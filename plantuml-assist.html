@@ -99,6 +99,49 @@ html, body {
   border-color: transparent;
 }
 
+#zoom-display {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+  width: 42px;
+  text-align: center;
+  user-select: none;
+}
+
+/* Export menu wrapper */
+.export-wrap {
+  position: relative;
+}
+
+#export-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  z-index: 200;
+  min-width: 180px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+}
+#export-menu.open { display: block; }
+
+#export-menu button {
+  display: block;
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  padding: 8px 14px;
+  text-align: left;
+  cursor: pointer;
+}
+#export-menu button:hover { background: var(--bg-tertiary); }
+
 /* Diagram / render mode selects */
 #diagram-type, #render-mode {
   background: var(--bg-tertiary);
@@ -328,8 +371,32 @@ html, body {
   <div id="toolbar">
     <span class="logo">PlantUMLAssist</span>
 
+    <button class="tb-btn" id="btn-open" title="ファイルを開く">Open</button>
+    <button class="tb-btn" id="btn-save" title="ファイルを保存">Save</button>
+
+    <div class="tb-sep"></div>
+
     <button class="tb-btn" id="btn-undo" title="元に戻す (Ctrl+Z)" disabled>↩ Undo</button>
     <button class="tb-btn" id="btn-redo" title="やり直す (Ctrl+Y)" disabled>↪ Redo</button>
+
+    <div class="tb-sep"></div>
+
+    <button class="tb-btn" id="btn-zoom-out" title="縮小">－</button>
+    <span id="zoom-display">100%</span>
+    <button class="tb-btn" id="btn-zoom-in"  title="拡大">＋</button>
+    <button class="tb-btn" id="btn-zoom-fit" title="幅に合わせる">Fit</button>
+
+    <div class="tb-sep"></div>
+
+    <div class="export-wrap">
+      <button class="tb-btn" id="btn-export" title="エクスポート">Export ▾</button>
+      <div id="export-menu">
+        <button id="exp-svg">SVGとして保存</button>
+        <button id="exp-png">PNGとして保存</button>
+        <button id="exp-png-transparent">PNG（透過背景）</button>
+        <button id="exp-clipboard">クリップボードにコピー</button>
+      </div>
+    </div>
 
     <div class="tb-sep"></div>
 
@@ -390,6 +457,9 @@ html, body {
   </div>
 
 </div><!-- /#app -->
+
+<!-- Hidden file input -->
+<input type="file" id="file-input" accept=".puml,.plantuml,.uml,.txt" style="display:none">
 
 <script src="src/core/html-utils.js"></script>
 <script src="src/core/text-updater.js"></script>

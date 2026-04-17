@@ -19,12 +19,15 @@ function _registerModules() {
   }
 }
 
-var editorEl, previewSvgEl, propsEl, statusParseEl, statusInfoEl, renderStatusEl, lineNumbersEl;
+var editorEl, previewSvgEl, propsEl, statusParseEl, statusInfoEl, renderStatusEl, lineNumbersEl, zoomDisplayEl;
 var mmdText = '';
 var currentModule = null;
+var currentParsed = { meta: {}, elements: [], relations: [], groups: [] };
 var suppressSync = false;
 var renderTimer = null;
 var RENDER_DEBOUNCE_MS = 150;
+var zoom = 1.0;
+var isFirstRender = true;
 
 function init() {
   editorEl = document.getElementById('editor');
@@ -34,6 +37,7 @@ function init() {
   statusInfoEl = document.getElementById('status-info');
   renderStatusEl = document.getElementById('render-status');
   lineNumbersEl = document.getElementById('line-numbers');
+  zoomDisplayEl = document.getElementById('zoom-display');
 
   _registerModules();
 
@@ -82,9 +86,44 @@ function init() {
   });
 
   document.getElementById('btn-render').addEventListener('click', scheduleRefresh);
-
   document.getElementById('btn-undo').addEventListener('click', function() { window.MA.history.undo(); });
   document.getElementById('btn-redo').addEventListener('click', function() { window.MA.history.redo(); });
+
+  // Open / Save
+  document.getElementById('btn-open').addEventListener('click', openFile);
+  document.getElementById('btn-save').addEventListener('click', saveFile);
+  document.getElementById('file-input').addEventListener('change', onFilePicked);
+
+  // Zoom
+  document.getElementById('btn-zoom-in').addEventListener('click', function() { setZoom(zoom + 0.1); });
+  document.getElementById('btn-zoom-out').addEventListener('click', function() { setZoom(zoom - 0.1); });
+  document.getElementById('btn-zoom-fit').addEventListener('click', zoomToFit);
+
+  // Export menu
+  var btnExport = document.getElementById('btn-export');
+  var exportMenu = document.getElementById('export-menu');
+  btnExport.addEventListener('click', function(e) {
+    e.stopPropagation();
+    exportMenu.classList.toggle('open');
+  });
+  document.addEventListener('click', function() { exportMenu.classList.remove('open'); });
+  document.getElementById('exp-svg').addEventListener('click', function() { exportMenu.classList.remove('open'); exportSVG(); });
+  document.getElementById('exp-png').addEventListener('click', function() { exportMenu.classList.remove('open'); exportPNG(false); });
+  document.getElementById('exp-png-transparent').addEventListener('click', function() { exportMenu.classList.remove('open'); exportPNG(true); });
+  document.getElementById('exp-clipboard').addEventListener('click', function() { exportMenu.classList.remove('open'); exportClipboard(); });
+
+  // Ctrl+wheel zoom, Shift+wheel horizontal scroll on preview
+  var previewContainer = document.getElementById('preview-container');
+  previewContainer.addEventListener('wheel', function(e) {
+    if (e.ctrlKey) {
+      e.preventDefault();
+      var delta = e.deltaY < 0 ? 0.1 : -0.1;
+      setZoom(zoom + delta);
+    } else if (e.shiftKey && !e.ctrlKey) {
+      previewContainer.scrollLeft += e.deltaY;
+      e.preventDefault();
+    }
+  }, { passive: false });
 
   document.getElementById('diagram-type').addEventListener('change', function() {
     var t = this.value;
@@ -96,17 +135,19 @@ function init() {
     editorEl.value = mmdText;
     suppressSync = false;
     window.MA.selection.clearSelection();
+    isFirstRender = true;
     scheduleRefresh();
   });
 
   window.MA.history.init({
     getMmdText: function() { return mmdText; },
     setMmdText: function(s) { mmdText = s; suppressSync = true; editorEl.value = s; suppressSync = false; scheduleRefresh(); },
-    onUpdate: function() {},
+    onUpdate: function() { updateUndoRedoButtons(); },
   });
 
   window.MA.selection.init(function() { renderProps(); });
 
+  setZoom(1.0);
   updateLineNumbers();
   scheduleRefresh();
 }
@@ -162,6 +203,157 @@ function initPaneResizers() {
   attach(document.getElementById('resizer-right'), propsPane, 'right');
 }
 
+// ── Zoom ───────────────────────────────────────────────────────────────────
+function setZoom(z) {
+  zoom = Math.max(0.25, Math.min(3.0, Math.round(z * 100) / 100));
+  if (zoomDisplayEl) zoomDisplayEl.textContent = Math.round(zoom * 100) + '%';
+  if (previewSvgEl) {
+    previewSvgEl.style.transform = 'scale(' + zoom + ')';
+    previewSvgEl.style.transformOrigin = '0 0';
+  }
+}
+
+function zoomToFit() {
+  var svgEl = previewSvgEl ? previewSvgEl.querySelector('svg') : null;
+  var previewContainer = document.getElementById('preview-container');
+  if (!svgEl || !previewContainer) return;
+  var naturalW = parseFloat(svgEl.getAttribute('width')) || 800;
+  var containerW = previewContainer.clientWidth - 32;
+  var fitZoom = containerW / naturalW;
+  setZoom(fitZoom);
+}
+
+// Normalize PlantUML SVG: ensure width/height attributes are pure pixel numbers.
+// PlantUML renders use inline style="width:Xpx;height:Ypx;" — Image() can't size off those.
+function normalizeSvgSize(svgEl) {
+  function parsePx(v) {
+    if (!v) return 0;
+    var m = String(v).match(/([0-9.]+)/);
+    return m ? parseFloat(m[1]) : 0;
+  }
+  var w = parsePx(svgEl.getAttribute('width'));
+  var h = parsePx(svgEl.getAttribute('height'));
+  if (!w || !h) {
+    var style = svgEl.getAttribute('style') || '';
+    var mw = style.match(/width\s*:\s*([0-9.]+)/);
+    var mh = style.match(/height\s*:\s*([0-9.]+)/);
+    if (mw) w = parseFloat(mw[1]);
+    if (mh) h = parseFloat(mh[1]);
+  }
+  if (!w || !h) {
+    var vb = svgEl.getAttribute('viewBox');
+    if (vb) {
+      var parts = vb.split(/\s+/);
+      if (parts.length >= 4) { w = parseFloat(parts[2]); h = parseFloat(parts[3]); }
+    }
+  }
+  if (w && h) {
+    svgEl.setAttribute('width', String(w));
+    svgEl.setAttribute('height', String(h));
+  }
+  svgEl.removeAttribute('style');
+  return { w: w || 800, h: h || 400 };
+}
+
+// ── File Open / Save ───────────────────────────────────────────────────────
+function openFile() {
+  document.getElementById('file-input').click();
+}
+
+function onFilePicked(e) {
+  var file = e.target.files && e.target.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(ev) {
+    window.MA.history.pushHistory();
+    mmdText = ev.target.result;
+    suppressSync = true;
+    editorEl.value = mmdText;
+    suppressSync = false;
+    updateLineNumbers();
+    isFirstRender = true;
+    scheduleRefresh();
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+function saveFile() {
+  var title = (currentParsed && currentParsed.meta && currentParsed.meta.title) || 'untitled';
+  var blob = new Blob([mmdText], { type: 'text/plain' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = title + '.puml';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// ── Export ─────────────────────────────────────────────────────────────────
+function exportSVG() {
+  var svgEl = previewSvgEl.querySelector('svg');
+  if (!svgEl) return;
+  var clone = svgEl.cloneNode(true);
+  var blob = new Blob([new XMLSerializer().serializeToString(clone)], { type: 'image/svg+xml' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = ((currentParsed.meta && currentParsed.meta.title) || 'untitled') + '.svg';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function svgToCanvas(transparent, callback) {
+  var svgEl = previewSvgEl.querySelector('svg');
+  if (!svgEl) return;
+  var clone = svgEl.cloneNode(true);
+  var w = parseFloat(clone.getAttribute('width')) || 800;
+  var h = parseFloat(clone.getAttribute('height')) || 400;
+  var svgData = new XMLSerializer().serializeToString(clone);
+  var img = new Image();
+  img.onload = function() {
+    var canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    var ctx = canvas.getContext('2d');
+    if (!transparent) {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    ctx.drawImage(img, 0, 0, w, h);
+    callback(canvas);
+  };
+  img.onerror = function() { alert('PNG エクスポートに失敗しました (SVG 読み込みエラー)'); };
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgData);
+}
+
+function exportPNG(transparent) {
+  svgToCanvas(transparent, function(canvas) {
+    canvas.toBlob(function(blob) {
+      if (!blob) return;
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = ((currentParsed.meta && currentParsed.meta.title) || 'untitled') + '.png';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+  });
+}
+
+function exportClipboard() {
+  if (!navigator.clipboard || !window.ClipboardItem) {
+    alert('クリップボード API が利用できません');
+    return;
+  }
+  svgToCanvas(false, function(canvas) {
+    canvas.toBlob(function(blob) {
+      if (!blob) return;
+      navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]).catch(function(err) {
+        alert('クリップボードコピー失敗: ' + err);
+      });
+    });
+  });
+}
+
+// ── Render pipeline ────────────────────────────────────────────────────────
 function scheduleRefresh() {
   if (renderTimer) clearTimeout(renderTimer);
   renderTimer = setTimeout(refresh, RENDER_DEBOUNCE_MS);
@@ -174,26 +366,23 @@ function refresh() {
   var mod = detectedType ? modules[detectedType] : null;
   if (mod) currentModule = mod;
 
-  var parsed;
   try {
-    parsed = currentModule.parse(mmdText);
+    currentParsed = currentModule.parse(mmdText);
     statusParseEl.textContent = 'OK';
-    statusParseEl.style.color = 'var(--text-secondary)';
+    statusParseEl.classList.remove('error');
   } catch (e) {
     statusParseEl.textContent = 'Parse error: ' + e.message;
-    statusParseEl.style.color = '#ff7b72';
-    parsed = { meta: {}, elements: [], relations: [], groups: [] };
+    statusParseEl.classList.add('error');
+    currentParsed = { meta: {}, elements: [], relations: [], groups: [] };
   }
-  statusInfoEl.textContent = (parsed.elements ? parsed.elements.length : 0) + ' elements, ' + (parsed.relations ? parsed.relations.length : 0) + ' relations';
+  statusInfoEl.textContent = (currentParsed.elements ? currentParsed.elements.length : 0) + ' elements, ' + (currentParsed.relations ? currentParsed.relations.length : 0) + ' relations';
 
-  renderProps(parsed);
+  renderProps(currentParsed);
   renderSvg();
 }
 
 function renderProps(parsed) {
-  if (!parsed) {
-    try { parsed = currentModule.parse(mmdText); } catch (e) { parsed = { meta: {}, elements: [], relations: [], groups: [] }; }
-  }
+  if (!parsed) parsed = currentParsed;
   var sel = window.MA.selection.getSelected();
   currentModule.renderProps(sel, parsed, propsEl, {
     getMmdText: function() { return mmdText; },
@@ -222,9 +411,26 @@ function renderSvg() {
     return resp.text();
   }).then(function(svg) {
     previewSvgEl.innerHTML = svg;
+    var svgEl = previewSvgEl.querySelector('svg');
+    if (svgEl) {
+      var dim = normalizeSvgSize(svgEl);
+      if (isFirstRender) {
+        isFirstRender = false;
+        var previewContainer = document.getElementById('preview-container');
+        if (previewContainer) {
+          var containerW = previewContainer.clientWidth - 32;
+          var fitZoom = containerW / dim.w;
+          // Auto-fit: shrink oversize diagrams, but don't enlarge small ones past 100%
+          fitZoom = Math.max(0.25, Math.min(1.0, fitZoom));
+          setZoom(fitZoom);
+        }
+      } else {
+        setZoom(zoom);
+      }
+    }
     renderStatusEl.textContent = 'OK (' + mode + ')';
   }).catch(function(err) {
-    previewSvgEl.innerHTML = '<p style="color:#ff7b72;padding:20px;white-space:pre-wrap;">Render error: ' + (err.message || err) + '</p>';
+    previewSvgEl.innerHTML = '<p style="color:var(--accent-red);padding:20px;white-space:pre-wrap;font-family:var(--font-mono);font-size:12px;">Render error: ' + (err.message || err) + '</p>';
     renderStatusEl.textContent = 'ERROR';
     renderStatusEl.classList.add('error');
   });
