@@ -105,10 +105,21 @@ def render_online(text):
     try:
         encoded = plantuml_encode(text)
         url = f'https://www.plantuml.com/plantuml/svg/{encoded}'
-        with urllib.request.urlopen(url, timeout=15) as resp:
+        req = urllib.request.Request(url, headers={
+            'User-Agent': 'PlantUMLAssist/0.1 (+https://github.com/KawanoMomo)',
+            'Accept': 'image/svg+xml',
+        })
+        with urllib.request.urlopen(req, timeout=15) as resp:
             return resp.read(), None
+    except urllib.error.HTTPError as e:
+        detail = ''
+        try:
+            detail = ': ' + e.read().decode('utf-8', errors='replace')[:200]
+        except Exception:
+            pass
+        return None, f'online render failed: HTTP {e.code}{detail}'
     except urllib.error.URLError as e:
-        return None, f'online render failed: {e}'
+        return None, f'online render failed: {e.reason}'
     except Exception as e:
         return None, f'online render error: {e}'
 
