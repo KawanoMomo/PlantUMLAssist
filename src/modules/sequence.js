@@ -33,6 +33,9 @@ window.MA.modules.plantumlSequence = (function() {
   var NOTE_POSITIONS = ['left of', 'right of', 'over'];
   var NOTE_RE = /^note\s+(left of|right of|over)\s+([^:]+?)(?:\s*:\s*(.*))?$/i;
 
+  var ACTIVATION_ACTIONS = ['activate', 'deactivate', 'create', 'destroy'];
+  var ACTIVATION_RE = new RegExp('^(' + ACTIVATION_ACTIONS.join('|') + ')\\s+(\\S+)$');
+
   function unquote(s) {
     if (!s) return s;
     if (s.length >= 2 && s.charAt(0) === '"' && s.charAt(s.length - 1) === '"') {
@@ -99,6 +102,15 @@ window.MA.modules.plantumlSequence = (function() {
           var closing = groupStack.pop();
           closing.endLine = lineNum;
         }
+        continue;
+      }
+
+      // activation / deactivation / create / destroy
+      var am = trimmed.match(ACTIVATION_RE);
+      if (am) {
+        result.elements.push({
+          kind: 'activation', action: am[1], target: unquote(am[2]), line: lineNum,
+        });
         continue;
       }
 
@@ -253,6 +265,10 @@ window.MA.modules.plantumlSequence = (function() {
     return lines.join('\n');
   }
 
+  function addActivation(text, action, target) {
+    return insertBeforeEnd(text, action + ' ' + target);
+  }
+
   function addNote(text, position, targets, noteText) {
     var targetStr = Array.isArray(targets) ? targets.join(', ') : targets;
     var line = 'note ' + position + ' ' + targetStr + (noteText ? ' : ' + noteText : '');
@@ -352,6 +368,7 @@ window.MA.modules.plantumlSequence = (function() {
     addNote: addNote,
     updateNote: updateNote,
     moveMessage: moveMessage,
+    addActivation: addActivation,
     template: function() {
       return [
         '@startuml',
@@ -380,6 +397,7 @@ window.MA.modules.plantumlSequence = (function() {
       var P = window.MA.properties;
       var participants = parsedData.elements.filter(function(e) { return e.kind === 'participant'; });
       var notes = parsedData.elements.filter(function(e) { return e.kind === 'note'; });
+      var activations = parsedData.elements.filter(function(e) { return e.kind === 'activation'; });
       var messages = parsedData.relations;
       var groups = parsedData.groups || [];
 
@@ -430,6 +448,18 @@ window.MA.modules.plantumlSequence = (function() {
         }
         if (!gList) gList = P.emptyListHtml('（ブロックなし）');
 
+        // Activation list
+        var aList = '';
+        for (var ai = 0; ai < activations.length; ai++) {
+          var ac = activations[ai];
+          aList += P.listItemHtml({
+            label: ac.action + ' ' + ac.target,
+            deleteClass: 'seq-delete-activation',
+            dataLine: ac.line, mono: true,
+          });
+        }
+        if (!aList) aList = P.emptyListHtml('（アクティベーションなし）');
+
         // Note list
         var nList = '';
         for (var ni = 0; ni < notes.length; ni++) {
@@ -448,6 +478,12 @@ window.MA.modules.plantumlSequence = (function() {
         var notePosOpts = NOTE_POSITIONS.map(function(p) { return { value: p, label: p, selected: p === 'over' }; });
         var noteTargetOpts = participants.map(function(p) { return { value: p.id, label: p.label }; });
         if (noteTargetOpts.length === 0) noteTargetOpts = [{ value: '', label: '（参加者を先に追加）' }];
+        var actionOpts = [
+          { value: 'activate',   label: 'activate (アクティブ化)',        selected: true },
+          { value: 'deactivate', label: 'deactivate (非アクティブ化)' },
+          { value: 'create',     label: 'create (参加者の生成)' },
+          { value: 'destroy',    label: 'destroy (参加者の破棄)' },
+        ];
         propsEl.innerHTML =
           '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Sequence</div>' +
           '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
@@ -485,6 +521,13 @@ window.MA.modules.plantumlSequence = (function() {
             '<div style="font-size:10px;color:var(--text-secondary);margin-top:4px;">空のブロックを末尾に挿入します。中身はエディタまたはメッセージ追加で入れてください。</div>' +
           '</div>' +
           '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
+            '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">ライフライン制御 (activate/deactivate)</label>' +
+            P.selectFieldHtml('Action', 'seq-add-act-action', actionOpts) +
+            P.selectFieldHtml('Target', 'seq-add-act-target', noteTargetOpts) +
+            P.primaryButtonHtml('seq-add-act-btn', '+ ライフライン操作 追加') +
+            '<div style="font-size:10px;color:var(--text-secondary);margin-top:4px;">アクティベーションバー (太い縦帯) の表示/非表示を制御します。</div>' +
+          '</div>' +
+          '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
             '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">注釈 (note) を追加</label>' +
             P.selectFieldHtml('Position', 'seq-add-note-pos', notePosOpts) +
             P.selectFieldHtml('Target', 'seq-add-note-target', noteTargetOpts) +
@@ -502,6 +545,10 @@ window.MA.modules.plantumlSequence = (function() {
           '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
             '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:6px;">ブロック一覧</label>' +
             '<div>' + gList + '</div>' +
+          '</div>' +
+          '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
+            '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:6px;">ライフライン操作一覧</label>' +
+            '<div>' + aList + '</div>' +
           '</div>' +
           '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
             '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:6px;">注釈一覧</label>' +
@@ -554,6 +601,14 @@ window.MA.modules.plantumlSequence = (function() {
           ctx.setMmdText(addNote(ctx.getMmdText(), pos, [tgt], txt));
           ctx.onUpdate();
         });
+        P.bindEvent('seq-add-act-btn', 'click', function() {
+          var act = document.getElementById('seq-add-act-action').value;
+          var tgt = document.getElementById('seq-add-act-target').value;
+          if (!tgt) { alert('Target 参加者を選択してください'); return; }
+          window.MA.history.pushHistory();
+          ctx.setMmdText(addActivation(ctx.getMmdText(), act, tgt));
+          ctx.onUpdate();
+        });
 
         P.bindSelectButtons(propsEl, 'seq-select-part', 'participant');
         P.bindSelectButtons(propsEl, 'seq-select-msg', 'message');
@@ -561,6 +616,7 @@ window.MA.modules.plantumlSequence = (function() {
         P.bindDeleteButtons(propsEl, 'seq-delete-part', ctx, deleteLine);
         P.bindDeleteButtons(propsEl, 'seq-delete-msg', ctx, deleteLine);
         P.bindDeleteButtons(propsEl, 'seq-delete-note', ctx, deleteLine);
+        P.bindDeleteButtons(propsEl, 'seq-delete-activation', ctx, deleteLine);
         P.bindDeleteButtons(propsEl, 'seq-delete-group', ctx, deleteGroup, true);
 
         // Reorder buttons
