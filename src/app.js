@@ -19,7 +19,7 @@ function _registerModules() {
   }
 }
 
-var editorEl, previewSvgEl, propsEl, statusParseEl, statusInfoEl, renderStatusEl;
+var editorEl, previewSvgEl, propsEl, statusParseEl, statusInfoEl, renderStatusEl, lineNumbersEl;
 var mmdText = '';
 var currentModule = null;
 var suppressSync = false;
@@ -29,10 +29,11 @@ var RENDER_DEBOUNCE_MS = 150;
 function init() {
   editorEl = document.getElementById('editor');
   previewSvgEl = document.getElementById('preview-svg');
-  propsEl = document.getElementById('props-pane');
+  propsEl = document.getElementById('props-content');
   statusParseEl = document.getElementById('status-parse');
   statusInfoEl = document.getElementById('status-info');
   renderStatusEl = document.getElementById('render-status');
+  lineNumbersEl = document.getElementById('line-numbers');
 
   _registerModules();
 
@@ -47,8 +48,15 @@ function init() {
     if (suppressSync) return;
     window.MA.history.pushHistory();
     mmdText = editorEl.value;
+    updateLineNumbers();
     scheduleRefresh();
   });
+
+  editorEl.addEventListener('scroll', function() {
+    if (lineNumbersEl) lineNumbersEl.scrollTop = editorEl.scrollTop;
+  });
+
+  initPaneResizers();
 
   editorEl.addEventListener('keydown', function(e) {
     if (e.key !== 'Tab' || e.isComposing) return;
@@ -99,7 +107,59 @@ function init() {
 
   window.MA.selection.init(function() { renderProps(); });
 
+  updateLineNumbers();
   scheduleRefresh();
+}
+
+function updateUndoRedoButtons() {
+  var hist = window.MA.history;
+  if (!hist || !hist.canUndo) return;
+  var btnUndo = document.getElementById('btn-undo');
+  var btnRedo = document.getElementById('btn-redo');
+  if (btnUndo) btnUndo.disabled = !hist.canUndo();
+  if (btnRedo) btnRedo.disabled = !hist.canRedo();
+}
+
+function updateLineNumbers() {
+  if (!lineNumbersEl || !editorEl) return;
+  var count = (editorEl.value.match(/\n/g) || []).length + 1;
+  var out = '';
+  for (var i = 1; i <= count; i++) out += (i === 1 ? '' : '\n') + i;
+  lineNumbersEl.textContent = out;
+}
+
+function initPaneResizers() {
+  var main = document.getElementById('main');
+  var editorPane = document.getElementById('editor-pane');
+  var propsPane = document.getElementById('props-pane');
+
+  function attach(handle, pane, side) {
+    if (!handle || !pane) return;
+    handle.addEventListener('mousedown', function(e) {
+      e.preventDefault();
+      handle.classList.add('dragging');
+      var rect = main.getBoundingClientRect();
+      function onMove(ev) {
+        var w;
+        if (side === 'left') {
+          w = Math.max(180, ev.clientX - rect.left);
+        } else {
+          w = Math.max(200, rect.right - ev.clientX);
+        }
+        pane.style.width = w + 'px';
+      }
+      function onUp() {
+        handle.classList.remove('dragging');
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      }
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  }
+
+  attach(document.getElementById('resizer-left'), editorPane, 'left');
+  attach(document.getElementById('resizer-right'), propsPane, 'right');
 }
 
 function scheduleRefresh() {
@@ -108,6 +168,8 @@ function scheduleRefresh() {
 }
 
 function refresh() {
+  updateLineNumbers();
+  updateUndoRedoButtons();
   var detectedType = window.MA.parserUtils.detectDiagramType(mmdText);
   var mod = detectedType ? modules[detectedType] : null;
   if (mod) currentModule = mod;
