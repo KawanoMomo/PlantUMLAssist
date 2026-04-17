@@ -49,4 +49,24 @@ describe('parseSequence', function() {
     var r = seq.parseSequence("@startuml\n' this is comment\nactor A\n@enduml");
     expect(r.elements.length).toBe(1);
   });
+
+  test('parses bare autonumber as true', function() {
+    var r = seq.parseSequence('@startuml\nautonumber\nA -> B\n@enduml');
+    expect(r.meta.autonumber).toBe(true);
+  });
+
+  test('parses autonumber with start value', function() {
+    var r = seq.parseSequence('@startuml\nautonumber 10\nA -> B\n@enduml');
+    expect(r.meta.autonumber).toEqual({ start: 10, step: 1 });
+  });
+
+  test('parses autonumber with start and step', function() {
+    var r = seq.parseSequence('@startuml\nautonumber 10 5\nA -> B\n@enduml');
+    expect(r.meta.autonumber).toEqual({ start: 10, step: 5 });
+  });
+
+  test('null autonumber when absent', function() {
+    var r = seq.parseSequence('@startuml\nA -> B\n@enduml');
+    expect(r.meta.autonumber).toBe(null);
+  });
 });

@@ -72,3 +72,23 @@ describe('setTitle', function() {
     expect(out).not.toContain('title Old');
   });
 });
+
+describe('toggleAutonumber', function() {
+  test('adds autonumber after @startuml', function() {
+    var out = seq.toggleAutonumber('@startuml\nA -> B\n@enduml');
+    expect(out).toContain('autonumber');
+    expect(out.indexOf('autonumber')).toBeLessThan(out.indexOf('A -> B'));
+  });
+
+  test('removes existing autonumber', function() {
+    var out = seq.toggleAutonumber('@startuml\nautonumber\nA -> B\n@enduml');
+    expect(out).not.toContain('autonumber');
+    expect(out).toContain('A -> B');
+  });
+
+  test('inserts after title if present', function() {
+    var out = seq.toggleAutonumber('@startuml\ntitle T\nA -> B\n@enduml');
+    expect(out.indexOf('title T')).toBeLessThan(out.indexOf('autonumber'));
+    expect(out.indexOf('autonumber')).toBeLessThan(out.indexOf('A -> B'));
+  });
+});

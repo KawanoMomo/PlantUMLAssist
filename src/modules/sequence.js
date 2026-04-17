@@ -5,6 +5,21 @@ window.MA.modules = window.MA.modules || {};
 window.MA.modules.plantumlSequence = (function() {
   var PARTICIPANT_TYPES = ['participant', 'actor', 'boundary', 'control', 'entity', 'database', 'queue', 'collections'];
   var ARROWS = ['->', '-->', '->>', '-->>', '<-', '<--', '<<-', '<<--', '<->', '<-->'];
+  // Display labels: UML 有識者が形で思い出せる最小の注釈を添える。
+  // 形: -> 実線 / --> 破線 / ->> 開矢印 (async) / -->> 破線+開矢印 (async return)
+  var ARROW_META = {
+    '->':    '->    同期メッセージ (実線)',
+    '-->':   '-->   返信/戻り (破線)',
+    '->>':   '->>   非同期メッセージ (開矢印)',
+    '-->>':  '-->>  非同期返信 (破線+開矢印)',
+    '<-':    '<-    同期 (逆向き)',
+    '<--':   '<--   返信 (逆向き)',
+    '<<-':   '<<-   非同期 (逆向き)',
+    '<<--':  '<<--  非同期返信 (逆向き)',
+    '<->':   '<->   双方向 同期',
+    '<-->':  '<-->  双方向 返信',
+  };
+  function arrowLabel(a) { return ARROW_META[a] || a; }
 
   var PART_RE = new RegExp('^(' + PARTICIPANT_TYPES.join('|') + ')\\s+(?:"([^"]+)"\\s+as\\s+(\\S+)|(\\S+)(?:\\s+as\\s+"([^"]+)")?)\\s*$');
   var MSG_RE_FROM = '([A-Za-z_][A-Za-z0-9_]*|"[^"]+")';
@@ -19,7 +34,7 @@ window.MA.modules.plantumlSequence = (function() {
   }
 
   function parseSequence(text) {
-    var result = { meta: { title: '' }, elements: [], relations: [], groups: [] };
+    var result = { meta: { title: '', autonumber: null }, elements: [], relations: [], groups: [] };
     if (!text || !text.trim()) return result;
     var lines = text.split('\n');
     var msgCounter = 0;
@@ -44,6 +59,15 @@ window.MA.modules.plantumlSequence = (function() {
 
       var tm = trimmed.match(/^title\s+(.+)$/);
       if (tm) { result.meta.title = tm[1].trim(); continue; }
+
+      // autonumber
+      if (trimmed === 'autonumber') { result.meta.autonumber = true; continue; }
+      if (trimmed === 'autonumber stop' || trimmed === 'autonumber off') { result.meta.autonumber = false; continue; }
+      var anMatch = trimmed.match(/^autonumber\s+(\d+)(?:\s+(\d+))?$/);
+      if (anMatch) {
+        result.meta.autonumber = { start: parseInt(anMatch[1], 10), step: anMatch[2] ? parseInt(anMatch[2], 10) : 1 };
+        continue;
+      }
 
       var pm = trimmed.match(PART_RE);
       if (pm) {
@@ -163,6 +187,26 @@ window.MA.modules.plantumlSequence = (function() {
     return lines.join('\n');
   }
 
+  function toggleAutonumber(text) {
+    var lines = text.split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      if (/^\s*autonumber(\s|$)/.test(lines[i])) {
+        lines.splice(i, 1);
+        return lines.join('\n');
+      }
+    }
+    for (var j = 0; j < lines.length; j++) {
+      if (/^\s*@startuml/.test(lines[j])) {
+        // Insert after title line if present, otherwise right after @startuml.
+        var insertAt = j + 1;
+        while (insertAt < lines.length && /^\s*title\s+/.test(lines[insertAt])) insertAt++;
+        lines.splice(insertAt, 0, 'autonumber');
+        return lines.join('\n');
+      }
+    }
+    return text;
+  }
+
   function setTitle(text, newTitle) {
     var lines = text.split('\n');
     for (var i = 0; i < lines.length; i++) {
@@ -195,6 +239,7 @@ window.MA.modules.plantumlSequence = (function() {
     updateParticipant: updateParticipant,
     updateMessage: updateMessage,
     setTitle: setTitle,
+    toggleAutonumber: toggleAutonumber,
     template: function() {
       return [
         '@startuml',
@@ -226,7 +271,7 @@ window.MA.modules.plantumlSequence = (function() {
 
       if (!selData || selData.length === 0) {
         var pTypeOpts = PARTICIPANT_TYPES.map(function(pt) { return { value: pt, label: pt, selected: pt === 'participant' }; });
-        var arrowOpts = ARROWS.map(function(a) { return { value: a, label: a, selected: a === '->' }; });
+        var arrowOpts = ARROWS.map(function(a) { return { value: a, label: arrowLabel(a), selected: a === '->' }; });
         var partOpts = participants.map(function(p) { return { value: p.id, label: p.label }; });
         if (partOpts.length === 0) partOpts = [{ value: '', label: '（参加者を先に追加）' }];
 
@@ -252,12 +297,20 @@ window.MA.modules.plantumlSequence = (function() {
         }
         if (!mList) mList = P.emptyListHtml('（メッセージなし）');
 
+        var autonumChecked = parsedData.meta.autonumber ? 'checked' : '';
         propsEl.innerHTML =
           '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Sequence</div>' +
           '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
             '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">Title 設定</label>' +
             P.fieldHtml('Title', 'seq-title', parsedData.meta.title) +
             P.primaryButtonHtml('seq-set-title', 'Title 適用') +
+          '</div>' +
+          '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
+            '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-primary);cursor:pointer;">' +
+              '<input id="seq-autonumber" type="checkbox" ' + autonumChecked + '>' +
+              ' autonumber (自動採番)' +
+            '</label>' +
+            '<div style="font-size:10px;color:var(--text-secondary);margin-top:4px;">有効にすると各メッセージに通し番号が付きます</div>' +
           '</div>' +
           '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
             '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">参加者を追加</label>' +
@@ -286,6 +339,11 @@ window.MA.modules.plantumlSequence = (function() {
         P.bindEvent('seq-set-title', 'click', function() {
           window.MA.history.pushHistory();
           ctx.setMmdText(setTitle(ctx.getMmdText(), document.getElementById('seq-title').value.trim()));
+          ctx.onUpdate();
+        });
+        P.bindEvent('seq-autonumber', 'change', function() {
+          window.MA.history.pushHistory();
+          ctx.setMmdText(toggleAutonumber(ctx.getMmdText()));
           ctx.onUpdate();
         });
         P.bindEvent('seq-add-part-btn', 'click', function() {
@@ -351,7 +409,7 @@ window.MA.modules.plantumlSequence = (function() {
           var partOpts2 = participants.map(function(p) { return { value: p.id, label: p.label }; });
           var fromOpts = partOpts2.map(function(o) { return { value: o.value, label: o.label, selected: o.value === mm.from }; });
           var toOpts = partOpts2.map(function(o) { return { value: o.value, label: o.label, selected: o.value === mm.to }; });
-          var arrowOpts2 = ARROWS.map(function(a) { return { value: a, label: a, selected: a === mm.arrow }; });
+          var arrowOpts2 = ARROWS.map(function(a) { return { value: a, label: arrowLabel(a), selected: a === mm.arrow }; });
           propsEl.innerHTML =
             P.panelHeaderHtml('Message') +
             P.selectFieldHtml('From', 'seq-edit-from', fromOpts) +

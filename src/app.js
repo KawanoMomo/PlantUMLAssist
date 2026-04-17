@@ -234,7 +234,7 @@ function initPaneResizers() {
 
 // ── Zoom ───────────────────────────────────────────────────────────────────
 function setZoom(z) {
-  zoom = Math.max(0.25, Math.min(3.0, Math.round(z * 100) / 100));
+  zoom = Math.max(0.1, Math.min(5.0, Math.round(z * 100) / 100));
   if (zoomDisplayEl) zoomDisplayEl.textContent = Math.round(zoom * 100) + '%';
   if (previewSvgEl) {
     previewSvgEl.style.transform = 'scale(' + zoom + ')';
