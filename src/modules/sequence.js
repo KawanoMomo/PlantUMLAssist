@@ -25,6 +25,14 @@ window.MA.modules.plantumlSequence = (function() {
   var MSG_RE_FROM = '([A-Za-z_][A-Za-z0-9_]*|"[^"]+")';
   var MSG_RE = new RegExp('^' + MSG_RE_FROM + '\\s+(->|-->|->>|-->>|<-|<--|<<-|<<--|<->|<-->)\\s+' + MSG_RE_FROM + '(?:\\s*:\\s*(.+))?$');
 
+  var GROUP_KINDS = ['alt', 'opt', 'loop', 'par', 'break', 'critical', 'group'];
+  var GROUP_OPEN_RE = new RegExp('^(' + GROUP_KINDS.join('|') + ')(?:\\s+(.*))?$');
+  var GROUP_ELSE_RE = /^else(?:\s+(.*))?$/;
+  var GROUP_END_RE = /^end$/;
+
+  var NOTE_POSITIONS = ['left of', 'right of', 'over'];
+  var NOTE_RE = /^note\s+(left of|right of|over)\s+([^:]+?)(?:\s*:\s*(.*))?$/i;
+
   function unquote(s) {
     if (!s) return s;
     if (s.length >= 2 && s.charAt(0) === '"' && s.charAt(s.length - 1) === '"') {
@@ -51,6 +59,10 @@ window.MA.modules.plantumlSequence = (function() {
       return clean;
     }
 
+    var groupStack = [];
+    var groupCounter = 0;
+    var noteCounter = 0;
+
     for (var i = 0; i < lines.length; i++) {
       var lineNum = i + 1;
       var trimmed = lines[i].trim();
@@ -66,6 +78,39 @@ window.MA.modules.plantumlSequence = (function() {
       var anMatch = trimmed.match(/^autonumber\s+(\d+)(?:\s+(\d+))?$/);
       if (anMatch) {
         result.meta.autonumber = { start: parseInt(anMatch[1], 10), step: anMatch[2] ? parseInt(anMatch[2], 10) : 1 };
+        continue;
+      }
+
+      // group open (alt/opt/loop/par/break/critical/group)
+      var gm = trimmed.match(GROUP_OPEN_RE);
+      if (gm) {
+        var g = {
+          kind: 'group', gtype: gm[1], id: '__g_' + (groupCounter++),
+          label: (gm[2] || '').trim(), line: lineNum, endLine: 0,
+          parentId: groupStack.length > 0 ? groupStack[groupStack.length - 1].id : null,
+        };
+        result.groups.push(g);
+        groupStack.push(g);
+        continue;
+      }
+      if (GROUP_ELSE_RE.test(trimmed)) continue;  // else is inside alt, treat transparently
+      if (GROUP_END_RE.test(trimmed)) {
+        if (groupStack.length > 0) {
+          var closing = groupStack.pop();
+          closing.endLine = lineNum;
+        }
+        continue;
+      }
+
+      // note
+      var nm = trimmed.match(NOTE_RE);
+      if (nm) {
+        var targets = nm[2].split(',').map(function(s) { return s.trim(); });
+        result.elements.push({
+          kind: 'note', id: '__n_' + (noteCounter++),
+          position: nm[1].toLowerCase(), targets: targets,
+          text: (nm[3] || '').trim(), line: lineNum,
+        });
         continue;
       }
 
@@ -187,6 +232,68 @@ window.MA.modules.plantumlSequence = (function() {
     return lines.join('\n');
   }
 
+  function addGroup(text, kind, label) {
+    // Insert an empty block (with "end") right before @enduml so the user
+    // can move messages inside or add new ones there.
+    var open = label ? kind + ' ' + label : kind;
+    var block = open + '\n\nend';
+    return insertBeforeEnd(text, block);
+  }
+
+  function deleteGroup(text, startLine, endLine) {
+    // Remove the opening line and matching end line only — keep inner
+    // contents intact so messages don't disappear.
+    var lines = text.split('\n');
+    if (endLine >= 1 && endLine <= lines.length) {
+      lines.splice(endLine - 1, 1);
+    }
+    if (startLine >= 1 && startLine <= lines.length) {
+      lines.splice(startLine - 1, 1);
+    }
+    return lines.join('\n');
+  }
+
+  function addNote(text, position, targets, noteText) {
+    var targetStr = Array.isArray(targets) ? targets.join(', ') : targets;
+    var line = 'note ' + position + ' ' + targetStr + (noteText ? ' : ' + noteText : '');
+    return insertBeforeEnd(text, line);
+  }
+
+  function updateNote(text, lineNum, field, value) {
+    var lines = text.split('\n');
+    var idx = lineNum - 1;
+    if (idx < 0 || idx >= lines.length) return text;
+    var indent = lines[idx].match(/^(\s*)/)[1];
+    var m = lines[idx].trim().match(NOTE_RE);
+    if (!m) return text;
+    var position = m[1], targets = m[2], body = m[3] || '';
+    if (field === 'position') position = value;
+    else if (field === 'targets') targets = value;
+    else if (field === 'text') body = value;
+    lines[idx] = indent + 'note ' + position + ' ' + targets + (body ? ' : ' + body : '');
+    return lines.join('\n');
+  }
+
+  function moveMessage(text, lineNum, direction) {
+    // direction: -1 = up, +1 = down. Skips non-message lines (stops at
+    // group boundaries and notes to keep block structure intact).
+    var lines = text.split('\n');
+    var idx = lineNum - 1;
+    if (idx < 0 || idx >= lines.length) return text;
+    var target = idx + direction;
+    while (target >= 0 && target < lines.length) {
+      var t = lines[target].trim();
+      if (!t || t.indexOf("'") === 0) { target += direction; continue; }
+      if (/^@startuml/.test(t) || /^@enduml/.test(t)) return text;
+      break;
+    }
+    if (target < 0 || target >= lines.length) return text;
+    var tmp = lines[idx];
+    lines[idx] = lines[target];
+    lines[target] = tmp;
+    return lines.join('\n');
+  }
+
   function toggleAutonumber(text) {
     var lines = text.split('\n');
     for (var i = 0; i < lines.length; i++) {
@@ -240,6 +347,11 @@ window.MA.modules.plantumlSequence = (function() {
     updateMessage: updateMessage,
     setTitle: setTitle,
     toggleAutonumber: toggleAutonumber,
+    addGroup: addGroup,
+    deleteGroup: deleteGroup,
+    addNote: addNote,
+    updateNote: updateNote,
+    moveMessage: moveMessage,
     template: function() {
       return [
         '@startuml',
@@ -267,7 +379,9 @@ window.MA.modules.plantumlSequence = (function() {
       var escHtml = window.MA.htmlUtils.escHtml;
       var P = window.MA.properties;
       var participants = parsedData.elements.filter(function(e) { return e.kind === 'participant'; });
+      var notes = parsedData.elements.filter(function(e) { return e.kind === 'note'; });
       var messages = parsedData.relations;
+      var groups = parsedData.groups || [];
 
       if (!selData || selData.length === 0) {
         var pTypeOpts = PARTICIPANT_TYPES.map(function(pt) { return { value: pt, label: pt, selected: pt === 'participant' }; });
@@ -286,18 +400,54 @@ window.MA.modules.plantumlSequence = (function() {
         }
         if (!pList) pList = P.emptyListHtml('（参加者なし）');
 
+        // Message list: adds ↑/↓ buttons inline so users can reorder
+        // without rewriting text by hand.
         var mList = '';
         for (var j = 0; j < messages.length; j++) {
           var m = messages[j];
-          mList += P.listItemHtml({
-            label: m.from + ' ' + m.arrow + ' ' + m.to + (m.label ? ' : ' + m.label : ''),
-            selectClass: 'seq-select-msg', deleteClass: 'seq-delete-msg',
-            dataElementId: m.id, dataLine: m.line, mono: true,
-          });
+          var msgLabel = m.from + ' ' + m.arrow + ' ' + m.to + (m.label ? ' : ' + m.label : '');
+          mList +=
+            '<div style="display:flex;align-items:center;gap:4px;margin-bottom:3px;padding:3px 4px;background:var(--bg-tertiary);border-radius:3px;font-size:11px;">' +
+              '<div style="flex:1;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--font-mono);">' + escHtml(msgLabel) + '</div>' +
+              '<button class="seq-msg-up" data-line="' + m.line + '" title="上へ移動" style="background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:2px 6px;border-radius:3px;cursor:pointer;font-size:10px;">↑</button>' +
+              '<button class="seq-msg-down" data-line="' + m.line + '" title="下へ移動" style="background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:2px 6px;border-radius:3px;cursor:pointer;font-size:10px;">↓</button>' +
+              '<button class="seq-select-msg" data-element-id="' + escHtml(m.id) + '" data-line="' + m.line + '" style="background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:2px 6px;border-radius:3px;cursor:pointer;font-size:10px;">編集</button>' +
+              '<button class="seq-delete-msg" data-line="' + m.line + '" style="background:var(--accent-red);color:#fff;border:none;padding:2px 6px;border-radius:3px;cursor:pointer;font-size:10px;">✕</button>' +
+            '</div>';
         }
         if (!mList) mList = P.emptyListHtml('（メッセージなし）');
 
+        // Group list (alt/opt/loop/par/...)
+        var gList = '';
+        for (var gi = 0; gi < groups.length; gi++) {
+          var gr = groups[gi];
+          gList += P.listItemHtml({
+            label: gr.gtype + (gr.label ? ' ' + gr.label : ''),
+            sublabel: 'L' + gr.line + '-' + gr.endLine,
+            deleteClass: 'seq-delete-group',
+            dataLine: gr.line, dataEndLine: gr.endLine, mono: true,
+          });
+        }
+        if (!gList) gList = P.emptyListHtml('（ブロックなし）');
+
+        // Note list
+        var nList = '';
+        for (var ni = 0; ni < notes.length; ni++) {
+          var n = notes[ni];
+          var nLabel = 'note ' + n.position + ' ' + n.targets.join(',') + (n.text ? ' : ' + n.text : '');
+          nList += P.listItemHtml({
+            label: nLabel,
+            selectClass: 'seq-select-note', deleteClass: 'seq-delete-note',
+            dataElementId: n.id, dataLine: n.line, mono: true,
+          });
+        }
+        if (!nList) nList = P.emptyListHtml('（注釈なし）');
+
         var autonumChecked = parsedData.meta.autonumber ? 'checked' : '';
+        var groupKindOpts = GROUP_KINDS.map(function(k) { return { value: k, label: k, selected: k === 'alt' }; });
+        var notePosOpts = NOTE_POSITIONS.map(function(p) { return { value: p, label: p, selected: p === 'over' }; });
+        var noteTargetOpts = participants.map(function(p) { return { value: p.id, label: p.label }; });
+        if (noteTargetOpts.length === 0) noteTargetOpts = [{ value: '', label: '（参加者を先に追加）' }];
         propsEl.innerHTML =
           '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Sequence</div>' +
           '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
@@ -328,12 +478,34 @@ window.MA.modules.plantumlSequence = (function() {
             P.primaryButtonHtml('seq-add-msg-btn', '+ メッセージ追加') +
           '</div>' +
           '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
+            '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">ブロックを追加 (alt/opt/loop/par…)</label>' +
+            P.selectFieldHtml('Kind', 'seq-add-group-kind', groupKindOpts) +
+            P.fieldHtml('Label/Condition', 'seq-add-group-label', '', '例: x > 0 / retry') +
+            P.primaryButtonHtml('seq-add-group-btn', '+ ブロック追加') +
+            '<div style="font-size:10px;color:var(--text-secondary);margin-top:4px;">空のブロックを末尾に挿入します。中身はエディタまたはメッセージ追加で入れてください。</div>' +
+          '</div>' +
+          '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
+            '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">注釈 (note) を追加</label>' +
+            P.selectFieldHtml('Position', 'seq-add-note-pos', notePosOpts) +
+            P.selectFieldHtml('Target', 'seq-add-note-target', noteTargetOpts) +
+            P.fieldHtml('Text', 'seq-add-note-text', '', '注釈本文') +
+            P.primaryButtonHtml('seq-add-note-btn', '+ 注釈追加') +
+          '</div>' +
+          '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
             '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:6px;">参加者一覧</label>' +
             '<div>' + pList + '</div>' +
           '</div>' +
           '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-            '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:6px;">メッセージ一覧</label>' +
+            '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:6px;">メッセージ一覧 (↑↓で並び替え)</label>' +
             '<div>' + mList + '</div>' +
+          '</div>' +
+          '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
+            '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:6px;">ブロック一覧</label>' +
+            '<div>' + gList + '</div>' +
+          '</div>' +
+          '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
+            '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:6px;">注釈一覧</label>' +
+            '<div>' + nList + '</div>' +
           '</div>';
 
         P.bindEvent('seq-set-title', 'click', function() {
@@ -366,15 +538,81 @@ window.MA.modules.plantumlSequence = (function() {
           ctx.onUpdate();
         });
 
+        P.bindEvent('seq-add-group-btn', 'click', function() {
+          var k = document.getElementById('seq-add-group-kind').value;
+          var l = document.getElementById('seq-add-group-label').value.trim();
+          window.MA.history.pushHistory();
+          ctx.setMmdText(addGroup(ctx.getMmdText(), k, l));
+          ctx.onUpdate();
+        });
+        P.bindEvent('seq-add-note-btn', 'click', function() {
+          var pos = document.getElementById('seq-add-note-pos').value;
+          var tgt = document.getElementById('seq-add-note-target').value;
+          var txt = document.getElementById('seq-add-note-text').value.trim();
+          if (!tgt) { alert('Target 参加者を選択してください'); return; }
+          window.MA.history.pushHistory();
+          ctx.setMmdText(addNote(ctx.getMmdText(), pos, [tgt], txt));
+          ctx.onUpdate();
+        });
+
         P.bindSelectButtons(propsEl, 'seq-select-part', 'participant');
         P.bindSelectButtons(propsEl, 'seq-select-msg', 'message');
+        P.bindSelectButtons(propsEl, 'seq-select-note', 'note');
         P.bindDeleteButtons(propsEl, 'seq-delete-part', ctx, deleteLine);
         P.bindDeleteButtons(propsEl, 'seq-delete-msg', ctx, deleteLine);
+        P.bindDeleteButtons(propsEl, 'seq-delete-note', ctx, deleteLine);
+        P.bindDeleteButtons(propsEl, 'seq-delete-group', ctx, deleteGroup, true);
+
+        // Reorder buttons
+        P.bindAllByClass(propsEl, 'seq-msg-up', function(btn) {
+          var ln = parseInt(btn.getAttribute('data-line'), 10);
+          if (isNaN(ln)) return;
+          window.MA.history.pushHistory();
+          ctx.setMmdText(moveMessage(ctx.getMmdText(), ln, -1));
+          ctx.onUpdate();
+        });
+        P.bindAllByClass(propsEl, 'seq-msg-down', function(btn) {
+          var ln = parseInt(btn.getAttribute('data-line'), 10);
+          if (isNaN(ln)) return;
+          window.MA.history.pushHistory();
+          ctx.setMmdText(moveMessage(ctx.getMmdText(), ln, 1));
+          ctx.onUpdate();
+        });
         return;
       }
 
       if (selData.length === 1) {
         var sel = selData[0];
+        if (sel.type === 'note') {
+          var nn = null;
+          for (var ki = 0; ki < parsedData.elements.length; ki++) {
+            var e0 = parsedData.elements[ki];
+            if (e0.kind === 'note' && e0.id === sel.id) { nn = e0; break; }
+          }
+          if (!nn) { propsEl.innerHTML = '<p style="color:var(--text-secondary);font-size:11px;">注釈が見つかりません</p>'; return; }
+          var nPosOpts = NOTE_POSITIONS.map(function(pp) { return { value: pp, label: pp, selected: pp === nn.position }; });
+          propsEl.innerHTML =
+            P.panelHeaderHtml('Note') +
+            P.selectFieldHtml('Position', 'seq-edit-note-pos', nPosOpts) +
+            P.fieldHtml('Target(s)', 'seq-edit-note-targets', nn.targets.join(', '), 'Alice / Alice, Bob') +
+            P.fieldHtml('Text', 'seq-edit-note-text', nn.text) +
+            P.dangerButtonHtml('seq-edit-note-delete', '注釈削除');
+          var nln = nn.line;
+          [['pos', 'position'], ['targets', 'targets'], ['text', 'text']].forEach(function(pair) {
+            document.getElementById('seq-edit-note-' + pair[0]).addEventListener('change', function() {
+              window.MA.history.pushHistory();
+              ctx.setMmdText(updateNote(ctx.getMmdText(), nln, pair[1], this.value));
+              ctx.onUpdate();
+            });
+          });
+          P.bindEvent('seq-edit-note-delete', 'click', function() {
+            window.MA.history.pushHistory();
+            ctx.setMmdText(deleteLine(ctx.getMmdText(), nln));
+            window.MA.selection.clearSelection();
+            ctx.onUpdate();
+          });
+          return;
+        }
         if (sel.type === 'participant') {
           var pp = null;
           for (var ii = 0; ii < participants.length; ii++) if (participants[ii].id === sel.id) { pp = participants[ii]; break; }

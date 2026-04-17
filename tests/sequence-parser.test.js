@@ -69,4 +69,36 @@ describe('parseSequence', function() {
     var r = seq.parseSequence('@startuml\nA -> B\n@enduml');
     expect(r.meta.autonumber).toBe(null);
   });
+
+  test('parses alt group', function() {
+    var r = seq.parseSequence('@startuml\nalt x > 0\nA -> B\nelse\nA -> C\nend\n@enduml');
+    expect(r.groups.length).toBe(1);
+    expect(r.groups[0].gtype).toBe('alt');
+    expect(r.groups[0].label).toBe('x > 0');
+    expect(r.groups[0].endLine).toBeGreaterThan(r.groups[0].line);
+  });
+
+  test('parses nested loop', function() {
+    var r = seq.parseSequence('@startuml\nloop 3 times\nalt ok\nA -> B\nend\nend\n@enduml');
+    expect(r.groups.length).toBe(2);
+    expect(r.groups[0].gtype).toBe('loop');
+    expect(r.groups[1].gtype).toBe('alt');
+    expect(r.groups[1].parentId).toBe(r.groups[0].id);
+  });
+
+  test('parses note over', function() {
+    var r = seq.parseSequence('@startuml\nparticipant A\nnote over A : hello\n@enduml');
+    var notes = r.elements.filter(function(e) { return e.kind === 'note'; });
+    expect(notes.length).toBe(1);
+    expect(notes[0].position).toBe('over');
+    expect(notes[0].targets).toEqual(['A']);
+    expect(notes[0].text).toBe('hello');
+  });
+
+  test('parses note right of', function() {
+    var r = seq.parseSequence('@startuml\nnote right of Bob : side\n@enduml');
+    var notes = r.elements.filter(function(e) { return e.kind === 'note'; });
+    expect(notes[0].position).toBe('right of');
+    expect(notes[0].targets).toEqual(['Bob']);
+  });
 });
