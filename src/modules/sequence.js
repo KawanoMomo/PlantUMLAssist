@@ -86,6 +86,101 @@ window.MA.modules.plantumlSequence = (function() {
     return result;
   }
 
+  function insertBeforeEnd(text, newLine) {
+    var lines = text.split('\n');
+    var endIdx = -1;
+    for (var i = lines.length - 1; i >= 0; i--) {
+      if (/^\s*@enduml/.test(lines[i])) { endIdx = i; break; }
+    }
+    if (endIdx < 0) {
+      var insertAt = lines.length;
+      while (insertAt > 0 && lines[insertAt - 1].trim() === '') insertAt--;
+      lines.splice(insertAt, 0, newLine);
+    } else {
+      lines.splice(endIdx, 0, newLine);
+    }
+    return lines.join('\n');
+  }
+
+  function addParticipant(text, ptype, alias, label) {
+    var line;
+    if (label && label !== alias) {
+      line = ptype + ' "' + label + '" as ' + alias;
+    } else {
+      line = ptype + ' ' + alias;
+    }
+    return insertBeforeEnd(text, line);
+  }
+
+  function addMessage(text, from, to, arrow, label) {
+    var line = from + ' ' + (arrow || '->') + ' ' + to + (label ? ' : ' + label : '');
+    return insertBeforeEnd(text, line);
+  }
+
+  function deleteLine(text, lineNum) {
+    return window.MA.textUpdater.deleteLine(text, lineNum);
+  }
+
+  function updateParticipant(text, lineNum, field, value) {
+    var lines = text.split('\n');
+    var idx = lineNum - 1;
+    if (idx < 0 || idx >= lines.length) return text;
+    var indent = lines[idx].match(/^(\s*)/)[1];
+    var m = lines[idx].trim().match(PART_RE);
+    if (!m) return text;
+    var ptype = m[1];
+    var alias, label, labelImplicit = false;
+    if (m[2] !== undefined) { alias = m[3]; label = m[2]; }
+    else {
+      alias = m[4];
+      if (m[5] !== undefined) { label = m[5]; }
+      else { label = m[4]; labelImplicit = true; }
+    }
+    if (field === 'ptype') ptype = value;
+    else if (field === 'id' || field === 'alias') {
+      if (labelImplicit) label = value;
+      alias = value;
+    }
+    else if (field === 'label') label = value;
+    var out = label && label !== alias ? (ptype + ' "' + label + '" as ' + alias) : (ptype + ' ' + alias);
+    lines[idx] = indent + out;
+    return lines.join('\n');
+  }
+
+  function updateMessage(text, lineNum, field, value) {
+    var lines = text.split('\n');
+    var idx = lineNum - 1;
+    if (idx < 0 || idx >= lines.length) return text;
+    var indent = lines[idx].match(/^(\s*)/)[1];
+    var m = lines[idx].trim().match(MSG_RE);
+    if (!m) return text;
+    var from = unquote(m[1]), arrow = m[2], to = unquote(m[3]), label = m[4] || '';
+    if (field === 'from') from = value;
+    else if (field === 'to') to = value;
+    else if (field === 'arrow') arrow = value;
+    else if (field === 'label') label = value;
+    lines[idx] = indent + from + ' ' + arrow + ' ' + to + (label ? ' : ' + label : '');
+    return lines.join('\n');
+  }
+
+  function setTitle(text, newTitle) {
+    var lines = text.split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      if (/^\s*title\s+/.test(lines[i])) {
+        var indent = lines[i].match(/^(\s*)/)[1];
+        lines[i] = indent + 'title ' + newTitle;
+        return lines.join('\n');
+      }
+    }
+    for (var j = 0; j < lines.length; j++) {
+      if (/^\s*@startuml/.test(lines[j])) {
+        lines.splice(j + 1, 0, 'title ' + newTitle);
+        return lines.join('\n');
+      }
+    }
+    return text;
+  }
+
   return {
     type: 'plantuml-sequence',
     displayName: 'Sequence',
@@ -94,6 +189,12 @@ window.MA.modules.plantumlSequence = (function() {
     detect: function(text) { return window.MA.parserUtils.detectDiagramType(text) === 'plantuml-sequence'; },
     parse: parseSequence,
     parseSequence: parseSequence,
+    addParticipant: addParticipant,
+    addMessage: addMessage,
+    deleteLine: deleteLine,
+    updateParticipant: updateParticipant,
+    updateMessage: updateMessage,
+    setTitle: setTitle,
     template: function() {
       return [
         '@startuml',
@@ -119,6 +220,32 @@ window.MA.modules.plantumlSequence = (function() {
     renderProps: function(selData, parsedData, propsEl, ctx) {
       if (propsEl) propsEl.innerHTML = '<p style="color:var(--text-secondary);font-size:11px;">Sequence (実装中)</p>';
     },
-    operations: { add: function(t) { return t; }, delete: function(t) { return t; }, update: function(t) { return t; }, moveUp: function(t) { return t; }, moveDown: function(t) { return t; }, connect: function(t) { return t; } },
+    operations: {
+      add: function(text, kind, props) {
+        if (kind === 'participant') return addParticipant(text, props.ptype || 'participant', props.alias, props.label);
+        if (kind === 'message') return addMessage(text, props.from, props.to, props.arrow, props.label);
+        return text;
+      },
+      delete: function(text, lineNum) { return deleteLine(text, lineNum); },
+      update: function(text, lineNum, field, value, opts) {
+        opts = opts || {};
+        if (field === 'title') return setTitle(text, value);
+        if (opts.kind === 'message') return updateMessage(text, lineNum, field, value);
+        return updateParticipant(text, lineNum, field, value);
+      },
+      moveUp: function(text, lineNum) {
+        if (lineNum <= 1) return text;
+        return window.MA.textUpdater.swapLines(text, lineNum, lineNum - 1);
+      },
+      moveDown: function(text, lineNum) {
+        var total = text.split('\n').length;
+        if (lineNum >= total) return text;
+        return window.MA.textUpdater.swapLines(text, lineNum, lineNum + 1);
+      },
+      connect: function(text, fromName, toName, props) {
+        props = props || {};
+        return addMessage(text, fromName, toName, props.arrow || '->', props.label);
+      },
+    },
   };
 })();
