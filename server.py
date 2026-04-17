@@ -6,6 +6,8 @@ import json
 import os
 import subprocess
 import sys
+import threading
+import time
 import urllib.request
 import urllib.error
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -14,6 +16,14 @@ from pathlib import Path
 ROOT = Path(__file__).parent
 JAR_PATH = ROOT / 'lib' / 'plantuml.jar'
 PORT = 8766
+# Seconds of heartbeat silence before the server shuts itself down.
+# Browser client POSTs /heartbeat every ~5s; if the tab is closed the
+# pings stop and the watchdog terminates the server automatically.
+IDLE_SHUTDOWN_SEC = 20
+
+_state_lock = threading.Lock()
+_last_heartbeat = time.time()
+_shutdown_started = False
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -43,9 +53,28 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(file_path.read_bytes())
 
     def do_POST(self):
+        global _last_heartbeat, _shutdown_started
+        if self.path == '/heartbeat':
+            with _state_lock:
+                _last_heartbeat = time.time()
+            self.send_response(204)
+            self.end_headers()
+            return
+        if self.path == '/shutdown':
+            # Don't kill immediately — F5 reload also fires pagehide/beforeunload.
+            # Instead fast-forward the idle timer so the watchdog fires in ~2s,
+            # which a fresh heartbeat from the new page will cancel.
+            with _state_lock:
+                _last_heartbeat = time.time() - IDLE_SHUTDOWN_SEC + 2
+            self.send_response(204)
+            self.end_headers()
+            return
         if self.path != '/render':
             self.send_error(404)
             return
+        # Any render counts as activity too, so a client mid-edit is never killed.
+        with _state_lock:
+            _last_heartbeat = time.time()
         length = int(self.headers.get('Content-Length', 0))
         body = self.rfile.read(length).decode('utf-8')
         try:
@@ -149,16 +178,41 @@ def _encode_base64(data):
     return ''.join(out)
 
 
+def _idle_watchdog(server):
+    """Shut the server down when the browser client stops sending heartbeats."""
+    global _shutdown_started
+    while True:
+        time.sleep(2)
+        with _state_lock:
+            if _shutdown_started:
+                return
+            idle = time.time() - _last_heartbeat
+        if idle > IDLE_SHUTDOWN_SEC:
+            with _state_lock:
+                if _shutdown_started:
+                    return
+                _shutdown_started = True
+            print(f'\nNo heartbeat for {idle:.1f}s (browser tab closed?) -- shutting down.')
+            server.shutdown()
+            return
+
+
 def main():
     print(f'PlantUMLAssist server starting on http://127.0.0.1:{PORT}')
     print(f'  ROOT: {ROOT}')
     print(f'  JAR:  {JAR_PATH} (exists={JAR_PATH.exists()})')
+    print(f'  IDLE_SHUTDOWN: {IDLE_SHUTDOWN_SEC}s (auto-stops if browser tab closes)')
     print('Press Ctrl+C to stop.')
     server = HTTPServer(('127.0.0.1', PORT), Handler)
+    # Grace period before the watchdog starts counting.
+    global _last_heartbeat
+    _last_heartbeat = time.time() + 30
+    threading.Thread(target=_idle_watchdog, args=(server,), daemon=True).start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         print('\nShutting down.')
+    finally:
         server.server_close()
 
 

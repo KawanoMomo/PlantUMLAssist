@@ -277,16 +277,23 @@ html, body {
   overflow: auto;
   position: relative;
   padding: 16px;
+  background: #f5f5f5;
 }
 
 #preview-svg {
   display: inline-block;
   transform-origin: 0 0;
   position: relative;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
 }
 #preview-svg svg {
   display: block;
   max-width: 100%;
+}
+#preview-svg p {
+  background: var(--bg-secondary);
+  color: var(--accent-red);
 }
 
 #overlay-layer {

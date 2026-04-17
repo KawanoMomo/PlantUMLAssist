@@ -150,6 +150,35 @@ function init() {
   setZoom(1.0);
   updateLineNumbers();
   scheduleRefresh();
+  startHeartbeat();
+}
+
+// ── Auto-shutdown heartbeat ─────────────────────────────────────────────────
+// Pings /heartbeat every 5s so the Python server knows the tab is alive.
+// On close/unload, fires sendBeacon('/shutdown') for an immediate kill.
+// If the browser crashes without firing unload events, the server's
+// watchdog (IDLE_SHUTDOWN_SEC in server.py) catches it.
+//
+// Playwright/automation is detected via navigator.webdriver and skips the
+// shutdown beacon so tests don't kill the shared server between cases.
+function startHeartbeat() {
+  function ping() {
+    fetch('/heartbeat', { method: 'POST', keepalive: true }).catch(function() {});
+  }
+  ping();
+  setInterval(ping, 5000);
+  if (navigator.webdriver) return;  // automated browser: heartbeat only, no shutdown beacon
+  function shutdown() {
+    try {
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon('/shutdown', new Blob([], { type: 'text/plain' }));
+      } else {
+        fetch('/shutdown', { method: 'POST', keepalive: true }).catch(function() {});
+      }
+    } catch (e) {}
+  }
+  window.addEventListener('pagehide', shutdown);
+  window.addEventListener('beforeunload', shutdown);
 }
 
 function updateUndoRedoButtons() {
