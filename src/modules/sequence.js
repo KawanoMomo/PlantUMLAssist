@@ -420,6 +420,13 @@ window.MA.modules.plantumlSequence = (function() {
       ctx.setMmdText(insertAfter(ctx.getMmdText(), ln, 'participant', { ptype: ptype || 'participant', alias: alias }));
       ctx.onUpdate();
     });
+    // C9: メッセージ選択時、対応する activate/deactivate を推論挿入
+    P.bindAllByClass(propsEl, 'seq-infer-activation', function(btn) {
+      var ln = parseInt(btn.getAttribute('data-line'), 10);
+      window.MA.history.pushHistory();
+      ctx.setMmdText(inferActivations(ctx.getMmdText(), ln));
+      ctx.onUpdate();
+    });
   }
 
   function _showInsertForm(ctx, line, position, kind) {
@@ -826,6 +833,11 @@ window.MA.modules.plantumlSequence = (function() {
               '<button class="seq-insert-part-before" data-line="' + line + '" style="width:100%;text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">← 左に参加者追加</button>' +
               '<button class="seq-insert-part-after" data-line="' + line + '" style="width:100%;text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">→ 右に参加者追加</button>';
           }
+          var msgOnlyButtons = '';
+          if (kind === 'message') {
+            msgOnlyButtons =
+              '<button class="seq-infer-activation" data-line="' + line + '" style="width:100%;text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">⚡ ライフライン推論 (activate/deactivate)</button>';
+          }
           return '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
             '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">この位置に挿入</label>' +
             partInsert +
@@ -833,6 +845,7 @@ window.MA.modules.plantumlSequence = (function() {
             '<button class="seq-insert-msg-after" data-line="' + line + '" style="width:100%;text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">↓ この後にメッセージ追加</button>' +
             '<button class="seq-insert-note-after" data-line="' + line + '" style="width:100%;text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">↓ この後に注釈追加</button>' +
             '<button class="seq-wrap-block" data-line="' + line + '" style="width:100%;text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">⌗ alt/loop で囲む…</button>' +
+            msgOnlyButtons +
           '</div>' +
           '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;display:flex;gap:4px;">' +
             '<button class="seq-move-up" data-line="' + line + '" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↑ 上へ</button>' +
