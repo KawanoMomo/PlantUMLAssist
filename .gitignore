@@ -22,3 +22,9 @@ Thumbs.db
 
 # PlantUML rendered cache (if any)
 *.tmp.svg
+
+# Dev artifacts (local screenshots, MCP session state, user issue scratchpad)
+.eval/
+.superpowers/
+.playwright-mcp/
+docs/userissue/
