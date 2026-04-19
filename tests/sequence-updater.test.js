@@ -278,3 +278,48 @@ describe('wrapWith', function() {
     expect(out).toContain('opt\n');
   });
 });
+
+describe('renameWithRefs', function() {
+  test('renames participant and updates message from/to', function() {
+    var text = [
+      '@startuml',
+      'participant Database',
+      'A -> Database : query',
+      'Database --> A : result',
+      '@enduml',
+    ].join('\n');
+    var out = seq.renameWithRefs(text, 'Database', 'Redis');
+    expect(out).toContain('participant Redis');
+    expect(out).toContain('A -> Redis : query');
+    expect(out).toContain('Redis --> A : result');
+    expect(out).not.toContain('Database');
+  });
+
+  test('handles quoted alias', function() {
+    var text = '@startuml\nparticipant "DB Server" as DB\nA -> DB : q\n@enduml';
+    var out = seq.renameWithRefs(text, 'DB', 'Cache');
+    expect(out).toContain('"DB Server" as Cache');
+    expect(out).toContain('A -> Cache : q');
+  });
+
+  test('does not rename substring matches inside other identifiers', function() {
+    var text = '@startuml\nparticipant DB\nparticipant DBClient\nDBClient -> DB : q\n@enduml';
+    var out = seq.renameWithRefs(text, 'DB', 'Cache');
+    expect(out).toContain('participant Cache');
+    expect(out).toContain('participant DBClient');
+    expect(out).toContain('DBClient -> Cache : q');
+  });
+
+  test('updates activate/deactivate references', function() {
+    var text = '@startuml\nparticipant DB\nA -> DB\nactivate DB\ndeactivate DB\n@enduml';
+    var out = seq.renameWithRefs(text, 'DB', 'Cache');
+    expect(out).toContain('activate Cache');
+    expect(out).toContain('deactivate Cache');
+  });
+
+  test('updates note targets', function() {
+    var text = '@startuml\nparticipant DB\nnote over DB : info\n@enduml';
+    var out = seq.renameWithRefs(text, 'DB', 'Cache');
+    expect(out).toContain('note over Cache : info');
+  });
+});

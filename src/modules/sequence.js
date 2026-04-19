@@ -354,6 +354,33 @@ window.MA.modules.plantumlSequence = (function() {
     return window.MA.textUpdater.insertAfterLine(text, lineNum, line);
   }
 
+  // renameWithRefs: participant の id (alias) を別名へ。本文中の参照
+  // (message from/to, activate/deactivate target, note target など) も
+  // 単語境界 \b で同時更新する。コメント行 (' 始まり) と "..." 内のラベル
+  // 文字列は保護 (alias != label のとき label が誤置換されるのを防ぐ)。
+  // PlantUML identifier は ASCII 英数 + _ を想定 (\b で十分)。
+  function renameWithRefs(text, oldId, newId) {
+    if (!oldId || !newId || oldId === newId) return text;
+    var escaped = oldId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    var pattern = new RegExp('\\b' + escaped + '\\b', 'g');
+    return text.split('\n').map(function(line) {
+      if (/^\s*'/.test(line)) return line;
+      // "..." の中身は temporarily 取り除いて置換、最後に復元 (label 保護)。
+      // sentinel は制御文字 \u0001 \u0002 で囲み \b 境界に晒さない (識別子と
+      // 衝突しないため、ユーザが「\u0001 を含む alias を使う」現実離れした
+      // ケース以外で安全)。
+      var quoted = [];
+      var stripped = line.replace(/"[^"]*"/g, function(m) {
+        quoted.push(m);
+        return '\u0001' + (quoted.length - 1) + '\u0002';
+      });
+      var replaced = stripped.replace(pattern, newId);
+      return replaced.replace(/\u0001(\d+)\u0002/g, function(_, idx) {
+        return quoted[parseInt(idx, 10)];
+      });
+    }).join('\n');
+  }
+
   function updateNote(text, lineNum, field, value) {
     var lines = text.split('\n');
     var idx = lineNum - 1;
@@ -452,6 +479,7 @@ window.MA.modules.plantumlSequence = (function() {
     addActivation: addActivation,
     insertBefore: insertBefore,
     insertAfter: insertAfter,
+    renameWithRefs: renameWithRefs,
     template: function() {
       return [
         '@startuml',
