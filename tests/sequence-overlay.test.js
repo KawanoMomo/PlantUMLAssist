@@ -161,6 +161,19 @@ describe('buildSequenceOverlay', function() {
     expect(report.unmatched.participant).toBe(0);
     expect(report.unmatched.message).toBe(0);
   });
+
+  test('note placeholder is positioned near target participant rect (Bug B4)', function() {
+    var f = loadFixture('sequence-with-notes');
+    var overlayEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    overlay.buildSequenceOverlay(f.svgEl, f.parsed, overlayEl);
+    var noteRects = overlayEl.querySelectorAll('rect[data-type="note"]');
+    expect(noteRects.length).toBeGreaterThan(0);
+    var nr = noteRects[0];
+    // 1×1 placeholder 戦略ではなく target participant の座標近傍に box が置かれるので、
+    // width は 1 より大きい (= クリック可能な大きさ)。
+    expect(parseFloat(nr.getAttribute('width')) > 1).toBe(true);
+    expect(parseFloat(nr.getAttribute('height')) > 1).toBe(true);
+  });
 });
 
 describe('resolveInsertLine', function() {

@@ -202,12 +202,35 @@ window.MA.sequenceOverlay = (function() {
         });
       });
     } else {
+      // Bug B4 fix: 1×1 placeholder (pointer-events:none) ではクリック不可。
+      // note の target participant の既存 overlay rect の位置を参照し、その近傍に
+      // クリック可能な approximate box を置く (正確座標抽出は別 sprint)。
       notes.forEach(function(n) {
-        _addRect(overlayEl, 0, 0, 1, 1, {
-          'data-type': 'note',
-          'data-id': n.id,
-          'data-line': n.line,
-        });
+        var targets = n.targets || [];
+        var targetPart = targets[0];
+        var partRect = targetPart
+          ? overlayEl.querySelector('rect[data-type="participant"][data-id="' + targetPart + '"]')
+          : null;
+        if (partRect) {
+          var px = parseFloat(partRect.getAttribute('x')) || 0;
+          var pw = parseFloat(partRect.getAttribute('width')) || 60;
+          var py = parseFloat(partRect.getAttribute('y')) || 0;
+          var ph = parseFloat(partRect.getAttribute('height')) || 20;
+          // Position under the head participant rect (approximate).
+          _addRect(overlayEl, px, py + ph + 4, pw, 20, {
+            'data-type': 'note',
+            'data-id': n.id,
+            'data-line': n.line,
+          });
+        } else {
+          // 最終 fallback: 参照 participant が無い (or overlay 生成失敗) 場合のみ
+          // 1×1 placeholder (pointer-events:none)。
+          _addRect(overlayEl, 0, 0, 1, 1, {
+            'data-type': 'note',
+            'data-id': n.id,
+            'data-line': n.line,
+          });
+        }
       });
     }
     _warnIfMismatch('note', notes.length, overlayEl.querySelectorAll('rect[data-type="note"]').length);
