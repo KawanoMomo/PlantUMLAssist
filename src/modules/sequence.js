@@ -957,12 +957,28 @@ window.MA.modules.plantumlSequence = (function() {
           for (var ii = 0; ii < participants.length; ii++) if (participants[ii].id === sel.id) { pp = participants[ii]; break; }
           if (!pp) { propsEl.innerHTML = '<p style="color:var(--text-secondary);font-size:11px;">参加者が見つかりません</p>'; return; }
           var pOpts2 = PARTICIPANT_TYPES.map(function(pt) { return { value: pt, label: pt, selected: pt === pp.ptype }; });
+          var colors = ['#FFAAAA', '#FFD700', '#AAEEAA', '#AACCFF', '#E0AAFF', '#FFB88C', '#D3D3D3'];
+          var currentColor = null;
+          var pLine = ctx.getMmdText().split('\n')[pp.line - 1];
+          var cm = pLine && pLine.match(/#[0-9A-Fa-f]{6}/);
+          if (cm) currentColor = cm[0];
+          var paletteHtml = '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
+            '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">色</label>' +
+            '<div style="display:flex;gap:4px;flex-wrap:wrap;">' +
+              '<button class="seq-color-swatch" data-color="" title="色なし" style="width:22px;height:22px;background:transparent;border:1px dashed var(--text-secondary);border-radius:4px;cursor:pointer;' + (currentColor === null ? 'box-shadow:0 0 0 2px var(--accent);' : '') + '"></button>' +
+              colors.map(function(c) {
+                var selStyle = (currentColor && currentColor.toLowerCase() === c.toLowerCase()) ? 'box-shadow:0 0 0 2px var(--accent);border-color:#fff;' : '';
+                return '<button class="seq-color-swatch" data-color="' + c + '" title="' + c + '" style="width:22px;height:22px;background:' + c + ';border:2px solid var(--bg-secondary);border-radius:4px;cursor:pointer;' + selStyle + '"></button>';
+              }).join('') +
+            '</div>' +
+          '</div>';
           propsEl.innerHTML =
             '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>' + escHtml(pp.label) + '</strong><br><span style="color:var(--text-secondary);">' + pp.ptype + ' · L' + pp.line + '</span></div>' +
             P.selectFieldHtml('Type', 'seq-edit-ptype', pOpts2) +
             P.fieldHtml('Alias', 'seq-edit-alias', pp.id) +
             '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Label</label><div id="seq-edit-label-rle"></div></div>' +
             '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-primary);margin:8px 0;"><input id="seq-edit-rename-refs" type="checkbox" checked> Alias 変更時に他要素の参照も追従</label>' +
+            paletteHtml +
             actionBarHtml(pp.line, 'participant');
           var ln = pp.line;
           document.getElementById('seq-edit-ptype').addEventListener('change', function() {
@@ -988,6 +1004,13 @@ window.MA.modules.plantumlSequence = (function() {
           window.MA.richLabelEditor.mount(document.getElementById('seq-edit-label-rle'), pp.label, function(v) {
             if (!_partLabelPushed) { window.MA.history.pushHistory(); _partLabelPushed = true; }
             ctx.setMmdText(updateParticipant(ctx.getMmdText(), ln, 'label', v));
+            ctx.onUpdate();
+          });
+          // C19: color palette click handlers
+          P.bindAllByClass(propsEl, 'seq-color-swatch', function(btn) {
+            var c = btn.getAttribute('data-color');
+            window.MA.history.pushHistory();
+            ctx.setMmdText(setParticipantColor(ctx.getMmdText(), pp.id, c || null));
             ctx.onUpdate();
           });
         }
