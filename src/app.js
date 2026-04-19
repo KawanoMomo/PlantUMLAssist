@@ -254,12 +254,18 @@ function init() {
       if (newIndex !== null && currentModule) {
         var seqMod = window.MA.modules && window.MA.modules.plantumlSequence;
         if (seqMod && seqMod.moveParticipant) {
-          window.MA.history.pushHistory();
-          mmdText = seqMod.moveParticipant(mmdText, dragState.id, newIndex);
-          suppressSync = true;
-          editorEl.value = mmdText;
-          suppressSync = false;
-          scheduleRefresh();
+          // Bug 4: newIndex === 現在位置の no-op で履歴だけ積まれると
+          // Ctrl+Z が「同じ text に戻る」無駄な 1 step になり、体感的に
+          // undo が効かない。text が実際に変わった時のみ pushHistory。
+          var newText = seqMod.moveParticipant(mmdText, dragState.id, newIndex);
+          if (newText !== mmdText) {
+            window.MA.history.pushHistory();
+            mmdText = newText;
+            suppressSync = true;
+            editorEl.value = mmdText;
+            suppressSync = false;
+            scheduleRefresh();
+          }
         }
       }
       if (dragState.ghostEl && dragState.ghostEl.parentNode) dragState.ghostEl.parentNode.removeChild(dragState.ghostEl);
