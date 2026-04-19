@@ -73,16 +73,33 @@ window.MA.sequenceOverlay = (function() {
   function _gBBox(g) {
     // <g> の中の最初の <text> 要素の bbox を採用 (jsdom 互換 fallback あり)。
     var t = g.querySelector('text');
-    if (!t) return null;
-    if (typeof t.getBBox === 'function') {
-      try { return t.getBBox(); } catch (e) { /* jsdom: fall through */ }
+    if (t) {
+      if (typeof t.getBBox === 'function') {
+        try { return t.getBBox(); } catch (e) { /* jsdom: fall through */ }
+      }
+      return {
+        x: parseFloat(t.getAttribute('x')) || 0,
+        y: parseFloat(t.getAttribute('y')) || 0,
+        width: parseFloat(t.getAttribute('textLength')) || parseFloat(t.getAttribute('width')) || 0,
+        height: 14, // PlantUML default font height fallback
+      };
     }
-    return {
-      x: parseFloat(t.getAttribute('x')) || 0,
-      y: parseFloat(t.getAttribute('y')) || 0,
-      width: parseFloat(t.getAttribute('textLength')) || parseFloat(t.getAttribute('width')) || 0,
-      height: 14, // PlantUML default font height fallback
-    };
+    // Bug B3 fix: ラベル無しメッセージ (`A -> B` のみ) は <text> を持たない。
+    // <line> の座標から bbox を推定して選択可能にする。
+    var line = g.querySelector('line');
+    if (line) {
+      var x1 = parseFloat(line.getAttribute('x1')) || 0;
+      var x2 = parseFloat(line.getAttribute('x2')) || 0;
+      var y1 = parseFloat(line.getAttribute('y1')) || 0;
+      var y2 = parseFloat(line.getAttribute('y2')) || 0;
+      return {
+        x: Math.min(x1, x2),
+        y: Math.min(y1, y2) - 6,
+        width: Math.abs(x2 - x1),
+        height: Math.max(Math.abs(y2 - y1), 12),
+      };
+    }
+    return null;
   }
 
   function _pickBestOffset(svgEl, parsedItems, groupSelector, candidates) {

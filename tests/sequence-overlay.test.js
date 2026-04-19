@@ -107,6 +107,22 @@ describe('buildSequenceOverlay', function() {
     expect(report.unmatched.message).toBe(0);
   });
 
+  test('produces overlay rect for label-less message via <line> bbox fallback (Bug B3)', function() {
+    var f = loadFixture('sequence-basic');
+    // label を持つ 4 messages から 1 つ選び、<text> を削除して label-less を擬似再現。
+    var msgGroups = f.svgEl.querySelectorAll('g.message');
+    expect(msgGroups.length).toBeGreaterThan(0);
+    var targetG = msgGroups[0];
+    var targetText = targetG.querySelector('text');
+    if (targetText) targetG.removeChild(targetText);
+
+    var overlayEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    overlay.buildSequenceOverlay(f.svgEl, f.parsed, overlayEl);
+    var msgRects = overlayEl.querySelectorAll('rect[data-type="message"]');
+    // <text> が欠けた group も <line> fallback で overlay rect を得る → 4 個全て生成。
+    expect(msgRects.length).toBe(f.parsed.relations.length);
+  });
+
   test('falls back to order-based matching when SVG lacks data-source-line (Bug B5)', function() {
     var f = loadFixture('sequence-basic');
     // v1.2026.x 以降の SVG を模倣: 全ての data-source-line attribute を剥奪。
