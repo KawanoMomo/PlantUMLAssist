@@ -48,15 +48,27 @@ describe('buildSequenceOverlay', function() {
     overlay.buildSequenceOverlay(f.svgEl, f.parsed, overlayEl);
     var partRects = overlayEl.querySelectorAll('rect[data-type="participant"]');
     var partsInModel = f.parsed.elements.filter(function(e) { return e.kind === 'participant'; }).length;
-    // tail rect が追加されているので head + tail で 2× の rect が存在する。
-    expect(partRects.length).toBe(partsInModel * 2);
-    // tail rect は head よりも Y 座標が下。先頭 participant の 2 rect を y 比較。
+    // Feature #7: head + tail + lifeline の 3 rect / participant を生成する。
+    expect(partRects.length).toBe(partsInModel * 3);
+    // tail rect は head よりも Y 座標が下。同一 id で Y が異なる rect が 3 本ある。
     var firstId = f.parsed.elements.filter(function(e) { return e.kind === 'participant'; })[0].id;
-    var pairs = overlayEl.querySelectorAll('rect[data-type="participant"][data-id="' + firstId + '"]');
-    expect(pairs.length).toBe(2);
-    var y0 = parseFloat(pairs[0].getAttribute('y'));
-    var y1 = parseFloat(pairs[1].getAttribute('y'));
-    expect(Math.abs(y0 - y1) > 10).toBe(true);
+    var trio = overlayEl.querySelectorAll('rect[data-type="participant"][data-id="' + firstId + '"]');
+    expect(trio.length).toBe(3);
+    var ys = Array.prototype.map.call(trio, function(r) { return parseFloat(r.getAttribute('y')); }).sort(function(a, b) { return a - b; });
+    // head (最上) / lifeline (中央) / tail (最下) で少なくとも 10px 以上離れている。
+    expect(ys[2] - ys[0] > 10).toBe(true);
+  });
+
+  test('Feature #7: lifeline click overlay rect exists for each participant', function() {
+    var f = loadFixture('sequence-basic');
+    var overlayEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    overlay.buildSequenceOverlay(f.svgEl, f.parsed, overlayEl);
+    var participants = f.parsed.elements.filter(function(e) { return e.kind === 'participant'; });
+    // 各 participant について 3 rect (head/tail/lifeline) が data-id 一致で存在する
+    participants.forEach(function(p) {
+      var rects = overlayEl.querySelectorAll('rect[data-type="participant"][data-id="' + p.id + '"]');
+      expect(rects.length).toBe(3);
+    });
   });
 
   test('produces overlay rects for messages with correct data-line', function() {

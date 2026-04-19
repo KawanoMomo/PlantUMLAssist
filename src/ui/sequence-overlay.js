@@ -169,6 +169,36 @@ window.MA.sequenceOverlay = (function() {
       });
     });
 
+    // Feature #7: lifeline (縦点線) も click 可能にする。participant の head/tail
+    // overlay rect を参照し、lifeline の <line> x 座標が head rect の範囲内に
+    // 入るものを同一 participant として関連付ける。
+    var lifelines = svgEl.querySelectorAll('g.participant-lifeline');
+    Array.prototype.forEach.call(lifelines, function(lg) {
+      var line = lg.querySelector('line');
+      if (!line) return;
+      var x1 = parseFloat(line.getAttribute('x1'));
+      var x2 = parseFloat(line.getAttribute('x2'));
+      var y1 = parseFloat(line.getAttribute('y1'));
+      var y2 = parseFloat(line.getAttribute('y2'));
+      if (isNaN(x1) || isNaN(x2) || isNaN(y1) || isNaN(y2)) return;
+      var cx = (x1 + x2) / 2;
+      var matched = null;
+      var headRects = overlayEl.querySelectorAll('rect[data-type="participant"]');
+      Array.prototype.forEach.call(headRects, function(r) {
+        if (matched) return;
+        var rx = parseFloat(r.getAttribute('x'));
+        var rw = parseFloat(r.getAttribute('width'));
+        if (cx >= rx && cx <= rx + rw) matched = r;
+      });
+      if (!matched) return;
+      var id = matched.getAttribute('data-id');
+      var lineNum = matched.getAttribute('data-line');
+      _addRect(overlayEl,
+        Math.min(x1, x2) - 6, Math.min(y1, y2),
+        12, Math.abs(y2 - y1),
+        { 'data-type': 'participant', 'data-id': id, 'data-line': lineNum });
+    });
+
     var msgBest = _pickBestOffset(svgEl, parsedData.relations, 'g.message', candidates);
     var msgMatches = msgBest.matches;
     msgMatches.forEach(function(m) {
