@@ -62,6 +62,29 @@ function init() {
 
   initPaneResizers();
 
+  // Overlay click → selection
+  var overlayEl = document.getElementById('overlay-layer');
+  if (overlayEl) {
+    overlayEl.addEventListener('click', function(e) {
+      var target = e.target;
+      var type = target.getAttribute('data-type');
+      var id = target.getAttribute('data-id');
+      var line = target.getAttribute('data-line');
+      if (!type) {
+        if (!e.shiftKey) window.MA.selection.clearSelection();
+        return;
+      }
+      var selItem = { type: type, id: id, line: parseInt(line, 10) };
+      if (e.shiftKey) {
+        // 範囲/複数追加 (Sprint 5 で範囲選択 UI を完成させる)
+        var current = window.MA.selection.getSelected() || [];
+        window.MA.selection.setSelected(current.concat([selItem]));
+      } else {
+        window.MA.selection.setSelected([selItem]);
+      }
+    });
+  }
+
   editorEl.addEventListener('keydown', function(e) {
     if (e.key !== 'Tab' || e.isComposing) return;
     e.preventDefault();
