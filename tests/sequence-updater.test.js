@@ -175,3 +175,37 @@ describe('toggleAutonumber', function() {
     expect(out.indexOf('autonumber')).toBeLessThan(out.indexOf('A -> B'));
   });
 });
+
+describe('insertBefore', function() {
+  test('inserts a message before the given line', function() {
+    var text = '@startuml\nA -> B : first\nA -> C : second\n@enduml';
+    var out = seq.insertBefore(text, 3, 'message', { from: 'A', to: 'B', arrow: '->', label: 'mid' });
+    var lines = out.split('\n');
+    expect(lines[2]).toBe('A -> B : mid');
+    expect(lines[3]).toBe('A -> C : second');
+  });
+
+  test('inserts a note before the given line', function() {
+    var text = '@startuml\nA -> B\n@enduml';
+    var out = seq.insertBefore(text, 2, 'note', { position: 'over', targets: ['A'], text: 'hi' });
+    expect(out).toContain('note over A : hi');
+    expect(out.indexOf('note over')).toBeLessThan(out.indexOf('A -> B'));
+  });
+});
+
+describe('insertAfter', function() {
+  test('inserts a message after the given line', function() {
+    var text = '@startuml\nA -> B : first\nA -> C : second\n@enduml';
+    var out = seq.insertAfter(text, 2, 'message', { from: 'A', to: 'B', arrow: '->', label: 'mid' });
+    var lines = out.split('\n');
+    expect(lines[2]).toBe('A -> B : mid');
+    expect(lines[3]).toBe('A -> C : second');
+  });
+
+  test('inserts an activation after the given line', function() {
+    var text = '@startuml\nA -> B\n@enduml';
+    var out = seq.insertAfter(text, 2, 'activation', { action: 'activate', target: 'B' });
+    expect(out).toContain('activate B');
+    expect(out.indexOf('A -> B')).toBeLessThan(out.indexOf('activate B'));
+  });
+});

@@ -275,6 +275,42 @@ window.MA.modules.plantumlSequence = (function() {
     return insertBeforeEnd(text, line);
   }
 
+  function _formatLine(kind, props) {
+    if (kind === 'message') {
+      return (props.from || 'A') + ' ' + (props.arrow || '->') + ' ' + (props.to || 'B') + (props.label ? ' : ' + props.label : '');
+    }
+    if (kind === 'note') {
+      var targetStr = Array.isArray(props.targets) ? props.targets.join(', ') : (props.targets || '');
+      return 'note ' + (props.position || 'over') + ' ' + targetStr + (props.text ? ' : ' + props.text : '');
+    }
+    if (kind === 'activation') {
+      return (props.action || 'activate') + ' ' + (props.target || 'A');
+    }
+    if (kind === 'participant') {
+      var ptype = props.ptype || 'participant';
+      var alias = props.alias || 'X';
+      var label = props.label;
+      if (label && label !== alias) return ptype + ' "' + label + '" as ' + alias;
+      return ptype + ' ' + alias;
+    }
+    if (kind === 'block') {
+      return (props.kind || 'alt') + (props.label ? ' ' + props.label : '') + '\n\nend';
+    }
+    return '';
+  }
+
+  function insertBefore(text, lineNum, kind, props) {
+    var line = _formatLine(kind, props);
+    if (!line) return text;
+    return window.MA.textUpdater.insertAtLine(text, lineNum, line);
+  }
+
+  function insertAfter(text, lineNum, kind, props) {
+    var line = _formatLine(kind, props);
+    if (!line) return text;
+    return window.MA.textUpdater.insertAfterLine(text, lineNum, line);
+  }
+
   function updateNote(text, lineNum, field, value) {
     var lines = text.split('\n');
     var idx = lineNum - 1;
@@ -369,6 +405,8 @@ window.MA.modules.plantumlSequence = (function() {
     updateNote: updateNote,
     moveMessage: moveMessage,
     addActivation: addActivation,
+    insertBefore: insertBefore,
+    insertAfter: insertAfter,
     template: function() {
       return [
         '@startuml',
