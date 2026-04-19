@@ -152,18 +152,23 @@ function init() {
     var rectBBox = overlayD.getBoundingClientRect();
     var z = zoom || 1;
     var localX = (clientX - rectBBox.left) / z;
-    var boundaries = [0];
-    Array.prototype.forEach.call(partRects, function(r) {
-      var x = parseFloat(r.getAttribute('x'));
-      var w = parseFloat(r.getAttribute('width'));
-      boundaries.push(x + w / 2);
-    });
-    boundaries.push(parseFloat(overlayD.getAttribute('width')) || 800);
-    var bestX = boundaries[0];
+    // Bug 3: participant 中心 (= ライフライン) ではなく「2 participants の
+    // 間の中点」を候補にすることで、縦点線が既存ライフラインと重ならず
+    // 視認性向上。
+    var centers = Array.prototype.map.call(partRects, function(r) {
+      return parseFloat(r.getAttribute('x')) + parseFloat(r.getAttribute('width')) / 2;
+    }).sort(function(a, b) { return a - b; });
+    var gaps = [];
+    gaps.push(centers[0] - 40);  // 先頭の前 (40px 左)
+    for (var i = 0; i < centers.length - 1; i++) {
+      gaps.push((centers[i] + centers[i + 1]) / 2);  // 2 participants の中点
+    }
+    gaps.push(centers[centers.length - 1] + 40);  // 末尾の後
+    var bestX = gaps[0];
     var bestDist = Infinity;
-    for (var ii = 0; ii < boundaries.length; ii++) {
-      var d = Math.abs(localX - boundaries[ii]);
-      if (d < bestDist) { bestDist = d; bestX = boundaries[ii]; }
+    for (var ii = 0; ii < gaps.length; ii++) {
+      var d = Math.abs(localX - gaps[ii]);
+      if (d < bestDist) { bestDist = d; bestX = gaps[ii]; }
     }
     var h = parseFloat(overlayD.getAttribute('height')) || 400;
     var line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
@@ -190,14 +195,23 @@ function init() {
     var rectBBox = overlayD.getBoundingClientRect();
     var z = zoom || 1;
     var localX = (clientX - rectBBox.left) / z;
+    // Bug 3: drawDropIndicator と同じ「中点 gap」で index 計算に統一。
+    // localX に最も近い gap index = 新 index (0 = 先頭、N = 末尾)。
     var centers = Array.prototype.map.call(partRects, function(r) {
       return parseFloat(r.getAttribute('x')) + parseFloat(r.getAttribute('width')) / 2;
     }).sort(function(a, b) { return a - b; });
-    var idx = 0;
-    for (var ii = 0; ii < centers.length; ii++) {
-      if (localX > centers[ii]) idx = ii + 1;
+    var gaps = [centers[0] - 40];
+    for (var i = 0; i < centers.length - 1; i++) {
+      gaps.push((centers[i] + centers[i + 1]) / 2);
     }
-    return idx;
+    gaps.push(centers[centers.length - 1] + 40);
+    var bestIdx = 0;
+    var bestDist = Infinity;
+    for (var j = 0; j < gaps.length; j++) {
+      var d = Math.abs(localX - gaps[j]);
+      if (d < bestDist) { bestDist = d; bestIdx = j; }
+    }
+    return bestIdx;
   }
 
   var ovForDrag = document.getElementById('overlay-layer');
