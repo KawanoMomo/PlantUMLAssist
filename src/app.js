@@ -19,6 +19,14 @@ function _registerModules() {
   }
 }
 
+// Feature #10: online モードの外部送信警告バナー表示/非表示
+function updateOnlineWarning() {
+  var warnEl = document.getElementById('online-warning');
+  var modeEl = document.getElementById('render-mode');
+  if (!warnEl || !modeEl) return;
+  warnEl.style.display = (modeEl.value === 'online') ? 'block' : 'none';
+}
+
 var editorEl, previewSvgEl, propsEl, statusParseEl, statusInfoEl, renderStatusEl, lineNumbersEl, zoomDisplayEl;
 var mmdText = '';
 var currentModule = null;
@@ -43,6 +51,7 @@ function init() {
 
   var savedMode = localStorage.getItem('plantuml-render-mode') || 'local';
   document.getElementById('render-mode').value = savedMode;
+  updateOnlineWarning();
 
   currentModule = modules['plantuml-sequence'];
   mmdText = currentModule.template();
@@ -355,6 +364,7 @@ function init() {
 
   document.getElementById('render-mode').addEventListener('change', function() {
     localStorage.setItem('plantuml-render-mode', this.value);
+    updateOnlineWarning();
     scheduleRefresh();
   });
 
