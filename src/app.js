@@ -263,6 +263,12 @@ function setZoom(z) {
     previewSvgEl.style.transform = 'scale(' + zoom + ')';
     previewSvgEl.style.transformOrigin = '0 0';
   }
+  // overlay-layer にも同じ transform を当てないとクリック座標と SVG 位置がズレる
+  var overlayEl = document.getElementById('overlay-layer');
+  if (overlayEl) {
+    overlayEl.style.transform = 'scale(' + zoom + ')';
+    overlayEl.style.transformOrigin = '0 0';
+  }
 }
 
 function zoomToFit() {
