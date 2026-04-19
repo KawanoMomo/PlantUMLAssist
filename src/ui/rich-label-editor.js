@@ -74,12 +74,14 @@ window.MA.richLabelEditor = (function() {
       preview.innerHTML = plantumlToHtml(ta.value);
     }
 
+    // onChange への出力も getValue() と同じ正規化を通す (実改行 → literal \n)
+    function normalized() { return ta.value.replace(/\n/g, '\\n'); }
     ta.addEventListener('input', function() {
       refreshPreview();
-      if (onChange) onChange(ta.value);
+      if (onChange) onChange(normalized());
     });
     ta.addEventListener('change', function() {
-      if (onChange) onChange(ta.value);
+      if (onChange) onChange(normalized());
     });
     ta.addEventListener('keydown', function(e) {
       if (e.key === 'Tab' && !e.isComposing) {
