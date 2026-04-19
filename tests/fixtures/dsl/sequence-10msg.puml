@@ -1,0 +1,15 @@
+@startuml
+actor User
+participant System
+database DB
+User -> System : req1
+System -> DB : q1
+DB --> System : r1
+System -> DB : q2
+DB --> System : r2
+System --> User : resp1
+User -> System : req2
+System -> DB : q3
+DB --> System : r3
+System --> User : resp2
+@enduml

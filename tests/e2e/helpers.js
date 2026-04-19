@@ -5,6 +5,15 @@ const path = require('path');
 async function gotoApp(page) {
   await page.goto('/');
   await page.waitForSelector('#preview-svg', { timeout: 5000 });
+  // Prefer online render so overlays build even without Java installed.
+  // Tests that don't need overlay (UC-1) are unaffected.
+  await page.evaluate(() => {
+    var sel = document.getElementById('render-mode');
+    if (sel && sel.value !== 'online') {
+      sel.value = 'online';
+      sel.dispatchEvent(new Event('change'));
+    }
+  });
   await page.waitForTimeout(500);
 }
 
