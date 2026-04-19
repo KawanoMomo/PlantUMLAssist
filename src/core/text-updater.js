@@ -55,6 +55,20 @@ window.MA.textUpdater = (function() {
     return lines.join('\n');
   }
 
+  // insertAtLine: 1-based lineNum の位置に newContent を挿入（既存行はその下に押し下げ）
+  // lineNum < 1 は先頭、lineNum > lines.length は末尾追加にクランプ
+  function insertAtLine(text, lineNum, newContent) {
+    var lines = text.split('\n');
+    var idx = Math.max(0, Math.min(lines.length, lineNum - 1));
+    lines.splice(idx, 0, newContent);
+    return lines.join('\n');
+  }
+
+  // insertAfterLine: 1-based lineNum の行の直後に newContent を挿入
+  function insertAfterLine(text, lineNum, newContent) {
+    return insertAtLine(text, lineNum + 1, newContent);
+  }
+
   return {
     replaceLine: replaceLine,
     insertAfter: insertAfter,
@@ -62,5 +76,7 @@ window.MA.textUpdater = (function() {
     deleteLine: deleteLine,
     swapLines: swapLines,
     appendToFile: appendToFile,
+    insertAtLine: insertAtLine,
+    insertAfterLine: insertAfterLine,
   };
 })();
