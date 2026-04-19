@@ -749,12 +749,22 @@ window.MA.modules.plantumlSequence = (function() {
           var html = '';
           if (kind === 'message') {
             var arrowOpts = ARROWS.map(function(a) { return { value: a, label: arrowLabel(a), selected: a === '->' }; });
+            var partOptsWithNew = partOpts.slice();
+            partOptsWithNew.push({ value: '__new__', label: '+ 新規追加…' });
             html =
-              P.selectFieldHtml('From', 'seq-tail-from', partOpts) +
+              P.selectFieldHtml('From', 'seq-tail-from', partOptsWithNew) +
               P.selectFieldHtml('Arrow', 'seq-tail-arrow', arrowOpts) +
-              P.selectFieldHtml('To', 'seq-tail-to', partOpts) +
-              '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">本文</label><div id="seq-tail-label-rle"></div></div>' +
-              P.primaryButtonHtml('seq-tail-add', '+ 末尾に追加');
+              P.selectFieldHtml('To', 'seq-tail-to', partOptsWithNew) +
+              '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">本文</label><div id="seq-tail-label-rle"></div></div>';
+            html +=
+              '<div id="seq-tail-new-inline" style="display:none;margin-top:6px;padding:8px;background:var(--bg-tertiary);border-left:3px solid var(--accent-green);border-radius:3px;">' +
+                '<label style="display:block;font-size:10px;color:var(--accent-green);margin-bottom:4px;">新しい参加者を作成</label>' +
+                '<input id="seq-tail-new-alias" type="text" placeholder="Alias (必須)" style="width:100%;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-size:12px;margin-bottom:4px;">' +
+                '<select id="seq-tail-new-ptype" style="width:100%;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-size:12px;">' +
+                  PARTICIPANT_TYPES.map(function(pt) { return '<option value="' + pt + '">' + pt + '</option>'; }).join('') +
+                '</select>' +
+              '</div>';
+            html += P.primaryButtonHtml('seq-tail-add', '+ 末尾に追加');
           } else if (kind === 'participant') {
             var pTypeOpts = PARTICIPANT_TYPES.map(function(pt) { return { value: pt, label: pt, selected: pt === 'participant' }; });
             html =
@@ -788,29 +798,56 @@ window.MA.modules.plantumlSequence = (function() {
           var rleObj = null;
           if (kind === 'message') rleObj = window.MA.richLabelEditor.mount(document.getElementById('seq-tail-label-rle'), '');
           else if (kind === 'note') rleObj = window.MA.richLabelEditor.mount(document.getElementById('seq-tail-ntext-rle'), '');
+          if (kind === 'message') {
+            var inline = document.getElementById('seq-tail-new-inline');
+            function maybeShowInline() {
+              var frSel = document.getElementById('seq-tail-from');
+              var toSel = document.getElementById('seq-tail-to');
+              if (!frSel || !toSel) return;
+              inline.style.display = (frSel.value === '__new__' || toSel.value === '__new__') ? 'block' : 'none';
+            }
+            var frSel = document.getElementById('seq-tail-from');
+            var toSel = document.getElementById('seq-tail-to');
+            if (frSel) frSel.addEventListener('change', maybeShowInline);
+            if (toSel) toSel.addEventListener('change', maybeShowInline);
+          }
           P.bindEvent('seq-tail-add', 'click', function() {
-            window.MA.history.pushHistory();
             var t = ctx.getMmdText();
             var out;
             if (kind === 'message') {
-              out = addMessage(t,
-                document.getElementById('seq-tail-from').value,
-                document.getElementById('seq-tail-to').value,
-                document.getElementById('seq-tail-arrow').value,
-                (rleObj ? rleObj.getValue() : '').trim());
+              var fr = document.getElementById('seq-tail-from').value;
+              var to = document.getElementById('seq-tail-to').value;
+              var arrow = document.getElementById('seq-tail-arrow').value;
+              var labelVal = (rleObj ? rleObj.getValue() : '').trim();
+              if (fr === '__new__' || to === '__new__') {
+                var al = document.getElementById('seq-tail-new-alias').value.trim();
+                if (!al) { alert('新しい参加者の Alias は必須です'); return; }
+                var ptype = document.getElementById('seq-tail-new-ptype').value;
+                window.MA.history.pushHistory();
+                t = addParticipant(t, ptype, al, al);
+                if (fr === '__new__') fr = al;
+                if (to === '__new__') to = al;
+              } else {
+                window.MA.history.pushHistory();
+              }
+              out = addMessage(t, fr, to, arrow, labelVal);
             } else if (kind === 'participant') {
               var al = document.getElementById('seq-tail-alias').value.trim();
               if (!al) { alert('Alias 必須'); return; }
+              window.MA.history.pushHistory();
               out = addParticipant(t, document.getElementById('seq-tail-ptype').value, al, document.getElementById('seq-tail-plabel').value.trim() || al);
             } else if (kind === 'note') {
               var ntg = document.getElementById('seq-tail-ntarget').value;
               if (!ntg) { alert('Target 必須'); return; }
+              window.MA.history.pushHistory();
               out = addNote(t, document.getElementById('seq-tail-npos').value, [ntg], (rleObj ? rleObj.getValue() : '').trim());
             } else if (kind === 'block') {
+              window.MA.history.pushHistory();
               out = addGroup(t, document.getElementById('seq-tail-bkind').value, document.getElementById('seq-tail-blabel').value.trim());
             } else if (kind === 'activation') {
               var atg = document.getElementById('seq-tail-atgt').value;
               if (!atg) { alert('Target 必須'); return; }
+              window.MA.history.pushHistory();
               out = addActivation(t, document.getElementById('seq-tail-aact').value, atg);
             }
             ctx.setMmdText(out);
