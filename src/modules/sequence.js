@@ -560,90 +560,10 @@ window.MA.modules.plantumlSequence = (function() {
       var groups = parsedData.groups || [];
 
       if (!selData || selData.length === 0) {
-        var pTypeOpts = PARTICIPANT_TYPES.map(function(pt) { return { value: pt, label: pt, selected: pt === 'participant' }; });
-        var arrowOpts = ARROWS.map(function(a) { return { value: a, label: arrowLabel(a), selected: a === '->' }; });
-        var partOpts = participants.map(function(p) { return { value: p.id, label: p.label }; });
-        if (partOpts.length === 0) partOpts = [{ value: '', label: '（参加者を先に追加）' }];
-
-        var pList = '';
-        for (var i = 0; i < participants.length; i++) {
-          var p = participants[i];
-          pList += P.listItemHtml({
-            label: p.ptype + ' ' + p.label + (p.label !== p.id ? ' (as ' + p.id + ')' : ''),
-            selectClass: 'seq-select-part', deleteClass: 'seq-delete-part',
-            dataElementId: p.id, dataLine: p.line,
-          });
-        }
-        if (!pList) pList = P.emptyListHtml('（参加者なし）');
-
-        // Message list: adds ↑/↓ buttons inline so users can reorder
-        // without rewriting text by hand.
-        var mList = '';
-        for (var j = 0; j < messages.length; j++) {
-          var m = messages[j];
-          var msgLabel = m.from + ' ' + m.arrow + ' ' + m.to + (m.label ? ' : ' + m.label : '');
-          mList +=
-            '<div style="display:flex;align-items:center;gap:4px;margin-bottom:3px;padding:3px 4px;background:var(--bg-tertiary);border-radius:3px;font-size:11px;">' +
-              '<div style="flex:1;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--font-mono);">' + escHtml(msgLabel) + '</div>' +
-              '<button class="seq-msg-up" data-line="' + m.line + '" title="上へ移動" style="background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:2px 6px;border-radius:3px;cursor:pointer;font-size:10px;">↑</button>' +
-              '<button class="seq-msg-down" data-line="' + m.line + '" title="下へ移動" style="background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:2px 6px;border-radius:3px;cursor:pointer;font-size:10px;">↓</button>' +
-              '<button class="seq-select-msg" data-element-id="' + escHtml(m.id) + '" data-line="' + m.line + '" style="background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:2px 6px;border-radius:3px;cursor:pointer;font-size:10px;">編集</button>' +
-              '<button class="seq-delete-msg" data-line="' + m.line + '" style="background:var(--accent-red);color:#fff;border:none;padding:2px 6px;border-radius:3px;cursor:pointer;font-size:10px;">✕</button>' +
-            '</div>';
-        }
-        if (!mList) mList = P.emptyListHtml('（メッセージなし）');
-
-        // Group list (alt/opt/loop/par/...)
-        var gList = '';
-        for (var gi = 0; gi < groups.length; gi++) {
-          var gr = groups[gi];
-          gList += P.listItemHtml({
-            label: gr.gtype + (gr.label ? ' ' + gr.label : ''),
-            sublabel: 'L' + gr.line + '-' + gr.endLine,
-            deleteClass: 'seq-delete-group',
-            dataLine: gr.line, dataEndLine: gr.endLine, mono: true,
-          });
-        }
-        if (!gList) gList = P.emptyListHtml('（ブロックなし）');
-
-        // Activation list
-        var aList = '';
-        for (var ai = 0; ai < activations.length; ai++) {
-          var ac = activations[ai];
-          aList += P.listItemHtml({
-            label: ac.action + ' ' + ac.target,
-            deleteClass: 'seq-delete-activation',
-            dataLine: ac.line, mono: true,
-          });
-        }
-        if (!aList) aList = P.emptyListHtml('（アクティベーションなし）');
-
-        // Note list
-        var nList = '';
-        for (var ni = 0; ni < notes.length; ni++) {
-          var n = notes[ni];
-          var nLabel = 'note ' + n.position + ' ' + n.targets.join(',') + (n.text ? ' : ' + n.text : '');
-          nList += P.listItemHtml({
-            label: nLabel,
-            selectClass: 'seq-select-note', deleteClass: 'seq-delete-note',
-            dataElementId: n.id, dataLine: n.line, mono: true,
-          });
-        }
-        if (!nList) nList = P.emptyListHtml('（注釈なし）');
-
+        var participants = parsedData.elements.filter(function(e) { return e.kind === 'participant'; });
         var autonumChecked = parsedData.meta.autonumber ? 'checked' : '';
-        var groupKindOpts = GROUP_KINDS.map(function(k) { return { value: k, label: k, selected: k === 'alt' }; });
-        var notePosOpts = NOTE_POSITIONS.map(function(p) { return { value: p, label: p, selected: p === 'over' }; });
-        var noteTargetOpts = participants.map(function(p) { return { value: p.id, label: p.label }; });
-        if (noteTargetOpts.length === 0) noteTargetOpts = [{ value: '', label: '（参加者を先に追加）' }];
-        var actionOpts = [
-          { value: 'activate',   label: 'activate (アクティブ化)',        selected: true },
-          { value: 'deactivate', label: 'deactivate (非アクティブ化)' },
-          { value: 'create',     label: 'create (参加者の生成)' },
-          { value: 'destroy',    label: 'destroy (参加者の破棄)' },
-        ];
         propsEl.innerHTML =
-          '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Sequence</div>' +
+          '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Sequence Diagram</div>' +
           '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
             '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">Title 設定</label>' +
             P.fieldHtml('Title', 'seq-title', parsedData.meta.title) +
@@ -654,144 +574,110 @@ window.MA.modules.plantumlSequence = (function() {
               '<input id="seq-autonumber" type="checkbox" ' + autonumChecked + '>' +
               ' autonumber (自動採番)' +
             '</label>' +
-            '<div style="font-size:10px;color:var(--text-secondary);margin-top:4px;">有効にすると各メッセージに通し番号が付きます</div>' +
           '</div>' +
           '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-            '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">参加者を追加</label>' +
-            P.selectFieldHtml('Type', 'seq-add-ptype', pTypeOpts) +
-            P.fieldHtml('Alias', 'seq-add-alias', '', '例: user1') +
-            P.fieldHtml('Label (省略可)', 'seq-add-label', '') +
-            P.primaryButtonHtml('seq-add-part-btn', '+ 参加者追加') +
+            '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">末尾に追加</label>' +
+            P.selectFieldHtml('種類', 'seq-tail-kind', [
+              { value: 'message', label: 'メッセージ', selected: true },
+              { value: 'participant', label: '参加者' },
+              { value: 'note', label: '注釈 (note)' },
+              { value: 'block', label: 'ブロック (alt/loop/...)' },
+              { value: 'activation', label: 'ライフライン (activate/deactivate)' },
+            ]) +
+            '<div id="seq-tail-detail" style="margin-top:6px;"></div>' +
           '</div>' +
-          '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-            '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">メッセージを追加</label>' +
-            P.selectFieldHtml('From', 'seq-add-from', partOpts) +
-            P.selectFieldHtml('Arrow', 'seq-add-arrow', arrowOpts) +
-            P.selectFieldHtml('To', 'seq-add-to', partOpts) +
-            P.fieldHtml('Label', 'seq-add-msg-label', '', '省略可') +
-            P.primaryButtonHtml('seq-add-msg-btn', '+ メッセージ追加') +
-          '</div>' +
-          '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-            '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">ブロックを追加 (alt/opt/loop/par…)</label>' +
-            P.selectFieldHtml('Kind', 'seq-add-group-kind', groupKindOpts) +
-            P.fieldHtml('Label/Condition', 'seq-add-group-label', '', '例: x > 0 / retry') +
-            P.primaryButtonHtml('seq-add-group-btn', '+ ブロック追加') +
-            '<div style="font-size:10px;color:var(--text-secondary);margin-top:4px;">空のブロックを末尾に挿入します。中身はエディタまたはメッセージ追加で入れてください。</div>' +
-          '</div>' +
-          '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-            '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">ライフライン制御 (activate/deactivate)</label>' +
-            P.selectFieldHtml('Action', 'seq-add-act-action', actionOpts) +
-            P.selectFieldHtml('Target', 'seq-add-act-target', noteTargetOpts) +
-            P.primaryButtonHtml('seq-add-act-btn', '+ ライフライン操作 追加') +
-            '<div style="font-size:10px;color:var(--text-secondary);margin-top:4px;">アクティベーションバー (太い縦帯) の表示/非表示を制御します。</div>' +
-          '</div>' +
-          '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-            '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">注釈 (note) を追加</label>' +
-            P.selectFieldHtml('Position', 'seq-add-note-pos', notePosOpts) +
-            P.selectFieldHtml('Target', 'seq-add-note-target', noteTargetOpts) +
-            P.fieldHtml('Text', 'seq-add-note-text', '', '注釈本文') +
-            P.primaryButtonHtml('seq-add-note-btn', '+ 注釈追加') +
-          '</div>' +
-          '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-            '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:6px;">参加者一覧</label>' +
-            '<div>' + pList + '</div>' +
-          '</div>' +
-          '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-            '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:6px;">メッセージ一覧 (↑↓で並び替え)</label>' +
-            '<div>' + mList + '</div>' +
-          '</div>' +
-          '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-            '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:6px;">ブロック一覧</label>' +
-            '<div>' + gList + '</div>' +
-          '</div>' +
-          '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-            '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:6px;">ライフライン操作一覧</label>' +
-            '<div>' + aList + '</div>' +
-          '</div>' +
-          '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-            '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:6px;">注釈一覧</label>' +
-            '<div>' + nList + '</div>' +
+          '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;color:var(--text-secondary);font-size:11px;">' +
+            'プレビュー上で要素をクリックすると編集パネルが開きます' +
           '</div>';
 
+        // Title button
         P.bindEvent('seq-set-title', 'click', function() {
           window.MA.history.pushHistory();
           ctx.setMmdText(setTitle(ctx.getMmdText(), document.getElementById('seq-title').value.trim()));
           ctx.onUpdate();
         });
+        // autonumber checkbox
         P.bindEvent('seq-autonumber', 'change', function() {
           window.MA.history.pushHistory();
           ctx.setMmdText(toggleAutonumber(ctx.getMmdText()));
           ctx.onUpdate();
         });
-        P.bindEvent('seq-add-part-btn', 'click', function() {
-          var pt = document.getElementById('seq-add-ptype').value;
-          var al = document.getElementById('seq-add-alias').value.trim();
-          var lb = document.getElementById('seq-add-label').value.trim();
-          if (!al) { alert('Alias は必須です'); return; }
-          window.MA.history.pushHistory();
-          ctx.setMmdText(addParticipant(ctx.getMmdText(), pt, al, lb || al));
-          ctx.onUpdate();
-        });
-        P.bindEvent('seq-add-msg-btn', 'click', function() {
-          var f = document.getElementById('seq-add-from').value;
-          var t = document.getElementById('seq-add-to').value;
-          var a = document.getElementById('seq-add-arrow').value;
-          var l = document.getElementById('seq-add-msg-label').value.trim();
-          if (!f || !t) { alert('From/To 必須'); return; }
-          window.MA.history.pushHistory();
-          ctx.setMmdText(addMessage(ctx.getMmdText(), f, t, a, l));
-          ctx.onUpdate();
-        });
-
-        P.bindEvent('seq-add-group-btn', 'click', function() {
-          var k = document.getElementById('seq-add-group-kind').value;
-          var l = document.getElementById('seq-add-group-label').value.trim();
-          window.MA.history.pushHistory();
-          ctx.setMmdText(addGroup(ctx.getMmdText(), k, l));
-          ctx.onUpdate();
-        });
-        P.bindEvent('seq-add-note-btn', 'click', function() {
-          var pos = document.getElementById('seq-add-note-pos').value;
-          var tgt = document.getElementById('seq-add-note-target').value;
-          var txt = document.getElementById('seq-add-note-text').value.trim();
-          if (!tgt) { alert('Target 参加者を選択してください'); return; }
-          window.MA.history.pushHistory();
-          ctx.setMmdText(addNote(ctx.getMmdText(), pos, [tgt], txt));
-          ctx.onUpdate();
-        });
-        P.bindEvent('seq-add-act-btn', 'click', function() {
-          var act = document.getElementById('seq-add-act-action').value;
-          var tgt = document.getElementById('seq-add-act-target').value;
-          if (!tgt) { alert('Target 参加者を選択してください'); return; }
-          window.MA.history.pushHistory();
-          ctx.setMmdText(addActivation(ctx.getMmdText(), act, tgt));
-          ctx.onUpdate();
-        });
-
-        P.bindSelectButtons(propsEl, 'seq-select-part', 'participant');
-        P.bindSelectButtons(propsEl, 'seq-select-msg', 'message');
-        P.bindSelectButtons(propsEl, 'seq-select-note', 'note');
-        P.bindDeleteButtons(propsEl, 'seq-delete-part', ctx, deleteLine);
-        P.bindDeleteButtons(propsEl, 'seq-delete-msg', ctx, deleteLine);
-        P.bindDeleteButtons(propsEl, 'seq-delete-note', ctx, deleteLine);
-        P.bindDeleteButtons(propsEl, 'seq-delete-activation', ctx, deleteLine);
-        P.bindDeleteButtons(propsEl, 'seq-delete-group', ctx, deleteGroup, true);
-
-        // Reorder buttons
-        P.bindAllByClass(propsEl, 'seq-msg-up', function(btn) {
-          var ln = parseInt(btn.getAttribute('data-line'), 10);
-          if (isNaN(ln)) return;
-          window.MA.history.pushHistory();
-          ctx.setMmdText(moveMessage(ctx.getMmdText(), ln, -1));
-          ctx.onUpdate();
-        });
-        P.bindAllByClass(propsEl, 'seq-msg-down', function(btn) {
-          var ln = parseInt(btn.getAttribute('data-line'), 10);
-          if (isNaN(ln)) return;
-          window.MA.history.pushHistory();
-          ctx.setMmdText(moveMessage(ctx.getMmdText(), ln, 1));
-          ctx.onUpdate();
-        });
+        // 末尾追加: 種類 select で詳細フォーム切替
+        var renderTailDetail = function() {
+          var kind = document.getElementById('seq-tail-kind').value;
+          var detailEl = document.getElementById('seq-tail-detail');
+          var partOpts = participants.map(function(p) { return { value: p.id, label: p.label }; });
+          if (partOpts.length === 0) partOpts = [{ value: '', label: '（参加者なし）' }];
+          var html = '';
+          if (kind === 'message') {
+            var arrowOpts = ARROWS.map(function(a) { return { value: a, label: arrowLabel(a), selected: a === '->' }; });
+            html =
+              P.selectFieldHtml('From', 'seq-tail-from', partOpts) +
+              P.selectFieldHtml('Arrow', 'seq-tail-arrow', arrowOpts) +
+              P.selectFieldHtml('To', 'seq-tail-to', partOpts) +
+              P.fieldHtml('本文', 'seq-tail-label', '', '省略可') +
+              P.primaryButtonHtml('seq-tail-add', '+ 末尾に追加');
+          } else if (kind === 'participant') {
+            var pTypeOpts = PARTICIPANT_TYPES.map(function(pt) { return { value: pt, label: pt, selected: pt === 'participant' }; });
+            html =
+              P.selectFieldHtml('Type', 'seq-tail-ptype', pTypeOpts) +
+              P.fieldHtml('Alias', 'seq-tail-alias', '', '例: user1') +
+              P.fieldHtml('Label', 'seq-tail-plabel', '', '省略可') +
+              P.primaryButtonHtml('seq-tail-add', '+ 末尾に追加');
+          } else if (kind === 'note') {
+            var posOpts = NOTE_POSITIONS.map(function(p) { return { value: p, label: p, selected: p === 'over' }; });
+            html =
+              P.selectFieldHtml('Position', 'seq-tail-npos', posOpts) +
+              P.selectFieldHtml('Target', 'seq-tail-ntarget', partOpts) +
+              P.fieldHtml('Text', 'seq-tail-ntext', '', '注釈本文') +
+              P.primaryButtonHtml('seq-tail-add', '+ 末尾に追加');
+          } else if (kind === 'block') {
+            var bkOpts = GROUP_KINDS.map(function(k) { return { value: k, label: k, selected: k === 'alt' }; });
+            html =
+              P.selectFieldHtml('Kind', 'seq-tail-bkind', bkOpts) +
+              P.fieldHtml('Label', 'seq-tail-blabel', '', '例: x > 0') +
+              P.primaryButtonHtml('seq-tail-add', '+ 末尾に追加');
+          } else if (kind === 'activation') {
+            html =
+              P.selectFieldHtml('Action', 'seq-tail-aact', [
+                { value: 'activate', label: 'activate', selected: true },
+                { value: 'deactivate', label: 'deactivate' },
+              ]) +
+              P.selectFieldHtml('Target', 'seq-tail-atgt', partOpts) +
+              P.primaryButtonHtml('seq-tail-add', '+ 末尾に追加');
+          }
+          detailEl.innerHTML = html;
+          P.bindEvent('seq-tail-add', 'click', function() {
+            window.MA.history.pushHistory();
+            var t = ctx.getMmdText();
+            var out;
+            if (kind === 'message') {
+              out = addMessage(t,
+                document.getElementById('seq-tail-from').value,
+                document.getElementById('seq-tail-to').value,
+                document.getElementById('seq-tail-arrow').value,
+                document.getElementById('seq-tail-label').value.trim());
+            } else if (kind === 'participant') {
+              var al = document.getElementById('seq-tail-alias').value.trim();
+              if (!al) { alert('Alias 必須'); return; }
+              out = addParticipant(t, document.getElementById('seq-tail-ptype').value, al, document.getElementById('seq-tail-plabel').value.trim() || al);
+            } else if (kind === 'note') {
+              var ntg = document.getElementById('seq-tail-ntarget').value;
+              if (!ntg) { alert('Target 必須'); return; }
+              out = addNote(t, document.getElementById('seq-tail-npos').value, [ntg], document.getElementById('seq-tail-ntext').value.trim());
+            } else if (kind === 'block') {
+              out = addGroup(t, document.getElementById('seq-tail-bkind').value, document.getElementById('seq-tail-blabel').value.trim());
+            } else if (kind === 'activation') {
+              var atg = document.getElementById('seq-tail-atgt').value;
+              if (!atg) { alert('Target 必須'); return; }
+              out = addActivation(t, document.getElementById('seq-tail-aact').value, atg);
+            }
+            ctx.setMmdText(out);
+            ctx.onUpdate();
+          });
+        };
+        renderTailDetail();
+        P.bindEvent('seq-tail-kind', 'change', renderTailDetail);
         return;
       }
 
