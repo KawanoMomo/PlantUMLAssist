@@ -684,7 +684,7 @@ window.MA.modules.plantumlSequence = (function() {
               P.selectFieldHtml('From', 'seq-tail-from', partOpts) +
               P.selectFieldHtml('Arrow', 'seq-tail-arrow', arrowOpts) +
               P.selectFieldHtml('To', 'seq-tail-to', partOpts) +
-              P.fieldHtml('本文', 'seq-tail-label', '', '省略可') +
+              '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">本文</label><div id="seq-tail-label-rle"></div></div>' +
               P.primaryButtonHtml('seq-tail-add', '+ 末尾に追加');
           } else if (kind === 'participant') {
             var pTypeOpts = PARTICIPANT_TYPES.map(function(pt) { return { value: pt, label: pt, selected: pt === 'participant' }; });
@@ -698,7 +698,7 @@ window.MA.modules.plantumlSequence = (function() {
             html =
               P.selectFieldHtml('Position', 'seq-tail-npos', posOpts) +
               P.selectFieldHtml('Target', 'seq-tail-ntarget', partOpts) +
-              P.fieldHtml('Text', 'seq-tail-ntext', '', '注釈本文') +
+              '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Text</label><div id="seq-tail-ntext-rle"></div></div>' +
               P.primaryButtonHtml('seq-tail-add', '+ 末尾に追加');
           } else if (kind === 'block') {
             var bkOpts = GROUP_KINDS.map(function(k) { return { value: k, label: k, selected: k === 'alt' }; });
@@ -716,6 +716,9 @@ window.MA.modules.plantumlSequence = (function() {
               P.primaryButtonHtml('seq-tail-add', '+ 末尾に追加');
           }
           detailEl.innerHTML = html;
+          var rleObj = null;
+          if (kind === 'message') rleObj = window.MA.richLabelEditor.mount(document.getElementById('seq-tail-label-rle'), '');
+          else if (kind === 'note') rleObj = window.MA.richLabelEditor.mount(document.getElementById('seq-tail-ntext-rle'), '');
           P.bindEvent('seq-tail-add', 'click', function() {
             window.MA.history.pushHistory();
             var t = ctx.getMmdText();
@@ -725,7 +728,7 @@ window.MA.modules.plantumlSequence = (function() {
                 document.getElementById('seq-tail-from').value,
                 document.getElementById('seq-tail-to').value,
                 document.getElementById('seq-tail-arrow').value,
-                document.getElementById('seq-tail-label').value.trim());
+                (rleObj ? rleObj.getValue() : '').trim());
             } else if (kind === 'participant') {
               var al = document.getElementById('seq-tail-alias').value.trim();
               if (!al) { alert('Alias 必須'); return; }
@@ -733,7 +736,7 @@ window.MA.modules.plantumlSequence = (function() {
             } else if (kind === 'note') {
               var ntg = document.getElementById('seq-tail-ntarget').value;
               if (!ntg) { alert('Target 必須'); return; }
-              out = addNote(t, document.getElementById('seq-tail-npos').value, [ntg], document.getElementById('seq-tail-ntext').value.trim());
+              out = addNote(t, document.getElementById('seq-tail-npos').value, [ntg], (rleObj ? rleObj.getValue() : '').trim());
             } else if (kind === 'block') {
               out = addGroup(t, document.getElementById('seq-tail-bkind').value, document.getElementById('seq-tail-blabel').value.trim());
             } else if (kind === 'activation') {
