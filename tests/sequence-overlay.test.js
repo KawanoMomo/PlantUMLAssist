@@ -44,6 +44,7 @@ describe('buildSequenceOverlay', function() {
     expect(msgRects.length).toBe(f.parsed.relations.length);
     var lines = Array.prototype.map.call(msgRects, function(r) { return parseInt(r.getAttribute('data-line'), 10); });
     var modelLines = f.parsed.relations.map(function(r) { return r.line; });
-    expect(lines.sort()).toEqual(modelLines.sort());
+    function numCmp(a, b) { return a - b; }
+    expect(lines.sort(numCmp)).toEqual(modelLines.sort(numCmp));
   });
 });

@@ -4,6 +4,11 @@ window.MA.sequenceOverlay = (function() {
 
   var SVG_NS = 'http://www.w3.org/2000/svg';
 
+  // PlantUML SVG の data-source-line は @startuml を含まない 0-origin (= parser line - 1)。
+  // 内部では parser の lineNum (1-origin, @startuml=1) を真とするため、
+  // 突合時のみ -1 オフセットして SVG 側のキーに揃える。
+  var PLANTUML_LINE_OFFSET = 1;
+
   function _clearChildren(el) {
     while (el.firstChild) el.removeChild(el.firstChild);
   }
@@ -26,65 +31,38 @@ window.MA.sequenceOverlay = (function() {
     return rect;
   }
 
-  function _bbox(el) {
-    if (!el) return null;
-    if (typeof el.getBBox === 'function') {
-      try { return el.getBBox(); } catch (e) {}
-    }
-    // jsdom fallback: getBBox 不在のため属性 fallback
-    return {
-      x: parseFloat(el.getAttribute('x')) || 0,
-      y: parseFloat(el.getAttribute('y')) || 0,
-      width: parseFloat(el.getAttribute('width')) || 0,
-      height: parseFloat(el.getAttribute('height')) || 0,
-    };
-  }
-
-  function _matchParticipants(svgEl, participants) {
-    var texts = svgEl.querySelectorAll('text');
+  function _matchByDataSourceLine(svgEl, parsedItems, groupSelector) {
+    // PlantUML SVG が data-source-line を持つ <g> を検索し、
+    // parsedItems の line 番号 (offset 補正後) と一致する <g> を取り出す。
     var matches = [];
-    var labelToParticipants = {};
-    participants.forEach(function(p) {
-      labelToParticipants[p.label] = labelToParticipants[p.label] || [];
-      labelToParticipants[p.label].push(p);
+    var groups = svgEl.querySelectorAll(groupSelector + '[data-source-line]');
+    var lineToItem = {};
+    parsedItems.forEach(function(item) {
+      lineToItem[item.line - PLANTUML_LINE_OFFSET] = item;
     });
-    Array.prototype.forEach.call(texts, function(t) {
-      var content = (t.textContent || '').trim();
-      var pool = labelToParticipants[content];
-      if (pool && pool.length > 0) {
-        var p = pool.shift();
-        matches.push({ participant: p, textEl: t });
+    Array.prototype.forEach.call(groups, function(g) {
+      var line = parseInt(g.getAttribute('data-source-line'), 10);
+      var item = lineToItem[line];
+      if (item) {
+        matches.push({ item: item, groupEl: g });
       }
     });
     return matches;
   }
 
-  function _matchMessages(svgEl, messages) {
-    var texts = svgEl.querySelectorAll('text');
-    var labelEls = [];
-    messages.forEach(function(m, idx) {
-      if (!m.label) return;
-      Array.prototype.forEach.call(texts, function(t) {
-        if ((t.textContent || '').trim() === m.label) {
-          labelEls.push({ idx: idx, msg: m, textEl: t, y: _bbox(t).y });
-        }
-      });
-    });
-    var assigned = [];
-    var consumed = {};
-    messages.forEach(function(m) {
-      if (!m.label) return;
-      var candidates = labelEls.filter(function(le) {
-        return le.msg === m && !consumed[le.textEl.id || le.y + ':' + le.textEl.textContent];
-      });
-      candidates.sort(function(a, b) { return a.y - b.y; });
-      if (candidates.length > 0) {
-        var pick = candidates[0];
-        consumed[pick.textEl.id || pick.y + ':' + pick.textEl.textContent] = true;
-        assigned.push({ message: m, textEl: pick.textEl });
-      }
-    });
-    return assigned;
+  function _gBBox(g) {
+    // <g> の中の最初の <text> 要素の bbox を採用 (jsdom 互換 fallback あり)。
+    var t = g.querySelector('text');
+    if (!t) return null;
+    if (typeof t.getBBox === 'function') {
+      try { return t.getBBox(); } catch (e) { /* jsdom: fall through */ }
+    }
+    return {
+      x: parseFloat(t.getAttribute('x')) || 0,
+      y: parseFloat(t.getAttribute('y')) || 0,
+      width: parseFloat(t.getAttribute('textLength')) || parseFloat(t.getAttribute('width')) || 0,
+      height: 14, // PlantUML default font height fallback
+    };
   }
 
   function buildSequenceOverlay(svgEl, parsedData, overlayEl) {
@@ -97,23 +75,25 @@ window.MA.sequenceOverlay = (function() {
     var h = svgEl.getAttribute('height'); if (h) overlayEl.setAttribute('height', h);
 
     var participants = parsedData.elements.filter(function(e) { return e.kind === 'participant'; });
-    var partMatches = _matchParticipants(svgEl, participants);
+    var partMatches = _matchByDataSourceLine(svgEl, participants, 'g.participant-head');
     partMatches.forEach(function(m) {
-      var bb = _bbox(m.textEl);
-      _addRect(overlayEl, bb.x - 8, bb.y - 4, bb.width + 16, bb.height + 8, {
+      var bb = _gBBox(m.groupEl);
+      if (!bb) return;
+      _addRect(overlayEl, bb.x - 8, bb.y - 4, (bb.width || 60) + 16, (bb.height || 14) + 8, {
         'data-type': 'participant',
-        'data-id': m.participant.id,
-        'data-line': m.participant.line,
+        'data-id': m.item.id,
+        'data-line': m.item.line,
       });
     });
 
-    var msgMatches = _matchMessages(svgEl, parsedData.relations);
+    var msgMatches = _matchByDataSourceLine(svgEl, parsedData.relations, 'g.message');
     msgMatches.forEach(function(m) {
-      var bb = _bbox(m.textEl);
-      _addRect(overlayEl, bb.x - 4, bb.y - 4, bb.width + 8, bb.height + 8, {
+      var bb = _gBBox(m.groupEl);
+      if (!bb) return;
+      _addRect(overlayEl, bb.x - 4, bb.y - 4, (bb.width || 60) + 8, (bb.height || 14) + 8, {
         'data-type': 'message',
-        'data-id': m.message.id,
-        'data-line': m.message.line,
+        'data-id': m.item.id,
+        'data-line': m.item.line,
       });
     });
   }
