@@ -225,6 +225,15 @@ PlantUML 構文: `participant System #FFAAAA` (hex suffix)。既存 `fmtParticip
 ### Phase 4: UC E2E 検証 (Sprint 11)
 - UC-11 〜 UC-16 の全 PASS
 
+### Phase 5: MermaidAssist 横展開 (Sprint 12)
+- 本 spec と同じ 6 capability (C14〜C20) を MermaidAssist Sequence (`05_MermaidAssist/src/modules/sequence.js`) に適用
+- 差異:
+  - Mermaid SVG 構造が異なる (`data-source-line` 不在の可能性、要 empirical 確認)
+  - Mermaid は `fill:#color` でなく `rect ... style` で色指定、構文調整必要
+  - Drag/drop の DOM event 層は共通化可能
+- ecn-from-git skill で ECN-009 として抽出 → MermaidAssist へ cross-apply 分析 → 実装
+- 最終的には rich-label-editor を両プロジェクト共通 src に昇格する選択肢あり
+
 ## スコープ外
 
 - 複数 participant 同時選択 → 一括色変更 (YAGNI)
