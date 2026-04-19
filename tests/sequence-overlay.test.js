@@ -27,13 +27,36 @@ function loadFixture(name) {
 }
 
 describe('buildSequenceOverlay', function() {
-  test('produces overlay rects matching participant count', function() {
+  test('produces overlay rects matching participant count (unique by data-id)', function() {
     var f = loadFixture('sequence-basic');
     var overlayEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     overlay.buildSequenceOverlay(f.svgEl, f.parsed, overlayEl);
     var partRects = overlayEl.querySelectorAll('rect[data-type="participant"]');
     var partsInModel = f.parsed.elements.filter(function(e) { return e.kind === 'participant'; }).length;
-    expect(partRects.length).toBe(partsInModel);
+    // Bug C6 fix で head + tail の両方に rect を置くので rect 総数は participant
+    // 数の 2 倍になる。「何人分の selectable box があるか」は data-id の unique 数で判定。
+    var uniqueIds = {};
+    Array.prototype.forEach.call(partRects, function(r) {
+      uniqueIds[r.getAttribute('data-id')] = true;
+    });
+    expect(Object.keys(uniqueIds).length).toBe(partsInModel);
+  });
+
+  test('produces participant-tail overlay rects so bottom actors are selectable (Bug C6)', function() {
+    var f = loadFixture('sequence-basic');
+    var overlayEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    overlay.buildSequenceOverlay(f.svgEl, f.parsed, overlayEl);
+    var partRects = overlayEl.querySelectorAll('rect[data-type="participant"]');
+    var partsInModel = f.parsed.elements.filter(function(e) { return e.kind === 'participant'; }).length;
+    // tail rect が追加されているので head + tail で 2× の rect が存在する。
+    expect(partRects.length).toBe(partsInModel * 2);
+    // tail rect は head よりも Y 座標が下。先頭 participant の 2 rect を y 比較。
+    var firstId = f.parsed.elements.filter(function(e) { return e.kind === 'participant'; })[0].id;
+    var pairs = overlayEl.querySelectorAll('rect[data-type="participant"][data-id="' + firstId + '"]');
+    expect(pairs.length).toBe(2);
+    var y0 = parseFloat(pairs[0].getAttribute('y'));
+    var y1 = parseFloat(pairs[1].getAttribute('y'));
+    expect(Math.abs(y0 - y1) > 10).toBe(true);
   });
 
   test('produces overlay rects for messages with correct data-line', function() {

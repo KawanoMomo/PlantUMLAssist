@@ -155,6 +155,19 @@ window.MA.sequenceOverlay = (function() {
         'data-line': m.item.line,
       });
     });
+    // Bug C6 fix: PlantUML は participant を上下 (head/tail) 両方に描く。
+    // tail もクリックで選択できるよう overlay rect を追加配置。
+    // (data-id は head と同一なので selection は head/tail 共通で動作。)
+    var partTailBest = _pickBestOffset(svgEl, participants, 'g.participant-tail', candidates);
+    partTailBest.matches.forEach(function(m) {
+      var bb = _gBBox(m.groupEl);
+      if (!bb) return;
+      _addRect(overlayEl, bb.x - 8, bb.y - 4, (bb.width || 60) + 16, (bb.height || 14) + 8, {
+        'data-type': 'participant',
+        'data-id': m.item.id,
+        'data-line': m.item.line,
+      });
+    });
 
     var msgBest = _pickBestOffset(svgEl, parsedData.relations, 'g.message', candidates);
     var msgMatches = msgBest.matches;
@@ -228,6 +241,7 @@ window.MA.sequenceOverlay = (function() {
     var actRectCount = overlayEl.querySelectorAll('rect[data-type="activation"]').length;
     return {
       matched: {
+        // head 基準。tail rect は重複なので「何人マッチしたか」には加算しない。
         participant: partMatches.length,
         message: msgMatches.length,
         note: noteRectCount,
