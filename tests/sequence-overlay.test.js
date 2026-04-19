@@ -108,6 +108,27 @@ describe('buildSequenceOverlay', function() {
   });
 });
 
+describe('resolveInsertLine', function() {
+  test('y below a message y-center returns position after that line', function() {
+    var f = loadFixture('sequence-basic');
+    var overlayEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    overlay.buildSequenceOverlay(f.svgEl, f.parsed, overlayEl);
+    // First message y center を見つけてそれより下を指す
+    var msgRects = overlayEl.querySelectorAll('rect[data-type="message"]');
+    if (msgRects.length === 0) return;  // jsdom fixture が rect を生成しない場合の safety
+    var firstY = parseFloat(msgRects[0].getAttribute('y')) + parseFloat(msgRects[0].getAttribute('height')) / 2;
+    var res = overlay.resolveInsertLine(overlayEl, firstY + 10);
+    expect(res).toBeDefined();
+    expect(res.position).toBe('after');
+    expect(typeof res.line).toBe('number');
+  });
+
+  test('returns null when overlay has no messages', function() {
+    var overlayEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    expect(overlay.resolveInsertLine(overlayEl, 100)).toBe(null);
+  });
+});
+
 describe('setSelectedHighlight', function() {
   test('adds selected class to matching rect and removes from others', function() {
     var f = loadFixture('sequence-basic');

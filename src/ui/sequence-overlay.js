@@ -225,8 +225,27 @@ window.MA.sequenceOverlay = (function() {
     });
   }
 
+  function resolveInsertLine(overlayEl, y) {
+    if (!overlayEl) return null;
+    var msgRects = overlayEl.querySelectorAll('rect[data-type="message"]');
+    if (msgRects.length === 0) return null;
+    var items = Array.prototype.map.call(msgRects, function(r) {
+      return {
+        line: parseInt(r.getAttribute('data-line'), 10),
+        y: parseFloat(r.getAttribute('y')) + parseFloat(r.getAttribute('height')) / 2,
+      };
+    }).sort(function(a, b) { return a.y - b.y; });
+    // y がどの rect の y より下か判定: 下端から遡って最初に「rect.y < y」なら after その rect
+    for (var i = items.length - 1; i >= 0; i--) {
+      if (y > items[i].y) return { line: items[i].line, position: 'after' };
+    }
+    // 全 rect より上 → 最上位 rect の before
+    return { line: items[0].line, position: 'before' };
+  }
+
   return {
     buildSequenceOverlay: buildSequenceOverlay,
     setSelectedHighlight: setSelectedHighlight,
+    resolveInsertLine: resolveInsertLine,
   };
 })();
