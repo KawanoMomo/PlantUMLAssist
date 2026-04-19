@@ -401,6 +401,25 @@ window.MA.modules.plantumlSequence = (function() {
       window.MA.selection.clearSelection();
       ctx.onUpdate();
     });
+    // C3: participant 左右挿入 (participant 選択時のみ描画される)
+    P.bindAllByClass(propsEl, 'seq-insert-part-before', function(btn) {
+      var ln = parseInt(btn.getAttribute('data-line'), 10);
+      var alias = prompt('新しい参加者の Alias');
+      if (!alias) return;
+      var ptype = prompt('Type (participant/actor/database/boundary/control/entity/queue/collections)', 'participant');
+      window.MA.history.pushHistory();
+      ctx.setMmdText(insertBefore(ctx.getMmdText(), ln, 'participant', { ptype: ptype || 'participant', alias: alias }));
+      ctx.onUpdate();
+    });
+    P.bindAllByClass(propsEl, 'seq-insert-part-after', function(btn) {
+      var ln = parseInt(btn.getAttribute('data-line'), 10);
+      var alias = prompt('新しい参加者の Alias');
+      if (!alias) return;
+      var ptype = prompt('Type (participant/actor/database/boundary/control/entity/queue/collections)', 'participant');
+      window.MA.history.pushHistory();
+      ctx.setMmdText(insertAfter(ctx.getMmdText(), ln, 'participant', { ptype: ptype || 'participant', alias: alias }));
+      ctx.onUpdate();
+    });
   }
 
   function _showInsertForm(ctx, line, position, kind) {
@@ -797,9 +816,19 @@ window.MA.modules.plantumlSequence = (function() {
         var sel = selData[0];
 
         // ヘルパ: 共通の挿入アクションバー (要素の line を起点)
-        function actionBarHtml(line) {
+        // kind: 'message' | 'participant' | 'note' | 'activation'
+        //   - 'participant': 参加者左右挿入ボタンを前置
+        //   - 'message': ライフライン推論ボタンを末尾に追加
+        function actionBarHtml(line, kind) {
+          var partInsert = '';
+          if (kind === 'participant') {
+            partInsert =
+              '<button class="seq-insert-part-before" data-line="' + line + '" style="width:100%;text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">← 左に参加者追加</button>' +
+              '<button class="seq-insert-part-after" data-line="' + line + '" style="width:100%;text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">→ 右に参加者追加</button>';
+          }
           return '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
             '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">この位置に挿入</label>' +
+            partInsert +
             '<button class="seq-insert-msg-before" data-line="' + line + '" style="width:100%;text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">↑ この前にメッセージ追加</button>' +
             '<button class="seq-insert-msg-after" data-line="' + line + '" style="width:100%;text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">↓ この後にメッセージ追加</button>' +
             '<button class="seq-insert-note-after" data-line="' + line + '" style="width:100%;text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">↓ この後に注釈追加</button>' +
@@ -826,7 +855,7 @@ window.MA.modules.plantumlSequence = (function() {
             P.selectFieldHtml('Arrow', 'seq-edit-arrow', arrowOpts2) +
             P.selectFieldHtml('To', 'seq-edit-to', toOpts) +
             '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">本文</label><div id="seq-edit-msg-label-rle"></div></div>' +
-            actionBarHtml(mm.line);
+            actionBarHtml(mm.line, 'message');
           var mln = mm.line;
           ['from', 'arrow', 'to'].forEach(function(f) {
             document.getElementById('seq-edit-' + f).addEventListener('change', function() {
@@ -852,7 +881,7 @@ window.MA.modules.plantumlSequence = (function() {
             P.fieldHtml('Alias', 'seq-edit-alias', pp.id) +
             '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Label</label><div id="seq-edit-label-rle"></div></div>' +
             '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-primary);margin:8px 0;"><input id="seq-edit-rename-refs" type="checkbox" checked> Alias 変更時に他要素の参照も追従</label>' +
-            actionBarHtml(pp.line);
+            actionBarHtml(pp.line, 'participant');
           var ln = pp.line;
           document.getElementById('seq-edit-ptype').addEventListener('change', function() {
             window.MA.history.pushHistory();
@@ -887,7 +916,7 @@ window.MA.modules.plantumlSequence = (function() {
             P.selectFieldHtml('Position', 'seq-edit-npos', posOpts2) +
             P.fieldHtml('Targets', 'seq-edit-ntargets', nn2.targets.join(', ')) +
             '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Text</label><div id="seq-edit-ntext-rle"></div></div>' +
-            actionBarHtml(nn2.line);
+            actionBarHtml(nn2.line, 'note');
           var nln = nn2.line;
           [['npos', 'position'], ['ntargets', 'targets']].forEach(function(pair) {
             document.getElementById('seq-edit-' + pair[0]).addEventListener('change', function() {
@@ -906,7 +935,7 @@ window.MA.modules.plantumlSequence = (function() {
           var aLine = sel.line;
           propsEl.innerHTML =
             '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>Activation</strong><br><span style="color:var(--text-secondary);">L' + aLine + '</span></div>' +
-            actionBarHtml(aLine);
+            actionBarHtml(aLine, 'activation');
         }
 
         // 共通: action bar の click ハンドラ
