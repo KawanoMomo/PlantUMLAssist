@@ -782,7 +782,7 @@ window.MA.modules.plantumlSequence = (function() {
             P.selectFieldHtml('From', 'seq-edit-from', fromOpts) +
             P.selectFieldHtml('Arrow', 'seq-edit-arrow', arrowOpts2) +
             P.selectFieldHtml('To', 'seq-edit-to', toOpts) +
-            P.fieldHtml('本文', 'seq-edit-msg-label', mm.label) +
+            '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">本文</label><div id="seq-edit-msg-label-rle"></div></div>' +
             actionBarHtml(mm.line);
           var mln = mm.line;
           ['from', 'arrow', 'to'].forEach(function(f) {
@@ -792,9 +792,9 @@ window.MA.modules.plantumlSequence = (function() {
               ctx.onUpdate();
             });
           });
-          document.getElementById('seq-edit-msg-label').addEventListener('change', function() {
+          window.MA.richLabelEditor.mount(document.getElementById('seq-edit-msg-label-rle'), mm.label, function(v) {
             window.MA.history.pushHistory();
-            ctx.setMmdText(updateMessage(ctx.getMmdText(), mln, 'label', this.value));
+            ctx.setMmdText(updateMessage(ctx.getMmdText(), mln, 'label', v));
             ctx.onUpdate();
           });
         }
@@ -807,7 +807,7 @@ window.MA.modules.plantumlSequence = (function() {
             '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>' + escHtml(pp.label) + '</strong><br><span style="color:var(--text-secondary);">' + pp.ptype + ' · L' + pp.line + '</span></div>' +
             P.selectFieldHtml('Type', 'seq-edit-ptype', pOpts2) +
             P.fieldHtml('Alias', 'seq-edit-alias', pp.id) +
-            P.fieldHtml('Label', 'seq-edit-label', pp.label) +
+            '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Label</label><div id="seq-edit-label-rle"></div></div>' +
             '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-primary);margin:8px 0;"><input id="seq-edit-rename-refs" type="checkbox" checked> Alias 変更時に他要素の参照も追従</label>' +
             actionBarHtml(pp.line);
           var ln = pp.line;
@@ -829,9 +829,9 @@ window.MA.modules.plantumlSequence = (function() {
             ctx.setMmdText(t);
             ctx.onUpdate();
           });
-          document.getElementById('seq-edit-label').addEventListener('change', function() {
+          window.MA.richLabelEditor.mount(document.getElementById('seq-edit-label-rle'), pp.label, function(v) {
             window.MA.history.pushHistory();
-            ctx.setMmdText(updateParticipant(ctx.getMmdText(), ln, 'label', this.value));
+            ctx.setMmdText(updateParticipant(ctx.getMmdText(), ln, 'label', v));
             ctx.onUpdate();
           });
         }
@@ -843,15 +843,20 @@ window.MA.modules.plantumlSequence = (function() {
             '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>' + escHtml(nn2.text || '(empty)') + '</strong><br><span style="color:var(--text-secondary);">Note · ' + nn2.position + ' · L' + nn2.line + '</span></div>' +
             P.selectFieldHtml('Position', 'seq-edit-npos', posOpts2) +
             P.fieldHtml('Targets', 'seq-edit-ntargets', nn2.targets.join(', ')) +
-            P.fieldHtml('Text', 'seq-edit-ntext', nn2.text) +
+            '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Text</label><div id="seq-edit-ntext-rle"></div></div>' +
             actionBarHtml(nn2.line);
           var nln = nn2.line;
-          [['npos', 'position'], ['ntargets', 'targets'], ['ntext', 'text']].forEach(function(pair) {
+          [['npos', 'position'], ['ntargets', 'targets']].forEach(function(pair) {
             document.getElementById('seq-edit-' + pair[0]).addEventListener('change', function() {
               window.MA.history.pushHistory();
               ctx.setMmdText(updateNote(ctx.getMmdText(), nln, pair[1], this.value));
               ctx.onUpdate();
             });
+          });
+          window.MA.richLabelEditor.mount(document.getElementById('seq-edit-ntext-rle'), nn2.text, function(v) {
+            window.MA.history.pushHistory();
+            ctx.setMmdText(updateNote(ctx.getMmdText(), nln, 'text', v));
+            ctx.onUpdate();
           });
         }
         else if (sel.type === 'activation') {
