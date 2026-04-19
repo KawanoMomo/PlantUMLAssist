@@ -436,6 +436,19 @@ window.MA.modules.plantumlSequence = (function() {
     return text;
   }
 
+  function duplicateRange(text, startLine, endLine, insertAfterLine) {
+    // 範囲 [startLine, endLine] (1-based, inclusive) を複製し、
+    // insertAfterLine の後ろ (= splice index = insertAfterLine) に挿入する。
+    // insertAfterLine === 0 は先頭挿入。range 内/重複位置への挿入も許容
+    // (元 lines のスナップショットを slice 後に splice するため安全)。
+    var lines = text.split('\n');
+    if (startLine < 1 || endLine > lines.length || startLine > endLine) return text;
+    if (insertAfterLine < 0 || insertAfterLine > lines.length) return text;
+    var copy = lines.slice(startLine - 1, endLine).slice();
+    Array.prototype.splice.apply(lines, [insertAfterLine, 0].concat(copy));
+    return lines.join('\n');
+  }
+
   function setTitle(text, newTitle) {
     var lines = text.split('\n');
     for (var i = 0; i < lines.length; i++) {
@@ -480,6 +493,7 @@ window.MA.modules.plantumlSequence = (function() {
     insertBefore: insertBefore,
     insertAfter: insertAfter,
     renameWithRefs: renameWithRefs,
+    duplicateRange: duplicateRange,
     template: function() {
       return [
         '@startuml',

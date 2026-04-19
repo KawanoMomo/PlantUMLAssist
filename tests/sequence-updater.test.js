@@ -323,3 +323,24 @@ describe('renameWithRefs', function() {
     expect(out).toContain('note over Cache : info');
   });
 });
+
+describe('duplicateRange', function() {
+  test('duplicates a range and inserts after the given line', function() {
+    var text = '@startuml\nA -> B : a\nB -> C : b\n@enduml';
+    var out = seq.duplicateRange(text, 2, 3, 3);
+    var lines = out.split('\n');
+    expect(lines[1]).toBe('A -> B : a');
+    expect(lines[2]).toBe('B -> C : b');
+    expect(lines[3]).toBe('A -> B : a');
+    expect(lines[4]).toBe('B -> C : b');
+  });
+
+  test('duplicates single line', function() {
+    var text = '@startuml\nA -> B\nB -> C\n@enduml';
+    var out = seq.duplicateRange(text, 2, 2, 3);
+    var lines = out.split('\n');
+    expect(lines[1]).toBe('A -> B');
+    expect(lines[2]).toBe('B -> C');
+    expect(lines[3]).toBe('A -> B');
+  });
+});
