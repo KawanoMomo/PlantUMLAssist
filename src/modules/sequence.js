@@ -617,6 +617,31 @@ window.MA.modules.plantumlSequence = (function() {
     return out;
   }
 
+  function setParticipantColor(text, alias, hex) {
+    if (!alias) return text;
+    var lines = text.split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      var ln = lines[i];
+      var trimmed = ln.trim();
+      // match: line ends with optional #HEX, strip first
+      var withoutColor = trimmed.replace(/\s+#[0-9A-Fa-f]{6}\s*$/, '');
+      var m = withoutColor.match(PART_RE);
+      if (!m) continue;
+      var aliasInLine = (m[2] !== undefined) ? m[3] : m[4];
+      if (aliasInLine !== alias) continue;
+      // 既存の末尾 #HEX を除去
+      var indent = ln.match(/^(\s*)/)[1];
+      var base = indent + withoutColor;
+      if (hex) {
+        lines[i] = base + ' ' + hex;
+      } else {
+        lines[i] = base;
+      }
+      break;
+    }
+    return lines.join('\n');
+  }
+
   function setTitle(text, newTitle) {
     var lines = text.split('\n');
     for (var i = 0; i < lines.length; i++) {
@@ -663,6 +688,7 @@ window.MA.modules.plantumlSequence = (function() {
     renameWithRefs: renameWithRefs,
     duplicateRange: duplicateRange,
     inferActivations: inferActivations,
+    setParticipantColor: setParticipantColor,
     showInsertForm: function(ctx, line, position, kind) {
       _showInsertForm(ctx, line, position, kind);
     },

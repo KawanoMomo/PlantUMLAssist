@@ -368,3 +368,31 @@ describe('inferActivations', function() {
     expect(out).not.toContain('deactivate');
   });
 });
+
+describe('setParticipantColor', function() {
+  test('appends #HEX to participant line', function() {
+    var text = '@startuml\nparticipant System\n@enduml';
+    var out = seq.setParticipantColor(text, 'System', '#FFAAAA');
+    expect(out).toContain('participant System #FFAAAA');
+  });
+
+  test('replaces existing #HEX', function() {
+    var text = '@startuml\nparticipant System #FFAAAA\n@enduml';
+    var out = seq.setParticipantColor(text, 'System', '#AAEEAA');
+    expect(out).toContain('participant System #AAEEAA');
+    expect(out).not.toContain('#FFAAAA');
+  });
+
+  test('removes color when hex is null', function() {
+    var text = '@startuml\nparticipant System #FFAAAA\n@enduml';
+    var out = seq.setParticipantColor(text, 'System', null);
+    expect(out).toContain('participant System');
+    expect(out).not.toContain('#FFAAAA');
+  });
+
+  test('handles quoted alias', function() {
+    var text = '@startuml\nparticipant "My Server" as MS\n@enduml';
+    var out = seq.setParticipantColor(text, 'MS', '#FFAAAA');
+    expect(out).toContain('participant "My Server" as MS #FFAAAA');
+  });
+});
