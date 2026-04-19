@@ -438,15 +438,18 @@ window.MA.modules.plantumlSequence = (function() {
     var participants = parsed.elements.filter(function(e) { return e.kind === 'participant'; });
     var partOpts = participants.map(function(p) { return { value: p.id, label: p.label }; });
     if (partOpts.length === 0) partOpts = [{ value: '', label: '（参加者なし）' }];
+    // message 時のみ '+ 新規追加…' option を付与 (tail-add と同パターン)
+    var partOptsWithNew = partOpts.slice();
+    partOptsWithNew.push({ value: '__new__', label: '+ 新規追加…' });
 
     var title = (position === 'before' ? '前に' : '後に') + (kind === 'message' ? 'メッセージを挿入' : '注釈を挿入');
     var html = '<h3 style="margin:0 0 12px 0;color:var(--text-primary);">' + title + '</h3>';
     if (kind === 'message') {
       var arrowOpts = ARROWS.map(function(a) { return { value: a, label: arrowLabel(a), selected: a === '->' }; });
       html +=
-        P.selectFieldHtml('From', 'seq-mod-from', partOpts) +
+        P.selectFieldHtml('From', 'seq-mod-from', partOptsWithNew) +
         P.selectFieldHtml('Arrow', 'seq-mod-arrow', arrowOpts) +
-        P.selectFieldHtml('To', 'seq-mod-to', partOpts) +
+        P.selectFieldHtml('To', 'seq-mod-to', partOptsWithNew) +
         '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">本文</label><div id="seq-mod-label-rle"></div></div>';
     } else if (kind === 'note') {
       var posOpts = NOTE_POSITIONS.map(function(p) { return { value: p, label: p, selected: p === 'over' }; });
@@ -454,6 +457,16 @@ window.MA.modules.plantumlSequence = (function() {
         P.selectFieldHtml('Position', 'seq-mod-npos', posOpts) +
         P.selectFieldHtml('Target', 'seq-mod-ntarget', partOpts) +
         '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">本文</label><div id="seq-mod-ntext-rle"></div></div>';
+    }
+    if (kind === 'message') {
+      html +=
+        '<div id="seq-mod-new-inline" style="display:none;margin-top:6px;padding:8px;background:var(--bg-tertiary);border-left:3px solid var(--accent-green);border-radius:3px;">' +
+          '<label style="display:block;font-size:10px;color:var(--accent-green);margin-bottom:4px;">新しい参加者を作成</label>' +
+          '<input id="seq-mod-new-alias" type="text" placeholder="Alias (必須)" style="width:100%;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-size:12px;margin-bottom:4px;">' +
+          '<select id="seq-mod-new-ptype" style="width:100%;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-size:12px;">' +
+            PARTICIPANT_TYPES.map(function(pt) { return '<option value="' + pt + '">' + pt + '</option>'; }).join('') +
+          '</select>' +
+        '</div>';
     }
     html +=
       '<div style="display:flex;gap:8px;margin-top:12px;">' +
@@ -467,21 +480,49 @@ window.MA.modules.plantumlSequence = (function() {
     if (kind === 'message') rleObj = window.MA.richLabelEditor.mount(document.getElementById('seq-mod-label-rle'), '');
     else if (kind === 'note') rleObj = window.MA.richLabelEditor.mount(document.getElementById('seq-mod-ntext-rle'), '');
 
+    // From/To で '__new__' が選ばれたら inline 入力を表示/非表示
+    if (kind === 'message') {
+      var inlineEl = document.getElementById('seq-mod-new-inline');
+      function maybeShowInline() {
+        var frSel = document.getElementById('seq-mod-from');
+        var toSel = document.getElementById('seq-mod-to');
+        if (!frSel || !toSel || !inlineEl) return;
+        inlineEl.style.display = (frSel.value === '__new__' || toSel.value === '__new__') ? 'block' : 'none';
+      }
+      var frSel = document.getElementById('seq-mod-from');
+      var toSel = document.getElementById('seq-mod-to');
+      if (frSel) frSel.addEventListener('change', maybeShowInline);
+      if (toSel) toSel.addEventListener('change', maybeShowInline);
+    }
+
     document.getElementById('seq-mod-cancel').addEventListener('click', function() {
       modal.style.display = 'none';
     });
     document.getElementById('seq-mod-confirm').addEventListener('click', function() {
-      window.MA.history.pushHistory();
       var t = ctx.getMmdText();
       var insertFn = position === 'before' ? insertBefore : insertAfter;
       if (kind === 'message') {
+        var fr = document.getElementById('seq-mod-from').value;
+        var to = document.getElementById('seq-mod-to').value;
+        if (fr === '__new__' || to === '__new__') {
+          var al = document.getElementById('seq-mod-new-alias').value.trim();
+          if (!al) { alert('新しい参加者の Alias は必須です'); return; }
+          var ptype = document.getElementById('seq-mod-new-ptype').value;
+          window.MA.history.pushHistory();
+          t = addParticipant(t, ptype, al, al);
+          if (fr === '__new__') fr = al;
+          if (to === '__new__') to = al;
+        } else {
+          window.MA.history.pushHistory();
+        }
         t = insertFn(t, line, 'message', {
-          from: document.getElementById('seq-mod-from').value,
-          to: document.getElementById('seq-mod-to').value,
+          from: fr,
+          to: to,
           arrow: document.getElementById('seq-mod-arrow').value,
           label: rleObj ? rleObj.getValue() : '',
         });
       } else if (kind === 'note') {
+        window.MA.history.pushHistory();
         t = insertFn(t, line, 'note', {
           position: document.getElementById('seq-mod-npos').value,
           targets: [document.getElementById('seq-mod-ntarget').value],
