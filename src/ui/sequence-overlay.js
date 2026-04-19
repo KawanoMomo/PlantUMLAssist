@@ -199,6 +199,46 @@ window.MA.sequenceOverlay = (function() {
         { 'data-type': 'participant', 'data-id': id, 'data-line': lineNum });
     });
 
+    // Feature #8: group block (alt/opt/loop/par/break/critical/group) の overlay rect。
+    // PlantUML v1.2026.x の SVG は group 用の class を付けないが、block bbox を
+    // <rect fill="none" stroke="#000000"> として描画する (同一 bbox が 2 回出る)。
+    // 同一座標を de-dup して document 順に並べ、parsedData.groups と 1:1 対応させる。
+    var groups = (parsedData.groups || []).slice().sort(function(a, b) {
+      return (a.line || 0) - (b.line || 0);
+    });
+    if (groups.length > 0) {
+      var allRects = svgEl.querySelectorAll('rect[fill="none"]');
+      var seen = {};
+      var bboxes = [];
+      Array.prototype.forEach.call(allRects, function(r) {
+        var style = (r.getAttribute('style') || '') + '';
+        // group 境界 rect は黒 stroke。lifeline の hit-area rect (fill-opacity:0) は除外。
+        if (style.indexOf('stroke:#000000') === -1) return;
+        var x = parseFloat(r.getAttribute('x'));
+        var y = parseFloat(r.getAttribute('y'));
+        var w = parseFloat(r.getAttribute('width'));
+        var h = parseFloat(r.getAttribute('height'));
+        if (isNaN(x) || isNaN(y) || isNaN(w) || isNaN(h)) return;
+        var key = x + ',' + y + ',' + w + ',' + h;
+        if (seen[key]) return;
+        seen[key] = true;
+        bboxes.push({ x: x, y: y, w: w, h: h });
+      });
+      // document 順 (= 上から下 = DSL 順) にすでに並んでいるので y で再 sort して安定化。
+      bboxes.sort(function(a, b) { return a.y - b.y; });
+      var n = Math.min(bboxes.length, groups.length);
+      for (var gi = 0; gi < n; gi++) {
+        var bb = bboxes[gi];
+        var gp = groups[gi];
+        _addRect(overlayEl, bb.x - 2, bb.y - 2, bb.w + 4, bb.h + 4, {
+          'data-type': 'group',
+          'data-id': gp.id,
+          'data-line': gp.line,
+        });
+      }
+      _warnIfMismatch('group', groups.length, n);
+    }
+
     var msgBest = _pickBestOffset(svgEl, parsedData.relations, 'g.message', candidates);
     var msgMatches = msgBest.matches;
     msgMatches.forEach(function(m) {
@@ -292,6 +332,8 @@ window.MA.sequenceOverlay = (function() {
 
     var noteRectCount = overlayEl.querySelectorAll('rect[data-type="note"]').length;
     var actRectCount = overlayEl.querySelectorAll('rect[data-type="activation"]').length;
+    var groupRectCount = overlayEl.querySelectorAll('rect[data-type="group"]').length;
+    var groupsInModel = (parsedData.groups || []).length;
     return {
       matched: {
         // head 基準。tail rect は重複なので「何人マッチしたか」には加算しない。
@@ -299,12 +341,14 @@ window.MA.sequenceOverlay = (function() {
         message: msgMatches.length,
         note: noteRectCount,
         activation: actRectCount,
+        group: groupRectCount,
       },
       unmatched: {
         participant: participants.length - partMatches.length,
         message: parsedData.relations.length - msgMatches.length,
         note: notes.length - noteRectCount,
         activation: activations.length - actRectCount,
+        group: groupsInModel - groupRectCount,
       },
     };
   }
