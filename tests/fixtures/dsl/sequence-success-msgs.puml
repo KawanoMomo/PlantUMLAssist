@@ -1,0 +1,8 @@
+@startuml
+actor User
+participant Auth
+User -> Auth : login
+Auth --> User : token
+User -> Auth : refresh
+Auth --> User : new_token
+@enduml
