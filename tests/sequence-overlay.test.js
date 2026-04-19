@@ -63,4 +63,22 @@ describe('buildSequenceOverlay', function() {
     function numCmp(a, b) { return a - b; }
     expect(lines.sort(numCmp)).toEqual(modelLines.sort(numCmp));
   });
+
+  test('produces overlay rects for notes', function() {
+    var f = loadFixture('sequence-with-notes');
+    var overlayEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    overlay.buildSequenceOverlay(f.svgEl, f.parsed, overlayEl);
+    var noteRects = overlayEl.querySelectorAll('rect[data-type="note"]');
+    var notesInModel = f.parsed.elements.filter(function(e) { return e.kind === 'note'; }).length;
+    expect(noteRects.length).toBe(notesInModel);
+  });
+
+  test('produces overlay rects for activations', function() {
+    var f = loadFixture('sequence-with-notes');
+    var overlayEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    overlay.buildSequenceOverlay(f.svgEl, f.parsed, overlayEl);
+    var actRects = overlayEl.querySelectorAll('rect[data-type="activation"]');
+    var actsInModel = f.parsed.elements.filter(function(e) { return e.kind === 'activation'; }).length;
+    expect(actRects.length).toBe(actsInModel);
+  });
 });

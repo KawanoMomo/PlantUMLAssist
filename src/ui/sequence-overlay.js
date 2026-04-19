@@ -130,14 +130,65 @@ window.MA.sequenceOverlay = (function() {
 
     // Warn on silent divergence — early signal when SVG structure changes
     // (PlantUML 新版 / カスタム skin) and our selector/offset assumptions break.
-    if (partMatches.length !== participants.length) {
-      if (typeof console !== 'undefined' && console.warn) {
-        console.warn('[sequence-overlay] participant count mismatch: model=' + participants.length + ' matched=' + partMatches.length);
-      }
+    _warnIfMismatch('participant', participants.length, partMatches.length);
+    _warnIfMismatch('message', parsedData.relations.length, msgMatches.length);
+
+    // Notes: PlantUML 1.2026.x では <g class="note"> を出さず、bare <path>+<text> で描画される。
+    // data-source-line も付かないため、selector マッチは成立せず placeholder rect を挿入する。
+    // (overlay は data-line が正しければ click hit/jump が機能する。座標精度は後続 task で改善。)
+    var notes = parsedData.elements.filter(function(e) { return e.kind === 'note'; });
+    var notePicked = _pickBestOffset(svgEl, notes, 'g.note', candidates);
+    if (notePicked.matches.length > 0) {
+      notePicked.matches.forEach(function(m) {
+        var bb = _gBBox(m.groupEl);
+        if (!bb) return;
+        _addRect(overlayEl, bb.x - 8, bb.y - 6, (bb.width || 60) + 16, (bb.height || 14) + 12, {
+          'data-type': 'note',
+          'data-id': m.item.id,
+          'data-line': m.item.line,
+        });
+      });
+    } else {
+      notes.forEach(function(n) {
+        _addRect(overlayEl, 0, 0, 1, 1, {
+          'data-type': 'note',
+          'data-id': n.id,
+          'data-line': n.line,
+        });
+      });
     }
-    if (msgMatches.length !== parsedData.relations.length) {
+    _warnIfMismatch('note', notes.length, overlayEl.querySelectorAll('rect[data-type="note"]').length);
+
+    // Activations: PlantUML SVG では activation バーは <g><title>...</title><rect/></g> として
+    // class も data-source-line も付かない。selector が当たらないため placeholder rect 戦略で対応。
+    var activations = parsedData.elements.filter(function(e) { return e.kind === 'activation'; });
+    var actPicked = _pickBestOffset(svgEl, activations, 'g.activation', candidates);
+    if (actPicked.matches.length > 0) {
+      actPicked.matches.forEach(function(m) {
+        var bb = _gBBox(m.groupEl);
+        if (!bb) return;
+        _addRect(overlayEl, bb.x - 4, bb.y, (bb.width || 12) + 8, (bb.height || 16), {
+          'data-type': 'activation',
+          'data-id': m.item.action + '-' + m.item.target + '-' + m.item.line,
+          'data-line': m.item.line,
+        });
+      });
+    } else {
+      activations.forEach(function(a) {
+        _addRect(overlayEl, 0, 0, 1, 1, {
+          'data-type': 'activation',
+          'data-id': a.action + '-' + a.target + '-' + a.line,
+          'data-line': a.line,
+        });
+      });
+    }
+    _warnIfMismatch('activation', activations.length, overlayEl.querySelectorAll('rect[data-type="activation"]').length);
+  }
+
+  function _warnIfMismatch(kind, modelCount, matchedCount) {
+    if (modelCount !== matchedCount) {
       if (typeof console !== 'undefined' && console.warn) {
-        console.warn('[sequence-overlay] message count mismatch: model=' + parsedData.relations.length + ' matched=' + msgMatches.length);
+        console.warn('[sequence-overlay] ' + kind + ' count mismatch: model=' + modelCount + ' matched=' + matchedCount);
       }
     }
   }
