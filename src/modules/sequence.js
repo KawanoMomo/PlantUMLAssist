@@ -44,6 +44,25 @@ window.MA.modules.plantumlSequence = (function() {
     return s;
   }
 
+  // Pure formatters — used by both add* (末尾追加) and _formatLine (位置駆動挿入)
+  // 同一形式を一箇所で管理 (parser-format drift を防ぐ)
+  function fmtMessage(from, to, arrow, label) {
+    return from + ' ' + (arrow || '->') + ' ' + to + (label ? ' : ' + label : '');
+  }
+  function fmtNote(position, targets, text) {
+    var t = Array.isArray(targets) ? targets.join(', ') : targets;
+    return 'note ' + position + ' ' + t + (text ? ' : ' + text : '');
+  }
+  function fmtActivation(action, target) {
+    return action + ' ' + target;
+  }
+  function fmtParticipant(ptype, alias, label) {
+    return (label && label !== alias) ? ptype + ' "' + label + '" as ' + alias : ptype + ' ' + alias;
+  }
+  function fmtBlock(kind, label) {
+    return (label ? kind + ' ' + label : kind) + '\n\nend';
+  }
+
   function parseSequence(text) {
     var result = { meta: { title: '', autonumber: null }, elements: [], relations: [], groups: [] };
     if (!text || !text.trim()) return result;
@@ -184,18 +203,11 @@ window.MA.modules.plantumlSequence = (function() {
   }
 
   function addParticipant(text, ptype, alias, label) {
-    var line;
-    if (label && label !== alias) {
-      line = ptype + ' "' + label + '" as ' + alias;
-    } else {
-      line = ptype + ' ' + alias;
-    }
-    return insertBeforeEnd(text, line);
+    return insertBeforeEnd(text, fmtParticipant(ptype, alias, label));
   }
 
   function addMessage(text, from, to, arrow, label) {
-    var line = from + ' ' + (arrow || '->') + ' ' + to + (label ? ' : ' + label : '');
-    return insertBeforeEnd(text, line);
+    return insertBeforeEnd(text, fmtMessage(from, to, arrow, label));
   }
 
   function deleteLine(text, lineNum) {
@@ -247,9 +259,7 @@ window.MA.modules.plantumlSequence = (function() {
   function addGroup(text, kind, label) {
     // Insert an empty block (with "end") right before @enduml so the user
     // can move messages inside or add new ones there.
-    var open = label ? kind + ' ' + label : kind;
-    var block = open + '\n\nend';
-    return insertBeforeEnd(text, block);
+    return insertBeforeEnd(text, fmtBlock(kind, label));
   }
 
   function deleteGroup(text, startLine, endLine) {
@@ -266,35 +276,40 @@ window.MA.modules.plantumlSequence = (function() {
   }
 
   function addActivation(text, action, target) {
-    return insertBeforeEnd(text, action + ' ' + target);
+    return insertBeforeEnd(text, fmtActivation(action, target));
   }
 
   function addNote(text, position, targets, noteText) {
-    var targetStr = Array.isArray(targets) ? targets.join(', ') : targets;
-    var line = 'note ' + position + ' ' + targetStr + (noteText ? ' : ' + noteText : '');
-    return insertBeforeEnd(text, line);
+    return insertBeforeEnd(text, fmtNote(position, targets, noteText));
   }
 
+  // _formatLine: kind に応じて 1 行の PlantUML 文字列を生成
+  //   message:     { from, to, arrow?, label? }     ← from/to 必須
+  //   note:        { position, targets, text? }     ← position/targets 必須
+  //   activation:  { action, target }                ← action/target 必須
+  //   participant: { ptype?, alias, label? }        ← alias 必須
+  //   block:       { kind, label? }                  ← props.kind は外側 kind 引数とは別 (alt/opt/loop/...)
+  // 必須 props 欠落時は '' を返し、insertBefore/After 側のガードで no-op になる
   function _formatLine(kind, props) {
     if (kind === 'message') {
-      return (props.from || 'A') + ' ' + (props.arrow || '->') + ' ' + (props.to || 'B') + (props.label ? ' : ' + props.label : '');
+      if (!props.from || !props.to) return '';
+      return fmtMessage(props.from, props.to, props.arrow, props.label);
     }
     if (kind === 'note') {
-      var targetStr = Array.isArray(props.targets) ? props.targets.join(', ') : (props.targets || '');
-      return 'note ' + (props.position || 'over') + ' ' + targetStr + (props.text ? ' : ' + props.text : '');
+      if (!props.position || !props.targets || (Array.isArray(props.targets) && props.targets.length === 0)) return '';
+      return fmtNote(props.position, props.targets, props.text);
     }
     if (kind === 'activation') {
-      return (props.action || 'activate') + ' ' + (props.target || 'A');
+      if (!props.action || !props.target) return '';
+      return fmtActivation(props.action, props.target);
     }
     if (kind === 'participant') {
-      var ptype = props.ptype || 'participant';
-      var alias = props.alias || 'X';
-      var label = props.label;
-      if (label && label !== alias) return ptype + ' "' + label + '" as ' + alias;
-      return ptype + ' ' + alias;
+      if (!props.alias) return '';
+      return fmtParticipant(props.ptype || 'participant', props.alias, props.label);
     }
     if (kind === 'block') {
-      return (props.kind || 'alt') + (props.label ? ' ' + props.label : '') + '\n\nend';
+      if (!props.kind) return '';
+      return fmtBlock(props.kind, props.label);
     }
     return '';
   }

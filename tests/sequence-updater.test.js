@@ -208,4 +208,26 @@ describe('insertAfter', function() {
     expect(out).toContain('activate B');
     expect(out.indexOf('A -> B')).toBeLessThan(out.indexOf('activate B'));
   });
+
+  test('inserts a participant after the given line', function() {
+    var out = seq.insertAfter('@startuml\n@enduml', 1, 'participant',
+      { ptype: 'actor', alias: 'A', label: 'Alice' });
+    expect(out).toContain('actor "Alice" as A');
+  });
+
+  test('inserts a block before the given line', function() {
+    var out = seq.insertBefore('@startuml\nA -> B\n@enduml', 2, 'block',
+      { kind: 'alt', label: 'x > 0' });
+    expect(out).toContain('alt x > 0');
+    expect(out).toContain('end');
+    expect(out.indexOf('alt x > 0')).toBeLessThan(out.indexOf('A -> B'));
+  });
+
+  test('insertBefore with missing required props returns text unchanged', function() {
+    var text = '@startuml\nA -> B\n@enduml';
+    // missing from
+    expect(seq.insertBefore(text, 2, 'message', { to: 'B' })).toBe(text);
+    // missing alias
+    expect(seq.insertBefore(text, 2, 'participant', { ptype: 'actor' })).toBe(text);
+  });
 });
