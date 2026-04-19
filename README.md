@@ -12,19 +12,34 @@ PlantUML 記法の GUI 編集ツール。Python バックエンド + HTML/JS フ
 
 ## 起動
 
+> **重要**: MermaidAssist と違い、HTML をダブルクリックしても動きません。PlantUML は Java 実行または plantuml.com への POST を必要とするため、Python バックエンド経由でアクセスしてください。
+
 ```bash
 cd 06_PlantUMLAssist
 python server.py
-# http://127.0.0.1:8766 をブラウザで開く
 ```
+
+コンソールに `PlantUMLAssist server starting on http://127.0.0.1:8766` と表示されたら、ブラウザで **http://127.0.0.1:8766/** を開きます。
+
+Windows では `start.bat` をダブルクリックでも起動可能（server.py を起動してブラウザを自動で開きます）。
+
+**自動停止**: ブラウザタブを閉じるとサーバーも自動で停止します (heartbeat 方式、タブ close 後 2〜6秒以内に終了)。F5 リロードは自動判定で継続。明示的に止めたい場合は `Ctrl+C`。
 
 ## 要件
 
-- Python 3 (標準ライブラリのみ)
-- Java 8+ (local render モード用。online モードでは不要)
-- `lib/plantuml.jar` (リポジトリ同梱、v1.2024.7)
+- Python 3 (標準ライブラリのみ、追加パッケージ不要)
+- Java 8+ (local render モード用。online モードのみ使うなら不要)
+- `lib/plantuml.jar` (リポジトリ同梱、v1.2024.7、約 22 MB)
 
-Java がインストールされていない場合は、UI 右上の `render-mode` を `online` に切替えて使用可能 (plantuml.com の公開サーバー利用、業務データは外部送信されることに注意)。
+Java がインストールされていない場合は、UI 右上の `render-mode` セレクトを `online (plantuml.com)` に切替えて使用可能。plantuml.com の公開サーバを利用するため、**業務データは外部送信される**ことに注意。
+
+### トラブルシューティング
+
+| 症状 | 原因 | 対策 |
+|---|---|---|
+| "Render error: Failed to fetch" | server.py が起動していない / HTML を `file://` で開いている | `python server.py` を起動し、`http://127.0.0.1:8766/` にアクセス |
+| "java not found" (local mode) | Java 未インストール | JDK/JRE 8+ をインストール、または online モードへ切替 |
+| "online render failed: HTTP 4xx/5xx" | plantuml.com のレート制限/障害 | 時間をおいて再試行、または local モードへ切替 |
 
 ## テスト
 

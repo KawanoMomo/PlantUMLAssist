@@ -57,16 +57,27 @@ global.fns = fns;
 global.window = sandbox.window;
 
 let passed = 0, failed = 0, currentDescribe = '';
+let beforeEachStack = [];
 
 global.describe = function(name, fn) {
   currentDescribe = name;
   console.log(`\n  ${name}`);
+  beforeEachStack.push([]);
   fn();
+  beforeEachStack.pop();
   currentDescribe = '';
+};
+
+global.beforeEach = function(fn) {
+  if (beforeEachStack.length === 0) beforeEachStack.push([]);
+  beforeEachStack[beforeEachStack.length - 1].push(fn);
 };
 
 global.test = function(name, fn) {
   try {
+    for (const frame of beforeEachStack) {
+      for (const be of frame) be();
+    }
     fn();
     passed++;
     console.log(`    ✓ ${name}`);

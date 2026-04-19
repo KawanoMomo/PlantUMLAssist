@@ -55,6 +55,19 @@ window.MA.textUpdater = (function() {
     return lines.join('\n');
   }
 
+  // insertAtLine: insertBefore + 範囲外は先頭/末尾にクランプ (overlay UI 用)
+  // 既存 insertBefore は範囲外で undefined を生むため、UI 由来の lineNum を安全に扱うラッパ。
+  function insertAtLine(text, lineNum, newContent) {
+    var lines = text.split('\n');
+    var clamped = Math.max(1, Math.min(lines.length + 1, lineNum));
+    return insertBefore(text, clamped, newContent);
+  }
+
+  // insertAfterLine: 「N行目の直後」 = 「N+1行目の前に挿入」 として委譲
+  function insertAfterLine(text, lineNum, newContent) {
+    return insertAtLine(text, lineNum + 1, newContent);
+  }
+
   return {
     replaceLine: replaceLine,
     insertAfter: insertAfter,
@@ -62,5 +75,7 @@ window.MA.textUpdater = (function() {
     deleteLine: deleteLine,
     swapLines: swapLines,
     appendToFile: appendToFile,
+    insertAtLine: insertAtLine,
+    insertAfterLine: insertAfterLine,
   };
 })();

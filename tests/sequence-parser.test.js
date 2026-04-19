@@ -49,4 +49,86 @@ describe('parseSequence', function() {
     var r = seq.parseSequence("@startuml\n' this is comment\nactor A\n@enduml");
     expect(r.elements.length).toBe(1);
   });
+
+  test('parses bare autonumber as true', function() {
+    var r = seq.parseSequence('@startuml\nautonumber\nA -> B\n@enduml');
+    expect(r.meta.autonumber).toBe(true);
+  });
+
+  test('parses autonumber with start value', function() {
+    var r = seq.parseSequence('@startuml\nautonumber 10\nA -> B\n@enduml');
+    expect(r.meta.autonumber).toEqual({ start: 10, step: 1 });
+  });
+
+  test('parses autonumber with start and step', function() {
+    var r = seq.parseSequence('@startuml\nautonumber 10 5\nA -> B\n@enduml');
+    expect(r.meta.autonumber).toEqual({ start: 10, step: 5 });
+  });
+
+  test('null autonumber when absent', function() {
+    var r = seq.parseSequence('@startuml\nA -> B\n@enduml');
+    expect(r.meta.autonumber).toBe(null);
+  });
+
+  test('parses alt group', function() {
+    var r = seq.parseSequence('@startuml\nalt x > 0\nA -> B\nelse\nA -> C\nend\n@enduml');
+    expect(r.groups.length).toBe(1);
+    expect(r.groups[0].gtype).toBe('alt');
+    expect(r.groups[0].label).toBe('x > 0');
+    expect(r.groups[0].endLine).toBeGreaterThan(r.groups[0].line);
+  });
+
+  test('parses nested loop', function() {
+    var r = seq.parseSequence('@startuml\nloop 3 times\nalt ok\nA -> B\nend\nend\n@enduml');
+    expect(r.groups.length).toBe(2);
+    expect(r.groups[0].gtype).toBe('loop');
+    expect(r.groups[1].gtype).toBe('alt');
+    expect(r.groups[1].parentId).toBe(r.groups[0].id);
+  });
+
+  test('parses note over', function() {
+    var r = seq.parseSequence('@startuml\nparticipant A\nnote over A : hello\n@enduml');
+    var notes = r.elements.filter(function(e) { return e.kind === 'note'; });
+    expect(notes.length).toBe(1);
+    expect(notes[0].position).toBe('over');
+    expect(notes[0].targets).toEqual(['A']);
+    expect(notes[0].text).toBe('hello');
+  });
+
+  test('parses note right of', function() {
+    var r = seq.parseSequence('@startuml\nnote right of Bob : side\n@enduml');
+    var notes = r.elements.filter(function(e) { return e.kind === 'note'; });
+    expect(notes[0].position).toBe('right of');
+    expect(notes[0].targets).toEqual(['Bob']);
+  });
+
+  test('meta.startUmlLine records the line of @startuml', function() {
+    var r = seq.parseSequence('@startuml\nA -> B\n@enduml');
+    expect(r.meta.startUmlLine).toBe(1);
+  });
+
+  test('meta.startUmlLine handles preamble comments before @startuml', function() {
+    var r = seq.parseSequence("' comment\n' another\n@startuml\nA -> B\n@enduml");
+    expect(r.meta.startUmlLine).toBe(3);
+  });
+
+  test('meta.startUmlLine is null for snippet without @startuml', function() {
+    var r = seq.parseSequence('A -> B');
+    expect(r.meta.startUmlLine).toBe(null);
+  });
+
+  test('parses participant with color suffix', function() {
+    var r = seq.parseSequence('@startuml\nactor User #FFAAAA\n@enduml');
+    expect(r.elements.length).toBe(1);
+    expect(r.elements[0].ptype).toBe('actor');
+    expect(r.elements[0].id).toBe('User');
+    expect(r.elements[0].line).toBe(2);
+  });
+
+  test('parses participant quoted alias with color', function() {
+    var r = seq.parseSequence('@startuml\nparticipant "Login Server" as LS #AAEEAA\n@enduml');
+    expect(r.elements.length).toBe(1);
+    expect(r.elements[0].id).toBe('LS');
+    expect(r.elements[0].label).toBe('Login Server');
+  });
 });
