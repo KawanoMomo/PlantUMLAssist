@@ -29,7 +29,9 @@ window.MA.sequenceOverlay = (function() {
     rect.setAttribute('stroke', 'none');
     rect.setAttribute('class', 'seq-overlay-target');
     rect.style.cursor = 'pointer';
-    rect.style.pointerEvents = 'all';
+    // 1×1 placeholder (note/activation の暫定座標) は誤クリック誘発を避け pointer-events: none
+    var isPlaceholder = (w === 1 && h === 1);
+    rect.style.pointerEvents = isPlaceholder ? 'none' : 'all';
     Object.keys(attrs).forEach(function(k) {
       rect.setAttribute(k, attrs[k]);
     });
