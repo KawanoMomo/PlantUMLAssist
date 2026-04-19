@@ -101,4 +101,19 @@ describe('parseSequence', function() {
     expect(notes[0].position).toBe('right of');
     expect(notes[0].targets).toEqual(['Bob']);
   });
+
+  test('meta.startUmlLine records the line of @startuml', function() {
+    var r = seq.parseSequence('@startuml\nA -> B\n@enduml');
+    expect(r.meta.startUmlLine).toBe(1);
+  });
+
+  test('meta.startUmlLine handles preamble comments before @startuml', function() {
+    var r = seq.parseSequence("' comment\n' another\n@startuml\nA -> B\n@enduml");
+    expect(r.meta.startUmlLine).toBe(3);
+  });
+
+  test('meta.startUmlLine is null for snippet without @startuml', function() {
+    var r = seq.parseSequence('A -> B');
+    expect(r.meta.startUmlLine).toBe(null);
+  });
 });

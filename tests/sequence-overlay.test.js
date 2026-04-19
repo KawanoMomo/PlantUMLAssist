@@ -47,4 +47,20 @@ describe('buildSequenceOverlay', function() {
     function numCmp(a, b) { return a - b; }
     expect(lines.sort(numCmp)).toEqual(modelLines.sort(numCmp));
   });
+
+  test('matches correctly when @startuml is not on line 1 (preamble)', function() {
+    var f = loadFixture('sequence-with-preamble');
+    // parsed.meta.startUmlLine should be 3 (after 2 comment lines)
+    expect(f.parsed.meta.startUmlLine).toBe(3);
+    var overlayEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    overlay.buildSequenceOverlay(f.svgEl, f.parsed, overlayEl);
+    var msgRects = overlayEl.querySelectorAll('rect[data-type="message"]');
+    // 2 messages
+    expect(msgRects.length).toBe(2);
+    // data-line values should match parser line numbers (absolute)
+    var lines = Array.prototype.map.call(msgRects, function(r) { return parseInt(r.getAttribute('data-line'), 10); });
+    var modelLines = f.parsed.relations.map(function(r) { return r.line; });
+    function numCmp(a, b) { return a - b; }
+    expect(lines.sort(numCmp)).toEqual(modelLines.sort(numCmp));
+  });
 });

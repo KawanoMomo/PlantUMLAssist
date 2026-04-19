@@ -64,7 +64,7 @@ window.MA.modules.plantumlSequence = (function() {
   }
 
   function parseSequence(text) {
-    var result = { meta: { title: '', autonumber: null }, elements: [], relations: [], groups: [] };
+    var result = { meta: { title: '', autonumber: null, startUmlLine: null }, elements: [], relations: [], groups: [] };
     if (!text || !text.trim()) return result;
     var lines = text.split('\n');
     var msgCounter = 0;
@@ -89,7 +89,11 @@ window.MA.modules.plantumlSequence = (function() {
       var lineNum = i + 1;
       var trimmed = lines[i].trim();
       if (!trimmed || trimmed.indexOf("'") === 0) continue;
-      if (/^@startuml/.test(trimmed) || /^@enduml/.test(trimmed)) continue;
+      if (/^@startuml/.test(trimmed)) {
+        if (result.meta.startUmlLine === null) result.meta.startUmlLine = lineNum;
+        continue;
+      }
+      if (/^@enduml/.test(trimmed)) continue;
 
       var tm = trimmed.match(/^title\s+(.+)$/);
       if (tm) { result.meta.title = tm[1].trim(); continue; }

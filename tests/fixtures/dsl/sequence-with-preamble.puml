@@ -1,0 +1,8 @@
+' (c) 2026 author
+' description
+@startuml
+actor User
+participant System
+User -> System : Hi
+System --> User : OK
+@enduml
