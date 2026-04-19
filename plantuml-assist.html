@@ -464,6 +464,9 @@ html, body {
     <span id="status-info"></span>
   </div>
 
+<div id="seq-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+  <div id="seq-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:400px;max-width:600px;"></div>
+</div>
 </div><!-- /#app -->
 
 <!-- Hidden file input -->
@@ -477,6 +480,7 @@ html, body {
 <script src="src/core/connection-mode.js"></script>
 <script src="src/ui/properties.js"></script>
 <script src="src/ui/sequence-overlay.js"></script>
+<script src="src/ui/rich-label-editor.js"></script>
 <script src="src/modules/sequence.js"></script>
 <script src="src/app.js"></script>
 </body>
