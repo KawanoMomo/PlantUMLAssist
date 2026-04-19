@@ -62,6 +62,82 @@ function init() {
 
   initPaneResizers();
 
+  // ── Hover 挿入ガイド ──
+  var previewContainerForHover = document.getElementById('preview-container');
+  var hoverEl = document.getElementById('hover-layer');
+  var overlayElForHover = document.getElementById('overlay-layer');
+
+  function clearHoverGuide() {
+    if (!hoverEl) return;
+    while (hoverEl.firstChild) hoverEl.removeChild(hoverEl.firstChild);
+  }
+
+  function drawHoverGuide(y) {
+    clearHoverGuide();
+    if (!overlayElForHover) return;
+    var w = parseFloat(overlayElForHover.getAttribute('width')) || 800;
+    var h = parseFloat(overlayElForHover.getAttribute('height')) || 400;
+    var lineEl = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    lineEl.setAttribute('x1', 0);
+    lineEl.setAttribute('y1', y);
+    lineEl.setAttribute('x2', w);
+    lineEl.setAttribute('y2', y);
+    lineEl.setAttribute('class', 'hover-guide');
+    hoverEl.appendChild(lineEl);
+    var text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    text.setAttribute('x', 10);
+    text.setAttribute('y', y - 3);
+    text.setAttribute('class', 'hover-label');
+    text.textContent = '+ ここに挿入';
+    hoverEl.appendChild(text);
+    // overlay と sync
+    hoverEl.setAttribute('width', overlayElForHover.getAttribute('width') || w);
+    hoverEl.setAttribute('height', overlayElForHover.getAttribute('height') || h);
+    var vb = overlayElForHover.getAttribute('viewBox');
+    if (vb) hoverEl.setAttribute('viewBox', vb);
+    hoverEl.style.transform = overlayElForHover.style.transform;
+  }
+
+  if (previewContainerForHover && hoverEl && overlayElForHover) {
+    previewContainerForHover.addEventListener('mousemove', function(e) {
+      var target = e.target;
+      // overlay rect 上にマウス → guide 非表示 (既存選択を優先)
+      if (target.getAttribute && target.getAttribute('data-type')) {
+        clearHoverGuide();
+        return;
+      }
+      var rect = overlayElForHover.getBoundingClientRect();
+      if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) {
+        clearHoverGuide();
+        return;
+      }
+      var z = zoom || 1;
+      var y = (e.clientY - rect.top) / z;
+      drawHoverGuide(y);
+    });
+
+    previewContainerForHover.addEventListener('mouseleave', clearHoverGuide);
+
+    previewContainerForHover.addEventListener('click', function(e) {
+      var target = e.target;
+      if (target.getAttribute && target.getAttribute('data-type')) return;  // overlay click は既存 handler が処理
+      if (!currentModule || !currentModule.showInsertForm) return;
+      if (!window.MA.sequenceOverlay || !window.MA.sequenceOverlay.resolveInsertLine) return;
+      var rect = overlayElForHover.getBoundingClientRect();
+      if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) return;
+      var z = zoom || 1;
+      var y = (e.clientY - rect.top) / z;
+      var res = window.MA.sequenceOverlay.resolveInsertLine(overlayElForHover, y);
+      if (!res) return;
+      currentModule.showInsertForm({
+        getMmdText: function() { return mmdText; },
+        setMmdText: function(s) { mmdText = s; suppressSync = true; editorEl.value = s; suppressSync = false; },
+        onUpdate: function() { scheduleRefresh(); },
+      }, res.line, res.position, 'message');
+      clearHoverGuide();
+    });
+  }
+
   // Overlay click → selection
   var overlayEl = document.getElementById('overlay-layer');
   if (overlayEl) {

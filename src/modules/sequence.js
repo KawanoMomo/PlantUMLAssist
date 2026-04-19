@@ -663,6 +663,9 @@ window.MA.modules.plantumlSequence = (function() {
     renameWithRefs: renameWithRefs,
     duplicateRange: duplicateRange,
     inferActivations: inferActivations,
+    showInsertForm: function(ctx, line, position, kind) {
+      _showInsertForm(ctx, line, position, kind);
+    },
     template: function() {
       return [
         '@startuml',
