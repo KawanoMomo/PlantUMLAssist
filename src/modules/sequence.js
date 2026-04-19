@@ -617,6 +617,44 @@ window.MA.modules.plantumlSequence = (function() {
     return out;
   }
 
+  function moveParticipant(text, alias, newIndex) {
+    if (!alias) return text;
+    var lines = text.split('\n');
+    var partIndexes = [];
+    for (var i = 0; i < lines.length; i++) {
+      var trimmed = lines[i].trim();
+      // color suffix を除去してから match
+      var withoutColor = trimmed.replace(/\s+#[0-9A-Fa-f]{6}\s*$/, '');
+      var m = withoutColor.match(PART_RE);
+      if (m) {
+        var al = (m[2] !== undefined) ? m[3] : m[4];
+        partIndexes.push({ lineIdx: i, alias: al });
+      }
+    }
+    var from = -1;
+    for (var j = 0; j < partIndexes.length; j++) {
+      if (partIndexes[j].alias === alias) { from = j; break; }
+    }
+    if (from < 0) return text;
+    if (newIndex < 0) newIndex = 0;
+    if (newIndex >= partIndexes.length) newIndex = partIndexes.length - 1;
+    if (from === newIndex) return text;
+    var fromLineIdx = partIndexes[from].lineIdx;
+    var lineContent = lines[fromLineIdx];
+    lines.splice(fromLineIdx, 1);
+    var remaining = partIndexes.filter(function(p, idx) { return idx !== from; });
+    var toLineIdx;
+    if (newIndex >= remaining.length) {
+      toLineIdx = remaining[remaining.length - 1].lineIdx + 1;
+      if (fromLineIdx < toLineIdx) toLineIdx--;
+    } else {
+      toLineIdx = remaining[newIndex].lineIdx;
+      if (fromLineIdx < toLineIdx) toLineIdx--;
+    }
+    lines.splice(toLineIdx, 0, lineContent);
+    return lines.join('\n');
+  }
+
   function setParticipantColor(text, alias, hex) {
     if (!alias) return text;
     var lines = text.split('\n');
@@ -689,6 +727,7 @@ window.MA.modules.plantumlSequence = (function() {
     duplicateRange: duplicateRange,
     inferActivations: inferActivations,
     setParticipantColor: setParticipantColor,
+    moveParticipant: moveParticipant,
     showInsertForm: function(ctx, line, position, kind) {
       _showInsertForm(ctx, line, position, kind);
     },

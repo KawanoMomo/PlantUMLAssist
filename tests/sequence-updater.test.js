@@ -369,6 +369,33 @@ describe('inferActivations', function() {
   });
 });
 
+describe('moveParticipant', function() {
+  test('moves participant to new index', function() {
+    var text = '@startuml\nparticipant A\nparticipant B\nparticipant C\n@enduml';
+    var out = seq.moveParticipant(text, 'C', 0);
+    var lines = out.split('\n').filter(function(l) { return l.indexOf('participant') === 0; });
+    expect(lines[0]).toContain('participant C');
+    expect(lines[1]).toContain('participant A');
+    expect(lines[2]).toContain('participant B');
+  });
+
+  test('moves participant to middle', function() {
+    var text = '@startuml\nparticipant A\nparticipant B\nparticipant C\n@enduml';
+    var out = seq.moveParticipant(text, 'A', 1);
+    var lines = out.split('\n').filter(function(l) { return l.indexOf('participant') === 0; });
+    expect(lines[0]).toContain('participant B');
+    expect(lines[1]).toContain('participant A');
+    expect(lines[2]).toContain('participant C');
+  });
+
+  test('preserves other lines in order', function() {
+    var text = '@startuml\nparticipant A\nparticipant B\nA -> B : msg\n@enduml';
+    var out = seq.moveParticipant(text, 'B', 0);
+    expect(out).toContain('participant B');
+    expect(out).toContain('A -> B : msg');
+  });
+});
+
 describe('setParticipantColor', function() {
   test('appends #HEX to participant line', function() {
     var text = '@startuml\nparticipant System\n@enduml';
