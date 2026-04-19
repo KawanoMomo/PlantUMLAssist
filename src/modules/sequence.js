@@ -877,8 +877,11 @@ window.MA.modules.plantumlSequence = (function() {
               ctx.onUpdate();
             });
           });
+          // C20: rich-label-editor の onChange は input ごとに発火するため、
+          // 最初の変更時のみ pushHistory (1 edit session = 1 undo entry)
+          var _msgLabelPushed = false;
           window.MA.richLabelEditor.mount(document.getElementById('seq-edit-msg-label-rle'), mm.label, function(v) {
-            window.MA.history.pushHistory();
+            if (!_msgLabelPushed) { window.MA.history.pushHistory(); _msgLabelPushed = true; }
             ctx.setMmdText(updateMessage(ctx.getMmdText(), mln, 'label', v));
             ctx.onUpdate();
           });
@@ -914,8 +917,10 @@ window.MA.modules.plantumlSequence = (function() {
             ctx.setMmdText(t);
             ctx.onUpdate();
           });
+          // C20: 同上 (participant label edit)
+          var _partLabelPushed = false;
           window.MA.richLabelEditor.mount(document.getElementById('seq-edit-label-rle'), pp.label, function(v) {
-            window.MA.history.pushHistory();
+            if (!_partLabelPushed) { window.MA.history.pushHistory(); _partLabelPushed = true; }
             ctx.setMmdText(updateParticipant(ctx.getMmdText(), ln, 'label', v));
             ctx.onUpdate();
           });
@@ -938,8 +943,10 @@ window.MA.modules.plantumlSequence = (function() {
               ctx.onUpdate();
             });
           });
+          // C20: 同上 (note text edit)
+          var _noteTextPushed = false;
           window.MA.richLabelEditor.mount(document.getElementById('seq-edit-ntext-rle'), nn2.text, function(v) {
-            window.MA.history.pushHistory();
+            if (!_noteTextPushed) { window.MA.history.pushHistory(); _noteTextPushed = true; }
             ctx.setMmdText(updateNote(ctx.getMmdText(), nln, 'text', v));
             ctx.onUpdate();
           });
