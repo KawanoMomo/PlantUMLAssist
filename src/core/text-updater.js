@@ -55,16 +55,15 @@ window.MA.textUpdater = (function() {
     return lines.join('\n');
   }
 
-  // insertAtLine: 1-based lineNum の位置に newContent を挿入（既存行はその下に押し下げ）
-  // lineNum < 1 は先頭、lineNum > lines.length は末尾追加にクランプ
+  // insertAtLine: insertBefore + 範囲外は先頭/末尾にクランプ (overlay UI 用)
+  // 既存 insertBefore は範囲外で undefined を生むため、UI 由来の lineNum を安全に扱うラッパ。
   function insertAtLine(text, lineNum, newContent) {
     var lines = text.split('\n');
-    var idx = Math.max(0, Math.min(lines.length, lineNum - 1));
-    lines.splice(idx, 0, newContent);
-    return lines.join('\n');
+    var clamped = Math.max(1, Math.min(lines.length + 1, lineNum));
+    return insertBefore(text, clamped, newContent);
   }
 
-  // insertAfterLine: 1-based lineNum の行の直後に newContent を挿入
+  // insertAfterLine: 「N行目の直後」 = 「N+1行目の前に挿入」 として委譲
   function insertAfterLine(text, lineNum, newContent) {
     return insertAtLine(text, lineNum + 1, newContent);
   }
