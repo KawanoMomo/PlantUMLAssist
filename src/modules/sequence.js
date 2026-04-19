@@ -545,10 +545,9 @@ window.MA.modules.plantumlSequence = (function() {
     },
     buildOverlay: function(svgEl, parsedData, overlayEl) {
       if (!overlayEl) return;
-      while (overlayEl.firstChild) overlayEl.removeChild(overlayEl.firstChild);
-      if (!svgEl) return;
-      var viewBox = svgEl.getAttribute('viewBox');
-      if (viewBox) overlayEl.setAttribute('viewBox', viewBox);
+      if (window.MA.sequenceOverlay && window.MA.sequenceOverlay.buildSequenceOverlay) {
+        return window.MA.sequenceOverlay.buildSequenceOverlay(svgEl, parsedData, overlayEl);
+      }
     },
     renderProps: function(selData, parsedData, propsEl, ctx) {
       if (!propsEl) return;
