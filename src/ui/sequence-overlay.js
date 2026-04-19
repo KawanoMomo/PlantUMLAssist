@@ -212,5 +212,21 @@ window.MA.sequenceOverlay = (function() {
     }
   }
 
-  return { buildSequenceOverlay: buildSequenceOverlay };
+  function setSelectedHighlight(overlayEl, selData) {
+    if (!overlayEl) return;
+    var all = overlayEl.querySelectorAll('rect.seq-overlay-target');
+    Array.prototype.forEach.call(all, function(r) { r.classList.remove('selected'); });
+    if (!selData || selData.length === 0) return;
+    selData.forEach(function(s) {
+      var selector = 'rect[data-type="' + s.type + '"]';
+      if (s.line !== undefined && s.line !== null) selector += '[data-line="' + s.line + '"]';
+      var rects = overlayEl.querySelectorAll(selector);
+      Array.prototype.forEach.call(rects, function(r) { r.classList.add('selected'); });
+    });
+  }
+
+  return {
+    buildSequenceOverlay: buildSequenceOverlay,
+    setSelectedHighlight: setSelectedHighlight,
+  };
 })();

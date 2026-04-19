@@ -168,7 +168,14 @@ function init() {
     onUpdate: function() { updateUndoRedoButtons(); },
   });
 
-  window.MA.selection.init(function() { renderProps(); });
+  window.MA.selection.init(function() {
+    var ovEl = document.getElementById('overlay-layer');
+    var sel = window.MA.selection.getSelected() || [];
+    if (ovEl && window.MA.sequenceOverlay && window.MA.sequenceOverlay.setSelectedHighlight) {
+      window.MA.sequenceOverlay.setSelectedHighlight(ovEl, sel);
+    }
+    renderProps();
+  });
 
   setZoom(1.0);
   updateLineNumbers();
@@ -499,6 +506,10 @@ function renderSvg() {
         } else {
           warnEl.style.display = 'none';
         }
+      }
+      var sel = window.MA.selection.getSelected() || [];
+      if (window.MA.sequenceOverlay && window.MA.sequenceOverlay.setSelectedHighlight) {
+        window.MA.sequenceOverlay.setSelectedHighlight(overlayEl, sel);
       }
     }
     renderStatusEl.textContent = 'OK (' + mode + ')';

@@ -107,3 +107,18 @@ describe('buildSequenceOverlay', function() {
     expect(report.unmatched.message).toBe(0);
   });
 });
+
+describe('setSelectedHighlight', function() {
+  test('adds selected class to matching rect and removes from others', function() {
+    var f = loadFixture('sequence-basic');
+    var overlayEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    overlay.buildSequenceOverlay(f.svgEl, f.parsed, overlayEl);
+    var firstLine = f.parsed.relations[0].line;
+    overlay.setSelectedHighlight(overlayEl, [{ type: 'message', line: firstLine }]);
+    var selectedRects = overlayEl.querySelectorAll('rect.selected');
+    expect(selectedRects.length).toBe(1);
+    expect(parseInt(selectedRects[0].getAttribute('data-line'), 10)).toBe(firstLine);
+    overlay.setSelectedHighlight(overlayEl, []);
+    expect(overlayEl.querySelectorAll('rect.selected').length).toBe(0);
+  });
+});
