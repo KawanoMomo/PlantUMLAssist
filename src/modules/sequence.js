@@ -274,6 +274,22 @@ window.MA.modules.plantumlSequence = (function() {
     return lines.join('\n');
   }
 
+  function unwrap(text, startLine, endLine, keepInner) {
+    // wrapWith の対称操作。block の開始行 / 終了行のみ削除 (中身保持) または
+    // ブロック全体ごと削除 (keepInner === false 明示時のみ)。
+    // startLine === endLine は無効 (block には開始と終了の2行が必要)。
+    var lines = text.split('\n');
+    if (startLine < 1 || endLine > lines.length || startLine >= endLine) return text;
+    if (keepInner === false) {
+      lines.splice(startLine - 1, endLine - startLine + 1);
+    } else {
+      // 順序: end 行 → open 行 (前を先に消すと endLine の index がズレる)
+      lines.splice(endLine - 1, 1);
+      lines.splice(startLine - 1, 1);
+    }
+    return lines.join('\n');
+  }
+
   function deleteGroup(text, startLine, endLine) {
     // Remove the opening line and matching end line only — keep inner
     // contents intact so messages don't disappear.
@@ -429,6 +445,7 @@ window.MA.modules.plantumlSequence = (function() {
     addGroup: addGroup,
     deleteGroup: deleteGroup,
     wrapWith: wrapWith,
+    unwrap: unwrap,
     addNote: addNote,
     updateNote: updateNote,
     moveMessage: moveMessage,

@@ -232,6 +232,25 @@ describe('insertAfter', function() {
   });
 });
 
+describe('unwrap', function() {
+  test('removes block boundaries but keeps inner messages by default', function() {
+    var text = '@startuml\nalt cond\nA -> B\nB -> C\nend\n@enduml';
+    var out = seq.unwrap(text, 2, 5, true);
+    expect(out).not.toContain('alt cond');
+    var lines = out.split('\n').map(function(s) { return s.trim(); });
+    expect(lines.indexOf('end')).toBe(-1);
+    expect(out).toContain('A -> B');
+    expect(out).toContain('B -> C');
+  });
+
+  test('removes block including inner content when keepInner=false', function() {
+    var text = '@startuml\nalt cond\nA -> B\nend\n@enduml';
+    var out = seq.unwrap(text, 2, 4, false);
+    expect(out).not.toContain('A -> B');
+    expect(out).not.toContain('alt cond');
+  });
+});
+
 describe('wrapWith', function() {
   test('wraps a single line with alt block', function() {
     var text = '@startuml\nA -> B : msg\n@enduml';
