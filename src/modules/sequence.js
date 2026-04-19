@@ -449,6 +449,35 @@ window.MA.modules.plantumlSequence = (function() {
     return lines.join('\n');
   }
 
+  function inferActivations(text, msgLine) {
+    // 指定行のメッセージ (from -> to) について、
+    //   1) 直後に `activate <to>` を挿入
+    //   2) 同じ to から from への dashed reply (--/-->/-->>/<--/<<--) があれば
+    //      その直後に `deactivate <to>` を挿入
+    // re-parse コスト: O(N) 1 回。activate 挿入で行番号が +1 ずれるので、
+    // 元 parsed の reply.line に +1 して挿入位置を合わせる (再 parse はしない)。
+    var parsed = parseSequence(text);
+    var msg = null;
+    for (var i = 0; i < parsed.relations.length; i++) {
+      if (parsed.relations[i].line === msgLine) { msg = parsed.relations[i]; break; }
+    }
+    if (!msg) return text;
+    var out = window.MA.textUpdater.insertAfterLine(text, msgLine, fmtActivation('activate', msg.to));
+    var replyLine = null;
+    for (var j = 0; j < parsed.relations.length; j++) {
+      var r = parsed.relations[j];
+      if (r.line <= msgLine) continue;
+      if (r.from === msg.to && r.to === msg.from && /^--/.test(r.arrow)) {
+        replyLine = r.line + 1; // activate 挿入で 1 行ずれた
+        break;
+      }
+    }
+    if (replyLine !== null) {
+      out = window.MA.textUpdater.insertAfterLine(out, replyLine, fmtActivation('deactivate', msg.to));
+    }
+    return out;
+  }
+
   function setTitle(text, newTitle) {
     var lines = text.split('\n');
     for (var i = 0; i < lines.length; i++) {
@@ -494,6 +523,7 @@ window.MA.modules.plantumlSequence = (function() {
     insertAfter: insertAfter,
     renameWithRefs: renameWithRefs,
     duplicateRange: duplicateRange,
+    inferActivations: inferActivations,
     template: function() {
       return [
         '@startuml',

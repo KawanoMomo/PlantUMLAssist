@@ -344,3 +344,27 @@ describe('duplicateRange', function() {
     expect(lines[3]).toBe('A -> B');
   });
 });
+
+describe('inferActivations', function() {
+  test('adds activate after sync message and deactivate after reply', function() {
+    var text = [
+      '@startuml',
+      'A -> B : req',
+      'B --> A : reply',
+      '@enduml',
+    ].join('\n');
+    var out = seq.inferActivations(text, 2);
+    expect(out).toContain('activate B');
+    expect(out).toContain('deactivate B');
+    expect(out.indexOf('A -> B : req')).toBeLessThan(out.indexOf('activate B'));
+    expect(out.indexOf('activate B')).toBeLessThan(out.indexOf('B --> A : reply'));
+    expect(out.indexOf('B --> A : reply')).toBeLessThan(out.indexOf('deactivate B'));
+  });
+
+  test('only adds activate if no matching reply exists', function() {
+    var text = '@startuml\nA -> B : fire-and-forget\n@enduml';
+    var out = seq.inferActivations(text, 2);
+    expect(out).toContain('activate B');
+    expect(out).not.toContain('deactivate');
+  });
+});
