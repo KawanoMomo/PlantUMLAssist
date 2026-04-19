@@ -76,9 +76,11 @@ window.MA.richLabelEditor = (function() {
 
     // onChange への出力も getValue() と同じ正規化を通す (実改行 → literal \n)
     function normalized() { return ta.value.replace(/\n/g, '\\n'); }
+    // Bug 2+5: input (毎 keystroke) は preview のみ更新 (パネル再描画なし)。
+    // onChange は change (blur) 時のみ発火 → panel re-render で textarea が
+    // destroy されず focus を保持できる。
     ta.addEventListener('input', function() {
       refreshPreview();
-      if (onChange) onChange(normalized());
     });
     ta.addEventListener('change', function() {
       if (onChange) onChange(normalized());

@@ -71,3 +71,27 @@ describe('keyboard handling', function() {
     expect(fired).toBe(true);
   });
 });
+
+describe('onChange timing', function() {
+  test('input event does not fire onChange (only preview updates)', function() {
+    var container = document.createElement('div');
+    document.body.appendChild(container);
+    var calls = 0;
+    RLE.mount(container, 'initial', function() { calls++; });
+    var ta = container.querySelector('.rle-textarea');
+    ta.value = 'modified';
+    ta.dispatchEvent(new window.Event('input', { bubbles: true }));
+    expect(calls).toBe(0);  // input では onChange 呼ばれない
+  });
+
+  test('change event fires onChange', function() {
+    var container = document.createElement('div');
+    document.body.appendChild(container);
+    var calls = 0;
+    RLE.mount(container, 'initial', function() { calls++; });
+    var ta = container.querySelector('.rle-textarea');
+    ta.value = 'modified';
+    ta.dispatchEvent(new window.Event('change', { bubbles: true }));
+    expect(calls).toBe(1);
+  });
+});
