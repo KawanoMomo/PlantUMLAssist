@@ -914,6 +914,55 @@ window.MA.modules.plantumlSequence = (function() {
         return;
       }
 
+      if (selData.length > 1) {
+        var range = window.MA.selection.getRange();
+        if (!range) { propsEl.innerHTML = '<p style="color:var(--text-secondary);font-size:11px;">範囲取得失敗</p>'; return; }
+        propsEl.innerHTML =
+          '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;">' +
+            '<strong>' + selData.length + ' 件選択中</strong><br>' +
+            '<span style="color:var(--text-secondary);">L' + range.start + ' 〜 L' + range.end + '</span>' +
+          '</div>' +
+          '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
+            '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">一括アクション</label>' +
+            GROUP_KINDS.map(function(k) {
+              return '<button class="seq-bulk-wrap" data-kind="' + k + '" data-start="' + range.start + '" data-end="' + range.end + '" style="width:100%;text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">⌗ ' + k + ' で囲む</button>';
+            }).join('') +
+            '<button class="seq-bulk-duplicate" data-start="' + range.start + '" data-end="' + range.end + '" style="width:100%;text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">📋 範囲を複製</button>' +
+            '<button class="seq-bulk-delete" data-start="' + range.start + '" data-end="' + range.end + '" style="width:100%;text-align:left;background:var(--accent-red);border:none;color:#fff;padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 範囲を一括削除</button>' +
+          '</div>';
+
+        var P = window.MA.properties;
+        P.bindAllByClass(propsEl, 'seq-bulk-wrap', function(btn) {
+          var k = btn.getAttribute('data-kind');
+          var s = parseInt(btn.getAttribute('data-start'), 10);
+          var e = parseInt(btn.getAttribute('data-end'), 10);
+          var label = prompt(k + ' のラベル', '');
+          window.MA.history.pushHistory();
+          ctx.setMmdText(wrapWith(ctx.getMmdText(), s, e, k, label || ''));
+          window.MA.selection.clearSelection();
+          ctx.onUpdate();
+        });
+        P.bindAllByClass(propsEl, 'seq-bulk-duplicate', function(btn) {
+          var s = parseInt(btn.getAttribute('data-start'), 10);
+          var e = parseInt(btn.getAttribute('data-end'), 10);
+          window.MA.history.pushHistory();
+          ctx.setMmdText(duplicateRange(ctx.getMmdText(), s, e, e));
+          ctx.onUpdate();
+        });
+        P.bindAllByClass(propsEl, 'seq-bulk-delete', function(btn) {
+          if (!confirm('選択範囲を一括削除しますか？')) return;
+          var s = parseInt(btn.getAttribute('data-start'), 10);
+          var e = parseInt(btn.getAttribute('data-end'), 10);
+          window.MA.history.pushHistory();
+          var lines = ctx.getMmdText().split('\n');
+          lines.splice(s - 1, e - s + 1);
+          ctx.setMmdText(lines.join('\n'));
+          window.MA.selection.clearSelection();
+          ctx.onUpdate();
+        });
+        return;
+      }
+
       propsEl.innerHTML = '<p style="color:var(--text-secondary);font-size:11px;">未対応の選択状態</p>';
     },
     operations: {
