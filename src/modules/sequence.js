@@ -262,6 +262,18 @@ window.MA.modules.plantumlSequence = (function() {
     return insertBeforeEnd(text, fmtBlock(kind, label));
   }
 
+  function wrapWith(text, startLine, endLine, blockKind, blockLabel) {
+    // Wrap an existing line range [startLine, endLine] with a block opener
+    // (alt/opt/loop/...) + matching `end`. 1-based, inclusive.
+    var lines = text.split('\n');
+    if (startLine < 1 || endLine > lines.length || startLine > endLine) return text;
+    var openLine = blockLabel ? blockKind + ' ' + blockLabel : blockKind;
+    // 順序大事: 末尾を先に挿入しないと endLine のインデックスがズレる
+    lines.splice(endLine, 0, 'end');
+    lines.splice(startLine - 1, 0, openLine);
+    return lines.join('\n');
+  }
+
   function deleteGroup(text, startLine, endLine) {
     // Remove the opening line and matching end line only — keep inner
     // contents intact so messages don't disappear.
@@ -416,6 +428,7 @@ window.MA.modules.plantumlSequence = (function() {
     toggleAutonumber: toggleAutonumber,
     addGroup: addGroup,
     deleteGroup: deleteGroup,
+    wrapWith: wrapWith,
     addNote: addNote,
     updateNote: updateNote,
     moveMessage: moveMessage,

@@ -231,3 +231,31 @@ describe('insertAfter', function() {
     expect(seq.insertBefore(text, 2, 'participant', { ptype: 'actor' })).toBe(text);
   });
 });
+
+describe('wrapWith', function() {
+  test('wraps a single line with alt block', function() {
+    var text = '@startuml\nA -> B : msg\n@enduml';
+    var out = seq.wrapWith(text, 2, 2, 'alt', 'condition');
+    var lines = out.split('\n');
+    expect(lines[1]).toBe('alt condition');
+    expect(lines[2]).toBe('A -> B : msg');
+    expect(lines[3]).toBe('end');
+  });
+
+  test('wraps a multi-line range with loop block', function() {
+    var text = '@startuml\nA -> B : a\nB -> C : b\nC -> D : c\n@enduml';
+    var out = seq.wrapWith(text, 2, 4, 'loop', '3 times');
+    var lines = out.split('\n');
+    expect(lines[1]).toBe('loop 3 times');
+    expect(lines[2]).toBe('A -> B : a');
+    expect(lines[3]).toBe('B -> C : b');
+    expect(lines[4]).toBe('C -> D : c');
+    expect(lines[5]).toBe('end');
+  });
+
+  test('wraps without label', function() {
+    var text = '@startuml\nA -> B\n@enduml';
+    var out = seq.wrapWith(text, 2, 2, 'opt', '');
+    expect(out).toContain('opt\n');
+  });
+});
