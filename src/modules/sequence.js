@@ -149,7 +149,8 @@ window.MA.modules.plantumlSequence = (function() {
         continue;
       }
 
-      var pm = trimmed.match(PART_RE);
+      var partTrimmed = trimmed.replace(/\s+#[0-9A-Fa-f]{6}\s*$/, '');
+      var pm = partTrimmed.match(PART_RE);
       if (pm) {
         var ptype = pm[1];
         var alias, label;

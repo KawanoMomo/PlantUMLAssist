@@ -116,4 +116,19 @@ describe('parseSequence', function() {
     var r = seq.parseSequence('A -> B');
     expect(r.meta.startUmlLine).toBe(null);
   });
+
+  test('parses participant with color suffix', function() {
+    var r = seq.parseSequence('@startuml\nactor User #FFAAAA\n@enduml');
+    expect(r.elements.length).toBe(1);
+    expect(r.elements[0].ptype).toBe('actor');
+    expect(r.elements[0].id).toBe('User');
+    expect(r.elements[0].line).toBe(2);
+  });
+
+  test('parses participant quoted alias with color', function() {
+    var r = seq.parseSequence('@startuml\nparticipant "Login Server" as LS #AAEEAA\n@enduml');
+    expect(r.elements.length).toBe(1);
+    expect(r.elements[0].id).toBe('LS');
+    expect(r.elements[0].label).toBe('Login Server');
+  });
 });
