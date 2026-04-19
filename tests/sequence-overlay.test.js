@@ -81,4 +81,29 @@ describe('buildSequenceOverlay', function() {
     var actsInModel = f.parsed.elements.filter(function(e) { return e.kind === 'activation'; }).length;
     expect(actRects.length).toBe(actsInModel);
   });
+
+  test('returns failure report when participants cant be matched', function() {
+    var f = loadFixture('sequence-basic');
+    // 意図的に label を変えて parse を破壊
+    f.parsed.elements[0].label = '存在しないラベル_zzz';
+    // line 番号も誤値に変えて offset 推定もズラす
+    f.parsed.elements[0].line = 9999;
+    var overlayEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    var report = overlay.buildSequenceOverlay(f.svgEl, f.parsed, overlayEl);
+    expect(report).toBeDefined();
+    expect(report.unmatched).toBeDefined();
+    // Use toBeGreaterThan(0) since the test framework lacks toBeGreaterThanOrEqual.
+    // Equivalent for integers: >=1 ⟺ >0.
+    expect(report.unmatched.participant).toBeGreaterThan(0);
+  });
+
+  test('returns matched/unmatched counts in report', function() {
+    var f = loadFixture('sequence-basic');
+    var overlayEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    var report = overlay.buildSequenceOverlay(f.svgEl, f.parsed, overlayEl);
+    expect(report.matched.participant).toBe(3);
+    expect(report.matched.message).toBe(4);
+    expect(report.unmatched.participant).toBe(0);
+    expect(report.unmatched.message).toBe(0);
+  });
 });

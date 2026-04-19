@@ -185,6 +185,23 @@ window.MA.sequenceOverlay = (function() {
       });
     }
     _warnIfMismatch('activation', activations.length, overlayEl.querySelectorAll('rect[data-type="activation"]').length);
+
+    var noteRectCount = overlayEl.querySelectorAll('rect[data-type="note"]').length;
+    var actRectCount = overlayEl.querySelectorAll('rect[data-type="activation"]').length;
+    return {
+      matched: {
+        participant: partMatches.length,
+        message: msgMatches.length,
+        note: noteRectCount,
+        activation: actRectCount,
+      },
+      unmatched: {
+        participant: participants.length - partMatches.length,
+        message: parsedData.relations.length - msgMatches.length,
+        note: notes.length - noteRectCount,
+        activation: activations.length - actRectCount,
+      },
+    };
   }
 
   function _warnIfMismatch(kind, modelCount, matchedCount) {
