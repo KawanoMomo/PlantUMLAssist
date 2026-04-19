@@ -390,6 +390,27 @@ html, body {
   font-weight: bold;
   pointer-events: none;
 }
+
+/* ── Participant drag-reorder (Sprint 10 C19) ─────────────────────────────── */
+.seq-drag-ghost {
+  position: fixed;
+  pointer-events: none;
+  background: rgba(124,140,248,0.25);
+  border: 2px dashed #7c8cf8;
+  color: #7c8cf8;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  z-index: 2000;
+  transform: translate(-50%, -50%);
+}
+#hover-layer .drop-indicator {
+  stroke: #7c8cf8;
+  stroke-width: 2;
+  stroke-dasharray: 6,3;
+  pointer-events: none;
+}
 </style>
 </head>
 <body>

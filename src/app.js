@@ -138,6 +138,130 @@ function init() {
     });
   }
 
+  // ── Participant drag 並び替え (Sprint 10 C19) ──
+  var dragState = null;
+
+  function drawDropIndicator(clientX) {
+    var hoverElD = document.getElementById('hover-layer');
+    var overlayD = document.getElementById('overlay-layer');
+    if (!hoverElD || !overlayD) return;
+    var old = hoverElD.querySelector('.drop-indicator');
+    if (old) old.parentNode.removeChild(old);
+    var partRects = overlayD.querySelectorAll('rect[data-type="participant"]');
+    if (partRects.length === 0) return;
+    var rectBBox = overlayD.getBoundingClientRect();
+    var z = zoom || 1;
+    var localX = (clientX - rectBBox.left) / z;
+    var boundaries = [0];
+    Array.prototype.forEach.call(partRects, function(r) {
+      var x = parseFloat(r.getAttribute('x'));
+      var w = parseFloat(r.getAttribute('width'));
+      boundaries.push(x + w / 2);
+    });
+    boundaries.push(parseFloat(overlayD.getAttribute('width')) || 800);
+    var bestX = boundaries[0];
+    var bestDist = Infinity;
+    for (var ii = 0; ii < boundaries.length; ii++) {
+      var d = Math.abs(localX - boundaries[ii]);
+      if (d < bestDist) { bestDist = d; bestX = boundaries[ii]; }
+    }
+    var h = parseFloat(overlayD.getAttribute('height')) || 400;
+    var line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', bestX);
+    line.setAttribute('y1', 0);
+    line.setAttribute('x2', bestX);
+    line.setAttribute('y2', h);
+    line.setAttribute('class', 'drop-indicator');
+    hoverElD.appendChild(line);
+  }
+
+  function clearDropIndicator() {
+    var hoverElD = document.getElementById('hover-layer');
+    if (!hoverElD) return;
+    var old = hoverElD.querySelector('.drop-indicator');
+    if (old) old.parentNode.removeChild(old);
+  }
+
+  function computeDropIndex(clientX) {
+    var overlayD = document.getElementById('overlay-layer');
+    if (!overlayD) return null;
+    var partRects = overlayD.querySelectorAll('rect[data-type="participant"]');
+    if (partRects.length === 0) return null;
+    var rectBBox = overlayD.getBoundingClientRect();
+    var z = zoom || 1;
+    var localX = (clientX - rectBBox.left) / z;
+    var centers = Array.prototype.map.call(partRects, function(r) {
+      return parseFloat(r.getAttribute('x')) + parseFloat(r.getAttribute('width')) / 2;
+    }).sort(function(a, b) { return a - b; });
+    var idx = 0;
+    for (var ii = 0; ii < centers.length; ii++) {
+      if (localX > centers[ii]) idx = ii + 1;
+    }
+    return idx;
+  }
+
+  var ovForDrag = document.getElementById('overlay-layer');
+  if (ovForDrag) {
+    ovForDrag.addEventListener('mousedown', function(e) {
+      var target = e.target;
+      if (!target.getAttribute) return;
+      if (target.getAttribute('data-type') !== 'participant') return;
+      var id = target.getAttribute('data-id');
+      dragState = { id: id, startX: e.clientX, startY: e.clientY, ghostEl: null, dragging: false };
+    });
+  }
+
+  document.addEventListener('mousemove', function(e) {
+    if (!dragState) return;
+    var dx = e.clientX - dragState.startX;
+    var dy = e.clientY - dragState.startY;
+    var dist = Math.sqrt(dx * dx + dy * dy);
+    if (!dragState.dragging && dist > 4) {
+      dragState.dragging = true;
+      var g = document.createElement('div');
+      g.className = 'seq-drag-ghost';
+      g.textContent = dragState.id;
+      g.style.left = e.clientX + 'px';
+      g.style.top = e.clientY + 'px';
+      document.body.appendChild(g);
+      dragState.ghostEl = g;
+    }
+    if (dragState.dragging) {
+      dragState.ghostEl.style.left = e.clientX + 'px';
+      dragState.ghostEl.style.top = e.clientY + 'px';
+      drawDropIndicator(e.clientX);
+    }
+  });
+
+  document.addEventListener('mouseup', function(e) {
+    if (!dragState) return;
+    if (dragState.dragging) {
+      var newIndex = computeDropIndex(e.clientX);
+      if (newIndex !== null && currentModule) {
+        var seqMod = window.MA.modules && window.MA.modules.plantumlSequence;
+        if (seqMod && seqMod.moveParticipant) {
+          window.MA.history.pushHistory();
+          mmdText = seqMod.moveParticipant(mmdText, dragState.id, newIndex);
+          suppressSync = true;
+          editorEl.value = mmdText;
+          suppressSync = false;
+          scheduleRefresh();
+        }
+      }
+      if (dragState.ghostEl && dragState.ghostEl.parentNode) dragState.ghostEl.parentNode.removeChild(dragState.ghostEl);
+      clearDropIndicator();
+    }
+    dragState = null;
+  });
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && dragState && dragState.dragging) {
+      if (dragState.ghostEl && dragState.ghostEl.parentNode) dragState.ghostEl.parentNode.removeChild(dragState.ghostEl);
+      clearDropIndicator();
+      dragState = null;
+    }
+  });
+
   // Overlay click → selection
   var overlayEl = document.getElementById('overlay-layer');
   if (overlayEl) {
