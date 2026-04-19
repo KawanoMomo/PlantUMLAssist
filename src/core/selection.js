@@ -49,6 +49,13 @@ window.MA.selection = (function() {
     onChange();
   }
 
+  function getRange() {
+    if (!sel || sel.length === 0) return null;
+    var lines = sel.map(function(s) { return s.line; }).filter(function(n) { return typeof n === 'number'; });
+    if (lines.length === 0) return null;
+    return { start: Math.min.apply(null, lines), end: Math.max.apply(null, lines) };
+  }
+
   return {
     init: init,
     getSelected: getSelected,
@@ -56,5 +63,6 @@ window.MA.selection = (function() {
     isSelected: isSelected,
     selectItem: selectItem,
     clearSelection: clearSelection,
+    getRange: getRange,
   };
 })();
