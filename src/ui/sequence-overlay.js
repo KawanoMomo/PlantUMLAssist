@@ -58,6 +58,18 @@ window.MA.sequenceOverlay = (function() {
     return matches;
   }
 
+  function _matchByOrder(svgEl, parsedItems, groupSelector) {
+    // Fallback: v1.2026.x 以降 data-source-line が付かない <g> 向け。
+    // parsedItems の順序と SVG 出現順序で 1:1 対応させる。
+    var matches = [];
+    var allGroups = svgEl.querySelectorAll(groupSelector);
+    var n = Math.min(allGroups.length, parsedItems.length);
+    for (var i = 0; i < n; i++) {
+      matches.push({ item: parsedItems[i], groupEl: allGroups[i] });
+    }
+    return matches;
+  }
+
   function _gBBox(g) {
     // <g> の中の最初の <text> 要素の bbox を採用 (jsdom 互換 fallback あり)。
     var t = g.querySelector('text');
@@ -81,6 +93,15 @@ window.MA.sequenceOverlay = (function() {
       var m = _matchByDataSourceLine(svgEl, parsedItems, groupSelector, candidates[i]);
       if (m.length > best.matches.length) {
         best = { matches: m, offset: candidates[i] };
+      }
+    }
+    // Bug B5 fix: data-source-line 無しの PlantUML 出力 (v1.2026.x 以降の
+    // g.message / g.participant-*) ではどの offset でも 0 マッチになる。
+    // その場合 selector + 出現順で 1:1 fallback matching を試みる。
+    if (best.matches.length === 0 && parsedItems.length > 0) {
+      var fb = _matchByOrder(svgEl, parsedItems, groupSelector);
+      if (fb.length > 0) {
+        best = { matches: fb, offset: 0, fallback: 'order' };
       }
     }
     return best;

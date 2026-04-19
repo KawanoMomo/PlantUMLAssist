@@ -106,6 +106,22 @@ describe('buildSequenceOverlay', function() {
     expect(report.unmatched.participant).toBe(0);
     expect(report.unmatched.message).toBe(0);
   });
+
+  test('falls back to order-based matching when SVG lacks data-source-line (Bug B5)', function() {
+    var f = loadFixture('sequence-basic');
+    // v1.2026.x 以降の SVG を模倣: 全ての data-source-line attribute を剥奪。
+    var allGroups = f.svgEl.querySelectorAll('[data-source-line]');
+    Array.prototype.forEach.call(allGroups, function(g) {
+      g.removeAttribute('data-source-line');
+    });
+    var overlayEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    var report = overlay.buildSequenceOverlay(f.svgEl, f.parsed, overlayEl);
+    // 順序 fallback により全 participant/message が overlay に出るはず。
+    expect(report.matched.participant).toBe(3);
+    expect(report.matched.message).toBe(4);
+    expect(report.unmatched.participant).toBe(0);
+    expect(report.unmatched.message).toBe(0);
+  });
 });
 
 describe('resolveInsertLine', function() {
