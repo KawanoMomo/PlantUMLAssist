@@ -10,8 +10,10 @@ window.MA.richLabelEditor = (function() {
   function plantumlToHtml(s) {
     if (!s) return '';
     var out = escHtml(s);
-    // \n → <br> (テキスト中の literal '\n' を改行に変換)
+    // literal '\n' (2 文字) → <br>
     out = out.replace(/\\n/g, '<br>');
+    // 実改行 (U+000A) → <br>
+    out = out.replace(/\n/g, '<br>');
     // <color:xxx> ... </color> (HTML エスケープ後 → &lt;color:...&gt;)
     out = out.replace(/&lt;color:([^&]+)&gt;([\s\S]*?)&lt;\/color&gt;/g, function(_, c, body) {
       return '<span style="color:' + c + '">' + body + '</span>';
@@ -79,6 +81,31 @@ window.MA.richLabelEditor = (function() {
     ta.addEventListener('change', function() {
       if (onChange) onChange(ta.value);
     });
+    ta.addEventListener('keydown', function(e) {
+      if (e.key === 'Tab' && !e.isComposing) {
+        e.preventDefault();
+        var s = ta.selectionStart, ed = ta.selectionEnd;
+        if (e.shiftKey) {
+          // outdent: 行頭の 2 空白を除去
+          var before = ta.value.substring(0, s);
+          var lineStart = before.lastIndexOf('\n') + 1;
+          if (ta.value.substring(lineStart, lineStart + 2) === '  ') {
+            ta.value = ta.value.substring(0, lineStart) + ta.value.substring(lineStart + 2);
+            ta.selectionStart = ta.selectionEnd = Math.max(lineStart, s - 2);
+          }
+        } else {
+          // indent: 2 空白挿入
+          ta.value = ta.value.substring(0, s) + '  ' + ta.value.substring(ed);
+          ta.selectionStart = ta.selectionEnd = s + 2;
+        }
+        ta.dispatchEvent(new window.Event('input', { bubbles: true }));
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        container.dispatchEvent(new window.CustomEvent('rle-escape', { bubbles: true }));
+      }
+    });
 
     container.querySelector('.rle-b').addEventListener('click', function() { insertWrapAtSelection(ta, '<b>', '</b>'); });
     container.querySelector('.rle-i').addEventListener('click', function() { insertWrapAtSelection(ta, '<i>', '</i>'); });
@@ -99,8 +126,11 @@ window.MA.richLabelEditor = (function() {
     });
 
     return {
-      getValue: function() { return ta.value; },
-      setValue: function(v) { ta.value = v; refreshPreview(); },
+      getValue: function() {
+        // 実改行 (U+000A) を PlantUML literal '\n' (2 文字) に変換
+        return ta.value.replace(/\n/g, '\\n');
+      },
+      setValue: function(v) { ta.value = (v || '').replace(/\\n/g, '\n'); refreshPreview(); },
       element: ta,
     };
   }

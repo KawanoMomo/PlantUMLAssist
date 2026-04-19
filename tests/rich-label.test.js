@@ -33,3 +33,41 @@ describe('insertWrapAtSelection', function() {
     expect(ta.value).toBe('<b>hello</b> world');
   });
 });
+
+describe('keyboard handling', function() {
+  test('Tab inserts 2 spaces (workspace ADR-011)', function() {
+    var container = document.createElement('div');
+    document.body.appendChild(container);
+    RLE.mount(container, 'hello');
+    var ta = container.querySelector('.rle-textarea');
+    ta.setSelectionRange(0, 0);
+    ta.focus();
+    var ev = new window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+    ta.dispatchEvent(ev);
+    expect(ta.value.substring(0, 2)).toBe('  ');
+  });
+
+  test('Shift+Tab removes leading 2 spaces (outdent)', function() {
+    var container = document.createElement('div');
+    document.body.appendChild(container);
+    RLE.mount(container, '  hello');
+    var ta = container.querySelector('.rle-textarea');
+    ta.setSelectionRange(4, 4);
+    ta.focus();
+    var ev = new window.KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true });
+    ta.dispatchEvent(ev);
+    expect(ta.value).toBe('hello');
+  });
+
+  test('Escape dispatches rle-escape custom event', function() {
+    var container = document.createElement('div');
+    document.body.appendChild(container);
+    RLE.mount(container, 'x');
+    var ta = container.querySelector('.rle-textarea');
+    var fired = false;
+    container.addEventListener('rle-escape', function() { fired = true; });
+    var ev = new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    ta.dispatchEvent(ev);
+    expect(fired).toBe(true);
+  });
+});
