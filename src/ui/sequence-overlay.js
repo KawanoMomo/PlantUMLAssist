@@ -8,7 +8,7 @@ window.MA.sequenceOverlay = (function() {
   //   parserLine = svgLine + offset
   // PlantUML のバージョン / preamble 種別で offset の挙動が異なる:
   //   - preamble なし (@startuml が line 1):    offset = 1 (= startUmlLine)
-  //   - preamble が空白行のみ:                  offset = startUmlLine
+  //   - preamble が空白行のみ:                  offset = startUmlLine (推定/未検証)
   //   - preamble にコメント行 (' ...) を含む:   offset = 0 (PlantUML が絶対行を出す)
   //   - @startuml なし (snippet):               offset = 0
   // 単純な startUmlLine 利用では comment preamble case で破綻するため、
