@@ -403,28 +403,68 @@ window.MA.modules.plantumlSequence = (function() {
     });
   }
 
-  // インライン挿入フォーム (簡易: prompt ベース。Sprint 4 で modal+rich editor に置換)
   function _showInsertForm(ctx, line, position, kind) {
+    var modal = document.getElementById('seq-modal');
+    var content = document.getElementById('seq-modal-content');
+    var P = window.MA.properties;
+    var parsed = parseSequence(ctx.getMmdText());
+    var participants = parsed.elements.filter(function(e) { return e.kind === 'participant'; });
+    var partOpts = participants.map(function(p) { return { value: p.id, label: p.label }; });
+    if (partOpts.length === 0) partOpts = [{ value: '', label: '（参加者なし）' }];
+
+    var title = (position === 'before' ? '前に' : '後に') + (kind === 'message' ? 'メッセージを挿入' : '注釈を挿入');
+    var html = '<h3 style="margin:0 0 12px 0;color:var(--text-primary);">' + title + '</h3>';
     if (kind === 'message') {
-      var from = prompt('From (participant id)');
-      if (!from) return;
-      var to = prompt('To (participant id)');
-      if (!to) return;
-      var arrow = prompt('Arrow (例: ->)', '->');
-      var label = prompt('本文', '');
-      window.MA.history.pushHistory();
-      var insertFn = position === 'before' ? insertBefore : insertAfter;
-      ctx.setMmdText(insertFn(ctx.getMmdText(), line, 'message', { from: from, to: to, arrow: arrow || '->', label: label }));
-      ctx.onUpdate();
+      var arrowOpts = ARROWS.map(function(a) { return { value: a, label: arrowLabel(a), selected: a === '->' }; });
+      html +=
+        P.selectFieldHtml('From', 'seq-mod-from', partOpts) +
+        P.selectFieldHtml('Arrow', 'seq-mod-arrow', arrowOpts) +
+        P.selectFieldHtml('To', 'seq-mod-to', partOpts) +
+        '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">本文</label><div id="seq-mod-label-rle"></div></div>';
     } else if (kind === 'note') {
-      var pos = prompt('Position (over/left of/right of)', 'over');
-      var target = prompt('Target participant');
-      if (!target) return;
-      var text = prompt('Note 本文', '');
-      window.MA.history.pushHistory();
-      ctx.setMmdText(insertAfter(ctx.getMmdText(), line, 'note', { position: pos || 'over', targets: [target], text: text }));
-      ctx.onUpdate();
+      var posOpts = NOTE_POSITIONS.map(function(p) { return { value: p, label: p, selected: p === 'over' }; });
+      html +=
+        P.selectFieldHtml('Position', 'seq-mod-npos', posOpts) +
+        P.selectFieldHtml('Target', 'seq-mod-ntarget', partOpts) +
+        '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">本文</label><div id="seq-mod-ntext-rle"></div></div>';
     }
+    html +=
+      '<div style="display:flex;gap:8px;margin-top:12px;">' +
+        '<button id="seq-mod-cancel" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:8px;border-radius:4px;cursor:pointer;">キャンセル</button>' +
+        '<button id="seq-mod-confirm" style="flex:1;background:var(--accent);border:none;color:#fff;padding:8px;border-radius:4px;cursor:pointer;">確定</button>' +
+      '</div>';
+    content.innerHTML = html;
+    modal.style.display = 'flex';
+
+    var rleObj = null;
+    if (kind === 'message') rleObj = window.MA.richLabelEditor.mount(document.getElementById('seq-mod-label-rle'), '');
+    else if (kind === 'note') rleObj = window.MA.richLabelEditor.mount(document.getElementById('seq-mod-ntext-rle'), '');
+
+    document.getElementById('seq-mod-cancel').addEventListener('click', function() {
+      modal.style.display = 'none';
+    });
+    document.getElementById('seq-mod-confirm').addEventListener('click', function() {
+      window.MA.history.pushHistory();
+      var t = ctx.getMmdText();
+      var insertFn = position === 'before' ? insertBefore : insertAfter;
+      if (kind === 'message') {
+        t = insertFn(t, line, 'message', {
+          from: document.getElementById('seq-mod-from').value,
+          to: document.getElementById('seq-mod-to').value,
+          arrow: document.getElementById('seq-mod-arrow').value,
+          label: rleObj ? rleObj.getValue() : '',
+        });
+      } else if (kind === 'note') {
+        t = insertFn(t, line, 'note', {
+          position: document.getElementById('seq-mod-npos').value,
+          targets: [document.getElementById('seq-mod-ntarget').value],
+          text: rleObj ? rleObj.getValue() : '',
+        });
+      }
+      ctx.setMmdText(t);
+      modal.style.display = 'none';
+      ctx.onUpdate();
+    });
   }
 
   // renameWithRefs: participant の id (alias) を別名へ。本文中の参照
