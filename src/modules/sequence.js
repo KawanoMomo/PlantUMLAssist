@@ -358,6 +358,75 @@ window.MA.modules.plantumlSequence = (function() {
     return window.MA.textUpdater.insertAfterLine(text, lineNum, line);
   }
 
+  function bindActionBar(propsEl, ctx) {
+    var P = window.MA.properties;
+    P.bindAllByClass(propsEl, 'seq-insert-msg-before', function(btn) {
+      var ln = parseInt(btn.getAttribute('data-line'), 10);
+      _showInsertForm(ctx, ln, 'before', 'message');
+    });
+    P.bindAllByClass(propsEl, 'seq-insert-msg-after', function(btn) {
+      var ln = parseInt(btn.getAttribute('data-line'), 10);
+      _showInsertForm(ctx, ln, 'after', 'message');
+    });
+    P.bindAllByClass(propsEl, 'seq-insert-note-after', function(btn) {
+      var ln = parseInt(btn.getAttribute('data-line'), 10);
+      _showInsertForm(ctx, ln, 'after', 'note');
+    });
+    P.bindAllByClass(propsEl, 'seq-wrap-block', function(btn) {
+      var ln = parseInt(btn.getAttribute('data-line'), 10);
+      var kind = prompt('ブロック種類 (alt/opt/loop/par)', 'alt');
+      if (!kind) return;
+      var label = prompt('Label/Condition', '');
+      window.MA.history.pushHistory();
+      ctx.setMmdText(wrapWith(ctx.getMmdText(), ln, ln, kind, label || ''));
+      ctx.onUpdate();
+    });
+    P.bindAllByClass(propsEl, 'seq-move-up', function(btn) {
+      var ln = parseInt(btn.getAttribute('data-line'), 10);
+      window.MA.history.pushHistory();
+      ctx.setMmdText(moveMessage(ctx.getMmdText(), ln, -1));
+      ctx.onUpdate();
+    });
+    P.bindAllByClass(propsEl, 'seq-move-down', function(btn) {
+      var ln = parseInt(btn.getAttribute('data-line'), 10);
+      window.MA.history.pushHistory();
+      ctx.setMmdText(moveMessage(ctx.getMmdText(), ln, 1));
+      ctx.onUpdate();
+    });
+    P.bindAllByClass(propsEl, 'seq-delete-line', function(btn) {
+      var ln = parseInt(btn.getAttribute('data-line'), 10);
+      if (!confirm('この行を削除しますか？')) return;
+      window.MA.history.pushHistory();
+      ctx.setMmdText(deleteLine(ctx.getMmdText(), ln));
+      window.MA.selection.clearSelection();
+      ctx.onUpdate();
+    });
+  }
+
+  // インライン挿入フォーム (簡易: prompt ベース。Sprint 4 で modal+rich editor に置換)
+  function _showInsertForm(ctx, line, position, kind) {
+    if (kind === 'message') {
+      var from = prompt('From (participant id)');
+      if (!from) return;
+      var to = prompt('To (participant id)');
+      if (!to) return;
+      var arrow = prompt('Arrow (例: ->)', '->');
+      var label = prompt('本文', '');
+      window.MA.history.pushHistory();
+      var insertFn = position === 'before' ? insertBefore : insertAfter;
+      ctx.setMmdText(insertFn(ctx.getMmdText(), line, 'message', { from: from, to: to, arrow: arrow || '->', label: label }));
+      ctx.onUpdate();
+    } else if (kind === 'note') {
+      var pos = prompt('Position (over/left of/right of)', 'over');
+      var target = prompt('Target participant');
+      if (!target) return;
+      var text = prompt('Note 本文', '');
+      window.MA.history.pushHistory();
+      ctx.setMmdText(insertAfter(ctx.getMmdText(), line, 'note', { position: pos || 'over', targets: [target], text: text }));
+      ctx.onUpdate();
+    }
+  }
+
   // renameWithRefs: participant の id (alias) を別名へ。本文中の参照
   // (message from/to, activate/deactivate target, note target など) も
   // 単語境界 \b で同時更新する。コメント行 (' 始まり) と "..." 内のラベル
@@ -683,63 +752,23 @@ window.MA.modules.plantumlSequence = (function() {
 
       if (selData.length === 1) {
         var sel = selData[0];
-        if (sel.type === 'note') {
-          var nn = null;
-          for (var ki = 0; ki < parsedData.elements.length; ki++) {
-            var e0 = parsedData.elements[ki];
-            if (e0.kind === 'note' && e0.id === sel.id) { nn = e0; break; }
-          }
-          if (!nn) { propsEl.innerHTML = '<p style="color:var(--text-secondary);font-size:11px;">注釈が見つかりません</p>'; return; }
-          var nPosOpts = NOTE_POSITIONS.map(function(pp) { return { value: pp, label: pp, selected: pp === nn.position }; });
-          propsEl.innerHTML =
-            P.panelHeaderHtml('Note') +
-            P.selectFieldHtml('Position', 'seq-edit-note-pos', nPosOpts) +
-            P.fieldHtml('Target(s)', 'seq-edit-note-targets', nn.targets.join(', '), 'Alice / Alice, Bob') +
-            P.fieldHtml('Text', 'seq-edit-note-text', nn.text) +
-            P.dangerButtonHtml('seq-edit-note-delete', '注釈削除');
-          var nln = nn.line;
-          [['pos', 'position'], ['targets', 'targets'], ['text', 'text']].forEach(function(pair) {
-            document.getElementById('seq-edit-note-' + pair[0]).addEventListener('change', function() {
-              window.MA.history.pushHistory();
-              ctx.setMmdText(updateNote(ctx.getMmdText(), nln, pair[1], this.value));
-              ctx.onUpdate();
-            });
-          });
-          P.bindEvent('seq-edit-note-delete', 'click', function() {
-            window.MA.history.pushHistory();
-            ctx.setMmdText(deleteLine(ctx.getMmdText(), nln));
-            window.MA.selection.clearSelection();
-            ctx.onUpdate();
-          });
-          return;
+
+        // ヘルパ: 共通の挿入アクションバー (要素の line を起点)
+        function actionBarHtml(line) {
+          return '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
+            '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">この位置に挿入</label>' +
+            '<button class="seq-insert-msg-before" data-line="' + line + '" style="width:100%;text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">↑ この前にメッセージ追加</button>' +
+            '<button class="seq-insert-msg-after" data-line="' + line + '" style="width:100%;text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">↓ この後にメッセージ追加</button>' +
+            '<button class="seq-insert-note-after" data-line="' + line + '" style="width:100%;text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">↓ この後に注釈追加</button>' +
+            '<button class="seq-wrap-block" data-line="' + line + '" style="width:100%;text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">⌗ alt/loop で囲む…</button>' +
+          '</div>' +
+          '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;display:flex;gap:4px;">' +
+            '<button class="seq-move-up" data-line="' + line + '" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↑ 上へ</button>' +
+            '<button class="seq-move-down" data-line="' + line + '" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↓ 下へ</button>' +
+            '<button class="seq-delete-line" data-line="' + line + '" style="flex:0 0 60px;background:var(--accent-red);color:#fff;border:none;padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 削除</button>' +
+          '</div>';
         }
-        if (sel.type === 'participant') {
-          var pp = null;
-          for (var ii = 0; ii < participants.length; ii++) if (participants[ii].id === sel.id) { pp = participants[ii]; break; }
-          if (!pp) { propsEl.innerHTML = '<p style="color:var(--text-secondary);font-size:11px;">参加者が見つかりません</p>'; return; }
-          var pOpts2 = PARTICIPANT_TYPES.map(function(pt) { return { value: pt, label: pt, selected: pt === pp.ptype }; });
-          propsEl.innerHTML =
-            P.panelHeaderHtml(pp.label) +
-            P.selectFieldHtml('Type', 'seq-edit-ptype', pOpts2) +
-            P.fieldHtml('Alias', 'seq-edit-alias', pp.id) +
-            P.fieldHtml('Label', 'seq-edit-label', pp.label) +
-            P.dangerButtonHtml('seq-edit-delete', '参加者削除');
-          var ln = pp.line;
-          ['ptype', 'alias', 'label'].forEach(function(f) {
-            document.getElementById('seq-edit-' + f).addEventListener('change', function() {
-              window.MA.history.pushHistory();
-              ctx.setMmdText(updateParticipant(ctx.getMmdText(), ln, f, this.value));
-              ctx.onUpdate();
-            });
-          });
-          P.bindEvent('seq-edit-delete', 'click', function() {
-            window.MA.history.pushHistory();
-            ctx.setMmdText(deleteLine(ctx.getMmdText(), ln));
-            window.MA.selection.clearSelection();
-            ctx.onUpdate();
-          });
-          return;
-        }
+
         if (sel.type === 'message') {
           var mm = null;
           for (var jj = 0; jj < messages.length; jj++) if (messages[jj].id === sel.id) { mm = messages[jj]; break; }
@@ -749,12 +778,12 @@ window.MA.modules.plantumlSequence = (function() {
           var toOpts = partOpts2.map(function(o) { return { value: o.value, label: o.label, selected: o.value === mm.to }; });
           var arrowOpts2 = ARROWS.map(function(a) { return { value: a, label: arrowLabel(a), selected: a === mm.arrow }; });
           propsEl.innerHTML =
-            P.panelHeaderHtml('Message') +
+            '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>' + escHtml(mm.from + ' ' + mm.arrow + ' ' + mm.to) + '</strong><br><span style="color:var(--text-secondary);">Message · L' + mm.line + '</span></div>' +
             P.selectFieldHtml('From', 'seq-edit-from', fromOpts) +
             P.selectFieldHtml('Arrow', 'seq-edit-arrow', arrowOpts2) +
             P.selectFieldHtml('To', 'seq-edit-to', toOpts) +
-            P.fieldHtml('Label', 'seq-edit-msg-label', mm.label) +
-            P.dangerButtonHtml('seq-edit-msg-delete', 'メッセージ削除');
+            P.fieldHtml('本文', 'seq-edit-msg-label', mm.label) +
+            actionBarHtml(mm.line);
           var mln = mm.line;
           ['from', 'arrow', 'to'].forEach(function(f) {
             document.getElementById('seq-edit-' + f).addEventListener('change', function() {
@@ -768,14 +797,73 @@ window.MA.modules.plantumlSequence = (function() {
             ctx.setMmdText(updateMessage(ctx.getMmdText(), mln, 'label', this.value));
             ctx.onUpdate();
           });
-          P.bindEvent('seq-edit-msg-delete', 'click', function() {
+        }
+        else if (sel.type === 'participant') {
+          var pp = null;
+          for (var ii = 0; ii < participants.length; ii++) if (participants[ii].id === sel.id) { pp = participants[ii]; break; }
+          if (!pp) { propsEl.innerHTML = '<p style="color:var(--text-secondary);font-size:11px;">参加者が見つかりません</p>'; return; }
+          var pOpts2 = PARTICIPANT_TYPES.map(function(pt) { return { value: pt, label: pt, selected: pt === pp.ptype }; });
+          propsEl.innerHTML =
+            '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>' + escHtml(pp.label) + '</strong><br><span style="color:var(--text-secondary);">' + pp.ptype + ' · L' + pp.line + '</span></div>' +
+            P.selectFieldHtml('Type', 'seq-edit-ptype', pOpts2) +
+            P.fieldHtml('Alias', 'seq-edit-alias', pp.id) +
+            P.fieldHtml('Label', 'seq-edit-label', pp.label) +
+            '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-primary);margin:8px 0;"><input id="seq-edit-rename-refs" type="checkbox" checked> Alias 変更時に他要素の参照も追従</label>' +
+            actionBarHtml(pp.line);
+          var ln = pp.line;
+          document.getElementById('seq-edit-ptype').addEventListener('change', function() {
             window.MA.history.pushHistory();
-            ctx.setMmdText(deleteLine(ctx.getMmdText(), mln));
-            window.MA.selection.clearSelection();
+            ctx.setMmdText(updateParticipant(ctx.getMmdText(), ln, 'ptype', this.value));
             ctx.onUpdate();
           });
-          return;
+          document.getElementById('seq-edit-alias').addEventListener('change', function() {
+            var newAlias = this.value;
+            var oldAlias = pp.id;
+            window.MA.history.pushHistory();
+            var t = ctx.getMmdText();
+            if (document.getElementById('seq-edit-rename-refs').checked && oldAlias !== newAlias) {
+              t = renameWithRefs(t, oldAlias, newAlias);
+            } else {
+              t = updateParticipant(t, ln, 'alias', newAlias);
+            }
+            ctx.setMmdText(t);
+            ctx.onUpdate();
+          });
+          document.getElementById('seq-edit-label').addEventListener('change', function() {
+            window.MA.history.pushHistory();
+            ctx.setMmdText(updateParticipant(ctx.getMmdText(), ln, 'label', this.value));
+            ctx.onUpdate();
+          });
         }
+        else if (sel.type === 'note') {
+          var nn2 = parsedData.elements.filter(function(e) { return e.kind === 'note' && e.id === sel.id; })[0];
+          if (!nn2) return;
+          var posOpts2 = NOTE_POSITIONS.map(function(p) { return { value: p, label: p, selected: p === nn2.position }; });
+          propsEl.innerHTML =
+            '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>' + escHtml(nn2.text || '(empty)') + '</strong><br><span style="color:var(--text-secondary);">Note · ' + nn2.position + ' · L' + nn2.line + '</span></div>' +
+            P.selectFieldHtml('Position', 'seq-edit-npos', posOpts2) +
+            P.fieldHtml('Targets', 'seq-edit-ntargets', nn2.targets.join(', ')) +
+            P.fieldHtml('Text', 'seq-edit-ntext', nn2.text) +
+            actionBarHtml(nn2.line);
+          var nln = nn2.line;
+          [['npos', 'position'], ['ntargets', 'targets'], ['ntext', 'text']].forEach(function(pair) {
+            document.getElementById('seq-edit-' + pair[0]).addEventListener('change', function() {
+              window.MA.history.pushHistory();
+              ctx.setMmdText(updateNote(ctx.getMmdText(), nln, pair[1], this.value));
+              ctx.onUpdate();
+            });
+          });
+        }
+        else if (sel.type === 'activation') {
+          var aLine = sel.line;
+          propsEl.innerHTML =
+            '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>Activation</strong><br><span style="color:var(--text-secondary);">L' + aLine + '</span></div>' +
+            actionBarHtml(aLine);
+        }
+
+        // 共通: action bar の click ハンドラ
+        bindActionBar(propsEl, ctx);
+        return;
       }
 
       propsEl.innerHTML = '<p style="color:var(--text-secondary);font-size:11px;">未対応の選択状態</p>';
