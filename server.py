@@ -2,8 +2,10 @@
 """PlantUMLAssist dev server.
 Serves static files + /render endpoint for PlantUML local/online rendering.
 """
+import atexit
 import json
 import os
+import struct
 import subprocess
 import sys
 import threading
@@ -15,7 +17,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).parent
 JAR_PATH = ROOT / 'lib' / 'plantuml.jar'
+DAEMON_SRC = ROOT / 'lib' / 'PlantUMLDaemon.java'
 PORT = 8766
+
+# Windows: suppress the console window that otherwise flashes every time
+# we spawn java (once per /render call). No-op on other platforms.
+_SUBPROCESS_KWARGS = {}
+if sys.platform == 'win32':
+    _SUBPROCESS_KWARGS['creationflags'] = subprocess.CREATE_NO_WINDOW
 # Seconds of heartbeat silence before the server shuts itself down.
 # Browser client POSTs /heartbeat every ~5s; if the tab is closed the
 # pings stop and the watchdog terminates the server automatically.
@@ -110,24 +119,145 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
 
-def render_local(text):
-    if not JAR_PATH.exists():
-        return None, f'plantuml.jar not found at {JAR_PATH}'
+# --- Local render: persistent Java daemon (fast path) ------------------------
+#
+# Starting `java -jar plantuml.jar -pipe` per request costs ~1s of JVM startup.
+# Instead we launch a single long-running JVM (lib/PlantUMLDaemon.java) that
+# reads DSL / writes SVG through its stdin / stdout. No sockets are opened, so
+# the daemon is unreachable from the network.
+#
+# Requires Java 11+ (single-file source-launcher, JEP 330). On older Javas the
+# daemon startup fails and render_local() falls back to the legacy -pipe path.
+
+_daemon_lock = threading.Lock()
+_daemon_proc = None
+_daemon_disabled = False  # set True once we decide to stop retrying the daemon
+
+
+def _start_daemon():
+    """Spawn the persistent PlantUML daemon. Returns the Popen, or None on failure."""
+    if not JAR_PATH.exists() or not DAEMON_SRC.exists():
+        return None
+    try:
+        proc = subprocess.Popen(
+            ['java', '--source', '11',
+             '-cp', str(JAR_PATH),
+             str(DAEMON_SRC)],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            **_SUBPROCESS_KWARGS,
+        )
+    except FileNotFoundError:
+        return None
+    # Give the JVM a moment to start; if it dies immediately (unsupported Java,
+    # compile error, etc.) we detect that here rather than on first /render.
+    time.sleep(0.05)
+    if proc.poll() is not None:
+        return None
+    return proc
+
+
+def _get_daemon():
+    """Lazily start the daemon on first use. Returns Popen or None if unusable."""
+    global _daemon_proc, _daemon_disabled
+    if _daemon_disabled:
+        return None
+    if _daemon_proc is not None and _daemon_proc.poll() is None:
+        return _daemon_proc
+    _daemon_proc = _start_daemon()
+    if _daemon_proc is None:
+        _daemon_disabled = True
+    return _daemon_proc
+
+
+def _render_via_daemon(text):
+    """Send DSL to the daemon, read SVG back. Returns (svg, error) or raises on IO."""
+    proc = _get_daemon()
+    if proc is None:
+        return None, 'daemon unavailable'
+    payload = text.encode('utf-8')
+    proc.stdin.write(struct.pack('>I', len(payload)))
+    proc.stdin.write(payload)
+    proc.stdin.flush()
+    status = struct.unpack('>I', _read_exact(proc.stdout, 4))[0]
+    body_len = struct.unpack('>I', _read_exact(proc.stdout, 4))[0]
+    body = _read_exact(proc.stdout, body_len)
+    if status == 0:
+        return body, None
+    return None, 'PlantUML error: ' + body.decode('utf-8', errors='replace')
+
+
+def _read_exact(stream, n):
+    chunks = []
+    remaining = n
+    while remaining > 0:
+        buf = stream.read(remaining)
+        if not buf:
+            raise EOFError('daemon closed stdout')
+        chunks.append(buf)
+        remaining -= len(buf)
+    return b''.join(chunks)
+
+
+def _render_via_pipe(text):
+    """Fallback: one-shot `java -jar plantuml.jar -pipe` (slower, Java 8+ compatible)."""
     try:
         proc = subprocess.run(
             ['java', '-jar', str(JAR_PATH), '-tsvg', '-pipe', '-charset', 'UTF-8'],
             input=text.encode('utf-8'),
             capture_output=True,
             timeout=30,
+            **_SUBPROCESS_KWARGS,
         )
     except FileNotFoundError:
         return None, 'java not found; install Java 8+ or switch to online mode'
     except subprocess.TimeoutExpired:
         return None, 'render timeout (30s)'
     if proc.returncode != 0:
-        err = proc.stderr.decode('utf-8', errors='replace')
-        return None, f'PlantUML error: {err}'
+        return None, 'PlantUML error: ' + proc.stderr.decode('utf-8', errors='replace')
     return proc.stdout, None
+
+
+def render_local(text):
+    global _daemon_proc
+    if not JAR_PATH.exists():
+        return None, f'plantuml.jar not found at {JAR_PATH}'
+    with _daemon_lock:
+        try:
+            svg, err = _render_via_daemon(text)
+            if svg is not None or err is not None and err != 'daemon unavailable':
+                return svg, err
+        except (BrokenPipeError, EOFError, OSError):
+            # Daemon died mid-session; drop it and fall back for this request.
+            if _daemon_proc is not None:
+                try:
+                    _daemon_proc.kill()
+                except Exception:
+                    pass
+            _daemon_proc = None
+    return _render_via_pipe(text)
+
+
+def _shutdown_daemon():
+    global _daemon_proc
+    if _daemon_proc is None:
+        return
+    try:
+        _daemon_proc.stdin.close()
+    except Exception:
+        pass
+    try:
+        _daemon_proc.wait(timeout=2)
+    except Exception:
+        try:
+            _daemon_proc.kill()
+        except Exception:
+            pass
+    _daemon_proc = None
+
+
+atexit.register(_shutdown_daemon)
 
 
 def render_online(text):
@@ -203,6 +333,9 @@ def main():
     print(f'  JAR:  {JAR_PATH} (exists={JAR_PATH.exists()})')
     print(f'  IDLE_SHUTDOWN: {IDLE_SHUTDOWN_SEC}s (auto-stops if browser tab closes)')
     print('Press Ctrl+C to stop.')
+    # Warm up the JVM daemon in a background thread so the first /render
+    # call doesn't pay the ~1s startup cost.
+    threading.Thread(target=_get_daemon, daemon=True).start()
     server = HTTPServer(('127.0.0.1', PORT), Handler)
     # Grace period before the watchdog starts counting.
     global _last_heartbeat
@@ -214,6 +347,7 @@ def main():
         print('\nShutting down.')
     finally:
         server.server_close()
+        _shutdown_daemon()
 
 
 if __name__ == '__main__':

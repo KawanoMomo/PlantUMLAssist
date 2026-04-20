@@ -694,6 +694,13 @@ window.MA.modules.plantumlSequence = (function() {
     return out;
   }
 
+  // newIndex is a GAP index in the pre-move participant array, range [0, N].
+  //   0 = before all, k (1..N-1) = between the (k-1)-th and k-th participant,
+  //   N = after all. Gaps immediately adjacent to the dragged participant
+  //   (`from` and `from+1`) are treated as no-op since the participant would
+  //   end up in the same slot. Matches the gap-indicator semantics used by
+  //   app.js drawDropIndicator / computeDropIndex so that a drop at the
+  //   visible dotted line ends up at exactly that position.
   function moveParticipant(text, alias, newIndex) {
     if (!alias) return text;
     var lines = text.split('\n');
@@ -713,19 +720,24 @@ window.MA.modules.plantumlSequence = (function() {
       if (partIndexes[j].alias === alias) { from = j; break; }
     }
     if (from < 0) return text;
+    var N = partIndexes.length;
     if (newIndex < 0) newIndex = 0;
-    if (newIndex >= partIndexes.length) newIndex = partIndexes.length - 1;
-    if (from === newIndex) return text;
+    if (newIndex > N) newIndex = N;
+    if (newIndex === from || newIndex === from + 1) return text;
+    // Remove the dragged participant and translate gap index → insertion
+    // index in the `remaining` array. Gaps strictly after `from` shift left
+    // by one because removal collapsed one slot.
     var fromLineIdx = partIndexes[from].lineIdx;
     var lineContent = lines[fromLineIdx];
     lines.splice(fromLineIdx, 1);
     var remaining = partIndexes.filter(function(p, idx) { return idx !== from; });
+    var targetIdx = (newIndex <= from) ? newIndex : newIndex - 1;
     var toLineIdx;
-    if (newIndex >= remaining.length) {
+    if (targetIdx >= remaining.length) {
       toLineIdx = remaining[remaining.length - 1].lineIdx + 1;
       if (fromLineIdx < toLineIdx) toLineIdx--;
     } else {
-      toLineIdx = remaining[newIndex].lineIdx;
+      toLineIdx = remaining[targetIdx].lineIdx;
       if (fromLineIdx < toLineIdx) toLineIdx--;
     }
     lines.splice(toLineIdx, 0, lineContent);

@@ -45,17 +45,31 @@ Windows では `start.bat` をダブルクリックでも起動可能（server.p
 ## 要件
 
 - Python 3 (標準ライブラリのみ、追加パッケージ不要)
-- Java 8+ (local render モード用。online モードのみ使うなら不要)
+- **Java 11 以降 推奨** (常駐 JVM daemon モードで高速化)
+  - Java 8〜10 でも動作可能だが、自動的に毎回 JVM 起動する従来モード (低速) にフォールバック
+  - online モードのみ使うなら Java 不要
 - `lib/plantuml.jar` (**別途ダウンロード必要**、fetch スクリプト提供。推奨: v1.2026.2、約 22 MB)
+- `lib/PlantUMLDaemon.java` (リポジトリ同梱、ビルド不要 — Java 11+ の single-file source-launcher が直接実行)
 
 Java がインストールされていない場合は、UI 右上の `render-mode` セレクトを `online (plantuml.com)` に切替えて使用可能。plantuml.com の公開サーバを利用するため、**業務データは外部送信される**ことに注意。
+
+### Java バージョン別の挙動
+
+| バージョン | 動作 | 初回 render | 2回目以降 |
+|---|---|---|---|
+| **Java 11+** (推奨) | 常駐 daemon モード。JVM を1回だけ起動して stdin/stdout pipe 通信 | ~400ms (JVM warmup) | **~10-30ms** |
+| Java 8 / 9 / 10 | 従来モード (自動フォールバック)。毎回 `java -jar plantuml.jar -pipe` を起動 | ~1.5s | ~1.5s |
+| Java 未インストール | local モード使用不可。online モードは使用可 | — | — |
+
+daemon モードでは**ネットワークソケットを一切開きません** (pipe 通信のみ)。外部から daemon プロセスにアクセスすることは OS レベルで不可能です。
 
 ### トラブルシューティング
 
 | 症状 | 原因 | 対策 |
 |---|---|---|
 | "Render error: Failed to fetch" | server.py が起動していない / HTML を `file://` で開いている | `python server.py` を起動し、`http://127.0.0.1:8766/` にアクセス |
-| "java not found" (local mode) | Java 未インストール | JDK/JRE 8+ をインストール、または online モードへ切替 |
+| "java not found" (local mode) | Java 未インストール | JDK/JRE 11+ をインストール (Java 8-10 でも動作するが低速)、または online モードへ切替 |
+| local mode で毎回数秒かかる | Java 10 以下で daemon モードが起動できず従来モードにフォールバック | Java 11 以降 (LTS: 11 / 17 / 21) にアップグレード推奨 |
 | "online render failed: HTTP 4xx/5xx" | plantuml.com のレート制限/障害 | 時間をおいて再試行、または local モードへ切替 |
 
 ## テスト
