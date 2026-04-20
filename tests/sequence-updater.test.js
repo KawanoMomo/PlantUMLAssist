@@ -103,6 +103,66 @@ describe('deleteGroup', function() {
   });
 });
 
+describe('insertElseIntoGroup (Feature #8)', function() {
+  test('inserts else line before the end line', function() {
+    var t = '@startuml\nalt c1\nA -> B\nend\n@enduml';
+    // alt line=2, end line=4
+    var out = seq.insertElseIntoGroup(t, 2, 4, 'c2');
+    expect(out).toContain('alt c1');
+    expect(out).toContain('else c2');
+    expect(out).toContain('end');
+    expect(out.indexOf('else c2')).toBeLessThan(out.indexOf('end'));
+    expect(out.indexOf('A -> B')).toBeLessThan(out.indexOf('else c2'));
+  });
+
+  test('inserts bare else when condition is empty', function() {
+    var t = '@startuml\nalt c1\nA -> B\nend\n@enduml';
+    var out = seq.insertElseIntoGroup(t, 2, 4, '');
+    var lines = out.split('\n').map(function(s) { return s.trim(); });
+    expect(lines.indexOf('else')).toBeGreaterThan(-1);
+  });
+
+  test('preserves indent of the opening alt line', function() {
+    var t = '@startuml\n  alt c1\n    A -> B\n  end\n@enduml';
+    var out = seq.insertElseIntoGroup(t, 2, 4, 'c2');
+    var lines = out.split('\n');
+    var elseLine = null;
+    for (var i = 0; i < lines.length; i++) {
+      if (/else\s+c2/.test(lines[i])) { elseLine = lines[i]; break; }
+    }
+    expect(elseLine).not.toBe(null);
+    expect(/^\s\s[^ ]/.test(elseLine)).toBe(true);
+  });
+
+  test('no-op for invalid range', function() {
+    var t = '@startuml\nalt c1\nend\n@enduml';
+    expect(seq.insertElseIntoGroup(t, 0, 3, 'c2')).toBe(t);
+    expect(seq.insertElseIntoGroup(t, 2, 1, 'c2')).toBe(t);
+  });
+});
+
+describe('updateGroup (Feature #8)', function() {
+  test('updates gtype', function() {
+    var t = '@startuml\nalt c1\nA -> B\nend\n@enduml';
+    var out = seq.updateGroup(t, 2, 'gtype', 'loop');
+    expect(out).toContain('loop c1');
+    expect(out).not.toContain('alt c1');
+  });
+
+  test('updates label', function() {
+    var t = '@startuml\nalt old\nA -> B\nend\n@enduml';
+    var out = seq.updateGroup(t, 2, 'label', 'new');
+    expect(out).toContain('alt new');
+  });
+
+  test('clears label when value empty', function() {
+    var t = '@startuml\nalt old\nA -> B\nend\n@enduml';
+    var out = seq.updateGroup(t, 2, 'label', '');
+    var lines = out.split('\n');
+    expect(lines[1]).toBe('alt');
+  });
+});
+
 describe('addNote', function() {
   test('adds note over single participant', function() {
     var out = seq.addNote('@startuml\nA -> B\n@enduml', 'over', ['A'], 'remark');

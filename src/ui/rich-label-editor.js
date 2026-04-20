@@ -30,6 +30,19 @@ window.MA.richLabelEditor = (function() {
     ta.dispatchEvent(new EvtCtor('input'));
   }
 
+  function fireChange(ta) {
+    // Feature #9 fix: ツールバーボタン (B/I/U/color/newline) は click 後に blur
+    // しないため、onChange (change event) が発火せず DSL に反映されない。
+    // insertWrapAtSelection 後に明示的に change を dispatch して
+    // ctx.setMmdText → SVG re-render の経路を起動する。
+    var EvtCtor = (typeof window !== 'undefined' && window.Event) ? window.Event : Event;
+    try {
+      ta.dispatchEvent(new EvtCtor('change', { bubbles: true }));
+    } catch (e) {
+      ta.dispatchEvent(new EvtCtor('change'));
+    }
+  }
+
   function insertWrapAtSelection(ta, openTag, closeTag) {
     var s = ta.selectionStart, e = ta.selectionEnd;
     var before = ta.value.substring(0, s);
@@ -111,14 +124,15 @@ window.MA.richLabelEditor = (function() {
       }
     });
 
-    container.querySelector('.rle-b').addEventListener('click', function() { insertWrapAtSelection(ta, '<b>', '</b>'); });
-    container.querySelector('.rle-i').addEventListener('click', function() { insertWrapAtSelection(ta, '<i>', '</i>'); });
-    container.querySelector('.rle-u').addEventListener('click', function() { insertWrapAtSelection(ta, '<u>', '</u>'); });
-    container.querySelector('.rle-newline').addEventListener('click', function() { insertAtCursor(ta, '\\n'); });
+    container.querySelector('.rle-b').addEventListener('click', function() { insertWrapAtSelection(ta, '<b>', '</b>'); fireChange(ta); });
+    container.querySelector('.rle-i').addEventListener('click', function() { insertWrapAtSelection(ta, '<i>', '</i>'); fireChange(ta); });
+    container.querySelector('.rle-u').addEventListener('click', function() { insertWrapAtSelection(ta, '<u>', '</u>'); fireChange(ta); });
+    container.querySelector('.rle-newline').addEventListener('click', function() { insertAtCursor(ta, '\\n'); fireChange(ta); });
     Array.prototype.forEach.call(container.querySelectorAll('.rle-color'), function(btn) {
       btn.addEventListener('click', function() {
         var c = btn.getAttribute('data-color');
         insertWrapAtSelection(ta, '<color:' + c + '>', '</color>');
+        fireChange(ta);
       });
     });
     container.querySelector('.rle-color-clear').addEventListener('click', function() {
@@ -127,6 +141,7 @@ window.MA.richLabelEditor = (function() {
       sel = sel.replace(/<color:[^>]+>/g, '').replace(/<\/color>/g, '');
       ta.value = ta.value.substring(0, s) + sel + ta.value.substring(e);
       fireInput(ta);
+      fireChange(ta);
     });
 
     return {

@@ -19,6 +19,14 @@ function _registerModules() {
   }
 }
 
+// Feature #10: online モードの外部送信警告バナー表示/非表示
+function updateOnlineWarning() {
+  var warnEl = document.getElementById('online-warning');
+  var modeEl = document.getElementById('render-mode');
+  if (!warnEl || !modeEl) return;
+  warnEl.style.display = (modeEl.value === 'online') ? 'block' : 'none';
+}
+
 var editorEl, previewSvgEl, propsEl, statusParseEl, statusInfoEl, renderStatusEl, lineNumbersEl, zoomDisplayEl;
 var mmdText = '';
 var currentModule = null;
@@ -43,6 +51,7 @@ function init() {
 
   var savedMode = localStorage.getItem('plantuml-render-mode') || 'local';
   document.getElementById('render-mode').value = savedMode;
+  updateOnlineWarning();
 
   currentModule = modules['plantuml-sequence'];
   mmdText = currentModule.template();
@@ -155,15 +164,29 @@ function init() {
     // Bug 3: participant 中心 (= ライフライン) ではなく「2 participants の
     // 間の中点」を候補にすることで、縦点線が既存ライフラインと重ならず
     // 視認性向上。
-    var centers = Array.prototype.map.call(partRects, function(r) {
-      return parseFloat(r.getAttribute('x')) + parseFloat(r.getAttribute('width')) / 2;
-    }).sort(function(a, b) { return a - b; });
+    // Bug A1/A2: head + tail の両方に rect があるので dedupe が必要。
+    // x 中心座標で集約し重複を取り除く。
+    var centerSet = {};
+    Array.prototype.forEach.call(partRects, function(r) {
+      var cx = parseFloat(r.getAttribute('x')) + parseFloat(r.getAttribute('width')) / 2;
+      // 小数点丸めで head/tail 同座標を同一視
+      centerSet[Math.round(cx * 100) / 100] = true;
+    });
+    var centers = Object.keys(centerSet).map(parseFloat).sort(function(a, b) { return a - b; });
+    // Bug A1/A2: sentinel gap が overlay 描画範囲外に置かれると hover-layer
+    // の viewBox/clip で見えなくなり、両端 drop が不可視になる。
+    // overlay width / 0 の範囲内に clamp。
+    var overlayW = parseFloat(overlayD.getAttribute('width'))
+      || parseFloat(overlayD.getAttribute('viewBox') && overlayD.getAttribute('viewBox').split(/\s+/)[2])
+      || 800;
+    var leftSentinel = Math.max(5, centers[0] - 40);
+    var rightSentinel = Math.min(overlayW - 5, centers[centers.length - 1] + 40);
     var gaps = [];
-    gaps.push(centers[0] - 40);  // 先頭の前 (40px 左)
+    gaps.push(leftSentinel);
     for (var i = 0; i < centers.length - 1; i++) {
       gaps.push((centers[i] + centers[i + 1]) / 2);  // 2 participants の中点
     }
-    gaps.push(centers[centers.length - 1] + 40);  // 末尾の後
+    gaps.push(rightSentinel);
     var bestX = gaps[0];
     var bestDist = Infinity;
     for (var ii = 0; ii < gaps.length; ii++) {
@@ -171,6 +194,13 @@ function init() {
       if (d < bestDist) { bestDist = d; bestX = gaps[ii]; }
     }
     var h = parseFloat(overlayD.getAttribute('height')) || 400;
+    // Bug A1/A2: hover-layer が width=0/height=0 のままだと SVG 自体がクリップ
+    // されて drop-indicator が表示されない。overlay-layer に合わせて都度同期。
+    hoverElD.setAttribute('width', overlayD.getAttribute('width') || overlayW);
+    hoverElD.setAttribute('height', overlayD.getAttribute('height') || h);
+    var vb = overlayD.getAttribute('viewBox');
+    if (vb) hoverElD.setAttribute('viewBox', vb);
+    hoverElD.style.transform = overlayD.style.transform;
     var line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
     line.setAttribute('x1', bestX);
     line.setAttribute('y1', 0);
@@ -197,14 +227,23 @@ function init() {
     var localX = (clientX - rectBBox.left) / z;
     // Bug 3: drawDropIndicator と同じ「中点 gap」で index 計算に統一。
     // localX に最も近い gap index = 新 index (0 = 先頭、N = 末尾)。
-    var centers = Array.prototype.map.call(partRects, function(r) {
-      return parseFloat(r.getAttribute('x')) + parseFloat(r.getAttribute('width')) / 2;
-    }).sort(function(a, b) { return a - b; });
-    var gaps = [centers[0] - 40];
+    // Bug A1/A2/C6: head+tail rect を x 座標で dedupe してから gap 算出。
+    var centerSet = {};
+    Array.prototype.forEach.call(partRects, function(r) {
+      var cx = parseFloat(r.getAttribute('x')) + parseFloat(r.getAttribute('width')) / 2;
+      centerSet[Math.round(cx * 100) / 100] = true;
+    });
+    var centers = Object.keys(centerSet).map(parseFloat).sort(function(a, b) { return a - b; });
+    var overlayW = parseFloat(overlayD.getAttribute('width'))
+      || parseFloat(overlayD.getAttribute('viewBox') && overlayD.getAttribute('viewBox').split(/\s+/)[2])
+      || 800;
+    var leftSentinel = Math.max(5, centers[0] - 40);
+    var rightSentinel = Math.min(overlayW - 5, centers[centers.length - 1] + 40);
+    var gaps = [leftSentinel];
     for (var i = 0; i < centers.length - 1; i++) {
       gaps.push((centers[i] + centers[i + 1]) / 2);
     }
-    gaps.push(centers[centers.length - 1] + 40);
+    gaps.push(rightSentinel);
     var bestIdx = 0;
     var bestDist = Infinity;
     for (var j = 0; j < gaps.length; j++) {
@@ -325,6 +364,7 @@ function init() {
 
   document.getElementById('render-mode').addEventListener('change', function() {
     localStorage.setItem('plantuml-render-mode', this.value);
+    updateOnlineWarning();
     scheduleRefresh();
   });
 

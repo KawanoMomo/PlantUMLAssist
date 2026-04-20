@@ -58,19 +58,48 @@ window.MA.sequenceOverlay = (function() {
     return matches;
   }
 
+  function _matchByOrder(svgEl, parsedItems, groupSelector) {
+    // Fallback: v1.2026.x 以降 data-source-line が付かない <g> 向け。
+    // parsedItems の順序と SVG 出現順序で 1:1 対応させる。
+    var matches = [];
+    var allGroups = svgEl.querySelectorAll(groupSelector);
+    var n = Math.min(allGroups.length, parsedItems.length);
+    for (var i = 0; i < n; i++) {
+      matches.push({ item: parsedItems[i], groupEl: allGroups[i] });
+    }
+    return matches;
+  }
+
   function _gBBox(g) {
     // <g> の中の最初の <text> 要素の bbox を採用 (jsdom 互換 fallback あり)。
     var t = g.querySelector('text');
-    if (!t) return null;
-    if (typeof t.getBBox === 'function') {
-      try { return t.getBBox(); } catch (e) { /* jsdom: fall through */ }
+    if (t) {
+      if (typeof t.getBBox === 'function') {
+        try { return t.getBBox(); } catch (e) { /* jsdom: fall through */ }
+      }
+      return {
+        x: parseFloat(t.getAttribute('x')) || 0,
+        y: parseFloat(t.getAttribute('y')) || 0,
+        width: parseFloat(t.getAttribute('textLength')) || parseFloat(t.getAttribute('width')) || 0,
+        height: 14, // PlantUML default font height fallback
+      };
     }
-    return {
-      x: parseFloat(t.getAttribute('x')) || 0,
-      y: parseFloat(t.getAttribute('y')) || 0,
-      width: parseFloat(t.getAttribute('textLength')) || parseFloat(t.getAttribute('width')) || 0,
-      height: 14, // PlantUML default font height fallback
-    };
+    // Bug B3 fix: ラベル無しメッセージ (`A -> B` のみ) は <text> を持たない。
+    // <line> の座標から bbox を推定して選択可能にする。
+    var line = g.querySelector('line');
+    if (line) {
+      var x1 = parseFloat(line.getAttribute('x1')) || 0;
+      var x2 = parseFloat(line.getAttribute('x2')) || 0;
+      var y1 = parseFloat(line.getAttribute('y1')) || 0;
+      var y2 = parseFloat(line.getAttribute('y2')) || 0;
+      return {
+        x: Math.min(x1, x2),
+        y: Math.min(y1, y2) - 6,
+        width: Math.abs(x2 - x1),
+        height: Math.max(Math.abs(y2 - y1), 12),
+      };
+    }
+    return null;
   }
 
   function _pickBestOffset(svgEl, parsedItems, groupSelector, candidates) {
@@ -81,6 +110,15 @@ window.MA.sequenceOverlay = (function() {
       var m = _matchByDataSourceLine(svgEl, parsedItems, groupSelector, candidates[i]);
       if (m.length > best.matches.length) {
         best = { matches: m, offset: candidates[i] };
+      }
+    }
+    // Bug B5 fix: data-source-line 無しの PlantUML 出力 (v1.2026.x 以降の
+    // g.message / g.participant-*) ではどの offset でも 0 マッチになる。
+    // その場合 selector + 出現順で 1:1 fallback matching を試みる。
+    if (best.matches.length === 0 && parsedItems.length > 0) {
+      var fb = _matchByOrder(svgEl, parsedItems, groupSelector);
+      if (fb.length > 0) {
+        best = { matches: fb, offset: 0, fallback: 'order' };
       }
     }
     return best;
@@ -117,6 +155,89 @@ window.MA.sequenceOverlay = (function() {
         'data-line': m.item.line,
       });
     });
+    // Bug C6 fix: PlantUML は participant を上下 (head/tail) 両方に描く。
+    // tail もクリックで選択できるよう overlay rect を追加配置。
+    // (data-id は head と同一なので selection は head/tail 共通で動作。)
+    var partTailBest = _pickBestOffset(svgEl, participants, 'g.participant-tail', candidates);
+    partTailBest.matches.forEach(function(m) {
+      var bb = _gBBox(m.groupEl);
+      if (!bb) return;
+      _addRect(overlayEl, bb.x - 8, bb.y - 4, (bb.width || 60) + 16, (bb.height || 14) + 8, {
+        'data-type': 'participant',
+        'data-id': m.item.id,
+        'data-line': m.item.line,
+      });
+    });
+
+    // Feature #7: lifeline (縦点線) も click 可能にする。participant の head/tail
+    // overlay rect を参照し、lifeline の <line> x 座標が head rect の範囲内に
+    // 入るものを同一 participant として関連付ける。
+    var lifelines = svgEl.querySelectorAll('g.participant-lifeline');
+    Array.prototype.forEach.call(lifelines, function(lg) {
+      var line = lg.querySelector('line');
+      if (!line) return;
+      var x1 = parseFloat(line.getAttribute('x1'));
+      var x2 = parseFloat(line.getAttribute('x2'));
+      var y1 = parseFloat(line.getAttribute('y1'));
+      var y2 = parseFloat(line.getAttribute('y2'));
+      if (isNaN(x1) || isNaN(x2) || isNaN(y1) || isNaN(y2)) return;
+      var cx = (x1 + x2) / 2;
+      var matched = null;
+      var headRects = overlayEl.querySelectorAll('rect[data-type="participant"]');
+      Array.prototype.forEach.call(headRects, function(r) {
+        if (matched) return;
+        var rx = parseFloat(r.getAttribute('x'));
+        var rw = parseFloat(r.getAttribute('width'));
+        if (cx >= rx && cx <= rx + rw) matched = r;
+      });
+      if (!matched) return;
+      var id = matched.getAttribute('data-id');
+      var lineNum = matched.getAttribute('data-line');
+      _addRect(overlayEl,
+        Math.min(x1, x2) - 6, Math.min(y1, y2),
+        12, Math.abs(y2 - y1),
+        { 'data-type': 'participant', 'data-id': id, 'data-line': lineNum });
+    });
+
+    // Feature #8: group block (alt/opt/loop/par/break/critical/group) の overlay rect。
+    // PlantUML v1.2026.x の SVG は group 用の class を付けないが、block bbox を
+    // <rect fill="none" stroke="#000000"> として描画する (同一 bbox が 2 回出る)。
+    // 同一座標を de-dup して document 順に並べ、parsedData.groups と 1:1 対応させる。
+    var groups = (parsedData.groups || []).slice().sort(function(a, b) {
+      return (a.line || 0) - (b.line || 0);
+    });
+    if (groups.length > 0) {
+      var allRects = svgEl.querySelectorAll('rect[fill="none"]');
+      var seen = {};
+      var bboxes = [];
+      Array.prototype.forEach.call(allRects, function(r) {
+        var style = (r.getAttribute('style') || '') + '';
+        // group 境界 rect は黒 stroke。lifeline の hit-area rect (fill-opacity:0) は除外。
+        if (style.indexOf('stroke:#000000') === -1) return;
+        var x = parseFloat(r.getAttribute('x'));
+        var y = parseFloat(r.getAttribute('y'));
+        var w = parseFloat(r.getAttribute('width'));
+        var h = parseFloat(r.getAttribute('height'));
+        if (isNaN(x) || isNaN(y) || isNaN(w) || isNaN(h)) return;
+        var key = x + ',' + y + ',' + w + ',' + h;
+        if (seen[key]) return;
+        seen[key] = true;
+        bboxes.push({ x: x, y: y, w: w, h: h });
+      });
+      // document 順 (= 上から下 = DSL 順) にすでに並んでいるので y で再 sort して安定化。
+      bboxes.sort(function(a, b) { return a.y - b.y; });
+      var n = Math.min(bboxes.length, groups.length);
+      for (var gi = 0; gi < n; gi++) {
+        var bb = bboxes[gi];
+        var gp = groups[gi];
+        _addRect(overlayEl, bb.x - 2, bb.y - 2, bb.w + 4, bb.h + 4, {
+          'data-type': 'group',
+          'data-id': gp.id,
+          'data-line': gp.line,
+        });
+      }
+      _warnIfMismatch('group', groups.length, n);
+    }
 
     var msgBest = _pickBestOffset(svgEl, parsedData.relations, 'g.message', candidates);
     var msgMatches = msgBest.matches;
@@ -151,12 +272,35 @@ window.MA.sequenceOverlay = (function() {
         });
       });
     } else {
+      // Bug B4 fix: 1×1 placeholder (pointer-events:none) ではクリック不可。
+      // note の target participant の既存 overlay rect の位置を参照し、その近傍に
+      // クリック可能な approximate box を置く (正確座標抽出は別 sprint)。
       notes.forEach(function(n) {
-        _addRect(overlayEl, 0, 0, 1, 1, {
-          'data-type': 'note',
-          'data-id': n.id,
-          'data-line': n.line,
-        });
+        var targets = n.targets || [];
+        var targetPart = targets[0];
+        var partRect = targetPart
+          ? overlayEl.querySelector('rect[data-type="participant"][data-id="' + targetPart + '"]')
+          : null;
+        if (partRect) {
+          var px = parseFloat(partRect.getAttribute('x')) || 0;
+          var pw = parseFloat(partRect.getAttribute('width')) || 60;
+          var py = parseFloat(partRect.getAttribute('y')) || 0;
+          var ph = parseFloat(partRect.getAttribute('height')) || 20;
+          // Position under the head participant rect (approximate).
+          _addRect(overlayEl, px, py + ph + 4, pw, 20, {
+            'data-type': 'note',
+            'data-id': n.id,
+            'data-line': n.line,
+          });
+        } else {
+          // 最終 fallback: 参照 participant が無い (or overlay 生成失敗) 場合のみ
+          // 1×1 placeholder (pointer-events:none)。
+          _addRect(overlayEl, 0, 0, 1, 1, {
+            'data-type': 'note',
+            'data-id': n.id,
+            'data-line': n.line,
+          });
+        }
       });
     }
     _warnIfMismatch('note', notes.length, overlayEl.querySelectorAll('rect[data-type="note"]').length);
@@ -188,18 +332,23 @@ window.MA.sequenceOverlay = (function() {
 
     var noteRectCount = overlayEl.querySelectorAll('rect[data-type="note"]').length;
     var actRectCount = overlayEl.querySelectorAll('rect[data-type="activation"]').length;
+    var groupRectCount = overlayEl.querySelectorAll('rect[data-type="group"]').length;
+    var groupsInModel = (parsedData.groups || []).length;
     return {
       matched: {
+        // head 基準。tail rect は重複なので「何人マッチしたか」には加算しない。
         participant: partMatches.length,
         message: msgMatches.length,
         note: noteRectCount,
         activation: actRectCount,
+        group: groupRectCount,
       },
       unmatched: {
         participant: participants.length - partMatches.length,
         message: parsedData.relations.length - msgMatches.length,
         note: notes.length - noteRectCount,
         activation: activations.length - actRectCount,
+        group: groupsInModel - groupRectCount,
       },
     };
   }

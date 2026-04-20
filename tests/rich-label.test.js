@@ -94,4 +94,41 @@ describe('onChange timing', function() {
     ta.dispatchEvent(new window.Event('change', { bubbles: true }));
     expect(calls).toBe(1);
   });
+
+  test('Feature #9: clicking bold button fires onChange immediately', function() {
+    var container = document.createElement('div');
+    document.body.appendChild(container);
+    var calls = 0;
+    var lastVal = null;
+    RLE.mount(container, 'hello', function(v) { calls++; lastVal = v; });
+    var ta = container.querySelector('.rle-textarea');
+    ta.setSelectionRange(0, 5);
+    container.querySelector('.rle-b').click();
+    expect(calls).toBe(1);
+    expect(lastVal).toBe('<b>hello</b>');
+  });
+
+  test('Feature #9: clicking color button fires onChange immediately', function() {
+    var container = document.createElement('div');
+    document.body.appendChild(container);
+    var calls = 0;
+    var lastVal = null;
+    RLE.mount(container, 'hello', function(v) { calls++; lastVal = v; });
+    var ta = container.querySelector('.rle-textarea');
+    ta.setSelectionRange(0, 5);
+    container.querySelector('.rle-color').click();
+    expect(calls).toBe(1);
+    expect(lastVal.indexOf('<color:') === 0).toBe(true);
+    expect(lastVal.indexOf('hello')).toBeGreaterThan(-1);
+    expect(lastVal.indexOf('</color>')).toBeGreaterThan(-1);
+  });
+
+  test('Feature #9: newline button fires onChange immediately', function() {
+    var container = document.createElement('div');
+    document.body.appendChild(container);
+    var calls = 0;
+    RLE.mount(container, '', function() { calls++; });
+    container.querySelector('.rle-newline').click();
+    expect(calls).toBe(1);
+  });
 });

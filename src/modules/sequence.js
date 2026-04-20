@@ -295,6 +295,41 @@ window.MA.modules.plantumlSequence = (function() {
     return lines.join('\n');
   }
 
+  // Feature #8: alt ブロック内に else/elseif 行を挿入する。
+  //   groupStartLine: alt 行 (1-based)
+  //   groupEndLine:   end 行 (1-based)
+  // end 行の直前に `else <condition>` (condition は任意) を挿入。
+  // groupStartLine のインデントを継承する (nested block でも揃う)。
+  function insertElseIntoGroup(text, groupStartLine, groupEndLine, condition) {
+    var lines = text.split('\n');
+    if (groupStartLine < 1 || groupEndLine > lines.length || groupStartLine >= groupEndLine) return text;
+    var openLine = lines[groupStartLine - 1] || '';
+    var indentMatch = openLine.match(/^(\s*)/);
+    var indent = indentMatch ? indentMatch[1] : '';
+    var condStr = (condition == null ? '' : String(condition)).trim();
+    var elseLine = indent + 'else' + (condStr ? ' ' + condStr : '');
+    // end 行 (groupEndLine) の 1 つ前 (= index groupEndLine - 1) に挿入すると end の直前に入る。
+    lines.splice(groupEndLine - 1, 0, elseLine);
+    return lines.join('\n');
+  }
+
+  function updateGroup(text, lineNum, field, value) {
+    // field: 'gtype' | 'label'
+    var lines = text.split('\n');
+    var idx = lineNum - 1;
+    if (idx < 0 || idx >= lines.length) return text;
+    var indent = lines[idx].match(/^(\s*)/)[1];
+    var trimmed = lines[idx].trim();
+    var gm = trimmed.match(GROUP_OPEN_RE);
+    if (!gm) return text;
+    var gtype = gm[1];
+    var label = (gm[2] || '').trim();
+    if (field === 'gtype') gtype = value;
+    else if (field === 'label') label = value;
+    lines[idx] = indent + (label ? gtype + ' ' + label : gtype);
+    return lines.join('\n');
+  }
+
   function deleteGroup(text, startLine, endLine) {
     // Remove the opening line and matching end line only — keep inner
     // contents intact so messages don't disappear.
@@ -757,6 +792,8 @@ window.MA.modules.plantumlSequence = (function() {
     toggleAutonumber: toggleAutonumber,
     addGroup: addGroup,
     deleteGroup: deleteGroup,
+    insertElseIntoGroup: insertElseIntoGroup,
+    updateGroup: updateGroup,
     wrapWith: wrapWith,
     unwrap: unwrap,
     addNote: addNote,
@@ -1126,6 +1163,53 @@ window.MA.modules.plantumlSequence = (function() {
           propsEl.innerHTML =
             '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>Activation</strong><br><span style="color:var(--text-secondary);">L' + aLine + '</span></div>' +
             actionBarHtml(aLine, 'activation');
+        }
+        else if (sel.type === 'group') {
+          // Feature #8: group block 選択 → gtype/label 編集 + else 追加 + 削除
+          var gg = null;
+          for (var gk = 0; gk < groups.length; gk++) {
+            if (groups[gk].id === sel.id || groups[gk].line === sel.line) { gg = groups[gk]; break; }
+          }
+          if (!gg) { propsEl.innerHTML = '<p style="color:var(--text-secondary);font-size:11px;">ブロックが見つかりません</p>'; return; }
+          var gtypeOpts = GROUP_KINDS.map(function(k) { return { value: k, label: k, selected: k === gg.gtype }; });
+          propsEl.innerHTML =
+            '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>' + escHtml(gg.gtype + (gg.label ? ' ' + gg.label : '')) + '</strong><br><span style="color:var(--text-secondary);">Block · L' + gg.line + (gg.endLine ? '–L' + gg.endLine : '') + '</span></div>' +
+            P.selectFieldHtml('Type', 'seq-edit-gtype', gtypeOpts) +
+            P.fieldHtml('Label/Condition', 'seq-edit-glabel', gg.label || '') +
+            '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
+              '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">else 追加 (alt/critical)</label>' +
+              '<input id="seq-edit-else-cond" type="text" placeholder="else の条件 (省略可)" style="width:100%;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-size:12px;margin-bottom:4px;box-sizing:border-box;">' +
+              '<button id="seq-edit-add-else" style="width:100%;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px 10px;border-radius:4px;font-size:11px;cursor:pointer;">+ else 行を追加</button>' +
+            '</div>' +
+            '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;display:flex;gap:4px;">' +
+              '<button id="seq-edit-group-delete" style="flex:1;background:var(--accent-red);color:#fff;border:none;padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 削除 (中身保持)</button>' +
+            '</div>';
+          var gLine = gg.line;
+          var gEnd = gg.endLine;
+          document.getElementById('seq-edit-gtype').addEventListener('change', function() {
+            window.MA.history.pushHistory();
+            ctx.setMmdText(updateGroup(ctx.getMmdText(), gLine, 'gtype', this.value));
+            ctx.onUpdate();
+          });
+          document.getElementById('seq-edit-glabel').addEventListener('change', function() {
+            window.MA.history.pushHistory();
+            ctx.setMmdText(updateGroup(ctx.getMmdText(), gLine, 'label', this.value));
+            ctx.onUpdate();
+          });
+          document.getElementById('seq-edit-add-else').addEventListener('click', function() {
+            if (!gEnd) { alert('対応する end 行を検出できません'); return; }
+            var cond = document.getElementById('seq-edit-else-cond').value;
+            window.MA.history.pushHistory();
+            ctx.setMmdText(insertElseIntoGroup(ctx.getMmdText(), gLine, gEnd, cond));
+            ctx.onUpdate();
+          });
+          document.getElementById('seq-edit-group-delete').addEventListener('click', function() {
+            if (!confirm('このブロックの開始行と end 行を削除しますか？ (中身は保持されます)')) return;
+            window.MA.history.pushHistory();
+            ctx.setMmdText(deleteGroup(ctx.getMmdText(), gLine, gEnd || gLine + 1));
+            window.MA.selection.clearSelection();
+            ctx.onUpdate();
+          });
         }
 
         // 共通: action bar の click ハンドラ
