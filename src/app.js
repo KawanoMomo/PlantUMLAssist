@@ -128,6 +128,8 @@ function init() {
     previewContainerForHover.addEventListener('mouseleave', clearHoverGuide);
 
     previewContainerForHover.addEventListener('click', function(e) {
+      // drag 終了直後の click は無視 (participant drag と挿入 popup の競合回避)
+      if (Date.now() - justDraggedAt < DRAG_CLICK_SUPPRESS_MS) return;
       var target = e.target;
       if (target.getAttribute && target.getAttribute('data-type')) return;  // overlay click は既存 handler が処理
       if (!currentModule || !currentModule.showInsertForm) return;
@@ -149,6 +151,11 @@ function init() {
 
   // ── Participant drag 並び替え (Sprint 10 C19) ──
   var dragState = null;
+  // drag 完了直後は click event も発火するため、hover-insert や overlay-click
+  // と競合してメッセージ挿入 popup が意図せず開く。mouseup 時刻を記録し、
+  // 一定時間以内の click は「drag 由来の残響」と判定して無視する。
+  var justDraggedAt = 0;
+  var DRAG_CLICK_SUPPRESS_MS = 300;
 
   function drawDropIndicator(clientX) {
     var hoverElD = document.getElementById('hover-layer');
@@ -309,6 +316,7 @@ function init() {
       }
       if (dragState.ghostEl && dragState.ghostEl.parentNode) dragState.ghostEl.parentNode.removeChild(dragState.ghostEl);
       clearDropIndicator();
+      justDraggedAt = Date.now();
     }
     dragState = null;
   });
@@ -325,6 +333,8 @@ function init() {
   var overlayEl = document.getElementById('overlay-layer');
   if (overlayEl) {
     overlayEl.addEventListener('click', function(e) {
+      // drag 終了直後の click は participant drag の残響とみなし無視
+      if (Date.now() - justDraggedAt < DRAG_CLICK_SUPPRESS_MS) return;
       var target = e.target;
       var type = target.getAttribute('data-type');
       var id = target.getAttribute('data-id');
@@ -339,7 +349,16 @@ function init() {
         var current = window.MA.selection.getSelected() || [];
         window.MA.selection.setSelected(current.concat([selItem]));
       } else {
-        window.MA.selection.setSelected([selItem]);
+        // 同一アイテム再クリックで toggle-off (選択解除)。type+id+line で同定。
+        var cur = window.MA.selection.getSelected() || [];
+        if (cur.length === 1
+            && cur[0].type === selItem.type
+            && cur[0].id === selItem.id
+            && cur[0].line === selItem.line) {
+          window.MA.selection.clearSelection();
+        } else {
+          window.MA.selection.setSelected([selItem]);
+        }
       }
     });
   }
