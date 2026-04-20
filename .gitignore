@@ -23,6 +23,9 @@ Thumbs.db
 # PlantUML rendered cache (if any)
 *.tmp.svg
 
+# PlantUML jar (not bundled due to license — fetch via lib/fetch-plantuml.sh)
+lib/*.jar
+
 # Dev artifacts (local screenshots, MCP session state, user issue scratchpad)
 .eval/
 .superpowers/

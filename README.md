@@ -10,6 +10,23 @@ PlantUML 記法の GUI 編集ツール。Python バックエンド + HTML/JS フ
 - **DiagramModule v2** インターフェース (MermaidAssist 踏襲)
 - **縦並びラベル付き追加フォーム**、DSL エディタ Tab/Shift+Tab でインデント挿入
 
+## セットアップ
+
+> **初回のみ**: リポジトリには PlantUML jar を同梱していません (ライセンス整合性のため)。
+> 下記いずれかで `lib/plantuml.jar` を配置してください。
+
+```bash
+# macOS / Linux / WSL / Git Bash
+bash lib/fetch-plantuml.sh
+
+# Windows PowerShell
+.\lib\fetch-plantuml.ps1
+```
+
+または PlantUML 公式リリース (https://github.com/plantuml/plantuml/releases) から任意の
+ライセンス変種 (GPLv3 / LGPL / Apache 2.0 / EPL / MIT / BSD) を手動ダウンロードして
+`lib/plantuml.jar` として配置してください。詳細は `lib/README.md` を参照。
+
 ## 起動
 
 > **重要**: MermaidAssist と違い、HTML をダブルクリックしても動きません。PlantUML は Java 実行または plantuml.com への POST を必要とするため、Python バックエンド経由でアクセスしてください。
@@ -29,7 +46,7 @@ Windows では `start.bat` をダブルクリックでも起動可能（server.p
 
 - Python 3 (標準ライブラリのみ、追加パッケージ不要)
 - Java 8+ (local render モード用。online モードのみ使うなら不要)
-- `lib/plantuml.jar` (リポジトリ同梱、v1.2024.7、約 22 MB)
+- `lib/plantuml.jar` (**別途ダウンロード必要**、fetch スクリプト提供。推奨: v1.2026.2、約 22 MB)
 
 Java がインストールされていない場合は、UI 右上の `render-mode` セレクトを `online (plantuml.com)` に切替えて使用可能。plantuml.com の公開サーバを利用するため、**業務データは外部送信される**ことに注意。
 
@@ -59,4 +76,8 @@ npm run test:all
 
 ## ライセンス
 
-MIT。`lib/plantuml.jar` は PlantUML プロジェクト (GPL-3.0 / LGPL / Apache 2.0 dual-license) から同梱、各々のライセンスに従う。
+本リポジトリは **MIT** (`LICENSE` 参照)。
+
+`lib/plantuml.jar` は同梱していません。利用者が PlantUML 公式から任意のライセンス変種
+(GPLv3 / LGPL / Apache 2.0 / EPL / MIT / BSD) をダウンロードして配置します。jar の
+ライセンスはその配布元の条項に従い、本リポジトリのライセンスとは別扱いです。
