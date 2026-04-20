@@ -430,7 +430,12 @@ describe('inferActivations', function() {
 });
 
 describe('moveParticipant', function() {
-  test('moves participant to new index', function() {
+  // newIndex is a gap index 0..N (N = # of participants), matching
+  // drawDropIndicator / computeDropIndex in app.js. Gap k is between
+  // participants k-1 and k in the pre-move array; gap 0 = before all,
+  // gap N = after all.
+
+  test('gap 0 moves C (last) to the head', function() {
     var text = '@startuml\nparticipant A\nparticipant B\nparticipant C\n@enduml';
     var out = seq.moveParticipant(text, 'C', 0);
     var lines = out.split('\n').filter(function(l) { return l.indexOf('participant') === 0; });
@@ -439,13 +444,35 @@ describe('moveParticipant', function() {
     expect(lines[2]).toContain('participant B');
   });
 
-  test('moves participant to middle', function() {
+  test('gap 2 moves A two positions forward to the B-C boundary', function() {
+    // Regression: previously `newIndex = 2` on [A,B,C] was clamped to 1 and
+    // then interpreted as a post-remove index, producing [B,C,A] instead of
+    // [B,A,C]. User report: "2+ ブロック移動しようとしても 1 ブロックしか動かない".
     var text = '@startuml\nparticipant A\nparticipant B\nparticipant C\n@enduml';
-    var out = seq.moveParticipant(text, 'A', 1);
+    var out = seq.moveParticipant(text, 'A', 2);
     var lines = out.split('\n').filter(function(l) { return l.indexOf('participant') === 0; });
     expect(lines[0]).toContain('participant B');
     expect(lines[1]).toContain('participant A');
     expect(lines[2]).toContain('participant C');
+  });
+
+  test('gap N (= length) drops at the end', function() {
+    // Regression: newIndex=3 on 3-participant array was clamped to 2 → the
+    // "end" gap collapsed onto "between B and C", so moves to the far right
+    // stopped one slot short of the rightSentinel.
+    var text = '@startuml\nparticipant A\nparticipant B\nparticipant C\n@enduml';
+    var out = seq.moveParticipant(text, 'A', 3);
+    var lines = out.split('\n').filter(function(l) { return l.indexOf('participant') === 0; });
+    expect(lines[0]).toContain('participant B');
+    expect(lines[1]).toContain('participant C');
+    expect(lines[2]).toContain('participant A');
+  });
+
+  test('gap adjacent to self is a no-op (drop at own slot)', function() {
+    var text = '@startuml\nparticipant A\nparticipant B\nparticipant C\n@enduml';
+    // A is at from=0, so gaps 0 and 1 are both "A's own slot".
+    expect(seq.moveParticipant(text, 'A', 0)).toBe(text);
+    expect(seq.moveParticipant(text, 'A', 1)).toBe(text);
   });
 
   test('preserves other lines in order', function() {

@@ -157,29 +157,39 @@ function init() {
   var justDraggedAt = 0;
   var DRAG_CLICK_SUPPRESS_MS = 300;
 
+  // Feature #7 で lifeline rect を追加した結果、同一 participant が head /
+  // tail / lifeline の 3 つの rect で表現され、それぞれ微妙に異なる x を
+  // 持つようになった。旧来の「x を小数2桁で丸めて dedupe」では 3 つが
+  // 同一視されず、gap 数が水増しされて drop 位置判定が壊れる。
+  // data-id 基準で dedupe し、1 participant = 1 center に戻す。
+  function _participantCenters(overlayD) {
+    var partRects = overlayD.querySelectorAll('rect[data-type="participant"]');
+    var centerById = {};
+    Array.prototype.forEach.call(partRects, function(r) {
+      var id = r.getAttribute('data-id');
+      if (!id) return;
+      var cx = parseFloat(r.getAttribute('x')) + parseFloat(r.getAttribute('width')) / 2;
+      if (!(id in centerById)) centerById[id] = cx;
+    });
+    var centers = [];
+    for (var k in centerById) {
+      if (Object.prototype.hasOwnProperty.call(centerById, k)) centers.push(centerById[k]);
+    }
+    centers.sort(function(a, b) { return a - b; });
+    return centers;
+  }
+
   function drawDropIndicator(clientX) {
     var hoverElD = document.getElementById('hover-layer');
     var overlayD = document.getElementById('overlay-layer');
     if (!hoverElD || !overlayD) return;
     var old = hoverElD.querySelector('.drop-indicator');
     if (old) old.parentNode.removeChild(old);
-    var partRects = overlayD.querySelectorAll('rect[data-type="participant"]');
-    if (partRects.length === 0) return;
+    var centers = _participantCenters(overlayD);
+    if (centers.length === 0) return;
     var rectBBox = overlayD.getBoundingClientRect();
     var z = zoom || 1;
     var localX = (clientX - rectBBox.left) / z;
-    // Bug 3: participant 中心 (= ライフライン) ではなく「2 participants の
-    // 間の中点」を候補にすることで、縦点線が既存ライフラインと重ならず
-    // 視認性向上。
-    // Bug A1/A2: head + tail の両方に rect があるので dedupe が必要。
-    // x 中心座標で集約し重複を取り除く。
-    var centerSet = {};
-    Array.prototype.forEach.call(partRects, function(r) {
-      var cx = parseFloat(r.getAttribute('x')) + parseFloat(r.getAttribute('width')) / 2;
-      // 小数点丸めで head/tail 同座標を同一視
-      centerSet[Math.round(cx * 100) / 100] = true;
-    });
-    var centers = Object.keys(centerSet).map(parseFloat).sort(function(a, b) { return a - b; });
     // Bug A1/A2: sentinel gap が overlay 描画範囲外に置かれると hover-layer
     // の viewBox/clip で見えなくなり、両端 drop が不可視になる。
     // overlay width / 0 の範囲内に clamp。
@@ -227,20 +237,13 @@ function init() {
   function computeDropIndex(clientX) {
     var overlayD = document.getElementById('overlay-layer');
     if (!overlayD) return null;
-    var partRects = overlayD.querySelectorAll('rect[data-type="participant"]');
-    if (partRects.length === 0) return null;
+    var centers = _participantCenters(overlayD);
+    if (centers.length === 0) return null;
     var rectBBox = overlayD.getBoundingClientRect();
     var z = zoom || 1;
     var localX = (clientX - rectBBox.left) / z;
     // Bug 3: drawDropIndicator と同じ「中点 gap」で index 計算に統一。
     // localX に最も近い gap index = 新 index (0 = 先頭、N = 末尾)。
-    // Bug A1/A2/C6: head+tail rect を x 座標で dedupe してから gap 算出。
-    var centerSet = {};
-    Array.prototype.forEach.call(partRects, function(r) {
-      var cx = parseFloat(r.getAttribute('x')) + parseFloat(r.getAttribute('width')) / 2;
-      centerSet[Math.round(cx * 100) / 100] = true;
-    });
-    var centers = Object.keys(centerSet).map(parseFloat).sort(function(a, b) { return a - b; });
     var overlayW = parseFloat(overlayD.getAttribute('width'))
       || parseFloat(overlayD.getAttribute('viewBox') && overlayD.getAttribute('viewBox').split(/\s+/)[2])
       || 800;
