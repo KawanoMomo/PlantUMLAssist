@@ -107,8 +107,24 @@ function init() {
     hoverEl.style.transform = overlayElForHover.style.transform;
   }
 
+  // 選択中は hover-insert ガイドと挿入 popup を両方抑制する。
+  // 理由: 選択 = 編集モードでユーザーは選択項目を扱っており、別の箇所への
+  // 挿入を示唆する点線ガイドは視覚ノイズになる。また空白クリックは選択解除に
+  // 使われる (overlay click handler 側で処理) ため、click で popup まで開くと
+  // 解除と挿入が同時に起きて混乱する。
+  function _hasSelection() {
+    return !!(window.MA && window.MA.selection
+      && window.MA.selection.getSelected
+      && window.MA.selection.getSelected().length > 0);
+  }
+
   if (previewContainerForHover && hoverEl && overlayElForHover) {
     previewContainerForHover.addEventListener('mousemove', function(e) {
+      // 選択中は挿入ガイドを出さない
+      if (_hasSelection()) {
+        clearHoverGuide();
+        return;
+      }
       var target = e.target;
       // overlay rect 上にマウス → guide 非表示 (既存選択を優先)
       if (target.getAttribute && target.getAttribute('data-type')) {
@@ -130,6 +146,8 @@ function init() {
     previewContainerForHover.addEventListener('click', function(e) {
       // drag 終了直後の click は無視 (participant drag と挿入 popup の競合回避)
       if (Date.now() - justDraggedAt < DRAG_CLICK_SUPPRESS_MS) return;
+      // 選択中は挿入 popup を開かない (overlay click が選択解除を担当)
+      if (_hasSelection()) return;
       var target = e.target;
       if (target.getAttribute && target.getAttribute('data-type')) return;  // overlay click は既存 handler が処理
       if (!currentModule || !currentModule.showInsertForm) return;
@@ -456,6 +474,8 @@ function init() {
     if (ovEl && window.MA.sequenceOverlay && window.MA.sequenceOverlay.setSelectedHighlight) {
       window.MA.sequenceOverlay.setSelectedHighlight(ovEl, sel);
     }
+    // 選択状態に入ったらその瞬間に hover ガイドを消す (mousemove を待たない)
+    if (sel.length > 0) clearHoverGuide();
     renderProps();
   });
 
