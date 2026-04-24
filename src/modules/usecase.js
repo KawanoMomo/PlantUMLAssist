@@ -91,6 +91,80 @@ window.MA.modules.plantumlUsecase = (function() {
     return insertBeforeEnd(text, fmtRelation(kind, from, to, label));
   }
 
+  // ─── Update operations (pure: text + lineNum + field/value → text) ───
+  function updateActor(text, lineNum, field, value) {
+    var lines = text.split('\n');
+    var idx = lineNum - 1;
+    if (idx < 0 || idx >= lines.length) return text;
+    var indent = lines[idx].match(/^(\s*)/)[1];
+    var trimmed = lines[idx].trim();
+    var id, label;
+    var km = trimmed.match(ACTOR_KW_RE);
+    if (km) {
+      if (km[2] !== undefined) { id = km[2]; label = km[1]; }
+      else { id = km[3]; label = km[4] !== undefined ? km[4] : km[3]; }
+    } else {
+      var sm = trimmed.match(ACTOR_SHORT_RE);
+      if (!sm) return text;
+      label = sm[1].trim(); id = sm[2] || label;
+    }
+    if (field === 'id') id = value;
+    else if (field === 'label') label = value;
+    lines[idx] = indent + fmtActor(id, label);
+    return lines.join('\n');
+  }
+
+  function updateUsecase(text, lineNum, field, value) {
+    var lines = text.split('\n');
+    var idx = lineNum - 1;
+    if (idx < 0 || idx >= lines.length) return text;
+    var indent = lines[idx].match(/^(\s*)/)[1];
+    var trimmed = lines[idx].trim();
+    var id, label;
+    var km = trimmed.match(USECASE_KW_RE);
+    if (km) {
+      if (km[2] !== undefined) { id = km[2]; label = km[1]; }
+      else { id = km[3]; label = km[4] !== undefined ? km[4] : km[3]; }
+    } else {
+      var sm = trimmed.match(USECASE_SHORT_RE);
+      if (!sm) return text;
+      label = sm[1].trim(); id = sm[2] || label;
+    }
+    if (field === 'id') id = value;
+    else if (field === 'label') label = value;
+    lines[idx] = indent + fmtUsecase(id, label);
+    return lines.join('\n');
+  }
+
+  function updateRelation(text, lineNum, field, value) {
+    var lines = text.split('\n');
+    var idx = lineNum - 1;
+    if (idx < 0 || idx >= lines.length) return text;
+    var indent = lines[idx].match(/^(\s*)/)[1];
+    var trimmed = lines[idx].trim();
+    var m = trimmed.match(RELATION_RE);
+    if (!m) return text;
+    var fromRaw = m[1], arrow = m[2], toRaw = m[3], lbl = (m[4] || '').trim();
+    var from = DU.unquote(fromRaw), to = DU.unquote(toRaw);
+    var kind = 'association';
+    if (arrow === '<|--' || arrow === '--|>') kind = 'generalization';
+    else if (lbl === '<<include>>') kind = 'include';
+    else if (lbl === '<<extend>>') kind = 'extend';
+
+    if (field === 'kind') {
+      kind = value;
+      // When changing kind, also reset label appropriately
+      if (kind === 'include') lbl = '<<include>>';
+      else if (kind === 'extend') lbl = '<<extend>>';
+      else if (kind === 'association') lbl = '';
+    } else if (field === 'from') from = value;
+    else if (field === 'to') to = value;
+    else if (field === 'label') lbl = value;
+
+    lines[idx] = indent + fmtRelation(kind, from, to, lbl);
+    return lines.join('\n');
+  }
+
   // ─── Parser ─────────────────────────────────────────────────────────────
   function parse(text) {
     var result = { meta: { title: '', startUmlLine: null }, elements: [], relations: [], groups: [] };
@@ -207,6 +281,9 @@ window.MA.modules.plantumlUsecase = (function() {
     addUsecase: addUsecase,
     addPackage: addPackage,
     addRelation: addRelation,
+    updateActor: updateActor,
+    updateUsecase: updateUsecase,
+    updateRelation: updateRelation,
     detect: function(text) { return window.MA.parserUtils.detectDiagramType(text) === 'plantuml-usecase'; },
     template: function() {
       return [

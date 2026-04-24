@@ -72,3 +72,36 @@ describe('usecase add operations', function() {
     expect(out).toContain('L1 ..> Validate : <<include>>');
   });
 });
+
+describe('usecase update operations', function() {
+  test('updateActor changes label', function() {
+    var t = '@startuml\nactor User\n@enduml';
+    var out = uc.updateActor(t, 2, 'label', 'End User');
+    expect(out).toContain('actor "End User" as User');
+  });
+  test('updateActor changes id (keeps line position)', function() {
+    var t = '@startuml\nactor "End User" as User\n@enduml';
+    var out = uc.updateActor(t, 2, 'id', 'EU');
+    expect(out).toContain('actor "End User" as EU');
+  });
+  test('updateUsecase changes label', function() {
+    var t = '@startuml\nusecase L1\n@enduml';
+    var out = uc.updateUsecase(t, 2, 'label', 'Login Flow');
+    expect(out).toContain('usecase "Login Flow" as L1');
+  });
+  test('updateRelation changes kind from association to include', function() {
+    var t = '@startuml\nA --> B\n@enduml';
+    var out = uc.updateRelation(t, 2, 'kind', 'include');
+    expect(out).toContain('A ..> B : <<include>>');
+  });
+  test('updateRelation changes kind from include to extend', function() {
+    var t = '@startuml\nA ..> B : <<include>>\n@enduml';
+    var out = uc.updateRelation(t, 2, 'kind', 'extend');
+    expect(out).toContain('A ..> B : <<extend>>');
+  });
+  test('updateRelation changes association label', function() {
+    var t = '@startuml\nA --> B : old\n@enduml';
+    var out = uc.updateRelation(t, 2, 'label', 'new label');
+    expect(out).toContain('A --> B : new label');
+  });
+});
