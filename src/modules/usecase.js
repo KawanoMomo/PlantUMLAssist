@@ -27,11 +27,20 @@ window.MA.modules.plantumlUsecase = (function() {
   // usecase short: `(Label)` / `(Label) as Alias`
   var USECASE_SHORT_RE = /^\(([^)]+)\)(?:\s+as\s+([A-Za-z_][A-Za-z0-9_]*))?\s*$/;
 
+  // package open: `package "Label" {` / `package L {` / `rectangle "Label" {` / `rectangle L {`
+  var PACKAGE_OPEN_RE = new RegExp(
+    '^(?:package|rectangle)\\s+(?:"([^"]+)"|(' + ID + '))\\s*\\{\\s*$'
+  );
+  var PACKAGE_CLOSE_RE = /^\s*\}\s*$/;
+
   // ─── Parser ─────────────────────────────────────────────────────────────
   function parse(text) {
     var result = { meta: { title: '', startUmlLine: null }, elements: [], relations: [], groups: [] };
     if (!text || !text.trim()) return result;
     var lines = text.split('\n');
+
+    var packageStack = [];
+    var packageCounter = 0;
 
     for (var i = 0; i < lines.length; i++) {
       var lineNum = i + 1;
@@ -43,8 +52,30 @@ window.MA.modules.plantumlUsecase = (function() {
       }
       if (RP.isEndUml(trimmed)) continue;
 
+      // package open
+      var pm = trimmed.match(PACKAGE_OPEN_RE);
+      if (pm) {
+        var label0 = pm[1] !== undefined ? pm[1] : pm[2];
+        var pkgId = '__pkg_' + (packageCounter++);
+        var parent = packageStack.length > 0 ? packageStack[packageStack.length - 1].id : null;
+        var pkg = { kind: 'package', id: pkgId, label: label0, startLine: lineNum, endLine: 0, parentId: parent };
+        result.groups.push(pkg);
+        packageStack.push(pkg);
+        continue;
+      }
+      // package close
+      if (PACKAGE_CLOSE_RE.test(lines[i])) {
+        if (packageStack.length > 0) {
+          var closing = packageStack.pop();
+          closing.endLine = lineNum;
+        }
+        continue;
+      }
+
       var tm = trimmed.match(/^title\s+(.+)$/);
       if (tm) { result.meta.title = tm[1].trim(); continue; }
+
+      var currentPackageId = packageStack.length > 0 ? packageStack[packageStack.length - 1].id : null;
 
       var m;
       var id, label;
@@ -53,7 +84,7 @@ window.MA.modules.plantumlUsecase = (function() {
       if (m) {
         if (m[2] !== undefined) { id = m[2]; label = m[1]; }
         else { id = m[3]; label = m[4] !== undefined ? m[4] : m[3]; }
-        result.elements.push({ kind: 'actor', id: id, label: label, stereotype: null, line: lineNum, parentPackageId: null });
+        result.elements.push({ kind: 'actor', id: id, label: label, stereotype: null, line: lineNum, parentPackageId: currentPackageId });
         continue;
       }
       // actor short form
@@ -61,7 +92,7 @@ window.MA.modules.plantumlUsecase = (function() {
       if (m) {
         label = m[1].trim();
         id = m[2] || label;
-        result.elements.push({ kind: 'actor', id: id, label: label, stereotype: null, line: lineNum, parentPackageId: null });
+        result.elements.push({ kind: 'actor', id: id, label: label, stereotype: null, line: lineNum, parentPackageId: currentPackageId });
         continue;
       }
       // usecase keyword form
@@ -69,7 +100,7 @@ window.MA.modules.plantumlUsecase = (function() {
       if (m) {
         if (m[2] !== undefined) { id = m[2]; label = m[1]; }
         else { id = m[3]; label = m[4] !== undefined ? m[4] : m[3]; }
-        result.elements.push({ kind: 'usecase', id: id, label: label, stereotype: null, line: lineNum, parentPackageId: null });
+        result.elements.push({ kind: 'usecase', id: id, label: label, stereotype: null, line: lineNum, parentPackageId: currentPackageId });
         continue;
       }
       // usecase short form
@@ -77,7 +108,7 @@ window.MA.modules.plantumlUsecase = (function() {
       if (m) {
         label = m[1].trim();
         id = m[2] || label;
-        result.elements.push({ kind: 'usecase', id: id, label: label, stereotype: null, line: lineNum, parentPackageId: null });
+        result.elements.push({ kind: 'usecase', id: id, label: label, stereotype: null, line: lineNum, parentPackageId: currentPackageId });
         continue;
       }
     }

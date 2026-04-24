@@ -73,3 +73,46 @@ describe('parseUsecase usecase element', function() {
     expect(r.elements[0].label).toBe('Login Flow');
   });
 });
+
+describe('parseUsecase package', function() {
+  test('parses single package with quoted label', function() {
+    var r = uc.parse('@startuml\npackage "Auth" {\nactor User\nusecase Login\n}\n@enduml');
+    expect(r.groups.length).toBe(1);
+    expect(r.groups[0].kind).toBe('package');
+    expect(r.groups[0].label).toBe('Auth');
+    expect(r.groups[0].startLine).toBe(2);
+    expect(r.groups[0].endLine).toBe(5);
+    expect(r.groups[0].parentId).toBe(null);
+  });
+
+  test('assigns parentPackageId to elements inside package', function() {
+    var r = uc.parse('@startuml\npackage "Auth" {\nactor User\n}\n@enduml');
+    var actor = r.elements.find(function(e) { return e.kind === 'actor'; });
+    expect(actor.parentPackageId).toBe(r.groups[0].id);
+  });
+
+  test('parses nested packages with parentId chain', function() {
+    var r = uc.parse([
+      '@startuml',
+      'package "Outer" {',
+      'package "Inner" {',
+      'actor U',
+      '}',
+      '}',
+      '@enduml',
+    ].join('\n'));
+    expect(r.groups.length).toBe(2);
+    var outer = r.groups.find(function(g) { return g.label === 'Outer'; });
+    var inner = r.groups.find(function(g) { return g.label === 'Inner'; });
+    expect(inner.parentId).toBe(outer.id);
+    var actor = r.elements[0];
+    expect(actor.parentPackageId).toBe(inner.id);
+  });
+
+  test('rectangle keyword treated as package alias', function() {
+    var r = uc.parse('@startuml\nrectangle "Box" {\nactor U\n}\n@enduml');
+    expect(r.groups.length).toBe(1);
+    expect(r.groups[0].kind).toBe('package');
+    expect(r.groups[0].label).toBe('Box');
+  });
+});
