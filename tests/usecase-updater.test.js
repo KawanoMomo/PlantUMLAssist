@@ -7,6 +7,7 @@ try {
   require('../src/core/dsl-utils.js');
   require('../src/core/regex-parts.js');
   require('../src/core/parser-utils.js');
+  require('../src/core/text-updater.js');
   require('../src/modules/usecase.js');
 } catch (e) { /* sandbox path: run-tests.js already loaded everything */ }
 var uc = (typeof window !== 'undefined' && window.MA && window.MA.modules && window.MA.modules.plantumlUsecase)
@@ -103,5 +104,39 @@ describe('usecase update operations', function() {
     var t = '@startuml\nA --> B : old\n@enduml';
     var out = uc.updateRelation(t, 2, 'label', 'new label');
     expect(out).toContain('A --> B : new label');
+  });
+});
+
+describe('usecase line operations', function() {
+  test('deleteLine removes a line', function() {
+    var t = '@startuml\nactor A\nactor B\n@enduml';
+    var out = uc.deleteLine(t, 3);
+    expect(out).not.toContain('actor B');
+    expect(out).toContain('actor A');
+  });
+  test('moveLineUp swaps two lines', function() {
+    var t = '@startuml\nactor A\nactor B\n@enduml';
+    var out = uc.moveLineUp(t, 3);
+    var lines = out.split('\n');
+    expect(lines[1]).toBe('actor B');
+    expect(lines[2]).toBe('actor A');
+  });
+  test('moveLineDown swaps two lines', function() {
+    var t = '@startuml\nactor A\nactor B\n@enduml';
+    var out = uc.moveLineDown(t, 2);
+    var lines = out.split('\n');
+    expect(lines[1]).toBe('actor B');
+    expect(lines[2]).toBe('actor A');
+  });
+  test('setTitle inserts after @startuml', function() {
+    var t = '@startuml\nactor A\n@enduml';
+    var out = uc.setTitle(t, 'My UseCase');
+    expect(out.split('\n')[1]).toBe('title My UseCase');
+  });
+  test('setTitle replaces existing title', function() {
+    var t = '@startuml\ntitle Old\nactor A\n@enduml';
+    var out = uc.setTitle(t, 'New');
+    expect(out).toContain('title New');
+    expect(out).not.toContain('title Old');
   });
 });

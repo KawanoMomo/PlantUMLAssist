@@ -165,6 +165,49 @@ window.MA.modules.plantumlUsecase = (function() {
     return lines.join('\n');
   }
 
+  // ─── Line operations (delete / move / setTitle) ────────────────────────
+  function deleteLine(text, lineNum) {
+    return window.MA.textUpdater.deleteLine(text, lineNum);
+  }
+
+  function moveLineUp(text, lineNum) {
+    var lines = text.split('\n');
+    var idx = lineNum - 1;
+    if (idx <= 0 || idx >= lines.length) return text;
+    var tmp = lines[idx];
+    lines[idx] = lines[idx - 1];
+    lines[idx - 1] = tmp;
+    return lines.join('\n');
+  }
+
+  function moveLineDown(text, lineNum) {
+    var lines = text.split('\n');
+    var idx = lineNum - 1;
+    if (idx < 0 || idx >= lines.length - 1) return text;
+    var tmp = lines[idx];
+    lines[idx] = lines[idx + 1];
+    lines[idx + 1] = tmp;
+    return lines.join('\n');
+  }
+
+  function setTitle(text, newTitle) {
+    var lines = text.split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      if (/^\s*title\s+/.test(lines[i])) {
+        var indent = lines[i].match(/^(\s*)/)[1];
+        lines[i] = indent + 'title ' + newTitle;
+        return lines.join('\n');
+      }
+    }
+    for (var j = 0; j < lines.length; j++) {
+      if (RP.isStartUml(lines[j])) {
+        lines.splice(j + 1, 0, 'title ' + newTitle);
+        return lines.join('\n');
+      }
+    }
+    return text;
+  }
+
   // ─── Parser ─────────────────────────────────────────────────────────────
   function parse(text) {
     var result = { meta: { title: '', startUmlLine: null }, elements: [], relations: [], groups: [] };
@@ -284,6 +327,10 @@ window.MA.modules.plantumlUsecase = (function() {
     updateActor: updateActor,
     updateUsecase: updateUsecase,
     updateRelation: updateRelation,
+    deleteLine: deleteLine,
+    moveLineUp: moveLineUp,
+    moveLineDown: moveLineDown,
+    setTitle: setTitle,
     detect: function(text) { return window.MA.parserUtils.detectDiagramType(text) === 'plantuml-usecase'; },
     template: function() {
       return [
