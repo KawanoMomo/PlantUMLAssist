@@ -334,6 +334,123 @@ window.MA.modules.plantumlUsecase = (function() {
     return result;
   }
 
+  // ─── Property Panel ─────────────────────────────────────────────────────
+  function renderProps(selData, parsedData, propsEl, ctx) {
+    if (!propsEl) return;
+    var P = window.MA.properties;
+    var elements = parsedData.elements || [];
+    var actors = elements.filter(function(e) { return e.kind === 'actor'; });
+    var usecases = elements.filter(function(e) { return e.kind === 'usecase'; });
+
+    if (!selData || selData.length === 0) {
+      var html =
+        '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">UseCase Diagram</div>' +
+        '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
+          '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">Title 設定</label>' +
+          P.fieldHtml('Title', 'uc-title', parsedData.meta.title) +
+          P.primaryButtonHtml('uc-set-title', 'Title 適用') +
+        '</div>' +
+        '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
+          '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">末尾に追加</label>' +
+          P.selectFieldHtml('種類', 'uc-tail-kind', [
+            { value: 'actor',    label: 'Actor', selected: true },
+            { value: 'usecase',  label: 'Usecase' },
+            { value: 'package',  label: 'Package境界' },
+            { value: 'relation', label: 'Relation (関係)' },
+          ]) +
+          '<div id="uc-tail-detail" style="margin-top:6px;"></div>' +
+        '</div>' +
+        '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;color:var(--text-secondary);font-size:11px;">' +
+          'DSL エディタで行をクリックすると編集パネルが開きます (v0.5.0 で SVG クリック対応予定)' +
+        '</div>';
+      propsEl.innerHTML = html;
+
+      // Title button
+      P.bindEvent('uc-set-title', 'click', function() {
+        window.MA.history.pushHistory();
+        ctx.setMmdText(setTitle(ctx.getMmdText(), document.getElementById('uc-title').value.trim()));
+        ctx.onUpdate();
+      });
+
+      // 末尾追加 detail switcher
+      var renderTailDetail = function() {
+        var kind = document.getElementById('uc-tail-kind').value;
+        var detailEl = document.getElementById('uc-tail-detail');
+        var actorOpts = actors.map(function(a) { return { value: a.id, label: a.label }; });
+        var usecaseOpts = usecases.map(function(u) { return { value: u.id, label: u.label }; });
+        var allOpts = actorOpts.concat(usecaseOpts);
+        if (allOpts.length === 0) allOpts = [{ value: '', label: '（要素なし）' }];
+        var html = '';
+        if (kind === 'actor') {
+          html =
+            P.fieldHtml('Alias', 'uc-tail-alias', '', '例: User') +
+            P.fieldHtml('Label', 'uc-tail-label', '', '省略可、Alias と異なる場合に表示用') +
+            P.primaryButtonHtml('uc-tail-add', '+ Actor 追加');
+        } else if (kind === 'usecase') {
+          html =
+            P.fieldHtml('Alias', 'uc-tail-alias', '', '例: L1') +
+            P.fieldHtml('Label', 'uc-tail-label', '', '省略可、Alias と異なる場合に表示用') +
+            P.primaryButtonHtml('uc-tail-add', '+ Usecase 追加');
+        } else if (kind === 'package') {
+          html =
+            P.fieldHtml('Label', 'uc-tail-label', '', '例: Auth Module') +
+            P.primaryButtonHtml('uc-tail-add', '+ Package 追加');
+        } else if (kind === 'relation') {
+          html =
+            P.selectFieldHtml('Kind', 'uc-tail-rkind', [
+              { value: 'association',    label: 'Association (-->)', selected: true },
+              { value: 'generalization', label: 'Generalization (<|--)' },
+              { value: 'include',        label: 'Include (..> <<include>>)' },
+              { value: 'extend',         label: 'Extend (..> <<extend>>)' },
+            ]) +
+            P.selectFieldHtml('From', 'uc-tail-from', allOpts) +
+            P.selectFieldHtml('To', 'uc-tail-to', allOpts) +
+            P.fieldHtml('Label', 'uc-tail-rlabel', '', 'association のみ任意') +
+            P.primaryButtonHtml('uc-tail-add', '+ Relation 追加');
+        }
+        detailEl.innerHTML = html;
+
+        P.bindEvent('uc-tail-add', 'click', function() {
+          var t = ctx.getMmdText();
+          var out = t;
+          if (kind === 'actor') {
+            var al = document.getElementById('uc-tail-alias').value.trim();
+            if (!al) { alert('Alias 必須'); return; }
+            window.MA.history.pushHistory();
+            out = addActor(t, al, document.getElementById('uc-tail-label').value.trim() || al);
+          } else if (kind === 'usecase') {
+            var al2 = document.getElementById('uc-tail-alias').value.trim();
+            if (!al2) { alert('Alias 必須'); return; }
+            window.MA.history.pushHistory();
+            out = addUsecase(t, al2, document.getElementById('uc-tail-label').value.trim() || al2);
+          } else if (kind === 'package') {
+            var lbl = document.getElementById('uc-tail-label').value.trim();
+            if (!lbl) { alert('Label 必須'); return; }
+            window.MA.history.pushHistory();
+            out = addPackage(t, lbl);
+          } else if (kind === 'relation') {
+            var fr = document.getElementById('uc-tail-from').value;
+            var to = document.getElementById('uc-tail-to').value;
+            if (!fr || !to) { alert('From/To 必須 (先に actor/usecase を追加)'); return; }
+            var rkind = document.getElementById('uc-tail-rkind').value;
+            window.MA.history.pushHistory();
+            out = addRelation(t, rkind, fr, to, document.getElementById('uc-tail-rlabel').value.trim());
+          }
+          ctx.setMmdText(out);
+          ctx.onUpdate();
+        });
+      };
+      document.getElementById('uc-tail-kind').addEventListener('change', renderTailDetail);
+      renderTailDetail();
+      return;
+    }
+
+    // selection != 0 — Task 12 で実装 (placeholder)
+    propsEl.innerHTML =
+      '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">UseCase Diagram (selection ' + selData.length + ')</div>' +
+      '<div>選択編集 UI: Task 12 で実装予定</div>';
+  }
+
   return {
     type: 'plantuml-usecase',
     displayName: 'UseCase',
@@ -354,6 +471,8 @@ window.MA.modules.plantumlUsecase = (function() {
     moveLineDown: moveLineDown,
     setTitle: setTitle,
     renameWithRefs: renameWithRefs,
+    renderProps: renderProps,
+    buildOverlay: function() { /* v0.3.0 では overlay なし */ },
     detect: function(text) { return window.MA.parserUtils.detectDiagramType(text) === 'plantuml-usecase'; },
     template: function() {
       return [
