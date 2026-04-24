@@ -8,8 +8,8 @@ window.MA.parserUtils = (function() {
     for (var i = 0; i < lines.length; i++) {
       var t = lines[i].trim();
       if (!t || t.indexOf("'") === 0) continue;
-      if (/^@startuml/.test(t)) { inBlock = true; continue; }
-      if (/^@enduml/.test(t)) break;
+      if (window.MA.regexParts.isStartUml(t)) { inBlock = true; continue; }
+      if (window.MA.regexParts.isEndUml(t)) break;
       if (!inBlock) continue;
       if (/^(actor|participant|boundary|control|entity|database|queue|collections)\b/.test(t)) return 'plantuml-sequence';
       if (/^usecase\b|\bas\s+\(/.test(t)) return 'plantuml-usecase';
