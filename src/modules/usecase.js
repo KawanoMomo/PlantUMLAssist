@@ -43,6 +43,27 @@ window.MA.modules.plantumlUsecase = (function() {
     '^(' + ID + '|' + QN + ')\\s+(<\\|--|--\\|>|\\.\\.>|<\\.\\.|-->|<--|--|<-)\\s+(' + ID + '|' + QN + ')(?:\\s*:\\s*(.+))?$'
   );
 
+  // ─── Formatters (canonical emit, ADR-105 keyword-first) ───────────────
+  function fmtActor(id, label) {
+    if (label && label !== id) return 'actor "' + label + '" as ' + id;
+    return 'actor ' + id;
+  }
+  function fmtUsecase(id, label) {
+    if (label && label !== id) return 'usecase "' + label + '" as ' + id;
+    return 'usecase ' + id;
+  }
+  function fmtPackage(label) {
+    return 'package "' + label + '" {';
+  }
+  function fmtRelation(kind, from, to, label) {
+    var lbl = label || '';
+    if (kind === 'generalization') return from + ' <|-- ' + to;
+    if (kind === 'include') return from + ' ..> ' + to + ' : <<include>>';
+    if (kind === 'extend') return from + ' ..> ' + to + ' : <<extend>>';
+    // association (default)
+    return from + ' --> ' + to + (lbl ? ' : ' + lbl : '');
+  }
+
   // ─── Parser ─────────────────────────────────────────────────────────────
   function parse(text) {
     var result = { meta: { title: '', startUmlLine: null }, elements: [], relations: [], groups: [] };
@@ -151,6 +172,10 @@ window.MA.modules.plantumlUsecase = (function() {
     type: 'plantuml-usecase',
     displayName: 'UseCase',
     parse: parse,
+    fmtActor: fmtActor,
+    fmtUsecase: fmtUsecase,
+    fmtPackage: fmtPackage,
+    fmtRelation: fmtRelation,
     detect: function(text) { return window.MA.parserUtils.detectDiagramType(text) === 'plantuml-usecase'; },
     template: function() {
       return [
