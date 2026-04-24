@@ -5,6 +5,7 @@ const path = require('path');
 const projectRoot = path.resolve(__dirname, '..');
 const sourceFiles = [
   'src/core/html-utils.js',
+  'src/core/dsl-utils.js',
   'src/core/text-updater.js',
   'src/core/parser-utils.js',
   'src/core/history.js',
