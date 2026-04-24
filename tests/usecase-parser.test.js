@@ -116,3 +116,51 @@ describe('parseUsecase package', function() {
     expect(r.groups[0].label).toBe('Box');
   });
 });
+
+describe('parseUsecase relations', function() {
+  test('parses association --> with no label', function() {
+    var r = uc.parse('@startuml\nactor U\nusecase L\nU --> L\n@enduml');
+    expect(r.relations.length).toBe(1);
+    expect(r.relations[0].kind).toBe('association');
+    expect(r.relations[0].from).toBe('U');
+    expect(r.relations[0].to).toBe('L');
+    expect(r.relations[0].arrow).toBe('-->');
+    expect(r.relations[0].label).toBe('');
+  });
+
+  test('parses association with label after colon', function() {
+    var r = uc.parse('@startuml\nU --> L : initiates\n@enduml');
+    expect(r.relations[0].label).toBe('initiates');
+  });
+
+  test('parses generalization <|--', function() {
+    var r = uc.parse('@startuml\nPerson <|-- Admin\n@enduml');
+    expect(r.relations[0].kind).toBe('generalization');
+    expect(r.relations[0].from).toBe('Person');
+    expect(r.relations[0].to).toBe('Admin');
+    expect(r.relations[0].arrow).toBe('<|--');
+  });
+
+  test('parses include via stereotype', function() {
+    var r = uc.parse('@startuml\nLogin ..> Validate : <<include>>\n@enduml');
+    expect(r.relations[0].kind).toBe('include');
+    expect(r.relations[0].label).toBe('<<include>>');
+  });
+
+  test('parses extend via stereotype', function() {
+    var r = uc.parse('@startuml\nLogin ..> CancelLogin : <<extend>>\n@enduml');
+    expect(r.relations[0].kind).toBe('extend');
+    expect(r.relations[0].label).toBe('<<extend>>');
+  });
+
+  test('parses dotted ..> without stereotype as association', function() {
+    var r = uc.parse('@startuml\nA ..> B\n@enduml');
+    expect(r.relations[0].kind).toBe('association');
+    expect(r.relations[0].arrow).toBe('..>');
+  });
+
+  test('parses comments and skips them', function() {
+    var r = uc.parse("@startuml\n' this is comment\nactor U\n@enduml");
+    expect(r.elements.length).toBe(1);
+  });
+});

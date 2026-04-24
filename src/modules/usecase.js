@@ -8,6 +8,7 @@ window.MA.modules.plantumlUsecase = (function() {
 
   // ─── Regex 構築 ─────────────────────────────────────────────────────────
   var ID = RP.IDENTIFIER;             // [A-Za-z_][A-Za-z0-9_]*
+  var QN = RP.QUOTED_NAME;            // "[^"]+"
   // Note: RP.QUOTED_NAME ('"[^"]+"') is non-capturing; for actor/usecase keyword
   // forms we need to capture the inner label, so we inline `"([^"]+)"` here.
 
@@ -32,6 +33,15 @@ window.MA.modules.plantumlUsecase = (function() {
     '^(?:package|rectangle)\\s+(?:"([^"]+)"|(' + ID + '))\\s*\\{\\s*$'
   );
   var PACKAGE_CLOSE_RE = /^\s*\}\s*$/;
+
+  // Relation arrows (longest first to avoid prefix matches):
+  // <|-- / --|>  → generalization
+  // ..> / <..    → dotted (association unless include/extend stereotype)
+  // --> / <--    → solid association
+  // -- / -       → undirected
+  var RELATION_RE = new RegExp(
+    '^(' + ID + '|' + QN + ')\\s+(<\\|--|--\\|>|\\.\\.>|<\\.\\.|-->|<--|--|<-)\\s+(' + ID + '|' + QN + ')(?:\\s*:\\s*(.+))?$'
+  );
 
   // ─── Parser ─────────────────────────────────────────────────────────────
   function parse(text) {
@@ -109,6 +119,28 @@ window.MA.modules.plantumlUsecase = (function() {
         label = m[1].trim();
         id = m[2] || label;
         result.elements.push({ kind: 'usecase', id: id, label: label, stereotype: null, line: lineNum, parentPackageId: currentPackageId });
+        continue;
+      }
+      // relation
+      m = trimmed.match(RELATION_RE);
+      if (m) {
+        var fromRaw = m[1], arrow = m[2], toRaw = m[3], lbl = (m[4] || '').trim();
+        var from = DU.unquote(fromRaw);
+        var to = DU.unquote(toRaw);
+        var kind = 'association';
+        if (arrow === '<|--' || arrow === '--|>') {
+          kind = 'generalization';
+          // canonicalize direction: parent <|-- child (swap if --|>)
+          if (arrow === '--|>') { var tmp = from; from = to; to = tmp; arrow = '<|--'; }
+        } else if (lbl === '<<include>>') {
+          kind = 'include';
+        } else if (lbl === '<<extend>>') {
+          kind = 'extend';
+        }
+        result.relations.push({
+          id: '__r_' + result.relations.length,
+          kind: kind, from: from, to: to, arrow: arrow, label: lbl, line: lineNum,
+        });
         continue;
       }
     }
