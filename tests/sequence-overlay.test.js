@@ -8,10 +8,18 @@ global.window = dom.window;
 global.document = dom.window.document;
 global.DOMParser = dom.window.DOMParser;
 
+// line-resolver.test.js は自前の jsdom window を作って line-resolver を require し、
+// 終了時に global.window を復元する。しかし Node の require キャッシュに残るため
+// 本ファイルで require してもモジュール IIFE が再実行されず、
+// 新しい jsdom window への window.MA.lineResolver 登録が起きない。
+// キャッシュを明示的に落として現在の window に再登録させる。
+delete require.cache[require.resolve('../src/core/line-resolver.js')];
+
 require('../src/core/html-utils.js');
 require('../src/core/dsl-utils.js');
 require('../src/core/text-updater.js');
 require('../src/core/parser-utils.js');
+require('../src/core/line-resolver.js');
 require('../src/modules/sequence.js');
 require('../src/ui/sequence-overlay.js');
 

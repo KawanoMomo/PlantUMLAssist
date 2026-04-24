@@ -43,31 +43,13 @@ window.MA.sequenceOverlay = (function() {
     // PlantUML SVG が data-source-line を持つ <g> を検索し、
     // parsedItems の line 番号と一致する <g> を取り出す。
     // parserLine = svgLine + offset (offset = startUmlLine。@startuml 不在時は 0)
-    var matches = [];
-    var groups = svgEl.querySelectorAll(groupSelector + '[data-source-line]');
-    var lineToItem = {};
-    parsedItems.forEach(function(item) { lineToItem[item.line] = item; });
-    Array.prototype.forEach.call(groups, function(g) {
-      var svgLine = parseInt(g.getAttribute('data-source-line'), 10);
-      var parserLine = svgLine + offset;
-      var item = lineToItem[parserLine];
-      if (item) {
-        matches.push({ item: item, groupEl: g });
-      }
-    });
-    return matches;
+    return window.MA.lineResolver.matchByDataSourceLine(svgEl, parsedItems, groupSelector, offset);
   }
 
   function _matchByOrder(svgEl, parsedItems, groupSelector) {
     // Fallback: v1.2026.x 以降 data-source-line が付かない <g> 向け。
     // parsedItems の順序と SVG 出現順序で 1:1 対応させる。
-    var matches = [];
-    var allGroups = svgEl.querySelectorAll(groupSelector);
-    var n = Math.min(allGroups.length, parsedItems.length);
-    for (var i = 0; i < n; i++) {
-      matches.push({ item: parsedItems[i], groupEl: allGroups[i] });
-    }
-    return matches;
+    return window.MA.lineResolver.matchByOrder(svgEl, parsedItems, groupSelector);
   }
 
   function _gBBox(g) {
@@ -105,23 +87,10 @@ window.MA.sequenceOverlay = (function() {
   function _pickBestOffset(svgEl, parsedItems, groupSelector, candidates) {
     // 候補 offset を順に試し、最もマッチ数が多いものを選ぶ。
     // tie の場合は配列の先頭を優先 (= 期待値順に並べておく)。
-    var best = { matches: [], offset: candidates[0] };
-    for (var i = 0; i < candidates.length; i++) {
-      var m = _matchByDataSourceLine(svgEl, parsedItems, groupSelector, candidates[i]);
-      if (m.length > best.matches.length) {
-        best = { matches: m, offset: candidates[i] };
-      }
-    }
     // Bug B5 fix: data-source-line 無しの PlantUML 出力 (v1.2026.x 以降の
     // g.message / g.participant-*) ではどの offset でも 0 マッチになる。
     // その場合 selector + 出現順で 1:1 fallback matching を試みる。
-    if (best.matches.length === 0 && parsedItems.length > 0) {
-      var fb = _matchByOrder(svgEl, parsedItems, groupSelector);
-      if (fb.length > 0) {
-        best = { matches: fb, offset: 0, fallback: 'order' };
-      }
-    }
-    return best;
+    return window.MA.lineResolver.pickBestOffset(svgEl, parsedItems, groupSelector, candidates);
   }
 
   function buildSequenceOverlay(svgEl, parsedData, overlayEl) {
