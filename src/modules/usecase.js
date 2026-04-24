@@ -445,10 +445,119 @@ window.MA.modules.plantumlUsecase = (function() {
       return;
     }
 
-    // selection != 0 — Task 12 で実装 (placeholder)
-    propsEl.innerHTML =
-      '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">UseCase Diagram (selection ' + selData.length + ')</div>' +
-      '<div>選択編集 UI: Task 12 で実装予定</div>';
+    // selection 1 件のみ対応 (multi-select は v0.5.0)
+    var sel = selData[0];
+    var element = elements.find(function(e) { return e.id === sel.id && e.kind === sel.type; });
+    var relation = (parsedData.relations || []).find(function(r) { return r.id === sel.id; });
+    var pkg = (parsedData.groups || []).find(function(g) { return g.id === sel.id; });
+
+    var html = '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">UseCase Diagram</div>';
+
+    if (element && (element.kind === 'actor' || element.kind === 'usecase')) {
+      html +=
+        '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
+          '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + element.kind.toUpperCase() + ' (L' + element.line + ')</label>' +
+          P.fieldHtml('Alias (id)', 'uc-edit-id', element.id) +
+          P.fieldHtml('Label', 'uc-edit-label', element.label) +
+          P.primaryButtonHtml('uc-edit-apply', '変更を反映') +
+          '<div style="margin-top:6px;">' +
+            P.primaryButtonHtml('uc-rename-refs', 'Alias 変更を関連 Relation にも追従 (renameWithRefs)') +
+          '</div>' +
+          '<div style="margin-top:8px;display:flex;gap:6px;">' +
+            '<button id="uc-move-up" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↑ 上へ</button>' +
+            '<button id="uc-move-down" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↓ 下へ</button>' +
+            '<button id="uc-delete" style="flex:0 0 60px;background:var(--accent-red);color:#fff;border:none;padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 削除</button>' +
+          '</div>' +
+        '</div>';
+    } else if (relation) {
+      html +=
+        '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
+          '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">RELATION (L' + relation.line + ')</label>' +
+          P.selectFieldHtml('Kind', 'uc-rel-kind', [
+            { value: 'association',    label: 'Association (-->)', selected: relation.kind === 'association' },
+            { value: 'generalization', label: 'Generalization (<|--)', selected: relation.kind === 'generalization' },
+            { value: 'include',        label: 'Include (..> <<include>>)', selected: relation.kind === 'include' },
+            { value: 'extend',         label: 'Extend (..> <<extend>>)', selected: relation.kind === 'extend' },
+          ]) +
+          P.fieldHtml('From', 'uc-rel-from', relation.from) +
+          P.fieldHtml('To', 'uc-rel-to', relation.to) +
+          P.fieldHtml('Label', 'uc-rel-label', relation.label) +
+          P.primaryButtonHtml('uc-rel-apply', '変更を反映') +
+          '<div style="margin-top:8px;">' +
+            '<button id="uc-delete" style="background:var(--accent-red);color:#fff;border:none;padding:6px 10px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 削除</button>' +
+          '</div>' +
+        '</div>';
+    } else if (pkg) {
+      html +=
+        '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
+          '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">PACKAGE (L' + pkg.startLine + '-' + pkg.endLine + ')</label>' +
+          '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">Label: ' + pkg.label + '</div>' +
+          '<div style="font-size:10px;color:var(--text-secondary);">v0.3.0: package のラベル変更 / 範囲指定 wrap は v0.5.0 で対応</div>' +
+        '</div>';
+    }
+
+    propsEl.innerHTML = html;
+
+    // bindings
+    if (element && (element.kind === 'actor' || element.kind === 'usecase')) {
+      P.bindEvent('uc-edit-apply', 'click', function() {
+        var newId = document.getElementById('uc-edit-id').value.trim();
+        var newLabel = document.getElementById('uc-edit-label').value.trim();
+        window.MA.history.pushHistory();
+        var t = ctx.getMmdText();
+        var fn = element.kind === 'actor' ? updateActor : updateUsecase;
+        if (newId !== element.id) t = fn(t, element.line, 'id', newId);
+        if (newLabel !== element.label) t = fn(t, element.line, 'label', newLabel);
+        ctx.setMmdText(t);
+        ctx.onUpdate();
+      });
+      P.bindEvent('uc-rename-refs', 'click', function() {
+        var newId = document.getElementById('uc-edit-id').value.trim();
+        if (!newId || newId === element.id) { alert('Alias を変更してから実行してください'); return; }
+        window.MA.history.pushHistory();
+        ctx.setMmdText(renameWithRefs(ctx.getMmdText(), element.id, newId));
+        ctx.onUpdate();
+      });
+      P.bindEvent('uc-move-up', 'click', function() {
+        window.MA.history.pushHistory();
+        ctx.setMmdText(moveLineUp(ctx.getMmdText(), element.line));
+        ctx.onUpdate();
+      });
+      P.bindEvent('uc-move-down', 'click', function() {
+        window.MA.history.pushHistory();
+        ctx.setMmdText(moveLineDown(ctx.getMmdText(), element.line));
+        ctx.onUpdate();
+      });
+      P.bindEvent('uc-delete', 'click', function() {
+        if (!confirm('この行を削除しますか？')) return;
+        window.MA.history.pushHistory();
+        ctx.setMmdText(deleteLine(ctx.getMmdText(), element.line));
+        window.MA.selection.clearSelection();
+        ctx.onUpdate();
+      });
+    } else if (relation) {
+      P.bindEvent('uc-rel-apply', 'click', function() {
+        var newKind = document.getElementById('uc-rel-kind').value;
+        var newFrom = document.getElementById('uc-rel-from').value.trim();
+        var newTo = document.getElementById('uc-rel-to').value.trim();
+        var newLabel = document.getElementById('uc-rel-label').value.trim();
+        window.MA.history.pushHistory();
+        var t = ctx.getMmdText();
+        if (newKind !== relation.kind) t = updateRelation(t, relation.line, 'kind', newKind);
+        if (newFrom !== relation.from) t = updateRelation(t, relation.line, 'from', newFrom);
+        if (newTo !== relation.to) t = updateRelation(t, relation.line, 'to', newTo);
+        if (newLabel !== relation.label) t = updateRelation(t, relation.line, 'label', newLabel);
+        ctx.setMmdText(t);
+        ctx.onUpdate();
+      });
+      P.bindEvent('uc-delete', 'click', function() {
+        if (!confirm('この行を削除しますか？')) return;
+        window.MA.history.pushHistory();
+        ctx.setMmdText(deleteLine(ctx.getMmdText(), relation.line));
+        window.MA.selection.clearSelection();
+        ctx.onUpdate();
+      });
+    }
   }
 
   return {
