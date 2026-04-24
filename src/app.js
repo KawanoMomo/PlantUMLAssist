@@ -753,7 +753,20 @@ function renderProps(parsed) {
   var sel = window.MA.selection.getSelected();
   currentModule.renderProps(sel, parsed, propsEl, {
     getMmdText: function() { return mmdText; },
-    setMmdText: function(s) { mmdText = s; suppressSync = true; editorEl.value = s; suppressSync = false; },
+    setMmdText: function(s) {
+      mmdText = s;
+      suppressSync = true;
+      editorEl.value = s;
+      suppressSync = false;
+      // Re-parse synchronously so any setSelected() that fires right
+      // after sees the updated structure. Without this, currentParsed
+      // stayed stale until the async refresh tick and caused selection
+      // look-ups to hit wrong elements (cross-ported from MermaidAssist
+      // PR #1 commit a4e8410).
+      if (currentModule && currentModule.parse) {
+        try { currentParsed = currentModule.parse(mmdText); } catch (e) { /* leave stale */ }
+      }
+    },
     onUpdate: function() { scheduleRefresh(); },
   });
 }
