@@ -8,6 +8,7 @@ const sourceFiles = [
   'src/core/dsl-utils.js',
   'src/core/regex-parts.js',
   'src/core/line-resolver.js',
+  'src/core/formatter-interface.js',
   'src/core/text-updater.js',
   'src/core/parser-utils.js',
   'src/core/history.js',
@@ -103,12 +104,25 @@ global.expect = function(actual) {
       if (Array.isArray(actual)) { if (!actual.includes(item)) throw new Error(`Array does not contain ${JSON.stringify(item)}`); }
       else if (typeof actual === 'string') { if (!actual.includes(item)) throw new Error(`String does not contain "${item}"`); }
     },
+    toThrow(expectedMsg) {
+      if (typeof actual !== 'function') throw new Error('Expected a function to check toThrow');
+      var threw = false, msg = '';
+      try { actual(); } catch (e) { threw = true; msg = e.message; }
+      if (!threw) throw new Error('Expected function to throw, but it did not');
+      if (expectedMsg != null && msg.indexOf(expectedMsg) < 0) {
+        throw new Error('Expected error message to contain "' + expectedMsg + '", got "' + msg + '"');
+      }
+    },
     not: {
       toBe(expected) { if (actual === expected) throw new Error(`Expected not ${JSON.stringify(expected)}`); },
       toBeNull() { if (actual === null) throw new Error('Expected not null'); },
       toContain(item) {
         if (typeof actual === 'string' && actual.includes(item)) throw new Error(`String should not contain "${item}"`);
         if (Array.isArray(actual) && actual.includes(item)) throw new Error(`Array should not contain ${JSON.stringify(item)}`);
+      },
+      toThrow() {
+        if (typeof actual !== 'function') throw new Error('Expected a function to check .not.toThrow');
+        try { actual(); } catch (e) { throw new Error('Expected function not to throw, but it threw: ' + e.message); }
       },
     },
   };
