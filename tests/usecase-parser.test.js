@@ -1,0 +1,75 @@
+'use strict';
+// Earlier sibling tests (e.g. sequence-overlay.test.js) reassign global.window
+// to a fresh jsdom window, which wipes the sandbox window prepared by
+// run-tests.js. Eagerly require usecase.js so its IIFE registers
+// window.MA.modules.plantumlUsecase on whatever global.window is current.
+// Ensure usecase.js (and its core deps) is registered on whatever global.window
+// is current. Earlier sibling tests (sequence-overlay/line-resolver/etc.) may
+// have replaced global.window with a fresh jsdom window — in that case the
+// IIFE in usecase.js needs dsl-utils + regex-parts + parser-utils to be
+// re-required against the same window before it.
+try {
+  require('../src/core/dsl-utils.js');
+  require('../src/core/regex-parts.js');
+  require('../src/core/parser-utils.js');
+  require('../src/modules/usecase.js');
+} catch (e) { /* sandbox path: run-tests.js already loaded everything */ }
+var uc = (typeof window !== 'undefined' && window.MA && window.MA.modules && window.MA.modules.plantumlUsecase)
+  || (global.window && global.window.MA && global.window.MA.modules && global.window.MA.modules.plantumlUsecase);
+
+describe('parseUsecase actor', function() {
+  test('parses bare actor', function() {
+    var r = uc.parse('@startuml\nactor User\n@enduml');
+    expect(r.elements.length).toBe(1);
+    expect(r.elements[0].kind).toBe('actor');
+    expect(r.elements[0].id).toBe('User');
+    expect(r.elements[0].label).toBe('User');
+  });
+
+  test('parses actor with quoted label and as alias', function() {
+    var r = uc.parse('@startuml\nactor "Power User" as PU\n@enduml');
+    expect(r.elements[0].id).toBe('PU');
+    expect(r.elements[0].label).toBe('Power User');
+  });
+
+  test('parses :X: short form for actor', function() {
+    var r = uc.parse('@startuml\n:Visitor:\n@enduml');
+    expect(r.elements[0].kind).toBe('actor');
+    expect(r.elements[0].id).toBe('Visitor');
+    expect(r.elements[0].label).toBe('Visitor');
+  });
+
+  test('parses :Label: as Alias short form', function() {
+    var r = uc.parse('@startuml\n:Power User: as PU\n@enduml');
+    expect(r.elements[0].id).toBe('PU');
+    expect(r.elements[0].label).toBe('Power User');
+  });
+});
+
+describe('parseUsecase usecase element', function() {
+  test('parses bare usecase keyword', function() {
+    var r = uc.parse('@startuml\nusecase Login\n@enduml');
+    expect(r.elements[0].kind).toBe('usecase');
+    expect(r.elements[0].id).toBe('Login');
+    expect(r.elements[0].label).toBe('Login');
+  });
+
+  test('parses usecase with quoted label and as alias', function() {
+    var r = uc.parse('@startuml\nusecase "Login Flow" as L1\n@enduml');
+    expect(r.elements[0].id).toBe('L1');
+    expect(r.elements[0].label).toBe('Login Flow');
+  });
+
+  test('parses (Label) short form', function() {
+    var r = uc.parse('@startuml\n(Login)\n@enduml');
+    expect(r.elements[0].kind).toBe('usecase');
+    expect(r.elements[0].id).toBe('Login');
+    expect(r.elements[0].label).toBe('Login');
+  });
+
+  test('parses (Label) as Alias short form', function() {
+    var r = uc.parse('@startuml\n(Login Flow) as L1\n@enduml');
+    expect(r.elements[0].id).toBe('L1');
+    expect(r.elements[0].label).toBe('Login Flow');
+  });
+});

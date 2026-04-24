@@ -16,6 +16,7 @@ const sourceFiles = [
   'src/core/connection-mode.js',
   'src/ui/properties.js',
   'src/modules/sequence.js',
+  'src/modules/usecase.js',
 ];
 
 let fns = {};
