@@ -45,3 +45,30 @@ describe('usecase formatters', function() {
     expect(uc.fmtRelation('extend', 'Login', 'CancelLogin')).toBe('Login ..> CancelLogin : <<extend>>');
   });
 });
+
+describe('usecase add operations', function() {
+  var TEMPLATE = '@startuml\ntitle Sample\nactor U\nusecase L1\nU --> L1\n@enduml';
+
+  test('addActor appends before @enduml', function() {
+    var out = uc.addActor(TEMPLATE, 'Admin', 'Admin');
+    expect(out).toContain('actor Admin');
+    expect(out.split('\n').slice(-1)[0]).toBe('@enduml');
+  });
+  test('addUsecase appends with quoted label', function() {
+    var out = uc.addUsecase(TEMPLATE, 'L2', 'Logout Flow');
+    expect(out).toContain('usecase "Logout Flow" as L2');
+  });
+  test('addPackage appends open + empty body + close', function() {
+    var out = uc.addPackage(TEMPLATE, 'Auth');
+    expect(out).toContain('package "Auth" {');
+    expect(out).toContain('}');
+  });
+  test('addRelation appends association', function() {
+    var out = uc.addRelation(TEMPLATE, 'association', 'U', 'L1', 'navigates');
+    expect(out).toContain('U --> L1 : navigates');
+  });
+  test('addRelation appends include', function() {
+    var out = uc.addRelation(TEMPLATE, 'include', 'L1', 'Validate');
+    expect(out).toContain('L1 ..> Validate : <<include>>');
+  });
+});

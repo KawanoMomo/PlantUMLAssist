@@ -64,6 +64,33 @@ window.MA.modules.plantumlUsecase = (function() {
     return from + ' --> ' + to + (lbl ? ' : ' + lbl : '');
   }
 
+  // ─── Add operations (pure: text + args → text) ────────────────────────
+  function insertBeforeEnd(text, newLine) {
+    var lines = text.split('\n');
+    var endIdx = -1;
+    for (var i = lines.length - 1; i >= 0; i--) {
+      if (RP.isEndUml(lines[i])) { endIdx = i; break; }
+    }
+    if (endIdx < 0) {
+      var insertAt = lines.length;
+      while (insertAt > 0 && lines[insertAt - 1].trim() === '') insertAt--;
+      lines.splice(insertAt, 0, newLine);
+    } else {
+      lines.splice(endIdx, 0, newLine);
+    }
+    return lines.join('\n');
+  }
+
+  function addActor(text, id, label) { return insertBeforeEnd(text, fmtActor(id, label || id)); }
+  function addUsecase(text, id, label) { return insertBeforeEnd(text, fmtUsecase(id, label || id)); }
+  function addPackage(text, label) {
+    var open = fmtPackage(label);
+    return insertBeforeEnd(insertBeforeEnd(text, open), '}');
+  }
+  function addRelation(text, kind, from, to, label) {
+    return insertBeforeEnd(text, fmtRelation(kind, from, to, label));
+  }
+
   // ─── Parser ─────────────────────────────────────────────────────────────
   function parse(text) {
     var result = { meta: { title: '', startUmlLine: null }, elements: [], relations: [], groups: [] };
@@ -176,6 +203,10 @@ window.MA.modules.plantumlUsecase = (function() {
     fmtUsecase: fmtUsecase,
     fmtPackage: fmtPackage,
     fmtRelation: fmtRelation,
+    addActor: addActor,
+    addUsecase: addUsecase,
+    addPackage: addPackage,
+    addRelation: addRelation,
     detect: function(text) { return window.MA.parserUtils.detectDiagramType(text) === 'plantuml-usecase'; },
     template: function() {
       return [
