@@ -9,6 +9,7 @@ global.document = dom.window.document;
 global.DOMParser = dom.window.DOMParser;
 
 require('../src/core/html-utils.js');
+require('../src/core/dsl-utils.js');
 require('../src/core/text-updater.js');
 require('../src/core/parser-utils.js');
 require('../src/modules/sequence.js');

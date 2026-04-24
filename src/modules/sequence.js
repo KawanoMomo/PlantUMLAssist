@@ -36,13 +36,7 @@ window.MA.modules.plantumlSequence = (function() {
   var ACTIVATION_ACTIONS = ['activate', 'deactivate', 'create', 'destroy'];
   var ACTIVATION_RE = new RegExp('^(' + ACTIVATION_ACTIONS.join('|') + ')\\s+(\\S+)$');
 
-  function unquote(s) {
-    if (!s) return s;
-    if (s.length >= 2 && s.charAt(0) === '"' && s.charAt(s.length - 1) === '"') {
-      return s.substring(1, s.length - 1);
-    }
-    return s;
-  }
+  var unquote = window.MA.dslUtils.unquote;
 
   // Pure formatters — used by both add* (末尾追加) and _formatLine (位置駆動挿入)
   // 同一形式を一箇所で管理 (parser-format drift を防ぐ)
@@ -88,7 +82,7 @@ window.MA.modules.plantumlSequence = (function() {
     for (var i = 0; i < lines.length; i++) {
       var lineNum = i + 1;
       var trimmed = lines[i].trim();
-      if (!trimmed || trimmed.indexOf("'") === 0) continue;
+      if (!trimmed || window.MA.dslUtils.isPlantumlComment(trimmed)) continue;
       if (/^@startuml/.test(trimmed)) {
         if (result.meta.startUmlLine === null) result.meta.startUmlLine = lineNum;
         continue;
@@ -577,10 +571,10 @@ window.MA.modules.plantumlSequence = (function() {
   // PlantUML identifier は ASCII 英数 + _ を想定 (\b で十分)。
   function renameWithRefs(text, oldId, newId) {
     if (!oldId || !newId || oldId === newId) return text;
-    var escaped = oldId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    var escaped = window.MA.dslUtils.escapeForRegex(oldId);
     var pattern = new RegExp('\\b' + escaped + '\\b', 'g');
     return text.split('\n').map(function(line) {
-      if (/^\s*'/.test(line)) return line;
+      if (window.MA.dslUtils.isPlantumlComment(line)) return line;
       // "..." の中身は temporarily 取り除いて置換、最後に復元 (label 保護)。
       // sentinel は制御文字 \u0001 \u0002 で囲み \b 境界に晒さない (識別子と
       // 衝突しないため、ユーザが「\u0001 を含む alias を使う」現実離れした
@@ -621,7 +615,7 @@ window.MA.modules.plantumlSequence = (function() {
     var target = idx + direction;
     while (target >= 0 && target < lines.length) {
       var t = lines[target].trim();
-      if (!t || t.indexOf("'") === 0) { target += direction; continue; }
+      if (!t || window.MA.dslUtils.isPlantumlComment(t)) { target += direction; continue; }
       if (/^@startuml/.test(t) || /^@enduml/.test(t)) return text;
       break;
     }
