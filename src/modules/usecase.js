@@ -190,6 +190,28 @@ window.MA.modules.plantumlUsecase = (function() {
     return lines.join('\n');
   }
 
+  // ─── renameWithRefs: rename id and update all references ──────────────
+  // mirrors sequence.js renameWithRefs with sentinel-based label protection.
+  //  /  sentinels temporarily replace "..." quoted labels so the
+  // \b<id>\b word-boundary replace cannot touch label contents.
+  function renameWithRefs(text, oldId, newId) {
+    if (!oldId || !newId || oldId === newId) return text;
+    var escaped = DU.escapeForRegex(oldId);
+    var pattern = new RegExp('\\b' + escaped + '\\b', 'g');
+    return text.split('\n').map(function(line) {
+      if (DU.isPlantumlComment(line)) return line;
+      var quoted = [];
+      var stripped = line.replace(/"[^"]*"/g, function(m) {
+        quoted.push(m);
+        return '' + (quoted.length - 1) + '';
+      });
+      var replaced = stripped.replace(pattern, newId);
+      return replaced.replace(/(\d+)/g, function(_, idx) {
+        return quoted[parseInt(idx, 10)];
+      });
+    }).join('\n');
+  }
+
   function setTitle(text, newTitle) {
     var lines = text.split('\n');
     for (var i = 0; i < lines.length; i++) {
@@ -331,6 +353,7 @@ window.MA.modules.plantumlUsecase = (function() {
     moveLineUp: moveLineUp,
     moveLineDown: moveLineDown,
     setTitle: setTitle,
+    renameWithRefs: renameWithRefs,
     detect: function(text) { return window.MA.parserUtils.detectDiagramType(text) === 'plantuml-usecase'; },
     template: function() {
       return [

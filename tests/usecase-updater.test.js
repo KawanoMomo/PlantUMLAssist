@@ -140,3 +140,33 @@ describe('usecase line operations', function() {
     expect(out).not.toContain('title Old');
   });
 });
+
+describe('usecase renameWithRefs', function() {
+  test('renames actor and updates relation references', function() {
+    var t = '@startuml\nactor User\nusecase L1\nUser --> L1\n@enduml';
+    // newId chosen so it does not contain oldId as a substring,
+    // letting `not.toContain('User --> L1')` actually verify removal.
+    var out = uc.renameWithRefs(t, 'User', 'Admin');
+    expect(out).toContain('actor Admin');
+    expect(out).toContain('Admin --> L1');
+    expect(out).not.toContain('User --> L1');
+  });
+  test('renames usecase and updates relations', function() {
+    var t = '@startuml\nactor U\nusecase L1\nU --> L1\nL1 ..> Validate : <<include>>\n@enduml';
+    var out = uc.renameWithRefs(t, 'L1', 'Login');
+    expect(out).toContain('usecase Login');
+    expect(out).toContain('U --> Login');
+    expect(out).toContain('Login ..> Validate');
+  });
+  test('does not replace inside quoted labels', function() {
+    var t = '@startuml\nactor "User Admin" as U\n@enduml';
+    var out = uc.renameWithRefs(t, 'User', 'EndUser');
+    expect(out).toContain('"User Admin"');
+  });
+  test('skips comment lines', function() {
+    var t = "@startuml\n' rename User to EndUser\nactor User\n@enduml";
+    var out = uc.renameWithRefs(t, 'User', 'EndUser');
+    expect(out).toContain("' rename User to EndUser");
+    expect(out).toContain('actor EndUser');
+  });
+});
