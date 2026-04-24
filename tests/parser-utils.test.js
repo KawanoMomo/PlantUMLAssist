@@ -27,4 +27,10 @@ describe('detectDiagramType — PlantUML', function() {
   test('returns null for empty', function() {
     expect(parserUtils.detectDiagramType('')).toBeNull();
   });
+  test('detects usecase from actor + (Login) short form', function() {
+    expect(parserUtils.detectDiagramType('@startuml\nactor User\n(Login)\n@enduml')).toBe('plantuml-usecase');
+  });
+  test('detects usecase from package + actor combo', function() {
+    expect(parserUtils.detectDiagramType('@startuml\npackage Auth {\nactor U\n}\n@enduml')).toBe('plantuml-usecase');
+  });
 });
