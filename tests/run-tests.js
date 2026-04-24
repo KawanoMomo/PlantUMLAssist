@@ -7,6 +7,7 @@ const sourceFiles = [
   'src/core/html-utils.js',
   'src/core/dsl-utils.js',
   'src/core/regex-parts.js',
+  'src/core/line-resolver.js',
   'src/core/text-updater.js',
   'src/core/parser-utils.js',
   'src/core/history.js',
