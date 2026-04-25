@@ -33,4 +33,13 @@ describe('detectDiagramType — PlantUML', function() {
   test('detects usecase from package + actor combo', function() {
     expect(parserUtils.detectDiagramType('@startuml\npackage Auth {\nactor U\n}\n@enduml')).toBe('plantuml-usecase');
   });
+  test('detects component from component keyword', function() {
+    expect(parserUtils.detectDiagramType('@startuml\ncomponent WebApp\n@enduml')).toBe('plantuml-component');
+  });
+  test('detects component from [X] short form (with non-* first char)', function() {
+    expect(parserUtils.detectDiagramType('@startuml\n[A] -- [B]\n@enduml')).toBe('plantuml-component');
+  });
+  test('does not confuse [*] with [X] (state vs component priority)', function() {
+    expect(parserUtils.detectDiagramType('@startuml\n[*] --> Idle\nstate Idle\n@enduml')).toBe('plantuml-state');
+  });
 });
