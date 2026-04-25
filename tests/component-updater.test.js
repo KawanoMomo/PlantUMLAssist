@@ -62,3 +62,53 @@ describe('component add operations', function() {
     expect(out).toContain('W -() IAuth');
   });
 });
+
+describe('component update operations', function() {
+  test('updateComponent changes label', function() {
+    var t = '@startuml\ncomponent W\n@enduml';
+    var out = co.updateComponent(t, 2, 'label', 'Web App');
+    expect(out).toContain('component "Web App" as W');
+  });
+  test('updateInterface changes id', function() {
+    var t = '@startuml\ninterface IAuth\n@enduml';
+    var out = co.updateInterface(t, 2, 'id', 'IA');
+    expect(out).toContain('interface IA');
+  });
+  test('updateRelation changes kind from association to dependency', function() {
+    var t = '@startuml\nA -- B\n@enduml';
+    var out = co.updateRelation(t, 2, 'kind', 'dependency');
+    expect(out).toContain('A ..> B');
+  });
+  test('updateRelation changes association to provides (lollipop)', function() {
+    var t = '@startuml\nA -- B\n@enduml';
+    var out = co.updateRelation(t, 2, 'kind', 'provides');
+    expect(out).toContain('A -() B');
+  });
+});
+
+describe('component line operations', function() {
+  test('deleteLine works', function() {
+    var t = '@startuml\nA\nB\n@enduml';
+    var out = co.deleteLine(t, 3);
+    expect(out).not.toContain('B');
+  });
+  test('moveLineUp delegates to core', function() {
+    var t = '@startuml\nA\nB\n@enduml';
+    var out = co.moveLineUp(t, 3);
+    expect(out.split('\n')[1]).toBe('B');
+  });
+  test('setTitle works', function() {
+    var t = '@startuml\ncomponent A\n@enduml';
+    var out = co.setTitle(t, 'My Component');
+    expect(out).toContain('title My Component');
+  });
+});
+
+describe('component renameWithRefs', function() {
+  test('renames component and updates relation', function() {
+    var t = '@startuml\ncomponent W\ninterface I\nW -() I\n@enduml';
+    var out = co.renameWithRefs(t, 'W', 'WebApp');
+    expect(out).toContain('component WebApp');
+    expect(out).toContain('WebApp -() I');
+  });
+});

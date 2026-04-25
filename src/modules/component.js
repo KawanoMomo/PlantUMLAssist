@@ -71,6 +71,106 @@ window.MA.modules.plantumlComponent = (function() {
     return insertBeforeEnd(text, fmtRelation(kind, from, to, label));
   }
 
+  function updateComponent(text, lineNum, field, value) {
+    var lines = text.split('\n');
+    var idx = lineNum - 1;
+    if (idx < 0 || idx >= lines.length) return text;
+    var indent = lines[idx].match(/^(\s*)/)[1];
+    var trimmed = lines[idx].trim();
+    var id, label;
+    var km = trimmed.match(COMPONENT_KW_RE);
+    if (km) {
+      if (km[2] !== undefined) { id = km[2]; label = km[1]; }
+      else { id = km[3]; label = km[4] !== undefined ? km[4] : km[3]; }
+    } else {
+      var sm = trimmed.match(COMPONENT_SHORT_RE);
+      if (!sm) return text;
+      label = sm[1].trim(); id = sm[2] || label;
+    }
+    if (field === 'id') id = value;
+    else if (field === 'label') label = value;
+    lines[idx] = indent + fmtComponent(id, label);
+    return lines.join('\n');
+  }
+
+  function updateInterface(text, lineNum, field, value) {
+    var lines = text.split('\n');
+    var idx = lineNum - 1;
+    if (idx < 0 || idx >= lines.length) return text;
+    var indent = lines[idx].match(/^(\s*)/)[1];
+    var trimmed = lines[idx].trim();
+    var id, label, labelImplicit = false;
+    var km = trimmed.match(INTERFACE_KW_RE);
+    if (km) {
+      if (km[2] !== undefined) { id = km[2]; label = km[1]; }
+      else {
+        id = km[3];
+        if (km[4] !== undefined) { label = km[4]; }
+        else { label = km[3]; labelImplicit = true; }
+      }
+    } else {
+      var sm = trimmed.match(INTERFACE_SHORT_RE);
+      if (!sm) return text;
+      // () X / () X as I:  m[1] = X (token), m[2] = I (alias)
+      var firstToken = sm[1].trim();
+      id = sm[2] || firstToken;
+      label = firstToken;
+    }
+    if (field === 'id') {
+      id = value;
+      if (labelImplicit) label = value;
+    } else if (field === 'label') label = value;
+    lines[idx] = indent + fmtInterface(id, label);
+    return lines.join('\n');
+  }
+
+  function updateRelation(text, lineNum, field, value) {
+    var lines = text.split('\n');
+    var idx = lineNum - 1;
+    if (idx < 0 || idx >= lines.length) return text;
+    var indent = lines[idx].match(/^(\s*)/)[1];
+    var trimmed = lines[idx].trim();
+    var m = trimmed.match(RELATION_RE);
+    if (!m) return text;
+    var fromRaw = m[1], arrow = m[2], toRaw = m[3], lbl = (m[4] || '').trim();
+    var from = DU.unquote(fromRaw), to = DU.unquote(toRaw);
+    var kind = 'association';
+    if (arrow === '-()' || arrow === '()-') kind = 'provides';
+    else if (arrow === ')-' || arrow === '-(') kind = 'requires';
+    else if (arrow === '..>' || arrow === '<..' || arrow === '.>') kind = 'dependency';
+
+    if (field === 'kind') kind = value;
+    else if (field === 'from') from = value;
+    else if (field === 'to') to = value;
+    else if (field === 'label') lbl = value;
+
+    lines[idx] = indent + fmtRelation(kind, from, to, lbl);
+    return lines.join('\n');
+  }
+
+  function deleteLine(text, lineNum) { return window.MA.textUpdater.deleteLine(text, lineNum); }
+  var moveLineUp = window.MA.dslUpdater.moveLineUp;
+  var moveLineDown = window.MA.dslUpdater.moveLineDown;
+  var renameWithRefs = window.MA.dslUpdater.renameWithRefs;
+
+  function setTitle(text, newTitle) {
+    var lines = text.split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      if (/^\s*title\s+/.test(lines[i])) {
+        var indent = lines[i].match(/^(\s*)/)[1];
+        lines[i] = indent + 'title ' + newTitle;
+        return lines.join('\n');
+      }
+    }
+    for (var j = 0; j < lines.length; j++) {
+      if (RP.isStartUml(lines[j])) {
+        lines.splice(j + 1, 0, 'title ' + newTitle);
+        return lines.join('\n');
+      }
+    }
+    return text;
+  }
+
   function parse(text) {
     var result = { meta: { title: '', startUmlLine: null }, elements: [], relations: [], groups: [] };
     if (!text || !text.trim()) return result;
@@ -230,5 +330,13 @@ window.MA.modules.plantumlComponent = (function() {
     addPort: addPort,
     addPackage: addPackage,
     addRelation: addRelation,
+    updateComponent: updateComponent,
+    updateInterface: updateInterface,
+    updateRelation: updateRelation,
+    deleteLine: deleteLine,
+    moveLineUp: moveLineUp,
+    moveLineDown: moveLineDown,
+    setTitle: setTitle,
+    renameWithRefs: renameWithRefs,
   };
 })();
