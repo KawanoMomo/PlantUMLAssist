@@ -17,6 +17,8 @@ delete require.cache[require.resolve('../src/core/line-resolver.js')];
 
 require('../src/core/html-utils.js');
 require('../src/core/dsl-utils.js');
+require('../src/core/regex-parts.js');
+require('../src/core/dsl-updater.js');
 require('../src/core/text-updater.js');
 require('../src/core/parser-utils.js');
 require('../src/core/line-resolver.js');

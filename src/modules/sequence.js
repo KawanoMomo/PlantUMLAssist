@@ -185,21 +185,7 @@ window.MA.modules.plantumlSequence = (function() {
     return result;
   }
 
-  function insertBeforeEnd(text, newLine) {
-    var lines = text.split('\n');
-    var endIdx = -1;
-    for (var i = lines.length - 1; i >= 0; i--) {
-      if (/^\s*@enduml/.test(lines[i])) { endIdx = i; break; }
-    }
-    if (endIdx < 0) {
-      var insertAt = lines.length;
-      while (insertAt > 0 && lines[insertAt - 1].trim() === '') insertAt--;
-      lines.splice(insertAt, 0, newLine);
-    } else {
-      lines.splice(endIdx, 0, newLine);
-    }
-    return lines.join('\n');
-  }
+  var insertBeforeEnd = window.MA.dslUpdater.insertBeforeEnd;
 
   function addParticipant(text, ptype, alias, label) {
     return insertBeforeEnd(text, fmtParticipant(ptype, alias, label));
@@ -564,32 +550,7 @@ window.MA.modules.plantumlSequence = (function() {
     });
   }
 
-  // renameWithRefs: participant の id (alias) を別名へ。本文中の参照
-  // (message from/to, activate/deactivate target, note target など) も
-  // 単語境界 \b で同時更新する。コメント行 (' 始まり) と "..." 内のラベル
-  // 文字列は保護 (alias != label のとき label が誤置換されるのを防ぐ)。
-  // PlantUML identifier は ASCII 英数 + _ を想定 (\b で十分)。
-  function renameWithRefs(text, oldId, newId) {
-    if (!oldId || !newId || oldId === newId) return text;
-    var escaped = window.MA.dslUtils.escapeForRegex(oldId);
-    var pattern = new RegExp('\\b' + escaped + '\\b', 'g');
-    return text.split('\n').map(function(line) {
-      if (window.MA.dslUtils.isPlantumlComment(line)) return line;
-      // "..." の中身は temporarily 取り除いて置換、最後に復元 (label 保護)。
-      // sentinel は制御文字 \u0001 \u0002 で囲み \b 境界に晒さない (識別子と
-      // 衝突しないため、ユーザが「\u0001 を含む alias を使う」現実離れした
-      // ケース以外で安全)。
-      var quoted = [];
-      var stripped = line.replace(/"[^"]*"/g, function(m) {
-        quoted.push(m);
-        return '\u0001' + (quoted.length - 1) + '\u0002';
-      });
-      var replaced = stripped.replace(pattern, newId);
-      return replaced.replace(/\u0001(\d+)\u0002/g, function(_, idx) {
-        return quoted[parseInt(idx, 10)];
-      });
-    }).join('\n');
-  }
+  var renameWithRefs = window.MA.dslUpdater.renameWithRefs;
 
   function updateNote(text, lineNum, field, value) {
     var lines = text.split('\n');
