@@ -304,6 +304,251 @@ window.MA.modules.plantumlComponent = (function() {
     return result;
   }
 
+  function renderProps(selData, parsedData, propsEl, ctx) {
+    window.MA.propsRenderer.renderByDispatch(selData, parsedData, propsEl, {
+      onNoSelection: function(parsed, el) { _renderNoSelection(parsed, el, ctx); },
+      onElement: function(elt, parsed, el) { _renderElementEdit(elt, parsed, el, ctx); },
+      onRelation: function(rel, parsed, el) { _renderRelationEdit(rel, parsed, el, ctx); },
+      onGroup: function(grp, parsed, el) { _renderGroupReadOnly(grp, parsed, el, ctx); },
+    });
+  }
+
+  function _renderNoSelection(parsedData, propsEl, ctx) {
+    var P = window.MA.properties;
+    var elements = parsedData.elements || [];
+    var components = elements.filter(function(e) { return e.kind === 'component'; });
+    var interfaces = elements.filter(function(e) { return e.kind === 'interface'; });
+    var html =
+      '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Component Diagram</div>' +
+      '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">Title 設定</label>' +
+        P.fieldHtml('Title', 'co-title', parsedData.meta.title) +
+        P.primaryButtonHtml('co-set-title', 'Title 適用') +
+      '</div>' +
+      '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">末尾に追加</label>' +
+        P.selectFieldHtml('種類', 'co-tail-kind', [
+          { value: 'component', label: 'Component', selected: true },
+          { value: 'interface', label: 'Interface' },
+          { value: 'port',      label: 'Port' },
+          { value: 'package',   label: 'Package境界' },
+          { value: 'relation',  label: 'Relation (関係)' },
+        ]) +
+        '<div id="co-tail-detail" style="margin-top:6px;"></div>' +
+      '</div>';
+    propsEl.innerHTML = html;
+
+    P.bindEvent('co-set-title', 'click', function() {
+      window.MA.history.pushHistory();
+      ctx.setMmdText(setTitle(ctx.getMmdText(), document.getElementById('co-title').value.trim()));
+      ctx.onUpdate();
+    });
+
+    var renderTailDetail = function() {
+      var kind = document.getElementById('co-tail-kind').value;
+      var detailEl = document.getElementById('co-tail-detail');
+      var compOpts = components.map(function(c) { return { value: c.id, label: c.label }; });
+      var intfOpts = interfaces.map(function(i) { return { value: i.id, label: i.label }; });
+      var allOpts = compOpts.concat(intfOpts);
+      if (allOpts.length === 0) allOpts = [{ value: '', label: '（要素なし）' }];
+
+      var html = '';
+      if (kind === 'component') {
+        html =
+          P.fieldHtml('Alias', 'co-tail-alias', '', '例: WebApp') +
+          P.fieldHtml('Label', 'co-tail-label', '', '省略可') +
+          P.primaryButtonHtml('co-tail-add', '+ Component 追加');
+      } else if (kind === 'interface') {
+        html =
+          P.fieldHtml('Alias', 'co-tail-alias', '', '例: IAuth') +
+          P.fieldHtml('Label', 'co-tail-label', '', '省略可') +
+          P.primaryButtonHtml('co-tail-add', '+ Interface 追加');
+      } else if (kind === 'port') {
+        html =
+          P.fieldHtml('Alias', 'co-tail-alias', '', '例: p1') +
+          P.fieldHtml('Label', 'co-tail-label', '', '省略可') +
+          P.primaryButtonHtml('co-tail-add', '+ Port 追加');
+      } else if (kind === 'package') {
+        html =
+          P.fieldHtml('Label', 'co-tail-label', '', '例: Backend') +
+          P.primaryButtonHtml('co-tail-add', '+ Package 追加');
+      } else if (kind === 'relation') {
+        html =
+          P.selectFieldHtml('Kind', 'co-tail-rkind', [
+            { value: 'association', label: 'Association (--)', selected: true },
+            { value: 'dependency',  label: 'Dependency (..>)' },
+            { value: 'provides',    label: 'Provides (lollipop -())' },
+            { value: 'requires',    label: 'Requires (lollipop )-)' },
+          ]) +
+          P.selectFieldHtml('From', 'co-tail-from', allOpts) +
+          P.selectFieldHtml('To', 'co-tail-to', allOpts) +
+          P.fieldHtml('Label', 'co-tail-rlabel', '', 'association/dependency のみ任意') +
+          P.primaryButtonHtml('co-tail-add', '+ Relation 追加');
+      }
+      detailEl.innerHTML = html;
+
+      P.bindEvent('co-tail-add', 'click', function() {
+        var t = ctx.getMmdText();
+        var out = t;
+        if (kind === 'component') {
+          var al = document.getElementById('co-tail-alias').value.trim();
+          if (!al) { alert('Alias 必須'); return; }
+          window.MA.history.pushHistory();
+          out = addComponent(t, al, document.getElementById('co-tail-label').value.trim() || al);
+        } else if (kind === 'interface') {
+          var al2 = document.getElementById('co-tail-alias').value.trim();
+          if (!al2) { alert('Alias 必須'); return; }
+          window.MA.history.pushHistory();
+          out = addInterface(t, al2, document.getElementById('co-tail-label').value.trim() || al2);
+        } else if (kind === 'port') {
+          var al3 = document.getElementById('co-tail-alias').value.trim();
+          if (!al3) { alert('Alias 必須'); return; }
+          window.MA.history.pushHistory();
+          out = addPort(t, al3, document.getElementById('co-tail-label').value.trim() || al3);
+        } else if (kind === 'package') {
+          var lbl = document.getElementById('co-tail-label').value.trim();
+          if (!lbl) { alert('Label 必須'); return; }
+          window.MA.history.pushHistory();
+          out = addPackage(t, lbl);
+        } else if (kind === 'relation') {
+          var fr = document.getElementById('co-tail-from').value;
+          var to = document.getElementById('co-tail-to').value;
+          if (!fr || !to) { alert('From/To 必須'); return; }
+          var rkind = document.getElementById('co-tail-rkind').value;
+          window.MA.history.pushHistory();
+          out = addRelation(t, rkind, fr, to, document.getElementById('co-tail-rlabel').value.trim());
+        }
+        ctx.setMmdText(out);
+        ctx.onUpdate();
+      });
+    };
+    document.getElementById('co-tail-kind').addEventListener('change', renderTailDetail);
+    renderTailDetail();
+  }
+
+  function _renderElementEdit(element, parsedData, propsEl, ctx) {
+    var P = window.MA.properties;
+    if (element.kind !== 'component' && element.kind !== 'interface') {
+      // port / unknown: read-only display
+      propsEl.innerHTML =
+        '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Component Diagram</div>' +
+        '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
+          '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + element.kind.toUpperCase() + ' (L' + element.line + ')</label>' +
+          '<div style="font-size:11px;color:var(--text-secondary);">id: ' + element.id + '</div>' +
+        '</div>';
+      return;
+    }
+    var html =
+      '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Component Diagram</div>' +
+      '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + element.kind.toUpperCase() + ' (L' + element.line + ')</label>' +
+        P.fieldHtml('Alias (id)', 'co-edit-id', element.id) +
+        P.fieldHtml('Label', 'co-edit-label', element.label) +
+        P.primaryButtonHtml('co-edit-apply', '変更を反映') +
+        '<div style="margin-top:6px;">' +
+          P.primaryButtonHtml('co-rename-refs', 'Alias 変更を関連 Relation にも追従') +
+        '</div>' +
+        '<div style="margin-top:8px;display:flex;gap:6px;">' +
+          '<button id="co-move-up" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↑ 上へ</button>' +
+          '<button id="co-move-down" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↓ 下へ</button>' +
+          '<button id="co-delete" style="flex:0 0 60px;background:var(--accent-red);color:#fff;border:none;padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 削除</button>' +
+        '</div>' +
+      '</div>';
+    propsEl.innerHTML = html;
+
+    P.bindEvent('co-edit-apply', 'click', function() {
+      var newId = document.getElementById('co-edit-id').value.trim();
+      var newLabel = document.getElementById('co-edit-label').value.trim();
+      window.MA.history.pushHistory();
+      var t = ctx.getMmdText();
+      var fn = element.kind === 'component' ? updateComponent : updateInterface;
+      if (newId !== element.id) t = fn(t, element.line, 'id', newId);
+      if (newLabel !== element.label) t = fn(t, element.line, 'label', newLabel);
+      ctx.setMmdText(t);
+      ctx.onUpdate();
+    });
+    P.bindEvent('co-rename-refs', 'click', function() {
+      var newId = document.getElementById('co-edit-id').value.trim();
+      if (!newId || newId === element.id) { alert('Alias を変更してから実行してください'); return; }
+      window.MA.history.pushHistory();
+      ctx.setMmdText(renameWithRefs(ctx.getMmdText(), element.id, newId));
+      ctx.onUpdate();
+    });
+    P.bindEvent('co-move-up', 'click', function() {
+      window.MA.history.pushHistory();
+      ctx.setMmdText(moveLineUp(ctx.getMmdText(), element.line));
+      ctx.onUpdate();
+    });
+    P.bindEvent('co-move-down', 'click', function() {
+      window.MA.history.pushHistory();
+      ctx.setMmdText(moveLineDown(ctx.getMmdText(), element.line));
+      ctx.onUpdate();
+    });
+    P.bindEvent('co-delete', 'click', function() {
+      if (!confirm('この行を削除しますか？')) return;
+      window.MA.history.pushHistory();
+      ctx.setMmdText(deleteLine(ctx.getMmdText(), element.line));
+      window.MA.selection.clearSelection();
+      ctx.onUpdate();
+    });
+  }
+
+  function _renderRelationEdit(relation, parsedData, propsEl, ctx) {
+    var P = window.MA.properties;
+    var html =
+      '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Component Diagram</div>' +
+      '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">RELATION (L' + relation.line + ')</label>' +
+        P.selectFieldHtml('Kind', 'co-rel-kind', [
+          { value: 'association', label: 'Association (--)', selected: relation.kind === 'association' },
+          { value: 'dependency',  label: 'Dependency (..>)', selected: relation.kind === 'dependency' },
+          { value: 'provides',    label: 'Provides (-())', selected: relation.kind === 'provides' },
+          { value: 'requires',    label: 'Requires ()-)', selected: relation.kind === 'requires' },
+        ]) +
+        P.fieldHtml('From', 'co-rel-from', relation.from) +
+        P.fieldHtml('To', 'co-rel-to', relation.to) +
+        P.fieldHtml('Label', 'co-rel-label', relation.label) +
+        P.primaryButtonHtml('co-rel-apply', '変更を反映') +
+        '<div style="margin-top:8px;">' +
+          '<button id="co-delete" style="background:var(--accent-red);color:#fff;border:none;padding:6px 10px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 削除</button>' +
+        '</div>' +
+      '</div>';
+    propsEl.innerHTML = html;
+
+    P.bindEvent('co-rel-apply', 'click', function() {
+      window.MA.history.pushHistory();
+      var t = ctx.getMmdText();
+      var newKind = document.getElementById('co-rel-kind').value;
+      var newFrom = document.getElementById('co-rel-from').value.trim();
+      var newTo = document.getElementById('co-rel-to').value.trim();
+      var newLabel = document.getElementById('co-rel-label').value.trim();
+      if (newKind !== relation.kind) t = updateRelation(t, relation.line, 'kind', newKind);
+      if (newFrom !== relation.from) t = updateRelation(t, relation.line, 'from', newFrom);
+      if (newTo !== relation.to) t = updateRelation(t, relation.line, 'to', newTo);
+      if (newLabel !== relation.label) t = updateRelation(t, relation.line, 'label', newLabel);
+      ctx.setMmdText(t);
+      ctx.onUpdate();
+    });
+    P.bindEvent('co-delete', 'click', function() {
+      if (!confirm('この行を削除しますか？')) return;
+      window.MA.history.pushHistory();
+      ctx.setMmdText(deleteLine(ctx.getMmdText(), relation.line));
+      window.MA.selection.clearSelection();
+      ctx.onUpdate();
+    });
+  }
+
+  function _renderGroupReadOnly(group, parsedData, propsEl, ctx) {
+    var html =
+      '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Component Diagram</div>' +
+      '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">PACKAGE (L' + group.startLine + '-' + group.endLine + ')</label>' +
+        '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">Label: ' + group.label + '</div>' +
+        '<div style="font-size:10px;color:var(--text-secondary);">v0.4.0: package ラベル変更 / 範囲指定 wrap は v0.5.0 で対応</div>' +
+      '</div>';
+    propsEl.innerHTML = html;
+  }
+
   return {
     type: 'plantuml-component',
     displayName: 'Component',
@@ -338,5 +583,7 @@ window.MA.modules.plantumlComponent = (function() {
     moveLineDown: moveLineDown,
     setTitle: setTitle,
     renameWithRefs: renameWithRefs,
+    renderProps: renderProps,
+    buildOverlay: function() { /* v0.4.0 では overlay なし */ },
   };
 })();
