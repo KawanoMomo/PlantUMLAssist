@@ -36,6 +36,41 @@ window.MA.modules.plantumlComponent = (function() {
     '^(' + ID + '|"[^"]+")\\s+(-\\(\\)|\\(\\)-|\\)-|-\\(|\\.\\.>|<\\.\\.|-->|<--|--|<-|->)\\s+(' + ID + '|"[^"]+")(?:\\s*:\\s*(.+))?$'
   );
 
+  var insertBeforeEnd = window.MA.dslUpdater.insertBeforeEnd;
+
+  function fmtComponent(id, label) {
+    if (label && label !== id) return 'component "' + label + '" as ' + id;
+    return 'component ' + id;
+  }
+  function fmtInterface(id, label) {
+    if (label && label !== id) return 'interface "' + label + '" as ' + id;
+    return 'interface ' + id;
+  }
+  function fmtPort(id, label) {
+    if (label && label !== id) return 'port "' + label + '" as ' + id;
+    return 'port ' + id;
+  }
+  function fmtPackage(label) {
+    return 'package "' + label + '" {';
+  }
+  function fmtRelation(kind, from, to, label) {
+    var lbl = label || '';
+    if (kind === 'dependency') return from + ' ..> ' + to + (lbl ? ' : ' + lbl : '');
+    if (kind === 'provides') return from + ' -() ' + to;
+    if (kind === 'requires') return from + ' )- ' + to;
+    return from + ' -- ' + to + (lbl ? ' : ' + lbl : '');
+  }
+
+  function addComponent(text, id, label) { return insertBeforeEnd(text, fmtComponent(id, label || id)); }
+  function addInterface(text, id, label) { return insertBeforeEnd(text, fmtInterface(id, label || id)); }
+  function addPort(text, id, label) { return insertBeforeEnd(text, fmtPort(id, label || id)); }
+  function addPackage(text, label) {
+    return insertBeforeEnd(insertBeforeEnd(text, fmtPackage(label)), '}');
+  }
+  function addRelation(text, kind, from, to, label) {
+    return insertBeforeEnd(text, fmtRelation(kind, from, to, label));
+  }
+
   function parse(text) {
     var result = { meta: { title: '', startUmlLine: null }, elements: [], relations: [], groups: [] };
     if (!text || !text.trim()) return result;
@@ -185,5 +220,15 @@ window.MA.modules.plantumlComponent = (function() {
         '@enduml',
       ].join('\n');
     },
+    fmtComponent: fmtComponent,
+    fmtInterface: fmtInterface,
+    fmtPort: fmtPort,
+    fmtPackage: fmtPackage,
+    fmtRelation: fmtRelation,
+    addComponent: addComponent,
+    addInterface: addInterface,
+    addPort: addPort,
+    addPackage: addPackage,
+    addRelation: addRelation,
   };
 })();
