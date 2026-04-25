@@ -9,6 +9,7 @@ const sourceFiles = [
   'src/core/regex-parts.js',
   'src/core/line-resolver.js',
   'src/core/formatter-interface.js',
+  'src/core/dsl-updater.js',
   'src/core/text-updater.js',
   'src/core/parser-utils.js',
   'src/core/history.js',
