@@ -19,6 +19,7 @@ const sourceFiles = [
   'src/ui/properties.js',
   'src/modules/sequence.js',
   'src/modules/usecase.js',
+  'src/modules/component.js',
 ];
 
 let fns = {};
