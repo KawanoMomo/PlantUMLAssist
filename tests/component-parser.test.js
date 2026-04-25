@@ -50,6 +50,28 @@ describe('parseComponent interface element', function() {
   });
 });
 
+describe('parseComponent port', function() {
+  test('parses port directly after component', function() {
+    var r = co.parse('@startuml\ncomponent WebApp\nport p1\n@enduml');
+    var port = r.elements.find(function(e) { return e.kind === 'port'; });
+    expect(port).toBeDefined();
+    expect(port.id).toBe('p1');
+    expect(port.parentComponentId).toBe('WebApp');
+  });
+  test('parses port with quoted label as alias', function() {
+    var r = co.parse('@startuml\ncomponent WebApp\nport "Port One" as p1\n@enduml');
+    var port = r.elements.find(function(e) { return e.kind === 'port'; });
+    expect(port.label).toBe('Port One');
+    expect(port.id).toBe('p1');
+  });
+  test('port not preceded by component has parentComponentId null', function() {
+    var r = co.parse('@startuml\nport orphan\n@enduml');
+    var port = r.elements[0];
+    expect(port.kind).toBe('port');
+    expect(port.parentComponentId).toBe(null);
+  });
+});
+
 describe('parseComponent package', function() {
   test('parses single package with quoted label', function() {
     var r = co.parse('@startuml\npackage "Backend" {\ncomponent WebApp\n}\n@enduml');

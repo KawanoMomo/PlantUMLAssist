@@ -28,6 +28,10 @@ window.MA.modules.plantumlComponent = (function() {
   );
   var PACKAGE_CLOSE_RE = /^\s*\}\s*$/;
 
+  var PORT_KW_RE = new RegExp(
+    '^port\\s+(?:"([^"]+)"\\s+as\\s+(' + ID + ')|(' + ID + ')(?:\\s+as\\s+"([^"]+)")?)\\s*$'
+  );
+
   function parse(text) {
     var result = { meta: { title: '', startUmlLine: null }, elements: [], relations: [], groups: [] };
     if (!text || !text.trim()) return result;
@@ -35,6 +39,7 @@ window.MA.modules.plantumlComponent = (function() {
 
     var packageStack = [];
     var packageCounter = 0;
+    var lastComponentId = null;
 
     for (var i = 0; i < lines.length; i++) {
       var lineNum = i + 1;
@@ -76,6 +81,7 @@ window.MA.modules.plantumlComponent = (function() {
         if (m[2] !== undefined) { id = m[2]; label = m[1]; }
         else { id = m[3]; label = m[4] !== undefined ? m[4] : m[3]; }
         result.elements.push({ kind: 'component', id: id, label: label, stereotype: null, line: lineNum, parentPackageId: currentPackageId });
+        lastComponentId = id;  // track for port adjacency
         continue;
       }
       // component short [X] / [Label] as Alias
@@ -84,6 +90,7 @@ window.MA.modules.plantumlComponent = (function() {
         var label2 = m[1].trim();
         var id2 = m[2] || label2;
         result.elements.push({ kind: 'component', id: id2, label: label2, stereotype: null, line: lineNum, parentPackageId: currentPackageId });
+        lastComponentId = id2;  // track for port adjacency
         continue;
       }
       // interface keyword
@@ -93,6 +100,7 @@ window.MA.modules.plantumlComponent = (function() {
         if (m[2] !== undefined) { id3 = m[2]; label3 = m[1]; }
         else { id3 = m[3]; label3 = m[4] !== undefined ? m[4] : m[3]; }
         result.elements.push({ kind: 'interface', id: id3, label: label3, stereotype: null, line: lineNum, parentPackageId: currentPackageId });
+        lastComponentId = null;  // interface breaks component adjacency
         continue;
       }
       // interface short () X / () X as I
@@ -105,6 +113,21 @@ window.MA.modules.plantumlComponent = (function() {
         var realId = alias || firstTok;
         var realLabel = firstTok;
         result.elements.push({ kind: 'interface', id: realId, label: realLabel, stereotype: null, line: lineNum, parentPackageId: currentPackageId });
+        lastComponentId = null;  // interface breaks component adjacency
+        continue;
+      }
+      // port (keyword form): port ID | port "Label" as ID | port ID as "Label"
+      m = trimmed.match(PORT_KW_RE);
+      if (m) {
+        var portId, portLabel;
+        if (m[2] !== undefined) { portId = m[2]; portLabel = m[1]; }
+        else { portId = m[3]; portLabel = m[4] !== undefined ? m[4] : m[3]; }
+        result.elements.push({
+          kind: 'port', id: portId, label: portLabel,
+          parentComponentId: lastComponentId,
+          line: lineNum, parentPackageId: currentPackageId
+        });
+        // port does NOT reset lastComponentId — multiple ports can follow
         continue;
       }
     }
