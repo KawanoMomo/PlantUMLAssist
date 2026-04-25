@@ -50,6 +50,37 @@ describe('parseComponent interface element', function() {
   });
 });
 
+describe('parseComponent relations', function() {
+  test('parses association --', function() {
+    var r = co.parse('@startuml\nA -- B\n@enduml');
+    expect(r.relations[0].kind).toBe('association');
+    expect(r.relations[0].arrow).toBe('--');
+  });
+  test('parses dependency ..>', function() {
+    var r = co.parse('@startuml\nA ..> B\n@enduml');
+    expect(r.relations[0].kind).toBe('dependency');
+    expect(r.relations[0].arrow).toBe('..>');
+  });
+  test('parses lollipop provides component -() interface', function() {
+    var r = co.parse('@startuml\nWebApp -() IAuth\n@enduml');
+    expect(r.relations[0].kind).toBe('provides');
+    expect(r.relations[0].from).toBe('WebApp');
+    expect(r.relations[0].to).toBe('IAuth');
+  });
+  test('parses lollipop provides reverse interface ()- component', function() {
+    var r = co.parse('@startuml\nIAuth ()- WebApp\n@enduml');
+    expect(r.relations[0].kind).toBe('provides');
+    expect(r.relations[0].from).toBe('WebApp');
+    expect(r.relations[0].to).toBe('IAuth');
+  });
+  test('parses lollipop requires interface )- component', function() {
+    var r = co.parse('@startuml\nIAuth )- WebApp\n@enduml');
+    expect(r.relations[0].kind).toBe('requires');
+    expect(r.relations[0].from).toBe('IAuth');
+    expect(r.relations[0].to).toBe('WebApp');
+  });
+});
+
 describe('parseComponent port', function() {
   test('parses port directly after component', function() {
     var r = co.parse('@startuml\ncomponent WebApp\nport p1\n@enduml');

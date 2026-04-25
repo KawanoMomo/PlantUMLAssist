@@ -32,6 +32,10 @@ window.MA.modules.plantumlComponent = (function() {
     '^port\\s+(?:"([^"]+)"\\s+as\\s+(' + ID + ')|(' + ID + ')(?:\\s+as\\s+"([^"]+)")?)\\s*$'
   );
 
+  var RELATION_RE = new RegExp(
+    '^(' + ID + '|"[^"]+")\\s+(-\\(\\)|\\(\\)-|\\)-|-\\(|\\.\\.>|<\\.\\.|-->|<--|--|<-|->)\\s+(' + ID + '|"[^"]+")(?:\\s*:\\s*(.+))?$'
+  );
+
   function parse(text) {
     var result = { meta: { title: '', startUmlLine: null }, elements: [], relations: [], groups: [] };
     if (!text || !text.trim()) return result;
@@ -128,6 +132,37 @@ window.MA.modules.plantumlComponent = (function() {
           line: lineNum, parentPackageId: currentPackageId
         });
         // port does NOT reset lastComponentId — multiple ports can follow
+        continue;
+      }
+      // relations: --, -->, ..>, lollipop -()/()-/)-/-(, with optional ": label"
+      m = trimmed.match(RELATION_RE);
+      if (m) {
+        var fromRaw = m[1], arrow = m[2], toRaw = m[3], lbl = (m[4] || '').trim();
+        var from = DU.unquote(fromRaw);
+        var to = DU.unquote(toRaw);
+        var kind = 'association';
+
+        if (arrow === '-()') {
+          kind = 'provides';
+        } else if (arrow === '()-') {
+          kind = 'provides';
+          var tmp = from; from = to; to = tmp; arrow = '-()';
+        } else if (arrow === ')-') {
+          kind = 'requires';
+        } else if (arrow === '-(') {
+          kind = 'requires';
+          var tmp2 = from; from = to; to = tmp2; arrow = ')-';
+        } else if (arrow === '..>' || arrow === '.>') {
+          kind = 'dependency';
+        } else if (arrow === '<..') {
+          kind = 'dependency';
+          var tmp3 = from; from = to; to = tmp3; arrow = '..>';
+        }
+
+        result.relations.push({
+          id: '__r_' + result.relations.length,
+          kind: kind, from: from, to: to, arrow: arrow, label: lbl, line: lineNum,
+        });
         continue;
       }
     }
