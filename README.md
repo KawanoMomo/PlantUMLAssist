@@ -5,7 +5,7 @@ PlantUML 記法の GUI 編集ツール。Python バックエンド + HTML/JS フ
 ## 特徴
 
 - **Tier1 ロードマップ** (対応予定): Sequence / Use Case / Class / Activity / Component / State の UML 主要6図形
-- **v0.1.0** 時点では **Sequence Diagram** の MVP 実装
+- **v0.1.0** Sequence Diagram MVP / **v0.3.0** UseCase Diagram form-based MVP
 - **local (Java)** がデフォルトレンダリング、**online (plantuml.com)** にもオプションで切替可能
 - **DiagramModule v2** インターフェース (MermaidAssist 踏襲)
 - **縦並びラベル付き追加フォーム**、DSL エディタ Tab/Shift+Tab でインデント挿入
@@ -80,6 +80,46 @@ npm run test:unit   # Node runner
 npm run test:e2e    # Playwright
 npm run test:all
 ```
+
+## UseCase Diagram (v0.3.0)
+
+PlantUML UseCase Diagram の form-based 編集に対応。要求分析・ハザード分析・規格対応の業務フローで使用。
+
+### 対応 DSL 要素
+
+- `actor` (キーワード形式 / 短縮 `:Label:`)
+- `usecase` (キーワード形式 / 短縮 `(Label)`)
+- `package "Label" { ... }` 境界 (`rectangle` も同義として受理)
+- 4 種の関係:
+  - association `A --> B` (label 任意)
+  - generalization `A <|-- B` (parent <|-- child 方向)
+  - include `A ..> B : <<include>>`
+  - extend `A ..> B : <<extend>>`
+
+### Canonical 出力 (ADR-105)
+
+GUI からの編集はすべて keyword-first canonical 形式で emit (例: `actor "Power User" as PU`)。短縮記法 (`:X:` / `(L)`) は parser で受理しますが、保存時に正規化されます。
+
+### サンプル DSL
+
+```plantuml
+@startuml
+title Sample UseCase
+actor User
+usecase "Login Flow" as Login
+package "Authentication" {
+  usecase Validate
+}
+User --> Login
+Login ..> Validate : <<include>>
+@enduml
+```
+
+### v0.3.0 制約 (v0.5.0 で対応予定)
+
+- SVG 要素クリック選択 (overlay-driven UI)
+- ドラッグで関係作成
+- 既存要素を package に範囲指定で囲む
 
 ## 設計ドキュメント
 
