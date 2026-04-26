@@ -8,7 +8,7 @@ DSL を直接書かなくても、SVG 上の図形をクリック / プロパテ
 
 ## 特徴
 
-- **Tier1 ロードマップ**: Sequence / Use Case / Component の 3 図形が利用可能 (Class / Activity / State は v0.6.0 以降)
+- **Tier1 ロードマップ**: Sequence / Use Case / Component / Class の 4 図形が利用可能 (Activity / State は v0.7.0 以降)
 - **3 種類の編集スタイル** を組み合わせて使える
   - DSL エディタで直接編集 (左ペイン)
   - フォームから追加 (右ペイン下部の「末尾に追加」)
@@ -143,6 +143,80 @@ WebApp ..> Logger
 @enduml
 ```
 
+### Class Diagram (v0.6.0)
+
+OO 設計で頻出。class / interface / abstract class / enum + 6 種関係 + member (attribute / method) を編集可能。
+
+#### 対応 DSL 要素
+
+- `class` (キーワード形式 / quoted label)
+- `interface` (専用キーワード優先、`<<interface>>` stereotype は parse-only)
+- `abstract class` (2 トークン強制)
+- `enum` (block 必須)
+- 6 種の関係:
+  - association `--`
+  - inheritance `<|--` (parent <|-- child)
+  - implementation `<|..` (interface <|.. class)
+  - composition `*--` (container *-- contained)
+  - aggregation `o--` (container o-- part)
+  - dependency `..>`
+- Stereotype `<<X>>`
+- Generics `Foo<T>`, `Map<K, V>`
+- Nesting: `package "Label" {}` + `namespace foo {}`
+
+#### Member 編集
+
+class / interface / abstract を **クリックで選択** → property panel に attribute / method リストが表示。各行に削除ボタン。`+ Attribute 追加` / `+ Method 追加` で visibility / static / abstract / 型 を入力するフォームが展開。
+
+#### Multi-Select Connect (6 kind)
+
+UseCase / Component と同じ Shift+click 流儀。Class は **6 種の関係** から選択。implementation は方向固定 (interface → class)、kind 切替時に自動 swap。
+
+#### Canonical 出力 (ADR-107)
+
+GUI 編集はすべて keyword-first canonical 形式で emit (例: `abstract class Shape <<Geometry>>`)。短縮形式 / 揺れ形式 (`abstract Foo` / `class Foo <<interface>>` / 順序揺れ等) は parser で受理しますが保存時に正規化。
+
+#### サンプル DSL
+
+```plantuml
+@startuml
+title Sample Class
+
+abstract class Shape {
+  + {abstract} area() : double
+}
+class Circle <<Geometry>> {
+  - radius : double
+  + area() : double
+}
+class Rectangle {
+  - width : double
+  - height : double
+  + area() : double
+}
+interface Drawable {
+  + draw() : void
+}
+enum Color {
+  RED
+  GREEN
+  BLUE
+}
+
+Shape <|-- Circle
+Shape <|-- Rectangle
+Drawable <|.. Circle
+Drawable <|.. Rectangle
+Circle *-- Color
+@enduml
+```
+
+#### v0.6.0 制約 (v0.6.1+ で対応予定)
+
+- Member 個別 SVG クリック選択 (現在は class 全体選択 → panel 内 member リスト)
+- 内部クラス (class 内 class 定義)
+- Note on class
+
 ## Overlay-Driven Editing 共通操作 (v0.5.0)
 
 Sequence / UseCase / Component のすべてで以下が共通:
@@ -152,13 +226,14 @@ Sequence / UseCase / Component のすべてで以下が共通:
 - **Shift+クリック**: 複数選択 (UseCase / Component で 2 つまで → Connect form 表示)
 - **空白クリック**: 選択解除
 
-## v0.5.0 制約 (v0.6.0+ で対応予定)
+## v0.6.0 制約 (v0.7.0+ で対応予定)
 
 - drag-to-connect (SVG 上で線を drag して関係作成)
 - package 範囲選択 → wrap (既存要素を package で囲む)
 - 要素を別 package へ drag 移動
 - Sequence の multi-select connect (現状 Sequence は form-based のみ)
-- Class / Activity / State の各 diagram
+- Class diagram の SVG 上 member 個別クリック選択
+- Activity / State の各 diagram
 
 ## セットアップ
 

@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.0] - 2026-04-26
+
+### Added
+- **Class Diagram** support — Tier1 ロードマップの 4 番目の図形 (`src/modules/class.js`)
+- 4 element kinds: class / interface / abstract class / enum
+- 6 relation kinds: association / inheritance / implementation / composition / aggregation / dependency
+- Members: attribute / method with visibility (+/-/#/~), static, abstract
+- Extensions: stereotype `<<X>>`, generics `Foo<T>` (incl nested `Map<K, V>`)
+- Nesting: package + namespace
+- ADR-107: Class canonical DSL form (keyword-first)
+- Multi-select connect (Component / UseCase と同じ Shift+click 流儀、6 kinds + auto-swap for implementation)
+- E2E coverage: class-overlay (11 tests, α + γ axes)
+- Total tests: 374 unit + 91 E2E (前 308+80 から +66 unit + +11 E2E)
+
+### Changed
+- `src/core/parser-utils.js` `detectDiagramType` に Class 判定追加 (priority: hasComponentKw > Class判定)
+
+### Notes
+- v0.6.1 へ繰越: SVG 上の member 個別クリック選択 (`extractMultiLineTextBBoxes` API は Activity v0.7.0 と統合設計)、内部クラス、note on class
+- 設計詳細: `docs/superpowers/specs/2026-04-26-class-design.md`
+- 実装計画: `docs/superpowers/plans/2026-04-26-class-v0.6.0.md`
+
 ## [0.5.0] - 2026-04-26
 
 ### Added
