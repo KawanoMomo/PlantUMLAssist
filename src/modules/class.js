@@ -565,7 +565,128 @@ window.MA.modules.plantumlClass = (function() {
 
   function renderProps(selData, parsedData, propsEl, ctx) {
     if (!propsEl) return;
-    propsEl.innerHTML = '<div style="padding:12px;color:var(--text-secondary);font-size:11px;">Class Diagram (Phase B で実装)</div>';
+    window.MA.propsRenderer.renderByDispatch(selData, parsedData, propsEl, {
+      onNoSelection: function(p, e) { _renderNoSelection(p, e, ctx); },
+      onElement: function(elt, p, e) { _renderElementEdit(elt, p, e, ctx); },
+      onRelation: function(rel, p, e) { _renderRelationEdit(rel, p, e, ctx); },
+      onGroup: function(grp, p, e) { _renderGroupReadOnly(grp, p, e, ctx); },
+      onMultiSelectConnect: function(s, p, e) { _renderMultiSelectConnect(s, p, e, ctx); },
+      onMultiSelect: function(s, p, e) { _renderMultiSelect(s, p, e); },
+    });
+  }
+
+  function _renderNoSelection(parsedData, propsEl, ctx) {
+    var P = window.MA.properties;
+    var elements = parsedData.elements || [];
+    var allOpts = elements.map(function(e) { return { value: e.id, label: e.label || e.id }; });
+    if (allOpts.length === 0) allOpts = [{ value: '', label: '（要素なし）' }];
+
+    var html =
+      '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Class Diagram</div>' +
+      '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">Title 設定</label>' +
+        P.fieldHtml('Title', 'cl-title', parsedData.meta.title) +
+        P.primaryButtonHtml('cl-set-title', 'Title 適用') +
+      '</div>' +
+      '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">末尾に追加</label>' +
+        P.selectFieldHtml('種類', 'cl-tail-kind', [
+          { value: 'class',     label: 'Class', selected: true },
+          { value: 'interface', label: 'Interface' },
+          { value: 'abstract',  label: 'Abstract Class' },
+          { value: 'enum',      label: 'Enum' },
+          { value: 'package',   label: 'Package境界' },
+          { value: 'namespace', label: 'Namespace' },
+          { value: 'relation',  label: 'Relation (関係)' },
+        ]) +
+        '<div id="cl-tail-detail" style="margin-top:6px;"></div>' +
+      '</div>';
+    propsEl.innerHTML = html;
+
+    P.bindEvent('cl-set-title', 'click', function() {
+      window.MA.history.pushHistory();
+      ctx.setMmdText(setTitle(ctx.getMmdText(), document.getElementById('cl-title').value.trim()));
+      ctx.onUpdate();
+    });
+
+    var renderTailDetail = function() {
+      var kind = document.getElementById('cl-tail-kind').value;
+      var detailEl = document.getElementById('cl-tail-detail');
+      var html2 = '';
+      if (kind === 'class' || kind === 'interface' || kind === 'abstract') {
+        html2 =
+          P.fieldHtml('Alias', 'cl-tail-alias', '', '例: User') +
+          P.fieldHtml('Label', 'cl-tail-label', '', '省略可') +
+          P.fieldHtml('Stereotype', 'cl-tail-stereo', '', '<<X>> の X 部分のみ') +
+          P.fieldHtml('Generics (カンマ区切り)', 'cl-tail-generics', '', '例: T,K,V') +
+          P.primaryButtonHtml('cl-tail-add', '+ ' + kind + ' 追加');
+      } else if (kind === 'enum') {
+        html2 =
+          P.fieldHtml('Alias', 'cl-tail-alias', '', '例: Color') +
+          P.fieldHtml('値 (改行区切り)', 'cl-tail-values', '', 'RED\\nGREEN\\nBLUE') +
+          P.primaryButtonHtml('cl-tail-add', '+ enum 追加');
+      } else if (kind === 'package' || kind === 'namespace') {
+        html2 =
+          P.fieldHtml('Label', 'cl-tail-label', '', '例: domain') +
+          P.primaryButtonHtml('cl-tail-add', '+ ' + kind + ' 追加');
+      } else if (kind === 'relation') {
+        html2 =
+          P.selectFieldHtml('Kind', 'cl-tail-rkind', [
+            { value: 'association',    label: 'Association (--)', selected: true },
+            { value: 'inheritance',    label: 'Inheritance (<|--)' },
+            { value: 'implementation', label: 'Implementation (<|..)' },
+            { value: 'composition',    label: 'Composition (*--)' },
+            { value: 'aggregation',    label: 'Aggregation (o--)' },
+            { value: 'dependency',     label: 'Dependency (..>)' },
+          ]) +
+          P.selectFieldHtml('From', 'cl-tail-from', allOpts) +
+          P.selectFieldHtml('To', 'cl-tail-to', allOpts) +
+          P.fieldHtml('Label', 'cl-tail-rlabel', '', '任意') +
+          P.primaryButtonHtml('cl-tail-add', '+ Relation 追加');
+      }
+      detailEl.innerHTML = html2;
+
+      P.bindEvent('cl-tail-add', 'click', function() {
+        var t = ctx.getMmdText();
+        var out = t;
+        var k = document.getElementById('cl-tail-kind').value;
+        if (k === 'class' || k === 'interface' || k === 'abstract') {
+          var al = document.getElementById('cl-tail-alias').value.trim();
+          if (!al) { alert('Alias 必須'); return; }
+          var lbl = document.getElementById('cl-tail-label').value.trim() || al;
+          var st = document.getElementById('cl-tail-stereo').value.trim() || null;
+          var genStr = document.getElementById('cl-tail-generics').value.trim();
+          var gen = genStr ? genStr.split(',').map(function(s) { return s.trim(); }) : null;
+          window.MA.history.pushHistory();
+          if (k === 'class') out = addClass(t, al, lbl, st, gen);
+          else if (k === 'interface') out = addInterface(t, al, lbl, st, gen);
+          else out = addAbstract(t, al, lbl, st, gen);
+        } else if (k === 'enum') {
+          var al2 = document.getElementById('cl-tail-alias').value.trim();
+          if (!al2) { alert('Alias 必須'); return; }
+          var valsStr = document.getElementById('cl-tail-values').value;
+          var vals = valsStr.split(/\r?\n/).map(function(s) { return s.trim(); }).filter(function(s) { return s; });
+          window.MA.history.pushHistory();
+          out = addEnum(t, al2, al2, vals);
+        } else if (k === 'package' || k === 'namespace') {
+          var lbl3 = document.getElementById('cl-tail-label').value.trim();
+          if (!lbl3) { alert('Label 必須'); return; }
+          window.MA.history.pushHistory();
+          out = k === 'package' ? addPackage(t, lbl3) : addNamespace(t, lbl3);
+        } else if (k === 'relation') {
+          var fr = document.getElementById('cl-tail-from').value;
+          var to = document.getElementById('cl-tail-to').value;
+          if (!fr || !to) { alert('From/To 必須 (先に要素を追加)'); return; }
+          var rkind = document.getElementById('cl-tail-rkind').value;
+          window.MA.history.pushHistory();
+          out = addRelation(t, rkind, fr, to, document.getElementById('cl-tail-rlabel').value.trim() || null);
+        }
+        ctx.setMmdText(out);
+        ctx.onUpdate();
+      });
+    };
+    document.getElementById('cl-tail-kind').addEventListener('change', renderTailDetail);
+    renderTailDetail();
   }
 
   return {
