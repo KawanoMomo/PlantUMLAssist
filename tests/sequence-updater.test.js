@@ -214,6 +214,32 @@ describe('moveMessage', function() {
     var out = seq.moveMessage(text, 2, -1);
     expect(out).toBe(text);
   });
+
+  test('no-op when previous non-blank line is a Note', function() {
+    var text = '@startuml\nA -> B : first\nnote over A : remark\nA -> C : second\n@enduml';
+    expect(seq.moveMessage(text, 4, -1)).toBe(text);
+  });
+
+  test('no-op when next non-blank line is an alt opener', function() {
+    var text = '@startuml\nA -> B : first\nalt ok\nA -> C\nend\n@enduml';
+    expect(seq.moveMessage(text, 2, 1)).toBe(text);
+  });
+
+  test('no-op when next non-blank line is an end keyword', function() {
+    var text = '@startuml\nalt ok\nA -> B : first\nend\nA -> C\n@enduml';
+    expect(seq.moveMessage(text, 3, 1)).toBe(text);
+  });
+
+  test('no-op when adjacent is participant declaration', function() {
+    var text = '@startuml\nparticipant A\nparticipant B\nA -> B : first\n@enduml';
+    expect(seq.moveMessage(text, 4, -1)).toBe(text);
+  });
+
+  test('skips blank lines between messages', function() {
+    var text = '@startuml\nA -> B : first\n\nA -> C : second\n@enduml';
+    var out = seq.moveMessage(text, 4, -1);
+    expect(out.indexOf('second')).toBeLessThan(out.indexOf('first'));
+  });
 });
 
 describe('toggleAutonumber', function() {
