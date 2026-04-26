@@ -38,11 +38,14 @@ window.MA.parserUtils = (function() {
     }
 
     // Priority: most-specific keywords first
+    // Component takes priority over Class because Component diagrams legally
+    // contain `interface` (which would otherwise match hasClassKw).
+    if (hasComponentKw) return 'plantuml-component';
     if (hasClassKw) return 'plantuml-class';
     if (hasStateKw) return 'plantuml-state';
     if (hasActivityKw) return 'plantuml-activity';
     if (hasUsecaseKw || hasUsecaseShort || (hasActor && hasPackage)) return 'plantuml-usecase';
-    if (hasComponentKw || hasComponentBracket) return 'plantuml-component';
+    if (hasComponentBracket) return 'plantuml-component';
     if (hasParticipantSeqOnly) return 'plantuml-sequence';
     if (hasActor) {
       // actor alone could be either sequence or usecase; message arrow disambiguates to sequence

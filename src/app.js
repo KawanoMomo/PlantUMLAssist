@@ -453,6 +453,7 @@ function init() {
     var mod = modules[t];
     if (!mod) return;
     window.MA.history.pushHistory();
+    currentModule = mod;  // explicit user choice overrides auto-detection
     mmdText = mod.template();
     suppressSync = true;
     editorEl.value = mmdText;
