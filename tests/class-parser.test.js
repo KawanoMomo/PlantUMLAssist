@@ -277,6 +277,16 @@ describe('class.parse — package nesting', function() {
   });
 });
 
+describe('class.parse — namespace nesting', function() {
+  test('parses namespace + nested class with parentPackageId', function() {
+    var t = '@startuml\nnamespace foo {\n  class Bar\n}\n@enduml';
+    var r = clMod.parse(t);
+    expect(r.groups.length).toBe(1);
+    expect(r.groups[0].kind).toBe('namespace');
+    expect(r.elements[0].parentPackageId).toBe(r.groups[0].id);
+  });
+});
+
 // jsdom epilogue
 if (prevWindow !== undefined) global.window = prevWindow;
 if (prevDocument !== undefined) global.document = prevDocument;

@@ -46,6 +46,10 @@ window.MA.modules.plantumlClass = (function() {
     '^package\\s+(?:"([^"]+)"|(' + ID + '))\\s*\\{\\s*$'
   );
 
+  var NAMESPACE_OPEN_RE = new RegExp(
+    '^namespace\\s+(?:"([^"]+)"|(' + ID + '))\\s*\\{\\s*$'
+  );
+
   // Relation arrow tokens, longest first to avoid prefix matches
   var RELATION_RE = new RegExp(
     '^(' + ID_WITH_GENERICS + '|"[^"]+")\\s+' +
@@ -166,6 +170,17 @@ window.MA.modules.plantumlClass = (function() {
         var pkg = { kind: 'package', id: pkgId, label: pkgLabel, startLine: lineNum, endLine: 0, parentId: pkgParent };
         result.groups.push(pkg);
         packageStack.push(pkg);
+        continue;
+      }
+
+      var nm = trimmed.match(NAMESPACE_OPEN_RE);
+      if (nm) {
+        var nsLabel = nm[1] !== undefined ? nm[1] : nm[2];
+        var nsId = '__pkg_' + (packageCounter++);
+        var nsParent = packageStack.length > 0 ? packageStack[packageStack.length - 1].id : null;
+        var ns = { kind: 'namespace', id: nsId, label: nsLabel, startLine: lineNum, endLine: 0, parentId: nsParent };
+        result.groups.push(ns);
+        packageStack.push(ns);
         continue;
       }
 
