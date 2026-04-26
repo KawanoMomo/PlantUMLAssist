@@ -266,7 +266,71 @@ S1.5 でも抽出しないと判定すべきケースを事前定義:
 - `start.bat` ダブルクリックで v1.0 フル機能が立ち上がる
 - GitHub public repo へ v1.0.0 tag を打ってリリース
 
-## 9. 子 spec 策定ガイド
+## 8.5 v0.5.0 設計指針: モジュール capability 契約
+
+### 背景 (v0.4.0 で発覚した構造的バグパターン)
+
+v0.4.0 リリース直前に「sequence でしか動かない UI 要素が UseCase/Component の表示時にも残る/誤動作する」リークを 4 件連続で発見・修正:
+
+| commit | 漏れていた sequence-only 機能 | UseCase/Component での症状 |
+|---|---|---|
+| `1cfd07a` | overlay-layer の選択ハイライト rect | モジュール切替後も rect が残留 |
+| `dc4e25b` | mousemove `+ ここに挿入` ガイド | クリックしても何も起きない誤誘導 |
+| `2ea528b` | selection.init callback の setSelectedHighlight | 選択変更時に sequence overlay を触る |
+| (上記の root cause) | renderSvg の setSelectedHighlight 無条件呼出 | (上に同じ) |
+
+### 根本原因
+
+`src/app.js` 側に **「特定モジュール固有の機能」を currentModule のチェック無しに常時実行している** コードが多数存在。各機能が暗黙的に「sequence でだけ意味を持つ」前提に依存しており、UseCase / Component が `buildOverlay` を空関数にしても他の path から sequence-only な動作が漏れ出る構造。
+
+### v0.5.0 で導入する契約
+
+各 DiagramModule v2 が **明示的に capability を宣言** する。app.js は capability を見て呼出を gate する:
+
+```javascript
+// 各モジュール側
+window.MA.modules.plantumlSequence = {
+  // ...
+  capabilities: {
+    overlaySelection: true,    // overlay-layer に rect を置きクリック選択
+    hoverInsert: true,         // preview hover で挿入ガイド表示
+    participantDrag: true,     // SVG 上の participant を drag で並び替え
+    showInsertForm: true,      // 行間クリックで挿入 popup
+  },
+};
+
+window.MA.modules.plantumlUsecase = {
+  // ...
+  capabilities: {},  // form-based MVP — 何も持たない
+};
+```
+
+```javascript
+// app.js 側
+function moduleHas(cap) {
+  return !!(currentModule && currentModule.capabilities && currentModule.capabilities[cap]);
+}
+
+if (moduleHas('overlaySelection')) {
+  window.MA.sequenceOverlay.setSelectedHighlight(overlayEl, sel);
+}
+if (moduleHas('hoverInsert')) {
+  drawHoverGuide(y);
+}
+```
+
+### 適用範囲 (v0.5.0 sprint 1)
+
+- `core/overlay-builder.js` 抽出と同タイミングで capability 契約を導入
+- 既存の `currentModule === modules['plantuml-sequence']` ハードコード比較を `moduleHas('overlaySelection')` 等に置換
+- 新規 capability 追加時は **対応しないモジュールには明示的に false / undefined を残す** ことを review checklist に追加
+
+### この章で対象としないこと
+
+- capability の継承 / mixin (将来必要なら別途)
+- runtime での capability 動的変更 (使う場面がないため不要)
+
+
 
 各図形の詳細 spec を策定する際、以下を必ず含める:
 

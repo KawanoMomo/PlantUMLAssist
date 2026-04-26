@@ -433,6 +433,9 @@ local (Java daemon) / online (plantuml.com) 両方で UC-1 のスモークテス
 - package 範囲選択 → wrap (既存要素を package で囲む)
 - 要素を別 package へ drag で移動
 - 観点 J (座標系整合) — overlay 化時必須
+- **モジュール capability 契約の導入** (Tier1 master spec § 8.5)
+  - v0.4.0 で「sequence-only 機能が UseCase/Component に漏れる」リークを 4 commit で連続修正 (`b9cac82` / `1cfd07a` / `dc4e25b` / `2ea528b`)
+  - v0.5.0 では `currentModule.capabilities = { overlaySelection, hoverInsert, participantDrag, showInsertForm }` を導入し、app.js 側の `currentModule === modules['plantuml-sequence']` ハードコード比較を全廃
 
 ## 12. 開始手順
 
