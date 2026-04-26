@@ -261,6 +261,65 @@ window.MA.modules.plantumlClass = (function() {
     return result;
   }
 
+  function _fmtIdGenerics(id, generics) {
+    return generics && generics.length > 0 ? id + '<' + generics.join(', ') + '>' : id;
+  }
+
+  function fmtClass(id, label, stereotype, generics) {
+    var idPart = _fmtIdGenerics(id, generics);
+    var labelPart = (label && label !== id && !generics) ? '"' + label + '" as ' + idPart : idPart;
+    var stereoPart = stereotype ? ' <<' + stereotype + '>>' : '';
+    return 'class ' + labelPart + stereoPart;
+  }
+
+  function fmtInterface(id, label, stereotype, generics) {
+    var idPart = _fmtIdGenerics(id, generics);
+    var labelPart = (label && label !== id && !generics) ? '"' + label + '" as ' + idPart : idPart;
+    var stereoPart = stereotype ? ' <<' + stereotype + '>>' : '';
+    return 'interface ' + labelPart + stereoPart;
+  }
+
+  function fmtAbstract(id, label, stereotype, generics) {
+    var idPart = _fmtIdGenerics(id, generics);
+    var labelPart = (label && label !== id && !generics) ? '"' + label + '" as ' + idPart : idPart;
+    var stereoPart = stereotype ? ' <<' + stereotype + '>>' : '';
+    return 'abstract class ' + labelPart + stereoPart;
+  }
+
+  function fmtEnum(id, label, stereotype) {
+    var labelPart = (label && label !== id) ? '"' + label + '" as ' + id : id;
+    var stereoPart = stereotype ? ' <<' + stereotype + '>>' : '';
+    return 'enum ' + labelPart + stereoPart;
+  }
+
+  function fmtRelation(kind, from, to, label) {
+    var lbl = label ? ' : ' + label : '';
+    if (kind === 'inheritance')   return from + ' <|-- ' + to + lbl;
+    if (kind === 'implementation') return from + ' <|.. ' + to + lbl;
+    if (kind === 'composition')   return from + ' *-- ' + to + lbl;
+    if (kind === 'aggregation')   return from + ' o-- ' + to + lbl;
+    if (kind === 'dependency')    return from + ' ..> ' + to + lbl;
+    return from + ' -- ' + to + lbl;
+  }
+
+  function fmtAttribute(visibility, name, type, isStatic) {
+    var v = visibility || '';
+    var stat = isStatic ? '{static} ' : '';
+    var typ = type ? ' : ' + type : '';
+    return (v ? v + ' ' : '') + stat + name + typ;
+  }
+
+  function fmtMethod(visibility, name, params, returnType, isStatic, isAbstract) {
+    var v = visibility || '';
+    var mod = isStatic ? '{static} ' : (isAbstract ? '{abstract} ' : '');
+    var ret = returnType ? ' : ' + returnType : '';
+    return (v ? v + ' ' : '') + mod + name + '(' + (params || '') + ')' + ret;
+  }
+
+  function fmtEnumValue(name) { return name; }
+  function fmtPackage(label) { return 'package "' + label + '" {'; }
+  function fmtNamespace(label) { return 'namespace ' + label + ' {'; }
+
   function template() {
     return [
       '@startuml',
@@ -298,5 +357,15 @@ window.MA.modules.plantumlClass = (function() {
     },
     buildOverlay: function() { /* Phase B Task 21 で実装 */ },
     detect: function(text) { return window.MA.parserUtils.detectDiagramType(text) === 'plantuml-class'; },
+    fmtClass: fmtClass,
+    fmtInterface: fmtInterface,
+    fmtAbstract: fmtAbstract,
+    fmtEnum: fmtEnum,
+    fmtRelation: fmtRelation,
+    fmtAttribute: fmtAttribute,
+    fmtMethod: fmtMethod,
+    fmtEnumValue: fmtEnumValue,
+    fmtPackage: fmtPackage,
+    fmtNamespace: fmtNamespace,
   };
 })();
