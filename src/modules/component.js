@@ -734,37 +734,89 @@ window.MA.modules.plantumlComponent = (function() {
       var OB = window.MA.overlayBuilder;
       OB.syncDimensions(svgEl, overlayEl);
 
+      var components = (parsedData.elements || []).filter(function(e) { return e.kind === 'component'; });
+      var interfaces = (parsedData.elements || []).filter(function(e) { return e.kind === 'interface'; });
+
+      // PlantUML emits component/interface as <g class="entity" data-qualified-name="X">
+      // (実機 SVG)。test fixture は g.component / g.interface の旧形式も受理する fallback。
+      function _matchEntity(item) {
+        var g = svgEl.querySelector('g.entity[data-qualified-name="' + item.id + '"]');
+        if (g) return g;
+        return svgEl.querySelector('g.' + item.kind + '[data-source-line]');
+      }
+      function _entityBBox(g) {
+        if (!g) return null;
+        if (typeof g.getBBox === 'function') {
+          try {
+            var bb = g.getBBox();
+            if (bb && (bb.width > 0 || bb.height > 0)) return bb;
+          } catch (e) { /* jsdom fallback */ }
+        }
+        var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        var found = false;
+        Array.prototype.forEach.call(g.querySelectorAll('ellipse, rect, text'), function(el) {
+          var x, y, w, h;
+          if (el.tagName.toLowerCase() === 'ellipse') {
+            var cx = parseFloat(el.getAttribute('cx')) || 0;
+            var cy = parseFloat(el.getAttribute('cy')) || 0;
+            var rx = parseFloat(el.getAttribute('rx')) || 0;
+            var ry = parseFloat(el.getAttribute('ry')) || 0;
+            x = cx - rx; y = cy - ry; w = rx * 2; h = ry * 2;
+          } else if (el.tagName.toLowerCase() === 'rect') {
+            x = parseFloat(el.getAttribute('x')) || 0;
+            y = parseFloat(el.getAttribute('y')) || 0;
+            w = parseFloat(el.getAttribute('width')) || 0;
+            h = parseFloat(el.getAttribute('height')) || 0;
+          } else {
+            x = parseFloat(el.getAttribute('x')) || 0;
+            y = parseFloat(el.getAttribute('y')) || 0;
+            w = parseFloat(el.getAttribute('textLength')) || 0;
+            h = 14;
+          }
+          if (w === 0 && h === 0) return;
+          found = true;
+          minX = Math.min(minX, x); minY = Math.min(minY, y);
+          maxX = Math.max(maxX, x + w); maxY = Math.max(maxY, y + h);
+        });
+        if (!found) return null;
+        return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+      }
+
+      var compMatched = 0;
+      components.forEach(function(c) {
+        var g = _matchEntity(c);
+        if (!g) return;
+        var bb = _entityBBox(g);
+        if (!bb) return;
+        OB.addRect(overlayEl, bb.x - 8, bb.y - 6, bb.width + 16, bb.height + 12, {
+          'data-type': 'component',
+          'data-id': c.id,
+          'data-line': c.line,
+        });
+        compMatched++;
+      });
+
+      var ifMatched = 0;
+      interfaces.forEach(function(i) {
+        var g = _matchEntity(i);
+        if (!g) return;
+        var bb = _entityBBox(g);
+        if (!bb) return;
+        OB.addRect(overlayEl, bb.x - 6, bb.y - 6, bb.width + 12, bb.height + 12, {
+          'data-type': 'interface',
+          'data-id': i.id,
+          'data-line': i.line,
+        });
+        ifMatched++;
+      });
+
+      // candidates for port matching (still uses data-source-line)
       var startUml = (parsedData.meta && parsedData.meta.startUmlLine) || 0;
       var candidates = [];
       function _push(v) { if (candidates.indexOf(v) === -1) candidates.push(v); }
       if (startUml > 0) _push(startUml);
       _push(0);
       _push(1);
-
-      var components = (parsedData.elements || []).filter(function(e) { return e.kind === 'component'; });
-      var interfaces = (parsedData.elements || []).filter(function(e) { return e.kind === 'interface'; });
-
-      var compPicked = OB.pickBestOffset(svgEl, components, 'g.component', candidates);
-      compPicked.matches.forEach(function(m) {
-        var bb = OB.extractBBox(m.groupEl);
-        if (!bb) return;
-        OB.addRect(overlayEl, bb.x - 8, bb.y - 6, (bb.width || 80) + 16, (bb.height || 14) + 12, {
-          'data-type': 'component',
-          'data-id': m.item.id,
-          'data-line': m.item.line,
-        });
-      });
-
-      var ifPicked = OB.pickBestOffset(svgEl, interfaces, 'g.interface', candidates);
-      ifPicked.matches.forEach(function(m) {
-        var bb = OB.extractBBox(m.groupEl);
-        if (!bb) return;
-        OB.addRect(overlayEl, bb.x - 6, bb.y - 6, (bb.width || 60) + 12, (bb.height || 14) + 12, {
-          'data-type': 'interface',
-          'data-id': m.item.id,
-          'data-line': m.item.line,
-        });
-      });
 
       var packages = (parsedData.groups || []).filter(function(g) { return g.kind === 'package'; });
       var pkgGroups = svgEl.querySelectorAll('g.cluster');
@@ -785,15 +837,20 @@ window.MA.modules.plantumlComponent = (function() {
       }
 
       var ports = (parsedData.elements || []).filter(function(e) { return e.kind === 'port'; });
-      var portPicked = OB.pickBestOffset(svgEl, ports, 'g.port', candidates);
-      portPicked.matches.forEach(function(m) {
-        var bb = OB.extractBBox(m.groupEl);
+      var portMatched = 0;
+      ports.forEach(function(p) {
+        // port も entity name で引いて、なければ legacy fallback
+        var g = svgEl.querySelector('g.entity[data-qualified-name="' + p.id + '"]')
+             || svgEl.querySelector('g.port[data-source-line]');
+        if (!g) return;
+        var bb = _entityBBox(g);
         if (!bb) return;
-        OB.addRect(overlayEl, bb.x - 4, bb.y - 4, (bb.width || 20) + 8, (bb.height || 14) + 8, {
+        OB.addRect(overlayEl, bb.x - 4, bb.y - 4, bb.width + 8, bb.height + 8, {
           'data-type': 'port',
-          'data-id': m.item.id,
-          'data-line': m.item.line,
+          'data-id': p.id,
+          'data-line': p.line,
         });
+        portMatched++;
       });
 
       var relations = parsedData.relations || [];
@@ -815,16 +872,16 @@ window.MA.modules.plantumlComponent = (function() {
 
       return {
         matched: {
-          component: compPicked.matches.length,
-          interface: ifPicked.matches.length,
-          port: portPicked.matches.length,
+          component: compMatched,
+          interface: ifMatched,
+          port: portMatched,
           package: pkgN,
           relation: relN,
         },
         unmatched: {
-          component: components.length - compPicked.matches.length,
-          interface: interfaces.length - ifPicked.matches.length,
-          port: ports.length - portPicked.matches.length,
+          component: components.length - compMatched,
+          interface: interfaces.length - ifMatched,
+          port: ports.length - portMatched,
           package: packages.length - pkgN,
           relation: relations.length - relN,
         },

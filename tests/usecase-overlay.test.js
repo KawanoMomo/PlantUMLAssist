@@ -41,8 +41,8 @@ describe('usecase.buildOverlay — actor/usecase', function() {
   beforeEach(function() {
     document.body.innerHTML =
       '<svg id="src" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">' +
-        '<g class="actor" data-source-line="3"><text x="10" y="20" textLength="30">User</text></g>' +
-        '<g class="usecase" data-source-line="4"><text x="60" y="20" textLength="50">Login</text></g>' +
+        '<g class="entity" data-qualified-name="User" data-source-line="3"><ellipse cx="20" cy="14" rx="8" ry="8"/><text x="10" y="40" textLength="30">User</text></g>' +
+        '<g class="entity" data-qualified-name="Login" data-source-line="4"><ellipse cx="80" cy="40" rx="29" ry="14"/><text x="60" y="44" textLength="50">Login</text></g>' +
       '</svg>' +
       '<svg id="ov" xmlns="http://www.w3.org/2000/svg"></svg>';
   });

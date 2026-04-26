@@ -41,8 +41,8 @@ describe('component.buildOverlay — component/interface', function() {
   beforeEach(function() {
     document.body.innerHTML =
       '<svg id="src" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">' +
-        '<g class="component" data-source-line="3"><text x="10" y="20" textLength="60">WebApp</text></g>' +
-        '<g class="interface" data-source-line="4"><text x="80" y="20" textLength="40">IAuth</text></g>' +
+        '<g class="entity" data-qualified-name="WebApp" data-source-line="3"><rect x="10" y="10" width="60" height="40"/><text x="20" y="30" textLength="40">WebApp</text></g>' +
+        '<g class="entity" data-qualified-name="IAuth" data-source-line="4"><ellipse cx="100" cy="30" rx="8" ry="8"/><text x="80" y="50" textLength="40">IAuth</text></g>' +
       '</svg>' +
       '<svg id="ov" xmlns="http://www.w3.org/2000/svg"></svg>';
   });
@@ -78,8 +78,8 @@ describe('component.buildOverlay — port + package', function() {
   test('port rect is added AFTER component rect (z-order: child first)', function() {
     document.body.innerHTML =
       '<svg id="src" xmlns="http://www.w3.org/2000/svg">' +
-        '<g class="component" data-source-line="3"><text x="0" y="0" textLength="60">W</text></g>' +
-        '<g class="port" data-source-line="4"><text x="20" y="20" textLength="10">p1</text></g>' +
+        '<g class="entity" data-qualified-name="W" data-source-line="3"><rect x="0" y="0" width="60" height="40"/><text x="10" y="20" textLength="40">W</text></g>' +
+        '<g class="entity" data-qualified-name="p1" data-source-line="4"><rect x="20" y="20" width="10" height="10"/></g>' +
       '</svg>' +
       '<svg id="ov" xmlns="http://www.w3.org/2000/svg"></svg>';
     var src = document.getElementById('src');
