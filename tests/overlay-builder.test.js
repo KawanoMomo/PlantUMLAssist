@@ -161,6 +161,44 @@ describe('overlayBuilder.pickBestOffset', function() {
   });
 });
 
+describe('overlayBuilder.hitTestTopmost', function() {
+  beforeEach(function() {
+    document.body.innerHTML = '<svg id="ov" xmlns="http://www.w3.org/2000/svg">' +
+      '<rect class="selectable" x="0" y="0" width="100" height="100" data-id="parent"/>' +
+      '<rect class="selectable" x="40" y="40" width="20" height="20" data-id="child"/>' +
+      '</svg>';
+  });
+  test('returns the topmost (last appended) selectable rect at point', function() {
+    var ov = document.getElementById('ov');
+    var hit = OB.hitTestTopmost(ov, 50, 50);
+    expect(hit).not.toBeNull();
+    expect(hit.getAttribute('data-id')).toBe('child');
+  });
+  test('returns parent when point only intersects parent', function() {
+    var ov = document.getElementById('ov');
+    var hit = OB.hitTestTopmost(ov, 10, 10);
+    expect(hit.getAttribute('data-id')).toBe('parent');
+  });
+  test('returns null when point is outside all rects', function() {
+    var ov = document.getElementById('ov');
+    expect(OB.hitTestTopmost(ov, 200, 200)).toBeNull();
+  });
+});
+
+describe('overlayBuilder.dedupById', function() {
+  test('keeps first occurrence per data-id', function() {
+    document.body.innerHTML = '<svg id="ov" xmlns="http://www.w3.org/2000/svg">' +
+      '<rect data-id="A"/><rect data-id="A"/><rect data-id="B"/>' +
+      '</svg>';
+    var ov = document.getElementById('ov');
+    var rects = Array.prototype.slice.call(ov.querySelectorAll('rect'));
+    var unique = OB.dedupById(rects);
+    expect(unique.length).toBe(2);
+    expect(unique[0].getAttribute('data-id')).toBe('A');
+    expect(unique[1].getAttribute('data-id')).toBe('B');
+  });
+});
+
 // jsdom window を run-tests.js が用意した sandbox window に戻す。
 // これをしないと後続 test ファイル (parser-utils, regex-parts 等) が
 // window.MA.* を見失って失敗する。

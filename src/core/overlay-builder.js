@@ -116,6 +116,39 @@ window.MA.overlayBuilder = (function() {
     return best;
   }
 
+  function hitTestTopmost(overlayEl, x, y) {
+    var rects = overlayEl.querySelectorAll('rect.selectable');
+    for (var i = rects.length - 1; i >= 0; i--) {
+      var r = rects[i];
+      var rx = parseFloat(r.getAttribute('x')) || 0;
+      var ry = parseFloat(r.getAttribute('y')) || 0;
+      var rw = parseFloat(r.getAttribute('width')) || 0;
+      var rh = parseFloat(r.getAttribute('height')) || 0;
+      if (x >= rx && x <= rx + rw && y >= ry && y <= ry + rh) {
+        return r;
+      }
+    }
+    return null;
+  }
+
+  function dedupById(rects) {
+    var seen = {};
+    var unique = [];
+    rects.forEach(function(r) {
+      var id = r.getAttribute('data-id');
+      if (!id || seen[id]) return;
+      seen[id] = true;
+      unique.push(r);
+    });
+    return unique;
+  }
+
+  function warnIfMismatch(kind, modelCount, matched) {
+    if (modelCount !== matched && typeof console !== 'undefined' && console.warn) {
+      console.warn('[overlay-builder] ' + kind + ' mismatch: model=' + modelCount + ' matched=' + matched);
+    }
+  }
+
   function syncDimensions(svgEl, overlayEl) {
     if (!svgEl || !overlayEl) return;
     var vb = svgEl.getAttribute('viewBox');
@@ -126,11 +159,14 @@ window.MA.overlayBuilder = (function() {
 
   return {
     addRect: addRect,
+    dedupById: dedupById,
     extractBBox: extractBBox,
     extractEdgeBBox: extractEdgeBBox,
+    hitTestTopmost: hitTestTopmost,
     matchByDataSourceLine: matchByDataSourceLine,
     matchByOrder: matchByOrder,
     pickBestOffset: pickBestOffset,
     syncDimensions: syncDimensions,
+    warnIfMismatch: warnIfMismatch,
   };
 })();
