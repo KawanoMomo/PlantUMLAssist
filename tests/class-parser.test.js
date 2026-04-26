@@ -121,6 +121,23 @@ describe('class.parse — methods', function() {
   });
 });
 
+describe('class.parse — interface', function() {
+  test('parses interface keyword', function() {
+    var t = '@startuml\ninterface IAuth {\n  + verify() : bool\n}\n@enduml';
+    var r = clMod.parse(t);
+    expect(r.elements.length).toBe(1);
+    expect(r.elements[0].kind).toBe('interface');
+    expect(r.elements[0].id).toBe('IAuth');
+    expect(r.elements[0].members.length).toBe(1);
+  });
+  test('parses interface with quoted label', function() {
+    var t = '@startuml\ninterface "Auth Service" as IAuth\n@enduml';
+    var r = clMod.parse(t);
+    expect(r.elements[0].id).toBe('IAuth');
+    expect(r.elements[0].label).toBe('Auth Service');
+  });
+});
+
 // jsdom epilogue
 if (prevWindow !== undefined) global.window = prevWindow;
 if (prevDocument !== undefined) global.document = prevDocument;
