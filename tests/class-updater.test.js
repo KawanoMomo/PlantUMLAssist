@@ -109,6 +109,31 @@ describe('class update operations', function() {
   });
 });
 
+describe('class member operations', function() {
+  test('addAttribute inserts before closing brace', function() {
+    var t = '@startuml\nclass Foo {\n}\n@enduml';
+    var out = clMod.addAttribute(t, 2, '+', 'name', 'String', false);
+    expect(out).toContain('+ name : String');
+    expect(out.indexOf('+ name')).toBeLessThan(out.indexOf('}'));
+  });
+  test('addMethod inserts before closing brace', function() {
+    var t = '@startuml\nclass Foo {\n}\n@enduml';
+    var out = clMod.addMethod(t, 2, '+', 'login', '', 'void', false, false);
+    expect(out).toContain('+ login() : void');
+  });
+  test('updateAttribute changes visibility', function() {
+    var t = '@startuml\nclass Foo {\n  + name : String\n}\n@enduml';
+    var out = clMod.updateAttribute(t, 3, 'visibility', '-');
+    expect(out).toContain('- name : String');
+  });
+  test('deleteMember removes member line', function() {
+    var t = '@startuml\nclass Foo {\n  + name : String\n  + id : int\n}\n@enduml';
+    var out = clMod.deleteMember(t, 3);
+    expect(out).not.toContain('name');
+    expect(out).toContain('id');
+  });
+});
+
 if (prevWindow !== undefined) global.window = prevWindow;
 if (prevDocument !== undefined) global.document = prevDocument;
 depPaths.forEach(function(p) { try { delete require.cache[require.resolve(p)]; } catch (e) {} });

@@ -395,6 +395,94 @@ window.MA.modules.plantumlClass = (function() {
     return lines.join('\n');
   }
 
+  function _findClassEndLine(lines, classLineIdx) {
+    if (!/\{\s*$/.test(lines[classLineIdx])) return -1;
+    for (var i = classLineIdx + 1; i < lines.length; i++) {
+      if (lines[i].trim() === '}') return i;
+    }
+    return -1;
+  }
+
+  function addAttribute(text, classLineNum, visibility, name, type, isStatic) {
+    var lines = text.split('\n');
+    var classIdx = classLineNum - 1;
+    var closeIdx = _findClassEndLine(lines, classIdx);
+    if (closeIdx < 0) return text;
+    var indent = lines[classIdx].match(/^(\s*)/)[1] + '  ';
+    lines.splice(closeIdx, 0, indent + fmtAttribute(visibility, name, type, isStatic));
+    return lines.join('\n');
+  }
+
+  function addMethod(text, classLineNum, visibility, name, params, returnType, isStatic, isAbstract) {
+    var lines = text.split('\n');
+    var classIdx = classLineNum - 1;
+    var closeIdx = _findClassEndLine(lines, classIdx);
+    if (closeIdx < 0) return text;
+    var indent = lines[classIdx].match(/^(\s*)/)[1] + '  ';
+    lines.splice(closeIdx, 0, indent + fmtMethod(visibility, name, params, returnType, isStatic, isAbstract));
+    return lines.join('\n');
+  }
+
+  function addEnumValue(text, enumLineNum, name) {
+    var lines = text.split('\n');
+    var enumIdx = enumLineNum - 1;
+    var closeIdx = _findClassEndLine(lines, enumIdx);
+    if (closeIdx < 0) return text;
+    var indent = lines[enumIdx].match(/^(\s*)/)[1] + '  ';
+    lines.splice(closeIdx, 0, indent + name);
+    return lines.join('\n');
+  }
+
+  function updateAttribute(text, lineNum, field, value) {
+    var lines = text.split('\n');
+    var idx = lineNum - 1;
+    var indent = lines[idx].match(/^(\s*)/)[1];
+    var trimmed = lines[idx].trim();
+    var am = trimmed.match(ATTRIBUTE_RE);
+    if (!am) return text;
+    var visibility = am[1] || null;
+    var isStatic = am[2] === 'static';
+    var name = am[3];
+    var type = am[4] ? am[4].trim() : '';
+    if (field === 'visibility') visibility = value;
+    else if (field === 'name') name = value;
+    else if (field === 'type') type = value;
+    else if (field === 'static') isStatic = !!value;
+    lines[idx] = indent + fmtAttribute(visibility, name, type, isStatic);
+    return lines.join('\n');
+  }
+
+  function updateMethod(text, lineNum, field, value) {
+    var lines = text.split('\n');
+    var idx = lineNum - 1;
+    var indent = lines[idx].match(/^(\s*)/)[1];
+    var trimmed = lines[idx].trim();
+    var mm = trimmed.match(METHOD_RE);
+    if (!mm) return text;
+    var visibility = mm[1] || null;
+    var isStatic = mm[2] === 'static';
+    var isAbstract = mm[2] === 'abstract';
+    var name = mm[3];
+    var params = mm[4] || '';
+    var returnType = mm[5] ? mm[5].trim() : '';
+    if (field === 'visibility') visibility = value;
+    else if (field === 'name') name = value;
+    else if (field === 'params') params = value;
+    else if (field === 'type') returnType = value;
+    else if (field === 'static') { isStatic = !!value; if (isStatic) isAbstract = false; }
+    else if (field === 'abstract') { isAbstract = !!value; if (isAbstract) isStatic = false; }
+    lines[idx] = indent + fmtMethod(visibility, name, params, returnType, isStatic, isAbstract);
+    return lines.join('\n');
+  }
+
+  function deleteMember(text, lineNum) {
+    var lines = text.split('\n');
+    var idx = lineNum - 1;
+    if (idx < 0 || idx >= lines.length) return text;
+    lines.splice(idx, 1);
+    return lines.join('\n');
+  }
+
   function updateRelation(text, lineNum, field, value) {
     var lines = text.split('\n');
     var idx = lineNum - 1;
@@ -487,5 +575,11 @@ window.MA.modules.plantumlClass = (function() {
     updateAbstract: updateClass,
     updateEnum: updateClass,
     updateRelation: updateRelation,
+    addAttribute: addAttribute,
+    addMethod: addMethod,
+    addEnumValue: addEnumValue,
+    updateAttribute: updateAttribute,
+    updateMethod: updateMethod,
+    deleteMember: deleteMember,
   };
 })();
