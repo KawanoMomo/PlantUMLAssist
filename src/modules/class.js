@@ -349,6 +349,85 @@ window.MA.modules.plantumlClass = (function() {
     return insertBeforeEnd(insertBeforeEnd(text, fmtNamespace(label)), '}');
   }
 
+  function _parseSingleLine(line) {
+    var trimmed = line.trim();
+    var indent = line.match(/^(\s*)/)[1];
+    var match;
+    if ((match = trimmed.match(ABSTRACT_KW_RE)))
+      return { kind: 'abstract', indent: indent, match: match };
+    if ((match = trimmed.match(INTERFACE_KW_RE)))
+      return { kind: 'interface', indent: indent, match: match };
+    if ((match = trimmed.match(ENUM_KW_RE)))
+      return { kind: 'enum', indent: indent, match: match };
+    if ((match = trimmed.match(CLASS_KW_RE)))
+      return { kind: 'class', indent: indent, match: match };
+    return null;
+  }
+
+  function updateClass(text, lineNum, field, value) {
+    var lines = text.split('\n');
+    var idx = lineNum - 1;
+    if (idx < 0 || idx >= lines.length) return text;
+    var info = _parseSingleLine(lines[idx]);
+    if (!info) return text;
+    var m = info.match;
+    var rawId, label, stereotype;
+    if (m[2] !== undefined) { rawId = m[2]; label = m[1]; }
+    else { rawId = m[3]; label = m[4] !== undefined ? m[4] : m[3]; }
+    var split = _splitIdGenerics(rawId);
+    var id = split.id, generics = split.generics;
+    stereotype = m[5] || null;
+    var wasBareLabel = (label === split.id);
+
+    if (field === 'id') { id = value; if (wasBareLabel) label = value; }
+    else if (field === 'label') label = value;
+    else if (field === 'stereotype') stereotype = value || null;
+    else if (field === 'generics') generics = value && value.length > 0 ? value : null;
+
+    var hasBlock = /\{\s*$/.test(lines[idx]);
+    var openBrace = hasBlock ? ' {' : '';
+    var fmtFn;
+    if (info.kind === 'interface') fmtFn = fmtInterface;
+    else if (info.kind === 'abstract') fmtFn = fmtAbstract;
+    else if (info.kind === 'enum') fmtFn = function(i, l, s) { return fmtEnum(i, l, s); };
+    else fmtFn = fmtClass;
+    lines[idx] = info.indent + fmtFn(id, label, stereotype, generics) + openBrace;
+    return lines.join('\n');
+  }
+
+  function updateRelation(text, lineNum, field, value) {
+    var lines = text.split('\n');
+    var idx = lineNum - 1;
+    if (idx < 0 || idx >= lines.length) return text;
+    var indent = lines[idx].match(/^(\s*)/)[1];
+    var trimmed = lines[idx].trim();
+    var rm = trimmed.match(RELATION_RE);
+    if (!rm) return text;
+    var arrow = rm[2];
+    var from = rm[1].replace(/^"|"$/g, '');
+    var to = rm[3].replace(/^"|"$/g, '');
+    var label = rm[4] || null;
+    var kind;
+    if (arrow === '<|--' || arrow === '--|>') kind = 'inheritance';
+    else if (arrow === '<|..' || arrow === '..|>') kind = 'implementation';
+    else if (arrow === '*--' || arrow === '--*') kind = 'composition';
+    else if (arrow === 'o--' || arrow === '--o') kind = 'aggregation';
+    else if (arrow === '..>' || arrow === '<..') kind = 'dependency';
+    else kind = 'association';
+    if (arrow === '--|>' || arrow === '..|>' || arrow === '--*' || arrow === '--o' || arrow === '<..') {
+      var tmp = from; from = to; to = tmp;
+    }
+
+    if (field === 'kind') kind = value;
+    else if (field === 'from') from = value;
+    else if (field === 'to') to = value;
+    else if (field === 'label') label = value;
+    else if (field === 'swap') { var s = from; from = to; to = s; }
+
+    lines[idx] = indent + fmtRelation(kind, from, to, label);
+    return lines.join('\n');
+  }
+
   function template() {
     return [
       '@startuml',
@@ -403,5 +482,10 @@ window.MA.modules.plantumlClass = (function() {
     addRelation: addRelation,
     addPackage: addPackage,
     addNamespace: addNamespace,
+    updateClass: updateClass,
+    updateInterface: updateClass,
+    updateAbstract: updateClass,
+    updateEnum: updateClass,
+    updateRelation: updateRelation,
   };
 })();

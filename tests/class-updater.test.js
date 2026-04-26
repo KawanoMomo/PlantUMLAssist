@@ -85,6 +85,30 @@ describe('class add operations', function() {
   });
 });
 
+describe('class update operations', function() {
+  test('updateClass changes id', function() {
+    var t = '@startuml\nclass Foo\n@enduml';
+    var out = clMod.updateClass(t, 2, 'id', 'Bar');
+    expect(out).toContain('class Bar');
+    expect(out).not.toContain('class Foo');
+  });
+  test('updateClass adds stereotype', function() {
+    var t = '@startuml\nclass Foo\n@enduml';
+    var out = clMod.updateClass(t, 2, 'stereotype', 'Entity');
+    expect(out).toContain('class Foo <<Entity>>');
+  });
+  test('updateRelation changes kind', function() {
+    var t = '@startuml\nFoo -- Bar\n@enduml';
+    var out = clMod.updateRelation(t, 2, 'kind', 'inheritance');
+    expect(out).toContain('Foo <|-- Bar');
+  });
+  test('updateRelation swap', function() {
+    var t = '@startuml\nFoo -- Bar\n@enduml';
+    var out = clMod.updateRelation(t, 2, 'swap');
+    expect(out).toContain('Bar -- Foo');
+  });
+});
+
 if (prevWindow !== undefined) global.window = prevWindow;
 if (prevDocument !== undefined) global.document = prevDocument;
 depPaths.forEach(function(p) { try { delete require.cache[require.resolve(p)]; } catch (e) {} });
