@@ -538,6 +538,13 @@ window.MA.modules.plantumlUsecase = (function() {
     setTitle: setTitle,
     renameWithRefs: renameWithRefs,
     renderProps: renderProps,
+    capabilities: {
+      overlaySelection: false,  // Phase B で true に切替
+      hoverInsert: false,
+      participantDrag: false,
+      showInsertForm: false,
+      multiSelectConnect: false,  // Phase B で true に切替
+    },
     buildOverlay: function() { /* v0.3.0 では overlay なし */ },
     detect: function(text) { return window.MA.parserUtils.detectDiagramType(text) === 'plantuml-usecase'; },
     template: function() {

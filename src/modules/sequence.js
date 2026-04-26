@@ -792,6 +792,13 @@ window.MA.modules.plantumlSequence = (function() {
         '@enduml',
       ].join('\n');
     },
+    capabilities: {
+      overlaySelection: true,
+      hoverInsert: true,
+      participantDrag: true,
+      showInsertForm: true,
+      multiSelectConnect: false,
+    },
     buildOverlay: function(svgEl, parsedData, overlayEl) {
       if (!overlayEl) return;
       if (window.MA.sequenceOverlay && window.MA.sequenceOverlay.buildSequenceOverlay) {

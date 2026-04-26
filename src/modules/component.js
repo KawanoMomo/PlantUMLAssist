@@ -637,6 +637,13 @@ window.MA.modules.plantumlComponent = (function() {
     setTitle: setTitle,
     renameWithRefs: renameWithRefs,
     renderProps: renderProps,
+    capabilities: {
+      overlaySelection: false,  // Phase B で true に切替
+      hoverInsert: false,
+      participantDrag: false,
+      showInsertForm: false,
+      multiSelectConnect: false,  // Phase B で true に切替
+    },
     buildOverlay: function() { /* v0.4.0 では overlay なし */ },
   };
 })();
