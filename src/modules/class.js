@@ -10,7 +10,7 @@ window.MA.modules.plantumlClass = (function() {
   // class declaration: keyword + id (with optional quoted label)
   // groups: 1=quoted label (with as), 2=alias ID, 3=bare ID, 4=quoted label (trailing as)
   var CLASS_KW_RE = new RegExp(
-    '^class\\s+(?:"([^"]+)"\\s+as\\s+(' + ID + ')|(' + ID + ')(?:\\s+as\\s+"([^"]+)")?)\\s*\\{?\\s*$'
+    '^class\\s+(?:"([^"]+)"\\s+as\\s+(' + ID + ')|(' + ID + ')(?:\\s+as\\s+"([^"]+)")?)\\s*(?:<<([^>]+)>>)?\\s*\\{?\\s*$'
   );
 
   var ATTRIBUTE_RE = new RegExp(
@@ -22,15 +22,15 @@ window.MA.modules.plantumlClass = (function() {
   );
 
   var INTERFACE_KW_RE = new RegExp(
-    '^interface\\s+(?:"([^"]+)"\\s+as\\s+(' + ID + ')|(' + ID + ')(?:\\s+as\\s+"([^"]+)")?)\\s*\\{?\\s*$'
+    '^interface\\s+(?:"([^"]+)"\\s+as\\s+(' + ID + ')|(' + ID + ')(?:\\s+as\\s+"([^"]+)")?)\\s*(?:<<([^>]+)>>)?\\s*\\{?\\s*$'
   );
 
   var ABSTRACT_KW_RE = new RegExp(
-    '^abstract\\s+class\\s+(?:"([^"]+)"\\s+as\\s+(' + ID + ')|(' + ID + ')(?:\\s+as\\s+"([^"]+)")?)\\s*\\{?\\s*$'
+    '^abstract\\s+class\\s+(?:"([^"]+)"\\s+as\\s+(' + ID + ')|(' + ID + ')(?:\\s+as\\s+"([^"]+)")?)\\s*(?:<<([^>]+)>>)?\\s*\\{?\\s*$'
   );
 
   var ENUM_KW_RE = new RegExp(
-    '^enum\\s+(?:"([^"]+)"\\s+as\\s+(' + ID + ')|(' + ID + ')(?:\\s+as\\s+"([^"]+)")?)\\s*\\{?\\s*$'
+    '^enum\\s+(?:"([^"]+)"\\s+as\\s+(' + ID + ')|(' + ID + ')(?:\\s+as\\s+"([^"]+)")?)\\s*(?:<<([^>]+)>>)?\\s*\\{?\\s*$'
   );
   var ENUM_VALUE_RE = /^([A-Z_][A-Z0-9_]*)\s*;?\s*$/;
 
@@ -147,7 +147,7 @@ window.MA.modules.plantumlClass = (function() {
         var eHasBlock = /\{\s*$/.test(trimmed);
         var eEl = {
           kind: 'enum', id: eid, label: elabel,
-          stereotype: null, generics: null, members: [],
+          stereotype: em[5] || null, generics: null, members: [],
           line: lineNum, endLine: lineNum, parentPackageId: null,
         };
         result.elements.push(eEl);
@@ -163,7 +163,7 @@ window.MA.modules.plantumlClass = (function() {
         var aHasBlock = /\{\s*$/.test(trimmed);
         var aEl = {
           kind: 'abstract', id: aid, label: alabel,
-          stereotype: null, generics: null, members: [],
+          stereotype: abm[5] || null, generics: null, members: [],
           line: lineNum, endLine: lineNum, parentPackageId: null,
         };
         result.elements.push(aEl);
@@ -179,7 +179,7 @@ window.MA.modules.plantumlClass = (function() {
         var iHasBlock = /\{\s*$/.test(trimmed);
         var iEl = {
           kind: 'interface', id: iid, label: ilabel,
-          stereotype: null, generics: null, members: [],
+          stereotype: im[5] || null, generics: null, members: [],
           line: lineNum, endLine: lineNum, parentPackageId: null,
         };
         result.elements.push(iEl);
@@ -195,7 +195,7 @@ window.MA.modules.plantumlClass = (function() {
         var hasBlock = /\{\s*$/.test(trimmed);
         var el = {
           kind: 'class', id: id, label: label,
-          stereotype: null, generics: null, members: [],
+          stereotype: m[5] || null, generics: null, members: [],
           line: lineNum, endLine: lineNum, parentPackageId: null,
         };
         result.elements.push(el);

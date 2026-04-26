@@ -220,6 +220,25 @@ describe('class.parse — relations', function() {
   });
 });
 
+describe('class.parse — stereotype', function() {
+  test('parses class with <<Entity>> stereotype', function() {
+    var t = '@startuml\nclass User <<Entity>>\n@enduml';
+    var r = clMod.parse(t);
+    expect(r.elements[0].stereotype).toBe('Entity');
+  });
+  test('parses interface with <<Repository>> stereotype', function() {
+    var t = '@startuml\ninterface UserRepo <<Repository>>\n@enduml';
+    var r = clMod.parse(t);
+    expect(r.elements[0].stereotype).toBe('Repository');
+  });
+  test('handles stereotype before block opening brace', function() {
+    var t = '@startuml\nclass User <<Entity>> {\n}\n@enduml';
+    var r = clMod.parse(t);
+    expect(r.elements[0].stereotype).toBe('Entity');
+    expect(r.elements[0].endLine).toBe(3);
+  });
+});
+
 // jsdom epilogue
 if (prevWindow !== undefined) global.window = prevWindow;
 if (prevDocument !== undefined) global.document = prevDocument;
