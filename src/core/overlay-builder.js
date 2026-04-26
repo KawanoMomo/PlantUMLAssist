@@ -22,6 +22,60 @@ window.MA.overlayBuilder = (function() {
     return rect;
   }
 
+  function extractBBox(g, opts) {
+    if (!g) return null;
+    var t = g.querySelector('text');
+    if (t) {
+      if (typeof t.getBBox === 'function') {
+        try { return t.getBBox(); } catch (e) { /* jsdom fallback */ }
+      }
+      return {
+        x: parseFloat(t.getAttribute('x')) || 0,
+        y: parseFloat(t.getAttribute('y')) || 0,
+        width: parseFloat(t.getAttribute('textLength')) || parseFloat(t.getAttribute('width')) || 0,
+        height: 14,
+      };
+    }
+    var line = g.querySelector('line');
+    if (line) {
+      var x1 = parseFloat(line.getAttribute('x1')) || 0;
+      var x2 = parseFloat(line.getAttribute('x2')) || 0;
+      var y1 = parseFloat(line.getAttribute('y1')) || 0;
+      var y2 = parseFloat(line.getAttribute('y2')) || 0;
+      return {
+        x: Math.min(x1, x2),
+        y: Math.min(y1, y2) - 6,
+        width: Math.abs(x2 - x1),
+        height: Math.abs(y2 - y1) + 12,
+      };
+    }
+    return null;
+  }
+
+  function extractEdgeBBox(pathEl, padding) {
+    var pad = padding || 8;
+    if (!pathEl) return null;
+    if (pathEl.tagName.toLowerCase() === 'line') {
+      var x1 = parseFloat(pathEl.getAttribute('x1')) || 0;
+      var x2 = parseFloat(pathEl.getAttribute('x2')) || 0;
+      var y1 = parseFloat(pathEl.getAttribute('y1')) || 0;
+      var y2 = parseFloat(pathEl.getAttribute('y2')) || 0;
+      return {
+        x: Math.min(x1, x2) - pad,
+        y: Math.min(y1, y2) - pad,
+        width: Math.abs(x2 - x1) + 2 * pad,
+        height: Math.abs(y2 - y1) + 2 * pad,
+      };
+    }
+    if (typeof pathEl.getBBox === 'function') {
+      try {
+        var bb = pathEl.getBBox();
+        return { x: bb.x - pad, y: bb.y - pad, width: bb.width + 2 * pad, height: bb.height + 2 * pad };
+      } catch (e) { /* jsdom: fall through */ }
+    }
+    return null;
+  }
+
   function syncDimensions(svgEl, overlayEl) {
     if (!svgEl || !overlayEl) return;
     var vb = svgEl.getAttribute('viewBox');
@@ -32,6 +86,8 @@ window.MA.overlayBuilder = (function() {
 
   return {
     addRect: addRect,
+    extractBBox: extractBBox,
+    extractEdgeBBox: extractEdgeBBox,
     syncDimensions: syncDimensions,
   };
 })();

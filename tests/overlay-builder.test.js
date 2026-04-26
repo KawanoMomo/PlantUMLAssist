@@ -60,6 +60,51 @@ describe('overlayBuilder.syncDimensions', function() {
   });
 });
 
+describe('overlayBuilder.extractBBox', function() {
+  beforeEach(function() {
+    document.body.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" id="root">' +
+      '<g id="g1"><text x="10" y="20" textLength="50">Hi</text></g>' +
+      '<g id="g2"><line x1="0" y1="0" x2="100" y2="50"/></g>' +
+      '<g id="g3"></g>' +
+      '</svg>';
+  });
+  test('returns text bbox via x/y/textLength fallback (jsdom)', function() {
+    var g = document.getElementById('g1');
+    var bb = OB.extractBBox(g);
+    expect(bb.x).toBe(10);
+    expect(bb.y).toBe(20);
+    expect(bb.width).toBe(50);
+    expect(bb.height).toBe(14);
+  });
+  test('falls back to line bbox when text is missing', function() {
+    var g = document.getElementById('g2');
+    var bb = OB.extractBBox(g);
+    expect(bb.x).toBe(0);
+    expect(bb.y).toBe(-6);
+    expect(bb.width).toBe(100);
+  });
+  test('returns null for empty group', function() {
+    var g = document.getElementById('g3');
+    expect(OB.extractBBox(g)).toBeNull();
+  });
+});
+
+describe('overlayBuilder.extractEdgeBBox', function() {
+  beforeEach(function() {
+    document.body.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" id="root">' +
+      '<line id="ln" x1="10" y1="20" x2="50" y2="60"/>' +
+      '</svg>';
+  });
+  test('returns padded bbox around line endpoints', function() {
+    var ln = document.getElementById('ln');
+    var bb = OB.extractEdgeBBox(ln, 8);
+    expect(bb.x).toBe(2);
+    expect(bb.y).toBe(12);
+    expect(bb.width).toBe(56);
+    expect(bb.height).toBe(56);
+  });
+});
+
 // jsdom window を run-tests.js が用意した sandbox window に戻す。
 // これをしないと後続 test ファイル (parser-utils, regex-parts 等) が
 // window.MA.* を見失って失敗する。
