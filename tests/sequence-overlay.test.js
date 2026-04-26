@@ -14,6 +14,8 @@ global.DOMParser = dom.window.DOMParser;
 // 新しい jsdom window への window.MA.lineResolver 登録が起きない。
 // キャッシュを明示的に落として現在の window に再登録させる。
 delete require.cache[require.resolve('../src/core/line-resolver.js')];
+delete require.cache[require.resolve('../src/core/overlay-builder.js')];
+delete require.cache[require.resolve('../src/core/selection-router.js')];
 
 require('../src/core/html-utils.js');
 require('../src/core/dsl-utils.js');
@@ -22,6 +24,8 @@ require('../src/core/dsl-updater.js');
 require('../src/core/text-updater.js');
 require('../src/core/parser-utils.js');
 require('../src/core/line-resolver.js');
+require('../src/core/overlay-builder.js');
+require('../src/core/selection-router.js');
 require('../src/modules/sequence.js');
 require('../src/ui/sequence-overlay.js');
 
@@ -220,17 +224,18 @@ describe('resolveInsertLine', function() {
   });
 });
 
-describe('setSelectedHighlight', function() {
+describe('selection-router.applyHighlight integration', function() {
   test('adds selected class to matching rect and removes from others', function() {
     var f = loadFixture('sequence-basic');
     var overlayEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     overlay.buildSequenceOverlay(f.svgEl, f.parsed, overlayEl);
-    var firstLine = f.parsed.relations[0].line;
-    overlay.setSelectedHighlight(overlayEl, [{ type: 'message', line: firstLine }]);
+    var firstMsg = f.parsed.relations[0];
+    var SR = window.MA.selectionRouter;
+    SR.applyHighlight(overlayEl, [{ type: 'message', id: firstMsg.id, line: firstMsg.line }]);
     var selectedRects = overlayEl.querySelectorAll('rect.selected');
     expect(selectedRects.length).toBe(1);
-    expect(parseInt(selectedRects[0].getAttribute('data-line'), 10)).toBe(firstLine);
-    overlay.setSelectedHighlight(overlayEl, []);
+    expect(parseInt(selectedRects[0].getAttribute('data-line'), 10)).toBe(firstMsg.line);
+    SR.applyHighlight(overlayEl, []);
     expect(overlayEl.querySelectorAll('rect.selected').length).toBe(0);
   });
 });

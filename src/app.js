@@ -361,38 +361,16 @@ function init() {
     }
   });
 
-  // Overlay click → selection
+  // Overlay click → selection (Phase A: selection-router へ移譲)
   var overlayEl = document.getElementById('overlay-layer');
   if (overlayEl) {
+    // drag suppress: participant drag 直後の click は無視 (capture phase で先取り)
     overlayEl.addEventListener('click', function(e) {
-      // drag 終了直後の click は participant drag の残響とみなし無視
-      if (Date.now() - justDraggedAt < DRAG_CLICK_SUPPRESS_MS) return;
-      var target = e.target;
-      var type = target.getAttribute('data-type');
-      var id = target.getAttribute('data-id');
-      var line = target.getAttribute('data-line');
-      if (!type) {
-        if (!e.shiftKey) window.MA.selection.clearSelection();
-        return;
+      if (Date.now() - justDraggedAt < DRAG_CLICK_SUPPRESS_MS) {
+        e.stopImmediatePropagation();
       }
-      var selItem = { type: type, id: id, line: parseInt(line, 10) };
-      if (e.shiftKey) {
-        // 範囲/複数追加 (Sprint 5 で範囲選択 UI を完成させる)
-        var current = window.MA.selection.getSelected() || [];
-        window.MA.selection.setSelected(current.concat([selItem]));
-      } else {
-        // 同一アイテム再クリックで toggle-off (選択解除)。type+id+line で同定。
-        var cur = window.MA.selection.getSelected() || [];
-        if (cur.length === 1
-            && cur[0].type === selItem.type
-            && cur[0].id === selItem.id
-            && cur[0].line === selItem.line) {
-          window.MA.selection.clearSelection();
-        } else {
-          window.MA.selection.setSelected([selItem]);
-        }
-      }
-    });
+    }, true);
+    window.MA.selectionRouter.bind(overlayEl);
   }
 
   editorEl.addEventListener('keydown', function(e) {
@@ -483,13 +461,8 @@ function init() {
   window.MA.selection.init(function() {
     var ovEl = document.getElementById('overlay-layer');
     var sel = window.MA.selection.getSelected() || [];
-    // TEMP dual-gate: capability gates the cross-module surface; the sequence
-    // comparison gates the sequence-specific overlay API. Task 8 (selection-router)
-    // removes the sequence comparison.
-    if (moduleHas('overlaySelection')
-        && currentModule === modules['plantuml-sequence']
-        && ovEl && window.MA.sequenceOverlay && window.MA.sequenceOverlay.setSelectedHighlight) {
-      window.MA.sequenceOverlay.setSelectedHighlight(ovEl, sel);
+    if (moduleHas('overlaySelection') && ovEl) {
+      window.MA.selectionRouter.applyHighlight(ovEl, sel);
     }
     // 選択状態に入ったらその瞬間に hover ガイドを消す (mousemove を待たない)
     if (sel.length > 0) clearHoverGuide();
@@ -830,14 +803,9 @@ function renderSvg() {
           warnEl.textContent = '\u26A0 Overlay \u30DE\u30C3\u30C1\u30F3\u30B0\u5931\u6557: ' + JSON.stringify(u) + ' \u3002\u30EA\u30B9\u30C8\u4E00\u89A7\u304B\u3089\u7DE8\u96C6\u3057\u3066\u304F\u3060\u3055\u3044\u3002';
         }
       }
-      // TEMP dual-gate: capability gates the cross-module surface; the sequence
-      // comparison gates the sequence-specific overlay API. Task 8 (selection-router)
-      // removes the sequence comparison.
-      if (moduleHas('overlaySelection') && currentModule === modules['plantuml-sequence']) {
+      if (moduleHas('overlaySelection')) {
         var sel = window.MA.selection.getSelected() || [];
-        if (window.MA.sequenceOverlay && window.MA.sequenceOverlay.setSelectedHighlight) {
-          window.MA.sequenceOverlay.setSelectedHighlight(overlayEl, sel);
-        }
+        window.MA.selectionRouter.applyHighlight(overlayEl, sel);
       }
     }
     renderStatusEl.textContent = 'OK (' + mode + ')';
