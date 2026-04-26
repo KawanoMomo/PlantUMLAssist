@@ -45,6 +45,22 @@ describe('class.parse — bare class', function() {
   });
 });
 
+describe('class.parse — block form', function() {
+  test('parses class with empty body { }', function() {
+    var t = '@startuml\nclass Foo {\n}\n@enduml';
+    var r = clMod.parse(t);
+    expect(r.elements.length).toBe(1);
+    expect(r.elements[0].id).toBe('Foo');
+    expect(r.elements[0].endLine).toBe(3);
+  });
+  test('endLine matches closing brace for nested empty class', function() {
+    var t = '@startuml\nclass Foo {\n}\nclass Bar\n@enduml';
+    var r = clMod.parse(t);
+    expect(r.elements[0].endLine).toBe(3);
+    expect(r.elements[1].endLine).toBe(4);
+  });
+});
+
 // jsdom epilogue
 if (prevWindow !== undefined) global.window = prevWindow;
 if (prevDocument !== undefined) global.document = prevDocument;

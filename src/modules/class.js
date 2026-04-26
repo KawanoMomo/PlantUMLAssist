@@ -17,6 +17,7 @@ window.MA.modules.plantumlClass = (function() {
     var result = { meta: { title: '', startUmlLine: null }, elements: [], relations: [], groups: [] };
     if (!text || !text.trim()) return result;
     var lines = text.split('\n');
+    var openClassStack = [];
 
     for (var i = 0; i < lines.length; i++) {
       var lineNum = i + 1;
@@ -31,16 +32,26 @@ window.MA.modules.plantumlClass = (function() {
       var tm = trimmed.match(/^title\s+(.+)$/);
       if (tm) { result.meta.title = tm[1].trim(); continue; }
 
+      // closing brace for class block
+      if (trimmed === '}' && openClassStack.length > 0) {
+        var closing = openClassStack.pop();
+        closing.element.endLine = lineNum;
+        continue;
+      }
+
       var m = trimmed.match(CLASS_KW_RE);
       if (m) {
         var id, label;
         if (m[2] !== undefined) { id = m[2]; label = m[1]; }
         else { id = m[3]; label = m[4] !== undefined ? m[4] : m[3]; }
-        result.elements.push({
+        var hasBlock = /\{\s*$/.test(trimmed);
+        var el = {
           kind: 'class', id: id, label: label,
           stereotype: null, generics: null, members: [],
           line: lineNum, endLine: lineNum, parentPackageId: null,
-        });
+        };
+        result.elements.push(el);
+        if (hasBlock) openClassStack.push({ element: el });
         continue;
       }
     }
