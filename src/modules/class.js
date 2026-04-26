@@ -986,6 +986,74 @@ window.MA.modules.plantumlClass = (function() {
     });
   }
 
+  function _renderMultiSelectConnect(selData, parsedData, propsEl, ctx) {
+    var P = window.MA.properties;
+    var allElements = (parsedData.elements || []);
+    var nameById = {};
+    var typeById = {};
+    allElements.forEach(function(e) { nameById[e.id] = e.label || e.id; typeById[e.id] = e.kind; });
+    var fromOpt = nameById[selData[0].id] || selData[0].id;
+    var toOpt = nameById[selData[1].id] || selData[1].id;
+
+    propsEl.innerHTML =
+      '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Class - Connect 2 elements</div>' +
+      '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
+        '<div style="margin:8px 0;">' +
+          'From: <strong id="cl-conn-from">' + window.MA.htmlUtils.escHtml(fromOpt) + '</strong> ' +
+          '<button id="cl-conn-swap" type="button">⇄ swap</button> ' +
+          'To: <strong id="cl-conn-to">' + window.MA.htmlUtils.escHtml(toOpt) + '</strong>' +
+        '</div>' +
+        P.selectFieldHtml('Kind', 'cl-conn-kind', [
+          { value: 'association',    label: 'Association (--)', selected: true },
+          { value: 'inheritance',    label: 'Inheritance (<|--, parent <|-- child)' },
+          { value: 'implementation', label: 'Implementation (<|.., interface <|.. class)' },
+          { value: 'composition',    label: 'Composition (*--, container *-- contained)' },
+          { value: 'aggregation',    label: 'Aggregation (o--, container o-- part)' },
+          { value: 'dependency',     label: 'Dependency (..>)' },
+        ]) +
+        P.fieldHtml('Label', 'cl-conn-label', '', '任意') +
+        P.primaryButtonHtml('cl-conn-create', '+ Connect') +
+      '</div>';
+
+    var swapped = false;
+    function _doSwap() {
+      swapped = !swapped;
+      var f = document.getElementById('cl-conn-from');
+      var to = document.getElementById('cl-conn-to');
+      var tmp = f.textContent; f.textContent = to.textContent; to.textContent = tmp;
+    }
+    P.bindEvent('cl-conn-swap', 'click', _doSwap);
+
+    P.bindEvent('cl-conn-kind', 'change', function() {
+      var k = document.getElementById('cl-conn-kind').value;
+      if (k !== 'implementation') return;
+      var fromId = swapped ? selData[1].id : selData[0].id;
+      var fromType = typeById[fromId];
+      if (fromType !== 'interface') {
+        var otherId = swapped ? selData[0].id : selData[1].id;
+        if (typeById[otherId] === 'interface') _doSwap();
+      }
+    });
+
+    P.bindEvent('cl-conn-create', 'click', function() {
+      window.MA.history.pushHistory();
+      var fromId = swapped ? selData[1].id : selData[0].id;
+      var toId = swapped ? selData[0].id : selData[1].id;
+      var kind = document.getElementById('cl-conn-kind').value;
+      var label = document.getElementById('cl-conn-label').value.trim() || null;
+      ctx.setMmdText(addRelation(ctx.getMmdText(), kind, fromId, toId, label));
+      window.MA.selection.clearSelection();
+      ctx.onUpdate();
+    });
+  }
+
+  function _renderMultiSelect(selData, parsedData, propsEl) {
+    propsEl.innerHTML =
+      '<div style="padding:12px;color:var(--text-secondary);font-size:11px;">' +
+      selData.length + ' elements selected。Connect は 2 elements まで。' +
+      'Shift+クリックで解除できます。</div>';
+  }
+
   return {
     type: 'plantuml-class',
     displayName: 'Class',
@@ -997,7 +1065,7 @@ window.MA.modules.plantumlClass = (function() {
       hoverInsert: false,
       participantDrag: false,
       showInsertForm: false,
-      multiSelectConnect: false,  // Task 25 で true
+      multiSelectConnect: true,
     },
 
     buildOverlay: function(svgEl, parsedData, overlayEl) {
