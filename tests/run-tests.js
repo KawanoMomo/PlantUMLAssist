@@ -16,6 +16,7 @@ const sourceFiles = [
   'src/core/history.js',
   'src/core/selection.js',
   'src/core/connection-mode.js',
+  'src/core/overlay-builder.js',
   'src/ui/properties.js',
   'src/modules/sequence.js',
   'src/modules/usecase.js',
