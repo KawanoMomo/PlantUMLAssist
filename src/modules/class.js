@@ -13,6 +13,10 @@ window.MA.modules.plantumlClass = (function() {
     '^class\\s+(?:"([^"]+)"\\s+as\\s+(' + ID + ')|(' + ID + ')(?:\\s+as\\s+"([^"]+)")?)\\s*\\{?\\s*$'
   );
 
+  var ATTRIBUTE_RE = new RegExp(
+    '^([+\\-#~])?\\s*(?:\\{(static|abstract)\\}\\s*)?(' + ID + ')\\s*(?::\\s*(.+))?\\s*$'
+  );
+
   function parse(text) {
     var result = { meta: { title: '', startUmlLine: null }, elements: [], relations: [], groups: [] };
     if (!text || !text.trim()) return result;
@@ -37,6 +41,25 @@ window.MA.modules.plantumlClass = (function() {
         var closing = openClassStack.pop();
         closing.element.endLine = lineNum;
         continue;
+      }
+
+      // member parsing: only inside an open class block
+      if (openClassStack.length > 0) {
+        var parent = openClassStack[openClassStack.length - 1].element;
+        var am = trimmed.match(ATTRIBUTE_RE);
+        if (am && trimmed.indexOf('(') < 0) {  // method は別 regex (params にカッコ)
+          parent.members.push({
+            kind: 'attribute',
+            visibility: am[1] || null,
+            static: am[2] === 'static',
+            abstract: false,
+            name: am[3],
+            type: am[4] ? am[4].trim() : '',
+            params: null,
+            line: lineNum,
+          });
+          continue;
+        }
       }
 
       var m = trimmed.match(CLASS_KW_RE);

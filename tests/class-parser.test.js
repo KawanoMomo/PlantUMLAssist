@@ -61,6 +61,36 @@ describe('class.parse — block form', function() {
   });
 });
 
+describe('class.parse — attributes', function() {
+  test('parses public attribute with type', function() {
+    var t = '@startuml\nclass Foo {\n  + name : String\n}\n@enduml';
+    var r = clMod.parse(t);
+    expect(r.elements[0].members.length).toBe(1);
+    var m = r.elements[0].members[0];
+    expect(m.kind).toBe('attribute');
+    expect(m.visibility).toBe('+');
+    expect(m.name).toBe('name');
+    expect(m.type).toBe('String');
+    expect(m.static).toBe(false);
+  });
+  test('parses 4 visibility markers', function() {
+    var t = '@startuml\nclass Foo {\n  + a : int\n  - b : int\n  # c : int\n  ~ d : int\n}\n@enduml';
+    var r = clMod.parse(t);
+    expect(r.elements[0].members.map(function(m) { return m.visibility; })).toEqual(['+', '-', '#', '~']);
+  });
+  test('parses {static} attribute', function() {
+    var t = '@startuml\nclass Foo {\n  + {static} count : int\n}\n@enduml';
+    var r = clMod.parse(t);
+    expect(r.elements[0].members[0].static).toBe(true);
+    expect(r.elements[0].members[0].name).toBe('count');
+  });
+  test('parses attribute without visibility (default null)', function() {
+    var t = '@startuml\nclass Foo {\n  name : String\n}\n@enduml';
+    var r = clMod.parse(t);
+    expect(r.elements[0].members[0].visibility).toBeNull();
+  });
+});
+
 // jsdom epilogue
 if (prevWindow !== undefined) global.window = prevWindow;
 if (prevDocument !== undefined) global.document = prevDocument;
