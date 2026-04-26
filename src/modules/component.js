@@ -638,12 +638,59 @@ window.MA.modules.plantumlComponent = (function() {
     renameWithRefs: renameWithRefs,
     renderProps: renderProps,
     capabilities: {
-      overlaySelection: false,  // Phase B で true に切替
+      overlaySelection: true,  // ← false から true に
       hoverInsert: false,
       participantDrag: false,
       showInsertForm: false,
-      multiSelectConnect: false,  // Phase B で true に切替
+      multiSelectConnect: false,  // Task 17 で true に
     },
-    buildOverlay: function() { /* v0.4.0 では overlay なし */ },
+    buildOverlay: function(svgEl, parsedData, overlayEl) {
+      if (!svgEl || !overlayEl) return { matched: {}, unmatched: {} };
+      var OB = window.MA.overlayBuilder;
+      OB.syncDimensions(svgEl, overlayEl);
+
+      var startUml = (parsedData.meta && parsedData.meta.startUmlLine) || 0;
+      var candidates = [];
+      function _push(v) { if (candidates.indexOf(v) === -1) candidates.push(v); }
+      if (startUml > 0) _push(startUml);
+      _push(0);
+      _push(1);
+
+      var components = (parsedData.elements || []).filter(function(e) { return e.kind === 'component'; });
+      var interfaces = (parsedData.elements || []).filter(function(e) { return e.kind === 'interface'; });
+
+      var compPicked = OB.pickBestOffset(svgEl, components, 'g.component', candidates);
+      compPicked.matches.forEach(function(m) {
+        var bb = OB.extractBBox(m.groupEl);
+        if (!bb) return;
+        OB.addRect(overlayEl, bb.x - 8, bb.y - 6, (bb.width || 80) + 16, (bb.height || 14) + 12, {
+          'data-type': 'component',
+          'data-id': m.item.id,
+          'data-line': m.item.line,
+        });
+      });
+
+      var ifPicked = OB.pickBestOffset(svgEl, interfaces, 'g.interface', candidates);
+      ifPicked.matches.forEach(function(m) {
+        var bb = OB.extractBBox(m.groupEl);
+        if (!bb) return;
+        OB.addRect(overlayEl, bb.x - 6, bb.y - 6, (bb.width || 60) + 12, (bb.height || 14) + 12, {
+          'data-type': 'interface',
+          'data-id': m.item.id,
+          'data-line': m.item.line,
+        });
+      });
+
+      return {
+        matched: {
+          component: compPicked.matches.length,
+          interface: ifPicked.matches.length,
+        },
+        unmatched: {
+          component: components.length - compPicked.matches.length,
+          interface: interfaces.length - ifPicked.matches.length,
+        },
+      };
+    },
   };
 })();
