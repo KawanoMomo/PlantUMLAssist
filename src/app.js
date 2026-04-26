@@ -37,6 +37,10 @@ var RENDER_DEBOUNCE_MS = 150;
 var zoom = 1.0;
 var isFirstRender = true;
 
+function moduleHas(cap) {
+  return !!(currentModule && currentModule.capabilities && currentModule.capabilities[cap]);
+}
+
 function init() {
   editorEl = document.getElementById('editor');
   previewSvgEl = document.getElementById('preview-svg');
@@ -120,9 +124,9 @@ function init() {
 
   if (previewContainerForHover && hoverEl && overlayElForHover) {
     previewContainerForHover.addEventListener('mousemove', function(e) {
-      // 挿入クリックを処理できるモジュール (= showInsertForm を持つ) でなければガイドも出さない。
+      // 挿入クリックを処理できるモジュール (= hoverInsert capability) でなければガイドも出さない。
       // 出すと「+ ここに挿入」が見えるのにクリックしても何も起きない誤誘導になる。
-      if (!currentModule || !currentModule.showInsertForm) {
+      if (!moduleHas('hoverInsert')) {
         clearHoverGuide();
         return;
       }
@@ -156,7 +160,7 @@ function init() {
       if (_hasSelection()) return;
       var target = e.target;
       if (target.getAttribute && target.getAttribute('data-type')) return;  // overlay click は既存 handler が処理
-      if (!currentModule || !currentModule.showInsertForm) return;
+      if (!moduleHas('showInsertForm')) return;
       if (!window.MA.sequenceOverlay || !window.MA.sequenceOverlay.resolveInsertLine) return;
       var rect = overlayElForHover.getBoundingClientRect();
       if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) return;
@@ -290,6 +294,7 @@ function init() {
   var ovForDrag = document.getElementById('overlay-layer');
   if (ovForDrag) {
     ovForDrag.addEventListener('mousedown', function(e) {
+      if (!moduleHas('participantDrag')) return;
       var target = e.target;
       if (!target.getAttribute) return;
       if (target.getAttribute('data-type') !== 'participant') return;
@@ -478,7 +483,8 @@ function init() {
   window.MA.selection.init(function() {
     var ovEl = document.getElementById('overlay-layer');
     var sel = window.MA.selection.getSelected() || [];
-    if (currentModule === modules['plantuml-sequence']
+    if (moduleHas('overlaySelection')
+        && currentModule === modules['plantuml-sequence']
         && ovEl && window.MA.sequenceOverlay && window.MA.sequenceOverlay.setSelectedHighlight) {
       window.MA.sequenceOverlay.setSelectedHighlight(ovEl, sel);
     }
@@ -821,7 +827,7 @@ function renderSvg() {
           warnEl.textContent = '\u26A0 Overlay \u30DE\u30C3\u30C1\u30F3\u30B0\u5931\u6557: ' + JSON.stringify(u) + ' \u3002\u30EA\u30B9\u30C8\u4E00\u89A7\u304B\u3089\u7DE8\u96C6\u3057\u3066\u304F\u3060\u3055\u3044\u3002';
         }
       }
-      if (currentModule === modules['plantuml-sequence']) {
+      if (moduleHas('overlaySelection') && currentModule === modules['plantuml-sequence']) {
         var sel = window.MA.selection.getSelected() || [];
         if (window.MA.sequenceOverlay && window.MA.sequenceOverlay.setSelectedHighlight) {
           window.MA.sequenceOverlay.setSelectedHighlight(overlayEl, sel);
