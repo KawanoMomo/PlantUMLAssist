@@ -91,6 +91,36 @@ describe('class.parse — attributes', function() {
   });
 });
 
+describe('class.parse — methods', function() {
+  test('parses public method with no params + return type', function() {
+    var t = '@startuml\nclass Foo {\n  + login() : void\n}\n@enduml';
+    var r = clMod.parse(t);
+    var m = r.elements[0].members[0];
+    expect(m.kind).toBe('method');
+    expect(m.visibility).toBe('+');
+    expect(m.name).toBe('login');
+    expect(m.params).toBe('');
+    expect(m.type).toBe('void');
+  });
+  test('parses method with params', function() {
+    var t = '@startuml\nclass Foo {\n  + add(a : int, b : int) : int\n}\n@enduml';
+    var r = clMod.parse(t);
+    var m = r.elements[0].members[0];
+    expect(m.params).toBe('a : int, b : int');
+    expect(m.type).toBe('int');
+  });
+  test('parses {static} method', function() {
+    var t = '@startuml\nclass Foo {\n  + {static} create() : Foo\n}\n@enduml';
+    var r = clMod.parse(t);
+    expect(r.elements[0].members[0].static).toBe(true);
+  });
+  test('parses {abstract} method', function() {
+    var t = '@startuml\nclass Foo {\n  + {abstract} validate() : bool\n}\n@enduml';
+    var r = clMod.parse(t);
+    expect(r.elements[0].members[0].abstract).toBe(true);
+  });
+});
+
 // jsdom epilogue
 if (prevWindow !== undefined) global.window = prevWindow;
 if (prevDocument !== undefined) global.document = prevDocument;

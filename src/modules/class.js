@@ -17,6 +17,10 @@ window.MA.modules.plantumlClass = (function() {
     '^([+\\-#~])?\\s*(?:\\{(static|abstract)\\}\\s*)?(' + ID + ')\\s*(?::\\s*(.+))?\\s*$'
   );
 
+  var METHOD_RE = new RegExp(
+    '^([+\\-#~])?\\s*(?:\\{(static|abstract)\\}\\s*)?(' + ID + ')\\s*\\(([^)]*)\\)\\s*(?::\\s*(.+))?\\s*$'
+  );
+
   function parse(text) {
     var result = { meta: { title: '', startUmlLine: null }, elements: [], relations: [], groups: [] };
     if (!text || !text.trim()) return result;
@@ -46,6 +50,20 @@ window.MA.modules.plantumlClass = (function() {
       // member parsing: only inside an open class block
       if (openClassStack.length > 0) {
         var parent = openClassStack[openClassStack.length - 1].element;
+        var mm = trimmed.match(METHOD_RE);
+        if (mm) {
+          parent.members.push({
+            kind: 'method',
+            visibility: mm[1] || null,
+            static: mm[2] === 'static',
+            abstract: mm[2] === 'abstract',
+            name: mm[3],
+            type: mm[5] ? mm[5].trim() : '',
+            params: mm[4] || '',
+            line: lineNum,
+          });
+          continue;
+        }
         var am = trimmed.match(ATTRIBUTE_RE);
         if (am && trimmed.indexOf('(') < 0) {  // method は別 regex (params にカッコ)
           parent.members.push({
