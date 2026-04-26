@@ -474,6 +474,7 @@ window.MA.modules.plantumlUsecase = (function() {
           { value: 'extend',         label: 'Extend (..> <<extend>>)', selected: relation.kind === 'extend' },
         ]) +
         P.fieldHtml('From', 'uc-rel-from', relation.from) +
+        '<button id="uc-rel-swap" type="button" style="font-size:11px;padding:4px 10px;margin:4px 0;cursor:pointer;">⇄ From/To 入替</button>' +
         P.fieldHtml('To', 'uc-rel-to', relation.to) +
         P.fieldHtml('Label', 'uc-rel-label', relation.label) +
         P.primaryButtonHtml('uc-rel-apply', '変更を反映') +
@@ -503,6 +504,13 @@ window.MA.modules.plantumlUsecase = (function() {
       ctx.setMmdText(deleteLine(ctx.getMmdText(), relation.line));
       window.MA.selection.clearSelection();
       ctx.onUpdate();
+    });
+    P.bindEvent('uc-rel-swap', 'click', function() {
+      var fromEl = document.getElementById('uc-rel-from');
+      var toEl = document.getElementById('uc-rel-to');
+      var tmp = fromEl.value;
+      fromEl.value = toEl.value;
+      toEl.value = tmp;
     });
   }
 
