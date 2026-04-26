@@ -29,6 +29,11 @@ window.MA.modules.plantumlClass = (function() {
     '^abstract\\s+class\\s+(?:"([^"]+)"\\s+as\\s+(' + ID + ')|(' + ID + ')(?:\\s+as\\s+"([^"]+)")?)\\s*\\{?\\s*$'
   );
 
+  var ENUM_KW_RE = new RegExp(
+    '^enum\\s+(?:"([^"]+)"\\s+as\\s+(' + ID + ')|(' + ID + ')(?:\\s+as\\s+"([^"]+)")?)\\s*\\{?\\s*$'
+  );
+  var ENUM_VALUE_RE = /^([A-Z_][A-Z0-9_]*)\s*;?\s*$/;
+
   function parse(text) {
     var result = { meta: { title: '', startUmlLine: null }, elements: [], relations: [], groups: [] };
     if (!text || !text.trim()) return result;
@@ -58,6 +63,17 @@ window.MA.modules.plantumlClass = (function() {
       // member parsing: only inside an open class block
       if (openClassStack.length > 0) {
         var parent = openClassStack[openClassStack.length - 1].element;
+        if (parent.kind === 'enum') {
+          var ev = trimmed.match(ENUM_VALUE_RE);
+          if (ev) {
+            parent.members.push({
+              kind: 'enum-value',
+              visibility: null, static: false, abstract: false,
+              name: ev[1], type: '', params: null, line: lineNum,
+            });
+            continue;
+          }
+        }
         var mm = trimmed.match(METHOD_RE);
         if (mm) {
           parent.members.push({
@@ -86,6 +102,22 @@ window.MA.modules.plantumlClass = (function() {
           });
           continue;
         }
+      }
+
+      var em = trimmed.match(ENUM_KW_RE);
+      if (em) {
+        var eid, elabel;
+        if (em[2] !== undefined) { eid = em[2]; elabel = em[1]; }
+        else { eid = em[3]; elabel = em[4] !== undefined ? em[4] : em[3]; }
+        var eHasBlock = /\{\s*$/.test(trimmed);
+        var eEl = {
+          kind: 'enum', id: eid, label: elabel,
+          stereotype: null, generics: null, members: [],
+          line: lineNum, endLine: lineNum, parentPackageId: null,
+        };
+        result.elements.push(eEl);
+        if (eHasBlock) openClassStack.push({ element: eEl });
+        continue;
       }
 
       var abm = trimmed.match(ABSTRACT_KW_RE);

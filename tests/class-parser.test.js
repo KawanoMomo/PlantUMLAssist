@@ -154,6 +154,24 @@ describe('class.parse — abstract', function() {
   });
 });
 
+describe('class.parse — enum', function() {
+  test('parses enum with values (newline separated)', function() {
+    var t = '@startuml\nenum Color {\n  RED\n  GREEN\n  BLUE\n}\n@enduml';
+    var r = clMod.parse(t);
+    expect(r.elements[0].kind).toBe('enum');
+    expect(r.elements[0].id).toBe('Color');
+    expect(r.elements[0].members.length).toBe(3);
+    expect(r.elements[0].members[0].kind).toBe('enum-value');
+    expect(r.elements[0].members[0].name).toBe('RED');
+  });
+  test('parses enum value with trailing semicolon', function() {
+    var t = '@startuml\nenum Status {\n  ACTIVE;\n  DISABLED;\n}\n@enduml';
+    var r = clMod.parse(t);
+    expect(r.elements[0].members[0].name).toBe('ACTIVE');
+    expect(r.elements[0].members[1].name).toBe('DISABLED');
+  });
+});
+
 // jsdom epilogue
 if (prevWindow !== undefined) global.window = prevWindow;
 if (prevDocument !== undefined) global.document = prevDocument;
