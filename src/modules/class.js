@@ -900,6 +900,92 @@ window.MA.modules.plantumlClass = (function() {
     });
   }
 
+  function _renderRelationEdit(relation, parsedData, propsEl, ctx) {
+    var P = window.MA.properties;
+    var html =
+      '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Class Diagram</div>' +
+      '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">RELATION (L' + relation.line + ')</label>' +
+        P.selectFieldHtml('Kind', 'cl-rel-kind', [
+          { value: 'association',    label: 'Association (--)', selected: relation.kind === 'association' },
+          { value: 'inheritance',    label: 'Inheritance (<|--)', selected: relation.kind === 'inheritance' },
+          { value: 'implementation', label: 'Implementation (<|..)', selected: relation.kind === 'implementation' },
+          { value: 'composition',    label: 'Composition (*--)', selected: relation.kind === 'composition' },
+          { value: 'aggregation',    label: 'Aggregation (o--)', selected: relation.kind === 'aggregation' },
+          { value: 'dependency',     label: 'Dependency (..>)', selected: relation.kind === 'dependency' },
+        ]) +
+        P.fieldHtml('From', 'cl-rel-from', relation.from) +
+        '<button id="cl-rel-swap" type="button" style="font-size:11px;padding:4px 10px;margin:4px 0;cursor:pointer;">⇄ From/To 入替</button>' +
+        P.fieldHtml('To', 'cl-rel-to', relation.to) +
+        P.fieldHtml('Label', 'cl-rel-label', relation.label || '') +
+        P.primaryButtonHtml('cl-rel-apply', '変更を反映') +
+        ' <button id="cl-rel-delete" type="button" style="background:var(--accent-red);color:#fff;border:none;padding:6px 10px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 削除</button>' +
+      '</div>';
+    propsEl.innerHTML = html;
+
+    P.bindEvent('cl-rel-apply', 'click', function() {
+      window.MA.history.pushHistory();
+      var t = ctx.getMmdText();
+      var newKind = document.getElementById('cl-rel-kind').value;
+      var newFrom = document.getElementById('cl-rel-from').value.trim();
+      var newTo = document.getElementById('cl-rel-to').value.trim();
+      var newLabel = document.getElementById('cl-rel-label').value.trim() || null;
+      if (newKind !== relation.kind) t = updateRelation(t, relation.line, 'kind', newKind);
+      if (newFrom !== relation.from) t = updateRelation(t, relation.line, 'from', newFrom);
+      if (newTo !== relation.to) t = updateRelation(t, relation.line, 'to', newTo);
+      if (newLabel !== relation.label) t = updateRelation(t, relation.line, 'label', newLabel);
+      ctx.setMmdText(t);
+      ctx.onUpdate();
+    });
+    P.bindEvent('cl-rel-swap', 'click', function() {
+      var f = document.getElementById('cl-rel-from');
+      var to = document.getElementById('cl-rel-to');
+      var tmp = f.value; f.value = to.value; to.value = tmp;
+    });
+    P.bindEvent('cl-rel-delete', 'click', function() {
+      window.MA.history.pushHistory();
+      ctx.setMmdText(deleteLine(ctx.getMmdText(), relation.line));
+      window.MA.selection.clearSelection();
+      ctx.onUpdate();
+    });
+  }
+
+  function _renderGroupReadOnly(group, parsedData, propsEl, ctx) {
+    var P = window.MA.properties;
+    var html =
+      '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Class Diagram</div>' +
+      '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' +
+        (group.kind === 'namespace' ? 'NAMESPACE' : 'PACKAGE') +
+        ' (L' + group.startLine + '-' + group.endLine + ')</label>' +
+        P.fieldHtml('Label', 'cl-grp-label', group.label) +
+        P.primaryButtonHtml('cl-grp-apply', '変更を反映') +
+        ' <button id="cl-grp-delete" style="background:var(--accent-red);color:#fff;border:none;padding:6px 10px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 境界削除</button>' +
+      '</div>';
+    propsEl.innerHTML = html;
+    P.bindEvent('cl-grp-apply', 'click', function() {
+      var newLabel = document.getElementById('cl-grp-label').value.trim();
+      if (!newLabel) { alert('Label 必須'); return; }
+      window.MA.history.pushHistory();
+      var lines = ctx.getMmdText().split('\n');
+      var openIdx = group.startLine - 1;
+      var indent = lines[openIdx].match(/^(\s*)/)[1];
+      lines[openIdx] = indent + (group.kind === 'namespace' ? fmtNamespace(newLabel) : fmtPackage(newLabel));
+      ctx.setMmdText(lines.join('\n'));
+      ctx.onUpdate();
+    });
+    P.bindEvent('cl-grp-delete', 'click', function() {
+      if (!confirm('この境界を削除しますか？(中身は保持)')) return;
+      window.MA.history.pushHistory();
+      var lines = ctx.getMmdText().split('\n');
+      lines.splice(group.endLine - 1, 1);
+      lines.splice(group.startLine - 1, 1);
+      ctx.setMmdText(lines.join('\n'));
+      window.MA.selection.clearSelection();
+      ctx.onUpdate();
+    });
+  }
+
   return {
     type: 'plantuml-class',
     displayName: 'Class',
