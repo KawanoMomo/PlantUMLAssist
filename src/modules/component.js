@@ -10,10 +10,10 @@ window.MA.modules.plantumlComponent = (function() {
   // component: keyword form (with capturing label group inlined since RP.QUOTED_NAME is non-capturing)
   // groups: 1=quoted label (leading), 2=alias ID, 3=bare ID, 4=quoted label (trailing)
   var COMPONENT_KW_RE = new RegExp(
-    '^component\\s+(?:"([^"]+)"\\s+as\\s+(' + ID + ')|(' + ID + ')(?:\\s+as\\s+"([^"]+)")?)\\s*$'
+    '^component\\s+(?:"([^"]+)"\\s+as\\s+(' + ID + ')|(' + ID + ')(?:\\s+as\\s+"([^"]+)")?)\\s*\\{?\\s*$'
   );
   // component: [X] / [Label] as Alias
-  var COMPONENT_SHORT_RE = /^\[([^\]]+)\](?:\s+as\s+([A-Za-z_][A-Za-z0-9_]*))?\s*$/;
+  var COMPONENT_SHORT_RE = /^\[([^\]]+)\](?:\s+as\s+([A-Za-z_][A-Za-z0-9_]*))?\s*\{?\s*$/;
 
   // interface: keyword form
   // groups: 1=quoted label (leading), 2=alias ID, 3=bare ID, 4=quoted label (trailing)
@@ -64,6 +64,52 @@ window.MA.modules.plantumlComponent = (function() {
   function addComponent(text, id, label) { return insertBeforeEnd(text, fmtComponent(id, label || id)); }
   function addInterface(text, id, label) { return insertBeforeEnd(text, fmtInterface(id, label || id)); }
   function addPort(text, id, label) { return insertBeforeEnd(text, fmtPort(id, label || id)); }
+  // Port must live inside a component { ... } block. If the parent component is
+  // in single-line form, convert it to block form first; if it already has a
+  // block, insert the port before the matching close brace.
+  function addPortToComponent(text, parentId, portId, portLabel) {
+    var lines = text.split('\n');
+    var parentIdx = -1;
+    var parentIsBlock = false;
+    for (var i = 0; i < lines.length; i++) {
+      var t = lines[i].trim();
+      if (t.indexOf("'") === 0) continue;
+      var km = t.match(COMPONENT_KW_RE);
+      var matchedId = null;
+      if (km) {
+        matchedId = (km[2] !== undefined) ? km[2] : km[3];
+      } else {
+        var sm = t.match(COMPONENT_SHORT_RE);
+        if (sm) matchedId = sm[2] || sm[1].trim();
+      }
+      if (matchedId === parentId) {
+        parentIdx = i;
+        parentIsBlock = /\{\s*$/.test(lines[i]);
+        break;
+      }
+    }
+    if (parentIdx < 0) return addPort(text, portId, portLabel);
+    var indent = lines[parentIdx].match(/^(\s*)/)[1];
+    var portLine = indent + '  ' + fmtPort(portId, portLabel || portId);
+    if (parentIsBlock) {
+      var depth = 1;
+      for (var j = parentIdx + 1; j < lines.length; j++) {
+        var lt = lines[j].trim();
+        if (/\{\s*$/.test(lines[j])) depth++;
+        if (lt === '}') {
+          depth--;
+          if (depth === 0) {
+            lines.splice(j, 0, portLine);
+            return lines.join('\n');
+          }
+        }
+      }
+      return text;
+    }
+    lines[parentIdx] = lines[parentIdx].replace(/\s*$/, '') + ' {';
+    lines.splice(parentIdx + 1, 0, portLine, indent + '}');
+    return lines.join('\n');
+  }
   function addPackage(text, label) {
     return insertBeforeEnd(insertBeforeEnd(text, fmtPackage(label)), '}');
   }
@@ -89,7 +135,8 @@ window.MA.modules.plantumlComponent = (function() {
     }
     if (field === 'id') id = value;
     else if (field === 'label') label = value;
-    lines[idx] = indent + fmtComponent(id, label);
+    var openBrace = /\{\s*$/.test(lines[idx]) ? ' {' : '';
+    lines[idx] = indent + fmtComponent(id, label) + openBrace;
     return lines.join('\n');
   }
 
@@ -364,7 +411,9 @@ window.MA.modules.plantumlComponent = (function() {
           P.fieldHtml('Label', 'co-tail-label', '', '省略可') +
           P.primaryButtonHtml('co-tail-add', '+ Interface 追加');
       } else if (kind === 'port') {
+        var portParentOpts = compOpts.length > 0 ? compOpts : [{ value: '', label: '（component なし）' }];
         html =
+          P.selectFieldHtml('Parent component', 'co-tail-parent', portParentOpts) +
           P.fieldHtml('Alias', 'co-tail-alias', '', '例: p1') +
           P.fieldHtml('Label', 'co-tail-label', '', '省略可') +
           P.primaryButtonHtml('co-tail-add', '+ Port 追加');
@@ -403,8 +452,11 @@ window.MA.modules.plantumlComponent = (function() {
         } else if (kind === 'port') {
           var al3 = document.getElementById('co-tail-alias').value.trim();
           if (!al3) { alert('Alias 必須'); return; }
+          var parentEl = document.getElementById('co-tail-parent');
+          var parentId = parentEl ? parentEl.value : '';
+          if (!parentId) { alert('Parent component 必須 (port は component の中に配置)'); return; }
           window.MA.history.pushHistory();
-          out = addPort(t, al3, document.getElementById('co-tail-label').value.trim() || al3);
+          out = addPortToComponent(t, parentId, al3, document.getElementById('co-tail-label').value.trim() || al3);
         } else if (kind === 'package') {
           var lbl = document.getElementById('co-tail-label').value.trim();
           if (!lbl) { alert('Label 必須'); return; }
@@ -573,6 +625,7 @@ window.MA.modules.plantumlComponent = (function() {
     addComponent: addComponent,
     addInterface: addInterface,
     addPort: addPort,
+    addPortToComponent: addPortToComponent,
     addPackage: addPackage,
     addRelation: addRelation,
     updateComponent: updateComponent,

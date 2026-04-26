@@ -4,16 +4,18 @@ const { gotoApp, getEditorText } = require('./helpers');
 
 test.describe('UC-5: 横展開 (ports を追加して詳細ブロック化)', () => {
   test.describe('α: DSL technical', () => {
-    test('addPort emits canonical', async ({ page }) => {
+    test('addPort emits port inside parent component block', async ({ page }) => {
       await gotoApp(page);
       await page.locator('#diagram-type').selectOption('plantuml-component');
       await page.waitForTimeout(300);
       await page.locator('#co-tail-kind').selectOption('port');
+      await page.locator('#co-tail-parent').selectOption('WebApp');
       await page.locator('#co-tail-alias').fill('p1');
       await page.locator('#co-tail-add').click();
       await page.waitForTimeout(300);
       var t = await getEditorText(page);
       expect(t).toContain('port p1');
+      expect(t).toMatch(/component WebApp\s*\{[\s\S]*port p1[\s\S]*\}/);
     });
     test('parser links port parentComponentId', async ({ page }) => {
       await gotoApp(page);
@@ -42,21 +44,24 @@ test.describe('UC-5: 横展開 (ports を追加して詳細ブロック化)', ()
       var options = await page.locator('#co-tail-kind option').allTextContents();
       expect(options.some(function(o) { return o.includes('Port'); })).toBe(true);
     });
-    test('multi-port workflow', async ({ page }) => {
+    test('multi-port workflow keeps both inside same component block', async ({ page }) => {
       await gotoApp(page);
       await page.locator('#diagram-type').selectOption('plantuml-component');
       await page.waitForTimeout(300);
       await page.locator('#co-tail-kind').selectOption('port');
+      await page.locator('#co-tail-parent').selectOption('WebApp');
       await page.locator('#co-tail-alias').fill('p1');
       await page.locator('#co-tail-add').click();
       await page.waitForTimeout(200);
       await page.locator('#co-tail-kind').selectOption('port');
+      await page.locator('#co-tail-parent').selectOption('WebApp');
       await page.locator('#co-tail-alias').fill('p2');
       await page.locator('#co-tail-add').click();
       await page.waitForTimeout(300);
       var t = await getEditorText(page);
       expect(t).toContain('port p1');
       expect(t).toContain('port p2');
+      expect(t).toMatch(/component WebApp\s*\{[\s\S]*port p1[\s\S]*port p2[\s\S]*\}/);
     });
   });
 });
