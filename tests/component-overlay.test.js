@@ -113,6 +113,30 @@ describe('component.buildOverlay — port + package', function() {
     var pkgs = ov.querySelectorAll('rect[data-type="package"]');
     expect(pkgs.length).toBe(1);
   });
+
+  test('relation rect with data-relation-kind for 4 kinds', function() {
+    document.body.innerHTML =
+      '<svg id="src" xmlns="http://www.w3.org/2000/svg">' +
+        '<g class="link"><line x1="0" y1="0" x2="50" y2="0"/></g>' +
+        '<g class="link"><line x1="0" y1="20" x2="50" y2="20"/></g>' +
+      '</svg>' +
+      '<svg id="ov" xmlns="http://www.w3.org/2000/svg"></svg>';
+    var src = document.getElementById('src');
+    var ov = document.getElementById('ov');
+    coMod.buildOverlay(src, {
+      meta: { startUmlLine: 1 },
+      elements: [],
+      relations: [
+        { id: '__r_0', kind: 'association', from: 'A', to: 'B', line: 5 },
+        { id: '__r_1', kind: 'provides', from: 'A', to: 'I', line: 6 },
+      ],
+      groups: [],
+    }, ov);
+    var rels = ov.querySelectorAll('rect[data-type="relation"]');
+    expect(rels.length).toBe(2);
+    expect(rels[0].getAttribute('data-relation-kind')).toBe('association');
+    expect(rels[1].getAttribute('data-relation-kind')).toBe('provides');
+  });
 });
 
 // jsdom window を run-tests.js が用意した sandbox window に戻す。

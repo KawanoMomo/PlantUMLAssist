@@ -711,18 +711,37 @@ window.MA.modules.plantumlComponent = (function() {
         });
       });
 
+      var relations = parsedData.relations || [];
+      var linkGroups = svgEl.querySelectorAll('g.link, g[class*="link_"]');
+      var relN = Math.min(relations.length, linkGroups.length);
+      for (var ri = 0; ri < relN; ri++) {
+        var lg = linkGroups[ri];
+        var lineEl = lg.querySelector('line, path');
+        if (!lineEl) continue;
+        var bb = OB.extractEdgeBBox(lineEl, 8);
+        if (!bb) continue;
+        OB.addRect(overlayEl, bb.x, bb.y, bb.width, bb.height, {
+          'data-type': 'relation',
+          'data-id': relations[ri].id,
+          'data-line': relations[ri].line,
+          'data-relation-kind': relations[ri].kind,
+        });
+      }
+
       return {
         matched: {
           component: compPicked.matches.length,
           interface: ifPicked.matches.length,
           port: portPicked.matches.length,
           package: pkgN,
+          relation: relN,
         },
         unmatched: {
           component: components.length - compPicked.matches.length,
           interface: interfaces.length - ifPicked.matches.length,
           port: ports.length - portPicked.matches.length,
           package: packages.length - pkgN,
+          relation: relations.length - relN,
         },
       };
     },
