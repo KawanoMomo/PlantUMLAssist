@@ -681,14 +681,48 @@ window.MA.modules.plantumlComponent = (function() {
         });
       });
 
+      var packages = (parsedData.groups || []).filter(function(g) { return g.kind === 'package'; });
+      var pkgGroups = svgEl.querySelectorAll('g.cluster');
+      var pkgN = Math.min(packages.length, pkgGroups.length);
+      for (var pi = 0; pi < pkgN; pi++) {
+        var pg = pkgGroups[pi];
+        var pkgRect = pg.querySelector('rect');
+        if (!pkgRect) continue;
+        OB.addRect(overlayEl,
+          (parseFloat(pkgRect.getAttribute('x')) || 0) - 2,
+          (parseFloat(pkgRect.getAttribute('y')) || 0) - 2,
+          (parseFloat(pkgRect.getAttribute('width')) || 0) + 4,
+          (parseFloat(pkgRect.getAttribute('height')) || 0) + 4, {
+            'data-type': 'package',
+            'data-id': packages[pi].id,
+            'data-line': packages[pi].startLine,
+          });
+      }
+
+      var ports = (parsedData.elements || []).filter(function(e) { return e.kind === 'port'; });
+      var portPicked = OB.pickBestOffset(svgEl, ports, 'g.port', candidates);
+      portPicked.matches.forEach(function(m) {
+        var bb = OB.extractBBox(m.groupEl);
+        if (!bb) return;
+        OB.addRect(overlayEl, bb.x - 4, bb.y - 4, (bb.width || 20) + 8, (bb.height || 14) + 8, {
+          'data-type': 'port',
+          'data-id': m.item.id,
+          'data-line': m.item.line,
+        });
+      });
+
       return {
         matched: {
           component: compPicked.matches.length,
           interface: ifPicked.matches.length,
+          port: portPicked.matches.length,
+          package: pkgN,
         },
         unmatched: {
           component: components.length - compPicked.matches.length,
           interface: interfaces.length - ifPicked.matches.length,
+          port: ports.length - portPicked.matches.length,
+          package: packages.length - pkgN,
         },
       };
     },

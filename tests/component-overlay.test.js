@@ -74,6 +74,47 @@ describe('component.buildOverlay — component/interface', function() {
   });
 });
 
+describe('component.buildOverlay — port + package', function() {
+  test('port rect is added AFTER component rect (z-order: child first)', function() {
+    document.body.innerHTML =
+      '<svg id="src" xmlns="http://www.w3.org/2000/svg">' +
+        '<g class="component" data-source-line="3"><text x="0" y="0" textLength="60">W</text></g>' +
+        '<g class="port" data-source-line="4"><text x="20" y="20" textLength="10">p1</text></g>' +
+      '</svg>' +
+      '<svg id="ov" xmlns="http://www.w3.org/2000/svg"></svg>';
+    var src = document.getElementById('src');
+    var ov = document.getElementById('ov');
+    coMod.buildOverlay(src, {
+      meta: { startUmlLine: 1 },
+      elements: [
+        { kind: 'component', id: 'W', line: 3 },
+        { kind: 'port', id: 'p1', parentComponentId: 'W', line: 4 },
+      ],
+      relations: [], groups: [],
+    }, ov);
+    var rects = ov.querySelectorAll('rect.selectable');
+    expect(rects[0].getAttribute('data-type')).toBe('component');
+    expect(rects[1].getAttribute('data-type')).toBe('port');
+  });
+
+  test('creates package rect via g.cluster', function() {
+    document.body.innerHTML =
+      '<svg id="src" xmlns="http://www.w3.org/2000/svg">' +
+        '<g class="cluster"><rect x="0" y="0" width="200" height="100"/><text x="10" y="15">Pkg</text></g>' +
+      '</svg>' +
+      '<svg id="ov" xmlns="http://www.w3.org/2000/svg"></svg>';
+    var src = document.getElementById('src');
+    var ov = document.getElementById('ov');
+    coMod.buildOverlay(src, {
+      meta: { startUmlLine: 1 },
+      elements: [], relations: [],
+      groups: [{ kind: 'package', id: '__pkg_0', label: 'Pkg', startLine: 2, endLine: 5 }],
+    }, ov);
+    var pkgs = ov.querySelectorAll('rect[data-type="package"]');
+    expect(pkgs.length).toBe(1);
+  });
+});
+
 // jsdom window を run-tests.js が用意した sandbox window に戻す。
 // これをしないと後続 test ファイル (parser-utils, regex-parts 等) が
 // window.MA.* を見失って失敗する。
