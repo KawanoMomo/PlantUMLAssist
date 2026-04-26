@@ -357,6 +357,8 @@ window.MA.modules.plantumlComponent = (function() {
       onElement: function(elt, parsed, el) { _renderElementEdit(elt, parsed, el, ctx); },
       onRelation: function(rel, parsed, el) { _renderRelationEdit(rel, parsed, el, ctx); },
       onGroup: function(grp, parsed, el) { _renderGroupReadOnly(grp, parsed, el, ctx); },
+      onMultiSelectConnect: function(s, parsed, el) { _renderMultiSelectConnect(s, parsed, el, ctx); },
+      onMultiSelect: function(s, parsed, el) { _renderMultiSelect(s, parsed, el); },
     });
   }
 
@@ -558,6 +560,7 @@ window.MA.modules.plantumlComponent = (function() {
           { value: 'requires',    label: 'Requires ()-)', selected: relation.kind === 'requires' },
         ]) +
         P.fieldHtml('From', 'co-rel-from', relation.from) +
+        '<button id="co-rel-swap" type="button" style="font-size:11px;padding:4px 10px;margin:4px 0;cursor:pointer;">⇄ From/To 入替</button>' +
         P.fieldHtml('To', 'co-rel-to', relation.to) +
         P.fieldHtml('Label', 'co-rel-label', relation.label) +
         P.primaryButtonHtml('co-rel-apply', '変更を反映') +
@@ -588,6 +591,88 @@ window.MA.modules.plantumlComponent = (function() {
       window.MA.selection.clearSelection();
       ctx.onUpdate();
     });
+    P.bindEvent('co-rel-swap', 'click', function() {
+      var fromEl = document.getElementById('co-rel-from');
+      var toEl = document.getElementById('co-rel-to');
+      var tmp = fromEl.value;
+      fromEl.value = toEl.value;
+      toEl.value = tmp;
+    });
+  }
+
+  function _renderMultiSelectConnect(selData, parsedData, propsEl, ctx) {
+    var P = window.MA.properties;
+    var allElements = (parsedData.elements || []).filter(function(e) {
+      return e.kind === 'component' || e.kind === 'interface';
+    });
+    var nameById = {};
+    var typeById = {};
+    allElements.forEach(function(e) {
+      nameById[e.id] = e.label || e.id;
+      typeById[e.id] = e.kind;
+    });
+    var fromOpt = nameById[selData[0].id] || selData[0].id;
+    var toOpt = nameById[selData[1].id] || selData[1].id;
+
+    propsEl.innerHTML =
+      '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Component - Connect 2 elements</div>' +
+      '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
+        '<div style="margin:8px 0;">' +
+          'From: <strong id="co-conn-from">' + window.MA.htmlUtils.escHtml(fromOpt) + '</strong> ' +
+          '<button id="co-conn-swap" type="button">⇄ swap</button> ' +
+          'To: <strong id="co-conn-to">' + window.MA.htmlUtils.escHtml(toOpt) + '</strong>' +
+        '</div>' +
+        P.selectFieldHtml('Kind', 'co-conn-kind', [
+          { value: 'association', label: 'Association (--)', selected: true },
+          { value: 'dependency',  label: 'Dependency (..>)' },
+          { value: 'provides',    label: 'Provides (lollipop -())' },
+          { value: 'requires',    label: 'Requires (lollipop )-)' },
+        ]) +
+        P.fieldHtml('Label', 'co-conn-label', '', '任意') +
+        P.primaryButtonHtml('co-conn-create', '+ Connect') +
+      '</div>';
+
+    var swapped = false;
+    function _doSwap() {
+      swapped = !swapped;
+      var fromEl = document.getElementById('co-conn-from');
+      var toEl = document.getElementById('co-conn-to');
+      var tmp = fromEl.textContent;
+      fromEl.textContent = toEl.textContent;
+      toEl.textContent = tmp;
+    }
+    P.bindEvent('co-conn-swap', 'click', _doSwap);
+
+    // lollipop の方向制約: provides は component → interface、requires は interface → component
+    P.bindEvent('co-conn-kind', 'change', function() {
+      var kind = document.getElementById('co-conn-kind').value;
+      if (kind !== 'provides' && kind !== 'requires') return;
+      var fromId = swapped ? selData[1].id : selData[0].id;
+      var fromType = typeById[fromId];
+      var needSwap = (kind === 'provides' && fromType !== 'component') ||
+                     (kind === 'requires' && fromType !== 'interface');
+      if (needSwap) _doSwap();
+    });
+
+    P.bindEvent('co-conn-create', 'click', function() {
+      window.MA.history.pushHistory();
+      var fromId = swapped ? selData[1].id : selData[0].id;
+      var toId = swapped ? selData[0].id : selData[1].id;
+      var kind = document.getElementById('co-conn-kind').value;
+      var label = document.getElementById('co-conn-label').value.trim();
+      var t = ctx.getMmdText();
+      var out = addRelation(t, kind, fromId, toId, label);
+      ctx.setMmdText(out);
+      window.MA.selection.clearSelection();
+      ctx.onUpdate();
+    });
+  }
+
+  function _renderMultiSelect(selData, parsedData, propsEl) {
+    propsEl.innerHTML =
+      '<div style="padding:12px;color:var(--text-secondary);font-size:11px;">' +
+      selData.length + ' elements selected。Connect は 2 elements まで。' +
+      'Shift+クリックで解除できます。</div>';
   }
 
   function _renderGroupReadOnly(group, parsedData, propsEl, ctx) {
@@ -638,11 +723,11 @@ window.MA.modules.plantumlComponent = (function() {
     renameWithRefs: renameWithRefs,
     renderProps: renderProps,
     capabilities: {
-      overlaySelection: true,  // ← false から true に
+      overlaySelection: true,
       hoverInsert: false,
       participantDrag: false,
       showInsertForm: false,
-      multiSelectConnect: false,  // Task 17 で true に
+      multiSelectConnect: true,
     },
     buildOverlay: function(svgEl, parsedData, overlayEl) {
       if (!svgEl || !overlayEl) return { matched: {}, unmatched: {} };
