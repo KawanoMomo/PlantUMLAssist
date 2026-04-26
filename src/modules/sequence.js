@@ -36,13 +36,7 @@ window.MA.modules.plantumlSequence = (function() {
   var ACTIVATION_ACTIONS = ['activate', 'deactivate', 'create', 'destroy'];
   var ACTIVATION_RE = new RegExp('^(' + ACTIVATION_ACTIONS.join('|') + ')\\s+(\\S+)$');
 
-  function unquote(s) {
-    if (!s) return s;
-    if (s.length >= 2 && s.charAt(0) === '"' && s.charAt(s.length - 1) === '"') {
-      return s.substring(1, s.length - 1);
-    }
-    return s;
-  }
+  var unquote = window.MA.dslUtils.unquote;
 
   // Pure formatters — used by both add* (末尾追加) and _formatLine (位置駆動挿入)
   // 同一形式を一箇所で管理 (parser-format drift を防ぐ)
@@ -88,7 +82,7 @@ window.MA.modules.plantumlSequence = (function() {
     for (var i = 0; i < lines.length; i++) {
       var lineNum = i + 1;
       var trimmed = lines[i].trim();
-      if (!trimmed || trimmed.indexOf("'") === 0) continue;
+      if (!trimmed || window.MA.dslUtils.isPlantumlComment(trimmed)) continue;
       if (/^@startuml/.test(trimmed)) {
         if (result.meta.startUmlLine === null) result.meta.startUmlLine = lineNum;
         continue;
@@ -191,21 +185,7 @@ window.MA.modules.plantumlSequence = (function() {
     return result;
   }
 
-  function insertBeforeEnd(text, newLine) {
-    var lines = text.split('\n');
-    var endIdx = -1;
-    for (var i = lines.length - 1; i >= 0; i--) {
-      if (/^\s*@enduml/.test(lines[i])) { endIdx = i; break; }
-    }
-    if (endIdx < 0) {
-      var insertAt = lines.length;
-      while (insertAt > 0 && lines[insertAt - 1].trim() === '') insertAt--;
-      lines.splice(insertAt, 0, newLine);
-    } else {
-      lines.splice(endIdx, 0, newLine);
-    }
-    return lines.join('\n');
-  }
+  var insertBeforeEnd = window.MA.dslUpdater.insertBeforeEnd;
 
   function addParticipant(text, ptype, alias, label) {
     return insertBeforeEnd(text, fmtParticipant(ptype, alias, label));
@@ -584,32 +564,7 @@ window.MA.modules.plantumlSequence = (function() {
     });
   }
 
-  // renameWithRefs: participant の id (alias) を別名へ。本文中の参照
-  // (message from/to, activate/deactivate target, note target など) も
-  // 単語境界 \b で同時更新する。コメント行 (' 始まり) と "..." 内のラベル
-  // 文字列は保護 (alias != label のとき label が誤置換されるのを防ぐ)。
-  // PlantUML identifier は ASCII 英数 + _ を想定 (\b で十分)。
-  function renameWithRefs(text, oldId, newId) {
-    if (!oldId || !newId || oldId === newId) return text;
-    var escaped = oldId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    var pattern = new RegExp('\\b' + escaped + '\\b', 'g');
-    return text.split('\n').map(function(line) {
-      if (/^\s*'/.test(line)) return line;
-      // "..." の中身は temporarily 取り除いて置換、最後に復元 (label 保護)。
-      // sentinel は制御文字 \u0001 \u0002 で囲み \b 境界に晒さない (識別子と
-      // 衝突しないため、ユーザが「\u0001 を含む alias を使う」現実離れした
-      // ケース以外で安全)。
-      var quoted = [];
-      var stripped = line.replace(/"[^"]*"/g, function(m) {
-        quoted.push(m);
-        return '\u0001' + (quoted.length - 1) + '\u0002';
-      });
-      var replaced = stripped.replace(pattern, newId);
-      return replaced.replace(/\u0001(\d+)\u0002/g, function(_, idx) {
-        return quoted[parseInt(idx, 10)];
-      });
-    }).join('\n');
-  }
+  var renameWithRefs = window.MA.dslUpdater.renameWithRefs;
 
   function updateNote(text, lineNum, field, value) {
     var lines = text.split('\n');
@@ -635,7 +590,7 @@ window.MA.modules.plantumlSequence = (function() {
   // a Note or alt line could silently swap with it (visible UX bug).
   function _isMessageLineForMove(trimmed) {
     if (!trimmed) return false;
-    if (trimmed.indexOf("'") === 0) return false;
+    if (window.MA.dslUtils.isPlantumlComment(trimmed)) return false;
     if (/^(@startuml|@enduml|note\b|end\b|alt\b|opt\b|loop\b|par\b|else\b|elseif\b|and\b|group\b|critical\b|break\b|title\b|autonumber\b|participant\b|actor\b|database\b|queue\b|collections\b|control\b|entity\b|boundary\b|activate\b|deactivate\b|destroy\b|return\b|skinparam\b|hide\b|show\b|!)/i.test(trimmed)) return false;
     return /[-=<]-?[>x]|->>?|<<?-/.test(trimmed) && /\S+\s*[-=<]/.test(trimmed);
   }
@@ -649,7 +604,7 @@ window.MA.modules.plantumlSequence = (function() {
     var target = idx + direction;
     while (target >= 0 && target < lines.length) {
       var t = lines[target].trim();
-      if (!t || t.indexOf("'") === 0) { target += direction; continue; }
+      if (!t || window.MA.dslUtils.isPlantumlComment(t)) { target += direction; continue; }
       if (_isMessageLineForMove(t)) break;
       return text;  // structural line — no-op
     }
@@ -669,7 +624,7 @@ window.MA.modules.plantumlSequence = (function() {
     var target = idx + direction;
     while (target >= 0 && target < lines.length) {
       var t = lines[target].trim();
-      if (!t || t.indexOf("'") === 0) { target += direction; continue; }
+      if (!t || window.MA.dslUtils.isPlantumlComment(t)) { target += direction; continue; }
       if (_isMessageLineForMove(t)) return target + 1;
       return -1;
     }
@@ -880,6 +835,13 @@ window.MA.modules.plantumlSequence = (function() {
         'System --> User : Response',
         '@enduml',
       ].join('\n');
+    },
+    capabilities: {
+      overlaySelection: true,
+      hoverInsert: true,
+      participantDrag: true,
+      showInsertForm: true,
+      multiSelectConnect: false,
     },
     buildOverlay: function(svgEl, parsedData, overlayEl) {
       if (!overlayEl) return;

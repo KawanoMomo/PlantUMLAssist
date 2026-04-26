@@ -5,21 +5,54 @@ window.MA.parserUtils = (function() {
     if (!text || !text.trim()) return null;
     var lines = text.split('\n');
     var inBlock = false;
+    var hasParticipantSeqOnly = false;
+    var hasActor = false;
+    var hasUsecaseShort = false;
+    var hasUsecaseKw = false;
+    var hasPackage = false;
+    var hasClassKw = false;
+    var hasStateKw = false;
+    var hasActivityKw = false;
+    var hasComponentKw = false;
+    var hasComponentBracket = false;
+    var hasMessageArrow = false;
+
     for (var i = 0; i < lines.length; i++) {
       var t = lines[i].trim();
       if (!t || t.indexOf("'") === 0) continue;
-      if (/^@startuml/.test(t)) { inBlock = true; continue; }
-      if (/^@enduml/.test(t)) break;
+      if (window.MA.regexParts.isStartUml(t)) { inBlock = true; continue; }
+      if (window.MA.regexParts.isEndUml(t)) break;
       if (!inBlock) continue;
-      if (/^(actor|participant|boundary|control|entity|database|queue|collections)\b/.test(t)) return 'plantuml-sequence';
-      if (/^usecase\b|\bas\s+\(/.test(t)) return 'plantuml-usecase';
-      if (/^(class|interface|abstract|enum)\b/.test(t)) return 'plantuml-class';
-      if (/^(start|stop|:.+;|if\s+\(|fork)/.test(t)) return 'plantuml-activity';
-      if (/^\[[^\]]+\]/.test(t) || /^(component|package)\b/.test(t)) return 'plantuml-component';
-      if (/^(state|\[\*\])/.test(t)) return 'plantuml-state';
-      if (/\s(->|-->|<-|<--|<->|\.\.>)\s/.test(t)) return 'plantuml-sequence';
-      return 'plantuml-sequence';
+
+      if (/^(participant|boundary|control|entity|database|queue|collections)\b/.test(t)) hasParticipantSeqOnly = true;
+      if (/^actor\b/.test(t)) hasActor = true;
+      if (/^\(.+\)/.test(t)) hasUsecaseShort = true;
+      if (/^usecase\b/.test(t)) hasUsecaseKw = true;
+      if (/^(package|rectangle)\b.*\{/.test(t)) hasPackage = true;
+      if (/^(class|interface|abstract|enum)\b/.test(t)) hasClassKw = true;
+      if (/^state\b|^\[\*\]/.test(t)) hasStateKw = true;
+      if (/^(start|stop)\b|^:.+;|^if\s+\(|^fork\b/.test(t)) hasActivityKw = true;
+      if (/^component\b/.test(t)) hasComponentKw = true;
+      if (/^\[[^\]*][^\]]*\]/.test(t)) hasComponentBracket = true;
+      if (/\s(->|-->|->>|-->>|<-|<--|<<-|<<--)\s/.test(t)) hasMessageArrow = true;
     }
+
+    // Priority: most-specific keywords first
+    // Component takes priority over Class because Component diagrams legally
+    // contain `interface` (which would otherwise match hasClassKw).
+    if (hasComponentKw) return 'plantuml-component';
+    if (hasClassKw) return 'plantuml-class';
+    if (hasStateKw) return 'plantuml-state';
+    if (hasActivityKw) return 'plantuml-activity';
+    if (hasUsecaseKw || hasUsecaseShort || (hasActor && hasPackage)) return 'plantuml-usecase';
+    if (hasComponentBracket) return 'plantuml-component';
+    if (hasParticipantSeqOnly) return 'plantuml-sequence';
+    if (hasActor) {
+      // actor alone could be either sequence or usecase; message arrow disambiguates to sequence
+      if (hasMessageArrow) return 'plantuml-sequence';
+      return 'plantuml-usecase';
+    }
+    if (hasMessageArrow) return 'plantuml-sequence';
     return null;
   }
 

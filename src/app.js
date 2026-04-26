@@ -37,6 +37,10 @@ var RENDER_DEBOUNCE_MS = 150;
 var zoom = 1.0;
 var isFirstRender = true;
 
+function moduleHas(cap) {
+  return !!(currentModule && currentModule.capabilities && currentModule.capabilities[cap]);
+}
+
 function init() {
   editorEl = document.getElementById('editor');
   previewSvgEl = document.getElementById('preview-svg');
@@ -120,6 +124,12 @@ function init() {
 
   if (previewContainerForHover && hoverEl && overlayElForHover) {
     previewContainerForHover.addEventListener('mousemove', function(e) {
+      // 挿入クリックを処理できるモジュール (= hoverInsert capability) でなければガイドも出さない。
+      // 出すと「+ ここに挿入」が見えるのにクリックしても何も起きない誤誘導になる。
+      if (!moduleHas('hoverInsert')) {
+        clearHoverGuide();
+        return;
+      }
       // 選択中は挿入ガイドを出さない
       if (_hasSelection()) {
         clearHoverGuide();
@@ -150,7 +160,7 @@ function init() {
       if (_hasSelection()) return;
       var target = e.target;
       if (target.getAttribute && target.getAttribute('data-type')) return;  // overlay click は既存 handler が処理
-      if (!currentModule || !currentModule.showInsertForm) return;
+      if (!moduleHas('showInsertForm')) return;
       if (!window.MA.sequenceOverlay || !window.MA.sequenceOverlay.resolveInsertLine) return;
       var rect = overlayElForHover.getBoundingClientRect();
       if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) return;
@@ -284,6 +294,7 @@ function init() {
   var ovForDrag = document.getElementById('overlay-layer');
   if (ovForDrag) {
     ovForDrag.addEventListener('mousedown', function(e) {
+      if (!moduleHas('participantDrag')) return;
       var target = e.target;
       if (!target.getAttribute) return;
       if (target.getAttribute('data-type') !== 'participant') return;
@@ -350,38 +361,16 @@ function init() {
     }
   });
 
-  // Overlay click → selection
+  // Overlay click → selection (Phase A: selection-router へ移譲)
   var overlayEl = document.getElementById('overlay-layer');
   if (overlayEl) {
+    // drag suppress: participant drag 直後の click は無視 (capture phase で先取り)
     overlayEl.addEventListener('click', function(e) {
-      // drag 終了直後の click は participant drag の残響とみなし無視
-      if (Date.now() - justDraggedAt < DRAG_CLICK_SUPPRESS_MS) return;
-      var target = e.target;
-      var type = target.getAttribute('data-type');
-      var id = target.getAttribute('data-id');
-      var line = target.getAttribute('data-line');
-      if (!type) {
-        if (!e.shiftKey) window.MA.selection.clearSelection();
-        return;
+      if (Date.now() - justDraggedAt < DRAG_CLICK_SUPPRESS_MS) {
+        e.stopImmediatePropagation();
       }
-      var selItem = { type: type, id: id, line: parseInt(line, 10) };
-      if (e.shiftKey) {
-        // 範囲/複数追加 (Sprint 5 で範囲選択 UI を完成させる)
-        var current = window.MA.selection.getSelected() || [];
-        window.MA.selection.setSelected(current.concat([selItem]));
-      } else {
-        // 同一アイテム再クリックで toggle-off (選択解除)。type+id+line で同定。
-        var cur = window.MA.selection.getSelected() || [];
-        if (cur.length === 1
-            && cur[0].type === selItem.type
-            && cur[0].id === selItem.id
-            && cur[0].line === selItem.line) {
-          window.MA.selection.clearSelection();
-        } else {
-          window.MA.selection.setSelected([selItem]);
-        }
-      }
-    });
+    }, true);
+    window.MA.selectionRouter.bind(overlayEl);
   }
 
   editorEl.addEventListener('keydown', function(e) {
@@ -453,6 +442,7 @@ function init() {
     var mod = modules[t];
     if (!mod) return;
     window.MA.history.pushHistory();
+    currentModule = mod;  // explicit user choice overrides auto-detection
     mmdText = mod.template();
     suppressSync = true;
     editorEl.value = mmdText;
@@ -471,8 +461,8 @@ function init() {
   window.MA.selection.init(function() {
     var ovEl = document.getElementById('overlay-layer');
     var sel = window.MA.selection.getSelected() || [];
-    if (ovEl && window.MA.sequenceOverlay && window.MA.sequenceOverlay.setSelectedHighlight) {
-      window.MA.sequenceOverlay.setSelectedHighlight(ovEl, sel);
+    if (moduleHas('overlaySelection') && ovEl) {
+      window.MA.selectionRouter.applyHighlight(ovEl, sel);
     }
     // 選択状態に入ったらその瞬間に hover ガイドを消す (mousemove を待たない)
     if (sel.length > 0) clearHoverGuide();
@@ -810,6 +800,12 @@ function renderSvg() {
     }
     var overlayEl = document.getElementById('overlay-layer');
     var warnEl = document.getElementById('overlay-warning');
+    // Reset overlay state so leftovers from one module don't leak into another
+    // (e.g. sequence block-highlight rects persisting after switching to usecase).
+    if (overlayEl) {
+      while (overlayEl.firstChild) overlayEl.removeChild(overlayEl.firstChild);
+    }
+    if (warnEl) { warnEl.style.display = 'none'; warnEl.textContent = ''; }
     if (svgEl && currentModule && currentModule.buildOverlay) {
       var report = currentModule.buildOverlay(svgEl, currentParsed, overlayEl);
       if (report && warnEl) {
@@ -818,13 +814,11 @@ function renderSvg() {
         if (totalUnmatched > 0) {
           warnEl.style.display = 'block';
           warnEl.textContent = '\u26A0 Overlay \u30DE\u30C3\u30C1\u30F3\u30B0\u5931\u6557: ' + JSON.stringify(u) + ' \u3002\u30EA\u30B9\u30C8\u4E00\u89A7\u304B\u3089\u7DE8\u96C6\u3057\u3066\u304F\u3060\u3055\u3044\u3002';
-        } else {
-          warnEl.style.display = 'none';
         }
       }
-      var sel = window.MA.selection.getSelected() || [];
-      if (window.MA.sequenceOverlay && window.MA.sequenceOverlay.setSelectedHighlight) {
-        window.MA.sequenceOverlay.setSelectedHighlight(overlayEl, sel);
+      if (moduleHas('overlaySelection')) {
+        var sel = window.MA.selection.getSelected() || [];
+        window.MA.selectionRouter.applyHighlight(overlayEl, sel);
       }
     }
     renderStatusEl.textContent = 'OK (' + mode + ')';
