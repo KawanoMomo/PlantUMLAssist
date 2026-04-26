@@ -798,6 +798,12 @@ function renderSvg() {
     }
     var overlayEl = document.getElementById('overlay-layer');
     var warnEl = document.getElementById('overlay-warning');
+    // Reset overlay state so leftovers from one module don't leak into another
+    // (e.g. sequence block-highlight rects persisting after switching to usecase).
+    if (overlayEl) {
+      while (overlayEl.firstChild) overlayEl.removeChild(overlayEl.firstChild);
+    }
+    if (warnEl) { warnEl.style.display = 'none'; warnEl.textContent = ''; }
     if (svgEl && currentModule && currentModule.buildOverlay) {
       var report = currentModule.buildOverlay(svgEl, currentParsed, overlayEl);
       if (report && warnEl) {
@@ -806,13 +812,13 @@ function renderSvg() {
         if (totalUnmatched > 0) {
           warnEl.style.display = 'block';
           warnEl.textContent = '\u26A0 Overlay \u30DE\u30C3\u30C1\u30F3\u30B0\u5931\u6557: ' + JSON.stringify(u) + ' \u3002\u30EA\u30B9\u30C8\u4E00\u89A7\u304B\u3089\u7DE8\u96C6\u3057\u3066\u304F\u3060\u3055\u3044\u3002';
-        } else {
-          warnEl.style.display = 'none';
         }
       }
-      var sel = window.MA.selection.getSelected() || [];
-      if (window.MA.sequenceOverlay && window.MA.sequenceOverlay.setSelectedHighlight) {
-        window.MA.sequenceOverlay.setSelectedHighlight(overlayEl, sel);
+      if (currentModule === modules['plantuml-sequence']) {
+        var sel = window.MA.selection.getSelected() || [];
+        if (window.MA.sequenceOverlay && window.MA.sequenceOverlay.setSelectedHighlight) {
+          window.MA.sequenceOverlay.setSelectedHighlight(overlayEl, sel);
+        }
       }
     }
     renderStatusEl.textContent = 'OK (' + mode + ')';
