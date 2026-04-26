@@ -105,6 +105,62 @@ describe('overlayBuilder.extractEdgeBBox', function() {
   });
 });
 
+describe('overlayBuilder.matchByDataSourceLine', function() {
+  beforeEach(function() {
+    document.body.innerHTML = '<svg id="root" xmlns="http://www.w3.org/2000/svg">' +
+      '<g class="X" data-source-line="2"></g>' +
+      '<g class="X" data-source-line="3"></g>' +
+      '<g class="X" data-source-line="5"></g>' +
+      '</svg>';
+  });
+  test('matches items whose lineNum = svgLine + offset (offset=1)', function() {
+    var svg = document.getElementById('root');
+    var items = [{ id: 'a', line: 3 }, { id: 'b', line: 4 }, { id: 'c', line: 6 }];
+    var matches = OB.matchByDataSourceLine(svg, items, 'g.X', 1);
+    expect(matches.length).toBe(3);
+    expect(matches[0].item.id).toBe('a');
+    expect(matches[1].item.id).toBe('b');
+    expect(matches[2].item.id).toBe('c');
+  });
+  test('returns empty when offset mismatches all', function() {
+    var svg = document.getElementById('root');
+    var items = [{ id: 'a', line: 100 }];
+    expect(OB.matchByDataSourceLine(svg, items, 'g.X', 0).length).toBe(0);
+  });
+});
+
+describe('overlayBuilder.matchByOrder', function() {
+  beforeEach(function() {
+    document.body.innerHTML = '<svg id="root" xmlns="http://www.w3.org/2000/svg">' +
+      '<g class="Y"></g><g class="Y"></g><g class="Y"></g>' +
+      '</svg>';
+  });
+  test('pairs N parsed items with first N matching SVG groups', function() {
+    var svg = document.getElementById('root');
+    var items = [{ id: 'a' }, { id: 'b' }];
+    var matches = OB.matchByOrder(svg, items, 'g.Y');
+    expect(matches.length).toBe(2);
+    expect(matches[0].item.id).toBe('a');
+    expect(matches[1].item.id).toBe('b');
+  });
+});
+
+describe('overlayBuilder.pickBestOffset', function() {
+  beforeEach(function() {
+    document.body.innerHTML = '<svg id="root" xmlns="http://www.w3.org/2000/svg">' +
+      '<g class="Z" data-source-line="3"></g>' +
+      '<g class="Z" data-source-line="5"></g>' +
+      '</svg>';
+  });
+  test('picks offset that yields max matches', function() {
+    var svg = document.getElementById('root');
+    var items = [{ id: 'a', line: 3 }, { id: 'b', line: 5 }];
+    var result = OB.pickBestOffset(svg, items, 'g.Z', [0, 1, 2]);
+    expect(result.offset).toBe(0);
+    expect(result.matches.length).toBe(2);
+  });
+});
+
 // jsdom window を run-tests.js が用意した sandbox window に戻す。
 // これをしないと後続 test ファイル (parser-utils, regex-parts 等) が
 // window.MA.* を見失って失敗する。

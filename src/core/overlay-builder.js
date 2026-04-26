@@ -76,6 +76,46 @@ window.MA.overlayBuilder = (function() {
     return null;
   }
 
+  function matchByDataSourceLine(svgEl, items, selector, offset) {
+    var groups = svgEl.querySelectorAll(selector);
+    var byLine = {};
+    Array.prototype.forEach.call(groups, function(g) {
+      var sl = parseInt(g.getAttribute('data-source-line'), 10);
+      if (!isNaN(sl)) byLine[sl + offset] = g;
+    });
+    var matches = [];
+    items.forEach(function(item) {
+      if (item.line != null && byLine[item.line]) {
+        matches.push({ item: item, groupEl: byLine[item.line] });
+      }
+    });
+    return matches;
+  }
+
+  function matchByOrder(svgEl, items, selector) {
+    var groups = svgEl.querySelectorAll(selector);
+    var n = Math.min(items.length, groups.length);
+    var matches = [];
+    for (var i = 0; i < n; i++) {
+      matches.push({ item: items[i], groupEl: groups[i] });
+    }
+    return matches;
+  }
+
+  function pickBestOffset(svgEl, items, selector, candidates) {
+    var best = { offset: candidates[0], matches: [] };
+    candidates.forEach(function(off) {
+      var m = matchByDataSourceLine(svgEl, items, selector, off);
+      if (m.length > best.matches.length) {
+        best = { offset: off, matches: m };
+      }
+    });
+    if (best.matches.length === 0) {
+      best = { offset: null, matches: matchByOrder(svgEl, items, selector) };
+    }
+    return best;
+  }
+
   function syncDimensions(svgEl, overlayEl) {
     if (!svgEl || !overlayEl) return;
     var vb = svgEl.getAttribute('viewBox');
@@ -88,6 +128,9 @@ window.MA.overlayBuilder = (function() {
     addRect: addRect,
     extractBBox: extractBBox,
     extractEdgeBBox: extractEdgeBBox,
+    matchByDataSourceLine: matchByDataSourceLine,
+    matchByOrder: matchByOrder,
+    pickBestOffset: pickBestOffset,
     syncDimensions: syncDimensions,
   };
 })();
