@@ -539,13 +539,60 @@ window.MA.modules.plantumlUsecase = (function() {
     renameWithRefs: renameWithRefs,
     renderProps: renderProps,
     capabilities: {
-      overlaySelection: false,  // Phase B で true に切替
+      overlaySelection: true,  // Phase B Task 9 で actor/usecase 対応
       hoverInsert: false,
       participantDrag: false,
       showInsertForm: false,
-      multiSelectConnect: false,  // Phase B で true に切替
+      multiSelectConnect: false,  // Task 13 で true に
     },
-    buildOverlay: function() { /* v0.3.0 では overlay なし */ },
+    buildOverlay: function(svgEl, parsedData, overlayEl) {
+      if (!svgEl || !overlayEl) return { matched: {}, unmatched: {} };
+      var OB = window.MA.overlayBuilder;
+      OB.syncDimensions(svgEl, overlayEl);
+
+      var startUml = (parsedData.meta && parsedData.meta.startUmlLine) || 0;
+      var candidates = [];
+      function _push(v) { if (candidates.indexOf(v) === -1) candidates.push(v); }
+      if (startUml > 0) _push(startUml);
+      _push(0);
+      _push(1);
+
+      var actors = (parsedData.elements || []).filter(function(e) { return e.kind === 'actor'; });
+      var usecases = (parsedData.elements || []).filter(function(e) { return e.kind === 'usecase'; });
+
+      var actorPicked = OB.pickBestOffset(svgEl, actors, 'g.actor', candidates);
+      actorPicked.matches.forEach(function(m) {
+        var bb = OB.extractBBox(m.groupEl);
+        if (!bb) return;
+        OB.addRect(overlayEl, bb.x - 6, bb.y - 4, (bb.width || 40) + 12, (bb.height || 14) + 8, {
+          'data-type': 'actor',
+          'data-id': m.item.id,
+          'data-line': m.item.line,
+        });
+      });
+
+      var ucPicked = OB.pickBestOffset(svgEl, usecases, 'g.usecase', candidates);
+      ucPicked.matches.forEach(function(m) {
+        var bb = OB.extractBBox(m.groupEl);
+        if (!bb) return;
+        OB.addRect(overlayEl, bb.x - 6, bb.y - 4, (bb.width || 60) + 12, (bb.height || 14) + 8, {
+          'data-type': 'usecase',
+          'data-id': m.item.id,
+          'data-line': m.item.line,
+        });
+      });
+
+      return {
+        matched: {
+          actor: actorPicked.matches.length,
+          usecase: ucPicked.matches.length,
+        },
+        unmatched: {
+          actor: actors.length - actorPicked.matches.length,
+          usecase: usecases.length - ucPicked.matches.length,
+        },
+      };
+    },
     detect: function(text) { return window.MA.parserUtils.detectDiagramType(text) === 'plantuml-usecase'; },
     template: function() {
       return [
