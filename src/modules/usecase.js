@@ -291,6 +291,8 @@ window.MA.modules.plantumlUsecase = (function() {
       onElement: function(elt, parsed, el) { _renderElementEdit(elt, parsed, el, ctx); },
       onRelation: function(rel, parsed, el) { _renderRelationEdit(rel, parsed, el, ctx); },
       onGroup: function(grp, parsed, el) { _renderGroupReadOnly(grp, parsed, el, ctx); },
+      onMultiSelectConnect: function(sel, parsed, el) { _renderMultiSelectConnect(sel, parsed, el, ctx); },
+      onMultiSelect: function(sel, parsed, el) { _renderMultiSelect(sel, el); },
     });
   }
 
@@ -474,6 +476,7 @@ window.MA.modules.plantumlUsecase = (function() {
           { value: 'extend',         label: 'Extend (..> <<extend>>)', selected: relation.kind === 'extend' },
         ]) +
         P.fieldHtml('From', 'uc-rel-from', relation.from) +
+        '<button id="uc-rel-swap" type="button" style="font-size:11px;padding:4px 10px;margin:4px 0;cursor:pointer;">⇄ From/To 入替</button>' +
         P.fieldHtml('To', 'uc-rel-to', relation.to) +
         P.fieldHtml('Label', 'uc-rel-label', relation.label) +
         P.primaryButtonHtml('uc-rel-apply', '変更を反映') +
@@ -504,6 +507,13 @@ window.MA.modules.plantumlUsecase = (function() {
       window.MA.selection.clearSelection();
       ctx.onUpdate();
     });
+    P.bindEvent('uc-rel-swap', 'click', function() {
+      var fromEl = document.getElementById('uc-rel-from');
+      var toEl = document.getElementById('uc-rel-to');
+      var tmp = fromEl.value;
+      fromEl.value = toEl.value;
+      toEl.value = tmp;
+    });
   }
 
   function _renderGroupReadOnly(pkg, parsedData, propsEl, ctx) {
@@ -515,6 +525,68 @@ window.MA.modules.plantumlUsecase = (function() {
         '<div style="font-size:10px;color:var(--text-secondary);">v0.3.0: package のラベル変更 / 範囲指定 wrap は v0.5.0 で対応</div>' +
       '</div>';
     propsEl.innerHTML = html;
+  }
+
+  // ─── Multi-select Connect (Phase B Task 13) ─────────────────────────────
+  function _renderMultiSelectConnect(selData, parsedData, propsEl, ctx) {
+    var P = window.MA.properties;
+    var allElements = (parsedData.elements || []).filter(function(e) {
+      return e.kind === 'actor' || e.kind === 'usecase';
+    });
+    var nameById = {};
+    allElements.forEach(function(e) { nameById[e.id] = e.label || e.id; });
+
+    var fromOpt = nameById[selData[0].id] || selData[0].id;
+    var toOpt = nameById[selData[1].id] || selData[1].id;
+
+    propsEl.innerHTML =
+      '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">UseCase - Connect 2 elements</div>' +
+      '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
+        '<div style="margin:8px 0;">' +
+          'From: <strong id="uc-conn-from">' + window.MA.htmlUtils.escHtml(fromOpt) + '</strong> ' +
+          '<button id="uc-conn-swap" type="button">⇄ swap</button> ' +
+          'To: <strong id="uc-conn-to">' + window.MA.htmlUtils.escHtml(toOpt) + '</strong>' +
+        '</div>' +
+        P.selectFieldHtml('Kind', 'uc-conn-kind', [
+          { value: 'association', label: 'Association (-->)', selected: true },
+          { value: 'generalization', label: 'Generalization (<|--)' },
+          { value: 'include', label: 'Include (..>) <<include>>' },
+          { value: 'extend', label: 'Extend (..>) <<extend>>' },
+        ]) +
+        P.fieldHtml('Label', 'uc-conn-label', '', '任意') +
+        P.primaryButtonHtml('uc-conn-create', '+ Connect') +
+      '</div>';
+
+    var swapped = false;
+    P.bindEvent('uc-conn-swap', 'click', function() {
+      swapped = !swapped;
+      var fromEl = document.getElementById('uc-conn-from');
+      var toEl = document.getElementById('uc-conn-to');
+      var tmp = fromEl.textContent;
+      fromEl.textContent = toEl.textContent;
+      toEl.textContent = tmp;
+    });
+
+    P.bindEvent('uc-conn-create', 'click', function() {
+      window.MA.history.pushHistory();
+      var fromId = swapped ? selData[1].id : selData[0].id;
+      var toId = swapped ? selData[0].id : selData[1].id;
+      var kind = document.getElementById('uc-conn-kind').value;
+      var label = document.getElementById('uc-conn-label').value.trim();
+      var t = ctx.getMmdText();
+      var out = addRelation(t, kind, fromId, toId, label);
+      ctx.setMmdText(out);
+      window.MA.selection.clearSelection();
+      ctx.onUpdate();
+    });
+  }
+
+  // 3+ selection 用
+  function _renderMultiSelect(selData, propsEl) {
+    propsEl.innerHTML =
+      '<div style="padding:12px;color:var(--text-secondary);font-size:11px;">' +
+      selData.length + ' elements selected。Connect は 2 elements まで。' +
+      'Shift+クリックで解除できます。</div>';
   }
 
   return {
@@ -538,7 +610,148 @@ window.MA.modules.plantumlUsecase = (function() {
     setTitle: setTitle,
     renameWithRefs: renameWithRefs,
     renderProps: renderProps,
-    buildOverlay: function() { /* v0.3.0 では overlay なし */ },
+    capabilities: {
+      overlaySelection: true,  // Phase B Task 9 で actor/usecase 対応
+      hoverInsert: false,
+      participantDrag: false,
+      showInsertForm: false,
+      multiSelectConnect: true,  // Task 13: 2-element connect form
+    },
+    buildOverlay: function(svgEl, parsedData, overlayEl) {
+      if (!svgEl || !overlayEl) return { matched: {}, unmatched: {} };
+      var OB = window.MA.overlayBuilder;
+      OB.syncDimensions(svgEl, overlayEl);
+
+      var actors = (parsedData.elements || []).filter(function(e) { return e.kind === 'actor'; });
+      var usecases = (parsedData.elements || []).filter(function(e) { return e.kind === 'usecase'; });
+
+      // PlantUML emits actor/usecase as <g class="entity" data-qualified-name="X">
+      // (実機 SVG。test fixture は g.actor / g.usecase の旧形式も受理する fallback)。
+      function _matchEntity(item) {
+        var g = svgEl.querySelector('g.entity[data-qualified-name="' + item.id + '"]');
+        if (g) return g;
+        // legacy/fixture fallback
+        return svgEl.querySelector('g.' + item.kind + '[data-source-line]');
+      }
+      function _entityBBox(g) {
+        if (!g) return null;
+        if (typeof g.getBBox === 'function') {
+          try {
+            var bb = g.getBBox();
+            if (bb && (bb.width > 0 || bb.height > 0)) return bb;
+          } catch (e) { /* jsdom fallback */ }
+        }
+        // jsdom fallback: union of inner ellipse/rect/text
+        var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        var found = false;
+        Array.prototype.forEach.call(g.querySelectorAll('ellipse, rect, text'), function(el) {
+          var x, y, w, h;
+          if (el.tagName.toLowerCase() === 'ellipse') {
+            var cx = parseFloat(el.getAttribute('cx')) || 0;
+            var cy = parseFloat(el.getAttribute('cy')) || 0;
+            var rx = parseFloat(el.getAttribute('rx')) || 0;
+            var ry = parseFloat(el.getAttribute('ry')) || 0;
+            x = cx - rx; y = cy - ry; w = rx * 2; h = ry * 2;
+          } else if (el.tagName.toLowerCase() === 'rect') {
+            x = parseFloat(el.getAttribute('x')) || 0;
+            y = parseFloat(el.getAttribute('y')) || 0;
+            w = parseFloat(el.getAttribute('width')) || 0;
+            h = parseFloat(el.getAttribute('height')) || 0;
+          } else {
+            x = parseFloat(el.getAttribute('x')) || 0;
+            y = parseFloat(el.getAttribute('y')) || 0;
+            w = parseFloat(el.getAttribute('textLength')) || 0;
+            h = 14;
+          }
+          if (w === 0 && h === 0) return;
+          found = true;
+          minX = Math.min(minX, x); minY = Math.min(minY, y);
+          maxX = Math.max(maxX, x + w); maxY = Math.max(maxY, y + h);
+        });
+        if (!found) return null;
+        return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+      }
+
+      var actorMatched = 0;
+      actors.forEach(function(actor) {
+        var g = _matchEntity(actor);
+        if (!g) return;
+        var bb = _entityBBox(g);
+        if (!bb) return;
+        OB.addRect(overlayEl, bb.x - 6, bb.y - 4, bb.width + 12, bb.height + 8, {
+          'data-type': 'actor',
+          'data-id': actor.id,
+          'data-line': actor.line,
+        });
+        actorMatched++;
+      });
+
+      var ucMatched = 0;
+      usecases.forEach(function(uc) {
+        var g = _matchEntity(uc);
+        if (!g) return;
+        var bb = _entityBBox(g);
+        if (!bb) return;
+        OB.addRect(overlayEl, bb.x - 6, bb.y - 4, bb.width + 12, bb.height + 8, {
+          'data-type': 'usecase',
+          'data-id': uc.id,
+          'data-line': uc.line,
+        });
+        ucMatched++;
+      });
+
+      // package: <g class="cluster">
+      var packages = (parsedData.groups || []).filter(function(g) { return g.kind === 'package'; });
+      var pkgGroups = svgEl.querySelectorAll('g.cluster');
+      var pkgN = Math.min(packages.length, pkgGroups.length);
+      for (var pi = 0; pi < pkgN; pi++) {
+        var g = pkgGroups[pi];
+        var pkgRect = g.querySelector('rect');
+        if (!pkgRect) continue;
+        var px = parseFloat(pkgRect.getAttribute('x')) || 0;
+        var py = parseFloat(pkgRect.getAttribute('y')) || 0;
+        var pw = parseFloat(pkgRect.getAttribute('width')) || 0;
+        var ph = parseFloat(pkgRect.getAttribute('height')) || 0;
+        OB.addRect(overlayEl, px - 2, py - 2, pw + 4, ph + 4, {
+          'data-type': 'package',
+          'data-id': packages[pi].id,
+          'data-line': packages[pi].startLine,
+        });
+      }
+
+      // relation: <g class="link"> 内の line / path
+      var relations = parsedData.relations || [];
+      var linkGroups = svgEl.querySelectorAll('g.link, g[class*="link_"]');
+      var relN = Math.min(relations.length, linkGroups.length);
+      for (var ri = 0; ri < relN; ri++) {
+        var lg = linkGroups[ri];
+        var lineEl = lg.querySelector('line, path');
+        if (!lineEl) continue;
+        var bb = OB.extractEdgeBBox(lineEl, 8);
+        if (!bb) continue;
+        OB.addRect(overlayEl, bb.x, bb.y, bb.width, bb.height, {
+          'data-type': 'relation',
+          'data-id': relations[ri].id,
+          'data-line': relations[ri].line,
+          'data-relation-kind': relations[ri].kind,
+        });
+      }
+
+      return {
+        matched: {
+          actor: actorMatched,
+          usecase: ucMatched,
+          package: pkgN,
+          relation: relN,
+        },
+        unmatched: {
+          actor: actors.length - actorMatched,
+          usecase: usecases.length - ucMatched,
+          package: packages.length - pkgN,
+          relation: relations.length - relN,
+        },
+      };
+    },
     detect: function(text) { return window.MA.parserUtils.detectDiagramType(text) === 'plantuml-usecase'; },
     template: function() {
       return [

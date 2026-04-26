@@ -357,6 +357,8 @@ window.MA.modules.plantumlComponent = (function() {
       onElement: function(elt, parsed, el) { _renderElementEdit(elt, parsed, el, ctx); },
       onRelation: function(rel, parsed, el) { _renderRelationEdit(rel, parsed, el, ctx); },
       onGroup: function(grp, parsed, el) { _renderGroupReadOnly(grp, parsed, el, ctx); },
+      onMultiSelectConnect: function(s, parsed, el) { _renderMultiSelectConnect(s, parsed, el, ctx); },
+      onMultiSelect: function(s, parsed, el) { _renderMultiSelect(s, parsed, el); },
     });
   }
 
@@ -558,6 +560,7 @@ window.MA.modules.plantumlComponent = (function() {
           { value: 'requires',    label: 'Requires ()-)', selected: relation.kind === 'requires' },
         ]) +
         P.fieldHtml('From', 'co-rel-from', relation.from) +
+        '<button id="co-rel-swap" type="button" style="font-size:11px;padding:4px 10px;margin:4px 0;cursor:pointer;">⇄ From/To 入替</button>' +
         P.fieldHtml('To', 'co-rel-to', relation.to) +
         P.fieldHtml('Label', 'co-rel-label', relation.label) +
         P.primaryButtonHtml('co-rel-apply', '変更を反映') +
@@ -588,6 +591,88 @@ window.MA.modules.plantumlComponent = (function() {
       window.MA.selection.clearSelection();
       ctx.onUpdate();
     });
+    P.bindEvent('co-rel-swap', 'click', function() {
+      var fromEl = document.getElementById('co-rel-from');
+      var toEl = document.getElementById('co-rel-to');
+      var tmp = fromEl.value;
+      fromEl.value = toEl.value;
+      toEl.value = tmp;
+    });
+  }
+
+  function _renderMultiSelectConnect(selData, parsedData, propsEl, ctx) {
+    var P = window.MA.properties;
+    var allElements = (parsedData.elements || []).filter(function(e) {
+      return e.kind === 'component' || e.kind === 'interface';
+    });
+    var nameById = {};
+    var typeById = {};
+    allElements.forEach(function(e) {
+      nameById[e.id] = e.label || e.id;
+      typeById[e.id] = e.kind;
+    });
+    var fromOpt = nameById[selData[0].id] || selData[0].id;
+    var toOpt = nameById[selData[1].id] || selData[1].id;
+
+    propsEl.innerHTML =
+      '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Component - Connect 2 elements</div>' +
+      '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
+        '<div style="margin:8px 0;">' +
+          'From: <strong id="co-conn-from">' + window.MA.htmlUtils.escHtml(fromOpt) + '</strong> ' +
+          '<button id="co-conn-swap" type="button">⇄ swap</button> ' +
+          'To: <strong id="co-conn-to">' + window.MA.htmlUtils.escHtml(toOpt) + '</strong>' +
+        '</div>' +
+        P.selectFieldHtml('Kind', 'co-conn-kind', [
+          { value: 'association', label: 'Association (--)', selected: true },
+          { value: 'dependency',  label: 'Dependency (..>)' },
+          { value: 'provides',    label: 'Provides (lollipop -())' },
+          { value: 'requires',    label: 'Requires (lollipop )-)' },
+        ]) +
+        P.fieldHtml('Label', 'co-conn-label', '', '任意') +
+        P.primaryButtonHtml('co-conn-create', '+ Connect') +
+      '</div>';
+
+    var swapped = false;
+    function _doSwap() {
+      swapped = !swapped;
+      var fromEl = document.getElementById('co-conn-from');
+      var toEl = document.getElementById('co-conn-to');
+      var tmp = fromEl.textContent;
+      fromEl.textContent = toEl.textContent;
+      toEl.textContent = tmp;
+    }
+    P.bindEvent('co-conn-swap', 'click', _doSwap);
+
+    // lollipop の方向制約: provides は component → interface、requires は interface → component
+    P.bindEvent('co-conn-kind', 'change', function() {
+      var kind = document.getElementById('co-conn-kind').value;
+      if (kind !== 'provides' && kind !== 'requires') return;
+      var fromId = swapped ? selData[1].id : selData[0].id;
+      var fromType = typeById[fromId];
+      var needSwap = (kind === 'provides' && fromType !== 'component') ||
+                     (kind === 'requires' && fromType !== 'interface');
+      if (needSwap) _doSwap();
+    });
+
+    P.bindEvent('co-conn-create', 'click', function() {
+      window.MA.history.pushHistory();
+      var fromId = swapped ? selData[1].id : selData[0].id;
+      var toId = swapped ? selData[0].id : selData[1].id;
+      var kind = document.getElementById('co-conn-kind').value;
+      var label = document.getElementById('co-conn-label').value.trim();
+      var t = ctx.getMmdText();
+      var out = addRelation(t, kind, fromId, toId, label);
+      ctx.setMmdText(out);
+      window.MA.selection.clearSelection();
+      ctx.onUpdate();
+    });
+  }
+
+  function _renderMultiSelect(selData, parsedData, propsEl) {
+    propsEl.innerHTML =
+      '<div style="padding:12px;color:var(--text-secondary);font-size:11px;">' +
+      selData.length + ' elements selected。Connect は 2 elements まで。' +
+      'Shift+クリックで解除できます。</div>';
   }
 
   function _renderGroupReadOnly(group, parsedData, propsEl, ctx) {
@@ -637,6 +722,170 @@ window.MA.modules.plantumlComponent = (function() {
     setTitle: setTitle,
     renameWithRefs: renameWithRefs,
     renderProps: renderProps,
-    buildOverlay: function() { /* v0.4.0 では overlay なし */ },
+    capabilities: {
+      overlaySelection: true,
+      hoverInsert: false,
+      participantDrag: false,
+      showInsertForm: false,
+      multiSelectConnect: true,
+    },
+    buildOverlay: function(svgEl, parsedData, overlayEl) {
+      if (!svgEl || !overlayEl) return { matched: {}, unmatched: {} };
+      var OB = window.MA.overlayBuilder;
+      OB.syncDimensions(svgEl, overlayEl);
+
+      var components = (parsedData.elements || []).filter(function(e) { return e.kind === 'component'; });
+      var interfaces = (parsedData.elements || []).filter(function(e) { return e.kind === 'interface'; });
+
+      // PlantUML emits component/interface as <g class="entity" data-qualified-name="X">
+      // (実機 SVG)。test fixture は g.component / g.interface の旧形式も受理する fallback。
+      function _matchEntity(item) {
+        var g = svgEl.querySelector('g.entity[data-qualified-name="' + item.id + '"]');
+        if (g) return g;
+        return svgEl.querySelector('g.' + item.kind + '[data-source-line]');
+      }
+      function _entityBBox(g) {
+        if (!g) return null;
+        if (typeof g.getBBox === 'function') {
+          try {
+            var bb = g.getBBox();
+            if (bb && (bb.width > 0 || bb.height > 0)) return bb;
+          } catch (e) { /* jsdom fallback */ }
+        }
+        var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        var found = false;
+        Array.prototype.forEach.call(g.querySelectorAll('ellipse, rect, text'), function(el) {
+          var x, y, w, h;
+          if (el.tagName.toLowerCase() === 'ellipse') {
+            var cx = parseFloat(el.getAttribute('cx')) || 0;
+            var cy = parseFloat(el.getAttribute('cy')) || 0;
+            var rx = parseFloat(el.getAttribute('rx')) || 0;
+            var ry = parseFloat(el.getAttribute('ry')) || 0;
+            x = cx - rx; y = cy - ry; w = rx * 2; h = ry * 2;
+          } else if (el.tagName.toLowerCase() === 'rect') {
+            x = parseFloat(el.getAttribute('x')) || 0;
+            y = parseFloat(el.getAttribute('y')) || 0;
+            w = parseFloat(el.getAttribute('width')) || 0;
+            h = parseFloat(el.getAttribute('height')) || 0;
+          } else {
+            x = parseFloat(el.getAttribute('x')) || 0;
+            y = parseFloat(el.getAttribute('y')) || 0;
+            w = parseFloat(el.getAttribute('textLength')) || 0;
+            h = 14;
+          }
+          if (w === 0 && h === 0) return;
+          found = true;
+          minX = Math.min(minX, x); minY = Math.min(minY, y);
+          maxX = Math.max(maxX, x + w); maxY = Math.max(maxY, y + h);
+        });
+        if (!found) return null;
+        return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+      }
+
+      var compMatched = 0;
+      components.forEach(function(c) {
+        var g = _matchEntity(c);
+        if (!g) return;
+        var bb = _entityBBox(g);
+        if (!bb) return;
+        OB.addRect(overlayEl, bb.x - 8, bb.y - 6, bb.width + 16, bb.height + 12, {
+          'data-type': 'component',
+          'data-id': c.id,
+          'data-line': c.line,
+        });
+        compMatched++;
+      });
+
+      var ifMatched = 0;
+      interfaces.forEach(function(i) {
+        var g = _matchEntity(i);
+        if (!g) return;
+        var bb = _entityBBox(g);
+        if (!bb) return;
+        OB.addRect(overlayEl, bb.x - 6, bb.y - 6, bb.width + 12, bb.height + 12, {
+          'data-type': 'interface',
+          'data-id': i.id,
+          'data-line': i.line,
+        });
+        ifMatched++;
+      });
+
+      // candidates for port matching (still uses data-source-line)
+      var startUml = (parsedData.meta && parsedData.meta.startUmlLine) || 0;
+      var candidates = [];
+      function _push(v) { if (candidates.indexOf(v) === -1) candidates.push(v); }
+      if (startUml > 0) _push(startUml);
+      _push(0);
+      _push(1);
+
+      var packages = (parsedData.groups || []).filter(function(g) { return g.kind === 'package'; });
+      var pkgGroups = svgEl.querySelectorAll('g.cluster');
+      var pkgN = Math.min(packages.length, pkgGroups.length);
+      for (var pi = 0; pi < pkgN; pi++) {
+        var pg = pkgGroups[pi];
+        var pkgRect = pg.querySelector('rect');
+        if (!pkgRect) continue;
+        OB.addRect(overlayEl,
+          (parseFloat(pkgRect.getAttribute('x')) || 0) - 2,
+          (parseFloat(pkgRect.getAttribute('y')) || 0) - 2,
+          (parseFloat(pkgRect.getAttribute('width')) || 0) + 4,
+          (parseFloat(pkgRect.getAttribute('height')) || 0) + 4, {
+            'data-type': 'package',
+            'data-id': packages[pi].id,
+            'data-line': packages[pi].startLine,
+          });
+      }
+
+      var ports = (parsedData.elements || []).filter(function(e) { return e.kind === 'port'; });
+      var portMatched = 0;
+      ports.forEach(function(p) {
+        // port も entity name で引いて、なければ legacy fallback
+        var g = svgEl.querySelector('g.entity[data-qualified-name="' + p.id + '"]')
+             || svgEl.querySelector('g.port[data-source-line]');
+        if (!g) return;
+        var bb = _entityBBox(g);
+        if (!bb) return;
+        OB.addRect(overlayEl, bb.x - 4, bb.y - 4, bb.width + 8, bb.height + 8, {
+          'data-type': 'port',
+          'data-id': p.id,
+          'data-line': p.line,
+        });
+        portMatched++;
+      });
+
+      var relations = parsedData.relations || [];
+      var linkGroups = svgEl.querySelectorAll('g.link, g[class*="link_"]');
+      var relN = Math.min(relations.length, linkGroups.length);
+      for (var ri = 0; ri < relN; ri++) {
+        var lg = linkGroups[ri];
+        var lineEl = lg.querySelector('line, path');
+        if (!lineEl) continue;
+        var bb = OB.extractEdgeBBox(lineEl, 8);
+        if (!bb) continue;
+        OB.addRect(overlayEl, bb.x, bb.y, bb.width, bb.height, {
+          'data-type': 'relation',
+          'data-id': relations[ri].id,
+          'data-line': relations[ri].line,
+          'data-relation-kind': relations[ri].kind,
+        });
+      }
+
+      return {
+        matched: {
+          component: compMatched,
+          interface: ifMatched,
+          port: portMatched,
+          package: pkgN,
+          relation: relN,
+        },
+        unmatched: {
+          component: components.length - compMatched,
+          interface: interfaces.length - ifMatched,
+          port: ports.length - portMatched,
+          package: packages.length - pkgN,
+          relation: relations.length - relN,
+        },
+      };
+    },
   };
 })();

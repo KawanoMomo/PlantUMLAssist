@@ -397,17 +397,31 @@ window.MA.modules.plantumlSequence = (function() {
       ctx.setMmdText(wrapWith(ctx.getMmdText(), ln, ln, kind, label || ''));
       ctx.onUpdate();
     });
-    P.bindAllByClass(propsEl, 'seq-move-up', function(btn) {
-      var ln = parseInt(btn.getAttribute('data-line'), 10);
+    function _moveAndReselect(ln, direction) {
+      var oldText = ctx.getMmdText();
+      var newLine = _findMessageSwapTargetLine(oldText, ln, direction);
+      if (newLine < 0) return;
+      var newText = moveMessage(oldText, ln, direction);
+      if (newText === oldText) return;
       window.MA.history.pushHistory();
-      ctx.setMmdText(moveMessage(ctx.getMmdText(), ln, -1));
+      ctx.setMmdText(newText);
+      try {
+        var p = parseSequence(newText);
+        for (var i = 0; i < p.relations.length; i++) {
+          var r = p.relations[i];
+          if (r.kind === 'message' && r.line === newLine) {
+            window.MA.selection.setSelected([{ type: 'message', id: r.id, line: r.line }]);
+            break;
+          }
+        }
+      } catch (e) { /* keep prior selection */ }
       ctx.onUpdate();
+    }
+    P.bindAllByClass(propsEl, 'seq-move-up', function(btn) {
+      _moveAndReselect(parseInt(btn.getAttribute('data-line'), 10), -1);
     });
     P.bindAllByClass(propsEl, 'seq-move-down', function(btn) {
-      var ln = parseInt(btn.getAttribute('data-line'), 10);
-      window.MA.history.pushHistory();
-      ctx.setMmdText(moveMessage(ctx.getMmdText(), ln, 1));
-      ctx.onUpdate();
+      _moveAndReselect(parseInt(btn.getAttribute('data-line'), 10), 1);
     });
     P.bindAllByClass(propsEl, 'seq-delete-line', function(btn) {
       var ln = parseInt(btn.getAttribute('data-line'), 10);
@@ -567,9 +581,23 @@ window.MA.modules.plantumlSequence = (function() {
     return lines.join('\n');
   }
 
+  // _isMessageLineForMove: a line is "another message" if it contains an
+  // arrow token with content before it. Notes, block keywords (alt/opt/
+  // loop/par/end/else/activate/etc.), participant declarations, and
+  // structural markers are NOT message lines. The previous implementation
+  // claimed via comment to "stop at group boundaries and notes" but
+  // actually only checked @startuml / @enduml, so a message adjacent to
+  // a Note or alt line could silently swap with it (visible UX bug).
+  function _isMessageLineForMove(trimmed) {
+    if (!trimmed) return false;
+    if (window.MA.dslUtils.isPlantumlComment(trimmed)) return false;
+    if (/^(@startuml|@enduml|note\b|end\b|alt\b|opt\b|loop\b|par\b|else\b|elseif\b|and\b|group\b|critical\b|break\b|title\b|autonumber\b|participant\b|actor\b|database\b|queue\b|collections\b|control\b|entity\b|boundary\b|activate\b|deactivate\b|destroy\b|return\b|skinparam\b|hide\b|show\b|!)/i.test(trimmed)) return false;
+    return /[-=<]-?[>x]|->>?|<<?-/.test(trimmed) && /\S+\s*[-=<]/.test(trimmed);
+  }
+
   function moveMessage(text, lineNum, direction) {
-    // direction: -1 = up, +1 = down. Skips non-message lines (stops at
-    // group boundaries and notes to keep block structure intact).
+    // direction: -1 = up, +1 = down. Stops at any non-message structural
+    // line so up/down never visibly rearranges unrelated elements.
     var lines = text.split('\n');
     var idx = lineNum - 1;
     if (idx < 0 || idx >= lines.length) return text;
@@ -577,14 +605,30 @@ window.MA.modules.plantumlSequence = (function() {
     while (target >= 0 && target < lines.length) {
       var t = lines[target].trim();
       if (!t || window.MA.dslUtils.isPlantumlComment(t)) { target += direction; continue; }
-      if (/^@startuml/.test(t) || /^@enduml/.test(t)) return text;
-      break;
+      if (_isMessageLineForMove(t)) break;
+      return text;  // structural line — no-op
     }
     if (target < 0 || target >= lines.length) return text;
     var tmp = lines[idx];
     lines[idx] = lines[target];
     lines[target] = tmp;
     return lines.join('\n');
+  }
+
+  // _findMessageSwapTargetLine: mirror of moveMessage's target search so
+  // callers can re-select the moved message by its new 1-based line.
+  function _findMessageSwapTargetLine(text, lineNum, direction) {
+    var lines = text.split('\n');
+    var idx = lineNum - 1;
+    if (idx < 0 || idx >= lines.length) return -1;
+    var target = idx + direction;
+    while (target >= 0 && target < lines.length) {
+      var t = lines[target].trim();
+      if (!t || window.MA.dslUtils.isPlantumlComment(t)) { target += direction; continue; }
+      if (_isMessageLineForMove(t)) return target + 1;
+      return -1;
+    }
+    return -1;
   }
 
   function toggleAutonumber(text) {
@@ -791,6 +835,13 @@ window.MA.modules.plantumlSequence = (function() {
         'System --> User : Response',
         '@enduml',
       ].join('\n');
+    },
+    capabilities: {
+      overlaySelection: true,
+      hoverInsert: true,
+      participantDrag: true,
+      showInsertForm: true,
+      multiSelectConnect: false,
     },
     buildOverlay: function(svgEl, parsedData, overlayEl) {
       if (!overlayEl) return;

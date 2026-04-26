@@ -306,11 +306,17 @@ html, body {
 #overlay-layer > * {
   pointer-events: auto;
 }
-#overlay-layer rect.seq-overlay-target.selected {
-  fill: rgba(124, 140, 248, 0.12);
-  stroke: #7c8cf8;
-  stroke-width: 2;
-  rx: 3;
+#overlay-layer rect.selectable {
+  fill: transparent;
+  stroke: none;
+}
+#overlay-layer rect.selectable.selected {
+  fill: rgba(80, 160, 255, 0.18);
+  stroke: rgba(80, 160, 255, 0.65);
+  stroke-width: 1.5;
+}
+#overlay-layer rect.selectable:hover:not(.selected) {
+  fill: rgba(255, 255, 255, 0.05);
 }
 
 /* ── Properties Pane ───────────────────────────────────────────────────────── */
@@ -534,6 +540,8 @@ html, body {
 <script src="src/core/history.js"></script>
 <script src="src/core/selection.js"></script>
 <script src="src/core/connection-mode.js"></script>
+<script src="src/core/overlay-builder.js"></script>
+<script src="src/core/selection-router.js"></script>
 <script src="src/ui/properties.js"></script>
 <script src="src/ui/sequence-overlay.js"></script>
 <script src="src/ui/rich-label-editor.js"></script>

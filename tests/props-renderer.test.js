@@ -50,4 +50,32 @@ describe('propsRenderer.renderByDispatch', function() {
       PR.renderByDispatch([{ type: 'unknown', id: 'X' }], parsed, makeMockEl(), {});
     }).not.toThrow();
   });
+
+  test('renderByDispatch calls onMultiSelectConnect when 2 elements selected', function() {
+    var called = false;
+    var receivedSel = null;
+    PR.renderByDispatch(
+      [{ type: 'actor', id: 'A' }, { type: 'usecase', id: 'U' }],
+      { elements: [], relations: [], groups: [] },
+      makeMockEl(),
+      {
+        onMultiSelectConnect: function(sel) { called = true; receivedSel = sel; },
+      }
+    );
+    expect(called).toBe(true);
+    expect(receivedSel.length).toBe(2);
+  });
+
+  test('renderByDispatch calls onMultiSelect when 3+ elements selected', function() {
+    var called = false;
+    PR.renderByDispatch(
+      [{ type: 'actor', id: 'A' }, { type: 'actor', id: 'B' }, { type: 'actor', id: 'C' }],
+      { elements: [], relations: [], groups: [] },
+      makeMockEl(),
+      {
+        onMultiSelect: function() { called = true; },
+      }
+    );
+    expect(called).toBe(true);
+  });
 });

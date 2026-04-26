@@ -7,6 +7,16 @@ window.MA.propsRenderer = (function() {
       if (dispatchers.onNoSelection) dispatchers.onNoSelection(parsedData, propsEl);
       return;
     }
+    // 2-element selection: multi-select connect (Phase B)
+    if (selData.length === 2 && dispatchers.onMultiSelectConnect) {
+      dispatchers.onMultiSelectConnect(selData, parsedData, propsEl);
+      return;
+    }
+    // 3+ selection (or 2 without connect handler): generic multi-select callback
+    if (selData.length >= 2 && dispatchers.onMultiSelect) {
+      dispatchers.onMultiSelect(selData, parsedData, propsEl);
+      return;
+    }
     var sel = selData[0];
     var relation = (parsedData.relations || []).find(function(r) { return r.id === sel.id; });
     if (relation && dispatchers.onRelation) {
