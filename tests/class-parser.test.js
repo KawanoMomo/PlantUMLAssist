@@ -239,6 +239,34 @@ describe('class.parse — stereotype', function() {
   });
 });
 
+describe('class.parse — generics', function() {
+  test('parses class with single generic Foo<T>', function() {
+    var t = '@startuml\nclass Container<T>\n@enduml';
+    var r = clMod.parse(t);
+    expect(r.elements[0].id).toBe('Container');
+    expect(r.elements[0].generics).toEqual(['T']);
+  });
+  test('parses class with multiple generics Map<K, V>', function() {
+    var t = '@startuml\nclass Map<K, V>\n@enduml';
+    var r = clMod.parse(t);
+    expect(r.elements[0].generics).toEqual(['K', 'V']);
+  });
+  test('parses generics + stereotype', function() {
+    var t = '@startuml\nclass Container<T> <<Generic>>\n@enduml';
+    var r = clMod.parse(t);
+    expect(r.elements[0].generics).toEqual(['T']);
+    expect(r.elements[0].stereotype).toBe('Generic');
+  });
+  test('does not confuse <|-- inheritance with generics', function() {
+    var t = '@startuml\nclass Foo<T>\nFoo<T> <|-- Bar\n@enduml';
+    var r = clMod.parse(t);
+    expect(r.elements[0].generics).toEqual(['T']);
+    expect(r.relations[0].kind).toBe('inheritance');
+    expect(r.relations[0].from).toBe('Foo<T>');
+    expect(r.relations[0].to).toBe('Bar');
+  });
+});
+
 // jsdom epilogue
 if (prevWindow !== undefined) global.window = prevWindow;
 if (prevDocument !== undefined) global.document = prevDocument;

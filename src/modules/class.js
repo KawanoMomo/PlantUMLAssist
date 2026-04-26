@@ -6,11 +6,19 @@ window.MA.modules.plantumlClass = (function() {
   var RP = window.MA.regexParts;
   var DU = window.MA.dslUtils;
   var ID = RP.IDENTIFIER;
+  var ID_WITH_GENERICS = '(?:' + ID + '(?:<[^<>]*>)?)';
+  var _ID_GENERICS_RE = new RegExp('^(' + ID + ')<([^<>]+)>$');
+  function _splitIdGenerics(idWithGen) {
+    var m = idWithGen.match(_ID_GENERICS_RE);
+    if (!m) return { id: idWithGen, generics: null };
+    var ids = m[2].split(',').map(function(s) { return s.trim(); });
+    return { id: m[1], generics: ids };
+  }
 
   // class declaration: keyword + id (with optional quoted label)
   // groups: 1=quoted label (with as), 2=alias ID, 3=bare ID, 4=quoted label (trailing as)
   var CLASS_KW_RE = new RegExp(
-    '^class\\s+(?:"([^"]+)"\\s+as\\s+(' + ID + ')|(' + ID + ')(?:\\s+as\\s+"([^"]+)")?)\\s*(?:<<([^>]+)>>)?\\s*\\{?\\s*$'
+    '^class\\s+(?:"([^"]+)"\\s+as\\s+(' + ID_WITH_GENERICS + ')|(' + ID_WITH_GENERICS + ')(?:\\s+as\\s+"([^"]+)")?)\\s*(?:<<([^>]+)>>)?\\s*\\{?\\s*$'
   );
 
   var ATTRIBUTE_RE = new RegExp(
@@ -22,11 +30,11 @@ window.MA.modules.plantumlClass = (function() {
   );
 
   var INTERFACE_KW_RE = new RegExp(
-    '^interface\\s+(?:"([^"]+)"\\s+as\\s+(' + ID + ')|(' + ID + ')(?:\\s+as\\s+"([^"]+)")?)\\s*(?:<<([^>]+)>>)?\\s*\\{?\\s*$'
+    '^interface\\s+(?:"([^"]+)"\\s+as\\s+(' + ID_WITH_GENERICS + ')|(' + ID_WITH_GENERICS + ')(?:\\s+as\\s+"([^"]+)")?)\\s*(?:<<([^>]+)>>)?\\s*\\{?\\s*$'
   );
 
   var ABSTRACT_KW_RE = new RegExp(
-    '^abstract\\s+class\\s+(?:"([^"]+)"\\s+as\\s+(' + ID + ')|(' + ID + ')(?:\\s+as\\s+"([^"]+)")?)\\s*(?:<<([^>]+)>>)?\\s*\\{?\\s*$'
+    '^abstract\\s+class\\s+(?:"([^"]+)"\\s+as\\s+(' + ID_WITH_GENERICS + ')|(' + ID_WITH_GENERICS + ')(?:\\s+as\\s+"([^"]+)")?)\\s*(?:<<([^>]+)>>)?\\s*\\{?\\s*$'
   );
 
   var ENUM_KW_RE = new RegExp(
@@ -36,9 +44,9 @@ window.MA.modules.plantumlClass = (function() {
 
   // Relation arrow tokens, longest first to avoid prefix matches
   var RELATION_RE = new RegExp(
-    '^(' + ID + '|"[^"]+")\\s+' +
+    '^(' + ID_WITH_GENERICS + '|"[^"]+")\\s+' +
     '(<\\|--|--\\|>|<\\|\\.\\.|\\.\\.\\|>|\\*--|--\\*|o--|--o|\\.\\.>|<\\.\\.|--)\\s+' +
-    '(' + ID + '|"[^"]+")(?:\\s*:\\s*(.+))?\\s*$'
+    '(' + ID_WITH_GENERICS + '|"[^"]+")(?:\\s*:\\s*(.+))?\\s*$'
   );
 
   function parse(text) {
@@ -157,13 +165,15 @@ window.MA.modules.plantumlClass = (function() {
 
       var abm = trimmed.match(ABSTRACT_KW_RE);
       if (abm) {
-        var aid, alabel;
-        if (abm[2] !== undefined) { aid = abm[2]; alabel = abm[1]; }
-        else { aid = abm[3]; alabel = abm[4] !== undefined ? abm[4] : abm[3]; }
+        var aRawId, alabel;
+        if (abm[2] !== undefined) { aRawId = abm[2]; alabel = abm[1]; }
+        else { aRawId = abm[3]; alabel = abm[4] !== undefined ? abm[4] : abm[3]; }
+        var aSplit = _splitIdGenerics(aRawId);
         var aHasBlock = /\{\s*$/.test(trimmed);
         var aEl = {
-          kind: 'abstract', id: aid, label: alabel,
-          stereotype: abm[5] || null, generics: null, members: [],
+          kind: 'abstract', id: aSplit.id,
+          label: aSplit.generics ? aSplit.id : alabel,
+          stereotype: abm[5] || null, generics: aSplit.generics, members: [],
           line: lineNum, endLine: lineNum, parentPackageId: null,
         };
         result.elements.push(aEl);
@@ -173,13 +183,15 @@ window.MA.modules.plantumlClass = (function() {
 
       var im = trimmed.match(INTERFACE_KW_RE);
       if (im) {
-        var iid, ilabel;
-        if (im[2] !== undefined) { iid = im[2]; ilabel = im[1]; }
-        else { iid = im[3]; ilabel = im[4] !== undefined ? im[4] : im[3]; }
+        var iRawId, ilabel;
+        if (im[2] !== undefined) { iRawId = im[2]; ilabel = im[1]; }
+        else { iRawId = im[3]; ilabel = im[4] !== undefined ? im[4] : im[3]; }
+        var iSplit = _splitIdGenerics(iRawId);
         var iHasBlock = /\{\s*$/.test(trimmed);
         var iEl = {
-          kind: 'interface', id: iid, label: ilabel,
-          stereotype: im[5] || null, generics: null, members: [],
+          kind: 'interface', id: iSplit.id,
+          label: iSplit.generics ? iSplit.id : ilabel,
+          stereotype: im[5] || null, generics: iSplit.generics, members: [],
           line: lineNum, endLine: lineNum, parentPackageId: null,
         };
         result.elements.push(iEl);
@@ -189,13 +201,15 @@ window.MA.modules.plantumlClass = (function() {
 
       var m = trimmed.match(CLASS_KW_RE);
       if (m) {
-        var id, label;
-        if (m[2] !== undefined) { id = m[2]; label = m[1]; }
-        else { id = m[3]; label = m[4] !== undefined ? m[4] : m[3]; }
+        var rawId, label;
+        if (m[2] !== undefined) { rawId = m[2]; label = m[1]; }
+        else { rawId = m[3]; label = m[4] !== undefined ? m[4] : m[3]; }
+        var split = _splitIdGenerics(rawId);
         var hasBlock = /\{\s*$/.test(trimmed);
         var el = {
-          kind: 'class', id: id, label: label,
-          stereotype: m[5] || null, generics: null, members: [],
+          kind: 'class', id: split.id,
+          label: split.generics ? split.id : label,
+          stereotype: m[5] || null, generics: split.generics, members: [],
           line: lineNum, endLine: lineNum, parentPackageId: null,
         };
         result.elements.push(el);
