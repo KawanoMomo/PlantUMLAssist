@@ -575,13 +575,110 @@ window.MA.modules.plantumlClass = (function() {
     template: template,
     renderProps: renderProps,
     capabilities: {
-      overlaySelection: false,  // Phase B Task 21 で true
+      overlaySelection: true,
       hoverInsert: false,
       participantDrag: false,
       showInsertForm: false,
-      multiSelectConnect: false,  // Phase B Task 25 で true
+      multiSelectConnect: false,  // Task 25 で true
     },
-    buildOverlay: function() { /* Phase B Task 21 で実装 */ },
+
+    buildOverlay: function(svgEl, parsedData, overlayEl) {
+      if (!svgEl || !overlayEl) return { matched: {}, unmatched: {} };
+      var OB = window.MA.overlayBuilder;
+      OB.syncDimensions(svgEl, overlayEl);
+
+      function _entityBBox(g) {
+        if (!g) return null;
+        if (typeof g.getBBox === 'function') {
+          try { var bb = g.getBBox(); if (bb && (bb.width > 0 || bb.height > 0)) return bb; }
+          catch (e) { /* jsdom fallback */ }
+        }
+        var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        var found = false;
+        Array.prototype.forEach.call(g.querySelectorAll('ellipse, rect, text'), function(el) {
+          var x, y, w, h;
+          if (el.tagName.toLowerCase() === 'rect') {
+            x = parseFloat(el.getAttribute('x')) || 0;
+            y = parseFloat(el.getAttribute('y')) || 0;
+            w = parseFloat(el.getAttribute('width')) || 0;
+            h = parseFloat(el.getAttribute('height')) || 0;
+          } else if (el.tagName.toLowerCase() === 'ellipse') {
+            var cx = parseFloat(el.getAttribute('cx')) || 0;
+            var cy = parseFloat(el.getAttribute('cy')) || 0;
+            var rx = parseFloat(el.getAttribute('rx')) || 0;
+            var ry = parseFloat(el.getAttribute('ry')) || 0;
+            x = cx - rx; y = cy - ry; w = rx * 2; h = ry * 2;
+          } else {
+            x = parseFloat(el.getAttribute('x')) || 0;
+            y = parseFloat(el.getAttribute('y')) || 0;
+            w = parseFloat(el.getAttribute('textLength')) || 0;
+            h = 14;
+          }
+          if (w === 0 && h === 0) return;
+          found = true;
+          minX = Math.min(minX, x); minY = Math.min(minY, y);
+          maxX = Math.max(maxX, x + w); maxY = Math.max(maxY, y + h);
+        });
+        if (!found) return null;
+        return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+      }
+
+      var matched = { class: 0, interface: 0, abstract: 0, enum: 0, relation: 0, package: 0 };
+
+      (parsedData.elements || []).forEach(function(el) {
+        var g = svgEl.querySelector('g.entity[data-qualified-name="' + el.id + '"]');
+        if (!g) return;
+        var bb = _entityBBox(g);
+        if (!bb) return;
+        OB.addRect(overlayEl, bb.x - 6, bb.y - 6, bb.width + 12, bb.height + 12, {
+          'data-type': el.kind,
+          'data-id': el.id,
+          'data-line': el.line,
+        });
+        matched[el.kind]++;
+      });
+
+      // package + namespace
+      var packages = (parsedData.groups || []);
+      var pkgGroups = svgEl.querySelectorAll('g.cluster');
+      var pkgN = Math.min(packages.length, pkgGroups.length);
+      for (var pi = 0; pi < pkgN; pi++) {
+        var pg = pkgGroups[pi];
+        var pkgRect = pg.querySelector('rect');
+        if (!pkgRect) continue;
+        OB.addRect(overlayEl,
+          (parseFloat(pkgRect.getAttribute('x')) || 0) - 2,
+          (parseFloat(pkgRect.getAttribute('y')) || 0) - 2,
+          (parseFloat(pkgRect.getAttribute('width')) || 0) + 4,
+          (parseFloat(pkgRect.getAttribute('height')) || 0) + 4, {
+            'data-type': 'package',
+            'data-id': packages[pi].id,
+            'data-line': packages[pi].startLine,
+          });
+        matched.package++;
+      }
+
+      // relations
+      var relations = parsedData.relations || [];
+      var linkGroups = svgEl.querySelectorAll('g.link, g[class*="link_"]');
+      var relN = Math.min(relations.length, linkGroups.length);
+      for (var ri = 0; ri < relN; ri++) {
+        var lg = linkGroups[ri];
+        var lineEl = lg.querySelector('line, path');
+        if (!lineEl) continue;
+        var bb2 = OB.extractEdgeBBox(lineEl, 8);
+        if (!bb2) continue;
+        OB.addRect(overlayEl, bb2.x, bb2.y, bb2.width, bb2.height, {
+          'data-type': 'relation',
+          'data-id': relations[ri].id,
+          'data-line': relations[ri].line,
+          'data-relation-kind': relations[ri].kind,
+        });
+        matched.relation++;
+      }
+
+      return { matched: matched, unmatched: {} };
+    },
     detect: function(text) { return window.MA.parserUtils.detectDiagramType(text) === 'plantuml-class'; },
     fmtClass: fmtClass,
     fmtInterface: fmtInterface,
