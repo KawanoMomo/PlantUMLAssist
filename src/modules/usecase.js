@@ -582,14 +582,55 @@ window.MA.modules.plantumlUsecase = (function() {
         });
       });
 
+      // package: <g class="cluster">
+      var packages = (parsedData.groups || []).filter(function(g) { return g.kind === 'package'; });
+      var pkgGroups = svgEl.querySelectorAll('g.cluster');
+      var pkgN = Math.min(packages.length, pkgGroups.length);
+      for (var pi = 0; pi < pkgN; pi++) {
+        var g = pkgGroups[pi];
+        var pkgRect = g.querySelector('rect');
+        if (!pkgRect) continue;
+        var px = parseFloat(pkgRect.getAttribute('x')) || 0;
+        var py = parseFloat(pkgRect.getAttribute('y')) || 0;
+        var pw = parseFloat(pkgRect.getAttribute('width')) || 0;
+        var ph = parseFloat(pkgRect.getAttribute('height')) || 0;
+        OB.addRect(overlayEl, px - 2, py - 2, pw + 4, ph + 4, {
+          'data-type': 'package',
+          'data-id': packages[pi].id,
+          'data-line': packages[pi].startLine,
+        });
+      }
+
+      // relation: <g class="link"> 内の line / path
+      var relations = parsedData.relations || [];
+      var linkGroups = svgEl.querySelectorAll('g.link, g[class*="link_"]');
+      var relN = Math.min(relations.length, linkGroups.length);
+      for (var ri = 0; ri < relN; ri++) {
+        var lg = linkGroups[ri];
+        var lineEl = lg.querySelector('line, path');
+        if (!lineEl) continue;
+        var bb = OB.extractEdgeBBox(lineEl, 8);
+        if (!bb) continue;
+        OB.addRect(overlayEl, bb.x, bb.y, bb.width, bb.height, {
+          'data-type': 'relation',
+          'data-id': relations[ri].id,
+          'data-line': relations[ri].line,
+          'data-relation-kind': relations[ri].kind,
+        });
+      }
+
       return {
         matched: {
           actor: actorPicked.matches.length,
           usecase: ucPicked.matches.length,
+          package: pkgN,
+          relation: relN,
         },
         unmatched: {
           actor: actors.length - actorPicked.matches.length,
           usecase: usecases.length - ucPicked.matches.length,
+          package: packages.length - pkgN,
+          relation: relations.length - relN,
         },
       };
     },

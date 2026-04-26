@@ -101,6 +101,62 @@ describe('usecase.buildOverlay — actor/usecase', function() {
   });
 });
 
+describe('usecase.buildOverlay — package + relation', function() {
+  beforeEach(function() {
+    document.body.innerHTML =
+      '<svg id="src" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 200">' +
+        '<g class="cluster"><rect x="0" y="0" width="200" height="100"/><text x="10" y="15">Pkg</text></g>' +
+        '<g class="link"><line x1="10" y1="50" x2="100" y2="50"/></g>' +
+      '</svg>' +
+      '<svg id="ov" xmlns="http://www.w3.org/2000/svg"></svg>';
+  });
+
+  test('creates package rect with data-type="package"', function() {
+    var src = document.getElementById('src');
+    var ov = document.getElementById('ov');
+    var parsed = {
+      meta: { startUmlLine: 1 },
+      elements: [],
+      relations: [],
+      groups: [{ kind: 'package', id: '__pkg_0', label: 'Pkg', startLine: 2, endLine: 5 }],
+    };
+    ucMod.buildOverlay(src, parsed, ov);
+    var pkgs = ov.querySelectorAll('rect[data-type="package"]');
+    expect(pkgs.length).toBe(1);
+    expect(pkgs[0].getAttribute('data-id')).toBe('__pkg_0');
+  });
+
+  test('creates relation rect with data-relation-kind', function() {
+    var src = document.getElementById('src');
+    var ov = document.getElementById('ov');
+    var parsed = {
+      meta: { startUmlLine: 1 },
+      elements: [],
+      relations: [{ id: 'rel_0', kind: 'association', from: 'A', to: 'B', line: 3 }],
+      groups: [],
+    };
+    ucMod.buildOverlay(src, parsed, ov);
+    var rels = ov.querySelectorAll('rect[data-type="relation"]');
+    expect(rels.length).toBe(1);
+    expect(rels[0].getAttribute('data-relation-kind')).toBe('association');
+  });
+
+  test('relation rect uses extractEdgeBBox padding', function() {
+    var src = document.getElementById('src');
+    var ov = document.getElementById('ov');
+    var parsed = {
+      meta: { startUmlLine: 1 },
+      elements: [],
+      relations: [{ id: 'rel_0', kind: 'association', from: 'A', to: 'B', line: 3 }],
+      groups: [],
+    };
+    ucMod.buildOverlay(src, parsed, ov);
+    var rect = ov.querySelector('rect[data-type="relation"]');
+    var width = parseFloat(rect.getAttribute('width'));
+    expect(width).toBeGreaterThan(90);  // line長 90 + 2*8 padding
+  });
+});
+
 // jsdom window を run-tests.js が用意した sandbox window に戻す。
 // これをしないと後続 test ファイル (parser-utils, regex-parts 等) が
 // window.MA.* を見失って失敗する。
