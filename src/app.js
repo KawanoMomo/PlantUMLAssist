@@ -478,7 +478,8 @@ function init() {
   window.MA.selection.init(function() {
     var ovEl = document.getElementById('overlay-layer');
     var sel = window.MA.selection.getSelected() || [];
-    if (ovEl && window.MA.sequenceOverlay && window.MA.sequenceOverlay.setSelectedHighlight) {
+    if (currentModule === modules['plantuml-sequence']
+        && ovEl && window.MA.sequenceOverlay && window.MA.sequenceOverlay.setSelectedHighlight) {
       window.MA.sequenceOverlay.setSelectedHighlight(ovEl, sel);
     }
     // 選択状態に入ったらその瞬間に hover ガイドを消す (mousemove を待たない)
