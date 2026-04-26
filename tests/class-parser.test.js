@@ -138,6 +138,22 @@ describe('class.parse — interface', function() {
   });
 });
 
+describe('class.parse — abstract', function() {
+  test('parses abstract class with 2 tokens', function() {
+    var t = '@startuml\nabstract class Shape\n@enduml';
+    var r = clMod.parse(t);
+    expect(r.elements[0].kind).toBe('abstract');
+    expect(r.elements[0].id).toBe('Shape');
+  });
+  test('parses abstract class with body', function() {
+    var t = '@startuml\nabstract class Shape {\n  + {abstract} area() : double\n}\n@enduml';
+    var r = clMod.parse(t);
+    expect(r.elements[0].kind).toBe('abstract');
+    expect(r.elements[0].members.length).toBe(1);
+    expect(r.elements[0].members[0].abstract).toBe(true);
+  });
+});
+
 // jsdom epilogue
 if (prevWindow !== undefined) global.window = prevWindow;
 if (prevDocument !== undefined) global.document = prevDocument;

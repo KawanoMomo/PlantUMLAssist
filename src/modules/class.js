@@ -25,6 +25,10 @@ window.MA.modules.plantumlClass = (function() {
     '^interface\\s+(?:"([^"]+)"\\s+as\\s+(' + ID + ')|(' + ID + ')(?:\\s+as\\s+"([^"]+)")?)\\s*\\{?\\s*$'
   );
 
+  var ABSTRACT_KW_RE = new RegExp(
+    '^abstract\\s+class\\s+(?:"([^"]+)"\\s+as\\s+(' + ID + ')|(' + ID + ')(?:\\s+as\\s+"([^"]+)")?)\\s*\\{?\\s*$'
+  );
+
   function parse(text) {
     var result = { meta: { title: '', startUmlLine: null }, elements: [], relations: [], groups: [] };
     if (!text || !text.trim()) return result;
@@ -82,6 +86,22 @@ window.MA.modules.plantumlClass = (function() {
           });
           continue;
         }
+      }
+
+      var abm = trimmed.match(ABSTRACT_KW_RE);
+      if (abm) {
+        var aid, alabel;
+        if (abm[2] !== undefined) { aid = abm[2]; alabel = abm[1]; }
+        else { aid = abm[3]; alabel = abm[4] !== undefined ? abm[4] : abm[3]; }
+        var aHasBlock = /\{\s*$/.test(trimmed);
+        var aEl = {
+          kind: 'abstract', id: aid, label: alabel,
+          stereotype: null, generics: null, members: [],
+          line: lineNum, endLine: lineNum, parentPackageId: null,
+        };
+        result.elements.push(aEl);
+        if (aHasBlock) openClassStack.push({ element: aEl });
+        continue;
       }
 
       var im = trimmed.match(INTERFACE_KW_RE);
