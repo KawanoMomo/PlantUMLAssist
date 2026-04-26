@@ -58,6 +58,33 @@ describe('class formatters (canonical emit)', function() {
   });
 });
 
+describe('class add operations', function() {
+  test('addClass appends before @enduml', function() {
+    var t = '@startuml\n@enduml';
+    var out = clMod.addClass(t, 'Foo', 'Foo', null, null);
+    expect(out).toContain('class Foo');
+    expect(out.indexOf('class Foo')).toBeLessThan(out.indexOf('@enduml'));
+  });
+  test('addRelation appends', function() {
+    var t = '@startuml\nclass A\nclass B\n@enduml';
+    var out = clMod.addRelation(t, 'inheritance', 'A', 'B');
+    expect(out).toContain('A <|-- B');
+  });
+  test('addInterface emits interface keyword', function() {
+    var t = '@startuml\n@enduml';
+    var out = clMod.addInterface(t, 'IAuth', 'IAuth');
+    expect(out).toContain('interface IAuth');
+  });
+  test('addEnum with values emits block form', function() {
+    var t = '@startuml\n@enduml';
+    var out = clMod.addEnum(t, 'Color', 'Color', ['RED', 'GREEN']);
+    expect(out).toContain('enum Color {');
+    expect(out).toContain('RED');
+    expect(out).toContain('GREEN');
+    expect(out).toContain('}');
+  });
+});
+
 if (prevWindow !== undefined) global.window = prevWindow;
 if (prevDocument !== undefined) global.document = prevDocument;
 depPaths.forEach(function(p) { try { delete require.cache[require.resolve(p)]; } catch (e) {} });

@@ -320,6 +320,35 @@ window.MA.modules.plantumlClass = (function() {
   function fmtPackage(label) { return 'package "' + label + '" {'; }
   function fmtNamespace(label) { return 'namespace ' + label + ' {'; }
 
+  var insertBeforeEnd = window.MA.dslUpdater.insertBeforeEnd;
+
+  function addClass(text, id, label, stereotype, generics) {
+    return insertBeforeEnd(text, fmtClass(id, label || id, stereotype, generics));
+  }
+  function addInterface(text, id, label, stereotype, generics) {
+    return insertBeforeEnd(text, fmtInterface(id, label || id, stereotype, generics));
+  }
+  function addAbstract(text, id, label, stereotype, generics) {
+    return insertBeforeEnd(text, fmtAbstract(id, label || id, stereotype, generics));
+  }
+  function addEnum(text, id, label, values) {
+    var lines = [fmtEnum(id, label || id) + ' {'];
+    (values || []).forEach(function(v) { lines.push('  ' + v); });
+    lines.push('}');
+    var out = text;
+    lines.forEach(function(l) { out = insertBeforeEnd(out, l); });
+    return out;
+  }
+  function addRelation(text, kind, from, to, label) {
+    return insertBeforeEnd(text, fmtRelation(kind, from, to, label));
+  }
+  function addPackage(text, label) {
+    return insertBeforeEnd(insertBeforeEnd(text, fmtPackage(label)), '}');
+  }
+  function addNamespace(text, label) {
+    return insertBeforeEnd(insertBeforeEnd(text, fmtNamespace(label)), '}');
+  }
+
   function template() {
     return [
       '@startuml',
@@ -367,5 +396,12 @@ window.MA.modules.plantumlClass = (function() {
     fmtEnumValue: fmtEnumValue,
     fmtPackage: fmtPackage,
     fmtNamespace: fmtNamespace,
+    addClass: addClass,
+    addInterface: addInterface,
+    addAbstract: addAbstract,
+    addEnum: addEnum,
+    addRelation: addRelation,
+    addPackage: addPackage,
+    addNamespace: addNamespace,
   };
 })();
