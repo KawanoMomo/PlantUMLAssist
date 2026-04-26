@@ -161,6 +161,33 @@ WebApp ..> Logger
 - ドラッグで関係作成
 - 既存要素を package に範囲指定で囲む
 
+## Overlay-Driven Editing (v0.5.0)
+
+Sequence / UseCase / Component の 3 図形は SVG プレビュー上の図形を直接クリックして編集できます。
+
+### 共通操作
+
+- **クリック**: 図形を単一選択 → property panel が編集モードに
+- **再クリック**: 選択解除 (toggle)
+- **Shift+クリック**: 複数選択 (2 つまで)
+- **空白クリック**: 選択解除
+
+### Multi-Select Connect (UseCase / Component)
+
+2 つの図形を Shift+クリックで選択 → property panel に Connect form が出ます:
+
+- UseCase: association / generalization / include / extend
+- Component: association / dependency / provides (lollipop) / requires (lollipop)
+
+Provides/Requires (lollipop) は方向が固定: component → interface (provides) / interface → component (requires)。Connect form は kind 切替時に自動で from/to を入れ替えます。
+
+### v0.5.0 制約 (v0.6.0+ で対応予定)
+
+- drag-to-connect (SVG 上で線を drag して関係作成)
+- package 範囲選択 → wrap (既存要素を package で囲む)
+- 要素を別 package へ drag 移動
+- Sequence の multi-select connect (現状 Sequence は form-based のみ)
+
 ## 設計ドキュメント
 
 - Design: `docs/superpowers/specs/2026-04-17-plantuml-assist-design.md`
