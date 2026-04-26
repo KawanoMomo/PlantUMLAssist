@@ -42,4 +42,16 @@ describe('detectDiagramType — PlantUML', function() {
   test('does not confuse [*] with [X] (state vs component priority)', function() {
     expect(parserUtils.detectDiagramType('@startuml\n[*] --> Idle\nstate Idle\n@enduml')).toBe('plantuml-state');
   });
+  test('detects class diagram by class keyword', function() {
+    expect(parserUtils.detectDiagramType('@startuml\nclass Foo\n@enduml')).toBe('plantuml-class');
+  });
+  test('detects class diagram by abstract keyword', function() {
+    expect(parserUtils.detectDiagramType('@startuml\nabstract class Shape\n@enduml')).toBe('plantuml-class');
+  });
+  test('detects class diagram by enum keyword', function() {
+    expect(parserUtils.detectDiagramType('@startuml\nenum Color { RED }\n@enduml')).toBe('plantuml-class');
+  });
+  test('detects class diagram by inheritance arrow', function() {
+    expect(parserUtils.detectDiagramType('@startuml\nFoo --|> Bar\n@enduml')).toBe('plantuml-class');
+  });
 });
