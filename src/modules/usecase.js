@@ -291,6 +291,8 @@ window.MA.modules.plantumlUsecase = (function() {
       onElement: function(elt, parsed, el) { _renderElementEdit(elt, parsed, el, ctx); },
       onRelation: function(rel, parsed, el) { _renderRelationEdit(rel, parsed, el, ctx); },
       onGroup: function(grp, parsed, el) { _renderGroupReadOnly(grp, parsed, el, ctx); },
+      onMultiSelectConnect: function(sel, parsed, el) { _renderMultiSelectConnect(sel, parsed, el, ctx); },
+      onMultiSelect: function(sel, parsed, el) { _renderMultiSelect(sel, el); },
     });
   }
 
@@ -525,6 +527,68 @@ window.MA.modules.plantumlUsecase = (function() {
     propsEl.innerHTML = html;
   }
 
+  // ─── Multi-select Connect (Phase B Task 13) ─────────────────────────────
+  function _renderMultiSelectConnect(selData, parsedData, propsEl, ctx) {
+    var P = window.MA.properties;
+    var allElements = (parsedData.elements || []).filter(function(e) {
+      return e.kind === 'actor' || e.kind === 'usecase';
+    });
+    var nameById = {};
+    allElements.forEach(function(e) { nameById[e.id] = e.label || e.id; });
+
+    var fromOpt = nameById[selData[0].id] || selData[0].id;
+    var toOpt = nameById[selData[1].id] || selData[1].id;
+
+    propsEl.innerHTML =
+      '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">UseCase - Connect 2 elements</div>' +
+      '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
+        '<div style="margin:8px 0;">' +
+          'From: <strong id="uc-conn-from">' + window.MA.htmlUtils.escHtml(fromOpt) + '</strong> ' +
+          '<button id="uc-conn-swap" type="button">⇄ swap</button> ' +
+          'To: <strong id="uc-conn-to">' + window.MA.htmlUtils.escHtml(toOpt) + '</strong>' +
+        '</div>' +
+        P.selectFieldHtml('Kind', 'uc-conn-kind', [
+          { value: 'association', label: 'Association (-->)', selected: true },
+          { value: 'generalization', label: 'Generalization (<|--)' },
+          { value: 'include', label: 'Include (..>) <<include>>' },
+          { value: 'extend', label: 'Extend (..>) <<extend>>' },
+        ]) +
+        P.fieldHtml('Label', 'uc-conn-label', '', '任意') +
+        P.primaryButtonHtml('uc-conn-create', '+ Connect') +
+      '</div>';
+
+    var swapped = false;
+    P.bindEvent('uc-conn-swap', 'click', function() {
+      swapped = !swapped;
+      var fromEl = document.getElementById('uc-conn-from');
+      var toEl = document.getElementById('uc-conn-to');
+      var tmp = fromEl.textContent;
+      fromEl.textContent = toEl.textContent;
+      toEl.textContent = tmp;
+    });
+
+    P.bindEvent('uc-conn-create', 'click', function() {
+      window.MA.history.pushHistory();
+      var fromId = swapped ? selData[1].id : selData[0].id;
+      var toId = swapped ? selData[0].id : selData[1].id;
+      var kind = document.getElementById('uc-conn-kind').value;
+      var label = document.getElementById('uc-conn-label').value.trim();
+      var t = ctx.getMmdText();
+      var out = addRelation(t, kind, fromId, toId, label);
+      ctx.setMmdText(out);
+      window.MA.selection.clearSelection();
+      ctx.onUpdate();
+    });
+  }
+
+  // 3+ selection 用
+  function _renderMultiSelect(selData, propsEl) {
+    propsEl.innerHTML =
+      '<div style="padding:12px;color:var(--text-secondary);font-size:11px;">' +
+      selData.length + ' elements selected。Connect は 2 elements まで。' +
+      'Shift+クリックで解除できます。</div>';
+  }
+
   return {
     type: 'plantuml-usecase',
     displayName: 'UseCase',
@@ -551,7 +615,7 @@ window.MA.modules.plantumlUsecase = (function() {
       hoverInsert: false,
       participantDrag: false,
       showInsertForm: false,
-      multiSelectConnect: false,  // Task 13 で true に
+      multiSelectConnect: true,  // Task 13: 2-element connect form
     },
     buildOverlay: function(svgEl, parsedData, overlayEl) {
       if (!svgEl || !overlayEl) return { matched: {}, unmatched: {} };
