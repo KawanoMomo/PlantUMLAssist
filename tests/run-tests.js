@@ -22,6 +22,7 @@ const sourceFiles = [
   'src/modules/sequence.js',
   'src/modules/usecase.js',
   'src/modules/component.js',
+  'src/modules/class.js',
 ];
 
 let fns = {};
