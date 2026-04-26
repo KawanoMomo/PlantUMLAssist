@@ -121,6 +121,46 @@ Login ..> Validate : <<include>>
 - ドラッグで関係作成
 - 既存要素を package に範囲指定で囲む
 
+## Component Diagram (v0.4.0)
+
+PlantUML Component Diagram の form-based 編集に対応。システムブロック構成・モジュール依存・インターフェース表現の業務フローで使用。
+
+### 対応 DSL 要素
+
+- `component` (キーワード形式 / 短縮 `[X]`)
+- `interface` (キーワード形式 / 短縮 `() X`)
+- `port` (component 直後行に配置)
+- `package "Label" { ... }` 境界 (`folder`/`frame`/`node`/`rectangle` も同義として受理)
+- 4 種の関係:
+  - association `A -- B` (label 任意)
+  - dependency `A ..> B` (label 任意)
+  - provides (lollipop) `component -() interface`
+  - requires (lollipop) `interface )- component`
+
+### Canonical 出力 (ADR-106)
+
+GUI からの編集はすべて keyword-first canonical 形式で emit (例: `component "Web App" as WA`)。短縮記法 (`[X]` / `() X` / `folder/frame/node/rectangle`) は parser で受理しますが、保存時に正規化されます。
+
+### サンプル DSL
+
+```plantuml
+@startuml
+title Sample Component
+package "Backend" {
+  component WebApp
+  interface IAuth
+}
+WebApp -() IAuth
+WebApp ..> Logger
+@enduml
+```
+
+### v0.4.0 制約 (v0.5.0 で対応予定)
+
+- SVG 要素クリック選択 (overlay-driven UI)
+- ドラッグで関係作成
+- 既存要素を package に範囲指定で囲む
+
 ## 設計ドキュメント
 
 - Design: `docs/superpowers/specs/2026-04-17-plantuml-assist-design.md`
