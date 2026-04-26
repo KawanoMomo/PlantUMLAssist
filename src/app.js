@@ -483,6 +483,9 @@ function init() {
   window.MA.selection.init(function() {
     var ovEl = document.getElementById('overlay-layer');
     var sel = window.MA.selection.getSelected() || [];
+    // TEMP dual-gate: capability gates the cross-module surface; the sequence
+    // comparison gates the sequence-specific overlay API. Task 8 (selection-router)
+    // removes the sequence comparison.
     if (moduleHas('overlaySelection')
         && currentModule === modules['plantuml-sequence']
         && ovEl && window.MA.sequenceOverlay && window.MA.sequenceOverlay.setSelectedHighlight) {
@@ -827,6 +830,9 @@ function renderSvg() {
           warnEl.textContent = '\u26A0 Overlay \u30DE\u30C3\u30C1\u30F3\u30B0\u5931\u6557: ' + JSON.stringify(u) + ' \u3002\u30EA\u30B9\u30C8\u4E00\u89A7\u304B\u3089\u7DE8\u96C6\u3057\u3066\u304F\u3060\u3055\u3044\u3002';
         }
       }
+      // TEMP dual-gate: capability gates the cross-module surface; the sequence
+      // comparison gates the sequence-specific overlay API. Task 8 (selection-router)
+      // removes the sequence comparison.
       if (moduleHas('overlaySelection') && currentModule === modules['plantuml-sequence']) {
         var sel = window.MA.selection.getSelected() || [];
         if (window.MA.sequenceOverlay && window.MA.sequenceOverlay.setSelectedHighlight) {
