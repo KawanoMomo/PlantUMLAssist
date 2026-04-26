@@ -42,6 +42,10 @@ window.MA.modules.plantumlClass = (function() {
   );
   var ENUM_VALUE_RE = /^([A-Z_][A-Z0-9_]*)\s*;?\s*$/;
 
+  var PACKAGE_OPEN_RE = new RegExp(
+    '^package\\s+(?:"([^"]+)"|(' + ID + '))\\s*\\{\\s*$'
+  );
+
   // Relation arrow tokens, longest first to avoid prefix matches
   var RELATION_RE = new RegExp(
     '^(' + ID_WITH_GENERICS + '|"[^"]+")\\s+' +
@@ -54,6 +58,8 @@ window.MA.modules.plantumlClass = (function() {
     if (!text || !text.trim()) return result;
     var lines = text.split('\n');
     var openClassStack = [];
+    var packageStack = [];
+    var packageCounter = 0;
 
     for (var i = 0; i < lines.length; i++) {
       var lineNum = i + 1;
@@ -72,6 +78,11 @@ window.MA.modules.plantumlClass = (function() {
       if (trimmed === '}' && openClassStack.length > 0) {
         var closing = openClassStack.pop();
         closing.element.endLine = lineNum;
+        continue;
+      }
+      if (trimmed === '}' && packageStack.length > 0) {
+        var pkgClosing = packageStack.pop();
+        pkgClosing.endLine = lineNum;
         continue;
       }
 
@@ -147,16 +158,28 @@ window.MA.modules.plantumlClass = (function() {
         }
       }
 
+      var pm = trimmed.match(PACKAGE_OPEN_RE);
+      if (pm) {
+        var pkgLabel = pm[1] !== undefined ? pm[1] : pm[2];
+        var pkgId = '__pkg_' + (packageCounter++);
+        var pkgParent = packageStack.length > 0 ? packageStack[packageStack.length - 1].id : null;
+        var pkg = { kind: 'package', id: pkgId, label: pkgLabel, startLine: lineNum, endLine: 0, parentId: pkgParent };
+        result.groups.push(pkg);
+        packageStack.push(pkg);
+        continue;
+      }
+
       var em = trimmed.match(ENUM_KW_RE);
       if (em) {
         var eid, elabel;
         if (em[2] !== undefined) { eid = em[2]; elabel = em[1]; }
         else { eid = em[3]; elabel = em[4] !== undefined ? em[4] : em[3]; }
         var eHasBlock = /\{\s*$/.test(trimmed);
+        var eCurrentPackageId = packageStack.length > 0 ? packageStack[packageStack.length - 1].id : null;
         var eEl = {
           kind: 'enum', id: eid, label: elabel,
           stereotype: em[5] || null, generics: null, members: [],
-          line: lineNum, endLine: lineNum, parentPackageId: null,
+          line: lineNum, endLine: lineNum, parentPackageId: eCurrentPackageId,
         };
         result.elements.push(eEl);
         if (eHasBlock) openClassStack.push({ element: eEl });
@@ -170,11 +193,12 @@ window.MA.modules.plantumlClass = (function() {
         else { aRawId = abm[3]; alabel = abm[4] !== undefined ? abm[4] : abm[3]; }
         var aSplit = _splitIdGenerics(aRawId);
         var aHasBlock = /\{\s*$/.test(trimmed);
+        var aCurrentPackageId = packageStack.length > 0 ? packageStack[packageStack.length - 1].id : null;
         var aEl = {
           kind: 'abstract', id: aSplit.id,
           label: aSplit.generics ? aSplit.id : alabel,
           stereotype: abm[5] || null, generics: aSplit.generics, members: [],
-          line: lineNum, endLine: lineNum, parentPackageId: null,
+          line: lineNum, endLine: lineNum, parentPackageId: aCurrentPackageId,
         };
         result.elements.push(aEl);
         if (aHasBlock) openClassStack.push({ element: aEl });
@@ -188,11 +212,12 @@ window.MA.modules.plantumlClass = (function() {
         else { iRawId = im[3]; ilabel = im[4] !== undefined ? im[4] : im[3]; }
         var iSplit = _splitIdGenerics(iRawId);
         var iHasBlock = /\{\s*$/.test(trimmed);
+        var iCurrentPackageId = packageStack.length > 0 ? packageStack[packageStack.length - 1].id : null;
         var iEl = {
           kind: 'interface', id: iSplit.id,
           label: iSplit.generics ? iSplit.id : ilabel,
           stereotype: im[5] || null, generics: iSplit.generics, members: [],
-          line: lineNum, endLine: lineNum, parentPackageId: null,
+          line: lineNum, endLine: lineNum, parentPackageId: iCurrentPackageId,
         };
         result.elements.push(iEl);
         if (iHasBlock) openClassStack.push({ element: iEl });
@@ -206,11 +231,12 @@ window.MA.modules.plantumlClass = (function() {
         else { rawId = m[3]; label = m[4] !== undefined ? m[4] : m[3]; }
         var split = _splitIdGenerics(rawId);
         var hasBlock = /\{\s*$/.test(trimmed);
+        var currentPackageId = packageStack.length > 0 ? packageStack[packageStack.length - 1].id : null;
         var el = {
           kind: 'class', id: split.id,
           label: split.generics ? split.id : label,
           stereotype: m[5] || null, generics: split.generics, members: [],
-          line: lineNum, endLine: lineNum, parentPackageId: null,
+          line: lineNum, endLine: lineNum, parentPackageId: currentPackageId,
         };
         result.elements.push(el);
         if (hasBlock) openClassStack.push({ element: el });

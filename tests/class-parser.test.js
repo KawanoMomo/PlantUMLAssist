@@ -267,6 +267,16 @@ describe('class.parse — generics', function() {
   });
 });
 
+describe('class.parse — package nesting', function() {
+  test('assigns parentPackageId to class inside package', function() {
+    var t = '@startuml\npackage "Domain" {\n  class User\n}\n@enduml';
+    var r = clMod.parse(t);
+    expect(r.groups.length).toBe(1);
+    expect(r.groups[0].kind).toBe('package');
+    expect(r.elements[0].parentPackageId).toBe(r.groups[0].id);
+  });
+});
+
 // jsdom epilogue
 if (prevWindow !== undefined) global.window = prevWindow;
 if (prevDocument !== undefined) global.document = prevDocument;
