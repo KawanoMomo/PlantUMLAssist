@@ -34,6 +34,13 @@ window.MA.modules.plantumlClass = (function() {
   );
   var ENUM_VALUE_RE = /^([A-Z_][A-Z0-9_]*)\s*;?\s*$/;
 
+  // Relation arrow tokens, longest first to avoid prefix matches
+  var RELATION_RE = new RegExp(
+    '^(' + ID + '|"[^"]+")\\s+' +
+    '(<\\|--|--\\|>|<\\|\\.\\.|\\.\\.\\|>|\\*--|--\\*|o--|--o|\\.\\.>|<\\.\\.|--)\\s+' +
+    '(' + ID + '|"[^"]+")(?:\\s*:\\s*(.+))?\\s*$'
+  );
+
   function parse(text) {
     var result = { meta: { title: '', startUmlLine: null }, elements: [], relations: [], groups: [] };
     if (!text || !text.trim()) return result;
@@ -99,6 +106,34 @@ window.MA.modules.plantumlClass = (function() {
             type: am[4] ? am[4].trim() : '',
             params: null,
             line: lineNum,
+          });
+          continue;
+        }
+      }
+
+      if (openClassStack.length === 0) {
+        var rm = trimmed.match(RELATION_RE);
+        if (rm) {
+          var arrow = rm[2];
+          var fromTok = rm[1].replace(/^"|"$/g, '');
+          var toTok = rm[3].replace(/^"|"$/g, '');
+          var lbl = rm[4] ? rm[4].trim() : null;
+          var rkind, rfrom, rto;
+          if (arrow === '<|--') { rkind = 'inheritance'; rfrom = fromTok; rto = toTok; }
+          else if (arrow === '--|>') { rkind = 'inheritance'; rfrom = toTok; rto = fromTok; }
+          else if (arrow === '<|..') { rkind = 'implementation'; rfrom = fromTok; rto = toTok; }
+          else if (arrow === '..|>') { rkind = 'implementation'; rfrom = toTok; rto = fromTok; }
+          else if (arrow === '*--') { rkind = 'composition'; rfrom = fromTok; rto = toTok; }
+          else if (arrow === '--*') { rkind = 'composition'; rfrom = toTok; rto = fromTok; }
+          else if (arrow === 'o--') { rkind = 'aggregation'; rfrom = fromTok; rto = toTok; }
+          else if (arrow === '--o') { rkind = 'aggregation'; rfrom = toTok; rto = fromTok; }
+          else if (arrow === '..>') { rkind = 'dependency'; rfrom = fromTok; rto = toTok; }
+          else if (arrow === '<..') { rkind = 'dependency'; rfrom = toTok; rto = fromTok; }
+          else { rkind = 'association'; rfrom = fromTok; rto = toTok; }
+
+          result.relations.push({
+            id: '__r_' + result.relations.length,
+            kind: rkind, from: rfrom, to: rto, label: lbl, line: lineNum,
           });
           continue;
         }

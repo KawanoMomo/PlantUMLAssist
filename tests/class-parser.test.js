@@ -172,6 +172,54 @@ describe('class.parse — enum', function() {
   });
 });
 
+describe('class.parse — relations', function() {
+  test('parses association --', function() {
+    var t = '@startuml\nFoo -- Bar\n@enduml';
+    var r = clMod.parse(t);
+    expect(r.relations[0].kind).toBe('association');
+    expect(r.relations[0].from).toBe('Foo');
+    expect(r.relations[0].to).toBe('Bar');
+  });
+  test('parses inheritance <|-- (parent <|-- child)', function() {
+    var t = '@startuml\nAnimal <|-- Dog\n@enduml';
+    var r = clMod.parse(t);
+    expect(r.relations[0].kind).toBe('inheritance');
+    expect(r.relations[0].from).toBe('Animal');
+    expect(r.relations[0].to).toBe('Dog');
+  });
+  test('parses inheritance reverse --|> (child --|> parent canonicalized)', function() {
+    var t = '@startuml\nDog --|> Animal\n@enduml';
+    var r = clMod.parse(t);
+    expect(r.relations[0].kind).toBe('inheritance');
+    expect(r.relations[0].from).toBe('Animal');
+    expect(r.relations[0].to).toBe('Dog');
+  });
+  test('parses implementation <|.. and ..|>', function() {
+    var t = '@startuml\nIAuth <|.. UserAuth\nMockAuth ..|> IAuth\n@enduml';
+    var r = clMod.parse(t);
+    expect(r.relations[0].kind).toBe('implementation');
+    expect(r.relations[0].from).toBe('IAuth');
+    expect(r.relations[1].kind).toBe('implementation');
+    expect(r.relations[1].from).toBe('IAuth');
+  });
+  test('parses composition *-- and aggregation o--', function() {
+    var t = '@startuml\nCar *-- Engine\nLibrary o-- Book\n@enduml';
+    var r = clMod.parse(t);
+    expect(r.relations[0].kind).toBe('composition');
+    expect(r.relations[1].kind).toBe('aggregation');
+  });
+  test('parses dependency ..>', function() {
+    var t = '@startuml\nFoo ..> Bar\n@enduml';
+    var r = clMod.parse(t);
+    expect(r.relations[0].kind).toBe('dependency');
+  });
+  test('parses relation with label', function() {
+    var t = '@startuml\nFoo -- Bar : uses\n@enduml';
+    var r = clMod.parse(t);
+    expect(r.relations[0].label).toBe('uses');
+  });
+});
+
 // jsdom epilogue
 if (prevWindow !== undefined) global.window = prevWindow;
 if (prevDocument !== undefined) global.document = prevDocument;
