@@ -134,6 +134,26 @@ describe('class member operations', function() {
   });
 });
 
+describe('class line ops', function() {
+  test('deleteLine removes class declaration', function() {
+    var t = '@startuml\nclass Foo\n@enduml';
+    var out = clMod.deleteLine(t, 2);
+    expect(out).not.toContain('Foo');
+  });
+  test('setTitle inserts after @startuml', function() {
+    var t = '@startuml\nclass Foo\n@enduml';
+    var out = clMod.setTitle(t, 'My Diagram');
+    expect(out).toContain('title My Diagram');
+  });
+  test('renameWithRefs updates id in class + relations', function() {
+    var t = '@startuml\nclass Foo\nclass Bar\nFoo -- Bar\n@enduml';
+    var out = clMod.renameWithRefs(t, 'Foo', 'Baz');
+    expect(out).toContain('class Baz');
+    expect(out).toContain('Baz -- Bar');
+    expect(out).not.toContain('class Foo');
+  });
+});
+
 if (prevWindow !== undefined) global.window = prevWindow;
 if (prevDocument !== undefined) global.document = prevDocument;
 depPaths.forEach(function(p) { try { delete require.cache[require.resolve(p)]; } catch (e) {} });

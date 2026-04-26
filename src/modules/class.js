@@ -483,6 +483,36 @@ window.MA.modules.plantumlClass = (function() {
     return lines.join('\n');
   }
 
+  var moveLineUp = window.MA.dslUpdater.moveLineUp;
+  var moveLineDown = window.MA.dslUpdater.moveLineDown;
+  var renameWithRefs = window.MA.dslUpdater.renameWithRefs;
+
+  function deleteLine(text, lineNum) {
+    var lines = text.split('\n');
+    var idx = lineNum - 1;
+    if (idx < 0 || idx >= lines.length) return text;
+    lines.splice(idx, 1);
+    return lines.join('\n');
+  }
+
+  function setTitle(text, newTitle) {
+    var lines = text.split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      if (/^\s*title\s+/.test(lines[i])) {
+        var indent = lines[i].match(/^(\s*)/)[1];
+        lines[i] = indent + 'title ' + newTitle;
+        return lines.join('\n');
+      }
+    }
+    for (var j = 0; j < lines.length; j++) {
+      if (RP.isStartUml(lines[j])) {
+        lines.splice(j + 1, 0, 'title ' + newTitle);
+        return lines.join('\n');
+      }
+    }
+    return text;
+  }
+
   function updateRelation(text, lineNum, field, value) {
     var lines = text.split('\n');
     var idx = lineNum - 1;
@@ -581,5 +611,10 @@ window.MA.modules.plantumlClass = (function() {
     updateAttribute: updateAttribute,
     updateMethod: updateMethod,
     deleteMember: deleteMember,
+    deleteLine: deleteLine,
+    moveLineUp: moveLineUp,
+    moveLineDown: moveLineDown,
+    setTitle: setTitle,
+    renameWithRefs: renameWithRefs,
   };
 })();
