@@ -689,6 +689,217 @@ window.MA.modules.plantumlClass = (function() {
     renderTailDetail();
   }
 
+  function _renderElementEdit(element, parsedData, propsEl, ctx) {
+    var P = window.MA.properties;
+    if (element.kind === 'enum') return _renderEnumEdit(element, parsedData, propsEl, ctx);
+
+    var kindLabel = element.kind === 'interface' ? 'Interface'
+                  : element.kind === 'abstract' ? 'Abstract Class'
+                  : 'Class';
+    var html =
+      '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Class Diagram</div>' +
+      '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' +
+        kindLabel + ' (L' + element.line + ')</label>' +
+        P.fieldHtml('Alias (id)', 'cl-edit-id', element.id) +
+        P.fieldHtml('Label', 'cl-edit-label', element.label || '') +
+        P.fieldHtml('Stereotype', 'cl-edit-stereo', element.stereotype || '') +
+        P.fieldHtml('Generics (カンマ区切り)', 'cl-edit-generics', (element.generics || []).join(',')) +
+        P.primaryButtonHtml('cl-edit-apply', '変更を反映') +
+        ' ' + P.primaryButtonHtml('cl-rename-refs', 'Alias 変更を関連 Relation にも追従') +
+        '<div style="margin-top:8px;display:flex;gap:6px;">' +
+          '<button id="cl-move-up" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↑ 上へ</button>' +
+          '<button id="cl-move-down" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↓ 下へ</button>' +
+          '<button id="cl-delete" style="flex:0 0 60px;background:var(--accent-red);color:#fff;border:none;padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 削除</button>' +
+        '</div>' +
+      '</div>';
+
+    if (element.members && element.members.length > 0) {
+      var attrs = element.members.filter(function(m) { return m.kind === 'attribute'; });
+      var methods = element.members.filter(function(m) { return m.kind === 'method'; });
+      html += '<div style="border-top:1px solid var(--border);padding-top:10px;margin-top:10px;">' +
+              '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">Attributes</label>';
+      attrs.forEach(function(a) {
+        html += '<div style="font-size:11px;margin:3px 0;">' +
+                window.MA.htmlUtils.escHtml((a.visibility || '') + ' ' + (a.static ? '{static} ' : '') + a.name + (a.type ? ' : ' + a.type : '')) +
+                ' <button class="cl-mem-del" data-line="' + a.line + '" style="background:var(--accent-red);color:#fff;border:none;padding:2px 6px;font-size:10px;border-radius:3px;cursor:pointer;">✕</button>' +
+                '</div>';
+      });
+      html += '<button id="cl-add-attr" style="font-size:11px;padding:4px 10px;margin-top:4px;">+ Attribute 追加</button>' +
+              '<div id="cl-add-attr-form" style="display:none;margin-top:6px;"></div>' +
+              '<label style="display:block;font-size:10px;color:var(--accent);margin:10px 0 4px;font-weight:bold;">Methods</label>';
+      methods.forEach(function(m) {
+        html += '<div style="font-size:11px;margin:3px 0;">' +
+                window.MA.htmlUtils.escHtml((m.visibility || '') + ' ' + (m.static ? '{static} ' : (m.abstract ? '{abstract} ' : '')) + m.name + '(' + (m.params || '') + ')' + (m.type ? ' : ' + m.type : '')) +
+                ' <button class="cl-mem-del" data-line="' + m.line + '" style="background:var(--accent-red);color:#fff;border:none;padding:2px 6px;font-size:10px;border-radius:3px;cursor:pointer;">✕</button>' +
+                '</div>';
+      });
+      html += '<button id="cl-add-method" style="font-size:11px;padding:4px 10px;margin-top:4px;">+ Method 追加</button>' +
+              '<div id="cl-add-method-form" style="display:none;margin-top:6px;"></div></div>';
+    } else {
+      html += '<div style="border-top:1px solid var(--border);padding-top:10px;margin-top:10px;">' +
+              '<button id="cl-add-attr" style="font-size:11px;padding:4px 10px;">+ Attribute 追加</button> ' +
+              '<button id="cl-add-method" style="font-size:11px;padding:4px 10px;">+ Method 追加</button>' +
+              '<div id="cl-add-attr-form" style="display:none;margin-top:6px;"></div>' +
+              '<div id="cl-add-method-form" style="display:none;margin-top:6px;"></div></div>';
+    }
+
+    propsEl.innerHTML = html;
+
+    P.bindEvent('cl-edit-apply', 'click', function() {
+      window.MA.history.pushHistory();
+      var t = ctx.getMmdText();
+      var newId = document.getElementById('cl-edit-id').value.trim();
+      var newLabel = document.getElementById('cl-edit-label').value.trim();
+      var newStereo = document.getElementById('cl-edit-stereo').value.trim() || null;
+      var genStr = document.getElementById('cl-edit-generics').value.trim();
+      var newGen = genStr ? genStr.split(',').map(function(s) { return s.trim(); }) : null;
+      if (newId !== element.id) t = updateClass(t, element.line, 'id', newId);
+      if (newLabel !== element.label) t = updateClass(t, element.line, 'label', newLabel);
+      if (newStereo !== element.stereotype) t = updateClass(t, element.line, 'stereotype', newStereo);
+      var oldGen = (element.generics || []).join(',');
+      if (genStr !== oldGen) t = updateClass(t, element.line, 'generics', newGen);
+      ctx.setMmdText(t);
+      ctx.onUpdate();
+    });
+    P.bindEvent('cl-rename-refs', 'click', function() {
+      var newId = document.getElementById('cl-edit-id').value.trim();
+      if (!newId || newId === element.id) { alert('Alias を変更してから実行してください'); return; }
+      window.MA.history.pushHistory();
+      ctx.setMmdText(renameWithRefs(ctx.getMmdText(), element.id, newId));
+      ctx.onUpdate();
+    });
+    P.bindEvent('cl-move-up', 'click', function() {
+      window.MA.history.pushHistory();
+      ctx.setMmdText(moveLineUp(ctx.getMmdText(), element.line));
+      ctx.onUpdate();
+    });
+    P.bindEvent('cl-move-down', 'click', function() {
+      window.MA.history.pushHistory();
+      ctx.setMmdText(moveLineDown(ctx.getMmdText(), element.line));
+      ctx.onUpdate();
+    });
+    P.bindEvent('cl-delete', 'click', function() {
+      if (!confirm('この行を削除しますか？')) return;
+      window.MA.history.pushHistory();
+      ctx.setMmdText(deleteLine(ctx.getMmdText(), element.line));
+      window.MA.selection.clearSelection();
+      ctx.onUpdate();
+    });
+    P.bindAllByClass(propsEl, 'cl-mem-del', function(btn) {
+      var ln = parseInt(btn.getAttribute('data-line'), 10);
+      window.MA.history.pushHistory();
+      ctx.setMmdText(deleteMember(ctx.getMmdText(), ln));
+      ctx.onUpdate();
+    });
+    P.bindEvent('cl-add-attr', 'click', function() {
+      document.getElementById('cl-add-attr-form').style.display = 'block';
+      document.getElementById('cl-add-attr-form').innerHTML =
+        P.selectFieldHtml('Visibility', 'cl-aa-vis', [
+          { value: '+', label: '+ public', selected: true },
+          { value: '-', label: '- private' },
+          { value: '#', label: '# protected' },
+          { value: '~', label: '~ package' },
+        ]) +
+        '<label style="font-size:11px;"><input type="checkbox" id="cl-aa-static"> static</label>' +
+        P.fieldHtml('Name', 'cl-aa-name', '', '例: count') +
+        P.fieldHtml('Type', 'cl-aa-type', '', '例: int') +
+        P.primaryButtonHtml('cl-aa-go', '追加');
+      P.bindEvent('cl-aa-go', 'click', function() {
+        var vis = document.getElementById('cl-aa-vis').value;
+        var stat = document.getElementById('cl-aa-static').checked;
+        var name = document.getElementById('cl-aa-name').value.trim();
+        var typ = document.getElementById('cl-aa-type').value.trim();
+        if (!name) { alert('Name 必須'); return; }
+        window.MA.history.pushHistory();
+        ctx.setMmdText(addAttribute(ctx.getMmdText(), element.line, vis, name, typ, stat));
+        ctx.onUpdate();
+      });
+    });
+    P.bindEvent('cl-add-method', 'click', function() {
+      document.getElementById('cl-add-method-form').style.display = 'block';
+      document.getElementById('cl-add-method-form').innerHTML =
+        P.selectFieldHtml('Visibility', 'cl-am-vis', [
+          { value: '+', label: '+ public', selected: true },
+          { value: '-', label: '- private' },
+          { value: '#', label: '# protected' },
+          { value: '~', label: '~ package' },
+        ]) +
+        '<label style="font-size:11px;"><input type="checkbox" id="cl-am-static"> static</label>' +
+        '<label style="font-size:11px;"><input type="checkbox" id="cl-am-abstract"> abstract</label>' +
+        P.fieldHtml('Name', 'cl-am-name', '', '例: login') +
+        P.fieldHtml('Params', 'cl-am-params', '', '例: a : int, b : str') +
+        P.fieldHtml('Return type', 'cl-am-ret', '', '例: void') +
+        P.primaryButtonHtml('cl-am-go', '追加');
+      P.bindEvent('cl-am-go', 'click', function() {
+        var vis = document.getElementById('cl-am-vis').value;
+        var stat = document.getElementById('cl-am-static').checked;
+        var abs = document.getElementById('cl-am-abstract').checked;
+        var name = document.getElementById('cl-am-name').value.trim();
+        var params = document.getElementById('cl-am-params').value.trim();
+        var ret = document.getElementById('cl-am-ret').value.trim();
+        if (!name) { alert('Name 必須'); return; }
+        window.MA.history.pushHistory();
+        ctx.setMmdText(addMethod(ctx.getMmdText(), element.line, vis, name, params, ret, stat, abs));
+        ctx.onUpdate();
+      });
+    });
+  }
+
+  function _renderEnumEdit(element, parsedData, propsEl, ctx) {
+    var P = window.MA.properties;
+    var html =
+      '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Class Diagram</div>' +
+      '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">Enum (L' + element.line + ')</label>' +
+        P.fieldHtml('Alias (id)', 'cl-edit-id', element.id) +
+        P.fieldHtml('Stereotype', 'cl-edit-stereo', element.stereotype || '') +
+        P.primaryButtonHtml('cl-edit-apply', '変更を反映') +
+        '<button id="cl-delete" style="margin-left:8px;background:var(--accent-red);color:#fff;border:none;padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 削除</button>' +
+      '</div>' +
+      '<div style="border-top:1px solid var(--border);padding-top:10px;margin-top:10px;">' +
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">Values</label>';
+    (element.members || []).forEach(function(v) {
+      html += '<div style="font-size:11px;margin:3px 0;">• ' + window.MA.htmlUtils.escHtml(v.name) +
+              ' <button class="cl-mem-del" data-line="' + v.line + '" style="background:var(--accent-red);color:#fff;border:none;padding:2px 6px;font-size:10px;border-radius:3px;cursor:pointer;">✕</button></div>';
+    });
+    html += P.fieldHtml('新しい値', 'cl-add-val-name', '', '例: PURPLE') +
+            P.primaryButtonHtml('cl-add-val', '+ Value 追加') +
+            '</div>';
+    propsEl.innerHTML = html;
+
+    P.bindEvent('cl-edit-apply', 'click', function() {
+      window.MA.history.pushHistory();
+      var t = ctx.getMmdText();
+      var newId = document.getElementById('cl-edit-id').value.trim();
+      var newStereo = document.getElementById('cl-edit-stereo').value.trim() || null;
+      if (newId !== element.id) t = updateClass(t, element.line, 'id', newId);
+      if (newStereo !== element.stereotype) t = updateClass(t, element.line, 'stereotype', newStereo);
+      ctx.setMmdText(t);
+      ctx.onUpdate();
+    });
+    P.bindEvent('cl-delete', 'click', function() {
+      if (!confirm('この enum を削除しますか？')) return;
+      window.MA.history.pushHistory();
+      ctx.setMmdText(deleteLine(ctx.getMmdText(), element.line));
+      window.MA.selection.clearSelection();
+      ctx.onUpdate();
+    });
+    P.bindEvent('cl-add-val', 'click', function() {
+      var name = document.getElementById('cl-add-val-name').value.trim();
+      if (!name) { alert('値 必須'); return; }
+      window.MA.history.pushHistory();
+      ctx.setMmdText(addEnumValue(ctx.getMmdText(), element.line, name));
+      ctx.onUpdate();
+    });
+    P.bindAllByClass(propsEl, 'cl-mem-del', function(btn) {
+      var ln = parseInt(btn.getAttribute('data-line'), 10);
+      window.MA.history.pushHistory();
+      ctx.setMmdText(deleteMember(ctx.getMmdText(), ln));
+      ctx.onUpdate();
+    });
+  }
+
   return {
     type: 'plantuml-class',
     displayName: 'Class',
