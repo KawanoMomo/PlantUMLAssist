@@ -120,6 +120,12 @@ function init() {
 
   if (previewContainerForHover && hoverEl && overlayElForHover) {
     previewContainerForHover.addEventListener('mousemove', function(e) {
+      // 挿入クリックを処理できるモジュール (= showInsertForm を持つ) でなければガイドも出さない。
+      // 出すと「+ ここに挿入」が見えるのにクリックしても何も起きない誤誘導になる。
+      if (!currentModule || !currentModule.showInsertForm) {
+        clearHoverGuide();
+        return;
+      }
       // 選択中は挿入ガイドを出さない
       if (_hasSelection()) {
         clearHoverGuide();
