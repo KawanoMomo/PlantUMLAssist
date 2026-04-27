@@ -201,6 +201,28 @@ describe('class updateNote', function() {
   });
 });
 
+describe('class deleteNote', function() {
+  test('deleteNote removes 1-line note', function() {
+    var t = '@startuml\nclass Foo\nnote left of Foo : x\n@enduml';
+    var out = clMod.deleteNote(t, 3, 3);
+    expect(out).not.toContain('note left of Foo');
+    expect(out).toContain('class Foo');
+  });
+  test('deleteNote removes multi-line block', function() {
+    var t = '@startuml\nclass Foo\nnote left of Foo\n  body\nend note\n@enduml';
+    var out = clMod.deleteNote(t, 3, 5);
+    expect(out).not.toContain('note left');
+    expect(out).not.toContain('end note');
+    expect(out).not.toContain('body');
+  });
+  test('deleteNote preserves surrounding lines', function() {
+    var t = '@startuml\nclass A\nnote left of A : tip\nclass B\n@enduml';
+    var out = clMod.deleteNote(t, 3, 3);
+    expect(out).toContain('class A');
+    expect(out).toContain('class B');
+  });
+});
+
 describe('class line ops', function() {
   test('deleteLine removes class declaration', function() {
     var t = '@startuml\nclass Foo\n@enduml';

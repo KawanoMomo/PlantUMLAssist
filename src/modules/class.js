@@ -664,6 +664,16 @@ window.MA.modules.plantumlClass = (function() {
     return before.concat(newLines).concat(after).join('\n');
   }
 
+  function deleteNote(text, startLine, endLine) {
+    var lines = text.split('\n');
+    var startIdx = startLine - 1;
+    var endIdx = endLine - 1;
+    if (startIdx < 0 || startIdx >= lines.length) return text;
+    var before = lines.slice(0, startIdx);
+    var after = lines.slice(endIdx + 1);
+    return before.concat(after).join('\n');
+  }
+
   function template() {
     return [
       '@startuml',
@@ -1309,6 +1319,7 @@ window.MA.modules.plantumlClass = (function() {
     updateEnum: updateClass,
     updateRelation: updateRelation,
     updateNote: updateNote,
+    deleteNote: deleteNote,
     addAttribute: addAttribute,
     addMethod: addMethod,
     addEnumValue: addEnumValue,
