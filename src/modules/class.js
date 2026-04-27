@@ -723,6 +723,18 @@ window.MA.modules.plantumlClass = (function() {
 
   function renderProps(selData, parsedData, propsEl, ctx) {
     if (!propsEl) return;
+    // Custom dispatch for 'note' selection
+    if (selData && selData.length === 1 && selData[0].type === 'note') {
+      var notesArr = parsedData.notes || [];
+      var note = null;
+      for (var i = 0; i < notesArr.length; i++) {
+        if (notesArr[i].id === selData[0].id) { note = notesArr[i]; break; }
+      }
+      if (note) {
+        _renderNoteEdit(note, parsedData, propsEl, ctx);
+        return;
+      }
+    }
     window.MA.propsRenderer.renderByDispatch(selData, parsedData, propsEl, {
       onNoSelection: function(p, e) { _renderNoSelection(p, e, ctx); },
       onElement: function(elt, p, e) { _renderElementEdit(elt, p, e, ctx); },
@@ -926,6 +938,27 @@ window.MA.modules.plantumlClass = (function() {
               '<div id="cl-add-method-form" style="display:none;margin-top:6px;"></div></div>';
     }
 
+    // Notes section
+    var classNotes = (parsedData.notes || []).filter(function(n) { return n.targetId === element.id; });
+    html += '<div style="border-top:1px solid var(--border);padding-top:8px;margin-top:8px;">' +
+            '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">Notes</div>';
+    if (classNotes.length === 0) {
+      html += '<div style="font-size:11px;color:var(--text-secondary);font-style:italic;">（このクラスへの note なし）</div>';
+    } else {
+      classNotes.forEach(function(n, idx) {
+        var preview = (n.text || '').replace(/\n/g, ' ⏎ ').slice(0, 40);
+        if ((n.text || '').length > 40) preview += '...';
+        html += '<div style="display:flex;align-items:center;gap:4px;font-size:11px;margin-bottom:2px;">' +
+                  '<span style="flex:1;">' + n.position + ' "' + preview.replace(/[<>&]/g, '') + '" (L' + n.line + ')</span>' +
+                  '<button id="cl-note-edit-' + idx + '" data-line="' + n.line + '" data-end="' + n.endLine + '" data-id="' + n.id + '">edit</button>' +
+                  '<button id="cl-note-del-' + idx + '" data-line="' + n.line + '" data-end="' + n.endLine + '">✕</button>' +
+                '</div>';
+      });
+    }
+    html += '<div id="cl-add-note-form" style="margin-top:6px;"></div>' +
+            '<button id="cl-add-note-btn" style="margin-top:4px;">+ Note 追加</button>' +
+          '</div>';
+
     propsEl.innerHTML = html;
 
     P.bindEvent('cl-edit-apply', 'click', function() {
@@ -1023,6 +1056,47 @@ window.MA.modules.plantumlClass = (function() {
         if (!name) { alert('Name 必須'); return; }
         window.MA.history.pushHistory();
         ctx.setMmdText(addMethod(ctx.getMmdText(), element.line, vis, name, params, ret, stat, abs));
+        ctx.onUpdate();
+      });
+    });
+
+    classNotes.forEach(function(n, idx) {
+      P.bindEvent('cl-note-edit-' + idx, 'click', function(e) {
+        var btn = e.currentTarget;
+        var ln = parseInt(btn.getAttribute('data-line'), 10);
+        // Switch to note selection
+        ctx.setSelectedHighlight([{ type: 'note', id: btn.getAttribute('data-id'), line: ln }]);
+        ctx.onUpdate();
+      });
+      P.bindEvent('cl-note-del-' + idx, 'click', function(e) {
+        var btn = e.currentTarget;
+        var sl = parseInt(btn.getAttribute('data-line'), 10);
+        var el = parseInt(btn.getAttribute('data-end'), 10);
+        window.MA.history.pushHistory();
+        ctx.setMmdText(deleteNote(ctx.getMmdText(), sl, el));
+        ctx.onUpdate();
+      });
+    });
+
+    P.bindEvent('cl-add-note-btn', 'click', function() {
+      var f = document.getElementById('cl-add-note-form');
+      f.innerHTML =
+        P.selectFieldHtml('Position', 'cl-new-npos', [
+          { value: 'left', label: 'Left', selected: true },
+          { value: 'right', label: 'Right' },
+          { value: 'top', label: 'Top' },
+          { value: 'bottom', label: 'Bottom' },
+        ]) +
+        '<div style="margin-bottom:6px;">' +
+          '<label style="display:block;font-size:10px;color:var(--text-secondary);">Text</label>' +
+          '<textarea id="cl-new-ntext" style="width:100%;min-height:50px;"></textarea>' +
+        '</div>' +
+        P.primaryButtonHtml('cl-new-nadd', '+ 追加');
+      P.bindEvent('cl-new-nadd', 'click', function() {
+        var pos = document.getElementById('cl-new-npos').value;
+        var txt = document.getElementById('cl-new-ntext').value || '';
+        window.MA.history.pushHistory();
+        ctx.setMmdText(addNote(ctx.getMmdText(), element.id, pos, txt));
         ctx.onUpdate();
       });
     });
@@ -1128,6 +1202,40 @@ window.MA.modules.plantumlClass = (function() {
       window.MA.history.pushHistory();
       ctx.setMmdText(deleteLine(ctx.getMmdText(), relation.line));
       window.MA.selection.clearSelection();
+      ctx.onUpdate();
+    });
+  }
+
+  function _renderNoteEdit(note, parsedData, propsEl, ctx) {
+    var P = window.MA.properties;
+    var html =
+      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">Note (target: ' + note.targetId + ', L' + note.line + ')</div>' +
+      '<div style="margin-bottom:6px;font-size:11px;"><b>Target:</b> ' + note.targetId + ' <span style="color:var(--text-secondary);">(read-only)</span></div>' +
+      P.selectFieldHtml('Position', 'cl-note-pos', [
+        { value: 'left', label: 'Left', selected: note.position === 'left' },
+        { value: 'right', label: 'Right', selected: note.position === 'right' },
+        { value: 'top', label: 'Top', selected: note.position === 'top' },
+        { value: 'bottom', label: 'Bottom', selected: note.position === 'bottom' },
+      ]) +
+      '<div style="margin-bottom:6px;">' +
+        '<label style="display:block;font-size:10px;color:var(--text-secondary);">Text</label>' +
+        '<textarea id="cl-note-text" style="width:100%;min-height:80px;">' + (note.text || '').replace(/[<>&]/g, '') + '</textarea>' +
+      '</div>' +
+      P.primaryButtonHtml('cl-note-update', '更新') +
+      P.primaryButtonHtml('cl-note-delete', '✕ 削除');
+    propsEl.innerHTML = html;
+
+    P.bindEvent('cl-note-update', 'click', function() {
+      var pos = document.getElementById('cl-note-pos').value;
+      var txt = document.getElementById('cl-note-text').value;
+      window.MA.history.pushHistory();
+      ctx.setMmdText(updateNote(ctx.getMmdText(), note.line, note.endLine, { position: pos, text: txt }));
+      ctx.onUpdate();
+    });
+    P.bindEvent('cl-note-delete', 'click', function() {
+      window.MA.history.pushHistory();
+      ctx.setMmdText(deleteNote(ctx.getMmdText(), note.line, note.endLine));
+      ctx.setSelectedHighlight([]);
       ctx.onUpdate();
     });
   }
