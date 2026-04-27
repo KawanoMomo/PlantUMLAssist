@@ -574,6 +574,36 @@ window.MA.modules.plantumlClass = (function() {
     return lines.join('\n');
   }
 
+  function deleteClassWithNotes(text, classId) {
+    var parsed = parse(text);
+    // Find target element
+    var elt = null;
+    for (var i = 0; i < parsed.elements.length; i++) {
+      if (parsed.elements[i].id === classId) { elt = parsed.elements[i]; break; }
+    }
+    if (!elt) return text;
+
+    // Collect line ranges to delete: element + its notes (descending order to avoid index shift)
+    var ranges = [];
+    var elStart = elt.line;
+    var elEnd = elt.endLine && elt.endLine > elt.line ? elt.endLine : elt.line;
+    ranges.push({ start: elStart, end: elEnd });
+    parsed.notes.forEach(function(n) {
+      if (n.targetId === classId) {
+        ranges.push({ start: n.line, end: n.endLine });
+      }
+    });
+    ranges.sort(function(a, b) { return b.start - a.start; });
+
+    var lines = text.split('\n');
+    ranges.forEach(function(r) {
+      var startIdx = r.start - 1;
+      var endIdx = r.end - 1;
+      lines.splice(startIdx, endIdx - startIdx + 1);
+    });
+    return lines.join('\n');
+  }
+
   function setTitle(text, newTitle) {
     var lines = text.split('\n');
     for (var i = 0; i < lines.length; i++) {
@@ -908,9 +938,9 @@ window.MA.modules.plantumlClass = (function() {
       ctx.onUpdate();
     });
     P.bindEvent('cl-delete', 'click', function() {
-      if (!confirm('この行を削除しますか？')) return;
+      if (!confirm('このクラスと紐付く note も削除します。続行しますか？')) return;
       window.MA.history.pushHistory();
-      ctx.setMmdText(deleteLine(ctx.getMmdText(), element.line));
+      ctx.setMmdText(deleteClassWithNotes(ctx.getMmdText(), element.id));
       window.MA.selection.clearSelection();
       ctx.onUpdate();
     });
@@ -1007,9 +1037,9 @@ window.MA.modules.plantumlClass = (function() {
       ctx.onUpdate();
     });
     P.bindEvent('cl-delete', 'click', function() {
-      if (!confirm('この enum を削除しますか？')) return;
+      if (!confirm('このクラスと紐付く note も削除します。続行しますか？')) return;
       window.MA.history.pushHistory();
-      ctx.setMmdText(deleteLine(ctx.getMmdText(), element.line));
+      ctx.setMmdText(deleteClassWithNotes(ctx.getMmdText(), element.id));
       window.MA.selection.clearSelection();
       ctx.onUpdate();
     });
@@ -1327,6 +1357,7 @@ window.MA.modules.plantumlClass = (function() {
     updateMethod: updateMethod,
     deleteMember: deleteMember,
     deleteLine: deleteLine,
+    deleteClassWithNotes: deleteClassWithNotes,
     moveLineUp: moveLineUp,
     moveLineDown: moveLineDown,
     setTitle: setTitle,

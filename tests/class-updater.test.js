@@ -223,6 +223,31 @@ describe('class deleteNote', function() {
   });
 });
 
+describe('class deleteClassWithNotes', function() {
+  test('deleting a class also removes its notes', function() {
+    var t = '@startuml\nclass Foo\nnote left of Foo : a\nnote right of Foo : b\nclass Bar\n@enduml';
+    var out = clMod.deleteClassWithNotes(t, 'Foo');
+    expect(out).not.toContain('class Foo');
+    expect(out).not.toContain('note left of Foo');
+    expect(out).not.toContain('note right of Foo');
+    expect(out).toContain('class Bar');
+  });
+  test('deleting a class with multi-line notes removes the entire note blocks', function() {
+    var t = '@startuml\nclass Foo\nnote left of Foo\n  body\nend note\nclass Bar\n@enduml';
+    var out = clMod.deleteClassWithNotes(t, 'Foo');
+    expect(out).not.toContain('class Foo');
+    expect(out).not.toContain('note left of Foo');
+    expect(out).not.toContain('end note');
+    expect(out).not.toContain('body');
+  });
+  test('deleteClassWithNotes preserves notes targeting other classes', function() {
+    var t = '@startuml\nclass Foo\nclass Bar\nnote left of Bar : keep\n@enduml';
+    var out = clMod.deleteClassWithNotes(t, 'Foo');
+    expect(out).not.toContain('class Foo');
+    expect(out).toContain('note left of Bar : keep');
+  });
+});
+
 describe('class line ops', function() {
   test('deleteLine removes class declaration', function() {
     var t = '@startuml\nclass Foo\n@enduml';
