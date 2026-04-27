@@ -84,6 +84,30 @@ describe('state parser: transitions', function() {
   });
 });
 
+describe('state parser: stereotypes', function() {
+  test('parses choice stereotype', function() {
+    var t = '@startuml\nstate X <<choice>>\n@enduml';
+    var r = stMod.parse(t);
+    expect(r.states[0].kind).toBe('choice');
+    expect(r.states[0].stereotype).toBe('choice');
+  });
+  test('parses history stereotype', function() {
+    var t = '@startuml\nstate X <<history>>\n@enduml';
+    var r = stMod.parse(t);
+    expect(r.states[0].kind).toBe('history');
+  });
+  test('parses historyDeep stereotype', function() {
+    var t = '@startuml\nstate X <<historyDeep>>\n@enduml';
+    var r = stMod.parse(t);
+    expect(r.states[0].kind).toBe('historyDeep');
+  });
+  test('lowercases stereotype regardless of source case', function() {
+    var t = '@startuml\nstate X <<History>>\n@enduml';
+    var r = stMod.parse(t);
+    expect(r.states[0].stereotype).toBe('history');
+  });
+});
+
 describe('state parser: composite', function() {
   test('parses composite state with inner state', function() {
     var t = '@startuml\nstate Outer {\n  state Inner\n}\n@enduml';
