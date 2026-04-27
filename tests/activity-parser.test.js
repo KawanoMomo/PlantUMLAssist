@@ -53,6 +53,31 @@ describe('activity parser: start/stop/end', function() {
   });
 });
 
+describe('activity parser: action', function() {
+  test('parses single-line action', function() {
+    var t = '@startuml\n:Hello;\n@enduml';
+    var r = actMod.parse(t);
+    expect(r.nodes[0].kind).toBe('action');
+    expect(r.nodes[0].text).toBe('Hello');
+  });
+  test('parses multi-line action with embedded newline before semicolon', function() {
+    var t = '@startuml\n:line one\nline two;\n@enduml';
+    var r = actMod.parse(t);
+    expect(r.nodes.length).toBe(1);
+    expect(r.nodes[0].kind).toBe('action');
+    expect(r.nodes[0].text).toBe('line one\nline two');
+    expect(r.nodes[0].line).toBe(2);
+    expect(r.nodes[0].endLine).toBe(3);
+  });
+  test('parses multiple actions in sequence', function() {
+    var t = '@startuml\nstart\n:A;\n:B;\nstop\n@enduml';
+    var r = actMod.parse(t);
+    expect(r.nodes.length).toBe(4);
+    expect(r.nodes[1].text).toBe('A');
+    expect(r.nodes[2].text).toBe('B');
+  });
+});
+
 if (prevWindow !== undefined) global.window = prevWindow;
 if (prevDocument !== undefined) global.document = prevDocument;
 depPaths.forEach(function(p) { try { delete require.cache[require.resolve(p)]; } catch (e) {} });
