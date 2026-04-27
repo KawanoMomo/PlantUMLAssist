@@ -735,6 +735,19 @@ window.MA.modules.plantumlClass = (function() {
         return;
       }
     }
+    // Custom dispatch for 'member' selection — render parent class with focused member
+    if (selData && selData.length === 1 && selData[0].type === 'member') {
+      var sel = selData[0];
+      var parent = null;
+      var elsArr = parsedData.elements || [];
+      for (var j = 0; j < elsArr.length; j++) {
+        if (elsArr[j].id === sel.parentId) { parent = elsArr[j]; break; }
+      }
+      if (parent) {
+        _renderElementEdit(parent, parsedData, propsEl, ctx, { focusMemberIndex: sel.memberIndex });
+        return;
+      }
+    }
     window.MA.propsRenderer.renderByDispatch(selData, parsedData, propsEl, {
       onNoSelection: function(p, e) { _renderNoSelection(p, e, ctx); },
       onElement: function(elt, p, e) { _renderElementEdit(elt, p, e, ctx); },
@@ -883,9 +896,10 @@ window.MA.modules.plantumlClass = (function() {
     renderTailDetail();
   }
 
-  function _renderElementEdit(element, parsedData, propsEl, ctx) {
+  function _renderElementEdit(element, parsedData, propsEl, ctx, opts) {
     var P = window.MA.properties;
-    if (element.kind === 'enum') return _renderEnumEdit(element, parsedData, propsEl, ctx);
+    if (element.kind === 'enum') return _renderEnumEdit(element, parsedData, propsEl, ctx, opts);
+    var focusIdx = opts && typeof opts.focusMemberIndex === 'number' ? opts.focusMemberIndex : -1;
 
     var kindLabel = element.kind === 'interface' ? 'Interface'
                   : element.kind === 'abstract' ? 'Abstract Class'
@@ -908,28 +922,49 @@ window.MA.modules.plantumlClass = (function() {
         '</div>' +
       '</div>';
 
+    // Members (uniform loop across attributes + methods)
     if (element.members && element.members.length > 0) {
-      var attrs = element.members.filter(function(m) { return m.kind === 'attribute'; });
-      var methods = element.members.filter(function(m) { return m.kind === 'method'; });
-      html += '<div style="border-top:1px solid var(--border);padding-top:10px;margin-top:10px;">' +
-              '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">Attributes</label>';
-      attrs.forEach(function(a) {
-        html += '<div style="font-size:11px;margin:3px 0;">' +
-                window.MA.htmlUtils.escHtml((a.visibility || '') + ' ' + (a.static ? '{static} ' : '') + a.name + (a.type ? ' : ' + a.type : '')) +
-                ' <button class="cl-mem-del" data-line="' + a.line + '" style="background:var(--accent-red);color:#fff;border:none;padding:2px 6px;font-size:10px;border-radius:3px;cursor:pointer;">✕</button>' +
-                '</div>';
+      html += '<div style="border-top:1px solid var(--border);padding-top:6px;margin-top:6px;">' +
+              '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">Members</div>';
+      element.members.forEach(function(m, mi) {
+        var isSel = mi === focusIdx;
+        var rowCls = isSel ? 'cl-member-row cl-member-selected' : 'cl-member-row';
+        var rowStyle = isSel ? 'background:var(--accent-bg, rgba(0,128,255,0.15));padding:4px;border-radius:3px;' : 'padding:2px;';
+        var preview = (m.visibility || '') + ' ' + m.name +
+                      (m.kind === 'method' ? '(' + (m.params || '') + ')' : '') +
+                      (m.type ? ' : ' + m.type : '');
+        html += '<div class="' + rowCls + '" data-member-idx="' + mi + '" style="' + rowStyle + 'font-size:11px;margin-bottom:2px;">' +
+                  window.MA.htmlUtils.escHtml(preview) +
+                  ' <button id="cl-mem-up-' + mi + '" data-line="' + m.line + '">↑</button>' +
+                  ' <button id="cl-mem-down-' + mi + '" data-line="' + m.line + '">↓</button>' +
+                  ' <button id="cl-mem-del-' + mi + '" data-line="' + m.line + '">✕</button>';
+        if (isSel) {
+          // Inline edit fields (only for selected row)
+          html += '<div style="margin-top:4px;padding:4px;background:var(--bg);border:1px solid var(--border);">' +
+                    P.selectFieldHtml('Visibility', 'cl-mem-vis-' + mi, [
+                      { value: '+', label: '+', selected: m.visibility === '+' },
+                      { value: '-', label: '-', selected: m.visibility === '-' },
+                      { value: '#', label: '#', selected: m.visibility === '#' },
+                      { value: '~', label: '~', selected: m.visibility === '~' },
+                      { value: '',  label: '(none)', selected: !m.visibility }
+                    ]) +
+                    P.fieldHtml('Name', 'cl-mem-name-' + mi, m.name) +
+                    P.fieldHtml('Type', 'cl-mem-type-' + mi, m.type || '') +
+                    (m.kind === 'method' ? P.fieldHtml('Params', 'cl-mem-params-' + mi, m.params || '') : '') +
+                    '<div style="margin-top:4px;">' +
+                      '<label><input type="checkbox" id="cl-mem-static-' + mi + '"' + (m.static ? ' checked' : '') + '> static</label>' +
+                      (m.kind === 'method' ? ' <label><input type="checkbox" id="cl-mem-abstract-' + mi + '"' + (m.abstract ? ' checked' : '') + '> abstract</label>' : '') +
+                    '</div>' +
+                    P.primaryButtonHtml('cl-mem-update-' + mi, '更新') +
+                  '</div>';
+        }
+        html += '</div>';
       });
-      html += '<button id="cl-add-attr" style="font-size:11px;padding:4px 10px;margin-top:4px;">+ Attribute 追加</button>' +
+      html += '<button id="cl-add-attr" style="font-size:11px;padding:4px 10px;margin-top:4px;">+ Attribute 追加</button> ' +
+              '<button id="cl-add-method" style="font-size:11px;padding:4px 10px;margin-top:4px;">+ Method 追加</button>' +
               '<div id="cl-add-attr-form" style="display:none;margin-top:6px;"></div>' +
-              '<label style="display:block;font-size:10px;color:var(--accent);margin:10px 0 4px;font-weight:bold;">Methods</label>';
-      methods.forEach(function(m) {
-        html += '<div style="font-size:11px;margin:3px 0;">' +
-                window.MA.htmlUtils.escHtml((m.visibility || '') + ' ' + (m.static ? '{static} ' : (m.abstract ? '{abstract} ' : '')) + m.name + '(' + (m.params || '') + ')' + (m.type ? ' : ' + m.type : '')) +
-                ' <button class="cl-mem-del" data-line="' + m.line + '" style="background:var(--accent-red);color:#fff;border:none;padding:2px 6px;font-size:10px;border-radius:3px;cursor:pointer;">✕</button>' +
-                '</div>';
-      });
-      html += '<button id="cl-add-method" style="font-size:11px;padding:4px 10px;margin-top:4px;">+ Method 追加</button>' +
-              '<div id="cl-add-method-form" style="display:none;margin-top:6px;"></div></div>';
+              '<div id="cl-add-method-form" style="display:none;margin-top:6px;"></div>' +
+              '</div>';
     } else {
       html += '<div style="border-top:1px solid var(--border);padding-top:10px;margin-top:10px;">' +
               '<button id="cl-add-attr" style="font-size:11px;padding:4px 10px;">+ Attribute 追加</button> ' +
@@ -1001,11 +1036,79 @@ window.MA.modules.plantumlClass = (function() {
       window.MA.selection.clearSelection();
       ctx.onUpdate();
     });
-    P.bindAllByClass(propsEl, 'cl-mem-del', function(btn) {
-      var ln = parseInt(btn.getAttribute('data-line'), 10);
-      window.MA.history.pushHistory();
-      ctx.setMmdText(deleteMember(ctx.getMmdText(), ln));
-      ctx.onUpdate();
+    // Per-member row handlers (click row to focus, ↑↓✕ buttons, update button when focused)
+    (element.members || []).forEach(function(m, mi) {
+      // Row click → switch selection to that member (if not already focused)
+      var row = propsEl.querySelector('.cl-member-row[data-member-idx="' + mi + '"]');
+      if (row && mi !== focusIdx) {
+        row.style.cursor = 'pointer';
+        row.addEventListener('click', function(e) {
+          // Avoid hijacking clicks on inner buttons
+          if (e.target && e.target.tagName === 'BUTTON') return;
+          ctx.setSelectedHighlight([{
+            type: 'member',
+            id: element.id + '::__m_' + mi,
+            parentId: element.id,
+            parentKind: element.kind,
+            memberIndex: mi,
+            memberKind: m.kind,
+            line: m.line
+          }]);
+          ctx.onUpdate();
+        });
+      }
+      P.bindEvent('cl-mem-up-' + mi, 'click', function(e) {
+        if (e && e.stopPropagation) e.stopPropagation();
+        window.MA.history.pushHistory();
+        ctx.setMmdText(moveLineUp(ctx.getMmdText(), m.line));
+        ctx.onUpdate();
+      });
+      P.bindEvent('cl-mem-down-' + mi, 'click', function(e) {
+        if (e && e.stopPropagation) e.stopPropagation();
+        window.MA.history.pushHistory();
+        ctx.setMmdText(moveLineDown(ctx.getMmdText(), m.line));
+        ctx.onUpdate();
+      });
+      P.bindEvent('cl-mem-del-' + mi, 'click', function(e) {
+        if (e && e.stopPropagation) e.stopPropagation();
+        window.MA.history.pushHistory();
+        ctx.setMmdText(deleteMember(ctx.getMmdText(), m.line));
+        ctx.setSelectedHighlight([]);
+        ctx.onUpdate();
+      });
+      if (mi === focusIdx) {
+        P.bindEvent('cl-mem-update-' + mi, 'click', function() {
+          var vis = document.getElementById('cl-mem-vis-' + mi).value || null;
+          var name = document.getElementById('cl-mem-name-' + mi).value;
+          var typ = document.getElementById('cl-mem-type-' + mi).value;
+          var stat = !!document.getElementById('cl-mem-static-' + mi).checked;
+          window.MA.history.pushHistory();
+          var t = ctx.getMmdText();
+          if (m.kind === 'attribute') {
+            t = updateAttribute(t, m.line, 'visibility', vis);
+            t = updateAttribute(t, m.line, 'name', name);
+            t = updateAttribute(t, m.line, 'type', typ);
+            t = updateAttribute(t, m.line, 'static', stat);
+            ctx.setMmdText(t);
+          } else if (m.kind === 'method') {
+            var pms = document.getElementById('cl-mem-params-' + mi).value;
+            var abs = !!document.getElementById('cl-mem-abstract-' + mi).checked;
+            t = updateMethod(t, m.line, 'visibility', vis);
+            t = updateMethod(t, m.line, 'name', name);
+            t = updateMethod(t, m.line, 'params', pms);
+            t = updateMethod(t, m.line, 'type', typ);
+            t = updateMethod(t, m.line, 'static', stat);
+            t = updateMethod(t, m.line, 'abstract', abs);
+            ctx.setMmdText(t);
+          }
+          ctx.onUpdate();
+        });
+        // Auto-scroll selected row into view
+        setTimeout(function() {
+          var r = propsEl.querySelector('.cl-member-selected');
+          if (r && r.scrollIntoView) r.scrollIntoView({ block: 'nearest' });
+        }, 0);
+      }
     });
     P.bindEvent('cl-add-attr', 'click', function() {
       document.getElementById('cl-add-attr-form').style.display = 'block';
@@ -1102,7 +1205,7 @@ window.MA.modules.plantumlClass = (function() {
     });
   }
 
-  function _renderEnumEdit(element, parsedData, propsEl, ctx) {
+  function _renderEnumEdit(element, parsedData, propsEl, ctx, opts) {
     var P = window.MA.properties;
     var html =
       '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Class Diagram</div>' +
