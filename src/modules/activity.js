@@ -718,8 +718,155 @@ window.MA.modules.plantumlActivity = (function() {
   }
 
   function renderProps(selData, parsedData, propsEl, ctx) {
-    // Phase B で実装
-    if (propsEl) propsEl.innerHTML = '<div style="font-size:11px;color:var(--text-secondary);">Activity Diagram (renderProps wip)</div>';
+    if (!propsEl) return;
+    if (!selData || selData.length === 0) {
+      _renderNoSelection(parsedData, propsEl, ctx);
+      return;
+    }
+    if (selData.length === 1) {
+      var sel = selData[0];
+      if (sel.type === 'action') return _renderActionEdit(sel, parsedData, propsEl, ctx);
+      if (sel.type === 'decision') return _renderControlEdit(sel, parsedData, propsEl, ctx);
+      if (sel.type === 'note') return _renderNoteEdit(sel, parsedData, propsEl, ctx);
+      if (sel.type === 'swimlane') return _renderSwimlaneEdit(sel, parsedData, propsEl, ctx);
+    }
+    propsEl.innerHTML = '<div style="font-size:11px;color:var(--text-secondary);">複数選択は未対応 (Activity)</div>';
+  }
+
+  function _renderNoSelection(parsedData, propsEl, ctx) {
+    var P = window.MA.properties;
+    var html =
+      '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Activity Diagram</div>' +
+      '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">Title 設定</label>' +
+        P.fieldHtml('Title', 'ac-title', (parsedData.meta && parsedData.meta.title) || '') +
+        P.primaryButtonHtml('ac-set-title', 'Title 適用') +
+      '</div>' +
+      '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">末尾に追加</label>' +
+        P.selectFieldHtml('種類', 'ac-tail-kind', [
+          { value: 'action', label: 'Action', selected: true },
+          { value: 'start', label: 'Start' },
+          { value: 'stop', label: 'Stop' },
+          { value: 'end', label: 'End' },
+          { value: 'if', label: 'If decision' },
+          { value: 'while', label: 'While loop' },
+          { value: 'repeat', label: 'Repeat loop' },
+          { value: 'fork', label: 'Fork' },
+          { value: 'swimlane', label: 'Swimlane' }
+        ]) +
+        '<div id="ac-tail-detail" style="margin-top:6px;"></div>' +
+      '</div>';
+    propsEl.innerHTML = html;
+
+    P.bindEvent('ac-set-title', 'click', function() {
+      window.MA.history.pushHistory();
+      ctx.setMmdText(_setTitle(ctx.getMmdText(), document.getElementById('ac-title').value.trim()));
+      ctx.onUpdate();
+    });
+
+    var renderTailDetail = function() {
+      var kind = document.getElementById('ac-tail-kind').value;
+      var detailEl = document.getElementById('ac-tail-detail');
+      var html2 = '';
+      if (kind === 'action') {
+        html2 =
+          '<label style="display:block;font-size:10px;color:var(--text-secondary);">Text (改行可)</label>' +
+          '<textarea id="ac-tail-text" style="width:100%;min-height:50px;font-family:inherit;font-size:12px;"></textarea>' +
+          P.primaryButtonHtml('ac-tail-add', '+ Action 追加');
+      } else if (kind === 'start' || kind === 'stop' || kind === 'end') {
+        html2 = P.primaryButtonHtml('ac-tail-add', '+ ' + kind + ' 追加');
+      } else if (kind === 'if') {
+        html2 =
+          P.fieldHtml('Condition', 'ac-tail-cond', '', '例: 認証成功?') +
+          P.fieldHtml('Then label', 'ac-tail-thenlbl', 'yes') +
+          P.fieldHtml('Else label (空で else 省略)', 'ac-tail-elselbl', 'no') +
+          P.primaryButtonHtml('ac-tail-add', '+ if 追加');
+      } else if (kind === 'while') {
+        html2 =
+          P.fieldHtml('Condition', 'ac-tail-cond', '') +
+          P.fieldHtml('Label', 'ac-tail-lbl', 'yes') +
+          P.primaryButtonHtml('ac-tail-add', '+ while 追加');
+      } else if (kind === 'repeat') {
+        html2 =
+          P.fieldHtml('While condition', 'ac-tail-cond', '') +
+          P.fieldHtml('Label', 'ac-tail-lbl', 'yes') +
+          P.primaryButtonHtml('ac-tail-add', '+ repeat 追加');
+      } else if (kind === 'fork') {
+        html2 =
+          P.fieldHtml('Branches', 'ac-tail-bcount', '2') +
+          P.primaryButtonHtml('ac-tail-add', '+ fork 追加');
+      } else if (kind === 'swimlane') {
+        html2 =
+          P.fieldHtml('Label', 'ac-tail-lbl', '') +
+          P.primaryButtonHtml('ac-tail-add', '+ swimlane 追加');
+      }
+      detailEl.innerHTML = html2;
+
+      P.bindEvent('ac-tail-add', 'click', function() {
+        var t = ctx.getMmdText();
+        var k = document.getElementById('ac-tail-kind').value;
+        var out = t;
+        if (k === 'action') {
+          var txt = document.getElementById('ac-tail-text').value;
+          out = addAction(t, txt);
+        } else if (k === 'start') {
+          out = insertBeforeEnd(t, 'start');
+        } else if (k === 'stop') {
+          out = insertBeforeEnd(t, 'stop');
+        } else if (k === 'end') {
+          out = insertBeforeEnd(t, 'end');
+        } else if (k === 'if') {
+          var c = document.getElementById('ac-tail-cond').value;
+          var tl = document.getElementById('ac-tail-thenlbl').value || 'yes';
+          var el = document.getElementById('ac-tail-elselbl').value;
+          out = addIf(t, c, tl, el || null);
+        } else if (k === 'while') {
+          out = addWhile(t, document.getElementById('ac-tail-cond').value, document.getElementById('ac-tail-lbl').value);
+        } else if (k === 'repeat') {
+          out = addRepeat(t, document.getElementById('ac-tail-cond').value, document.getElementById('ac-tail-lbl').value);
+        } else if (k === 'fork') {
+          var n = parseInt(document.getElementById('ac-tail-bcount').value, 10) || 2;
+          out = addFork(t, n);
+        } else if (k === 'swimlane') {
+          out = addSwimlane(t, document.getElementById('ac-tail-lbl').value);
+        }
+        if (out !== t) {
+          window.MA.history.pushHistory();
+          ctx.setMmdText(out);
+          ctx.onUpdate();
+        }
+      });
+    };
+    P.bindEvent('ac-tail-kind', 'change', renderTailDetail);
+    renderTailDetail();
+  }
+
+  function _setTitle(text, title) {
+    var lines = text.split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      if (/^@startuml/.test(lines[i].trim())) {
+        if (i + 1 < lines.length && /^title\s+/.test(lines[i + 1].trim())) {
+          lines.splice(i + 1, 1);
+        }
+        if (title) lines.splice(i + 1, 0, 'title ' + title);
+        return lines.join('\n');
+      }
+    }
+    return text;
+  }
+
+  function _renderActionEdit(sel, parsedData, propsEl, ctx) {
+    propsEl.innerHTML = '<div>edit (Task 16)</div>';
+  }
+  function _renderControlEdit(sel, parsedData, propsEl, ctx) {
+    propsEl.innerHTML = '<div>edit (Task 17)</div>';
+  }
+  function _renderNoteEdit(sel, parsedData, propsEl, ctx) {
+    propsEl.innerHTML = '<div>edit (Task 18)</div>';
+  }
+  function _renderSwimlaneEdit(sel, parsedData, propsEl, ctx) {
+    propsEl.innerHTML = '<div>edit (Task 18)</div>';
   }
 
   function getTemplate() {
