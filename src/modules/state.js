@@ -608,13 +608,123 @@ window.MA.modules.plantumlState = (function() {
     renderTailDetail();
   }
 
-  // Stubs for next tasks
+  function _selectedOpt(o, sel) { return { value: o.value, label: o.label, selected: o.value === sel }; }
+
   function _renderStateEdit(sel, parsedData, propsEl, ctx) {
-    propsEl.innerHTML = '<div>State edit (Task 12)</div>';
+    var P = window.MA.properties;
+    var st = null;
+    for (var i = 0; i < parsedData.states.length; i++) {
+      if (parsedData.states[i].id === sel.id) { st = parsedData.states[i]; break; }
+    }
+    if (!st) { propsEl.innerHTML = ''; return; }
+    var related = (parsedData.transitions || []).filter(function(tr) { return tr.from === st.id || tr.to === st.id; });
+    var notes = (parsedData.notes || []).filter(function(n) { return n.targetId === st.id; });
+
+    var html =
+      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' +
+      (st.stereotype ? st.stereotype + ' ' : '') + 'State (L' + st.line + ')</div>' +
+      P.fieldHtml('ID', 'st-id', st.id) +
+      P.fieldHtml('Label', 'st-label', st.label || '') +
+      P.selectFieldHtml('Stereotype', 'st-stereo', [
+        { value: '', label: '(none)', selected: !st.stereotype },
+        { value: 'choice', label: 'choice', selected: st.stereotype === 'choice' },
+        { value: 'history', label: 'history', selected: st.stereotype === 'history' },
+        { value: 'historyDeep', label: 'historyDeep', selected: st.stereotype === 'historydeep' }
+      ]) +
+      '<div style="font-size:11px;margin:4px 0;color:var(--text-secondary);">Parent: ' + (st.parentId || '(root)') + '</div>' +
+      P.primaryButtonHtml('st-update', '更新');
+    if (related.length > 0) {
+      html += '<div style="border-top:1px solid var(--border);padding-top:6px;margin-top:6px;">' +
+              '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">Transitions</div>';
+      related.forEach(function(tr) {
+        html += '<div style="font-size:11px;margin-bottom:2px;">' + tr.from + ' → ' + tr.to + (tr.label ? ' : ' + tr.label : '') + ' (L' + tr.line + ')</div>';
+      });
+      html += '</div>';
+    }
+    if (notes.length > 0) {
+      html += '<div style="border-top:1px solid var(--border);padding-top:6px;margin-top:6px;">' +
+              '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">Notes</div>';
+      notes.forEach(function(n, idx) {
+        var preview = (n.text || '').replace(/\n/g, ' ⏎ ').slice(0, 30);
+        html += '<div style="font-size:11px;margin-bottom:2px;">' + n.position + ' "' + preview + '" (L' + n.line + ') <button id="st-note-del-' + idx + '" data-start="' + n.line + '" data-end="' + n.endLine + '">✕</button></div>';
+      });
+      html += '</div>';
+    }
+    html +=
+      '<div style="margin-top:10px;display:flex;gap:6px;">' +
+      P.primaryButtonHtml('st-delete', '✕ 削除 (cascade)') +
+      '</div>';
+    propsEl.innerHTML = html;
+
+    P.bindEvent('st-update', 'click', function() {
+      window.MA.history.pushHistory();
+      ctx.setMmdText(updateState(ctx.getMmdText(), st.line, {
+        id: document.getElementById('st-id').value,
+        label: document.getElementById('st-label').value,
+        stereotype: document.getElementById('st-stereo').value || null
+      }));
+      ctx.onUpdate();
+    });
+    P.bindEvent('st-delete', 'click', function() {
+      if (!confirm('この state と紐付く transition / note も削除します。続行しますか？')) return;
+      window.MA.history.pushHistory();
+      ctx.setMmdText(deleteStateWithRefs(ctx.getMmdText(), st.id));
+      window.MA.selection.clearSelection();
+      ctx.onUpdate();
+    });
+    notes.forEach(function(n, idx) {
+      P.bindEvent('st-note-del-' + idx, 'click', function(e) {
+        var btn = e.currentTarget;
+        var sl = parseInt(btn.getAttribute('data-start'), 10);
+        var el = parseInt(btn.getAttribute('data-end'), 10);
+        window.MA.history.pushHistory();
+        ctx.setMmdText(deleteNode(ctx.getMmdText(), sl, el));
+        ctx.onUpdate();
+      });
+    });
   }
+
   function _renderTransitionEdit(sel, parsedData, propsEl, ctx) {
-    propsEl.innerHTML = '<div>Transition edit (Task 12)</div>';
+    var P = window.MA.properties;
+    var tr = null;
+    for (var i = 0; i < parsedData.transitions.length; i++) {
+      if (parsedData.transitions[i].id === sel.id) { tr = parsedData.transitions[i]; break; }
+    }
+    if (!tr) { propsEl.innerHTML = ''; return; }
+    var stateOpts = (parsedData.states || []).map(function(s) { return { value: s.id, label: s.label || s.id }; });
+    var stateOptsWithPseudo = [{ value: '[*]', label: '[*]' }].concat(stateOpts);
+    var fromOpts = stateOptsWithPseudo.map(function(o) { return _selectedOpt(o, tr.from); });
+    var toOpts = stateOptsWithPseudo.map(function(o) { return _selectedOpt(o, tr.to); });
+    var html =
+      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">Transition (L' + tr.line + ')</div>' +
+      P.selectFieldHtml('From', 'st-tr-from', fromOpts) +
+      P.selectFieldHtml('To', 'st-tr-to', toOpts) +
+      P.fieldHtml('Trigger', 'st-tr-trig', tr.trigger || '') +
+      P.fieldHtml('Guard', 'st-tr-guard', tr.guard || '') +
+      P.fieldHtml('Action', 'st-tr-act', tr.action || '') +
+      P.primaryButtonHtml('st-tr-update', '更新') +
+      P.primaryButtonHtml('st-tr-delete', '✕ 削除');
+    propsEl.innerHTML = html;
+
+    P.bindEvent('st-tr-update', 'click', function() {
+      window.MA.history.pushHistory();
+      ctx.setMmdText(updateTransition(ctx.getMmdText(), tr.line, {
+        from: document.getElementById('st-tr-from').value,
+        to: document.getElementById('st-tr-to').value,
+        trigger: document.getElementById('st-tr-trig').value || null,
+        guard: document.getElementById('st-tr-guard').value || null,
+        action: document.getElementById('st-tr-act').value || null
+      }));
+      ctx.onUpdate();
+    });
+    P.bindEvent('st-tr-delete', 'click', function() {
+      window.MA.history.pushHistory();
+      ctx.setMmdText(deleteNode(ctx.getMmdText(), tr.line, tr.line));
+      window.MA.selection.clearSelection();
+      ctx.onUpdate();
+    });
   }
+
   function _renderNoteEdit(sel, parsedData, propsEl, ctx) {
     propsEl.innerHTML = '<div>Note edit (Task 13)</div>';
   }
