@@ -335,6 +335,34 @@ describe('class.parse — note (1-line)', function() {
   });
 });
 
+describe('class.parse — note (multi-line block)', function() {
+  test('parses multi-line note block', function() {
+    var t = '@startuml\nclass Foo\nnote left of Foo\n  first line\n  second line\nend note\n@enduml';
+    var r = clMod.parse(t);
+    expect(r.notes.length).toBe(1);
+    expect(r.notes[0].position).toBe('left');
+    expect(r.notes[0].targetId).toBe('Foo');
+    expect(r.notes[0].text).toBe('first line\nsecond line');
+    expect(r.notes[0].line).toBe(3);
+    expect(r.notes[0].endLine).toBe(6);
+  });
+
+  test('multi-line note keeps internal blank lines', function() {
+    var t = '@startuml\nclass Foo\nnote right of Foo\n  para 1\n\n  para 2\nend note\n@enduml';
+    var r = clMod.parse(t);
+    expect(r.notes[0].text).toBe('para 1\n\npara 2');
+  });
+
+  test('parses 1-line and multi-line notes in same diagram', function() {
+    var t = '@startuml\nclass Foo\nnote left of Foo : single\n' +
+      'class Bar\nnote right of Bar\n  multi\nend note\n@enduml';
+    var r = clMod.parse(t);
+    expect(r.notes.length).toBe(2);
+    expect(r.notes[0].text).toBe('single');
+    expect(r.notes[1].text).toBe('multi');
+  });
+});
+
 // jsdom epilogue
 if (prevWindow !== undefined) global.window = prevWindow;
 if (prevDocument !== undefined) global.document = prevDocument;

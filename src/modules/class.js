@@ -55,6 +55,12 @@ window.MA.modules.plantumlClass = (function() {
     'i'
   );
 
+  var NOTE_BLOCK_OPEN_RE = new RegExp(
+    '^note\\s+(left|right|top|bottom)\\s+of\\s+(' + ID + ')\\s*$',
+    'i'
+  );
+  var END_NOTE_RE = /^end\s+note\s*$/i;
+
   // Relation arrow tokens, longest first to avoid prefix matches
   var RELATION_RE = new RegExp(
     '^(' + ID_WITH_GENERICS + '|"[^"]+")\\s+' +
@@ -69,10 +75,32 @@ window.MA.modules.plantumlClass = (function() {
     var openClassStack = [];
     var packageStack = [];
     var packageCounter = 0;
+    var openNote = null;  // { startLine, position, targetId, bodyLines: [] }
 
     for (var i = 0; i < lines.length; i++) {
       var lineNum = i + 1;
-      var trimmed = lines[i].trim();
+      var rawLine = lines[i];
+      var trimmed = rawLine.trim();
+
+      // Inside multi-line note block: handle BEFORE empty/comment skip
+      if (openNote) {
+        if (END_NOTE_RE.test(trimmed)) {
+          result.notes.push({
+            kind: 'note',
+            id: '__n_' + result.notes.length,
+            position: openNote.position,
+            targetId: openNote.targetId,
+            text: openNote.bodyLines.join('\n'),
+            line: openNote.startLine,
+            endLine: lineNum,
+          });
+          openNote = null;
+          continue;
+        }
+        openNote.bodyLines.push(rawLine.replace(/^  /, ''));
+        continue;
+      }
+
       if (!trimmed || DU.isPlantumlComment(trimmed)) continue;
       if (RP.isStartUml(trimmed)) {
         if (result.meta.startUmlLine === null) result.meta.startUmlLine = lineNum;
@@ -151,6 +179,16 @@ window.MA.modules.plantumlClass = (function() {
             line: lineNum,
             endLine: lineNum,
           });
+          continue;
+        }
+        var blockMatch = trimmed.match(NOTE_BLOCK_OPEN_RE);
+        if (blockMatch) {
+          openNote = {
+            startLine: lineNum,
+            position: blockMatch[1].toLowerCase(),
+            targetId: blockMatch[2],
+            bodyLines: [],
+          };
           continue;
         }
         var rm = trimmed.match(RELATION_RE);
