@@ -50,6 +50,11 @@ window.MA.modules.plantumlClass = (function() {
     '^namespace\\s+(?:"([^"]+)"|(' + ID + '))\\s*\\{\\s*$'
   );
 
+  var NOTE_INLINE_RE = new RegExp(
+    '^note\\s+(left|right|top|bottom)\\s+of\\s+(' + ID + ')\\s*:\\s*(.*)$',
+    'i'
+  );
+
   // Relation arrow tokens, longest first to avoid prefix matches
   var RELATION_RE = new RegExp(
     '^(' + ID_WITH_GENERICS + '|"[^"]+")\\s+' +
@@ -58,7 +63,7 @@ window.MA.modules.plantumlClass = (function() {
   );
 
   function parse(text) {
-    var result = { meta: { title: '', startUmlLine: null }, elements: [], relations: [], groups: [] };
+    var result = { meta: { title: '', startUmlLine: null }, elements: [], relations: [], groups: [], notes: [] };
     if (!text || !text.trim()) return result;
     var lines = text.split('\n');
     var openClassStack = [];
@@ -135,6 +140,19 @@ window.MA.modules.plantumlClass = (function() {
       }
 
       if (openClassStack.length === 0) {
+        var noteMatch = trimmed.match(NOTE_INLINE_RE);
+        if (noteMatch) {
+          result.notes.push({
+            kind: 'note',
+            id: '__n_' + result.notes.length,
+            position: noteMatch[1].toLowerCase(),
+            targetId: noteMatch[2],
+            text: noteMatch[3],
+            line: lineNum,
+            endLine: lineNum,
+          });
+          continue;
+        }
         var rm = trimmed.match(RELATION_RE);
         if (rm) {
           var arrow = rm[2];
