@@ -1438,6 +1438,36 @@ window.MA.modules.plantumlClass = (function() {
           'data-line': el.line,
         });
         matched[el.kind]++;
+
+        // Member rects: one per class member, mapped to <text> lines after header
+        if (el.members && el.members.length > 0) {
+          var lines = OB.extractMultiLineTextBBoxes(g);
+          // Header skip count: 1 (label) + (stereotype ? 1 : 0) + (generics ? 1 : 0)
+          var headerSkip = 1;
+          if (el.stereotype) headerSkip++;
+          if (el.generics && el.generics.length > 0) headerSkip++;
+          var memberLines = lines.slice(headerSkip);
+          var matchCount = Math.min(el.members.length, memberLines.length);
+          for (var mi = 0; mi < matchCount; mi++) {
+            var ml = memberLines[mi];
+            var mem = el.members[mi];
+            var mbb = ml.bbox;
+            var rectW = mbb.width || 80;
+            OB.addRect(overlayEl, mbb.x, mbb.y, rectW, mbb.height || 14, {
+              'data-type': 'member',
+              'data-id': el.id + '::__m_' + mi,
+              'data-parent-id': el.id,
+              'data-parent-kind': el.kind,
+              'data-member-index': String(mi),
+              'data-member-kind': mem.kind,
+              'data-line': String(mem.line),
+            });
+          }
+          if (matchCount !== el.members.length && typeof console !== 'undefined' && console.warn) {
+            console.warn('[class.buildOverlay] member line mismatch for ' + el.id +
+              ': model=' + el.members.length + ' svg=' + memberLines.length);
+          }
+        }
       });
 
       // package + namespace

@@ -84,6 +84,67 @@ describe('class.buildOverlay', function() {
     expect(noteRects[0].getAttribute('data-id')).toBe('__n_0');
   });
 
+  test('creates member rect per class member', function() {
+    document.body.innerHTML =
+      '<svg id="src" xmlns="http://www.w3.org/2000/svg">' +
+        '<g class="entity" data-qualified-name="Foo" data-source-line="2">' +
+          '<rect x="10" y="10" width="120" height="60"/>' +
+          '<text x="20" y="22" textLength="40">Foo</text>' +
+          '<text x="20" y="36" textLength="80">+ name : String</text>' +
+          '<text x="20" y="50" textLength="80">+ login() : void</text>' +
+        '</g>' +
+      '</svg>' +
+      '<svg id="ov" xmlns="http://www.w3.org/2000/svg"></svg>';
+    clMod.buildOverlay(
+      document.getElementById('src'),
+      {
+        meta: { startUmlLine: 1 },
+        elements: [{
+          kind: 'class', id: 'Foo', label: 'Foo', stereotype: null, generics: null,
+          line: 2, endLine: 4,
+          members: [
+            { kind: 'attribute', visibility: '+', name: 'name', type: 'String', static: false, abstract: false, line: 3 },
+            { kind: 'method', visibility: '+', name: 'login', params: '', type: 'void', static: false, abstract: false, line: 4 },
+          ],
+        }],
+        relations: [], groups: [], notes: [],
+      },
+      document.getElementById('ov')
+    );
+    var memberRects = document.querySelectorAll('#ov rect[data-type="member"]');
+    expect(memberRects.length).toBe(2);
+    expect(memberRects[0].getAttribute('data-parent-id')).toBe('Foo');
+    expect(memberRects[0].getAttribute('data-member-index')).toBe('0');
+    expect(memberRects[1].getAttribute('data-member-index')).toBe('1');
+  });
+
+  test('member rect data-id encodes parent::index', function() {
+    document.body.innerHTML =
+      '<svg id="src" xmlns="http://www.w3.org/2000/svg">' +
+        '<g class="entity" data-qualified-name="Foo" data-source-line="2">' +
+          '<rect x="10" y="10" width="120" height="40"/>' +
+          '<text x="20" y="22" textLength="40">Foo</text>' +
+          '<text x="20" y="36" textLength="60">+ x : int</text>' +
+        '</g>' +
+      '</svg>' +
+      '<svg id="ov" xmlns="http://www.w3.org/2000/svg"></svg>';
+    clMod.buildOverlay(
+      document.getElementById('src'),
+      {
+        meta: { startUmlLine: 1 },
+        elements: [{
+          kind: 'class', id: 'Foo', label: 'Foo', stereotype: null, generics: null,
+          line: 2, endLine: 3,
+          members: [{ kind: 'attribute', visibility: '+', name: 'x', type: 'int', static: false, abstract: false, line: 3 }],
+        }],
+        relations: [], groups: [], notes: [],
+      },
+      document.getElementById('ov')
+    );
+    var r = document.querySelectorAll('#ov rect[data-type="member"]')[0];
+    expect(r.getAttribute('data-id')).toBe('Foo::__m_0');
+  });
+
   test('omits note rect when polygon count mismatches notes count', function() {
     document.body.innerHTML =
       '<svg id="src" xmlns="http://www.w3.org/2000/svg">' +
