@@ -79,6 +79,26 @@ describe('activity buildOverlay: shape classification', function() {
     actMod.buildOverlay(svg, parsed, overlay);
     expect(overlay.querySelectorAll('rect[data-type="action"]').length).toBe(0);
   });
+  test('builds overlay rect for note (5-point polygon)', function() {
+    var svg = makeSvg(function(s) {
+      // Action rect
+      var r = document.createElementNS(SVG_NS, 'rect');
+      r.setAttribute('x', '10'); r.setAttribute('y', '10');
+      r.setAttribute('width', '80'); r.setAttribute('height', '30'); r.setAttribute('rx', '8');
+      s.appendChild(r);
+      // Note polygon (5 points)
+      var p = document.createElementNS(SVG_NS, 'polygon');
+      p.setAttribute('points', '100,10 180,10 190,20 190,40 100,40');
+      s.appendChild(p);
+    });
+    var overlay = document.createElementNS(SVG_NS, 'svg');
+    var parsed = {
+      meta: {}, swimlanes: [], notes: [{ id: '__n_0', position: 'right', attachedNodeId: '__a_0', text: 'tip', line: 3, endLine: 3 }],
+      nodes: [{ kind: 'action', id: '__a_0', text: 'A', line: 2, endLine: 2, swimlaneId: null }],
+    };
+    actMod.buildOverlay(svg, parsed, overlay);
+    expect(overlay.querySelectorAll('rect[data-type="note"]').length).toBe(1);
+  });
 });
 
 if (prevWindow !== undefined) global.window = prevWindow;

@@ -691,6 +691,30 @@ window.MA.modules.plantumlActivity = (function() {
     if (matched.length !== flat.filter(function(n) { return expectedKind(n); }).length) {
       OB.warnIfMismatch('activity', flat.length, matched.length);
     }
+
+    // Notes: match 5-point polygons in document order
+    var notes = parsedData.notes || [];
+    if (notes.length > 0) {
+      var allPolys = svgEl.querySelectorAll('polygon');
+      var notePolys = [];
+      Array.prototype.forEach.call(allPolys, function(p) {
+        var pts = (p.getAttribute('points') || '').trim().split(/\s+/);
+        if (pts.length === 5) notePolys.push(p);
+      });
+      if (notePolys.length === notes.length) {
+        notes.forEach(function(n, idx) {
+          var bb = _polygonBBox(notePolys[idx]);
+          if (!bb) return;
+          OB.addRect(overlayEl, bb.x, bb.y, bb.width, bb.height, {
+            'data-type': 'note',
+            'data-id': n.id,
+            'data-line': String(n.line),
+          });
+        });
+      } else if (typeof console !== 'undefined' && console.warn) {
+        console.warn('[activity.buildOverlay] note polygon count mismatch: model=' + notes.length + ' svg=' + notePolys.length);
+      }
+    }
   }
 
   function renderProps(selData, parsedData, propsEl, ctx) {
