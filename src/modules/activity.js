@@ -856,8 +856,120 @@ window.MA.modules.plantumlActivity = (function() {
     return text;
   }
 
+  function _findNodeById(nodes, id) {
+    if (!nodes) return null;
+    for (var i = 0; i < nodes.length; i++) {
+      var n = nodes[i];
+      if (n.id === id) return n;
+      if (n.branches) {
+        for (var j = 0; j < n.branches.length; j++) {
+          var found = _findNodeById(n.branches[j].body, id);
+          if (found) return found;
+        }
+      }
+      if (n.body) {
+        var found2 = _findNodeById(n.body, id);
+        if (found2) return found2;
+      }
+    }
+    return null;
+  }
+
   function _renderActionEdit(sel, parsedData, propsEl, ctx) {
-    propsEl.innerHTML = '<div>edit (Task 16)</div>';
+    var P = window.MA.properties;
+    var node = _findNodeById(parsedData.nodes, sel.id);
+    if (!node) { propsEl.innerHTML = ''; return; }
+    var attachedNotes = [];
+    var allNotes = parsedData.notes || [];
+    for (var ai = 0; ai < allNotes.length; ai++) {
+      if (allNotes[ai].attachedNodeId === node.id) attachedNotes.push(allNotes[ai]);
+    }
+    var swimlane = null;
+    var sws = parsedData.swimlanes || [];
+    for (var si = 0; si < sws.length; si++) {
+      if (sws[si].id === node.swimlaneId) { swimlane = sws[si]; break; }
+    }
+    var swimLabel = swimlane ? swimlane.label : '(なし)';
+
+    var html =
+      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">Action (L' + node.line + ')</div>' +
+      '<div style="margin-bottom:6px;font-size:11px;"><b>Swimlane:</b> ' + window.MA.htmlUtils.escHtml(swimLabel) + ' <span style="color:var(--text-secondary);">(read-only)</span></div>' +
+      '<div style="margin-bottom:6px;">' +
+        '<label style="display:block;font-size:10px;color:var(--text-secondary);">Text</label>' +
+        '<textarea id="ac-action-text" style="width:100%;min-height:60px;">' + window.MA.htmlUtils.escHtml(node.text || '') + '</textarea>' +
+      '</div>' +
+      P.primaryButtonHtml('ac-action-update', '更新') +
+      '<div style="border-top:1px solid var(--border);padding-top:8px;margin-top:8px;">' +
+        '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">Notes</div>';
+    if (attachedNotes.length === 0) {
+      html += '<div style="font-size:11px;color:var(--text-secondary);font-style:italic;">（このアクションに note なし）</div>';
+    } else {
+      for (var ni = 0; ni < attachedNotes.length; ni++) {
+        var n = attachedNotes[ni];
+        var preview = (n.text || '').replace(/\n/g, ' ⏎ ').slice(0, 40);
+        html += '<div style="font-size:11px;margin-bottom:2px;">' +
+                  n.position + ' "' + window.MA.htmlUtils.escHtml(preview) + '" (L' + n.line + ')' +
+                  ' <button id="ac-note-edit-' + ni + '" data-id="' + n.id + '" data-line="' + n.line + '">edit</button>' +
+                  ' <button id="ac-note-del-' + ni + '" data-start="' + n.line + '" data-end="' + n.endLine + '">✕</button>' +
+                '</div>';
+      }
+    }
+    html += '<div id="ac-add-note-form" style="margin-top:6px;"></div>' +
+            '<button id="ac-add-note-btn" style="margin-top:4px;">+ Note 追加</button>' +
+          '</div>' +
+          '<div style="margin-top:10px;">' +
+            P.primaryButtonHtml('ac-action-delete', '✕ 削除') +
+          '</div>';
+    propsEl.innerHTML = html;
+
+    P.bindEvent('ac-action-update', 'click', function() {
+      var newText = document.getElementById('ac-action-text').value;
+      window.MA.history.pushHistory();
+      ctx.setMmdText(updateAction(ctx.getMmdText(), node.line, node.endLine, newText));
+      ctx.onUpdate();
+    });
+    P.bindEvent('ac-action-delete', 'click', function() {
+      window.MA.history.pushHistory();
+      ctx.setMmdText(deleteNode(ctx.getMmdText(), node.line, node.endLine));
+      window.MA.selection.clearSelection();
+      ctx.onUpdate();
+    });
+    for (var bi = 0; bi < attachedNotes.length; bi++) {
+      (function(idx) {
+        P.bindEvent('ac-note-edit-' + idx, 'click', function(e) {
+          var btn = e.currentTarget;
+          window.MA.selection.setSelected([{ type: 'note', id: btn.getAttribute('data-id'), line: parseInt(btn.getAttribute('data-line'), 10) }]);
+        });
+        P.bindEvent('ac-note-del-' + idx, 'click', function(e) {
+          var btn = e.currentTarget;
+          var sl = parseInt(btn.getAttribute('data-start'), 10);
+          var el = parseInt(btn.getAttribute('data-end'), 10);
+          window.MA.history.pushHistory();
+          ctx.setMmdText(deleteNode(ctx.getMmdText(), sl, el));
+          ctx.onUpdate();
+        });
+      })(bi);
+    }
+    P.bindEvent('ac-add-note-btn', 'click', function() {
+      var f = document.getElementById('ac-add-note-form');
+      f.innerHTML =
+        P.selectFieldHtml('Position', 'ac-new-npos', [
+          { value: 'right', label: 'Right', selected: true },
+          { value: 'left', label: 'Left' }
+        ]) +
+        '<div style="margin-bottom:6px;">' +
+          '<label style="display:block;font-size:10px;color:var(--text-secondary);">Text</label>' +
+          '<textarea id="ac-new-ntext" style="width:100%;min-height:50px;"></textarea>' +
+        '</div>' +
+        P.primaryButtonHtml('ac-new-nadd', '+ 追加');
+      P.bindEvent('ac-new-nadd', 'click', function() {
+        var pos = document.getElementById('ac-new-npos').value;
+        var txt = document.getElementById('ac-new-ntext').value;
+        window.MA.history.pushHistory();
+        ctx.setMmdText(addNote(ctx.getMmdText(), node.endLine, pos, txt));
+        ctx.onUpdate();
+      });
+    });
   }
   function _renderControlEdit(sel, parsedData, propsEl, ctx) {
     propsEl.innerHTML = '<div>edit (Task 17)</div>';
