@@ -11,6 +11,9 @@ window.MA.parserUtils = (function() {
     var hasUsecaseKw = false;
     var hasPackage = false;
     var hasClassKw = false;
+    var hasAbstractClassKw = false;
+    var hasEnumKw = false;
+    var hasClassRelation = false;
     var hasStateKw = false;
     var hasActivityKw = false;
     var hasComponentKw = false;
@@ -30,6 +33,9 @@ window.MA.parserUtils = (function() {
       if (/^usecase\b/.test(t)) hasUsecaseKw = true;
       if (/^(package|rectangle)\b.*\{/.test(t)) hasPackage = true;
       if (/^(class|interface|abstract|enum)\b/.test(t)) hasClassKw = true;
+      if (/^abstract\s+class\s/.test(t)) hasAbstractClassKw = true;
+      if (/^enum\s/.test(t)) hasEnumKw = true;
+      if (/\s(<\|--|--\|>|<\|\.\.|\.\.\|>|\*--|--\*|o--|--o)\s/.test(t)) hasClassRelation = true;
       if (/^state\b|^\[\*\]/.test(t)) hasStateKw = true;
       if (/^(start|stop)\b|^:.+;|^if\s+\(|^fork\b/.test(t)) hasActivityKw = true;
       if (/^component\b/.test(t)) hasComponentKw = true;
@@ -41,6 +47,7 @@ window.MA.parserUtils = (function() {
     // Component takes priority over Class because Component diagrams legally
     // contain `interface` (which would otherwise match hasClassKw).
     if (hasComponentKw) return 'plantuml-component';
+    if (hasAbstractClassKw || hasEnumKw || hasClassRelation) return 'plantuml-class';
     if (hasClassKw) return 'plantuml-class';
     if (hasStateKw) return 'plantuml-state';
     if (hasActivityKw) return 'plantuml-activity';
