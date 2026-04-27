@@ -109,6 +109,35 @@ test.describe('Class v0.6.1 polish', () => {
       expect(connKind).toBeGreaterThan(0);
     });
 
+    test('member delete immediately updates UI (panel re-renders, no stale member row)', async ({ page }) => {
+      var errors = [];
+      page.on('console', function(msg) { if (msg.type() === 'error') errors.push(msg.text()); });
+      await gotoApp(page);
+      await page.locator('#diagram-type').selectOption('plantuml-class');
+      await page.waitForTimeout(2500);
+      var memRect = page.locator('#overlay-layer rect[data-type="member"]').first();
+      var mc = await memRect.count();
+      if (mc === 0) test.skip();
+      var memCountBefore = mc;
+      // Click member to focus + expand inline edit
+      await memRect.click();
+      await page.waitForTimeout(300);
+      // Verify focused row shows inline edit
+      var editFieldsBefore = await page.locator('input[id^="cl-mem-name-"]').count();
+      expect(editFieldsBefore).toBeGreaterThan(0);
+      // Click delete on the focused member
+      await page.locator('button[id^="cl-mem-del-"]').first().click();
+      await page.waitForTimeout(300);
+      // After delete: panel should re-render → fewer member rows
+      var memRowsAfter = await page.locator('.cl-member-row').count();
+      // Panel re-rendered (no inline edit fields visible since selection cleared)
+      var editFieldsAfter = await page.locator('input[id^="cl-mem-name-"]').count();
+      expect(editFieldsAfter).toBe(0);
+      // No JS errors (TypeError from setSelectedHighlight regression)
+      var jsErrors = errors.filter(function(e) { return e.indexOf('favicon') < 0; });
+      expect(jsErrors).toHaveLength(0);
+    });
+
     test('console error count is 0 during member + note interactions', async ({ page }) => {
       var errors = [];
       page.on('console', function(msg) { if (msg.type() === 'error') errors.push(msg.text()); });

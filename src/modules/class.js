@@ -1081,7 +1081,7 @@ window.MA.modules.plantumlClass = (function() {
         row.addEventListener('click', function(e) {
           // Avoid hijacking clicks on inner buttons
           if (e.target && e.target.tagName === 'BUTTON') return;
-          ctx.setSelectedHighlight([{
+          window.MA.selection.setSelected([{
             type: 'member',
             id: element.id + '::__m_' + mi,
             parentId: element.id,
@@ -1090,7 +1090,6 @@ window.MA.modules.plantumlClass = (function() {
             memberKind: m.kind,
             line: m.line
           }]);
-          ctx.onUpdate();
         });
       }
       P.bindEvent('cl-mem-up-' + mi, 'click', function(e) {
@@ -1109,7 +1108,7 @@ window.MA.modules.plantumlClass = (function() {
         if (e && e.stopPropagation) e.stopPropagation();
         window.MA.history.pushHistory();
         ctx.setMmdText(deleteMemberByIndex(ctx.getMmdText(), element.id, mi));
-        ctx.setSelectedHighlight([]);
+        window.MA.selection.clearSelection();
         ctx.onUpdate();
       });
       if (mi === focusIdx) {
@@ -1203,9 +1202,8 @@ window.MA.modules.plantumlClass = (function() {
       P.bindEvent('cl-note-edit-' + idx, 'click', function(e) {
         var btn = e.currentTarget;
         var ln = parseInt(btn.getAttribute('data-line'), 10);
-        // Switch to note selection
-        ctx.setSelectedHighlight([{ type: 'note', id: btn.getAttribute('data-id'), line: ln }]);
-        ctx.onUpdate();
+        // Switch to note selection (selection.setSelected triggers synchronous renderProps via init callback)
+        window.MA.selection.setSelected([{ type: 'note', id: btn.getAttribute('data-id'), line: ln }]);
       });
       P.bindEvent('cl-note-del-' + idx, 'click', function(e) {
         var btn = e.currentTarget;
@@ -1374,7 +1372,7 @@ window.MA.modules.plantumlClass = (function() {
     P.bindEvent('cl-note-delete', 'click', function() {
       window.MA.history.pushHistory();
       ctx.setMmdText(deleteNote(ctx.getMmdText(), note.line, note.endLine));
-      ctx.setSelectedHighlight([]);
+      window.MA.selection.clearSelection();
       ctx.onUpdate();
     });
   }
