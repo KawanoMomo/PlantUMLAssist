@@ -726,7 +726,126 @@ window.MA.modules.plantumlState = (function() {
   }
 
   function _renderNoteEdit(sel, parsedData, propsEl, ctx) {
-    propsEl.innerHTML = '<div>Note edit (Task 13)</div>';
+    var P = window.MA.properties;
+    var H = window.MA.htmlUtils;
+    var note = null;
+    for (var i = 0; i < (parsedData.notes || []).length; i++) {
+      if (parsedData.notes[i].id === sel.id) { note = parsedData.notes[i]; break; }
+    }
+    if (!note) { propsEl.innerHTML = ''; return; }
+    var html =
+      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">Note (target: ' + H.escHtml(note.targetId) + ', L' + note.line + ')</div>' +
+      P.selectFieldHtml('Position', 'st-note-pos', [
+        { value: 'right', label: 'Right', selected: note.position === 'right' },
+        { value: 'left', label: 'Left', selected: note.position === 'left' }
+      ]) +
+      '<div style="margin-bottom:6px;"><label style="display:block;font-size:10px;color:var(--text-secondary);">Text</label><textarea id="st-note-text" style="width:100%;min-height:80px;">' + H.escHtml(note.text || '') + '</textarea></div>' +
+      P.primaryButtonHtml('st-note-update', '更新') +
+      P.primaryButtonHtml('st-note-delete', '✕ 削除');
+    propsEl.innerHTML = html;
+
+    P.bindEvent('st-note-update', 'click', function() {
+      window.MA.history.pushHistory();
+      ctx.setMmdText(updateNote(ctx.getMmdText(), note.line, note.endLine, {
+        position: document.getElementById('st-note-pos').value,
+        text: document.getElementById('st-note-text').value
+      }));
+      ctx.onUpdate();
+    });
+    P.bindEvent('st-note-delete', 'click', function() {
+      window.MA.history.pushHistory();
+      ctx.setMmdText(deleteNode(ctx.getMmdText(), note.line, note.endLine));
+      window.MA.selection.clearSelection();
+      ctx.onUpdate();
+    });
+  }
+
+  function resolveInsertLine(overlayEl, y) {
+    if (!overlayEl) return null;
+    var rects = overlayEl.querySelectorAll('rect[data-type="state"]');
+    if (rects.length === 0) return null;
+    var items = Array.prototype.map.call(rects, function(r) {
+      return {
+        line: parseInt(r.getAttribute('data-line'), 10),
+        y: parseFloat(r.getAttribute('y')) + parseFloat(r.getAttribute('height')) / 2
+      };
+    }).sort(function(a, b) { return a.y - b.y; });
+    for (var i = items.length - 1; i >= 0; i--) {
+      if (y > items[i].y) return { line: items[i].line, position: 'after' };
+    }
+    return { line: items[0].line, position: 'before' };
+  }
+
+  function showInsertForm(ctx, line, position, kind) {
+    var modal = document.getElementById('st-modal');
+    var content = document.getElementById('st-modal-content');
+    if (!modal || !content) {
+      var t = window.prompt((position === 'before' ? '前に' : '後に') + 'state を挿入: ID', '');
+      if (!t) return;
+      window.MA.history.pushHistory();
+      ctx.setMmdText(addStateAtLine(ctx.getMmdText(), line, position, t, null));
+      ctx.onUpdate();
+      return;
+    }
+    var P = window.MA.properties;
+    var parsed = parse(ctx.getMmdText());
+    var stateOpts = (parsed.states || []).map(function(s) { return { value: s.id, label: s.label || s.id }; });
+    var stateOptsWithPseudo = [{ value: '[*]', label: '[*]' }].concat(stateOpts);
+    var title = (position === 'before' ? '前に' : '後に') + '挿入 (L' + line + ')';
+    content.innerHTML =
+      '<h3 style="margin:0 0 12px 0;color:var(--text-primary);">' + title + '</h3>' +
+      P.selectFieldHtml('Kind', 'st-mod-kind', [
+        { value: 'state', label: 'State', selected: true },
+        { value: 'transition', label: 'Transition' }
+      ]) +
+      '<div id="st-mod-detail" style="margin-top:8px;"></div>' +
+      '<div style="display:flex;gap:8px;margin-top:12px;">' +
+        '<button id="st-mod-cancel" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:8px;border-radius:4px;cursor:pointer;">キャンセル</button>' +
+        '<button id="st-mod-confirm" style="flex:1;background:var(--accent);border:none;color:#fff;padding:8px;border-radius:4px;cursor:pointer;">確定</button>' +
+      '</div>';
+    modal.style.display = 'flex';
+
+    function renderDetail() {
+      var k = document.getElementById('st-mod-kind').value;
+      var detail = document.getElementById('st-mod-detail');
+      if (k === 'state') {
+        detail.innerHTML = P.fieldHtml('ID', 'st-mod-id', '');
+      } else {
+        detail.innerHTML =
+          P.selectFieldHtml('From', 'st-mod-from', stateOptsWithPseudo) +
+          P.selectFieldHtml('To', 'st-mod-to', stateOptsWithPseudo) +
+          P.fieldHtml('Trigger', 'st-mod-trig', '') +
+          P.fieldHtml('Guard', 'st-mod-guard', '') +
+          P.fieldHtml('Action', 'st-mod-act', '');
+      }
+    }
+    renderDetail();
+    P.bindEvent('st-mod-kind', 'change', renderDetail);
+
+    function close() { modal.style.display = 'none'; content.innerHTML = ''; }
+    P.bindEvent('st-mod-cancel', 'click', close);
+    P.bindEvent('st-mod-confirm', 'click', function() {
+      var k = document.getElementById('st-mod-kind').value;
+      var t = ctx.getMmdText();
+      var out = t;
+      if (k === 'state') {
+        var id = (document.getElementById('st-mod-id') || {}).value || '';
+        if (!id) { alert('ID 必須'); return; }
+        out = addStateAtLine(t, line, position, id, null);
+      } else {
+        out = addTransitionAtLine(t, line, position,
+          document.getElementById('st-mod-from').value,
+          document.getElementById('st-mod-to').value,
+          document.getElementById('st-mod-trig').value || null,
+          document.getElementById('st-mod-guard').value || null,
+          document.getElementById('st-mod-act').value || null
+        );
+      }
+      window.MA.history.pushHistory();
+      ctx.setMmdText(out);
+      ctx.onUpdate();
+      close();
+    });
   }
 
   function template() {
@@ -736,6 +855,9 @@ window.MA.modules.plantumlState = (function() {
   return {
     type: 'plantuml-state',
     parse: parse,
+    buildOverlay: buildOverlay,
+    renderProps: renderProps,
+    template: template,
     fmtState: fmtState,
     fmtTransition: fmtTransition,
     fmtNote: fmtNote,
@@ -750,14 +872,14 @@ window.MA.modules.plantumlState = (function() {
     updateNote: updateNote,
     deleteNode: deleteNode,
     deleteStateWithRefs: deleteStateWithRefs,
-    buildOverlay: buildOverlay,
-    renderProps: renderProps,
-    template: template,
+    resolveInsertLine: resolveInsertLine,
+    showInsertForm: showInsertForm,
+    defaultInsertKind: 'state',
     capabilities: {
       overlaySelection: true,
-      hoverInsert: false,
+      hoverInsert: true,
       participantDrag: false,
-      showInsertForm: false,
+      showInsertForm: true,
       multiSelectConnect: false,
     },
   };
