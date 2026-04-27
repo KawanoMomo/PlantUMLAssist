@@ -972,7 +972,85 @@ window.MA.modules.plantumlActivity = (function() {
     });
   }
   function _renderControlEdit(sel, parsedData, propsEl, ctx) {
-    propsEl.innerHTML = '<div>edit (Task 17)</div>';
+    var P = window.MA.properties;
+    var node = _findNodeById(parsedData.nodes, sel.id);
+    if (!node) { propsEl.innerHTML = ''; return; }
+    var html = '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' + node.kind + ' (L' + node.line + ')</div>';
+
+    if (node.kind === 'if') {
+      html += P.fieldHtml('Condition', 'ac-if-cond', node.condition || '');
+      html += '<div style="border-top:1px solid var(--border);padding-top:6px;margin-top:6px;">' +
+                '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">Branches</div>';
+      var brs = node.branches || [];
+      for (var bi = 0; bi < brs.length; bi++) {
+        var b = brs[bi];
+        html += '<div style="font-size:11px;margin-bottom:2px;">' +
+                  '▸ ' + b.kind + ' (' + window.MA.htmlUtils.escHtml(b.label || '') + ')' + (b.condition ? ' cond: ' + window.MA.htmlUtils.escHtml(b.condition) : '') + ' (L' + b.line + ')' +
+                  ' <button id="ac-branch-edit-' + bi + '" data-line="' + b.line + '">edit label</button>' +
+                '</div>';
+      }
+      html += '</div>';
+    } else if (node.kind === 'while') {
+      html += P.fieldHtml('Condition', 'ac-while-cond', node.condition || '');
+      html += P.fieldHtml('Label', 'ac-while-lbl', node.label || 'yes');
+    } else if (node.kind === 'repeat') {
+      html += P.fieldHtml('Repeat-while condition', 'ac-rep-cond', node.condition || '');
+      html += P.fieldHtml('Label', 'ac-rep-lbl', node.label || 'yes');
+    } else if (node.kind === 'fork') {
+      html += '<div style="font-size:11px;">Branches: ' + (node.branches || []).length + '</div>';
+    }
+    html += P.primaryButtonHtml('ac-ctrl-update', '更新') +
+            P.primaryButtonHtml('ac-ctrl-delete', '✕ 構造ごと削除');
+    propsEl.innerHTML = html;
+
+    P.bindEvent('ac-ctrl-update', 'click', function() {
+      var t = ctx.getMmdText();
+      var out = t;
+      if (node.kind === 'if') {
+        var c = document.getElementById('ac-if-cond').value;
+        out = updateIfCondition(t, node.line, c);
+      } else if (node.kind === 'while') {
+        out = updateWhileCondition(t, node.line, document.getElementById('ac-while-cond').value);
+        var lines = out.split('\n');
+        var idx = node.line - 1;
+        var indent = lines[idx].match(/^(\s*)/)[1];
+        lines[idx] = indent + fmtWhile(document.getElementById('ac-while-cond').value, document.getElementById('ac-while-lbl').value);
+        out = lines.join('\n');
+      } else if (node.kind === 'repeat') {
+        var lines2 = t.split('\n');
+        var idx2 = node.endLine - 1;
+        var indent2 = lines2[idx2].match(/^(\s*)/)[1];
+        lines2[idx2] = indent2 + fmtRepeatWhile(document.getElementById('ac-rep-cond').value, document.getElementById('ac-rep-lbl').value);
+        out = lines2.join('\n');
+      }
+      if (out !== t) {
+        window.MA.history.pushHistory();
+        ctx.setMmdText(out);
+        ctx.onUpdate();
+      }
+    });
+    P.bindEvent('ac-ctrl-delete', 'click', function() {
+      if (!confirm('構造ごと削除します (' + node.kind + ')。続行しますか？')) return;
+      window.MA.history.pushHistory();
+      ctx.setMmdText(deleteNode(ctx.getMmdText(), node.line, node.endLine));
+      window.MA.selection.clearSelection();
+      ctx.onUpdate();
+    });
+    if (node.kind === 'if') {
+      var brs2 = node.branches || [];
+      for (var bj = 0; bj < brs2.length; bj++) {
+        (function(b) {
+          var bIdx = brs2.indexOf(b);
+          P.bindEvent('ac-branch-edit-' + bIdx, 'click', function() {
+            var newLabel = prompt('Branch label:', b.label || '');
+            if (newLabel === null) return;
+            window.MA.history.pushHistory();
+            ctx.setMmdText(updateBranchLabel(ctx.getMmdText(), b.line, newLabel));
+            ctx.onUpdate();
+          });
+        })(brs2[bj]);
+      }
+    }
   }
   function _renderNoteEdit(sel, parsedData, propsEl, ctx) {
     propsEl.innerHTML = '<div>edit (Task 18)</div>';
