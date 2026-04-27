@@ -174,6 +174,33 @@ describe('class addNote', function() {
   });
 });
 
+describe('class updateNote', function() {
+  test('updateNote changes position of 1-line note', function() {
+    var t = '@startuml\nclass Foo\nnote left of Foo : tip\n@enduml';
+    var out = clMod.updateNote(t, 3, 3, { position: 'right' });
+    expect(out).toContain('note right of Foo : tip');
+  });
+  test('updateNote changes text of 1-line note', function() {
+    var t = '@startuml\nclass Foo\nnote left of Foo : old\n@enduml';
+    var out = clMod.updateNote(t, 3, 3, { text: 'new' });
+    expect(out).toContain('note left of Foo : new');
+  });
+  test('updateNote converts 1-line to multi-line when text has newline', function() {
+    var t = '@startuml\nclass Foo\nnote left of Foo : single\n@enduml';
+    var out = clMod.updateNote(t, 3, 3, { text: 'a\nb' });
+    var ls = out.split('\n');
+    expect(ls.indexOf('note left of Foo') >= 0).toBe(true);
+    expect(ls.indexOf('end note') >= 0).toBe(true);
+  });
+  test('updateNote replaces multi-line block', function() {
+    var t = '@startuml\nclass Foo\nnote left of Foo\n  old1\n  old2\nend note\n@enduml';
+    var out = clMod.updateNote(t, 3, 6, { text: 'new1\nnew2' });
+    expect(out).toContain('new1');
+    expect(out).toContain('new2');
+    expect(out).not.toContain('old1');
+  });
+});
+
 describe('class line ops', function() {
   test('deleteLine removes class declaration', function() {
     var t = '@startuml\nclass Foo\n@enduml';

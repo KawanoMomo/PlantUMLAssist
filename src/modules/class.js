@@ -625,6 +625,45 @@ window.MA.modules.plantumlClass = (function() {
     return lines.join('\n');
   }
 
+  function updateNote(text, startLine, endLine, fields) {
+    var lines = text.split('\n');
+    var startIdx = startLine - 1;
+    var endIdx = endLine - 1;
+    if (startIdx < 0 || startIdx >= lines.length) return text;
+
+    // Parse current note state from start line
+    var startTrimmed = lines[startIdx].trim();
+    var inlineMatch = startTrimmed.match(NOTE_INLINE_RE);
+    var blockMatch = startTrimmed.match(NOTE_BLOCK_OPEN_RE);
+    var current = null;
+    if (inlineMatch) {
+      current = { position: inlineMatch[1].toLowerCase(), targetId: inlineMatch[2], text: inlineMatch[3] };
+    } else if (blockMatch) {
+      var bodyLines = [];
+      for (var k = startIdx + 1; k <= endIdx - 1; k++) {
+        bodyLines.push(lines[k].replace(/^  /, ''));
+      }
+      current = { position: blockMatch[1].toLowerCase(), targetId: blockMatch[2], text: bodyLines.join('\n') };
+    }
+    if (!current) return text;
+
+    var newPos = fields.position != null ? fields.position : current.position;
+    var newText = fields.text != null ? fields.text : current.text;
+
+    var formatted = fmtNote(newPos, current.targetId, newText);
+    var newLines;
+    if (Array.isArray(formatted)) {
+      newLines = formatted;
+    } else {
+      newLines = [formatted];
+    }
+
+    // Replace [startIdx..endIdx] with newLines
+    var before = lines.slice(0, startIdx);
+    var after = lines.slice(endIdx + 1);
+    return before.concat(newLines).concat(after).join('\n');
+  }
+
   function template() {
     return [
       '@startuml',
@@ -1269,6 +1308,7 @@ window.MA.modules.plantumlClass = (function() {
     updateAbstract: updateClass,
     updateEnum: updateClass,
     updateRelation: updateRelation,
+    updateNote: updateNote,
     addAttribute: addAttribute,
     addMethod: addMethod,
     addEnumValue: addEnumValue,
