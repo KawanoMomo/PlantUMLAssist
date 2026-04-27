@@ -46,6 +46,30 @@ describe('state parser: simple state', function() {
   });
 });
 
+describe('state parser: composite', function() {
+  test('parses composite state with inner state', function() {
+    var t = '@startuml\nstate Outer {\n  state Inner\n}\n@enduml';
+    var r = stMod.parse(t);
+    expect(r.states.length).toBe(2);
+    expect(r.states[0].id).toBe('Outer');
+    expect(r.states[0].endLine).toBe(4);
+    expect(r.states[1].id).toBe('Outer.Inner');
+    expect(r.states[1].parentId).toBe('Outer');
+  });
+  test('inner state line tracking', function() {
+    var t = '@startuml\nstate Outer {\n  state Inner\n}\n@enduml';
+    var r = stMod.parse(t);
+    expect(r.states[1].line).toBe(3);
+  });
+  test('multiple inner states', function() {
+    var t = '@startuml\nstate Outer {\n  state A\n  state B\n}\n@enduml';
+    var r = stMod.parse(t);
+    expect(r.states.length).toBe(3);
+    expect(r.states[1].id).toBe('Outer.A');
+    expect(r.states[2].id).toBe('Outer.B');
+  });
+});
+
 if (prevWindow !== undefined) global.window = prevWindow;
 if (prevDocument !== undefined) global.document = prevDocument;
 depPaths.forEach(function(p) { try { delete require.cache[require.resolve(p)]; } catch (e) {} });
