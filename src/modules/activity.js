@@ -583,39 +583,94 @@ window.MA.modules.plantumlActivity = (function() {
     return out;
   }
 
+  function _parsePoints(el) {
+    var raw = (el.getAttribute('points') || '').trim();
+    var nums = raw.split(/[\s,]+/).filter(function(s) { return s !== ''; });
+    var pts = [];
+    for (var i = 0; i + 1 < nums.length; i += 2) {
+      pts.push({ x: parseFloat(nums[i]), y: parseFloat(nums[i + 1]) });
+    }
+    return pts;
+  }
+
+  // Classify a single SVG primitive into a node-kind string,
+  // OR return an ellipse descriptor for post-processing (pair grouping).
+  // Returns null for shapes that should be ignored (arrow heads, merge markers, container rects).
   function _classifyShape(el) {
     var tag = el.tagName.toLowerCase();
     if (tag === 'rect') {
       var rx = parseFloat(el.getAttribute('rx')) || 0;
       var h = parseFloat(el.getAttribute('height')) || 0;
-      if (rx > 0) return 'action';
+      // Fork bar: PlantUML uses height ≈ 6, fill #555555. Discriminate by height.
       if (h > 0 && h < 12) return 'fork-bar';
+      // Action: rounded rect with sufficient height (PlantUML uses rx ≈ 12.5, h ≈ 30+)
+      if (rx >= 8 && h >= 20) return 'action';
       return null;
     }
     if (tag === 'polygon') {
-      var pts = (el.getAttribute('points') || '').trim().split(/\s+/);
-      if (pts.length === 4) return 'decision';
-      if (pts.length === 5) return 'note';
+      var pts = _parsePoints(el);
+      // Decision (if/while/repeat header): 7-point hexagonal polygon (PlantUML 1.2026.x)
+      if (pts.length === 7) return 'decision';
+      // 4-point polygons are arrow heads (always small) — ignore
+      // 5-point polygons are endif/endwhile merge markers (no model node) — ignore
+      // 8-point polygons are reserved for future activity action variants — ignore for now
+      return null;
     }
     if (tag === 'ellipse') {
-      // Single ellipse (filled) vs nested = stop
-      var fill = el.getAttribute('fill') || '';
-      if (fill.toLowerCase() === '#000' || fill === 'black') return 'start';
-      return 'stop-or-end';
+      var rxe = parseFloat(el.getAttribute('rx')) || 0;
+      if (rxe < 5) return null;  // tiny decoration ellipse
+      var fill = (el.getAttribute('fill') || '').toLowerCase();
+      var hasFill = fill && fill !== 'none' && fill !== 'transparent';
+      // Return descriptor for post-process pair grouping
+      return {
+        kind: 'ellipse-raw',
+        cx: parseFloat(el.getAttribute('cx')) || 0,
+        cy: parseFloat(el.getAttribute('cy')) || 0,
+        rx: rxe,
+        hasFill: hasFill,
+      };
     }
     return null;
   }
 
-  function _polygonBBox(el) {
-    var pts = (el.getAttribute('points') || '').trim().split(/\s+/);
-    var xs = [], ys = [];
-    for (var i = 0; i < pts.length; i++) {
-      var pair = pts[i].split(',');
-      var x = parseFloat(pair[0]); var y = parseFloat(pair[1]);
-      if (!isNaN(x)) xs.push(x);
-      if (!isNaN(y)) ys.push(y);
+  // Post-process raw shape list: group adjacent same-center ellipses as 'stop-or-end' (paired),
+  // single filled ellipses as 'start', single unfilled as 'stop-or-end'.
+  function _groupShapes(raw) {
+    var matched = [];
+    for (var i = 0; i < raw.length; i++) {
+      var item = raw[i];
+      var c = item.classification;
+      if (typeof c === 'string') {
+        matched.push({ el: item.el, kind: c });
+        continue;
+      }
+      // ellipse-raw: check next item for pair
+      var paired = false;
+      if (i + 1 < raw.length) {
+        var next = raw[i + 1];
+        if (next.classification && typeof next.classification === 'object' &&
+            next.classification.kind === 'ellipse-raw' &&
+            Math.abs(next.classification.cx - c.cx) < 2 &&
+            Math.abs(next.classification.cy - c.cy) < 2) {
+          // Pair = stop. Use outer (larger rx) as the primary el for bbox.
+          var outerEl = c.rx >= next.classification.rx ? item.el : next.el;
+          matched.push({ el: outerEl, kind: 'stop-or-end' });
+          i++;  // skip the inner ellipse
+          paired = true;
+        }
+      }
+      if (!paired) {
+        matched.push({ el: item.el, kind: c.hasFill ? 'start' : 'stop-or-end' });
+      }
     }
-    if (xs.length === 0) return null;
+    return matched;
+  }
+
+  function _polygonBBox(el) {
+    var pts = _parsePoints(el);
+    if (pts.length === 0) return null;
+    var xs = pts.map(function(p) { return p.x; });
+    var ys = pts.map(function(p) { return p.y; });
     var minX = Math.min.apply(null, xs);
     var minY = Math.min.apply(null, ys);
     var maxX = Math.max.apply(null, xs);
@@ -652,13 +707,14 @@ window.MA.modules.plantumlActivity = (function() {
     var flat = _flattenNodes(parsedData.nodes || [], []);
     if (flat.length === 0) return;
 
-    // Walk SVG and classify shapes
+    // Walk SVG, classify each primitive, then post-process to group ellipse pairs as 'stop-or-end'.
     var shapeNodes = svgEl.querySelectorAll('rect, polygon, ellipse');
-    var matched = [];
+    var raw = [];
     Array.prototype.forEach.call(shapeNodes, function(s) {
-      var kind = _classifyShape(s);
-      if (kind) matched.push({ el: s, kind: kind });
+      var c = _classifyShape(s);
+      if (c) raw.push({ el: s, classification: c });
     });
+    var matched = _groupShapes(raw);
 
     // Map flat nodes to expected shape kind
     var expectedKind = function(n) {
@@ -692,14 +748,18 @@ window.MA.modules.plantumlActivity = (function() {
       OB.warnIfMismatch('activity', flat.length, matched.length);
     }
 
-    // Notes: match 5-point polygons in document order
+    // Notes: match 5-point polygons in document order, excluding closed-diamond merge markers (endif/endwhile).
+    // A folded-corner rect (note) has 5 distinct points; a closed diamond merge marker repeats the first point.
     var notes = parsedData.notes || [];
     if (notes.length > 0) {
       var allPolys = svgEl.querySelectorAll('polygon');
       var notePolys = [];
       Array.prototype.forEach.call(allPolys, function(p) {
-        var pts = (p.getAttribute('points') || '').trim().split(/\s+/);
-        if (pts.length === 5) notePolys.push(p);
+        var pts = _parsePoints(p);
+        if (pts.length === 5) {
+          var first = pts[0], last = pts[4];
+          if (first.x !== last.x || first.y !== last.y) notePolys.push(p);
+        }
       });
       if (notePolys.length === notes.length) {
         notes.forEach(function(n, idx) {
@@ -726,11 +786,29 @@ window.MA.modules.plantumlActivity = (function() {
     if (selData.length === 1) {
       var sel = selData[0];
       if (sel.type === 'action') return _renderActionEdit(sel, parsedData, propsEl, ctx);
-      if (sel.type === 'decision') return _renderControlEdit(sel, parsedData, propsEl, ctx);
+      if (sel.type === 'decision' || sel.type === 'fork') return _renderControlEdit(sel, parsedData, propsEl, ctx);
+      if (sel.type === 'start' || sel.type === 'stop' || sel.type === 'end') return _renderTerminatorEdit(sel, parsedData, propsEl, ctx);
       if (sel.type === 'note') return _renderNoteEdit(sel, parsedData, propsEl, ctx);
       if (sel.type === 'swimlane') return _renderSwimlaneEdit(sel, parsedData, propsEl, ctx);
     }
     propsEl.innerHTML = '<div style="font-size:11px;color:var(--text-secondary);">複数選択は未対応 (Activity)</div>';
+  }
+
+  function _renderTerminatorEdit(sel, parsedData, propsEl, ctx) {
+    var P = window.MA.properties;
+    var node = _findNodeById(parsedData.nodes, sel.id);
+    if (!node) { propsEl.innerHTML = ''; return; }
+    var html =
+      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' + node.kind + ' (L' + node.line + ')</div>' +
+      '<div style="font-size:11px;margin-bottom:8px;color:var(--text-secondary);">この ' + node.kind + ' ノードは編集項目がありません。</div>' +
+      P.primaryButtonHtml('ac-term-delete', '✕ 削除');
+    propsEl.innerHTML = html;
+    P.bindEvent('ac-term-delete', 'click', function() {
+      window.MA.history.pushHistory();
+      ctx.setMmdText(deleteNode(ctx.getMmdText(), node.line, node.endLine));
+      window.MA.selection.clearSelection();
+      ctx.onUpdate();
+    });
   }
 
   function _renderNoSelection(parsedData, propsEl, ctx) {
