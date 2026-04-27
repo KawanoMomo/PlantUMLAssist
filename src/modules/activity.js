@@ -470,6 +470,102 @@ window.MA.modules.plantumlActivity = (function() {
     return before.concat(newLines).concat(after).join('\n');
   }
 
+  function updateAction(text, startLine, endLine, newText) {
+    var lines = text.split('\n');
+    var newBody = (newText || '').split('\n');
+    var firstLine = ':' + newBody[0] + (newBody.length === 1 ? ';' : '');
+    var rest = [];
+    for (var i = 1; i < newBody.length; i++) {
+      rest.push(i === newBody.length - 1 ? newBody[i] + ';' : newBody[i]);
+    }
+    var newLines = [firstLine].concat(rest);
+    var before = lines.slice(0, startLine - 1);
+    var after = lines.slice(endLine);
+    return before.concat(newLines).concat(after).join('\n');
+  }
+
+  function updateIfCondition(text, lineNum, newCond) {
+    var lines = text.split('\n');
+    var idx = lineNum - 1;
+    var m = lines[idx].trim().match(IF_OPEN_RE);
+    if (!m) return text;
+    var indent = lines[idx].match(/^(\s*)/)[1];
+    lines[idx] = indent + fmtIf(newCond, m[2] || 'yes');
+    return lines.join('\n');
+  }
+
+  function updateBranchLabel(text, lineNum, newLabel) {
+    var lines = text.split('\n');
+    var idx = lineNum - 1;
+    var trimmed = lines[idx].trim();
+    var indent = lines[idx].match(/^(\s*)/)[1];
+    var em;
+    if ((em = trimmed.match(IF_OPEN_RE))) {
+      lines[idx] = indent + fmtIf(em[1], newLabel);
+    } else if ((em = trimmed.match(ELSEIF_RE))) {
+      lines[idx] = indent + fmtElseif(em[1], newLabel);
+    } else if ((em = trimmed.match(ELSE_RE))) {
+      lines[idx] = indent + fmtElse(newLabel);
+    } else {
+      return text;
+    }
+    return lines.join('\n');
+  }
+
+  function updateWhileCondition(text, lineNum, newCond) {
+    var lines = text.split('\n');
+    var idx = lineNum - 1;
+    var m = lines[idx].trim().match(WHILE_OPEN_RE);
+    if (!m) return text;
+    var indent = lines[idx].match(/^(\s*)/)[1];
+    lines[idx] = indent + fmtWhile(newCond, m[2] || 'yes');
+    return lines.join('\n');
+  }
+
+  function updateSwimlane(text, lineNum, newLabel) {
+    var lines = text.split('\n');
+    var idx = lineNum - 1;
+    var m = lines[idx].trim().match(SWIMLANE_RE);
+    if (!m) return text;
+    var indent = lines[idx].match(/^(\s*)/)[1];
+    lines[idx] = indent + fmtSwimlane(newLabel);
+    return lines.join('\n');
+  }
+
+  function updateNote(text, startLine, endLine, fields) {
+    var lines = text.split('\n');
+    var idx = startLine - 1;
+    var trimmed = lines[idx].trim();
+    var inlineM = trimmed.match(NOTE_INLINE_RE);
+    var blockM = trimmed.match(NOTE_BLOCK_OPEN_RE);
+    var current = null;
+    if (inlineM) {
+      current = { position: inlineM[1].toLowerCase(), text: inlineM[2] };
+    } else if (blockM) {
+      var bodyLines = [];
+      for (var k = idx + 1; k <= endLine - 2; k++) bodyLines.push(lines[k].replace(/^  /, ''));
+      current = { position: blockM[1].toLowerCase(), text: bodyLines.join('\n') };
+    }
+    if (!current) return text;
+    var newPos = fields.position != null ? fields.position : current.position;
+    var newText = fields.text != null ? fields.text : current.text;
+    var formatted = fmtNote(newPos, newText);
+    var newLines = Array.isArray(formatted) ? formatted : [formatted];
+    var before = lines.slice(0, idx);
+    var after = lines.slice(endLine);
+    return before.concat(newLines).concat(after).join('\n');
+  }
+
+  function deleteNode(text, startLine, endLine) {
+    var lines = text.split('\n');
+    var startIdx = startLine - 1;
+    var endIdx = endLine - 1;
+    if (startIdx < 0 || startIdx >= lines.length) return text;
+    var before = lines.slice(0, startIdx);
+    var after = lines.slice(endIdx + 1);
+    return before.concat(after).join('\n');
+  }
+
   function buildOverlay(svgEl, parsedData, overlayEl) {
     // Phase B で実装
   }
@@ -504,6 +600,13 @@ window.MA.modules.plantumlActivity = (function() {
     addFork: addFork,
     addSwimlane: addSwimlane,
     addNote: addNote,
+    updateAction: updateAction,
+    updateIfCondition: updateIfCondition,
+    updateBranchLabel: updateBranchLabel,
+    updateWhileCondition: updateWhileCondition,
+    updateSwimlane: updateSwimlane,
+    updateNote: updateNote,
+    deleteNode: deleteNode,
     capabilities: {
       overlaySelection: true,
       hoverInsert: false,

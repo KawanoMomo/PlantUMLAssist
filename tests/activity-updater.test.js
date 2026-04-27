@@ -103,6 +103,60 @@ describe('activity add ops', function() {
   });
 });
 
+describe('activity update/delete ops', function() {
+  test('updateAction changes text', function() {
+    var t = '@startuml\n:old;\n@enduml';
+    var out = actMod.updateAction(t, 2, 2, 'new');
+    expect(out).toContain(':new;');
+    expect(out).not.toContain(':old;');
+  });
+  test('updateAction handles multi-line replacement', function() {
+    var t = '@startuml\n:old;\n@enduml';
+    var out = actMod.updateAction(t, 2, 2, 'a\nb');
+    expect(out).toContain(':a');
+    expect(out).toContain('b;');
+  });
+  test('updateIfCondition changes condition', function() {
+    var t = '@startuml\nif (old) then (yes)\nendif\n@enduml';
+    var out = actMod.updateIfCondition(t, 2, 'new');
+    expect(out).toContain('if (new)');
+  });
+  test('updateBranchLabel changes branch label', function() {
+    var t = '@startuml\nif (a) then (yes)\nelse (no)\nendif\n@enduml';
+    var out = actMod.updateBranchLabel(t, 3, 'false');
+    expect(out).toContain('else (false)');
+  });
+  test('updateWhileCondition changes condition', function() {
+    var t = '@startuml\nwhile (old) is (yes)\nendwhile\n@enduml';
+    var out = actMod.updateWhileCondition(t, 2, 'new');
+    expect(out).toContain('while (new)');
+  });
+  test('updateSwimlane renames label', function() {
+    var t = '@startuml\n|Old|\n@enduml';
+    var out = actMod.updateSwimlane(t, 2, 'New');
+    expect(out).toContain('|New|');
+    expect(out).not.toContain('|Old|');
+  });
+  test('updateNote changes position + text', function() {
+    var t = '@startuml\n:A;\nnote right : old\n@enduml';
+    var out = actMod.updateNote(t, 3, 3, { position: 'left', text: 'new' });
+    expect(out).toContain('note left : new');
+  });
+  test('deleteNode removes single-line node', function() {
+    var t = '@startuml\nstart\n:A;\nstop\n@enduml';
+    var out = actMod.deleteNode(t, 3, 3);
+    expect(out).not.toContain(':A;');
+    expect(out).toContain('start');
+    expect(out).toContain('stop');
+  });
+  test('deleteNode removes block (line range)', function() {
+    var t = '@startuml\nif (a) then\n:A;\nendif\n@enduml';
+    var out = actMod.deleteNode(t, 2, 4);
+    expect(out).not.toContain('if (a)');
+    expect(out).not.toContain('endif');
+  });
+});
+
 if (prevWindow !== undefined) global.window = prevWindow;
 if (prevDocument !== undefined) global.document = prevDocument;
 depPaths.forEach(function(p) { try { delete require.cache[require.resolve(p)]; } catch (e) {} });
