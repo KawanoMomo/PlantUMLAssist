@@ -1119,7 +1119,7 @@ window.MA.modules.plantumlActivity = (function() {
     });
   }
 
-  function getTemplate() {
+  function template() {
     return '@startuml\nstart\n:Hello world;\nstop\n@enduml';
   }
 
@@ -1128,7 +1128,7 @@ window.MA.modules.plantumlActivity = (function() {
     parse: parse,
     buildOverlay: buildOverlay,
     renderProps: renderProps,
-    getTemplate: getTemplate,
+    template: template,
     fmtAction: fmtAction,
     fmtIf: fmtIf,
     fmtElseif: fmtElseif,
