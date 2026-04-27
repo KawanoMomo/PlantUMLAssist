@@ -78,6 +78,55 @@ describe('activity parser: action', function() {
   });
 });
 
+describe('activity parser: if/elseif/else/endif', function() {
+  test('parses simple if/else', function() {
+    var t = '@startuml\nstart\nif (a?) then (yes)\n:A;\nelse (no)\n:B;\nendif\nstop\n@enduml';
+    var r = actMod.parse(t);
+    var ifNode = r.nodes.find(function(n) { return n.kind === 'if'; });
+    expect(ifNode).toBeDefined();
+    expect(ifNode.condition).toBe('a?');
+    expect(ifNode.branches.length).toBe(2);
+    expect(ifNode.branches[0].kind).toBe('then');
+    expect(ifNode.branches[0].label).toBe('yes');
+    expect(ifNode.branches[0].body.length).toBe(1);
+    expect(ifNode.branches[0].body[0].text).toBe('A');
+    expect(ifNode.branches[1].kind).toBe('else');
+    expect(ifNode.branches[1].label).toBe('no');
+  });
+  test('parses if without else', function() {
+    var t = '@startuml\nif (a?) then\n:A;\nendif\n@enduml';
+    var r = actMod.parse(t);
+    var ifNode = r.nodes[0];
+    expect(ifNode.kind).toBe('if');
+    expect(ifNode.branches.length).toBe(1);
+    expect(ifNode.branches[0].kind).toBe('then');
+    expect(ifNode.branches[0].label).toBe('yes');  // default label
+  });
+  test('parses if with elseif', function() {
+    var t = '@startuml\nif (a?) then (y)\n:A;\nelseif (b?) then (y)\n:B;\nelse (n)\n:C;\nendif\n@enduml';
+    var r = actMod.parse(t);
+    var ifNode = r.nodes[0];
+    expect(ifNode.branches.length).toBe(3);
+    expect(ifNode.branches[1].kind).toBe('elseif');
+    expect(ifNode.branches[1].condition).toBe('b?');
+    expect(ifNode.branches[1].label).toBe('y');
+  });
+  test('parses nested if (depth 2)', function() {
+    var t = '@startuml\nif (a?) then (y)\n  if (b?) then (y)\n    :B;\n  endif\nendif\n@enduml';
+    var r = actMod.parse(t);
+    var outer = r.nodes[0];
+    expect(outer.kind).toBe('if');
+    expect(outer.branches[0].body[0].kind).toBe('if');
+    expect(outer.branches[0].body[0].branches[0].body[0].text).toBe('B');
+  });
+  test('endif endLine is set on outer if', function() {
+    var t = '@startuml\nif (a?) then\n:A;\nendif\n@enduml';
+    var r = actMod.parse(t);
+    expect(r.nodes[0].line).toBe(2);
+    expect(r.nodes[0].endLine).toBe(4);
+  });
+});
+
 if (prevWindow !== undefined) global.window = prevWindow;
 if (prevDocument !== undefined) global.document = prevDocument;
 depPaths.forEach(function(p) { try { delete require.cache[require.resolve(p)]; } catch (e) {} });
