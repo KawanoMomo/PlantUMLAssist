@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.0] - 2026-04-27
+
+### Added
+- **Activity Diagram** — Tier1 ロードマップの 5 番目の図形 (`src/modules/activity.js`)
+- 6 node kinds: start / stop / end / action / decision (if/while/repeat) / fork
+- 制御構造 4 種: if/elseif/else/endif、while/endwhile、repeat/repeat while、fork/fork again/end fork
+- Swimlane (`|name|`、color 部分は v0.7.0 で捨てる)
+- Note (`note right` / `note left`、1行 + 複数行、action attachment)
+- Legacy parse-only (`(*) -->` syntax → 新記法 normalize)
+- ADR-109: Activity canonical DSL form (新記法 primary)
+- Property panel: 4 layouts (action / control / swimlane / note) + tail-add 9 kinds
+- Overlay-driven (shape signature classification: rect/polygon/ellipse)
+- E2E: activity.spec.js (9 tests)
+
+### Changed
+- `src/core/parser-utils.js` `detectDiagramType` に Activity 判定追加 (priority: Activity > Class > Component)
+
+### Notes
+- 設計詳細: `docs/superpowers/specs/2026-04-27-activity-design.md`
+- 実装計画: `docs/superpowers/plans/2026-04-27-activity-v0.7.0.md`
+- v0.7.1 へ繰越: detach/kill, rake, connector, partition reuse, swimlane color, drag-to-reorder
+
 ## [0.6.1] - 2026-04-27
 
 ### Added
