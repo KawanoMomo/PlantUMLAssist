@@ -196,6 +196,51 @@ window.MA.modules.plantumlState = (function() {
     return out;
   }
 
+  var insertBeforeEnd = window.MA.dslUpdater.insertBeforeEnd;
+
+  function addState(text, id, label, stereotype) {
+    return insertBeforeEnd(text, fmtState(id, label || id, stereotype));
+  }
+  function addCompositeState(text, id) {
+    var out = insertBeforeEnd(text, 'state ' + id + ' {');
+    out = insertBeforeEnd(out, '}');
+    return out;
+  }
+  function addTransition(text, from, to, trigger, guard, action) {
+    return insertBeforeEnd(text, fmtTransition(from, to, trigger, guard, action));
+  }
+  function addNote(text, targetId, position, noteText) {
+    var formatted = fmtNote(position || 'right', targetId, noteText || '');
+    if (Array.isArray(formatted)) {
+      var out = text;
+      formatted.forEach(function(l) { out = insertBeforeEnd(out, l); });
+      return out;
+    }
+    return insertBeforeEnd(text, formatted);
+  }
+  function addStateAtLine(text, lineNum, position, id, stereotype) {
+    var lines = text.split('\n');
+    var targetIdx = position === 'before' ? lineNum - 1 : lineNum;
+    if (targetIdx < 0) targetIdx = 0;
+    if (targetIdx > lines.length) targetIdx = lines.length;
+    var indentSrc = lines[Math.min(targetIdx, lines.length - 1)] || lines[Math.max(0, targetIdx - 1)] || '';
+    var indent = (indentSrc.match(/^(\s*)/) || ['', ''])[1];
+    var newLine = indent + fmtState(id, id, stereotype || null);
+    lines.splice(targetIdx, 0, newLine);
+    return lines.join('\n');
+  }
+  function addTransitionAtLine(text, lineNum, position, from, to, trigger, guard, action) {
+    var lines = text.split('\n');
+    var targetIdx = position === 'before' ? lineNum - 1 : lineNum;
+    if (targetIdx < 0) targetIdx = 0;
+    if (targetIdx > lines.length) targetIdx = lines.length;
+    var indentSrc = lines[Math.min(targetIdx, lines.length - 1)] || '';
+    var indent = (indentSrc.match(/^(\s*)/) || ['', ''])[1];
+    var newLine = indent + fmtTransition(from, to, trigger, guard, action);
+    lines.splice(targetIdx, 0, newLine);
+    return lines.join('\n');
+  }
+
   function buildOverlay(svgEl, parsedData, overlayEl) {
     // Phase B Task 12 で実装
   }
@@ -215,6 +260,12 @@ window.MA.modules.plantumlState = (function() {
     fmtState: fmtState,
     fmtTransition: fmtTransition,
     fmtNote: fmtNote,
+    addState: addState,
+    addCompositeState: addCompositeState,
+    addTransition: addTransition,
+    addNote: addNote,
+    addStateAtLine: addStateAtLine,
+    addTransitionAtLine: addTransitionAtLine,
     buildOverlay: buildOverlay,
     renderProps: renderProps,
     template: template,

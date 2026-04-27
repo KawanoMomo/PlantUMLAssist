@@ -53,6 +53,41 @@ describe('state formatters', function() {
   });
 });
 
+describe('state add ops', function() {
+  test('addState appends bare state', function() {
+    var t = '@startuml\n@enduml';
+    var out = stMod.addState(t, 'A', 'A', null);
+    expect(out).toContain('state A');
+  });
+  test('addState with stereotype', function() {
+    var t = '@startuml\n@enduml';
+    var out = stMod.addState(t, 'X', 'X', 'choice');
+    expect(out).toContain('state X <<choice>>');
+  });
+  test('addCompositeState appends state X { } skeleton', function() {
+    var t = '@startuml\n@enduml';
+    var out = stMod.addCompositeState(t, 'Outer');
+    expect(out).toContain('state Outer {');
+    expect(out).toContain('}');
+  });
+  test('addTransition', function() {
+    var t = '@startuml\nstate A\nstate B\n@enduml';
+    var out = stMod.addTransition(t, 'A', 'B', 'click', null, null);
+    expect(out).toContain('A --> B : click');
+  });
+  test('addNote', function() {
+    var t = '@startuml\nstate A\n@enduml';
+    var out = stMod.addNote(t, 'A', 'right', 'tip');
+    expect(out).toContain('note right of A : tip');
+  });
+  test('addStateAtLine inserts before specified line', function() {
+    var t = '@startuml\nstate A\nstate B\n@enduml';
+    var out = stMod.addStateAtLine(t, 3, 'before', 'NEW', null);
+    var ls = out.split('\n');
+    expect(ls[2]).toBe('state NEW');
+  });
+});
+
 if (prevWindow !== undefined) global.window = prevWindow;
 if (prevDocument !== undefined) global.document = prevDocument;
 depPaths.forEach(function(p) { try { delete require.cache[require.resolve(p)]; } catch (e) {} });
