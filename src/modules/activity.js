@@ -388,6 +388,37 @@ window.MA.modules.plantumlActivity = (function() {
     return result;
   }
 
+  function fmtAction(text) {
+    return ':' + (text || '') + ';';
+  }
+  function fmtIf(condition, thenLabel) {
+    return 'if (' + condition + ') then (' + (thenLabel || 'yes') + ')';
+  }
+  function fmtElseif(condition, thenLabel) {
+    return 'elseif (' + condition + ') then (' + (thenLabel || 'yes') + ')';
+  }
+  function fmtElse(label) {
+    return 'else (' + (label || 'no') + ')';
+  }
+  function fmtWhile(condition, label) {
+    return 'while (' + condition + ') is (' + (label || 'yes') + ')';
+  }
+  function fmtRepeatWhile(condition, label) {
+    return 'repeat while (' + condition + ') is (' + (label || 'yes') + ')';
+  }
+  function fmtSwimlane(label) {
+    return '|' + label + '|';
+  }
+  function fmtNote(position, text) {
+    var pos = (position || 'right').toLowerCase();
+    if (typeof text !== 'string') text = '';
+    if (text.indexOf('\n') < 0) return 'note ' + pos + ' : ' + text;
+    var out = ['note ' + pos];
+    text.split('\n').forEach(function(l) { out.push(l); });
+    out.push('end note');
+    return out;
+  }
+
   function buildOverlay(svgEl, parsedData, overlayEl) {
     // Phase B で実装
   }
@@ -407,6 +438,14 @@ window.MA.modules.plantumlActivity = (function() {
     buildOverlay: buildOverlay,
     renderProps: renderProps,
     getTemplate: getTemplate,
+    fmtAction: fmtAction,
+    fmtIf: fmtIf,
+    fmtElseif: fmtElseif,
+    fmtElse: fmtElse,
+    fmtWhile: fmtWhile,
+    fmtRepeatWhile: fmtRepeatWhile,
+    fmtSwimlane: fmtSwimlane,
+    fmtNote: fmtNote,
     capabilities: {
       overlaySelection: true,
       hoverInsert: false,
