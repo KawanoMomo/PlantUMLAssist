@@ -376,6 +376,19 @@ window.MA.modules.plantumlClass = (function() {
   function fmtPackage(label) { return 'package "' + label + '" {'; }
   function fmtNamespace(label) { return 'namespace ' + label + ' {'; }
 
+  function fmtNote(position, targetId, text) {
+    var pos = (position || 'left').toLowerCase();
+    if (typeof text !== 'string') text = '';
+    if (text.indexOf('\n') < 0) {
+      return 'note ' + pos + ' of ' + targetId + ' : ' + text;
+    }
+    var bodyLines = text.split('\n');
+    var out = ['note ' + pos + ' of ' + targetId];
+    bodyLines.forEach(function(l) { out.push(l); });
+    out.push('end note');
+    return out;
+  }
+
   var insertBeforeEnd = window.MA.dslUpdater.insertBeforeEnd;
 
   function addClass(text, id, label, stereotype, generics) {
@@ -1232,6 +1245,7 @@ window.MA.modules.plantumlClass = (function() {
     fmtEnumValue: fmtEnumValue,
     fmtPackage: fmtPackage,
     fmtNamespace: fmtNamespace,
+    fmtNote: fmtNote,
     addClass: addClass,
     addInterface: addInterface,
     addAbstract: addAbstract,

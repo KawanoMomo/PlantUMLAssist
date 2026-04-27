@@ -134,6 +134,25 @@ describe('class member operations', function() {
   });
 });
 
+describe('class fmtNote', function() {
+  test('fmtNote 1-line for short single-line text', function() {
+    var line = clMod.fmtNote('left', 'Foo', 'short tip');
+    expect(line).toBe('note left of Foo : short tip');
+  });
+  test('fmtNote multi-line block for text with newline', function() {
+    var lines = clMod.fmtNote('right', 'Bar', 'first\nsecond');
+    expect(lines).toEqual(['note right of Bar', 'first', 'second', 'end note']);
+  });
+  test('fmtNote 1-line preserves spaces in text', function() {
+    var line = clMod.fmtNote('top', 'Foo', 'a b  c');
+    expect(line).toBe('note top of Foo : a b  c');
+  });
+  test('fmtNote multi-line preserves blank lines', function() {
+    var lines = clMod.fmtNote('left', 'Foo', 'a\n\nb');
+    expect(lines).toEqual(['note left of Foo', 'a', '', 'b', 'end note']);
+  });
+});
+
 describe('class line ops', function() {
   test('deleteLine removes class declaration', function() {
     var t = '@startuml\nclass Foo\n@enduml';
