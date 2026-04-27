@@ -43,6 +43,16 @@ window.MA.parserUtils = (function() {
       if (/\s(->|-->|->>|-->>|<-|<--|<<-|<<--)\s/.test(t)) hasMessageArrow = true;
     }
 
+    // Activity: start keyword + action `:` syntax + control keywords
+    // Disambiguate from class/component by absence of those keywords.
+    var hasActivityStart = /^\s*start\s*$/m.test(text);
+    var hasAction = /^\s*:[^:]+;\s*$/m.test(text);
+    var hasActivityKw2 = /^\s*(endif|endwhile|end\s+fork|fork|while|repeat)\s*(\(|$)/m.test(text);
+    var hasSwimlane = /^\s*\|[^|]+\|\s*$/m.test(text);
+    if ((hasActivityStart || hasAction) && (hasActivityKw2 || hasAction || hasActivityStart || hasSwimlane)) {
+      if (!hasClassKw && !hasComponentKw) return 'plantuml-activity';
+    }
+
     // Priority: most-specific keywords first
     // Component takes priority over Class because Component diagrams legally
     // contain `interface` (which would otherwise match hasClassKw).
