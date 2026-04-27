@@ -189,6 +189,25 @@ describe('activity parser: fork', function() {
   });
 });
 
+describe('activity parser: swimlane', function() {
+  test('parses swimlane and assigns swimlaneId to following nodes', function() {
+    var t = '@startuml\nstart\n|Frontend|\n:UI;\n|Backend|\n:API;\nstop\n@enduml';
+    var r = actMod.parse(t);
+    expect(r.swimlanes.length).toBe(2);
+    expect(r.swimlanes[0].label).toBe('Frontend');
+    expect(r.swimlanes[1].label).toBe('Backend');
+    var uiNode = r.nodes.find(function(n) { return n.kind === 'action' && n.text === 'UI'; });
+    var apiNode = r.nodes.find(function(n) { return n.kind === 'action' && n.text === 'API'; });
+    expect(uiNode.swimlaneId).toBe(r.swimlanes[0].id);
+    expect(apiNode.swimlaneId).toBe(r.swimlanes[1].id);
+  });
+  test('strips |color|name| color part', function() {
+    var t = '@startuml\n|#blue|Frontend|\n:UI;\n@enduml';
+    var r = actMod.parse(t);
+    expect(r.swimlanes[0].label).toBe('Frontend');
+  });
+});
+
 if (prevWindow !== undefined) global.window = prevWindow;
 if (prevDocument !== undefined) global.document = prevDocument;
 depPaths.forEach(function(p) { try { delete require.cache[require.resolve(p)]; } catch (e) {} });

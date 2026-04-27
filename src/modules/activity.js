@@ -27,9 +27,14 @@ window.MA.modules.plantumlActivity = (function() {
   var FORK_AGAIN_RE = /^fork\s+again\s*$/i;
   var END_FORK_RE = /^end\s+fork\s*$/i;
 
+  var SWIMLANE_RE = /^\|(?:#[^|]+\|)?\s*([^|]+?)\s*\|$/;
+
   function _newId(state) { return '__a_' + (state.counter++); }
 
   function _appendNode(state, node) {
+    if (node.swimlaneId === null && state.currentSwimlaneId) {
+      node.swimlaneId = state.currentSwimlaneId;
+    }
     var top = state.stack[state.stack.length - 1];
     top.target.push(node);
   }
@@ -45,6 +50,7 @@ window.MA.modules.plantumlActivity = (function() {
     var lines = text.split('\n');
     var state = {
       counter: 0,
+      currentSwimlaneId: null,
       // Stack frames: { type: 'root'|'if-node'|'if-branch', target: array<Node>, ifNode?, branch? }
       stack: [{ type: 'root', target: result.nodes }],
     };
@@ -82,6 +88,15 @@ window.MA.modules.plantumlActivity = (function() {
       if (RP.isEndUml(trimmed)) continue;
       var tm = trimmed.match(/^title\s+(.+)$/);
       if (tm) { result.meta.title = tm[1].trim(); continue; }
+
+      // Swimlane: |name| or |#color|name|
+      var swimMatch = trimmed.match(SWIMLANE_RE);
+      if (swimMatch) {
+        var swimId = '__sw_' + result.swimlanes.length;
+        result.swimlanes.push({ id: swimId, label: swimMatch[1].trim(), line: lineNum, endLine: lineNum });
+        state.currentSwimlaneId = swimId;
+        continue;
+      }
 
       // ENDWHILE — pop matching while frame
       if (ENDWHILE_RE.test(trimmed)) {
