@@ -499,8 +499,124 @@ window.MA.modules.plantumlState = (function() {
   }
 
   function renderProps(selData, parsedData, propsEl, ctx) {
-    // Phase B Task 13+ で実装
-    if (propsEl) propsEl.innerHTML = '<div style="font-size:11px;color:var(--text-secondary);">State Diagram (wip)</div>';
+    if (!propsEl) return;
+    if (!selData || selData.length === 0) {
+      _renderNoSelection(parsedData, propsEl, ctx);
+      return;
+    }
+    if (selData.length === 1) {
+      var sel = selData[0];
+      if (sel.type === 'state') return _renderStateEdit(sel, parsedData, propsEl, ctx);
+      if (sel.type === 'transition') return _renderTransitionEdit(sel, parsedData, propsEl, ctx);
+      if (sel.type === 'note') return _renderNoteEdit(sel, parsedData, propsEl, ctx);
+    }
+    propsEl.innerHTML = '<div style="font-size:11px;color:var(--text-secondary);">複数選択は未対応 (State)</div>';
+  }
+
+  function _renderNoSelection(parsedData, propsEl, ctx) {
+    var P = window.MA.properties;
+    var allStates = parsedData.states || [];
+    var stateOpts = allStates.map(function(s) { return { value: s.id, label: s.label || s.id }; });
+    if (stateOpts.length === 0) stateOpts = [{ value: '', label: '（state なし）' }];
+    var stateOptsWithPseudo = [{ value: '[*]', label: '[*] (initial/final)' }].concat(stateOpts);
+
+    var html =
+      '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">State Diagram</div>' +
+      '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">末尾に追加</label>' +
+        P.selectFieldHtml('種類', 'st-tail-kind', [
+          { value: 'state', label: 'State', selected: true },
+          { value: 'composite', label: 'Composite State' },
+          { value: 'transition', label: 'Transition' },
+          { value: 'note', label: 'Note' }
+        ]) +
+        '<div id="st-tail-detail" style="margin-top:6px;"></div>' +
+      '</div>';
+    propsEl.innerHTML = html;
+
+    var renderTailDetail = function() {
+      var kind = document.getElementById('st-tail-kind').value;
+      var detailEl = document.getElementById('st-tail-detail');
+      var html2 = '';
+      if (kind === 'state') {
+        html2 =
+          P.fieldHtml('ID', 'st-tail-id', '', '例: Idle') +
+          P.selectFieldHtml('Stereotype', 'st-tail-stereo', [
+            { value: '', label: '(none)', selected: true },
+            { value: 'choice', label: 'choice' },
+            { value: 'history', label: 'history' },
+            { value: 'historyDeep', label: 'historyDeep' }
+          ]) +
+          P.primaryButtonHtml('st-tail-add', '+ State 追加');
+      } else if (kind === 'composite') {
+        html2 =
+          P.fieldHtml('ID', 'st-tail-id', '', '例: Outer') +
+          P.primaryButtonHtml('st-tail-add', '+ Composite 追加');
+      } else if (kind === 'transition') {
+        html2 =
+          P.selectFieldHtml('From', 'st-tail-from', stateOptsWithPseudo) +
+          P.selectFieldHtml('To', 'st-tail-to', stateOptsWithPseudo) +
+          P.fieldHtml('Trigger', 'st-tail-trig', '') +
+          P.fieldHtml('Guard', 'st-tail-guard', '') +
+          P.fieldHtml('Action', 'st-tail-act', '') +
+          P.primaryButtonHtml('st-tail-add', '+ Transition 追加');
+      } else if (kind === 'note') {
+        html2 =
+          P.selectFieldHtml('Target', 'st-tail-target', stateOpts) +
+          P.selectFieldHtml('Position', 'st-tail-pos', [
+            { value: 'right', label: 'Right', selected: true },
+            { value: 'left', label: 'Left' }
+          ]) +
+          '<div style="margin-bottom:6px;"><label style="display:block;font-size:10px;color:var(--text-secondary);">Text</label><textarea id="st-tail-ntext" style="width:100%;min-height:50px;"></textarea></div>' +
+          P.primaryButtonHtml('st-tail-add', '+ Note 追加');
+      }
+      detailEl.innerHTML = html2;
+
+      P.bindEvent('st-tail-add', 'click', function() {
+        var t = ctx.getMmdText();
+        var k = document.getElementById('st-tail-kind').value;
+        var out = t;
+        if (k === 'state') {
+          var id = document.getElementById('st-tail-id').value.trim();
+          if (!id) { alert('ID 必須'); return; }
+          var st = document.getElementById('st-tail-stereo').value || null;
+          out = addState(t, id, id, st);
+        } else if (k === 'composite') {
+          var cid = document.getElementById('st-tail-id').value.trim();
+          if (!cid) { alert('ID 必須'); return; }
+          out = addCompositeState(t, cid);
+        } else if (k === 'transition') {
+          var fr = document.getElementById('st-tail-from').value;
+          var to = document.getElementById('st-tail-to').value;
+          out = addTransition(t, fr, to,
+            document.getElementById('st-tail-trig').value || null,
+            document.getElementById('st-tail-guard').value || null,
+            document.getElementById('st-tail-act').value || null);
+        } else if (k === 'note') {
+          var tg = document.getElementById('st-tail-target').value;
+          if (!tg) { alert('Target 必須'); return; }
+          out = addNote(t, tg, document.getElementById('st-tail-pos').value, document.getElementById('st-tail-ntext').value);
+        }
+        if (out !== t) {
+          window.MA.history.pushHistory();
+          ctx.setMmdText(out);
+          ctx.onUpdate();
+        }
+      });
+    };
+    P.bindEvent('st-tail-kind', 'change', renderTailDetail);
+    renderTailDetail();
+  }
+
+  // Stubs for next tasks
+  function _renderStateEdit(sel, parsedData, propsEl, ctx) {
+    propsEl.innerHTML = '<div>State edit (Task 12)</div>';
+  }
+  function _renderTransitionEdit(sel, parsedData, propsEl, ctx) {
+    propsEl.innerHTML = '<div>Transition edit (Task 12)</div>';
+  }
+  function _renderNoteEdit(sel, parsedData, propsEl, ctx) {
+    propsEl.innerHTML = '<div>Note edit (Task 13)</div>';
   }
 
   function template() {
