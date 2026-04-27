@@ -23,6 +23,10 @@ window.MA.modules.plantumlActivity = (function() {
   var REPEAT_OPEN_RE = /^repeat\s*$/i;
   var REPEAT_WHILE_RE = /^repeat\s+while\s*\(([^)]*)\)\s*(?:is\s*\(([^)]*)\))?\s*$/i;
 
+  var FORK_OPEN_RE = /^fork\s*$/i;
+  var FORK_AGAIN_RE = /^fork\s+again\s*$/i;
+  var END_FORK_RE = /^end\s+fork\s*$/i;
+
   function _newId(state) { return '__a_' + (state.counter++); }
 
   function _appendNode(state, node) {
@@ -161,6 +165,49 @@ window.MA.modules.plantumlActivity = (function() {
         };
         _appendNode(state, repeatNode);
         state.stack.push({ type: 'repeat-node', repeatNode: repeatNode, target: repeatNode.body });
+        continue;
+      }
+
+      // FORK — end fork (must check before fork again since 'end fork' contains 'fork')
+      if (END_FORK_RE.test(trimmed)) {
+        // Close current branch + fork frame
+        while (state.stack.length > 1 && state.stack[state.stack.length - 1].type === 'fork-branch') {
+          var fbf = state.stack.pop();
+          fbf.branch.endLine = lineNum - 1;
+        }
+        if (state.stack.length > 1 && state.stack[state.stack.length - 1].type === 'fork-node') {
+          var ff = state.stack.pop();
+          ff.forkNode.endLine = lineNum;
+        }
+        continue;
+      }
+      if (FORK_AGAIN_RE.test(trimmed)) {
+        // Close current branch, open new branch
+        if (state.stack.length > 1 && state.stack[state.stack.length - 1].type === 'fork-branch') {
+          var prevFb = state.stack.pop();
+          prevFb.branch.endLine = lineNum - 1;
+        }
+        var fnFrame = state.stack[state.stack.length - 1];
+        if (!fnFrame || fnFrame.type !== 'fork-node') continue;
+        var newFb = { body: [], line: lineNum, endLine: lineNum };
+        fnFrame.forkNode.branches.push(newFb);
+        state.stack.push({ type: 'fork-branch', target: newFb.body, branch: newFb });
+        continue;
+      }
+      if (FORK_OPEN_RE.test(trimmed)) {
+        var forkNode = {
+          kind: 'fork',
+          id: _newId(state),
+          branches: [],
+          line: lineNum,
+          endLine: lineNum,
+          swimlaneId: null,
+        };
+        var fb = { body: [], line: lineNum, endLine: lineNum };
+        forkNode.branches.push(fb);
+        _appendNode(state, forkNode);
+        state.stack.push({ type: 'fork-node', forkNode: forkNode });
+        state.stack.push({ type: 'fork-branch', target: fb.body, branch: fb });
         continue;
       }
 

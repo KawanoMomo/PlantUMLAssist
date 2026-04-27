@@ -167,6 +167,28 @@ describe('activity parser: repeat', function() {
   });
 });
 
+describe('activity parser: fork', function() {
+  test('parses fork with 2 branches', function() {
+    var t = '@startuml\nfork\n:A;\nfork again\n:B;\nend fork\n@enduml';
+    var r = actMod.parse(t);
+    var f = r.nodes[0];
+    expect(f.kind).toBe('fork');
+    expect(f.branches.length).toBe(2);
+    expect(f.branches[0].body[0].text).toBe('A');
+    expect(f.branches[1].body[0].text).toBe('B');
+  });
+  test('parses fork with 3 branches', function() {
+    var t = '@startuml\nfork\n:A;\nfork again\n:B;\nfork again\n:C;\nend fork\n@enduml';
+    var r = actMod.parse(t);
+    expect(r.nodes[0].branches.length).toBe(3);
+  });
+  test('parses fork without explicit fork again (1 branch)', function() {
+    var t = '@startuml\nfork\n:A;\nend fork\n@enduml';
+    var r = actMod.parse(t);
+    expect(r.nodes[0].branches.length).toBe(1);
+  });
+});
+
 if (prevWindow !== undefined) global.window = prevWindow;
 if (prevDocument !== undefined) global.document = prevDocument;
 depPaths.forEach(function(p) { try { delete require.cache[require.resolve(p)]; } catch (e) {} });
