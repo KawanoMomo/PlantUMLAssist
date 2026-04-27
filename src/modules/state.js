@@ -15,6 +15,16 @@ window.MA.modules.plantumlState = (function() {
     '^(\\[\\*\\]|' + ID + ')\\s*-->\\s*(\\[\\*\\]|' + ID + ')(?:\\s*:\\s*(.*))?\\s*$'
   );
 
+  var NOTE_INLINE_RE = new RegExp(
+    '^note\\s+(left|right)\\s+of\\s+(' + ID + ')\\s*:\\s*(.*)$',
+    'i'
+  );
+  var NOTE_BLOCK_OPEN_RE = new RegExp(
+    '^note\\s+(left|right)\\s+of\\s+(' + ID + ')\\s*$',
+    'i'
+  );
+  var END_NOTE_RE = /^end\s+note\s*$/i;
+
   function _parseTransitionLabel(label) {
     if (!label) return { trigger: null, guard: null, action: null };
     var trimmed = label.trim();
@@ -49,10 +59,31 @@ window.MA.modules.plantumlState = (function() {
     if (!text || !text.trim()) return result;
     var lines = text.split('\n');
     var openCompositeStack = [];
+    var openNote = null;
 
     for (var i = 0; i < lines.length; i++) {
       var lineNum = i + 1;
-      var trimmed = lines[i].trim();
+      var rawLine = lines[i];
+      var trimmed = rawLine.trim();
+
+      if (openNote) {
+        if (END_NOTE_RE.test(trimmed)) {
+          result.notes.push({
+            kind: 'note',
+            id: '__n_' + result.notes.length,
+            position: openNote.position,
+            targetId: openNote.targetId,
+            text: openNote.bodyLines.join('\n'),
+            line: openNote.startLine,
+            endLine: lineNum,
+          });
+          openNote = null;
+          continue;
+        }
+        openNote.bodyLines.push(rawLine.replace(/^  /, ''));
+        continue;
+      }
+
       if (!trimmed || DU.isPlantumlComment(trimmed)) continue;
       if (RP.isStartUml(trimmed)) {
         if (result.meta.startUmlLine === null) result.meta.startUmlLine = lineNum;
@@ -110,6 +141,30 @@ window.MA.modules.plantumlState = (function() {
           action: parts.action,
           line: lineNum,
         });
+        continue;
+      }
+
+      var nim = trimmed.match(NOTE_INLINE_RE);
+      if (nim) {
+        result.notes.push({
+          kind: 'note',
+          id: '__n_' + result.notes.length,
+          position: nim[1].toLowerCase(),
+          targetId: nim[2],
+          text: nim[3],
+          line: lineNum,
+          endLine: lineNum,
+        });
+        continue;
+      }
+      var nbm = trimmed.match(NOTE_BLOCK_OPEN_RE);
+      if (nbm) {
+        openNote = {
+          startLine: lineNum,
+          position: nbm[1].toLowerCase(),
+          targetId: nbm[2],
+          bodyLines: [],
+        };
         continue;
       }
     }

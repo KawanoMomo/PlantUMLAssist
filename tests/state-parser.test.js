@@ -108,6 +108,28 @@ describe('state parser: stereotypes', function() {
   });
 });
 
+describe('state parser: notes', function() {
+  test('parses 1-line note', function() {
+    var t = '@startuml\nstate A\nnote right of A : my note\n@enduml';
+    var r = stMod.parse(t);
+    expect(r.notes.length).toBe(1);
+    expect(r.notes[0].position).toBe('right');
+    expect(r.notes[0].targetId).toBe('A');
+    expect(r.notes[0].text).toBe('my note');
+  });
+  test('parses multi-line note block', function() {
+    var t = '@startuml\nstate A\nnote left of A\n  line1\n  line2\nend note\n@enduml';
+    var r = stMod.parse(t);
+    expect(r.notes[0].text).toBe('line1\nline2');
+    expect(r.notes[0].endLine).toBe(6);
+  });
+  test('case insensitive note position', function() {
+    var t = '@startuml\nnote Right of A : x\n@enduml';
+    var r = stMod.parse(t);
+    expect(r.notes[0].position).toBe('right');
+  });
+});
+
 describe('state parser: composite', function() {
   test('parses composite state with inner state', function() {
     var t = '@startuml\nstate Outer {\n  state Inner\n}\n@enduml';
