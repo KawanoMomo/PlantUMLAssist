@@ -23,6 +23,7 @@ const sourceFiles = [
   'src/modules/usecase.js',
   'src/modules/component.js',
   'src/modules/class.js',
+  'src/modules/activity.js',
 ];
 
 let fns = {};

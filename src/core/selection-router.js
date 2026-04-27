@@ -8,11 +8,28 @@ window.MA.selectionRouter = (function() {
     var id = target.getAttribute('data-id');
     if (!type || !id) return null;
     var line = parseInt(target.getAttribute('data-line'), 10);
-    return { type: type, id: id, line: isNaN(line) ? null : line };
+    var item = { type: type, id: id, line: isNaN(line) ? null : line };
+    if (type === 'member') {
+      item.parentId = target.getAttribute('data-parent-id');
+      item.parentKind = target.getAttribute('data-parent-kind');
+      var mi = parseInt(target.getAttribute('data-member-index'), 10);
+      item.memberIndex = isNaN(mi) ? null : mi;
+      item.memberKind = target.getAttribute('data-member-kind');
+    }
+    return item;
   }
 
   function _isSameItem(a, b) {
     return a && b && a.type === b.type && a.id === b.id;
+  }
+
+  function _coerceMembersToParent(items) {
+    return items.map(function(it) {
+      if (it.type === 'member') {
+        return { type: it.parentKind || 'class', id: it.parentId };
+      }
+      return it;
+    });
   }
 
   function bind(overlayEl, opts) {
@@ -28,11 +45,23 @@ window.MA.selectionRouter = (function() {
 
       if (e.shiftKey) {
         var existing = current.filter(function(s) { return _isSameItem(s, item); });
+        var nextSelection;
         if (existing.length > 0) {
-          window.MA.selection.setSelected(current.filter(function(s) { return !_isSameItem(s, item); }));
+          nextSelection = current.filter(function(s) { return !_isSameItem(s, item); });
         } else {
-          window.MA.selection.setSelected(current.concat([item]));
+          nextSelection = current.concat([item]);
         }
+        // Coerce members to parent for multi-select connect compatibility
+        var coerced = _coerceMembersToParent(nextSelection);
+        // Dedup by type:id after coerce
+        var seen = {};
+        var deduped = coerced.filter(function(s) {
+          var k = s.type + ':' + s.id;
+          if (seen[k]) return false;
+          seen[k] = true;
+          return true;
+        });
+        window.MA.selection.setSelected(deduped);
       } else {
         if (current.length === 1 && _isSameItem(current[0], item)) {
           window.MA.selection.clearSelection();

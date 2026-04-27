@@ -217,6 +217,20 @@ Circle *-- Color
 - 内部クラス (class 内 class 定義)
 - Note on class
 
+### v0.6.1 — Class polish (Member click + Note on class)
+
+- **Member 個別 click**: SVG 上の attribute / method / enum-value 行を直接クリック → 該当 member の inline edit が auto-expand
+- **Note on class**: 1 行 / 複数行 directional note を property panel から作成・編集・削除。class 削除時に紐付く note も自動削除
+- **Activity v0.7.0 へ向けた API**: `extractMultiLineTextBBoxes` を `core/overlay-builder` に汎化、複数行 text の per-line bbox 取得を共通化
+
+### v0.7.0 — Activity Diagram (Tier1 #5)
+
+- **新記法 primary** (`start` / `:action;` / `if/while/repeat/fork`) + legacy parse-only
+- **制御構造**: if/elseif/else/endif、while/endwhile、repeat/repeat while、fork/fork again/end fork
+- **Swimlane** (`|name|`) + **Note** (`note right` / `note left`、1行+複数行)
+- **Overlay-driven** (action rect / decision diamond / start-stop ellipse / fork bar)
+- ADR-109: canonical form 確定
+
 ## Overlay-Driven Editing 共通操作 (v0.5.0)
 
 Sequence / UseCase / Component のすべてで以下が共通:

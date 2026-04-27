@@ -76,6 +76,32 @@ window.MA.overlayBuilder = (function() {
     return null;
   }
 
+  function extractMultiLineTextBBoxes(g, opts) {
+    if (!g) return [];
+    var mode = (opts && opts.mode) || 'text-per-line';
+    var nodes = mode === 'tspan-per-line'
+      ? g.querySelectorAll('text tspan')
+      : g.querySelectorAll('text');
+    var lines = [];
+    for (var i = 0; i < nodes.length; i++) {
+      var n = nodes[i];
+      var bb = null;
+      if (typeof n.getBBox === 'function') {
+        try { bb = n.getBBox(); } catch (e) { /* jsdom fallback */ }
+      }
+      if (!bb || (!bb.width && !bb.height)) {
+        bb = {
+          x: parseFloat(n.getAttribute('x')) || 0,
+          y: parseFloat(n.getAttribute('y')) || 0,
+          width: parseFloat(n.getAttribute('textLength')) || (n.textContent || '').length * 7,
+          height: 14,
+        };
+      }
+      lines.push({ text: (n.textContent || '').trim(), bbox: bb, lineIndex: i });
+    }
+    return lines;
+  }
+
   function matchByDataSourceLine(svgEl, items, selector, offset) {
     var groups = svgEl.querySelectorAll(selector);
     var byLine = {};
@@ -162,6 +188,7 @@ window.MA.overlayBuilder = (function() {
     dedupById: dedupById,
     extractBBox: extractBBox,
     extractEdgeBBox: extractEdgeBBox,
+    extractMultiLineTextBBoxes: extractMultiLineTextBBoxes,
     hitTestTopmost: hitTestTopmost,
     matchByDataSourceLine: matchByDataSourceLine,
     matchByOrder: matchByOrder,

@@ -2,6 +2,68 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.1] - 2026-04-27
+
+### Added
+- **Activity 途中挿入** — Sequence の hover-insert ガイドと同じ UX を Activity でも有効化:
+  - preview hover で「+ ここに挿入」ガイド表示
+  - 空白部分 click で modal 表示 (action text textarea)
+  - 確定で `:text;` を該当行の前/後に挿入 (indent 自動継承)
+- `addActionAtLine(text, lineNum, position, actionText)` — indent-preserving insertion API
+- `resolveInsertLine(overlayEl, y)` — Y 座標 → 最近接 node line/position
+- `showInsertForm(ctx, line, position, kind)` + HTML modal (`act-modal`)
+- `defaultInsertKind: 'action'` (sequence の 'message' に対する Activity の既定 kind)
+- E2E: hover guide 表示 + 空白 click → form → 挿入 (2 tests)
+
+### Changed
+- `src/app.js` insert click handler: hardcoded `window.MA.sequenceOverlay.resolveInsertLine`
+  を `currentModule.resolveInsertLine` 経由に refactor (sequence は fallback path で互換維持)
+- Activity capabilities: `hoverInsert: true`, `showInsertForm: true`
+
+### Notes
+- v0.7.0 で繰越となっていた iterative-workflow editing (途中挿入) を埋めるための polish スプリント
+- 設計詳細: 軽量 polish、別 spec 不要 (v0.7.0 spec § 9 で「v0.7.1+ 繰越」記載分の対応)
+
+## [0.7.0] - 2026-04-27
+
+### Added
+- **Activity Diagram** — Tier1 ロードマップの 5 番目の図形 (`src/modules/activity.js`)
+- 6 node kinds: start / stop / end / action / decision (if/while/repeat) / fork
+- 制御構造 4 種: if/elseif/else/endif、while/endwhile、repeat/repeat while、fork/fork again/end fork
+- Swimlane (`|name|`、color 部分は v0.7.0 で捨てる)
+- Note (`note right` / `note left`、1行 + 複数行、action attachment)
+- Legacy parse-only (`(*) -->` syntax → 新記法 normalize)
+- ADR-109: Activity canonical DSL form (新記法 primary)
+- Property panel: 4 layouts (action / control / swimlane / note) + tail-add 9 kinds
+- Overlay-driven (shape signature classification: rect/polygon/ellipse)
+- E2E: activity.spec.js (9 tests)
+
+### Changed
+- `src/core/parser-utils.js` `detectDiagramType` に Activity 判定追加 (priority: Activity > Class > Component)
+
+### Notes
+- 設計詳細: `docs/superpowers/specs/2026-04-27-activity-design.md`
+- 実装計画: `docs/superpowers/plans/2026-04-27-activity-v0.7.0.md`
+- v0.7.1 へ繰越: detach/kill, rake, connector, partition reuse, swimlane color, drag-to-reorder
+
+## [0.6.1] - 2026-04-27
+
+### Added
+- **Member 個別 SVG クリック選択** — class / interface / abstract / enum の attribute / method / enum-value 行を SVG で直接 click → property panel が自動 expand inline edit + auto-scroll
+- **Note on class** — 1行 + 複数行 directional note (`note (left|right|top|bottom) of NAME`) の parse / formatter / add / update / delete + class 削除時の cascade
+- `core/overlay-builder.js` `extractMultiLineTextBBoxes(g, opts)` API 追加 (Activity v0.7.0 と共有予定)
+- ADR-108: Note canonical DSL form
+- E2E: `class-v0.6.1.spec.js` (6 tests, member click + note)
+
+### Changed
+- `src/core/selection-router.js` shift+click 時に `member` type の selection を `parentClass` に coerce + dedup (multi-select connect 互換性のため)
+- `src/modules/class.js` `_renderElementEdit` に opts.focusMemberIndex 受付追加 (member 選択時の auto-expand 用)
+
+### Notes
+- v0.7.0 へ繰越: 内部クラス、floating note (`note "..." as N`) + link、note on relation、member の drag-to-reorder
+- 設計詳細: `docs/superpowers/specs/2026-04-27-class-v0.6.1-design.md`
+- 実装計画: `docs/superpowers/plans/2026-04-27-class-v0.6.1.md`
+
 ## [0.6.0] - 2026-04-26
 
 ### Added
