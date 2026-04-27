@@ -150,6 +150,23 @@ describe('activity parser: while/endwhile', function() {
   });
 });
 
+describe('activity parser: repeat', function() {
+  test('parses simple repeat', function() {
+    var t = '@startuml\nrepeat\n:body;\nrepeat while (cond?) is (yes)\n@enduml';
+    var r = actMod.parse(t);
+    var rep = r.nodes.find(function(n) { return n.kind === 'repeat'; });
+    expect(rep).toBeDefined();
+    expect(rep.condition).toBe('cond?');
+    expect(rep.label).toBe('yes');
+    expect(rep.body[0].text).toBe('body');
+  });
+  test('repeat without is label defaults to "yes"', function() {
+    var t = '@startuml\nrepeat\n:body;\nrepeat while (a)\n@enduml';
+    var r = actMod.parse(t);
+    expect(r.nodes[0].label).toBe('yes');
+  });
+});
+
 if (prevWindow !== undefined) global.window = prevWindow;
 if (prevDocument !== undefined) global.document = prevDocument;
 depPaths.forEach(function(p) { try { delete require.cache[require.resolve(p)]; } catch (e) {} });

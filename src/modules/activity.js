@@ -20,6 +20,9 @@ window.MA.modules.plantumlActivity = (function() {
   var WHILE_OPEN_RE = /^while\s*\(([^)]*)\)\s*(?:is\s*\(([^)]*)\))?\s*$/i;
   var ENDWHILE_RE = /^endwhile\s*$/i;
 
+  var REPEAT_OPEN_RE = /^repeat\s*$/i;
+  var REPEAT_WHILE_RE = /^repeat\s+while\s*\(([^)]*)\)\s*(?:is\s*\(([^)]*)\))?\s*$/i;
+
   function _newId(state) { return '__a_' + (state.counter++); }
 
   function _appendNode(state, node) {
@@ -131,6 +134,33 @@ window.MA.modules.plantumlActivity = (function() {
         }
         ifFrame2.ifNode.branches.push(newBranch);
         state.stack.push({ type: 'if-branch', target: newBranch.body, branch: newBranch });
+        continue;
+      }
+
+      // REPEAT WHILE — close repeat frame (must check before WHILE since string contains 'while')
+      var repWhileMatch = trimmed.match(REPEAT_WHILE_RE);
+      if (repWhileMatch) {
+        if (state.stack.length > 1 && state.stack[state.stack.length - 1].type === 'repeat-node') {
+          var rf = state.stack.pop();
+          rf.repeatNode.condition = repWhileMatch[1];
+          rf.repeatNode.label = repWhileMatch[2] || 'yes';
+          rf.repeatNode.endLine = lineNum;
+        }
+        continue;
+      }
+      if (REPEAT_OPEN_RE.test(trimmed)) {
+        var repeatNode = {
+          kind: 'repeat',
+          id: _newId(state),
+          condition: '',
+          label: 'yes',
+          body: [],
+          line: lineNum,
+          endLine: lineNum,
+          swimlaneId: null,
+        };
+        _appendNode(state, repeatNode);
+        state.stack.push({ type: 'repeat-node', repeatNode: repeatNode, target: repeatNode.body });
         continue;
       }
 
