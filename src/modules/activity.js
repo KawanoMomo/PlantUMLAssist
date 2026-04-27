@@ -33,6 +33,38 @@ window.MA.modules.plantumlActivity = (function() {
   var NOTE_BLOCK_OPEN_RE = /^note\s+(right|left)\s*$/i;
   var END_NOTE_RE = /^end\s+note\s*$/i;
 
+  var LEGACY_START_RE = /^\(\*\)\s*-->\s*:(.*);$/;
+  var LEGACY_TRANSITION_RE = /^:(.*?);\s*-->\s*:(.*?);$/;
+  var LEGACY_END_RE = /^:(.*?);\s*-->\s*\(\*\)$/;
+
+  function _normalizeLegacy(text) {
+    var lines = text.split('\n');
+    var out = [];
+    var seenStart = false;
+    for (var i = 0; i < lines.length; i++) {
+      var trimmed = lines[i].trim();
+      var m;
+      if ((m = trimmed.match(LEGACY_START_RE))) {
+        if (!seenStart) { out.push('start'); seenStart = true; }
+        out.push(':' + m[1] + ';');
+        continue;
+      }
+      if ((m = trimmed.match(LEGACY_END_RE))) {
+        out.push(':' + m[1] + ';');
+        out.push('end');
+        continue;
+      }
+      if ((m = trimmed.match(LEGACY_TRANSITION_RE))) {
+        // Both ends are actions; emit them in order (dedup later if same as previous)
+        out.push(':' + m[1] + ';');
+        out.push(':' + m[2] + ';');
+        continue;
+      }
+      out.push(lines[i]);  // pass through (preserve original indent)
+    }
+    return out.join('\n');
+  }
+
   function _newId(state) { return '__a_' + (state.counter++); }
 
   function _appendNode(state, node) {
@@ -45,6 +77,7 @@ window.MA.modules.plantumlActivity = (function() {
   }
 
   function parse(text) {
+    text = _normalizeLegacy(text || '');
     var result = {
       meta: { title: '', startUmlLine: null },
       nodes: [],

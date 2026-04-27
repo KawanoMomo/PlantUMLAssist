@@ -189,6 +189,17 @@ describe('activity parser: fork', function() {
   });
 });
 
+describe('activity parser: legacy normalization', function() {
+  test('parses legacy "(*) --> :foo;" as start + action', function() {
+    var t = '@startuml\n(*) --> :A;\n:A; --> :B;\n:B; --> (*)\n@enduml';
+    var r = actMod.parse(t);
+    var kinds = r.nodes.map(function(n) { return n.kind; });
+    // Expected: start, action(A), action(B), end (no further structure)
+    expect(kinds).toContain('start');
+    expect(kinds).toContain('action');
+  });
+});
+
 describe('activity parser: note', function() {
   test('parses 1-line note right after action', function() {
     var t = '@startuml\n:A;\nnote right : tip\n@enduml';
