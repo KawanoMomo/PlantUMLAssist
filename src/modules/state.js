@@ -241,6 +241,113 @@ window.MA.modules.plantumlState = (function() {
     return lines.join('\n');
   }
 
+  function updateState(text, lineNum, fields) {
+    var lines = text.split('\n');
+    var idx = lineNum - 1;
+    if (idx < 0 || idx >= lines.length) return text;
+    var trimmed = lines[idx].trim();
+    var m = trimmed.match(STATE_RE);
+    if (!m) return text;
+    var indent = (lines[idx].match(/^(\s*)/) || ['', ''])[1];
+    var hasBlock = !!m[6];
+    var id, label, stereotype, labelExplicit;
+    if (m[2] !== undefined) { id = m[2]; label = m[1]; labelExplicit = true; }
+    else { id = m[3]; label = m[4] !== undefined ? m[4] : m[3]; labelExplicit = m[4] !== undefined; }
+    stereotype = m[5] ? m[5].toLowerCase() : null;
+    if (fields.id != null) {
+      if (!labelExplicit && fields.label == null) label = fields.id;
+      id = fields.id;
+    }
+    if (fields.label != null) label = fields.label;
+    if (fields.stereotype !== undefined) stereotype = fields.stereotype;
+    var openBrace = hasBlock ? ' {' : '';
+    lines[idx] = indent + fmtState(id, label, stereotype) + openBrace;
+    return lines.join('\n');
+  }
+
+  function updateTransition(text, lineNum, fields) {
+    var lines = text.split('\n');
+    var idx = lineNum - 1;
+    if (idx < 0 || idx >= lines.length) return text;
+    var trimmed = lines[idx].trim();
+    var m = trimmed.match(TRANSITION_RE);
+    if (!m) return text;
+    var indent = (lines[idx].match(/^(\s*)/) || ['', ''])[1];
+    var from = m[1], to = m[2];
+    var lbl = m[3] ? m[3].trim() : null;
+    var parts = _parseTransitionLabel(lbl);
+    if (fields.from != null) from = fields.from;
+    if (fields.to != null) to = fields.to;
+    if (fields.trigger !== undefined) parts.trigger = fields.trigger;
+    if (fields.guard !== undefined) parts.guard = fields.guard;
+    if (fields.action !== undefined) parts.action = fields.action;
+    lines[idx] = indent + fmtTransition(from, to, parts.trigger, parts.guard, parts.action);
+    return lines.join('\n');
+  }
+
+  function updateNote(text, startLine, endLine, fields) {
+    var lines = text.split('\n');
+    var idx = startLine - 1;
+    var trimmed = lines[idx].trim();
+    var inlineM = trimmed.match(NOTE_INLINE_RE);
+    var blockM = trimmed.match(NOTE_BLOCK_OPEN_RE);
+    var current = null;
+    if (inlineM) {
+      current = { position: inlineM[1].toLowerCase(), targetId: inlineM[2], text: inlineM[3] };
+    } else if (blockM) {
+      var bodyLines = [];
+      for (var k = idx + 1; k <= endLine - 2; k++) bodyLines.push(lines[k].replace(/^  /, ''));
+      current = { position: blockM[1].toLowerCase(), targetId: blockM[2], text: bodyLines.join('\n') };
+    }
+    if (!current) return text;
+    var newPos = fields.position != null ? fields.position : current.position;
+    var newText = fields.text != null ? fields.text : current.text;
+    var formatted = fmtNote(newPos, current.targetId, newText);
+    var newLines = Array.isArray(formatted) ? formatted : [formatted];
+    var before = lines.slice(0, idx);
+    var after = lines.slice(endLine);
+    return before.concat(newLines).concat(after).join('\n');
+  }
+
+  function deleteNode(text, startLine, endLine) {
+    var lines = text.split('\n');
+    var startIdx = startLine - 1;
+    var endIdx = endLine - 1;
+    if (startIdx < 0 || startIdx >= lines.length) return text;
+    var before = lines.slice(0, startIdx);
+    var after = lines.slice(endIdx + 1);
+    return before.concat(after).join('\n');
+  }
+
+  function deleteStateWithRefs(text, stateId) {
+    var parsed = parse(text);
+    var elt = null;
+    for (var i = 0; i < parsed.states.length; i++) {
+      if (parsed.states[i].id === stateId) { elt = parsed.states[i]; break; }
+    }
+    if (!elt) return text;
+    var ranges = [];
+    ranges.push({ start: elt.line, end: elt.endLine && elt.endLine > elt.line ? elt.endLine : elt.line });
+    parsed.transitions.forEach(function(tr) {
+      if (tr.from === stateId || tr.to === stateId) {
+        ranges.push({ start: tr.line, end: tr.line });
+      }
+    });
+    parsed.notes.forEach(function(n) {
+      if (n.targetId === stateId) {
+        ranges.push({ start: n.line, end: n.endLine });
+      }
+    });
+    ranges.sort(function(a, b) { return b.start - a.start; });
+    var lines = text.split('\n');
+    ranges.forEach(function(r) {
+      var startIdx = r.start - 1;
+      var endIdx = r.end - 1;
+      lines.splice(startIdx, endIdx - startIdx + 1);
+    });
+    return lines.join('\n');
+  }
+
   function buildOverlay(svgEl, parsedData, overlayEl) {
     // Phase B Task 12 で実装
   }
@@ -266,6 +373,11 @@ window.MA.modules.plantumlState = (function() {
     addNote: addNote,
     addStateAtLine: addStateAtLine,
     addTransitionAtLine: addTransitionAtLine,
+    updateState: updateState,
+    updateTransition: updateTransition,
+    updateNote: updateNote,
+    deleteNode: deleteNode,
+    deleteStateWithRefs: deleteStateWithRefs,
     buildOverlay: buildOverlay,
     renderProps: renderProps,
     template: template,

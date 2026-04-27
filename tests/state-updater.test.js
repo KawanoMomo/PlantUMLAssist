@@ -88,6 +88,49 @@ describe('state add ops', function() {
   });
 });
 
+describe('state update/delete ops', function() {
+  test('updateState changes id', function() {
+    var t = '@startuml\nstate Old\n@enduml';
+    var out = stMod.updateState(t, 2, { id: 'New' });
+    expect(out).toContain('state New');
+  });
+  test('updateState changes stereotype', function() {
+    var t = '@startuml\nstate X\n@enduml';
+    var out = stMod.updateState(t, 2, { stereotype: 'choice' });
+    expect(out).toContain('state X <<choice>>');
+  });
+  test('updateTransition changes label', function() {
+    var t = '@startuml\nA --> B : old\n@enduml';
+    var out = stMod.updateTransition(t, 2, { trigger: 'new' });
+    expect(out).toContain('A --> B : new');
+  });
+  test('updateTransition swap from/to', function() {
+    var t = '@startuml\nA --> B\n@enduml';
+    var out = stMod.updateTransition(t, 2, { from: 'B', to: 'A' });
+    expect(out).toContain('B --> A');
+  });
+  test('updateNote', function() {
+    var t = '@startuml\nstate A\nnote right of A : old\n@enduml';
+    var out = stMod.updateNote(t, 3, 3, { position: 'left', text: 'new' });
+    expect(out).toContain('note left of A : new');
+  });
+  test('deleteNode removes single line', function() {
+    var t = '@startuml\nstate A\nstate B\n@enduml';
+    var out = stMod.deleteNode(t, 2, 2);
+    expect(out).not.toContain('state A');
+    expect(out).toContain('state B');
+  });
+  test('deleteStateWithRefs cascades incoming/outgoing transitions + notes', function() {
+    var t = '@startuml\nstate A\nstate B\nA --> B\nB --> A\nnote right of A : x\n@enduml';
+    var out = stMod.deleteStateWithRefs(t, 'A');
+    expect(out).not.toContain('state A');
+    expect(out).not.toContain('A --> B');
+    expect(out).not.toContain('B --> A');
+    expect(out).not.toContain('note right of A');
+    expect(out).toContain('state B');
+  });
+});
+
 if (prevWindow !== undefined) global.window = prevWindow;
 if (prevDocument !== undefined) global.document = prevDocument;
 depPaths.forEach(function(p) { try { delete require.cache[require.resolve(p)]; } catch (e) {} });
