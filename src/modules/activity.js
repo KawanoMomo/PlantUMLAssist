@@ -107,6 +107,7 @@ window.MA.modules.plantumlActivity = (function() {
   }
 
   return {
+    type: 'plantuml-activity',
     parse: parse,
     buildOverlay: buildOverlay,
     renderProps: renderProps,
