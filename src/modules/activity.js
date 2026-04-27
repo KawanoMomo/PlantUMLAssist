@@ -566,8 +566,131 @@ window.MA.modules.plantumlActivity = (function() {
     return before.concat(after).join('\n');
   }
 
+  var OB = window.MA.overlayBuilder;
+
+  function _flattenNodes(nodes, out) {
+    for (var i = 0; i < nodes.length; i++) {
+      var n = nodes[i];
+      out.push(n);
+      if (n.branches) {
+        for (var j = 0; j < n.branches.length; j++) {
+          var b = n.branches[j];
+          if (b.body) _flattenNodes(b.body, out);
+        }
+      }
+      if (n.body) _flattenNodes(n.body, out);
+    }
+    return out;
+  }
+
+  function _classifyShape(el) {
+    var tag = el.tagName.toLowerCase();
+    if (tag === 'rect') {
+      var rx = parseFloat(el.getAttribute('rx')) || 0;
+      var h = parseFloat(el.getAttribute('height')) || 0;
+      if (rx > 0) return 'action';
+      if (h > 0 && h < 12) return 'fork-bar';
+      return null;
+    }
+    if (tag === 'polygon') {
+      var pts = (el.getAttribute('points') || '').trim().split(/\s+/);
+      if (pts.length === 4) return 'decision';
+      if (pts.length === 5) return 'note';
+    }
+    if (tag === 'ellipse') {
+      // Single ellipse (filled) vs nested = stop
+      var fill = el.getAttribute('fill') || '';
+      if (fill.toLowerCase() === '#000' || fill === 'black') return 'start';
+      return 'stop-or-end';
+    }
+    return null;
+  }
+
+  function _polygonBBox(el) {
+    var pts = (el.getAttribute('points') || '').trim().split(/\s+/);
+    var xs = [], ys = [];
+    for (var i = 0; i < pts.length; i++) {
+      var pair = pts[i].split(',');
+      var x = parseFloat(pair[0]); var y = parseFloat(pair[1]);
+      if (!isNaN(x)) xs.push(x);
+      if (!isNaN(y)) ys.push(y);
+    }
+    if (xs.length === 0) return null;
+    var minX = Math.min.apply(null, xs);
+    var minY = Math.min.apply(null, ys);
+    var maxX = Math.max.apply(null, xs);
+    var maxY = Math.max.apply(null, ys);
+    return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+  }
+
+  function _shapeBBox(el) {
+    var tag = el.tagName.toLowerCase();
+    if (tag === 'rect') {
+      return {
+        x: parseFloat(el.getAttribute('x')) || 0,
+        y: parseFloat(el.getAttribute('y')) || 0,
+        width: parseFloat(el.getAttribute('width')) || 0,
+        height: parseFloat(el.getAttribute('height')) || 0,
+      };
+    }
+    if (tag === 'polygon') return _polygonBBox(el);
+    if (tag === 'ellipse') {
+      var cx = parseFloat(el.getAttribute('cx')) || 0;
+      var cy = parseFloat(el.getAttribute('cy')) || 0;
+      var rx = parseFloat(el.getAttribute('rx')) || 0;
+      var ry = parseFloat(el.getAttribute('ry')) || 0;
+      return { x: cx - rx, y: cy - ry, width: 2 * rx, height: 2 * ry };
+    }
+    return null;
+  }
+
   function buildOverlay(svgEl, parsedData, overlayEl) {
-    // Phase B で実装
+    if (!svgEl || !overlayEl) return;
+    OB.syncDimensions(svgEl, overlayEl);
+    while (overlayEl.firstChild) overlayEl.removeChild(overlayEl.firstChild);
+
+    var flat = _flattenNodes(parsedData.nodes || [], []);
+    if (flat.length === 0) return;
+
+    // Walk SVG and classify shapes
+    var shapeNodes = svgEl.querySelectorAll('rect, polygon, ellipse');
+    var matched = [];
+    Array.prototype.forEach.call(shapeNodes, function(s) {
+      var kind = _classifyShape(s);
+      if (kind) matched.push({ el: s, kind: kind });
+    });
+
+    // Map flat nodes to expected shape kind
+    var expectedKind = function(n) {
+      if (n.kind === 'start') return 'start';
+      if (n.kind === 'stop' || n.kind === 'end') return 'stop-or-end';
+      if (n.kind === 'action') return 'action';
+      if (n.kind === 'if' || n.kind === 'while' || n.kind === 'repeat') return 'decision';
+      if (n.kind === 'fork') return 'fork-bar';
+      return null;
+    };
+
+    // Greedy match: for each flat node, find next matching shape in document order
+    var shapeIdx = 0;
+    flat.forEach(function(n) {
+      var ek = expectedKind(n);
+      if (!ek) return;
+      while (shapeIdx < matched.length && matched[shapeIdx].kind !== ek) shapeIdx++;
+      if (shapeIdx >= matched.length) return;
+      var sh = matched[shapeIdx];
+      shapeIdx++;
+      var bb = _shapeBBox(sh.el);
+      if (!bb) return;
+      OB.addRect(overlayEl, bb.x, bb.y, bb.width, bb.height, {
+        'data-type': n.kind === 'if' || n.kind === 'while' || n.kind === 'repeat' ? 'decision' : n.kind,
+        'data-id': n.id,
+        'data-line': String(n.line),
+      });
+    });
+
+    if (matched.length !== flat.filter(function(n) { return expectedKind(n); }).length) {
+      OB.warnIfMismatch('activity', flat.length, matched.length);
+    }
   }
 
   function renderProps(selData, parsedData, propsEl, ctx) {
