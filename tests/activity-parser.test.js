@@ -127,6 +127,29 @@ describe('activity parser: if/elseif/else/endif', function() {
   });
 });
 
+describe('activity parser: while/endwhile', function() {
+  test('parses simple while', function() {
+    var t = '@startuml\nstart\nwhile (cond?) is (yes)\n:body;\nendwhile\nstop\n@enduml';
+    var r = actMod.parse(t);
+    var w = r.nodes.find(function(n) { return n.kind === 'while'; });
+    expect(w.condition).toBe('cond?');
+    expect(w.label).toBe('yes');
+    expect(w.body.length).toBe(1);
+    expect(w.body[0].text).toBe('body');
+  });
+  test('while without is label defaults to "yes"', function() {
+    var t = '@startuml\nwhile (cond?)\n:body;\nendwhile\n@enduml';
+    var r = actMod.parse(t);
+    expect(r.nodes[0].label).toBe('yes');
+  });
+  test('endwhile sets endLine on while node', function() {
+    var t = '@startuml\nwhile (a)\n:body;\nendwhile\n@enduml';
+    var r = actMod.parse(t);
+    expect(r.nodes[0].line).toBe(2);
+    expect(r.nodes[0].endLine).toBe(4);
+  });
+});
+
 if (prevWindow !== undefined) global.window = prevWindow;
 if (prevDocument !== undefined) global.document = prevDocument;
 depPaths.forEach(function(p) { try { delete require.cache[require.resolve(p)]; } catch (e) {} });

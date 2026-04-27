@@ -17,6 +17,9 @@ window.MA.modules.plantumlActivity = (function() {
   var ELSE_RE = /^else(?:\s*\(([^)]*)\))?\s*$/i;
   var ENDIF_RE = /^endif\s*$/i;
 
+  var WHILE_OPEN_RE = /^while\s*\(([^)]*)\)\s*(?:is\s*\(([^)]*)\))?\s*$/i;
+  var ENDWHILE_RE = /^endwhile\s*$/i;
+
   function _newId(state) { return '__a_' + (state.counter++); }
 
   function _appendNode(state, node) {
@@ -73,6 +76,15 @@ window.MA.modules.plantumlActivity = (function() {
       var tm = trimmed.match(/^title\s+(.+)$/);
       if (tm) { result.meta.title = tm[1].trim(); continue; }
 
+      // ENDWHILE — pop matching while frame
+      if (ENDWHILE_RE.test(trimmed)) {
+        if (state.stack.length > 1 && state.stack[state.stack.length - 1].type === 'while-node') {
+          var wf = state.stack.pop();
+          wf.whileNode.endLine = lineNum;
+        }
+        continue;
+      }
+
       // ENDIF — pop until matching if frame
       if (ENDIF_RE.test(trimmed)) {
         // Pop branch frames until we hit if-node frame, then pop the if frame
@@ -119,6 +131,24 @@ window.MA.modules.plantumlActivity = (function() {
         }
         ifFrame2.ifNode.branches.push(newBranch);
         state.stack.push({ type: 'if-branch', target: newBranch.body, branch: newBranch });
+        continue;
+      }
+
+      // WHILE — open
+      var whileMatch = trimmed.match(WHILE_OPEN_RE);
+      if (whileMatch) {
+        var whileNode = {
+          kind: 'while',
+          id: _newId(state),
+          condition: whileMatch[1],
+          label: whileMatch[2] || 'yes',
+          body: [],
+          line: lineNum,
+          endLine: lineNum,
+          swimlaneId: null,
+        };
+        _appendNode(state, whileNode);
+        state.stack.push({ type: 'while-node', whileNode: whileNode, target: whileNode.body });
         continue;
       }
 
