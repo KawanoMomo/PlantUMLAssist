@@ -1267,6 +1267,32 @@ window.MA.modules.plantumlClass = (function() {
         return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
       }
 
+      function _polygonBBox(p) {
+        if (!p) return null;
+        if (typeof p.getBBox === 'function') {
+          try { var bb = p.getBBox(); if (bb && (bb.width > 0 || bb.height > 0)) return bb; }
+          catch (e) { /* jsdom fallback */ }
+        }
+        var raw = (p.getAttribute('points') || '').trim();
+        if (!raw) return null;
+        var pts = raw.split(/\s+/);
+        var pminX = Infinity, pminY = Infinity, pmaxX = -Infinity, pmaxY = -Infinity;
+        var ok = false;
+        pts.forEach(function(pt) {
+          var xy = pt.split(',');
+          if (xy.length !== 2) return;
+          var x = parseFloat(xy[0]); var y = parseFloat(xy[1]);
+          if (isNaN(x) || isNaN(y)) return;
+          ok = true;
+          if (x < pminX) pminX = x;
+          if (y < pminY) pminY = y;
+          if (x > pmaxX) pmaxX = x;
+          if (y > pmaxY) pmaxY = y;
+        });
+        if (!ok) return null;
+        return { x: pminX, y: pminY, width: pmaxX - pminX, height: pmaxY - pminY };
+      }
+
       var matched = { class: 0, interface: 0, abstract: 0, enum: 0, relation: 0, package: 0 };
 
       (parsedData.elements || []).forEach(function(el) {
@@ -1319,6 +1345,32 @@ window.MA.modules.plantumlClass = (function() {
           'data-relation-kind': relations[ri].kind,
         });
         matched.relation++;
+      }
+
+      // Notes: match 5-point polygons in document order against parsed notes
+      var notes = parsedData.notes || [];
+      if (notes.length > 0) {
+        var allPolys = svgEl.querySelectorAll('polygon');
+        var notePolys = [];
+        Array.prototype.forEach.call(allPolys, function(p) {
+          var pts = (p.getAttribute('points') || '').trim().split(/\s+/);
+          if (pts.length === 5) notePolys.push(p);
+        });
+        if (notePolys.length === notes.length) {
+          notes.forEach(function(n, idx) {
+            var p = notePolys[idx];
+            var bb = _polygonBBox(p);
+            if (!bb) return;
+            OB.addRect(overlayEl, bb.x, bb.y, bb.width, bb.height, {
+              'data-type': 'note',
+              'data-id': n.id,
+              'data-line': n.line,
+              'data-target-id': n.targetId,
+            });
+          });
+        } else if (typeof console !== 'undefined' && console.warn) {
+          console.warn('[class.buildOverlay] note polygon count mismatch: model=' + notes.length + ' svg=' + notePolys.length);
+        }
       }
 
       return { matched: matched, unmatched: {} };
