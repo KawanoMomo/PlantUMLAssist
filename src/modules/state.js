@@ -171,6 +171,31 @@ window.MA.modules.plantumlState = (function() {
     return result;
   }
 
+  function fmtState(id, label, stereotype) {
+    var labelPart = (label && label !== id) ? '"' + label + '" as ' + id : id;
+    var stereoPart = stereotype ? ' <<' + stereotype + '>>' : '';
+    return 'state ' + labelPart + stereoPart;
+  }
+
+  function fmtTransition(from, to, trigger, guard, action) {
+    var labelParts = [];
+    if (trigger) labelParts.push(trigger);
+    if (guard) labelParts.push('[' + guard + ']');
+    if (action) labelParts.push('/ ' + action);
+    var labelStr = labelParts.length > 0 ? ' : ' + labelParts.join(' ') : '';
+    return from + ' --> ' + to + labelStr;
+  }
+
+  function fmtNote(position, targetId, text) {
+    var pos = (position || 'right').toLowerCase();
+    if (typeof text !== 'string') text = '';
+    if (text.indexOf('\n') < 0) return 'note ' + pos + ' of ' + targetId + ' : ' + text;
+    var out = ['note ' + pos + ' of ' + targetId];
+    text.split('\n').forEach(function(l) { out.push(l); });
+    out.push('end note');
+    return out;
+  }
+
   function buildOverlay(svgEl, parsedData, overlayEl) {
     // Phase B Task 12 で実装
   }
@@ -187,6 +212,9 @@ window.MA.modules.plantumlState = (function() {
   return {
     type: 'plantuml-state',
     parse: parse,
+    fmtState: fmtState,
+    fmtTransition: fmtTransition,
+    fmtNote: fmtNote,
     buildOverlay: buildOverlay,
     renderProps: renderProps,
     template: template,
