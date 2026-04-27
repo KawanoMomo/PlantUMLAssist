@@ -153,6 +153,27 @@ describe('class fmtNote', function() {
   });
 });
 
+describe('class addNote', function() {
+  test('addNote inserts 1-line note before @enduml', function() {
+    var t = '@startuml\nclass Foo\n@enduml';
+    var out = clMod.addNote(t, 'Foo', 'left', 'tip');
+    expect(out).toContain('note left of Foo : tip');
+    expect(out).toContain('@enduml');
+  });
+  test('addNote inserts multi-line block when text has newline', function() {
+    var t = '@startuml\nclass Foo\n@enduml';
+    var out = clMod.addNote(t, 'Foo', 'right', 'a\nb');
+    var ls = out.split('\n');
+    expect(ls.indexOf('note right of Foo') >= 0).toBe(true);
+    expect(ls.indexOf('end note') >= 0).toBe(true);
+  });
+  test('addNote default position is left', function() {
+    var t = '@startuml\nclass Foo\n@enduml';
+    var out = clMod.addNote(t, 'Foo', null, 'x');
+    expect(out).toContain('note left of Foo : x');
+  });
+});
+
 describe('class line ops', function() {
   test('deleteLine removes class declaration', function() {
     var t = '@startuml\nclass Foo\n@enduml';

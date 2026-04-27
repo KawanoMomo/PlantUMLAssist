@@ -417,6 +417,16 @@ window.MA.modules.plantumlClass = (function() {
   function addNamespace(text, label) {
     return insertBeforeEnd(insertBeforeEnd(text, fmtNamespace(label)), '}');
   }
+  function addNote(text, targetId, position, noteText) {
+    var pos = position || 'left';
+    var formatted = fmtNote(pos, targetId, noteText || '');
+    if (Array.isArray(formatted)) {
+      var out = text;
+      formatted.forEach(function(l) { out = insertBeforeEnd(out, l); });
+      return out;
+    }
+    return insertBeforeEnd(text, formatted);
+  }
 
   function _parseSingleLine(line) {
     var trimmed = line.trim();
@@ -1253,6 +1263,7 @@ window.MA.modules.plantumlClass = (function() {
     addRelation: addRelation,
     addPackage: addPackage,
     addNamespace: addNamespace,
+    addNote: addNote,
     updateClass: updateClass,
     updateInterface: updateClass,
     updateAbstract: updateClass,
