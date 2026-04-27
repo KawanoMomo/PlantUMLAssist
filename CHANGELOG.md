@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.0] - 2026-04-28
+
+### Added — Tier1 完成
+
+- **State Diagram** — Tier1 ロードマップ最後 (#6) — `src/modules/state.js`
+- 6 element kinds: state / composite-state (1-level nesting) / initial pseudo `[*]` / final pseudo `[*]` / choice / history (deep history 含む)
+- Transitions: `A --> B` + label `: trigger [guard] / action`
+- Notes: `note (left|right) of NAME` 1 行 + 複数行
+- ADR-110: State canonical DSL form
+- Property panel: state edit / transition edit / note edit / no-selection (tail-add 4 kinds)
+- Overlay-driven (Class パターン流用、`<g class="entity" data-qualified-name>`)
+- **hoverInsert + showInsertForm** 最初から組み込み (state / transition モーダル挿入)
+- E2E: state.spec.js (8 tests, α + γ axes)
+
+### Notes
+
+**Tier1 ロードマップ完成** — Sequence + UseCase + Component + Class + Activity + State の全 6 図形が overlay-driven で完備。
+- 設計詳細: `docs/superpowers/specs/2026-04-28-state-design.md`
+- 実装計画: `docs/superpowers/plans/2026-04-28-state-v1.0.0.md`
+- v1.x+ 繰越: 2 段以上の composite ネスト、concurrent region、entry/exit actions、internal transition
+
 ## [0.7.1] - 2026-04-27
 
 ### Added

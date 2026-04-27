@@ -24,6 +24,7 @@ const sourceFiles = [
   'src/modules/component.js',
   'src/modules/class.js',
   'src/modules/activity.js',
+  'src/modules/state.js',
 ];
 
 let fns = {};
