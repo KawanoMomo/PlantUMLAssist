@@ -26,7 +26,9 @@ test.describe('Class v0.6.1 polish', () => {
       var rect = page.locator('#overlay-layer rect[data-type="class"]').first();
       var c = await rect.count();
       if (c === 0) test.skip();
-      await rect.click();
+      // Click top-left of class rect (header area, avoiding member rect overlap)
+      var box = await rect.boundingBox();
+      await page.mouse.click(box.x + 10, box.y + 8);
       await page.waitForTimeout(300);
       await page.locator('#cl-add-note-btn').click();
       await page.waitForTimeout(200);
@@ -56,9 +58,13 @@ test.describe('Class v0.6.1 polish', () => {
       var rect = page.locator('#overlay-layer rect[data-type="class"][data-id="User"]').first();
       var c = await rect.count();
       if (c === 0) test.skip();
-      await rect.click();
+      // Click top-left of class rect (header area, avoiding member rect overlap)
+      var box = await rect.boundingBox();
+      await page.mouse.click(box.x + 10, box.y + 8);
       await page.waitForTimeout(300);
-      await page.locator('#cl-element-delete').click();
+      // Auto-confirm window.confirm() dialog (cascade delete prompts)
+      page.once('dialog', function(d) { d.accept(); });
+      await page.locator('#cl-delete').click();
       await page.waitForTimeout(300);
       var t = await getEditorText(page);
       expect(t).not.toContain('class User');
@@ -89,16 +95,15 @@ test.describe('Class v0.6.1 polish', () => {
       var classRect = page.locator('#overlay-layer rect[data-type="class"]').first();
       var iface = page.locator('#overlay-layer rect[data-type="interface"]').first();
       if ((await classRect.count()) === 0 || (await iface.count()) === 0) test.skip();
-      await classRect.click();
-      // Try to find a member rect inside the interface (or a 2nd class)
+      // First click interface header (so coerce target differs from class member parent)
+      var ibox = await iface.boundingBox();
+      await page.mouse.click(ibox.x + 10, ibox.y + 8);
+      await page.waitForTimeout(200);
+      // Shift+click member of the class (coerces to parent class → 2 distinct entities)
       var anyMember = page.locator('#overlay-layer rect[data-type="member"]').first();
       var mc = await anyMember.count();
-      if (mc === 0) {
-        // Fallback: shift+click another class
-        await iface.click({ modifiers: ['Shift'] });
-      } else {
-        await anyMember.click({ modifiers: ['Shift'] });
-      }
+      if (mc === 0) test.skip();
+      await anyMember.click({ modifiers: ['Shift'] });
       await page.waitForTimeout(300);
       var connKind = await page.locator('#cl-conn-kind').count();
       expect(connKind).toBeGreaterThan(0);
@@ -112,7 +117,9 @@ test.describe('Class v0.6.1 polish', () => {
       await page.waitForTimeout(2500);
       var c = page.locator('#overlay-layer rect[data-type="class"]').first();
       if ((await c.count()) > 0) {
-        await c.click();
+        // Click top-left header area (avoiding member rect overlap)
+        var cbox = await c.boundingBox();
+        await page.mouse.click(cbox.x + 10, cbox.y + 8);
         await page.waitForTimeout(200);
       }
       var m = page.locator('#overlay-layer rect[data-type="member"]').first();
