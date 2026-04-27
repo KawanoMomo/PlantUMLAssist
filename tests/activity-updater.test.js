@@ -56,6 +56,53 @@ describe('activity formatters', function() {
   });
 });
 
+describe('activity add ops', function() {
+  test('addAction inserts before @enduml', function() {
+    var t = '@startuml\nstart\n@enduml';
+    var out = actMod.addAction(t, 'Hello');
+    expect(out).toContain(':Hello;');
+    expect(out.split('\n').indexOf(':Hello;')).toBeGreaterThan(0);
+  });
+  test('addIf inserts skeleton with then/endif', function() {
+    var t = '@startuml\nstart\n@enduml';
+    var out = actMod.addIf(t, 'cond?', 'yes', 'no');
+    expect(out).toContain('if (cond?) then (yes)');
+    expect(out).toContain('else (no)');
+    expect(out).toContain('endif');
+  });
+  test('addWhile inserts while/endwhile skeleton', function() {
+    var t = '@startuml\nstart\n@enduml';
+    var out = actMod.addWhile(t, 'cond?', 'yes');
+    expect(out).toContain('while (cond?) is (yes)');
+    expect(out).toContain('endwhile');
+  });
+  test('addRepeat inserts repeat ... repeat while skeleton', function() {
+    var t = '@startuml\nstart\n@enduml';
+    var out = actMod.addRepeat(t, 'cond?', 'yes');
+    expect(out).toContain('repeat');
+    expect(out).toContain('repeat while (cond?) is (yes)');
+  });
+  test('addFork inserts fork/end fork with N branches', function() {
+    var t = '@startuml\nstart\n@enduml';
+    var out = actMod.addFork(t, 3);
+    var s = out.split('\n');
+    var againCount = s.filter(function(l) { return /^fork again\s*$/.test(l); }).length;
+    expect(againCount).toBe(2);
+    expect(out).toContain('end fork');
+  });
+  test('addSwimlane inserts swimlane block', function() {
+    var t = '@startuml\nstart\n@enduml';
+    var out = actMod.addSwimlane(t, 'Frontend');
+    expect(out).toContain('|Frontend|');
+  });
+  test('addNote inserts after specified action line', function() {
+    var t = '@startuml\nstart\n:A;\nstop\n@enduml';
+    var out = actMod.addNote(t, 3, 'right', 'tip');
+    var s = out.split('\n');
+    expect(s[3]).toBe('note right : tip');
+  });
+});
+
 if (prevWindow !== undefined) global.window = prevWindow;
 if (prevDocument !== undefined) global.document = prevDocument;
 depPaths.forEach(function(p) { try { delete require.cache[require.resolve(p)]; } catch (e) {} });

@@ -419,6 +419,57 @@ window.MA.modules.plantumlActivity = (function() {
     return out;
   }
 
+  var insertBeforeEnd = window.MA.dslUpdater.insertBeforeEnd;
+
+  function addAction(text, actionText) {
+    return insertBeforeEnd(text, fmtAction(actionText || ''));
+  }
+
+  function addIf(text, condition, thenLabel, elseLabel) {
+    var out = text;
+    out = insertBeforeEnd(out, fmtIf(condition, thenLabel || 'yes'));
+    if (elseLabel) out = insertBeforeEnd(out, fmtElse(elseLabel));
+    out = insertBeforeEnd(out, 'endif');
+    return out;
+  }
+
+  function addWhile(text, condition, label) {
+    var out = text;
+    out = insertBeforeEnd(out, fmtWhile(condition, label || 'yes'));
+    out = insertBeforeEnd(out, 'endwhile');
+    return out;
+  }
+
+  function addRepeat(text, condition, label) {
+    var out = text;
+    out = insertBeforeEnd(out, 'repeat');
+    out = insertBeforeEnd(out, fmtRepeatWhile(condition, label || 'yes'));
+    return out;
+  }
+
+  function addFork(text, branchCount) {
+    var n = Math.max(1, branchCount || 2);
+    var out = text;
+    out = insertBeforeEnd(out, 'fork');
+    for (var i = 1; i < n; i++) out = insertBeforeEnd(out, 'fork again');
+    out = insertBeforeEnd(out, 'end fork');
+    return out;
+  }
+
+  function addSwimlane(text, label) {
+    return insertBeforeEnd(text, fmtSwimlane(label));
+  }
+
+  function addNote(text, afterLine, position, noteText) {
+    var lines = text.split('\n');
+    var idx = afterLine;
+    var formatted = fmtNote(position || 'right', noteText || '');
+    var newLines = Array.isArray(formatted) ? formatted : [formatted];
+    var before = lines.slice(0, idx);
+    var after = lines.slice(idx);
+    return before.concat(newLines).concat(after).join('\n');
+  }
+
   function buildOverlay(svgEl, parsedData, overlayEl) {
     // Phase B で実装
   }
@@ -446,6 +497,13 @@ window.MA.modules.plantumlActivity = (function() {
     fmtRepeatWhile: fmtRepeatWhile,
     fmtSwimlane: fmtSwimlane,
     fmtNote: fmtNote,
+    addAction: addAction,
+    addIf: addIf,
+    addWhile: addWhile,
+    addRepeat: addRepeat,
+    addFork: addFork,
+    addSwimlane: addSwimlane,
+    addNote: addNote,
     capabilities: {
       overlaySelection: true,
       hoverInsert: false,
