@@ -756,6 +756,7 @@ window.MA.modules.plantumlClass = (function() {
           { value: 'package',   label: 'Package境界' },
           { value: 'namespace', label: 'Namespace' },
           { value: 'relation',  label: 'Relation (関係)' },
+          { value: 'note',      label: 'Note (注釈)' },
         ]) +
         '<div id="cl-tail-detail" style="margin-top:6px;"></div>' +
       '</div>';
@@ -801,6 +802,22 @@ window.MA.modules.plantumlClass = (function() {
           P.selectFieldHtml('To', 'cl-tail-to', allOpts) +
           P.fieldHtml('Label', 'cl-tail-rlabel', '', '任意') +
           P.primaryButtonHtml('cl-tail-add', '+ Relation 追加');
+      } else if (kind === 'note') {
+        var noteTargets = elements.map(function(e) { return { value: e.id, label: e.label || e.id }; });
+        if (noteTargets.length === 0) noteTargets = [{ value: '', label: '（要素なし）' }];
+        html2 =
+          P.selectFieldHtml('Target', 'cl-tail-ntarget', noteTargets) +
+          P.selectFieldHtml('Position', 'cl-tail-npos', [
+            { value: 'left', label: 'Left', selected: true },
+            { value: 'right', label: 'Right' },
+            { value: 'top', label: 'Top' },
+            { value: 'bottom', label: 'Bottom' },
+          ]) +
+          '<div style="margin-bottom:6px;">' +
+            '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Text (改行可)</label>' +
+            '<textarea id="cl-tail-ntext" style="width:100%;min-height:60px;font-family:inherit;font-size:12px;"></textarea>' +
+          '</div>' +
+          P.primaryButtonHtml('cl-tail-add', '+ Note 追加');
       }
       detailEl.innerHTML = html2;
 
@@ -838,6 +855,13 @@ window.MA.modules.plantumlClass = (function() {
           var rkind = document.getElementById('cl-tail-rkind').value;
           window.MA.history.pushHistory();
           out = addRelation(t, rkind, fr, to, document.getElementById('cl-tail-rlabel').value.trim() || null);
+        } else if (k === 'note') {
+          var ntg = document.getElementById('cl-tail-ntarget').value;
+          if (!ntg) { alert('Target 必須'); return; }
+          var npos = document.getElementById('cl-tail-npos').value;
+          var ntext = document.getElementById('cl-tail-ntext').value || '';
+          window.MA.history.pushHistory();
+          out = addNote(t, ntg, npos, ntext);
         }
         ctx.setMmdText(out);
         ctx.onUpdate();
