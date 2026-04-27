@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.1] - 2026-04-27
+
+### Added
+- **Activity 途中挿入** — Sequence の hover-insert ガイドと同じ UX を Activity でも有効化:
+  - preview hover で「+ ここに挿入」ガイド表示
+  - 空白部分 click で modal 表示 (action text textarea)
+  - 確定で `:text;` を該当行の前/後に挿入 (indent 自動継承)
+- `addActionAtLine(text, lineNum, position, actionText)` — indent-preserving insertion API
+- `resolveInsertLine(overlayEl, y)` — Y 座標 → 最近接 node line/position
+- `showInsertForm(ctx, line, position, kind)` + HTML modal (`act-modal`)
+- `defaultInsertKind: 'action'` (sequence の 'message' に対する Activity の既定 kind)
+- E2E: hover guide 表示 + 空白 click → form → 挿入 (2 tests)
+
+### Changed
+- `src/app.js` insert click handler: hardcoded `window.MA.sequenceOverlay.resolveInsertLine`
+  を `currentModule.resolveInsertLine` 経由に refactor (sequence は fallback path で互換維持)
+- Activity capabilities: `hoverInsert: true`, `showInsertForm: true`
+
+### Notes
+- v0.7.0 で繰越となっていた iterative-workflow editing (途中挿入) を埋めるための polish スプリント
+- 設計詳細: 軽量 polish、別 spec 不要 (v0.7.0 spec § 9 で「v0.7.1+ 繰越」記載分の対応)
+
 ## [0.7.0] - 2026-04-27
 
 ### Added

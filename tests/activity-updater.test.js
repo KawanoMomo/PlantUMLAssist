@@ -157,6 +157,94 @@ describe('activity update/delete ops', function() {
   });
 });
 
+describe('activity addActionAtLine (mid-insertion)', function() {
+  test('inserts before specified line', function() {
+    var t = '@startuml\nstart\n:A;\nstop\n@enduml';
+    var out = actMod.addActionAtLine(t, 3, 'before', 'NEW');
+    var lines = out.split('\n');
+    expect(lines[1]).toBe('start');
+    expect(lines[2]).toBe(':NEW;');
+    expect(lines[3]).toBe(':A;');
+    expect(lines[4]).toBe('stop');
+  });
+  test('inserts after specified line', function() {
+    var t = '@startuml\nstart\n:A;\nstop\n@enduml';
+    var out = actMod.addActionAtLine(t, 3, 'after', 'NEW');
+    var lines = out.split('\n');
+    expect(lines[3]).toBe(':NEW;');
+    expect(lines[4]).toBe('stop');
+  });
+  test('preserves indent of surrounding lines (inside if-block)', function() {
+    var t = '@startuml\nif (a) then\n  :A;\nendif\n@enduml';
+    var out = actMod.addActionAtLine(t, 3, 'before', 'NEW');
+    var lines = out.split('\n');
+    expect(lines[2]).toBe('  :NEW;');
+    expect(lines[3]).toBe('  :A;');
+  });
+  test('boundary: insert before line 1', function() {
+    var t = ':A;';
+    var out = actMod.addActionAtLine(t, 1, 'before', 'NEW');
+    var lines = out.split('\n');
+    expect(lines[0]).toBe(':NEW;');
+    expect(lines[1]).toBe(':A;');
+  });
+});
+
+describe('activity resolveInsertLine (Y → line/position mapping)', function() {
+  var SVG_NS = 'http://www.w3.org/2000/svg';
+  function makeOverlay(rectsSpec) {
+    var ov = document.createElementNS(SVG_NS, 'svg');
+    rectsSpec.forEach(function(r) {
+      var el = document.createElementNS(SVG_NS, 'rect');
+      Object.keys(r).forEach(function(k) { el.setAttribute(k, r[k]); });
+      ov.appendChild(el);
+    });
+    return ov;
+  }
+  test('returns null for empty overlay', function() {
+    var ov = makeOverlay([]);
+    expect(actMod.resolveInsertLine(ov, 50)).toBe(null);
+  });
+  test('y above all rects: before first node', function() {
+    var ov = makeOverlay([
+      { 'data-type': 'action', 'data-line': '5', y: '50', height: '20' },
+      { 'data-type': 'action', 'data-line': '7', y: '100', height: '20' },
+    ]);
+    var res = actMod.resolveInsertLine(ov, 10);
+    expect(res.line).toBe(5);
+    expect(res.position).toBe('before');
+  });
+  test('y between two rects: after upper rect', function() {
+    var ov = makeOverlay([
+      { 'data-type': 'action', 'data-line': '5', y: '50', height: '20' },
+      { 'data-type': 'action', 'data-line': '7', y: '100', height: '20' },
+    ]);
+    var res = actMod.resolveInsertLine(ov, 80);
+    expect(res.line).toBe(5);
+    expect(res.position).toBe('after');
+  });
+  test('y below all rects: after last node', function() {
+    var ov = makeOverlay([
+      { 'data-type': 'action', 'data-line': '5', y: '50', height: '20' },
+      { 'data-type': 'action', 'data-line': '7', y: '100', height: '20' },
+    ]);
+    var res = actMod.resolveInsertLine(ov, 200);
+    expect(res.line).toBe(7);
+    expect(res.position).toBe('after');
+  });
+  test('mixed kinds (start/action/decision/stop) all considered', function() {
+    var ov = makeOverlay([
+      { 'data-type': 'start', 'data-line': '2', y: '20', height: '20' },
+      { 'data-type': 'decision', 'data-line': '4', y: '60', height: '24' },
+      { 'data-type': 'action', 'data-line': '5', y: '100', height: '20' },
+      { 'data-type': 'stop', 'data-line': '7', y: '150', height: '22' },
+    ]);
+    var res = actMod.resolveInsertLine(ov, 80);
+    expect(res.line).toBe(4);
+    expect(res.position).toBe('after');
+  });
+});
+
 if (prevWindow !== undefined) global.window = prevWindow;
 if (prevDocument !== undefined) global.document = prevDocument;
 depPaths.forEach(function(p) { try { delete require.cache[require.resolve(p)]; } catch (e) {} });

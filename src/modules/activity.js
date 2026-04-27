@@ -566,6 +566,84 @@ window.MA.modules.plantumlActivity = (function() {
     return before.concat(after).join('\n');
   }
 
+  // Insert an action `:text;` before or after the specified line, preserving
+  // surrounding indent so the new action stays inside the same control block.
+  function addActionAtLine(text, lineNum, position, actionText) {
+    var lines = text.split('\n');
+    var targetIdx = position === 'before' ? lineNum - 1 : lineNum;
+    if (targetIdx < 0) targetIdx = 0;
+    if (targetIdx > lines.length) targetIdx = lines.length;
+    // Match indent of nearest existing line (preferred: target line, else previous)
+    var indentSrc = lines[Math.min(targetIdx, lines.length - 1)] || lines[Math.max(0, targetIdx - 1)] || '';
+    var indent = (indentSrc.match(/^(\s*)/) || ['', ''])[1];
+    var newLine = indent + ':' + (actionText || '') + ';';
+    lines.splice(targetIdx, 0, newLine);
+    return lines.join('\n');
+  }
+
+  // Map a Y-coordinate (in SVG/overlay coordinates) to the nearest model line +
+  // before/after position. Returns null when the overlay has no node rects.
+  function resolveInsertLine(overlayEl, y) {
+    if (!overlayEl) return null;
+    // Consider all node rects (action/decision/start/stop/end/fork)
+    var rects = overlayEl.querySelectorAll(
+      'rect[data-type="action"], rect[data-type="decision"], rect[data-type="start"],' +
+      'rect[data-type="stop"], rect[data-type="end"], rect[data-type="fork"]'
+    );
+    if (rects.length === 0) return null;
+    var items = Array.prototype.map.call(rects, function(r) {
+      return {
+        line: parseInt(r.getAttribute('data-line'), 10),
+        y: parseFloat(r.getAttribute('y')) + parseFloat(r.getAttribute('height')) / 2,
+      };
+    }).sort(function(a, b) { return a.y - b.y; });
+    for (var i = items.length - 1; i >= 0; i--) {
+      if (y > items[i].y) return { line: items[i].line, position: 'after' };
+    }
+    return { line: items[0].line, position: 'before' };
+  }
+
+  // Open a modal popup to insert an action `:text;` before/after the resolved line.
+  // Mirrors sequence.showInsertForm pattern but limited to action insertion.
+  function showInsertForm(ctx, line, position, kind) {
+    var modal = document.getElementById('act-modal');
+    var content = document.getElementById('act-modal-content');
+    if (!modal || !content) {
+      // Fallback: prompt() if modal HTML missing
+      var t = window.prompt((position === 'before' ? '前に' : '後に') + 'アクションを挿入: テキスト', '');
+      if (t === null) return;
+      window.MA.history.pushHistory();
+      ctx.setMmdText(addActionAtLine(ctx.getMmdText(), line, position, t));
+      ctx.onUpdate();
+      return;
+    }
+    var P = window.MA.properties;
+    var title = (position === 'before' ? '前に' : '後に') + 'アクションを挿入 (L' + line + ')';
+    content.innerHTML =
+      '<h3 style="margin:0 0 12px 0;color:var(--text-primary);">' + title + '</h3>' +
+      '<div style="margin-bottom:8px;">' +
+        '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">アクション本文 (改行可)</label>' +
+        '<textarea id="act-mod-text" style="width:100%;min-height:60px;font-family:inherit;font-size:12px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:3px;"></textarea>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;margin-top:12px;">' +
+        '<button id="act-mod-cancel" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:8px;border-radius:4px;cursor:pointer;">キャンセル</button>' +
+        '<button id="act-mod-confirm" style="flex:1;background:var(--accent);border:none;color:#fff;padding:8px;border-radius:4px;cursor:pointer;">確定</button>' +
+      '</div>';
+    modal.style.display = 'flex';
+    var ta = document.getElementById('act-mod-text');
+    if (ta && ta.focus) setTimeout(function() { ta.focus(); }, 0);
+
+    function close() { modal.style.display = 'none'; content.innerHTML = ''; }
+    P.bindEvent('act-mod-cancel', 'click', close);
+    P.bindEvent('act-mod-confirm', 'click', function() {
+      var txt = (document.getElementById('act-mod-text') || {}).value || '';
+      window.MA.history.pushHistory();
+      ctx.setMmdText(addActionAtLine(ctx.getMmdText(), line, position, txt));
+      ctx.onUpdate();
+      close();
+    });
+  }
+
   var OB = window.MA.overlayBuilder;
 
   function _flattenNodes(nodes, out) {
@@ -1229,11 +1307,15 @@ window.MA.modules.plantumlActivity = (function() {
     updateSwimlane: updateSwimlane,
     updateNote: updateNote,
     deleteNode: deleteNode,
+    addActionAtLine: addActionAtLine,
+    resolveInsertLine: resolveInsertLine,
+    showInsertForm: showInsertForm,
+    defaultInsertKind: 'action',
     capabilities: {
       overlaySelection: true,
-      hoverInsert: false,
+      hoverInsert: true,
       participantDrag: false,
-      showInsertForm: false,
+      showInsertForm: true,
       multiSelectConnect: false,
     },
   };

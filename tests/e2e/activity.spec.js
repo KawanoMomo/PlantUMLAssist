@@ -126,6 +126,41 @@ test.describe('Activity v0.7.0', () => {
       expect(textArea).toBeGreaterThan(0);
     });
 
+    test('hover on preview shows insert guide ("+ ここに挿入")', async ({ page }) => {
+      await gotoApp(page);
+      await page.locator('#diagram-type').selectOption('plantuml-activity');
+      await page.waitForTimeout(2500);
+      var actionRect = page.locator('#overlay-layer rect[data-type="action"]').first();
+      var c = await actionRect.count();
+      if (c === 0) test.skip();
+      // Hover above the action rect (so guide line appears in empty space)
+      var box = await actionRect.boundingBox();
+      await page.mouse.move(box.x + box.width / 2, box.y - 10);
+      await page.waitForTimeout(200);
+      var guide = await page.locator('#hover-layer .hover-guide').count();
+      expect(guide).toBeGreaterThan(0);
+    });
+
+    test('clicking empty preview area opens insert form and inserts action', async ({ page }) => {
+      await gotoApp(page);
+      await page.locator('#diagram-type').selectOption('plantuml-activity');
+      await page.waitForTimeout(2500);
+      var actionRect = page.locator('#overlay-layer rect[data-type="action"]').first();
+      var c = await actionRect.count();
+      if (c === 0) test.skip();
+      var box = await actionRect.boundingBox();
+      // Click just below the action rect (5-10px gap before next overlay rect = empty area)
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height + 6);
+      await page.waitForTimeout(300);
+      var modalDisplay = await page.locator('#act-modal').evaluate(function(el) { return el.style.display; });
+      expect(modalDisplay).toBe('flex');
+      await page.locator('#act-mod-text').fill('Mid Insert');
+      await page.locator('#act-mod-confirm').click();
+      await page.waitForTimeout(300);
+      var t = await getEditorText(page);
+      expect(t).toContain(':Mid Insert;');
+    });
+
     test('console error count is 0 during overlay interactions', async ({ page }) => {
       var errors = [];
       page.on('console', function(msg) { if (msg.type() === 'error') errors.push(msg.text()); });
