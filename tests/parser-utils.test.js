@@ -54,4 +54,16 @@ describe('detectDiagramType — PlantUML', function() {
   test('detects class diagram by inheritance arrow', function() {
     expect(parserUtils.detectDiagramType('@startuml\nFoo --|> Bar\n@enduml')).toBe('plantuml-class');
   });
+  test('detects plantuml-activity from start + action', function() {
+    var t = '@startuml\nstart\n:Hello;\nstop\n@enduml';
+    expect(parserUtils.detectDiagramType(t)).toBe('plantuml-activity');
+  });
+  test('detects plantuml-activity from while loop', function() {
+    var t = '@startuml\nwhile (a)\n:body;\nendwhile\n@enduml';
+    expect(parserUtils.detectDiagramType(t)).toBe('plantuml-activity');
+  });
+  test('does NOT detect activity for class diagram with action-like text', function() {
+    var t = '@startuml\nclass Foo\nclass Bar\nFoo --|> Bar\n@enduml';
+    expect(parserUtils.detectDiagramType(t)).toBe('plantuml-class');
+  });
 });
