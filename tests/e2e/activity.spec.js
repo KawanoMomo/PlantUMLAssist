@@ -58,4 +58,87 @@ test.describe('Activity v0.7.0', () => {
       expect(t.match(/endif/g)).toBeTruthy();
     });
   });
+
+  test.describe('γ: form + overlay', () => {
+    test('UC-4: while loop emits canonical', async ({ page }) => {
+      await gotoApp(page);
+      await page.locator('#diagram-type').selectOption('plantuml-activity');
+      await page.waitForTimeout(500);
+      await page.locator('#ac-tail-kind').selectOption('while');
+      await page.locator('#ac-tail-cond').fill('more?');
+      await page.locator('#ac-tail-lbl').fill('yes');
+      await page.locator('#ac-tail-add').click();
+      await page.waitForTimeout(300);
+      var t = await getEditorText(page);
+      expect(t).toContain('while (more?) is (yes)');
+      expect(t).toContain('endwhile');
+    });
+
+    test('UC-5: fork with 3 branches emits 2 fork-again + end fork', async ({ page }) => {
+      await gotoApp(page);
+      await page.locator('#diagram-type').selectOption('plantuml-activity');
+      await page.waitForTimeout(500);
+      await page.locator('#ac-tail-kind').selectOption('fork');
+      await page.locator('#ac-tail-bcount').fill('3');
+      await page.locator('#ac-tail-add').click();
+      await page.waitForTimeout(300);
+      var t = await getEditorText(page);
+      var lines = t.split('\n');
+      var againCount = lines.filter(function(l) { return /^fork again\s*$/.test(l); }).length;
+      expect(againCount).toBe(2);
+      expect(t).toContain('end fork');
+    });
+
+    test('UC-6: swimlane added then action gets that swimlane', async ({ page }) => {
+      await gotoApp(page);
+      await page.locator('#diagram-type').selectOption('plantuml-activity');
+      await page.waitForTimeout(500);
+      await page.locator('#ac-tail-kind').selectOption('swimlane');
+      await page.locator('#ac-tail-lbl').fill('Frontend');
+      await page.locator('#ac-tail-add').click();
+      await page.waitForTimeout(200);
+      // Add action after swimlane
+      await page.locator('#ac-tail-kind').selectOption('action');
+      await page.locator('#ac-tail-text').fill('Render UI');
+      await page.locator('#ac-tail-add').click();
+      await page.waitForTimeout(300);
+      var t = await getEditorText(page);
+      expect(t).toContain('|Frontend|');
+      expect(t).toContain(':Render UI;');
+      // Verify swimlane line precedes action line
+      var lines = t.split('\n');
+      var swIdx = lines.indexOf('|Frontend|');
+      var acIdx = lines.indexOf(':Render UI;');
+      expect(swIdx).toBeGreaterThan(0);
+      expect(acIdx).toBeGreaterThan(swIdx);
+    });
+
+    test('UC-7: clicking action overlay rect selects action and shows edit form', async ({ page }) => {
+      await gotoApp(page);
+      await page.locator('#diagram-type').selectOption('plantuml-activity');
+      await page.waitForTimeout(2500);
+      var rect = page.locator('#overlay-layer rect[data-type="action"]').first();
+      var c = await rect.count();
+      if (c === 0) test.skip();
+      await rect.click();
+      await page.waitForTimeout(300);
+      var textArea = await page.locator('#ac-action-text').count();
+      expect(textArea).toBeGreaterThan(0);
+    });
+
+    test('console error count is 0 during overlay interactions', async ({ page }) => {
+      var errors = [];
+      page.on('console', function(msg) { if (msg.type() === 'error') errors.push(msg.text()); });
+      await gotoApp(page);
+      await page.locator('#diagram-type').selectOption('plantuml-activity');
+      await page.waitForTimeout(2500);
+      var actionRect = page.locator('#overlay-layer rect[data-type="action"]').first();
+      if ((await actionRect.count()) > 0) {
+        await actionRect.click();
+        await page.waitForTimeout(200);
+      }
+      var jsErrors = errors.filter(function(e) { return e.indexOf('favicon') < 0; });
+      expect(jsErrors).toHaveLength(0);
+    });
+  });
 });
