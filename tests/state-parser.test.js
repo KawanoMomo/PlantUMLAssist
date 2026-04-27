@@ -46,6 +46,44 @@ describe('state parser: simple state', function() {
   });
 });
 
+describe('state parser: transitions', function() {
+  test('parses simple transition without label', function() {
+    var t = '@startuml\nstate A\nstate B\nA --> B\n@enduml';
+    var r = stMod.parse(t);
+    expect(r.transitions.length).toBe(1);
+    expect(r.transitions[0].from).toBe('A');
+    expect(r.transitions[0].to).toBe('B');
+    expect(r.transitions[0].label).toBe(null);
+  });
+  test('parses transition with full label (trigger [guard] / action)', function() {
+    var t = '@startuml\nstate A\nstate B\nA --> B : click [enabled] / save()\n@enduml';
+    var r = stMod.parse(t);
+    var tr = r.transitions[0];
+    expect(tr.label).toBe('click [enabled] / save()');
+    expect(tr.trigger).toBe('click');
+    expect(tr.guard).toBe('enabled');
+    expect(tr.action).toBe('save()');
+  });
+  test('parses transition with only trigger', function() {
+    var t = '@startuml\nA --> B : click\n@enduml';
+    var r = stMod.parse(t);
+    expect(r.transitions[0].trigger).toBe('click');
+    expect(r.transitions[0].guard).toBe(null);
+    expect(r.transitions[0].action).toBe(null);
+  });
+  test('parses transition with [*] as initial pseudo-state', function() {
+    var t = '@startuml\n[*] --> A\n@enduml';
+    var r = stMod.parse(t);
+    expect(r.transitions[0].from).toBe('[*]');
+    expect(r.transitions[0].to).toBe('A');
+  });
+  test('parses transition with [*] as final pseudo-state', function() {
+    var t = '@startuml\nA --> [*]\n@enduml';
+    var r = stMod.parse(t);
+    expect(r.transitions[0].to).toBe('[*]');
+  });
+});
+
 describe('state parser: composite', function() {
   test('parses composite state with inner state', function() {
     var t = '@startuml\nstate Outer {\n  state Inner\n}\n@enduml';

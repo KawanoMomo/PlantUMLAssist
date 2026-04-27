@@ -11,6 +11,34 @@ window.MA.modules.plantumlState = (function() {
     '^state\\s+(?:"([^"]+)"\\s+as\\s+(' + ID + ')|(' + ID + ')(?:\\s+as\\s+"([^"]+)")?)\\s*(?:<<([^>]+)>>)?\\s*(\\{)?\\s*$'
   );
 
+  var TRANSITION_RE = new RegExp(
+    '^(\\[\\*\\]|' + ID + ')\\s*-->\\s*(\\[\\*\\]|' + ID + ')(?:\\s*:\\s*(.*))?\\s*$'
+  );
+
+  function _parseTransitionLabel(label) {
+    if (!label) return { trigger: null, guard: null, action: null };
+    var trimmed = label.trim();
+    var actionMatch = trimmed.match(/^(.*?)\s*\/\s*(.+)$/);
+    var action = null;
+    var rest = trimmed;
+    if (actionMatch) {
+      action = actionMatch[2].trim();
+      rest = actionMatch[1].trim();
+    }
+    var guardMatch = rest.match(/^(.*?)\s*\[(.+?)\]\s*$/);
+    var guard = null;
+    var trigger = rest;
+    if (guardMatch) {
+      guard = guardMatch[2].trim();
+      trigger = guardMatch[1].trim();
+    }
+    return {
+      trigger: trigger || null,
+      guard: guard || null,
+      action: action || null,
+    };
+  }
+
   function parse(text) {
     var result = {
       meta: { title: '', startUmlLine: null },
@@ -65,6 +93,23 @@ window.MA.modules.plantumlState = (function() {
         };
         result.states.push(st);
         if (hasBlock) openCompositeStack.push(st);
+        continue;
+      }
+
+      var tmt = trimmed.match(TRANSITION_RE);
+      if (tmt) {
+        var lbl = tmt[3] ? tmt[3].trim() : null;
+        var parts = _parseTransitionLabel(lbl);
+        result.transitions.push({
+          id: '__t_' + result.transitions.length,
+          from: tmt[1],
+          to: tmt[2],
+          label: lbl,
+          trigger: parts.trigger,
+          guard: parts.guard,
+          action: parts.action,
+          line: lineNum,
+        });
         continue;
       }
     }
