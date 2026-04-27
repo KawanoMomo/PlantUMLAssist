@@ -189,6 +189,29 @@ describe('activity parser: fork', function() {
   });
 });
 
+describe('activity parser: note', function() {
+  test('parses 1-line note right after action', function() {
+    var t = '@startuml\n:A;\nnote right : tip\n@enduml';
+    var r = actMod.parse(t);
+    expect(r.notes.length).toBe(1);
+    expect(r.notes[0].position).toBe('right');
+    expect(r.notes[0].text).toBe('tip');
+    expect(r.notes[0].attachedNodeId).toBe(r.nodes[0].id);
+  });
+  test('parses multi-line note', function() {
+    var t = '@startuml\n:A;\nnote left\n  body line\nend note\n@enduml';
+    var r = actMod.parse(t);
+    expect(r.notes[0].position).toBe('left');
+    expect(r.notes[0].text).toBe('body line');
+  });
+  test('attaches to most recent action only (not start/stop)', function() {
+    var t = '@startuml\nstart\nnote right : tip\n:A;\nstop\n@enduml';
+    var r = actMod.parse(t);
+    // Without an action before note, attachedNodeId is null
+    expect(r.notes[0].attachedNodeId).toBe(null);
+  });
+});
+
 describe('activity parser: swimlane', function() {
   test('parses swimlane and assigns swimlaneId to following nodes', function() {
     var t = '@startuml\nstart\n|Frontend|\n:UI;\n|Backend|\n:API;\nstop\n@enduml';

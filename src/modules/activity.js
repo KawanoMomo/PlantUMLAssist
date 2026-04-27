@@ -29,6 +29,10 @@ window.MA.modules.plantumlActivity = (function() {
 
   var SWIMLANE_RE = /^\|(?:#[^|]+\|)?\s*([^|]+?)\s*\|$/;
 
+  var NOTE_INLINE_RE = /^note\s+(right|left)\s*:\s*(.*)$/i;
+  var NOTE_BLOCK_OPEN_RE = /^note\s+(right|left)\s*$/i;
+  var END_NOTE_RE = /^end\s+note\s*$/i;
+
   function _newId(state) { return '__a_' + (state.counter++); }
 
   function _appendNode(state, node) {
@@ -37,6 +41,7 @@ window.MA.modules.plantumlActivity = (function() {
     }
     var top = state.stack[state.stack.length - 1];
     top.target.push(node);
+    if (node.kind === 'action') state.lastActionId = node.id;
   }
 
   function parse(text) {
@@ -51,6 +56,8 @@ window.MA.modules.plantumlActivity = (function() {
     var state = {
       counter: 0,
       currentSwimlaneId: null,
+      lastActionId: null,
+      openNote: null,
       // Stack frames: { type: 'root'|'if-node'|'if-branch', target: array<Node>, ifNode?, branch? }
       stack: [{ type: 'root', target: result.nodes }],
     };
@@ -77,6 +84,25 @@ window.MA.modules.plantumlActivity = (function() {
           });
           openAction = null;
         }
+        continue;
+      }
+
+      // Multi-line note collection (BEFORE empty-line skip)
+      if (state.openNote) {
+        if (END_NOTE_RE.test(trimmed)) {
+          result.notes.push({
+            kind: 'note',
+            id: '__n_' + result.notes.length,
+            position: state.openNote.position,
+            attachedNodeId: state.openNote.attachedNodeId,
+            text: state.openNote.bodyLines.join('\n'),
+            line: state.openNote.startLine,
+            endLine: lineNum,
+          });
+          state.openNote = null;
+          continue;
+        }
+        state.openNote.bodyLines.push(rawLine.replace(/^  /, ''));
         continue;
       }
 
@@ -280,6 +306,31 @@ window.MA.modules.plantumlActivity = (function() {
       }
       if (END_RE.test(trimmed)) {
         _appendNode(state, { kind: 'end', id: _newId(state), line: lineNum, endLine: lineNum, swimlaneId: null });
+        continue;
+      }
+
+      // Note (1-line and block open) — placed BEFORE action `:` handling
+      var noteInlineMatch = trimmed.match(NOTE_INLINE_RE);
+      if (noteInlineMatch) {
+        result.notes.push({
+          kind: 'note',
+          id: '__n_' + result.notes.length,
+          position: noteInlineMatch[1].toLowerCase(),
+          attachedNodeId: state.lastActionId,
+          text: noteInlineMatch[2],
+          line: lineNum,
+          endLine: lineNum,
+        });
+        continue;
+      }
+      var noteBlockMatch = trimmed.match(NOTE_BLOCK_OPEN_RE);
+      if (noteBlockMatch) {
+        state.openNote = {
+          startLine: lineNum,
+          position: noteBlockMatch[1].toLowerCase(),
+          attachedNodeId: state.lastActionId,
+          bodyLines: [],
+        };
         continue;
       }
 
