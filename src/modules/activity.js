@@ -1052,11 +1052,71 @@ window.MA.modules.plantumlActivity = (function() {
       }
     }
   }
-  function _renderNoteEdit(sel, parsedData, propsEl, ctx) {
-    propsEl.innerHTML = '<div>edit (Task 18)</div>';
-  }
   function _renderSwimlaneEdit(sel, parsedData, propsEl, ctx) {
-    propsEl.innerHTML = '<div>edit (Task 18)</div>';
+    var P = window.MA.properties;
+    var sw = null;
+    var sws = parsedData.swimlanes || [];
+    for (var i = 0; i < sws.length; i++) {
+      if (sws[i].id === sel.id) { sw = sws[i]; break; }
+    }
+    if (!sw) { propsEl.innerHTML = ''; return; }
+    var html =
+      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">Swimlane "' + window.MA.htmlUtils.escHtml(sw.label) + '" (L' + sw.line + ')</div>' +
+      P.fieldHtml('Name', 'ac-sw-name', sw.label) +
+      P.primaryButtonHtml('ac-sw-update', '更新') +
+      P.primaryButtonHtml('ac-sw-delete', '✕ swimlane 解除');
+    propsEl.innerHTML = html;
+
+    P.bindEvent('ac-sw-update', 'click', function() {
+      var newLabel = document.getElementById('ac-sw-name').value;
+      window.MA.history.pushHistory();
+      ctx.setMmdText(updateSwimlane(ctx.getMmdText(), sw.line, newLabel));
+      ctx.onUpdate();
+    });
+    P.bindEvent('ac-sw-delete', 'click', function() {
+      window.MA.history.pushHistory();
+      ctx.setMmdText(deleteNode(ctx.getMmdText(), sw.line, sw.line));
+      window.MA.selection.clearSelection();
+      ctx.onUpdate();
+    });
+  }
+
+  function _renderNoteEdit(sel, parsedData, propsEl, ctx) {
+    var P = window.MA.properties;
+    var note = null;
+    var notes = parsedData.notes || [];
+    for (var i = 0; i < notes.length; i++) {
+      if (notes[i].id === sel.id) { note = notes[i]; break; }
+    }
+    if (!note) { propsEl.innerHTML = ''; return; }
+    var html =
+      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">Note (L' + note.line + ')</div>' +
+      P.selectFieldHtml('Position', 'ac-note-pos', [
+        { value: 'right', label: 'Right', selected: note.position === 'right' },
+        { value: 'left', label: 'Left', selected: note.position === 'left' }
+      ]) +
+      '<div style="margin-bottom:6px;">' +
+        '<label style="display:block;font-size:10px;color:var(--text-secondary);">Text</label>' +
+        '<textarea id="ac-note-text" style="width:100%;min-height:80px;">' + window.MA.htmlUtils.escHtml(note.text || '') + '</textarea>' +
+      '</div>' +
+      P.primaryButtonHtml('ac-note-update', '更新') +
+      P.primaryButtonHtml('ac-note-delete', '✕ 削除');
+    propsEl.innerHTML = html;
+
+    P.bindEvent('ac-note-update', 'click', function() {
+      window.MA.history.pushHistory();
+      ctx.setMmdText(updateNote(ctx.getMmdText(), note.line, note.endLine, {
+        position: document.getElementById('ac-note-pos').value,
+        text: document.getElementById('ac-note-text').value
+      }));
+      ctx.onUpdate();
+    });
+    P.bindEvent('ac-note-delete', 'click', function() {
+      window.MA.history.pushHistory();
+      ctx.setMmdText(deleteNode(ctx.getMmdText(), note.line, note.endLine));
+      window.MA.selection.clearSelection();
+      ctx.onUpdate();
+    });
   }
 
   function getTemplate() {
