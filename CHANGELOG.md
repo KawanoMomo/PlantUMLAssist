@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.1] - 2026-04-27
+
+### Added
+- **Member 個別 SVG クリック選択** — class / interface / abstract / enum の attribute / method / enum-value 行を SVG で直接 click → property panel が自動 expand inline edit + auto-scroll
+- **Note on class** — 1行 + 複数行 directional note (`note (left|right|top|bottom) of NAME`) の parse / formatter / add / update / delete + class 削除時の cascade
+- `core/overlay-builder.js` `extractMultiLineTextBBoxes(g, opts)` API 追加 (Activity v0.7.0 と共有予定)
+- ADR-108: Note canonical DSL form
+- E2E: `class-v0.6.1.spec.js` (6 tests, member click + note)
+
+### Changed
+- `src/core/selection-router.js` shift+click 時に `member` type の selection を `parentClass` に coerce + dedup (multi-select connect 互換性のため)
+- `src/modules/class.js` `_renderElementEdit` に opts.focusMemberIndex 受付追加 (member 選択時の auto-expand 用)
+
+### Notes
+- v0.7.0 へ繰越: 内部クラス、floating note (`note "..." as N`) + link、note on relation、member の drag-to-reorder
+- 設計詳細: `docs/superpowers/specs/2026-04-27-class-v0.6.1-design.md`
+- 実装計画: `docs/superpowers/plans/2026-04-27-class-v0.6.1.md`
+
 ## [0.6.0] - 2026-04-26
 
 ### Added

@@ -217,6 +217,12 @@ Circle *-- Color
 - 内部クラス (class 内 class 定義)
 - Note on class
 
+### v0.6.1 — Class polish (Member click + Note on class)
+
+- **Member 個別 click**: SVG 上の attribute / method / enum-value 行を直接クリック → 該当 member の inline edit が auto-expand
+- **Note on class**: 1 行 / 複数行 directional note を property panel から作成・編集・削除。class 削除時に紐付く note も自動削除
+- **Activity v0.7.0 へ向けた API**: `extractMultiLineTextBBoxes` を `core/overlay-builder` に汎化、複数行 text の per-line bbox 取得を共通化
+
 ## Overlay-Driven Editing 共通操作 (v0.5.0)
 
 Sequence / UseCase / Component のすべてで以下が共通:
