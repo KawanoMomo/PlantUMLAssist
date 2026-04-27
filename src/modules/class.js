@@ -562,6 +562,42 @@ window.MA.modules.plantumlClass = (function() {
     return lines.join('\n');
   }
 
+  function _swapLines(text, lineA, lineB) {
+    var lines = text.split('\n');
+    var ia = lineA - 1, ib = lineB - 1;
+    if (ia < 0 || ib < 0 || ia >= lines.length || ib >= lines.length) return text;
+    var tmp = lines[ia]; lines[ia] = lines[ib]; lines[ib] = tmp;
+    return lines.join('\n');
+  }
+
+  function _findElementById(parsed, classId) {
+    for (var i = 0; i < parsed.elements.length; i++) {
+      if (parsed.elements[i].id === classId) return parsed.elements[i];
+    }
+    return null;
+  }
+
+  function moveMemberUpByIndex(text, classId, memberIndex) {
+    var elt = _findElementById(parse(text), classId);
+    if (!elt || !elt.members) return text;
+    if (memberIndex <= 0 || memberIndex >= elt.members.length) return text;
+    return _swapLines(text, elt.members[memberIndex - 1].line, elt.members[memberIndex].line);
+  }
+
+  function moveMemberDownByIndex(text, classId, memberIndex) {
+    var elt = _findElementById(parse(text), classId);
+    if (!elt || !elt.members) return text;
+    if (memberIndex < 0 || memberIndex >= elt.members.length - 1) return text;
+    return _swapLines(text, elt.members[memberIndex].line, elt.members[memberIndex + 1].line);
+  }
+
+  function deleteMemberByIndex(text, classId, memberIndex) {
+    var elt = _findElementById(parse(text), classId);
+    if (!elt || !elt.members) return text;
+    if (memberIndex < 0 || memberIndex >= elt.members.length) return text;
+    return deleteMember(text, elt.members[memberIndex].line);
+  }
+
   var moveLineUp = window.MA.dslUpdater.moveLineUp;
   var moveLineDown = window.MA.dslUpdater.moveLineDown;
   var renameWithRefs = window.MA.dslUpdater.renameWithRefs;
@@ -1060,19 +1096,19 @@ window.MA.modules.plantumlClass = (function() {
       P.bindEvent('cl-mem-up-' + mi, 'click', function(e) {
         if (e && e.stopPropagation) e.stopPropagation();
         window.MA.history.pushHistory();
-        ctx.setMmdText(moveLineUp(ctx.getMmdText(), m.line));
+        ctx.setMmdText(moveMemberUpByIndex(ctx.getMmdText(), element.id, mi));
         ctx.onUpdate();
       });
       P.bindEvent('cl-mem-down-' + mi, 'click', function(e) {
         if (e && e.stopPropagation) e.stopPropagation();
         window.MA.history.pushHistory();
-        ctx.setMmdText(moveLineDown(ctx.getMmdText(), m.line));
+        ctx.setMmdText(moveMemberDownByIndex(ctx.getMmdText(), element.id, mi));
         ctx.onUpdate();
       });
       P.bindEvent('cl-mem-del-' + mi, 'click', function(e) {
         if (e && e.stopPropagation) e.stopPropagation();
         window.MA.history.pushHistory();
-        ctx.setMmdText(deleteMember(ctx.getMmdText(), m.line));
+        ctx.setMmdText(deleteMemberByIndex(ctx.getMmdText(), element.id, mi));
         ctx.setSelectedHighlight([]);
         ctx.onUpdate();
       });
@@ -1673,6 +1709,9 @@ window.MA.modules.plantumlClass = (function() {
     updateAttribute: updateAttribute,
     updateMethod: updateMethod,
     deleteMember: deleteMember,
+    deleteMemberByIndex: deleteMemberByIndex,
+    moveMemberUpByIndex: moveMemberUpByIndex,
+    moveMemberDownByIndex: moveMemberDownByIndex,
     deleteLine: deleteLine,
     deleteClassWithNotes: deleteClassWithNotes,
     moveLineUp: moveLineUp,

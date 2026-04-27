@@ -268,6 +268,75 @@ describe('class line ops', function() {
   });
 });
 
+describe('class member move/delete by index (closure-stale safe)', function() {
+  test('moveMemberUpByIndex no-op for first member (does not swap with class declaration)', function() {
+    var t = '@startuml\nclass Foo {\n  + a : int\n  + b : int\n}\n@enduml';
+    var out = clMod.moveMemberUpByIndex(t, 'Foo', 0);
+    expect(out).toBe(t);
+    var ls = out.split('\n');
+    expect(ls[1]).toBe('class Foo {');
+  });
+  test('moveMemberUpByIndex swaps within class block (idx 1 → 0)', function() {
+    var t = '@startuml\nclass Foo {\n  + a : int\n  + b : int\n}\n@enduml';
+    var out = clMod.moveMemberUpByIndex(t, 'Foo', 1);
+    var ls = out.split('\n');
+    expect(ls[1]).toBe('class Foo {');
+    expect(ls[2]).toContain('+ b');
+    expect(ls[3]).toContain('+ a');
+    expect(ls[4]).toBe('}');
+  });
+  test('moveMemberDownByIndex no-op for last member', function() {
+    var t = '@startuml\nclass Foo {\n  + a : int\n  + b : int\n}\n@enduml';
+    var out = clMod.moveMemberDownByIndex(t, 'Foo', 1);
+    expect(out).toBe(t);
+  });
+  test('moveMemberDownByIndex swaps within class block (idx 0 → 1)', function() {
+    var t = '@startuml\nclass Foo {\n  + a : int\n  + b : int\n}\n@enduml';
+    var out = clMod.moveMemberDownByIndex(t, 'Foo', 0);
+    var ls = out.split('\n');
+    expect(ls[2]).toContain('+ b');
+    expect(ls[3]).toContain('+ a');
+    expect(ls[4]).toBe('}');
+  });
+  test('moveMember*ByIndex returns text unchanged for unknown classId', function() {
+    var t = '@startuml\nclass Foo {\n  + a : int\n}\n@enduml';
+    expect(clMod.moveMemberUpByIndex(t, 'Bar', 0)).toBe(t);
+    expect(clMod.moveMemberDownByIndex(t, 'Bar', 0)).toBe(t);
+  });
+  test('moveMemberUpByIndex with single-member class: no-op even on idx 0', function() {
+    var t = '@startuml\nclass Foo {\n  + a : int\n}\n@enduml';
+    var out = clMod.moveMemberUpByIndex(t, 'Foo', 0);
+    expect(out).toBe(t);
+    var ls = out.split('\n');
+    expect(ls[1]).toBe('class Foo {');
+    expect(ls[2]).toContain('+ a');
+    expect(ls[3]).toBe('}');
+  });
+  test('deleteMemberByIndex deletes the correct member by index', function() {
+    var t = '@startuml\nclass Foo {\n  + a : int\n  + b : int\n  + c : int\n}\n@enduml';
+    var out = clMod.deleteMemberByIndex(t, 'Foo', 1);
+    expect(out).toContain('+ a');
+    expect(out).toContain('+ c');
+    expect(out).not.toContain('+ b');
+  });
+  test('deleteMemberByIndex rapid same-index calls do NOT delete non-member lines (class brace preserved)', function() {
+    // Reproduces the rapid-click bug: 3-member class, delete idx 0 four times in a row.
+    // Without index-based safety: closure-captured m.line=stale would splice the closing '}'
+    // and break DSL. With fix: each call re-parses, returns unchanged when idx out of range.
+    var t = '@startuml\nclass Foo {\n  + a : int\n  + b : int\n  + c : int\n}\n@enduml';
+    var t1 = clMod.deleteMemberByIndex(t, 'Foo', 0);   // members: [b, c]
+    var t2 = clMod.deleteMemberByIndex(t1, 'Foo', 0);  // members: [c]
+    var t3 = clMod.deleteMemberByIndex(t2, 'Foo', 0);  // members: []
+    var t4 = clMod.deleteMemberByIndex(t3, 'Foo', 0);  // out-of-range: no-op
+    expect(t3).toContain('class Foo {');
+    expect(t3).toContain('}');
+    expect(t3).not.toContain('+ a');
+    expect(t3).not.toContain('+ b');
+    expect(t3).not.toContain('+ c');
+    expect(t4).toBe(t3);
+  });
+});
+
 if (prevWindow !== undefined) global.window = prevWindow;
 if (prevDocument !== undefined) global.document = prevDocument;
 depPaths.forEach(function(p) { try { delete require.cache[require.resolve(p)]; } catch (e) {} });
