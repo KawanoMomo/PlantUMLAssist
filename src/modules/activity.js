@@ -666,8 +666,9 @@ window.MA.modules.plantumlActivity = (function() {
   }
 
   // Find the line index of the matching endif for an `if` at ifLine (1-based).
-  // Returns 0-based index of endif line, or -1 if not found.
+  // Returns 0-based index of endif line, or -1 if not found / invalid ifLine.
   function _findMatchingEndif(lines, ifLine) {
+    if (ifLine < 1 || ifLine > lines.length) return -1;
     var depth = 0;
     for (var i = ifLine - 1; i < lines.length; i++) {
       var trimmed = lines[i].trim();
