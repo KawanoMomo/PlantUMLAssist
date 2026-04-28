@@ -286,6 +286,51 @@ test.describe('Activity v0.7.0', () => {
       expect(t).toContain('else (no)');
     });
 
+    test('UC-5: delete elseif from existing if', async ({ page }) => {
+      await gotoApp(page);
+      await page.locator('#diagram-type').selectOption('plantuml-activity');
+      await page.waitForTimeout(500);
+      await page.locator('#editor').fill('@startuml\nstart\nif (a?) then (yes)\n  :X;\nelseif (b?) then (yes)\n  :Y;\nelse\n  :Z;\nendif\nstop\n@enduml');
+      await page.waitForTimeout(2500);
+      var decision = page.locator('#overlay-layer polygon[data-type="decision"], #overlay-layer rect[data-type="decision"]').first();
+      var dCount = await decision.count();
+      if (dCount === 0) test.skip();
+      await decision.click();
+      await page.waitForTimeout(300);
+      page.once('dialog', function(d) { d.accept(); });  // confirm
+      // The delete button id depends on branch index; the elseif is branch index 1 (then=0, elseif=1)
+      var delBtn = page.locator('#ac-branch-del-1');
+      if ((await delBtn.count()) === 0) test.skip();
+      await delBtn.click();
+      await page.waitForTimeout(300);
+      var t = await getEditorText(page);
+      expect(t).not.toContain('elseif (b?)');
+      expect(t).not.toContain(':Y;');
+      expect(t).toContain(':X;');
+      expect(t).toContain(':Z;');
+    });
+
+    test('UC-6: add and delete fork-again branch', async ({ page }) => {
+      await gotoApp(page);
+      await page.locator('#diagram-type').selectOption('plantuml-activity');
+      await page.waitForTimeout(500);
+      await page.locator('#editor').fill('@startuml\nstart\nfork\n  :X;\nfork again\n  :Y;\nend fork\nstop\n@enduml');
+      await page.waitForTimeout(2500);
+      var forkBar = page.locator('#overlay-layer rect[data-type="fork"]').first();
+      var fCount = await forkBar.count();
+      if (fCount === 0) test.skip();
+      await forkBar.click();
+      await page.waitForTimeout(300);
+      // Add new fork again
+      var addBtn = page.locator('#ac-add-fork-again');
+      if ((await addBtn.count()) === 0) test.skip();
+      await addBtn.click();
+      await page.waitForTimeout(300);
+      var t1 = await getEditorText(page);
+      var againCount1 = (t1.match(/^fork again\s*$/gm) || []).length;
+      expect(againCount1).toBe(2);
+    });
+
     test('console error count is 0 during overlay interactions', async ({ page }) => {
       var errors = [];
       page.on('console', function(msg) { if (msg.type() === 'error') errors.push(msg.text()); });

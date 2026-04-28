@@ -408,6 +408,45 @@ describe('activity addForkBranch', function() {
   });
 });
 
+describe('activity deleteBranchAt', function() {
+  test('removes elseif branch only', function() {
+    var t = 'if (a?) then\n  :X;\nelseif (b?) then\n  :Y;\nelse\n  :Z;\nendif';
+    // elseif at line 3
+    var out = actMod.deleteBranchAt(t, 3);
+    expect(out).not.toContain('elseif (b?)');
+    expect(out).not.toContain(':Y;');
+    expect(out).toContain(':X;');
+    expect(out).toContain('else');
+    expect(out).toContain(':Z;');
+  });
+  test('removes else branch only', function() {
+    var t = 'if (a?) then\n  :X;\nelse\n  :Y;\nendif';
+    // else at line 3
+    var out = actMod.deleteBranchAt(t, 3);
+    expect(out).not.toContain(':Y;');
+    var hasElse = false;
+    out.split('\n').forEach(function(l) { if (/^\s*else(\s|$)/.test(l)) hasElse = true; });
+    expect(hasElse).toBe(false);
+    expect(out).toContain(':X;');
+  });
+  test('removes fork again branch only', function() {
+    var t = 'fork\n  :X;\nfork again\n  :Y;\nfork again\n  :Z;\nend fork';
+    // fork again at line 5 (the second one)
+    var out = actMod.deleteBranchAt(t, 5);
+    var againCount = 0;
+    out.split('\n').forEach(function(l) { if (/^\s*fork again\s*$/.test(l)) againCount++; });
+    expect(againCount).toBe(1);
+    expect(out).not.toContain(':Z;');
+    expect(out).toContain(':X;');
+    expect(out).toContain(':Y;');
+  });
+  test('returns input unchanged for non-branch line', function() {
+    var t = 'if (a?) then\n  :X;\nendif';
+    // line 2 is :X; (not a branch)
+    expect(actMod.deleteBranchAt(t, 2)).toBe(t);
+  });
+});
+
 describe('activity resolveInsertLine (Y → line/position mapping)', function() {
   var SVG_NS = 'http://www.w3.org/2000/svg';
   function makeOverlay(rectsSpec) {

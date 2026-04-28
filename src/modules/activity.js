@@ -764,6 +764,49 @@ window.MA.modules.plantumlActivity = (function() {
     return lines.join('\n');
   }
 
+  // Delete a single branch (elseif | else | fork again) at branchLine,
+  // including its body up to (but excluding) the next branch line or
+  // endif/end fork. The structure itself is preserved.
+  function deleteBranchAt(text, branchLine) {
+    var lines = text.split('\n');
+    var idx = branchLine - 1;
+    if (idx < 0 || idx >= lines.length) return text;
+    var trimmed = lines[idx].trim();
+    var isElseif = ELSEIF_RE.test(trimmed);
+    var isElse = ELSE_RE.test(trimmed) && !isElseif;
+    var isForkAgain = FORK_AGAIN_RE.test(trimmed);
+    if (!isElseif && !isElse && !isForkAgain) return text;
+
+    // Find end-of-branch: next line at same depth that is elseif/else/endif
+    // (for if-branches) or fork again/end fork (for fork-branches).
+    var depth = 0;
+    var endIdx = lines.length;  // exclusive
+    for (var i = idx + 1; i < lines.length; i++) {
+      var t2 = lines[i].trim();
+      if (isForkAgain) {
+        if (FORK_OPEN_RE.test(t2)) depth++;
+        else if (END_FORK_RE.test(t2)) {
+          if (depth === 0) { endIdx = i; break; }
+          depth--;
+        } else if (FORK_AGAIN_RE.test(t2) && depth === 0) {
+          endIdx = i; break;
+        }
+      } else {
+        // elseif or else
+        if (IF_OPEN_RE.test(t2)) depth++;
+        else if (ENDIF_RE.test(t2)) {
+          if (depth === 0) { endIdx = i; break; }
+          depth--;
+        } else if ((ELSEIF_RE.test(t2) || ELSE_RE.test(t2)) && depth === 0) {
+          endIdx = i; break;
+        }
+      }
+    }
+    var before = lines.slice(0, idx);
+    var after = lines.slice(endIdx);
+    return before.concat(after).join('\n');
+  }
+
   // Map a Y-coordinate (in SVG/overlay coordinates) to the nearest model line +
   // before/after position. Returns null when the overlay has no node rects.
   function resolveInsertLine(overlayEl, y) {
@@ -1398,9 +1441,14 @@ window.MA.modules.plantumlActivity = (function() {
       for (var bi = 0; bi < brs.length; bi++) {
         var b = brs[bi];
         if (b.kind === 'else') hasElse = true;
+        var deleteBtn = '';
+        if (b.kind === 'elseif' || b.kind === 'else') {
+          deleteBtn = ' <button id="ac-branch-del-' + bi + '" data-line="' + b.line + '" title="この branch を削除" style="background:var(--accent-red);border:none;color:#fff;padding:2px 6px;border-radius:3px;cursor:pointer;font-size:10px;">✕</button>';
+        }
         html += '<div style="font-size:11px;margin-bottom:2px;">' +
                   '▸ ' + b.kind + ' (' + window.MA.htmlUtils.escHtml(b.label || '') + ')' + (b.condition ? ' cond: ' + window.MA.htmlUtils.escHtml(b.condition) : '') + ' (L' + b.line + ')' +
                   ' <button id="ac-branch-edit-' + bi + '" data-line="' + b.line + '">edit label</button>' +
+                  deleteBtn +
                 '</div>';
       }
       // Branch add buttons
@@ -1421,6 +1469,17 @@ window.MA.modules.plantumlActivity = (function() {
     } else if (node.kind === 'fork') {
       var fbrs = node.branches || [];
       html += '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">Branches (' + fbrs.length + ')</div>';
+      for (var fbi = 0; fbi < fbrs.length; fbi++) {
+        var fb = fbrs[fbi];
+        if (fbi === 0) {
+          html += '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:2px;">▸ branch 1 (L' + fb.line + ')</div>';
+        } else {
+          html += '<div style="font-size:11px;margin-bottom:2px;">' +
+                    '▸ branch ' + (fbi + 1) + ' (fork again, L' + fb.line + ')' +
+                    ' <button id="ac-fork-branch-del-' + fbi + '" data-line="' + fb.line + '" title="この branch を削除" style="background:var(--accent-red);border:none;color:#fff;padding:2px 6px;border-radius:3px;cursor:pointer;font-size:10px;">✕</button>' +
+                  '</div>';
+        }
+      }
       html += '<button id="ac-add-fork-again" style="font-size:11px;padding:3px 8px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">+ fork again 追加</button>';
     }
     html += P.primaryButtonHtml('ac-ctrl-update', '更新') +
@@ -1472,6 +1531,15 @@ window.MA.modules.plantumlActivity = (function() {
             ctx.setMmdText(updateBranchLabel(ctx.getMmdText(), b.line, newLabel));
             ctx.onUpdate();
           });
+          if (b.kind === 'elseif' || b.kind === 'else') {
+            P.bindEvent('ac-branch-del-' + bIdx, 'click', function() {
+              if (!confirm(b.kind + ' を削除します。続行しますか？')) return;
+              window.MA.history.pushHistory();
+              ctx.setMmdText(deleteBranchAt(ctx.getMmdText(), b.line));
+              window.MA.selection.clearSelection();
+              ctx.onUpdate();
+            });
+          }
         })(brs2[bj]);
       }
       P.bindEvent('ac-add-elseif', 'click', function() {
@@ -1490,6 +1558,18 @@ window.MA.modules.plantumlActivity = (function() {
       });
     }
     if (node.kind === 'fork') {
+      var fbrs2 = node.branches || [];
+      for (var fbj = 1; fbj < fbrs2.length; fbj++) {
+        (function(b, fIdx) {
+          P.bindEvent('ac-fork-branch-del-' + fIdx, 'click', function() {
+            if (!confirm('fork branch を削除します。続行しますか？')) return;
+            window.MA.history.pushHistory();
+            ctx.setMmdText(deleteBranchAt(ctx.getMmdText(), b.line));
+            window.MA.selection.clearSelection();
+            ctx.onUpdate();
+          });
+        })(fbrs2[fbj], fbj);
+      }
       P.bindEvent('ac-add-fork-again', 'click', function() {
         window.MA.history.pushHistory();
         ctx.setMmdText(addForkBranch(ctx.getMmdText(), node.line));
@@ -1603,6 +1683,7 @@ window.MA.modules.plantumlActivity = (function() {
     addElseifBranch: addElseifBranch,
     addElseBranch: addElseBranch,
     addForkBranch: addForkBranch,
+    deleteBranchAt: deleteBranchAt,
     _resolveInsertIndent: _resolveInsertIndent,
     resolveInsertLine: resolveInsertLine,
     showInsertForm: showInsertForm,
