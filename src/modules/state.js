@@ -344,6 +344,43 @@ window.MA.modules.plantumlState = (function() {
     return before.concat(newLines).concat(after).join('\n');
   }
 
+  function setStateBehavior(text, stateId, kind, value) {
+    if (kind !== 'entry' && kind !== 'exit' && kind !== 'do') return text;
+    var lines = text.split('\n');
+    // Multi-line value: encode newlines as backslash-n for PlantUML rendering
+    var encodedValue = (typeof value === 'string') ? value.replace(/\n/g, '\\n') : '';
+    // Find the bare id (after dot for nested states)
+    var bareId = stateId.indexOf('.') >= 0 ? stateId.split('.').pop() : stateId;
+    // Find existing description line for this kind
+    var existingIdx = -1;
+    var insertAfterIdx = -1;
+    for (var i = 0; i < lines.length; i++) {
+      var trimmed = lines[i].trim();
+      var dm = trimmed.match(/^(\w+)\s*:\s*(entry|exit|do)\s*\/\s*(.+)$/i);
+      if (dm && (dm[1] === stateId || dm[1] === bareId) && dm[2].toLowerCase() === kind) {
+        existingIdx = i;
+        break;
+      }
+      // Track the state declaration line as fallback insertion point
+      var sm = trimmed.match(/^state\s+(?:"[^"]+"\s+as\s+(\w+)|(\w+))/);
+      if (sm && (sm[1] === bareId || sm[2] === bareId)) {
+        insertAfterIdx = i;
+      }
+    }
+    if (existingIdx >= 0) {
+      if (encodedValue === '') {
+        lines.splice(existingIdx, 1);
+      } else {
+        var indent = (lines[existingIdx].match(/^(\s*)/) || ['', ''])[1];
+        lines[existingIdx] = indent + bareId + ' : ' + kind + ' / ' + encodedValue;
+      }
+    } else if (encodedValue !== '' && insertAfterIdx >= 0) {
+      var indent2 = (lines[insertAfterIdx].match(/^(\s*)/) || ['', ''])[1];
+      lines.splice(insertAfterIdx + 1, 0, indent2 + bareId + ' : ' + kind + ' / ' + encodedValue);
+    }
+    return lines.join('\n');
+  }
+
   function deleteNode(text, startLine, endLine) {
     var lines = text.split('\n');
     var startIdx = startLine - 1;
@@ -908,6 +945,7 @@ window.MA.modules.plantumlState = (function() {
     updateState: updateState,
     updateTransition: updateTransition,
     updateNote: updateNote,
+    setStateBehavior: setStateBehavior,
     deleteNode: deleteNode,
     deleteStateWithRefs: deleteStateWithRefs,
     resolveInsertLine: resolveInsertLine,

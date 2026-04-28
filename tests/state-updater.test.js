@@ -131,6 +131,37 @@ describe('state update/delete ops', function() {
   });
 });
 
+describe('state setStateBehavior', function() {
+  test('inserts entry description line', function() {
+    var t = '@startuml\nstate Driving\n@enduml';
+    var out = stMod.setStateBehavior(t, 'Driving', 'entry', 'start_engine()');
+    expect(out).toContain('Driving : entry / start_engine()');
+  });
+  test('updates existing entry line', function() {
+    var t = '@startuml\nstate Driving\nDriving : entry / old()\n@enduml';
+    var out = stMod.setStateBehavior(t, 'Driving', 'entry', 'new()');
+    expect(out).toContain('Driving : entry / new()');
+    expect(out).not.toContain('old()');
+  });
+  test('removes line when value is empty', function() {
+    var t = '@startuml\nstate Driving\nDriving : entry / x()\n@enduml';
+    var out = stMod.setStateBehavior(t, 'Driving', 'entry', '');
+    expect(out).not.toContain('entry / x()');
+    expect(out).toContain('state Driving');
+  });
+  test('multi-line do uses backslash-n escape', function() {
+    var t = '@startuml\nstate Driving\n@enduml';
+    var out = stMod.setStateBehavior(t, 'Driving', 'do', 'a\nb\nc');
+    expect(out).toContain('Driving : do / a\\nb\\nc');
+  });
+  test('do prefix and entry prefix coexist', function() {
+    var t = '@startuml\nstate Driving\nDriving : entry / a\n@enduml';
+    var out = stMod.setStateBehavior(t, 'Driving', 'do', 'b');
+    expect(out).toContain('Driving : entry / a');
+    expect(out).toContain('Driving : do / b');
+  });
+});
+
 if (prevWindow !== undefined) global.window = prevWindow;
 if (prevDocument !== undefined) global.document = prevDocument;
 depPaths.forEach(function(p) { try { delete require.cache[require.resolve(p)]; } catch (e) {} });
