@@ -687,13 +687,13 @@ window.MA.modules.plantumlActivity = (function() {
     return { line: items[0].line, position: 'before' };
   }
 
-  // Open a modal popup to insert an action `:text;` before/after the resolved line.
-  // Mirrors sequence.showInsertForm pattern but limited to action insertion.
+  // Open a modal popup to insert a new node before/after the resolved line.
+  // Supports all 7 kinds: action / if / while / repeat / fork / swimlane / note
   function showInsertForm(ctx, line, position, kind) {
     var modal = document.getElementById('act-modal');
     var content = document.getElementById('act-modal-content');
     if (!modal || !content) {
-      // Fallback: prompt() if modal HTML missing
+      // Fallback: prompt() for action only
       var t = window.prompt((position === 'before' ? '前に' : '後に') + 'アクションを挿入: テキスト', '');
       if (t === null) return;
       window.MA.history.pushHistory();
@@ -702,28 +702,101 @@ window.MA.modules.plantumlActivity = (function() {
       return;
     }
     var P = window.MA.properties;
-    var title = (position === 'before' ? '前に' : '後に') + 'アクションを挿入 (L' + line + ')';
+    var defaultKind = kind || 'action';
+    var title = '(L' + line + ' の ' + (position === 'before' ? '前' : '後') + ') に挿入';
     content.innerHTML =
       '<h3 style="margin:0 0 12px 0;color:var(--text-primary);">' + title + '</h3>' +
-      '<div style="margin-bottom:8px;">' +
-        '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">アクション本文 (改行可)</label>' +
-        '<textarea id="act-mod-text" style="width:100%;min-height:60px;font-family:inherit;font-size:12px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:3px;"></textarea>' +
-      '</div>' +
+      P.selectFieldHtml('種類', 'act-mod-kind', [
+        { value: 'action', label: 'Action', selected: defaultKind === 'action' },
+        { value: 'if', label: 'If decision', selected: defaultKind === 'if' },
+        { value: 'while', label: 'While loop', selected: defaultKind === 'while' },
+        { value: 'repeat', label: 'Repeat loop', selected: defaultKind === 'repeat' },
+        { value: 'fork', label: 'Fork', selected: defaultKind === 'fork' },
+        { value: 'swimlane', label: 'Swimlane', selected: defaultKind === 'swimlane' },
+        { value: 'note', label: 'Note', selected: defaultKind === 'note' }
+      ]) +
+      '<div id="act-mod-fields" style="margin-top:8px;"></div>' +
       '<div style="display:flex;gap:8px;margin-top:12px;">' +
         '<button id="act-mod-cancel" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:8px;border-radius:4px;cursor:pointer;">キャンセル</button>' +
         '<button id="act-mod-confirm" style="flex:1;background:var(--accent);border:none;color:#fff;padding:8px;border-radius:4px;cursor:pointer;">確定</button>' +
       '</div>';
     modal.style.display = 'flex';
-    var ta = document.getElementById('act-mod-text');
-    if (ta && ta.focus) setTimeout(function() { ta.focus(); }, 0);
+
+    function renderFields() {
+      var k = document.getElementById('act-mod-kind').value;
+      var fEl = document.getElementById('act-mod-fields');
+      var html = '';
+      if (k === 'action') {
+        html = '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">アクション本文 (改行可)</label>' +
+               '<textarea id="act-mod-text" style="width:100%;min-height:60px;font-family:inherit;font-size:12px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:3px;"></textarea>';
+      } else if (k === 'if') {
+        html = P.fieldHtml('Condition', 'act-mod-cond', '', '例: 認証成功?') +
+               P.fieldHtml('Then label', 'act-mod-thenlbl', 'yes') +
+               P.fieldHtml('Else label (空で else 省略)', 'act-mod-elselbl', 'no');
+      } else if (k === 'while') {
+        html = P.fieldHtml('Condition', 'act-mod-cond', '') +
+               P.fieldHtml('Label', 'act-mod-lbl', 'yes');
+      } else if (k === 'repeat') {
+        html = P.fieldHtml('Repeat-while condition', 'act-mod-cond', '') +
+               P.fieldHtml('Label', 'act-mod-lbl', 'yes');
+      } else if (k === 'fork') {
+        html = P.fieldHtml('Branches', 'act-mod-bcount', '2');
+      } else if (k === 'swimlane') {
+        html = P.fieldHtml('Name', 'act-mod-name', '');
+      } else if (k === 'note') {
+        html = P.selectFieldHtml('Position', 'act-mod-notepos', [
+          { value: 'right', label: 'right', selected: true },
+          { value: 'left', label: 'left' }
+        ]) +
+        '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-top:6px;margin-bottom:2px;">Text (改行可)</label>' +
+        '<textarea id="act-mod-text" style="width:100%;min-height:50px;font-family:inherit;font-size:12px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:3px;"></textarea>';
+      }
+      fEl.innerHTML = html;
+    }
+    renderFields();
+    P.bindEvent('act-mod-kind', 'change', renderFields);
 
     function close() { modal.style.display = 'none'; content.innerHTML = ''; }
     P.bindEvent('act-mod-cancel', 'click', close);
     P.bindEvent('act-mod-confirm', 'click', function() {
-      var txt = (document.getElementById('act-mod-text') || {}).value || '';
-      window.MA.history.pushHistory();
-      ctx.setMmdText(addActionAtLine(ctx.getMmdText(), line, position, txt));
-      ctx.onUpdate();
+      var k = document.getElementById('act-mod-kind').value;
+      var src = ctx.getMmdText();
+      var out = src;
+      if (k === 'action') {
+        var txt = (document.getElementById('act-mod-text') || {}).value || '';
+        out = addActionAtLine(src, line, position, txt);
+      } else if (k === 'if') {
+        out = addControlAtLine(src, line, position, 'if', {
+          cond: document.getElementById('act-mod-cond').value,
+          thenLabel: document.getElementById('act-mod-thenlbl').value || 'yes',
+          elseLabel: document.getElementById('act-mod-elselbl').value
+        });
+      } else if (k === 'while') {
+        out = addControlAtLine(src, line, position, 'while', {
+          cond: document.getElementById('act-mod-cond').value,
+          label: document.getElementById('act-mod-lbl').value || 'yes'
+        });
+      } else if (k === 'repeat') {
+        out = addControlAtLine(src, line, position, 'repeat', {
+          cond: document.getElementById('act-mod-cond').value,
+          label: document.getElementById('act-mod-lbl').value || 'yes'
+        });
+      } else if (k === 'fork') {
+        var n = parseInt(document.getElementById('act-mod-bcount').value, 10) || 2;
+        out = addControlAtLine(src, line, position, 'fork', { branchCount: n });
+      } else if (k === 'swimlane') {
+        out = addSwimlaneAtLine(src, line, position, document.getElementById('act-mod-name').value);
+      } else if (k === 'note') {
+        out = addNoteAtLine(src, line, position, {
+          position: document.getElementById('act-mod-notepos').value,
+          text: (document.getElementById('act-mod-text') || {}).value || ''
+        });
+      }
+      if (out !== src) {
+        window.MA.history.pushHistory();
+        ctx.setMmdText(out);
+        ctx.onUpdate();
+      }
       close();
     });
   }
