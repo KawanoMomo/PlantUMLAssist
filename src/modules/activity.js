@@ -566,6 +566,21 @@ window.MA.modules.plantumlActivity = (function() {
     return before.concat(after).join('\n');
   }
 
+  // Closing tokens: indent should be inherited from PREVIOUS line, not these.
+  var CLOSING_TOKEN_RE = /^(endif|endwhile|repeat\s+while|else|elseif|end\s+fork|fork\s+again|end\s+note)/i;
+
+  function _resolveInsertIndent(lines, targetIdx) {
+    if (targetIdx < 0) targetIdx = 0;
+    if (targetIdx >= lines.length) targetIdx = lines.length - 1;
+    var src = lines[targetIdx] || '';
+    var trimmed = src.trim();
+    // If target is a closing token, use previous line's indent
+    if (CLOSING_TOKEN_RE.test(trimmed) && targetIdx > 0) {
+      src = lines[targetIdx - 1] || src;
+    }
+    return (src.match(/^(\s*)/) || ['', ''])[1];
+  }
+
   // Insert an action `:text;` before or after the specified line, preserving
   // surrounding indent so the new action stays inside the same control block.
   function addActionAtLine(text, lineNum, position, actionText) {
@@ -573,9 +588,7 @@ window.MA.modules.plantumlActivity = (function() {
     var targetIdx = position === 'before' ? lineNum - 1 : lineNum;
     if (targetIdx < 0) targetIdx = 0;
     if (targetIdx > lines.length) targetIdx = lines.length;
-    // Match indent of nearest existing line (preferred: target line, else previous)
-    var indentSrc = lines[Math.min(targetIdx, lines.length - 1)] || lines[Math.max(0, targetIdx - 1)] || '';
-    var indent = (indentSrc.match(/^(\s*)/) || ['', ''])[1];
+    var indent = _resolveInsertIndent(lines, Math.min(targetIdx, lines.length - 1));
     var newLine = indent + ':' + (actionText || '') + ';';
     lines.splice(targetIdx, 0, newLine);
     return lines.join('\n');
@@ -1308,6 +1321,7 @@ window.MA.modules.plantumlActivity = (function() {
     updateNote: updateNote,
     deleteNode: deleteNode,
     addActionAtLine: addActionAtLine,
+    _resolveInsertIndent: _resolveInsertIndent,
     resolveInsertLine: resolveInsertLine,
     showInsertForm: showInsertForm,
     defaultInsertKind: 'action',

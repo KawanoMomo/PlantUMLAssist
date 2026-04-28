@@ -190,6 +190,26 @@ describe('activity addActionAtLine (mid-insertion)', function() {
   });
 });
 
+describe('activity _resolveInsertIndent', function() {
+  test('returns indent of target line for action', function() {
+    var lines = ['if (a?) then', '  :X;', 'endif'];
+    expect(actMod._resolveInsertIndent(lines, 1)).toBe('  ');
+  });
+  test('falls back to previous line when target is closing token', function() {
+    var lines = ['if (a?) then', '  :X;', 'endif'];
+    // targetIdx=2 ('endif') → previous line indent ('  ')
+    expect(actMod._resolveInsertIndent(lines, 2)).toBe('  ');
+  });
+  test('handles top-level (no indent)', function() {
+    var lines = [':A;', ':B;'];
+    expect(actMod._resolveInsertIndent(lines, 1)).toBe('');
+  });
+  test('handles else as closing token', function() {
+    var lines = ['if (a?) then', '  :X;', 'else', '  :Y;', 'endif'];
+    expect(actMod._resolveInsertIndent(lines, 2)).toBe('  ');
+  });
+});
+
 describe('activity resolveInsertLine (Y → line/position mapping)', function() {
   var SVG_NS = 'http://www.w3.org/2000/svg';
   function makeOverlay(rectsSpec) {
