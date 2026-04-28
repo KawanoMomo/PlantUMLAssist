@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.3] - 2026-04-29
+
+### Fixed — Note attachment
+
+- **`addNoteAtLine` の attachment bug 修正** — position='before' で note を target line の前に挿入していたため、 PlantUML の「note は直前 statement に attach」仕様により **意図した action ではなく前の action** に note が付いていた。 targetIdx を常に lineNum に固定し、 必ず target line の AFTER に挿入するよう変更
+- API signature `(text, lineNum, position, fields)` は v1.0.1 互換のため維持、 position 引数は内部で無視
+- Unit テスト: +1 (position='before' 渡しでも正しい attachment になる回帰テスト)
+
+### Notes
+
+- 設計詳細: `docs/superpowers/specs/2026-04-29-activity-v1.0.3-design.md`
+- ユーザ指摘 「複雑なアクティビティ図を書いたときに Note を挿入すると選択したものとは違う Action に Note が付きます」 を解消
+- v1.0.4+ 繰越: property panel `+ Note` ボタンの indent 継承、 `note right of ALIAS` 構文移行、 buildOverlay の composite 内 action overlay rect emit、 State 図の同種 polish
+
 ## [1.0.2] - 2026-04-29
 
 ### Fixed — Branch-aware insertion
