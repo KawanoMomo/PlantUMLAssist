@@ -691,6 +691,7 @@ window.MA.modules.plantumlState = (function() {
     var related = (parsedData.transitions || []).filter(function(tr) { return tr.from === st.id || tr.to === st.id; });
     var notes = (parsedData.notes || []).filter(function(n) { return n.targetId === st.id; });
 
+    var doDisplay = (st.do || '').replace(/\\n/g, '\n');
     var html =
       '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' +
       (st.stereotype ? st.stereotype + ' ' : '') + 'State (L' + st.line + ')</div>' +
@@ -703,6 +704,19 @@ window.MA.modules.plantumlState = (function() {
         { value: 'historyDeep', label: 'historyDeep', selected: st.stereotype === 'historydeep' }
       ]) +
       '<div style="font-size:11px;margin:4px 0;color:var(--text-secondary);">Parent: ' + (st.parentId || '(root)') + '</div>' +
+      // Behaviors section (StableState style: entry/exit single-line, do multi-line)
+      '<div style="border-top:1px solid var(--border);padding-top:6px;margin-top:6px;">' +
+        '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">Behaviors</div>' +
+        '<div style="margin-bottom:5px;">' +
+          '<input id="st-entry" placeholder="entry" value="' + window.MA.htmlUtils.escHtml(st.entry || '') + '" style="width:100%;box-sizing:border-box;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-family:Consolas,monospace;font-size:11px;">' +
+        '</div>' +
+        '<div style="margin-bottom:5px;">' +
+          '<textarea id="st-do" placeholder="do" style="width:100%;box-sizing:border-box;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-family:Consolas,monospace;font-size:11px;min-height:40px;resize:vertical;line-height:1.4;white-space:pre;">' + window.MA.htmlUtils.escHtml(doDisplay) + '</textarea>' +
+        '</div>' +
+        '<div style="margin-bottom:5px;">' +
+          '<input id="st-exit" placeholder="exit" value="' + window.MA.htmlUtils.escHtml(st.exit || '') + '" style="width:100%;box-sizing:border-box;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-family:Consolas,monospace;font-size:11px;">' +
+        '</div>' +
+      '</div>' +
       P.primaryButtonHtml('st-update', '更新');
     if (related.length > 0) {
       html += '<div style="border-top:1px solid var(--border);padding-top:6px;margin-top:6px;">' +
@@ -729,11 +743,22 @@ window.MA.modules.plantumlState = (function() {
 
     P.bindEvent('st-update', 'click', function() {
       window.MA.history.pushHistory();
-      ctx.setMmdText(updateState(ctx.getMmdText(), st.line, {
-        id: document.getElementById('st-id').value,
+      var newId = document.getElementById('st-id').value;
+      var src = ctx.getMmdText();
+      var out = updateState(src, st.line, {
+        id: newId,
         label: document.getElementById('st-label').value,
         stereotype: document.getElementById('st-stereo').value || null
-      }));
+      });
+      // Apply Behaviors. Use the (possibly renamed) id.
+      var bareId = newId.indexOf('.') >= 0 ? newId.split('.').pop() : newId;
+      var entryVal = document.getElementById('st-entry').value;
+      var doVal = document.getElementById('st-do').value;
+      var exitVal = document.getElementById('st-exit').value;
+      out = setStateBehavior(out, bareId, 'entry', entryVal);
+      out = setStateBehavior(out, bareId, 'do', doVal);
+      out = setStateBehavior(out, bareId, 'exit', exitVal);
+      ctx.setMmdText(out);
       ctx.onUpdate();
     });
     P.bindEvent('st-delete', 'click', function() {
@@ -953,9 +978,9 @@ window.MA.modules.plantumlState = (function() {
     defaultInsertKind: 'state',
     capabilities: {
       overlaySelection: true,
-      hoverInsert: true,
+      hoverInsert: false,
       participantDrag: false,
-      showInsertForm: true,
+      showInsertForm: false,
       multiSelectConnect: false,
     },
   };
