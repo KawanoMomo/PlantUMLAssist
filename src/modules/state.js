@@ -169,9 +169,11 @@ window.MA.modules.plantumlState = (function() {
           }
         }
         if (targetState) {
-          if (dKind === 'entry') targetState.entry = (targetState.entry ? targetState.entry + '\n' : '') + dValue;
-          else if (dKind === 'exit') targetState.exit = (targetState.exit ? targetState.exit + '\n' : '') + dValue;
-          else if (dKind === 'do') targetState.do = (targetState.do ? targetState.do + '\n' : '') + dValue;
+          // Use `\\n` (literal 2-char escape) to join multi-occurrence values so they
+          // round-trip through Task 3's `<input>` fields (which strip real newlines).
+          if (dKind === 'entry') targetState.entry = (targetState.entry ? targetState.entry + '\\n' : '') + dValue;
+          else if (dKind === 'exit') targetState.exit = (targetState.exit ? targetState.exit + '\\n' : '') + dValue;
+          else if (dKind === 'do') targetState.do = (targetState.do ? targetState.do + '\\n' : '') + dValue;
           else targetState.descriptions.push(dValue);
           continue;
         }
