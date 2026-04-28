@@ -250,6 +250,50 @@ describe('activity addControlAtLine - if', function() {
   });
 });
 
+describe('activity addControlAtLine - while/repeat/fork', function() {
+  test('inserts while with placeholder', function() {
+    var t = ':A;\n:B;';
+    var out = actMod.addControlAtLine(t, 2, 'before', 'while', { cond: 'more?', label: 'yes' });
+    expect(out).toContain('while (more?) is (yes)');
+    expect(out).toContain('  :;');
+    expect(out).toContain('endwhile');
+  });
+  test('inserts repeat with placeholder', function() {
+    var t = ':A;\n:B;';
+    var out = actMod.addControlAtLine(t, 2, 'before', 'repeat', { cond: 'done?', label: 'no' });
+    var lines = out.split('\n');
+    var hasRepeat = false; var hasRepeatWhile = false;
+    for (var i = 0; i < lines.length; i++) {
+      if (/^\s*repeat\s*$/.test(lines[i])) hasRepeat = true;
+      if (lines[i].indexOf('repeat while (done?)') >= 0) hasRepeatWhile = true;
+    }
+    expect(hasRepeat).toBe(true);
+    expect(hasRepeatWhile).toBe(true);
+    expect(out).toContain('  :;');
+  });
+  test('inserts fork with N branches', function() {
+    var t = ':A;\n:B;';
+    var out = actMod.addControlAtLine(t, 2, 'before', 'fork', { branchCount: 3 });
+    var lines = out.split('\n');
+    var againCount = 0; var hasFork = false; var hasEndFork = false;
+    for (var i = 0; i < lines.length; i++) {
+      if (/^\s*fork\s*$/.test(lines[i])) hasFork = true;
+      if (/^\s*fork again\s*$/.test(lines[i])) againCount++;
+      if (/^\s*end fork\s*$/.test(lines[i])) hasEndFork = true;
+    }
+    expect(hasFork).toBe(true);
+    expect(againCount).toBe(2);  // 3 branches → 2 fork-again
+    expect(hasEndFork).toBe(true);
+  });
+  test('fork branchCount default is 2 when omitted', function() {
+    var t = ':A;';
+    var out = actMod.addControlAtLine(t, 1, 'after', 'fork', {});
+    var againCount = 0;
+    out.split('\n').forEach(function(l) { if (/^\s*fork again\s*$/.test(l)) againCount++; });
+    expect(againCount).toBe(1);  // 2 branches → 1 fork-again
+  });
+});
+
 describe('activity resolveInsertLine (Y → line/position mapping)', function() {
   var SVG_NS = 'http://www.w3.org/2000/svg';
   function makeOverlay(rectsSpec) {

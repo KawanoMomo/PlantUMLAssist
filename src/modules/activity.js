@@ -614,8 +614,25 @@ window.MA.modules.plantumlActivity = (function() {
         block.push(inner + ':;');
       }
       block.push(indent + 'endif');
+    } else if (kind === 'while') {
+      block.push(indent + fmtWhile(fields.cond || '', fields.label || 'yes'));
+      block.push(inner + ':;');
+      block.push(indent + 'endwhile');
+    } else if (kind === 'repeat') {
+      block.push(indent + 'repeat');
+      block.push(inner + ':;');
+      block.push(indent + fmtRepeatWhile(fields.cond || '', fields.label || 'yes'));
+    } else if (kind === 'fork') {
+      var n = Math.max(2, fields.branchCount || 2);
+      block.push(indent + 'fork');
+      block.push(inner + ':;');
+      for (var i = 1; i < n; i++) {
+        block.push(indent + 'fork again');
+        block.push(inner + ':;');
+      }
+      block.push(indent + 'end fork');
     } else {
-      return text;  // other kinds added in Task 3
+      return text;
     }
     // Splice block into lines
     var args = [targetIdx, 0].concat(block);
