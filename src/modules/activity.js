@@ -807,26 +807,45 @@ window.MA.modules.plantumlActivity = (function() {
     return before.concat(after).join('\n');
   }
 
-  // Map a Y-coordinate (in SVG/overlay coordinates) to the nearest model line +
-  // before/after position. Returns null when the overlay has no node rects.
-  function resolveInsertLine(overlayEl, y) {
+  // Map a click/hover position (in SVG/overlay coordinates) to the nearest
+  // rect by Euclidean distance, then determine before/after by Y relative to
+  // the rect center. X is honored for branch disambiguation in if/fork composites.
+  function resolveInsertLine(overlayEl, x, y) {
     if (!overlayEl) return null;
-    // Consider all node rects (action/decision/start/stop/end/fork)
     var rects = overlayEl.querySelectorAll(
       'rect[data-type="action"], rect[data-type="decision"], rect[data-type="start"],' +
       'rect[data-type="stop"], rect[data-type="end"], rect[data-type="fork"]'
     );
     if (rects.length === 0) return null;
-    var items = Array.prototype.map.call(rects, function(r) {
-      return {
-        line: parseInt(r.getAttribute('data-line'), 10),
-        y: parseFloat(r.getAttribute('y')) + parseFloat(r.getAttribute('height')) / 2,
-      };
-    }).sort(function(a, b) { return a.y - b.y; });
-    for (var i = items.length - 1; i >= 0; i--) {
-      if (y > items[i].y) return { line: items[i].line, position: 'after' };
-    }
-    return { line: items[0].line, position: 'before' };
+    var best = null;
+    var bestDist = Infinity;
+    Array.prototype.forEach.call(rects, function(r) {
+      var rx = parseFloat(r.getAttribute('x'));
+      var ry = parseFloat(r.getAttribute('y'));
+      var rw = parseFloat(r.getAttribute('width'));
+      var rh = parseFloat(r.getAttribute('height'));
+      var cx = rx + rw / 2;
+      var cy = ry + rh / 2;
+      var dx = x - cx;
+      var dy = y - cy;
+      var d = Math.sqrt(dx * dx + dy * dy);
+      if (d < bestDist) {
+        bestDist = d;
+        best = {
+          line: parseInt(r.getAttribute('data-line'), 10),
+          cy: cy,
+          rx: rx,
+          rw: rw,
+        };
+      }
+    });
+    if (!best) return null;
+    return {
+      line: best.line,
+      position: y < best.cy ? 'before' : 'after',
+      rectX: best.rx,
+      rectWidth: best.rw,
+    };
   }
 
   // Open a modal popup to insert a new node before/after the resolved line.

@@ -447,58 +447,91 @@ describe('activity deleteBranchAt', function() {
   });
 });
 
-describe('activity resolveInsertLine (Y → line/position mapping)', function() {
-  var SVG_NS = 'http://www.w3.org/2000/svg';
-  function makeOverlay(rectsSpec) {
-    var ov = document.createElementNS(SVG_NS, 'svg');
-    rectsSpec.forEach(function(r) {
-      var el = document.createElementNS(SVG_NS, 'rect');
-      Object.keys(r).forEach(function(k) { el.setAttribute(k, r[k]); });
-      ov.appendChild(el);
+describe('activity resolveInsertLine (X+Y → line/position mapping)', function() {
+  function makeOverlay(rectAttrs) {
+    var ov = document.createElement('div');
+    rectAttrs.forEach(function(attrs) {
+      var r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      Object.keys(attrs).forEach(function(k) { r.setAttribute(k, attrs[k]); });
+      r.setAttribute('width', attrs.width || '100');
+      ov.appendChild(r);
     });
     return ov;
   }
   test('returns null for empty overlay', function() {
     var ov = makeOverlay([]);
-    expect(actMod.resolveInsertLine(ov, 50)).toBe(null);
+    expect(actMod.resolveInsertLine(ov, 50, 50)).toBe(null);
   });
-  test('y above all rects: before first node', function() {
+  test('y above all rects: nearest by Y, position before', function() {
     var ov = makeOverlay([
-      { 'data-type': 'action', 'data-line': '5', y: '50', height: '20' },
-      { 'data-type': 'action', 'data-line': '7', y: '100', height: '20' },
+      { 'data-type': 'action', 'data-line': '5', x: '0', y: '50', height: '20', width: '100' },
+      { 'data-type': 'action', 'data-line': '7', x: '0', y: '100', height: '20', width: '100' },
     ]);
-    var res = actMod.resolveInsertLine(ov, 10);
+    var res = actMod.resolveInsertLine(ov, 50, 10);
     expect(res.line).toBe(5);
     expect(res.position).toBe('before');
   });
-  test('y between two rects: after upper rect', function() {
+  test('y between two rects: nearest, after upper', function() {
     var ov = makeOverlay([
-      { 'data-type': 'action', 'data-line': '5', y: '50', height: '20' },
-      { 'data-type': 'action', 'data-line': '7', y: '100', height: '20' },
+      { 'data-type': 'action', 'data-line': '5', x: '0', y: '50', height: '20', width: '100' },
+      { 'data-type': 'action', 'data-line': '7', x: '0', y: '100', height: '20', width: '100' },
     ]);
-    var res = actMod.resolveInsertLine(ov, 80);
+    var res = actMod.resolveInsertLine(ov, 50, 80);
     expect(res.line).toBe(5);
     expect(res.position).toBe('after');
   });
-  test('y below all rects: after last node', function() {
+  test('y below all rects: nearest by Y, after last', function() {
     var ov = makeOverlay([
-      { 'data-type': 'action', 'data-line': '5', y: '50', height: '20' },
-      { 'data-type': 'action', 'data-line': '7', y: '100', height: '20' },
+      { 'data-type': 'action', 'data-line': '5', x: '0', y: '50', height: '20', width: '100' },
+      { 'data-type': 'action', 'data-line': '7', x: '0', y: '100', height: '20', width: '100' },
     ]);
-    var res = actMod.resolveInsertLine(ov, 200);
+    var res = actMod.resolveInsertLine(ov, 50, 200);
     expect(res.line).toBe(7);
     expect(res.position).toBe('after');
   });
   test('mixed kinds (start/action/decision/stop) all considered', function() {
     var ov = makeOverlay([
-      { 'data-type': 'start', 'data-line': '2', y: '20', height: '20' },
-      { 'data-type': 'decision', 'data-line': '4', y: '60', height: '24' },
-      { 'data-type': 'action', 'data-line': '5', y: '100', height: '20' },
-      { 'data-type': 'stop', 'data-line': '7', y: '150', height: '22' },
+      { 'data-type': 'start', 'data-line': '2', x: '0', y: '20', height: '20', width: '100' },
+      { 'data-type': 'decision', 'data-line': '4', x: '0', y: '60', height: '24', width: '100' },
+      { 'data-type': 'action', 'data-line': '5', x: '0', y: '100', height: '20', width: '100' },
+      { 'data-type': 'stop', 'data-line': '7', x: '0', y: '150', height: '22', width: '100' },
     ]);
-    var res = actMod.resolveInsertLine(ov, 80);
+    var res = actMod.resolveInsertLine(ov, 50, 80);
     expect(res.line).toBe(4);
     expect(res.position).toBe('after');
+  });
+  // === Branch disambiguation tests (v1.0.2) ===
+  test('horizontal branches at same Y: closer X wins (then side)', function() {
+    var ov = makeOverlay([
+      { 'data-type': 'action', 'data-line': '3', x: '0', y: '100', height: '20', width: '60' },
+      { 'data-type': 'action', 'data-line': '5', x: '150', y: '100', height: '20', width: '60' },
+    ]);
+    var res = actMod.resolveInsertLine(ov, 30, 110);
+    expect(res.line).toBe(3);
+  });
+  test('horizontal branches at same Y: closer X wins (else side)', function() {
+    var ov = makeOverlay([
+      { 'data-type': 'action', 'data-line': '3', x: '0', y: '100', height: '20', width: '60' },
+      { 'data-type': 'action', 'data-line': '5', x: '150', y: '100', height: '20', width: '60' },
+    ]);
+    var res = actMod.resolveInsertLine(ov, 180, 110);
+    expect(res.line).toBe(5);
+  });
+  test('Y is dominant when X is similar (top-level vertical flow)', function() {
+    var ov = makeOverlay([
+      { 'data-type': 'action', 'data-line': '3', x: '0', y: '50', height: '20', width: '100' },
+      { 'data-type': 'action', 'data-line': '5', x: '0', y: '150', height: '20', width: '100' },
+    ]);
+    var res = actMod.resolveInsertLine(ov, 50, 60);
+    expect(res.line).toBe(3);
+  });
+  test('returns rectX and rectWidth for hover guide', function() {
+    var ov = makeOverlay([
+      { 'data-type': 'action', 'data-line': '3', x: '20', y: '50', height: '20', width: '60' },
+    ]);
+    var res = actMod.resolveInsertLine(ov, 50, 60);
+    expect(res.rectX).toBe(20);
+    expect(res.rectWidth).toBe(60);
   });
 });
 
