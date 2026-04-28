@@ -594,6 +594,35 @@ window.MA.modules.plantumlActivity = (function() {
     return lines.join('\n');
   }
 
+  // Insert a control structure (if/while/repeat/fork) before/after lineNum,
+  // with indent inherited from target line and inner placeholder `:;`.
+  // fields: { cond, thenLabel, elseLabel } for if; { cond, label } for while/repeat; { branchCount } for fork
+  function addControlAtLine(text, lineNum, position, kind, fields) {
+    var lines = text.split('\n');
+    var targetIdx = position === 'before' ? lineNum - 1 : lineNum;
+    if (targetIdx < 0) targetIdx = 0;
+    if (targetIdx > lines.length) targetIdx = lines.length;
+    var indent = _resolveInsertIndent(lines, Math.min(targetIdx, lines.length - 1));
+    var inner = indent + '  ';
+    var block = [];
+    fields = fields || {};
+    if (kind === 'if') {
+      block.push(indent + fmtIf(fields.cond || '', fields.thenLabel || 'yes'));
+      block.push(inner + ':;');
+      if (fields.elseLabel) {
+        block.push(indent + fmtElse(fields.elseLabel));
+        block.push(inner + ':;');
+      }
+      block.push(indent + 'endif');
+    } else {
+      return text;  // other kinds added in Task 3
+    }
+    // Splice block into lines
+    var args = [targetIdx, 0].concat(block);
+    Array.prototype.splice.apply(lines, args);
+    return lines.join('\n');
+  }
+
   // Map a Y-coordinate (in SVG/overlay coordinates) to the nearest model line +
   // before/after position. Returns null when the overlay has no node rects.
   function resolveInsertLine(overlayEl, y) {
@@ -1321,6 +1350,7 @@ window.MA.modules.plantumlActivity = (function() {
     updateNote: updateNote,
     deleteNode: deleteNode,
     addActionAtLine: addActionAtLine,
+    addControlAtLine: addControlAtLine,
     _resolveInsertIndent: _resolveInsertIndent,
     resolveInsertLine: resolveInsertLine,
     showInsertForm: showInsertForm,

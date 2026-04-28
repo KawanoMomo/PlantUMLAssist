@@ -210,6 +210,46 @@ describe('activity _resolveInsertIndent', function() {
   });
 });
 
+describe('activity addControlAtLine - if', function() {
+  test('inserts if before specified line at top-level', function() {
+    var t = ':A;\n:B;';
+    var out = actMod.addControlAtLine(t, 2, 'before', 'if', { cond: 'auth?', thenLabel: 'yes', elseLabel: 'no' });
+    expect(out).toContain(':A;');
+    expect(out).toContain('if (auth?) then (yes)');
+    expect(out).toContain('  :;');
+    expect(out).toContain('else (no)');
+    expect(out).toContain('endif');
+    expect(out).toContain(':B;');
+    // Verify line ordering
+    var lines = out.split('\n');
+    var aIdx = lines.indexOf(':A;');
+    var ifIdx = -1; for (var i = 0; i < lines.length; i++) { if (lines[i].indexOf('if (auth?)') >= 0) { ifIdx = i; break; } }
+    var bIdx = lines.indexOf(':B;');
+    expect(aIdx).toBeLessThan(ifIdx);
+    expect(ifIdx).toBeLessThan(bIdx);
+  });
+  test('omits else when elseLabel is empty', function() {
+    var t = ':A;\n:B;';
+    var out = actMod.addControlAtLine(t, 2, 'before', 'if', { cond: 'a?', thenLabel: 'yes', elseLabel: '' });
+    expect(out).toContain('if (a?) then (yes)');
+    expect(out).toContain('endif');
+    var hasElse = false;
+    out.split('\n').forEach(function(l) { if (/^\s*else/.test(l)) hasElse = true; });
+    expect(hasElse).toBe(false);
+  });
+  test('preserves indent inside existing if-block (composite-aware)', function() {
+    var t = 'if (outer?) then\n  :X;\nendif';
+    var out = actMod.addControlAtLine(t, 2, 'before', 'if', { cond: 'inner?', thenLabel: 'yes', elseLabel: '' });
+    var lines = out.split('\n');
+    // Inner if should be at indent 2, its body at indent 4
+    var innerIfLine = -1;
+    for (var i = 0; i < lines.length; i++) { if (lines[i].indexOf('if (inner?)') >= 0) { innerIfLine = i; break; } }
+    expect(innerIfLine).toBeGreaterThan(-1);
+    expect(lines[innerIfLine].substring(0, 2)).toBe('  ');
+    expect(lines[innerIfLine + 1].substring(0, 4)).toBe('    ');  // placeholder :; at depth 2
+  });
+});
+
 describe('activity resolveInsertLine (Y → line/position mapping)', function() {
   var SVG_NS = 'http://www.w3.org/2000/svg';
   function makeOverlay(rectsSpec) {
