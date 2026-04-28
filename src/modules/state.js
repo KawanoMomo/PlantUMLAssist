@@ -26,6 +26,11 @@ window.MA.modules.plantumlState = (function() {
   );
   var END_NOTE_RE = /^end\s+note\s*$/i;
 
+  var DESCRIPTION_RE = new RegExp(
+    '^(' + ID + ')\\s*:\\s*(?:(entry|exit|do)\\s*/\\s*)?(.+)$',
+    'i'
+  );
+
   function _parseTransitionLabel(label) {
     if (!label) return { trigger: null, guard: null, action: null };
     var trimmed = label.trim();
@@ -120,6 +125,10 @@ window.MA.modules.plantumlState = (function() {
           label: slabel,
           stereotype: stereotype,
           parentId: parentId,
+          entry: null,
+          do: null,
+          exit: null,
+          descriptions: [],
           line: lineNum,
           endLine: lineNum,
         };
@@ -143,6 +152,29 @@ window.MA.modules.plantumlState = (function() {
           line: lineNum,
         });
         continue;
+      }
+
+      var dm = trimmed.match(DESCRIPTION_RE);
+      if (dm) {
+        var dTargetId = dm[1];
+        var dKind = dm[2] ? dm[2].toLowerCase() : null;
+        var dValue = dm[3];
+        // Find the state with matching id (consider parent qualification)
+        var targetState = null;
+        for (var ds = result.states.length - 1; ds >= 0; ds--) {
+          var cand = result.states[ds];
+          var bareId = cand.id.indexOf('.') >= 0 ? cand.id.split('.').pop() : cand.id;
+          if (cand.id === dTargetId || bareId === dTargetId) {
+            targetState = cand; break;
+          }
+        }
+        if (targetState) {
+          if (dKind === 'entry') targetState.entry = (targetState.entry ? targetState.entry + '\n' : '') + dValue;
+          else if (dKind === 'exit') targetState.exit = (targetState.exit ? targetState.exit + '\n' : '') + dValue;
+          else if (dKind === 'do') targetState.do = (targetState.do ? targetState.do + '\n' : '') + dValue;
+          else targetState.descriptions.push(dValue);
+          continue;
+        }
       }
 
       var nim = trimmed.match(NOTE_INLINE_RE);
