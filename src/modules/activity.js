@@ -640,6 +640,31 @@ window.MA.modules.plantumlActivity = (function() {
     return lines.join('\n');
   }
 
+  function addSwimlaneAtLine(text, lineNum, position, name) {
+    var lines = text.split('\n');
+    var targetIdx = position === 'before' ? lineNum - 1 : lineNum;
+    if (targetIdx < 0) targetIdx = 0;
+    if (targetIdx > lines.length) targetIdx = lines.length;
+    var indent = _resolveInsertIndent(lines, Math.min(targetIdx, lines.length - 1));
+    lines.splice(targetIdx, 0, indent + fmtSwimlane(name || ''));
+    return lines.join('\n');
+  }
+
+  function addNoteAtLine(text, lineNum, position, fields) {
+    var lines = text.split('\n');
+    var targetIdx = position === 'before' ? lineNum - 1 : lineNum;
+    if (targetIdx < 0) targetIdx = 0;
+    if (targetIdx > lines.length) targetIdx = lines.length;
+    var indent = _resolveInsertIndent(lines, Math.min(targetIdx, lines.length - 1));
+    fields = fields || {};
+    var formatted = fmtNote(fields.position || 'right', fields.text || '');
+    var newLines = Array.isArray(formatted) ? formatted : [formatted];
+    var indented = newLines.map(function(l) { return indent + l; });
+    var args = [targetIdx, 0].concat(indented);
+    Array.prototype.splice.apply(lines, args);
+    return lines.join('\n');
+  }
+
   // Map a Y-coordinate (in SVG/overlay coordinates) to the nearest model line +
   // before/after position. Returns null when the overlay has no node rects.
   function resolveInsertLine(overlayEl, y) {
@@ -1368,6 +1393,8 @@ window.MA.modules.plantumlActivity = (function() {
     deleteNode: deleteNode,
     addActionAtLine: addActionAtLine,
     addControlAtLine: addControlAtLine,
+    addSwimlaneAtLine: addSwimlaneAtLine,
+    addNoteAtLine: addNoteAtLine,
     _resolveInsertIndent: _resolveInsertIndent,
     resolveInsertLine: resolveInsertLine,
     showInsertForm: showInsertForm,

@@ -294,6 +294,39 @@ describe('activity addControlAtLine - while/repeat/fork', function() {
   });
 });
 
+describe('activity addSwimlaneAtLine', function() {
+  test('inserts swimlane line before specified line', function() {
+    var t = ':A;\n:B;';
+    var out = actMod.addSwimlaneAtLine(t, 2, 'before', 'Backend');
+    var lines = out.split('\n');
+    var aIdx = -1, swIdx = -1, bIdx = -1;
+    for (var i = 0; i < lines.length; i++) {
+      if (lines[i] === ':A;') aIdx = i;
+      if (lines[i] === '|Backend|') swIdx = i;
+      if (lines[i] === ':B;') bIdx = i;
+    }
+    expect(aIdx).toBe(0);
+    expect(swIdx).toBe(1);
+    expect(bIdx).toBe(2);
+  });
+});
+
+describe('activity addNoteAtLine', function() {
+  test('inserts inline note (single-line text)', function() {
+    var t = ':A;\n:B;';
+    var out = actMod.addNoteAtLine(t, 1, 'after', { position: 'right', text: 'important' });
+    expect(out).toContain('note right : important');
+  });
+  test('inserts block note (multi-line text)', function() {
+    var t = ':A;\n:B;';
+    var out = actMod.addNoteAtLine(t, 1, 'after', { position: 'right', text: 'line1\nline2' });
+    expect(out).toContain('note right');
+    expect(out).toContain('line1');
+    expect(out).toContain('line2');
+    expect(out).toContain('end note');
+  });
+});
+
 describe('activity resolveInsertLine (Y → line/position mapping)', function() {
   var SVG_NS = 'http://www.w3.org/2000/svg';
   function makeOverlay(rectsSpec) {
