@@ -665,6 +665,74 @@ window.MA.modules.plantumlActivity = (function() {
     return lines.join('\n');
   }
 
+  // Find the line index of the matching endif for an `if` at ifLine (1-based).
+  // Returns 0-based index of endif line, or -1 if not found.
+  function _findMatchingEndif(lines, ifLine) {
+    var depth = 0;
+    for (var i = ifLine - 1; i < lines.length; i++) {
+      var trimmed = lines[i].trim();
+      if (IF_OPEN_RE.test(trimmed)) depth++;
+      else if (ENDIF_RE.test(trimmed)) {
+        depth--;
+        if (depth === 0) return i;
+      }
+    }
+    return -1;
+  }
+
+  // Find the first else-line at the same depth between ifLine and endif.
+  // Returns 0-based index of else line, or -1 if not found.
+  function _findElseLine(lines, ifLine, endifIdx) {
+    var depth = 0;
+    for (var i = ifLine - 1; i <= endifIdx; i++) {
+      var trimmed = lines[i].trim();
+      if (IF_OPEN_RE.test(trimmed)) {
+        depth++;
+        if (depth === 1) continue;  // outer if entry
+      } else if (ENDIF_RE.test(trimmed)) {
+        depth--;
+        if (depth === 0) break;
+      } else if (depth === 1 && ELSE_RE.test(trimmed)) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  function addElseifBranch(text, ifLine, condition, label) {
+    var lines = text.split('\n');
+    var endifIdx = _findMatchingEndif(lines, ifLine);
+    if (endifIdx < 0) return text;
+    var elseIdx = _findElseLine(lines, ifLine, endifIdx);
+    var insertAt = elseIdx >= 0 ? elseIdx : endifIdx;
+    var ifIndent = (lines[ifLine - 1].match(/^(\s*)/) || ['', ''])[1];
+    var inner = ifIndent + '  ';
+    var block = [
+      ifIndent + fmtElseif(condition || '', label || 'yes'),
+      inner + ':;'
+    ];
+    var args = [insertAt, 0].concat(block);
+    Array.prototype.splice.apply(lines, args);
+    return lines.join('\n');
+  }
+
+  function addElseBranch(text, ifLine, label) {
+    var lines = text.split('\n');
+    var endifIdx = _findMatchingEndif(lines, ifLine);
+    if (endifIdx < 0) return text;
+    var elseIdx = _findElseLine(lines, ifLine, endifIdx);
+    if (elseIdx >= 0) return text;  // else already exists, no-op
+    var ifIndent = (lines[ifLine - 1].match(/^(\s*)/) || ['', ''])[1];
+    var inner = ifIndent + '  ';
+    var block = [
+      ifIndent + fmtElse(label || 'no'),
+      inner + ':;'
+    ];
+    var args = [endifIdx, 0].concat(block);
+    Array.prototype.splice.apply(lines, args);
+    return lines.join('\n');
+  }
+
   // Map a Y-coordinate (in SVG/overlay coordinates) to the nearest model line +
   // before/after position. Returns null when the overlay has no node rects.
   function resolveInsertLine(overlayEl, y) {
@@ -1468,6 +1536,8 @@ window.MA.modules.plantumlActivity = (function() {
     addControlAtLine: addControlAtLine,
     addSwimlaneAtLine: addSwimlaneAtLine,
     addNoteAtLine: addNoteAtLine,
+    addElseifBranch: addElseifBranch,
+    addElseBranch: addElseBranch,
     _resolveInsertIndent: _resolveInsertIndent,
     resolveInsertLine: resolveInsertLine,
     showInsertForm: showInsertForm,

@@ -327,6 +327,61 @@ describe('activity addNoteAtLine', function() {
   });
 });
 
+describe('activity addElseifBranch / addElseBranch', function() {
+  test('addElseifBranch inserts elseif before endif', function() {
+    var t = 'if (a?) then (yes)\n  :X;\nendif';
+    var out = actMod.addElseifBranch(t, 1, 'b?', 'yes');
+    expect(out).toContain('elseif (b?) then (yes)');
+    expect(out).toContain('  :;');
+    expect(out).toContain('endif');
+    // Order: if → :X; → elseif → :; → endif
+    var lines = out.split('\n');
+    var ifIdx = -1, elseifIdx = -1, endifIdx = -1;
+    for (var i = 0; i < lines.length; i++) {
+      if (lines[i].indexOf('if (a?)') >= 0) ifIdx = i;
+      if (lines[i].indexOf('elseif (b?)') >= 0) elseifIdx = i;
+      if (lines[i].trim() === 'endif') endifIdx = i;
+    }
+    expect(ifIdx).toBe(0);
+    expect(elseifIdx).toBeGreaterThan(ifIdx);
+    expect(endifIdx).toBeGreaterThan(elseifIdx);
+  });
+  test('addElseifBranch inserts before existing else', function() {
+    var t = 'if (a?) then\n  :X;\nelse\n  :Y;\nendif';
+    var out = actMod.addElseifBranch(t, 1, 'b?', 'maybe');
+    var lines = out.split('\n');
+    var elseifIdx = -1, elseIdx = -1;
+    for (var i = 0; i < lines.length; i++) {
+      if (lines[i].indexOf('elseif (b?)') >= 0) elseifIdx = i;
+      if (/^\s*else(\s|$)/.test(lines[i]) && lines[i].indexOf('elseif') < 0) elseIdx = i;
+    }
+    expect(elseifIdx).toBeGreaterThan(0);
+    expect(elseIdx).toBeGreaterThan(elseifIdx);
+  });
+  test('addElseBranch inserts else before endif', function() {
+    var t = 'if (a?) then\n  :X;\nendif';
+    var out = actMod.addElseBranch(t, 1, 'no');
+    expect(out).toContain('else (no)');
+    expect(out).toContain('  :;');
+  });
+  test('addElseBranch is no-op when else already exists', function() {
+    var t = 'if (a?) then\n  :X;\nelse\n  :Y;\nendif';
+    var out = actMod.addElseBranch(t, 1, 'no');
+    expect(out).toBe(t);
+  });
+  test('addElseif preserves indent at if depth', function() {
+    var t = ':A;\nif (outer?) then\n  if (a?) then\n    :X;\n  endif\nendif';
+    // Inner if at line 3, indent='  '
+    var out = actMod.addElseifBranch(t, 3, 'b?', 'yes');
+    var lines = out.split('\n');
+    var elseifLine = '';
+    for (var i = 0; i < lines.length; i++) {
+      if (lines[i].indexOf('elseif (b?)') >= 0) { elseifLine = lines[i]; break; }
+    }
+    expect(elseifLine.substring(0, 2)).toBe('  ');
+  });
+});
+
 describe('activity resolveInsertLine (Y → line/position mapping)', function() {
   var SVG_NS = 'http://www.w3.org/2000/svg';
   function makeOverlay(rectsSpec) {
