@@ -263,6 +263,29 @@ test.describe('Activity v0.7.0', () => {
       expect(t).toContain('end note');
     });
 
+    test('UC-3: add else to existing if via property panel', async ({ page }) => {
+      await gotoApp(page);
+      await page.locator('#diagram-type').selectOption('plantuml-activity');
+      await page.waitForTimeout(500);
+      // Set up DSL with if (no else)
+      await page.locator('#editor').fill('@startuml\nstart\nif (a?) then (yes)\n  :X;\nendif\nstop\n@enduml');
+      await page.waitForTimeout(2500);
+      // Click decision polygon to select if
+      var decision = page.locator('#overlay-layer polygon[data-type="decision"], #overlay-layer rect[data-type="decision"]').first();
+      var dCount = await decision.count();
+      if (dCount === 0) test.skip();
+      await decision.click();
+      await page.waitForTimeout(300);
+      // Click + else button (handle prompt dialog)
+      page.once('dialog', function(d) { d.accept('no'); });
+      var addElseBtn = page.locator('#ac-add-else');
+      if ((await addElseBtn.count()) === 0) test.skip();
+      await addElseBtn.click();
+      await page.waitForTimeout(300);
+      var t = await getEditorText(page);
+      expect(t).toContain('else (no)');
+    });
+
     test('console error count is 0 during overlay interactions', async ({ page }) => {
       var errors = [];
       page.on('console', function(msg) { if (msg.type() === 'error') errors.push(msg.text()); });

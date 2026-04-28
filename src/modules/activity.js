@@ -1394,13 +1394,23 @@ window.MA.modules.plantumlActivity = (function() {
       html += '<div style="border-top:1px solid var(--border);padding-top:6px;margin-top:6px;">' +
                 '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">Branches</div>';
       var brs = node.branches || [];
+      var hasElse = false;
       for (var bi = 0; bi < brs.length; bi++) {
         var b = brs[bi];
+        if (b.kind === 'else') hasElse = true;
         html += '<div style="font-size:11px;margin-bottom:2px;">' +
                   '▸ ' + b.kind + ' (' + window.MA.htmlUtils.escHtml(b.label || '') + ')' + (b.condition ? ' cond: ' + window.MA.htmlUtils.escHtml(b.condition) : '') + ' (L' + b.line + ')' +
                   ' <button id="ac-branch-edit-' + bi + '" data-line="' + b.line + '">edit label</button>' +
                 '</div>';
       }
+      // Branch add buttons
+      html += '<div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap;">' +
+                '<button id="ac-add-elseif" style="font-size:11px;padding:3px 8px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">+ elseif 追加</button>' +
+                (hasElse
+                  ? '<button id="ac-add-else" disabled style="font-size:11px;padding:3px 8px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-secondary);border-radius:3px;cursor:not-allowed;opacity:0.5;">+ else 追加 (既に存在)</button>'
+                  : '<button id="ac-add-else" style="font-size:11px;padding:3px 8px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">+ else 追加</button>'
+                ) +
+              '</div>';
       html += '</div>';
     } else if (node.kind === 'while') {
       html += P.fieldHtml('Condition', 'ac-while-cond', node.condition || '');
@@ -1409,7 +1419,9 @@ window.MA.modules.plantumlActivity = (function() {
       html += P.fieldHtml('Repeat-while condition', 'ac-rep-cond', node.condition || '');
       html += P.fieldHtml('Label', 'ac-rep-lbl', node.label || 'yes');
     } else if (node.kind === 'fork') {
-      html += '<div style="font-size:11px;">Branches: ' + (node.branches || []).length + '</div>';
+      var fbrs = node.branches || [];
+      html += '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">Branches (' + fbrs.length + ')</div>';
+      html += '<button id="ac-add-fork-again" style="font-size:11px;padding:3px 8px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">+ fork again 追加</button>';
     }
     html += P.primaryButtonHtml('ac-ctrl-update', '更新') +
             P.primaryButtonHtml('ac-ctrl-delete', '✕ 構造ごと削除');
@@ -1462,6 +1474,27 @@ window.MA.modules.plantumlActivity = (function() {
           });
         })(brs2[bj]);
       }
+      P.bindEvent('ac-add-elseif', 'click', function() {
+        var cond = window.prompt('elseif condition:', '');
+        if (cond === null) return;
+        var lbl = window.prompt('elseif label (default: yes):', 'yes') || 'yes';
+        window.MA.history.pushHistory();
+        ctx.setMmdText(addElseifBranch(ctx.getMmdText(), node.line, cond, lbl));
+        ctx.onUpdate();
+      });
+      P.bindEvent('ac-add-else', 'click', function() {
+        var lbl = window.prompt('else label (default: no):', 'no') || 'no';
+        window.MA.history.pushHistory();
+        ctx.setMmdText(addElseBranch(ctx.getMmdText(), node.line, lbl));
+        ctx.onUpdate();
+      });
+    }
+    if (node.kind === 'fork') {
+      P.bindEvent('ac-add-fork-again', 'click', function() {
+        window.MA.history.pushHistory();
+        ctx.setMmdText(addForkBranch(ctx.getMmdText(), node.line));
+        ctx.onUpdate();
+      });
     }
   }
   function _renderSwimlaneEdit(sel, parsedData, propsEl, ctx) {
