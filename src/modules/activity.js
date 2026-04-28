@@ -652,7 +652,12 @@ window.MA.modules.plantumlActivity = (function() {
 
   function addNoteAtLine(text, lineNum, position, fields) {
     var lines = text.split('\n');
-    var targetIdx = position === 'before' ? lineNum - 1 : lineNum;
+    // PlantUML の note は DSL 上の直前 statement に attach されるため、 position
+    // 引数は概念的に意味を持たない (attach target は lineNum 自身であり、 前後で
+    // はない)。 position='before' で挿入すると line N-1 の action に attach されて
+    // しまうバグを避けるため、 互換性のため引数は維持しつつ常に lineNum の
+    // AFTER に挿入する。
+    var targetIdx = lineNum;
     if (targetIdx < 0) targetIdx = 0;
     if (targetIdx > lines.length) targetIdx = lines.length;
     var indent = _resolveInsertIndent(lines, Math.min(targetIdx, lines.length - 1));

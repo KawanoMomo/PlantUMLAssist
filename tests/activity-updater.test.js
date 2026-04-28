@@ -325,6 +325,23 @@ describe('activity addNoteAtLine', function() {
     expect(out).toContain('line2');
     expect(out).toContain('end note');
   });
+  test('inserts after target line regardless of position arg (note attachment fix)', function() {
+    var t = ':A;\n:B;\n:C;';
+    // position='before' でも target line (line 2 = :B;) の AFTER に挿入される
+    var out = actMod.addNoteAtLine(t, 2, 'before', { position: 'right', text: 'attach to B' });
+    var lines = out.split('\n');
+    var aIdx = -1, bIdx = -1, noteIdx = -1, cIdx = -1;
+    for (var i = 0; i < lines.length; i++) {
+      if (lines[i] === ':A;') aIdx = i;
+      if (lines[i] === ':B;') bIdx = i;
+      if (lines[i].indexOf('note right') >= 0) noteIdx = i;
+      if (lines[i] === ':C;') cIdx = i;
+    }
+    expect(aIdx).toBe(0);
+    expect(bIdx).toBe(1);
+    expect(noteIdx).toBe(2);
+    expect(cIdx).toBe(3);
+  });
 });
 
 describe('activity addElseifBranch / addElseBranch', function() {
