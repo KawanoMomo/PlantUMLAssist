@@ -382,6 +382,32 @@ describe('activity addElseifBranch / addElseBranch', function() {
   });
 });
 
+describe('activity addForkBranch', function() {
+  test('inserts fork again before end fork', function() {
+    var t = 'fork\n  :X;\nfork again\n  :Y;\nend fork';
+    var out = actMod.addForkBranch(t, 1);
+    var lines = out.split('\n');
+    var againCount = 0;
+    for (var i = 0; i < lines.length; i++) {
+      if (/^\s*fork again\s*$/.test(lines[i])) againCount++;
+    }
+    expect(againCount).toBe(2);
+    // Last line should still be end fork
+    expect(/^\s*end fork\s*$/.test(lines[lines.length - 1])).toBe(true);
+  });
+  test('preserves fork indent (composite-aware)', function() {
+    var t = 'if (a?) then\n  fork\n    :X;\n  end fork\nendif';
+    // fork at line 2, indent '  '
+    var out = actMod.addForkBranch(t, 2);
+    var lines = out.split('\n');
+    var againLine = '';
+    for (var i = 0; i < lines.length; i++) {
+      if (/^\s*fork again\s*$/.test(lines[i])) { againLine = lines[i]; break; }
+    }
+    expect(againLine.substring(0, 2)).toBe('  ');
+  });
+});
+
 describe('activity resolveInsertLine (Y → line/position mapping)', function() {
   var SVG_NS = 'http://www.w3.org/2000/svg';
   function makeOverlay(rectsSpec) {

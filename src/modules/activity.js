@@ -734,6 +734,36 @@ window.MA.modules.plantumlActivity = (function() {
     return lines.join('\n');
   }
 
+  // Find the line index of the matching `end fork` for a fork at forkLine.
+  function _findMatchingEndFork(lines, forkLine) {
+    if (forkLine < 1 || forkLine > lines.length) return -1;
+    var depth = 0;
+    for (var i = forkLine - 1; i < lines.length; i++) {
+      var trimmed = lines[i].trim();
+      if (FORK_OPEN_RE.test(trimmed)) depth++;
+      else if (END_FORK_RE.test(trimmed)) {
+        depth--;
+        if (depth === 0) return i;
+      }
+    }
+    return -1;
+  }
+
+  function addForkBranch(text, forkLine) {
+    var lines = text.split('\n');
+    var endForkIdx = _findMatchingEndFork(lines, forkLine);
+    if (endForkIdx < 0) return text;
+    var forkIndent = (lines[forkLine - 1].match(/^(\s*)/) || ['', ''])[1];
+    var inner = forkIndent + '  ';
+    var block = [
+      forkIndent + 'fork again',
+      inner + ':;'
+    ];
+    var args = [endForkIdx, 0].concat(block);
+    Array.prototype.splice.apply(lines, args);
+    return lines.join('\n');
+  }
+
   // Map a Y-coordinate (in SVG/overlay coordinates) to the nearest model line +
   // before/after position. Returns null when the overlay has no node rects.
   function resolveInsertLine(overlayEl, y) {
@@ -1539,6 +1569,7 @@ window.MA.modules.plantumlActivity = (function() {
     addNoteAtLine: addNoteAtLine,
     addElseifBranch: addElseifBranch,
     addElseBranch: addElseBranch,
+    addForkBranch: addForkBranch,
     _resolveInsertIndent: _resolveInsertIndent,
     resolveInsertLine: resolveInsertLine,
     showInsertForm: showInsertForm,
