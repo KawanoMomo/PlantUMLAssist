@@ -566,6 +566,21 @@ window.MA.modules.plantumlActivity = (function() {
     return before.concat(after).join('\n');
   }
 
+  // Closing tokens: indent should be inherited from PREVIOUS line, not these.
+  var CLOSING_TOKEN_RE = /^(endif|endwhile|repeat\s+while|else|elseif|end\s+fork|fork\s+again|end\s+note)/i;
+
+  function _resolveInsertIndent(lines, targetIdx) {
+    if (targetIdx < 0) targetIdx = 0;
+    if (targetIdx >= lines.length) targetIdx = lines.length - 1;
+    var src = lines[targetIdx] || '';
+    var trimmed = src.trim();
+    // If target is a closing token, use previous line's indent
+    if (CLOSING_TOKEN_RE.test(trimmed) && targetIdx > 0) {
+      src = lines[targetIdx - 1] || src;
+    }
+    return (src.match(/^(\s*)/) || ['', ''])[1];
+  }
+
   // Insert an action `:text;` before or after the specified line, preserving
   // surrounding indent so the new action stays inside the same control block.
   function addActionAtLine(text, lineNum, position, actionText) {
@@ -573,12 +588,223 @@ window.MA.modules.plantumlActivity = (function() {
     var targetIdx = position === 'before' ? lineNum - 1 : lineNum;
     if (targetIdx < 0) targetIdx = 0;
     if (targetIdx > lines.length) targetIdx = lines.length;
-    // Match indent of nearest existing line (preferred: target line, else previous)
-    var indentSrc = lines[Math.min(targetIdx, lines.length - 1)] || lines[Math.max(0, targetIdx - 1)] || '';
-    var indent = (indentSrc.match(/^(\s*)/) || ['', ''])[1];
+    var indent = _resolveInsertIndent(lines, Math.min(targetIdx, lines.length - 1));
     var newLine = indent + ':' + (actionText || '') + ';';
     lines.splice(targetIdx, 0, newLine);
     return lines.join('\n');
+  }
+
+  // Insert a control structure (if/while/repeat/fork) before/after lineNum,
+  // with indent inherited from target line and inner placeholder `:;`.
+  // fields: { cond, thenLabel, elseLabel } for if; { cond, label } for while/repeat; { branchCount } for fork
+  function addControlAtLine(text, lineNum, position, kind, fields) {
+    var lines = text.split('\n');
+    var targetIdx = position === 'before' ? lineNum - 1 : lineNum;
+    if (targetIdx < 0) targetIdx = 0;
+    if (targetIdx > lines.length) targetIdx = lines.length;
+    var indent = _resolveInsertIndent(lines, Math.min(targetIdx, lines.length - 1));
+    var inner = indent + '  ';
+    var block = [];
+    fields = fields || {};
+    if (kind === 'if') {
+      block.push(indent + fmtIf(fields.cond || '', fields.thenLabel || 'yes'));
+      block.push(inner + ':;');
+      if (fields.elseLabel) {
+        block.push(indent + fmtElse(fields.elseLabel));
+        block.push(inner + ':;');
+      }
+      block.push(indent + 'endif');
+    } else if (kind === 'while') {
+      block.push(indent + fmtWhile(fields.cond || '', fields.label || 'yes'));
+      block.push(inner + ':;');
+      block.push(indent + 'endwhile');
+    } else if (kind === 'repeat') {
+      block.push(indent + 'repeat');
+      block.push(inner + ':;');
+      block.push(indent + fmtRepeatWhile(fields.cond || '', fields.label || 'yes'));
+    } else if (kind === 'fork') {
+      var n = Math.max(2, fields.branchCount || 2);
+      block.push(indent + 'fork');
+      block.push(inner + ':;');
+      for (var i = 1; i < n; i++) {
+        block.push(indent + 'fork again');
+        block.push(inner + ':;');
+      }
+      block.push(indent + 'end fork');
+    } else {
+      return text;
+    }
+    // Splice block into lines
+    var args = [targetIdx, 0].concat(block);
+    Array.prototype.splice.apply(lines, args);
+    return lines.join('\n');
+  }
+
+  function addSwimlaneAtLine(text, lineNum, position, name) {
+    var lines = text.split('\n');
+    var targetIdx = position === 'before' ? lineNum - 1 : lineNum;
+    if (targetIdx < 0) targetIdx = 0;
+    if (targetIdx > lines.length) targetIdx = lines.length;
+    var indent = _resolveInsertIndent(lines, Math.min(targetIdx, lines.length - 1));
+    lines.splice(targetIdx, 0, indent + fmtSwimlane(name || ''));
+    return lines.join('\n');
+  }
+
+  function addNoteAtLine(text, lineNum, position, fields) {
+    var lines = text.split('\n');
+    var targetIdx = position === 'before' ? lineNum - 1 : lineNum;
+    if (targetIdx < 0) targetIdx = 0;
+    if (targetIdx > lines.length) targetIdx = lines.length;
+    var indent = _resolveInsertIndent(lines, Math.min(targetIdx, lines.length - 1));
+    fields = fields || {};
+    var formatted = fmtNote(fields.position || 'right', fields.text || '');
+    var newLines = Array.isArray(formatted) ? formatted : [formatted];
+    var indented = newLines.map(function(l) { return indent + l; });
+    var args = [targetIdx, 0].concat(indented);
+    Array.prototype.splice.apply(lines, args);
+    return lines.join('\n');
+  }
+
+  // Find the line index of the matching endif for an `if` at ifLine (1-based).
+  // Returns 0-based index of endif line, or -1 if not found / invalid ifLine.
+  function _findMatchingEndif(lines, ifLine) {
+    if (ifLine < 1 || ifLine > lines.length) return -1;
+    var depth = 0;
+    for (var i = ifLine - 1; i < lines.length; i++) {
+      var trimmed = lines[i].trim();
+      if (IF_OPEN_RE.test(trimmed)) depth++;
+      else if (ENDIF_RE.test(trimmed)) {
+        depth--;
+        if (depth === 0) return i;
+      }
+    }
+    return -1;
+  }
+
+  // Find the first else-line at the same depth between ifLine and endif.
+  // Returns 0-based index of else line, or -1 if not found.
+  function _findElseLine(lines, ifLine, endifIdx) {
+    var depth = 0;
+    for (var i = ifLine - 1; i <= endifIdx; i++) {
+      var trimmed = lines[i].trim();
+      if (IF_OPEN_RE.test(trimmed)) {
+        depth++;
+        if (depth === 1) continue;  // outer if entry
+      } else if (ENDIF_RE.test(trimmed)) {
+        depth--;
+        if (depth === 0) break;
+      } else if (depth === 1 && ELSE_RE.test(trimmed)) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  function addElseifBranch(text, ifLine, condition, label) {
+    var lines = text.split('\n');
+    var endifIdx = _findMatchingEndif(lines, ifLine);
+    if (endifIdx < 0) return text;
+    var elseIdx = _findElseLine(lines, ifLine, endifIdx);
+    var insertAt = elseIdx >= 0 ? elseIdx : endifIdx;
+    var ifIndent = (lines[ifLine - 1].match(/^(\s*)/) || ['', ''])[1];
+    var inner = ifIndent + '  ';
+    var block = [
+      ifIndent + fmtElseif(condition || '', label || 'yes'),
+      inner + ':;'
+    ];
+    var args = [insertAt, 0].concat(block);
+    Array.prototype.splice.apply(lines, args);
+    return lines.join('\n');
+  }
+
+  function addElseBranch(text, ifLine, label) {
+    var lines = text.split('\n');
+    var endifIdx = _findMatchingEndif(lines, ifLine);
+    if (endifIdx < 0) return text;
+    var elseIdx = _findElseLine(lines, ifLine, endifIdx);
+    if (elseIdx >= 0) return text;  // else already exists, no-op
+    var ifIndent = (lines[ifLine - 1].match(/^(\s*)/) || ['', ''])[1];
+    var inner = ifIndent + '  ';
+    var block = [
+      ifIndent + fmtElse(label || 'no'),
+      inner + ':;'
+    ];
+    var args = [endifIdx, 0].concat(block);
+    Array.prototype.splice.apply(lines, args);
+    return lines.join('\n');
+  }
+
+  // Find the line index of the matching `end fork` for a fork at forkLine.
+  function _findMatchingEndFork(lines, forkLine) {
+    if (forkLine < 1 || forkLine > lines.length) return -1;
+    var depth = 0;
+    for (var i = forkLine - 1; i < lines.length; i++) {
+      var trimmed = lines[i].trim();
+      if (FORK_OPEN_RE.test(trimmed)) depth++;
+      else if (END_FORK_RE.test(trimmed)) {
+        depth--;
+        if (depth === 0) return i;
+      }
+    }
+    return -1;
+  }
+
+  function addForkBranch(text, forkLine) {
+    var lines = text.split('\n');
+    var endForkIdx = _findMatchingEndFork(lines, forkLine);
+    if (endForkIdx < 0) return text;
+    var forkIndent = (lines[forkLine - 1].match(/^(\s*)/) || ['', ''])[1];
+    var inner = forkIndent + '  ';
+    var block = [
+      forkIndent + 'fork again',
+      inner + ':;'
+    ];
+    var args = [endForkIdx, 0].concat(block);
+    Array.prototype.splice.apply(lines, args);
+    return lines.join('\n');
+  }
+
+  // Delete a single branch (elseif | else | fork again) at branchLine,
+  // including its body up to (but excluding) the next branch line or
+  // endif/end fork. The structure itself is preserved.
+  function deleteBranchAt(text, branchLine) {
+    var lines = text.split('\n');
+    var idx = branchLine - 1;
+    if (idx < 0 || idx >= lines.length) return text;
+    var trimmed = lines[idx].trim();
+    var isElseif = ELSEIF_RE.test(trimmed);
+    var isElse = ELSE_RE.test(trimmed) && !isElseif;
+    var isForkAgain = FORK_AGAIN_RE.test(trimmed);
+    if (!isElseif && !isElse && !isForkAgain) return text;
+
+    // Find end-of-branch: next line at same depth that is elseif/else/endif
+    // (for if-branches) or fork again/end fork (for fork-branches).
+    var depth = 0;
+    var endIdx = lines.length;  // exclusive
+    for (var i = idx + 1; i < lines.length; i++) {
+      var t2 = lines[i].trim();
+      if (isForkAgain) {
+        if (FORK_OPEN_RE.test(t2)) depth++;
+        else if (END_FORK_RE.test(t2)) {
+          if (depth === 0) { endIdx = i; break; }
+          depth--;
+        } else if (FORK_AGAIN_RE.test(t2) && depth === 0) {
+          endIdx = i; break;
+        }
+      } else {
+        // elseif or else
+        if (IF_OPEN_RE.test(t2)) depth++;
+        else if (ENDIF_RE.test(t2)) {
+          if (depth === 0) { endIdx = i; break; }
+          depth--;
+        } else if ((ELSEIF_RE.test(t2) || ELSE_RE.test(t2)) && depth === 0) {
+          endIdx = i; break;
+        }
+      }
+    }
+    var before = lines.slice(0, idx);
+    var after = lines.slice(endIdx);
+    return before.concat(after).join('\n');
   }
 
   // Map a Y-coordinate (in SVG/overlay coordinates) to the nearest model line +
@@ -603,13 +829,13 @@ window.MA.modules.plantumlActivity = (function() {
     return { line: items[0].line, position: 'before' };
   }
 
-  // Open a modal popup to insert an action `:text;` before/after the resolved line.
-  // Mirrors sequence.showInsertForm pattern but limited to action insertion.
+  // Open a modal popup to insert a new node before/after the resolved line.
+  // Supports all 7 kinds: action / if / while / repeat / fork / swimlane / note
   function showInsertForm(ctx, line, position, kind) {
     var modal = document.getElementById('act-modal');
     var content = document.getElementById('act-modal-content');
     if (!modal || !content) {
-      // Fallback: prompt() if modal HTML missing
+      // Fallback: prompt() for action only
       var t = window.prompt((position === 'before' ? '前に' : '後に') + 'アクションを挿入: テキスト', '');
       if (t === null) return;
       window.MA.history.pushHistory();
@@ -618,28 +844,101 @@ window.MA.modules.plantumlActivity = (function() {
       return;
     }
     var P = window.MA.properties;
-    var title = (position === 'before' ? '前に' : '後に') + 'アクションを挿入 (L' + line + ')';
+    var defaultKind = kind || 'action';
+    var title = '(L' + line + ' の ' + (position === 'before' ? '前' : '後') + ') に挿入';
     content.innerHTML =
       '<h3 style="margin:0 0 12px 0;color:var(--text-primary);">' + title + '</h3>' +
-      '<div style="margin-bottom:8px;">' +
-        '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">アクション本文 (改行可)</label>' +
-        '<textarea id="act-mod-text" style="width:100%;min-height:60px;font-family:inherit;font-size:12px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:3px;"></textarea>' +
-      '</div>' +
+      P.selectFieldHtml('種類', 'act-mod-kind', [
+        { value: 'action', label: 'Action', selected: defaultKind === 'action' },
+        { value: 'if', label: 'If decision', selected: defaultKind === 'if' },
+        { value: 'while', label: 'While loop', selected: defaultKind === 'while' },
+        { value: 'repeat', label: 'Repeat loop', selected: defaultKind === 'repeat' },
+        { value: 'fork', label: 'Fork', selected: defaultKind === 'fork' },
+        { value: 'swimlane', label: 'Swimlane', selected: defaultKind === 'swimlane' },
+        { value: 'note', label: 'Note', selected: defaultKind === 'note' }
+      ]) +
+      '<div id="act-mod-fields" style="margin-top:8px;"></div>' +
       '<div style="display:flex;gap:8px;margin-top:12px;">' +
         '<button id="act-mod-cancel" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:8px;border-radius:4px;cursor:pointer;">キャンセル</button>' +
         '<button id="act-mod-confirm" style="flex:1;background:var(--accent);border:none;color:#fff;padding:8px;border-radius:4px;cursor:pointer;">確定</button>' +
       '</div>';
     modal.style.display = 'flex';
-    var ta = document.getElementById('act-mod-text');
-    if (ta && ta.focus) setTimeout(function() { ta.focus(); }, 0);
+
+    function renderFields() {
+      var k = document.getElementById('act-mod-kind').value;
+      var fEl = document.getElementById('act-mod-fields');
+      var html = '';
+      if (k === 'action') {
+        html = '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">アクション本文 (改行可)</label>' +
+               '<textarea id="act-mod-text" style="width:100%;min-height:60px;font-family:inherit;font-size:12px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:3px;"></textarea>';
+      } else if (k === 'if') {
+        html = P.fieldHtml('Condition', 'act-mod-cond', '', '例: 認証成功?') +
+               P.fieldHtml('Then label', 'act-mod-thenlbl', 'yes') +
+               P.fieldHtml('Else label (空で else 省略)', 'act-mod-elselbl', 'no');
+      } else if (k === 'while') {
+        html = P.fieldHtml('Condition', 'act-mod-cond', '') +
+               P.fieldHtml('Label', 'act-mod-lbl', 'yes');
+      } else if (k === 'repeat') {
+        html = P.fieldHtml('Repeat-while condition', 'act-mod-cond', '') +
+               P.fieldHtml('Label', 'act-mod-lbl', 'yes');
+      } else if (k === 'fork') {
+        html = P.fieldHtml('Branches', 'act-mod-bcount', '2');
+      } else if (k === 'swimlane') {
+        html = P.fieldHtml('Name', 'act-mod-name', '');
+      } else if (k === 'note') {
+        html = P.selectFieldHtml('Position', 'act-mod-notepos', [
+          { value: 'right', label: 'right', selected: true },
+          { value: 'left', label: 'left' }
+        ]) +
+        '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-top:6px;margin-bottom:2px;">Text (改行可)</label>' +
+        '<textarea id="act-mod-text" style="width:100%;min-height:50px;font-family:inherit;font-size:12px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:3px;"></textarea>';
+      }
+      fEl.innerHTML = html;
+    }
+    renderFields();
+    P.bindEvent('act-mod-kind', 'change', renderFields);
 
     function close() { modal.style.display = 'none'; content.innerHTML = ''; }
     P.bindEvent('act-mod-cancel', 'click', close);
     P.bindEvent('act-mod-confirm', 'click', function() {
-      var txt = (document.getElementById('act-mod-text') || {}).value || '';
-      window.MA.history.pushHistory();
-      ctx.setMmdText(addActionAtLine(ctx.getMmdText(), line, position, txt));
-      ctx.onUpdate();
+      var k = document.getElementById('act-mod-kind').value;
+      var src = ctx.getMmdText();
+      var out = src;
+      if (k === 'action') {
+        var txt = (document.getElementById('act-mod-text') || {}).value || '';
+        out = addActionAtLine(src, line, position, txt);
+      } else if (k === 'if') {
+        out = addControlAtLine(src, line, position, 'if', {
+          cond: document.getElementById('act-mod-cond').value,
+          thenLabel: document.getElementById('act-mod-thenlbl').value || 'yes',
+          elseLabel: document.getElementById('act-mod-elselbl').value
+        });
+      } else if (k === 'while') {
+        out = addControlAtLine(src, line, position, 'while', {
+          cond: document.getElementById('act-mod-cond').value,
+          label: document.getElementById('act-mod-lbl').value || 'yes'
+        });
+      } else if (k === 'repeat') {
+        out = addControlAtLine(src, line, position, 'repeat', {
+          cond: document.getElementById('act-mod-cond').value,
+          label: document.getElementById('act-mod-lbl').value || 'yes'
+        });
+      } else if (k === 'fork') {
+        var n = parseInt(document.getElementById('act-mod-bcount').value, 10) || 2;
+        out = addControlAtLine(src, line, position, 'fork', { branchCount: n });
+      } else if (k === 'swimlane') {
+        out = addSwimlaneAtLine(src, line, position, document.getElementById('act-mod-name').value);
+      } else if (k === 'note') {
+        out = addNoteAtLine(src, line, position, {
+          position: document.getElementById('act-mod-notepos').value,
+          text: (document.getElementById('act-mod-text') || {}).value || ''
+        });
+      }
+      if (out !== src) {
+        window.MA.history.pushHistory();
+        ctx.setMmdText(out);
+        ctx.onUpdate();
+      }
       close();
     });
   }
@@ -1138,13 +1437,28 @@ window.MA.modules.plantumlActivity = (function() {
       html += '<div style="border-top:1px solid var(--border);padding-top:6px;margin-top:6px;">' +
                 '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">Branches</div>';
       var brs = node.branches || [];
+      var hasElse = false;
       for (var bi = 0; bi < brs.length; bi++) {
         var b = brs[bi];
+        if (b.kind === 'else') hasElse = true;
+        var deleteBtn = '';
+        if (b.kind === 'elseif' || b.kind === 'else') {
+          deleteBtn = ' <button id="ac-branch-del-' + bi + '" data-line="' + b.line + '" title="この branch を削除" style="background:var(--accent-red);border:none;color:#fff;padding:2px 6px;border-radius:3px;cursor:pointer;font-size:10px;">✕</button>';
+        }
         html += '<div style="font-size:11px;margin-bottom:2px;">' +
                   '▸ ' + b.kind + ' (' + window.MA.htmlUtils.escHtml(b.label || '') + ')' + (b.condition ? ' cond: ' + window.MA.htmlUtils.escHtml(b.condition) : '') + ' (L' + b.line + ')' +
                   ' <button id="ac-branch-edit-' + bi + '" data-line="' + b.line + '">edit label</button>' +
+                  deleteBtn +
                 '</div>';
       }
+      // Branch add buttons
+      html += '<div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap;">' +
+                '<button id="ac-add-elseif" style="font-size:11px;padding:3px 8px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">+ elseif 追加</button>' +
+                (hasElse
+                  ? '<button id="ac-add-else" disabled style="font-size:11px;padding:3px 8px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-secondary);border-radius:3px;cursor:not-allowed;opacity:0.5;">+ else 追加 (既に存在)</button>'
+                  : '<button id="ac-add-else" style="font-size:11px;padding:3px 8px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">+ else 追加</button>'
+                ) +
+              '</div>';
       html += '</div>';
     } else if (node.kind === 'while') {
       html += P.fieldHtml('Condition', 'ac-while-cond', node.condition || '');
@@ -1153,7 +1467,20 @@ window.MA.modules.plantumlActivity = (function() {
       html += P.fieldHtml('Repeat-while condition', 'ac-rep-cond', node.condition || '');
       html += P.fieldHtml('Label', 'ac-rep-lbl', node.label || 'yes');
     } else if (node.kind === 'fork') {
-      html += '<div style="font-size:11px;">Branches: ' + (node.branches || []).length + '</div>';
+      var fbrs = node.branches || [];
+      html += '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">Branches (' + fbrs.length + ')</div>';
+      for (var fbi = 0; fbi < fbrs.length; fbi++) {
+        var fb = fbrs[fbi];
+        if (fbi === 0) {
+          html += '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:2px;">▸ branch 1 (L' + fb.line + ')</div>';
+        } else {
+          html += '<div style="font-size:11px;margin-bottom:2px;">' +
+                    '▸ branch ' + (fbi + 1) + ' (fork again, L' + fb.line + ')' +
+                    ' <button id="ac-fork-branch-del-' + fbi + '" data-line="' + fb.line + '" title="この branch を削除" style="background:var(--accent-red);border:none;color:#fff;padding:2px 6px;border-radius:3px;cursor:pointer;font-size:10px;">✕</button>' +
+                  '</div>';
+        }
+      }
+      html += '<button id="ac-add-fork-again" style="font-size:11px;padding:3px 8px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">+ fork again 追加</button>';
     }
     html += P.primaryButtonHtml('ac-ctrl-update', '更新') +
             P.primaryButtonHtml('ac-ctrl-delete', '✕ 構造ごと削除');
@@ -1204,8 +1531,50 @@ window.MA.modules.plantumlActivity = (function() {
             ctx.setMmdText(updateBranchLabel(ctx.getMmdText(), b.line, newLabel));
             ctx.onUpdate();
           });
+          if (b.kind === 'elseif' || b.kind === 'else') {
+            P.bindEvent('ac-branch-del-' + bIdx, 'click', function() {
+              if (!confirm(b.kind + ' を削除します。続行しますか？')) return;
+              window.MA.history.pushHistory();
+              ctx.setMmdText(deleteBranchAt(ctx.getMmdText(), b.line));
+              window.MA.selection.clearSelection();
+              ctx.onUpdate();
+            });
+          }
         })(brs2[bj]);
       }
+      P.bindEvent('ac-add-elseif', 'click', function() {
+        var cond = window.prompt('elseif condition:', '');
+        if (cond === null) return;
+        var lbl = window.prompt('elseif label (default: yes):', 'yes') || 'yes';
+        window.MA.history.pushHistory();
+        ctx.setMmdText(addElseifBranch(ctx.getMmdText(), node.line, cond, lbl));
+        ctx.onUpdate();
+      });
+      P.bindEvent('ac-add-else', 'click', function() {
+        var lbl = window.prompt('else label (default: no):', 'no') || 'no';
+        window.MA.history.pushHistory();
+        ctx.setMmdText(addElseBranch(ctx.getMmdText(), node.line, lbl));
+        ctx.onUpdate();
+      });
+    }
+    if (node.kind === 'fork') {
+      var fbrs2 = node.branches || [];
+      for (var fbj = 1; fbj < fbrs2.length; fbj++) {
+        (function(b, fIdx) {
+          P.bindEvent('ac-fork-branch-del-' + fIdx, 'click', function() {
+            if (!confirm('fork branch を削除します。続行しますか？')) return;
+            window.MA.history.pushHistory();
+            ctx.setMmdText(deleteBranchAt(ctx.getMmdText(), b.line));
+            window.MA.selection.clearSelection();
+            ctx.onUpdate();
+          });
+        })(fbrs2[fbj], fbj);
+      }
+      P.bindEvent('ac-add-fork-again', 'click', function() {
+        window.MA.history.pushHistory();
+        ctx.setMmdText(addForkBranch(ctx.getMmdText(), node.line));
+        ctx.onUpdate();
+      });
     }
   }
   function _renderSwimlaneEdit(sel, parsedData, propsEl, ctx) {
@@ -1308,6 +1677,14 @@ window.MA.modules.plantumlActivity = (function() {
     updateNote: updateNote,
     deleteNode: deleteNode,
     addActionAtLine: addActionAtLine,
+    addControlAtLine: addControlAtLine,
+    addSwimlaneAtLine: addSwimlaneAtLine,
+    addNoteAtLine: addNoteAtLine,
+    addElseifBranch: addElseifBranch,
+    addElseBranch: addElseBranch,
+    addForkBranch: addForkBranch,
+    deleteBranchAt: deleteBranchAt,
+    _resolveInsertIndent: _resolveInsertIndent,
     resolveInsertLine: resolveInsertLine,
     showInsertForm: showInsertForm,
     defaultInsertKind: 'action',

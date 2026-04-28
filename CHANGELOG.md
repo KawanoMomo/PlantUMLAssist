@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.1] - 2026-04-29
+
+### Added — Activity Mid-flow Editing Polish
+
+- **mid-insert 全 7 kind** — `showInsertForm` 再構成、modal に kind selector + 条件フィールド (action/if/while/repeat/fork/swimlane/note)
+- **composite 内挿入** — if/while/fork の body 内にもホバー位置に応じて挿入、indent 自動継承で入れ子整合
+- **既存 if に branch 後付け** — `+ elseif 追加` `+ else 追加` ボタン (property panel)、既存 else があれば disabled
+- **既存 fork に分岐後付け** — `+ fork again 追加` ボタン
+- **branch 個別削除** — elseif / else / fork again 各行に `✕` ボタン、構造本体は保持
+- 新規 public API 7 個: `addControlAtLine` / `addSwimlaneAtLine` / `addNoteAtLine` / `addElseifBranch` / `addElseBranch` / `addForkBranch` / `deleteBranchAt`
+- 内部ヘルパ: `_resolveInsertIndent` / `_findMatchingEndif` / `_findElseLine` / `_findMatchingEndFork`
+- Unit テスト: +18 (557 total)、E2E テスト: +6 (UC-1/UC-2/UC-3/UC-5/UC-6/UC-8/UC-9)
+
+### Notes
+
+- 設計詳細: `docs/superpowers/specs/2026-04-28-activity-v1.0.1-design.md`
+- 実装計画: `docs/superpowers/plans/2026-04-28-activity-v1.0.1.md`
+- ユーザ指摘 「アクションの挿入がアクションのみなので途中で If 文や Loop を表現したい場合、後段のすべての内容を削除しないと追加できない。これはツールとして破綻している」 を解消
+- v1.0.2+ 繰越: State 図の同種 polish (mid-insert state/transition/note + composite-state 内挿入)、 既存ノードを if/while で囲む UX、 branch 順序入れ替え、 buildOverlay の composite 内 action overlay rect 対応 (UC-2 E2E が現状 skip する根本原因)
+
 ## [1.0.0] - 2026-04-28
 
 ### Added — Tier1 完成
