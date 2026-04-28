@@ -85,25 +85,33 @@ function init() {
     while (hoverEl.firstChild) hoverEl.removeChild(hoverEl.firstChild);
   }
 
-  function drawHoverGuide(y) {
+  function drawHoverGuide(y, rectX, rectWidth) {
     clearHoverGuide();
     if (!overlayElForHover) return;
     var w = parseFloat(overlayElForHover.getAttribute('width')) || 800;
     var h = parseFloat(overlayElForHover.getAttribute('height')) || 400;
+    var PADDING = 10;
+    // When rectX/rectWidth are provided, constrain the guide span to the
+    // resolved rect's column (with padding). Otherwise span the full overlay.
+    var x1 = (typeof rectX === 'number' && typeof rectWidth === 'number')
+      ? Math.max(0, rectX - PADDING)
+      : 0;
+    var x2 = (typeof rectX === 'number' && typeof rectWidth === 'number')
+      ? Math.min(w, rectX + rectWidth + PADDING)
+      : w;
     var lineEl = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    lineEl.setAttribute('x1', 0);
+    lineEl.setAttribute('x1', x1);
     lineEl.setAttribute('y1', y);
-    lineEl.setAttribute('x2', w);
+    lineEl.setAttribute('x2', x2);
     lineEl.setAttribute('y2', y);
     lineEl.setAttribute('class', 'hover-guide');
     hoverEl.appendChild(lineEl);
     var text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    text.setAttribute('x', 10);
+    text.setAttribute('x', x1 + 4);
     text.setAttribute('y', y - 3);
     text.setAttribute('class', 'hover-label');
     text.textContent = '+ ここに挿入';
     hoverEl.appendChild(text);
-    // overlay と sync
     hoverEl.setAttribute('width', overlayElForHover.getAttribute('width') || w);
     hoverEl.setAttribute('height', overlayElForHover.getAttribute('height') || h);
     var vb = overlayElForHover.getAttribute('viewBox');
@@ -147,7 +155,19 @@ function init() {
         return;
       }
       var z = zoom || 1;
+      var x = (e.clientX - rect.left) / z;
       var y = (e.clientY - rect.top) / z;
+      // Resolve via current module to obtain the column bounds (rectX/rectWidth)
+      var resolver = (currentModule && typeof currentModule.resolveInsertLine === 'function')
+        ? currentModule.resolveInsertLine
+        : null;
+      if (resolver) {
+        var res = resolver(overlayElForHover, x, y);
+        if (res) {
+          drawHoverGuide(y, res.rectX, res.rectWidth);
+          return;
+        }
+      }
       drawHoverGuide(y);
     });
 
@@ -164,7 +184,7 @@ function init() {
       // Resolve insert line via current module (v0.5.0 overlay-driven contract)
       // Falls back to sequence-overlay for backward compat with sequence module.
       var resolver = (currentModule && typeof currentModule.resolveInsertLine === 'function')
-        ? function(ovEl, yy) { return currentModule.resolveInsertLine(ovEl, yy); }
+        ? function(ovEl, xx, yy) { return currentModule.resolveInsertLine(ovEl, xx, yy); }
         : (window.MA.sequenceOverlay && window.MA.sequenceOverlay.resolveInsertLine
           ? window.MA.sequenceOverlay.resolveInsertLine
           : null);
@@ -172,8 +192,9 @@ function init() {
       var rect = overlayElForHover.getBoundingClientRect();
       if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) return;
       var z = zoom || 1;
+      var x = (e.clientX - rect.left) / z;
       var y = (e.clientY - rect.top) / z;
-      var res = resolver(overlayElForHover, y);
+      var res = resolver(overlayElForHover, x, y);
       if (!res) return;
       var insertKind = (currentModule && currentModule.defaultInsertKind) || 'message';
       currentModule.showInsertForm({
