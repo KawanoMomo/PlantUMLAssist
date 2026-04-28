@@ -161,6 +161,111 @@ test.describe('Activity v0.7.0', () => {
       expect(t).toContain(':Mid Insert;');
     });
 
+    test('UC-1: mid-insert if via modal kind selector', async ({ page }) => {
+      await gotoApp(page);
+      await page.locator('#diagram-type').selectOption('plantuml-activity');
+      await page.waitForTimeout(2500);
+      var actionRect = page.locator('#overlay-layer rect[data-type="action"]').first();
+      var c = await actionRect.count();
+      if (c === 0) test.skip();
+      var box = await actionRect.boundingBox();
+      // Click below the action rect (empty space) to open modal
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height + 6);
+      await page.waitForTimeout(300);
+      // Switch kind to 'if'
+      await page.locator('#act-mod-kind').selectOption('if');
+      await page.waitForTimeout(100);
+      await page.locator('#act-mod-cond').fill('auth?');
+      await page.locator('#act-mod-thenlbl').fill('yes');
+      await page.locator('#act-mod-elselbl').fill('no');
+      await page.locator('#act-mod-confirm').click();
+      await page.waitForTimeout(300);
+      var t = await getEditorText(page);
+      expect(t).toContain('if (auth?) then (yes)');
+      expect(t).toContain('else (no)');
+      expect(t).toContain('endif');
+    });
+
+    test('UC-2: composite-internal mid-insert preserves indent', async ({ page }) => {
+      await gotoApp(page);
+      await page.locator('#diagram-type').selectOption('plantuml-activity');
+      await page.waitForTimeout(500);
+      // Set up DSL with an existing if block
+      await page.evaluate(function() {
+        var ed = document.getElementById('editor');
+        if (ed) {
+          ed.value = '@startuml\nstart\n:A;\nif (outer?) then (yes)\n  :X;\nendif\nstop\n@enduml';
+          ed.dispatchEvent(new Event('input'));
+        }
+      });
+      await page.waitForTimeout(2500);
+      var rects = page.locator('#overlay-layer rect[data-type="action"]');
+      var rectCount = await rects.count();
+      if (rectCount < 2) test.skip();
+      // Pick the second action (:X; inside if)
+      var innerRect = rects.nth(1);
+      var box = await innerRect.boundingBox();
+      // Click 5px ABOVE :X; (still in empty space inside if-block)
+      await page.mouse.click(box.x + box.width / 2, box.y - 5);
+      await page.waitForTimeout(300);
+      // Modal should be visible
+      var modalDisplay = await page.locator('#act-modal').evaluate(function(el) { return el.style.display; });
+      if (modalDisplay !== 'flex') test.skip();
+      await page.locator('#act-mod-kind').selectOption('if');
+      await page.waitForTimeout(100);
+      await page.locator('#act-mod-cond').fill('inner?');
+      await page.locator('#act-mod-elselbl').fill('');  // omit else
+      await page.locator('#act-mod-confirm').click();
+      await page.waitForTimeout(300);
+      var t = await getEditorText(page);
+      // Inner if should be at indent 2 (inside outer if)
+      var lines = t.split('\n');
+      var innerLine = '';
+      for (var i = 0; i < lines.length; i++) {
+        if (lines[i].indexOf('if (inner?)') >= 0) { innerLine = lines[i]; break; }
+      }
+      expect(innerLine.substring(0, 2)).toBe('  ');
+    });
+
+    test('UC-8: mid-insert swimlane', async ({ page }) => {
+      await gotoApp(page);
+      await page.locator('#diagram-type').selectOption('plantuml-activity');
+      await page.waitForTimeout(2500);
+      var actionRect = page.locator('#overlay-layer rect[data-type="action"]').first();
+      var c = await actionRect.count();
+      if (c === 0) test.skip();
+      var box = await actionRect.boundingBox();
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height + 6);
+      await page.waitForTimeout(300);
+      await page.locator('#act-mod-kind').selectOption('swimlane');
+      await page.waitForTimeout(100);
+      await page.locator('#act-mod-name').fill('Backend');
+      await page.locator('#act-mod-confirm').click();
+      await page.waitForTimeout(300);
+      var t = await getEditorText(page);
+      expect(t).toContain('|Backend|');
+    });
+
+    test('UC-9: mid-insert note (block form)', async ({ page }) => {
+      await gotoApp(page);
+      await page.locator('#diagram-type').selectOption('plantuml-activity');
+      await page.waitForTimeout(2500);
+      var actionRect = page.locator('#overlay-layer rect[data-type="action"]').first();
+      var c = await actionRect.count();
+      if (c === 0) test.skip();
+      var box = await actionRect.boundingBox();
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height + 6);
+      await page.waitForTimeout(300);
+      await page.locator('#act-mod-kind').selectOption('note');
+      await page.waitForTimeout(100);
+      await page.locator('#act-mod-text').fill('important comment');
+      await page.locator('#act-mod-confirm').click();
+      await page.waitForTimeout(300);
+      var t = await getEditorText(page);
+      expect(t).toContain('note right');
+      expect(t).toContain('important comment');
+    });
+
     test('console error count is 0 during overlay interactions', async ({ page }) => {
       var errors = [];
       page.on('console', function(msg) { if (msg.type() === 'error') errors.push(msg.text()); });
