@@ -205,6 +205,47 @@ describe('state dissolveComposite', function() {
   });
 });
 
+describe('state moveStateIntoComposite', function() {
+  test('moves top-level state into existing composite', function() {
+    var t = '@startuml\nstate Slow\nstate Driving {\n  state Fast\n}\n@enduml';
+    var out = stMod.moveStateIntoComposite(t, 'Slow', 'Driving');
+    var lines = out.split('\n');
+    var topLevelSlow = false, insideSlow = false, insideDriving = false;
+    for (var i = 0; i < lines.length; i++) {
+      var t1 = lines[i];
+      if (t1 === 'state Slow') topLevelSlow = true;
+      if (t1.indexOf('state Driving {') >= 0) insideDriving = true;
+      if (insideDriving && /^\s+state Slow/.test(t1)) insideSlow = true;
+      if (t1.trim() === '}') insideDriving = false;
+    }
+    expect(topLevelSlow).toBe(false);
+    expect(insideSlow).toBe(true);
+  });
+  test('returns text unchanged if target composite not found', function() {
+    var t = '@startuml\nstate Slow\n@enduml';
+    var out = stMod.moveStateIntoComposite(t, 'Slow', 'NoSuchComposite');
+    expect(out).toBe(t);
+  });
+});
+
+describe('state moveStateOutOfComposite', function() {
+  test('moves composite-internal state to top-level', function() {
+    var t = '@startuml\nstate Driving {\n  state Slow\n  state Fast\n}\n@enduml';
+    var out = stMod.moveStateOutOfComposite(t, 'Driving.Slow');
+    var lines = out.split('\n');
+    var topLevelSlow = false, insideSlow = false, insideDriving = false;
+    for (var i = 0; i < lines.length; i++) {
+      var t1 = lines[i];
+      if (t1 === 'state Slow') topLevelSlow = true;
+      if (t1.indexOf('state Driving {') >= 0) insideDriving = true;
+      if (insideDriving && /^\s+state Slow/.test(t1)) insideSlow = true;
+      if (t1.trim() === '}') insideDriving = false;
+    }
+    expect(topLevelSlow).toBe(true);
+    expect(insideSlow).toBe(false);
+  });
+});
+
 if (prevWindow !== undefined) global.window = prevWindow;
 if (prevDocument !== undefined) global.document = prevDocument;
 depPaths.forEach(function(p) { try { delete require.cache[require.resolve(p)]; } catch (e) {} });

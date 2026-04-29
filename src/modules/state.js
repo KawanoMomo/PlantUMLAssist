@@ -437,6 +437,53 @@ window.MA.modules.plantumlState = (function() {
     return before.concat(dedented).concat(after).join('\n');
   }
 
+  function moveStateIntoComposite(text, stateId, targetCompositeId) {
+    var lines = text.split('\n');
+    var targetIdx = _findStateDeclLine(lines, targetCompositeId);
+    if (targetIdx < 0) return text;
+    if (!/\{\s*$/.test(lines[targetIdx])) return text;  // target is not a composite
+    var stateIdx = _findStateDeclLine(lines, stateId);
+    if (stateIdx < 0 || stateIdx === targetIdx) return text;
+    // Extract the state line, indent +2 spaces, insert right after target's open brace.
+    var stateLine = lines[stateIdx].trim();
+    var targetIndent = (lines[targetIdx].match(/^(\s*)/) || ['', ''])[1];
+    var newLine = targetIndent + '  ' + stateLine;
+    // Remove state line first, then re-insert at adjusted target idx
+    lines.splice(stateIdx, 1);
+    var newTargetIdx = stateIdx < targetIdx ? targetIdx - 1 : targetIdx;
+    lines.splice(newTargetIdx + 1, 0, newLine);
+    return lines.join('\n');
+  }
+
+  function moveStateOutOfComposite(text, stateId) {
+    var lines = text.split('\n');
+    var stateIdx = _findStateDeclLine(lines, stateId);
+    if (stateIdx < 0) return text;
+    // Find the enclosing composite: scan back for the most recent `state X {` whose matching brace is AFTER stateIdx.
+    var enclosingIdx = -1;
+    for (var i = stateIdx - 1; i >= 0; i--) {
+      var t1 = lines[i].trim();
+      if (t1.match(STATE_RE) && /\{\s*$/.test(t1)) {
+        var closeIdx = _findMatchingBrace(lines, i);
+        if (closeIdx >= 0 && closeIdx > stateIdx) {
+          enclosingIdx = i;
+          break;
+        }
+      }
+    }
+    if (enclosingIdx < 0) return text;  // not inside any composite
+    var compositeCloseIdx = _findMatchingBrace(lines, enclosingIdx);
+    if (compositeCloseIdx < 0) return text;
+    // Dedent the state line and move it to AFTER the closing brace.
+    var stateLine = lines[stateIdx].trim();
+    var compositeIndent = (lines[enclosingIdx].match(/^(\s*)/) || ['', ''])[1];
+    var newLine = compositeIndent + stateLine;
+    lines.splice(stateIdx, 1);  // remove from inside
+    var insertIdx = compositeCloseIdx; // closeIdx shifted by -1 after splice
+    lines.splice(insertIdx + 1, 0, newLine);  // insert after closing brace
+    return lines.join('\n');
+  }
+
   function deleteNode(text, startLine, endLine) {
     var lines = text.split('\n');
     var startIdx = startLine - 1;
@@ -747,6 +794,32 @@ window.MA.modules.plantumlState = (function() {
     var related = (parsedData.transitions || []).filter(function(tr) { return tr.from === st.id || tr.to === st.id; });
     var notes = (parsedData.notes || []).filter(function(n) { return n.targetId === st.id; });
 
+    // Compute candidate composites for "Move into" (exclude self and descendants)
+    var moveCandidates = (parsedData.states || []).filter(function(other) {
+      if (other.id === st.id) return false;
+      if (!(other.endLine && other.endLine > other.line)) return false;  // only composites
+      if (other.id.indexOf(st.id + '.') === 0) return false;  // exclude descendants
+      return true;
+    });
+    var moveIntoHtml = '';
+    if (!st.parentId && moveCandidates.length > 0) {
+      var moveOpts = '<option value="">-- 選択 --</option>';
+      for (var mci = 0; mci < moveCandidates.length; mci++) {
+        var mco = moveCandidates[mci];
+        moveOpts += '<option value="' + window.MA.htmlUtils.escHtml(mco.id) + '">' + window.MA.htmlUtils.escHtml(mco.label || mco.id) + '</option>';
+      }
+      moveIntoHtml =
+        '<div style="margin-top:4px;font-size:11px;display:flex;align-items:center;gap:4px;">' +
+          '<span style="color:var(--text-secondary);">Move into:</span>' +
+          '<select id="st-move-target" style="flex:1;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:3px 6px;border-radius:3px;font-size:11px;">' + moveOpts + '</select>' +
+          '<button id="st-move-into" style="font-size:11px;padding:3px 8px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">Move</button>' +
+        '</div>';
+    }
+    var moveOutHtml = '';
+    if (st.parentId) {
+      moveOutHtml = '<button id="st-move-out" style="font-size:11px;padding:3px 8px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;margin-top:4px;display:block;">↑ Move out of ' + window.MA.htmlUtils.escHtml(st.parentId) + '</button>';
+    }
+
     var doDisplay = (st.do || '').replace(/\\n/g, '\n');
     var html =
       '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' +
@@ -778,6 +851,8 @@ window.MA.modules.plantumlState = (function() {
         ? '<button id="st-dissolve" style="font-size:11px;padding:4px 10px;background:var(--accent-red);border:none;color:#fff;border-radius:3px;cursor:pointer;margin-bottom:4px;">✕ Dissolve composite</button>'
         : '<button id="st-convert" style="font-size:11px;padding:4px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;margin-bottom:4px;">+ Convert to composite</button>'
       ) +
+      moveIntoHtml +
+      moveOutHtml +
       P.primaryButtonHtml('st-update', '更新');
     if (related.length > 0) {
       html += '<div style="border-top:1px solid var(--border);padding-top:6px;margin-top:6px;">' +
@@ -850,6 +925,26 @@ window.MA.modules.plantumlState = (function() {
       window.MA.selection.clearSelection();
       ctx.onUpdate();
     });
+    if (!st.parentId) {
+      P.bindEvent('st-move-into', 'click', function() {
+        var targetSel = document.getElementById('st-move-target');
+        if (!targetSel) return;
+        var target = targetSel.value;
+        if (!target) return;
+        window.MA.history.pushHistory();
+        ctx.setMmdText(moveStateIntoComposite(ctx.getMmdText(), st.id, target));
+        window.MA.selection.clearSelection();
+        ctx.onUpdate();
+      });
+    }
+    if (st.parentId) {
+      P.bindEvent('st-move-out', 'click', function() {
+        window.MA.history.pushHistory();
+        ctx.setMmdText(moveStateOutOfComposite(ctx.getMmdText(), st.id));
+        window.MA.selection.clearSelection();
+        ctx.onUpdate();
+      });
+    }
     notes.forEach(function(n, idx) {
       P.bindEvent('st-note-del-' + idx, 'click', function(e) {
         var btn = e.currentTarget;
@@ -1055,6 +1150,8 @@ window.MA.modules.plantumlState = (function() {
     setStateBehavior: setStateBehavior,
     convertToComposite: convertToComposite,
     dissolveComposite: dissolveComposite,
+    moveStateIntoComposite: moveStateIntoComposite,
+    moveStateOutOfComposite: moveStateOutOfComposite,
     deleteNode: deleteNode,
     deleteStateWithRefs: deleteStateWithRefs,
     resolveInsertLine: resolveInsertLine,
