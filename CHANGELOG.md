@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.0] - 2026-04-29
+
+### Added — State Tier2 Polish
+
+- **Behaviors セクション** — state edit form に entry (input) / do (textarea, multi-line) / exit (input) フィールド (StableState 流 UI)。 PlantUML description line `STATE : entry / xxx` 形式で emit、 do の改行は `\n` escape で 1 行結合
+- **Composite state nesting ops 全 4 種**:
+  - `+ Convert to composite` — 単純 state を空 composite に変換
+  - `✕ Dissolve composite` — composite を解体し子要素を top-level に持ち上げ
+  - `Move into:` dropdown + `Move` — top-level state を別 composite の子へ移動 (自身/descendants は候補から除外で循環参照防止)
+  - `↑ Move out of` — composite 内 state を top-level に取り出し
+- **+ Outgoing transition modal** — selected state から新規 outgoing transition を target dropdown ([*] pseudo-state 含む) + trigger/guard/action 入力で追加
+- 新規 public API 7 個: `setStateBehavior` / `convertToComposite` / `dissolveComposite` / `moveStateIntoComposite` / `moveStateOutOfComposite` (+ 内部ヘルパ `_findStateDeclLine` / `_findMatchingBrace` / `_showAddTransitionModal`)
+
+### Changed
+
+- parser に `entry` / `do` / `exit` / `descriptions` フィールドを state node に追加。 description line を prefix で振り分け (`\\n` literal escape で multi-occurrence join)
+- `_renderStateEdit` 拡張: Behaviors / composite ops / + Outgoing transition の各セクション
+- state rename 時の orphan 防止: 旧 bareId の description lines を削除してから新 bareId で書き直し
+
+### Removed (Behavior change)
+
+- **`capabilities.hoverInsert` / `showInsertForm` を `false` 化** — State 図は graph-like layout で hover 位置から挿入先を予測できないため除去
+- 旧 v1.0.0 の UC-6 / UC-7 E2E テスト (hover insert / empty click insert modal) を削除 (capability 廃止に伴い obsolete)
+
+### Notes
+
+- 設計詳細: `docs/superpowers/specs/2026-04-29-state-v1.1.0-design.md`
+- 実装計画: `docs/superpowers/plans/2026-04-29-state-v1.1.0.md`
+- ユーザ指摘 「State は縦方向に図形が生成されることが保証されないから、 ここに挿入で追加するのは不適切」 + 「entry/exit/during 処理をプロパティから記載できるように」 を解消
+- transition source/target 変更 (vi) は v1.0.0 で実装済を確認、 E2E verification を追加 (UC-4 v1.0.0)
+- entry/exit/do フィールドの UI は StableState (`04_StableState/stablestate.html:3683-3697`) を参考
+- v1.1.x+ 繰越: graph-aware 代替挿入 UX、 2 段以上 composite ネスト、 concurrent region、 internal transition、 transition reorder、 buildOverlay の Activity composite 内 rect 制限、 description line 移動時の orphan 防止 (state を composite 間で move した時の `S : entry / x` 等の追従)
+
 ## [1.0.3] - 2026-04-29
 
 ### Fixed — Note attachment
