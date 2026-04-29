@@ -86,6 +86,47 @@ describe('state add ops', function() {
     var ls = out.split('\n');
     expect(ls[2]).toBe('state NEW');
   });
+  test('addStateAtLine accepts label distinct from id', function() {
+    var t = '@startuml\nstate A\n@enduml';
+    var out = stMod.addStateAtLine(t, 3, 'before', 'S1', null, 'アイドル');
+    expect(out).toContain('state "アイドル" as S1');
+  });
+  test('addCompositeState accepts label distinct from id', function() {
+    var t = '@startuml\n@enduml';
+    var out = stMod.addCompositeState(t, 'S1', '状態X');
+    expect(out).toContain('state "状態X" as S1 {');
+  });
+});
+
+describe('non-ASCII id normalization', function() {
+  var parsed1 = { states: [{ id: 'Idle' }, { id: 'Active' }] };
+  test('ASCII id passes through unchanged', function() {
+    var n = stMod.normalizeIdInput('Foo', parsed1);
+    expect(n).toEqual({ id: 'Foo', label: 'Foo', valid: true });
+  });
+  test('Japanese id maps to S1 alias with label preserved', function() {
+    var n = stMod.normalizeIdInput('状態A', parsed1);
+    expect(n.valid).toBe(true);
+    expect(n.id).toBe('S1');
+    expect(n.label).toBe('状態A');
+  });
+  test('alias avoids collisions with existing states', function() {
+    var p = { states: [{ id: 'S1' }, { id: 'S2' }] };
+    var n = stMod.normalizeIdInput('日本語', p);
+    expect(n.id).toBe('S3');
+  });
+  test('empty input is invalid', function() {
+    var n = stMod.normalizeIdInput('  ', parsed1);
+    expect(n.valid).toBe(false);
+  });
+  test('parser finds normalized state via STATE_RE', function() {
+    var t = '@startuml\nstate "状態A" as S1\n@enduml';
+    var p = stMod.parse(t);
+    expect(p.states.length).toBe(1);
+    expect(p.states[0].id).toBe('S1');
+    expect(p.states[0].label).toBe('状態A');
+    expect(p.states[0].line).toBe(2);
+  });
 });
 
 describe('state update/delete ops', function() {

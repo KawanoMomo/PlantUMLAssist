@@ -12,6 +12,38 @@ window.MA.modules.plantumlState = (function() {
     '^state\\s+(?:"([^"]+)"\\s+as\\s+(' + ID + ')|(' + ID + ')(?:\\s+as\\s+"([^"]+)")?)\\s*(?:<<([^>]+)>>)?\\s*(\\{)?\\s*$'
   );
 
+  var ASCII_ID_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+  function _existingIdSet(parsed) {
+    var set = {};
+    var states = (parsed && parsed.states) || [];
+    states.forEach(function(s) {
+      var bare = s.id.indexOf('.') >= 0 ? s.id.split('.').pop() : s.id;
+      set[bare] = true;
+    });
+    return set;
+  }
+
+  // User-typed IDs that aren't ASCII-safe (e.g. Japanese) won't match the
+  // parser's IDENTIFIER regex AND PlantUML strips them from
+  // data-qualified-name. Auto-generate an ASCII alias and keep the user's
+  // string as the visible label so both the parser and the renderer agree.
+  function normalizeIdInput(rawInput, parsed) {
+    var trimmed = (rawInput == null ? '' : String(rawInput)).trim();
+    if (!trimmed) return { id: '', label: '', valid: false };
+    if (ASCII_ID_RE.test(trimmed)) {
+      return { id: trimmed, label: trimmed, valid: true };
+    }
+    var existing = _existingIdSet(parsed);
+    for (var i = 1; i < 10000; i++) {
+      var candidate = 'S' + i;
+      if (!existing[candidate]) {
+        return { id: candidate, label: trimmed, valid: true };
+      }
+    }
+    return { id: 'S' + Date.now(), label: trimmed, valid: true };
+  }
+
   var TRANSITION_RE = new RegExp(
     '^(\\[\\*\\]|' + ID + ')\\s*-->\\s*(\\[\\*\\]|' + ID + ')(?:\\s*:\\s*(.*))?\\s*$'
   );
@@ -236,8 +268,11 @@ window.MA.modules.plantumlState = (function() {
   function addState(text, id, label, stereotype) {
     return insertBeforeEnd(text, fmtState(id, label || id, stereotype));
   }
-  function addCompositeState(text, id) {
-    var out = insertBeforeEnd(text, 'state ' + id + ' {');
+  function addCompositeState(text, id, label) {
+    var head = (label && label !== id)
+      ? 'state "' + label + '" as ' + id + ' {'
+      : 'state ' + id + ' {';
+    var out = insertBeforeEnd(text, head);
     out = insertBeforeEnd(out, '}');
     return out;
   }
@@ -253,14 +288,14 @@ window.MA.modules.plantumlState = (function() {
     }
     return insertBeforeEnd(text, formatted);
   }
-  function addStateAtLine(text, lineNum, position, id, stereotype) {
+  function addStateAtLine(text, lineNum, position, id, stereotype, label) {
     var lines = text.split('\n');
     var targetIdx = position === 'before' ? lineNum - 1 : lineNum;
     if (targetIdx < 0) targetIdx = 0;
     if (targetIdx > lines.length) targetIdx = lines.length;
     var indentSrc = lines[Math.min(targetIdx, lines.length - 1)] || lines[Math.max(0, targetIdx - 1)] || '';
     var indent = (indentSrc.match(/^(\s*)/) || ['', ''])[1];
-    var newLine = indent + fmtState(id, id, stereotype || null);
+    var newLine = indent + fmtState(id, label != null ? label : id, stereotype || null);
     lines.splice(targetIdx, 0, newLine);
     return lines.join('\n');
   }
@@ -751,14 +786,16 @@ window.MA.modules.plantumlState = (function() {
         var k = document.getElementById('st-tail-kind').value;
         var out = t;
         if (k === 'state') {
-          var id = document.getElementById('st-tail-id').value.trim();
-          if (!id) { alert('ID 必須'); return; }
+          var rawId = document.getElementById('st-tail-id').value;
+          var normSt = normalizeIdInput(rawId, parsedData);
+          if (!normSt.valid) { alert('ID 必須'); return; }
           var st = document.getElementById('st-tail-stereo').value || null;
-          out = addState(t, id, id, st);
+          out = addState(t, normSt.id, normSt.label, st);
         } else if (k === 'composite') {
-          var cid = document.getElementById('st-tail-id').value.trim();
-          if (!cid) { alert('ID 必須'); return; }
-          out = addCompositeState(t, cid);
+          var rawCid = document.getElementById('st-tail-id').value;
+          var normC = normalizeIdInput(rawCid, parsedData);
+          if (!normC.valid) { alert('ID 必須'); return; }
+          out = addCompositeState(t, normC.id, normC.label);
         } else if (k === 'transition') {
           var fr = document.getElementById('st-tail-from').value;
           var to = document.getElementById('st-tail-to').value;
@@ -913,11 +950,18 @@ window.MA.modules.plantumlState = (function() {
 
     P.bindEvent('st-update', 'click', function() {
       window.MA.history.pushHistory();
-      var newId = document.getElementById('st-id').value;
+      var rawId = document.getElementById('st-id').value;
+      var rawLabel = document.getElementById('st-label').value;
+      // If user typed a non-ASCII id (e.g. Japanese), promote it to the label
+      // and synthesize a fresh ASCII alias so parser+PlantUML stay in sync.
+      var freshParsed = parse(ctx.getMmdText());
+      var renameNorm = normalizeIdInput(rawId, freshParsed);
+      var newId = renameNorm.id;
+      var newLabel = (renameNorm.id !== renameNorm.label) ? renameNorm.label : rawLabel;
       var src = ctx.getMmdText();
       var out = updateState(src, st.line, {
         id: newId,
-        label: document.getElementById('st-label').value,
+        label: newLabel,
         stereotype: document.getElementById('st-stereo').value || null
       });
       // Apply Behaviors. Use the (possibly renamed) id.
@@ -1096,8 +1140,11 @@ window.MA.modules.plantumlState = (function() {
     if (!modal || !content) {
       var t = window.prompt((position === 'before' ? '前に' : '後に') + 'state を挿入: ID', '');
       if (!t) return;
+      var promptParsed = parse(ctx.getMmdText());
+      var promptNorm = normalizeIdInput(t, promptParsed);
+      if (!promptNorm.valid) return;
       window.MA.history.pushHistory();
-      ctx.setMmdText(addStateAtLine(ctx.getMmdText(), line, position, t, null));
+      ctx.setMmdText(addStateAtLine(ctx.getMmdText(), line, position, promptNorm.id, null, promptNorm.label));
       ctx.onUpdate();
       return;
     }
@@ -1144,8 +1191,9 @@ window.MA.modules.plantumlState = (function() {
       var out = t;
       if (k === 'state') {
         var id = (document.getElementById('st-mod-id') || {}).value || '';
-        if (!id) { alert('ID 必須'); return; }
-        out = addStateAtLine(t, line, position, id, null);
+        var modNorm = normalizeIdInput(id, parsed);
+        if (!modNorm.valid) { alert('ID 必須'); return; }
+        out = addStateAtLine(t, line, position, modNorm.id, null, modNorm.label);
       } else {
         out = addTransitionAtLine(t, line, position,
           document.getElementById('st-mod-from').value,
@@ -1181,6 +1229,7 @@ window.MA.modules.plantumlState = (function() {
     addNote: addNote,
     addStateAtLine: addStateAtLine,
     addTransitionAtLine: addTransitionAtLine,
+    normalizeIdInput: normalizeIdInput,
     updateState: updateState,
     updateTransition: updateTransition,
     updateNote: updateNote,

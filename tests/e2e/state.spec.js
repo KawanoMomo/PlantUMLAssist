@@ -315,4 +315,32 @@ test.describe('State v1.0.0', () => {
     expect(ids).toContain('Alpha');
     expect(ids).toContain('Beta');
   });
+
+  // v1.1.2: Japanese (non-ASCII) state names must remain selectable.
+  // Root cause: parser STATE_RE used IDENTIFIER = [A-Za-z_][A-Za-z0-9_]*,
+  // which cannot match Japanese; the added state was missing from
+  // parsed.states, no overlay rect was built, and the user couldn't click it.
+  // Fix: tail-add normalizes non-ASCII id to an ASCII alias (S1, S2, ...) and
+  // keeps the original string as the visible label via `state "X" as S1`.
+  test('UC-bug2-jp v1.1.2: Japanese-named tail-add State is selectable', async ({ page }) => {
+    await gotoApp(page);
+    await page.locator('#diagram-type').selectOption('plantuml-state');
+    await page.waitForTimeout(2500);
+    await page.locator('#st-tail-kind').selectOption('state');
+    await page.locator('#st-tail-id').fill('状態X');
+    await page.locator('#st-tail-add').click();
+    await page.waitForTimeout(2500);
+    // DSL should have been normalized to ASCII alias + Japanese label
+    var t = await getEditorText(page);
+    expect(t).toContain('state "状態X" as S1');
+    // Overlay must include rect for S1
+    var rect = page.locator('#overlay-layer rect[data-id="S1"]');
+    await expect(rect).toHaveCount(1);
+    await rect.click();
+    // Edit panel must reflect the selected state (id=S1, label=状態X)
+    var idVal = await page.locator('#st-id').inputValue();
+    var labelVal = await page.locator('#st-label').inputValue();
+    expect(idVal).toBe('S1');
+    expect(labelVal).toBe('状態X');
+  });
 });

@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.2] - 2026-04-30
+
+### Fixed
+
+- **Bug: 日本語 (非 ASCII) で命名した State を追加すると選択できない** — parser の `STATE_RE` が共通定数 `RP.IDENTIFIER = [A-Za-z_][A-Za-z0-9_]*` を使っており非 ASCII 識別子をマッチしない。さらに PlantUML 自身も非 ASCII id を `data-qualified-name` から脱落させる (`..A` 等) ため、 v1.1.1 で入れた renderGen race fix では塞げなかった。 Fix: `state.js` に `normalizeIdInput()` を追加し、 ユーザ入力 ID が ASCII identifier に一致しない場合は `S1`, `S2`, ... の ASCII alias を生成、 元の文字列を label として `state "状態X" as S1` 形式で書き出す。 これにより parser / PlantUML / overlay-builder 全レイヤで同一の ASCII id で整合する。 適用箇所: tail-add (state / composite) / insert-form (modal & prompt fallback) / state rename。 `addCompositeState(id, label?)` と `addStateAtLine(..., label?)` に optional label 引数を追加 (既存 ASCII-only 呼び出しは後方互換)。
+
+### Tests
+
+- 単体テスト 5 件追加 (`tests/state-updater.test.js`): `normalizeIdInput` の ASCII pass-through / Japanese → S1 alias / 既存 S1/S2 衝突回避 / empty 入力の `valid:false` / `state "状態A" as S1` の parser round-trip
+- E2E 回帰 1 件追加 (`tests/e2e/state.spec.js`): `UC-bug2-jp v1.1.2` — tail-add で `状態X` を入力 → editor に `state "状態X" as S1` が emit、 overlay rect[data-id="S1"] が生成、 click で selection panel が `id=S1, label=状態X` を表示
+
 ## [1.1.1] - 2026-04-29
 
 ### Fixed
