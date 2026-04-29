@@ -752,6 +752,15 @@ window.MA.modules.plantumlState = (function() {
       });
       // Apply Behaviors. Use the (possibly renamed) id.
       var bareId = newId.indexOf('.') >= 0 ? newId.split('.').pop() : newId;
+      var oldBareId = st.id.indexOf('.') >= 0 ? st.id.split('.').pop() : st.id;
+      // If state id was renamed, clean up orphan description lines under the
+      // old bare id first to avoid leaving stale entry/do/exit lines pointing
+      // to a now-nonexistent identifier.
+      if (oldBareId !== bareId) {
+        out = setStateBehavior(out, oldBareId, 'entry', '');
+        out = setStateBehavior(out, oldBareId, 'do', '');
+        out = setStateBehavior(out, oldBareId, 'exit', '');
+      }
       var entryVal = document.getElementById('st-entry').value;
       var doVal = document.getElementById('st-do').value;
       var exitVal = document.getElementById('st-exit').value;
