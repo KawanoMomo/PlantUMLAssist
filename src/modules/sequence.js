@@ -853,14 +853,22 @@ window.MA.modules.plantumlSequence = (function() {
       if (!propsEl) return;
       var escHtml = window.MA.htmlUtils.escHtml;
       var P = window.MA.properties;
-      var participants = parsedData.elements.filter(function(e) { return e.kind === 'participant'; });
-      var notes = parsedData.elements.filter(function(e) { return e.kind === 'note'; });
-      var activations = parsedData.elements.filter(function(e) { return e.kind === 'activation'; });
-      var messages = parsedData.relations;
+      // Defense-in-depth: parsedData may transiently lack the sequence shape
+      // when other modules' parsedData is still in-flight (e.g. during a
+      // diagram-type switch where clearSelection() fires renderProps before
+      // app.js finishes the reparse). Coalesce missing fields rather than
+      // throwing on `parsedData.elements.filter`.
+      if (!parsedData) parsedData = { meta: {}, elements: [], relations: [], groups: [] };
+      if (!parsedData.meta) parsedData.meta = {};
+      var elements = parsedData.elements || [];
+      var participants = elements.filter(function(e) { return e.kind === 'participant'; });
+      var notes = elements.filter(function(e) { return e.kind === 'note'; });
+      var activations = elements.filter(function(e) { return e.kind === 'activation'; });
+      var messages = parsedData.relations || [];
       var groups = parsedData.groups || [];
 
       if (!selData || selData.length === 0) {
-        var participants = parsedData.elements.filter(function(e) { return e.kind === 'participant'; });
+        var participants = elements.filter(function(e) { return e.kind === 'participant'; });
         var autonumChecked = parsedData.meta.autonumber ? 'checked' : '';
         propsEl.innerHTML =
           '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Sequence Diagram</div>' +

@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.1] - 2026-04-29
+
+### Fixed
+
+- **Bug 1: State→Sequence 切替時にプレビューが State のままになる** — `diagram-type` change handler が `clearSelection()` を呼ぶと、selection callback が stale な State-shape の `currentParsed` で `sequence.renderProps` を呼び `parsedData.elements.filter(...)` で `TypeError` を投げていた。 例外が handler を抜けるため次の `scheduleRefresh()` が走らず、プレビューが旧 State SVG のまま固まる。 Fix: change handler 内で新モジュールにより `currentParsed` を同期再パースしてから `clearSelection()` を呼ぶ。 加えて `sequence.renderProps` を `parsedData.elements/relations/groups` 欠落に対し defense-in-depth で防御化。
+- **Bug 2: 新規追加した State を選択できない** — `renderSvg()` の `fetch('/render')` 応答が in-flight 中に新たな edit が走った場合、 古い応答が新しい応答の後に到着して新しい SVG を上書きする race condition があり、 新規追加 state の `g.entity` が消えるため `buildOverlay` が overlay rect を生成できずクリックしても選択できなかった。 Fix: `renderGen` 単調増加カウンタを導入し、 `renderSvg()` 内で自分の世代が最新でなければ応答を破棄。
+
+### Tests
+
+- E2E 回帰 3 件追加 (`tests/e2e/state.spec.js`):
+  - `UC-bug1 v1.1.1` — State→Sequence 切替で `participant` が editor に入り、 SVG が Sequence 図 (Sample Sequence / User / System) で描画される
+  - `UC-bug2 v1.1.1` — tail-add で新規 state を追加 → overlay rect が生成され、 click で selection に入り `#st-id` が新ID
+  - `UC-bug2-race v1.1.1` — fetch interceptor で最初の `/render` 応答を 800ms 遅延させ、 古い応答が後続 edit の SVG を上書きしないこと (Alpha + Beta の両 overlay rect が残る) を確認
+
 ## [1.1.0] - 2026-04-29
 
 ### Added — State Tier2 Polish
