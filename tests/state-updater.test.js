@@ -162,6 +162,49 @@ describe('state setStateBehavior', function() {
   });
 });
 
+describe('state convertToComposite', function() {
+  test('converts simple state to empty composite', function() {
+    var t = '@startuml\nstate Driving\n@enduml';
+    var out = stMod.convertToComposite(t, 'Driving');
+    expect(out).toContain('state Driving {');
+    var lines = out.split('\n');
+    var hasClose = false;
+    for (var i = 0; i < lines.length; i++) {
+      if (lines[i].trim() === '}') { hasClose = true; break; }
+    }
+    expect(hasClose).toBe(true);
+  });
+  test('preserves label when converting', function() {
+    var t = '@startuml\nstate Driving as "運転中"\n@enduml';
+    var out = stMod.convertToComposite(t, 'Driving');
+    expect(out).toContain('"運転中"');
+    expect(out).toContain('{');
+  });
+  test('returns text unchanged when state already composite', function() {
+    var t = '@startuml\nstate Driving {\n}\n@enduml';
+    var out = stMod.convertToComposite(t, 'Driving');
+    expect(out).toBe(t);
+  });
+});
+
+describe('state dissolveComposite', function() {
+  test('removes composite wrapper, lifts children to top-level', function() {
+    var t = '@startuml\nstate Driving {\n  state Slow\n  state Fast\n}\n@enduml';
+    var out = stMod.dissolveComposite(t, 'Driving');
+    expect(out).not.toContain('state Driving {');
+    expect(out).not.toContain('}');
+    expect(out).toContain('state Slow');
+    expect(out).toContain('state Fast');
+  });
+  test('handles empty composite (just removes wrapper)', function() {
+    var t = '@startuml\nstate Driving {\n}\n@enduml';
+    var out = stMod.dissolveComposite(t, 'Driving');
+    expect(out).not.toContain('Driving');
+    expect(out).toContain('@startuml');
+    expect(out).toContain('@enduml');
+  });
+});
+
 if (prevWindow !== undefined) global.window = prevWindow;
 if (prevDocument !== undefined) global.document = prevDocument;
 depPaths.forEach(function(p) { try { delete require.cache[require.resolve(p)]; } catch (e) {} });

@@ -381,6 +381,62 @@ window.MA.modules.plantumlState = (function() {
     return lines.join('\n');
   }
 
+  // Find the line index (0-based) of "state STATE_ID" declaration matching id (qualified or bare).
+  // Returns -1 if not found.
+  function _findStateDeclLine(lines, stateId) {
+    var bareId = stateId.indexOf('.') >= 0 ? stateId.split('.').pop() : stateId;
+    for (var i = 0; i < lines.length; i++) {
+      var trimmed = lines[i].trim();
+      var m = trimmed.match(STATE_RE);
+      if (!m) continue;
+      var declId = m[2] !== undefined ? m[2] : m[3];
+      if (declId === stateId || declId === bareId) return i;
+    }
+    return -1;
+  }
+
+  // Find the line index of the matching closing brace for a composite that opens at openLineIdx.
+  function _findMatchingBrace(lines, openLineIdx) {
+    var depth = 0;
+    for (var i = openLineIdx; i < lines.length; i++) {
+      var trimmed = lines[i].trim();
+      if (trimmed.match(STATE_RE) && /\{\s*$/.test(trimmed)) depth++;
+      else if (trimmed === '}') {
+        depth--;
+        if (depth === 0) return i;
+      }
+    }
+    return -1;
+  }
+
+  function convertToComposite(text, stateId) {
+    var lines = text.split('\n');
+    var idx = _findStateDeclLine(lines, stateId);
+    if (idx < 0) return text;
+    if (/\{\s*$/.test(lines[idx])) return text;  // already composite
+    var indent = (lines[idx].match(/^(\s*)/) || ['', ''])[1];
+    lines[idx] = lines[idx].replace(/\s*$/, '') + ' {';
+    lines.splice(idx + 1, 0, indent + '}');
+    return lines.join('\n');
+  }
+
+  function dissolveComposite(text, stateId) {
+    var lines = text.split('\n');
+    var idx = _findStateDeclLine(lines, stateId);
+    if (idx < 0) return text;
+    if (!/\{\s*$/.test(lines[idx])) return text;  // not a composite
+    var closeIdx = _findMatchingBrace(lines, idx);
+    if (closeIdx < 0) return text;
+    var bodyLines = lines.slice(idx + 1, closeIdx);
+    // Reduce indent of body lines by 2 spaces (leading 2 spaces removed)
+    var dedented = bodyLines.map(function(l) {
+      return l.replace(/^  /, '');
+    });
+    var before = lines.slice(0, idx);
+    var after = lines.slice(closeIdx + 1);
+    return before.concat(dedented).concat(after).join('\n');
+  }
+
   function deleteNode(text, startLine, endLine) {
     var lines = text.split('\n');
     var startIdx = startLine - 1;
@@ -717,6 +773,11 @@ window.MA.modules.plantumlState = (function() {
           '<input id="st-exit" placeholder="exit" value="' + window.MA.htmlUtils.escHtml(st.exit || '') + '" style="width:100%;box-sizing:border-box;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-family:Consolas,monospace;font-size:11px;">' +
         '</div>' +
       '</div>' +
+      // Composite ops (kind-aware buttons)
+      (st.endLine && st.endLine > st.line
+        ? '<button id="st-dissolve" style="font-size:11px;padding:4px 10px;background:var(--accent-red);border:none;color:#fff;border-radius:3px;cursor:pointer;margin-bottom:4px;">✕ Dissolve composite</button>'
+        : '<button id="st-convert" style="font-size:11px;padding:4px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;margin-bottom:4px;">+ Convert to composite</button>'
+      ) +
       P.primaryButtonHtml('st-update', '更新');
     if (related.length > 0) {
       html += '<div style="border-top:1px solid var(--border);padding-top:6px;margin-top:6px;">' +
@@ -774,6 +835,18 @@ window.MA.modules.plantumlState = (function() {
       if (!confirm('この state と紐付く transition / note も削除します。続行しますか？')) return;
       window.MA.history.pushHistory();
       ctx.setMmdText(deleteStateWithRefs(ctx.getMmdText(), st.id));
+      window.MA.selection.clearSelection();
+      ctx.onUpdate();
+    });
+    P.bindEvent('st-convert', 'click', function() {
+      window.MA.history.pushHistory();
+      ctx.setMmdText(convertToComposite(ctx.getMmdText(), st.id));
+      ctx.onUpdate();
+    });
+    P.bindEvent('st-dissolve', 'click', function() {
+      if (!confirm('composite を解体し、 子要素を top-level に出します。 続行しますか？')) return;
+      window.MA.history.pushHistory();
+      ctx.setMmdText(dissolveComposite(ctx.getMmdText(), st.id));
       window.MA.selection.clearSelection();
       ctx.onUpdate();
     });
@@ -980,6 +1053,8 @@ window.MA.modules.plantumlState = (function() {
     updateTransition: updateTransition,
     updateNote: updateNote,
     setStateBehavior: setStateBehavior,
+    convertToComposite: convertToComposite,
+    dissolveComposite: dissolveComposite,
     deleteNode: deleteNode,
     deleteStateWithRefs: deleteStateWithRefs,
     resolveInsertLine: resolveInsertLine,
