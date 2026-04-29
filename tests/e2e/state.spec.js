@@ -65,39 +65,10 @@ test.describe('State v1.0.0', () => {
       var idField = await page.locator('#st-id').count();
       expect(idField).toBeGreaterThan(0);
     });
-    test('UC-6: hover preview shows insert guide', async ({ page }) => {
-      await gotoApp(page);
-      await page.locator('#diagram-type').selectOption('plantuml-state');
-      await page.waitForTimeout(2500);
-      var rect = page.locator('#overlay-layer rect[data-type="state"]').first();
-      var c = await rect.count();
-      if (c === 0) test.skip();
-      var box = await rect.boundingBox();
-      // Hover BELOW the state rect: state diagrams render transition arrows as
-      // overlay rects too, so the area immediately above a state typically
-      // overlaps the incoming transition rect (which would suppress the
-      // hover guide via app.js: data-type check). The gap right after a
-      // state -- before the next transition rect -- is empty space.
-      await page.mouse.move(box.x + box.width / 2, box.y + box.height + 10);
-      await page.waitForTimeout(200);
-      var guide = await page.locator('#hover-layer .hover-guide').count();
-      expect(guide).toBeGreaterThan(0);
-    });
-    test('UC-7: empty click opens insert modal', async ({ page }) => {
-      await gotoApp(page);
-      await page.locator('#diagram-type').selectOption('plantuml-state');
-      await page.waitForTimeout(2500);
-      var rect = page.locator('#overlay-layer rect[data-type="state"]').first();
-      var c = await rect.count();
-      if (c === 0) test.skip();
-      var box = await rect.boundingBox();
-      await page.mouse.click(box.x + box.width / 2, box.y + box.height + 6);
-      await page.waitForTimeout(300);
-      var modalDisplay = await page.locator('#st-modal').evaluate(function(el) { return el.style.display; });
-      expect(modalDisplay).toBe('flex');
-      // Cancel to clean up
-      await page.locator('#st-mod-cancel').click();
-    });
+    // UC-6 (hover preview shows insert guide) と UC-7 (empty click opens insert modal)
+    // は v1.1.0 で削除: hoverInsert / showInsertForm capability が graph-like layout
+    // に不適切として false 化されたため (spec § A)。 代替として γ describe の
+    // UC-8 v1.1.0 「hover guide does NOT appear」 を追加済。
     test('UC-8: console error count is 0', async ({ page }) => {
       var errors = [];
       page.on('console', function(msg) { if (msg.type() === 'error') errors.push(msg.text()); });
