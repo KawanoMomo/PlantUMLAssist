@@ -784,6 +784,39 @@ window.MA.modules.plantumlState = (function() {
 
   function _selectedOpt(o, sel) { return { value: o.value, label: o.label, selected: o.value === sel }; }
 
+  function _showAddTransitionModal(fromId, parsedData, ctx) {
+    var modal = document.getElementById('st-tx-modal');
+    var content = document.getElementById('st-tx-modal-content');
+    if (!modal || !content) return;
+    var P = window.MA.properties;
+    var stateOpts = (parsedData.states || []).map(function(s) { return { value: s.id, label: s.label || s.id }; });
+    var stateOptsWithPseudo = [{ value: '[*]', label: '[*]' }].concat(stateOpts);
+    content.innerHTML =
+      '<h3 style="margin:0 0 12px 0;color:var(--text-primary);">Outgoing transition from ' + window.MA.htmlUtils.escHtml(fromId) + '</h3>' +
+      P.selectFieldHtml('Target state', 'st-tx-to', stateOptsWithPseudo) +
+      P.fieldHtml('Trigger', 'st-tx-trig', '') +
+      P.fieldHtml('Guard', 'st-tx-guard', '') +
+      P.fieldHtml('Action', 'st-tx-act', '') +
+      '<div style="display:flex;gap:8px;margin-top:12px;">' +
+        '<button id="st-tx-cancel" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:8px;border-radius:4px;cursor:pointer;">キャンセル</button>' +
+        '<button id="st-tx-confirm" style="flex:1;background:var(--accent);border:none;color:#fff;padding:8px;border-radius:4px;cursor:pointer;">確定</button>' +
+      '</div>';
+    modal.style.display = 'flex';
+    function close() { modal.style.display = 'none'; content.innerHTML = ''; }
+    P.bindEvent('st-tx-cancel', 'click', close);
+    P.bindEvent('st-tx-confirm', 'click', function() {
+      var to = document.getElementById('st-tx-to').value;
+      var trig = document.getElementById('st-tx-trig').value || null;
+      var guard = document.getElementById('st-tx-guard').value || null;
+      var action = document.getElementById('st-tx-act').value || null;
+      if (!to) { close(); return; }
+      window.MA.history.pushHistory();
+      ctx.setMmdText(addTransition(ctx.getMmdText(), fromId, to, trig, guard, action));
+      ctx.onUpdate();
+      close();
+    });
+  }
+
   function _renderStateEdit(sel, parsedData, propsEl, ctx) {
     var P = window.MA.properties;
     var st = null;
@@ -853,6 +886,7 @@ window.MA.modules.plantumlState = (function() {
       ) +
       moveIntoHtml +
       moveOutHtml +
+      '<button id="st-add-tx" style="font-size:11px;padding:4px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;margin-top:4px;display:block;">+ Outgoing transition</button>' +
       P.primaryButtonHtml('st-update', '更新');
     if (related.length > 0) {
       html += '<div style="border-top:1px solid var(--border);padding-top:6px;margin-top:6px;">' +
@@ -945,6 +979,9 @@ window.MA.modules.plantumlState = (function() {
         ctx.onUpdate();
       });
     }
+    P.bindEvent('st-add-tx', 'click', function() {
+      _showAddTransitionModal(st.id, parsedData, ctx);
+    });
     notes.forEach(function(n, idx) {
       P.bindEvent('st-note-del-' + idx, 'click', function(e) {
         var btn = e.currentTarget;
