@@ -178,6 +178,57 @@ describe('autoSave save/restore', function() {
   });
 });
 
+describe('autoSave file backend', function() {
+  var savedFetch;
+  var capturedRequests;
+  beforeEach(function() {
+    global.window.localStorage.__reset();
+    capturedRequests = [];
+    savedFetch = global.window.fetch;
+    global.window.fetch = function(url, opts) {
+      capturedRequests.push({ url: url, method: (opts && opts.method) || 'GET', body: opts && opts.body });
+      return Promise.resolve({
+        ok: true,
+        text: function() { return Promise.resolve(''); },
+        json: function() { return Promise.resolve({ files: [], meta: null, dir: '/test' }); },
+      });
+    };
+  });
+
+  test('file backend mirrors writes to /autosave POST', function() {
+    as.setConfig({ backend: 'file', fileDir: '/test' });
+    as.scheduleSave('plantuml-state', '@startuml\n@enduml');
+    as.flush();
+    var post = capturedRequests.find(function(r) { return r.method === 'POST' && r.url === '/autosave'; });
+    expect(post).toBeDefined();
+    var body = JSON.parse(post.body);
+    expect(body.type).toBe('plantuml-state');
+    expect(body.dir).toBe('/test');
+    expect(body.dsl).toContain('@startuml');
+    if (savedFetch !== undefined) global.window.fetch = savedFetch;
+    else delete global.window.fetch;
+  });
+
+  test('localStorage backend does NOT call fetch', function() {
+    as.setConfig({ backend: 'localStorage' });
+    as.scheduleSave('plantuml-state', 'X');
+    as.flush();
+    expect(capturedRequests.length).toBe(0);
+    if (savedFetch !== undefined) global.window.fetch = savedFetch;
+    else delete global.window.fetch;
+  });
+
+  test('clearAll with file backend issues DELETE /autosave', function() {
+    as.setConfig({ backend: 'file', fileDir: '/test' });
+    as.clearAll();
+    var del = capturedRequests.find(function(r) { return r.method === 'DELETE'; });
+    expect(del).toBeDefined();
+    expect(del.url).toContain('dir=');
+    if (savedFetch !== undefined) global.window.fetch = savedFetch;
+    else delete global.window.fetch;
+  });
+});
+
 // jsdom window を run-tests.js が用意した sandbox window に戻す。
 // これをしないと後続 test ファイル (class-*, component-*, regex-parts 等) が
 // window.MA.* を見失って失敗する。

@@ -84,22 +84,34 @@ function init() {
   // Per spec: 'auto' silently loads, 'confirm' asks via native dialog,
   // 'none' leaves the template alone. Skip restore if the saved DSL is
   // identical to the current template (nothing meaningful to recover).
+  // The init() call may return a Promise when the file backend needs to
+  // hydrate localStorage from disk first; we wait for it before doing
+  // the restore lookup so the disk-resident DSL is in localStorage.
   (function bootRestore() {
     var as = window.MA.autoSave;
     if (!as || !as.isAvailable()) return;
-    as.init();
-    var cfg = as.getConfig();
-    if (!cfg.enabled) return;
-    var saved = as.restoreFor(lastDiagramType);
-    if (saved == null || saved === mmdText) return;
-    var apply = false;
-    if (cfg.restoreMode === 'auto') apply = true;
-    else if (cfg.restoreMode === 'confirm') apply = window.confirm('前回編集中の DSL が見つかりました。 復元しますか？');
-    if (apply) {
-      mmdText = saved;
-      suppressSync = true;
-      editorEl.value = mmdText;
-      suppressSync = false;
+    function doRestore() {
+      var cfg = as.getConfig();
+      if (!cfg.enabled) return;
+      var saved = as.restoreFor(lastDiagramType);
+      if (saved == null || saved === mmdText) return;
+      var apply = false;
+      if (cfg.restoreMode === 'auto') apply = true;
+      else if (cfg.restoreMode === 'confirm') apply = window.confirm('前回編集中の DSL が見つかりました。 復元しますか？');
+      if (apply) {
+        mmdText = saved;
+        suppressSync = true;
+        editorEl.value = mmdText;
+        suppressSync = false;
+        // Trigger a refresh now that mmdText changed — the rest of init
+        // will not re-run but scheduleRefresh below uses the new mmdText.
+      }
+    }
+    var p = as.init();
+    if (p && typeof p.then === 'function') {
+      p.then(doRestore, doRestore);
+    } else {
+      doRestore();
     }
   })();
 

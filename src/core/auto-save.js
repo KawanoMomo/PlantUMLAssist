@@ -58,6 +58,54 @@ window.MA.autoSave = (function() {
     try { return window.localStorage.getItem(key); } catch (e) { return null; }
   }
 
+  function _fileBackendWrite(diagramType, dsl, fileDir) {
+    // Fire-and-forget POST to /autosave. We don't await: localStorage
+    // already has the canonical sync copy. Errors are logged but don't
+    // block the localStorage write.
+    // Use window.fetch so test sandboxes can stub it via global.window.fetch.
+    try {
+      var body = JSON.stringify({ type: diagramType, dsl: dsl, dir: fileDir || './autosave' });
+      window.fetch('/autosave', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: body,
+        keepalive: true,
+      }).catch(function(e) {
+        if (typeof console !== 'undefined' && console.warn) {
+          console.warn('[autoSave] file write failed:', e);
+        }
+      });
+    } catch (e) { /* fetch may not exist in test sandbox; localStorage still works */ }
+  }
+  function _fileBackendDelete(fileDir) {
+    try {
+      window.fetch('/autosave?dir=' + encodeURIComponent(fileDir || './autosave'), {
+        method: 'DELETE',
+        keepalive: true,
+      }).catch(function() {});
+    } catch (e) {}
+  }
+  function _fileBackendList(fileDir) {
+    // Returns Promise<{files: [...types], meta: {...}|null, dir: '...'} | null>
+    try {
+      return window.fetch('/autosave?dir=' + encodeURIComponent(fileDir || './autosave'))
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .catch(function() { return null; });
+    } catch (e) {
+      return Promise.resolve(null);
+    }
+  }
+  function _fileBackendGetOne(diagramType, fileDir) {
+    // Returns Promise<string | null>
+    try {
+      return window.fetch('/autosave?type=' + encodeURIComponent(diagramType) + '&dir=' + encodeURIComponent(fileDir || './autosave'))
+        .then(function(r) { return r.ok ? r.text() : null; })
+        .catch(function() { return null; });
+    } catch (e) {
+      return Promise.resolve(null);
+    }
+  }
+
   function getConfig() {
     var stored = _readJson(KEY_CONFIG, {});
     var out = {};
@@ -86,6 +134,11 @@ window.MA.autoSave = (function() {
     if (!ok) return null;
     var meta = { lastSavedAt: new Date().toISOString(), lastSavedType: diagramType };
     _writeJson(KEY_META, meta);
+    // If file backend selected, mirror the write to disk via the server.
+    var cfg = getConfig();
+    if (cfg.backend === 'file') {
+      _fileBackendWrite(diagramType, dsl, cfg.fileDir);
+    }
     for (var i = 0; i < _saveListeners.length; i++) {
       try { _saveListeners[i](meta); } catch (e) { /* listener errors must not block */ }
     }
@@ -140,15 +193,40 @@ window.MA.autoSave = (function() {
     for (var j = 0; j < keysToRemove.length; j++) {
       try { window.localStorage.removeItem(keysToRemove[j]); } catch (e) {}
     }
+    // If file backend selected, also wipe the server-side directory.
+    var cfg = getConfig();
+    if (cfg.backend === 'file') {
+      _fileBackendDelete(cfg.fileDir);
+    }
   }
 
   function onSave(listener) {
     if (typeof listener === 'function') _saveListeners.push(listener);
   }
 
+  // init() returns either undefined (sync, localStorage backend) or a
+  // Promise (async, file backend hydrating localStorage from disk).
+  // app.js bootRestore must check for the Promise and await it before
+  // doing the restoreFor() lookups.
   function init() {
-    // app.js wires visibilitychange / beforeunload separately (Task 7).
-    // Nothing to do here yet.
+    var cfg = getConfig();
+    if (cfg.backend !== 'file') return;
+    return _fileBackendList(cfg.fileDir).then(function(data) {
+      if (!data || !Array.isArray(data.files)) return;
+      // Fetch every file in parallel and seed localStorage with them.
+      var promises = data.files.map(function(t) {
+        return _fileBackendGetOne(t, cfg.fileDir).then(function(text) {
+          if (text != null) {
+            try { window.localStorage.setItem(DSL_PREFIX + t, text); } catch (e) {}
+          }
+        });
+      });
+      // Update meta from server's record (more authoritative)
+      if (data.meta) {
+        try { window.localStorage.setItem(KEY_META, JSON.stringify(data.meta)); } catch (e) {}
+      }
+      return Promise.all(promises).then(function() { return data; });
+    });
   }
 
   return {
