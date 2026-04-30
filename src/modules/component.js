@@ -61,6 +61,17 @@ window.MA.modules.plantumlComponent = (function() {
     return from + ' -- ' + to + (lbl ? ' : ' + lbl : '');
   }
 
+  function _existingComponentIdSet(parsed) {
+    var set = {};
+    var elts = (parsed && parsed.elements) || [];
+    elts.forEach(function(e) { if (e.id) set[e.id] = true; });
+    return set;
+  }
+
+  function normalizeIdInput(rawInput, parsed) {
+    return window.MA.idNormalizer.normalize(rawInput, _existingComponentIdSet(parsed), 'C');
+  }
+
   function addComponent(text, id, label) { return insertBeforeEnd(text, fmtComponent(id, label || id)); }
   function addInterface(text, id, label) { return insertBeforeEnd(text, fmtInterface(id, label || id)); }
   function addPort(text, id, label) { return insertBeforeEnd(text, fmtPort(id, label || id)); }
@@ -442,23 +453,29 @@ window.MA.modules.plantumlComponent = (function() {
         var t = ctx.getMmdText();
         var out = t;
         if (kind === 'component') {
-          var al = document.getElementById('co-tail-alias').value.trim();
-          if (!al) { alert('Alias 必須'); return; }
+          var rawAl = document.getElementById('co-tail-alias').value;
+          var normCo = normalizeIdInput(rawAl, parsedData);
+          if (!normCo.valid) { alert('Alias 必須'); return; }
+          var rawLbl = document.getElementById('co-tail-label').value.trim();
           window.MA.history.pushHistory();
-          out = addComponent(t, al, document.getElementById('co-tail-label').value.trim() || al);
+          out = addComponent(t, normCo.id, rawLbl || normCo.label);
         } else if (kind === 'interface') {
-          var al2 = document.getElementById('co-tail-alias').value.trim();
-          if (!al2) { alert('Alias 必須'); return; }
+          var rawAl2 = document.getElementById('co-tail-alias').value;
+          var normIf = normalizeIdInput(rawAl2, parsedData);
+          if (!normIf.valid) { alert('Alias 必須'); return; }
+          var rawLbl2 = document.getElementById('co-tail-label').value.trim();
           window.MA.history.pushHistory();
-          out = addInterface(t, al2, document.getElementById('co-tail-label').value.trim() || al2);
+          out = addInterface(t, normIf.id, rawLbl2 || normIf.label);
         } else if (kind === 'port') {
-          var al3 = document.getElementById('co-tail-alias').value.trim();
-          if (!al3) { alert('Alias 必須'); return; }
+          var rawAl3 = document.getElementById('co-tail-alias').value;
+          var normPt = normalizeIdInput(rawAl3, parsedData);
+          if (!normPt.valid) { alert('Alias 必須'); return; }
           var parentEl = document.getElementById('co-tail-parent');
           var parentId = parentEl ? parentEl.value : '';
           if (!parentId) { alert('Parent component 必須 (port は component の中に配置)'); return; }
+          var rawLbl3 = document.getElementById('co-tail-label').value.trim();
           window.MA.history.pushHistory();
-          out = addPortToComponent(t, parentId, al3, document.getElementById('co-tail-label').value.trim() || al3);
+          out = addPortToComponent(t, parentId, normPt.id, rawLbl3 || normPt.label);
         } else if (kind === 'package') {
           var lbl = document.getElementById('co-tail-label').value.trim();
           if (!lbl) { alert('Label 必須'); return; }
@@ -511,10 +528,16 @@ window.MA.modules.plantumlComponent = (function() {
     propsEl.innerHTML = html;
 
     P.bindEvent('co-edit-apply', 'click', function() {
-      var newId = document.getElementById('co-edit-id').value.trim();
-      var newLabel = document.getElementById('co-edit-label').value.trim();
+      var rawNewId = document.getElementById('co-edit-id').value.trim();
+      var rawNewLabel = document.getElementById('co-edit-label').value.trim();
       window.MA.history.pushHistory();
       var t = ctx.getMmdText();
+      var freshParsed = parse(t);
+      var renameNorm = window.MA.idNormalizer.normalize(rawNewId, _existingComponentIdSet(freshParsed), 'C');
+      var newId = renameNorm.valid ? renameNorm.id : rawNewId;
+      var newLabel = (renameNorm.valid && renameNorm.id !== renameNorm.label)
+        ? renameNorm.label
+        : rawNewLabel;
       var fn = element.kind === 'component' ? updateComponent : updateInterface;
       if (newId !== element.id) t = fn(t, element.line, 'id', newId);
       if (newLabel !== element.label) t = fn(t, element.line, 'label', newLabel);
@@ -522,8 +545,11 @@ window.MA.modules.plantumlComponent = (function() {
       ctx.onUpdate();
     });
     P.bindEvent('co-rename-refs', 'click', function() {
-      var newId = document.getElementById('co-edit-id').value.trim();
-      if (!newId || newId === element.id) { alert('Alias を変更してから実行してください'); return; }
+      var rawNewId = document.getElementById('co-edit-id').value.trim();
+      if (!rawNewId || rawNewId === element.id) { alert('Alias を変更してから実行してください'); return; }
+      var freshParsed = parse(ctx.getMmdText());
+      var refsNorm = window.MA.idNormalizer.normalize(rawNewId, _existingComponentIdSet(freshParsed), 'C');
+      var newId = refsNorm.valid ? refsNorm.id : rawNewId;
       window.MA.history.pushHistory();
       ctx.setMmdText(renameWithRefs(ctx.getMmdText(), element.id, newId));
       ctx.onUpdate();
@@ -708,6 +734,7 @@ window.MA.modules.plantumlComponent = (function() {
     fmtPackage: fmtPackage,
     fmtRelation: fmtRelation,
     addComponent: addComponent,
+    normalizeIdInput: normalizeIdInput,
     addInterface: addInterface,
     addPort: addPort,
     addPortToComponent: addPortToComponent,

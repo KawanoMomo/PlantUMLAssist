@@ -53,6 +53,24 @@ window.MA.modules.plantumlSequence = (function() {
   function fmtParticipant(ptype, alias, label) {
     return (label && label !== alias) ? ptype + ' "' + label + '" as ' + alias : ptype + ' ' + alias;
   }
+
+  function _existingParticipantIdSet(parsed) {
+    var set = {};
+    var elts = (parsed && parsed.elements) || [];
+    elts.forEach(function(e) {
+      if (e && e.kind === 'participant' && e.id) set[e.id] = true;
+    });
+    return set;
+  }
+
+  // MSG_RE only accepts ASCII identifiers in `from`/`to` positions (line 25
+  // above). A Japanese-aliased participant declaration parses (PART_RE is
+  // permissive) but messages referencing it fail to match, so the new
+  // participant becomes an isolated lifeline. Normalize alias to ASCII
+  // (P1, P2, ...) and keep the typed string as the display label.
+  function normalizeIdInput(rawInput, parsed) {
+    return window.MA.idNormalizer.normalize(rawInput, _existingParticipantIdSet(parsed), 'P');
+  }
   function fmtBlock(kind, label) {
     return (label ? kind + ' ' + label : kind) + '\n\nend';
   }
@@ -795,6 +813,7 @@ window.MA.modules.plantumlSequence = (function() {
     parse: parseSequence,
     parseSequence: parseSequence,
     addParticipant: addParticipant,
+    normalizeIdInput: normalizeIdInput,
     addMessage: addMessage,
     deleteLine: deleteLine,
     updateParticipant: updateParticipant,
@@ -853,14 +872,22 @@ window.MA.modules.plantumlSequence = (function() {
       if (!propsEl) return;
       var escHtml = window.MA.htmlUtils.escHtml;
       var P = window.MA.properties;
-      var participants = parsedData.elements.filter(function(e) { return e.kind === 'participant'; });
-      var notes = parsedData.elements.filter(function(e) { return e.kind === 'note'; });
-      var activations = parsedData.elements.filter(function(e) { return e.kind === 'activation'; });
-      var messages = parsedData.relations;
+      // Defense-in-depth: parsedData may transiently lack the sequence shape
+      // when other modules' parsedData is still in-flight (e.g. during a
+      // diagram-type switch where clearSelection() fires renderProps before
+      // app.js finishes the reparse). Coalesce missing fields rather than
+      // throwing on `parsedData.elements.filter`.
+      if (!parsedData) parsedData = { meta: {}, elements: [], relations: [], groups: [] };
+      if (!parsedData.meta) parsedData.meta = {};
+      var elements = parsedData.elements || [];
+      var participants = elements.filter(function(e) { return e.kind === 'participant'; });
+      var notes = elements.filter(function(e) { return e.kind === 'note'; });
+      var activations = elements.filter(function(e) { return e.kind === 'activation'; });
+      var messages = parsedData.relations || [];
       var groups = parsedData.groups || [];
 
       if (!selData || selData.length === 0) {
-        var participants = parsedData.elements.filter(function(e) { return e.kind === 'participant'; });
+        var participants = elements.filter(function(e) { return e.kind === 'participant'; });
         var autonumChecked = parsedData.meta.autonumber ? 'checked' : '';
         propsEl.innerHTML =
           '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Sequence Diagram</div>' +
@@ -982,22 +1009,25 @@ window.MA.modules.plantumlSequence = (function() {
               var arrow = document.getElementById('seq-tail-arrow').value;
               var labelVal = (rleObj ? rleObj.getValue() : '').trim();
               if (fr === '__new__' || to === '__new__') {
-                var al = document.getElementById('seq-tail-new-alias').value.trim();
-                if (!al) { alert('新しい参加者の Alias は必須です'); return; }
+                var rawNewAl = document.getElementById('seq-tail-new-alias').value;
+                var inlineNorm = normalizeIdInput(rawNewAl, parsedData);
+                if (!inlineNorm.valid) { alert('新しい参加者の Alias は必須です'); return; }
                 var ptype = document.getElementById('seq-tail-new-ptype').value;
                 window.MA.history.pushHistory();
-                t = addParticipant(t, ptype, al, al);
-                if (fr === '__new__') fr = al;
-                if (to === '__new__') to = al;
+                t = addParticipant(t, ptype, inlineNorm.id, inlineNorm.label);
+                if (fr === '__new__') fr = inlineNorm.id;
+                if (to === '__new__') to = inlineNorm.id;
               } else {
                 window.MA.history.pushHistory();
               }
               out = addMessage(t, fr, to, arrow, labelVal);
             } else if (kind === 'participant') {
-              var al = document.getElementById('seq-tail-alias').value.trim();
-              if (!al) { alert('Alias 必須'); return; }
+              var rawAl = document.getElementById('seq-tail-alias').value;
+              var partNorm = normalizeIdInput(rawAl, parsedData);
+              if (!partNorm.valid) { alert('Alias 必須'); return; }
+              var rawPlbl = document.getElementById('seq-tail-plabel').value.trim();
               window.MA.history.pushHistory();
-              out = addParticipant(t, document.getElementById('seq-tail-ptype').value, al, document.getElementById('seq-tail-plabel').value.trim() || al);
+              out = addParticipant(t, document.getElementById('seq-tail-ptype').value, partNorm.id, rawPlbl || partNorm.label);
             } else if (kind === 'note') {
               var ntg = document.getElementById('seq-tail-ntarget').value;
               if (!ntg) { alert('Target 必須'); return; }
@@ -1123,7 +1153,14 @@ window.MA.modules.plantumlSequence = (function() {
             ctx.onUpdate();
           });
           document.getElementById('seq-edit-alias').addEventListener('change', function() {
-            var newAlias = this.value;
+            var rawNewAlias = this.value;
+            // Non-ASCII alias would break MSG_RE matching for any subsequent
+            // message referencing this participant. Force ASCII alias and
+            // promote the typed string to label via updateParticipant.
+            var freshParsed = parseSequence(ctx.getMmdText());
+            var renameNorm = window.MA.idNormalizer.normalize(rawNewAlias, _existingParticipantIdSet(freshParsed), 'P');
+            var newAlias = renameNorm.valid ? renameNorm.id : rawNewAlias;
+            var promotedLabel = (renameNorm.valid && renameNorm.id !== renameNorm.label) ? renameNorm.label : null;
             var oldAlias = pp.id;
             window.MA.history.pushHistory();
             var t = ctx.getMmdText();
@@ -1131,6 +1168,9 @@ window.MA.modules.plantumlSequence = (function() {
               t = renameWithRefs(t, oldAlias, newAlias);
             } else {
               t = updateParticipant(t, ln, 'alias', newAlias);
+            }
+            if (promotedLabel != null) {
+              t = updateParticipant(t, ln, 'label', promotedLabel);
             }
             ctx.setMmdText(t);
             ctx.onUpdate();

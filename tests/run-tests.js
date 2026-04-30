@@ -7,6 +7,8 @@ const sourceFiles = [
   'src/core/html-utils.js',
   'src/core/dsl-utils.js',
   'src/core/regex-parts.js',
+  'src/core/id-normalizer.js',
+  'src/core/auto-save.js',
   'src/core/line-resolver.js',
   'src/core/formatter-interface.js',
   'src/core/dsl-updater.js',
@@ -24,6 +26,7 @@ const sourceFiles = [
   'src/modules/component.js',
   'src/modules/class.js',
   'src/modules/activity.js',
+  'src/modules/state.js',
 ];
 
 let fns = {};

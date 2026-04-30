@@ -190,58 +190,365 @@ describe('activity addActionAtLine (mid-insertion)', function() {
   });
 });
 
-describe('activity resolveInsertLine (Y → line/position mapping)', function() {
-  var SVG_NS = 'http://www.w3.org/2000/svg';
-  function makeOverlay(rectsSpec) {
-    var ov = document.createElementNS(SVG_NS, 'svg');
-    rectsSpec.forEach(function(r) {
-      var el = document.createElementNS(SVG_NS, 'rect');
-      Object.keys(r).forEach(function(k) { el.setAttribute(k, r[k]); });
-      ov.appendChild(el);
+describe('activity _resolveInsertIndent', function() {
+  test('returns indent of target line for action', function() {
+    var lines = ['if (a?) then', '  :X;', 'endif'];
+    expect(actMod._resolveInsertIndent(lines, 1)).toBe('  ');
+  });
+  test('falls back to previous line when target is closing token', function() {
+    var lines = ['if (a?) then', '  :X;', 'endif'];
+    // targetIdx=2 ('endif') → previous line indent ('  ')
+    expect(actMod._resolveInsertIndent(lines, 2)).toBe('  ');
+  });
+  test('handles top-level (no indent)', function() {
+    var lines = [':A;', ':B;'];
+    expect(actMod._resolveInsertIndent(lines, 1)).toBe('');
+  });
+  test('handles else as closing token', function() {
+    var lines = ['if (a?) then', '  :X;', 'else', '  :Y;', 'endif'];
+    expect(actMod._resolveInsertIndent(lines, 2)).toBe('  ');
+  });
+});
+
+describe('activity addControlAtLine - if', function() {
+  test('inserts if before specified line at top-level', function() {
+    var t = ':A;\n:B;';
+    var out = actMod.addControlAtLine(t, 2, 'before', 'if', { cond: 'auth?', thenLabel: 'yes', elseLabel: 'no' });
+    expect(out).toContain(':A;');
+    expect(out).toContain('if (auth?) then (yes)');
+    expect(out).toContain('  :;');
+    expect(out).toContain('else (no)');
+    expect(out).toContain('endif');
+    expect(out).toContain(':B;');
+    // Verify line ordering
+    var lines = out.split('\n');
+    var aIdx = lines.indexOf(':A;');
+    var ifIdx = -1; for (var i = 0; i < lines.length; i++) { if (lines[i].indexOf('if (auth?)') >= 0) { ifIdx = i; break; } }
+    var bIdx = lines.indexOf(':B;');
+    expect(aIdx).toBeLessThan(ifIdx);
+    expect(ifIdx).toBeLessThan(bIdx);
+  });
+  test('omits else when elseLabel is empty', function() {
+    var t = ':A;\n:B;';
+    var out = actMod.addControlAtLine(t, 2, 'before', 'if', { cond: 'a?', thenLabel: 'yes', elseLabel: '' });
+    expect(out).toContain('if (a?) then (yes)');
+    expect(out).toContain('endif');
+    var hasElse = false;
+    out.split('\n').forEach(function(l) { if (/^\s*else/.test(l)) hasElse = true; });
+    expect(hasElse).toBe(false);
+  });
+  test('preserves indent inside existing if-block (composite-aware)', function() {
+    var t = 'if (outer?) then\n  :X;\nendif';
+    var out = actMod.addControlAtLine(t, 2, 'before', 'if', { cond: 'inner?', thenLabel: 'yes', elseLabel: '' });
+    var lines = out.split('\n');
+    // Inner if should be at indent 2, its body at indent 4
+    var innerIfLine = -1;
+    for (var i = 0; i < lines.length; i++) { if (lines[i].indexOf('if (inner?)') >= 0) { innerIfLine = i; break; } }
+    expect(innerIfLine).toBeGreaterThan(-1);
+    expect(lines[innerIfLine].substring(0, 2)).toBe('  ');
+    expect(lines[innerIfLine + 1].substring(0, 4)).toBe('    ');  // placeholder :; at depth 2
+  });
+});
+
+describe('activity addControlAtLine - while/repeat/fork', function() {
+  test('inserts while with placeholder', function() {
+    var t = ':A;\n:B;';
+    var out = actMod.addControlAtLine(t, 2, 'before', 'while', { cond: 'more?', label: 'yes' });
+    expect(out).toContain('while (more?) is (yes)');
+    expect(out).toContain('  :;');
+    expect(out).toContain('endwhile');
+  });
+  test('inserts repeat with placeholder', function() {
+    var t = ':A;\n:B;';
+    var out = actMod.addControlAtLine(t, 2, 'before', 'repeat', { cond: 'done?', label: 'no' });
+    var lines = out.split('\n');
+    var hasRepeat = false; var hasRepeatWhile = false;
+    for (var i = 0; i < lines.length; i++) {
+      if (/^\s*repeat\s*$/.test(lines[i])) hasRepeat = true;
+      if (lines[i].indexOf('repeat while (done?)') >= 0) hasRepeatWhile = true;
+    }
+    expect(hasRepeat).toBe(true);
+    expect(hasRepeatWhile).toBe(true);
+    expect(out).toContain('  :;');
+  });
+  test('inserts fork with N branches', function() {
+    var t = ':A;\n:B;';
+    var out = actMod.addControlAtLine(t, 2, 'before', 'fork', { branchCount: 3 });
+    var lines = out.split('\n');
+    var againCount = 0; var hasFork = false; var hasEndFork = false;
+    for (var i = 0; i < lines.length; i++) {
+      if (/^\s*fork\s*$/.test(lines[i])) hasFork = true;
+      if (/^\s*fork again\s*$/.test(lines[i])) againCount++;
+      if (/^\s*end fork\s*$/.test(lines[i])) hasEndFork = true;
+    }
+    expect(hasFork).toBe(true);
+    expect(againCount).toBe(2);  // 3 branches → 2 fork-again
+    expect(hasEndFork).toBe(true);
+  });
+  test('fork branchCount default is 2 when omitted', function() {
+    var t = ':A;';
+    var out = actMod.addControlAtLine(t, 1, 'after', 'fork', {});
+    var againCount = 0;
+    out.split('\n').forEach(function(l) { if (/^\s*fork again\s*$/.test(l)) againCount++; });
+    expect(againCount).toBe(1);  // 2 branches → 1 fork-again
+  });
+});
+
+describe('activity addSwimlaneAtLine', function() {
+  test('inserts swimlane line before specified line', function() {
+    var t = ':A;\n:B;';
+    var out = actMod.addSwimlaneAtLine(t, 2, 'before', 'Backend');
+    var lines = out.split('\n');
+    var aIdx = -1, swIdx = -1, bIdx = -1;
+    for (var i = 0; i < lines.length; i++) {
+      if (lines[i] === ':A;') aIdx = i;
+      if (lines[i] === '|Backend|') swIdx = i;
+      if (lines[i] === ':B;') bIdx = i;
+    }
+    expect(aIdx).toBe(0);
+    expect(swIdx).toBe(1);
+    expect(bIdx).toBe(2);
+  });
+});
+
+describe('activity addNoteAtLine', function() {
+  test('inserts inline note (single-line text)', function() {
+    var t = ':A;\n:B;';
+    var out = actMod.addNoteAtLine(t, 1, 'after', { position: 'right', text: 'important' });
+    expect(out).toContain('note right : important');
+  });
+  test('inserts block note (multi-line text)', function() {
+    var t = ':A;\n:B;';
+    var out = actMod.addNoteAtLine(t, 1, 'after', { position: 'right', text: 'line1\nline2' });
+    expect(out).toContain('note right');
+    expect(out).toContain('line1');
+    expect(out).toContain('line2');
+    expect(out).toContain('end note');
+  });
+  test('inserts after target line regardless of position arg (note attachment fix)', function() {
+    var t = ':A;\n:B;\n:C;';
+    // position='before' でも target line (line 2 = :B;) の AFTER に挿入される
+    var out = actMod.addNoteAtLine(t, 2, 'before', { position: 'right', text: 'attach to B' });
+    var lines = out.split('\n');
+    var aIdx = -1, bIdx = -1, noteIdx = -1, cIdx = -1;
+    for (var i = 0; i < lines.length; i++) {
+      if (lines[i] === ':A;') aIdx = i;
+      if (lines[i] === ':B;') bIdx = i;
+      if (lines[i].indexOf('note right') >= 0) noteIdx = i;
+      if (lines[i] === ':C;') cIdx = i;
+    }
+    expect(aIdx).toBe(0);
+    expect(bIdx).toBe(1);
+    expect(noteIdx).toBe(2);
+    expect(cIdx).toBe(3);
+  });
+});
+
+describe('activity addElseifBranch / addElseBranch', function() {
+  test('addElseifBranch inserts elseif before endif', function() {
+    var t = 'if (a?) then (yes)\n  :X;\nendif';
+    var out = actMod.addElseifBranch(t, 1, 'b?', 'yes');
+    expect(out).toContain('elseif (b?) then (yes)');
+    expect(out).toContain('  :;');
+    expect(out).toContain('endif');
+    // Order: if → :X; → elseif → :; → endif
+    var lines = out.split('\n');
+    var ifIdx = -1, elseifIdx = -1, endifIdx = -1;
+    for (var i = 0; i < lines.length; i++) {
+      if (lines[i].indexOf('if (a?)') >= 0) ifIdx = i;
+      if (lines[i].indexOf('elseif (b?)') >= 0) elseifIdx = i;
+      if (lines[i].trim() === 'endif') endifIdx = i;
+    }
+    expect(ifIdx).toBe(0);
+    expect(elseifIdx).toBeGreaterThan(ifIdx);
+    expect(endifIdx).toBeGreaterThan(elseifIdx);
+  });
+  test('addElseifBranch inserts before existing else', function() {
+    var t = 'if (a?) then\n  :X;\nelse\n  :Y;\nendif';
+    var out = actMod.addElseifBranch(t, 1, 'b?', 'maybe');
+    var lines = out.split('\n');
+    var elseifIdx = -1, elseIdx = -1;
+    for (var i = 0; i < lines.length; i++) {
+      if (lines[i].indexOf('elseif (b?)') >= 0) elseifIdx = i;
+      if (/^\s*else(\s|$)/.test(lines[i]) && lines[i].indexOf('elseif') < 0) elseIdx = i;
+    }
+    expect(elseifIdx).toBeGreaterThan(0);
+    expect(elseIdx).toBeGreaterThan(elseifIdx);
+  });
+  test('addElseBranch inserts else before endif', function() {
+    var t = 'if (a?) then\n  :X;\nendif';
+    var out = actMod.addElseBranch(t, 1, 'no');
+    expect(out).toContain('else (no)');
+    expect(out).toContain('  :;');
+  });
+  test('addElseBranch is no-op when else already exists', function() {
+    var t = 'if (a?) then\n  :X;\nelse\n  :Y;\nendif';
+    var out = actMod.addElseBranch(t, 1, 'no');
+    expect(out).toBe(t);
+  });
+  test('addElseif preserves indent at if depth', function() {
+    var t = ':A;\nif (outer?) then\n  if (a?) then\n    :X;\n  endif\nendif';
+    // Inner if at line 3, indent='  '
+    var out = actMod.addElseifBranch(t, 3, 'b?', 'yes');
+    var lines = out.split('\n');
+    var elseifLine = '';
+    for (var i = 0; i < lines.length; i++) {
+      if (lines[i].indexOf('elseif (b?)') >= 0) { elseifLine = lines[i]; break; }
+    }
+    expect(elseifLine.substring(0, 2)).toBe('  ');
+  });
+});
+
+describe('activity addForkBranch', function() {
+  test('inserts fork again before end fork', function() {
+    var t = 'fork\n  :X;\nfork again\n  :Y;\nend fork';
+    var out = actMod.addForkBranch(t, 1);
+    var lines = out.split('\n');
+    var againCount = 0;
+    for (var i = 0; i < lines.length; i++) {
+      if (/^\s*fork again\s*$/.test(lines[i])) againCount++;
+    }
+    expect(againCount).toBe(2);
+    // Last line should still be end fork
+    expect(/^\s*end fork\s*$/.test(lines[lines.length - 1])).toBe(true);
+  });
+  test('preserves fork indent (composite-aware)', function() {
+    var t = 'if (a?) then\n  fork\n    :X;\n  end fork\nendif';
+    // fork at line 2, indent '  '
+    var out = actMod.addForkBranch(t, 2);
+    var lines = out.split('\n');
+    var againLine = '';
+    for (var i = 0; i < lines.length; i++) {
+      if (/^\s*fork again\s*$/.test(lines[i])) { againLine = lines[i]; break; }
+    }
+    expect(againLine.substring(0, 2)).toBe('  ');
+  });
+});
+
+describe('activity deleteBranchAt', function() {
+  test('removes elseif branch only', function() {
+    var t = 'if (a?) then\n  :X;\nelseif (b?) then\n  :Y;\nelse\n  :Z;\nendif';
+    // elseif at line 3
+    var out = actMod.deleteBranchAt(t, 3);
+    expect(out).not.toContain('elseif (b?)');
+    expect(out).not.toContain(':Y;');
+    expect(out).toContain(':X;');
+    expect(out).toContain('else');
+    expect(out).toContain(':Z;');
+  });
+  test('removes else branch only', function() {
+    var t = 'if (a?) then\n  :X;\nelse\n  :Y;\nendif';
+    // else at line 3
+    var out = actMod.deleteBranchAt(t, 3);
+    expect(out).not.toContain(':Y;');
+    var hasElse = false;
+    out.split('\n').forEach(function(l) { if (/^\s*else(\s|$)/.test(l)) hasElse = true; });
+    expect(hasElse).toBe(false);
+    expect(out).toContain(':X;');
+  });
+  test('removes fork again branch only', function() {
+    var t = 'fork\n  :X;\nfork again\n  :Y;\nfork again\n  :Z;\nend fork';
+    // fork again at line 5 (the second one)
+    var out = actMod.deleteBranchAt(t, 5);
+    var againCount = 0;
+    out.split('\n').forEach(function(l) { if (/^\s*fork again\s*$/.test(l)) againCount++; });
+    expect(againCount).toBe(1);
+    expect(out).not.toContain(':Z;');
+    expect(out).toContain(':X;');
+    expect(out).toContain(':Y;');
+  });
+  test('returns input unchanged for non-branch line', function() {
+    var t = 'if (a?) then\n  :X;\nendif';
+    // line 2 is :X; (not a branch)
+    expect(actMod.deleteBranchAt(t, 2)).toBe(t);
+  });
+});
+
+describe('activity resolveInsertLine (X+Y → line/position mapping)', function() {
+  function makeOverlay(rectAttrs) {
+    var ov = document.createElement('div');
+    rectAttrs.forEach(function(attrs) {
+      var r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      Object.keys(attrs).forEach(function(k) { r.setAttribute(k, attrs[k]); });
+      r.setAttribute('width', attrs.width || '100');
+      ov.appendChild(r);
     });
     return ov;
   }
   test('returns null for empty overlay', function() {
     var ov = makeOverlay([]);
-    expect(actMod.resolveInsertLine(ov, 50)).toBe(null);
+    expect(actMod.resolveInsertLine(ov, 50, 50)).toBe(null);
   });
-  test('y above all rects: before first node', function() {
+  test('y above all rects: nearest by Y, position before', function() {
     var ov = makeOverlay([
-      { 'data-type': 'action', 'data-line': '5', y: '50', height: '20' },
-      { 'data-type': 'action', 'data-line': '7', y: '100', height: '20' },
+      { 'data-type': 'action', 'data-line': '5', x: '0', y: '50', height: '20', width: '100' },
+      { 'data-type': 'action', 'data-line': '7', x: '0', y: '100', height: '20', width: '100' },
     ]);
-    var res = actMod.resolveInsertLine(ov, 10);
+    var res = actMod.resolveInsertLine(ov, 50, 10);
     expect(res.line).toBe(5);
     expect(res.position).toBe('before');
   });
-  test('y between two rects: after upper rect', function() {
+  test('y between two rects: nearest, after upper', function() {
     var ov = makeOverlay([
-      { 'data-type': 'action', 'data-line': '5', y: '50', height: '20' },
-      { 'data-type': 'action', 'data-line': '7', y: '100', height: '20' },
+      { 'data-type': 'action', 'data-line': '5', x: '0', y: '50', height: '20', width: '100' },
+      { 'data-type': 'action', 'data-line': '7', x: '0', y: '100', height: '20', width: '100' },
     ]);
-    var res = actMod.resolveInsertLine(ov, 80);
+    var res = actMod.resolveInsertLine(ov, 50, 80);
     expect(res.line).toBe(5);
     expect(res.position).toBe('after');
   });
-  test('y below all rects: after last node', function() {
+  test('y below all rects: nearest by Y, after last', function() {
     var ov = makeOverlay([
-      { 'data-type': 'action', 'data-line': '5', y: '50', height: '20' },
-      { 'data-type': 'action', 'data-line': '7', y: '100', height: '20' },
+      { 'data-type': 'action', 'data-line': '5', x: '0', y: '50', height: '20', width: '100' },
+      { 'data-type': 'action', 'data-line': '7', x: '0', y: '100', height: '20', width: '100' },
     ]);
-    var res = actMod.resolveInsertLine(ov, 200);
+    var res = actMod.resolveInsertLine(ov, 50, 200);
     expect(res.line).toBe(7);
     expect(res.position).toBe('after');
   });
   test('mixed kinds (start/action/decision/stop) all considered', function() {
     var ov = makeOverlay([
-      { 'data-type': 'start', 'data-line': '2', y: '20', height: '20' },
-      { 'data-type': 'decision', 'data-line': '4', y: '60', height: '24' },
-      { 'data-type': 'action', 'data-line': '5', y: '100', height: '20' },
-      { 'data-type': 'stop', 'data-line': '7', y: '150', height: '22' },
+      { 'data-type': 'start', 'data-line': '2', x: '0', y: '20', height: '20', width: '100' },
+      { 'data-type': 'decision', 'data-line': '4', x: '0', y: '60', height: '24', width: '100' },
+      { 'data-type': 'action', 'data-line': '5', x: '0', y: '100', height: '20', width: '100' },
+      { 'data-type': 'stop', 'data-line': '7', x: '0', y: '150', height: '22', width: '100' },
     ]);
-    var res = actMod.resolveInsertLine(ov, 80);
+    var res = actMod.resolveInsertLine(ov, 50, 80);
     expect(res.line).toBe(4);
     expect(res.position).toBe('after');
+  });
+  // === Branch disambiguation tests (v1.0.2) ===
+  test('horizontal branches at same Y: closer X wins (then side)', function() {
+    var ov = makeOverlay([
+      { 'data-type': 'action', 'data-line': '3', x: '0', y: '100', height: '20', width: '60' },
+      { 'data-type': 'action', 'data-line': '5', x: '150', y: '100', height: '20', width: '60' },
+    ]);
+    var res = actMod.resolveInsertLine(ov, 30, 110);
+    expect(res.line).toBe(3);
+  });
+  test('horizontal branches at same Y: closer X wins (else side)', function() {
+    var ov = makeOverlay([
+      { 'data-type': 'action', 'data-line': '3', x: '0', y: '100', height: '20', width: '60' },
+      { 'data-type': 'action', 'data-line': '5', x: '150', y: '100', height: '20', width: '60' },
+    ]);
+    var res = actMod.resolveInsertLine(ov, 180, 110);
+    expect(res.line).toBe(5);
+  });
+  test('Y is dominant when X is similar (top-level vertical flow)', function() {
+    var ov = makeOverlay([
+      { 'data-type': 'action', 'data-line': '3', x: '0', y: '50', height: '20', width: '100' },
+      { 'data-type': 'action', 'data-line': '5', x: '0', y: '150', height: '20', width: '100' },
+    ]);
+    var res = actMod.resolveInsertLine(ov, 50, 60);
+    expect(res.line).toBe(3);
+  });
+  test('returns rectX and rectWidth for hover guide', function() {
+    var ov = makeOverlay([
+      { 'data-type': 'action', 'data-line': '3', x: '20', y: '50', height: '20', width: '60' },
+    ]);
+    var res = actMod.resolveInsertLine(ov, 50, 60);
+    expect(res.rectX).toBe(20);
+    expect(res.rectWidth).toBe(60);
   });
 });
 

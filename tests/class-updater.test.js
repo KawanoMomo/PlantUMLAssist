@@ -9,6 +9,7 @@ global.document = dom.window.document;
 var depPaths = [
   '../src/core/dsl-utils.js',
   '../src/core/regex-parts.js',
+  '../src/core/id-normalizer.js',
   '../src/core/line-resolver.js',
   '../src/core/text-updater.js',
   '../src/core/dsl-updater.js',
@@ -38,6 +39,25 @@ describe('class formatters (canonical emit)', function() {
   });
   test('fmtClass with generics + stereotype', function() {
     expect(clMod.fmtClass('Container', 'Container', 'Generic', ['T'])).toBe('class Container<T> <<Generic>>');
+  });
+  test('fmtClass quoted label with generics (label != id)', function() {
+    expect(clMod.fmtClass('Box', 'コンテナ', null, ['T'])).toBe('class "コンテナ" as Box<T>');
+  });
+});
+
+describe('class normalizeIdInput', function() {
+  test('ASCII alias passes through', function() {
+    var n = clMod.normalizeIdInput('Foo', { elements: [] });
+    expect(n).toEqual({ id: 'Foo', label: 'Foo', valid: true });
+  });
+  test('Japanese alias maps to C1', function() {
+    var n = clMod.normalizeIdInput('クラスA', { elements: [] });
+    expect(n.id).toBe('C1');
+    expect(n.label).toBe('クラスA');
+  });
+  test('avoids id collision with existing C1 element', function() {
+    var n = clMod.normalizeIdInput('日本語', { elements: [{ id: 'C1' }] });
+    expect(n.id).toBe('C2');
   });
   test('fmtRelation inheritance canonical', function() {
     expect(clMod.fmtRelation('inheritance', 'Animal', 'Dog')).toBe('Animal <|-- Dog');

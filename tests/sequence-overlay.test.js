@@ -20,6 +20,7 @@ delete require.cache[require.resolve('../src/core/selection-router.js')];
 require('../src/core/html-utils.js');
 require('../src/core/dsl-utils.js');
 require('../src/core/regex-parts.js');
+require('../src/core/id-normalizer.js');
 require('../src/core/dsl-updater.js');
 require('../src/core/text-updater.js');
 require('../src/core/parser-utils.js');
@@ -212,7 +213,7 @@ describe('resolveInsertLine', function() {
     var msgRects = overlayEl.querySelectorAll('rect[data-type="message"]');
     if (msgRects.length === 0) return;  // jsdom fixture が rect を生成しない場合の safety
     var firstY = parseFloat(msgRects[0].getAttribute('y')) + parseFloat(msgRects[0].getAttribute('height')) / 2;
-    var res = overlay.resolveInsertLine(overlayEl, firstY + 10);
+    var res = overlay.resolveInsertLine(overlayEl, 0, firstY + 10);
     expect(res).toBeDefined();
     expect(res.position).toBe('after');
     expect(typeof res.line).toBe('number');
@@ -220,7 +221,7 @@ describe('resolveInsertLine', function() {
 
   test('returns null when overlay has no messages', function() {
     var overlayEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    expect(overlay.resolveInsertLine(overlayEl, 100)).toBe(null);
+    expect(overlay.resolveInsertLine(overlayEl, 0, 100)).toBe(null);
   });
 });
 

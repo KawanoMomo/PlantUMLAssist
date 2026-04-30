@@ -1,0 +1,198 @@
+'use strict';
+var jsdom = require('jsdom');
+var prevWindow = global.window;
+var prevDocument = global.document;
+var dom = new jsdom.JSDOM('<!DOCTYPE html><html><body></body></html>');
+global.window = dom.window;
+global.document = dom.window.document;
+
+var depPaths = [
+  '../src/core/dsl-utils.js',
+  '../src/core/regex-parts.js',
+  '../src/core/line-resolver.js',
+  '../src/core/text-updater.js',
+  '../src/core/dsl-updater.js',
+  '../src/core/parser-utils.js',
+  '../src/core/props-renderer.js',
+  '../src/core/overlay-builder.js',
+  '../src/modules/state.js',
+];
+depPaths.forEach(function(p) {
+  try { delete require.cache[require.resolve(p)]; } catch (e) {}
+  require(p);
+});
+var stMod = global.window.MA.modules.plantumlState;
+
+describe('state parser: simple state', function() {
+  test('parses simple state', function() {
+    var t = '@startuml\nstate A\n@enduml';
+    var r = stMod.parse(t);
+    expect(r.states.length).toBe(1);
+    expect(r.states[0].kind).toBe('state');
+    expect(r.states[0].id).toBe('A');
+    expect(r.states[0].line).toBe(2);
+    expect(r.states[0].parentId).toBe(null);
+  });
+  test('parses multiple states', function() {
+    var t = '@startuml\nstate A\nstate B\nstate C\n@enduml';
+    var r = stMod.parse(t);
+    expect(r.states.length).toBe(3);
+    expect(r.states[1].id).toBe('B');
+  });
+  test('returns empty for empty diagram', function() {
+    var r = stMod.parse('@startuml\n@enduml');
+    expect(r.states.length).toBe(0);
+    expect(r.transitions.length).toBe(0);
+  });
+});
+
+describe('state parser: transitions', function() {
+  test('parses simple transition without label', function() {
+    var t = '@startuml\nstate A\nstate B\nA --> B\n@enduml';
+    var r = stMod.parse(t);
+    expect(r.transitions.length).toBe(1);
+    expect(r.transitions[0].from).toBe('A');
+    expect(r.transitions[0].to).toBe('B');
+    expect(r.transitions[0].label).toBe(null);
+  });
+  test('parses transition with full label (trigger [guard] / action)', function() {
+    var t = '@startuml\nstate A\nstate B\nA --> B : click [enabled] / save()\n@enduml';
+    var r = stMod.parse(t);
+    var tr = r.transitions[0];
+    expect(tr.label).toBe('click [enabled] / save()');
+    expect(tr.trigger).toBe('click');
+    expect(tr.guard).toBe('enabled');
+    expect(tr.action).toBe('save()');
+  });
+  test('parses transition with only trigger', function() {
+    var t = '@startuml\nA --> B : click\n@enduml';
+    var r = stMod.parse(t);
+    expect(r.transitions[0].trigger).toBe('click');
+    expect(r.transitions[0].guard).toBe(null);
+    expect(r.transitions[0].action).toBe(null);
+  });
+  test('parses transition with [*] as initial pseudo-state', function() {
+    var t = '@startuml\n[*] --> A\n@enduml';
+    var r = stMod.parse(t);
+    expect(r.transitions[0].from).toBe('[*]');
+    expect(r.transitions[0].to).toBe('A');
+  });
+  test('parses transition with [*] as final pseudo-state', function() {
+    var t = '@startuml\nA --> [*]\n@enduml';
+    var r = stMod.parse(t);
+    expect(r.transitions[0].to).toBe('[*]');
+  });
+});
+
+describe('state parser: stereotypes', function() {
+  test('parses choice stereotype', function() {
+    var t = '@startuml\nstate X <<choice>>\n@enduml';
+    var r = stMod.parse(t);
+    expect(r.states[0].kind).toBe('choice');
+    expect(r.states[0].stereotype).toBe('choice');
+  });
+  test('parses history stereotype', function() {
+    var t = '@startuml\nstate X <<history>>\n@enduml';
+    var r = stMod.parse(t);
+    expect(r.states[0].kind).toBe('history');
+  });
+  test('parses historyDeep stereotype', function() {
+    var t = '@startuml\nstate X <<historyDeep>>\n@enduml';
+    var r = stMod.parse(t);
+    expect(r.states[0].kind).toBe('historyDeep');
+  });
+  test('lowercases stereotype regardless of source case', function() {
+    var t = '@startuml\nstate X <<History>>\n@enduml';
+    var r = stMod.parse(t);
+    expect(r.states[0].stereotype).toBe('history');
+  });
+});
+
+describe('state parser: notes', function() {
+  test('parses 1-line note', function() {
+    var t = '@startuml\nstate A\nnote right of A : my note\n@enduml';
+    var r = stMod.parse(t);
+    expect(r.notes.length).toBe(1);
+    expect(r.notes[0].position).toBe('right');
+    expect(r.notes[0].targetId).toBe('A');
+    expect(r.notes[0].text).toBe('my note');
+  });
+  test('parses multi-line note block', function() {
+    var t = '@startuml\nstate A\nnote left of A\n  line1\n  line2\nend note\n@enduml';
+    var r = stMod.parse(t);
+    expect(r.notes[0].text).toBe('line1\nline2');
+    expect(r.notes[0].endLine).toBe(6);
+  });
+  test('case insensitive note position', function() {
+    var t = '@startuml\nnote Right of A : x\n@enduml';
+    var r = stMod.parse(t);
+    expect(r.notes[0].position).toBe('right');
+  });
+});
+
+describe('state parser: composite', function() {
+  test('parses composite state with inner state', function() {
+    var t = '@startuml\nstate Outer {\n  state Inner\n}\n@enduml';
+    var r = stMod.parse(t);
+    expect(r.states.length).toBe(2);
+    expect(r.states[0].id).toBe('Outer');
+    expect(r.states[0].endLine).toBe(4);
+    expect(r.states[1].id).toBe('Outer.Inner');
+    expect(r.states[1].parentId).toBe('Outer');
+  });
+  test('inner state line tracking', function() {
+    var t = '@startuml\nstate Outer {\n  state Inner\n}\n@enduml';
+    var r = stMod.parse(t);
+    expect(r.states[1].line).toBe(3);
+  });
+  test('multiple inner states', function() {
+    var t = '@startuml\nstate Outer {\n  state A\n  state B\n}\n@enduml';
+    var r = stMod.parse(t);
+    expect(r.states.length).toBe(3);
+    expect(r.states[1].id).toBe('Outer.A');
+    expect(r.states[2].id).toBe('Outer.B');
+  });
+});
+
+describe('state parser - description lines (entry/do/exit)', function() {
+  test('entry prefix routed to state.entry', function() {
+    var t = '@startuml\nstate Driving\nDriving : entry / start_engine()\n@enduml';
+    var p = stMod.parse(t);
+    var s = p.states[0];
+    expect(s.entry).toBe('start_engine()');
+    expect(s.do).toBe(null);
+    expect(s.exit).toBe(null);
+  });
+  test('exit prefix routed to state.exit', function() {
+    var t = '@startuml\nstate Driving\nDriving : exit / stop_engine()\n@enduml';
+    var p = stMod.parse(t);
+    expect(p.states[0].exit).toBe('stop_engine()');
+  });
+  test('do prefix routed to state.do (single-line)', function() {
+    var t = '@startuml\nstate Driving\nDriving : do / monitor()\n@enduml';
+    var p = stMod.parse(t);
+    expect(p.states[0].do).toBe('monitor()');
+  });
+  test('description without prefix routed to state.descriptions', function() {
+    var t = '@startuml\nstate Driving\nDriving : custom note\n@enduml';
+    var p = stMod.parse(t);
+    var s = p.states[0];
+    expect(s.entry).toBe(null);
+    expect(s.descriptions.length).toBe(1);
+    expect(s.descriptions[0]).toBe('custom note');
+  });
+  test('all three behaviors and a description coexist', function() {
+    var t = '@startuml\nstate Driving\nDriving : entry / a\nDriving : do / b\nDriving : exit / c\nDriving : note d\n@enduml';
+    var p = stMod.parse(t);
+    var s = p.states[0];
+    expect(s.entry).toBe('a');
+    expect(s.do).toBe('b');
+    expect(s.exit).toBe('c');
+    expect(s.descriptions.length).toBe(1);
+    expect(s.descriptions[0]).toBe('note d');
+  });
+});
+
+if (prevWindow !== undefined) global.window = prevWindow;
+if (prevDocument !== undefined) global.document = prevDocument;
+depPaths.forEach(function(p) { try { delete require.cache[require.resolve(p)]; } catch (e) {} });

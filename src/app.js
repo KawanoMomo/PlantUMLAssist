@@ -29,6 +29,7 @@ function updateOnlineWarning() {
 
 var editorEl, previewSvgEl, propsEl, statusParseEl, statusInfoEl, renderStatusEl, lineNumbersEl, zoomDisplayEl;
 var mmdText = '';
+var currentDiagramType = 'plantuml-sequence';
 var currentModule = null;
 var currentParsed = { meta: {}, elements: [], relations: [], groups: [] };
 var suppressSync = false;
@@ -36,6 +37,12 @@ var renderTimer = null;
 var RENDER_DEBOUNCE_MS = 150;
 var zoom = 1.0;
 var isFirstRender = true;
+// renderGen monotonically increases for each renderSvg() invocation. Stale
+// fetch responses (request older than the latest) are discarded so a slow
+// older render cannot overwrite the SVG produced by a newer request — which
+// previously caused newly added shapes to disappear from the preview when
+// the user issued multiple edits in quick succession.
+var renderGen = 0;
 
 function moduleHas(cap) {
   return !!(currentModule && currentModule.capabilities && currentModule.capabilities[cap]);
@@ -57,9 +64,56 @@ function init() {
   document.getElementById('render-mode').value = savedMode;
   updateOnlineWarning();
 
-  currentModule = modules['plantuml-sequence'];
+  // Use the last-active diagram-type if persisted, otherwise default to
+  // sequence. This pairs with the autoSave per-type restore below so a
+  // crash-then-reload lands on the same type the user was working in.
+  var lastDiagramType = (function() {
+    try { return window.localStorage.getItem('plantuml-diagram-type') || 'plantuml-sequence'; }
+    catch (e) { return 'plantuml-sequence'; }
+  })();
+  if (!modules[lastDiagramType]) lastDiagramType = 'plantuml-sequence';
+  currentDiagramType = lastDiagramType;
+  currentModule = modules[lastDiagramType];
   mmdText = currentModule.template();
   editorEl.value = mmdText;
+  // Keep the <select> in sync with the active type.
+  var dtSelect = document.getElementById('diagram-type');
+  if (dtSelect) dtSelect.value = lastDiagramType;
+
+  // ── Auto-save: boot-time restore ────────────────────────────────────
+  // Per spec: 'auto' silently loads, 'confirm' asks via native dialog,
+  // 'none' leaves the template alone. Skip restore if the saved DSL is
+  // identical to the current template (nothing meaningful to recover).
+  // The init() call may return a Promise when the file backend needs to
+  // hydrate localStorage from disk first; we wait for it before doing
+  // the restore lookup so the disk-resident DSL is in localStorage.
+  (function bootRestore() {
+    var as = window.MA.autoSave;
+    if (!as || !as.isAvailable()) return;
+    function doRestore() {
+      var cfg = as.getConfig();
+      if (!cfg.enabled) return;
+      var saved = as.restoreFor(lastDiagramType);
+      if (saved == null || saved === mmdText) return;
+      var apply = false;
+      if (cfg.restoreMode === 'auto') apply = true;
+      else if (cfg.restoreMode === 'confirm') apply = window.confirm('前回編集中の DSL が見つかりました。 復元しますか？');
+      if (apply) {
+        mmdText = saved;
+        suppressSync = true;
+        editorEl.value = mmdText;
+        suppressSync = false;
+        // Trigger a refresh now that mmdText changed — the rest of init
+        // will not re-run but scheduleRefresh below uses the new mmdText.
+      }
+    }
+    var p = as.init();
+    if (p && typeof p.then === 'function') {
+      p.then(doRestore, doRestore);
+    } else {
+      doRestore();
+    }
+  })();
 
   editorEl.addEventListener('input', function() {
     if (suppressSync) return;
@@ -67,6 +121,12 @@ function init() {
     mmdText = editorEl.value;
     updateLineNumbers();
     scheduleRefresh();
+    // Auto-save: schedule a debounced write of the current DSL keyed by
+    // the active diagram-type (closure-tracked, kept in sync by the
+    // diagram-type change handler).
+    if (window.MA.autoSave) {
+      window.MA.autoSave.scheduleSave(currentDiagramType, mmdText);
+    }
   });
 
   editorEl.addEventListener('scroll', function() {
@@ -85,25 +145,33 @@ function init() {
     while (hoverEl.firstChild) hoverEl.removeChild(hoverEl.firstChild);
   }
 
-  function drawHoverGuide(y) {
+  function drawHoverGuide(y, rectX, rectWidth) {
     clearHoverGuide();
     if (!overlayElForHover) return;
     var w = parseFloat(overlayElForHover.getAttribute('width')) || 800;
     var h = parseFloat(overlayElForHover.getAttribute('height')) || 400;
+    var PADDING = 10;
+    // When rectX/rectWidth are provided, constrain the guide span to the
+    // resolved rect's column (with padding). Otherwise span the full overlay.
+    var x1 = (typeof rectX === 'number' && typeof rectWidth === 'number')
+      ? Math.max(0, rectX - PADDING)
+      : 0;
+    var x2 = (typeof rectX === 'number' && typeof rectWidth === 'number')
+      ? Math.min(w, rectX + rectWidth + PADDING)
+      : w;
     var lineEl = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    lineEl.setAttribute('x1', 0);
+    lineEl.setAttribute('x1', x1);
     lineEl.setAttribute('y1', y);
-    lineEl.setAttribute('x2', w);
+    lineEl.setAttribute('x2', x2);
     lineEl.setAttribute('y2', y);
     lineEl.setAttribute('class', 'hover-guide');
     hoverEl.appendChild(lineEl);
     var text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    text.setAttribute('x', 10);
+    text.setAttribute('x', x1 + 4);
     text.setAttribute('y', y - 3);
     text.setAttribute('class', 'hover-label');
     text.textContent = '+ ここに挿入';
     hoverEl.appendChild(text);
-    // overlay と sync
     hoverEl.setAttribute('width', overlayElForHover.getAttribute('width') || w);
     hoverEl.setAttribute('height', overlayElForHover.getAttribute('height') || h);
     var vb = overlayElForHover.getAttribute('viewBox');
@@ -147,7 +215,19 @@ function init() {
         return;
       }
       var z = zoom || 1;
+      var x = (e.clientX - rect.left) / z;
       var y = (e.clientY - rect.top) / z;
+      // Resolve via current module to obtain the column bounds (rectX/rectWidth)
+      var resolver = (currentModule && typeof currentModule.resolveInsertLine === 'function')
+        ? currentModule.resolveInsertLine
+        : null;
+      if (resolver) {
+        var res = resolver(overlayElForHover, x, y);
+        if (res) {
+          drawHoverGuide(y, res.rectX, res.rectWidth);
+          return;
+        }
+      }
       drawHoverGuide(y);
     });
 
@@ -164,7 +244,7 @@ function init() {
       // Resolve insert line via current module (v0.5.0 overlay-driven contract)
       // Falls back to sequence-overlay for backward compat with sequence module.
       var resolver = (currentModule && typeof currentModule.resolveInsertLine === 'function')
-        ? function(ovEl, yy) { return currentModule.resolveInsertLine(ovEl, yy); }
+        ? function(ovEl, xx, yy) { return currentModule.resolveInsertLine(ovEl, xx, yy); }
         : (window.MA.sequenceOverlay && window.MA.sequenceOverlay.resolveInsertLine
           ? window.MA.sequenceOverlay.resolveInsertLine
           : null);
@@ -172,8 +252,9 @@ function init() {
       var rect = overlayElForHover.getBoundingClientRect();
       if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) return;
       var z = zoom || 1;
+      var x = (e.clientX - rect.left) / z;
       var y = (e.clientY - rect.top) / z;
-      var res = resolver(overlayElForHover, y);
+      var res = resolver(overlayElForHover, x, y);
       if (!res) return;
       var insertKind = (currentModule && currentModule.defaultInsertKind) || 'message';
       currentModule.showInsertForm({
@@ -414,6 +495,112 @@ function init() {
   document.getElementById('btn-save').addEventListener('click', saveFile);
   document.getElementById('file-input').addEventListener('change', onFilePicked);
 
+  // ── Settings modal (auto-save config) ────────────────────────────────
+  (function setupConfigModal() {
+    var btn = document.getElementById('btn-config');
+    var modal = document.getElementById('cfg-modal');
+    if (!btn || !modal) return;
+
+    function fmtDate(iso) {
+      if (!iso) return '(未保存)';
+      try {
+        var d = new Date(iso);
+        if (isNaN(d.getTime())) return '(不明)';
+        function pad(n) { return n < 10 ? '0' + n : '' + n; }
+        return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate())
+          + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+      } catch (e) { return '(不明)'; }
+    }
+
+    function refreshMetaInfo() {
+      var info = document.getElementById('cfg-meta-info');
+      if (!info) return;
+      var as = window.MA.autoSave;
+      if (!as) { info.textContent = ''; return; }
+      if (!as.isAvailable()) {
+        info.textContent = '⚠ localStorage が使えないため自動保存は無効です';
+        return;
+      }
+      var meta = as.getMeta();
+      info.textContent = '最終保存: ' + fmtDate(meta && meta.lastSavedAt) +
+        (meta && meta.lastSavedType ? ' (' + meta.lastSavedType.replace('plantuml-', '') + ')' : '');
+    }
+
+    function applyBackendVisibility(backend) {
+      var dirRow = document.getElementById('cfg-file-dir-row');
+      if (dirRow) dirRow.style.display = (backend === 'file') ? 'block' : 'none';
+    }
+
+    function open() {
+      var as = window.MA.autoSave;
+      var cfg = as ? as.getConfig() : { enabled: true, debounceMs: 1000, restoreMode: 'confirm', backend: 'localStorage', fileDir: './autosave' };
+      document.getElementById('cfg-enabled').checked = !!cfg.enabled;
+      document.getElementById('cfg-debounce').value = String(cfg.debounceMs);
+      var radios = document.getElementsByName('cfg-restore-mode');
+      for (var i = 0; i < radios.length; i++) radios[i].checked = (radios[i].value === cfg.restoreMode);
+      var backendRadios = document.getElementsByName('cfg-backend');
+      var backend = cfg.backend || 'localStorage';
+      for (var j = 0; j < backendRadios.length; j++) backendRadios[j].checked = (backendRadios[j].value === backend);
+      var dirInput = document.getElementById('cfg-file-dir');
+      if (dirInput) dirInput.value = cfg.fileDir || './autosave';
+      applyBackendVisibility(backend);
+      refreshMetaInfo();
+      modal.style.display = 'flex';
+    }
+    function close() { modal.style.display = 'none'; }
+
+    btn.addEventListener('click', open);
+    document.getElementById('cfg-cancel').addEventListener('click', close);
+    document.getElementById('cfg-ok').addEventListener('click', function() {
+      var enabled = document.getElementById('cfg-enabled').checked;
+      var debounceMs = parseInt(document.getElementById('cfg-debounce').value, 10);
+      var radios = document.getElementsByName('cfg-restore-mode');
+      var restoreMode = 'confirm';
+      for (var i = 0; i < radios.length; i++) if (radios[i].checked) { restoreMode = radios[i].value; break; }
+      var backendRadios = document.getElementsByName('cfg-backend');
+      var backend = 'localStorage';
+      for (var j = 0; j < backendRadios.length; j++) if (backendRadios[j].checked) { backend = backendRadios[j].value; break; }
+      var fileDirEl = document.getElementById('cfg-file-dir');
+      var fileDir = fileDirEl ? (fileDirEl.value.trim() || './autosave') : './autosave';
+      if (window.MA.autoSave) {
+        window.MA.autoSave.setConfig({
+          enabled: enabled,
+          debounceMs: debounceMs,
+          restoreMode: restoreMode,
+          backend: backend,
+          fileDir: fileDir,
+        });
+      }
+      close();
+    });
+    document.getElementById('cfg-clear-all').addEventListener('click', function() {
+      if (!window.confirm('保存中の全 DSL とエディタの編集中内容を消去し、 デフォルトテンプレに戻します。 続行しますか？')) return;
+      if (window.MA.autoSave) window.MA.autoSave.clearAll();
+      // Reset editor + mmdText to the current type's template, so the
+      // in-memory DSL doesn't immediately re-save on the next input/
+      // type-switch/beforeunload (clearAll already cancels the pending
+      // debounce timer, but leaving stale mmdText would still let the
+      // very next save trigger re-create the keys we just deleted).
+      try { window.localStorage.removeItem('plantuml-diagram-type'); } catch (e) {}
+      mmdText = currentModule.template();
+      suppressSync = true;
+      editorEl.value = mmdText;
+      suppressSync = false;
+      try { currentParsed = currentModule.parse(mmdText); } catch (e) { currentParsed = null; }
+      window.MA.selection.clearSelection();
+      isFirstRender = true;
+      scheduleRefresh();
+      refreshMetaInfo();
+    });
+    // Toggle the file-dir input visibility when the backend radio changes
+    var backendRadios = document.getElementsByName('cfg-backend');
+    for (var k = 0; k < backendRadios.length; k++) {
+      backendRadios[k].addEventListener('change', function() {
+        if (this.checked) applyBackendVisibility(this.value);
+      });
+    }
+  })();
+
   // Zoom
   document.getElementById('btn-zoom-in').addEventListener('click', function() { setZoom(zoom + 0.1); });
   document.getElementById('btn-zoom-out').addEventListener('click', function() { setZoom(zoom - 0.1); });
@@ -449,12 +636,39 @@ function init() {
     var t = this.value;
     var mod = modules[t];
     if (!mod) return;
+    // Force-save the OUTGOING type's current editor content. We schedule
+    // a save keyed to currentDiagramType (NOT the new t) and flush so even
+    // if no debounce was pending, the latest mmdText is persisted before
+    // we leave this type. Wrapped in try/catch — never block a type switch
+    // on autosave failures.
+    if (window.MA.autoSave) {
+      try {
+        window.MA.autoSave.scheduleSave(currentDiagramType, mmdText);
+        window.MA.autoSave.flush();
+      } catch (e) { /* never block type switch */ }
+    }
+    // Persist the active type so the next page load can restore it.
+    try { window.localStorage.setItem('plantuml-diagram-type', t); } catch (e) { /* private mode etc */ }
+    currentDiagramType = t;
     window.MA.history.pushHistory();
     currentModule = mod;  // explicit user choice overrides auto-detection
-    mmdText = mod.template();
+    // Per-type restore: if a saved DSL exists for the new type, prefer it
+    // over the default template. Type switch is an explicit user action so
+    // we silently restore (no confirm() prompt regardless of restoreMode).
+    var savedForType = window.MA.autoSave ? window.MA.autoSave.restoreFor(t) : null;
+    mmdText = (savedForType != null && savedForType !== '') ? savedForType : mod.template();
     suppressSync = true;
     editorEl.value = mmdText;
     suppressSync = false;
+    // Reparse with the new module BEFORE clearSelection() so that the
+    // selection callback's renderProps() sees a parsedData shape matching
+    // the new module. Otherwise the previous module's parsedData (e.g.
+    // state's {states, transitions, notes}) leaks into the new module's
+    // renderProps which expects a different shape (e.g. sequence's
+    // {elements, relations, groups}) and throws — preventing the next
+    // scheduleRefresh() from running and leaving the preview stuck on
+    // the previous diagram.
+    try { currentParsed = currentModule.parse(mmdText); } catch (e) { /* leave stale */ }
     window.MA.selection.clearSelection();
     isFirstRender = true;
     scheduleRefresh();
@@ -480,6 +694,54 @@ function init() {
   setZoom(1.0);
   updateLineNumbers();
   scheduleRefresh();
+  // ── Auto-save: best-effort flush on tab hide / unload ───────────────
+  // visibilitychange catches user switching tabs / OS minimize.
+  // beforeunload catches tab close / reload / navigation. Both are wrapped
+  // in try/catch so a flush failure can never block tab teardown.
+  if (window.MA.autoSave) {
+    document.addEventListener('visibilitychange', function() {
+      if (document.hidden) {
+        try { window.MA.autoSave.flush(); } catch (e) {}
+      }
+    });
+    window.addEventListener('beforeunload', function() {
+      try { window.MA.autoSave.flush(); } catch (e) {}
+    });
+  }
+
+  // ── Auto-save: status indicator ─────────────────────────────────────
+  // Render `💾 N秒前` (relative time) in #status-autosave, refreshed on
+  // every successful flush AND every 5 seconds (so the relative-time
+  // text stays current without requiring another flush).
+  (function setupAutoSaveStatus() {
+    var span = document.getElementById('status-autosave');
+    if (!span || !window.MA.autoSave || !window.MA.autoSave.onSave) return;
+
+    function relTime(iso) {
+      if (!iso) return '';
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return '';
+      var sec = Math.max(0, Math.round((Date.now() - d.getTime()) / 1000));
+      if (sec < 5) return 'たった今';
+      if (sec < 60) return sec + '秒前';
+      if (sec < 3600) return Math.floor(sec / 60) + '分前';
+      return Math.floor(sec / 3600) + '時間前';
+    }
+    function update() {
+      if (!window.MA.autoSave.isAvailable()) {
+        span.textContent = '';
+        return;
+      }
+      var meta = window.MA.autoSave.getMeta();
+      if (!meta) { span.textContent = ''; return; }
+      span.textContent = '💾 ' + relTime(meta.lastSavedAt);
+      span.title = '最終保存: ' + meta.lastSavedAt + ' (' + (meta.lastSavedType || '').replace('plantuml-', '') + ')';
+    }
+    window.MA.autoSave.onSave(function() { update(); });
+    update();
+    setInterval(update, 5000);
+  })();
+
   startHeartbeat();
 }
 
@@ -774,6 +1036,7 @@ function renderSvg() {
   renderStatusEl.textContent = 'Rendering\u2026';
   renderStatusEl.classList.remove('error');
 
+  var myGen = ++renderGen;
   fetch('/render', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -788,6 +1051,7 @@ function renderSvg() {
     }
     return resp.text();
   }).then(function(svg) {
+    if (myGen !== renderGen) return;  // stale response \u2014 a newer renderSvg() superseded this one
     previewSvgEl.innerHTML = svg;
     var svgEl = previewSvgEl.querySelector('svg');
     if (svgEl) {
@@ -831,6 +1095,7 @@ function renderSvg() {
     }
     renderStatusEl.textContent = 'OK (' + mode + ')';
   }).catch(function(err) {
+    if (myGen !== renderGen) return;  // stale failure — ignore
     previewSvgEl.innerHTML = '<p style="color:var(--accent-red);padding:20px;white-space:pre-wrap;font-family:var(--font-mono);font-size:12px;">Render error: ' + (err.message || err) + '</p>';
     renderStatusEl.textContent = 'ERROR';
     renderStatusEl.classList.add('error');
