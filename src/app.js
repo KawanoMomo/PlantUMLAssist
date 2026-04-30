@@ -472,6 +472,69 @@ function init() {
   document.getElementById('btn-save').addEventListener('click', saveFile);
   document.getElementById('file-input').addEventListener('change', onFilePicked);
 
+  // ── Settings modal (auto-save config) ────────────────────────────────
+  (function setupConfigModal() {
+    var btn = document.getElementById('btn-config');
+    var modal = document.getElementById('cfg-modal');
+    if (!btn || !modal) return;
+
+    function fmtDate(iso) {
+      if (!iso) return '(未保存)';
+      try {
+        var d = new Date(iso);
+        if (isNaN(d.getTime())) return '(不明)';
+        function pad(n) { return n < 10 ? '0' + n : '' + n; }
+        return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate())
+          + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+      } catch (e) { return '(不明)'; }
+    }
+
+    function refreshMetaInfo() {
+      var info = document.getElementById('cfg-meta-info');
+      if (!info) return;
+      var as = window.MA.autoSave;
+      if (!as) { info.textContent = ''; return; }
+      if (!as.isAvailable()) {
+        info.textContent = '⚠ localStorage が使えないため自動保存は無効です';
+        return;
+      }
+      var meta = as.getMeta();
+      info.textContent = '最終保存: ' + fmtDate(meta && meta.lastSavedAt) +
+        (meta && meta.lastSavedType ? ' (' + meta.lastSavedType.replace('plantuml-', '') + ')' : '');
+    }
+
+    function open() {
+      var as = window.MA.autoSave;
+      var cfg = as ? as.getConfig() : { enabled: true, debounceMs: 1000, restoreMode: 'confirm' };
+      document.getElementById('cfg-enabled').checked = !!cfg.enabled;
+      document.getElementById('cfg-debounce').value = String(cfg.debounceMs);
+      var radios = document.getElementsByName('cfg-restore-mode');
+      for (var i = 0; i < radios.length; i++) radios[i].checked = (radios[i].value === cfg.restoreMode);
+      refreshMetaInfo();
+      modal.style.display = 'flex';
+    }
+    function close() { modal.style.display = 'none'; }
+
+    btn.addEventListener('click', open);
+    document.getElementById('cfg-cancel').addEventListener('click', close);
+    document.getElementById('cfg-ok').addEventListener('click', function() {
+      var enabled = document.getElementById('cfg-enabled').checked;
+      var debounceMs = parseInt(document.getElementById('cfg-debounce').value, 10);
+      var radios = document.getElementsByName('cfg-restore-mode');
+      var restoreMode = 'confirm';
+      for (var i = 0; i < radios.length; i++) if (radios[i].checked) { restoreMode = radios[i].value; break; }
+      if (window.MA.autoSave) {
+        window.MA.autoSave.setConfig({ enabled: enabled, debounceMs: debounceMs, restoreMode: restoreMode });
+      }
+      close();
+    });
+    document.getElementById('cfg-clear-all').addEventListener('click', function() {
+      if (!window.confirm('保存中の全 DSL を削除します。 続行しますか？')) return;
+      if (window.MA.autoSave) window.MA.autoSave.clearAll();
+      refreshMetaInfo();
+    });
+  })();
+
   // Zoom
   document.getElementById('btn-zoom-in').addEventListener('click', function() { setZoom(zoom + 0.1); });
   document.getElementById('btn-zoom-out').addEventListener('click', function() { setZoom(zoom - 0.1); });
