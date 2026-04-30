@@ -428,6 +428,7 @@ html, body {
 
     <button class="tb-btn" id="btn-open" title="ファイルを開く">Open</button>
     <button class="tb-btn" id="btn-save" title="ファイルを保存">Save</button>
+    <button class="tb-btn" id="btn-config" title="設定">⚙</button>
 
     <div class="tb-sep"></div>
 
@@ -520,6 +521,7 @@ html, body {
   <!-- ── Status bar ──────────────────────────────────────────────────────── -->
   <div id="statusbar">
     <span id="status-parse">Ready</span>
+    <span id="status-autosave" style="margin-left:12px;color:var(--text-secondary);"></span>
     <span id="status-info"></span>
   </div>
 
@@ -534,6 +536,47 @@ html, body {
 </div>
 <div id="st-tx-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="st-tx-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:400px;max-width:600px;"></div>
+</div>
+<div id="cfg-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+  <div id="cfg-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:380px;max-width:520px;color:var(--text-primary);">
+    <h3 style="margin:0 0 12px 0;">設定</h3>
+
+    <label style="display:flex;align-items:center;gap:6px;margin-bottom:10px;font-size:12px;">
+      <input type="checkbox" id="cfg-enabled"> DSL を自動保存する
+    </label>
+
+    <div style="margin-bottom:10px;font-size:12px;">
+      <label style="display:block;margin-bottom:4px;color:var(--text-secondary);">保存間隔</label>
+      <select id="cfg-debounce" style="background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;">
+        <option value="500">500ms</option>
+        <option value="1000">1秒</option>
+        <option value="2000">2秒</option>
+        <option value="5000">5秒</option>
+      </select>
+    </div>
+
+    <fieldset style="border:1px solid var(--border);border-radius:4px;padding:8px 10px;margin-bottom:10px;font-size:12px;">
+      <legend style="color:var(--text-secondary);padding:0 4px;">起動時の復元動作</legend>
+      <label style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+        <input type="radio" name="cfg-restore-mode" value="auto"> 自動復元 (確認なしで前回 DSL をロード)
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+        <input type="radio" name="cfg-restore-mode" value="confirm"> 確認ダイアログを表示 (推奨)
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;">
+        <input type="radio" name="cfg-restore-mode" value="none"> 復元しない (常にテンプレ)
+      </label>
+    </fieldset>
+
+    <div id="cfg-meta-info" style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;"></div>
+
+    <button id="cfg-clear-all" style="background:var(--accent-red);color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;margin-bottom:12px;">保存データを全削除</button>
+
+    <div style="display:flex;gap:8px;">
+      <button id="cfg-cancel" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:8px;border-radius:4px;cursor:pointer;">キャンセル</button>
+      <button id="cfg-ok" style="flex:1;background:var(--accent);border:none;color:#fff;padding:8px;border-radius:4px;cursor:pointer;">OK</button>
+    </div>
+  </div>
 </div>
 </div><!-- /#app -->
 
