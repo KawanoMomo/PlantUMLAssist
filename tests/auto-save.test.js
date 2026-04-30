@@ -79,6 +79,20 @@ describe('autoSave config', function() {
     expect(c.enabled).toBe(true);
     expect(c.debounceMs).toBe(1000);
   });
+  test('getConfig falls back per-field when restoreMode is invalid, leaving other fields intact', function() {
+    global.window.localStorage.setItem('plantuml-autosave-config', JSON.stringify({ enabled: false, debounceMs: 2000, restoreMode: 'banana' }));
+    var c = as.getConfig();
+    expect(c.restoreMode).toBe('confirm'); // default
+    expect(c.enabled).toBe(false);          // preserved
+    expect(c.debounceMs).toBe(2000);        // preserved
+  });
+  test('getConfig falls back per-field when debounceMs is below 100, leaving other fields intact', function() {
+    global.window.localStorage.setItem('plantuml-autosave-config', JSON.stringify({ enabled: false, debounceMs: 50, restoreMode: 'auto' }));
+    var c = as.getConfig();
+    expect(c.debounceMs).toBe(1000);  // default
+    expect(c.enabled).toBe(false);    // preserved
+    expect(c.restoreMode).toBe('auto'); // preserved
+  });
 });
 
 // jsdom window を run-tests.js が用意した sandbox window に戻す。

@@ -42,7 +42,7 @@ window.MA.autoSave = (function() {
   }
 
   function getConfig() {
-    var stored = _readJson(KEY_CONFIG, {}) || {};
+    var stored = _readJson(KEY_CONFIG, {});
     var out = {};
     out.enabled = (typeof stored.enabled === 'boolean') ? stored.enabled : DEFAULTS.enabled;
     out.debounceMs = (typeof stored.debounceMs === 'number' && stored.debounceMs >= 100) ? stored.debounceMs : DEFAULTS.debounceMs;
@@ -57,7 +57,7 @@ window.MA.autoSave = (function() {
       if ('restoreMode' in partial) merged.restoreMode = partial.restoreMode;
     }
     _writeJson(KEY_CONFIG, merged);
-    return merged;
+    return getConfig();
   }
 
   return {
