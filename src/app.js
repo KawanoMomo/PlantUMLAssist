@@ -29,6 +29,7 @@ function updateOnlineWarning() {
 
 var editorEl, previewSvgEl, propsEl, statusParseEl, statusInfoEl, renderStatusEl, lineNumbersEl, zoomDisplayEl;
 var mmdText = '';
+var currentDiagramType = 'plantuml-sequence';
 var currentModule = null;
 var currentParsed = { meta: {}, elements: [], relations: [], groups: [] };
 var suppressSync = false;
@@ -71,6 +72,7 @@ function init() {
     catch (e) { return 'plantuml-sequence'; }
   })();
   if (!modules[lastDiagramType]) lastDiagramType = 'plantuml-sequence';
+  currentDiagramType = lastDiagramType;
   currentModule = modules[lastDiagramType];
   mmdText = currentModule.template();
   editorEl.value = mmdText;
@@ -108,11 +110,10 @@ function init() {
     updateLineNumbers();
     scheduleRefresh();
     // Auto-save: schedule a debounced write of the current DSL keyed by
-    // the active diagram-type. The autoSave module no-ops internally if
-    // disabled or unavailable.
+    // the active diagram-type (closure-tracked, kept in sync by the
+    // diagram-type change handler).
     if (window.MA.autoSave) {
-      var dt = (document.getElementById('diagram-type') || {}).value || 'plantuml-sequence';
-      window.MA.autoSave.scheduleSave(dt, mmdText);
+      window.MA.autoSave.scheduleSave(currentDiagramType, mmdText);
     }
   });
 
@@ -580,14 +581,20 @@ function init() {
     var t = this.value;
     var mod = modules[t];
     if (!mod) return;
-    // Flush any pending autosave for the OUTGOING type so its latest edits
-    // are persisted before we leave it. wrapped in try/catch — never block
-    // a type switch on autosave failures.
+    // Force-save the OUTGOING type's current editor content. We schedule
+    // a save keyed to currentDiagramType (NOT the new t) and flush so even
+    // if no debounce was pending, the latest mmdText is persisted before
+    // we leave this type. Wrapped in try/catch — never block a type switch
+    // on autosave failures.
     if (window.MA.autoSave) {
-      try { window.MA.autoSave.flush(); } catch (e) { /* never block type switch */ }
+      try {
+        window.MA.autoSave.scheduleSave(currentDiagramType, mmdText);
+        window.MA.autoSave.flush();
+      } catch (e) { /* never block type switch */ }
     }
     // Persist the active type so the next page load can restore it.
     try { window.localStorage.setItem('plantuml-diagram-type', t); } catch (e) { /* private mode etc */ }
+    currentDiagramType = t;
     window.MA.history.pushHistory();
     currentModule = mod;  // explicit user choice overrides auto-detection
     // Per-type restore: if a saved DSL exists for the new type, prefer it
