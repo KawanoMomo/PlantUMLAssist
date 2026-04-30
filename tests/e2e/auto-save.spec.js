@@ -11,23 +11,31 @@ async function clearAutoSave(page) {
 }
 
 test.describe('Auto-save (v1.2.0)', () => {
-  test('UC-as-1: edit → reload → confirm OK → DSL restored', async ({ page }) => {
+  test('UC-as-1: edit → reload → confirm OK → DSL restored (cross-type round-trip)', async ({ page }) => {
     await gotoApp(page);
-    await clearAutoSave(page);
-    // Reload to start clean (but with cleared LS)
+    await page.evaluate(() => {
+      Object.keys(localStorage).forEach(function(k) {
+        if (k.indexOf('plantuml-autosave-') === 0 || k === 'plantuml-diagram-type') localStorage.removeItem(k);
+      });
+    });
     await page.reload();
     await page.waitForSelector('#preview-svg', { timeout: 5000 });
-    // Stay on sequence (the default type) — bootRestore restores plantuml-sequence key
-    // Edit DSL with a unique marker
-    await page.locator('#editor').fill('@startuml\nactor Marker_AAA\n@enduml');
-    // Wait > debounceMs (default 1000) so autosave flushes
+    // Switch to state mode (so we prove the cross-type round-trip)
+    await page.locator('#diagram-type').selectOption('plantuml-state');
+    await page.waitForTimeout(500);
+    // Edit DSL
+    await page.locator('#editor').fill('@startuml\nstate Marker_AAA\n@enduml');
     await page.waitForTimeout(1500);
-    // Reload — confirm dialog should appear; accept it
+    // Reload — confirm dialog appears in state mode (the persisted type
+    // selection survives the reload).
     page.once('dialog', async (d) => { await d.accept(); });
     await page.reload();
     await page.waitForSelector('#preview-svg', { timeout: 5000 });
+    // Page must boot in state mode + restore the state DSL
     var t = await getEditorText(page);
-    expect(t).toContain('Marker_AAA');
+    expect(t).toContain('state Marker_AAA');
+    var activeType = await page.locator('#diagram-type').inputValue();
+    expect(activeType).toBe('plantuml-state');
   });
 
   test('UC-as-2: per-type isolation across diagram switches', async ({ page }) => {

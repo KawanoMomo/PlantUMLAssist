@@ -63,9 +63,20 @@ function init() {
   document.getElementById('render-mode').value = savedMode;
   updateOnlineWarning();
 
-  currentModule = modules['plantuml-sequence'];
+  // Use the last-active diagram-type if persisted, otherwise default to
+  // sequence. This pairs with the autoSave per-type restore below so a
+  // crash-then-reload lands on the same type the user was working in.
+  var lastDiagramType = (function() {
+    try { return window.localStorage.getItem('plantuml-diagram-type') || 'plantuml-sequence'; }
+    catch (e) { return 'plantuml-sequence'; }
+  })();
+  if (!modules[lastDiagramType]) lastDiagramType = 'plantuml-sequence';
+  currentModule = modules[lastDiagramType];
   mmdText = currentModule.template();
   editorEl.value = mmdText;
+  // Keep the <select> in sync with the active type.
+  var dtSelect = document.getElementById('diagram-type');
+  if (dtSelect) dtSelect.value = lastDiagramType;
 
   // ── Auto-save: boot-time restore ────────────────────────────────────
   // Per spec: 'auto' silently loads, 'confirm' asks via native dialog,
@@ -77,8 +88,7 @@ function init() {
     as.init();
     var cfg = as.getConfig();
     if (!cfg.enabled) return;
-    var diagramTypeKey = 'plantuml-sequence';
-    var saved = as.restoreFor(diagramTypeKey);
+    var saved = as.restoreFor(lastDiagramType);
     if (saved == null || saved === mmdText) return;
     var apply = false;
     if (cfg.restoreMode === 'auto') apply = true;
@@ -576,6 +586,8 @@ function init() {
     if (window.MA.autoSave) {
       try { window.MA.autoSave.flush(); } catch (e) { /* never block type switch */ }
     }
+    // Persist the active type so the next page load can restore it.
+    try { window.localStorage.setItem('plantuml-diagram-type', t); } catch (e) { /* private mode etc */ }
     window.MA.history.pushHistory();
     currentModule = mod;  // explicit user choice overrides auto-detection
     // Per-type restore: if a saved DSL exists for the new type, prefer it
