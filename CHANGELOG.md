@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0] - 2026-04-30
+
+### Added — Auto-save (DSL persistence)
+
+- **DSL の自動保存** — 編集中の DSL を `localStorage` に diagram-type 別 (6 type) で永続化。 ブラウザ/タブのクラッシュや誤 close でも未保存内容が消えない。 トリガは `editor input` の debounce (デフォルト 1秒) + `visibilitychange (hidden)` + `beforeunload` のベストエフォート flush。
+- **設定 modal** — toolbar `⚙` ボタン → `#cfg-modal`。 自動保存 ON/OFF、 保存間隔 (500ms / 1秒 / 2秒 / 5秒)、 起動時の復元動作 (auto / confirm / none、 デフォルト confirm)、 「最終保存: yyyy-mm-dd hh:mm:ss (type)」表示、 「保存データを全削除」ボタン。
+- **起動時復元** — 起動時に保存 DSL があれば、 設定の `restoreMode` に従って復元: `auto` は無言で適用、 `confirm` は `window.confirm()` ダイアログで確認、 `none` は適用しない。 保存 DSL がデフォルトテンプレと同一の場合は復元プロンプトをスキップ。
+- **last-active diagram-type の永続化** — `localStorage['plantuml-diagram-type']` に最後に編集した type を保存。 reload 時はその type で起動 (& boot restore はその type の保存 DSL を見る)。 これによりクラッシュ → reload で「sequence で起動 → state DSL は隠れている」状況が起きず、 ユーザの作業環境がそのまま戻る。
+- **diagram-type 切替時** — 切替前に flush、 切替後は新 type の保存 DSL があればそれをロード (確認ダイアログなし、 切替自体が明示操作のため)。
+- **ステータスバー indicator** — 画面下部に `💾 N秒前` 形式の最終保存時刻 (`たった今` / `N秒前` / `N分前` / `N時間前`)。 5 秒ごとに相対時刻を更新、 hover で ISO 時刻 + diagram-type を表示。
+
+### New module
+
+- `src/core/auto-save.js` — `window.MA.autoSave` API: `init / scheduleSave / flush / restoreFor / hasSavedFor / getMeta / clearAll / getConfig / setConfig / isAvailable / onSave`。
+- localStorage layout: `plantuml-autosave-config` / `plantuml-autosave-meta` / `plantuml-autosave-dsl-<type>` / `plantuml-diagram-type`。
+- 失敗時挙動: localStorage quota / private mode / 破損 JSON はすべて try/catch で吸収し in-memory DSL を維持 (decentralized resilience)。 `clearAll` は dsl/meta だけ消し、 ユーザ設定 (`-config`) は残す。
+
+### Tests
+
+- 単体テスト 18 件追加 (`tests/auto-save.test.js`): API skeleton (2) / config defaults・persist・round-trip・corrupt-fallback・per-field validation (6) / scheduleSave + flush + restoreFor + hasSavedFor + meta + per-type isolation + clearAll + disabled + quota + onSave (10)。
+- E2E 回帰 5 件追加 (`tests/e2e/auto-save.spec.js`): UC-as-1 (cross-type round-trip: state を編集 → reload → confirm OK → state 復元) / UC-as-2 (per-type 分離) / UC-as-3 (restoreMode=none) / UC-as-4 (clear-all) / UC-as-5 (status indicator)。
+- Visual verification (`.investigation/`): 設定 modal / 復元後の editor 状態 / `💾` indicator のスクリーンショット。
+
 ## [1.1.2] - 2026-04-30
 
 ### Fixed
