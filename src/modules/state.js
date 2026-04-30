@@ -26,6 +26,11 @@ window.MA.modules.plantumlState = (function() {
   );
   var END_NOTE_RE = /^end\s+note\s*$/i;
 
+  var DESCRIPTION_RE = new RegExp(
+    '^(' + ID + ')\\s*:\\s*(?:(entry|exit|do)\\s*/\\s*)?(.+)$',
+    'i'
+  );
+
   function _parseTransitionLabel(label) {
     if (!label) return { trigger: null, guard: null, action: null };
     var trimmed = label.trim();
@@ -120,6 +125,10 @@ window.MA.modules.plantumlState = (function() {
           label: slabel,
           stereotype: stereotype,
           parentId: parentId,
+          entry: null,
+          do: null,
+          exit: null,
+          descriptions: [],
           line: lineNum,
           endLine: lineNum,
         };
@@ -143,6 +152,31 @@ window.MA.modules.plantumlState = (function() {
           line: lineNum,
         });
         continue;
+      }
+
+      var dm = trimmed.match(DESCRIPTION_RE);
+      if (dm) {
+        var dTargetId = dm[1];
+        var dKind = dm[2] ? dm[2].toLowerCase() : null;
+        var dValue = dm[3];
+        // Find the state with matching id (consider parent qualification)
+        var targetState = null;
+        for (var ds = result.states.length - 1; ds >= 0; ds--) {
+          var cand = result.states[ds];
+          var bareId = cand.id.indexOf('.') >= 0 ? cand.id.split('.').pop() : cand.id;
+          if (cand.id === dTargetId || bareId === dTargetId) {
+            targetState = cand; break;
+          }
+        }
+        if (targetState) {
+          // Use `\\n` (literal 2-char escape) to join multi-occurrence values so they
+          // round-trip through Task 3's `<input>` fields (which strip real newlines).
+          if (dKind === 'entry') targetState.entry = (targetState.entry ? targetState.entry + '\\n' : '') + dValue;
+          else if (dKind === 'exit') targetState.exit = (targetState.exit ? targetState.exit + '\\n' : '') + dValue;
+          else if (dKind === 'do') targetState.do = (targetState.do ? targetState.do + '\\n' : '') + dValue;
+          else targetState.descriptions.push(dValue);
+          continue;
+        }
       }
 
       var nim = trimmed.match(NOTE_INLINE_RE);
@@ -308,6 +342,146 @@ window.MA.modules.plantumlState = (function() {
     var before = lines.slice(0, idx);
     var after = lines.slice(endLine);
     return before.concat(newLines).concat(after).join('\n');
+  }
+
+  function setStateBehavior(text, stateId, kind, value) {
+    if (kind !== 'entry' && kind !== 'exit' && kind !== 'do') return text;
+    var lines = text.split('\n');
+    // Multi-line value: encode newlines as backslash-n for PlantUML rendering
+    var encodedValue = (typeof value === 'string') ? value.replace(/\n/g, '\\n') : '';
+    // Find the bare id (after dot for nested states)
+    var bareId = stateId.indexOf('.') >= 0 ? stateId.split('.').pop() : stateId;
+    // Find existing description line for this kind
+    var existingIdx = -1;
+    var insertAfterIdx = -1;
+    for (var i = 0; i < lines.length; i++) {
+      var trimmed = lines[i].trim();
+      var dm = trimmed.match(/^(\w+)\s*:\s*(entry|exit|do)\s*\/\s*(.+)$/i);
+      if (dm && (dm[1] === stateId || dm[1] === bareId) && dm[2].toLowerCase() === kind) {
+        existingIdx = i;
+        break;
+      }
+      // Track the state declaration line as fallback insertion point
+      var sm = trimmed.match(/^state\s+(?:"[^"]+"\s+as\s+(\w+)|(\w+))/);
+      if (sm && (sm[1] === bareId || sm[2] === bareId)) {
+        insertAfterIdx = i;
+      }
+    }
+    if (existingIdx >= 0) {
+      if (encodedValue === '') {
+        lines.splice(existingIdx, 1);
+      } else {
+        var indent = (lines[existingIdx].match(/^(\s*)/) || ['', ''])[1];
+        lines[existingIdx] = indent + bareId + ' : ' + kind + ' / ' + encodedValue;
+      }
+    } else if (encodedValue !== '' && insertAfterIdx >= 0) {
+      var indent2 = (lines[insertAfterIdx].match(/^(\s*)/) || ['', ''])[1];
+      lines.splice(insertAfterIdx + 1, 0, indent2 + bareId + ' : ' + kind + ' / ' + encodedValue);
+    }
+    return lines.join('\n');
+  }
+
+  // Find the line index (0-based) of "state STATE_ID" declaration matching id (qualified or bare).
+  // Returns -1 if not found.
+  function _findStateDeclLine(lines, stateId) {
+    var bareId = stateId.indexOf('.') >= 0 ? stateId.split('.').pop() : stateId;
+    for (var i = 0; i < lines.length; i++) {
+      var trimmed = lines[i].trim();
+      var m = trimmed.match(STATE_RE);
+      if (!m) continue;
+      var declId = m[2] !== undefined ? m[2] : m[3];
+      if (declId === stateId || declId === bareId) return i;
+    }
+    return -1;
+  }
+
+  // Find the line index of the matching closing brace for a composite that opens at openLineIdx.
+  function _findMatchingBrace(lines, openLineIdx) {
+    var depth = 0;
+    for (var i = openLineIdx; i < lines.length; i++) {
+      var trimmed = lines[i].trim();
+      if (trimmed.match(STATE_RE) && /\{\s*$/.test(trimmed)) depth++;
+      else if (trimmed === '}') {
+        depth--;
+        if (depth === 0) return i;
+      }
+    }
+    return -1;
+  }
+
+  function convertToComposite(text, stateId) {
+    var lines = text.split('\n');
+    var idx = _findStateDeclLine(lines, stateId);
+    if (idx < 0) return text;
+    if (/\{\s*$/.test(lines[idx])) return text;  // already composite
+    var indent = (lines[idx].match(/^(\s*)/) || ['', ''])[1];
+    lines[idx] = lines[idx].replace(/\s*$/, '') + ' {';
+    lines.splice(idx + 1, 0, indent + '}');
+    return lines.join('\n');
+  }
+
+  function dissolveComposite(text, stateId) {
+    var lines = text.split('\n');
+    var idx = _findStateDeclLine(lines, stateId);
+    if (idx < 0) return text;
+    if (!/\{\s*$/.test(lines[idx])) return text;  // not a composite
+    var closeIdx = _findMatchingBrace(lines, idx);
+    if (closeIdx < 0) return text;
+    var bodyLines = lines.slice(idx + 1, closeIdx);
+    // Reduce indent of body lines by 2 spaces (leading 2 spaces removed)
+    var dedented = bodyLines.map(function(l) {
+      return l.replace(/^  /, '');
+    });
+    var before = lines.slice(0, idx);
+    var after = lines.slice(closeIdx + 1);
+    return before.concat(dedented).concat(after).join('\n');
+  }
+
+  function moveStateIntoComposite(text, stateId, targetCompositeId) {
+    var lines = text.split('\n');
+    var targetIdx = _findStateDeclLine(lines, targetCompositeId);
+    if (targetIdx < 0) return text;
+    if (!/\{\s*$/.test(lines[targetIdx])) return text;  // target is not a composite
+    var stateIdx = _findStateDeclLine(lines, stateId);
+    if (stateIdx < 0 || stateIdx === targetIdx) return text;
+    // Extract the state line, indent +2 spaces, insert right after target's open brace.
+    var stateLine = lines[stateIdx].trim();
+    var targetIndent = (lines[targetIdx].match(/^(\s*)/) || ['', ''])[1];
+    var newLine = targetIndent + '  ' + stateLine;
+    // Remove state line first, then re-insert at adjusted target idx
+    lines.splice(stateIdx, 1);
+    var newTargetIdx = stateIdx < targetIdx ? targetIdx - 1 : targetIdx;
+    lines.splice(newTargetIdx + 1, 0, newLine);
+    return lines.join('\n');
+  }
+
+  function moveStateOutOfComposite(text, stateId) {
+    var lines = text.split('\n');
+    var stateIdx = _findStateDeclLine(lines, stateId);
+    if (stateIdx < 0) return text;
+    // Find the enclosing composite: scan back for the most recent `state X {` whose matching brace is AFTER stateIdx.
+    var enclosingIdx = -1;
+    for (var i = stateIdx - 1; i >= 0; i--) {
+      var t1 = lines[i].trim();
+      if (t1.match(STATE_RE) && /\{\s*$/.test(t1)) {
+        var closeIdx = _findMatchingBrace(lines, i);
+        if (closeIdx >= 0 && closeIdx > stateIdx) {
+          enclosingIdx = i;
+          break;
+        }
+      }
+    }
+    if (enclosingIdx < 0) return text;  // not inside any composite
+    var compositeCloseIdx = _findMatchingBrace(lines, enclosingIdx);
+    if (compositeCloseIdx < 0) return text;
+    // Dedent the state line and move it to AFTER the closing brace.
+    var stateLine = lines[stateIdx].trim();
+    var compositeIndent = (lines[enclosingIdx].match(/^(\s*)/) || ['', ''])[1];
+    var newLine = compositeIndent + stateLine;
+    lines.splice(stateIdx, 1);  // remove from inside
+    var insertIdx = compositeCloseIdx; // closeIdx shifted by -1 after splice
+    lines.splice(insertIdx + 1, 0, newLine);  // insert after closing brace
+    return lines.join('\n');
   }
 
   function deleteNode(text, startLine, endLine) {
@@ -610,6 +784,39 @@ window.MA.modules.plantumlState = (function() {
 
   function _selectedOpt(o, sel) { return { value: o.value, label: o.label, selected: o.value === sel }; }
 
+  function _showAddTransitionModal(fromId, parsedData, ctx) {
+    var modal = document.getElementById('st-tx-modal');
+    var content = document.getElementById('st-tx-modal-content');
+    if (!modal || !content) return;
+    var P = window.MA.properties;
+    var stateOpts = (parsedData.states || []).map(function(s) { return { value: s.id, label: s.label || s.id }; });
+    var stateOptsWithPseudo = [{ value: '[*]', label: '[*]' }].concat(stateOpts);
+    content.innerHTML =
+      '<h3 style="margin:0 0 12px 0;color:var(--text-primary);">Outgoing transition from ' + window.MA.htmlUtils.escHtml(fromId) + '</h3>' +
+      P.selectFieldHtml('Target state', 'st-tx-to', stateOptsWithPseudo) +
+      P.fieldHtml('Trigger', 'st-tx-trig', '') +
+      P.fieldHtml('Guard', 'st-tx-guard', '') +
+      P.fieldHtml('Action', 'st-tx-act', '') +
+      '<div style="display:flex;gap:8px;margin-top:12px;">' +
+        '<button id="st-tx-cancel" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:8px;border-radius:4px;cursor:pointer;">キャンセル</button>' +
+        '<button id="st-tx-confirm" style="flex:1;background:var(--accent);border:none;color:#fff;padding:8px;border-radius:4px;cursor:pointer;">確定</button>' +
+      '</div>';
+    modal.style.display = 'flex';
+    function close() { modal.style.display = 'none'; content.innerHTML = ''; }
+    P.bindEvent('st-tx-cancel', 'click', close);
+    P.bindEvent('st-tx-confirm', 'click', function() {
+      var to = document.getElementById('st-tx-to').value;
+      var trig = document.getElementById('st-tx-trig').value || null;
+      var guard = document.getElementById('st-tx-guard').value || null;
+      var action = document.getElementById('st-tx-act').value || null;
+      if (!to) { close(); return; }
+      window.MA.history.pushHistory();
+      ctx.setMmdText(addTransition(ctx.getMmdText(), fromId, to, trig, guard, action));
+      ctx.onUpdate();
+      close();
+    });
+  }
+
   function _renderStateEdit(sel, parsedData, propsEl, ctx) {
     var P = window.MA.properties;
     var st = null;
@@ -620,6 +827,33 @@ window.MA.modules.plantumlState = (function() {
     var related = (parsedData.transitions || []).filter(function(tr) { return tr.from === st.id || tr.to === st.id; });
     var notes = (parsedData.notes || []).filter(function(n) { return n.targetId === st.id; });
 
+    // Compute candidate composites for "Move into" (exclude self and descendants)
+    var moveCandidates = (parsedData.states || []).filter(function(other) {
+      if (other.id === st.id) return false;
+      if (!(other.endLine && other.endLine > other.line)) return false;  // only composites
+      if (other.id.indexOf(st.id + '.') === 0) return false;  // exclude descendants
+      return true;
+    });
+    var moveIntoHtml = '';
+    if (!st.parentId && moveCandidates.length > 0) {
+      var moveOpts = '<option value="">-- 選択 --</option>';
+      for (var mci = 0; mci < moveCandidates.length; mci++) {
+        var mco = moveCandidates[mci];
+        moveOpts += '<option value="' + window.MA.htmlUtils.escHtml(mco.id) + '">' + window.MA.htmlUtils.escHtml(mco.label || mco.id) + '</option>';
+      }
+      moveIntoHtml =
+        '<div style="margin-top:4px;font-size:11px;display:flex;align-items:center;gap:4px;">' +
+          '<span style="color:var(--text-secondary);">Move into:</span>' +
+          '<select id="st-move-target" style="flex:1;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:3px 6px;border-radius:3px;font-size:11px;">' + moveOpts + '</select>' +
+          '<button id="st-move-into" style="font-size:11px;padding:3px 8px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">Move</button>' +
+        '</div>';
+    }
+    var moveOutHtml = '';
+    if (st.parentId) {
+      moveOutHtml = '<button id="st-move-out" style="font-size:11px;padding:3px 8px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;margin-top:4px;display:block;">↑ Move out of ' + window.MA.htmlUtils.escHtml(st.parentId) + '</button>';
+    }
+
+    var doDisplay = (st.do || '').replace(/\\n/g, '\n');
     var html =
       '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' +
       (st.stereotype ? st.stereotype + ' ' : '') + 'State (L' + st.line + ')</div>' +
@@ -632,6 +866,27 @@ window.MA.modules.plantumlState = (function() {
         { value: 'historyDeep', label: 'historyDeep', selected: st.stereotype === 'historydeep' }
       ]) +
       '<div style="font-size:11px;margin:4px 0;color:var(--text-secondary);">Parent: ' + (st.parentId || '(root)') + '</div>' +
+      // Behaviors section (StableState style: entry/exit single-line, do multi-line)
+      '<div style="border-top:1px solid var(--border);padding-top:6px;margin-top:6px;">' +
+        '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">Behaviors</div>' +
+        '<div style="margin-bottom:5px;">' +
+          '<input id="st-entry" placeholder="entry" value="' + window.MA.htmlUtils.escHtml(st.entry || '') + '" style="width:100%;box-sizing:border-box;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-family:Consolas,monospace;font-size:11px;">' +
+        '</div>' +
+        '<div style="margin-bottom:5px;">' +
+          '<textarea id="st-do" placeholder="do" style="width:100%;box-sizing:border-box;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-family:Consolas,monospace;font-size:11px;min-height:40px;resize:vertical;line-height:1.4;white-space:pre;">' + window.MA.htmlUtils.escHtml(doDisplay) + '</textarea>' +
+        '</div>' +
+        '<div style="margin-bottom:5px;">' +
+          '<input id="st-exit" placeholder="exit" value="' + window.MA.htmlUtils.escHtml(st.exit || '') + '" style="width:100%;box-sizing:border-box;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-family:Consolas,monospace;font-size:11px;">' +
+        '</div>' +
+      '</div>' +
+      // Composite ops (kind-aware buttons)
+      (st.endLine && st.endLine > st.line
+        ? '<button id="st-dissolve" style="font-size:11px;padding:4px 10px;background:var(--accent-red);border:none;color:#fff;border-radius:3px;cursor:pointer;margin-bottom:4px;">✕ Dissolve composite</button>'
+        : '<button id="st-convert" style="font-size:11px;padding:4px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;margin-bottom:4px;">+ Convert to composite</button>'
+      ) +
+      moveIntoHtml +
+      moveOutHtml +
+      '<button id="st-add-tx" style="font-size:11px;padding:4px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;margin-top:4px;display:block;">+ Outgoing transition</button>' +
       P.primaryButtonHtml('st-update', '更新');
     if (related.length > 0) {
       html += '<div style="border-top:1px solid var(--border);padding-top:6px;margin-top:6px;">' +
@@ -658,11 +913,31 @@ window.MA.modules.plantumlState = (function() {
 
     P.bindEvent('st-update', 'click', function() {
       window.MA.history.pushHistory();
-      ctx.setMmdText(updateState(ctx.getMmdText(), st.line, {
-        id: document.getElementById('st-id').value,
+      var newId = document.getElementById('st-id').value;
+      var src = ctx.getMmdText();
+      var out = updateState(src, st.line, {
+        id: newId,
         label: document.getElementById('st-label').value,
         stereotype: document.getElementById('st-stereo').value || null
-      }));
+      });
+      // Apply Behaviors. Use the (possibly renamed) id.
+      var bareId = newId.indexOf('.') >= 0 ? newId.split('.').pop() : newId;
+      var oldBareId = st.id.indexOf('.') >= 0 ? st.id.split('.').pop() : st.id;
+      // If state id was renamed, clean up orphan description lines under the
+      // old bare id first to avoid leaving stale entry/do/exit lines pointing
+      // to a now-nonexistent identifier.
+      if (oldBareId !== bareId) {
+        out = setStateBehavior(out, oldBareId, 'entry', '');
+        out = setStateBehavior(out, oldBareId, 'do', '');
+        out = setStateBehavior(out, oldBareId, 'exit', '');
+      }
+      var entryVal = document.getElementById('st-entry').value;
+      var doVal = document.getElementById('st-do').value;
+      var exitVal = document.getElementById('st-exit').value;
+      out = setStateBehavior(out, bareId, 'entry', entryVal);
+      out = setStateBehavior(out, bareId, 'do', doVal);
+      out = setStateBehavior(out, bareId, 'exit', exitVal);
+      ctx.setMmdText(out);
       ctx.onUpdate();
     });
     P.bindEvent('st-delete', 'click', function() {
@@ -671,6 +946,41 @@ window.MA.modules.plantumlState = (function() {
       ctx.setMmdText(deleteStateWithRefs(ctx.getMmdText(), st.id));
       window.MA.selection.clearSelection();
       ctx.onUpdate();
+    });
+    P.bindEvent('st-convert', 'click', function() {
+      window.MA.history.pushHistory();
+      ctx.setMmdText(convertToComposite(ctx.getMmdText(), st.id));
+      ctx.onUpdate();
+    });
+    P.bindEvent('st-dissolve', 'click', function() {
+      if (!confirm('composite を解体し、 子要素を top-level に出します。 続行しますか？')) return;
+      window.MA.history.pushHistory();
+      ctx.setMmdText(dissolveComposite(ctx.getMmdText(), st.id));
+      window.MA.selection.clearSelection();
+      ctx.onUpdate();
+    });
+    if (!st.parentId) {
+      P.bindEvent('st-move-into', 'click', function() {
+        var targetSel = document.getElementById('st-move-target');
+        if (!targetSel) return;
+        var target = targetSel.value;
+        if (!target) return;
+        window.MA.history.pushHistory();
+        ctx.setMmdText(moveStateIntoComposite(ctx.getMmdText(), st.id, target));
+        window.MA.selection.clearSelection();
+        ctx.onUpdate();
+      });
+    }
+    if (st.parentId) {
+      P.bindEvent('st-move-out', 'click', function() {
+        window.MA.history.pushHistory();
+        ctx.setMmdText(moveStateOutOfComposite(ctx.getMmdText(), st.id));
+        window.MA.selection.clearSelection();
+        ctx.onUpdate();
+      });
+    }
+    P.bindEvent('st-add-tx', 'click', function() {
+      _showAddTransitionModal(st.id, parsedData, ctx);
     });
     notes.forEach(function(n, idx) {
       P.bindEvent('st-note-del-' + idx, 'click', function(e) {
@@ -874,6 +1184,11 @@ window.MA.modules.plantumlState = (function() {
     updateState: updateState,
     updateTransition: updateTransition,
     updateNote: updateNote,
+    setStateBehavior: setStateBehavior,
+    convertToComposite: convertToComposite,
+    dissolveComposite: dissolveComposite,
+    moveStateIntoComposite: moveStateIntoComposite,
+    moveStateOutOfComposite: moveStateOutOfComposite,
     deleteNode: deleteNode,
     deleteStateWithRefs: deleteStateWithRefs,
     resolveInsertLine: resolveInsertLine,
@@ -881,9 +1196,9 @@ window.MA.modules.plantumlState = (function() {
     defaultInsertKind: 'state',
     capabilities: {
       overlaySelection: true,
-      hoverInsert: true,
+      hoverInsert: false,
       participantDrag: false,
-      showInsertForm: true,
+      showInsertForm: false,
       multiSelectConnect: false,
     },
   };

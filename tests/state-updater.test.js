@@ -131,6 +131,121 @@ describe('state update/delete ops', function() {
   });
 });
 
+describe('state setStateBehavior', function() {
+  test('inserts entry description line', function() {
+    var t = '@startuml\nstate Driving\n@enduml';
+    var out = stMod.setStateBehavior(t, 'Driving', 'entry', 'start_engine()');
+    expect(out).toContain('Driving : entry / start_engine()');
+  });
+  test('updates existing entry line', function() {
+    var t = '@startuml\nstate Driving\nDriving : entry / old()\n@enduml';
+    var out = stMod.setStateBehavior(t, 'Driving', 'entry', 'new()');
+    expect(out).toContain('Driving : entry / new()');
+    expect(out).not.toContain('old()');
+  });
+  test('removes line when value is empty', function() {
+    var t = '@startuml\nstate Driving\nDriving : entry / x()\n@enduml';
+    var out = stMod.setStateBehavior(t, 'Driving', 'entry', '');
+    expect(out).not.toContain('entry / x()');
+    expect(out).toContain('state Driving');
+  });
+  test('multi-line do uses backslash-n escape', function() {
+    var t = '@startuml\nstate Driving\n@enduml';
+    var out = stMod.setStateBehavior(t, 'Driving', 'do', 'a\nb\nc');
+    expect(out).toContain('Driving : do / a\\nb\\nc');
+  });
+  test('do prefix and entry prefix coexist', function() {
+    var t = '@startuml\nstate Driving\nDriving : entry / a\n@enduml';
+    var out = stMod.setStateBehavior(t, 'Driving', 'do', 'b');
+    expect(out).toContain('Driving : entry / a');
+    expect(out).toContain('Driving : do / b');
+  });
+});
+
+describe('state convertToComposite', function() {
+  test('converts simple state to empty composite', function() {
+    var t = '@startuml\nstate Driving\n@enduml';
+    var out = stMod.convertToComposite(t, 'Driving');
+    expect(out).toContain('state Driving {');
+    var lines = out.split('\n');
+    var hasClose = false;
+    for (var i = 0; i < lines.length; i++) {
+      if (lines[i].trim() === '}') { hasClose = true; break; }
+    }
+    expect(hasClose).toBe(true);
+  });
+  test('preserves label when converting', function() {
+    var t = '@startuml\nstate Driving as "運転中"\n@enduml';
+    var out = stMod.convertToComposite(t, 'Driving');
+    expect(out).toContain('"運転中"');
+    expect(out).toContain('{');
+  });
+  test('returns text unchanged when state already composite', function() {
+    var t = '@startuml\nstate Driving {\n}\n@enduml';
+    var out = stMod.convertToComposite(t, 'Driving');
+    expect(out).toBe(t);
+  });
+});
+
+describe('state dissolveComposite', function() {
+  test('removes composite wrapper, lifts children to top-level', function() {
+    var t = '@startuml\nstate Driving {\n  state Slow\n  state Fast\n}\n@enduml';
+    var out = stMod.dissolveComposite(t, 'Driving');
+    expect(out).not.toContain('state Driving {');
+    expect(out).not.toContain('}');
+    expect(out).toContain('state Slow');
+    expect(out).toContain('state Fast');
+  });
+  test('handles empty composite (just removes wrapper)', function() {
+    var t = '@startuml\nstate Driving {\n}\n@enduml';
+    var out = stMod.dissolveComposite(t, 'Driving');
+    expect(out).not.toContain('Driving');
+    expect(out).toContain('@startuml');
+    expect(out).toContain('@enduml');
+  });
+});
+
+describe('state moveStateIntoComposite', function() {
+  test('moves top-level state into existing composite', function() {
+    var t = '@startuml\nstate Slow\nstate Driving {\n  state Fast\n}\n@enduml';
+    var out = stMod.moveStateIntoComposite(t, 'Slow', 'Driving');
+    var lines = out.split('\n');
+    var topLevelSlow = false, insideSlow = false, insideDriving = false;
+    for (var i = 0; i < lines.length; i++) {
+      var t1 = lines[i];
+      if (t1 === 'state Slow') topLevelSlow = true;
+      if (t1.indexOf('state Driving {') >= 0) insideDriving = true;
+      if (insideDriving && /^\s+state Slow/.test(t1)) insideSlow = true;
+      if (t1.trim() === '}') insideDriving = false;
+    }
+    expect(topLevelSlow).toBe(false);
+    expect(insideSlow).toBe(true);
+  });
+  test('returns text unchanged if target composite not found', function() {
+    var t = '@startuml\nstate Slow\n@enduml';
+    var out = stMod.moveStateIntoComposite(t, 'Slow', 'NoSuchComposite');
+    expect(out).toBe(t);
+  });
+});
+
+describe('state moveStateOutOfComposite', function() {
+  test('moves composite-internal state to top-level', function() {
+    var t = '@startuml\nstate Driving {\n  state Slow\n  state Fast\n}\n@enduml';
+    var out = stMod.moveStateOutOfComposite(t, 'Driving.Slow');
+    var lines = out.split('\n');
+    var topLevelSlow = false, insideSlow = false, insideDriving = false;
+    for (var i = 0; i < lines.length; i++) {
+      var t1 = lines[i];
+      if (t1 === 'state Slow') topLevelSlow = true;
+      if (t1.indexOf('state Driving {') >= 0) insideDriving = true;
+      if (insideDriving && /^\s+state Slow/.test(t1)) insideSlow = true;
+      if (t1.trim() === '}') insideDriving = false;
+    }
+    expect(topLevelSlow).toBe(true);
+    expect(insideSlow).toBe(false);
+  });
+});
+
 if (prevWindow !== undefined) global.window = prevWindow;
 if (prevDocument !== undefined) global.document = prevDocument;
 depPaths.forEach(function(p) { try { delete require.cache[require.resolve(p)]; } catch (e) {} });
