@@ -154,6 +154,45 @@ describe('state parser: composite', function() {
   });
 });
 
+describe('state parser - description lines (entry/do/exit)', function() {
+  test('entry prefix routed to state.entry', function() {
+    var t = '@startuml\nstate Driving\nDriving : entry / start_engine()\n@enduml';
+    var p = stMod.parse(t);
+    var s = p.states[0];
+    expect(s.entry).toBe('start_engine()');
+    expect(s.do).toBe(null);
+    expect(s.exit).toBe(null);
+  });
+  test('exit prefix routed to state.exit', function() {
+    var t = '@startuml\nstate Driving\nDriving : exit / stop_engine()\n@enduml';
+    var p = stMod.parse(t);
+    expect(p.states[0].exit).toBe('stop_engine()');
+  });
+  test('do prefix routed to state.do (single-line)', function() {
+    var t = '@startuml\nstate Driving\nDriving : do / monitor()\n@enduml';
+    var p = stMod.parse(t);
+    expect(p.states[0].do).toBe('monitor()');
+  });
+  test('description without prefix routed to state.descriptions', function() {
+    var t = '@startuml\nstate Driving\nDriving : custom note\n@enduml';
+    var p = stMod.parse(t);
+    var s = p.states[0];
+    expect(s.entry).toBe(null);
+    expect(s.descriptions.length).toBe(1);
+    expect(s.descriptions[0]).toBe('custom note');
+  });
+  test('all three behaviors and a description coexist', function() {
+    var t = '@startuml\nstate Driving\nDriving : entry / a\nDriving : do / b\nDriving : exit / c\nDriving : note d\n@enduml';
+    var p = stMod.parse(t);
+    var s = p.states[0];
+    expect(s.entry).toBe('a');
+    expect(s.do).toBe('b');
+    expect(s.exit).toBe('c');
+    expect(s.descriptions.length).toBe(1);
+    expect(s.descriptions[0]).toBe('note d');
+  });
+});
+
 if (prevWindow !== undefined) global.window = prevWindow;
 if (prevDocument !== undefined) global.document = prevDocument;
 depPaths.forEach(function(p) { try { delete require.cache[require.resolve(p)]; } catch (e) {} });
