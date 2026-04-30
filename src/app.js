@@ -574,8 +574,22 @@ function init() {
       close();
     });
     document.getElementById('cfg-clear-all').addEventListener('click', function() {
-      if (!window.confirm('保存中の全 DSL を削除します。 続行しますか？')) return;
+      if (!window.confirm('保存中の全 DSL とエディタの編集中内容を消去し、 デフォルトテンプレに戻します。 続行しますか？')) return;
       if (window.MA.autoSave) window.MA.autoSave.clearAll();
+      // Reset editor + mmdText to the current type's template, so the
+      // in-memory DSL doesn't immediately re-save on the next input/
+      // type-switch/beforeunload (clearAll already cancels the pending
+      // debounce timer, but leaving stale mmdText would still let the
+      // very next save trigger re-create the keys we just deleted).
+      try { window.localStorage.removeItem('plantuml-diagram-type'); } catch (e) {}
+      mmdText = currentModule.template();
+      suppressSync = true;
+      editorEl.value = mmdText;
+      suppressSync = false;
+      try { currentParsed = currentModule.parse(mmdText); } catch (e) { currentParsed = null; }
+      window.MA.selection.clearSelection();
+      isFirstRender = true;
+      scheduleRefresh();
       refreshMetaInfo();
     });
     // Toggle the file-dir input visibility when the backend radio changes

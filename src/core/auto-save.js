@@ -181,6 +181,13 @@ window.MA.autoSave = (function() {
   }
 
   function clearAll() {
+    // Cancel any pending debounced save so the timer can't fire moments
+    // later and re-create the keys we're about to delete.
+    if (_timerId != null) {
+      try { clearTimeout(_timerId); } catch (e) {}
+      _timerId = null;
+    }
+    _pending = null;
     var keysToRemove = [];
     try {
       for (var i = 0; i < window.localStorage.length; i++) {

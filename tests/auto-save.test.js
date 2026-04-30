@@ -151,6 +151,16 @@ describe('autoSave save/restore', function() {
     expect(as.getConfig().debounceMs).toBe(2000);
   });
 
+  test('clearAll cancels pending debounced save (no immediate re-write)', function() {
+    // Schedule a save with the default debounce (1000ms). The timer is
+    // pending — clearAll should cancel it so a subsequent flush() finds
+    // nothing to write and the cleared keys stay cleared.
+    as.scheduleSave('plantuml-state', 'PENDING_DSL');
+    as.clearAll();
+    as.flush();
+    expect(as.restoreFor('plantuml-state')).toBe(null);
+  });
+
   test('disabled config: scheduleSave + flush are no-ops', function() {
     as.setConfig({ enabled: false });
     as.scheduleSave('plantuml-state', 'X');
