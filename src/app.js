@@ -67,12 +67,43 @@ function init() {
   mmdText = currentModule.template();
   editorEl.value = mmdText;
 
+  // ── Auto-save: boot-time restore ────────────────────────────────────
+  // Per spec: 'auto' silently loads, 'confirm' asks via native dialog,
+  // 'none' leaves the template alone. Skip restore if the saved DSL is
+  // identical to the current template (nothing meaningful to recover).
+  (function bootRestore() {
+    var as = window.MA.autoSave;
+    if (!as || !as.isAvailable()) return;
+    as.init();
+    var cfg = as.getConfig();
+    if (!cfg.enabled) return;
+    var diagramTypeKey = 'plantuml-sequence';
+    var saved = as.restoreFor(diagramTypeKey);
+    if (saved == null || saved === mmdText) return;
+    var apply = false;
+    if (cfg.restoreMode === 'auto') apply = true;
+    else if (cfg.restoreMode === 'confirm') apply = window.confirm('前回編集中の DSL が見つかりました。 復元しますか？');
+    if (apply) {
+      mmdText = saved;
+      suppressSync = true;
+      editorEl.value = mmdText;
+      suppressSync = false;
+    }
+  })();
+
   editorEl.addEventListener('input', function() {
     if (suppressSync) return;
     window.MA.history.pushHistory();
     mmdText = editorEl.value;
     updateLineNumbers();
     scheduleRefresh();
+    // Auto-save: schedule a debounced write of the current DSL keyed by
+    // the active diagram-type. The autoSave module no-ops internally if
+    // disabled or unavailable.
+    if (window.MA.autoSave) {
+      var dt = (document.getElementById('diagram-type') || {}).value || 'plantuml-sequence';
+      window.MA.autoSave.scheduleSave(dt, mmdText);
+    }
   });
 
   editorEl.addEventListener('scroll', function() {
