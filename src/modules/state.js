@@ -760,7 +760,11 @@ window.MA.modules.plantumlState = (function() {
     });
   }
 
-  function resolveInsertLine(overlayEl, y) {
+  function resolveInsertLine(overlayEl, x, y) {
+    // x is accepted for signature parity with activity module; state's
+    // overlay-rect layout (composite-state nesting) does not currently use
+    // X for branch disambiguation. Reserved for future v1.0.3+ branch-aware
+    // insertion in composite states.
     if (!overlayEl) return null;
     var rects = overlayEl.querySelectorAll('rect[data-type="state"]');
     if (rects.length === 0) return null;

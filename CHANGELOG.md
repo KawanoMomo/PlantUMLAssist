@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.2] - 2026-04-29
+
+### Fixed — Branch-aware insertion
+
+- **mid-insert で X 座標を考慮** — `resolveInsertLine(overlayEl, x, y)` をユークリッド距離での最近接 rect 選択に変更。 if/fork の水平分岐 composite で「else 列クリック → then 末尾に挿入される」 critical UX bug を解消
+- **Hover ガイドのカラム幅制限** — 解決された rect の X 範囲 ± 10px padding にガイド線を制限。 「どっちの branch に入るか」が視覚的に明示される
+- Sequence / State の `resolveInsertLine` も signature を `(overlayEl, x, y)` に揃え (X は無視)、 caller (`src/app.js`) を統一インターフェース化
+- Unit テスト: +4 (branch disambiguation 3 + rectX/rectWidth 1)、E2E テスト: +2 (UC-1 v1.0.2 guide span / branch-aware click)
+
+### Notes
+
+- 設計詳細: `docs/superpowers/specs/2026-04-29-activity-v1.0.2-design.md`
+- 実装計画: `docs/superpowers/plans/2026-04-29-activity-v1.0.2.md`
+- ユーザ指摘 「ここに挿入が行レベルで管理されるので分岐があるとどちらの分岐に挿入されるかわかりません」 を解消
+- v1.0.3+ 繰越: buildOverlay の composite 内 action overlay rect emit (v1.0.1 UC-2 + v1.0.2 UC-1 の skip 原因)、 State 図の同種 polish
+
 ## [1.0.1] - 2026-04-29
 
 ### Added — Activity Mid-flow Editing Polish

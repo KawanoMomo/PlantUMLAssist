@@ -245,7 +245,9 @@ window.MA.sequenceOverlay = (function() {
     };
   }
 
-  function resolveInsertLine(overlayEl, y) {
+  function resolveInsertLine(overlayEl, x, y) {
+    // x is accepted for signature parity with activity module; sequence's
+    // single-column lifeline layout does not need horizontal disambiguation.
     if (!overlayEl) return null;
     var msgRects = overlayEl.querySelectorAll('rect[data-type="message"]');
     if (msgRects.length === 0) return null;
