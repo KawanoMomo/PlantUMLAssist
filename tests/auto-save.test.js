@@ -95,6 +95,89 @@ describe('autoSave config', function() {
   });
 });
 
+describe('autoSave save/restore', function() {
+  beforeEach(function() { global.window.localStorage.__reset(); });
+
+  test('flush() writes the pending DSL to per-type key', function() {
+    as.scheduleSave('plantuml-state', '@startuml\nstate A\n@enduml');
+    as.flush();
+    expect(global.window.localStorage.getItem('plantuml-autosave-dsl-plantuml-state')).toBe('@startuml\nstate A\n@enduml');
+  });
+
+  test('restoreFor returns saved DSL', function() {
+    as.scheduleSave('plantuml-class', '@startuml\nclass X\n@enduml');
+    as.flush();
+    expect(as.restoreFor('plantuml-class')).toBe('@startuml\nclass X\n@enduml');
+  });
+
+  test('restoreFor returns null when no save', function() {
+    expect(as.restoreFor('plantuml-state')).toBe(null);
+  });
+
+  test('hasSavedFor reflects presence', function() {
+    expect(as.hasSavedFor('plantuml-state')).toBe(false);
+    as.scheduleSave('plantuml-state', 'x');
+    as.flush();
+    expect(as.hasSavedFor('plantuml-state')).toBe(true);
+  });
+
+  test('flush updates meta with timestamp + diagramType', function() {
+    var t0 = Date.now();
+    as.scheduleSave('plantuml-state', 'x');
+    as.flush();
+    var meta = as.getMeta();
+    expect(meta).not.toBe(null);
+    expect(meta.lastSavedType).toBe('plantuml-state');
+    expect(typeof meta.lastSavedAt).toBe('string');
+    expect(new Date(meta.lastSavedAt).getTime()).toBeGreaterThan(t0 - 1000);
+  });
+
+  test('per-type isolation: state save does not affect class', function() {
+    as.scheduleSave('plantuml-state', 'STATE_DSL');
+    as.flush();
+    as.scheduleSave('plantuml-class', 'CLASS_DSL');
+    as.flush();
+    expect(as.restoreFor('plantuml-state')).toBe('STATE_DSL');
+    expect(as.restoreFor('plantuml-class')).toBe('CLASS_DSL');
+  });
+
+  test('clearAll removes dsl keys and meta but keeps config', function() {
+    as.setConfig({ debounceMs: 2000 });
+    as.scheduleSave('plantuml-state', 'X');
+    as.flush();
+    as.clearAll();
+    expect(as.restoreFor('plantuml-state')).toBe(null);
+    expect(as.getMeta()).toBe(null);
+    expect(as.getConfig().debounceMs).toBe(2000);
+  });
+
+  test('disabled config: scheduleSave + flush are no-ops', function() {
+    as.setConfig({ enabled: false });
+    as.scheduleSave('plantuml-state', 'X');
+    as.flush();
+    expect(as.restoreFor('plantuml-state')).toBe(null);
+  });
+
+  test('save throws → does not propagate (quota exceeded simulation)', function() {
+    var origSet = global.window.localStorage.setItem;
+    global.window.localStorage.setItem = function(k, v) {
+      if (k.indexOf('plantuml-autosave-dsl-') === 0) throw new Error('QuotaExceeded');
+      return origSet.call(this, k, v);
+    };
+    expect(function() { as.scheduleSave('plantuml-state', 'X'); as.flush(); }).not.toThrow();
+    global.window.localStorage.setItem = origSet;
+  });
+
+  test('onSave listener fires after successful flush with meta', function() {
+    var calls = [];
+    as.onSave(function(meta) { calls.push(meta); });
+    as.scheduleSave('plantuml-state', 'X');
+    as.flush();
+    expect(calls.length).toBe(1);
+    expect(calls[0].lastSavedType).toBe('plantuml-state');
+  });
+});
+
 // jsdom window を run-tests.js が用意した sandbox window に戻す。
 // これをしないと後続 test ファイル (class-*, component-*, regex-parts 等) が
 // window.MA.* を見失って失敗する。
