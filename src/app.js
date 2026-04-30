@@ -507,9 +507,19 @@ function init() {
     var t = this.value;
     var mod = modules[t];
     if (!mod) return;
+    // Flush any pending autosave for the OUTGOING type so its latest edits
+    // are persisted before we leave it. wrapped in try/catch — never block
+    // a type switch on autosave failures.
+    if (window.MA.autoSave) {
+      try { window.MA.autoSave.flush(); } catch (e) { /* never block type switch */ }
+    }
     window.MA.history.pushHistory();
     currentModule = mod;  // explicit user choice overrides auto-detection
-    mmdText = mod.template();
+    // Per-type restore: if a saved DSL exists for the new type, prefer it
+    // over the default template. Type switch is an explicit user action so
+    // we silently restore (no confirm() prompt regardless of restoreMode).
+    var savedForType = window.MA.autoSave ? window.MA.autoSave.restoreFor(t) : null;
+    mmdText = (savedForType != null && savedForType !== '') ? savedForType : mod.template();
     suppressSync = true;
     editorEl.value = mmdText;
     suppressSync = false;
