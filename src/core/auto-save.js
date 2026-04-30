@@ -24,5 +24,6 @@ window.MA.autoSave = (function() {
     getConfig: function() { return {}; },
     setConfig: noop,
     isAvailable: isAvailable,
+    onSave: noop,
   };
 })();

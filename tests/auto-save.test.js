@@ -43,6 +43,7 @@ describe('autoSave skeleton', function() {
     expect(typeof as.getConfig).toBe('function');
     expect(typeof as.setConfig).toBe('function');
     expect(typeof as.isAvailable).toBe('function');
+    expect(typeof as.onSave).toBe('function');
   });
   test('isAvailable returns true when localStorage works', function() {
     expect(as.isAvailable()).toBe(true);
