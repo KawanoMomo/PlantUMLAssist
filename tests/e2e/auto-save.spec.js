@@ -5,7 +5,7 @@ const { gotoApp, getEditorText } = require('./helpers');
 async function clearAutoSave(page) {
   await page.evaluate(() => {
     Object.keys(localStorage).forEach(function(k) {
-      if (k.indexOf('plantuml-autosave-') === 0) localStorage.removeItem(k);
+      if (k.indexOf('plantuml-autosave-') === 0 || k === 'plantuml-diagram-type') localStorage.removeItem(k);
     });
   });
 }
@@ -13,11 +13,7 @@ async function clearAutoSave(page) {
 test.describe('Auto-save (v1.2.0)', () => {
   test('UC-as-1: edit → reload → confirm OK → DSL restored (cross-type round-trip)', async ({ page }) => {
     await gotoApp(page);
-    await page.evaluate(() => {
-      Object.keys(localStorage).forEach(function(k) {
-        if (k.indexOf('plantuml-autosave-') === 0 || k === 'plantuml-diagram-type') localStorage.removeItem(k);
-      });
-    });
+    await clearAutoSave(page);
     await page.reload();
     await page.waitForSelector('#preview-svg', { timeout: 5000 });
     // Switch to state mode (so we prove the cross-type round-trip)
