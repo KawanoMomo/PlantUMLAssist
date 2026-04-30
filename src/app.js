@@ -161,18 +161,26 @@ function init() {
       var target = e.target;
       if (target.getAttribute && target.getAttribute('data-type')) return;  // overlay click は既存 handler が処理
       if (!moduleHas('showInsertForm')) return;
-      if (!window.MA.sequenceOverlay || !window.MA.sequenceOverlay.resolveInsertLine) return;
+      // Resolve insert line via current module (v0.5.0 overlay-driven contract)
+      // Falls back to sequence-overlay for backward compat with sequence module.
+      var resolver = (currentModule && typeof currentModule.resolveInsertLine === 'function')
+        ? function(ovEl, yy) { return currentModule.resolveInsertLine(ovEl, yy); }
+        : (window.MA.sequenceOverlay && window.MA.sequenceOverlay.resolveInsertLine
+          ? window.MA.sequenceOverlay.resolveInsertLine
+          : null);
+      if (!resolver) return;
       var rect = overlayElForHover.getBoundingClientRect();
       if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) return;
       var z = zoom || 1;
       var y = (e.clientY - rect.top) / z;
-      var res = window.MA.sequenceOverlay.resolveInsertLine(overlayElForHover, y);
+      var res = resolver(overlayElForHover, y);
       if (!res) return;
+      var insertKind = (currentModule && currentModule.defaultInsertKind) || 'message';
       currentModule.showInsertForm({
         getMmdText: function() { return mmdText; },
         setMmdText: function(s) { mmdText = s; suppressSync = true; editorEl.value = s; suppressSync = false; },
         onUpdate: function() { scheduleRefresh(); },
-      }, res.line, res.position, 'message');
+      }, res.line, res.position, insertKind);
       clearHoverGuide();
     });
   }

@@ -134,6 +134,120 @@ describe('class member operations', function() {
   });
 });
 
+describe('class fmtNote', function() {
+  test('fmtNote 1-line for short single-line text', function() {
+    var line = clMod.fmtNote('left', 'Foo', 'short tip');
+    expect(line).toBe('note left of Foo : short tip');
+  });
+  test('fmtNote multi-line block for text with newline', function() {
+    var lines = clMod.fmtNote('right', 'Bar', 'first\nsecond');
+    expect(lines).toEqual(['note right of Bar', 'first', 'second', 'end note']);
+  });
+  test('fmtNote 1-line preserves spaces in text', function() {
+    var line = clMod.fmtNote('top', 'Foo', 'a b  c');
+    expect(line).toBe('note top of Foo : a b  c');
+  });
+  test('fmtNote multi-line preserves blank lines', function() {
+    var lines = clMod.fmtNote('left', 'Foo', 'a\n\nb');
+    expect(lines).toEqual(['note left of Foo', 'a', '', 'b', 'end note']);
+  });
+});
+
+describe('class addNote', function() {
+  test('addNote inserts 1-line note before @enduml', function() {
+    var t = '@startuml\nclass Foo\n@enduml';
+    var out = clMod.addNote(t, 'Foo', 'left', 'tip');
+    expect(out).toContain('note left of Foo : tip');
+    expect(out).toContain('@enduml');
+  });
+  test('addNote inserts multi-line block when text has newline', function() {
+    var t = '@startuml\nclass Foo\n@enduml';
+    var out = clMod.addNote(t, 'Foo', 'right', 'a\nb');
+    var ls = out.split('\n');
+    expect(ls.indexOf('note right of Foo') >= 0).toBe(true);
+    expect(ls.indexOf('end note') >= 0).toBe(true);
+  });
+  test('addNote default position is left', function() {
+    var t = '@startuml\nclass Foo\n@enduml';
+    var out = clMod.addNote(t, 'Foo', null, 'x');
+    expect(out).toContain('note left of Foo : x');
+  });
+});
+
+describe('class updateNote', function() {
+  test('updateNote changes position of 1-line note', function() {
+    var t = '@startuml\nclass Foo\nnote left of Foo : tip\n@enduml';
+    var out = clMod.updateNote(t, 3, 3, { position: 'right' });
+    expect(out).toContain('note right of Foo : tip');
+  });
+  test('updateNote changes text of 1-line note', function() {
+    var t = '@startuml\nclass Foo\nnote left of Foo : old\n@enduml';
+    var out = clMod.updateNote(t, 3, 3, { text: 'new' });
+    expect(out).toContain('note left of Foo : new');
+  });
+  test('updateNote converts 1-line to multi-line when text has newline', function() {
+    var t = '@startuml\nclass Foo\nnote left of Foo : single\n@enduml';
+    var out = clMod.updateNote(t, 3, 3, { text: 'a\nb' });
+    var ls = out.split('\n');
+    expect(ls.indexOf('note left of Foo') >= 0).toBe(true);
+    expect(ls.indexOf('end note') >= 0).toBe(true);
+  });
+  test('updateNote replaces multi-line block', function() {
+    var t = '@startuml\nclass Foo\nnote left of Foo\n  old1\n  old2\nend note\n@enduml';
+    var out = clMod.updateNote(t, 3, 6, { text: 'new1\nnew2' });
+    expect(out).toContain('new1');
+    expect(out).toContain('new2');
+    expect(out).not.toContain('old1');
+  });
+});
+
+describe('class deleteNote', function() {
+  test('deleteNote removes 1-line note', function() {
+    var t = '@startuml\nclass Foo\nnote left of Foo : x\n@enduml';
+    var out = clMod.deleteNote(t, 3, 3);
+    expect(out).not.toContain('note left of Foo');
+    expect(out).toContain('class Foo');
+  });
+  test('deleteNote removes multi-line block', function() {
+    var t = '@startuml\nclass Foo\nnote left of Foo\n  body\nend note\n@enduml';
+    var out = clMod.deleteNote(t, 3, 5);
+    expect(out).not.toContain('note left');
+    expect(out).not.toContain('end note');
+    expect(out).not.toContain('body');
+  });
+  test('deleteNote preserves surrounding lines', function() {
+    var t = '@startuml\nclass A\nnote left of A : tip\nclass B\n@enduml';
+    var out = clMod.deleteNote(t, 3, 3);
+    expect(out).toContain('class A');
+    expect(out).toContain('class B');
+  });
+});
+
+describe('class deleteClassWithNotes', function() {
+  test('deleting a class also removes its notes', function() {
+    var t = '@startuml\nclass Foo\nnote left of Foo : a\nnote right of Foo : b\nclass Bar\n@enduml';
+    var out = clMod.deleteClassWithNotes(t, 'Foo');
+    expect(out).not.toContain('class Foo');
+    expect(out).not.toContain('note left of Foo');
+    expect(out).not.toContain('note right of Foo');
+    expect(out).toContain('class Bar');
+  });
+  test('deleting a class with multi-line notes removes the entire note blocks', function() {
+    var t = '@startuml\nclass Foo\nnote left of Foo\n  body\nend note\nclass Bar\n@enduml';
+    var out = clMod.deleteClassWithNotes(t, 'Foo');
+    expect(out).not.toContain('class Foo');
+    expect(out).not.toContain('note left of Foo');
+    expect(out).not.toContain('end note');
+    expect(out).not.toContain('body');
+  });
+  test('deleteClassWithNotes preserves notes targeting other classes', function() {
+    var t = '@startuml\nclass Foo\nclass Bar\nnote left of Bar : keep\n@enduml';
+    var out = clMod.deleteClassWithNotes(t, 'Foo');
+    expect(out).not.toContain('class Foo');
+    expect(out).toContain('note left of Bar : keep');
+  });
+});
+
 describe('class line ops', function() {
   test('deleteLine removes class declaration', function() {
     var t = '@startuml\nclass Foo\n@enduml';
@@ -151,6 +265,75 @@ describe('class line ops', function() {
     expect(out).toContain('class Baz');
     expect(out).toContain('Baz -- Bar');
     expect(out).not.toContain('class Foo');
+  });
+});
+
+describe('class member move/delete by index (closure-stale safe)', function() {
+  test('moveMemberUpByIndex no-op for first member (does not swap with class declaration)', function() {
+    var t = '@startuml\nclass Foo {\n  + a : int\n  + b : int\n}\n@enduml';
+    var out = clMod.moveMemberUpByIndex(t, 'Foo', 0);
+    expect(out).toBe(t);
+    var ls = out.split('\n');
+    expect(ls[1]).toBe('class Foo {');
+  });
+  test('moveMemberUpByIndex swaps within class block (idx 1 → 0)', function() {
+    var t = '@startuml\nclass Foo {\n  + a : int\n  + b : int\n}\n@enduml';
+    var out = clMod.moveMemberUpByIndex(t, 'Foo', 1);
+    var ls = out.split('\n');
+    expect(ls[1]).toBe('class Foo {');
+    expect(ls[2]).toContain('+ b');
+    expect(ls[3]).toContain('+ a');
+    expect(ls[4]).toBe('}');
+  });
+  test('moveMemberDownByIndex no-op for last member', function() {
+    var t = '@startuml\nclass Foo {\n  + a : int\n  + b : int\n}\n@enduml';
+    var out = clMod.moveMemberDownByIndex(t, 'Foo', 1);
+    expect(out).toBe(t);
+  });
+  test('moveMemberDownByIndex swaps within class block (idx 0 → 1)', function() {
+    var t = '@startuml\nclass Foo {\n  + a : int\n  + b : int\n}\n@enduml';
+    var out = clMod.moveMemberDownByIndex(t, 'Foo', 0);
+    var ls = out.split('\n');
+    expect(ls[2]).toContain('+ b');
+    expect(ls[3]).toContain('+ a');
+    expect(ls[4]).toBe('}');
+  });
+  test('moveMember*ByIndex returns text unchanged for unknown classId', function() {
+    var t = '@startuml\nclass Foo {\n  + a : int\n}\n@enduml';
+    expect(clMod.moveMemberUpByIndex(t, 'Bar', 0)).toBe(t);
+    expect(clMod.moveMemberDownByIndex(t, 'Bar', 0)).toBe(t);
+  });
+  test('moveMemberUpByIndex with single-member class: no-op even on idx 0', function() {
+    var t = '@startuml\nclass Foo {\n  + a : int\n}\n@enduml';
+    var out = clMod.moveMemberUpByIndex(t, 'Foo', 0);
+    expect(out).toBe(t);
+    var ls = out.split('\n');
+    expect(ls[1]).toBe('class Foo {');
+    expect(ls[2]).toContain('+ a');
+    expect(ls[3]).toBe('}');
+  });
+  test('deleteMemberByIndex deletes the correct member by index', function() {
+    var t = '@startuml\nclass Foo {\n  + a : int\n  + b : int\n  + c : int\n}\n@enduml';
+    var out = clMod.deleteMemberByIndex(t, 'Foo', 1);
+    expect(out).toContain('+ a');
+    expect(out).toContain('+ c');
+    expect(out).not.toContain('+ b');
+  });
+  test('deleteMemberByIndex rapid same-index calls do NOT delete non-member lines (class brace preserved)', function() {
+    // Reproduces the rapid-click bug: 3-member class, delete idx 0 four times in a row.
+    // Without index-based safety: closure-captured m.line=stale would splice the closing '}'
+    // and break DSL. With fix: each call re-parses, returns unchanged when idx out of range.
+    var t = '@startuml\nclass Foo {\n  + a : int\n  + b : int\n  + c : int\n}\n@enduml';
+    var t1 = clMod.deleteMemberByIndex(t, 'Foo', 0);   // members: [b, c]
+    var t2 = clMod.deleteMemberByIndex(t1, 'Foo', 0);  // members: [c]
+    var t3 = clMod.deleteMemberByIndex(t2, 'Foo', 0);  // members: []
+    var t4 = clMod.deleteMemberByIndex(t3, 'Foo', 0);  // out-of-range: no-op
+    expect(t3).toContain('class Foo {');
+    expect(t3).toContain('}');
+    expect(t3).not.toContain('+ a');
+    expect(t3).not.toContain('+ b');
+    expect(t3).not.toContain('+ c');
+    expect(t4).toBe(t3);
   });
 });
 

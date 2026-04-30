@@ -185,6 +185,51 @@ describe('overlayBuilder.hitTestTopmost', function() {
   });
 });
 
+describe('overlayBuilder.extractMultiLineTextBBoxes', function() {
+  beforeEach(function() {
+    document.body.innerHTML = '<svg id="root" xmlns="http://www.w3.org/2000/svg"></svg>';
+  });
+  test('returns one entry per <text> in text-per-line mode', function() {
+    var svg = document.getElementById('root');
+    var g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    for (var i = 0; i < 3; i++) {
+      var t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      t.setAttribute('x', String(10 + i));
+      t.setAttribute('y', String(20 + i * 10));
+      t.textContent = 'line' + i;
+      g.appendChild(t);
+    }
+    svg.appendChild(g);
+    var lines = OB.extractMultiLineTextBBoxes(g);
+    expect(lines.length).toBe(3);
+    expect(lines[0].text).toBe('line0');
+    expect(lines[2].lineIndex).toBe(2);
+  });
+  test('returns empty array for empty group', function() {
+    var svg = document.getElementById('root');
+    var g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    svg.appendChild(g);
+    var lines = OB.extractMultiLineTextBBoxes(g);
+    expect(lines.length).toBe(0);
+  });
+  test('uses tspan-per-line mode', function() {
+    var svg = document.getElementById('root');
+    var g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    var t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    for (var i = 0; i < 2; i++) {
+      var ts = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+      ts.textContent = 'span' + i;
+      t.appendChild(ts);
+    }
+    g.appendChild(t);
+    svg.appendChild(g);
+    var lines = OB.extractMultiLineTextBBoxes(g, { mode: 'tspan-per-line' });
+    expect(lines.length).toBe(2);
+    expect(lines[0].text).toBe('span0');
+    expect(lines[1].text).toBe('span1');
+  });
+});
+
 describe('overlayBuilder.dedupById', function() {
   test('keeps first occurrence per data-id', function() {
     document.body.innerHTML = '<svg id="ov" xmlns="http://www.w3.org/2000/svg">' +

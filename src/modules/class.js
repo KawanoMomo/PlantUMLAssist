@@ -50,6 +50,17 @@ window.MA.modules.plantumlClass = (function() {
     '^namespace\\s+(?:"([^"]+)"|(' + ID + '))\\s*\\{\\s*$'
   );
 
+  var NOTE_INLINE_RE = new RegExp(
+    '^note\\s+(left|right|top|bottom)\\s+of\\s+(' + ID + ')\\s*:\\s*(.*)$',
+    'i'
+  );
+
+  var NOTE_BLOCK_OPEN_RE = new RegExp(
+    '^note\\s+(left|right|top|bottom)\\s+of\\s+(' + ID + ')\\s*$',
+    'i'
+  );
+  var END_NOTE_RE = /^end\s+note\s*$/i;
+
   // Relation arrow tokens, longest first to avoid prefix matches
   var RELATION_RE = new RegExp(
     '^(' + ID_WITH_GENERICS + '|"[^"]+")\\s+' +
@@ -58,16 +69,38 @@ window.MA.modules.plantumlClass = (function() {
   );
 
   function parse(text) {
-    var result = { meta: { title: '', startUmlLine: null }, elements: [], relations: [], groups: [] };
+    var result = { meta: { title: '', startUmlLine: null }, elements: [], relations: [], groups: [], notes: [] };
     if (!text || !text.trim()) return result;
     var lines = text.split('\n');
     var openClassStack = [];
     var packageStack = [];
     var packageCounter = 0;
+    var openNote = null;  // { startLine, position, targetId, bodyLines: [] }
 
     for (var i = 0; i < lines.length; i++) {
       var lineNum = i + 1;
-      var trimmed = lines[i].trim();
+      var rawLine = lines[i];
+      var trimmed = rawLine.trim();
+
+      // Inside multi-line note block: handle BEFORE empty/comment skip
+      if (openNote) {
+        if (END_NOTE_RE.test(trimmed)) {
+          result.notes.push({
+            kind: 'note',
+            id: '__n_' + result.notes.length,
+            position: openNote.position,
+            targetId: openNote.targetId,
+            text: openNote.bodyLines.join('\n'),
+            line: openNote.startLine,
+            endLine: lineNum,
+          });
+          openNote = null;
+          continue;
+        }
+        openNote.bodyLines.push(rawLine.replace(/^  /, ''));
+        continue;
+      }
+
       if (!trimmed || DU.isPlantumlComment(trimmed)) continue;
       if (RP.isStartUml(trimmed)) {
         if (result.meta.startUmlLine === null) result.meta.startUmlLine = lineNum;
@@ -135,6 +168,29 @@ window.MA.modules.plantumlClass = (function() {
       }
 
       if (openClassStack.length === 0) {
+        var noteMatch = trimmed.match(NOTE_INLINE_RE);
+        if (noteMatch) {
+          result.notes.push({
+            kind: 'note',
+            id: '__n_' + result.notes.length,
+            position: noteMatch[1].toLowerCase(),
+            targetId: noteMatch[2],
+            text: noteMatch[3],
+            line: lineNum,
+            endLine: lineNum,
+          });
+          continue;
+        }
+        var blockMatch = trimmed.match(NOTE_BLOCK_OPEN_RE);
+        if (blockMatch) {
+          openNote = {
+            startLine: lineNum,
+            position: blockMatch[1].toLowerCase(),
+            targetId: blockMatch[2],
+            bodyLines: [],
+          };
+          continue;
+        }
         var rm = trimmed.match(RELATION_RE);
         if (rm) {
           var arrow = rm[2];
@@ -320,6 +376,19 @@ window.MA.modules.plantumlClass = (function() {
   function fmtPackage(label) { return 'package "' + label + '" {'; }
   function fmtNamespace(label) { return 'namespace ' + label + ' {'; }
 
+  function fmtNote(position, targetId, text) {
+    var pos = (position || 'left').toLowerCase();
+    if (typeof text !== 'string') text = '';
+    if (text.indexOf('\n') < 0) {
+      return 'note ' + pos + ' of ' + targetId + ' : ' + text;
+    }
+    var bodyLines = text.split('\n');
+    var out = ['note ' + pos + ' of ' + targetId];
+    bodyLines.forEach(function(l) { out.push(l); });
+    out.push('end note');
+    return out;
+  }
+
   var insertBeforeEnd = window.MA.dslUpdater.insertBeforeEnd;
 
   function addClass(text, id, label, stereotype, generics) {
@@ -347,6 +416,16 @@ window.MA.modules.plantumlClass = (function() {
   }
   function addNamespace(text, label) {
     return insertBeforeEnd(insertBeforeEnd(text, fmtNamespace(label)), '}');
+  }
+  function addNote(text, targetId, position, noteText) {
+    var pos = position || 'left';
+    var formatted = fmtNote(pos, targetId, noteText || '');
+    if (Array.isArray(formatted)) {
+      var out = text;
+      formatted.forEach(function(l) { out = insertBeforeEnd(out, l); });
+      return out;
+    }
+    return insertBeforeEnd(text, formatted);
   }
 
   function _parseSingleLine(line) {
@@ -483,6 +562,42 @@ window.MA.modules.plantumlClass = (function() {
     return lines.join('\n');
   }
 
+  function _swapLines(text, lineA, lineB) {
+    var lines = text.split('\n');
+    var ia = lineA - 1, ib = lineB - 1;
+    if (ia < 0 || ib < 0 || ia >= lines.length || ib >= lines.length) return text;
+    var tmp = lines[ia]; lines[ia] = lines[ib]; lines[ib] = tmp;
+    return lines.join('\n');
+  }
+
+  function _findElementById(parsed, classId) {
+    for (var i = 0; i < parsed.elements.length; i++) {
+      if (parsed.elements[i].id === classId) return parsed.elements[i];
+    }
+    return null;
+  }
+
+  function moveMemberUpByIndex(text, classId, memberIndex) {
+    var elt = _findElementById(parse(text), classId);
+    if (!elt || !elt.members) return text;
+    if (memberIndex <= 0 || memberIndex >= elt.members.length) return text;
+    return _swapLines(text, elt.members[memberIndex - 1].line, elt.members[memberIndex].line);
+  }
+
+  function moveMemberDownByIndex(text, classId, memberIndex) {
+    var elt = _findElementById(parse(text), classId);
+    if (!elt || !elt.members) return text;
+    if (memberIndex < 0 || memberIndex >= elt.members.length - 1) return text;
+    return _swapLines(text, elt.members[memberIndex].line, elt.members[memberIndex + 1].line);
+  }
+
+  function deleteMemberByIndex(text, classId, memberIndex) {
+    var elt = _findElementById(parse(text), classId);
+    if (!elt || !elt.members) return text;
+    if (memberIndex < 0 || memberIndex >= elt.members.length) return text;
+    return deleteMember(text, elt.members[memberIndex].line);
+  }
+
   var moveLineUp = window.MA.dslUpdater.moveLineUp;
   var moveLineDown = window.MA.dslUpdater.moveLineDown;
   var renameWithRefs = window.MA.dslUpdater.renameWithRefs;
@@ -492,6 +607,36 @@ window.MA.modules.plantumlClass = (function() {
     var idx = lineNum - 1;
     if (idx < 0 || idx >= lines.length) return text;
     lines.splice(idx, 1);
+    return lines.join('\n');
+  }
+
+  function deleteClassWithNotes(text, classId) {
+    var parsed = parse(text);
+    // Find target element
+    var elt = null;
+    for (var i = 0; i < parsed.elements.length; i++) {
+      if (parsed.elements[i].id === classId) { elt = parsed.elements[i]; break; }
+    }
+    if (!elt) return text;
+
+    // Collect line ranges to delete: element + its notes (descending order to avoid index shift)
+    var ranges = [];
+    var elStart = elt.line;
+    var elEnd = elt.endLine && elt.endLine > elt.line ? elt.endLine : elt.line;
+    ranges.push({ start: elStart, end: elEnd });
+    parsed.notes.forEach(function(n) {
+      if (n.targetId === classId) {
+        ranges.push({ start: n.line, end: n.endLine });
+      }
+    });
+    ranges.sort(function(a, b) { return b.start - a.start; });
+
+    var lines = text.split('\n');
+    ranges.forEach(function(r) {
+      var startIdx = r.start - 1;
+      var endIdx = r.end - 1;
+      lines.splice(startIdx, endIdx - startIdx + 1);
+    });
     return lines.join('\n');
   }
 
@@ -546,6 +691,55 @@ window.MA.modules.plantumlClass = (function() {
     return lines.join('\n');
   }
 
+  function updateNote(text, startLine, endLine, fields) {
+    var lines = text.split('\n');
+    var startIdx = startLine - 1;
+    var endIdx = endLine - 1;
+    if (startIdx < 0 || startIdx >= lines.length) return text;
+
+    // Parse current note state from start line
+    var startTrimmed = lines[startIdx].trim();
+    var inlineMatch = startTrimmed.match(NOTE_INLINE_RE);
+    var blockMatch = startTrimmed.match(NOTE_BLOCK_OPEN_RE);
+    var current = null;
+    if (inlineMatch) {
+      current = { position: inlineMatch[1].toLowerCase(), targetId: inlineMatch[2], text: inlineMatch[3] };
+    } else if (blockMatch) {
+      var bodyLines = [];
+      for (var k = startIdx + 1; k <= endIdx - 1; k++) {
+        bodyLines.push(lines[k].replace(/^  /, ''));
+      }
+      current = { position: blockMatch[1].toLowerCase(), targetId: blockMatch[2], text: bodyLines.join('\n') };
+    }
+    if (!current) return text;
+
+    var newPos = fields.position != null ? fields.position : current.position;
+    var newText = fields.text != null ? fields.text : current.text;
+
+    var formatted = fmtNote(newPos, current.targetId, newText);
+    var newLines;
+    if (Array.isArray(formatted)) {
+      newLines = formatted;
+    } else {
+      newLines = [formatted];
+    }
+
+    // Replace [startIdx..endIdx] with newLines
+    var before = lines.slice(0, startIdx);
+    var after = lines.slice(endIdx + 1);
+    return before.concat(newLines).concat(after).join('\n');
+  }
+
+  function deleteNote(text, startLine, endLine) {
+    var lines = text.split('\n');
+    var startIdx = startLine - 1;
+    var endIdx = endLine - 1;
+    if (startIdx < 0 || startIdx >= lines.length) return text;
+    var before = lines.slice(0, startIdx);
+    var after = lines.slice(endIdx + 1);
+    return before.concat(after).join('\n');
+  }
+
   function template() {
     return [
       '@startuml',
@@ -565,6 +759,31 @@ window.MA.modules.plantumlClass = (function() {
 
   function renderProps(selData, parsedData, propsEl, ctx) {
     if (!propsEl) return;
+    // Custom dispatch for 'note' selection
+    if (selData && selData.length === 1 && selData[0].type === 'note') {
+      var notesArr = parsedData.notes || [];
+      var note = null;
+      for (var i = 0; i < notesArr.length; i++) {
+        if (notesArr[i].id === selData[0].id) { note = notesArr[i]; break; }
+      }
+      if (note) {
+        _renderNoteEdit(note, parsedData, propsEl, ctx);
+        return;
+      }
+    }
+    // Custom dispatch for 'member' selection — render parent class with focused member
+    if (selData && selData.length === 1 && selData[0].type === 'member') {
+      var sel = selData[0];
+      var parent = null;
+      var elsArr = parsedData.elements || [];
+      for (var j = 0; j < elsArr.length; j++) {
+        if (elsArr[j].id === sel.parentId) { parent = elsArr[j]; break; }
+      }
+      if (parent) {
+        _renderElementEdit(parent, parsedData, propsEl, ctx, { focusMemberIndex: sel.memberIndex });
+        return;
+      }
+    }
     window.MA.propsRenderer.renderByDispatch(selData, parsedData, propsEl, {
       onNoSelection: function(p, e) { _renderNoSelection(p, e, ctx); },
       onElement: function(elt, p, e) { _renderElementEdit(elt, p, e, ctx); },
@@ -598,6 +817,7 @@ window.MA.modules.plantumlClass = (function() {
           { value: 'package',   label: 'Package境界' },
           { value: 'namespace', label: 'Namespace' },
           { value: 'relation',  label: 'Relation (関係)' },
+          { value: 'note',      label: 'Note (注釈)' },
         ]) +
         '<div id="cl-tail-detail" style="margin-top:6px;"></div>' +
       '</div>';
@@ -643,6 +863,22 @@ window.MA.modules.plantumlClass = (function() {
           P.selectFieldHtml('To', 'cl-tail-to', allOpts) +
           P.fieldHtml('Label', 'cl-tail-rlabel', '', '任意') +
           P.primaryButtonHtml('cl-tail-add', '+ Relation 追加');
+      } else if (kind === 'note') {
+        var noteTargets = elements.map(function(e) { return { value: e.id, label: e.label || e.id }; });
+        if (noteTargets.length === 0) noteTargets = [{ value: '', label: '（要素なし）' }];
+        html2 =
+          P.selectFieldHtml('Target', 'cl-tail-ntarget', noteTargets) +
+          P.selectFieldHtml('Position', 'cl-tail-npos', [
+            { value: 'left', label: 'Left', selected: true },
+            { value: 'right', label: 'Right' },
+            { value: 'top', label: 'Top' },
+            { value: 'bottom', label: 'Bottom' },
+          ]) +
+          '<div style="margin-bottom:6px;">' +
+            '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Text (改行可)</label>' +
+            '<textarea id="cl-tail-ntext" style="width:100%;min-height:60px;font-family:inherit;font-size:12px;"></textarea>' +
+          '</div>' +
+          P.primaryButtonHtml('cl-tail-add', '+ Note 追加');
       }
       detailEl.innerHTML = html2;
 
@@ -680,6 +916,13 @@ window.MA.modules.plantumlClass = (function() {
           var rkind = document.getElementById('cl-tail-rkind').value;
           window.MA.history.pushHistory();
           out = addRelation(t, rkind, fr, to, document.getElementById('cl-tail-rlabel').value.trim() || null);
+        } else if (k === 'note') {
+          var ntg = document.getElementById('cl-tail-ntarget').value;
+          if (!ntg) { alert('Target 必須'); return; }
+          var npos = document.getElementById('cl-tail-npos').value;
+          var ntext = document.getElementById('cl-tail-ntext').value || '';
+          window.MA.history.pushHistory();
+          out = addNote(t, ntg, npos, ntext);
         }
         ctx.setMmdText(out);
         ctx.onUpdate();
@@ -689,9 +932,10 @@ window.MA.modules.plantumlClass = (function() {
     renderTailDetail();
   }
 
-  function _renderElementEdit(element, parsedData, propsEl, ctx) {
+  function _renderElementEdit(element, parsedData, propsEl, ctx, opts) {
     var P = window.MA.properties;
-    if (element.kind === 'enum') return _renderEnumEdit(element, parsedData, propsEl, ctx);
+    if (element.kind === 'enum') return _renderEnumEdit(element, parsedData, propsEl, ctx, opts);
+    var focusIdx = opts && typeof opts.focusMemberIndex === 'number' ? opts.focusMemberIndex : -1;
 
     var kindLabel = element.kind === 'interface' ? 'Interface'
                   : element.kind === 'abstract' ? 'Abstract Class'
@@ -714,28 +958,49 @@ window.MA.modules.plantumlClass = (function() {
         '</div>' +
       '</div>';
 
+    // Members (uniform loop across attributes + methods)
     if (element.members && element.members.length > 0) {
-      var attrs = element.members.filter(function(m) { return m.kind === 'attribute'; });
-      var methods = element.members.filter(function(m) { return m.kind === 'method'; });
-      html += '<div style="border-top:1px solid var(--border);padding-top:10px;margin-top:10px;">' +
-              '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">Attributes</label>';
-      attrs.forEach(function(a) {
-        html += '<div style="font-size:11px;margin:3px 0;">' +
-                window.MA.htmlUtils.escHtml((a.visibility || '') + ' ' + (a.static ? '{static} ' : '') + a.name + (a.type ? ' : ' + a.type : '')) +
-                ' <button class="cl-mem-del" data-line="' + a.line + '" style="background:var(--accent-red);color:#fff;border:none;padding:2px 6px;font-size:10px;border-radius:3px;cursor:pointer;">✕</button>' +
-                '</div>';
+      html += '<div style="border-top:1px solid var(--border);padding-top:6px;margin-top:6px;">' +
+              '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">Members</div>';
+      element.members.forEach(function(m, mi) {
+        var isSel = mi === focusIdx;
+        var rowCls = isSel ? 'cl-member-row cl-member-selected' : 'cl-member-row';
+        var rowStyle = isSel ? 'background:var(--accent-bg, rgba(0,128,255,0.15));padding:4px;border-radius:3px;' : 'padding:2px;';
+        var preview = (m.visibility || '') + ' ' + m.name +
+                      (m.kind === 'method' ? '(' + (m.params || '') + ')' : '') +
+                      (m.type ? ' : ' + m.type : '');
+        html += '<div class="' + rowCls + '" data-member-idx="' + mi + '" style="' + rowStyle + 'font-size:11px;margin-bottom:2px;">' +
+                  window.MA.htmlUtils.escHtml(preview) +
+                  ' <button id="cl-mem-up-' + mi + '" data-line="' + m.line + '">↑</button>' +
+                  ' <button id="cl-mem-down-' + mi + '" data-line="' + m.line + '">↓</button>' +
+                  ' <button id="cl-mem-del-' + mi + '" data-line="' + m.line + '">✕</button>';
+        if (isSel) {
+          // Inline edit fields (only for selected row)
+          html += '<div style="margin-top:4px;padding:4px;background:var(--bg);border:1px solid var(--border);">' +
+                    P.selectFieldHtml('Visibility', 'cl-mem-vis-' + mi, [
+                      { value: '+', label: '+', selected: m.visibility === '+' },
+                      { value: '-', label: '-', selected: m.visibility === '-' },
+                      { value: '#', label: '#', selected: m.visibility === '#' },
+                      { value: '~', label: '~', selected: m.visibility === '~' },
+                      { value: '',  label: '(none)', selected: !m.visibility }
+                    ]) +
+                    P.fieldHtml('Name', 'cl-mem-name-' + mi, m.name) +
+                    P.fieldHtml('Type', 'cl-mem-type-' + mi, m.type || '') +
+                    (m.kind === 'method' ? P.fieldHtml('Params', 'cl-mem-params-' + mi, m.params || '') : '') +
+                    '<div style="margin-top:4px;">' +
+                      '<label><input type="checkbox" id="cl-mem-static-' + mi + '"' + (m.static ? ' checked' : '') + '> static</label>' +
+                      (m.kind === 'method' ? ' <label><input type="checkbox" id="cl-mem-abstract-' + mi + '"' + (m.abstract ? ' checked' : '') + '> abstract</label>' : '') +
+                    '</div>' +
+                    P.primaryButtonHtml('cl-mem-update-' + mi, '更新') +
+                  '</div>';
+        }
+        html += '</div>';
       });
-      html += '<button id="cl-add-attr" style="font-size:11px;padding:4px 10px;margin-top:4px;">+ Attribute 追加</button>' +
+      html += '<button id="cl-add-attr" style="font-size:11px;padding:4px 10px;margin-top:4px;">+ Attribute 追加</button> ' +
+              '<button id="cl-add-method" style="font-size:11px;padding:4px 10px;margin-top:4px;">+ Method 追加</button>' +
               '<div id="cl-add-attr-form" style="display:none;margin-top:6px;"></div>' +
-              '<label style="display:block;font-size:10px;color:var(--accent);margin:10px 0 4px;font-weight:bold;">Methods</label>';
-      methods.forEach(function(m) {
-        html += '<div style="font-size:11px;margin:3px 0;">' +
-                window.MA.htmlUtils.escHtml((m.visibility || '') + ' ' + (m.static ? '{static} ' : (m.abstract ? '{abstract} ' : '')) + m.name + '(' + (m.params || '') + ')' + (m.type ? ' : ' + m.type : '')) +
-                ' <button class="cl-mem-del" data-line="' + m.line + '" style="background:var(--accent-red);color:#fff;border:none;padding:2px 6px;font-size:10px;border-radius:3px;cursor:pointer;">✕</button>' +
-                '</div>';
-      });
-      html += '<button id="cl-add-method" style="font-size:11px;padding:4px 10px;margin-top:4px;">+ Method 追加</button>' +
-              '<div id="cl-add-method-form" style="display:none;margin-top:6px;"></div></div>';
+              '<div id="cl-add-method-form" style="display:none;margin-top:6px;"></div>' +
+              '</div>';
     } else {
       html += '<div style="border-top:1px solid var(--border);padding-top:10px;margin-top:10px;">' +
               '<button id="cl-add-attr" style="font-size:11px;padding:4px 10px;">+ Attribute 追加</button> ' +
@@ -743,6 +1008,27 @@ window.MA.modules.plantumlClass = (function() {
               '<div id="cl-add-attr-form" style="display:none;margin-top:6px;"></div>' +
               '<div id="cl-add-method-form" style="display:none;margin-top:6px;"></div></div>';
     }
+
+    // Notes section
+    var classNotes = (parsedData.notes || []).filter(function(n) { return n.targetId === element.id; });
+    html += '<div style="border-top:1px solid var(--border);padding-top:8px;margin-top:8px;">' +
+            '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">Notes</div>';
+    if (classNotes.length === 0) {
+      html += '<div style="font-size:11px;color:var(--text-secondary);font-style:italic;">（このクラスへの note なし）</div>';
+    } else {
+      classNotes.forEach(function(n, idx) {
+        var preview = (n.text || '').replace(/\n/g, ' ⏎ ').slice(0, 40);
+        if ((n.text || '').length > 40) preview += '...';
+        html += '<div style="display:flex;align-items:center;gap:4px;font-size:11px;margin-bottom:2px;">' +
+                  '<span style="flex:1;">' + n.position + ' "' + preview.replace(/[<>&]/g, '') + '" (L' + n.line + ')</span>' +
+                  '<button id="cl-note-edit-' + idx + '" data-line="' + n.line + '" data-end="' + n.endLine + '" data-id="' + n.id + '">edit</button>' +
+                  '<button id="cl-note-del-' + idx + '" data-line="' + n.line + '" data-end="' + n.endLine + '">✕</button>' +
+                '</div>';
+      });
+    }
+    html += '<div id="cl-add-note-form" style="margin-top:6px;"></div>' +
+            '<button id="cl-add-note-btn" style="margin-top:4px;">+ Note 追加</button>' +
+          '</div>';
 
     propsEl.innerHTML = html;
 
@@ -780,17 +1066,84 @@ window.MA.modules.plantumlClass = (function() {
       ctx.onUpdate();
     });
     P.bindEvent('cl-delete', 'click', function() {
-      if (!confirm('この行を削除しますか？')) return;
+      if (!confirm('このクラスと紐付く note も削除します。続行しますか？')) return;
       window.MA.history.pushHistory();
-      ctx.setMmdText(deleteLine(ctx.getMmdText(), element.line));
+      ctx.setMmdText(deleteClassWithNotes(ctx.getMmdText(), element.id));
       window.MA.selection.clearSelection();
       ctx.onUpdate();
     });
-    P.bindAllByClass(propsEl, 'cl-mem-del', function(btn) {
-      var ln = parseInt(btn.getAttribute('data-line'), 10);
-      window.MA.history.pushHistory();
-      ctx.setMmdText(deleteMember(ctx.getMmdText(), ln));
-      ctx.onUpdate();
+    // Per-member row handlers (click row to focus, ↑↓✕ buttons, update button when focused)
+    (element.members || []).forEach(function(m, mi) {
+      // Row click → switch selection to that member (if not already focused)
+      var row = propsEl.querySelector('.cl-member-row[data-member-idx="' + mi + '"]');
+      if (row && mi !== focusIdx) {
+        row.style.cursor = 'pointer';
+        row.addEventListener('click', function(e) {
+          // Avoid hijacking clicks on inner buttons
+          if (e.target && e.target.tagName === 'BUTTON') return;
+          window.MA.selection.setSelected([{
+            type: 'member',
+            id: element.id + '::__m_' + mi,
+            parentId: element.id,
+            parentKind: element.kind,
+            memberIndex: mi,
+            memberKind: m.kind,
+            line: m.line
+          }]);
+        });
+      }
+      P.bindEvent('cl-mem-up-' + mi, 'click', function(e) {
+        if (e && e.stopPropagation) e.stopPropagation();
+        window.MA.history.pushHistory();
+        ctx.setMmdText(moveMemberUpByIndex(ctx.getMmdText(), element.id, mi));
+        ctx.onUpdate();
+      });
+      P.bindEvent('cl-mem-down-' + mi, 'click', function(e) {
+        if (e && e.stopPropagation) e.stopPropagation();
+        window.MA.history.pushHistory();
+        ctx.setMmdText(moveMemberDownByIndex(ctx.getMmdText(), element.id, mi));
+        ctx.onUpdate();
+      });
+      P.bindEvent('cl-mem-del-' + mi, 'click', function(e) {
+        if (e && e.stopPropagation) e.stopPropagation();
+        window.MA.history.pushHistory();
+        ctx.setMmdText(deleteMemberByIndex(ctx.getMmdText(), element.id, mi));
+        window.MA.selection.clearSelection();
+        ctx.onUpdate();
+      });
+      if (mi === focusIdx) {
+        P.bindEvent('cl-mem-update-' + mi, 'click', function() {
+          var vis = document.getElementById('cl-mem-vis-' + mi).value || null;
+          var name = document.getElementById('cl-mem-name-' + mi).value;
+          var typ = document.getElementById('cl-mem-type-' + mi).value;
+          var stat = !!document.getElementById('cl-mem-static-' + mi).checked;
+          window.MA.history.pushHistory();
+          var t = ctx.getMmdText();
+          if (m.kind === 'attribute') {
+            t = updateAttribute(t, m.line, 'visibility', vis);
+            t = updateAttribute(t, m.line, 'name', name);
+            t = updateAttribute(t, m.line, 'type', typ);
+            t = updateAttribute(t, m.line, 'static', stat);
+            ctx.setMmdText(t);
+          } else if (m.kind === 'method') {
+            var pms = document.getElementById('cl-mem-params-' + mi).value;
+            var abs = !!document.getElementById('cl-mem-abstract-' + mi).checked;
+            t = updateMethod(t, m.line, 'visibility', vis);
+            t = updateMethod(t, m.line, 'name', name);
+            t = updateMethod(t, m.line, 'params', pms);
+            t = updateMethod(t, m.line, 'type', typ);
+            t = updateMethod(t, m.line, 'static', stat);
+            t = updateMethod(t, m.line, 'abstract', abs);
+            ctx.setMmdText(t);
+          }
+          ctx.onUpdate();
+        });
+        // Auto-scroll selected row into view
+        setTimeout(function() {
+          var r = propsEl.querySelector('.cl-member-selected');
+          if (r && r.scrollIntoView) r.scrollIntoView({ block: 'nearest' });
+        }, 0);
+      }
     });
     P.bindEvent('cl-add-attr', 'click', function() {
       document.getElementById('cl-add-attr-form').style.display = 'block';
@@ -844,9 +1197,49 @@ window.MA.modules.plantumlClass = (function() {
         ctx.onUpdate();
       });
     });
+
+    classNotes.forEach(function(n, idx) {
+      P.bindEvent('cl-note-edit-' + idx, 'click', function(e) {
+        var btn = e.currentTarget;
+        var ln = parseInt(btn.getAttribute('data-line'), 10);
+        // Switch to note selection (selection.setSelected triggers synchronous renderProps via init callback)
+        window.MA.selection.setSelected([{ type: 'note', id: btn.getAttribute('data-id'), line: ln }]);
+      });
+      P.bindEvent('cl-note-del-' + idx, 'click', function(e) {
+        var btn = e.currentTarget;
+        var sl = parseInt(btn.getAttribute('data-line'), 10);
+        var el = parseInt(btn.getAttribute('data-end'), 10);
+        window.MA.history.pushHistory();
+        ctx.setMmdText(deleteNote(ctx.getMmdText(), sl, el));
+        ctx.onUpdate();
+      });
+    });
+
+    P.bindEvent('cl-add-note-btn', 'click', function() {
+      var f = document.getElementById('cl-add-note-form');
+      f.innerHTML =
+        P.selectFieldHtml('Position', 'cl-new-npos', [
+          { value: 'left', label: 'Left', selected: true },
+          { value: 'right', label: 'Right' },
+          { value: 'top', label: 'Top' },
+          { value: 'bottom', label: 'Bottom' },
+        ]) +
+        '<div style="margin-bottom:6px;">' +
+          '<label style="display:block;font-size:10px;color:var(--text-secondary);">Text</label>' +
+          '<textarea id="cl-new-ntext" style="width:100%;min-height:50px;"></textarea>' +
+        '</div>' +
+        P.primaryButtonHtml('cl-new-nadd', '+ 追加');
+      P.bindEvent('cl-new-nadd', 'click', function() {
+        var pos = document.getElementById('cl-new-npos').value;
+        var txt = document.getElementById('cl-new-ntext').value || '';
+        window.MA.history.pushHistory();
+        ctx.setMmdText(addNote(ctx.getMmdText(), element.id, pos, txt));
+        ctx.onUpdate();
+      });
+    });
   }
 
-  function _renderEnumEdit(element, parsedData, propsEl, ctx) {
+  function _renderEnumEdit(element, parsedData, propsEl, ctx, opts) {
     var P = window.MA.properties;
     var html =
       '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Class Diagram</div>' +
@@ -879,9 +1272,9 @@ window.MA.modules.plantumlClass = (function() {
       ctx.onUpdate();
     });
     P.bindEvent('cl-delete', 'click', function() {
-      if (!confirm('この enum を削除しますか？')) return;
+      if (!confirm('このクラスと紐付く note も削除します。続行しますか？')) return;
       window.MA.history.pushHistory();
-      ctx.setMmdText(deleteLine(ctx.getMmdText(), element.line));
+      ctx.setMmdText(deleteClassWithNotes(ctx.getMmdText(), element.id));
       window.MA.selection.clearSelection();
       ctx.onUpdate();
     });
@@ -945,6 +1338,40 @@ window.MA.modules.plantumlClass = (function() {
     P.bindEvent('cl-rel-delete', 'click', function() {
       window.MA.history.pushHistory();
       ctx.setMmdText(deleteLine(ctx.getMmdText(), relation.line));
+      window.MA.selection.clearSelection();
+      ctx.onUpdate();
+    });
+  }
+
+  function _renderNoteEdit(note, parsedData, propsEl, ctx) {
+    var P = window.MA.properties;
+    var html =
+      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">Note (target: ' + note.targetId + ', L' + note.line + ')</div>' +
+      '<div style="margin-bottom:6px;font-size:11px;"><b>Target:</b> ' + note.targetId + ' <span style="color:var(--text-secondary);">(read-only)</span></div>' +
+      P.selectFieldHtml('Position', 'cl-note-pos', [
+        { value: 'left', label: 'Left', selected: note.position === 'left' },
+        { value: 'right', label: 'Right', selected: note.position === 'right' },
+        { value: 'top', label: 'Top', selected: note.position === 'top' },
+        { value: 'bottom', label: 'Bottom', selected: note.position === 'bottom' },
+      ]) +
+      '<div style="margin-bottom:6px;">' +
+        '<label style="display:block;font-size:10px;color:var(--text-secondary);">Text</label>' +
+        '<textarea id="cl-note-text" style="width:100%;min-height:80px;">' + (note.text || '').replace(/[<>&]/g, '') + '</textarea>' +
+      '</div>' +
+      P.primaryButtonHtml('cl-note-update', '更新') +
+      P.primaryButtonHtml('cl-note-delete', '✕ 削除');
+    propsEl.innerHTML = html;
+
+    P.bindEvent('cl-note-update', 'click', function() {
+      var pos = document.getElementById('cl-note-pos').value;
+      var txt = document.getElementById('cl-note-text').value;
+      window.MA.history.pushHistory();
+      ctx.setMmdText(updateNote(ctx.getMmdText(), note.line, note.endLine, { position: pos, text: txt }));
+      ctx.onUpdate();
+    });
+    P.bindEvent('cl-note-delete', 'click', function() {
+      window.MA.history.pushHistory();
+      ctx.setMmdText(deleteNote(ctx.getMmdText(), note.line, note.endLine));
       window.MA.selection.clearSelection();
       ctx.onUpdate();
     });
@@ -1109,6 +1536,32 @@ window.MA.modules.plantumlClass = (function() {
         return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
       }
 
+      function _polygonBBox(p) {
+        if (!p) return null;
+        if (typeof p.getBBox === 'function') {
+          try { var bb = p.getBBox(); if (bb && (bb.width > 0 || bb.height > 0)) return bb; }
+          catch (e) { /* jsdom fallback */ }
+        }
+        var raw = (p.getAttribute('points') || '').trim();
+        if (!raw) return null;
+        var pts = raw.split(/\s+/);
+        var pminX = Infinity, pminY = Infinity, pmaxX = -Infinity, pmaxY = -Infinity;
+        var ok = false;
+        pts.forEach(function(pt) {
+          var xy = pt.split(',');
+          if (xy.length !== 2) return;
+          var x = parseFloat(xy[0]); var y = parseFloat(xy[1]);
+          if (isNaN(x) || isNaN(y)) return;
+          ok = true;
+          if (x < pminX) pminX = x;
+          if (y < pminY) pminY = y;
+          if (x > pmaxX) pmaxX = x;
+          if (y > pmaxY) pmaxY = y;
+        });
+        if (!ok) return null;
+        return { x: pminX, y: pminY, width: pmaxX - pminX, height: pmaxY - pminY };
+      }
+
       var matched = { class: 0, interface: 0, abstract: 0, enum: 0, relation: 0, package: 0 };
 
       (parsedData.elements || []).forEach(function(el) {
@@ -1122,6 +1575,36 @@ window.MA.modules.plantumlClass = (function() {
           'data-line': el.line,
         });
         matched[el.kind]++;
+
+        // Member rects: one per class member, mapped to <text> lines after header
+        if (el.members && el.members.length > 0) {
+          var lines = OB.extractMultiLineTextBBoxes(g);
+          // Header skip count: 1 (label) + (stereotype ? 1 : 0) + (generics ? 1 : 0)
+          var headerSkip = 1;
+          if (el.stereotype) headerSkip++;
+          if (el.generics && el.generics.length > 0) headerSkip++;
+          var memberLines = lines.slice(headerSkip);
+          var matchCount = Math.min(el.members.length, memberLines.length);
+          for (var mi = 0; mi < matchCount; mi++) {
+            var ml = memberLines[mi];
+            var mem = el.members[mi];
+            var mbb = ml.bbox;
+            var rectW = mbb.width || 80;
+            OB.addRect(overlayEl, mbb.x, mbb.y, rectW, mbb.height || 14, {
+              'data-type': 'member',
+              'data-id': el.id + '::__m_' + mi,
+              'data-parent-id': el.id,
+              'data-parent-kind': el.kind,
+              'data-member-index': String(mi),
+              'data-member-kind': mem.kind,
+              'data-line': String(mem.line),
+            });
+          }
+          if (matchCount !== el.members.length && typeof console !== 'undefined' && console.warn) {
+            console.warn('[class.buildOverlay] member line mismatch for ' + el.id +
+              ': model=' + el.members.length + ' svg=' + memberLines.length);
+          }
+        }
       });
 
       // package + namespace
@@ -1163,6 +1646,32 @@ window.MA.modules.plantumlClass = (function() {
         matched.relation++;
       }
 
+      // Notes: match 5-point polygons in document order against parsed notes
+      var notes = parsedData.notes || [];
+      if (notes.length > 0) {
+        var allPolys = svgEl.querySelectorAll('polygon');
+        var notePolys = [];
+        Array.prototype.forEach.call(allPolys, function(p) {
+          var pts = (p.getAttribute('points') || '').trim().split(/\s+/);
+          if (pts.length === 5) notePolys.push(p);
+        });
+        if (notePolys.length === notes.length) {
+          notes.forEach(function(n, idx) {
+            var p = notePolys[idx];
+            var bb = _polygonBBox(p);
+            if (!bb) return;
+            OB.addRect(overlayEl, bb.x, bb.y, bb.width, bb.height, {
+              'data-type': 'note',
+              'data-id': n.id,
+              'data-line': n.line,
+              'data-target-id': n.targetId,
+            });
+          });
+        } else if (typeof console !== 'undefined' && console.warn) {
+          console.warn('[class.buildOverlay] note polygon count mismatch: model=' + notes.length + ' svg=' + notePolys.length);
+        }
+      }
+
       return { matched: matched, unmatched: {} };
     },
     detect: function(text) { return window.MA.parserUtils.detectDiagramType(text) === 'plantuml-class'; },
@@ -1176,6 +1685,7 @@ window.MA.modules.plantumlClass = (function() {
     fmtEnumValue: fmtEnumValue,
     fmtPackage: fmtPackage,
     fmtNamespace: fmtNamespace,
+    fmtNote: fmtNote,
     addClass: addClass,
     addInterface: addInterface,
     addAbstract: addAbstract,
@@ -1183,18 +1693,25 @@ window.MA.modules.plantumlClass = (function() {
     addRelation: addRelation,
     addPackage: addPackage,
     addNamespace: addNamespace,
+    addNote: addNote,
     updateClass: updateClass,
     updateInterface: updateClass,
     updateAbstract: updateClass,
     updateEnum: updateClass,
     updateRelation: updateRelation,
+    updateNote: updateNote,
+    deleteNote: deleteNote,
     addAttribute: addAttribute,
     addMethod: addMethod,
     addEnumValue: addEnumValue,
     updateAttribute: updateAttribute,
     updateMethod: updateMethod,
     deleteMember: deleteMember,
+    deleteMemberByIndex: deleteMemberByIndex,
+    moveMemberUpByIndex: moveMemberUpByIndex,
+    moveMemberDownByIndex: moveMemberDownByIndex,
     deleteLine: deleteLine,
+    deleteClassWithNotes: deleteClassWithNotes,
     moveLineUp: moveLineUp,
     moveLineDown: moveLineDown,
     setTitle: setTitle,
