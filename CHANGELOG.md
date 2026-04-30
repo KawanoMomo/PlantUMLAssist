@@ -7,11 +7,12 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - **Bug: 日本語 (非 ASCII) で命名した State を追加すると選択できない** — parser の `STATE_RE` が共通定数 `RP.IDENTIFIER = [A-Za-z_][A-Za-z0-9_]*` を使っており非 ASCII 識別子をマッチしない。さらに PlantUML 自身も非 ASCII id を `data-qualified-name` から脱落させる (`..A` 等) ため、 v1.1.1 で入れた renderGen race fix では塞げなかった。 Fix: `state.js` に `normalizeIdInput()` を追加し、 ユーザ入力 ID が ASCII identifier に一致しない場合は `S1`, `S2`, ... の ASCII alias を生成、 元の文字列を label として `state "状態X" as S1` 形式で書き出す。 これにより parser / PlantUML / overlay-builder 全レイヤで同一の ASCII id で整合する。 適用箇所: tail-add (state / composite) / insert-form (modal & prompt fallback) / state rename。 `addCompositeState(id, label?)` と `addStateAtLine(..., label?)` に optional label 引数を追加 (既存 ASCII-only 呼び出しは後方互換)。
+- **Bug: 同じ非 ASCII id 不具合が Class / Component / Sequence / UseCase でも発生** — 監査の結果、 state.js と同じ脆弱性パターンが他 4 モジュールにも存在することを確認。 各モジュールの parser regex (CLASS_KW_RE / COMPONENT_KW_RE / MSG_RE / ACTOR_KW_RE / USECASE_KW_RE) が ASCII identifier を要求するため、 tail-add UI から日本語 alias を入力すると parser に拾われず overlay rect が作られない (sequence では参加者宣言は parse できるが MSG_RE が参照を弾く)。 Fix: 共有モジュール `src/core/id-normalizer.js` を新設し `window.MA.idNormalizer.normalize(rawInput, existingIds, prefix)` として共通化。 各モジュールから module-specific prefix (`S` / `C` / `P` / `A` / `U`) でラップして呼ぶ。 適用箇所: state / class / component / sequence / usecase の tail-add (各 entity 種別) と rename ハンドラ。 副次的修正として class.js の `fmtClass` / `fmtInterface` / `fmtAbstract` から `&& !generics` 制約を外し、 `class "Label" as Id<T>` 形式の emit を許可 (PlantUML の CLASS_KW_RE は元から quoted-label-with-generics を受理)。
 
 ### Tests
 
-- 単体テスト 5 件追加 (`tests/state-updater.test.js`): `normalizeIdInput` の ASCII pass-through / Japanese → S1 alias / 既存 S1/S2 衝突回避 / empty 入力の `valid:false` / `state "状態A" as S1` の parser round-trip
-- E2E 回帰 1 件追加 (`tests/e2e/state.spec.js`): `UC-bug2-jp v1.1.2` — tail-add で `状態X` を入力 → editor に `state "状態X" as S1` が emit、 overlay rect[data-id="S1"] が生成、 click で selection panel が `id=S1, label=状態X` を表示
+- 単体テスト 13 件追加: `tests/state-updater.test.js` (5 件: `normalizeIdInput` ASCII pass-through / Japanese → S1 alias / 既存 S1/S2 衝突回避 / empty 入力の `valid:false` / `state "状態A" as S1` の parser round-trip), `tests/class-updater.test.js` (4 件: 正規化 + `fmtClass` quoted-label-with-generics), `tests/component-overlay.test.js` (3 件: 正規化), `tests/sequence-updater.test.js` (3 件: 正規化), `tests/usecase-updater.test.js` (3 件: 正規化, prefix=A actor / prefix=U usecase)
+- E2E 回帰 5 件追加: `UC-bug2-jp v1.1.2` (state) / `UC-bug-jp v1.1.2` (class / component / sequence / usecase) — それぞれ tail-add で日本語 alias を入力し、 editor に `<keyword> "<日本語>" as <ASCII alias>` が emit、 overlay rect[data-id=<ASCII alias>] が生成、 click で selection panel が正しい id+label を表示
 
 ## [1.1.1] - 2026-04-29
 

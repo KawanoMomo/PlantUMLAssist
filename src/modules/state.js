@@ -12,8 +12,6 @@ window.MA.modules.plantumlState = (function() {
     '^state\\s+(?:"([^"]+)"\\s+as\\s+(' + ID + ')|(' + ID + ')(?:\\s+as\\s+"([^"]+)")?)\\s*(?:<<([^>]+)>>)?\\s*(\\{)?\\s*$'
   );
 
-  var ASCII_ID_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
-
   function _existingIdSet(parsed) {
     var set = {};
     var states = (parsed && parsed.states) || [];
@@ -24,24 +22,8 @@ window.MA.modules.plantumlState = (function() {
     return set;
   }
 
-  // User-typed IDs that aren't ASCII-safe (e.g. Japanese) won't match the
-  // parser's IDENTIFIER regex AND PlantUML strips them from
-  // data-qualified-name. Auto-generate an ASCII alias and keep the user's
-  // string as the visible label so both the parser and the renderer agree.
   function normalizeIdInput(rawInput, parsed) {
-    var trimmed = (rawInput == null ? '' : String(rawInput)).trim();
-    if (!trimmed) return { id: '', label: '', valid: false };
-    if (ASCII_ID_RE.test(trimmed)) {
-      return { id: trimmed, label: trimmed, valid: true };
-    }
-    var existing = _existingIdSet(parsed);
-    for (var i = 1; i < 10000; i++) {
-      var candidate = 'S' + i;
-      if (!existing[candidate]) {
-        return { id: candidate, label: trimmed, valid: true };
-      }
-    }
-    return { id: 'S' + Date.now(), label: trimmed, valid: true };
+    return window.MA.idNormalizer.normalize(rawInput, _existingIdSet(parsed), 'S');
   }
 
   var TRANSITION_RE = new RegExp(

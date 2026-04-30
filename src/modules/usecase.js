@@ -67,6 +67,17 @@ window.MA.modules.plantumlUsecase = (function() {
   // ─── Add operations (pure: text + args → text) ────────────────────────
   var insertBeforeEnd = window.MA.dslUpdater.insertBeforeEnd;
 
+  function _existingUsecaseIdSet(parsed) {
+    var set = {};
+    var elts = (parsed && parsed.elements) || [];
+    elts.forEach(function(e) { if (e.id) set[e.id] = true; });
+    return set;
+  }
+
+  function normalizeIdInput(rawInput, parsed, prefix) {
+    return window.MA.idNormalizer.normalize(rawInput, _existingUsecaseIdSet(parsed), prefix || 'U');
+  }
+
   function addActor(text, id, label) { return insertBeforeEnd(text, fmtActor(id, label || id)); }
   function addUsecase(text, id, label) { return insertBeforeEnd(text, fmtUsecase(id, label || id)); }
   function addPackage(text, label) {
@@ -373,15 +384,19 @@ window.MA.modules.plantumlUsecase = (function() {
         var t = ctx.getMmdText();
         var out = t;
         if (kind === 'actor') {
-          var al = document.getElementById('uc-tail-alias').value.trim();
-          if (!al) { alert('Alias 必須'); return; }
+          var rawAl = document.getElementById('uc-tail-alias').value;
+          var normAc = normalizeIdInput(rawAl, parsedData, 'A');
+          if (!normAc.valid) { alert('Alias 必須'); return; }
+          var rawLbl = document.getElementById('uc-tail-label').value.trim();
           window.MA.history.pushHistory();
-          out = addActor(t, al, document.getElementById('uc-tail-label').value.trim() || al);
+          out = addActor(t, normAc.id, rawLbl || normAc.label);
         } else if (kind === 'usecase') {
-          var al2 = document.getElementById('uc-tail-alias').value.trim();
-          if (!al2) { alert('Alias 必須'); return; }
+          var rawAl2 = document.getElementById('uc-tail-alias').value;
+          var normUc = normalizeIdInput(rawAl2, parsedData, 'U');
+          if (!normUc.valid) { alert('Alias 必須'); return; }
+          var rawLbl2 = document.getElementById('uc-tail-label').value.trim();
           window.MA.history.pushHistory();
-          out = addUsecase(t, al2, document.getElementById('uc-tail-label').value.trim() || al2);
+          out = addUsecase(t, normUc.id, rawLbl2 || normUc.label);
         } else if (kind === 'package') {
           var lbl = document.getElementById('uc-tail-label').value.trim();
           if (!lbl) { alert('Label 必須'); return; }
@@ -427,10 +442,17 @@ window.MA.modules.plantumlUsecase = (function() {
     propsEl.innerHTML = html;
 
     P.bindEvent('uc-edit-apply', 'click', function() {
-      var newId = document.getElementById('uc-edit-id').value.trim();
-      var newLabel = document.getElementById('uc-edit-label').value.trim();
+      var rawNewId = document.getElementById('uc-edit-id').value.trim();
+      var rawNewLabel = document.getElementById('uc-edit-label').value.trim();
       window.MA.history.pushHistory();
       var t = ctx.getMmdText();
+      var freshParsed = parse(t);
+      var pfx = element.kind === 'actor' ? 'A' : 'U';
+      var renameNorm = window.MA.idNormalizer.normalize(rawNewId, _existingUsecaseIdSet(freshParsed), pfx);
+      var newId = renameNorm.valid ? renameNorm.id : rawNewId;
+      var newLabel = (renameNorm.valid && renameNorm.id !== renameNorm.label)
+        ? renameNorm.label
+        : rawNewLabel;
       var fn = element.kind === 'actor' ? updateActor : updateUsecase;
       if (newId !== element.id) t = fn(t, element.line, 'id', newId);
       if (newLabel !== element.label) t = fn(t, element.line, 'label', newLabel);
@@ -438,8 +460,12 @@ window.MA.modules.plantumlUsecase = (function() {
       ctx.onUpdate();
     });
     P.bindEvent('uc-rename-refs', 'click', function() {
-      var newId = document.getElementById('uc-edit-id').value.trim();
-      if (!newId || newId === element.id) { alert('Alias を変更してから実行してください'); return; }
+      var rawNewId = document.getElementById('uc-edit-id').value.trim();
+      if (!rawNewId || rawNewId === element.id) { alert('Alias を変更してから実行してください'); return; }
+      var freshParsed = parse(ctx.getMmdText());
+      var pfx2 = element.kind === 'actor' ? 'A' : 'U';
+      var refsNorm = window.MA.idNormalizer.normalize(rawNewId, _existingUsecaseIdSet(freshParsed), pfx2);
+      var newId = refsNorm.valid ? refsNorm.id : rawNewId;
       window.MA.history.pushHistory();
       ctx.setMmdText(renameWithRefs(ctx.getMmdText(), element.id, newId));
       ctx.onUpdate();
@@ -598,6 +624,7 @@ window.MA.modules.plantumlUsecase = (function() {
     fmtPackage: fmtPackage,
     fmtRelation: fmtRelation,
     addActor: addActor,
+    normalizeIdInput: normalizeIdInput,
     addUsecase: addUsecase,
     addPackage: addPackage,
     addRelation: addRelation,

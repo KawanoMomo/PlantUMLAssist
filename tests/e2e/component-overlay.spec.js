@@ -86,4 +86,21 @@ test.describe('Component overlay-driven', () => {
     var jsErrors = errors.filter(function(e) { return e.indexOf('favicon') < 0; });
     expect(jsErrors).toHaveLength(0);
   });
+
+  // v1.1.2: Japanese component alias normalizes to ASCII alias + quoted label
+  // so the new component is selectable (parser COMPONENT_KW_RE only accepts
+  // ASCII identifiers).
+  test('UC-bug-jp v1.1.2: Japanese-named component is selectable', async ({ page }) => {
+    await gotoApp(page);
+    await page.locator('#diagram-type').selectOption('plantuml-component');
+    await page.waitForTimeout(2000);
+    await page.locator('#co-tail-kind').selectOption('component');
+    await page.locator('#co-tail-alias').fill('コンポA');
+    await page.locator('#co-tail-add').click();
+    await page.waitForTimeout(2500);
+    var t = await getEditorText(page);
+    expect(t).toContain('component "コンポA" as C1');
+    var rect = page.locator('#overlay-layer rect[data-id="C1"]');
+    await expect(rect).toHaveCount(1);
+  });
 });

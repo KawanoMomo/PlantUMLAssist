@@ -11,6 +11,7 @@
 try {
   require('../src/core/dsl-utils.js');
   require('../src/core/regex-parts.js');
+  require('../src/core/id-normalizer.js');
   require('../src/core/parser-utils.js');
   require('../src/modules/usecase.js');
 } catch (e) { /* sandbox path: run-tests.js already loaded everything */ }
