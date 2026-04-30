@@ -48,3 +48,15 @@ describe('autoSave skeleton', function() {
     expect(as.isAvailable()).toBe(true);
   });
 });
+
+// jsdom window を run-tests.js が用意した sandbox window に戻す。
+// これをしないと後続 test ファイル (class-*, component-*, regex-parts 等) が
+// window.MA.* を見失って失敗する。
+if (prevWindow !== undefined) global.window = prevWindow;
+if (prevDocument !== undefined) global.document = prevDocument;
+
+// require.cache を落とすことで、後続テストが各モジュールを
+// 自分の sandbox window 上で再実行できるようにする。
+depPaths.forEach(function(p) {
+  try { delete require.cache[require.resolve(p)]; } catch (e) {}
+});
