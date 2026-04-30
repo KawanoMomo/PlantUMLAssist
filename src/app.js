@@ -36,6 +36,12 @@ var renderTimer = null;
 var RENDER_DEBOUNCE_MS = 150;
 var zoom = 1.0;
 var isFirstRender = true;
+// renderGen monotonically increases for each renderSvg() invocation. Stale
+// fetch responses (request older than the latest) are discarded so a slow
+// older render cannot overwrite the SVG produced by a newer request — which
+// previously caused newly added shapes to disappear from the preview when
+// the user issued multiple edits in quick succession.
+var renderGen = 0;
 
 function moduleHas(cap) {
   return !!(currentModule && currentModule.capabilities && currentModule.capabilities[cap]);
@@ -476,6 +482,15 @@ function init() {
     suppressSync = true;
     editorEl.value = mmdText;
     suppressSync = false;
+    // Reparse with the new module BEFORE clearSelection() so that the
+    // selection callback's renderProps() sees a parsedData shape matching
+    // the new module. Otherwise the previous module's parsedData (e.g.
+    // state's {states, transitions, notes}) leaks into the new module's
+    // renderProps which expects a different shape (e.g. sequence's
+    // {elements, relations, groups}) and throws — preventing the next
+    // scheduleRefresh() from running and leaving the preview stuck on
+    // the previous diagram.
+    try { currentParsed = currentModule.parse(mmdText); } catch (e) { /* leave stale */ }
     window.MA.selection.clearSelection();
     isFirstRender = true;
     scheduleRefresh();
@@ -795,6 +810,7 @@ function renderSvg() {
   renderStatusEl.textContent = 'Rendering\u2026';
   renderStatusEl.classList.remove('error');
 
+  var myGen = ++renderGen;
   fetch('/render', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -809,6 +825,7 @@ function renderSvg() {
     }
     return resp.text();
   }).then(function(svg) {
+    if (myGen !== renderGen) return;  // stale response \u2014 a newer renderSvg() superseded this one
     previewSvgEl.innerHTML = svg;
     var svgEl = previewSvgEl.querySelector('svg');
     if (svgEl) {
@@ -852,6 +869,7 @@ function renderSvg() {
     }
     renderStatusEl.textContent = 'OK (' + mode + ')';
   }).catch(function(err) {
+    if (myGen !== renderGen) return;  // stale failure — ignore
     previewSvgEl.innerHTML = '<p style="color:var(--accent-red);padding:20px;white-space:pre-wrap;font-family:var(--font-mono);font-size:12px;">Render error: ' + (err.message || err) + '</p>';
     renderStatusEl.textContent = 'ERROR';
     renderStatusEl.classList.add('error');

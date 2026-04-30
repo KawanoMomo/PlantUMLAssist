@@ -15,6 +15,22 @@ describe('addParticipant', function() {
   });
 });
 
+describe('sequence normalizeIdInput', function() {
+  test('ASCII alias passes through', function() {
+    var n = seq.normalizeIdInput('Alice', { elements: [] });
+    expect(n).toEqual({ id: 'Alice', label: 'Alice', valid: true });
+  });
+  test('Japanese alias maps to P1', function() {
+    var n = seq.normalizeIdInput('利用者', { elements: [] });
+    expect(n.id).toBe('P1');
+    expect(n.label).toBe('利用者');
+  });
+  test('avoids collision with existing P1 participant', function() {
+    var n = seq.normalizeIdInput('日本語', { elements: [{ kind: 'participant', id: 'P1' }] });
+    expect(n.id).toBe('P2');
+  });
+});
+
 describe('addMessage', function() {
   test('adds message with label', function() {
     var out = seq.addMessage('@startuml\nactor A\nactor B\n@enduml', 'A', 'B', '->', 'hi');

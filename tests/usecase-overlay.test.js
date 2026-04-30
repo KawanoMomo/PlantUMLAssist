@@ -19,6 +19,7 @@ global.DOMParser = dom.window.DOMParser;
 var depPaths = [
   '../src/core/dsl-utils.js',
   '../src/core/regex-parts.js',
+  '../src/core/id-normalizer.js',
   '../src/core/line-resolver.js',
   '../src/core/text-updater.js',
   '../src/core/dsl-updater.js',

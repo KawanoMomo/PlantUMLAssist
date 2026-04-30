@@ -6,6 +6,7 @@
 try {
   require('../src/core/dsl-utils.js');
   require('../src/core/regex-parts.js');
+  require('../src/core/id-normalizer.js');
   require('../src/core/parser-utils.js');
   require('../src/core/text-updater.js');
   require('../src/modules/usecase.js');
@@ -168,5 +169,22 @@ describe('usecase renameWithRefs', function() {
     var out = uc.renameWithRefs(t, 'User', 'EndUser');
     expect(out).toContain("' rename User to EndUser");
     expect(out).toContain('actor EndUser');
+  });
+});
+
+describe('usecase normalizeIdInput', function() {
+  test('ASCII alias passes through', function() {
+    var n = uc.normalizeIdInput('User', { elements: [] }, 'A');
+    expect(n).toEqual({ id: 'User', label: 'User', valid: true });
+  });
+  test('Japanese alias maps to A1 with prefix=A (actor)', function() {
+    var n = uc.normalizeIdInput('利用者', { elements: [] }, 'A');
+    expect(n.id).toBe('A1');
+    expect(n.label).toBe('利用者');
+  });
+  test('Japanese alias maps to U1 with prefix=U (usecase)', function() {
+    var n = uc.normalizeIdInput('検索', { elements: [] }, 'U');
+    expect(n.id).toBe('U1');
+    expect(n.label).toBe('検索');
   });
 });

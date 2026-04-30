@@ -19,6 +19,7 @@ global.DOMParser = dom.window.DOMParser;
 var depPaths = [
   '../src/core/dsl-utils.js',
   '../src/core/regex-parts.js',
+  '../src/core/id-normalizer.js',
   '../src/core/line-resolver.js',
   '../src/core/text-updater.js',
   '../src/core/dsl-updater.js',
@@ -136,6 +137,22 @@ describe('component.buildOverlay — port + package', function() {
     expect(rels.length).toBe(2);
     expect(rels[0].getAttribute('data-relation-kind')).toBe('association');
     expect(rels[1].getAttribute('data-relation-kind')).toBe('provides');
+  });
+});
+
+describe('component normalizeIdInput', function() {
+  test('ASCII alias passes through', function() {
+    var n = coMod.normalizeIdInput('WebApp', { elements: [] });
+    expect(n).toEqual({ id: 'WebApp', label: 'WebApp', valid: true });
+  });
+  test('Japanese alias maps to C1', function() {
+    var n = coMod.normalizeIdInput('コンポ', { elements: [] });
+    expect(n.id).toBe('C1');
+    expect(n.label).toBe('コンポ');
+  });
+  test('Empty input is invalid', function() {
+    var n = coMod.normalizeIdInput('   ', { elements: [] });
+    expect(n.valid).toBe(false);
   });
 });
 
