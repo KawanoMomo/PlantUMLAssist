@@ -468,6 +468,7 @@ html, body {
       <option value="plantuml-component">Component</option>
       <option value="plantuml-class">Class</option>
       <option value="plantuml-activity">Activity</option>
+      <option value="plantuml-state">State</option>
     </select>
   </div>
 
@@ -528,6 +529,9 @@ html, body {
 <div id="act-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="act-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:400px;max-width:600px;"></div>
 </div>
+<div id="st-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+  <div id="st-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:400px;max-width:600px;"></div>
+</div>
 </div><!-- /#app -->
 
 <!-- Hidden file input -->
@@ -555,6 +559,7 @@ html, body {
 <script src="src/modules/component.js"></script>
 <script src="src/modules/class.js"></script>
 <script src="src/modules/activity.js"></script>
+<script src="src/modules/state.js"></script>
 <script src="src/app.js"></script>
 </body>
 </html>
