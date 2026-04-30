@@ -557,6 +557,21 @@ function init() {
   setZoom(1.0);
   updateLineNumbers();
   scheduleRefresh();
+  // ── Auto-save: best-effort flush on tab hide / unload ───────────────
+  // visibilitychange catches user switching tabs / OS minimize.
+  // beforeunload catches tab close / reload / navigation. Both are wrapped
+  // in try/catch so a flush failure can never block tab teardown.
+  if (window.MA.autoSave) {
+    document.addEventListener('visibilitychange', function() {
+      if (document.hidden) {
+        try { window.MA.autoSave.flush(); } catch (e) {}
+      }
+    });
+    window.addEventListener('beforeunload', function() {
+      try { window.MA.autoSave.flush(); } catch (e) {}
+    });
+  }
+
   startHeartbeat();
 }
 
