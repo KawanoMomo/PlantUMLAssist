@@ -15,8 +15,6 @@ window.MA.autoSave = (function() {
   var _timerId = null;
   var _saveListeners = [];
 
-  function noop() {}
-
   function isAvailable() {
     try {
       var k = '__plantuml_autosave_probe__';

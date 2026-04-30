@@ -27,7 +27,7 @@ PlantUMLAssist の DSL は `#editor` (textarea) の in-memory 値だけで管理
 
 - `plantuml-autosave-config` — 設定 JSON (enabled, debounceMs, restoreMode)
 - `plantuml-autosave-dsl-<diagram-type>` — diagram-type 別の DSL 文字列 (6 type)
-- `plantuml-autosave-meta` — `{ lastDiagramType, lastSavedAt: ISO string, lastSavedType: string }`
+- `plantuml-autosave-meta` — `{ lastSavedAt: ISO string, lastSavedType: string }`
 
 > Why per diagram-type: diagram-type を切り替えると `setMmdText(template())` で DSL が置き換わる現状動作のため、 切替時に直前の DSL を失わないには type 別保存が必要。 ユーザは複数 type を平行編集する想定。
 
