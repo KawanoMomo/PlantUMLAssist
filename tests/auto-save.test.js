@@ -50,6 +50,37 @@ describe('autoSave skeleton', function() {
   });
 });
 
+describe('autoSave config', function() {
+  beforeEach(function() { global.window.localStorage.__reset(); });
+  test('getConfig returns defaults when nothing saved', function() {
+    var c = as.getConfig();
+    expect(c.enabled).toBe(true);
+    expect(c.debounceMs).toBe(1000);
+    expect(c.restoreMode).toBe('confirm');
+  });
+  test('setConfig persists and merges with existing', function() {
+    as.setConfig({ debounceMs: 2000 });
+    var c = as.getConfig();
+    expect(c.debounceMs).toBe(2000);
+    expect(c.enabled).toBe(true);
+    expect(c.restoreMode).toBe('confirm');
+  });
+  test('setConfig persists across reads via localStorage', function() {
+    as.setConfig({ enabled: false, restoreMode: 'auto' });
+    var raw = global.window.localStorage.getItem('plantuml-autosave-config');
+    expect(raw).not.toBe(null);
+    var parsed = JSON.parse(raw);
+    expect(parsed.enabled).toBe(false);
+    expect(parsed.restoreMode).toBe('auto');
+  });
+  test('getConfig falls back to defaults if stored JSON is corrupt', function() {
+    global.window.localStorage.setItem('plantuml-autosave-config', '{not-json');
+    var c = as.getConfig();
+    expect(c.enabled).toBe(true);
+    expect(c.debounceMs).toBe(1000);
+  });
+});
+
 // jsdom window を run-tests.js が用意した sandbox window に戻す。
 // これをしないと後続 test ファイル (class-*, component-*, regex-parts 等) が
 // window.MA.* を見失って失敗する。
