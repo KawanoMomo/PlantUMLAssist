@@ -635,6 +635,39 @@ function init() {
     });
   }
 
+  // ── Auto-save: status indicator ─────────────────────────────────────
+  // Render `💾 N秒前` (relative time) in #status-autosave, refreshed on
+  // every successful flush AND every 5 seconds (so the relative-time
+  // text stays current without requiring another flush).
+  (function setupAutoSaveStatus() {
+    var span = document.getElementById('status-autosave');
+    if (!span || !window.MA.autoSave || !window.MA.autoSave.onSave) return;
+
+    function relTime(iso) {
+      if (!iso) return '';
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return '';
+      var sec = Math.max(0, Math.round((Date.now() - d.getTime()) / 1000));
+      if (sec < 5) return 'たった今';
+      if (sec < 60) return sec + '秒前';
+      if (sec < 3600) return Math.floor(sec / 60) + '分前';
+      return Math.floor(sec / 3600) + '時間前';
+    }
+    function update() {
+      if (!window.MA.autoSave.isAvailable()) {
+        span.textContent = '';
+        return;
+      }
+      var meta = window.MA.autoSave.getMeta();
+      if (!meta) { span.textContent = ''; return; }
+      span.textContent = '💾 ' + relTime(meta.lastSavedAt);
+      span.title = '最終保存: ' + meta.lastSavedAt + ' (' + (meta.lastSavedType || '').replace('plantuml-', '') + ')';
+    }
+    window.MA.autoSave.onSave(function() { update(); });
+    update();
+    setInterval(update, 5000);
+  })();
+
   startHeartbeat();
 }
 
