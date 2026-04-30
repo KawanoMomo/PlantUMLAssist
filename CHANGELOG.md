@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.1] - 2026-04-30
+
+### Added (v1.2.0 follow-up)
+
+- **保存方式の選択** — 設定 modal に「保存方式」 (localStorage / ファイル) と「保存先ディレクトリ」を追加。 ファイル選択時は server が `<dir>/<type>.puml` + `<dir>/_meta.json` をディスクに永続化。 localStorage は同期 working copy として併用、 起動時に disk → localStorage を hydrate するため `restoreFor` は同期のまま。
+- **種類切替時の force-save** — diagram-type 切替時、 従来の `flush()` (pending のみ書く) に加えて `scheduleSave(currentDiagramType, mmdText) + flush()` で OUTGOING type の現在内容を強制保存。 1秒以上経過した後の切替でもユーザの編集内容が確実に書き込まれる。
+
+### Server endpoints (`server.py`)
+
+- `POST /autosave` — body `{type, dsl, dir}` → `<dir>/<type>.puml` + meta JSON。
+- `GET /autosave?type=X&dir=Y` — type 単体の DSL 取得 / `?dir=Y` のみで `{files, meta, dir}` リスト。
+- `DELETE /autosave?dir=Y` — `<dir>/*.puml` + `_meta.json` を削除。
+- 入力検証: `type` は `^[A-Za-z0-9_-]+$` 必須 (path traversal 拒否)。 `dir` は expanduser + resolve で絶対化。
+- `IDLE_SHUTDOWN_SEC` を 20s → 300s に緩和 (E2E 実行と長時間 dev session への耐性)。
+
+### Tests
+
+- 単体テスト 3 件追加 (`tests/auto-save.test.js` の `autoSave file backend` describe): file backend が `/autosave` POST を実行 / localStorage backend では fetch を呼ばない / clearAll が DELETE を発行
+- E2E 既存 5 件は localStorage backend デフォルト前提で全 pass を維持
+- Visual verification (`.investigation/cfg-modal-with-backend.png`): 設定 modal の新 backend セクションと file backend での「最終保存」表示
+
 ## [1.2.0] - 2026-04-30
 
 ### Added — Auto-save (DSL persistence)
