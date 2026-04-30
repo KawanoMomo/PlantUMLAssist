@@ -514,13 +514,24 @@ function init() {
         (meta && meta.lastSavedType ? ' (' + meta.lastSavedType.replace('plantuml-', '') + ')' : '');
     }
 
+    function applyBackendVisibility(backend) {
+      var dirRow = document.getElementById('cfg-file-dir-row');
+      if (dirRow) dirRow.style.display = (backend === 'file') ? 'block' : 'none';
+    }
+
     function open() {
       var as = window.MA.autoSave;
-      var cfg = as ? as.getConfig() : { enabled: true, debounceMs: 1000, restoreMode: 'confirm' };
+      var cfg = as ? as.getConfig() : { enabled: true, debounceMs: 1000, restoreMode: 'confirm', backend: 'localStorage', fileDir: './autosave' };
       document.getElementById('cfg-enabled').checked = !!cfg.enabled;
       document.getElementById('cfg-debounce').value = String(cfg.debounceMs);
       var radios = document.getElementsByName('cfg-restore-mode');
       for (var i = 0; i < radios.length; i++) radios[i].checked = (radios[i].value === cfg.restoreMode);
+      var backendRadios = document.getElementsByName('cfg-backend');
+      var backend = cfg.backend || 'localStorage';
+      for (var j = 0; j < backendRadios.length; j++) backendRadios[j].checked = (backendRadios[j].value === backend);
+      var dirInput = document.getElementById('cfg-file-dir');
+      if (dirInput) dirInput.value = cfg.fileDir || './autosave';
+      applyBackendVisibility(backend);
       refreshMetaInfo();
       modal.style.display = 'flex';
     }
@@ -534,8 +545,19 @@ function init() {
       var radios = document.getElementsByName('cfg-restore-mode');
       var restoreMode = 'confirm';
       for (var i = 0; i < radios.length; i++) if (radios[i].checked) { restoreMode = radios[i].value; break; }
+      var backendRadios = document.getElementsByName('cfg-backend');
+      var backend = 'localStorage';
+      for (var j = 0; j < backendRadios.length; j++) if (backendRadios[j].checked) { backend = backendRadios[j].value; break; }
+      var fileDirEl = document.getElementById('cfg-file-dir');
+      var fileDir = fileDirEl ? (fileDirEl.value.trim() || './autosave') : './autosave';
       if (window.MA.autoSave) {
-        window.MA.autoSave.setConfig({ enabled: enabled, debounceMs: debounceMs, restoreMode: restoreMode });
+        window.MA.autoSave.setConfig({
+          enabled: enabled,
+          debounceMs: debounceMs,
+          restoreMode: restoreMode,
+          backend: backend,
+          fileDir: fileDir,
+        });
       }
       close();
     });
@@ -544,6 +566,13 @@ function init() {
       if (window.MA.autoSave) window.MA.autoSave.clearAll();
       refreshMetaInfo();
     });
+    // Toggle the file-dir input visibility when the backend radio changes
+    var backendRadios = document.getElementsByName('cfg-backend');
+    for (var k = 0; k < backendRadios.length; k++) {
+      backendRadios[k].addEventListener('change', function() {
+        if (this.checked) applyBackendVisibility(this.value);
+      });
+    }
   })();
 
   // Zoom

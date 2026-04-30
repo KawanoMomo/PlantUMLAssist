@@ -568,6 +568,21 @@ html, body {
       </label>
     </fieldset>
 
+    <fieldset style="border:1px solid var(--border);border-radius:4px;padding:8px 10px;margin-bottom:10px;font-size:12px;">
+      <legend style="color:var(--text-secondary);padding:0 4px;">保存方式</legend>
+      <label style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+        <input type="radio" name="cfg-backend" value="localStorage"> localStorage (ブラウザ内、 高速)
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;">
+        <input type="radio" name="cfg-backend" value="file"> ファイル (ディスク永続、 git で管理可能)
+      </label>
+      <div id="cfg-file-dir-row" style="display:none;margin-top:6px;">
+        <label style="display:block;margin-bottom:4px;color:var(--text-secondary);">保存先ディレクトリ</label>
+        <input type="text" id="cfg-file-dir" placeholder="./autosave" style="width:100%;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-family:monospace;">
+        <div style="font-size:10px;color:var(--text-secondary);margin-top:2px;">サーバ (server.py) からの相対パス、 または絶対パス。 存在しなければ自動作成。</div>
+      </div>
+    </fieldset>
+
     <div id="cfg-meta-info" style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;"></div>
 
     <button id="cfg-clear-all" style="background:var(--accent-red);color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;margin-bottom:12px;">保存データを全削除</button>

@@ -9,6 +9,8 @@ window.MA.autoSave = (function() {
     enabled: true,
     debounceMs: 1000,
     restoreMode: 'confirm',
+    backend: 'localStorage',
+    fileDir: './autosave',
   };
 
   var _pending = null;       // { diagramType, dsl }
@@ -62,6 +64,8 @@ window.MA.autoSave = (function() {
     out.enabled = (typeof stored.enabled === 'boolean') ? stored.enabled : DEFAULTS.enabled;
     out.debounceMs = (typeof stored.debounceMs === 'number' && stored.debounceMs >= 100) ? stored.debounceMs : DEFAULTS.debounceMs;
     out.restoreMode = (stored.restoreMode === 'auto' || stored.restoreMode === 'confirm' || stored.restoreMode === 'none') ? stored.restoreMode : DEFAULTS.restoreMode;
+    out.backend = (stored.backend === 'localStorage' || stored.backend === 'file') ? stored.backend : DEFAULTS.backend;
+    out.fileDir = (typeof stored.fileDir === 'string' && stored.fileDir.length > 0) ? stored.fileDir : DEFAULTS.fileDir;
     return out;
   }
   function setConfig(partial) {
@@ -70,6 +74,8 @@ window.MA.autoSave = (function() {
       if ('enabled' in partial) merged.enabled = !!partial.enabled;
       if ('debounceMs' in partial) merged.debounceMs = partial.debounceMs;
       if ('restoreMode' in partial) merged.restoreMode = partial.restoreMode;
+      if ('backend' in partial) merged.backend = partial.backend;
+      if ('fileDir' in partial) merged.fileDir = partial.fileDir;
     }
     _writeJson(KEY_CONFIG, merged);
     return getConfig();
