@@ -32,7 +32,7 @@ if sys.platform == 'win32':
 # Seconds of heartbeat silence before the server shuts itself down.
 # Browser client POSTs /heartbeat every ~5s; if the tab is closed the
 # pings stop and the watchdog terminates the server automatically.
-IDLE_SHUTDOWN_SEC = 20
+IDLE_SHUTDOWN_SEC = 300
 
 _state_lock = threading.Lock()
 _last_heartbeat = time.time()
