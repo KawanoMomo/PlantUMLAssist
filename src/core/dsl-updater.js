@@ -10,13 +10,22 @@ window.MA.dslUpdater = (function() {
     for (var i = lines.length - 1; i >= 0; i--) {
       if (RP.isEndUml(lines[i])) { endIdx = i; break; }
     }
-    if (endIdx < 0) {
-      var insertAt = lines.length;
-      while (insertAt > 0 && lines[insertAt - 1].trim() === '') insertAt--;
-      lines.splice(insertAt, 0, newLine);
-    } else {
+    if (endIdx >= 0) {
       lines.splice(endIdx, 0, newLine);
+      return lines.join('\n');
     }
+    // No @enduml — strip trailing blank lines and locate @startuml.
+    while (lines.length > 0 && lines[lines.length - 1].trim() === '') lines.pop();
+    var hasStartUml = false;
+    for (var j = 0; j < lines.length; j++) {
+      if (RP.isStartUml(lines[j])) { hasStartUml = true; break; }
+    }
+    // userissue v1.2.2: スクラッチからの追加対応。 @enduml が無い場合は
+    // PlantUML が "No valid @start/@end found" でレンダリング失敗するため、
+    // 必要に応じ @startuml/@enduml を補完して常に有効な DSL を返す。
+    if (!hasStartUml) lines.unshift('@startuml');
+    lines.push(newLine);
+    lines.push('@enduml');
     return lines.join('\n');
   }
 

@@ -7,9 +7,22 @@ describe('dslUpdater.insertBeforeEnd', function() {
     var t = '@startuml\nactor A\n@enduml';
     expect(DUR.insertBeforeEnd(t, 'actor B')).toBe('@startuml\nactor A\nactor B\n@enduml');
   });
-  test('appends if no @enduml', function() {
+  // userissue v1.2.2: スクラッチからの追加 — @startuml はあるが @enduml が無いケース
+  // で auto-close する。 旧来は閉じタグ無しのまま返したが、 PlantUML は
+  // @enduml が無いと "No valid @start/@end found" でレンダリング失敗するので
+  // 不正な中間状態を作らないよう自動補完する。
+  test('auto-closes with @enduml when @startuml exists but @enduml is missing', function() {
     var t = '@startuml\nactor A';
-    expect(DUR.insertBeforeEnd(t, 'actor B')).toBe('@startuml\nactor A\nactor B');
+    expect(DUR.insertBeforeEnd(t, 'actor B')).toBe('@startuml\nactor A\nactor B\n@enduml');
+  });
+  test('wraps with @startuml/@enduml when both are missing (empty editor)', function() {
+    expect(DUR.insertBeforeEnd('', 'actor User1')).toBe('@startuml\nactor User1\n@enduml');
+  });
+  test('wraps with @startuml/@enduml when both are missing (existing bare content)', function() {
+    expect(DUR.insertBeforeEnd('actor A', 'actor B')).toBe('@startuml\nactor A\nactor B\n@enduml');
+  });
+  test('preserves trailing newline structure when wrapping bare content', function() {
+    expect(DUR.insertBeforeEnd('actor A\n', 'actor B')).toBe('@startuml\nactor A\nactor B\n@enduml');
   });
 });
 

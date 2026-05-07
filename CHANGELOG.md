@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.2] - 2026-05-07
+
+### Fixed
+
+- **Bug: テンプレートを使用せずに 1 から記載しようとしたときに Actor やシーケンスの追加ができない** — エディタを完全に空にして tail-add フォームから actor / participant 等を追加すると `actor User1\n` のように `@startuml`/`@enduml` 抜けの不正 DSL を emit してしまい、 PlantUML が `"No valid @start/@end found"` でレンダリング失敗していた。 影響範囲は 6 図形すべて (sequence / usecase / component / class / activity / state — 全モジュールが共通の `dslUpdater.insertBeforeEnd` を使用) 。 Fix: `src/core/dsl-updater.js` の `insertBeforeEnd` を auto-wrap 化し、 `@enduml` が無いケースでは `@startuml`/`@enduml` を自動補完して常に有効な PlantUML を返すよう変更。 `@startuml` が既に存在し `@enduml` のみ欠けるケースでは `@enduml` だけを補完する。
+
+### Tests
+
+- 単体テスト 4 件追加 + 1 件挙動変更 (`tests/dsl-updater.test.js`): 既存の「@enduml 無しで append」テストを「@startuml 有・@enduml 無で auto-close」に更新し、 「完全空テキストから wrap」「bare content から wrap」「trailing newline 維持」のケースを追加。
+- E2E 回帰 6 件追加 (`tests/e2e/scratch-tail-add.spec.js`): Sequence / UseCase / Component / Class / State の 5 図形すべてで 「空エディタ → tail-add → editor が `@startuml...@enduml` 形式」を確認、 加えて bare-text からの wrap も検証。
+- Visual verification (`tests/e2e/scratch-visual.spec.js` + `.investigation/visual-*.png`): 空エディタで `+ 末尾に追加` を click した後にエディタが `@startuml\nactor User1\n@enduml` になり、 SVG プレビューに actor が描画されることを実機スクショで確認。
+
+### Notes
+
+- ユーザ指摘 「テンプレートを使用せずに 1 から記載しようとしたときに、 Actor やシーケンスの追加ができない」 を解消。
+- 副次的観察: 単一 actor のみ (no message arrows) を追加した直後は `parserUtils.detectDiagramType` が UseCase を選ぶため 右ペインが UseCase 用フォームに切り替わるが、 これは仕様通りの auto-detect 挙動であり本 fix のスコープ外。
+
 ## [1.2.1] - 2026-04-30
 
 ### Added (v1.2.0 follow-up)
