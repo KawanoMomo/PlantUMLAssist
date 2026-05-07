@@ -64,26 +64,30 @@ describe('buildSequenceOverlay', function() {
     overlay.buildSequenceOverlay(f.svgEl, f.parsed, overlayEl);
     var partRects = overlayEl.querySelectorAll('rect[data-type="participant"]');
     var partsInModel = f.parsed.elements.filter(function(e) { return e.kind === 'participant'; }).length;
-    // Feature #7: head + tail + lifeline の 3 rect / participant を生成する。
-    expect(partRects.length).toBe(partsInModel * 3);
-    // tail rect は head よりも Y 座標が下。同一 id で Y が異なる rect が 3 本ある。
+    // userissue v1.2.3: lifeline は別 data-type ('lifeline') に分離した。
+    // participant data-type は head + tail の 2 rect / participant のみ。
+    expect(partRects.length).toBe(partsInModel * 2);
     var firstId = f.parsed.elements.filter(function(e) { return e.kind === 'participant'; })[0].id;
-    var trio = overlayEl.querySelectorAll('rect[data-type="participant"][data-id="' + firstId + '"]');
-    expect(trio.length).toBe(3);
-    var ys = Array.prototype.map.call(trio, function(r) { return parseFloat(r.getAttribute('y')); }).sort(function(a, b) { return a - b; });
-    // head (最上) / lifeline (中央) / tail (最下) で少なくとも 10px 以上離れている。
-    expect(ys[2] - ys[0] > 10).toBe(true);
+    var pair = overlayEl.querySelectorAll('rect[data-type="participant"][data-id="' + firstId + '"]');
+    expect(pair.length).toBe(2);
+    var ys = Array.prototype.map.call(pair, function(r) { return parseFloat(r.getAttribute('y')); }).sort(function(a, b) { return a - b; });
+    // head (最上) と tail (最下) で 10px 以上離れている。
+    expect(ys[1] - ys[0] > 10).toBe(true);
   });
 
-  test('Feature #7: lifeline click overlay rect exists for each participant', function() {
+  // userissue v1.2.3: lifeline は data-type='lifeline' で独立。 participant
+  // と data-id を共有することで sequence.js 側のマッピングは保たれる。
+  test('Feature #7 v2: lifeline overlay rect uses data-type="lifeline" and shares id with participant', function() {
     var f = loadFixture('sequence-basic');
     var overlayEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     overlay.buildSequenceOverlay(f.svgEl, f.parsed, overlayEl);
     var participants = f.parsed.elements.filter(function(e) { return e.kind === 'participant'; });
-    // 各 participant について 3 rect (head/tail/lifeline) が data-id 一致で存在する
     participants.forEach(function(p) {
-      var rects = overlayEl.querySelectorAll('rect[data-type="participant"][data-id="' + p.id + '"]');
-      expect(rects.length).toBe(3);
+      var lifelineRects = overlayEl.querySelectorAll('rect[data-type="lifeline"][data-id="' + p.id + '"]');
+      expect(lifelineRects.length).toBe(1);
+      // 同一 id の participant rect (head/tail) はちょうど 2 件
+      var partRects = overlayEl.querySelectorAll('rect[data-type="participant"][data-id="' + p.id + '"]');
+      expect(partRects.length).toBe(2);
     });
   });
 

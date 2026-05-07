@@ -15,6 +15,83 @@ describe('addParticipant', function() {
   });
 });
 
+describe('deleteActivationsFor (userissue v1.2.3)', function() {
+  test('removes all activate/deactivate lines for a participant id', function() {
+    var t = [
+      '@startuml',
+      'actor User',
+      'participant System',
+      'User -> System : Request',
+      'activate System',
+      'System --> User : Response',
+      'deactivate System',
+      '@enduml',
+    ].join('\n');
+    var out = seq.deleteActivationsFor(t, 'System');
+    expect(out).not.toContain('activate System');
+    expect(out).not.toContain('deactivate System');
+    // Other lines are preserved
+    expect(out).toContain('actor User');
+    expect(out).toContain('participant System');
+    expect(out).toContain('User -> System : Request');
+    expect(out).toContain('System --> User : Response');
+  });
+  test('does not remove activations for other participants', function() {
+    var t = [
+      '@startuml',
+      'participant A',
+      'participant B',
+      'activate A',
+      'activate B',
+      'deactivate A',
+      'deactivate B',
+      '@enduml',
+    ].join('\n');
+    var out = seq.deleteActivationsFor(t, 'A');
+    expect(out).not.toContain('activate A');
+    expect(out).not.toContain('deactivate A');
+    expect(out).toContain('activate B');
+    expect(out).toContain('deactivate B');
+  });
+  test('removes create/destroy lines too', function() {
+    var t = [
+      '@startuml',
+      'participant A',
+      'create B',
+      'A -> B : new',
+      'destroy B',
+      '@enduml',
+    ].join('\n');
+    var out = seq.deleteActivationsFor(t, 'B');
+    expect(out).not.toContain('create B');
+    expect(out).not.toContain('destroy B');
+    // Message line (which references B but is not an activation) should remain
+    expect(out).toContain('A -> B : new');
+  });
+  test('no-op when no activations exist for the id', function() {
+    var t = '@startuml\nactor User\n@enduml';
+    var out = seq.deleteActivationsFor(t, 'User');
+    expect(out).toBe(t);
+  });
+  test('preserves indentation of other lines', function() {
+    var t = [
+      '@startuml',
+      'alt yes',
+      '  activate System',
+      '  System -> DB : query',
+      '  deactivate System',
+      'end',
+      '@enduml',
+    ].join('\n');
+    var out = seq.deleteActivationsFor(t, 'System');
+    expect(out).not.toContain('activate System');
+    expect(out).not.toContain('deactivate System');
+    expect(out).toContain('  System -> DB : query');
+    expect(out).toContain('alt yes');
+    expect(out).toContain('end');
+  });
+});
+
 describe('sequence normalizeIdInput', function() {
   test('ASCII alias passes through', function() {
     var n = seq.normalizeIdInput('Alice', { elements: [] });
