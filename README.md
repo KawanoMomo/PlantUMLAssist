@@ -8,7 +8,7 @@ DSL を直接書かなくても、SVG 上の図形をクリック / プロパテ
 
 ## 特徴
 
-- **Tier1 ロードマップ**: Sequence / Use Case / Component / Class の 4 図形が利用可能 (Activity / State は v0.7.0 以降)
+- **Tier1 ロードマップ完成 (v1.0.0)**: Sequence / Use Case / Component / Class / Activity / State の **6 図形すべて** が overlay-driven で完備
 - **3 種類の編集スタイル** を組み合わせて使える
   - DSL エディタで直接編集 (左ペイン)
   - フォームから追加 (右ペイン下部の「末尾に追加」)
@@ -230,6 +230,21 @@ Circle *-- Color
 - **Swimlane** (`|name|`) + **Note** (`note right` / `note left`、1行+複数行)
 - **Overlay-driven** (action rect / decision diamond / start-stop ellipse / fork bar)
 - ADR-109: canonical form 確定
+
+### v0.7.1 — Activity polish (mid-flow insertion)
+
+- preview hover で `+ ここに挿入` ガイド + 空白 click で modal による途中挿入
+- Sequence と同じ UX を Activity でも (action 限定 MVP)
+- `addActionAtLine` / `resolveInsertLine` / `showInsertForm` API 整備
+
+### v1.0.0 — State Diagram (Tier1 #6) + Tier1 完成
+
+- **State Diagram**: simple + composite (1-level nesting) + initial/final + choice + history pseudo-states
+- **Transitions** with full label syntax (`trigger [guard] / action`)
+- **Notes** (`note left of NAME` / `note right of NAME`、1 行 + 複数行)
+- **hoverInsert** 最初から組み込み (途中での state / transition 挿入、Class パターン流用 overlay)
+- ADR-110: State canonical DSL form
+- **Tier1 完成**: Sequence / UseCase / Component / Class / Activity / State の 6 図形すべてが overlay-driven で完備
 
 ## Overlay-Driven Editing 共通操作 (v0.5.0)
 

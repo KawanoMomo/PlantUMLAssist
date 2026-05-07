@@ -5,11 +5,13 @@ Serves static files + /render endpoint for PlantUML local/online rendering.
 import atexit
 import json
 import os
+import re
 import struct
 import subprocess
 import sys
 import threading
 import time
+import urllib.parse
 import urllib.request
 import urllib.error
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -19,6 +21,8 @@ ROOT = Path(__file__).parent
 JAR_PATH = ROOT / 'lib' / 'plantuml.jar'
 DAEMON_SRC = ROOT / 'lib' / 'PlantUMLDaemon.java'
 PORT = 8766
+AUTOSAVE_DEFAULT_DIR = ROOT / 'autosave'
+AUTOSAVE_TYPE_RE = re.compile(r'^[A-Za-z0-9_-]+$')
 
 # Windows: suppress the console window that otherwise flashes every time
 # we spawn java (once per /render call). No-op on other platforms.
@@ -28,7 +32,7 @@ if sys.platform == 'win32':
 # Seconds of heartbeat silence before the server shuts itself down.
 # Browser client POSTs /heartbeat every ~5s; if the tab is closed the
 # pings stop and the watchdog terminates the server automatically.
-IDLE_SHUTDOWN_SEC = 20
+IDLE_SHUTDOWN_SEC = 300
 
 _state_lock = threading.Lock()
 _last_heartbeat = time.time()
@@ -37,6 +41,8 @@ _shutdown_started = False
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
+        if self.path.startswith('/autosave'):
+            return self._handle_autosave_get()
         path = self.path.split('?')[0]
         if path == '/':
             path = '/plantuml-assist.html'
@@ -63,6 +69,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         global _last_heartbeat, _shutdown_started
+        if self.path == '/autosave':
+            return self._handle_autosave_post()
         if self.path == '/heartbeat':
             with _state_lock:
                 _last_heartbeat = time.time()
@@ -117,6 +125,134 @@ class Handler(BaseHTTPRequestHandler):
 
     def log_message(self, fmt, *args):
         pass
+
+    # --- autosave helpers ----------------------------------------------------
+
+    def _autosave_resolve_dir(self, raw):
+        """Resolve an autosave dir argument to an absolute Path. Empty/None → default."""
+        if not raw:
+            return AUTOSAVE_DEFAULT_DIR
+        return Path(raw).expanduser().resolve()
+
+    def _autosave_validate_type(self, dt):
+        """Return True if dt is a safe filename component."""
+        return bool(dt and AUTOSAVE_TYPE_RE.match(dt))
+
+    def _autosave_meta_path(self, save_dir):
+        return save_dir / '_meta.json'
+
+    def _autosave_file_path(self, save_dir, dt):
+        return save_dir / (dt + '.puml')
+
+    def _autosave_read_meta(self, save_dir):
+        p = self._autosave_meta_path(save_dir)
+        if not p.exists():
+            return None
+        try:
+            return json.loads(p.read_text(encoding='utf-8'))
+        except (ValueError, OSError):
+            return None
+
+    # --- autosave POST -------------------------------------------------------
+
+    def _handle_autosave_post(self):
+        length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(length).decode('utf-8')
+        try:
+            data = json.loads(body)
+        except ValueError:
+            self._send_json(400, {'error': 'invalid JSON'})
+            return
+        dt = data.get('type')
+        dsl = data.get('dsl', '')
+        dir_raw = data.get('dir')
+        if not self._autosave_validate_type(dt):
+            self._send_json(400, {'error': 'invalid type — must match [A-Za-z0-9_-]+'})
+            return
+        if not isinstance(dsl, str):
+            self._send_json(400, {'error': 'dsl must be a string'})
+            return
+        save_dir = self._autosave_resolve_dir(dir_raw)
+        try:
+            save_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            self._send_json(500, {'error': f'cannot create directory: {e}'})
+            return
+        file_path = self._autosave_file_path(save_dir, dt)
+        try:
+            file_path.write_text(dsl, encoding='utf-8')
+        except OSError as e:
+            self._send_json(500, {'error': f'write failed: {e}'})
+            return
+        meta = {
+            'lastSavedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+            'lastSavedType': dt,
+        }
+        try:
+            self._autosave_meta_path(save_dir).write_text(json.dumps(meta), encoding='utf-8')
+        except OSError:
+            pass  # meta is best-effort
+        self._send_json(200, {'ok': True, 'meta': meta, 'path': str(file_path)})
+
+    # --- autosave GET --------------------------------------------------------
+
+    def _handle_autosave_get(self):
+        parsed = urllib.parse.urlparse(self.path)
+        params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
+        dir_raw = params.get('dir')
+        save_dir = self._autosave_resolve_dir(dir_raw)
+        dt = params.get('type', '')
+        if dt:
+            if not self._autosave_validate_type(dt):
+                self._send_json(400, {'error': 'invalid type — must match [A-Za-z0-9_-]+'})
+                return
+            file_path = self._autosave_file_path(save_dir, dt)
+            if not file_path.exists():
+                self.send_error(404, 'autosave entry not found')
+                return
+            try:
+                content = file_path.read_text(encoding='utf-8')
+            except OSError as e:
+                self._send_json(500, {'error': f'read failed: {e}'})
+                return
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/plain; charset=utf-8')
+            self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+            self.end_headers()
+            self.wfile.write(content.encode('utf-8'))
+            return
+        # List mode: return all .puml stems + meta
+        files = []
+        if save_dir.exists():
+            files = sorted(p.stem for p in save_dir.glob('*.puml'))
+        meta = self._autosave_read_meta(save_dir)
+        self._send_json(200, {'files': files, 'meta': meta, 'dir': str(save_dir)})
+
+    # --- autosave DELETE -----------------------------------------------------
+
+    def do_DELETE(self):
+        if self.path.startswith('/autosave'):
+            return self._handle_autosave_delete()
+        self.send_error(404)
+
+    def _handle_autosave_delete(self):
+        parsed = urllib.parse.urlparse(self.path)
+        params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
+        dir_raw = params.get('dir')
+        save_dir = self._autosave_resolve_dir(dir_raw)
+        if save_dir.exists():
+            for p in save_dir.glob('*.puml'):
+                try:
+                    p.unlink()
+                except OSError:
+                    pass
+            meta = self._autosave_meta_path(save_dir)
+            if meta.exists():
+                try:
+                    meta.unlink()
+                except OSError:
+                    pass
+        self._send_json(200, {'ok': True})
 
 
 # --- Local render: persistent Java daemon (fast path) ------------------------

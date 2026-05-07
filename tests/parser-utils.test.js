@@ -66,4 +66,16 @@ describe('detectDiagramType — PlantUML', function() {
     var t = '@startuml\nclass Foo\nclass Bar\nFoo --|> Bar\n@enduml';
     expect(parserUtils.detectDiagramType(t)).toBe('plantuml-class');
   });
+  test('detects plantuml-state from state + transition', function() {
+    var t = '@startuml\nstate A\nstate B\nA --> B\n@enduml';
+    expect(parserUtils.detectDiagramType(t)).toBe('plantuml-state');
+  });
+  test('detects plantuml-state from [*] pseudo-state', function() {
+    var t = '@startuml\n[*] --> A\n@enduml';
+    expect(parserUtils.detectDiagramType(t)).toBe('plantuml-state');
+  });
+  test('does NOT misdetect class diagram as state', function() {
+    var t = '@startuml\nclass Foo\n@enduml';
+    expect(parserUtils.detectDiagramType(t)).toBe('plantuml-class');
+  });
 });

@@ -95,4 +95,23 @@ test.describe('Sequence Operations', () => {
     const stored = await page.evaluate(() => localStorage.getItem('plantuml-render-mode'));
     expect(stored).toBe('online');
   });
+
+  // v1.1.2: Japanese participant alias normalizes to ASCII alias (P1, P2..)
+  // so subsequent message arrows can match MSG_RE's ASCII identifier
+  // requirement.
+  test('UC-bug-jp v1.1.2: Japanese-named participant is selectable', async ({ page }) => {
+    await waitForInitialCycle(page);
+    // Switch to online for deterministic SVG render even without Java
+    await page.locator('#render-mode').selectOption('online');
+    await page.waitForTimeout(500);
+    // Clear existing template, then add Japanese participant via tail-add
+    await page.locator('#editor').fill('@startuml\n@enduml');
+    await page.waitForTimeout(800);
+    await page.locator('#seq-tail-kind').selectOption('participant');
+    await page.locator('#seq-tail-alias').fill('利用者');
+    await page.locator('#seq-tail-add').click();
+    await page.waitForTimeout(2500);
+    const t = await page.locator('#editor').inputValue();
+    expect(t).toContain('participant "利用者" as P1');
+  });
 });

@@ -53,6 +53,14 @@ window.MA.parserUtils = (function() {
       if (!hasClassKw && !hasComponentKw) return 'plantuml-activity';
     }
 
+    // State: 'state X' keyword OR '[*] -->' pseudo-state
+    var hasStateKwExplicit = /^\s*state\s+\w/m.test(text);
+    var hasInitialPseudo = /^\s*\[\*\]\s*-->/m.test(text);
+    var hasFinalPseudo = /-->\s*\[\*\]/m.test(text);
+    if ((hasStateKwExplicit || hasInitialPseudo || hasFinalPseudo) && !hasClassKw && !hasComponentKw) {
+      return 'plantuml-state';
+    }
+
     // Priority: most-specific keywords first
     // Component takes priority over Class because Component diagrams legally
     // contain `interface` (which would otherwise match hasClassKw).

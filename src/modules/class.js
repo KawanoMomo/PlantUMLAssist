@@ -323,21 +323,21 @@ window.MA.modules.plantumlClass = (function() {
 
   function fmtClass(id, label, stereotype, generics) {
     var idPart = _fmtIdGenerics(id, generics);
-    var labelPart = (label && label !== id && !generics) ? '"' + label + '" as ' + idPart : idPart;
+    var labelPart = (label && label !== id) ? '"' + label + '" as ' + idPart : idPart;
     var stereoPart = stereotype ? ' <<' + stereotype + '>>' : '';
     return 'class ' + labelPart + stereoPart;
   }
 
   function fmtInterface(id, label, stereotype, generics) {
     var idPart = _fmtIdGenerics(id, generics);
-    var labelPart = (label && label !== id && !generics) ? '"' + label + '" as ' + idPart : idPart;
+    var labelPart = (label && label !== id) ? '"' + label + '" as ' + idPart : idPart;
     var stereoPart = stereotype ? ' <<' + stereotype + '>>' : '';
     return 'interface ' + labelPart + stereoPart;
   }
 
   function fmtAbstract(id, label, stereotype, generics) {
     var idPart = _fmtIdGenerics(id, generics);
-    var labelPart = (label && label !== id && !generics) ? '"' + label + '" as ' + idPart : idPart;
+    var labelPart = (label && label !== id) ? '"' + label + '" as ' + idPart : idPart;
     var stereoPart = stereotype ? ' <<' + stereotype + '>>' : '';
     return 'abstract class ' + labelPart + stereoPart;
   }
@@ -390,6 +390,17 @@ window.MA.modules.plantumlClass = (function() {
   }
 
   var insertBeforeEnd = window.MA.dslUpdater.insertBeforeEnd;
+
+  function _existingClassIdSet(parsed) {
+    var set = {};
+    var elts = (parsed && parsed.elements) || [];
+    elts.forEach(function(e) { if (e.id) set[e.id] = true; });
+    return set;
+  }
+
+  function normalizeIdInput(rawInput, parsed) {
+    return window.MA.idNormalizer.normalize(rawInput, _existingClassIdSet(parsed), 'C');
+  }
 
   function addClass(text, id, label, stereotype, generics) {
     return insertBeforeEnd(text, fmtClass(id, label || id, stereotype, generics));
@@ -887,23 +898,26 @@ window.MA.modules.plantumlClass = (function() {
         var out = t;
         var k = document.getElementById('cl-tail-kind').value;
         if (k === 'class' || k === 'interface' || k === 'abstract') {
-          var al = document.getElementById('cl-tail-alias').value.trim();
-          if (!al) { alert('Alias 必須'); return; }
-          var lbl = document.getElementById('cl-tail-label').value.trim() || al;
+          var rawAl = document.getElementById('cl-tail-alias').value;
+          var normCl = normalizeIdInput(rawAl, parsedData);
+          if (!normCl.valid) { alert('Alias 必須'); return; }
+          var rawLbl = document.getElementById('cl-tail-label').value.trim();
+          var lbl = rawLbl || normCl.label;
           var st = document.getElementById('cl-tail-stereo').value.trim() || null;
           var genStr = document.getElementById('cl-tail-generics').value.trim();
           var gen = genStr ? genStr.split(',').map(function(s) { return s.trim(); }) : null;
           window.MA.history.pushHistory();
-          if (k === 'class') out = addClass(t, al, lbl, st, gen);
-          else if (k === 'interface') out = addInterface(t, al, lbl, st, gen);
-          else out = addAbstract(t, al, lbl, st, gen);
+          if (k === 'class') out = addClass(t, normCl.id, lbl, st, gen);
+          else if (k === 'interface') out = addInterface(t, normCl.id, lbl, st, gen);
+          else out = addAbstract(t, normCl.id, lbl, st, gen);
         } else if (k === 'enum') {
-          var al2 = document.getElementById('cl-tail-alias').value.trim();
-          if (!al2) { alert('Alias 必須'); return; }
+          var rawAl2 = document.getElementById('cl-tail-alias').value;
+          var normEn = normalizeIdInput(rawAl2, parsedData);
+          if (!normEn.valid) { alert('Alias 必須'); return; }
           var valsStr = document.getElementById('cl-tail-values').value;
           var vals = valsStr.split(/\r?\n/).map(function(s) { return s.trim(); }).filter(function(s) { return s; });
           window.MA.history.pushHistory();
-          out = addEnum(t, al2, al2, vals);
+          out = addEnum(t, normEn.id, normEn.label, vals);
         } else if (k === 'package' || k === 'namespace') {
           var lbl3 = document.getElementById('cl-tail-label').value.trim();
           if (!lbl3) { alert('Label 必須'); return; }
@@ -1035,8 +1049,16 @@ window.MA.modules.plantumlClass = (function() {
     P.bindEvent('cl-edit-apply', 'click', function() {
       window.MA.history.pushHistory();
       var t = ctx.getMmdText();
-      var newId = document.getElementById('cl-edit-id').value.trim();
-      var newLabel = document.getElementById('cl-edit-label').value.trim();
+      var rawNewId = document.getElementById('cl-edit-id').value.trim();
+      var rawNewLabel = document.getElementById('cl-edit-label').value.trim();
+      // Non-ASCII alias: normalize to ASCII alias and promote the typed alias
+      // string to the label so parser+SVG matching stays consistent.
+      var freshParsed = parse(t);
+      var renameNorm = window.MA.idNormalizer.normalize(rawNewId, _existingClassIdSet(freshParsed), 'C');
+      var newId = renameNorm.valid ? renameNorm.id : rawNewId;
+      var newLabel = (renameNorm.valid && renameNorm.id !== renameNorm.label)
+        ? renameNorm.label
+        : rawNewLabel;
       var newStereo = document.getElementById('cl-edit-stereo').value.trim() || null;
       var genStr = document.getElementById('cl-edit-generics').value.trim();
       var newGen = genStr ? genStr.split(',').map(function(s) { return s.trim(); }) : null;
@@ -1049,8 +1071,13 @@ window.MA.modules.plantumlClass = (function() {
       ctx.onUpdate();
     });
     P.bindEvent('cl-rename-refs', 'click', function() {
-      var newId = document.getElementById('cl-edit-id').value.trim();
-      if (!newId || newId === element.id) { alert('Alias を変更してから実行してください'); return; }
+      var rawNewId = document.getElementById('cl-edit-id').value.trim();
+      if (!rawNewId || rawNewId === element.id) { alert('Alias を変更してから実行してください'); return; }
+      // renameWithRefs rewrites references, so we MUST end up with an ASCII
+      // alias (otherwise refs become unparseable). Normalize first.
+      var freshParsed = parse(ctx.getMmdText());
+      var refsNorm = window.MA.idNormalizer.normalize(rawNewId, _existingClassIdSet(freshParsed), 'C');
+      var newId = refsNorm.valid ? refsNorm.id : rawNewId;
       window.MA.history.pushHistory();
       ctx.setMmdText(renameWithRefs(ctx.getMmdText(), element.id, newId));
       ctx.onUpdate();
@@ -1687,6 +1714,7 @@ window.MA.modules.plantumlClass = (function() {
     fmtNamespace: fmtNamespace,
     fmtNote: fmtNote,
     addClass: addClass,
+    normalizeIdInput: normalizeIdInput,
     addInterface: addInterface,
     addAbstract: addAbstract,
     addEnum: addEnum,

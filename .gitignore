@@ -30,4 +30,8 @@ lib/*.jar
 .eval/
 .superpowers/
 .playwright-mcp/
+.investigation/
 docs/userissue/
+
+# Auto-save file-backend runtime data
+autosave/

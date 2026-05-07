@@ -168,5 +168,26 @@ test.describe('Class diagram (v0.6.0)', () => {
       var jsErrors = errors.filter(function(e) { return e.indexOf('favicon') < 0; });
       expect(jsErrors).toHaveLength(0);
     });
+
+    // v1.1.2: Japanese class alias normalizes to ASCII alias + label so the
+    // class is selectable via overlay click (parser CLASS_KW_RE only accepts
+    // ASCII identifiers).
+    test('UC-bug-jp v1.1.2: Japanese-named class is selectable', async ({ page }) => {
+      await gotoApp(page);
+      await page.locator('#diagram-type').selectOption('plantuml-class');
+      await page.waitForTimeout(3000);
+      await page.locator('#cl-tail-kind').selectOption('class');
+      await page.locator('#cl-tail-alias').fill('クラスA');
+      await page.locator('#cl-tail-add').click();
+      // Class template is bigger (multiple classes + relations) so the render
+      // round-trip + buildOverlay takes longer than other modules. The
+      // expect.toHaveCount below polls up to 5s on its own, but the overlay
+      // is only attached after the render fetch resolves.
+      await page.waitForTimeout(4500);
+      var t = await getEditorText(page);
+      expect(t).toContain('class "クラスA" as C1');
+      var rect = page.locator('#overlay-layer rect[data-id="C1"]');
+      await expect(rect).toHaveCount(1, { timeout: 8000 });
+    });
   });
 });

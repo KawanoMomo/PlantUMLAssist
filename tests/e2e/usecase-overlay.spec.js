@@ -82,4 +82,20 @@ test.describe('UseCase overlay-driven', () => {
     var jsErrors = errors.filter(function(e) { return e.indexOf('favicon') < 0; });
     expect(jsErrors).toHaveLength(0);
   });
+
+  // v1.1.2: Japanese actor alias normalizes to ASCII alias (A1) so the new
+  // actor is selectable (parser ACTOR_KW_RE only accepts ASCII identifiers).
+  test('UC-bug-jp v1.1.2: Japanese-named actor is selectable', async ({ page }) => {
+    await gotoApp(page);
+    await page.locator('#diagram-type').selectOption('plantuml-usecase');
+    await page.waitForTimeout(2000);
+    await page.locator('#uc-tail-kind').selectOption('actor');
+    await page.locator('#uc-tail-alias').fill('管理者');
+    await page.locator('#uc-tail-add').click();
+    await page.waitForTimeout(2500);
+    var t = await getEditorText(page);
+    expect(t).toContain('actor "管理者" as A1');
+    var rect = page.locator('#overlay-layer rect[data-id="A1"]');
+    await expect(rect).toHaveCount(1);
+  });
 });

@@ -428,6 +428,7 @@ html, body {
 
     <button class="tb-btn" id="btn-open" title="ファイルを開く">Open</button>
     <button class="tb-btn" id="btn-save" title="ファイルを保存">Save</button>
+    <button class="tb-btn" id="btn-config" title="設定">⚙</button>
 
     <div class="tb-sep"></div>
 
@@ -468,6 +469,7 @@ html, body {
       <option value="plantuml-component">Component</option>
       <option value="plantuml-class">Class</option>
       <option value="plantuml-activity">Activity</option>
+      <option value="plantuml-state">State</option>
     </select>
   </div>
 
@@ -519,6 +521,7 @@ html, body {
   <!-- ── Status bar ──────────────────────────────────────────────────────── -->
   <div id="statusbar">
     <span id="status-parse">Ready</span>
+    <span id="status-autosave" style="color:var(--text-secondary);"></span>
     <span id="status-info"></span>
   </div>
 
@@ -528,6 +531,68 @@ html, body {
 <div id="act-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="act-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:400px;max-width:600px;"></div>
 </div>
+<div id="st-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+  <div id="st-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:400px;max-width:600px;"></div>
+</div>
+<div id="st-tx-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+  <div id="st-tx-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:400px;max-width:600px;"></div>
+</div>
+<div id="cfg-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+  <div id="cfg-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:380px;max-width:520px;">
+    <h3 style="margin:0 0 12px 0;">設定</h3>
+
+    <label style="display:flex;align-items:center;gap:6px;margin-bottom:10px;font-size:12px;">
+      <input type="checkbox" id="cfg-enabled"> DSL を自動保存する
+    </label>
+
+    <div style="margin-bottom:10px;font-size:12px;">
+      <label style="display:block;margin-bottom:4px;color:var(--text-secondary);">保存間隔</label>
+      <select id="cfg-debounce" style="background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;">
+        <option value="500">500ms</option>
+        <option value="1000">1秒</option>
+        <option value="2000">2秒</option>
+        <option value="5000">5秒</option>
+      </select>
+    </div>
+
+    <fieldset style="border:1px solid var(--border);border-radius:4px;padding:8px 10px;margin-bottom:10px;font-size:12px;">
+      <legend style="color:var(--text-secondary);padding:0 4px;">起動時の復元動作</legend>
+      <label style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+        <input type="radio" name="cfg-restore-mode" value="auto"> 自動復元 (確認なしで前回 DSL をロード)
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+        <input type="radio" name="cfg-restore-mode" value="confirm"> 確認ダイアログを表示 (推奨)
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;">
+        <input type="radio" name="cfg-restore-mode" value="none"> 復元しない (常にテンプレ)
+      </label>
+    </fieldset>
+
+    <fieldset style="border:1px solid var(--border);border-radius:4px;padding:8px 10px;margin-bottom:10px;font-size:12px;">
+      <legend style="color:var(--text-secondary);padding:0 4px;">保存方式</legend>
+      <label style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+        <input type="radio" name="cfg-backend" value="localStorage"> localStorage (ブラウザ内、 高速)
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;">
+        <input type="radio" name="cfg-backend" value="file"> ファイル (ディスク永続、 git で管理可能)
+      </label>
+      <div id="cfg-file-dir-row" style="display:none;margin-top:6px;">
+        <label style="display:block;margin-bottom:4px;color:var(--text-secondary);">保存先ディレクトリ</label>
+        <input type="text" id="cfg-file-dir" placeholder="./autosave" style="width:100%;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-family:monospace;">
+        <div style="font-size:10px;color:var(--text-secondary);margin-top:2px;">サーバ (server.py) からの相対パス、 または絶対パス。 存在しなければ自動作成。</div>
+      </div>
+    </fieldset>
+
+    <div id="cfg-meta-info" style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;"></div>
+
+    <button id="cfg-clear-all" style="background:var(--accent-red);color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;margin-bottom:12px;">保存データを全削除</button>
+
+    <div style="display:flex;gap:8px;">
+      <button id="cfg-cancel" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:8px;border-radius:4px;cursor:pointer;">キャンセル</button>
+      <button id="cfg-ok" style="flex:1;background:var(--accent);border:none;color:#fff;padding:8px;border-radius:4px;cursor:pointer;">OK</button>
+    </div>
+  </div>
+</div>
 </div><!-- /#app -->
 
 <!-- Hidden file input -->
@@ -536,6 +601,8 @@ html, body {
 <script src="src/core/html-utils.js"></script>
 <script src="src/core/dsl-utils.js"></script>
 <script src="src/core/regex-parts.js"></script>
+<script src="src/core/id-normalizer.js"></script>
+<script src="src/core/auto-save.js"></script>
 <script src="src/core/line-resolver.js"></script>
 <script src="src/core/formatter-interface.js"></script>
 <script src="src/core/dsl-updater.js"></script>
@@ -555,6 +622,7 @@ html, body {
 <script src="src/modules/component.js"></script>
 <script src="src/modules/class.js"></script>
 <script src="src/modules/activity.js"></script>
+<script src="src/modules/state.js"></script>
 <script src="src/app.js"></script>
 </body>
 </html>
