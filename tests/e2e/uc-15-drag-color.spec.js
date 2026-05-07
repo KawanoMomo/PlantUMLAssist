@@ -10,11 +10,13 @@ test.describe('UC-15: drag reorder + color', () => {
     await clickOverlayByLine(page, 3);  // participant System (L3 in sequence-basic.puml)
     await page.waitForTimeout(400);
 
-    await page.locator('.seq-color-swatch[data-color="#FFAAAA"]').click();
+    // userissue v1.2.5: palette を Material Design 100 へ刷新。 先頭色を
+    // #FFCDD2 (Red) に変更したので、 既存 swatch click テストも更新。
+    await page.locator('.seq-color-swatch[data-color="#FFCDD2"]').click();
     await page.waitForTimeout(500);
 
     var t = await getEditorText(page);
-    expect(t).toContain('participant System #FFAAAA');
+    expect(t).toContain('participant System #FFCDD2');
   });
 
   test('moveParticipant (direct API call) reorders DSL', async ({ page }) => {

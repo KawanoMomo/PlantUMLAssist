@@ -1140,7 +1140,25 @@ window.MA.modules.plantumlSequence = (function() {
           for (var ii = 0; ii < participants.length; ii++) if (participants[ii].id === sel.id) { pp = participants[ii]; break; }
           if (!pp) { propsEl.innerHTML = '<p style="color:var(--text-secondary);font-size:11px;">参加者が見つかりません</p>'; return; }
           var pOpts2 = PARTICIPANT_TYPES.map(function(pt) { return { value: pt, label: pt, selected: pt === pp.ptype }; });
-          var colors = ['#FFAAAA', '#FFD700', '#AAEEAA', '#AACCFF', '#E0AAFF', '#FFB88C', '#D3D3D3'];
+          // userissue v1.2.5: 設計ドキュメント向けに Material Design 100 シェード
+          // ベースの 10 色パレットへ拡張。 ロール想起 (User=Blue / Service=Green
+          // / DB=Teal / External=Orange / Critical=Red 等) を意図したセマンティック
+          // 配色。 行頭から虹順 + 末尾に gray 系を並べる。
+          var colorPalette = [
+            { hex: '#FFCDD2', name: 'Red — エラー / 重要' },
+            { hex: '#FFE0B2', name: 'Orange — 外部 / 3rd-party' },
+            { hex: '#FFF9C4', name: 'Yellow — Note / Queue' },
+            { hex: '#C8E6C9', name: 'Green — Service / 正常系' },
+            { hex: '#B2DFDB', name: 'Teal — DB / Storage' },
+            { hex: '#BBDEFB', name: 'Blue — User / 主役' },
+            { hex: '#D1C4E9', name: 'Purple — 抽象 / 特殊' },
+            { hex: '#F8BBD0', name: 'Pink — Test / Optional' },
+            { hex: '#D7CCC8', name: 'Brown — Legacy / Deprecated' },
+            { hex: '#CFD8DC', name: 'Grey — Infra / Util' },
+          ];
+          var colors = colorPalette.map(function(c) { return c.hex; });
+          var colorTitle = {};
+          colorPalette.forEach(function(c) { colorTitle[c.hex] = c.name; });
           var currentColor = null;
           var pLine = ctx.getMmdText().split('\n')[pp.line - 1];
           var cm = pLine && pLine.match(/#[0-9A-Fa-f]{6}/);
@@ -1151,7 +1169,8 @@ window.MA.modules.plantumlSequence = (function() {
               '<button class="seq-color-swatch" data-color="" title="色なし" style="width:22px;height:22px;background:transparent;border:1px dashed var(--text-secondary);border-radius:4px;cursor:pointer;' + (currentColor === null ? 'box-shadow:0 0 0 2px var(--accent);' : '') + '"></button>' +
               colors.map(function(c) {
                 var selStyle = (currentColor && currentColor.toLowerCase() === c.toLowerCase()) ? 'box-shadow:0 0 0 2px var(--accent);border-color:#fff;' : '';
-                return '<button class="seq-color-swatch" data-color="' + c + '" title="' + c + '" style="width:22px;height:22px;background:' + c + ';border:2px solid var(--bg-secondary);border-radius:4px;cursor:pointer;' + selStyle + '"></button>';
+                var titleAttr = (colorTitle[c] || c) + ' (' + c + ')';
+                return '<button class="seq-color-swatch" data-color="' + c + '" title="' + escHtml(titleAttr) + '" style="width:22px;height:22px;background:' + c + ';border:2px solid var(--bg-secondary);border-radius:4px;cursor:pointer;' + selStyle + '"></button>';
               }).join('') +
             '</div>' +
           '</div>';

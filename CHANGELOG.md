@@ -2,6 +2,38 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.5] - 2026-05-07
+
+### Changed — Participant color palette redesigned for design documentation
+
+- **設計ドキュメント向けカラーパレットへ刷新** — 旧パレット (`#FFAAAA #FFD700 #AAEEAA #AACCFF #E0AAFF #FFB88C #D3D3D3` の 7 色) は彩度が高くキャンディ調で、 Slack / Notion / 印刷物に貼った際にツール感が浮く問題があった。 Material Design 100 シェードをベースに 10 色のセマンティック配色へ刷新し、 ロール想起を意図した並び順 (虹順 + grays) に変更。
+- **新パレット (10 色)**:
+  | Hex | ラベル | 用途想定 |
+  |---|---|---|
+  | `#FFCDD2` | Red | エラー / 重要 |
+  | `#FFE0B2` | Orange | 外部 / 3rd-party |
+  | `#FFF9C4` | Yellow | Note / Queue |
+  | `#C8E6C9` | Green | Service / 正常系 |
+  | `#B2DFDB` | Teal | DB / Storage |
+  | `#BBDEFB` | Blue | User / 主役 |
+  | `#D1C4E9` | Purple | 抽象 / 特殊 |
+  | `#F8BBD0` | Pink | Test / Optional |
+  | `#D7CCC8` | Brown | Legacy / Deprecated |
+  | `#CFD8DC` | Grey | Infra / Util |
+- **swatch tooltip** に hex コードに加えロール名 (例: `Blue — User / 主役 (#BBDEFB)`) を表示。 hover 時に意図が即座に伝わる。
+- 7 → 10 色化に伴いプロパティパネル「色」セクションは 2 行レイアウト (`flex-wrap:wrap` で自動折返し)。
+
+### Tests
+
+- E2E +1 (`tests/e2e/palette-visual.spec.js`): 10 色すべての swatch が `data-color` 属性で存在 / 先頭 swatch の tooltip が "Red" + hex を含む / Blue 適用後のスクショ
+- E2E 1 件更新 (`tests/e2e/uc-15-drag-color.spec.js`): 旧 `#FFAAAA` → 新パレット先頭 `#FFCDD2` に追従
+- Visual verification (`.investigation/palette-{01-new-palette,02-applied-blue}.png`)
+
+### Notes
+
+- ユーザ指摘 「participant のカラーテーブルが微妙。 設計ドキュメントにふさわしいものはないの？」 を解消。
+- 既存の `setParticipantColor` API / `#HEX` パース regex はそのまま (任意の 6 桁 hex を受理) のため、 ユーザが editor で直接書いた色は palette 外でもそのまま動作。
+
 ## [1.2.4] - 2026-05-07
 
 ### Fixed
