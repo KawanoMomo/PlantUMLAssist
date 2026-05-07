@@ -92,6 +92,55 @@ describe('deleteActivationsFor (userissue v1.2.3)', function() {
   });
 });
 
+describe('message stereotype split/compose (userissue v1.2.7)', function() {
+  test('extractStereotype on plain label returns empty stereotype', function() {
+    var r = seq.extractStereotype('Request');
+    expect(r.stereotype).toBe('');
+    expect(r.label).toBe('Request');
+  });
+  test('extractStereotype on color-wrapped <<x>>\\nlabel', function() {
+    var r = seq.extractStereotype('<color:#32CD32><<async>></color>\\ndoLogin');
+    expect(r.stereotype).toBe('async');
+    expect(r.label).toBe('doLogin');
+  });
+  test('extractStereotype tolerates bare <<x>>\\nlabel without color tag', function() {
+    var r = seq.extractStereotype('<<sync>>\\nfoo');
+    expect(r.stereotype).toBe('sync');
+    expect(r.label).toBe('foo');
+  });
+  test('extractStereotype handles stereotype-only (no body)', function() {
+    var r = seq.extractStereotype('<color:#32CD32><<important>></color>');
+    expect(r.stereotype).toBe('important');
+    expect(r.label).toBe('');
+  });
+  test('extractStereotype handles empty/null', function() {
+    expect(seq.extractStereotype('').stereotype).toBe('');
+    expect(seq.extractStereotype(null).stereotype).toBe('');
+    expect(seq.extractStereotype(undefined).label).toBe('');
+  });
+  test('formatLabelWithStereotype canonical lime green form', function() {
+    expect(seq.formatLabelWithStereotype('async', 'doLogin'))
+      .toBe('<color:#32CD32><<async>></color>\\ndoLogin');
+  });
+  test('formatLabelWithStereotype strips user-typed <<>> wrappers (be permissive)', function() {
+    expect(seq.formatLabelWithStereotype('<<async>>', 'foo'))
+      .toBe('<color:#32CD32><<async>></color>\\nfoo');
+  });
+  test('formatLabelWithStereotype with empty stereotype returns plain label', function() {
+    expect(seq.formatLabelWithStereotype('', 'foo')).toBe('foo');
+    expect(seq.formatLabelWithStereotype('  ', 'foo')).toBe('foo');
+  });
+  test('formatLabelWithStereotype with empty label keeps stereotype only', function() {
+    expect(seq.formatLabelWithStereotype('done', '')).toBe('<color:#32CD32><<done>></color>');
+  });
+  test('round-trip: format then extract returns original', function() {
+    var combined = seq.formatLabelWithStereotype('foo', 'Bar Baz');
+    var back = seq.extractStereotype(combined);
+    expect(back.stereotype).toBe('foo');
+    expect(back.label).toBe('Bar Baz');
+  });
+});
+
 describe('sequence normalizeIdInput', function() {
   test('ASCII alias passes through', function() {
     var n = seq.normalizeIdInput('Alice', { elements: [] });

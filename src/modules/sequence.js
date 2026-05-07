@@ -345,6 +345,32 @@ window.MA.modules.plantumlSequence = (function() {
     return insertBeforeEnd(text, fmtActivation(action, target));
   }
 
+  // userissue v1.2.7: メッセージラベルから <<stereotype>> 部を抽出 / 合成する
+  // pure 関数。 canonical 形式は <color:#32CD32><<X>></color>\n<plain> で、
+  // 色タグ無しの bare <<X>>\n<plain> も受理 (parser 寛容性)。 \n は PlantUML
+  // が改行と解釈する 2 文字 (バックスラッシュ + n) リテラル。
+  var STEREOTYPE_COLOR = '#32CD32';
+  function extractStereotype(label) {
+    if (label == null) return { stereotype: '', label: '' };
+    var s = String(label);
+    var m = s.match(/^<color:[^>]+><<([^<>]+)>><\/color>\\n([\s\S]*)$/);
+    if (m) return { stereotype: m[1], label: m[2] };
+    var m2 = s.match(/^<<([^<>]+)>>\\n([\s\S]*)$/);
+    if (m2) return { stereotype: m2[1], label: m2[2] };
+    var m3 = s.match(/^<color:[^>]+><<([^<>]+)>><\/color>$/);
+    if (m3) return { stereotype: m3[1], label: '' };
+    var m4 = s.match(/^<<([^<>]+)>>$/);
+    if (m4) return { stereotype: m4[1], label: '' };
+    return { stereotype: '', label: s };
+  }
+  function formatLabelWithStereotype(stereotype, label) {
+    var st = (stereotype || '').trim().replace(/^<<+/, '').replace(/>>+$/, '').trim();
+    var lb = label != null ? String(label) : '';
+    if (!st) return lb;
+    if (!lb) return '<color:' + STEREOTYPE_COLOR + '><<' + st + '>></color>';
+    return '<color:' + STEREOTYPE_COLOR + '><<' + st + '>></color>\\n' + lb;
+  }
+
   // userissue v1.2.3: lifeline 選択時の「activation 全削除」用。 対象 participant
   // ID にマッチする activate / deactivate / create / destroy 行を一括除去。
   // メッセージ参照 (User -> System) は activation ではないので残す。
@@ -513,6 +539,11 @@ window.MA.modules.plantumlSequence = (function() {
         P.selectFieldHtml('From', 'seq-mod-from', partOptsWithNew) +
         P.selectFieldHtml('Arrow', 'seq-mod-arrow', arrowOpts) +
         P.selectFieldHtml('To', 'seq-mod-to', partOptsWithNew) +
+        // userissue v1.2.7+: 「ここに挿入」 modal にも Stereotype 入力欄を追加。
+        '<div style="margin-bottom:8px;">' +
+          '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Stereotype <span style="color:#32CD32;">&lt;&lt; &gt;&gt;</span> <span style="color:var(--text-secondary);font-weight:normal;">(任意・上段にライムグリーンで表示)</span></label>' +
+          '<input id="seq-mod-stereotype" type="text" placeholder="例: async / sync / important" style="width:100%;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-size:12px;box-sizing:border-box;">' +
+        '</div>' +
         '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">本文</label><div id="seq-mod-label-rle"></div></div>';
     } else if (kind === 'note') {
       var posOpts = NOTE_POSITIONS.map(function(p) { return { value: p, label: p, selected: p === 'over' }; });
@@ -578,11 +609,15 @@ window.MA.modules.plantumlSequence = (function() {
         } else {
           window.MA.history.pushHistory();
         }
+        // userissue v1.2.7+: stereotype 入力があれば canonical 形式で合成する。
+        var modStereoEl = document.getElementById('seq-mod-stereotype');
+        var modStereo = modStereoEl ? modStereoEl.value : '';
+        var modPlain = rleObj ? rleObj.getValue() : '';
         t = insertFn(t, line, 'message', {
           from: fr,
           to: to,
           arrow: document.getElementById('seq-mod-arrow').value,
-          label: rleObj ? rleObj.getValue() : '',
+          label: formatLabelWithStereotype(modStereo, modPlain),
         });
       } else if (kind === 'note') {
         window.MA.history.pushHistory();
@@ -847,6 +882,8 @@ window.MA.modules.plantumlSequence = (function() {
     moveMessage: moveMessage,
     addActivation: addActivation,
     deleteActivationsFor: deleteActivationsFor,
+    extractStereotype: extractStereotype,
+    formatLabelWithStereotype: formatLabelWithStereotype,
     insertBefore: insertBefore,
     insertAfter: insertAfter,
     renameWithRefs: renameWithRefs,
@@ -961,6 +998,11 @@ window.MA.modules.plantumlSequence = (function() {
               P.selectFieldHtml('From', 'seq-tail-from', partOptsWithNew) +
               P.selectFieldHtml('Arrow', 'seq-tail-arrow', arrowOpts) +
               P.selectFieldHtml('To', 'seq-tail-to', partOptsWithNew) +
+              // userissue v1.2.7+: 末尾追加でも Stereotype を入力できるように。
+              '<div style="margin-bottom:8px;">' +
+                '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Stereotype <span style="color:#32CD32;">&lt;&lt; &gt;&gt;</span> <span style="color:var(--text-secondary);font-weight:normal;">(任意・上段にライムグリーンで表示)</span></label>' +
+                '<input id="seq-tail-stereotype" type="text" placeholder="例: async / sync / important" style="width:100%;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-size:12px;box-sizing:border-box;">' +
+              '</div>' +
               '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">本文</label><div id="seq-tail-label-rle"></div></div>';
             html +=
               '<div id="seq-tail-new-inline" style="display:none;margin-top:6px;padding:8px;background:var(--bg-tertiary);border-left:3px solid var(--accent-green);border-radius:3px;">' +
@@ -1037,7 +1079,11 @@ window.MA.modules.plantumlSequence = (function() {
               } else {
                 window.MA.history.pushHistory();
               }
-              out = addMessage(t, fr, to, arrow, labelVal);
+              // userissue v1.2.7+: stereotype 入力があれば canonical 形式で合成。
+              var tailStereoEl = document.getElementById('seq-tail-stereotype');
+              var tailStereo = tailStereoEl ? tailStereoEl.value : '';
+              var combinedLabel = formatLabelWithStereotype(tailStereo, labelVal);
+              out = addMessage(t, fr, to, arrow, combinedLabel);
             } else if (kind === 'participant') {
               var rawAl = document.getElementById('seq-tail-alias').value;
               var partNorm = normalizeIdInput(rawAl, parsedData);
@@ -1111,11 +1157,17 @@ window.MA.modules.plantumlSequence = (function() {
           var fromOpts = partOpts2.map(function(o) { return { value: o.value, label: o.label, selected: o.value === mm.from }; });
           var toOpts = partOpts2.map(function(o) { return { value: o.value, label: o.label, selected: o.value === mm.to }; });
           var arrowOpts2 = ARROWS.map(function(a) { return { value: a, label: arrowLabel(a), selected: a === mm.arrow }; });
+          // userissue v1.2.7: 既存ラベルから <<stereotype>> 部を分離して個別フィールドへ。
+          var msgParts = extractStereotype(mm.label);
           propsEl.innerHTML =
             '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>' + escHtml(mm.from + ' ' + mm.arrow + ' ' + mm.to) + '</strong><br><span style="color:var(--text-secondary);">Message · L' + mm.line + '</span></div>' +
             P.selectFieldHtml('From', 'seq-edit-from', fromOpts) +
             P.selectFieldHtml('Arrow', 'seq-edit-arrow', arrowOpts2) +
             P.selectFieldHtml('To', 'seq-edit-to', toOpts) +
+            '<div style="margin-bottom:8px;">' +
+              '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Stereotype <span style="color:#32CD32;">&lt;&lt; &gt;&gt;</span> <span style="color:var(--text-secondary);font-weight:normal;">(任意・上段にライムグリーンで表示)</span></label>' +
+              '<input id="seq-edit-stereotype" type="text" value="' + escHtml(msgParts.stereotype) + '" placeholder="例: async / sync / important" style="width:100%;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-size:12px;box-sizing:border-box;">' +
+            '</div>' +
             '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">本文</label><div id="seq-edit-msg-label-rle"></div></div>' +
             actionBarHtml(mm.line, 'message');
           var mln = mm.line;
@@ -1126,12 +1178,22 @@ window.MA.modules.plantumlSequence = (function() {
               ctx.onUpdate();
             });
           });
-          // C20: rich-label-editor の onChange は input ごとに発火するため、
-          // 最初の変更時のみ pushHistory (1 edit session = 1 undo entry)
+          // userissue v1.2.7: stereotype と本文を合成して 1 つの label として書き戻す。
+          // どちらが変わっても extracted の他方を保持して再合成する。
           var _msgLabelPushed = false;
-          window.MA.richLabelEditor.mount(document.getElementById('seq-edit-msg-label-rle'), mm.label, function(v) {
+          var rleObj = window.MA.richLabelEditor.mount(document.getElementById('seq-edit-msg-label-rle'), msgParts.label, function(v) {
             if (!_msgLabelPushed) { window.MA.history.pushHistory(); _msgLabelPushed = true; }
-            ctx.setMmdText(updateMessage(ctx.getMmdText(), mln, 'label', v));
+            var stereo = (document.getElementById('seq-edit-stereotype') || { value: '' }).value;
+            var combined = formatLabelWithStereotype(stereo, v);
+            ctx.setMmdText(updateMessage(ctx.getMmdText(), mln, 'label', combined));
+            ctx.onUpdate();
+          });
+          var _stereoPushed = false;
+          document.getElementById('seq-edit-stereotype').addEventListener('change', function() {
+            if (!_stereoPushed) { window.MA.history.pushHistory(); _stereoPushed = true; }
+            var plain = rleObj && rleObj.getValue ? rleObj.getValue() : msgParts.label;
+            var combined = formatLabelWithStereotype(this.value, plain);
+            ctx.setMmdText(updateMessage(ctx.getMmdText(), mln, 'label', combined));
             ctx.onUpdate();
           });
         }
