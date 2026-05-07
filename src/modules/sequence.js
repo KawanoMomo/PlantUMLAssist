@@ -1227,23 +1227,53 @@ window.MA.modules.plantumlSequence = (function() {
           });
         }
         else if (sel.type === 'lifeline') {
-          // userissue v1.2.3: lifeline 選択 = 対象 participant の activation を一括削除する
-          // 専用パネル。 head/tail とは独立した selection type なので
-          // visual highlight も lifeline rect だけにかかる。
+          // userissue v1.2.3: lifeline 選択 = 対象 participant の activation を編集する
+          // 専用パネル。 head/tail とは独立した selection type で highlight も
+          // lifeline rect だけにかかる。
+          // userissue v1.2.6: activation を 1 行ずつ選択削除できるよう、 lifeline
+          // パネル内に個別 ✕ 付きリストを追加。 PlantUML SVG では activation バーに
+          // class が付かず click overlay を貼れないため、 panel UI で代替する。
           var lpp = null;
           for (var lii = 0; lii < participants.length; lii++) if (participants[lii].id === sel.id) { lpp = participants[lii]; break; }
           if (!lpp) { propsEl.innerHTML = '<p style="color:var(--text-secondary);font-size:11px;">参加者が見つかりません</p>'; return; }
-          var actCount = activations.filter(function(a) { return a.target === lpp.id; }).length;
+          var lifelineActs = activations.filter(function(a) { return a.target === lpp.id; })
+            .slice().sort(function(a, b) { return (a.line || 0) - (b.line || 0); });
+          var actCount = lifelineActs.length;
+          var listHtml = '';
+          if (actCount === 0) {
+            listHtml = '<div style="padding:8px;text-align:center;color:var(--text-secondary);font-size:11px;">' +
+              '(この participant に紐付く activation 行はありません)</div>';
+          } else {
+            listHtml = lifelineActs.map(function(a) {
+              return '<div style="display:flex;align-items:center;gap:6px;padding:4px 6px;margin-bottom:2px;background:var(--bg-tertiary);border:1px solid var(--border);border-radius:3px;font-size:11px;">' +
+                '<span style="color:var(--text-secondary);min-width:36px;font-family:var(--font-mono);">L' + a.line + '</span>' +
+                '<span style="flex:1;color:var(--text-primary);"><strong>' + escHtml(a.action) + '</strong> ' + escHtml(a.target) + '</span>' +
+                '<button class="seq-lifeline-delete-one" data-line="' + a.line + '" data-action="' + escHtml(a.action) + '" title="この行のみ削除" style="flex:0 0 auto;background:var(--accent-red);color:#fff;border:none;padding:3px 8px;border-radius:3px;font-size:11px;cursor:pointer;">✕</button>' +
+              '</div>';
+            }).join('');
+          }
           propsEl.innerHTML =
             '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>' + escHtml(lpp.label) + ' のライフライン</strong><br><span style="color:var(--text-secondary);">Lifeline · participant ' + escHtml(lpp.id) + '</span></div>' +
-            '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' +
-              'この participant に紐付く <strong>activate / deactivate / create / destroy</strong> 行は <strong>' + actCount + '</strong> 件あります。' +
+            '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:6px;">' +
+              '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">activate / deactivate / create / destroy 行 (' + actCount + ' 件)</label>' +
+              listHtml +
             '</div>' +
             '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-              '<button id="seq-lifeline-delete-acts" style="width:100%;background:' + (actCount > 0 ? 'var(--accent-red)' : 'var(--bg-tertiary)') + ';color:#fff;border:' + (actCount > 0 ? 'none' : '1px solid var(--border)') + ';padding:8px;border-radius:4px;font-size:12px;cursor:' + (actCount > 0 ? 'pointer' : 'not-allowed') + ';"' + (actCount === 0 ? ' disabled' : '') + '>✕ activation を全削除 (' + actCount + ' 件)</button>' +
+              '<button id="seq-lifeline-delete-acts" style="width:100%;background:' + (actCount > 0 ? 'var(--accent-red)' : 'var(--bg-tertiary)') + ';color:#fff;border:' + (actCount > 0 ? 'none' : '1px solid var(--border)') + ';padding:6px;border-radius:4px;font-size:11px;cursor:' + (actCount > 0 ? 'pointer' : 'not-allowed') + ';"' + (actCount === 0 ? ' disabled' : '') + '>✕ ' + escHtml(lpp.label) + ' の activation を全削除 (' + actCount + ' 件)</button>' +
             '</div>' +
             '<div style="font-size:10px;color:var(--text-secondary);margin-top:6px;">participant 宣言行を消したい場合は actor の頭をクリックしてください。</div>';
           var lid = lpp.id;
+          // 個別 ✕ — 行ごと削除。 削除後は line 番号がシフトするので selection を
+          // クリアし render に refresh を委譲。
+          P.bindAllByClass(propsEl, 'seq-lifeline-delete-one', function(btn) {
+            var ln = parseInt(btn.getAttribute('data-line'), 10);
+            if (isNaN(ln)) return;
+            window.MA.history.pushHistory();
+            ctx.setMmdText(deleteLine(ctx.getMmdText(), ln));
+            window.MA.selection.clearSelection();
+            ctx.onUpdate();
+          });
+          // 全削除はそのまま維持
           P.bindEvent('seq-lifeline-delete-acts', 'click', function() {
             if (actCount === 0) return;
             if (!confirm(lpp.label + ' の activate/deactivate/create/destroy 行を ' + actCount + ' 件削除します。 続行しますか?')) return;
