@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.7] - 2026-05-07
+
+### Added — Per-message Stereotype field with lime-green rendering
+
+- **メッセージごとの Stereotype 入力** — プロパティ右ペインの **メッセージ編集** / **「ここに挿入」 modal** / **末尾に追加 form** の 3 経路すべてに `Stereotype <<>>` 入力欄を新設。 入力値は `<color:#32CD32><<NAME>></color>\n<本文>` の canonical 形式で DSL に emit され、 PlantUML がライムグリーンの `«NAME»` をメッセージ上段に描画する。
+- **canonical 形式**: `User -> System : <color:#32CD32><<async>></color>\ndoLogin`
+- **パーサ寛容性**: 色タグなしの `<<async>>\nfoo` も受理し、 編集時に正規化。 ユーザが `<<async>>` のように `<<>>` 込みで入力しても strip 後にラップし直す permissive 仕様。
+- 新規 pure 関数 (sequence module 公開):
+  - `extractStereotype(label) → { stereotype, label }`
+  - `formatLabelWithStereotype(stereotype, label) → composed string`
+- 影響範囲: メッセージ label の表示・書込にだけ作用し、 from/to/arrow/note/activation の処理は不変。
+
+### Tests
+
+- 単体 +10 (`tests/sequence-updater.test.js`): plain / 色タグ有 / bare `<<>>` / stereotype-only / null / empty / canonical format / `<<>>` strip / empty stereotype / round-trip
+- E2E +7 (`tests/e2e/message-stereotype.spec.js`):
+  - 既存メッセージ選択時に Stereotype フィールド表示
+  - 入力 → DSL に `<color:#32CD32><<X>></color>\n` が emit
+  - フィールドクリア → plain label に戻る
+  - `<<X>>` wrappers strip
+  - 「ここに挿入」 modal でも入力欄あり / canonical emit
+  - 末尾追加 form でも入力欄あり / canonical emit
+  - VISUAL: SVG 上段にライムグリーンの `«async»` が表示される screenshot
+- **640 unit + 7 scoped E2E pass**, 0 failed
+
+### Notes
+
+- ユーザ指摘 「各メッセージごとにプロパティ上でステレオタイプを入力できるようにしてください。 ステレオタイプは <<>> で囲まれライムグリーンで表示されるようにしてください。 入力した場合、 メッセージの上部に表示できるように編集してください」 + 追加指摘 「ここに挿入の場合、 ステレオタイプの入力欄がない」 を解消。
+- PlantUML が `<<X>>` を UML 標準の `«X»` にレンダリングするのは仕様通り (parser は guillemets を `<<>>` に逆変換しない — DSL は `<<>>` のままで OK)。
+
 ## [1.2.6] - 2026-05-07
 
 ### Added — Per-activation row delete in lifeline panel
