@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.6] - 2026-05-07
+
+### Added — Per-activation row delete in lifeline panel
+
+- **activation 行を 1 件ずつ選択削除可能に** — v1.2.3 の lifeline 専用パネルでは「✕ activation を全削除」 のみで、 「同じ actor に紐付くライフラインを **すべて消す** ことになり部分的な修正ができない」 とユーザ指摘。 PlantUML SVG では activation バー要素に class が付かず data-source-line も無いため、 `g.activation` selector フォールバックで 1×1 placeholder rect を出していた経緯から、 SVG 上での個別 click overlay が貼れない。 解決策として **lifeline panel 内に行ごとリスト + 個別 ✕ ボタン** を追加した。
+- **lifeline パネルの新 UI**:
+  - ヘッダ 「activate / deactivate / create / destroy 行 (N 件)」
+  - 各行: `[L<line番号>] <action> <target>  ✕` のグレー背景行
+  - ✕ click → その 1 行のみ `deleteLine(text, line)` で削除 + history push + selection クリア (line 番号がシフトするので)
+  - 既存「全削除」ボタン (赤) は維持し、 list の下に配置 (件数も label に表示)
+- 新規 internal API は無し (既存 `deleteLine` / `deleteActivationsFor` をそのまま再利用)。
+
+### Tests
+
+- E2E +4 (`tests/e2e/activation-individual-delete.spec.js`):
+  - panel に 4 件 (activate ×2 + deactivate ×2) の個別 ✕ ボタンが現れる
+  - L7 ✕ → 第 1 activate のみ削除、 第 2 activate と両 deactivate および全メッセージは保持
+  - 「全削除」 は従来通り全 activation を一括削除
+  - VISUAL screenshots
+- 既存 lifeline-select-delete.spec.js (5 件) に回帰なし。 全削除挙動の互換性確保のため再 run で確認。
+- **630 unit + 9 scoped E2E pass**, 0 failed
+
+### Notes
+
+- ユーザ指摘 「activation のラインごとに選択し削除できるようにしてください。 現状できないので同じ Actor につくライフラインをすべて消すことになり、 部分的な修正ができません」 を解消。
+- SVG 上の activation バー直接クリックは PlantUML 側の class/data 欠落により実現できないが、 panel listing で代替し かつ「行番号 + action + target」 の明示で意図と DSL の対応関係も可視化された。
+
 ## [1.2.5] - 2026-05-07
 
 ### Changed — Participant color palette redesigned for design documentation
