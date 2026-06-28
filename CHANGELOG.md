@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.4] - 2026-05-07
+
+### Fixed
+
+- **Bug: Ctrl+Z / Ctrl+Y で Undo / Redo できない** — `src/core/history.js` に `pushHistory` / `undo` / `redo` の実装はあり、 `editor input` event でも `pushHistory` が呼ばれていたが、 **document-level の Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z keybinding が `app.js` に存在しなかった**。 Toolbar の `↺ Undo` / `↻ Redo` ボタンからしか発火できず、 ユーザは「ショートカット効かない」と感じていた。 textarea のネイティブ undo は `setMmdText` (tail-add 等) の programmatic な `value` 上書きで履歴が壊れるため、 native に頼ることはできない。
+- **Fix**: `app.js` に document-level keydown listener を追加し、 Ctrl/Cmd + Z (undo)、 Ctrl/Cmd + Y / Ctrl/Cmd + Shift + Z (redo) を `MA.history` にルーティング。 `e.isComposing` (IME) と Alt 修飾はスキップ。 右パネルのフォーム入力 (input/textarea/select/contenteditable) で focus 中は **ネイティブの input undo を温存** するため preventDefault しない。
+
+### Tests
+
+- E2E 5 件追加 (`tests/e2e/undo-keybinding-check.spec.js`):
+  - Ctrl+Z で tail-add を取り消し editor が元に戻る
+  - Ctrl+Y で再適用
+  - Ctrl+Shift+Z でも redo が動作
+  - 連続 Ctrl+Z で 2 段戻る
+  - 右パネル `#seq-title` 入力中の Ctrl+Z は **editor を巻き戻さず** ネイティブ undo に委譲される
+
+### Notes
+
+- ユーザ指摘 「Ctrl+Z で Undo できない」 を解消。
+- README で記載されていた 「Ctrl+Z/Ctrl+Y で Undo/Redo」 仕様が実装と乖離していた状態を解消。
+
 ## [1.2.3] - 2026-05-07
 
 ### Changed — Lifeline selection independent from actor head

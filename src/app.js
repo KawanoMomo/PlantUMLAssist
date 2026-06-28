@@ -490,6 +490,28 @@ function init() {
   document.getElementById('btn-undo').addEventListener('click', function() { window.MA.history.undo(); });
   document.getElementById('btn-redo').addEventListener('click', function() { window.MA.history.redo(); });
 
+  // userissue v1.2.4: Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z (Cmd on Mac) を MA.history
+  // にルーティング。 textarea のネイティブ undo は setMmdText の programmatic
+  // 上書きで壊れるため、 アプリ全体で 1 系統の history に統一する。
+  // 右パネルのフォーム入力 (Title/Alias 等) では native undo を温存したいので
+  // activeElement が editor 以外の input/textarea/select の時はスルー。
+  document.addEventListener('keydown', function(e) {
+    if (e.isComposing) return;
+    if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+    var key = (e.key || '').toLowerCase();
+    var isUndo = key === 'z' && !e.shiftKey;
+    var isRedo = key === 'y' || (key === 'z' && e.shiftKey);
+    if (!isUndo && !isRedo) return;
+    var ae = document.activeElement;
+    if (ae && ae !== editorEl) {
+      var tag = ae.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || ae.isContentEditable) return;
+    }
+    e.preventDefault();
+    if (isUndo) window.MA.history.undo();
+    else window.MA.history.redo();
+  });
+
   // Open / Save
   document.getElementById('btn-open').addEventListener('click', openFile);
   document.getElementById('btn-save').addEventListener('click', saveFile);
