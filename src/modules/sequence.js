@@ -345,6 +345,22 @@ window.MA.modules.plantumlSequence = (function() {
     return insertBeforeEnd(text, fmtActivation(action, target));
   }
 
+  // userissue v1.2.3: lifeline 選択時の「activation 全削除」用。 対象 participant
+  // ID にマッチする activate / deactivate / create / destroy 行を一括除去。
+  // メッセージ参照 (User -> System) は activation ではないので残す。
+  function deleteActivationsFor(text, participantId) {
+    if (!participantId) return text;
+    var escaped = window.MA.dslUtils.escapeForRegex(participantId);
+    var lineRe = new RegExp('^\\s*(' + ACTIVATION_ACTIONS.join('|') + ')\\s+' + escaped + '\\s*$');
+    var lines = text.split('\n');
+    var kept = [];
+    for (var i = 0; i < lines.length; i++) {
+      if (lineRe.test(lines[i])) continue;
+      kept.push(lines[i]);
+    }
+    return kept.join('\n');
+  }
+
   function addNote(text, position, targets, noteText) {
     return insertBeforeEnd(text, fmtNote(position, targets, noteText));
   }
@@ -830,6 +846,7 @@ window.MA.modules.plantumlSequence = (function() {
     updateNote: updateNote,
     moveMessage: moveMessage,
     addActivation: addActivation,
+    deleteActivationsFor: deleteActivationsFor,
     insertBefore: insertBefore,
     insertAfter: insertAfter,
     renameWithRefs: renameWithRefs,
@@ -1187,6 +1204,33 @@ window.MA.modules.plantumlSequence = (function() {
             var c = btn.getAttribute('data-color');
             window.MA.history.pushHistory();
             ctx.setMmdText(setParticipantColor(ctx.getMmdText(), pp.id, c || null));
+            ctx.onUpdate();
+          });
+        }
+        else if (sel.type === 'lifeline') {
+          // userissue v1.2.3: lifeline 選択 = 対象 participant の activation を一括削除する
+          // 専用パネル。 head/tail とは独立した selection type なので
+          // visual highlight も lifeline rect だけにかかる。
+          var lpp = null;
+          for (var lii = 0; lii < participants.length; lii++) if (participants[lii].id === sel.id) { lpp = participants[lii]; break; }
+          if (!lpp) { propsEl.innerHTML = '<p style="color:var(--text-secondary);font-size:11px;">参加者が見つかりません</p>'; return; }
+          var actCount = activations.filter(function(a) { return a.target === lpp.id; }).length;
+          propsEl.innerHTML =
+            '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>' + escHtml(lpp.label) + ' のライフライン</strong><br><span style="color:var(--text-secondary);">Lifeline · participant ' + escHtml(lpp.id) + '</span></div>' +
+            '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' +
+              'この participant に紐付く <strong>activate / deactivate / create / destroy</strong> 行は <strong>' + actCount + '</strong> 件あります。' +
+            '</div>' +
+            '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
+              '<button id="seq-lifeline-delete-acts" style="width:100%;background:' + (actCount > 0 ? 'var(--accent-red)' : 'var(--bg-tertiary)') + ';color:#fff;border:' + (actCount > 0 ? 'none' : '1px solid var(--border)') + ';padding:8px;border-radius:4px;font-size:12px;cursor:' + (actCount > 0 ? 'pointer' : 'not-allowed') + ';"' + (actCount === 0 ? ' disabled' : '') + '>✕ activation を全削除 (' + actCount + ' 件)</button>' +
+            '</div>' +
+            '<div style="font-size:10px;color:var(--text-secondary);margin-top:6px;">participant 宣言行を消したい場合は actor の頭をクリックしてください。</div>';
+          var lid = lpp.id;
+          P.bindEvent('seq-lifeline-delete-acts', 'click', function() {
+            if (actCount === 0) return;
+            if (!confirm(lpp.label + ' の activate/deactivate/create/destroy 行を ' + actCount + ' 件削除します。 続行しますか?')) return;
+            window.MA.history.pushHistory();
+            ctx.setMmdText(deleteActivationsFor(ctx.getMmdText(), lid));
+            window.MA.selection.clearSelection();
             ctx.onUpdate();
           });
         }

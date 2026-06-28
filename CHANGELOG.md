@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.3] - 2026-05-07
+
+### Changed — Lifeline selection independent from actor head
+
+- **lifeline は participant とは別の selectable type に分離** — 旧来 `g.participant-lifeline` (縦点線) のクリック overlay rect は `data-type="participant"` で head/tail と同一 `data-id` を共有していたため、 ライフラインをクリックしてもアクター/参加者ボックスまで一緒に highlight され、 同じ参加者編集パネルが開いていた (userissue v1.1.x の Feature #7 では「クリック可能にした」 ところまで)。 v1.2.3 で `data-type="lifeline"` に分離し、 lifeline クリック時は **lifeline 専用パネル** を表示。
+- **lifeline 専用パネル**: 「`<participant名>` のライフライン」「Lifeline · participant `<id>`」のヘッダ、 紐付く activate / deactivate / create / destroy 行の件数表示、 件数が 1 件以上の場合のみ赤ボタン **「✕ activation を全削除 (N 件)」** を表示。 「participant 宣言行を消したい場合は actor の頭をクリックしてください」のガイド文付き。
+- **delete セマンティクス**: lifeline 選択時の削除は **対象 participant の activate/deactivate/create/destroy 行のみ一括除去** で、 participant 宣言・メッセージ・他 participant の activation・note は残す。 actor head 選択時の従来の `✕ 削除` (宣言行のみ削除) はそのまま。
+- 新規 public API: `deleteActivationsFor(text, participantId)` (sequence module) — pure function、 ASCII id を `escapeForRegex` でガード、 indent を保持。
+
+### Tests
+
+- 単体テスト 5 件追加 (`tests/sequence-updater.test.js`): 基本ケース / 他 participant の activation 保持 / create+destroy / no-op / 行頭インデント維持。
+- 単体テスト 1 件更新 + 1 件追加 (`tests/sequence-overlay.test.js`): Bug C6 expected を `*3` → `*2` に変更 (lifeline 別 type 化により participant data-type 数が 2 倍に減少)、 新規 「Feature #7 v2」 で lifeline rect が `data-type="lifeline"` で 1 個 / 同 id で participant 2 個並存することを検証。
+- E2E 回帰 5 件追加 (`tests/e2e/lifeline-select-delete.spec.js`): rect 数 (3 lifeline + 6 participant) / lifeline クリック → 専用パネル表示 / ✕ ボタンで System の activation のみ削除、 DB と participant 宣言・メッセージは保持 / actor head クリックは従来通りの participant 編集 / VISUAL screenshots。
+- Visual verification (`.investigation/lifeline-v2-{01-fixture,02-selected,03-after-delete}.png`): fixture → System lifeline 単独 highlight + 専用パネル → activation 2 行削除後の editor (`activate System` / `deactivate System` 行が消失、 DB と messages は保持) を実機スクショで記録。
+
+### Notes
+
+- ユーザ指摘 「ライフラインの選択をするとアクターまで選択されるのがおかしい。 ライフラインのみ選択して削除ボタンを押せるようにしてほしい」 を解消。
+- 旧 v1.1.x の Feature #7 (lifeline をクリック可能にする) は完了済だったが、 selection 単位を participant と分けず head/tail と同列に扱っていたため意図が伝わらなかった。 v1.2.3 で「lifeline は activation 操作の単位」 と意味付けを明確化。
+
 ## [1.2.2] - 2026-05-07
 
 ### Fixed

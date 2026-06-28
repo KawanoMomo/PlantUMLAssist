@@ -61,9 +61,11 @@ window.MA.sequenceOverlay = (function() {
       });
     });
 
-    // Feature #7: lifeline (縦点線) も click 可能にする。participant の head/tail
-    // overlay rect を参照し、lifeline の <line> x 座標が head rect の範囲内に
-    // 入るものを同一 participant として関連付ける。
+    // userissue v1.2.3: lifeline は participant とは別の selectable type に分離。
+    // lifeline 選択 → activate/deactivate 行を一括削除する独自オペレーションを
+    // 持たせるため、 head/tail と highlight を分けるべく data-type='lifeline' で
+    // emit する。 ID は対応 participant と同じなので scoped operation の引数に
+    // そのまま使える。
     var lifelines = svgEl.querySelectorAll('g.participant-lifeline');
     Array.prototype.forEach.call(lifelines, function(lg) {
       var line = lg.querySelector('line');
@@ -88,7 +90,7 @@ window.MA.sequenceOverlay = (function() {
       OB.addRect(overlayEl,
         Math.min(x1, x2) - 6, Math.min(y1, y2),
         12, Math.abs(y2 - y1),
-        { 'data-type': 'participant', 'data-id': id, 'data-line': lineNum });
+        { 'data-type': 'lifeline', 'data-id': id, 'data-line': lineNum });
     });
 
     // Feature #8: group block (alt/opt/loop/par/break/critical/group) の overlay rect。
