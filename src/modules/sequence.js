@@ -557,10 +557,12 @@ window.MA.modules.plantumlSequence = (function() {
       // FEAT-001: From はアンカー行の from を初期選択する (アンカー不在時は従来どおり先頭)。
       var anchorRel = resolveAnchor(parsed, line);
       var fromOpts = withSelected(partOptsWithNew, anchorRel ? anchorRel.from : null);
+      // FEAT-002: To もアンカー行の to を初期選択する (アンカー不在時は従来どおり先頭)。
+      var toOpts = withSelected(partOptsWithNew, anchorRel ? anchorRel.to : null);
       html +=
         P.selectFieldHtml('From', 'seq-mod-from', fromOpts) +
         P.selectFieldHtml('Arrow', 'seq-mod-arrow', arrowOpts) +
-        P.selectFieldHtml('To', 'seq-mod-to', partOptsWithNew) +
+        P.selectFieldHtml('To', 'seq-mod-to', toOpts) +
         // userissue v1.2.7+: 「ここに挿入」 modal にも Stereotype 入力欄を追加。
         '<div style="margin-bottom:8px;">' +
           '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Stereotype <span style="color:#32CD32;">&lt;&lt; &gt;&gt;</span> <span style="color:var(--text-secondary);font-weight:normal;">(任意・上段にライムグリーンで表示)</span></label>' +
