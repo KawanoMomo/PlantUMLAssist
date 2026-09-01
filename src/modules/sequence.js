@@ -597,6 +597,8 @@ window.MA.modules.plantumlSequence = (function() {
     var rleObj = null;
     if (kind === 'message') rleObj = window.MA.richLabelEditor.mount(document.getElementById('seq-mod-label-rle'), '');
     else if (kind === 'note') rleObj = window.MA.richLabelEditor.mount(document.getElementById('seq-mod-ntext-rle'), '');
+    // FEAT-004: message 種別に限り、modal 表示直後に本文 textarea へフォーカスする。
+    if (kind === 'message' && rleObj && rleObj.element) rleObj.element.focus();
 
     // From/To で '__new__' が選ばれたら inline 入力を表示/非表示
     if (kind === 'message') {
