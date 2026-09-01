@@ -519,6 +519,25 @@ window.MA.modules.plantumlSequence = (function() {
     });
   }
 
+  // FEAT-001: 挿入位置のアンカー行 (line が指す message relation) を返す。
+  // 該当する message が無い場合 (先頭挿入・participant 行など) は null。
+  function resolveAnchor(parsed, line) {
+    if (!parsed || !parsed.relations) return null;
+    for (var i = 0; i < parsed.relations.length; i++) {
+      var r = parsed.relations[i];
+      if (r.kind === 'message' && r.line === line) return r;
+    }
+    return null;
+  }
+
+  // FEAT-001: selectFieldHtml 用 option 配列に selected を付与した新しい配列を返す。
+  // 元配列は破壊しない。value が null/undefined なら selected は 1件も立たない。
+  function withSelected(options, value) {
+    return options.map(function(o) {
+      return { value: o.value, label: o.label, selected: o.value === value };
+    });
+  }
+
   function _showInsertForm(ctx, line, position, kind) {
     var modal = document.getElementById('seq-modal');
     var content = document.getElementById('seq-modal-content');
@@ -535,8 +554,11 @@ window.MA.modules.plantumlSequence = (function() {
     var html = '<h3 style="margin:0 0 12px 0;color:var(--text-primary);">' + title + '</h3>';
     if (kind === 'message') {
       var arrowOpts = ARROWS.map(function(a) { return { value: a, label: arrowLabel(a), selected: a === '->' }; });
+      // FEAT-001: From はアンカー行の from を初期選択する (アンカー不在時は従来どおり先頭)。
+      var anchorRel = resolveAnchor(parsed, line);
+      var fromOpts = withSelected(partOptsWithNew, anchorRel ? anchorRel.from : null);
       html +=
-        P.selectFieldHtml('From', 'seq-mod-from', partOptsWithNew) +
+        P.selectFieldHtml('From', 'seq-mod-from', fromOpts) +
         P.selectFieldHtml('Arrow', 'seq-mod-arrow', arrowOpts) +
         P.selectFieldHtml('To', 'seq-mod-to', partOptsWithNew) +
         // userissue v1.2.7+: 「ここに挿入」 modal にも Stereotype 入力欄を追加。
@@ -886,6 +908,8 @@ window.MA.modules.plantumlSequence = (function() {
     formatLabelWithStereotype: formatLabelWithStereotype,
     insertBefore: insertBefore,
     insertAfter: insertAfter,
+    resolveAnchor: resolveAnchor,
+    withSelected: withSelected,
     renameWithRefs: renameWithRefs,
     duplicateRange: duplicateRange,
     inferActivations: inferActivations,
