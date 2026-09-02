@@ -512,8 +512,9 @@ function init() {
     else window.MA.history.redo();
   });
 
-  // FEAT-012: 選択中のキーボード操作ルーター。
-  //   ArrowUp / ArrowDown → DSL 上の前後のメッセージへ選択を移す
+  // FEAT-012 / FEAT-017: 選択中のキーボード操作ルーター。
+  //   ArrowUp / ArrowDown → DSL 上の前後のメッセージへ選択を移す (FEAT-012)
+  //   Enter               → 選択行の直後を挿入位置として挿入 modal を開く (FEAT-017)
   // 設計上の約束:
   //  - 入力中のキーは決して奪わない。IME 変換中 (isComposing / keyCode 229) と
   //    input / textarea / select / contenteditable にフォーカスがある間は素通しする。
@@ -527,6 +528,11 @@ function init() {
     if (!ae) return false;
     var tag = ae.tagName;
     return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || !!ae.isContentEditable;
+  }
+
+  function _kbdModalOpen() {
+    var m = document.getElementById('seq-modal');
+    return !!(m && m.style.display && m.style.display !== 'none');
   }
 
   // 単独選択が指す message を現在の parse 結果から解決する。
@@ -546,12 +552,28 @@ function init() {
     if (e.isComposing || e.keyCode === 229) return;
     if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
     var key = e.key;
-    if (key !== 'ArrowUp' && key !== 'ArrowDown') return;
+    if (key !== 'ArrowUp' && key !== 'ArrowDown' && key !== 'Enter') return;
     if (_kbdInTypingTarget()) return;
+    // modal 表示中は二重発火させない (FEAT-017 [AC-5])。
+    if (_kbdModalOpen()) return;
     var cur = _kbdSelectedMessage();
     if (!cur) return;
 
-    // DSL 行順で前後の message へ移す。note / group / participant は
+    if (key === 'Enter') {
+      // FEAT-017: ホバー経由と同一の入口 (showInsertForm) を position='after' で呼ぶ。
+      // From/To/Arrow の既定値ロジック (FEAT-001 / FEAT-002) と
+      // 本文欄への初期フォーカス (FEAT-004) はこの経路の内側で共有される。
+      if (!moduleHas('showInsertForm')) return;
+      e.preventDefault();
+      currentModule.showInsertForm({
+        getMmdText: function() { return mmdText; },
+        setMmdText: function(s) { mmdText = s; suppressSync = true; editorEl.value = s; suppressSync = false; },
+        onUpdate: function() { scheduleRefresh(); },
+      }, cur.line, 'after', 'message');
+      return;
+    }
+
+    // FEAT-012: DSL 行順で前後の message へ移す。note / group / participant は
     // relations の kind==='message' に現れないため自然に飛ばされる。
     var msgs = ((currentParsed && currentParsed.relations) || [])
       .filter(function(r) { return r.kind === 'message' && typeof r.line === 'number'; })
