@@ -979,6 +979,17 @@ function normalizeSvgSize(svgEl) {
     svgEl.setAttribute('height', String(h));
   }
   svgEl.removeAttribute('style');
+  // FEAT-033 (resolves UI-010): 図を縦横同率で表示する。
+  // plantuml-assist.html の `#preview-svg svg { max-width: 100% }` は幅だけを
+  // コンテナ幅に丸め、height は原寸のまま残すため非一様スケーリングになり、
+  // ラベルが横方向に潰れて重なる。原寸表示に戻し、はみ出しは
+  // `#preview-container { overflow: auto }` の横スクロールで読む。
+  // 全体俯瞰は既存の Fit / ズーム (一様倍率の transform: scale()) が担う。
+  // 🔴 本来の修正箇所は plantuml-assist.html:290-293 の CSS 規則そのものであるが、
+  //    同ファイルは feature_implementer の write_scope 外であるため、
+  //    ここからインラインスタイル (CSS 詳細度で stylesheet に優先) で上書きしている。
+  //    これは技術的負債である。CSS 側を直せるようになった時点で本行は撤去してよい。
+  svgEl.style.maxWidth = 'none';
   return { w: w || 800, h: h || 400 };
 }
 
