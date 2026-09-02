@@ -512,6 +512,62 @@ function init() {
     else window.MA.history.redo();
   });
 
+  // FEAT-012: 選択中のキーボード操作ルーター。
+  //   ArrowUp / ArrowDown → DSL 上の前後のメッセージへ選択を移す
+  // 設計上の約束:
+  //  - 入力中のキーは決して奪わない。IME 変換中 (isComposing / keyCode 229) と
+  //    input / textarea / select / contenteditable にフォーカスがある間は素通しする。
+  //    DSL エディタ textarea のカーソル移動と改行は本ルーターの対象外である。
+  //  - 修飾キー付きは対象外。Alt 付きは FEAT-013 の行移動に予約し、Ctrl/Meta 付きは
+  //    上の history ルーターの領分である。素の矢印キー = 選択移動とし、
+  //    誤操作で図が壊れない側をテキストエディタの慣習どおり素のキーに割り当てる。
+  //  - 単独選択された message のときだけ発火する (0件 / 複数 / message 以外は無反応)。
+  function _kbdInTypingTarget() {
+    var ae = document.activeElement;
+    if (!ae) return false;
+    var tag = ae.tagName;
+    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || !!ae.isContentEditable;
+  }
+
+  // 単独選択が指す message を現在の parse 結果から解決する。
+  // 0件選択 / 複数選択 / message 以外の選択では null を返す。
+  function _kbdSelectedMessage() {
+    var sel = (window.MA.selection && window.MA.selection.getSelected)
+      ? (window.MA.selection.getSelected() || []) : [];
+    if (sel.length !== 1) return null;
+    var rels = (currentParsed && currentParsed.relations) || [];
+    for (var i = 0; i < rels.length; i++) {
+      if (rels[i].kind === 'message' && rels[i].id === sel[0].id) return rels[i];
+    }
+    return null;
+  }
+
+  document.addEventListener('keydown', function(e) {
+    if (e.isComposing || e.keyCode === 229) return;
+    if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+    var key = e.key;
+    if (key !== 'ArrowUp' && key !== 'ArrowDown') return;
+    if (_kbdInTypingTarget()) return;
+    var cur = _kbdSelectedMessage();
+    if (!cur) return;
+
+    // DSL 行順で前後の message へ移す。note / group / participant は
+    // relations の kind==='message' に現れないため自然に飛ばされる。
+    var msgs = ((currentParsed && currentParsed.relations) || [])
+      .filter(function(r) { return r.kind === 'message' && typeof r.line === 'number'; })
+      .sort(function(a, b) { return a.line - b.line; });
+    var idx = -1;
+    for (var j = 0; j < msgs.length; j++) {
+      if (msgs[j].id === cur.id) { idx = j; break; }
+    }
+    if (idx < 0) return;
+    e.preventDefault();
+    var next = msgs[idx + (key === 'ArrowDown' ? 1 : -1)];
+    // 端では選択を変えず、DSL も書き換えない (FEAT-012 [AC-2])。
+    if (!next) return;
+    window.MA.selection.setSelected([{ type: 'message', id: next.id, line: next.line }]);
+  });
+
   // Open / Save
   document.getElementById('btn-open').addEventListener('click', openFile);
   document.getElementById('btn-save').addEventListener('click', saveFile);
