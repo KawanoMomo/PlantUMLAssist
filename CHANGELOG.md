@@ -2,6 +2,48 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.0] - 2026-09-02
+
+### Added — シーケンス図の挿入 modal 初期値・キーボード操作・プレビュー表示 (6 件)
+
+自動化ループ (loop) が実装した 6 件の機能追加を遡及記載する。各項目に課題 ID と commit SHA を併記した。
+
+| 課題 ID | 機能 | commit |
+|---|---|---|
+| `FEAT-001` | 挿入 modal の **From** を、挿入位置の直前メッセージ (アンカー行) の `from` で初期選択する | `e9b56494301f4e0670322dec519f020a9511bd75` |
+| `FEAT-002` | 挿入 modal の **To** を、アンカー行の `to` で初期選択する | `7ed101e105b4e0e7caae7e88a87f81b7a0168310` |
+| `FEAT-004` | 挿入 modal を開いた直後、**本文入力欄にフォーカス**が当たる | `4073c9ceeca59433be72739c01a602fca645ae24` |
+| `FEAT-012` | **上下矢印キー**で選択を前後のメッセージへ移す | `6b283ba6ba706d10698e849d44c5c75022df48ed` |
+| `FEAT-017` | **Enter キー**で選択行の直後に挿入 modal を開く | `f85e9dd8f910574adff5e4562c945ff5fe181c23` |
+| `FEAT-033` | プレビューの図を**縦横同率**で表示し、表示幅を超える分は**横スクロール**で読む | `c8af3fc1190349fc51ad7eadb5a856891ab9b70b` |
+
+- **挿入 modal の初期値 (`FEAT-001` / `FEAT-002`)** — 「ここに挿入」 modal は従来 From / To とも participant 一覧の先頭が選ばれていた。 挿入位置の直前メッセージを *アンカー行* として解決し (`resolveAnchor`)、 その `from` / `to` を `selected` として立てる (`withSelected`)。 アンカーが解決できない場合は従来どおり先頭が選ばれる。 いずれも `src/modules/sequence.js` の 1 経路のみに作用し、 arrow / note / activation の処理は不変。
+- **modal の初期フォーカス (`FEAT-004`)** — message 種別で modal を開いた直後、 本文入力欄 (`#seq-mod-label-rle .rle-textarea`) にフォーカスが当たる。 開いてから本文欄をクリックする 1 操作が不要になる。
+- **キーボード操作 (`FEAT-012` / `FEAT-017`)** — `ArrowDown` / `ArrowUp` で選択が前後のメッセージへ移る (note 行は読み飛ばす)。 選択行がある状態で `Enter` を押すと、 その直後に挿入する modal が開く。 このとき modal の From / To / Arrow の初期値は、 ホバー経由で同じアンカー行から開いた modal と一致する。
+- **プレビューの表示 (`FEAT-033`)** — レンダリング済み SVG の描画寸法を `width` / `height` 属性と一致させ (`normalizeSvgSize()`)、 縦横比の崩れをなくした。 表示幅を超える図は横スクロールで読む。
+
+### Tests
+
+各実装時の run ログから取れた実測値のみを記載する。
+
+- **単体** — `FEAT-001` で `tests/sequence-insert-anchor.test.js` に **+8** (640 passed → **648 passed, 0 failed** / exit code 0)。 `FEAT-002` / `FEAT-004` / `FEAT-012` / `FEAT-017` / `FEAT-033` はいずれも実装前後とも **648 passed, 0 failed** で増減なし (これらは E2E で判定する層のため単体を追加していない)。
+- **E2E (新規追加)**
+  - `tests/e2e/feat-001-insert-from-default.spec.js` — 3 tests (新規)
+  - `tests/e2e/feat-002-insert-to-default.spec.js` — 5 tests (新規 / 6,184 B)
+  - `tests/e2e/feat-004-insert-focus.spec.js` — 5 tests (新規 / 6,157 B)
+  - `tests/e2e/feat-012-arrow-select.spec.js` + `tests/e2e/feat-017-enter-insert.spec.js` — 合わせて 15 tests (新規 / 全件 pass)
+  - `tests/e2e/feat-033-preview-aspect-ratio.spec.js` — 新規 +187 行
+- **E2E 回帰の判定** — 各実装で「変更後の失敗テスト**名の集合**が、 同一 run 内で自力取得した変更前の失敗集合の**部分集合**であること」で判定した (件数の引き算では判定していない)。 全 6 件で新規 FAIL は 0 件。 `FEAT-033` の run では新規 FAIL 1 件 (`class-overlay.spec.js:42:5`) が現れたが、 単独再実行で PASS することを実測し、 起動タイムアウトの run 間ジッタと切り分けた。
+- **E2E ベースラインは恒常的に RED を含む** — 実装時点の failed 件数は run により 20〜22 件で揺れており、 これは本エントリの 6 件とは無関係な既存の RED である。
+- **E2E から除外した spec** — `docs/images/*.png` および `.investigation/*.png` に書き込む 6 spec (`readme-screenshots` / `activation-individual-delete` / `lifeline-select-delete` / `message-stereotype` / `palette-visual` / `scratch-visual`) は、 ループの書込許可範囲外を汚染するため実行対象から除外した。 **これらの spec が覆う範囲について、 本エントリの 6 件は回帰の有無を観測していない。**
+
+### Notes
+
+- **本エントリは遡及記載である。** 上記 6 件は 2026-08-26 以降に自動化ループによって実装され (commit 日付の実測は 2026-09-01 〜 2026-09-02)、 CHANGELOG への記載が漏れていた。 本エントリはその漏れを埋めるものであり、 新たなコード変更は伴わない。
+- **`FEAT-033` は技術的負債を含む迂回実装である。** 本来の修正箇所は `plantuml-assist.html` の CSS だが、 当該ファイルはループの書込許可範囲 (write_scope) 外であるため、 `src/app.js` からインラインスタイルで上書きする形で実装した。 CSS 側へ移す是正が必要である。
+- **手数 (charter §5) の達成は宣言しない。** `FEAT-012` / `FEAT-017` は操作手数に効く変更だが、 手数を何の値で確定するかが未決 (`LOOP-156`) であり、 達成可否は**未確定**である。 CLI E2E から得られる値は「実測」ではなく **E2E 計数 (上限値)** として扱う。
+- **`FEAT-009` は昇格済みだが未実装であり、 本エントリには含まれない。**
+
 ## [1.2.7] - 2026-05-07
 
 ### Added — Per-message Stereotype field with lime-green rendering
