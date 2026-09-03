@@ -472,6 +472,23 @@ function init() {
     window.MA.selectionRouter.bind(overlayEl);
   }
 
+  // FEAT-080: Ctrl+/ (Cmd+/) で選択行の PlantUML 行コメント ' をトグルする。
+  // Tab / Shift+Tab と同じ作法 (selectionStart/End の文字列操作 + input イベント) に
+  // そろえ、DSL 反映と履歴記録は既存の input 経路 (scheduleRefresh / MA.history) に委ねる。
+  // 日本語配列等で e.key が '/' にならない場合に備え e.code === 'Slash' も見る (FEAT-080「不利な事実」)。
+  editorEl.addEventListener('keydown', function(e) {
+    if (e.isComposing) return;
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+    if (e.key !== '/' && e.code !== 'Slash') return;
+    var res = window.MA.dslUtils.toggleLineComment(this.value, this.selectionStart, this.selectionEnd);
+    if (!res) return;
+    e.preventDefault();
+    this.value = res.value;
+    this.selectionStart = res.selectionStart;
+    this.selectionEnd = res.selectionEnd;
+    this.dispatchEvent(new Event('input'));
+  });
+
   editorEl.addEventListener('keydown', function(e) {
     if (e.key !== 'Tab' || e.isComposing) return;
     e.preventDefault();
