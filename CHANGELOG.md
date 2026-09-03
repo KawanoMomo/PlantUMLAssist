@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+
+- **シーケンス図の削除から確認ダイアログを廃止し、「元に戻す」付きトーストに置き換えた** (`FEAT-015` / ブランチ `loop/impl/FEAT-015`)。 対象は `src/modules/sequence.js` の 3 経路 — 単一行削除 (`seq-delete-line`) / group ブロック削除 (`seq-edit-group-delete`) / 範囲一括削除 (`seq-bulk-delete`)。 削除は即時に実行され、直後に「N 件削除しました」+「元に戻す」の一時トースト (6 秒) が出る。 「元に戻す」は既存の `MA.history.undo()` をそのまま呼び、新たな undo 機構は追加していない。 participant の activate/deactivate 一括削除の確認ダイアログは本件の対象外で、そのまま残る。
+
+- **削除トーストの「元に戻す」を、削除専用のスナップショット復元にした** (`FEAT-104` / `resolves: UI-011` / ブランチ `loop/impl/FEAT-104`)。 `FEAT-015` の「元に戻す」はグローバル単一 undo スタックの `MA.history.undo()` を呼んでおり、トースト表示中 (6 秒) に `pushHistory()` を伴う編集が 1 つでも起きると、スタック先頭が置き換わって**削除ではなくその編集の方が取り消されていた** (表示と実体の乖離)。 `src/modules/sequence.js` の `_toastUndo` を `_toastUndo(msg, snapshot, ctx)` に変え、削除の 3 経路 (`seq-delete-line` / `seq-edit-group-delete` / `seq-bulk-delete`) がそれぞれ削除直前のテキストを捕捉して渡すようにした。 「元に戻す」はグローバル undo に一切依存せず、そのスナップショットへ直接復元する。 復元の直前に `pushHistory()` を呼ぶため、復元操作自体も Ctrl+Z で取り消せる。 割り込み編集は取り消されない。 変更は `src/modules/sequence.js` の 1 ファイルのみで、`plantuml-assist.html` と `src/core/html-utils.js` の差分は 0 バイトである (トースト側の API は変えていない)。
+
+### Added
+
+- **`window.MA.toast`** (`src/core/html-utils.js`) — `show(message, undoLabel, onUndo)` / `dismiss()`。 画面下端中央に 1 つだけ表示され、6 秒で自動的に消える。
+
+### Tests
+
+- `tests/toast.test.js` を追加 (12 ケース)。 3 つの削除ハンドラに確認ダイアログのガードが残っていないこと、いずれも破壊の前に `pushHistory()` を呼ぶこと、トーストの表示・「元に戻す」の呼び出し・二重表示の抑止・破棄を検証する。 ユニットテストは 660 件 (追加前 648 件) が GREEN。
+- `tests/feat-104-toast-undo-snapshot.test.js` を追加 (9 ケース。`FEAT-104` / `UI-011`)。 jsdom 上に実 DOM を用意して `renderProps` から削除ボタンを実際に描画・クリックし、**トースト表示中に別の編集を挟んでから**「元に戻す」を押す経路を検証する (`UI-011` の再現条件そのもの)。 削除行が復元されること・割り込み編集が取り消されないこと・復元後の Ctrl+Z で削除済み状態へ戻ること・単一行削除と範囲一括削除の双方で成立することを含む。 変更前のコードに対しては 6 ケースが FAIL することを確認済み。
+
+### Notes
+
+- 🔴 **技術的負債 (迂回実装)**: トーストの実体は本来 `src/core/toast.js` に置き、CSS は `plantuml-assist.html` の `<style>` に書くべきものである。 しかし当該 HTML は実装側の write_scope 外で `<script>` タグを追加できないため、既に読み込まれている `src/core/html-utils.js` に相乗りし、スタイルは JS からのインライン指定で生成している (`FEAT-033` と同じ方式)。 write_scope が拡張された際は切り出しと CSS の正本化を行うこと。
+- 本件は charter §5 の 3 操作 (挿入 / 順序入れ替え / 種別変更) に含まれない削除操作の変更であり、§5 の手数の測定値には寄与しない。
+
 ## [1.3.0] - 2026-09-02
 
 ### Added — シーケンス図の挿入 modal 初期値・キーボード操作・プレビュー表示 (6 件)
