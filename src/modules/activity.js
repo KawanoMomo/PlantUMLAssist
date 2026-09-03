@@ -967,6 +967,50 @@ window.MA.modules.plantumlActivity = (function() {
     });
   }
 
+  // FEAT-115 (HFR-061): elseif の condition と label を 1 枚のフォームで入力する (3 手 → 2 手)。
+  // showInsertForm と同じ作法で act-modal に描き、modal が無ければ prompt() 2 回に戻る ([AC-5])。
+  function showElseifForm(ctx, node) {
+    var modal = document.getElementById('act-modal');
+    var content = document.getElementById('act-modal-content');
+    if (!modal || !content) {
+      var pCond = window.prompt('elseif condition:', '');
+      if (pCond === null) return;
+      var pLbl = window.prompt('elseif label (default: yes):', 'yes') || 'yes';
+      window.MA.history.pushHistory();
+      ctx.setMmdText(addElseifBranch(ctx.getMmdText(), node.line, pCond, pLbl));
+      ctx.onUpdate();
+      return;
+    }
+    var P = window.MA.properties;
+    content.innerHTML =
+      '<h3 style="margin:0 0 12px 0;color:var(--text-primary);">elseif を追加</h3>' +
+      P.fieldHtml('elseif condition', 'act-ei-cond', '', '例: 認証失敗?') +
+      P.fieldHtml('elseif label (default: yes)', 'act-ei-lbl', 'yes') +
+      '<div style="display:flex;gap:8px;margin-top:12px;">' +
+        '<button id="act-ei-cancel" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:8px;border-radius:4px;cursor:pointer;">キャンセル</button>' +
+        '<button id="act-ei-confirm" style="flex:1;background:var(--accent);border:none;color:#fff;padding:8px;border-radius:4px;cursor:pointer;">確定</button>' +
+      '</div>';
+    modal.style.display = 'flex';
+    function close() { modal.style.display = 'none'; content.innerHTML = ''; }
+    function confirmForm() {
+      var cond = document.getElementById('act-ei-cond').value;
+      var lbl = document.getElementById('act-ei-lbl').value || 'yes';
+      window.MA.history.pushHistory();
+      ctx.setMmdText(addElseifBranch(ctx.getMmdText(), node.line, cond, lbl));
+      ctx.onUpdate();
+      close();
+    }
+    P.bindEvent('act-ei-cancel', 'click', close);
+    P.bindEvent('act-ei-confirm', 'click', confirmForm);
+    // 欄への明示のフォーカス移動が手数 (charter §5) に加算され旧経路より増えるのを避けるため、
+    // 開いた時点で condition 欄にフォーカスを置き、どちらの欄でも Enter で確定できるようにする。
+    function onEnter(e) { if (e.key === 'Enter') { e.preventDefault(); confirmForm(); } }
+    P.bindEvent('act-ei-cond', 'keydown', onEnter);
+    P.bindEvent('act-ei-lbl', 'keydown', onEnter);
+    var condEl = document.getElementById('act-ei-cond');
+    if (condEl && condEl.focus) condEl.focus();
+  }
+
   var OB = window.MA.overlayBuilder;
 
   function _flattenNodes(nodes, out) {
@@ -1566,14 +1610,8 @@ window.MA.modules.plantumlActivity = (function() {
           }
         })(brs2[bj]);
       }
-      P.bindEvent('ac-add-elseif', 'click', function() {
-        var cond = window.prompt('elseif condition:', '');
-        if (cond === null) return;
-        var lbl = window.prompt('elseif label (default: yes):', 'yes') || 'yes';
-        window.MA.history.pushHistory();
-        ctx.setMmdText(addElseifBranch(ctx.getMmdText(), node.line, cond, lbl));
-        ctx.onUpdate();
-      });
+      // FEAT-115: prompt() 2 回 → 1 枚のフォーム (showElseifForm)。
+      P.bindEvent('ac-add-elseif', 'click', function() { showElseifForm(ctx, node); });
       P.bindEvent('ac-add-else', 'click', function() {
         var lbl = window.prompt('else label (default: no):', 'no') || 'no';
         window.MA.history.pushHistory();
@@ -1711,6 +1749,7 @@ window.MA.modules.plantumlActivity = (function() {
     _resolveInsertIndent: _resolveInsertIndent,
     resolveInsertLine: resolveInsertLine,
     showInsertForm: showInsertForm,
+    showElseifForm: showElseifForm,
     defaultInsertKind: 'action',
     capabilities: {
       overlaySelection: true,

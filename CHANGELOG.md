@@ -10,6 +10,8 @@ All notable changes to this project will be documented in this file.
 
 - **Component 図の relation の種別 (Kind) を、選んだ時点で DSL へ反映するようにした** (`FEAT-089` / `resolves: HFR-053` / ブランチ `loop/impl/FEAT-089`)。 これまでは Kind の `<select>` を変えたあと「変更を反映」を押さないと DSL の矢印記法が変わらなかった。 `src/modules/component.js` の `_renderRelationEdit` に `co-rel-kind` の `change` ハンドラを 1 個追加し、選択値が現在の種別と異なるときだけ `pushHistory()` → `updateRelation(..., 'kind', ...)` → 再描画を行う。 From / To / Label は自由入力で打鍵途中の反映が破壊的になり得るため、従来どおり「変更を反映」に残した。 「変更を反映」ボタン自体は 1 バイトも変更しておらず、種別変更の直後に押しても再描画後の `relation.kind` により kind の分岐が成立せず二重適用にならない。 `plantuml-assist.html` は変更していない (インラインスタイルによる迂回実装も伴わない)。
 
+- **Activity 図の elseif 追加を、連続する 2 つの `prompt()` から 1 枚のフォームに変えた** (`FEAT-115` / `resolves: HFR-061` / ブランチ `loop/impl/FEAT-115`)。 これまでは右パネルの「+ elseif 追加」を押すと `elseif condition:` と `elseif label (default: yes):` が別々のダイアログで 2 回続けて聞かれていた。 `src/modules/activity.js` に `showElseifForm(ctx, node)` を追加し、既存の `showInsertForm` と同じ作法で `act-modal` / `act-modal-content` に condition と label の 2 欄を 1 枚で描く。 フォームを開いた時点で condition 欄にフォーカスが入り、どちらの欄でも Enter で確定できる (フォーカス移動のための操作を利用者に要求しないため)。 確定時に呼ぶのは従来と同じ `addElseifBranch(text, node.line, cond, lbl)` であり、生成される DSL は同じ入力に対して従来と同一である。 `act-modal` が DOM に無い環境では従来どおり `prompt()` 2 回にフォールバックする。 else 側 (`+ else 追加`) は `prompt()` が 1 回のみで手数が減らないため変更していない。 `plantuml-assist.html` は変更しておらず、インラインスタイルによる迂回実装も伴わない。
+
 - **削除トーストの「元に戻す」を、削除専用のスナップショット復元にした** (`FEAT-104` / `resolves: UI-011` / ブランチ `loop/impl/FEAT-104`)。 `FEAT-015` の「元に戻す」はグローバル単一 undo スタックの `MA.history.undo()` を呼んでおり、トースト表示中 (6 秒) に `pushHistory()` を伴う編集が 1 つでも起きると、スタック先頭が置き換わって**削除ではなくその編集の方が取り消されていた** (表示と実体の乖離)。 `src/modules/sequence.js` の `_toastUndo` を `_toastUndo(msg, snapshot, ctx)` に変え、削除の 3 経路 (`seq-delete-line` / `seq-edit-group-delete` / `seq-bulk-delete`) がそれぞれ削除直前のテキストを捕捉して渡すようにした。 「元に戻す」はグローバル undo に一切依存せず、そのスナップショットへ直接復元する。 復元の直前に `pushHistory()` を呼ぶため、復元操作自体も Ctrl+Z で取り消せる。 割り込み編集は取り消されない。 変更は `src/modules/sequence.js` の 1 ファイルのみで、`plantuml-assist.html` と `src/core/html-utils.js` の差分は 0 バイトである (トースト側の API は変えていない)。
 
 ### Added
@@ -23,8 +25,11 @@ All notable changes to this project will be documented in this file.
 
 - `tests/e2e/feat-089-relation-kind-instant.spec.js` を追加 (3 ケース。`FEAT-089` / `HFR-053`)。 実機の `<select>` の `change` 発火経路はユニット層のスタブ `document` では判定できないため E2E に置いた。 `[AC-1]` 即時反映 / `[AC-2]` Ctrl+Z 1 回での復帰 / `[AC-3]` 直後に「変更を反映」を押しても二重適用されないこと、を検証する。 いずれも操作前のエディタ本文を取得し、操作後の本文がそれと**異なる**ことをアサートしている。 変更前のコードに対しては 3 ケースすべてが FAIL することを確認済み。
 
+- `tests/feat-115-elseif-form.test.js` (5 ケース) と `tests/e2e/feat-115-elseif-form.spec.js` (2 ケース) を追加 (`FEAT-115` / `HFR-061`)。 単体は jsdom 上に `act-modal` を持つ DOM と持たない DOM を用意し、確定時の生成 DSL が `addElseifBranch` の出力と一致すること (`[AC-2]`) / label 既定値 `yes` (`[AC-3]`) / キャンセル時の無変化と `pushHistory()` 不発 (`[AC-4]`) / `act-modal` 不在時の `prompt()` フォールバックとその中断 (`[AC-5]`) を検証する。 E2E は実機でしか判定できない `[AC-1]` (1 クリックで 1 枚のフォームが開き 2 欄が同時に存在する) と `[AC-6]` (Ctrl+Z 1 回で追加前に戻る) を担い、いずれも操作前の本文を取得して操作後がそれと**異なる**ことをアサートしている。 変更前のコードに対しては 7 ケースすべてが FAIL することを確認済み。
+
 ### Notes
 
+- `FEAT-115` の elseif 追加の操作列は、実機で「『+ elseif 追加』クリック → condition を入力 → Enter」の **2 手** で完了することを確認した (charter §5 の定義 = マウスクリック数 + キー入力数。ラベル・条件の文字列タイプは除外。測定手段は実 UI 操作)。 変更前の同じ動線はダイアログの確定が 2 回必要で 3 手だった。 🔴 本件は Activity 図であり charter §5 の測定対象 (既存**シーケンス図**の 3 操作) ではないため、§5 の達成を主張するものではない。 なお受入条件 `[AC-7]` (既存の挿入 modal が回帰しないこと) は、変更前のコードでも必ず PASS するテストにしかならず事前 FAIL を観測できないためテストを追加せず、既存 E2E が変更の前後で同じ結果であることをもって確認した。
 - `FEAT-089` の受入条件のうち `[AC-3]` 後段「履歴も増えない」は、本変更では成立していない。 「変更を反映」ボタンは変更の有無にかかわらず無条件に `pushHistory()` を呼ぶ既存実装であり (本 FEAT の実現案が同ボタンを「変更しない」と明記しているため触れていない)、種別を変えた直後に同ボタンを押すと、DSL は変わらないまま undo が 1 段積まれる。 二重適用 (矢印記法が二重に書き換わること) は起きない。
 - 🔴 **技術的負債 (迂回実装)**: トーストの実体は本来 `src/core/toast.js` に置き、CSS は `plantuml-assist.html` の `<style>` に書くべきものである。 しかし当該 HTML は実装側の write_scope 外で `<script>` タグを追加できないため、既に読み込まれている `src/core/html-utils.js` に相乗りし、スタイルは JS からのインライン指定で生成している (`FEAT-033` と同じ方式)。 write_scope が拡張された際は切り出しと CSS の正本化を行うこと。
 - 本件は charter §5 の 3 操作 (挿入 / 順序入れ替え / 種別変更) に含まれない削除操作の変更であり、§5 の手数の測定値には寄与しない。
