@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- **`Ctrl+E` でエクスポートメニューを開き、そのままキーボードで形式を選べるようにした** (`FEAT-117` / `resolves: HFR-046` の前半 / ブランチ `loop/impl/FEAT-117`)。 これまでエクスポートメニュー (`Export ▾`) を開く手段はツールバーのボタンのクリックのみで、キーボードからの導線が無かった。 `src/app.js` の Export menu ブロックに document の keydown リスナを 1 個追加し、`Ctrl+E` (macOS は `Cmd+E`) で `preventDefault()` のうえメニューを開き、先頭項目「SVGとして保存」へフォーカスを移す。 以後は `Tab` でブラウザ既定の順送りにより 4 項目 (SVG / PNG / PNG 透過 / クリップボード) を辿れる (独自の focus trap は作っていない)。 DSL エディタ (`#editor`) にフォーカスがある間も動作し、textarea の内容は変わらない。 `Ctrl+Shift+E` / `Ctrl+Alt+E` は将来の割当を潰さないため発火しない。 既存の履歴ルーター (`Ctrl+Z` / `Ctrl+Y`) には相乗りせず専用リスナを足しているため、その早期 return の意味を壊していない。 `exportSVG()` / `exportPNG()` / `exportClipboard()` の実体は 1 バイトも変更しておらず、送信先も 1 つも増えていない。 `plantuml-assist.html` は変更しておらず (既存の `id` と既存の `.open` クラスのみを使う)、インラインスタイルによる迂回実装も伴わない。 「直近設定の記憶」は本件の対象外である (`FEAT-118`)。
+
 - **DSL エディタ内で `Alt+↑` / `Alt+↓` によりカーソル行を上下に移動できるようにした** (`FEAT-116` / `resolves: HFR-033` / ブランチ `loop/impl/FEAT-116`)。 これまで DSL テキストの行の並び替えは、行を選択して切り取り・貼り付けする以外の手段が無かった。 `src/app.js` の DSL エディタ (`#editor`) に keydown ハンドラを 1 個追加し、Alt 単独修飾の `ArrowUp` / `ArrowDown` のときにカーソル行を前後の行と入れ替える。 入替そのものは既存の純関数 `window.MA.dslUpdater.moveLineUp` / `moveLineDown` をそのまま呼んでおり、新しい行操作ロジックは追加していない。 先頭行での `Alt+↑` と末尾行での `Alt+↓` は純関数が元のテキストを返すため DSL は 1 バイトも変わらない。 入替後もカーソルは移動した行の上に残るので、連打で 2 行以上動かせる。 IME 変換中 (`isComposing`) は発火しない。 DSL 反映と履歴記録は既存の `input` イベント経路 (`scheduleRefresh` / `MA.history`) にそのまま委ねており、`Ctrl+Z` 1 回で入替前に戻る。 `plantuml-assist.html` / `src/core/` / `src/modules/` はいずれも変更しておらず、インラインスタイルによる迂回実装も伴わない。 図 (SVG) 側の並び替えは本件の対象外である (`FEAT-013` の範囲)。
 
 ### Changed

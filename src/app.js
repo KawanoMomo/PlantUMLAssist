@@ -835,6 +835,20 @@ function init() {
   document.getElementById('exp-png-transparent').addEventListener('click', function() { exportMenu.classList.remove('open'); exportPNG(true); });
   document.getElementById('exp-clipboard').addEventListener('click', function() { exportMenu.classList.remove('open'); exportClipboard(); });
 
+  // FEAT-117 (resolves HFR-046 前半): Ctrl+E でエクスポートメニューを開き、先頭項目へ
+  // フォーカスを移してキーボードだけで形式を選べるようにする。
+  // 履歴ルーター (Ctrl+Z / Ctrl+Y) の早期 return の意味を壊さないため、そちらに相乗りせず
+  // Export menu ブロック内に専用のリスナを足す。Ctrl+Shift+E / Ctrl+Alt+E は将来の割当の
+  // ために発火させない。
+  document.addEventListener('keydown', function(e) {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+    if ((e.key || '').toLowerCase() !== 'e') return;
+    e.preventDefault();
+    exportMenu.classList.add('open');
+    var firstItem = document.getElementById('exp-svg');
+    if (firstItem) firstItem.focus();
+  });
+
   // Ctrl+wheel zoom, Shift+wheel horizontal scroll on preview
   var previewContainer = document.getElementById('preview-container');
   previewContainer.addEventListener('wheel', function(e) {
