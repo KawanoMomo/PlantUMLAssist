@@ -58,6 +58,18 @@ All notable changes to this project will be documented in this file.
 - `tests/feat-014-delete-key.test.js` を新設 (単体 648 passed → **658 passed, 0 failed** / exit code 0)。
   削除本体の挙動 (履歴・本文・選択解除・再描画) に加え、**連続削除**と**削除と別編集が交互に挟まる場合の
   Undo の順序**を検証ケースに含めた。
+### Added
+
+- **`Ctrl+D` で選択中メッセージを直後に複製する** (`FEAT-076` / `HFR-003` / ブランチ `loop/impl/FEAT-076`) — 単独選択された message がある状態で `Ctrl+D` を押すと、同じ from / to / arrow / label を持つ行が**選択行の直後に 1 行だけ**増える。複製は入力を要さないため挿入 modal は開かない。同じ from / to のやり取りが続く区間で、modal を開いて From / To / Arrow を選び直す一連の操作が不要になる。
+  - `Ctrl+D` の直後に `Ctrl+Z` を 1 回で複製前の DSL に戻る (history は既存の `MA.history` 1 系統のまま)。複製の後に別の編集を挟んだ場合も `Ctrl+Z` 2 回で複製前まで戻ることを実機で確認した。
+  - DSL エディタ textarea / 右パネルの入力欄にフォーカスがある間・IME 変換中・挿入 modal 表示中は発火しない。選択が 0 件 / 複数件 / message 以外のときは DSL が 1 文字も変化しない。
+  - 実装は `src/modules/sequence.js` の `duplicateMessage()` 追加 (行生成は既存の `_formatLine`、挿入は既存の `insertAfter` を再利用) と、`src/app.js` の独立 `keydown` ハンドラ 1 本。迂回実装 (インラインスタイル上書き等) は含まない。
+  - 🔴 本機能は charter §5 の 3 操作 (挿入 / 順序入れ替え / 種別変更) に含まれないため、§5 の手数の達成は主張しない。
+
+### Tests
+
+- `tests/e2e/feat-076-ctrl-d-duplicate.spec.js` を新設 (**6 tests**)。`[AC-1]`〜`[AC-5]` を実機で判定する。単体 (`node tests/run-tests.js`) は **648 passed, 0 failed** / exit code 0 で増減なし (本機能の判定層は E2E 側にある)。
+- 🔴 検証環境の注記: 実装 worktree には `lib/plantuml.jar` が無く、プレビュー SVG は "Render error" のまま検証した (ループの規律により jar の複製・ループ外プロセスの流用ができないため)。本機能の作用面は DSL エディタと右パネルであり、いずれも描画された状態でスクリーンショット検証している。
 
 ## [1.3.0] - 2026-09-02
 

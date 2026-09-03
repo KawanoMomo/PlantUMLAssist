@@ -464,6 +464,21 @@ window.MA.modules.plantumlSequence = (function() {
     return window.MA.textUpdater.insertAfterLine(text, lineNum, line);
   }
 
+  // FEAT-076 (HFR-003): lineNum の message 行を、同一の from / to / arrow / label で
+  // **その直後**に 1 行だけ複製する。生成は _formatLine / 挿入は insertAfter の再利用であり
+  // 挿入 modal の確定処理と同一経路。message でない行・不在行では text を 1 文字も変えない。
+  function duplicateMessage(text, lineNum) {
+    var rels = (parseSequence(text).relations) || [];
+    for (var i = 0; i < rels.length; i++) {
+      var r = rels[i];
+      if (r.kind === 'message' && r.line === lineNum) {
+        return insertAfter(text, lineNum, 'message',
+          { from: r.from, to: r.to, arrow: r.arrow, label: r.label });
+      }
+    }
+    return text;
+  }
+
   function bindActionBar(propsEl, ctx) {
     var P = window.MA.properties;
     P.bindAllByClass(propsEl, 'seq-insert-msg-before', function(btn) {
@@ -946,6 +961,7 @@ window.MA.modules.plantumlSequence = (function() {
     formatLabelWithStereotype: formatLabelWithStereotype,
     insertBefore: insertBefore,
     insertAfter: insertAfter,
+    duplicateMessage: duplicateMessage,
     resolveAnchor: resolveAnchor,
     withSelected: withSelected,
     renameWithRefs: renameWithRefs,
