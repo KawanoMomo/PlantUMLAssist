@@ -4,11 +4,19 @@ window.MA.modules = window.MA.modules || {};
 
 window.MA.modules.plantumlSequence = (function() {
   // FEAT-015: 削除確認ダイアログの代替。削除は即実行し、直後に「元に戻す」付きトーストを出す。
-  // 取り消しは既存の MA.history.undo() をそのまま使う (新たな undo 機構は作らない)。
-  function _toastUndo(msg) {
+  // FEAT-104 (resolves UI-011): 取り消しをグローバル undo スタックの pop から、
+  // 「削除直前のテキストのスナップショットへの直接復元」に変える。
+  // 旧実装は MA.history.undo() を呼んでおり、トースト表示中 (HIDE_MS=6000ms) に
+  // pushHistory を伴う編集が 1 つでも起きると undoStack の先頭が置き換わり、
+  // 「元に戻す」が削除ではなくその編集を取り消していた (表示と実体の乖離)。
+  // ctx は本関数のスコープからは見えない (各 bind 関数の引数) ため第 3 引数で受け取る。
+  function _toastUndo(msg, snapshot, ctx) {
     if (!window.MA || !window.MA.toast) return;
     window.MA.toast.show(msg, '元に戻す', function() {
-      window.MA.history.undo();
+      window.MA.history.pushHistory();   // 復元操作自体も undo 可能にする
+      ctx.setMmdText(snapshot);
+      window.MA.selection.clearSelection();
+      ctx.onUpdate();
     });
   }
 
@@ -495,11 +503,13 @@ window.MA.modules.plantumlSequence = (function() {
     P.bindAllByClass(propsEl, 'seq-delete-line', function(btn) {
       var ln = parseInt(btn.getAttribute('data-line'), 10);
       // FEAT-015: 削除の確認ダイアログを廃し、削除後の「元に戻す」トーストで代替する。
+      // FEAT-104: 削除直前のテキストを捕捉し、トーストの復元先として渡す。
+      var _snap = ctx.getMmdText();
       window.MA.history.pushHistory();
       ctx.setMmdText(deleteLine(ctx.getMmdText(), ln));
       window.MA.selection.clearSelection();
       ctx.onUpdate();
-      _toastUndo('1 件削除しました');
+      _toastUndo('1 件削除しました', _snap, ctx);
     });
     // C3: participant 左右挿入 (participant 選択時のみ描画される)
     P.bindAllByClass(propsEl, 'seq-insert-part-before', function(btn) {
@@ -1456,11 +1466,13 @@ window.MA.modules.plantumlSequence = (function() {
           });
           document.getElementById('seq-edit-group-delete').addEventListener('click', function() {
             // FEAT-015: 削除の確認ダイアログを廃し、削除後の「元に戻す」トーストで代替する。
+            // FEAT-104: 削除直前のテキストを捕捉し、トーストの復元先として渡す。
+            var _snap = ctx.getMmdText();
             window.MA.history.pushHistory();
             ctx.setMmdText(deleteGroup(ctx.getMmdText(), gLine, gEnd || gLine + 1));
             window.MA.selection.clearSelection();
             ctx.onUpdate();
-            _toastUndo('ブロックの開始行と end 行を削除しました (中身は保持)');
+            _toastUndo('ブロックの開始行と end 行を削除しました (中身は保持)', _snap, ctx);
           });
         }
 
@@ -1508,6 +1520,8 @@ window.MA.modules.plantumlSequence = (function() {
           // FEAT-015: 削除の確認ダイアログを廃し、削除後の「元に戻す」トーストで代替する。
           var s = parseInt(btn.getAttribute('data-start'), 10);
           var e = parseInt(btn.getAttribute('data-end'), 10);
+          // FEAT-104: 削除直前のテキストを捕捉し、トーストの復元先として渡す。
+          var _snap = ctx.getMmdText();
           window.MA.history.pushHistory();
           var lines = ctx.getMmdText().split('\n');
           var removed = e - s + 1;
@@ -1515,7 +1529,7 @@ window.MA.modules.plantumlSequence = (function() {
           ctx.setMmdText(lines.join('\n'));
           window.MA.selection.clearSelection();
           ctx.onUpdate();
-          _toastUndo(removed + ' 件削除しました');
+          _toastUndo(removed + ' 件削除しました', _snap, ctx);
         });
         return;
       }
