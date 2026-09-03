@@ -489,6 +489,31 @@ function init() {
     this.dispatchEvent(new Event('input'));
   });
 
+  // FEAT-116 (resolves HFR-033): Alt+↑ / Alt+↓ で DSL エディタのカーソル行を上下に移動する。
+  // Tab / FEAT-080 と同じ作法 (textarea の value を直接書き換え + input イベント) にそろえ、
+  // DSL 反映と履歴記録は既存の input 経路 (scheduleRefresh / MA.history) に委ねる。
+  // 入替の純関数は src/core/dsl-updater.js の moveLineUp / moveLineDown を再利用する
+  // (端の行では text をそのまま返す = [AC-3] の境界処理は純関数側が持つ)。
+  // Alt 付きは :500 の history ルーターと :553 の選択ルーターがいずれも明示的に除外しており、
+  // 本ハンドラと競合しない。
+  editorEl.addEventListener('keydown', function(e) {
+    if (e.isComposing) return;
+    if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    var up = e.key === 'ArrowUp';
+    if (!up && e.key !== 'ArrowDown') return;
+    var lineNum = this.value.substring(0, this.selectionStart).split('\n').length;
+    var DUR = window.MA.dslUpdater;
+    var next = up ? DUR.moveLineUp(this.value, lineNum) : DUR.moveLineDown(this.value, lineNum);
+    e.preventDefault();
+    if (next === this.value) return;   // 端の行: DSL は 1 バイトも変えない
+    this.value = next;
+    // カーソルは移動した行の行頭に残す ([AC-4]: 連打で 2 行以上動かせる)。
+    var moved = up ? lineNum - 1 : lineNum + 1;
+    var pos = next.split('\n').slice(0, moved - 1).join('\n').length + (moved > 1 ? 1 : 0);
+    this.selectionStart = this.selectionEnd = pos;
+    this.dispatchEvent(new Event('input'));
+  });
+
   editorEl.addEventListener('keydown', function(e) {
     if (e.key !== 'Tab' || e.isComposing) return;
     e.preventDefault();

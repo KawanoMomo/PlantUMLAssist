@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **DSL エディタ内で `Alt+↑` / `Alt+↓` によりカーソル行を上下に移動できるようにした** (`FEAT-116` / `resolves: HFR-033` / ブランチ `loop/impl/FEAT-116`)。 これまで DSL テキストの行の並び替えは、行を選択して切り取り・貼り付けする以外の手段が無かった。 `src/app.js` の DSL エディタ (`#editor`) に keydown ハンドラを 1 個追加し、Alt 単独修飾の `ArrowUp` / `ArrowDown` のときにカーソル行を前後の行と入れ替える。 入替そのものは既存の純関数 `window.MA.dslUpdater.moveLineUp` / `moveLineDown` をそのまま呼んでおり、新しい行操作ロジックは追加していない。 先頭行での `Alt+↑` と末尾行での `Alt+↓` は純関数が元のテキストを返すため DSL は 1 バイトも変わらない。 入替後もカーソルは移動した行の上に残るので、連打で 2 行以上動かせる。 IME 変換中 (`isComposing`) は発火しない。 DSL 反映と履歴記録は既存の `input` イベント経路 (`scheduleRefresh` / `MA.history`) にそのまま委ねており、`Ctrl+Z` 1 回で入替前に戻る。 `plantuml-assist.html` / `src/core/` / `src/modules/` はいずれも変更しておらず、インラインスタイルによる迂回実装も伴わない。 図 (SVG) 側の並び替えは本件の対象外である (`FEAT-013` の範囲)。
+
 ### Changed
 
 - **シーケンス図の削除から確認ダイアログを廃止し、「元に戻す」付きトーストに置き換えた** (`FEAT-015` / ブランチ `loop/impl/FEAT-015`)。 対象は `src/modules/sequence.js` の 3 経路 — 単一行削除 (`seq-delete-line`) / group ブロック削除 (`seq-edit-group-delete`) / 範囲一括削除 (`seq-bulk-delete`)。 削除は即時に実行され、直後に「N 件削除しました」+「元に戻す」の一時トースト (6 秒) が出る。 「元に戻す」は既存の `MA.history.undo()` をそのまま呼び、新たな undo 機構は追加していない。 participant の activate/deactivate 一括削除の確認ダイアログは本件の対象外で、そのまま残る。
