@@ -82,6 +82,9 @@ All notable changes to this project will be documented in this file.
 ### Tests
 
 - `tests/dsl-utils.test.js` に `toggleLineComment()` の単体 6 件を追加 (単一行トグル / 再押下での復元 / 複数行選択 / 全行コメント時のみ解除 / インデント保持 / 非文字列入力)。`tests/e2e/feat-080-comment-toggle.spec.js` に実機 2 件を追加 (プレビュー再描画と `Ctrl+Z` 1 回での復元 / エディタ外フォーカス時に発火しないこと)。
+### Added
+
+- **State 図でも ↑↓ で選択を移し、Enter で挿入フォームを開けるようにした** (`FEAT-109` / `HFR-055` / `loop/impl/FEAT-109`) — シーケンス図で先行実装した `FEAT-012` / `FEAT-017` の操作を State 図へ広げた。図種モジュールの任意実装 `kbdSelectables(parsed)` に委譲する形にしたため、未実装の図種は従来どおりの挙動のまま変わらない。State では state と transition が DSL 行順で 1 本の候補列になり、note は候補に含めない。手数の達成は主張しない (charter §5 はシーケンス図が対象)。
 
 ## [1.3.0] - 2026-09-02
 

@@ -1116,6 +1116,24 @@ window.MA.modules.plantumlState = (function() {
     return { line: items[0].line, position: 'before' };
   }
 
+  // FEAT-109: ↑↓ でキーボード選択を移す対象を DSL 行順で返す。
+  // states と transitions のみを対象とし、notes は含めない。
+  function kbdSelectables(parsed) {
+    if (!parsed) return [];
+    var out = [];
+    var sts = parsed.states || [];
+    for (var i = 0; i < sts.length; i++) {
+      out.push({ type: 'state', id: sts[i].id, line: sts[i].line });
+    }
+    var trs = parsed.transitions || [];
+    for (var j = 0; j < trs.length; j++) {
+      out.push({ type: 'transition', id: trs[j].id, line: trs[j].line });
+    }
+    return out
+      .filter(function(it) { return typeof it.line === 'number'; })
+      .sort(function(a, b) { return a.line - b.line; });
+  }
+
   function showInsertForm(ctx, line, position, kind) {
     var modal = document.getElementById('st-modal');
     var content = document.getElementById('st-modal-content');
@@ -1224,12 +1242,13 @@ window.MA.modules.plantumlState = (function() {
     deleteStateWithRefs: deleteStateWithRefs,
     resolveInsertLine: resolveInsertLine,
     showInsertForm: showInsertForm,
+    kbdSelectables: kbdSelectables,
     defaultInsertKind: 'state',
     capabilities: {
       overlaySelection: true,
       hoverInsert: false,
       participantDrag: false,
-      showInsertForm: false,
+      showInsertForm: true,
       multiSelectConnect: false,
     },
   };

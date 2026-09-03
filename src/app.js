@@ -558,20 +558,42 @@ function init() {
     return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || !!ae.isContentEditable;
   }
 
+  // FEAT-109 [AC-5]: 図種ごとの挿入 modal をすべて見る (従来は seq-modal のみ)。
+  var KBD_MODAL_IDS = ['seq-modal', 'st-modal'];
   function _kbdModalOpen() {
-    var m = document.getElementById('seq-modal');
-    return !!(m && m.style.display && m.style.display !== 'none');
+    for (var i = 0; i < KBD_MODAL_IDS.length; i++) {
+      var m = document.getElementById(KBD_MODAL_IDS[i]);
+      if (m && m.style.display && m.style.display !== 'none') return true;
+    }
+    return false;
   }
 
-  // 単独選択が指す message を現在の parse 結果から解決する。
-  // 0件選択 / 複数選択 / message 以外の選択では null を返す。
-  function _kbdSelectedMessage() {
+  // FEAT-109: キーボード選択の対象要素を DSL 行順で返す。
+  // 図種モジュールが任意実装 kbdSelectables(parsed) を持てばそれに委譲し、
+  // 無ければ従来どおり relations の kind==='message' にフォールバックする。
+  function _kbdSelectables() {
+    var items;
+    if (currentModule && typeof currentModule.kbdSelectables === 'function') {
+      items = currentModule.kbdSelectables(currentParsed) || [];
+    } else {
+      items = ((currentParsed && currentParsed.relations) || [])
+        .filter(function(r) { return r.kind === 'message'; })
+        .map(function(r) { return { type: 'message', id: r.id, line: r.line }; });
+    }
+    return items
+      .filter(function(it) { return it && typeof it.line === 'number'; })
+      .sort(function(a, b) { return a.line - b.line; });
+  }
+
+  // 単独選択が指す要素を現在の parse 結果から解決する。
+  // 0件選択 / 複数選択 / 対象外の選択では null を返す。
+  function _kbdSelectedItem() {
     var sel = (window.MA.selection && window.MA.selection.getSelected)
       ? (window.MA.selection.getSelected() || []) : [];
     if (sel.length !== 1) return null;
-    var rels = (currentParsed && currentParsed.relations) || [];
-    for (var i = 0; i < rels.length; i++) {
-      if (rels[i].kind === 'message' && rels[i].id === sel[0].id) return rels[i];
+    var items = _kbdSelectables();
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].id === sel[0].id) return items[i];
     }
     return null;
   }
@@ -585,7 +607,7 @@ function init() {
     if (_kbdInTypingTarget()) return;
     // modal 表示中は二重発火させない (FEAT-017 [AC-5])。
     if (_kbdModalOpen()) return;
-    var cur = _kbdSelectedMessage();
+    var cur = _kbdSelectedItem();
     if (!cur) return;
 
     if (key === 'Delete' || key === 'Backspace') {
@@ -612,15 +634,14 @@ function init() {
         getMmdText: function() { return mmdText; },
         setMmdText: function(s) { mmdText = s; suppressSync = true; editorEl.value = s; suppressSync = false; },
         onUpdate: function() { scheduleRefresh(); },
-      }, cur.line, 'after', 'message');
+      }, cur.line, 'after',
+        (currentModule && currentModule.defaultInsertKind) || 'message');
       return;
     }
 
-    // FEAT-012: DSL 行順で前後の message へ移す。note / group / participant は
-    // relations の kind==='message' に現れないため自然に飛ばされる。
-    var msgs = ((currentParsed && currentParsed.relations) || [])
-      .filter(function(r) { return r.kind === 'message' && typeof r.line === 'number'; })
-      .sort(function(a, b) { return a.line - b.line; });
+    // FEAT-012 / FEAT-109: DSL 行順で前後の選択対象へ移す。note / group / participant は
+    // 候補列に現れないため自然に飛ばされる。
+    var msgs = _kbdSelectables();
     var idx = -1;
     for (var j = 0; j < msgs.length; j++) {
       if (msgs[j].id === cur.id) { idx = j; break; }
@@ -630,7 +651,8 @@ function init() {
     var next = msgs[idx + (key === 'ArrowDown' ? 1 : -1)];
     // 端では選択を変えず、DSL も書き換えない (FEAT-012 [AC-2])。
     if (!next) return;
-    window.MA.selection.setSelected([{ type: 'message', id: next.id, line: next.line }]);
+    // FEAT-109: type をハードコードせず要素の実 type を使う (state / transition の再解決)。
+    window.MA.selection.setSelected([{ type: next.type || 'message', id: next.id, line: next.line }]);
   });
 
   // FEAT-076 (HFR-003): Ctrl+D で単独選択された message を直後に複製する。
