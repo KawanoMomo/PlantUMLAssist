@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- **DSL エディタの `Ctrl+/` で行コメントをトグルする** (`FEAT-080` / branch `loop/impl/FEAT-080`) — エディタにフォーカスがある状態で `Ctrl+/` (`Cmd+/`) を押すと、キャレット行、またはテキスト選択がまたぐ全行の行頭に PlantUML の行コメント記号 `'` が付く。対象行が**すべて**コメント行のときだけ外れる (1 行でも非コメント行があれば全行に付ける)。日本語配列等で `e.key` が `/` にならない場合に備えて `e.code === 'Slash'` も見る。IME 変換中 (`isComposing`) と、エディタ以外にフォーカスがあるときは発火しない。ブロックコメント `/' ... '/` は扱わない。トグル本体は `src/core/dsl-utils.js` の純関数 `toggleLineComment()` にあり、DSL への反映と履歴記録は既存の `input` イベント経路 (`scheduleRefresh` / `MA.history`) がそのまま行うため、`Ctrl+Z` 1 回で押す前の DSL に戻る。
+
+### Tests
+
+- `tests/dsl-utils.test.js` に `toggleLineComment()` の単体 6 件を追加 (単一行トグル / 再押下での復元 / 複数行選択 / 全行コメント時のみ解除 / インデント保持 / 非文字列入力)。`tests/e2e/feat-080-comment-toggle.spec.js` に実機 2 件を追加 (プレビュー再描画と `Ctrl+Z` 1 回での復元 / エディタ外フォーカス時に発火しないこと)。
+
 ## [1.3.0] - 2026-09-02
 
 ### Added — シーケンス図の挿入 modal 初期値・キーボード操作・プレビュー表示 (6 件)
