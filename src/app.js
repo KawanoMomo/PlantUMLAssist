@@ -512,9 +512,10 @@ function init() {
     else window.MA.history.redo();
   });
 
-  // FEAT-012 / FEAT-017: 選択中のキーボード操作ルーター。
+  // FEAT-012 / FEAT-017 / FEAT-014: 選択中のキーボード操作ルーター。
   //   ArrowUp / ArrowDown → DSL 上の前後のメッセージへ選択を移す (FEAT-012)
   //   Enter               → 選択行の直後を挿入位置として挿入 modal を開く (FEAT-017)
+  //   Delete / Backspace  → 選択中の message の行を削除する (FEAT-014 / UI-002 / HFR-001)
   // 設計上の約束:
   //  - 入力中のキーは決して奪わない。IME 変換中 (isComposing / keyCode 229) と
   //    input / textarea / select / contenteditable にフォーカスがある間は素通しする。
@@ -552,12 +553,27 @@ function init() {
     if (e.isComposing || e.keyCode === 229) return;
     if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
     var key = e.key;
-    if (key !== 'ArrowUp' && key !== 'ArrowDown' && key !== 'Enter') return;
+    if (key !== 'ArrowUp' && key !== 'ArrowDown' && key !== 'Enter'
+      && key !== 'Delete' && key !== 'Backspace') return;
     if (_kbdInTypingTarget()) return;
     // modal 表示中は二重発火させない (FEAT-017 [AC-5])。
     if (_kbdModalOpen()) return;
     var cur = _kbdSelectedMessage();
     if (!cur) return;
+
+    if (key === 'Delete' || key === 'Backspace') {
+      // FEAT-014: 右パネルの「✕ 削除」と同じ削除本体 (module 側) を呼ぶ。
+      // ガード (IME / 修飾キー / 入力欄 / modal / 単独選択の message) は
+      // FEAT-012 / FEAT-017 と完全に共有しており、本経路のためのゆるめはしていない。
+      if (!moduleHas('deleteSelectedLine')) return;
+      e.preventDefault();
+      currentModule.deleteSelectedLine({
+        getMmdText: function() { return mmdText; },
+        setMmdText: function(s) { mmdText = s; suppressSync = true; editorEl.value = s; suppressSync = false; },
+        onUpdate: function() { scheduleRefresh(); },
+      }, cur.line);
+      return;
+    }
 
     if (key === 'Enter') {
       // FEAT-017: ホバー経由と同一の入口 (showInsertForm) を position='after' で呼ぶ。
