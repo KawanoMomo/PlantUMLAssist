@@ -85,6 +85,8 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - **State 図でも ↑↓ で選択を移し、Enter で挿入フォームを開けるようにした** (`FEAT-109` / `HFR-055` / `loop/impl/FEAT-109`) — シーケンス図で先行実装した `FEAT-012` / `FEAT-017` の操作を State 図へ広げた。図種モジュールの任意実装 `kbdSelectables(parsed)` に委譲する形にしたため、未実装の図種は従来どおりの挙動のまま変わらない。State では state と transition が DSL 行順で 1 本の候補列になり、note は候補に含めない。手数の達成は主張しない (charter §5 はシーケンス図が対象)。
+### Changed
+- `FEAT-114` (`resolves: HFR-060`) / `loop/impl/FEAT-114`: シーケンス図の「ブロックで囲む」で連続していた 2 つの `prompt()` を、種類の 4 択ドロップダウン (alt/opt/loop/par) とラベル欄を 1 枚にまとめたフォーム (`seq-modal`) に置き換えた。種類が 4 択に限定されたため、任意文字列がそのまま DSL に入る経路がなくなった。生成される DSL は従来の `wrapWith` の出力と同一である。
 
 ## [1.3.0] - 2026-09-02
 

@@ -493,14 +493,10 @@ window.MA.modules.plantumlSequence = (function() {
       var ln = parseInt(btn.getAttribute('data-line'), 10);
       _showInsertForm(ctx, ln, 'after', 'note');
     });
+    // FEAT-114 / HFR-060: 2 連 prompt() を seq-modal の 1 枚フォームへ置き換える。
     P.bindAllByClass(propsEl, 'seq-wrap-block', function(btn) {
       var ln = parseInt(btn.getAttribute('data-line'), 10);
-      var kind = prompt('ブロック種類 (alt/opt/loop/par)', 'alt');
-      if (!kind) return;
-      var label = prompt('Label/Condition', '');
-      window.MA.history.pushHistory();
-      ctx.setMmdText(wrapWith(ctx.getMmdText(), ln, ln, kind, label || ''));
-      ctx.onUpdate();
+      _showWrapForm(ctx, ln, ln);
     });
     function _moveAndReselect(ln, direction) {
       var oldText = ctx.getMmdText();
@@ -583,6 +579,51 @@ window.MA.modules.plantumlSequence = (function() {
   function withSelected(options, value) {
     return options.map(function(o) {
       return { value: o.value, label: o.label, selected: o.value === value };
+    });
+  }
+
+  // FEAT-114 / HFR-060: 「ブロックで囲む」の 2 連 prompt() を 1 枚のフォームにまとめる。
+  // 種類は 4 択のドロップダウンに限定し、任意文字列が DSL に入る経路を塞ぐ ([AC-4])。
+  var WRAP_KINDS = ['alt', 'opt', 'loop', 'par'];
+
+  function wrapFormHtml(selectedKind) {
+    var P = window.MA.properties;
+    var kind = selectedKind || WRAP_KINDS[0];
+    var opts = WRAP_KINDS.map(function(k) {
+      return { value: k, label: k, selected: k === kind };
+    });
+    return '<h3 style="margin:0 0 12px 0;color:var(--text-primary);">ブロックで囲む</h3>' +
+      P.selectFieldHtml('ブロック種類', 'seq-wrap-kind', opts) +
+      '<div style="margin-bottom:8px;">' +
+        '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Label/Condition</label>' +
+        '<input id="seq-wrap-label" type="text" style="width:100%;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-size:12px;box-sizing:border-box;">' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;margin-top:12px;">' +
+        '<button id="seq-wrap-cancel" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:8px;border-radius:4px;cursor:pointer;">キャンセル</button>' +
+        '<button id="seq-wrap-confirm" style="flex:1;background:var(--accent);border:none;color:#fff;padding:8px;border-radius:4px;cursor:pointer;">確定</button>' +
+      '</div>';
+  }
+
+  function _showWrapForm(ctx, startLine, endLine) {
+    var modal = document.getElementById('seq-modal');
+    var content = document.getElementById('seq-modal-content');
+    content.innerHTML = wrapFormHtml(WRAP_KINDS[0]);
+    modal.style.display = 'flex';
+    var labelEl = document.getElementById('seq-wrap-label');
+    if (labelEl && labelEl.focus) labelEl.focus();
+    // [AC-3] キャンセルは DSL を 1 バイトも変えず pushHistory() も呼ばない。
+    document.getElementById('seq-wrap-cancel').addEventListener('click', function() {
+      modal.style.display = 'none';
+    });
+    // [AC-2] 書き戻しは既存の wrapWith をそのまま呼ぶ (出力はバイト単位で従来と同一)。
+    // [AC-5] pushHistory() は書き戻しの直前に 1 回だけ = Ctrl+Z 1 回で戻る。
+    document.getElementById('seq-wrap-confirm').addEventListener('click', function() {
+      var kind = document.getElementById('seq-wrap-kind').value;
+      var label = document.getElementById('seq-wrap-label').value;
+      window.MA.history.pushHistory();
+      ctx.setMmdText(wrapWith(ctx.getMmdText(), startLine, endLine, kind, label || ''));
+      modal.style.display = 'none';
+      ctx.onUpdate();
     });
   }
 
@@ -951,6 +992,8 @@ window.MA.modules.plantumlSequence = (function() {
     insertElseIntoGroup: insertElseIntoGroup,
     updateGroup: updateGroup,
     wrapWith: wrapWith,
+    WRAP_KINDS: WRAP_KINDS,
+    wrapFormHtml: wrapFormHtml,
     unwrap: unwrap,
     addNote: addNote,
     updateNote: updateNote,
