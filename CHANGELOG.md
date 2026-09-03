@@ -8,6 +8,8 @@ All notable changes to this project will be documented in this file.
 
 - **シーケンス図の削除から確認ダイアログを廃止し、「元に戻す」付きトーストに置き換えた** (`FEAT-015` / ブランチ `loop/impl/FEAT-015`)。 対象は `src/modules/sequence.js` の 3 経路 — 単一行削除 (`seq-delete-line`) / group ブロック削除 (`seq-edit-group-delete`) / 範囲一括削除 (`seq-bulk-delete`)。 削除は即時に実行され、直後に「N 件削除しました」+「元に戻す」の一時トースト (6 秒) が出る。 「元に戻す」は既存の `MA.history.undo()` をそのまま呼び、新たな undo 機構は追加していない。 participant の activate/deactivate 一括削除の確認ダイアログは本件の対象外で、そのまま残る。
 
+- **Component 図の relation の種別 (Kind) を、選んだ時点で DSL へ反映するようにした** (`FEAT-089` / `resolves: HFR-053` / ブランチ `loop/impl/FEAT-089`)。 これまでは Kind の `<select>` を変えたあと「変更を反映」を押さないと DSL の矢印記法が変わらなかった。 `src/modules/component.js` の `_renderRelationEdit` に `co-rel-kind` の `change` ハンドラを 1 個追加し、選択値が現在の種別と異なるときだけ `pushHistory()` → `updateRelation(..., 'kind', ...)` → 再描画を行う。 From / To / Label は自由入力で打鍵途中の反映が破壊的になり得るため、従来どおり「変更を反映」に残した。 「変更を反映」ボタン自体は 1 バイトも変更しておらず、種別変更の直後に押しても再描画後の `relation.kind` により kind の分岐が成立せず二重適用にならない。 `plantuml-assist.html` は変更していない (インラインスタイルによる迂回実装も伴わない)。
+
 - **削除トーストの「元に戻す」を、削除専用のスナップショット復元にした** (`FEAT-104` / `resolves: UI-011` / ブランチ `loop/impl/FEAT-104`)。 `FEAT-015` の「元に戻す」はグローバル単一 undo スタックの `MA.history.undo()` を呼んでおり、トースト表示中 (6 秒) に `pushHistory()` を伴う編集が 1 つでも起きると、スタック先頭が置き換わって**削除ではなくその編集の方が取り消されていた** (表示と実体の乖離)。 `src/modules/sequence.js` の `_toastUndo` を `_toastUndo(msg, snapshot, ctx)` に変え、削除の 3 経路 (`seq-delete-line` / `seq-edit-group-delete` / `seq-bulk-delete`) がそれぞれ削除直前のテキストを捕捉して渡すようにした。 「元に戻す」はグローバル undo に一切依存せず、そのスナップショットへ直接復元する。 復元の直前に `pushHistory()` を呼ぶため、復元操作自体も Ctrl+Z で取り消せる。 割り込み編集は取り消されない。 変更は `src/modules/sequence.js` の 1 ファイルのみで、`plantuml-assist.html` と `src/core/html-utils.js` の差分は 0 バイトである (トースト側の API は変えていない)。
 
 ### Added
@@ -19,8 +21,11 @@ All notable changes to this project will be documented in this file.
 - `tests/toast.test.js` を追加 (12 ケース)。 3 つの削除ハンドラに確認ダイアログのガードが残っていないこと、いずれも破壊の前に `pushHistory()` を呼ぶこと、トーストの表示・「元に戻す」の呼び出し・二重表示の抑止・破棄を検証する。 ユニットテストは 660 件 (追加前 648 件) が GREEN。
 - `tests/feat-104-toast-undo-snapshot.test.js` を追加 (9 ケース。`FEAT-104` / `UI-011`)。 jsdom 上に実 DOM を用意して `renderProps` から削除ボタンを実際に描画・クリックし、**トースト表示中に別の編集を挟んでから**「元に戻す」を押す経路を検証する (`UI-011` の再現条件そのもの)。 削除行が復元されること・割り込み編集が取り消されないこと・復元後の Ctrl+Z で削除済み状態へ戻ること・単一行削除と範囲一括削除の双方で成立することを含む。 変更前のコードに対しては 6 ケースが FAIL することを確認済み。
 
+- `tests/e2e/feat-089-relation-kind-instant.spec.js` を追加 (3 ケース。`FEAT-089` / `HFR-053`)。 実機の `<select>` の `change` 発火経路はユニット層のスタブ `document` では判定できないため E2E に置いた。 `[AC-1]` 即時反映 / `[AC-2]` Ctrl+Z 1 回での復帰 / `[AC-3]` 直後に「変更を反映」を押しても二重適用されないこと、を検証する。 いずれも操作前のエディタ本文を取得し、操作後の本文がそれと**異なる**ことをアサートしている。 変更前のコードに対しては 3 ケースすべてが FAIL することを確認済み。
+
 ### Notes
 
+- `FEAT-089` の受入条件のうち `[AC-3]` 後段「履歴も増えない」は、本変更では成立していない。 「変更を反映」ボタンは変更の有無にかかわらず無条件に `pushHistory()` を呼ぶ既存実装であり (本 FEAT の実現案が同ボタンを「変更しない」と明記しているため触れていない)、種別を変えた直後に同ボタンを押すと、DSL は変わらないまま undo が 1 段積まれる。 二重適用 (矢印記法が二重に書き換わること) は起きない。
 - 🔴 **技術的負債 (迂回実装)**: トーストの実体は本来 `src/core/toast.js` に置き、CSS は `plantuml-assist.html` の `<style>` に書くべきものである。 しかし当該 HTML は実装側の write_scope 外で `<script>` タグを追加できないため、既に読み込まれている `src/core/html-utils.js` に相乗りし、スタイルは JS からのインライン指定で生成している (`FEAT-033` と同じ方式)。 write_scope が拡張された際は切り出しと CSS の正本化を行うこと。
 - 本件は charter §5 の 3 操作 (挿入 / 順序入れ替え / 種別変更) に含まれない削除操作の変更であり、§5 の手数の測定値には寄与しない。
 

@@ -596,6 +596,17 @@ window.MA.modules.plantumlComponent = (function() {
       '</div>';
     propsEl.innerHTML = html;
 
+    // FEAT-089: 種別 (Kind) は選んだ時点で確定する。From / To / Label は自由入力であり
+    // 打鍵途中の反映が破壊的になり得るため、従来どおり「変更を反映」に残す。
+    // 二重適用は起きない: 反映後の再描画で relation.kind が更新されるため、続けて
+    // 「変更を反映」を押しても co-rel-apply 側の kind 分岐が成立しない。
+    P.bindEvent('co-rel-kind', 'change', function() {
+      var newKind = document.getElementById('co-rel-kind').value;
+      if (newKind === relation.kind) return;
+      window.MA.history.pushHistory();
+      ctx.setMmdText(updateRelation(ctx.getMmdText(), relation.line, 'kind', newKind));
+      ctx.onUpdate();
+    });
     P.bindEvent('co-rel-apply', 'click', function() {
       window.MA.history.pushHistory();
       var t = ctx.getMmdText();
