@@ -23,6 +23,24 @@ All notable changes to this project will be documented in this file.
 
 - 🔴 **技術的負債 (迂回実装)**: トーストの実体は本来 `src/core/toast.js` に置き、CSS は `plantuml-assist.html` の `<style>` に書くべきものである。 しかし当該 HTML は実装側の write_scope 外で `<script>` タグを追加できないため、既に読み込まれている `src/core/html-utils.js` に相乗りし、スタイルは JS からのインライン指定で生成している (`FEAT-033` と同じ方式)。 write_scope が拡張された際は切り出しと CSS の正本化を行うこと。
 - 本件は charter §5 の 3 操作 (挿入 / 順序入れ替え / 種別変更) に含まれない削除操作の変更であり、§5 の手数の測定値には寄与しない。
+### Fixed
+
+- **図の空白クリックで選択が解除される** (`FEAT-009` / resolves `UI-003` / ブランチ `loop/impl/FEAT-009`) —
+  `README.md:256` が明記する「**空白クリック**: 選択解除」が動作していなかった。原因は
+  `#overlay-layer` が `pointer-events:none` で、当たり判定を持つのが子の rect だけだったこと。
+  overlay の最背面に透明な背景 rect (`rect.overlay-background` / `pointer-events:all`) を敷き、
+  `selection-router.js` の既存分岐 (`data-type` を持たない要素のクリック = 空白 →
+  `clearSelection()`) に到達させた。設置点は `overlay-builder.js` の `syncDimensions()` で、
+  シーケンス / ユースケース / コンポーネント / クラス / アクティビティ / ステートの全モジュールに効く。
+  あわせて `app.js` の挿入 popup ハンドラで click 時点の選択状態を capture 段階で記録し、
+  1 クリックで「解除」と「挿入 modal を開く」が同時に起きないようにした。Esc キーによる解除は
+  本項の対象外 (`UI-003` の改善案 1 のうち空白クリック分のみを実装)。
+  🔴 本項は charter §5 の手数を減らさない。§5 の 3 操作 (途中挿入 / 順序入替 / 種別変更) に
+  選択解除は含まれず、手数の増減もない。効くのは README と実装の乖離の解消である。
+  テストは `tests/overlay-builder.test.js` に +2、`tests/e2e/feat-009-blank-click-deselect.spec.js`
+  を新規追加 (2 tests)。回帰は失敗テスト**名の集合**の包含で判定した (件数の引き算ではない)。
+  `docs/images/*.png` を上書きする `readme-screenshots.spec.js` は実行対象から除外しており、
+  **その spec が覆う範囲について本項は回帰の有無を観測していない。**
 
 ## [1.3.0] - 2026-09-02
 

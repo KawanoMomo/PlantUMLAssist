@@ -233,11 +233,21 @@ function init() {
 
     previewContainerForHover.addEventListener('mouseleave', clearHoverGuide);
 
+    // FEAT-009 (resolves UI-003): 空白クリックは先に overlay の click ハンドラ
+    // (selectionRouter = 選択解除) を通ってから ここへ bubble するため、下の
+    // handler の時点では選択が既に空で、_hasSelection() だけでは「解除」と
+    // 「挿入 popup」が 1 クリックで同時に起きる。click 時点の選択状態を capture
+    // 段階で記録し、bubble 側はその値で判定する。
+    var hadSelectionAtClick = false;
+    previewContainerForHover.addEventListener('click', function() {
+      hadSelectionAtClick = _hasSelection();
+    }, true);
+
     previewContainerForHover.addEventListener('click', function(e) {
       // drag 終了直後の click は無視 (participant drag と挿入 popup の競合回避)
       if (Date.now() - justDraggedAt < DRAG_CLICK_SUPPRESS_MS) return;
       // 選択中は挿入 popup を開かない (overlay click が選択解除を担当)
-      if (_hasSelection()) return;
+      if (hadSelectionAtClick || _hasSelection()) return;
       var target = e.target;
       if (target.getAttribute && target.getAttribute('data-type')) return;  // overlay click は既存 handler が処理
       if (!moduleHas('showInsertForm')) return;

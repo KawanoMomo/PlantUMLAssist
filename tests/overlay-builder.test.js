@@ -244,6 +244,48 @@ describe('overlayBuilder.dedupById', function() {
   });
 });
 
+// FEAT-009 (resolves UI-003): 図の空白クリックで選択を解除するための背景 rect。
+describe('overlayBuilder.addBackground', function() {
+  beforeEach(function() {
+    document.body.innerHTML =
+      '<svg id="src" viewBox="0 0 100 200" width="100" height="200"></svg>' +
+      '<svg id="dst" xmlns="http://www.w3.org/2000/svg"></svg>';
+  });
+
+  // 最背面 (先頭の子) / 当たり判定あり / data-type なし (= selectionRouter が「空白」と解釈)。
+  test('透明・当たり判定つきの背景 rect を最背面に敷く', function() {
+    var dst = document.getElementById('dst');
+    dst.setAttribute('width', '320');
+    dst.setAttribute('height', '240');
+    var bg = OB.addBackground(dst);
+    expect(bg).not.toBeNull();
+    expect(bg.getAttribute('width')).toBe('320');
+    expect(bg.getAttribute('height')).toBe('240');
+    expect(bg.getAttribute('fill')).toBe('transparent');
+    expect(bg.style.pointerEvents).toBe('all');
+    expect(bg.getAttribute('data-type')).toBeNull();
+    expect(bg.classList.contains('selectable')).toBe(false);
+    expect(dst.firstChild).toBe(bg);
+    // 二重に敷かない。
+    OB.addBackground(dst);
+    expect(dst.querySelectorAll('rect.overlay-background').length).toBe(1);
+  });
+
+  // 全モジュールの buildOverlay が syncDimensions を経由するため、ここが唯一の設置点。
+  // viewBox がある場合はユーザー単位系 (= viewBox の寸法) で図全体を覆う。
+  test('syncDimensions が背景 rect を敷き、以後の addRect はその前面に来る', function() {
+    var dst = document.getElementById('dst');
+    OB.syncDimensions(document.getElementById('src'), dst);
+    OB.addRect(dst, 0, 0, 20, 20, { 'data-type': 'message', 'data-id': 'm1' });
+    var kids = dst.querySelectorAll('rect');
+    expect(kids.length).toBe(2);
+    expect(kids[0].classList.contains('overlay-background')).toBe(true);
+    expect(kids[0].getAttribute('width')).toBe('100');
+    expect(kids[0].getAttribute('height')).toBe('200');
+    expect(kids[1].getAttribute('data-id')).toBe('m1');
+  });
+});
+
 // jsdom window を run-tests.js が用意した sandbox window に戻す。
 // これをしないと後続 test ファイル (parser-utils, regex-parts 等) が
 // window.MA.* を見失って失敗する。

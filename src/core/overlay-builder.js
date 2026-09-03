@@ -175,15 +175,55 @@ window.MA.overlayBuilder = (function() {
     }
   }
 
+  // FEAT-009 (resolves UI-003): 図の空白クリックで選択を解除する。#overlay-layer は
+  // pointer-events:none で当たり判定を持つのは子要素だけのため、空白のクリックが
+  // selectionRouter.bind() に届かず README.md:256 の挙動が成立していなかった。
+  // 最背面に透明な背景 rect を敷いて当たり判定を与える。data-type を持たないので
+  // selectionRouter は「空白」と解釈して clearSelection() し、app.js の hover 挿入
+  // ガイド／挿入 popup も data-type の有無で分岐するため発火条件は変わらない。
+  function addBackground(overlayEl) {
+    if (!overlayEl) return null;
+    var existing = overlayEl.querySelector('rect.overlay-background');
+    if (existing) return existing;
+    // viewBox がある場合はユーザー単位系が width/height 属性と異なりうる。
+    // 図全体を覆うには viewBox の寸法を使う。
+    var w = 0, h = 0;
+    var vb = overlayEl.getAttribute('viewBox');
+    if (vb) {
+      var parts = String(vb).split(/[\s,]+/);
+      if (parts.length >= 4) { w = parseFloat(parts[2]) || 0; h = parseFloat(parts[3]) || 0; }
+    }
+    if (!w || !h) {
+      w = parseFloat(overlayEl.getAttribute('width')) || 0;
+      h = parseFloat(overlayEl.getAttribute('height')) || 0;
+    }
+    var rect = document.createElementNS(SVG_NS, 'rect');
+    rect.setAttribute('x', 0);
+    rect.setAttribute('y', 0);
+    rect.setAttribute('width', w);
+    rect.setAttribute('height', h);
+    rect.setAttribute('fill', 'transparent');
+    rect.setAttribute('stroke', 'none');
+    rect.classList.add('overlay-background');
+    rect.style.pointerEvents = 'all';
+    if (overlayEl.firstChild) overlayEl.insertBefore(rect, overlayEl.firstChild);
+    else overlayEl.appendChild(rect);
+    return rect;
+  }
+
   function syncDimensions(svgEl, overlayEl) {
     if (!svgEl || !overlayEl) return;
     var vb = svgEl.getAttribute('viewBox');
     if (vb) overlayEl.setAttribute('viewBox', vb);
     var w = svgEl.getAttribute('width'); if (w) overlayEl.setAttribute('width', w);
     var h = svgEl.getAttribute('height'); if (h) overlayEl.setAttribute('height', h);
+    // 全モジュールの buildOverlay が overlay をクリアした直後に本関数を呼ぶ。
+    // ここで敷けば背景 rect は必ず最背面 (先頭の子) になる。
+    addBackground(overlayEl);
   }
 
   return {
+    addBackground: addBackground,
     addRect: addRect,
     dedupById: dedupById,
     extractBBox: extractBBox,
