@@ -41,6 +41,23 @@ All notable changes to this project will be documented in this file.
   を新規追加 (2 tests)。回帰は失敗テスト**名の集合**の包含で判定した (件数の引き算ではない)。
   `docs/images/*.png` を上書きする `readme-screenshots.spec.js` は実行対象から除外しており、
   **その spec が覆う範囲について本項は回帰の有無を観測していない。**
+### Added
+
+- **`Delete` / `Backspace` キーで選択中のメッセージ行を削除する** (`FEAT-014` / resolves `UI-002`, `HFR-001` / ブランチ `loop/impl/FEAT-014`)
+  シーケンス図で 1 本のメッセージを選択している状態で `Delete` または `Backspace` を押すと、その行が削除される。
+  これまでは右パネルの「✕ 削除」ボタンまでマウスを往復させる必要があった。
+  発火条件は `FEAT-012` (上下矢印での選択移動) / `FEAT-017` (Enter での挿入) と同じキーボードルーターを共有し、
+  IME 変換中・修飾キー付き・入力欄 (input / textarea / select / contenteditable) にフォーカスがある間・
+  挿入 modal 表示中・単独選択の message 以外では発火しない。**本経路のためにガードをゆるめてはいない。**
+  取り消しはアプリ共通の Undo (`Ctrl+Z` / ツールバー) で行う。取り消される対象は常に「直前の 1 操作」であり、
+  削除のあとに別の編集を行った場合は先にその編集が取り消される (削除専用の復元は約束しない)。
+  対象は Sequence 図のみ。他の図種への展開は本項に含まれない。
+
+### Tests
+
+- `tests/feat-014-delete-key.test.js` を新設 (単体 648 passed → **658 passed, 0 failed** / exit code 0)。
+  削除本体の挙動 (履歴・本文・選択解除・再描画) に加え、**連続削除**と**削除と別編集が交互に挟まる場合の
+  Undo の順序**を検証ケースに含めた。
 
 ## [1.3.0] - 2026-09-02
 

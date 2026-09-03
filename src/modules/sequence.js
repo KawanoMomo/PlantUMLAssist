@@ -234,6 +234,19 @@ window.MA.modules.plantumlSequence = (function() {
     return window.MA.textUpdater.deleteLine(text, lineNum);
   }
 
+  // FEAT-014 (resolves UI-002 / HFR-001): 行削除を「履歴 → 本文 → 選択解除 → 再描画」の
+  // 1 単位としてまとめた入口。app.js の Delete / Backspace ルーターから呼ばれる。
+  // 右パネルの「✕ 削除」ボタン (seq-delete-line) は FEAT-015 が確認ダイアログの置換を
+  // 担当中であり、その差分と衝突させないため本 run では書き換えない (「ついでに直さない」)。
+  // undo はアプリ共通の単一スタック (window.MA.history) に載る。取り消し対象は常に
+  // 「直前の 1 操作」であり、キー操作の UI 上もそれ以上の約束をしない (UI-011 の教訓)。
+  function deleteSelectedLine(ctx, lineNum) {
+    window.MA.history.pushHistory();
+    ctx.setMmdText(deleteLine(ctx.getMmdText(), lineNum));
+    window.MA.selection.clearSelection();
+    ctx.onUpdate();
+  }
+
   function updateParticipant(text, lineNum, field, value) {
     var lines = text.split('\n');
     var idx = lineNum - 1;
@@ -913,6 +926,7 @@ window.MA.modules.plantumlSequence = (function() {
     normalizeIdInput: normalizeIdInput,
     addMessage: addMessage,
     deleteLine: deleteLine,
+    deleteSelectedLine: deleteSelectedLine,
     updateParticipant: updateParticipant,
     updateMessage: updateMessage,
     setTitle: setTitle,
@@ -962,6 +976,7 @@ window.MA.modules.plantumlSequence = (function() {
       hoverInsert: true,
       participantDrag: true,
       showInsertForm: true,
+      deleteSelectedLine: true,
       multiSelectConnect: false,
     },
     buildOverlay: function(svgEl, parsedData, overlayEl) {
