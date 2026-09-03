@@ -590,6 +590,32 @@ function init() {
     window.MA.selection.setSelected([{ type: 'message', id: next.id, line: next.line }]);
   });
 
+  // FEAT-076 (HFR-003): Ctrl+D で単独選択された message を直後に複製する。
+  // 上の FEAT-012 / FEAT-017 ルーターは修飾キー付きを一律除外するため、Ctrl 系である
+  // 本機能は Ctrl+Z / Ctrl+Y の history ルーターと同じ形の独立ハンドラで受け、ガードだけを
+  // 共有する。複製は入力を要さないので modal は開かない。書き換えは pushHistory →
+  // setMmdText の 1 系統に載せるため、直後の Ctrl+Z 1 回で複製前に戻る ([AC-2])。
+  document.addEventListener('keydown', function(e) {
+    if (e.isComposing || e.keyCode === 229) return;
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+    if ((e.key || '').toLowerCase() !== 'd') return;
+    // 入力中はブラウザ既定を通す ([AC-3])。modal 表示中は発火しない ([AC-5])。
+    if (_kbdInTypingTarget() || _kbdModalOpen()) return;
+    // 0 件 / 複数 / message 以外の選択では null が返り、DSL は変化しない ([AC-4])。
+    var cur = _kbdSelectedMessage();
+    if (!cur) return;
+    if (!currentModule || typeof currentModule.duplicateMessage !== 'function') return;
+    var dup = currentModule.duplicateMessage(mmdText, cur.line);
+    if (dup === mmdText) return; // 空振りで undo 段を増やさない
+    e.preventDefault();
+    window.MA.history.pushHistory();
+    mmdText = dup;
+    suppressSync = true;
+    editorEl.value = dup;
+    suppressSync = false;
+    scheduleRefresh();
+  });
+
   // Open / Save
   document.getElementById('btn-open').addEventListener('click', openFile);
   document.getElementById('btn-save').addEventListener('click', saveFile);
