@@ -35,3 +35,4 @@ docs/userissue/
 
 # Auto-save file-backend runtime data
 autosave/
+.server_stdout_tmp.log

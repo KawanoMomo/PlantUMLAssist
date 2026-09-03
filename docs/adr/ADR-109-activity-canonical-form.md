@@ -39,3 +39,19 @@ emit ルール:
 - Legacy ファイルを読み込むと normalize されて editor に表示 → 元 DSL は失われる
   (ユーザーには CHANGELOG で周知)
 - 将来 v0.7.1+ で legacy emit option を追加可能 (本 ADR は新記法 emit を canonical と確定するのみで、legacy emit を禁止しない)
+
+## Addendum (2026-06-15) — 色付き action / split 対応
+
+パーサ網羅性 (C) 拡張に伴い、以下を canonical に追加する (既存決定は不変、拡張のみ)。
+
+| 形式 | canonical |
+|---|---|
+| `#color:foo;` (色付き action) | `#<color>:foo;` (色プレフィックスは保持し正規化しない。本体 `:foo;` は既存ルール通り) |
+| `split` / `split  again` (空白揺れ) | `split` / `split again` |
+| `end split` / `end  split` | `end split` |
+
+- 従来 `#color:foo;` はどの規則にもマッチせず **サイレント消失** していた。本追補で正式対応 (修正を兼ねる)。
+- 色は Action の属性であり、新ノード種別を作らない。
+- split は fork と構造同型 (Composite node・Branch・原子移動)。emit も fork に準ずる。
+- overlay 分類 (`_classifyShape`) は rx / height ベースのため色付きでも action として分類される想定。新図形 (split bar) は fork bar と被るため、分類ロジックの視覚検証が必須 (ADR-111 / visual verification gate)。
+- 関連: [ADR-111](ADR-111-activity-sibling-reorder.md) (並び替え), [ADR-112](ADR-112-activity-node-only-model.md) (node-only)。

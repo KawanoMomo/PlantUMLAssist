@@ -10,6 +10,10 @@ PlantUMLAssist の技術的意思決定の履歴。
 | [102](ADR-102-async-render-pipeline.md) | Java 非同期 render pipeline | インターフェース | 承認 | 2026-04-17 |
 | [103](ADR-103-render-mode-switch.md) | Local / Online render モード切替 | 配布・運用 | 承認 | 2026-04-17 |
 | [104](ADR-104-plantuml-type-detection.md) | PlantUML type detection heuristic | インターフェース | 承認 | 2026-04-17 |
+| [111](ADR-111-activity-sibling-reorder.md) | Activity ノード Sibling 並び替え | インタラクション | 承認 | 2026-06-15 |
+| [112](ADR-112-activity-node-only-model.md) | Activity は node-only (エッジ非導入) | アーキテクチャ | 承認 | 2026-06-15 |
+
+> ※ 一覧は部分的: ADR-105〜110 (各図 canonical form 系) と ADR-109 追補 (色付き action / split) は本表に未反映。
 
 ## 命名規則
 
