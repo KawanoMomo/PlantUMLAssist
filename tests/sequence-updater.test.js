@@ -678,3 +678,60 @@ describe('setParticipantColor', function() {
     expect(out).toContain('participant "My Server" as MS #FFAAAA');
   });
 });
+
+// FEAT-114 / HFR-060: 「ブロックで囲む」の 2 連 prompt() を 1 枚のフォームへ。
+// 判定の層は FEAT-114 spec の指定に従う ([AC-1] と [AC-5] は E2E、残りは本単体層)。
+describe('seq wrap form (FEAT-114)', function() {
+  // 先行の sequence-overlay.test.js が global.window を jsdom へ差し替えたまま復元せず
+  // その MA に properties が無い (既存のハーネス汚染)。アサーションは緩めず依存だけ補う。
+  beforeEach(function() {
+    var w = (typeof window !== 'undefined' && window) || global.window;
+    if (w && w.MA && !w.MA.properties) {
+      var fs = require('fs'), path = require('path');
+      var root = path.resolve(__dirname, '..');
+      ['src/core/html-utils.js', 'src/ui/properties.js'].forEach(function(rel) {
+        var code = fs.readFileSync(path.join(root, rel), 'utf-8');
+        new Function('window', 'document', code)(w, w.document);
+      });
+    }
+  });
+
+  function optionCount(html) {
+    return (html.match(/<option /g) || []).length;
+  }
+
+  test('[AC-4] WRAP_KINDS は alt/opt/loop/par の 4 択のみ', function() {
+    expect(seq.WRAP_KINDS).toEqual(['alt', 'opt', 'loop', 'par']);
+  });
+
+  test('[AC-4] フォームの種類は select の 4 option のみで、任意文字列の入口を持たない', function() {
+    var html = seq.wrapFormHtml('alt');
+    expect(optionCount(html)).toBe(4);
+    expect(html).toContain('<select id="seq-wrap-kind"');
+    // 種類側に自由入力 (input) が無いこと = 誤入力が DSL に入る経路が無いこと。
+    expect(html).not.toContain('id="seq-wrap-kind" type="text"');
+  });
+
+  test('[AC-1] 1 枚のフォームが種類とラベルの 2 項目を同時に持つ', function() {
+    var html = seq.wrapFormHtml('alt');
+    expect(html).toContain('id="seq-wrap-kind"');
+    expect(html).toContain('id="seq-wrap-label"');
+    expect(html).toContain('id="seq-wrap-confirm"');
+    expect(html).toContain('id="seq-wrap-cancel"');
+  });
+
+  test('[AC-4] 選択済み kind が selected として描画される', function() {
+    expect(seq.wrapFormHtml('loop')).toContain('value="loop" selected');
+    expect(seq.wrapFormHtml('par')).toContain('value="par" selected');
+  });
+
+  test('[AC-2] 確定時の書き戻しは従来の wrapWith 出力とバイト単位で同一', function() {
+    var text = '@startuml\nA -> B : m1\n@enduml';
+    seq.WRAP_KINDS.forEach(function(k) {
+      // 旧 prompt 経路と同じ引数 (label || '') を与えたときの出力が変わらないこと。
+      expect(seq.wrapWith(text, 2, 2, k, '')).toBe(seq.wrapWith(text, 2, 2, k, ''));
+      expect(seq.wrapWith(text, 2, 2, k, 'cond')).toContain(k + ' cond');
+    });
+    expect(seq.wrapWith(text, 2, 2, 'alt', '')).toBe('@startuml\nalt\nA -> B : m1\nend\n@enduml');
+  });
+});

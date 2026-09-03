@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+### Changed
+- `FEAT-114` (`resolves: HFR-060`) / `loop/impl/FEAT-114`: シーケンス図の「ブロックで囲む」で連続していた 2 つの `prompt()` を、種類の 4 択ドロップダウン (alt/opt/loop/par) とラベル欄を 1 枚にまとめたフォーム (`seq-modal`) に置き換えた。種類が 4 択に限定されたため、任意文字列がそのまま DSL に入る経路がなくなった。生成される DSL は従来の `wrapWith` の出力と同一である。
+
 ## [1.3.0] - 2026-09-02
 
 ### Added — シーケンス図の挿入 modal 初期値・キーボード操作・プレビュー表示 (6 件)
