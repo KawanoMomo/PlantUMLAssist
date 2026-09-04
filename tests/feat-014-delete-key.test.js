@@ -136,6 +136,10 @@ describe('FEAT-014 app.js のキールーティングとガード (ソース走�
     expect(router).toContain('e.ctrlKey || e.metaKey || e.altKey || e.shiftKey');
     expect(router).toContain('_kbdInTypingTarget()');
     expect(router).toContain('_kbdModalOpen()');
-    expect(router).toContain('_kbdSelectedMessage()');
+    // FEAT-179: 単独選択ガードの実体は FEAT-109 のリネーム後の _kbdSelectedItem()
+    // (src/app.js の FEAT-012/017 ルーター内)。旧名 _kbdSelectedMessage() を期待していた
+    // 従来の記述は、切り出し終端マーカーが FEAT-109 のコメント改稿で一致しなくなり
+    // slice が Ctrl+D ハンドラまで及んでいたために偶然 GREEN だった。実体の識別子に是正する。
+    expect(router).toContain('_kbdSelectedItem()');
   });
 });
