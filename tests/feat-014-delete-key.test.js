@@ -118,6 +118,16 @@ describe('FEAT-014 app.js のキールーティングとガード (ソース走�
   var m = src.match(/if \(key !== 'ArrowUp'[\s\S]*?\) return;/);
   var keyGuard = m ? m[0] : '';
 
+  // FEAT-184 [AC-3]: マーカー不在を無警告で通さないガード。
+  // 様式は tests/toast.test.js:22 の既存前例 (`if (i < 0) throw new Error(...)`) に揃える。
+  // 従来は indexOf が -1 を返しても slice(0, -1) として黙って成立し、検査範囲が
+  // 意図の 1,991 バイトからファイル末尾まで 31,764 バイト (16.0 倍) に拡大していた。
+  function markerIndex(haystack, marker) {
+    var i = haystack.indexOf(marker);
+    if (i < 0) throw new Error('marker not found in app.js: ' + marker);
+    return i;
+  }
+
   test('同一ルーターの key 判定に Delete と Backspace が含まれる', function() {
     expect(keyGuard.length).toBeGreaterThan(0);
     expect(keyGuard).toContain("key !== 'Delete'");
@@ -130,8 +140,16 @@ describe('FEAT-014 app.js のキールーティングとガード (ソース走�
   });
 
   test('既存ガード (IME / 修飾キー / 入力欄 / modal / 単独選択) を共有したままである', function() {
-    var router = src.slice(src.indexOf("if (key !== 'ArrowUp'") - 400);
-    router = router.slice(0, router.indexOf("// FEAT-012: DSL 行順で"));
+    // FEAT-184 [AC-1]: 終端マーカーは src/app.js の実体の逐語に是正する。
+    // FEAT-109 のコメント改稿 ("// FEAT-012:" -> "// FEAT-012 / FEAT-109:") により
+    // 従来の "// FEAT-012: DSL 行順で" は src/app.js に 1 件も存在しなくなっていた。
+    var ROUTER_START = "if (key !== 'ArrowUp'";
+    var ROUTER_END = '// FEAT-012 / FEAT-109: DSL 行順で';
+    var router = src.slice(markerIndex(src, ROUTER_START) - 400);
+    router = router.slice(0, markerIndex(router, ROUTER_END));
+    // FEAT-184 [AC-2]: 切り出し範囲がルーター近傍に収まっていること
+    // (マーカーが外れてファイル末尾まで及ぶ状態の機械判定。意図値 1,991 バイト)。
+    expect(router.length).toBeLessThan(3000);
     expect(router).toContain('e.isComposing || e.keyCode === 229');
     expect(router).toContain('e.ctrlKey || e.metaKey || e.altKey || e.shiftKey');
     expect(router).toContain('_kbdInTypingTarget()');
