@@ -5,7 +5,25 @@ window.MA.htmlUtils = (function() {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
-  return { escHtml: escHtml };
+  // FEAT-183 (resolves HFR-039): プレビュー背景モードに対応する CSS 宣言文字列を返す純関数。
+  // 戻り値はそのまま element.style.cssText へ代入できる形式。
+  // 🔴 本関数は DOM に一切触れない。トグル UI と #preview-svg への適用は別 FEAT の担当である。
+  // ダーク時は色値をハードコードせず既存の CSS 変数 var(--bg-primary) を用いる。
+  function previewBackgroundStyle(mode) {
+    if (mode === 'light') {
+      return 'background-color: #ffffff; background-image: none;';
+    }
+    if (mode === 'transparent') {
+      // 透過であることを視認させる市松模様。背景色そのものは transparent。
+      return 'background-color: transparent; '
+        + 'background-image: repeating-conic-gradient(#c8c8c8 0% 25%, #ffffff 0% 50%); '
+        + 'background-size: 16px 16px;';
+    }
+    // 既定 (dark)。未知の値 / undefined / null もここへフォールバックし、例外は投げない。
+    return 'background-color: var(--bg-primary); background-image: none;';
+  }
+
+  return { escHtml: escHtml, previewBackgroundStyle: previewBackgroundStyle };
 })();
 
 // FEAT-015: 削除の confirm() を廃し、「元に戻す」付きの一時トーストで代替する。
