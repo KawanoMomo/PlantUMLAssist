@@ -114,3 +114,85 @@ test.describe('FEAT-117: Ctrl+E でエクスポートメニューを開く', () 
     expect(afterUndo).toBe(beforeTab);
   });
 });
+
+// FEAT-165 (resolves UI-017): Esc でエクスポートメニューを閉じ、Ctrl+E 押下前の要素へ
+// フォーカスを戻す。AC タグは同一 spec 内で FEAT-117 の [AC-n] と重複しないよう
+// [FEAT-165-AC-n] とする (LOOP-437 (i))。
+//
+// E5 の分類 (loop_agent/feature_implementer.md「E5 の名宛人と申告様式」[R-1]):
+//   (a) 新しい振る舞いを主張するテスト = [FEAT-165-AC-1] [FEAT-165-AC-2] の 2 件 (事前 FAIL 観測必須)
+//   (b) 回帰ガード / 非退行テスト     = [FEAT-165-AC-3] [FEAT-165-AC-6] [FEAT-165-AC-7] の 3 件
+//   🔴 [FEAT-165-AC-4] (participant ドラッグ中の Esc の非回帰) はテストを追加しない。
+//      ドラッグ操作は #overlay-layer の rect を要し、本 worktree では lib/plantuml.jar 不在の
+//      ため overlay が構築されず (同 run のベースラインで uc-11 等が同一事由で FAIL)、
+//      事前 FAIL も事後 PASS も観測できないためである。
+const FEAT165_SHOT_DIR = require('path').join(__dirname, '..', '..', 'test-results', 'feat-165');
+
+test.describe('FEAT-165: Esc でエクスポートメニューを閉じてフォーカスを戻す', () => {
+  test('[FEAT-165-AC-1] Ctrl+E で開いた #export-menu が Esc で .open を失う', async ({ page }) => {
+    await gotoApp(page);
+    await page.locator('#preview-container').click({ position: { x: 5, y: 5 } });
+    await pressCtrlE(page);
+    await expect(page.locator('#export-menu')).toHaveClass(/\bopen\b/);
+    // Visual Verification Gate (E3) 用の実機スクリーンショット。test-results/ にのみ書く。
+    await page.screenshot({ path: FEAT165_SHOT_DIR + '/ac1-menu-open.png' });
+
+    await page.keyboard.press('Escape');
+
+    await expect(page.locator('#export-menu')).not.toHaveClass(/\bopen\b/);
+    await page.screenshot({ path: FEAT165_SHOT_DIR + '/ac1-menu-closed-after-esc.png' });
+  });
+
+  test('[FEAT-165-AC-2] Esc 後の activeElement が Ctrl+E 押下直前の要素に戻る', async ({ page }) => {
+    await gotoApp(page);
+    // 復帰先として一意に識別できる要素 (#editor) にフォーカスを置く。
+    await page.locator('#editor').click();
+    const activeId = () => page.evaluate(() => document.activeElement && document.activeElement.id);
+    expect(await activeId()).toBe('editor');
+
+    await pressCtrlE(page);
+    // Ctrl+E の既存挙動でフォーカスは #exp-svg へ移る (操作前後で変化することを固定)。
+    const whileOpen = await activeId();
+    expect(whileOpen).toBe('exp-svg');
+    expect(whileOpen).not.toBe('editor');
+
+    await page.keyboard.press('Escape');
+
+    expect(await activeId()).toBe('editor');
+  });
+
+  test('[FEAT-165-AC-3] メニューが閉じている状態の Esc では何も起きない', async ({ page }) => {
+    await gotoApp(page);
+    await loadFixture(page, 'sequence-basic.puml');
+    await page.locator('#preview-container').click({ position: { x: 5, y: 5 } });
+    await expect(page.locator('#export-menu')).not.toHaveClass(/\bopen\b/);
+    const before = await getEditorText(page);
+
+    await page.keyboard.press('Escape');
+
+    await expect(page.locator('#export-menu')).not.toHaveClass(/\bopen\b/);
+    expect(await getEditorText(page)).toBe(before);
+  });
+
+  test('[FEAT-165-AC-6] メニュー外クリックによる close の既存経路が回帰しない', async ({ page }) => {
+    await gotoApp(page);
+    await page.locator('#preview-container').click({ position: { x: 5, y: 5 } });
+    await pressCtrlE(page);
+    await expect(page.locator('#export-menu')).toHaveClass(/\bopen\b/);
+
+    await page.locator('#preview-container').click({ position: { x: 5, y: 5 } });
+
+    await expect(page.locator('#export-menu')).not.toHaveClass(/\bopen\b/);
+  });
+
+  test('[FEAT-165-AC-7] 4 つのエクスポート項目が Esc 経路の追加後も配線されたまま残る', async ({ page }) => {
+    await gotoApp(page);
+    await page.locator('#preview-container').click({ position: { x: 5, y: 5 } });
+    await pressCtrlE(page);
+
+    for (const id of ['exp-svg', 'exp-png', 'exp-png-transparent', 'exp-clipboard']) {
+      await expect(page.locator('#' + id)).toBeVisible();
+      await expect(page.locator('#' + id)).toBeEnabled();
+    }
+  });
+});
