@@ -1343,13 +1343,31 @@ window.MA.modules.plantumlClass = (function() {
       '</div>';
     propsEl.innerHTML = html;
 
+    // FEAT-139 (resolves HFR-076): 種別だけは <select> の change で即時反映する。
+    // 処理を二重に書かないよう、種別更新をここへ切り出し change / click の両方から呼ぶ。
+    // 🔴 From / To / Label は自由入力であり、誤爆と履歴汚染を避けるため即時反映しない。
+    function _applyRelationKind(newKind) {
+      if (newKind === relation.kind) return false;   // 値が変わらないなら DSL も履歴も触らない
+      window.MA.history.pushHistory();               // DSL 書換の直前に 1 回だけ
+      ctx.setMmdText(updateRelation(ctx.getMmdText(), relation.line, 'kind', newKind));
+      relation.kind = newKind;                       // 「変更を反映」での二重適用を防ぐ
+      ctx.onUpdate();
+      return true;
+    }
+
+    P.bindEvent('cl-rel-kind', 'change', function() {
+      _applyRelationKind(document.getElementById('cl-rel-kind').value);
+    });
     P.bindEvent('cl-rel-apply', 'click', function() {
-      window.MA.history.pushHistory();
-      var t = ctx.getMmdText();
       var newKind = document.getElementById('cl-rel-kind').value;
       var newFrom = document.getElementById('cl-rel-from').value.trim();
       var newTo = document.getElementById('cl-rel-to').value.trim();
       var newLabel = document.getElementById('cl-rel-label').value.trim() || null;
+      // 種別は change で反映済みのことがあるため、実際に変わる項目が無ければ履歴も積まない。
+      if (newKind === relation.kind && newFrom === relation.from &&
+          newTo === relation.to && newLabel === relation.label) return;
+      window.MA.history.pushHistory();
+      var t = ctx.getMmdText();
       if (newKind !== relation.kind) t = updateRelation(t, relation.line, 'kind', newKind);
       if (newFrom !== relation.from) t = updateRelation(t, relation.line, 'from', newFrom);
       if (newTo !== relation.to) t = updateRelation(t, relation.line, 'to', newTo);
