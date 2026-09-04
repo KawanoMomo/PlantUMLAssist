@@ -18,6 +18,8 @@ All notable changes to this project will be documented in this file.
 
 - `tests/parser-utils-unused-participants.test.js` (新規) に `FEAT-177` の単体 10 件を追加した (参照済みのみ / 未参照 1 件の検出 / activation のみの参照 / note のみの参照 / 返り値がもとのオブジェクトであること / 順序 / null・空入力 / 前後空白 / 引数の非変更 / message 以外の relation を参照と数えないこと)。 既存 `tests/parser-utils.test.js` は 1 バイトも変更していない。 E2E は追加していない (判定に DOM・SVG・overlay を 1 件も要さないため)。
 
+- `tests/feat-014-delete-key.test.js` のソース走査テスト 1 件が期待する識別子を `_kbdSelectedMessage()` から `_kbdSelectedItem()` へ是正した (`FEAT-179`)。 同テストは FEAT-012/017 ルーターの単独選択ガードの共有を主張するものだが、切り出し終端マーカーが `FEAT-109` のコメント改稿で一致しなくなったため slice が `Ctrl+D` ハンドラまで及び、そこにあった旧名によって偶然 GREEN になっていた。 アサーションの追加・削除・緩和は行っておらず、期待する識別子を実体 (`src/app.js` の同ルーター内の `_kbdSelectedItem()`) に合わせただけである。 E2E は追加していない (既存 spec の RED を GREEN に転じさせるのが本件の完了条件であるため)。
+
 - `tests/e2e/feat-117-ctrl-e-export.spec.js` に `FEAT-165` の E2E 5 件を追加した (`Esc` で `.open` が外れること / フォーカスが `#editor` に戻ること / メニューが閉じているときの `Esc` が無害であること / メニュー外クリックの close 経路の非退行 / 4 つのエクスポート項目が残ること)。 既存 `FEAT-117` の 6 件は 1 バイトも変更していない。 participant ドラッグ中の `Esc` の非退行はテストを追加していない (ドラッグ操作が `#overlay-layer` の rect を要し、`lib/plantuml.jar` を持たない作業ツリーでは overlay が構築されないため観測できない)。
 
 ### Changed
@@ -52,6 +54,8 @@ All notable changes to this project will be documented in this file.
 - 🔴 **技術的負債 (迂回実装)**: トーストの実体は本来 `src/core/toast.js` に置き、CSS は `plantuml-assist.html` の `<style>` に書くべきものである。 しかし当該 HTML は実装側の write_scope 外で `<script>` タグを追加できないため、既に読み込まれている `src/core/html-utils.js` に相乗りし、スタイルは JS からのインライン指定で生成している (`FEAT-033` と同じ方式)。 write_scope が拡張された際は切り出しと CSS の正本化を行うこと。
 - 本件は charter §5 の 3 操作 (挿入 / 順序入れ替え / 種別変更) に含まれない削除操作の変更であり、§5 の手数の測定値には寄与しない。
 ### Fixed
+
+- **`Ctrl+D` (選択メッセージの複製) が無条件に不動作だったのを是正した** (`FEAT-179` / `resolves: UI-019` / ブランチ `loop/impl/FEAT-179`)。 `FEAT-076` で入った `Ctrl+D` ハンドラが、`FEAT-109` のリネーム前の関数名 `_kbdSelectedMessage()` を呼んでおり、押下のたびに `ReferenceError` になって DSL が 1 バイトも変わらなかった。 テキスト上は衝突しない意味論的な取り違えであり、`FEAT-076` と `FEAT-109` が同じ親から分岐したことに起因する (根本原因の特定は `LOOP-802`)。 `src/app.js` の当該 1 行を既存の `_kbdSelectedItem()` に是正し、あわせて `cur.type !== 'message'` の早期 return を 1 行足して複製対象を message に限定した (図種モジュールが `kbdSelectables()` を実装した場合の誤発火の予防)。 これにより既存 `tests/e2e/feat-076-ctrl-d-duplicate.spec.js` の RED 3 件 (`[AC-1]` 1 件 / `[AC-2]` 2 件) が GREEN に転じ、同 spec の否定アサーション 6 件 (`[AC-3]` / `[AC-4]` / `[AC-5]`) は引き続き GREEN である。 実機で `Ctrl+D` を 1 回押した際の `pageerror` は 0 件であり、選択行の直後に同一内容の行が 1 行だけ増え、modal は開かない。 `_kbdSelectables()` / `_kbdSelectedItem()` / `_kbdInTypingTarget()` / `_kbdModalOpen()` の本体、`src/modules/` / `src/core/` / `src/ui/` / `plantuml-assist.html` はいずれも 1 バイトも変更しておらず、インラインスタイルによる迂回実装も伴わない。 手数 (charter §5) の達成は本件では宣言しない (`FEAT-076` が宣言済みの効果を取り戻すものである)。
 
 - **図の空白クリックで選択が解除される** (`FEAT-009` / resolves `UI-003` / ブランチ `loop/impl/FEAT-009`) —
   `README.md:256` が明記する「**空白クリック**: 選択解除」が動作していなかった。原因は

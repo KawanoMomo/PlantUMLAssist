@@ -692,8 +692,12 @@ function init() {
     // 入力中はブラウザ既定を通す ([AC-3])。modal 表示中は発火しない ([AC-5])。
     if (_kbdInTypingTarget() || _kbdModalOpen()) return;
     // 0 件 / 複数 / message 以外の選択では null が返り、DSL は変化しない ([AC-4])。
-    var cur = _kbdSelectedMessage();
-    if (!cur) return;
+    // FEAT-179 (UI-019): FEAT-109 のリネーム前の旧名を呼んでいて未定義だったため、
+    // 既存の _kbdSelectedItem() に是正する(旧名は本ファイルに 1 件も残さない [AC-5])。
+    // _kbdSelectedItem() は図種モジュールの kbdSelectables() 由来の message 以外の要素も
+    // 返しうるため、type を明示的に検査して複製対象を message に限定する ([AC-6])。
+    var cur = _kbdSelectedItem();
+    if (!cur || cur.type !== 'message') return;
     if (!currentModule || typeof currentModule.duplicateMessage !== 'function') return;
     var dup = currentModule.duplicateMessage(mmdText, cur.line);
     if (dup === mmdText) return; // 空振りで undo 段を増やさない
