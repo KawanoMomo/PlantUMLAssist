@@ -12,7 +12,11 @@ All notable changes to this project will be documented in this file.
 
 - **`Esc` でエクスポートメニューを閉じ、`Ctrl+E` を押す直前の要素へフォーカスを戻すようにした** (`FEAT-165` / `resolves: UI-017` / ブランチ `loop/impl/FEAT-165`)。 `Ctrl+E` (`FEAT-117`) で開いたエクスポートメニューを閉じる手段は、これまでメニュー外のクリックだけであり、キーボードだけの取消し経路が無かった。 `src/app.js` の Export menu ブロックに、`Ctrl+E` 押下直前の `document.activeElement` を保存する 1 行と、`Escape` 用の document keydown リスナ 1 個を足した。 メニューが開いているときだけ `.open` を外し、保存した要素が `document.body.contains()` を満たすときだけフォーカスを戻す。 participant ドラッグ中は既存の `Escape` (ドラッグ中断) を優先して何もしない。 既存のメニュー外クリックによる close 経路と `Ctrl+E` の既存挙動は 1 バイトも変更していない。 `plantuml-assist.html` は変更しておらず、インラインスタイルによる迂回実装も伴わない。 `UI-017` の改善案 2 (Tab リングの仕様化) は本件の対象外である。
 
+- **未使用 participant を検出する純関数 `findUnusedParticipants(parsed)` を追加した** (`FEAT-177` / `resolves: HFR-042` の前半 / ブランチ `loop/impl/FEAT-177`)。 `src/core/parser-utils.js` に関数を 1 個と export を 1 行足したのみである。 引数は sequence モジュールの `parseSequence(text)` の返り値と同じ形の `{ elements, relations }` オブジェクトで、生の DSL テキストは受け取らない (パーサを二重に実装していない)。 message の `from` / `to`、activation の `target`、note の `targets` のいずれにも現れない participant を「未使用」として、`parsed.elements` に現れる順序のまま返す。 前後の空白は無視して突合するため `' A '` は `A` への参照として数える。 返り値の要素は元の participant オブジェクトそのものであり、呼び出し側は `line` で行を特定できる。 引数オブジェクトは変更しない。 `null` / `{}` / `{elements: []}` はいずれも例外を投げず空配列を返す。 🔴 **本件は純関数のみであり、UI への表示・バッジ・1 クリック削除は含まない** (それらは `FEAT-178` の範囲)。 `detectDiagramType` / `splitLinesWithMeta` の本体、`src/modules/` / `src/ui/` / `src/app.js` / `plantuml-assist.html` はいずれも 1 バイトも変更しておらず、インラインスタイルによる迂回実装も伴わない。 利用者の操作は 1 手も変わらないため、手数 (charter §5) への寄与は本件では論じない。
+
 ### Tests
+
+- `tests/parser-utils-unused-participants.test.js` (新規) に `FEAT-177` の単体 10 件を追加した (参照済みのみ / 未参照 1 件の検出 / activation のみの参照 / note のみの参照 / 返り値がもとのオブジェクトであること / 順序 / null・空入力 / 前後空白 / 引数の非変更 / message 以外の relation を参照と数えないこと)。 既存 `tests/parser-utils.test.js` は 1 バイトも変更していない。 E2E は追加していない (判定に DOM・SVG・overlay を 1 件も要さないため)。
 
 - `tests/e2e/feat-117-ctrl-e-export.spec.js` に `FEAT-165` の E2E 5 件を追加した (`Esc` で `.open` が外れること / フォーカスが `#editor` に戻ること / メニューが閉じているときの `Esc` が無害であること / メニュー外クリックの close 経路の非退行 / 4 つのエクスポート項目が残ること)。 既存 `FEAT-117` の 6 件は 1 バイトも変更していない。 participant ドラッグ中の `Esc` の非退行はテストを追加していない (ドラッグ操作が `#overlay-layer` の rect を要し、`lib/plantuml.jar` を持たない作業ツリーでは overlay が構築されないため観測できない)。
 

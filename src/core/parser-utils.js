@@ -99,8 +99,42 @@ window.MA.parserUtils = (function() {
     return result;
   }
 
+  // FEAT-177 (resolves HFR-042): 宣言されているが 1 度も参照されない participant を返す。
+  // 入力は sequence モジュールの parseSequence(text) の返り値と同じ形の
+  // { elements: [...], relations: [...] } である (生テキストは受け取らない)。
+  // message の from/to・activation の target・note の targets のいずれにも現れない
+  // participant を「未使用」とみなす。引数オブジェクトは変更しない。
+  function findUnusedParticipants(parsed) {
+    if (!parsed || !parsed.elements) return [];
+    var used = {};
+    function mark(name) {
+      if (name == null) return;
+      var k = String(name).trim();
+      if (k !== '') used[k] = true;
+    }
+    var rels = parsed.relations || [];
+    for (var i = 0; i < rels.length; i++) {
+      if (rels[i] && rels[i].kind === 'message') { mark(rels[i].from); mark(rels[i].to); }
+    }
+    for (var j = 0; j < parsed.elements.length; j++) {
+      var el = parsed.elements[j];
+      if (!el) continue;
+      if (el.kind === 'activation') mark(el.target);
+      if (el.kind === 'note' && el.targets) {
+        for (var t = 0; t < el.targets.length; t++) mark(el.targets[t]);
+      }
+    }
+    var out = [];
+    for (var k2 = 0; k2 < parsed.elements.length; k2++) {
+      var p = parsed.elements[k2];
+      if (p && p.kind === 'participant' && !used[String(p.id).trim()]) out.push(p);
+    }
+    return out;
+  }
+
   return {
     detectDiagramType: detectDiagramType,
     splitLinesWithMeta: splitLinesWithMeta,
+    findUnusedParticipants: findUnusedParticipants,
   };
 })();
