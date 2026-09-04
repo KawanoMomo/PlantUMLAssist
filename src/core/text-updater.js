@@ -68,6 +68,31 @@ window.MA.textUpdater = (function() {
     return insertAtLine(text, lineNum + 1, newContent);
   }
 
+  // extractRange (FEAT-181): 1-based の startLine〜endLine (両端含む) を抜き出し、
+  // 単体でレンダリング可能な DSL として返す純関数。DOM に触れず副作用を持たない。
+  // - 元テキストに @startuml / @enduml で始まる行があれば、抜き出し結果に不足している側だけを補う
+  //   (抜き出し範囲が既にそれらを含む場合は二重に付けない)
+  // - 元テキストに @startuml / @enduml が無い場合は何も付けない (素の抜き出しを返す)
+  // - 範囲がテキスト外へ出る場合は存在する行だけを返し、startLine > endLine では空文字列を返す
+  function extractRange(text, startLine, endLine) {
+    if (typeof text !== 'string') return '';
+    if (startLine > endLine) return '';
+    var lines = text.split('\n');
+    var from = Math.max(0, startLine - 1);
+    var to = Math.min(lines.length, endLine); // slice の終端 (exclusive)
+    if (from >= to) return '';
+    var picked = lines.slice(from, to);
+
+    var hasStartInSource = lines.some(function(l) { return l.trim().indexOf('@startuml') === 0; });
+    var hasEndInSource = lines.some(function(l) { return l.trim().indexOf('@enduml') === 0; });
+    var hasStartInPicked = picked.some(function(l) { return l.trim().indexOf('@startuml') === 0; });
+    var hasEndInPicked = picked.some(function(l) { return l.trim().indexOf('@enduml') === 0; });
+
+    if (hasStartInSource && !hasStartInPicked) picked.unshift('@startuml');
+    if (hasEndInSource && !hasEndInPicked) picked.push('@enduml');
+    return picked.join('\n');
+  }
+
   return {
     replaceLine: replaceLine,
     insertAfter: insertAfter,
@@ -77,5 +102,6 @@ window.MA.textUpdater = (function() {
     appendToFile: appendToFile,
     insertAtLine: insertAtLine,
     insertAfterLine: insertAfterLine,
+    extractRange: extractRange,
   };
 })();
