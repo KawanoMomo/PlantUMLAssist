@@ -536,23 +536,14 @@ window.MA.modules.plantumlSequence = (function() {
       _toastUndo('1 件削除しました', _snap, ctx);
     });
     // C3: participant 左右挿入 (participant 選択時のみ描画される)
+    // FEAT-142 / HFR-075: 2 連 prompt() を seq-modal の 1 枚フォームへ置き換える
+    // (FEAT-114 / HFR-060 の _showWrapForm と同じ作法)。挿入本体・pushHistory()・
+    // onUpdate() の並びは変えず、変えるのは値の取得手段だけである。
     P.bindAllByClass(propsEl, 'seq-insert-part-before', function(btn) {
-      var ln = parseInt(btn.getAttribute('data-line'), 10);
-      var alias = prompt('新しい参加者の Alias');
-      if (!alias) return;
-      var ptype = prompt('Type (participant/actor/database/boundary/control/entity/queue/collections)', 'participant');
-      window.MA.history.pushHistory();
-      ctx.setMmdText(insertBefore(ctx.getMmdText(), ln, 'participant', { ptype: ptype || 'participant', alias: alias }));
-      ctx.onUpdate();
+      _showPartForm(ctx, parseInt(btn.getAttribute('data-line'), 10), 'before');
     });
     P.bindAllByClass(propsEl, 'seq-insert-part-after', function(btn) {
-      var ln = parseInt(btn.getAttribute('data-line'), 10);
-      var alias = prompt('新しい参加者の Alias');
-      if (!alias) return;
-      var ptype = prompt('Type (participant/actor/database/boundary/control/entity/queue/collections)', 'participant');
-      window.MA.history.pushHistory();
-      ctx.setMmdText(insertAfter(ctx.getMmdText(), ln, 'participant', { ptype: ptype || 'participant', alias: alias }));
-      ctx.onUpdate();
+      _showPartForm(ctx, parseInt(btn.getAttribute('data-line'), 10), 'after');
     });
     // C9: メッセージ選択時、対応する activate/deactivate を推論挿入
     P.bindAllByClass(propsEl, 'seq-infer-activation', function(btn) {
@@ -622,6 +613,56 @@ window.MA.modules.plantumlSequence = (function() {
       var label = document.getElementById('seq-wrap-label').value;
       window.MA.history.pushHistory();
       ctx.setMmdText(wrapWith(ctx.getMmdText(), startLine, endLine, kind, label || ''));
+      modal.style.display = 'none';
+      ctx.onUpdate();
+    });
+  }
+
+  // FEAT-142 / HFR-075: participant 左右挿入の 2 連 prompt() を 1 枚のフォームにまとめる。
+  // Type は PARTICIPANT_TYPES の 8 択のドロップダウンに限定し、旧 prompt が通していた
+  // 任意文字列が DSL に入る経路を塞ぐ ([AC-2])。既定値は 'participant'。
+  function partFormHtml(position) {
+    var P = window.MA.properties;
+    var opts = PARTICIPANT_TYPES.map(function(pt) {
+      return { value: pt, label: pt, selected: pt === 'participant' };
+    });
+    return '<h3 style="margin:0 0 12px 0;color:var(--text-primary);">参加者を' +
+        (position === 'before' ? '左' : '右') + 'に追加</h3>' +
+      '<div style="margin-bottom:8px;">' +
+        '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Alias</label>' +
+        '<input id="seq-part-alias" type="text" style="width:100%;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-size:12px;box-sizing:border-box;">' +
+      '</div>' +
+      P.selectFieldHtml('Type', 'seq-part-type', opts) +
+      '<div style="display:flex;gap:8px;margin-top:12px;">' +
+        '<button id="seq-part-cancel" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:8px;border-radius:4px;cursor:pointer;">キャンセル</button>' +
+        '<button id="seq-part-confirm" style="flex:1;background:var(--accent);border:none;color:#fff;padding:8px;border-radius:4px;cursor:pointer;">確定</button>' +
+      '</div>';
+  }
+
+  function _showPartForm(ctx, line, position) {
+    var modal = document.getElementById('seq-modal');
+    var content = document.getElementById('seq-modal-content');
+    content.innerHTML = partFormHtml(position);
+    modal.style.display = 'flex';
+    var aliasEl = document.getElementById('seq-part-alias');
+    if (aliasEl && aliasEl.focus) aliasEl.focus();
+    // [AC-6] キャンセルは DSL を 1 バイトも変えず pushHistory() も呼ばない。
+    document.getElementById('seq-part-cancel').addEventListener('click', function() {
+      modal.style.display = 'none';
+    });
+    document.getElementById('seq-part-confirm').addEventListener('click', function() {
+      var alias = document.getElementById('seq-part-alias').value;
+      // [AC-5] Alias 未入力では旧 prompt 経路の `if (!alias) return;` と同じく何もしない。
+      if (!alias) return;
+      var ptype = document.getElementById('seq-part-type').value;
+      // [AC-3] [AC-4] 書き戻しは既存の insertBefore / insertAfter をそのまま呼ぶ
+      // (出力はバイト単位で従来と同一)。
+      window.MA.history.pushHistory();
+      var text = ctx.getMmdText();
+      var opt = { ptype: ptype || 'participant', alias: alias };
+      ctx.setMmdText(position === 'before'
+        ? insertBefore(text, line, 'participant', opt)
+        : insertAfter(text, line, 'participant', opt));
       modal.style.display = 'none';
       ctx.onUpdate();
     });
@@ -994,6 +1035,7 @@ window.MA.modules.plantumlSequence = (function() {
     wrapWith: wrapWith,
     WRAP_KINDS: WRAP_KINDS,
     wrapFormHtml: wrapFormHtml,
+    partFormHtml: partFormHtml,
     unwrap: unwrap,
     addNote: addNote,
     updateNote: updateNote,

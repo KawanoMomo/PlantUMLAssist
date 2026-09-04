@@ -735,3 +735,39 @@ describe('seq wrap form (FEAT-114)', function() {
     expect(seq.wrapWith(text, 2, 2, 'alt', '')).toBe('@startuml\nalt\nA -> B : m1\nend\n@enduml');
   });
 });
+
+// FEAT-142 / HFR-075: participant 左右挿入の 2 連 prompt() を 1 枚のフォームへ。
+// 🔴 本 describe が判定するのは [AC-2] (フォームの項目と既定値) と、
+//    [AC-3] [AC-4] の書き戻し純関数がバイト単位で不変であることの 2 系統である。
+//    実機の 1 枚 modal / prompt 呼出 0 回 / キャンセル ([AC-1] [AC-5] [AC-6]) は
+//    tests/e2e/feat-142-part-form.spec.js が判定する。
+describe('FEAT-142 participant 挿入フォーム', function() {
+  function optionCount(html) {
+    return (html.match(/<option /g) || []).length;
+  }
+
+  test('[AC-2] Alias と Type の両方の入力欄を 1 枚に持つ', function() {
+    var html = seq.partFormHtml('before');
+    expect(html).toContain('id="seq-part-alias"');
+    expect(html).toContain('<select id="seq-part-type"');
+    expect(html).toContain('id="seq-part-confirm"');
+    expect(html).toContain('id="seq-part-cancel"');
+  });
+
+  test('[AC-2] Type は PARTICIPANT_TYPES の 8 択のみで、既定値は participant', function() {
+    var html = seq.partFormHtml('before');
+    expect(seq.PARTICIPANT_TYPES.length).toBe(8);
+    expect(optionCount(html)).toBe(seq.PARTICIPANT_TYPES.length);
+    expect(html).toContain('value="participant" selected');
+    // 種別側に自由入力の入口が無いこと (旧 prompt は任意文字列を通していた)。
+    expect(html).not.toContain('id="seq-part-type" type="text"');
+  });
+
+  test('[AC-3][AC-4] 書き戻しの純関数は従来の insertBefore / insertAfter のまま', function() {
+    var text = '@startuml\nparticipant A\nparticipant B\nA -> B : m1\n@enduml';
+    var opt = { ptype: 'actor', alias: 'X' };
+    expect(seq.insertBefore(text, 3, 'participant', opt).split('\n')[2]).toBe('actor X');
+    expect(seq.insertAfter(text, 2, 'participant', { ptype: 'database', alias: 'DB' })
+      .split('\n')[2]).toBe('database DB');
+  });
+});
