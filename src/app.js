@@ -840,13 +840,29 @@ function init() {
   // 履歴ルーター (Ctrl+Z / Ctrl+Y) の早期 return の意味を壊さないため、そちらに相乗りせず
   // Export menu ブロック内に専用のリスナを足す。Ctrl+Shift+E / Ctrl+Alt+E は将来の割当の
   // ために発火させない。
+  // FEAT-165 (resolves UI-017): Ctrl+E 押下直前のフォーカス元を保存し、Esc での復帰に使う。
+  var exportReturnFocusEl = null;
   document.addEventListener('keydown', function(e) {
     if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
     if ((e.key || '').toLowerCase() !== 'e') return;
     e.preventDefault();
+    exportReturnFocusEl = document.activeElement;
     exportMenu.classList.add('open');
     var firstItem = document.getElementById('exp-svg');
     if (firstItem) firstItem.focus();
+  });
+
+  // FEAT-165 (resolves UI-017): Esc でエクスポートメニューを閉じ、Ctrl+E 押下前の要素へ
+  // フォーカスを戻す。既存の click による close 経路と、既存の Escape (participant ドラッグ
+  // 中断) は変更せず、後者を優先するためドラッグ中は何もしない。
+  document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Escape') return;
+    if (dragState && dragState.dragging) return;
+    if (!exportMenu.classList.contains('open')) return;
+    exportMenu.classList.remove('open');
+    var back = exportReturnFocusEl;
+    exportReturnFocusEl = null;
+    if (back && back.focus && document.body.contains(back)) back.focus();
   });
 
   // Ctrl+wheel zoom, Shift+wheel horizontal scroll on preview
