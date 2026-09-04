@@ -52,7 +52,10 @@ window.MA.dslUtils = (function() {
       if (uncomment) {
         next = line.replace(/^(\s*)'/, '$1');
       } else {
-        next = "'" + line;
+        // FEAT-132 (resolves UI-015): コメント化側を行ごとの判定にする。
+        // 既にコメント行である行へ ' を重ねると "' foo" が "'' foo" になり、
+        // ユーザーが手で書いたコメントを無警告で改変してしまう (UI-015 Major)。
+        next = isPlantumlComment(line) ? line : "'" + line;
       }
       if (idx === 0) firstDelta = next.length - line.length;
       return next;

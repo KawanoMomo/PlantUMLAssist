@@ -78,11 +78,14 @@ describe('dslUtils.toggleLineComment', function() {
     expect(r.selectionStart).toBe(TXT.indexOf('Alice -> Bob'));
   });
 
+  // FEAT-132 (resolves UI-015): 混在選択で既コメント行に二重マーカーが付く欠陥の是正に伴い、
+  // 本ケースの mixed の期待値を "''a\n'b" (欠陥の固定) から "'a\n'b" (行ごと判定) へ改める。
+  // アサーションの緩和ではなく、UI-015 が Major と判定した誤挙動を期待値から取り除く強化である。
   test('[AC-3] uncomments only when every touched line is a comment', function() {
     var all = "'a\n'b";
     expect(dslUtils.toggleLineComment(all, 0, all.length).value).toBe('a\nb');
     var mixed = "'a\nb";
-    expect(dslUtils.toggleLineComment(mixed, 0, mixed.length).value).toBe("''a\n'b");
+    expect(dslUtils.toggleLineComment(mixed, 0, mixed.length).value).toBe("'a\n'b");
   });
 
   test('[AC-3] preserves indentation when commenting and uncommenting', function() {
@@ -94,5 +97,44 @@ describe('dslUtils.toggleLineComment', function() {
 
   test('returns null for a non-string value', function() {
     expect(dslUtils.toggleLineComment(null, 0, 0)).toBe(null);
+  });
+
+  // FEAT-132 (resolves UI-015): コメント化側を「選択全体が全部コメントか」の 1 ビット判定から
+  // 行ごとの判定へ変える。AC タグは LOOP-437 (i) に従い本ファイル内で一意な別名を用いる
+  // (既存の [AC-1] [AC-2] [AC-3] は FEAT-080 のものであり重複させない)。
+  // フィクスチャは UI-015「再現」節の逐語 "' foo\nbar" をそのまま用いる。
+  var MIXED = "' foo\nbar";
+
+  test('[FEAT-132 AC-1] mixed selection leaves an already-commented line untouched', function() {
+    var r = dslUtils.toggleLineComment(MIXED, 0, MIXED.length);
+    expect(r.value).toBe("' foo\n'bar");
+    // UI-015「効果測定」の逐語要求: 既コメント行の ' の個数が変化しない (1 個のまま)。
+    expect(r.value.split('\n')[0].split("'").length - 1).toBe(1);
+    expect(r.value.split('\n')[1]).toBe("'bar");
+  });
+
+  test('[FEAT-132 AC-2] all-comment selection still strips one quote per line', function() {
+    var allc = "'x\n'y";
+    expect(dslUtils.toggleLineComment(allc, 0, allc.length).value).toBe('x\ny');
+  });
+
+  test('[FEAT-132 AC-3] all-plain selection still adds one quote per line', function() {
+    var plain = 'x\ny';
+    expect(dslUtils.toggleLineComment(plain, 0, plain.length).value).toBe("'x\n'y");
+  });
+
+  test('[FEAT-132 AC-4] toggling the mixed result again uncomments every line (asymmetric by design)', function() {
+    var once = dslUtils.toggleLineComment(MIXED, 0, MIXED.length);
+    var twice = dslUtils.toggleLineComment(once.value, once.selectionStart, once.selectionEnd);
+    // 往路で 1 行目は変化しないため、復路は元の "' foo\nbar" には戻らない。
+    // 1 行目の ' の直後の空白は元の本文の一部であり剥がれない (実測値)。
+    expect(twice.value).toBe(' foo\nbar');
+    expect(twice.value).not.toBe(MIXED);
+  });
+
+  test('[FEAT-132 AC-5] selection range of the mixed case stays inside the new value', function() {
+    var r = dslUtils.toggleLineComment(MIXED, 0, MIXED.length);
+    expect(r.selectionStart).toBe(0);
+    expect(r.selectionEnd).toBe(r.value.length);
   });
 });
