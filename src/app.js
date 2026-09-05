@@ -628,12 +628,34 @@ function init() {
     if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
     var key = e.key;
     if (key !== 'ArrowUp' && key !== 'ArrowDown' && key !== 'Enter'
-      && key !== 'Delete' && key !== 'Backspace') return;
+      && key !== 'Delete' && key !== 'Backspace' && key !== 'd') return;
     if (_kbdInTypingTarget()) return;
     // modal 表示中は二重発火させない (FEAT-017 [AC-5])。
     if (_kbdModalOpen()) return;
     var cur = _kbdSelectedItem();
     if (!cur) return;
+
+    // FEAT-138 (UI-016 / HFR-073): 選択中 message の矢印を 1 打で `->` / `-->` に切り替える。
+    // ARROWS の順序・剰余には依存せず、`-->` を既定の相手とする 2 値切替である。
+    if (key === 'd') {
+      if (cur.type !== 'message') return;
+      if (!currentModule || typeof currentModule.updateMessage !== 'function') return;
+      var rels = (currentParsed && currentParsed.relations) || [];
+      var rel = null;
+      for (var k = 0; k < rels.length; k++) { if (rels[k].id === cur.id) { rel = rels[k]; break; } }
+      if (!rel) return;
+      var toggled = currentModule.updateMessage(mmdText, cur.line, 'arrow',
+        rel.arrow === '-->' ? '->' : '-->');
+      if (toggled === mmdText) return; // 空振りで undo 段を増やさない
+      e.preventDefault();
+      window.MA.history.pushHistory();
+      mmdText = toggled;
+      suppressSync = true;
+      editorEl.value = toggled;
+      suppressSync = false;
+      scheduleRefresh();
+      return;
+    }
 
     if (key === 'Delete' || key === 'Backspace') {
       // FEAT-014: 右パネルの「✕ 削除」と同じ削除本体 (module 側) を呼ぶ。
