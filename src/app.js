@@ -691,6 +691,14 @@ function init() {
     if ((e.key || '').toLowerCase() !== 'd') return;
     // 入力中はブラウザ既定を通す ([AC-3])。modal 表示中は発火しない ([AC-5])。
     if (_kbdInTypingTarget() || _kbdModalOpen()) return;
+    // FEAT-126 (UI-012): ここで Ctrl+D は「本アプリが引き受けたキー」と確定している。
+    // 以降の早期 return は「複製が成立しなかった」だけであり、ブラウザ既定(ブックマーク
+    // 追加ダイアログ)を通す理由にはならない。よって preventDefault() は成立判定より前、
+    // 引受確定の直後に呼ぶ。同ファイルの history ルーター(Ctrl+Z / Ctrl+Y)が isUndo /
+    // isRedo の確定後に preventDefault() を呼ぶのと同じ型である。
+    // 🔴 入力中 ([AC-3]) と modal 表示中 ([AC-5]) は直前の行で return 済みであり、
+    //    それらの経路では従来どおりブラウザ既定が通る(引き受けていない)。
+    e.preventDefault();
     // 0 件 / 複数 / message 以外の選択では null が返り、DSL は変化しない ([AC-4])。
     // FEAT-179 (UI-019): FEAT-109 のリネーム前の旧名を呼んでいて未定義だったため、
     // 既存の _kbdSelectedItem() に是正する(旧名は本ファイルに 1 件も残さない [AC-5])。
@@ -701,7 +709,7 @@ function init() {
     if (!currentModule || typeof currentModule.duplicateMessage !== 'function') return;
     var dup = currentModule.duplicateMessage(mmdText, cur.line);
     if (dup === mmdText) return; // 空振りで undo 段を増やさない
-    e.preventDefault();
+    // FEAT-126 (UI-012): preventDefault() は引受確定の直後へ移した(上記)。
     window.MA.history.pushHistory();
     mmdText = dup;
     suppressSync = true;
