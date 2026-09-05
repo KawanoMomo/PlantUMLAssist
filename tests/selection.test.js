@@ -24,3 +24,23 @@ describe('selection range', function() {
     expect(sel.getRange()).toBe(null);
   });
 });
+
+// FEAT-123 [AC-5] (resolves UI-014 / HFR-064)
+// 挿入フォームが退避する prevSelection が、退避後の選択変更に影響されない複製であること。
+// 🔴 分類 (b) 回帰ガード / 非退行テスト: 本ケースは変更前のコードでも PASS する
+//    (getSelected() は元々 sel.slice() を返す)。E5 [R-1](b) に従い分類を明記する。
+describe('FEAT-123: selection snapshot is a copy (regression guard)', function() {
+  beforeEach(function() {
+    sel.init(function() {});
+    sel.clearSelection();
+  });
+  test('[AC-5] getSelected() の戻り値は以後の setSelected に影響されない', function() {
+    sel.setSelected([{ type: 'message', id: 'm1', line: 8 }]);
+    var snapshot = sel.getSelected();
+    sel.setSelected([{ type: 'message', id: 'm2', line: 12 }]);
+    expect(snapshot).toEqual([{ type: 'message', id: 'm1', line: 8 }]);
+    // 退避した値でそのまま復帰できる。
+    sel.setSelected(snapshot);
+    expect(sel.getSelected()).toEqual([{ type: 'message', id: 'm1', line: 8 }]);
+  });
+});

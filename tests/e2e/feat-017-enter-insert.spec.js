@@ -217,4 +217,83 @@ test.describe('FEAT-017: Enter キーで選択行の直後に挿入 modal を開
     // ガイドが出た場合はラベル文言が不変であること (出ない環境では判定対象外)。
     if (label !== null) expect(label).toBe('+ ここに挿入');
   });
+
+  // ---- FEAT-123 / UI-014 / HFR-064 -------------------------------------
+  // 挿入 modal を「キャンセル」で閉じたとき、開く直前の選択を復帰する。
+  // 🔴 タグは [F123-AC-n] とする: 本ファイルには FEAT-017 の [AC-1]〜[AC-6] が既にあり、
+  //    LOOP-437 (i)「同一 spec 内で AC タグを重複させない」に従い新規側を一意な別名にした。
+  async function currentSelection(page) {
+    return page.evaluate(() => window.MA.selection.getSelected());
+  }
+
+  test('[F123-AC-1] Enter で開いた挿入 modal をキャンセルすると、開く直前の選択が復帰する', async ({ page }) => {
+    await boot(page);
+    expect(await selectMessageByLine(page, 8)).toBeTruthy();
+    await blurToBody(page);
+    // 🔴 比較の基準は modal を開く「前」に取得する (開いた後に読み直した値どうしの比較は
+    //    実装が no-op でも通る同語反復になる — LOOP-437 (ii))。
+    const before = await currentSelection(page);
+    expect(before.length).toBe(1);
+
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('#seq-modal-content');
+    expect(await modalDisplay(page)).toBe('flex');
+    // 開いている間に選択を意図的に壊し、キャンセルが「開く直前の値」を復帰することを判定する。
+    // (壊さないと、選択が元々保持されているだけの実装でも通る同語反復になる)
+    await page.evaluate(() => window.MA.selection.clearSelection());
+    expect((await currentSelection(page)).length).toBe(0);
+
+    await page.locator('#seq-mod-cancel').click();
+    await page.waitForTimeout(300);
+    expect(await modalDisplay(page)).toBe('none');
+
+    expect(await currentSelection(page)).toEqual(before);
+  });
+
+  test('[F123-AC-2] キャンセル直後の ↑ / ↓ が SVG を再クリックせずに効く', async ({ page }) => {
+    await boot(page);
+    expect(await selectMessageByLine(page, 8)).toBeTruthy();
+    await blurToBody(page);
+    const before = await currentSelection(page);
+
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('#seq-modal-content');
+    await page.evaluate(() => window.MA.selection.clearSelection());
+    await page.locator('#seq-mod-cancel').click();
+    await page.waitForTimeout(300);
+
+    // SVG の再クリックは 1 度も行わない。キーボードのみ。
+    await blurToBody(page);
+    await page.keyboard.press('ArrowUp');
+    await page.waitForTimeout(300);
+
+    const after = await currentSelection(page);
+    expect(after.length).toBe(1);
+    // 操作「前」の値と「異なる」ことを主張する (LOOP-437 (ii))。
+    expect(after[0].line).not.toBe(before[0].line);
+  });
+
+  test('[F123-AC-3] 選択が無い状態で開いた modal をキャンセルしても選択は作られない', async ({ page }) => {
+    await boot(page);
+    await page.evaluate(() => window.MA.selection.clearSelection());
+    const before = await currentSelection(page);
+    expect(before.length).toBe(0);
+
+    // ホバー/パネルと同じ入口 (showInsertForm) を直接開く。
+    await page.evaluate(() => {
+      var seq = window.MA.modules.plantumlSequence;
+      var ed = document.getElementById('editor');
+      var ctx = {
+        getMmdText: function() { return ed.value; },
+        setMmdText: function(t) { ed.value = t; ed.dispatchEvent(new Event('input')); },
+        onUpdate: function() {},
+      };
+      seq.showInsertForm(ctx, 8, 'after', 'message');
+    });
+    await page.waitForSelector('#seq-modal-content');
+    await page.locator('#seq-mod-cancel').click();
+    await page.waitForTimeout(300);
+
+    expect(await currentSelection(page)).toEqual([]);
+  });
 });

@@ -670,6 +670,13 @@ window.MA.modules.plantumlSequence = (function() {
 
   function _showInsertForm(ctx, line, position, kind) {
     var modal = document.getElementById('seq-modal');
+    // FEAT-123 (resolves UI-014 / HFR-064): フォームを開く直前の選択を退避し、
+    // 「キャンセル」で閉じたときに復帰する ([F123-AC-1])。
+    // getSelected() は slice() 済みの複製を返すが、参照を共有しないことを
+    // 呼出側でも明示するため slice() を重ねる。
+    var prevSelection = (window.MA.selection && window.MA.selection.getSelected)
+      ? window.MA.selection.getSelected().slice()
+      : [];
     var content = document.getElementById('seq-modal-content');
     var P = window.MA.properties;
     var parsed = parseSequence(ctx.getMmdText());
@@ -747,6 +754,11 @@ window.MA.modules.plantumlSequence = (function() {
 
     document.getElementById('seq-mod-cancel').addEventListener('click', function() {
       modal.style.display = 'none';
+      // FEAT-123 [F123-AC-1] / [F123-AC-3]: 退避した選択が空でなければ復帰する。
+      // 空のときは setSelected を呼ばない (選択を新たに作らない)。
+      if (prevSelection.length && window.MA.selection && window.MA.selection.setSelected) {
+        window.MA.selection.setSelected(prevSelection);
+      }
     });
     document.getElementById('seq-mod-confirm').addEventListener('click', function() {
       var t = ctx.getMmdText();
