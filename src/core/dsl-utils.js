@@ -28,6 +28,15 @@ window.MA.dslUtils = (function() {
     return line.replace(/^\s+/, '').indexOf("'") === 0;
   }
 
+  // FEAT-187 (resolves UI-021): @startuml / @enduml の境界行かどうかを判定する。
+  // 境界行をコメント化すると PlantUML が図として解釈できなくなり、Ctrl+/ が
+  // 無警告で DSL を壊す (UI-021 Major)。大文字小文字は区別しない —
+  // src/core/dsl-updater.js の /^\s*@startuml\b/i の先例に揃えた規約である。
+  function isPlantumlBoundary(line) {
+    if (typeof line !== 'string') return false;
+    return /^\s*@(startuml|enduml)\b/i.test(line);
+  }
+
   // FEAT-080 (resolves UI 側 HFR-030): Ctrl+/ の行コメント トグルの純関数。
   // textarea の値と選択範囲を受け取り、キャレット行 (または選択がまたぐ全行) の
   // 行頭 PlantUML 行コメント記号 ' を付け外しした結果を返す。DOM に触れないので
@@ -44,12 +53,18 @@ window.MA.dslUtils = (function() {
     var lines = value.substring(lineStart, lineEnd).split('\n');
     var uncomment = true;
     for (var i = 0; i < lines.length; i++) {
+      // FEAT-187: 境界行は判定母集団から外す。数えると「全行コメント」が
+      // 境界行の存在で恒常的に偽になり、既存の解除動作が壊れる。
+      if (isPlantumlBoundary(lines[i])) continue;
       if (!isPlantumlComment(lines[i])) { uncomment = false; break; }
     }
     var firstDelta = 0;
     var out = lines.map(function(line, idx) {
       var next;
-      if (uncomment) {
+      // FEAT-187: 境界行はコメント化も解除もせず素通しする。
+      if (isPlantumlBoundary(line)) {
+        next = line;
+      } else if (uncomment) {
         next = line.replace(/^(\s*)'/, '$1');
       } else {
         // FEAT-132 (resolves UI-015): コメント化側を行ごとの判定にする。
@@ -74,6 +89,7 @@ window.MA.dslUtils = (function() {
     quote: quote,
     escapeForRegex: escapeForRegex,
     isPlantumlComment: isPlantumlComment,
+    isPlantumlBoundary: isPlantumlBoundary,
     toggleLineComment: toggleLineComment,
   };
 })();

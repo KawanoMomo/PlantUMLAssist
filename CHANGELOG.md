@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`Ctrl+/` が `@startuml` / `@enduml` の境界行をコメント化して DSL を無警告で壊す欠陥を止めた** (`FEAT-187` / `resolves: UI-021` / ブランチ `loop/impl/FEAT-187`)。 これまで `Ctrl+/` (`FEAT-080`) は、キャレット行または選択がまたぐ全行を行の内容によらずコメント化しており、`@startuml` 行にキャレットがある状態で押すと DSL が `'@startuml` へ書き換わって図として解釈できなくなっていた。 エラー表示は出ず (`UI-021` の実測で `errorBanner: null` / `pageerror: 0`)、利用者に破壊が伝わらなかった。 `src/core/dsl-utils.js` に述語 `isPlantumlBoundary(line)` を 1 個追加し、行頭の空白を除いたうえで `@startuml` / `@enduml` で始まる行を**境界行**として、コメント化も解除もせず素通しするようにした。 大文字小文字は区別しない (同リポジトリの `src/core/dsl-updater.js` の `/^\s*@startuml\b/i` の先例に揃えた規約である)。 あわせて「対象行がすべてコメント行か」の判定母集団からも境界行を除外した — 除外しないと境界行の存在によりこの判定が恒常的に偽になり、既存の解除動作が壊れるためである。 これにより、図全体を選択して `Ctrl+/` を 2 回押すと元の DSL に一字一句同一で戻る (実機 Chromium で往復を確認済み)。 境界行を含まない選択に対する既存の挙動 (`FEAT-080` / `FEAT-132` 由来) は変更しておらず、既存ユニットテスト 766 件は全件 GREEN のまま維持されている。 返り値の `selectionStart` / `selectionEnd` の算出規約は変更していない。 `src/app.js` / `src/ui/` / `src/modules/` / `plantuml-assist.html` はいずれも 1 バイトも変更しておらず、インラインスタイルによる迂回実装も伴わない。 利用者の操作は 1 手も増減しないため、手数 (charter §5) への寄与は本件では論じない。 online モード送信時のサーバー側解釈、およびブロックコメント `/' ... '/` は本件の対象外である。
+
+### Tests
+
+- **`tests/dsl-utils.test.js` に `FEAT-187` の境界行ガードのユニットテストを 7 件追加した** (`FEAT-187` / ブランチ `loop/impl/FEAT-187`)。 `@startuml` 行へのキャレット単独トグルが無操作であること、`@enduml` 行でも同様であること、全選択時に境界行以外のみがコメント化されること、その結果をもう一度トグルすると入力と一字一句同一に戻ること、先頭空白付きの境界行 (`"  @startuml"`) も素通しされること、大文字小文字違い (`@startUML`) も境界行として扱われること、境界行のみを選択したときに返る選択範囲が値の長さの内側に収まること、を判定する。 追加した 7 件はいずれも変更前のコードで FAIL することを実測した (変更前 `766 passed, 7 failed` / exit 1)。 変更後は `773 passed, 0 failed` / exit 0 である。
+
 ### Added
 
 - **DSL の行番号を `#editor` のキャレット範囲 (文字オフセット) へ変換する純関数 `caretRangeForLine(text, lineIndex)` を追加した** (`FEAT-185` / `resolves: HFR-089` / ブランチ `loop/impl/FEAT-185`)。 `src/core/line-resolver.js` の IIFE 内に関数を 1 個と `return` オブジェクトへの export を 1 行足したのみである。 引数は DSL 全文の文字列と **0 始まり**の行番号で、返り値は `{ start, end }` の文字オフセットである (`end` は改行を含まない)。 `text` を `'\n'` で分割し、対象行より前の各行の長さに失われた改行 1 文字を足し合わせて `start` を求める。 CRLF 改行の入力に対しては行末の `\r` を `end` に含めないため、返る範囲の部分文字列に `\r` は現れない。 末尾に改行が無い最終行に対しては `end` が `text.length` と等しくなる。 範囲外 (負値 / 行数以上)・`text` が文字列でない・`lineIndex` が整数でない場合は、いずれも例外を投げず `null` を返す (同一ファイル内の既存 3 関数の防御的 early-return の様式に揃えた)。 🔴 **本件は純関数の追加のみであり、図の選択イベントから本関数を呼んで `#editor` へ適用する配線は含まない** (それは `FEAT-186` の範囲)。 `caretRangeForLine` の `src/**` 内の呼出箇所は 0 件である。 既存 3 関数 (`matchByDataSourceLine` / `matchByOrder` / `pickBestOffset`) の実装と export の既存 3 エントリは 1 バイトも変更していない。 `src/app.js` / `src/ui/` / `src/modules/` / `plantuml-assist.html` はいずれも変更しておらず、インラインスタイルによる迂回実装も伴わない。 利用者の操作は 1 手も変わらないため、手数 (charter §5) への寄与は本件では論じない。
