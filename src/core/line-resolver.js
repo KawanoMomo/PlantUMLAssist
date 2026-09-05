@@ -50,9 +50,32 @@ window.MA.lineResolver = (function() {
     return best;
   }
 
+  // FEAT-185 (resolves HFR-089): DSL の行番号 (0 始まり) を #editor のキャレット範囲
+  // (文字オフセット) へ変換する純関数。DOM には一切触れない。
+  // 配線 (選択イベントから本関数を呼び #editor へ適用する) は FEAT-186 の職掌であり、
+  // 本 FEAT は src/** 内に呼出元を 1 箇所も作らない。
+  // 不正入力は throw せず null を返す (同一ファイル内の既存 3 関数の防御的 early-return に揃える)。
+  function caretRangeForLine(text, lineIndex) {
+    if (typeof text !== 'string') return null;
+    if (typeof lineIndex !== 'number' || !isFinite(lineIndex)) return null;
+    if (Math.floor(lineIndex) !== lineIndex || lineIndex < 0) return null;
+    var lines = text.split('\n');
+    if (lineIndex >= lines.length) return null;
+    var start = 0;
+    for (var i = 0; i < lineIndex; i++) {
+      start += lines[i].length + 1; // +1 は分割で失われた '\n'
+    }
+    var line = lines[lineIndex];
+    var end = start + line.length;
+    // CRLF: 末尾の '\r' は行の内容に含めない
+    if (line.charAt(line.length - 1) === '\r') end -= 1;
+    return { start: start, end: end };
+  }
+
   return {
     matchByDataSourceLine: matchByDataSourceLine,
     matchByOrder: matchByOrder,
     pickBestOffset: pickBestOffset,
+    caretRangeForLine: caretRangeForLine,
   };
 })();
