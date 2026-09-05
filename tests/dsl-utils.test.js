@@ -138,3 +138,58 @@ describe('dslUtils.toggleLineComment', function() {
     expect(r.selectionEnd).toBe(r.value.length);
   });
 });
+
+// FEAT-187 (resolves UI-021): Ctrl+/ が @startuml / @enduml 境界行をコメント化して
+// DSL を無警告で壊す欠陥の是正。境界行は素通し (コメント化も解除もしない)。
+// 判定規約: 先頭空白を除去した後 @startuml / @enduml で始まる行を境界行とする。
+// 大文字小文字は区別しない (src/core/dsl-updater.js:87 の /^\s*@startuml\b/i の先例に揃えた)。
+describe('dslUtils.toggleLineComment @startuml/@enduml guard (FEAT-187)', function() {
+  var DOC = '@startuml\nUser -> System : Request\n@enduml';
+  var COMMENTED = "@startuml\n'User -> System : Request\n@enduml";
+
+  test('[FEAT-187 AC-1] caret on the @startuml line is a no-op', function() {
+    var r = dslUtils.toggleLineComment(DOC, 2, 2);
+    expect(r.value).toBe(DOC);
+    expect(r.selectionStart).toBe(2);
+    expect(r.selectionEnd).toBe(2);
+  });
+
+  test('[FEAT-187 AC-1b] caret on the @enduml line is a no-op', function() {
+    var caret = DOC.length - 2;
+    var r = dslUtils.toggleLineComment(DOC, caret, caret);
+    expect(r.value).toBe(DOC);
+  });
+
+  test('[FEAT-187 AC-2] select-all comments only the body line', function() {
+    var r = dslUtils.toggleLineComment(DOC, 0, DOC.length);
+    expect(r.value).toBe(COMMENTED);
+    expect(r.value).not.toBe(DOC);
+  });
+
+  test('[FEAT-187 AC-3] toggling the AC-2 result again restores the input exactly', function() {
+    var once = dslUtils.toggleLineComment(DOC, 0, DOC.length);
+    expect(once.value).toBe(COMMENTED);
+    var twice = dslUtils.toggleLineComment(once.value, once.selectionStart, once.selectionEnd);
+    expect(twice.value).toBe(DOC);
+  });
+
+  test('[FEAT-187 AC-5] a boundary line with leading whitespace is still skipped', function() {
+    var src = '  @startuml\nfoo\n  @enduml';
+    var r = dslUtils.toggleLineComment(src, 0, src.length);
+    expect(r.value).toBe("  @startuml\n'foo\n  @enduml");
+  });
+
+  test('[FEAT-187 AC-5b] case-insensitive boundary keywords are skipped', function() {
+    var src = '@startUML\nfoo\n@endUML';
+    var r = dslUtils.toggleLineComment(src, 0, src.length);
+    expect(r.value).toBe("@startUML\n'foo\n@endUML");
+  });
+
+  test('[FEAT-187 AC-6] selecting only boundary lines leaves the range inside the value', function() {
+    var r = dslUtils.toggleLineComment(DOC, 0, 9);
+    expect(r.value).toBe(DOC);
+    expect(r.selectionStart).toBe(0);
+    expect(r.selectionEnd).toBe(9);
+    expect(r.value.length).toBe(DOC.length);
+  });
+});
