@@ -737,6 +737,30 @@ function init() {
     suppressSync = true;
     editorEl.value = dup;
     suppressSync = false;
+    // FEAT-127 (UI-013 / HFR-063): 複製直後、選択を「複製で生まれた新しい行」へ移す。
+    // 🔴 複製前の id を保持してはならない: parseSequence は message の id を文書順の連番
+    //    (src/modules/sequence.js:215 の `id: '__m_' + (msgCounter++)`) で採番するため、
+    //    複製行より後ろの message は id が振り直される。よって新しい選択は
+    //    **複製後の再パース結果に対して行番号から引き直す** (UI-013 の指摘どおり)。
+    // 🔴 Ctrl+D 経路には renderProps() の setMmdText(:1312 の逐語コメント
+    //    "Re-parse synchronously so any setSelected() that fires right ...") のような
+    //    同期再パースが無く、currentParsed は scheduleRefresh() の非同期 tick まで古いままである。
+    //    そのため _kbdSelectables() を使う前にここで同期再パースする (同 :1317-1319 と同じ形)。
+    if (currentModule && typeof currentModule.parse === 'function') {
+      try { currentParsed = currentModule.parse(mmdText); } catch (err) { /* leave stale */ }
+    }
+    // duplicateMessage は insertAfterLine (src/core/text-updater.js:67) で複製元の直後へ
+    // 1 行だけ挿入するため、新しい行は cur.line + 1 である。
+    var dupLine = cur.line + 1;
+    var after = _kbdSelectables();
+    for (var n = 0; n < after.length; n++) {
+      if (after[n].line === dupLine) {
+        // FEAT-109 と同じく type はハードコードせず要素の実 type を使う。
+        window.MA.selection.setSelected(
+          [{ type: after[n].type || 'message', id: after[n].id, line: after[n].line }]);
+        break;
+      }
+    }
     scheduleRefresh();
   });
 
