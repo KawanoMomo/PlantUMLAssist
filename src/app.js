@@ -173,6 +173,8 @@ function init() {
     if (window.MA.workspace) {
       try { window.MA.workspace.updateActive({ dsl: mmdText, diagramType: currentDiagramType }); } catch (e) {}
     }
+    // 前回保存時点との差分バッジを追従させる。
+    try { renderDiffBadge(); } catch (e) {}
   });
 
   editorEl.addEventListener('scroll', function() {
@@ -1150,6 +1152,7 @@ function init() {
   setupTabs();
   setupBulkRename();
   setupTemplateNew();
+  setupDiffPanel();
   setupNameAudit();
   setupLineEdit();
   setupOutline();
@@ -1543,8 +1546,11 @@ function saveActiveDoc() {
     var cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null;
     if (doc && cfg && cfg.backend === 'file') {
       window.MA.workspace.saveToFile(doc, cfg.fileDir);
+      // 保存した時点を差分の基準にする (BLK-reviewer-20260907-0803)。
+      if (window.MA.saveDiff) window.MA.saveDiff.mark(doc.name, doc.dsl);
     }
   } catch (e) { /* 保存フォルダへの書き出しは best-effort */ }
+  renderDiffBadge();
   return doc;
 }
 
@@ -1599,6 +1605,17 @@ function renderTabs() {
     el.setAttribute('data-doc-id', doc.id);
     el.setAttribute('data-doc-name', doc.name);
     el.title = doc.name + ' (' + doc.diagramType.replace('plantuml-', '') + ') — ダブルクリックで名前変更';
+    // 前回保存時点から変わっている図にだけ印を付ける。
+    var st = window.MA.saveDiff ? window.MA.saveDiff.statusOf(doc.name, doc.dsl) : 'same';
+    if (st !== 'same') {
+      el.className += ' dirty';
+      var dot = document.createElement('span');
+      dot.className = 'tab-dot';
+      dot.setAttribute('data-diff-status', st);
+      dot.textContent = st === 'new' ? '○' : '●';
+      dot.title = st === 'new' ? 'まだ保存していない' : '前回保存時点から変更あり';
+      el.appendChild(dot);
+    }
     var label = document.createElement('span');
     label.className = 'tab-label';
     label.textContent = doc.name;
@@ -1629,6 +1646,132 @@ function renderTabs() {
     });
     bar.insertBefore(el, firstTool);
   });
+  renderDiffBadge();
+}
+
+// ── 前回保存時点との差分 ──────────────────────────────
+// BLK-reviewer-20260907-0803: 何か変わったかを知るのに控えとの全文 diff を毎回
+// 取っていた。保存した時点の DSL を基準に持てば、バッジを見るだけで
+// 「読む必要がある図」が分かる。変更 0 件ならその tick は図を開かなくてよい。
+
+// エディタの未確定分を含めた現在の全図。
+function _diffDocs() {
+  if (!window.MA.workspace) return [];
+  var docs = window.MA.workspace.list();
+  var activeId = window.MA.workspace.getActiveId();
+  return docs.map(function(d) {
+    return (d.id === activeId) ? { id: d.id, name: d.name, dsl: mmdText } : d;
+  });
+}
+
+// タブの印を今の中身に合わせ直す。編集のたびにタブを組み立て直すと
+// クリック中のタブが差し替わるので、印だけを付け外しする。
+function syncTabDirtyMarks(docs) {
+  var SD = window.MA.saveDiff;
+  var bar = document.getElementById('tab-bar');
+  if (!SD || !bar) return;
+  docs.forEach(function(d) {
+    var el = bar.querySelector('.tab[data-doc-id="' + d.id + '"]');
+    if (!el) return;
+    var st = SD.statusOf(d.name, d.dsl);
+    var dot = el.querySelector('.tab-dot');
+    if (st === 'same') {
+      el.className = el.className.replace(/\s*\bdirty\b/, '');
+      if (dot) el.removeChild(dot);
+      return;
+    }
+    if (el.className.indexOf('dirty') < 0) el.className += ' dirty';
+    if (!dot) {
+      dot = document.createElement('span');
+      dot.className = 'tab-dot';
+      el.insertBefore(dot, el.firstChild);
+    }
+    dot.setAttribute('data-diff-status', st);
+    dot.textContent = st === 'new' ? '○' : '●';
+    dot.title = st === 'new' ? 'まだ保存していない' : '前回保存時点から変更あり';
+  });
+}
+
+function renderDiffBadge() {
+  var btn = document.getElementById('btn-tab-diff');
+  var SD = window.MA.saveDiff;
+  if (!btn || !SD) return null;
+  var docs = _diffDocs();
+  syncTabDirtyMarks(docs);
+  var sum = SD.summary(docs);
+  btn.textContent = SD.badgeText(sum);
+  btn.className = sum.hasChange ? 'tab-tool has-change' : 'tab-tool';
+  btn.title = sum.hasChange
+    ? ('前回保存時点から変わった図: ' + sum.changed.concat(sum.added).join(', '))
+    : '前回保存時点から変わった図はない';
+  return sum;
+}
+
+function setupDiffPanel() {
+  var btn = document.getElementById('btn-tab-diff');
+  var panel = document.getElementById('diff-panel');
+  var SD = window.MA.saveDiff;
+  if (!btn || !panel || !SD) return;
+  var esc = window.MA.htmlUtils.escHtml;
+
+  function close() { panel.classList.remove('open'); }
+
+  function render() {
+    var docs = _diffDocs();
+    var sum = SD.summary(docs);
+    var html = '<div class="diff-head">' + esc(SD.badgeText(sum));
+    if (sum.markedAt) html += ' ・ 基準 ' + esc(sum.markedAt.replace('T', ' ').slice(0, 16));
+    html += '</div>';
+    docs.forEach(function(d) {
+      var st = SD.statusOf(d.name, d.dsl);
+      var mark = st === 'same' ? '—' : (st === 'new' ? '新規' : '変更');
+      if (st === 'changed') {
+        var c = SD.changedLines(d.name, d.dsl);
+        mark += ' +' + c.added + ' −' + c.removed;
+      }
+      html += '<div class="diff-row' + (st === 'same' ? '' : ' changed') + '"'
+        + ' data-doc-id="' + esc(d.id) + '" data-diff-status="' + esc(st) + '">'
+        + '<span>' + esc(d.name) + '</span><span>' + esc(mark) + '</span></div>';
+    });
+    html += '<div class="diff-actions">'
+      + '<button type="button" id="diff-mark-all">今の内容を基準にする</button></div>';
+    panel.innerHTML = html;
+
+    var rows = panel.querySelectorAll('.diff-row');
+    for (var i = 0; i < rows.length; i++) {
+      (function(row) {
+        row.addEventListener('click', function() {
+          close();
+          switchToDoc(row.getAttribute('data-doc-id'));
+        });
+      })(rows[i]);
+    }
+    var markAll = document.getElementById('diff-mark-all');
+    if (markAll) {
+      markAll.addEventListener('click', function() {
+        SD.markAll(_diffDocs());
+        renderTabs();
+        render();
+      });
+    }
+  }
+
+  btn.addEventListener('click', function() {
+    if (panel.classList.contains('open')) { close(); return; }
+    render();
+    panel.classList.add('open');
+    var rect = btn.getBoundingClientRect();
+    panel.style.left = Math.max(4, rect.right - 260) + 'px';
+    panel.style.top = (rect.bottom + 2) + 'px';
+  });
+
+  document.addEventListener('click', function(ev) {
+    if (!panel.classList.contains('open')) return;
+    if (panel.contains(ev.target) || ev.target === btn) return;
+    close();
+  });
+
+  renderDiffBadge();
 }
 
 function setupTabs() {
@@ -1805,6 +1948,7 @@ function renameAcrossDocs(from, to, docs) {
     if (cfg && cfg.backend === 'file') {
       window.MA.workspace.list().forEach(function(d) {
         window.MA.workspace.saveToFile(d, cfg.fileDir);
+        if (window.MA.saveDiff) window.MA.saveDiff.mark(d.name, d.dsl);
       });
     }
   } catch (e) { /* best-effort */ }
