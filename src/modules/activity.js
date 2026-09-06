@@ -1320,6 +1320,7 @@ window.MA.modules.plantumlActivity = (function() {
       if (kind === 'action') {
         html2 =
           '<label style="display:block;font-size:10px;color:var(--text-secondary);">Text (改行可)</label>' +
+          window.MA.reuseModal.buttonHtml('ac-tail-reuse') +
           '<textarea id="ac-tail-text" style="width:100%;min-height:50px;font-family:inherit;font-size:12px;"></textarea>' +
           P.primaryButtonHtml('ac-tail-add', '+ Action 追加') +
           P.primaryButtonHtml('ac-tail-add-lines', '+ 各行を Action として一括追加') +
@@ -1353,6 +1354,8 @@ window.MA.modules.plantumlActivity = (function() {
           P.primaryButtonHtml('ac-tail-add', '+ swimlane 追加');
       }
       detailEl.innerHTML = html2;
+      // 一括欄は「既に他の図にある行」を打ち直させないためのボタンを持つ。
+      window.MA.reuseModal.bindButton('ac-tail-reuse', 'plantuml-activity', 'ac-tail-text');
 
       P.bindEvent('ac-tail-add-lines', 'click', function() {
         var t0 = ctx.getMmdText();

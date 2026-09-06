@@ -532,6 +532,7 @@ window.MA.modules.plantumlComponent = (function() {
       } else if (kind === 'bulk') {
         html =
           '<label style="display:block;font-size:10px;color:var(--text-secondary);">要素と関係を 1 行 1 件で</label>' +
+          window.MA.reuseModal.buttonHtml('co-tail-reuse') +
           '<textarea id="co-tail-bulk" style="width:100%;min-height:90px;font-family:inherit;font-size:12px;"></textarea>' +
           P.primaryButtonHtml('co-tail-add', '+ まとめて末尾に追加') +
           '<div id="co-tail-bulk-hint" style="font-size:10px;color:var(--text-secondary);margin-top:4px;line-height:1.5;">' +
@@ -539,6 +540,8 @@ window.MA.modules.plantumlComponent = (function() {
             'A ..&gt; B(dependency) / A -() B(provides) / A )- B(requires)。空行は無視されます</div>';
       }
       detailEl.innerHTML = html;
+      // 一括欄は「既に他の図にある行」を打ち直させないためのボタンを持つ。
+      window.MA.reuseModal.bindButton('co-tail-reuse', 'plantuml-component', 'co-tail-bulk');
 
       P.bindEvent('co-tail-add', 'click', function() {
         var t = ctx.getMmdText();
