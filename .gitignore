@@ -36,3 +36,6 @@ docs/userissue/
 # Auto-save file-backend runtime data
 autosave/
 .server_stdout_tmp.log
+
+# E2E が作る一時保存フォルダ
+autosave-e2e-tabs/
