@@ -142,6 +142,21 @@ html, body {
 }
 #export-menu button:hover { background: var(--bg-tertiary); }
 
+#bulk-export-status {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  white-space: nowrap;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 11px;
+  padding: 6px 10px;
+  z-index: 199;
+}
+
 /* Diagram / render mode selects */
 #diagram-type, #render-mode {
   background: var(--bg-tertiary);
@@ -669,7 +684,9 @@ html, body {
         <button id="exp-png">PNGとして保存</button>
         <button id="exp-png-transparent">PNG（透過背景）</button>
         <button id="exp-clipboard">クリップボードにコピー</button>
+        <button id="exp-svg-all">全図をSVGで保存（zip）</button>
       </div>
+      <div id="bulk-export-status" role="status"></div>
     </div>
 
     <div class="tb-sep"></div>
@@ -875,6 +892,7 @@ html, body {
 <script src="src/core/auto-save.js"></script>
 <script src="src/core/workspace.js"></script>
 <script src="src/core/bulk-rename.js"></script>
+<script src="src/core/bulk-export.js"></script>
 <script src="src/core/name-audit.js"></script>
 <script src="src/core/line-edit.js"></script>
 <script src="src/core/state-branch.js"></script>
