@@ -1056,6 +1056,7 @@ function init() {
 
   setupTabs();
   setupBulkRename();
+  setupNameAudit();
 
   setZoom(1.0);
   updateLineNumbers();
@@ -1505,15 +1506,12 @@ function updateRenamePreview() {
   applyBtn.disabled = !ok;
 }
 
-function applyBulkRename() {
+// 置換前・置換後を決めたあとの共通処理。一括置換パネルと名前突合の
+// 「統一」ボタンが同じ経路を通るようにここへ出す。
+function renameAcrossDocs(from, to, docs) {
   var br = window.MA.bulkRename;
   if (!br || !window.MA.workspace) return null;
-  var from = (document.getElementById('rename-from') || {}).value || '';
-  var to = (document.getElementById('rename-to') || {}).value || '';
-  var allDocs = (document.getElementById('rename-all-docs') || {}).checked;
-  var docs = _renameDocs();
   var activeId = window.MA.workspace.getActiveId();
-  if (!allDocs) docs = docs.filter(function(d) { return d.id === activeId; });
 
   var res = br.apply(docs, from, to);
   if (res.changed.length === 0) return res;
@@ -1548,6 +1546,17 @@ function applyBulkRename() {
     }
   } catch (e) { /* best-effort */ }
   return res;
+}
+
+function applyBulkRename() {
+  if (!window.MA.workspace) return null;
+  var from = (document.getElementById('rename-from') || {}).value || '';
+  var to = (document.getElementById('rename-to') || {}).value || '';
+  var allDocs = (document.getElementById('rename-all-docs') || {}).checked;
+  var docs = _renameDocs();
+  var activeId = window.MA.workspace.getActiveId();
+  if (!allDocs) docs = docs.filter(function(d) { return d.id === activeId; });
+  return renameAcrossDocs(from, to, docs);
 }
 
 function setupBulkRename() {
@@ -1620,6 +1629,136 @@ function setupBulkRename() {
     if (!panel.classList.contains('open')) return;
     if (panel.contains(ev.target) || ev.target === btn) return;
     closePanel();
+  });
+}
+
+// ── 名前突合 ───────────────────────────────────────────────────────────────
+// 図が増えるほど「participant 名・class 名・状態名が図をまたいで揃っているか」の
+// 目視確認が追いつかなくなる。宣言行から名前を機械抽出して、表記揺れ (IRQCtrl と
+// IrqCtrl)、宣言の無い名前 (どの図にもクラスが無い DmaCtrl)、図 × 名前の対照表を
+// 一度に出す。揺れはその場で 1 クリック統一できる。
+
+function openNameAudit() {
+  var modal = document.getElementById('na-modal');
+  var content = document.getElementById('na-modal-content');
+  var na = window.MA.nameAudit;
+  if (!modal || !content || !na) return null;
+  var esc = window.MA.htmlUtils.escHtml;
+
+  var docs = _renameDocs();
+  var result = na.audit(docs);
+
+  var SECTION = 'font-size:10px;color:var(--accent);font-weight:bold;margin:12px 0 4px 0;';
+  var CELL = 'padding:3px 6px;border-bottom:1px solid var(--border);font-size:11px;color:var(--text-primary);';
+  var BTN = 'background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;padding:2px 8px;font-size:11px;';
+
+  var html = '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">名前突合</h3>' +
+    '<div id="na-summary" style="font-size:11px;color:var(--text-secondary);" ' +
+      'data-docs="' + docs.length + '" data-names="' + result.names.length + '" ' +
+      'data-variants="' + result.variants.length + '" data-undeclared="' + result.undeclared.length + '">' +
+      docs.length + ' 枚 / 部品名 ' + result.names.length + ' 件 — ' +
+      '表記揺れ ' + result.variants.length + ' 組、宣言なし ' + result.undeclared.length + ' 件' +
+    '</div>';
+
+  html += '<div style="' + SECTION + '">表記揺れ (同じ部品が別の綴りで書かれている)</div>';
+  if (result.variants.length === 0) {
+    html += '<div id="na-no-variants" style="font-size:11px;color:var(--text-secondary);">揺れはありません</div>';
+  } else {
+    html += '<table id="na-variants" style="border-collapse:collapse;width:100%;">';
+    result.variants.forEach(function(g, gi) {
+      g.members.forEach(function(m, mi) {
+        html += '<tr class="na-variant-row" data-key="' + esc(g.key) + '" data-name="' + esc(m.name) + '">' +
+          (mi === 0 ? '<td rowspan="' + g.members.length + '" style="' + CELL + 'color:var(--text-secondary);white-space:nowrap;">' + esc(g.key) + '</td>' : '') +
+          '<td style="' + CELL + 'font-family:var(--font-mono);">' + esc(m.name) + '</td>' +
+          '<td style="' + CELL + 'color:var(--text-secondary);">' + esc(m.docs.join(', ')) + '</td>' +
+          '<td style="' + CELL + 'text-align:right;color:var(--text-secondary);">' + m.refs + ' 件</td>' +
+          '<td style="' + CELL + 'text-align:right;"><button class="na-unify" data-gi="' + gi + '" ' +
+            'data-to="' + esc(m.name) + '" style="' + BTN + '">これに統一</button></td>' +
+        '</tr>';
+      });
+    });
+    html += '</table>';
+  }
+
+  html += '<div style="' + SECTION + '">宣言なし (矢印にだけ出てきて、どの図にも宣言が無い)</div>';
+  if (result.undeclared.length === 0) {
+    html += '<div id="na-no-undeclared" style="font-size:11px;color:var(--text-secondary);">ありません</div>';
+  } else {
+    html += '<div id="na-undeclared" style="font-size:11px;font-family:var(--font-mono);color:var(--accent-red);">' +
+      result.undeclared.map(function(r) { return esc(r.name) + ' (' + esc(r.docs.join(', ')) + ')'; }).join('<br>') +
+      '</div>';
+  }
+
+  html += '<div style="' + SECTION + '">図 × 部品名</div>' +
+    '<table id="na-matrix" style="border-collapse:collapse;width:100%;">' +
+    '<tr><th style="' + CELL + 'text-align:left;">部品名</th>' +
+    '<th style="' + CELL + 'text-align:left;color:var(--text-secondary);">種類</th>' +
+    result.matrix.docs.map(function(n) {
+      return '<th style="' + CELL + 'text-align:center;color:var(--text-secondary);font-weight:normal;">' + esc(n) + '</th>';
+    }).join('') + '</tr>';
+  result.matrix.rows.forEach(function(r) {
+    html += '<tr class="na-matrix-row" data-name="' + esc(r.name) + '">' +
+      '<td style="' + CELL + 'font-family:var(--font-mono);">' + esc(r.name) + '</td>' +
+      '<td style="' + CELL + 'color:var(--text-secondary);">' + esc(r.kind || '—') + '</td>' +
+      r.present.map(function(p, i) {
+        return '<td class="na-cell" data-doc-index="' + i + '" data-present="' + (p ? '1' : '0') + '" ' +
+          'style="' + CELL + 'text-align:center;' + (p ? 'cursor:pointer;' : 'color:var(--text-secondary);') + '">' +
+          (p ? '●' : '·') + '</td>';
+      }).join('') + '</tr>';
+  });
+  html += '</table>' +
+    '<div style="display:flex;gap:8px;margin-top:14px;">' +
+      '<button id="na-close" style="flex:1;' + BTN + 'padding:8px;">閉じる</button>' +
+    '</div>';
+
+  content.innerHTML = html;
+  modal.style.display = 'flex';
+
+  function close() { modal.style.display = 'none'; }
+
+  var closeBtn = document.getElementById('na-close');
+  if (closeBtn) closeBtn.addEventListener('click', close);
+
+  // 揺れの 1 組を選んだ綴りへ寄せる。組の他の綴りを順に置換していく。
+  var unifyBtns = content.querySelectorAll('.na-unify');
+  for (var i = 0; i < unifyBtns.length; i++) {
+    unifyBtns[i].addEventListener('click', function(ev) {
+      var to = ev.currentTarget.getAttribute('data-to');
+      var g = result.variants[Number(ev.currentTarget.getAttribute('data-gi'))];
+      if (!g || !to) return;
+      g.members.forEach(function(m) {
+        if (m.name === to) return;
+        renameAcrossDocs(m.name, to, _renameDocs());
+      });
+      openNameAudit();      // 置換後の状態で開き直す
+    });
+  }
+
+  // ● のセルはその図へのショートカット。名前を追いかけて図を渡り歩ける。
+  var cells = content.querySelectorAll('.na-cell');
+  for (var j = 0; j < cells.length; j++) {
+    cells[j].addEventListener('click', function(ev) {
+      if (ev.currentTarget.getAttribute('data-present') !== '1') return;
+      var idx = Number(ev.currentTarget.getAttribute('data-doc-index'));
+      var target = docs[idx];
+      if (!target || !window.MA.workspace) return;
+      close();
+      saveActiveDoc();
+      window.MA.workspace.setActive(target.id);
+      applyActiveDoc();
+    });
+  }
+
+  return result;
+}
+
+function setupNameAudit() {
+  var btn = document.getElementById('btn-tab-audit');
+  var modal = document.getElementById('na-modal');
+  if (!btn || !modal || !window.MA.nameAudit) return;
+  btn.addEventListener('click', function() { openNameAudit(); });
+  modal.addEventListener('click', function(ev) {
+    if (ev.target === modal) modal.style.display = 'none';
   });
 }
 
