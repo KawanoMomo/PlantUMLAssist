@@ -750,6 +750,61 @@ html, body {
   position: relative;
 }
 
+/* ── 参照ペイン (2 枚の図を並べて見比べる) ──────────────────────────────── */
+#compare-pane {
+  display: flex;
+  flex-direction: column;
+  width: 34%;
+  min-width: 220px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-left: 1px solid var(--border);
+  background: var(--bg-primary);
+}
+#compare-pane[hidden] { display: none; }
+#compare-pane-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+#compare-select {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+#compare-status { white-space: nowrap; }
+#btn-compare-close {
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 1px 6px;
+}
+/* 主プレビューとは別にスクロールする (片方を動かしても相手はそのまま) */
+#compare-container {
+  flex: 1;
+  overflow: auto;
+  padding: 16px;
+  background: var(--bg-primary);
+}
+#compare-svg svg { max-width: none; }
+
 /* ── Floating zoom HUD (design 1a) ────────────────────────────────────────── */
 /* #preview-container ではなく #preview-pane を基準にするので、図をスクロール
    しても帯はキャンバスの右上に留まる。 */
@@ -1129,6 +1184,7 @@ html, body {
         <button class="tab-tool" id="btn-tab-rename" title="開いている図をまたいで部品名を一括置換">⇄ 一括置換</button>
         <button class="tab-tool" id="btn-tab-audit" title="開いている図の部品名を突き合わせて表記揺れを探す">🔍 名前突合</button>
         <button class="tab-tool" id="btn-tab-lines" title="この図の 1 行だけを選んで書き換え・挿入・削除する">✎ 行編集</button>
+        <button class="tab-tool" id="btn-tab-compare" title="別のタブの図を右に並べて見ながら書く">⇔ 並べて見る</button>
         <!-- BLK-junior-20260907-0803-wish: 既存の図をテンプレートに新しい図を作る -->
         <button class="tab-tool" id="btn-tab-template" title="既存の図をテンプレートにして、部品名を替えた新しい図を作る">⧉ テンプレート</button>
         <!-- BLK-reviewer-20260907-0803: 前回保存時点から変わった図があるかを常時見せる -->
@@ -1205,6 +1261,19 @@ html, body {
       </div>
       <!-- キャンバス上に浮くズーム帯 (design 1a)。中身は zoom-hud.js が描く -->
       <div id="zoom-hud" role="group" aria-label="ズーム"></div>
+    </div>
+
+    <!-- 参照ペイン: 別のタブの図を並べて出す (先輩の図を見ながら書く)。
+         スクロールは主ペインと独立。既定では畳んでいる。 -->
+    <div id="compare-pane" hidden>
+      <div id="compare-pane-header">
+        <select id="compare-select" title="並べて見る図を選ぶ"></select>
+        <span id="compare-status"></span>
+        <button type="button" id="btn-compare-close" title="並べて見るのをやめる">✕</button>
+      </div>
+      <div id="compare-container">
+        <div id="compare-svg"></div>
+      </div>
     </div>
 
     <div class="pane-resizer" id="resizer-right"></div>
@@ -1351,6 +1420,7 @@ html, body {
 <script src="src/core/zoom-hud.js"></script>
 <script src="src/core/line-edit.js"></script>
 <script src="src/core/outline.js"></script>
+<script src="src/core/compare-view.js"></script>
 <script src="src/core/state-branch.js"></script>
 <script src="src/core/state-transition.js"></script>
 <script src="src/core/reuse-picker.js"></script>
