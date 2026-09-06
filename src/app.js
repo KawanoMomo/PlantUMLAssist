@@ -949,6 +949,14 @@ function init() {
   document.getElementById('btn-zoom-out').addEventListener('click', function() { setZoom(zoom - 0.1); });
   document.getElementById('btn-zoom-fit').addEventListener('click', zoomToFit);
 
+  // BLK-primary-20260907-0703: 右パネルの「Properties / 図の設定」タブ。
+  var tabProps = document.getElementById('props-tab-props');
+  var tabSettings = document.getElementById('props-tab-settings');
+  if (tabProps && tabSettings) {
+    tabProps.addEventListener('click', function() { showPropsTab('props'); });
+    tabSettings.addEventListener('click', function() { showPropsTab('settings'); });
+  }
+
   // Export menu
   var btnExport = document.getElementById('btn-export');
   var exportMenu = document.getElementById('export-menu');
@@ -2177,6 +2185,142 @@ function refresh() {
 
   renderProps(currentParsed);
   renderSvg();
+}
+
+// ── 図の設定タブ (BLK-primary-20260907-0703) ───────────────────────────────
+// 色・文字サイズ・テーマ・タイトルを変える経路が DSL の手書きしか無かった。
+// 右パネルに常設のタブを置き、選ぶとその場で DSL 先頭に skinparam / title が
+// 書き込まれ、書き込まれる行も同じ画面に出す。
+var dsSettings = null;
+
+function dsApplyToDsl() {
+  var ds = window.MA.diagramSettings;
+  var next = ds.apply(mmdText, dsSettings, currentDiagramType);
+  if (next === mmdText) return;
+  if (window.MA.history) window.MA.history.pushHistory();
+  mmdText = next;
+  suppressSync = true;
+  editorEl.value = next;
+  suppressSync = false;
+  scheduleRefresh();
+}
+
+function dsSet(patch) {
+  for (var k in patch) if (Object.prototype.hasOwnProperty.call(patch, k)) dsSettings[k] = patch[k];
+  dsApplyToDsl();
+  renderDiagramSettings(true);
+}
+
+function renderDiagramSettings(keepState) {
+  var host = document.getElementById('diagram-settings-content');
+  var ds = window.MA.diagramSettings;
+  if (!host || !ds) return;
+  // タブを開いた時点の DSL を読み戻して、今の図の見た目に合わせる。
+  if (!keepState || !dsSettings) dsSettings = ds.readFrom(mmdText);
+  var resolved = ds.resolve(dsSettings);
+  while (host.firstChild) host.removeChild(host.firstChild);
+
+  function group(labelText) {
+    var g = document.createElement('div');
+    g.className = 'ds-group';
+    var l = document.createElement('span');
+    l.className = 'ds-label';
+    l.textContent = labelText;
+    g.appendChild(l);
+    host.appendChild(g);
+    return g;
+  }
+
+  function choiceRow(g, items, isActive, onPick) {
+    var row = document.createElement('div');
+    row.className = 'ds-row';
+    items.forEach(function(it) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'ds-choice' + (isActive(it) ? ' active' : '');
+      b.textContent = it.label;
+      b.setAttribute('data-ds-value', String(it.value));
+      b.addEventListener('click', function() { onPick(it.value); });
+      row.appendChild(b);
+    });
+    g.appendChild(row);
+    return row;
+  }
+
+  // タイトル
+  var gTitle = group('タイトル / Title');
+  var title = document.createElement('input');
+  title.type = 'text';
+  title.id = 'ds-title';
+  title.value = dsSettings.title || '';
+  title.addEventListener('change', function() { dsSet({ title: title.value }); });
+  gTitle.appendChild(title);
+
+  // 外観 / Theme
+  var gTheme = group('外観 / Theme');
+  gTheme.id = 'ds-theme-group';
+  choiceRow(gTheme,
+    ds.THEMES.map(function(t) { return { value: t.id, label: t.label }; }),
+    function(it) { return it.value === resolved.theme; },
+    // テーマを選び直したら個別の色指定は捨てる。でないと前のテーマの色が残る。
+    function(v) { dsSet({ theme: v, shapeColor: null, lineColor: null, backgroundColor: null }); });
+
+  function colorGroup(labelText, id, key, current) {
+    var g = group(labelText);
+    var row = document.createElement('div');
+    row.className = 'ds-row';
+    var input = document.createElement('input');
+    input.type = 'color';
+    input.id = id;
+    input.value = current;
+    input.addEventListener('change', function() {
+      var patch = {};
+      patch[key] = input.value.toUpperCase();
+      dsSet(patch);
+    });
+    row.appendChild(input);
+    var code = document.createElement('span');
+    code.textContent = current;
+    code.style.fontFamily = 'var(--font-mono)';
+    code.style.fontSize = '11px';
+    row.appendChild(code);
+    g.appendChild(row);
+  }
+
+  colorGroup('図形の色 / Shape', 'ds-shape-color', 'shapeColor', resolved.shapeColor);
+  colorGroup('線の色 / Line', 'ds-line-color', 'lineColor', resolved.lineColor);
+  colorGroup('背景色 / Background', 'ds-background-color', 'backgroundColor', resolved.backgroundColor);
+
+  // 文字サイズ
+  var gFont = group('文字サイズ / Font size');
+  gFont.id = 'ds-font-group';
+  choiceRow(gFont,
+    ds.FONT_SIZES.map(function(n) { return { value: n, label: String(n) }; }),
+    function(it) { return Number(it.value) === Number(resolved.fontSize); },
+    function(v) { dsSet({ fontSize: Number(v) }); });
+
+  // 生成される行
+  var gPrev = group('DSL 先頭に書き込まれる行');
+  var pre = document.createElement('div');
+  pre.id = 'ds-preview';
+  var lines = ds.buildLines(dsSettings, currentDiagramType);
+  if (dsSettings.title) lines = ['title ' + dsSettings.title].concat(lines);
+  pre.textContent = lines.join('\n');
+  gPrev.appendChild(pre);
+}
+
+function showPropsTab(which) {
+  var propsBtn = document.getElementById('props-tab-props');
+  var setBtn = document.getElementById('props-tab-settings');
+  var propsPane = document.getElementById('props-content');
+  var setPane = document.getElementById('diagram-settings-content');
+  if (!propsBtn || !setBtn || !propsPane || !setPane) return;
+  var settings = which === 'settings';
+  propsBtn.classList.toggle('active', !settings);
+  setBtn.classList.toggle('active', settings);
+  propsPane.hidden = settings;
+  setPane.hidden = !settings;
+  if (settings) renderDiagramSettings(false);
 }
 
 function renderProps(parsed) {
