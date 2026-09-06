@@ -163,14 +163,12 @@ test.describe('BLK-primary-2243 単一図の行編集', () => {
     await pickLine(page, 'send');
     await page.locator('#lines-text').fill('DmaDrv -> SpiHw: Spi_Transmit');
     await page.locator('#btn-lines-apply').click();
-    await page.waitForTimeout(300);
-    expect(await getEditorText(page)).toContain('Spi_Transmit');
+    await expect.poll(() => getEditorText(page)).toContain('Spi_Transmit');
 
     await page.locator('#btn-lines-close').click();
     await page.locator('#editor').click();
     await page.keyboard.press('Control+z');
-    await page.waitForTimeout(300);
-    expect(await getEditorText(page)).toBe(DMA_SEQ);
+    await expect.poll(() => getEditorText(page)).toBe(DMA_SEQ);
   });
 
   test('行を選ぶまで操作ボタンは押せない', async ({ page }) => {
