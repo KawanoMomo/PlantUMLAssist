@@ -1140,7 +1140,171 @@ function init() {
     setInterval(update, 5000);
   })();
 
+  initCommandPalette();
+
   startHeartbeat();
+}
+
+// ── Command palette (BLK-builder-20260907-0803-1 / design 1a) ───────────────
+// design「リデザイン案」1a は「ツールバーのボタンを目で探す」代わりに
+// Ctrl+K で名前を打ってコマンドを実行する経路を求める。コマンドの中身は
+// 既存のツールバー要素を click / change するだけにしてある。挙動を 1 つの
+// 経路に保つためで、ボタン側の実装が変わってもパレットが古びない。
+// 絞り込み・並び・カーソル移動は MA.commandPalette (unit テスト済み) が持つ。
+function initCommandPalette() {
+  var CP = window.MA.commandPalette;
+  var modal = document.getElementById('cp-modal');
+  var input = document.getElementById('cp-input');
+  var listEl = document.getElementById('cp-list');
+  var emptyEl = document.getElementById('cp-empty');
+  var openBtn = document.getElementById('btn-command-palette');
+  if (!CP || !modal || !input || !listEl) return;
+
+  var items = [];       // 絞り込み前
+  var shown = [];       // 絞り込み後 (画面の並びと同じ)
+  var active = -1;
+  var returnFocusEl = null;
+
+  function clickById(id) {
+    var el = document.getElementById(id);
+    if (el) el.click();
+  }
+  function selectValue(id, value) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.value = value;
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  var DIAGRAMS = [
+    { value: 'plantuml-sequence', label: 'Sequence / シーケンス図' },
+    { value: 'plantuml-usecase', label: 'UseCase / ユースケース図' },
+    { value: 'plantuml-component', label: 'Component / コンポーネント図' },
+    { value: 'plantuml-class', label: 'Class / クラス図' },
+    { value: 'plantuml-activity', label: 'Activity / アクティビティ図' },
+    { value: 'plantuml-state', label: 'State / 状態遷移図' },
+  ];
+
+  function commands() {
+    var list = [
+      { id: 'open', title: 'ファイルを開く / Open', hint: 'File', keywords: ['open', 'file', 'ひらく'], run: function() { clickById('btn-open'); } },
+      { id: 'save', title: 'ファイルを保存 / Save', hint: 'File', keywords: ['save', 'file', 'ほぞん'], run: function() { clickById('btn-save'); } },
+      { id: 'settings', title: '設定を開く / Settings', hint: 'Ctrl', keywords: ['settings', 'config', 'せってい'], run: function() { clickById('btn-config'); } },
+      { id: 'undo', title: '元に戻す / Undo', hint: 'Ctrl+Z', keywords: ['undo', 'もどす'], run: function() { clickById('btn-undo'); } },
+      { id: 'redo', title: 'やり直す / Redo', hint: 'Ctrl+Y', keywords: ['redo', 'やりなおす'], run: function() { clickById('btn-redo'); } },
+      { id: 'zoom-in', title: '拡大 / Zoom in', hint: 'View', keywords: ['zoom', 'かくだい'], run: function() { clickById('btn-zoom-in'); } },
+      { id: 'zoom-out', title: '縮小 / Zoom out', hint: 'View', keywords: ['zoom', 'しゅくしょう'], run: function() { clickById('btn-zoom-out'); } },
+      { id: 'zoom-fit', title: '幅に合わせる / Fit', hint: 'View', keywords: ['zoom', 'fit'], run: function() { clickById('btn-zoom-fit'); } },
+      { id: 'render', title: '再描画 / Render', hint: 'View', keywords: ['render', 'refresh', 'さいびょうが'], run: function() { clickById('btn-render'); } },
+      { id: 'export-svg', title: 'SVG として保存 / Export SVG', hint: 'Export', keywords: ['export', 'svg'], run: function() { clickById('exp-svg'); } },
+      { id: 'export-png', title: 'PNG として保存 / Export PNG', hint: 'Export', keywords: ['export', 'png'], run: function() { clickById('exp-png'); } },
+      { id: 'export-png-t', title: 'PNG（透過背景）/ Export PNG transparent', hint: 'Export', keywords: ['export', 'png', 'transparent'], run: function() { clickById('exp-png-transparent'); } },
+      { id: 'export-clip', title: 'クリップボードにコピー / Copy image', hint: 'Export', keywords: ['export', 'clipboard', 'copy'], run: function() { clickById('exp-clipboard'); } },
+      { id: 'export-all', title: '全図を SVG で保存（zip）', hint: 'Export', keywords: ['export', 'svg', 'zip', 'all'], run: function() { clickById('exp-svg-all'); } },
+      { id: 'mode-local', title: 'レンダリング: local (Java)', hint: 'Render', keywords: ['render', 'mode', 'local'], run: function() { selectValue('render-mode', 'local'); } },
+      { id: 'mode-online', title: 'レンダリング: online (plantuml.com)', hint: 'Render', keywords: ['render', 'mode', 'online'], run: function() { selectValue('render-mode', 'online'); } },
+    ];
+    DIAGRAMS.forEach(function(d) {
+      list.push({
+        id: 'diagram-' + d.value,
+        title: '図種を切り替え: ' + d.label,
+        hint: 'Diagram',
+        keywords: ['diagram', d.value, d.label],
+        run: function() { selectValue('diagram-type', d.value); },
+      });
+    });
+    return list;
+  }
+
+  // element を選んだらエディタの該当行へキャレットを置き、その行が見える位置へ送る。
+  function gotoLine(line) {
+    if (!editorEl) return;
+    var lines = editorEl.value.split('\n');
+    var offset = 0;
+    for (var i = 0; i < line - 1 && i < lines.length; i++) offset += lines[i].length + 1;
+    editorEl.focus();
+    editorEl.setSelectionRange(offset, offset + (lines[line - 1] || '').length);
+    var lineHeight = editorEl.scrollHeight / Math.max(1, lines.length);
+    editorEl.scrollTop = Math.max(0, (line - 3) * lineHeight);
+  }
+
+  function render() {
+    listEl.innerHTML = '';
+    shown.forEach(function(item, i) {
+      var row = document.createElement('div');
+      row.className = 'cp-item' + (i === active ? ' active' : '');
+      row.setAttribute('role', 'option');
+      row.dataset.cpId = item.id;
+      var kind = document.createElement('span');
+      kind.className = 'cp-kind';
+      kind.textContent = item.kind === 'element' ? '要素' : 'コマンド';
+      var title = document.createElement('span');
+      title.className = 'cp-title';
+      title.textContent = item.title;
+      var hint = document.createElement('span');
+      hint.className = 'cp-hint';
+      hint.textContent = item.hint || '';
+      row.appendChild(kind); row.appendChild(title); row.appendChild(hint);
+      row.addEventListener('click', function() { active = i; execute(); });
+      listEl.appendChild(row);
+    });
+    if (emptyEl) emptyEl.style.display = shown.length ? 'none' : 'block';
+    var activeRow = listEl.children[active];
+    if (activeRow && activeRow.scrollIntoView) activeRow.scrollIntoView({ block: 'nearest' });
+  }
+
+  function refilter() {
+    shown = CP.filter(items, input.value);
+    active = shown.length ? 0 : -1;
+    render();
+  }
+
+  function open() {
+    returnFocusEl = document.activeElement;
+    items = CP.buildItems(commands(), editorEl ? editorEl.value : '');
+    input.value = '';
+    modal.classList.add('open');
+    refilter();
+    input.focus();
+  }
+
+  function close() {
+    modal.classList.remove('open');
+    var back = returnFocusEl;
+    returnFocusEl = null;
+    if (back && back.focus && document.body.contains(back)) back.focus();
+  }
+
+  function execute() {
+    var item = shown[active];
+    if (!item) return;
+    close();
+    if (item.kind === 'element') gotoLine(item.line);
+    else if (typeof item.run === 'function') item.run();
+  }
+
+  if (openBtn) openBtn.addEventListener('click', open);
+
+  document.addEventListener('keydown', function(e) {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+    if ((e.key || '').toLowerCase() !== 'k') return;
+    e.preventDefault();
+    if (modal.classList.contains('open')) close(); else open();
+  });
+
+  input.addEventListener('input', refilter);
+
+  input.addEventListener('keydown', function(e) {
+    if (e.isComposing || e.keyCode === 229) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); active = CP.moveIndex(active, 1, shown.length); render(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); active = CP.moveIndex(active, -1, shown.length); render(); }
+    else if (e.key === 'Enter') { e.preventDefault(); execute(); }
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
+  });
+
+  modal.addEventListener('click', function(e) {
+    if (e.target === modal) close();
+  });
 }
 
 // ── Auto-shutdown heartbeat ─────────────────────────────────────────────────
