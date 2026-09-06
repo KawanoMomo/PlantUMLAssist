@@ -425,6 +425,31 @@ window.MA.modules.plantumlActivity = (function() {
     return insertBeforeEnd(text, fmtAction(actionText || ''));
   }
 
+  // 複数行テキストの 1 行 = 1 アクションとして、末尾へまとめて追加する。
+  // 空行と行頭・行末の空白は捨てる。先頭の ':' と末尾の ';' が付いていても受け付ける。
+  function splitActionLines(block) {
+    var out = [];
+    if (!block) return out;
+    var lines = String(block).split(/\r?\n/);
+    for (var i = 0; i < lines.length; i++) {
+      var s = lines[i].trim();
+      if (!s) continue;
+      s = s.replace(/^:/, '').replace(/;$/, '').trim();
+      if (!s) continue;
+      out.push(s);
+    }
+    return out;
+  }
+
+  function addActions(text, block) {
+    var items = splitActionLines(block);
+    var out = text;
+    for (var i = 0; i < items.length; i++) {
+      out = insertBeforeEnd(out, fmtAction(items[i]));
+    }
+    return out;
+  }
+
   function addIf(text, condition, thenLabel, elseLabel) {
     var out = text;
     out = insertBeforeEnd(out, fmtIf(condition, thenLabel || 'yes'));
@@ -1296,7 +1321,10 @@ window.MA.modules.plantumlActivity = (function() {
         html2 =
           '<label style="display:block;font-size:10px;color:var(--text-secondary);">Text (改行可)</label>' +
           '<textarea id="ac-tail-text" style="width:100%;min-height:50px;font-family:inherit;font-size:12px;"></textarea>' +
-          P.primaryButtonHtml('ac-tail-add', '+ Action 追加');
+          P.primaryButtonHtml('ac-tail-add', '+ Action 追加') +
+          P.primaryButtonHtml('ac-tail-add-lines', '+ 各行を Action として一括追加') +
+          '<div id="ac-tail-lines-hint" style="font-size:10px;color:var(--text-secondary);margin-top:4px;">' +
+            '1 行 = 1 アクション。空行は無視されます</div>';
       } else if (kind === 'start' || kind === 'stop' || kind === 'end') {
         html2 = P.primaryButtonHtml('ac-tail-add', '+ ' + kind + ' 追加');
       } else if (kind === 'if') {
@@ -1325,6 +1353,16 @@ window.MA.modules.plantumlActivity = (function() {
           P.primaryButtonHtml('ac-tail-add', '+ swimlane 追加');
       }
       detailEl.innerHTML = html2;
+
+      P.bindEvent('ac-tail-add-lines', 'click', function() {
+        var t0 = ctx.getMmdText();
+        var out0 = addActions(t0, document.getElementById('ac-tail-text').value);
+        if (out0 !== t0) {
+          window.MA.history.pushHistory();
+          ctx.setMmdText(out0);
+          ctx.onUpdate();
+        }
+      });
 
       P.bindEvent('ac-tail-add', 'click', function() {
         var t = ctx.getMmdText();
@@ -1725,6 +1763,8 @@ window.MA.modules.plantumlActivity = (function() {
     fmtSwimlane: fmtSwimlane,
     fmtNote: fmtNote,
     addAction: addAction,
+    addActions: addActions,
+    splitActionLines: splitActionLines,
     addIf: addIf,
     addWhile: addWhile,
     addRepeat: addRepeat,
