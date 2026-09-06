@@ -80,6 +80,41 @@ function init() {
   var dtSelect = document.getElementById('diagram-type');
   if (dtSelect) dtSelect.value = lastDiagramType;
 
+  // ── Workspace: 複数の図をタブで同時に開く ───────────────────────────
+  // 保存済みのワークスペースがあればそれを復元する。無ければ今の
+  // (種類ごとの) 1 枚を最初のタブとして採用する。復元できた場合は
+  // 従来の「前回の DSL を復元しますか？」は出さない — タブが既に
+  // 前回の内容を持っているため。
+  var hadWorkspace = false;
+  try { hadWorkspace = window.localStorage.getItem('plantuml-workspace') != null; } catch (e) {}
+  // 復元モード none は「起動時に前回の内容を持ち越さない」設定なので、
+  // タブ構成も持ち越さずまっさらな 1 枚から始める。
+  if (window.MA.workspace && window.MA.autoSave) {
+    try {
+      var asCfg = window.MA.autoSave.getConfig();
+      if (!asCfg.enabled || asCfg.restoreMode === 'none') {
+        window.MA.workspace.reset();
+        hadWorkspace = false;
+      }
+    } catch (e) {}
+  }
+  if (window.MA.workspace) {
+    var active = window.MA.workspace.init({
+      name: 'diagram1',
+      diagramType: currentDiagramType,
+      dsl: mmdText,
+    });
+    if (active) {
+      if (modules[active.diagramType]) {
+        currentDiagramType = active.diagramType;
+        currentModule = modules[active.diagramType];
+        if (dtSelect) dtSelect.value = currentDiagramType;
+      }
+      mmdText = active.dsl;
+      editorEl.value = mmdText;
+    }
+  }
+
   // ── Auto-save: boot-time restore ────────────────────────────────────
   // Per spec: 'auto' silently loads, 'confirm' asks via native dialog,
   // 'none' leaves the template alone. Skip restore if the saved DSL is
@@ -90,6 +125,8 @@ function init() {
   (function bootRestore() {
     var as = window.MA.autoSave;
     if (!as || !as.isAvailable()) return;
+    // ワークスペースを復元したなら各タブが自分の DSL を持っている。
+    if (hadWorkspace) return;
     function doRestore() {
       var cfg = as.getConfig();
       if (!cfg.enabled) return;
@@ -126,6 +163,10 @@ function init() {
     // diagram-type change handler).
     if (window.MA.autoSave) {
       window.MA.autoSave.scheduleSave(currentDiagramType, mmdText);
+    }
+    // アクティブなタブの中身も更新する (タブ切替とリロードで残る)。
+    if (window.MA.workspace) {
+      try { window.MA.workspace.updateActive({ dsl: mmdText, diagramType: currentDiagramType }); } catch (e) {}
     }
   });
 
@@ -856,6 +897,14 @@ function init() {
       // debounce timer, but leaving stale mmdText would still let the
       // very next save trigger re-create the keys we just deleted).
       try { window.localStorage.removeItem('plantuml-diagram-type'); } catch (e) {}
+      // 開いていたタブも全部畳んで 1 枚に戻す。
+      if (window.MA.workspace) {
+        try {
+          window.MA.workspace.reset();
+          window.MA.workspace.init({ name: 'diagram1', diagramType: currentDiagramType, dsl: currentModule.template() });
+          renderTabs();
+        } catch (e) {}
+      }
       mmdText = currentModule.template();
       suppressSync = true;
       editorEl.value = mmdText;
@@ -953,6 +1002,12 @@ function init() {
     }
     // Persist the active type so the next page load can restore it.
     try { window.localStorage.setItem('plantuml-diagram-type', t); } catch (e) { /* private mode etc */ }
+    // タブごとに図の種類を持つ: 現在のタブの種類を差し替える。DSL は
+    // 下で新しい種類の内容に入れ替わるので、そちらは後段で書き戻す。
+    var wsDoc = null;
+    if (window.MA.workspace) {
+      try { wsDoc = window.MA.workspace.updateActive({ dsl: mmdText, diagramType: t }); } catch (e) {}
+    }
     currentDiagramType = t;
     window.MA.history.pushHistory();
     currentModule = mod;  // explicit user choice overrides auto-detection
@@ -964,6 +1019,10 @@ function init() {
     suppressSync = true;
     editorEl.value = mmdText;
     suppressSync = false;
+    if (window.MA.workspace && wsDoc) {
+      try { window.MA.workspace.updateActive({ dsl: mmdText, diagramType: t }); } catch (e) {}
+    }
+    if (typeof renderTabs === 'function') renderTabs();
     // Reparse with the new module BEFORE clearSelection() so that the
     // selection callback's renderProps() sees a parsedData shape matching
     // the new module. Otherwise the previous module's parsedData (e.g.
@@ -994,6 +1053,8 @@ function init() {
     if (sel.length > 0) clearHoverGuide();
     renderProps();
   });
+
+  setupTabs();
 
   setZoom(1.0);
   updateLineNumbers();
@@ -1198,6 +1259,193 @@ function normalizeSvgSize(svgEl) {
 }
 
 // ── File Open / Save ───────────────────────────────────────────────────────
+// ── Diagram tabs ───────────────────────────────────────────────────────────
+// 複数の図を同時に開き、タブで行き来する。1 タブ = workspace の 1 ドキュメント。
+// タブを離れるときにその時点の DSL と図の種類を書き戻すので、戻ってくれば
+// 続きから編集できる。保存フォルダ (autoSave の fileDir) にある .puml は
+// 「一覧」から選んでタブとして開ける。
+
+function _wsFileDir() {
+  try {
+    var cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null;
+    return (cfg && cfg.fileDir) || './autosave';
+  } catch (e) { return './autosave'; }
+}
+
+// アクティブなタブの現在の編集内容を workspace に書き戻す。
+function saveActiveDoc() {
+  if (!window.MA.workspace) return null;
+  var doc = window.MA.workspace.updateActive({ dsl: mmdText, diagramType: currentDiagramType });
+  try {
+    var cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null;
+    if (doc && cfg && cfg.backend === 'file') {
+      window.MA.workspace.saveToFile(doc, cfg.fileDir);
+    }
+  } catch (e) { /* 保存フォルダへの書き出しは best-effort */ }
+  return doc;
+}
+
+// タブの内容をエディタ・プレビューに反映する。
+function applyActiveDoc() {
+  if (!window.MA.workspace) return;
+  var doc = window.MA.workspace.getActive();
+  if (!doc) return;
+  var mod = modules[doc.diagramType] || modules[currentDiagramType];
+  if (mod) {
+    currentModule = mod;
+    currentDiagramType = mod.type || doc.diagramType;
+    var dtSel = document.getElementById('diagram-type');
+    if (dtSel) dtSel.value = currentDiagramType;
+    try { window.localStorage.setItem('plantuml-diagram-type', currentDiagramType); } catch (e) {}
+  }
+  mmdText = doc.dsl;
+  suppressSync = true;
+  editorEl.value = mmdText;
+  suppressSync = false;
+  try { currentParsed = currentModule.parse(mmdText); } catch (e) { /* leave stale */ }
+  if (window.MA.selection) window.MA.selection.clearSelection();
+  updateLineNumbers();
+  isFirstRender = true;
+  scheduleRefresh();
+  renderTabs();
+}
+
+function switchToDoc(id) {
+  if (!window.MA.workspace) return;
+  if (id === window.MA.workspace.getActiveId()) return;
+  saveActiveDoc();
+  if (window.MA.autoSave) { try { window.MA.autoSave.flush(); } catch (e) {} }
+  if (!window.MA.workspace.setActive(id)) return;
+  if (window.MA.history) window.MA.history.pushHistory();
+  applyActiveDoc();
+}
+
+function renderTabs() {
+  var bar = document.getElementById('tab-bar');
+  if (!bar || !window.MA.workspace) return;
+  var docs = window.MA.workspace.list();
+  var activeId = window.MA.workspace.getActiveId();
+  var tabs = bar.querySelectorAll('.tab');
+  for (var i = 0; i < tabs.length; i++) bar.removeChild(tabs[i]);
+  var firstTool = bar.querySelector('.tab-tool');
+  docs.forEach(function(doc) {
+    var el = document.createElement('div');
+    el.className = 'tab' + (doc.id === activeId ? ' active' : '');
+    el.setAttribute('data-doc-id', doc.id);
+    el.setAttribute('data-doc-name', doc.name);
+    el.title = doc.name + ' (' + doc.diagramType.replace('plantuml-', '') + ') — ダブルクリックで名前変更';
+    var label = document.createElement('span');
+    label.className = 'tab-label';
+    label.textContent = doc.name;
+    el.appendChild(label);
+    if (docs.length > 1) {
+      var close = document.createElement('button');
+      close.className = 'tab-close';
+      close.setAttribute('data-doc-id', doc.id);
+      close.title = 'このタブを閉じる';
+      close.textContent = '×';
+      close.addEventListener('click', function(ev) {
+        ev.stopPropagation();
+        var wasActive = doc.id === window.MA.workspace.getActiveId();
+        if (wasActive) saveActiveDoc();
+        if (window.MA.workspace.close(doc.id)) {
+          if (wasActive) applyActiveDoc(); else renderTabs();
+        }
+      });
+      el.appendChild(close);
+    }
+    el.addEventListener('click', function() { switchToDoc(doc.id); });
+    el.addEventListener('dblclick', function(ev) {
+      ev.preventDefault();
+      var next = window.prompt('図の名前 (英数字・_ ・- のみ)', doc.name);
+      if (next == null) return;
+      window.MA.workspace.rename(doc.id, next);
+      renderTabs();
+    });
+    bar.insertBefore(el, firstTool);
+  });
+}
+
+function setupTabs() {
+  if (!window.MA.workspace) return;
+  renderTabs();
+
+  var btnNew = document.getElementById('btn-tab-new');
+  if (btnNew) {
+    btnNew.addEventListener('click', function() {
+      saveActiveDoc();
+      var mod = modules[currentDiagramType];
+      window.MA.workspace.open({
+        name: 'diagram' + (window.MA.workspace.count() + 1),
+        diagramType: currentDiagramType,
+        dsl: mod ? mod.template() : '',
+      });
+      applyActiveDoc();
+    });
+  }
+
+  var panel = document.getElementById('folder-panel');
+  var btnFolder = document.getElementById('btn-tab-folder');
+  if (!panel || !btnFolder) return;
+
+  function closePanel() { panel.classList.remove('open'); }
+
+  function openFromFolder(name) {
+    closePanel();
+    var dir = _wsFileDir();
+    window.MA.workspace.loadFile(name, dir).then(function(text) {
+      if (text == null) return;
+      saveActiveDoc();
+      var detected = window.MA.workspace.detectType(text);
+      window.MA.workspace.openOrActivate({
+        name: name,
+        dsl: text,
+        diagramType: (detected && modules[detected]) ? detected : currentDiagramType,
+      });
+      applyActiveDoc();
+    });
+  }
+
+  btnFolder.addEventListener('click', function() {
+    if (panel.classList.contains('open')) { closePanel(); return; }
+    // 開いているタブの内容を先に書き出してから一覧を取り直す。
+    saveActiveDoc();
+    panel.textContent = '';
+    var loading = document.createElement('div');
+    loading.className = 'folder-empty';
+    loading.textContent = '読み込み中…';
+    panel.appendChild(loading);
+    panel.classList.add('open');
+    var rect = btnFolder.getBoundingClientRect();
+    panel.style.left = rect.left + 'px';
+    panel.style.top = (rect.bottom + 2) + 'px';
+    window.MA.workspace.listFiles(_wsFileDir()).then(function(files) {
+      panel.textContent = '';
+      if (!files || files.length === 0) {
+        var empty = document.createElement('div');
+        empty.className = 'folder-empty';
+        empty.textContent = '保存フォルダに図がありません';
+        panel.appendChild(empty);
+        return;
+      }
+      files.forEach(function(name) {
+        var b = document.createElement('button');
+        b.className = 'folder-item';
+        b.setAttribute('data-file-name', name);
+        b.textContent = name;
+        b.addEventListener('click', function() { openFromFolder(name); });
+        panel.appendChild(b);
+      });
+    });
+  });
+
+  document.addEventListener('click', function(ev) {
+    if (!panel.classList.contains('open')) return;
+    if (panel.contains(ev.target) || ev.target === btnFolder) return;
+    closePanel();
+  });
+}
+
 function openFile() {
   document.getElementById('file-input').click();
 }
@@ -1208,7 +1456,20 @@ function onFilePicked(e) {
   var reader = new FileReader();
   reader.onload = function(ev) {
     window.MA.history.pushHistory();
-    mmdText = ev.target.result;
+    var text = ev.target.result;
+    // 開いたファイルは新しいタブになる。今のタブの編集内容は残る。
+    if (window.MA.workspace) {
+      saveActiveDoc();
+      var detected = window.MA.workspace.detectType(text);
+      window.MA.workspace.openOrActivate({
+        name: window.MA.workspace.sanitizeName(file.name),
+        dsl: text,
+        diagramType: (detected && modules[detected]) ? detected : currentDiagramType,
+      });
+      applyActiveDoc();
+      return;
+    }
+    mmdText = text;
     suppressSync = true;
     editorEl.value = mmdText;
     suppressSync = false;

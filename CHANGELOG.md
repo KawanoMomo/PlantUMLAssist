@@ -1,3 +1,4 @@
+- BLK-human-20260906-1850: 複数の図をタブで同時に開き、切り替え・リロードしても各図の DSL と種類が残る。保存フォルダの .puml を「一覧」から新しいタブで開ける
 # Changelog
 
 All notable changes to this project will be documented in this file.
