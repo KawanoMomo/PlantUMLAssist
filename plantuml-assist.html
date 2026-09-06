@@ -958,6 +958,55 @@ html, body {
 .props-tab:hover { color: var(--text-primary); }
 .props-tab.active { color: var(--text-primary); border-bottom-color: var(--accent); }
 
+/* 設定モーダルの 5 タブ (design 1a) */
+#cfg-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.cfg-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  padding: 6px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.cfg-tab:hover { color: var(--text-primary); }
+.cfg-tab.active { color: var(--text-primary); border-bottom-color: var(--accent); }
+#cfg-close {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 6px;
+  line-height: 1;
+}
+#cfg-close:hover { color: var(--text-primary); }
+.cfg-sc-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.cfg-sc-table th {
+  text-align: left;
+  padding: 3px 8px 3px 0;
+  white-space: nowrap;
+  font-weight: normal;
+  width: 1%;
+}
+.cfg-sc-table td { padding: 3px 0; color: var(--text-secondary); }
+.cfg-sc-table kbd {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-family: monospace;
+  font-size: 11px;
+  color: var(--text-primary);
+}
+
 #diagram-settings-content {
   flex: 1;
   overflow-y: auto;
@@ -1343,9 +1392,16 @@ html, body {
   <div id="na-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:620px;max-width:900px;max-height:80vh;overflow-y:auto;"></div>
 </div>
 <div id="cfg-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
-  <div id="cfg-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:380px;max-width:520px;">
-    <h3 style="margin:0 0 12px 0;">設定</h3>
+  <div id="cfg-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:600px;max-width:680px;max-height:84vh;overflow-y:auto;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin:0 0 10px 0;">
+      <h3 style="margin:0;">設定 / Settings</h3>
+      <button type="button" id="cfg-close" title="閉じる" aria-label="閉じる">✕</button>
+    </div>
 
+    <!-- design 1a: 自動保存 / レンダリング / エディタ / ショートカット / データ -->
+    <div id="cfg-tabs" role="tablist"></div>
+
+    <div id="cfg-pane-autosave" class="cfg-pane">
     <label style="display:flex;align-items:center;gap:6px;margin-bottom:10px;font-size:12px;">
       <input type="checkbox" id="cfg-enabled"> DSL を自動保存する
     </label>
@@ -1388,13 +1444,52 @@ html, body {
       </div>
     </fieldset>
 
-    <div id="cfg-meta-info" style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;"></div>
+    </div><!-- /#cfg-pane-autosave -->
 
-    <button id="cfg-clear-all" style="background:var(--accent-red);color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;margin-bottom:12px;">保存データを全削除</button>
+    <div id="cfg-pane-render" class="cfg-pane" hidden>
+      <fieldset style="border:1px solid var(--border);border-radius:4px;padding:8px 10px;margin-bottom:10px;font-size:12px;">
+        <legend style="color:var(--text-secondary);padding:0 4px;">レンダリングモード</legend>
+        <label style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+          <input type="radio" name="cfg-render-mode" value="local"> local (Java) — 常駐 JVM・外部送信なし
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;">
+          <input type="radio" name="cfg-render-mode" value="online"> online (plantuml.com)
+        </label>
+      </fieldset>
+      <div id="cfg-render-note" style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;"></div>
+    </div>
 
-    <div style="display:flex;gap:8px;">
+    <div id="cfg-pane-editor" class="cfg-pane" hidden>
+      <div style="margin-bottom:10px;font-size:12px;">
+        <label style="display:block;margin-bottom:4px;color:var(--text-secondary);">DSL の文字サイズ</label>
+        <select id="cfg-editor-font" style="background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;">
+          <option value="11">11px</option>
+          <option value="12">12px</option>
+          <option value="13">13px</option>
+          <option value="15">15px</option>
+          <option value="17">17px</option>
+          <option value="20">20px</option>
+        </select>
+      </div>
+      <label style="display:flex;align-items:center;gap:6px;margin-bottom:10px;font-size:12px;">
+        <input type="checkbox" id="cfg-editor-wrap"> 長い行を折り返す
+      </label>
+      <div style="font-size:11px;color:var(--text-secondary);">保存を押すと DSL エディタに即時反映されます。</div>
+    </div>
+
+    <div id="cfg-pane-shortcuts" class="cfg-pane" hidden>
+      <div id="cfg-shortcuts-list"></div>
+    </div>
+
+    <div id="cfg-pane-data" class="cfg-pane" hidden>
+      <div id="cfg-meta-info" style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;"></div>
+      <div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">保存済みの DSL スナップショットと設定をすべて削除します。この操作は取り消せません。</div>
+      <button id="cfg-clear-all" style="background:var(--accent-red);color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;margin-bottom:12px;">保存データを全削除</button>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:14px;">
       <button id="cfg-cancel" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:8px;border-radius:4px;cursor:pointer;">キャンセル</button>
-      <button id="cfg-ok" style="flex:1;background:var(--accent);border:none;color:#fff;padding:8px;border-radius:4px;cursor:pointer;">OK</button>
+      <button id="cfg-ok" style="flex:1;background:var(--accent);border:none;color:#fff;padding:8px;border-radius:4px;cursor:pointer;">保存</button>
     </div>
   </div>
 </div>
@@ -1418,6 +1513,7 @@ html, body {
 <script src="src/core/command-palette.js"></script>
 <script src="src/core/diagram-rail.js"></script>
 <script src="src/core/zoom-hud.js"></script>
+<script src="src/core/settings-tabs.js"></script>
 <script src="src/core/line-edit.js"></script>
 <script src="src/core/outline.js"></script>
 <script src="src/core/compare-view.js"></script>
