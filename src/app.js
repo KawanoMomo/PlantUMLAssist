@@ -961,6 +961,8 @@ function init() {
   document.getElementById('exp-png').addEventListener('click', function() { exportMenu.classList.remove('open'); exportPNG(false); });
   document.getElementById('exp-png-transparent').addEventListener('click', function() { exportMenu.classList.remove('open'); exportPNG(true); });
   document.getElementById('exp-clipboard').addEventListener('click', function() { exportMenu.classList.remove('open'); exportClipboard(); });
+  // BLK-primary-20260907-0443: 開いている全タブを 2 クリックで SVG 保存する。
+  document.getElementById('exp-svg-all').addEventListener('click', function() { exportMenu.classList.remove('open'); exportAllSVG(); });
 
   // FEAT-117 (resolves HFR-046 前半): Ctrl+E でエクスポートメニューを開き、先頭項目へ
   // フォーカスを移してキーボードだけで形式を選べるようにする。
@@ -2038,6 +2040,63 @@ function exportSVG() {
   a.download = ((currentParsed.meta && currentParsed.meta.title) || 'untitled') + '.svg';
   a.click();
   URL.revokeObjectURL(a.href);
+}
+
+// BLK-primary-20260907-0443: 図が増えるほど「タブ切替 → Export → SVG」の 3 クリックが
+// 枚数分積み上がっていた。ここではタブを切り替えず、各ドキュメントの DSL を /render に
+// 直接投げて保存するので、何枚でも Export を開く → この項目を押す の 2 クリックで済む。
+// 保存はブラウザの複数ダウンロードを 1 件ずつ直列に走らせる。
+function renderDslToSvg(dsl) {
+  var mode = (document.getElementById('render-mode') || {}).value || 'local';
+  return fetch('/render', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text: dsl, mode: mode }),
+  }).then(function(resp) {
+    if (!resp.ok) {
+      return resp.json().then(function(err) { throw new Error(err.error || ('HTTP ' + resp.status)); });
+    }
+    return resp.text();
+  });
+}
+
+function downloadBlob(filename, blob) {
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function() { URL.revokeObjectURL(url); }, 10000);
+}
+
+function exportAllSVG() {
+  if (!window.MA.bulkExport || !window.MA.workspace) return;
+  // 編集中の内容が workspace に載っていないと 1 枚だけ古い DSL で書き出される。
+  saveActiveDoc();
+  var docs = window.MA.workspace.list();
+  var status = document.getElementById('bulk-export-status');
+  if (status) { status.style.display = 'block'; status.textContent = 'SVG を書き出しています…'; }
+  var files = [];
+  return window.MA.bulkExport.run(docs, {
+    render: renderDslToSvg,
+    save: function(filename, svg) { files.push({ name: filename, content: svg }); },
+    onProgress: function(done, total) {
+      if (status) status.textContent = 'SVG を書き出しています… ' + done + ' / ' + total;
+    },
+  }).then(function(summary) {
+    var msg = summary.message;
+    if (files.length > 0) {
+      var name = window.MA.bulkExport.zipName();
+      downloadBlob(name, new Blob([window.MA.bulkExport.buildZip(files)], { type: 'application/zip' }));
+      msg = msg + '（' + name + '）';
+    }
+    if (status) status.textContent = msg;
+    if (window.MA.toast) window.MA.toast.show(msg);
+    return summary;
+  });
 }
 
 function svgToCanvas(transparent, callback) {
