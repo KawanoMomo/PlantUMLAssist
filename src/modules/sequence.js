@@ -751,7 +751,79 @@ window.MA.modules.plantumlSequence = (function() {
     });
   }
 
-  function _showInsertForm(ctx, line, position, kind) {
+  // BLK-primary-20260907-0356 (design 5c): プレビュー上の挿入ガイドをクリックしたとき、
+  // 「メッセージだけ」ではなく挿入できる要素種別のメニューを出す。
+  // value は _showInsertForm の kind に対応する。alt / loop は block の preset。
+  var INSERT_KINDS = [
+    { value: 'message', label: 'メッセージ', hint: 'A -> B : 本文' },
+    { value: 'note', label: '注釈 (note)', hint: 'note over A : 本文' },
+    { value: 'alt', label: '条件分岐 (alt)', hint: 'alt … end' },
+    { value: 'loop', label: '繰り返し (loop)', hint: 'loop … end' },
+    { value: 'activation', label: '実行中の帯 (activate)', hint: 'activate A' },
+    { value: 'block', label: 'その他のブロック', hint: 'opt / par / break / critical / group' },
+  ];
+
+  function insertKindOptions() {
+    return INSERT_KINDS.map(function(k) { return { value: k.value, label: k.label, hint: k.hint }; });
+  }
+
+  // 挿入結果が DSL の何行目になるか。before は line そのもの、after は line の次。
+  function insertTargetLine(line, position) {
+    var n = parseInt(line, 10);
+    if (isNaN(n)) return null;
+    return position === 'before' ? n : n + 1;
+  }
+
+  // ピッカー / フォームの見出しに出す「どこに入るか」の 1 行説明。
+  function describeInsertTarget(line, position) {
+    var target = insertTargetLine(line, position);
+    if (target === null) return '';
+    return 'DSL ' + target + ' 行目に挿入（' + line + ' 行目の' + (position === 'before' ? '前' : '後') + '）';
+  }
+
+  // kind 引数を _showInsertForm 用の (kind, opts) に正規化する。
+  function _resolvePickedKind(picked) {
+    if (picked === 'alt' || picked === 'loop') return { kind: 'block', opts: { blockKind: picked } };
+    return { kind: picked, opts: {} };
+  }
+
+  function _showInsertPicker(ctx, line, position) {
+    var modal = document.getElementById('seq-modal');
+    var content = document.getElementById('seq-modal-content');
+    if (!modal || !content) return;
+    var esc = window.MA.htmlUtils.escHtml;
+    var html = '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">ここに挿入</h3>' +
+      '<div id="seq-pick-target" style="font-size:11px;color:var(--text-secondary);margin-bottom:12px;">' +
+        esc(describeInsertTarget(line, position)) + '</div>' +
+      '<div style="display:flex;flex-direction:column;gap:6px;">';
+    INSERT_KINDS.forEach(function(k) {
+      html += '<button id="seq-pick-' + k.value + '" data-kind="' + k.value + '" class="seq-pick-btn" ' +
+        'style="text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);' +
+        'padding:8px 10px;border-radius:4px;cursor:pointer;font-size:12px;">' +
+        esc(k.label) +
+        '<span style="color:var(--text-secondary);font-size:10px;margin-left:8px;">' + esc(k.hint) + '</span>' +
+        '</button>';
+    });
+    html += '</div>' +
+      '<button id="seq-pick-cancel" style="width:100%;margin-top:12px;background:var(--bg-tertiary);' +
+      'border:1px solid var(--border);color:var(--text-primary);padding:8px;border-radius:4px;cursor:pointer;">キャンセル</button>';
+    content.innerHTML = html;
+    modal.style.display = 'flex';
+
+    Array.prototype.forEach.call(content.querySelectorAll('.seq-pick-btn'), function(btn) {
+      btn.addEventListener('click', function() {
+        var picked = _resolvePickedKind(btn.getAttribute('data-kind'));
+        picked.opts.fromPicker = true;
+        _showInsertForm(ctx, line, position, picked.kind, picked.opts);
+      });
+    });
+    document.getElementById('seq-pick-cancel').addEventListener('click', function() {
+      modal.style.display = 'none';
+    });
+  }
+
+  function _showInsertForm(ctx, line, position, kind, opts) {
+    opts = opts || {};
     var modal = document.getElementById('seq-modal');
     // FEAT-123 (resolves UI-014 / HFR-064): フォームを開く直前の選択を退避し、
     // 「キャンセル」で閉じたときに復帰する ([F123-AC-1])。
@@ -770,8 +842,17 @@ window.MA.modules.plantumlSequence = (function() {
     var partOptsWithNew = partOpts.slice();
     partOptsWithNew.push({ value: '__new__', label: '+ 新規追加…' });
 
-    var title = (position === 'before' ? '前に' : '後に') + (kind === 'message' ? 'メッセージを挿入' : '注釈を挿入');
-    var html = '<h3 style="margin:0 0 12px 0;color:var(--text-primary);">' + title + '</h3>';
+    var KIND_TITLE = {
+      message: 'メッセージを挿入',
+      note: '注釈を挿入',
+      block: 'ブロックを挿入',
+      activation: '実行中の帯を挿入',
+    };
+    var title = (position === 'before' ? '前に' : '後に') + (KIND_TITLE[kind] || 'メッセージを挿入');
+    var html = '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">' + title + '</h3>' +
+      // BLK-primary-20260907-0356: フォームでも「DSL の何行目に入るか」を示し続ける。
+      '<div id="seq-mod-target" style="font-size:11px;color:var(--text-secondary);margin-bottom:12px;">' +
+        window.MA.htmlUtils.escHtml(describeInsertTarget(line, position)) + '</div>';
     if (kind === 'message') {
       var arrowOpts = ARROWS.map(function(a) { return { value: a, label: arrowLabel(a), selected: a === '->' }; });
       // FEAT-001: From はアンカー行の from を初期選択する (アンカー不在時は従来どおり先頭)。
@@ -795,6 +876,21 @@ window.MA.modules.plantumlSequence = (function() {
         P.selectFieldHtml('Position', 'seq-mod-npos', posOpts) +
         P.selectFieldHtml('Target', 'seq-mod-ntarget', partOpts) +
         '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">本文</label><div id="seq-mod-ntext-rle"></div></div>';
+    } else if (kind === 'block') {
+      // alt / loop / opt / par / break / critical / group。空ブロック (opener + end) を
+      // 挿入位置に置く。中身は挿入後に既存の行編集/挿入で足す (末尾追加の block と同じ形)。
+      var bkSel = opts.blockKind || 'alt';
+      var bkOpts = GROUP_KINDS.map(function(k) { return { value: k, label: k, selected: k === bkSel }; });
+      html +=
+        P.selectFieldHtml('Kind', 'seq-mod-bkind', bkOpts) +
+        P.fieldHtml('Label', 'seq-mod-blabel', '', '例: x > 0');
+    } else if (kind === 'activation') {
+      html +=
+        P.selectFieldHtml('Action', 'seq-mod-aact', [
+          { value: 'activate', label: 'activate', selected: true },
+          { value: 'deactivate', label: 'deactivate' },
+        ]) +
+        P.selectFieldHtml('Target', 'seq-mod-atgt', withSelected(partOpts, (resolveAnchor(parsed, line) || {}).to));
     }
     if (kind === 'message') {
       html +=
@@ -805,6 +901,11 @@ window.MA.modules.plantumlSequence = (function() {
             PARTICIPANT_TYPES.map(function(pt) { return '<option value="' + pt + '">' + pt + '</option>'; }).join('') +
           '</select>' +
         '</div>';
+    }
+    if (opts.fromPicker) {
+      html += '<button id="seq-mod-back" style="width:100%;margin-top:12px;background:var(--bg-tertiary);' +
+        'border:1px solid var(--border);color:var(--text-secondary);padding:6px;border-radius:4px;cursor:pointer;font-size:11px;">' +
+        '← 種別を選び直す</button>';
     }
     html +=
       '<div style="display:flex;gap:8px;margin-top:12px;">' +
@@ -835,6 +936,11 @@ window.MA.modules.plantumlSequence = (function() {
       if (toSel) toSel.addEventListener('change', maybeShowInline);
     }
 
+    if (opts.fromPicker) {
+      document.getElementById('seq-mod-back').addEventListener('click', function() {
+        _showInsertPicker(ctx, line, position);
+      });
+    }
     document.getElementById('seq-mod-cancel').addEventListener('click', function() {
       modal.style.display = 'none';
       // FEAT-123 [F123-AC-1] / [F123-AC-3]: 退避した選択が空でなければ復帰する。
@@ -876,6 +982,20 @@ window.MA.modules.plantumlSequence = (function() {
           position: document.getElementById('seq-mod-npos').value,
           targets: [document.getElementById('seq-mod-ntarget').value],
           text: rleObj ? rleObj.getValue() : '',
+        });
+      } else if (kind === 'block') {
+        window.MA.history.pushHistory();
+        t = insertFn(t, line, 'block', {
+          kind: document.getElementById('seq-mod-bkind').value,
+          label: document.getElementById('seq-mod-blabel').value.trim(),
+        });
+      } else if (kind === 'activation') {
+        var atgt = document.getElementById('seq-mod-atgt').value;
+        if (!atgt) { alert('Target 必須'); return; }
+        window.MA.history.pushHistory();
+        t = insertFn(t, line, 'activation', {
+          action: document.getElementById('seq-mod-aact').value,
+          target: atgt,
         });
       }
       ctx.setMmdText(t);
@@ -1154,6 +1274,12 @@ window.MA.modules.plantumlSequence = (function() {
     showInsertForm: function(ctx, line, position, kind) {
       _showInsertForm(ctx, line, position, kind);
     },
+    showInsertPicker: function(ctx, line, position) {
+      _showInsertPicker(ctx, line, position);
+    },
+    insertKindOptions: insertKindOptions,
+    insertTargetLine: insertTargetLine,
+    describeInsertTarget: describeInsertTarget,
     template: function() {
       return [
         '@startuml',
@@ -1174,6 +1300,7 @@ window.MA.modules.plantumlSequence = (function() {
       hoverInsert: true,
       participantDrag: true,
       showInsertForm: true,
+      insertPicker: true,
       deleteSelectedLine: true,
       multiSelectConnect: false,
     },
