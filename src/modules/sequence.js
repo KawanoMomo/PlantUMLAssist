@@ -21,7 +21,9 @@ window.MA.modules.plantumlSequence = (function() {
   }
 
   var PARTICIPANT_TYPES =['participant', 'actor', 'boundary', 'control', 'entity', 'database', 'queue', 'collections'];
-  var ARROWS = ['->', '-->', '->>', '-->>', '<-', '<--', '<<-', '<<--', '<->', '<-->'];
+  var ARROWS = ['->', '-->', '->>', '-->>', '->x', '-->x', '<-', '<--', '<<-', '<<--', '<->', '<-->'];
+  // design 1a の右ペインで分節ボタンに出す 4 種。残りはプルダウンから選ぶ。
+  var QUICK_ARROWS = ['->', '-->', '->>', '->x'];
   // Display labels: UML 有識者が形で思い出せる最小の注釈を添える。
   // 形: -> 実線 / --> 破線 / ->> 開矢印 (async) / -->> 破線+開矢印 (async return)
   var ARROW_META = {
@@ -29,6 +31,8 @@ window.MA.modules.plantumlSequence = (function() {
     '-->':   '-->   返信/戻り (破線)',
     '->>':   '->>   非同期メッセージ (開矢印)',
     '-->>':  '-->>  非同期返信 (破線+開矢印)',
+    '->x':   '->x   届かない (ロスト)',
+    '-->x':  '-->x  届かない返信 (破線)',
     '<-':    '<-    同期 (逆向き)',
     '<--':   '<--   返信 (逆向き)',
     '<<-':   '<<-   非同期 (逆向き)',
@@ -40,7 +44,7 @@ window.MA.modules.plantumlSequence = (function() {
 
   var PART_RE = new RegExp('^(' + PARTICIPANT_TYPES.join('|') + ')\\s+(?:"([^"]+)"\\s+as\\s+(\\S+)|(\\S+)(?:\\s+as\\s+"([^"]+)")?)\\s*$');
   var MSG_RE_FROM = '([A-Za-z_][A-Za-z0-9_]*|"[^"]+")';
-  var MSG_RE = new RegExp('^' + MSG_RE_FROM + '\\s+(->|-->|->>|-->>|<-|<--|<<-|<<--|<->|<-->)\\s+' + MSG_RE_FROM + '(?:\\s*:\\s*(.+))?$');
+  var MSG_RE = new RegExp('^' + MSG_RE_FROM + '\\s+(-->>|-->x|-->|->>|->x|->|<<--|<<-|<--|<-|<-->|<->)\\s+' + MSG_RE_FROM + '(?:\\s*:\\s*(.+))?$');
 
   var GROUP_KINDS = ['alt', 'opt', 'loop', 'par', 'break', 'critical', 'group'];
   var GROUP_OPEN_RE = new RegExp('^(' + GROUP_KINDS.join('|') + ')(?:\\s+(.*))?$');
@@ -353,6 +357,20 @@ window.MA.modules.plantumlSequence = (function() {
     else if (field === 'label') label = value;
     var out = label && label !== alias ? (ptype + ' "' + label + '" as ' + alias) : (ptype + ' ' + alias);
     lines[idx] = indent + out;
+    return lines.join('\n');
+  }
+
+  // design 1a: From と To の間の ⇄ 。向きを逆にするのに select を
+  // 2 往復させず、両端をその場で入れ替える。矢印の種類と本文は変えない。
+  function swapMessageEnds(text, lineNum) {
+    var lines = text.split('\n');
+    var idx = lineNum - 1;
+    if (idx < 0 || idx >= lines.length) return text;
+    var indent = lines[idx].match(/^(\s*)/)[1];
+    var m = lines[idx].trim().match(MSG_RE);
+    if (!m) return text;
+    var label = m[4] || '';
+    lines[idx] = indent + m[3] + ' ' + m[2] + ' ' + m[1] + (label ? ' : ' + label : '');
     return lines.join('\n');
   }
 
@@ -1243,6 +1261,8 @@ window.MA.modules.plantumlSequence = (function() {
     deleteSelectedLine: deleteSelectedLine,
     updateParticipant: updateParticipant,
     updateMessage: updateMessage,
+    swapMessageEnds: swapMessageEnds,
+    quickArrows: function() { return QUICK_ARROWS.slice(); },
     setTitle: setTitle,
     toggleAutonumber: toggleAutonumber,
     addGroup: addGroup,
@@ -1569,9 +1589,18 @@ window.MA.modules.plantumlSequence = (function() {
           var msgParts = extractStereotype(mm.label);
           propsEl.innerHTML =
             '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>' + escHtml(mm.from + ' ' + mm.arrow + ' ' + mm.to) + '</strong><br><span style="color:var(--text-secondary);">Message · L' + mm.line + '</span></div>' +
-            P.selectFieldHtml('From', 'seq-edit-from', fromOpts) +
-            P.selectFieldHtml('Arrow', 'seq-edit-arrow', arrowOpts2) +
-            P.selectFieldHtml('To', 'seq-edit-to', toOpts) +
+            // design 1a: From ⇄ To を横並びにし、間の ⇄ で 1 クリック入替。
+            '<div style="display:flex;align-items:flex-end;gap:4px;margin-bottom:8px;">' +
+              '<div style="flex:1;min-width:0;">' + P.selectFieldHtml('From', 'seq-edit-from', fromOpts) + '</div>' +
+              '<button type="button" id="seq-edit-swap" title="From と To を入れ替える" ' +
+                'style="flex:0 0 28px;height:24px;margin-bottom:8px;background:var(--bg-tertiary);border:1px solid var(--border);' +
+                'color:var(--text-primary);border-radius:3px;font-size:12px;cursor:pointer;">⇄</button>' +
+              '<div style="flex:1;min-width:0;">' + P.selectFieldHtml('To', 'seq-edit-to', toOpts) + '</div>' +
+            '</div>' +
+            P.segmentedFieldHtml('Arrow', 'seq-edit-arrow-seg', QUICK_ARROWS.map(function(a) {
+              return { value: a, label: a, title: arrowLabel(a), selected: a === mm.arrow };
+            })) +
+            P.selectFieldHtml('Arrow (その他)', 'seq-edit-arrow', arrowOpts2) +
             '<div style="margin-bottom:8px;">' +
               '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Stereotype <span style="color:#32CD32;">&lt;&lt; &gt;&gt;</span> <span style="color:var(--text-secondary);font-weight:normal;">(任意・上段にライムグリーンで表示)</span></label>' +
               '<input id="seq-edit-stereotype" type="text" value="' + escHtml(msgParts.stereotype) + '" placeholder="例: async / sync / important" style="width:100%;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-size:12px;box-sizing:border-box;">' +
@@ -1579,6 +1608,27 @@ window.MA.modules.plantumlSequence = (function() {
             '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">本文</label><div id="seq-edit-msg-label-rle"></div></div>' +
             actionBarHtml(mm.line, 'message');
           var mln = mm.line;
+          var swapBtn = document.getElementById('seq-edit-swap');
+          if (swapBtn) {
+            swapBtn.addEventListener('click', function() {
+              window.MA.history.pushHistory();
+              ctx.setMmdText(swapMessageEnds(ctx.getMmdText(), mln));
+              ctx.onUpdate();
+            });
+          }
+          var segWrap = document.getElementById('seq-edit-arrow-seg');
+          if (segWrap) {
+            var segBtns = segWrap.querySelectorAll('.prop-seg');
+            for (var sgi = 0; sgi < segBtns.length; sgi++) {
+              (function(b) {
+                b.addEventListener('click', function() {
+                  window.MA.history.pushHistory();
+                  ctx.setMmdText(updateMessage(ctx.getMmdText(), mln, 'arrow', b.getAttribute('data-value')));
+                  ctx.onUpdate();
+                });
+              })(segBtns[sgi]);
+            }
+          }
           ['from', 'arrow', 'to'].forEach(function(f) {
             document.getElementById('seq-edit-' + f).addEventListener('change', function() {
               window.MA.history.pushHistory();
