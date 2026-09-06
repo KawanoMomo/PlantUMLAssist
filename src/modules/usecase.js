@@ -88,6 +88,93 @@ window.MA.modules.plantumlUsecase = (function() {
     return insertBeforeEnd(text, fmtRelation(kind, from, to, label));
   }
 
+  // ─── Bulk tail add (1 行 = 1 件) ──────────────────────────────────────
+  // 要素は `actor User` / `:User:`(アクター)、`usecase 起動` / `(起動)` / 装飾なし(ユースケース)。
+  // `Alias : Label` で表示名を指定できる。関係は
+  //   `A --> B : label`(association) / `A <|-- B`(generalization) /
+  //   `A ..> B : extend`(extend) / `A ..> B`(include)。
+  var UC_BULK_ARROW_RE = /\s(<\|--|--\|>|\.\.>|\.\.|-->|->|--)\s/;
+
+  function _ucStripDeco(s) {
+    var t = String(s || '').trim();
+    t = t.replace(/^:(.*):$/, '$1').replace(/^\((.*)\)$/, '$1')
+         .replace(/^(actor|usecase)\s+/i, '');
+    return t.replace(/^"(.*)"$/, '$1').trim();
+  }
+
+  function _ucArrowKind(arrow, label) {
+    if (arrow === '<|--' || arrow === '--|>') return 'generalization';
+    if (arrow === '..>' || arrow === '..') {
+      return /extend/i.test(label || '') ? 'extend' : 'include';
+    }
+    return 'association';
+  }
+
+  function parseBulkLines(block) {
+    var out = [];
+    if (!block) return out;
+    var lines = String(block).split(/\r?\n/);
+    for (var i = 0; i < lines.length; i++) {
+      var s = lines[i].trim();
+      if (!s || s.indexOf("'") === 0 || s.indexOf('#') === 0) continue;
+      var am = s.match(UC_BULK_ARROW_RE);
+      if (am) {
+        var pos = s.indexOf(am[0]);
+        var left = s.slice(0, pos);
+        var rest = s.slice(pos + am[0].length);
+        var lbl = '';
+        var ci = rest.indexOf(':');
+        if (ci >= 0) { lbl = rest.slice(ci + 1).trim(); rest = rest.slice(0, ci); }
+        var from = _ucStripDeco(left);
+        var to = _ucStripDeco(rest);
+        if (!from || !to) continue;
+        var kind = _ucArrowKind(am[1], lbl);
+        var arrow = am[1];
+        if (arrow === '--|>') { var sw = from; from = to; to = sw; }
+        out.push({
+          op: 'relation', kind: kind, from: from, to: to,
+          // include/extend/generalization のラベルは記法側に持つので捨てる
+          label: kind === 'association' ? lbl : '',
+        });
+        continue;
+      }
+      var isActor = /^actor\s+/i.test(s) || /^:.*:$/.test(s);
+      var body = s.replace(/^(actor|usecase)\s+/i, '').replace(/^:(.*):$/, '$1');
+      var label2 = '';
+      var ci2 = body.indexOf(':');
+      if (ci2 >= 0) { label2 = body.slice(ci2 + 1).trim(); body = body.slice(0, ci2); }
+      var id = _ucStripDeco(body);
+      if (!id) continue;
+      out.push({ op: isActor ? 'actor' : 'usecase', id: id, label: label2 });
+    }
+    return out;
+  }
+
+  // 要素を先に全部宣言してから関係を並べるので、入力順は問わない。
+  function addBulk(text, block, parsed) {
+    var ops = parseBulkLines(block);
+    var out = text;
+    var idMap = {};
+    var taken = _existingUsecaseIdSet(parsed || { elements: [] });
+    var i;
+    for (i = 0; i < ops.length; i++) {
+      var o = ops[i];
+      if (o.op !== 'actor' && o.op !== 'usecase') continue;
+      var norm = window.MA.idNormalizer.normalize(o.id, taken, o.op === 'actor' ? 'A' : 'U');
+      if (!norm.valid) continue;
+      idMap[o.id] = norm.id;
+      taken[norm.id] = true;
+      var lbl = o.label || norm.label || o.id;
+      out = (o.op === 'actor') ? addActor(out, norm.id, lbl) : addUsecase(out, norm.id, lbl);
+    }
+    for (i = 0; i < ops.length; i++) {
+      var r = ops[i];
+      if (r.op !== 'relation') continue;
+      out = addRelation(out, r.kind, idMap[r.from] || r.from, idMap[r.to] || r.to, r.label);
+    }
+    return out;
+  }
+
   // ─── Update operations (pure: text + lineNum + field/value → text) ───
   function updateActor(text, lineNum, field, value) {
     var lines = text.split('\n');
@@ -327,6 +414,7 @@ window.MA.modules.plantumlUsecase = (function() {
           { value: 'usecase',  label: 'Usecase' },
           { value: 'package',  label: 'Package境界' },
           { value: 'relation', label: 'Relation (関係)' },
+          { value: 'bulk',     label: '一括 (複数行)' },
         ]) +
         '<div id="uc-tail-detail" style="margin-top:6px;"></div>' +
       '</div>' +
@@ -377,6 +465,14 @@ window.MA.modules.plantumlUsecase = (function() {
           P.selectFieldHtml('To', 'uc-tail-to', allOpts) +
           P.fieldHtml('Label', 'uc-tail-rlabel', '', 'association のみ任意') +
           P.primaryButtonHtml('uc-tail-add', '+ Relation 追加');
+      } else if (kind === 'bulk') {
+        html =
+          '<label style="display:block;font-size:10px;color:var(--text-secondary);">要素と関係を 1 行 1 件で</label>' +
+          '<textarea id="uc-tail-bulk" style="width:100%;min-height:90px;font-family:inherit;font-size:12px;"></textarea>' +
+          P.primaryButtonHtml('uc-tail-add', '+ まとめて末尾に追加') +
+          '<div id="uc-tail-bulk-hint" style="font-size:10px;color:var(--text-secondary);margin-top:4px;line-height:1.5;">' +
+            'actor 開発者 / :Tester: (アクター) / 起動 / (診断実行) : ラベル (ユースケース) /<br>' +
+            'A --&gt; B : label / A ..&gt; B(include) / A ..&gt; B : extend / A &lt;|-- B。空行は無視されます</div>';
       }
       detailEl.innerHTML = html;
 
@@ -409,6 +505,12 @@ window.MA.modules.plantumlUsecase = (function() {
           var rkind = document.getElementById('uc-tail-rkind').value;
           window.MA.history.pushHistory();
           out = addRelation(t, rkind, fr, to, document.getElementById('uc-tail-rlabel').value.trim());
+        } else if (kind === 'bulk') {
+          var block = document.getElementById('uc-tail-bulk').value;
+          var bulkOut = addBulk(t, block, parsedData);
+          if (bulkOut === t) { alert('追加できる行がありません'); return; }
+          window.MA.history.pushHistory();
+          out = bulkOut;
         }
         ctx.setMmdText(out);
         ctx.onUpdate();
@@ -628,6 +730,8 @@ window.MA.modules.plantumlUsecase = (function() {
     addUsecase: addUsecase,
     addPackage: addPackage,
     addRelation: addRelation,
+    parseBulkLines: parseBulkLines,
+    addBulk: addBulk,
     updateActor: updateActor,
     updateUsecase: updateUsecase,
     updateRelation: updateRelation,
