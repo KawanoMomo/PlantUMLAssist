@@ -805,6 +805,210 @@ window.MA.modules.plantumlClass = (function() {
     });
   }
 
+  // 親 1 つ + 派生クラス数個 + 関連数本を 1 つのフォームで組む。
+  // class 追加フォームと Relation 追加フォームを開き直す回数が
+  // クラス数 + 関連数に比例してしまい、DSL を直接打つ方が早くなるため、
+  // クラスと関連を行として並べて一括で確定する。
+  function _showScaffoldModal(parsedData, ctx) {
+    var modal = document.getElementById('cl-sc-modal');
+    var content = document.getElementById('cl-sc-modal-content');
+    if (!modal || !content) return;
+    var CS = window.MA.classScaffold;
+    var esc = window.MA.htmlUtils.escHtml;
+    var P = window.MA.properties;
+
+    var existing = (parsedData.elements || []).map(function(e) { return e.id; });
+    var datalist = '<datalist id="cl-sc-names">' +
+      existing.map(function(n) { return '<option value="' + esc(n) + '"></option>'; }).join('') +
+      '</datalist>';
+
+    var INPUT = 'background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:3px 6px;border-radius:3px;font-size:12px;';
+    var REL_OPTS = [
+      ['inheritance', '継承 <|--'],
+      ['implementation', '実装 <|..'],
+      ['composition', 'コンポジション *--'],
+      ['aggregation', '集約 o--'],
+      ['association', '関連 --'],
+      ['dependency', '依存 ..>'],
+    ];
+
+    function relSelect(id, selected) {
+      return '<select id="' + id + '" style="' + INPUT + '">' +
+        REL_OPTS.map(function(o) {
+          return '<option value="' + o[0] + '"' + (o[0] === selected ? ' selected' : '') + '>' + esc(o[1]) + '</option>';
+        }).join('') + '</select>';
+    }
+
+    function classRowHtml(i) {
+      return '<div class="cl-sc-row" data-i="' + i + '" style="display:flex;gap:6px;margin-bottom:5px;align-items:center;">' +
+        '<input id="cl-sc-name-' + i + '" type="text" placeholder="クラス名" style="flex:1;' + INPUT + '">' +
+        '<input id="cl-sc-mem-' + i + '" type="text" placeholder="メンバ (カンマ/改行区切り 例: +send(), -id : int)" style="flex:2;' + INPUT + '">' +
+        '<select id="cl-sc-rel-' + i + '" style="' + INPUT + '">' +
+          REL_OPTS.map(function(o) { return '<option value="' + o[0] + '">' + esc(o[1]) + '</option>'; }).join('') +
+          '<option value="none">親と結ばない</option>' +
+        '</select>' +
+        '<button id="cl-sc-del-' + i + '" title="この行を削除" style="background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;padding:2px 7px;">✕</button>' +
+      '</div>';
+    }
+
+    function relRowHtml(j) {
+      return '<div class="cl-sc-rel-row" data-j="' + j + '" style="display:flex;gap:6px;margin-bottom:5px;align-items:center;">' +
+        '<input id="cl-sc-rfrom-' + j + '" list="cl-sc-names" type="text" placeholder="元" style="flex:1;' + INPUT + '">' +
+        relSelect('cl-sc-rkind-' + j, 'association') +
+        '<input id="cl-sc-rto-' + j + '" list="cl-sc-names" type="text" placeholder="先" style="flex:1;' + INPUT + '">' +
+        '<input id="cl-sc-rlabel-' + j + '" type="text" placeholder="ラベル" style="flex:1;' + INPUT + '">' +
+        '<button id="cl-sc-rdel-' + j + '" title="この行を削除" style="background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;padding:2px 7px;">✕</button>' +
+      '</div>';
+    }
+
+    var SECTION = 'font-size:10px;color:var(--accent);font-weight:bold;margin:10px 0 4px 0;';
+    content.innerHTML = datalist +
+      '<h3 style="margin:0 0 12px 0;color:var(--text-primary);">クラス構成をまとめて追加</h3>' +
+      '<div style="' + SECTION + '">親クラス (省略可)</div>' +
+      '<div style="display:flex;gap:6px;margin-bottom:5px;align-items:center;">' +
+        '<select id="cl-sc-pkind" style="' + INPUT + '">' +
+          '<option value="class">class</option>' +
+          '<option value="abstract" selected>abstract class</option>' +
+          '<option value="interface">interface</option>' +
+        '</select>' +
+        '<input id="cl-sc-parent" list="cl-sc-names" type="text" placeholder="親クラス名 (例: CanDrv)" style="flex:1;' + INPUT + '">' +
+        '<input id="cl-sc-pmembers" type="text" placeholder="メンバ (カンマ/改行区切り)" style="flex:2;' + INPUT + '">' +
+      '</div>' +
+      '<div style="' + SECTION + '">クラス (名前 / メンバ / 親との関連)</div>' +
+      '<div id="cl-sc-rows">' + classRowHtml(0) + classRowHtml(1) + classRowHtml(2) + '</div>' +
+      '<button id="cl-sc-add-row" style="font-size:11px;padding:3px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">＋ クラスを追加</button>' +
+      '<div style="' + SECTION + '">親以外の関連 (省略可)</div>' +
+      '<div id="cl-sc-rel-rows">' + relRowHtml(0) + '</div>' +
+      '<button id="cl-sc-add-rel" style="font-size:11px;padding:3px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">＋ 関連を追加</button>' +
+      '<div style="' + SECTION + '">追加される行</div>' +
+      '<pre id="cl-sc-preview" style="margin:0;background:var(--bg-primary);border:1px solid var(--border);border-radius:3px;padding:6px;font-family:Consolas,monospace;font-size:11px;color:var(--text-primary);white-space:pre-wrap;min-height:34px;"></pre>' +
+      '<div id="cl-sc-errors" style="font-size:11px;color:var(--accent-red);margin-top:6px;min-height:14px;"></div>' +
+      '<div style="display:flex;gap:8px;margin-top:12px;">' +
+        '<button id="cl-sc-cancel" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:8px;border-radius:4px;cursor:pointer;">キャンセル</button>' +
+        '<button id="cl-sc-confirm" style="flex:1;background:var(--accent);border:none;color:#fff;padding:8px;border-radius:4px;cursor:pointer;">確定</button>' +
+      '</div>';
+    modal.style.display = 'flex';
+
+    function val(id) { var el = document.getElementById(id); return el ? el.value : ''; }
+
+    function collectSpec() {
+      var classes = [];
+      var rows = content.querySelectorAll('.cl-sc-row');
+      for (var i = 0; i < rows.length; i++) {
+        var idx = rows[i].getAttribute('data-i');
+        classes.push({
+          name: val('cl-sc-name-' + idx),
+          members: val('cl-sc-mem-' + idx),
+          relation: val('cl-sc-rel-' + idx),
+        });
+      }
+      var relations = [];
+      var rrows = content.querySelectorAll('.cl-sc-rel-row');
+      for (var j = 0; j < rrows.length; j++) {
+        var jdx = rrows[j].getAttribute('data-j');
+        relations.push({
+          from: val('cl-sc-rfrom-' + jdx),
+          kind: val('cl-sc-rkind-' + jdx),
+          to: val('cl-sc-rto-' + jdx),
+          label: val('cl-sc-rlabel-' + jdx),
+        });
+      }
+      return {
+        parent: val('cl-sc-parent'),
+        parentKind: val('cl-sc-pkind'),
+        parentMembers: val('cl-sc-pmembers'),
+        classes: classes,
+        relations: relations,
+      };
+    }
+
+    function refresh() {
+      var spec = collectSpec();
+      var text = ctx.getMmdText();
+      var pre = document.getElementById('cl-sc-preview');
+      if (pre) pre.textContent = CS.preview(text, spec).join('\n');
+      var v = CS.validate(spec, text);
+      var errEl = document.getElementById('cl-sc-errors');
+      if (errEl) errEl.textContent = v.errors.join(' / ');
+      var confirmBtn = document.getElementById('cl-sc-confirm');
+      if (confirmBtn) {
+        confirmBtn.disabled = !v.ok;
+        confirmBtn.style.opacity = v.ok ? '1' : '0.5';
+        confirmBtn.style.cursor = v.ok ? 'pointer' : 'not-allowed';
+      }
+    }
+
+    // 行の削除は「最低 1 行は残す」。全部消えると追加ボタンの位置が
+    // 分からなくなるため。
+    function bindRemovable(btnId, selector, key, keyVal) {
+      P.bindEvent(btnId, 'click', function() {
+        var rows = content.querySelectorAll(selector);
+        if (rows.length <= 1) return;
+        for (var k = 0; k < rows.length; k++) {
+          if (rows[k].getAttribute(key) === String(keyVal)) {
+            rows[k].parentNode.removeChild(rows[k]);
+            break;
+          }
+        }
+        refresh();
+      });
+    }
+
+    function bindClassRow(i) {
+      ['cl-sc-name-' + i, 'cl-sc-mem-' + i].forEach(function(id) { P.bindEvent(id, 'input', refresh); });
+      P.bindEvent('cl-sc-rel-' + i, 'change', refresh);
+      bindRemovable('cl-sc-del-' + i, '.cl-sc-row', 'data-i', i);
+    }
+
+    function bindRelRow(j) {
+      ['cl-sc-rfrom-' + j, 'cl-sc-rto-' + j, 'cl-sc-rlabel-' + j].forEach(function(id) { P.bindEvent(id, 'input', refresh); });
+      P.bindEvent('cl-sc-rkind-' + j, 'change', refresh);
+      bindRemovable('cl-sc-rdel-' + j, '.cl-sc-rel-row', 'data-j', j);
+    }
+
+    var rowCount = 3, relCount = 1;
+    bindClassRow(0); bindClassRow(1); bindClassRow(2);
+    bindRelRow(0);
+    ['cl-sc-parent', 'cl-sc-pmembers'].forEach(function(id) { P.bindEvent(id, 'input', refresh); });
+    P.bindEvent('cl-sc-pkind', 'change', refresh);
+
+    P.bindEvent('cl-sc-add-row', 'click', function() {
+      var rows = document.getElementById('cl-sc-rows');
+      if (!rows) return;
+      var i = rowCount++;
+      rows.insertAdjacentHTML('beforeend', classRowHtml(i));
+      bindClassRow(i);
+      var el = document.getElementById('cl-sc-name-' + i);
+      if (el && el.focus) el.focus();
+      refresh();
+    });
+
+    P.bindEvent('cl-sc-add-rel', 'click', function() {
+      var rows = document.getElementById('cl-sc-rel-rows');
+      if (!rows) return;
+      var j = relCount++;
+      rows.insertAdjacentHTML('beforeend', relRowHtml(j));
+      bindRelRow(j);
+      var el = document.getElementById('cl-sc-rfrom-' + j);
+      if (el && el.focus) el.focus();
+      refresh();
+    });
+
+    function close() { modal.style.display = 'none'; content.innerHTML = ''; }
+    P.bindEvent('cl-sc-cancel', 'click', close);
+    P.bindEvent('cl-sc-confirm', 'click', function() {
+      var spec = collectSpec();
+      var text = ctx.getMmdText();
+      if (!CS.validate(spec, text).ok) return;
+      window.MA.history.pushHistory();
+      ctx.setMmdText(CS.apply(text, spec));
+      ctx.onUpdate();
+      close();
+    });
+
+    refresh();
+  }
+
   function _renderNoSelection(parsedData, propsEl, ctx) {
     var P = window.MA.properties;
     var elements = parsedData.elements || [];
@@ -831,8 +1035,15 @@ window.MA.modules.plantumlClass = (function() {
           { value: 'note',      label: 'Note (注釈)' },
         ]) +
         '<div id="cl-tail-detail" style="margin-top:6px;"></div>' +
+      '</div>' +
+      '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
+        '<button id="cl-scaffold-open" style="width:100%;font-size:11px;padding:5px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">⌗ クラス構成をまとめて追加</button>' +
       '</div>';
     propsEl.innerHTML = html;
+
+    P.bindEvent('cl-scaffold-open', 'click', function() {
+      _showScaffoldModal(parsedData, ctx);
+    });
 
     P.bindEvent('cl-set-title', 'click', function() {
       window.MA.history.pushHistory();
