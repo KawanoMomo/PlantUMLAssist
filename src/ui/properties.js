@@ -64,6 +64,29 @@ window.MA.properties = (function() {
 
   // selectFieldHtml: select dropdown with label
   // options: array of { value, label, selected? }
+  // segmentedFieldHtml: 選択肢を横並びのボタンにして、押した瞬間に確定させる
+  // (design 1a の右ペイン)。プルダウンを開く 1 手が消えるので、よく使う
+  // 数個の値はこちらに出す。options = [{ value, label, title, selected }]
+  function segmentedFieldHtml(label, id, options) {
+    var btns = '';
+    for (var i = 0; i < options.length; i++) {
+      var on = !!options[i].selected;
+      btns += '<button type="button" class="prop-seg' + (on ? ' active' : '') + '"'
+        + ' data-value="' + escHtml(options[i].value) + '"'
+        + ' aria-pressed="' + (on ? 'true' : 'false') + '"'
+        + (options[i].title ? ' title="' + escHtml(options[i].title) + '"' : '')
+        + ' style="flex:1;min-width:34px;background:' + (on ? 'var(--accent)' : 'var(--bg-tertiary)') + ';'
+        + 'border:1px solid ' + (on ? 'var(--accent)' : 'var(--border)') + ';'
+        + 'color:' + (on ? '#fff' : 'var(--text-primary)') + ';'
+        + 'font-family:var(--font-mono);font-size:12px;padding:3px 4px;border-radius:3px;cursor:pointer;">'
+        + escHtml(options[i].label) + '</button>';
+    }
+    return '<div style="margin-bottom:8px;">' +
+      '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">' + escHtml(label) + '</label>' +
+      '<div id="' + id + '" style="display:flex;gap:3px;">' + btns + '</div>' +
+    '</div>';
+  }
+
   function selectFieldHtml(label, id, options, monoFont) {
     var opts = '';
     for (var i = 0; i < options.length; i++) {
@@ -190,6 +213,7 @@ window.MA.properties = (function() {
     // HTML builders
     fieldHtml: fieldHtml,
     selectFieldHtml: selectFieldHtml,
+    segmentedFieldHtml: segmentedFieldHtml,
     panelHeaderHtml: panelHeaderHtml,
     sectionHeaderHtml: sectionHeaderHtml,
     sectionFooterHtml: sectionFooterHtml,
