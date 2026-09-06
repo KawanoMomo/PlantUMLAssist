@@ -270,6 +270,86 @@ window.MA.modules.plantumlState = (function() {
     }
     return insertBeforeEnd(text, formatted);
   }
+  // BLK-junior-20260907-0443: state と transition をまとめて末尾に追加する。
+  // 1 件ずつのフォーム (種類選択 → 入力 → 追加ボタン) だと state4 + transition6 で
+  // クリックが 10 を超え、結局 DSL を手書きすることになっていた。他図種
+  // (usecase / component / class / activity) と同じ「一括 (複数行)」の流儀に揃える。
+  //
+  // 1 行 1 件:
+  //   Idle                       → state
+  //   state Active               → state
+  //   Error : 異常検知            → ラベル付き state
+  //   Choice1 <<choice>>         → ステレオタイプ付き state
+  //   [*] --> Idle               → 遷移
+  //   Idle --> Active : start    → トリガ付き遷移
+  //   Active --> Error : fail [retry > 3] / log()  → トリガ + ガード + アクション
+  var ST_BULK_ARROW_RE = /-->/;
+  var ST_STEREO_RE = /<<\s*([A-Za-z][A-Za-z0-9_]*)\s*>>/;
+
+  function parseBulkLines(block) {
+    var out = [];
+    if (!block) return out;
+    var lines = String(block).split(/\r?\n/);
+    for (var i = 0; i < lines.length; i++) {
+      var s = lines[i].trim();
+      if (!s || s.indexOf("'") === 0 || s.indexOf('#') === 0) continue;
+      if (/^@(startuml|enduml)\b/i.test(s)) continue;
+      if (ST_BULK_ARROW_RE.test(s)) {
+        var pos = s.indexOf('-->');
+        var from = s.slice(0, pos).trim();
+        var rest = s.slice(pos + 3);
+        var label = '';
+        var ci = rest.indexOf(':');
+        if (ci >= 0) { label = rest.slice(ci + 1).trim(); rest = rest.slice(0, ci); }
+        var to = rest.trim();
+        if (!from || !to) continue;
+        var parts = _parseTransitionLabel(label);
+        out.push({ op: 'transition', from: from, to: to,
+          trigger: parts.trigger, guard: parts.guard, action: parts.action });
+        continue;
+      }
+      var body = s.replace(/^state\s+/i, '');
+      var stereo = null;
+      var sm = body.match(ST_STEREO_RE);
+      if (sm) { stereo = sm[1]; body = body.replace(ST_STEREO_RE, '').trim(); }
+      var lbl = '';
+      var ci2 = body.indexOf(':');
+      if (ci2 >= 0) { lbl = body.slice(ci2 + 1).trim(); body = body.slice(0, ci2); }
+      var id = body.replace(/^"(.*)"$/, '$1').trim();
+      if (!id) continue;
+      out.push({ op: 'state', id: id, label: lbl, stereotype: stereo });
+    }
+    return out;
+  }
+
+  // state を先に全部宣言してから遷移を並べるので、入力順は問わない。
+  // 既に宣言済みの state は宣言し直さず、遷移からの参照だけにする。
+  function addBulk(text, block, parsed) {
+    var ops = parseBulkLines(block);
+    var out = text;
+    var idMap = {};
+    var taken = _existingIdSet(parsed || { states: [] });
+    var i;
+    for (i = 0; i < ops.length; i++) {
+      var o = ops[i];
+      if (o.op !== 'state') continue;
+      if (taken[o.id]) { idMap[o.id] = o.id; continue; }
+      var norm = window.MA.idNormalizer.normalize(o.id, taken, 'S');
+      if (!norm.valid) continue;
+      idMap[o.id] = norm.id;
+      taken[norm.id] = true;
+      out = addState(out, norm.id, o.label || norm.label || o.id, o.stereotype);
+    }
+    for (i = 0; i < ops.length; i++) {
+      var t = ops[i];
+      if (t.op !== 'transition') continue;
+      var from = t.from === '[*]' ? '[*]' : (idMap[t.from] || t.from);
+      var to = t.to === '[*]' ? '[*]' : (idMap[t.to] || t.to);
+      out = addTransition(out, from, to, t.trigger, t.guard, t.action);
+    }
+    return out;
+  }
+
   function addStateAtLine(text, lineNum, position, id, stereotype, label) {
     var lines = text.split('\n');
     var targetIdx = position === 'before' ? lineNum - 1 : lineNum;
@@ -719,7 +799,8 @@ window.MA.modules.plantumlState = (function() {
           { value: 'state', label: 'State', selected: true },
           { value: 'composite', label: 'Composite State' },
           { value: 'transition', label: 'Transition' },
-          { value: 'note', label: 'Note' }
+          { value: 'note', label: 'Note' },
+          { value: 'bulk', label: '一括 (複数行)' }
         ]) +
         '<div id="st-tail-detail" style="margin-top:6px;"></div>' +
       '</div>' +
@@ -767,6 +848,15 @@ window.MA.modules.plantumlState = (function() {
           ]) +
           '<div style="margin-bottom:6px;"><label style="display:block;font-size:10px;color:var(--text-secondary);">Text</label><textarea id="st-tail-ntext" style="width:100%;min-height:50px;"></textarea></div>' +
           P.primaryButtonHtml('st-tail-add', '+ Note 追加');
+      } else if (kind === 'bulk') {
+        html2 =
+          '<label style="display:block;font-size:10px;color:var(--text-secondary);">state と遷移を 1 行 1 件で</label>' +
+          '<textarea id="st-tail-bulk" style="width:100%;min-height:90px;font-family:inherit;font-size:12px;"></textarea>' +
+          P.primaryButtonHtml('st-tail-add', '+ まとめて末尾に追加') +
+          '<div id="st-tail-bulk-hint" style="font-size:10px;color:var(--text-secondary);margin-top:4px;line-height:1.5;">' +
+            'Idle / state Active / Error : 異常検知 / Sel &lt;&lt;choice&gt;&gt; (state) /<br>' +
+            '[*] --&gt; Idle / Idle --&gt; Active : start / Active --&gt; Error : fail [retry &gt; 3] / log()。' +
+            '空行は無視されます</div>';
       }
       detailEl.innerHTML = html2;
 
@@ -796,6 +886,11 @@ window.MA.modules.plantumlState = (function() {
           var tg = document.getElementById('st-tail-target').value;
           if (!tg) { alert('Target 必須'); return; }
           out = addNote(t, tg, document.getElementById('st-tail-pos').value, document.getElementById('st-tail-ntext').value);
+        } else if (k === 'bulk') {
+          var block = document.getElementById('st-tail-bulk').value;
+          var bulkOut = addBulk(t, block, parsedData);
+          if (bulkOut === t) { alert('追加できる行がありません'); return; }
+          out = bulkOut;
         }
         if (out !== t) {
           window.MA.history.pushHistory();
@@ -1370,6 +1465,8 @@ window.MA.modules.plantumlState = (function() {
     addNote: addNote,
     addStateAtLine: addStateAtLine,
     addTransitionAtLine: addTransitionAtLine,
+    parseBulkLines: parseBulkLines,
+    addBulk: addBulk,
     normalizeIdInput: normalizeIdInput,
     updateState: updateState,
     updateTransition: updateTransition,
