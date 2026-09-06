@@ -88,8 +88,11 @@ test.describe('Auto-save (v1.2.0)', () => {
     await page.waitForSelector('#preview-svg', { timeout: 5000 });
     await page.locator('#editor').fill('@startuml\nactor MARKER_X\n@enduml');
     await page.waitForTimeout(1500);
-    // Settings → clear all
+    // Settings → データタブ → clear all
+    // (BLK-builder-20260907-0843-3: 設定モーダルが design 1a の 5 タブになり、
+    //  保存データの全削除は「データ」タブに移った)
     await page.locator('#btn-config').click();
+    await page.locator('#cfg-tab-data').click();
     page.once('dialog', async (d) => { await d.accept(); });
     await page.locator('#cfg-clear-all').click();
     await page.locator('#cfg-ok').click();

@@ -907,6 +907,80 @@ function init() {
       if (dirRow) dirRow.style.display = (backend === 'file') ? 'block' : 'none';
     }
 
+    // ── design 1a: 5 タブ ───────────────────────────────────────────
+    var ST = window.MA.settingsTabs;
+    var TAB_KEY = 'plantuml-settings-tab';
+    var EDITOR_PREFS_KEY = 'plantuml-editor-prefs';
+
+    function readEditorPrefs() {
+      if (!ST) return { fontSize: 13, wrap: false };
+      try {
+        return ST.normalizeEditorPrefs(JSON.parse(localStorage.getItem(EDITOR_PREFS_KEY) || '{}'));
+      } catch (e) { return ST.normalizeEditorPrefs(null); }
+    }
+
+    // 保存された見た目を textarea に当てる。設定モーダルを開かずに起動した回でも
+    // 前回の指定が効いている必要があるので、結線時に 1 度呼ぶ。
+    function applyEditorPrefs(prefs) {
+      if (!ST || !editorEl) return;
+      var s = ST.editorStyleFor(prefs);
+      editorEl.style.fontSize = s.fontSize;
+      editorEl.style.whiteSpace = s.whiteSpace;
+      editorEl.style.overflowX = s.overflowX;
+    }
+
+    function currentRenderMode() {
+      var sel = document.getElementById('render-mode');
+      return ST ? ST.normalizeRenderMode(sel && sel.value) : 'local';
+    }
+
+    // 注記はラジオの選択を写す。ツールバーの select は「保存」まで動かさないので、
+    // ここで select を読むと online を選んでも local の注記が出たままになる。
+    function checkedRenderMode() {
+      var radios = document.getElementsByName('cfg-render-mode');
+      for (var i = 0; i < radios.length; i++) if (radios[i].checked) return radios[i].value;
+      return currentRenderMode();
+    }
+
+    function showTab(id) {
+      if (!ST) return;
+      var active = ST.normalizeTab(id);
+      var ids = ST.tabIds();
+      for (var i = 0; i < ids.length; i++) {
+        var pane = document.getElementById('cfg-pane-' + ids[i]);
+        if (pane) pane.hidden = (ids[i] !== active);
+        var tab = document.getElementById('cfg-tab-' + ids[i]);
+        if (tab) {
+          tab.classList.toggle('active', ids[i] === active);
+          tab.setAttribute('aria-selected', ids[i] === active ? 'true' : 'false');
+        }
+      }
+      try { localStorage.setItem(TAB_KEY, active); } catch (e) {}
+    }
+
+    function renderTabBar(active) {
+      var bar = document.getElementById('cfg-tabs');
+      if (!bar || !ST) return;
+      bar.innerHTML = ST.buildTabsHtml(active);
+      var btns = bar.querySelectorAll('[data-cfg-tab]');
+      for (var i = 0; i < btns.length; i++) {
+        btns[i].addEventListener('click', function() { showTab(this.getAttribute('data-cfg-tab')); });
+      }
+    }
+
+    function refreshRenderNote() {
+      var note = document.getElementById('cfg-render-note');
+      if (note && ST) note.textContent = ST.renderModeNote(checkedRenderMode());
+    }
+
+    if (ST) {
+      var list = document.getElementById('cfg-shortcuts-list');
+      if (list) list.innerHTML = ST.buildShortcutsHtml();
+      applyEditorPrefs(readEditorPrefs());
+      var rm = document.getElementsByName('cfg-render-mode');
+      for (var r = 0; r < rm.length; r++) rm[r].addEventListener('change', refreshRenderNote);
+    }
+
     function open() {
       var as = window.MA.autoSave;
       var cfg = as ? as.getConfig() : { enabled: true, debounceMs: 1000, restoreMode: 'confirm', backend: 'localStorage', fileDir: './autosave' };
@@ -921,12 +995,29 @@ function init() {
       if (dirInput) dirInput.value = cfg.fileDir || './autosave';
       applyBackendVisibility(backend);
       refreshMetaInfo();
+      if (ST) {
+        var mode = currentRenderMode();
+        var modeRadios = document.getElementsByName('cfg-render-mode');
+        for (var k = 0; k < modeRadios.length; k++) modeRadios[k].checked = (modeRadios[k].value === mode);
+        refreshRenderNote();
+        var prefs = readEditorPrefs();
+        var fontSel = document.getElementById('cfg-editor-font');
+        if (fontSel) fontSel.value = String(prefs.fontSize);
+        var wrapEl = document.getElementById('cfg-editor-wrap');
+        if (wrapEl) wrapEl.checked = !!prefs.wrap;
+        var savedTab = 'autosave';
+        try { savedTab = localStorage.getItem(TAB_KEY) || 'autosave'; } catch (e) {}
+        renderTabBar(ST.normalizeTab(savedTab));
+        showTab(savedTab);
+      }
       modal.style.display = 'flex';
     }
     function close() { modal.style.display = 'none'; }
 
     btn.addEventListener('click', open);
     document.getElementById('cfg-cancel').addEventListener('click', close);
+    var closeX = document.getElementById('cfg-close');
+    if (closeX) closeX.addEventListener('click', close);
     document.getElementById('cfg-ok').addEventListener('click', function() {
       var enabled = document.getElementById('cfg-enabled').checked;
       var debounceMs = parseInt(document.getElementById('cfg-debounce').value, 10);
@@ -946,6 +1037,27 @@ function init() {
           backend: backend,
           fileDir: fileDir,
         });
+      }
+      // レンダリングモードとエディタの見た目も同じ「保存」で確定する。
+      // モード切替は既存の #render-mode を唯一の窓口に保ち、change を投げて
+      // 再描画・localStorage 保存の既存経路に載せる。
+      if (ST) {
+        var modeRadios2 = document.getElementsByName('cfg-render-mode');
+        var mode2 = 'local';
+        for (var m = 0; m < modeRadios2.length; m++) if (modeRadios2[m].checked) { mode2 = modeRadios2[m].value; break; }
+        var modeSel = document.getElementById('render-mode');
+        if (modeSel && modeSel.value !== ST.normalizeRenderMode(mode2)) {
+          modeSel.value = ST.normalizeRenderMode(mode2);
+          modeSel.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        var fontSel2 = document.getElementById('cfg-editor-font');
+        var wrapEl2 = document.getElementById('cfg-editor-wrap');
+        var prefs2 = ST.normalizeEditorPrefs({
+          fontSize: fontSel2 ? fontSel2.value : undefined,
+          wrap: wrapEl2 ? wrapEl2.checked : false,
+        });
+        try { localStorage.setItem(EDITOR_PREFS_KEY, JSON.stringify(prefs2)); } catch (e) {}
+        applyEditorPrefs(prefs2);
       }
       close();
     });
