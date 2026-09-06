@@ -262,6 +262,74 @@ html, body {
   cursor: pointer;
 }
 #folder-panel button:hover { background: var(--bg-secondary); }
+/* 一括置換パネル (複数の図をまたいで部品名を置換する) */
+#rename-panel {
+  display: none;
+  position: absolute;
+  z-index: 41;
+  width: 260px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px;
+  font-size: 11px;
+  color: var(--text-primary);
+}
+#rename-panel.open { display: block; }
+#rename-panel label {
+  display: block;
+  font-size: 10px;
+  color: var(--text-secondary);
+  margin: 4px 0 2px;
+}
+#rename-panel input, #rename-panel select {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 3px 4px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+#rename-panel .rename-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 8px;
+}
+#rename-panel .rename-row label {
+  margin: 0;
+  font-size: 10px;
+  white-space: nowrap;
+}
+#rename-hits {
+  margin-top: 6px;
+  max-height: 120px;
+  overflow-y: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+#rename-hits .hit { display: flex; justify-content: space-between; padding: 1px 0; }
+#rename-hits .hit.zero { opacity: 0.45; }
+#rename-summary { margin-top: 6px; font-size: 10px; color: var(--text-secondary); }
+#rename-panel .rename-actions { display: flex; gap: 6px; margin-top: 8px; }
+#rename-panel .rename-actions button {
+  flex: 1;
+  font-size: 11px;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+#rename-panel .rename-actions button#btn-rename-apply {
+  border-color: var(--accent);
+}
+#rename-panel .rename-actions button[disabled] { opacity: 0.45; cursor: default; }
 #folder-panel .folder-empty {
   font-size: 11px;
   color: var(--text-secondary);
@@ -568,8 +636,27 @@ html, body {
       <div id="tab-bar">
         <button class="tab-tool" id="btn-tab-new" title="新しい図を開く">＋</button>
         <button class="tab-tool" id="btn-tab-folder" title="保存フォルダの図を一覧">📂 一覧</button>
+        <button class="tab-tool" id="btn-tab-rename" title="開いている図をまたいで部品名を一括置換">⇄ 一括置換</button>
       </div>
       <div id="folder-panel"></div>
+      <!-- 開いている図をまたいで部品名を一括置換する -->
+      <div id="rename-panel">
+        <label for="rename-from">置換前 (部品名)</label>
+        <input id="rename-from" list="rename-candidates" autocomplete="off" spellcheck="false" placeholder="SpiDrv">
+        <datalist id="rename-candidates"></datalist>
+        <label for="rename-to">置換後</label>
+        <input id="rename-to" autocomplete="off" spellcheck="false" placeholder="Spi_Driver">
+        <div class="rename-row">
+          <input type="checkbox" id="rename-all-docs" checked style="width:auto;">
+          <label for="rename-all-docs">開いている図すべてに適用</label>
+        </div>
+        <div id="rename-hits"></div>
+        <div id="rename-summary"></div>
+        <div class="rename-actions">
+          <button id="btn-rename-apply" disabled>置換</button>
+          <button id="btn-rename-cancel">閉じる</button>
+        </div>
+      </div>
       <div id="editor-pane-header">Editor</div>
       <div id="editor-wrap">
         <div id="line-numbers">1</div>
@@ -691,6 +778,7 @@ html, body {
 <script src="src/core/id-normalizer.js"></script>
 <script src="src/core/auto-save.js"></script>
 <script src="src/core/workspace.js"></script>
+<script src="src/core/bulk-rename.js"></script>
 <script src="src/core/line-resolver.js"></script>
 <script src="src/core/formatter-interface.js"></script>
 <script src="src/core/dsl-updater.js"></script>

@@ -150,6 +150,17 @@ window.MA.workspace = (function() {
     return _copy(d);
   }
 
+  // id 指定でドキュメントを書き換える。一括置換のように「今開いていない図も
+  // まとめて直す」操作で使う。
+  function updateDoc(id, patch) {
+    var d = _find(id);
+    if (!d || !patch) return null;
+    if (typeof patch.dsl === 'string') d.dsl = patch.dsl;
+    if (typeof patch.diagramType === 'string' && patch.diagramType) d.diagramType = patch.diagramType;
+    persist();
+    return _copy(d);
+  }
+
   function setActive(id) {
     if (!_find(id)) return null;
     _state.activeId = id;
@@ -291,6 +302,7 @@ window.MA.workspace = (function() {
     getActiveId: getActiveId,
     findByName: findByName,
     updateActive: updateActive,
+    updateDoc: updateDoc,
     setActive: setActive,
     open: open,
     openOrActivate: openOrActivate,
