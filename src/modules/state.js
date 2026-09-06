@@ -722,8 +722,15 @@ window.MA.modules.plantumlState = (function() {
           { value: 'note', label: 'Note' }
         ]) +
         '<div id="st-tail-detail" style="margin-top:6px;"></div>' +
+      '</div>' +
+      '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
+        '<button id="st-branch-open" style="width:100%;font-size:11px;padding:5px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">⑂ 分岐 (choice) を追加</button>' +
       '</div>';
     propsEl.innerHTML = html;
+
+    P.bindEvent('st-branch-open', 'click', function() {
+      _showAddBranchModal('', parsedData, ctx);
+    });
 
     var renderTailDetail = function() {
       var kind = document.getElementById('st-tail-kind').value;
@@ -836,6 +843,136 @@ window.MA.modules.plantumlState = (function() {
     });
   }
 
+  // 分岐 (choice + 複数のガード付き遷移) を 1 つのフォームで組む。
+  // Transition 追加フォームを枝の数だけ開き直すと、DSL を直接打った方が
+  // 早くなってしまうため、枝を行として並べて一括で確定する。
+  function _showAddBranchModal(fromId, parsedData, ctx) {
+    var modal = document.getElementById('st-br-modal');
+    var content = document.getElementById('st-br-modal-content');
+    if (!modal || !content) return;
+    var SB = window.MA.stateBranch;
+    var esc = window.MA.htmlUtils.escHtml;
+    var P = window.MA.properties;
+
+    var stateNames = (parsedData.states || []).map(function(s) { return s.id; });
+    stateNames.push('[*]');
+    var datalist = '<datalist id="st-br-states">' +
+      stateNames.map(function(n) { return '<option value="' + esc(n) + '"></option>'; }).join('') +
+      '</datalist>';
+
+    var INPUT = 'background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:3px 6px;border-radius:3px;font-size:12px;';
+
+    function rowHtml(i) {
+      return '<div class="st-br-row" data-i="' + i + '" style="display:flex;gap:6px;margin-bottom:5px;align-items:center;">' +
+        '<input id="st-br-guard-' + i + '" list="" type="text" placeholder="ガード (例: 重大)" style="flex:1;' + INPUT + '">' +
+        '<span style="color:var(--text-secondary);font-size:12px;">→</span>' +
+        '<input id="st-br-to-' + i + '" list="st-br-states" type="text" placeholder="遷移先" style="flex:1;' + INPUT + '">' +
+        '<input id="st-br-act-' + i + '" type="text" placeholder="アクション" style="flex:1;' + INPUT + '">' +
+        '<button id="st-br-del-' + i + '" title="この枝を削除" style="background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;padding:2px 7px;">✕</button>' +
+      '</div>';
+    }
+
+    var rowCount = 2;
+    content.innerHTML = datalist +
+      '<h3 style="margin:0 0 12px 0;color:var(--text-primary);">分岐 (choice) を追加' +
+        (fromId ? ' — ' + esc(fromId) + ' から' : '') + '</h3>' +
+      P.fieldHtml('分岐 (choice) 状態の名前', 'st-br-id', '', '例: AnomalyCheck') +
+      (fromId ? P.fieldHtml('分岐に入るトリガー', 'st-br-trigger', '', '例: Fault') : '') +
+      '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin:10px 0 4px 0;">枝 (ガード → 遷移先)</div>' +
+      '<div id="st-br-rows">' + rowHtml(0) + rowHtml(1) + '</div>' +
+      '<button id="st-br-add-row" style="font-size:11px;padding:3px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">＋ 枝を追加</button>' +
+      '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin:10px 0 4px 0;">追加される行</div>' +
+      '<pre id="st-br-preview" style="margin:0;background:var(--bg-primary);border:1px solid var(--border);border-radius:3px;padding:6px;font-family:Consolas,monospace;font-size:11px;color:var(--text-primary);white-space:pre-wrap;min-height:34px;"></pre>' +
+      '<div id="st-br-errors" style="font-size:11px;color:var(--accent-red);margin-top:6px;min-height:14px;"></div>' +
+      '<div style="display:flex;gap:8px;margin-top:12px;">' +
+        '<button id="st-br-cancel" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:8px;border-radius:4px;cursor:pointer;">キャンセル</button>' +
+        '<button id="st-br-confirm" style="flex:1;background:var(--accent);border:none;color:#fff;padding:8px;border-radius:4px;cursor:pointer;">確定</button>' +
+      '</div>';
+    modal.style.display = 'flex';
+
+    function val(id) { var el = document.getElementById(id); return el ? el.value : ''; }
+
+    function collectSpec() {
+      var branches = [];
+      var rows = content.querySelectorAll('.st-br-row');
+      for (var i = 0; i < rows.length; i++) {
+        var idx = rows[i].getAttribute('data-i');
+        branches.push({
+          guard: val('st-br-guard-' + idx),
+          to: val('st-br-to-' + idx),
+          action: val('st-br-act-' + idx),
+        });
+      }
+      return {
+        source: fromId || '',
+        trigger: val('st-br-trigger'),
+        choiceId: val('st-br-id'),
+        branches: branches,
+      };
+    }
+
+    function refresh() {
+      var spec = collectSpec();
+      var text = ctx.getMmdText();
+      var lines = SB.preview(text, spec);
+      var pre = document.getElementById('st-br-preview');
+      if (pre) pre.textContent = lines.join('\n');
+      var v = SB.validate(spec, text);
+      var errEl = document.getElementById('st-br-errors');
+      if (errEl) errEl.textContent = v.errors.join(' / ');
+      var confirmBtn = document.getElementById('st-br-confirm');
+      if (confirmBtn) {
+        confirmBtn.disabled = !v.ok;
+        confirmBtn.style.opacity = v.ok ? '1' : '0.5';
+        confirmBtn.style.cursor = v.ok ? 'pointer' : 'not-allowed';
+      }
+    }
+
+    function bindRow(i) {
+      ['st-br-guard-' + i, 'st-br-to-' + i, 'st-br-act-' + i].forEach(function(id) {
+        P.bindEvent(id, 'input', refresh);
+      });
+      P.bindEvent('st-br-del-' + i, 'click', function() {
+        var rows = content.querySelectorAll('.st-br-row');
+        if (rows.length <= 1) return;   // 最低 1 行は残す
+        for (var k = 0; k < rows.length; k++) {
+          if (rows[k].getAttribute('data-i') === String(i)) { rows[k].parentNode.removeChild(rows[k]); break; }
+        }
+        refresh();
+      });
+    }
+
+    bindRow(0);
+    bindRow(1);
+    P.bindEvent('st-br-id', 'input', refresh);
+    P.bindEvent('st-br-trigger', 'input', refresh);
+    P.bindEvent('st-br-add-row', 'click', function() {
+      var rows = document.getElementById('st-br-rows');
+      if (!rows) return;
+      var i = rowCount++;
+      rows.insertAdjacentHTML('beforeend', rowHtml(i));
+      bindRow(i);
+      var el = document.getElementById('st-br-guard-' + i);
+      if (el && el.focus) el.focus();
+      refresh();
+    });
+
+    function close() { modal.style.display = 'none'; content.innerHTML = ''; }
+    P.bindEvent('st-br-cancel', 'click', close);
+    P.bindEvent('st-br-confirm', 'click', function() {
+      var spec = collectSpec();
+      var text = ctx.getMmdText();
+      if (!SB.validate(spec, text).ok) return;
+      window.MA.history.pushHistory();
+      ctx.setMmdText(SB.apply(text, spec));
+      ctx.onUpdate();
+      close();
+    });
+    refresh();
+    var first = document.getElementById('st-br-id');
+    if (first && first.focus) first.focus();
+  }
+
   function _renderStateEdit(sel, parsedData, propsEl, ctx) {
     var P = window.MA.properties;
     var st = null;
@@ -906,6 +1043,7 @@ window.MA.modules.plantumlState = (function() {
       moveIntoHtml +
       moveOutHtml +
       '<button id="st-add-tx" style="font-size:11px;padding:4px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;margin-top:4px;display:block;">+ Outgoing transition</button>' +
+      '<button id="st-add-branch" style="font-size:11px;padding:4px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;margin-top:4px;display:block;">⑂ 分岐 (choice) を追加</button>' +
       P.primaryButtonHtml('st-update', '更新');
     if (related.length > 0) {
       html += '<div style="border-top:1px solid var(--border);padding-top:6px;margin-top:6px;">' +
@@ -1007,6 +1145,9 @@ window.MA.modules.plantumlState = (function() {
     }
     P.bindEvent('st-add-tx', 'click', function() {
       _showAddTransitionModal(st.id, parsedData, ctx);
+    });
+    P.bindEvent('st-add-branch', 'click', function() {
+      _showAddBranchModal(st.id, parsedData, ctx);
     });
     notes.forEach(function(n, idx) {
       P.bindEvent('st-note-del-' + idx, 'click', function(e) {
