@@ -8,6 +8,7 @@ global.document = dom.window.document;
 
 var depPaths = [
   '../src/core/dsl-utils.js',
+  '../src/core/state-transition.js',
   '../src/core/regex-parts.js',
   '../src/core/id-normalizer.js',
   '../src/core/line-resolver.js',
