@@ -493,7 +493,55 @@ window.MA.modules.plantumlClass = (function() {
     return -1;
   }
 
+  // design 4a「Class — メンバー編集」: 属性・メソッドはフォームから足せなければならない。
+  // 本体 { } を持たない `class Foo` に足そうとすると挿入位置が無く、これまでは
+  // 何も起きずに握り潰していた (クラス定義全体を打ち直すしかなかった)。
+  // 足す直前に本体を開いて、どの宣言でも同じ手順で足せるようにする。
+  function ensureBlock(text, classLineNum) {
+    var lines = text.split('\n');
+    var idx = classLineNum - 1;
+    if (idx < 0 || idx >= lines.length) return text;
+    if (!_parseSingleLine(lines[idx])) return text;
+    if (/\{\s*$/.test(lines[idx])) return text;   // 既に本体がある
+    var indent = lines[idx].match(/^(\s*)/)[1];
+    lines[idx] = lines[idx].replace(/\s*$/, '') + ' {';
+    lines.splice(idx + 1, 0, indent + '}');
+    return lines.join('\n');
+  }
+
+  // design 4a「種別 / Kind」: class / abstract class / interface / enum の切り替え。
+  // 宣言のキーワードだけを差し替え、id・表示名・ステレオタイプ・ジェネリクス・本体は
+  // そのまま残す。従来は宣言行を手で打ち直すしかなかった。
+  function changeKind(text, lineNum, newKind) {
+    var lines = text.split('\n');
+    var idx = lineNum - 1;
+    if (idx < 0 || idx >= lines.length) return text;
+    var info = _parseSingleLine(lines[idx]);
+    if (!info || info.kind === newKind) return text;
+    var m = info.match;
+    var rawId, label;
+    if (m[2] !== undefined) { rawId = m[2]; label = m[1]; }
+    else { rawId = m[3]; label = m[4] !== undefined ? m[4] : m[3]; }
+    var split = _splitIdGenerics(rawId);
+    var stereotype = m[5] || null;
+    // `class Box<T>` のような素の宣言では label に生の `Box<T>` が入る。
+    // そのまま渡すと `"Box<T>" as Box` と引用名に化けるので、id に揃える。
+    if (label === rawId) label = split.id;
+    // enum はジェネリクスを持たない (PlantUML が解釈しない)。落として残りを保つ。
+    var generics = (newKind === 'enum') ? null : split.generics;
+    var openBrace = /\{\s*$/.test(lines[idx]) ? ' {' : '';
+    var fmtFn;
+    if (newKind === 'interface') fmtFn = fmtInterface;
+    else if (newKind === 'abstract') fmtFn = fmtAbstract;
+    else if (newKind === 'enum') fmtFn = function(i, l, s) { return fmtEnum(i, l, s); };
+    else if (newKind === 'class') fmtFn = fmtClass;
+    else return text;
+    lines[idx] = info.indent + fmtFn(split.id, label, stereotype, generics) + openBrace;
+    return lines.join('\n');
+  }
+
   function addAttribute(text, classLineNum, visibility, name, type, isStatic) {
+    text = ensureBlock(text, classLineNum);
     var lines = text.split('\n');
     var classIdx = classLineNum - 1;
     var closeIdx = _findClassEndLine(lines, classIdx);
@@ -504,6 +552,7 @@ window.MA.modules.plantumlClass = (function() {
   }
 
   function addMethod(text, classLineNum, visibility, name, params, returnType, isStatic, isAbstract) {
+    text = ensureBlock(text, classLineNum);
     var lines = text.split('\n');
     var classIdx = classLineNum - 1;
     var closeIdx = _findClassEndLine(lines, classIdx);
@@ -514,6 +563,7 @@ window.MA.modules.plantumlClass = (function() {
   }
 
   function addEnumValue(text, enumLineNum, name) {
+    text = ensureBlock(text, enumLineNum);
     var lines = text.split('\n');
     var enumIdx = enumLineNum - 1;
     var closeIdx = _findClassEndLine(lines, enumIdx);
@@ -1157,6 +1207,72 @@ window.MA.modules.plantumlClass = (function() {
     renderTailDetail();
   }
 
+  // design 4a: 種別は select ではなくトグル。今の種別が押された状態で出る。
+  var _KINDS = [
+    { kind: 'class', label: 'class' },
+    { kind: 'abstract', label: 'abstract class' },
+    { kind: 'interface', label: 'interface' },
+    { kind: 'enum', label: 'enum' },
+  ];
+
+  function _kindToggleHtml(current) {
+    var html = '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:2px;">種別 / Kind</div>' +
+               '<div id="cl-kind-toggle" style="display:flex;gap:3px;margin-bottom:8px;flex-wrap:wrap;">';
+    _KINDS.forEach(function(k) {
+      var on = k.kind === current;
+      html += '<button class="cl-kind-btn" data-kind="' + k.kind + '"' +
+              ' aria-pressed="' + (on ? 'true' : 'false') + '"' +
+              ' style="flex:1 1 auto;padding:4px 6px;font-size:10px;border-radius:3px;cursor:pointer;' +
+              'border:1px solid ' + (on ? 'var(--accent)' : 'var(--border)') + ';' +
+              'background:' + (on ? 'var(--accent)' : 'var(--bg-tertiary)') + ';' +
+              'color:' + (on ? '#fff' : 'var(--text-primary)') + ';">' + k.label + '</button>';
+    });
+    return html + '</div>';
+  }
+
+  // design 4a: 可視性は記号を打つのではなく + − # ~ のトグルで選ぶ。
+  var _VIS = [
+    { value: '+', label: '+ public' },
+    { value: '-', label: '− private' },
+    { value: '#', label: '# prot.' },
+    { value: '~', label: '~ pkg' },
+  ];
+
+  function _visToggleHtml(idPrefix, current) {
+    var html = '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:2px;">可視性 / Visibility</div>' +
+               '<div class="cl-vis-toggle" data-vis-for="' + idPrefix + '" style="display:flex;gap:3px;margin-bottom:6px;">';
+    _VIS.forEach(function(v) {
+      var on = v.value === current;
+      html += '<button class="cl-vis-btn" data-vis-for="' + idPrefix + '" data-vis="' + v.value + '"' +
+              ' aria-pressed="' + (on ? 'true' : 'false') + '"' +
+              ' style="flex:1;padding:3px 2px;font-size:10px;border-radius:3px;cursor:pointer;' +
+              'border:1px solid ' + (on ? 'var(--accent)' : 'var(--border)') + ';' +
+              'background:' + (on ? 'var(--accent)' : 'var(--bg-tertiary)') + ';' +
+              'color:' + (on ? '#fff' : 'var(--text-primary)') + ';">' + v.label + '</button>';
+    });
+    return html + '<input type="hidden" id="' + idPrefix + '" value="' + (current || '') + '">' + '</div>';
+  }
+
+  // トグル群の押下を 1 本のハンドラで受け、hidden input に値を落とす。
+  function _bindVisToggle(propsEl, idPrefix, onPick) {
+    var btns = propsEl.querySelectorAll('.cl-vis-btn[data-vis-for="' + idPrefix + '"]');
+    Array.prototype.forEach.call(btns, function(b) {
+      b.addEventListener('click', function() {
+        var hidden = document.getElementById(idPrefix);
+        var picked = b.getAttribute('data-vis');
+        if (hidden) hidden.value = picked;
+        Array.prototype.forEach.call(btns, function(o) {
+          var on = o === b;
+          o.setAttribute('aria-pressed', on ? 'true' : 'false');
+          o.style.borderColor = on ? 'var(--accent)' : 'var(--border)';
+          o.style.background = on ? 'var(--accent)' : 'var(--bg-tertiary)';
+          o.style.color = on ? '#fff' : 'var(--text-primary)';
+        });
+        if (onPick) onPick(picked);
+      });
+    });
+  }
+
   function _renderElementEdit(element, parsedData, propsEl, ctx, opts) {
     var P = window.MA.properties;
     if (element.kind === 'enum') return _renderEnumEdit(element, parsedData, propsEl, ctx, opts);
@@ -1170,6 +1286,8 @@ window.MA.modules.plantumlClass = (function() {
       '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' +
         kindLabel + ' (L' + element.line + ')</label>' +
+        // design 4a「種別 / Kind」: 宣言のキーワードをその場で切り替える
+        _kindToggleHtml(element.kind) +
         P.fieldHtml('Alias (id)', 'cl-edit-id', element.id) +
         P.fieldHtml('Label', 'cl-edit-label', element.label || '') +
         P.fieldHtml('Stereotype', 'cl-edit-stereo', element.stereotype || '') +
@@ -1183,56 +1301,57 @@ window.MA.modules.plantumlClass = (function() {
         '</div>' +
       '</div>';
 
-    // Members (uniform loop across attributes + methods)
-    if (element.members && element.members.length > 0) {
-      html += '<div style="border-top:1px solid var(--border);padding-top:6px;margin-top:6px;">' +
-              '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">Members</div>';
-      element.members.forEach(function(m, mi) {
+    // design 4a: 属性 / Attributes と メソッド / Methods を別の節に分け、
+    // それぞれに「+ 追加」を置く。1 行 1 レコードで、クリックするとその場で開く。
+    // 行の並び (member index) は元の DSL 順のまま持つので ↑↓✕ の宛先は変わらない。
+    var members = element.members || [];
+    function _memberSectionHtml(sectionKind, title, addBtnId) {
+      var rows = '';
+      var count = 0;
+      members.forEach(function(m, mi) {
+        if (m.kind !== sectionKind) return;
+        count++;
         var isSel = mi === focusIdx;
         var rowCls = isSel ? 'cl-member-row cl-member-selected' : 'cl-member-row';
         var rowStyle = isSel ? 'background:var(--accent-bg, rgba(0,128,255,0.15));padding:4px;border-radius:3px;' : 'padding:2px;';
         var preview = (m.visibility || '') + ' ' + m.name +
                       (m.kind === 'method' ? '(' + (m.params || '') + ')' : '') +
                       (m.type ? ' : ' + m.type : '');
-        html += '<div class="' + rowCls + '" data-member-idx="' + mi + '" style="' + rowStyle + 'font-size:11px;margin-bottom:2px;">' +
+        rows += '<div class="' + rowCls + '" data-member-idx="' + mi + '" data-member-kind="' + m.kind + '" style="' + rowStyle + 'font-size:11px;margin-bottom:2px;">' +
                   window.MA.htmlUtils.escHtml(preview) +
                   ' <button id="cl-mem-up-' + mi + '" data-line="' + m.line + '">↑</button>' +
                   ' <button id="cl-mem-down-' + mi + '" data-line="' + m.line + '">↓</button>' +
                   ' <button id="cl-mem-del-' + mi + '" data-line="' + m.line + '">✕</button>';
         if (isSel) {
-          // Inline edit fields (only for selected row)
-          html += '<div style="margin-top:4px;padding:4px;background:var(--bg);border:1px solid var(--border);">' +
-                    P.selectFieldHtml('Visibility', 'cl-mem-vis-' + mi, [
-                      { value: '+', label: '+', selected: m.visibility === '+' },
-                      { value: '-', label: '-', selected: m.visibility === '-' },
-                      { value: '#', label: '#', selected: m.visibility === '#' },
-                      { value: '~', label: '~', selected: m.visibility === '~' },
-                      { value: '',  label: '(none)', selected: !m.visibility }
-                    ]) +
-                    P.fieldHtml('Name', 'cl-mem-name-' + mi, m.name) +
-                    P.fieldHtml('Type', 'cl-mem-type-' + mi, m.type || '') +
-                    (m.kind === 'method' ? P.fieldHtml('Params', 'cl-mem-params-' + mi, m.params || '') : '') +
+          // 選んだ行だけをその場で展開して編集する
+          rows += '<div style="margin-top:4px;padding:4px;background:var(--bg);border:1px solid var(--border);">' +
+                    _visToggleHtml('cl-mem-vis-' + mi, m.visibility || '') +
+                    P.fieldHtml('名前', 'cl-mem-name-' + mi, m.name) +
+                    P.fieldHtml('型', 'cl-mem-type-' + mi, m.type || '') +
+                    (m.kind === 'method' ? P.fieldHtml('引数', 'cl-mem-params-' + mi, m.params || '') : '') +
                     '<div style="margin-top:4px;">' +
-                      '<label><input type="checkbox" id="cl-mem-static-' + mi + '"' + (m.static ? ' checked' : '') + '> static</label>' +
-                      (m.kind === 'method' ? ' <label><input type="checkbox" id="cl-mem-abstract-' + mi + '"' + (m.abstract ? ' checked' : '') + '> abstract</label>' : '') +
+                      '<label><input type="checkbox" id="cl-mem-static-' + mi + '"' + (m.static ? ' checked' : '') + '> static にする</label>' +
+                      (m.kind === 'method' ? ' <label><input type="checkbox" id="cl-mem-abstract-' + mi + '"' + (m.abstract ? ' checked' : '') + '> abstract にする</label>' : '') +
                     '</div>' +
                     P.primaryButtonHtml('cl-mem-update-' + mi, '更新') +
                   '</div>';
         }
-        html += '</div>';
+        rows += '</div>';
       });
-      html += '<button id="cl-add-attr" style="font-size:11px;padding:4px 10px;margin-top:4px;">+ Attribute 追加</button> ' +
-              '<button id="cl-add-method" style="font-size:11px;padding:4px 10px;margin-top:4px;">+ Method 追加</button>' +
-              '<div id="cl-add-attr-form" style="display:none;margin-top:6px;"></div>' +
-              '<div id="cl-add-method-form" style="display:none;margin-top:6px;"></div>' +
-              '</div>';
-    } else {
-      html += '<div style="border-top:1px solid var(--border);padding-top:10px;margin-top:10px;">' +
-              '<button id="cl-add-attr" style="font-size:11px;padding:4px 10px;">+ Attribute 追加</button> ' +
-              '<button id="cl-add-method" style="font-size:11px;padding:4px 10px;">+ Method 追加</button>' +
-              '<div id="cl-add-attr-form" style="display:none;margin-top:6px;"></div>' +
-              '<div id="cl-add-method-form" style="display:none;margin-top:6px;"></div></div>';
+      if (count === 0) {
+        rows = '<div style="font-size:11px;color:var(--text-secondary);font-style:italic;">（まだありません）</div>';
+      }
+      return '<div style="border-top:1px solid var(--border);padding-top:6px;margin-top:6px;">' +
+               '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">' +
+                 '<span style="font-size:10px;color:var(--accent);font-weight:bold;">' + title + '</span>' +
+                 '<button id="' + addBtnId + '" style="font-size:11px;padding:2px 8px;">+ 追加</button>' +
+               '</div>' + rows;
     }
+
+    html += _memberSectionHtml('attribute', '属性 / Attributes', 'cl-add-attr') +
+            '<div id="cl-add-attr-form" style="display:none;margin-top:6px;"></div></div>' +
+            _memberSectionHtml('method', 'メソッド / Methods', 'cl-add-method') +
+            '<div id="cl-add-method-form" style="display:none;margin-top:6px;"></div></div>';
 
     // Notes section
     var classNotes = (parsedData.notes || []).filter(function(n) { return n.targetId === element.id; });
@@ -1293,6 +1412,17 @@ window.MA.modules.plantumlClass = (function() {
       ctx.setMmdText(renameWithRefs(ctx.getMmdText(), element.id, newId));
       ctx.onUpdate();
     });
+    // 種別トグル: 押した種別へ宣言のキーワードを差し替える (id・表示名・本体は残る)
+    Array.prototype.forEach.call(propsEl.querySelectorAll('.cl-kind-btn'), function(b) {
+      b.addEventListener('click', function() {
+        var next = b.getAttribute('data-kind');
+        if (next === element.kind) return;
+        window.MA.history.pushHistory();
+        ctx.setMmdText(changeKind(ctx.getMmdText(), element.line, next));
+        window.MA.selection.clearSelection();
+        ctx.onUpdate();
+      });
+    });
     P.bindEvent('cl-move-up', 'click', function() {
       window.MA.history.pushHistory();
       ctx.setMmdText(moveLineUp(ctx.getMmdText(), element.line));
@@ -1350,6 +1480,7 @@ window.MA.modules.plantumlClass = (function() {
         ctx.onUpdate();
       });
       if (mi === focusIdx) {
+        _bindVisToggle(propsEl, 'cl-mem-vis-' + mi);
         P.bindEvent('cl-mem-update-' + mi, 'click', function() {
           var vis = document.getElementById('cl-mem-vis-' + mi).value || null;
           var name = document.getElementById('cl-mem-name-' + mi).value;
@@ -1386,16 +1517,12 @@ window.MA.modules.plantumlClass = (function() {
     P.bindEvent('cl-add-attr', 'click', function() {
       document.getElementById('cl-add-attr-form').style.display = 'block';
       document.getElementById('cl-add-attr-form').innerHTML =
-        P.selectFieldHtml('Visibility', 'cl-aa-vis', [
-          { value: '+', label: '+ public', selected: true },
-          { value: '-', label: '- private' },
-          { value: '#', label: '# protected' },
-          { value: '~', label: '~ package' },
-        ]) +
-        '<label style="font-size:11px;"><input type="checkbox" id="cl-aa-static"> static</label>' +
-        P.fieldHtml('Name', 'cl-aa-name', '', '例: count') +
-        P.fieldHtml('Type', 'cl-aa-type', '', '例: int') +
+        _visToggleHtml('cl-aa-vis', '+') +
+        '<label style="font-size:11px;"><input type="checkbox" id="cl-aa-static"> static にする</label>' +
+        P.fieldHtml('名前', 'cl-aa-name', '', '例: count') +
+        P.fieldHtml('型', 'cl-aa-type', '', '例: int') +
         P.primaryButtonHtml('cl-aa-go', '追加');
+      _bindVisToggle(propsEl, 'cl-aa-vis');
       P.bindEvent('cl-aa-go', 'click', function() {
         var vis = document.getElementById('cl-aa-vis').value;
         var stat = document.getElementById('cl-aa-static').checked;
@@ -1410,18 +1537,14 @@ window.MA.modules.plantumlClass = (function() {
     P.bindEvent('cl-add-method', 'click', function() {
       document.getElementById('cl-add-method-form').style.display = 'block';
       document.getElementById('cl-add-method-form').innerHTML =
-        P.selectFieldHtml('Visibility', 'cl-am-vis', [
-          { value: '+', label: '+ public', selected: true },
-          { value: '-', label: '- private' },
-          { value: '#', label: '# protected' },
-          { value: '~', label: '~ package' },
-        ]) +
-        '<label style="font-size:11px;"><input type="checkbox" id="cl-am-static"> static</label>' +
-        '<label style="font-size:11px;"><input type="checkbox" id="cl-am-abstract"> abstract</label>' +
-        P.fieldHtml('Name', 'cl-am-name', '', '例: login') +
-        P.fieldHtml('Params', 'cl-am-params', '', '例: a : int, b : str') +
-        P.fieldHtml('Return type', 'cl-am-ret', '', '例: void') +
+        _visToggleHtml('cl-am-vis', '+') +
+        '<label style="font-size:11px;"><input type="checkbox" id="cl-am-static"> static にする</label>' +
+        '<label style="font-size:11px;"><input type="checkbox" id="cl-am-abstract"> abstract にする</label>' +
+        P.fieldHtml('名前', 'cl-am-name', '', '例: login') +
+        P.fieldHtml('引数', 'cl-am-params', '', '例: a : int, b : str') +
+        P.fieldHtml('戻り値の型', 'cl-am-ret', '', '例: void') +
         P.primaryButtonHtml('cl-am-go', '追加');
+      _bindVisToggle(propsEl, 'cl-am-vis');
       P.bindEvent('cl-am-go', 'click', function() {
         var vis = document.getElementById('cl-am-vis').value;
         var stat = document.getElementById('cl-am-static').checked;
@@ -1958,6 +2081,8 @@ window.MA.modules.plantumlClass = (function() {
     updateRelation: updateRelation,
     updateNote: updateNote,
     deleteNote: deleteNote,
+    ensureBlock: ensureBlock,
+    changeKind: changeKind,
     addAttribute: addAttribute,
     addMethod: addMethod,
     addEnumValue: addEnumValue,
