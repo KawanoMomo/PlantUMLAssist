@@ -128,6 +128,75 @@ describe('candidates', function() {
   });
 });
 
+// BLK-primary-20260907-0803-wish: 複製した図に元の系統の名前が残ったまま
+// 提出されるのを、確定の前に機械的に止める。
+var SEQ_TPL = [
+  '@startuml',
+  'title SPI 転送',
+  'participant Spi_Driver',
+  'participant "共通ログ" as CommonLog',
+  'database Spi_Buffer',
+  'Spi_Driver -> Spi_Buffer : write',
+  'Spi_Driver -> CommonLog : trace',
+  '@enduml',
+].join('\n');
+
+describe('declaredNames', function() {
+  test('宣言行の名前を出現順に拾う (as があれば別名)', function() {
+    expect(TN.declaredNames(SEQ_TPL)).toEqual(['Spi_Driver', 'CommonLog', 'Spi_Buffer']);
+  });
+
+  test('矢印行だけの名前は宣言ではないので拾わない', function() {
+    expect(TN.declaredNames('@startuml\nA -> B : x\n@enduml')).toEqual([]);
+  });
+
+  test('同じ名前を二重に数えない', function() {
+    expect(TN.declaredNames('state S\nstate S')).toEqual(['S']);
+  });
+});
+
+describe('remainingNames', function() {
+  test('1 語替えただけでは残る名前を挙げる', function() {
+    var out = TN.instantiate(SEQ_TPL, 'Spi', 'Adc');
+    expect(TN.remainingNames(SEQ_TPL, out)).toEqual(['CommonLog']);
+  });
+
+  test('全部替われば残りなし', function() {
+    var out = TN.instantiateAll(SEQ_TPL, [
+      { from: 'Spi', to: 'Adc' },
+      { from: 'CommonLog', to: 'AdcLog' },
+    ]);
+    expect(TN.remainingNames(SEQ_TPL, out)).toEqual([]);
+  });
+
+  test('何も替えなければ宣言名が全部残る', function() {
+    expect(TN.remainingNames(SEQ_TPL, SEQ_TPL).length).toBe(3);
+  });
+});
+
+describe('instantiateAll', function() {
+  test('組を順に当てる', function() {
+    var out = TN.instantiateAll(SEQ_TPL, [
+      { from: 'Spi', to: 'Adc' },
+      { from: 'CommonLog', to: 'AdcLog' },
+    ]);
+    expect(out).toContain('participant Adc_Driver');
+    expect(out).toContain('as AdcLog');
+    expect(out).toContain('title ADC 転送');
+    expect(out).not.toContain('Spi');
+  });
+
+  test('置換先が空の組は飛ばす', function() {
+    expect(TN.instantiateAll(SEQ_TPL, [{ from: 'Spi', to: '' }])).toBe(SEQ_TPL);
+    expect(TN.instantiateAll(SEQ_TPL, [])).toBe(SEQ_TPL);
+  });
+
+  test('行数は変わらない', function() {
+    var out = TN.instantiateAll(SEQ_TPL, [{ from: 'Spi', to: 'Adc' }]);
+    expect(out.split('\n').length).toBe(SEQ_TPL.split('\n').length);
+  });
+});
+
 describe('suggestName', function() {
   test('元の名前の中の語を置き換える', function() {
     expect(TN.suggestName('uart-driver.puml', 'Uart', 'Gpio')).toBe('gpio-driver');

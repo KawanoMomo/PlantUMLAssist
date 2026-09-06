@@ -1862,6 +1862,84 @@ function setupTemplateNew() {
     });
   }
 
+  // BLK-primary-20260907-0803-wish: 1 語目の置換のあとに元の系統の名前が
+  // 残っていたら、それを片付けるまで確定させない。今までは複製した図に
+  // Spi_Driver が残ったまま提出され、同じ指摘をレビューで何度も受けていた。
+  // 残った名前ごとに「新しい名前」を入れるか、「そのままで良い」を
+  // 明示的に選ぶかのどちらかを必ず通す。
+  var leftovers = [];      // [{ name }] 1 語目のあとに残っている宣言名
+
+  // 追加の置換の組 (残った名前 → 新しい名前)。UI の入力から読む。
+  function extraPairs() {
+    return leftovers.map(function(lo) {
+      var el = document.querySelector('[data-remaining-input="' + lo.name + '"]');
+      return { from: lo.name, to: el ? el.value.trim() : '' };
+    }).filter(function(p) { return p.to; });
+  }
+
+  function isKept(name) {
+    var el = document.querySelector('[data-remaining-keep="' + name + '"]');
+    return !!(el && el.checked);
+  }
+
+  // 未処理 (新しい名前も「そのままで良い」も無い) の残り名。
+  function unresolved() {
+    return leftovers.filter(function(lo) {
+      var el = document.querySelector('[data-remaining-input="' + lo.name + '"]');
+      return !(el && el.value.trim()) && !isKept(lo.name);
+    });
+  }
+
+  function allPairs() {
+    var from = (document.getElementById('tpl-from') || {}).value.trim();
+    var to = (document.getElementById('tpl-to') || {}).value.trim();
+    return [{ from: from, to: to }].concat(extraPairs());
+  }
+
+  // 残り名の一覧を作り直す。1 語目の置換が変わったときだけ呼ぶ
+  // (入力のたびに作り直すと打っている最中にフォーカスが飛ぶため)。
+  function rebuildRemaining() {
+    var tpl = currentTemplate();
+    var box = document.getElementById('tpl-remaining');
+    var head = document.getElementById('tpl-remaining-head');
+    if (!box || !head) return;
+    leftovers = [];
+    if (tpl) {
+      var from = (document.getElementById('tpl-from') || {}).value.trim();
+      var to = (document.getElementById('tpl-to') || {}).value.trim();
+      var first = (from && to) ? TN.instantiate(tpl.dsl, from, to) : tpl.dsl;
+      leftovers = TN.remainingNames(tpl.dsl, first).map(function(n) { return { name: n }; });
+    }
+    head.setAttribute('data-remaining', String(leftovers.length));
+    if (!leftovers.length) {
+      head.textContent = '元の系統の部品名は残っていません';
+      box.innerHTML = '';
+      return;
+    }
+    head.textContent = 'まだ元の名前のままの部品が ' + leftovers.length
+      + ' 件あります。新しい名前を入れるか「このままで良い」を選んでください';
+    var html = '';
+    leftovers.forEach(function(lo) {
+      html += '<div class="tpl-remaining-row" style="display:flex;align-items:center;gap:8px;'
+        + 'padding:3px 4px;border-bottom:1px solid var(--border);">'
+        + '<span style="font-family:var(--font-mono);font-size:11px;color:var(--accent-orange);'
+        + 'min-width:150px;">' + esc(lo.name) + '</span>'
+        + '<input data-remaining-input="' + esc(lo.name) + '" autocomplete="off" spellcheck="false" '
+        + 'placeholder="新しい名前" style="' + FIELD + 'flex:1;">'
+        + '<label style="font-size:11px;color:var(--text-secondary);white-space:nowrap;">'
+        + '<input type="checkbox" data-remaining-keep="' + esc(lo.name) + '" style="width:auto;"> '
+        + 'このままで良い</label>'
+        + '</div>';
+    });
+    box.innerHTML = html;
+    Array.prototype.forEach.call(box.querySelectorAll('[data-remaining-input]'), function(el) {
+      el.addEventListener('input', updatePreview);
+    });
+    Array.prototype.forEach.call(box.querySelectorAll('[data-remaining-keep]'), function(el) {
+      el.addEventListener('change', updatePreview);
+    });
+  }
+
   function updatePreview() {
     var tpl = currentTemplate();
     var fromEl = document.getElementById('tpl-from');
@@ -1870,6 +1948,7 @@ function setupTemplateNew() {
     var preview = document.getElementById('tpl-preview');
     var summary = document.getElementById('tpl-summary');
     var createBtn = document.getElementById('btn-tpl-create');
+    var blocked = document.getElementById('tpl-blocked');
     if (!fromEl || !toEl || !preview || !summary || !createBtn) return;
 
     if (!tpl) {
@@ -1881,7 +1960,15 @@ function setupTemplateNew() {
     }
     var from = fromEl.value.trim();
     var to = toEl.value.trim();
-    var rows = (from && to) ? TN.previewLines(tpl.dsl, from, to) : [];
+    var result = TN.instantiateAll(tpl.dsl, allPairs());
+    var rows = [];
+    var beforeLines = tpl.dsl.split('\n');
+    var afterLines = result.split('\n');
+    for (var i = 0; i < beforeLines.length; i++) {
+      if (beforeLines[i] !== afterLines[i]) {
+        rows.push({ line: i + 1, before: beforeLines[i], after: afterLines[i] });
+      }
+    }
     summary.setAttribute('data-changed', String(rows.length));
     if (!from || !to) {
       summary.textContent = '置換元と置換先を入れると、変わる行がここに出ます';
@@ -1891,7 +1978,16 @@ function setupTemplateNew() {
       summary.textContent = rows.length + ' 行が変わります (全 '
         + tpl.dsl.split('\n').length + ' 行)';
     }
-    createBtn.disabled = !(from && to && rows.length > 0 && (nameEl ? nameEl.value.trim() : ''));
+    var left = unresolved();
+    if (blocked) {
+      blocked.setAttribute('data-unresolved', String(left.length));
+      blocked.textContent = left.length
+        ? '元の名前が残っています: ' + left.map(function(l) { return l.name; }).join(', ')
+        : '';
+      blocked.style.display = left.length ? 'block' : 'none';
+    }
+    createBtn.disabled = !(from && to && rows.length > 0
+      && (nameEl ? nameEl.value.trim() : '') && left.length === 0);
 
     var html = '';
     rows.forEach(function(r) {
@@ -1947,6 +2043,7 @@ function setupTemplateNew() {
         }
       }
       syncName();
+      rebuildRemaining();
       updatePreview();
     });
   }
@@ -1957,7 +2054,8 @@ function setupTemplateNew() {
     var to = (document.getElementById('tpl-to') || {}).value.trim();
     var name = (document.getElementById('tpl-name') || {}).value.trim();
     if (!tpl || !from || !to || !name) return;
-    var dsl = TN.instantiate(tpl.dsl, from, to);
+    if (unresolved().length) return;   // 元の名前が残ったままの図は作らせない
+    var dsl = TN.instantiateAll(tpl.dsl, allPairs());
     saveActiveDoc();
     var detected = window.MA.workspace.detectType(dsl);
     window.MA.workspace.open({
@@ -1987,18 +2085,24 @@ function setupTemplateNew() {
       + '大小の綴りは族ごと置換します (Uart → Gpio なら UART → GPIO、uart → gpio も同時)。</div>'
       + '<label style="' + LABEL + '" for="tpl-name">新しい図の名前</label>'
       + '<input id="tpl-name" autocomplete="off" spellcheck="false" style="' + FIELD + '">'
+      + '<label style="' + LABEL + '">元の系統の部品名 (残っていると作れません)</label>'
+      + '<div id="tpl-remaining-head" style="font-size:11px;color:var(--text-secondary);" '
+      + 'data-remaining="0"></div>'
+      + '<div id="tpl-remaining" style="max-height:22vh;overflow-y:auto;margin-top:4px;"></div>'
       + '<label style="' + LABEL + '">置換の結果 (確定前に確認できます)</label>'
       + '<div id="tpl-summary" style="font-size:11px;color:var(--text-secondary);" data-changed="0"></div>'
-      + '<div id="tpl-preview" style="max-height:34vh;overflow-y:auto;margin-top:4px;'
+      + '<div id="tpl-preview" style="max-height:28vh;overflow-y:auto;margin-top:4px;'
       + 'border:1px solid var(--border);border-radius:3px;"></div>'
+      + '<div id="tpl-blocked" style="display:none;font-size:11px;color:var(--accent-orange);'
+      + 'margin-top:6px;" data-unresolved="0"></div>'
       + '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">'
       + '<button id="btn-tpl-create" style="' + BTN + '" disabled>この内容で作る</button>'
       + '<button id="btn-tpl-cancel" style="' + BTN + '">キャンセル</button>'
       + '</div>';
 
     document.getElementById('tpl-source').addEventListener('change', onSourceChange);
-    document.getElementById('tpl-from').addEventListener('input', function() { syncName(); updatePreview(); });
-    document.getElementById('tpl-to').addEventListener('input', function() { syncName(); updatePreview(); });
+    document.getElementById('tpl-from').addEventListener('input', function() { syncName(); rebuildRemaining(); updatePreview(); });
+    document.getElementById('tpl-to').addEventListener('input', function() { syncName(); rebuildRemaining(); updatePreview(); });
     document.getElementById('tpl-name').addEventListener('input', function() { nameTouched = true; updatePreview(); });
     document.getElementById('btn-tpl-create').addEventListener('click', create);
     document.getElementById('btn-tpl-cancel').addEventListener('click', close);
