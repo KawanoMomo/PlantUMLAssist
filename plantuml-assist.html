@@ -562,16 +562,98 @@ html, body {
 }
 
 #editor-pane-header {
-  padding: 5px 10px;
+  display: flex;
+  gap: 2px;
+  padding: 0 4px;
   font-size: 11px;
   color: var(--text-secondary);
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   font-family: var(--font-mono);
-  text-transform: uppercase;
   letter-spacing: 0.5px;
 }
+
+/* DSL / 構造 のタブ */
+.editor-tab {
+  padding: 5px 10px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+.editor-tab:hover { color: var(--text-primary); }
+.editor-tab.active { color: var(--text-primary); border-bottom-color: var(--accent); }
+
+/* 構造 / Outline ビュー */
+#outline-pane {
+  display: none;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 6px;
+  background: var(--bg-primary);
+}
+#outline-pane.open { display: flex; }
+#outline-filter {
+  width: 100%;
+  padding: 4px 6px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  outline: none;
+  flex-shrink: 0;
+}
+#outline-filter:focus { border-color: var(--accent); }
+#outline-list {
+  flex: 1;
+  overflow: auto;
+  margin-top: 6px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg-secondary);
+}
+#outline-list .outline-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+#outline-list .outline-row:hover { background: var(--bg-primary); }
+#outline-list .outline-row.selected { background: var(--bg-primary); outline: 1px solid var(--accent); }
+#outline-list .outline-no { color: var(--text-secondary); min-width: 22px; text-align: right; flex-shrink: 0; }
+#outline-list .outline-kind {
+  color: var(--text-secondary);
+  min-width: 62px;
+  flex-shrink: 0;
+  text-transform: uppercase;
+  font-size: 9px;
+  letter-spacing: 0.5px;
+}
+#outline-list .outline-label { color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; }
+#outline-list .outline-detail { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; }
+#outline-list .outline-empty { padding: 8px; color: var(--text-secondary); font-size: 10px; }
+#outline-list .outline-row[data-outline-kind="relation"] .outline-kind { color: var(--accent); }
+#outline-list .outline-row[data-outline-kind="block"] .outline-label { font-style: italic; }
+#outline-summary {
+  margin-top: 6px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+#outline-summary.ng { color: var(--accent-orange); }
 
 #editor-wrap {
   display: flex;
@@ -989,10 +1071,20 @@ html, body {
           <button id="btn-lines-close">閉じる</button>
         </div>
       </div>
-      <div id="editor-pane-header">Editor</div>
+      <!-- design 1a: エディタペインは「DSL」と「構造 / Outline」の 2 タブ -->
+      <div id="editor-pane-header" role="tablist">
+        <button class="editor-tab active" id="btn-editor-tab-dsl" role="tab" aria-selected="true" data-editor-tab="dsl">DSL</button>
+        <button class="editor-tab" id="btn-editor-tab-outline" role="tab" aria-selected="false" data-editor-tab="outline" title="図の要素と関係を一覧で見る">構造 / Outline</button>
+      </div>
       <div id="editor-wrap">
         <div id="line-numbers">1</div>
         <textarea id="editor" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
+      </div>
+      <!-- 構造ビュー。行を選ぶと DSL タブに戻ってその行へ飛ぶ -->
+      <div id="outline-pane">
+        <input id="outline-filter" autocomplete="off" spellcheck="false" placeholder="要素・関係を絞り込む">
+        <div id="outline-list" role="tree"></div>
+        <div id="outline-summary"></div>
       </div>
     </div>
 
@@ -1147,6 +1239,7 @@ html, body {
 <script src="src/core/command-palette.js"></script>
 <script src="src/core/diagram-rail.js"></script>
 <script src="src/core/line-edit.js"></script>
+<script src="src/core/outline.js"></script>
 <script src="src/core/state-branch.js"></script>
 <script src="src/core/state-transition.js"></script>
 <script src="src/core/reuse-picker.js"></script>
