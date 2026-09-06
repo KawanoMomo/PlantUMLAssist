@@ -1033,6 +1033,8 @@ html, body {
         <button class="tab-tool" id="btn-tab-rename" title="開いている図をまたいで部品名を一括置換">⇄ 一括置換</button>
         <button class="tab-tool" id="btn-tab-audit" title="開いている図の部品名を突き合わせて表記揺れを探す">🔍 名前突合</button>
         <button class="tab-tool" id="btn-tab-lines" title="この図の 1 行だけを選んで書き換え・挿入・削除する">✎ 行編集</button>
+        <!-- BLK-junior-20260907-0803-wish: 既存の図をテンプレートに新しい図を作る -->
+        <button class="tab-tool" id="btn-tab-template" title="既存の図をテンプレートにして、部品名を替えた新しい図を作る">⧉ テンプレート</button>
       </div>
       <div id="folder-panel"></div>
       <!-- 開いている図をまたいで部品名を一括置換する -->
@@ -1140,6 +1142,11 @@ html, body {
   </div>
 </div>
 
+<!-- テンプレートから新規作成 (BLK-junior-20260907-0803-wish) -->
+<div id="tpl-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+  <div id="tpl-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:600px;max-width:820px;max-height:80vh;overflow-y:auto;"></div>
+</div>
+
 <div id="seq-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="seq-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:400px;max-width:600px;"></div>
 </div>
@@ -1236,6 +1243,7 @@ html, body {
 <script src="src/core/bulk-export.js"></script>
 <script src="src/core/diagram-settings.js"></script>
 <script src="src/core/name-audit.js"></script>
+<script src="src/core/template-new.js"></script>
 <script src="src/core/command-palette.js"></script>
 <script src="src/core/diagram-rail.js"></script>
 <script src="src/core/line-edit.js"></script>

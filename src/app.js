@@ -1123,6 +1123,7 @@ function init() {
 
   setupTabs();
   setupBulkRename();
+  setupTemplateNew();
   setupNameAudit();
   setupLineEdit();
   setupOutline();
@@ -1791,6 +1792,244 @@ function applyBulkRename() {
   var activeId = window.MA.workspace.getActiveId();
   if (!allDocs) docs = docs.filter(function(d) { return d.id === activeId; });
   return renameAcrossDocs(from, to, docs);
+}
+
+// ── テンプレートから新規作成 ───────────────────────────────────────────────
+// BLK-junior-20260907-0803-wish: 同じ構成の図をもう 1 枚作るとき、今までは
+// 元の図を開いて構造を覚え、新しいタブでゼロから打ち直していた (模写)。
+// 「元の図 + 置換元語 + 置換先語」を選ぶだけで新しいタブが出来るようにする。
+// 置換結果は確定前に行単位で見せるので、写し間違いが起きる余地がない。
+function setupTemplateNew() {
+  var btn = document.getElementById('btn-tab-template');
+  var modal = document.getElementById('tpl-modal');
+  var content = document.getElementById('tpl-modal-content');
+  var TN = window.MA.templateNew;
+  if (!btn || !modal || !content || !TN) return;
+
+  var esc = window.MA.htmlUtils.escHtml;
+  var docs = [];          // [{ id, name, dsl }] 開いているタブ
+  var files = [];         // 保存フォルダのファイル名
+  var fileCache = {};     // name → dsl (読み込み済み)
+
+  var LABEL = 'display:block;font-size:10px;color:var(--accent);font-weight:bold;margin:10px 0 3px 0;';
+  var FIELD = 'width:100%;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);'
+    + 'font-family:var(--font-mono);font-size:12px;padding:4px 6px;border-radius:3px;';
+  var BTN = 'background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);'
+    + 'border-radius:3px;cursor:pointer;padding:4px 12px;font-size:12px;';
+
+  function close() { modal.style.display = 'none'; }
+
+  function templateOptions() {
+    var html = '';
+    docs.forEach(function(d) {
+      html += '<option value="doc:' + esc(d.id) + '">' + esc(d.name) + ' (開いている図)</option>';
+    });
+    files.forEach(function(name) {
+      html += '<option value="file:' + esc(name) + '">' + esc(name) + ' (保存フォルダ)</option>';
+    });
+    return html;
+  }
+
+  // 選ばれているテンプレートの DSL。フォルダのファイルはまだ読んでいない
+  // ことがあるので null を返し、呼び出し側が読み込んでからやり直す。
+  function currentTemplate() {
+    var sel = document.getElementById('tpl-source');
+    var v = sel ? sel.value : '';
+    if (v.indexOf('doc:') === 0) {
+      var id = v.slice(4);
+      for (var i = 0; i < docs.length; i++) {
+        if (String(docs[i].id) === id) return { name: docs[i].name, dsl: docs[i].dsl };
+      }
+      return null;
+    }
+    if (v.indexOf('file:') === 0) {
+      var name = v.slice(5);
+      if (fileCache[name] == null) return null;
+      return { name: name, dsl: fileCache[name] };
+    }
+    return null;
+  }
+
+  function fillCandidates(dsl) {
+    var dl = document.getElementById('tpl-candidates');
+    if (!dl) return;
+    dl.textContent = '';
+    TN.candidates(dsl).slice(0, 20).forEach(function(c) {
+      var o = document.createElement('option');
+      o.value = c.name;
+      o.label = c.name + ' (' + c.count + ' 箇所)';
+      dl.appendChild(o);
+    });
+  }
+
+  function updatePreview() {
+    var tpl = currentTemplate();
+    var fromEl = document.getElementById('tpl-from');
+    var toEl = document.getElementById('tpl-to');
+    var nameEl = document.getElementById('tpl-name');
+    var preview = document.getElementById('tpl-preview');
+    var summary = document.getElementById('tpl-summary');
+    var createBtn = document.getElementById('btn-tpl-create');
+    if (!fromEl || !toEl || !preview || !summary || !createBtn) return;
+
+    if (!tpl) {
+      summary.textContent = 'テンプレートを読み込んでいます…';
+      summary.setAttribute('data-changed', '0');
+      preview.textContent = '';
+      createBtn.disabled = true;
+      return;
+    }
+    var from = fromEl.value.trim();
+    var to = toEl.value.trim();
+    var rows = (from && to) ? TN.previewLines(tpl.dsl, from, to) : [];
+    summary.setAttribute('data-changed', String(rows.length));
+    if (!from || !to) {
+      summary.textContent = '置換元と置換先を入れると、変わる行がここに出ます';
+    } else if (rows.length === 0) {
+      summary.textContent = '「' + from + '」はこのテンプレートに出てきません';
+    } else {
+      summary.textContent = rows.length + ' 行が変わります (全 '
+        + tpl.dsl.split('\n').length + ' 行)';
+    }
+    createBtn.disabled = !(from && to && rows.length > 0 && (nameEl ? nameEl.value.trim() : ''));
+
+    var html = '';
+    rows.forEach(function(r) {
+      html += '<div class="tpl-row" data-line="' + r.line + '" style="font-family:var(--font-mono);font-size:11px;'
+        + 'padding:2px 4px;border-bottom:1px solid var(--border);">'
+        + '<span style="color:var(--text-secondary);">L' + r.line + '</span> '
+        + '<span style="color:var(--accent-red);">' + esc(r.before) + '</span>'
+        + '<span style="color:var(--text-secondary);"> → </span>'
+        + '<span style="color:var(--accent-green);">' + esc(r.after) + '</span></div>';
+    });
+    preview.innerHTML = html;
+  }
+
+  // 置換先を打った時点で、新しい図の名前も自動で埋める
+  // (利用者が名前欄を自分で触っていたら上書きしない)。
+  var nameTouched = false;
+
+  function syncName() {
+    var nameEl = document.getElementById('tpl-name');
+    var tpl = currentTemplate();
+    if (!nameEl || nameTouched || !tpl) return;
+    var from = (document.getElementById('tpl-from') || {}).value || '';
+    var to = (document.getElementById('tpl-to') || {}).value || '';
+    if (!to) { nameEl.value = ''; return; }
+    nameEl.value = TN.suggestName(tpl.name, from, to);
+  }
+
+  // フォルダのファイルは選ばれたときに初めて読む (一覧を開くたびに全部
+  // 読みに行くと枚数だけ待たされるため)。
+  function ensureTemplateLoaded(then) {
+    var sel = document.getElementById('tpl-source');
+    var v = sel ? sel.value : '';
+    if (v.indexOf('file:') !== 0) { then(); return; }
+    var name = v.slice(5);
+    if (fileCache[name] != null) { then(); return; }
+    window.MA.workspace.loadFile(name, _wsFileDir()).then(function(text) {
+      fileCache[name] = text == null ? '' : text;
+      then();
+    });
+  }
+
+  function onSourceChange() {
+    ensureTemplateLoaded(function() {
+      var tpl = currentTemplate();
+      if (tpl) {
+        fillCandidates(tpl.dsl);
+        // 置換元が空なら、いちばん多く出てくる語を入れておく
+        // (入力ゼロで押せる状態から始める)。
+        var fromEl = document.getElementById('tpl-from');
+        if (fromEl && !fromEl.value) {
+          var cands = TN.candidates(tpl.dsl);
+          if (cands.length && cands[0].count > 1) fromEl.value = cands[0].name;
+        }
+      }
+      syncName();
+      updatePreview();
+    });
+  }
+
+  function create() {
+    var tpl = currentTemplate();
+    var from = (document.getElementById('tpl-from') || {}).value.trim();
+    var to = (document.getElementById('tpl-to') || {}).value.trim();
+    var name = (document.getElementById('tpl-name') || {}).value.trim();
+    if (!tpl || !from || !to || !name) return;
+    var dsl = TN.instantiate(tpl.dsl, from, to);
+    saveActiveDoc();
+    var detected = window.MA.workspace.detectType(dsl);
+    window.MA.workspace.open({
+      name: name,
+      dsl: dsl,
+      diagramType: (detected && modules[detected]) ? detected : currentDiagramType,
+    });
+    applyActiveDoc();
+    close();
+  }
+
+  function render() {
+    content.innerHTML =
+      '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">テンプレートから新規作成</h3>'
+      + '<div style="font-size:11px;color:var(--text-secondary);">'
+      + '既にある図と同じ構成のまま、部品名だけを替えた図を新しいタブに作ります。</div>'
+      + '<label style="' + LABEL + '" for="tpl-source">テンプレートにする図</label>'
+      + '<select id="tpl-source" style="' + FIELD + '">' + templateOptions() + '</select>'
+      + '<div style="display:flex;gap:10px;">'
+      + '<div style="flex:1;"><label style="' + LABEL + '" for="tpl-from">置換元 (元の部品名)</label>'
+      + '<input id="tpl-from" list="tpl-candidates" autocomplete="off" spellcheck="false" '
+      + 'placeholder="Uart" style="' + FIELD + '"><datalist id="tpl-candidates"></datalist></div>'
+      + '<div style="flex:1;"><label style="' + LABEL + '" for="tpl-to">置換先 (作る部品名)</label>'
+      + '<input id="tpl-to" autocomplete="off" spellcheck="false" placeholder="Gpio" style="' + FIELD + '"></div>'
+      + '</div>'
+      + '<div style="font-size:10px;color:var(--text-secondary);margin-top:3px;">'
+      + '大小の綴りは族ごと置換します (Uart → Gpio なら UART → GPIO、uart → gpio も同時)。</div>'
+      + '<label style="' + LABEL + '" for="tpl-name">新しい図の名前</label>'
+      + '<input id="tpl-name" autocomplete="off" spellcheck="false" style="' + FIELD + '">'
+      + '<label style="' + LABEL + '">置換の結果 (確定前に確認できます)</label>'
+      + '<div id="tpl-summary" style="font-size:11px;color:var(--text-secondary);" data-changed="0"></div>'
+      + '<div id="tpl-preview" style="max-height:34vh;overflow-y:auto;margin-top:4px;'
+      + 'border:1px solid var(--border);border-radius:3px;"></div>'
+      + '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">'
+      + '<button id="btn-tpl-create" style="' + BTN + '" disabled>この内容で作る</button>'
+      + '<button id="btn-tpl-cancel" style="' + BTN + '">キャンセル</button>'
+      + '</div>';
+
+    document.getElementById('tpl-source').addEventListener('change', onSourceChange);
+    document.getElementById('tpl-from').addEventListener('input', function() { syncName(); updatePreview(); });
+    document.getElementById('tpl-to').addEventListener('input', function() { syncName(); updatePreview(); });
+    document.getElementById('tpl-name').addEventListener('input', function() { nameTouched = true; updatePreview(); });
+    document.getElementById('btn-tpl-create').addEventListener('click', create);
+    document.getElementById('btn-tpl-cancel').addEventListener('click', close);
+  }
+
+  btn.addEventListener('click', function() {
+    saveActiveDoc();
+    docs = window.MA.workspace ? window.MA.workspace.list() : [];
+    files = [];
+    fileCache = {};
+    nameTouched = false;
+    render();
+    modal.style.display = 'flex';
+    onSourceChange();
+    // 保存フォルダの図もテンプレートに選べる (先輩が保存した図が主な出所)。
+    window.MA.workspace.listFiles(_wsFileDir()).then(function(list) {
+      files = (list || []).filter(function(n) { return n; });
+      if (!files.length || modal.style.display === 'none') return;
+      var sel = document.getElementById('tpl-source');
+      var keep = sel ? sel.value : '';
+      if (sel) {
+        sel.innerHTML = templateOptions();
+        if (keep) sel.value = keep;
+      }
+    });
+  });
+
+  modal.addEventListener('click', function(ev) { if (ev.target === modal) close(); });
+  document.addEventListener('keydown', function(ev) {
+    if (ev.key === 'Escape' && modal.style.display !== 'none') close();
+  });
 }
 
 function setupBulkRename() {
