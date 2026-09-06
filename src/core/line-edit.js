@@ -114,6 +114,33 @@ window.MA.lineEdit = (function() {
   function insertAfter(dsl, index, text) { return _insert(dsl, index, text, false); }
   function insertBefore(dsl, index, text) { return _insert(dsl, index, text, true); }
 
+  // index の行を delta 行だけ上下に動かす。既にある 2 行の順序を入れ替えるのに
+  // 「削除して末尾に足し直す」しか無いと、途中に戻す手が無く全文を打ち直すことに
+  // なるため、隣の行との入れ替えとして 1 手で扱えるようにする。
+  // 端を越える移動と不正な index は何もしない (元の DSL と index をそのまま返す)。
+  function moveLine(dsl, index, delta) {
+    var lines = _split(dsl);
+    var d = typeof delta === 'number' && isFinite(delta) ? Math.round(delta) : 0;
+    var to = index + d;
+    if (!_validIndex(lines, index) || d === 0 || !_validIndex(lines, to)) {
+      return { text: _s(dsl), index: index };
+    }
+    // 動かす行と、その行が入る先の字下げをそろえる。alt ブロックの内と外を
+    // またいで動かしたときに字下げだけが取り残されないようにする。
+    // 改行コードは行ではなく位置に付いている (最終行だけ CR が無いなど) ので、
+    // 並べ替えたあとに元の位置の CR を貼り直す。
+    var crs = lines.map(_cr);
+    var moving = _strip(lines[index]);
+    var target = _strip(lines[to]);
+    var body = moving.replace(/^[ \t]*/, '');
+    lines.splice(index, 1);
+    lines.splice(to, 0, indentOf(target) + body);
+    return {
+      text: lines.map(function(l, i) { return _strip(l) + crs[i]; }).join('\n'),
+      index: to,
+    };
+  }
+
   function removeLine(dsl, index) {
     var lines = _split(dsl);
     if (!_validIndex(lines, index)) return _s(dsl);
@@ -136,6 +163,7 @@ window.MA.lineEdit = (function() {
     replaceLine: replaceLine,
     insertAfter: insertAfter,
     insertBefore: insertBefore,
+    moveLine: moveLine,
     removeLine: removeLine,
     summarize: summarize,
   };
