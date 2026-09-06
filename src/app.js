@@ -186,7 +186,7 @@ function init() {
     while (hoverEl.firstChild) hoverEl.removeChild(hoverEl.firstChild);
   }
 
-  function drawHoverGuide(y, rectX, rectWidth) {
+  function drawHoverGuide(y, rectX, rectWidth, labelText) {
     clearHoverGuide();
     if (!overlayElForHover) return;
     var w = parseFloat(overlayElForHover.getAttribute('width')) || 800;
@@ -211,13 +211,24 @@ function init() {
     text.setAttribute('x', x1 + 4);
     text.setAttribute('y', y - 3);
     text.setAttribute('class', 'hover-label');
-    text.textContent = '+ ここに挿入';
+    // BLK-primary-20260907-0356: ガイド線にも「DSL の何行目に入るか」を出す。
+    // 解決できなかった場合 (labelText 無し) は従来どおりの汎用文言。
+    text.textContent = labelText || '+ ここに挿入';
     hoverEl.appendChild(text);
     hoverEl.setAttribute('width', overlayElForHover.getAttribute('width') || w);
     hoverEl.setAttribute('height', overlayElForHover.getAttribute('height') || h);
     var vb = overlayElForHover.getAttribute('viewBox');
     if (vb) hoverEl.setAttribute('viewBox', vb);
     hoverEl.style.transform = overlayElForHover.style.transform;
+  }
+
+  // ガイド線のラベル。挿入先の DSL 行番号を module に計算させる (module が
+  // insertTargetLine を持たない場合は汎用文言に落ちる)。
+  function _insertGuideLabel(res) {
+    if (!res || !currentModule || typeof currentModule.insertTargetLine !== 'function') return null;
+    var target = currentModule.insertTargetLine(res.line, res.position);
+    if (target === null || typeof target === 'undefined') return null;
+    return '+ DSL ' + target + ' 行目に挿入';
   }
 
   // 選択中は hover-insert ガイドと挿入 popup を両方抑制する。
@@ -265,7 +276,7 @@ function init() {
       if (resolver) {
         var res = resolver(overlayElForHover, x, y);
         if (res) {
-          drawHoverGuide(y, res.rectX, res.rectWidth);
+          drawHoverGuide(y, res.rectX, res.rectWidth, _insertGuideLabel(res));
           return;
         }
       }
@@ -307,12 +318,21 @@ function init() {
       var y = (e.clientY - rect.top) / z;
       var res = resolver(overlayElForHover, x, y);
       if (!res) return;
-      var insertKind = (currentModule && currentModule.defaultInsertKind) || 'message';
-      currentModule.showInsertForm({
+      var insertCtx = {
         getMmdText: function() { return mmdText; },
         setMmdText: function(s) { mmdText = s; suppressSync = true; editorEl.value = s; suppressSync = false; },
         onUpdate: function() { scheduleRefresh(); },
-      }, res.line, res.position, insertKind);
+      };
+      // BLK-primary-20260907-0356: insertPicker を持つ module は、まず「何を挿入するか」
+      // (メッセージ/note/alt/loop/activate/その他) のメニューを出す。
+      // 持たない module は従来どおり単一種別のフォームを直接開く。
+      if (moduleHas('insertPicker') && typeof currentModule.showInsertPicker === 'function') {
+        currentModule.showInsertPicker(insertCtx, res.line, res.position);
+        clearHoverGuide();
+        return;
+      }
+      var insertKind = (currentModule && currentModule.defaultInsertKind) || 'message';
+      currentModule.showInsertForm(insertCtx, res.line, res.position, insertKind);
       clearHoverGuide();
     });
   }
