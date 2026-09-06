@@ -168,7 +168,52 @@ window.MA.templateNew = (function() {
     return base ? base + '-' + t : t;
   }
 
+  // ── 残った部品名の検出 (BLK-primary-20260907-0803-wish) ──────────────────
+  // テンプレートを複製したあと、置換しそこねた部品名 (Spi_Driver のような
+  // 元の系統の名前) がそのまま残ると、レビューで毎回同じ指摘を受ける。
+  // 「複製した図に、テンプレートと同じ宣言名がまだ何個残っているか」を
+  // 機械的に出して、確定の前に必ず片付けさせる。
+  var DECL_RE = /^\s*(?:participant|actor|boundary|control|entity|database|collections|queue|abstract\s+class|class|interface|enum|state|component|node|package|folder|rectangle|cloud|storage|usecase)\s+(?:"([^"]+)"\s+as\s+([A-Za-z0-9_][\w.-]*)|"([^"]+)"|([A-Za-z0-9_][\w.-]*))/;
+
+  // 宣言行に出てくる名前 (別名 as があればその別名)。出現順、重複なし。
+  function declaredNames(dsl) {
+    var lines = _s(dsl).split('\n');
+    var seen = {};
+    var out = [];
+    for (var i = 0; i < lines.length; i++) {
+      var m = lines[i].match(DECL_RE);
+      if (!m) continue;
+      var name = m[2] || m[1] || m[3] || m[4];
+      if (!name || seen[name]) continue;
+      seen[name] = true;
+      out.push(name);
+    }
+    return out;
+  }
+
+  // テンプレートと複製後の両方に同じ綴りで残っている宣言名。
+  // ここが空でなければ「元の系統の名前が残ったまま」ということ。
+  function remainingNames(templateDsl, resultDsl) {
+    var after = {};
+    declaredNames(resultDsl).forEach(function(n) { after[n] = true; });
+    return declaredNames(templateDsl).filter(function(n) { return after[n]; });
+  }
+
+  // 置換の組を順に当てる。1 語目のあとに残った名前を個別に直すために使う。
+  // pairs: [{ from, to }]。to が空の組は飛ばす。
+  function instantiateAll(dsl, pairs) {
+    var text = _s(dsl);
+    (pairs || []).forEach(function(p) {
+      if (!p || !p.from || !p.to) return;
+      text = instantiate(text, p.from, p.to);
+    });
+    return text;
+  }
+
   return {
+    declaredNames: declaredNames,
+    remainingNames: remainingNames,
+    instantiateAll: instantiateAll,
     caseVariants: caseVariants,
     instantiate: instantiate,
     previewLines: previewLines,
