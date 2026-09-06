@@ -1156,6 +1156,7 @@ function init() {
   setupNameAudit();
   setupLineEdit();
   setupOutline();
+  setupCompareView();
 
   setZoom(1.0);
   updateLineNumbers();
@@ -2830,6 +2831,105 @@ function gotoOutlineLine(line) {
   if (lineNumbersEl) lineNumbersEl.scrollTop = editorEl.scrollTop;
 }
 
+// ── 参照ペイン (2 枚の図を並べて見比べる) ────────────────────────────────
+// 先輩の図を真似て書くとき、タブを行き来して記憶する往復が要らないように、
+// 別のタブの図を右に出したまま編集を続けられるようにする。
+// 参照側は読むだけ (選択・編集はしない)。スクロールは主プレビューと独立。
+
+var _compareOpen = false;
+var _compareRefId = null;    // 選んでいる参照図の doc id
+var _compareShownDsl = null; // 直近に描いた DSL (同じなら描き直さない)
+
+function _compareDocs() {
+  if (!window.MA.workspace) return [];
+  // 編集中の内容を workspace に載せてから読む (参照側が古い DSL にならない)。
+  saveActiveDoc();
+  try { return window.MA.workspace.list() || []; } catch (e) { return []; }
+}
+
+function toggleCompareView(open) {
+  var pane = document.getElementById('compare-pane');
+  if (!pane) return;
+  _compareOpen = (open == null) ? !_compareOpen : !!open;
+  pane.hidden = !_compareOpen;
+  if (_compareOpen) {
+    _compareShownDsl = null;   // 開き直したら必ず描く
+    renderCompareView();
+  }
+}
+
+// 参照図の選択肢を出し直し、選ばれている図を描く。
+function renderCompareView() {
+  var cv = window.MA.compareView;
+  var sel = document.getElementById('compare-select');
+  var status = document.getElementById('compare-status');
+  var host = document.getElementById('compare-svg');
+  if (!cv || !sel || !host || !_compareOpen) return;
+
+  var docs = _compareDocs();
+  var activeId = window.MA.workspace ? window.MA.workspace.getActiveId() : null;
+  var ref = cv.pick(docs, activeId, _compareRefId);
+  var opts = cv.options(docs, activeId);
+
+  sel.textContent = '';
+  opts.forEach(function(o) {
+    var op = document.createElement('option');
+    op.value = String(o.id);
+    op.textContent = o.name + ' (' + String(o.diagramType || '').replace('plantuml-', '') + ')';
+    if (ref && o.id === ref.id) op.selected = true;
+    sel.appendChild(op);
+  });
+
+  if (!ref) {
+    _compareRefId = null;
+    _compareShownDsl = null;
+    host.textContent = '';
+    if (status) status.textContent = '';
+    var msg = document.createElement('div');
+    msg.id = 'compare-empty';
+    msg.style.cssText = 'font-size:11px;color:var(--text-secondary);';
+    msg.textContent = '並べる図がありません。＋ で 2 枚目のタブを開いてください。';
+    host.appendChild(msg);
+    return;
+  }
+
+  _compareRefId = ref.id;
+  var full = cv.doc(docs, ref.id) || {};
+  var dsl = full.dsl || '';
+  if (dsl === _compareShownDsl) return;   // 中身が変わっていなければ描き直さない
+  _compareShownDsl = dsl;
+  if (status) status.textContent = '描画中…';
+  renderDslToSvg(dsl).then(function(svg) {
+    // 描いている間に参照図が切り替わっていたら捨てる (遅れて届いた結果で上書きしない)
+    if (!_compareOpen || _compareShownDsl !== dsl) return;
+    host.innerHTML = svg;
+    if (status) status.textContent = '参照 (読むだけ)';
+  }).catch(function(err) {
+    if (!_compareOpen || _compareShownDsl !== dsl) return;
+    host.textContent = '';
+    var e = document.createElement('div');
+    e.style.cssText = 'font-size:11px;color:var(--accent-orange);';
+    e.textContent = '描画に失敗: ' + (err && err.message ? err.message : err);
+    host.appendChild(e);
+    if (status) status.textContent = 'エラー';
+  });
+}
+
+function setupCompareView() {
+  var btn = document.getElementById('btn-tab-compare');
+  var sel = document.getElementById('compare-select');
+  var close = document.getElementById('btn-compare-close');
+  if (btn) btn.addEventListener('click', function() { toggleCompareView(); });
+  if (close) close.addEventListener('click', function() { toggleCompareView(false); });
+  if (sel) {
+    sel.addEventListener('change', function() {
+      _compareRefId = sel.value;
+      _compareShownDsl = null;
+      renderCompareView();
+    });
+  }
+}
+
 function setupOutline() {
   var dslBtn = document.getElementById('btn-editor-tab-dsl');
   var outBtn = document.getElementById('btn-editor-tab-outline');
@@ -3033,6 +3133,9 @@ function refresh() {
   // 構造タブを開いたまま DSL が変わったら (エディタ・行編集・一括追加・タブ切替)
   // 一覧も追随させる。開いていないときは組み立てない。
   if (_outlineTab === 'outline') renderOutline();
+  // 参照ペインを開いたままタブを切り替えたら、選択肢と中身を追随させる
+  // (今編集しているタブは参照の候補から外れる)。
+  if (_compareOpen) renderCompareView();
   var detectedType = window.MA.parserUtils.detectDiagramType(mmdText);
   var mod = detectedType ? modules[detectedType] : null;
   if (mod) currentModule = mod;
