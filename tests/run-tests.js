@@ -12,6 +12,7 @@ const sourceFiles = [
   'src/core/workspace.js',
   'src/core/state-branch.js',
   'src/core/class-scaffold.js',
+  'src/core/name-audit.js',
   'src/core/line-resolver.js',
   'src/core/formatter-interface.js',
   'src/core/dsl-updater.js',

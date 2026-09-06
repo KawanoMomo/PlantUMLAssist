@@ -637,6 +637,7 @@ html, body {
         <button class="tab-tool" id="btn-tab-new" title="新しい図を開く">＋</button>
         <button class="tab-tool" id="btn-tab-folder" title="保存フォルダの図を一覧">📂 一覧</button>
         <button class="tab-tool" id="btn-tab-rename" title="開いている図をまたいで部品名を一括置換">⇄ 一括置換</button>
+        <button class="tab-tool" id="btn-tab-audit" title="開いている図の部品名を突き合わせて表記揺れを探す">🔍 名前突合</button>
       </div>
       <div id="folder-panel"></div>
       <!-- 開いている図をまたいで部品名を一括置換する -->
@@ -717,6 +718,9 @@ html, body {
 <div id="cl-sc-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="cl-sc-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:600px;max-width:820px;max-height:80vh;overflow-y:auto;"></div>
 </div>
+<div id="na-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+  <div id="na-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:620px;max-width:900px;max-height:80vh;overflow-y:auto;"></div>
+</div>
 <div id="cfg-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="cfg-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:380px;max-width:520px;">
     <h3 style="margin:0 0 12px 0;">設定</h3>
@@ -785,6 +789,7 @@ html, body {
 <script src="src/core/auto-save.js"></script>
 <script src="src/core/workspace.js"></script>
 <script src="src/core/bulk-rename.js"></script>
+<script src="src/core/name-audit.js"></script>
 <script src="src/core/state-branch.js"></script>
 <script src="src/core/class-scaffold.js"></script>
 <script src="src/core/line-resolver.js"></script>
