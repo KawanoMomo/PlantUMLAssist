@@ -1125,6 +1125,7 @@ function init() {
   setupBulkRename();
   setupNameAudit();
   setupLineEdit();
+  setupOutline();
 
   setZoom(1.0);
   updateLineNumbers();
@@ -2208,6 +2209,126 @@ function setupLineEdit() {
   if (closeBtn) closeBtn.addEventListener('click', closePanel);
 }
 
+// ── 構造 / Outline ─────────────────────────────────────────────────────────
+// design/「PlantUMLAssist - リデザイン案」1a のエディタペインは DSL と
+// 構造 (Outline) の 2 タブ。DSL 全文を目で追わずに図の骨格を掴み、
+// 目的の要素の行へ 1 クリックで飛ぶための索引。
+// 行の書き換えは行編集パネルの職掌なので、ここは「見る・飛ぶ」だけにする。
+
+var _outlineTab = 'dsl';     // 'dsl' | 'outline'
+var _outlineLine = null;     // 選択中の行 (0 始まり)
+
+function setEditorTab(tab) {
+  var wrap = document.getElementById('editor-wrap');
+  var pane = document.getElementById('outline-pane');
+  if (!wrap || !pane) return;
+  _outlineTab = (tab === 'outline') ? 'outline' : 'dsl';
+  var isOutline = _outlineTab === 'outline';
+  wrap.style.display = isOutline ? 'none' : 'flex';
+  if (isOutline) pane.classList.add('open'); else pane.classList.remove('open');
+  Array.prototype.forEach.call(document.querySelectorAll('.editor-tab'), function(b) {
+    var on = b.getAttribute('data-editor-tab') === _outlineTab;
+    if (on) b.classList.add('active'); else b.classList.remove('active');
+    b.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+  if (isOutline) {
+    renderOutline();
+    var f = document.getElementById('outline-filter');
+    if (f) f.focus();
+  } else if (editorEl) {
+    editorEl.focus();
+  }
+}
+
+function renderOutline() {
+  var ol = window.MA.outline;
+  var list = document.getElementById('outline-list');
+  var summary = document.getElementById('outline-summary');
+  if (!ol || !list || !summary) return;
+  var result = ol.build(mmdText);
+  var q = (document.getElementById('outline-filter') || {}).value || '';
+  var rows = ol.filter(result.nodes, q);
+
+  list.textContent = '';
+  if (rows.length === 0) {
+    var empty = document.createElement('div');
+    empty.className = 'outline-empty';
+    empty.textContent = q
+      ? '「' + q + '」に一致する要素はありません'
+      : 'この図にはまだ要素がありません';
+    list.appendChild(empty);
+  }
+  rows.forEach(function(n) {
+    var row = document.createElement('div');
+    row.className = 'outline-row' + (n.line === _outlineLine ? ' selected' : '');
+    row.setAttribute('data-outline-line', String(n.line));
+    row.setAttribute('data-outline-kind', n.kind);
+    row.setAttribute('role', 'treeitem');
+    row.setAttribute('aria-level', String(n.depth + 1));
+    var no = document.createElement('span');
+    no.className = 'outline-no';
+    no.textContent = String(n.line + 1);
+    var kind = document.createElement('span');
+    kind.className = 'outline-kind';
+    kind.textContent = n.kind;
+    var label = document.createElement('span');
+    label.className = 'outline-label';
+    // 入れ子は字下げで見せる (ブロックの内と外を取り違えないため)。
+    label.style.paddingLeft = (n.depth * 12) + 'px';
+    label.textContent = n.label;
+    var detail = document.createElement('span');
+    detail.className = 'outline-detail';
+    detail.textContent = n.detail ? ': ' + n.detail : '';
+    row.appendChild(no);
+    row.appendChild(kind);
+    row.appendChild(label);
+    row.appendChild(detail);
+    row.title = 'クリックで ' + (n.line + 1) + ' 行目へ';
+    row.addEventListener('click', function() { gotoOutlineLine(n.line); });
+    list.appendChild(row);
+  });
+
+  summary.textContent = ol.summary(result);
+  if (result.ok) summary.classList.remove('ng'); else summary.classList.add('ng');
+  if (!result.ok && result.errors.length) {
+    summary.title = result.errors.map(function(e) { return e.message; }).join('\n');
+  } else {
+    summary.title = '';
+  }
+}
+
+// 構造の行を選ぶと DSL タブに戻り、その行をキャレット選択して見える位置に出す。
+function gotoOutlineLine(line) {
+  _outlineLine = line;
+  var lines = String(mmdText || '').split('\n');
+  if (line == null || line < 0 || line >= lines.length) return;
+  setEditorTab('dsl');
+  var start = 0;
+  for (var i = 0; i < line; i++) start += lines[i].length + 1;
+  var end = start + lines[line].length;
+  if (!editorEl) return;
+  editorEl.focus();
+  editorEl.setSelectionRange(start, end);
+  // 選んだ行が画面の中ほどに来るようにする (先頭に貼り付くと前後が見えない)。
+  var lineHeight = editorEl.scrollHeight / Math.max(1, lines.length);
+  editorEl.scrollTop = Math.max(0, (line * lineHeight) - (editorEl.clientHeight / 2));
+  if (lineNumbersEl) lineNumbersEl.scrollTop = editorEl.scrollTop;
+}
+
+function setupOutline() {
+  var dslBtn = document.getElementById('btn-editor-tab-dsl');
+  var outBtn = document.getElementById('btn-editor-tab-outline');
+  var filter = document.getElementById('outline-filter');
+  if (dslBtn) dslBtn.addEventListener('click', function() { setEditorTab('dsl'); });
+  if (outBtn) outBtn.addEventListener('click', function() { setEditorTab('outline'); });
+  if (filter) {
+    filter.addEventListener('input', renderOutline);
+    filter.addEventListener('keydown', function(ev) {
+      if (ev.key === 'Escape') { ev.preventDefault(); setEditorTab('dsl'); }
+    });
+  }
+}
+
 function setupNameAudit() {
   var btn = document.getElementById('btn-tab-audit');
   var modal = document.getElementById('na-modal');
@@ -2394,6 +2515,9 @@ function scheduleRefresh() {
 function refresh() {
   updateLineNumbers();
   updateUndoRedoButtons();
+  // 構造タブを開いたまま DSL が変わったら (エディタ・行編集・一括追加・タブ切替)
+  // 一覧も追随させる。開いていないときは組み立てない。
+  if (_outlineTab === 'outline') renderOutline();
   var detectedType = window.MA.parserUtils.detectDiagramType(mmdText);
   var mod = detectedType ? modules[detectedType] : null;
   if (mod) currentModule = mod;
