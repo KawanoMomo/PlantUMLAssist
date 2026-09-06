@@ -5,12 +5,11 @@ const path = require('path');
 async function gotoApp(page) {
   await page.goto('/');
   await page.waitForSelector('#preview-svg', { timeout: 5000 });
-  // Prefer online render so overlays build even without Java installed.
-  // Tests that don't need overlay (UC-1) are unaffected.
+  // local (Java) で描画する。online は DSL を plantuml.com へ送るため使わない。
   await page.evaluate(() => {
     var sel = document.getElementById('render-mode');
-    if (sel && sel.value !== 'online') {
-      sel.value = 'online';
+    if (sel && sel.value !== 'local') {
+      sel.value = 'local';
       sel.dispatchEvent(new Event('change'));
     }
   });

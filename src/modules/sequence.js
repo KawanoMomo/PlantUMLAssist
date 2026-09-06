@@ -230,6 +230,89 @@ window.MA.modules.plantumlSequence = (function() {
     return insertBeforeEnd(text, fmtMessage(from, to, arrow, label));
   }
 
+  // ─── Bulk tail add (参加者 + メッセージをまとめて末尾に追加) ───
+  // 1 件ずつの挿入フォームだと参加者 5 + メッセージ 6 で手数が 10 を超えるため、
+  // DSL そのままの書き方で貼れる入口を用意する。
+  var SEQ_BULK_ARROW_RE = new RegExp('\\s(' + ARROWS.slice().sort(function(a, b) {
+    return b.length - a.length;
+  }).map(function(a) {
+    return a.replace(/[-\\^$*+?.()|[\]{}<>]/g, '\\$&');
+  }).join('|') + ')\\s');
+
+  function _seqStripDeco(s) {
+    var t = String(s || '').trim();
+    return t.replace(/^"(.*)"$/, '$1').trim();
+  }
+
+  function parseBulkLines(block) {
+    var out = [];
+    if (!block) return out;
+    var lines = String(block).split(/\r?\n/);
+    for (var i = 0; i < lines.length; i++) {
+      var s = lines[i].trim();
+      if (!s || s.indexOf("'") === 0 || s.indexOf('#') === 0) continue;
+      if (/^@(start|end)uml\b/i.test(s)) continue;
+      var am = s.match(SEQ_BULK_ARROW_RE);
+      if (am) {
+        var pos = s.indexOf(am[0]);
+        var left = s.slice(0, pos);
+        var rest = s.slice(pos + am[0].length);
+        var lbl = '';
+        var ci = rest.indexOf(':');
+        if (ci >= 0) { lbl = rest.slice(ci + 1).trim(); rest = rest.slice(0, ci); }
+        var from = _seqStripDeco(left);
+        var to = _seqStripDeco(rest);
+        if (!from || !to) continue;
+        out.push({ op: 'message', from: from, to: to, arrow: am[1], label: lbl });
+        continue;
+      }
+      // 参加者宣言。`participant "表示名" as Alias` と `actor Dev : 表示名` の両方を受ける。
+      var ptype = 'participant';
+      var body = s;
+      var km = body.match(new RegExp('^(' + PARTICIPANT_TYPES.join('|') + ')\\s+(.*)$', 'i'));
+      if (km) { ptype = km[1].toLowerCase(); body = km[2].trim(); }
+      var label = '';
+      var asm = body.match(/^(.*?)\s+as\s+(\S+)$/i);
+      if (asm) {
+        label = _seqStripDeco(asm[1]);
+        body = asm[2];
+      } else {
+        var ci2 = body.indexOf(':');
+        if (ci2 >= 0) { label = body.slice(ci2 + 1).trim(); body = body.slice(0, ci2); }
+      }
+      var id = _seqStripDeco(body);
+      if (!id) continue;
+      out.push({ op: 'participant', ptype: ptype, id: id, label: label });
+    }
+    return out;
+  }
+
+  // 参加者を先に全部宣言してからメッセージを並べるので、入力順は問わない。
+  function addBulk(text, block, parsed) {
+    var ops = parseBulkLines(block);
+    var out = text;
+    var idMap = {};
+    var taken = _existingParticipantIdSet(parsed || { elements: [] });
+    var i;
+    for (i = 0; i < ops.length; i++) {
+      var o = ops[i];
+      if (o.op !== 'participant') continue;
+      var norm = window.MA.idNormalizer.normalize(o.id, taken, 'P');
+      if (!norm.valid) continue;
+      idMap[o.id] = norm.id;
+      // 既に宣言済みの参加者は重複宣言せず、メッセージ側の参照先としてだけ使う。
+      if (taken[norm.id]) continue;
+      taken[norm.id] = true;
+      out = addParticipant(out, o.ptype, norm.id, o.label || norm.label || o.id);
+    }
+    for (i = 0; i < ops.length; i++) {
+      var m = ops[i];
+      if (m.op !== 'message') continue;
+      out = addMessage(out, idMap[m.from] || m.from, idMap[m.to] || m.to, m.arrow, m.label);
+    }
+    return out;
+  }
+
   function deleteLine(text, lineNum) {
     return window.MA.textUpdater.deleteLine(text, lineNum);
   }
@@ -1034,6 +1117,8 @@ window.MA.modules.plantumlSequence = (function() {
     addParticipant: addParticipant,
     normalizeIdInput: normalizeIdInput,
     addMessage: addMessage,
+    parseBulkLines: parseBulkLines,
+    addBulk: addBulk,
     deleteLine: deleteLine,
     deleteSelectedLine: deleteSelectedLine,
     updateParticipant: updateParticipant,
@@ -1140,6 +1225,7 @@ window.MA.modules.plantumlSequence = (function() {
               { value: 'note', label: '注釈 (note)' },
               { value: 'block', label: 'ブロック (alt/loop/...)' },
               { value: 'activation', label: 'ライフライン (activate/deactivate)' },
+              { value: 'bulk', label: '一括 (複数行)' },
             ]) +
             '<div id="seq-tail-detail" style="margin-top:6px;"></div>' +
           '</div>' +
@@ -1217,6 +1303,16 @@ window.MA.modules.plantumlSequence = (function() {
               ]) +
               P.selectFieldHtml('Target', 'seq-tail-atgt', partOpts) +
               P.primaryButtonHtml('seq-tail-add', '+ 末尾に追加');
+          } else if (kind === 'bulk') {
+            html =
+              '<div style="margin-bottom:4px;font-size:10px;color:var(--text-secondary);">1 行 1 件。参加者とメッセージを混ぜて書けます</div>' +
+              '<textarea id="seq-tail-bulk" style="width:100%;min-height:90px;font-family:inherit;font-size:12px;"></textarea>' +
+              P.primaryButtonHtml('seq-tail-add', '+ まとめて末尾に追加') +
+              '<div id="seq-tail-bulk-hint" style="font-size:10px;color:var(--text-secondary);margin-top:4px;line-height:1.5;">' +
+                'actor Dev / participant "SPI ドライバ" as SpiDrv / DB : データベース → 参加者<br>' +
+                'Dev -&gt; SpiDrv : Spi_Init() → メッセージ (矢印は -&gt; --&gt; -&gt;&gt; など)<br>' +
+                '参加者は書いた順に宣言され、メッセージは後ろにまとまります' +
+              '</div>';
           }
           detailEl.innerHTML = html;
           var rleObj = null;
@@ -1280,6 +1376,12 @@ window.MA.modules.plantumlSequence = (function() {
               if (!atg) { alert('Target 必須'); return; }
               window.MA.history.pushHistory();
               out = addActivation(t, document.getElementById('seq-tail-aact').value, atg);
+            } else if (kind === 'bulk') {
+              var block = document.getElementById('seq-tail-bulk').value;
+              var bulkOut = addBulk(t, block, parsedData);
+              if (bulkOut === t) { alert('追加できる行がありません'); return; }
+              window.MA.history.pushHistory();
+              out = bulkOut;
             }
             ctx.setMmdText(out);
             ctx.onUpdate();
