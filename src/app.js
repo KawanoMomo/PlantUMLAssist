@@ -1057,6 +1057,7 @@ function init() {
   setupTabs();
   setupBulkRename();
   setupNameAudit();
+  setupLineEdit();
 
   setZoom(1.0);
   updateLineNumbers();
@@ -1750,6 +1751,205 @@ function openNameAudit() {
   }
 
   return result;
+}
+
+// ── 行編集 ─────────────────────────────────────────────────────────────────
+// 一括置換は「図をまたいで識別子を一斉に」直すもので、レビュー指摘のような
+// 「この図のこのメッセージ名だけ」「3 本目と 4 本目の間に 1 本」には使えない。
+// エディタで直すと全選択して図全体を打ち直すことになり、1 語の修正でも手数が
+// 図のテキスト量に比例して増える。ここでは行を一覧から選び、その 1 行だけを
+// 書き換える・上下に挿す・消す経路を用意する。
+
+var _lineEditIndex = null;   // 選択中の行番号 (0 始まり、DSL 上の実位置)
+
+// 行の編集結果をエディタ・プレビュー・workspace へ流す共通経路。
+// undo は 1 手で戻せるようにここで履歴を積む。
+function _applyLineEditText(next) {
+  if (typeof next !== 'string' || next === mmdText) return false;
+  if (window.MA.history) window.MA.history.pushHistory();
+  mmdText = next;
+  suppressSync = true;
+  editorEl.value = mmdText;
+  suppressSync = false;
+  if (window.MA.selection) window.MA.selection.clearSelection();
+  updateLineNumbers();
+  saveActiveDoc();
+  scheduleRefresh();
+  return true;
+}
+
+function renderLineEditList() {
+  var le = window.MA.lineEdit;
+  var list = document.getElementById('lines-list');
+  if (!le || !list) return;
+  var q = (document.getElementById('lines-filter') || {}).value || '';
+  var rows = le.filter(le.entries(mmdText), q);
+
+  list.textContent = '';
+  if (rows.length === 0) {
+    var empty = document.createElement('div');
+    empty.className = 'line-empty';
+    empty.textContent = q ? '「' + q + '」に一致する行はありません' : '編集できる行がありません';
+    list.appendChild(empty);
+  }
+  rows.forEach(function(e) {
+    var row = document.createElement('div');
+    row.className = 'line-row' + (e.index === _lineEditIndex ? ' selected' : '');
+    row.setAttribute('data-line-index', String(e.index));
+    row.setAttribute('data-line-kind', e.kind);
+    var no = document.createElement('span');
+    no.className = 'line-no';
+    no.textContent = String(e.index + 1);
+    var kind = document.createElement('span');
+    kind.className = 'line-kind';
+    kind.textContent = e.kind;
+    var text = document.createElement('span');
+    text.className = 'line-text';
+    text.textContent = le.summarize(e.text, 60);
+    row.appendChild(no);
+    row.appendChild(kind);
+    row.appendChild(text);
+    row.addEventListener('click', function() { selectLineEditRow(e.index); });
+    list.appendChild(row);
+  });
+  updateLineEditState();
+}
+
+// 行を選ぶと、その行の全文が入力欄に入る。直したい 1 語だけを打ち替えれば済む。
+function selectLineEditRow(index) {
+  var le = window.MA.lineEdit;
+  var input = document.getElementById('lines-text');
+  if (!le || !input) return;
+  var lines = String(mmdText || '').split('\n');
+  if (index == null || index < 0 || index >= lines.length) return;
+  _lineEditIndex = index;
+  input.value = String(lines[index]).replace(/\r$/, '');
+  input.disabled = false;
+  Array.prototype.forEach.call(document.querySelectorAll('#lines-list .line-row'), function(r) {
+    var hit = Number(r.getAttribute('data-line-index')) === index;
+    if (hit) r.classList.add('selected'); else r.classList.remove('selected');
+  });
+  updateLineEditState();
+  input.focus();
+  input.setSelectionRange(input.value.length, input.value.length);
+}
+
+function updateLineEditState() {
+  var input = document.getElementById('lines-text');
+  var summary = document.getElementById('lines-summary');
+  var apply = document.getElementById('btn-lines-apply');
+  var before = document.getElementById('btn-lines-insert-before');
+  var after = document.getElementById('btn-lines-insert-after');
+  var del = document.getElementById('btn-lines-delete');
+  if (!input || !summary || !apply) return;
+  var picked = _lineEditIndex != null;
+  var text = input.value || '';
+  var lines = String(mmdText || '').split('\n');
+  var current = picked && _lineEditIndex < lines.length
+    ? String(lines[_lineEditIndex]).replace(/\r$/, '') : null;
+
+  apply.disabled = !picked || !text.trim() || text === current;
+  if (before) before.disabled = !picked || !text.trim();
+  if (after) after.disabled = !picked || !text.trim();
+  if (del) del.disabled = !picked;
+
+  if (!picked) summary.textContent = '一覧から行を選んでください';
+  else if (!text.trim()) summary.textContent = '行の内容を入力してください';
+  else if (text === current) summary.textContent = (_lineEditIndex + 1) + ' 行目 (変更なし)';
+  else summary.textContent = (_lineEditIndex + 1) + ' 行目を書き換えます';
+  summary.setAttribute('data-line', picked ? String(_lineEditIndex + 1) : '');
+}
+
+function setupLineEdit() {
+  var le = window.MA.lineEdit;
+  var panel = document.getElementById('lines-panel');
+  var btn = document.getElementById('btn-tab-lines');
+  if (!le || !panel || !btn) return;
+  var filterEl = document.getElementById('lines-filter');
+  var textEl = document.getElementById('lines-text');
+  var summary = document.getElementById('lines-summary');
+
+  function closePanel() { panel.classList.remove('open'); }
+
+  function reselectAfter(nextIndex) {
+    _lineEditIndex = null;
+    if (textEl) { textEl.value = ''; textEl.disabled = true; }
+    renderLineEditList();
+    if (nextIndex != null) selectLineEditRow(nextIndex);
+  }
+
+  function doReplace() {
+    if (_lineEditIndex == null) return;
+    var idx = _lineEditIndex;
+    if (!_applyLineEditText(le.replaceLine(mmdText, idx, textEl.value))) return;
+    renderLineEditList();
+    selectLineEditRow(idx);
+    summary.textContent = (idx + 1) + ' 行目を書き換えました';
+    summary.setAttribute('data-applied', String(idx + 1));
+  }
+
+  function doInsert(before) {
+    if (_lineEditIndex == null) return;
+    var idx = _lineEditIndex;
+    var next = before ? le.insertBefore(mmdText, idx, textEl.value)
+                      : le.insertAfter(mmdText, idx, textEl.value);
+    if (!_applyLineEditText(next)) return;
+    var added = before ? idx : idx + 1;
+    reselectAfter(added);
+    summary.textContent = (added + 1) + ' 行目に挿入しました';
+    summary.setAttribute('data-applied', String(added + 1));
+  }
+
+  function doDelete() {
+    if (_lineEditIndex == null) return;
+    var idx = _lineEditIndex;
+    if (!_applyLineEditText(le.removeLine(mmdText, idx))) return;
+    reselectAfter(null);
+    summary.textContent = (idx + 1) + ' 行目を削除しました';
+    summary.setAttribute('data-applied', String(idx + 1));
+  }
+
+  btn.addEventListener('click', function() {
+    if (panel.classList.contains('open')) { closePanel(); return; }
+    _lineEditIndex = null;
+    if (textEl) { textEl.value = ''; textEl.disabled = true; }
+    var rect = btn.getBoundingClientRect();
+    panel.style.left = Math.max(4, rect.left - 220) + 'px';
+    panel.style.top = (rect.bottom + 2) + 'px';
+    panel.classList.add('open');
+    renderLineEditList();
+    // 選択中の要素があればその行を初期選択にする (探す手数をゼロにする)。
+    var sel = (window.MA.selection && window.MA.selection.getSelected()) || [];
+    if (sel.length === 1 && sel[0] && typeof sel[0].line === 'number') {
+      selectLineEditRow(sel[0].line);
+    } else if (filterEl) {
+      filterEl.focus();
+    }
+  });
+
+  if (filterEl) {
+    filterEl.addEventListener('input', renderLineEditList);
+    filterEl.addEventListener('keydown', function(ev) {
+      if (ev.key === 'Escape') { ev.preventDefault(); closePanel(); }
+    });
+  }
+  if (textEl) {
+    textEl.addEventListener('input', updateLineEditState);
+    textEl.addEventListener('keydown', function(ev) {
+      if (ev.key === 'Enter') { ev.preventDefault(); doReplace(); }
+      if (ev.key === 'Escape') { ev.preventDefault(); closePanel(); }
+    });
+  }
+  var applyBtn = document.getElementById('btn-lines-apply');
+  if (applyBtn) applyBtn.addEventListener('click', doReplace);
+  var beforeBtn = document.getElementById('btn-lines-insert-before');
+  if (beforeBtn) beforeBtn.addEventListener('click', function() { doInsert(true); });
+  var afterBtn = document.getElementById('btn-lines-insert-after');
+  if (afterBtn) afterBtn.addEventListener('click', function() { doInsert(false); });
+  var delBtn = document.getElementById('btn-lines-delete');
+  if (delBtn) delBtn.addEventListener('click', doDelete);
+  var closeBtn = document.getElementById('btn-lines-close');
+  if (closeBtn) closeBtn.addEventListener('click', closePanel);
 }
 
 function setupNameAudit() {

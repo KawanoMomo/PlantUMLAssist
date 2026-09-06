@@ -262,6 +262,75 @@ html, body {
   cursor: pointer;
 }
 #folder-panel button:hover { background: var(--bg-secondary); }
+/* 行編集パネル (この図の 1 行だけを書換・挿入・削除する) */
+#lines-panel {
+  display: none;
+  position: absolute;
+  z-index: 41;
+  width: 420px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px;
+  font-size: 11px;
+  color: var(--text-primary);
+}
+#lines-panel.open { display: block; }
+#lines-panel label {
+  display: block;
+  font-size: 10px;
+  color: var(--text-secondary);
+  margin: 4px 0 2px;
+}
+#lines-panel input {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 3px 4px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+#lines-panel input:disabled { opacity: 0.5; }
+#lines-list {
+  margin-top: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+#lines-list .line-row {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  padding: 2px 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+#lines-list .line-row:hover { background: var(--bg-secondary); }
+#lines-list .line-row.selected { background: var(--bg-secondary); outline: 1px solid var(--accent); }
+#lines-list .line-no { color: var(--text-secondary); min-width: 22px; text-align: right; }
+#lines-list .line-kind { color: var(--text-secondary); min-width: 38px; }
+#lines-list .line-text { overflow: hidden; text-overflow: ellipsis; }
+#lines-list .line-empty { padding: 6px; color: var(--text-secondary); font-size: 10px; }
+#lines-summary { margin-top: 6px; font-size: 10px; color: var(--text-secondary); }
+#lines-panel .lines-actions { display: flex; gap: 4px; margin-top: 8px; }
+#lines-panel .lines-actions button {
+  flex: 1;
+  font-size: 11px;
+  padding: 3px 4px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+#lines-panel .lines-actions button#btn-lines-apply { border-color: var(--accent); }
+#lines-panel .lines-actions button:disabled { opacity: 0.45; cursor: default; }
 /* 一括置換パネル (複数の図をまたいで部品名を置換する) */
 #rename-panel {
   display: none;
@@ -638,6 +707,7 @@ html, body {
         <button class="tab-tool" id="btn-tab-folder" title="保存フォルダの図を一覧">📂 一覧</button>
         <button class="tab-tool" id="btn-tab-rename" title="開いている図をまたいで部品名を一括置換">⇄ 一括置換</button>
         <button class="tab-tool" id="btn-tab-audit" title="開いている図の部品名を突き合わせて表記揺れを探す">🔍 名前突合</button>
+        <button class="tab-tool" id="btn-tab-lines" title="この図の 1 行だけを選んで書き換え・挿入・削除する">✎ 行編集</button>
       </div>
       <div id="folder-panel"></div>
       <!-- 開いている図をまたいで部品名を一括置換する -->
@@ -656,6 +726,22 @@ html, body {
         <div class="rename-actions">
           <button id="btn-rename-apply" disabled>置換</button>
           <button id="btn-rename-cancel">閉じる</button>
+        </div>
+      </div>
+      <!-- この図の 1 行だけを対象に書換・挿入・削除する (全文の打ち直しを避ける) -->
+      <div id="lines-panel">
+        <label for="lines-filter">行を絞り込む</label>
+        <input id="lines-filter" autocomplete="off" spellcheck="false" placeholder="send">
+        <div id="lines-list"></div>
+        <label for="lines-text">選んだ行</label>
+        <input id="lines-text" autocomplete="off" spellcheck="false" placeholder="行を選んでください" disabled>
+        <div id="lines-summary"></div>
+        <div class="lines-actions">
+          <button id="btn-lines-apply" disabled title="選んだ行だけを書き換える">書換</button>
+          <button id="btn-lines-insert-before" disabled title="選んだ行の上に 1 行入れる">↑挿入</button>
+          <button id="btn-lines-insert-after" disabled title="選んだ行の下に 1 行入れる">↓挿入</button>
+          <button id="btn-lines-delete" disabled title="選んだ行を消す">削除</button>
+          <button id="btn-lines-close">閉じる</button>
         </div>
       </div>
       <div id="editor-pane-header">Editor</div>
@@ -790,6 +876,7 @@ html, body {
 <script src="src/core/workspace.js"></script>
 <script src="src/core/bulk-rename.js"></script>
 <script src="src/core/name-audit.js"></script>
+<script src="src/core/line-edit.js"></script>
 <script src="src/core/state-branch.js"></script>
 <script src="src/core/class-scaffold.js"></script>
 <script src="src/core/line-resolver.js"></script>
