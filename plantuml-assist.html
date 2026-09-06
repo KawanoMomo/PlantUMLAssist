@@ -35,11 +35,73 @@ html, body {
 }
 
 /* ── App Shell ─────────────────────────────────────────────────────────────── */
+/* 左端の図種レール (#rail) と、それ以外一式 (#app-body) の 2 列。 */
 #app {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   height: 100vh;
 }
+
+#app-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  height: 100vh;
+}
+
+/* ── Diagram rail (design 1a「Quiet Rail」) ───────────────────────────────── */
+#rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 48px;
+  flex-shrink: 0;
+  padding: 6px 0;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border);
+}
+
+#rail .rail-logo {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--accent);
+  line-height: 24px;
+  margin-bottom: 4px;
+  user-select: none;
+}
+
+#rail #rail-types {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+#rail .rail-spacer { flex: 1; }
+
+.rail-btn {
+  width: 36px;
+  height: 28px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+}
+.rail-btn:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+.rail-btn.active {
+  background: var(--bg-tertiary);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.rail-btn:focus { outline: none; border-color: var(--accent); }
 
 /* ── Toolbar ───────────────────────────────────────────────────────────────── */
 #toolbar {
@@ -802,6 +864,16 @@ html, body {
 <body>
 <div id="app">
 
+  <!-- ── 図種レール (design 1a): 6 図種を 1 クリックで切り替える ────────── -->
+  <div id="rail" role="toolbar" aria-label="図の種類">
+    <span class="rail-logo" title="PlantUMLAssist">P</span>
+    <div id="rail-types"></div>
+    <div class="rail-spacer"></div>
+    <button type="button" class="rail-btn" id="rail-config" title="設定">⚙</button>
+  </div>
+
+  <div id="app-body">
+
   <!-- ── Toolbar ─────────────────────────────────────────────────────────── -->
   <div id="toolbar">
     <span class="logo">PlantUMLAssist</span>
@@ -963,6 +1035,8 @@ html, body {
     <span id="status-info"></span>
   </div>
 
+  </div><!-- /#app-body -->
+
 <!-- コマンドパレット (BLK-builder-20260907-0803-1 / design 1a) -->
 <div id="cp-modal" role="dialog" aria-label="コマンド・要素を検索">
   <div id="cp-panel">
@@ -1071,6 +1145,7 @@ html, body {
 <script src="src/core/diagram-settings.js"></script>
 <script src="src/core/name-audit.js"></script>
 <script src="src/core/command-palette.js"></script>
+<script src="src/core/diagram-rail.js"></script>
 <script src="src/core/line-edit.js"></script>
 <script src="src/core/state-branch.js"></script>
 <script src="src/core/state-transition.js"></script>
