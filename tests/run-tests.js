@@ -14,6 +14,7 @@ const sourceFiles = [
   'src/core/state-transition.js',
   'src/core/class-scaffold.js',
   'src/core/name-audit.js',
+  'src/core/command-palette.js',
   'src/core/line-resolver.js',
   'src/core/formatter-interface.js',
   'src/core/dsl-updater.js',
