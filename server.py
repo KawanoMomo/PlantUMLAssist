@@ -20,7 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).parent
 JAR_PATH = ROOT / 'lib' / 'plantuml.jar'
 DAEMON_SRC = ROOT / 'lib' / 'PlantUMLDaemon.java'
-PORT = 8766
+PORT = int(os.environ.get('PUA_PORT', '8766'))
 AUTOSAVE_DEFAULT_DIR = ROOT / 'autosave'
 AUTOSAVE_TYPE_RE = re.compile(r'^[A-Za-z0-9_-]+$')
 
