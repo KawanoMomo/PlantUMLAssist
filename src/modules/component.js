@@ -128,6 +128,88 @@ window.MA.modules.plantumlComponent = (function() {
     return insertBeforeEnd(text, fmtRelation(kind, from, to, label));
   }
 
+  // 一括追加の 1 行を 1 操作に読み替える。要素は
+  //   `Alias`, `component Alias`, `interface Alias : Label`, `[Alias]`, `()Alias`
+  // 関係は
+  //   `A -- B : label`(association) / `A ..> B`(dependency) / `A -() B`(provides) /
+  //   `A )- B`(requires)。`->` `-->` は association、`..` は dependency として扱う。
+  var BULK_ARROW_RE = /\s(-\(\)|\)-|\.\.>|\.\.|-->|->|--)\s/;
+  var BULK_ARROW_KIND = {
+    '-()': 'provides',
+    ')-': 'requires',
+    '..>': 'dependency',
+    '..': 'dependency',
+    '-->': 'association',
+    '->': 'association',
+    '--': 'association',
+  };
+
+  function _stripDeco(s) {
+    var t = String(s || '').trim();
+    t = t.replace(/^\[(.*)\]$/, '$1').replace(/^\(\)\s*/, '').replace(/^interface\s+/i, '')
+         .replace(/^component\s+/i, '');
+    return t.replace(/^"(.*)"$/, '$1').trim();
+  }
+
+  function parseBulkLines(block) {
+    var out = [];
+    if (!block) return out;
+    var lines = String(block).split(/\r?\n/);
+    for (var i = 0; i < lines.length; i++) {
+      var s = lines[i].trim();
+      if (!s || s.indexOf("'") === 0 || s.indexOf('#') === 0) continue;
+      var am = s.match(BULK_ARROW_RE);
+      if (am) {
+        var pos = s.indexOf(am[0]);
+        var left = s.slice(0, pos);
+        var rest = s.slice(pos + am[0].length);
+        var lbl = '';
+        var ci = rest.indexOf(':');
+        if (ci >= 0) { lbl = rest.slice(ci + 1).trim(); rest = rest.slice(0, ci); }
+        var from = _stripDeco(left);
+        var to = _stripDeco(rest);
+        if (!from || !to) continue;
+        out.push({ op: 'relation', kind: BULK_ARROW_KIND[am[1]], from: from, to: to, label: lbl });
+        continue;
+      }
+      var isIntf = /^interface\s+/i.test(s) || /^\(\)/.test(s);
+      var body = s.replace(/^(component|interface)\s+/i, '').replace(/^\(\)\s*/, '');
+      var label2 = '';
+      var ci2 = body.indexOf(':');
+      if (ci2 >= 0) { label2 = body.slice(ci2 + 1).trim(); body = body.slice(0, ci2); }
+      var id = _stripDeco(body);
+      if (!id) continue;
+      out.push({ op: isIntf ? 'interface' : 'component', id: id, label: label2 });
+    }
+    return out;
+  }
+
+  // 要素は先に全部宣言してから関係を並べる。関係行に出てきただけの名前は
+  // PlantUML 側で暗黙宣言されるので、こちらでは足さない。
+  function addBulk(text, block, parsed) {
+    var ops = parseBulkLines(block);
+    var out = text;
+    var idMap = {};
+    var taken = _existingComponentIdSet(parsed || { elements: [] });
+    var i;
+    for (i = 0; i < ops.length; i++) {
+      var o = ops[i];
+      if (o.op !== 'component' && o.op !== 'interface') continue;
+      var norm = window.MA.idNormalizer.normalize(o.id, taken, 'C');
+      if (!norm.valid) continue;
+      idMap[o.id] = norm.id;
+      taken[norm.id] = true;
+      var lbl = o.label || norm.label || o.id;
+      out = (o.op === 'interface') ? addInterface(out, norm.id, lbl) : addComponent(out, norm.id, lbl);
+    }
+    for (i = 0; i < ops.length; i++) {
+      var r = ops[i];
+      if (r.op !== 'relation') continue;
+      out = addRelation(out, r.kind, idMap[r.from] || r.from, idMap[r.to] || r.to, r.label);
+    }
+    return out;
+  }
+
   function updateComponent(text, lineNum, field, value) {
     var lines = text.split('\n');
     var idx = lineNum - 1;
@@ -393,6 +475,7 @@ window.MA.modules.plantumlComponent = (function() {
           { value: 'port',      label: 'Port' },
           { value: 'package',   label: 'Package境界' },
           { value: 'relation',  label: 'Relation (関係)' },
+          { value: 'bulk',      label: '一括 (複数行)' },
         ]) +
         '<div id="co-tail-detail" style="margin-top:6px;"></div>' +
       '</div>';
@@ -446,6 +529,14 @@ window.MA.modules.plantumlComponent = (function() {
           P.selectFieldHtml('To', 'co-tail-to', allOpts) +
           P.fieldHtml('Label', 'co-tail-rlabel', '', 'association/dependency のみ任意') +
           P.primaryButtonHtml('co-tail-add', '+ Relation 追加');
+      } else if (kind === 'bulk') {
+        html =
+          '<label style="display:block;font-size:10px;color:var(--text-secondary);">要素と関係を 1 行 1 件で</label>' +
+          '<textarea id="co-tail-bulk" style="width:100%;min-height:90px;font-family:inherit;font-size:12px;"></textarea>' +
+          P.primaryButtonHtml('co-tail-add', '+ まとめて末尾に追加') +
+          '<div id="co-tail-bulk-hint" style="font-size:10px;color:var(--text-secondary);margin-top:4px;line-height:1.5;">' +
+            'CanDrv / interface ICan : CAN 送受信 / A -- B : label /<br>' +
+            'A ..&gt; B(dependency) / A -() B(provides) / A )- B(requires)。空行は無視されます</div>';
       }
       detailEl.innerHTML = html;
 
@@ -488,6 +579,12 @@ window.MA.modules.plantumlComponent = (function() {
           var rkind = document.getElementById('co-tail-rkind').value;
           window.MA.history.pushHistory();
           out = addRelation(t, rkind, fr, to, document.getElementById('co-tail-rlabel').value.trim());
+        } else if (kind === 'bulk') {
+          var block = document.getElementById('co-tail-bulk').value;
+          var bulkOut = addBulk(t, block, parsedData);
+          if (bulkOut === t) { alert('追加できる行がありません'); return; }
+          window.MA.history.pushHistory();
+          out = bulkOut;
         }
         ctx.setMmdText(out);
         ctx.onUpdate();
@@ -751,6 +848,8 @@ window.MA.modules.plantumlComponent = (function() {
     addPortToComponent: addPortToComponent,
     addPackage: addPackage,
     addRelation: addRelation,
+    parseBulkLines: parseBulkLines,
+    addBulk: addBulk,
     updateComponent: updateComponent,
     updateInterface: updateInterface,
     updateRelation: updateRelation,
