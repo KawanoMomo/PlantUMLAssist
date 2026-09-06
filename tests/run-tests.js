@@ -11,6 +11,7 @@ const sourceFiles = [
   'src/core/auto-save.js',
   'src/core/workspace.js',
   'src/core/state-branch.js',
+  'src/core/state-transition.js',
   'src/core/class-scaffold.js',
   'src/core/name-audit.js',
   'src/core/line-resolver.js',

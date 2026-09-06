@@ -45,28 +45,10 @@ window.MA.modules.plantumlState = (function() {
     'i'
   );
 
+  // ラベルの分解・組み立ては state-transition に一本化してある。
+  // プレビュー (UI) と実際に書き込む行が同じ関数から出るようにするため。
   function _parseTransitionLabel(label) {
-    if (!label) return { trigger: null, guard: null, action: null };
-    var trimmed = label.trim();
-    var actionMatch = trimmed.match(/^(.*?)\s*\/\s*(.+)$/);
-    var action = null;
-    var rest = trimmed;
-    if (actionMatch) {
-      action = actionMatch[2].trim();
-      rest = actionMatch[1].trim();
-    }
-    var guardMatch = rest.match(/^(.*?)\s*\[(.+?)\]\s*$/);
-    var guard = null;
-    var trigger = rest;
-    if (guardMatch) {
-      guard = guardMatch[2].trim();
-      trigger = guardMatch[1].trim();
-    }
-    return {
-      trigger: trigger || null,
-      guard: guard || null,
-      action: action || null,
-    };
+    return window.MA.stateTransition.parseLabel(label);
   }
 
   function parse(text) {
@@ -227,12 +209,8 @@ window.MA.modules.plantumlState = (function() {
   }
 
   function fmtTransition(from, to, trigger, guard, action) {
-    var labelParts = [];
-    if (trigger) labelParts.push(trigger);
-    if (guard) labelParts.push('[' + guard + ']');
-    if (action) labelParts.push('/ ' + action);
-    var labelStr = labelParts.length > 0 ? ' : ' + labelParts.join(' ') : '';
-    return from + ' --> ' + to + labelStr;
+    var label = window.MA.stateTransition.composeLabel(trigger, guard, action);
+    return from + ' --> ' + to + (label ? ' : ' + label : '');
   }
 
   function fmtNote(position, targetId, text) {
@@ -790,6 +768,7 @@ window.MA.modules.plantumlState = (function() {
     var stateOpts = allStates.map(function(s) { return { value: s.id, label: s.label || s.id }; });
     if (stateOpts.length === 0) stateOpts = [{ value: '', label: '（state なし）' }];
     var stateOptsWithPseudo = [{ value: '[*]', label: '[*] (initial/final)' }].concat(stateOpts);
+    var trSummaries = window.MA.stateTransition.summaries(parsedData);
 
     var html =
       '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">State Diagram</div>' +
@@ -804,10 +783,32 @@ window.MA.modules.plantumlState = (function() {
         ]) +
         '<div id="st-tail-detail" style="margin-top:6px;"></div>' +
       '</div>' +
+      // 遷移一覧。図の矢印を正確にクリックしなくても遷移を選べるようにする。
+      // 選ぶと trigger / guard / action の 3 欄を持つ編集フォームが開く。
+      P.sectionHeaderHtml('遷移を選ぶ') +
+        (trSummaries.length === 0
+          ? P.emptyListHtml('遷移がありません')
+          : trSummaries.map(function(s) {
+              return P.listItemHtml({
+                label: s.text, sublabel: 'L' + s.line, mono: true,
+                selectClass: 'st-tr-pick', dataElementId: s.id, dataLine: s.line,
+              });
+            }).join('')) +
+      P.sectionFooterHtml() +
       '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
         '<button id="st-branch-open" style="width:100%;font-size:11px;padding:5px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">⑂ 分岐 (choice) を追加</button>' +
       '</div>';
     propsEl.innerHTML = html;
+
+    Array.prototype.forEach.call(propsEl.querySelectorAll('.st-tr-pick'), function(btn) {
+      btn.addEventListener('click', function() {
+        window.MA.selection.setSelected([{
+          type: 'transition',
+          id: btn.getAttribute('data-element-id'),
+          line: parseInt(btn.getAttribute('data-line'), 10),
+        }]);
+      });
+    });
 
     P.bindEvent('st-branch-open', 'click', function() {
       _showAddBranchModal('', parsedData, ctx);
@@ -835,9 +836,10 @@ window.MA.modules.plantumlState = (function() {
         html2 =
           P.selectFieldHtml('From', 'st-tail-from', stateOptsWithPseudo) +
           P.selectFieldHtml('To', 'st-tail-to', stateOptsWithPseudo) +
-          P.fieldHtml('Trigger', 'st-tail-trig', '') +
-          P.fieldHtml('Guard', 'st-tail-guard', '') +
-          P.fieldHtml('Action', 'st-tail-act', '') +
+          P.fieldHtml('きっかけ / trigger', 'st-tail-trig', '', '例: start') +
+          P.fieldHtml('条件 / guard', 'st-tail-guard', '', '例: retry > 3') +
+          P.fieldHtml('実行する処理 / action', 'st-tail-act', '', '例: log()') +
+          _previewBoxHtml('st-tail-preview') +
           P.primaryButtonHtml('st-tail-add', '+ Transition 追加');
       } else if (kind === 'note') {
         html2 =
@@ -859,6 +861,13 @@ window.MA.modules.plantumlState = (function() {
             '空行は無視されます</div>';
       }
       detailEl.innerHTML = html2;
+
+      if (kind === 'transition') {
+        _bindPreview({
+          preview: 'st-tail-preview', from: 'st-tail-from', to: 'st-tail-to',
+          trigger: 'st-tail-trig', guard: 'st-tail-guard', action: 'st-tail-act',
+        });
+      }
 
       P.bindEvent('st-tail-add', 'click', function() {
         var t = ctx.getMmdText();
@@ -904,6 +913,36 @@ window.MA.modules.plantumlState = (function() {
   }
 
   function _selectedOpt(o, sel) { return { value: o.value, label: o.label, selected: o.value === sel }; }
+
+  // 「組み立てられる行」— 3 要素の入力から出来る DSL 行をその場に出す。
+  // 構文 (`: trigger [guard] / action`) を覚えていなくても、確定前に
+  // 何が書き込まれるか読めるようにするための表示。
+  function _previewBoxHtml(id) {
+    return '<div style="margin:8px 0 8px 0;">' +
+      '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:2px;font-weight:bold;">組み立てられる行</label>' +
+      '<pre id="' + id + '" style="margin:0;background:var(--bg-primary);border:1px solid var(--border);border-radius:3px;padding:5px 6px;font-family:var(--font-mono),Consolas,monospace;font-size:11px;color:var(--text-primary);white-space:pre-wrap;word-break:break-all;min-height:15px;"></pre>' +
+    '</div>';
+  }
+
+  // ids: { preview, from, to, trigger, guard, action }
+  // 入力のたびに再描画する。要素が無い場合は何もしない (フォーム差替え中)。
+  function _bindPreview(ids) {
+    function val(id) { var el = document.getElementById(id); return el ? el.value : ''; }
+    function refresh() {
+      var box = document.getElementById(ids.preview);
+      if (!box) return;
+      box.textContent = window.MA.stateTransition.previewLine(
+        val(ids.from), val(ids.to), val(ids.trigger), val(ids.guard), val(ids.action));
+    }
+    ['from', 'to', 'trigger', 'guard', 'action'].forEach(function(k) {
+      var el = document.getElementById(ids[k]);
+      if (!el) return;
+      el.addEventListener('input', refresh);
+      el.addEventListener('change', refresh);
+    });
+    refresh();
+    return refresh;
+  }
 
   function _showAddTransitionModal(fromId, parsedData, ctx) {
     var modal = document.getElementById('st-tx-modal');
@@ -1270,13 +1309,30 @@ window.MA.modules.plantumlState = (function() {
     var html =
       '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">Transition (L' + tr.line + ')</div>' +
       P.selectFieldHtml('From', 'st-tr-from', fromOpts) +
+      '<button id="st-tr-swap" title="From と To を入れ替える" style="width:100%;font-size:11px;padding:3px 8px;margin-bottom:8px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">⇄ 向きを入れ替え</button>' +
       P.selectFieldHtml('To', 'st-tr-to', toOpts) +
-      P.fieldHtml('Trigger', 'st-tr-trig', tr.trigger || '') +
-      P.fieldHtml('Guard', 'st-tr-guard', tr.guard || '') +
-      P.fieldHtml('Action', 'st-tr-act', tr.action || '') +
+      P.fieldHtml('きっかけ / trigger', 'st-tr-trig', tr.trigger || '', '例: start') +
+      P.fieldHtml('条件 / guard', 'st-tr-guard', tr.guard || '', '例: retry > 3') +
+      P.fieldHtml('実行する処理 / action', 'st-tr-act', tr.action || '', '例: log()') +
+      _previewBoxHtml('st-tr-preview') +
       P.primaryButtonHtml('st-tr-update', '更新') +
       P.primaryButtonHtml('st-tr-delete', '✕ 削除');
     propsEl.innerHTML = html;
+
+    var refreshPreview = _bindPreview({
+      preview: 'st-tr-preview', from: 'st-tr-from', to: 'st-tr-to',
+      trigger: 'st-tr-trig', guard: 'st-tr-guard', action: 'st-tr-act',
+    });
+
+    P.bindEvent('st-tr-swap', 'click', function() {
+      var fromEl = document.getElementById('st-tr-from');
+      var toEl = document.getElementById('st-tr-to');
+      if (!fromEl || !toEl) return;
+      var f = fromEl.value;
+      fromEl.value = toEl.value;
+      toEl.value = f;
+      refreshPreview();
+    });
 
     P.bindEvent('st-tr-update', 'click', function() {
       window.MA.history.pushHistory();
