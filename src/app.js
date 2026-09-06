@@ -1882,6 +1882,11 @@ function updateLineEditState() {
   if (before) before.disabled = !picked || !text.trim();
   if (after) after.disabled = !picked || !text.trim();
   if (del) del.disabled = !picked;
+  // 移動は入力欄の中身に関係なく、行が選ばれていて動かす先がある間だけ押せる。
+  var up = document.getElementById('btn-lines-move-up');
+  var down = document.getElementById('btn-lines-move-down');
+  if (up) up.disabled = !picked || _lineEditIndex <= 0;
+  if (down) down.disabled = !picked || _lineEditIndex >= lines.length - 1;
 
   if (!picked) summary.textContent = '一覧から行を選んでください';
   else if (!text.trim()) summary.textContent = '行の内容を入力してください';
@@ -1930,6 +1935,18 @@ function setupLineEdit() {
     summary.setAttribute('data-applied', String(added + 1));
   }
 
+  // 選んだ行を 1 つ上/下へ動かす。動かした行を選び直したまま残すので、
+  // 続けて押せば何行でも運べる (2 行の入れ替えなら 1 手)。
+  function doMove(delta) {
+    if (_lineEditIndex == null) return;
+    var moved = le.moveLine(mmdText, _lineEditIndex, delta);
+    if (moved.text === mmdText) return;
+    if (!_applyLineEditText(moved.text)) return;
+    reselectAfter(moved.index);
+    summary.textContent = (moved.index + 1) + ' 行目へ移動しました';
+    summary.setAttribute('data-applied', String(moved.index + 1));
+  }
+
   function doDelete() {
     if (_lineEditIndex == null) return;
     var idx = _lineEditIndex;
@@ -1968,6 +1985,9 @@ function setupLineEdit() {
     textEl.addEventListener('keydown', function(ev) {
       if (ev.key === 'Enter') { ev.preventDefault(); doReplace(); }
       if (ev.key === 'Escape') { ev.preventDefault(); closePanel(); }
+      // Alt+↑↓ で連続して動かせる。入力欄から手を離さずに順序を直せる。
+      if (ev.altKey && ev.key === 'ArrowUp') { ev.preventDefault(); doMove(-1); }
+      if (ev.altKey && ev.key === 'ArrowDown') { ev.preventDefault(); doMove(1); }
     });
   }
   var applyBtn = document.getElementById('btn-lines-apply');
@@ -1976,6 +1996,10 @@ function setupLineEdit() {
   if (beforeBtn) beforeBtn.addEventListener('click', function() { doInsert(true); });
   var afterBtn = document.getElementById('btn-lines-insert-after');
   if (afterBtn) afterBtn.addEventListener('click', function() { doInsert(false); });
+  var upBtn = document.getElementById('btn-lines-move-up');
+  if (upBtn) upBtn.addEventListener('click', function() { doMove(-1); });
+  var downBtn = document.getElementById('btn-lines-move-down');
+  if (downBtn) downBtn.addEventListener('click', function() { doMove(1); });
   var delBtn = document.getElementById('btn-lines-delete');
   if (delBtn) delBtn.addEventListener('click', doDelete);
   var closeBtn = document.getElementById('btn-lines-close');

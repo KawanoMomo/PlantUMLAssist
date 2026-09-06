@@ -38,7 +38,7 @@ var STATE = [
 describe('lineEdit public API', function() {
   test('exports the documented API', function() {
     ['kindOf', 'entries', 'filter', 'indentOf', 'replaceLine', 'insertAfter',
-      'insertBefore', 'removeLine', 'summarize']
+      'insertBefore', 'moveLine', 'removeLine', 'summarize']
       .forEach(function(k) { expect(typeof le[k]).toBe('function'); });
   });
 });
@@ -189,5 +189,86 @@ describe('summarize', function() {
     expect(le.summarize('  a -> b : x  ')).toBe('a -> b : x');
     expect(le.summarize('abcdefghij', 5)).toBe('abcd…');
     expect(le.summarize('abcde', 5)).toBe('abcde');
+  });
+});
+
+// BLK-junior-20260907-0543: 既にある 2 行の順序だけを入れ替える。
+// 削除して末尾に足し直すしか無いと途中に戻せず、全文を打ち直すことになる。
+describe('moveLine', function() {
+  var CLS = [
+    '@startuml',
+    'class GpioDrv',
+    'GpioDrv <|-- GpioDrv_Input',
+    'GpioDrv_Input --> GpioDrv_Interrupt',
+    'GpioDrv_Output --> GpioDrv_Interrupt',
+    '@enduml',
+  ].join('\n');
+
+  test('1 つ上へ動かすと隣の行と入れ替わる', function() {
+    var r = le.moveLine(CLS, 4, -1);
+    var lines = r.text.split('\n');
+    expect(lines[3]).toBe('GpioDrv_Output --> GpioDrv_Interrupt');
+    expect(lines[4]).toBe('GpioDrv_Input --> GpioDrv_Interrupt');
+    expect(r.index).toBe(3);
+  });
+
+  test('1 つ下へ動かすと隣の行と入れ替わる', function() {
+    var r = le.moveLine(CLS, 3, 1);
+    var lines = r.text.split('\n');
+    expect(lines[3]).toBe('GpioDrv_Output --> GpioDrv_Interrupt');
+    expect(lines[4]).toBe('GpioDrv_Input --> GpioDrv_Interrupt');
+    expect(r.index).toBe(4);
+  });
+
+  test('入れ替えても行数と行の集合は変わらない', function() {
+    var r = le.moveLine(CLS, 4, -1);
+    var before = CLS.split('\n').slice().sort().join('|');
+    var after = r.text.split('\n').slice().sort().join('|');
+    expect(after).toBe(before);
+  });
+
+  test('往復すると元の DSL に戻る', function() {
+    var r1 = le.moveLine(CLS, 4, -1);
+    var r2 = le.moveLine(r1.text, r1.index, 1);
+    expect(r2.text).toBe(CLS);
+    expect(r2.index).toBe(4);
+  });
+
+  test('先頭より上・末尾より下へは動かさない', function() {
+    var top = le.moveLine(CLS, 0, -1);
+    expect(top.text).toBe(CLS);
+    expect(top.index).toBe(0);
+    var last = CLS.split('\n').length - 1;
+    var bottom = le.moveLine(CLS, last, 1);
+    expect(bottom.text).toBe(CLS);
+    expect(bottom.index).toBe(last);
+  });
+
+  test('delta 0 と不正な index は何もしない', function() {
+    expect(le.moveLine(CLS, 2, 0).text).toBe(CLS);
+    expect(le.moveLine(CLS, -1, 1).text).toBe(CLS);
+    expect(le.moveLine(CLS, 99, -1).text).toBe(CLS);
+    expect(le.moveLine(CLS, 2, null).text).toBe(CLS);
+  });
+
+  test('2 つ以上まとめて動かせる', function() {
+    var r = le.moveLine(CLS, 4, -2);
+    var lines = r.text.split('\n');
+    expect(lines[2]).toBe('GpioDrv_Output --> GpioDrv_Interrupt');
+    expect(lines[3]).toBe('GpioDrv <|-- GpioDrv_Input');
+    expect(r.index).toBe(2);
+  });
+
+  test('移動先の字下げに合わせる (alt の内と外をまたいでも崩れない)', function() {
+    var r = le.moveLine(SEQ, 6, 2);
+    var lines = r.text.split('\n');
+    expect(lines[8]).toBe('  Spi --> DmaDrv : ack');
+    expect(r.index).toBe(8);
+  });
+
+  test('CRLF の行を動かしても改行コードが混ざらない', function() {
+    var crlf = ['a -> b : 1', 'a -> b : 2', 'a -> b : 3'].join('\r\n');
+    var r = le.moveLine(crlf, 2, -1);
+    expect(r.text).toBe(['a -> b : 1', 'a -> b : 3', 'a -> b : 2'].join('\r\n'));
   });
 });
