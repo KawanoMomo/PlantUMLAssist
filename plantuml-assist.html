@@ -418,6 +418,50 @@ html, body {
   cursor: pointer;
 }
 #folder-panel button:hover { background: var(--bg-secondary); }
+/* 差分バッジと一覧 (前回保存時点との差) */
+#tab-bar .tab .tab-dot {
+  font-size: 9px;
+  line-height: 1;
+  color: var(--accent);
+}
+#tab-bar .tab.dirty .tab-label { font-weight: bold; }
+#btn-tab-diff.has-change { color: var(--accent); border-color: var(--accent); }
+#diff-panel {
+  display: none;
+  position: absolute;
+  z-index: 42;
+  max-height: 300px;
+  overflow-y: auto;
+  min-width: 260px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+}
+#diff-panel.open { display: block; }
+#diff-panel .diff-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+#diff-panel .diff-row:hover { background: var(--bg-secondary); }
+#diff-panel .diff-row.changed { color: var(--accent); }
+#diff-panel .diff-head { color: var(--text-primary); padding: 2px 4px 4px 4px; }
+#diff-panel .diff-actions { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 4px; }
+#diff-panel .diff-actions button {
+  border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 3px 8px;
+}
 /* 行編集パネル (この図の 1 行だけを書換・挿入・削除する) */
 #lines-panel {
   display: none;
@@ -1087,8 +1131,11 @@ html, body {
         <button class="tab-tool" id="btn-tab-lines" title="この図の 1 行だけを選んで書き換え・挿入・削除する">✎ 行編集</button>
         <!-- BLK-junior-20260907-0803-wish: 既存の図をテンプレートに新しい図を作る -->
         <button class="tab-tool" id="btn-tab-template" title="既存の図をテンプレートにして、部品名を替えた新しい図を作る">⧉ テンプレート</button>
+        <!-- BLK-reviewer-20260907-0803: 前回保存時点から変わった図があるかを常時見せる -->
+        <button class="tab-tool" id="btn-tab-diff" title="前回保存した時点から変わった図の一覧">± 差分 −</button>
       </div>
       <div id="folder-panel"></div>
+      <div id="diff-panel"></div>
       <!-- 開いている図をまたいで部品名を一括置換する -->
       <div id="rename-panel">
         <label for="rename-from">置換前 (部品名)</label>
@@ -1298,6 +1345,7 @@ html, body {
 <script src="src/core/diagram-settings.js"></script>
 <script src="src/core/name-audit.js"></script>
 <script src="src/core/template-new.js"></script>
+<script src="src/core/save-diff.js"></script>
 <script src="src/core/command-palette.js"></script>
 <script src="src/core/diagram-rail.js"></script>
 <script src="src/core/zoom-hud.js"></script>

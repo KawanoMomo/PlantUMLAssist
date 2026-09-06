@@ -15,6 +15,7 @@ const sourceFiles = [
   'src/core/class-scaffold.js',
   'src/core/name-audit.js',
   'src/core/template-new.js',
+  'src/core/save-diff.js',
   'src/core/command-palette.js',
   'src/core/diagram-rail.js',
   'src/core/zoom-hud.js',
