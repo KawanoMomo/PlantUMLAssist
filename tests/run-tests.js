@@ -17,6 +17,7 @@ const sourceFiles = [
   'src/core/template-new.js',
   'src/core/command-palette.js',
   'src/core/diagram-rail.js',
+  'src/core/zoom-hud.js',
   'src/core/outline.js',
   'src/core/line-resolver.js',
   'src/core/formatter-interface.js',

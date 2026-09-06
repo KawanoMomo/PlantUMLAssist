@@ -36,6 +36,8 @@ var suppressSync = false;
 // 図種レールのハイライトを現在の図種に合わせ直す。setupDiagramRail が実体を入れる
 // (レールが無い環境でも呼び出し側が分岐を書かずに済むよう既定は no-op)。
 var syncRail = function() {};
+// キャンバス上のズーム帯を現在の倍率・図種に合わせ直す。setupZoomHud が実体を入れる。
+var syncZoomHud = function() {};
 var renderTimer = null;
 var RENDER_DEBOUNCE_MS = 150;
 var zoom = 1.0;
@@ -855,7 +857,7 @@ function init() {
     });
 
     // select 側から変えられたときもハイライトを追随させる。
-    sel.addEventListener('change', function() { syncRail(); });
+    sel.addEventListener('change', function() { syncRail(); syncZoomHud(); });
 
     var cfg = document.getElementById('rail-config');
     var cfgBtn = document.getElementById('btn-config');
@@ -985,6 +987,30 @@ function init() {
   document.getElementById('btn-zoom-in').addEventListener('click', function() { setZoom(zoom + 0.1); });
   document.getElementById('btn-zoom-out').addEventListener('click', function() { setZoom(zoom - 0.1); });
   document.getElementById('btn-zoom-fit').addEventListener('click', zoomToFit);
+
+  // ── キャンバス上に浮くズーム帯 (design 1a) ───────────────────────────
+  // 倍率の適用そのものは従来どおり setZoom / zoomToFit の 1 本で、帯はその
+  // 呼び出し口をキャンバスの上へ持ってきただけ。表示は setZoom 内の
+  // syncZoomHud() が一括で更新するので、ツールバー・ホイール・パレットの
+  // どこから倍率が変わっても帯が古い値のまま残らない。
+  (function setupZoomHud() {
+    var host = document.getElementById('zoom-hud');
+    var hud = window.MA.zoomHud;
+    if (!host || !hud) return;
+
+    syncZoomHud = function() {
+      host.innerHTML = hud.buildHudHtml(currentDiagramType, zoom);
+    };
+    syncZoomHud();
+
+    host.addEventListener('click', function(e) {
+      var btn = e.target && e.target.closest ? e.target.closest('.hud-btn') : null;
+      if (!btn || btn.disabled) return;
+      if (btn.id === 'hud-zoom-in') setZoom(hud.stepZoom(zoom, 1));
+      else if (btn.id === 'hud-zoom-out') setZoom(hud.stepZoom(zoom, -1));
+      else if (btn.id === 'hud-zoom-fit') zoomToFit();
+    });
+  })();
 
   // BLK-primary-20260907-0703: 右パネルの「Properties / 図の設定」タブ。
   var tabProps = document.getElementById('props-tab-props');
@@ -1429,6 +1455,7 @@ function initPaneResizers() {
 function setZoom(z) {
   zoom = Math.max(0.1, Math.min(5.0, Math.round(z * 100) / 100));
   if (zoomDisplayEl) zoomDisplayEl.textContent = Math.round(zoom * 100) + '%';
+  syncZoomHud();
   if (previewSvgEl) {
     previewSvgEl.style.transform = 'scale(' + zoom + ')';
     previewSvgEl.style.transformOrigin = '0 0';
@@ -1533,6 +1560,7 @@ function applyActiveDoc() {
     var dtSel = document.getElementById('diagram-type');
     if (dtSel) dtSel.value = currentDiagramType;
     syncRail();  // タブ切替は select を直接書き換えるので change が飛ばない
+    syncZoomHud();
     try { window.localStorage.setItem('plantuml-diagram-type', currentDiagramType); } catch (e) {}
   }
   mmdText = doc.dsl;
