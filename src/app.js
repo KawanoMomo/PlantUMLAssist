@@ -33,6 +33,9 @@ var currentDiagramType = 'plantuml-sequence';
 var currentModule = null;
 var currentParsed = { meta: {}, elements: [], relations: [], groups: [] };
 var suppressSync = false;
+// 図種レールのハイライトを現在の図種に合わせ直す。setupDiagramRail が実体を入れる
+// (レールが無い環境でも呼び出し側が分岐を書かずに済むよう既定は no-op)。
+var syncRail = function() {};
 var renderTimer = null;
 var RENDER_DEBOUNCE_MS = 150;
 var zoom = 1.0;
@@ -825,6 +828,40 @@ function init() {
     scheduleRefresh();
   });
 
+  // ── 図種レール (design 1a): 左端の SEQ/UC/CMP/CLS/ACT/ST ─────────────
+  // レールは <select id="diagram-type"> の別経路であり、切り替えそのものは
+  // 従来どおり select の change ハンドラ 1 本が行う (自動保存・履歴・タブの
+  // 種類差し替えがそこに集約されているため、二重実装にしない)。
+  (function setupDiagramRail() {
+    var host = document.getElementById('rail-types');
+    var sel = document.getElementById('diagram-type');
+    var rail = window.MA.diagramRail;
+    if (!host || !sel || !rail) return;
+
+    // 現在の図種に合わせてレールを描き直す。
+    syncRail = function() {
+      host.innerHTML = rail.buildRailHtml(sel.value);
+    };
+    syncRail();
+
+    host.addEventListener('click', function(e) {
+      var btn = e.target && e.target.closest ? e.target.closest('.rail-btn') : null;
+      if (!btn) return;
+      var t = btn.getAttribute('data-type');
+      if (!t || t === sel.value) return;  // 同じ図種の押し直しは何もしない
+      sel.value = t;
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+      syncRail();
+    });
+
+    // select 側から変えられたときもハイライトを追随させる。
+    sel.addEventListener('change', function() { syncRail(); });
+
+    var cfg = document.getElementById('rail-config');
+    var cfgBtn = document.getElementById('btn-config');
+    if (cfg && cfgBtn) cfg.addEventListener('click', function() { cfgBtn.click(); });
+  })();
+
   // Open / Save
   document.getElementById('btn-open').addEventListener('click', openFile);
   document.getElementById('btn-save').addEventListener('click', saveFile);
@@ -1493,6 +1530,7 @@ function applyActiveDoc() {
     currentDiagramType = mod.type || doc.diagramType;
     var dtSel = document.getElementById('diagram-type');
     if (dtSel) dtSel.value = currentDiagramType;
+    syncRail();  // タブ切替は select を直接書き換えるので change が飛ばない
     try { window.localStorage.setItem('plantuml-diagram-type', currentDiagramType); } catch (e) {}
   }
   mmdText = doc.dsl;
