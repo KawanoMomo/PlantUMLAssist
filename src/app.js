@@ -1055,6 +1055,7 @@ function init() {
   });
 
   setupTabs();
+  setupBulkRename();
 
   setZoom(1.0);
   updateLineNumbers();
@@ -1442,6 +1443,182 @@ function setupTabs() {
   document.addEventListener('click', function(ev) {
     if (!panel.classList.contains('open')) return;
     if (panel.contains(ev.target) || ev.target === btnFolder) return;
+    closePanel();
+  });
+}
+
+// ── 一括置換 ───────────────────────────────────────────────────────────────
+// 部品名は複数の図に同じ綴りで現れる。図ごとに全文を打ち直すと手数が枚数に
+// 比例して増えるので、置換前・置換後を 1 度だけ入力して開いている図すべてに
+// 適用する。アクティブな図はエディタにも即座に反映する。
+
+// 現在の編集内容を含んだドキュメント一覧。書き戻してから読むので
+// エディタの未確定分も置換対象になる。
+function _renameDocs() {
+  saveActiveDoc();
+  return window.MA.workspace ? window.MA.workspace.list() : [];
+}
+
+function updateRenamePreview() {
+  var br = window.MA.bulkRename;
+  var hits = document.getElementById('rename-hits');
+  var summary = document.getElementById('rename-summary');
+  var applyBtn = document.getElementById('btn-rename-apply');
+  if (!br || !hits || !summary || !applyBtn) return;
+  var from = (document.getElementById('rename-from') || {}).value || '';
+  var to = (document.getElementById('rename-to') || {}).value || '';
+  var allDocs = (document.getElementById('rename-all-docs') || {}).checked;
+  var docs = window.MA.workspace ? window.MA.workspace.list() : [];
+  var activeId = window.MA.workspace ? window.MA.workspace.getActiveId() : null;
+  // 表示中の候補は「今の editor の中身」を反映させたいのでアクティブ分だけ差し替える。
+  docs = docs.map(function(d) {
+    return d.id === activeId ? { id: d.id, name: d.name, dsl: mmdText } : d;
+  });
+  if (!allDocs) docs = docs.filter(function(d) { return d.id === activeId; });
+
+  hits.textContent = '';
+  var rows = br.preview(docs, from);
+  var total = 0;
+  rows.forEach(function(r) {
+    total += r.count;
+    var row = document.createElement('div');
+    row.className = 'hit' + (r.count === 0 ? ' zero' : '');
+    row.setAttribute('data-doc-name', r.name);
+    var n = document.createElement('span');
+    n.textContent = r.name;
+    var c = document.createElement('span');
+    c.className = 'hit-count';
+    c.textContent = r.count + ' 件';
+    row.appendChild(n);
+    row.appendChild(c);
+    hits.appendChild(row);
+  });
+
+  var ok = !!from && br.isValidTarget(to) && from !== to && total > 0;
+  if (!from) summary.textContent = '置換前の部品名を入力してください';
+  else if (total === 0) summary.textContent = '「' + from + '」は見つかりません';
+  else if (!to) summary.textContent = '置換後の名前を入力してください';
+  else if (!br.isValidTarget(to)) summary.textContent = '置換後は英数字・_ ・- ・. のみ';
+  else if (from === to) summary.textContent = '置換前と置換後が同じです';
+  else summary.textContent = total + ' 件 / ' + rows.filter(function(r) { return r.count > 0; }).length + ' 枚を置換します';
+  summary.setAttribute('data-total', String(total));
+  applyBtn.disabled = !ok;
+}
+
+function applyBulkRename() {
+  var br = window.MA.bulkRename;
+  if (!br || !window.MA.workspace) return null;
+  var from = (document.getElementById('rename-from') || {}).value || '';
+  var to = (document.getElementById('rename-to') || {}).value || '';
+  var allDocs = (document.getElementById('rename-all-docs') || {}).checked;
+  var docs = _renameDocs();
+  var activeId = window.MA.workspace.getActiveId();
+  if (!allDocs) docs = docs.filter(function(d) { return d.id === activeId; });
+
+  var res = br.apply(docs, from, to);
+  if (res.changed.length === 0) return res;
+
+  // アクティブな図はエディタごと差し替える。undo は 1 手で戻せるようにする。
+  if (window.MA.history) window.MA.history.pushHistory();
+  res.changed.forEach(function(c) {
+    if (c.id === activeId) {
+      mmdText = c.dsl;
+      suppressSync = true;
+      editorEl.value = mmdText;
+      suppressSync = false;
+    }
+    window.MA.workspace.updateDoc(c.id, { dsl: c.dsl });
+  });
+  // タブ名自体が旧名なら追随させる (SpiDrv.puml → Spi_Driver.puml)。
+  window.MA.workspace.list().forEach(function(d) {
+    if (d.name === from && br.isValidTarget(to)) window.MA.workspace.rename(d.id, to);
+  });
+
+  if (window.MA.selection) window.MA.selection.clearSelection();
+  updateLineNumbers();
+  scheduleRefresh();
+  renderTabs();
+  // 保存フォルダ運用時は置換後の全図を書き出す。
+  try {
+    var cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null;
+    if (cfg && cfg.backend === 'file') {
+      window.MA.workspace.list().forEach(function(d) {
+        window.MA.workspace.saveToFile(d, cfg.fileDir);
+      });
+    }
+  } catch (e) { /* best-effort */ }
+  return res;
+}
+
+function setupBulkRename() {
+  var panel = document.getElementById('rename-panel');
+  var btn = document.getElementById('btn-tab-rename');
+  if (!panel || !btn || !window.MA.bulkRename) return;
+  var fromEl = document.getElementById('rename-from');
+  var toEl = document.getElementById('rename-to');
+  var allEl = document.getElementById('rename-all-docs');
+  var cancel = document.getElementById('btn-rename-cancel');
+  var applyBtn = document.getElementById('btn-rename-apply');
+  var summary = document.getElementById('rename-summary');
+
+  function closePanel() { panel.classList.remove('open'); }
+
+  function fillCandidates() {
+    var dl = document.getElementById('rename-candidates');
+    if (!dl) return;
+    dl.textContent = '';
+    window.MA.bulkRename.identifiers(_renameDocs()).forEach(function(name) {
+      var o = document.createElement('option');
+      o.value = name;
+      dl.appendChild(o);
+    });
+  }
+
+  btn.addEventListener('click', function() {
+    if (panel.classList.contains('open')) { closePanel(); return; }
+    fillCandidates();
+    // 選択中の部品があればそれを置換前の初期値にする (入力ゼロで始められる)。
+    var sel = (window.MA.selection && window.MA.selection.getSelected()) || [];
+    if (sel.length === 1 && sel[0] && typeof sel[0].id === 'string' && !fromEl.value) {
+      fromEl.value = sel[0].id;
+    }
+    var rect = btn.getBoundingClientRect();
+    panel.style.left = Math.max(4, rect.left - 60) + 'px';
+    panel.style.top = (rect.bottom + 2) + 'px';
+    panel.classList.add('open');
+    updateRenamePreview();
+    fromEl.focus();
+  });
+
+  [fromEl, toEl].forEach(function(el) {
+    if (!el) return;
+    el.addEventListener('input', updateRenamePreview);
+    el.addEventListener('keydown', function(ev) {
+      if (ev.key === 'Enter' && !applyBtn.disabled) { ev.preventDefault(); doApply(); }
+      if (ev.key === 'Escape') { ev.preventDefault(); closePanel(); }
+    });
+  });
+  if (allEl) allEl.addEventListener('change', updateRenamePreview);
+
+  function doApply() {
+    var res = applyBulkRename();
+    if (res && res.total > 0) {
+      summary.textContent = res.total + ' 件 / ' + res.docs + ' 枚を置換しました';
+      summary.setAttribute('data-applied', String(res.total));
+      fromEl.value = '';
+      toEl.value = '';
+      fillCandidates();
+      updateRenamePreview();
+      summary.textContent = res.total + ' 件 / ' + res.docs + ' 枚を置換しました';
+    }
+  }
+
+  if (applyBtn) applyBtn.addEventListener('click', doApply);
+  if (cancel) cancel.addEventListener('click', closePanel);
+
+  document.addEventListener('click', function(ev) {
+    if (!panel.classList.contains('open')) return;
+    if (panel.contains(ev.target) || ev.target === btn) return;
     closePanel();
   });
 }
