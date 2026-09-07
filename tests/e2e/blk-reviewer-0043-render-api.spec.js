@@ -16,24 +16,45 @@ test.describe('/render の仕様が窓口から分かる (BLK-reviewer-0043)', (
     expect(res.status()).toBe(200);
     const doc = await res.json();
     expect(doc.endpoint).toBe('POST /render');
-    expect(doc.request.fields.text).toContain("'dsl' ではない");
+    expect(doc.request.fields).toHaveProperty('text');
     expect(doc.request.fields).toHaveProperty('mode');
+    expect(doc.request.aliases.fields).toContain('dsl');
     expect(doc.response).toHaveProperty('400');
     expect(doc.response).toHaveProperty('422');
     expect(doc.example).toContain('"text"');
   });
 
-  test('dsl フィールドで送ると 400 で「text です」と言われる', async ({ request }) => {
-    const res = await request.post('/render', { data: { dsl: OK_DSL, mode: 'local' } });
+  // 差し戻し対応: 400 で名指しするだけでは、呼ぶ側が GET /render を先に読まない
+  // かぎり同じ往復が毎回起きる。別名で送っても 1 回目の POST が通ることを確かめる。
+  for (const alias of ['dsl', 'source', 'uml', 'puml', 'diagram']) {
+    test(`${alias} フィールドで送っても 200 で SVG が返る`, async ({ request }) => {
+      const res = await request.post('/render', { data: { [alias]: OK_DSL, mode: 'local' } });
+      expect(res.status()).toBe(200);
+      expect(res.headers()['content-type']).toContain('image/svg+xml');
+      expect(await res.text()).toContain('<svg');
+      // 黙って呑まず、正式な名前をヘッダで伝える。
+      const warn = decodeURIComponent(res.headers()['x-plantumlassist-warning'] || '');
+      expect(warn).toContain(`'${alias}'`);
+      expect(warn).toContain("'text'");
+    });
+  }
+
+  test('text を使えば警告ヘッダは付かない', async ({ request }) => {
+    const res = await request.post('/render', { data: { text: OK_DSL, mode: 'local' } });
+    expect(res.status()).toBe(200);
+    expect(res.headers()['x-plantumlassist-warning']).toBeUndefined();
+  });
+
+  test('別名が 2 つ以上あるときだけ 400', async ({ request }) => {
+    const res = await request.post('/render', { data: { dsl: OK_DSL, uml: OK_DSL } });
     expect(res.status()).toBe(400);
     const body = await res.json();
-    expect(body.error).toContain("'text'");
-    expect(body.error).toContain("'dsl'");
-    // 仕様も一緒に返すので、その場で正しい形が分かる。
+    expect(body.error).toContain('dsl');
+    expect(body.error).toContain('uml');
     expect(body.api.endpoint).toBe('POST /render');
   });
 
-  test('text が無い / 空 / 文字列でないときも 400', async ({ request }) => {
+  test('DSL のフィールドが無い / 空 / 文字列でないときは 400', async ({ request }) => {
     const missing = await request.post('/render', { data: { mode: 'local' } });
     expect(missing.status()).toBe(400);
     expect((await missing.json()).error).toContain("'text'");
@@ -45,6 +66,11 @@ test.describe('/render の仕様が窓口から分かる (BLK-reviewer-0043)', (
     const notString = await request.post('/render', { data: { text: 42 } });
     expect(notString.status()).toBe(400);
     expect((await notString.json()).error).toContain('string');
+
+    // 別名で来ても同じ判定になり、名指しは送られてきた名前でされる。
+    const aliasEmpty = await request.post('/render', { data: { dsl: '' } });
+    expect(aliasEmpty.status()).toBe(400);
+    expect((await aliasEmpty.json()).error).toContain("'dsl'");
   });
 
   test('知らない mode は 400 で選べる値を示す', async ({ request }) => {
