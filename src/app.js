@@ -201,6 +201,7 @@ function init() {
     }
     // 前回保存時点との差分バッジを追従させる。
     try { renderDiffBadge(); } catch (e) {}
+    try { renderConsistencyBadge(); } catch (e) {}
   });
 
   editorEl.addEventListener('scroll', function() {
@@ -1328,6 +1329,7 @@ function init() {
   setupDiffPanel();
   setupNameAudit();
   setupFamilyAudit();
+  setupConsistencyPanel();
   setupLineEdit();
   setupOutline();
   setupCompareView();
@@ -1432,6 +1434,7 @@ function initCommandPalette() {
     var list = [
       { id: 'open', title: 'ファイルを開く / Open', hint: 'File', keywords: ['open', 'file', 'ひらく'], run: function() { clickById('btn-open'); } },
       { id: 'save', title: 'ファイルを保存 / Save', hint: 'File', keywords: ['save', 'file', 'ほぞん'], run: function() { clickById('btn-save'); } },
+      { id: 'consistency', title: '整合性チェックを開く / Consistency', hint: 'Review', keywords: ['consistency', 'check', 'せいごう', 'かくにん'], run: function() { clickById('status-consistency'); } },
       { id: 'family-audit', title: '系統チェックを開く / Family audit', hint: 'Tabs', keywords: ['family', 'audit', 'けいとう', 'とつごう'], run: function() { clickById('btn-tab-family'); } },
       { id: 'settings', title: '設定を開く / Settings', hint: 'Ctrl', keywords: ['settings', 'config', 'せってい'], run: function() { clickById('btn-config'); } },
       { id: 'undo', title: '元に戻す / Undo', hint: 'Ctrl+Z', keywords: ['undo', 'もどす'], run: function() { clickById('btn-undo'); } },
@@ -1824,6 +1827,7 @@ function renderTabs() {
     bar.insertBefore(el, firstTool);
   });
   renderDiffBadge();
+  try { renderConsistencyBadge(); } catch (e) {}
 }
 
 // ── 前回保存時点との差分 ──────────────────────────────
@@ -3331,6 +3335,107 @@ function openFamilyAudit() {
   _familyAuditBind(families);
   modal.style.display = 'flex';
   return families;
+}
+
+// ── 整合性チェック ─────────────────────────────────────────────────────────
+// BLK-reviewer-20260907-0843: レビューは 17 枚の DSL を読み、命名規約・未使用
+// participant・メソッドの欠落・粒度対応を突合パターンごとに探していた。ここは
+// 4 種の突合結果を 1 本の一覧にし、ステータスバーに件数を常時出す。作った側も
+// 保存を待たずに自分の逸脱に気付ける。
+
+function _consistencyDocs() {
+  if (!window.MA.workspace) return [];
+  saveActiveDoc();
+  return window.MA.workspace.list();
+}
+
+function renderConsistencyBadge() {
+  var btn = document.getElementById('status-consistency');
+  var ck = window.MA.consistency;
+  if (!btn || !ck) return null;
+  var result = ck.check(_consistencyDocs());
+  btn.textContent = ck.badgeLabel(result);
+  btn.className = result.count > 0 ? 'has-warning' : '';
+  btn.title = result.count > 0
+    ? ('命名 ' + result.naming.length + ' / 未使用 ' + result.unused.length
+       + ' / メソッド ' + result.methods.length + ' / 粒度 ' + result.granularity.length)
+    : '命名規約・未使用 participant・メソッド不一致・粒度不一致はない';
+  return result;
+}
+
+function openConsistencyPanel() {
+  var modal = document.getElementById('ck-modal');
+  var content = document.getElementById('ck-modal-content');
+  var ck = window.MA.consistency;
+  if (!modal || !content || !ck) return null;
+  var esc = window.MA.htmlUtils.escHtml;
+  var result = ck.check(_consistencyDocs());
+
+  var SECTION = 'font-size:10px;color:var(--accent);font-weight:bold;margin:12px 0 4px 0;';
+  var ROW = 'font-size:11px;color:var(--text-primary);padding:2px 0;border-bottom:1px solid var(--border);';
+  var NONE = 'font-size:11px;color:var(--text-secondary);';
+  var BTN = 'background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;padding:2px 8px;font-size:11px;';
+
+  function section(id, title, rows, render) {
+    var html = '<div style="' + SECTION + '">' + esc(title) + ' — ' + rows.length + ' 件</div>';
+    if (rows.length === 0) {
+      html += '<div id="' + id + '-none" style="' + NONE + '">ありません</div>';
+      return html;
+    }
+    html += '<div id="' + id + '">' + rows.map(function(r) {
+      return '<div class="ck-row" data-kind="' + id + '">' + render(r) + '</div>';
+    }).join('') + '</div>';
+    return html;
+  }
+
+  var html = '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">整合性チェック</h3>'
+    + '<div id="ck-summary" data-count="' + result.count + '" '
+    + 'data-naming="' + result.naming.length + '" data-unused="' + result.unused.length + '" '
+    + 'data-methods="' + result.methods.length + '" data-granularity="' + result.granularity.length + '" '
+    + 'style="font-size:11px;color:' + (result.count ? 'var(--accent-orange)' : 'var(--accent-green)') + ';">'
+    + (result.count === 0 ? '警告はありません' : '警告 ' + result.count + ' 件') + '</div>';
+
+  html += section('ck-naming', '命名規約の逸脱 (多数派の接尾辞から外れている)', result.naming, function(r) {
+    return '<span style="font-family:var(--font-mono);color:var(--accent-orange);">' + esc(r.name) + '</span>'
+      + ' — 末尾 <code>' + esc(r.suffix) + '</code> は <code>' + esc(r.expected) + '</code> に揃える'
+      + ' <span style="color:var(--text-secondary);">(' + esc(r.docs.join(', ')) + ')</span>';
+  });
+  html += section('ck-unused', '未使用 participant (宣言だけで矢印に出てこない)', result.unused, function(r) {
+    return '<span style="font-family:var(--font-mono);color:var(--accent-orange);">' + esc(r.name) + '</span>'
+      + ' <span style="color:var(--text-secondary);">(' + esc(r.doc) + ')</span>';
+  });
+  html += section('ck-methods', 'メソッド不一致 (呼んでいるのにクラスに無い)', result.methods, function(r) {
+    return '<span style="font-family:var(--font-mono);color:var(--accent-orange);">'
+      + esc(r.target) + '.' + esc(r.method) + '</span>'
+      + ' <span style="color:var(--text-secondary);">(' + esc(r.doc) + ')</span>';
+  });
+  html += section('ck-granularity', '粒度不一致 (系統の片方にしか無い動作名)', result.granularity, function(r) {
+    return '<span style="font-family:var(--font-mono);color:var(--accent-orange);">' + esc(r.label) + '</span>'
+      + ' <span style="color:var(--text-secondary);">(' + esc(r.family) + ' 系 / ' + esc(r.onlyIn) + ' にだけ)</span>';
+  });
+
+  html += '<div style="display:flex;gap:8px;margin-top:14px;">'
+    + '<button id="ck-close" style="flex:1;' + BTN + 'padding:8px;">閉じる</button></div>';
+
+  content.innerHTML = html;
+  var rows = content.querySelectorAll('.ck-row');
+  for (var i = 0; i < rows.length; i++) rows[i].setAttribute('style', ROW);
+  modal.style.display = 'flex';
+
+  var closeBtn = document.getElementById('ck-close');
+  if (closeBtn) closeBtn.addEventListener('click', function() { modal.style.display = 'none'; });
+  return result;
+}
+
+function setupConsistencyPanel() {
+  var btn = document.getElementById('status-consistency');
+  var modal = document.getElementById('ck-modal');
+  if (!btn || !modal || !window.MA.consistency) return;
+  btn.addEventListener('click', function() { openConsistencyPanel(); });
+  modal.addEventListener('click', function(ev) {
+    if (ev.target === modal) modal.style.display = 'none';
+  });
+  renderConsistencyBadge();
 }
 
 function setupFamilyAudit() {
