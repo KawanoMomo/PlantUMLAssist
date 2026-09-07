@@ -32,6 +32,18 @@ window.MA.methodAudit = (function() {
     return String(s == null ? '' : s).toLowerCase().replace(/[_\-.\s]/g, '');
   }
 
+  // BLK-reviewer-20260907-1203: 保存された .puml は CRLF が普通なので、行末に \r が
+  // 残る。上の正規表現はどれも末尾が `(.+)$` で、JS の `.` は \r に当たらないため、
+  // CRLF の図では遷移ラベルが 1 件も拾えず「問題なし」を返していた。
+  // 行を渡す入口で必ずここを通し、改行の種類を突合の結果に影響させない。
+  function _line(s) {
+    return String(s == null ? '' : s).replace(/\r$/, '');
+  }
+
+  function _lines(text) {
+    return String(text == null ? '' : text).split(/\r?\n/);
+  }
+
   // 引数の個数。`()` は 0、`(buf: uint8*, len)` は 2。空白だけも 0 とする。
   function argCount(argsText) {
     var t = String(argsText == null ? '' : argsText).trim();
@@ -41,7 +53,7 @@ window.MA.methodAudit = (function() {
 
   // 1 行から呼び出しを 1 件取り出す。メソッドらしくない行は null。
   function parseCall(line) {
-    var m = String(line == null ? '' : line).match(MSG_RE);
+    var m = _line(line).match(MSG_RE);
     if (!m) return null;
     var body = m[1];
     var c = body.match(CALL_RE);
@@ -52,7 +64,7 @@ window.MA.methodAudit = (function() {
   // クラス図の 1 図からメソッド宣言を取り出す。
   // 返り値: { classes: [クラス名], methods: [{ cls, method, args, ret }] }
   function parseClassDoc(dsl) {
-    var lines = String(dsl == null ? '' : dsl).split('\n');
+    var lines = _lines(dsl);
     var classes = [];
     var methods = [];
     var open = null;   // 波括弧の中にいるときの、そのクラス名
@@ -112,7 +124,7 @@ window.MA.methodAudit = (function() {
   // 日本語ラベル・空白入りのラベル (`受信 完了`) はイベント名として数えない
   // (クラスのメソッド名と突き合わせられる形になっていないため)。
   function parseStateEvent(line) {
-    var m = String(line == null ? '' : line).match(STATE_TRANS_RE);
+    var m = _line(line).match(STATE_TRANS_RE);
     if (!m) return null;
     // guard `[...]` と action `/ ...` を先に落とす。action 側の `log()` の括弧で
     // 行ごと捨ててしまうと、`Timer_Fault [retry > 3] / log()` のきっかけを取り逃す。
@@ -136,7 +148,7 @@ window.MA.methodAudit = (function() {
     (Array.isArray(docs) ? docs : []).forEach(function(d) {
       if (!isStateDoc(d)) return;
       var docName = (d && d.name) || '';
-      String((d && d.dsl) || '').split("\n").forEach(function(line, idx) {
+      _lines((d && d.dsl) || '').forEach(function(line, idx) {
         var e = parseStateEvent(line);
         if (!e) return;
         out.push({ event: e.event, doc: docName, line: idx + 1 });
@@ -166,7 +178,7 @@ window.MA.methodAudit = (function() {
       parsedCls.methods.forEach(function(m) {
         methods.push({ cls: m.cls, method: m.method, args: m.args, ret: m.ret, doc: docName });
       });
-      dsl.split('\n').forEach(function(line, idx) {
+      _lines(dsl).forEach(function(line, idx) {
         var c = parseCall(line);
         if (!c) return;
         calls.push({ method: c.method, args: c.args, doc: docName, line: idx + 1 });

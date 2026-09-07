@@ -1525,6 +1525,21 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 }
 
 .cfg-sc-empty { font-size: 11px; color: var(--text-secondary); padding: 8px 0; }
+
+/* ── テンプレート複製の突合 (BLK-primary-20260907-1203-wish) ─────────────── */
+/* 見出しの色で結果を言い切る。作れなくはしないので、赤は「読んでから押せ」の意。 */
+#tpl-audit-head[data-audit="ok"]      { color: var(--accent-green); }
+#tpl-audit-head[data-audit="ng"]      { color: var(--accent-red); }
+#tpl-audit-head[data-audit="skipped"] { color: var(--text-secondary); }
+
+.tpl-audit-row {
+  font-size: 11px;
+  color: var(--accent-red);
+  padding: 2px 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tpl-audit-mark { font-weight: bold; }
 .cfg-sc-table kbd {
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
@@ -2098,6 +2113,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/method-audit.js"></script>
 <script src="src/core/template-new.js"></script>
 <script src="src/core/template-map.js"></script>
+<script src="src/core/template-audit.js"></script>
 <script src="src/core/activity-insert.js"></script>
 <script src="src/core/save-diff.js"></script>
 <script src="src/core/command-palette.js"></script>
