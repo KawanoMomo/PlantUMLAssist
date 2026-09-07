@@ -14,6 +14,7 @@ try {
   require('../src/core/id-normalizer.js');
   require('../src/core/parser-utils.js');
   require('../src/core/relation-options.js');
+  require('../src/core/group-notation.js');
   require('../src/modules/usecase.js');
 } catch (e) { /* sandbox path: run-tests.js already loaded everything */ }
 var uc = (typeof window !== 'undefined' && window.MA && window.MA.modules && window.MA.modules.plantumlUsecase)

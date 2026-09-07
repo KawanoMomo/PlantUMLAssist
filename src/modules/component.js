@@ -50,8 +50,10 @@ window.MA.modules.plantumlComponent = (function() {
     if (label && label !== id) return 'port "' + label + '" as ' + id;
     return 'port ' + id;
   }
-  function fmtPackage(label) {
-    return 'package "' + label + '" {';
+  // design 5d: 境界の表記 (package / folder / frame / node / rectangle)。
+  // 書式は group-notation に 1 つだけ置く。
+  function fmtPackage(label, notation) {
+    return window.MA.groupNotation.fmtOpen(notation, label, 'plantuml-component');
   }
   function fmtRelation(kind, from, to, label) {
     var lbl = label || '';
@@ -121,8 +123,13 @@ window.MA.modules.plantumlComponent = (function() {
     lines.splice(parentIdx + 1, 0, portLine, indent + '}');
     return lines.join('\n');
   }
-  function addPackage(text, label) {
-    return insertBeforeEnd(insertBeforeEnd(text, fmtPackage(label)), '}');
+  function addPackage(text, label, notation) {
+    return insertBeforeEnd(insertBeforeEnd(text, fmtPackage(label, notation)), '}');
+  }
+
+  // 既にある境界の表記だけを差し替える (ラベル・中身・閉じ括弧はそのまま)。
+  function changeGroupNotation(text, lineNum, notation) {
+    return window.MA.groupNotation.changeNotation(text, lineNum, notation, 'plantuml-component');
   }
   function addRelation(text, kind, from, to, label) {
     return insertBeforeEnd(text, fmtRelation(kind, from, to, label));
@@ -356,7 +363,7 @@ window.MA.modules.plantumlComponent = (function() {
         var pkgLabel = pm[1] !== undefined ? pm[1] : pm[2];
         var pkgId = '__pkg_' + (packageCounter++);
         var parent = packageStack.length > 0 ? packageStack[packageStack.length - 1].id : null;
-        var pkg = { kind: 'package', id: pkgId, label: pkgLabel, startLine: lineNum, endLine: 0, parentId: parent };
+        var pkg = { kind: 'package', notation: (window.MA.groupNotation.notationOf(trimmed) || 'package'), id: pkgId, label: pkgLabel, startLine: lineNum, endLine: 0, parentId: parent };
         result.groups.push(pkg);
         packageStack.push(pkg);
         continue;
@@ -491,7 +498,7 @@ window.MA.modules.plantumlComponent = (function() {
           { value: 'component', label: 'Component', selected: true },
           { value: 'interface', label: 'Interface' },
           { value: 'port',      label: 'Port' },
-          { value: 'package',   label: 'Package境界' },
+          { value: 'package',   label: '境界 (package / folder / frame / node / rectangle)' },
           { value: 'relation',  label: 'Relation (関係)' },
           { value: 'bulk',      label: '一括 (複数行)' },
         ]) +
@@ -534,7 +541,11 @@ window.MA.modules.plantumlComponent = (function() {
       } else if (kind === 'package') {
         html =
           P.fieldHtml('Label', 'co-tail-label', '', '例: Backend') +
-          P.primaryButtonHtml('co-tail-add', '+ Package 追加');
+          P.selectFieldHtml('表記', 'co-tail-notation', window.MA.groupNotation
+            .notationsFor('plantuml-component').map(function(n, i) {
+              return { value: n.id, label: n.label + ' — ' + n.hint, selected: i === 0 };
+            })) +
+          P.primaryButtonHtml('co-tail-add', '+ 境界 追加');
       } else if (kind === 'relation') {
         html =
           P.selectFieldHtml('Kind', 'co-tail-rkind', [
@@ -592,7 +603,8 @@ window.MA.modules.plantumlComponent = (function() {
           var lbl = document.getElementById('co-tail-label').value.trim();
           if (!lbl) { alert('Label 必須'); return; }
           window.MA.history.pushHistory();
-          out = addPackage(t, lbl);
+          var notaEl = document.getElementById('co-tail-notation');
+          out = addPackage(t, lbl, notaEl ? notaEl.value : 'package');
         } else if (kind === 'relation') {
           var fr = document.getElementById('co-tail-from').value;
           var to = document.getElementById('co-tail-to').value;
@@ -847,10 +859,23 @@ window.MA.modules.plantumlComponent = (function() {
       '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Component Diagram</div>' +
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">PACKAGE (L' + group.startLine + '-' + group.endLine + ')</label>' +
-        '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">Label: ' + group.label + '</div>' +
-        '<div style="font-size:10px;color:var(--text-secondary);">v0.4.0: package ラベル変更 / 範囲指定 wrap は v0.5.0 で対応</div>' +
+        '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">Label: ' + window.MA.htmlUtils.escHtml(group.label || '') + '</div>' +
+        // design 5d: 表記を後から差し替える (中身と閉じ括弧はそのまま)
+        window.MA.properties.selectFieldHtml('表記', 'co-grp-notation',
+          window.MA.groupNotation.notationsFor('plantuml-component').map(function(n) {
+            return { value: n.id, label: n.label + ' — ' + n.hint, selected: n.id === (group.notation || 'package') };
+          })) +
+        window.MA.properties.primaryButtonHtml('co-grp-notation-apply', '表記を変更') +
+        '<div style="font-size:10px;color:var(--text-secondary);margin-top:8px;">v0.4.0: ラベル変更 / 範囲指定 wrap は v0.5.0 で対応</div>' +
       '</div>';
     propsEl.innerHTML = html;
+    window.MA.properties.bindEvent('co-grp-notation-apply', 'click', function() {
+      var v = document.getElementById('co-grp-notation').value;
+      if (v === (group.notation || 'package')) return;
+      window.MA.history.pushHistory();
+      ctx.setMmdText(changeGroupNotation(ctx.getMmdText(), group.startLine, v));
+      ctx.onUpdate();
+    });
   }
 
   return {
@@ -873,6 +898,7 @@ window.MA.modules.plantumlComponent = (function() {
     fmtInterface: fmtInterface,
     fmtPort: fmtPort,
     fmtPackage: fmtPackage,
+    changeGroupNotation: changeGroupNotation,
     fmtRelation: fmtRelation,
     addComponent: addComponent,
     normalizeIdInput: normalizeIdInput,
