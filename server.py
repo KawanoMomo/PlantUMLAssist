@@ -23,6 +23,12 @@ JAR_PATH = ROOT / 'lib' / 'plantuml.jar'
 DAEMON_SRC = ROOT / 'lib' / 'PlantUMLDaemon.java'
 PORT = int(os.environ.get('PUA_PORT', '8766'))
 AUTOSAVE_DEFAULT_DIR = ROOT / 'autosave'
+# BLK-junior-20260907-0843: 保存先ディレクトリは localStorage にしか無く、
+# 新しいタブ・別プロファイルで開くたびに既定へ戻るため、図種を変えるたびに
+# ⚙設定 → ファイル → パス再入力 → OK を打ち直すことになっていた。
+# 保存先はブラウザではなくこのマシンの設定なので、server 側の 1 ファイルに置く。
+PREFS_PATH = ROOT / '.assist-prefs.json'
+PREFS_KEYS = ('backend', 'fileDir')
 # BLK-junior-20260907-1203: 図の名前はそのままファイル名 ({name}.puml) になる。
 # 以前は [A-Za-z0-9_-]+ しか通さず、「GPIOドライバユースケース」のような日本語名の図が
 # 保存フォルダから読めず、保存も 400 になって黙って download に落ちていた。
@@ -59,10 +65,40 @@ _last_heartbeat = time.time()
 _shutdown_started = False
 
 
+def read_prefs():
+    """Saved-on-this-machine preferences. Missing/broken file → empty dict."""
+    try:
+        data = json.loads(PREFS_PATH.read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {k: data[k] for k in PREFS_KEYS if isinstance(data.get(k), str) and data[k]}
+
+
+def write_prefs(partial):
+    """Merge the given keys into the prefs file and return the stored result."""
+    merged = read_prefs()
+    for k in PREFS_KEYS:
+        if k in partial:
+            v = partial[k]
+            if isinstance(v, str) and v:
+                merged[k] = v
+            else:
+                merged.pop(k, None)
+    try:
+        PREFS_PATH.write_text(json.dumps(merged, ensure_ascii=False), encoding='utf-8')
+    except OSError:
+        pass
+    return merged
+
+
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path.startswith('/autosave'):
             return self._handle_autosave_get()
+        if self.path.split('?')[0] == '/prefs':
+            return self._send_json(200, read_prefs())
         if self.path.split('?')[0] == '/env':
             return self._send_json(200, detect_env())
         path = self.path.split('?')[0]
@@ -93,6 +129,8 @@ class Handler(BaseHTTPRequestHandler):
         global _last_heartbeat, _shutdown_started
         if self.path == '/autosave':
             return self._handle_autosave_post()
+        if self.path == '/prefs':
+            return self._handle_prefs_post()
         if self.path == '/heartbeat':
             with _state_lock:
                 _last_heartbeat = time.time()
@@ -147,6 +185,21 @@ class Handler(BaseHTTPRequestHandler):
 
     def log_message(self, fmt, *args):
         pass
+
+    # --- prefs ---------------------------------------------------------------
+
+    def _handle_prefs_post(self):
+        length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(length).decode('utf-8')
+        try:
+            data = json.loads(body)
+        except ValueError:
+            self._send_json(400, {'error': 'invalid JSON'})
+            return
+        if not isinstance(data, dict):
+            self._send_json(400, {'error': 'body must be an object'})
+            return
+        self._send_json(200, write_prefs(data))
 
     # --- autosave helpers ----------------------------------------------------
 
