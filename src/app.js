@@ -1327,6 +1327,7 @@ function init() {
   setupTemplateNew();
   setupDiffPanel();
   setupNameAudit();
+  setupFamilyAudit();
   setupLineEdit();
   setupOutline();
   setupCompareView();
@@ -1431,6 +1432,7 @@ function initCommandPalette() {
     var list = [
       { id: 'open', title: 'ファイルを開く / Open', hint: 'File', keywords: ['open', 'file', 'ひらく'], run: function() { clickById('btn-open'); } },
       { id: 'save', title: 'ファイルを保存 / Save', hint: 'File', keywords: ['save', 'file', 'ほぞん'], run: function() { clickById('btn-save'); } },
+      { id: 'family-audit', title: '系統チェックを開く / Family audit', hint: 'Tabs', keywords: ['family', 'audit', 'けいとう', 'とつごう'], run: function() { clickById('btn-tab-family'); } },
       { id: 'settings', title: '設定を開く / Settings', hint: 'Ctrl', keywords: ['settings', 'config', 'せってい'], run: function() { clickById('btn-config'); } },
       { id: 'undo', title: '元に戻す / Undo', hint: 'Ctrl+Z', keywords: ['undo', 'もどす'], run: function() { clickById('btn-undo'); } },
       { id: 'redo', title: 'やり直す / Redo', hint: 'Ctrl+Y', keywords: ['redo', 'やりなおす'], run: function() { clickById('btn-redo'); } },
@@ -3116,6 +3118,145 @@ function setupOutline() {
       if (ev.key === 'Escape') { ev.preventDefault(); setEditorTab('dsl'); }
     });
   }
+}
+
+// ── 系統チェック ───────────────────────────────────────────────────────────
+// 同じ系統 (図の名前の頭を共有する複数枚) の sequence のメッセージ列と state の
+// 遷移列が揃っているかは、今は 3 枚を開いて目で追うしかない。ここは系統ごとに
+// 動作名を突き合わせ、片方にしか無い名前を機械的に出す。名前突合 (部品名) と
+// 対になる道具で、こちらは動作名 (矢印のラベル) を見る。
+
+var _familyAuditDocs = [];   // 表の行から図へ飛ぶための、表示中の系統の図一覧
+
+function _familyAuditRender(families, selectedKey) {
+  var content = document.getElementById('fa-modal-content');
+  var fa = window.MA.familyAudit;
+  if (!content || !fa) return;
+  var esc = window.MA.htmlUtils.escHtml;
+
+  var SECTION = 'font-size:10px;color:var(--accent);font-weight:bold;margin:12px 0 4px 0;';
+  var CELL = 'padding:3px 6px;border-bottom:1px solid var(--border);font-size:11px;color:var(--text-primary);';
+  var BTN = 'background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;padding:2px 8px;font-size:11px;';
+
+  var html = '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">系統チェック</h3>';
+
+  if (families.length === 0) {
+    html += '<div id="fa-empty" style="font-size:11px;color:var(--text-secondary);">'
+      + '同じ頭の名前を持つ図が 2 枚以上ありません。Adc_Seq / Adc_State のように'
+      + '系統の頭を揃えて名前を付けると突き合わせられます。</div>'
+      + '<div style="display:flex;gap:8px;margin-top:14px;">'
+      + '<button id="fa-close" style="flex:1;' + BTN + 'padding:8px;">閉じる</button></div>';
+    content.innerHTML = html;
+    _familyAuditDocs = [];
+    return;
+  }
+
+  var sel = null;
+  for (var i = 0; i < families.length; i++) if (families[i].key === selectedKey) sel = families[i];
+  if (!sel) sel = families[0];
+  _familyAuditDocs = sel.docs;
+
+  html += '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">'
+    + '<label for="fa-family">系統</label> '
+    + '<select id="fa-family" style="background:var(--bg-primary);border:1px solid var(--border);'
+      + 'color:var(--text-primary);padding:3px 6px;border-radius:3px;font-family:var(--font-mono);">'
+    + families.map(function(f) {
+        return '<option value="' + esc(f.key) + '"' + (f === sel ? ' selected' : '') + '>'
+          + esc(f.key) + ' (' + f.docs.length + ' 枚, 食い違い ' + f.mismatches.length + ' 件)</option>';
+      }).join('')
+    + '</select></div>';
+
+  html += '<div id="fa-summary" data-mismatches="' + sel.mismatches.length + '" '
+    + 'data-docs="' + sel.docs.length + '" data-comparable="' + (sel.comparable ? '1' : '0') + '" '
+    + 'style="font-size:11px;color:' + (sel.mismatches.length ? 'var(--accent-orange)' : 'var(--accent-green)') + ';">'
+    + esc(fa.summaryLine(sel)) + '</div>';
+
+  html += '<div style="' + SECTION + '">動作名 × 図 (● がある方にだけ名前がある行が食い違い)</div>'
+    + '<table id="fa-matrix" style="border-collapse:collapse;width:100%;">'
+    + '<tr><th style="' + CELL + 'text-align:left;">動作名</th>'
+    + sel.docs.map(function(d) {
+        return '<th style="' + CELL + 'text-align:center;color:var(--text-secondary);font-weight:normal;">'
+          + esc(d.name) + '</th>';
+      }).join('') + '</tr>';
+
+  if (sel.rows.length === 0) {
+    html += '<tr><td id="fa-no-rows" colspan="' + (sel.docs.length + 1) + '" style="' + CELL
+      + 'color:var(--text-secondary);">矢印にラベルが付いていないため突き合わせられません</td></tr>';
+  }
+  sel.rows.forEach(function(r) {
+    html += '<tr class="fa-row' + (r.onlyIn ? ' fa-mismatch' : '') + '" data-key="' + esc(r.key) + '"'
+      + ' data-only-in="' + esc(r.onlyIn || '') + '">'
+      + '<td style="' + CELL + 'font-family:var(--font-mono);'
+        + (r.onlyIn ? 'color:var(--accent-orange);' : '') + '">' + esc(r.label) + '</td>'
+      + r.present.map(function(p, di) {
+          return '<td class="fa-cell" data-doc-index="' + di + '" data-present="' + (p ? '1' : '0') + '" '
+            + 'style="' + CELL + 'text-align:center;'
+            + (p ? 'cursor:pointer;' : 'color:var(--accent-orange);') + '">' + (p ? '●' : '·') + '</td>';
+        }).join('')
+      + '</tr>';
+  });
+  html += '</table>'
+    + '<div style="display:flex;gap:8px;margin-top:14px;">'
+    + '<button id="fa-close" style="flex:1;' + BTN + 'padding:8px;">閉じる</button></div>';
+
+  content.innerHTML = html;
+}
+
+function _familyAuditBind(families) {
+  var content = document.getElementById('fa-modal-content');
+  var modal = document.getElementById('fa-modal');
+  if (!content || !modal) return;
+
+  function close() { modal.style.display = 'none'; }
+  var closeBtn = document.getElementById('fa-close');
+  if (closeBtn) closeBtn.addEventListener('click', close);
+
+  var famSel = document.getElementById('fa-family');
+  if (famSel) famSel.addEventListener('change', function() {
+    _familyAuditRender(families, this.value);
+    _familyAuditBind(families);
+  });
+
+  // ● のセルはその図へのショートカット。開いていないファイルには飛ばない。
+  var cells = content.querySelectorAll('.fa-cell');
+  for (var i = 0; i < cells.length; i++) {
+    cells[i].addEventListener('click', function(ev) {
+      if (ev.currentTarget.getAttribute('data-present') !== '1') return;
+      var d = _familyAuditDocs[Number(ev.currentTarget.getAttribute('data-doc-index'))];
+      if (!d || !d.id || !window.MA.workspace) return;
+      close();
+      saveActiveDoc();
+      window.MA.workspace.setActive(d.id);
+      applyActiveDoc();
+    });
+  }
+}
+
+function openFamilyAudit() {
+  var modal = document.getElementById('fa-modal');
+  var fa = window.MA.familyAudit;
+  if (!modal || !fa) return null;
+
+  // 突合の対象は開いているタブ。保存フォルダの図は保存時点の中身なので、
+  // 編集中のタブと混ぜると「今の食い違い」が出せない (見たい図は 📂 一覧で開く)。
+  var docs = _renameDocs().map(function(d) {
+    return { id: d.id, name: d.name, diagramType: d.diagramType, dsl: d.dsl };
+  });
+  var families = fa.audit(docs);
+  _familyAuditRender(families, families.length ? families[0].key : null);
+  _familyAuditBind(families);
+  modal.style.display = 'flex';
+  return families;
+}
+
+function setupFamilyAudit() {
+  var btn = document.getElementById('btn-tab-family');
+  var modal = document.getElementById('fa-modal');
+  if (!btn || !modal || !window.MA.familyAudit) return;
+  btn.addEventListener('click', function() { openFamilyAudit(); });
+  modal.addEventListener('click', function(ev) {
+    if (ev.target === modal) modal.style.display = 'none';
+  });
 }
 
 function setupNameAudit() {
