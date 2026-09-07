@@ -7863,7 +7863,7 @@ function renderPinPanel() {
     + '<div class="pin-target" id="pin-target" data-line="' + target + '">'
     + (target ? ('付ける先: L' + target + ' ' + esc(_pinLineText(target))) : '付ける先の行がありません')
     + '</div>'
-    + '<input id="pin-text" placeholder="指摘の内容 (例: Timer_StartConv に対応する method が無い)">'
+    + '<input id="pin-text" placeholder="指摘の内容 (末尾に「根拠: 図名 に 語 が無い」を書くと毎回確かめ直します)">'
     + '<button type="button" id="pin-add">この行に指摘を付ける</button></div>';
   panel.innerHTML = html;
 
@@ -8011,6 +8011,7 @@ function setupPinPanel() {
 // 集計は src/core/pin-inbox.js。ここは読み込みと画面だけ。
 
 var _inboxItems = null;      // 直近の走査結果 (絞り込み前)
+var _inboxDocs = null;       // 走査で読んだ図の束 (根拠の確かめ直しに使う)
 var _inboxLoading = false;
 
 // 「自分」の名前。自分で書いた指摘を受信箱から外すために憶えておく。
@@ -8064,6 +8065,7 @@ function scanPinInbox() {
       for (var i = 0; i < docs.length; i++) { if (docs[i].name === n) return; }
       docs.push({ name: n, dsl: openDocs[n] });
     });
+    _inboxDocs = docs;
     return window.MA.pinInbox.collect(docs);
   });
 }
@@ -8133,6 +8135,26 @@ function renderInboxPanel() {
     + '<label>自分 <input id="ib-me" placeholder="junior" value="' + esc(_inboxMe()) + '"></label>'
     + ' <button type="button" id="ib-reload">読み直す</button></div>';
 
+  // BLK-reviewer-20260908-0003: 手で書いた指摘は audit.js のどの監査にも当たらず、
+  // 根拠 (別の図の中身) が消えても「DSL 無変更 → 前回のまま」で引き継がれ続ける。
+  // 受信箱を開いた時点で、根拠が崩れたものだけを名指しで先頭に出す。
+  var CC = window.MA.claimCheck;
+  var cres = CC ? CC.scan(shown, _inboxDocs || []) : null;
+  if (cres) {
+    html += '<div class="ib-claims" id="ib-claims" data-claims="' + cres.claims.length
+      + '" data-broken="' + cres.broken.length + '">'
+      + '<div class="ib-claim-head">' + esc(CC.headText(cres)) + '</div>';
+    cres.broken.forEach(function(e) {
+      html += '<div class="ib-claim-row" data-doc="' + esc(e.item.doc) + '"'
+        + ' data-pin-id="' + esc(e.item.id) + '"'
+        + ' data-claim-doc="' + esc(e.claim.doc) + '"'
+        + ' data-claim-line="' + e.result.line + '">'
+        + '<span class="ib-claim-where">' + esc(e.item.doc) + ' #' + esc(e.item.id) + '</span>'
+        + '<span class="ib-claim-why">' + esc(CC.describe(e)) + '</span></div>';
+    });
+    html += '</div>';
+  }
+
   var groups = PI.groupByDoc(shown);
   if (!groups.length) {
     html += '<div class="ib-empty" id="ib-empty">'
@@ -8170,6 +8192,18 @@ function renderInboxPanel() {
   }
   var reload = document.getElementById('ib-reload');
   if (reload) reload.addEventListener('click', function() { loadInbox(); });
+
+  var claimRows = panel.querySelectorAll('.ib-claim-row');
+  for (var ci = 0; ci < claimRows.length; ci++) {
+    (function(el) {
+      el.addEventListener('click', function() {
+        openInboxItem({
+          doc: el.getAttribute('data-claim-doc'),
+          line: Number(el.getAttribute('data-claim-line')) || 1,
+        });
+      });
+    })(claimRows[ci]);
+  }
 
   var rows = panel.querySelectorAll('.ib-row');
   for (var i = 0; i < rows.length; i++) {
