@@ -3531,6 +3531,13 @@ function setupTabs() {
   var svgScan = null;
   // 作り直した結果の 1 行。一覧を開き直すまで残す (押した結果が消えない)。
   var svgRenderNote = '';
+  // BLK-reviewer-20260908-0203-wish: 図名 → {role, status}。実データ / テンプレの宣言と、
+  // テンプレの中身が宣言時から変わっていないか。22 枚を毎回同列に扱わなくて済むように。
+  var fileRoles = {};        // 保存フォルダの _roles.json の中身
+  var roleStatus = {};       // 一覧に配る早見表
+  var roleScan = null;
+  var roleEntries = [];      // 役割を決めた瞬間の指紋を取るための一覧
+  var roleNote = '';
 
   function _openDocNames() {
     if (!window.MA.workspace) return [];
@@ -3630,6 +3637,7 @@ function setupTabs() {
       window.MA.workspace.updateActive({ dsl: mmdText, diagramType: currentDiagramType });
     }
     svgRenderNote = '';   // 前に押した結果は持ち越さない
+    roleNote = '';
     panel.textContent = '';
     var loading = document.createElement('div');
     loading.className = 'folder-empty';
@@ -3675,6 +3683,23 @@ function setupTabs() {
         panel.appendChild(empty);
         return;
       }
+      // 実データ / テンプレの宣言は保存フォルダに置いてある (GUI の設定ではない)。
+      var FR = window.MA.fileRole;
+      roleEntries = entries;
+      if (FR) {
+        var storedRoles = (res && res.roles) || {};
+        fileRoles = FR.keepExisting(storedRoles, entries);
+        // 消えた図の宣言は画面から外すだけでなく保存フォルダからも落とす。残しておくと、
+        // 同じ名前で作り直した別物が前の baseline と比べられ、汚染として赤くなる。
+        if (Object.keys(FR.parse(storedRoles)).length !== Object.keys(fileRoles).length) {
+          saveFileRoles(dir, fileRoles);
+        }
+        roleScan = FR.scan(entries, fileRoles);
+        roleStatus = FR.statusMap(roleScan);
+      } else {
+        fileRoles = {}; roleScan = null; roleStatus = {};
+      }
+
       // SVG の追いつきは、図の中身とは別に一覧の時点で分かる。
       var SF = window.MA.svgFreshness;
       svgScan = SF ? SF.scan(entries) : null;
@@ -3690,6 +3715,7 @@ function setupTabs() {
         setFolderNames(plain);
         folderStatus = {};
         panel.appendChild(folderPickBar());
+        appendRoleSection(panel, dir);
         appendSvgSection(panel, dir);
         plain.items.forEach(function(e) { panel.appendChild(folderRow(e.name || e, null, null)); });
         appendDraftSection(plain.drafts, function(e) { return folderRow(e.name || e, null, null); });
@@ -3709,6 +3735,7 @@ function setupTabs() {
       head.textContent = first ? '前回見た版の控えがありません（全部を新規として出しています）' : RW.summary(sp.items);
       panel.appendChild(head);
       panel.appendChild(folderPickBar());
+      appendRoleSection(panel, dir);
       appendSvgSection(panel, dir);
 
       folderStatus = {};
@@ -3881,6 +3908,102 @@ function setupTabs() {
     step();
   }
 
+  // BLK-reviewer-20260908-0203-wish: 実データ / テンプレの内訳と、汚染したテンプレの名指し。
+  // 「新規指摘が実データの変更かテンプレの汚染か」を、一覧を開いた時点で答える。
+  function appendRoleSection(panel, dir) {
+    var FR = window.MA.fileRole;
+    if (!FR || !roleScan || !roleScan.rows.length) return;
+    var sum = document.createElement('div');
+    var dirty = roleScan.dirty.length > 0;
+    sum.className = 'folder-role-summary' + (dirty ? ' has-dirty' : '');
+    sum.id = 'folder-role-summary';
+    sum.textContent = FR.summary(roleScan);
+    panel.appendChild(sum);
+    if (dirty) {
+      var list = document.createElement('div');
+      list.className = 'folder-role-summary has-dirty';
+      list.id = 'folder-role-dirty';
+      list.textContent = '汚染: ' + roleScan.dirty.join(' / ');
+      panel.appendChild(list);
+    }
+    if (roleNote) {
+      var note = document.createElement('div');
+      note.className = 'folder-role-summary';
+      note.id = 'folder-role-note';
+      note.textContent = roleNote;
+      panel.appendChild(note);
+    }
+  }
+
+  function _entryOf(name) {
+    var hit = null;
+    (roleEntries || []).forEach(function(e) {
+      if (e && e.name === name) hit = e;
+    });
+    return hit || { name: name, hash: null };
+  }
+
+  // 押すたびに 未分類 → 実データ → テンプレ。テンプレにした瞬間の中身が baseline になる。
+  function folderRoleButton(name) {
+    var FR = window.MA.fileRole;
+    var b = document.createElement('button');
+    b.type = 'button';
+    var rs = roleStatus[name] || { role: 'unset', status: 'none' };
+    var bd = FR.badge(rs.role, rs.status);
+    b.className = 'folder-role ' + bd.cls;
+    b.setAttribute('data-role-name', name);
+    b.setAttribute('data-role', rs.role);
+    b.setAttribute('data-role-status', rs.status);
+    b.textContent = bd.mark || '−';
+    b.title = bd.title + '（押すと ' + FR.roleLabel(FR.nextRole(rs.role)) + ' になります）';
+    b.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      setFileRole(name, FR.nextRole(rs.role));
+    });
+    return b;
+  }
+
+  // 汚染したテンプレに付く [今の内容で更新]。自分で直したときに赤を消すための出口
+  // (赤を消す手段が無いと、次からこの印そのものを見なくなる)。
+  function folderRoleAcceptButton(name) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'folder-role-accept';
+    b.setAttribute('data-role-accept', name);
+    b.textContent = '今の内容で更新';
+    b.title = 'このテンプレを自分で直したのなら、今の中身を正として覚え直します';
+    b.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      setFileRole(name, 'template');
+    });
+    return b;
+  }
+
+  // 宣言は保存フォルダの _roles.json に丸ごと置き換えで書く。
+  function saveFileRoles(dir, roles) {
+    var FR = window.MA.fileRole;
+    return fetch('/file-roles', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dir: dir, roles: FR.serialize(roles).roles }),
+    }).then(function(resp) {
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      return true;
+    });
+  }
+
+  function setFileRole(name, role) {
+    var FR = window.MA.fileRole;
+    var dir = _wsFileDir();
+    fileRoles = FR.setRole(fileRoles, _entryOf(name), role, new Date().toISOString());
+    roleNote = name + ' を ' + FR.roleLabel(role) + ' にしました';
+    saveFileRoles(dir, fileRoles).catch(function() {
+      roleNote = name + ' の分類を保存できませんでした（この画面の中だけの印です）';
+    }).then(function() {
+      renderFolderPanel();
+    });
+  }
+
   function folderRow(name, bdg, mtime, status) {
     var FS = window.MA.folderSelect;
     var b = folderButton(name, bdg, mtime, status);
@@ -3899,7 +4022,9 @@ function setupTabs() {
       syncFolderPickUi();
     });
     row.appendChild(box);
+    if (window.MA.fileRole) row.appendChild(folderRoleButton(name));
     row.appendChild(b);
+    if ((roleStatus[name] || {}).status === 'dirty') row.appendChild(folderRoleAcceptButton(name));
     if (status === 'changed' || status === 'new') row.appendChild(folderDiffButton(name, status));
     row.appendChild(folderDraftButton(name));
     return row;

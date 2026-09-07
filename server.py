@@ -248,6 +248,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._handle_autosave_post()
         if self.path == '/autosave-svg':
             return self._handle_autosave_svg_post()
+        if self.path == '/file-roles':
+            return self._handle_file_roles_post()
         if self.path == '/prefs':
             return self._handle_prefs_post()
         if self.path == '/heartbeat':
@@ -354,6 +356,25 @@ class Handler(BaseHTTPRequestHandler):
     def _autosave_meta_path(self, save_dir):
         return save_dir / '_meta.json'
 
+    def _roles_path(self, save_dir):
+        """BLK-reviewer-20260908-0203-wish: ファイルが実データかテンプレかの宣言。
+
+        保存フォルダの隣に置く。GUI の設定ではなくフォルダの属性なので、
+        別の PC で開いても・audit.js から読んでも同じ答えになる。
+        """
+        return save_dir / '_roles.json'
+
+    def _read_file_roles(self, save_dir):
+        p = self._roles_path(save_dir)
+        if not p.exists():
+            return {}
+        try:
+            data = json.loads(p.read_text(encoding='utf-8'))
+        except (ValueError, OSError):
+            return {}
+        roles = data.get('roles') if isinstance(data, dict) else None
+        return roles if isinstance(roles, dict) else {}
+
     def _autosave_file_path(self, save_dir, dt):
         return save_dir / (dt + '.puml')
 
@@ -445,6 +466,54 @@ class Handler(BaseHTTPRequestHandler):
             mtime = None
         self._send_json(200, {'ok': True, 'path': str(svg_path), 'svgMtime': mtime})
 
+    def _handle_file_roles_post(self):
+        """保存フォルダの _roles.json を丸ごと置き換える。
+
+        BLK-reviewer-20260908-0203-wish: 22 枚を毎回同列に扱わざるを得なかったのは、
+        「これはテンプレだ」という宣言の置き場所が無かったため。図の隣に置く。
+        """
+        length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(length).decode('utf-8')
+        try:
+            data = json.loads(body)
+        except ValueError:
+            self._send_json(400, {'error': 'invalid JSON'})
+            return
+        if not isinstance(data, dict):
+            self._send_json(400, {'error': 'body must be an object'})
+            return
+        roles = data.get('roles')
+        if not isinstance(roles, dict):
+            self._send_json(400, {'error': 'roles must be an object'})
+            return
+        clean = {}
+        for name, rec in roles.items():
+            if not self._autosave_validate_type(name):
+                self._send_json(400, {'error': f'invalid name: {name!r}'})
+                return
+            if not isinstance(rec, dict) or rec.get('role') not in ('data', 'template'):
+                self._send_json(400, {'error': f'role must be data or template: {name!r}'})
+                return
+            base = rec.get('baseline')
+            at = rec.get('at')
+            clean[name] = {
+                'role': rec['role'],
+                'baseline': base if isinstance(base, str) else None,
+                'at': at if isinstance(at, str) else None,
+            }
+        save_dir = self._autosave_resolve_dir(data.get('dir'))
+        if not (save_dir.exists() and save_dir.is_dir()):
+            self._send_json(404, {'error': '保存フォルダがありません'})
+            return
+        try:
+            self._roles_path(save_dir).write_text(
+                json.dumps({'version': 1, 'roles': clean}, ensure_ascii=False, indent=1),
+                encoding='utf-8')
+        except OSError as e:
+            self._send_json(500, {'error': f'write failed: {e}'})
+            return
+        self._send_json(200, {'ok': True, 'roles': clean})
+
     # --- autosave GET --------------------------------------------------------
 
     def _handle_autosave_get(self):
@@ -488,8 +557,11 @@ class Handler(BaseHTTPRequestHandler):
                 files.append(p.stem)
                 entries.append(self._autosave_entry(p))
         meta = self._autosave_read_meta(save_dir)
+        # BLK-reviewer-20260908-0203-wish: 実データ / テンプレの宣言は一覧と同時に要る。
+        # 別呼び出しにすると、印が付く前の一覧が一瞬出て「未分類 22 枚」に見える。
+        roles = self._read_file_roles(save_dir) if exists else {}
         self._send_json(200, {'files': files, 'entries': entries, 'meta': meta,
-                              'dir': str(save_dir), 'exists': exists})
+                              'dir': str(save_dir), 'exists': exists, 'roles': roles})
 
     def _autosave_entry(self, path):
         """1 図分の {name, mtime, size, hash, svgMtime}。読めない図でも名前だけは返す。
@@ -539,12 +611,15 @@ class Handler(BaseHTTPRequestHandler):
                         target.unlink()
                     except OSError:
                         pass
-            meta = self._autosave_meta_path(save_dir)
-            if meta.exists():
-                try:
-                    meta.unlink()
-                except OSError:
-                    pass
+            # BLK-reviewer-20260908-0203-wish: 図を全部消したら「これはテンプレだ」の
+            # 宣言も一緒に消す。図が無いのに宣言だけ残ると、同じ名前で作り直した
+            # 別物が前の baseline と比べられ、身に覚えのない汚染として赤くなる。
+            for side in (self._autosave_meta_path(save_dir), self._roles_path(save_dir)):
+                if side.exists():
+                    try:
+                        side.unlink()
+                    except OSError:
+                        pass
         self._send_json(200, {'ok': True})
 
 
