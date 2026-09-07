@@ -2577,6 +2577,65 @@ function _reviewStore() {
   try { return window.localStorage || null; } catch (e) { return null; }
 }
 
+// ── 一時控えの印 (BLK-junior-20260907-2009-wish) ────────────────────────────
+// やり直しの練習で作る控えが保存フォルダに溜まり、📂 一覧で成果物と同じ並びに
+// 混ざっていた。印を付けた図は一覧で畳み、成果物だけが並ぶようにする。
+// 印は保存フォルダごとに localStorage に持つ (判定は draft-mark が唯一の規約)。
+var _draftCollapsed = true;   // 一覧を開いたときは畳んだ状態から始める
+
+function _draftLoad() {
+  var DM = window.MA.draftMark;
+  return DM ? DM.load(_reviewStore(), _wsFileDir()) : [];
+}
+
+function _draftStore(names) {
+  var DM = window.MA.draftMark;
+  return DM ? DM.save(_reviewStore(), _wsFileDir(), names) : false;
+}
+
+function _draftHas(name) {
+  var DM = window.MA.draftMark;
+  return !!(DM && DM.has(_draftLoad(), name));
+}
+
+// 名前 1 つの印を裏返して控える。戻り値は裏返した後に控えかどうか。
+function _draftToggleName(name) {
+  var DM = window.MA.draftMark;
+  if (!DM || !name) return false;
+  var next = DM.toggle(_draftLoad(), name);
+  _draftStore(next);
+  return DM.has(next, name);
+}
+
+// 上部バーの「🗂 一時控え」。開いている図そのものに印を付ける。
+// 保存の前でも後でも押せる (印は名前に付くので、次の保存にもそのまま効く)。
+function toggleActiveDraft() {
+  var DM = window.MA.draftMark;
+  if (!DM || !window.MA.workspace) return;
+  var doc = window.MA.workspace.getActive();
+  if (!doc || !doc.name) return;
+  var isDraft = _draftToggleName(doc.name);
+  syncDraftButton();
+  setSaveStatus(DM.activeMessage(doc.name, isDraft));
+  if (window.MA.toast) window.MA.toast.show(DM.activeMessage(doc.name, isDraft));
+}
+
+// ボタンの文言を、今開いている図が控えかどうかに合わせる。
+function syncDraftButton() {
+  var DM = window.MA.draftMark;
+  var btn = document.getElementById('btn-tab-draft');
+  if (!btn || !DM) return;
+  var doc = window.MA.workspace ? window.MA.workspace.getActive() : null;
+  var name = doc && doc.name;
+  var isDraft = !!(name && _draftHas(name));
+  btn.textContent = DM.activeLabel(isDraft);
+  btn.setAttribute('aria-pressed', isDraft ? 'true' : 'false');
+  btn.classList.toggle('tab-tool-on', isDraft);
+  btn.title = name
+    ? DM.rowTitle(isDraft) + '（' + name + '）'
+    : 'この図に一時控え(下書き / やり直し途中)の印を付けて、📂 一覧から畳む';
+}
+
 // アクティブなタブの現在の編集内容を workspace に書き戻す。
 function saveActiveDoc() {
   if (!window.MA.workspace) return null;
@@ -2638,6 +2697,7 @@ function renderTabs() {
   var docs = window.MA.workspace.list();
   var activeId = window.MA.workspace.getActiveId();
   updateTopFileName();
+  syncDraftButton();
   var tabs = bar.querySelectorAll('.tab');
   for (var i = 0; i < tabs.length; i++) bar.removeChild(tabs[i]);
   var firstTool = bar.querySelector('.tab-tool');
@@ -3119,6 +3179,9 @@ function setupTabs() {
   // BLK-reviewer-20260907-1803-wish: 図名 → new/changed/unchanged。
   // 「変更のある図だけ選ぶ」と行ごとの [差分] がここを見る。
   var folderStatus = {};
+  // BLK-junior-20260907-2009-wish: 一時控えの印が付いた図名。畳んでいる間は
+  // folderNames に入れない (「全部選ぶ」や「変更図だけ選ぶ」が控えを掴まない)。
+  var draftNames = [];
 
   function _openDocNames() {
     if (!window.MA.workspace) return [];
@@ -3198,6 +3261,16 @@ function setupTabs() {
     });
   }
 
+  // BLK-junior-20260907-2009-wish: 上部バーの「🗂 一時控え」。
+  var btnDraft = document.getElementById('btn-tab-draft');
+  if (btnDraft) {
+    btnDraft.addEventListener('click', function() {
+      toggleActiveDraft();
+      if (panel.classList.contains('open')) renderFolderPanel();
+    });
+    syncDraftButton();
+  }
+
   btnFolder.addEventListener('click', function() {
     if (panel.classList.contains('open')) { closePanel(); return; }
     // BLK-junior-20260907-1803: 一覧を開くだけでは保存フォルダへ書き出さない。
@@ -3234,33 +3307,43 @@ function setupTabs() {
         panel.appendChild(empty);
         return;
       }
-      // 印は今の一覧に残っているものだけ持ち越す。
-      folderNames = entries.map(function(e) { return e.name || e; });
-      folderStatus = {};
-      if (window.MA.folderSelect) {
-        folderPicked = window.MA.folderSelect.keepExisting(folderPicked, folderNames);
-      }
+      // 消えた図の一時控えの印は捨てる (印だけが残り続けないようにする)。
+      var DM = window.MA.draftMark;
+      draftNames = DM ? DM.keepExisting(DM.load(store, dir), entries) : [];
+      if (DM) DM.save(store, dir, draftNames);
+
       if (!RW) {
+        var plain = DM ? DM.split(entries, draftNames) : { items: entries, drafts: [] };
+        setFolderNames(plain);
+        folderStatus = {};
         panel.appendChild(folderPickBar());
-        entries.forEach(function(e) { panel.appendChild(folderRow(e.name || e, null, null)); });
+        plain.items.forEach(function(e) { panel.appendChild(folderRow(e.name || e, null, null)); });
+        appendDraftSection(plain.drafts, function(e) { return folderRow(e.name || e, null, null); });
         syncFolderPickUi();
         return;
       }
       var seen = RW.load(store, dir);
       var first = !RW.hasSeen(store, dir);
       var rows = RW.diff(seen, entries);
+      // 一時控えは成果物とは別扱い。読む枚数の要約も成果物だけで数える
+      // (畳んだ控えの「変更 3 枚」を出すと、読むものが増えたように見える)。
+      var sp = DM ? DM.split(rows, draftNames) : { items: rows, drafts: [] };
+      setFolderNames(sp);
 
       var head = document.createElement('div');
       head.className = 'folder-summary';
-      head.textContent = first ? '前回見た版の控えがありません（全部を新規として出しています）' : RW.summary(rows);
+      head.textContent = first ? '前回見た版の控えがありません（全部を新規として出しています）' : RW.summary(sp.items);
       panel.appendChild(head);
       panel.appendChild(folderPickBar());
 
+      folderStatus = {};
       rows.forEach(function(r) { folderStatus[r.name] = r.status; });
       syncFolderPickUi();
-      rows.forEach(function(r) {
-        panel.appendChild(folderRow(r.name, RW.badge(r.status), RW.formatMtime(r.mtime), r.status));
-      });
+      function rowOf(r) {
+        return folderRow(r.name, RW.badge(r.status), RW.formatMtime(r.mtime), r.status);
+      }
+      sp.items.forEach(function(r) { panel.appendChild(rowOf(r)); });
+      appendDraftSection(sp.drafts, rowOf);
 
       RW.removed(seen, entries).forEach(function(name) {
         var gone = document.createElement('div');
@@ -3290,6 +3373,68 @@ function setupTabs() {
     });
   }
 
+  // 一覧の「選ぶ」対象は、今この場に出ている図だけ。畳んでいる一時控えを
+  // folderNames に入れると、「全部選ぶ」が見えていない控えまで開いてしまう。
+  function setFolderNames(sp) {
+    var vis = (sp.items || []).map(function(e) { return e.name || e; });
+    if (!_draftCollapsed) {
+      (sp.drafts || []).forEach(function(e) { vis.push(e.name || e); });
+    }
+    folderNames = vis;
+    if (window.MA.folderSelect) {
+      folderPicked = window.MA.folderSelect.keepExisting(folderPicked, folderNames);
+    }
+  }
+
+  // 一時控えは成果物の下にまとめ、既定では畳む。畳んだ枚数は必ず言葉で出す
+  // (一覧に出ていないことを「保存できていない」と読み違えないため)。
+  function appendDraftSection(drafts, factory) {
+    var DM = window.MA.draftMark;
+    if (!DM || !drafts || drafts.length === 0) return;
+    var bar = document.createElement('div');
+    bar.className = 'folder-draft-head';
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'folder-draft-toggle';
+    b.setAttribute('data-draft-count', String(drafts.length));
+    b.textContent = DM.toggleLabel(drafts.length, _draftCollapsed);
+    b.title = DM.summary(drafts.length, _draftCollapsed);
+    b.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      _draftCollapsed = !_draftCollapsed;
+      renderFolderPanel();
+    });
+    bar.appendChild(b);
+    panel.appendChild(bar);
+    if (_draftCollapsed) return;
+    drafts.forEach(function(e) {
+      var row = factory(e);
+      if (row && row.classList) row.classList.add('folder-row-draft');
+      panel.appendChild(row);
+    });
+  }
+
+  // 行ごとの「控えにする / 控え」。既に溜まっている控えも 1 クリックで畳める
+  // (名前の付け方を規約にすると、規約から外れた控えを取りこぼす)。
+  function folderDraftButton(name) {
+    var DM = window.MA.draftMark;
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'folder-draft';
+    b.setAttribute('data-draft-name', name);
+    var isDraft = !!(DM && DM.has(draftNames, name));
+    if (isDraft) b.classList.add('folder-draft-on');
+    b.textContent = DM ? DM.rowLabel(isDraft) : '控え';
+    b.title = DM ? DM.rowTitle(isDraft) : '';
+    b.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      _draftToggleName(name);
+      syncDraftButton();
+      renderFolderPanel();
+    });
+    return b;
+  }
+
   // 印を付ける欄と、名前を押して 1 枚だけ開く従来のボタンを 1 行に並べる。
   // 名前を押したときの動きは変えない (1 枚だけ開くのが今までどおり最短)。
   function folderRow(name, bdg, mtime, status) {
@@ -3312,6 +3457,7 @@ function setupTabs() {
     row.appendChild(box);
     row.appendChild(b);
     if (status === 'changed' || status === 'new') row.appendChild(folderDiffButton(name, status));
+    row.appendChild(folderDraftButton(name));
     return row;
   }
 
