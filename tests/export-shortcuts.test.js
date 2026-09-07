@@ -65,10 +65,11 @@ describe('export-shortcuts — Export メニューのキー割り当て (design 
     expect(ES.matchEvent(ev({ ctrlKey: true, shiftKey: true, key: undefined }))).toBeNull();
   });
 
-  test('shortcutRows: 設定のショートカット一覧と同じ形 ({keys, desc}) で渡せる', () => {
+  // BLK-builder-20260907-1403-4: 一覧の行は割り当ての差し替え先を指すため id を持つ。
+  test('shortcutRows: 設定のショートカット一覧と同じ形 ({id, keys, desc}) で渡せる', () => {
     expect(ES.shortcutRows()).toEqual([
-      { keys: 'Ctrl+Shift+S', desc: 'SVG として保存' },
-      { keys: 'Ctrl+Shift+C', desc: 'クリップボードにコピー' },
+      { id: 'exp-svg', keys: 'Ctrl+Shift+S', desc: 'SVG として保存' },
+      { id: 'exp-clipboard', keys: 'Ctrl+Shift+C', desc: 'クリップボードにコピー' },
     ]);
   });
 });
@@ -84,8 +85,11 @@ describe('settings-tabs — 書き出しキーを一覧に足す (design 2c)', (
     var rows = ST.shortcutRows();
     expect(rows.length).toBe(declared + 2);
     var globalRows = ST.shortcutGroups()[0].rows;
-    expect(globalRows[globalRows.length - 1])
-      .toEqual({ keys: 'Ctrl+Shift+C', desc: 'クリップボードにコピー', state: 'done' });
+    // BLK-builder-20260907-1403-4: 行は id / 差し替えの可否 / 既定からの変更も持つ。
+    expect(globalRows[globalRows.length - 1]).toEqual({
+      id: 'exp-clipboard', keys: 'Ctrl+Shift+C', desc: 'クリップボードにコピー',
+      state: 'done', remap: true, changed: false,
+    });
     expect(ST.buildShortcutsHtml()).toContain('<kbd>Ctrl+Shift+S</kbd>');
   });
 });

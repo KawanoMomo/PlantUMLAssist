@@ -1605,6 +1605,51 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 
 .cfg-sc-empty { font-size: 11px; color: var(--text-secondary); padding: 8px 0; }
 
+/* ── 割り当ての差し替え (design 5b) ───────────────────────────────────── */
+/* 差し替えできる行だけを押せる形にする。範囲の割り当て (Ctrl+1 … Ctrl+6 など) は
+   押した 1 つのキーで表せないので、見た目でも押せないままにする。 */
+.cfg-sc-remap { cursor: pointer; }
+.cfg-sc-remap:hover, .cfg-sc-remap:focus { background: var(--bg-tertiary); outline: none; }
+.cfg-sc-capturing { background: var(--bg-tertiary); }
+
+.cfg-sc-capture-hint {
+  font-size: 11px;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.cfg-sc-changed {
+  margin-left: 5px;
+  font-size: 10px;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  padding: 0 4px;
+}
+
+#cfg-sc-note { font-size: 11px; min-height: 14px; margin-top: 6px; }
+#cfg-sc-note[data-sc-note="ok"]  { color: var(--text-secondary); }
+#cfg-sc-note[data-sc-note="bad"] { color: var(--accent-red); }
+
+#cfg-sc-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+#cfg-sc-reset {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+#cfg-sc-hint { font-size: 10px; color: var(--text-secondary); }
+
 /* ── テンプレート複製の突合 (BLK-primary-20260907-1203-wish) ─────────────── */
 /* 見出しの色で結果を言い切る。作れなくはしないので、赤は「読んでから押せ」の意。 */
 #tpl-audit-head[data-audit="ok"]      { color: var(--accent-green); }
@@ -2165,6 +2210,12 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       </div>
       <input type="search" id="cfg-sc-search" placeholder="⌕ 操作名で検索" aria-label="操作名で検索">
       <div id="cfg-shortcuts-list"></div>
+      <!-- design 5b: 行をクリックすると割り当てを変更。押した結果はここに出す -->
+      <div id="cfg-sc-note" role="status" data-sc-note="ok"></div>
+      <div id="cfg-sc-actions">
+        <button type="button" id="cfg-sc-reset">既定に戻す</button>
+        <span id="cfg-sc-hint">行をクリックすると割り当てを変更できます</span>
+      </div>
     </div>
 
     <div id="cfg-pane-data" class="cfg-pane" hidden>
@@ -2210,6 +2261,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/zoom-hud.js"></script>
 <script src="src/core/relation-add.js"></script>
 <script src="src/core/settings-tabs.js"></script>
+<script src="src/core/key-bindings.js"></script>
 <script src="src/core/editor-jump.js"></script>
 <script src="src/core/render-modes.js"></script>
 <script src="src/core/render-error.js"></script>

@@ -29,39 +29,39 @@ window.MA.settingsTabs = (function() {
     {
       id: 'global', label: '全体', note: '',
       rows: [
-        { keys: 'Ctrl+K',          desc: 'コマンドパレットを開く',                  state: 'done' },
-        { keys: 'Ctrl+R',          desc: '再描画する',                              state: 'done' },
-        { keys: 'Ctrl+Z / Ctrl+Y', desc: '元に戻す / やり直す',                     state: 'done' },
-        { keys: 'Ctrl+S',          desc: 'ファイルを保存する',                      state: 'done' },
-        { keys: 'Ctrl+E',          desc: 'エクスポートメニューを開く',              state: 'done' },
+        { id: 'palette', keys: 'Ctrl+K',    desc: 'コマンドパレットを開く',                  state: 'done', remap: true },
+        { id: 'render',  keys: 'Ctrl+R',    desc: '再描画する',                              state: 'done', remap: true },
+        { id: 'undo-redo', keys: 'Ctrl+Z / Ctrl+Y', desc: '元に戻す / やり直す',             state: 'done' },
+        { id: 'save',    keys: 'Ctrl+S',    desc: 'ファイルを保存する',                      state: 'done', remap: true },
+        { id: 'export-menu', keys: 'Ctrl+E', desc: 'エクスポートメニューを開く',             state: 'done', remap: true },
       ],
     },
     {
       id: 'diagram', label: '図の編集', note: '図形を選んでいるとき',
       rows: [
-        { keys: '↑ / ↓',           desc: '前後の図形へ選択を移す',                  state: 'done' },
-        { keys: 'Enter',           desc: '選択の直後に挿入する',                    state: 'done' },
-        { keys: 'Delete',          desc: '選択を削除する',                          state: 'done' },
-        { keys: 'Ctrl+D',          desc: '選択を複製する',                          state: 'done' },
-        { keys: 'Esc',             desc: '選択を解除する / 開いているものを閉じる',  state: 'done' },
-        { keys: 'D',               desc: '選択中メッセージの矢印を切り替える',      state: 'done' },
-        { keys: 'Ctrl+Enter',      desc: '末尾に追加する',                          state: 'done' },
-        { keys: 'Alt+↑ / Alt+↓',   desc: '選択を上下に並び替える — 同じ親の中だけ', state: 'done' },
+        { id: 'sel-move',   keys: '↑ / ↓',           desc: '前後の図形へ選択を移す',                  state: 'done' },
+        { id: 'sel-insert', keys: 'Enter',           desc: '選択の直後に挿入する',                    state: 'done' },
+        { id: 'sel-delete', keys: 'Delete',          desc: '選択を削除する',                          state: 'done' },
+        { id: 'sel-dup',    keys: 'Ctrl+D',          desc: '選択を複製する',                          state: 'done' },
+        { id: 'sel-clear',  keys: 'Esc',             desc: '選択を解除する / 開いているものを閉じる',  state: 'done' },
+        { id: 'sel-arrow',  keys: 'D',               desc: '選択中メッセージの矢印を切り替える',      state: 'done' },
+        { id: 'sel-tail',   keys: 'Ctrl+Enter',      desc: '末尾に追加する',                          state: 'done' },
+        { id: 'sel-reorder', keys: 'Alt+↑ / Alt+↓',  desc: '選択を上下に並び替える — 同じ親の中だけ', state: 'done' },
       ],
     },
     {
       id: 'editor', label: 'DSL エディタ', note: 'テキスト欄にカーソルがあるとき',
       rows: [
-        { keys: 'Ctrl+/',            desc: '選択行をコメント化 / 解除する',   state: 'done' },
-        { keys: 'Tab / Shift+Tab',   desc: 'インデント / 解除する',           state: 'done' },
-        { keys: 'Alt+↑ / Alt+↓',     desc: 'カーソル行を上下に移動する',      state: 'done' },
+        { id: 'ed-comment', keys: 'Ctrl+/',          desc: '選択行をコメント化 / 解除する',   state: 'done' },
+        { id: 'ed-indent',  keys: 'Tab / Shift+Tab', desc: 'インデント / 解除する',           state: 'done' },
+        { id: 'ed-move',    keys: 'Alt+↑ / Alt+↓',   desc: 'カーソル行を上下に移動する',      state: 'done' },
       ],
     },
     {
       id: 'view', label: '表示', note: '',
       rows: [
-        { keys: 'Ctrl+ + / − / 0',   desc: '拡大 / 縮小 / 幅に合わせる',      state: 'done' },
-        { keys: 'Ctrl+1 … Ctrl+6',   desc: '図の種類を切り替える',            state: 'done' },
+        { id: 'view-zoom', keys: 'Ctrl+ + / − / 0',  desc: '拡大 / 縮小 / 幅に合わせる',      state: 'done' },
+        { id: 'view-type', keys: 'Ctrl+1 … Ctrl+6',  desc: '図の種類を切り替える',            state: 'done' },
       ],
     },
   ];
@@ -111,19 +111,45 @@ window.MA.settingsTabs = (function() {
 
   // 書き出しのキー割り当ては export-shortcuts が持っている (design 2c)。
   // 一覧はそこから引いて足し、キー文字列を 2 箇所に書かない。
-  function shortcutGroups() {
+  //
+  // 既定の一覧。差し替え (design 5b の「行をクリックすると割り当てを変更」) を
+  // 当てる前の姿で、key-bindings はここを唯一の既定として読む。
+  function defaultGroups() {
     var extra = (window.MA.exportShortcuts && window.MA.exportShortcuts.shortcutRows)
       ? window.MA.exportShortcuts.shortcutRows() : [];
     return GROUPS.map(function(g) {
       var rows = g.rows.map(function(r) {
-        return { keys: r.keys, desc: r.desc, state: r.state };
+        return { id: r.id, keys: r.keys, desc: r.desc, state: r.state, remap: !!r.remap };
       });
       // Export の 2 つは全体のキーなので「全体」に合流させる。
       if (g.id === 'global') {
         extra.forEach(function(r) {
-          rows.push({ keys: r.keys, desc: r.desc, state: 'done' });
+          rows.push({ id: r.id, keys: r.keys, desc: r.desc, state: 'done', remap: true });
         });
       }
+      return { id: g.id, label: g.label, note: g.note, rows: rows };
+    });
+  }
+
+  function defaultRows() {
+    var out = [];
+    defaultGroups().forEach(function(g) { g.rows.forEach(function(r) { out.push(r); }); });
+    return out;
+  }
+
+  // 表に出す姿。差し替え済みのキーがあればそちらを出す
+  // (表と実際に効くキーが食い違うと、衝突の見つけ場所が無くなる)。
+  function shortcutGroups() {
+    var KB = window.MA.keyBindings;
+    var ov = KB ? KB.readOverrides() : {};
+    return defaultGroups().map(function(g) {
+      var rows = g.rows.map(function(r) {
+        var keys = (KB && r.remap && ov[r.id]) ? ov[r.id] : r.keys;
+        return {
+          id: r.id, keys: keys, desc: r.desc, state: r.state, remap: r.remap,
+          changed: keys !== r.keys,
+        };
+      });
       return { id: g.id, label: g.label, note: g.note, rows: rows };
     });
   }
@@ -164,7 +190,28 @@ window.MA.settingsTabs = (function() {
       + (s === 'done' ? '●' : '新設') + '</span>';
   }
 
-  function buildShortcutsHtml(query) {
+  // 1 行。差し替えできる行はクリックできることを見た目でも言う
+  // (押しても何も起きない行を押させない)。
+  // capturingId の行はキー待ちで、そこだけ表記を「キーを押してください」に替える。
+  function shortcutRowHtml(r, capturingId) {
+    var remap = !!r.remap;
+    var capturing = remap && capturingId && r.id === capturingId;
+    var cls = 'cfg-sc-row' + (remap ? ' cfg-sc-remap' : '') + (capturing ? ' cfg-sc-capturing' : '');
+    var keyCell = capturing
+      ? '<span class="cfg-sc-capture-hint">キーを押してください… Esc で取り消し</span>'
+      : '<kbd>' + esc(r.keys) + '</kbd>' + (r.changed ? '<span class="cfg-sc-changed" title="既定から変更されています">変更</span>' : '');
+    return '<tr class="' + cls + '" data-sc-state="' + esc(r.state) + '"'
+      + ' data-sc-id="' + esc(r.id || '') + '"'
+      + ' data-sc-remap="' + (remap ? '1' : '0') + '"'
+      + (remap ? ' tabindex="0" role="button" title="クリックすると割り当てを変更します"' : '')
+      + '>'
+      + '<th>' + keyCell + '</th>'
+      + '<td>' + esc(r.desc) + '</td>'
+      + '<td class="cfg-sc-state-cell">' + stateChipHtml(r.state) + '</td>'
+      + '</tr>';
+  }
+
+  function buildShortcutsHtml(query, capturingId) {
     var groups = filterGroups(shortcutGroups(), query);
     if (groups.length === 0) {
       return '<div id="cfg-sc-empty" class="cfg-sc-empty">該当する操作がありません</div>';
@@ -173,13 +220,7 @@ window.MA.settingsTabs = (function() {
       return '<div class="cfg-sc-group" data-sc-group="' + esc(g.id) + '">'
         + '<div class="cfg-sc-heading">' + esc(groupHeading(g)) + '</div>'
         + '<table class="cfg-sc-table"><tbody>'
-        + g.rows.map(function(r) {
-            return '<tr data-sc-state="' + esc(r.state) + '">'
-              + '<th><kbd>' + esc(r.keys) + '</kbd></th>'
-              + '<td>' + esc(r.desc) + '</td>'
-              + '<td class="cfg-sc-state-cell">' + stateChipHtml(r.state) + '</td>'
-              + '</tr>';
-          }).join('')
+        + g.rows.map(function(r) { return shortcutRowHtml(r, capturingId); }).join('')
         + '</tbody></table></div>';
     }).join('');
   }
@@ -237,6 +278,9 @@ window.MA.settingsTabs = (function() {
     buildTabsHtml: buildTabsHtml,
     shortcutRows: shortcutRows,
     shortcutGroups: shortcutGroups,
+    defaultGroups: defaultGroups,
+    defaultRows: defaultRows,
+    shortcutRowHtml: shortcutRowHtml,
     filterGroups: filterGroups,
     groupHeading: groupHeading,
     stateChipHtml: stateChipHtml,
