@@ -89,6 +89,22 @@ window.MA.modules.plantumlUsecase = (function() {
     return insertBeforeEnd(text, fmtRelation(kind, from, to, label));
   }
 
+  // design 5d: UseCase の「その他パレット」の ノート。書式は図種で変わらないので
+  // src/core/note-block.js に置いた純関数をそのまま使う。
+  function addNote(text, targetId, position, noteText) {
+    var out = text;
+    window.MA.noteBlock.format(position, targetId, noteText || '').forEach(function(l) {
+      out = insertBeforeEnd(out, l);
+    });
+    return out;
+  }
+  function updateNote(text, startLine, endLine, fields) {
+    return window.MA.noteBlock.update(text, startLine, endLine, fields);
+  }
+  function deleteNote(text, startLine, endLine) {
+    return window.MA.noteBlock.remove(text, startLine, endLine);
+  }
+
   // 既にある境界の表記だけを差し替える (ラベル・中身・閉じ括弧はそのまま)。
   function changeGroupNotation(text, lineNum, notation) {
     return window.MA.groupNotation.changeNotation(text, lineNum, notation, 'plantuml-usecase');
@@ -289,16 +305,29 @@ window.MA.modules.plantumlUsecase = (function() {
 
   // ─── Parser ─────────────────────────────────────────────────────────────
   function parse(text) {
-    var result = { meta: { title: '', startUmlLine: null }, elements: [], relations: [], groups: [] };
+    var result = { meta: { title: '', startUmlLine: null }, elements: [], relations: [], groups: [], notes: [] };
     if (!text || !text.trim()) return result;
     var lines = text.split('\n');
 
     var packageStack = [];
     var packageCounter = 0;
 
+    // 注釈は行を跨ぐ (`note left of X` … `end note`) ので、要素の走査とは別に
+    // 1 回で拾う。注釈の中の本文行が actor / relation として読まれないよう、
+    // 拾った範囲は下の走査で飛ばす。
+    // note-block が読み込まれていない環境 (単体テストが window を差し替えた後など)
+    // でも、注釈が出ないだけで要素と関係は読めるようにする。
+    var NB = window.MA.noteBlock;
+    result.notes = NB ? NB.collect(text) : [];
+    var inNote = {};
+    result.notes.forEach(function(n) {
+      for (var ln = n.line; ln <= n.endLine; ln++) inNote[ln] = true;
+    });
+
     for (var i = 0; i < lines.length; i++) {
       var lineNum = i + 1;
       var trimmed = lines[i].trim();
+      if (inNote[lineNum]) continue;
       if (!trimmed || DU.isPlantumlComment(trimmed)) continue;
       if (RP.isStartUml(trimmed)) {
         if (result.meta.startUmlLine === null) result.meta.startUmlLine = lineNum;
@@ -393,6 +422,17 @@ window.MA.modules.plantumlUsecase = (function() {
 
   // ─── Property Panel ─────────────────────────────────────────────────────
   function renderProps(selData, parsedData, propsEl, ctx) {
+    // 注釈は element でも relation でもないので、共通のディスパッチに乗る前に拾う
+    // (class.js の note と同じ扱い)。
+    if (selData && selData.length === 1 && selData[0].type === 'note') {
+      var notes = parsedData.notes || [];
+      for (var i = 0; i < notes.length; i++) {
+        if (notes[i].id === selData[0].id) {
+          _renderNoteEdit(notes[i], parsedData, propsEl, ctx);
+          return;
+        }
+      }
+    }
     window.MA.propsRenderer.renderByDispatch(selData, parsedData, propsEl, {
       onNoSelection: function(parsed, el) { _renderNoSelection(parsed, el, ctx); },
       onElement: function(elt, parsed, el) { _renderElementEdit(elt, parsed, el, ctx); },
@@ -423,6 +463,7 @@ window.MA.modules.plantumlUsecase = (function() {
           { value: 'usecase',  label: 'Usecase' },
           { value: 'package',  label: '境界 (package / rectangle)' },
           { value: 'relation', label: 'Relation (関係)' },
+          { value: 'note',     label: 'Note (注釈)' },
           { value: 'bulk',     label: '一括 (複数行)' },
         ]) +
         '<div id="uc-tail-detail" style="margin-top:6px;"></div>' +
@@ -478,6 +519,20 @@ window.MA.modules.plantumlUsecase = (function() {
           P.selectFieldHtml('To', 'uc-tail-to', allOpts) +
           P.fieldHtml('Label', 'uc-tail-rlabel', '', 'association のみ任意') +
           P.primaryButtonHtml('uc-tail-add', '+ Relation 追加');
+      } else if (kind === 'note') {
+        // 注釈は必ず既存の要素に付く。付ける相手が無いうちは足させない
+        // (`note left of` の後ろが空の DSL は PlantUML が描けない)。
+        html =
+          P.selectFieldHtml('Target', 'uc-tail-ntarget', allOpts) +
+          P.selectFieldHtml('Position', 'uc-tail-npos', [
+            { value: 'left',   label: 'Left', selected: true },
+            { value: 'right',  label: 'Right' },
+            { value: 'top',    label: 'Top' },
+            { value: 'bottom', label: 'Bottom' },
+          ]) +
+          '<label style="display:block;font-size:10px;color:var(--text-secondary);">Text</label>' +
+          '<textarea id="uc-tail-ntext" style="width:100%;min-height:60px;font-family:inherit;font-size:12px;"></textarea>' +
+          P.primaryButtonHtml('uc-tail-add', '+ Note 追加');
       } else if (kind === 'bulk') {
         html =
           '<label style="display:block;font-size:10px;color:var(--text-secondary);">要素と関係を 1 行 1 件で</label>' +
@@ -522,6 +577,13 @@ window.MA.modules.plantumlUsecase = (function() {
           var rkind = document.getElementById('uc-tail-rkind').value;
           window.MA.history.pushHistory();
           out = addRelation(t, rkind, fr, to, document.getElementById('uc-tail-rlabel').value.trim());
+        } else if (kind === 'note') {
+          var ntarget = document.getElementById('uc-tail-ntarget').value;
+          if (!ntarget) { alert('Target 必須 (先に actor/usecase を追加)'); return; }
+          window.MA.history.pushHistory();
+          out = addNote(t, ntarget,
+            document.getElementById('uc-tail-npos').value,
+            document.getElementById('uc-tail-ntext').value);
         } else if (kind === 'bulk') {
           var block = document.getElementById('uc-tail-bulk').value;
           var bulkOut = addBulk(t, block, parsedData);
@@ -537,6 +599,43 @@ window.MA.modules.plantumlUsecase = (function() {
     // design 2b: 種別はチップ 1 クリックで決める。値の持ち主は上の select のまま。
     window.MA.tailKindChips.mount('uc-tail-kind');
     renderTailDetail();
+  }
+
+  // 注釈の編集。付ける相手 (Target) は動かさない — 付け替えは実質「別の注釈」なので、
+  // 消して足す操作に寄せる (class.js の note パネルと同じ判断)。
+  function _renderNoteEdit(note, parsedData, propsEl, ctx) {
+    var P = window.MA.properties;
+    var esc = window.MA.htmlUtils.escHtml;
+    propsEl.innerHTML =
+      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">Note (L' + note.line + ')</div>' +
+      '<div style="margin-bottom:6px;font-size:11px;"><b>Target:</b> ' + esc(note.targetId) +
+        ' <span style="color:var(--text-secondary);">(付け替えは削除して追加)</span></div>' +
+      P.selectFieldHtml('Position', 'uc-note-pos', [
+        { value: 'left',   label: 'Left',   selected: note.position === 'left' },
+        { value: 'right',  label: 'Right',  selected: note.position === 'right' },
+        { value: 'top',    label: 'Top',    selected: note.position === 'top' },
+        { value: 'bottom', label: 'Bottom', selected: note.position === 'bottom' },
+      ]) +
+      '<label style="display:block;font-size:10px;color:var(--text-secondary);">Text</label>' +
+      '<textarea id="uc-note-text" style="width:100%;min-height:70px;font-family:inherit;font-size:12px;">' +
+        esc(note.text || '') + '</textarea>' +
+      P.primaryButtonHtml('uc-note-update', '更新') +
+      P.primaryButtonHtml('uc-note-delete', '✕ 削除');
+
+    P.bindEvent('uc-note-update', 'click', function() {
+      window.MA.history.pushHistory();
+      ctx.setMmdText(updateNote(ctx.getMmdText(), note.line, note.endLine, {
+        position: document.getElementById('uc-note-pos').value,
+        text: document.getElementById('uc-note-text').value,
+      }));
+      ctx.onUpdate();
+    });
+    P.bindEvent('uc-note-delete', 'click', function() {
+      window.MA.history.pushHistory();
+      ctx.setMmdText(deleteNote(ctx.getMmdText(), note.line, note.endLine));
+      window.MA.selection.clearSelection();
+      ctx.onUpdate();
+    });
   }
 
   function _renderElementEdit(element, parsedData, propsEl, ctx) {
@@ -560,7 +659,44 @@ window.MA.modules.plantumlUsecase = (function() {
           '<button id="uc-delete" style="flex:0 0 60px;background:var(--accent-red);color:#fff;border:none;padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 削除</button>' +
         '</div>' +
       '</div>';
+
+    // この要素に付いている注釈。ここに出さないと、付けたあと編集・削除に
+    // 辿り着く道が無い (注釈は SVG 上のクリック対象になっていない)。
+    var esc = window.MA.htmlUtils.escHtml;
+    var myNotes = (parsedData.notes || []).filter(function(n) { return n.targetId === element.id; });
+    if (myNotes.length) {
+      html += '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">Note (注釈)</label>';
+      myNotes.forEach(function(n, idx) {
+        var preview = String(n.text || '').replace(/\n/g, ' ⏎ ').slice(0, 40);
+        if (String(n.text || '').length > 40) preview += '…';
+        html += '<div style="display:flex;align-items:center;gap:4px;font-size:11px;margin-bottom:2px;">' +
+          '<span style="flex:1;">' + esc(n.position) + ' 「' + esc(preview) + '」 (L' + n.line + ')</span>' +
+          '<button id="uc-note-edit-' + idx + '" data-id="' + esc(n.id) + '" data-line="' + n.line + '">edit</button>' +
+          '<button id="uc-note-del-' + idx + '" data-line="' + n.line + '" data-end="' + n.endLine + '">✕</button>' +
+          '</div>';
+      });
+      html += '</div>';
+    }
     propsEl.innerHTML = html;
+
+    myNotes.forEach(function(n, idx) {
+      P.bindEvent('uc-note-edit-' + idx, 'click', function(e) {
+        var btn = e.currentTarget;
+        window.MA.selection.setSelected([{
+          type: 'note', id: btn.getAttribute('data-id'),
+          line: parseInt(btn.getAttribute('data-line'), 10),
+        }]);
+      });
+      P.bindEvent('uc-note-del-' + idx, 'click', function(e) {
+        var btn = e.currentTarget;
+        window.MA.history.pushHistory();
+        ctx.setMmdText(deleteNote(ctx.getMmdText(),
+          parseInt(btn.getAttribute('data-line'), 10),
+          parseInt(btn.getAttribute('data-end'), 10)));
+        ctx.onUpdate();
+      });
+    });
 
     P.bindEvent('uc-edit-apply', 'click', function() {
       var rawNewId = document.getElementById('uc-edit-id').value.trim();
@@ -795,6 +931,9 @@ window.MA.modules.plantumlUsecase = (function() {
     addUsecase: addUsecase,
     addPackage: addPackage,
     addRelation: addRelation,
+    addNote: addNote,
+    updateNote: updateNote,
+    deleteNote: deleteNote,
     parseBulkLines: parseBulkLines,
     addBulk: addBulk,
     updateActor: updateActor,
