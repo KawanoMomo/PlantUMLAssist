@@ -1152,9 +1152,17 @@ window.MA.modules.plantumlState = (function() {
         (fromId ? ' — ' + esc(fromId) + ' から' : '') + '</h3>' +
       P.fieldHtml('分岐 (choice) 状態の名前', 'st-br-id', '', '例: AnomalyCheck') +
       (fromId ? P.fieldHtml('分岐に入るトリガー', 'st-br-trigger', '', '例: Fault') : '') +
+      // BLK-junior-20260907-0803: 枝ごとに 3 欄をクリックして回ると手数が枝の本数に比例する。
+      // 1 行 1 枝でまとめて打てる欄を上に置き、下の行はその結果として自動で並ぶ。
+      '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin:10px 0 4px 0;">枝をまとめて入力 (1 行 1 枝)</div>' +
+      '<textarea id="st-br-bulk" rows="4" placeholder="重大 -> Error / notify&#10;軽微 -> Idle" ' +
+        'style="width:100%;box-sizing:border-box;' + INPUT + 'font-family:Consolas,monospace;resize:vertical;"></textarea>' +
+      '<div style="font-size:10px;color:var(--text-secondary);margin:3px 0 0 0;">' +
+        '書き方: <code>ガード -&gt; 遷移先 / アクション</code>。ガードもアクションも省けます。下の欄と両方向で同期します。</div>' +
       '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin:10px 0 4px 0;">枝 (ガード → 遷移先)</div>' +
       '<div id="st-br-rows">' + rowHtml(0) + rowHtml(1) + '</div>' +
       '<button id="st-br-add-row" style="font-size:11px;padding:3px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">＋ 枝を追加</button>' +
+      '<div id="st-br-replaced" style="font-size:11px;color:var(--text-secondary);margin-top:10px;"></div>' +
       '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin:10px 0 4px 0;">追加される行</div>' +
       '<pre id="st-br-preview" style="margin:0;background:var(--bg-primary);border:1px solid var(--border);border-radius:3px;padding:6px;font-family:Consolas,monospace;font-size:11px;color:var(--text-primary);white-space:pre-wrap;min-height:34px;"></pre>' +
       '<div id="st-br-errors" style="font-size:11px;color:var(--accent-red);margin-top:6px;min-height:14px;"></div>' +
@@ -1185,12 +1193,49 @@ window.MA.modules.plantumlState = (function() {
       };
     }
 
+    // 一括入力欄 → 行。行は毎回組み直すので、枝が増えても手で足す必要がない。
+    function rowsFromBranches(branches) {
+      var host = document.getElementById('st-br-rows');
+      if (!host) return;
+      var list = (branches && branches.length) ? branches : [{}, {}];
+      if (list.length < 2) list = list.concat([{}]);
+      var html = '';
+      var idx = [];
+      list.forEach(function() { idx.push(rowCount++); });
+      list.forEach(function(b, k) { html += rowHtml(idx[k]); });
+      host.innerHTML = html;
+      list.forEach(function(b, k) {
+        setVal('st-br-guard-' + idx[k], b.guard || '');
+        setVal('st-br-to-' + idx[k], b.to || '');
+        setVal('st-br-act-' + idx[k], b.action || '');
+        bindRow(idx[k]);
+      });
+    }
+
+    function setVal(id, v) { var el = document.getElementById(id); if (el) el.value = v; }
+
+    // 行 → 一括入力欄。入力中の欄は上書きしない (打っている途中で消えない)。
+    function syncBulkFromRows(spec) {
+      var ta = document.getElementById('st-br-bulk');
+      if (!ta || document.activeElement === ta) return;
+      ta.value = SB.formatBranchLines(spec.branches);
+    }
+
     function refresh() {
       var spec = collectSpec();
       var text = ctx.getMmdText();
       var lines = SB.preview(text, spec);
       var pre = document.getElementById('st-br-preview');
       if (pre) pre.textContent = lines.join('\n');
+      // 置き換え元の直接遷移は黙って消さず、消える行として見せる。
+      var repl = SB.replacedTransitions(text, spec);
+      var replEl = document.getElementById('st-br-replaced');
+      if (replEl) {
+        replEl.textContent = repl.length
+          ? '確定すると消える行 (同じ遷移元・同じトリガーの直接遷移): '
+            + repl.map(function(r) { return r.line + ' 行目 ' + r.text; }).join(' / ')
+          : '';
+      }
       var v = SB.validate(spec, text);
       var errEl = document.getElementById('st-br-errors');
       if (errEl) errEl.textContent = v.errors.join(' / ');
@@ -1200,6 +1245,7 @@ window.MA.modules.plantumlState = (function() {
         confirmBtn.style.opacity = v.ok ? '1' : '0.5';
         confirmBtn.style.cursor = v.ok ? 'pointer' : 'not-allowed';
       }
+      syncBulkFromRows(spec);
     }
 
     function bindRow(i) {
@@ -1220,6 +1266,11 @@ window.MA.modules.plantumlState = (function() {
     bindRow(1);
     P.bindEvent('st-br-id', 'input', refresh);
     P.bindEvent('st-br-trigger', 'input', refresh);
+    P.bindEvent('st-br-bulk', 'input', function() {
+      var ta = document.getElementById('st-br-bulk');
+      rowsFromBranches(SB.parseBranchLines(ta ? ta.value : ''));
+      refresh();
+    });
     P.bindEvent('st-br-add-row', 'click', function() {
       var rows = document.getElementById('st-br-rows');
       if (!rows) return;

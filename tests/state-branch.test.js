@@ -216,3 +216,104 @@ describe('apply', function() {
     expect(decls.length).toBe(1);
   });
 });
+
+// BLK-junior-20260907-0803: 枝の一括入力と、置き換え元の直接遷移の自動削除。
+describe('stateBranch.parseBranchLines — 1 行 1 枝', function() {
+  test('ガード -> 遷移先 / アクション を読む', function() {
+    expect(sb.parseBranchLines('重大 -> Error / notify'))
+      .toEqual([{ guard: '重大', to: 'Error', action: 'notify' }]);
+  });
+  test('複数行を枝の並びにする', function() {
+    expect(sb.parseBranchLines('重大 -> Error\n軽微 -> Idle'))
+      .toEqual([{ guard: '重大', to: 'Error', action: '' }, { guard: '軽微', to: 'Idle', action: '' }]);
+  });
+  test('ガードを省くと else の枝になる', function() {
+    expect(sb.parseBranchLines('-> Idle')).toEqual([{ guard: '', to: 'Idle', action: '' }]);
+  });
+  test('矢印を省くと遷移先だけの枝になる', function() {
+    expect(sb.parseBranchLines('Idle')).toEqual([{ guard: '', to: 'Idle', action: '' }]);
+  });
+  test('→ や => も矢印として読む', function() {
+    expect(sb.parseBranchLines('重大 → Error')[0].to).toBe('Error');
+    expect(sb.parseBranchLines('重大 => Error')[0].to).toBe('Error');
+  });
+  test('空行と # の行は読み飛ばす', function() {
+    expect(sb.parseBranchLines('\n# メモ\n重大 -> Error\n').length).toBe(1);
+  });
+  test('空文字は枝なし', function() {
+    expect(sb.parseBranchLines('')).toEqual([]);
+  });
+});
+
+describe('stateBranch.formatBranchLines', function() {
+  test('行に戻す (往復する)', function() {
+    var src = '重大 -> Error / notify\n軽微 -> Idle';
+    expect(sb.formatBranchLines(sb.parseBranchLines(src))).toBe(src);
+  });
+  test('空の枝は行にしない', function() {
+    expect(sb.formatBranchLines([{ guard: '', to: '', action: '' }, { to: 'Idle' }])).toBe('-> Idle');
+  });
+});
+
+describe('stateBranch.triggerOf', function() {
+  test('ガードとアクションを落としてトリガー名だけにする', function() {
+    expect(sb.triggerOf('Fault [重大] / notify')).toBe('Fault');
+    expect(sb.triggerOf('Fault')).toBe('Fault');
+    expect(sb.triggerOf('')).toBe('');
+  });
+});
+
+describe('stateBranch.replacedTransitions — 二重経路を残さない', function() {
+  var T = [
+    '@startuml',
+    '[*] --> Idle',
+    'Idle --> Busy : Start',
+    'Busy --> Error : Fault',
+    '@enduml',
+  ].join('\n');
+  var SPEC = {
+    source: 'Busy', trigger: 'Fault', choiceId: 'AnomalyCheck',
+    branches: [{ guard: '重大', to: 'Error' }, { guard: '軽微', to: 'Idle' }],
+  };
+
+  test('同じ遷移元・同じトリガーの直接遷移を挙げる', function() {
+    var r = sb.replacedTransitions(T, SPEC);
+    expect(r.length).toBe(1);
+    expect(r[0].line).toBe(4);
+    expect(r[0].text).toBe('Busy --> Error : Fault');
+  });
+  test('トリガーが違えば残す', function() {
+    var spec = { source: 'Busy', trigger: 'Reset', choiceId: 'C', branches: [{ to: 'Idle' }, { guard: 'x', to: 'Error' }] };
+    expect(sb.replacedTransitions(T, spec)).toEqual([]);
+  });
+  test('遷移元が違えば残す', function() {
+    var spec = { source: 'Idle', trigger: 'Fault', choiceId: 'C', branches: [{ to: 'Idle' }, { guard: 'x', to: 'Error' }] };
+    expect(sb.replacedTransitions(T, spec)).toEqual([]);
+  });
+  test('トリガーを入れていなければ何も消さない', function() {
+    var spec = { source: 'Busy', trigger: '', choiceId: 'C', branches: [{ to: 'Idle' }, { guard: 'x', to: 'Error' }] };
+    expect(sb.replacedTransitions(T, spec)).toEqual([]);
+  });
+  test('ガード付きの既存遷移も同じトリガーなら消す対象になる', function() {
+    var t2 = T.replace('Busy --> Error : Fault', 'Busy --> Error : Fault [重大] / log');
+    expect(sb.replacedTransitions(t2, SPEC).length).toBe(1);
+  });
+
+  test('apply は直接遷移を消してから分岐を足す', function() {
+    var out = sb.apply(T, SPEC);
+    expect(out).not.toContain('Busy --> Error : Fault\n');
+    expect(out).toContain('state AnomalyCheck <<choice>>');
+    expect(out).toContain('Busy --> AnomalyCheck : Fault');
+    expect(out).toContain('AnomalyCheck --> Error : [重大]');
+    expect(out).toContain('AnomalyCheck --> Idle : [軽微]');
+    // 関係の無い行は残る
+    expect(out).toContain('Idle --> Busy : Start');
+  });
+
+  test('apply は消す対象が無くても今までどおり足すだけ', function() {
+    var t3 = T.replace('Busy --> Error : Fault\n', '');
+    var out = sb.apply(t3, SPEC);
+    expect(out).toContain('Busy --> AnomalyCheck : Fault');
+    expect(out.split('\n').length).toBe(t3.split('\n').length + 4);
+  });
+});
