@@ -76,7 +76,8 @@ test.describe('BLK-builder-1050 関係のその他の設定 (design 3c)', () => 
 
   test('主要な「関係の種類」は畳まれず常時表示のまま', async ({ page }) => {
     await openRelation(page, UC, 4);
-    await expect(page.locator('#uc-rel-kind')).toBeVisible();
+    // design 3c で「関係の種類」は <select> からカードに変わった (BLK-builder-2035-3)。
+    await expect(page.locator('.uc-rel-card[data-value="association"]')).toBeVisible();
   });
 
   test('design が挙げる 4 項目が並ぶ', async ({ page }) => {
@@ -111,7 +112,7 @@ test.describe('BLK-builder-1050 関係のその他の設定 (design 3c)', () => 
     await expect(page.locator('#uc-rel-more')).toBeVisible();
     await page.locator('#uc-rel-more-mult-left').press('Escape');
     await expect(page.locator('#uc-rel-more')).toBeHidden();
-    await expect(page.locator('#uc-rel-kind')).toBeVisible();
+    await expect(page.locator('.uc-rel-card[data-value="association"]')).toBeVisible();
   });
 
   test('Component: 線の色を選ぶと -[#red]-> になる', async ({ page }) => {

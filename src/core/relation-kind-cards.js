@@ -2,16 +2,34 @@
 // relation-kind-cards — 関係の種類を「UML の名称が主・意味の説明が従」のカードで選ばせる。
 // design/PlantUMLAssist - 1a 図種展開.dc.html の 3b。プルダウンのラベル (`Provides (-())`)
 // は記法しか伝えないため、記法を知らない利用者はどれを選べばよいか決められない。
+// 3c はこの流儀を「UseCase / Component / Class で共通」と定めるので、3 図種ぶんの
+// 語彙をここに 1 つだけ置く。2 要素を選んで追加する側 (relation-add) も同じ語彙を読む。
 window.MA = window.MA || {};
 window.MA.relationKindCards = (function() {
 
   // 図種ごとの関係の種類。name は UML の名称(主)、desc は意味の説明(従)。
+  // 並びはそのままカードの並びになる。よく使うものから先に置く。
   var KINDS = {
+    usecase: [
+      { value: 'association',    name: '関連 / association',    desc: 'アクターがユースケースを利用する' },
+      { value: 'include',        name: '包含 / include',        desc: '実行時に必ず呼び出される' },
+      { value: 'extend',         name: '拡張 / extend',         desc: '条件を満たすときだけ実行される' },
+      { value: 'generalization', name: '汎化 / generalization', desc: '一方がもう一方の特化である' },
+    ],
     component: [
       { value: 'association', name: '関連 / association',  desc: '部品どうしが接続されている' },
       { value: 'dependency',  name: '依存 / dependency',   desc: '一方が他方を利用している' },
       { value: 'provides',    name: '提供 / provides',     desc: '部品がインターフェースを提供する' },
       { value: 'requires',    name: '要求 / requires',     desc: '部品がインターフェースを必要とする' },
+    ],
+    class: [
+      { value: 'association',    name: '関連 / association',    desc: 'クラスどうしがつながっている' },
+      { value: 'inheritance',    name: '継承 / inheritance',    desc: '子が親の性質を引き継ぐ' },
+      { value: 'implementation', name: '実現 / implementation', desc: 'インターフェースを実装する' },
+      { value: 'composition',    name: '合成 / composition',    desc: '部分は全体と生死を共にする' },
+      { value: 'aggregation',    name: '集約 / aggregation',    desc: '全体が部分を持つ。部分は単独でも残る' },
+      { value: 'dependency',     name: '依存 / dependency',     desc: '一方が他方を利用している' },
+      { value: 'nested',         name: '入れ子 / nested',       desc: '内部クラスとして中に定義されている' },
     ],
   };
 
@@ -85,8 +103,13 @@ window.MA.relationKindCards = (function() {
 
   var FIXED_NOTE = '提供 / 要求 は向きが固定です。選ぶと 部品 → インターフェース の向きに自動で並べ替えます。';
 
-  // noteHtml: 向き固定の注記。常に出す (選ぶ前に読めなければ意味がない)
-  function noteHtml() {
+  // noteHtml: 向き固定の注記。常に出す (選ぶ前に読めなければ意味がない)。
+  // 向きが固定の種類を持たない図種 (UseCase / Class) では出さない。
+  // 引数なしの呼び出しは Component 扱い (3b から先に入った呼び出しをそのまま通す)。
+  function noteHtml(diagram) {
+    var list = KINDS[diagram || 'component'] || [];
+    var hasFixed = list.some(function(k) { return isFixedOrientation(k.value); });
+    if (!hasFixed) return '';
     return '<div style="margin-bottom:8px;padding:6px 8px;border-radius:6px;' +
       'background:var(--bg-tertiary);color:var(--text-secondary);font-size:10px;line-height:1.5;">' +
       esc(FIXED_NOTE) + '</div>';
