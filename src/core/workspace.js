@@ -45,6 +45,18 @@ window.MA.workspace = (function() {
     return out;
   }
 
+  // 名前の規則を、判定と同じ場所から日本語 1 行で出す。
+  //
+  // BLK-junior-20260908-0003: 名前変更ダイアログの説明文が「英数字・_ ・- のみ」
+  // のまま残っていて、実際には通る日本語・空白・括弧を「使ってよいのか」毎回
+  // 試すまで確信が持てなかった。文言を画面側に書き写すと、判定を変えたときに
+  // また置いていかれる。判定の隣に置いて、画面はここから取る。
+  function nameRuleText() {
+    return '図の名前 (日本語・空白・括弧は使えます。'
+      + UNSAFE_CHARS.split('').concat(['/', String.fromCharCode(92)]).join(' ')
+      + ' と、先頭・末尾の空白とドットは使えません)';
+  }
+
   function isValidName(name) {
     if (typeof name !== 'string' || !name) return false;
     if (RESERVED_RE.test(name)) return false;
@@ -354,6 +366,7 @@ window.MA.workspace = (function() {
     reset: reset,
     sanitizeName: sanitizeName,
     isValidName: isValidName,
+    nameRuleText: nameRuleText,
     saveToFile: saveToFile,
     listFiles: listFiles,
     listFileEntries: listFileEntries,
