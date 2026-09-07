@@ -2043,6 +2043,7 @@ function init() {
   setupBulkRename();
   setupSymptomSearch();
   setupPatternCheck();
+  setupXrefGraph();
   setupBulkApply();
   setupTemplateNew();
   setupDiffPanel();
@@ -2193,6 +2194,7 @@ function initCommandPalette() {
       { id: 'tab-symptom', title: '症状から関連図を探す / Symptom search', hint: 'Tabs', keywords: ['symptom', 'search', 'しょうじょう', 'けんさく', 'ふぐあい'], run: function() { clickById('btn-tab-symptom'); } },
       { id: 'tab-pattern', title: '同じ観点で全図を棚卸し / Pattern check', hint: 'Tabs', keywords: ['pattern', 'check', 'かんてん', 'いっかつ', 'してき', 'たなおろし'], run: function() { clickById('btn-tab-pattern'); } },
       { id: 'tab-submit', title: '提出前チェックを開く / Submit check', hint: 'Tabs', keywords: ['submit', 'check', 'ていしゅつ', 'かくにん', '略語'], run: function() { clickById('btn-tab-submit'); } },
+      { id: 'tab-xref', title: '参照関係を開く / Cross-reference', hint: 'Tabs', keywords: ['xref', 'reference', 'project', 'さんしょう', 'かんけい'], run: function() { clickById('btn-tab-xref'); } },
       { id: 'tab-audit', title: '名前突合を開く / Name audit', hint: 'Tabs', keywords: ['name', 'audit', 'なまえ', 'つきあわせ'], run: function() { clickById('btn-tab-audit'); } },
       { id: 'tab-handoff', title: '引き継ぎパッケージを作る / Handoff package', hint: 'Tabs', keywords: ['handoff', 'package', 'zip', 'ひきつぎ', 'ぱっけーじ'], run: function() { clickById('btn-tab-handoff'); } },
       { id: 'tab-delivery', title: '納品パッケージを作る / Delivery package', hint: 'Tabs', keywords: ['delivery', 'package', 'zip', 'のうひん', 'ぱっけーじ', '提出'], run: function() { clickById('btn-tab-delivery'); } },
@@ -2831,6 +2833,8 @@ function renderTabs() {
   try { renderConsistencyBadge(); } catch (e) {}
   try { renderEventSyncBadge(); } catch (e) {}
   try { renderPinBadge(); } catch (e) {}
+  // 参照関係でハイライトしている部品名の印は、タブを組み立て直すたびに付け直す。
+  try { if (typeof _xrefSelected === 'string' && _xrefSelected) renderXrefGraph(); } catch (e) {}
 }
 
 // ── 前回保存時点との差分 ──────────────────────────────
@@ -5257,6 +5261,167 @@ function setupPatternCheck() {
       if (ev.key === 'Escape') { ev.preventDefault(); closePanel(); }
     });
   }
+  if (closeBtn) closeBtn.addEventListener('click', closePanel);
+}
+
+// ── 参照関係 ───────────────────────────────────────────────────────────────
+// BLK-primary-20260908-0003-wish: 14 枚一式を新人に渡すとき、「この図とこの図は
+// 同じ部品名で繋がっている」という関係そのものを渡す手段が無く、渡された側は
+// 1 枚ずつ開いて名前を照合するしかなかった。開いている図を 1 プロジェクトとして
+// 扱い、図をまたぐ部品名を並べ、選べばその名前が出る図をタブ上でハイライトして
+// 一覧に出す。行を押せばその図のその行へ運ぶ。関係は書き出して渡せる。
+
+var _xrefSelected = '';   // 今ハイライトしている部品名
+
+// タブは編集のたびに組み立て直されるので、印は毎回付け直す。
+function applyXrefHighlight(names) {
+  var bar = document.getElementById('tab-bar');
+  if (!bar) return;
+  var hit = {};
+  (names || []).forEach(function(n) { hit[n] = true; });
+  var tabs = bar.querySelectorAll('.tab');
+  for (var i = 0; i < tabs.length; i++) {
+    var el = tabs[i];
+    if (hit[el.getAttribute('data-doc-name')]) el.classList.add('xref-hit');
+    else el.classList.remove('xref-hit');
+  }
+}
+
+function _xrefHighlightSelected(graph) {
+  if (!_xrefSelected) { applyXrefHighlight([]); return; }
+  var e = window.MA.xrefGraph.forName(graph, _xrefSelected);
+  applyXrefHighlight(e ? e.docs.map(function(d) { return d.name; }) : []);
+}
+
+function renderXrefGraph() {
+  var XG = window.MA.xrefGraph;
+  var headEl = document.getElementById('xref-head');
+  var namesEl = document.getElementById('xref-names');
+  var refsEl = document.getElementById('xref-refs');
+  var linksEl = document.getElementById('xref-links');
+  if (!XG || !headEl || !namesEl || !refsEl || !linksEl) return;
+
+  var graph = XG.build(_renameDocs());
+  var activeName = '';
+  if (window.MA.workspace) {
+    var act = window.MA.workspace.getActive();
+    activeName = (act && act.name) || '';
+  }
+
+  headEl.textContent = XG.summaryLine(graph);
+  headEl.setAttribute('data-docs', String(graph.counts.docs));
+  headEl.setAttribute('data-shared', String(graph.counts.shared));
+  headEl.setAttribute('data-links', String(graph.counts.links));
+
+  // 選んでいた名前がもう跨いでいなければ選択を落とす。
+  if (_xrefSelected && !XG.forName(graph, _xrefSelected)) _xrefSelected = '';
+
+  namesEl.textContent = '';
+  graph.shared.forEach(function(n) {
+    var row = document.createElement('div');
+    row.className = 'xref-name' + (n.name === _xrefSelected ? ' on' : '');
+    row.setAttribute('data-name', n.name);
+    row.setAttribute('data-docs', String(n.docCount));
+    row.title = n.name + ' が出てくる図: ' + n.docs.map(function(d) { return d.name; }).join(', ');
+    var nm = document.createElement('span');
+    nm.textContent = n.name;
+    var ct = document.createElement('span');
+    ct.className = 'xref-count';
+    ct.textContent = n.docCount + ' 枚';
+    row.appendChild(nm);
+    row.appendChild(ct);
+    row.addEventListener('click', function() {
+      _xrefSelected = (_xrefSelected === n.name) ? '' : n.name;
+      renderXrefGraph();
+    });
+    namesEl.appendChild(row);
+  });
+  if (graph.shared.length === 0) {
+    var none = document.createElement('div');
+    none.id = 'xref-no-shared';
+    none.className = 'xref-hint';
+    none.textContent = '図をまたぐ部品名はありません';
+    namesEl.appendChild(none);
+  }
+
+  refsEl.textContent = '';
+  var sel = _xrefSelected ? XG.forName(graph, _xrefSelected) : null;
+  if (!sel) {
+    var hint = document.createElement('div');
+    hint.id = 'xref-hint';
+    hint.className = 'xref-hint';
+    hint.textContent = '部品名を押すと、その名前が出てくる図が並びます';
+    refsEl.appendChild(hint);
+  } else {
+    refsEl.setAttribute('data-name', sel.name);
+    refsEl.setAttribute('data-count', String(sel.docCount));
+    sel.docs.forEach(function(d) {
+      var row = document.createElement('div');
+      row.className = 'xref-ref' + (d.declared ? '' : ' xref-ref-undeclared');
+      row.setAttribute('data-doc-name', d.name);
+      row.setAttribute('data-line', String(d.line));
+      row.setAttribute('data-declared', d.declared ? '1' : '0');
+      if (d.name === activeName) row.setAttribute('data-active', '1');
+      row.title = d.name + ' の ' + d.line + ' 行目へ移動'
+        + (d.declared ? '' : ' (宣言が無く、矢印にだけ出てくる)');
+      var no = document.createElement('span');
+      no.className = 'xref-ref-line';
+      no.textContent = String(d.line);
+      var tx = document.createElement('span');
+      tx.textContent = d.name + ' (' + d.kind + ')';
+      row.appendChild(no);
+      row.appendChild(tx);
+      row.addEventListener('click', function() { jumpToDocLine(d.id, d.line); });
+      refsEl.appendChild(row);
+    });
+  }
+
+  linksEl.textContent = '';
+  linksEl.setAttribute('data-links', String(graph.links.length));
+  graph.links.slice(0, 12).forEach(function(l) {
+    var row = document.createElement('div');
+    row.className = 'xref-link';
+    row.setAttribute('data-a', l.a);
+    row.setAttribute('data-b', l.b);
+    row.textContent = l.a + ' ⇄ ' + l.b + ': ' + l.names.join(', ');
+    linksEl.appendChild(row);
+  });
+
+  _xrefHighlightSelected(graph);
+}
+
+function setupXrefGraph() {
+  var panel = document.getElementById('xref-panel');
+  var btn = document.getElementById('btn-tab-xref');
+  if (!panel || !btn || !window.MA.xrefGraph) return;
+  var closeBtn = document.getElementById('btn-xref-close');
+  var exportBtn = document.getElementById('btn-xref-export');
+
+  function closePanel() {
+    panel.classList.remove('open');
+    _xrefSelected = '';
+    applyXrefHighlight([]);
+  }
+
+  btn.addEventListener('click', function() {
+    if (panel.classList.contains('open')) { closePanel(); return; }
+    var rect = btn.getBoundingClientRect();
+    panel.style.left = Math.max(4, rect.left - 200) + 'px';
+    panel.style.top = (rect.bottom + 2) + 'px';
+    panel.classList.add('open');
+    renderXrefGraph();
+  });
+
+  if (exportBtn) exportBtn.addEventListener('click', function() {
+    var txt = window.MA.xrefGraph.toText(window.MA.xrefGraph.build(_renameDocs()));
+    var blob = new Blob([txt], { type: 'text/markdown' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'xref.md';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    setSaveStatus('参照関係を xref.md に書き出しました');
+  });
   if (closeBtn) closeBtn.addEventListener('click', closePanel);
 }
 
