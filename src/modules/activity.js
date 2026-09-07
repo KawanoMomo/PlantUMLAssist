@@ -1829,8 +1829,9 @@ window.MA.modules.plantumlActivity = (function() {
         ' title="' + window.MA.htmlUtils.escHtml(title) + '"' +
         ' style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);' +
         'color:var(--' + (on ? 'text-primary' : 'text-secondary') + ');padding:6px;' +
-        'border-radius:4px;font-size:11px;cursor:' + (on ? 'pointer' : 'not-allowed') + ';' +
-        (on ? '' : 'opacity:0.5;') + '">' + label + '</button>';
+        'border-radius:4px;font-size:14px;line-height:1;cursor:' + (on ? 'pointer' : 'not-allowed') + ';' +
+        // 押せない側は目で分かる程度に落とす (0.5 だと隣と見分けが付かない)。
+        (on ? '' : 'opacity:0.3;') + '">' + label + '</button>';
     }
     return '<div style="border-top:1px solid var(--border);padding-top:10px;margin-top:8px;">' +
       '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">並び替え / Reorder</label>' +
