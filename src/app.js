@@ -9652,6 +9652,12 @@ function refresh() {
   // (今編集しているタブは参照の候補から外れる)。
   if (_compareOpen) renderCompareView();
   var detectedType = window.MA.parserUtils.detectDiagramType(mmdText);
+  // `actor A` しか無い段階では図種を当てられない。空のシーケンス図に参加者を
+  // 1 人足した直後に UseCase へ載せ替わると「末尾に追加」ペインごと消えて、
+  // 2 人目が足せなくなっていた。決め手が出るまでは選んである図種を保つ。
+  if (window.MA.parserUtils.isAmbiguousType(mmdText) && modules[currentDiagramType]) {
+    detectedType = currentDiagramType;
+  }
   var mod = detectedType ? modules[detectedType] : null;
   if (mod) currentModule = mod;
 
