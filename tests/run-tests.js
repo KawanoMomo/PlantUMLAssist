@@ -8,6 +8,7 @@ const sourceFiles = [
   'src/core/dsl-utils.js',
   'src/core/regex-parts.js',
   'src/core/id-normalizer.js',
+  'src/core/alias-hint.js',
   'src/core/auto-save.js',
   'src/core/workspace.js',
   'src/core/review-watch.js',

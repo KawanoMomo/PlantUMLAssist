@@ -473,20 +473,42 @@ window.MA.modules.plantumlUsecase = (function() {
     var renderTailDetail = function() {
       var kind = document.getElementById('uc-tail-kind').value;
       var detailEl = document.getElementById('uc-tail-detail');
-      var actorOpts = actors.map(function(a) { return { value: a.id, label: a.label }; });
-      var usecaseOpts = usecases.map(function(u) { return { value: u.id, label: u.label }; });
+      // 表示名と識別子がずれている要素は「ラベル (id)」で出す。日本語を打つと
+      // 識別子は自動採番されるので、プルダウンの表示が DSL のどの行を指すのか
+      // 併記しないと選び直すときに確信が持てない (BLK-junior-20260908-0630)。
+      var AH = window.MA.aliasHint;
+      var actorOpts = actors.map(function(a) { return { value: a.id, label: AH.optionLabel(a.id, a.label) }; });
+      var usecaseOpts = usecases.map(function(u) { return { value: u.id, label: AH.optionLabel(u.id, u.label) }; });
+      // Alias 欄の下の 1 行。打った文字がどの識別子になるかを打っている最中に出す。
+      function aliasHintHtml() {
+        return '<div id="uc-tail-alias-hint" style="margin:-4px 0 8px;font-size:10px;' +
+          'color:var(--text-secondary);line-height:1.5;min-height:1.4em;"></div>';
+      }
+      function bindAliasHint(prefix) {
+        var inputEl = document.getElementById('uc-tail-alias');
+        var hintEl = document.getElementById('uc-tail-alias-hint');
+        if (!inputEl || !hintEl) return;
+        var taken = _existingUsecaseIdSet(parsedData);
+        var refresh = function() {
+          hintEl.textContent = AH.hintFor(inputEl.value, taken, prefix).text;
+        };
+        inputEl.addEventListener('input', refresh);
+        refresh();
+      }
       var allOpts = actorOpts.concat(usecaseOpts);
       if (allOpts.length === 0) allOpts = [{ value: '', label: '（要素なし）' }];
       var html = '';
       if (kind === 'actor') {
         html =
-          P.fieldHtml('Alias', 'uc-tail-alias', '', '例: User') +
-          P.fieldHtml('Label', 'uc-tail-label', '', '省略可、Alias と異なる場合に表示用') +
+          P.fieldHtml('Alias (識別子)', 'uc-tail-alias', '', '例: User（日本語は表示名になります）') +
+          aliasHintHtml() +
+          P.fieldHtml('Label (表示名)', 'uc-tail-label', '', '省略可、Alias と異なる場合に表示用') +
           P.primaryButtonHtml('uc-tail-add', '+ Actor 追加');
       } else if (kind === 'usecase') {
         html =
-          P.fieldHtml('Alias', 'uc-tail-alias', '', '例: L1') +
-          P.fieldHtml('Label', 'uc-tail-label', '', '省略可、Alias と異なる場合に表示用') +
+          P.fieldHtml('Alias (識別子)', 'uc-tail-alias', '', '例: L1（日本語は表示名になります）') +
+          aliasHintHtml() +
+          P.fieldHtml('Label (表示名)', 'uc-tail-label', '', '省略可、Alias と異なる場合に表示用') +
           P.primaryButtonHtml('uc-tail-add', '+ Usecase 追加');
       } else if (kind === 'package') {
         html =
@@ -533,6 +555,8 @@ window.MA.modules.plantumlUsecase = (function() {
             'A --&gt; B : label / A ..&gt; B(include) / A ..&gt; B : extend / A &lt;|-- B。空行は無視されます</div>';
       }
       detailEl.innerHTML = html;
+      if (kind === 'actor') bindAliasHint('A');
+      else if (kind === 'usecase') bindAliasHint('U');
       // 一括欄は「既に他の図にある行」を打ち直させないためのボタンを持つ。
       window.MA.reuseModal.bindButton('uc-tail-reuse', 'plantuml-usecase', 'uc-tail-bulk');
 
@@ -832,7 +856,9 @@ window.MA.modules.plantumlUsecase = (function() {
       return e.kind === 'actor' || e.kind === 'usecase';
     });
     var nameById = {};
-    allElements.forEach(function(e) { nameById[e.id] = e.label || e.id; });
+    allElements.forEach(function(e) {
+      nameById[e.id] = window.MA.aliasHint.optionLabel(e.id, e.label || e.id);
+    });
 
     var swapped = false;
     var kind = RA.defaultKind('usecase');
