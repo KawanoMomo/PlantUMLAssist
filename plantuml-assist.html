@@ -1429,6 +1429,62 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   width: 1%;
 }
 .cfg-sc-table td { padding: 3px 0; color: var(--text-secondary); }
+
+/* ── ショートカット表のグループ・検索・状態チップ (design 5b) ─────────────── */
+#cfg-sc-search {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  padding: 5px 8px;
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+
+#cfg-sc-legend {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+#cfg-sc-legend .cfg-sc-state { margin-left: 8px; }
+#cfg-sc-legend .cfg-sc-state:first-child { margin-left: 0; }
+
+.cfg-sc-group { margin-bottom: 12px; }
+
+.cfg-sc-heading {
+  font-size: 10px;
+  font-weight: bold;
+  color: var(--accent);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 3px;
+  margin-bottom: 4px;
+}
+
+.cfg-sc-state-cell { width: 1%; white-space: nowrap; text-align: right; padding-left: 8px; }
+
+.cfg-sc-state {
+  display: inline-block;
+  font-size: 10px;
+  line-height: 1.5;
+  border-radius: 3px;
+  padding: 0 5px;
+}
+
+/* ● = 既にあるもの。新設 = この設計で足すもの。割り当ての衝突を見つけるため、
+   未実装の行も表から消さずに、色と文字の両方で区別する。 */
+.cfg-sc-done { color: var(--accent-green); background: none; padding: 0; }
+.cfg-sc-new {
+  color: var(--bg-primary);
+  background: var(--accent);
+}
+
+.cfg-sc-empty { font-size: 11px; color: var(--text-secondary); padding: 8px 0; }
 .cfg-sc-table kbd {
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
@@ -1954,6 +2010,12 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     </div>
 
     <div id="cfg-pane-shortcuts" class="cfg-pane" hidden>
+      <!-- design 5b: 操作名で絞り込み、実装済み ● と 新設 を同じ表の上で区別する -->
+      <div id="cfg-sc-legend">
+        <span class="cfg-sc-state cfg-sc-done">●</span> 実装済み
+        <span class="cfg-sc-state cfg-sc-new">新設</span> 新設（未実装）
+      </div>
+      <input type="search" id="cfg-sc-search" placeholder="⌕ 操作名で検索" aria-label="操作名で検索">
       <div id="cfg-shortcuts-list"></div>
     </div>
 

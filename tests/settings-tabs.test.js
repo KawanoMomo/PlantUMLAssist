@@ -55,10 +55,89 @@ describe('settings-tabs — 設定モーダルの 5 タブ (design 1a)', () => {
     var html = ST.buildShortcutsHtml();
     expect(html).toContain('<kbd>Ctrl+K</kbd>');
     expect(html).toContain('コマンドパレットを開く');
-    expect(html).toContain('<kbd>Ctrl+Z</kbd>');
+    expect(html).toContain('<kbd>Ctrl+Z / Ctrl+Y</kbd>');
     // design 2c で書き出しのキー (export-shortcuts) が一覧に加わったため、
-    // 行数は SHORTCUTS 単体ではなく shortcutRows() を基準にする。
-    expect((html.match(/<tr>/g) || []).length).toBe(ST.shortcutRows().length);
+    // 行数は GROUPS 単体ではなく shortcutRows() を基準にする。
+    expect((html.match(/<tr /g) || []).length).toBe(ST.shortcutRows().length);
+  });
+
+  // ── ショートカット表 (design 5b) ────────────────────────────────────
+  describe('ショートカット表 — グループ・検索・実装済み/新設 (design 5b)', () => {
+    test('shortcutGroups: design 5b の 4 グループが順に並ぶ', () => {
+      var ids = ST.shortcutGroups().map(function(g) { return g.id; });
+      expect(ids).toEqual(['global', 'diagram', 'editor', 'view']);
+    });
+
+    test('groupHeading: 効く状況を括弧で添える', () => {
+      var g = ST.shortcutGroups();
+      expect(ST.groupHeading(g[0])).toBe('全体');
+      expect(ST.groupHeading(g[1])).toBe('図の編集（図形を選んでいるとき）');
+      expect(ST.groupHeading(g[2])).toBe('DSL エディタ（テキスト欄にカーソルがあるとき）');
+    });
+
+    test('すべての行が実装済み / 新設 のどちらかに分類されている', () => {
+      ST.shortcutRows().forEach(function(r) {
+        expect(['done', 'new']).toContain(r.state);
+      });
+    });
+
+    test('新設（未実装）の行も表から消さず、既存の割り当てと同じ表に載る', () => {
+      var news = ST.shortcutRows().filter(function(r) { return r.state === 'new'; });
+      expect(news.length).toBeGreaterThan(0);
+      var html = ST.buildShortcutsHtml();
+      news.forEach(function(r) { expect(html).toContain('<kbd>' + r.keys + '</kbd>'); });
+      expect(html).toContain('data-sc-state="new"');
+      expect(html).toContain('data-sc-state="done"');
+    });
+
+    test('stateChipHtml: 色だけでなく文字でも区別する', () => {
+      expect(ST.stateChipHtml('done')).toContain('●');
+      expect(ST.stateChipHtml('done')).toContain('実装済み');
+      expect(ST.stateChipHtml('new')).toContain('新設');
+    });
+
+    test('filterGroups: 操作名で絞り込み、空になった見出しは落とす', () => {
+      var out = ST.filterGroups(ST.shortcutGroups(), 'コマンドパレット');
+      expect(out.length).toBe(1);
+      expect(out[0].id).toBe('global');
+      expect(out[0].rows.length).toBe(1);
+      expect(out[0].rows[0].keys).toBe('Ctrl+K');
+    });
+
+    test('filterGroups: キー文字列でも当たる (割り当ての衝突を引けるように)', () => {
+      var out = ST.filterGroups(ST.shortcutGroups(), 'alt+');
+      var ids = out.map(function(g) { return g.id; });
+      expect(ids).toContain('diagram');
+      expect(ids).toContain('editor');
+    });
+
+    test('filterGroups: 空の検索語は全件そのまま返す', () => {
+      var all = ST.shortcutGroups();
+      expect(ST.filterGroups(all, '')).toBe(all);
+      expect(ST.filterGroups(all, '   ')).toBe(all);
+      expect(ST.filterGroups(all, null)).toBe(all);
+    });
+
+    test('filterGroups: 大文字小文字を問わない', () => {
+      expect(ST.filterGroups(ST.shortcutGroups(), 'CTRL+K').length).toBe(1);
+    });
+
+    test('buildShortcutsHtml: 該当なしなら表ではなくその旨を出す', () => {
+      var html = ST.buildShortcutsHtml('存在しない操作名');
+      expect(html).toContain('該当する操作がありません');
+      expect(html).not.toContain('<kbd>');
+    });
+
+    test('同じキーに 2 つの操作が割り当てられていない (Alt+↑↓ のフォーカス排他を除く)', () => {
+      var seen = {};
+      var dup = [];
+      ST.shortcutRows().forEach(function(r) {
+        if (r.keys === 'Alt+↑ / Alt+↓') return;  // 図側と DSL 側でフォーカス排他
+        if (seen[r.keys]) dup.push(r.keys);
+        seen[r.keys] = true;
+      });
+      expect(dup).toEqual([]);
+    });
   });
 
   test('normalizeRenderMode: online 以外はすべて local', () => {
