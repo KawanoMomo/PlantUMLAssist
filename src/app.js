@@ -1985,6 +1985,7 @@ function init() {
 
   setupTabs();
   setupBulkRename();
+  setupBulkApply();
   setupTemplateNew();
   setupDiffPanel();
   setupReviewPanel();
@@ -4256,6 +4257,173 @@ function setupBulkRename() {
   if (applyBtn) applyBtn.addEventListener('click', doApply);
   if (cancel) cancel.addEventListener('click', closePanel);
 
+  document.addEventListener('click', function(ev) {
+    if (!panel.classList.contains('open')) return;
+    if (panel.contains(ev.target) || ev.target === btn) return;
+    closePanel();
+  });
+}
+
+// ── 一括適用 ───────────────────────────────────────────────────────────────
+// レビュー指摘は「この 3 クラスに同じメソッドが無い」の形で来るのに、GUI 側は
+// クラスを 1 つ選ぶ → フォームを開く → 打つ、を対象の数だけ繰り返すしかなく、
+// 手数が対象数に比例して増えていた (BLK-primary-20260906-2043)。
+// 名前を 1 度だけ打ち、当てる先をまとめて選んで 1 回で当てる。
+
+function setupBulkApply() {
+  var panel = document.getElementById('apply-panel');
+  var btn = document.getElementById('btn-tab-apply');
+  var ba = window.MA.bulkApply;
+  if (!panel || !btn || !ba) return;
+  var kindEl = document.getElementById('apply-kind');
+  var nameEl = document.getElementById('apply-name');
+  var extraEl = document.getElementById('apply-extra');
+  var extraLabel = document.getElementById('apply-extra-label');
+  var listEl = document.getElementById('apply-targets');
+  var summary = document.getElementById('apply-summary');
+  var runBtn = document.getElementById('btn-apply-run');
+  var selected = {};
+
+  ba.kinds().forEach(function(k) {
+    var o = document.createElement('option');
+    o.value = k.kind;
+    o.textContent = k.label;
+    kindEl.appendChild(o);
+  });
+
+  function closePanel() { panel.classList.remove('open'); }
+
+  function spec() {
+    return kindEl.value === 'class-method'
+      ? { name: nameEl.value.trim(), params: '', returnType: extraEl.value.trim(), visibility: '+' }
+      : { name: nameEl.value.trim(), type: extraEl.value.trim(), visibility: '+' };
+  }
+
+  function renderTargets() {
+    var docs = _renameDocs();
+    var kind = kindEl.value;
+    var list = ba.targets(docs, kind);
+    var keys = Object.keys(selected).filter(function(k) { return selected[k]; });
+    var rows = ba.preview(docs, keys, kind, spec());
+    var stateOf = {};
+    rows.forEach(function(r) { stateOf[r.key] = r.status; });
+
+    listEl.textContent = '';
+    if (list.length === 0) {
+      var none = document.createElement('div');
+      none.className = 'ap-row';
+      none.id = 'apply-no-targets';
+      none.textContent = 'クラス図が開かれていません';
+      listEl.appendChild(none);
+    }
+    list.forEach(function(t) {
+      var row = document.createElement('label');
+      row.className = 'ap-row' + (stateOf[t.key] === 'skip' ? ' skip' : '');
+      row.setAttribute('data-key', t.key);
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.className = 'ap-check';
+      cb.checked = !!selected[t.key];
+      cb.addEventListener('change', function() {
+        selected[t.key] = cb.checked;
+        renderTargets();
+      });
+      var n = document.createElement('span');
+      n.className = 'ap-name';
+      n.textContent = t.name;
+      var d = document.createElement('span');
+      d.className = 'ap-doc';
+      d.textContent = t.docName;
+      var s = document.createElement('span');
+      s.className = 'ap-state';
+      s.textContent = stateOf[t.key] === 'skip' ? '既にあり' : '';
+      row.appendChild(cb); row.appendChild(n); row.appendChild(d); row.appendChild(s);
+      listEl.appendChild(row);
+    });
+
+    var add = rows.filter(function(r) { return r.status === 'add'; }).length;
+    var skip = rows.filter(function(r) { return r.status === 'skip'; }).length;
+    var label = ba.memberLine(kind, spec());
+    if (!nameEl.value.trim()) summary.textContent = '名前を入力してください';
+    else if (keys.length === 0) summary.textContent = '当てる先を選んでください';
+    else if (add === 0) summary.textContent = '選んだ ' + skip + ' 件はすべて既にあります';
+    else summary.textContent = '「' + label + '」を ' + add + ' 件に追加' + (skip ? '（' + skip + ' 件は既にあり）' : '');
+    summary.setAttribute('data-add', String(add));
+    summary.setAttribute('data-skip', String(skip));
+    runBtn.disabled = !(add > 0);
+  }
+
+  function syncExtraLabel() {
+    var isMethod = kindEl.value === 'class-method';
+    extraLabel.textContent = isMethod ? '戻り値' : '型';
+    extraEl.placeholder = isMethod ? 'void' : 'uint8';
+  }
+
+  function doApply() {
+    var docs = _renameDocs();
+    var keys = Object.keys(selected).filter(function(k) { return selected[k]; });
+    var res = ba.apply(docs, keys, kindEl.value, spec());
+    if (!res.changed.length) { renderTargets(); return; }
+    var activeId = window.MA.workspace ? window.MA.workspace.getActiveId() : null;
+    if (window.MA.history) window.MA.history.pushHistory();
+    res.changed.forEach(function(c) {
+      if (c.id === activeId) {
+        mmdText = c.dsl;
+        suppressSync = true;
+        editorEl.value = mmdText;
+        suppressSync = false;
+      }
+      window.MA.workspace.updateDoc(c.id, { dsl: c.dsl });
+    });
+    updateLineNumbers();
+    scheduleRefresh();
+    renderTabs();
+    // 保存フォルダ運用時は当てた図を書き出す (一括置換と同じ扱い)。
+    try {
+      var cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null;
+      if (cfg && cfg.backend === 'file') {
+        res.changed.forEach(function(c) {
+          var d = window.MA.workspace.list().filter(function(x) { return x.id === c.id; })[0];
+          if (!d) return;
+          window.MA.workspace.saveToFile(d, cfg.fileDir);
+          if (window.MA.saveDiff) window.MA.saveDiff.mark(d.name, d.dsl);
+        });
+      }
+    } catch (e) { /* best-effort */ }
+    renderTargets();
+    summary.textContent = res.added + ' 件 / ' + res.changed.length + ' 枚に追加しました';
+    summary.setAttribute('data-applied', String(res.added));
+  }
+
+  btn.addEventListener('click', function() {
+    if (panel.classList.contains('open')) { closePanel(); return; }
+    var rect = btn.getBoundingClientRect();
+    panel.style.left = Math.max(4, rect.left - 60) + 'px';
+    panel.style.top = (rect.bottom + 2) + 'px';
+    panel.classList.add('open');
+    syncExtraLabel();
+    renderTargets();
+    nameEl.focus();
+  });
+
+  kindEl.addEventListener('change', function() { selected = {}; syncExtraLabel(); renderTargets(); });
+  [nameEl, extraEl].forEach(function(el) {
+    el.addEventListener('input', renderTargets);
+    el.addEventListener('keydown', function(ev) {
+      if (ev.key === 'Enter' && !runBtn.disabled) { ev.preventDefault(); doApply(); }
+      if (ev.key === 'Escape') { ev.preventDefault(); closePanel(); }
+    });
+  });
+  document.getElementById('btn-apply-all').addEventListener('click', function() {
+    ba.targets(_renameDocs(), kindEl.value).forEach(function(t) { selected[t.key] = true; });
+    renderTargets();
+  });
+  document.getElementById('btn-apply-none').addEventListener('click', function() {
+    selected = {};
+    renderTargets();
+  });
+  runBtn.addEventListener('click', doApply);
+  document.getElementById('btn-apply-close').addEventListener('click', closePanel);
   document.addEventListener('click', function(ev) {
     if (!panel.classList.contains('open')) return;
     if (panel.contains(ev.target) || ev.target === btn) return;

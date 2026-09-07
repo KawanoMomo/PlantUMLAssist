@@ -954,6 +954,73 @@ html, body {
   border-color: var(--accent);
 }
 #rename-panel .rename-actions button[disabled] { opacity: 0.45; cursor: default; }
+/* 一括適用パネル (指摘に並んだ複数の対象へ同じ変更を 1 回で当てる) */
+#apply-panel {
+  display: none;
+  position: absolute;
+  z-index: 41;
+  width: 280px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px;
+  font-size: 11px;
+  color: var(--text-primary);
+}
+#apply-panel.open { display: block; }
+#apply-panel label {
+  display: block;
+  font-size: 10px;
+  color: var(--text-secondary);
+  margin: 4px 0 2px;
+}
+#apply-panel input, #apply-panel select {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 3px 4px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+#apply-targets {
+  margin-top: 6px;
+  max-height: 140px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 3px;
+}
+#apply-targets .ap-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 2px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  cursor: pointer;
+}
+#apply-targets .ap-row input { width: auto; }
+#apply-targets .ap-row .ap-name { flex: 1; color: var(--text-primary); }
+#apply-targets .ap-row .ap-doc { color: var(--text-secondary); }
+#apply-targets .ap-row .ap-state { color: var(--text-secondary); font-size: 9px; }
+#apply-targets .ap-row.skip .ap-name { opacity: 0.5; }
+#apply-summary { margin-top: 6px; font-size: 10px; color: var(--text-secondary); }
+#apply-panel .apply-actions { display: flex; gap: 6px; margin-top: 8px; }
+#apply-panel .apply-actions button {
+  flex: 1;
+  font-size: 11px;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+#apply-panel .apply-actions button#btn-apply-run { border-color: var(--accent); }
+#apply-panel .apply-actions button[disabled] { opacity: 0.45; cursor: default; }
 #folder-panel .folder-empty {
   font-size: 11px;
   color: var(--text-secondary);
@@ -2130,6 +2197,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button class="tab-tool" id="btn-tab-new" title="新しい図を開く">＋</button>
         <button class="tab-tool" id="btn-tab-folder" title="保存フォルダの図を一覧">📂 一覧</button>
         <button class="tab-tool" id="btn-tab-rename" title="開いている図をまたいで部品名を一括置換">⇄ 一括置換</button>
+        <button class="tab-tool" id="btn-tab-apply" title="指摘に並んだ複数のクラスへ同じメソッド・属性を 1 回で追加する">⊞ 一括適用</button>
         <button class="tab-tool" id="btn-tab-audit" title="開いている図の部品名を突き合わせて表記揺れを探す">🔍 名前突合</button>
         <!-- BLK-primary-20260907-0823-wish: 同じ系統の複数枚で動作名が揃っているかを見る -->
         <!-- BLK-primary-20260907-1403-wish: 顧客に出す前に、全図の title / note / 部品名を横断で見る -->
@@ -2174,6 +2242,28 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <div class="rename-actions">
           <button id="btn-rename-apply" disabled>置換</button>
           <button id="btn-rename-cancel">閉じる</button>
+        </div>
+      </div>
+      <!-- 指摘に並んだ複数のクラスへ同じメンバーを 1 回で足す -->
+      <div id="apply-panel">
+        <label for="apply-kind">当てる変更</label>
+        <select id="apply-kind"></select>
+        <label for="apply-name">名前</label>
+        <input id="apply-name" autocomplete="off" spellcheck="false" placeholder="Reset">
+        <div id="apply-extra-wrap">
+          <label for="apply-extra" id="apply-extra-label">戻り値</label>
+          <input id="apply-extra" autocomplete="off" spellcheck="false" placeholder="void">
+        </div>
+        <label>対象 (クリックで選ぶ)</label>
+        <div id="apply-targets"></div>
+        <div class="apply-actions" style="margin-top:4px;">
+          <button id="btn-apply-all" title="出ている対象をすべて選ぶ">すべて選ぶ</button>
+          <button id="btn-apply-none" title="選択を外す">選択解除</button>
+        </div>
+        <div id="apply-summary"></div>
+        <div class="apply-actions">
+          <button id="btn-apply-run" disabled>適用</button>
+          <button id="btn-apply-close">閉じる</button>
         </div>
       </div>
       <!-- この図の 1 行だけを対象に書換・挿入・削除する (全文の打ち直しを避ける) -->
@@ -2491,6 +2581,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/review-diff.js"></script>
 <script src="src/core/folder-select.js"></script>
 <script src="src/core/bulk-rename.js"></script>
+<script src="src/core/bulk-apply.js"></script>
 <script src="src/core/bulk-export.js"></script>
 <script src="src/core/handoff-package.js"></script>
 <script src="src/core/delivery-package.js"></script>

@@ -55,18 +55,15 @@ var NESTED = [
   '@enduml',
 ].join('\n');
 
-var results = [];
-function check(name, fn) {
-  try { fn(); results.push([true, name]); }
-  catch (e) { results.push([false, name + ' — ' + e.message]); }
-}
 function eq(a, b, msg) {
   var x = JSON.stringify(a), y = JSON.stringify(b);
   if (x !== y) throw new Error((msg || '') + ' expected ' + y + ' got ' + x);
 }
 function ok(v, msg) { if (!v) throw new Error(msg || 'expected truthy'); }
 
-check('組み込みの型に「初期化失敗時の分岐」があり、両枝の中身まで持っている', function() {
+describe('activity-branch-pattern — よく使う分岐パターン (BLK-junior-1803-wish)', function() {
+
+test('組み込みの型に「初期化失敗時の分岐」があり、両枝の中身まで持っている', function() {
   var list = BP.builtins();
   var init = list.filter(function(p) { return p.id === 'init-fail'; })[0];
   ok(init, 'init-fail が無い');
@@ -74,7 +71,7 @@ check('組み込みの型に「初期化失敗時の分岐」があり、両枝�
   ok(init.thenActions.length > 0 && init.elseActions.length > 0, '枝の中身が空');
 });
 
-check('過去のアクティビティ図から if…else…endif の型を採れる', function() {
+test('過去のアクティビティ図から if…else…endif の型を採れる', function() {
   var got = BP.harvestFrom(PAST, 'UartDrv 初期化');
   eq(got.length, 1, '採れた型の数');
   eq(got[0].cond, 'ボーレート設定に失敗?');
@@ -85,12 +82,12 @@ check('過去のアクティビティ図から if…else…endif の型を採れ
   eq(got[0].from, 'UartDrv 初期化');
 });
 
-check('else が無い if と入れ子の if は型として採らない', function() {
+test('else が無い if と入れ子の if は型として採らない', function() {
   eq(BP.harvestFrom(NO_ELSE, 'x').length, 0, 'else 無し');
   eq(BP.harvestFrom(NESTED, 'x').length, 0, '入れ子');
 });
 
-check('patterns は組み込みの後に過去図の型を並べ、編集中の図は見ない', function() {
+test('patterns は組み込みの後に過去図の型を並べ、編集中の図は見ない', function() {
   var docs = [
     { id: 'me', name: 'CanDrv 初期化', diagramType: 'plantuml-activity', dsl: PAST },
     { id: 'sen', name: 'UartDrv 初期化', diagramType: 'plantuml-activity', dsl: PAST },
@@ -106,7 +103,7 @@ check('patterns は組み込みの後に過去図の型を並べ、編集中の�
   eq(BP.patterns([docs[0]], 'me').filter(function(p) { return p.from; }).length, 0);
 });
 
-check('linesFor が条件・両枝ラベル・枝の中身まで入った行を返す', function() {
+test('linesFor が条件・両枝ラベル・枝の中身まで入った行を返す', function() {
   var p = BP.builtins()[0];
   var got = BP.linesFor(p, '  ');
   eq(got[0], '  if (' + p.cond + ') then (' + p.thenLabel + ')');
@@ -116,12 +113,12 @@ check('linesFor が条件・両枝ラベル・枝の中身まで入った行を�
   ok(got.indexOf('    :;') < 0, '空アクションが残っている');
 });
 
-check('枝の中身が空の型でも枝が空行にならない', function() {
+test('枝の中身が空の型でも枝が空行にならない', function() {
   var got = BP.linesFor({ cond: 'c?', thenLabel: '', thenActions: [], elseLabel: '', elseActions: [] }, '');
   eq(got, ['if (c?) then (yes)', '  :;', 'else (no)', '  :;', 'endif']);
 });
 
-check('signature は枝ラベルの揺れでは変わらず、中身が違えば変わる', function() {
+test('signature は枝ラベルの揺れでは変わらず、中身が違えば変わる', function() {
   var a = { cond: 'c?', thenLabel: 'yes', thenActions: ['A'], elseLabel: 'no', elseActions: ['B'] };
   var b = { cond: 'c?', thenLabel: 'はい', thenActions: ['A'], elseLabel: 'いいえ', elseActions: ['B'] };
   var c = { cond: 'c?', thenLabel: 'yes', thenActions: ['A'], elseLabel: 'no', elseActions: ['C'] };
@@ -129,13 +126,10 @@ check('signature は枝ラベルの揺れでは変わらず、中身が違えば
   ok(BP.signature(a) !== BP.signature(c), '中身違いは別の型');
 });
 
-check('byId で選んだ型を取り出せる', function() {
+test('byId で選んだ型を取り出せる', function() {
   var p = BP.byId([], null, 'timeout');
   ok(p && /タイムアウト/.test(p.cond), 'timeout の型が取れない');
   eq(BP.byId([], null, 'nope'), null);
 });
 
-var failed = results.filter(function(r) { return !r[0]; });
-results.forEach(function(r) { console.log((r[0] ? 'ok   ' : 'FAIL ') + r[1]); });
-console.log(results.length - failed.length + '/' + results.length + ' passed');
-if (failed.length) process.exit(1);
+});
