@@ -4203,9 +4203,111 @@ function setupTemplateNew() {
     } catch (e) {}
   }
 
+  // ── 骨格から新規作成 (BLK-junior-20260907-1903-wish) ─────────────────────
+  // 同じ骨格の図 (本体 1 + 周辺 3 + 依存 6 本) を題材ごとに毎回ゼロから組み直して
+  // いた。下のテンプレート欄でも作れるが、そこで打つのは 4 か所あり、置換元を
+  // 選び損ねると骨格が割れる。ここは「同じ図種の図」に絞り、置換元も新しい図の
+  // 名前も図の中身から決めるので、打つのは題材名 1 語だけになる。
+  var SK = window.MA.skeletonNew;
+
+  function skelSources() {
+    if (!SK) return [];
+    var active = window.MA.workspace ? window.MA.workspace.getActiveId() : null;
+    var list = SK.sources(docs, currentDiagramType, active);
+    // 今のタブも中身があれば土台にできる (自分の図を題材替えするのがいちばん多い)。
+    return list.length ? list : SK.sources(docs, currentDiagramType);
+  }
+
+  function skelCurrent() {
+    var sel = document.getElementById('skel-source');
+    var list = skelSources();
+    if (!list.length) return null;
+    var v = sel ? sel.value : '';
+    for (var i = 0; i < list.length; i++) if (String(list[i].id) === v) return list[i];
+    return list[0];
+  }
+
+  function skelPlan() {
+    var src = skelCurrent();
+    var el = document.getElementById('skel-subject');
+    return src ? SK.plan(src, el ? el.value : '') : null;
+  }
+
+  function updateSkeleton() {
+    if (!SK) return;
+    var src = skelCurrent();
+    var summary = document.getElementById('skel-summary');
+    var btn = document.getElementById('btn-skel-create');
+    if (!summary || !btn) return;
+    var p = skelPlan();
+    summary.textContent = SK.summaryText(p, src);
+    summary.setAttribute('data-ok', p && p.ok ? '1' : '0');
+    summary.setAttribute('data-changed', String(p && p.ok ? p.changed : 0));
+    btn.disabled = !(p && p.ok);
+  }
+
+  function skelCreate() {
+    var p = skelPlan();
+    if (!p || !p.ok) return;
+    saveActiveDoc();
+    var detected = window.MA.workspace.detectType(p.dsl);
+    window.MA.workspace.open({
+      name: p.name,
+      dsl: p.dsl,
+      diagramType: (detected && modules[detected]) ? detected : currentDiagramType,
+    });
+    applyActiveDoc();
+    saveActiveDoc();   // 作った時点でフォルダにも現れる (テンプレートと同じ)
+    close();
+  }
+
+  function skelSectionHtml() {
+    var list = skelSources();
+    var html = '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">骨格から新規作成</h3>'
+      + '<div style="font-size:11px;color:var(--text-secondary);">'
+      + '同じ図種で描いた図の骨格 (要素と関係) をそのまま土台にします。打つのは題材名 1 語だけです。</div>';
+    if (!list.length) {
+      return html + '<div id="skel-summary" data-ok="0" data-changed="0" '
+        + 'style="font-size:11px;color:var(--text-secondary);margin-top:6px;">'
+        + esc(SK.summaryText(null, null)) + '</div>';
+    }
+    html += '<div style="display:flex;gap:8px;align-items:flex-end;margin-top:6px;">'
+      + '<div style="flex:2;"><label style="' + LABEL + '" for="skel-source">土台にする図</label>'
+      + '<select id="skel-source" style="' + FIELD + '">';
+    list.forEach(function(s) {
+      html += '<option value="' + esc(String(s.id)) + '">' + esc(SK.sourceLabel(s)) + '</option>';
+    });
+    html += '</select></div>'
+      + '<div style="flex:1;"><label style="' + LABEL + '" for="skel-subject">題材名</label>'
+      + '<input id="skel-subject" autocomplete="off" spellcheck="false" placeholder="Can" style="'
+      + FIELD + '"></div>'
+      + '<button id="btn-skel-create" style="' + BTN + '" disabled>骨格から作る</button>'
+      + '</div>'
+      + '<div id="skel-summary" data-ok="0" data-changed="0" '
+      + 'style="font-size:11px;color:var(--text-secondary);margin-top:4px;"></div>'
+      + '<div style="border-bottom:1px solid var(--border);margin:12px 0 4px 0;"></div>';
+    return html;
+  }
+
+  function bindSkeleton() {
+    var sel = document.getElementById('skel-source');
+    var sub = document.getElementById('skel-subject');
+    var btn = document.getElementById('btn-skel-create');
+    if (sel) sel.addEventListener('change', updateSkeleton);
+    if (sub) {
+      sub.addEventListener('input', updateSkeleton);
+      sub.addEventListener('keydown', function(ev) {
+        if (ev.key === 'Enter') { ev.preventDefault(); skelCreate(); }
+      });
+    }
+    if (btn) btn.addEventListener('click', skelCreate);
+    updateSkeleton();
+  }
+
   function render() {
     content.innerHTML =
-      '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">テンプレートから新規作成</h3>'
+      (SK ? skelSectionHtml() : '')
+      + '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">テンプレートから新規作成</h3>'
       + '<div style="font-size:11px;color:var(--text-secondary);">'
       + '既にある図か組み込みの雛形と同じ構成のまま、部品名だけを替えた図を新しいタブに作ります。</div>'
       + '<label style="' + LABEL + '" for="tpl-source">テンプレートにする図</label>'
@@ -4245,9 +4347,10 @@ function setupTemplateNew() {
     document.getElementById('tpl-name').addEventListener('input', function() { nameTouched = true; updatePreview(); });
     document.getElementById('btn-tpl-create').addEventListener('click', create);
     document.getElementById('btn-tpl-cancel').addEventListener('click', close);
+    if (SK) bindSkeleton();
   }
 
-  btn.addEventListener('click', function() {
+  function open(focusSkeleton) {
     saveActiveDoc();
     docs = window.MA.workspace ? window.MA.workspace.list() : [];
     files = [];
@@ -4255,6 +4358,10 @@ function setupTemplateNew() {
     nameTouched = false;
     render();
     modal.style.display = 'flex';
+    if (focusSkeleton) {
+      var sub = document.getElementById('skel-subject');
+      if (sub) sub.focus();
+    }
     onSourceChange();
     // 保存フォルダの図もテンプレートに選べる (先輩が保存した図が主な出所)。
     window.MA.workspace.listFiles(_wsFileDir()).then(function(list) {
@@ -4267,7 +4374,11 @@ function setupTemplateNew() {
         if (keep) sel.value = keep;
       }
     });
-  });
+  }
+
+  btn.addEventListener('click', function() { open(false); });
+  var btnSkel = document.getElementById('btn-tab-skeleton');
+  if (btnSkel) btnSkel.addEventListener('click', function() { open(true); });
 
   modal.addEventListener('click', function(ev) { if (ev.target === modal) close(); });
   document.addEventListener('keydown', function(ev) {
