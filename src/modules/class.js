@@ -64,7 +64,9 @@ window.MA.modules.plantumlClass = (function() {
   // Relation arrow tokens, longest first to avoid prefix matches
   var RELATION_RE = new RegExp(
     '^(' + ID_WITH_GENERICS + '|"[^"]+")\\s+' +
-    '(<\\|--|--\\|>|<\\|\\.\\.|\\.\\.\\|>|\\*--|--\\*|o--|--o|\\.\\.>|<\\.\\.|--)\\s+' +
+    // BLK-builder-20260907-1050-2: 「その他の設定」の向きが作る `-->` / `<--` も関連として読む。
+    '(<\\|--|--\\|>|<\\|\\.\\.|\\.\\.\\|>|\\*-->|<--\\*|\\*--|--\\*|o-->|<--o|o--|--o|' +
+    '\\.\\.>|<\\.\\.|-->|<--|--)\\s+' +
     '(' + ID_WITH_GENERICS + '|"[^"]+")(?:\\s*:\\s*(.+))?\\s*$'
   );
 
@@ -191,7 +193,7 @@ window.MA.modules.plantumlClass = (function() {
           };
           continue;
         }
-        var rm = trimmed.match(RELATION_RE);
+        var rm = window.MA.relationOptions.plainLine(trimmed).match(RELATION_RE);
         if (rm) {
           var arrow = rm[2];
           var fromTok = rm[1].replace(/^"|"$/g, '');
@@ -202,12 +204,14 @@ window.MA.modules.plantumlClass = (function() {
           else if (arrow === '--|>') { rkind = 'inheritance'; rfrom = toTok; rto = fromTok; }
           else if (arrow === '<|..') { rkind = 'implementation'; rfrom = fromTok; rto = toTok; }
           else if (arrow === '..|>') { rkind = 'implementation'; rfrom = toTok; rto = fromTok; }
-          else if (arrow === '*--') { rkind = 'composition'; rfrom = fromTok; rto = toTok; }
-          else if (arrow === '--*') { rkind = 'composition'; rfrom = toTok; rto = fromTok; }
-          else if (arrow === 'o--') { rkind = 'aggregation'; rfrom = fromTok; rto = toTok; }
-          else if (arrow === '--o') { rkind = 'aggregation'; rfrom = toTok; rto = fromTok; }
+          else if (arrow === '*--' || arrow === '*-->') { rkind = 'composition'; rfrom = fromTok; rto = toTok; }
+          else if (arrow === '--*' || arrow === '<--*') { rkind = 'composition'; rfrom = toTok; rto = fromTok; }
+          else if (arrow === 'o--' || arrow === 'o-->') { rkind = 'aggregation'; rfrom = fromTok; rto = toTok; }
+          else if (arrow === '--o' || arrow === '<--o') { rkind = 'aggregation'; rfrom = toTok; rto = fromTok; }
           else if (arrow === '..>') { rkind = 'dependency'; rfrom = fromTok; rto = toTok; }
           else if (arrow === '<..') { rkind = 'dependency'; rfrom = toTok; rto = fromTok; }
+          // 「その他の設定」で向きを反転した関連は、矢の先が指す側を to として読む。
+          else if (arrow === '<--') { rkind = 'association'; rfrom = toTok; rto = fromTok; }
           else { rkind = 'association'; rfrom = fromTok; rto = toTok; }
 
           result.relations.push({
@@ -725,7 +729,8 @@ window.MA.modules.plantumlClass = (function() {
     if (idx < 0 || idx >= lines.length) return text;
     var indent = lines[idx].match(/^(\s*)/)[1];
     var trimmed = lines[idx].trim();
-    var rm = trimmed.match(RELATION_RE);
+    var deco = window.MA.relationOptions.decorationsOf(lines[idx]);
+    var rm = window.MA.relationOptions.plainLine(trimmed).match(RELATION_RE);
     if (!rm) return text;
     var arrow = rm[2];
     var from = rm[1].replace(/^"|"$/g, '');
@@ -734,11 +739,12 @@ window.MA.modules.plantumlClass = (function() {
     var kind;
     if (arrow === '<|--' || arrow === '--|>') kind = 'inheritance';
     else if (arrow === '<|..' || arrow === '..|>') kind = 'implementation';
-    else if (arrow === '*--' || arrow === '--*') kind = 'composition';
-    else if (arrow === 'o--' || arrow === '--o') kind = 'aggregation';
+    else if (arrow === '*--' || arrow === '--*' || arrow === '*-->' || arrow === '<--*') kind = 'composition';
+    else if (arrow === 'o--' || arrow === '--o' || arrow === 'o-->' || arrow === '<--o') kind = 'aggregation';
     else if (arrow === '..>' || arrow === '<..') kind = 'dependency';
     else kind = 'association';
-    if (arrow === '--|>' || arrow === '..|>' || arrow === '--*' || arrow === '--o' || arrow === '<..') {
+    if (arrow === '--|>' || arrow === '..|>' || arrow === '--*' || arrow === '--o' ||
+        arrow === '<..' || arrow === '<--' || arrow === '<--*' || arrow === '<--o') {
       var tmp = from; from = to; to = tmp;
     }
 
@@ -748,7 +754,9 @@ window.MA.modules.plantumlClass = (function() {
     else if (field === 'label') label = value;
     else if (field === 'swap') { var s = from; from = to; to = s; }
 
-    lines[idx] = indent + fmtRelation(kind, from, to, label);
+    // 多重度・線の色は種別やラベルの書き換えでは失われない (design 3c)。
+    lines[idx] = window.MA.relationOptions.applyDecorations(
+      indent + fmtRelation(kind, from, to, label), deco);
     return lines.join('\n');
   }
 
@@ -1674,10 +1682,14 @@ window.MA.modules.plantumlClass = (function() {
         '<button id="cl-rel-swap" type="button" style="font-size:11px;padding:4px 10px;margin:4px 0;cursor:pointer;">⇄ From/To 入替</button>' +
         P.fieldHtml('To', 'cl-rel-to', relation.to) +
         P.fieldHtml('Label', 'cl-rel-label', relation.label || '') +
+        P.relationOptionsFor('cl-rel-more', ctx.getMmdText(), relation.line) +
         P.primaryButtonHtml('cl-rel-apply', '変更を反映') +
         ' <button id="cl-rel-delete" type="button" style="background:var(--accent-red);color:#fff;border:none;padding:6px 10px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 削除</button>' +
       '</div>';
     propsEl.innerHTML = html;
+
+    // design 3c: 細かい指定は「その他の設定」に畳み、押した時点で DSL へ反映する。
+    P.bindRelationOptionsFor('cl-rel-more', relation.line, ctx);
 
     // FEAT-139 (resolves HFR-076): 種別だけは <select> の change で即時反映する。
     // 処理を二重に書かないよう、種別更新をここへ切り出し change / click の両方から呼ぶ。

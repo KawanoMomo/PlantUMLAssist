@@ -10,6 +10,7 @@ var depPaths = [
   '../src/core/line-resolver.js', '../src/core/text-updater.js',
   '../src/core/dsl-updater.js', '../src/core/parser-utils.js',
   '../src/core/props-renderer.js', '../src/core/overlay-builder.js',
+  '../src/core/relation-options.js',
   '../src/modules/class.js',
 ];
 depPaths.forEach(function(p) {

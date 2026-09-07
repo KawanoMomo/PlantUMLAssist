@@ -21,6 +21,7 @@ var loadErrors = [];
   'src/core/id-normalizer.js', 'src/core/line-resolver.js', 'src/core/formatter-interface.js',
   'src/core/dsl-updater.js', 'src/core/props-renderer.js', 'src/core/text-updater.js',
   'src/core/parser-utils.js', 'src/core/history.js', 'src/core/selection.js',
+  'src/core/relation-options.js',
   'src/ui/properties.js', 'src/modules/class.js',
 ].forEach(function(rel) {
   var code = fs.readFileSync(path.join(ROOT, rel), 'utf-8');

@@ -40,6 +40,7 @@ const sourceFiles = [
   'src/core/reuse-picker.js',
   'src/core/relation-kind-cards.js',
   'src/core/review-pins.js',
+  'src/core/relation-options.js',
   'src/ui/properties.js',
   'src/ui/reuse-modal.js',
   'src/modules/sequence.js',
