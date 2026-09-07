@@ -177,7 +177,22 @@ window.MA.modules.plantumlComponent = (function() {
       var label2 = '';
       var ci2 = body.indexOf(':');
       if (ci2 >= 0) { label2 = body.slice(ci2 + 1).trim(); body = body.slice(0, ci2); }
-      var id = _stripDeco(body);
+      // BLK-junior-20260907-0943: `"表示名" as Alias` / `Alias as "表示名"` は
+      // PlantUML の宣言そのもので、他の図から取り込んだ行にはこの形が普通に入る。
+      // 名前と表示名に分けずに丸ごと名前として扱うと、`interface ""表示名" as I" as C1`
+      // という壊れた行が書き出されてしまう。
+      var asm = body.trim().match(/^"([^"]+)"\s+as\s+([A-Za-z_][A-Za-z0-9_]*)$/)
+        || (function() {
+          var m = body.trim().match(/^([A-Za-z_][A-Za-z0-9_]*)\s+as\s+"([^"]+)"$/);
+          return m ? [m[0], m[2], m[1]] : null;
+        })();
+      var id;
+      if (asm) {
+        id = asm[2];
+        if (!label2) label2 = asm[1];
+      } else {
+        id = _stripDeco(body);
+      }
       if (!id) continue;
       out.push({ op: isIntf ? 'interface' : 'component', id: id, label: label2 });
     }
