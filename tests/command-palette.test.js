@@ -49,12 +49,94 @@ describe('elementItems', function() {
   });
 });
 
+describe('relationItems', function() {
+  test('関係行を行番号つきで拾う', function() {
+    var items = CP.relationItems(DSL);
+    expect(items.length).toBe(1);
+    expect(items[0].title).toBe('User -> OrderSvc : Request');
+    expect(items[0].line).toBe(6);
+    expect(items[0].hint).toBe('6 行目');
+    expect(items[0].group).toBe('jump');
+    expect(items[0].badge).toBe('MSG');
+  });
+
+  test('宣言行・title・ブロック開始は関係行にしない', function() {
+    var dsl = [
+      '@startuml', 'title A -> B', 'participant System',
+      'alt 成功', 'note over System : x -> y', 'end', '@enduml',
+    ].join('\n');
+    expect(CP.relationItems(dsl).length).toBe(0);
+  });
+
+  test('引用名と破線矢印も割れる', function() {
+    var items = CP.relationItems('"注文サービス" --> "DB 本体" : 結果');
+    expect(items[0].title).toBe('注文サービス --> DB 本体 : 結果');
+  });
+
+  test('矢印の無い行と空 DSL では 0 件', function() {
+    expect(CP.relationItems('hello world').length).toBe(0);
+    expect(CP.relationItems(null).length).toBe(0);
+  });
+});
+
+describe('グループ (design 2a の見出し)', function() {
+  var ADD = [{ id: 'msg', group: 'add', title: 'メッセージ', run: function() {} }];
+  var SEL = [{ id: 'act', group: 'selected', title: '⚡ ライフライン推論', run: function() {} }];
+
+  test('並びは 図に足す → 移動 → 選択中 → コマンド', function() {
+    var items = CP.buildItems(ADD.concat(SEL).concat(COMMANDS), DSL);
+    var groups = [];
+    items.forEach(function(i) { if (groups[groups.length - 1] !== i.group) groups.push(i.group); });
+    expect(groups).toEqual(['add', 'jump', 'selected', 'command']);
+  });
+
+  test('見出し文言', function() {
+    expect(CP.groupLabel('add')).toBe('図に足す / Add');
+    expect(CP.groupLabel('jump')).toBe('図の要素へ移動 / Jump to element');
+    expect(CP.groupLabel('selected')).toBe('選択中の要素に対して / Selected');
+    expect(CP.groupNote('jump')).toBe('選ぶとその行を選択し、右パネルで編集できます。');
+    expect(CP.groupNote('add')).toBe('');
+  });
+
+  test('groupsOf は実在する group だけを並び順で返す', function() {
+    expect(CP.groupsOf(CP.buildItems(ADD.concat(COMMANDS), DSL))).toEqual(['add', 'jump', 'command']);
+  });
+
+  test('cycleGroup は 全部 → 各種別 → 全部 と一周する', function() {
+    var g = ['add', 'jump', 'command'];
+    expect(CP.cycleGroup(null, g, 1)).toBe('add');
+    expect(CP.cycleGroup('add', g, 1)).toBe('jump');
+    expect(CP.cycleGroup('command', g, 1)).toBeNull();
+    expect(CP.cycleGroup(null, g, -1)).toBe('command');
+    expect(CP.cycleGroup('add', g, -1)).toBeNull();
+    expect(CP.cycleGroup(null, [], 1)).toBeNull();
+  });
+
+  test('filterByGroup は その種別だけ / null なら全部', function() {
+    var items = CP.buildItems(ADD.concat(COMMANDS), DSL);
+    expect(CP.filterByGroup(items, 'add').length).toBe(1);
+    expect(CP.filterByGroup(items, null).length).toBe(items.length);
+  });
+
+  test('絞り込んでも group ごとに固まって並ぶ (見出しが繰り返されない)', function() {
+    var items = CP.buildItems(
+      [{ id: 'u', group: 'add', title: 'User を足す', run: function() {} }].concat(COMMANDS), DSL);
+    var r = CP.filter(items, 'user');
+    var groups = [];
+    r.forEach(function(i) { if (groups[groups.length - 1] !== i.group) groups.push(i.group); });
+    expect(groups).toEqual(['add', 'jump']);
+  });
+});
+
 describe('buildItems', function() {
-  test('コマンドと要素が 1 つの一覧になる', function() {
+  // BLK-builder-20260907-0923-1: relation 候補が増え、並びが group 順になったので
+  // 件数と先頭の kind の期待値を更新した (design 2a の見出し順を出すための変更)。
+  test('コマンドと要素と関係行が 1 つの一覧になる', function() {
     var items = CP.buildItems(COMMANDS, DSL);
-    expect(items.length).toBe(6);
-    expect(items[0].kind).toBe('command');
-    expect(items[3].kind).toBe('element');
+    expect(items.length).toBe(7);
+    expect(items[0].kind).toBe('element');
+    expect(items[3].kind).toBe('relation');
+    expect(items[4].kind).toBe('command');
   });
 
   test('run はそのまま持ち回される', function() {
@@ -70,7 +152,8 @@ describe('filter', function() {
 
   test('空クエリなら全件をそのままの順で返す', function() {
     expect(CP.filter(items, '').length).toBe(items.length);
-    expect(CP.filter(items, '   ')[0].title).toBe('ファイルを開く / Open');
+    // group 順になったので先頭は jump (要素) 側。
+    expect(CP.filter(items, '   ')[0].title).toBe('User');
   });
 
   test('英語コマンド名で引ける', function() {

@@ -9,11 +9,38 @@ window.MA = window.MA || {};
 // 「打った文字でどう絞り込むか」だけを持つ。こうするとキーボード操作の
 // 挙動を unit テストで確かめられる。
 //
-// 候補は 2 種類:
-//   command … ツールバー等の操作 (Open / Export / 図種切替 …)
-//   element … 今の DSL に書かれている宣言行 (participant / class / state …)。
-//             選ぶとその行へ飛ぶので「要素を検索」も同じ 1 つの窓で足りる。
+// 候補は 4 種類:
+//   command  … ツールバー等の操作 (Open / Export / 図種切替 …)
+//   add      … 図に足せるもの (メッセージ / 参加者 / 注釈 …)
+//   element  … 今の DSL に書かれている宣言行 (participant / class / state …)
+//   relation … 今の DSL に書かれている関係行 (User -> System : Request …)
+//             element / relation は選ぶとその行へ飛ぶので、
+//             「要素を検索」も同じ 1 つの窓で足りる。
+//
+// design「1a 展開」2a は、これを 3 つの見出しに分けて出すことを求める。
+// 見出しは kind ではなく group で決める (add は kind も group も 'add' だが、
+// element と relation は別 kind で同じ 'jump' に入る)。
 window.MA.commandPalette = (function() {
+  // 見出しの並び。開いた直後にまず「図に足せるもの」が見える順にする。
+  var GROUPS = ['add', 'jump', 'selected', 'command'];
+  var GROUP_LABELS = {
+    add: '図に足す / Add',
+    jump: '図の要素へ移動 / Jump to element',
+    selected: '選択中の要素に対して / Selected',
+    command: 'コマンド / Command',
+  };
+  // 見出しの下に 1 行だけ出す補足。何が起きるか読まずに分かるようにする。
+  var GROUP_NOTES = {
+    jump: '選ぶとその行を選択し、右パネルで編集できます。',
+  };
+  // relation 行の矢印。長いものから並べる (-> が -->> を食わないように)。
+  var REL_ARROWS = [
+    '<-->', '-->>', '-->x', '<<--', '<|--', '<|..', '--|>', '..|>',
+    '<->', '<<-', '-->', '->>', '->x', '<--', '..>', '<..', '--*', '*--',
+    '--o', 'o--', '->', '<-', '--', '..',
+  ];
+  // 関係行として扱わない行頭キーワード。ブロック開始や宣言は別 kind か対象外。
+  var NOT_REL_RE = /^\s*(@start|@end|title|note|end|alt|else|opt|loop|par|break|critical|group|activate|deactivate|autonumber|skinparam|hide|show|legend|caption|footer|header|scale|left|right|top|bottom|newpage|ref|return|create|destroy|!|'|\/')/i;
   // 宣言行として拾うキーワード。名前が付いていて、飛ぶ意味がある行だけ。
   var DECL_RE = /^\s*(participant|actor|boundary|control|entity|database|collections|queue|class|abstract\s+class|interface|enum|state|component|node|package|folder|rectangle|cloud|storage|usecase)\s+(.+?)\s*$/i;
 
@@ -41,6 +68,8 @@ window.MA.commandPalette = (function() {
       items.push({
         id: 'element:' + (i + 1),
         kind: 'element',
+        group: 'jump',
+        badge: '要素',
         title: name,
         hint: kind + ' · L' + (i + 1),
         line: i + 1,
@@ -50,19 +79,128 @@ window.MA.commandPalette = (function() {
     return items;
   }
 
+  // 関係行 (User -> System : Request) を「行き先」候補にする。
+  // design 2a の一覧は宣言だけでなくメッセージ行も並べる。宣言行しか拾わないと
+  // 「7 行目のあのメッセージ」へ 1 発で飛べない。
+  function relationItems(dslText) {
+    var lines = _s(dslText).split('\n');
+    var items = [];
+    for (var i = 0; i < lines.length; i++) {
+      var raw = lines[i];
+      var line = raw.trim();
+      if (!line || NOT_REL_RE.test(line)) continue;
+      var parsed = _splitRelation(line);
+      if (!parsed) continue;
+      items.push({
+        id: 'relation:' + (i + 1),
+        kind: 'relation',
+        group: 'jump',
+        badge: 'MSG',
+        title: parsed.from + ' ' + parsed.arrow + ' ' + parsed.to +
+               (parsed.label ? ' : ' + parsed.label : ''),
+        hint: (i + 1) + ' 行目',
+        line: i + 1,
+        keywords: [parsed.from, parsed.to, parsed.label, line],
+      });
+    }
+    return items;
+  }
+
+  // `A <arrow> B : label` を割る。矢印が 1 個も無い / 両側が空なら null。
+  function _splitRelation(line) {
+    var body = line, label = '';
+    var colon = _labelColon(line);
+    if (colon >= 0) { body = line.slice(0, colon).trim(); label = line.slice(colon + 1).trim(); }
+    for (var i = 0; i < REL_ARROWS.length; i++) {
+      var a = REL_ARROWS[i];
+      var at = body.indexOf(' ' + a + ' ');
+      if (at < 0) continue;
+      var from = body.slice(0, at).trim();
+      var to = body.slice(at + a.length + 2).trim();
+      if (!from || !to) return null;
+      // 両側に別の矢印が残っているなら区切りを誤っている。
+      if (/[<>]/.test(from) || /[<>]/.test(to)) return null;
+      return { from: _unq(from), arrow: a, to: _unq(to), label: label };
+    }
+    return null;
+  }
+
+  // ラベル区切りの `:`。`"..."` の中の `:` と、`::` (C++ 風の名前) は数えない。
+  function _labelColon(line) {
+    var inQ = false;
+    for (var i = 0; i < line.length; i++) {
+      var c = line[i];
+      if (c === '"') { inQ = !inQ; continue; }
+      if (inQ) continue;
+      if (c === ':') {
+        if (line[i + 1] === ':') { i++; continue; }
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  function _unq(s) { return s.replace(/^"(.*)"$/, '$1'); }
+
   // コマンド定義 + 今の DSL から、絞り込み前の候補一覧を作る。
+  // 並びは GROUPS 順。開いた直後の一覧がそのまま design 2a の見出し順になる。
   function buildItems(commands, dslText) {
     var cmds = (commands || []).map(function(c) {
+      var g = c.group || 'command';
       return {
-        id: 'command:' + c.id,
-        kind: 'command',
+        id: (g === 'command' ? 'command:' : g + ':') + c.id,
+        kind: g === 'command' ? 'command' : g,
+        group: g,
+        badge: c.badge || (g === 'add' ? '追加' : g === 'selected' ? '選択中' : 'コマンド'),
         title: c.title,
         hint: c.hint || '',
         run: c.run,
         keywords: [c.title].concat(c.keywords || []),
       };
     });
-    return cmds.concat(elementItems(dslText));
+    return sortByGroup(cmds.concat(elementItems(dslText)).concat(relationItems(dslText)));
+  }
+
+  function groupIndex(item) {
+    var g = (item && item.group) || 'command';
+    var i = GROUPS.indexOf(g);
+    return i < 0 ? GROUPS.length : i;
+  }
+
+  // group 順の安定ソート。同じ group の中では元の順を保つ。
+  function sortByGroup(items) {
+    return (items || []).map(function(it, i) { return { it: it, i: i }; })
+      .sort(function(a, b) { return groupIndex(a.it) - groupIndex(b.it) || a.i - b.i; })
+      .map(function(x) { return x.it; });
+  }
+
+  function groupLabel(g) { return GROUP_LABELS[g] || g; }
+  function groupNote(g) { return GROUP_NOTES[g] || ''; }
+
+  // items に実在する group を GROUPS 順で。Tab の巡回先はこれだけにする
+  // (中身が無い見出しへ絞り込めると「押しても何も出ない」になる)。
+  function groupsOf(items) {
+    var seen = {};
+    (items || []).forEach(function(it) { seen[(it && it.group) || 'command'] = true; });
+    return GROUPS.filter(function(g) { return seen[g]; });
+  }
+
+  // Tab の巡回。null (全部) → 先頭の group → … → 末尾 → null に戻る。
+  function cycleGroup(current, present, dir) {
+    var list = present || [];
+    if (!list.length) return null;
+    var ring = [null].concat(list);
+    var at = ring.indexOf(current == null ? null : current);
+    if (at < 0) at = 0;
+    var next = at + (dir < 0 ? -1 : 1);
+    if (next < 0) next = ring.length - 1;
+    if (next >= ring.length) next = 0;
+    return ring[next];
+  }
+
+  function filterByGroup(items, group) {
+    if (!group) return (items || []).slice();
+    return (items || []).filter(function(it) { return ((it && it.group) || 'command') === group; });
   }
 
   // 打った文字を候補にぶつける。連続一致 (部分文字列) を最優先にしつつ、
@@ -101,6 +239,9 @@ window.MA.commandPalette = (function() {
   }
 
   // 絞り込み結果。query が空なら全件を元の順で返す (開いた直後の一覧)。
+  // 並びは group を最優先にする。見出しごとに区切って出す (design 2a) 以上、
+  // 同じ group の候補が離れて並ぶと見出しが繰り返されて読めなくなる。
+  // group の中では近い順 (score)。
   function filter(items, query) {
     var q = _s(query).trim();
     if (!q) return (items || []).slice();
@@ -110,7 +251,9 @@ window.MA.commandPalette = (function() {
       if (s === null) return;
       scored.push({ item: item, s: s, i: i });
     });
-    scored.sort(function(a, b) { return a.s - b.s || a.i - b.i; });
+    scored.sort(function(a, b) {
+      return groupIndex(a.item) - groupIndex(b.item) || a.s - b.s || a.i - b.i;
+    });
     return scored.map(function(x) { return x.item; });
   }
 
@@ -125,8 +268,16 @@ window.MA.commandPalette = (function() {
   }
 
   return {
+    GROUPS: GROUPS.slice(),
     buildItems: buildItems,
     elementItems: elementItems,
+    relationItems: relationItems,
+    sortByGroup: sortByGroup,
+    groupLabel: groupLabel,
+    groupNote: groupNote,
+    groupsOf: groupsOf,
+    cycleGroup: cycleGroup,
+    filterByGroup: filterByGroup,
     filter: filter,
     score: score,
     moveIndex: moveIndex,

@@ -1402,6 +1402,7 @@ function initCommandPalette() {
   var input = document.getElementById('cp-input');
   var listEl = document.getElementById('cp-list');
   var emptyEl = document.getElementById('cp-empty');
+  var footEl = document.getElementById('cp-foot');
   var openBtn = document.getElementById('btn-command-palette');
   if (!CP || !modal || !input || !listEl) return;
 
@@ -1409,6 +1410,7 @@ function initCommandPalette() {
   var shown = [];       // 絞り込み後 (画面の並びと同じ)
   var active = -1;
   var returnFocusEl = null;
+  var groupFilter = null;   // Tab で絞った種別。null なら全部
 
   function clickById(id) {
     var el = document.getElementById(id);
@@ -1463,6 +1465,132 @@ function initCommandPalette() {
     return list;
   }
 
+  // ── 図に足す / Add ─────────────────────────────────────────────────────
+  // design「1a 展開」2a は、パレットを開いた直後に「図に足せるもの」を先頭に
+  // 並べることを求める。行き先は右ペインの「末尾に追加」フォームの種類 select
+  // (#{prefix}-tail-kind) で、値は各 module の option とそろえてある。
+  // 選択があるときは tail フォームが DOM に無いので、まず選択を外して描き直す。
+  var ADD_KINDS = {
+    'plantuml-sequence': { prefix: 'seq', kinds: [
+      { value: 'message', label: 'メッセージ' },
+      { value: 'participant', label: '参加者' },
+      { value: 'note', label: '注釈' },
+      { value: 'block', label: '条件分岐・繰り返しの枠 (alt/loop)' },
+      { value: 'activation', label: '実行中の帯 (activate)' },
+      { value: 'bulk', label: '一括 (複数行)' },
+    ] },
+    'plantuml-usecase': { prefix: 'uc', kinds: [
+      { value: 'actor', label: 'アクター' },
+      { value: 'usecase', label: 'ユースケース' },
+      { value: 'package', label: 'Package 境界' },
+      { value: 'relation', label: '関係' },
+      { value: 'bulk', label: '一括 (複数行)' },
+    ] },
+    'plantuml-component': { prefix: 'co', kinds: [
+      { value: 'component', label: 'コンポーネント' },
+      { value: 'interface', label: 'インタフェース' },
+      { value: 'port', label: 'ポート' },
+      { value: 'package', label: 'Package 境界' },
+      { value: 'relation', label: '依存関係' },
+      { value: 'bulk', label: '一括 (複数行)' },
+    ] },
+    'plantuml-class': { prefix: 'cl', kinds: [
+      { value: 'class', label: 'クラス' },
+      { value: 'interface', label: 'インタフェース' },
+      { value: 'abstract', label: '抽象クラス' },
+      { value: 'enum', label: '列挙' },
+      { value: 'package', label: 'Package 境界' },
+      { value: 'namespace', label: 'Namespace' },
+      { value: 'relation', label: '関連' },
+      { value: 'note', label: '注釈' },
+    ] },
+    'plantuml-activity': { prefix: 'ac', kinds: [
+      { value: 'action', label: 'アクション' },
+      { value: 'start', label: '開始' },
+      { value: 'stop', label: '停止' },
+      { value: 'if', label: '条件分岐 (if)' },
+      { value: 'while', label: '繰り返し (while)' },
+      { value: 'repeat', label: '繰り返し (repeat)' },
+      { value: 'fork', label: '並行 (fork)' },
+      { value: 'swimlane', label: 'スイムレーン' },
+    ] },
+    'plantuml-state': { prefix: 'st', kinds: [
+      { value: 'state', label: '状態' },
+      { value: 'composite', label: '複合状態' },
+      { value: 'transition', label: '遷移' },
+      { value: 'note', label: '注釈' },
+      { value: 'bulk', label: '一括 (複数行)' },
+    ] },
+  };
+
+  function openTailForm(prefix, kindValue) {
+    if (window.MA.selection) window.MA.selection.clearSelection();
+    renderProps();
+    var sel = document.getElementById(prefix + '-tail-kind');
+    if (!sel) return;
+    sel.value = kindValue;
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+    if (sel.scrollIntoView) sel.scrollIntoView({ block: 'nearest' });
+    sel.focus();
+  }
+
+  function addCommands() {
+    var typeEl = document.getElementById('diagram-type');
+    var spec = ADD_KINDS[typeEl ? typeEl.value : ''];
+    if (!spec) return [];
+    return spec.kinds.map(function(k) {
+      return {
+        id: 'add-' + spec.prefix + '-' + k.value,
+        group: 'add',
+        title: k.label,
+        hint: '末尾に追加',
+        keywords: ['add', 'ついか', k.value, k.label],
+        run: function() { openTailForm(spec.prefix, k.value); },
+      };
+    });
+  }
+
+  // ── 選択中の要素に対して / Selected ────────────────────────────────────
+  // 右ペインに今出ている操作ボタンをそのまま候補にする。図種ごとに固有の
+  // ボタン (⚡ ライフライン推論 / ⌗ alt/loop で囲む…) を列挙し直さずに済み、
+  // モジュール側でボタンが増えてもパレットが古びない。
+  function selectedCommands() {
+    var sel = (window.MA.selection && window.MA.selection.getSelected)
+      ? (window.MA.selection.getSelected() || []) : [];
+    if (!sel.length || !propsEl) return [];
+    var out = [];
+    Array.prototype.forEach.call(propsEl.querySelectorAll('button'), function(btn, i) {
+      var label = (btn.textContent || '').trim();
+      if (!label || btn.disabled) return;
+      out.push({
+        id: 'sel-' + i,
+        group: 'selected',
+        title: label,
+        hint: '',
+        keywords: ['selected', 'せんたく', label],
+        run: function() { btn.click(); },
+      });
+    });
+    return out.slice(0, 20);
+  }
+
+  // jump 候補を選んだとき、その行の要素を右ペインでも選択状態にする
+  // (design 2a「選ぶとその行を選択し、右パネルで編集できます」)。
+  function selectAtLine(line) {
+    if (!window.MA.selection || !currentModule) return;
+    var list = (typeof currentModule.kbdSelectables === 'function')
+      ? (currentModule.kbdSelectables(currentParsed) || [])
+      : (((currentParsed && currentParsed.relations) || [])
+          .filter(function(r) { return r.kind === 'message'; })
+          .map(function(r) { return { type: 'message', id: r.id, line: r.line }; }));
+    for (var i = 0; i < list.length; i++) {
+      if (list[i] && list[i].line === line) {
+        window.MA.selection.setSelected([{ type: list[i].type || 'message', id: list[i].id, line: line }]);
+        return;
+      }
+    }
+  }
+
   // element を選んだらエディタの該当行へキャレットを置き、その行が見える位置へ送る。
   function gotoLine(line) {
     if (!editorEl) return;
@@ -1477,14 +1605,31 @@ function initCommandPalette() {
 
   function render() {
     listEl.innerHTML = '';
+    var lastGroup = null;
     shown.forEach(function(item, i) {
+      var g = item.group || 'command';
+      if (g !== lastGroup) {
+        lastGroup = g;
+        var head = document.createElement('div');
+        head.className = 'cp-group';
+        head.dataset.cpGroup = g;
+        head.textContent = CP.groupLabel(g);
+        listEl.appendChild(head);
+        var note = CP.groupNote(g);
+        if (note) {
+          var noteEl = document.createElement('div');
+          noteEl.className = 'cp-group-note';
+          noteEl.textContent = note;
+          listEl.appendChild(noteEl);
+        }
+      }
       var row = document.createElement('div');
       row.className = 'cp-item' + (i === active ? ' active' : '');
       row.setAttribute('role', 'option');
       row.dataset.cpId = item.id;
       var kind = document.createElement('span');
       kind.className = 'cp-kind';
-      kind.textContent = item.kind === 'element' ? '要素' : 'コマンド';
+      kind.textContent = item.badge || (item.kind === 'element' ? '要素' : 'コマンド');
       var title = document.createElement('span');
       title.className = 'cp-title';
       title.textContent = item.title;
@@ -1494,22 +1639,29 @@ function initCommandPalette() {
       row.appendChild(kind); row.appendChild(title); row.appendChild(hint);
       row.addEventListener('click', function() { active = i; execute(); });
       listEl.appendChild(row);
+      if (i === active && row.scrollIntoView) row.scrollIntoView({ block: 'nearest' });
     });
     if (emptyEl) emptyEl.style.display = shown.length ? 'none' : 'block';
-    var activeRow = listEl.children[active];
-    if (activeRow && activeRow.scrollIntoView) activeRow.scrollIntoView({ block: 'nearest' });
+    if (footEl) {
+      footEl.textContent = '↑↓ 選択 · Enter 実行 · Tab 種別で絞り込み' +
+        (groupFilter ? ' (' + CP.groupLabel(groupFilter) + ')' : '') + ' · Esc 閉じる';
+    }
   }
 
   function refilter() {
-    shown = CP.filter(items, input.value);
+    shown = CP.filter(CP.filterByGroup(items, groupFilter), input.value);
     active = shown.length ? 0 : -1;
     render();
   }
 
   function open() {
     returnFocusEl = document.activeElement;
-    items = CP.buildItems(commands(), editorEl ? editorEl.value : '');
+    // add / selected は「今の図種」「今の選択」で中身が変わるので、開くたびに作り直す。
+    items = CP.buildItems(
+      addCommands().concat(selectedCommands()).concat(commands()),
+      editorEl ? editorEl.value : '');
     input.value = '';
+    groupFilter = null;
     modal.classList.add('open');
     refilter();
     input.focus();
@@ -1526,7 +1678,7 @@ function initCommandPalette() {
     var item = shown[active];
     if (!item) return;
     close();
-    if (item.kind === 'element') gotoLine(item.line);
+    if (item.group === 'jump') { gotoLine(item.line); selectAtLine(item.line); }
     else if (typeof item.run === 'function') item.run();
   }
 
@@ -1546,6 +1698,13 @@ function initCommandPalette() {
     if (e.key === 'ArrowDown') { e.preventDefault(); active = CP.moveIndex(active, 1, shown.length); render(); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); active = CP.moveIndex(active, -1, shown.length); render(); }
     else if (e.key === 'Enter') { e.preventDefault(); execute(); }
+    else if (e.key === 'Tab') {
+      // design 2a: Tab は種別 (図に足す / 移動 / 選択中 / コマンド) を巡回して絞る。
+      // 一周すると全部に戻る。パレットの中に他のフォーカス先は無いので奪ってよい。
+      e.preventDefault();
+      groupFilter = CP.cycleGroup(groupFilter, CP.groupsOf(items), e.shiftKey ? -1 : 1);
+      refilter();
+    }
     else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
   });
 
