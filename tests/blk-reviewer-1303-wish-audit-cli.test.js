@@ -68,17 +68,18 @@ describe('audit-report.collectDocs', function() {
 });
 
 describe('audit-report.buildReport', function() {
-  test('4 監査すべてが ok で返り、docs は名前だけ (全文を積まない)', function() {
+  test('全監査が ok で返り、docs は名前だけ (全文を積まない)', function() {
     const rt = loadMA();
     const d = tmpdir();
     write(d, 'seq.puml', SEQ);
     write(d, 'cls.puml', CLS);
     const r = report.buildReport(rt.MA, report.collectDocs(d), { targets: [d] });
-    expect(Object.keys(r.audits).length).toBe(4);
+    expect(Object.keys(r.audits).length).toBe(report.auditNames().length);
     expect(r.audits.name.status).toBe('ok');
     expect(r.audits.method.status).toBe('ok');
     expect(r.audits.consistency.status).toBe('ok');
     expect(r.audits.family.status).toBe('ok');
+    expect(r.audits.trace.status).toBe('ok');
     expect(r.docs).toEqual(['cls.puml', 'seq.puml']);
   });
   test('宣言済みの呼び出しはメソッド突合で指摘されない', function() {
