@@ -7796,15 +7796,25 @@ function _pinLineText(line) {
   return (line >= 1 && line <= lines.length) ? lines[line - 1].trim() : '';
 }
 
+// 対応済みにするときの「修正後の行」。指摘先の行が生きていればその行、
+// 書き換わって迷子になっていれば、いま選んでいる要素の行 (直した相手) を使う。
+function _pinFixedLine(pin) {
+  var sel = (window.MA.selection && window.MA.selection.getRange) ? window.MA.selection.getRange() : null;
+  if (pin && !pin.stale && pin.line) return pin.line;
+  if (sel && sel.start) return sel.start;
+  return 0;
+}
+
 function renderPinBadge() {
   var btn = document.getElementById('btn-tab-pins');
   var RP = window.MA.reviewPins;
   if (!btn || !RP) return null;
   var sum = RP.summary(_pins());
   btn.textContent = RP.badgeText(sum);
-  btn.className = sum.open > 0 ? 'tab-tool has-open' : 'tab-tool';
+  btn.className = sum.pending > 0 ? 'tab-tool has-open' : 'tab-tool';
   btn.title = sum.total
-    ? ('レビュー指摘 ' + sum.total + ' 件 (未読 ' + sum.open + ' / 迷子 ' + sum.stale + ')')
+    ? ('レビュー指摘 ' + sum.total + ' 件 (未対応 ' + sum.pending + ' / 対応済み ' + sum.done
+      + ' / 迷子 ' + sum.stale + ')')
     : 'この図にレビュー指摘はない';
   return sum;
 }
@@ -7843,7 +7853,8 @@ function drawPinMarkers(overlayEl) {
       t.setAttribute('fill', '#ffffff');
       t.textContent = RP.markerLabel(pin);
       var title = document.createElementNS(SVG_NS, 'title');
-      title.textContent = (pin.state === 'read' ? '既読' : '未読') + ': ' + pin.text;
+      title.textContent = RP.stateLabel(pin.state) + ': ' + pin.text
+        + (RP.fixText(pin) ? ' (' + RP.fixText(pin) + ')' : '');
       g.appendChild(c);
       g.appendChild(t);
       g.appendChild(title);
@@ -7888,25 +7899,38 @@ function renderPinPanel() {
   var target = _pinTargetLine();
 
   var html = '<div class="pin-head" data-total="' + sum.total + '" data-open="' + sum.open
-    + '" data-stale="' + sum.stale + '">レビュー指摘 ' + sum.total + ' 件 ・ 未読 ' + sum.open
+    + '" data-done="' + sum.done + '" data-pending="' + sum.pending
+    + '" data-stale="' + sum.stale + '">レビュー指摘 ' + sum.total + ' 件 ・ 未対応 ' + sum.pending
+    + ' ・ 対応済み ' + sum.done
     + (sum.stale ? ' ・ 行が見つからない ' + sum.stale : '') + '</div>';
   if (!pins.length) {
     html += '<div class="pin-row" id="pin-empty">この図に指摘はありません</div>';
   }
   pins.forEach(function(p) {
-    html += '<div class="pin-row' + (p.state === 'read' ? ' read' : '') + (p.stale ? ' stale' : '') + '"'
+    var fix = RP.fixText(p);
+    html += '<div class="pin-row' + (p.state === 'read' ? ' read' : '')
+      + (p.state === 'done' ? ' done' : '') + (p.stale ? ' stale' : '') + '"'
       + ' data-pin-id="' + esc(p.id) + '" data-pin-state="' + esc(p.state) + '">'
       + '<span class="pin-where">#' + esc(p.id) + ' '
       + (p.stale ? '行が見つかりません' : ('L' + p.line)) + '</span>'
+      + '<span class="pin-state">' + esc(RP.stateLabel(p.state)) + '</span>'
       + '<span class="pin-text">' + esc(p.text) + '</span>'
-      + '<span class="pin-anchor">' + esc(p.anchor) + '</span><br>'
+      + '<span class="pin-anchor">' + esc(p.anchor) + '</span>'
+      // どの指摘にどの修正が対応するかを、指摘の行そのものに残して見せる。
+      + (fix ? '<span class="pin-fix">' + esc(fix) + '</span>' : '') + '<br>'
       + '<button type="button" class="pin-jump" data-pin-id="' + esc(p.id) + '"'
       + (window.MA.pinJump && !window.MA.pinJump.canJump(p) ? ' disabled' : '')
       + ' title="この指摘の対象を選択して修正フォームを開く">'
       + (window.MA.pinJump ? esc(window.MA.pinJump.jumpLabel(p)) : '対象へジャンプ')
       + '</button> '
-      + '<button type="button" class="pin-toggle" data-pin-id="' + esc(p.id) + '">'
-      + (p.state === 'read' ? '未読に戻す' : '既読にする') + '</button> '
+      + (p.state === 'done'
+        ? '<button type="button" class="pin-reopen" data-pin-id="' + esc(p.id) + '"'
+          + ' title="修正が足りなかったときに未対応へ戻す">未対応に戻す</button> '
+        : '<button type="button" class="pin-done" data-pin-id="' + esc(p.id) + '"'
+          + ' title="直した内容をこの指摘に記録する。選択中の要素の行を修正後として憶える">'
+          + '対応済みにする</button> '
+          + '<button type="button" class="pin-toggle" data-pin-id="' + esc(p.id) + '">'
+          + (p.state === 'read' ? '未読に戻す' : '既読にする') + '</button> ')
       + '<button type="button" class="pin-del" data-pin-id="' + esc(p.id) + '">消す</button>'
       + '</div>';
   });
@@ -7933,6 +7957,20 @@ function renderPinPanel() {
   }
   bindAll('pin-toggle', function(id) {
     _applyLineEditText(RP.toggleState(mmdText, id));
+    renderPinBadge();
+    renderPinPanel();
+  });
+  // 「対応済みにする」: 直した後の行を修正後として憶える。指摘の行を直すと anchor が
+  // 変わって迷子になるので、いま選んでいる要素の行 (= ジャンプして直した相手) を渡す。
+  bindAll('pin-done', function(id) {
+    var pin = null;
+    pins.forEach(function(q) { if (String(q.id) === String(id)) pin = q; });
+    _applyLineEditText(RP.markDone(mmdText, id, { line: _pinFixedLine(pin) }));
+    renderPinBadge();
+    renderPinPanel();
+  });
+  bindAll('pin-reopen', function(id) {
+    _applyLineEditText(RP.reopen(mmdText, id));
     renderPinBadge();
     renderPinPanel();
   });
@@ -8087,7 +8125,10 @@ function _inboxSetUnreadOnly(v) {
 function _inboxShown() {
   var PI = window.MA.pinInbox;
   if (!PI || !_inboxItems) return [];
-  return PI.filter(_inboxItems, { unreadOnly: _inboxUnreadOnly(), excludeAuthor: _inboxMe() });
+  // 受信箱は「まだ直っていない指摘」の箱。対応済み (対応した修正を記録済み) は常に落とす。
+  return PI.filter(_inboxItems, {
+    unreadOnly: _inboxUnreadOnly(), pendingOnly: true, excludeAuthor: _inboxMe(),
+  });
 }
 
 // 保存フォルダの図を 1 枚ずつ読む。開いているタブは編集中の本文で見る
@@ -8138,7 +8179,7 @@ function renderInboxBadge() {
   }
   var sum = PI.summary(_inboxShown());
   btn.textContent = PI.badgeText(sum);
-  btn.className = sum.open > 0 ? 'tab-tool has-open' : 'tab-tool';
+  btn.className = sum.pending > 0 ? 'tab-tool has-open' : 'tab-tool';
   btn.title = PI.headText(sum);
   return sum;
 }

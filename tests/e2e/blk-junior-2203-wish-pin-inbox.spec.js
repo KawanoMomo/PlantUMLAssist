@@ -133,7 +133,8 @@ test.describe('BLK-junior-2203-wish: 図をまたいだ指摘の受信箱', () =
     });
     expect(sel.trim()).toBe('Idle --> Busy : Adc_Start');
     // その図の 📌 も同じ指摘を持っている
-    expect(await page.locator('#btn-tab-pins').textContent()).toContain('1/2');
+    // (BLK-junior-20260908-0103-wish: 件数は未対応 = 対応済み以外。既読の 1 件も未対応)
+    expect(await page.locator('#btn-tab-pins').textContent()).toContain('2/2');
   });
 
   test('編集中の未保存の指摘も受信箱に出る', async ({ page }) => {

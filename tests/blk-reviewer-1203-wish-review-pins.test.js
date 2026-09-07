@@ -114,11 +114,14 @@ describe('review-pins — 指摘を DSL の行に結び付ける', () => {
   test('summary は未読・既読・迷子の件数を数える', () => {
     var out = RP().add(RP().add(DSL, { line: 4, text: 'a' }), { line: 5, text: 'b' });
     out = RP().setState(out, '1', 'read');
-    expect(RP().summary(RP().list(out))).toEqual({ total: 2, open: 1, read: 1, stale: 0 });
+    // BLK-junior-20260908-0103-wish で done / pending が増えた。
+    expect(RP().summary(RP().list(out)))
+      .toEqual({ total: 2, open: 1, read: 1, done: 0, pending: 2, stale: 0 });
   });
 
-  test('badgeText は未読件数を先に出す', () => {
-    expect(RP().badgeText({ total: 3, open: 2, read: 1, stale: 0 })).toBe('📌 指摘 2/3');
+  test('badgeText は未対応件数を先に出す', () => {
+    // 未対応 = 対応済み以外 (BLK-junior-20260908-0103-wish)。この 3 件は全部未対応。
+    expect(RP().badgeText({ total: 3, open: 2, read: 1, done: 0, pending: 3, stale: 0 })).toBe('📌 指摘 3/3');
     expect(RP().badgeText({ total: 0, open: 0, read: 0, stale: 0 })).toBe('📌 指摘 −');
   });
 

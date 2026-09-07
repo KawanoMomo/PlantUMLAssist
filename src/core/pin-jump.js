@@ -106,10 +106,10 @@ window.MA.pinJump = (function() {
   }
 
   // 未読の指摘を上から順に辿るための次の 1 件。id が無ければ先頭を返す。
-  // 既読は飛ばす (反映確認済みの指摘へ戻ってくる意味がない)。
+  // 既読と対応済みは飛ばす (読んだ / 直した指摘へ戻ってくる意味がない)。
   function nextOpen(pins, currentId) {
     var list = (Array.isArray(pins) ? pins : []).filter(function(p) {
-      return p && p.state !== 'read' && canJump(p);
+      return p && p.state !== 'read' && p.state !== 'done' && canJump(p);
     });
     if (!list.length) return null;
     if (currentId == null || currentId === '') return list[0];

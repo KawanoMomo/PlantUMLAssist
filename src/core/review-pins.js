@@ -13,6 +13,13 @@ window.MA = window.MA || {};
 //   ' @pin 1|open|reviewer|2026-09-07T12:03|Idle --> Busy : Timer_StartConv|対応する method が無い
 // 行番号ではなく「その行の文字列」で結び付ける。上に行が増えても指摘は付いて回り、
 // 指摘先の行が書き換わったときだけ迷子 (stale) として残る。
+//
+// BLK-junior-20260908-0103-wish: 「読んだ (read)」と「直した (done)」が同じ印だったため、
+// 反映済みかどうかはファイル名末尾の「(レビュー反映)」で管理されていた。そのうえ直すと
+// anchor の行が書き換わって指摘が迷子になり、どの指摘にどの修正が対応するかが図に残らない。
+// 対応済み (done) を state に足し、そのとき anchor を修正後の行へ貼り替え、
+// 修正前の行を 7 番目のフィールドに残す。1 行の中に「指摘 → 修正前 → 修正後」が揃う。
+//   ' @pin 1|done|reviewer|...|Idle --> Busy : Timer_Ack|...|Idle --> Busy : Timer_StartConv
 window.MA.reviewPins = (function() {
 
   var PREFIX = "' @pin ";
@@ -49,11 +56,19 @@ window.MA.reviewPins = (function() {
     return lines.join(/\r\n/.test(String(dsl == null ? '' : dsl)) ? '\r\n' : '\n');
   }
 
+  function normState(s) {
+    return (s === 'read' || s === 'done') ? s : 'open';
+  }
+
+  // 修正前の行 (before) は対応済みにしたときだけ書く。まだ直していない指摘の行に
+  // 空の 7 番目を足すと、既存の図の差分が意味なく増える。
   function formatPin(pin) {
-    return PREFIX + [
-      _esc(pin.id), _esc(pin.state || 'open'), _esc(pin.author || ''),
+    var f = [
+      _esc(pin.id), _esc(normState(pin.state)), _esc(pin.author || ''),
       _esc(pin.at || ''), _esc(pin.anchor || ''), _esc(pin.text || ''),
-    ].join('|');
+    ];
+    if (pin.before) f.push(_esc(pin.before));
+    return PREFIX + f.join('|');
   }
 
   function parsePinLine(line) {
@@ -63,11 +78,12 @@ window.MA.reviewPins = (function() {
     if (!f[0]) return null;
     return {
       id: f[0],
-      state: (f[1] === 'read') ? 'read' : 'open',
+      state: normState(f[1]),
       author: f[2] || '',
       at: f[3] || '',
       anchor: f[4] || '',
       text: f[5] || '',
+      before: f[6] || '',
     };
   }
 
@@ -162,52 +178,102 @@ window.MA.reviewPins = (function() {
   }
 
   function setState(dsl, id, state) {
-    var s = (state === 'read') ? 'read' : 'open';
+    var s = normState(state);
     return _rewrite(dsl, id, function(p) { p.state = s; return p; });
   }
 
+  // 未読 ⇄ 既読 だけを往復する。対応済みは修正の記録を持つので toggle では動かさない
+  // (押し間違いで「どの修正が対応するか」を消さない)。戻すのは reopen。
   function toggleState(dsl, id) {
     return _rewrite(dsl, id, function(p) {
+      if (p.state === 'done') return p;
       p.state = (p.state === 'read') ? 'open' : 'read';
       return p;
     });
+  }
+
+  // markDone: 「この指摘は直した」を記録する。opts.line に修正後の対象行を渡すと、
+  // anchor をその行へ貼り替え、指摘した時点の行を before に残す。行を渡さなければ
+  // anchor はそのまま (行を書き換えずに済んだ指摘)。
+  // 貼り替えるので、直した指摘が迷子 (stale) にならず一覧に残り続ける。
+  function markDone(dsl, id, opts) {
+    var o = opts || {};
+    var lines = _lines(dsl);
+    var text = null;
+    if (typeof o.line === 'number' && o.line >= 1 && o.line <= lines.length) {
+      var l = lines[o.line - 1];
+      if (!isPinLine(l) && l.trim()) text = l.trim();
+    } else if (typeof o.anchor === 'string' && o.anchor.trim()) {
+      text = o.anchor.trim();
+    }
+    return _rewrite(dsl, id, function(p) {
+      if (text && text !== p.anchor) { p.before = p.anchor; p.anchor = text; }
+      p.state = 'done';
+      return p;
+    });
+  }
+
+  // reopen: 修正が足りなかったときに未読へ戻す。before は残す
+  // (何をどう直したかの記録を、差し戻しのたびに失わない)。
+  function reopen(dsl, id) {
+    return _rewrite(dsl, id, function(p) { p.state = 'open'; return p; });
   }
 
   function remove(dsl, id) {
     return _rewrite(dsl, id, function() { return null; });
   }
 
+  // pending は「まだ直っていない指摘」= 対応済み以外。未読か既読かに関わらず、
+  // 直すべき件数はこれで数える (ファイル名末尾の「(レビュー反映)」の代わり)。
   function summary(pins) {
-    var s = { total: 0, open: 0, read: 0, stale: 0 };
+    var s = { total: 0, open: 0, read: 0, done: 0, pending: 0, stale: 0 };
     (Array.isArray(pins) ? pins : []).forEach(function(p) {
       s.total++;
-      if (p.state === 'read') s.read++; else s.open++;
+      if (p.state === 'done') s.done++;
+      else if (p.state === 'read') s.read++;
+      else s.open++;
       if (p.stale) s.stale++;
     });
+    s.pending = s.total - s.done;
     return s;
   }
 
-  // badgeText: タブの道具ボタンに出す 1 行。未読が 0 でないことが一目で分かる形にする。
-  function badgeText(sum) {
-    if (!sum || !sum.total) return '📌 指摘 −';
-    return '📌 指摘 ' + sum.open + '/' + sum.total;
+  function stateLabel(state) {
+    if (state === 'done') return '対応済み';
+    return (state === 'read') ? '既読' : '未読';
   }
 
-  // markerLabel: 図の上に置く印。未読は番号、既読はチェック。
+  // badgeText: タブの道具ボタンに出す 1 行。未対応 (= 対応済み以外) が一目で分かる形。
+  function badgeText(sum) {
+    if (!sum || !sum.total) return '📌 指摘 −';
+    var pending = (typeof sum.pending === 'number') ? sum.pending : sum.open;
+    return '📌 指摘 ' + pending + '/' + sum.total;
+  }
+
+  // markerLabel: 図の上に置く印。未読は番号、既読はチェック、対応済みは「済」。
   function markerLabel(pin) {
+    if (pin && pin.state === 'done') return '済';
     return (pin && pin.state === 'read') ? '✓' : String((pin && pin.id) || '');
   }
 
   function markerColor(pin) {
+    if (pin && pin.state === 'done') return '#16a34a';
     return (pin && pin.state === 'read') ? '#6b7280' : '#ef4444';
+  }
+
+  // fixText: どの指摘にどの修正が対応するか。対応済みで行を書き替えた指摘だけが持つ。
+  function fixText(pin) {
+    if (!pin || pin.state !== 'done' || !pin.before) return '';
+    return '修正: ' + pin.before + ' → ' + pin.anchor;
   }
 
   // rowText: 一覧に出す 1 行。行が見つからない指摘は、探し直せるよう anchor を見せる。
   function rowText(pin) {
     if (!pin) return '';
     var head = pin.stale ? '行が見つかりません' : ('L' + pin.line);
-    return '#' + pin.id + ' ' + head + ' ' + (pin.state === 'read' ? '既読' : '未読')
-      + ' ・ ' + pin.text;
+    var fix = fixText(pin);
+    return '#' + pin.id + ' ' + head + ' ' + stateLabel(pin.state)
+      + ' ・ ' + pin.text + (fix ? ' ・ ' + fix : '');
   }
 
   return {
@@ -222,11 +288,15 @@ window.MA.reviewPins = (function() {
     add: add,
     setState: setState,
     toggleState: toggleState,
+    markDone: markDone,
+    reopen: reopen,
     remove: remove,
     summary: summary,
+    stateLabel: stateLabel,
     badgeText: badgeText,
     markerLabel: markerLabel,
     markerColor: markerColor,
+    fixText: fixText,
     rowText: rowText,
   };
 })();

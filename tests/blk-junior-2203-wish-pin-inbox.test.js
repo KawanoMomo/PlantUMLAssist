@@ -84,8 +84,9 @@ describe('pin-inbox — 図をまたいで未対応の指摘を集める', () =>
     expect(sum.read).toBe(1);
     expect(sum.docs).toBe(2);
     expect(sum.openDocs).toBe(2);
-    expect(PI().headText(sum)).toBe('未対応 3 件 / 全 4 件 ・ 2 図');
-    expect(PI().badgeText(sum)).toBe('📥 指摘箱 3/4');
+    // BLK-junior-20260908-0103-wish: 未対応 = 対応済み以外。既読 (読んだだけ) も未対応に数える。
+    expect(PI().headText(sum)).toBe('未対応 4 件 / 全 4 件 ・ 2 図');
+    expect(PI().badgeText(sum)).toBe('📥 指摘箱 4/4');
   });
 
   test('指摘が 1 件も無ければ、見出しもバッジもそう言う', () => {
@@ -105,6 +106,6 @@ describe('pin-inbox — 図をまたいで未対応の指摘を集める', () =>
 
   test('図の見出しは未対応と全件を出す', () => {
     var g = PI().groupByDoc(PI().collect(docs())).filter((x) => x.doc === 'adc_state')[0];
-    expect(PI().groupText(g)).toBe('adc_state — 未対応 1 / 2 件');
+    expect(PI().groupText(g)).toBe('adc_state — 未対応 2 / 2 件');
   });
 });
