@@ -2462,6 +2462,86 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 }
 .cfg-sc-table td { padding: 3px 0; color: var(--text-secondary); }
 
+/* ── UML 要素の網羅一覧 (design 5d) ───────────────────────────────────────
+   図種ごとの「常時表示 / その他パレット」の配分を 1 枚の表で見せる。要素は
+   チップにして、どちら側に何件寄っているかが読めるようにする。 */
+#cfg-cv-note {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+
+#cfg-cv-search {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  padding: 5px 8px;
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+
+.cfg-cv-table { width: 100%; border-collapse: collapse; font-size: 11px; table-layout: fixed; }
+.cfg-cv-table thead th {
+  text-align: left;
+  font-size: 10px;
+  font-weight: bold;
+  color: var(--accent);
+  border-bottom: 1px solid var(--border);
+  padding: 0 6px 3px 0;
+}
+.cfg-cv-table thead th:first-child { width: 24%; }
+.cfg-cv-table thead th:nth-child(2) { width: 38%; }
+
+.cfg-cv-row { border-bottom: 1px solid var(--border); vertical-align: top; }
+.cfg-cv-row td, .cfg-cv-row th { padding: 5px 6px 5px 0; }
+.cfg-cv-kind {
+  text-align: left;
+  font-weight: normal;
+  color: var(--text-primary);
+  white-space: normal;
+}
+.cfg-cv-current { background: var(--bg-tertiary); }
+
+.cfg-cv-badge {
+  display: inline-block;
+  margin-left: 5px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 9px;
+}
+.cfg-cv-count { display: block; font-size: 9px; color: var(--text-secondary); margin-top: 2px; }
+
+.cfg-cv-chip {
+  display: inline-block;
+  margin: 0 3px 3px 0;
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+.cfg-cv-chip.cfg-cv-palette { color: var(--text-secondary); opacity: 0.85; }
+.cfg-cv-none { color: var(--text-secondary); }
+.cfg-cv-empty { font-size: 11px; color: var(--text-secondary); padding: 8px 0; }
+
+#cfg-cv-legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--text-secondary);
+  margin-top: 8px;
+}
+#cfg-cv-hint { margin-left: 8px; }
+
 /* ── ショートカット表のグループ・検索・状態チップ (design 5b) ─────────────── */
 #cfg-sc-search {
   width: 100%;
@@ -3294,6 +3374,18 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <div id="cfg-meta-info" style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;"></div>
       <div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">保存済みの DSL スナップショットと設定をすべて削除します。この操作は取り消せません。</div>
       <button id="cfg-clear-all" style="background:var(--accent-red);color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;margin-bottom:12px;">保存データを全削除</button>
+    </div>
+
+    <!-- design 5d: 図種ごとの「常時表示 / その他パレット」の配分を 1 枚の表で見る -->
+    <div id="cfg-pane-coverage" class="cfg-pane" hidden>
+      <div id="cfg-cv-note"></div>
+      <input type="search" id="cfg-cv-search" placeholder="⌕ 要素名・図種で検索" aria-label="要素名・図種で検索">
+      <div id="cfg-cv-list"></div>
+      <div id="cfg-cv-legend">
+        <span class="cfg-cv-chip cfg-cv-always">常時表示</span> 右パネルに出しっぱなし
+        <span class="cfg-cv-chip cfg-cv-palette">その他</span> パレットに畳む
+        <span id="cfg-cv-hint">図種名の右の数字は 常時表示 / その他 の件数</span>
+      </div>
     </div>
 
     <div style="display:flex;gap:8px;margin-top:14px;">

@@ -1168,6 +1168,8 @@ function init() {
     var ST = window.MA.settingsTabs;
     var RM = window.MA.renderModes;
     var _cfgMode = null;   // 設定モーダルの中で選ばれているモード (保存まで確定しない)
+    // design 5d: 網羅一覧の描き直し。結線は下の if (ST) で入れる。
+    var drawCoverage = null;
     var TAB_KEY = 'plantuml-settings-tab';
     var EDITOR_PREFS_KEY = 'plantuml-editor-prefs';
     var RENDER_DEBOUNCE_KEY = 'plantuml-render-debounce';
@@ -1409,6 +1411,19 @@ function init() {
       drawShortcuts();
       if (scSearch) scSearch.addEventListener('input', function() { scCapturing = null; drawShortcuts(); });
 
+      // design 5d: UML 要素の網羅一覧。図種ごとの「常時表示 / その他パレット」の
+      // 配分を 1 枚の表にして、配分そのものを指摘できるようにする。いま編集して
+      // いる図種の行に「編集中」を付けるので、開いている図の配分から読み始められる。
+      var cvSearch = document.getElementById('cfg-cv-search');
+      drawCoverage = function() {
+        var list = document.getElementById('cfg-cv-list');
+        if (list) list.innerHTML = ST.buildCoverageHtml(currentDiagramType, cvSearch ? cvSearch.value : '');
+        var note = document.getElementById('cfg-cv-note');
+        if (note && !note.textContent) note.textContent = ST.COVERAGE_NOTE;
+      };
+      drawCoverage();
+      if (cvSearch) cvSearch.addEventListener('input', drawCoverage);
+
       var scList = document.getElementById('cfg-shortcuts-list');
       if (scList) {
         var startCapture = function(row) {
@@ -1513,6 +1528,8 @@ function init() {
         try { savedTab = localStorage.getItem(TAB_KEY) || 'autosave'; } catch (e) {}
         renderTabBar(ST.normalizeTab(savedTab));
         showTab(savedTab);
+        // 開くたびに引き直す (図種を替えた後も「編集中」が正しい行に付く)
+        if (drawCoverage) drawCoverage();
       }
       modal.style.display = 'flex';
     }
