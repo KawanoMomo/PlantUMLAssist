@@ -2026,6 +2026,7 @@ function init() {
   setupReviewPanel();
   setupChangeBoard();
   setupPinPanel();
+  setupPinInbox();
   setupNameAudit();
   setupSubmitCheck();
   setupFamilyAudit();
@@ -7447,6 +7448,229 @@ function setupPinPanel() {
     panel.classList.remove('open');
   });
   renderPinBadge();
+}
+
+// ── 指摘の受信箱 (BLK-junior-20260907-2203-wish) ────────────────────────────
+// 📌 指摘は開いている 1 図ぶんしか出ない。指摘を受けて直す業務は、前の図を
+// 1 枚ずつ開いてバッジを見て回るところから始まっていた。保存フォルダの図を
+// まとめて読み、「未対応が何件・どの図に残っているか」を先に出す。
+// 行を押すとその図を開いて該当行へ飛ぶので、直す作業がそのまま続く。
+// 集計は src/core/pin-inbox.js。ここは読み込みと画面だけ。
+
+var _inboxItems = null;      // 直近の走査結果 (絞り込み前)
+var _inboxLoading = false;
+
+// 「自分」の名前。自分で書いた指摘を受信箱から外すために憶えておく。
+function _inboxMe() {
+  try { return window.localStorage.getItem('pua.pin-inbox.me') || ''; } catch (e) { return ''; }
+}
+function _inboxSetMe(v) {
+  try { window.localStorage.setItem('pua.pin-inbox.me', String(v == null ? '' : v)); } catch (e) { /* 保存できなくても画面は動く */ }
+}
+function _inboxUnreadOnly() {
+  try { return window.localStorage.getItem('pua.pin-inbox.unread') !== '0'; } catch (e) { return true; }
+}
+function _inboxSetUnreadOnly(v) {
+  try { window.localStorage.setItem('pua.pin-inbox.unread', v ? '1' : '0'); } catch (e) { /* 同上 */ }
+}
+
+function _inboxShown() {
+  var PI = window.MA.pinInbox;
+  if (!PI || !_inboxItems) return [];
+  return PI.filter(_inboxItems, { unreadOnly: _inboxUnreadOnly(), excludeAuthor: _inboxMe() });
+}
+
+// 保存フォルダの図を 1 枚ずつ読む。開いているタブは編集中の本文で見る
+// (保存前の指摘も受信箱に出す)。1 枚読めなくても残りは集める。
+function scanPinInbox() {
+  var WS = window.MA.workspace;
+  if (!WS) return Promise.resolve([]);
+  var dir = _wsFileDir();
+  saveActiveDoc();
+  var openDocs = {};
+  WS.list().forEach(function(d) { openDocs[d.name] = d.dsl; });
+  return WS.listFiles(dir).then(function(names) {
+    var list = (names || []).slice();
+    var docs = [];
+    function step(i) {
+      if (i >= list.length) return Promise.resolve(docs);
+      var name = list[i];
+      if (typeof openDocs[name] === 'string') {
+        docs.push({ name: name, dsl: openDocs[name] });
+        return step(i + 1);
+      }
+      return WS.loadFile(name, dir).then(function(text) {
+        docs.push({ name: name, dsl: text });
+        return step(i + 1);
+      }, function() { return step(i + 1); });
+    }
+    return step(0);
+  }, function() { return []; }).then(function(docs) {
+    // 保存フォルダに無い開いたままの図 (新規タブ) も見る。
+    Object.keys(openDocs).forEach(function(n) {
+      for (var i = 0; i < docs.length; i++) { if (docs[i].name === n) return; }
+      docs.push({ name: n, dsl: openDocs[n] });
+    });
+    return window.MA.pinInbox.collect(docs);
+  });
+}
+
+function renderInboxBadge() {
+  var btn = document.getElementById('btn-tab-inbox');
+  var PI = window.MA.pinInbox;
+  if (!btn || !PI) return null;
+  if (!_inboxItems) {
+    btn.textContent = '📥 指摘箱 −';
+    btn.className = 'tab-tool';
+    btn.title = '保存フォルダの図をまたいで、未対応のレビュー指摘を集める';
+    return null;
+  }
+  var sum = PI.summary(_inboxShown());
+  btn.textContent = PI.badgeText(sum);
+  btn.className = sum.open > 0 ? 'tab-tool has-open' : 'tab-tool';
+  btn.title = PI.headText(sum);
+  return sum;
+}
+
+// 指摘の図を開き、該当行へ飛ぶ。開いていない図は保存フォルダから読む。
+function openInboxItem(item) {
+  var WS = window.MA.workspace;
+  if (!WS || !item) return;
+  var panel = document.getElementById('inbox-panel');
+  if (panel) panel.classList.remove('open');
+  var active = WS.getActive();
+  if (!(active && active.name === item.doc)) saveActiveDoc();
+  function show() {
+    applyActiveDoc();
+    renderTabs();
+    renderPinBadge();
+    if (item.line) jumpToLine(item.line);
+  }
+  var already = WS.findByName ? WS.findByName(item.doc) : null;
+  if (already) { WS.setActive(already.id); show(); return; }
+  WS.loadFile(item.doc, _wsFileDir()).then(function(text) {
+    if (text == null) return;
+    var detected = WS.detectType(text);
+    WS.openOrActivate({
+      name: item.doc,
+      dsl: text,
+      diagramType: (detected && modules[detected]) ? detected : currentDiagramType,
+    });
+    show();
+  }, function() { /* 読めない図は開かない。受信箱はそのまま */ });
+}
+
+function renderInboxPanel() {
+  var panel = document.getElementById('inbox-panel');
+  var PI = window.MA.pinInbox;
+  if (!panel || !PI) return;
+  var esc = window.MA.htmlUtils.escHtml;
+
+  if (_inboxLoading) {
+    panel.innerHTML = '<div class="ib-head">保存フォルダの図を読んでいます…</div>';
+    return;
+  }
+  var shown = _inboxShown();
+  var sum = PI.summary(shown);
+  var html = '<div class="ib-head" data-total="' + sum.total + '" data-open="' + sum.open
+    + '" data-docs="' + sum.openDocs + '">' + esc(PI.headText(sum)) + '</div>'
+    + '<div class="ib-filter">'
+    + '<label><input type="checkbox" id="ib-unread"' + (_inboxUnreadOnly() ? ' checked' : '')
+    + '> 未対応だけ</label> '
+    + '<label>自分 <input id="ib-me" placeholder="junior" value="' + esc(_inboxMe()) + '"></label>'
+    + ' <button type="button" id="ib-reload">読み直す</button></div>';
+
+  var groups = PI.groupByDoc(shown);
+  if (!groups.length) {
+    html += '<div class="ib-empty" id="ib-empty">'
+      + (_inboxItems ? '未対応の指摘はありません' : '「読み直す」で保存フォルダを走査します') + '</div>';
+  }
+  groups.forEach(function(g) {
+    html += '<div class="ib-group" data-doc="' + esc(g.doc) + '" data-open="' + g.open + '">'
+      + '<div class="ib-doc">' + esc(PI.groupText(g)) + '</div>';
+    g.items.forEach(function(p) {
+      html += '<div class="ib-row' + (p.state === 'read' ? ' read' : '') + (p.stale ? ' stale' : '') + '"'
+        + ' data-doc="' + esc(p.doc) + '" data-pin-id="' + esc(p.id) + '" data-line="' + p.line + '">'
+        + '<span class="ib-where">' + (p.stale ? '行が見つかりません' : ('L' + p.line)) + '</span> '
+        + '<span class="ib-who">' + esc(p.author || '?') + '</span>'
+        + '<span class="ib-text">' + esc(p.text) + '</span></div>';
+    });
+    html += '</div>';
+  });
+  panel.innerHTML = html;
+
+  var unread = document.getElementById('ib-unread');
+  if (unread) {
+    unread.addEventListener('change', function() {
+      _inboxSetUnreadOnly(unread.checked);
+      renderInboxPanel();
+      renderInboxBadge();
+    });
+  }
+  var me = document.getElementById('ib-me');
+  if (me) {
+    me.addEventListener('change', function() {
+      _inboxSetMe(me.value.trim());
+      renderInboxPanel();
+      renderInboxBadge();
+    });
+  }
+  var reload = document.getElementById('ib-reload');
+  if (reload) reload.addEventListener('click', function() { loadInbox(); });
+
+  var rows = panel.querySelectorAll('.ib-row');
+  for (var i = 0; i < rows.length; i++) {
+    (function(el) {
+      el.addEventListener('click', function() {
+        var id = el.getAttribute('data-pin-id');
+        var docName = el.getAttribute('data-doc');
+        var hit = null;
+        shown.forEach(function(p) { if (p.id === id && p.doc === docName) hit = p; });
+        if (hit) openInboxItem(hit);
+      });
+    })(rows[i]);
+  }
+}
+
+function loadInbox() {
+  _inboxLoading = true;
+  renderInboxPanel();
+  return scanPinInbox().then(function(items) {
+    _inboxItems = items;
+    _inboxLoading = false;
+    renderInboxPanel();
+    renderInboxBadge();
+    return items;
+  }, function() {
+    _inboxLoading = false;
+    _inboxItems = _inboxItems || [];
+    renderInboxPanel();
+    renderInboxBadge();
+  });
+}
+
+function setupPinInbox() {
+  var btn = document.getElementById('btn-tab-inbox');
+  var panel = document.getElementById('inbox-panel');
+  if (!btn || !panel) return;
+  btn.addEventListener('click', function() {
+    if (panel.classList.contains('open')) { panel.classList.remove('open'); return; }
+    panel.classList.add('open');
+    var rect = btn.getBoundingClientRect();
+    panel.style.left = Math.max(4, rect.left) + 'px';
+    panel.style.top = (rect.bottom + 2) + 'px';
+    loadInbox();
+  });
+  panel.addEventListener('click', function(ev) { ev.stopPropagation(); });
+  document.addEventListener('keydown', function(ev) {
+    if (ev.key === 'Escape') panel.classList.remove('open');
+  });
+  document.addEventListener('click', function(ev) {
+    if (!panel.classList.contains('open')) return;
+    if (panel.contains(ev.target) || ev.target === btn) return;
+    panel.classList.remove('open');
+  });
+  renderInboxBadge();
 }
 
 // ── セット複製 (BLK-junior-20260907-1203-wish) ──────────────────────────────
