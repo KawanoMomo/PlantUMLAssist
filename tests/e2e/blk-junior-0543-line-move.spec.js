@@ -130,7 +130,7 @@ test.describe('BLK-junior-0543 行の並べ替え', () => {
     await page.locator('#btn-lines-move-up').click();
     await expect.poll(async () => lineIndex(await getEditorText(page), 'GpioDrv_Output --> GpioDrv_Interrupt')).toBe(7);
     await page.waitForTimeout(1500);
-    await expect(page.locator('#status-parse')).toHaveText('OK');
+    await expect(page.locator('#status-parse')).toHaveText('パース OK');
     await expect(page.locator('#preview-svg svg')).toBeVisible();
   });
 });

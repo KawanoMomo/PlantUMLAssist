@@ -77,7 +77,7 @@ test.describe('BLK-junior-0443 状態遷移図の一括末尾追加', () => {
     expect(lastState).toBeLessThan(firstTrans);
 
     await page.waitForTimeout(1500);
-    await expect(page.locator('#status-parse')).toHaveText('OK');
+    await expect(page.locator('#status-parse')).toHaveText('パース OK');
     await expect(page.locator('#preview-svg svg')).toBeVisible();
   });
 

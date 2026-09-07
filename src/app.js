@@ -6265,14 +6265,21 @@ function refresh() {
 
   try {
     currentParsed = currentModule.parse(mmdText);
-    statusParseEl.textContent = 'OK';
+    statusParseEl.textContent = 'パース OK';
     statusParseEl.classList.remove('error');
   } catch (e) {
-    statusParseEl.textContent = 'Parse error: ' + e.message;
+    statusParseEl.textContent = 'パース NG · ' + e.message;
     statusParseEl.classList.add('error');
     currentParsed = { meta: {}, elements: [], relations: [], groups: [] };
   }
-  statusInfoEl.textContent = (currentParsed.elements ? currentParsed.elements.length : 0) + ' elements, ' + (currentParsed.relations ? currentParsed.relations.length : 0) + ' relations';
+  // design 1a/4a/4b/4c: 下端で何を数えるかは図種で変わる (3 classes · 2 relations /
+  // 3 actions · 1 branch / 2 states · 4 transitions)。Activity / State のパーサは
+  // elements / relations を持たないので、モジュールの戻り値を直接数えると
+  // どちらも常に 0 になっていた。構造タブと同じ outline.countLabel で数えて、
+  // 同じ図の 2 か所に違う数が出ないようにする。
+  statusInfoEl.textContent = window.MA.outline.countLabel(
+    window.MA.outline.build(mmdText).counts,
+    detectedType || currentDiagramType);
 
   renderProps(currentParsed);
   syncStateTable();

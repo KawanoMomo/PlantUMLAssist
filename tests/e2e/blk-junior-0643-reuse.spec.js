@@ -88,7 +88,7 @@ test.describe('BLK-junior-0643 他の図から取り込む', () => {
     expect(dsl).toContain('participant "SPI ドライバ" as SpiDrv');
     expect(dsl).toContain('Hal --> SpiDrv : E_OK');
     await page.waitForTimeout(1500);
-    await expect(page.locator('#status-parse')).toHaveText('OK');
+    await expect(page.locator('#status-parse')).toHaveText('パース OK');
     await expect(page.locator('#preview-svg svg')).toBeVisible();
   });
 
