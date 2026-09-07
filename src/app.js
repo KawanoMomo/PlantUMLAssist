@@ -3538,6 +3538,9 @@ function setupTabs() {
   var roleScan = null;
   var roleEntries = [];      // 役割を決めた瞬間の指紋を取るための一覧
   var roleNote = '';
+  // BLK-junior-20260908-0630-wish: 図名 → 指摘の反映状態 (未反映 / 反映済み)。
+  // 「元図」と「元図(レビュー反映)」を別名で並べる代わりに、1 枚のバッジで見分ける。
+  var reviewStatus = {};
 
   function _openDocNames() {
     if (!window.MA.workspace) return [];
@@ -3705,6 +3708,11 @@ function setupTabs() {
       svgScan = SF ? SF.scan(entries) : null;
       svgStatus = SF ? SF.statusMap(svgScan) : {};
 
+      // 指摘の反映状態は server が一覧と一緒に返す pins から作る。図を開かなくても
+      // 一覧の時点で「未反映が残っている図」が分かる (別名保存を続けなくてよい)。
+      var RS = window.MA.reviewState;
+      reviewStatus = RS ? RS.statusMap(entries) : {};
+
       // 消えた図の一時控えの印は捨てる (印だけが残り続けないようにする)。
       var DM = window.MA.draftMark;
       draftNames = DM ? DM.keepExisting(DM.load(store, dir), entries) : [];
@@ -3715,6 +3723,7 @@ function setupTabs() {
         setFolderNames(plain);
         folderStatus = {};
         panel.appendChild(folderPickBar());
+        appendReviewSection(panel);
         appendRoleSection(panel, dir);
         appendSvgSection(panel, dir);
         plain.items.forEach(function(e) { panel.appendChild(folderRow(e.name || e, null, null)); });
@@ -3735,6 +3744,7 @@ function setupTabs() {
       head.textContent = first ? '前回見た版の控えがありません（全部を新規として出しています）' : RW.summary(sp.items);
       panel.appendChild(head);
       panel.appendChild(folderPickBar());
+      appendReviewSection(panel);
       appendRoleSection(panel, dir);
       appendSvgSection(panel, dir);
 
@@ -4074,6 +4084,42 @@ function setupTabs() {
     return b;
   }
 
+  // BLK-junior-20260908-0630-wish: 「未反映だけ選ぶ」。指摘が残っている図だけに
+  // 印を付けるので、手順 9 の「一覧から名前を読み比べて探し直す」が 1 押しになる。
+  function pendingNames() {
+    var RS = window.MA.reviewState;
+    if (!RS) return [];
+    return RS.pendingNames(reviewStatus).filter(function(n) { return folderNames.indexOf(n) >= 0; });
+  }
+
+  function folderPendingButton() {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'folder-pick-pending';
+    b.textContent = '未反映だけ選ぶ（0 枚）';
+    b.title = '未対応のレビュー指摘が残っている図にだけ印を付ける';
+    b.disabled = true;
+    b.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      var FS = window.MA.folderSelect;
+      if (!FS) return;
+      folderPicked = FS.selectAll(pendingNames());
+      syncFolderPickUi();
+    });
+    return b;
+  }
+
+  // 一覧の頭に出す 1 行。0 件でも黙らない (「指摘が無い」と「数えていない」は別物)。
+  function appendReviewSection(host) {
+    var RS = window.MA.reviewState;
+    if (!RS) return;
+    var line = document.createElement('div');
+    line.className = 'folder-review-summary';
+    line.id = 'folder-review-summary';
+    line.textContent = RS.summary(reviewStatus);
+    host.appendChild(line);
+  }
+
   // 一覧に出ている図の本文を全部読んで「前回見た版」として控える。
   function saveSeenBodies(dir, names) {
     var RD = window.MA.reviewDiff;
@@ -4155,6 +4201,7 @@ function setupTabs() {
     });
     bar.appendChild(all);
     bar.appendChild(folderChangedButton());
+    bar.appendChild(folderPendingButton());
     // 一覧は長いと縦にスクロールする。開くボタンを末尾に置くと 14 枚のときに
     // 画面の外へ出るので、印を付ける行の上に固定して常に見えるようにする。
     bar.appendChild(folderOpenButton());
@@ -4197,6 +4244,12 @@ function setupTabs() {
       changed.textContent = '変更図だけ選ぶ（' + chNames.length + ' 枚）';
       changed.disabled = chNames.length === 0;
     }
+    var pending = panel.querySelector('.folder-pick-pending');
+    if (pending) {
+      var pNames = pendingNames();
+      pending.textContent = '未反映だけ選ぶ（' + pNames.length + ' 枚）';
+      pending.disabled = pNames.length === 0;
+    }
     var open = panel.querySelector('.folder-open-many');
     if (open) {
       open.textContent = FS.openLabel(folderPicked, folderNames, _openDocNames());
@@ -4220,6 +4273,18 @@ function setupTabs() {
     label.className = 'folder-name';
     label.textContent = name;
     b.appendChild(label);
+    // 指摘の反映状態は図名の右に置く。名前の末尾に「(レビュー反映)」を足す
+    // 代わりなので、名前の続きとして読める位置でないと読み替えが要る。
+    var RS = window.MA.reviewState;
+    var rc = RS && reviewStatus[name];
+    if (rc && rc.kind !== 'none' && rc.kind !== 'unknown') {
+      var rb = document.createElement('span');
+      rb.className = 'folder-review-badge review-' + rc.kind;
+      rb.setAttribute('data-review-state', rc.kind);
+      rb.textContent = RS.badgeText(rc);
+      rb.title = RS.badgeTitle(rc);
+      b.appendChild(rb);
+    }
     var SF = window.MA.svgFreshness;
     if (SF && svgStatus[name] && svgStatus[name] !== 'fresh') {
       var sb = SF.badge(svgStatus[name]);
