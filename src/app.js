@@ -64,6 +64,15 @@ var syncZoomHud = function() {};
 // 「保存」と起動時の applyEditorPrefs が唯一の書き手で、選択のたびにここを読む
 // (localStorage を選択ごとに読み直さないため)。
 var currentEditorPrefs = null;
+// design 5a: Tab / Shift+Tab が入れ外しする単位。設定を開かない回でも効くよう、
+// 保存済みの指定は init で currentEditorPrefs に載る。
+function currentIndentId() {
+  var EI = window.MA.editorIndent;
+  if (!EI) return '2';
+  return EI.normalize(currentEditorPrefs && currentEditorPrefs.indent);
+}
+// design 5a: 描画に失敗したとき、直前の図を残してエラーを重ねるか。
+var currentErrorOverlay = true;
 var syncStateTable = function() {};
 var renderTimer = null;
 var RENDER_DEBOUNCE_MS = 150;
@@ -624,18 +633,15 @@ function init() {
   editorEl.addEventListener('keydown', function(e) {
     if (e.key !== 'Tab' || e.isComposing) return;
     e.preventDefault();
+    // design 5a: 入れ外しする単位は設定の「インデント幅」に従う。
+    var EI = window.MA.editorIndent;
+    var indentId = currentIndentId();
     var start = this.selectionStart, end = this.selectionEnd;
-    if (e.shiftKey) {
-      var before = this.value.substring(0, start);
-      var lineStart = before.lastIndexOf('\n') + 1;
-      if (this.value.substring(lineStart, lineStart + 2) === '  ') {
-        this.value = this.value.substring(0, lineStart) + this.value.substring(lineStart + 2);
-        this.selectionStart = this.selectionEnd = Math.max(lineStart, start - 2);
-      }
-    } else {
-      this.value = this.value.substring(0, start) + '  ' + this.value.substring(end);
-      this.selectionStart = this.selectionEnd = start + 2;
-    }
+    var r = e.shiftKey ? EI.applyOutdent(this.value, start, indentId)
+                       : EI.applyIndent(this.value, start, end, indentId);
+    if (r.changed === false) return;
+    this.value = r.text;
+    this.selectionStart = this.selectionEnd = r.caret;
     this.dispatchEvent(new Event('input'));
   });
 
@@ -955,6 +961,16 @@ function init() {
     var TAB_KEY = 'plantuml-settings-tab';
     var EDITOR_PREFS_KEY = 'plantuml-editor-prefs';
     var RENDER_DEBOUNCE_KEY = 'plantuml-render-debounce';
+    var ERROR_OVERLAY_KEY = 'plantuml-render-error-overlay';
+
+    function readErrorOverlay() {
+      if (!RM) return true;
+      var stored = null;
+      try { stored = localStorage.getItem(ERROR_OVERLAY_KEY); } catch (e) {}
+      return RM.normalizeErrorOverlay(stored);
+    }
+    // 保存済みの指定は設定モーダルを開かない回でも効かせる。
+    currentErrorOverlay = readErrorOverlay();
 
     // 未保存なら現行の RENDER_DEBOUNCE_MS を一番近い選択肢に丸めて見せる
     // (既定の 150ms は利用者から見れば「即時」)。
@@ -1120,6 +1136,34 @@ function init() {
       wrap.dataset.pending = String(cur);
     }
 
+    // design 5a: インデント幅の 3 択。debounce と同じセグメント。
+    function renderIndentChoices(current) {
+      var wrap = document.getElementById('cfg-editor-indent');
+      var EI = window.MA.editorIndent;
+      if (!wrap || !EI) return;
+      var cur = EI.normalize(current);
+      wrap.innerHTML = '';
+      EI.CHOICES.forEach(function(c) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'cfg-seg' + (c.id === cur ? ' active' : '');
+        b.dataset.indent = c.id;
+        b.setAttribute('role', 'radio');
+        b.setAttribute('aria-checked', c.id === cur ? 'true' : 'false');
+        b.textContent = c.label;
+        b.addEventListener('click', function() {
+          wrap.dataset.pending = c.id;
+          Array.prototype.forEach.call(wrap.children, function(el) {
+            var on = el === b;
+            el.classList.toggle('active', on);
+            el.setAttribute('aria-checked', on ? 'true' : 'false');
+          });
+        });
+        wrap.appendChild(b);
+      });
+      wrap.dataset.pending = cur;
+    }
+
     // Java の検出は server に 1 回だけ聞く。落ちても設定画面は開けるようにする。
     function loadRenderEnv() {
       if (_renderEnv || _renderEnvLoading) { renderModeCards(); return; }
@@ -1177,6 +1221,9 @@ function init() {
         if (wrapEl) wrapEl.checked = !!prefs.wrap;
         var jumpEl = document.getElementById('cfg-editor-click-to-line');
         if (jumpEl) jumpEl.checked = !!prefs.clickToLine;
+        renderIndentChoices(prefs.indent);
+        var errOvEl = document.getElementById('cfg-render-error-overlay');
+        if (errOvEl) errOvEl.checked = readErrorOverlay();
         var savedTab = 'autosave';
         try { savedTab = localStorage.getItem(TAB_KEY) || 'autosave'; } catch (e) {}
         renderTabBar(ST.normalizeTab(savedTab));
@@ -1232,11 +1279,19 @@ function init() {
         var fontSel2 = document.getElementById('cfg-editor-font');
         var wrapEl2 = document.getElementById('cfg-editor-wrap');
         var jumpEl2 = document.getElementById('cfg-editor-click-to-line');
+        var indentWrap = document.getElementById('cfg-editor-indent');
         var prefs2 = ST.normalizeEditorPrefs({
           fontSize: fontSel2 ? fontSel2.value : undefined,
           wrap: wrapEl2 ? wrapEl2.checked : false,
           clickToLine: jumpEl2 ? jumpEl2.checked : true,
+          indent: indentWrap ? indentWrap.dataset.pending : undefined,
         });
+        // design 5a: 描画エラーの出し方。
+        var errOvEl2 = document.getElementById('cfg-render-error-overlay');
+        if (errOvEl2 && RM) {
+          currentErrorOverlay = RM.normalizeErrorOverlay(errOvEl2.checked);
+          try { localStorage.setItem(ERROR_OVERLAY_KEY, String(currentErrorOverlay)); } catch (e) {}
+        }
         try { localStorage.setItem(EDITOR_PREFS_KEY, JSON.stringify(prefs2)); } catch (e) {}
         applyEditorPrefs(prefs2);
       }
@@ -5234,6 +5289,26 @@ function renderProps(parsed) {
   });
 }
 
+// design 5a: 描画エラーの出し方。「図の上に重ねて表示」が入っていれば
+// 直前の図を残して帯だけ重ね、外れていれば従来どおり図をエラー 1 行に差し替える。
+function showRenderError(message) {
+  var banner = document.getElementById('render-error-overlay');
+  var text = 'Render error: ' + message;
+  if (!currentErrorOverlay || !banner || !previewSvgEl.querySelector('svg')) {
+    if (banner) { banner.hidden = true; banner.textContent = ''; }
+    previewSvgEl.innerHTML = '<p style="color:var(--accent-red);padding:20px;white-space:pre-wrap;font-family:var(--font-mono);font-size:12px;">' +
+      window.MA.htmlUtils.escHtml(text) + '</p>';
+    return;
+  }
+  banner.textContent = text;
+  banner.hidden = false;
+}
+
+function clearRenderError() {
+  var banner = document.getElementById('render-error-overlay');
+  if (banner) { banner.hidden = true; banner.textContent = ''; }
+}
+
 function renderSvg() {
   var mode = document.getElementById('render-mode').value || 'local';
   renderStatusEl.textContent = 'Rendering\u2026';
@@ -5262,6 +5337,7 @@ function renderSvg() {
     return resp.text();
   }).then(function(svg) {
     if (myGen !== renderGen) return;  // stale response \u2014 a newer renderSvg() superseded this one
+    clearRenderError();
     previewSvgEl.innerHTML = svg;
     var svgEl = previewSvgEl.querySelector('svg');
     if (svgEl) {
@@ -5311,7 +5387,7 @@ function renderSvg() {
     updateTopRenderStatus('ok', took);
   }).catch(function(err) {
     if (myGen !== renderGen) return;  // stale failure — ignore
-    previewSvgEl.innerHTML = '<p style="color:var(--accent-red);padding:20px;white-space:pre-wrap;font-family:var(--font-mono);font-size:12px;">Render error: ' + (err.message || err) + '</p>';
+    showRenderError(err.message || err);
     renderStatusEl.textContent = 'ERROR';
     renderStatusEl.classList.add('error');
     updateTopRenderStatus('error');

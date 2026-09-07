@@ -206,7 +206,10 @@ window.MA.settingsTabs = (function() {
     // undefined を !! で潰すと保存前の状態が「無効」に見えてしまう。
     var jump = p.clickToLine === undefined || p.clickToLine === null
       ? EDITOR_DEFAULTS.clickToLine : !!p.clickToLine;
-    return { fontSize: n, wrap: !!p.wrap, clickToLine: jump };
+    // design 5a: インデント幅。判定は editor-indent が持つ (Tab キーと同じ表を使う)。
+    var EI = window.MA.editorIndent;
+    var indent = EI ? EI.normalize(p.indent) : '2';
+    return { fontSize: n, wrap: !!p.wrap, clickToLine: jump, indent: indent };
   }
 
   // textarea に直接あてる style。折り返し無しでは横スクロールを残す。

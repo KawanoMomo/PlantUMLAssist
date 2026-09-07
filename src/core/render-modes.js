@@ -100,6 +100,18 @@ window.MA.renderModes = (function() {
     return '';
   }
 
+  // 描画エラーの出し方 (design 5a「描画エラーを図の上に重ねて表示」)。
+  // 既定は重ね表示。図を消してエラー 1 行に差し替えると、打ち間違えた瞬間に
+  // 直前まで出ていた図が消えてしまい、どこを直せばよいか見比べられない。
+  var ERROR_OVERLAY_DEFAULT = true;
+
+  function normalizeErrorOverlay(v) {
+    if (v === undefined || v === null || v === '') return ERROR_OVERLAY_DEFAULT;
+    if (v === 'false' || v === '0') return false;
+    if (v === 'true' || v === '1') return true;
+    return !!v;
+  }
+
   // 画面に出す 3 枚ぶんのモデル。app.js はこれを HTML にするだけにする。
   function cards(env, timings, selected) {
     var sel = normalizeMode(selected);
@@ -123,6 +135,8 @@ window.MA.renderModes = (function() {
     MODES: MODES,
     DEBOUNCE_CHOICES: DEBOUNCE_CHOICES,
     DEBOUNCE_DEFAULT: DEBOUNCE_DEFAULT,
+    ERROR_OVERLAY_DEFAULT: ERROR_OVERLAY_DEFAULT,
+    normalizeErrorOverlay: normalizeErrorOverlay,
     normalizeMode: normalizeMode,
     normalizeDebounce: normalizeDebounce,
     javaBadge: javaBadge,
