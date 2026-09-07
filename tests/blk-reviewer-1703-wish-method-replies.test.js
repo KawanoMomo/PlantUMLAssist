@@ -11,6 +11,10 @@
 // (0 件が「見ていない」ではなく「応答だった」と読めるように)。
 var prevWindow = global.window;
 global.window = {};
+// consistency は図 1 枚の DSL を取り出すのに dsl-utils.docDsl を使う
+// (BLK-reviewer-20260907-0803-2)。先に読んでおかないと呼び出し時に落ちる。
+try { delete require.cache[require.resolve('../src/core/dsl-utils.js')]; } catch (e) {}
+require('../src/core/dsl-utils.js');
 try { delete require.cache[require.resolve('../src/core/consistency.js')]; } catch (e) {}
 require('../src/core/consistency.js');
 var ck = global.window.MA.consistency;

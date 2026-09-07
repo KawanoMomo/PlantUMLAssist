@@ -147,7 +147,7 @@ window.MA.methodAudit = (function() {
   function isStateDoc(doc) {
     var t = String((doc && doc.diagramType) || '');
     if (t) return t.indexOf('state') !== -1;
-    var dsl = String((doc && doc.dsl) || '');
+    var dsl = window.MA.dslUtils.docDsl(doc);
     return /^\s*\[\*\]\s*-/m.test(dsl) || /^\s*state\s+/m.test(dsl);
   }
 
@@ -170,7 +170,7 @@ window.MA.methodAudit = (function() {
     (Array.isArray(docs) ? docs : []).forEach(function(d) {
       if (!isStateDoc(d)) return;
       var docName = (d && d.name) || '';
-      _lines((d && d.dsl) || '').forEach(function(line, idx) {
+      _lines(window.MA.dslUtils.docDsl(d)).forEach(function(line, idx) {
         var e = parseStateEvent(line);
         if (!e) return;
         out.push({ event: e.event, doc: docName, line: idx + 1 });
@@ -194,7 +194,7 @@ window.MA.methodAudit = (function() {
 
     list.forEach(function(d) {
       var docName = (d && d.name) || '';
-      var dsl = (d && d.dsl) || '';
+      var dsl = window.MA.dslUtils.docDsl(d);
       var parsedCls = parseClassDoc(dsl);
       parsedCls.classes.forEach(function(c) { if (classes.indexOf(c) === -1) classes.push(c); });
       parsedCls.methods.forEach(function(m) {

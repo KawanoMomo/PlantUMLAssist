@@ -82,4 +82,12 @@ function loadMA(options) {
   return { MA: sandbox.window.MA || {}, window: sandbox.window, loaded, errors };
 }
 
-module.exports = { loadMA, PROJECT_ROOT };
+// BLK-reviewer-20260907-0803-2: 自分で監査スクリプトを書くときに、
+// 「.puml を集める」ところで別のファイル (audit-report) を知らないと始められなかった。
+// 読み込みと同じ入口から docs も作れるようにして、require を 1 本で済ませる。
+// 返り値は [{ name, dsl, path }] — 監査モジュールが期待する形そのもの。
+function docsFrom(targets, options) {
+  return require('./audit-report').collectDocs(targets, options);
+}
+
+module.exports = { loadMA, docsFrom, PROJECT_ROOT };
