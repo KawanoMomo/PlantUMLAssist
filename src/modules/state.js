@@ -865,7 +865,8 @@ window.MA.modules.plantumlState = (function() {
     var html =
       '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">State Diagram</div>' +
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">末尾に追加</label>' +
+        // design 4c: 置く場所を選べるようになったので、見出しは「末尾」を名乗らない。
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">追加 / Add</label>' +
         P.selectFieldHtml('種類', 'st-tail-kind', [
           { value: 'state', label: 'State', selected: true },
           { value: 'composite', label: 'Composite State' },
@@ -908,6 +909,40 @@ window.MA.modules.plantumlState = (function() {
       _showAddBranchModal('', parsedData, ctx);
     });
 
+    // design 4c:「追加する位置」。state / composite だけが末尾以外へ置ける
+    // (遷移とノートは相手の行が決まるので位置を選ばせる意味がない)。
+    // composite に「この遷移の途中」は出さない — 中身の無い箱を遷移の間に
+    // 挟んでも、そのあと必ず中を作る手が要る。
+    var SI = window.MA.stateInsert;
+    function placeHtml(kind) {
+      var opts = SI.positions(parsedData).filter(function(p) {
+        return !(kind === 'composite' && p.value === 'transition');
+      });
+      if (opts.length <= 1) return '';
+      return '<div id="st-tail-place">' +
+        P.selectFieldHtml('追加する位置', 'st-tail-where', opts.map(function(p, i) {
+          return { value: p.value, label: p.label, selected: i === 0 };
+        })) +
+        '<div id="st-tail-where-detail"></div>' +
+      '</div>';
+    }
+
+    // 位置を選ぶと相手 (どの遷移 / どの複合状態) の欄が要る。
+    function renderWhereDetail() {
+      var box = document.getElementById('st-tail-where-detail');
+      var whereEl = document.getElementById('st-tail-where');
+      if (!box || !whereEl) return;
+      if (whereEl.value === 'transition') {
+        box.innerHTML = P.selectFieldHtml('間に挟む遷移', 'st-tail-where-target',
+          SI.transitionOptions(parsedData));
+      } else if (whereEl.value === 'inside') {
+        box.innerHTML = P.selectFieldHtml('中に入れる複合状態', 'st-tail-where-target',
+          SI.compositeOptions(parsedData));
+      } else {
+        box.innerHTML = '';
+      }
+    }
+
     var renderTailDetail = function() {
       var kind = document.getElementById('st-tail-kind').value;
       var detailEl = document.getElementById('st-tail-detail');
@@ -921,10 +956,12 @@ window.MA.modules.plantumlState = (function() {
             { value: 'history', label: 'history' },
             { value: 'historyDeep', label: 'historyDeep' }
           ]) +
+          placeHtml('state') +
           P.primaryButtonHtml('st-tail-add', '+ State 追加');
       } else if (kind === 'composite') {
         html2 =
           P.fieldHtml('ID', 'st-tail-id', '', '例: Outer') +
+          placeHtml('composite') +
           P.primaryButtonHtml('st-tail-add', '+ Composite 追加');
       } else if (kind === 'transition') {
         html2 =
@@ -977,6 +1014,8 @@ window.MA.modules.plantumlState = (function() {
       detailEl.innerHTML = html2;
       // 一括欄は「既に他の図にある行」を打ち直させないためのボタンを持つ。
       window.MA.reuseModal.bindButton('st-tail-reuse', 'plantuml-state', 'st-tail-bulk');
+      renderWhereDetail();
+      P.bindEvent('st-tail-where', 'change', renderWhereDetail);
 
       if (kind === 'other') {
         var addPseudo = function(stereo, fallbackPrefix) {
@@ -1018,17 +1057,39 @@ window.MA.modules.plantumlState = (function() {
         var t = ctx.getMmdText();
         var k = document.getElementById('st-tail-kind').value;
         var out = t;
+        // design 4c: 位置の欄が出ていなければ従来どおり末尾。
+        var whereEl = document.getElementById('st-tail-where');
+        var where = whereEl ? whereEl.value : 'end';
+        var tgtEl = document.getElementById('st-tail-where-target');
+        var whereTarget = tgtEl ? tgtEl.value : '';
         if (k === 'state') {
           var rawId = document.getElementById('st-tail-id').value;
           var normSt = normalizeIdInput(rawId, parsedData);
           if (!normSt.valid) { alert('ID 必須'); return; }
           var st = document.getElementById('st-tail-stereo').value || null;
-          out = addState(t, normSt.id, normSt.label, st);
+          if (where === 'transition') {
+            out = SI.splitTransition(t, parsedData, whereTarget, normSt.id, st, normSt.label);
+            if (out === t) { alert('挟む遷移を選んでください'); return; }
+          } else if (where === 'inside') {
+            out = SI.insertInside(t, parsedData, whereTarget,
+              fmtState(normSt.id, normSt.label || normSt.id, st));
+            if (out === t) { alert('入れる複合状態を選んでください'); return; }
+          } else {
+            out = addState(t, normSt.id, normSt.label, st);
+          }
         } else if (k === 'composite') {
           var rawCid = document.getElementById('st-tail-id').value;
           var normC = normalizeIdInput(rawCid, parsedData);
           if (!normC.valid) { alert('ID 必須'); return; }
-          out = addCompositeState(t, normC.id, normC.label);
+          if (where === 'inside') {
+            var head = (normC.label && normC.label !== normC.id)
+              ? 'state "' + normC.label + '" as ' + normC.id + ' {'
+              : 'state ' + normC.id + ' {';
+            out = SI.insertInside(t, parsedData, whereTarget, [head, '}']);
+            if (out === t) { alert('入れる複合状態を選んでください'); return; }
+          } else {
+            out = addCompositeState(t, normC.id, normC.label);
+          }
         } else if (k === 'transition') {
           var fr = document.getElementById('st-tail-from').value;
           var to = document.getElementById('st-tail-to').value;

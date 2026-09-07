@@ -13,6 +13,7 @@ const sourceFiles = [
   'src/core/review-watch.js',
   'src/core/state-branch.js',
   'src/core/state-transition.js',
+  'src/core/state-insert.js',
   'src/core/class-scaffold.js',
   'src/core/name-audit.js',
   'src/core/template-new.js',
