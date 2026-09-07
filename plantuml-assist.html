@@ -1323,8 +1323,19 @@ html, body {
   max-height: 70px;
   overflow-y: auto;
 }
+#xref-dir-box { margin-top: 6px; border-top: 1px solid var(--border); padding-top: 6px; }
+#xref-dir-now { font-size: 10px; color: var(--text-secondary); margin-bottom: 4px; }
+#xref-dir-input {
+  width: 100%; box-sizing: border-box; font-size: 10px; font-family: monospace;
+  background: var(--bg-primary); color: var(--text-primary);
+  border: 1px solid var(--border); border-radius: 3px; padding: 3px; resize: vertical;
+}
+#xref-panel .xref-dir-actions { display: flex; gap: 4px; margin-top: 4px; }
+#xref-dir-msg { font-size: 10px; margin-top: 4px; white-space: pre-wrap; }
+#xref-dir-msg.ng { color: var(--accent-red); }
 #xref-panel .xref-actions { display: flex; gap: 4px; margin-top: 6px; }
-#xref-panel .xref-actions button {
+#xref-panel .xref-actions button,
+#xref-panel .xref-dir-actions button {
   flex: 1;
   font-size: 11px;
   padding: 3px 6px;
@@ -2800,8 +2811,20 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         </div>
         <div id="xref-links"></div>
         <div class="xref-actions">
-          <button id="btn-xref-export" title="この参照関係を 1 枚のテキストにして書き出す (渡す側の成果物)">書き出す</button>
+          <button id="btn-xref-export" title="この参照関係を 1 枚のテキストにして書き出す (渡す側の成果物)。保存先ディレクトリの値も一緒に載る">書き出す</button>
+          <button id="btn-xref-dir" title="渡された保存先ディレクトリの値 (xref.md ごとでも可) を貼って、そのまま設定に反映する">保存先を貼る</button>
           <button id="btn-xref-close">閉じる</button>
+        </div>
+        <!-- 受け取った側: 保存先を打ち直さずに反映する -->
+        <div id="xref-dir-box" hidden>
+          <div id="xref-dir-now"></div>
+          <textarea id="xref-dir-input" rows="3" spellcheck="false"
+            placeholder="渡された xref.md をそのまま貼るか、保存先のパスを 1 行貼る"></textarea>
+          <div class="xref-dir-actions">
+            <button id="btn-xref-dir-apply">設定に反映</button>
+            <button id="btn-xref-dir-cancel">やめる</button>
+          </div>
+          <div id="xref-dir-msg"></div>
         </div>
       </div>
       <!-- 指摘に並んだ複数のクラスへ同じメンバーを 1 回で足す -->
@@ -3161,6 +3184,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/export-shortcuts.js"></script>
 <script src="src/core/diagram-settings.js"></script>
 <script src="src/core/name-audit.js"></script>
+<script src="src/core/save-dir-handoff.js"></script>
 <script src="src/core/xref-graph.js"></script>
 <script src="src/core/method-audit.js"></script>
 <script src="src/core/template-new.js"></script>

@@ -5156,6 +5156,59 @@ function setupSymptomSearch() {
     textEl.focus();
   });
   if (closeBtn) closeBtn.addEventListener('click', closePanel);
+
+  // 受け取った側。渡された保存先を打ち直さず、検証してから設定に反映する
+  // (BLK-primary-20260908-0103-wish)。書式の崩れは反映前にここで止める。
+  var SDH = window.MA.saveDirHandoff;
+  var dirBtn = document.getElementById('btn-xref-dir');
+  var dirBox = document.getElementById('xref-dir-box');
+  var dirInput = document.getElementById('xref-dir-input');
+  var dirMsg = document.getElementById('xref-dir-msg');
+  var dirNow = document.getElementById('xref-dir-now');
+  var dirApply = document.getElementById('btn-xref-dir-apply');
+  var dirCancel = document.getElementById('btn-xref-dir-cancel');
+
+  function showDirMsg(text, ng) {
+    if (!dirMsg) return;
+    dirMsg.textContent = text || '';
+    dirMsg.className = ng ? 'ng' : '';
+  }
+  function showDirNow() {
+    if (!dirNow) return;
+    var cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null;
+    dirNow.textContent = (cfg && cfg.backend === 'file')
+      ? '今の保存先: ' + cfg.fileDir
+      : '今は保存先フォルダ未設定 (localStorage)。反映するとファイル保存に切り替わります。';
+  }
+
+  if (dirBtn && dirBox && SDH) dirBtn.addEventListener('click', function() {
+    dirBox.hidden = !dirBox.hidden;
+    if (!dirBox.hidden) { showDirMsg(''); showDirNow(); if (dirInput) dirInput.focus(); }
+  });
+  if (dirCancel && dirBox) dirCancel.addEventListener('click', function() {
+    dirBox.hidden = true;
+    showDirMsg('');
+  });
+  if (dirApply && SDH) dirApply.addEventListener('click', function() {
+    var raw = SDH.fromText(dirInput ? dirInput.value : '');
+    if (!raw) {
+      showDirMsg('⚠ 貼られた文面から' + SDH.LABEL + 'を見つけられませんでした。'
+        + 'パスを 1 行だけ貼ってみてください。', true);
+      return;
+    }
+    var res = SDH.check(raw);
+    if (!res.ok) { showDirMsg(SDH.messageFor(res), true); return; }
+    if (window.MA.autoSave) {
+      window.MA.autoSave.setConfig({ backend: 'file', fileDir: res.value });
+      updateTopSaveTarget();
+    }
+    // 設定モーダルを開いたときに古い値が出ないよう、入力欄も合わせておく。
+    var cfgDirEl = document.getElementById('cfg-file-dir');
+    if (cfgDirEl) cfgDirEl.value = res.value;
+    showDirNow();
+    showDirMsg(SDH.messageFor(res), false);
+    setSaveStatus(SDH.messageFor(res));
+  });
 }
 
 // ── 観点一括 ───────────────────────────────────────────────────────────────
@@ -5402,6 +5455,8 @@ function setupXrefGraph() {
     panel.classList.remove('open');
     _xrefSelected = '';
     applyXrefHighlight([]);
+    var box = document.getElementById('xref-dir-box');
+    if (box) box.hidden = true;
   }
 
   btn.addEventListener('click', function() {
@@ -5414,7 +5469,8 @@ function setupXrefGraph() {
   });
 
   if (exportBtn) exportBtn.addEventListener('click', function() {
-    var txt = window.MA.xrefGraph.toText(window.MA.xrefGraph.build(_renameDocs()));
+    var cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null;
+    var txt = window.MA.xrefGraph.toText(window.MA.xrefGraph.build(_renameDocs()), cfg);
     var blob = new Blob([txt], { type: 'text/markdown' });
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
