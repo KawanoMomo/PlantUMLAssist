@@ -4727,6 +4727,184 @@ function applySignatureChange(name, spec) {
   return res;
 }
 
+// ── 開いていない図も含めた影響範囲 ─────────────────────────────────────────
+// BLK-primary-20260908-0723-wish: ヒット数が今開いているタブ分しか出ないので、
+// 「仕様変更が全図に及んだか」を確かめるには残りを 1 枚ずつ開き直すしかなかった。
+// 保存フォルダを先に全部数え、ヒットした図・しなかった図を一覧で出す。
+// 置換もこの一覧の的 (テンプレを除く) にそのまま当てるので、開き直す手順が要らない。
+var _fiFileDocs = [];    // 保存フォルダのファイル [{ name, dsl }]
+var _fiRoles = {};       // name → { role } (実データ / テンプレの宣言)
+var _fiDir = null;       // _fiFileDocs を読んだフォルダ
+var _fiLoading = false;
+var _fiSeq = 0;          // 読み込みの世代 (古い応答で新しい一覧を上書きしない)
+
+// 保存フォルダ運用のときだけ数える。localStorage 運用では「保存フォルダの
+// 全ファイル」という的が無く、勝手にフォルダへ書き戻すと保存先が二重になる。
+function _fiFolderMode() {
+  try {
+    var cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null;
+    return !!(cfg && cfg.backend === 'file');
+  } catch (e) { return false; }
+}
+
+function _fiEnabled() {
+  var el = document.getElementById('rename-scan-folder');
+  return !!(el && el.checked) && _fiFolderMode();
+}
+
+// 保存フォルダの全ファイルを読む。フォルダが変わるまでは読み直さない。
+function loadFolderImpact(force) {
+  var WS = window.MA.workspace;
+  if (!WS || !WS.listFolder) return Promise.resolve(false);
+  var dir = _wsFileDir();
+  if (!force && _fiDir === dir && !_fiLoading) return Promise.resolve(true);
+  var seq = ++_fiSeq;
+  _fiLoading = true;
+  renderRenameFolder();
+  return WS.listFolder(dir).then(function(info) {
+    var names = ((info && info.entries) || []).map(function(e) {
+      return e && typeof e === 'object' ? e.name : e;
+    }).filter(function(n) { return n; });
+    var roles = (info && info.roles) || {};
+    return Promise.all(names.map(function(n) {
+      return WS.loadFile(n, dir).then(function(text) {
+        return typeof text === 'string' ? { name: n, dsl: text } : null;
+      }, function() { return null; });
+    })).then(function(docs) {
+      if (seq !== _fiSeq) return false;
+      _fiFileDocs = docs.filter(function(d) { return d; });
+      _fiRoles = roles;
+      _fiDir = dir;
+      _fiLoading = false;
+      renderRenameFolder();
+      return true;
+    });
+  }).catch(function() {
+    if (seq === _fiSeq) { _fiLoading = false; renderRenameFolder(); }
+    return false;
+  });
+}
+
+// 開いているタブ (未保存の編集を含む) + 保存フォルダ。同名は開いている方が勝つ。
+function _fiRows() {
+  var FI = window.MA.folderImpact;
+  if (!FI) return [];
+  var WS = window.MA.workspace;
+  var activeId = WS ? WS.getActiveId() : null;
+  var open = (WS ? WS.list() : []).map(function(d) {
+    return d.id === activeId ? { id: d.id, name: d.name, dsl: mmdText } : d;
+  });
+  return FI.merge(open, _fiFileDocs, _fiRoles);
+}
+
+function renderRenameFolder() {
+  var box = document.getElementById('rename-folder');
+  var FI = window.MA.folderImpact;
+  if (!box || !FI) return;
+  box.textContent = '';
+  if (!_fiEnabled()) return;
+
+  var head = document.createElement('div');
+  head.className = 'folder-head';
+  head.id = 'rename-folder-head';
+  box.appendChild(head);
+  if (_fiLoading) {
+    head.textContent = '保存フォルダを読み込み中…';
+    head.setAttribute('data-loading', '1');
+    return;
+  }
+  head.setAttribute('data-loading', '0');
+
+  var from = (document.getElementById('rename-from') || {}).value || '';
+  var pv = FI.preview(_fiRows(), from);
+  var s = FI.summarize(pv);
+  head.textContent = from ? FI.summaryText(s) : (s.files + ' 枚を対象にできます');
+  head.setAttribute('data-files', String(s.files));
+  head.setAttribute('data-hit-docs', String(s.hitDocs));
+  head.setAttribute('data-total', String(s.total));
+  head.setAttribute('data-unopened-hit-docs', String(s.unopenedHitDocs));
+  head.setAttribute('data-apply-docs', String(s.applyDocs));
+  if (!from || s.files === 0) return;
+
+  var rows = document.createElement('div');
+  rows.className = 'folder-rows';
+  FI.sortForDisplay(pv).forEach(function(r) {
+    var row = document.createElement('div');
+    row.className = 'folder-row' + (r.count === 0 ? ' zero' : '');
+    row.setAttribute('data-doc-name', r.name);
+    row.setAttribute('data-count', String(r.count));
+    row.setAttribute('data-open', r.open ? '1' : '0');
+    row.setAttribute('data-role', r.role);
+    row.setAttribute('data-target', r.target ? '1' : '0');
+    var n = document.createElement('span');
+    n.className = 'folder-name';
+    n.textContent = r.name;
+    row.appendChild(n);
+    // 「開いている / テンプレ (置換しない)」だけを印にする。未オープンの実データが
+    // 無印なのは、それが置換の既定の的だから (印は例外にだけ付ける)。
+    if (r.open || r.role === 'template') {
+      var tag = document.createElement('span');
+      tag.className = 'folder-tag';
+      tag.textContent = r.role === 'template' ? 'テンプレ (置換しない)' : '開いている';
+      row.appendChild(tag);
+    }
+    var c = document.createElement('span');
+    c.className = 'folder-count';
+    c.textContent = r.count + ' 件';
+    row.appendChild(c);
+    rows.appendChild(row);
+  });
+  box.appendChild(rows);
+}
+
+// 開いていない図のうち、置換の的になるぶん (テンプレとヒット 0 を除く)。
+function _fiFolderApply(from) {
+  var FI = window.MA.folderImpact;
+  var br = window.MA.bulkRename;
+  var out = { docs: 0, total: 0 };
+  if (!FI || !br || !_fiEnabled() || !from || !window.MA.workspace) return out;
+  var openNames = {};
+  window.MA.workspace.list().forEach(function(d) { openNames[d.name] = true; });
+  FI.applyTargets(FI.merge([], _fiFileDocs, _fiRoles).filter(function(r) {
+    return !openNames[r.name];
+  }), from).forEach(function(r) {
+    out.docs++;
+    out.total += br.countIn(r.dsl, from);
+  });
+  return out;
+}
+
+// 開いていない図への置換。タブを開かずに保存フォルダへ直接書き戻す
+// (開いてから直すのでは、枚数ぶんのタブを開く手順が残ってしまう)。
+function applyRenameToUnopenedFiles(from, to) {
+  var FI = window.MA.folderImpact;
+  var br = window.MA.bulkRename;
+  var WS = window.MA.workspace;
+  var empty = { docs: 0, total: 0, failed: 0 };
+  if (!FI || !br || !WS || !_fiEnabled() || !from || !br.isValidTarget(to) || from === to) {
+    return Promise.resolve(empty);
+  }
+  var dir = _wsFileDir();
+  var openNames = {};
+  WS.list().forEach(function(d) { openNames[d.name] = true; });
+  var rows = FI.merge([], _fiFileDocs, _fiRoles).filter(function(r) { return !openNames[r.name]; });
+  var targets = FI.applyTargets(rows, from);
+  if (targets.length === 0) return Promise.resolve(empty);
+  var res = { docs: 0, total: 0, failed: 0 };
+  return Promise.all(targets.map(function(r) {
+    var next = br.replaceIn(r.dsl, from, to);
+    var n = br.countIn(r.dsl, from);
+    return WS.saveToFile({ name: r.name, dsl: next }, dir).then(function(ok) {
+      if (!ok) { res.failed++; return; }
+      res.docs++;
+      res.total += n;
+      // 読み込み済みの控えも進めておく。次のプレビューが古い本文を数えないように。
+      _fiFileDocs.forEach(function(d) { if (d.name === r.name) d.dsl = next; });
+      if (window.MA.saveDiff) { try { window.MA.saveDiff.mark(r.name, next); } catch (e) {} }
+    });
+  })).then(function() { return res; });
+}
+
 function updateRenamePreview() {
   var br = window.MA.bulkRename;
   var hits = document.getElementById('rename-hits');
@@ -4764,15 +4942,28 @@ function updateRenamePreview() {
 
   renderRenameImpact(docs, from);
   renderSignatureApply(docs, from);
+  renderRenameFolder();
 
-  var ok = !!from && br.isValidTarget(to) && from !== to && total > 0;
+  // 開いていない図しか当たらない語でも置換できるようにする。フォルダを数えて
+  // いるのにボタンが押せないのでは、結局その図を開く手順が残る。
+  var openDocs = rows.filter(function(r) { return r.count > 0; }).length;
+  var folder = _fiFolderApply(from);
+  var grand = total + folder.total;
+  var grandDocs = openDocs + folder.docs;
+
+  var ok = !!from && br.isValidTarget(to) && from !== to && grand > 0;
   if (!from) summary.textContent = '置換前の部品名を入力してください';
-  else if (total === 0) summary.textContent = '「' + from + '」は見つかりません';
+  else if (grand === 0) summary.textContent = '「' + from + '」は見つかりません';
   else if (!to) summary.textContent = '置換後の名前を入力してください';
   else if (!br.isValidTarget(to)) summary.textContent = '置換後は英数字・_ ・- ・. のみ';
   else if (from === to) summary.textContent = '置換前と置換後が同じです';
-  else summary.textContent = total + ' 件 / ' + rows.filter(function(r) { return r.count > 0; }).length + ' 枚を置換します';
+  else {
+    summary.textContent = grand + ' 件 / ' + grandDocs + ' 枚を置換します'
+      + (folder.docs > 0 ? ' (うち未オープン ' + folder.docs + ' 枚)' : '');
+  }
   summary.setAttribute('data-total', String(total));
+  summary.setAttribute('data-grand-total', String(grand));
+  summary.setAttribute('data-unopened-docs', String(folder.docs));
   applyBtn.disabled = !ok;
 }
 
@@ -5463,7 +5654,15 @@ function setupBulkRename() {
     panel.style.left = Math.max(4, rect.left - 60) + 'px';
     panel.style.top = (rect.bottom + 2) + 'px';
     panel.classList.add('open');
+    // 保存フォルダ運用でなければ、その的が無いのでチェック欄ごと出さない。
+    var scanRow = document.getElementById('rename-scan-folder');
+    if (scanRow && scanRow.parentNode) {
+      scanRow.parentNode.style.display = _fiFolderMode() ? '' : 'none';
+    }
     updateRenamePreview();
+    // 保存フォルダは開いた時点で数え始める。押してから待たせると、
+    // 「まず全ファイルを数えさせる」ための 1 手が増えるだけになる。
+    if (_fiEnabled()) loadFolderImpact(true).then(updateRenamePreview);
     fromEl.focus();
   });
 
@@ -5476,18 +5675,35 @@ function setupBulkRename() {
     });
   });
   if (allEl) allEl.addEventListener('change', updateRenamePreview);
+  var scanEl = document.getElementById('rename-scan-folder');
+  if (scanEl) scanEl.addEventListener('change', function() {
+    if (scanEl.checked) loadFolderImpact(true).then(updateRenamePreview);
+    else updateRenamePreview();
+  });
 
   function doApply() {
+    var from = fromEl.value;
+    var to = toEl.value;
     var res = applyBulkRename();
-    if (res && res.total > 0) {
-      summary.textContent = res.total + ' 件 / ' + res.docs + ' 枚を置換しました';
-      summary.setAttribute('data-applied', String(res.total));
+    var openTotal = (res && res.total) || 0;
+    var openDocs = (res && res.docs) || 0;
+    // 開いていない図はタブを開かずに保存フォルダへ書き戻す。書き終えてから
+    // 件数を足すので、表示された枚数は「実際に書けた枚数」になる。
+    applyRenameToUnopenedFiles(from, to).then(function(f) {
+      var total = openTotal + f.total;
+      var docs = openDocs + f.docs;
+      if (total === 0) return;
       fromEl.value = '';
       toEl.value = '';
       fillCandidates();
       updateRenamePreview();
-      summary.textContent = res.total + ' 件 / ' + res.docs + ' 枚を置換しました';
-    }
+      var msg = total + ' 件 / ' + docs + ' 枚を置換しました';
+      if (f.docs > 0) msg += ' (未オープン ' + f.docs + ' 枚を含む)';
+      if (f.failed > 0) msg += ' / ' + f.failed + ' 枚は書き込めませんでした';
+      summary.textContent = msg;
+      summary.setAttribute('data-applied', String(total));
+      summary.setAttribute('data-applied-unopened', String(f.docs));
+    });
   }
 
   if (applyBtn) applyBtn.addEventListener('click', doApply);
