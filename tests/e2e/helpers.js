@@ -4,7 +4,11 @@ const path = require('path');
 
 async function gotoApp(page) {
   await page.goto('/');
-  await page.waitForSelector('#preview-svg', { timeout: 5000 });
+  // BLK-builder-20260908-0744-2-red: no hard-coded cap here. 5s was shorter than
+  // the time a page load can legitimately take while other workers are rendering,
+  // so the app opening a little late failed the test before it had begun.
+  // The suite-wide `timeout` in playwright.config.js is the budget that matters.
+  await page.waitForSelector('#preview-svg');
   // local (Java) で描画する。online は DSL を plantuml.com へ送るため使わない。
   await page.evaluate(() => {
     var sel = document.getElementById('render-mode');
