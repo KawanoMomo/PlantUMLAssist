@@ -805,6 +805,10 @@ html, body {
   padding: 3px 6px;
 }
 #pin-panel button { cursor: pointer; }
+#pin-panel .pin-row .pin-jump { border-color: var(--accent); color: var(--accent); }
+#pin-panel .pin-row .pin-jump[disabled] { opacity: 0.45; cursor: default; border-color: var(--border); color: var(--text-secondary); }
+#pin-panel .pin-jump-bar { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 6px; }
+#pin-panel #pin-jump-note { color: var(--text-secondary); padding: 4px 2px 0 2px; }
 #pin-panel .pin-new { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 6px; }
 #pin-panel .pin-new input { width: 100%; margin-bottom: 4px; }
 #pin-panel .pin-target { color: var(--text-secondary); padding-bottom: 4px; }
@@ -2926,6 +2930,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/selection-router.js"></script>
 <script src="src/core/relation-kind-cards.js"></script>
 <script src="src/core/review-pins.js"></script>
+<script src="src/core/pin-jump.js"></script>
 <script src="src/core/pin-inbox.js"></script>
 <script src="src/core/note-block.js"></script>
 <script src="src/core/family-clone.js"></script>

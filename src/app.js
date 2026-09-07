@@ -7381,6 +7381,8 @@ function drawPinMarkers(overlayEl) {
       g.addEventListener('click', function(ev) {
         ev.stopPropagation();
         openPinPanel(pin.id);
+        // 印を押した時点で対象要素を選び、修正フォームまで開く。
+        jumpToPin(pin.id);
       });
       overlayEl.appendChild(g);
       drawn++;
@@ -7429,11 +7431,21 @@ function renderPinPanel() {
       + (p.stale ? '行が見つかりません' : ('L' + p.line)) + '</span>'
       + '<span class="pin-text">' + esc(p.text) + '</span>'
       + '<span class="pin-anchor">' + esc(p.anchor) + '</span><br>'
+      + '<button type="button" class="pin-jump" data-pin-id="' + esc(p.id) + '"'
+      + (window.MA.pinJump && !window.MA.pinJump.canJump(p) ? ' disabled' : '')
+      + ' title="この指摘の対象を選択して修正フォームを開く">'
+      + (window.MA.pinJump ? esc(window.MA.pinJump.jumpLabel(p)) : '対象へジャンプ')
+      + '</button> '
       + '<button type="button" class="pin-toggle" data-pin-id="' + esc(p.id) + '">'
       + (p.state === 'read' ? '未読に戻す' : '既読にする') + '</button> '
       + '<button type="button" class="pin-del" data-pin-id="' + esc(p.id) + '">消す</button>'
       + '</div>';
   });
+  html += '<div class="pin-jump-bar">'
+    + '<button type="button" id="pin-next-open"'
+    + (sum.open ? '' : ' disabled') + ' title="未読の指摘を上から順に辿る">'
+    + '次の未読へジャンプ (' + sum.open + ')</button>'
+    + '<div id="pin-jump-note" hidden></div></div>';
   html += '<div class="pin-new">'
     + '<div class="pin-target" id="pin-target" data-line="' + target + '">'
     + (target ? ('付ける先: L' + target + ' ' + esc(_pinLineText(target))) : '付ける先の行がありません')
@@ -7460,15 +7472,17 @@ function renderPinPanel() {
     renderPinBadge();
     renderPinPanel();
   });
+  // 「対象へジャンプ」: 行への移動だけでなく、対象要素の選択と修正フォームまで開く。
+  bindAll('pin-jump', function(id) { jumpToPin(id); });
+  var nextBtn = document.getElementById('pin-next-open');
+  if (nextBtn) nextBtn.addEventListener('click', function() { jumpToNextOpenPin(); });
+  // L番号の表示も同じジャンプにする (「行だけ動いて要素は選ばれない」を無くす)。
   var wheres = panel.querySelectorAll('.pin-where');
   for (var i = 0; i < wheres.length; i++) {
     (function(el) {
       el.addEventListener('click', function() {
         var row = el.parentNode;
-        var pin = null;
-        pins.forEach(function(p) { if (p.id === row.getAttribute('data-pin-id')) pin = p; });
-        if (!pin || pin.stale) return;
-        jumpToLine(pin.line);
+        jumpToPin(row.getAttribute('data-pin-id'));
       });
     })(wheres[i]);
   }
@@ -7486,6 +7500,58 @@ function renderPinPanel() {
       renderPinPanel();
     });
   }
+}
+
+// ── 指摘から対象要素へのジャンプ (BLK-junior-20260907-2303-wish) ────────────
+// 指摘の対象を選び直すのに、レイアウトが変わるたび要素を目で探してクリックし直して
+// いた。再レイアウト直後は隣を掴む誤クリックも起きる。指摘は対象行を覚えているので、
+// その行の選択候補を引き当てて 移動 + 選択 + 修正フォームまでを 1 操作で済ませる。
+
+// 今の図で「選べる要素」の一覧。図種ごとの kbdSelectables があればそれを使い、
+// 無い図種では message 関係を候補にする (command palette の jump と同じ土俵)。
+function pinSelectables() {
+  if (!currentModule) return [];
+  if (typeof currentModule.kbdSelectables === 'function') {
+    try { return currentModule.kbdSelectables(currentParsed) || []; } catch (e) { return []; }
+  }
+  return (((currentParsed && currentParsed.relations) || [])
+    .filter(function(r) { return r.kind === 'message'; })
+    .map(function(r) { return { type: 'message', id: r.id, line: r.line }; }));
+}
+
+var _lastJumpedPinId = null;
+
+// 指摘 1 件へジャンプする。行へ移動し、対象要素を選択して図の上でハイライトし、
+// 右ペインを「選択中」タブ (修正フォーム) にする。迷子の指摘は動かさず理由を出す。
+function jumpToPin(pinId) {
+  var PJ = window.MA.pinJump;
+  if (!PJ || !window.MA.reviewPins) return null;
+  var pin = null;
+  _pins().forEach(function(p) { if (String(p.id) === String(pinId)) pin = p; });
+  var p = PJ.plan(pin, pinSelectables());
+  var note = document.getElementById('pin-jump-note');
+  if (note) { note.textContent = p.message; note.hidden = false; }
+  if (!p.ok) return p;
+  jumpToLine(p.line);
+  if (p.item && window.MA.selection) {
+    window.MA.selection.setSelected([{ type: p.item.type, id: p.item.id, line: p.item.line }]);
+  }
+  if (p.openProps) showPropsTab('props');
+  _lastJumpedPinId = pin ? pin.id : null;
+  return p;
+}
+
+// 未読の指摘を上から順に辿る。1 件直したら次の指摘へ、を同じボタンで続けられる。
+function jumpToNextOpenPin() {
+  var PJ = window.MA.pinJump;
+  if (!PJ) return null;
+  var next = PJ.nextOpen(_pins(), _lastJumpedPinId);
+  if (!next) {
+    var note = document.getElementById('pin-jump-note');
+    if (note) { note.textContent = '未読の指摘はありません'; note.hidden = false; }
+    return null;
+  }
+  return jumpToPin(next.id);
 }
 
 // 指摘先の行へ飛ぶ。エディタのキャレットをその行に置き、行が見えるまでスクロールする。
