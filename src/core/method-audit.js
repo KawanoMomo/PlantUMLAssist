@@ -18,6 +18,13 @@ window.MA.methodAudit = (function() {
   var MSG_RE = /^\s*(?:"[^"]+"|[A-Za-z0-9_][A-Za-z0-9_.-]*)\s*(?:-+>+|<-+|-+\\|\/-+)\s*(?:"[^"]+"|[A-Za-z0-9_][A-Za-z0-9_.-]*)\s*:\s*(.+)$/;
 
   // クラス本体の開始行 `class Spi_Driver {` と、外置きの `Spi_Driver : +Spi_Init()`。
+  // BLK-reviewer-20260907-0943: state の遷移ラベルは `Idle --> Busy : Timer_StartConv`
+  // のように丸括弧を持たない。CALL_RE は括弧を要求するので、この形は今まで
+  // 突合の網に 1 件も掛からず、adc_state.puml を接頭辞だけ替えて複製した
+  // timer_state.puml のイベント名が どのクラスにも無いことに誰も気付けなかった。
+  var STATE_TRANS_RE = /^\s*(?:\[\*\]|"[^"]+"|[A-Za-z0-9_][A-Za-z0-9_.-]*)\s*-+(?:up|down|left|right)?-*>\s*(?:\[\*\]|"[^"]+"|[A-Za-z0-9_][A-Za-z0-9_.-]*)\s*:\s*(.+)$/;
+  var EVENT_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
   var CLASS_OPEN_RE = /^\s*(?:abstract\s+class|abstract|class|interface|enum|struct)\s+(?:"([^"]+)"\s+as\s+([A-Za-z0-9_][A-Za-z0-9_.-]*)|([A-Za-z0-9_][A-Za-z0-9_.-]*))/;
   var MEMBER_OUTSIDE_RE = /^\s*([A-Za-z0-9_][A-Za-z0-9_.-]*)\s*:\s*(.+)$/;
 
@@ -100,6 +107,44 @@ window.MA.methodAudit = (function() {
     return hit;
   }
 
+  // 遷移ラベルの「きっかけ」を 1 件取り出す。`start [cond] / act()` なら `start`。
+  // 括弧つき (`Timer_Init()`) は呼び出しとして parseCall が拾うので、ここでは扱わない。
+  // 日本語ラベル・空白入りのラベル (`受信 完了`) はイベント名として数えない
+  // (クラスのメソッド名と突き合わせられる形になっていないため)。
+  function parseStateEvent(line) {
+    var m = String(line == null ? '' : line).match(STATE_TRANS_RE);
+    if (!m) return null;
+    // guard `[...]` と action `/ ...` を先に落とす。action 側の `log()` の括弧で
+    // 行ごと捨ててしまうと、`Timer_Fault [retry > 3] / log()` のきっかけを取り逃す。
+    var trigger = m[1].split('/')[0].split('[')[0].trim();
+    if (!EVENT_NAME_RE.test(trigger)) return null;
+    return { event: trigger };
+  }
+
+  // state の図かどうか。diagramType があればそれを信じ、無ければ DSL の形で見る
+  // (保存フォルダから読んだ図には diagramType が付いていないことがある)。
+  function isStateDoc(doc) {
+    var t = String((doc && doc.diagramType) || '');
+    if (t) return t.indexOf('state') !== -1;
+    var dsl = String((doc && doc.dsl) || '');
+    return /^\s*\[\*\]\s*-/m.test(dsl) || /^\s*state\s+/m.test(dsl);
+  }
+
+  // state の図から遷移イベントを集める。
+  function stateEvents(docs) {
+    var out = [];
+    (Array.isArray(docs) ? docs : []).forEach(function(d) {
+      if (!isStateDoc(d)) return;
+      var docName = (d && d.name) || '';
+      String((d && d.dsl) || '').split("\n").forEach(function(line, idx) {
+        var e = parseStateEvent(line);
+        if (!e) return;
+        out.push({ event: e.event, doc: docName, line: idx + 1 });
+      });
+    });
+    return out;
+  }
+
   // docs: [{ name, dsl, diagramType }]
   // 返り値: { calls, classes, methods, issues: [...], clean }
   //
@@ -157,6 +202,23 @@ window.MA.methodAudit = (function() {
       else seen[sig] = { docs: [] };
     });
 
+    // state の遷移イベントも同じ表に載せる。引数が書けない形なので arity は見ない。
+    var events = stateEvents(list);
+    var seenEv = {};
+    events.forEach(function(e) {
+      var k = _key(e.event);
+      if (seenEv[k]) { if (seenEv[k].docs.indexOf(e.doc) === -1) seenEv[k].docs.push(e.doc); return; }
+      var prefix = ownerPrefix(e.event);
+      var cls = findClass(classes, prefix);
+      var decls = methods.filter(function(m) { return _key(m.method) === k; });
+      var issue = null;
+      if (decls.length > 0) { seenEv[k] = { docs: [] }; return; }
+      if (!cls) issue = { kind: 'no-class', method: e.event, args: null, owner: prefix, cls: '', docs: [e.doc], via: 'state' };
+      else issue = { kind: 'no-method', method: e.event, args: null, owner: prefix, cls: cls, docs: [e.doc], via: 'state' };
+      seenEv[k] = issue;
+      issues.push(issue);
+    });
+
     var ORDER = { 'no-class': 0, 'no-method': 1, arity: 2 };
     issues.sort(function(a, b) {
       if (ORDER[a.kind] !== ORDER[b.kind]) return ORDER[a.kind] - ORDER[b.kind];
@@ -165,6 +227,7 @@ window.MA.methodAudit = (function() {
 
     return {
       calls: calls,
+      events: events,
       classes: classes,
       methods: methods,
       issues: issues,
@@ -175,6 +238,13 @@ window.MA.methodAudit = (function() {
   // 1 件を 1 行の日本語にする。何が足りないのかを言い切る。
   function describe(issue) {
     if (!issue) return '';
+    if (issue.via === 'state') {
+      // 遷移ラベルは呼び出しではないので「() を呼んでいる」とは言わない。
+      if (issue.kind === 'no-class') {
+        return issue.method + ' (state の遷移) に対応する ' + (issue.owner || '型') + ' のクラスがどの図にも無い';
+      }
+      return issue.method + ' (state の遷移) の宣言が ' + issue.cls + ' に無い';
+    }
     if (issue.kind === 'no-class') {
       return issue.method + '() を呼んでいるが、' + (issue.owner || '対応する型') + ' のクラスがどの図にも無い';
     }
@@ -188,6 +258,9 @@ window.MA.methodAudit = (function() {
   return {
     argCount: argCount,
     parseCall: parseCall,
+    parseStateEvent: parseStateEvent,
+    isStateDoc: isStateDoc,
+    stateEvents: stateEvents,
     parseClassDoc: parseClassDoc,
     ownerPrefix: ownerPrefix,
     findClass: findClass,

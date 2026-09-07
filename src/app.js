@@ -3809,8 +3809,9 @@ function renderConsistencyBadge() {
   btn.className = result.count > 0 ? 'has-warning' : '';
   btn.title = result.count > 0
     ? ('命名 ' + result.naming.length + ' / 未使用 ' + result.unused.length
-       + ' / メソッド ' + result.methods.length + ' / 粒度 ' + result.granularity.length)
-    : '命名規約・未使用 participant・メソッド不一致・粒度不一致はない';
+       + ' / メソッド ' + result.methods.length + ' / 粒度 ' + result.granularity.length
+       + ' / イベント ' + result.events.length)
+    : '命名規約・未使用 participant・メソッド不一致・粒度不一致・イベント名不一致はない';
   return result;
 }
 
@@ -3843,6 +3844,7 @@ function openConsistencyPanel() {
     + '<div id="ck-summary" data-count="' + result.count + '" '
     + 'data-naming="' + result.naming.length + '" data-unused="' + result.unused.length + '" '
     + 'data-methods="' + result.methods.length + '" data-granularity="' + result.granularity.length + '" '
+    + 'data-events="' + result.events.length + '" '
     + 'style="font-size:11px;color:' + (result.count ? 'var(--accent-orange)' : 'var(--accent-green)') + ';">'
     + (result.count === 0 ? '警告はありません' : '警告 ' + result.count + ' 件') + '</div>';
 
@@ -3859,6 +3861,15 @@ function openConsistencyPanel() {
     return '<span style="font-family:var(--font-mono);color:var(--accent-orange);">'
       + esc(r.target) + '.' + esc(r.method) + '</span>'
       + ' <span style="color:var(--text-secondary);">(' + esc(r.doc) + ')</span>';
+  });
+  // BLK-reviewer-20260907-0943: state の遷移ラベルはこれまでどの突合にも掛からず、
+  // 接頭辞だけ替えて複製した図のイベント名の取り残しを誰も見つけられなかった。
+  html += section('ck-events', 'イベント名不一致 (state の遷移に対応するクラスメソッドが無い)', result.events, function(r) {
+    return '<span style="font-family:var(--font-mono);color:var(--accent-orange);">' + esc(r.event) + '</span>'
+      + (r.kind === 'no-class'
+          ? ' — ' + esc(r.owner || '対応する型') + ' のクラスがどの図にも無い'
+          : ' — ' + esc(r.cls) + ' に宣言が無い')
+      + ' <span style="color:var(--text-secondary);">(' + esc(r.docs.join(', ')) + ')</span>';
   });
   html += section('ck-granularity', '粒度不一致 (系統の片方にしか無い動作名)', result.granularity, function(r) {
     return '<span style="font-family:var(--font-mono);color:var(--accent-orange);">' + esc(r.label) + '</span>'
