@@ -100,18 +100,88 @@ describe('family-audit — 系統をまたいだ動作名の突合', () => {
     expect(r.rows[0].present).toEqual([true, true]);
   });
 
-  test('compareFamily: 粒度不一致は片方にしか無い名前として出る (DMA の実例)', () => {
+  // BLK-reviewer-20260907-1803: この組は「手順のシーケンス (4 ステップ)」と
+  // 「状態遷移 (1 本)」で、意図して粒度が違う。以前はここで
+  // ConfigureChannel / SetSrcDst / EnableDmaReq の 3 件を食い違いとして出しており、
+  // 実際の監査ではこの形の過検出が指摘の大半を占めていた。図種が違い語彙も
+  // ほとんど重ならない組は突き合わせず、外したことを skipped で言う。
+  test('compareFamily: 図種が違い語彙も重ならない組は突き合わせない (DMA の実例)', () => {
     var r = fa.compareFamily([
       { name: 'Dma_Seq', diagramType: 'plantuml-sequence', dsl: DMA_SEQ },
       { name: 'Dma_State', diagramType: 'plantuml-state', dsl: DMA_STATE },
     ]);
-    expect(r.mismatches.map(function(m) { return m.label; }))
-      .toEqual(['ConfigureChannel', 'SetSrcDst', 'EnableDmaReq']);
-    r.mismatches.forEach(function(m) { expect(m.onlyIn).toBe('Dma_Seq'); });
-    // ArmChannel / arm channel は両方にあるので食い違いではない。
+    expect(r.mismatches).toEqual([]);
+    expect(r.comparable).toBe(false);
+    expect(r.skipped.length).toBe(1);
+    expect(r.skipped[0].reason).toContain('粒度が違う');
+    // 行そのものは残る (表は見られる)。判定だけを止めている。
     var arm = r.rows.filter(function(x) { return x.key === 'armchannel'; })[0];
     expect(arm.count).toBe(2);
     expect(arm.onlyIn).toBe(null);
+  });
+
+  test('compareFamily: 図種が違っても語彙がほぼ一致していれば突き合わせる', () => {
+    // 状態遷移側も同じ手順名で書かれている = 同じ粒度で書き分けている。
+    var stateSameWords = [
+      '@startuml',
+      'Idle --> Configured : ConfigureChannel',
+      'Configured --> Armed : SetSrcDst',
+      'Armed --> Active : EnableDmaReq',
+      '@enduml',
+    ].join('\n');
+    var r = fa.compareFamily([
+      { name: 'Dma_Seq', diagramType: 'plantuml-sequence', dsl: DMA_SEQ },
+      { name: 'Dma_State', diagramType: 'plantuml-state', dsl: stateSameWords },
+    ]);
+    expect(r.comparable).toBe(true);
+    expect(r.skipped).toEqual([]);
+    // 手順側にしか無い ArmChannel だけが食い違いとして残る。
+    expect(r.mismatches.map(function(m) { return m.label; })).toEqual(['ArmChannel']);
+    expect(r.mismatches[0].onlyIn).toBe('Dma_Seq');
+  });
+
+  test('compareFamily: 同じ図種どうしは 1 語共有していれば突き合わせる', () => {
+    // 状態遷移の写しに 1 本足りない = 書き漏らし。粒度違いで黙ってはいけない。
+    var stateA = '@startuml\nIdle --> Run : Start\nRun --> Idle : Stop\n@enduml';
+    var stateB = '@startuml\nIdle --> Run : Start\n@enduml';
+    var r = fa.compareFamily([
+      { name: 'Gpio_State', diagramType: 'plantuml-state', dsl: stateA },
+      { name: 'Gpio_State_copy', diagramType: 'plantuml-state', dsl: stateB },
+    ]);
+    expect(r.comparable).toBe(true);
+    expect(r.skipped).toEqual([]);
+    expect(r.mismatches.map(function(m) { return m.label; })).toEqual(['Stop']);
+    expect(r.mismatches[0].onlyIn).toBe('Gpio_State');
+  });
+
+  test('familyKeyOf: フォルダ名は系統に含めない', () => {
+    // BLK-reviewer-20260907-1803: `primary/adc_state.puml` の頭の 1 語が
+    // 'primary' になり、そのフォルダの図が全部 1 系統に落ちていた。
+    expect(fa.familyKeyOf('primary/adc_state.puml')).toBe('adc');
+    expect(fa.familyKeyOf('primary\\uart_init_sequence.puml')).toBe('uart');
+    expect(fa.familyKeyOf('a/b/c/Adc_Init.puml')).toBe('adc');
+    expect(fa.familyKeyOf('adc_state.puml')).toBe('adc');
+  });
+
+  test('groupFamilies: フォルダが同じでも系統は分かれる', () => {
+    var groups = fa.groupFamilies([
+      { name: 'primary/adc_init_sequence.puml', dsl: ADC_SEQ },
+      { name: 'primary/adc_state.puml', dsl: ADC_STATE },
+      { name: 'primary/dma_transfer_sequence.puml', dsl: DMA_SEQ },
+      { name: 'primary/dma_state.puml', dsl: DMA_STATE },
+    ]);
+    expect(groups.map(function(g) { return g.key; })).toEqual(['adc', 'dma']);
+    groups.forEach(function(g) { expect(g.docs.length).toBe(2); });
+  });
+
+  test('summaryLine: 全部外したときは「揃っている」と言わない', () => {
+    var r = fa.compareFamily([
+      { name: 'Dma_Seq', diagramType: 'plantuml-sequence', dsl: DMA_SEQ },
+      { name: 'Dma_State', diagramType: 'plantuml-state', dsl: DMA_STATE },
+    ]);
+    var line = fa.summaryLine(r);
+    expect(line).toContain('粒度が違うため突き合わせていません');
+    expect(line).not.toContain('揃っています');
   });
 
   test('compareFamily: 図へ飛ぶための id を持ち回る', () => {
