@@ -434,7 +434,13 @@ html, body {
   cursor: pointer;
   font-size: 11px;
   padding: 2px 6px;
+  /* BLK-primary-20260907-0923: エディタペインが design 1a の左レールぶん狭くなり、
+     flex の既定 (shrink 可) だとラベルが 1 文字ずつ縦に折り返されて読めなくなる。
+     縮めずに #tab-bar 側の overflow-x で横スクロールさせる。 */
+  white-space: nowrap;
+  flex-shrink: 0;
 }
+#tab-bar .tab { flex-shrink: 0; }
 #folder-panel {
   display: none;
   position: absolute;

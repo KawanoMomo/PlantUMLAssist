@@ -1438,6 +1438,16 @@ function initCommandPalette() {
       { id: 'save', title: 'ファイルを保存 / Save', hint: 'File', keywords: ['save', 'file', 'ほぞん'], run: function() { clickById('btn-save'); } },
       { id: 'consistency', title: '整合性チェックを開く / Consistency', hint: 'Review', keywords: ['consistency', 'check', 'せいごう', 'かくにん'], run: function() { clickById('status-consistency'); } },
       { id: 'family-audit', title: '系統チェックを開く / Family audit', hint: 'Tabs', keywords: ['family', 'audit', 'けいとう', 'とつごう'], run: function() { clickById('btn-tab-family'); } },
+      // BLK-primary-20260907-0923: タブバーの道具はどれもパレットに無く、design 1a で
+      // ペインが狭くなった後は潰れたラベルを目で数えて押すしか経路が無かった。
+      { id: 'tab-new', title: '新しい図を開く / New diagram', hint: 'Tabs', keywords: ['new', 'tab', 'あたらしい', 'ず'], run: function() { clickById('btn-tab-new'); } },
+      { id: 'tab-folder', title: '保存フォルダの図を一覧 / Folder', hint: 'Tabs', keywords: ['folder', 'list', 'いちらん', 'ふぉるだ'], run: function() { clickById('btn-tab-folder'); } },
+      { id: 'tab-rename', title: '部品名を一括置換 / Bulk rename', hint: 'Tabs', keywords: ['rename', 'replace', 'いっかつ', 'ちかん'], run: function() { clickById('btn-tab-rename'); } },
+      { id: 'tab-audit', title: '名前突合を開く / Name audit', hint: 'Tabs', keywords: ['name', 'audit', 'なまえ', 'つきあわせ'], run: function() { clickById('btn-tab-audit'); } },
+      { id: 'tab-lines', title: '行編集を開く / Line edit', hint: 'Tabs', keywords: ['line', 'edit', 'ぎょう', 'へんしゅう'], run: function() { clickById('btn-tab-lines'); } },
+      { id: 'tab-compare', title: '並べて見る / Compare', hint: 'Tabs', keywords: ['compare', 'side', 'ならべて', 'みくらべ'], run: function() { clickById('btn-tab-compare'); } },
+      { id: 'tab-template', title: 'テンプレートから新しい図を作る / Template', hint: 'Tabs', keywords: ['template', 'copy', 'てんぷれ', 'ふくせい'], run: function() { clickById('btn-tab-template'); } },
+      { id: 'tab-diff', title: '前回保存からの差分 / Diff', hint: 'Tabs', keywords: ['diff', 'change', 'さぶん', 'へんこう'], run: function() { clickById('btn-tab-diff'); } },
       { id: 'settings', title: '設定を開く / Settings', hint: 'Ctrl', keywords: ['settings', 'config', 'せってい'], run: function() { clickById('btn-config'); } },
       { id: 'undo', title: '元に戻す / Undo', hint: 'Ctrl+Z', keywords: ['undo', 'もどす'], run: function() { clickById('btn-undo'); } },
       { id: 'redo', title: 'やり直す / Redo', hint: 'Ctrl+Y', keywords: ['redo', 'やりなおす'], run: function() { clickById('btn-redo'); } },
