@@ -83,4 +83,54 @@ describe('diagram-rail — 左端の図種レール (design 1a)', () => {
     expect(html).toContain('id="rail-cls"');
     expect(html).toContain('title="クラス図 (Class)"');
   });
+
+  // ── design 7a: 略号だけの箱をやめ、図の形の線画を添える (BLK-builder-20260908-0823-1)
+  describe('図種の線画 (design 7a)', () => {
+    test('glyphFor: 6 図種すべてが線画を持ち、中身が図種ごとに違う', () => {
+      var seen = {};
+      rail.items().forEach(function(it) {
+        var g = rail.glyphFor(it.type);
+        expect(g).not.toBe('');
+        expect(seen[g]).toBe(undefined);
+        seen[g] = it.type;
+      });
+      expect(Object.keys(seen).length).toBe(6);
+    });
+
+    test('glyphFor: 未知の図種は空文字 (例外を投げない)', () => {
+      expect(rail.glyphFor('plantuml-unknown')).toBe('');
+      expect(rail.glyphFor(undefined)).toBe('');
+    });
+
+    test('glyphSvg: 16x16・線幅 1・currentColor の <svg> で包む', () => {
+      var svg = rail.glyphSvg('plantuml-usecase');
+      expect(svg).toContain('viewBox="0 0 16 16"');
+      expect(svg).toContain('stroke-width="1"');
+      expect(svg).toContain('stroke="currentColor"');
+      expect(svg).toContain('fill="none"');
+      // 線画は装飾なので支援技術からは隠す (ボタン本体が略号と title を持つ)
+      expect(svg).toContain('aria-hidden="true"');
+      expect(svg).toContain('class="rail-glyph"');
+      expect(svg.slice(-6)).toBe('</svg>');
+    });
+
+    test('glyphSvg: 未知の図種は <svg> を作らない', () => {
+      expect(rail.glyphSvg('plantuml-unknown')).toBe('');
+    });
+
+    test('buildRailHtml: 各ボタンに線画 1 つと略号が入る', () => {
+      var html = rail.buildRailHtml('plantuml-sequence');
+      expect((html.match(/<svg/g) || []).length).toBe(6);
+      expect((html.match(/class="rail-code"/g) || []).length).toBe(6);
+      expect(html).toContain('<span class="rail-code">SEQ</span>');
+      expect(html).toContain('<span class="rail-code">CMP</span>');
+    });
+
+    test('buildRailHtml: 略号は線画の後ろに来る (読み上げ順が 形→名前)', () => {
+      var html = rail.buildRailHtml('plantuml-state');
+      var btn = html.slice(html.indexOf('id="rail-st"'));
+      btn = btn.slice(0, btn.indexOf('</button>'));
+      expect(btn.indexOf('<svg')).toBeLessThan(btn.indexOf('rail-code'));
+    });
+  });
 });
