@@ -1912,6 +1912,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button class="tab-tool" id="btn-tab-rename" title="開いている図をまたいで部品名を一括置換">⇄ 一括置換</button>
         <button class="tab-tool" id="btn-tab-audit" title="開いている図の部品名を突き合わせて表記揺れを探す">🔍 名前突合</button>
         <!-- BLK-primary-20260907-0823-wish: 同じ系統の複数枚で動作名が揃っているかを見る -->
+        <!-- BLK-primary-20260907-1403-wish: 顧客に出す前に、全図の title / note / 部品名を横断で見る -->
+        <button class="tab-tool" id="btn-tab-submit" title="顧客提出前に、全図のタイトル・注釈・部品名を横断で見て社内略語を洗い出す">📤 提出前チェック</button>
         <button class="tab-tool" id="btn-tab-family" title="同じ系統の図を並べて、片方にしか無いメッセージ名・遷移名を探す">⇉ 系統チェック</button>
         <button class="tab-tool" id="btn-tab-lines" title="この図の 1 行だけを選んで書き換え・挿入・削除する">✎ 行編集</button>
         <button class="tab-tool" id="btn-tab-compare" title="別のタブの図を右に並べて見ながら書く">⇔ 並べて見る</button>
@@ -2112,6 +2114,9 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <div id="na-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="na-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:620px;max-width:900px;max-height:80vh;overflow-y:auto;"></div>
 </div>
+<div id="sc-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+  <div id="sc-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:680px;max-width:960px;max-height:82vh;overflow-y:auto;"></div>
+</div>
 <div id="ck-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="ck-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:680px;max-width:960px;max-height:82vh;overflow-y:auto;"></div>
 </div>
@@ -2284,6 +2289,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/sequence-marks.js"></script>
 <script src="src/core/insert-marker.js"></script>
 <script src="src/core/label-colors.js"></script>
+<script src="src/core/submit-check.js"></script>
 <script src="src/core/sequence-autonumber.js"></script>
 <script src="src/core/class-scaffold.js"></script>
 <script src="src/core/line-resolver.js"></script>

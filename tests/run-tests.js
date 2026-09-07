@@ -51,6 +51,7 @@ const sourceFiles = [
   'src/core/sequence-autonumber.js',
   'src/core/insert-marker.js',
   'src/core/label-colors.js',
+  'src/core/submit-check.js',
   'src/ui/properties.js',
   'src/ui/reuse-modal.js',
   'src/modules/sequence.js',
