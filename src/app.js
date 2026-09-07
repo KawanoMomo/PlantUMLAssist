@@ -3105,6 +3105,45 @@ function setupTabs() {
 
   function closePanel() { panel.classList.remove('open'); }
 
+  // BLK-primary-20260907-1703: 一覧に印を付けて、まとめてタブで開く。
+  // 印はパネルを開いている間だけ持つ (次に開いたときは白紙から選ぶ)。
+  var folderPicked = [];
+  var folderNames = [];
+
+  function _openDocNames() {
+    if (!window.MA.workspace) return [];
+    return window.MA.workspace.list().map(function(d) { return d.name; });
+  }
+
+  // 選んだ順ではなく一覧の順に、1 枚ずつ読んでタブにする。
+  // 途中で読めない図があっても残りは開く (1 枚のために全部が止まらない)。
+  function openManyFromFolder(names) {
+    var FS = window.MA.folderSelect;
+    var dir = _wsFileDir();
+    saveActiveDoc();
+    var queue = names.slice();
+    function step() {
+      if (queue.length === 0) {
+        applyActiveDoc();
+        renderTabs();
+        return;
+      }
+      var name = queue.shift();
+      window.MA.workspace.loadFile(name, dir).then(function(text) {
+        if (text != null) {
+          var detected = window.MA.workspace.detectType(text);
+          window.MA.workspace.openOrActivate({
+            name: name,
+            dsl: text,
+            diagramType: (detected && modules[detected]) ? detected : currentDiagramType,
+          });
+        }
+        step();
+      }, step);
+    }
+    if (FS) step();
+  }
+
   function openFromFolder(name) {
     closePanel();
     var dir = _wsFileDir();
@@ -3152,8 +3191,15 @@ function setupTabs() {
         panel.appendChild(empty);
         return;
       }
+      // 印は今の一覧に残っているものだけ持ち越す。
+      folderNames = entries.map(function(e) { return e.name || e; });
+      if (window.MA.folderSelect) {
+        folderPicked = window.MA.folderSelect.keepExisting(folderPicked, folderNames);
+      }
       if (!RW) {
-        entries.forEach(function(e) { panel.appendChild(folderButton(e.name || e, null, null)); });
+        panel.appendChild(folderPickBar());
+        entries.forEach(function(e) { panel.appendChild(folderRow(e.name || e, null, null)); });
+        syncFolderPickUi();
         return;
       }
       var seen = RW.load(store, dir);
@@ -3164,9 +3210,10 @@ function setupTabs() {
       head.className = 'folder-summary';
       head.textContent = first ? '前回見た版の控えがありません（全部を新規として出しています）' : RW.summary(rows);
       panel.appendChild(head);
+      panel.appendChild(folderPickBar());
 
       rows.forEach(function(r) {
-        panel.appendChild(folderButton(r.name, RW.badge(r.status), RW.formatMtime(r.mtime), r.status));
+        panel.appendChild(folderRow(r.name, RW.badge(r.status), RW.formatMtime(r.mtime), r.status));
       });
 
       RW.removed(seen, entries).forEach(function(name) {
@@ -3188,7 +3235,89 @@ function setupTabs() {
         renderFolderPanel();
       });
       panel.appendChild(mark);
+      syncFolderPickUi();
     });
+  }
+
+  // 印を付ける欄と、名前を押して 1 枚だけ開く従来のボタンを 1 行に並べる。
+  // 名前を押したときの動きは変えない (1 枚だけ開くのが今までどおり最短)。
+  function folderRow(name, bdg, mtime, status) {
+    var FS = window.MA.folderSelect;
+    var b = folderButton(name, bdg, mtime, status);
+    if (!FS) return b;
+    var row = document.createElement('div');
+    row.className = 'folder-row';
+    var box = document.createElement('input');
+    box.type = 'checkbox';
+    box.className = 'folder-pick';
+    box.setAttribute('data-pick-name', name);
+    box.checked = FS.has(folderPicked, name);
+    box.title = 'まとめて開く図に印を付ける';
+    box.addEventListener('click', function(ev) {
+      ev.stopPropagation();   // パネルを閉じずに印だけ変える
+      folderPicked = FS.toggle(folderPicked, name);
+      syncFolderPickUi();
+    });
+    row.appendChild(box);
+    row.appendChild(b);
+    return row;
+  }
+
+  function folderPickBar() {
+    var bar = document.createElement('div');
+    bar.className = 'folder-pickbar';
+    var all = document.createElement('button');
+    all.type = 'button';
+    all.className = 'folder-pick-all';
+    all.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      var FS = window.MA.folderSelect;
+      if (!FS) return;
+      folderPicked = FS.allPicked(folderPicked, folderNames) ? FS.clear() : FS.selectAll(folderNames);
+      syncFolderPickUi();
+    });
+    bar.appendChild(all);
+    // 一覧は長いと縦にスクロールする。開くボタンを末尾に置くと 14 枚のときに
+    // 画面の外へ出るので、印を付ける行の上に固定して常に見えるようにする。
+    bar.appendChild(folderOpenButton());
+    return bar;
+  }
+
+  function folderOpenButton() {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'folder-open-many';
+    b.title = '印を付けた図を、一覧の並びのまま全部タブで開く';
+    b.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      var FS = window.MA.folderSelect;
+      if (!FS) return;
+      var names = FS.toOpen(folderPicked, folderNames, _openDocNames());
+      if (names.length === 0) return;
+      closePanel();
+      openManyFromFolder(names);
+    });
+    return b;
+  }
+
+  // 印の付き外れに合わせて、2 つのボタンの文言と使える・使えないを引き直す。
+  // 一覧そのものは作り直さない (14 個の行を毎回作り直すと印を打つ手が重くなる)。
+  function syncFolderPickUi() {
+    var FS = window.MA.folderSelect;
+    if (!FS) return;
+    Array.prototype.forEach.call(panel.querySelectorAll('.folder-pick'), function(box) {
+      box.checked = FS.has(folderPicked, box.getAttribute('data-pick-name'));
+    });
+    var all = panel.querySelector('.folder-pick-all');
+    if (all) {
+      all.textContent = FS.allPicked(folderPicked, folderNames)
+        ? '印を全部外す' : '全部選ぶ（' + folderNames.length + ' 枚）';
+    }
+    var open = panel.querySelector('.folder-open-many');
+    if (open) {
+      open.textContent = FS.openLabel(folderPicked, folderNames, _openDocNames());
+      open.disabled = FS.toOpen(folderPicked, folderNames, _openDocNames()).length === 0;
+    }
   }
 
   function folderButton(name, bdg, mtime, status) {

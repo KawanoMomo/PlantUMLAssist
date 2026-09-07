@@ -495,6 +495,43 @@ html, body {
   font-size: 10px;
   text-align: center;
 }
+/* まとめて開く (BLK-primary-20260907-1703): 印の欄と名前を 1 行に並べる */
+#folder-panel .folder-row { display: flex; align-items: center; gap: 6px; }
+#folder-panel .folder-row .folder-item { flex: 1 1 auto; min-width: 0; }
+#folder-panel .folder-pick { flex: 0 0 auto; margin: 0; cursor: pointer; }
+/* 一覧は縦にスクロールするので、印の操作は上端に貼り付けて常に見えるようにする */
+#folder-panel .folder-pickbar {
+  position: sticky;
+  top: -4px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0 4px 0;
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 2px;
+}
+#folder-panel .folder-pickbar button { width: auto; }
+#folder-panel button.folder-pick-all {
+  flex: 0 0 auto;
+  color: var(--text-secondary);
+  font-size: 10px;
+  text-align: left;
+  white-space: nowrap;
+}
+#folder-panel button.folder-open-many {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--accent);
+  font-size: 11px;
+  text-align: right;
+}
+#folder-panel button.folder-open-many:disabled {
+  color: var(--text-secondary);
+  cursor: default;
+}
+#folder-panel button.folder-open-many:disabled:hover { background: transparent; }
 /* 差分バッジと一覧 (前回保存時点との差) */
 #tab-bar .tab .tab-dot {
   font-size: 9px;
@@ -2360,6 +2397,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/autosave-options.js"></script>
 <script src="src/core/workspace.js"></script>
 <script src="src/core/review-watch.js"></script>
+<script src="src/core/folder-select.js"></script>
 <script src="src/core/bulk-rename.js"></script>
 <script src="src/core/bulk-export.js"></script>
 <script src="src/core/handoff-package.js"></script>
