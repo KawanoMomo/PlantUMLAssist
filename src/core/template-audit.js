@@ -31,7 +31,7 @@ window.MA.templateAudit = (function() {
     if (!MAu || !newDoc.dsl) return { issues: [], clean: true };
 
     var others = (Array.isArray(otherDocs) ? otherDocs : []).filter(function(d) {
-      if (!d || !d.dsl) return false;
+      if (!d || !window.MA.dslUtils.docDsl(d)) return false;
       if (sourceName && d.name === sourceName) return false;
       return d.name !== newDoc.name;
     });
@@ -52,8 +52,9 @@ window.MA.templateAudit = (function() {
     if (!MAu) return false;
     var found = false;
     (Array.isArray(otherDocs) ? otherDocs : []).forEach(function(d) {
-      if (!d || !d.dsl || (sourceName && d.name === sourceName)) return;
-      if (MAu.parseClassDoc(d.dsl).methods.length > 0) found = true;
+      if (!d || (sourceName && d.name === sourceName)) return;
+      var dsl = window.MA.dslUtils.docDsl(d);
+      if (dsl && MAu.parseClassDoc(dsl).methods.length > 0) found = true;
     });
     return found;
   }

@@ -67,7 +67,7 @@ window.MA.consistency = (function() {
     var messages = [];
     var currentClass = null;
 
-    String((doc && doc.dsl) || '').split(/\r?\n/).forEach(function(line) {
+    window.MA.dslUtils.docDsl(doc).split(/\r?\n/).forEach(function(line) {
       var cls = line.match(CLASS_RE);
       if (cls) {
         var cn = _pick(cls);

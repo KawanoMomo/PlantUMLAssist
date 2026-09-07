@@ -95,10 +95,21 @@ window.MA.dslUtils = (function() {
     };
   }
 
+  // BLK-reviewer-20260907-0803-2: 監査モジュールに渡す「図 1 枚」の DSL を取り出す。
+  // 呼ぶ側が組み立てる doc は場面によって `dsl` だったり `text` だったりし、
+  // 取り違えると例外ではなく**空の結果**になるので、間違いに気付けなかった。
+  // どちらの綴りでも同じ図として読めるようにして、取り違え自体を無くす。
+  function docDsl(doc) {
+    if (!doc) return '';
+    var v = doc.dsl != null ? doc.dsl : doc.text;
+    return v == null ? '' : String(v);
+  }
+
   return {
     splitLines: splitLines,
     unquote: unquote,
     quote: quote,
+    docDsl: docDsl,
     escapeForRegex: escapeForRegex,
     isPlantumlComment: isPlantumlComment,
     isPlantumlBoundary: isPlantumlBoundary,

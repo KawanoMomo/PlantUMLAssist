@@ -419,6 +419,26 @@ JSON の形:
 
 `src/core/` は列挙して丸ごと読むので、本体が新しい依存を足しても呼び出し側の書き換えは要らない。
 
+### 自分のスクリプトから監査モジュールを呼ぶ
+
+`npm run audit` で足りない集計をしたいときは、`tools/audit-runtime.js` を使う。
+`window` のモックを自分で組んだり、`src/core/*.js` を依存順に手で `require` したりする
+必要はない (本体が新しい依存を足しても、このスクリプトは書き換えずに動く)。
+
+```js
+const { loadMA, docsFrom } = require('./tools/audit-runtime');
+
+const { MA, errors } = loadMA();          // errors が空でなければ「見ていない」監査がある
+const docs = docsFrom('E:\path\to\diagrams');  // [{ name, dsl, path }]
+
+const res = MA.nameAudit.audit(docs);     // MA.methodAudit / MA.consistency / MA.familyAudit も同様
+console.log(res.variants.length, res.undeclared.length);
+```
+
+図 1 枚は `{ name, dsl }` で渡す。手で組み立てるときは `dsl` でも `text` でも読めるので、
+綴りを取り違えて**指摘 0 件**が返ってくることはない。`name` は突合結果の中で図を指す名前に
+なるだけなので、ファイル名でなくても構わない。
+
 ## 設計ドキュメント
 
 - **Tier1 master spec**: `docs/superpowers/specs/2026-04-24-plantuml-tier1-complete-master.md`

@@ -77,7 +77,7 @@ window.MA.familyAudit = (function() {
   function compareFamily(docs) {
     var list = (docs || []).map(function(d) {
       // id は画面が「その図へ飛ぶ」ために持ち回るだけ。突合には使わない。
-      return { id: d.id, name: d.name, diagramType: d.diagramType || '', actions: actionsOf(d.dsl) };
+      return { id: d.id, name: d.name, diagramType: d.diagramType || '', actions: actionsOf(window.MA.dslUtils.docDsl(d)) };
     });
     var rows = [];
     var index = {};
