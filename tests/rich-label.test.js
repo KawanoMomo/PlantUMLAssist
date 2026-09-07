@@ -5,6 +5,7 @@ global.window = dom.window;
 global.document = dom.window.document;
 
 require('../src/core/html-utils.js');
+require('../src/core/label-colors.js');
 require('../src/ui/rich-label-editor.js');
 var RLE = window.MA.richLabelEditor;
 
@@ -130,5 +131,95 @@ describe('onChange timing', function() {
     RLE.mount(container, '', function() { calls++; });
     container.querySelector('.rle-newline').click();
     expect(calls).toBe(1);
+  });
+});
+
+// design 2b: ツールバーは `B I U ··· ↵ creole` のみ。色は `···` の内側に畳む。
+describe('design 2b color panel', function() {
+  function mountFresh(value) {
+    try { window.localStorage.removeItem(window.MA.labelColors.RECENT_KEY); } catch (e) {}
+    var container = document.createElement('div');
+    document.body.appendChild(container);
+    RLE.mount(container, value == null ? 'hello' : value, function() {});
+    return container;
+  }
+
+  test('toolbar shows the creole hint and no always-on color swatches', function() {
+    var c = mountFresh();
+    expect(c.querySelector('.rle-creole')).not.toBeNull();
+    expect(c.querySelector('.rle-color-more')).not.toBeNull();
+    // 見本はパネルの中にだけ在る
+    expect(c.querySelector('.rle-color').closest('.rle-color-panel')).not.toBeNull();
+  });
+
+  test('panel is folded away until ··· is pressed', function() {
+    var c = mountFresh();
+    var panel = c.querySelector('.rle-color-panel');
+    var more = c.querySelector('.rle-color-more');
+    expect(panel.hasAttribute('hidden')).toBe(true);
+    expect(more.getAttribute('aria-expanded')).toBe('false');
+    more.click();
+    expect(panel.hasAttribute('hidden')).toBe(false);
+    expect(more.getAttribute('aria-expanded')).toBe('true');
+    more.click();
+    expect(panel.hasAttribute('hidden')).toBe(true);
+  });
+
+  test('panel holds 文字色 / 色を外す / Esc で閉じる', function() {
+    var c = mountFresh();
+    var panel = c.querySelector('.rle-color-panel');
+    expect(panel.textContent).toContain('文字色');
+    expect(panel.textContent).toContain('色を外す');
+    expect(panel.textContent).toContain('Esc で閉じる');
+  });
+
+  test('Esc closes the panel first, keeping rle-escape for the second Esc', function() {
+    var c = mountFresh();
+    var ta = c.querySelector('.rle-textarea');
+    var panel = c.querySelector('.rle-color-panel');
+    var escaped = 0;
+    c.addEventListener('rle-escape', function() { escaped++; });
+    c.querySelector('.rle-color-more').click();
+    ta.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    expect(panel.hasAttribute('hidden')).toBe(true);
+    expect(escaped).toBe(0);
+    ta.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    expect(escaped).toBe(1);
+  });
+
+  test('a used color comes back under 最近使った色', function() {
+    var c = mountFresh();
+    var ta = c.querySelector('.rle-textarea');
+    ta.setSelectionRange(0, 5);
+    c.querySelector('.rle-color-more').click();
+    var swatch = c.querySelector('.rle-color-panel .rle-color');
+    var used = swatch.getAttribute('data-color');
+    swatch.click();
+    var row = c.querySelector('.rle-recent-row');
+    expect(row).not.toBeNull();
+    expect(row.textContent).toContain('最近使った色');
+    expect(row.querySelector('.rle-recent').getAttribute('data-color')).toBe(used);
+  });
+
+  test('a recent swatch inserts the color too', function() {
+    var c = mountFresh();
+    var ta = c.querySelector('.rle-textarea');
+    ta.setSelectionRange(0, 5);
+    c.querySelector('.rle-color-more').click();
+    var swatch = c.querySelector('.rle-color-panel .rle-color');
+    var used = swatch.getAttribute('data-color');
+    swatch.click();
+    ta.value = 'hello';
+    ta.setSelectionRange(0, 5);
+    c.querySelector('.rle-recent-row .rle-recent').click();
+    expect(ta.value).toBe('<color:' + used + '>hello</color>');
+  });
+
+  test('色を外す strips the color from the selection', function() {
+    var c = mountFresh('<color:#f00>hello</color>');
+    var ta = c.querySelector('.rle-textarea');
+    ta.setSelectionRange(0, ta.value.length);
+    c.querySelector('.rle-color-clear').click();
+    expect(ta.value).toBe('hello');
   });
 });
