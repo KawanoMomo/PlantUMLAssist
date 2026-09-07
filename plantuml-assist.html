@@ -855,6 +855,63 @@ html, body {
 #inbox-panel .ib-row.read { opacity: 0.65; }
 #inbox-panel .ib-row .ib-who { color: var(--text-secondary); margin-left: 4px; }
 #inbox-panel .ib-row .ib-text { color: var(--text-primary); display: block; margin-top: 2px; }
+/* 監査履歴 (BLK-reviewer-20260907-2303-wish) */
+#at-modal-content {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  width: 92vw;
+  max-width: 1280px;
+  height: 88vh;
+  display: flex;
+  flex-direction: column;
+}
+#at-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-primary);
+}
+#at-summary { color: var(--accent); font-family: var(--font-mono); }
+#at-tools { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+#at-tools input {
+  background: var(--bg-tertiary); color: var(--text-primary);
+  border: 1px solid var(--border); border-radius: 3px; font-size: 11px; padding: 3px 6px; width: 160px;
+}
+#at-tools button {
+  border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 3px 10px;
+}
+#at-body { flex: 1; overflow: auto; padding: 6px 14px 14px 14px; }
+#at-body .at-empty { color: var(--text-secondary); font-size: 12px; padding: 20px 4px; }
+#at-body .at-note { color: var(--accent-orange); font-size: 11px; padding: 4px 2px; }
+#at-body table.at-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+#at-body table.at-table th {
+  text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--border);
+  color: var(--text-secondary); font-weight: normal; white-space: nowrap; position: sticky; top: 0;
+  background: var(--bg-secondary);
+}
+#at-body table.at-table th .at-th-count { color: var(--text-secondary); margin-left: 6px; opacity: 0.7; }
+#at-body table.at-table td { padding: 3px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+#at-body table.at-table td.at-item { font-family: var(--font-mono); color: var(--text-primary); white-space: nowrap; }
+#at-body table.at-table td.at-cell .at-cat { color: var(--text-primary); }
+#at-body table.at-table td.at-cell .at-none { color: var(--text-secondary); opacity: 0.5; }
+#at-body table.at-table td.at-status { white-space: nowrap; }
+#at-body table.at-table .at-chip {
+  border: 1px solid var(--border); border-radius: 3px; padding: 1px 6px; color: var(--text-secondary);
+}
+#at-body table.at-table .at-moves { color: var(--text-secondary); margin-left: 6px; opacity: 0.8; }
+#at-body table.at-table tr[data-at-status="再分類"] .at-chip { color: var(--accent-orange); border-color: var(--accent-orange); }
+#at-body table.at-table tr[data-at-status="解消"] .at-chip { color: var(--accent); border-color: var(--accent); }
+#at-body table.at-table tr[data-at-status="新規"] .at-chip { color: var(--accent-red); border-color: var(--accent-red); }
 /* 変更サマリボード (BLK-primary-20260907-0923-wish) */
 #cb-modal-content {
   background: var(--bg-secondary);
@@ -2466,6 +2523,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <!-- BLK-junior-20260907-2203-wish: 図をまたいで未対応の指摘を集める受信箱 -->
         <button class="tab-tool" id="btn-tab-inbox" title="保存フォルダの図をまたいで、未対応のレビュー指摘を「どの図に何件」で出す。行を押すとその図の該当行へ飛ぶ">📥 指摘箱 −</button>
         <button class="tab-tool" id="btn-tab-board" title="変わった図の変更前 DSL と変更後 DSL を全部まとめて 1 画面に並べる (レビュー会議用)">▤ 変更サマリ</button>
+        <!-- BLK-reviewer-20260907-2303-wish: 監査ツールが育つと、同じ欠陥が別カテゴリへ移る -->
+        <button class="tab-tool" id="btn-tab-audit-timeline" title="監査を回すたびに記録し、同じ欠陥が run ごとにどのカテゴリへ分類されたかを 1 本の帯で並べる。解消と再分類を分けて出す">◷ 監査履歴</button>
         <!-- BLK-junior-20260907-1403-wish: 型の基準にした図と突き合わせて、書いている間ずっと見てもらう -->
         <button class="tab-tool" id="btn-tab-review" title="型の基準にした図と突き合わせて、この図のずれと図種特有の間違いを出す">👁 レビュー −</button>
         <!-- BLK-primary-20260907-1303-wish: 引き継ぎに要る確認結果と図を 1 つの zip に固める -->
@@ -2900,6 +2959,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/compare-view.js"></script>
 <script src="src/core/count-compare.js"></script>
 <script src="src/core/change-board.js"></script>
+<script src="src/core/audit-timeline.js"></script>
 <script src="src/core/consistency-check.js"></script>
 <script src="src/core/review-desk.js"></script>
 <script src="src/core/state-branch.js"></script>
@@ -2962,6 +3022,22 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       </span>
     </div>
     <div id="cb-body"></div>
+  </div>
+</div>
+<!-- 監査履歴 (BLK-reviewer-20260907-2303-wish) -->
+<div id="at-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+  <div id="at-modal-content">
+    <div id="at-head">
+      <strong>監査履歴</strong>
+      <span id="at-summary"></span>
+      <span id="at-tools">
+        <input type="text" id="at-label" placeholder="run の名前 (空なら日時)">
+        <button type="button" id="at-record">いまの監査を記録</button>
+        <button type="button" id="at-clear">記録を消す</button>
+        <button type="button" id="at-close">閉じる</button>
+      </span>
+    </div>
+    <div id="at-body"></div>
   </div>
 </div>
 </body>

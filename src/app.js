@@ -2047,6 +2047,7 @@ function init() {
   setupDiffPanel();
   setupReviewPanel();
   setupChangeBoard();
+  setupAuditTimeline();
   setupPinPanel();
   setupPinInbox();
   setupNameAudit();
@@ -3214,6 +3215,132 @@ function setupChangeBoard() {
   if (full) full.addEventListener('change', function() { _cbFull = full.checked; renderChangeBoard(); });
   var same = document.getElementById('cb-same');
   if (same) same.addEventListener('change', function() { _cbSame = same.checked; renderChangeBoard(); });
+}
+
+// ── 監査履歴 (BLK-reviewer-20260907-2303-wish) ──────────────────────────
+// 監査ツールは run ごとに育つので、DSL が 1 行も変わっていなくてもカテゴリ別の
+// 件数は動く。「メソッド 5 → 0」を見て直ったと思うと、実は粒度へ移っただけ、
+// ということが起きる。監査を回すたびに記録を積み、欠陥の実体ごとに
+// 「どの run でどのカテゴリに分類されていたか」を 1 行に並べて、
+// 解消 (もう出ない) と再分類 (出るが別カテゴリ) を分けて出す。
+// 判断は audit-timeline が持ち、ここは監査を回して並べるだけ。
+
+function _atDocs() {
+  if (!window.MA.workspace) return [];
+  saveActiveDoc();
+  return window.MA.workspace.list();
+}
+
+// いま開いている図に、CLI と同じ監査一式を掛ける。モジュールが無い監査は
+// 「見ていない」として結果に載せない (0 件と区別する)。
+function _atRunAudits() {
+  var docs = _atDocs();
+  var out = {};
+  function one(key, fn) {
+    try {
+      var v = fn();
+      if (v !== undefined) out[key] = { status: 'ok', result: v };
+    } catch (e) { out[key] = { status: 'error', message: e.message }; }
+  }
+  one('name', function() { return window.MA.nameAudit ? window.MA.nameAudit.audit(docs) : undefined; });
+  one('method', function() { return window.MA.methodAudit ? window.MA.methodAudit.audit(docs) : undefined; });
+  one('consistency', function() { return window.MA.consistency ? window.MA.consistency.check(docs) : undefined; });
+  one('family', function() { return window.MA.familyAudit ? window.MA.familyAudit.audit(docs) : undefined; });
+  one('trace', function() { return window.MA.traceCoverage ? window.MA.traceCoverage.audit(docs) : undefined; });
+  return { audits: out, docs: docs.length };
+}
+
+function renderAuditTimeline() {
+  var body = document.getElementById('at-body');
+  var sumEl = document.getElementById('at-summary');
+  var TL = window.MA.auditTimeline;
+  if (!body || !TL) return;
+  var esc = window.MA.htmlUtils.escHtml;
+  var t = TL.build(TL.load());
+
+  if (sumEl) sumEl.textContent = TL.summaryLine(t);
+
+  if (t.runs.length === 0) {
+    body.innerHTML = '<div class="at-empty">まだ記録がありません。「いまの監査を記録」を押すと、'
+      + 'この時点の指摘を 1 列として積みます。2 回目から、解消したものと分類が変わっただけのものを分けて出します。</div>';
+    return;
+  }
+
+  var html = '';
+  if (t.newCategories.length) {
+    html += '<div class="at-note">監査カテゴリが増えた → ' + esc(t.newCategories.join('・'))
+      + ' (図が変わっていなくても件数はここで動きます)</div>';
+  }
+  if (t.goneCategories.length) {
+    html += '<div class="at-note">監査カテゴリが減った → ' + esc(t.goneCategories.join('・')) + '</div>';
+  }
+
+  html += '<table class="at-table"><thead><tr><th class="at-th-item">欠陥</th>';
+  t.runs.forEach(function(r) {
+    html += '<th title="' + esc(r.at) + '">' + esc(r.label) + '<span class="at-th-count">'
+      + r.count + ' 件</span></th>';
+  });
+  html += '<th class="at-th-status">いまの扱い</th></tr></thead><tbody>';
+
+  if (t.rows.length === 0) {
+    html += '<tr><td colspan="' + (t.runs.length + 2) + '" class="at-empty">記録した run に指摘はありません。</td></tr>';
+  }
+  t.rows.forEach(function(row) {
+    html += '<tr data-at-status="' + esc(row.status) + '">'
+      + '<td class="at-item" title="' + esc(row.entity) + '">' + esc(row.title) + '</td>';
+    row.cells.forEach(function(c) {
+      html += '<td class="at-cell">' + (c ? '<span class="at-cat">' + esc(c.text) + '</span>' : '<span class="at-none">—</span>') + '</td>';
+    });
+    html += '<td class="at-status"><span class="at-chip">' + esc(row.status) + '</span>'
+      + (row.moves ? '<span class="at-moves">移動 ' + row.moves + ' 回</span>' : '') + '</td></tr>';
+  });
+  html += '</tbody></table>';
+  body.innerHTML = html;
+}
+
+function toggleAuditTimeline(open) {
+  var modal = document.getElementById('at-modal');
+  if (!modal) return;
+  if (open) renderAuditTimeline();
+  modal.style.display = open ? 'flex' : 'none';
+}
+
+function setupAuditTimeline() {
+  var btn = document.getElementById('btn-tab-audit-timeline');
+  var modal = document.getElementById('at-modal');
+  var TL = window.MA.auditTimeline;
+  if (!btn || !modal || !TL) return;
+  btn.addEventListener('click', function() { toggleAuditTimeline(true); });
+
+  var closeBtn = document.getElementById('at-close');
+  if (closeBtn) closeBtn.addEventListener('click', function() { toggleAuditTimeline(false); });
+  modal.addEventListener('click', function(ev) {
+    if (ev.target === modal) toggleAuditTimeline(false);
+  });
+  document.addEventListener('keydown', function(ev) {
+    if (ev.key === 'Escape' && modal.style.display === 'flex') toggleAuditTimeline(false);
+  });
+
+  var rec = document.getElementById('at-record');
+  if (rec) {
+    rec.addEventListener('click', function() {
+      var r = _atRunAudits();
+      var label = document.getElementById('at-label');
+      var name = label && label.value ? label.value.trim() : '';
+      var snap = TL.snapshot(r.audits, { label: name, docs: r.docs });
+      TL.save(TL.push(TL.load(), snap));
+      if (label) label.value = '';
+      renderAuditTimeline();
+    });
+  }
+  var clr = document.getElementById('at-clear');
+  if (clr) {
+    clr.addEventListener('click', function() {
+      if (!confirm('記録した監査履歴を全部消します。よろしいですか。')) return;
+      TL.clear();
+      renderAuditTimeline();
+    });
+  }
 }
 
 function setupTabs() {
