@@ -244,3 +244,69 @@ describe('selection-router.applyHighlight integration', function() {
     expect(overlayEl.querySelectorAll('rect.selected').length).toBe(0);
   });
 });
+
+// BLK-primary-20260908-0103-design (design 5c): Sequence の hover ガイドにも
+// 「DSL の何行目に入るか」と矢印の列を出す。app.js の hover 側は
+// currentModule.resolveInsertLine しか見ないため、module からの公開と
+// rectX / rectWidth の返却の両方が要る。
+describe('sequence resolveInsertLine: hover ガイド用の列と行番号', function() {
+  function makeOverlay(rectAttrs) {
+    var ov = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    rectAttrs.forEach(function(attrs) {
+      var r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      Object.keys(attrs).forEach(function(k) { r.setAttribute(k, attrs[k]); });
+      ov.appendChild(r);
+    });
+    return ov;
+  }
+  var TWO = [
+    { 'data-type': 'message', 'data-line': '6', x: '100', y: '50', width: '40', height: '20' },
+    { 'data-type': 'message', 'data-line': '7', x: '180', y: '100', width: '60', height: '20' },
+  ];
+
+  test('module が resolveInsertLine を公開している', function() {
+    expect(typeof seq.resolveInsertLine).toBe('function');
+  });
+
+  test('メッセージの隙間: 上のメッセージの after と、その矢印の列を返す', function() {
+    var res = seq.resolveInsertLine(makeOverlay(TWO), 120, 80);
+    expect(res.line).toBe(6);
+    expect(res.position).toBe('after');
+    expect(res.rectX).toBe(100);
+    expect(res.rectWidth).toBe(40);
+  });
+
+  test('全メッセージより上: 先頭の before と先頭の列', function() {
+    var res = seq.resolveInsertLine(makeOverlay(TWO), 120, 10);
+    expect(res.line).toBe(6);
+    expect(res.position).toBe('before');
+    expect(res.rectX).toBe(100);
+    expect(res.rectWidth).toBe(40);
+  });
+
+  test('最後のメッセージより下: 末尾の after と末尾の列', function() {
+    var res = seq.resolveInsertLine(makeOverlay(TWO), 120, 300);
+    expect(res.line).toBe(7);
+    expect(res.position).toBe('after');
+    expect(res.rectX).toBe(180);
+    expect(res.rectWidth).toBe(60);
+  });
+
+  test('x / width の無い rect でも line と position は返る', function() {
+    var res = seq.resolveInsertLine(makeOverlay([
+      { 'data-type': 'message', 'data-line': '6', y: '50', height: '20' },
+    ]), 0, 300);
+    expect(res.line).toBe(6);
+    expect(res.position).toBe('after');
+    expect(res.rectX).toBe(undefined);
+  });
+
+  test('メッセージが無ければ null', function() {
+    expect(seq.resolveInsertLine(makeOverlay([]), 0, 0)).toBe(null);
+  });
+
+  test('ガイドのラベルは insertTargetLine と一致する', function() {
+    var res = seq.resolveInsertLine(makeOverlay(TWO), 120, 80);
+    expect(seq.insertTargetLine(res.line, res.position)).toBe(7);
+  });
+});

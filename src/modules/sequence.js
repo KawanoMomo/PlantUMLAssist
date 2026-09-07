@@ -1613,6 +1613,13 @@ window.MA.modules.plantumlSequence = (function() {
     otherInsertKinds: otherInsertKinds,
     insertTargetLine: insertTargetLine,
     describeInsertTarget: describeInsertTarget,
+    // design 5c: hover ガイドも「DSL の何行目に入るか」を出す。app.js の hover 側は
+    // currentModule.resolveInsertLine しか見ないので、click 側と同じ解決を module から
+    // 公開する (無いと汎用の「+ ここに挿入」に落ち、行番号も列も出ない)。
+    resolveInsertLine: function(overlayEl, x, y) {
+      if (!window.MA.sequenceOverlay || !window.MA.sequenceOverlay.resolveInsertLine) return null;
+      return window.MA.sequenceOverlay.resolveInsertLine(overlayEl, x, y);
+    },
     template: function() {
       return [
         '@startuml',
