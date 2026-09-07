@@ -32,7 +32,10 @@ test.describe('BLK-primary-20260907-0356: 挿入位置の種別ピッカー', ()
       await expect(page.locator('#seq-pick-' + id)).toBeVisible();
     }
     await page.locator('#seq-pick-other').click();
-    await expect(page.locator('#seq-pick-block')).toBeVisible();
+    // BLK-builder-20260907-2320-1: design 5d 以降、「その他のブロック」の 1 行は
+    // par / break / critical … の行に分かれた。id は `block:par` を CSS で拾えるよう
+    // `seq-pick-block-par` に均してある。
+    await expect(page.locator('#seq-pick-block-par')).toBeVisible();
     await page.locator('#seq-pick-back').click();
     const target = await page.locator('#seq-pick-target').textContent();
     expect(target).toMatch(/DSL \d+ 行目に挿入/);
