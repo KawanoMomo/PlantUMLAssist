@@ -488,6 +488,78 @@ html, body {
 #folder-panel .folder-mtime { flex: 0 0 auto; font-size: 9px; color: var(--text-secondary); }
 #folder-panel button[data-review-status="unchanged"] .folder-name { color: var(--text-secondary); }
 #folder-panel .folder-gone { color: var(--text-secondary); font-style: italic; }
+/* 変更図の旧DSL/新DSL を並べて読む (BLK-reviewer-20260907-1803-wish) */
+#folder-panel button.folder-diff {
+  flex: 0 0 auto;
+  width: auto;
+  font-size: 9px;
+  color: var(--accent);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+#folder-panel button.folder-pick-changed {
+  width: auto;
+  font-size: 10px;
+  color: var(--accent);
+}
+#folder-panel button.folder-pick-changed:disabled {
+  color: var(--text-secondary);
+  cursor: default;
+}
+#folder-panel button.folder-pick-changed:disabled:hover { background: transparent; }
+#rd-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+#rd-head .rd-title { font-size: 13px; font-weight: 600; flex: 1 1 auto; }
+#rd-head .rd-stats { font-size: 11px; color: var(--text-secondary); }
+#rd-list { border: 1px solid var(--border); border-radius: 4px; overflow: auto; max-height: 62vh; }
+#rd-list .rd-cols {
+  display: flex;
+  font-size: 10px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--bg-secondary);
+}
+#rd-list .rd-cols span { flex: 1 1 50%; padding: 3px 8px; }
+#rd-list .rd-row { display: flex; font-family: var(--font-mono); font-size: 11px; }
+#rd-list .rd-side {
+  flex: 1 1 50%;
+  min-width: 0;
+  display: flex;
+  gap: 6px;
+  padding: 1px 6px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  border-left: 1px solid var(--border);
+}
+#rd-list .rd-side:first-child { border-left: none; }
+#rd-list .rd-no { flex: 0 0 28px; text-align: right; color: var(--text-secondary); font-size: 10px; }
+#rd-list .rd-text { flex: 1 1 auto; min-width: 0; }
+#rd-list .rd-row-del .rd-side-left,
+#rd-list .rd-row-change .rd-side-left { background: rgba(220, 80, 80, 0.16); }
+#rd-list .rd-row-add .rd-side-right,
+#rd-list .rd-row-change .rd-side-right { background: rgba(80, 180, 110, 0.16); }
+#rd-list .rd-skip {
+  font-size: 10px;
+  color: var(--text-secondary);
+  padding: 2px 8px;
+  background: var(--bg-secondary);
+  text-align: center;
+}
+#rd-foot { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+#rd-foot .rd-note { flex: 1 1 auto; font-size: 10px; color: var(--text-secondary); }
+#rd-head .rd-close,
+#rd-foot button {
+  font-size: 11px;
+  padding: 3px 10px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+}
+#rd-foot button:hover, #rd-head .rd-close:hover { background: var(--bg-secondary); }
 #folder-panel button.folder-mark-seen {
   margin-top: 4px;
   border-top: 1px solid var(--border);
@@ -2397,6 +2469,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/autosave-options.js"></script>
 <script src="src/core/workspace.js"></script>
 <script src="src/core/review-watch.js"></script>
+<script src="src/core/review-diff.js"></script>
 <script src="src/core/folder-select.js"></script>
 <script src="src/core/bulk-rename.js"></script>
 <script src="src/core/bulk-export.js"></script>
@@ -2478,6 +2551,9 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/modules/state.js"></script>
 <script src="src/app.js"></script>
 <!-- BLK-primary-20260907-0923-wish: 変更サマリボード。変わった図を全件、変更前後で並べる -->
+<div id="rd-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+  <div id="rd-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:720px;max-width:1080px;max-height:88vh;overflow-y:auto;"></div>
+</div>
 <div id="cb-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="cb-modal-content">
     <div id="cb-head">
