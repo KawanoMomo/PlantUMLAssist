@@ -301,12 +301,18 @@ curl などから直接使う窓口。**仕様は `GET /render` が自分で返�
 
 ### `POST /render` — DSL を SVG にする
 
-リクエストは `application/json`。DSL を渡すフィールドは **`text`** です (`dsl` ではありません)。
+リクエストは `application/json`。DSL を渡すフィールドの正式な名前は **`text`** ですが、
+**`dsl` / `source` / `uml` / `puml` / `diagram` も別名として受理します**。名前を思い出せなくても
+1 回目の POST が通り、`GET /render` を先に読まないと使えない窓口ではありません。
 
 | フィールド | 必須 | 内容 |
 |---|---|---|
-| `text` | 必須 | PlantUML の DSL 全文 (`@startuml` … `@enduml`) |
+| `text` | 必須 | PlantUML の DSL 全文 (`@startuml` … `@enduml`)。別名: `dsl` / `source` / `uml` / `puml` / `diagram` |
 | `mode` | 任意 | `local` (既定・同梱 Java) / `online` (plantuml.com へ送信) |
+
+別名で送った場合も描画は成功 (`200`) し、レスポンスに
+`X-PlantUMLAssist-Warning` ヘッダ (URL エンコード) が付いて正式な名前が `text` であることを伝えます。
+別名を 2 つ以上同時に送ったときだけ、どれを描くか決められないので `400` になります。
 
 ```bash
 curl -sS -X POST http://127.0.0.1:8766/render   -H "Content-Type: application/json"   -d '{"text": "@startuml
@@ -319,7 +325,7 @@ A -> B
 | ステータス | 内容 |
 |---|---|
 | `200` | `image/svg+xml` — 描画された SVG |
-| `400` | `{"error": ...}` — `text` が無い / 文字列でない / 空。`{"dsl": ...}` を送るとここに落ち、`'dsl' ではなく 'text' です` と返ります |
+| `400` | `{"error": ...}` — `text` (と別名) が 1 つも無い / 文字列でない / 空、または別名が複数 |
 | `422` | `{"error": "3 行目: Syntax Error?", "line": 3}` — DSL の文法エラー |
 | `500` | `{"error": ...}` — 描画そのものの失敗 |
 
