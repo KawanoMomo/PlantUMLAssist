@@ -1976,8 +1976,21 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   padding: 0 6px;
   cursor: pointer;
 }
-#status-consistency:hover { background: var(--bg-tertiary); }
-#status-consistency.has-warning { color: var(--accent-orange); border-color: var(--accent-orange); }
+#status-consistency:hover, #status-eventsync:hover { background: var(--bg-tertiary); }
+#status-consistency.has-warning, #status-eventsync.has-warning { color: var(--accent-orange); border-color: var(--accent-orange); }
+
+/* イベント⇔メソッド整合のバッジ (BLK-primary-20260907-1803-wish) */
+#status-eventsync {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--accent-green);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 0 6px;
+  margin-left: 6px;
+  cursor: pointer;
+}
 
 /* ── Scrollbar Styling ─────────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -2283,6 +2296,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <span id="status-info"></span>
     <!-- BLK-reviewer-20260907-0843: 整合性チェックの警告件数を常時出す -->
     <button type="button" id="status-consistency" title="命名規約・未使用 participant・メソッド不一致・粒度不一致の一覧">整合 —</button>
+    <!-- BLK-primary-20260907-1803-wish: state の遷移イベントと class のメソッドの突合表 -->
+    <button type="button" id="status-eventsync" title="state 図の遷移イベントと class 図のメソッドの突合表を開く">⇄ イベント —</button>
   </div>
 
   </div><!-- /#app-body -->
@@ -2335,6 +2350,10 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <div id="sc-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="sc-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:680px;max-width:960px;max-height:82vh;overflow-y:auto;"></div>
 </div>
+<div id="ev-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+  <div id="ev-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:720px;max-width:1000px;max-height:82vh;overflow-y:auto;"></div>
+</div>
+
 <div id="ck-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="ck-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:680px;max-width:960px;max-height:82vh;overflow-y:auto;"></div>
 </div>
@@ -2501,6 +2520,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/top-status.js"></script>
 <script src="src/core/family-audit.js"></script>
 <script src="src/core/consistency.js"></script>
+<script src="src/core/event-sync.js"></script>
 <script src="src/core/line-edit.js"></script>
 <script src="src/core/outline.js"></script>
 <script src="src/core/tail-kind-chips.js"></script>

@@ -235,6 +235,7 @@ function init() {
     // 指摘は打つたびに引き直す。
     try { renderReviewBadge(); } catch (e) {}
     try { renderConsistencyBadge(); } catch (e) {}
+    try { renderEventSyncBadge(); } catch (e) {}
     try { renderPinBadge(); } catch (e) {}
   });
 
@@ -1996,6 +1997,7 @@ function init() {
   setupDeliveryPackage();
   setupFamilyClone();
   setupConsistencyPanel();
+  setupEventSyncPanel();
   setupLineEdit();
   setupOutline();
   setupCompareView();
@@ -2103,6 +2105,7 @@ function initCommandPalette() {
       { id: 'open', title: 'ファイルを開く / Open', hint: 'File', keywords: ['open', 'file', 'ひらく'], run: function() { clickById('btn-open'); } },
       { id: 'save', title: 'ファイルを保存 / Save', hint: 'File', keywords: ['save', 'file', 'ほぞん'], run: function() { clickById('btn-save'); } },
       { id: 'consistency', title: '整合性チェックを開く / Consistency', hint: 'Review', keywords: ['consistency', 'check', 'せいごう', 'かくにん'], run: function() { clickById('status-consistency'); } },
+      { id: 'eventsync', title: 'イベント整合を開く / Event sync', hint: 'Review', keywords: ['event', 'sync', 'method', 'いべんと', 'せいごう', 'めそっど'], run: function() { clickById('status-eventsync'); } },
       { id: 'family-audit', title: '系統チェックを開く / Family audit', hint: 'Tabs', keywords: ['family', 'audit', 'けいとう', 'とつごう'], run: function() { clickById('btn-tab-family'); } },
       // BLK-primary-20260907-0923: タブバーの道具はどれもパレットに無く、design 1a で
       // ペインが狭くなった後は潰れたラベルを目で数えて押すしか経路が無かった。
@@ -2688,6 +2691,7 @@ function renderTabs() {
   });
   renderDiffBadge();
   try { renderConsistencyBadge(); } catch (e) {}
+  try { renderEventSyncBadge(); } catch (e) {}
   try { renderPinBadge(); } catch (e) {}
 }
 
@@ -5235,6 +5239,192 @@ function setupConsistencyPanel() {
     if (ev.target === modal) modal.style.display = 'none';
   });
   renderConsistencyBadge();
+}
+
+// ── イベント⇔メソッド整合 ─────────────────────────────────────────────────
+// BLK-primary-20260907-1803-wish: レビュー指摘は「イベント名の一覧」で来るのに、
+// GUI 側には「どのクラスに何が足りないか」をまとめて示す画面が無かった。
+// 指摘文とクラス一覧を目で見比べて対応表を作り、Adc_Driver / Gpio_Driver /
+// Can_Driver を順にクリックしてメソッド追加フォームを開き名前を打つ、を
+// クラスの数だけ繰り返していた。ここは突合表を 1 画面に出し、欠落行から
+// 直接メソッドを足せるようにする。複数行をまとめて当てられるので、
+// 「同じ種類の修正を 1 件ずつ繰り返す」形にならない。
+// 表と DSL の書き換えは src/core/event-sync.js の職掌。ここは表示と結線だけ。
+
+function renderEventSyncBadge() {
+  var btn = document.getElementById('status-eventsync');
+  var es = window.MA.eventSync;
+  if (!btn || !es) return null;
+  var result = es.build(_consistencyDocs());
+  btn.textContent = es.badgeLabel(result);
+  var n = result.counts.missing + result.counts.noClass;
+  btn.className = n > 0 ? 'has-warning' : '';
+  btn.title = n > 0
+    ? ('state の遷移イベント ' + result.total + ' 種 — 欠落 ' + result.counts.missing
+       + ' / クラス無し ' + result.counts.noClass)
+    : 'state の遷移イベントに対応するクラスメソッドはすべて揃っている';
+  return result;
+}
+
+// 図の書き換えをまとめて反映する。アクティブな図はエディタごと差し替え、
+// undo は 1 手で戻せるようにする (一括置換と同じ経路)。
+function _applyDocPatches(changed) {
+  if (!window.MA.workspace || !changed || !changed.length) return;
+  var activeId = window.MA.workspace.getActiveId();
+  if (window.MA.history) window.MA.history.pushHistory();
+  changed.forEach(function(c) {
+    if (c.id === activeId) {
+      mmdText = c.dsl;
+      suppressSync = true;
+      editorEl.value = mmdText;
+      suppressSync = false;
+    }
+    window.MA.workspace.updateDoc(c.id, { dsl: c.dsl });
+  });
+  updateLineNumbers();
+  scheduleRefresh();
+  renderTabs();
+  try { renderConsistencyBadge(); } catch (e) {}
+  try { renderEventSyncBadge(); } catch (e) {}
+}
+
+// 表の行 (index の配列) をクラスに足す。戻り値の型はパネル上の入力を使う。
+function applyEventSync(indexes) {
+  var es = window.MA.eventSync;
+  if (!es) return null;
+  var docs = _consistencyDocs();
+  var result = es.build(docs);
+  var retEl = document.getElementById('ev-ret');
+  var ret = retEl ? String(retEl.value || '').trim() : 'void';
+  var rows = (indexes || []).map(function(i) { return result.rows[i]; })
+    .filter(function(r) { return r && r.status === 'missing'; });
+  if (rows.length === 0) return null;
+  var res = es.apply(docs, rows, ret);
+  _applyDocPatches(res.changed);
+  openEventSyncPanel(res);
+  return res;
+}
+
+function openEventSyncPanel(applied) {
+  var modal = document.getElementById('ev-modal');
+  var content = document.getElementById('ev-modal-content');
+  var es = window.MA.eventSync;
+  if (!modal || !content || !es) return null;
+  var esc = window.MA.htmlUtils.escHtml;
+  var result = es.build(_consistencyDocs());
+
+  var BTN = 'background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;padding:2px 8px;font-size:11px;';
+  var TD = 'font-size:11px;padding:3px 6px;border-bottom:1px solid var(--border);vertical-align:top;';
+  var TH = 'font-size:10px;color:var(--accent);text-align:left;padding:3px 6px;border-bottom:1px solid var(--border);';
+  var LABEL = {
+    missing: '欠落', 'no-class': 'クラス無し', ok: '宣言あり', excluded: '対象外',
+  };
+  var COLOR = {
+    missing: 'var(--accent-orange)', 'no-class': 'var(--accent-red)',
+    ok: 'var(--accent-green)', excluded: 'var(--text-secondary)',
+  };
+
+  var html = '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">⇄ イベント整合 (state の遷移 ⇔ class のメソッド)</h3>'
+    + '<div id="ev-summary" data-total="' + result.total + '" data-missing="' + result.counts.missing + '"'
+    + ' data-no-class="' + result.counts.noClass + '" data-ok="' + result.counts.ok + '"'
+    + ' data-excluded="' + result.counts.excluded + '"'
+    + ' style="font-size:11px;color:' + (result.counts.missing + result.counts.noClass ? 'var(--accent-orange)' : 'var(--accent-green)') + ';">'
+    + esc(es.summary(result)) + '</div>';
+
+  if (applied) {
+    html += '<div id="ev-applied" style="font-size:11px;color:var(--accent-green);margin-top:4px;">'
+      + applied.added.length + ' 件を追加しました'
+      + (applied.added.length ? ' (' + esc(applied.added.join(', ')) + ')' : '')
+      + (applied.skipped.length ? ' / 見送り ' + applied.skipped.length + ' 件' : '') + '</div>';
+  }
+
+  html += '<div style="display:flex;gap:8px;align-items:center;margin:10px 0 6px 0;">'
+    + '<label style="font-size:11px;color:var(--text-secondary);">追加するメソッドの戻り値</label>'
+    + '<input id="ev-ret" type="text" value="void" style="width:100px;font-size:11px;background:var(--bg-primary);color:var(--text-primary);border:1px solid var(--border);border-radius:3px;padding:2px 4px;">'
+    + '<button id="ev-select-all" style="' + BTN + '">欠落をすべて選ぶ</button>'
+    + '<button id="ev-apply-selected" style="' + BTN + '">選んだ行をまとめて追加</button>'
+    + '<span id="ev-selected-count" style="font-size:11px;color:var(--text-secondary);">0 件選択</span>'
+    + '</div>';
+
+  html += '<table id="ev-table" style="width:100%;border-collapse:collapse;">'
+    + '<tr><th style="' + TH + '"></th><th style="' + TH + '">イベント</th>'
+    + '<th style="' + TH + '">state 図</th><th style="' + TH + '">状態</th>'
+    + '<th style="' + TH + '">クラス (図)</th><th style="' + TH + '"></th></tr>';
+
+  result.rows.forEach(function(r, i) {
+    var can = r.status === 'missing';
+    html += '<tr class="ev-row" data-index="' + i + '" data-status="' + r.status + '" data-event="' + esc(r.event) + '">'
+      + '<td style="' + TD + '">'
+      + (can ? '<input type="checkbox" class="ev-pick" data-index="' + i + '">' : '')
+      + '</td>'
+      + '<td style="' + TD + 'font-family:var(--font-mono);color:' + COLOR[r.status] + ';">' + esc(r.event) + '</td>'
+      + '<td style="' + TD + 'color:var(--text-secondary);">' + esc(r.stateDocs.join(', ')) + '</td>'
+      + '<td style="' + TD + 'color:' + COLOR[r.status] + ';">' + LABEL[r.status] + '</td>'
+      + '<td style="' + TD + 'font-family:var(--font-mono);">'
+      + (r.cls ? esc(r.cls) + (r.classDoc ? ' <span style="color:var(--text-secondary);font-family:var(--font-sans);">(' + esc(r.classDoc) + ')</span>' : '')
+               : (r.status === 'no-class' ? '<span style="color:var(--text-secondary);">' + esc(r.owner || '対応する型') + ' のクラスがどの図にも無い</span>'
+                                          : '<span style="color:var(--text-secondary);">接頭辞なし (突合の対象外)</span>'))
+      + '</td>'
+      + '<td style="' + TD + '">'
+      + (can ? '<button class="ev-add" data-index="' + i + '" style="' + BTN + '">このクラスに追加</button>' : '')
+      + '</td></tr>';
+  });
+  html += '</table>';
+
+  html += '<div style="display:flex;gap:8px;margin-top:14px;">'
+    + '<button id="ev-close" style="flex:1;' + BTN + 'padding:8px;">閉じる</button></div>';
+
+  content.innerHTML = html;
+  modal.style.display = 'flex';
+
+  function countPicked() {
+    var picks = content.querySelectorAll('.ev-pick');
+    var n = 0;
+    for (var i = 0; i < picks.length; i++) if (picks[i].checked) n++;
+    var el = document.getElementById('ev-selected-count');
+    if (el) el.textContent = n + ' 件選択';
+    return n;
+  }
+  function pickedIndexes() {
+    var picks = content.querySelectorAll('.ev-pick');
+    var out = [];
+    for (var i = 0; i < picks.length; i++) {
+      if (picks[i].checked) out.push(parseInt(picks[i].getAttribute('data-index'), 10));
+    }
+    return out;
+  }
+
+  var picks = content.querySelectorAll('.ev-pick');
+  for (var p = 0; p < picks.length; p++) picks[p].addEventListener('change', countPicked);
+
+  var adds = content.querySelectorAll('.ev-add');
+  for (var a = 0; a < adds.length; a++) {
+    adds[a].addEventListener('click', function(ev) {
+      applyEventSync([parseInt(ev.currentTarget.getAttribute('data-index'), 10)]);
+    });
+  }
+  var selAll = document.getElementById('ev-select-all');
+  if (selAll) selAll.addEventListener('click', function() {
+    var all = content.querySelectorAll('.ev-pick');
+    for (var i = 0; i < all.length; i++) all[i].checked = true;
+    countPicked();
+  });
+  var applyBtn = document.getElementById('ev-apply-selected');
+  if (applyBtn) applyBtn.addEventListener('click', function() { applyEventSync(pickedIndexes()); });
+  var closeBtn = document.getElementById('ev-close');
+  if (closeBtn) closeBtn.addEventListener('click', function() { modal.style.display = 'none'; });
+  return result;
+}
+
+function setupEventSyncPanel() {
+  var btn = document.getElementById('status-eventsync');
+  var modal = document.getElementById('ev-modal');
+  if (!btn || !modal || !window.MA.eventSync) return;
+  btn.addEventListener('click', function() { openEventSyncPanel(); });
+  modal.addEventListener('click', function(ev) {
+    if (ev.target === modal) modal.style.display = 'none';
+  });
+  renderEventSyncBadge();
 }
 
 // ── 引き継ぎパッケージ ─────────────────────────────────────────────────────
