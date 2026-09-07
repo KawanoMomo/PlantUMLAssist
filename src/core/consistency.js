@@ -198,6 +198,19 @@ window.MA.consistency = (function() {
     return out;
   }
 
+  // ⑤ イベント名不一致。state の遷移ラベル (括弧なし) に対応する
+  // クラスメソッドが無いもの。判断は method-audit に任せる。同じ突合を
+  // 2 つ持つと、バッジと名前突合の表で数が食い違う。
+  function eventGaps(docs) {
+    var ma = window.MA.methodAudit;
+    if (!ma) return [];
+    return ma.audit(docs || []).issues
+      .filter(function(i) { return i.via === 'state'; })
+      .map(function(i) {
+        return { event: i.method, cls: i.cls || '', owner: i.owner || '', kind: i.kind, docs: i.docs || [] };
+      });
+  }
+
   // ④ 粒度不一致は family-audit の職掌。ここでは同じ一覧に載せるためだけに畳む。
   function granularityGaps(docs) {
     var fa = window.MA.familyAudit;
@@ -217,12 +230,14 @@ window.MA.consistency = (function() {
     var unused = unusedParticipants(docs);
     var methods = methodGaps(docs);
     var granularity = granularityGaps(docs);
+    var events = eventGaps(docs);
     return {
       naming: naming,
       unused: unused,
       methods: methods,
       granularity: granularity,
-      count: naming.length + unused.length + methods.length + granularity.length,
+      events: events,
+      count: naming.length + unused.length + methods.length + granularity.length + events.length,
     };
   }
 
@@ -241,6 +256,7 @@ window.MA.consistency = (function() {
     unusedParticipants: unusedParticipants,
     methodGaps: methodGaps,
     granularityGaps: granularityGaps,
+    eventGaps: eventGaps,
     check: check,
     badgeLabel: badgeLabel,
   };
