@@ -1987,6 +1987,122 @@ html, body {
   flex-shrink: 0;
 }
 #check-list[hidden] { display: none; }
+
+/* 他の人のフォルダの図と突き合わせる (BLK-junior-20260908-0723-wish) */
+#xf-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+#xf-dir {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+#btn-xf-load {
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+#btn-xf-load:hover { background: var(--bg-tertiary); }
+#xf-pick {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+#xf-pick[hidden] { display: none; }
+#xf-file {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+#xf-rename { color: var(--accent); white-space: nowrap; }
+#xf-summary {
+  padding: 3px 8px;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+#xf-summary[hidden] { display: none; }
+#xf-summary.clean { color: var(--accent-green); }
+#xf-summary.dirty { color: var(--accent-orange); }
+#xf-list {
+  max-height: 34%;
+  overflow: auto;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-primary);
+  flex-shrink: 0;
+}
+#xf-list[hidden] { display: none; }
+.xf-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 8px;
+  font-size: 11px;
+  border-bottom: 1px solid var(--bg-tertiary);
+}
+.xf-row .xf-side {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  width: 74px;
+  flex-shrink: 0;
+}
+/* 相手にしかない = 取り込める。自分にしかない = 相手に無い。色で役割を分ける */
+.xf-row.only-ref .xf-side { color: var(--accent-orange); }
+.xf-row.only-self .xf-side { color: var(--text-secondary); }
+.xf-row .xf-text {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.xf-row .xf-text:hover { text-decoration: underline; }
+.xf-row .xf-take {
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 10px;
+  padding: 1px 6px;
+  flex-shrink: 0;
+}
+.xf-row .xf-take:hover { background: var(--bg-tertiary); }
 .check-row {
   display: flex;
   align-items: baseline;
@@ -3190,6 +3306,18 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <span id="check-summary"></span>
       </div>
       <div id="check-list" hidden></div>
+      <!-- BLK-junior-20260908-0723-wish: 他の人のフォルダの同じ図を相手にする -->
+      <div id="xf-bar">
+        <input type="text" id="xf-dir" placeholder="相手のフォルダ (例 ..\primary)"
+               title="他の人の保存フォルダ。自分の保存先設定は変えない">
+        <button type="button" id="btn-xf-load" title="そのフォルダの図を読み、名前の近いものを相手にする">🔍 探す</button>
+      </div>
+      <div id="xf-pick" hidden>
+        <select id="xf-file" title="相手にする図"></select>
+        <span id="xf-rename"></span>
+      </div>
+      <div id="xf-summary" hidden></div>
+      <div id="xf-list" hidden></div>
       <div id="compare-container">
         <div id="compare-svg"></div>
       </div>
@@ -3490,6 +3618,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/select-at-line.js"></script>
 <script src="src/core/tail-kind-chips.js"></script>
 <script src="src/core/compare-view.js"></script>
+<script src="src/core/cross-ref-diff.js"></script>
 <script src="src/core/count-compare.js"></script>
 <script src="src/core/change-board.js"></script>
 <script src="src/core/handover-notes.js"></script>
