@@ -2056,6 +2056,7 @@ function init() {
   setupNameAudit();
   setupSubmitCheck();
   setupFamilyAudit();
+  setupDriverMap();
   setupTraceCoverage();
   setupHandoffPackage();
   setupDeliveryPackage();
@@ -2776,6 +2777,7 @@ function renderTabs() {
   var activeId = window.MA.workspace.getActiveId();
   updateTopFileName();
   syncDraftButton();
+  syncDriverMapBadge();
   var tabs = bar.querySelectorAll('.tab');
   for (var i = 0; i < tabs.length; i++) bar.removeChild(tabs[i]);
   var firstTool = bar.querySelector('.tab-tool');
@@ -7423,6 +7425,189 @@ function setupDeliveryPackage() {
   modal.addEventListener('click', function(ev) {
     if (ev.target === modal) modal.style.display = 'none';
   });
+}
+
+
+// ── 系統マップ ────────────────────────────────────
+// BLK-reviewer-20260908-0103-wish: spi_init_sequence → spi_state のような図と図の
+// 対応関係は現場では固定なのに、GUI はそれをどこにも持っていなかった。
+// 系統チェックは毎回名前の頭から推測し直し、語彙が重ならない組を黙って外す。
+// ここでは対応関係を宣言として保存し、宣言された組は必ず突き合わせて、崩れていれば赤くする。
+
+var DM_KEY = 'pua.driverMap';
+
+function _dmLoad() {
+  if (!window.MA.driverMap) return { version: 1, families: [] };
+  try { return window.MA.driverMap.parse(window.localStorage.getItem(DM_KEY) || ''); }
+  catch (e) { return window.MA.driverMap.parse(''); }
+}
+
+function _dmSave(decl) {
+  try { window.localStorage.setItem(DM_KEY, window.MA.driverMap.serialize(decl)); }
+  catch (e) { /* 次に開いたときに残らないだけ */ }
+}
+
+function _dmDocs() {
+  return _renameDocs().map(function(d) {
+    return { id: d.id, name: d.name, diagramType: d.diagramType, dsl: d.dsl };
+  });
+}
+
+// タブ列のボタンに「崩れている系統の数」を出す。開かなくても崩れたことが分かる。
+function syncDriverMapBadge() {
+  var btn = document.getElementById('btn-tab-drivermap');
+  if (!btn || !window.MA.driverMap || !window.MA.workspace) return;
+  var decl = _dmLoad();
+  if (!decl.families.length) {
+    btn.textContent = '\uD83E\uDDE9 系統マップ −';
+    btn.classList.remove('has-red');
+    return;
+  }
+  var docs = window.MA.workspace.list().map(function(d) {
+    return { id: d.id, name: d.name, diagramType: d.diagramType, dsl: d.dsl };
+  });
+  var r = window.MA.driverMap.check(decl, docs);
+  btn.textContent = '\uD83E\uDDE9 系統マップ ' + (r.red ? r.red : '−');
+  if (r.red > 0) btn.classList.add('has-red');
+  else btn.classList.remove('has-red');
+}
+
+function _dmRender(result) {
+  var content = document.getElementById('dm-modal-content');
+  var DM = window.MA.driverMap;
+  if (!content || !DM) return;
+  var esc = window.MA.htmlUtils.escHtml;
+  var html = '<h3 style="margin:0 0 6px;">\uD83E\uDDE9 系統マップ</h3>'
+    + '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">'
+    + 'どの図がどの図の相手かを宣言しておくと、その組だけを確かめれば済む。'
+    + '宣言は次に開いたときも残る。</div>'
+    + '<div id="dm-summary" style="margin-bottom:10px;font-weight:bold;'
+    + (result.red ? 'color:var(--accent-red);' : '') + '">' + esc(DM.summaryLine(result)) + '</div>'
+    + '<div style="margin-bottom:12px;">'
+    + '<button id="dm-rebuild" class="btn-small">開いている図から宣言を作り直す</button> '
+    + '<button id="dm-clear" class="btn-small">宣言を消す</button></div>'
+    + '<div id="dm-families">';
+
+  result.families.forEach(function(f) {
+    html += '<div class="dm-family' + (f.status === 'red' ? ' red' : '') + '" data-key="' + esc(f.key) + '">'
+      + '<div style="font-weight:bold;margin-bottom:4px;">' + esc(f.label)
+      + ' <span class="dm-state" style="font-weight:normal;font-size:11px;color:'
+      + (f.status === 'red' ? 'var(--accent-red)' : 'var(--text-secondary)') + ';">'
+      + esc(f.status === 'red' ? f.reasons.join(' / ') : '対応どおりに揃っています') + '</span></div>';
+    f.members.forEach(function(m) {
+      html += '<span class="dm-member' + (m.present ? '' : ' missing') + '"'
+        + (m.present ? ' data-doc="' + esc(m.name) + '"' : '')
+        + ' title="' + esc(m.present ? '押すとこの図に移る' : '宣言されているが開かれていない') + '">'
+        + esc(m.name) + (m.role ? ' <span style="color:var(--text-secondary);">' + esc(m.role) + '</span>' : '')
+        + '</span>';
+    });
+    if (f.members.filter(function(m) { return m.present; }).length >= 2) {
+      html += ' <button class="btn-small dm-pair" data-key="' + esc(f.key) + '">⇔ 相手を並べる</button>';
+    }
+    if (f.mismatch.length) {
+      html += '<div class="dm-mismatch">';
+      f.mismatch.forEach(function(m) {
+        html += '<div class="dm-row" data-doc="' + esc(m.onlyIn) + '" data-line="' + (m.line || '') + '">'
+          + esc(m.label) + ' — ' + esc(m.onlyIn) + ' にしか無い ('
+          + esc(m.missingIn.join(' / ')) + ' に無し)</div>';
+      });
+      html += '</div>';
+    }
+    html += '</div>';
+  });
+  html += '</div>';
+
+  if (result.undeclared.length) {
+    html += '<div id="dm-undeclared" style="font-size:12px;color:var(--text-secondary);margin-top:8px;">'
+      + '宣言に入っていない図 (' + result.undeclared.length + ' 枚): '
+      + esc(result.undeclared.join(', ')) + '</div>';
+  }
+  content.innerHTML = html;
+}
+
+// 宣言された相手を右に並べて開く。1 枚開けば対応する図が並ぶ、が wish の本体。
+function openWithPartner(name, partnerName) {
+  if (!window.MA.workspace) return false;
+  var a = window.MA.workspace.findByName(name);
+  var b = window.MA.workspace.findByName(partnerName);
+  if (!a || !b) return false;
+  switchToDoc(a.id);
+  _compareRefId = b.id;
+  _compareShownDsl = null;
+  toggleCompareView(true);
+  return true;
+}
+
+function _dmBind(decl, result) {
+  var content = document.getElementById('dm-modal-content');
+  var modal = document.getElementById('dm-modal');
+  if (!content) return;
+
+  var rebuild = document.getElementById('dm-rebuild');
+  if (rebuild) rebuild.addEventListener('click', function() {
+    _dmSave(window.MA.driverMap.suggest(_dmDocs(), decl));
+    openDriverMap();
+  });
+  var clear = document.getElementById('dm-clear');
+  if (clear) clear.addEventListener('click', function() {
+    _dmSave({ version: 1, families: [] });
+    openDriverMap();
+  });
+
+  Array.prototype.forEach.call(content.querySelectorAll('.dm-member[data-doc]'), function(el) {
+    el.addEventListener('click', function() {
+      var d = window.MA.workspace.findByName(el.getAttribute('data-doc'));
+      if (modal) modal.style.display = 'none';
+      if (d) switchToDoc(d.id);
+    });
+  });
+
+  Array.prototype.forEach.call(content.querySelectorAll('.dm-pair'), function(btn) {
+    btn.addEventListener('click', function() {
+      var key = btn.getAttribute('data-key');
+      var fam = null;
+      result.families.forEach(function(f) { if (f.key === key) fam = f; });
+      if (!fam) return;
+      var present = fam.members.filter(function(m) { return m.present; });
+      if (present.length < 2) return;
+      if (modal) modal.style.display = 'none';
+      openWithPartner(present[0].name, present[1].name);
+    });
+  });
+
+  Array.prototype.forEach.call(content.querySelectorAll('.dm-row'), function(row) {
+    row.addEventListener('click', function() {
+      var d = window.MA.workspace.findByName(row.getAttribute('data-doc'));
+      var line = parseInt(row.getAttribute('data-line'), 10);
+      if (modal) modal.style.display = 'none';
+      if (d) switchToDoc(d.id);
+      if (!isNaN(line)) jumpToLine(line);
+    });
+  });
+}
+
+function openDriverMap() {
+  var modal = document.getElementById('dm-modal');
+  var DM = window.MA.driverMap;
+  if (!modal || !DM) return null;
+  var decl = _dmLoad();
+  var result = DM.check(decl, _dmDocs());
+  _dmRender(result);
+  _dmBind(decl, result);
+  modal.style.display = 'flex';
+  syncDriverMapBadge();
+  return result;
+}
+
+function setupDriverMap() {
+  var btn = document.getElementById('btn-tab-drivermap');
+  var modal = document.getElementById('dm-modal');
+  if (!btn || !modal || !window.MA.driverMap) return;
+  btn.addEventListener('click', function() { openDriverMap(); });
+  modal.addEventListener('click', function(ev) {
+    if (ev.target === modal) modal.style.display = 'none';
+  });
+  syncDriverMapBadge();
 }
 
 function setupFamilyAudit() {
