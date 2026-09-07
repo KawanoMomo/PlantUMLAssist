@@ -9,6 +9,9 @@
 
 const fs = require('fs');
 const path = require('path');
+// BLK-reviewer-20260907-2203: 件数表だけでは「同じ 5 件」の中身が入れ替わった
+// ことも、カテゴリが新設されたことも読めない。前回の JSON との差分を要約に足す。
+const auditDiff = require('./audit-diff');
 
 // ディレクトリなら再帰して .puml を集める。ファイルならそれ 1 枚。
 // name は入力ルートからの相対パスにする (同名 basename が別フォルダにあっても
@@ -141,7 +144,7 @@ function totalIssues(summary) {
 }
 
 // 人が読む 1 行ずつの要約。--summary のときだけ使う。
-function formatSummary(report) {
+function formatSummary(report, prev) {
   const lines = [`図 ${report.docs.length} 枚 (${report.targets.join(', ')})`];
   const s = report.summary;
   if (s.name) lines.push(`名前突合: 表記揺れ ${s.name.variants} 組 / 宣言なし ${s.name.undeclared} 件`);
@@ -166,6 +169,12 @@ function formatSummary(report) {
     if (a.status !== 'ok') lines.push(`${k}: ${a.status} (${a.message || a.reason})`);
   }
   lines.push(`合計 ${report.totalIssues} 件`);
+  // prev を渡さない旧来の呼び方では何も足さない。null を渡すと「前回が無い」と
+  // 明示する 1 行が出る。件数だけを見て「前回と同じ」と読むのを防ぐのが目的。
+  if (prev !== undefined) {
+    const d = prev ? auditDiff.diff(prev.audits, report.audits) : null;
+    for (const l of auditDiff.formatDiff(d, prev && prev.generatedAt)) lines.push(l);
+  }
   return lines.join('\n');
 }
 
