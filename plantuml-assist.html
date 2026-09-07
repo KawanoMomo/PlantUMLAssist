@@ -255,6 +255,16 @@ html, body {
   width: 46px;
   flex-shrink: 0;
 }
+/* design「1a 展開」2a: 候補を「図に足す / 移動 / 選択中 / コマンド」の見出しで区切る */
+.cp-group {
+  padding: 8px 14px 3px;
+  font-size: 10px;
+  font-weight: bold;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  text-transform: none;
+}
+.cp-group-note { padding: 0 14px 4px; font-size: 10px; color: var(--text-secondary); }
 #cp-empty { padding: 12px 14px; color: var(--text-secondary); font-size: 12px; }
 #cp-foot {
   padding: 6px 14px;
@@ -1475,7 +1485,7 @@ html, body {
            placeholder="コマンド・要素を検索 / Run anything">
     <div id="cp-list" role="listbox"></div>
     <div id="cp-empty" style="display:none;">該当するコマンド・要素はありません</div>
-    <div id="cp-foot">↑↓ 選択 · Enter 実行 · Esc 閉じる</div>
+    <div id="cp-foot">↑↓ 選択 · Enter 実行 · Tab 種別で絞り込み · Esc 閉じる</div>
   </div>
 </div>
 
