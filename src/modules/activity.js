@@ -1304,8 +1304,16 @@ window.MA.modules.plantumlActivity = (function() {
           { value: 'swimlane', label: 'Swimlane' }
         ]) +
         '<div id="ac-tail-detail" style="margin-top:6px;"></div>' +
+      '</div>' +
+      // design 4b: 位置を選ぶと、その位置に置ける要素だけがメニューに出る。
+      '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">＋ この位置に挿入</label>' +
+        '<div id="ac-ins-point-wrap"></div>' +
+        '<div id="ac-ins-kind-wrap"></div>' +
+        '<div id="ac-ins-detail" style="margin-top:6px;"></div>' +
       '</div>';
     propsEl.innerHTML = html;
+    _renderInsertHere(ctx, propsEl);
 
     P.bindEvent('ac-set-title', 'click', function() {
       window.MA.history.pushHistory();
@@ -1404,6 +1412,120 @@ window.MA.modules.plantumlActivity = (function() {
     };
     P.bindEvent('ac-tail-kind', 'change', renderTailDetail);
     renderTailDetail();
+  }
+
+  // design 4b「Activity — 途中に挿入」。フローのどの行間に置くかを先に選ぶと、
+  // そこに置ける要素だけがメニューに残り、if / while / fork は開始と終了が対で入る。
+  // 生の構文を打つ必要がないので、`start` / `:Hello world;` / `stop` しかない
+  // 図にも分岐や繰り返しをその場で足せる。
+  function _renderInsertHere(ctx, propsEl) {
+    var AI = window.MA.activityInsert;
+    var P = window.MA.properties;
+    if (!AI || !P) return;
+    var pointWrap = document.getElementById('ac-ins-point-wrap');
+    var kindWrap = document.getElementById('ac-ins-kind-wrap');
+    var detailEl = document.getElementById('ac-ins-detail');
+    if (!pointWrap || !kindWrap || !detailEl) return;
+
+    var pts = AI.insertPoints(ctx.getMmdText());
+    if (!pts.length) {
+      pointWrap.innerHTML = '<div style="font-size:10px;color:var(--text-secondary);">挿入できる行がありません</div>';
+      return;
+    }
+    // 既定は本体の最後 (いちばんよく足す位置)。
+    var defIdx = 0;
+    for (var d = 0; d < pts.length; d++) if (pts[d].inFlow) defIdx = d;
+
+    pointWrap.innerHTML = P.selectFieldHtml('位置', 'ac-ins-point', pts.map(function(pt, i) {
+      return { value: String(i), label: pt.label, selected: i === defIdx };
+    }));
+
+    function currentPoint() {
+      var sel = document.getElementById('ac-ins-point');
+      var i = sel ? parseInt(sel.value, 10) : defIdx;
+      return pts[isNaN(i) ? defIdx : i] || pts[defIdx];
+    }
+
+    function renderKinds() {
+      var pt = currentPoint();
+      var allowed = AI.allowedKinds(ctx.getMmdText(), pt.line);
+      kindWrap.innerHTML = P.selectFieldHtml('要素', 'ac-ins-kind', allowed.map(function(k, i) {
+        return { value: k.kind, label: k.label + '  (' + k.hint + ')', selected: i === 0 };
+      })) +
+      (pt.inFlow ? '' : '<div style="font-size:10px;color:var(--text-secondary);margin:-4px 0 6px 0;">'
+        + 'フローの外なので、置けるのはレーンと start / stop だけです</div>');
+      P.bindEvent('ac-ins-kind', 'change', renderDetail);
+      renderDetail();
+    }
+
+    function renderDetail() {
+      var kindSel = document.getElementById('ac-ins-kind');
+      var kind = kindSel ? kindSel.value : 'action';
+      var fields = AI.fieldsFor(kind);
+      var h = '';
+      fields.forEach(function(f) {
+        h += P.fieldHtml(f.label, 'ac-ins-f-' + f.id, f.value || '', f.placeholder || '');
+      });
+      h += P.primaryButtonHtml('ac-ins-do', '＋ ' + AI.labelFor(kind) + ' を挿入');
+      detailEl.innerHTML = h;
+      P.bindEvent('ac-ins-do', 'click', doInsert);
+    }
+
+    function fieldVal(id) {
+      var el = document.getElementById('ac-ins-f-' + id);
+      return el ? el.value : '';
+    }
+
+    function doInsert() {
+      var pt = currentPoint();
+      var kindSel = document.getElementById('ac-ins-kind');
+      var kind = kindSel ? kindSel.value : 'action';
+      if (!AI.isAllowed(ctx.getMmdText(), pt.line, kind)) return;
+      var t = ctx.getMmdText();
+      var out = t;
+      if (kind === 'action') {
+        out = addActionAtLine(t, pt.line, pt.position, fieldVal('text'));
+      } else if (kind === 'if') {
+        out = addControlAtLine(t, pt.line, pt.position, 'if', {
+          cond: fieldVal('cond'), thenLabel: fieldVal('thenLabel') || 'yes',
+          elseLabel: fieldVal('elseLabel') || null,
+        });
+      } else if (kind === 'while' || kind === 'repeat') {
+        out = addControlAtLine(t, pt.line, pt.position, kind, {
+          cond: fieldVal('cond'), label: fieldVal('label') || 'yes',
+        });
+      } else if (kind === 'fork') {
+        out = addControlAtLine(t, pt.line, pt.position, 'fork', {
+          branchCount: parseInt(fieldVal('branchCount'), 10) || 2,
+        });
+      } else if (kind === 'note') {
+        out = addNoteAtLine(t, pt.line, pt.position, { position: 'right', text: fieldVal('text') });
+      } else if (kind === 'swimlane') {
+        out = addSwimlaneAtLine(t, pt.line, pt.position, fieldVal('name'));
+      } else if (AI.isBareKind(kind)) {
+        out = _insertBareAtLine(t, pt.line, pt.position, AI.bareLineFor(kind));
+      }
+      if (out !== t) {
+        window.MA.history.pushHistory();
+        ctx.setMmdText(out);
+        ctx.onUpdate();
+      }
+    }
+
+    P.bindEvent('ac-ins-point', 'change', renderKinds);
+    renderKinds();
+  }
+
+  // break / detach / kill / start / stop のように入力の要らない 1 行を置く。
+  function _insertBareAtLine(text, lineNum, position, word) {
+    if (!word) return text;
+    var lines = text.split('\n');
+    var targetIdx = position === 'before' ? lineNum - 1 : lineNum;
+    if (targetIdx < 0) targetIdx = 0;
+    if (targetIdx > lines.length) targetIdx = lines.length;
+    var indent = _resolveInsertIndent(lines, Math.min(targetIdx, lines.length - 1));
+    lines.splice(targetIdx, 0, indent + word);
+    return lines.join('\n');
   }
 
   function _setTitle(text, title) {
@@ -1783,6 +1905,7 @@ window.MA.modules.plantumlActivity = (function() {
     deleteNode: deleteNode,
     addActionAtLine: addActionAtLine,
     addControlAtLine: addControlAtLine,
+    insertBareAtLine: _insertBareAtLine,
     addSwimlaneAtLine: addSwimlaneAtLine,
     addNoteAtLine: addNoteAtLine,
     addElseifBranch: addElseifBranch,
