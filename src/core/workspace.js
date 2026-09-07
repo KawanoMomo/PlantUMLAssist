@@ -320,6 +320,38 @@ window.MA.workspace = (function() {
     }
   }
 
+  // listFolder — 一覧に加えて「その保存先が実在するか」も返す。
+  //
+  // BLK-primary-20260908-0103: listFileEntries は 0 件しか返さないので、
+  // 「保存先の綴りを間違えた」と「まだ 1 枚も無い」が呼び出し側で区別できず、
+  // 保存先の書式を誤ると 📂一覧が黙って空になっていた。
+  // 返り値: { entries, exists, dir }。exists が null なら server に尋ねられなかった。
+  function listFolder(fileDir) {
+    var asked = _dir(fileDir);
+    var miss = { entries: [], exists: null, dir: asked };
+    try {
+      return window.fetch('/autosave?dir=' + encodeURIComponent(asked))
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(data) {
+          if (!data) return miss;
+          var entries = [];
+          if (Array.isArray(data.entries)) entries = data.entries;
+          else if (Array.isArray(data.files)) {
+            entries = data.files.map(function(n) { return { name: n, mtime: null, hash: null }; });
+          }
+          return {
+            entries: entries,
+            // 古い server は exists を返さない。その場合は判定しない (null)。
+            exists: (typeof data.exists === 'boolean') ? data.exists : null,
+            dir: (typeof data.dir === 'string' && data.dir) ? data.dir : asked,
+          };
+        })
+        .catch(function() { return miss; });
+    } catch (e) {
+      return Promise.resolve(miss);
+    }
+  }
+
   function loadFile(name, fileDir) {
     if (!isValidName(name)) return Promise.resolve(null);
     try {
@@ -370,6 +402,7 @@ window.MA.workspace = (function() {
     saveToFile: saveToFile,
     listFiles: listFiles,
     listFileEntries: listFileEntries,
+    listFolder: listFolder,
     loadFile: loadFile,
     detectType: detectType,
   };
