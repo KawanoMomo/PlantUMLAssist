@@ -1,9 +1,9 @@
 // @ts-check
 // BLK-junior-20260907-2009 の画面写真 (loop/shots)。上部バーの保存先チップ。
 const { test } = require('@playwright/test');
-const { gotoApp } = require('./helpers');
+const { gotoApp, shotOut } = require('./helpers');
 
-const OUT = process.env.SHOT_OUT || 'shot.png';
+const OUT = shotOut('shot-blk-junior-2009.png');
 const DIR = ['E:', '01_Loop', 'persona-data', 'junior'].join('\\');
 
 test('shot: 上部バーの保存先', async ({ page }) => {

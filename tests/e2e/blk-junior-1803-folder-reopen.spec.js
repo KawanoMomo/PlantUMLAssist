@@ -3,9 +3,9 @@
 // 開いているタブと同じ名前だと画面が何も動かず、保存できたのか一覧が効いていないのかが
 // 分からなかった。開き直しの結果を必ず言葉で返し、編集中の本文でファイルを上書きしない。
 const { test, expect } = require('@playwright/test');
-const { gotoApp, getEditorText } = require('./helpers');
+const { gotoApp, getEditorText, saveDirFor } = require('./helpers');
 
-const DIR = './autosave-e2e-blk-j1803';
+const DIR = saveDirFor(__filename);
 const NAME = 'J1803_CanDrvInit';
 const UPDATED = '@startuml\nstart\n:CAN を初期化する;\n:割り込みを許可する;\nstop\n@enduml';
 const SAVED = '@startuml\nstart\n:CAN を初期化する;\nstop\n@enduml';

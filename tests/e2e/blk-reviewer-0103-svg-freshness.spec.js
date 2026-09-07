@@ -1,10 +1,10 @@
 const { test, expect } = require('@playwright/test');
-const { gotoApp } = require('./helpers');
+const { gotoApp, saveDirFor } = require('./helpers');
 
 // BLK-reviewer-20260908-0103: SVG が puml 変更後も再生成されているかを
 // `ls -l` でタイムスタンプ比較して判定していた。一覧が答え、古い枚数だけを
 // 1 押しで作り直せることを確かめる。
-const DIR = './autosave-e2e-blk-r0103svg';
+const DIR = saveDirFor(__filename);
 
 async function bootWithDir(page) {
   await page.addInitScript((d) => {

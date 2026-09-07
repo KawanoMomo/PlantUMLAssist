@@ -2,9 +2,9 @@
 // BLK-junior-20260908-0003 の画面写真。名前変更ダイアログはブラウザ標準の
 // prompt で撮れないので、説明文そのものを画面に出して撮る。
 const { test } = require('@playwright/test');
-const { gotoApp } = require('./helpers');
+const { gotoApp, shotOut } = require('./helpers');
 
-const OUT = process.env.SHOT_OUT || 'shot-blk-junior-0003.png';
+const OUT = shotOut('shot-blk-junior-0003.png');
 
 test('shot: 名前変更ダイアログの説明文', async ({ page }) => {
   await gotoApp(page);

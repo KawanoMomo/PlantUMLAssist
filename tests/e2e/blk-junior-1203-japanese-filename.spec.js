@@ -3,9 +3,9 @@
 // 全て黙って失敗していた (server.py / workspace.js が名前を [A-Za-z0-9_-]+ に限っていた)。
 // クライアントとサーバを通しで見る。
 const { test, expect } = require('@playwright/test');
-const { gotoApp } = require('./helpers');
+const { gotoApp, saveDirFor } = require('./helpers');
 
-const DIR = './autosave-e2e-blk-j1203';
+const DIR = saveDirFor(__filename);
 const JP = 'GPIOドライバユースケース';
 const DSL = '@startuml\nactor 開発者\nusecase (GPIO を初期化する)\n開発者 --> (GPIO を初期化する)\n@enduml';
 

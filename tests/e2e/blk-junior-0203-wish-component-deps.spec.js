@@ -30,7 +30,7 @@ async function freshWorkspace(page) {
     try {
       window.localStorage.clear();
       window.localStorage.setItem('plantuml-autosave-config',
-        JSON.stringify({ enabled: true, debounceMs: 200, restoreMode: 'auto', backend: 'localStorage', fileDir: './autosave-e2e-blk-j0203w' }));
+        JSON.stringify({ enabled: true, debounceMs: 200, restoreMode: 'auto', backend: 'localStorage', fileDir: './test-results/autosave/blk-junior-0203-wish-component-deps/e2e-blk-j0203w' }));
     } catch (e) {}
   });
 }

@@ -1,9 +1,9 @@
 const { test } = require('@playwright/test');
-const { gotoApp } = require('./helpers');
+const { gotoApp, shotOut } = require('./helpers');
 
 // BLK-primary-20260908-0003-wish の画面写真。🕸 参照関係を開き、DmaCtrl を選んで
 // 出てくる 3 枚が一覧に並び、タブに印が付いているところを撮る。
-const OUT = process.env.SHOT_OUT || 'shot-blk-primary-0003-wish.png';
+const OUT = shotOut('shot-blk-primary-0003-wish.png');
 
 const SPI = ['@startuml', 'participant Spi_Driver', 'participant DmaCtrl',
   'Spi_Driver -> DmaCtrl : Spi_TransmitDma', '@enduml'].join('\n');

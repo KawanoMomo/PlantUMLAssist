@@ -3,9 +3,9 @@
 // 書くしかなく、次に見るときは全文を読み直していた。指摘に「対象ファイル + 行 + 行の指紋」を
 // 持たせ、開いた時点で「未変更のため前回判定を維持」と「要再確認」に仕分かれるのを実機で見る。
 const { test, expect } = require('@playwright/test');
-const { gotoApp } = require('./helpers');
+const { gotoApp, saveDirFor } = require('./helpers');
 
-const DIR = './autosave-e2e-blk-r0003w';
+const DIR = saveDirFor(__filename);
 
 const FILES = {
   R0003_dma_seq: [

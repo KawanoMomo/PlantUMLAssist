@@ -1,9 +1,9 @@
 // @ts-check
 // BLK-junior-20260907-1903 の画面写真 (loop/shots)。無選択時の右ペイン。
 const { test } = require('@playwright/test');
-const { gotoApp } = require('./helpers');
+const { gotoApp, shotOut } = require('./helpers');
 
-const OUT = process.env.SHOT_OUT || 'shot.png';
+const OUT = shotOut('shot-blk-junior-1903.png');
 
 test('shot: 末尾に追加の「まとめて入れる」呼び込み', async ({ page }) => {
   await page.addInitScript(() => { try { window.localStorage.clear(); } catch (e) {} });

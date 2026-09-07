@@ -28,7 +28,7 @@ async function freshWorkspace(page) {
     try {
       window.localStorage.clear();
       window.localStorage.setItem('plantuml-autosave-config',
-        JSON.stringify({ enabled: true, debounceMs: 200, restoreMode: 'auto', backend: 'localStorage', fileDir: './autosave-e2e-blk-p2203' }));
+        JSON.stringify({ enabled: true, debounceMs: 200, restoreMode: 'auto', backend: 'localStorage', fileDir: './test-results/autosave/blk-primary-2203-wish-symptom-search/e2e-blk-p2203' }));
     } catch (e) {}
   });
 }

@@ -3,9 +3,9 @@
 // 図を 1 枚ずつ開いて 📌 のバッジを見て回るしかなかった。
 // 保存フォルダ全体の未対応を 1 画面に出し、行を押すとその図の該当行へ飛ぶ、を実機で見る。
 const { test, expect } = require('@playwright/test');
-const { gotoApp } = require('./helpers');
+const { gotoApp, saveDirFor } = require('./helpers');
 
-const DIR = './autosave-e2e-blk-j2203';
+const DIR = saveDirFor(__filename);
 
 function pin(id, state, author, text, anchor) {
   return "' @pin " + [id, state, author, '2026-09-07T22:23', anchor, text].join('|');

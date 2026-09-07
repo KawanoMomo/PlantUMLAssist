@@ -3,9 +3,9 @@
 // 保存フォルダに溜まり、📂 一覧で本物の成果物と同じ並びに混ざっていた。
 // 「🗂 一時控え」で印を付けると一覧では畳まれ、成果物だけが並ぶ。
 const { test, expect } = require('@playwright/test');
-const { gotoApp } = require('./helpers');
+const { gotoApp, saveDirFor } = require('./helpers');
 
-const DIR = './autosave-e2e-blk-j2009';
+const DIR = saveDirFor(__filename);
 const REAL = ['J2009_CanUseCase', 'J2009_UartSequence'];
 const DRAFTS = ['J2009_Gpio_TYPO_interim', 'J2009_Uart_TYPO_interim', 'J2009_Can_TYPO_interim'];
 const DSL = '@startuml\nstart\n:初期化する;\nstop\n@enduml';

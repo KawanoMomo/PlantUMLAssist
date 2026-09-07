@@ -6,9 +6,9 @@
 // 保存フォルダの全ファイルを先に数え、ヒットした図・しなかった図を一覧で出し、
 // 置換もその一覧 (テンプレを除く) に当たることを確認する。
 const { test, expect } = require('@playwright/test');
-const { gotoApp } = require('./helpers');
+const { gotoApp, saveDirFor } = require('./helpers');
 
-const DIR = './test-results/autosave-e2e-blk-p0723w';
+const DIR = saveDirFor(__filename);
 
 function seq(name) {
   return '@startuml\nparticipant ' + name + '\nparticipant Mcu\n'

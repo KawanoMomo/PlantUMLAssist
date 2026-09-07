@@ -2,9 +2,9 @@
 // BLK-junior-20260907-0843 の実測。手順8「保存先を persona-data\junior にして保存」を
 // 前回値が覚えられている状態でなぞり、クリック数とキー入力数を数える。
 const { test, expect } = require('@playwright/test');
-const { gotoApp } = require('./helpers');
+const { gotoApp, saveDirFor } = require('./helpers');
 
-const DIR = './autosave-e2e-blk-j0843-measure';
+const DIR = saveDirFor(__filename);
 
 test('手順8 の実測 — 前回値が残っていれば設定を開き直さない', async ({ page, context, request }) => {
   // 前の run で保存先を決めた状態を作る。

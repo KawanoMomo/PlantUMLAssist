@@ -1,11 +1,11 @@
 const { test, expect } = require('@playwright/test');
-const { gotoApp } = require('./helpers');
+const { gotoApp, saveDirFor } = require('./helpers');
 
 // BLK-reviewer-20260907-1803 (wish):
 // 「変更図だけを、前回見た版と並べて読む」。バッジ (BLK-1403) までは出ていたが、
 // どこが変わったかは自作の diff で見るしかなかった。控えに本文を足して、
 // 一覧から [差分] を押すだけで旧DSL/新DSL が左右に並ぶようにする。
-const DIR = './autosave-e2e-blk-r1803w';
+const DIR = saveDirFor(__filename);
 
 async function bootWithDir(page) {
   await page.addInitScript((d) => {

@@ -1,10 +1,10 @@
 const { test } = require('@playwright/test');
-const { gotoApp } = require('./helpers');
+const { gotoApp, saveDirFor, shotOut } = require('./helpers');
 
 // BLK-reviewer-20260907-2203-wish の画面写真。保存フォルダ一覧の下端に
 // 「前回の指摘をそのまま今回の指摘にする」が出ているところを撮る。
-const DIR = './autosave-shot-r2203w';
-const OUT = process.env.SHOT_OUT || 'shot-blk-reviewer-2203-wish.png';
+const DIR = saveDirFor(__filename);
+const OUT = shotOut('shot-blk-reviewer-2203-wish.png');
 
 const A1 = ['@startuml',
   "' @pin 1|open|reviewer|2026-09-07T19:03|Idle --> Busy : Timer_StartConv|対応する method が無い",

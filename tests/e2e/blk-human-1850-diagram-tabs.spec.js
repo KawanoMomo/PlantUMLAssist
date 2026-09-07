@@ -3,7 +3,7 @@
 // 業務では SPI / CAN のように部品ごとに複数の図を持ち、それらを往復しながら
 // 名前を揃える。DSL を消して貼り直さずに切り替えられることを確認する。
 const { test, expect } = require('@playwright/test');
-const { gotoApp, getEditorText } = require('./helpers');
+const { gotoApp, getEditorText, saveDirFor } = require('./helpers');
 
 const SPI_SEQ = '@startuml\nparticipant SpiDrv\nparticipant SpiHw\nSpiDrv -> SpiHw: transfer\n@enduml';
 const CAN_SEQ = '@startuml\nparticipant CanDrv\nparticipant CanHw\nCanDrv -> CanHw: send\n@enduml';
@@ -105,7 +105,7 @@ test.describe('BLK-human-1850 複数の図をタブで扱う', () => {
 
 test.describe('BLK-human-1850 保存フォルダ一覧', () => {
   test('フォルダに保存した図を一覧から新しいタブとして開ける', async ({ page }) => {
-    const dir = './autosave-e2e-tabs';
+    const dir = saveDirFor(__filename);
     await page.addInitScript((d) => {
       try {
         window.localStorage.clear();

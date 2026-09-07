@@ -7,8 +7,8 @@
 const { test, expect } = require('@playwright/test');
 const { gotoApp } = require('./helpers');
 
-const SELF_DIR = './autosave-e2e-xf-junior';
-const REF_DIR = './autosave-e2e-xf-primary';
+const SELF_DIR = './test-results/autosave/blk-junior-0723-wish-cross-ref-diff/e2e-xf-junior';
+const REF_DIR = './test-results/autosave/blk-junior-0723-wish-cross-ref-diff/e2e-xf-primary';
 const NAME = 'GPIOドライバ初期化シーケンス';
 
 const SELF_DSL = [
@@ -115,7 +115,7 @@ test.describe('他の人のフォルダの図と突き合わせる (BLK-junior-0
 
   test('無いフォルダを打つと、その旨が出る (黙って空にならない)', async ({ page }) => {
     await setup(page);
-    await page.locator('#xf-dir').fill('./autosave-e2e-xf-nowhere');
+    await page.locator('#xf-dir').fill('./test-results/autosave/blk-junior-0723-wish-cross-ref-diff/e2e-xf-nowhere');
     await page.locator('#btn-xf-load').click();
     await expect(page.locator('#xf-summary')).toContainText('見つかりません');
     await expect(page.locator('#xf-list')).toBeHidden();
@@ -146,6 +146,9 @@ test.describe('他の人のフォルダの図と突き合わせる (BLK-junior-0
 
     await expect(page.locator('#editor')).toHaveValue(/shares Driver_Common base/);
     expect(clicks).toBeLessThanOrEqual(10);
-    expect(REF_DIR.length).toBeLessThanOrEqual(50);
+    // 打つのはフォルダ名 1 つだけというのが AC。REF_DIR の前半
+    // (test-results/autosave/<spec 名>/) はテストの置き場であって、
+    // 利用者が打つものではない (BLK-releaser-20260908-0800)。
+    expect(REF_DIR.split('/').pop().length).toBeLessThanOrEqual(50);
   });
 });
