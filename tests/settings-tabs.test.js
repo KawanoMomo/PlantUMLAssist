@@ -81,13 +81,20 @@ describe('settings-tabs — 設定モーダルの 5 タブ (design 1a)', () => {
       });
     });
 
+    // BLK-builder-20260907-1346-3: 表に残っていた 'new' の 2 行 (Ctrl+Enter /
+    // Alt+↑ Alt+↓) を実装したので、いま 'new' の行は 0 件である。design 5b が求めるのは
+    // 「未実装の行も消さずに載せ、実装済みと区別する」仕組みなので、'new' が
+    // 1 件以上あることではなく、あれば表に出て state で区別されることを確かめる。
     test('新設（未実装）の行も表から消さず、既存の割り当てと同じ表に載る', () => {
-      var news = ST.shortcutRows().filter(function(r) { return r.state === 'new'; });
-      expect(news.length).toBeGreaterThan(0);
       var html = ST.buildShortcutsHtml();
-      news.forEach(function(r) { expect(html).toContain('<kbd>' + r.keys + '</kbd>'); });
-      expect(html).toContain('data-sc-state="new"');
+      var news = ST.shortcutRows().filter(function(r) { return r.state === 'new'; });
+      news.forEach(function(r) {
+        expect(html).toContain('<kbd>' + r.keys + '</kbd>');
+      });
+      expect(html).toContain('data-sc-state="' + (news.length ? 'new' : 'done') + '"');
       expect(html).toContain('data-sc-state="done"');
+      // 区別の仕組み自体は行の有無によらず残っている。
+      expect(ST.stateChipHtml('new')).toContain('新設');
     });
 
     test('stateChipHtml: 色だけでなく文字でも区別する', () => {

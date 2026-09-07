@@ -29,11 +29,15 @@ test.describe('設定のショートカット表 (design 5b)', () => {
     await openShortcuts(page);
     await expect(page.locator('#cfg-sc-legend')).toContainText('実装済み');
     await expect(page.locator('#cfg-sc-legend')).toContainText('新設（未実装）');
-    // 新設の行も表から消えていない (既存の割り当てとの衝突を見るため)
-    await expect(page.locator('#cfg-shortcuts-list tr[data-sc-state="new"]').first()).toBeVisible();
+    // BLK-builder-20260907-1346-3: 残っていた 'new' の 2 行を実装したので、いま
+    // 新設の行は 0 件である。design 5b が求めるのは「未実装の行も消さずに、実装済みと
+    // 区別して載せる」仕組みなので、行が有ればそれが表に出て区別されることを見る。
     await expect(page.locator('#cfg-shortcuts-list tr[data-sc-state="done"]').first()).toBeVisible();
-    const newRow = page.locator('#cfg-shortcuts-list tr[data-sc-state="new"]').first();
-    await expect(newRow.locator('.cfg-sc-new')).toHaveText('新設');
+    const newRows = page.locator('#cfg-shortcuts-list tr[data-sc-state="new"]');
+    if (await newRows.count()) {
+      await expect(newRows.first()).toBeVisible();
+      await expect(newRows.first().locator('.cfg-sc-new')).toHaveText('新設');
+    }
   });
 
   test('「⌕ 操作名で検索」で表が絞られ、空にすると戻る', async ({ page }) => {
