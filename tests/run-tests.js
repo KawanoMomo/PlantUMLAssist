@@ -31,6 +31,7 @@ const sourceFiles = [
   'src/core/diagram-rail.js',
   'src/core/zoom-hud.js',
   'src/core/outline.js',
+  'src/core/select-at-line.js',
   'src/core/tail-kind-chips.js',
   'src/core/compare-view.js',
   'src/core/change-board.js',

@@ -2119,6 +2119,21 @@ function init() {
   startHeartbeat();
 }
 
+// BLK-junior-20260907-2303: 行番号から要素を選ぶ。プレビュー上の座標は
+// 遷移を 1 本足すだけで動くが、行番号は再レイアウトで動かない。
+// Ctrl+K のジャンプと構造タブの行クリックがここを共有する。
+function selectElementAtLine(line) {
+  if (!window.MA.selection || !currentModule) return false;
+  var SAL = window.MA.selectAtLine;
+  var list = (typeof currentModule.kbdSelectables === 'function')
+    ? (currentModule.kbdSelectables(currentParsed) || [])
+    : SAL.messageSelectables(currentParsed);
+  var hit = SAL.pick(list, line);
+  if (!hit) return false;
+  window.MA.selection.setSelected([hit]);
+  return true;
+}
+
 // ── Command palette (BLK-builder-20260907-0803-1 / design 1a) ───────────────
 // design「リデザイン案」1a は「ツールバーのボタンを目で探す」代わりに
 // Ctrl+K で名前を打ってコマンドを実行する経路を求める。コマンドの中身は
@@ -2334,20 +2349,7 @@ function initCommandPalette() {
 
   // jump 候補を選んだとき、その行の要素を右ペインでも選択状態にする
   // (design 2a「選ぶとその行を選択し、右パネルで編集できます」)。
-  function selectAtLine(line) {
-    if (!window.MA.selection || !currentModule) return;
-    var list = (typeof currentModule.kbdSelectables === 'function')
-      ? (currentModule.kbdSelectables(currentParsed) || [])
-      : (((currentParsed && currentParsed.relations) || [])
-          .filter(function(r) { return r.kind === 'message'; })
-          .map(function(r) { return { type: 'message', id: r.id, line: r.line }; }));
-    for (var i = 0; i < list.length; i++) {
-      if (list[i] && list[i].line === line) {
-        window.MA.selection.setSelected([{ type: list[i].type || 'message', id: list[i].id, line: line }]);
-        return;
-      }
-    }
-  }
+  function selectAtLine(line) { return selectElementAtLine(line); }
 
   // element を選んだらエディタの該当行へキャレットを置き、その行が見える位置へ送る。
   function gotoLine(line) {
@@ -5768,7 +5770,7 @@ function renderOutline() {
     row.appendChild(kind);
     row.appendChild(label);
     row.appendChild(detail);
-    row.title = 'クリックで ' + (n.line + 1) + ' 行目へ';
+    row.title = 'クリックで ' + (n.line + 1) + ' 行目へ移動し、その要素を選ぶ';
     row.addEventListener('click', function() { gotoOutlineLine(n.line); });
     list.appendChild(row);
   });
@@ -5845,6 +5847,15 @@ function gotoOutlineLine(line) {
   var lineHeight = editorEl.scrollHeight / Math.max(1, lines.length);
   editorEl.scrollTop = Math.max(0, (line * lineHeight) - (editorEl.clientHeight / 2));
   if (lineNumbersEl) lineNumbersEl.scrollTop = editorEl.scrollTop;
+  // BLK-junior-20260907-2303: 行へ飛ぶだけではなく、その行の要素を選んだ
+  // 状態にする。右パネルにその要素の編集フォームが出るので、
+  // プレビュー上で座標を探し直さなくて済む。
+  if (!selectElementAtLine(line + 1) && window.MA.selection) {
+    // 選べない行 (@startuml など) では前の選択を残さない。
+    // 右パネルに別の要素のフォームが出たままになると、
+    // それを目的の要素だと思って編集してしまう。
+    window.MA.selection.clearSelection();
+  }
 }
 
 // ── 参照ペイン (2 枚の図を並べて見比べる) ────────────────────────────────
