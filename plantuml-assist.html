@@ -264,7 +264,7 @@ html, body {
   border-radius: 6px;
   overflow: hidden;
   z-index: 200;
-  min-width: 180px;
+  min-width: 260px;
   box-shadow: 0 4px 16px rgba(0,0,0,0.5);
 }
 #export-menu.open { display: block; }
@@ -284,7 +284,7 @@ html, body {
 #export-menu button:hover { background: var(--bg-tertiary); }
 
 /* design 2c: 行の右にキー割り当てを小さく置く */
-#export-menu button { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+#export-menu button { display: flex; align-items: center; justify-content: space-between; gap: 16px; white-space: nowrap; }
 #export-menu .exp-key {
   font-family: var(--font-mono);
   font-size: 10px;
