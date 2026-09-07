@@ -8451,9 +8451,20 @@ function jumpEditorToSelection(sel) {
   updateLineNumbers();
 }
 
+// design 2b: 1 枚目のタブは「追加」(無選択) / 「選択中」(選択あり)。
+function updatePropsTabLabel(sel) {
+  var btn = document.getElementById('props-tab-props');
+  var PTL = window.MA.propsTabLabel;
+  if (!btn || !PTL) return;
+  var n = (sel || []).length;
+  btn.textContent = PTL.labelFor(n);
+  btn.title = PTL.titleFor(n);
+}
+
 function renderProps(parsed) {
   if (!parsed) parsed = currentParsed;
   var sel = window.MA.selection.getSelected();
+  updatePropsTabLabel(sel);
   currentModule.renderProps(sel, parsed, propsEl, {
     getMmdText: function() { return mmdText; },
     setMmdText: function(s) {
