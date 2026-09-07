@@ -60,6 +60,7 @@ const sourceFiles = [
   'src/core/submit-check.js',
   'src/core/scope-decl.js',
   'src/core/trace-coverage.js',
+  'src/core/audit-timeline.js',
   'src/ui/properties.js',
   'src/ui/reuse-modal.js',
   'src/modules/sequence.js',
