@@ -328,7 +328,7 @@ window.MA.workspace = (function() {
   // 返り値: { entries, exists, dir }。exists が null なら server に尋ねられなかった。
   function listFolder(fileDir) {
     var asked = _dir(fileDir);
-    var miss = { entries: [], exists: null, dir: asked };
+    var miss = { entries: [], exists: null, dir: asked, roles: {} };
     try {
       return window.fetch('/autosave?dir=' + encodeURIComponent(asked))
         .then(function(r) { return r.ok ? r.json() : null; })
@@ -344,6 +344,9 @@ window.MA.workspace = (function() {
             // 古い server は exists を返さない。その場合は判定しない (null)。
             exists: (typeof data.exists === 'boolean') ? data.exists : null,
             dir: (typeof data.dir === 'string' && data.dir) ? data.dir : asked,
+            // BLK-reviewer-20260908-0203-wish: 実データ / テンプレの宣言。
+            // 一覧と同じ呼び出しで返る (別呼び出しにすると印の付く前が一瞬見える)。
+            roles: (data.roles && typeof data.roles === 'object') ? data.roles : {},
           };
         })
         .catch(function() { return miss; });
