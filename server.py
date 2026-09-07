@@ -22,7 +22,26 @@ JAR_PATH = ROOT / 'lib' / 'plantuml.jar'
 DAEMON_SRC = ROOT / 'lib' / 'PlantUMLDaemon.java'
 PORT = int(os.environ.get('PUA_PORT', '8766'))
 AUTOSAVE_DEFAULT_DIR = ROOT / 'autosave'
-AUTOSAVE_TYPE_RE = re.compile(r'^[A-Za-z0-9_-]+$')
+# BLK-junior-20260907-1203: 図の名前はそのままファイル名 ({name}.puml) になる。
+# 以前は [A-Za-z0-9_-]+ しか通さず、「GPIOドライバユースケース」のような日本語名の図が
+# 保存フォルダから読めず、保存も 400 になって黙って download に落ちていた。
+# ファイル名として危ないものだけを弾き、日本語はそのまま通す。
+# src/core/workspace.js の isValidName と同じ規則。片方だけ変えないこと。
+AUTOSAVE_UNSAFE_CHARS = set('<>:"|?*/' + chr(92)) | {chr(c) for c in range(32)}
+AUTOSAVE_RESERVED = ({'con', 'prn', 'aux', 'nul'}
+                     | {'com%d' % i for i in range(1, 10)}
+                     | {'lpt%d' % i for i in range(1, 10)})
+
+
+def is_safe_autosave_name(name):
+    """True if `name` can be used as a bare filename stem (Japanese included)."""
+    if not name or not isinstance(name, str):
+        return False
+    if name != name.strip(' .'):
+        return False
+    if name.lower() in AUTOSAVE_RESERVED:
+        return False
+    return not any(ch in AUTOSAVE_UNSAFE_CHARS for ch in name)
 
 # Windows: suppress the console window that otherwise flashes every time
 # we spawn java (once per /render call). No-op on other platforms.
@@ -138,7 +157,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _autosave_validate_type(self, dt):
         """Return True if dt is a safe filename component."""
-        return bool(dt and AUTOSAVE_TYPE_RE.match(dt))
+        return is_safe_autosave_name(dt)
 
     def _autosave_meta_path(self, save_dir):
         return save_dir / '_meta.json'
@@ -169,7 +188,7 @@ class Handler(BaseHTTPRequestHandler):
         dsl = data.get('dsl', '')
         dir_raw = data.get('dir')
         if not self._autosave_validate_type(dt):
-            self._send_json(400, {'error': 'invalid type — must match [A-Za-z0-9_-]+'})
+            self._send_json(400, {'error': 'invalid type — パス区切り・制御文字・Windows の禁止文字は使えません'})
             return
         if not isinstance(dsl, str):
             self._send_json(400, {'error': 'dsl must be a string'})
@@ -206,7 +225,7 @@ class Handler(BaseHTTPRequestHandler):
         dt = params.get('type', '')
         if dt:
             if not self._autosave_validate_type(dt):
-                self._send_json(400, {'error': 'invalid type — must match [A-Za-z0-9_-]+'})
+                self._send_json(400, {'error': 'invalid type — パス区切り・制御文字・Windows の禁止文字は使えません'})
                 return
             file_path = self._autosave_file_path(save_dir, dt)
             if not file_path.exists():
