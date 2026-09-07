@@ -88,6 +88,67 @@ window.MA.tailKindChips = (function() {
     }
   }
 
+  // ── 一括入力の呼び込み (BLK-junior-20260907-1903) ────────────────────────
+  // 「一括 (複数行)」は種別の並びの最後にあり、チップにすると文字も「一括」の 2 字。
+  // 4 部品 + 6 関係のコンポーネント図を 1 件ずつ足し切ってから、後で存在に気付く、
+  // ということが起きる。何が足せるかの列とは別に、「まとめて入れられる」ことだけを
+  // 言う 1 行を常に出す。どの種別を選んでいても 1 クリックで一括欄に入れる。
+  var BULK_VALUE = 'bulk';
+
+  function bulkOption(options) {
+    var list = options || [];
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].value === BULK_VALUE) return list[i];
+    }
+    return null;
+  }
+
+  // promoModel: 一括の選択肢が無ければ null (呼び込む先が無いので出さない)。
+  function promoModel(options, current) {
+    var opt = bulkOption(options);
+    if (!opt) return null;
+    var active = current === BULK_VALUE;
+    return {
+      value: BULK_VALUE,
+      active: active,
+      label: active ? '⊞ まとめて入れる — 選択中' : '⊞ まとめて入れる',
+      hint: active
+        ? '下の欄に 1 行 1 件で書いて、まとめて末尾に追加します'
+        : '要素も関係も 1 行 1 件で書けます。1 件ずつ足さなくて済みます',
+    };
+  }
+
+  function promoHtml(idPrefix, model) {
+    if (!model) return '';
+    var on = !!model.active;
+    return '<button type="button" id="' + esc(idPrefix) + '-bulk-promo"'
+      + ' data-value="' + esc(model.value) + '"'
+      + ' aria-pressed="' + (on ? 'true' : 'false') + '"'
+      + ' style="display:block;width:100%;text-align:left;margin-bottom:6px;'
+      + 'background:' + (on ? 'var(--accent)' : 'var(--bg-tertiary)') + ';'
+      + 'border:1px dashed ' + (on ? 'var(--accent)' : 'var(--accent)') + ';'
+      + 'color:' + (on ? '#fff' : 'var(--text-primary)') + ';'
+      + 'padding:6px 10px;border-radius:4px;font-size:11px;cursor:pointer;">'
+      + '<strong>' + esc(model.label) + '</strong><br>'
+      + '<span style="font-size:10px;opacity:0.85;">' + esc(model.hint) + '</span>'
+      + '</button>';
+  }
+
+  // paintPromo: 現在値に合わせて呼び込みの文言と当たりを揃える。
+  function paintPromo(promoEl, options, current) {
+    if (!promoEl) return;
+    var m = promoModel(options, current);
+    if (!m) return;
+    var on = !!m.active;
+    promoEl.setAttribute('aria-pressed', on ? 'true' : 'false');
+    promoEl.style.background = on ? 'var(--accent)' : 'var(--bg-tertiary)';
+    promoEl.style.color = on ? '#fff' : 'var(--text-primary)';
+    var strong = promoEl.querySelector('strong');
+    var span = promoEl.querySelector('span');
+    if (strong) strong.textContent = m.label;
+    if (span) span.textContent = m.hint;
+  }
+
   // mount: {selectId} の select の直前にチップ列を差し込む。
   // propsEl を作り直すたびに呼ばれるので、既にある列は捨ててから作る。
   function mount(selectId) {
@@ -96,6 +157,8 @@ window.MA.tailKindChips = (function() {
     var idPrefix = selectId;
     var old = document.getElementById(idPrefix + '-chips');
     if (old && old.parentNode) old.parentNode.removeChild(old);
+    var oldPromo = document.getElementById(idPrefix + '-bulk-promo');
+    if (oldPromo && oldPromo.parentNode) oldPromo.parentNode.removeChild(oldPromo);
 
     var options = [];
     for (var i = 0; i < sel.options.length; i++) {
@@ -110,8 +173,18 @@ window.MA.tailKindChips = (function() {
     var wrap = sel.parentNode;
     wrap.parentNode.insertBefore(chipsEl, wrap);
 
+    // 呼び込みはチップ列の上。種別を読み下す前に目に入る位置に置く。
+    var promoEl = null;
+    var pm = promoModel(options, sel.value);
+    if (pm) {
+      var phost = document.createElement('div');
+      phost.innerHTML = promoHtml(idPrefix, pm);
+      promoEl = phost.firstChild;
+      chipsEl.parentNode.insertBefore(promoEl, chipsEl);
+    }
+
     function pick(value, focus) {
-      if (sel.value === value) { paint(chipsEl, sel.value); return; }
+      if (sel.value === value) { paint(chipsEl, sel.value); paintPromo(promoEl, options, sel.value); return; }
       sel.value = value;
       paint(chipsEl, sel.value);
       // Event は select が属する document のものを使う。テストの jsdom のように
@@ -122,6 +195,7 @@ window.MA.tailKindChips = (function() {
       if (view && view.Event) ev = new view.Event('change', { bubbles: true });
       else { ev = doc.createEvent('Event'); ev.initEvent('change', true, false); }
       sel.dispatchEvent(ev);
+      paintPromo(promoEl, options, sel.value);
       if (focus) {
         var b = document.getElementById(idPrefix + '-chip-' + idPart(value));
         if (b) b.focus();
@@ -146,8 +220,15 @@ window.MA.tailKindChips = (function() {
       pick(btns[next].getAttribute('data-value'), true);
     });
 
+    if (promoEl) {
+      promoEl.addEventListener('click', function() { pick(BULK_VALUE, false); });
+    }
+
     // select 側 (従来の経路・E2E) から値が変わってもチップの当たりが古びないようにする。
-    sel.addEventListener('change', function() { paint(chipsEl, sel.value); });
+    sel.addEventListener('change', function() {
+      paint(chipsEl, sel.value);
+      paintPromo(promoEl, options, sel.value);
+    });
 
     return chipsEl;
   }
@@ -159,6 +240,9 @@ window.MA.tailKindChips = (function() {
     chipsHtml: chipsHtml,
     moveIndex: moveIndex,
     paint: paint,
+    promoModel: promoModel,
+    promoHtml: promoHtml,
+    paintPromo: paintPromo,
     mount: mount,
   };
 })();
