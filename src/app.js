@@ -6052,8 +6052,16 @@ function _traceRender(families, selectedKey) {
     + '<th style="' + CELL + 'text-align:left;">現れたシーケンス</th></tr>';
 
   if (sel.rows.length === 0) {
+    // 対象外に回した遷移があるのに「遷移がありません」と出すと、
+    // 図を書いていないのか見ていないのかが読めない (BLK-reviewer-20260907-2003)。
+    var oosN = (sel.outOfScope || []).length;
     html += '<tr><td id="tc-no-rows" colspan="3" style="' + CELL
-      + 'color:var(--text-secondary);">ラベルの付いた遷移がありません</td></tr>';
+      + 'color:var(--text-secondary);">'
+      + (oosN
+          ? (sel.declared ? '宣言された遷移がありません (上の欄で宣言してください)'
+                          : '遷移 ' + oosN + ' 件は粒度が違うとして外しています (上の欄で宣言すれば突き合わせます)')
+          : 'ラベルの付いた遷移がありません')
+      + '</td></tr>';
   }
   sel.rows.forEach(function(r, ri) {
     var missing = r.status === 'missing';
