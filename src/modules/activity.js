@@ -1771,8 +1771,15 @@ window.MA.modules.plantumlActivity = (function() {
     }
     var swimLabel = swimlane ? swimlane.label : '(なし)';
 
+    // design 4b: 居場所は行番号ではなく構造で示す (条件分岐「有効?」の yes 側、1 番目)。
+    var AI = window.MA.activityInsert;
+    var place = (AI && AI.describeStructure) ? AI.describeStructure(ctx.getMmdText(), node.line) : '';
     var html =
       '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">Action (L' + node.line + ')</div>' +
+      '<div id="ac-action-place" style="margin-bottom:8px;font-size:11px;">' +
+        '<span style="color:var(--text-secondary);">位置</span> ' +
+        window.MA.htmlUtils.escHtml(place || 'フローの外') +
+      '</div>' +
       '<div style="margin-bottom:6px;font-size:11px;"><b>Swimlane:</b> ' + window.MA.htmlUtils.escHtml(swimLabel) + ' <span style="color:var(--text-secondary);">(read-only)</span></div>' +
       '<div style="margin-bottom:6px;">' +
         '<label style="display:block;font-size:10px;color:var(--text-secondary);">Text</label>' +
@@ -1798,10 +1805,22 @@ window.MA.modules.plantumlActivity = (function() {
     html += '<div id="ac-add-note-form" style="margin-top:6px;"></div>' +
             '<button id="ac-add-note-btn" style="margin-top:4px;">+ Note 追加</button>' +
           '</div>' +
+          // design 4b:「この位置に挿入 / Insert here」— 選んでいるアクションの前後に足す。
+          // 押すと図の隙間クリックと同じ挿入メニュー (showInsertPicker) がその位置で開く。
+          '<div style="border-top:1px solid var(--border);padding-top:10px;margin-top:8px;">' +
+            '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">この位置に挿入 / Insert here</label>' +
+            '<div style="display:flex;gap:4px;">' +
+              '<button id="ac-insert-before" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↑ 前に</button>' +
+              '<button id="ac-insert-after" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↓ 後に</button>' +
+            '</div>' +
+          '</div>' +
           '<div style="margin-top:10px;">' +
             P.primaryButtonHtml('ac-action-delete', '✕ 削除') +
           '</div>';
     propsEl.innerHTML = html;
+
+    P.bindEvent('ac-insert-before', 'click', function() { showInsertPicker(ctx, node.line, 'before'); });
+    P.bindEvent('ac-insert-after', 'click', function() { showInsertPicker(ctx, node.line, 'after'); });
 
     // 色を選んだ時点で DSL へ入れる (design 3c と同じ流儀)。
     for (var ci = 0; ci < ACTION_COLORS.length; ci++) {
