@@ -7021,7 +7021,206 @@ function runConsistencyCheck() {
   renderCheckList();
 }
 
+// ── 他の人のフォルダの同じ図と突き合わせる (BLK-junior-20260908-0723-wish) ──
+// 先輩版と自分版の同種図を見比べる場面で、これまでは自分の保存先設定を先輩の
+// フォルダへ一時的に替えて開き、内容を憶えてから設定を戻し、記憶を頼りに
+// 打ち直していた。相手のフォルダを打てば、名前の近い図を勝手に引き当て、
+// 「相手にしかない要素」を並べる。取り込みは行ごとに 1 クリック。
+// 自分の保存先設定 (autoSave の fileDir) には一切触らない。
+var _xfDir = '';        // 相手のフォルダ
+var _xfNames = [];      // そのフォルダのファイル名
+var _xfFile = null;     // 相手にしている図の名前
+var _xfRefDsl = '';     // その中身
+var _xfResult = null;   // 直近の突き合わせ結果
+
+var XF_DIR_KEY = 'pua.crossRef.dir';
+
+function _xfStore(dir) {
+  try { if (window.localStorage) window.localStorage.setItem(XF_DIR_KEY, dir); } catch (e) { /* 使えない環境でも動く */ }
+}
+
+function _xfRestore() {
+  try { return (window.localStorage && window.localStorage.getItem(XF_DIR_KEY)) || ''; } catch (e) { return ''; }
+}
+
+function _xfEl(id) { return document.getElementById(id); }
+
+// 相手フォルダを読み、名前の近い図を選んで突き合わせる。
+function loadCrossRefFolder() {
+  var input = _xfEl('xf-dir');
+  var summary = _xfEl('xf-summary');
+  var dir = input ? input.value.trim() : '';
+  if (!dir) {
+    _xfShowMessage('相手のフォルダを入れてください (自分の保存先は変わりません)', 'dirty');
+    return Promise.resolve();
+  }
+  _xfDir = dir;
+  _xfStore(dir);
+  if (summary) { summary.hidden = false; summary.className = ''; summary.textContent = '読み込み中…'; }
+  if (!window.MA.workspace) return Promise.resolve();
+  return window.MA.workspace.listFolder(dir).then(function(res) {
+    var entries = (res && res.entries) || [];
+    _xfNames = entries.map(function(e) { return (e && e.name) || ''; })
+      .filter(function(n) { return n !== ''; });
+    if (res && res.exists === false) {
+      _xfShowMessage('そのフォルダが見つかりません: ' + dir, 'dirty');
+      _xfClearPick();
+      return;
+    }
+    if (_xfNames.length === 0) {
+      _xfShowMessage('そのフォルダに図がありません: ' + dir, 'dirty');
+      _xfClearPick();
+      return;
+    }
+    var CRD = window.MA.crossRefDiff;
+    var selfName = _xfSelfName();
+    var pick = CRD ? CRD.pickCounterpart(_xfNames, selfName) : null;
+    _xfRenderPick(pick || _xfNames[0]);
+    return _xfSelectFile(pick || _xfNames[0]);
+  });
+}
+
+function _xfSelfName() {
+  try {
+    var d = window.MA.workspace ? window.MA.workspace.getActive() : null;
+    return (d && d.name) || '';
+  } catch (e) { return ''; }
+}
+
+function _xfShowMessage(text, cls) {
+  var summary = _xfEl('xf-summary');
+  if (!summary) return;
+  summary.hidden = false;
+  summary.className = cls || '';
+  summary.textContent = text;
+}
+
+function _xfClearPick() {
+  var pick = _xfEl('xf-pick'), list = _xfEl('xf-list');
+  if (pick) pick.hidden = true;
+  if (list) { list.hidden = true; list.textContent = ''; }
+  _xfFile = null;
+  _xfResult = null;
+}
+
+// 相手の候補を近い順に並べる。近さの付いた名前を先に出す。
+function _xfRenderPick(selected) {
+  var pick = _xfEl('xf-pick'), sel = _xfEl('xf-file');
+  if (!pick || !sel) return;
+  var CRD = window.MA.crossRefDiff;
+  var ranked = CRD ? CRD.counterparts(_xfNames, _xfSelfName())
+                   : _xfNames.map(function(n) { return { name: n, distance: null }; });
+  sel.textContent = '';
+  ranked.forEach(function(c) {
+    var op = document.createElement('option');
+    op.value = c.name;
+    op.textContent = c.name + (c.distance === 0 ? ' (同じ名前)' : c.distance == null ? ' (名前が離れています)' : '');
+    if (c.name === selected) op.selected = true;
+    sel.appendChild(op);
+  });
+  pick.hidden = false;
+}
+
+// 相手の図を 1 枚読み、要素を突き合わせて並べる。
+function _xfSelectFile(name) {
+  if (!name || !window.MA.workspace) return Promise.resolve();
+  _xfFile = name;
+  return window.MA.workspace.loadFile(name, _xfDir).then(function(dsl) {
+    _xfRefDsl = dsl == null ? '' : dsl;
+    if (_xfRefDsl === '') {
+      _xfShowMessage('その図を読めませんでした: ' + name, 'dirty');
+      return;
+    }
+    renderCrossRefDiff();
+  });
+}
+
+// 突き合わせ結果を描く。自分の DSL が変わるたびに呼び直してよい。
+function renderCrossRefDiff() {
+  var CRD = window.MA.crossRefDiff;
+  var list = _xfEl('xf-list'), note = _xfEl('xf-rename');
+  if (!CRD || !list || !_xfFile) return;
+  var selfDsl = editorEl ? editorEl.value : '';
+  var map = CRD.renameMap(_xfSelfName(), _xfFile);
+  _xfResult = CRD.diff(selfDsl, _xfRefDsl, map);
+  if (note) {
+    note.textContent = map ? ('読み替え: ' + map.from + ' → ' + map.to) : '';
+  }
+  var clean = _xfResult.onlyRef.length === 0 && _xfResult.onlySelf.length === 0;
+  _xfShowMessage(CRD.summary(_xfResult), clean ? 'clean' : 'dirty');
+
+  list.textContent = '';
+  _xfResult.onlyRef.forEach(function(e) { list.appendChild(_xfRow(e, 'ref')); });
+  _xfResult.onlySelf.forEach(function(e) { list.appendChild(_xfRow(e, 'self')); });
+  list.hidden = (_xfResult.onlyRef.length + _xfResult.onlySelf.length) === 0;
+}
+
+// 1 行。相手にしかない行には「取り込む」を付ける (自分にしかない行は取り込めない)。
+function _xfRow(entry, side) {
+  var row = document.createElement('div');
+  row.className = 'xf-row ' + (side === 'ref' ? 'only-ref' : 'only-self');
+  row.setAttribute('data-side', side);
+  row.setAttribute('data-kind', entry.kind || '');
+
+  var tag = document.createElement('span');
+  tag.className = 'xf-side';
+  tag.textContent = side === 'ref' ? '相手だけ' : '自分だけ';
+  row.appendChild(tag);
+
+  var text = document.createElement('span');
+  text.className = 'xf-text';
+  text.textContent = entry.text;
+  text.title = entry.text;
+  // 自分にしかない行はその場で見に行ける。相手の行は自分の図にまだ無いので飛べない。
+  if (side === 'self') {
+    text.addEventListener('click', function() { jumpToLine(entry.line); });
+  } else {
+    text.style.cursor = 'default';
+  }
+  row.appendChild(text);
+
+  if (side === 'ref') {
+    var take = document.createElement('button');
+    take.type = 'button';
+    take.className = 'xf-take';
+    take.textContent = '取り込む';
+    take.title = 'この 1 行を自分の図に入れる';
+    take.addEventListener('click', function() { takeCrossRefEntry(entry); });
+    row.appendChild(take);
+  }
+  return row;
+}
+
+// 相手にしかない 1 行を自分の DSL へ入れ、その行へ飛んで、一覧を出し直す。
+function takeCrossRefEntry(entry) {
+  var CRD = window.MA.crossRefDiff;
+  if (!CRD || !editorEl) return;
+  var out = CRD.applyInsert(editorEl.value, entry);
+  if (!out) return;
+  editorEl.value = out.dsl;
+  editorEl.dispatchEvent(new Event('input'));
+  jumpToLine(out.line);
+  renderCrossRefDiff();
+}
+
+function setupCrossRefDiff() {
+  var btn = _xfEl('btn-xf-load');
+  var dir = _xfEl('xf-dir');
+  var file = _xfEl('xf-file');
+  if (dir) dir.value = _xfRestore();
+  if (btn) btn.addEventListener('click', function() { loadCrossRefFolder(); });
+  if (dir) {
+    dir.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { e.preventDefault(); loadCrossRefFolder(); }
+    });
+  }
+  if (file) {
+    file.addEventListener('change', function() { _xfSelectFile(file.value); });
+  }
+}
+
 function setupCompareView() {
+  setupCrossRefDiff();
   var checkBtn = document.getElementById('btn-check-run');
   if (checkBtn) checkBtn.addEventListener('click', runConsistencyCheck);
   var btn = document.getElementById('btn-tab-compare');

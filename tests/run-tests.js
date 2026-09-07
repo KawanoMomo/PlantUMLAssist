@@ -39,6 +39,7 @@ const sourceFiles = [
   'src/core/select-at-line.js',
   'src/core/tail-kind-chips.js',
   'src/core/compare-view.js',
+  'src/core/cross-ref-diff.js',
   'src/core/change-board.js',
   'src/core/line-resolver.js',
   'src/core/formatter-interface.js',
