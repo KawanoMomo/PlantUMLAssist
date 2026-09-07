@@ -1986,6 +1986,7 @@ function init() {
   setupChangeBoard();
   setupPinPanel();
   setupNameAudit();
+  setupSubmitCheck();
   setupFamilyAudit();
   setupHandoffPackage();
   setupFamilyClone();
@@ -2103,6 +2104,7 @@ function initCommandPalette() {
       { id: 'tab-new', title: '新しい図を開く / New diagram', hint: 'Tabs', keywords: ['new', 'tab', 'あたらしい', 'ず'], run: function() { clickById('btn-tab-new'); } },
       { id: 'tab-folder', title: '保存フォルダの図を一覧 / Folder', hint: 'Tabs', keywords: ['folder', 'list', 'いちらん', 'ふぉるだ'], run: function() { clickById('btn-tab-folder'); } },
       { id: 'tab-rename', title: '部品名を一括置換 / Bulk rename', hint: 'Tabs', keywords: ['rename', 'replace', 'いっかつ', 'ちかん'], run: function() { clickById('btn-tab-rename'); } },
+      { id: 'tab-submit', title: '提出前チェックを開く / Submit check', hint: 'Tabs', keywords: ['submit', 'check', 'ていしゅつ', 'かくにん', '略語'], run: function() { clickById('btn-tab-submit'); } },
       { id: 'tab-audit', title: '名前突合を開く / Name audit', hint: 'Tabs', keywords: ['name', 'audit', 'なまえ', 'つきあわせ'], run: function() { clickById('btn-tab-audit'); } },
       { id: 'tab-handoff', title: '引き継ぎパッケージを作る / Handoff package', hint: 'Tabs', keywords: ['handoff', 'package', 'zip', 'ひきつぎ', 'ぱっけーじ'], run: function() { clickById('btn-tab-handoff'); } },
       { id: 'tab-lines', title: '行編集を開く / Line edit', hint: 'Tabs', keywords: ['line', 'edit', 'ぎょう', 'へんしゅう'], run: function() { clickById('btn-tab-lines'); } },
@@ -4709,6 +4711,135 @@ function setupFamilyAudit() {
   var modal = document.getElementById('fa-modal');
   if (!btn || !modal || !window.MA.familyAudit) return;
   btn.addEventListener('click', function() { openFamilyAudit(); });
+  modal.addEventListener('click', function(ev) {
+    if (ev.target === modal) modal.style.display = 'none';
+  });
+}
+
+// ── 提出前チェック ─────────────────────────────────────────────────────────
+// BLK-primary-20260907-1403-wish: 顧客資料に組み込む前、14 枚のタイトル・注釈・
+// 部品名を 1 枚ずつ開いて社内略語や日付入りの一時識別子が残っていないか読んでいた。
+// 読む対象は決まっているので、全図から抜き出して 1 枚の表にし、辞書に当たった行だけ
+// 赤くする。辞書はその場で書き換えられ、次に開いたときも残る。
+
+var SC_DICT_KEY = 'pua.submitCheck.dict';
+
+function _scLoadDict() {
+  try {
+    var raw = window.localStorage.getItem(SC_DICT_KEY);
+    if (raw === null || raw === '') return window.MA.submitCheck.DEFAULT_TERMS.join('\n');
+    return raw;
+  } catch (e) { return window.MA.submitCheck.DEFAULT_TERMS.join('\n'); }
+}
+
+function _scSaveDict(text) {
+  try { window.localStorage.setItem(SC_DICT_KEY, text); } catch (e) { /* 残らないだけ */ }
+}
+
+function openSubmitCheck() {
+  var modal = document.getElementById('sc-modal');
+  var content = document.getElementById('sc-modal-content');
+  var SC = window.MA.submitCheck;
+  if (!modal || !content || !SC) return null;
+  var esc = window.MA.htmlUtils.escHtml;
+
+  var docs = _renameDocs();
+  var dictText = _scLoadDict();
+  var result = SC.check(docs, SC.parseDict(dictText));
+
+  var CELL = 'padding:3px 6px;border-bottom:1px solid var(--border);font-size:11px;color:var(--text-primary);';
+  var BTN = 'background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;padding:3px 10px;font-size:11px;';
+
+  var html = '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">\u{1F4E4} 提出前チェック</h3>' +
+    '<div id="sc-summary" style="font-size:11px;color:var(--text-secondary);" ' +
+      'data-docs="' + result.docs.length + '" data-rows="' + result.rows.length + '" ' +
+      'data-flagged="' + result.flagged.length + '">' + esc(SC.summaryLine(result)) + '</div>';
+
+  html += '<div style="display:flex;gap:12px;margin-top:10px;align-items:flex-start;">' +
+    '<div style="flex:1;min-width:0;">' +
+      '<label style="display:block;font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">' +
+        '全図のタイトル・注釈・部品名</label>' +
+      '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:4px;">' +
+        '<input type="checkbox" id="sc-only-flagged"' + (result.flagged.length ? ' checked' : '') + '> 要確認だけ表示</label>' +
+      '<table id="sc-table" style="border-collapse:collapse;width:100%;">' +
+        '<tr><th style="' + CELL + 'text-align:left;color:var(--text-secondary);">図</th>' +
+        '<th style="' + CELL + 'text-align:left;color:var(--text-secondary);">種別</th>' +
+        '<th style="' + CELL + 'text-align:left;color:var(--text-secondary);">文字列</th>' +
+        '<th style="' + CELL + 'text-align:left;color:var(--text-secondary);">当たった語</th></tr>';
+
+  if (result.rows.length === 0) {
+    html += '<tr id="sc-empty"><td colspan="4" style="' + CELL + 'color:var(--text-secondary);">' +
+      '読む対象の行がありません</td></tr>';
+  }
+  result.rows.forEach(function(r) {
+    var red = r.flagged ? 'color:var(--accent-red);font-weight:bold;' : '';
+    html += '<tr class="sc-row' + (r.flagged ? ' sc-flagged' : '') + '"' +
+      ' data-doc="' + esc(r.doc) + '" data-line="' + r.line + '" data-kind="' + esc(r.kind) + '"' +
+      ' style="cursor:pointer;">' +
+      '<td style="' + CELL + 'color:var(--text-secondary);white-space:nowrap;">' + esc(r.doc) + '</td>' +
+      '<td style="' + CELL + 'color:var(--text-secondary);white-space:nowrap;">' + esc(SC.kindLabel(r.kind)) + ' L' + r.line + '</td>' +
+      '<td style="' + CELL + 'font-family:var(--font-mono);' + red + '">' + esc(r.text) + '</td>' +
+      '<td style="' + CELL + red + '">' + esc(r.hits.join(', ')) + '</td>' +
+      '</tr>';
+  });
+  html += '</table></div>';
+
+  html += '<div style="width:200px;flex-shrink:0;">' +
+      '<label style="display:block;font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">' +
+        '社内略語辞書 (1 行 1 語)</label>' +
+      '<textarea id="sc-dict" style="width:100%;min-height:180px;font-family:var(--font-mono);font-size:11px;' +
+        'background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);' +
+        'border-radius:3px;padding:4px;box-sizing:border-box;">' + esc(dictText) + '</textarea>' +
+      '<div style="font-size:10px;color:var(--text-secondary);margin-top:4px;line-height:1.5;">' +
+        '日付入りの識別子 (20260907 / 2026-09-07) は辞書に書かなくても当たります</div>' +
+      '<button id="sc-recheck" style="' + BTN + 'width:100%;margin-top:6px;">辞書を保存して再チェック</button>' +
+    '</div></div>';
+
+  html += '<div style="display:flex;gap:8px;margin-top:12px;">' +
+    '<button id="sc-close" style="' + BTN + 'flex:1;">閉じる</button></div>';
+
+  content.innerHTML = html;
+  modal.style.display = 'flex';
+
+  var only = document.getElementById('sc-only-flagged');
+  function applyFilter() {
+    var onlyFlagged = only && only.checked;
+    Array.prototype.forEach.call(content.querySelectorAll('.sc-row'), function(tr) {
+      tr.hidden = !!(onlyFlagged && tr.className.indexOf('sc-flagged') === -1);
+    });
+  }
+  if (only) only.addEventListener('change', applyFilter);
+  applyFilter();
+
+  // 行を押すとその図のタブへ移り、該当行を選ぶ。赤い行から直しに行ける。
+  Array.prototype.forEach.call(content.querySelectorAll('.sc-row'), function(tr) {
+    tr.addEventListener('click', function() {
+      var name = tr.getAttribute('data-doc');
+      var line = parseInt(tr.getAttribute('data-line'), 10);
+      modal.style.display = 'none';
+      if (window.MA.workspace) {
+        var d = window.MA.workspace.findByName(name);
+        if (d) switchToDoc(d.id);
+      }
+      if (!isNaN(line)) jumpToLine(line);
+    });
+  });
+
+  document.getElementById('sc-recheck').addEventListener('click', function() {
+    _scSaveDict(document.getElementById('sc-dict').value);
+    openSubmitCheck();
+  });
+  document.getElementById('sc-close').addEventListener('click', function() {
+    modal.style.display = 'none';
+  });
+  return result;
+}
+
+function setupSubmitCheck() {
+  var btn = document.getElementById('btn-tab-submit');
+  var modal = document.getElementById('sc-modal');
+  if (!btn || !modal || !window.MA.submitCheck) return;
+  btn.addEventListener('click', function() { openSubmitCheck(); });
   modal.addEventListener('click', function(ev) {
     if (ev.target === modal) modal.style.display = 'none';
   });
