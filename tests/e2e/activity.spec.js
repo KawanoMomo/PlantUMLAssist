@@ -2,6 +2,13 @@
 const { test, expect } = require('@playwright/test');
 const { gotoApp, getEditorText } = require('./helpers');
 
+// BLK-builder-20260907-1324-3 (design 4b): 隙間クリックはまず「＋ ここに挿入」メニューを
+// 開くようになった。フォームはそこで種別を選んでから出る。
+async function pickInsertKind(page, kind) {
+  await page.locator('#act-pick-' + kind).click();
+  await page.waitForTimeout(100);
+}
+
 test.describe('Activity v0.7.0', () => {
   test.describe('α: DSL technical', () => {
     test('UC-1: switching to Activity loads start + action template', async ({ page }) => {
@@ -154,6 +161,7 @@ test.describe('Activity v0.7.0', () => {
       await page.waitForTimeout(300);
       var modalDisplay = await page.locator('#act-modal').evaluate(function(el) { return el.style.display; });
       expect(modalDisplay).toBe('flex');
+      await pickInsertKind(page, 'action');
       await page.locator('#act-mod-text').fill('Mid Insert');
       await page.locator('#act-mod-confirm').click();
       await page.waitForTimeout(300);
@@ -172,9 +180,8 @@ test.describe('Activity v0.7.0', () => {
       // Click below the action rect (empty space) to open modal
       await page.mouse.click(box.x + box.width / 2, box.y + box.height + 6);
       await page.waitForTimeout(300);
-      // Switch kind to 'if'
-      await page.locator('#act-mod-kind').selectOption('if');
-      await page.waitForTimeout(100);
+      // BLK-builder-1324: 種別はメニューから選ぶ
+      await pickInsertKind(page, 'if');
       await page.locator('#act-mod-cond').fill('auth?');
       await page.locator('#act-mod-thenlbl').fill('yes');
       await page.locator('#act-mod-elselbl').fill('no');
@@ -207,8 +214,7 @@ test.describe('Activity v0.7.0', () => {
       // Modal should be visible
       var modalDisplay = await page.locator('#act-modal').evaluate(function(el) { return el.style.display; });
       if (modalDisplay !== 'flex') test.skip();
-      await page.locator('#act-mod-kind').selectOption('if');
-      await page.waitForTimeout(100);
+      await pickInsertKind(page, 'if');
       await page.locator('#act-mod-cond').fill('inner?');
       await page.locator('#act-mod-elselbl').fill('');  // omit else
       await page.locator('#act-mod-confirm').click();
@@ -233,8 +239,7 @@ test.describe('Activity v0.7.0', () => {
       var box = await actionRect.boundingBox();
       await page.mouse.click(box.x + box.width / 2, box.y + box.height + 6);
       await page.waitForTimeout(300);
-      await page.locator('#act-mod-kind').selectOption('swimlane');
-      await page.waitForTimeout(100);
+      await pickInsertKind(page, 'swimlane');
       await page.locator('#act-mod-name').fill('Backend');
       await page.locator('#act-mod-confirm').click();
       await page.waitForTimeout(300);
@@ -252,8 +257,7 @@ test.describe('Activity v0.7.0', () => {
       var box = await actionRect.boundingBox();
       await page.mouse.click(box.x + box.width / 2, box.y + box.height + 6);
       await page.waitForTimeout(300);
-      await page.locator('#act-mod-kind').selectOption('note');
-      await page.waitForTimeout(100);
+      await pickInsertKind(page, 'note');
       await page.locator('#act-mod-text').fill('important\ncomment');
       await page.locator('#act-mod-confirm').click();
       await page.waitForTimeout(300);
@@ -377,6 +381,7 @@ test.describe('Activity v0.7.0', () => {
       await page.waitForTimeout(300);
       var modalDisplay = await page.locator('#act-modal').evaluate(function(el) { return el.style.display; });
       if (modalDisplay !== 'flex') test.skip();
+      await pickInsertKind(page, 'action');
       await page.locator('#act-mod-text').fill('NewElseAction');
       await page.locator('#act-mod-confirm').click();
       await page.waitForTimeout(300);

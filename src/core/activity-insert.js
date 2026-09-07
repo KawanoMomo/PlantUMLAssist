@@ -167,6 +167,36 @@ window.MA.activityInsert = (function() {
     return [];   // break / detach / kill / start / stop は入力なし
   }
 
+  // design 4b の「小さなメニュー」の並び。よく置くものだけを 1 段目に出し、
+  // 残り (repeat / break / detach / kill) は「その他」の 2 段目に畳む。
+  var PRIMARY_ORDER = ['action', 'if', 'while', 'fork', 'note', 'swimlane'];
+  var OTHER_ORDER = ['repeat', 'break', 'detach', 'kill'];
+
+  // その位置に置ける要素を 1 段目 / 2 段目に振り分ける。
+  // フローの外 (start / stop / レーンだけ) では 2 段目を作らない。
+  function pickerKinds(dsl, lineNum) {
+    var allowed = allowedKinds(dsl, lineNum);
+    var byKind = {};
+    allowed.forEach(function(k) { byKind[k.kind] = k; });
+    var primary = [];
+    var other = [];
+    PRIMARY_ORDER.forEach(function(k) { if (byKind[k]) { primary.push(byKind[k]); delete byKind[k]; } });
+    OTHER_ORDER.forEach(function(k) { if (byKind[k]) { other.push(byKind[k]); delete byKind[k]; } });
+    // 並びに載っていないもの (start / stop) は 1 段目の末尾に、allowed の順で残す。
+    allowed.forEach(function(k) { if (byKind[k.kind]) { primary.push(k); delete byKind[k.kind]; } });
+    return { primary: primary, other: other };
+  }
+
+  // メニューの見出しに出す「どこに入るか」。
+  function describePoint(dsl, lineNum, position) {
+    var lines = _lines(dsl);
+    var idx = lineNum - 1;
+    var text = (idx >= 0 && idx < lines.length) ? lines[idx].trim() : '';
+    var where = position === 'before' ? 'の前' : 'の後';
+    if (!text) return lineNum + ' 行目' + where;
+    return lineNum + ' 行目「' + text + '」' + where;
+  }
+
   // 入力なしでそのまま 1 行入る種類。
   function isBareKind(kind) {
     return kind === 'break' || kind === 'detach' || kind === 'kill'
@@ -183,6 +213,8 @@ window.MA.activityInsert = (function() {
     inFlow: inFlow,
     allowedKinds: allowedKinds,
     isAllowed: isAllowed,
+    pickerKinds: pickerKinds,
+    describePoint: describePoint,
     insertPoints: insertPoints,
     pointAt: pointAt,
     fieldsFor: fieldsFor,
