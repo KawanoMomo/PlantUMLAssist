@@ -207,6 +207,90 @@ window.MA.activityInsert = (function() {
     return isBareKind(kind) ? kind : null;
   }
 
+
+  // design 4b の右ペインは、選んでいるアクションの居場所を行番号ではなく構造で
+  // 示すことを求める (例:「条件分岐「有効?」の yes 側、1 番目」)。
+  // ブロックの入れ子は selection-reorder が持つ判定 (isOpen / isClose / isMid /
+  // isFence) をそのまま使い、開き行の書き方の解釈だけをここに置く。
+  function _condOf(head) {
+    var m = /\(([^)]*)\)/.exec(head);
+    return m ? m[1] : '';
+  }
+
+  // `if (c?) then (yes)` / `else (no)` / `elseif (x) then (y)` の枝ラベル。
+  function _branchOf(head) {
+    var m = /then\s*\(([^)]*)\)\s*$/i.exec(head);
+    if (m) return m[1];
+    m = /^else\s*\(([^)]*)\)/i.exec(head);
+    if (m) return m[1];
+    m = /is\s*\(([^)]*)\)/i.exec(head);        // while (c) is (yes)
+    if (m) return m[1];
+    return '';
+  }
+
+  // 種類は開き行 (openHead) で決める。else / fork again をまたいでも
+  // 「条件分岐」「並行処理」という呼び名は変わらないため。
+  function _frameLabel(fr) {
+    var head = fr.openHead;
+    if (/^if\s*\(/i.test(head)) {
+      var br = fr.branch;
+      return '条件分岐「' + _condOf(head) + '」の' + (br ? ' ' + br + ' 側' : '中');
+    }
+    if (/^while\s*\(/i.test(head)) return '繰り返し「' + _condOf(head) + '」の中';
+    if (/^repeat\s*$/i.test(head)) return '繰り返し (repeat) の中';
+    if (/^fork\s*$/i.test(head)) return '並行処理の ' + (fr.branchIndex + 1) + ' 本目';
+    if (/^split\s*$/i.test(head)) return '分岐 (split) の ' + (fr.branchIndex + 1) + ' 本目';
+    if (/^partition/i.test(head)) return '「' + head.replace(/^partition\s*/i, '').replace(/\{\s*$/, '').trim() + '」の中';
+    return '「' + head + '」の中';
+  }
+
+  // 行 lineNum が「どのブロックのどちら側の何番目か」。フローの直下なら
+  // 「フローの N 番目」。範囲外・空行では '' を返す。
+  function describeStructure(dsl, lineNum) {
+    var SR = window.MA && window.MA.selectionReorder;
+    if (!SR) return '';
+    var lines = _lines(dsl);
+    var idx = lineNum - 1;
+    if (idx < 0 || idx >= lines.length) return '';
+    var stack = [];
+    var count = 0;
+    for (var i = 0; i <= idx; i++) {
+      var line = lines[i];
+      var t = line.trim();
+      if (!t) continue;
+      if (SR.isClose(line)) {
+        var st = stack.pop();
+        count = st ? st.count : 0;
+        if (i === idx) return '';                 // 閉じ行そのものには居場所を出さない
+        continue;
+      }
+      if (SR.isMid(line)) {
+        if (stack.length) {
+          var top = stack[stack.length - 1];
+          top.branch = _branchOf(t);
+          top.branchIndex++;
+        }
+        count = 0;
+        if (i === idx) return '';
+        continue;
+      }
+      if (SR.isFence(line)) {
+        if (i === idx) return '';
+        continue;
+      }
+      count++;
+      if (i === idx) break;
+      if (SR.isOpen(line)) {
+        stack.push({
+          openHead: t, branch: _branchOf(t), branchIndex: 0, count: count,
+        });
+        count = 0;
+      }
+    }
+    if (!stack.length) return 'フローの ' + count + ' 番目';
+    return _frameLabel(stack[stack.length - 1]) + '、' + count + ' 番目';
+  }
+
   return {
     kinds: kinds,
     labelFor: labelFor,
@@ -215,6 +299,7 @@ window.MA.activityInsert = (function() {
     isAllowed: isAllowed,
     pickerKinds: pickerKinds,
     describePoint: describePoint,
+    describeStructure: describeStructure,
     insertPoints: insertPoints,
     pointAt: pointAt,
     fieldsFor: fieldsFor,
