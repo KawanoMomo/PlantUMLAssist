@@ -314,6 +314,49 @@ window.MA.properties = (function() {
     }
   }
 
+  // linkNoteHtml / bindLinkNote: BLK-builder-20260907-1737-2 (design 4c)。
+  // 「この線にノートを添える」は relationOptionsHtml の中にしか無かったので、
+  // 「その他の設定」を丸ごとは持たない State の遷移でも同じことができるように切り出す。
+  // チェックを外すとノートを消すところまで含めて 1 つの操作なので、
+  // 見た目と繋ぎこみを対にして置く。
+  function linkNoteHtml(id, opts) {
+    var o = opts || {};
+    var noted = !!o.note;
+    return '<div style="margin-bottom:8px;">' +
+      '<label style="display:flex;align-items:center;justify-content:space-between;font-size:12px;cursor:pointer;">' +
+        '<span>' + escHtml(o.label || 'この線にノートを添える') + '</span>' +
+        '<input id="' + id + '-on" type="checkbox"' + (noted ? ' checked' : '') + '>' +
+      '</label>' +
+      '<textarea id="' + id + '"' + (noted ? '' : ' hidden')
+        + ' placeholder="' + escHtml(o.placeholder || '') + '"'
+        + ' style="width:100%;min-height:48px;margin-top:4px;background:var(--bg-tertiary);'
+        + 'border:1px solid var(--border);color:var(--text-primary);font-size:12px;">'
+        + escHtml(o.note || '') + '</textarea>' +
+    '</div>';
+  }
+
+  // onChange(textOrNull) — null はノートを外すこと。チェックを入れた直後は
+  // まだ本文が無いので投げない (空のノート行を作らない)。
+  function bindLinkNote(id, onChange) {
+    var box = document.getElementById(id + '-on');
+    var ta = document.getElementById(id);
+    if (!box || !ta) return;
+    box.addEventListener('change', function() {
+      if (box.checked) {
+        ta.removeAttribute('hidden');
+        ta.focus();
+        return;
+      }
+      ta.setAttribute('hidden', '');
+      if (onChange) onChange(null);
+    });
+    ta.addEventListener('change', function() {
+      if (!onChange) return;
+      var v = ta.value.trim();
+      onChange(v ? v : null);
+    });
+  }
+
   // bindRelationOptions: 「その他の設定」の各操作を、行番号を渡された 1 つのハンドラに繋ぐ。
   // handlers = { onDirection(v), onMultiplicity(l, r), onColor(v), onNote(textOrNull) }
   // どの操作も押した / 離れた時点で即座に DSL へ反映する (design 3c)。
@@ -544,6 +587,8 @@ window.MA.properties = (function() {
     colorPaletteHtml: colorPaletteHtml,
     bindColorPalette: bindColorPalette,
     relationOptionsHtml: relationOptionsHtml,
+    linkNoteHtml: linkNoteHtml,
+    bindLinkNote: bindLinkNote,
     bindRelationOptions: bindRelationOptions,
     relationOptionsFor: relationOptionsFor,
     bindRelationOptionsFor: bindRelationOptionsFor,
