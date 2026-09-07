@@ -21,6 +21,7 @@ const sourceFiles = [
   'src/core/diagram-rail.js',
   'src/core/zoom-hud.js',
   'src/core/outline.js',
+  'src/core/tail-kind-chips.js',
   'src/core/compare-view.js',
   'src/core/line-resolver.js',
   'src/core/formatter-interface.js',

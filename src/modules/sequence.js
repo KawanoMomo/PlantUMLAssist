@@ -1539,6 +1539,8 @@ window.MA.modules.plantumlSequence = (function() {
         };
         renderTailDetail();
         P.bindEvent('seq-tail-kind', 'change', renderTailDetail);
+        // design 2b: 種別はチップ 1 クリックで決める。値の持ち主は上の select のまま。
+        window.MA.tailKindChips.mount('seq-tail-kind');
         return;
       }
 
