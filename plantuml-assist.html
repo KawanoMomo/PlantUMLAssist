@@ -502,6 +502,44 @@ html, body {
 #diff-panel .diff-row.changed { color: var(--accent); }
 #diff-panel .diff-head { color: var(--text-primary); padding: 2px 4px 4px 4px; }
 #diff-panel .diff-actions { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 4px; }
+#btn-tab-pins.has-open { color: var(--accent-red); border-color: var(--accent-red); }
+#pin-panel {
+  display: none;
+  position: absolute;
+  z-index: 42;
+  max-height: 320px;
+  overflow-y: auto;
+  min-width: 300px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px;
+  font-size: 11px;
+}
+#pin-panel.open { display: block; }
+#pin-panel .pin-head { color: var(--text-primary); padding: 2px 4px 4px 4px; }
+#pin-panel .pin-row {
+  border-top: 1px solid var(--border);
+  padding: 4px;
+  color: var(--text-secondary);
+}
+#pin-panel .pin-row .pin-where { cursor: pointer; color: var(--accent); }
+#pin-panel .pin-row.stale .pin-where { color: var(--accent-red); cursor: default; }
+#pin-panel .pin-row.read { opacity: 0.65; }
+#pin-panel .pin-row .pin-text { color: var(--text-primary); display: block; margin: 2px 0; }
+#pin-panel .pin-row .pin-anchor { font-family: var(--font-mono); font-size: 10px; }
+#pin-panel button, #pin-panel input {
+  border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-radius: 3px;
+  font-size: 11px;
+  padding: 3px 6px;
+}
+#pin-panel button { cursor: pointer; }
+#pin-panel .pin-new { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 6px; }
+#pin-panel .pin-new input { width: 100%; margin-bottom: 4px; }
+#pin-panel .pin-target { color: var(--text-secondary); padding-bottom: 4px; }
 /* 変更サマリボード (BLK-primary-20260907-0923-wish) */
 #cb-modal-content {
   background: var(--bg-secondary);
@@ -1743,10 +1781,13 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <!-- BLK-reviewer-20260907-0803: 前回保存時点から変わった図があるかを常時見せる -->
         <button class="tab-tool" id="btn-tab-diff" title="前回保存した時点から変わった図の一覧">± 差分 −</button>
         <!-- BLK-primary-20260907-0923-wish: 変わった図の変更前後をまとめて 1 画面に並べる -->
+        <!-- BLK-reviewer-20260907-1203-wish: レビューの指摘を図の該当行に貼り、未読/既読で追う -->
+        <button class="tab-tool" id="btn-tab-pins" title="この図に付いたレビュー指摘の一覧。図の上の印をクリックしても開く">📌 指摘 −</button>
         <button class="tab-tool" id="btn-tab-board" title="変わった図の変更前 DSL と変更後 DSL を全部まとめて 1 画面に並べる (レビュー会議用)">▤ 変更サマリ</button>
       </div>
       <div id="folder-panel"></div>
       <div id="diff-panel"></div>
+      <div id="pin-panel"></div>
       <!-- 開いている図をまたいで部品名を一括置換する -->
       <div id="rename-panel">
         <label for="rename-from">置換前 (部品名)</label>
@@ -2087,6 +2128,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/overlay-builder.js"></script>
 <script src="src/core/selection-router.js"></script>
 <script src="src/core/relation-kind-cards.js"></script>
+<script src="src/core/review-pins.js"></script>
 <script src="src/ui/properties.js"></script>
 <script src="src/ui/reuse-modal.js"></script>
 <script src="src/ui/sequence-overlay.js"></script>
