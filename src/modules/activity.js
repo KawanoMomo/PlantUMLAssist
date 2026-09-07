@@ -602,6 +602,33 @@ window.MA.modules.plantumlActivity = (function() {
     return lines.join('\n');
   }
 
+  // design 5d: 分岐ラベルは prompt ではなく右ペインのフォームで直す。if / elseif は
+  // 条件とラベルが同じ行に同居するので、渡されなかった側は今の値を残す。
+  // fields: { condition?, label? }。else 行には condition が無いので無視する。
+  function updateBranch(text, lineNum, fields) {
+    var f = fields || {};
+    var lines = text.split('\n');
+    var idx = lineNum - 1;
+    if (idx < 0 || idx >= lines.length) return text;
+    var trimmed = lines[idx].trim();
+    var indent = lines[idx].match(/^(\s*)/)[1];
+    var m;
+    if ((m = trimmed.match(IF_OPEN_RE))) {
+      lines[idx] = indent + fmtIf(
+        f.condition === undefined ? m[1] : f.condition,
+        f.label === undefined ? (m[2] || 'yes') : f.label);
+    } else if ((m = trimmed.match(ELSEIF_RE))) {
+      lines[idx] = indent + fmtElseif(
+        f.condition === undefined ? m[1] : f.condition,
+        f.label === undefined ? (m[2] || 'yes') : f.label);
+    } else if ((m = trimmed.match(ELSE_RE))) {
+      lines[idx] = indent + fmtElse(f.label === undefined ? (m[1] || 'no') : f.label);
+    } else {
+      return text;
+    }
+    return lines.join('\n');
+  }
+
   function updateWhileCondition(text, lineNum, newCond) {
     var lines = text.split('\n');
     var idx = lineNum - 1;
@@ -2127,6 +2154,8 @@ window.MA.modules.plantumlActivity = (function() {
 
     if (node.kind === 'if') {
       html += P.fieldHtml('Condition', 'ac-if-cond', node.condition || '');
+      // design 5d: 分岐ラベルは prompt に隠さず、条件と同じ右ペインに置いて 1 回の更新で直す。
+      // then は if 行そのものなので、その label 欄も Branches の 1 行目として出す。
       html += '<div style="border-top:1px solid var(--border);padding-top:6px;margin-top:6px;">' +
                 '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">Branches</div>';
       var brs = node.branches || [];
@@ -2138,10 +2167,12 @@ window.MA.modules.plantumlActivity = (function() {
         if (b.kind === 'elseif' || b.kind === 'else') {
           deleteBtn = ' <button id="ac-branch-del-' + bi + '" data-line="' + b.line + '" title="この branch を削除" style="background:var(--accent-red);border:none;color:#fff;padding:2px 6px;border-radius:3px;cursor:pointer;font-size:10px;">✕</button>';
         }
-        html += '<div style="font-size:11px;margin-bottom:2px;">' +
-                  '▸ ' + b.kind + ' (' + window.MA.htmlUtils.escHtml(b.label || '') + ')' + (b.condition ? ' cond: ' + window.MA.htmlUtils.escHtml(b.condition) : '') + ' (L' + b.line + ')' +
-                  ' <button id="ac-branch-edit-' + bi + '" data-line="' + b.line + '">edit label</button>' +
-                  deleteBtn +
+        html += '<div class="ac-branch-row" data-line="' + b.line + '" style="font-size:11px;margin-bottom:6px;">' +
+                  '<div style="margin-bottom:2px;">▸ ' + b.kind + ' (L' + b.line + ')' + deleteBtn + '</div>' +
+                  (b.kind === 'elseif'
+                    ? P.fieldHtml('condition', 'ac-branch-cond-' + bi, b.condition || '')
+                    : '') +
+                  P.fieldHtml('label', 'ac-branch-lbl-' + bi, b.label || '') +
                 '</div>';
       }
       // Branch add buttons
@@ -2183,8 +2214,21 @@ window.MA.modules.plantumlActivity = (function() {
       var t = ctx.getMmdText();
       var out = t;
       if (node.kind === 'if') {
+        // design 5d: 条件と全分岐のラベルを 1 回の更新で書き戻す。
+        // 行数は変わらないので行番号のまま順に当てられる。
         var c = document.getElementById('ac-if-cond').value;
-        out = updateIfCondition(t, node.line, c);
+        var ubrs = node.branches || [];
+        for (var ui = 0; ui < ubrs.length; ui++) {
+          var ub = ubrs[ui];
+          var lblEl = document.getElementById('ac-branch-lbl-' + ui);
+          var condEl = document.getElementById('ac-branch-cond-' + ui);
+          var patch = {};
+          if (lblEl) patch.label = lblEl.value;
+          if (ub.kind === 'then') patch.condition = c;
+          else if (condEl) patch.condition = condEl.value;
+          out = updateBranch(out, ub.line, patch);
+        }
+        if (!ubrs.length) out = updateIfCondition(out, node.line, c);
       } else if (node.kind === 'while') {
         out = updateWhileCondition(t, node.line, document.getElementById('ac-while-cond').value);
         var lines = out.split('\n');
@@ -2217,13 +2261,6 @@ window.MA.modules.plantumlActivity = (function() {
       for (var bj = 0; bj < brs2.length; bj++) {
         (function(b) {
           var bIdx = brs2.indexOf(b);
-          P.bindEvent('ac-branch-edit-' + bIdx, 'click', function() {
-            var newLabel = prompt('Branch label:', b.label || '');
-            if (newLabel === null) return;
-            window.MA.history.pushHistory();
-            ctx.setMmdText(updateBranchLabel(ctx.getMmdText(), b.line, newLabel));
-            ctx.onUpdate();
-          });
           if (b.kind === 'elseif' || b.kind === 'else') {
             P.bindEvent('ac-branch-del-' + bIdx, 'click', function() {
               if (!confirm(b.kind + ' を削除します。続行しますか？')) return;
@@ -2363,6 +2400,7 @@ window.MA.modules.plantumlActivity = (function() {
     setActionColor: setActionColor,
     updateIfCondition: updateIfCondition,
     updateBranchLabel: updateBranchLabel,
+    updateBranch: updateBranch,
     updateWhileCondition: updateWhileCondition,
     updateSwimlane: updateSwimlane,
     updateNote: updateNote,
