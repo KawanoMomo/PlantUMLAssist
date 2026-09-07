@@ -2987,6 +2987,40 @@ function setupTemplateNew() {
     });
   }
 
+  // BLK-primary-20260907-1203-wish: 作る前に、これから作る図の名前がクラスの宣言と
+  // 噛み合うかをその場で突き合わせる。複製は接頭辞の置換なので、置換しただけでは
+  // 意味の合わない名前 (Adc 由来の conv 系を Timer に付け替えたもの) がそのまま残る。
+  // 押してから「🔍 名前突合」で見つけるのでは、次の run まで気づけない。
+  //
+  // 作れなくはしない。テンプレートより先にクラス図を書き足す順序もあるので、
+  // 赤い警告を出して判断は利用者に残す (design の「常時表示 / その他」と同じ考え方)。
+  function updateAudit(result, tpl) {
+    var TA = window.MA.templateAudit;
+    var head = document.getElementById('tpl-audit-head');
+    var box = document.getElementById('tpl-audit');
+    if (!TA || !head || !box) return;
+
+    var nameEl = document.getElementById('tpl-name');
+    var name = nameEl ? nameEl.value.trim() : '';
+    var others = docs.filter(function(d) { return d && d.dsl; });
+    var srcName = tpl ? tpl.name : '';
+
+    if (!tpl || !result) {
+      head.textContent = '';
+      head.setAttribute('data-audit', 'idle');
+      box.innerHTML = '';
+      return;
+    }
+
+    var checked = TA.hasClassDocs(others, srcName);
+    var res = checked ? TA.auditResult(result, name || '(新しい図)', others, srcName) : null;
+    head.textContent = TA.summaryText(res, checked);
+    head.setAttribute('data-audit',
+      !checked ? 'skipped' : (res.clean ? 'ok' : 'ng'));
+    head.setAttribute('data-audit-count', String(res ? res.issues.length : 0));
+    box.innerHTML = checked ? TA.buildIssuesHtml(res) : '';
+  }
+
   function updatePreview() {
     var tpl = currentTemplate();
     var fromEl = document.getElementById('tpl-from');
@@ -3044,6 +3078,8 @@ function setupTemplateNew() {
     }
     createBtn.disabled = !(from && to && rows.length > 0
       && (nameEl ? nameEl.value.trim() : '') && left.length === 0);
+
+    updateAudit(result, tpl);
 
     var html = '';
     rows.forEach(function(r) {
@@ -3156,6 +3192,9 @@ function setupTemplateNew() {
       + '<div id="tpl-remaining-head" style="font-size:11px;color:var(--text-secondary);" '
       + 'data-remaining="0"></div>'
       + '<div id="tpl-remaining" style="max-height:22vh;overflow-y:auto;margin-top:4px;"></div>'
+      + '<label style="' + LABEL + '">クラスの宣言との突合 (作る前に見ます)</label>'
+      + '<div id="tpl-audit-head" style="font-size:11px;" data-audit="idle" data-audit-count="0"></div>'
+      + '<div id="tpl-audit" style="max-height:16vh;overflow-y:auto;margin-top:4px;"></div>'
       + '<label style="' + LABEL + '">置換の結果 (確定前に確認できます)</label>'
       + '<div id="tpl-summary" style="font-size:11px;color:var(--text-secondary);" data-changed="0"></div>'
       + '<div id="tpl-preview" style="max-height:28vh;overflow-y:auto;margin-top:4px;'
