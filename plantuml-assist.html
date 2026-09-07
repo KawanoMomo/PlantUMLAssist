@@ -1186,6 +1186,20 @@ html, body {
 #status-parse.error { color: var(--accent-red); }
 #status-info  { color: var(--text-secondary); margin-left: auto; }
 
+/* 整合性チェックのバッジ (BLK-reviewer-20260907-0843)。常時見えている必要がある */
+#status-consistency {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--accent-green);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 0 6px;
+  cursor: pointer;
+}
+#status-consistency:hover { background: var(--bg-tertiary); }
+#status-consistency.has-warning { color: var(--accent-orange); border-color: var(--accent-orange); }
+
 /* ── Scrollbar Styling ─────────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: var(--bg-primary); }
@@ -1448,6 +1462,8 @@ html, body {
     <span id="status-autosave" style="color:var(--text-secondary);"></span>
     <span id="status-save-result" role="status" style="color:var(--text-secondary);"></span>
     <span id="status-info"></span>
+    <!-- BLK-reviewer-20260907-0843: 整合性チェックの警告件数を常時出す -->
+    <button type="button" id="status-consistency" title="命名規約・未使用 participant・メソッド不一致・粒度不一致の一覧">整合 —</button>
   </div>
 
   </div><!-- /#app-body -->
@@ -1492,6 +1508,9 @@ html, body {
 </div>
 <div id="na-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="na-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:620px;max-width:900px;max-height:80vh;overflow-y:auto;"></div>
+</div>
+<div id="ck-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+  <div id="ck-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:680px;max-width:960px;max-height:82vh;overflow-y:auto;"></div>
 </div>
 <div id="fa-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="fa-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:660px;max-width:940px;max-height:80vh;overflow-y:auto;"></div>
@@ -1624,6 +1643,7 @@ html, body {
 <script src="src/core/settings-tabs.js"></script>
 <script src="src/core/top-status.js"></script>
 <script src="src/core/family-audit.js"></script>
+<script src="src/core/consistency.js"></script>
 <script src="src/core/line-edit.js"></script>
 <script src="src/core/outline.js"></script>
 <script src="src/core/compare-view.js"></script>
