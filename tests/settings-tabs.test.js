@@ -154,7 +154,7 @@ describe('settings-tabs — 設定モーダルの 5 タブ (design 1a)', () => {
 
   test('normalizeEditorPrefs: フォントサイズは 10〜24 に丸めてクランプする', () => {
     expect(ST.normalizeEditorPrefs({ fontSize: 15, wrap: true }))
-      .toEqual({ fontSize: 15, wrap: true, clickToLine: true });
+      .toEqual({ fontSize: 15, wrap: true, clickToLine: true, indent: '2' });
     expect(ST.normalizeEditorPrefs({ fontSize: 3 }).fontSize).toBe(10);
     expect(ST.normalizeEditorPrefs({ fontSize: 99 }).fontSize).toBe(24);
     expect(ST.normalizeEditorPrefs({ fontSize: '17' }).fontSize).toBe(17);
@@ -162,7 +162,7 @@ describe('settings-tabs — 設定モーダルの 5 タブ (design 1a)', () => {
   });
 
   test('normalizeEditorPrefs: 壊れた入力でも既定に落ちて wrap は真偽値', () => {
-    expect(ST.normalizeEditorPrefs(null)).toEqual({ fontSize: 13, wrap: false, clickToLine: true });
+    expect(ST.normalizeEditorPrefs(null)).toEqual({ fontSize: 13, wrap: false, clickToLine: true, indent: '2' });
     expect(ST.normalizeEditorPrefs({ fontSize: 'abc' }).fontSize).toBe(13);
     expect(ST.normalizeEditorPrefs({ wrap: 'yes' }).wrap).toBe(true);
   });

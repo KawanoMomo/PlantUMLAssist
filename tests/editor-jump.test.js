@@ -106,6 +106,6 @@ describe('settingsTabs.normalizeEditorPrefs — clickToLine', function() {
 
   test('既存のフォントサイズ・折り返しの指定は変わらない', function() {
     var p = ST.normalizeEditorPrefs({ fontSize: 17, wrap: true, clickToLine: false });
-    expect(p).toEqual({ fontSize: 17, wrap: true, clickToLine: false });
+    expect(p).toEqual({ fontSize: 17, wrap: true, clickToLine: false, indent: '2' });
   });
 });

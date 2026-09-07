@@ -1317,6 +1317,23 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   background: #f5f5f5;
 }
 
+/* design 5a: 図の上に重なるエラー帯。図はそのまま残るので、
+   どの行を直せばよいか図と見比べられる。 */
+#render-error-overlay {
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 30;
+  margin: -16px -16px 12px -16px;
+  padding: 8px 12px;
+  background: rgba(60, 16, 16, 0.94);
+  color: #ff9a9a;
+  border-bottom: 1px solid var(--accent-red);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+
 #preview-svg {
   display: inline-block;
   transform-origin: 0 0;
@@ -1878,6 +1895,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       </div>
       <div id="overlay-warning" style="display:none;background:#3a2e0a;color:#ffa657;padding:6px 10px;font-size:11px;border-bottom:1px solid var(--border);"></div>
       <div id="preview-container">
+        <!-- design 5a: 描画エラーを図の上に重ねる帯。直前の図はそのまま残す -->
+        <div id="render-error-overlay" role="alert" hidden></div>
         <div id="preview-svg"></div>
         <svg id="overlay-layer" width="0" height="0"></svg>
         <svg id="hover-layer" width="0" height="0" style="position:absolute;top:16px;left:16px;pointer-events:none;transform-origin:0 0;"></svg>
@@ -2053,6 +2072,11 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <div style="font-size:11px;color:var(--text-secondary);margin-bottom:6px;">短くすると反応が速く、長くすると描画回数が減ります。</div>
         <div id="cfg-render-debounce" role="radiogroup" style="display:flex;gap:6px;"></div>
       </div>
+
+      <!-- design 5a: 失敗しても直前の図を残し、その上にエラーを重ねる -->
+      <label style="display:flex;align-items:center;gap:6px;margin-top:10px;font-size:12px;">
+        <input type="checkbox" id="cfg-render-error-overlay"> 描画エラーを図の上に重ねて表示
+      </label>
     </div>
 
     <div id="cfg-pane-editor" class="cfg-pane" hidden>
@@ -2066,6 +2090,11 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
           <option value="17">17px</option>
           <option value="20">20px</option>
         </select>
+      </div>
+      <!-- design 5a: インデント幅。Tab / Shift+Tab が入れ外しする単位 -->
+      <div style="margin-bottom:10px;font-size:12px;">
+        <label style="display:block;margin-bottom:4px;color:var(--text-secondary);">インデント幅</label>
+        <div id="cfg-editor-indent" role="radiogroup" aria-label="インデント幅" style="display:flex;gap:6px;"></div>
       </div>
       <label style="display:flex;align-items:center;gap:6px;margin-bottom:10px;font-size:12px;">
         <input type="checkbox" id="cfg-editor-wrap"> 長い行を折り返す
@@ -2129,6 +2158,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/settings-tabs.js"></script>
 <script src="src/core/editor-jump.js"></script>
 <script src="src/core/render-modes.js"></script>
+<script src="src/core/editor-indent.js"></script>
 <script src="src/core/top-status.js"></script>
 <script src="src/core/family-audit.js"></script>
 <script src="src/core/consistency.js"></script>
