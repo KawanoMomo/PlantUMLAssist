@@ -2584,7 +2584,8 @@ function setupTemplateNew() {
   var modal = document.getElementById('tpl-modal');
   var content = document.getElementById('tpl-modal-content');
   var TN = window.MA.templateNew;
-  if (!btn || !modal || !content || !TN) return;
+  var TM = window.MA.templateMap;
+  if (!btn || !modal || !content || !TN || !TM) return;
 
   var esc = window.MA.htmlUtils.escHtml;
   var docs = [];          // [{ id, name, dsl }] 開いているタブ
@@ -2663,14 +2664,29 @@ function setupTemplateNew() {
   // Spi_Driver が残ったまま提出され、同じ指摘をレビューで何度も受けていた。
   // 残った名前ごとに「新しい名前」を入れるか、「そのままで良い」を
   // 明示的に選ぶかのどちらかを必ず通す。
-  var leftovers = [];      // [{ name }] 1 語目のあとに残っている宣言名
+  // BLK-junior-20260907-0943-wish: 先輩の図の流用は「⧉ 取り込み」と「⇄ 一括置換」を
+  // 手で組み合わせるしかなく、2 操作の間に無関係な宣言行まで壊れる余地があった。
+  // テンプレートに宣言されている部品を全部この表に並べ、それぞれの新しい名前を
+  // 1 画面で埋めてから複製する。表からの置換は文字列一致ではなく
+  // 「宣言済みの部品名の付け替え」(template-map) として当てるので、
+  // 置換元の名前を含まない行が巻き込まれることが原理的に起きない。
+  var mapRows = [];        // [{ from, base, to, resolved }] from は元の図での名前
 
-  // 追加の置換の組 (残った名前 → 新しい名前)。UI の入力から読む。
-  function extraPairs() {
-    return leftovers.map(function(lo) {
-      var el = document.querySelector('[data-remaining-input="' + lo.name + '"]');
-      return { from: lo.name, to: el ? el.value.trim() : '' };
-    }).filter(function(p) { return p.to; });
+  function _headPair() {
+    return {
+      from: (document.getElementById('tpl-from') || {}).value.trim(),
+      to: (document.getElementById('tpl-to') || {}).value.trim(),
+    };
+  }
+
+  // 系統の置換 (Uart → Gpio、UART → GPIO …) を 1 語に当てた結果。
+  function _afterHead(name) {
+    var p = _headPair();
+    return (p.from && p.to) ? TN.instantiate(name, p.from, p.to) : name;
+  }
+
+  function _rowInput(name) {
+    return document.querySelector('[data-map-input="' + name + '"]');
   }
 
   function isKept(name) {
@@ -2678,57 +2694,97 @@ function setupTemplateNew() {
     return !!(el && el.checked);
   }
 
-  // 未処理 (新しい名前も「そのままで良い」も無い) の残り名。
-  function unresolved() {
-    return leftovers.filter(function(lo) {
-      var el = document.querySelector('[data-remaining-input="' + lo.name + '"]');
-      return !(el && el.value.trim()) && !isKept(lo.name);
+  // 対応表の今の中身。base は系統の置換のあとの名前 (構造置換の置換元)。
+  function currentRows() {
+    return mapRows.map(function(r) {
+      var el = _rowInput(r.from);
+      return {
+        from: r.from,
+        base: r.base,
+        to: el ? el.value.trim() : r.to,
+        keep: isKept(r.from),
+        resolved: r.resolved,
+      };
     });
   }
 
-  function allPairs() {
-    var from = (document.getElementById('tpl-from') || {}).value.trim();
-    var to = (document.getElementById('tpl-to') || {}).value.trim();
-    return [{ from: from, to: to }].concat(extraPairs());
+  // 系統の置換で決まらず、表も空で、「このままで良い」も付いていない部品。
+  function unresolved() {
+    return currentRows().filter(function(r) {
+      return !r.resolved && !r.to && !r.keep;
+    }).map(function(r) { return { name: r.from }; });
   }
 
-  // 残り名の一覧を作り直す。1 語目の置換が変わったときだけ呼ぶ
+  // 表のうち構造置換に回す組。系統の置換で既に付いた名前を置換元にする。
+  function structuralRows() {
+    return currentRows().filter(function(r) {
+      return !r.keep && r.to && r.to !== r.base;
+    }).map(function(r) { return { from: r.base, to: r.to }; });
+  }
+
+  // テンプレート → 新しい図の DSL。系統の置換を先に当て、
+  // 残りを対応表で構造的に付け替える。
+  function buildResult(dsl) {
+    var p = _headPair();
+    var text = (p.from && p.to) ? TN.instantiate(dsl, p.from, p.to) : dsl;
+    return TM ? TM.apply(text, structuralRows()) : text;
+  }
+
+  // 対応表を作り直す。系統の置換が変わったときだけ呼ぶ
   // (入力のたびに作り直すと打っている最中にフォーカスが飛ぶため)。
   function rebuildRemaining() {
     var tpl = currentTemplate();
     var box = document.getElementById('tpl-remaining');
     var head = document.getElementById('tpl-remaining-head');
-    if (!box || !head) return;
-    leftovers = [];
-    if (tpl) {
-      var from = (document.getElementById('tpl-from') || {}).value.trim();
-      var to = (document.getElementById('tpl-to') || {}).value.trim();
-      var first = (from && to) ? TN.instantiate(tpl.dsl, from, to) : tpl.dsl;
-      leftovers = TN.remainingNames(tpl.dsl, first).map(function(n) { return { name: n }; });
-    }
-    head.setAttribute('data-remaining', String(leftovers.length));
-    if (!leftovers.length) {
+    if (!box || !head || !TM) return;
+    // 打ちかけの入力は作り直しでも残す
+    var typed = {};
+    currentRows().forEach(function(r) { if (r.to && !r.resolved) typed[r.from] = r.to; });
+
+    mapRows = tpl ? TM.mapRows(tpl.dsl, _afterHead).map(function(r) {
+      return {
+        from: r.from, base: _afterHead(r.from), kind: r.kind,
+        to: r.resolved ? r.to : (typed[r.from] || ''), resolved: r.resolved,
+      };
+    }) : [];
+
+    var left = mapRows.filter(function(r) { return !r.resolved && !r.to && !isKept(r.from); });
+    head.setAttribute('data-remaining', String(left.length));
+    head.setAttribute('data-map-rows', String(mapRows.length));
+    if (!mapRows.length) {
       head.textContent = '元の系統の部品名は残っていません';
       box.innerHTML = '';
       return;
     }
-    head.textContent = 'まだ元の名前のままの部品が ' + leftovers.length
-      + ' 件あります。新しい名前を入れるか「このままで良い」を選んでください';
+    head.textContent = left.length
+      ? ('まだ元の名前のままの部品が ' + left.length
+         + ' 件あります。新しい名前を入れるか「このままで良い」を選んでください')
+      : '元の系統の部品名は残っていません';
+
     var html = '';
-    leftovers.forEach(function(lo) {
-      html += '<div class="tpl-remaining-row" style="display:flex;align-items:center;gap:8px;'
+    mapRows.forEach(function(r) {
+      var pending = !r.resolved && !r.to;
+      html += '<div class="tpl-map-row' + (pending ? ' tpl-remaining-row' : '')
+        + '" data-map-from="' + esc(r.from) + '" data-map-state="'
+        + (r.resolved ? 'auto' : (r.to ? 'filled' : 'pending')) + '"'
+        + ' style="display:flex;align-items:center;gap:8px;'
         + 'padding:3px 4px;border-bottom:1px solid var(--border);">'
-        + '<span style="font-family:var(--font-mono);font-size:11px;color:var(--accent-orange);'
-        + 'min-width:150px;">' + esc(lo.name) + '</span>'
-        + '<input data-remaining-input="' + esc(lo.name) + '" autocomplete="off" spellcheck="false" '
+        + '<span style="font-family:var(--font-mono);font-size:11px;min-width:150px;color:'
+        + (pending ? 'var(--accent-orange)' : 'var(--text-secondary)') + ';">'
+        + esc(r.from) + '</span>'
+        + '<span style="color:var(--text-secondary);font-size:11px;">→</span>'
+        + '<input data-map-input="' + esc(r.from) + '"'
+        + (pending ? ' data-remaining-input="' + esc(r.from) + '"' : '')
+        + ' value="' + esc(r.to) + '" autocomplete="off" spellcheck="false" '
         + 'placeholder="新しい名前" style="' + FIELD + 'flex:1;">'
         + '<label style="font-size:11px;color:var(--text-secondary);white-space:nowrap;">'
-        + '<input type="checkbox" data-remaining-keep="' + esc(lo.name) + '" style="width:auto;"> '
+        + '<input type="checkbox" data-remaining-keep="' + esc(r.from) + '" style="width:auto;"'
+        + (isKept(r.from) ? ' checked' : '') + '> '
         + 'このままで良い</label>'
         + '</div>';
     });
     box.innerHTML = html;
-    Array.prototype.forEach.call(box.querySelectorAll('[data-remaining-input]'), function(el) {
+    Array.prototype.forEach.call(box.querySelectorAll('[data-map-input]'), function(el) {
       el.addEventListener('input', updatePreview);
     });
     Array.prototype.forEach.call(box.querySelectorAll('[data-remaining-keep]'), function(el) {
@@ -2756,7 +2812,7 @@ function setupTemplateNew() {
     }
     var from = fromEl.value.trim();
     var to = toEl.value.trim();
-    var result = TN.instantiateAll(tpl.dsl, allPairs());
+    var result = buildResult(tpl.dsl);
     var rows = [];
     var beforeLines = tpl.dsl.split('\n');
     var afterLines = result.split('\n');
@@ -2775,6 +2831,15 @@ function setupTemplateNew() {
         + tpl.dsl.split('\n').length + ' 行)';
     }
     var left = unresolved();
+    // 対応表を埋めた分だけ見出しの件数も減らす (作り直さずに数だけ合わせる)。
+    var head = document.getElementById('tpl-remaining-head');
+    if (head && head.getAttribute('data-map-rows') !== '0') {
+      head.setAttribute('data-remaining', String(left.length));
+      head.textContent = left.length
+        ? ('まだ元の名前のままの部品が ' + left.length
+           + ' 件あります。新しい名前を入れるか「このままで良い」を選んでください')
+        : '元の系統の部品名は残っていません';
+    }
     if (blocked) {
       blocked.setAttribute('data-unresolved', String(left.length));
       blocked.textContent = left.length
@@ -2858,7 +2923,7 @@ function setupTemplateNew() {
     var name = (document.getElementById('tpl-name') || {}).value.trim();
     if (!tpl || !from || !to || !name) return;
     if (unresolved().length) return;   // 元の名前が残ったままの図は作らせない
-    var dsl = TN.instantiateAll(tpl.dsl, allPairs());
+    var dsl = buildResult(tpl.dsl);
     saveActiveDoc();
     var detected = window.MA.workspace.detectType(dsl);
     window.MA.workspace.open({
@@ -2892,7 +2957,7 @@ function setupTemplateNew() {
       + '大小の綴りは族ごと置換します (Uart → Gpio なら UART → GPIO、uart → gpio も同時)。</div>'
       + '<label style="' + LABEL + '" for="tpl-name">新しい図の名前</label>'
       + '<input id="tpl-name" autocomplete="off" spellcheck="false" style="' + FIELD + '">'
-      + '<label style="' + LABEL + '">元の系統の部品名 (残っていると作れません)</label>'
+      + '<label style="' + LABEL + '">部品名の対応表 (元の名前が残っていると作れません)</label>'
       + '<div id="tpl-remaining-head" style="font-size:11px;color:var(--text-secondary);" '
       + 'data-remaining="0"></div>'
       + '<div id="tpl-remaining" style="max-height:22vh;overflow-y:auto;margin-top:4px;"></div>'
