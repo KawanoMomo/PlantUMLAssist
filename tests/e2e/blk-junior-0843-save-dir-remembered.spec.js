@@ -3,9 +3,9 @@
 // 図種を変えるたびに ⚙設定 → ファイル → パス再入力 → OK を打ち直していた。
 // 保存先は server 側 (/prefs) に覚え、localStorage が空のタブでも引き継ぐ。
 const { test, expect } = require('@playwright/test');
-const { gotoApp } = require('./helpers');
+const { gotoApp, saveDirFor } = require('./helpers');
 
-const SAVE_DIR = './autosave-e2e-blk-j0843';
+const SAVE_DIR = saveDirFor(__filename);
 
 async function openSettings(page) {
   await page.locator('#rail-config').click();
@@ -70,12 +70,12 @@ test.describe('保存先ディレクトリを覚える (BLK-junior-20260907-0843
     await gotoApp(page);
     await page.evaluate((dir) => {
       window.MA.autoSave.setConfig({ backend: 'file', fileDir: dir });
-    }, './autosave-e2e-blk-j0843-local');
+    }, './test-results/autosave/blk-junior-0843-save-dir-remembered/e2e-blk-j0843-local');
     await request.post('/prefs', { data: { backend: 'file', fileDir: SAVE_DIR } });
 
     await page.reload();
     await page.waitForSelector('#preview-svg', { timeout: 5000 });
     await expect.poll(async () => page.evaluate(() => window.MA.autoSave.getConfig().fileDir))
-      .toBe('./autosave-e2e-blk-j0843-local');
+      .toBe('./test-results/autosave/blk-junior-0843-save-dir-remembered/e2e-blk-j0843-local');
   });
 });

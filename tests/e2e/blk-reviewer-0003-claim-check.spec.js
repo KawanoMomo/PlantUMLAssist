@@ -4,9 +4,9 @@
 // 指摘の末尾に「根拠: 図名 に 語 が無い」を書いておけば、受信箱を開いた時点で
 // 崩れた根拠だけが名指しで出て、読み直す先へ 1 クリックで飛べることを実機で見る。
 const { test, expect } = require('@playwright/test');
-const { gotoApp } = require('./helpers');
+const { gotoApp, saveDirFor } = require('./helpers');
 
-const DIR = './autosave-e2e-blk-r0003';
+const DIR = saveDirFor(__filename);
 
 function pin(id, state, author, text, anchor) {
   return "' @pin " + [id, state, author, '2026-09-08T00:03', anchor, text].join('|');

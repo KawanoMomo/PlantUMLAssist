@@ -1,9 +1,9 @@
 // @ts-check
 // BLK-primary-20260907-2003-wish の画面写真 (loop/shots)。一括置換パネル。
 const { test } = require('@playwright/test');
-const { gotoApp } = require('./helpers');
+const { gotoApp, shotOut } = require('./helpers');
 
-const OUT = process.env.SHOT_OUT || 'shot.png';
+const OUT = shotOut('shot-blk-primary-2003.png');
 
 const CLS = '@startuml\nclass Spi_Driver {\n  + Spi_Reset() : void\n  + Spi_Init(uint8 ch) : void\n}\n@enduml';
 const CLS2 = '@startuml\nclass Uart_Driver {\n  + Spi_Reset(uint8 ch) : void\n}\n@enduml';

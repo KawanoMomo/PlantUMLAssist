@@ -36,12 +36,12 @@ test.describe('BLK-primary-20260908-0103 保存先が違うことが分かる', 
 
   test('実在しない保存先なら、📂一覧は「見つかりません」とパスを名指しで言う', async ({ page }) => {
     await gotoApp(page);
-    await setSaveDir(page, './autosave-e2e-blk-p0103-nope');
+    await setSaveDir(page, './test-results/autosave/blk-primary-0103-save-dir-missing/e2e-blk-p0103-nope');
     await openFolder(page);
 
     await expect(page.locator('#folder-missing')).toBeVisible();
     await expect(page.locator('#folder-missing')).toContainText('保存先フォルダが見つかりません');
-    await expect(page.locator('#folder-missing')).toContainText('autosave-e2e-blk-p0103-nope');
+    await expect(page.locator('#folder-missing')).toContainText('e2e-blk-p0103-nope');
     // 直す場所まで出る。
     await expect(page.locator('#folder-missing-hint')).toContainText('⚙設定');
     // 「図がありません」とは言わない (0 件と取り違えない)。
@@ -51,14 +51,14 @@ test.describe('BLK-primary-20260908-0103 保存先が違うことが分かる', 
   test('実在する保存先が 0 件なら、従来どおり「図がありません」', async ({ page }) => {
     await gotoApp(page);
     // 保存を 1 度起こしてフォルダを作らせ、その図を消して 0 件にする。
-    await setSaveDir(page, './autosave-e2e-blk-p0103-empty');
+    await setSaveDir(page, './test-results/autosave/blk-primary-0103-save-dir-missing/e2e-blk-p0103-empty');
     await page.evaluate(() => window.fetch('/autosave', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'tmp', dsl: '@startuml\n@enduml', dir: './autosave-e2e-blk-p0103-empty' }),
+      body: JSON.stringify({ type: 'tmp', dsl: '@startuml\n@enduml', dir: './test-results/autosave/blk-primary-0103-save-dir-missing/e2e-blk-p0103-empty' }),
     }));
     await page.waitForTimeout(400);
-    await page.evaluate(() => window.fetch('/autosave?dir=' + encodeURIComponent('./autosave-e2e-blk-p0103-empty'), { method: 'DELETE' }));
+    await page.evaluate(() => window.fetch('/autosave?dir=' + encodeURIComponent('./test-results/autosave/blk-primary-0103-save-dir-missing/e2e-blk-p0103-empty'), { method: 'DELETE' }));
     await page.waitForTimeout(400);
 
     await openFolder(page);

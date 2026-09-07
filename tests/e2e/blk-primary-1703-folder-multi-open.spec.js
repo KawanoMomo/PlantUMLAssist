@@ -2,9 +2,9 @@
 // BLK-primary-20260907-1703: 横断作業で 14 枚を 1 枚ずつ開くと 28 クリックかかっていた。
 // 一覧を開いたまま印を付け、まとめてタブで開けるようにする。
 const { test, expect } = require('@playwright/test');
-const { gotoApp } = require('./helpers');
+const { gotoApp, saveDirFor } = require('./helpers');
 
-const DIR = './autosave-e2e-blk-p1703';
+const DIR = saveDirFor(__filename);
 
 // 横断作業の 14 枚。
 const NAMES = [

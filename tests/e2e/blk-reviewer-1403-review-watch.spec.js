@@ -1,10 +1,10 @@
 const { test, expect } = require('@playwright/test');
-const { gotoApp } = require('./helpers');
+const { gotoApp, saveDirFor } = require('./helpers');
 
 // BLK-reviewer-20260907-1403 (wish):
 // 「まず全部読んで機械監査して初めて変更なしと分かる」から
 // 「バッジが変化した図だけ読む」に業務を変えるための一覧バッジ。
-const DIR = './autosave-e2e-blk-r1403';
+const DIR = saveDirFor(__filename);
 
 async function bootWithDir(page) {
   await page.addInitScript((d) => {

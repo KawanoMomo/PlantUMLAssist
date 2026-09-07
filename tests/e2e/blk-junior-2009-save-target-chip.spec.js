@@ -17,7 +17,7 @@ async function bootWith(page, cfg) {
 
 const FILE_CFG = {
   enabled: true, debounceMs: 200, restoreMode: 'auto',
-  backend: 'file', fileDir: './autosave-e2e-blk-j2009',
+  backend: 'file', fileDir: './test-results/autosave/blk-junior-2009-save-target-chip/e2e-blk-j2009',
 };
 const LS_CFG = {
   enabled: true, debounceMs: 200, restoreMode: 'auto',
@@ -30,12 +30,12 @@ test.describe('BLK-junior-2009 保存先が設定済みだと画面で分かる'
     const chip = page.locator('#top-save-target');
     await expect(chip).toBeVisible();
     await expect(chip).toHaveAttribute('data-mode', 'file');
-    await expect(chip).toHaveText('📁 autosave-e2e-blk-j2009');
+    await expect(chip).toHaveText('📁 e2e-blk-j2009');
     await expect(chip).toHaveClass(/configured/);
     // 設定を開き直さなくても「もう設定されている」と分かる。
     const title = await chip.getAttribute('title');
     expect(title).toContain('保存先は設定済みです');
-    expect(title).toContain('./autosave-e2e-blk-j2009');
+    expect(title).toContain('./test-results/autosave/blk-junior-2009-save-target-chip/e2e-blk-j2009');
   });
 
   test('保存先が未設定ならダウンロードになることが先に出る', async ({ page }) => {
@@ -51,10 +51,10 @@ test.describe('BLK-junior-2009 保存先が設定済みだと画面で分かる'
     await page.locator('#top-save-target').click();
     await expect(page.locator('#cfg-modal')).toBeVisible();
     await page.locator('input[name="cfg-backend"][value="file"]').check();
-    await page.locator('#cfg-file-dir').fill('./autosave-e2e-blk-j2009');
+    await page.locator('#cfg-file-dir').fill('./test-results/autosave/blk-junior-2009-save-target-chip/e2e-blk-j2009');
     await page.locator('#cfg-ok').click();
     await page.waitForTimeout(300);
-    await expect(page.locator('#top-save-target')).toHaveText('📁 autosave-e2e-blk-j2009');
+    await expect(page.locator('#top-save-target')).toHaveText('📁 e2e-blk-j2009');
   });
 
   // 起票された手順 8 の実測。設定済みなら「保存」だけで済むことを数える。
@@ -75,6 +75,6 @@ test.describe('BLK-junior-2009 保存先が設定済みだと画面で分かる'
     expect(clicks).toBeLessThanOrEqual(10);
     expect(keys).toBeLessThanOrEqual(50);
     // 実際に保存フォルダへ書かれている。
-    await expect(page.locator('#status-save-result')).toContainText('autosave-e2e-blk-j2009');
+    await expect(page.locator('#status-save-result')).toContainText('e2e-blk-j2009');
   });
 });

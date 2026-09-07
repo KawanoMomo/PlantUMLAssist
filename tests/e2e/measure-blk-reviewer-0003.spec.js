@@ -3,9 +3,9 @@
 // 今も立っているかを確かめ、崩れていればその図を読み直す) を通しで行い、
 // クリック数とキー入力数を数える。
 const { test, expect } = require('@playwright/test');
-const { gotoApp } = require('./helpers');
+const { gotoApp, saveDirFor } = require('./helpers');
 
-const DIR = './autosave-e2e-blk-r0003m';
+const DIR = saveDirFor(__filename);
 
 function pin(id, state, author, text, anchor) {
   return "' @pin " + [id, state, author, '2026-09-08T00:03', anchor, text].join('|');

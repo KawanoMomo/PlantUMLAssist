@@ -2,9 +2,9 @@
 // BLK-junior-20260908-0003-wish の画面写真。「◎ 観点一括」に指摘を貼り、
 // 欠けている図だけが並んだところを撮る。
 const { test } = require('@playwright/test');
-const { gotoApp } = require('./helpers');
+const { gotoApp, shotOut } = require('./helpers');
 
-const OUT = process.env.SHOT_OUT || 'shot-blk-junior-0003-wish.png';
+const OUT = shotOut('shot-blk-junior-0003-wish.png');
 
 const CLS = [
   ['@startuml', 'class GpioDrv {', '  +GpioDrv()', '  +Gpio_Write(ch, v)', '}', '@enduml'],

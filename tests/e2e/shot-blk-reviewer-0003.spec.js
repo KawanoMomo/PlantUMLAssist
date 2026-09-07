@@ -1,10 +1,10 @@
 const { test } = require('@playwright/test');
-const { gotoApp } = require('./helpers');
+const { gotoApp, saveDirFor, shotOut } = require('./helpers');
 
 // BLK-reviewer-20260908-0003 の画面写真。📥 指摘箱の先頭に「根拠が崩れた指摘」が
 // 名指しで出ているところを撮る。
-const DIR = './autosave-shot-r0003';
-const OUT = process.env.SHOT_OUT || 'shot-blk-reviewer-0003.png';
+const DIR = saveDirFor(__filename);
+const OUT = shotOut('shot-blk-reviewer-0003.png');
 
 function pin(id, state, author, text, anchor) {
   return "' @pin " + [id, state, author, '2026-09-08T00:03', anchor, text].join('|');

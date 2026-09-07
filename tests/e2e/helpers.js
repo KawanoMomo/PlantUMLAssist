@@ -2,6 +2,26 @@
 const fs = require('fs');
 const path = require('path');
 
+// BLK-releaser-20260908-0800 — E2E の保存フォルダはリポジトリ直下ではなく
+// test-results/autosave/<spec 名>/ に作る。直下に作ると成果物リポジトリに残骸が溜まり、
+// 配布物に混ざる。test-results/ は .gitignore 済みで、全体実行の後に globalTeardown が消す。
+const REPO_ROOT = path.join(__dirname, '..', '..');
+const E2E_SAVE_ROOT = 'test-results/autosave';
+
+// spec ファイルごとに独立した保存フォルダ。--workers>1 でも spec 同士がぶつからない。
+// server には相対パスで渡すので、リポジトリ直下からの './' 付きで返す。
+function saveDirFor(specFilename) {
+  var name = path.basename(specFilename).replace(/\.spec\.js$/, '');
+  return './' + E2E_SAVE_ROOT + '/' + name;
+}
+
+// スクリーンショットの既定の置き場。直下に shot*.png を落とさない。
+// builder が成果物として撮るときは SHOT_OUT で loop/shots へ向ける。
+function shotOut(name) {
+  if (process.env.SHOT_OUT) return process.env.SHOT_OUT;
+  return path.join(REPO_ROOT, 'test-results', 'shots', name);
+}
+
 async function gotoApp(page) {
   await page.goto('/');
   // BLK-builder-20260908-0744-2-red: no hard-coded cap here. 5s was shorter than
@@ -55,4 +75,7 @@ async function setDiagramTitle(page, title) {
   await page.waitForTimeout(200);
 }
 
-module.exports = { gotoApp, loadFixture, getEditorText, getEditorLine, clickOverlayByLine, setDiagramTitle };
+module.exports = {
+  gotoApp, loadFixture, getEditorText, getEditorLine, clickOverlayByLine, setDiagramTitle,
+  saveDirFor, shotOut, E2E_SAVE_ROOT,
+};

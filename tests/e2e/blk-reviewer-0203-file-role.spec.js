@@ -1,12 +1,12 @@
 const { test, expect } = require('@playwright/test');
-const { gotoApp } = require('./helpers');
+const { gotoApp, saveDirFor } = require('./helpers');
 
 // BLK-reviewer-20260908-0203-wish: 保存フォルダの一覧でファイルを「実データ」「テンプレ」に
 // 分類でき、テンプレの内容が変化したら赤くなること。手順 5 (前回 run との差分確認) が
 // 22 枚の手動 diff ではなく、一覧を開くだけで済むことを確かめる。
 // 保存フォルダはテストごとに分ける。同じフォルダを使い回すと、前のテストが残した
 // 分類の宣言 (_roles.json) を次のテストが拾い、未分類のはずの図が分類済みで始まる。
-let DIR = './autosave-e2e-blk-r0203role';
+let DIR = saveDirFor(__filename);
 
 async function bootWithDir(page) {
   await page.addInitScript((d) => {
@@ -63,7 +63,7 @@ const DATA = '@startuml\nparticipant CPU\nCPU -> GPIO: set\n@enduml';
 
 test.describe('BLK-reviewer-20260908-0203-wish: 実データ / テンプレの分類とテンプレ汚染の検出', () => {
   test.beforeEach(async ({}, testInfo) => {
-    DIR = './autosave-e2e-blk-r0203role-' + testInfo.testId.replace(/[^a-zA-Z0-9]/g, '');
+    DIR = './test-results/autosave/blk-reviewer-0203-file-role/e2e-blk-r0203role-' + testInfo.testId.replace(/[^a-zA-Z0-9]/g, '');
   });
 
   test('分類の印を押すと 未分類 → 実データ → テンプレ と変わり、保存フォルダに残る', async ({ page }) => {

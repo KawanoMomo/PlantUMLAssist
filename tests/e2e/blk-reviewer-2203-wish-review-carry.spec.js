@@ -1,11 +1,11 @@
 const { test, expect } = require('@playwright/test');
-const { gotoApp } = require('./helpers');
+const { gotoApp, saveDirFor } = require('./helpers');
 
 // BLK-reviewer-20260907-2203 (wish):
 // 「前回から無変更」と確かめた日は、前回の指摘一覧をそのまま今回の指摘として複製し、
 // 「前回から無変更のため再突合なし」を 1 行付けて確定する。
 // 図が無変更でも監査ツールの構えが変われば新しい指摘が出るので、そのときは複製せず再突合を促す。
-const DIR = './autosave-e2e-blk-r2203w';
+const DIR = saveDirFor(__filename);
 
 async function bootWithDir(page) {
   await page.addInitScript((d) => {

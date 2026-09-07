@@ -1,11 +1,11 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
-const { gotoApp } = require('./helpers');
+const { gotoApp, saveDirFor } = require('./helpers');
 
 // BLK-primary-20260907-0823 — 保存先ディレクトリを設定していても、
 // 「⧉ テンプレート」で作った直後のタブが保存フォルダに現れなかった。
 // 台本どおりの手順 (保存先を設定 → テンプレートから作る → 保存) をなぞる。
-const DIR = './autosave-e2e-blk-p0823';
+const DIR = saveDirFor(__filename);
 
 async function setFileBackend(page) {
   await page.evaluate((dir) => {

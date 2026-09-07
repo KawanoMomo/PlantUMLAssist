@@ -1,11 +1,11 @@
 const { test, expect } = require('@playwright/test');
-const { gotoApp } = require('./helpers');
+const { gotoApp, saveDirFor } = require('./helpers');
 
 // BLK-junior-20260908-0630-wish: 指摘に対応するたびに「元図(レビュー反映).puml」を
 // 別名で保存していたので、📂 一覧に同じ題材が 2 枚並び、手順 1・9 でどちらを開くか
 // 毎回名前を読み比べていた。1 枚のままバッジで未反映 / 反映済みを見分けられること、
 // 未反映の図だけを 1 押しで選べることを確かめる。
-const DIR = './autosave-e2e-blk-j0630';
+const DIR = saveDirFor(__filename);
 
 const PIN_OPEN = "' @pin 1|open|reviewer|2026-09-08T06:30|Gpio_Init() : 電源系との依存が抜けている";
 const PIN_DONE = "' @pin 1|done|reviewer|2026-09-08T06:30|Gpio_Init()|電源系との依存が抜けている|Gpio_Init()";
