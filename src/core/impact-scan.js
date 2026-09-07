@@ -121,23 +121,35 @@ window.MA.impactScan = (function() {
     return 'other';
   }
 
-  // 1 本の DSL の内訳。{ kind, kindLabel, total, roles: [{ role, label, unit, count }] }
+  // 1 本の DSL の内訳。
+  // { kind, kindLabel, total, roles: [{ role, label, unit, count }], lines: [...] }
+  // lines は出現した行そのもの。内訳だけでは「この図のどの記述が対象か」が
+  // 分からず、結局タブを開いて探すことになるので、行番号と本文まで持たせる
+  // (画面はこの行番号でエディタへ飛ぶ)。
   function scanDoc(dsl, name) {
     var text = String(dsl == null ? '' : dsl);
     var kind = detectKind(text);
     var counts = {};
     var total = 0;
-    text.split('\n').forEach(function(line) {
+    var lines = [];
+    text.split('\n').forEach(function(line, i) {
       var n = countIn(line, name);
       if (n === 0) return;
       var role = classifyLine(line, kind);
       counts[role] = (counts[role] || 0) + n;
       total += n;
+      lines.push({
+        line: i + 1,
+        text: String(line),
+        role: role,
+        label: ROLE_LABEL[role],
+        count: n,
+      });
     });
     var roles = ROLE_ORDER.filter(function(r) { return counts[r]; }).map(function(r) {
       return { role: r, label: ROLE_LABEL[r], unit: ROLE_UNIT[r], count: counts[r] };
     });
-    return { kind: kind, kindLabel: KIND_LABEL[kind], total: total, roles: roles };
+    return { kind: kind, kindLabel: KIND_LABEL[kind], total: total, roles: roles, lines: lines };
   }
 
   // 「継承 1 本・関連 1 本」のような 1 行の要約。出現が無ければ空文字。
@@ -157,7 +169,7 @@ window.MA.impactScan = (function() {
       rows.push({
         id: d.id, name: d.name, order: i,
         kind: s.kind, kindLabel: s.kindLabel,
-        total: s.total, roles: s.roles, summary: summarize(s),
+        total: s.total, roles: s.roles, lines: s.lines, summary: summarize(s),
       });
     });
     rows.sort(function(a, b) { return b.total - a.total || a.order - b.order; });

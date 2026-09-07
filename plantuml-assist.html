@@ -959,6 +959,23 @@ html, body {
 #rename-impact .impact-kind { color: var(--text-secondary); white-space: nowrap; }
 #rename-impact .impact-roles { color: var(--text-secondary); padding-left: 8px; }
 #rename-impact .impact-empty { color: var(--text-secondary); }
+#rename-impact .impact-line {
+  display: flex; gap: 6px; padding: 1px 0 1px 8px; cursor: pointer;
+  color: var(--text-secondary); font-family: monospace; font-size: 10px;
+}
+#rename-impact .impact-line:hover { background: var(--bg-hover, rgba(127,127,127,0.15)); color: var(--text-primary); }
+#rename-impact .impact-line-no { min-width: 2.5em; text-align: right; opacity: 0.7; }
+#rename-impact .impact-line-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* シグネチャ変更 (戻り値型・引数) をまとめて当てる欄 */
+#rename-signature { margin-top: 6px; font-size: 10px; }
+#rename-signature .sig-head { color: var(--text-secondary); padding-bottom: 3px; }
+#rename-signature .sig-row { display: flex; align-items: center; gap: 4px; }
+#rename-signature .sig-row label { margin: 0; white-space: nowrap; }
+#rename-signature .sig-row input { width: auto; flex: 1 1 0; min-width: 0; }
+#rename-signature .sig-preview { max-height: 90px; overflow-y: auto; margin: 4px 0; }
+#rename-signature .sig-line { font-family: monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#rename-signature .sig-note { color: var(--text-secondary); }
+#rename-signature .sig-apply { width: 100%; }
 #rename-summary { margin-top: 6px; font-size: 10px; color: var(--text-secondary); }
 #rename-panel .rename-actions { display: flex; gap: 6px; margin-top: 8px; }
 #rename-panel .rename-actions button {
@@ -2265,6 +2282,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <div id="rename-hits"></div>
         <!-- 置換を実行する前に、図種 × 関係の内訳で影響範囲を見る -->
         <div id="rename-impact"></div>
+        <!-- 綴りが変わらない仕様変更 (戻り値型・引数) を全図へ 1 回で当てる -->
+        <div id="rename-signature"></div>
         <div id="rename-summary"></div>
         <div class="rename-actions">
           <button id="btn-rename-apply" disabled>置換</button>
@@ -2613,6 +2632,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/folder-reopen.js"></script>
 <script src="src/core/bulk-rename.js"></script>
 <script src="src/core/impact-scan.js"></script>
+<script src="src/core/signature-change.js"></script>
 <script src="src/core/bulk-apply.js"></script>
 <script src="src/core/bulk-export.js"></script>
 <script src="src/core/handoff-package.js"></script>
