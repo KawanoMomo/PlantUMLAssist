@@ -4847,6 +4847,155 @@ function _fcSourceDocs() {
   return out;
 }
 
+// ── 題材プリセット (BLK-junior-20260907-1303-wish) ─────────────────────────
+// セットを 1 度登録しておけば、次の題材からは「プリセットを選ぶ → 題材名を打つ →
+// 生成」の 3 操作で一式が揃う。元の図をタブに開く必要も、置換元を打ち直す必要も無い。
+// 何がどう置き換わるかは src/core/subject-preset.js、ここは画面と保存だけ。
+
+function _spSelected() {
+  var SP = window.MA.subjectPreset;
+  var sel = document.getElementById('sp-preset');
+  if (!SP || !sel || !sel.value) return null;
+  return SP.load(null, sel.value);
+}
+
+function _spSubject() {
+  var el = document.getElementById('sp-subject');
+  return el ? el.value.trim() : '';
+}
+
+function _spPlan() {
+  var SP = window.MA.subjectPreset;
+  var preset = _spSelected();
+  return (SP && preset) ? SP.plan(preset, _spSubject(), _fcExistingNames()) : null;
+}
+
+function _spBlockHtml(s) {
+  var SP = window.MA.subjectPreset;
+  if (!SP) return '';
+  var esc = s.esc;
+  var presets = SP.list(null);
+  var keepName = (document.getElementById('sp-preset') || {}).value || '';
+  var keepSubject = (document.getElementById('sp-subject') || {}).value || '';
+
+  var html = '<div id="sp-block" style="border:1px solid var(--border);border-radius:4px;padding:8px 10px;margin-top:8px;">'
+    + '<div style="font-size:11px;color:var(--text-secondary);">'
+    + '<b style="color:var(--text-primary);">題材プリセット</b> — 登録済みのセットなら、題材名を打つだけで一式が作れます'
+    + ' (元の図を開く必要はありません)。</div>';
+
+  if (!presets.length) {
+    html += '<div id="sp-empty" style="font-size:11px;color:var(--text-secondary);margin-top:6px;">'
+      + 'まだプリセットがありません。下でセットを 1 度作ってから「このセットをプリセットに登録」を押すと、'
+      + '次の題材からここで選べます。</div></div>';
+    return html;
+  }
+
+  var preset = null;
+  presets.forEach(function(p) { if (p.name === keepName) preset = p; });
+  if (!preset) preset = presets[0];
+
+  html += '<div style="display:flex;gap:10px;align-items:flex-end;margin-top:2px;">'
+    + '<div style="flex:2;"><label style="' + s.LABEL + '" for="sp-preset">プリセット</label>'
+    + '<select id="sp-preset" style="' + s.FIELD + '">';
+  presets.forEach(function(p) {
+    html += '<option value="' + esc(p.name) + '"' + (p.name === preset.name ? ' selected' : '') + '>'
+      + esc(SP.describe(p)) + '</option>';
+  });
+  html += '</select></div>'
+    + '<div style="flex:1;"><label style="' + s.LABEL + '" for="sp-subject">新しい題材名</label>'
+    + '<input id="sp-subject" style="' + s.FIELD + '" autocomplete="off" spellcheck="false" placeholder="I2c" value="'
+    + esc(keepSubject) + '"></div>'
+    + '</div>';
+
+  var plan = _spPlan();
+  var conflicts = SP.conflicts(preset, _spSubject(), _fcExistingNames());
+  html += '<div id="sp-plan" style="font-size:11px;color:var(--text-secondary);margin-top:6px;"'
+    + ' data-docs="' + ((plan && plan.docs) || 0) + '">'
+    + esc(((plan && plan.items) || []).map(function(it) { return it.name; }).join(' ・ ')) + '</div>';
+  // 同じ題材で既に作ってあると名前に連番が付く。黙って 2 セット目を作らせない。
+  if (conflicts.length) {
+    html += '<div id="sp-renamed" style="font-size:11px;color:var(--accent-red);margin-top:2px;">'
+      + 'この題材の図は既にあります (' + esc(conflicts.join(' ・ ')) + ')。作ると別名でもう 1 セット増えます</div>';
+  }
+  html += '<div id="sp-summary" style="font-size:11px;color:var(--text-secondary);margin-top:4px;"'
+    + ' data-ready="' + (plan && plan.ready ? '1' : '0') + '">' + esc(SP.summaryText(plan)) + '</div>'
+    + '<div style="margin-top:6px;">'
+    + '<button id="btn-sp-create" style="' + s.BTN + '"' + (plan && plan.ready ? '' : ' disabled') + '>'
+    + 'この題材で一式を作る</button>'
+    + '<button id="btn-sp-delete" style="' + s.BTN + '">このプリセットを削除</button>'
+    + '</div></div>';
+  return html;
+}
+
+function _spBind() {
+  var sel = document.getElementById('sp-preset');
+  if (sel) sel.addEventListener('change', renderFamilyClone);
+  var sub = document.getElementById('sp-subject');
+  if (sub) {
+    sub.addEventListener('input', function() {
+      renderFamilyClone();
+      // 再描画で作り直した入力欄にカーソルを戻す (1 文字ごとに外れないように)。
+      var el = document.getElementById('sp-subject');
+      if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+    });
+  }
+  var create = document.getElementById('btn-sp-create');
+  if (create) create.addEventListener('click', createFromSubjectPreset);
+  var del = document.getElementById('btn-sp-delete');
+  if (del) del.addEventListener('click', function() {
+    var s = document.getElementById('sp-preset');
+    if (!s || !s.value) return;
+    if (!confirm('プリセット「' + s.value + '」を削除しますか。')) return;
+    window.MA.subjectPreset.remove(null, s.value);
+    renderFamilyClone();
+  });
+  var save = document.getElementById('btn-fc-save-preset');
+  if (save) save.addEventListener('click', saveSubjectPreset);
+}
+
+// 今 fc 側で選んでいるセットと置換元を、そのままプリセットにする。
+// 名前はセット名を既定にして、その場で直せるようにする。
+function saveSubjectPreset() {
+  var SP = window.MA.subjectPreset;
+  var FC = window.MA.familyClone;
+  var group = _fcSelectedGroup();
+  if (!SP || !FC || !group) return;
+  var from = (document.getElementById('fc-from') || {}).value || FC.suggestFrom(group);
+  var name = prompt('プリセット名', FC.groupLabel(group));
+  if (name == null) return;
+  var preset = SP.fromGroup(group, from, name);
+  var err = SP.validate(preset);
+  if (err) { alert(err); return; }
+  try {
+    SP.save(null, preset);
+  } catch (e) {
+    alert(e.message);
+    return;
+  }
+  var sel = document.getElementById('sp-preset');
+  if (sel) sel.value = preset.name;
+  renderFamilyClone();
+  var s2 = document.getElementById('sp-preset');
+  if (s2) s2.value = preset.name;
+  renderFamilyClone();
+}
+
+function createFromSubjectPreset() {
+  var plan = _spPlan();
+  if (!plan || !plan.ready) return;
+  saveActiveDoc();
+  plan.items.forEach(function(it) {
+    var detected = window.MA.workspace.detectType(it.dsl);
+    var type = (it.diagramType && modules[it.diagramType])
+      ? it.diagramType
+      : ((detected && modules[detected]) ? detected : currentDiagramType);
+    window.MA.workspace.open({ name: it.name, dsl: it.dsl, diagramType: type });
+    applyActiveDoc();
+    saveActiveDoc();
+  });
+  closeFamilyClone();
+}
+
 function renderFamilyClone() {
   var content = document.getElementById('fc-modal-content');
   var FC = window.MA.familyClone;
@@ -4861,7 +5010,9 @@ function renderFamilyClone() {
   var plan = _fcPlan();
 
   var html = '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">セットごとまとめて題材を替える</h3>'
-    + '<div style="font-size:11px;color:var(--text-secondary);">'
+    + _spBlockHtml({ LABEL: LABEL, FIELD: FIELD, BTN: BTN, esc: esc })
+    + '<div style="font-size:11px;color:var(--text-secondary);margin-top:14px;">'
+    + '登録がまだのセットは、下で 1 度作ってから「プリセットに登録」を押してください。'
     + '同じ系統の図をまとめて 1 セットとして選び、対応表を 1 回入れると、そのセットの図が全部 '
     + '新しいタブに揃います。図種ごとにテンプレートを作り直す必要はありません。</div>'
     + '<label style="' + LABEL + '" for="fc-set">セット (図の名前の頭でまとめています)</label>'
@@ -4919,10 +5070,12 @@ function renderFamilyClone() {
     + '<button id="btn-fc-create" style="' + BTN + '"' + (plan && plan.ready ? '' : ' disabled') + '>'
     + 'セットをまとめて作る</button>'
     + '<button id="btn-fc-open" style="' + BTN + '">このセットを全部開く</button>'
+    + '<button id="btn-fc-save-preset" style="' + BTN + '">このセットをプリセットに登録</button>'
     + '<button id="btn-fc-cancel" style="' + BTN + '">キャンセル</button>'
     + '</div>';
 
   content.innerHTML = html;
+  _spBind();
 
   document.getElementById('fc-set').addEventListener('change', function() {
     var f = document.getElementById('fc-from');
