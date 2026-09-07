@@ -34,6 +34,10 @@ window.MA.settingsTabs = (function() {
         { id: 'undo-redo', keys: 'Ctrl+Z / Ctrl+Y', desc: '元に戻す / やり直す',             state: 'done' },
         { id: 'save',    keys: 'Ctrl+S',    desc: 'ファイルを保存する',                      state: 'done', remap: true },
         { id: 'export-menu', keys: 'Ctrl+E', desc: 'エクスポートメニューを開く',             state: 'done', remap: true },
+        // design 2c の書き出し 2 つ。表に載っていないと差し替えの衝突判定に入らず、
+        // 「一覧に無いのに効くキー」になってしまうので、割り当ての正本はここに置く。
+        { id: 'exp-svg',   keys: 'Ctrl+Shift+S', desc: 'SVG として保存する',                 state: 'done', remap: true },
+        { id: 'exp-clipboard', keys: 'Ctrl+Shift+C', desc: 'クリップボードにコピーする',     state: 'done', remap: true },
       ],
     },
     {
