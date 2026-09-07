@@ -1027,7 +1027,98 @@ function init() {
 
     function applyBackendVisibility(backend) {
       var dirRow = document.getElementById('cfg-file-dir-row');
-      if (dirRow) dirRow.style.display = (backend === 'file') ? 'block' : 'none';
+      var AO0 = window.MA.autosaveOptions;
+      var show = AO0 ? AO0.needsFileDir(backend) : (backend === 'file');
+      if (dirRow) dirRow.style.display = show ? 'block' : 'none';
+    }
+
+    // ── design 1a: 自動保存タブの中身 ────────────────────────────────
+    // レンダリングタブと同じ語彙 (セグメント + カード) に揃える。値の並びと
+    // 既定は MA.autosaveOptions が持ち、ここは DOM を作るだけ。
+    var AO = window.MA.autosaveOptions;
+
+    // 選択肢ごとに説明の付くカード 1 枚。renderModeCards と同じ見た目を使う。
+    function buildOptionCard(radioName, card, onPick) {
+      var label = document.createElement('label');
+      label.className = 'cfg-mode-card';
+      label.dataset.value = card.id;
+      var radio = document.createElement('input');
+      radio.type = 'radio';
+      radio.name = radioName;
+      radio.value = card.id;
+      radio.checked = !!card.checked;
+      radio.addEventListener('change', function() {
+        if (this.checked && onPick) onPick(this.value);
+      });
+      var body = document.createElement('div');
+      body.className = 'cfg-mode-body';
+      var head = document.createElement('div');
+      head.className = 'cfg-mode-head';
+      var title = document.createElement('span');
+      title.className = 'cfg-mode-title';
+      title.textContent = card.title;
+      head.appendChild(title);
+      if (card.badge) {
+        var badge = document.createElement('span');
+        badge.className = 'cfg-mode-badge ' + card.badge.tone;
+        badge.textContent = card.badge.text;
+        head.appendChild(badge);
+      }
+      body.appendChild(head);
+      if (card.desc) {
+        var d = document.createElement('div');
+        d.className = 'cfg-mode-privacy';
+        d.textContent = card.desc;
+        body.appendChild(d);
+      }
+      label.appendChild(radio);
+      label.appendChild(body);
+      return label;
+    }
+
+    function renderRestoreCards(selected) {
+      var wrap = document.getElementById('cfg-restore-cards');
+      if (!wrap || !AO) return;
+      wrap.innerHTML = '';
+      AO.restoreCards(selected).forEach(function(c) {
+        wrap.appendChild(buildOptionCard('cfg-restore-mode', c, null));
+      });
+    }
+
+    function renderBackendCards(selected) {
+      var wrap = document.getElementById('cfg-backend-cards');
+      if (!wrap || !AO) return;
+      wrap.innerHTML = '';
+      AO.backendCards(selected).forEach(function(c) {
+        // 保存先ディレクトリ欄の出し入れはカードを選んだ瞬間に効かせる。
+        wrap.appendChild(buildOptionCard('cfg-backend', c, applyBackendVisibility));
+      });
+    }
+
+    function renderAutosaveDebounce(current) {
+      var wrap = document.getElementById('cfg-debounce');
+      if (!wrap || !AO) return;
+      var cur = AO.normalizeDebounce(current);
+      wrap.innerHTML = '';
+      AO.DEBOUNCE_CHOICES.forEach(function(c) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'cfg-seg' + (c.value === cur ? ' active' : '');
+        b.dataset.debounce = String(c.value);
+        b.setAttribute('role', 'radio');
+        b.setAttribute('aria-checked', c.value === cur ? 'true' : 'false');
+        b.textContent = c.label;
+        b.addEventListener('click', function() {
+          wrap.dataset.pending = String(c.value);
+          Array.prototype.forEach.call(wrap.children, function(el) {
+            var on = el === b;
+            el.classList.toggle('active', on);
+            el.setAttribute('aria-checked', on ? 'true' : 'false');
+          });
+        });
+        wrap.appendChild(b);
+      });
+      wrap.dataset.pending = String(cur);
     }
 
     // ── design 1a: 5 タブ ───────────────────────────────────────────
@@ -1272,12 +1363,11 @@ function init() {
       var as = window.MA.autoSave;
       var cfg = as ? as.getConfig() : { enabled: true, debounceMs: 1000, restoreMode: 'confirm', backend: 'localStorage', fileDir: './autosave' };
       document.getElementById('cfg-enabled').checked = !!cfg.enabled;
-      document.getElementById('cfg-debounce').value = String(cfg.debounceMs);
-      var radios = document.getElementsByName('cfg-restore-mode');
-      for (var i = 0; i < radios.length; i++) radios[i].checked = (radios[i].value === cfg.restoreMode);
-      var backendRadios = document.getElementsByName('cfg-backend');
-      var backend = cfg.backend || 'localStorage';
-      for (var j = 0; j < backendRadios.length; j++) backendRadios[j].checked = (backendRadios[j].value === backend);
+      // セグメントとカードは開くたびに作り直す。保存済みの値がそのまま選択状態になる。
+      renderAutosaveDebounce(cfg.debounceMs);
+      renderRestoreCards(cfg.restoreMode);
+      var backend = AO ? AO.normalizeBackend(cfg.backend) : (cfg.backend || 'localStorage');
+      renderBackendCards(backend);
       var dirInput = document.getElementById('cfg-file-dir');
       if (dirInput) dirInput.value = cfg.fileDir || './autosave';
       applyBackendVisibility(backend);
@@ -1315,7 +1405,9 @@ function init() {
     if (closeX) closeX.addEventListener('click', close);
     document.getElementById('cfg-ok').addEventListener('click', function() {
       var enabled = document.getElementById('cfg-enabled').checked;
-      var debounceMs = parseInt(document.getElementById('cfg-debounce').value, 10);
+      var dbSeg = document.getElementById('cfg-debounce');
+      var debounceMs = AO ? AO.normalizeDebounce(dbSeg && dbSeg.dataset.pending)
+                          : parseInt((dbSeg && dbSeg.dataset.pending) || '1000', 10);
       var radios = document.getElementsByName('cfg-restore-mode');
       var restoreMode = 'confirm';
       for (var i = 0; i < radios.length; i++) if (radios[i].checked) { restoreMode = radios[i].value; break; }
@@ -1400,13 +1492,8 @@ function init() {
       scheduleRefresh();
       refreshMetaInfo();
     });
-    // Toggle the file-dir input visibility when the backend radio changes
-    var backendRadios = document.getElementsByName('cfg-backend');
-    for (var k = 0; k < backendRadios.length; k++) {
-      backendRadios[k].addEventListener('change', function() {
-        if (this.checked) applyBackendVisibility(this.value);
-      });
-    }
+    // 保存先ディレクトリ欄の出し入れは renderBackendCards がカードごとに結線する
+    // (カードは open() のたびに作り直されるので、ここで静的に拾うことはできない)。
   })();
 
   // Zoom

@@ -2056,47 +2056,30 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <div id="cfg-tabs" role="tablist"></div>
 
     <div id="cfg-pane-autosave" class="cfg-pane">
-    <label style="display:flex;align-items:center;gap:6px;margin-bottom:10px;font-size:12px;">
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;">
       <input type="checkbox" id="cfg-enabled"> DSL を自動保存する
     </label>
+    <div style="font-size:10px;color:var(--text-secondary);margin:2px 0 12px 20px;">編集を止めてから指定時間後に保存します。</div>
 
-    <div style="margin-bottom:10px;font-size:12px;">
-      <label style="display:block;margin-bottom:4px;color:var(--text-secondary);">保存間隔</label>
-      <select id="cfg-debounce" style="background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;">
-        <option value="500">500ms</option>
-        <option value="1000">1秒</option>
-        <option value="2000">2秒</option>
-        <option value="5000">5秒</option>
-      </select>
+    <div style="margin-bottom:12px;font-size:12px;">
+      <div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:6px;">保存間隔 / Debounce</div>
+      <div id="cfg-debounce" role="radiogroup" aria-label="保存間隔" style="display:flex;gap:6px;"></div>
     </div>
 
-    <fieldset style="border:1px solid var(--border);border-radius:4px;padding:8px 10px;margin-bottom:10px;font-size:12px;">
-      <legend style="color:var(--text-secondary);padding:0 4px;">起動時の復元動作</legend>
-      <label style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
-        <input type="radio" name="cfg-restore-mode" value="auto"> 自動復元 (確認なしで前回 DSL をロード)
-      </label>
-      <label style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
-        <input type="radio" name="cfg-restore-mode" value="confirm"> 確認ダイアログを表示 (推奨)
-      </label>
-      <label style="display:flex;align-items:center;gap:6px;">
-        <input type="radio" name="cfg-restore-mode" value="none"> 復元しない (常にテンプレ)
-      </label>
-    </fieldset>
+    <div style="margin-bottom:12px;">
+      <div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:6px;">起動時の復元 / On startup</div>
+      <div id="cfg-restore-cards"></div>
+    </div>
 
-    <fieldset style="border:1px solid var(--border);border-radius:4px;padding:8px 10px;margin-bottom:10px;font-size:12px;">
-      <legend style="color:var(--text-secondary);padding:0 4px;">保存方式</legend>
-      <label style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
-        <input type="radio" name="cfg-backend" value="localStorage"> localStorage (ブラウザ内、 高速)
-      </label>
-      <label style="display:flex;align-items:center;gap:6px;">
-        <input type="radio" name="cfg-backend" value="file"> ファイル (ディスク永続、 git で管理可能)
-      </label>
-      <div id="cfg-file-dir-row" style="display:none;margin-top:6px;">
+    <div style="margin-bottom:10px;">
+      <div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:6px;">保存先 / Backend</div>
+      <div id="cfg-backend-cards"></div>
+      <div id="cfg-file-dir-row" style="display:none;margin-top:6px;font-size:12px;">
         <label style="display:block;margin-bottom:4px;color:var(--text-secondary);">保存先ディレクトリ</label>
         <input type="text" id="cfg-file-dir" placeholder="./autosave" style="width:100%;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-family:monospace;">
-        <div style="font-size:10px;color:var(--text-secondary);margin-top:2px;">サーバ (server.py) からの相対パス、 または絶対パス。 存在しなければ自動作成。</div>
+        <div style="font-size:10px;color:var(--text-secondary);margin-top:2px;">server.py からの相対パス、 または絶対パス。 存在しなければ自動作成。</div>
       </div>
-    </fieldset>
+    </div>
 
     </div><!-- /#cfg-pane-autosave -->
 
@@ -2178,6 +2161,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/regex-parts.js"></script>
 <script src="src/core/id-normalizer.js"></script>
 <script src="src/core/auto-save.js"></script>
+<script src="src/core/autosave-options.js"></script>
 <script src="src/core/workspace.js"></script>
 <script src="src/core/bulk-rename.js"></script>
 <script src="src/core/bulk-export.js"></script>
