@@ -78,9 +78,14 @@ describe('settings-tabs — 書き出しキーを一覧に足す (design 2c)', (
     try { delete require.cache[require.resolve('../src/core/settings-tabs.js')]; } catch (e) {}
     require('../src/core/settings-tabs.js');
     var ST = global.window.MA.settingsTabs;
+    // design 5b で一覧がグループ分けされたので、基準は GROUPS の行数の総和。
+    // 書き出しの 2 つは全体のキーなので「全体」グループの末尾に合流する。
+    var declared = ST.GROUPS.reduce(function(n, g) { return n + g.rows.length; }, 0);
     var rows = ST.shortcutRows();
-    expect(rows.length).toBe(ST.SHORTCUTS.length + 2);
-    expect(rows[rows.length - 1]).toEqual({ keys: 'Ctrl+Shift+C', desc: 'クリップボードにコピー' });
+    expect(rows.length).toBe(declared + 2);
+    var globalRows = ST.shortcutGroups()[0].rows;
+    expect(globalRows[globalRows.length - 1])
+      .toEqual({ keys: 'Ctrl+Shift+C', desc: 'クリップボードにコピー', state: 'done' });
     expect(ST.buildShortcutsHtml()).toContain('<kbd>Ctrl+Shift+S</kbd>');
   });
 });

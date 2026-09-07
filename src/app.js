@@ -1129,8 +1129,15 @@ function init() {
     }
 
     if (ST) {
-      var list = document.getElementById('cfg-shortcuts-list');
-      if (list) list.innerHTML = ST.buildShortcutsHtml();
+      // design 5b: 「⌕ 操作名で検索」で表を絞る。打つたびに引き直すので、
+      // 表そのものは 1 本の buildShortcutsHtml(query) から作る。
+      var scSearch = document.getElementById('cfg-sc-search');
+      var drawShortcuts = function() {
+        var list = document.getElementById('cfg-shortcuts-list');
+        if (list) list.innerHTML = ST.buildShortcutsHtml(scSearch ? scSearch.value : '');
+      };
+      drawShortcuts();
+      if (scSearch) scSearch.addEventListener('input', drawShortcuts);
       applyEditorPrefs(readEditorPrefs());
     }
 
@@ -1470,6 +1477,77 @@ function init() {
     var back = exportReturnFocusEl;
     exportReturnFocusEl = null;
     if (back && back.focus && document.body.contains(back)) back.focus();
+  });
+
+  // design 5b: 設定のショートカット表に載せた「全体」「表示」のキーを効かせる。
+  // 表に載っていて効かないキーは「無い」と読めてしまうので、表と実装をここで揃える。
+  //
+  // 作法は既存の history ルーター (:653) にそろえる:
+  //  - IME 変換中は素通しする
+  //  - Alt / Shift 付きは別物 (Ctrl+Shift+S は Export の SVG 保存に予約済み)
+  //  - フォーム入力中は奪わない。ただし DSL エディタは例外で、ここのキーはどれも
+  //    「今の図」に対する操作 (再描画・保存・倍率・図種) なので、DSL を書きながらでも
+  //    効いた方が台本の往復に合う。design 5b でも「表示」に但し書きが無い
+  document.addEventListener('keydown', function(e) {
+    if (e.isComposing || e.keyCode === 229) return;
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+    var key = String(e.key || '');
+    var lower = key.toLowerCase();
+
+    var ae = document.activeElement;
+    var inField = ae && ae !== editorEl
+      && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT' || ae.isContentEditable);
+
+    // Ctrl+R / Ctrl+S: ブラウザ既定 (再読み込み / ページ保存) を奪う。図の再描画と
+    // ファイル保存はこのアプリで最も繰り返す 2 つで、既定の方が事故が大きい。
+    if (lower === 'r' && !inField) { e.preventDefault(); scheduleRefresh(); return; }
+    if (lower === 's' && !inField) {
+      e.preventDefault();
+      var saveBtn = document.getElementById('btn-save');
+      if (saveBtn) saveBtn.click();
+      return;
+    }
+
+    if (inField) return;
+
+    // Ctrl+ + / − / 0。'+' はレイアウトによって '=' や ';' で来るので e.code も見る。
+    if (key === '+' || key === '=' || e.code === 'Equal' || e.code === 'NumpadAdd') {
+      e.preventDefault(); setZoom(zoom + 0.1); return;
+    }
+    if (key === '-' || e.code === 'Minus' || e.code === 'NumpadSubtract') {
+      e.preventDefault(); setZoom(zoom - 0.1); return;
+    }
+    if (key === '0' || e.code === 'Digit0' || e.code === 'Numpad0') {
+      e.preventDefault(); zoomToFit(); return;
+    }
+
+    // Ctrl+1 … Ctrl+6 は左レールの並び (SEQ / UC / CMP / CLS / ACT / ST) と同じ順。
+    if (key >= '1' && key <= '6') {
+      var rail = window.MA.diagramRail;
+      var sel = document.getElementById('diagram-type');
+      if (!rail || !sel) return;
+      var item = rail.items()[Number(key) - 1];
+      if (!item) return;
+      e.preventDefault();
+      if (item.type === sel.value) return;   // 同じ図種の押し直しは何もしない
+      sel.value = item.type;
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  });
+
+  // design 5b「選択解除 — Esc」。モーダル / メニュー / ドラッグを閉じる既存の Esc は
+  // どれも先に自分で処理して止まるので、ここは「他に閉じるものが無いとき」だけ効く。
+  document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Escape' || e.isComposing) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (dragState && dragState.dragging) return;
+    var ae = document.activeElement;
+    if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
+    var sel = window.MA.selection;
+    if (!sel || typeof sel.getSelected !== 'function') return;
+    if ((sel.getSelected() || []).length === 0) return;
+    e.preventDefault();
+    sel.clearSelection();
   });
 
   // Ctrl+wheel zoom, Shift+wheel horizontal scroll on preview
