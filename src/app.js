@@ -62,6 +62,12 @@ var syncRail = function() {};
 var syncZoomHud = function() {};
 var renderTimer = null;
 var RENDER_DEBOUNCE_MS = 150;
+// design 5a: 設定「レンダリング」に出す材料。
+// _renderEnv    … GET /env の答え (Java の検出結果)。開くまで取りに行かない。
+// _renderTimings… モードごとの直近の実測 ms。どちらが速いかを設定画面で比べる。
+var _renderEnv = null;
+var _renderEnvLoading = false;
+var _renderTimings = {};
 var zoom = 1.0;
 var isFirstRender = true;
 // renderGen monotonically increases for each renderSvg() invocation. Stale
@@ -938,8 +944,28 @@ function init() {
 
     // ── design 1a: 5 タブ ───────────────────────────────────────────
     var ST = window.MA.settingsTabs;
+    var RM = window.MA.renderModes;
+    var _cfgMode = null;   // 設定モーダルの中で選ばれているモード (保存まで確定しない)
     var TAB_KEY = 'plantuml-settings-tab';
     var EDITOR_PREFS_KEY = 'plantuml-editor-prefs';
+    var RENDER_DEBOUNCE_KEY = 'plantuml-render-debounce';
+
+    // 未保存なら現行の RENDER_DEBOUNCE_MS を一番近い選択肢に丸めて見せる
+    // (既定の 150ms は利用者から見れば「即時」)。
+    function readRenderDebounce() {
+      if (!RM) return 300;
+      var stored = null;
+      try { stored = localStorage.getItem(RENDER_DEBOUNCE_KEY); } catch (e) {}
+      return RM.normalizeDebounce(stored === null ? RENDER_DEBOUNCE_MS : stored);
+    }
+
+    // 保存済みの指定は、設定モーダルを開かない回でも効かせる。
+    (function applyStoredDebounce() {
+      if (!RM) return;
+      var stored = null;
+      try { stored = localStorage.getItem(RENDER_DEBOUNCE_KEY); } catch (e) {}
+      if (stored !== null) RENDER_DEBOUNCE_MS = RM.normalizeDebounce(stored);
+    })();
 
     function readEditorPrefs() {
       if (!ST) return { fontSize: 13, wrap: false };
@@ -968,7 +994,7 @@ function init() {
     function checkedRenderMode() {
       var radios = document.getElementsByName('cfg-render-mode');
       for (var i = 0; i < radios.length; i++) if (radios[i].checked) return radios[i].value;
-      return currentRenderMode();
+      return _cfgMode || currentRenderMode();
     }
 
     function showTab(id) {
@@ -1000,14 +1026,111 @@ function init() {
     function refreshRenderNote() {
       var note = document.getElementById('cfg-render-note');
       if (note && ST) note.textContent = ST.renderModeNote(checkedRenderMode());
+      var warn = document.getElementById('cfg-render-warning');
+      if (warn && RM) {
+        warn.textContent = RM.warningFor(checkedRenderMode(), _renderEnv);
+        warn.style.display = warn.textContent ? 'block' : 'none';
+      }
+    }
+
+    // ── 描画方法の 3 択カード (design 5a) ──────────────────────────────
+    // 速度と外部送信の 2 点、それに Java の検出結果をカードの上に出す。
+    // 選択そのものは従来どおり name="cfg-render-mode" のラジオが持ち、
+    // 「保存」で #render-mode に流す既存経路をそのまま使う。
+    function renderModeCards() {
+      var wrap = document.getElementById('cfg-render-modes');
+      if (!wrap || !RM) return;
+      var selected = checkedRenderMode();
+      wrap.innerHTML = '';
+      RM.cards(_renderEnv, _renderTimings, selected).forEach(function(c) {
+        var label = document.createElement('label');
+        label.className = 'cfg-mode-card' + (c.selectable ? '' : ' disabled');
+        label.dataset.modeId = c.id;
+        var radio = document.createElement('input');
+        radio.type = 'radio';
+        radio.name = 'cfg-render-mode';
+        radio.value = c.id;
+        radio.checked = !!c.checked;
+        radio.disabled = !c.selectable;
+        radio.addEventListener('change', function() {
+          _cfgMode = this.value;
+          refreshRenderNote();
+          renderModeCards();
+        });
+        var body = document.createElement('div');
+        body.className = 'cfg-mode-body';
+        var head = document.createElement('div');
+        head.className = 'cfg-mode-head';
+        var title = document.createElement('span');
+        title.className = 'cfg-mode-title';
+        title.textContent = c.title;
+        head.appendChild(title);
+        if (c.badge) {
+          var badge = document.createElement('span');
+          badge.className = 'cfg-mode-badge ' + c.badge.tone;
+          badge.textContent = c.badge.text;
+          head.appendChild(badge);
+        }
+        body.appendChild(head);
+        [['cfg-mode-speed', c.speed], ['cfg-mode-privacy', c.privacy], ['cfg-mode-note', c.note]]
+          .forEach(function(pair) {
+            if (!pair[1]) return;
+            var d = document.createElement('div');
+            d.className = pair[0];
+            d.textContent = pair[1];
+            body.appendChild(d);
+          });
+        label.appendChild(radio);
+        label.appendChild(body);
+        wrap.appendChild(label);
+      });
+    }
+
+    function renderDebounceChoices() {
+      var wrap = document.getElementById('cfg-render-debounce');
+      if (!wrap || !RM) return;
+      var cur = readRenderDebounce();
+      wrap.innerHTML = '';
+      RM.DEBOUNCE_CHOICES.forEach(function(c) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'cfg-seg' + (c.value === cur ? ' active' : '');
+        b.dataset.debounce = String(c.value);
+        b.setAttribute('role', 'radio');
+        b.setAttribute('aria-checked', c.value === cur ? 'true' : 'false');
+        b.textContent = c.label;
+        b.addEventListener('click', function() {
+          wrap.dataset.pending = String(c.value);
+          Array.prototype.forEach.call(wrap.children, function(el) {
+            var on = el === b;
+            el.classList.toggle('active', on);
+            el.setAttribute('aria-checked', on ? 'true' : 'false');
+          });
+        });
+        wrap.appendChild(b);
+      });
+      wrap.dataset.pending = String(cur);
+    }
+
+    // Java の検出は server に 1 回だけ聞く。落ちても設定画面は開けるようにする。
+    function loadRenderEnv() {
+      if (_renderEnv || _renderEnvLoading) { renderModeCards(); return; }
+      _renderEnvLoading = true;
+      fetch('/env').then(function(r) { return r.json(); }).then(function(j) {
+        _renderEnv = j;
+      }).catch(function() {
+        _renderEnv = { java: { found: false, version: null, major: null }, jar: true };
+      }).then(function() {
+        _renderEnvLoading = false;
+        renderModeCards();
+        refreshRenderNote();
+      });
     }
 
     if (ST) {
       var list = document.getElementById('cfg-shortcuts-list');
       if (list) list.innerHTML = ST.buildShortcutsHtml();
       applyEditorPrefs(readEditorPrefs());
-      var rm = document.getElementsByName('cfg-render-mode');
-      for (var r = 0; r < rm.length; r++) rm[r].addEventListener('change', refreshRenderNote);
     }
 
     function open() {
@@ -1026,8 +1149,11 @@ function init() {
       refreshMetaInfo();
       if (ST) {
         var mode = currentRenderMode();
-        var modeRadios = document.getElementsByName('cfg-render-mode');
-        for (var k = 0; k < modeRadios.length; k++) modeRadios[k].checked = (modeRadios[k].value === mode);
+        // カードは毎回作り直す。実測 ms も Java の検出結果も開くたびに変わりうる。
+        _cfgMode = mode;
+        renderModeCards();
+        renderDebounceChoices();
+        loadRenderEnv();
         refreshRenderNote();
         var prefs = readEditorPrefs();
         var fontSel = document.getElementById('cfg-editor-font');
@@ -1078,6 +1204,13 @@ function init() {
         if (modeSel && modeSel.value !== ST.normalizeRenderMode(mode2)) {
           modeSel.value = ST.normalizeRenderMode(mode2);
           modeSel.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        // design 5a: 入力を止めてから描画するまでの間隔。
+        var dbWrap = document.getElementById('cfg-render-debounce');
+        if (dbWrap && RM) {
+          var db = RM.normalizeDebounce(dbWrap.dataset.pending);
+          try { localStorage.setItem(RENDER_DEBOUNCE_KEY, String(db)); } catch (e) {}
+          RENDER_DEBOUNCE_MS = db;
         }
         var fontSel2 = document.getElementById('cfg-editor-font');
         var wrapEl2 = document.getElementById('cfg-editor-wrap');
@@ -4237,7 +4370,9 @@ function renderSvg() {
       }
     }
     renderStatusEl.textContent = 'OK (' + mode + ')';
-    updateTopRenderStatus('ok', elapsed());
+    var took = elapsed();
+    _renderTimings[mode] = took;   // design 5a: 設定画面での速度比較に使う
+    updateTopRenderStatus('ok', took);
   }).catch(function(err) {
     if (myGen !== renderGen) return;  // stale failure — ignore
     previewSvgEl.innerHTML = '<p style="color:var(--accent-red);padding:20px;white-space:pre-wrap;font-family:var(--font-mono);font-size:12px;">Render error: ' + (err.message || err) + '</p>';
