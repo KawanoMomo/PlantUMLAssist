@@ -142,6 +142,48 @@ window.MA.commandPalette = (function() {
 
   function _unq(s) { return s.replace(/^"(.*)"$/, '$1'); }
 
+  // ── 選択中の操作の言い換え ─────────────────────────────────────────
+  // design 2a の「選択中のメッセージに対して」は、2d と同じ流儀で
+  // 「何が起きるか」を先に書き、記法を右に小さく置くことを求める
+  // (「呼び出しの開始・終了を自動で入れる」+ `activate`)。
+  // 候補名の元は右ペインのボタンの文字なので、そのままだと
+  // 「⚡ ライフライン推論 (activate/deactivate)」のように記法と記号が前に出る。
+  // ここでボタンの文字を言い換えに引き当てる。表に無いボタンは、記号だけを
+  // 落として文字をそのまま使う (モジュールがボタンを増やしても古びない)。
+  var ACTION_PHRASES = [
+    { match: 'ライフライン推論', title: '呼び出しの開始・終了を自動で入れる', hint: 'activate' },
+    { match: 'alt/loop',         title: '条件分岐・繰り返しの枠で囲む',       hint: 'alt / loop' },
+    { match: 'この前に',         title: '選んだ行の前に足す',                 hint: 'insert before' },
+    { match: 'この後に注釈',     title: '選んだ行に説明を書き添える',         hint: 'note' },
+    { match: 'この後に',         title: '選んだ行の後に足す',                 hint: 'insert after' },
+    { match: 'ノートを添え',     title: 'この要素に説明を書き添える',         hint: 'note' },
+    { match: '向きを入れ替え',   title: 'From と To を入れ替える',            hint: 'swap' },
+    { match: '⇄',                title: 'From と To を入れ替える',            hint: 'swap' },
+    { match: '上へ',             title: '選んだ要素を 1 つ上へ動かす',        hint: 'Alt+↑' },
+    { match: '下へ',             title: '選んだ要素を 1 つ下へ動かす',        hint: 'Alt+↓' },
+    { match: '複製',             title: '選んだ要素を複製する',               hint: 'Ctrl+D' },
+    { match: '削除',             title: '選んだ要素を消す',                   hint: 'Delete' },
+  ];
+
+  // 先頭の絵記号と、末尾の「…」を落とす。言い換えが無いときの見出しに使う。
+  function _plainLabel(label) {
+    return String(label == null ? '' : label)
+      .replace(/^[\s -　]*[^\w\s぀-ヿ一-鿿(]+\s*/, '')
+      .replace(/\s*[.…]{1,3}\s*$/, '')
+      .trim();
+  }
+
+  // ボタンの文字 → パレットに出す { title, hint }。
+  function describeAction(label) {
+    var raw = String(label == null ? '' : label).trim();
+    for (var i = 0; i < ACTION_PHRASES.length; i++) {
+      if (raw.indexOf(ACTION_PHRASES[i].match) >= 0) {
+        return { title: ACTION_PHRASES[i].title, hint: ACTION_PHRASES[i].hint, label: raw };
+      }
+    }
+    return { title: _plainLabel(raw) || raw, hint: '', label: raw };
+  }
+
   // コマンド定義 + 今の DSL から、絞り込み前の候補一覧を作る。
   // 並びは GROUPS 順。開いた直後の一覧がそのまま design 2a の見出し順になる。
   function buildItems(commands, dslText) {
@@ -281,5 +323,6 @@ window.MA.commandPalette = (function() {
     filter: filter,
     score: score,
     moveIndex: moveIndex,
+    describeAction: describeAction,
   };
 })();
