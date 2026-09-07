@@ -945,11 +945,19 @@ window.MA.modules.plantumlClass = (function() {
       '</div>';
     }
 
+    // BLK-junior-20260907-0823: 関連の元 / 先は、このモーダルで作る親・子と
+    // 図に既にあるクラスからの選択にする。名前を打ち直す手が要らず、
+    // 「関連の元が未定義です」で確定できない状態にも落ちない。
+    function namePickHtml(id) {
+      return '<select id="' + id + '" class="cl-sc-name-pick" style="flex:1;' + INPUT + '">' +
+        '<option value="">（選ぶ）</option></select>';
+    }
+
     function relRowHtml(j) {
       return '<div class="cl-sc-rel-row" data-j="' + j + '" style="display:flex;gap:6px;margin-bottom:5px;align-items:center;">' +
-        '<input id="cl-sc-rfrom-' + j + '" list="cl-sc-names" type="text" placeholder="元" style="flex:1;' + INPUT + '">' +
+        namePickHtml('cl-sc-rfrom-' + j) +
         relSelect('cl-sc-rkind-' + j, 'association') +
-        '<input id="cl-sc-rto-' + j + '" list="cl-sc-names" type="text" placeholder="先" style="flex:1;' + INPUT + '">' +
+        namePickHtml('cl-sc-rto-' + j) +
         '<input id="cl-sc-rlabel-' + j + '" type="text" placeholder="ラベル" style="flex:1;' + INPUT + '">' +
         '<button id="cl-sc-rdel-' + j + '" title="この行を削除" style="background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;padding:2px 7px;">✕</button>' +
       '</div>';
@@ -972,7 +980,9 @@ window.MA.modules.plantumlClass = (function() {
       '<div id="cl-sc-rows">' + classRowHtml(0) + classRowHtml(1) + classRowHtml(2) + '</div>' +
       '<button id="cl-sc-add-row" style="font-size:11px;padding:3px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">＋ クラスを追加</button>' +
       '<div style="' + SECTION + '">親以外の関連 (省略可)</div>' +
-      '<div id="cl-sc-rel-rows">' + relRowHtml(0) + '</div>' +
+      // BLK-junior-20260907-0823: 派生クラス図は子どうしの関連も一緒に引くので、
+      // クラスの行と同じく最初から 3 行出す (「＋ 関連を追加」を押す手を省く)。
+      '<div id="cl-sc-rel-rows">' + relRowHtml(0) + relRowHtml(1) + relRowHtml(2) + '</div>' +
       '<button id="cl-sc-add-rel" style="font-size:11px;padding:3px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">＋ 関連を追加</button>' +
       '<div style="' + SECTION + '">追加される行</div>' +
       '<pre id="cl-sc-preview" style="margin:0;background:var(--bg-primary);border:1px solid var(--border);border-radius:3px;padding:6px;font-family:Consolas,monospace;font-size:11px;color:var(--text-primary);white-space:pre-wrap;min-height:34px;"></pre>' +
@@ -1016,7 +1026,42 @@ window.MA.modules.plantumlClass = (function() {
       };
     }
 
+    // 関連の元 / 先に出す名前。このモーダルで作る親・子を先に、図に既にある
+    // クラスを後に並べる (今まさに打っている名前がすぐ選べる方が探さずに済む)。
+    function knownNames() {
+      var out = [];
+      var seen = {};
+      function push(n) {
+        var v = String(n == null ? '' : n).trim();
+        if (!v || seen[v]) return;
+        seen[v] = true;
+        out.push(v);
+      }
+      push(val('cl-sc-parent'));
+      var rows = content.querySelectorAll('.cl-sc-row');
+      for (var i = 0; i < rows.length; i++) push(val('cl-sc-name-' + rows[i].getAttribute('data-i')));
+      existing.forEach(push);
+      return out;
+    }
+
+    // 選択中の値は残す。まだ名前を打っていない行は「（選ぶ）」のまま。
+    function refreshNamePickers() {
+      var names = knownNames();
+      var picks = content.querySelectorAll('.cl-sc-name-pick');
+      for (var i = 0; i < picks.length; i++) {
+        var sel = picks[i];
+        var cur = sel.value;
+        var html = '<option value="">（選ぶ）</option>';
+        for (var k = 0; k < names.length; k++) {
+          html += '<option value="' + esc(names[k]) + '">' + esc(names[k]) + '</option>';
+        }
+        sel.innerHTML = html;
+        sel.value = names.indexOf(cur) >= 0 ? cur : '';
+      }
+    }
+
     function refresh() {
+      refreshNamePickers();
       var spec = collectSpec();
       var text = ctx.getMmdText();
       var pre = document.getElementById('cl-sc-preview');
@@ -1055,14 +1100,15 @@ window.MA.modules.plantumlClass = (function() {
     }
 
     function bindRelRow(j) {
-      ['cl-sc-rfrom-' + j, 'cl-sc-rto-' + j, 'cl-sc-rlabel-' + j].forEach(function(id) { P.bindEvent(id, 'input', refresh); });
-      P.bindEvent('cl-sc-rkind-' + j, 'change', refresh);
+      P.bindEvent('cl-sc-rlabel-' + j, 'input', refresh);
+      // 元 / 先はプルダウンなので change で拾う (BLK-junior-20260907-0823)。
+      ['cl-sc-rfrom-' + j, 'cl-sc-rto-' + j, 'cl-sc-rkind-' + j].forEach(function(id) { P.bindEvent(id, 'change', refresh); });
       bindRemovable('cl-sc-rdel-' + j, '.cl-sc-rel-row', 'data-j', j);
     }
 
-    var rowCount = 3, relCount = 1;
+    var rowCount = 3, relCount = 3;
     bindClassRow(0); bindClassRow(1); bindClassRow(2);
-    bindRelRow(0);
+    bindRelRow(0); bindRelRow(1); bindRelRow(2);
     ['cl-sc-parent', 'cl-sc-pmembers'].forEach(function(id) { P.bindEvent(id, 'input', refresh); });
     P.bindEvent('cl-sc-pkind', 'change', refresh);
 
@@ -1101,6 +1147,10 @@ window.MA.modules.plantumlClass = (function() {
     });
 
     refresh();
+    // BLK-junior-20260907-0823: 開いた直後は必ず親クラス名から打ち始めるので、
+    // その欄に置きに行くクリックを省いて最初からフォーカスを載せる。
+    var first = document.getElementById('cl-sc-parent');
+    if (first && first.focus) first.focus();
   }
 
   function _renderNoSelection(parsedData, propsEl, ctx) {
