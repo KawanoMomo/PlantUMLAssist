@@ -846,6 +846,18 @@ html, body {
 }
 #inbox-panel .ib-filter button { cursor: pointer; }
 #inbox-panel .ib-empty { color: var(--text-secondary); padding: 6px 4px; }
+/* 根拠が崩れた指摘 (BLK-reviewer-20260908-0003)。読み直す対象を名指しで先頭に出す */
+#inbox-panel .ib-claims {
+  margin: 2px 0 4px 0;
+  padding: 3px 4px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+#inbox-panel .ib-claim-head { color: var(--text-secondary); }
+#inbox-panel .ib-claim-row { padding: 3px 4px 3px 10px; cursor: pointer; }
+#inbox-panel .ib-claim-row:hover { background: var(--bg-secondary); }
+#inbox-panel .ib-claim-where { color: var(--accent-red); font-family: var(--font-mono); }
+#inbox-panel .ib-claim-why { color: var(--text-primary); display: block; margin-top: 2px; }
 #inbox-panel .ib-group { border-top: 1px solid var(--border); padding: 4px 0; }
 #inbox-panel .ib-doc { color: var(--text-primary); padding: 2px 4px; }
 #inbox-panel .ib-row { padding: 3px 4px 3px 12px; color: var(--text-secondary); cursor: pointer; }
@@ -3216,6 +3228,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/review-pins.js"></script>
 <script src="src/core/pin-jump.js"></script>
 <script src="src/core/pin-inbox.js"></script>
+<script src="src/core/claim-check.js"></script>
 <script src="src/core/note-block.js"></script>
 <script src="src/core/family-clone.js"></script>
 <script src="src/core/subject-preset.js"></script>
