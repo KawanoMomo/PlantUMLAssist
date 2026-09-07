@@ -1066,6 +1066,71 @@ html, body {
   color: var(--text-primary);
 }
 #at-summary { color: var(--accent); font-family: var(--font-mono); }
+
+/* ── 変遷履歴 (BLK-reviewer-20260908-0723-wish) ─────────────────────────────
+   1 図の版を新しい順に並べ、前の版に戻った版 (往復) を目で拾えるようにする。 */
+#vt-modal-content {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  width: 88vw;
+  max-width: 1100px;
+  height: 84vh;
+  display: flex;
+  flex-direction: column;
+}
+#vt-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-primary);
+}
+#vt-file {
+  background: var(--bg-tertiary); color: var(--text-primary);
+  border: 1px solid var(--border); border-radius: 3px; font-size: 11px; padding: 3px 6px; max-width: 260px;
+}
+#vt-summary { color: var(--accent); font-family: var(--font-mono); font-size: 11px; }
+#vt-tools { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 11px; }
+#vt-only-wrap { display: flex; align-items: center; gap: 4px; color: var(--text-secondary); cursor: pointer; }
+#vt-tools button {
+  border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-radius: 3px;
+  font-size: 11px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+#vt-body { flex: 1; overflow-y: auto; padding: 10px 14px 14px; }
+
+.vt-row {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 7px 10px;
+  margin-bottom: 7px;
+  font-size: 11px;
+}
+.vt-row.vt-revisit { border-color: var(--accent-orange); }
+.vt-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.vt-rev { font-family: var(--font-mono); color: var(--accent); }
+.vt-at { color: var(--text-secondary); font-family: var(--font-mono); }
+.vt-delta { font-family: var(--font-mono); }
+.vt-add { color: var(--accent-green, #4caf50); }
+.vt-del { color: var(--accent-red); }
+.vt-lines { color: var(--text-secondary); }
+.vt-badge {
+  padding: 0 5px; border-radius: 3px; font-size: 10px;
+  background: var(--accent-orange); color: #000;
+}
+.vt-first { padding: 0 5px; border-radius: 3px; font-size: 10px; background: var(--bg-tertiary); color: var(--text-secondary); }
+.vt-why { margin-top: 4px; color: var(--accent-orange); font-size: 10px; }
+.vt-diff { margin-top: 5px; font-family: var(--font-mono); font-size: 10px; white-space: pre-wrap; }
+.vt-diff .vt-d-add { color: var(--accent-green, #4caf50); display: block; }
+.vt-diff .vt-d-del { color: var(--accent-red); display: block; }
+.vt-empty { font-size: 11px; color: var(--text-secondary); padding: 10px 0; }
 #at-tools { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 #at-tools input {
   background: var(--bg-tertiary); color: var(--text-primary);
@@ -3082,6 +3147,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button class="tab-tool" id="btn-tab-skeleton" title="同じ図種の図の骨格をそのまま土台にして、題材名を 1 か所打つだけで新しい図を作る">⧉→ 骨格から</button>
         <!-- BLK-reviewer-20260907-0803: 前回保存時点から変わった図があるかを常時見せる -->
         <button class="tab-tool" id="btn-tab-diff" title="前回保存した時点から変わった図の一覧">± 差分 −</button>
+        <!-- BLK-reviewer-20260908-0723-wish: 単発 diff では見えない「行って戻った」を履歴の上で見る -->
+        <button class="tab-tool" id="btn-tab-versions" title="この図が保存のたびにどう変わったかを通しで並べる。前の版に戻った「往復」には印が付く">⟲ 変遷 −</button>
         <!-- BLK-primary-20260907-0923-wish: 変わった図の変更前後をまとめて 1 画面に並べる -->
         <!-- BLK-junior-20260907-1203-wish: 同じ系統の図を 1 セットとしてまとめて題材替えする -->
         <button class="tab-tool" id="btn-tab-set" title="同じ系統の図をまとめて 1 セットとして、対応表 1 回で全部複製する">⧉⧉ セット複製</button>
@@ -3593,6 +3660,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/activity-branch-pattern.js"></script>
 <script src="src/core/swimlane-move.js"></script>
 <script src="src/core/save-diff.js"></script>
+<script src="src/core/version-timeline.js"></script>
 <script src="src/core/svg-freshness.js"></script>
 <script src="src/core/review-state.js"></script>
 <script src="src/core/file-role.js"></script>
@@ -3704,6 +3772,23 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       </span>
     </div>
     <div id="at-body"></div>
+  </div>
+</div>
+
+<!-- BLK-reviewer-20260908-0723-wish: 1 図の中身が保存のたびにどう変わったかを通しで見る -->
+<div id="vt-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+  <div id="vt-modal-content">
+    <div id="vt-head">
+      <strong>変遷履歴</strong>
+      <select id="vt-file" aria-label="図を選ぶ"></select>
+      <span id="vt-summary"></span>
+      <span id="vt-tools">
+        <label id="vt-only-wrap"><input type="checkbox" id="vt-only-revisit"> 往復した版だけ</label>
+        <button type="button" id="vt-forget">この図の履歴を消す</button>
+        <button type="button" id="vt-close">閉じる</button>
+      </span>
+    </div>
+    <div id="vt-body"></div>
   </div>
 </div>
 </body>

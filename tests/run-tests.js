@@ -29,6 +29,7 @@ const sourceFiles = [
   'src/core/subject-preset.js',
   'src/core/activity-insert.js',
   'src/core/save-diff.js',
+  'src/core/version-timeline.js',
   'src/core/svg-freshness.js',
   'src/core/review-state.js',
   'src/core/file-role.js',
