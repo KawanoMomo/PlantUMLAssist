@@ -5397,6 +5397,11 @@ function renderSvg() {
     return resp.text();
   }).then(function(svg) {
     if (myGen !== renderGen) return;  // stale response \u2014 a newer renderSvg() superseded this one
+    // design 5a: PlantUML \u306f\u6587\u6cd5\u30a8\u30e9\u30fc\u3067\u3082 200 + SVG \u3092\u8fd4\u3059\u3002\u305d\u306e\u307e\u307e\u6d41\u3057\u8fbc\u3080\u3068
+    // \u76f4\u524d\u307e\u3067\u898b\u3048\u3066\u3044\u305f\u56f3\u304c\u300cSyntax Error?\u300d\u306e\u7d75\u306b\u4e38\u3054\u3068\u7f6e\u304d\u63db\u308f\u308b\u306e\u3067\u3001
+    // \u3053\u3053\u3067\u62fe\u3063\u3066\u63cf\u753b\u30a8\u30e9\u30fc\u6271\u3044\u306b\u3057\u3001\u76f4\u524d\u306e\u56f3\u3092\u6b8b\u3057\u305f\u307e\u307e\u5e2f\u3060\u3051\u3092\u91cd\u306d\u308b\u3002
+    var errInfo = window.MA.renderError.detect(svg);
+    if (errInfo.isError) throw new Error(window.MA.renderError.describe(errInfo));
     clearRenderError();
     previewSvgEl.innerHTML = svg;
     var svgEl = previewSvgEl.querySelector('svg');
