@@ -949,7 +949,15 @@ window.MA.modules.plantumlState = (function() {
     return refresh;
   }
 
-  function _showAddTransitionModal(fromId, parsedData, ctx) {
+  // design 4c: 状態遷移表の空欄を押したときの入口。行 (from) と列 (trigger) は
+  // 押したセルで決まっているので、フォームにはその 2 つを入れた状態で開く。
+  // 表からも右パネルからも同じフォームが出るように、既存のモーダルへ prefill を
+  // 足しただけにしてある。
+  function showAddTransitionModal(ctx, parsedData, fromId, prefill) {
+    _showAddTransitionModal(fromId, parsedData, ctx, prefill);
+  }
+
+  function _showAddTransitionModal(fromId, parsedData, ctx, prefill) {
     var modal = document.getElementById('st-tx-modal');
     var content = document.getElementById('st-tx-modal-content');
     if (!modal || !content) return;
@@ -959,9 +967,9 @@ window.MA.modules.plantumlState = (function() {
     content.innerHTML =
       '<h3 style="margin:0 0 12px 0;color:var(--text-primary);">Outgoing transition from ' + window.MA.htmlUtils.escHtml(fromId) + '</h3>' +
       P.selectFieldHtml('Target state', 'st-tx-to', stateOptsWithPseudo) +
-      P.fieldHtml('Trigger', 'st-tx-trig', '') +
-      P.fieldHtml('Guard', 'st-tx-guard', '') +
-      P.fieldHtml('Action', 'st-tx-act', '') +
+      P.fieldHtml('Trigger', 'st-tx-trig', (prefill && prefill.trigger) || '') +
+      P.fieldHtml('Guard', 'st-tx-guard', (prefill && prefill.guard) || '') +
+      P.fieldHtml('Action', 'st-tx-act', (prefill && prefill.action) || '') +
       '<div style="display:flex;gap:8px;margin-top:12px;">' +
         '<button id="st-tx-cancel" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:8px;border-radius:4px;cursor:pointer;">キャンセル</button>' +
         '<button id="st-tx-confirm" style="flex:1;background:var(--accent);border:none;color:#fff;padding:8px;border-radius:4px;cursor:pointer;">確定</button>' +
@@ -1541,6 +1549,7 @@ window.MA.modules.plantumlState = (function() {
     deleteStateWithRefs: deleteStateWithRefs,
     resolveInsertLine: resolveInsertLine,
     showInsertForm: showInsertForm,
+    showAddTransitionModal: showAddTransitionModal,
     kbdSelectables: kbdSelectables,
     defaultInsertKind: 'state',
     capabilities: {

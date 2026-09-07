@@ -60,6 +60,7 @@ var suppressSync = false;
 var syncRail = function() {};
 // キャンバス上のズーム帯を現在の倍率・図種に合わせ直す。setupZoomHud が実体を入れる。
 var syncZoomHud = function() {};
+var syncStateTable = function() {};
 var renderTimer = null;
 var RENDER_DEBOUNCE_MS = 150;
 // design 5a: 設定「レンダリング」に出す材料。
@@ -1288,6 +1289,103 @@ function init() {
     });
   })();
 
+  // ── 状態遷移表 (design 4c) ───────────────────────────────────────────────
+  // 表と図は同じ currentParsed から作るので、片方だけが古くなることはない。
+  // 表そのものの組み立ては state-table.js の純関数で、ここは DOM への
+  // 差し込みとクリックの行き先だけを持つ。
+  (function setupStateTable() {
+    var panel = document.getElementById('state-table-panel');
+    var body = document.getElementById('state-table-body');
+    var toggle = document.getElementById('btn-state-table-toggle');
+    var csvBtn = document.getElementById('btn-state-table-csv');
+    var ST = window.MA.stateTable;
+    if (!panel || !body || !toggle || !ST) return;
+
+    var open = false;
+
+    function currentTable() {
+      try { return ST.build(currentParsed); } catch (e) { return { triggers: [], rows: [] }; }
+    }
+
+    function tableHtml(table) {
+      var esc = window.MA.htmlUtils.escHtml;
+      var selIds = {};
+      window.MA.selection.getSelected().forEach(function(s) { selIds[s.id] = true; });
+      var html = '<table><thead><tr><th>現在の状態 \\ きっかけ</th>';
+      table.triggers.forEach(function(t) { html += '<th>' + esc(t) + '</th>'; });
+      html += '</tr></thead><tbody>';
+      table.rows.forEach(function(row) {
+        html += '<tr><th>' + esc(row.label) + '</th>';
+        row.cells.forEach(function(cell, j) {
+          var attrs = ' class="stt-cell' + (cell ? '' : ' stt-empty') +
+            (cell && selIds[cell.transitionId] ? ' stt-selected' : '') + '"' +
+            ' data-state-id="' + esc(row.stateId) + '"' +
+            ' data-trigger="' + esc(table.triggers[j]) + '"' +
+            (cell ? ' data-transition-id="' + esc(cell.transitionId) + '"' +
+                    ' data-line="' + cell.line + '"' : '') +
+            ' title="' + (cell ? 'この遷移を選択' : 'ここに遷移を追加') + '"';
+          html += '<td' + attrs + '>' + esc(cell ? cell.text : ST.EMPTY_CELL) + '</td>';
+        });
+        html += '</tr>';
+      });
+      html += '</tbody></table>' +
+        '<div id="state-table-summary">' + esc(ST.summaryText(table)) +
+        ' — セルをクリックすると該当の遷移を選択します。空欄をクリックすると遷移を新規追加します。</div>';
+      return html;
+    }
+
+    syncStateTable = function() {
+      var isState = currentDiagramType === 'plantuml-state';
+      panel.hidden = !isState;
+      if (!isState) { body.hidden = true; return; }
+      body.hidden = !open;
+      if (open) body.innerHTML = tableHtml(currentTable());
+    };
+
+    toggle.addEventListener('click', function() {
+      open = !open;
+      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      toggle.textContent = '状態遷移表 / State transition table ' + (open ? '⌃' : '⌄');
+      syncStateTable();
+    });
+
+    body.addEventListener('click', function(e) {
+      var td = e.target && e.target.closest ? e.target.closest('td.stt-cell') : null;
+      if (!td) return;
+      var tid = td.getAttribute('data-transition-id');
+      if (tid) {
+        // 埋まっているセル: その遷移を選ぶ。右パネルは通常の遷移編集が開く。
+        window.MA.selection.setSelected([{
+          type: 'transition', id: tid, line: Number(td.getAttribute('data-line')),
+        }]);
+        return;
+      }
+      // 空欄: 行 (from) と列 (trigger) を入れた遷移追加フォームを開く。
+      if (typeof currentModule.showAddTransitionModal !== 'function') return;
+      currentModule.showAddTransitionModal({
+        getMmdText: function() { return mmdText; },
+        setMmdText: function(s) {
+          mmdText = s; suppressSync = true; editorEl.value = s; suppressSync = false;
+        },
+        onUpdate: function() { scheduleRefresh(); },
+      }, currentParsed, td.getAttribute('data-state-id'), {
+        trigger: td.getAttribute('data-trigger') === window.MA.stateTable.NO_TRIGGER
+          ? '' : td.getAttribute('data-trigger'),
+      });
+    });
+
+    if (csvBtn) {
+      csvBtn.addEventListener('click', function() {
+        var csv = ST.toCsv(currentTable());
+        // Excel が UTF-8 と判断できるように BOM を付ける (日本語の状態名対策)。
+        var blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+        downloadBlob('state-transition-table.csv', blob);
+      });
+    }
+
+    syncStateTable();
+  })();
+
   // BLK-primary-20260907-0703: 右パネルの「Properties / 図の設定」タブ。
   var tabProps = document.getElementById('props-tab-props');
   var tabSettings = document.getElementById('props-tab-settings');
@@ -1455,6 +1553,8 @@ function init() {
     if (sel.length > 0) clearHoverGuide();
     updateSelectionNotice(sel);
     renderProps();
+    // 表の選択枠を図・右パネルと同じ選択に合わせる。
+    syncStateTable();
   });
 
   setupTabs();
@@ -4238,6 +4338,7 @@ function refresh() {
   statusInfoEl.textContent = (currentParsed.elements ? currentParsed.elements.length : 0) + ' elements, ' + (currentParsed.relations ? currentParsed.relations.length : 0) + ' relations';
 
   renderProps(currentParsed);
+  syncStateTable();
   renderSvg();
 }
 
