@@ -2819,7 +2819,7 @@ function renderTabs() {
     el.addEventListener('click', function() { switchToDoc(doc.id); });
     el.addEventListener('dblclick', function(ev) {
       ev.preventDefault();
-      var next = window.prompt('図の名前 (英数字・_ ・- のみ)', doc.name);
+      var next = window.prompt(window.MA.workspace.nameRuleText(), doc.name);
       if (next == null) return;
       // 図の名前が変わってもレビューの基準は持ち越す。
       if (window.MA.reviewDesk) {
