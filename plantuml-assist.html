@@ -2204,6 +2204,84 @@ html, body {
 }
 #check-list[hidden] { display: none; }
 
+/* 対応表 (BLK-junior-20260908-0823-wish) */
+#map-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+#btn-map-run {
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+#btn-map-run:hover { background: var(--bg-tertiary); }
+#map-summary { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#map-summary.clean { color: var(--accent-green); }
+#map-summary.dirty { color: var(--accent-orange); }
+#map-warn {
+  padding: 4px 8px;
+  font-size: 11px;
+  color: var(--accent-orange);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-primary);
+  flex-shrink: 0;
+}
+#map-warn[hidden] { display: none; }
+#map-list {
+  max-height: 40%;
+  overflow: auto;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-primary);
+  flex-shrink: 0;
+}
+#map-list[hidden] { display: none; }
+.map-head {
+  padding: 3px 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+}
+.map-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--bg-tertiary);
+}
+.map-row:hover { background: var(--bg-tertiary); }
+.map-row .map-match {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  width: 62px;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+/* 片方にしか無い行が「足された 1 要素」の候補。ここだけ色を付ける。 */
+.map-row[data-map-match="ref-only"] .map-match,
+.map-row[data-map-match="mine-only"] .map-match { color: var(--accent-orange); }
+.map-row[data-map-match="ref-only"],
+.map-row[data-map-match="mine-only"] { background: var(--bg-secondary); }
+.map-row .map-ref, .map-row .map-mine { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.map-row .map-ref { color: var(--text-primary); }
+.map-row .map-mine { color: var(--text-secondary); }
+#map-empty { padding: 6px 8px; font-size: 11px; color: var(--text-secondary); }
+
 /* 他の人のフォルダの図と突き合わせる (BLK-junior-20260908-0723-wish) */
 #xf-bar {
   display: flex;
@@ -3530,6 +3608,14 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <span id="check-summary"></span>
       </div>
       <div id="check-list" hidden></div>
+      <!-- BLK-junior-20260908-0823-wish: 2 枚の状態遷移図の対応表。名前がばらばらでも
+           対応を機械的に取り、片方にしか無い状態・遷移だけを目立たせる。 -->
+      <div id="map-bar">
+        <button type="button" id="btn-map-run" title="参照図と自分の図の状態・遷移の対応表を作る">🔀 対応表</button>
+        <span id="map-summary"></span>
+      </div>
+      <div id="map-warn" hidden></div>
+      <div id="map-list" hidden></div>
       <!-- BLK-junior-20260908-0723-wish: 他の人のフォルダの同じ図を相手にする -->
       <div id="xf-bar">
         <input type="text" id="xf-dir" placeholder="相手のフォルダ (例 ..\primary)"
@@ -3859,6 +3945,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/state-transition.js"></script>
 <script src="src/core/state-insert.js"></script>
 <script src="src/core/state-table.js"></script>
+<script src="src/core/state-map.js"></script>
 <script src="src/core/reuse-picker.js"></script>
 <script src="src/core/relation-options.js"></script>
 <script src="src/core/group-notation.js"></script>
