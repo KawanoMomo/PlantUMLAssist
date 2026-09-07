@@ -1365,6 +1365,15 @@ html, body {
 /* 選んだ部品名が出てくる図のタブ。1 枚ずつ開いて名前を照合しなくてよい */
 .tab.xref-hit { outline: 1px solid var(--accent); outline-offset: -1px; }
 #folder-panel .folder-missing { color: var(--accent-red); }
+/* 保存先のパスは長い。パネルからはみ出させず、折り返して全部読めるようにする。 */
+#folder-panel #folder-missing,
+#folder-panel #folder-missing-hint {
+  max-width: 420px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  line-height: 1.5;
+}
 /* 一括置換パネル (複数の図をまたいで部品名を置換する) */
 #rename-panel {
   display: none;
