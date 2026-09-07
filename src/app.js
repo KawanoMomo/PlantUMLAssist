@@ -3636,6 +3636,57 @@ function _renameDocs() {
   return window.MA.workspace ? window.MA.workspace.list() : [];
 }
 
+// BLK-primary-20260907-1903-wish: 置換の前に影響範囲を読む。ヒット数だけでは
+// 「この名前を変えると何が壊れるか」が分からず、置換してから全タブを開いて
+// 見比べる往復が要った。図種 × 関係の内訳を置換前に出して、その往復を無くす。
+function renderRenameImpact(docs, from) {
+  var box = document.getElementById('rename-impact');
+  var is = window.MA.impactScan;
+  if (!box || !is) return;
+  box.textContent = '';
+  if (!from) return;
+
+  var ov = is.overview(docs, from);
+  var head = document.createElement('div');
+  head.className = 'impact-head';
+  head.id = 'rename-impact-head';
+  if (ov.docs === 0) {
+    head.textContent = '「' + from + '」の出現なし';
+  } else {
+    head.textContent = from + ' は ' + ov.docs + ' 図に出現 / ' + ov.summary;
+  }
+  head.setAttribute('data-docs', String(ov.docs));
+  head.setAttribute('data-total', String(ov.total));
+  box.appendChild(head);
+  if (ov.docs === 0) return;
+
+  var rows = document.createElement('div');
+  rows.className = 'impact-rows';
+  is.scan(docs, from).forEach(function(r) {
+    var item = document.createElement('div');
+    item.className = 'impact-doc';
+    item.setAttribute('data-doc-name', r.name);
+    item.setAttribute('data-kind', r.kind);
+    item.setAttribute('data-summary', r.summary);
+    var line = document.createElement('div');
+    line.className = 'impact-doc-name';
+    var n = document.createElement('span');
+    n.textContent = r.name;
+    var k = document.createElement('span');
+    k.className = 'impact-kind';
+    k.textContent = r.kindLabel;
+    line.appendChild(n);
+    line.appendChild(k);
+    var roles = document.createElement('div');
+    roles.className = 'impact-roles';
+    roles.textContent = r.summary;
+    item.appendChild(line);
+    item.appendChild(roles);
+    rows.appendChild(item);
+  });
+  box.appendChild(rows);
+}
+
 function updateRenamePreview() {
   var br = window.MA.bulkRename;
   var hits = document.getElementById('rename-hits');
@@ -3670,6 +3721,8 @@ function updateRenamePreview() {
     row.appendChild(c);
     hits.appendChild(row);
   });
+
+  renderRenameImpact(docs, from);
 
   var ok = !!from && br.isValidTarget(to) && from !== to && total > 0;
   if (!from) summary.textContent = '置換前の部品名を入力してください';

@@ -938,6 +938,27 @@ html, body {
 }
 #rename-hits .hit { display: flex; justify-content: space-between; padding: 1px 0; }
 #rename-hits .hit.zero { opacity: 0.45; }
+/* 影響範囲プレビュー (置換前に、どの図のどの種類の線が影響するかを出す) */
+#rename-panel { width: 320px; }
+#rename-impact { margin-top: 6px; font-size: 10px; }
+#rename-impact .impact-head {
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 3px;
+  margin-bottom: 3px;
+}
+#rename-impact .impact-rows { max-height: 150px; overflow-y: auto; }
+#rename-impact .impact-doc { padding: 2px 0; }
+#rename-impact .impact-doc-name {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+}
+#rename-impact .impact-kind { color: var(--text-secondary); white-space: nowrap; }
+#rename-impact .impact-roles { color: var(--text-secondary); padding-left: 8px; }
+#rename-impact .impact-empty { color: var(--text-secondary); }
 #rename-summary { margin-top: 6px; font-size: 10px; color: var(--text-secondary); }
 #rename-panel .rename-actions { display: flex; gap: 6px; margin-top: 8px; }
 #rename-panel .rename-actions button {
@@ -2238,6 +2259,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
           <label for="rename-all-docs">開いている図すべてに適用</label>
         </div>
         <div id="rename-hits"></div>
+        <!-- 置換を実行する前に、図種 × 関係の内訳で影響範囲を見る -->
+        <div id="rename-impact"></div>
         <div id="rename-summary"></div>
         <div class="rename-actions">
           <button id="btn-rename-apply" disabled>置換</button>
@@ -2582,6 +2605,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/folder-select.js"></script>
 <script src="src/core/folder-reopen.js"></script>
 <script src="src/core/bulk-rename.js"></script>
+<script src="src/core/impact-scan.js"></script>
 <script src="src/core/bulk-apply.js"></script>
 <script src="src/core/bulk-export.js"></script>
 <script src="src/core/handoff-package.js"></script>
