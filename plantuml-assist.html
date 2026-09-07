@@ -560,6 +560,31 @@ html, body {
   cursor: pointer;
 }
 #rd-foot button:hover, #rd-head .rd-close:hover { background: var(--bg-secondary); }
+/* 一時控え (BLK-junior-20260907-2009-wish): 成果物と控えを一覧で分ける */
+#folder-panel button.folder-draft {
+  flex: 0 0 auto;
+  width: auto;
+  font-size: 9px;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 5px;
+  white-space: nowrap;
+}
+#folder-panel button.folder-draft.folder-draft-on { color: var(--accent); border-color: var(--accent); }
+#folder-panel .folder-draft-head {
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+  padding-top: 3px;
+}
+#folder-panel button.folder-draft-toggle {
+  width: 100%;
+  font-size: 10px;
+  color: var(--text-secondary);
+  text-align: left;
+}
+#folder-panel .folder-row-draft .folder-name { color: var(--text-secondary); font-style: italic; }
+#tab-bar .tab-tool.tab-tool-on { color: var(--accent); }
 #folder-panel button.folder-mark-seen {
   margin-top: 4px;
   border-top: 1px solid var(--border);
@@ -2234,6 +2259,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <div id="tab-bar">
         <button class="tab-tool" id="btn-tab-new" title="新しい図を開く">＋</button>
         <button class="tab-tool" id="btn-tab-folder" title="保存フォルダの図を一覧">📂 一覧</button>
+        <!-- BLK-junior-20260907-2009-wish: やり直し途中の控えに印を付け、📂 一覧で畳む -->
+        <button class="tab-tool" id="btn-tab-draft" aria-pressed="false" title="この図に一時控え(下書き / やり直し途中)の印を付けて、📂 一覧から畳む">🗂 一時控え</button>
         <button class="tab-tool" id="btn-tab-rename" title="開いている図をまたいで部品名を一括置換">⇄ 一括置換</button>
         <button class="tab-tool" id="btn-tab-apply" title="指摘に並んだ複数のクラスへ同じメソッド・属性を 1 回で追加する">⊞ 一括適用</button>
         <button class="tab-tool" id="btn-tab-audit" title="開いている図の部品名を突き合わせて表記揺れを探す">🔍 名前突合</button>
@@ -2629,6 +2656,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/review-watch.js"></script>
 <script src="src/core/review-diff.js"></script>
 <script src="src/core/folder-select.js"></script>
+<script src="src/core/draft-mark.js"></script>
 <script src="src/core/folder-reopen.js"></script>
 <script src="src/core/bulk-rename.js"></script>
 <script src="src/core/impact-scan.js"></script>
