@@ -38,6 +38,7 @@ const sourceFiles = [
   'src/core/selection-router.js',
   'src/core/line-edit.js',
   'src/core/reuse-picker.js',
+  'src/core/relation-kind-cards.js',
   'src/ui/properties.js',
   'src/ui/reuse-modal.js',
   'src/modules/sequence.js',

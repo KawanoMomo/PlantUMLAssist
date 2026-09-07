@@ -692,46 +692,53 @@ window.MA.modules.plantumlComponent = (function() {
 
   function _renderRelationEdit(relation, parsedData, propsEl, ctx) {
     var P = window.MA.properties;
+    var RC = window.MA.relationKindCards;
     var html =
       '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Component Diagram</div>' +
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">RELATION (L' + relation.line + ')</label>' +
-        P.selectFieldHtml('Kind', 'co-rel-kind', [
-          { value: 'association', label: 'Association (--)', selected: relation.kind === 'association' },
-          { value: 'dependency',  label: 'Dependency (..>)', selected: relation.kind === 'dependency' },
-          { value: 'provides',    label: 'Provides (-())', selected: relation.kind === 'provides' },
-          { value: 'requires',    label: 'Requires ()-)', selected: relation.kind === 'requires' },
-        ]) +
+        RC.headerHtml(relation.line, relation.from, relation.to) +
+        RC.cardsHtml('co-rel-card', RC.kindsOf('component'), relation.kind) +
+        RC.moreSettingsHtml('co-rel-more') +
+        RC.noteHtml() +
         P.fieldHtml('From', 'co-rel-from', relation.from) +
-        '<button id="co-rel-swap" type="button" style="font-size:11px;padding:4px 10px;margin:4px 0;cursor:pointer;">⇄ From/To 入替</button>' +
+        '<button id="co-rel-swap" type="button" style="font-size:11px;padding:4px 10px;margin:4px 0;cursor:pointer;">⇄ 向きを入れ替え</button>' +
         P.fieldHtml('To', 'co-rel-to', relation.to) +
-        P.fieldHtml('Label', 'co-rel-label', relation.label) +
+        P.fieldHtml('ラベル / Label（任意）', 'co-rel-label', relation.label) +
         P.primaryButtonHtml('co-rel-apply', '変更を反映') +
         '<div style="margin-top:8px;">' +
-          '<button id="co-delete" style="background:var(--accent-red);color:#fff;border:none;padding:6px 10px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 削除</button>' +
+          '<button id="co-delete" style="background:var(--accent-red);color:#fff;border:none;padding:6px 10px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 削除 / Delete</button>' +
         '</div>' +
       '</div>';
     propsEl.innerHTML = html;
 
-    // FEAT-089: 種別 (Kind) は選んだ時点で確定する。From / To / Label は自由入力であり
+    // FEAT-089: 種別は選んだ時点で確定する。From / To / Label は自由入力であり
     // 打鍵途中の反映が破壊的になり得るため、従来どおり「変更を反映」に残す。
-    // 二重適用は起きない: 反映後の再描画で relation.kind が更新されるため、続けて
-    // 「変更を反映」を押しても co-rel-apply 側の kind 分岐が成立しない。
-    P.bindEvent('co-rel-kind', 'change', function() {
-      var newKind = document.getElementById('co-rel-kind').value;
+    // 3b: 提供 / 要求 は向きが固定なので、選んだ時点で 部品 → インターフェース に並べ替える。
+    RC.bindCards(propsEl, 'co-rel-card', function(newKind) {
       if (newKind === relation.kind) return;
       window.MA.history.pushHistory();
-      ctx.setMmdText(updateRelation(ctx.getMmdText(), relation.line, 'kind', newKind));
+      var t = updateRelation(ctx.getMmdText(), relation.line, 'kind', newKind);
+      var o = RC.orient(newKind, relation.from, relation.to, RC.kindOfFromParsed(parsedData));
+      if (o.swapped) {
+        t = updateRelation(t, relation.line, 'from', o.from);
+        t = updateRelation(t, relation.line, 'to', o.to);
+      }
+      ctx.setMmdText(t);
       ctx.onUpdate();
+    });
+    P.bindEvent('co-rel-more', 'click', function() {
+      var b = document.getElementById('co-rel-more');
+      b.setAttribute('aria-expanded', b.getAttribute('aria-expanded') === 'true' ? 'false' : 'true');
     });
     P.bindEvent('co-rel-apply', 'click', function() {
       window.MA.history.pushHistory();
       var t = ctx.getMmdText();
-      var newKind = document.getElementById('co-rel-kind').value;
+      var newKind = relation.kind;
       var newFrom = document.getElementById('co-rel-from').value.trim();
       var newTo = document.getElementById('co-rel-to').value.trim();
       var newLabel = document.getElementById('co-rel-label').value.trim();
-      if (newKind !== relation.kind) t = updateRelation(t, relation.line, 'kind', newKind);
+      var o = RC.orient(newKind, newFrom, newTo, RC.kindOfFromParsed(parsedData));
+      newFrom = o.from; newTo = o.to;
       if (newFrom !== relation.from) t = updateRelation(t, relation.line, 'from', newFrom);
       if (newTo !== relation.to) t = updateRelation(t, relation.line, 'to', newTo);
       if (newLabel !== relation.label) t = updateRelation(t, relation.line, 'label', newLabel);
