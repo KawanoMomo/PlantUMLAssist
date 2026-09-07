@@ -879,6 +879,70 @@ function init() {
     scheduleRefresh();
   });
 
+  // BLK-builder-20260907-1346-3 (design 5b): 図形を選んでいるときの Alt+↑ / Alt+↓ で、
+  // 同じ親の中の前後の兄弟と入れ替える。DSL エディタ側の同じキー (FEAT-116) は
+  // テキスト欄にカーソルがあるときだけ効くので、_kbdInTypingTarget() の除外で棲み分く。
+  // 入れ替えの純関数は src/core/selection-reorder.js が持ち、親の境界 (else / endif /
+  // start / stop / @enduml など) に当たったら DSL を 1 バイトも変えない。
+  document.addEventListener('keydown', function(e) {
+    if (e.isComposing || e.keyCode === 229) return;
+    if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    var up = e.key === 'ArrowUp';
+    if (!up && e.key !== 'ArrowDown') return;
+    if (_kbdInTypingTarget() || _kbdModalOpen()) return;
+    var SR = window.MA.selectionReorder;
+    if (!SR) return;
+    var cur = _kbdSelectedItem();
+    if (!cur) return;
+    e.preventDefault();
+    var dir = up ? -1 : 1;
+    var moved = SR.move(mmdText, cur.line, dir);
+    if (moved === mmdText) return;      // 端 / 親の境界: 履歴も積まない
+    var newLine = SR.movedLine(mmdText, cur.line, dir);
+    window.MA.history.pushHistory();
+    mmdText = moved;
+    suppressSync = true;
+    editorEl.value = moved;
+    suppressSync = false;
+    // Ctrl+D と同じ形で同期再パースし、行番号から選択を引き直す
+    // (要素 id は文書順の連番なので、並び替えで振り直される)。
+    if (currentModule && typeof currentModule.parse === 'function') {
+      try { currentParsed = currentModule.parse(mmdText); } catch (err) { /* leave stale */ }
+    }
+    var after = _kbdSelectables();
+    for (var i = 0; i < after.length; i++) {
+      if (after[i].line === newLine) {
+        window.MA.selection.setSelected(
+          [{ type: after[i].type || 'message', id: after[i].id, line: after[i].line }]);
+        break;
+      }
+    }
+    scheduleRefresh();
+  });
+
+  // BLK-builder-20260907-1346-3 (design 5b): Ctrl+Enter で右ペインの「末尾に追加」を開く。
+  // 行き先はコマンドパレットの「図に足す」(openTailForm) と同じ、無選択時の右ペインに出る
+  // 種類 select (#{prefix}-tail-kind) である。ADD_KINDS / openTailForm は別スコープなので、
+  // ここは図種の prefix を持たずに DOM から引く (種別は各 module の既定のまま)。
+  document.addEventListener('keydown', function(e) {
+    if (e.isComposing || e.keyCode === 229) return;
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+    if (e.key !== 'Enter') return;
+    // design 5b は Ctrl+Enter を「図の編集（図形を選んでいるとき）」に置く。図形を選ぶと
+    // 右ペインの入力欄にフォーカスが移っているので、_kbdInTypingTarget() で外すと
+    // 肝心の場面で効かない。Ctrl+Enter は入力欄でも既定の意味を持たないため奪ってよい
+    // (素の Enter を扱う FEAT-017 の経路とは別ハンドラで、そちらの除外はそのまま)。
+    if (_kbdModalOpen()) return;
+    e.preventDefault();
+    // 選択があると tail フォームは DOM に無いので、まず選択を外して描き直す。
+    if (window.MA.selection) window.MA.selection.clearSelection();
+    renderProps();
+    var sel = document.querySelector('[id$="-tail-kind"]');
+    if (!sel) return;
+    if (sel.scrollIntoView) sel.scrollIntoView({ block: 'nearest' });
+    sel.focus();
+  });
+
   // ── 図種レール (design 1a): 左端の SEQ/UC/CMP/CLS/ACT/ST ─────────────
   // レールは <select id="diagram-type"> の別経路であり、切り替えそのものは
   // 従来どおり select の change ハンドラ 1 本が行う (自動保存・履歴・タブの

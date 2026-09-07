@@ -45,8 +45,8 @@ window.MA.settingsTabs = (function() {
         { keys: 'Ctrl+D',          desc: '選択を複製する',                          state: 'done' },
         { keys: 'Esc',             desc: '選択を解除する / 開いているものを閉じる',  state: 'done' },
         { keys: 'D',               desc: '選択中メッセージの矢印を切り替える',      state: 'done' },
-        { keys: 'Ctrl+Enter',      desc: '末尾に追加する',                          state: 'new' },
-        { keys: 'Alt+↑ / Alt+↓',   desc: '選択を上下に並び替える — 同じ親の中だけ', state: 'new' },
+        { keys: 'Ctrl+Enter',      desc: '末尾に追加する',                          state: 'done' },
+        { keys: 'Alt+↑ / Alt+↓',   desc: '選択を上下に並び替える — 同じ親の中だけ', state: 'done' },
       ],
     },
     {
