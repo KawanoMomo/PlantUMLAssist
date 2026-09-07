@@ -12,7 +12,7 @@ test.describe('設定モーダルの 5 タブ (design 1a)', () => {
       localStorage.removeItem('plantuml-settings-tab');
       localStorage.removeItem('plantuml-editor-prefs');
     });
-    await page.locator('#btn-config').click();
+    await page.locator('#rail-config').click();  // design 1a で設定は左レールの ⚙ に移った
     await expect(page.locator('#cfg-modal')).toBeVisible();
   });
 
@@ -70,7 +70,7 @@ test.describe('設定モーダルの 5 タブ (design 1a)', () => {
     await page.locator('#cfg-tab-editor').click();
     await page.locator('#cfg-editor-font').selectOption('20');
     await page.locator('#cfg-ok').click();
-    await page.locator('#btn-config').click();
+    await page.locator('#rail-config').click();  // design 1a で設定は左レールの ⚙ に移った
     await expect(page.locator('#cfg-tab-editor')).toHaveClass(/active/);
     await expect(page.locator('#cfg-editor-font')).toHaveValue('20');
   });
