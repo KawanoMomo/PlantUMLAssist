@@ -43,6 +43,7 @@ const sourceFiles = [
   'src/core/relation-kind-cards.js',
   'src/core/review-pins.js',
   'src/core/relation-options.js',
+  'src/core/sequence-marks.js',
   'src/ui/properties.js',
   'src/ui/reuse-modal.js',
   'src/modules/sequence.js',

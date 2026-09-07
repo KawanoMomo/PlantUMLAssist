@@ -18,6 +18,7 @@ var SRC = [
   '../src/core/text-updater.js',
   '../src/core/parser-utils.js',
   '../src/ui/properties.js',
+  '../src/core/sequence-marks.js',
   '../src/modules/sequence.js',
 ];
 SRC.forEach(function(p) { try { delete require.cache[require.resolve(p)]; } catch (e) {} require(p); });
@@ -37,9 +38,16 @@ var SAMPLE = [
 ].join('\n');
 
 describe('insertKindOptions (BLK-primary-20260907-0356)', function() {
+  // BLK-builder-20260907-1250-2: 6 つ目は 5c どおり「その他（区切り線 / 遅延 / 参照）」の
+  // 見出しになり、block はその下位メニュー otherInsertKinds() へ移った。
   test('5c が挙げる 6 種別をこの順で提示する', function() {
     var vals = seq.insertKindOptions().map(function(o) { return o.value; });
-    expect(vals).toEqual(['message', 'note', 'alt', 'loop', 'activation', 'block']);
+    expect(vals).toEqual(['message', 'note', 'alt', 'loop', 'activation', 'other']);
+  });
+
+  test('「その他」の下位メニューは 区切り線 / 遅延 / 参照 とブロックを並べる', function() {
+    var vals = seq.otherInsertKinds().map(function(o) { return o.value; });
+    expect(vals).toEqual(['separator', 'delay', 'ref', 'block']);
   });
 
   test('各種別に日本語ラベルと DSL の例が付く', function() {

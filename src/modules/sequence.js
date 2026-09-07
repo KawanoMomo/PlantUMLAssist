@@ -648,6 +648,10 @@ window.MA.modules.plantumlSequence = (function() {
       if (!props.kind) return '';
       return fmtBlock(props.kind, props.label);
     }
+    // design 5c: 区切り線 / 遅延 / 参照 の書式は core/sequence-marks.js が持つ。
+    if (window.MA.sequenceMarks.isMarkKind(kind)) {
+      return window.MA.sequenceMarks.formatLine(kind, props);
+    }
     return '';
   }
 
@@ -876,8 +880,20 @@ window.MA.modules.plantumlSequence = (function() {
     { value: 'alt', label: '条件分岐 (alt)', hint: 'alt … end' },
     { value: 'loop', label: '繰り返し (loop)', hint: 'loop … end' },
     { value: 'activation', label: '実行中の帯 (activate)', hint: 'activate A' },
-    { value: 'block', label: 'その他のブロック', hint: 'opt / par / break / critical / group' },
+    // design 5c: 最後は「その他（区切り線 / 遅延 / 参照）」で、押すと下位メニューが開く。
+    { value: 'other', label: 'その他（区切り線 / 遅延 / 参照）', hint: '▸' },
   ];
+
+  // 「その他」を開いたときに並ぶもの。区切り線 / 遅延 / 参照 (design 5c・5b の網羅表)
+  // に、従来の「その他のブロック」を続ける。
+  function otherInsertKinds() {
+    var marks = window.MA.sequenceMarks.marks().map(function(m) {
+      return { value: m.value, label: m.label, hint: m.hint };
+    });
+    return marks.concat([
+      { value: 'block', label: 'その他のブロック', hint: 'opt / par / break / critical / group' },
+    ]);
+  }
 
   function insertKindOptions() {
     return INSERT_KINDS.map(function(k) { return { value: k.value, label: k.label, hint: k.hint }; });
@@ -903,16 +919,25 @@ window.MA.modules.plantumlSequence = (function() {
     return { kind: picked, opts: {} };
   }
 
+  // _showInsertPicker は kinds を差し替えて 2 段目 (その他) にも使う。
+  function _showOtherPicker(ctx, line, position) {
+    _renderPicker(ctx, line, position, otherInsertKinds(), 'その他', true);
+  }
+
   function _showInsertPicker(ctx, line, position) {
+    _renderPicker(ctx, line, position, INSERT_KINDS, 'ここに挿入', false);
+  }
+
+  function _renderPicker(ctx, line, position, kinds, title, isOther) {
     var modal = document.getElementById('seq-modal');
     var content = document.getElementById('seq-modal-content');
     if (!modal || !content) return;
     var esc = window.MA.htmlUtils.escHtml;
-    var html = '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">ここに挿入</h3>' +
+    var html = '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">' + esc(title) + '</h3>' +
       '<div id="seq-pick-target" style="font-size:11px;color:var(--text-secondary);margin-bottom:12px;">' +
         esc(describeInsertTarget(line, position)) + '</div>' +
       '<div style="display:flex;flex-direction:column;gap:6px;">';
-    INSERT_KINDS.forEach(function(k) {
+    kinds.forEach(function(k) {
       html += '<button id="seq-pick-' + k.value + '" data-kind="' + k.value + '" class="seq-pick-btn" ' +
         'style="text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);' +
         'padding:8px 10px;border-radius:4px;cursor:pointer;font-size:12px;">' +
@@ -920,19 +945,33 @@ window.MA.modules.plantumlSequence = (function() {
         '<span style="color:var(--text-secondary);font-size:10px;margin-left:8px;">' + esc(k.hint) + '</span>' +
         '</button>';
     });
-    html += '</div>' +
-      '<button id="seq-pick-cancel" style="width:100%;margin-top:12px;background:var(--bg-tertiary);' +
+    html += '</div>';
+    if (isOther) {
+      html += '<button id="seq-pick-back" style="width:100%;margin-top:12px;background:var(--bg-tertiary);' +
+        'border:1px solid var(--border);color:var(--text-secondary);padding:6px;border-radius:4px;cursor:pointer;font-size:11px;">' +
+        '← 種別を選び直す</button>';
+    }
+    html += '<button id="seq-pick-cancel" style="width:100%;margin-top:8px;background:var(--bg-tertiary);' +
       'border:1px solid var(--border);color:var(--text-primary);padding:8px;border-radius:4px;cursor:pointer;">キャンセル</button>';
     content.innerHTML = html;
     modal.style.display = 'flex';
 
     Array.prototype.forEach.call(content.querySelectorAll('.seq-pick-btn'), function(btn) {
       btn.addEventListener('click', function() {
-        var picked = _resolvePickedKind(btn.getAttribute('data-kind'));
+        var kindAttr = btn.getAttribute('data-kind');
+        // design 5c: 「その他」は form ではなく 2 段目のメニューを開く。
+        if (kindAttr === 'other') { _showOtherPicker(ctx, line, position); return; }
+        var picked = _resolvePickedKind(kindAttr);
         picked.opts.fromPicker = true;
+        if (isOther) picked.opts.fromOther = true;
         _showInsertForm(ctx, line, position, picked.kind, picked.opts);
       });
     });
+    if (isOther) {
+      document.getElementById('seq-pick-back').addEventListener('click', function() {
+        _showInsertPicker(ctx, line, position);
+      });
+    }
     document.getElementById('seq-pick-cancel').addEventListener('click', function() {
       modal.style.display = 'none';
     });
@@ -963,6 +1002,10 @@ window.MA.modules.plantumlSequence = (function() {
       note: '注釈を挿入',
       block: 'ブロックを挿入',
       activation: '実行中の帯を挿入',
+      // design 5c の「その他」
+      separator: '区切り線を挿入',
+      delay: '遅延を挿入',
+      ref: '参照を挿入',
     };
     var title = (position === 'before' ? '前に' : '後に') + (KIND_TITLE[kind] || 'メッセージを挿入');
     var html = '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">' + title + '</h3>' +
@@ -1000,6 +1043,14 @@ window.MA.modules.plantumlSequence = (function() {
       html +=
         P.selectFieldHtml('Kind', 'seq-mod-bkind', bkOpts) +
         P.fieldHtml('Label', 'seq-mod-blabel', '', '例: x > 0');
+    } else if (kind === 'separator' || kind === 'delay') {
+      // design 5c: どちらも本文 1 つだけ。記法は placeholder で見せる。
+      html += P.fieldHtml('本文（任意）', 'seq-mod-mtext', '',
+        kind === 'separator' ? '例: 初期化ここまで' : '例: 応答待ち');
+    } else if (kind === 'ref') {
+      html +=
+        P.selectFieldHtml('かかる参加者 / Over', 'seq-mod-rtarget', partOpts) +
+        P.fieldHtml('本文', 'seq-mod-mtext', '', '例: 認証シーケンス参照');
     } else if (kind === 'activation') {
       html +=
         P.selectFieldHtml('Action', 'seq-mod-aact', [
@@ -1054,7 +1105,8 @@ window.MA.modules.plantumlSequence = (function() {
 
     if (opts.fromPicker) {
       document.getElementById('seq-mod-back').addEventListener('click', function() {
-        _showInsertPicker(ctx, line, position);
+        if (opts.fromOther) _showOtherPicker(ctx, line, position);
+        else _showInsertPicker(ctx, line, position);
       });
     }
     document.getElementById('seq-mod-cancel').addEventListener('click', function() {
@@ -1104,6 +1156,17 @@ window.MA.modules.plantumlSequence = (function() {
         t = insertFn(t, line, 'block', {
           kind: document.getElementById('seq-mod-bkind').value,
           label: document.getElementById('seq-mod-blabel').value.trim(),
+        });
+      } else if (kind === 'separator' || kind === 'delay') {
+        window.MA.history.pushHistory();
+        t = insertFn(t, line, kind, { text: document.getElementById('seq-mod-mtext').value });
+      } else if (kind === 'ref') {
+        var rtgt = document.getElementById('seq-mod-rtarget').value;
+        if (!rtgt) { alert('かかる参加者は必須です'); return; }
+        window.MA.history.pushHistory();
+        t = insertFn(t, line, 'ref', {
+          targets: [rtgt],
+          text: document.getElementById('seq-mod-mtext').value,
         });
       } else if (kind === 'activation') {
         var atgt = document.getElementById('seq-mod-atgt').value;
@@ -1400,6 +1463,7 @@ window.MA.modules.plantumlSequence = (function() {
       _showInsertPicker(ctx, line, position);
     },
     insertKindOptions: insertKindOptions,
+    otherInsertKinds: otherInsertKinds,
     insertTargetLine: insertTargetLine,
     describeInsertTarget: describeInsertTarget,
     template: function() {
