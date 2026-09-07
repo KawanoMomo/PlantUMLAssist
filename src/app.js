@@ -1327,6 +1327,7 @@ function init() {
   setupBulkRename();
   setupTemplateNew();
   setupDiffPanel();
+  setupChangeBoard();
   setupNameAudit();
   setupFamilyAudit();
   setupConsistencyPanel();
@@ -2084,6 +2085,7 @@ function setupDiffPanel() {
         + '<span>' + esc(d.name) + '</span><span>' + esc(mark) + '</span></div>';
     });
     html += '<div class="diff-actions">'
+      + '<button type="button" id="diff-open-board">変更サマリボード</button>'
       + '<button type="button" id="diff-mark-all">今の内容を基準にする</button></div>';
     panel.innerHTML = html;
 
@@ -2095,6 +2097,10 @@ function setupDiffPanel() {
           switchToDoc(row.getAttribute('data-doc-id'));
         });
       })(rows[i]);
+    }
+    var openBoard = document.getElementById('diff-open-board');
+    if (openBoard) {
+      openBoard.addEventListener('click', function() { close(); toggleChangeBoard(true); });
     }
     var markAll = document.getElementById('diff-mark-all');
     if (markAll) {
@@ -2122,6 +2128,123 @@ function setupDiffPanel() {
   });
 
   renderDiffBadge();
+}
+
+// ── 変更サマリボード ──────────────────────────────────
+// BLK-primary-20260907-0923-wish: レビュー会議で今日直した所を見せるのに、
+// 「± 差分」で名前を確かめ、タブを開き、「⇔ 並べて見る」で 2 枚ずつ突き合わせる、を
+// 図の枚数だけ繰り返していた。変わった図の変更前後を全件 1 画面に積んで出せば、
+// 上から順にスクロールして見せるだけで済む。
+
+var _cbFull = false;    // 全文を出すか (既定は差分行とその前後だけ)
+var _cbSame = false;    // 変わっていない図も並べるか
+
+function _changeBoardModel() {
+  var CB = window.MA.changeBoard;
+  var SD = window.MA.saveDiff;
+  if (!CB || !SD) return null;
+  return CB.build(_diffDocs(), SD.baselineOf, {
+    includeSame: _cbSame,
+    collapse: !_cbFull,
+    context: 2,
+  });
+}
+
+function renderChangeBoard() {
+  var CB = window.MA.changeBoard;
+  var body = document.getElementById('cb-body');
+  var sumEl = document.getElementById('cb-summary');
+  if (!CB || !body) return null;
+  var esc = window.MA.htmlUtils.escHtml;
+  var board = _changeBoardModel();
+  if (!board) return null;
+
+  if (sumEl) {
+    var head = CB.summaryText(board);
+    if (board.markedAt) head += ' ・ 基準 ' + board.markedAt.replace('T', ' ').slice(0, 16);
+    sumEl.textContent = head;
+  }
+
+  if (board.entries.length === 0) {
+    body.innerHTML = '<div class="cb-empty">前回保存した時点から変わった図はありません。'
+      + '「± 差分」の [今の内容を基準にする] を押すと、そこからの変更がここに並びます。</div>';
+    return board;
+  }
+
+  var html = '';
+  board.entries.forEach(function(e) {
+    var t = String(e.diagramType || '').replace('plantuml-', '');
+    html += '<div class="cb-entry" data-doc-id="' + esc(e.id) + '">'
+      + '<div class="cb-entry-head"><span>' + esc(e.name) + (t ? ' (' + esc(t) + ')' : '') + '</span>'
+      + '<span class="cb-count">' + esc(_cbCountText(e)) + '</span>'
+      + '<button type="button" class="cb-goto">この図を開く</button></div>'
+      + '<div class="cb-cols"><span>変更前' + (e.markedAt ? ' (' + esc(e.markedAt.replace('T', ' ').slice(0, 16)) + ')' : ' (基準なし)') + '</span>'
+      + '<span>変更後 (今)</span></div>'
+      + '<table class="cb-diff"><tbody>';
+    e.rows.forEach(function(r) {
+      if (r.kind === 'gap') {
+        html += '<tr class="cb-gap"><td colspan="4">⋯ 同じ行 ' + r.count + ' 行 ⋯</td></tr>';
+        return;
+      }
+      html += '<tr class="cb-' + r.kind + '">'
+        + '<td class="cb-no">' + (r.beforeNo || '') + '</td>'
+        + '<td class="cb-before">' + esc(r.before == null ? '' : r.before) + '</td>'
+        + '<td class="cb-no cb-after">' + (r.afterNo || '') + '</td>'
+        + '<td>' + esc(r.after == null ? '' : r.after) + '</td></tr>';
+    });
+    html += '</tbody></table></div>';
+  });
+  body.innerHTML = html;
+
+  var gotos = body.querySelectorAll('.cb-goto');
+  for (var i = 0; i < gotos.length; i++) {
+    (function(btn) {
+      btn.addEventListener('click', function() {
+        var entry = btn.parentNode.parentNode;
+        toggleChangeBoard(false);
+        switchToDoc(entry.getAttribute('data-doc-id'));
+      });
+    })(gotos[i]);
+  }
+  return board;
+}
+
+function _cbCountText(e) {
+  if (e.status === 'same') return '変更なし';
+  if (e.status === 'new') return '新規 +' + e.added;
+  return '+' + e.added + ' −' + e.removed;
+}
+
+function toggleChangeBoard(open) {
+  var modal = document.getElementById('cb-modal');
+  if (!modal) return;
+  var want = (open == null) ? (modal.style.display === 'none' || !modal.style.display) : !!open;
+  if (!want) { modal.style.display = 'none'; return; }
+  modal.style.display = 'flex';
+  renderChangeBoard();
+  var body = document.getElementById('cb-body');
+  if (body) body.scrollTop = 0;
+}
+
+function setupChangeBoard() {
+  var btn = document.getElementById('btn-tab-board');
+  var modal = document.getElementById('cb-modal');
+  if (!btn || !modal) return;
+  btn.addEventListener('click', function() { toggleChangeBoard(true); });
+
+  var closeBtn = document.getElementById('cb-close');
+  if (closeBtn) closeBtn.addEventListener('click', function() { toggleChangeBoard(false); });
+  modal.addEventListener('click', function(ev) {
+    if (ev.target === modal) toggleChangeBoard(false);
+  });
+  document.addEventListener('keydown', function(ev) {
+    if (ev.key === 'Escape' && modal.style.display === 'flex') toggleChangeBoard(false);
+  });
+
+  var full = document.getElementById('cb-full');
+  if (full) full.addEventListener('change', function() { _cbFull = full.checked; renderChangeBoard(); });
+  var same = document.getElementById('cb-same');
+  if (same) same.addEventListener('change', function() { _cbSame = same.checked; renderChangeBoard(); });
 }
 
 function setupTabs() {
