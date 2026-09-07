@@ -730,6 +730,23 @@ window.MA.modules.plantumlActivity = (function() {
     return lines.join('\n');
   }
 
+  // よく使う分岐パターンを、条件・枝ラベル・枝の中身ごと 1 手で入れる
+  // (BLK-junior-20260907-1803-wish)。addControlAtLine の if は枠だけを入れて
+  // 中身が `:;` のままなので、型として繰り返し使うにはここが別に要る。
+  function addBranchPatternAtLine(text, lineNum, position, pattern) {
+    var BP = window.MA.activityBranchPattern;
+    if (!BP || !pattern) return text;
+    var lines = text.split('\n');
+    var targetIdx = position === 'before' ? lineNum - 1 : lineNum;
+    if (targetIdx < 0) targetIdx = 0;
+    if (targetIdx > lines.length) targetIdx = lines.length;
+    var indent = _resolveInsertIndent(lines, Math.min(targetIdx, lines.length - 1));
+    var block = BP.linesFor(pattern, indent);
+    if (!block.length) return text;
+    Array.prototype.splice.apply(lines, [targetIdx, 0].concat(block));
+    return lines.join('\n');
+  }
+
   function addSwimlaneAtLine(text, lineNum, position, name) {
     var lines = text.split('\n');
     var targetIdx = position === 'before' ? lineNum - 1 : lineNum;
@@ -985,6 +1002,17 @@ window.MA.modules.plantumlActivity = (function() {
         '<span style="color:var(--text-secondary);font-size:10px;margin-left:8px;">' + esc(k.hint) + '</span>' +
         '</button>';
     });
+    // 分岐は「毎回同じ形」を打ち直していることが多いので、if の枠だけを入れる
+    // 導線の隣に、型ごと入れる導線を出す (BLK-junior-20260907-1803-wish)。
+    var canBranch = !isOther && list.some(function(k) { return k.kind === 'if'; });
+    if (canBranch) {
+      html += '<button id="act-pick-pattern" class="act-pick-btn2" ' +
+        'style="text-align:left;background:var(--bg-tertiary);border:1px solid var(--accent);color:var(--text-primary);' +
+        'padding:8px 10px;border-radius:4px;cursor:pointer;font-size:12px;">' +
+        'よく使う分岐パターン' +
+        '<span style="color:var(--text-secondary);font-size:10px;margin-left:8px;">条件と両枝の中身ごと入る</span>' +
+        '</button>';
+    }
     if (!isOther && groups.other.length) {
       html += '<button id="act-pick-other" data-kind="other" class="act-pick-btn" ' +
         'style="text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);' +
@@ -1023,12 +1051,86 @@ window.MA.modules.plantumlActivity = (function() {
         showInsertForm(ctx, line, position, kind);
       });
     });
+    if (canBranch) {
+      document.getElementById('act-pick-pattern').addEventListener('click', function() {
+        _renderPatternPicker(ctx, line, position);
+      });
+    }
     if (isOther) {
       document.getElementById('act-pick-back').addEventListener('click', function() {
         _renderInsertPicker(ctx, line, position, false);
       });
     }
     document.getElementById('act-pick-cancel').addEventListener('click', function() {
+      modal.style.display = 'none';
+      content.innerHTML = '';
+      _markerHide();
+    });
+  }
+
+  // 「よく使う分岐パターン」の一覧。組み込みの型と、開いている他のアクティビティ図
+  // から採った型 (先輩や自分の過去図) を並べ、1 クリックで挿入する。
+  // 条件文言だけ直したいことがあるので、挿入前に条件を書き換えられる欄も置く。
+  function _renderPatternPicker(ctx, line, position) {
+    var BP = window.MA.activityBranchPattern;
+    var AI = window.MA.activityInsert;
+    var modal = document.getElementById('act-modal');
+    var content = document.getElementById('act-modal-content');
+    if (!BP || !modal || !content) { showInsertForm(ctx, line, position, 'if'); return; }
+    var esc = window.MA.htmlUtils.escHtml;
+    var ws = window.MA.workspace;
+    var docs = (ws && ws.list) ? ws.list() : [];
+    var activeId = (ws && ws.getActiveId) ? ws.getActiveId() : null;
+    var list = BP.patterns(docs, activeId);
+
+    var html = '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">よく使う分岐パターン</h3>' +
+      '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;">' +
+        esc(AI ? AI.describePoint(ctx.getMmdText(), line, position) : '') + '</div>' +
+      '<div id="act-pat-list" style="display:flex;flex-direction:column;gap:6px;max-height:280px;overflow:auto;">';
+    list.forEach(function(p, i) {
+      html += '<button class="act-pat-btn" data-i="' + i + '" id="act-pat-' + p.id + '" ' +
+        'style="text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);' +
+        'padding:8px 10px;border-radius:4px;cursor:pointer;font-size:12px;">' +
+        '<div>' + esc(p.label) + (p.from ? '<span style="color:var(--text-secondary);font-size:10px;margin-left:8px;">' + esc(p.from) + '</span>' : '') + '</div>' +
+        '<div style="color:var(--text-secondary);font-size:10px;margin-top:2px;">' + esc(BP.summary(p)) + '</div>' +
+        '</button>';
+    });
+    html += '</div>' +
+      '<label style="display:block;font-size:10px;color:var(--text-secondary);margin:10px 0 2px 0;">条件を変える (空なら型のまま)</label>' +
+      '<input id="act-pat-cond" type="text" style="width:100%;box-sizing:border-box;background:var(--bg-primary);' +
+        'border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:3px;font-size:12px;">' +
+      '<button id="act-pat-back" style="width:100%;margin-top:12px;background:var(--bg-tertiary);' +
+        'border:1px solid var(--border);color:var(--text-secondary);padding:6px;border-radius:4px;cursor:pointer;font-size:11px;">' +
+        '← 種別を選び直す</button>' +
+      '<button id="act-pat-cancel" style="width:100%;margin-top:8px;background:var(--bg-tertiary);' +
+        'border:1px solid var(--border);color:var(--text-primary);padding:8px;border-radius:4px;cursor:pointer;">キャンセル</button>';
+    content.innerHTML = html;
+    modal.style.display = 'flex';
+    _markerShow(line, position);
+
+    Array.prototype.forEach.call(content.querySelectorAll('.act-pat-btn'), function(btn) {
+      btn.addEventListener('click', function() {
+        var p = list[parseInt(btn.getAttribute('data-i'), 10)];
+        if (!p) return;
+        var condEl = document.getElementById('act-pat-cond');
+        var cond = condEl && condEl.value.trim();
+        if (cond) { p = JSON.parse(JSON.stringify(p)); p.cond = cond; }
+        var src = ctx.getMmdText();
+        var out = addBranchPatternAtLine(src, line, position, p);
+        if (out !== src) {
+          window.MA.history.pushHistory();
+          ctx.setMmdText(out);
+          ctx.onUpdate();
+        }
+        modal.style.display = 'none';
+        content.innerHTML = '';
+        _markerHide();
+      });
+    });
+    document.getElementById('act-pat-back').addEventListener('click', function() {
+      _renderInsertPicker(ctx, line, position, false);
+    });
+    document.getElementById('act-pat-cancel').addEventListener('click', function() {
       modal.style.display = 'none';
       content.innerHTML = '';
       _markerHide();
@@ -2267,6 +2369,7 @@ window.MA.modules.plantumlActivity = (function() {
     deleteNode: deleteNode,
     addActionAtLine: addActionAtLine,
     addControlAtLine: addControlAtLine,
+    addBranchPatternAtLine: addBranchPatternAtLine,
     insertBareAtLine: _insertBareAtLine,
     addSwimlaneAtLine: addSwimlaneAtLine,
     addNoteAtLine: addNoteAtLine,
