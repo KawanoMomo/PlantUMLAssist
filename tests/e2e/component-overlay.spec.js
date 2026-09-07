@@ -65,8 +65,8 @@ test.describe('Component overlay-driven', () => {
     if (count === 0) test.skip();
     await relRect.click();
     await page.waitForTimeout(300);
-    await page.locator('#co-rel-kind').selectOption('dependency');
-    await page.locator('#co-rel-apply').click();
+    // BLK-builder-20260907-1003-3 (design 3b): 種別は select ではなくカードで選び、即反映する
+    await page.locator('.co-rel-card[data-value="dependency"]').click();
     await page.waitForTimeout(800);
     var t = await getEditorText(page);
     expect(t).toContain('..>');
