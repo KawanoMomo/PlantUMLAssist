@@ -13,6 +13,21 @@ window.MA.modules.plantumlActivity = (function() {
   // 本文の前に色を書ける。色を読めないとその行がアクションとして見えなくなり、
   // 図の上でも右パネルでも触れなくなるので、色は本文と分けて持つ。
   var ACTION_COLOR_RE = /^(#[A-Za-z0-9_]+(?:\/#?[A-Za-z0-9_]+)?)\s*:/;
+  // 同梱の plantuml.jar は前置き `#色:本文;` を deprecated として図の上に警告帯を出す。
+  // 書き出しは警告の出ない後置き `:本文; <<#色>>` にするが、既存の図や手書きには
+  // 前置きが残っているので、読みは両方受ける。
+  var ACTION_TAIL_COLOR_RE = /;\s*<<(#[A-Za-z0-9_]+(?:\/#?[A-Za-z0-9_]+)?)>>\s*$/;
+
+  // 1 行から色を剥がす。戻りの body は色を含まない行。
+  function _splitActionColor(trimmedLine) {
+    var color = null;
+    var body = trimmedLine;
+    var tail = body.match(ACTION_TAIL_COLOR_RE);
+    if (tail) { color = tail[1]; body = body.substring(0, tail.index + 1); }
+    var head = body.match(ACTION_COLOR_RE);
+    if (head) { if (!color) color = head[1]; body = body.substring(head[0].length - 1); }
+    return { color: color, body: body };
+  }
   var ACTION_OPEN_RE = /^:(.*)$/;
   var ACTION_CLOSED_RE = /^:(.*);$/;
 
@@ -107,8 +122,11 @@ window.MA.modules.plantumlActivity = (function() {
 
       // Multi-line action collection
       if (openAction) {
-        var endsWithSemi = /;\s*$/.test(trimmed);
-        var bodyTextLine = endsWithSemi ? trimmed.replace(/;\s*$/, '') : trimmed;
+        var closeSplit = _splitActionColor(trimmed);
+        if (closeSplit.color && !openAction.color) openAction.color = closeSplit.color;
+        var closeLine = closeSplit.body;
+        var endsWithSemi = /;\s*$/.test(closeLine);
+        var bodyTextLine = endsWithSemi ? closeLine.replace(/;\s*$/, '') : closeLine;
         openAction.bodyLines.push(bodyTextLine);
         if (endsWithSemi) {
           _appendNode(state, {
@@ -374,9 +392,9 @@ window.MA.modules.plantumlActivity = (function() {
 
       // Action (after control-structure tokens to avoid confusion)
       // 色つき `#色:本文;` は色を外した `:本文;` として、以降まったく同じ扱いにする。
-      var colorMatch = trimmed.match(ACTION_COLOR_RE);
-      var actionColor = colorMatch ? colorMatch[1] : null;
-      var actionBody = colorMatch ? trimmed.substring(colorMatch[0].length - 1) : trimmed;
+      var split = _splitActionColor(trimmed);
+      var actionColor = split.color;
+      var actionBody = split.body;
       if (actionBody.charAt(0) === ':') {
         var closedMatch = actionBody.match(ACTION_CLOSED_RE);
         if (closedMatch) {
@@ -399,7 +417,7 @@ window.MA.modules.plantumlActivity = (function() {
   }
 
   function fmtAction(text, color) {
-    return (color ? color : '') + ':' + (text || '') + ';';
+    return ':' + (text || '') + ';' + (color ? ' <<' + color + '>>' : '');
   }
   function fmtIf(condition, thenLabel) {
     return 'if (' + condition + ') then (' + (thenLabel || 'yes') + ')';
@@ -507,39 +525,50 @@ window.MA.modules.plantumlActivity = (function() {
 
   // 本文を書き換えても行に付いている色は落とさない (色は本文と別の指定なので、
   // 文言を直しただけで見た目が変わるのは意図しない副作用になる)。
-  function actionColorAt(text, lineNum) {
+  // 色は前置きなら先頭行、後置きなら閉じる行に付くので、両方の行を見る。
+  function actionColorAt(text, startLine, endLine) {
     var lines = text.split('\n');
-    var idx = lineNum - 1;
-    if (idx < 0 || idx >= lines.length) return null;
-    var m = lines[idx].trim().match(ACTION_COLOR_RE);
-    return m ? m[1] : null;
+    var last = endLine == null ? startLine : endLine;
+    for (var ln = startLine; ln <= last; ln++) {
+      var idx = ln - 1;
+      if (idx < 0 || idx >= lines.length) continue;
+      var c = _splitActionColor(lines[idx].trim()).color;
+      if (c) return c;
+    }
+    return null;
   }
 
-  // 行の色だけを差し替える。color が空なら色を外す。
-  function setActionColor(text, lineNum, color) {
+  // アクションの色だけを差し替える。color が空なら色を外す。
+  // 古い前置きが付いていた行は、この操作で警告の出ない後置きに揃う。
+  function setActionColor(text, startLine, endLine, color) {
     var lines = text.split('\n');
-    var idx = lineNum - 1;
-    if (idx < 0 || idx >= lines.length) return text;
-    var indent = lines[idx].match(/^(\s*)/)[1];
-    var body = lines[idx].trim();
-    var m = body.match(ACTION_COLOR_RE);
-    if (m) body = body.substring(m[0].length - 1);
-    if (body.charAt(0) !== ':') return text;   // アクション行でなければ触らない
+    var last = endLine == null ? startLine : endLine;
+    var sIdx = startLine - 1;
+    var eIdx = last - 1;
+    if (sIdx < 0 || eIdx >= lines.length || eIdx < sIdx) return text;
+    var sIndent = lines[sIdx].match(/^(\s*)/)[1];
+    var sBody = _splitActionColor(lines[sIdx].trim()).body;
+    if (sBody.charAt(0) !== ':') return text;   // アクション行でなければ触らない
+    lines[sIdx] = sIndent + sBody;
+    var eIndent = lines[eIdx].match(/^(\s*)/)[1];
+    var eBody = _splitActionColor(lines[eIdx].trim()).body;
+    if (!/;$/.test(eBody)) return text;         // 閉じていないアクションには付けない
     var norm = color ? (color.charAt(0) === '#' ? color : '#' + color) : '';
-    lines[idx] = indent + norm + body;
+    lines[eIdx] = eIndent + eBody + (norm ? ' <<' + norm + '>>' : '');
     return lines.join('\n');
   }
 
   function updateAction(text, startLine, endLine, newText) {
     var lines = text.split('\n');
-    var keepColor = actionColorAt(text, startLine) || '';
+    var keepColor = actionColorAt(text, startLine, endLine);
     var newBody = (newText || '').split('\n');
-    var firstLine = keepColor + ':' + newBody[0] + (newBody.length === 1 ? ';' : '');
+    var firstLine = ':' + newBody[0] + (newBody.length === 1 ? ';' : '');
     var rest = [];
     for (var i = 1; i < newBody.length; i++) {
       rest.push(i === newBody.length - 1 ? newBody[i] + ';' : newBody[i]);
     }
     var newLines = [firstLine].concat(rest);
+    if (keepColor) newLines[newLines.length - 1] += ' <<' + keepColor + '>>';
     var before = lines.slice(0, startLine - 1);
     var after = lines.slice(endLine);
     return before.concat(newLines).concat(after).join('\n');
@@ -1699,7 +1728,7 @@ window.MA.modules.plantumlActivity = (function() {
         P.bindEvent('ac-color-' + idx, 'click', function(e) {
           var v = e.currentTarget.getAttribute('data-value');
           var before = ctx.getMmdText();
-          var after = setActionColor(before, node.line, v);
+          var after = setActionColor(before, node.line, node.endLine, v);
           if (after === before) return;
           window.MA.history.pushHistory();
           ctx.setMmdText(after);
@@ -1710,7 +1739,7 @@ window.MA.modules.plantumlActivity = (function() {
     P.bindEvent('ac-color-go', 'click', function() {
       var v = document.getElementById('ac-color-custom').value.trim();
       var before = ctx.getMmdText();
-      var after = setActionColor(before, node.line, v);
+      var after = setActionColor(before, node.line, node.endLine, v);
       if (after === before) return;
       window.MA.history.pushHistory();
       ctx.setMmdText(after);

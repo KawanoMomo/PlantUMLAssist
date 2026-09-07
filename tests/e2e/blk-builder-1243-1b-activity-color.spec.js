@@ -66,7 +66,7 @@ test('色の無いアクションでは「その他（色）」が畳まれて�
   await page.locator('#ac-action-more button[data-value="#Pink"]').click();
   await page.waitForTimeout(1500);
 
-  expect(await getEditorText(page)).toContain('#Pink:入力を受け取る;');
+  expect(await getEditorText(page)).toContain(':入力を受け取る; <<#Pink>>');
 });
 
 test('色の付いたアクションでは開いた状態で出て、「なし」で色を外せる', async ({ page }) => {
@@ -97,5 +97,39 @@ test('本文を書き換えても色は残る', async ({ page }) => {
   await page.locator('#ac-action-update').click();
   await page.waitForTimeout(1500);
 
-  expect(await getEditorText(page)).toContain('#LightBlue:DB へ保存する;');
+  expect(await getEditorText(page)).toContain(':DB へ保存する; <<#LightBlue>>');
+});
+
+test('後置き `<<#色>>` も色つきアクションとして読める', async ({ page }) => {
+  await gotoApp(page);
+  await page.locator('#diagram-type').selectOption('plantuml-activity');
+  await typeDsl(page, '@startuml\nstart\n:保存する; <<#LightBlue>>\nstop\n@enduml');
+
+  const acts = await page.evaluate(() => {
+    const parsed = window.MA.modules.plantumlActivity.parse(
+      /** @type {HTMLTextAreaElement} */ (document.getElementById('editor')).value);
+    return parsed.nodes.filter((n) => n.kind === 'action').map((n) => [n.text, n.color]);
+  });
+  expect(acts).toEqual([['保存する', '#LightBlue']]);
+});
+
+// BLK-builder-20260907-1243-1c: 前置き `#色:本文;` は同梱の plantuml.jar が
+// deprecated として図の上に警告帯を出す。GUI から付けた色では出さない。
+test('GUI から色を付けても図の上に deprecated の警告が出ない', async ({ page }) => {
+  await gotoApp(page);
+  await page.locator('#diagram-type').selectOption('plantuml-activity');
+  // 図の方に既に古い前置きがあるとそちらで警告が出るので、色の無い図から始める。
+  await typeDsl(page, '@startuml\ntitle Sample Activity\nstart\n:入力を受け取る;\nstop\n@enduml');
+  await selectActionAtLine(page, 4);
+
+  await page.locator('#ac-action-more-summary').click();
+  await page.locator('#ac-action-more button[data-value="#Pink"]').click();
+  await page.waitForTimeout(2500);
+
+  const svg = await page.evaluate(() => (document.getElementById('preview-svg') || {}).innerHTML || '');
+  expect(svg).not.toContain('deprecated');
+  // 色が実際に塗られている (無色の #F1F1F1 ではない)
+  const fills = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('#preview-svg rect')).map((r) => r.getAttribute('fill')));
+  expect(fills).toContain('#FFC0CB');
 });
