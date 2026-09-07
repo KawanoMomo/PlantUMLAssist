@@ -2042,6 +2042,7 @@ function init() {
   setupTabs();
   setupBulkRename();
   setupSymptomSearch();
+  setupPatternCheck();
   setupBulkApply();
   setupTemplateNew();
   setupDiffPanel();
@@ -2190,6 +2191,7 @@ function initCommandPalette() {
       { id: 'tab-folder', title: '保存フォルダの図を一覧 / Folder', hint: 'Tabs', keywords: ['folder', 'list', 'いちらん', 'ふぉるだ'], run: function() { clickById('btn-tab-folder'); } },
       { id: 'tab-rename', title: '部品名を一括置換 / Bulk rename', hint: 'Tabs', keywords: ['rename', 'replace', 'いっかつ', 'ちかん'], run: function() { clickById('btn-tab-rename'); } },
       { id: 'tab-symptom', title: '症状から関連図を探す / Symptom search', hint: 'Tabs', keywords: ['symptom', 'search', 'しょうじょう', 'けんさく', 'ふぐあい'], run: function() { clickById('btn-tab-symptom'); } },
+      { id: 'tab-pattern', title: '同じ観点で全図を棚卸し / Pattern check', hint: 'Tabs', keywords: ['pattern', 'check', 'かんてん', 'いっかつ', 'してき', 'たなおろし'], run: function() { clickById('btn-tab-pattern'); } },
       { id: 'tab-submit', title: '提出前チェックを開く / Submit check', hint: 'Tabs', keywords: ['submit', 'check', 'ていしゅつ', 'かくにん', '略語'], run: function() { clickById('btn-tab-submit'); } },
       { id: 'tab-audit', title: '名前突合を開く / Name audit', hint: 'Tabs', keywords: ['name', 'audit', 'なまえ', 'つきあわせ'], run: function() { clickById('btn-tab-audit'); } },
       { id: 'tab-handoff', title: '引き継ぎパッケージを作る / Handoff package', hint: 'Tabs', keywords: ['handoff', 'package', 'zip', 'ひきつぎ', 'ぱっけーじ'], run: function() { clickById('btn-tab-handoff'); } },
@@ -5148,6 +5150,113 @@ function setupSymptomSearch() {
     renderSymptomSearch();
     textEl.focus();
   });
+  if (closeBtn) closeBtn.addEventListener('click', closePanel);
+}
+
+// ── 観点一括 ───────────────────────────────────────────────────────────────
+// BLK-junior-20260908-0003-wish: 指摘は 1 件でも、同じ観点は他の題材の対応する
+// 図にも当てはまる。今までは図を 1 枚ずつ開いて目で確かめるしかなく、手数が
+// 図の枚数に比例した。観点を先に選べば「欠けている図」だけが残るので、
+// 開くのはその枚数だけで済む。
+
+function renderPatternCheck() {
+  var pc = window.MA.patternCheck;
+  var kindEl = document.getElementById('pattern-kind');
+  var hintEl = document.getElementById('pattern-hint');
+  var headEl = document.getElementById('pattern-head');
+  var resEl = document.getElementById('pattern-results');
+  if (!pc || !kindEl || !hintEl || !headEl || !resEl) return;
+
+  var docs = _renameDocs();
+  var res = pc.run(docs, kindEl.value);
+  var p = pc.findPattern(kindEl.value);
+  hintEl.textContent = p ? p.hint : '';
+
+  headEl.setAttribute('data-missing', String(res.rows.length));
+  headEl.setAttribute('data-checked', String(res.checked));
+  headEl.textContent = pc.summaryText(res);
+
+  resEl.textContent = '';
+  res.rows.forEach(function(r) {
+    var item = document.createElement('div');
+    item.className = 'pat-doc';
+    item.setAttribute('data-doc-name', r.name);
+    item.setAttribute('data-kind', r.kind);
+    var line = document.createElement('div');
+    line.className = 'pat-doc-name';
+    var n = document.createElement('span');
+    n.textContent = r.name;
+    var k = document.createElement('span');
+    k.className = 'pat-kind';
+    k.textContent = r.kindLabel + ' / ' + r.missing.length + ' ' + (p ? p.unit : '件');
+    line.appendChild(n);
+    line.appendChild(k);
+    item.appendChild(line);
+    r.missing.forEach(function(m) {
+      var row = document.createElement('div');
+      row.className = 'pat-miss';
+      row.setAttribute('data-missing-text', m.text);
+      row.setAttribute('data-line', String(m.line));
+      row.title = r.name + ' の ' + m.line + ' 行目へ移動';
+      var no = document.createElement('span');
+      no.className = 'pat-miss-line';
+      no.textContent = String(m.line);
+      var tx = document.createElement('span');
+      tx.textContent = m.text;
+      row.appendChild(no);
+      row.appendChild(tx);
+      row.addEventListener('click', function() { jumpToDocLine(r.id, m.line); });
+      item.appendChild(row);
+    });
+    resEl.appendChild(item);
+  });
+}
+
+function setupPatternCheck() {
+  var panel = document.getElementById('pattern-panel');
+  var btn = document.getElementById('btn-tab-pattern');
+  var pc = window.MA.patternCheck;
+  if (!panel || !btn || !pc) return;
+  var kindEl = document.getElementById('pattern-kind');
+  var noteEl = document.getElementById('pattern-note');
+  var closeBtn = document.getElementById('btn-pattern-close');
+
+  if (kindEl && !kindEl.options.length) {
+    pc.patterns().forEach(function(p) {
+      var o = document.createElement('option');
+      o.value = p.id;
+      o.textContent = p.label;
+      kindEl.appendChild(o);
+    });
+  }
+
+  function closePanel() { panel.classList.remove('open'); }
+
+  btn.addEventListener('click', function() {
+    if (panel.classList.contains('open')) { closePanel(); return; }
+    var rect = btn.getBoundingClientRect();
+    panel.style.left = Math.max(4, rect.left - 60) + 'px';
+    panel.style.top = (rect.bottom + 2) + 'px';
+    panel.classList.add('open');
+    renderPatternCheck();
+    if (noteEl) noteEl.focus();
+  });
+
+  if (kindEl) kindEl.addEventListener('change', renderPatternCheck);
+  if (noteEl) {
+    // 指摘文を貼ると観点が選ばれる。当たらなければ今の観点のままにする
+    // (勝手に別の観点へ動くと、出た一覧がどの観点のものか読めなくなる)。
+    noteEl.addEventListener('input', function() {
+      var p = pc.suggest(noteEl.value);
+      if (p && kindEl && kindEl.value !== p.id) {
+        kindEl.value = p.id;
+        renderPatternCheck();
+      }
+    });
+    noteEl.addEventListener('keydown', function(ev) {
+      if (ev.key === 'Escape') { ev.preventDefault(); closePanel(); }
+    });
+  }
   if (closeBtn) closeBtn.addEventListener('click', closePanel);
 }
 

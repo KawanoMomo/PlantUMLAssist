@@ -1057,6 +1057,75 @@ html, body {
 }
 #lines-panel .lines-actions button#btn-lines-apply { border-color: var(--accent); }
 #lines-panel .lines-actions button:disabled { opacity: 0.45; cursor: default; }
+/* 観点一括パネル (指摘 1 件を全図に当て、欠けている図だけを出す) */
+#pattern-panel {
+  display: none;
+  position: absolute;
+  z-index: 41;
+  width: 360px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px;
+  font-size: 11px;
+  color: var(--text-primary);
+}
+#pattern-panel.open { display: block; }
+#pattern-panel label {
+  display: block;
+  font-size: 10px;
+  color: var(--text-secondary);
+  margin: 5px 0 2px;
+}
+#pattern-panel label:first-child { margin-top: 0; }
+#pattern-panel input, #pattern-panel select {
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 11px;
+  padding: 3px 4px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+#pattern-hint { margin-top: 3px; font-size: 10px; color: var(--text-secondary); }
+#pattern-head {
+  margin-top: 5px;
+  font-size: 10px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 3px;
+}
+#pattern-results { max-height: 200px; overflow-y: auto; font-size: 10px; }
+#pattern-results .pat-doc { padding: 3px 0; border-bottom: 1px solid var(--border); }
+#pattern-results .pat-doc-name {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+}
+#pattern-results .pat-kind { color: var(--text-secondary); white-space: nowrap; }
+#pattern-results .pat-miss {
+  display: flex;
+  gap: 5px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  padding: 1px 0;
+}
+#pattern-results .pat-miss:hover { background: var(--bg-secondary); }
+#pattern-results .pat-miss-line { color: var(--text-secondary); min-width: 2em; text-align: right; }
+#pattern-panel .pattern-actions { display: flex; gap: 4px; margin-top: 6px; }
+#pattern-panel .pattern-actions button {
+  flex: 1;
+  font-size: 11px;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  cursor: pointer;
+}
 /* 症状検索パネル (症状文から関連図を出す) */
 #symptom-panel {
   display: none;
@@ -2499,6 +2568,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button class="tab-tool" id="btn-tab-rename" title="開いている図をまたいで部品名を一括置換">⇄ 一括置換</button>
         <!-- BLK-primary-20260907-2203-wish: 症状文を貼るだけで関連しそうな図を出す -->
         <button class="tab-tool" id="btn-tab-symptom" title="不具合の症状文を貼ると、部品名を思い付かなくても関連しそうな図を関連度順に出す">⇄ 症状検索</button>
+        <!-- BLK-junior-20260908-0003-wish: 指摘 1 件を観点として全図に当て、欠けている図だけを出す -->
+        <button class="tab-tool" id="btn-tab-pattern" title="レビュー指摘を観点として開いている図全部に当て、同じ抜けがある図だけを一覧する">◎ 観点一括</button>
         <button class="tab-tool" id="btn-tab-apply" title="指摘に並んだ複数のクラスへ同じメソッド・属性を 1 回で追加する">⊞ 一括適用</button>
         <button class="tab-tool" id="btn-tab-audit" title="開いている図の部品名を突き合わせて表記揺れを探す">🔍 名前突合</button>
         <!-- BLK-primary-20260907-0823-wish: 同じ系統の複数枚で動作名が揃っているかを見る -->
@@ -2570,6 +2641,20 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <div class="symptom-actions">
           <button id="btn-symptom-clear">消す</button>
           <button id="btn-symptom-close">閉じる</button>
+        </div>
+      </div>
+      <!-- 指摘 1 件を観点として全図に当て、同じ抜けがある図だけを出す (棚卸ししてから開く) -->
+      <div id="pattern-panel">
+        <label for="pattern-note">指摘 (貼ると観点を選びます)</label>
+        <input id="pattern-note" autocomplete="off" spellcheck="false"
+          placeholder="GpioDrv クラスにコンストラクタが無い">
+        <label for="pattern-kind">観点</label>
+        <select id="pattern-kind"></select>
+        <div id="pattern-hint"></div>
+        <div id="pattern-head"></div>
+        <div id="pattern-results"></div>
+        <div class="pattern-actions">
+          <button id="btn-pattern-close">閉じる</button>
         </div>
       </div>
       <!-- 指摘に並んだ複数のクラスへ同じメンバーを 1 回で足す -->
@@ -2919,6 +3004,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/impact-scan.js"></script>
 <script src="src/core/signature-change.js"></script>
 <script src="src/core/symptom-search.js"></script>
+<script src="src/core/pattern-check.js"></script>
 <script src="src/core/bulk-apply.js"></script>
 <script src="src/core/bulk-export.js"></script>
 <script src="src/core/handoff-package.js"></script>
