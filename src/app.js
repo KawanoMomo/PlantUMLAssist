@@ -3128,7 +3128,10 @@ function setupTabs() {
   function openManyFromFolder(names) {
     var FS = window.MA.folderSelect;
     var dir = _wsFileDir();
-    saveActiveDoc();
+    // BLK-junior-20260907-1803: これから読み直す図を先に書き戻すと、保存の確認に
+    // ならない (必ず一致する)。開く対象に入っていない図だけ書き戻す。
+    var act = window.MA.workspace.getActive();
+    if (!(act && names.indexOf(act.name) >= 0)) saveActiveDoc();
     var queue = names.slice();
     function step() {
       if (queue.length === 0) {
@@ -3154,26 +3157,54 @@ function setupTabs() {
 
   openFromFolderByName = function(name) { openFromFolder(name); };
 
+  // BLK-junior-20260907-1803: 開いているタブと同じ名前を一覧から押したときに
+  // 画面が何も動かないと、「保存できている」のか「一覧が効いていない」のかが
+  // 分からない。同じ名前なら (1) 編集中の本文をそのファイルへ書き戻さずに読み、
+  // (2) 読んだ結果を必ず言葉で返す。書き戻してから読むと、保存の確認そのものが
+  // 成り立たない (いつ押しても必ず一致する)。
   function openFromFolder(name) {
     closePanel();
     var dir = _wsFileDir();
+    var active = window.MA.workspace.getActive();
+    var sameTab = !!(active && active.name === name);
+    if (!sameTab) saveActiveDoc();
     window.MA.workspace.loadFile(name, dir).then(function(text) {
-      if (text == null) return;
-      saveActiveDoc();
-      var detected = window.MA.workspace.detectType(text);
-      window.MA.workspace.openOrActivate({
-        name: name,
-        dsl: text,
-        diagramType: (detected && modules[detected]) ? detected : currentDiagramType,
-      });
-      applyActiveDoc();
+      var FR = window.MA.folderReopen;
+      var before = mmdText;
+      var info = FR
+        ? FR.describe(name, text, before, sameTab)
+        : { kind: text == null ? 'missing' : 'opened', changed: text != null, message: '' };
+      if (text != null) {
+        var detected = window.MA.workspace.detectType(text);
+        window.MA.workspace.openOrActivate({
+          name: name,
+          dsl: text,
+          diagramType: (detected && modules[detected]) ? detected : currentDiagramType,
+        });
+        applyActiveDoc();
+      }
+      if (window.MA.toast && info.message) {
+        if (info.kind === 'replaced') {
+          window.MA.toast.show(info.message, '元に戻す', function() {
+            window.MA.workspace.updateActive({ dsl: before });
+            applyActiveDoc();
+          });
+        } else {
+          window.MA.toast.show(info.message);
+        }
+      }
     });
   }
 
   btnFolder.addEventListener('click', function() {
     if (panel.classList.contains('open')) { closePanel(); return; }
-    // 開いているタブの内容を先に書き出してから一覧を取り直す。
-    saveActiveDoc();
+    // BLK-junior-20260907-1803: 一覧を開くだけでは保存フォルダへ書き出さない。
+    // ここで書き出すと、保存できたかを一覧から確かめようとするたびに編集中の本文で
+    // ファイルが上書きされ、「開き直したら必ず一致する」ので確認にならなかった。
+    // タブの控え (workspace) だけ今の本文にそろえる。
+    if (window.MA.workspace) {
+      window.MA.workspace.updateActive({ dsl: mmdText, diagramType: currentDiagramType });
+    }
     panel.textContent = '';
     var loading = document.createElement('div');
     loading.className = 'folder-empty';
