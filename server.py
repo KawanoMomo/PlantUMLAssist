@@ -220,6 +220,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.startswith('/autosave'):
             with _fs_lock:
                 return self._handle_autosave_get()
+        if self.path.split('?')[0] == '/peek-dirs':
+            with _fs_lock:
+                return self._handle_peek_dirs()
         if self.path.split('?')[0] == '/render':
             return self._send_json(200, RENDER_API_DOC)
         if self.path.split('?')[0] == '/prefs':
@@ -361,6 +364,44 @@ class Handler(BaseHTTPRequestHandler):
         if not raw:
             return AUTOSAVE_DEFAULT_DIR
         return Path(raw).expanduser().resolve()
+
+    def _handle_peek_dirs(self):
+        """BLK-junior-20260908-0723: 他ペルソナの図を「読むだけ」で見るための行き先一覧。
+
+        保存先ディレクトリの隣にあるフォルダ (と自分自身) を、.puml の枚数と一緒に返す。
+        保存先を打ち直させないためだけの口なので、親より上は辿らないし、書き込みもしない。
+        """
+        parsed = urllib.parse.urlparse(self.path)
+        params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
+        cur = self._autosave_resolve_dir(params.get('dir'))
+        parent = cur.parent
+        entries = []
+        seen = set()
+
+        def add(path):
+            key = str(path)
+            if key in seen:
+                return
+            seen.add(key)
+            try:
+                if not (path.exists() and path.is_dir()):
+                    return
+                count = sum(1 for f in path.iterdir() if f.is_file() and f.suffix.lower() == '.puml')
+            except OSError:
+                return
+            entries.append({'name': path.name, 'path': key, 'files': count,
+                            'current': key == str(cur)})
+
+        add(cur)
+        try:
+            for child in sorted(parent.iterdir(), key=lambda p: p.name.lower()):
+                if child.is_dir():
+                    add(child)
+        except OSError:
+            pass
+        # 図が 1 枚も無いフォルダは行き先にならない (自分の保存先だけは空でも残す)。
+        entries = [e for e in entries if e['files'] > 0 or e['current']]
+        self._send_json(200, {'current': str(cur), 'parent': str(parent), 'dirs': entries})
 
     def _autosave_validate_type(self, dt):
         """Return True if dt is a safe filename component."""

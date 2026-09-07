@@ -8,7 +8,7 @@
 const { test, expect } = require('@playwright/test');
 const { gotoApp } = require('./helpers');
 
-const DIR = './autosave-e2e-blk-p0723w';
+const DIR = './test-results/autosave-e2e-blk-p0723w';
 
 function seq(name) {
   return '@startuml\nparticipant ' + name + '\nparticipant Mcu\n'
@@ -130,6 +130,8 @@ test.describe('BLK-primary-0723-wish 開いていない図も含めた置換の�
     const summary = page.locator('#rename-summary');
     expect(Number(await summary.getAttribute('data-unopened-docs'))).toBeGreaterThanOrEqual(2);
     await page.locator('#btn-rename-apply').click();
+    // 「置換しました」が出るまで待つ (押した直後はまだ置換前の予告が出ている)
+    await expect(summary).toContainText('置換しました');
     await expect(summary).toContainText('未オープン');
     expect(Number(await summary.getAttribute('data-applied-unopened'))).toBeGreaterThanOrEqual(2);
     expect(await readFile(page, 'P0723_spi')).toContain('Spi_Driver');
@@ -155,6 +157,7 @@ test.describe('BLK-primary-0723-wish 開いていない図も含めた置換の�
     await openRename(page, 'AdcDrv', 'Adc_Driver');
     await expect(page.locator('#btn-rename-apply')).toBeEnabled();
     await page.locator('#btn-rename-apply').click();
+    await expect(page.locator('#rename-summary')).toContainText('置換しました');
     await expect(page.locator('#rename-summary')).toHaveAttribute('data-applied-unopened', '1');
     expect(await readFile(page, 'P0723_adc')).toContain('Adc_Driver');
   });
