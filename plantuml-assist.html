@@ -502,6 +502,28 @@ html, body {
   border-bottom: 1px solid var(--border);
   margin-bottom: 3px;
 }
+/* SVG が puml に追いついているか (BLK-reviewer-20260908-0103) */
+#folder-panel .folder-svg-badge {
+  font-size: 9px;
+  border: 1px solid var(--accent-red);
+  color: var(--accent-red);
+  border-radius: 2px;
+  padding: 0 3px;
+  white-space: nowrap;
+}
+#folder-panel .folder-svg-badge.svg-unknown { border-color: var(--text-secondary); color: var(--text-secondary); }
+#folder-panel .folder-svg-summary {
+  font-size: 10px;
+  color: var(--text-secondary);
+  padding: 2px 6px;
+}
+#folder-panel .folder-svg-summary.has-stale { color: var(--accent-red); }
+#folder-panel button.folder-svg-render {
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  margin: 2px 6px 4px;
+  width: auto;
+}
 #folder-panel button.folder-item {
   display: flex;
   align-items: baseline;
@@ -3227,6 +3249,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/activity-branch-pattern.js"></script>
 <script src="src/core/swimlane-move.js"></script>
 <script src="src/core/save-diff.js"></script>
+<script src="src/core/svg-freshness.js"></script>
 <script src="src/core/command-palette.js"></script>
 <script src="src/core/diagram-rail.js"></script>
 <script src="src/core/zoom-hud.js"></script>

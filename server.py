@@ -246,6 +246,8 @@ class Handler(BaseHTTPRequestHandler):
         global _last_heartbeat, _shutdown_started
         if self.path == '/autosave':
             return self._handle_autosave_post()
+        if self.path == '/autosave-svg':
+            return self._handle_autosave_svg_post()
         if self.path == '/prefs':
             return self._handle_prefs_post()
         if self.path == '/heartbeat':
@@ -405,6 +407,44 @@ class Handler(BaseHTTPRequestHandler):
             pass  # meta is best-effort
         self._send_json(200, {'ok': True, 'meta': meta, 'path': str(file_path)})
 
+    def _handle_autosave_svg_post(self):
+        """保存フォルダの {type}.svg だけを書き直す。
+
+        BLK-reviewer-20260908-0103: puml を書き戻すと puml の方が新しくなり、
+        「svg が古い」が永久に消えない。作り直しは svg 側だけに触る。
+        """
+        length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(length).decode('utf-8')
+        try:
+            data = json.loads(body)
+        except ValueError:
+            self._send_json(400, {'error': 'invalid JSON'})
+            return
+        dt = data.get('type')
+        svg = data.get('svg', '')
+        if not self._autosave_validate_type(dt):
+            self._send_json(400, {'error': 'invalid type — パス区切り・制御文字・Windows の禁止文字は使えません'})
+            return
+        if not isinstance(svg, str) or svg == '':
+            self._send_json(400, {'error': 'svg must be a non-empty string'})
+            return
+        save_dir = self._autosave_resolve_dir(data.get('dir'))
+        puml_path = self._autosave_file_path(save_dir, dt)
+        if not puml_path.exists():
+            self._send_json(404, {'error': 'その名前の図が保存フォルダにありません'})
+            return
+        svg_path = puml_path.with_suffix('.svg')
+        try:
+            svg_path.write_text(svg, encoding='utf-8')
+        except OSError as e:
+            self._send_json(500, {'error': f'write failed: {e}'})
+            return
+        try:
+            mtime = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(svg_path.stat().st_mtime))
+        except OSError:
+            mtime = None
+        self._send_json(200, {'ok': True, 'path': str(svg_path), 'svgMtime': mtime})
+
     # --- autosave GET --------------------------------------------------------
 
     def _handle_autosave_get(self):
@@ -452,8 +492,19 @@ class Handler(BaseHTTPRequestHandler):
                               'dir': str(save_dir), 'exists': exists})
 
     def _autosave_entry(self, path):
-        """1 図分の {name, mtime, size, hash}。読めない図でも名前だけは返す。"""
-        entry = {'name': path.stem, 'mtime': None, 'size': None, 'hash': None}
+        """1 図分の {name, mtime, size, hash, svgMtime}。読めない図でも名前だけは返す。
+
+        BLK-reviewer-20260908-0103: 隣に置いた {name}.svg が puml より古いかどうかを
+        `ls -l` で 1 枚ずつ突き合わせていた。同じ一覧で答えられるよう、
+        svg の最終更新時刻もここで返す (無ければ None)。
+        """
+        entry = {'name': path.stem, 'mtime': None, 'size': None, 'hash': None,
+                 'svgMtime': None}
+        try:
+            svg_st = path.with_suffix('.svg').stat()
+            entry['svgMtime'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(svg_st.st_mtime))
+        except OSError:
+            pass
         try:
             st = path.stat()
             entry['mtime'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(st.st_mtime))
@@ -480,10 +531,14 @@ class Handler(BaseHTTPRequestHandler):
         save_dir = self._autosave_resolve_dir(dir_raw)
         if save_dir.exists():
             for p in save_dir.glob('*.puml'):
-                try:
-                    p.unlink()
-                except OSError:
-                    pass
+                # BLK-reviewer-20260908-0103: puml だけ消すと {name}.svg が残り、
+                # 「元の図は無いのに SVG だけある」= 一番読み違えやすい状態を作る。
+                # 図を消すときは隣の SVG も一緒に消す。
+                for target in (p, p.with_suffix('.svg')):
+                    try:
+                        target.unlink()
+                    except OSError:
+                        pass
             meta = self._autosave_meta_path(save_dir)
             if meta.exists():
                 try:

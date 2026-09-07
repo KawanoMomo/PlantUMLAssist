@@ -28,6 +28,7 @@ const sourceFiles = [
   'src/core/subject-preset.js',
   'src/core/activity-insert.js',
   'src/core/save-diff.js',
+  'src/core/svg-freshness.js',
   'src/core/command-palette.js',
   'src/core/diagram-rail.js',
   'src/core/zoom-hud.js',
