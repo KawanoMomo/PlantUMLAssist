@@ -2049,6 +2049,10 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <label style="display:flex;align-items:center;gap:6px;margin-bottom:10px;font-size:12px;">
         <input type="checkbox" id="cfg-editor-wrap"> 長い行を折り返す
       </label>
+      <!-- design 5a: 図の要素を選んだら DSL の該当行へエディタを動かす -->
+      <label style="display:flex;align-items:center;gap:6px;margin-bottom:10px;font-size:12px;">
+        <input type="checkbox" id="cfg-editor-click-to-line"> 図をクリックしたら DSL の該当行へ移動
+      </label>
       <div style="font-size:11px;color:var(--text-secondary);">保存を押すと DSL エディタに即時反映されます。</div>
     </div>
 
@@ -2101,6 +2105,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/zoom-hud.js"></script>
 <script src="src/core/relation-add.js"></script>
 <script src="src/core/settings-tabs.js"></script>
+<script src="src/core/editor-jump.js"></script>
 <script src="src/core/render-modes.js"></script>
 <script src="src/core/top-status.js"></script>
 <script src="src/core/family-audit.js"></script>
