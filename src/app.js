@@ -3684,9 +3684,186 @@ function renderRenameImpact(docs, from) {
     roles.textContent = r.summary;
     item.appendChild(line);
     item.appendChild(roles);
+    // BLK-primary-20260907-2003-wish: 内訳だけでは「この図のどの記述が対象か」が
+    // 分からず、結局タブを開いて目で探すことになる。出現行そのものを並べ、
+    // 押したらその図のその行へキャレットを運ぶ。
+    (r.lines || []).forEach(function(h) {
+      var hit = document.createElement('div');
+      hit.className = 'impact-line';
+      hit.setAttribute('data-doc-id', r.id);
+      hit.setAttribute('data-line', String(h.line));
+      hit.title = r.name + ' の ' + h.line + ' 行目へ移動';
+      var no = document.createElement('span');
+      no.className = 'impact-line-no';
+      no.textContent = String(h.line);
+      var tx = document.createElement('span');
+      tx.className = 'impact-line-text';
+      tx.textContent = h.text.trim();
+      hit.appendChild(no);
+      hit.appendChild(tx);
+      hit.addEventListener('click', function() {
+        jumpToDocLine(r.id, h.line);
+      });
+      item.appendChild(hit);
+    });
     rows.appendChild(item);
   });
   box.appendChild(rows);
+}
+
+// 影響範囲プレビューの行から、その図のその行へ運ぶ。図を切り替えてから
+// エディタのキャレットを置くので、押した先で編集をそのまま続けられる。
+function jumpToDocLine(docId, line) {
+  if (!window.MA.workspace) return;
+  if (docId !== window.MA.workspace.getActiveId()) {
+    saveActiveDoc();
+    if (!window.MA.workspace.setActive(docId)) return;
+    applyActiveDoc();
+  }
+  _traceScrollToLine(line);
+}
+
+// BLK-primary-20260907-2003-wish: 「戻り値型を void から StatusType に変える」
+// のような仕様変更は、綴りが変わらないので一括置換では当てられない。宣言行が
+// 見つかったときだけ、戻り値・引数を 1 回で全図に当てる欄を出す。
+function renderSignatureApply(docs, from) {
+  var wrap = document.getElementById('rename-signature');
+  var SC = window.MA.signatureChange;
+  if (!wrap || !SC) return;
+  wrap.textContent = '';
+  var hits = from ? SC.findAll(docs, from) : [];
+  wrap.setAttribute('data-hits', String(hits.length));
+  if (hits.length === 0) return;
+
+  var head = document.createElement('div');
+  head.className = 'sig-head';
+  head.textContent = from + '() の宣言 ' + hits.length + ' 行 / 現在の戻り値: '
+    + SC.returnTypes(docs, from).join('・');
+  wrap.appendChild(head);
+
+  var row = document.createElement('div');
+  row.className = 'sig-row';
+  var retLabel = document.createElement('label');
+  retLabel.setAttribute('for', 'sig-return');
+  retLabel.textContent = '戻り値';
+  var ret = document.createElement('input');
+  ret.id = 'sig-return';
+  ret.autocomplete = 'off';
+  ret.spellcheck = false;
+  ret.placeholder = 'StatusType';
+  ret.value = _sigReturn;
+  var parLabel = document.createElement('label');
+  parLabel.setAttribute('for', 'sig-params');
+  parLabel.textContent = '引数';
+  var par = document.createElement('input');
+  par.id = 'sig-params';
+  par.autocomplete = 'off';
+  par.spellcheck = false;
+  par.placeholder = '変更しないなら空欄';
+  par.value = _sigParams;
+  row.appendChild(retLabel);
+  row.appendChild(ret);
+  row.appendChild(parLabel);
+  row.appendChild(par);
+  wrap.appendChild(row);
+
+  var preview = document.createElement('div');
+  preview.className = 'sig-preview';
+  wrap.appendChild(preview);
+
+  var btn = document.createElement('button');
+  btn.type = 'button';
+  btn.id = 'btn-sig-apply';
+  btn.className = 'sig-apply';
+  btn.textContent = 'まとめて適用';
+  wrap.appendChild(btn);
+
+  function spec() {
+    var s = {};
+    if (_sigReturn.trim()) s.returnType = _sigReturn.trim();
+    if (_sigParams.trim()) s.params = _sigParams.trim();
+    return s;
+  }
+
+  function draw() {
+    preview.textContent = '';
+    var sp = spec();
+    var changes = 0;
+    if (sp.returnType == null && sp.params == null) {
+      var none = document.createElement('div');
+      none.className = 'sig-note';
+      none.textContent = '新しい戻り値か引数を入れると、当たる行が出ます';
+      preview.appendChild(none);
+    } else {
+      SC.plan(docs, from, sp).forEach(function(p) {
+        if (p.status !== 'change') return;
+        changes++;
+        var line = document.createElement('div');
+        line.className = 'sig-line';
+        line.setAttribute('data-doc-name', p.docName);
+        line.setAttribute('data-line', String(p.line));
+        line.textContent = p.docName + ':' + p.line + '  ' + p.before.trim() + ' → ' + p.after.trim();
+        preview.appendChild(line);
+      });
+      if (changes === 0) {
+        var same = document.createElement('div');
+        same.className = 'sig-note';
+        same.textContent = 'すべて既にその形です';
+        preview.appendChild(same);
+      }
+    }
+    preview.setAttribute('data-changes', String(changes));
+    btn.disabled = changes === 0;
+  }
+
+  ret.addEventListener('input', function() { _sigReturn = ret.value; draw(); });
+  par.addEventListener('input', function() { _sigParams = par.value; draw(); });
+  btn.addEventListener('click', function() { applySignatureChange(from, spec()); });
+  draw();
+}
+
+var _sigReturn = '';
+var _sigParams = '';
+
+// 当てたあとは一括置換と同じ経路で書き戻す (undo 1 手・保存フォルダへの書き出し)。
+function applySignatureChange(name, spec) {
+  var SC = window.MA.signatureChange;
+  if (!SC || !window.MA.workspace) return null;
+  var docs = _renameDocs();
+  var activeId = window.MA.workspace.getActiveId();
+  // 「開いている図すべてに適用」のチェックは一括置換と共通の的を決める。
+  if (!(document.getElementById('rename-all-docs') || {}).checked) {
+    docs = docs.filter(function(d) { return d.id === activeId; });
+  }
+  var res = SC.apply(docs, name, spec);
+  if (res.changed.length === 0) return res;
+  if (window.MA.history) window.MA.history.pushHistory();
+  res.changed.forEach(function(c) {
+    if (c.id === activeId) {
+      mmdText = c.dsl;
+      suppressSync = true;
+      editorEl.value = c.dsl;
+      suppressSync = false;
+    }
+    window.MA.workspace.updateDoc(c.id, { dsl: c.dsl });
+  });
+  updateLineNumbers();
+  scheduleRefresh();
+  renderTabs();
+  try {
+    var cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null;
+    if (cfg && cfg.backend === 'file') {
+      window.MA.workspace.list().forEach(function(d) {
+        window.MA.workspace.saveToFile(d, cfg.fileDir);
+        if (window.MA.saveDiff) window.MA.saveDiff.mark(d.name, d.dsl);
+      });
+    }
+  } catch (e) { /* best-effort */ }
+  if (window.MA.toast) {
+    try { window.MA.toast.show(res.updated + ' 行 / ' + res.changed.length + ' 枚に適用しました'); } catch (e) {}
+  }
+  updateRenamePreview();
+  return res;
 }
 
 function updateRenamePreview() {
@@ -3725,6 +3902,7 @@ function updateRenamePreview() {
   });
 
   renderRenameImpact(docs, from);
+  renderSignatureApply(docs, from);
 
   var ok = !!from && br.isValidTarget(to) && from !== to && total > 0;
   if (!from) summary.textContent = '置換前の部品名を入力してください';
