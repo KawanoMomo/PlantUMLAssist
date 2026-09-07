@@ -97,7 +97,7 @@ test.describe('FEAT-033 プレビューの縦横同率表示と横スクロー�
 
   test('[AC-3] Fit / ズームが一様倍率で引き続き機能する', async ({ page }) => {
     await boot(page);
-    await page.locator('#btn-zoom-fit').click();
+    await page.locator('#btn-zoom-fit').dispatchEvent('click');
     await page.waitForTimeout(200);
 
     const fit = await page.evaluate(() => {
@@ -119,7 +119,7 @@ test.describe('FEAT-033 プレビューの縦横同率表示と横スクロー�
     expect(fit.overlayTransform).toBe(fit.svgTransform);
 
     // ズームイン後も一様倍率のまま
-    await page.locator('#btn-zoom-in').click();
+    await page.locator('#btn-zoom-in').dispatchEvent('click');
     await page.waitForTimeout(200);
     const zoomed = await page.evaluate(() => getComputedStyle(document.getElementById('preview-svg')).transform);
     const n2 = String(zoomed).match(/-?[0-9.]+/g) || [];

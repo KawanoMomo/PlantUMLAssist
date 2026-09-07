@@ -28,6 +28,28 @@ function updateOnlineWarning() {
 }
 
 var editorEl, previewSvgEl, propsEl, statusParseEl, statusInfoEl, renderStatusEl, lineNumbersEl, zoomDisplayEl;
+// design 1a: 上部バーに残す「編集中のファイル名」と「{モード} · {所要ms}」
+var topFileNameEl, topRenderStatusEl;
+
+// updateTopFileName: アクティブなタブの名前を上部バーに映す。
+// タブの追加・切替・名前変更のたびに renderTabs() から呼ばれる。
+function updateTopFileName() {
+  if (!topFileNameEl || !window.MA.topStatus) return;
+  var doc = window.MA.workspace ? window.MA.workspace.getActive() : null;
+  var name = window.MA.topStatus.fileName(doc ? doc.name : '');
+  topFileNameEl.textContent = name;
+  topFileNameEl.title = name;
+}
+
+// updateTopRenderStatus: レンダリングの相と所要時間を上部バーに映す。
+function updateTopRenderStatus(phase, ms) {
+  if (!topRenderStatusEl || !window.MA.topStatus) return;
+  var modeEl = document.getElementById('render-mode');
+  var mode = (modeEl && modeEl.value) || 'local';
+  topRenderStatusEl.textContent = window.MA.topStatus.render({ mode: mode, phase: phase, ms: ms });
+  if (window.MA.topStatus.isError(phase)) topRenderStatusEl.classList.add('error');
+  else topRenderStatusEl.classList.remove('error');
+}
 var mmdText = '';
 var currentDiagramType = 'plantuml-sequence';
 var currentModule = null;
@@ -62,6 +84,10 @@ function init() {
   renderStatusEl = document.getElementById('render-status');
   lineNumbersEl = document.getElementById('line-numbers');
   zoomDisplayEl = document.getElementById('zoom-display');
+  // design 1a: 上部バーに残す 2 つの表示
+  topFileNameEl = document.getElementById('top-file-name');
+  topRenderStatusEl = document.getElementById('top-render-status');
+  updateTopRenderStatus('idle');
 
   _registerModules();
 
@@ -603,6 +629,8 @@ function init() {
   document.getElementById('render-mode').addEventListener('change', function() {
     localStorage.setItem('plantuml-render-mode', this.value);
     updateOnlineWarning();
+    // 上部バーの状態表示はモード名を含むので、描画を待たずに切り替えを映す。
+    updateTopRenderStatus('idle');
     scheduleRefresh();
   });
 
@@ -1742,6 +1770,7 @@ function renderTabs() {
   if (!bar || !window.MA.workspace) return;
   var docs = window.MA.workspace.list();
   var activeId = window.MA.workspace.getActiveId();
+  updateTopFileName();
   var tabs = bar.querySelectorAll('.tab');
   for (var i = 0; i < tabs.length; i++) bar.removeChild(tabs[i]);
   var firstTool = bar.querySelector('.tab-tool');
@@ -3463,7 +3492,14 @@ function renderSvg() {
   var mode = document.getElementById('render-mode').value || 'local';
   renderStatusEl.textContent = 'Rendering\u2026';
   renderStatusEl.classList.remove('error');
+  updateTopRenderStatus('rendering');
 
+  // design 1a: \u4e0a\u90e8\u30d0\u30fc\u306e `local \u00b7 24ms` \u306f\u3053\u306e\u5f80\u5fa9\u306b\u304b\u304b\u3063\u305f\u5b9f\u6e2c\u3092\u51fa\u3059\u3002
+  var startedAt = (window.performance && performance.now) ? performance.now() : Date.now();
+  var elapsed = function() {
+    var now = (window.performance && performance.now) ? performance.now() : Date.now();
+    return now - startedAt;
+  };
   var myGen = ++renderGen;
   fetch('/render', {
     method: 'POST',
@@ -3522,11 +3558,13 @@ function renderSvg() {
       }
     }
     renderStatusEl.textContent = 'OK (' + mode + ')';
+    updateTopRenderStatus('ok', elapsed());
   }).catch(function(err) {
     if (myGen !== renderGen) return;  // stale failure — ignore
     previewSvgEl.innerHTML = '<p style="color:var(--accent-red);padding:20px;white-space:pre-wrap;font-family:var(--font-mono);font-size:12px;">Render error: ' + (err.message || err) + '</p>';
     renderStatusEl.textContent = 'ERROR';
     renderStatusEl.classList.add('error');
+    updateTopRenderStatus('error');
   });
 }
 

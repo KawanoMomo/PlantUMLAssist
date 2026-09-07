@@ -125,6 +125,30 @@ html, body {
   letter-spacing: -0.5px;
 }
 
+/* design 1a: 上部に残す 2 つの状態表示 */
+#top-file-name {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-primary);
+  margin-right: 8px;
+  white-space: nowrap;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#top-render-status {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  margin-left: auto;
+  margin-right: 8px;
+}
+#top-render-status.error { color: var(--accent-red); }
+
+/* 上部バーから外した操作の実体。表示しないが click は届く */
+#toolbar-actions[hidden] { display: none; }
+
 .tb-sep {
   width: 1px;
   height: 20px;
@@ -1167,7 +1191,10 @@ html, body {
 
   <!-- ── Toolbar ─────────────────────────────────────────────────────────── -->
   <div id="toolbar">
-    <span class="logo">PlantUMLAssist</span>
+    <!-- design 1a: 上部に残すのは「編集中のファイル名」「検索」「状態表示」「Export」だけ。
+         Open/Save/設定/Undo/Redo/ズーム/再描画は下の #toolbar-actions に退避し、
+         入口は Ctrl+K のコマンドパレット・左レール・キャンバス上のズーム HUD が持つ。 -->
+    <span id="top-file-name" title="編集中の図">(無題).puml</span>
 
     <!-- BLK-builder-20260907-0803-1 (design 1a): コマンド中心。名前を打って実行する入口 -->
     <button class="tb-btn" id="btn-command-palette" title="コマンド・要素を検索 (Ctrl+K)">
@@ -1176,23 +1203,7 @@ html, body {
       <span class="cp-search-kbd">Ctrl+K</span>
     </button>
 
-    <button class="tb-btn" id="btn-open" title="ファイルを開く">Open</button>
-    <button class="tb-btn" id="btn-save" title="ファイルを保存">Save</button>
-    <button class="tb-btn" id="btn-config" title="設定">⚙</button>
-
-    <div class="tb-sep"></div>
-
-    <button class="tb-btn" id="btn-undo" title="元に戻す (Ctrl+Z)" disabled>↩ Undo</button>
-    <button class="tb-btn" id="btn-redo" title="やり直す (Ctrl+Y)" disabled>↪ Redo</button>
-
-    <div class="tb-sep"></div>
-
-    <button class="tb-btn" id="btn-zoom-out" title="縮小">－</button>
-    <span id="zoom-display">100%</span>
-    <button class="tb-btn" id="btn-zoom-in"  title="拡大">＋</button>
-    <button class="tb-btn" id="btn-zoom-fit" title="幅に合わせる">Fit</button>
-
-    <div class="tb-sep"></div>
+    <span id="top-render-status" role="status" title="レンダリングのモードと直前の所要時間">local · —</span>
 
     <div class="export-wrap">
       <button class="tb-btn" id="btn-export" title="エクスポート">Export ▾</button>
@@ -1205,10 +1216,6 @@ html, body {
       </div>
       <div id="bulk-export-status" role="status"></div>
     </div>
-
-    <div class="tb-sep"></div>
-
-    <button class="tb-btn" id="btn-render" title="再レンダリング">⟳ Render</button>
 
     <select id="render-mode" title="レンダリングモード">
       <option value="local">local (Java)</option>
@@ -1223,6 +1230,21 @@ html, body {
       <option value="plantuml-activity">Activity</option>
       <option value="plantuml-state">State</option>
     </select>
+  </div>
+
+  <!-- design 1a: 上部バーから外した操作の実体。コマンドパレットがここを叩く。
+       画面には出さないが DOM には残すので、Undo の活性/不活性もそのまま働く。 -->
+  <div id="toolbar-actions" hidden>
+    <button class="tb-btn" id="btn-open" title="ファイルを開く">Open</button>
+    <button class="tb-btn" id="btn-save" title="ファイルを保存">Save</button>
+    <button class="tb-btn" id="btn-config" title="設定">⚙</button>
+    <button class="tb-btn" id="btn-undo" title="元に戻す (Ctrl+Z)" disabled>↩ Undo</button>
+    <button class="tb-btn" id="btn-redo" title="やり直す (Ctrl+Y)" disabled>↪ Redo</button>
+    <button class="tb-btn" id="btn-zoom-out" title="縮小">－</button>
+    <span id="zoom-display">100%</span>
+    <button class="tb-btn" id="btn-zoom-in"  title="拡大">＋</button>
+    <button class="tb-btn" id="btn-zoom-fit" title="幅に合わせる">Fit</button>
+    <button class="tb-btn" id="btn-render" title="再レンダリング">⟳ Render</button>
   </div>
 
   <!-- online モード時の外部送信警告バナー (Feature #10) -->
@@ -1525,6 +1547,7 @@ html, body {
 <script src="src/core/diagram-rail.js"></script>
 <script src="src/core/zoom-hud.js"></script>
 <script src="src/core/settings-tabs.js"></script>
+<script src="src/core/top-status.js"></script>
 <script src="src/core/line-edit.js"></script>
 <script src="src/core/outline.js"></script>
 <script src="src/core/compare-view.js"></script>

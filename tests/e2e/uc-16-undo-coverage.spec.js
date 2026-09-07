@@ -29,7 +29,7 @@ test.describe('UC-16: Undo coverage', () => {
     expect(changedText).toContain('Customer');
     expect(changedText).not.toBe(originalText);
 
-    await page.locator('#btn-undo').click();
+    await page.locator('#btn-undo').dispatchEvent('click');
     await page.waitForTimeout(500);
     expect(await getEditorText(page)).toBe(originalText);
   });
@@ -50,7 +50,7 @@ test.describe('UC-16: Undo coverage', () => {
     await page.waitForTimeout(500);
     expect(await getEditorText(page)).toContain('AuthRequest');
 
-    await page.locator('#btn-undo').click();
+    await page.locator('#btn-undo').dispatchEvent('click');
     await page.waitForTimeout(500);
     expect(await getEditorText(page)).toBe(originalText);
   });

@@ -26,7 +26,7 @@ test.describe('フローティング・ズーム (design 1a)', () => {
   test('帯の ＋ / − で倍率が変わり、ツールバー側の表示も一致する', async ({ page }) => {
     await page.locator('#hud-zoom-in').click();
     await expect(page.locator('#hud-percent')).toHaveText('110%');
-    await expect(page.locator('#zoom-display')).toHaveText('110%');
+    await expect(page.locator('#zoom-display')).toHaveText('110%');  // 実体は #toolbar-actions
     await page.locator('#hud-zoom-out').click();
     await page.locator('#hud-zoom-out').click();
     await expect(page.locator('#hud-percent')).toHaveText('90%');
@@ -40,7 +40,7 @@ test.describe('フローティング・ズーム (design 1a)', () => {
   });
 
   test('ツールバー側から変えても帯の表示が追随する', async ({ page }) => {
-    await page.locator('#btn-zoom-in').click();
+    await page.locator('#btn-zoom-in').dispatchEvent('click');
     await expect(page.locator('#hud-percent')).toHaveText('110%');
     await expect(page.locator('#hud-label')).toHaveText('Sequence · 110%');
   });
@@ -49,7 +49,7 @@ test.describe('フローティング・ズーム (design 1a)', () => {
     await page.locator('#hud-zoom-fit').click();
     await page.waitForTimeout(300);
     const pct = await page.locator('#hud-percent').innerText();
-    const disp = await page.locator('#zoom-display').innerText();
+    const disp = await page.locator('#zoom-display').textContent();
     expect(pct).toBe(disp);
     expect(pct).not.toBe('100%');
   });
@@ -62,7 +62,7 @@ test.describe('フローティング・ズーム (design 1a)', () => {
 
   test('端では対応するボタンが押せなくなる', async ({ page }) => {
     // setZoom は module scope なのでツールバー経由で上限まで上げる
-    for (let i = 0; i < 45; i++) await page.locator('#btn-zoom-in').click();
+    for (let i = 0; i < 45; i++) await page.locator('#btn-zoom-in').dispatchEvent('click');
     await expect(page.locator('#hud-percent')).toHaveText('500%');
     await expect(page.locator('#hud-zoom-in')).toBeDisabled();
     await expect(page.locator('#hud-zoom-out')).toBeEnabled();
