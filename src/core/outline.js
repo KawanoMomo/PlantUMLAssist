@@ -324,9 +324,18 @@ window.MA.outline = (function() {
     return head + ' · ' + countLabel(result.counts, diagramType);
   }
 
+  // 図種ごとに「何を数えるか」の並び。数合わせ (count-compare) が同じ語彙で
+  // 差を出せるように、名前の表を 1 か所から配る。
+  function countTerms(diagramType) {
+    return (COUNT_TERMS[String(diagramType)] || DEFAULT_TERMS).map(function(spec) {
+      return { key: spec[0], one: spec[1], many: spec.length > 2 ? spec[2] : spec[1] };
+    });
+  }
+
   return {
     build: build,
     filter: filter,
+    countTerms: countTerms,
     countLabel: countLabel,
     summary: summary,
   };
