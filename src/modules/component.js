@@ -493,6 +493,78 @@ window.MA.modules.plantumlComponent = (function() {
     });
   }
 
+  // BLK-junior-20260908-0203-wish: 定石の依存チェック。
+  // 判断は core/component-deps.js に置き、ここは並べて選ばせるだけ。
+  // 候補は「この図に無いもの」しか来ないので、押した数だけ図が埋まる。
+  function _renderDepsCheck(parsedData, ctx) {
+    var CD = window.MA.componentDeps;
+    var P = window.MA.properties;
+    var esc = window.MA.htmlUtils.escHtml;
+    var sumEl = document.getElementById('co-deps-summary');
+    var bodyEl = document.getElementById('co-deps-body');
+    if (!CD || !sumEl || !bodyEl) return;
+
+    var ws = window.MA.workspace;
+    var docs = (ws && ws.list) ? ws.list() : [];
+    var activeId = (ws && ws.getActiveId) ? ws.getActiveId() : null;
+    var dsl = ctx.getMmdText();
+    var res = CD.check(dsl, docs, activeId);
+
+    sumEl.textContent = CD.summaryText(res);
+    sumEl.setAttribute('data-missing', String(res.rows.length));
+    sumEl.setAttribute('data-catalog-missing', String(res.catalogMissing));
+    sumEl.setAttribute('data-peer-missing', String(res.peerMissing));
+
+    if (!res.rows.length) { bodyEl.innerHTML = ''; return; }
+
+    var subjOpts = CD.subjects(dsl).map(function(s, i) {
+      return { value: s.id, label: s.label, selected: i === 0 };
+    });
+    if (!subjOpts.length) {
+      bodyEl.innerHTML = '<div id="co-deps-nosubject" style="font-size:10px;color:var(--text-secondary);">'
+        + '依存の起点になる component がまだありません（先に上の「末尾に追加」で 1 つ作ってください）</div>';
+      return;
+    }
+
+    var rows = res.rows.map(function(r, i) {
+      return '<label class="co-dep-row" data-dep-key="' + esc(r.key) + '" data-dep-source="' + esc(r.source) + '"'
+        + ' style="display:flex;align-items:flex-start;gap:6px;padding:3px 4px;border-radius:3px;cursor:pointer;">'
+        + '<input type="checkbox" class="co-dep-check" data-i="' + i + '" style="margin-top:2px;">'
+        + '<span style="flex:1;">'
+          + '<span style="font-size:12px;color:var(--text-primary);">' + esc(r.name) + '</span>'
+          + (r.source === 'catalog' ? ' <span style="font-size:10px;color:var(--accent);">' + esc(r.label) + '</span>' : '')
+          + '<span style="display:block;font-size:10px;color:var(--text-secondary);line-height:1.4;">' + esc(r.why) + '</span>'
+        + '</span>'
+        + '<span style="font-size:9px;color:var(--text-secondary);white-space:nowrap;">'
+          + (r.source === 'catalog' ? '定石' : '他の図') + '</span>'
+      + '</label>';
+    }).join('');
+
+    bodyEl.innerHTML =
+      P.selectFieldHtml('依存の起点', 'co-deps-subject', subjOpts) +
+      '<div id="co-deps-list" style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:3px;padding:4px;margin-top:6px;">'
+        + rows + '</div>' +
+      P.primaryButtonHtml('co-deps-add', '+ 選んだ依存を追加');
+
+    P.bindEvent('co-deps-add', 'click', function() {
+      var picks = [];
+      var checks = document.querySelectorAll('#co-deps-list .co-dep-check');
+      for (var i = 0; i < checks.length; i++) {
+        if (checks[i].checked) picks.push(res.rows[Number(checks[i].getAttribute('data-i'))]);
+      }
+      if (!picks.length) { alert('追加する依存先を選んでください'); return; }
+      var subjEl = document.getElementById('co-deps-subject');
+      var block = CD.blockFor(subjEl ? subjEl.value : '', picks);
+      if (!block) { alert('依存の起点を選んでください'); return; }
+      var t = ctx.getMmdText();
+      var out = addBulk(t, block, parsedData);
+      if (out === t) { alert('追加できる行がありません'); return; }
+      window.MA.history.pushHistory();
+      ctx.setMmdText(out);
+      ctx.onUpdate();
+    });
+  }
+
   function _renderNoSelection(parsedData, propsEl, ctx) {
     var P = window.MA.properties;
     var elements = parsedData.elements || [];
@@ -511,8 +583,17 @@ window.MA.modules.plantumlComponent = (function() {
           { value: 'bulk',      label: '一括 (複数行)' },
         ]) +
         '<div id="co-tail-detail" style="margin-top:6px;"></div>' +
+      '</div>' +
+      // BLK-junior-20260908-0203-wish: ドライバの図で「定石の依存先のうち今の図に
+      // 無いもの」を出す。先輩の他部品の図を 1 枚ずつ開いて見比べる代わり。
+      '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">定石の依存チェック</label>' +
+        '<div id="co-deps-summary" style="font-size:10px;color:var(--text-secondary);margin-bottom:6px;line-height:1.5;"></div>' +
+        '<div id="co-deps-body"></div>' +
       '</div>';
     propsEl.innerHTML = html;
+
+    _renderDepsCheck(parsedData, ctx);
 
 
     var renderTailDetail = function() {
