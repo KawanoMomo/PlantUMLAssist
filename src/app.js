@@ -270,6 +270,7 @@ function init() {
     }
     // 前回保存時点との差分バッジを追従させる。
     try { renderDiffBadge(); } catch (e) {}
+    try { renderVersionBadge(); } catch (e) {}
     // BLK-junior-20260907-1403-wish: 「見てもらいながらその場で直す」ので、
     // 指摘は打つたびに引き直す。
     try { renderReviewBadge(); } catch (e) {}
@@ -2084,6 +2085,7 @@ function init() {
   setupChangeBoard();
   setupHandoverBanner();
   setupAuditTimeline();
+  setupVersionTimeline();
   setupPinPanel();
   setupPinInbox();
   setupManualFindings();
@@ -2762,9 +2764,13 @@ function saveActiveDoc() {
       window.MA.workspace.saveToFile(doc, cfg.fileDir);
       // 保存した時点を差分の基準にする (BLK-reviewer-20260907-0803)。
       if (window.MA.saveDiff) window.MA.saveDiff.mark(doc.name, doc.dsl);
+      // 保存のたびに版を積む (BLK-reviewer-20260908-0723-wish)。基準 1 点だけでは
+      // A → B → A の往復が見えないので、通しで並べられるよう履歴に残す。
+      if (window.MA.versionTimeline) window.MA.versionTimeline.push(doc.name, doc.dsl);
     }
   } catch (e) { /* 保存フォルダへの書き出しは best-effort */ }
   renderDiffBadge();
+  renderVersionBadge();
   return doc;
 }
 
@@ -3469,6 +3475,139 @@ function toggleAuditTimeline(open) {
   if (!modal) return;
   if (open) renderAuditTimeline();
   modal.style.display = open ? 'flex' : 'none';
+}
+
+// ── 変遷履歴 (BLK-reviewer-20260908-0723-wish) ─────────────────────────────
+// save-diff は「前回保存した 1 点」しか持たないので、A → B → A と書き換えが
+// 往復しても毎回「変わりました」としか出ず、往復そのものが見えなかった。
+// ここでは図ごとに積んだ版を新しい順に並べ、前の版に戻った版へ印を付ける。
+var _vtFile = '';
+
+function _vtCurrentName() {
+  try {
+    var a = window.MA.workspace.getActive();
+    return a && a.name ? a.name : '';
+  } catch (e) { return ''; }
+}
+
+function renderVersionTimeline() {
+  var VT = window.MA.versionTimeline;
+  var body = document.getElementById('vt-body');
+  var sel = document.getElementById('vt-file');
+  var sum = document.getElementById('vt-summary');
+  if (!VT || !body) return;
+  var esc = window.MA.htmlUtils.escHtml;
+
+  var names = VT.names();
+  if (sel) {
+    // 開いている図に履歴がまだ無くても選べるようにしておく
+    // (「この図の履歴はまだありません」を名指しで出すため)。
+    var cur = _vtFile || _vtCurrentName();
+    var opts = names.slice();
+    if (cur && opts.indexOf(cur) < 0) opts.unshift(cur);
+    if (!cur && opts.length) cur = opts[0];
+    _vtFile = cur;
+    sel.innerHTML = opts.map(function(n) {
+      return '<option value="' + esc(n) + '"' + (n === cur ? ' selected' : '') + '>' + esc(n) + '</option>';
+    }).join('');
+  }
+  var name = _vtFile;
+  if (sum) sum.textContent = name ? VT.summaryLine(name) : '図がありません';
+
+  var onlyEl = document.getElementById('vt-only-revisit');
+  var only = !!(onlyEl && onlyEl.checked);
+  var rows = name ? VT.rows(name) : [];
+  if (only) rows = rows.filter(function(r) { return r.revisit; });
+
+  if (!rows.length) {
+    body.innerHTML = '<div class="vt-empty" id="vt-empty">'
+      + (only ? '往復した版はありません' : 'この図の履歴はまだありません。保存すると 1 版ずつ積まれます')
+      + '</div>';
+    return;
+  }
+
+  body.innerHTML = rows.map(function(r) {
+    var d = r.first ? null : VT.diffLines(name, r.rev - 1, r.rev);
+    var head = '<div class="vt-line">'
+      + '<span class="vt-rev">v' + r.rev + '</span>'
+      + '<span class="vt-at">' + esc(r.at || '') + '</span>'
+      + (r.first
+          ? '<span class="vt-first">最初の版</span>'
+          : '<span class="vt-delta"><span class="vt-add">+' + r.added + '</span> '
+            + '<span class="vt-del">-' + r.removed + '</span></span>')
+      + '<span class="vt-lines">' + r.lines + ' 行</span>'
+      + (r.revisit ? '<span class="vt-badge">往復</span>' : '')
+      + '</div>';
+    var why = r.revisit
+      ? '<div class="vt-why">v' + r.revisitOf + ' と同じ中身に戻っています</div>' : '';
+    var diff = '';
+    if (d && (d.added.length || d.removed.length)) {
+      diff = '<div class="vt-diff">'
+        + d.removed.slice(0, 6).map(function(l) { return '<span class="vt-d-del">- ' + esc(l) + '</span>'; }).join('')
+        + d.added.slice(0, 6).map(function(l) { return '<span class="vt-d-add">+ ' + esc(l) + '</span>'; }).join('')
+        + '</div>';
+    }
+    return '<div class="vt-row' + (r.revisit ? ' vt-revisit' : '') + '" data-vt-rev="' + r.rev + '"'
+      + ' data-vt-revisit="' + (r.revisit ? '1' : '0') + '">' + head + why + diff + '</div>';
+  }).join('');
+}
+
+// ボタンの見出しは、開いている図に往復があるかどうかを常に言う
+// (モーダルを開かないと気付けない、では手順が 1 つ増えるだけになる)。
+function renderVersionBadge() {
+  var btn = document.getElementById('btn-tab-versions');
+  var VT = window.MA.versionTimeline;
+  if (!btn || !VT) return;
+  var name = _vtCurrentName();
+  var n = name ? VT.revisitCount(name) : 0;
+  btn.textContent = n > 0 ? ('⟲ 変遷 往復' + n) : '⟲ 変遷 −';
+  btn.className = n > 0 ? 'tab-tool has-change' : 'tab-tool';
+  btn.title = n > 0
+    ? (name + ' には前の版に戻った版が ' + n + ' 回あります')
+    : 'この図が保存のたびにどう変わったかを通しで並べる。前の版に戻った「往復」には印が付く';
+}
+
+function toggleVersionTimeline(open) {
+  var modal = document.getElementById('vt-modal');
+  if (!modal) return;
+  if (open) {
+    _vtFile = _vtCurrentName() || _vtFile;
+    renderVersionTimeline();
+  }
+  modal.style.display = open ? 'flex' : 'none';
+}
+
+function setupVersionTimeline() {
+  var btn = document.getElementById('btn-tab-versions');
+  var modal = document.getElementById('vt-modal');
+  var VT = window.MA.versionTimeline;
+  if (!btn || !modal || !VT) return;
+  btn.addEventListener('click', function() { toggleVersionTimeline(true); });
+
+  var closeBtn = document.getElementById('vt-close');
+  if (closeBtn) closeBtn.addEventListener('click', function() { toggleVersionTimeline(false); });
+  modal.addEventListener('click', function(ev) {
+    if (ev.target === modal) toggleVersionTimeline(false);
+  });
+  document.addEventListener('keydown', function(ev) {
+    if (ev.key === 'Escape' && modal.style.display === 'flex') toggleVersionTimeline(false);
+  });
+
+  var sel = document.getElementById('vt-file');
+  if (sel) sel.addEventListener('change', function() { _vtFile = this.value; renderVersionTimeline(); });
+  var only = document.getElementById('vt-only-revisit');
+  if (only) only.addEventListener('change', renderVersionTimeline);
+  var forget = document.getElementById('vt-forget');
+  if (forget) {
+    forget.addEventListener('click', function() {
+      if (!_vtFile) return;
+      VT.forget(_vtFile);
+      _vtFile = '';
+      renderVersionTimeline();
+      renderVersionBadge();
+    });
+  }
+  renderVersionBadge();
 }
 
 function setupAuditTimeline() {
@@ -4717,6 +4856,7 @@ function applySignatureChange(name, spec) {
       window.MA.workspace.list().forEach(function(d) {
         window.MA.workspace.saveToFile(d, cfg.fileDir);
         if (window.MA.saveDiff) window.MA.saveDiff.mark(d.name, d.dsl);
+        if (window.MA.versionTimeline) window.MA.versionTimeline.push(d.name, d.dsl);
       });
     }
   } catch (e) { /* best-effort */ }
@@ -5004,6 +5144,7 @@ function renameAcrossDocs(from, to, docs) {
       window.MA.workspace.list().forEach(function(d) {
         window.MA.workspace.saveToFile(d, cfg.fileDir);
         if (window.MA.saveDiff) window.MA.saveDiff.mark(d.name, d.dsl);
+        if (window.MA.versionTimeline) window.MA.versionTimeline.push(d.name, d.dsl);
       });
     }
   } catch (e) { /* best-effort */ }
@@ -6278,6 +6419,7 @@ function setupBulkApply() {
           if (!d) return;
           window.MA.workspace.saveToFile(d, cfg.fileDir);
           if (window.MA.saveDiff) window.MA.saveDiff.mark(d.name, d.dsl);
+        if (window.MA.versionTimeline) window.MA.versionTimeline.push(d.name, d.dsl);
         });
       }
     } catch (e) { /* best-effort */ }
