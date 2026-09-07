@@ -3406,6 +3406,12 @@ function setupTabs() {
   // BLK-junior-20260907-2009-wish: 一時控えの印が付いた図名。畳んでいる間は
   // folderNames に入れない (「全部選ぶ」や「変更図だけ選ぶ」が控えを掴まない)。
   var draftNames = [];
+  // BLK-reviewer-20260908-0103: 図名 → SVG が puml に追いついているか。
+  // `ls -l` で puml と svg を 1 枚ずつ突き合わせる代わりに、一覧が答える。
+  var svgStatus = {};
+  var svgScan = null;
+  // 作り直した結果の 1 行。一覧を開き直すまで残す (押した結果が消えない)。
+  var svgRenderNote = '';
 
   function _openDocNames() {
     if (!window.MA.workspace) return [];
@@ -3504,6 +3510,7 @@ function setupTabs() {
     if (window.MA.workspace) {
       window.MA.workspace.updateActive({ dsl: mmdText, diagramType: currentDiagramType });
     }
+    svgRenderNote = '';   // 前に押した結果は持ち越さない
     panel.textContent = '';
     var loading = document.createElement('div');
     loading.className = 'folder-empty';
@@ -3549,6 +3556,11 @@ function setupTabs() {
         panel.appendChild(empty);
         return;
       }
+      // SVG の追いつきは、図の中身とは別に一覧の時点で分かる。
+      var SF = window.MA.svgFreshness;
+      svgScan = SF ? SF.scan(entries) : null;
+      svgStatus = SF ? SF.statusMap(svgScan) : {};
+
       // 消えた図の一時控えの印は捨てる (印だけが残り続けないようにする)。
       var DM = window.MA.draftMark;
       draftNames = DM ? DM.keepExisting(DM.load(store, dir), entries) : [];
@@ -3559,6 +3571,7 @@ function setupTabs() {
         setFolderNames(plain);
         folderStatus = {};
         panel.appendChild(folderPickBar());
+        appendSvgSection(panel, dir);
         plain.items.forEach(function(e) { panel.appendChild(folderRow(e.name || e, null, null)); });
         appendDraftSection(plain.drafts, function(e) { return folderRow(e.name || e, null, null); });
         syncFolderPickUi();
@@ -3577,6 +3590,7 @@ function setupTabs() {
       head.textContent = first ? '前回見た版の控えがありません（全部を新規として出しています）' : RW.summary(sp.items);
       panel.appendChild(head);
       panel.appendChild(folderPickBar());
+      appendSvgSection(panel, dir);
 
       folderStatus = {};
       rows.forEach(function(r) { folderStatus[r.name] = r.status; });
@@ -3680,6 +3694,74 @@ function setupTabs() {
 
   // 印を付ける欄と、名前を押して 1 枚だけ開く従来のボタンを 1 行に並べる。
   // 名前を押したときの動きは変えない (1 枚だけ開くのが今までどおり最短)。
+  // BLK-reviewer-20260908-0103: SVG が puml に追いついているかの要約と、
+  // 追いついていない図だけを 1 押しで作り直すボタン。
+  // 22 枚全部を毎回描き直すのではなく、古い枚数だけを描き直す。
+  function appendSvgSection(panel, dir) {
+    var SF = window.MA.svgFreshness;
+    if (!SF || !svgScan || !svgScan.rows.length) return;
+    var sum = document.createElement('div');
+    var stale = svgScan.needsRender.length > 0;
+    sum.className = 'folder-svg-summary' + (stale ? ' has-stale' : '');
+    sum.textContent = SF.summary(svgScan);
+    panel.appendChild(sum);
+
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'folder-svg-render';
+    btn.textContent = SF.renderLabel(svgScan);
+    btn.title = '保存フォルダの puml から SVG を描き直す。puml には触らないので、'
+      + '「SVG が古い」がこの 1 押しで消える';
+    if (svgRenderNote) {
+      var note = document.createElement('div');
+      note.className = 'folder-svg-summary folder-svg-note';
+      note.textContent = svgRenderNote;
+      panel.appendChild(note);
+    }
+    btn.disabled = !stale;
+    btn.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      btn.disabled = true;
+      renderStaleSvgs(dir, svgScan.needsRender, btn);
+    });
+    panel.appendChild(btn);
+  }
+
+  // 古い SVG を 1 枚ずつ直列に作り直す。1 枚失敗しても残りは進める
+  // (1 枚のために全部が止まると、結局手で確かめ直すことになる)。
+  function renderStaleSvgs(dir, names, btn) {
+    var queue = names.slice();
+    var done = 0;
+    var failed = [];
+    function step() {
+      if (queue.length === 0) {
+        svgRenderNote = failed.length
+          ? (done + ' 枚を作り直しました（' + failed.join(' / ') + ' は失敗）')
+          : (done + ' 枚を作り直しました');
+        renderFolderPanel();
+        return;
+      }
+      var name = queue.shift();
+      btn.textContent = '作り直しています… ' + name + '（残り ' + queue.length + ' 枚）';
+      window.MA.workspace.loadFile(name, dir).then(function(dsl) {
+        if (dsl === null) throw new Error('読めません');
+        return renderDslToSvg(dsl);
+      }).then(function(svg) {
+        return fetch('/autosave-svg', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: name, dir: dir, svg: svg }),
+        });
+      }).then(function(resp) {
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        done++;
+      }).catch(function() {
+        failed.push(name);
+      }).then(step);
+    }
+    step();
+  }
+
   function folderRow(name, bdg, mtime, status) {
     var FS = window.MA.folderSelect;
     var b = folderButton(name, bdg, mtime, status);
@@ -3894,6 +3976,16 @@ function setupTabs() {
     label.className = 'folder-name';
     label.textContent = name;
     b.appendChild(label);
+    var SF = window.MA.svgFreshness;
+    if (SF && svgStatus[name] && svgStatus[name] !== 'fresh') {
+      var sb = SF.badge(svgStatus[name]);
+      var svgBadge = document.createElement('span');
+      svgBadge.className = 'folder-svg-badge svg-' + svgStatus[name];
+      svgBadge.setAttribute('data-svg-status', svgStatus[name]);
+      svgBadge.textContent = sb.mark;
+      svgBadge.title = sb.title;
+      b.appendChild(svgBadge);
+    }
     if (mtime) {
       var t = document.createElement('span');
       t.className = 'folder-mtime';
