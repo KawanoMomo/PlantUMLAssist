@@ -33,7 +33,8 @@ const USAGE = [
   '  --only a,b    回す監査を絞る (' + report.auditNames().join(', ') + ')',
   '  --summary     JSON ではなく人が読む要約を出す',
   '  --out FILE    JSON をファイルに書く (標準出力にはパスだけ)',
-  '  --since FILE  前回の監査 JSON と突き合わせ、増えた指摘・消えた指摘を要約に足す',
+  '  --since FILE  前回の監査 JSON と突き合わせ、増えた指摘・消えた指摘と、',
+  '                実データ/テンプレ別のファイル内容の変化を要約に足す',
   '  --no-state    前回比較用の控え (.assist-audit-last.json) を読み書きしない',
   '  --help        この説明',
 ].join('\n');
