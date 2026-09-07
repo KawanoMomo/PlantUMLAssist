@@ -5079,6 +5079,72 @@ function renderDiagramSettings(keepState) {
     function(it) { return Number(it.value) === Number(resolved.fontSize); },
     function(v) { dsSet({ fontSize: Number(v) }); });
 
+  // BLK-builder-20260907-1248-2 (design 5b の網羅表): メッセージの通し番号。
+  // autonumber はシーケンス図だけの指定なので、他の図種では出さない。
+  if (currentDiagramType === 'plantuml-sequence') {
+    var AN = window.MA.sequenceAutonumber;
+    var an = AN.read(mmdText);
+    var gNum = group('メッセージの通し番号 / autonumber');
+    gNum.id = 'ds-autonumber-group';
+    var numRow = document.createElement('div');
+    numRow.className = 'ds-row';
+    var onLabel = document.createElement('label');
+    onLabel.style.display = 'flex';
+    onLabel.style.alignItems = 'center';
+    onLabel.style.gap = '6px';
+    var onBox = document.createElement('input');
+    onBox.type = 'checkbox';
+    onBox.id = 'ds-autonumber-on';
+    onBox.checked = an.on;
+    onLabel.appendChild(onBox);
+    onLabel.appendChild(document.createTextNode('番号を振る'));
+    numRow.appendChild(onLabel);
+
+    function _numInput(id, value, title) {
+      var el = document.createElement('input');
+      el.type = 'number';
+      el.min = '1';
+      el.id = id;
+      el.value = String(value);
+      el.title = title;
+      el.style.width = '56px';
+      el.disabled = !an.on;
+      return el;
+    }
+    var startEl = _numInput('ds-autonumber-start', an.start, '開始番号');
+    var stepEl = _numInput('ds-autonumber-step', an.step, '増分');
+    numRow.appendChild(startEl);
+    numRow.appendChild(stepEl);
+    gNum.appendChild(numRow);
+
+    function applyAutonumber() {
+      var next = AN.apply(mmdText, {
+        on: onBox.checked,
+        start: startEl.value,
+        step: stepEl.value,
+      });
+      if (next === mmdText) { renderDiagramSettings(true); return; }
+      if (window.MA.history) window.MA.history.pushHistory();
+      mmdText = next;
+      suppressSync = true;
+      editorEl.value = next;
+      suppressSync = false;
+      scheduleRefresh();
+      renderDiagramSettings(true);
+    }
+    onBox.addEventListener('change', applyAutonumber);
+    startEl.addEventListener('change', applyAutonumber);
+    stepEl.addEventListener('change', applyAutonumber);
+
+    var numHint = document.createElement('div');
+    numHint.id = 'ds-autonumber-line';
+    numHint.style.fontFamily = 'var(--font-mono)';
+    numHint.style.fontSize = '11px';
+    numHint.style.color = 'var(--text-secondary)';
+    numHint.textContent = an.on ? AN.fmtLine(an.start, an.step) : '(番号なし)';
+    gNum.appendChild(numHint);
+  }
+
   // 生成される行
   var gPrev = group('DSL 先頭に書き込まれる行');
   var pre = document.createElement('div');
