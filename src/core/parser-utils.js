@@ -81,6 +81,30 @@ window.MA.parserUtils = (function() {
     return null;
   }
 
+  // `actor A` だけの図は Sequence にも UseCase にもなり得る。detectDiagramType は
+  // 従来どおり usecase を返すが、これは当て推量なので、図種を自分で選んで
+  // 組み立てている最中(空のシーケンス図に参加者を 1 人足した直後など)に
+  // モジュールを勝手に載せ替えてはならない。この関数が true を返す間は
+  // 呼び出し側が現在の図種を保つ。
+  function isAmbiguousType(text) {
+    if (!text || !text.trim()) return true;
+    var lines = text.split('\n');
+    var inBlock = false;
+    var hasActor = false;
+    for (var i = 0; i < lines.length; i++) {
+      var t = lines[i].trim();
+      if (!t || t.indexOf("'") === 0) continue;
+      if (window.MA.regexParts.isStartUml(t)) { inBlock = true; continue; }
+      if (window.MA.regexParts.isEndUml(t)) break;
+      if (!inBlock) continue;
+      if (/^actor\b/.test(t)) { hasActor = true; continue; }
+      // actor 以外の実質的な行が 1 つでもあれば、その行が図種を決める
+      if (!/^(@|skinparam\b|title\b|hide\b|show\b|scale\b|autonumber\b)/.test(t)) return false;
+    }
+    // 中身が無い、または actor 宣言しか無い
+    return true;
+  }
+
   function splitLinesWithMeta(text) {
     if (!text) return [];
     var lines = text.split('\n');
@@ -134,6 +158,7 @@ window.MA.parserUtils = (function() {
 
   return {
     detectDiagramType: detectDiagramType,
+    isAmbiguousType: isAmbiguousType,
     splitLinesWithMeta: splitLinesWithMeta,
     findUnusedParticipants: findUnusedParticipants,
   };
