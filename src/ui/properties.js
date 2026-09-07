@@ -247,6 +247,73 @@ window.MA.properties = (function() {
     '</div>';
   }
 
+  // colorPaletteHtml / bindColorPalette: BLK-builder-20260907-1306-2 (design 5d)。
+  // State のように「関係の設定」を丸ごとは持たないが色だけは畳んで置きたいところ用に、
+  // 色見本の一列と、それを包む「その他… ▾」を切り出したもの。
+  // 現在値が既定 (色なし) から外れていれば開いた状態で出す — 3c の流儀と同じ。
+  // colors = [{ value, label, swatch }]、current = 選択中の value ('' なら既定)。
+  function colorSwatchesHtml(id, colors, current) {
+    var out = '';
+    for (var i = 0; i < colors.length; i++) {
+      var sel = colors[i].value === (current || '');
+      out += '<button type="button" class="prop-color-swatch' + (sel ? ' active' : '') + '"'
+        + ' data-value="' + escHtml(colors[i].value) + '" title="' + escHtml(colors[i].label) + '"'
+        + ' aria-pressed="' + (sel ? 'true' : 'false') + '"'
+        + ' style="width:18px;height:18px;padding:0;border-radius:4px;cursor:pointer;'
+        + 'background:' + colors[i].swatch + ';'
+        + 'border:' + (sel ? '2px solid var(--accent)' : '1px solid var(--border)') + ';"></button>';
+    }
+    return '<div id="' + id + '-colors" style="display:flex;gap:6px;align-items:center;">' + out + '</div>';
+  }
+
+  // label = 見出し (「色 / Color」など)、notation = 右端に小さく出す記法の見本。
+  function colorPaletteHtml(id, opts) {
+    var o = opts || {};
+    var colors = o.colors || [];
+    var current = o.current || '';
+    var dirty = !!current;
+    return '<div style="margin-bottom:8px;">' +
+      '<button type="button" id="' + id + '-btn" aria-expanded="' + (dirty ? 'true' : 'false') + '"'
+        + ' aria-controls="' + id + '"'
+        + ' style="width:100%;text-align:left;background:transparent;border:0;color:var(--text-secondary);'
+        + 'font-size:11px;padding:2px 0;cursor:pointer;">' + escHtml(o.title || 'その他… ')
+        + '<span class="prop-color-caret">' + (dirty ? '▴' : '▾') + '</span></button>' +
+      '<div id="' + id + '"' + (dirty ? '' : ' hidden')
+        + ' style="border:1px solid var(--border);border-radius:3px;padding:8px;margin-top:2px;">' +
+        '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:3px;">' + escHtml(o.label || '色 / Color') + '</div>' +
+        '<div style="display:flex;align-items:center;">' +
+          colorSwatchesHtml(id, colors, current) +
+          (o.notation ? '<span style="margin-left:auto;font-family:var(--font-mono);font-size:10px;'
+            + 'color:var(--text-secondary);">' + escHtml(o.notation) + '</span>' : '') +
+        '</div>' +
+        '<div style="font-family:var(--font-mono);font-size:10px;color:var(--text-secondary);margin-top:6px;">'
+          + '押した時点で DSL へ反映</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function bindColorPalette(id, onPick) {
+    var panel = document.getElementById(id);
+    var btn = document.getElementById(id + '-btn');
+    if (btn && panel) {
+      btn.addEventListener('click', function() {
+        var open = panel.hasAttribute('hidden');
+        if (open) panel.removeAttribute('hidden'); else panel.setAttribute('hidden', '');
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        var caret = btn.querySelector('.prop-color-caret');
+        if (caret) caret.textContent = open ? '▴' : '▾';
+      });
+    }
+    var host = document.getElementById(id + '-colors');
+    if (!host || !onPick) return;
+    var btns = host.querySelectorAll('.prop-color-swatch');
+    for (var i = 0; i < btns.length; i++) {
+      (function(b) {
+        b.addEventListener('click', function() { onPick(b.getAttribute('data-value')); });
+      })(btns[i]);
+    }
+  }
+
   // bindRelationOptions: 「その他の設定」の各操作を、行番号を渡された 1 つのハンドラに繋ぐ。
   // handlers = { onDirection(v), onMultiplicity(l, r), onColor(v), onNote(textOrNull) }
   // どの操作も押した / 離れた時点で即座に DSL へ反映する (design 3c)。
@@ -474,6 +541,8 @@ window.MA.properties = (function() {
     segmentedFieldHtml: segmentedFieldHtml,
     arrowPickerHtml: arrowPickerHtml,
     bindArrowPicker: bindArrowPicker,
+    colorPaletteHtml: colorPaletteHtml,
+    bindColorPalette: bindColorPalette,
     relationOptionsHtml: relationOptionsHtml,
     bindRelationOptions: bindRelationOptions,
     relationOptionsFor: relationOptionsFor,
