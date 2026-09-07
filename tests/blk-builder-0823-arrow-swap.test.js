@@ -56,9 +56,10 @@ describe('BLK-builder-0823 分節に出す矢印', function() {
   });
 
   test('分節の 4 種はすべて選択肢 (ARROWS) にも入っている', function() {
-    var src = fs.readFileSync(path.join(__dirname, '..', 'src', 'modules', 'sequence.js'), 'utf-8');
-    var m = src.match(/var ARROWS = \[([^\]]*)\];/);
-    var all = m[1].split(',').map(function(x) { return x.trim().replace(/^'|'$/g, ''); });
+    // BLK-builder-20260907-0923-4: ARROWS に `-[#red]>` (中に `]`) が入ったため
+    // ソース走査の正規表現が使えない。意図は「4 種が ARROWS にある」なので
+    // モジュールが公開する ARROWS そのものを見る。
+    var all = seq.ARROWS;
     seq.quickArrows().forEach(function(a) { expect(all.indexOf(a) >= 0).toBe(true); });
   });
 

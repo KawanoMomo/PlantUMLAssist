@@ -21,9 +21,61 @@ window.MA.modules.plantumlSequence = (function() {
   }
 
   var PARTICIPANT_TYPES =['participant', 'actor', 'boundary', 'control', 'entity', 'database', 'queue', 'collections'];
-  var ARROWS = ['->', '-->', '->>', '-->>', '->x', '-->x', '<-', '<--', '<<-', '<<--', '<->', '<-->'];
-  // design 1a の右ペインで分節ボタンに出す 4 種。残りはプルダウンから選ぶ。
+  var ARROWS = ['->', '-->', '->>', '-->>', '->x', '-->x', '<-', '<--', '<<-', '<<--', '<->', '<-->',
+                '->o', '->\\', '-[#red]>'];
+  // design 1a の右ペインで分節ボタンに出す 4 種。
+  // 残りは design 2d の「その他の矢印…」パレットから選ぶ。
   var QUICK_ARROWS = ['->', '-->', '->>', '->x'];
+  // design 2d と同じく、常時出す 4 種も「何が起きるか」を主に、記法を従に置く。
+  var QUICK_ARROW_DESC = { '->': '同期', '-->': '応答・戻り', '->>': '非同期', '->x': '届かない' };
+
+  // design 2d「矢印のその他パレット」:
+  //   「各項目は『何が起きるか』を先に書き、記法は右に小さく置く」
+  // 各行は行をどう書き換えるかを持つ。arrow だけ変えるものと、
+  // 図の外 (`[` / `]`) を相手にすえるものがある。
+  var OTHER_ARROWS = [
+    { desc: '両方向のやり取り',         arrow: '<->' },
+    { desc: '図の外から入ってくる',     arrow: '->',  from: '[', notation: '[->' },
+    { desc: '図の外へ出ていく',         arrow: '->',  to: ']',   notation: '->]' },
+    { desc: '相手の手前で止まる',       arrow: '->o' },
+    { desc: '片羽根 (返り値の表現)',   arrow: '->\\' },
+    { desc: '線の色を変える',           arrow: '-[#red]>' },
+    { desc: '同期 (逆向き)',           arrow: '<-' },
+    { desc: '応答・戻り (逆向き)',     arrow: '<--' },
+    { desc: '非同期 (逆向き)',         arrow: '<<-' },
+    { desc: '非同期の応答 (逆向き)',   arrow: '<<--' },
+    { desc: '非同期の応答',             arrow: '-->>' },
+    { desc: '届かない応答',             arrow: '-->x' },
+    { desc: '両方向の応答',             arrow: '<-->' },
+  ];
+  // パレットの行を 1 つに定める key。notation があればそれ (`[->`)、
+  // 無ければ arrow そのもの。DOM の data-value と spec を紐付ける。
+  function arrowSpecKey(spec) { return spec.notation || spec.arrow; }
+  // 図の外を表す疑似端点。参加者ではないので participants には入れない。
+  function isOuterEnd(name) { return name === '[' || name === ']'; }
+  // P.arrowPickerHtml に渡す 2 つのリスト。
+  function quickArrowOptions() {
+    return QUICK_ARROWS.map(function(a) {
+      return { value: a, label: QUICK_ARROW_DESC[a] || a, sub: a, title: arrowLabel(a) };
+    });
+  }
+  function otherArrowOptions() {
+    return OTHER_ARROWS.map(function(sp) {
+      return { value: arrowSpecKey(sp), desc: sp.desc, notation: arrowSpecKey(sp) };
+    });
+  }
+  function findArrowSpec(key) {
+    for (var i = 0; i < OTHER_ARROWS.length; i++) {
+      if (arrowSpecKey(OTHER_ARROWS[i]) === key) return OTHER_ARROWS[i];
+    }
+    return null;
+  }
+  // 行の現状 (from/to/arrow) から、どのパレット行が選ばれているかを戻す。
+  function activeArrowKey(from, to, arrow) {
+    if (from === '[') return '[->';
+    if (to === ']') return '->]';
+    return arrow;
+  }
   // Display labels: UML 有識者が形で思い出せる最小の注釈を添える。
   // 形: -> 実線 / --> 破線 / ->> 開矢印 (async) / -->> 破線+開矢印 (async return)
   var ARROW_META = {
@@ -39,12 +91,20 @@ window.MA.modules.plantumlSequence = (function() {
     '<<--':  '<<--  非同期返信 (逆向き)',
     '<->':   '<->   双方向 同期',
     '<-->':  '<-->  双方向 返信',
+    '->o':   '->o   相手の手前で止まる',
+    '->\\':  '->\\   片羽根 (返り値の表現)',
+    '-[#red]>': '-[#red]>  線の色を変える',
   };
   function arrowLabel(a) { return ARROW_META[a] || a; }
 
   var PART_RE = new RegExp('^(' + PARTICIPANT_TYPES.join('|') + ')\\s+(?:"([^"]+)"\\s+as\\s+(\\S+)|(\\S+)(?:\\s+as\\s+"([^"]+)")?)\\s*$');
-  var MSG_RE_FROM = '([A-Za-z_][A-Za-z0-9_]*|"[^"]+")';
-  var MSG_RE = new RegExp('^' + MSG_RE_FROM + '\\s+(-->>|-->x|-->|->>|->x|->|<<--|<<-|<--|<-|<-->|<->)\\s+' + MSG_RE_FROM + '(?:\\s*:\\s*(.+))?$');
+  // design 2d: 図の外とのやり取り (`[-> System` / `System ->]`) を読めるように、
+  // 端点に疑似参加者 `[` `]` を許す。これらは矢印と空白無しで
+  // 接するので、区切りは `\s*` である必要がある。
+  var MSG_RE_FROM = '(\\[|\\]|[A-Za-z_][A-Za-z0-9_]*|"[^"]+")';
+  // 長いトークンから並べる (`->o` `->\` を `->` より先に)。
+  var MSG_ARROW_ALT = '-\\[#[A-Za-z0-9]+\\]>|-->>|-->x|-->|->>|->x|->o|->\\\\|->|<<--|<<-|<--|<-|<-->|<->';
+  var MSG_RE = new RegExp('^' + MSG_RE_FROM + '\\s*(' + MSG_ARROW_ALT + ')\\s*' + MSG_RE_FROM + '(?:\\s*:\\s*(.+))?$');
 
   var GROUP_KINDS = ['alt', 'opt', 'loop', 'par', 'break', 'critical', 'group'];
   var GROUP_OPEN_RE = new RegExp('^(' + GROUP_KINDS.join('|') + ')(?:\\s+(.*))?$');
@@ -62,7 +122,12 @@ window.MA.modules.plantumlSequence = (function() {
   // Pure formatters — used by both add* (末尾追加) and _formatLine (位置駆動挿入)
   // 同一形式を一箇所で管理 (parser-format drift を防ぐ)
   function fmtMessage(from, to, arrow, label) {
-    return from + ' ' + (arrow || '->') + ' ' + to + (label ? ' : ' + label : '');
+    var a = arrow || '->';
+    // design 2d: 図の外とのやり取りは PlantUML の書き方に合わせ、
+    // `[-> System` / `System ->]` と空白無しで接す。
+    var head = from === '[' ? '[' + a : from + ' ' + a;
+    var body = to === ']' ? head + ']' : head + ' ' + to;
+    return body + (label ? ' : ' + label : '');
   }
   function fmtNote(position, targets, text) {
     var t = Array.isArray(targets) ? targets.join(', ') : targets;
@@ -209,12 +274,14 @@ window.MA.modules.plantumlSequence = (function() {
 
       var mm = trimmed.match(MSG_RE);
       if (mm) {
-        var from = ensurePart(mm[1]);
+        // design 2d: `[` / `]` は「図の外」を表す疑似端点であり、参加者ではない。
+        // 参加者一覧に混ぜると左レールや Outline に `[` が並んでしまう。
+        var from = isOuterEnd(mm[1]) ? mm[1] : ensurePart(mm[1]);
         var arrow = mm[2];
-        var to = ensurePart(mm[3]);
+        var to = isOuterEnd(mm[3]) ? mm[3] : ensurePart(mm[3]);
         var label = mm[4] || '';
-        if (!participantMap[from].line) participantMap[from].line = lineNum;
-        if (!participantMap[to].line) participantMap[to].line = lineNum;
+        if (participantMap[from] && !participantMap[from].line) participantMap[from].line = lineNum;
+        if (participantMap[to] && !participantMap[to].line) participantMap[to].line = lineNum;
         result.relations.push({
           kind: 'message', id: '__m_' + (msgCounter++),
           from: from, to: to, arrow: arrow, label: label, line: lineNum,
@@ -370,8 +437,39 @@ window.MA.modules.plantumlSequence = (function() {
     var m = lines[idx].trim().match(MSG_RE);
     if (!m) return text;
     var label = m[4] || '';
-    lines[idx] = indent + m[3] + ' ' + m[2] + ' ' + m[1] + (label ? ' : ' + label : '');
+    // design 2d: 図の外 (`[` / `]`) を入れ替えるときは向きに合う側の記号にする。
+    var swapEnd = function(e) { return e === '[' ? ']' : (e === ']' ? '[' : e); };
+    lines[idx] = indent + fmtMessage(swapEnd(m[3]), swapEnd(m[1]), m[2], label);
     return lines.join('\n');
+  }
+
+  // design 2d:「その他の矢印」パレットの 1 行を、選択中のメッセージ行に適用する。
+  // 矢印だけを変える行と、相手を図の外 (`[` / `]`) に付け替える行がある。
+  // 図の外に付け替えたあと通常の矢印を選び直すと、外れていた側は元の相手に戻す。
+  function applyArrowSpec(text, lineNum, key) {
+    var spec = findArrowSpec(key);
+    if (!spec) return updateMessage(text, lineNum, 'arrow', key);
+    var lines = text.split('\n');
+    var idx = lineNum - 1;
+    if (idx < 0 || idx >= lines.length) return text;
+    var indent = lines[idx].match(/^(\s*)/)[1];
+    var m = lines[idx].trim().match(MSG_RE);
+    if (!m) return text;
+    var from = unquote(m[1]), to = unquote(m[3]), label = m[4] || '';
+    from = spec.from || (isOuterEnd(from) ? outerFallback(text, lineNum, 'from') : from);
+    to = spec.to || (isOuterEnd(to) ? outerFallback(text, lineNum, 'to') : to);
+    lines[idx] = indent + fmtMessage(from, to, spec.arrow, label);
+    return lines.join('\n');
+  }
+
+  // 図の外を外したときに置く相手。図に宣言されている参加者の先頭を使い、
+  // 1 人も居なければ相手側と同じにはできないので 'Participant' を作る。
+  function outerFallback(text, lineNum, side) {
+    var parsed = parseSequence(text);
+    for (var i = 0; i < parsed.elements.length; i++) {
+      if (parsed.elements[i].kind === 'participant') return parsed.elements[i].id;
+    }
+    return 'Participant';
   }
 
   function updateMessage(text, lineNum, field, value) {
@@ -386,7 +484,7 @@ window.MA.modules.plantumlSequence = (function() {
     else if (field === 'to') to = value;
     else if (field === 'arrow') arrow = value;
     else if (field === 'label') label = value;
-    lines[idx] = indent + from + ' ' + arrow + ' ' + to + (label ? ' : ' + label : '');
+    lines[idx] = indent + fmtMessage(from, to, arrow, label);
     return lines.join('\n');
   }
 
@@ -1263,6 +1361,10 @@ window.MA.modules.plantumlSequence = (function() {
     updateMessage: updateMessage,
     swapMessageEnds: swapMessageEnds,
     quickArrows: function() { return QUICK_ARROWS.slice(); },
+    // design 2d: 「その他の矢印」パレット
+    otherArrows: function() { return OTHER_ARROWS.slice(); },
+    applyArrowSpec: applyArrowSpec,
+    activeArrowKey: activeArrowKey,
     setTitle: setTitle,
     toggleAutonumber: toggleAutonumber,
     addGroup: addGroup,
@@ -1400,12 +1502,14 @@ window.MA.modules.plantumlSequence = (function() {
           if (partOpts.length === 0) partOpts = [{ value: '', label: '（参加者なし）' }];
           var html = '';
           if (kind === 'message') {
-            var arrowOpts = ARROWS.map(function(a) { return { value: a, label: arrowLabel(a), selected: a === '->' }; });
             var partOptsWithNew = partOpts.slice();
             partOptsWithNew.push({ value: '__new__', label: '+ 新規追加…' });
             html =
               P.selectFieldHtml('From', 'seq-tail-from', partOptsWithNew) +
-              P.selectFieldHtml('Arrow', 'seq-tail-arrow', arrowOpts) +
+              // design 2d: 末尾追加でも同じ矢印パレットから選ぶ。
+              // 現在値は hidden #seq-tail-arrow が持つ。
+              P.arrowPickerHtml('矢印の種類 / Arrow', 'seq-tail-arrow',
+                quickArrowOptions(), otherArrowOptions(), '->') +
               P.selectFieldHtml('To', 'seq-tail-to', partOptsWithNew) +
               // userissue v1.2.7+: 末尾追加でも Stereotype を入力できるように。
               '<div style="margin-bottom:8px;">' +
@@ -1480,6 +1584,15 @@ window.MA.modules.plantumlSequence = (function() {
             var toSel = document.getElementById('seq-tail-to');
             if (frSel) frSel.addEventListener('change', maybeShowInline);
             if (toSel) toSel.addEventListener('change', maybeShowInline);
+            // design 2d: 矢印パレットの選択を hidden #seq-tail-arrow に反映する。
+            // 図の外を選んだときは、その側の From/To を伏せる。
+            P.bindArrowPicker('seq-tail-arrow', function(v) {
+              var sp = findArrowSpec(v);
+              var frWrap = document.getElementById('seq-tail-from');
+              var toWrap = document.getElementById('seq-tail-to');
+              if (frWrap) frWrap.disabled = !!(sp && sp.from);
+              if (toWrap) toWrap.disabled = !!(sp && sp.to);
+            });
           }
           P.bindEvent('seq-tail-add', 'click', function() {
             var t = ctx.getMmdText();
@@ -1487,7 +1600,13 @@ window.MA.modules.plantumlSequence = (function() {
             if (kind === 'message') {
               var fr = document.getElementById('seq-tail-from').value;
               var to = document.getElementById('seq-tail-to').value;
-              var arrow = document.getElementById('seq-tail-arrow').value;
+              // design 2d: パレットの行は `[->` のように相手も決めるので、
+              // spec を引いて from/to を差し替えてから書式化する。
+              var arrowKey = document.getElementById('seq-tail-arrow').value;
+              var arrowSpec = findArrowSpec(arrowKey);
+              var arrow = arrowSpec ? arrowSpec.arrow : arrowKey;
+              if (arrowSpec && arrowSpec.from) fr = arrowSpec.from;
+              if (arrowSpec && arrowSpec.to) to = arrowSpec.to;
               var labelVal = (rleObj ? rleObj.getValue() : '').trim();
               if (fr === '__new__' || to === '__new__') {
                 var rawNewAl = document.getElementById('seq-tail-new-alias').value;
@@ -1586,7 +1705,10 @@ window.MA.modules.plantumlSequence = (function() {
           var partOpts2 = participants.map(function(p) { return { value: p.id, label: p.label }; });
           var fromOpts = partOpts2.map(function(o) { return { value: o.value, label: o.label, selected: o.value === mm.from }; });
           var toOpts = partOpts2.map(function(o) { return { value: o.value, label: o.label, selected: o.value === mm.to }; });
-          var arrowOpts2 = ARROWS.map(function(a) { return { value: a, label: arrowLabel(a), selected: a === mm.arrow }; });
+          // design 2d: 図の外が相手のときは、その旨を From/To にも出す
+          // (選択肢に無いと select が先頭の参加者を指してしまう)。
+          if (mm.from === '[') fromOpts.unshift({ value: '[', label: '（図の外）', selected: true });
+          if (mm.to === ']') toOpts.unshift({ value: ']', label: '（図の外）', selected: true });
           // userissue v1.2.7: 既存ラベルから <<stereotype>> 部を分離して個別フィールドへ。
           var msgParts = extractStereotype(mm.label);
           propsEl.innerHTML =
@@ -1599,10 +1721,10 @@ window.MA.modules.plantumlSequence = (function() {
                 'color:var(--text-primary);border-radius:3px;font-size:12px;cursor:pointer;">⇄</button>' +
               '<div style="flex:1;min-width:0;">' + P.selectFieldHtml('To', 'seq-edit-to', toOpts) + '</div>' +
             '</div>' +
-            P.segmentedFieldHtml('Arrow', 'seq-edit-arrow-seg', QUICK_ARROWS.map(function(a) {
-              return { value: a, label: a, title: arrowLabel(a), selected: a === mm.arrow };
-            })) +
-            P.selectFieldHtml('Arrow (その他)', 'seq-edit-arrow', arrowOpts2) +
+            // design 2d: よく使う 4 種は常時、残りは「その他の矢印… ▾」のパレットに。
+            P.arrowPickerHtml('矢印の種類 / Arrow', 'seq-edit-arrow',
+              quickArrowOptions(), otherArrowOptions(),
+              activeArrowKey(mm.from, mm.to, mm.arrow)) +
             '<div style="margin-bottom:8px;">' +
               '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Stereotype <span style="color:#32CD32;">&lt;&lt; &gt;&gt;</span> <span style="color:var(--text-secondary);font-weight:normal;">(任意・上段にライムグリーンで表示)</span></label>' +
               '<input id="seq-edit-stereotype" type="text" value="' + escHtml(msgParts.stereotype) + '" placeholder="例: async / sync / important" style="width:100%;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-size:12px;box-sizing:border-box;">' +
@@ -1618,20 +1740,14 @@ window.MA.modules.plantumlSequence = (function() {
               ctx.onUpdate();
             });
           }
-          var segWrap = document.getElementById('seq-edit-arrow-seg');
-          if (segWrap) {
-            var segBtns = segWrap.querySelectorAll('.prop-seg');
-            for (var sgi = 0; sgi < segBtns.length; sgi++) {
-              (function(b) {
-                b.addEventListener('click', function() {
-                  window.MA.history.pushHistory();
-                  ctx.setMmdText(updateMessage(ctx.getMmdText(), mln, 'arrow', b.getAttribute('data-value')));
-                  ctx.onUpdate();
-                });
-              })(segBtns[sgi]);
-            }
-          }
-          ['from', 'arrow', 'to'].forEach(function(f) {
+          // design 2d: 分節ボタンもパレットも押した瞬間に確定する。
+          // パレットの行は矢印だけでなく相手 (図の外) も変えるので applyArrowSpec を通す。
+          P.bindArrowPicker('seq-edit-arrow', function(v) {
+            window.MA.history.pushHistory();
+            ctx.setMmdText(applyArrowSpec(ctx.getMmdText(), mln, v));
+            ctx.onUpdate();
+          });
+          ['from', 'to'].forEach(function(f) {
             document.getElementById('seq-edit-' + f).addEventListener('change', function() {
               window.MA.history.pushHistory();
               ctx.setMmdText(updateMessage(ctx.getMmdText(), mln, f, this.value));

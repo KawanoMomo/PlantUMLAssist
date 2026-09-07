@@ -119,7 +119,9 @@ test.describe('FEAT-002: 挿入 modal の To 初期選択', () => {
     await expect(page.locator('.seq-move-down')).toBeVisible();
 
     await expect(page.locator('#seq-edit-arrow')).toHaveCount(1);
-    await expect(page.locator('#seq-edit-arrow')).toBeVisible();
+    // BLK-builder-20260907-0923-4 (design 2d): #seq-edit-arrow は現在値を持つ
+    // hidden input になった。目に見えるのは分節ボタン側なのでそちらを見る。
+    await expect(page.locator('#seq-edit-arrow-seg .prop-seg').first()).toBeVisible();
     expect(await page.locator('#seq-edit-arrow').inputValue()).toBe('->');
 
     // 目視用: パネル要素そのもの (確実に ↑/↓ と Arrow が収まる)
