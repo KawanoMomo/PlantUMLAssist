@@ -10,6 +10,9 @@ if (!global.window) {
 
 try { delete require.cache[require.resolve('../src/core/html-utils.js')]; } catch (e) {}
 require('../src/core/html-utils.js');
+// 関係の名称と説明は relation-kind-cards が持つ (design 3c: 3 図種で共通)。
+try { delete require.cache[require.resolve('../src/core/relation-kind-cards.js')]; } catch (e) {}
+require('../src/core/relation-kind-cards.js');
 try { delete require.cache[require.resolve('../src/core/relation-add.js')]; } catch (e) {}
 require('../src/core/relation-add.js');
 var RA = global.window.MA.relationAdd;

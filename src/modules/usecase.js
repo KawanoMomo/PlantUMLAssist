@@ -748,16 +748,13 @@ window.MA.modules.plantumlUsecase = (function() {
 
   function _renderRelationEdit(relation, parsedData, propsEl, ctx) {
     var P = window.MA.properties;
+    var RC = window.MA.relationKindCards;
     var html =
       '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">UseCase Diagram</div>' +
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">RELATION (L' + relation.line + ')</label>' +
-        P.selectFieldHtml('Kind', 'uc-rel-kind', [
-          { value: 'association',    label: 'Association (-->)', selected: relation.kind === 'association' },
-          { value: 'generalization', label: 'Generalization (<|--)', selected: relation.kind === 'generalization' },
-          { value: 'include',        label: 'Include (..> <<include>>)', selected: relation.kind === 'include' },
-          { value: 'extend',         label: 'Extend (..> <<extend>>)', selected: relation.kind === 'extend' },
-        ]) +
+        // design 3c: 関係の種類は記法ではなく「UML 名称 + 意味の説明」のカードで選ぶ
+        RC.cardsHtml('uc-rel-card', RC.kindsOf('usecase'), relation.kind) +
         P.fieldHtml('From', 'uc-rel-from', relation.from) +
         '<button id="uc-rel-swap" type="button" style="font-size:11px;padding:4px 10px;margin:4px 0;cursor:pointer;">⇄ From/To 入替</button>' +
         P.fieldHtml('To', 'uc-rel-to', relation.to) +
@@ -773,14 +770,21 @@ window.MA.modules.plantumlUsecase = (function() {
     // design 3c: 細かい指定は「その他の設定」に畳み、押した時点で DSL へ反映する。
     P.bindRelationOptionsFor('uc-rel-more', relation.line, ctx);
 
+    // 種別はカードを押した時点で確定する (Component と同じ)。
+    // From / To / Label は自由入力なので「変更を反映」に残す。
+    RC.bindCards(propsEl, 'uc-rel-card', function(newKind) {
+      if (newKind === relation.kind) return;
+      window.MA.history.pushHistory();
+      ctx.setMmdText(updateRelation(ctx.getMmdText(), relation.line, 'kind', newKind));
+      relation.kind = newKind;   // 「変更を反映」での二重適用を防ぐ
+      ctx.onUpdate();
+    });
     P.bindEvent('uc-rel-apply', 'click', function() {
-      var newKind = document.getElementById('uc-rel-kind').value;
       var newFrom = document.getElementById('uc-rel-from').value.trim();
       var newTo = document.getElementById('uc-rel-to').value.trim();
       var newLabel = document.getElementById('uc-rel-label').value.trim();
       window.MA.history.pushHistory();
       var t = ctx.getMmdText();
-      if (newKind !== relation.kind) t = updateRelation(t, relation.line, 'kind', newKind);
       if (newFrom !== relation.from) t = updateRelation(t, relation.line, 'from', newFrom);
       if (newTo !== relation.to) t = updateRelation(t, relation.line, 'to', newTo);
       if (newLabel !== relation.label) t = updateRelation(t, relation.line, 'label', newLabel);

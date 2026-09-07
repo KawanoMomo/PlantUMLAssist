@@ -9,32 +9,38 @@ window.MA = window.MA || {};
 // ここは DOM に触らない純関数だけを置き、描画と結線は各図種モジュール。
 window.MA.relationAdd = (function() {
 
-  // 図種ごとの関係カタログ。value は既存の fmtRelation / addRelation に渡す kind。
-  // name = UML 名称 (主)、desc = 意味の説明 (副)、sample = 矢印の見本。
-  var CATALOG = {
-    usecase: [
-      { value: 'association',    name: '関連 / association',        desc: 'アクターがユースケースを利用する',   sample: '──▶' },
-      { value: 'include',        name: '包含 / include',            desc: '実行時に必ず呼び出される',           sample: '┄┄▶' },
-      { value: 'extend',         name: '拡張 / extend',             desc: '条件を満たすときだけ実行される',     sample: '┄┄▶' },
-      { value: 'generalization', name: '汎化 / generalization',     desc: '一方がもう一方の特化である',         sample: '──▷' },
-    ],
-    component: [
-      { value: 'association',    name: '関連 / association',        desc: '部品どうしが接続されている',         sample: '──▶' },
-      { value: 'dependency',     name: '依存 / dependency',         desc: '一方が他方を利用している',           sample: '┄┄▶' },
-      { value: 'provides',       name: '提供 / provides',           desc: '部品がインターフェースを提供する',   sample: '─()' },
-      { value: 'requires',       name: '要求 / requires',           desc: '部品がインターフェースを必要とする', sample: ')─' },
-    ],
+  // 関係の名称と意味の説明は relation-kind-cards が持つ (design 3c は
+  // 「UseCase / Component / Class で共通」と定める)。同じ関係を追加する側と
+  // 選び直す側で語彙がずれないよう、ここでは矢印の見本だけを足す。
+  var SAMPLES = {
+    usecase: {
+      association: '──▶', include: '┄┄▶', extend: '┄┄▶', generalization: '──▷',
+    },
+    component: {
+      association: '──▶', dependency: '┄┄▶', provides: '─()', requires: ')─',
+    },
+    class: {
+      association: '──', inheritance: '──▷', implementation: '┄┄▷',
+      composition: '◆──', aggregation: '◇──', dependency: '┄┄▶', nested: '＋──',
+    },
   };
 
-  function kinds(diagramKind) {
-    var list = CATALOG[diagramKind] || [];
+  // カタログは呼ばれたときに組む (relation-kind-cards は後から読み込まれてもよい)。
+  function _catalog(diagramKind) {
+    var RC = window.MA.relationKindCards;
+    var list = (RC && RC.kindsOf(diagramKind)) || [];
+    var samples = SAMPLES[diagramKind] || {};
     return list.map(function(k) {
-      return { value: k.value, name: k.name, desc: k.desc, sample: k.sample };
+      return { value: k.value, name: k.name, desc: k.desc, sample: samples[k.value] || '──▶' };
     });
   }
 
+  function kinds(diagramKind) {
+    return _catalog(diagramKind);
+  }
+
   function findKind(diagramKind, value) {
-    var list = CATALOG[diagramKind] || [];
+    var list = _catalog(diagramKind);
     for (var i = 0; i < list.length; i++) {
       if (list[i].value === value) return list[i];
     }
@@ -42,7 +48,7 @@ window.MA.relationAdd = (function() {
   }
 
   function defaultKind(diagramKind) {
-    var list = CATALOG[diagramKind] || [];
+    var list = _catalog(diagramKind);
     return list.length > 0 ? list[0].value : '';
   }
 

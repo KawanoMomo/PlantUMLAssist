@@ -1802,19 +1802,13 @@ window.MA.modules.plantumlClass = (function() {
 
   function _renderRelationEdit(relation, parsedData, propsEl, ctx) {
     var P = window.MA.properties;
+    var RC = window.MA.relationKindCards;
     var html =
       '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Class Diagram</div>' +
       '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">RELATION (L' + relation.line + ')</label>' +
-        P.selectFieldHtml('Kind', 'cl-rel-kind', [
-          { value: 'association',    label: 'Association (--)', selected: relation.kind === 'association' },
-          { value: 'inheritance',    label: 'Inheritance (<|--)', selected: relation.kind === 'inheritance' },
-          { value: 'implementation', label: 'Implementation (<|..)', selected: relation.kind === 'implementation' },
-          { value: 'composition',    label: 'Composition (*--)', selected: relation.kind === 'composition' },
-          { value: 'aggregation',    label: 'Aggregation (o--)', selected: relation.kind === 'aggregation' },
-          { value: 'nested',         label: 'Nested (+--)', selected: relation.kind === 'nested' },
-          { value: 'dependency',     label: 'Dependency (..>)', selected: relation.kind === 'dependency' },
-        ]) +
+        // design 3c: 関係の種類は記法ではなく「UML 名称 + 意味の説明」のカードで選ぶ
+        RC.cardsHtml('cl-rel-card', RC.kindsOf('class'), relation.kind) +
         P.fieldHtml('From', 'cl-rel-from', relation.from) +
         '<button id="cl-rel-swap" type="button" style="font-size:11px;padding:4px 10px;margin:4px 0;cursor:pointer;">⇄ From/To 入替</button>' +
         P.fieldHtml('To', 'cl-rel-to', relation.to) +
@@ -1828,8 +1822,8 @@ window.MA.modules.plantumlClass = (function() {
     // design 3c: 細かい指定は「その他の設定」に畳み、押した時点で DSL へ反映する。
     P.bindRelationOptionsFor('cl-rel-more', relation.line, ctx);
 
-    // FEAT-139 (resolves HFR-076): 種別だけは <select> の change で即時反映する。
-    // 処理を二重に書かないよう、種別更新をここへ切り出し change / click の両方から呼ぶ。
+    // FEAT-139 (resolves HFR-076): 種別だけはカードを押した時点で即時反映する。
+    // 処理を二重に書かないよう、種別更新をここへ切り出す。
     // 🔴 From / To / Label は自由入力であり、誤爆と履歴汚染を避けるため即時反映しない。
     function _applyRelationKind(newKind) {
       if (newKind === relation.kind) return false;   // 値が変わらないなら DSL も履歴も触らない
@@ -1840,20 +1834,17 @@ window.MA.modules.plantumlClass = (function() {
       return true;
     }
 
-    P.bindEvent('cl-rel-kind', 'change', function() {
-      _applyRelationKind(document.getElementById('cl-rel-kind').value);
+    RC.bindCards(propsEl, 'cl-rel-card', function(newKind) {
+      _applyRelationKind(newKind);
     });
     P.bindEvent('cl-rel-apply', 'click', function() {
-      var newKind = document.getElementById('cl-rel-kind').value;
       var newFrom = document.getElementById('cl-rel-from').value.trim();
       var newTo = document.getElementById('cl-rel-to').value.trim();
       var newLabel = document.getElementById('cl-rel-label').value.trim() || null;
-      // 種別は change で反映済みのことがあるため、実際に変わる項目が無ければ履歴も積まない。
-      if (newKind === relation.kind && newFrom === relation.from &&
-          newTo === relation.to && newLabel === relation.label) return;
+      // 種別はカードで反映済みなので、実際に変わる項目が無ければ履歴も積まない。
+      if (newFrom === relation.from && newTo === relation.to && newLabel === relation.label) return;
       window.MA.history.pushHistory();
       var t = ctx.getMmdText();
-      if (newKind !== relation.kind) t = updateRelation(t, relation.line, 'kind', newKind);
       if (newFrom !== relation.from) t = updateRelation(t, relation.line, 'from', newFrom);
       if (newTo !== relation.to) t = updateRelation(t, relation.line, 'to', newTo);
       if (newLabel !== relation.label) t = updateRelation(t, relation.line, 'label', newLabel);

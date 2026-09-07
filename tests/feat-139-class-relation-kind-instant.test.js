@@ -21,7 +21,7 @@ var loadErrors = [];
   'src/core/id-normalizer.js', 'src/core/line-resolver.js', 'src/core/formatter-interface.js',
   'src/core/dsl-updater.js', 'src/core/props-renderer.js', 'src/core/text-updater.js',
   'src/core/parser-utils.js', 'src/core/history.js', 'src/core/selection.js',
-  'src/core/relation-options.js',
+  'src/core/relation-options.js', 'src/core/relation-kind-cards.js',
   'src/ui/properties.js', 'src/modules/class.js',
 ].forEach(function(rel) {
   var code = fs.readFileSync(path.join(ROOT, rel), 'utf-8');
@@ -67,13 +67,13 @@ function historyDepth() {
   return n;
 }
 
-// <select> の値を変え change イベントを発火する (人間の操作と同じ経路)。
+// design 3c で <select> は「関係の種類」カードに変わった。人間の操作と同じく、
+// 該当カードを押す経路で確かめる。
 function selectKind(propsEl, value) {
-  var sel = propsEl.querySelector('#cl-rel-kind');
-  if (!sel) throw new Error('cl-rel-kind not rendered');
-  sel.value = value;
-  sel.dispatchEvent(new W.Event('change', { bubbles: true }));
-  return sel;
+  var card = propsEl.querySelector('.cl-rel-card[data-value="' + value + '"]');
+  if (!card) throw new Error('cl-rel-card[' + value + '] not rendered');
+  card.click();
+  return card;
 }
 
 describe('FEAT-139 sources load into a live DOM', function() {
@@ -84,7 +84,7 @@ describe('FEAT-139 sources load into a live DOM', function() {
 describe('FEAT-139 / HFR-076: Class 関連の種別は選ぶだけで反映される', function() {
   beforeEach(reset);
 
-  test('[AC-1] cl-rel-kind の change だけで DSL の関連記法が変わる (変更を反映は押さない)', function() {
+  test('[AC-1] 関係の種類カードを押すだけで DSL の関連記法が変わる (変更を反映は押さない)', function() {
     var propsEl = renderRelationProps();
     var before = text;
     expect(before.indexOf('Foo -- Bar') >= 0).toBe(true);
