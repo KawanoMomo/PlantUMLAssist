@@ -3178,23 +3178,66 @@ function _changeBoardModel() {
   });
 }
 
+// 見出しの 1 行。差分・基準・申し送り・レビュー結果を 1 か所で組み立てる
+// (申し送りの保存後にも同じ文字列を作り直すため)。
+function _cbSummaryText(board) {
+  var CB = window.MA.changeBoard;
+  if (!CB) return '';
+  var head = CB.summaryText(board);
+  if (board && board.markedAt) head += ' ・ 基準 ' + board.markedAt.replace('T', ' ').slice(0, 16);
+  // 申し送り・レビュー結果は基準の取り直しでは消えないので、差分が 0 枚でも件数を出す。
+  var hnSum = window.MA.handoverNotes ? window.MA.handoverNotes.summaryText() : '';
+  if (hnSum) head += ' ・ ' + hnSum;
+  var rvSum = window.MA.reviewVerdicts ? window.MA.reviewVerdicts.summaryText() : '';
+  if (rvSum) head += ' ・ ' + rvSum;
+  return head;
+}
+
+// 差分行に添える「済 / 要修正」。押した印をもう一度押すと外れる。
+function _cbVerdictButtonsHtml(docName, key, verdict) {
+  var RV = window.MA.reviewVerdicts;
+  if (!RV || !key) return '';
+  var esc = window.MA.htmlUtils.escHtml;
+  function btn(v, title) {
+    return '<button type="button" class="cb-verdict-btn" data-doc-name="' + esc(docName) + '"'
+      + ' data-row-key="' + esc(key) + '" data-verdict="' + esc(v) + '"'
+      + ' aria-pressed="' + (verdict === v ? 'true' : 'false') + '"'
+      + ' title="' + esc(title) + '">' + esc(v) + '</button>';
+  }
+  return btn(RV.DONE, 'この行は OK (もう一度押すと印を外す)')
+    + btn(RV.FIX, 'この行は直す (もう一度押すと印を外す)');
+}
+
+function _wireChangeBoardVerdicts(body) {
+  var RV = window.MA.reviewVerdicts;
+  if (!RV || !body) return;
+  var btns = body.querySelectorAll('button.cb-verdict-btn');
+  for (var i = 0; i < btns.length; i++) {
+    (function(btn) {
+      btn.addEventListener('click', function() {
+        RV.toggle(btn.getAttribute('data-doc-name'), btn.getAttribute('data-row-key'),
+          btn.getAttribute('data-verdict'));
+        var scroll = body.scrollTop;
+        renderChangeBoard();
+        renderHandoverBanner();
+        var again = document.getElementById('cb-body');
+        if (again) again.scrollTop = scroll;
+      });
+    })(btns[i]);
+  }
+}
+
 function renderChangeBoard() {
   var CB = window.MA.changeBoard;
   var body = document.getElementById('cb-body');
   var sumEl = document.getElementById('cb-summary');
   if (!CB || !body) return null;
   var esc = window.MA.htmlUtils.escHtml;
+  var RV = window.MA.reviewVerdicts;
   var board = _changeBoardModel();
   if (!board) return null;
 
-  if (sumEl) {
-    var head = CB.summaryText(board);
-    if (board.markedAt) head += ' ・ 基準 ' + board.markedAt.replace('T', ' ').slice(0, 16);
-    // 申し送りは基準の取り直しでは消えないので、差分が 0 枚でも件数を出す。
-    var hnSum = window.MA.handoverNotes ? window.MA.handoverNotes.summaryText() : '';
-    if (hnSum) head += ' ・ ' + hnSum;
-    sumEl.textContent = head;
-  }
+  if (sumEl) sumEl.textContent = _cbSummaryText(board);
 
   if (board.entries.length === 0) {
     // 差分が消えても申し送りは残る (引き継ぎで読むのはこちら)。
@@ -3216,14 +3259,18 @@ function renderChangeBoard() {
       + '<table class="cb-diff"><tbody>';
     e.rows.forEach(function(r) {
       if (r.kind === 'gap') {
-        html += '<tr class="cb-gap"><td colspan="4">⋯ 同じ行 ' + r.count + ' 行 ⋯</td></tr>';
+        html += '<tr class="cb-gap"><td colspan="5">⋯ 同じ行 ' + r.count + ' 行 ⋯</td></tr>';
         return;
       }
-      html += '<tr class="cb-' + r.kind + '">'
+      // 会議で出た「この行は OK」「ここは直して」をその行に付ける (BLK-primary-20260908-0823-wish)。
+      var vKey = RV ? RV.rowKey(r) : '';
+      var v = vKey ? RV.verdictOf(e.name, vKey) : '';
+      html += '<tr class="cb-' + r.kind + '"' + (v ? ' data-verdict="' + esc(v) + '"' : '') + '>'
         + '<td class="cb-no">' + (r.beforeNo || '') + '</td>'
         + '<td class="cb-before">' + esc(r.before == null ? '' : r.before) + '</td>'
         + '<td class="cb-no cb-after">' + (r.afterNo || '') + '</td>'
-        + '<td>' + esc(r.after == null ? '' : r.after) + '</td></tr>';
+        + '<td>' + esc(r.after == null ? '' : r.after) + '</td>'
+        + '<td class="cb-verdict">' + _cbVerdictButtonsHtml(e.name, vKey, v) + '</td></tr>';
     });
     html += '</tbody></table>';
     // なぜ直したかを 1 行だけ添える。次にこの図を開いた人に帯で出る。
@@ -3239,6 +3286,7 @@ function renderChangeBoard() {
   });
   body.innerHTML = html + _cbNotesOnlyHtml(board);
   _wireChangeBoardNotes(body);
+  _wireChangeBoardVerdicts(body);
 
   var gotos = body.querySelectorAll('.cb-goto');
   for (var i = 0; i < gotos.length; i++) {
@@ -3295,13 +3343,7 @@ function _wireChangeBoardNotes(body) {
         var state = row.querySelector('.cb-note-state');
         if (state) state.textContent = saved ? '保存済み' : '';
         var sumEl = document.getElementById('cb-summary');
-        if (sumEl && window.MA.changeBoard) {
-          var head = window.MA.changeBoard.summaryText(board);
-          if (board && board.markedAt) head += ' ・ 基準 ' + board.markedAt.replace('T', ' ').slice(0, 16);
-          var hnSum = HN.summaryText();
-          if (hnSum) head += ' ・ ' + hnSum;
-          sumEl.textContent = head;
-        }
+        if (sumEl) sumEl.textContent = _cbSummaryText(board);
         renderHandoverBanner();
       });
     })(inputs[i]);
@@ -3315,15 +3357,23 @@ var _hnDismissed = {};   // この画面で閉じた図 (開き直せばまた�
 
 function renderHandoverBanner() {
   var HN = window.MA.handoverNotes;
+  var RV = window.MA.reviewVerdicts;
   var bar = document.getElementById('hn-banner');
   if (!bar) return null;
   var doc = window.MA.workspace ? window.MA.workspace.getActive() : null;
   var note = (HN && doc) ? HN.get(doc.name) : null;
-  if (!note || (doc && _hnDismissed[doc.name])) { bar.style.display = 'none'; return null; }
+  // 会議で「要修正」を付けた行が残っていれば、申し送りが無くても帯を出す
+  // (次に開いた人が上から潰していけるように。BLK-primary-20260908-0823-wish)。
+  var fix = (RV && doc) ? RV.bannerText(doc.name) : '';
+  if ((!note && !fix) || (doc && _hnDismissed[doc.name])) { bar.style.display = 'none'; return null; }
   var textEl = document.getElementById('hn-banner-text');
-  if (textEl) textEl.textContent = HN.bannerText(note);
+  var lines = [];
+  if (note) lines.push(HN.bannerText(note));
+  if (fix) lines.push(fix);
+  if (textEl) textEl.textContent = lines.join('\n');
+  bar.classList.toggle('hn-fix', !!fix);
   bar.style.display = 'flex';
-  return note;
+  return note || { text: '', fix: fix };
 }
 
 function setupHandoverBanner() {
