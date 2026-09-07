@@ -97,7 +97,15 @@ function summarize(audits) {
     };
   }
   const f = audits.family;
-  if (f && f.status === 'ok') s.family = { families: f.result.length, mismatched: f.result.filter((g) => (g.mismatches || []).length > 0).length };
+  if (f && f.status === 'ok') {
+    s.family = {
+      families: f.result.length,
+      mismatched: f.result.filter((g) => (g.mismatches || []).length > 0).length,
+      // BLK-reviewer-20260907-1803: 粒度が違うとして突き合わせなかった組数。
+      // 何を見ていないかが読めないと「0 件 = 揃っている」と読み違える。
+      skippedPairs: f.result.reduce((n, g) => n + ((g.skipped || []).length), 0),
+    };
+  }
   return s;
 }
 
@@ -119,7 +127,10 @@ function formatSummary(report) {
   if (s.consistency) lines.push(`整合: 命名 ${s.consistency.naming} / 未使用 ${s.consistency.unused} / メソッド ${s.consistency.methods}`
     + (s.consistency.methodReplies ? ` (応答として除外 ${s.consistency.methodReplies} 件)` : '')
     + ` / 粒度 ${s.consistency.granularity} / イベント ${s.consistency.events}`);
-  if (s.family) lines.push(`系統: ${s.family.families} 系統中 ${s.family.mismatched} 系統に食い違い`);
+  if (s.family) {
+    const skipped = s.family.skippedPairs ? ` (粒度違いで突き合わせ対象外 ${s.family.skippedPairs} 組)` : '';
+    lines.push(`系統: ${s.family.families} 系統中 ${s.family.mismatched} 系統に食い違い${skipped}`);
+  }
   for (const k of Object.keys(report.audits)) {
     const a = report.audits[k];
     if (a.status !== 'ok') lines.push(`${k}: ${a.status} (${a.message || a.reason})`);
