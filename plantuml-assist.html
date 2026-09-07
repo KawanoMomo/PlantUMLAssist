@@ -56,7 +56,8 @@ html, body {
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  width: 48px;
+  /* design 7a: 図の形の線画と略号を縦に積むため 48px → 56px */
+  width: 56px;
   flex-shrink: 0;
   padding: 6px 0;
   background: var(--bg-secondary);
@@ -82,9 +83,17 @@ html, body {
 
 #rail .rail-spacer { flex: 1; }
 
+/* design 7a: 図の形そのものを 1px の線画で添え、文字は従来の略号のまま残す。
+   選択中は塗りではなく左端 2px のバーで示す (塗ると 6 個並んだとき目が滑るため)。 */
 .rail-btn {
-  width: 36px;
-  height: 28px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  width: 44px;
+  height: 38px;
   background: transparent;
   border: 1px solid transparent;
   border-radius: 5px;
@@ -95,12 +104,28 @@ html, body {
   letter-spacing: 0.5px;
   cursor: pointer;
 }
+.rail-btn .rail-glyph { display: block; opacity: 0.85; }
+.rail-btn .rail-code { line-height: 1; }
+/* 選択を示す左端のバー。非選択でも同じ幅の場所を確保して、文字が横にずれないようにする */
+.rail-btn::before {
+  content: "";
+  position: absolute;
+  left: -4px;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  border-radius: 1px;
+  background: transparent;
+}
 .rail-btn:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+.rail-btn:hover .rail-glyph { opacity: 1; }
 .rail-btn.active {
-  background: var(--bg-tertiary);
-  border-color: var(--accent);
+  background: transparent;
+  border-color: transparent;
   color: var(--accent);
 }
+.rail-btn.active::before { background: var(--accent); }
+.rail-btn.active .rail-glyph { opacity: 1; }
 .rail-btn:focus { outline: none; border-color: var(--accent); }
 
 /* ── Toolbar ───────────────────────────────────────────────────────────────── */
