@@ -23,7 +23,9 @@ window.MA.consistency = (function() {
   var DECL_RE = /^\s*(?:participant|actor|boundary|control|entity|database|collections|queue|abstract\s+class|class|interface|enum|struct)\s+(?:"([^"]+)"\s+as\s+([A-Za-z0-9_][A-Za-z0-9_.-]*)|"([^"]+)"|([A-Za-z0-9_][A-Za-z0-9_.-]*))/;
   var PARTICIPANT_RE = /^\s*(?:participant|actor|boundary|control|entity|database|collections|queue)\s+(?:"([^"]+)"\s+as\s+([A-Za-z0-9_][A-Za-z0-9_.-]*)|"([^"]+)"|([A-Za-z0-9_][A-Za-z0-9_.-]*))/;
   var CLASS_RE = /^\s*(?:abstract\s+class|class|interface|enum|struct)\s+(?:"([^"]+)"\s+as\s+([A-Za-z0-9_][A-Za-z0-9_.-]*)|"([^"]+)"|([A-Za-z0-9_][A-Za-z0-9_.-]*))/;
-  var MSG_RE = /^\s*(?:"([^"]+)"|([A-Za-z0-9_][A-Za-z0-9_.-]*))\s*(?:-+>+|<-+|\.+>|<\.+)\s*(?:"([^"]+)"|([A-Za-z0-9_][A-Za-z0-9_.-]*))\s*:\s*(.+?)\s*$/;
+  // 3 = 矢印そのもの。呼び出し (`->`) と応答 (`-->` / `..>`) を見分けるために捕まえる
+  // (BLK-reviewer-20260907-1703)。
+  var MSG_RE = /^\s*(?:"([^"]+)"|([A-Za-z0-9_][A-Za-z0-9_.-]*))\s*(-+>+|<-+|\.+>|<\.+)\s*(?:"([^"]+)"|([A-Za-z0-9_][A-Za-z0-9_.-]*))\s*:\s*(.+?)\s*$/;
   var ARROW_ANY_RE = /^\s*(?:"([^"]+)"|\[\*\]|([A-Za-z0-9_][A-Za-z0-9_.-]*))\s*(?:-+>+|<-+|<\|-+|-+\|>|\*-+|o-+|-+\*|-+o|\.+>|<\.+|-{2,})\s*(?:"([^"]+)"|\[\*\]|([A-Za-z0-9_][A-Za-z0-9_.-]*))/;
   // クラス本体の 1 行。`+ read(ch) : int` や `read()` のような行からメソッド名を取る。
   var MEMBER_RE = /^\s*[-+#~]?\s*(?:\{static\}\s*|\{abstract\}\s*)?([A-Za-z_][A-Za-z0-9_]*)\s*\(/;
@@ -97,7 +99,19 @@ window.MA.consistency = (function() {
       if (SKIP_RE.test(line)) return;
       var msg = line.match(MSG_RE);
       if (msg) {
-        messages.push({ from: msg[1] || msg[2], to: msg[3] || msg[4], label: msg[5] });
+        var left = msg[1] || msg[2];
+        var right = msg[4] || msg[5];
+        var arrow = msg[3];
+        // 矢印が左を向いていれば送り手は右側。応答の対を見るときだけこの向きを使う
+        // (from / to は既存の突合がそのまま使うので並びを変えない)。
+        var back = arrow.charAt(0) === '<';
+        messages.push({
+          from: left, to: right, label: msg[6], arrow: arrow,
+          // 破線 (`-->` / `..>`) は PlantUML では戻りの線。呼び出しは実線。
+          dashed: /--|\.\./.test(arrow) || arrow.indexOf('.') >= 0,
+          src: back ? right : left,
+          dst: back ? left : right,
+        });
       }
       var a = line.match(ARROW_ANY_RE);
       if (a) {
@@ -169,9 +183,28 @@ window.MA.consistency = (function() {
     return out;
   }
 
+  // 呼び出しへの応答か。破線の矢印で、同じ 2 者の間に「先に出された逆向きの
+  // 呼び出し」があるものを応答とみなす (BLK-reviewer-20260907-1703)。
+  //
+  // 応答のラベル (Ack / Ready / 完了) はクラスのメソッドではないので、メソッド突合に
+  // 掛けると必ず「クラスに無い」と出る。レビューのたびに 12 件を目で読んで
+  // 「これは戻り矢印だから違う」とふるい分けていたのがこの過検出。
+  // 破線というだけでは足りない (破線で呼ぶ書き方もある) ので、対になる呼び出しが
+  // 先にあることまで見る。対の無い破線は今までどおり突合に掛ける。
+  function isReply(messages, i) {
+    var m = messages[i];
+    if (!m || !m.dashed || !m.src || !m.dst) return false;
+    for (var j = 0; j < i; j++) {
+      var c = messages[j];
+      if (!c.dashed && c.src === m.dst && c.dst === m.src) return true;
+    }
+    return false;
+  }
+
   // ③ メソッド不一致。sequence で呼んでいるのに、同名クラスの側に無いメソッド。
   // クラスが 1 枚も無い名前は対象外 (そこは name-audit の「宣言なし」の職掌)。
-  function methodGaps(docs) {
+  // 応答のラベルは除外し、除外した分は replies に残す (見ていない訳ではないと分かるように)。
+  function methodGapsDetail(docs) {
     var scans = (docs || []).map(scanDoc);
     var methodsOf = {};      // クラス名 → メソッド名 (正規化) の集合
     scans.forEach(function(s) {
@@ -182,9 +215,10 @@ window.MA.consistency = (function() {
     });
 
     var out = [];
+    var replies = [];
     var seen = {};
     scans.forEach(function(s) {
-      s.messages.forEach(function(m) {
+      s.messages.forEach(function(m, i) {
         if (!m.to || !methodsOf[m.to]) return;
         var label = String(m.label || '').replace(/\([^)]*\)/g, '').trim();
         var key = normalizeKey(label);
@@ -192,11 +226,18 @@ window.MA.consistency = (function() {
         var dedup = s.name + '|' + m.to + '|' + key;
         if (seen[dedup]) return;
         seen[dedup] = true;
-        out.push({ doc: s.name, target: m.to, method: label });
+        var row = { doc: s.name, target: m.to, method: label };
+        if (isReply(s.messages, i)) replies.push(row);
+        else out.push(row);
       });
     });
-    return out;
+    return { gaps: out, replies: replies };
   }
+
+  function methodGaps(docs) { return methodGapsDetail(docs).gaps; }
+
+  // 応答として突合から外したもの。「見ていない」ではないことを示すために数を出す。
+  function methodReplies(docs) { return methodGapsDetail(docs).replies; }
 
   // ⑤ イベント名不一致。state の遷移ラベル (括弧なし) に対応する
   // クラスメソッドが無いもの。判断は method-audit に任せる。同じ突合を
@@ -228,13 +269,16 @@ window.MA.consistency = (function() {
   function check(docs) {
     var naming = namingViolations(docs);
     var unused = unusedParticipants(docs);
-    var methods = methodGaps(docs);
+    var md = methodGapsDetail(docs);
+    var methods = md.gaps;
     var granularity = granularityGaps(docs);
     var events = eventGaps(docs);
     return {
       naming: naming,
       unused: unused,
       methods: methods,
+      // 呼び出しへの応答として突合から外したもの。count には数えない。
+      methodReplies: md.replies,
       granularity: granularity,
       events: events,
       count: naming.length + unused.length + methods.length + granularity.length + events.length,
@@ -254,7 +298,10 @@ window.MA.consistency = (function() {
     scanDoc: scanDoc,
     namingViolations: namingViolations,
     unusedParticipants: unusedParticipants,
+    isReply: isReply,
     methodGaps: methodGaps,
+    methodGapsDetail: methodGapsDetail,
+    methodReplies: methodReplies,
     granularityGaps: granularityGaps,
     eventGaps: eventGaps,
     check: check,
