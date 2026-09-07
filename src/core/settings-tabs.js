@@ -76,8 +76,16 @@ window.MA.settingsTabs = (function() {
     }).join('');
   }
 
+  // 書き出しのキー割り当ては export-shortcuts が持っている (design 2c)。
+  // 一覧はそこから引いて足し、キー文字列を 2 箇所に書かない。
+  function shortcutRows() {
+    var extra = (window.MA.exportShortcuts && window.MA.exportShortcuts.shortcutRows)
+      ? window.MA.exportShortcuts.shortcutRows() : [];
+    return SHORTCUTS.concat(extra);
+  }
+
   function buildShortcutsHtml() {
-    return '<table class="cfg-sc-table"><tbody>' + SHORTCUTS.map(function(s) {
+    return '<table class="cfg-sc-table"><tbody>' + shortcutRows().map(function(s) {
       return '<tr><th><kbd>' + esc(s.keys) + '</kbd></th><td>' + esc(s.desc) + '</td></tr>';
     }).join('') + '</tbody></table>';
   }
@@ -125,6 +133,7 @@ window.MA.settingsTabs = (function() {
     normalizeTab: normalizeTab,
     tabLabel: tabLabel,
     buildTabsHtml: buildTabsHtml,
+    shortcutRows: shortcutRows,
     buildShortcutsHtml: buildShortcutsHtml,
     normalizeRenderMode: normalizeRenderMode,
     renderModeNote: renderModeNote,

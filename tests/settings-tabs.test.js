@@ -56,7 +56,9 @@ describe('settings-tabs — 設定モーダルの 5 タブ (design 1a)', () => {
     expect(html).toContain('<kbd>Ctrl+K</kbd>');
     expect(html).toContain('コマンドパレットを開く');
     expect(html).toContain('<kbd>Ctrl+Z</kbd>');
-    expect((html.match(/<tr>/g) || []).length).toBe(ST.SHORTCUTS.length);
+    // design 2c で書き出しのキー (export-shortcuts) が一覧に加わったため、
+    // 行数は SHORTCUTS 単体ではなく shortcutRows() を基準にする。
+    expect((html.match(/<tr>/g) || []).length).toBe(ST.shortcutRows().length);
   });
 
   test('normalizeRenderMode: online 以外はすべて local', () => {
