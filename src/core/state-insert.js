@@ -1,0 +1,137 @@
+'use strict';
+window.MA = window.MA || {};
+
+// state-insert — State の「追加する位置」(design 4c)。
+//
+// 右パネルの追加フォームは長く「末尾に追加」しか持たず、Idle と Running の
+// 間に状態を 1 つ挟むには、末尾に足してから遷移を消して引き直すか、DSL を
+// 手で切り貼りするしかなかった。design 4c は追加フォームに
+// 「図の末尾 / この遷移の途中 / (状態) の中」の 3 択を置く。
+//
+// ここは DOM に触らない純関数だけ。描画と結線は modules/state.js。
+window.MA.stateInsert = (function() {
+  function _s(v) { return v == null ? '' : String(v).trim(); }
+
+  // 複合状態 = 本文を持つ state (`state X {` … `}`)。
+  // 単純 state には中が無いので「の中」の相手にならない。
+  function _composites(parsed) {
+    return ((parsed && parsed.states) || []).filter(function(s) {
+      return s && s.endLine > s.line;
+    });
+  }
+
+  // 選べる位置。図に無いものは出さない — 選んでから「置けません」と
+  // 言われるより、最初から並ばない方が迷わない。
+  function positions(parsed) {
+    var out = [{ value: 'end', label: '図の末尾' }];
+    if (((parsed && parsed.transitions) || []).length > 0) {
+      out.push({ value: 'transition', label: 'この遷移の途中' });
+    }
+    if (_composites(parsed).length > 0) out.push({ value: 'inside', label: '選んだ状態の中' });
+    return out;
+  }
+
+  // 遷移に載っている `: ...` の中身。parser は label を持たせるが、
+  // 3 要素 (trigger / guard / action) しか無い呼ばれ方でも同じ行を作れるように、
+  // 無ければ state-transition の組み立てに落とす。
+  function _labelOf(t) {
+    if (!t) return '';
+    var lbl = _s(t.label);
+    if (lbl) return lbl;
+    var STR = window.MA.stateTransition;
+    if (STR && STR.composeLabel) return _s(STR.composeLabel(t.trigger, t.guard, t.action));
+    return _s(t.trigger);
+  }
+
+  // 遷移の見出し。図の矢印と同じ向きで読めるように → を使う。
+  function transitionLabel(t) {
+    if (!t) return '';
+    var head = _s(t.from) + ' → ' + _s(t.to);
+    var lbl = _labelOf(t);
+    return lbl ? head + ' : ' + lbl : head;
+  }
+
+  function transitionOptions(parsed) {
+    return ((parsed && parsed.transitions) || []).map(function(t) {
+      return { value: t.id, label: transitionLabel(t) };
+    });
+  }
+
+  function compositeOptions(parsed) {
+    return _composites(parsed).map(function(s) {
+      return { value: s.id, label: s.label || s.id };
+    });
+  }
+
+  function _findTransition(parsed, id) {
+    var ts = (parsed && parsed.transitions) || [];
+    for (var i = 0; i < ts.length; i++) if (ts[i].id === id) return ts[i];
+    return null;
+  }
+
+  function _hasState(parsed, id) {
+    var ss = (parsed && parsed.states) || [];
+    for (var i = 0; i < ss.length; i++) if (ss[i].id === id) return true;
+    return false;
+  }
+
+  function _stateLine(id, label, stereotype) {
+    var lbl = _s(label);
+    var head = (lbl && lbl !== id) ? '"' + lbl + '" as ' + id : id;
+    return 'state ' + head + (stereotype ? ' <<' + stereotype + '>>' : '');
+  }
+
+  function _indentOf(line) { return (String(line || '').match(/^\s*/) || [''])[0]; }
+
+  // 遷移 A --> B : t の途中に N を挟む。A --> N : t と N --> B に割る。
+  // きっかけは前半に残す — 「t が起きたら N へ進み、そのあと B」という
+  // 読みになり、後半に付けると t が 2 回要るように見えてしまう。
+  function splitTransition(text, parsed, transitionId, newId, stereotype, label) {
+    var id = _s(newId);
+    if (!id) return text;
+    var t = _findTransition(parsed, transitionId);
+    if (!t || !t.line) return text;
+    var lines = String(text).split('\n');
+    var idx = t.line - 1;
+    if (idx < 0 || idx >= lines.length) return text;
+
+    var indent = _indentOf(lines[idx]);
+    var lbl = _labelOf(t);
+    var first = indent + _s(t.from) + ' --> ' + id + (lbl ? ' : ' + lbl : '');
+    var second = indent + id + ' --> ' + _s(t.to);
+
+    var replacement = [first, second];
+    // 既にある状態を挟むだけなら宣言は増やさない (同じ state 行が 2 本並ぶと
+    // PlantUML は通すが、DSL を読む人には重複に見える)。
+    if (!_hasState(parsed, id)) replacement.unshift(indent + _stateLine(id, label, stereotype));
+
+    lines.splice.apply(lines, [idx, 1].concat(replacement));
+    return lines.join('\n');
+  }
+
+  // 複合状態の閉じ `}` の直前へ入れる。字下げは `}` の 1 段内側にそろえる。
+  function insertInside(text, parsed, compositeId, newLines) {
+    var target = null;
+    var cs = _composites(parsed);
+    for (var i = 0; i < cs.length; i++) if (cs[i].id === compositeId) { target = cs[i]; break; }
+    if (!target) return text;
+    var lines = String(text).split('\n');
+    var closeIdx = target.endLine - 1;
+    if (closeIdx < 0 || closeIdx >= lines.length) return text;
+    var indent = _indentOf(lines[closeIdx]) + '  ';
+    var body = (Array.isArray(newLines) ? newLines : [newLines]).map(function(l) {
+      return indent + String(l);
+    });
+    lines.splice.apply(lines, [closeIdx, 0].concat(body));
+    return lines.join('\n');
+  }
+
+  return {
+    positions: positions,
+    transitionLabel: transitionLabel,
+    transitionOptions: transitionOptions,
+    compositeOptions: compositeOptions,
+    splitTransition: splitTransition,
+    insertInside: insertInside,
+  };
+})();
