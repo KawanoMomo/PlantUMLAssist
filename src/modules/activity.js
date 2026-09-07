@@ -1590,6 +1590,35 @@ window.MA.modules.plantumlActivity = (function() {
     { value: '#Pink', label: 'Pink', swatch: '#FFC0CB' },
   ];
 
+  // design 4b: 選択中アクションの「スイムレーン / Swimlane」チップ。
+  // 「（なし）」は今そこに居るときだけ押せる (PlantUML に外す印が無いため)。
+  function _swimlaneChipsHtml(dsl, line) {
+    var SM = window.MA.swimlaneMove;
+    if (!SM) return '';
+    var esc = window.MA.htmlUtils.escHtml;
+    var list = SM.chips(dsl, line);
+    var btns = '';
+    for (var i = 0; i < list.length; i++) {
+      var c = list[i];
+      var dis = !c.selectable && !c.checked;
+      btns += '<button type="button" class="ac-swim-chip" id="ac-swim-' + i + '"'
+        + ' data-lane="' + esc(c.id) + '"'
+        + ' aria-pressed="' + (c.checked ? 'true' : 'false') + '"'
+        + (dis ? ' disabled' : '')
+        + ' style="flex:0 0 auto;'
+        + 'background:' + (c.checked ? 'var(--accent)' : 'var(--bg-tertiary)') + ';'
+        + 'border:1px solid ' + (c.checked ? 'var(--accent)' : 'var(--border)') + ';'
+        + 'color:' + (c.checked ? '#fff' : 'var(--text-primary)') + ';'
+        + 'opacity:' + (dis ? '0.5' : '1') + ';'
+        + 'font-size:11px;padding:3px 8px;border-radius:3px;cursor:' + (dis ? 'default' : 'pointer') + ';">'
+        + esc(c.label) + '</button>';
+    }
+    return '<div id="ac-swimlane" style="margin-bottom:8px;">' +
+      '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">スイムレーン / Swimlane</label>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:4px;">' + btns + '</div>' +
+      '</div>';
+  }
+
   function _actionColorHtml(current) {
     var P = window.MA.properties;
     var cur = (current || '').toLowerCase();
@@ -1776,13 +1805,6 @@ window.MA.modules.plantumlActivity = (function() {
     for (var ai = 0; ai < allNotes.length; ai++) {
       if (allNotes[ai].attachedNodeId === node.id) attachedNotes.push(allNotes[ai]);
     }
-    var swimlane = null;
-    var sws = parsedData.swimlanes || [];
-    for (var si = 0; si < sws.length; si++) {
-      if (sws[si].id === node.swimlaneId) { swimlane = sws[si]; break; }
-    }
-    var swimLabel = swimlane ? swimlane.label : '(なし)';
-
     // design 4b: 居場所は行番号ではなく構造で示す (条件分岐「有効?」の yes 側、1 番目)。
     var AI = window.MA.activityInsert;
     var place = (AI && AI.describeStructure) ? AI.describeStructure(ctx.getMmdText(), node.line) : '';
@@ -1792,7 +1814,8 @@ window.MA.modules.plantumlActivity = (function() {
         '<span style="color:var(--text-secondary);">位置</span> ' +
         window.MA.htmlUtils.escHtml(place || 'フローの外') +
       '</div>' +
-      '<div style="margin-bottom:6px;font-size:11px;"><b>Swimlane:</b> ' + window.MA.htmlUtils.escHtml(swimLabel) + ' <span style="color:var(--text-secondary);">(read-only)</span></div>' +
+      // design 4b: スイムレーンは読むだけでなく、チップで選び直せる。
+      _swimlaneChipsHtml(ctx.getMmdText(), node.line) +
       '<div style="margin-bottom:6px;">' +
         '<label style="display:block;font-size:10px;color:var(--text-secondary);">Text</label>' +
         '<textarea id="ac-action-text" style="width:100%;min-height:60px;">' + window.MA.htmlUtils.escHtml(node.text || '') + '</textarea>' +
@@ -1857,6 +1880,27 @@ window.MA.modules.plantumlActivity = (function() {
       ctx.setMmdText(after);
       ctx.onUpdate();
     });
+    // design 4b: スイムレーンのチップ。押した時点で DSL の印を入れ直す。
+    (function() {
+      var SM = window.MA.swimlaneMove;
+      if (!SM) return;
+      var wrap = document.getElementById('ac-swimlane');
+      if (!wrap) return;
+      Array.prototype.forEach.call(wrap.querySelectorAll('.ac-swim-chip'), function(btn) {
+        btn.addEventListener('click', function() {
+          if (btn.disabled) return;
+          var lane = btn.getAttribute('data-lane') || '';
+          var before = ctx.getMmdText();
+          var after = SM.setSwimlane(before, node.line, lane, node.endLine);
+          if (after === before) return;
+          window.MA.history.pushHistory();
+          ctx.setMmdText(after);
+          // 行がずれるので選択は外す (別の要素を掴んだままにしない)。
+          window.MA.selection.clearSelection();
+          ctx.onUpdate();
+        });
+      });
+    })();
     P.bindEvent('ac-action-update', 'click', function() {
       var newText = document.getElementById('ac-action-text').value;
       window.MA.history.pushHistory();
