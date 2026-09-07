@@ -16,6 +16,13 @@ async function setFileBackend(page) {
   }, DIR);
 }
 
+// 上部バーは design 1a で整理され、保存はコマンドパレット (Ctrl+K) 経由になった。
+async function runSave(page) {
+  await page.keyboard.press('Control+K');
+  await page.locator('#cp-input').fill('保存');
+  await page.locator('#cp-list .cp-item').first().click();
+}
+
 async function listFiles(page) {
   return page.evaluate((dir) => {
     return fetch('/autosave?dir=' + encodeURIComponent(dir))
@@ -74,7 +81,7 @@ test.describe('新しく作った図が保存フォルダに現れる (BLK-prima
 
     let downloaded = false;
     page.on('download', () => { downloaded = true; });
-    await page.locator('#btn-save').click();
+    await runSave(page);
 
     await expect(page.locator('#status-save-result')).toContainText('に保存しました', { timeout: 8000 });
     await expect(page.locator('#status-save-result')).toContainText(DIR);
@@ -98,7 +105,7 @@ test.describe('新しく作った図が保存フォルダに現れる (BLK-prima
       });
     });
     const dl = page.waitForEvent('download', { timeout: 8000 });
-    await page.locator('#btn-save').click();
+    await runSave(page);
     const file = await dl;
     expect(file.suggestedFilename()).toMatch(/\.puml$/);
     await expect(page.locator('#status-save-result')).toContainText('ダウンロード');
