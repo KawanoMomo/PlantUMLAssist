@@ -568,6 +568,31 @@ html, body {
   padding: 2px 6px;
 }
 #folder-panel .folder-role-summary.has-dirty { color: var(--accent-red); }
+/* レビュー指摘の反映状態 (BLK-junior-20260908-0630-wish)。
+   名前の右に置き、「(レビュー反映)」という別名保存の代わりにする */
+#folder-panel .folder-review-badge {
+  font-size: 9px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 0 3px;
+  margin-left: 3px;
+  white-space: nowrap;
+  color: var(--text-secondary);
+}
+#folder-panel .folder-review-badge.review-pending {
+  border-color: var(--accent-red);
+  color: var(--accent-red);
+  font-weight: bold;
+}
+#folder-panel .folder-review-badge.review-applied {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+#folder-panel .folder-review-summary {
+  font-size: 10px;
+  color: var(--text-secondary);
+  padding: 2px 6px;
+}
 /* SVG が puml に追いついているか (BLK-reviewer-20260908-0103) */
 #folder-panel .folder-svg-badge {
   font-size: 9px;
@@ -3322,6 +3347,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/swimlane-move.js"></script>
 <script src="src/core/save-diff.js"></script>
 <script src="src/core/svg-freshness.js"></script>
+<script src="src/core/review-state.js"></script>
 <script src="src/core/file-role.js"></script>
 <script src="src/core/command-palette.js"></script>
 <script src="src/core/diagram-rail.js"></script>

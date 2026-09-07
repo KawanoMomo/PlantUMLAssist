@@ -571,7 +571,7 @@ class Handler(BaseHTTPRequestHandler):
         svg の最終更新時刻もここで返す (無ければ None)。
         """
         entry = {'name': path.stem, 'mtime': None, 'size': None, 'hash': None,
-                 'svgMtime': None}
+                 'svgMtime': None, 'pins': None}
         try:
             svg_st = path.with_suffix('.svg').stat()
             entry['svgMtime'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(svg_st.st_mtime))
@@ -584,10 +584,41 @@ class Handler(BaseHTTPRequestHandler):
         except OSError:
             return entry
         try:
-            entry['hash'] = hashlib.sha1(path.read_bytes()).hexdigest()
+            raw = path.read_bytes()
+            entry['hash'] = hashlib.sha1(raw).hexdigest()
+            # BLK-junior-20260908-0630-wish: レビュー指摘の反映状態は DSL の
+            # `' @pin` 行に入っている。一覧で「未反映 / 反映済み」を出すために
+            # 22 枚を 1 枚ずつ開き直すのは、別名保存を続けるのと同じ手間になる。
+            # 本文はここで既に読んでいるので、その場で数えて一覧に載せる。
+            entry['pins'] = self._pin_counts(raw)
         except OSError:
             pass
         return entry
+
+    @staticmethod
+    def _pin_counts(raw):
+        """DSL の本文から {open, read, done, total} を数える。
+
+        指摘行は `' @pin {id}|{state}|...`。state が読めない行は open として数える
+        (数え落として「反映済み」と言うより、未反映側に倒す方が安全)。
+        壊れた本文でも一覧を落とさない。
+        """
+        counts = {'open': 0, 'read': 0, 'done': 0, 'total': 0}
+        try:
+            text = raw.decode('utf-8', 'replace')
+        except Exception:
+            return counts
+        for line in text.splitlines():
+            stripped = line.strip()
+            if not stripped.startswith("' @pin "):
+                continue
+            counts['total'] += 1
+            fields = stripped[len("' @pin "):].split('|')
+            state = fields[1].strip() if len(fields) > 1 else ''
+            if state not in ('read', 'done'):
+                state = 'open'
+            counts[state] += 1
+        return counts
 
     # --- autosave DELETE -----------------------------------------------------
 
