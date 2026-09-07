@@ -1,6 +1,16 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
 
+// BLK-builder-20260907-2237-2 (design 1a): #render-mode は上部バーから外れて
+// 非表示になったので、選択は値を入れて change を投げる (経路は従来どおり)。
+async function setRenderMode(page, mode) {
+  await page.evaluate((m) => {
+    const sel = document.getElementById('render-mode');
+    sel.value = m;
+    sel.dispatchEvent(new Event('change'));
+  }, mode);
+}
+
 // Helper: wait for initial render cycle to complete (status != 'Idle' and != 'Rendering…')
 async function waitForInitialCycle(page) {
   await page.goto('/');
@@ -24,10 +34,14 @@ test.describe('Sequence: Boot', () => {
     await expect(page.locator('#seq-set-title')).toBeVisible();
   });
 
-  test('toolbar has render-mode and diagram-type selects', async ({ page }) => {
+  // BLK-builder-20260907-2237-2 (design 1a): 上部バーにレンダリングモードの select は
+  // 出さない (選ぶ場所は設定の「レンダリング」タブ)。select 自体は描画・保存の窓口
+  // として DOM に残るので、値と change はこれまでどおり効く。
+  test('toolbar has diagram-type select, and render-mode is off the toolbar', async ({ page }) => {
     await waitForInitialCycle(page);
-    await expect(page.locator('#render-mode')).toBeVisible();
     await expect(page.locator('#diagram-type')).toBeVisible();
+    await expect(page.locator('#render-mode')).toBeHidden();
+    await expect(page.locator('#render-mode')).toHaveCount(1);
   });
 
   test('status bar reports element count', async ({ page }) => {
@@ -90,7 +104,7 @@ test.describe('Sequence Operations', () => {
 
   test('render-mode toggle persists to localStorage', async ({ page }) => {
     await waitForInitialCycle(page);
-    await page.locator('#render-mode').selectOption('online');
+    await setRenderMode(page, 'online');
     await page.waitForTimeout(300);
     const stored = await page.evaluate(() => localStorage.getItem('plantuml-render-mode'));
     expect(stored).toBe('online');
@@ -102,7 +116,7 @@ test.describe('Sequence Operations', () => {
   test('UC-bug-jp v1.1.2: Japanese-named participant is selectable', async ({ page }) => {
     await waitForInitialCycle(page);
     // Switch to online for deterministic SVG render even without Java
-    await page.locator('#render-mode').selectOption('online');
+    await setRenderMode(page, 'online');
     await page.waitForTimeout(500);
     // Clear existing template, then add Japanese participant via tail-add
     await page.locator('#editor').fill('@startuml\n@enduml');

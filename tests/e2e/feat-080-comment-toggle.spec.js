@@ -43,7 +43,8 @@ test.describe('FEAT-080: Ctrl+/ 行コメントのトグル', () => {
     await page.waitForTimeout(800);
 
     const before = await getEditorText(page);
-    await page.locator('#render-mode').focus();
+    // design 1a で #render-mode は上部バーから外れたので、見えている別の窓口に移す
+    await page.locator('#diagram-type').focus();
     await page.keyboard.press('Control+/');
     await page.waitForTimeout(500);
     expect(await getEditorText(page)).toBe(before);
