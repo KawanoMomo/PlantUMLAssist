@@ -4198,6 +4198,52 @@ function renderOutline() {
   } else {
     summary.title = '';
   }
+  renderOutlineCompare(result);
+}
+
+// BLK-junior-20260907-1703-wish: 先輩の図と「同じ形か」を、開いた瞬間に数で出す。
+// 参照図はタブから選ぶ (compare-view と同じ選び方)。選んだ相手は覚えておくので、
+// 図を直すたびに選び直さずに済む。
+var _outlineCmpRefId = null;
+
+function renderOutlineCompare(result) {
+  var sel = document.getElementById('outline-cmp-select');
+  var out = document.getElementById('outline-cmp-result');
+  var cv = window.MA.compareView, cc = window.MA.countCompare;
+  if (!sel || !out || !cv || !cc) return;
+
+  var docs = _compareDocs();
+  var activeId = window.MA.workspace ? window.MA.workspace.getActiveId() : null;
+  var opts = cv.options(docs, activeId);
+  var ref = cv.pick(docs, activeId, _outlineCmpRefId);
+
+  sel.textContent = '';
+  if (opts.length === 0) {
+    _outlineCmpRefId = null;
+    sel.disabled = true;
+    var none = document.createElement('option');
+    none.textContent = '(他のタブがありません)';
+    sel.appendChild(none);
+    out.className = '';
+    out.textContent = '＋ で先輩の図をもう 1 枚開くと、要素数・関係数を突き合わせます。';
+    return;
+  }
+  sel.disabled = false;
+  opts.forEach(function(o) {
+    var op = document.createElement('option');
+    op.value = String(o.id);
+    op.textContent = o.name + ' (' + String(o.diagramType || '').replace('plantuml-', '') + ')';
+    if (ref && o.id === ref.id) op.selected = true;
+    sel.appendChild(op);
+  });
+
+  _outlineCmpRefId = ref ? ref.id : null;
+  var full = cv.doc ? (cv.doc(docs, _outlineCmpRefId) || {}) : {};
+  var cmp = cc.compare(result.counts,
+    window.MA.outline.build(full.dsl || '').counts,
+    currentDiagramType, full.diagramType);
+  out.className = cmp.comparable ? (cmp.same ? 'same' : 'diff') : '';
+  out.textContent = cc.label(cmp);
 }
 
 // 構造の行を選ぶと DSL タブに戻り、その行をキャレット選択して見える位置に出す。
@@ -4401,6 +4447,11 @@ function setupOutline() {
   var filter = document.getElementById('outline-filter');
   if (dslBtn) dslBtn.addEventListener('click', function() { setEditorTab('dsl'); });
   if (outBtn) outBtn.addEventListener('click', function() { setEditorTab('outline'); });
+  var cmpSel = document.getElementById('outline-cmp-select');
+  if (cmpSel) cmpSel.addEventListener('change', function() {
+    _outlineCmpRefId = cmpSel.value;
+    renderOutline();
+  });
   if (filter) {
     filter.addEventListener('input', renderOutline);
     filter.addEventListener('keydown', function(ev) {

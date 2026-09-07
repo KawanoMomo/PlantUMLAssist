@@ -881,6 +881,40 @@ html, body {
 }
 #outline-summary.ng { color: var(--accent-orange); }
 
+#outline-cmp {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+#outline-cmp label {
+  display: block;
+  font-size: 10px;
+  color: var(--accent);
+  font-weight: bold;
+  margin-bottom: 3px;
+}
+#outline-cmp-select {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border-radius: 3px;
+  padding: 3px 5px;
+  font-size: 11px;
+}
+#outline-cmp-select:focus { outline: none; border-color: var(--accent); }
+#outline-cmp-result {
+  margin-top: 4px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+#outline-cmp-result.same { color: var(--accent-green, var(--accent)); }
+#outline-cmp-result.diff { color: var(--accent-orange); }
+
 #editor-wrap {
   display: flex;
   flex: 1;
@@ -1987,6 +2021,12 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <input id="outline-filter" autocomplete="off" spellcheck="false" placeholder="要素・関係を絞り込む">
         <div id="outline-list" role="tree"></div>
         <div id="outline-summary"></div>
+        <!-- BLK-junior-20260907-1703-wish: 参照図と「同じ形か」を数で突き合わせる -->
+        <div id="outline-cmp">
+          <label for="outline-cmp-select">参照図と数合わせ</label>
+          <select id="outline-cmp-select"></select>
+          <div id="outline-cmp-result"></div>
+        </div>
       </div>
     </div>
 
@@ -2285,6 +2325,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/outline.js"></script>
 <script src="src/core/tail-kind-chips.js"></script>
 <script src="src/core/compare-view.js"></script>
+<script src="src/core/count-compare.js"></script>
 <script src="src/core/change-board.js"></script>
 <script src="src/core/consistency-check.js"></script>
 <script src="src/core/state-branch.js"></script>
