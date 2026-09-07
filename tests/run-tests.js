@@ -43,6 +43,7 @@ const sourceFiles = [
   'src/core/relation-kind-cards.js',
   'src/core/review-pins.js',
   'src/core/relation-options.js',
+  'src/core/group-notation.js',
   'src/core/sequence-marks.js',
   'src/core/sequence-autonumber.js',
   'src/ui/properties.js',
