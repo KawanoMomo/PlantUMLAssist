@@ -48,7 +48,7 @@ window.MA.exportShortcuts = (function() {
   // 設定の「ショートカット」タブへ流し込む行。settings-tabs の SHORTCUTS と
   // 同じ形 ({ keys, desc }) にそろえ、一覧の作り方を 1 本にする。
   function shortcutRows() {
-    return BINDINGS.map(function(b) { return { keys: b.keys, desc: b.desc }; });
+    return BINDINGS.map(function(b) { return { id: b.id, keys: b.keys, desc: b.desc }; });
   }
 
   return {

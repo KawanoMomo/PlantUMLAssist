@@ -1350,12 +1350,88 @@ function init() {
       // design 5b: 「⌕ 操作名で検索」で表を絞る。打つたびに引き直すので、
       // 表そのものは 1 本の buildShortcutsHtml(query) から作る。
       var scSearch = document.getElementById('cfg-sc-search');
+      // design 5b「行をクリックすると割り当てを変更」。押している間だけ id を持ち、
+      // 表はその id を渡して描き直す (キー待ちの行だけ表記が変わる)。
+      var scCapturing = null;
+      var scNoteEl = document.getElementById('cfg-sc-note');
+      var setScNote = function(text, bad) {
+        if (!scNoteEl) return;
+        scNoteEl.textContent = text || '';
+        scNoteEl.setAttribute('data-sc-note', bad ? 'bad' : 'ok');
+      };
       var drawShortcuts = function() {
         var list = document.getElementById('cfg-shortcuts-list');
-        if (list) list.innerHTML = ST.buildShortcutsHtml(scSearch ? scSearch.value : '');
+        if (list) list.innerHTML = ST.buildShortcutsHtml(scSearch ? scSearch.value : '', scCapturing);
       };
       drawShortcuts();
-      if (scSearch) scSearch.addEventListener('input', drawShortcuts);
+      if (scSearch) scSearch.addEventListener('input', function() { scCapturing = null; drawShortcuts(); });
+
+      var scList = document.getElementById('cfg-shortcuts-list');
+      if (scList) {
+        var startCapture = function(row) {
+          if (!row || row.getAttribute('data-sc-remap') !== '1') return;
+          scCapturing = row.getAttribute('data-sc-id');
+          setScNote('新しいキーを押してください (Ctrl / Alt を含む組み合わせ)。Esc で取り消し。', false);
+          drawShortcuts();
+        };
+        scList.addEventListener('click', function(e) {
+          var row = e.target && e.target.closest ? e.target.closest('tr[data-sc-id]') : null;
+          startCapture(row);
+        });
+        // キーボードだけでも行を開ける (行は tabindex="0" / role="button")。
+        scList.addEventListener('keydown', function(e) {
+          if (e.key !== 'Enter' && e.key !== ' ') return;
+          var row = e.target && e.target.closest ? e.target.closest('tr[data-sc-id]') : null;
+          if (!row || row.getAttribute('data-sc-remap') !== '1') return;
+          e.preventDefault();
+          startCapture(row);
+        });
+      }
+
+      // キー待ちの間は、押されたキーを割り当てとして食う。
+      // 設定モーダルを開いている間だけの捕捉なので、他のショートカットとは競合しない。
+      document.addEventListener('keydown', function(e) {
+        if (!scCapturing) return;
+        var KB = window.MA.keyBindings;
+        if (!KB) return;
+        if (e.key === 'Escape') {
+          scCapturing = null;
+          setScNote('取り消しました。', false);
+          drawShortcuts();
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+        var keys = KB.format(e);
+        e.preventDefault();
+        e.stopPropagation();
+        if (!keys) {
+          // 修飾キーだけの打鍵は待ち続ける (Ctrl を押した瞬間に確定させない)。
+          setScNote('Ctrl か Alt を含む組み合わせで押してください。', true);
+          return;
+        }
+        var res = KB.setBinding(scCapturing, keys);
+        if (!res.ok && res.reason === 'conflict') {
+          setScNote('「' + res.conflict.desc + '」(' + res.conflict.keys + ') と重なります。別のキーを押してください。', true);
+          return;
+        }
+        if (!res.ok) { setScNote('このキーは割り当てられません。', true); return; }
+        scCapturing = null;
+        setScNote(keys + ' に変更しました。', false);
+        drawShortcuts();
+      }, true);
+
+      var scReset = document.getElementById('cfg-sc-reset');
+      if (scReset) {
+        scReset.addEventListener('click', function() {
+          var KB = window.MA.keyBindings;
+          if (!KB) return;
+          KB.resetAll();
+          scCapturing = null;
+          setScNote('既定に戻しました。', false);
+          drawShortcuts();
+        });
+      }
       applyEditorPrefs(readEditorPrefs());
     }
 
@@ -1653,8 +1729,8 @@ function init() {
   // FEAT-165 (resolves UI-017): Ctrl+E 押下直前のフォーカス元を保存し、Esc での復帰に使う。
   var exportReturnFocusEl = null;
   document.addEventListener('keydown', function(e) {
-    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
-    if ((e.key || '').toLowerCase() !== 'e') return;
+    var KB = window.MA.keyBindings;
+    if (!KB || !KB.matches('export-menu', e)) return;
     e.preventDefault();
     exportReturnFocusEl = document.activeElement;
     exportMenu.classList.add('open');
@@ -1670,9 +1746,12 @@ function init() {
   // 入力欄にフォーカスがあっても発火してよい (文字入力を潰さない組み合わせのため)。
   document.addEventListener('keydown', function(e) {
     var ES = window.MA.exportShortcuts;
+    var KB = window.MA.keyBindings;
     if (!ES) return;
-    var targetId = ES.matchEvent(e);
-    if (!targetId) return;
+    // 当たり判定は key-bindings (差し替え済みのキーを含む) を先に見て、
+    // まだ読み込まれていないときだけ export-shortcuts の既定に落ちる。
+    var targetId = KB ? KB.matchEvent(e) : ES.matchEvent(e);
+    if (targetId !== 'exp-svg' && targetId !== 'exp-clipboard') return;
     var btn = document.getElementById(targetId);
     if (!btn) return;
     e.preventDefault();
@@ -1741,25 +1820,35 @@ function init() {
   //  - フォーム入力中は奪わない。ただし DSL エディタは例外で、ここのキーはどれも
   //    「今の図」に対する操作 (再描画・保存・倍率・図種) なので、DSL を書きながらでも
   //    効いた方が台本の往復に合う。design 5b でも「表示」に但し書きが無い
+  // Ctrl+R / Ctrl+S: ブラウザ既定 (再読み込み / ページ保存) を奪う。図の再描画と
+  // ファイル保存はこのアプリで最も繰り返す 2 つで、既定の方が事故が大きい。
+  //
+  // design 5b の「行をクリックすると割り当てを変更」で差し替えられる 2 つなので、
+  // キーの判定は key-bindings に聞く (下の倍率・図種は範囲の割り当てで差し替え対象外)。
+  document.addEventListener('keydown', function(e) {
+    var KB = window.MA.keyBindings;
+    if (!KB) return;
+    var hit = null;
+    if (KB.matches('render', e)) hit = 'render';
+    else if (KB.matches('save', e)) hit = 'save';
+    if (!hit) return;
+    var ae0 = document.activeElement;
+    if (ae0 && ae0 !== editorEl
+      && (ae0.tagName === 'INPUT' || ae0.tagName === 'TEXTAREA' || ae0.tagName === 'SELECT' || ae0.isContentEditable)) return;
+    e.preventDefault();
+    if (hit === 'render') { scheduleRefresh(); return; }
+    var saveBtn = document.getElementById('btn-save');
+    if (saveBtn) saveBtn.click();
+  });
+
   document.addEventListener('keydown', function(e) {
     if (e.isComposing || e.keyCode === 229) return;
     if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
     var key = String(e.key || '');
-    var lower = key.toLowerCase();
 
     var ae = document.activeElement;
     var inField = ae && ae !== editorEl
       && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT' || ae.isContentEditable);
-
-    // Ctrl+R / Ctrl+S: ブラウザ既定 (再読み込み / ページ保存) を奪う。図の再描画と
-    // ファイル保存はこのアプリで最も繰り返す 2 つで、既定の方が事故が大きい。
-    if (lower === 'r' && !inField) { e.preventDefault(); scheduleRefresh(); return; }
-    if (lower === 's' && !inField) {
-      e.preventDefault();
-      var saveBtn = document.getElementById('btn-save');
-      if (saveBtn) saveBtn.click();
-      return;
-    }
 
     if (inField) return;
 
@@ -2268,9 +2357,10 @@ function initCommandPalette() {
 
   if (openBtn) openBtn.addEventListener('click', open);
 
+  // キーの判定は key-bindings に聞く (design 5b で差し替えられる)。
   document.addEventListener('keydown', function(e) {
-    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
-    if ((e.key || '').toLowerCase() !== 'k') return;
+    var KB = window.MA.keyBindings;
+    if (!KB || !KB.matches('palette', e)) return;
     e.preventDefault();
     if (modal.classList.contains('open')) close(); else open();
   });
