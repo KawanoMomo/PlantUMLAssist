@@ -467,6 +467,34 @@ html, body {
   flex-shrink: 0;
 }
 #tab-bar .tab { flex-shrink: 0; }
+/* BLK-primary-20260907-2303-wish: 図を開いた人にその図の申し送りを出す帯 */
+#hn-banner {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  font-size: 11px;
+  background: rgba(180, 140, 255, 0.14);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+}
+#hn-banner #hn-banner-text { flex: 1; white-space: pre-wrap; word-break: break-all; }
+#hn-banner button {
+  background: transparent; border: 1px solid var(--border); border-radius: 3px;
+  color: var(--text-secondary); font-size: 10px; padding: 1px 6px; cursor: pointer;
+}
+#hn-banner button:hover { color: var(--text-primary); border-color: var(--accent); }
+/* 変更サマリボードの行に添える一言 */
+#cb-body .cb-note-row {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-top: 1px solid var(--border);
+  font-size: 11px;
+}
+#cb-body .cb-note-row input {
+  flex: 1; background: var(--bg-primary); color: var(--text-primary);
+  border: 1px solid var(--border); border-radius: 3px; padding: 2px 6px; font-size: 11px;
+}
+#cb-body .cb-note-row .cb-note-state { color: var(--accent); font-size: 10px; min-width: 84px; }
 #folder-panel {
   display: none;
   position: absolute;
@@ -2797,6 +2825,12 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <!-- BLK-primary-20260907-1703-wish: 顧客に渡す最終成果物 (表紙+目次+差分要約+全図 SVG) を 1 つの zip にする -->
         <button class="tab-tool" id="btn-tab-delivery" title="表紙 (図一覧・版数・提出前チェック結果)・前回提出からの差分・全図 SVG を 1 つの納品 zip にまとめる">📦 納品パッケージ</button>
       </div>
+      <!-- BLK-primary-20260907-2303-wish: この図に残された申し送り (なぜ直したか) -->
+      <div id="hn-banner" style="display:none;">
+        <span id="hn-banner-text"></span>
+        <button type="button" id="hn-banner-edit" title="この図の申し送りを書き直す">書き直す</button>
+        <button type="button" id="hn-banner-close" title="閉じる (申し送りは消えない)">×</button>
+      </div>
       <div id="folder-panel"></div>
       <div id="diff-panel"></div>
       <div id="review-panel"></div>
@@ -3274,6 +3308,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/compare-view.js"></script>
 <script src="src/core/count-compare.js"></script>
 <script src="src/core/change-board.js"></script>
+<script src="src/core/handover-notes.js"></script>
 <script src="src/core/audit-timeline.js"></script>
 <script src="src/core/consistency-check.js"></script>
 <script src="src/core/manual-findings.js"></script>

@@ -2065,6 +2065,7 @@ function init() {
   setupDiffPanel();
   setupReviewPanel();
   setupChangeBoard();
+  setupHandoverBanner();
   setupAuditTimeline();
   setupPinPanel();
   setupPinInbox();
@@ -2854,6 +2855,9 @@ function renderTabs() {
   try { renderPinBadge(); } catch (e) {}
   // 参照関係でハイライトしている部品名の印は、タブを組み立て直すたびに付け直す。
   try { if (typeof _xrefSelected === 'string' && _xrefSelected) renderXrefGraph(); } catch (e) {}
+  // 申し送りは開いた時点で見えていないと口頭説明の代わりにならない。
+  // 復元で開いた場合も出したいので、タブを組み立て直すたびに引き直す。
+  try { renderHandoverBanner(); } catch (e) {}
 }
 
 // ── 前回保存時点との差分 ──────────────────────────────
@@ -3159,12 +3163,17 @@ function renderChangeBoard() {
   if (sumEl) {
     var head = CB.summaryText(board);
     if (board.markedAt) head += ' ・ 基準 ' + board.markedAt.replace('T', ' ').slice(0, 16);
+    // 申し送りは基準の取り直しでは消えないので、差分が 0 枚でも件数を出す。
+    var hnSum = window.MA.handoverNotes ? window.MA.handoverNotes.summaryText() : '';
+    if (hnSum) head += ' ・ ' + hnSum;
     sumEl.textContent = head;
   }
 
   if (board.entries.length === 0) {
+    // 差分が消えても申し送りは残る (引き継ぎで読むのはこちら)。
     body.innerHTML = '<div class="cb-empty">前回保存した時点から変わった図はありません。'
-      + '「± 差分」の [今の内容を基準にする] を押すと、そこからの変更がここに並びます。</div>';
+      + '「± 差分」の [今の内容を基準にする] を押すと、そこからの変更がここに並びます。</div>'
+      + _cbNotesOnlyHtml();
     return board;
   }
 
@@ -3189,9 +3198,20 @@ function renderChangeBoard() {
         + '<td class="cb-no cb-after">' + (r.afterNo || '') + '</td>'
         + '<td>' + esc(r.after == null ? '' : r.after) + '</td></tr>';
     });
-    html += '</tbody></table></div>';
+    html += '</tbody></table>';
+    // なぜ直したかを 1 行だけ添える。次にこの図を開いた人に帯で出る。
+    var note = window.MA.handoverNotes ? window.MA.handoverNotes.get(e.name) : null;
+    html += '<div class="cb-note-row" data-doc-name="' + esc(e.name) + '">'
+      + '<span>申し送り</span>'
+      + '<input type="text" class="cb-note" maxlength="' + (window.MA.handoverNotes ? window.MA.handoverNotes.MAX : 200) + '"'
+      + ' placeholder="なぜ直したか (例: adc_state の Done→Configured に対応するメソッドが無かった)"'
+      + ' value="' + esc(note ? note.text : '') + '">'
+      + '<span class="cb-note-state">' + esc(note ? '保存済み' : '') + '</span>'
+      + '</div>';
+    html += '</div>';
   });
-  body.innerHTML = html;
+  body.innerHTML = html + _cbNotesOnlyHtml(board);
+  _wireChangeBoardNotes(body);
 
   var gotos = body.querySelectorAll('.cb-goto');
   for (var i = 0; i < gotos.length; i++) {
@@ -3204,6 +3224,105 @@ function renderChangeBoard() {
     })(gotos[i]);
   }
   return board;
+}
+
+// ボードに並ばなかった図の申し送り (差分が無くなった図・既に基準を取り直した図)。
+// 引き継ぎではこちらが本体なので、変更が消えても読めるようにしておく。
+function _cbNotesOnlyHtml(board) {
+  var HN = window.MA.handoverNotes;
+  if (!HN) return '';
+  var esc = window.MA.htmlUtils.escHtml;
+  var shown = {};
+  if (board) board.entries.forEach(function(e) { shown[e.name] = true; });
+  var rest = HN.list().filter(function(n) { return !shown[n.name]; });
+  if (rest.length === 0) return '';
+  var html = '<div class="cb-entry cb-notes-only"><div class="cb-entry-head">'
+    + '<span>この画面に出ていない図の申し送り</span>'
+    + '<span class="cb-count">' + rest.length + ' 件</span></div>';
+  rest.forEach(function(n) {
+    html += '<div class="cb-note-row" data-doc-name="' + esc(n.name) + '">'
+      + '<span>' + esc(n.name) + '</span>'
+      + '<input type="text" class="cb-note" maxlength="' + HN.MAX + '" value="' + esc(n.text) + '">'
+      + '<span class="cb-note-state">' + esc(String(n.at || '').replace('T', ' ').slice(0, 16)) + '</span>'
+      + '</div>';
+  });
+  return html + '</div>';
+}
+
+// 申し送りは打ち終わり (change) で保存する。ボタンを別に置くと押し忘れが起きる。
+function _wireChangeBoardNotes(body) {
+  var HN = window.MA.handoverNotes;
+  if (!HN || !body) return;
+  var inputs = body.querySelectorAll('input.cb-note');
+  for (var i = 0; i < inputs.length; i++) {
+    (function(input) {
+      input.addEventListener('change', function() {
+        var row = input.parentNode;
+        var name = row.getAttribute('data-doc-name');
+        var e = null;
+        var board = _changeBoardModel();
+        if (board) {
+          board.entries.forEach(function(x) { if (x.name === name) e = x; });
+        }
+        var saved = HN.set(name, input.value, e || {});
+        var state = row.querySelector('.cb-note-state');
+        if (state) state.textContent = saved ? '保存済み' : '';
+        var sumEl = document.getElementById('cb-summary');
+        if (sumEl && window.MA.changeBoard) {
+          var head = window.MA.changeBoard.summaryText(board);
+          if (board && board.markedAt) head += ' ・ 基準 ' + board.markedAt.replace('T', ' ').slice(0, 16);
+          var hnSum = HN.summaryText();
+          if (hnSum) head += ' ・ ' + hnSum;
+          sumEl.textContent = head;
+        }
+        renderHandoverBanner();
+      });
+    })(inputs[i]);
+  }
+}
+
+// ── 申し送りの帯 ────────────────────────────────────────────────────────
+// 図を開いた人にその図の申し送りを出す。口頭説明の代わりなので、
+// 開いた時点で見えていないと意味が無い (押して開く形にはしない)。
+var _hnDismissed = {};   // この画面で閉じた図 (開き直せばまた出る)
+
+function renderHandoverBanner() {
+  var HN = window.MA.handoverNotes;
+  var bar = document.getElementById('hn-banner');
+  if (!bar) return null;
+  var doc = window.MA.workspace ? window.MA.workspace.getActive() : null;
+  var note = (HN && doc) ? HN.get(doc.name) : null;
+  if (!note || (doc && _hnDismissed[doc.name])) { bar.style.display = 'none'; return null; }
+  var textEl = document.getElementById('hn-banner-text');
+  if (textEl) textEl.textContent = HN.bannerText(note);
+  bar.style.display = 'flex';
+  return note;
+}
+
+function setupHandoverBanner() {
+  var closeBtn = document.getElementById('hn-banner-close');
+  if (closeBtn) closeBtn.addEventListener('click', function() {
+    var doc = window.MA.workspace ? window.MA.workspace.getActive() : null;
+    if (doc) _hnDismissed[doc.name] = true;
+    var bar = document.getElementById('hn-banner');
+    if (bar) bar.style.display = 'none';
+  });
+  var editBtn = document.getElementById('hn-banner-edit');
+  if (editBtn) editBtn.addEventListener('click', function() {
+    toggleChangeBoard(true);
+    var doc = window.MA.workspace ? window.MA.workspace.getActive() : null;
+    if (!doc) return;
+    var body = document.getElementById('cb-body');
+    if (!body) return;
+    var rows = body.querySelectorAll('.cb-note-row');
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].getAttribute('data-doc-name') === doc.name) {
+        var input = rows[i].querySelector('input.cb-note');
+        if (input) { rows[i].scrollIntoView(); input.focus(); }
+        return;
+      }
+    }
+  });
 }
 
 function _cbCountText(e) {
