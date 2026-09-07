@@ -1989,6 +1989,7 @@ function init() {
   setupSubmitCheck();
   setupFamilyAudit();
   setupHandoffPackage();
+  setupDeliveryPackage();
   setupFamilyClone();
   setupConsistencyPanel();
   setupLineEdit();
@@ -2107,6 +2108,7 @@ function initCommandPalette() {
       { id: 'tab-submit', title: '提出前チェックを開く / Submit check', hint: 'Tabs', keywords: ['submit', 'check', 'ていしゅつ', 'かくにん', '略語'], run: function() { clickById('btn-tab-submit'); } },
       { id: 'tab-audit', title: '名前突合を開く / Name audit', hint: 'Tabs', keywords: ['name', 'audit', 'なまえ', 'つきあわせ'], run: function() { clickById('btn-tab-audit'); } },
       { id: 'tab-handoff', title: '引き継ぎパッケージを作る / Handoff package', hint: 'Tabs', keywords: ['handoff', 'package', 'zip', 'ひきつぎ', 'ぱっけーじ'], run: function() { clickById('btn-tab-handoff'); } },
+      { id: 'tab-delivery', title: '納品パッケージを作る / Delivery package', hint: 'Tabs', keywords: ['delivery', 'package', 'zip', 'のうひん', 'ぱっけーじ', '提出'], run: function() { clickById('btn-tab-delivery'); } },
       { id: 'tab-lines', title: '行編集を開く / Line edit', hint: 'Tabs', keywords: ['line', 'edit', 'ぎょう', 'へんしゅう'], run: function() { clickById('btn-tab-lines'); } },
       { id: 'tab-compare', title: '並べて見る / Compare', hint: 'Tabs', keywords: ['compare', 'side', 'ならべて', 'みくらべ'], run: function() { clickById('btn-tab-compare'); } },
       { id: 'tab-template', title: 'テンプレートから新しい図を作る / Template', hint: 'Tabs', keywords: ['template', 'copy', 'てんぷれ', 'ふくせい'], run: function() { clickById('btn-tab-template'); } },
@@ -4704,6 +4706,198 @@ function setupHandoffPackage() {
   var btn = document.getElementById('btn-tab-handoff');
   if (!btn || !window.MA.handoffPackage) return;
   btn.addEventListener('click', function() { buildHandoffPackage(); });
+}
+
+// ── 納品パッケージ ─────────────────────────────────────────────────────────
+// BLK-primary-20260907-1703-wish: 顧客に渡す最終成果物は、全図 SVG の zip に
+// 表紙 (図一覧・版数・提出前チェック結果) と変更履歴 (前回提出からの差分) を
+// 人手で足して作っていた。材料はどれも GUI にあるのに、組み立てだけが画面の外だった。
+// ここは対象の枚数・題・版数を選ばせ、1 つの zip にまとめて出す。
+// 判定と HTML は src/core/delivery-package.js の職掌。ここは材料を集めるだけ。
+
+var _dpDocs = null;      // 対象に選んでいる図 (name の配列)。null は「全部」
+
+function _dpSelectedDocs() {
+  var docs = _renameDocs();
+  if (!_dpDocs) return docs;
+  return docs.filter(function(d) { return _dpDocs.indexOf(d.name) !== -1; });
+}
+
+function _dpBoard(docs) {
+  var CB = window.MA.changeBoard;
+  var DP = window.MA.deliveryPackage;
+  if (!CB || !DP) return null;
+  // 提出物の一覧なので、変わっていない図も「変更なし」と書いて並べる。
+  return CB.build(docs, DP.baselineOf, { includeSame: true, collapse: true, context: 0 });
+}
+
+function _dpSubmitResult(docs) {
+  var SC = window.MA.submitCheck;
+  if (!SC) return null;
+  return SC.check(docs, SC.parseDict(_scLoadDict()));
+}
+
+function renderDeliveryPanel() {
+  var DP = window.MA.deliveryPackage;
+  var content = document.getElementById('dp-modal-content');
+  if (!DP || !content) return null;
+  var esc = window.MA.htmlUtils.escHtml;
+  var all = _renameDocs();
+  if (!_dpDocs) _dpDocs = all.map(function(d) { return d.name; });
+  var picked = _dpSelectedDocs();
+  var last = DP.lastDelivery();
+  var submit = _dpSubmitResult(picked);
+  var board = _dpBoard(picked);
+  var change = DP.changeSection(board, last);
+  var sub = DP.submitSection(submit);
+
+  var BTN = 'background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;padding:4px 12px;font-size:11px;';
+  var IN = 'background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;padding:3px 6px;font-size:12px;';
+
+  var titleVal = document.getElementById('dp-title');
+  var revVal = document.getElementById('dp-revision');
+  var title = titleVal ? titleVal.value : (last.title || '設計書 図面集');
+  var rev = revVal ? revVal.value : DP.nextRevision(last.revision);
+
+  var html = '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">\u{1F4E6} 納品パッケージ</h3>'
+    + '<div id="dp-last" style="font-size:11px;color:var(--text-secondary);">'
+    + esc(last.at ? '前回提出 ' + (last.revision || '版数なし') + ' ・ ' + last.at.replace('T', ' ').slice(0, 16)
+                  + ' ・ ' + last.count + ' 枚'
+                : 'まだ 1 度も提出していません（今回が初回提出になります）') + '</div>';
+
+  html += '<div style="display:flex;gap:12px;margin-top:10px;">'
+    + '<label style="flex:2;font-size:10px;color:var(--accent);font-weight:bold;">タイトル'
+    + '<input id="dp-title" style="' + IN + 'width:100%;margin-top:3px;" value="' + esc(title) + '"></label>'
+    + '<label style="flex:1;font-size:10px;color:var(--accent);font-weight:bold;">版数'
+    + '<input id="dp-revision" style="' + IN + 'width:100%;margin-top:3px;" value="' + esc(rev) + '"></label>'
+    + '</div>';
+
+  html += '<div style="margin-top:12px;font-size:10px;color:var(--accent);font-weight:bold;">'
+    + '対象の図 <span id="dp-count" style="color:var(--text-secondary);font-weight:normal;">'
+    + esc(picked.length + ' / ' + all.length + ' 枚') + '</span>'
+    + ' <button type="button" id="dp-all" style="' + BTN + 'padding:1px 8px;">全部</button>'
+    + ' <button type="button" id="dp-none" style="' + BTN + 'padding:1px 8px;">全部外す</button></div>';
+  html += '<div id="dp-list" style="max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:3px;margin-top:4px;padding:4px;">';
+  all.forEach(function(d) {
+    var on = _dpDocs.indexOf(d.name) !== -1;
+    var st = '';
+    (board ? board.entries : []).forEach(function(e) { if (e.name === d.name) st = e.status; });
+    var label = st === 'new' ? '新規' : (st === 'changed' ? '変更' : (st === 'same' ? '変更なし' : ''));
+    html += '<label class="dp-item" style="display:block;font-size:11px;color:var(--text-primary);padding:1px 2px;">'
+      + '<input type="checkbox" class="dp-pick" data-name="' + esc(d.name) + '"' + (on ? ' checked' : '') + '> '
+      + esc(d.name)
+      + '<span style="color:var(--text-secondary);"> ' + esc(String(d.diagramType || '').replace('plantuml-', ''))
+      + (label ? ' ・ ' + esc(label) : '') + '</span></label>';
+  });
+  html += '</div>';
+
+  html += '<div id="dp-summary" style="margin-top:12px;font-size:11px;color:var(--text-primary);'
+    + 'border:1px solid var(--border);border-radius:3px;padding:8px;">'
+    + '<div id="dp-submit-line">提出前チェック: ' + esc(sub.line) + '</div>'
+    + '<div id="dp-change-line">前回提出からの差分: ' + esc(change.line) + '</div>'
+    + '</div>';
+
+  html += '<div id="dp-status" style="margin-top:8px;font-size:11px;color:var(--text-secondary);"></div>';
+  html += '<div style="display:flex;gap:8px;margin-top:12px;">'
+    + '<button id="dp-build" style="flex:2;' + BTN + 'padding:8px;">\u{1F4E6} この内容で zip を作る</button>'
+    + '<button id="dp-close" style="flex:1;' + BTN + 'padding:8px;">閉じる</button></div>';
+
+  content.innerHTML = html;
+
+  var closeBtn = document.getElementById('dp-close');
+  if (closeBtn) closeBtn.addEventListener('click', function() {
+    var m = document.getElementById('dp-modal');
+    if (m) m.style.display = 'none';
+  });
+  var picks = content.querySelectorAll('.dp-pick');
+  Array.prototype.forEach.call(picks, function(cb) {
+    cb.addEventListener('change', function() {
+      var names = [];
+      Array.prototype.forEach.call(content.querySelectorAll('.dp-pick'), function(x) {
+        if (x.checked) names.push(x.getAttribute('data-name'));
+      });
+      _dpDocs = names;
+      renderDeliveryPanel();
+    });
+  });
+  var allBtn = document.getElementById('dp-all');
+  if (allBtn) allBtn.addEventListener('click', function() {
+    _dpDocs = all.map(function(d) { return d.name; });
+    renderDeliveryPanel();
+  });
+  var noneBtn = document.getElementById('dp-none');
+  if (noneBtn) noneBtn.addEventListener('click', function() { _dpDocs = []; renderDeliveryPanel(); });
+  var buildBtn = document.getElementById('dp-build');
+  if (buildBtn) buildBtn.addEventListener('click', function() { buildDeliveryPackage(); });
+  return { picked: picked, submit: sub, change: change };
+}
+
+function openDeliveryPanel() {
+  var modal = document.getElementById('dp-modal');
+  if (!modal || !window.MA.deliveryPackage) return null;
+  // 開くたびに対象を今の図に取り直す (タブが増減した後で古い選択を引きずらない)。
+  // 題と版数も、閉じたときの入力ではなく前回提出の控えから引き直す
+  // (前回 1.0 で出したなら次は 1.1 が既定になる)。
+  _dpDocs = null;
+  var content = document.getElementById('dp-modal-content');
+  if (content) content.innerHTML = '';
+  var model = renderDeliveryPanel();
+  modal.style.display = 'flex';
+  return model;
+}
+
+function buildDeliveryPackage() {
+  var DP = window.MA.deliveryPackage;
+  var BE = window.MA.bulkExport;
+  if (!DP || !BE) return Promise.resolve(null);
+  var docs = _dpSelectedDocs().map(function(d) {
+    return { id: d.id, name: d.name, diagramType: d.diagramType, dsl: d.dsl };
+  });
+  var status = document.getElementById('dp-status');
+  if (docs.length === 0) {
+    if (status) status.textContent = '対象の図が 1 枚もありません。';
+    return Promise.resolve(null);
+  }
+  var title = (document.getElementById('dp-title') || {}).value || '';
+  var revision = (document.getElementById('dp-revision') || {}).value || '';
+  var last = DP.lastDelivery();
+  var submit = _dpSubmitResult(docs);
+  var board = _dpBoard(docs);
+
+  var svgs = {};
+  function renderNext(i) {
+    if (i >= docs.length) return Promise.resolve();
+    if (status) status.textContent = '納品パッケージを作っています… ' + (i + 1) + ' / ' + docs.length;
+    // 1 枚失敗しても残りは続ける。落ちた図は「書き出せませんでした」と書いて渡す。
+    return Promise.resolve(renderDslToSvg(docs[i].dsl)).then(function(svg) {
+      if (svg) svgs[docs[i].id] = svg;
+    }, function() {}).then(function() { return renderNext(i + 1); });
+  }
+
+  return renderNext(0).then(function() {
+    var pkg = DP.buildPackage({
+      docs: docs, svgs: svgs, title: title, revision: revision,
+      submit: submit, board: board, last: last,
+    });
+    var name = DP.packageName();
+    downloadBlob(name, new Blob([BE.buildZip(DP.files(pkg))], { type: 'application/zip' }));
+    // 出した時点を控える。次に作るときの「前回提出から」の基準になる。
+    DP.markDelivered(docs, { title: pkg.title, revision: pkg.revision });
+    var msg = '納品パッケージを書き出しました（' + name + '） ' + pkg.verdict;
+    if (status) status.textContent = msg;
+    if (window.MA.toast) window.MA.toast.show(msg);
+    return pkg;
+  });
+}
+
+function setupDeliveryPackage() {
+  var btn = document.getElementById('btn-tab-delivery');
+  var modal = document.getElementById('dp-modal');
+  if (!btn || !modal || !window.MA.deliveryPackage) return;
+  btn.addEventListener('click', function() { openDeliveryPanel(); });
+  modal.addEventListener('click', function(ev) {
+    if (ev.target === modal) modal.style.display = 'none';
+  });
 }
 
 function setupFamilyAudit() {
