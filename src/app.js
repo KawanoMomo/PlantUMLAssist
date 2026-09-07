@@ -4186,7 +4186,8 @@ function renderOutline() {
     list.appendChild(row);
   });
 
-  summary.textContent = ol.summary(result);
+  // 何を数えたのかは図種で変わる (design 4a/4b/4c)。
+  summary.textContent = ol.summary(result, currentDiagramType);
   if (result.ok) summary.classList.remove('ng'); else summary.classList.add('ng');
   if (!result.ok && result.errors.length) {
     summary.title = result.errors.map(function(e) { return e.message; }).join('\n');

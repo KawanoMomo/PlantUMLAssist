@@ -36,6 +36,9 @@ window.MA.outline = (function() {
     '(\\[\\*\\]|"[^"]*"|\\(.*?\\)|:[^:]*:|[A-Za-z0-9_][A-Za-z0-9_.-]*)\\s*(?::\\s*(.*))?$'
   );
 
+  // 枝分かれとして数えるブロック (block ノードの label と一致させる)。
+  var BRANCH_LABELS = { 'if': 1, 'while': 1, 'repeat': 1, 'fork': 1, 'split': 1 };
+
   var NOTE_RE = /^\s*(?:note|hnote|rnote)\b(.*)$/i;
   var TITLE_RE = /^\s*title\s+(.+)$/i;
   // 見た目の指定。構造としては意味を持たないので数にも一覧にも入れない。
@@ -185,6 +188,7 @@ window.MA.outline = (function() {
         nodes.push({
           line: i, kind: 'relation',
           label: _unquote(m[1]) + ' ' + m[2] + ' ' + _unquote(m[3]),
+          from: _unquote(m[1]), to: _unquote(m[3]),
           detail: String(m[4] || '').trim(), depth: depth,
         });
         continue;
@@ -199,8 +203,10 @@ window.MA.outline = (function() {
       }
 
       // 括弧なしのアクティビティ (`:処理;`) や独立宣言 (`Idle`) は要素として拾う。
+      // `:処理;` はアクティビティ図のアクション。状態と同じ札にすると、構造タブの
+      // 種別バッジも下部の数え方も「state」になってしまう (design 4b は actions と数える)。
       if (/^:.*;$/.test(line)) {
-        nodes.push({ line: i, kind: 'state', label: line.replace(/^:/, '').replace(/;$/, '').trim(), detail: '', depth: depth });
+        nodes.push({ line: i, kind: 'action', label: line.replace(/^:/, '').replace(/;$/, '').trim(), detail: '', depth: depth });
         continue;
       }
       if (/^[A-Za-z0-9_][A-Za-z0-9_.-]*$/.test(line)) {
@@ -219,17 +225,43 @@ window.MA.outline = (function() {
     if (!sawEnd) errors.push({ line: Math.max(0, lines.length - 1), message: '@enduml がありません' });
 
     var elements = 0, relations = 0;
+    var classes = 0, actions = 0, branches = 0;
+    // 状態は「宣言された state」と「遷移の端に出てくる名前」の和集合。状態遷移図は
+    // `Idle --> Running : start` だけで状態を導入できるので、宣言だけを数えると 0 になる。
+    var stateNames = {};
     for (var n = 0; n < nodes.length; n++) {
-      if (nodes[n].kind === 'relation') relations++;
-      else if (nodes[n].kind !== 'block' && nodes[n].kind !== 'note' &&
-               nodes[n].kind !== 'title' && nodes[n].kind !== 'lifeline') elements++;
+      var k = nodes[n].kind;
+      if (k === 'relation') {
+        relations++;
+        [nodes[n].from, nodes[n].to].forEach(function(end) {
+          var name = String(end || '').trim();
+          if (name && name !== '[*]') stateNames[name] = 1;
+        });
+        continue;
+      }
+      if (k === 'block') {
+        // 分岐・繰り返し・並行は「枝分かれ」1 つと数える。else / elseif は
+        // 同じ分岐の 2 本目なので数えない (design 4b は if 1 つを 1 branch と出す)。
+        if (BRANCH_LABELS[nodes[n].label]) branches++;
+        continue;
+      }
+      if (k === 'note' || k === 'title' || k === 'lifeline') continue;
+      elements++;
+      if (k === 'class') classes++;
+      else if (k === 'action') actions++;
+      else if (k === 'state' && nodes[n].label) stateNames[nodes[n].label] = 1;
     }
+    var states = 0;
+    for (var sn in stateNames) if (Object.prototype.hasOwnProperty.call(stateNames, sn)) states++;
 
     return {
       ok: errors.length === 0,
       errors: errors,
       nodes: nodes,
-      counts: { elements: elements, relations: relations },
+      counts: {
+        elements: elements, relations: relations,
+        classes: classes, actions: actions, states: states, branches: branches,
+      },
     };
   }
 
@@ -260,16 +292,42 @@ window.MA.outline = (function() {
     return out;
   }
 
-  // 画面下部の一行。design の「パース OK / 3 elements · 4 relations」に合わせる。
-  function summary(result) {
+  // 画面下部の一行で何を数えたのかは図種で変わる (design 4a/4b/4c)。
+  //   Class    → 3 classes · 2 relations
+  //   Activity → 3 actions · 1 branch
+  //   State    → 2 states · 4 transitions
+  //   その他   → 3 elements · 4 relations (1a の Sequence)
+  // 名前を変えるだけで、数える規則そのものは build が 1 本で持っている。
+  var COUNT_TERMS = {
+    'plantuml-class':    [['classes', 'class', 'classes'], ['relations', 'relation', 'relations']],
+    'plantuml-activity': [['actions', 'action', 'actions'], ['branches', 'branch', 'branches']],
+    'plantuml-state':    [['states', 'state', 'states'], ['relations', 'transition', 'transitions']],
+  };
+  var DEFAULT_TERMS = [['elements', 'element', 'elements'], ['relations', 'relation', 'relations']];
+
+  function _term(spec, n) {
+    // [countsKey, 単数形, 複数形]。複数形を省いたら単数形をそのまま使う。
+    var one = spec[1];
+    var many = spec.length > 2 ? spec[2] : spec[1];
+    return n + ' ' + (n === 1 ? one : many);
+  }
+
+  function countLabel(counts, diagramType) {
+    var c = counts || {};
+    var terms = COUNT_TERMS[String(diagramType)] || DEFAULT_TERMS;
+    return terms.map(function(spec) { return _term(spec, c[spec[0]] || 0); }).join(' · ');
+  }
+
+  function summary(result, diagramType) {
     if (!result) return '';
     var head = result.ok ? 'パース OK' : ('パース NG · ' + result.errors.length + ' 件');
-    return head + ' · ' + result.counts.elements + ' elements · ' + result.counts.relations + ' relations';
+    return head + ' · ' + countLabel(result.counts, diagramType);
   }
 
   return {
     build: build,
     filter: filter,
+    countLabel: countLabel,
     summary: summary,
   };
 })();
