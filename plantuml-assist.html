@@ -987,7 +987,8 @@ html, body {
 /* 2 要素を選んだときの右ペイン。UML 名称を主・説明を副に置き、右端に矢印の見本。 */
 #selection-notice {
   position: absolute;
-  top: 40px;
+  /* ズーム帯 (#zoom-hud) がキャンバス右上に浮くので、注記は下端に置いて重ねない */
+  bottom: 14px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 50;
