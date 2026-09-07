@@ -68,7 +68,7 @@ window.MA.nameAudit = (function() {
 
     (Array.isArray(docs) ? docs : []).forEach(function(d) {
       var docName = (d && d.name) || '';
-      String((d && d.dsl) || '').split('\n').forEach(function(line) {
+      window.MA.dslUtils.splitLines((d && d.dsl) || '').forEach(function(line) {
         if (/^\s*(?:'|@)/.test(line)) return;                 // コメント・@startuml
         var decl = _declaredIn(line);
         if (decl) { touch(decl.name, docName, decl.kind); return; }

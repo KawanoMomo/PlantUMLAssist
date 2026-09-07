@@ -2,6 +2,17 @@
 window.MA = window.MA || {};
 window.MA.dslUtils = (function() {
 
+  // DSL を行に割る唯一の入口。改行は CRLF / CR / LF のどれでも来る
+  // (Windows のエディタで保存した .puml、persona-data 配下の図はすべて CRLF)。
+  // 素の split('\n') だと各行の末尾に CR が残り、`/...(.+)$/` のように
+  // 行末を見る正規表現が一切マッチしなくなる (`.` は CR にマッチせず、
+  // `$` は /m 無しでは文字列末尾しか指さない)。突合や構造一覧が「1 件も
+  // 見つからない」=「問題なし」に化けて黙って通ってしまうので、
+  // 行に割る側で改行を吸収する。
+  function splitLines(text) {
+    return String(text == null ? '' : text).split(/\r\n|\r|\n/);
+  }
+
   function unquote(s) {
     if (s == null) return s;
     if (s.length >= 2 && s.charAt(0) === '"' && s.charAt(s.length - 1) === '"') {
@@ -85,6 +96,7 @@ window.MA.dslUtils = (function() {
   }
 
   return {
+    splitLines: splitLines,
     unquote: unquote,
     quote: quote,
     escapeForRegex: escapeForRegex,

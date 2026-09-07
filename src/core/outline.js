@@ -92,7 +92,7 @@ window.MA.outline = (function() {
   //         | 'usecase' | 'relation' | 'block' | 'note' | 'lifeline'
   // counts.elements は宣言、counts.relations は矢印の数。
   function build(dsl) {
-    var lines = String(dsl == null ? '' : dsl).split('\n');
+    var lines = window.MA.dslUtils.splitLines(dsl);
     var nodes = [];
     var errors = [];
     var depth = 0;
