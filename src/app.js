@@ -2625,6 +2625,32 @@ function openNameAudit() {
       '</div>';
   }
 
+  // BLK-reviewer-20260907-0143: 名前だけでなくメソッドの宣言と引数まで突き合わせる。
+  // 図が増えるたびに繰り返していた「Xxx_Init() を呼んでいるのにクラスが無い」
+  // 「クラスはあるがメソッドが無い」「引数の個数が違う」を、grep 目視の前にここで出す。
+  var MAUD = window.MA.methodAudit;
+  var mres = MAUD ? MAUD.audit(docs) : { issues: [], calls: [] };
+  var KIND_LABEL = { 'no-class': 'クラス無し', 'no-method': 'メソッド無し', arity: '引数違い' };
+  html += '<div style="' + SECTION + '">メソッド突合 (呼び出しとクラス宣言)</div>';
+  html += '<div id="na-method-summary" style="font-size:11px;color:var(--text-secondary);" ' +
+    'data-calls="' + mres.calls.length + '" data-issues="' + mres.issues.length + '">' +
+    '呼び出し ' + mres.calls.length + ' 件 — 指摘 ' + mres.issues.length + ' 件</div>';
+  if (mres.issues.length === 0) {
+    html += '<div id="na-no-methods" style="font-size:11px;color:var(--text-secondary);">' +
+      '呼び出しと宣言は一致しています</div>';
+  } else {
+    html += '<table id="na-methods" style="border-collapse:collapse;width:100%;">';
+    mres.issues.forEach(function(it) {
+      html += '<tr class="na-method-row" data-kind="' + esc(it.kind) + '" data-method="' + esc(it.method) + '">' +
+        '<td style="' + CELL + 'color:var(--accent-red);white-space:nowrap;">' + esc(KIND_LABEL[it.kind] || it.kind) + '</td>' +
+        '<td style="' + CELL + 'font-family:var(--font-mono);">' + esc(it.method) + '()</td>' +
+        '<td style="' + CELL + '">' + esc(MAUD.describe(it)) + '</td>' +
+        '<td style="' + CELL + 'color:var(--text-secondary);">' + esc(it.docs.join(', ')) + '</td>' +
+      '</tr>';
+    });
+    html += '</table>';
+  }
+
   html += '<div style="' + SECTION + '">図 × 部品名</div>' +
     '<table id="na-matrix" style="border-collapse:collapse;width:100%;">' +
     '<tr><th style="' + CELL + 'text-align:left;">部品名</th>' +
