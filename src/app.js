@@ -4646,6 +4646,7 @@ function openConsistencyPanel() {
     + 'data-naming="' + result.naming.length + '" data-unused="' + result.unused.length + '" '
     + 'data-methods="' + result.methods.length + '" data-granularity="' + result.granularity.length + '" '
     + 'data-events="' + result.events.length + '" '
+    + 'data-method-replies="' + (result.methodReplies || []).length + '" '
     + 'style="font-size:11px;color:' + (result.count ? 'var(--accent-orange)' : 'var(--accent-green)') + ';">'
     + (result.count === 0 ? '警告はありません' : '警告 ' + result.count + ' 件') + '</div>';
 
@@ -4658,11 +4659,20 @@ function openConsistencyPanel() {
     return '<span style="font-family:var(--font-mono);color:var(--accent-orange);">' + esc(r.name) + '</span>'
       + ' <span style="color:var(--text-secondary);">(' + esc(r.doc) + ')</span>';
   });
+  // BLK-reviewer-20260907-1703: 応答 (Ack / Ready) は毎回ここに並び、
+  // どれが本物の欠落かを目でふるい分けていた。突合から外した分は数だけ出す。
   html += section('ck-methods', 'メソッド不一致 (呼んでいるのにクラスに無い)', result.methods, function(r) {
     return '<span style="font-family:var(--font-mono);color:var(--accent-orange);">'
       + esc(r.target) + '.' + esc(r.method) + '</span>'
       + ' <span style="color:var(--text-secondary);">(' + esc(r.doc) + ')</span>';
   });
+  var reps = result.methodReplies || [];
+  if (reps.length) {
+    html += '<div id="ck-method-replies" style="' + NONE + 'margin-top:2px;">'
+      + '呼び出しへの応答 ' + reps.length + ' 件は突合から外しました ('
+      + esc(reps.slice(0, 5).map(function(r) { return r.method; }).join(', '))
+      + (reps.length > 5 ? ' ほか' : '') + ')</div>';
+  }
   // BLK-reviewer-20260907-0943: state の遷移ラベルはこれまでどの突合にも掛からず、
   // 接頭辞だけ替えて複製した図のイベント名の取り残しを誰も見つけられなかった。
   html += section('ck-events', 'イベント名不一致 (state の遷移に対応するクラスメソッドが無い)', result.events, function(r) {

@@ -52,7 +52,12 @@ describe('consistency — レビューの突合を 1 本の警告一覧にする
     var s = ck.scanDoc({ name: 'Seq', dsl: SEQ });
     expect(s.participants).toEqual(['Can_Driver', 'CanDrv', 'Unused_Driver']);
     expect(s.messages.length).toBe(1);
-    expect(s.messages[0]).toEqual({ from: 'Can_Driver', to: 'CanDrv', label: 'Send' });
+    // BLK-reviewer-20260907-1703: 呼び出しと応答を見分けるため、矢印そのものと
+    // 向きを揃えた src / dst も持つようになった。
+    expect(s.messages[0]).toEqual({
+      from: 'Can_Driver', to: 'CanDrv', label: 'Send',
+      arrow: '->', dashed: false, src: 'Can_Driver', dst: 'CanDrv',
+    });
     var c = ck.scanDoc({ name: 'Cls', dsl: CLS });
     expect(Object.keys(c.classes)).toEqual(['Adc_Driver']);
     expect(c.classes.Adc_Driver).toEqual(['read', 'start']);

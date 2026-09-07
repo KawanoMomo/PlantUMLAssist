@@ -91,6 +91,8 @@ function summarize(audits) {
   if (c && c.status === 'ok') {
     s.consistency = {
       naming: c.result.naming.length, unused: c.result.unused.length, methods: c.result.methods.length,
+      // 呼び出しへの応答として突合から外した件数。0 件が「見ていない」ではないと分かるように出す。
+      methodReplies: (c.result.methodReplies || []).length,
       granularity: c.result.granularity.length, events: c.result.events.length, count: c.result.count,
     };
   }
@@ -114,7 +116,9 @@ function formatSummary(report) {
   const s = report.summary;
   if (s.name) lines.push(`名前突合: 表記揺れ ${s.name.variants} 組 / 宣言なし ${s.name.undeclared} 件`);
   if (s.method) lines.push(`メソッド突合: 指摘 ${s.method.issues} 件`);
-  if (s.consistency) lines.push(`整合: 命名 ${s.consistency.naming} / 未使用 ${s.consistency.unused} / メソッド ${s.consistency.methods} / 粒度 ${s.consistency.granularity} / イベント ${s.consistency.events}`);
+  if (s.consistency) lines.push(`整合: 命名 ${s.consistency.naming} / 未使用 ${s.consistency.unused} / メソッド ${s.consistency.methods}`
+    + (s.consistency.methodReplies ? ` (応答として除外 ${s.consistency.methodReplies} 件)` : '')
+    + ` / 粒度 ${s.consistency.granularity} / イベント ${s.consistency.events}`);
   if (s.family) lines.push(`系統: ${s.family.families} 系統中 ${s.family.mismatched} 系統に食い違い`);
   for (const k of Object.keys(report.audits)) {
     const a = report.audits[k];
