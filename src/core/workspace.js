@@ -4,12 +4,24 @@ window.MA = window.MA || {};
 // workspace — 複数の図を「ドキュメント」として同時に開いて切り替える。
 //
 // 1 ドキュメント = { id, name, diagramType, dsl }。
-// name はサーバの保存先ファイル名 ({name}.puml) にそのまま使うため
-// [A-Za-z0-9_-]+ に正規化する。状態は localStorage に丸ごと保存するので
-// リロードしてもタブ構成が残る。
+// name はサーバの保存先ファイル名 ({name}.puml) にそのまま使う。
+// BLK-junior-20260907-1203: 以前は [A-Za-z0-9_-]+ しか許さず、「GPIOドライバ
+// ユースケース」のような日本語名の図が保存フォルダ経由で読み込めず、保存も
+// 黙って download に落ちていた。ファイル名として危ないもの (パス区切り・
+// Windows の禁止文字・制御文字・予約名) だけを弾き、日本語はそのまま通す。
+// server.py の SAFE_NAME 判定と同じ規則。片方だけ変えないこと。
 window.MA.workspace = (function() {
   var KEY = 'plantuml-workspace';
-  var NAME_RE = /^[A-Za-z0-9_-]+$/;
+  // ファイル名に使えない文字。Windows の禁止文字 + パス区切り + 制御文字。
+  // 正規表現ではなく文字の並びで持つ (バックスラッシュのエスケープ事故を避けるため)。
+  var UNSAFE_CHARS = '<>:"|?*';
+  function _isUnsafeChar(ch) {
+    if (ch === '/' || ch === String.fromCharCode(92)) return true;   // パス区切り
+    if (ch.charCodeAt(0) < 32) return true;                          // 制御文字
+    return UNSAFE_CHARS.indexOf(ch) >= 0;
+  }
+  // Windows の予約デバイス名 (拡張子を付けても使えない)。
+  var RESERVED_RE = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
 
   var _state = null;   // { activeId, docs: [] }
   var _seq = 0;
@@ -19,17 +31,28 @@ window.MA.workspace = (function() {
     return 'doc' + Date.now().toString(36) + '-' + _seq;
   }
 
+  // 危ない文字だけを _ に潰す。日本語・空白・記号はそのまま残す。
   function sanitizeName(raw) {
     var s = String(raw == null ? '' : raw).trim();
     s = s.replace(/\.puml$/i, '');
-    s = s.replace(/[^A-Za-z0-9_-]+/g, '_');
-    s = s.replace(/^_+|_+$/g, '');
-    if (!s) s = 'diagram';
-    return s;
+    var out = '';
+    for (var i = 0; i < s.length; i++) {
+      out += _isUnsafeChar(s.charAt(i)) ? '_' : s.charAt(i);
+    }
+    // Windows は末尾のドット・空白を落とすので、先に自分で落として名前を一意に保つ。
+    out = out.replace(/^[\s.]+|[\s.]+$/g, '');
+    if (!out || RESERVED_RE.test(out)) out = out ? out + '_' : 'diagram';
+    return out;
   }
 
   function isValidName(name) {
-    return typeof name === 'string' && NAME_RE.test(name);
+    if (typeof name !== 'string' || !name) return false;
+    if (RESERVED_RE.test(name)) return false;
+    if (name !== name.replace(/^[\s.]+|[\s.]+$/g, '')) return false;
+    for (var i = 0; i < name.length; i++) {
+      if (_isUnsafeChar(name.charAt(i))) return false;
+    }
+    return true;
   }
 
   function _uniqueName(name, exceptId) {

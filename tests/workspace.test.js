@@ -113,7 +113,8 @@ describe('workspace tabs', function() {
   test('rename sanitizes and keeps names unique', function() {
     var a = ws.getActiveId();
     ws.open({ name: 'CAN_seq' });
-    expect(ws.rename(a, 'SPI シーケンス').name).toBe('SPI');
+    // BLK-junior-20260907-1203: 日本語名はそのまま残す (以前は 'SPI' に削られていた)。
+    expect(ws.rename(a, 'SPI シーケンス').name).toBe('SPI シーケンス');
     expect(ws.rename(a, 'CAN_seq').name).toBe('CAN_seq-2');
   });
   test('findByName locates a tab', function() {
@@ -124,15 +125,28 @@ describe('workspace tabs', function() {
 });
 
 describe('workspace name sanitisation', function() {
-  test('maps unsafe characters onto the server filename charset', function() {
-    expect(ws.sanitizeName('SPI シーケンス')).toBe('SPI');
+  // BLK-junior-20260907-1203: 日本語名の図がこのプロジェクトの大半なので、
+  // 「ASCII 以外は落とす」から「ファイル名として危ないものだけ潰す」に変えた。
+  test('危ない文字だけを潰し、日本語・空白はそのまま残す', function() {
+    expect(ws.sanitizeName('SPI シーケンス')).toBe('SPI シーケンス');
+    expect(ws.sanitizeName('GPIOドライバユースケース.puml')).toBe('GPIOドライバユースケース');
     expect(ws.sanitizeName('CAN/state.puml')).toBe('CAN_state');
+    expect(ws.sanitizeName('a<b>c:d|e?f*g')).toBe('a_b_c_d_e_f_g');
     expect(ws.sanitizeName('   ')).toBe('diagram');
-    expect(ws.sanitizeName('a b c')).toBe('a_b_c');
+    expect(ws.sanitizeName('a b c')).toBe('a b c');
+    // 末尾のドット・空白は Windows が落とすので先に落とす
+    expect(ws.sanitizeName('report. ')).toBe('report');
+    // Windows の予約デバイス名はそのままではファイルにできない
+    expect(ws.sanitizeName('CON')).toBe('CON_');
   });
-  test('isValidName accepts only the server-safe charset', function() {
+  test('isValidName はファイル名にできる名前だけ通す', function() {
     expect(ws.isValidName('CAN_state-2')).toBe(true);
-    expect(ws.isValidName('CAN state')).toBe(false);
+    expect(ws.isValidName('CAN state')).toBe(true);
+    expect(ws.isValidName('GPIOドライバユースケース')).toBe(true);
+    expect(ws.isValidName('CAN/state')).toBe(false);
+    expect(ws.isValidName('a:b')).toBe(false);
+    expect(ws.isValidName('nul')).toBe(false);
+    expect(ws.isValidName('report. ')).toBe(false);
     expect(ws.isValidName('')).toBe(false);
   });
 });
@@ -172,8 +186,14 @@ describe('workspace file folder bridge', function() {
   test('saveToFile refuses a name the server would reject', function() {
     var called = false;
     global.window.fetch = function() { called = true; return Promise.resolve({ ok: true }); };
-    ws.saveToFile({ name: 'bad name', dsl: 'x' }, './d');
+    ws.saveToFile({ name: 'bad/name', dsl: 'x' }, './d');
     expect(called).toBe(false);
+  });
+  test('saveToFile は日本語名の図もそのまま送る', function() {
+    var body = null;
+    global.window.fetch = function(url, opt) { body = JSON.parse(opt.body); return Promise.resolve({ ok: true }); };
+    ws.saveToFile({ name: 'GPIOドライバユースケース', dsl: 'x' }, './d');
+    expect(body.type).toBe('GPIOドライバユースケース');
   });
   test('saveToFile posts the document under its own filename', function() {
     var body = null;
