@@ -2468,6 +2468,11 @@ function _wsFileDir() {
   } catch (e) { return './autosave'; }
 }
 
+// 「前回見た版」の控えの置き場。使えない環境でもフォルダ一覧は出る。
+function _reviewStore() {
+  try { return window.localStorage || null; } catch (e) { return null; }
+}
+
 // アクティブなタブの現在の編集内容を workspace に書き戻す。
 function saveActiveDoc() {
   if (!window.MA.workspace) return null;
@@ -2884,25 +2889,90 @@ function setupTabs() {
     var rect = btnFolder.getBoundingClientRect();
     panel.style.left = rect.left + 'px';
     panel.style.top = (rect.bottom + 2) + 'px';
-    window.MA.workspace.listFiles(_wsFileDir()).then(function(files) {
+    renderFolderPanel();
+  });
+
+  // BLK-reviewer-20260907-1403: 図ごとに「前回見た版から変わったか」を出す。
+  // 変更が無い日に 17 枚を全部読み直さなくても、バッジの付いた図だけ読めばよくなる。
+  function renderFolderPanel() {
+    var dir = _wsFileDir();
+    var RW = window.MA.reviewWatch;
+    var store = _reviewStore();
+    window.MA.workspace.listFileEntries(dir).then(function(entries) {
       panel.textContent = '';
-      if (!files || files.length === 0) {
+      if (!entries || entries.length === 0) {
         var empty = document.createElement('div');
         empty.className = 'folder-empty';
         empty.textContent = '保存フォルダに図がありません';
         panel.appendChild(empty);
         return;
       }
-      files.forEach(function(name) {
-        var b = document.createElement('button');
-        b.className = 'folder-item';
-        b.setAttribute('data-file-name', name);
-        b.textContent = name;
-        b.addEventListener('click', function() { openFromFolder(name); });
-        panel.appendChild(b);
+      if (!RW) {
+        entries.forEach(function(e) { panel.appendChild(folderButton(e.name || e, null, null)); });
+        return;
+      }
+      var seen = RW.load(store, dir);
+      var first = !RW.hasSeen(store, dir);
+      var rows = RW.diff(seen, entries);
+
+      var head = document.createElement('div');
+      head.className = 'folder-summary';
+      head.textContent = first ? '前回見た版の控えがありません（全部を新規として出しています）' : RW.summary(rows);
+      panel.appendChild(head);
+
+      rows.forEach(function(r) {
+        panel.appendChild(folderButton(r.name, RW.badge(r.status), RW.formatMtime(r.mtime), r.status));
       });
+
+      RW.removed(seen, entries).forEach(function(name) {
+        var gone = document.createElement('div');
+        gone.className = 'folder-empty folder-gone';
+        gone.setAttribute('data-file-name', name);
+        gone.textContent = '— ' + name + '（前回はあった図が今はありません）';
+        panel.appendChild(gone);
+      });
+
+      var mark = document.createElement('button');
+      mark.className = 'folder-mark-seen';
+      mark.setAttribute('type', 'button');
+      mark.textContent = 'ここまで見たことにする';
+      mark.title = '今の一覧を「前回見た版」として控える。次に開いたときは、これ以降に変わった図だけにバッジが付く';
+      mark.addEventListener('click', function(ev) {
+        ev.stopPropagation();
+        RW.save(store, dir, RW.snapshot(entries));
+        renderFolderPanel();
+      });
+      panel.appendChild(mark);
     });
-  });
+  }
+
+  function folderButton(name, bdg, mtime, status) {
+    var b = document.createElement('button');
+    b.className = 'folder-item';
+    b.setAttribute('data-file-name', name);
+    if (status) b.setAttribute('data-review-status', status);
+    if (bdg && bdg.mark) {
+      var badge = document.createElement('span');
+      badge.className = 'folder-badge folder-badge-' + status;
+      badge.textContent = bdg.mark;
+      badge.title = bdg.title;
+      b.appendChild(badge);
+    }
+    var label = document.createElement('span');
+    label.className = 'folder-name';
+    label.textContent = name;
+    b.appendChild(label);
+    if (mtime) {
+      var t = document.createElement('span');
+      t.className = 'folder-mtime';
+      t.textContent = mtime;
+      t.title = '最終保存時刻';
+      b.appendChild(t);
+    }
+    if (bdg && bdg.title) b.title = bdg.title + (mtime ? '（最終保存 ' + mtime + '）' : '');
+    b.addEventListener('click', function() { openFromFolder(name); });
+    return b;
+  }
 
   document.addEventListener('click', function(ev) {
     if (!panel.classList.contains('open')) return;

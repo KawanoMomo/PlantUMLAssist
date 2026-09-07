@@ -10,6 +10,7 @@ const sourceFiles = [
   'src/core/id-normalizer.js',
   'src/core/auto-save.js',
   'src/core/workspace.js',
+  'src/core/review-watch.js',
   'src/core/state-branch.js',
   'src/core/state-transition.js',
   'src/core/class-scaffold.js',
