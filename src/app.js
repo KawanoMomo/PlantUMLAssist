@@ -1656,6 +1656,7 @@ function init() {
   setupPinPanel();
   setupNameAudit();
   setupFamilyAudit();
+  setupFamilyClone();
   setupConsistencyPanel();
   setupLineEdit();
   setupOutline();
@@ -1776,6 +1777,7 @@ function initCommandPalette() {
       { id: 'tab-template', title: 'テンプレートから新しい図を作る / Template', hint: 'Tabs', keywords: ['template', 'copy', 'てんぷれ', 'ふくせい'], run: function() { clickById('btn-tab-template'); } },
       { id: 'tab-diff', title: '前回保存からの差分 / Diff', hint: 'Tabs', keywords: ['diff', 'change', 'さぶん', 'へんこう'], run: function() { clickById('btn-tab-diff'); } },
       { id: 'tab-pins', title: 'レビュー指摘 / Review pins', hint: 'Tabs', keywords: ['pin', 'review', 'してき', 'ぴん'], run: function() { clickById('btn-tab-pins'); } },
+      { id: 'tab-set', title: 'セット複製 / Clone a set', hint: 'Tabs', keywords: ['set', 'clone', 'family', 'せっと', 'ふくせい'], run: function() { clickById('btn-tab-set'); } },
       { id: 'settings', title: '設定を開く / Settings', hint: 'Ctrl', keywords: ['settings', 'config', 'せってい'], run: function() { clickById('btn-config'); } },
       { id: 'undo', title: '元に戻す / Undo', hint: 'Ctrl+Z', keywords: ['undo', 'もどす'], run: function() { clickById('btn-undo'); } },
       { id: 'redo', title: 'やり直す / Redo', hint: 'Ctrl+Y', keywords: ['redo', 'やりなおす'], run: function() { clickById('btn-redo'); } },
@@ -4659,6 +4661,275 @@ function setupPinPanel() {
     panel.classList.remove('open');
   });
   renderPinBadge();
+}
+
+// ── セット複製 (BLK-junior-20260907-1203-wish) ──────────────────────────────
+// 題材替え (GPIO → UART) は 6 図種ぶん、テンプレート作成を図種の数だけ
+// 繰り返していた。系統でまとまった 1 セットに対応表を 1 回入れれば 6 枚が
+// 一度に揃う。組み立て (どの図がどんな名前で作られるか) は
+// src/core/family-clone.js、ここは画面と保存だけ。
+
+var _fcGroups = [];
+var _fcExtraPairs = [];
+
+function _fcSelectedGroup() {
+  var sel = document.getElementById('fc-set');
+  if (!sel) return null;
+  for (var i = 0; i < _fcGroups.length; i++) {
+    if (_fcGroups[i].key === sel.value) return _fcGroups[i];
+  }
+  return _fcGroups[0] || null;
+}
+
+function _fcPairs() {
+  var from = (document.getElementById('fc-from') || {}).value || '';
+  var to = (document.getElementById('fc-to') || {}).value || '';
+  var pairs = [{ from: from.trim(), to: to.trim() }];
+  _fcExtraPairs.forEach(function(p, i) {
+    var el = document.getElementById('fc-extra-' + i);
+    pairs.push({ from: p.from, to: el ? el.value.trim() : '' });
+  });
+  return pairs;
+}
+
+function _fcPlan() {
+  var FC = window.MA.familyClone;
+  return FC ? FC.plan(_fcSelectedGroup(), _fcPairs(), _fcExistingNames()) : null;
+}
+
+function _fcExistingNames() {
+  var names = (window.MA.workspace ? window.MA.workspace.list() : []).map(function(d) { return d.name; });
+  return names.concat(_fcFiles || []);
+}
+
+var _fcFiles = [];
+
+// セットの元になる図。開いているタブと、保存フォルダから読み込んだ図の両方。
+var _fcFileDocs = [];
+
+function _fcSourceDocs() {
+  var open = window.MA.workspace ? window.MA.workspace.list() : [];
+  var byName = {};
+  var out = [];
+  open.forEach(function(d) {
+    byName[String(d.name).replace(/\.puml$/i, '').toLowerCase()] = true;
+    out.push(d);
+  });
+  _fcFileDocs.forEach(function(d) {
+    var k = String(d.name).replace(/\.puml$/i, '').toLowerCase();
+    if (byName[k]) return;   // タブで開いている図が正 (打ちかけの内容を使う)
+    out.push(d);
+  });
+  return out;
+}
+
+function renderFamilyClone() {
+  var content = document.getElementById('fc-modal-content');
+  var FC = window.MA.familyClone;
+  if (!content || !FC) return;
+  var esc = window.MA.htmlUtils.escHtml;
+  var LABEL = 'display:block;font-size:10px;color:var(--text-secondary);margin:8px 0 2px 0;';
+  var FIELD = 'width:100%;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;padding:5px;font-size:12px;';
+  var BTN = 'background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;padding:5px 12px;font-size:12px;margin-right:6px;';
+  var CELL = 'padding:3px 6px;border-bottom:1px solid var(--border);font-size:11px;color:var(--text-primary);';
+
+  var group = _fcSelectedGroup();
+  var plan = _fcPlan();
+
+  var html = '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">セットごとまとめて題材を替える</h3>'
+    + '<div style="font-size:11px;color:var(--text-secondary);">'
+    + '同じ系統の図をまとめて 1 セットとして選び、対応表を 1 回入れると、そのセットの図が全部 '
+    + '新しいタブに揃います。図種ごとにテンプレートを作り直す必要はありません。</div>'
+    + '<label style="' + LABEL + '" for="fc-set">セット (図の名前の頭でまとめています)</label>'
+    + '<select id="fc-set" style="' + FIELD + '">';
+  _fcGroups.forEach(function(g) {
+    html += '<option value="' + esc(g.key) + '"' + (group && g.key === group.key ? ' selected' : '') + '>'
+      + esc(FC.groupLabel(g)) + '</option>';
+  });
+  html += '</select>';
+
+  if (group) {
+    html += '<div id="fc-members" style="font-size:11px;color:var(--text-secondary);margin-top:4px;">'
+      + group.docs.map(function(d) { return esc(String(d.name).replace(/\.puml$/i, '')); }).join(' ・ ')
+      + '</div>';
+  }
+
+  html += '<div style="display:flex;gap:10px;">'
+    + '<div style="flex:1;"><label style="' + LABEL + '" for="fc-from">置換元 (今の題材)</label>'
+    + '<input id="fc-from" style="' + FIELD + '" autocomplete="off" spellcheck="false" value="'
+    + esc((document.getElementById('fc-from') || {}).value || (group ? FC.suggestFrom(group) : '')) + '"></div>'
+    + '<div style="flex:1;"><label style="' + LABEL + '" for="fc-to">置換先 (新しい題材)</label>'
+    + '<input id="fc-to" style="' + FIELD + '" autocomplete="off" spellcheck="false" placeholder="Uart" value="'
+    + esc((document.getElementById('fc-to') || {}).value || '') + '"></div>'
+    + '</div>';
+
+  // 1 組目で消えなかった宣言名は、ここで 1 個ずつ引き取らせる。
+  if (_fcExtraPairs.length) {
+    html += '<label style="' + LABEL + '">まだ元の系統の名前が残っています</label>'
+      + '<table id="fc-extra" style="border-collapse:collapse;width:100%;">';
+    _fcExtraPairs.forEach(function(p, i) {
+      html += '<tr><td style="' + CELL + 'width:45%;">' + esc(p.from) + '</td>'
+        + '<td style="' + CELL + '"><input id="fc-extra-' + i + '" data-from="' + esc(p.from) + '" style="'
+        + FIELD + '" value="' + esc(p.to || '') + '"></td></tr>';
+    });
+    html += '</table>';
+  }
+
+  html += '<label style="' + LABEL + '">作られる図</label>'
+    + '<table id="fc-plan" style="border-collapse:collapse;width:100%;">';
+  ((plan && plan.items) || []).forEach(function(it) {
+    html += '<tr class="fc-plan-row" data-name="' + esc(it.name) + '" data-changed="' + it.changed + '">'
+      + '<td style="' + CELL + 'color:var(--text-secondary);">' + esc(it.sourceName) + '</td>'
+      + '<td style="' + CELL + 'color:var(--text-secondary);">→</td>'
+      + '<td style="' + CELL + '">' + esc(it.name) + '</td>'
+      + '<td style="' + CELL + 'color:' + (it.changed ? 'var(--text-secondary)' : 'var(--accent-red)') + ';">'
+      + (it.changed ? (it.changed + ' 行') : '変わらない') + '</td></tr>';
+  });
+  html += '</table>';
+
+  html += '<div id="fc-summary" style="font-size:11px;color:var(--text-secondary);margin-top:8px;"'
+    + ' data-ready="' + (plan && plan.ready ? '1' : '0') + '"'
+    + ' data-docs="' + ((plan && plan.docs) || 0) + '">'
+    + esc(FC.summaryText(plan)) + '</div>'
+    + '<div style="margin-top:10px;">'
+    + '<button id="btn-fc-create" style="' + BTN + '"' + (plan && plan.ready ? '' : ' disabled') + '>'
+    + 'セットをまとめて作る</button>'
+    + '<button id="btn-fc-open" style="' + BTN + '">このセットを全部開く</button>'
+    + '<button id="btn-fc-cancel" style="' + BTN + '">キャンセル</button>'
+    + '</div>';
+
+  content.innerHTML = html;
+
+  document.getElementById('fc-set').addEventListener('change', function() {
+    var f = document.getElementById('fc-from');
+    var g = _fcSelectedGroup();
+    if (f && g) f.value = FC.suggestFrom(g);
+    _fcExtraPairs = [];
+    renderFamilyClone();
+  });
+  ['fc-from', 'fc-to'].forEach(function(id) {
+    document.getElementById(id).addEventListener('input', function() {
+      _fcSyncExtraPairs();
+      renderFamilyClone();
+    });
+  });
+  _fcExtraPairs.forEach(function(p, i) {
+    var el = document.getElementById('fc-extra-' + i);
+    if (!el) return;
+    el.addEventListener('input', function() {
+      _fcExtraPairs[i].to = el.value;
+      var plan2 = _fcPlan();
+      var sum = document.getElementById('fc-summary');
+      var btn = document.getElementById('btn-fc-create');
+      if (sum) {
+        sum.textContent = FC.summaryText(plan2);
+        sum.setAttribute('data-ready', plan2 && plan2.ready ? '1' : '0');
+      }
+      if (btn) btn.disabled = !(plan2 && plan2.ready);
+    });
+  });
+  document.getElementById('btn-fc-create').addEventListener('click', createFamilyClone);
+  document.getElementById('btn-fc-open').addEventListener('click', openFamilySet);
+  document.getElementById('btn-fc-cancel').addEventListener('click', closeFamilyClone);
+}
+
+// 1 組目を当てても残る宣言名を、対応表の行として持ち直す。
+// 既に打った置換先は保つ (打ち直させない)。
+function _fcSyncExtraPairs() {
+  var FC = window.MA.familyClone;
+  if (!FC) return;
+  var kept = {};
+  _fcExtraPairs.forEach(function(p) {
+    var el = document.getElementById('fc-extra-' + _fcExtraPairs.indexOf(p));
+    kept[p.from] = el ? el.value : p.to;
+  });
+  var from = (document.getElementById('fc-from') || {}).value || '';
+  var to = (document.getElementById('fc-to') || {}).value || '';
+  var base = FC.plan(_fcSelectedGroup(), [{ from: from.trim(), to: to.trim() }], _fcExistingNames());
+  _fcExtraPairs = FC.remainingNames(base).map(function(n) {
+    return { from: n, to: kept[n] || '' };
+  });
+}
+
+function createFamilyClone() {
+  var plan = _fcPlan();
+  if (!plan || !plan.ready) return;
+  saveActiveDoc();
+  plan.items.forEach(function(it) {
+    // 図種は元の図のものを使う。複製は構成をそのまま写したものなので、
+    // 本文からの推測 (actor を含むシーケンスがユースケースに見える等) より確かである。
+    var detected = window.MA.workspace.detectType(it.dsl);
+    var type = (it.diagramType && modules[it.diagramType])
+      ? it.diagramType
+      : ((detected && modules[detected]) ? detected : currentDiagramType);
+    window.MA.workspace.open({ name: it.name, dsl: it.dsl, diagramType: type });
+    applyActiveDoc();
+    // 作った直後に保存フォルダへ書き出す (テンプレート作成と同じ作法)。
+    saveActiveDoc();
+  });
+  closeFamilyClone();
+}
+
+// セット単位で開く。まだタブに無い図だけをタブに足す
+// (レビューで先輩の図と突き合わせるとき、1 枚ずつ探し出さずに済む)。
+function openFamilySet() {
+  var group = _fcSelectedGroup();
+  if (!group) return;
+  saveActiveDoc();
+  group.docs.forEach(function(d) {
+    window.MA.workspace.openOrActivate({
+      name: String(d.name).replace(/\.puml$/i, ''),
+      dsl: d.dsl,
+      diagramType: d.diagramType,
+    });
+    applyActiveDoc();
+  });
+  closeFamilyClone();
+}
+
+function closeFamilyClone() {
+  var modal = document.getElementById('fc-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+function setupFamilyClone() {
+  var btn = document.getElementById('btn-tab-set');
+  var modal = document.getElementById('fc-modal');
+  if (!btn || !modal) return;
+  btn.addEventListener('click', function() {
+    saveActiveDoc();
+    _fcExtraPairs = [];
+    _fcFileDocs = [];
+    _fcFiles = [];
+    _fcGroups = window.MA.familyClone.groups(_fcSourceDocs());
+    renderFamilyClone();
+    modal.style.display = 'flex';
+    // 保存フォルダの図もセットに入れる (先輩が保存した図がセットの主な出所)。
+    window.MA.workspace.listFiles(_wsFileDir()).then(function(list) {
+      var names = (list || []).filter(function(n) { return n; });
+      _fcFiles = names;
+      return Promise.all(names.map(function(n) {
+        return window.MA.workspace.loadFile(n, _wsFileDir()).then(function(text) {
+          if (!text) return null;
+          return { id: 'file:' + n, name: n, dsl: text, diagramType: window.MA.workspace.detectType(text) };
+        }).catch(function() { return null; });
+      }));
+    }).then(function(docs) {
+      if (!docs || modal.style.display === 'none') return;
+      _fcFileDocs = docs.filter(function(d) { return d && d.dsl; });
+      var keep = (document.getElementById('fc-set') || {}).value;
+      _fcGroups = window.MA.familyClone.groups(_fcSourceDocs());
+      renderFamilyClone();
+      var sel = document.getElementById('fc-set');
+      if (sel && keep) {
+        sel.value = keep;
+        renderFamilyClone();
+      }
+    }).catch(function() { /* 保存フォルダが無くてもタブの図だけでセットは作れる */ });
+  });
+  modal.addEventListener('click', function(ev) {
+    if (ev.target === modal) closeFamilyClone();
+  });
 }
 
 // ── Render pipeline ────────────────────────────────────────────────────────
