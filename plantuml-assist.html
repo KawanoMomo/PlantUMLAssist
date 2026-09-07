@@ -1207,6 +1207,75 @@ html, body {
   color: var(--text-primary);
   cursor: pointer;
 }
+/* 参照関係パネル (図の束を 1 プロジェクトとして部品名で辿る) */
+#xref-panel {
+  display: none;
+  position: absolute;
+  z-index: 41;
+  width: 420px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px;
+  font-size: 11px;
+  color: var(--text-primary);
+}
+#xref-panel.open { display: block; }
+#xref-head {
+  font-size: 10px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 3px;
+}
+#xref-body { display: flex; gap: 6px; margin-top: 4px; }
+#xref-names, #xref-refs { flex: 1; max-height: 200px; overflow-y: auto; font-size: 10px; }
+#xref-refs { border-left: 1px solid var(--border); padding-left: 6px; }
+#xref-names .xref-name {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  padding: 1px 2px;
+  border-radius: 2px;
+}
+#xref-names .xref-name:hover { background: var(--bg-secondary); }
+#xref-names .xref-name.on { background: var(--accent); color: var(--bg-primary); }
+#xref-names .xref-count { color: var(--text-secondary); white-space: nowrap; }
+#xref-names .xref-name.on .xref-count { color: var(--bg-primary); }
+#xref-refs .xref-hint { color: var(--text-secondary); }
+#xref-refs .xref-ref {
+  display: flex;
+  gap: 5px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  padding: 1px 0;
+}
+#xref-refs .xref-ref:hover { background: var(--bg-secondary); }
+#xref-refs .xref-ref-line { color: var(--text-secondary); min-width: 2em; text-align: right; }
+#xref-refs .xref-ref-undeclared { color: var(--accent-red); }
+#xref-links {
+  margin-top: 5px;
+  padding-top: 3px;
+  border-top: 1px solid var(--border);
+  font-size: 10px;
+  color: var(--text-secondary);
+  max-height: 70px;
+  overflow-y: auto;
+}
+#xref-panel .xref-actions { display: flex; gap: 4px; margin-top: 6px; }
+#xref-panel .xref-actions button {
+  flex: 1;
+  font-size: 11px;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+/* 選んだ部品名が出てくる図のタブ。1 枚ずつ開いて名前を照合しなくてよい */
+.tab.xref-hit { outline: 1px solid var(--accent); outline-offset: -1px; }
 /* 一括置換パネル (複数の図をまたいで部品名を置換する) */
 #rename-panel {
   display: none;
@@ -2599,6 +2668,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <!-- BLK-junior-20260907-1403-wish: 型の基準にした図と突き合わせて、書いている間ずっと見てもらう -->
         <button class="tab-tool" id="btn-tab-review" title="型の基準にした図と突き合わせて、この図のずれと図種特有の間違いを出す">👁 レビュー −</button>
         <!-- BLK-primary-20260907-1303-wish: 引き継ぎに要る確認結果と図を 1 つの zip に固める -->
+        <!-- BLK-primary-20260908-0003-wish: 図の束を 1 プロジェクトとして、部品名で辿れるように渡す -->
+        <button class="tab-tool" id="btn-tab-xref" title="開いている図を 1 プロジェクトとして、部品名でどの図とどの図が繋がっているかを出す。名前を押すとその名前が出る図がタブ上でハイライトされる">🕸 参照関係</button>
         <button class="tab-tool" id="btn-tab-handoff" title="系統チェック・名前突合・変更サマリ・SVG 一式を 1 つのパッケージ (zip) に書き出す">📦 引き継ぎ</button>
         <!-- BLK-primary-20260907-1703-wish: 顧客に渡す最終成果物 (表紙+目次+差分要約+全図 SVG) を 1 つの zip にする -->
         <button class="tab-tool" id="btn-tab-delivery" title="表紙 (図一覧・版数・提出前チェック結果)・前回提出からの差分・全図 SVG を 1 つの納品 zip にまとめる">📦 納品パッケージ</button>
@@ -2655,6 +2726,19 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <div id="pattern-results"></div>
         <div class="pattern-actions">
           <button id="btn-pattern-close">閉じる</button>
+        </div>
+      </div>
+      <!-- 図の束を 1 プロジェクトとして、部品名で辿る -->
+      <div id="xref-panel">
+        <div id="xref-head"></div>
+        <div id="xref-body">
+          <div id="xref-names"></div>
+          <div id="xref-refs"></div>
+        </div>
+        <div id="xref-links"></div>
+        <div class="xref-actions">
+          <button id="btn-xref-export" title="この参照関係を 1 枚のテキストにして書き出す (渡す側の成果物)">書き出す</button>
+          <button id="btn-xref-close">閉じる</button>
         </div>
       </div>
       <!-- 指摘に並んだ複数のクラスへ同じメンバーを 1 回で足す -->
@@ -3014,6 +3098,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/export-shortcuts.js"></script>
 <script src="src/core/diagram-settings.js"></script>
 <script src="src/core/name-audit.js"></script>
+<script src="src/core/xref-graph.js"></script>
 <script src="src/core/method-audit.js"></script>
 <script src="src/core/template-new.js"></script>
 <script src="src/core/skeleton-new.js"></script>
