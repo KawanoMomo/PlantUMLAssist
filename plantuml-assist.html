@@ -161,7 +161,15 @@ html, body {
   white-space: nowrap;
   margin-left: auto;
   margin-right: 8px;
+  /* 押せるが、常時ボタンには見せない (1a: 上部は状態表示と Export だけ) */
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  padding: 2px 4px;
+  cursor: pointer;
 }
+#top-render-status:hover { border-color: var(--border); color: var(--text-primary); }
+#top-render-status:focus-visible { outline: none; border-color: var(--accent); }
 #top-render-status.error { color: var(--accent-red); }
 
 /* 上部バーから外した操作の実体。表示しないが click は届く */
@@ -2361,7 +2369,10 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <span class="cp-search-kbd">Ctrl+K</span>
     </button>
 
-    <span id="top-render-status" role="status" title="レンダリングのモードと直前の所要時間">local · —</span>
+    <!-- BLK-builder-20260907-2237-2 (design 1a): 状態表示はモードを変える入口も兼ねる。
+         1a の上部バーにモードの select は無く、選ぶ場所は設定の「レンダリング」タブ。 -->
+    <button id="top-render-status" type="button" role="status"
+      title="レンダリングのモードと直前の所要時間 (押すと設定のレンダリングを開く)">local · —</button>
 
     <div class="export-wrap">
       <button class="tb-btn" id="btn-export" title="エクスポート">Export ▾</button>
@@ -2374,11 +2385,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       </div>
       <div id="bulk-export-status" role="status"></div>
     </div>
-
-    <select id="render-mode" title="レンダリングモード">
-      <option value="local">local (Java)</option>
-      <option value="online">online (plantuml.com)</option>
-    </select>
 
     <select id="diagram-type" title="図の種類">
       <option value="plantuml-sequence">Sequence</option>
@@ -2403,6 +2409,14 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <button class="tb-btn" id="btn-zoom-in"  title="拡大">＋</button>
     <button class="tb-btn" id="btn-zoom-fit" title="幅に合わせる">Fit</button>
     <button class="tb-btn" id="btn-render" title="再レンダリング">⟳ Render</button>
+    <!-- BLK-builder-20260907-2237-2 (design 1a): モード切替の実体。1a の上部バーには
+         出さない。選ぶ入口は設定の「レンダリング」タブ・Ctrl+K・状態表示のクリック。
+         保存や描画の経路はこの select を唯一の窓口にしたままなので、値と change は
+         これまでどおり効く。 -->
+    <select id="render-mode" title="レンダリングモード">
+      <option value="local">local (Java)</option>
+      <option value="online">online (plantuml.com)</option>
+    </select>
   </div>
 
   <!-- online モード時の外部送信警告バナー (Feature #10) -->

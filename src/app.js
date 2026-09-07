@@ -136,6 +136,13 @@ function init() {
   topFileNameEl = document.getElementById('top-file-name');
   topRenderStatusEl = document.getElementById('top-render-status');
   updateTopRenderStatus('idle');
+  // BLK-builder-20260907-2237-2 (design 1a): モードを変えたくなるのは状態表示を見た
+  // ときなので、その表示自体を設定の「レンダリング」タブへの入口にする。
+  if (topRenderStatusEl) {
+    topRenderStatusEl.addEventListener('click', function() {
+      if (window.MA.openSettingsTab) window.MA.openSettingsTab('render');
+    });
+  }
 
   _registerModules();
 
@@ -1512,6 +1519,17 @@ function init() {
     function close() { modal.style.display = 'none'; }
 
     btn.addEventListener('click', open);
+    // BLK-builder-20260907-2237-2 (design 1a): 上部バーからモードの select を外した
+    // 代わりに、状態表示から設定の「レンダリング」タブへ直接開ける口を出す。
+    // タブ指定で開けるようにしておくと、他の入口も同じ経路を使える。
+    window.MA.openSettingsTab = function(tabId) {
+      open();
+      if (tabId && ST) {
+        var t = ST.normalizeTab(tabId);
+        renderTabBar(t);
+        showTab(t);
+      }
+    };
     document.getElementById('cfg-cancel').addEventListener('click', close);
     var closeX = document.getElementById('cfg-close');
     if (closeX) closeX.addEventListener('click', close);
