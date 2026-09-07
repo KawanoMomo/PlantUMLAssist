@@ -2086,6 +2086,7 @@ function init() {
   setupHandoverBanner();
   setupAuditTimeline();
   setupVersionTimeline();
+  setupPeekFolder();
   setupPinPanel();
   setupPinInbox();
   setupManualFindings();
@@ -3646,6 +3647,174 @@ function setupAuditTimeline() {
       renderAuditTimeline();
     });
   }
+}
+
+// ── 他フォルダの閲覧 ───────────────────────────────────────────────────────
+// BLK-junior-20260908-0723: 先輩の図を読むためだけに、設定ダイアログで保存先を
+// フルパスで打ち替え、読んだ後また打ち戻していた (往復 60 字超)。戻し忘れると
+// 自分の図が他人のフォルダに紛れ込む。読むだけなら保存先は動かさなくていい。
+// 隣のフォルダを一覧から選び、その場で図を出す。設定には一切書かない。
+var _peekDirs = [];
+var _peekDir = null;
+var _peekNames = [];
+var _peekName = null;
+
+function _peekEls() {
+  return {
+    modal: document.getElementById('peek-modal'),
+    dirs: document.getElementById('peek-dirs'),
+    files: document.getElementById('peek-files'),
+    title: document.getElementById('peek-title'),
+    svg: document.getElementById('peek-svg'),
+    dsl: document.getElementById('peek-dsl'),
+    notice: document.getElementById('peek-notice'),
+  };
+}
+
+function renderPeekDirs() {
+  var el = _peekEls();
+  var PF = window.MA.peekFolder;
+  if (!el.dirs || !PF) return;
+  el.dirs.textContent = '';
+  var head = document.createElement('div');
+  head.className = 'peek-head';
+  head.id = 'peek-dirs-head';
+  head.textContent = _peekDirs.length ? 'フォルダ' : '隣に読めるフォルダがありません';
+  el.dirs.appendChild(head);
+  _peekDirs.forEach(function(d) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'peek-dir' + (d.current ? ' current' : '')
+      + (PF.samePath(d.path, _peekDir) ? ' selected' : '');
+    b.setAttribute('data-dir-name', d.name);
+    b.setAttribute('data-current', d.current ? '1' : '0');
+    b.textContent = PF.label(d);
+    b.addEventListener('click', function() { selectPeekDir(d.path); });
+    el.dirs.appendChild(b);
+  });
+  if (el.notice) el.notice.textContent = PF.noticeText(_peekDir, _wsFileDir());
+}
+
+function renderPeekFiles() {
+  var el = _peekEls();
+  if (!el.files) return;
+  el.files.textContent = '';
+  var head = document.createElement('div');
+  head.className = 'peek-head';
+  head.id = 'peek-files-head';
+  head.textContent = _peekDir ? (_peekNames.length + ' 枚') : 'フォルダを選んでください';
+  el.files.appendChild(head);
+  _peekNames.forEach(function(n) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'peek-file' + (n === _peekName ? ' selected' : '');
+    b.setAttribute('data-file-name', n);
+    b.textContent = n;
+    b.addEventListener('click', function() { showPeekFile(n); });
+    el.files.appendChild(b);
+  });
+}
+
+function selectPeekDir(dir) {
+  var WS = window.MA.workspace;
+  if (!WS) return Promise.resolve(false);
+  _peekDir = dir;
+  _peekName = null;
+  _peekNames = [];
+  renderPeekDirs();
+  renderPeekFiles();
+  return WS.listFiles(dir).then(function(names) {
+    if (!window.MA.peekFolder.samePath(dir, _peekDir)) return false;   // 途中で選び直された
+    _peekNames = (names || []).filter(function(n) { return n; });
+    renderPeekFiles();
+    // 1 枚目をそのまま出す。選んだ後に「どれか押す」を挟むと、読むだけの用でも
+    // クリックが 1 つ増える。
+    if (_peekNames.length) showPeekFile(_peekNames[0]);
+    return true;
+  }).catch(function() { return false; });
+}
+
+// 読むだけ。ここで開いた図は workspace に入らないので、保存の対象にならない。
+function showPeekFile(name) {
+  var el = _peekEls();
+  var WS = window.MA.workspace;
+  if (!WS || !el.svg) return Promise.resolve(false);
+  _peekName = name;
+  renderPeekFiles();
+  if (el.title) el.title.textContent = name + '（読むだけ・編集も保存もしません）';
+  el.svg.textContent = '';
+  if (el.dsl) el.dsl.textContent = '読み込み中…';
+  var dir = _peekDir;
+  return WS.loadFile(name, dir).then(function(text) {
+    if (name !== _peekName) return false;
+    if (typeof text !== 'string') {
+      if (el.dsl) el.dsl.textContent = '読めませんでした';
+      return false;
+    }
+    if (el.dsl) el.dsl.textContent = text;
+    return renderDslToSvg(text).then(function(svg) {
+      if (name !== _peekName) return false;
+      el.svg.innerHTML = svg;
+      return true;
+    }).catch(function() {
+      // 図が出せなくても本文は出す。読むこと自体は止めない。
+      el.svg.textContent = '図の描画に失敗しました (本文は下に出ています)';
+      return false;
+    });
+  });
+}
+
+function stepPeekFile(delta) {
+  var next = window.MA.peekFolder.step(_peekNames, _peekName, delta);
+  if (next) showPeekFile(next);
+}
+
+function openPeekFolder() {
+  var el = _peekEls();
+  var PF = window.MA.peekFolder;
+  if (!el.modal || !PF) return Promise.resolve(false);
+  el.modal.style.display = 'flex';
+  var dir = _wsFileDir();
+  return fetch('/peek-dirs?dir=' + encodeURIComponent(dir))
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(data) {
+      _peekDirs = PF.choices(data);
+      renderPeekDirs();
+      // 用があるのは他人のフォルダなので、隣が 1 つだけならそれを開いておく
+      // (「読むだけ」の入口で自分のフォルダを選び直させない)。
+      var others = PF.others(_peekDirs);
+      if (others.length === 1) return selectPeekDir(others[0].path);
+      renderPeekFiles();
+      return true;
+    }).catch(function() {
+      _peekDirs = [];
+      renderPeekDirs();
+      return false;
+    });
+}
+
+function setupPeekFolder() {
+  var btn = document.getElementById('btn-tab-peek');
+  var el = _peekEls();
+  if (!btn || !el.modal) return;
+  btn.addEventListener('click', function() { openPeekFolder(); });
+  function close() {
+    el.modal.style.display = 'none';
+    _peekName = null;
+  }
+  var closeBtn = document.getElementById('peek-close');
+  if (closeBtn) closeBtn.addEventListener('click', close);
+  el.modal.addEventListener('click', function(ev) { if (ev.target === el.modal) close(); });
+  var prev = document.getElementById('peek-prev');
+  var next = document.getElementById('peek-next');
+  if (prev) prev.addEventListener('click', function() { stepPeekFile(-1); });
+  if (next) next.addEventListener('click', function() { stepPeekFile(1); });
+  document.addEventListener('keydown', function(ev) {
+    if (el.modal.style.display !== 'flex') return;
+    if (ev.key === 'Escape') { ev.preventDefault(); close(); }
+    if (ev.key === 'ArrowDown') { ev.preventDefault(); stepPeekFile(1); }
+    if (ev.key === 'ArrowUp') { ev.preventDefault(); stepPeekFile(-1); }
+  });
 }
 
 function setupTabs() {
