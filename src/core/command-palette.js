@@ -248,6 +248,15 @@ window.MA.commandPalette = (function() {
   // 打った文字を候補にぶつける。連続一致 (部分文字列) を最優先にしつつ、
   // 頭文字だけ打った場合 (例: "ex" → Export) も拾えるように順序一致も許す。
   // 一致しなければ null。数字が小さいほど「近い」。
+  //
+  // BLK-builder-20260908-0807-2-red: 部分一致の「見つかった位置」だけで順位を
+  // 決めていたので、「保存」と打つと先頭一致の「保存フォルダの図を一覧」が 1 位、
+  // 本命の「ファイルを保存」は 3 位だった。他の語にたまたま含まれているだけの
+  // 候補が、その語で名指しされた候補を押しのけていた。
+  // 完全一致 (キーワードちょうど 1 語) は部分一致より必ず前に出す。
+  var EXACT_TITLE = -2000;
+  var EXACT_FIELD = -1000;
+
   function score(item, query) {
     var q = _s(query).trim().toLowerCase();
     if (!q) return 0;
@@ -256,6 +265,11 @@ window.MA.commandPalette = (function() {
     for (var i = 0; i < fields.length; i++) {
       var f = _s(fields[i]).toLowerCase();
       if (!f) continue;
+      if (f === q) {
+        var se = (i === 0 ? EXACT_TITLE : EXACT_FIELD);
+        if (best === null || se < best) best = se;
+        continue;
+      }
       var idx = f.indexOf(q);
       if (idx >= 0) {
         // 先頭一致ほど強い。title (i===0) を他より優先する。
