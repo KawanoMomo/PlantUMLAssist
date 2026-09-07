@@ -1695,8 +1695,21 @@ window.MA.modules.plantumlSequence = (function() {
           if (kind === 'message') {
             var partOptsWithNew = partOpts.slice();
             partOptsWithNew.push({ value: '__new__', label: '+ 新規追加…' });
+            // BLK-junior-20260907-2203: 直前に選んだメッセージの当事者を初期値にする。
+            // 応答を 1 本足すたびに From / To を選び直さずに済む。憶えが無いとき
+            // (何も選ばずに開いたとき) はこれまでどおり先頭の参加者のまま。
+            var SE = window.MA.selectedEndpoints;
+            var tailDef = SE ? SE.defaultsFor(participants.map(function(p) { return p.id; })) : { source: 'none' };
+            var fromOptsT = tailDef.from ? withSelected(partOptsWithNew, tailDef.from) : partOptsWithNew;
+            var toOptsT = tailDef.to ? withSelected(partOptsWithNew, tailDef.to) : partOptsWithNew;
+            var tailNote = SE ? SE.noteText(tailDef, function(id) {
+              for (var i = 0; i < participants.length; i++) if (participants[i].id === id) return participants[i].label;
+              return id;
+            }) : '';
             html =
-              P.selectFieldHtml('From', 'seq-tail-from', partOptsWithNew) +
+              (tailNote ? '<div id="seq-tail-endpoint-note" style="font-size:10px;color:var(--text-secondary);margin-bottom:6px;">'
+                + window.MA.htmlUtils.escHtml(tailNote) + '</div>' : '') +
+              P.selectFieldHtml('From', 'seq-tail-from', fromOptsT) +
               // design 2d: 末尾追加でも同じ矢印パレットから選ぶ。
               // 現在値は hidden #seq-tail-arrow が持つ。
               P.arrowPickerHtml('矢印の種類 / Arrow', 'seq-tail-arrow',
@@ -1704,7 +1717,7 @@ window.MA.modules.plantumlSequence = (function() {
               // design 5d: 末尾追加でも線の色を先に決められる。
               lineColorRowHtml('seq-tail-color', '', true) +
               '<input type="hidden" id="seq-tail-color" value="">' +
-              P.selectFieldHtml('To', 'seq-tail-to', partOptsWithNew) +
+              P.selectFieldHtml('To', 'seq-tail-to', toOptsT) +
               // userissue v1.2.7+: 末尾追加でも Stereotype を入力できるように。
               '<div style="margin-bottom:8px;">' +
                 '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Stereotype <span style="color:#32CD32;">&lt;&lt; &gt;&gt;</span> <span style="color:var(--text-secondary);font-weight:normal;">(任意・上段にライムグリーンで表示)</span></label>' +
@@ -1916,6 +1929,9 @@ window.MA.modules.plantumlSequence = (function() {
           var mm = null;
           for (var jj = 0; jj < messages.length; jj++) if (messages[jj].id === sel.id) { mm = messages[jj]; break; }
           if (!mm) { propsEl.innerHTML = '<p style="color:var(--text-secondary);font-size:11px;">メッセージが見つかりません</p>'; return; }
+          // BLK-junior-20260907-2203: 選んだ行の当事者を憶えておき、選択を外して
+          // 「末尾に追加」を開いたときの From / To の初期値にする。
+          if (window.MA.selectedEndpoints) window.MA.selectedEndpoints.remember(mm);
           var partOpts2 = participants.map(function(p) { return { value: p.id, label: p.label }; });
           var fromOpts = partOpts2.map(function(o) { return { value: o.value, label: o.label, selected: o.value === mm.from }; });
           var toOpts = partOpts2.map(function(o) { return { value: o.value, label: o.label, selected: o.value === mm.to }; });
