@@ -116,7 +116,7 @@ test.describe('BLK-primary-0723 遷移を 3 要素で編集する', () => {
     await page.locator('#st-tr-update').click();
     await expect.poll(async () => await getEditorText(page)).toContain('[done]');
     await page.waitForTimeout(1500);
-    await expect(page.locator('#status-parse')).toHaveText('OK');
+    await expect(page.locator('#status-parse')).toHaveText('パース OK');
     await expect(page.locator('#preview-svg svg')).toBeVisible();
   });
 });
