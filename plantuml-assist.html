@@ -1316,6 +1316,19 @@ html, body {
 #cb-body table.cb-diff tr.cb-del td { background: rgba(220, 80, 80, 0.16); }
 #cb-body table.cb-diff tr.cb-add td { background: rgba(80, 180, 110, 0.16); }
 #cb-body table.cb-diff tr.cb-gap td { color: var(--text-secondary); text-align: center; padding: 2px 6px; }
+/* 差分行のレビュー結果 (BLK-primary-20260908-0823-wish) */
+#cb-body table.cb-diff td.cb-verdict { width: 88px; white-space: nowrap; text-align: right; padding: 0 6px; }
+#cb-body table.cb-diff td.cb-verdict button {
+  border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-secondary);
+  border-radius: 3px; cursor: pointer; font-size: 10px; padding: 0 5px; margin-left: 3px;
+}
+#cb-body table.cb-diff td.cb-verdict button:hover { color: var(--text-primary); border-color: var(--accent); }
+#cb-body table.cb-diff td.cb-verdict button[aria-pressed="true"] {
+  color: var(--text-primary); border-color: var(--accent); background: var(--bg-tertiary); font-weight: bold;
+}
+#cb-body table.cb-diff tr[data-verdict="要修正"] td { background: rgba(220, 80, 80, 0.28); }
+#cb-body table.cb-diff tr[data-verdict="済"] td { opacity: 0.55; }
+#hn-banner.hn-fix { border-color: var(--accent-red); }
 #diff-panel .diff-actions button {
   border: 1px solid var(--border);
   background: var(--bg-tertiary);
@@ -3774,6 +3787,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/count-compare.js"></script>
 <script src="src/core/change-board.js"></script>
 <script src="src/core/handover-notes.js"></script>
+<script src="src/core/review-verdicts.js"></script>
 <script src="src/core/audit-timeline.js"></script>
 <script src="src/core/consistency-check.js"></script>
 <script src="src/core/manual-findings.js"></script>
