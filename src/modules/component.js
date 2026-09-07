@@ -9,19 +9,21 @@ window.MA.modules.plantumlComponent = (function() {
 
   // component: keyword form (with capturing label group inlined since RP.QUOTED_NAME is non-capturing)
   // groups: 1=quoted label (leading), 2=alias ID, 3=bare ID, 4=quoted label (trailing)
+  // 末尾の `<<stereotype>>` は任意 (design 5d)。付いていても要素として読めるようにする。
+  var STEREO_OPT = '(?:\\s+<<\\s*([^>]+?)\\s*>>)?';
   var COMPONENT_KW_RE = new RegExp(
-    '^component\\s+(?:"([^"]+)"\\s+as\\s+(' + ID + ')|(' + ID + ')(?:\\s+as\\s+"([^"]+)")?)\\s*\\{?\\s*$'
+    '^component\\s+(?:"([^"]+)"\\s+as\\s+(' + ID + ')|(' + ID + ')(?:\\s+as\\s+"([^"]+)")?)' + STEREO_OPT + '\\s*\\{?\\s*$'
   );
   // component: [X] / [Label] as Alias
-  var COMPONENT_SHORT_RE = /^\[([^\]]+)\](?:\s+as\s+([A-Za-z_][A-Za-z0-9_]*))?\s*\{?\s*$/;
+  var COMPONENT_SHORT_RE = /^\[([^\]]+)\](?:\s+as\s+([A-Za-z_][A-Za-z0-9_]*))?(?:\s+<<\s*([^>]+?)\s*>>)?\s*\{?\s*$/;
 
   // interface: keyword form
   // groups: 1=quoted label (leading), 2=alias ID, 3=bare ID, 4=quoted label (trailing)
   var INTERFACE_KW_RE = new RegExp(
-    '^interface\\s+(?:"([^"]+)"\\s+as\\s+(' + ID + ')|(' + ID + ')(?:\\s+as\\s+"([^"]+)")?)\\s*$'
+    '^interface\\s+(?:"([^"]+)"\\s+as\\s+(' + ID + ')|(' + ID + ')(?:\\s+as\\s+"([^"]+)")?)' + STEREO_OPT + '\\s*$'
   );
   // interface: () X / () X as I
-  var INTERFACE_SHORT_RE = /^\(\)\s+([A-Za-z_][A-Za-z0-9_]*)(?:\s+as\s+([A-Za-z_][A-Za-z0-9_]*))?\s*$/;
+  var INTERFACE_SHORT_RE = /^\(\)\s+([A-Za-z_][A-Za-z0-9_]*)(?:\s+as\s+([A-Za-z_][A-Za-z0-9_]*))?(?:\s+<<\s*([^>]+?)\s*>>)?\s*$/;
 
   var PACKAGE_OPEN_RE = new RegExp(
     '^(?:package|folder|frame|node|rectangle)\\s+(?:"([^"]+)"|(' + ID + '))\\s*\\{\\s*$'
@@ -38,13 +40,18 @@ window.MA.modules.plantumlComponent = (function() {
 
   var insertBeforeEnd = window.MA.dslUpdater.insertBeforeEnd;
 
-  function fmtComponent(id, label) {
-    if (label && label !== id) return 'component "' + label + '" as ' + id;
-    return 'component ' + id;
+  // design 5d: ステレオタイプは要素名の後ろに `<<...>>` で足す (空なら書かない)。
+  function _stereoSuffix(stereotype) {
+    var s = (stereotype == null ? '' : String(stereotype)).trim();
+    return s ? ' <<' + s + '>>' : '';
   }
-  function fmtInterface(id, label) {
-    if (label && label !== id) return 'interface "' + label + '" as ' + id;
-    return 'interface ' + id;
+  function fmtComponent(id, label, stereotype) {
+    var head = (label && label !== id) ? 'component "' + label + '" as ' + id : 'component ' + id;
+    return head + _stereoSuffix(stereotype);
+  }
+  function fmtInterface(id, label, stereotype) {
+    var head = (label && label !== id) ? 'interface "' + label + '" as ' + id : 'interface ' + id;
+    return head + _stereoSuffix(stereotype);
   }
   function fmtPort(id, label) {
     if (label && label !== id) return 'port "' + label + '" as ' + id;
@@ -74,8 +81,8 @@ window.MA.modules.plantumlComponent = (function() {
     return window.MA.idNormalizer.normalize(rawInput, _existingComponentIdSet(parsed), 'C');
   }
 
-  function addComponent(text, id, label) { return insertBeforeEnd(text, fmtComponent(id, label || id)); }
-  function addInterface(text, id, label) { return insertBeforeEnd(text, fmtInterface(id, label || id)); }
+  function addComponent(text, id, label, stereotype) { return insertBeforeEnd(text, fmtComponent(id, label || id, stereotype)); }
+  function addInterface(text, id, label, stereotype) { return insertBeforeEnd(text, fmtInterface(id, label || id, stereotype)); }
   function addPort(text, id, label) { return insertBeforeEnd(text, fmtPort(id, label || id)); }
   // Port must live inside a component { ... } block. If the parent component is
   // in single-line form, convert it to block form first; if it already has a
@@ -238,20 +245,23 @@ window.MA.modules.plantumlComponent = (function() {
     if (idx < 0 || idx >= lines.length) return text;
     var indent = lines[idx].match(/^(\s*)/)[1];
     var trimmed = lines[idx].trim();
-    var id, label;
+    var id, label, stereo = null;
     var km = trimmed.match(COMPONENT_KW_RE);
     if (km) {
       if (km[2] !== undefined) { id = km[2]; label = km[1]; }
       else { id = km[3]; label = km[4] !== undefined ? km[4] : km[3]; }
+      stereo = km[5] || null;
     } else {
       var sm = trimmed.match(COMPONENT_SHORT_RE);
       if (!sm) return text;
       label = sm[1].trim(); id = sm[2] || label;
+      stereo = sm[3] || null;
     }
     if (field === 'id') id = value;
     else if (field === 'label') label = value;
+    else if (field === 'stereotype') stereo = value;
     var openBrace = /\{\s*$/.test(lines[idx]) ? ' {' : '';
-    lines[idx] = indent + fmtComponent(id, label) + openBrace;
+    lines[idx] = indent + fmtComponent(id, label, stereo) + openBrace;
     return lines.join('\n');
   }
 
@@ -261,7 +271,7 @@ window.MA.modules.plantumlComponent = (function() {
     if (idx < 0 || idx >= lines.length) return text;
     var indent = lines[idx].match(/^(\s*)/)[1];
     var trimmed = lines[idx].trim();
-    var id, label, labelImplicit = false;
+    var id, label, labelImplicit = false, stereo = null;
     var km = trimmed.match(INTERFACE_KW_RE);
     if (km) {
       if (km[2] !== undefined) { id = km[2]; label = km[1]; }
@@ -270,6 +280,7 @@ window.MA.modules.plantumlComponent = (function() {
         if (km[4] !== undefined) { label = km[4]; }
         else { label = km[3]; labelImplicit = true; }
       }
+      stereo = km[5] || null;
     } else {
       var sm = trimmed.match(INTERFACE_SHORT_RE);
       if (!sm) return text;
@@ -277,12 +288,14 @@ window.MA.modules.plantumlComponent = (function() {
       var firstToken = sm[1].trim();
       id = sm[2] || firstToken;
       label = firstToken;
+      stereo = sm[3] || null;
     }
     if (field === 'id') {
       id = value;
       if (labelImplicit) label = value;
     } else if (field === 'label') label = value;
-    lines[idx] = indent + fmtInterface(id, label);
+    else if (field === 'stereotype') stereo = value;
+    lines[idx] = indent + fmtInterface(id, label, stereo);
     return lines.join('\n');
   }
 
@@ -384,7 +397,7 @@ window.MA.modules.plantumlComponent = (function() {
         var id, label;
         if (m[2] !== undefined) { id = m[2]; label = m[1]; }
         else { id = m[3]; label = m[4] !== undefined ? m[4] : m[3]; }
-        result.elements.push({ kind: 'component', id: id, label: label, stereotype: null, line: lineNum, parentPackageId: currentPackageId });
+        result.elements.push({ kind: 'component', id: id, label: label, stereotype: m[5] || null, line: lineNum, parentPackageId: currentPackageId });
         lastComponentId = id;  // track for port adjacency
         continue;
       }
@@ -393,7 +406,7 @@ window.MA.modules.plantumlComponent = (function() {
       if (m) {
         var label2 = m[1].trim();
         var id2 = m[2] || label2;
-        result.elements.push({ kind: 'component', id: id2, label: label2, stereotype: null, line: lineNum, parentPackageId: currentPackageId });
+        result.elements.push({ kind: 'component', id: id2, label: label2, stereotype: m[3] || null, line: lineNum, parentPackageId: currentPackageId });
         lastComponentId = id2;  // track for port adjacency
         continue;
       }
@@ -403,7 +416,7 @@ window.MA.modules.plantumlComponent = (function() {
         var id3, label3;
         if (m[2] !== undefined) { id3 = m[2]; label3 = m[1]; }
         else { id3 = m[3]; label3 = m[4] !== undefined ? m[4] : m[3]; }
-        result.elements.push({ kind: 'interface', id: id3, label: label3, stereotype: null, line: lineNum, parentPackageId: currentPackageId });
+        result.elements.push({ kind: 'interface', id: id3, label: label3, stereotype: m[5] || null, line: lineNum, parentPackageId: currentPackageId });
         lastComponentId = null;  // interface breaks component adjacency
         continue;
       }
@@ -416,7 +429,7 @@ window.MA.modules.plantumlComponent = (function() {
         var alias = m[2];
         var realId = alias || firstTok;
         var realLabel = firstTok;
-        result.elements.push({ kind: 'interface', id: realId, label: realLabel, stereotype: null, line: lineNum, parentPackageId: currentPackageId });
+        result.elements.push({ kind: 'interface', id: realId, label: realLabel, stereotype: m[3] || null, line: lineNum, parentPackageId: currentPackageId });
         lastComponentId = null;  // interface breaks component adjacency
         continue;
       }
@@ -525,11 +538,13 @@ window.MA.modules.plantumlComponent = (function() {
         html =
           P.fieldHtml('Alias', 'co-tail-alias', '', '例: WebApp') +
           P.fieldHtml('Label', 'co-tail-label', '', '省略可') +
+          P.fieldHtml('Stereotype', 'co-tail-stereo', '', '省略可 (例: service)') +
           P.primaryButtonHtml('co-tail-add', '+ Component 追加');
       } else if (kind === 'interface') {
         html =
           P.fieldHtml('Alias', 'co-tail-alias', '', '例: IAuth') +
           P.fieldHtml('Label', 'co-tail-label', '', '省略可') +
+          P.fieldHtml('Stereotype', 'co-tail-stereo', '', '省略可 (例: api)') +
           P.primaryButtonHtml('co-tail-add', '+ Interface 追加');
       } else if (kind === 'port') {
         var portParentOpts = compOpts.length > 0 ? compOpts : [{ value: '', label: '（component なし）' }];
@@ -581,14 +596,16 @@ window.MA.modules.plantumlComponent = (function() {
           if (!normCo.valid) { alert('Alias 必須'); return; }
           var rawLbl = document.getElementById('co-tail-label').value.trim();
           window.MA.history.pushHistory();
-          out = addComponent(t, normCo.id, rawLbl || normCo.label);
+          var stEl = document.getElementById('co-tail-stereo');
+          out = addComponent(t, normCo.id, rawLbl || normCo.label, stEl ? stEl.value.trim() : '');
         } else if (kind === 'interface') {
           var rawAl2 = document.getElementById('co-tail-alias').value;
           var normIf = normalizeIdInput(rawAl2, parsedData);
           if (!normIf.valid) { alert('Alias 必須'); return; }
           var rawLbl2 = document.getElementById('co-tail-label').value.trim();
           window.MA.history.pushHistory();
-          out = addInterface(t, normIf.id, rawLbl2 || normIf.label);
+          var stEl2 = document.getElementById('co-tail-stereo');
+          out = addInterface(t, normIf.id, rawLbl2 || normIf.label, stEl2 ? stEl2.value.trim() : '');
         } else if (kind === 'port') {
           var rawAl3 = document.getElementById('co-tail-alias').value;
           var normPt = normalizeIdInput(rawAl3, parsedData);
@@ -647,6 +664,8 @@ window.MA.modules.plantumlComponent = (function() {
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + element.kind.toUpperCase() + ' (L' + element.line + ')</label>' +
         P.fieldHtml('Alias (id)', 'co-edit-id', element.id) +
         P.fieldHtml('Label', 'co-edit-label', element.label) +
+        // design 5d: ステレオタイプ (<<service>> など)。空にすれば外れる
+        P.fieldHtml('Stereotype', 'co-edit-stereo', element.stereotype || '', '例: service (空で外す)') +
         P.primaryButtonHtml('co-edit-apply', '変更を反映') +
         '<div style="margin-top:6px;">' +
           P.primaryButtonHtml('co-rename-refs', 'Alias 変更を関連 Relation にも追従') +
@@ -670,9 +689,12 @@ window.MA.modules.plantumlComponent = (function() {
       var newLabel = (renameNorm.valid && renameNorm.id !== renameNorm.label)
         ? renameNorm.label
         : rawNewLabel;
+      var stereoEl = document.getElementById('co-edit-stereo');
+      var newStereo = stereoEl ? stereoEl.value.trim() : '';
       var fn = element.kind === 'component' ? updateComponent : updateInterface;
       if (newId !== element.id) t = fn(t, element.line, 'id', newId);
       if (newLabel !== element.label) t = fn(t, element.line, 'label', newLabel);
+      if (newStereo !== (element.stereotype || '')) t = fn(t, element.line, 'stereotype', newStereo);
       ctx.setMmdText(t);
       ctx.onUpdate();
     });
