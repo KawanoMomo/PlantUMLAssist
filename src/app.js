@@ -1966,6 +1966,8 @@ function setupTabs() {
         dsl: mod ? mod.template() : '',
       });
       applyActiveDoc();
+      // 新規タブも作った時点でフォルダに現れる (BLK-primary-20260907-0823)。
+      saveActiveDoc();
     });
   }
 
@@ -2413,6 +2415,10 @@ function setupTemplateNew() {
       diagramType: (detected && modules[detected]) ? detected : currentDiagramType,
     });
     applyActiveDoc();
+    // BLK-primary-20260907-0823: 作った直後にフォルダへ書き出す。ここを踏まないと
+    // 新しいタブは「まだ 1 度も保存されていない図」のままで、保存先ディレクトリを
+    // 設定していても {name}.puml が現れない。
+    saveActiveDoc();
     close();
   }
 
@@ -3304,14 +3310,45 @@ function onFilePicked(e) {
   e.target.value = '';
 }
 
+// BLK-primary-20260907-0823: 保存先ディレクトリを設定していても「保存」は
+// ダウンロードしか起こさず、フォルダに .puml ができなかった。保存先を設定して
+// いる間は、保存先へ書くのが「保存」である。判定は save-target が唯一の規約。
 function saveFile() {
   var title = (currentParsed && currentParsed.meta && currentParsed.meta.title) || 'untitled';
+  // 押した時点の編集内容を workspace のアクティブなドキュメントに書き戻してから
+  // 保存する (打った直後に押しても最後の 1 文字が落ちない)。
+  var doc = saveActiveDoc();
+  var cfg = null;
+  try { cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null; } catch (e) { cfg = null; }
+  var ST = window.MA.saveTarget;
+  var target = ST ? ST.decide(cfg, doc, title) : { mode: 'download', name: title };
+
+  if (target.mode === 'file') {
+    // saveActiveDoc() が既に書き出しているが、ここでは結果を待って利用者に伝える。
+    window.MA.workspace.saveToFile(doc, target.dir).then(function(ok) {
+      setSaveStatus(ST.messageFor(target, ok));
+    });
+    return;
+  }
+
   var blob = new Blob([mmdText], { type: 'text/plain' });
   var a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = title + '.puml';
+  a.download = target.name + '.puml';
   a.click();
   URL.revokeObjectURL(a.href);
+  if (ST) setSaveStatus(ST.messageFor(target, true));
+}
+
+// 保存の結果をステータスバーに数秒だけ出す。押しても何も起きないように
+// 見える状態を作らないための表示で、通常の自動保存表示は上書きしない。
+var _saveStatusTimer = null;
+function setSaveStatus(msg) {
+  var el = document.getElementById('status-save-result');
+  if (!el || !msg) return;
+  el.textContent = msg;
+  if (_saveStatusTimer) clearTimeout(_saveStatusTimer);
+  _saveStatusTimer = setTimeout(function() { el.textContent = ''; }, 6000);
 }
 
 // ── Export ─────────────────────────────────────────────────────────────────
