@@ -93,10 +93,92 @@ def write_prefs(partial):
     return merged
 
 
+# BLK-reviewer-20260907-0043: /render のリクエスト仕様がどこにも書いておらず、
+# `{"dsl": ...}` を投げると text='' として描画され、PlantUML の
+# "No valid @start/@end found" というエラー画が 200 で返って成功と誤認できた。
+# curl から使う人がこの 1 つの窓口だけを見て分かるよう、
+#   - GET /render は仕様そのものを返す
+#   - POST /render は要求の形が違えば 400 で「何を期待しているか」を言う
+#   - PlantUML のエラー画は 200 ではなく 422 で返す
+# の 3 点を server 側で保証する。
+RENDER_API_DOC = {
+    'endpoint': 'POST /render',
+    'request': {
+        'content-type': 'application/json',
+        'fields': {
+            'text': "必須。PlantUML の DSL 全文 (@startuml … @enduml)。'dsl' ではない",
+            'mode': "任意。'local' (既定、同梱 Java) または 'online' (plantuml.com へ送信)",
+        },
+    },
+    'response': {
+        '200': 'image/svg+xml — 描画された SVG',
+        '400': "application/json {error} — text が無い / 文字列でない / 空",
+        '422': "application/json {error, line} — DSL の文法エラー (PlantUML のエラー画)",
+        '500': 'application/json {error} — 描画そのものの失敗',
+    },
+    'example': (
+        'curl -sS -X POST http://127.0.0.1:%d/render '
+        '-H "Content-Type: application/json" '
+        """-d '{"text": "@startuml\\nA -> B\\n@enduml", "mode": "local"}'"""
+    ) % PORT,
+}
+
+# PlantUML のエラー画の目印。src/core/render-error.js の detect と同じ 3 条件。
+# 片方だけ変えないこと。
+_ERR_GREEN_MARK = b'fill="#33FF02"'
+_ERR_RED_TEXT_RE = re.compile(rb'<text[^>]*fill="#FF0000"[^>]*>(.*?)</text>', re.S | re.I)
+_ERR_LINE_RE = re.compile(rb'\[From string \(line (\d+)\)')
+_ENTITIES = {'&lt;': '<', '&gt;': '>', '&quot;': '"', '&apos;': "'", '&amp;': '&', '&#160;': ' '}
+
+
+def _decode_entities(raw):
+    text = raw.decode('utf-8', 'replace')
+    for k, v in _ENTITIES.items():
+        text = text.replace(k, v)
+    text = re.sub(r'&#(\d+);', lambda m: chr(int(m.group(1))), text)
+    return text.strip()
+
+
+def detect_render_error(svg):
+    """PlantUML の「エラー画」なら {'message', 'line'}。図なら None。"""
+    if not svg or _ERR_GREEN_MARK not in svg:
+        return None
+    m = _ERR_RED_TEXT_RE.search(svg)
+    if not m:
+        return None
+    message = _decode_entities(m.group(1))
+    if 'error' not in message.lower():
+        return None
+    lm = _ERR_LINE_RE.search(svg)
+    return {'message': message, 'line': int(lm.group(1)) if lm else None}
+
+
+def validate_render_request(data):
+    """POST /render の body を検めて、問題があればエラーメッセージを返す。無ければ None。"""
+    if not isinstance(data, dict):
+        return "body must be a JSON object with a 'text' field. GET /render で仕様を返します"
+    if 'text' not in data:
+        wrong = [k for k in ('dsl', 'source', 'uml', 'puml', 'diagram') if k in data]
+        got = ', '.join(sorted(data.keys())) or '(なし)'
+        hint = (" — '%s' ではなく 'text' です" % wrong[0]) if wrong else ''
+        return ("required field 'text' is missing%s. 受け取ったフィールド: %s. "
+                'GET /render で仕様を返します' % (hint, got))
+    if not isinstance(data['text'], str):
+        return "'text' must be a string (PlantUML の DSL 全文)"
+    if not data['text'].strip():
+        return "'text' is empty — @startuml … @enduml を含む DSL を渡してください"
+    mode = data.get('mode', 'local')
+    if mode not in ('local', 'online'):
+        return "unknown mode: %r — 'local' か 'online' です" % (mode,)
+    return None
+
+
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path.startswith('/autosave'):
             return self._handle_autosave_get()
+        if self.path.split('?')[0] == '/render':
+            return self._send_json(200, RENDER_API_DOC)
         if self.path.split('?')[0] == '/prefs':
             return self._send_json(200, read_prefs())
         if self.path.split('?')[0] == '/env':
@@ -159,7 +241,11 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError:
             self._send_json(400, {'error': 'invalid JSON'})
             return
-        text = data.get('text', '')
+        problem = validate_render_request(data)
+        if problem:
+            self._send_json(400, {'error': problem, 'api': RENDER_API_DOC})
+            return
+        text = data['text']
         mode = data.get('mode', 'local')
         if mode == 'local':
             svg, error = render_local(text)
@@ -171,6 +257,14 @@ class Handler(BaseHTTPRequestHandler):
         if error:
             self._send_json(500, {'error': error})
         else:
+            # PlantUML は文法エラーでも SVG (エラー画) を 200 で返す。そのまま流すと
+            # curl では成功と区別できないので、ここで 422 に落とす。ブラウザ側は
+            # 元から !resp.ok を描画エラー扱いにしているので見え方は変わらない。
+            err = detect_render_error(svg)
+            if err:
+                msg = ('%d 行目: %s' % (err['line'], err['message'])) if err['line'] else err['message']
+                self._send_json(422, {'error': msg, 'line': err['line'], 'kind': 'plantuml-syntax'})
+                return
             self.send_response(200)
             self.send_header('Content-Type', 'image/svg+xml')
             self.send_header('Cache-Control', 'no-cache')
@@ -178,10 +272,14 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(svg)
 
     def _send_json(self, code, payload):
+        # BLK-reviewer-20260907-0043: エラーメッセージも API 仕様も日本語なので、
+        # エスケープに潰さずそのまま読める形で返す (curl から読む窓口である)。
+        body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
         self.send_response(code)
-        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Type', 'application/json; charset=utf-8')
+        self.send_header('Content-Length', str(len(body)))
         self.end_headers()
-        self.wfile.write(json.dumps(payload).encode('utf-8'))
+        self.wfile.write(body)
 
     def log_message(self, fmt, *args):
         pass

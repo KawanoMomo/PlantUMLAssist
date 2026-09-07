@@ -294,6 +294,48 @@ Windows では `start.bat` をダブルクリックでも起動可能 (server.py
 
 **自動停止**: ブラウザタブを閉じるとサーバーも自動で停止します (heartbeat 方式、タブ close 後 2〜6秒以内に終了)。F5 リロードは自動判定で継続。明示的に止めたい場合は `Ctrl+C`。
 
+## HTTP API
+
+curl などから直接使う窓口。**仕様は `GET /render` が自分で返す**ので、覚えていなくても
+`curl http://127.0.0.1:8766/render` を叩けば以下と同じ内容が JSON で得られます。
+
+### `POST /render` — DSL を SVG にする
+
+リクエストは `application/json`。DSL を渡すフィールドは **`text`** です (`dsl` ではありません)。
+
+| フィールド | 必須 | 内容 |
+|---|---|---|
+| `text` | 必須 | PlantUML の DSL 全文 (`@startuml` … `@enduml`) |
+| `mode` | 任意 | `local` (既定・同梱 Java) / `online` (plantuml.com へ送信) |
+
+```bash
+curl -sS -X POST http://127.0.0.1:8766/render   -H "Content-Type: application/json"   -d '{"text": "@startuml
+A -> B
+@enduml", "mode": "local"}'
+```
+
+レスポンス:
+
+| ステータス | 内容 |
+|---|---|
+| `200` | `image/svg+xml` — 描画された SVG |
+| `400` | `{"error": ...}` — `text` が無い / 文字列でない / 空。`{"dsl": ...}` を送るとここに落ち、`'dsl' ではなく 'text' です` と返ります |
+| `422` | `{"error": "3 行目: Syntax Error?", "line": 3}` — DSL の文法エラー |
+| `500` | `{"error": ...}` — 描画そのものの失敗 |
+
+> PlantUML 自身は文法エラーでも「Syntax Error?」と描いた SVG を 200 で返します。
+> この server はそれを `422` に落とすので、`curl` の終了コードとステータスだけで
+> 成功と失敗を見分けられます。
+
+### その他
+
+| エンドポイント | 内容 |
+|---|---|
+| `GET /render` | 上の仕様そのものを JSON で返す |
+| `GET /env` | Java の検出結果など実行環境 |
+| `GET|POST /prefs` | 保存先 (`backend` / `fileDir`) をこのマシンに覚えさせる |
+| `GET|POST|DELETE /autosave` | 保存フォルダの読み書き |
+
 ## 要件
 
 - Python 3 (標準ライブラリのみ、追加パッケージ不要)
