@@ -168,6 +168,183 @@ window.MA.properties = (function() {
     }
   }
 
+  // relationOptionsHtml: design 3c「関係のその他の設定」。
+  // 主要な「関係の種類」は呼び出し側が常時表示のまま出し、細かい指定 (向き / 多重度 /
+  // 線の色 / 線へのノート) をここに畳む。Sequence の「その他の矢印…」と同じ流儀で、
+  // 現在値が既定から外れていれば開いた状態で出す。
+  // opts = { direction, leftMult, rightMult, color, note } (relationOptions.optionsAt の戻り)
+  function relationOptionsHtml(id, opts) {
+    var o = opts || {};
+    var RO = window.MA.relationOptions;
+    var dirty = (o.direction && o.direction !== 'forward') || !!o.leftMult || !!o.rightMult
+      || !!o.color || o.note != null;
+
+    var dirs = [
+      { value: 'forward',  label: 'From → To' },
+      { value: 'backward', label: 'To → From' },
+      { value: 'none',     label: '矢印なし' },
+    ];
+    var dirBtns = '';
+    for (var i = 0; i < dirs.length; i++) {
+      var on = dirs[i].value === o.direction;
+      dirBtns += '<button type="button" class="prop-rel-dir' + (on ? ' active' : '') + '"'
+        + ' data-value="' + dirs[i].value + '" aria-pressed="' + (on ? 'true' : 'false') + '"'
+        + ' style="flex:1;background:' + (on ? 'var(--accent)' : 'var(--bg-tertiary)') + ';'
+        + 'border:1px solid ' + (on ? 'var(--accent)' : 'var(--border)') + ';'
+        + 'color:' + (on ? '#fff' : 'var(--text-primary)') + ';'
+        + 'font-size:11px;padding:4px 2px;border-radius:3px;cursor:pointer;">' + dirs[i].label + '</button>';
+    }
+
+    var colors = (RO && RO.COLORS) || [];
+    var swatches = '';
+    for (var j = 0; j < colors.length; j++) {
+      var sel = colors[j].value === (o.color || '');
+      swatches += '<button type="button" class="prop-rel-color' + (sel ? ' active' : '') + '"'
+        + ' data-value="' + escHtml(colors[j].value) + '" title="' + escHtml(colors[j].label) + '"'
+        + ' aria-pressed="' + (sel ? 'true' : 'false') + '"'
+        + ' style="width:18px;height:18px;padding:0;border-radius:4px;cursor:pointer;'
+        + 'background:' + colors[j].swatch + ';'
+        + 'border:' + (sel ? '2px solid var(--accent)' : '1px solid var(--border)') + ';"></button>';
+    }
+
+    var noted = o.note != null;
+    return '<div style="margin-bottom:8px;">' +
+      '<button type="button" id="' + id + '-btn" aria-expanded="' + (dirty ? 'true' : 'false') + '"'
+        + ' aria-controls="' + id + '"'
+        + ' style="width:100%;text-align:left;background:transparent;border:0;color:var(--text-secondary);'
+        + 'font-size:11px;padding:2px 0;cursor:pointer;">その他の設定… '
+        + '<span class="prop-rel-caret">' + (dirty ? '▴' : '▾') + '</span></button>' +
+      '<div id="' + id + '"' + (dirty ? '' : ' hidden')
+        + ' style="border:1px solid var(--border);border-radius:3px;padding:8px;margin-top:2px;">' +
+        '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:3px;">向き / Direction</div>' +
+        '<div id="' + id + '-dir" style="display:flex;gap:3px;margin-bottom:8px;">' + dirBtns + '</div>' +
+        '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:3px;">多重度 / Multiplicity</div>' +
+        '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">' +
+          '<input id="' + id + '-mult-left" type="text" value="' + escHtml(o.leftMult || '') + '" placeholder="1"'
+            + ' style="flex:1;min-width:0;background:var(--bg-tertiary);border:1px solid var(--border);'
+            + 'color:var(--text-primary);padding:3px 6px;border-radius:3px;font-family:var(--font-mono);font-size:12px;">' +
+          '<span style="font-size:11px;color:var(--text-secondary);">—</span>' +
+          '<input id="' + id + '-mult-right" type="text" value="' + escHtml(o.rightMult || '') + '" placeholder="*"'
+            + ' style="flex:1;min-width:0;background:var(--bg-tertiary);border:1px solid var(--border);'
+            + 'color:var(--text-primary);padding:3px 6px;border-radius:3px;font-family:var(--font-mono);font-size:12px;">' +
+        '</div>' +
+        '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:3px;">線の色 / Line color</div>' +
+        '<div id="' + id + '-colors" style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">' + swatches +
+          '<span style="margin-left:auto;font-family:var(--font-mono);font-size:10px;color:var(--text-secondary);">-[#red]&gt;</span>' +
+        '</div>' +
+        '<label style="display:flex;align-items:center;justify-content:space-between;font-size:12px;cursor:pointer;">' +
+          '<span>この線にノートを添える</span>' +
+          '<input id="' + id + '-note-on" type="checkbox"' + (noted ? ' checked' : '') + '>' +
+        '</label>' +
+        '<textarea id="' + id + '-note"' + (noted ? '' : ' hidden')
+          + ' style="width:100%;min-height:48px;margin-top:4px;background:var(--bg-tertiary);'
+          + 'border:1px solid var(--border);color:var(--text-primary);font-size:12px;">'
+          + escHtml(o.note || '') + '</textarea>' +
+        '<div style="display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:10px;'
+          + 'color:var(--text-secondary);margin-top:6px;"><span>Esc で閉じる</span>'
+          + '<span>変更は即座に DSL へ反映</span></div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  // bindRelationOptions: 「その他の設定」の各操作を、行番号を渡された 1 つのハンドラに繋ぐ。
+  // handlers = { onDirection(v), onMultiplicity(l, r), onColor(v), onNote(textOrNull) }
+  // どの操作も押した / 離れた時点で即座に DSL へ反映する (design 3c)。
+  function bindRelationOptions(id, handlers) {
+    var panel = document.getElementById(id);
+    var btn = document.getElementById(id + '-btn');
+    if (btn && panel) {
+      btn.addEventListener('click', function() {
+        var open = panel.hasAttribute('hidden');
+        if (open) panel.removeAttribute('hidden'); else panel.setAttribute('hidden', '');
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        var caret = btn.querySelector('.prop-rel-caret');
+        if (caret) caret.textContent = open ? '▴' : '▾';
+      });
+    }
+    // Esc は「その他の設定」だけを閉じる。選択そのものは解除しない。
+    if (panel) {
+      panel.addEventListener('keydown', function(e) {
+        if (e.key !== 'Escape') return;
+        e.stopPropagation();
+        panel.setAttribute('hidden', '');
+        if (btn) {
+          btn.setAttribute('aria-expanded', 'false');
+          var c = btn.querySelector('.prop-rel-caret');
+          if (c) c.textContent = '▾';
+          btn.focus();
+        }
+      });
+    }
+    var dirs = document.getElementById(id + '-dir');
+    if (dirs && handlers.onDirection) {
+      var dbtns = dirs.querySelectorAll('.prop-rel-dir');
+      for (var i = 0; i < dbtns.length; i++) {
+        (function(b) {
+          b.addEventListener('click', function() { handlers.onDirection(b.getAttribute('data-value')); });
+        })(dbtns[i]);
+      }
+    }
+    var colors = document.getElementById(id + '-colors');
+    if (colors && handlers.onColor) {
+      var cbtns = colors.querySelectorAll('.prop-rel-color');
+      for (var j = 0; j < cbtns.length; j++) {
+        (function(b) {
+          b.addEventListener('click', function() { handlers.onColor(b.getAttribute('data-value')); });
+        })(cbtns[j]);
+      }
+    }
+    var ml = document.getElementById(id + '-mult-left');
+    var mr = document.getElementById(id + '-mult-right');
+    if (ml && mr && handlers.onMultiplicity) {
+      var applyMult = function() { handlers.onMultiplicity(ml.value.trim(), mr.value.trim()); };
+      ml.addEventListener('change', applyMult);
+      mr.addEventListener('change', applyMult);
+    }
+    var on = document.getElementById(id + '-note-on');
+    var ta = document.getElementById(id + '-note');
+    if (on && ta && handlers.onNote) {
+      on.addEventListener('change', function() {
+        if (on.checked) {
+          ta.removeAttribute('hidden');
+          ta.focus();
+          if (ta.value.trim()) handlers.onNote(ta.value);
+        } else {
+          ta.setAttribute('hidden', '');
+          handlers.onNote(null);
+        }
+      });
+      ta.addEventListener('change', function() {
+        handlers.onNote(ta.value.trim() ? ta.value : null);
+      });
+    }
+  }
+
+  // relationOptionsFor / bindRelationOptionsFor: UseCase / Component / Class が
+  // 「関係行の行番号」と ctx だけを渡せば design 3c の一式が付く入口。
+  // 図種ごとの差は無いので、3 モジュールはこの 2 行を呼ぶだけでよい。
+  function relationOptionsFor(id, text, lineNum) {
+    return relationOptionsHtml(id, window.MA.relationOptions.optionsAt(text, lineNum));
+  }
+
+  function bindRelationOptionsFor(id, lineNum, ctx) {
+    var RO = window.MA.relationOptions;
+    var apply = function(fn) {
+      var before = ctx.getMmdText();
+      var after = fn(before);
+      if (after === before) return;
+      window.MA.history.pushHistory();
+      ctx.setMmdText(after);
+      ctx.onUpdate();
+    };
+    bindRelationOptions(id, {
+      onDirection: function(v) { apply(function(t) { return RO.setDirectionAt(t, lineNum, v); }); },
+      onMultiplicity: function(l, r) { apply(function(t) { return RO.setMultiplicityAt(t, lineNum, l, r); }); },
+      onColor: function(v) { apply(function(t) { return RO.setLineColorAt(t, lineNum, v); }); },
+      onNote: function(v) { apply(function(t) { return RO.setNoteAt(t, lineNum, v); }); },
+    });
+  }
+
   function selectFieldHtml(label, id, options, monoFont) {
     var opts = '';
     for (var i = 0; i < options.length; i++) {
@@ -297,6 +474,10 @@ window.MA.properties = (function() {
     segmentedFieldHtml: segmentedFieldHtml,
     arrowPickerHtml: arrowPickerHtml,
     bindArrowPicker: bindArrowPicker,
+    relationOptionsHtml: relationOptionsHtml,
+    bindRelationOptions: bindRelationOptions,
+    relationOptionsFor: relationOptionsFor,
+    bindRelationOptionsFor: bindRelationOptionsFor,
     panelHeaderHtml: panelHeaderHtml,
     sectionHeaderHtml: sectionHeaderHtml,
     sectionFooterHtml: sectionFooterHtml,

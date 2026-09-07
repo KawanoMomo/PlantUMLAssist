@@ -285,7 +285,8 @@ window.MA.modules.plantumlComponent = (function() {
     if (idx < 0 || idx >= lines.length) return text;
     var indent = lines[idx].match(/^(\s*)/)[1];
     var trimmed = lines[idx].trim();
-    var m = trimmed.match(RELATION_RE);
+    var deco = window.MA.relationOptions.decorationsOf(lines[idx]);
+    var m = window.MA.relationOptions.plainLine(trimmed).match(RELATION_RE);
     if (!m) return text;
     var fromRaw = m[1], arrow = m[2], toRaw = m[3], lbl = (m[4] || '').trim();
     var from = DU.unquote(fromRaw), to = DU.unquote(toRaw);
@@ -299,7 +300,9 @@ window.MA.modules.plantumlComponent = (function() {
     else if (field === 'to') to = value;
     else if (field === 'label') lbl = value;
 
-    lines[idx] = indent + fmtRelation(kind, from, to, lbl);
+    // 多重度・線の色は種別やラベルの書き換えでは失われない (design 3c)。
+    lines[idx] = window.MA.relationOptions.applyDecorations(
+      indent + fmtRelation(kind, from, to, lbl), deco);
     return lines.join('\n');
   }
 
@@ -425,7 +428,7 @@ window.MA.modules.plantumlComponent = (function() {
         continue;
       }
       // relations: --, -->, ..>, lollipop -()/()-/)-/-(, with optional ": label"
-      m = trimmed.match(RELATION_RE);
+      m = window.MA.relationOptions.plainLine(trimmed).match(RELATION_RE);
       if (m) {
         var fromRaw = m[1], arrow = m[2], toRaw = m[3], lbl = (m[4] || '').trim();
         var from = DU.unquote(fromRaw);
@@ -698,18 +701,21 @@ window.MA.modules.plantumlComponent = (function() {
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
         RC.headerHtml(relation.line, relation.from, relation.to) +
         RC.cardsHtml('co-rel-card', RC.kindsOf('component'), relation.kind) +
-        RC.moreSettingsHtml('co-rel-more') +
         RC.noteHtml() +
         P.fieldHtml('From', 'co-rel-from', relation.from) +
         '<button id="co-rel-swap" type="button" style="font-size:11px;padding:4px 10px;margin:4px 0;cursor:pointer;">⇄ 向きを入れ替え</button>' +
         P.fieldHtml('To', 'co-rel-to', relation.to) +
         P.fieldHtml('ラベル / Label（任意）', 'co-rel-label', relation.label) +
+        P.relationOptionsFor('co-rel-more', ctx.getMmdText(), relation.line) +
         P.primaryButtonHtml('co-rel-apply', '変更を反映') +
         '<div style="margin-top:8px;">' +
           '<button id="co-delete" style="background:var(--accent-red);color:#fff;border:none;padding:6px 10px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 削除 / Delete</button>' +
         '</div>' +
       '</div>';
     propsEl.innerHTML = html;
+
+    // design 3c: 細かい指定は「その他の設定」に畳み、押した時点で DSL へ反映する。
+    P.bindRelationOptionsFor('co-rel-more', relation.line, ctx);
 
     // FEAT-089: 種別は選んだ時点で確定する。From / To / Label は自由入力であり
     // 打鍵途中の反映が破壊的になり得るため、従来どおり「変更を反映」に残す。

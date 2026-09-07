@@ -66,10 +66,14 @@ test.describe('design 3b: Component の関係を選んだときの右パネル',
     expect(after).not.toContain('IAuth -() WebApp');
   });
 
+  // BLK-builder-20260907-1050-2 で 3c の中身が入り、枠だけの RC.moreSettingsHtml は
+  // 使わなくなった。開閉ボタンは #co-rel-more-btn、中身は #co-rel-more。
   test('その他の設定は折りたたまれた状態で置かれている', async ({ page }) => {
     if (!await openRelation(page)) test.skip();
-    await expect(page.locator('#co-rel-more')).toHaveAttribute('aria-expanded', 'false');
-    await page.locator('#co-rel-more').click();
-    await expect(page.locator('#co-rel-more')).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.locator('#co-rel-more-btn')).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.locator('#co-rel-more')).toBeHidden();
+    await page.locator('#co-rel-more-btn').click();
+    await expect(page.locator('#co-rel-more-btn')).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.locator('#co-rel-more')).toBeVisible();
   });
 });

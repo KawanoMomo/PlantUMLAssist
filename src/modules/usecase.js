@@ -226,7 +226,8 @@ window.MA.modules.plantumlUsecase = (function() {
     if (idx < 0 || idx >= lines.length) return text;
     var indent = lines[idx].match(/^(\s*)/)[1];
     var trimmed = lines[idx].trim();
-    var m = trimmed.match(RELATION_RE);
+    var deco = window.MA.relationOptions.decorationsOf(lines[idx]);
+    var m = window.MA.relationOptions.plainLine(trimmed).match(RELATION_RE);
     if (!m) return text;
     var fromRaw = m[1], arrow = m[2], toRaw = m[3], lbl = (m[4] || '').trim();
     var from = DU.unquote(fromRaw), to = DU.unquote(toRaw);
@@ -245,7 +246,9 @@ window.MA.modules.plantumlUsecase = (function() {
     else if (field === 'to') to = value;
     else if (field === 'label') lbl = value;
 
-    lines[idx] = indent + fmtRelation(kind, from, to, lbl);
+    // 多重度・線の色は種別やラベルの書き換えでは失われない (design 3c)。
+    lines[idx] = window.MA.relationOptions.applyDecorations(
+      indent + fmtRelation(kind, from, to, lbl), deco);
     return lines.join('\n');
   }
 
@@ -357,7 +360,7 @@ window.MA.modules.plantumlUsecase = (function() {
         continue;
       }
       // relation
-      m = trimmed.match(RELATION_RE);
+      m = window.MA.relationOptions.plainLine(trimmed).match(RELATION_RE);
       if (m) {
         var fromRaw = m[1], arrow = m[2], toRaw = m[3], lbl = (m[4] || '').trim();
         var from = DU.unquote(fromRaw);
@@ -612,12 +615,16 @@ window.MA.modules.plantumlUsecase = (function() {
         '<button id="uc-rel-swap" type="button" style="font-size:11px;padding:4px 10px;margin:4px 0;cursor:pointer;">⇄ From/To 入替</button>' +
         P.fieldHtml('To', 'uc-rel-to', relation.to) +
         P.fieldHtml('Label', 'uc-rel-label', relation.label) +
+        P.relationOptionsFor('uc-rel-more', ctx.getMmdText(), relation.line) +
         P.primaryButtonHtml('uc-rel-apply', '変更を反映') +
         '<div style="margin-top:8px;">' +
           '<button id="uc-delete" style="background:var(--accent-red);color:#fff;border:none;padding:6px 10px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 削除</button>' +
         '</div>' +
       '</div>';
     propsEl.innerHTML = html;
+
+    // design 3c: 細かい指定は「その他の設定」に畳み、押した時点で DSL へ反映する。
+    P.bindRelationOptionsFor('uc-rel-more', relation.line, ctx);
 
     P.bindEvent('uc-rel-apply', 'click', function() {
       var newKind = document.getElementById('uc-rel-kind').value;

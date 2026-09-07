@@ -16,6 +16,7 @@ var depPaths = [
   '../src/core/id-normalizer.js',
   '../src/core/props-renderer.js',
   '../src/core/overlay-builder.js',
+  '../src/core/relation-options.js',
   '../src/modules/usecase.js',
 ];
 depPaths.forEach(function(p) {
