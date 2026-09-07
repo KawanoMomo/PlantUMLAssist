@@ -95,12 +95,21 @@ describe('scope-decl', () => {
 });
 
 describe('trace-coverage × 担当範囲の宣言', () => {
-  test('宣言前: 初期化後の遷移が全部「どこにも現れない」と出る', () => {
+  // BLK-reviewer-20260907-2003 で、宣言が無い系統にも粒度差の除外を
+  // 入れた。宣言前の期待は「初期化後の遷移が 3 件 missing」から
+  // 「粒度違いとして見ていない」に変わる (宣言はその推測を
+  // 意図で置き換えるもので、宣言後の振る舞いは変えていない)。
+  test('宣言前: 初期化専用シーケンスとは粒度が違うとして突き合わせない', () => {
     var f = tc.audit(docs(GPIO_SEQ))[0];
     expect(f.declared).toBe(false);
-    expect(f.rows.length).toBe(4);
-    expect(f.missing.length).toBe(3);
-    expect(f.outOfScope.length).toBe(0);
+    expect(f.rows.length).toBe(0);
+    expect(f.missing.length).toBe(0);
+    expect(f.outOfScope.length).toBe(4);
+    expect(f.outOfScope.every(function(r) { return r.reason === 'grain'; })).toBe(true);
+    expect(f.grainSkipped.length).toBe(1);
+    // 黙って 0 件にせず、見ていないことを言う
+    expect(tc.summaryLine(f)).toContain('粒度が違うため突き合わせていません');
+    expect(tc.summaryLine(f)).toContain('宣言');
   });
 
   test('宣言後: 宣言された遷移だけが対象になり、漏れは 0 件になる', () => {

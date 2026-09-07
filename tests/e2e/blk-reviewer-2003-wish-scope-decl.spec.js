@@ -55,11 +55,16 @@ async function openTrace(page) {
 test.describe('BLK-reviewer-2003-wish シーケンス図の担当範囲を宣言する', () => {
   test.beforeEach(async ({ page }) => { await freshWorkspace(page); });
 
-  test('宣言前は初期化後の遷移が全部トレース漏れとして出る', async ({ page }) => {
+  // BLK-reviewer-20260907-2003 で、宣言が無い系統にも粒度差の除外を入れた。
+  // 宣言前の期待は「初期化後の遷移が全部漏れ」から「粒度違いとして見ていない」に
+  // 変わる (宣言はその推測を意図で置き換えるものなので、宣言後の振る舞いは変えていない)。
+  test('宣言前は初期化専用シーケンスとの粒度差として外れる', async ({ page }) => {
     await setupDocs(page);
     await openTrace(page);
-    await expect(page.locator('#tc-summary')).toHaveAttribute('data-missing', '3');
-    await expect(page.locator('#tc-scope-note')).toContainText('宣言なし');
+    await expect(page.locator('#tc-summary')).toHaveAttribute('data-missing', '0');
+    await expect(page.locator('#tc-summary')).toContainText('粒度が違うため突き合わせていません');
+    await expect(page.locator('#tc-table .tc-missing')).toHaveCount(0);
+    // 外した遷移は宣言欄に並ぶので、その場で意図を書ける
     await expect(page.locator('.tc-scope-cb')).toHaveCount(4);
   });
 
@@ -99,7 +104,10 @@ test.describe('BLK-reviewer-2003-wish シーケンス図の担当範囲を宣言
     await expect(page.locator('#tc-scope-note')).toContainText('宣言あり');
     await page.locator('#tc-scope-clear').click();
     await expect(page.locator('#tc-scope-note')).toContainText('宣言なし');
-    await expect(page.locator('#tc-summary')).toHaveAttribute('data-missing', '3');
+    // 宣言を消すと推測に戻る。この系統は初期化専用シーケンスしか無いので
+    // 粒度差として外れる (BLK-reviewer-20260907-2003)。
+    await expect(page.locator('#tc-summary')).toHaveAttribute('data-missing', '0');
+    await expect(page.locator('#tc-summary')).toContainText('粒度が違うため');
   });
 
   test('宣言はチェックの状態として開き直しても残る', async ({ page }) => {

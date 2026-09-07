@@ -5936,19 +5936,33 @@ function _traceScopeSection(family, SECTION, CELL, BTN) {
     + '<button id="tc-scope-all" style="' + BTN + '">全部にする</button>'
     + '<button id="tc-scope-clear" style="' + BTN + '">宣言を消す</button>'
     + '<span id="tc-scope-note" style="font-size:11px;color:var(--text-secondary);">'
-    + (family.declared
-        ? '宣言あり (' + esc(family.declaredBy.join(' / ')) + ') / 対象外 '
-          + (family.outOfScope || []).length + ' 件'
-        : '宣言なし: 遷移すべてを突き合わせています')
+    + _traceScopeNote(family)
     + '</span></div>';
 
-  if (family.declared && (family.outOfScope || []).length) {
+  if ((family.outOfScope || []).length) {
     html += '<div id="tc-scope-out" style="font-size:11px;color:var(--text-secondary);margin-top:4px;">'
-      + '宣言対象外: '
+      + (family.declared ? '宣言対象外: ' : '粒度違いで見ていない遷移: ')
       + family.outOfScope.map(function(r) { return esc(r.from + ' → ' + r.to); }).join(', ')
       + '</div>';
   }
   return html;
+}
+
+// 宣言欄の注記。宣言が無い系統でも、粒度違いで外した遷移があればそう言う
+// (BLK-reviewer-20260907-2003)。「遷移すべてを突き合わせています」と出しながら
+// 実際には外している状態を作らない。
+function _traceScopeNote(family) {
+  var esc = window.MA.htmlUtils.escHtml;
+  if (family.declared) {
+    return '宣言あり (' + esc(family.declaredBy.join(' / ')) + ') / 対象外 '
+      + (family.outOfScope || []).length + ' 件';
+  }
+  var oos = (family.outOfScope || []).length;
+  if (oos) {
+    return '宣言なし: 粒度が違うとして ' + oos + ' 件を外しています。'
+      + '担当範囲を宣言すれば意図どおりに突き合わせられます';
+  }
+  return '宣言なし: 遷移すべてを突き合わせています';
 }
 
 // チェックの状態を DSL に書き戻す。正本は PlantUML テキストなので、
@@ -6008,8 +6022,12 @@ function _traceRender(families, selectedKey) {
     + '<select id="tc-family" style="background:var(--bg-primary);border:1px solid var(--border);'
       + 'color:var(--text-primary);padding:3px 6px;border-radius:3px;font-family:var(--font-mono);">'
     + families.map(function(f) {
+        // 対象外に回した遷移があれば件数を並べる。「遷移 0, 漏れ 0 件」だけだと
+        // 遷移を書いていない系統と見分けが付かない (BLK-reviewer-20260907-2003)。
+        var oos = (f.outOfScope || []).length;
         return '<option value="' + esc(f.key) + '"' + (f === sel ? ' selected' : '') + '>'
-          + esc(f.key) + ' (遷移 ' + f.rows.length + ', 漏れ ' + f.missing.length + ' 件)</option>';
+          + esc(f.key) + ' (遷移 ' + f.rows.length + ', 漏れ ' + f.missing.length + ' 件'
+          + (oos ? ', 対象外 ' + oos + ' 件' : '') + ')</option>';
       }).join('')
     + '</select></div>';
 

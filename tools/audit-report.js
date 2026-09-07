@@ -117,9 +117,14 @@ function summarize(audits) {
       transitions: t.result.reduce((n, g) => n + g.rows.length, 0),
       missing: t.result.reduce((n, g) => n + g.missing.length, 0),
       partial: t.result.reduce((n, g) => n + g.partial.length, 0),
-      // シーケンス図が無くて突き合わせられなかった系統。0 件を「漏れなし」と
-      // 読み違えないように、見ていない系統数を別に出す。
+      // 突き合わせられなかった系統。0 件を「漏れなし」と読み違えないように、
+      // 見ていない系統数を別に出す。シーケンス図が無い系統と、シーケンス図は
+      // あるが粒度が違うとして外した系統 (BLK-reviewer-20260907-2003) は
+      // 直し方が違うので分けて数える。
       unmatchable: t.result.filter((g) => !g.comparable).length,
+      noSequence: t.result.filter((g) => !g.comparable && g.seqDocs.length === 0).length,
+      grainSkipped: t.result.filter((g) => (g.grainSkipped || []).length > 0).length,
+      outOfScope: t.result.reduce((n, g) => n + (g.outOfScope || []).length, 0),
     };
   }
   return s;
@@ -149,7 +154,10 @@ function formatSummary(report) {
     lines.push(`系統: ${s.family.families} 系統中 ${s.family.mismatched} 系統に食い違い${skipped}`);
   }
   if (s.trace) {
-    const un = s.trace.unmatchable ? ` (シーケンス図が無く突き合わせ不能 ${s.trace.unmatchable} 系統)` : '';
+    const parts = [];
+    if (s.trace.noSequence) parts.push(`シーケンス図が無く突き合わせ不能 ${s.trace.noSequence} 系統`);
+    if (s.trace.grainSkipped) parts.push(`粒度違いで除外 ${s.trace.grainSkipped} 系統 / ${s.trace.outOfScope} 件`);
+    const un = parts.length ? ` (${parts.join(' / ')})` : '';
     const pa = s.trace.partial ? ` / 部分一致 ${s.trace.partial} 件` : '';
     lines.push(`トレース: 遷移 ${s.trace.transitions} 件中 ${s.trace.missing} 件がどのシーケンスにも現れない${pa}${un}`);
   }
