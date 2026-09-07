@@ -283,6 +283,15 @@ html, body {
 }
 #export-menu button:hover { background: var(--bg-tertiary); }
 
+/* design 2c: 行の右にキー割り当てを小さく置く */
+#export-menu button { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+#export-menu .exp-key {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
 #bulk-export-status {
   display: none;
   position: absolute;
@@ -1506,6 +1515,7 @@ html, body {
 <script src="src/core/workspace.js"></script>
 <script src="src/core/bulk-rename.js"></script>
 <script src="src/core/bulk-export.js"></script>
+<script src="src/core/export-shortcuts.js"></script>
 <script src="src/core/diagram-settings.js"></script>
 <script src="src/core/name-audit.js"></script>
 <script src="src/core/template-new.js"></script>

@@ -1166,6 +1166,39 @@ function init() {
     if (firstItem) firstItem.focus();
   });
 
+  // design 2c: よく使う 2 つ (SVG 保存 / クリップボードにコピー) はメニューを開かずに
+  // 1 発で出せる。当たり判定は export-shortcuts が唯一の規約で、メニュー行に出る
+  // キー表示も同じ表から引くので、表示と挙動が食い違わない。
+  //
+  // Shift 必須なので、ブラウザの Ctrl+S (ページ保存) や textarea の Ctrl+C は奪わない。
+  // 入力欄にフォーカスがあっても発火してよい (文字入力を潰さない組み合わせのため)。
+  document.addEventListener('keydown', function(e) {
+    var ES = window.MA.exportShortcuts;
+    if (!ES) return;
+    var targetId = ES.matchEvent(e);
+    if (!targetId) return;
+    var btn = document.getElementById(targetId);
+    if (!btn) return;
+    e.preventDefault();
+    exportMenu.classList.remove('open');
+    btn.click();
+  });
+
+  // メニュー行の右にキー割り当てを出す (design 2c)。
+  (function paintExportKeyHints() {
+    var ES = window.MA.exportShortcuts;
+    if (!ES) return;
+    var list = ES.bindings();
+    for (var i = 0; i < list.length; i++) {
+      var row = document.getElementById(list[i].id);
+      if (!row) continue;
+      var hint = document.createElement('span');
+      hint.className = 'exp-key';
+      hint.textContent = list[i].keys;
+      row.appendChild(hint);
+    }
+  })();
+
   // FEAT-165 (resolves UI-017): Esc でエクスポートメニューを閉じ、Ctrl+E 押下前の要素へ
   // フォーカスを戻す。既存の click による close 経路と、既存の Escape (participant ドラッグ
   // 中断) は変更せず、後者を優先するためドラッグ中は何もしない。
