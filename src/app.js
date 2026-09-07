@@ -231,6 +231,9 @@ function init() {
     }
     // 前回保存時点との差分バッジを追従させる。
     try { renderDiffBadge(); } catch (e) {}
+    // BLK-junior-20260907-1403-wish: 「見てもらいながらその場で直す」ので、
+    // 指摘は打つたびに引き直す。
+    try { renderReviewBadge(); } catch (e) {}
     try { renderConsistencyBadge(); } catch (e) {}
     try { renderPinBadge(); } catch (e) {}
   });
@@ -1983,6 +1986,7 @@ function init() {
   setupBulkRename();
   setupTemplateNew();
   setupDiffPanel();
+  setupReviewPanel();
   setupChangeBoard();
   setupPinPanel();
   setupNameAudit();
@@ -2608,6 +2612,8 @@ function applyActiveDoc() {
   isFirstRender = true;
   scheduleRefresh();
   renderTabs();
+  // 指摘は図ごとに違う。タブを替えたらその図の基準で引き直す。
+  try { renderReviewBadge(); } catch (e) {}
 }
 
 function switchToDoc(id) {
@@ -2671,6 +2677,10 @@ function renderTabs() {
       ev.preventDefault();
       var next = window.prompt('図の名前 (英数字・_ ・- のみ)', doc.name);
       if (next == null) return;
+      // 図の名前が変わってもレビューの基準は持ち越す。
+      if (window.MA.reviewDesk) {
+        try { window.MA.reviewDesk.renameBaseline(doc.name, next); } catch (e) {}
+      }
       window.MA.workspace.rename(doc.id, next);
       renderTabs();
     });
@@ -2809,6 +2819,147 @@ function setupDiffPanel() {
   });
 
   renderDiffBadge();
+}
+
+// ── レビュー机 (BLK-junior-20260907-1403-wish) ──────────────────────────
+// 「先輩の図と同じ型のまま作る」業務では、型からのずれも、図種特有の間違い
+// (choice を足したのに元の直接遷移が残る等) も、書いた本人からは見えない。
+// 基準にした図を図ごとに覚えておき、打つたびに突き合わせて指摘を出す。
+// 判断は review-desk が持ち、ここは並べて行へ飛ばすだけ。
+
+function _reviewFindings() {
+  var RD = window.MA.reviewDesk;
+  if (!RD) return { findings: [], ok: true, summary: '' };
+  var name = _activeDocName();
+  var base = name ? RD.baselineOf(name) : null;
+  return RD.review(mmdText, base ? base.dsl : '');
+}
+
+function _activeDocName() {
+  if (!window.MA.workspace) return '';
+  var d = window.MA.workspace.getActive();
+  return d ? d.name : '';
+}
+
+function renderReviewBadge() {
+  var btn = document.getElementById('btn-tab-review');
+  var RD = window.MA.reviewDesk;
+  if (!btn || !RD) return null;
+  var r = _reviewFindings();
+  btn.textContent = RD.badgeText(r.findings);
+  btn.className = r.findings.length ? 'tab-tool has-finding' : 'tab-tool';
+  var name = _activeDocName();
+  var base = name ? RD.baselineOf(name) : null;
+  btn.title = (base ? ('基準: ' + base.ref + ' / ') : '基準の図は未選択 / ') + r.summary;
+  // 開いたままなら中身も追従させる (直した指摘がその場で消える)。
+  var panel = document.getElementById('review-panel');
+  if (panel && panel.classList.contains('open')) renderReviewPanel();
+  return r;
+}
+
+function renderReviewPanel() {
+  var panel = document.getElementById('review-panel');
+  var RD = window.MA.reviewDesk;
+  if (!panel || !RD) return;
+  var esc = window.MA.htmlUtils.escHtml;
+  var name = _activeDocName();
+  var base = name ? RD.baselineOf(name) : null;
+  var r = _reviewFindings();
+
+  var opts = '<option value="">(基準の図を選ぶ)</option>';
+  var listed = {};
+  if (window.MA.workspace) {
+    window.MA.workspace.list().forEach(function(d) {
+      if (d.name === name) return;   // 自分自身は基準にしない
+      listed[d.name] = true;
+      opts += '<option value="' + esc(d.name) + '"' + (base && base.ref === d.name ? ' selected' : '') + '>'
+        + esc(d.name) + '</option>';
+    });
+  }
+  // 基準は組み込みの雛形だったり、もう閉じた図だったりする。開いている図に無くても
+  // 「いま何を基準にしているか」は出す (選び直すまで基準が空欄に見えると、
+  // 何と突き合わせた指摘なのか分からなくなる)。
+  if (base && base.ref && !listed[base.ref]) {
+    opts += '<option value="' + esc(base.ref) + '" selected>' + esc(base.ref) + '</option>';
+  }
+
+  var html = '<div class="rv-head" data-review="' + (r.findings.length ? 'dirty' : 'clean') + '">'
+    + esc(r.summary) + '</div>'
+    + '<div class="rv-base"><span>基準</span><select id="rv-base-select">' + opts + '</select></div>';
+
+  if (r.findings.length === 0) {
+    html += '<div class="rv-empty" id="rv-empty">'
+      + (base ? '基準「' + esc(base.ref) + '」との型のずれも、図種特有の間違いもありません。'
+              : '図種特有の間違いはありません。基準の図を選ぶと、型からのずれも見ます。')
+      + '</div>';
+  } else {
+    html += r.findings.map(function(f) {
+      return '<div class="rv-row" data-review-kind="' + esc(f.kind) + '"'
+        + (f.line == null ? '' : ' data-review-line="' + f.line + '"') + '>'
+        + '<span class="rv-kind">' + esc(RD.kindLabel(f.kind)) + '</span>'
+        + '<span class="rv-no">' + (f.line == null ? '—' : (f.line + 1)) + '</span>'
+        + '<span class="rv-msg">' + esc(f.message) + '</span>'
+        + '</div>';
+    }).join('');
+  }
+  panel.innerHTML = html;
+
+  var sel = document.getElementById('rv-base-select');
+  if (sel) {
+    sel.addEventListener('change', function() {
+      var docName = _activeDocName();
+      if (!docName) return;
+      var refName = sel.value;
+      var cur = RD.baselineOf(docName);
+      if (!refName) { RD.clearBaseline(docName); }
+      else {
+        var ref = window.MA.workspace ? window.MA.workspace.findByName(refName) : null;
+        if (ref) RD.setBaseline(docName, refName, ref.dsl, new Date().toISOString());
+        // 開いている図に無い基準 (組み込みの雛形・閉じた図) は、覚えてある本文をそのまま使う。
+        else if (cur && cur.ref === refName) RD.setBaseline(docName, refName, cur.dsl, cur.at);
+      }
+      renderReviewBadge();
+      renderReviewPanel();
+    });
+  }
+  var rows = panel.querySelectorAll('.rv-row[data-review-line]');
+  for (var i = 0; i < rows.length; i++) {
+    (function(row) {
+      row.addEventListener('click', function() {
+        gotoOutlineLine(parseInt(row.getAttribute('data-review-line'), 10));
+      });
+    })(rows[i]);
+  }
+}
+
+function openReviewPanel() {
+  var btn = document.getElementById('btn-tab-review');
+  var panel = document.getElementById('review-panel');
+  if (!btn || !panel) return;
+  renderReviewPanel();
+  panel.classList.add('open');
+  var rect = btn.getBoundingClientRect();
+  panel.style.left = Math.max(4, rect.right - 340) + 'px';
+  panel.style.top = (rect.bottom + 2) + 'px';
+}
+
+function setupReviewPanel() {
+  var btn = document.getElementById('btn-tab-review');
+  var panel = document.getElementById('review-panel');
+  if (!btn || !panel || !window.MA.reviewDesk) return;
+
+  btn.addEventListener('click', function() {
+    if (panel.classList.contains('open')) { panel.classList.remove('open'); return; }
+    openReviewPanel();
+  });
+
+  document.addEventListener('click', function(ev) {
+    if (!panel.classList.contains('open')) return;
+    if (panel.contains(ev.target) || ev.target === btn) return;
+    panel.classList.remove('open');
+  });
+
+  renderReviewBadge();
 }
 
 // ── 変更サマリボード ──────────────────────────────────
@@ -3585,7 +3736,20 @@ function setupTemplateNew() {
     // 新しいタブは「まだ 1 度も保存されていない図」のままで、保存先ディレクトリを
     // 設定していても {name}.puml が現れない。
     saveActiveDoc();
+    // BLK-junior-20260907-1403-wish: テンプレート元は、そのままこの図の「型の基準」。
+    // ここで覚えておけば、作った直後から「同じ形のままか」を見てもらえる。
+    if (window.MA.reviewDesk) {
+      try {
+        window.MA.reviewDesk.setBaseline(name, tpl.name, tpl.dsl, new Date().toISOString());
+      } catch (e) {}
+    }
     close();
+    // パネルを開くのは「作る」のクリックが抜けた後にする。同じクリックの中で開くと、
+    // 外側クリックで閉じる仕掛けが自分の open を打ち消してしまう。
+    try {
+      renderReviewBadge();
+      window.setTimeout(function() { try { openReviewPanel(); } catch (e) {} }, 0);
+    } catch (e) {}
   }
 
   function render() {

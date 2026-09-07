@@ -530,6 +530,70 @@ html, body {
 #diff-panel .diff-row.changed { color: var(--accent); }
 #diff-panel .diff-head { color: var(--text-primary); padding: 2px 4px 4px 4px; }
 #diff-panel .diff-actions { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 4px; }
+/* ── レビュー机 (BLK-junior-20260907-1403-wish) ───────────────────────────── */
+/* 指摘が 0 でないことは書いた本人には見えないので、ボタンの側で言い切る。 */
+#btn-tab-review.has-finding { color: var(--accent-orange); border-color: var(--accent-orange); }
+
+#review-panel {
+  display: none;
+  position: absolute;
+  z-index: 42;
+  max-height: 340px;
+  overflow-y: auto;
+  min-width: 340px;
+  max-width: 460px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px;
+  font-size: 11px;
+}
+#review-panel.open { display: block; }
+#review-panel .rv-head { color: var(--text-primary); padding: 2px 4px 6px 4px; }
+#review-panel .rv-head[data-review="clean"] { color: var(--accent-green); }
+#review-panel .rv-head[data-review="dirty"] { color: var(--accent-orange); }
+#review-panel .rv-base {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+  margin-bottom: 4px;
+  color: var(--text-secondary);
+}
+#review-panel select {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border-radius: 3px;
+  padding: 3px 4px;
+  font-size: 11px;
+}
+#review-panel .rv-row {
+  display: flex;
+  gap: 6px;
+  padding: 3px 4px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+#review-panel .rv-row:hover { background: var(--bg-secondary); }
+#review-panel .rv-kind {
+  flex: 0 0 auto;
+  color: var(--bg-primary);
+  background: var(--accent);
+  border-radius: 3px;
+  padding: 0 5px;
+  font-size: 10px;
+  line-height: 1.6;
+}
+#review-panel .rv-row[data-review-kind="dup"] .rv-kind { background: var(--accent-orange); }
+#review-panel .rv-no { flex: 0 0 auto; color: var(--text-secondary); font-family: var(--font-mono); }
+#review-panel .rv-msg { flex: 1; }
+#review-panel .rv-empty { color: var(--text-secondary); padding: 6px 4px; }
+
 #btn-tab-pins.has-open { color: var(--accent-red); border-color: var(--accent-red); }
 #pin-panel {
   display: none;
@@ -1961,6 +2025,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <!-- BLK-reviewer-20260907-1203-wish: レビューの指摘を図の該当行に貼り、未読/既読で追う -->
         <button class="tab-tool" id="btn-tab-pins" title="この図に付いたレビュー指摘の一覧。図の上の印をクリックしても開く">📌 指摘 −</button>
         <button class="tab-tool" id="btn-tab-board" title="変わった図の変更前 DSL と変更後 DSL を全部まとめて 1 画面に並べる (レビュー会議用)">▤ 変更サマリ</button>
+        <!-- BLK-junior-20260907-1403-wish: 型の基準にした図と突き合わせて、書いている間ずっと見てもらう -->
+        <button class="tab-tool" id="btn-tab-review" title="型の基準にした図と突き合わせて、この図のずれと図種特有の間違いを出す">👁 レビュー −</button>
         <!-- BLK-primary-20260907-1303-wish: 引き継ぎに要る確認結果と図を 1 つの zip に固める -->
         <button class="tab-tool" id="btn-tab-handoff" title="系統チェック・名前突合・変更サマリ・SVG 一式を 1 つのパッケージ (zip) に書き出す">📦 引き継ぎ</button>
         <!-- BLK-primary-20260907-1703-wish: 顧客に渡す最終成果物 (表紙+目次+差分要約+全図 SVG) を 1 つの zip にする -->
@@ -1968,6 +2034,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       </div>
       <div id="folder-panel"></div>
       <div id="diff-panel"></div>
+      <div id="review-panel"></div>
       <div id="pin-panel"></div>
       <!-- 開いている図をまたいで部品名を一括置換する -->
       <div id="rename-panel">
@@ -2328,6 +2395,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/count-compare.js"></script>
 <script src="src/core/change-board.js"></script>
 <script src="src/core/consistency-check.js"></script>
+<script src="src/core/review-desk.js"></script>
 <script src="src/core/state-branch.js"></script>
 <script src="src/core/state-transition.js"></script>
 <script src="src/core/state-table.js"></script>
