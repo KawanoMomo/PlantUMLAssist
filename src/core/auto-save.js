@@ -126,7 +126,29 @@ window.MA.autoSave = (function() {
       if ('fileDir' in partial) merged.fileDir = partial.fileDir;
     }
     _writeJson(KEY_CONFIG, merged);
+    // BLK-junior-20260907-0843: 保存先はブラウザではなくマシンの設定なので、
+    // 新しいタブ・別プロファイルでも引き継げるよう server 側にも書き写す。
+    if (window.MA.savePrefs) window.MA.savePrefs.save(merged);
     return getConfig();
+  }
+
+  // hydrateFromServer() — localStorage に保存先の指定が無いときだけ、
+  // server が覚えている保存先を取り込む。取り込んだ値は書き戻して次回以降
+  // localStorage 側でも効かせる。返り値は取り込んだキーの object。
+  function hydrateFromServer() {
+    var SP = window.MA.savePrefs;
+    if (!SP) return Promise.resolve({});
+    return SP.load().then(function(remote) {
+      // stored はここで読む。fetch が飛んでいる間に設定画面から保存された値を
+      // 後から来た server の値で上書きしない (init 直後に setConfig が走る)。
+      var stored = _readJson(KEY_CONFIG, {});
+      var apply = SP.applicable(stored, remote);
+      if (Object.keys(apply).length === 0) return {};
+      var merged = getConfig();
+      SP.KEYS.forEach(function(k) { if (k in apply) merged[k] = apply[k]; });
+      _writeJson(KEY_CONFIG, merged);
+      return apply;
+    });
   }
 
   function _doWrite(diagramType, dsl) {
@@ -216,8 +238,14 @@ window.MA.autoSave = (function() {
   // app.js bootRestore must check for the Promise and await it before
   // doing the restoreFor() lookups.
   function init() {
+    // 保存先の引き継ぎが先。これを待たずに getConfig() を読むと、
+    // 新しいタブでは既定の ./autosave を見にいってしまう。
+    return hydrateFromServer().then(_initWithConfig, function() { return _initWithConfig({}); });
+  }
+
+  function _initWithConfig() {
     var cfg = getConfig();
-    if (cfg.backend !== 'file') return;
+    if (cfg.backend !== 'file') return null;
     return _fileBackendList(cfg.fileDir).then(function(data) {
       if (!data || !Array.isArray(data.files)) return;
       // Fetch every file in parallel and seed localStorage with them.
@@ -246,6 +274,7 @@ window.MA.autoSave = (function() {
     clearAll: clearAll,
     getConfig: getConfig,
     setConfig: setConfig,
+    hydrateFromServer: hydrateFromServer,
     isAvailable: isAvailable,
     onSave: onSave,
   };

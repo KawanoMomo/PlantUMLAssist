@@ -39,3 +39,8 @@ autosave/
 
 # E2E が作る一時保存フォルダ
 autosave-e2e-tabs/
+autosave-e2e-*/
+autosave-shot-*/
+
+# Machine-local prefs (save destination). Not shared via git.
+.assist-prefs.json
