@@ -60,16 +60,28 @@ test.describe('Export メニューのショートカット (design 2c)', () => {
     expect(await page.locator('#editor').inputValue()).toBe(before);
   });
 
+  // design 5b が Ctrl+S を「ファイルを保存する」に割り当てたので、Ctrl+S そのものが
+  // 無反応であることはもう主張できない。ここが守るのは design 2c の主張
+  // 「書き出し (SVG 保存 / クリップボードにコピー) は Shift 必須」だけである。
   test('Ctrl+S (Shift 無し) は書き出しを起こさない', async ({ page }) => {
-    let downloaded = false;
-    page.on('download', () => { downloaded = true; });
+    const hits = await page.evaluate(() => {
+      window.__expHits = [];
+      ['exp-svg', 'exp-clipboard'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.addEventListener('click', function() { window.__expHits.push(id); });
+      });
+      return window.__expHits.length;
+    });
+    expect(hits).toBe(0);
     await page.keyboard.press('Control+S');
     await page.waitForTimeout(1200);
-    expect(downloaded).toBe(false);
+    expect(await page.evaluate(() => window.__expHits)).toEqual([]);
+    await expect(page.locator('#export-menu')).not.toHaveClass(/open/);
   });
 
   test('設定のショートカット一覧に書き出しのキーが載る', async ({ page }) => {
-    await page.locator('#btn-config').click();
+    // 上部バーの ⚙ は design 1a で左レールへ移った (#toolbar-actions は hidden)。
+    await page.locator('#rail-config').click();
     await page.locator('#cfg-tab-shortcuts').click();
     const text = await page.locator('#cfg-modal').innerText();
     expect(text).toContain('Ctrl+Shift+S');

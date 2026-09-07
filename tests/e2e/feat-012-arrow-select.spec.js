@@ -146,12 +146,22 @@ test.describe('FEAT-012: 上下矢印キーで選択を前後のメッセージ�
     await selectMessageByLine(page, 8);
     await blurToBody(page);
 
-    for (const mod of ['Alt', 'Control', 'Shift', 'Meta']) {
+    for (const mod of ['Control', 'Shift', 'Meta']) {
       await page.keyboard.press(mod + '+ArrowDown');
       expect(await selectedLine(page)).toBe(8);
       await page.keyboard.press(mod + '+ArrowUp');
       expect(await selectedLine(page)).toBe(8);
     }
+
+    // Alt+↑↓ は design 5b で「同じ親の中の兄弟と入れ替える」に割り当てられており、
+    // 選択中の要素そのものが動く。本経路 (前後の要素へ選択を移す) に入っていないことは
+    // 「選択が別の要素へ移らない」で見る。入れ替えて戻せば行番号も元へ戻る。
+    const before = await page.evaluate(() => window.MA.selection.getSelected()[0].id);
+    await page.keyboard.press('Alt+ArrowDown');
+    expect(await page.evaluate(() => window.MA.selection.getSelected().length)).toBe(1);
+    await page.keyboard.press('Alt+ArrowUp');
+    expect(await selectedLine(page)).toBe(8);
+    expect(await page.evaluate(() => window.MA.selection.getSelected()[0].id)).toBe(before);
   });
 
   test('[AC-5] DSL エディタの textarea 内でのカーソル移動を奪わない', async ({ page }) => {

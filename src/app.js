@@ -869,7 +869,7 @@ function init() {
     // 端では選択を変えず、DSL も書き換えない (FEAT-012 [AC-2])。
     if (!next) return;
     // FEAT-109: type をハードコードせず要素の実 type を使う (state / transition の再解決)。
-    window.MA.selection.setSelected([{ type: next.type || 'message', id: next.id, line: next.line }]);
+    kbdSetSelected([{ type: next.type || 'message', id: next.id, line: next.line }]);
   });
 
   // FEAT-076 (HFR-003): Ctrl+D で単独選択された message を直後に複製する。
@@ -926,7 +926,7 @@ function init() {
     for (var n = 0; n < after.length; n++) {
       if (after[n].line === dupLine) {
         // FEAT-109 と同じく type はハードコードせず要素の実 type を使う。
-        window.MA.selection.setSelected(
+        kbdSetSelected(
           [{ type: after[n].type || 'message', id: after[n].id, line: after[n].line }]);
         break;
       }
@@ -967,7 +967,7 @@ function init() {
     var after = _kbdSelectables();
     for (var i = 0; i < after.length; i++) {
       if (after[i].line === newLine) {
-        window.MA.selection.setSelected(
+        kbdSetSelected(
           [{ type: after[i].type || 'message', id: after[i].id, line: after[i].line }]);
         break;
       }
@@ -1940,7 +1940,11 @@ function init() {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (dragState && dragState.dragging) return;
     var ae = document.activeElement;
-    if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
+    // DSL エディタは例外にする。design 5a が図のクリックで focus をここへ移すので、
+    // textarea を一律に除外すると「図で選んで Esc」が効かなくなる。
+    // textarea 内の Esc にブラウザ既定の意味は無いため、奪っても入力の邪魔にならない。
+    if (ae && ae !== editorEl
+      && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
     var sel = window.MA.selection;
     if (!sel || typeof sel.getSelected !== 'function') return;
     if ((sel.getSelected() || []).length === 0) return;
@@ -8425,6 +8429,18 @@ function updateSelectionNotice(sel) {
 // 図と DSL は行番号でしか結ばれていないので、対応を目で数えるしかなかった。
 // 設定 (エディタタブ) で切れる。DSL タブを開いていないときは動かさない
 // (構造タブを見ている最中に裏で textarea だけが動いても何も起きないため)。
+// キーボードで選択を移している最中かどうか。design 5a の「選んだ行へ飛ぶ」は
+// 図をクリックした場面のために textarea へ focus を移すが、↑↓ などキー操作で
+// 選択が動いた場面で同じことをすると、次の 1 打が textarea に吸われて
+// FEAT-012 / FEAT-109 の連打も Esc の選択解除も効かなくなる。
+// キー由来の選択変更ではスクロールと行のハイライトだけ行い、focus は移さない。
+var _kbdNavSelect = false;
+function kbdSetSelected(items) {
+  _kbdNavSelect = true;
+  try { window.MA.selection.setSelected(items); }
+  finally { _kbdNavSelect = false; }
+}
+
 function jumpEditorToSelection(sel) {
   var EJ = window.MA.editorJump;
   if (!EJ || !editorEl) return;
@@ -8445,7 +8461,7 @@ function jumpEditorToSelection(sel) {
   // 行を選択状態にして、どこへ来たのかを見えるようにする。focus を奪うのは
   // クリック元が図 (textarea の外) のときだけなので、入力中の邪魔にはならない。
   try {
-    editorEl.focus({ preventScroll: true });
+    if (!_kbdNavSelect) editorEl.focus({ preventScroll: true });
     editorEl.setSelectionRange(range.start, range.end);
   } catch (e) {}
   updateLineNumbers();
