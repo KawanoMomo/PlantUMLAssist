@@ -12,6 +12,10 @@ const path = require('path');
 // BLK-reviewer-20260907-2203: 件数表だけでは「同じ 5 件」の中身が入れ替わった
 // ことも、カテゴリが新設されたことも読めない。前回の JSON との差分を要約に足す。
 const auditDiff = require('./audit-diff');
+// BLK-reviewer-20260908-0203: 指摘の増減だけでは、新規指摘が実データの変更か
+// 対象外扱いのテンプレの汚染かを区別できない。ファイルの分類と内容の指紋を
+// レポートに載せ、次回の --since / 控えとの比較で「どちらが動いたか」を出す。
+const auditScope = require('../src/core/audit-scope');
 
 // ディレクトリなら再帰して .puml を集める。ファイルならそれ 1 枚。
 // name は入力ルートからの相対パスにする (同名 basename が別フォルダにあっても
@@ -174,6 +178,12 @@ function formatSummary(report, prev) {
   if (prev !== undefined) {
     const d = prev ? auditDiff.diff(prev.audits, report.audits) : null;
     for (const l of auditDiff.formatDiff(d, prev && prev.generatedAt)) lines.push(l);
+    // 指摘の差分のすぐ下に、ファイル内容がどちら側で動いたかを置く。
+    // 「新規 16 件」の原因を実データかテンプレかへ寄せるのはこの 1 行。
+    // 前回そのものが無い run では formatDiff が既にそう言っているので重ねない。
+    if (prev) {
+      for (const l of auditScope.formatFileDiff(auditScope.diffFiles(prev.files, report.files), report.files)) lines.push(l);
+    }
   }
   return lines.join('\n');
 }
@@ -187,6 +197,9 @@ function buildReport(MA, docs, options) {
     generatedAt: opts.now || new Date().toISOString(),
     targets: opts.targets || [],
     docs: docs.map((d) => d.name),
+    // docs (名前だけ) は残す。古い JSON を読む側を壊さないため、分類と指紋は
+    // files として別に持つ。
+    files: auditScope.fileEntries(docs),
     audits,
     summary,
     totalIssues: totalIssues(summary),
