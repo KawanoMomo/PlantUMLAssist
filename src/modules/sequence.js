@@ -102,8 +102,24 @@ window.MA.modules.plantumlSequence = (function() {
   // 端点に疑似参加者 `[` `]` を許す。これらは矢印と空白無しで
   // 接するので、区切りは `\s*` である必要がある。
   var MSG_RE_FROM = '(\\[|\\]|[A-Za-z_][A-Za-z0-9_]*|"[^"]+")';
+  // design 5d「Sequence のその他パレット: 線色」: 色は矢印の最初の `-` の直後に
+  // `[#色]` として入る (`-[#red]->` / `<-[#red]--`)。矢印の形はそのまま残るので、
+  // 読む側は「色を挟んだ形」も同じ矢印として認識できる必要がある。
+  var ARROW_COLOR_PART = '(?:\\[#[A-Za-z0-9_]+\\])?';
+  function _reEsc(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+  // 1 つの矢印トークンを「色を挟んでもよい」正規表現の断片にする。
+  function _arrowAlt(a) {
+    var i = a.indexOf('-');
+    if (i < 0) return _reEsc(a);
+    return _reEsc(a.slice(0, i + 1)) + ARROW_COLOR_PART + _reEsc(a.slice(i + 1));
+  }
   // 長いトークンから並べる (`->o` `->\` を `->` より先に)。
-  var MSG_ARROW_ALT = '-\\[#[A-Za-z0-9]+\\]>|-->>|-->x|-->|->>|->x|->o|->\\\\|->|<<--|<<-|<--|<-|<-->|<->';
+  var MSG_ARROW_ALT = ARROWS
+    .filter(function(a) { return a.indexOf('[#') < 0; })
+    .slice()
+    .sort(function(a, b) { return b.length - a.length; })
+    .map(_arrowAlt)
+    .join('|');
   var MSG_RE = new RegExp('^' + MSG_RE_FROM + '\\s*(' + MSG_ARROW_ALT + ')\\s*' + MSG_RE_FROM + '(?:\\s*:\\s*(.+))?$');
 
   var GROUP_KINDS = ['alt', 'opt', 'loop', 'par', 'break', 'critical', 'group'];
@@ -443,12 +459,86 @@ window.MA.modules.plantumlSequence = (function() {
     return lines.join('\n');
   }
 
+  // ─── design 5d: 線の色 / Line color ─────────────────────────────────
+  // UseCase / Component / Class の「その他の設定」と同じ 6 色を、Sequence の
+  // メッセージにも出す。色は矢印の形 (`-->` / `->>` …) を壊さずに差し替える。
+  var ARROW_COLOR_RE = /\[#([A-Za-z0-9_]+)\]/;
+  function stripArrowColor(arrow) { return String(arrow == null ? '' : arrow).replace(ARROW_COLOR_RE, ''); }
+  function arrowColor(arrow) {
+    var m = String(arrow == null ? '' : arrow).match(ARROW_COLOR_RE);
+    return m ? m[1] : '';
+  }
+  // 片羽根 `->\` だけは PlantUML が `-[#red]>\` を受け付けない (構文エラー)。
+  // 色を付けられない矢印はパレットを閉じ、理由をその場に出す。
+  function arrowSupportsColor(arrow) { return stripArrowColor(arrow).indexOf('\\') < 0; }
+  function setArrowColor(arrow, color) {
+    var base = stripArrowColor(arrow);
+    var c = String(color == null ? '' : color).trim().replace(/^#/, '');
+    if (!c || !arrowSupportsColor(base)) return base;
+    var i = base.indexOf('-');
+    if (i < 0) return base;
+    return base.slice(0, i + 1) + '[#' + c + ']' + base.slice(i + 1);
+  }
+  // 色見本は他図種と同じ 6 色 (relation-options が正本)。読み込み順に依存しないよう
+  // 呼ばれた時点で引き、無ければ同じ内容の控えを使う。
+  var FALLBACK_COLORS = [
+    { value: '',       label: '既定',   swatch: '#111114' },
+    { value: 'red',    label: '赤',     swatch: '#f87171' },
+    { value: 'orange', label: '橙',     swatch: '#fbbf24' },
+    { value: 'green',  label: '緑',     swatch: '#6ee7a8' },
+    { value: 'blue',   label: '青',     swatch: '#38bdf8' },
+    { value: 'violet', label: '紫',     swatch: '#a78bfa' },
+  ];
+  function _lineColors() {
+    var ro = window.MA.relationOptions;
+    return (ro && ro.COLORS ? ro.COLORS : FALLBACK_COLORS).slice();
+  }
+
+  // 色見本の 1 行。UseCase / Component / Class の「その他の設定」と同じ見た目。
+  function lineColorRowHtml(idPrefix, current, supported) {
+    var esc = window.MA.htmlUtils.escHtml;
+    if (!supported) {
+      return '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);' +
+        'margin-bottom:2px;">線の色 / Line color</label>' +
+        '<div id="' + idPrefix + '-unsupported" style="font-size:10px;color:var(--text-secondary);">' +
+        'この矢印 (片羽根) は色を指定できません</div></div>';
+    }
+    var html = '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);' +
+      'margin-bottom:2px;">線の色 / Line color</label><div style="display:flex;gap:4px;flex-wrap:wrap;">';
+    _lineColors().forEach(function(c) {
+      var on = (c.value || '') === (current || '');
+      html += '<button type="button" class="' + idPrefix + '-swatch" id="' + idPrefix + '-' + (c.value || 'default') + '"' +
+        ' data-color="' + esc(c.value) + '" title="' + esc(c.label) + '" aria-pressed="' + (on ? 'true' : 'false') + '"' +
+        ' style="width:22px;height:22px;background:' + c.swatch + ';border:1px solid var(--border);border-radius:4px;' +
+        'cursor:pointer;' + (on ? 'box-shadow:0 0 0 2px var(--accent);' : '') + '"></button>';
+    });
+    return html + '</div></div>';
+  }
+
+  // 行から読む / 行へ書く。書き戻しは updateMessage を通すので書式は 1 箇所のまま。
+  function messageColor(text, lineNum) {
+    var lines = String(text == null ? '' : text).split('\n');
+    var idx = lineNum - 1;
+    if (idx < 0 || idx >= lines.length) return '';
+    var m = lines[idx].trim().match(MSG_RE);
+    return m ? arrowColor(m[2]) : '';
+  }
+  function setMessageColor(text, lineNum, color) {
+    var lines = String(text == null ? '' : text).split('\n');
+    var idx = lineNum - 1;
+    if (idx < 0 || idx >= lines.length) return text;
+    var m = lines[idx].trim().match(MSG_RE);
+    if (!m) return text;
+    return updateMessage(text, lineNum, 'arrow', setArrowColor(m[2], color));
+  }
+
   // design 2d:「その他の矢印」パレットの 1 行を、選択中のメッセージ行に適用する。
   // 矢印だけを変える行と、相手を図の外 (`[` / `]`) に付け替える行がある。
   // 図の外に付け替えたあと通常の矢印を選び直すと、外れていた側は元の相手に戻す。
   function applyArrowSpec(text, lineNum, key) {
     var spec = findArrowSpec(key);
-    if (!spec) return updateMessage(text, lineNum, 'arrow', key);
+    // 分節ボタン (色を持たない 4 種) は、いま付いている線の色を引き継ぐ。
+    if (!spec) return updateMessage(text, lineNum, 'arrow', setArrowColor(key, messageColor(text, lineNum)));
     var lines = text.split('\n');
     var idx = lineNum - 1;
     if (idx < 0 || idx >= lines.length) return text;
@@ -458,7 +548,9 @@ window.MA.modules.plantumlSequence = (function() {
     var from = unquote(m[1]), to = unquote(m[3]), label = m[4] || '';
     from = spec.from || (isOuterEnd(from) ? outerFallback(text, lineNum, 'from') : from);
     to = spec.to || (isOuterEnd(to) ? outerFallback(text, lineNum, 'to') : to);
-    lines[idx] = indent + fmtMessage(from, to, spec.arrow, label);
+    // design 5d: 形を選び直しても線の色は保つ (色は別のパレットの持ち物)。
+    var specArrow = arrowColor(spec.arrow) ? spec.arrow : setArrowColor(spec.arrow, arrowColor(m[2]));
+    lines[idx] = indent + fmtMessage(from, to, specArrow, label);
     return lines.join('\n');
   }
 
@@ -1441,6 +1533,14 @@ window.MA.modules.plantumlSequence = (function() {
     otherArrows: function() { return OTHER_ARROWS.slice(); },
     applyArrowSpec: applyArrowSpec,
     activeArrowKey: activeArrowKey,
+    // design 5d: 線の色
+    lineColors: function() { return _lineColors(); },
+    stripArrowColor: stripArrowColor,
+    arrowColor: arrowColor,
+    arrowSupportsColor: arrowSupportsColor,
+    setArrowColor: setArrowColor,
+    messageColor: messageColor,
+    setMessageColor: setMessageColor,
     setTitle: setTitle,
     toggleAutonumber: toggleAutonumber,
     addGroup: addGroup,
@@ -1587,6 +1687,9 @@ window.MA.modules.plantumlSequence = (function() {
               // 現在値は hidden #seq-tail-arrow が持つ。
               P.arrowPickerHtml('矢印の種類 / Arrow', 'seq-tail-arrow',
                 quickArrowOptions(), otherArrowOptions(), '->') +
+              // design 5d: 末尾追加でも線の色を先に決められる。
+              lineColorRowHtml('seq-tail-color', '', true) +
+              '<input type="hidden" id="seq-tail-color" value="">' +
               P.selectFieldHtml('To', 'seq-tail-to', partOptsWithNew) +
               // userissue v1.2.7+: 末尾追加でも Stereotype を入力できるように。
               '<div style="margin-bottom:8px;">' +
@@ -1650,6 +1753,21 @@ window.MA.modules.plantumlSequence = (function() {
           if (kind === 'message') rleObj = window.MA.richLabelEditor.mount(document.getElementById('seq-tail-label-rle'), '');
           else if (kind === 'note') rleObj = window.MA.richLabelEditor.mount(document.getElementById('seq-tail-ntext-rle'), '');
           if (kind === 'message') {
+            // design 5d: 末尾追加の色見本。選んだ色は hidden #seq-tail-color が持つ。
+            var tColorBtns = detailEl.querySelectorAll('.seq-tail-color-swatch');
+            for (var tci = 0; tci < tColorBtns.length; tci++) {
+              (function(b) {
+                b.addEventListener('click', function() {
+                  var hid = document.getElementById('seq-tail-color');
+                  if (hid) hid.value = b.getAttribute('data-color');
+                  for (var k = 0; k < tColorBtns.length; k++) {
+                    var on = tColorBtns[k] === b;
+                    tColorBtns[k].setAttribute('aria-pressed', on ? 'true' : 'false');
+                    tColorBtns[k].style.boxShadow = on ? '0 0 0 2px var(--accent)' : '';
+                  }
+                });
+              })(tColorBtns[tci]);
+            }
             var inline = document.getElementById('seq-tail-new-inline');
             function maybeShowInline() {
               var frSel = document.getElementById('seq-tail-from');
@@ -1682,6 +1800,11 @@ window.MA.modules.plantumlSequence = (function() {
               var arrowKey = document.getElementById('seq-tail-arrow').value;
               var arrowSpec = findArrowSpec(arrowKey);
               var arrow = arrowSpec ? arrowSpec.arrow : arrowKey;
+              // design 5d: 色見本で選んだ色を、矢印の形を保ったまま載せる。
+              var tailColorEl = document.getElementById('seq-tail-color');
+              if (tailColorEl && tailColorEl.value && !arrowColor(arrow)) {
+                arrow = setArrowColor(arrow, tailColorEl.value);
+              }
               if (arrowSpec && arrowSpec.from) fr = arrowSpec.from;
               if (arrowSpec && arrowSpec.to) to = arrowSpec.to;
               var labelVal = (rleObj ? rleObj.getValue() : '').trim();
@@ -1801,7 +1924,9 @@ window.MA.modules.plantumlSequence = (function() {
             // design 2d: よく使う 4 種は常時、残りは「その他の矢印… ▾」のパレットに。
             P.arrowPickerHtml('矢印の種類 / Arrow', 'seq-edit-arrow',
               quickArrowOptions(), otherArrowOptions(),
-              activeArrowKey(mm.from, mm.to, mm.arrow)) +
+              activeArrowKey(mm.from, mm.to, stripArrowColor(mm.arrow))) +
+            // design 5d: 線色。矢印の形はそのままに色だけ差し替える。
+            lineColorRowHtml('seq-edit-color', arrowColor(mm.arrow), arrowSupportsColor(mm.arrow)) +
             '<div style="margin-bottom:8px;">' +
               '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Stereotype <span style="color:#32CD32;">&lt;&lt; &gt;&gt;</span> <span style="color:var(--text-secondary);font-weight:normal;">(任意・上段にライムグリーンで表示)</span></label>' +
               '<input id="seq-edit-stereotype" type="text" value="' + escHtml(msgParts.stereotype) + '" placeholder="例: async / sync / important" style="width:100%;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-size:12px;box-sizing:border-box;">' +
@@ -1819,6 +1944,17 @@ window.MA.modules.plantumlSequence = (function() {
           }
           // design 2d: 分節ボタンもパレットも押した瞬間に確定する。
           // パレットの行は矢印だけでなく相手 (図の外) も変えるので applyArrowSpec を通す。
+          // design 5d: 色見本を押した時点で確定する (他図種の「その他の設定」と同じ)。
+          var mColorBtns = propsEl.querySelectorAll('.seq-edit-color-swatch');
+          for (var ci = 0; ci < mColorBtns.length; ci++) {
+            (function(b) {
+              b.addEventListener('click', function() {
+                window.MA.history.pushHistory();
+                ctx.setMmdText(setMessageColor(ctx.getMmdText(), mln, b.getAttribute('data-color')));
+                ctx.onUpdate();
+              });
+            })(mColorBtns[ci]);
+          }
           P.bindArrowPicker('seq-edit-arrow', function(v) {
             window.MA.history.pushHistory();
             ctx.setMmdText(applyArrowSpec(ctx.getMmdText(), mln, v));
