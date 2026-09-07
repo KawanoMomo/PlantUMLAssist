@@ -2019,6 +2019,7 @@ function init() {
 
   setupTabs();
   setupBulkRename();
+  setupSymptomSearch();
   setupBulkApply();
   setupTemplateNew();
   setupDiffPanel();
@@ -2149,6 +2150,7 @@ function initCommandPalette() {
       { id: 'tab-new', title: '新しい図を開く / New diagram', hint: 'Tabs', keywords: ['new', 'tab', 'あたらしい', 'ず'], run: function() { clickById('btn-tab-new'); } },
       { id: 'tab-folder', title: '保存フォルダの図を一覧 / Folder', hint: 'Tabs', keywords: ['folder', 'list', 'いちらん', 'ふぉるだ'], run: function() { clickById('btn-tab-folder'); } },
       { id: 'tab-rename', title: '部品名を一括置換 / Bulk rename', hint: 'Tabs', keywords: ['rename', 'replace', 'いっかつ', 'ちかん'], run: function() { clickById('btn-tab-rename'); } },
+      { id: 'tab-symptom', title: '症状から関連図を探す / Symptom search', hint: 'Tabs', keywords: ['symptom', 'search', 'しょうじょう', 'けんさく', 'ふぐあい'], run: function() { clickById('btn-tab-symptom'); } },
       { id: 'tab-submit', title: '提出前チェックを開く / Submit check', hint: 'Tabs', keywords: ['submit', 'check', 'ていしゅつ', 'かくにん', '略語'], run: function() { clickById('btn-tab-submit'); } },
       { id: 'tab-audit', title: '名前突合を開く / Name audit', hint: 'Tabs', keywords: ['name', 'audit', 'なまえ', 'つきあわせ'], run: function() { clickById('btn-tab-audit'); } },
       { id: 'tab-handoff', title: '引き継ぎパッケージを作る / Handoff package', hint: 'Tabs', keywords: ['handoff', 'package', 'zip', 'ひきつぎ', 'ぱっけーじ'], run: function() { clickById('btn-tab-handoff'); } },
@@ -4828,6 +4830,121 @@ function setupBulkRename() {
     if (panel.contains(ev.target) || ev.target === btn) return;
     closePanel();
   });
+}
+
+// ── 症状検索 ───────────────────────────────────────────────────────────────
+// BLK-primary-20260907-2203-wish: 不具合対応は症状文から始まるのに、過去図を
+// 探す入口は「部品名を思い付いて打つ」しか無かった。思い付ける名前の数が探索の
+// 上限になるので、経験の浅い担当者はそもそも探索を始められない。症状文をその
+// まま貼れば関連度順に図が並び、当たった行を押せばその図のその行へ運ぶ。
+
+function renderSymptomSearch() {
+  var ss = window.MA.symptomSearch;
+  var textEl = document.getElementById('symptom-text');
+  var termsEl = document.getElementById('symptom-terms');
+  var headEl = document.getElementById('symptom-head');
+  var resEl = document.getElementById('symptom-results');
+  if (!ss || !textEl || !termsEl || !headEl || !resEl) return;
+  var text = textEl.value;
+  var docs = _renameDocs();
+  var ov = ss.overview(docs, text);
+  var rows = ss.search(docs, text);
+
+  termsEl.textContent = '';
+  var missed = {};
+  ov.missed.forEach(function(t) { missed[t] = true; });
+  ov.terms.forEach(function(t) {
+    var chip = document.createElement('span');
+    chip.className = 'sym-term' + (missed[t] ? ' missed' : '');
+    chip.textContent = t;
+    chip.title = missed[t] ? 'どの図にも見当たらない語' : 'この語で図が当たっている';
+    termsEl.appendChild(chip);
+  });
+
+  headEl.setAttribute('data-docs', String(rows.length));
+  headEl.setAttribute('data-terms', String(ov.terms.length));
+  if (ov.terms.length === 0) {
+    headEl.textContent = '症状を貼ると関連しそうな図が並びます';
+  } else if (rows.length === 0) {
+    headEl.textContent = ov.terms.length + ' 語で該当なし / 語を足すか綴りを確かめてください';
+  } else {
+    headEl.textContent = ov.terms.length + ' 語で ' + rows.length + ' 図が該当'
+      + (ov.missed.length ? ' / 当たらなかった語: ' + ov.missed.join('・') : '');
+  }
+
+  resEl.textContent = '';
+  rows.forEach(function(r) {
+    var item = document.createElement('div');
+    item.className = 'sym-doc';
+    item.setAttribute('data-doc-name', r.name);
+    item.setAttribute('data-score', String(r.score));
+    item.setAttribute('data-kind', r.kind);
+    var line = document.createElement('div');
+    line.className = 'sym-doc-name';
+    var n = document.createElement('span');
+    n.textContent = r.name;
+    var k = document.createElement('span');
+    k.className = 'sym-kind';
+    k.textContent = r.kindLabel + ' / 関連度 ' + r.score;
+    line.appendChild(n);
+    line.appendChild(k);
+    item.appendChild(line);
+    var m = document.createElement('div');
+    m.className = 'sym-matched';
+    m.textContent = '当たった語: ' + r.summary;
+    item.appendChild(m);
+    r.hits.forEach(function(h) {
+      var hit = document.createElement('div');
+      hit.className = 'sym-hit';
+      hit.setAttribute('data-term', h.term);
+      hit.setAttribute('data-line', String(h.line));
+      hit.title = r.name + ' の ' + h.line + ' 行目へ移動';
+      var no = document.createElement('span');
+      no.className = 'sym-hit-line';
+      no.textContent = String(h.line);
+      var tx = document.createElement('span');
+      tx.textContent = h.term + ' → ' + h.target + ' (' + h.label + ')';
+      hit.appendChild(no);
+      hit.appendChild(tx);
+      hit.addEventListener('click', function() { jumpToDocLine(r.id, h.line); });
+      item.appendChild(hit);
+    });
+    resEl.appendChild(item);
+  });
+}
+
+function setupSymptomSearch() {
+  var panel = document.getElementById('symptom-panel');
+  var btn = document.getElementById('btn-tab-symptom');
+  if (!panel || !btn || !window.MA.symptomSearch) return;
+  var textEl = document.getElementById('symptom-text');
+  var clearBtn = document.getElementById('btn-symptom-clear');
+  var closeBtn = document.getElementById('btn-symptom-close');
+
+  function closePanel() { panel.classList.remove('open'); }
+
+  btn.addEventListener('click', function() {
+    if (panel.classList.contains('open')) { closePanel(); return; }
+    var rect = btn.getBoundingClientRect();
+    panel.style.left = Math.max(4, rect.left - 60) + 'px';
+    panel.style.top = (rect.bottom + 2) + 'px';
+    panel.classList.add('open');
+    renderSymptomSearch();
+    textEl.focus();
+  });
+
+  if (textEl) {
+    textEl.addEventListener('input', renderSymptomSearch);
+    textEl.addEventListener('keydown', function(ev) {
+      if (ev.key === 'Escape') { ev.preventDefault(); closePanel(); }
+    });
+  }
+  if (clearBtn) clearBtn.addEventListener('click', function() {
+    textEl.value = '';
+    renderSymptomSearch();
+    textEl.focus();
+  });
+  if (closeBtn) closeBtn.addEventListener('click', closePanel);
 }
 
 // ── 一括適用 ───────────────────────────────────────────────────────────────

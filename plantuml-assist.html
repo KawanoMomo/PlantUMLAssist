@@ -929,6 +929,87 @@ html, body {
 }
 #lines-panel .lines-actions button#btn-lines-apply { border-color: var(--accent); }
 #lines-panel .lines-actions button:disabled { opacity: 0.45; cursor: default; }
+/* 症状検索パネル (症状文から関連図を出す) */
+#symptom-panel {
+  display: none;
+  position: absolute;
+  z-index: 41;
+  width: 340px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px;
+  font-size: 11px;
+  color: var(--text-primary);
+}
+#symptom-panel.open { display: block; }
+#symptom-panel label {
+  display: block;
+  font-size: 10px;
+  color: var(--text-secondary);
+  margin: 0 0 2px;
+}
+#symptom-panel textarea {
+  width: 100%;
+  box-sizing: border-box;
+  height: 48px;
+  resize: vertical;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 3px 4px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+#symptom-terms { margin-top: 4px; display: flex; flex-wrap: wrap; gap: 3px; }
+#symptom-terms .sym-term {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-primary);
+}
+#symptom-terms .sym-term.missed { opacity: 0.45; text-decoration: line-through; }
+#symptom-head {
+  margin-top: 5px;
+  font-size: 10px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 3px;
+}
+#symptom-results { max-height: 190px; overflow-y: auto; font-size: 10px; }
+#symptom-results .sym-doc { padding: 3px 0; border-bottom: 1px solid var(--border); }
+#symptom-results .sym-doc-name {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+}
+#symptom-results .sym-kind { color: var(--text-secondary); white-space: nowrap; }
+#symptom-results .sym-matched { color: var(--text-secondary); }
+#symptom-results .sym-hit {
+  display: flex;
+  gap: 5px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  padding: 1px 0;
+}
+#symptom-results .sym-hit:hover { background: var(--bg-secondary); }
+#symptom-results .sym-hit-line { color: var(--text-secondary); min-width: 2em; text-align: right; }
+#symptom-panel .symptom-actions { display: flex; gap: 4px; margin-top: 6px; }
+#symptom-panel .symptom-actions button {
+  flex: 1;
+  font-size: 11px;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  cursor: pointer;
+}
 /* 一括置換パネル (複数の図をまたいで部品名を置換する) */
 #rename-panel {
   display: none;
@@ -2282,6 +2363,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <!-- BLK-junior-20260907-2009-wish: やり直し途中の控えに印を付け、📂 一覧で畳む -->
         <button class="tab-tool" id="btn-tab-draft" aria-pressed="false" title="この図に一時控え(下書き / やり直し途中)の印を付けて、📂 一覧から畳む">🗂 一時控え</button>
         <button class="tab-tool" id="btn-tab-rename" title="開いている図をまたいで部品名を一括置換">⇄ 一括置換</button>
+        <!-- BLK-primary-20260907-2203-wish: 症状文を貼るだけで関連しそうな図を出す -->
+        <button class="tab-tool" id="btn-tab-symptom" title="不具合の症状文を貼ると、部品名を思い付かなくても関連しそうな図を関連度順に出す">⇄ 症状検索</button>
         <button class="tab-tool" id="btn-tab-apply" title="指摘に並んだ複数のクラスへ同じメソッド・属性を 1 回で追加する">⊞ 一括適用</button>
         <button class="tab-tool" id="btn-tab-audit" title="開いている図の部品名を突き合わせて表記揺れを探す">🔍 名前突合</button>
         <!-- BLK-primary-20260907-0823-wish: 同じ系統の複数枚で動作名が揃っているかを見る -->
@@ -2335,6 +2418,19 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <div class="rename-actions">
           <button id="btn-rename-apply" disabled>置換</button>
           <button id="btn-rename-cancel">閉じる</button>
+        </div>
+      </div>
+      <!-- 症状文を貼って、関連しそうな図を関連度順に出す (部品名を思い付かなくても始められる) -->
+      <div id="symptom-panel">
+        <label for="symptom-text">症状 (そのまま貼る)</label>
+        <textarea id="symptom-text" spellcheck="false" autocomplete="off"
+          placeholder="DMA転送のFault通知でリトライが動かない"></textarea>
+        <div id="symptom-terms"></div>
+        <div id="symptom-head"></div>
+        <div id="symptom-results"></div>
+        <div class="symptom-actions">
+          <button id="btn-symptom-clear">消す</button>
+          <button id="btn-symptom-close">閉じる</button>
         </div>
       </div>
       <!-- 指摘に並んだ複数のクラスへ同じメンバーを 1 回で足す -->
@@ -2681,6 +2777,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/bulk-rename.js"></script>
 <script src="src/core/impact-scan.js"></script>
 <script src="src/core/signature-change.js"></script>
+<script src="src/core/symptom-search.js"></script>
 <script src="src/core/bulk-apply.js"></script>
 <script src="src/core/bulk-export.js"></script>
 <script src="src/core/handoff-package.js"></script>
