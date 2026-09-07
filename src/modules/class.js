@@ -65,7 +65,9 @@ window.MA.modules.plantumlClass = (function() {
   var RELATION_RE = new RegExp(
     '^(' + ID_WITH_GENERICS + '|"[^"]+")\\s+' +
     // BLK-builder-20260907-1050-2: 「その他の設定」の向きが作る `-->` / `<--` も関連として読む。
+    // design 4a「内部クラス」: PlantUML の入れ子表記 `+--` も関連として読む。
     '(<\\|--|--\\|>|<\\|\\.\\.|\\.\\.\\|>|\\*-->|<--\\*|\\*--|--\\*|o-->|<--o|o--|--o|' +
+    '\\+-->|<--\\+|\\+--|--\\+|' +
     '\\.\\.>|<\\.\\.|-->|<--|--)\\s+' +
     '(' + ID_WITH_GENERICS + '|"[^"]+")(?:\\s*:\\s*(.+))?\\s*$'
   );
@@ -208,6 +210,8 @@ window.MA.modules.plantumlClass = (function() {
           else if (arrow === '--*' || arrow === '<--*') { rkind = 'composition'; rfrom = toTok; rto = fromTok; }
           else if (arrow === 'o--' || arrow === 'o-->') { rkind = 'aggregation'; rfrom = fromTok; rto = toTok; }
           else if (arrow === '--o' || arrow === '<--o') { rkind = 'aggregation'; rfrom = toTok; rto = fromTok; }
+          else if (arrow === '+--' || arrow === '+-->') { rkind = 'nested'; rfrom = fromTok; rto = toTok; }
+          else if (arrow === '--+' || arrow === '<--+') { rkind = 'nested'; rfrom = toTok; rto = fromTok; }
           else if (arrow === '..>') { rkind = 'dependency'; rfrom = fromTok; rto = toTok; }
           else if (arrow === '<..') { rkind = 'dependency'; rfrom = toTok; rto = fromTok; }
           // 「その他の設定」で向きを反転した関連は、矢の先が指す側を to として読む。
@@ -358,6 +362,7 @@ window.MA.modules.plantumlClass = (function() {
     if (kind === 'implementation') return from + ' <|.. ' + to + lbl;
     if (kind === 'composition')   return from + ' *-- ' + to + lbl;
     if (kind === 'aggregation')   return from + ' o-- ' + to + lbl;
+    if (kind === 'nested')        return from + ' +-- ' + to + lbl;
     if (kind === 'dependency')    return from + ' ..> ' + to + lbl;
     return from + ' -- ' + to + lbl;
   }
@@ -566,6 +571,35 @@ window.MA.modules.plantumlClass = (function() {
     return lines.join('\n');
   }
 
+  // design 4a「その他（constructor / static / abstract / ジェネリクス / 内部クラス）」:
+  // constructor はクラス名と同じ名前で戻り型を持たないメソッド。名前を手で打たせない。
+  // 宣言行から id を読むので、クラス名を後から変えても打ち直しの元にならない。
+  function classNameAt(text, classLineNum) {
+    var lines = text.split('\n');
+    var idx = classLineNum - 1;
+    if (idx < 0 || idx >= lines.length) return null;
+    var info = _parseSingleLine(lines[idx]);
+    if (!info) return null;
+    var m = info.match;
+    var rawId = m[2] !== undefined ? m[2] : m[3];
+    return _splitIdGenerics(rawId).id;
+  }
+
+  function addConstructor(text, classLineNum, visibility, params) {
+    var name = classNameAt(text, classLineNum);
+    if (!name) return text;
+    return addMethod(text, classLineNum, visibility, name, params, '', false, false);
+  }
+
+  // 内部クラス: 本体つきの `class Inner` を足し、`Outer +-- Inner` で入れ子であることを示す。
+  // PlantUML はクラス本体の中に class を書けないので、この 2 行が入れ子の表し方になる。
+  function addNestedClass(text, outerId, innerName) {
+    if (!outerId || !innerName) return text;
+    var out = insertBeforeEnd(text, fmtClass(innerName, innerName, null, null) + ' {');
+    out = insertBeforeEnd(out, '}');
+    return insertBeforeEnd(out, outerId + ' +-- ' + innerName);
+  }
+
   function addEnumValue(text, enumLineNum, name) {
     text = ensureBlock(text, enumLineNum);
     var lines = text.split('\n');
@@ -741,10 +775,11 @@ window.MA.modules.plantumlClass = (function() {
     else if (arrow === '<|..' || arrow === '..|>') kind = 'implementation';
     else if (arrow === '*--' || arrow === '--*' || arrow === '*-->' || arrow === '<--*') kind = 'composition';
     else if (arrow === 'o--' || arrow === '--o' || arrow === 'o-->' || arrow === '<--o') kind = 'aggregation';
+    else if (arrow === '+--' || arrow === '--+' || arrow === '+-->' || arrow === '<--+') kind = 'nested';
     else if (arrow === '..>' || arrow === '<..') kind = 'dependency';
     else kind = 'association';
-    if (arrow === '--|>' || arrow === '..|>' || arrow === '--*' || arrow === '--o' ||
-        arrow === '<..' || arrow === '<--' || arrow === '<--*' || arrow === '<--o') {
+    if (arrow === '--|>' || arrow === '..|>' || arrow === '--*' || arrow === '--o' || arrow === '--+' ||
+        arrow === '<..' || arrow === '<--' || arrow === '<--*' || arrow === '<--o' || arrow === '<--+') {
       var tmp = from; from = to; to = tmp;
     }
 
@@ -886,6 +921,7 @@ window.MA.modules.plantumlClass = (function() {
       ['implementation', '実装 <|..'],
       ['composition', 'コンポジション *--'],
       ['aggregation', '集約 o--'],
+      ['nested', '内部クラス +--'],
       ['association', '関連 --'],
       ['dependency', '依存 ..>'],
     ];
@@ -1137,6 +1173,7 @@ window.MA.modules.plantumlClass = (function() {
             { value: 'implementation', label: 'Implementation (<|..)' },
             { value: 'composition',    label: 'Composition (*--)' },
             { value: 'aggregation',    label: 'Aggregation (o--)' },
+            { value: 'nested',         label: 'Nested (+--)' },
             { value: 'dependency',     label: 'Dependency (..>)' },
           ]) +
           P.selectFieldHtml('From', 'cl-tail-from', allOpts) +
@@ -1301,7 +1338,6 @@ window.MA.modules.plantumlClass = (function() {
         P.fieldHtml('Alias (id)', 'cl-edit-id', element.id) +
         P.fieldHtml('Label', 'cl-edit-label', element.label || '') +
         P.fieldHtml('Stereotype', 'cl-edit-stereo', element.stereotype || '') +
-        P.fieldHtml('Generics (カンマ区切り)', 'cl-edit-generics', (element.generics || []).join(',')) +
         P.primaryButtonHtml('cl-edit-apply', '変更を反映') +
         ' ' + P.primaryButtonHtml('cl-rename-refs', 'Alias 変更を関連 Relation にも追従') +
         '<div style="margin-top:8px;display:flex;gap:6px;">' +
@@ -1363,6 +1399,37 @@ window.MA.modules.plantumlClass = (function() {
             _memberSectionHtml('method', 'メソッド / Methods', 'cl-add-method') +
             '<div id="cl-add-method-form" style="display:none;margin-top:6px;"></div></div>';
 
+    // design 4a: 細かい指定は「その他」に畳む。よく使う 属性 / メソッド を上に残し、
+    // constructor・ジェネリクス・内部クラスはここを開いたときだけ出す。
+    // static / abstract は各メンバー行と「+ 追加」フォームのチェックで指定する。
+    // 3c と同じ流儀で、畳んだ中の値が既定から外れていれば (ジェネリクスを持つクラス)
+    // 開いた状態で出す。閉じたままだと型引数が画面のどこにも見えなくなるため。
+    var moreOpen = (element.generics || []).length > 0;
+    html += '<details id="cl-more"' + (moreOpen ? ' open' : '') +
+              ' style="border-top:1px solid var(--border);padding-top:6px;margin-top:6px;">' +
+              '<summary id="cl-more-summary" style="font-size:11px;color:var(--text-secondary);cursor:pointer;">' +
+                'その他（constructor / static / abstract / ジェネリクス / 内部クラス）…' +
+              '</summary>' +
+              '<div style="margin-top:6px;">' +
+                '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:2px;">constructor</div>' +
+                _visToggleHtml('cl-ctor-vis', '+') +
+                P.fieldHtml('引数', 'cl-ctor-params', '', '例: radius : double') +
+                P.primaryButtonHtml('cl-ctor-go', '+ ' + window.MA.htmlUtils.escHtml(element.id) + '() を追加') +
+                '<div style="font-size:10px;color:var(--text-secondary);margin-top:2px;">' +
+                  'static / abstract は各メンバーの行、または属性・メソッドの「+ 追加」で指定します</div>' +
+                '<div style="border-top:1px solid var(--border);padding-top:6px;margin-top:8px;">' +
+                  '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:2px;">ジェネリクス</div>' +
+                  P.fieldHtml('型引数 (カンマ区切り)', 'cl-edit-generics', (element.generics || []).join(','), '例: T, K') +
+                  '<div style="font-size:10px;color:var(--text-secondary);">上の「変更を反映」で書き込まれます</div>' +
+                '</div>' +
+                '<div style="border-top:1px solid var(--border);padding-top:6px;margin-top:8px;">' +
+                  '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:2px;">内部クラス</div>' +
+                  P.fieldHtml('名前', 'cl-nested-name', '', '例: Builder') +
+                  P.primaryButtonHtml('cl-nested-go', '+ 内部クラスを追加') +
+                '</div>' +
+              '</div>' +
+            '</details>';
+
     // Notes section
     var classNotes = (parsedData.notes || []).filter(function(n) { return n.targetId === element.id; });
     html += '<div style="border-top:1px solid var(--border);padding-top:8px;margin-top:8px;">' +
@@ -1400,7 +1467,8 @@ window.MA.modules.plantumlClass = (function() {
         ? renameNorm.label
         : rawNewLabel;
       var newStereo = document.getElementById('cl-edit-stereo').value.trim() || null;
-      var genStr = document.getElementById('cl-edit-generics').value.trim();
+      var genEl = document.getElementById('cl-edit-generics');
+      var genStr = genEl ? genEl.value.trim() : (element.generics || []).join(',');
       var newGen = genStr ? genStr.split(',').map(function(s) { return s.trim(); }) : null;
       if (newId !== element.id) t = updateClass(t, element.line, 'id', newId);
       if (newLabel !== element.label) t = updateClass(t, element.line, 'label', newLabel);
@@ -1569,6 +1637,24 @@ window.MA.modules.plantumlClass = (function() {
       });
     });
 
+    _bindVisToggle(propsEl, 'cl-ctor-vis');
+    P.bindEvent('cl-ctor-go', 'click', function() {
+      var vis = document.getElementById('cl-ctor-vis').value;
+      var params = document.getElementById('cl-ctor-params').value.trim();
+      window.MA.history.pushHistory();
+      ctx.setMmdText(addConstructor(ctx.getMmdText(), element.line, vis, params));
+      ctx.onUpdate();
+    });
+    P.bindEvent('cl-nested-go', 'click', function() {
+      var raw = document.getElementById('cl-nested-name').value.trim();
+      if (!raw) { alert('内部クラスの名前を入れてください'); return; }
+      var norm = normalizeIdInput(raw, parse(ctx.getMmdText()));
+      var innerId = norm.valid ? norm.id : raw;
+      window.MA.history.pushHistory();
+      ctx.setMmdText(addNestedClass(ctx.getMmdText(), element.id, innerId));
+      ctx.onUpdate();
+    });
+
     classNotes.forEach(function(n, idx) {
       P.bindEvent('cl-note-edit-' + idx, 'click', function(e) {
         var btn = e.currentTarget;
@@ -1676,6 +1762,7 @@ window.MA.modules.plantumlClass = (function() {
           { value: 'implementation', label: 'Implementation (<|..)', selected: relation.kind === 'implementation' },
           { value: 'composition',    label: 'Composition (*--)', selected: relation.kind === 'composition' },
           { value: 'aggregation',    label: 'Aggregation (o--)', selected: relation.kind === 'aggregation' },
+          { value: 'nested',         label: 'Nested (+--)', selected: relation.kind === 'nested' },
           { value: 'dependency',     label: 'Dependency (..>)', selected: relation.kind === 'dependency' },
         ]) +
         P.fieldHtml('From', 'cl-rel-from', relation.from) +
@@ -1829,6 +1916,7 @@ window.MA.modules.plantumlClass = (function() {
           { value: 'implementation', label: 'Implementation (<|.., interface <|.. class)' },
           { value: 'composition',    label: 'Composition (*--, container *-- contained)' },
           { value: 'aggregation',    label: 'Aggregation (o--, container o-- part)' },
+          { value: 'nested',         label: 'Nested (+--, outer +-- inner)' },
           { value: 'dependency',     label: 'Dependency (..>)' },
         ]) +
         P.fieldHtml('Label', 'cl-conn-label', '', '任意') +
@@ -2099,6 +2187,9 @@ window.MA.modules.plantumlClass = (function() {
     changeKind: changeKind,
     addAttribute: addAttribute,
     addMethod: addMethod,
+    classNameAt: classNameAt,
+    addConstructor: addConstructor,
+    addNestedClass: addNestedClass,
     addEnumValue: addEnumValue,
     updateAttribute: updateAttribute,
     updateMethod: updateMethod,
