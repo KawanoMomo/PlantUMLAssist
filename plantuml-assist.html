@@ -855,6 +855,54 @@ html, body {
 #inbox-panel .ib-row.read { opacity: 0.65; }
 #inbox-panel .ib-row .ib-who { color: var(--text-secondary); margin-left: 4px; }
 #inbox-panel .ib-row .ib-text { color: var(--text-primary); display: block; margin-top: 2px; }
+#btn-tab-findings.has-recheck { color: var(--accent-red); border-color: var(--accent-red); }
+#findings-panel {
+  display: none;
+  position: absolute;
+  z-index: 42;
+  max-height: 360px;
+  overflow-y: auto;
+  min-width: 380px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px;
+  font-size: 11px;
+}
+#findings-panel.open { display: block; }
+#findings-panel .mf-head { color: var(--text-primary); padding: 2px 4px 4px 4px; }
+#findings-panel .mf-bar {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 5px;
+  color: var(--text-secondary);
+}
+#findings-panel .mf-bar input { width: 190px; }
+#findings-panel .mf-bar input, #findings-panel .mf-bar button {
+  border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-radius: 3px;
+  font-size: 11px;
+  padding: 2px 5px;
+}
+#findings-panel .mf-bar button { cursor: pointer; }
+#findings-panel .mf-empty { color: var(--text-secondary); padding: 6px 4px; }
+#findings-panel .mf-row { border-top: 1px solid var(--border); padding: 4px; cursor: pointer; }
+#findings-panel .mf-row:hover { background: var(--bg-secondary); }
+#findings-panel .mf-row .mf-mark {
+  border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; margin-right: 4px;
+  color: var(--text-secondary);
+}
+#findings-panel .mf-row.recheck .mf-mark { color: var(--accent-red); border-color: var(--accent-red); }
+#findings-panel .mf-row .mf-where { color: var(--accent); font-family: var(--font-mono); }
+#findings-panel .mf-row .mf-id { color: var(--text-secondary); font-family: var(--font-mono); margin-left: 4px; }
+#findings-panel .mf-row .mf-text { color: var(--text-primary); display: block; margin-top: 2px; }
+#findings-panel .mf-row .mf-verdict { color: var(--text-secondary); margin-left: 4px; }
+#findings-panel .mf-row .mf-acts { margin-top: 3px; }
+#findings-panel .mf-row .mf-acts button {
+  border: 1px solid var(--border); background: var(--bg-tertiary); color: var(--text-primary);
+  border-radius: 3px; font-size: 11px; padding: 1px 5px; cursor: pointer; margin-right: 4px;
+}
 /* 監査履歴 (BLK-reviewer-20260907-2303-wish) */
 #at-modal-content {
   background: var(--bg-secondary);
@@ -2663,6 +2711,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <!-- BLK-junior-20260907-2203-wish: 図をまたいで未対応の指摘を集める受信箱 -->
         <button class="tab-tool" id="btn-tab-inbox" title="保存フォルダの図をまたいで、未対応のレビュー指摘を「どの図に何件」で出す。行を押すとその図の該当行へ飛ぶ">📥 指摘箱 −</button>
         <button class="tab-tool" id="btn-tab-board" title="変わった図の変更前 DSL と変更後 DSL を全部まとめて 1 画面に並べる (レビュー会議用)">▤ 変更サマリ</button>
+        <!-- BLK-reviewer-20260908-0003-wish: 監査ツールが拾えない手動の指摘を実体 id で追う -->
+        <button class="tab-tool" id="btn-tab-findings" title="reviewer が図を読んで気づいた指摘を「対象ファイル+行+行の指紋」で憶え、次に開いたとき『未変更のため前回判定を維持』と『要再確認』に仕分ける">🔖 手動指摘 −</button>
         <!-- BLK-reviewer-20260907-2303-wish: 監査ツールが育つと、同じ欠陥が別カテゴリへ移る -->
         <button class="tab-tool" id="btn-tab-audit-timeline" title="監査を回すたびに記録し、同じ欠陥が run ごとにどのカテゴリへ分類されたかを 1 本の帯で並べる。解消と再分類を分けて出す">◷ 監査履歴</button>
         <!-- BLK-junior-20260907-1403-wish: 型の基準にした図と突き合わせて、書いている間ずっと見てもらう -->
@@ -2679,6 +2729,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <div id="review-panel"></div>
       <div id="pin-panel"></div>
       <div id="inbox-panel"></div>
+      <div id="findings-panel"></div>
       <!-- 開いている図をまたいで部品名を一括置換する -->
       <div id="rename-panel">
         <label for="rename-from">置換前 (部品名)</label>
@@ -3133,6 +3184,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/change-board.js"></script>
 <script src="src/core/audit-timeline.js"></script>
 <script src="src/core/consistency-check.js"></script>
+<script src="src/core/manual-findings.js"></script>
 <script src="src/core/review-desk.js"></script>
 <script src="src/core/state-branch.js"></script>
 <script src="src/core/state-transition.js"></script>
