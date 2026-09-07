@@ -8,8 +8,11 @@ window.MA.modules.plantumlState = (function() {
   var OB = window.MA.overlayBuilder;
   var ID = RP.IDENTIFIER;
 
+  // BLK-builder-20260907-1306-2 (design 5d): 状態行の色 (`state Foo #red`) を読む。
+  // 色はステレオタイプの後・`{` の前に置く (PlantUML の並び)。
+  // 6 = 色 (`#` を除いた中身)、7 = composite の `{`。
   var STATE_RE = new RegExp(
-    '^state\\s+(?:"([^"]+)"\\s+as\\s+(' + ID + ')|(' + ID + ')(?:\\s+as\\s+"([^"]+)")?)\\s*(?:<<([^>]+)>>)?\\s*(\\{)?\\s*$'
+    '^state\\s+(?:"([^"]+)"\\s+as\\s+(' + ID + ')|(' + ID + ')(?:\\s+as\\s+"([^"]+)")?)\\s*(?:<<([^>]+)>>)?\\s*(?:#([A-Za-z0-9]+)\\s*)?(\\{)?\\s*$'
   );
 
   function _existingIdSet(parsed) {
@@ -26,9 +29,18 @@ window.MA.modules.plantumlState = (function() {
     return window.MA.idNormalizer.normalize(rawInput, _existingIdSet(parsed), 'S');
   }
 
+  // BLK-builder-20260907-1306-2 (design 5d): 遷移行の線の色 (`A -[#red]-> B`) を読む。
+  // 1 = from、2 = 色 (`#` を除いた中身)、3 = to、4 = ラベル。
   var TRANSITION_RE = new RegExp(
-    '^(\\[\\*\\]|' + ID + ')\\s*-->\\s*(\\[\\*\\]|' + ID + ')(?:\\s*:\\s*(.*))?\\s*$'
+    '^(\\[\\*\\]|' + ID + ')\\s*-(?:\\[#([A-Za-z0-9]+)\\])?->\\s*(\\[\\*\\]|' + ID + ')(?:\\s*:\\s*(.*))?\\s*$'
   );
+
+  // その他パレットに出す色。src/core/relation-options.js の COLORS と同じ並びにして、
+  // 図種をまたいでも同じ色・同じ順序で選べるようにする。
+  function colors() {
+    var RO = window.MA.relationOptions;
+    return (RO && RO.COLORS) ? RO.COLORS : [{ value: '', label: '既定', swatch: '#111114' }];
+  }
 
   var NOTE_INLINE_RE = new RegExp(
     '^note\\s+(left|right)\\s+of\\s+(' + ID + ')\\s*:\\s*(.*)$',
@@ -137,7 +149,8 @@ window.MA.modules.plantumlState = (function() {
         if (sm[2] !== undefined) { sid = sm[2]; slabel = sm[1]; }
         else { sid = sm[3]; slabel = sm[4] !== undefined ? sm[4] : sm[3]; }
         var stereotype = sm[5] ? sm[5].toLowerCase() : null;
-        var hasBlock = !!sm[6];
+        var scolor = sm[6] || '';
+        var hasBlock = !!sm[7];
         var parentId = openCompositeStack.length > 0
           ? openCompositeStack[openCompositeStack.length - 1].id : null;
         var qid = parentId ? parentId + '.' + sid : sid;
@@ -146,6 +159,7 @@ window.MA.modules.plantumlState = (function() {
           id: qid,
           label: slabel,
           stereotype: stereotype,
+          color: scolor,
           parentId: parentId,
           entry: null,
           do: null,
@@ -161,12 +175,13 @@ window.MA.modules.plantumlState = (function() {
 
       var tmt = trimmed.match(TRANSITION_RE);
       if (tmt) {
-        var lbl = tmt[3] ? tmt[3].trim() : null;
+        var lbl = tmt[4] ? tmt[4].trim() : null;
         var parts = _parseTransitionLabel(lbl);
         result.transitions.push({
           id: '__t_' + result.transitions.length,
           from: tmt[1],
-          to: tmt[2],
+          to: tmt[3],
+          color: tmt[2] || '',
           label: lbl,
           trigger: parts.trigger,
           guard: parts.guard,
@@ -228,15 +243,17 @@ window.MA.modules.plantumlState = (function() {
     return result;
   }
 
-  function fmtState(id, label, stereotype) {
+  function fmtState(id, label, stereotype, color) {
     var labelPart = (label && label !== id) ? '"' + label + '" as ' + id : id;
     var stereoPart = stereotype ? ' <<' + stereotype + '>>' : '';
-    return 'state ' + labelPart + stereoPart;
+    var colorPart = color ? ' #' + color : '';
+    return 'state ' + labelPart + stereoPart + colorPart;
   }
 
-  function fmtTransition(from, to, trigger, guard, action) {
+  function fmtTransition(from, to, trigger, guard, action, color) {
     var label = window.MA.stateTransition.composeLabel(trigger, guard, action);
-    return from + ' --> ' + to + (label ? ' : ' + label : '');
+    var arrow = color ? '-[#' + color + ']->' : '-->';
+    return from + ' ' + arrow + ' ' + to + (label ? ' : ' + label : '');
   }
 
   function fmtNote(position, targetId, text) {
@@ -403,11 +420,14 @@ window.MA.modules.plantumlState = (function() {
     var m = trimmed.match(STATE_RE);
     if (!m) return text;
     var indent = (lines[idx].match(/^(\s*)/) || ['', ''])[1];
-    var hasBlock = !!m[6];
+    var hasBlock = !!m[7];
     var id, label, stereotype, labelExplicit;
     if (m[2] !== undefined) { id = m[2]; label = m[1]; labelExplicit = true; }
     else { id = m[3]; label = m[4] !== undefined ? m[4] : m[3]; labelExplicit = m[4] !== undefined; }
     stereotype = m[5] ? m[5].toLowerCase() : null;
+    // 色は ID / ラベル / ステレオタイプの書き換えでは失われない (design 3c と同じ扱い)。
+    var color = m[6] || '';
+    if (fields.color !== undefined) color = fields.color || '';
     if (fields.id != null) {
       if (!labelExplicit && fields.label == null) label = fields.id;
       id = fields.id;
@@ -415,7 +435,7 @@ window.MA.modules.plantumlState = (function() {
     if (fields.label != null) label = fields.label;
     if (fields.stereotype !== undefined) stereotype = fields.stereotype;
     var openBrace = hasBlock ? ' {' : '';
-    lines[idx] = indent + fmtState(id, label, stereotype) + openBrace;
+    lines[idx] = indent + fmtState(id, label, stereotype, color) + openBrace;
     return lines.join('\n');
   }
 
@@ -427,15 +447,18 @@ window.MA.modules.plantumlState = (function() {
     var m = trimmed.match(TRANSITION_RE);
     if (!m) return text;
     var indent = (lines[idx].match(/^(\s*)/) || ['', ''])[1];
-    var from = m[1], to = m[2];
-    var lbl = m[3] ? m[3].trim() : null;
+    var from = m[1], to = m[3];
+    // 線の色は from / to / trigger / guard / action の書き換えでは失われない。
+    var color = m[2] || '';
+    var lbl = m[4] ? m[4].trim() : null;
     var parts = _parseTransitionLabel(lbl);
     if (fields.from != null) from = fields.from;
     if (fields.to != null) to = fields.to;
+    if (fields.color !== undefined) color = fields.color || '';
     if (fields.trigger !== undefined) parts.trigger = fields.trigger;
     if (fields.guard !== undefined) parts.guard = fields.guard;
     if (fields.action !== undefined) parts.action = fields.action;
-    lines[idx] = indent + fmtTransition(from, to, parts.trigger, parts.guard, parts.action);
+    lines[idx] = indent + fmtTransition(from, to, parts.trigger, parts.guard, parts.action, color);
     return lines.join('\n');
   }
 
@@ -1291,6 +1314,14 @@ window.MA.modules.plantumlState = (function() {
           '<input id="st-exit" placeholder="exit" value="' + window.MA.htmlUtils.escHtml(st.exit || '') + '" style="width:100%;box-sizing:border-box;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-family:Consolas,monospace;font-size:11px;">' +
         '</div>' +
       '</div>' +
+      // BLK-builder-20260907-1306-2 (design 5d): 色は常時表示にせず「その他… ▾」に畳む。
+      P.colorPaletteHtml('st-more', {
+        title: 'その他（色）… ',
+        label: '色 / Color',
+        notation: 'state X #red',
+        colors: colors(),
+        current: st.color || '',
+      }) +
       // Composite ops (kind-aware buttons)
       (st.endLine && st.endLine > st.line
         ? '<button id="st-dissolve" style="font-size:11px;padding:4px 10px;background:var(--accent-red);border:none;color:#fff;border-radius:3px;cursor:pointer;margin-bottom:4px;">✕ Dissolve composite</button>'
@@ -1358,6 +1389,12 @@ window.MA.modules.plantumlState = (function() {
       out = setStateBehavior(out, bareId, 'do', doVal);
       out = setStateBehavior(out, bareId, 'exit', exitVal);
       ctx.setMmdText(out);
+      ctx.onUpdate();
+    });
+    // 色は「更新」を待たずに押した時点で DSL へ入れる (design 3c と同じ即時反映)。
+    P.bindColorPalette('st-more', function(value) {
+      window.MA.history.pushHistory();
+      ctx.setMmdText(updateState(ctx.getMmdText(), st.line, { color: value }));
       ctx.onUpdate();
     });
     P.bindEvent('st-delete', 'click', function() {
@@ -1437,6 +1474,14 @@ window.MA.modules.plantumlState = (function() {
       P.fieldHtml('条件 / guard', 'st-tr-guard', tr.guard || '', '例: retry > 3') +
       P.fieldHtml('実行する処理 / action', 'st-tr-act', tr.action || '', '例: log()') +
       _previewBoxHtml('st-tr-preview') +
+      // BLK-builder-20260907-1306-2 (design 5d): 線の色も「その他… ▾」に畳む。
+      P.colorPaletteHtml('st-tr-more', {
+        title: 'その他（線の色）… ',
+        label: '線の色 / Line color',
+        notation: '-[#red]->',
+        colors: colors(),
+        current: tr.color || '',
+      }) +
       P.primaryButtonHtml('st-tr-update', '更新') +
       P.primaryButtonHtml('st-tr-delete', '✕ 削除');
     propsEl.innerHTML = html;
@@ -1454,6 +1499,12 @@ window.MA.modules.plantumlState = (function() {
       fromEl.value = toEl.value;
       toEl.value = f;
       refreshPreview();
+    });
+
+    P.bindColorPalette('st-tr-more', function(value) {
+      window.MA.history.pushHistory();
+      ctx.setMmdText(updateTransition(ctx.getMmdText(), tr.line, { color: value }));
+      ctx.onUpdate();
     });
 
     P.bindEvent('st-tr-update', 'click', function() {
