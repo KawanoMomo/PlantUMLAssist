@@ -36,19 +36,20 @@ test.describe('BLK-primary-0823-design Activity 途中に挿入', () => {
     await expect(page.locator('#ac-ins-point')).toBeVisible();
     await expect(page.locator('#ac-ins-kind')).toBeVisible();
     const points = await page.locator('#ac-ins-point option').allTextContents();
-    expect(points.join('|')).toContain('start の前');
-    expect(points.join('|')).toContain(':Hello world; の後');
+    // BLK-junior-20260908-0103: 候補は行番号と生コードではなく構造の言葉になった。
+    expect(points.join('|')).toContain('フローのはじめの前');
+    expect(points.join('|')).toContain('アクション「Hello world」の後');
     expect(points.join('|')).not.toContain('@startuml');
   });
 
   test('フローの中では 10 種、フローの外ではレーンだけに絞られる', async ({ page }) => {
     await openActivity(page, MIN);
     // 既定は本体の最後 (:Hello world; の後 ではなく stop の後 なので明示的に選ぶ)
-    await page.locator('#ac-ins-point').selectOption({ label: '3: :Hello world; の後' });
+    await page.locator('#ac-ins-point').selectOption({ label: 'アクション「Hello world」の後 (L3)' });
     await page.waitForTimeout(300);
     expect(await page.locator('#ac-ins-kind option').count()).toBe(10);
 
-    await page.locator('#ac-ins-point').selectOption({ label: '2: start の前' });
+    await page.locator('#ac-ins-point').selectOption({ label: 'フローのはじめの前 (L2)' });
     await page.waitForTimeout(300);
     const outside = await page.locator('#ac-ins-kind option').allTextContents();
     expect(outside.length).toBe(1);
@@ -57,7 +58,7 @@ test.describe('BLK-primary-0823-design Activity 途中に挿入', () => {
 
   test('if を選んで挿入すると else / endif まで対で入る', async ({ page }) => {
     await openActivity(page, MIN);
-    await page.locator('#ac-ins-point').selectOption({ label: '3: :Hello world; の後' });
+    await page.locator('#ac-ins-point').selectOption({ label: 'アクション「Hello world」の後 (L3)' });
     await page.waitForTimeout(300);
     await page.locator('#ac-ins-kind').selectOption('if');
     await page.waitForTimeout(300);
@@ -74,7 +75,7 @@ test.describe('BLK-primary-0823-design Activity 途中に挿入', () => {
 
   test('fork は枝の数だけ fork again を作る', async ({ page }) => {
     await openActivity(page, MIN);
-    await page.locator('#ac-ins-point').selectOption({ label: '3: :Hello world; の後' });
+    await page.locator('#ac-ins-point').selectOption({ label: 'アクション「Hello world」の後 (L3)' });
     await page.waitForTimeout(300);
     await page.locator('#ac-ins-kind').selectOption('fork');
     await page.waitForTimeout(300);
@@ -89,7 +90,7 @@ test.describe('BLK-primary-0823-design Activity 途中に挿入', () => {
 
   test('入力の要らない break はその場に 1 行だけ入る', async ({ page }) => {
     await openActivity(page, MIN);
-    await page.locator('#ac-ins-point').selectOption({ label: '3: :Hello world; の後' });
+    await page.locator('#ac-ins-point').selectOption({ label: 'アクション「Hello world」の後 (L3)' });
     await page.waitForTimeout(300);
     await page.locator('#ac-ins-kind').selectOption('break');
     await page.waitForTimeout(300);
@@ -101,7 +102,7 @@ test.describe('BLK-primary-0823-design Activity 途中に挿入', () => {
 
   test('挿入は Ctrl+Z で戻せる', async ({ page }) => {
     await openActivity(page, MIN);
-    await page.locator('#ac-ins-point').selectOption({ label: '3: :Hello world; の後' });
+    await page.locator('#ac-ins-point').selectOption({ label: 'アクション「Hello world」の後 (L3)' });
     await page.waitForTimeout(300);
     await page.locator('#ac-ins-kind').selectOption('if');
     await page.waitForTimeout(300);
@@ -116,7 +117,7 @@ test.describe('BLK-primary-0823-design Activity 途中に挿入', () => {
   test('手数: 位置を選ぶ→要素を選ぶ→条件を打つ→挿入 の 3 クリックで分岐が 1 つ入る', async ({ page }) => {
     await openActivity(page, MIN);
     let clicks = 0;
-    await page.locator('#ac-ins-point').selectOption({ label: '3: :Hello world; の後' }); clicks++;
+    await page.locator('#ac-ins-point').selectOption({ label: 'アクション「Hello world」の後 (L3)' }); clicks++;
     await page.waitForTimeout(300);
     await page.locator('#ac-ins-kind').selectOption('if'); clicks++;
     await page.waitForTimeout(300);
