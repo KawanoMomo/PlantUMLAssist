@@ -794,6 +794,15 @@ html, body {
 #pin-panel .pin-row .pin-where { cursor: pointer; color: var(--accent); }
 #pin-panel .pin-row.stale .pin-where { color: var(--accent-red); cursor: default; }
 #pin-panel .pin-row.read { opacity: 0.65; }
+/* 対応済み (BLK-junior-20260908-0103-wish)。読んだだけの指摘と見分けが付く色にする */
+#pin-panel .pin-row.done { opacity: 0.8; border-left: 2px solid var(--accent-green); padding-left: 4px; }
+#pin-panel .pin-row .pin-state { color: var(--text-secondary); margin-left: 6px; }
+#pin-panel .pin-row.done .pin-state { color: var(--accent-green); }
+/* どの指摘にどの修正が対応するか (修正前 → 修正後) */
+#pin-panel .pin-row .pin-fix {
+  display: block; font-family: var(--font-mono); font-size: 10px;
+  color: var(--accent-green); margin: 2px 0;
+}
 #pin-panel .pin-row .pin-text { color: var(--text-primary); display: block; margin: 2px 0; }
 #pin-panel .pin-row .pin-anchor { font-family: var(--font-mono); font-size: 10px; }
 #pin-panel button, #pin-panel input {

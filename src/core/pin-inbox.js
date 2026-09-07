@@ -15,6 +15,11 @@ window.MA.pinInbox = (function() {
 
   function _s(v) { return v == null ? '' : String(v); }
 
+  // 未対応 = 対応済み以外。古い呼び出し元が pending を持たない要約を渡してきても壊さない。
+  function _pending(sum) {
+    return (sum && typeof sum.pending === 'number') ? sum.pending : (sum ? sum.open : 0);
+  }
+
   function _pinsOf(dsl) {
     var RP = window.MA.reviewPins;
     return RP ? RP.list(dsl) : [];
@@ -36,7 +41,8 @@ window.MA.pinInbox = (function() {
   }
 
   // filter: 受信箱の既定は「自分がまだ見ていない、他人の指摘」。
-  //   unreadOnly — 既読 (= 反映を確認済み) を落とす
+  //   unreadOnly — 既読 (= 目を通した) を落とす
+  //   pendingOnly — 対応済みを落とす。「まだ直っていない指摘」だけを残す
   //   excludeAuthor — 自分が書いた指摘を落とす。大小は問わない
   function filter(items, opts) {
     var o = opts || {};
@@ -44,6 +50,7 @@ window.MA.pinInbox = (function() {
     return (Array.isArray(items) ? items : []).filter(function(p) {
       if (!p) return false;
       if (o.unreadOnly && p.state === 'read') return false;
+      if (o.pendingOnly && p.state === 'done') return false;
       if (me && _s(p.author).trim().toLowerCase() === me) return false;
       return true;
     });
@@ -56,15 +63,17 @@ window.MA.pinInbox = (function() {
     (Array.isArray(items) ? items : []).forEach(function(p) {
       if (!p) return;
       var k = _s(p.doc);
-      if (!map[k]) { map[k] = { doc: k, open: 0, read: 0, stale: 0, items: [] }; order.push(k); }
+      if (!map[k]) { map[k] = { doc: k, open: 0, read: 0, done: 0, pending: 0, stale: 0, items: [] }; order.push(k); }
       var g = map[k];
       g.items.push(p);
-      if (p.state === 'read') g.read++; else g.open++;
+      if (p.state === 'done') g.done++;
+      else if (p.state === 'read') g.read++;
+      else g.open++;
       if (p.stale) g.stale++;
     });
-    var groups = order.map(function(k) { return map[k]; });
+    var groups = order.map(function(k) { map[k].pending = map[k].items.length - map[k].done; return map[k]; });
     groups.sort(function(a, b) {
-      if (a.open !== b.open) return b.open - a.open;
+      if (a.pending !== b.pending) return b.pending - a.pending;
       return a.doc < b.doc ? -1 : (a.doc > b.doc ? 1 : 0);
     });
     groups.forEach(function(g) {
@@ -77,34 +86,37 @@ window.MA.pinInbox = (function() {
   }
 
   function summary(items) {
-    var s = { total: 0, open: 0, read: 0, stale: 0, docs: 0, openDocs: 0 };
+    var s = { total: 0, open: 0, read: 0, done: 0, pending: 0, stale: 0, docs: 0, openDocs: 0 };
     groupByDoc(items).forEach(function(g) {
       s.docs++;
-      if (g.open > 0) s.openDocs++;
+      if (g.pending > 0) s.openDocs++;
       s.total += g.items.length;
       s.open += g.open;
       s.read += g.read;
+      s.done += g.done;
       s.stale += g.stale;
     });
+    s.pending = s.total - s.done;
     return s;
   }
 
   // headText: 受信箱の見出し 1 行。「何件・何図に残っているか」を先に言う。
   function headText(sum) {
     if (!sum || !sum.total) return '未対応の指摘はありません';
-    return '未対応 ' + sum.open + ' 件 / 全 ' + sum.total + ' 件 ・ ' + sum.openDocs + ' 図'
+    return '未対応 ' + _pending(sum) + ' 件 / 全 ' + sum.total + ' 件 ・ ' + sum.openDocs + ' 図'
       + (sum.stale ? ' ・ 行が見つからない ' + sum.stale : '');
   }
 
   // badgeText: 道具ボタンの 1 行。図をまたいだ未対応の数がボタンだけで分かる。
   function badgeText(sum) {
     if (!sum || !sum.total) return '📥 指摘箱 −';
-    return '📥 指摘箱 ' + sum.open + '/' + sum.total;
+    return '📥 指摘箱 ' + _pending(sum) + '/' + sum.total;
   }
 
   function groupText(g) {
     if (!g) return '';
-    return g.doc + ' — 未対応 ' + g.open + ' / ' + g.items.length + ' 件'
+    return g.doc + ' — 未対応 ' + (typeof g.pending === 'number' ? g.pending : g.open)
+      + ' / ' + g.items.length + ' 件'
       + (g.stale ? ' ・ 行が見つからない ' + g.stale : '');
   }
 
@@ -113,7 +125,8 @@ window.MA.pinInbox = (function() {
     if (!p) return '';
     var where = p.stale ? '行が見つかりません' : ('L' + p.line);
     return '#' + _s(p.id) + ' ' + _s(p.doc) + ' ' + where
-      + ' ' + (p.state === 'read' ? '既読' : '未読')
+      + ' ' + (window.MA.reviewPins ? window.MA.reviewPins.stateLabel(p.state)
+        : (p.state === 'read' ? '既読' : '未読'))
       + (p.author ? ' ・ ' + p.author : '')
       + ' ・ ' + _s(p.text);
   }
