@@ -948,6 +948,14 @@ window.MA.modules.plantumlActivity = (function() {
   // 入れるには種類セレクトを開き直す必要があった。
   // 種別を選ぶと従来の showInsertForm へ、入力の要らない break / detach / kill /
   // start / stop はその場で 1 行入れる。
+  // design 5c: 挿入メニューを開いている間、DSL の入る行に印を出す / 消す。
+  function _markerShow(line, position) {
+    if (window.MA.insertMarker) window.MA.insertMarker.show(line, position);
+  }
+  function _markerHide() {
+    if (window.MA.insertMarker) window.MA.insertMarker.hide();
+  }
+
   function showInsertPicker(ctx, line, position) {
     _renderInsertPicker(ctx, line, position, false);
   }
@@ -993,6 +1001,7 @@ window.MA.modules.plantumlActivity = (function() {
       'border:1px solid var(--border);color:var(--text-primary);padding:8px;border-radius:4px;cursor:pointer;">キャンセル</button>';
     content.innerHTML = html;
     modal.style.display = 'flex';
+    _markerShow(line, position);
 
     Array.prototype.forEach.call(content.querySelectorAll('.act-pick-btn'), function(btn) {
       btn.addEventListener('click', function() {
@@ -1008,6 +1017,7 @@ window.MA.modules.plantumlActivity = (function() {
           }
           modal.style.display = 'none';
           content.innerHTML = '';
+          _markerHide();
           return;
         }
         showInsertForm(ctx, line, position, kind);
@@ -1021,6 +1031,7 @@ window.MA.modules.plantumlActivity = (function() {
     document.getElementById('act-pick-cancel').addEventListener('click', function() {
       modal.style.display = 'none';
       content.innerHTML = '';
+      _markerHide();
     });
   }
 
@@ -1058,6 +1069,7 @@ window.MA.modules.plantumlActivity = (function() {
         '<button id="act-mod-confirm" style="flex:1;background:var(--accent);border:none;color:#fff;padding:8px;border-radius:4px;cursor:pointer;">確定</button>' +
       '</div>';
     modal.style.display = 'flex';
+    _markerShow(line, position);
 
     function renderFields() {
       var k = document.getElementById('act-mod-kind').value;
@@ -1093,7 +1105,7 @@ window.MA.modules.plantumlActivity = (function() {
     renderFields();
     P.bindEvent('act-mod-kind', 'change', renderFields);
 
-    function close() { modal.style.display = 'none'; content.innerHTML = ''; }
+    function close() { modal.style.display = 'none'; content.innerHTML = ''; _markerHide(); }
     P.bindEvent('act-mod-cancel', 'click', close);
     P.bindEvent('act-mod-confirm', 'click', function() {
       var k = document.getElementById('act-mod-kind').value;

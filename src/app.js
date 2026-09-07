@@ -104,6 +104,16 @@ function init() {
   renderStatusEl = document.getElementById('render-status');
   lineNumbersEl = document.getElementById('line-numbers');
   zoomDisplayEl = document.getElementById('zoom-display');
+  // design 5c: 挿入位置を選んでいる間の DSL 行マーカーと右パネルの案内
+  if (window.MA.insertMarker) {
+    window.MA.insertMarker.init({
+      wrap: document.getElementById('editor-wrap'),
+      editor: editorEl,
+      gutter: lineNumbersEl,
+      marker: document.getElementById('insert-marker'),
+      hint: document.getElementById('props-insert-hint'),
+    });
+  }
   // design 1a: 上部バーに残す 2 つの表示
   topFileNameEl = document.getElementById('top-file-name');
   topRenderStatusEl = document.getElementById('top-render-status');
@@ -227,6 +237,8 @@ function init() {
 
   editorEl.addEventListener('scroll', function() {
     if (lineNumbersEl) lineNumbersEl.scrollTop = editorEl.scrollTop;
+    // design 5c: 挿入先マーカーはエディタの座標で置くので、追随させる。
+    if (window.MA.insertMarker) window.MA.insertMarker.sync();
   });
 
   initPaneResizers();
@@ -1609,6 +1621,30 @@ function init() {
     if (back && back.focus && document.body.contains(back)) back.focus();
   });
 
+  // design 5c: 挿入位置を選んでいる間の「Esc で取り消し」。右パネルにそう出す以上、
+  // Esc で挿入メニューが閉じて印も消えるところまでを 1 つの動きにする。
+  document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Escape' || e.isComposing) return;
+    var IM = window.MA.insertMarker;
+    if (!IM || IM.getTarget() === null) return;
+    // 種別を選ぶ段 (ピッカー) だけを対象にする。入力を始めた後のフォームで
+    // Esc が閉じない挙動は FEAT-017 [AC-6] で決まっているので触らない。
+    var closed = false;
+    [['seq-modal', 'seq-pick-cancel'], ['act-modal', 'act-pick-cancel']].forEach(function(pair) {
+      var m = document.getElementById(pair[0]);
+      if (!m || m.style.display !== 'flex') return;
+      if (!document.getElementById(pair[1])) return;
+      m.style.display = 'none';
+      var c = document.getElementById(pair[0] + '-content');
+      if (c) c.innerHTML = '';
+      closed = true;
+    });
+    if (!closed) return;
+    IM.hide();
+    e.preventDefault();
+    e.stopPropagation();
+  });
+
   // design 5b: 設定のショートカット表に載せた「全体」「表示」のキーを効かせる。
   // 表に載っていて効かないキーは「無い」と読めてしまうので、表と実装をここで揃える。
   //
@@ -2214,6 +2250,14 @@ function updateUndoRedoButtons() {
 function updateLineNumbers() {
   if (!lineNumbersEl || !editorEl) return;
   var count = (editorEl.value.match(/\n/g) || []).length + 1;
+  // design 5c: 挿入位置を選んでいる間はその行を強調したいので、行番号は
+  // insert-marker に組ませる (表示中でなければ target は null で素の番号列)。
+  var IM = window.MA.insertMarker;
+  if (IM) {
+    lineNumbersEl.innerHTML = IM.gutterHtml(count, IM.getTarget(),
+      window.MA.htmlUtils && window.MA.htmlUtils.escHtml);
+    return;
+  }
   var out = '';
   for (var i = 1; i <= count; i++) out += (i === 1 ? '' : '\n') + i;
   lineNumbersEl.textContent = out;
