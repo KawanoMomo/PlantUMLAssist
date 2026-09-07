@@ -9,6 +9,10 @@ window.MA.modules.plantumlActivity = (function() {
   var START_RE = /^start$/i;
   var STOP_RE = /^stop$/i;
   var END_RE = /^end$/i;
+  // design 5d Activity「その他パレット」の色指定: `#LightBlue:保存する;` のように
+  // 本文の前に色を書ける。色を読めないとその行がアクションとして見えなくなり、
+  // 図の上でも右パネルでも触れなくなるので、色は本文と分けて持つ。
+  var ACTION_COLOR_RE = /^(#[A-Za-z0-9_]+(?:\/#?[A-Za-z0-9_]+)?)\s*:/;
   var ACTION_OPEN_RE = /^:(.*)$/;
   var ACTION_CLOSED_RE = /^:(.*);$/;
 
@@ -111,6 +115,7 @@ window.MA.modules.plantumlActivity = (function() {
             kind: 'action',
             id: _newId(state),
             text: openAction.bodyLines.join('\n'),
+            color: openAction.color || null,
             line: openAction.startLine,
             endLine: lineNum,
             swimlaneId: null,
@@ -368,28 +373,33 @@ window.MA.modules.plantumlActivity = (function() {
       }
 
       // Action (after control-structure tokens to avoid confusion)
-      if (trimmed.charAt(0) === ':') {
-        var closedMatch = trimmed.match(ACTION_CLOSED_RE);
+      // 色つき `#色:本文;` は色を外した `:本文;` として、以降まったく同じ扱いにする。
+      var colorMatch = trimmed.match(ACTION_COLOR_RE);
+      var actionColor = colorMatch ? colorMatch[1] : null;
+      var actionBody = colorMatch ? trimmed.substring(colorMatch[0].length - 1) : trimmed;
+      if (actionBody.charAt(0) === ':') {
+        var closedMatch = actionBody.match(ACTION_CLOSED_RE);
         if (closedMatch) {
           _appendNode(state, {
             kind: 'action',
             id: _newId(state),
             text: closedMatch[1],
+            color: actionColor,
             line: lineNum,
             endLine: lineNum,
             swimlaneId: null,
           });
           continue;
         }
-        openAction = { startLine: lineNum, bodyLines: [trimmed.substring(1)] };
+        openAction = { startLine: lineNum, color: actionColor, bodyLines: [actionBody.substring(1)] };
         continue;
       }
     }
     return result;
   }
 
-  function fmtAction(text) {
-    return ':' + (text || '') + ';';
+  function fmtAction(text, color) {
+    return (color ? color : '') + ':' + (text || '') + ';';
   }
   function fmtIf(condition, thenLabel) {
     return 'if (' + condition + ') then (' + (thenLabel || 'yes') + ')';
@@ -495,10 +505,36 @@ window.MA.modules.plantumlActivity = (function() {
     return before.concat(newLines).concat(after).join('\n');
   }
 
+  // 本文を書き換えても行に付いている色は落とさない (色は本文と別の指定なので、
+  // 文言を直しただけで見た目が変わるのは意図しない副作用になる)。
+  function actionColorAt(text, lineNum) {
+    var lines = text.split('\n');
+    var idx = lineNum - 1;
+    if (idx < 0 || idx >= lines.length) return null;
+    var m = lines[idx].trim().match(ACTION_COLOR_RE);
+    return m ? m[1] : null;
+  }
+
+  // 行の色だけを差し替える。color が空なら色を外す。
+  function setActionColor(text, lineNum, color) {
+    var lines = text.split('\n');
+    var idx = lineNum - 1;
+    if (idx < 0 || idx >= lines.length) return text;
+    var indent = lines[idx].match(/^(\s*)/)[1];
+    var body = lines[idx].trim();
+    var m = body.match(ACTION_COLOR_RE);
+    if (m) body = body.substring(m[0].length - 1);
+    if (body.charAt(0) !== ':') return text;   // アクション行でなければ触らない
+    var norm = color ? (color.charAt(0) === '#' ? color : '#' + color) : '';
+    lines[idx] = indent + norm + body;
+    return lines.join('\n');
+  }
+
   function updateAction(text, startLine, endLine, newText) {
     var lines = text.split('\n');
+    var keepColor = actionColorAt(text, startLine) || '';
     var newBody = (newText || '').split('\n');
-    var firstLine = ':' + newBody[0] + (newBody.length === 1 ? ';' : '');
+    var firstLine = keepColor + ':' + newBody[0] + (newBody.length === 1 ? ';' : '');
     var rest = [];
     for (var i = 1; i < newBody.length; i++) {
       rest.push(i === newBody.length - 1 ? newBody[i] + ';' : newBody[i]);
@@ -1420,6 +1456,52 @@ window.MA.modules.plantumlActivity = (function() {
   // そこに置ける要素だけがメニューに残り、if / while / fork は開始と終了が対で入る。
   // 生の構文を打つ必要がないので、`start` / `:Hello world;` / `stop` しかない
   // 図にも分岐や繰り返しをその場で足せる。
+  // design 5d Activityの「その他パレット」の色指定。
+  // 使うのは工程図での強調がほとんどなので、名前で選べる見本を並べ、
+  // それ以外は自由入力に逃がす。現在色があれば開いた状態で出す。
+  var ACTION_COLORS = [
+    { value: '', label: 'なし', swatch: 'transparent' },
+    { value: '#LightBlue', label: 'LightBlue', swatch: '#ADD8E6' },
+    { value: '#LightGreen', label: 'LightGreen', swatch: '#90EE90' },
+    { value: '#Yellow', label: 'Yellow', swatch: '#FFFF00' },
+    { value: '#Orange', label: 'Orange', swatch: '#FFA500' },
+    { value: '#Pink', label: 'Pink', swatch: '#FFC0CB' },
+  ];
+
+  function _actionColorHtml(current) {
+    var P = window.MA.properties;
+    var cur = (current || '').toLowerCase();
+    var known = false;
+    var btns = '';
+    for (var i = 0; i < ACTION_COLORS.length; i++) {
+      var c = ACTION_COLORS[i];
+      var on = c.value.toLowerCase() === cur;
+      if (on && c.value) known = true;
+      btns += '<button type="button" id="ac-color-' + i + '" data-value="' + c.value + '"'
+        + ' aria-pressed="' + (on ? 'true' : 'false') + '"'
+        + ' style="flex:0 0 auto;display:flex;align-items:center;gap:4px;'
+        + 'background:' + (on ? 'var(--accent)' : 'var(--bg-tertiary)') + ';'
+        + 'border:1px solid ' + (on ? 'var(--accent)' : 'var(--border)') + ';'
+        + 'color:' + (on ? '#fff' : 'var(--text-primary)') + ';'
+        + 'font-size:11px;padding:3px 6px;border-radius:3px;cursor:pointer;">'
+        + '<span style="width:10px;height:10px;border-radius:2px;border:1px solid var(--border);'
+        + 'background:' + c.swatch + ';"></span>' + c.label + '</button>';
+    }
+    var open = !!current;
+    return '<details' + (open ? ' open' : '') +
+      ' id="ac-action-more" style="border-top:1px solid var(--border);padding-top:6px;margin-top:8px;">' +
+      '<summary id="ac-action-more-summary" style="font-size:11px;color:var(--text-secondary);cursor:pointer;">' +
+        'その他（色）' + (current ? ' — ' + window.MA.htmlUtils.escHtml(current) : '') +
+      '</summary>' +
+      '<div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap;">' + btns + '</div>' +
+      '<div style="margin-top:6px;">' +
+        P.fieldHtml('その他の色 (名前または #RRGGBB)', 'ac-color-custom',
+          known ? '' : (current || ''), '例: #AliceBlue') +
+        P.primaryButtonHtml('ac-color-go', 'この色にする') +
+      '</div>' +
+    '</details>';
+  }
+
   function _renderInsertHere(ctx, propsEl) {
     var AI = window.MA.activityInsert;
     var P = window.MA.properties;
@@ -1587,6 +1669,7 @@ window.MA.modules.plantumlActivity = (function() {
         '<textarea id="ac-action-text" style="width:100%;min-height:60px;">' + window.MA.htmlUtils.escHtml(node.text || '') + '</textarea>' +
       '</div>' +
       P.primaryButtonHtml('ac-action-update', '更新') +
+      _actionColorHtml(node.color || '') +
       '<div style="border-top:1px solid var(--border);padding-top:8px;margin-top:8px;">' +
         '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">Notes</div>';
     if (attachedNotes.length === 0) {
@@ -1610,6 +1693,29 @@ window.MA.modules.plantumlActivity = (function() {
           '</div>';
     propsEl.innerHTML = html;
 
+    // 色を選んだ時点で DSL へ入れる (design 3c と同じ流儀)。
+    for (var ci = 0; ci < ACTION_COLORS.length; ci++) {
+      (function(idx) {
+        P.bindEvent('ac-color-' + idx, 'click', function(e) {
+          var v = e.currentTarget.getAttribute('data-value');
+          var before = ctx.getMmdText();
+          var after = setActionColor(before, node.line, v);
+          if (after === before) return;
+          window.MA.history.pushHistory();
+          ctx.setMmdText(after);
+          ctx.onUpdate();
+        });
+      })(ci);
+    }
+    P.bindEvent('ac-color-go', 'click', function() {
+      var v = document.getElementById('ac-color-custom').value.trim();
+      var before = ctx.getMmdText();
+      var after = setActionColor(before, node.line, v);
+      if (after === before) return;
+      window.MA.history.pushHistory();
+      ctx.setMmdText(after);
+      ctx.onUpdate();
+    });
     P.bindEvent('ac-action-update', 'click', function() {
       var newText = document.getElementById('ac-action-text').value;
       window.MA.history.pushHistory();
@@ -1899,6 +2005,8 @@ window.MA.modules.plantumlActivity = (function() {
     addSwimlane: addSwimlane,
     addNote: addNote,
     updateAction: updateAction,
+    actionColorAt: actionColorAt,
+    setActionColor: setActionColor,
     updateIfCondition: updateIfCondition,
     updateBranchLabel: updateBranchLabel,
     updateWhileCondition: updateWhileCondition,
