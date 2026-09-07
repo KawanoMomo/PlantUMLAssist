@@ -1711,6 +1711,7 @@ function init() {
   setupPinPanel();
   setupNameAudit();
   setupFamilyAudit();
+  setupHandoffPackage();
   setupFamilyClone();
   setupConsistencyPanel();
   setupLineEdit();
@@ -1827,6 +1828,7 @@ function initCommandPalette() {
       { id: 'tab-folder', title: '保存フォルダの図を一覧 / Folder', hint: 'Tabs', keywords: ['folder', 'list', 'いちらん', 'ふぉるだ'], run: function() { clickById('btn-tab-folder'); } },
       { id: 'tab-rename', title: '部品名を一括置換 / Bulk rename', hint: 'Tabs', keywords: ['rename', 'replace', 'いっかつ', 'ちかん'], run: function() { clickById('btn-tab-rename'); } },
       { id: 'tab-audit', title: '名前突合を開く / Name audit', hint: 'Tabs', keywords: ['name', 'audit', 'なまえ', 'つきあわせ'], run: function() { clickById('btn-tab-audit'); } },
+      { id: 'tab-handoff', title: '引き継ぎパッケージを作る / Handoff package', hint: 'Tabs', keywords: ['handoff', 'package', 'zip', 'ひきつぎ', 'ぱっけーじ'], run: function() { clickById('btn-tab-handoff'); } },
       { id: 'tab-lines', title: '行編集を開く / Line edit', hint: 'Tabs', keywords: ['line', 'edit', 'ぎょう', 'へんしゅう'], run: function() { clickById('btn-tab-lines'); } },
       { id: 'tab-compare', title: '並べて見る / Compare', hint: 'Tabs', keywords: ['compare', 'side', 'ならべて', 'みくらべ'], run: function() { clickById('btn-tab-compare'); } },
       { id: 'tab-template', title: 'テンプレートから新しい図を作る / Template', hint: 'Tabs', keywords: ['template', 'copy', 'てんぷれ', 'ふくせい'], run: function() { clickById('btn-tab-template'); } },
@@ -4277,6 +4279,64 @@ function setupConsistencyPanel() {
     if (ev.target === modal) modal.style.display = 'none';
   });
   renderConsistencyBadge();
+}
+
+// ── 引き継ぎパッケージ ─────────────────────────────────────────────────────
+// BLK-primary-20260907-1303-wish: 新人への引き継ぎは ⇉系統チェック・🔍名前突合・
+// ▤変更サマリ を別々のタブで開いて見せ、「問題なし」を口頭で伝える形だった。
+// 渡された側は後から同じ状態を再現できない。ここは 4 つ (系統チェック結果 /
+// 名前突合結果 / 直近の変更サマリ / SVG 一式) を 1 つの zip に固めて渡す。
+// 判定と HTML は src/core/handoff-package.js の職掌。ここは材料を集めるだけ。
+
+function buildHandoffPackage() {
+  var HP = window.MA.handoffPackage;
+  var BE = window.MA.bulkExport;
+  if (!HP || !BE || !window.MA.workspace) return Promise.resolve(null);
+  // 編集中の内容が workspace に載っていないと 1 枚だけ古い DSL で固まる。
+  saveActiveDoc();
+
+  var docs = _renameDocs().map(function(d) {
+    return { id: d.id, name: d.name, diagramType: d.diagramType, dsl: d.dsl };
+  });
+  var status = document.getElementById('bulk-export-status');
+  if (status) { status.style.display = 'block'; status.textContent = '引き継ぎパッケージを作っています…'; }
+
+  var svgs = {};
+  var order = docs.slice();
+
+  function renderNext(i) {
+    if (i >= order.length) return Promise.resolve();
+    var d = order[i];
+    if (status) status.textContent = '引き継ぎパッケージを作っています… ' + (i + 1) + ' / ' + order.length;
+    // 1 枚失敗しても残りは続ける。落ちた図は「書き出せませんでした」と書いて渡す。
+    return Promise.resolve(renderDslToSvg(d.dsl)).then(function(svg) {
+      if (svg) svgs[d.id] = svg;
+    }, function() {}).then(function() { return renderNext(i + 1); });
+  }
+
+  return renderNext(0).then(function() {
+    var FA = window.MA.familyAudit;
+    var NA = window.MA.nameAudit;
+    var snapshot = HP.buildSnapshot({
+      docs: docs,
+      families: FA ? FA.audit(docs) : [],
+      names: NA ? NA.audit(docs) : null,
+      board: _changeBoardModel(),
+      svgs: svgs,
+    });
+    var name = HP.packageName();
+    downloadBlob(name, new Blob([BE.buildZip(HP.files(snapshot))], { type: 'application/zip' }));
+    var msg = '引き継ぎパッケージを書き出しました（' + name + '） ' + snapshot.verdict;
+    if (status) status.textContent = msg;
+    if (window.MA.toast) window.MA.toast.show(msg);
+    return snapshot;
+  });
+}
+
+function setupHandoffPackage() {
+  var btn = document.getElementById('btn-tab-handoff');
+  if (!btn || !window.MA.handoffPackage) return;
+  btn.addEventListener('click', function() { buildHandoffPackage(); });
 }
 
 function setupFamilyAudit() {

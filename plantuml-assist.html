@@ -1818,6 +1818,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <!-- BLK-reviewer-20260907-1203-wish: レビューの指摘を図の該当行に貼り、未読/既読で追う -->
         <button class="tab-tool" id="btn-tab-pins" title="この図に付いたレビュー指摘の一覧。図の上の印をクリックしても開く">📌 指摘 −</button>
         <button class="tab-tool" id="btn-tab-board" title="変わった図の変更前 DSL と変更後 DSL を全部まとめて 1 画面に並べる (レビュー会議用)">▤ 変更サマリ</button>
+        <!-- BLK-primary-20260907-1303-wish: 引き継ぎに要る確認結果と図を 1 つの zip に固める -->
+        <button class="tab-tool" id="btn-tab-handoff" title="系統チェック・名前突合・変更サマリ・SVG 一式を 1 つのパッケージ (zip) に書き出す">📦 引き継ぎ</button>
       </div>
       <div id="folder-panel"></div>
       <div id="diff-panel"></div>
@@ -2141,6 +2143,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/workspace.js"></script>
 <script src="src/core/bulk-rename.js"></script>
 <script src="src/core/bulk-export.js"></script>
+<script src="src/core/handoff-package.js"></script>
 <script src="src/core/save-target.js"></script>
 <script src="src/core/export-shortcuts.js"></script>
 <script src="src/core/diagram-settings.js"></script>
