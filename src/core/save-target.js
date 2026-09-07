@@ -39,5 +39,41 @@ window.MA.saveTarget = (function() {
       : '⚠ ' + target.dir + '/' + target.name + '.puml に保存できませんでした';
   }
 
-  return { decide: decide, messageFor: messageFor };
+  // パスの末尾のフォルダ名。上部バーは狭いので、フルパスではなく
+  // 「どの置き場所か」が分かる 1 語だけを出す (全体は title に入れる)。
+  function tailOf(dir) {
+    var d = String(dir == null ? '' : dir).replace(/[\\/]+$/, '');
+    if (!d) return '';
+    var parts = d.split(/[\\/]/);
+    var last = parts[parts.length - 1] || '';
+    return (last === '.' || last === '..') ? d : last;
+  }
+
+  // BLK-junior-20260907-2009: 保存先が既に覚えられていても、画面のどこにも
+  // 出ていないので「設定済みであること」に気づけず、図種を変えるたびに
+  // ⚙設定 → ファイル → パス再入力 → OK を習慣で打ち直していた。
+  // 上部バーに常時出す 1 語を返し、「もう設定されている」を見えるようにする。
+  //
+  // 返り値: { mode, text, title, configured }
+  function label(cfg) {
+    var backend = cfg && cfg.backend;
+    if (backend === 'file') {
+      var dir = (cfg && cfg.fileDir) || './autosave';
+      var tail = tailOf(dir) || dir;
+      return {
+        mode: 'file',
+        text: '📁 ' + tail,
+        title: '保存先は設定済みです: ' + dir + '\n保存は Ctrl+K →「ファイルを保存」だけで済みます (押すと設定を開きます)',
+        configured: true,
+      };
+    }
+    return {
+      mode: 'download',
+      text: '⬇ ダウンロード',
+      title: '保存先フォルダは未設定です。保存するとブラウザのダウンロードになります (押すと設定を開きます)',
+      configured: false,
+    };
+  }
+
+  return { decide: decide, messageFor: messageFor, tailOf: tailOf, label: label };
 })();

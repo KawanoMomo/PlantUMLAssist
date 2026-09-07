@@ -39,6 +39,24 @@ function updateTopFileName() {
   var name = window.MA.topStatus.fileName(doc ? doc.name : '');
   topFileNameEl.textContent = name;
   topFileNameEl.title = name;
+  updateTopSaveTarget();
+}
+
+// BLK-junior-20260907-2009: 保存先はサーバ側 (.assist-prefs.json) に覚えられて
+// いるのに、画面のどこにも出ないので「設定済みであること」に気づけず、図種を
+// 変えるたびに ⚙設定 → ファイル → パス再入力 → OK を習慣で打ち直していた。
+// 上部バーのファイル名の隣に保存先を常時出し、押せば設定へ入れるようにする。
+function updateTopSaveTarget() {
+  var el = document.getElementById('top-save-target');
+  var ST = window.MA.saveTarget;
+  if (!el || !ST) return;
+  var cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null;
+  var info = ST.label(cfg);
+  el.textContent = info.text;
+  el.title = info.title;
+  el.setAttribute('data-mode', info.mode);
+  if (info.configured) el.classList.add('configured');
+  else el.classList.remove('configured');
 }
 
 // updateTopRenderStatus: レンダリングの相と所要時間を上部バーに映す。
@@ -205,12 +223,26 @@ function init() {
         // will not re-run but scheduleRefresh below uses the new mmdText.
       }
     }
+    // BLK-junior-20260907-2009: server から保存先を引き継いだ直後にも上部バーを
+    // 引き直す。ここを通さないと「覚えられているのに画面に出ない」が残る。
+    function doRestoreAndSync() { doRestore(); updateTopSaveTarget(); }
     var p = as.init();
     if (p && typeof p.then === 'function') {
-      p.then(doRestore, doRestore);
+      p.then(doRestoreAndSync, doRestoreAndSync);
     } else {
-      doRestore();
+      doRestoreAndSync();
     }
+  })();
+
+  // 上部バーの保存先チップ。押したら設定を開く (今の値を確かめて直せる)。
+  (function setupTopSaveTarget() {
+    var el = document.getElementById('top-save-target');
+    if (!el) return;
+    el.addEventListener('click', function() {
+      var btn = document.getElementById('btn-config');
+      if (btn) btn.click();
+    });
+    updateTopSaveTarget();
   })();
 
   editorEl.addEventListener('input', function() {
@@ -1504,6 +1536,8 @@ function init() {
           backend: backend,
           fileDir: fileDir,
         });
+        // 保存先を変えたらすぐ上部バーに映す (次に開くまで古い表示を残さない)。
+        updateTopSaveTarget();
       }
       // レンダリングモードとエディタの見た目も同じ「保存」で確定する。
       // モード切替は既存の #render-mode を唯一の窓口に保ち、change を投げて

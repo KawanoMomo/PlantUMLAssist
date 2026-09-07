@@ -136,6 +136,24 @@ html, body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* BLK-junior-20260907-2009: 保存先が設定済みかどうかを上部バーに常時出す */
+#top-save-target {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1px 8px;
+  margin-right: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#top-save-target:hover { color: var(--text-primary); border-color: var(--accent); }
+#top-save-target.configured { color: var(--accent); border-color: var(--accent); }
 #top-render-status {
   font-family: var(--font-mono);
   font-size: 11px;
@@ -2193,6 +2211,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
          Open/Save/設定/Undo/Redo/ズーム/再描画は下の #toolbar-actions に退避し、
          入口は Ctrl+K のコマンドパレット・左レール・キャンバス上のズーム HUD が持つ。 -->
     <span id="top-file-name" title="編集中の図">(無題).puml</span>
+    <!-- BLK-junior-20260907-2009: 保存先が既に覚えられていることを常時見せる -->
+    <button id="top-save-target" type="button" title="保存先">⬇ ダウンロード</button>
 
     <!-- BLK-builder-20260907-0803-1 (design 1a): コマンド中心。名前を打って実行する入口 -->
     <button class="tb-btn" id="btn-command-palette" title="コマンド・要素を検索 (Ctrl+K)">
