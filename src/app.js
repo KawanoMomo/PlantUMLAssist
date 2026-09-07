@@ -1033,6 +1033,96 @@ function init() {
     if (cfg && cfgBtn) cfg.addEventListener('click', function() { cfgBtn.click(); });
   })();
 
+  // ── ツールメニュー (design 7a): 機能ボタンを 6 分類に畳む ────────────────
+  // タブ列に横並びだった機能ボタンを 1 つの「ツール」に畳む。メニュー項目は
+  // 既存ボタンの click を鳴らすだけで、処理そのものは元のボタン側に残す
+  // (Ctrl+K のコマンドパレットと同じ経路を通す)。
+  // 畳んだ状態は localStorage に憶える。既定は畳まない (今のタブ列のまま) で、
+  // 「ツール ▾」の中の「タブ列から畳む / タブ列に戻す」で切り替える。
+  (function setupToolMenu() {
+    var btn = document.getElementById('btn-tab-tools');
+    var menu = document.getElementById('tool-menu');
+    var bar = document.getElementById('tab-bar');
+    var tm = window.MA.toolMenu;
+    if (!btn || !menu || !bar || !tm) return;
+
+    var FOLD_KEY = 'plantuml-tools-folded';
+
+    function foldable() {
+      return Array.prototype.filter.call(bar.querySelectorAll('.tab-tool'), function(b) {
+        return tm.isFoldable(b.id);
+      });
+    }
+
+    function applyFold(folded) {
+      foldable().forEach(function(b) { b.classList.add('tool-folded'); });
+      bar.classList.toggle('tools-folded', !!folded);
+    }
+
+    function isFolded() {
+      return bar.classList.contains('tools-folded');
+    }
+
+    // タブ列のボタン文字の末尾に出る件数 (「📌 指摘 3」の 3) をメニューにも出す。
+    // 「−」や 0 は数が無い印なので付けない。
+    function badges() {
+      var out = {};
+      foldable().forEach(function(b) {
+        var m = /(\d+)\s*$/.exec(b.textContent || '');
+        if (m && m[1] !== '0') out[b.id] = m[1];
+      });
+      return out;
+    }
+
+    function close() {
+      menu.hidden = true;
+      btn.setAttribute('aria-expanded', 'false');
+    }
+
+    function open() {
+      menu.innerHTML = tm.buildMenuHtml(badges())
+        + '<div class="tool-menu-group"><button type="button" class="tool-menu-item" id="tool-menu-fold">'
+        + '<span class="tool-menu-label">'
+        + (isFolded() ? 'タブ列に戻す' : 'タブ列から畳む')
+        + '</span></button></div>';
+      menu.hidden = false;
+      btn.setAttribute('aria-expanded', 'true');
+    }
+
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      if (menu.hidden) open(); else close();
+    });
+
+    menu.addEventListener('click', function(e) {
+      var item = e.target && e.target.closest ? e.target.closest('.tool-menu-item') : null;
+      if (!item) return;
+      if (item.id === 'tool-menu-fold') {
+        var next = !isFolded();
+        applyFold(next);
+        try { localStorage.setItem(FOLD_KEY, next ? '1' : '0'); } catch (err) {}
+        close();
+        return;
+      }
+      var target = document.getElementById(item.getAttribute('data-target'));
+      close();
+      if (target) target.click();
+    });
+
+    document.addEventListener('click', function(e) {
+      if (menu.hidden) return;
+      if (menu.contains(e.target) || btn.contains(e.target)) return;
+      close();
+    });
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && !menu.hidden) close();
+    });
+
+    var saved = '0';
+    try { saved = localStorage.getItem(FOLD_KEY) || '0'; } catch (err) {}
+    applyFold(saved === '1');
+  })();
+
   // Open / Save
   document.getElementById('btn-open').addEventListener('click', openFile);
   document.getElementById('btn-save').addEventListener('click', saveFile);
