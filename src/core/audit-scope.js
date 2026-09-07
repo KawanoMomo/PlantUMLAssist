@@ -69,10 +69,25 @@
 
   var KIND_LABEL = { data: '実データ', template: 'テンプレ' };
 
-  // 前回 → 今回のファイル差分。前回に files が無ければ null を返す
+  // 指紋を持たない古い JSON の docs (名前だけ) を、比較の土台に載る形にする。
+  // hash が無いので内容は比べられないが、名前の増減までは同じ 1 回の実行で言える。
+  // 「追えない」で全部を諦めると、移行直後の run はまた 22 枚の手 diff に戻る。
+  function entriesFromNames(names) {
+    return (names || []).map(function(n) {
+      var c = classify(n);
+      return { name: n, kind: c.kind, reason: c.reason, hash: null, bytes: null, lines: null };
+    });
+  }
+
+  // 前回 → 今回のファイル差分。前回に files も docs も無ければ null を返す
   // (「変化なし」と「追えない」は読む側にとって別物なので混ぜない)。
+  // 前回が名前だけなら contentComparable: false を立て、内容の変化は言わない。
   function diffFiles(prevFiles, curFiles) {
     if (!prevFiles || !prevFiles.length) return null;
+    var comparable = false;
+    for (var k = 0; k < prevFiles.length; k++) {
+      if (prevFiles[k] && typeof prevFiles[k].hash === 'string' && prevFiles[k].hash) { comparable = true; break; }
+    }
     var pi = {}, ci = {};
     prevFiles.forEach(function(f) { pi[f.name] = f; });
     (curFiles || []).forEach(function(f) { ci[f.name] = f; });
@@ -81,7 +96,7 @@
     (curFiles || []).forEach(function(f) {
       var p = pi[f.name];
       if (!p) { added.push(f); return; }
-      if (p.hash !== f.hash) {
+      if (comparable && p.hash !== f.hash) {
         changed.push({
           name: f.name, kind: f.kind, reason: f.reason,
           from: p.hash, to: f.hash, bytes: f.bytes - (p.bytes || 0),
@@ -95,6 +110,7 @@
 
     function byKind(list, kind) { return list.filter(function(f) { return f.kind === kind; }); }
     return {
+      contentComparable: comparable,
       changed: changed, added: added, removed: removed,
       dataChanged: byKind(changed, 'data'), templateChanged: byKind(changed, 'template'),
       dataAdded: byKind(added, 'data'), templateAdded: byKind(added, 'template'),
@@ -119,6 +135,23 @@
     if (!fd) return [head + ' (前回の JSON にファイル指紋が無く内容変化は追えない。次回から比較します)'];
 
     var lines = [head];
+    // 前回が名前だけ (指紋を持たない古い JSON) のとき。ここで黙って
+    // 「変化なし」と言うと、reviewer は変化を見落としたまま次へ進んでしまう。
+    // 何が言えて何が言えないかを分けて出し、内容まで見る手も併せて示す。
+    if (fd.contentComparable === false) {
+      lines.push('ファイル内容: 前回の JSON にファイル指紋が無く内容変化は追えない (名前の増減だけ比較した)');
+      if (fd.added.length) {
+        lines.push('  追加: ' + _names(fd.added)
+          + ' (実データ ' + fd.dataAdded.length + ' / テンプレ ' + fd.templateAdded.length + ')');
+      }
+      if (fd.removed.length) {
+        lines.push('  消失: ' + _names(fd.removed)
+          + ' (実データ ' + fd.dataRemoved.length + ' / テンプレ ' + fd.templateRemoved.length + ')');
+      }
+      if (!fd.added.length && !fd.removed.length) lines.push('  名前の増減はなし');
+      lines.push('  → 内容の変化も見るなら --since-files <前回の図フォルダ> を足す (前回の控えから指紋を採り直す)');
+      return lines;
+    }
     if (!fd.touched) {
       lines.push('ファイル内容: 前回から変化なし (実データ・テンプレとも同一)');
       return lines;
@@ -150,7 +183,8 @@
   var api = {
     RULES: RULES, KIND_LABEL: KIND_LABEL,
     baseName: baseName, classify: classify, fingerprint: fingerprint,
-    fileEntries: fileEntries, diffFiles: diffFiles, formatFileDiff: formatFileDiff,
+    fileEntries: fileEntries, entriesFromNames: entriesFromNames,
+    diffFiles: diffFiles, formatFileDiff: formatFileDiff,
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

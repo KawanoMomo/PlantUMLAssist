@@ -147,8 +147,22 @@ function totalIssues(summary) {
   return t;
 }
 
+// 内容比較の土台を決める。指紋入りの前回 JSON がいちばん強く、
+// --since-files で渡された前回の図フォルダがそれに次ぎ、名前だけの古い JSON が最後。
+// BLK-reviewer-20260908-0203 (0723 追記): 指紋を載せる前に採った JSON と比べる run は
+// 「追えない」で終わり、その 1 回はまた 22 枚の手 diff に戻っていた。前回の控えが
+// フォルダで残っているなら、そこから指紋を採り直せばその run から比較できる。
+function baselineFiles(prev, options) {
+  const opts = options || {};
+  if (opts.prevFiles && opts.prevFiles.length) return opts.prevFiles;
+  if (prev && prev.files && prev.files.length) return prev.files;
+  if (prev && prev.docs && prev.docs.length) return auditScope.entriesFromNames(prev.docs);
+  return null;
+}
+
 // 人が読む 1 行ずつの要約。--summary のときだけ使う。
-function formatSummary(report, prev) {
+function formatSummary(report, prev, options) {
+  const opts = options || {};
   const lines = [`図 ${report.docs.length} 枚 (${report.targets.join(', ')})`];
   const s = report.summary;
   if (s.name) lines.push(`名前突合: 表記揺れ ${s.name.variants} 組 / 宣言なし ${s.name.undeclared} 件`);
@@ -181,8 +195,10 @@ function formatSummary(report, prev) {
     // 指摘の差分のすぐ下に、ファイル内容がどちら側で動いたかを置く。
     // 「新規 16 件」の原因を実データかテンプレかへ寄せるのはこの 1 行。
     // 前回そのものが無い run では formatDiff が既にそう言っているので重ねない。
-    if (prev) {
-      for (const l of auditScope.formatFileDiff(auditScope.diffFiles(prev.files, report.files), report.files)) lines.push(l);
+    const base = baselineFiles(prev, opts);
+    if (prev || base) {
+      if (opts.prevFilesFrom) lines.push(`ファイル内容の比較元: ${opts.prevFilesFrom} (控えのフォルダから指紋を採り直した)`);
+      for (const l of auditScope.formatFileDiff(auditScope.diffFiles(base, report.files), report.files)) lines.push(l);
     }
   }
   return lines.join('\n');
@@ -206,4 +222,4 @@ function buildReport(MA, docs, options) {
   };
 }
 
-module.exports = { collectDocs, runAudits, summarize, totalIssues, buildReport, formatSummary, auditNames };
+module.exports = { collectDocs, runAudits, summarize, totalIssues, buildReport, formatSummary, auditNames, baselineFiles };

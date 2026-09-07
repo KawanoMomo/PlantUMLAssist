@@ -150,3 +150,69 @@ describe('--summary に出る行', function() {
     assert.ok(s.indexOf('ファイル内容:') < 0, s);
   });
 });
+
+// 追記 (BLK-reviewer-20260908-0203 の 0723 追記分): 指紋を載せる前に採った JSON と
+// 比べる run は「追えない」で終わり、その 1 回だけは 22 枚の手 diff に戻っていた。
+// 前回の図がフォルダで残っているなら、そこから指紋を採り直して同じ 1 回で出す。
+describe('指紋を持たない前回との比較', function() {
+  function summaryOf(prev, cur, opts) {
+    return report.formatSummary(report.buildReport({}, cur, { targets: ['t'] }), prev, opts);
+  }
+
+  test('名前だけの前回でも、追加・消失は同じ 1 回で言える', function() {
+    const old = report.buildReport({}, docs(), { targets: ['t'] });
+    delete old.files;                       // 指紋を載せる前の JSON
+    const cur = docs().concat([{ name: 'pwm_state.puml', dsl: '@startuml\nstate P\n@enduml' }]);
+    const s = summaryOf(old, cur);
+    assert.ok(s.indexOf('名前の増減だけ比較した') >= 0, s);
+    assert.ok(s.indexOf('追加: pwm_state.puml') >= 0, s);
+    assert.ok(s.indexOf('(実データ 1 / テンプレ 0)') >= 0, s);
+  });
+
+  test('内容が変わっていても、名前だけの前回では「変化なし」と言わない', function() {
+    const old = report.buildReport({}, docs(), { targets: ['t'] });
+    delete old.files;
+    const s = summaryOf(old, docs({ 'diagram1.puml': { dsl: '@startuml\nclass X\n@enduml' } }));
+    assert.ok(s.indexOf('前回から変化なし') < 0, s);
+    assert.ok(s.indexOf('名前の増減はなし') >= 0, s);
+    assert.ok(s.indexOf('--since-files') >= 0, s);   // 内容まで見る手を示す
+  });
+
+  test('前回の図フォルダを渡せば、その run から内容変化を切り分けられる', function() {
+    const old = report.buildReport({}, docs(), { targets: ['t'] });
+    delete old.files;
+    const prevFiles = scope.fileEntries(docs());     // 控えのフォルダから採り直した指紋
+    const s = summaryOf(old, docs({ 'diagram1.puml': { dsl: '@startuml\nclass X\n@enduml' } }),
+      { prevFiles: prevFiles, prevFilesFrom: 'runs/前回/tmp' });
+    assert.ok(s.indexOf('ファイル内容の比較元: runs/前回/tmp') >= 0, s);
+    assert.ok(s.indexOf('実データ 0 枚変化 / テンプレ 1 枚変化') >= 0, s);
+    assert.ok(s.indexOf('テンプレ変化: diagram1.puml') >= 0, s);
+  });
+
+  test('採り直した指紋は、指紋入りの前回 JSON より優先する', function() {
+    const prv = report.buildReport({}, docs(), { targets: ['t'] });
+    // JSON 側は「変化なし」に見えるが、控えのフォルダは spi_state が別内容だった
+    const prevFiles = scope.fileEntries(docs({ 'spi_state.puml': { dsl: '@startuml\nstate OLD\n@enduml' } }));
+    const s = summaryOf(prv, docs(), { prevFiles: prevFiles });
+    assert.ok(s.indexOf('実データ 1 枚変化') >= 0, s);
+  });
+
+  test('baselineFiles は 指紋入り JSON > 名前だけ > 無し の順で土台を選ぶ', function() {
+    const withFiles = report.buildReport({}, docs(), { targets: ['t'] });
+    assert.strictEqual(report.baselineFiles(withFiles, {}), withFiles.files);
+    const namesOnly = report.buildReport({}, docs(), { targets: ['t'] });
+    delete namesOnly.files;
+    const base = report.baselineFiles(namesOnly, {});
+    assert.strictEqual(base.length, 4);
+    assert.strictEqual(base[0].hash, null);
+    assert.strictEqual(report.baselineFiles(null, {}), null);
+  });
+
+  test('contentComparable が false の差分は changed を作らない', function() {
+    const prevNames = scope.entriesFromNames(docs().map(function(d) { return d.name; }));
+    const fd = scope.diffFiles(prevNames, scope.fileEntries(docs({ 'spi_state.puml': { dsl: 'x' } })));
+    assert.strictEqual(fd.contentComparable, false);
+    assert.strictEqual(fd.changed.length, 0);
+    assert.strictEqual(fd.touched, 0);
+  });
+});
