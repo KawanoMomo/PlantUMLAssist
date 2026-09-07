@@ -1,3 +1,4 @@
+- BLK-builder-20260908-0803-3-red: UC-6 (本番障害の root cause 反映: 注釈 + alt 囲み) の E2E が FEAT-114 の 1 枚フォームで通るようになった (known-red -1)
 - BLK-builder-20260908-0756-3-red: UC-4 (レビュー指摘の alt 追加) の E2E が FEAT-114 の 1 枚フォームを操作し、題どおり 2 箇所を囲むようになった (known-red -1)
 - BLK-builder-20260908-0743-3-red: UC-2 (alt block の mid-insert) の E2E が FEAT-114 の 1 枚フォームを操作するようになり、known-red の赤が 1 件減った
 - BLK-builder-20260908-0743-1-red: class-overlay の overlay 系 4 テストの赤を解消 (クラス矩形の中心は member コンパートメントなので、クラス自体はヘッダ帯クリックで掴む規約に統一。shift+click の modifiers も locator.click 経由で効くようにした)
