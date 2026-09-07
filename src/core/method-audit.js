@@ -15,7 +15,9 @@ window.MA.methodAudit = (function() {
   // 本文全体ではなく「識別子 + 丸括弧」だけを拾うので、`: 初期化する` のような
   // 日本語の本文は呼び出しとして数えない。
   var CALL_RE = /([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)/;
-  var MSG_RE = /^\s*(?:"[^"]+"|[A-Za-z0-9_][A-Za-z0-9_.-]*)\s*(?:-+>+|<-+|-+\\|\/-+)\s*(?:"[^"]+"|[A-Za-z0-9_][A-Za-z0-9_.-]*)\s*:\s*(.+)$/;
+  // 1 = 左、2 = 矢印、3 = 右、4 = 本文。呼ばれる側は矢印の向きで決まる
+  // (BLK-primary-20260907-1303: 接頭辞を持たない呼び出しの持ち主は受け手)。
+  var MSG_RE = /^\s*("[^"]+"|[A-Za-z0-9_][A-Za-z0-9_.-]*)\s*(-+>+|<-+|-+\\|\/-+)\s*("[^"]+"|[A-Za-z0-9_][A-Za-z0-9_.-]*)\s*:\s*(.+)$/;
 
   // クラス本体の開始行 `class Spi_Driver {` と、外置きの `Spi_Driver : +Spi_Init()`。
   // BLK-reviewer-20260907-0943: state の遷移ラベルは `Idle --> Busy : Timer_StartConv`
@@ -40,6 +42,11 @@ window.MA.methodAudit = (function() {
     return String(s == null ? '' : s).replace(/\r$/, '');
   }
 
+  function _unquote(s) {
+    var t = String(s == null ? '' : s).trim();
+    return (t.charAt(0) === '"' && t.charAt(t.length - 1) === '"') ? t.slice(1, -1) : t;
+  }
+
   function _lines(text) {
     return String(text == null ? '' : text).split(/\r?\n/);
   }
@@ -52,13 +59,15 @@ window.MA.methodAudit = (function() {
   }
 
   // 1 行から呼び出しを 1 件取り出す。メソッドらしくない行は null。
+  // receiver は「呼ばれる側」。`A -> B : m()` なら B、`A <- B : m()` なら A。
   function parseCall(line) {
     var m = _line(line).match(MSG_RE);
     if (!m) return null;
-    var body = m[1];
+    var body = m[4];
     var c = body.match(CALL_RE);
     if (!c) return null;
-    return { method: c[1], args: argCount(c[2]) };
+    var backward = m[2].charAt(0) === '<';
+    return { method: c[1], args: argCount(c[2]), receiver: _unquote(backward ? m[1] : m[3]) };
   }
 
   // クラス図の 1 図からメソッド宣言を取り出す。
@@ -142,6 +151,19 @@ window.MA.methodAudit = (function() {
     return /^\s*\[\*\]\s*-/m.test(dsl) || /^\s*state\s+/m.test(dsl);
   }
 
+  // BLK-primary-20260907-1303: 遷移ラベルには 2 種類が混ざっている。
+  //   (a) UML のイベント名 … `Tick` `Fault` `Reset` `Ack` `TransferComplete`。
+  //       「何が起きたら遷移するか」であって、誰かのメソッドを呼ぶ話ではない。
+  //   (b) ドライバ API の名前 … `Timer_StartConv` `Gpio_SetHigh`。
+  //       接頭辞が型を指しており、クラス図に宣言があるべきもの。
+  // これまでは両方をメソッド呼び出しとして突き合わせていたので、(a) が
+  // 全件「対応するクラスが無い」になり、実害の無い指摘が本物の不整合を埋めていた。
+  // 見分けは接頭辞 (`Xxx_`) の有無で付ける。接頭辞は「どの型のものか」の宣言そのもので、
+  // それが無い名前はクラスと突き合わせる形になっていない。
+  function isApiEvent(event) {
+    return ownerPrefix(event) !== '';
+  }
+
   // state の図から遷移イベントを集める。
   function stateEvents(docs) {
     var out = [];
@@ -181,7 +203,7 @@ window.MA.methodAudit = (function() {
       _lines(dsl).forEach(function(line, idx) {
         var c = parseCall(line);
         if (!c) return;
-        calls.push({ method: c.method, args: c.args, doc: docName, line: idx + 1 });
+        calls.push({ method: c.method, args: c.args, receiver: c.receiver, doc: docName, line: idx + 1 });
       });
     });
 
@@ -192,7 +214,10 @@ window.MA.methodAudit = (function() {
       var sig = c.method + '/' + c.args;
       if (seen[sig]) { seen[sig].docs.push(c.doc); return; }
 
-      var prefix = ownerPrefix(c.method);
+      // 持ち主は名前の接頭辞 (`Spi_Init` → Spi)。接頭辞が無い呼び出し (`EnableClock()`)
+      // は、矢印の受け手がそのまま持ち主なのでそちらを使う。これを見ないと
+      // 「対応する型 のクラスがどの図にも無い」としか言えず、何を足せばよいか伝わらない。
+      var prefix = ownerPrefix(c.method) || (c.receiver || '');
       var cls = findClass(classes, prefix);
       var decls = methods.filter(function(m) { return _key(m.method) === _key(c.method); });
       var issue = null;
@@ -215,10 +240,23 @@ window.MA.methodAudit = (function() {
     });
 
     // state の遷移イベントも同じ表に載せる。引数が書けない形なので arity は見ない。
+    // 接頭辞を持たないもの (UML のイベント名) は突合の対象外。数だけ別に持ち、
+    // 「黙って捨てた」ようには見せない (excludedEvents)。
     var events = stateEvents(list);
+    var excludedEvents = [];
+    var seenEx = {};
     var seenEv = {};
     events.forEach(function(e) {
       var k = _key(e.event);
+      if (!isApiEvent(e.event)) {
+        if (seenEx[k]) {
+          if (seenEx[k].docs.indexOf(e.doc) === -1) seenEx[k].docs.push(e.doc);
+          return;
+        }
+        seenEx[k] = { event: e.event, docs: [e.doc] };
+        excludedEvents.push(seenEx[k]);
+        return;
+      }
       if (seenEv[k]) { if (seenEv[k].docs.indexOf(e.doc) === -1) seenEv[k].docs.push(e.doc); return; }
       var prefix = ownerPrefix(e.event);
       var cls = findClass(classes, prefix);
@@ -240,6 +278,8 @@ window.MA.methodAudit = (function() {
     return {
       calls: calls,
       events: events,
+      // 接頭辞を持たない UML のイベント名。突合の対象外だが、何を外したかは見せる。
+      excludedEvents: excludedEvents,
       classes: classes,
       methods: methods,
       issues: issues,
@@ -267,10 +307,23 @@ window.MA.methodAudit = (function() {
       + issue.cls + ' の宣言は ' + issue.declaredArgs + ' 個';
   }
 
+  // 対象外にしたイベントの説明 1 行。UI はこれを出す。
+  function excludedLine(result) {
+    var ex = (result && result.excludedEvents) || [];
+    if (ex.length === 0) return '';
+    var names = ex.map(function(e) { return e.event; });
+    var head = names.slice(0, 5).join(' / ');
+    return 'state の遷移イベント ' + ex.length + ' 種 (' + head
+      + (names.length > 5 ? ' ほか' : '')
+      + ') は接頭辞を持たない UML のイベント名なので、メソッド突合の対象外です';
+  }
+
   return {
     argCount: argCount,
     parseCall: parseCall,
     parseStateEvent: parseStateEvent,
+    isApiEvent: isApiEvent,
+    excludedLine: excludedLine,
     isStateDoc: isStateDoc,
     stateEvents: stateEvents,
     parseClassDoc: parseClassDoc,

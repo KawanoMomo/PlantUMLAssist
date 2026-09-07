@@ -48,8 +48,12 @@ describe('method-audit — 呼び出しと宣言の突合 (BLK-reviewer-20260907
   });
 
   test('parseCall: メッセージ本文から呼び出しを取る', () => {
-    expect(MA_.parseCall('App -> Spi_Driver : Spi_Init(cfg)')).toEqual({ method: 'Spi_Init', args: 1 });
-    expect(MA_.parseCall('A --> B : Uart_Send(buf, len)')).toEqual({ method: 'Uart_Send', args: 2 });
+    // receiver は「呼ばれる側」。BLK-primary-20260907-1303 で足した
+    // (接頭辞を持たない呼び出しの持ち主を矢印の受け手から決めるため)。
+    expect(MA_.parseCall('App -> Spi_Driver : Spi_Init(cfg)'))
+      .toEqual({ method: 'Spi_Init', args: 1, receiver: 'Spi_Driver' });
+    expect(MA_.parseCall('A --> B : Uart_Send(buf, len)'))
+      .toEqual({ method: 'Uart_Send', args: 2, receiver: 'B' });
   });
 
   test('parseCall: 呼び出しでない行は数えない', () => {
