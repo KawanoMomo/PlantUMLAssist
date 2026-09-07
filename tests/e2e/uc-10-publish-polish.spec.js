@@ -1,6 +1,6 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
-const { gotoApp, loadFixture, getEditorText, clickOverlayByLine } = require('./helpers');
+const { gotoApp, loadFixture, getEditorText, clickOverlayByLine, setDiagramTitle } = require('./helpers');
 
 test.describe('UC-10: 公開前 polish', () => {
   test('title 設定 + autonumber on + label 編集', async ({ page }) => {
@@ -8,10 +8,8 @@ test.describe('UC-10: 公開前 polish', () => {
     await loadFixture(page, 'sequence-success-msgs.puml');
     await page.waitForTimeout(1500);
 
-    // Title 設定 (deselect してからデフォルトビューを取得)
-    await page.locator('#seq-title').fill('Auth Flow');
-    await page.locator('#seq-set-title').click();
-    await page.waitForTimeout(500);
+    // Title 設定 (design 2b: 「図の設定」タブが Title を持つ)
+    await setDiagramTitle(page, 'Auth Flow');
 
     // autonumber on
     await page.locator('#seq-autonumber').check();

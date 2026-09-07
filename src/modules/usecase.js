@@ -452,11 +452,6 @@ window.MA.modules.plantumlUsecase = (function() {
     var html =
       '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">UseCase Diagram</div>' +
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">Title 設定</label>' +
-        P.fieldHtml('Title', 'uc-title', parsedData.meta.title) +
-        P.primaryButtonHtml('uc-set-title', 'Title 適用') +
-      '</div>' +
-      '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">末尾に追加</label>' +
         P.selectFieldHtml('種類', 'uc-tail-kind', [
           { value: 'actor',    label: 'Actor', selected: true },
@@ -473,12 +468,6 @@ window.MA.modules.plantumlUsecase = (function() {
       '</div>';
     propsEl.innerHTML = html;
 
-    // Title button
-    P.bindEvent('uc-set-title', 'click', function() {
-      window.MA.history.pushHistory();
-      ctx.setMmdText(setTitle(ctx.getMmdText(), document.getElementById('uc-title').value.trim()));
-      ctx.onUpdate();
-    });
 
     // 末尾追加 detail switcher
     var renderTailDetail = function() {

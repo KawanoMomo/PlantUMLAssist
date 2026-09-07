@@ -1658,11 +1658,6 @@ window.MA.modules.plantumlSequence = (function() {
         propsEl.innerHTML =
           '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Sequence Diagram</div>' +
           '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-            '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">Title 設定</label>' +
-            P.fieldHtml('Title', 'seq-title', parsedData.meta.title) +
-            P.primaryButtonHtml('seq-set-title', 'Title 適用') +
-          '</div>' +
-          '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
             '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-primary);cursor:pointer;">' +
               '<input id="seq-autonumber" type="checkbox" ' + autonumChecked + '>' +
               ' autonumber (自動採番)' +
@@ -1684,12 +1679,6 @@ window.MA.modules.plantumlSequence = (function() {
             'プレビュー上で要素をクリックすると編集パネルが開きます' +
           '</div>';
 
-        // Title button
-        P.bindEvent('seq-set-title', 'click', function() {
-          window.MA.history.pushHistory();
-          ctx.setMmdText(setTitle(ctx.getMmdText(), document.getElementById('seq-title').value.trim()));
-          ctx.onUpdate();
-        });
         // autonumber checkbox
         P.bindEvent('seq-autonumber', 'change', function() {
           window.MA.history.pushHistory();

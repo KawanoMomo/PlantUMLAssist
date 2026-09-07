@@ -1,5 +1,6 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
+const { setDiagramTitle } = require('./helpers');
 
 // BLK-builder-20260907-2237-2 (design 1a): #render-mode は上部バーから外れて
 // 非表示になったので、選択は値を入れて change を投げる (経路は従来どおり)。
@@ -54,11 +55,10 @@ test.describe('Sequence: Boot', () => {
 });
 
 test.describe('Sequence Operations', () => {
+  // design 2b: Title 欄は無選択ペインから外し、「図の設定」タブ (#ds-title) に一本化した。
   test('set title updates editor text', async ({ page }) => {
     await waitForInitialCycle(page);
-    await page.locator('#seq-title').fill('New Title');
-    await page.locator('#seq-set-title').click();
-    await page.waitForTimeout(400);
+    await setDiagramTitle(page, 'New Title');
     const t = await page.locator('#editor').inputValue();
     expect(t).toContain('title New Title');
   });
