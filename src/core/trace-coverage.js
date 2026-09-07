@@ -7,9 +7,14 @@ window.MA = window.MA || {};
 // 系統チェック (family-audit) は「片方にしか無い動作名」を両方向に出す。
 // レビューが実際に探しているのはそのうち片側だけで、「状態遷移図に書かれた
 // 遷移が、どのシーケンス図にも一度も現れない」= 手順の書き漏らし候補である。
-// 粒度差の除外は family-audit の語彙一致率が済ませているので、ここは
 // 向きを 1 つに固定し、系統ごとに遷移を全件並べて、現れなかったものだけを
 // 赤にする。DOM には触らない。
+//
+// 粒度差 (初期化専用シーケンス vs フル状態遷移) の切り方は 2 段。
+// 担当範囲の宣言 (`' @covers A -> B`) があればそれを使い、無ければ
+// 遷移の担当割合で推測する (BLK-reviewer-20260907-2003)。宣言が無いときに
+// 何も外さないと、`*_init_sequence.puml` しか無い系統は初期化後の遷移が
+// 構造的に全部 missing になる。
 window.MA.traceCoverage = (function() {
   // 遷移行。`A --> B : Label` / `[*] --> Idle : PowerOn`。
   // ラベルが無い遷移は突き合わせる名前が無いので拾わない。
@@ -94,6 +99,60 @@ window.MA.traceCoverage = (function() {
     return { status: 'missing', seenIn: [] };
   }
 
+  // 状態遷移図 1 枚に対して「突き合わせてよいシーケンス図」を決める。
+  //
+  // 見るのは、その状態遷移図の遷移のうち何割をその 1 枚が担当しているか。
+  // 初期化専用シーケンスは PowerOn / Configure といった初期化の遷移しか
+  // 担当せず、StartConv / Transfer / Reset 等の初期化後の遷移には一度も
+  // 触れない。担当が半分に満たない相手は「書き漏らし」ではなく別の粒度で
+  // 書かれた図なので、突き合わせない (BLK-reviewer-20260907-2003)。
+  //
+  // 語彙の集合そのものの一致率 (family-audit の Jaccard) ではなく担当割合で
+  // 見るのは、遷移 1〜2 本の小さな図で「語彙が 1 つずれただけ」を粒度差と
+  // 取り違えないため。閾値は family-audit の CROSS_KIND_JACCARD に合わせる
+  // (同じ根本原因を 2 つの数字で切ると、片方だけが誤検出を出し続ける)。
+  // skipped には外した組を残す。何を見ていないかを黙らないため。
+  function _grainPartners(stateDocs, seqDocs) {
+    var fa = _fa();
+    var need = fa.CROSS_KIND_JACCARD;
+    var seqKeysOf = {};
+    seqDocs.forEach(function(d) {
+      seqKeysOf[d.name] = fa.actionsOf(d.dsl).map(function(a) { return { key: a.key, doc: d.name }; });
+    });
+
+    var partners = {};
+    var skipped = [];
+    stateDocs.forEach(function(d) {
+      var trans = transitionsOf(d.dsl);
+      var ok = [];
+      seqDocs.forEach(function(s) {
+        var keys = seqKeysOf[s.name] || [];
+        var hit = 0;
+        trans.forEach(function(t) {
+          if (_match(t.keys, keys).status !== 'missing') hit++;
+        });
+        var ratio = trans.length ? hit / trans.length : 0;
+        if (ratio >= need) ok.push(s);
+        else skipped.push({ state: d.name, seq: s.name, covered: hit, of: trans.length });
+      });
+      partners[d.name] = ok;
+    });
+
+    return {
+      skipped: skipped,
+      partnersOf: function(name) { return partners[name] || []; },
+      // 突き合わせに使うメッセージ名。相手を絞ったぶんだけキーも絞る
+      // (外した図のメッセージ名で「現れている」と言わないため)。
+      keysOf: function(docs) {
+        var out = [];
+        (docs || []).forEach(function(d) {
+          (seqKeysOf[d.name] || []).forEach(function(e) { out.push(e); });
+        });
+        return out;
+      },
+    };
+  }
+
   // 系統 1 つのカバレッジ。stateDocs の遷移 × seqDocs のメッセージ。
   function coverFamily(docs) {
     var fa = _fa();
@@ -128,9 +187,21 @@ window.MA.traceCoverage = (function() {
     }
     var hasDecl = declaredBy.length > 0;
 
+    // BLK-reviewer-20260907-2003: 宣言が無い系統では、family-audit と同じ
+    // 語彙一致率で粒度差を外す。`*_init_sequence.puml` しか持たない系統は、
+    // 状態遷移図の初期化後の遷移 (StartConv / Transfer / Reset …) が構造的に
+    // 全部 missing になり、8 系統ぶんを毎回「これは粒度差」と目で判定していた。
+    // 突き合わせるのは、その状態遷移図と語彙を共有するシーケンス図だけにする。
+    var grain = hasDecl ? null : _grainPartners(stateDocs, seqDocs);
+
     var rows = [];
     var outOfScope = [];
     stateDocs.forEach(function(d) {
+      // 語彙を共有する相手がいない状態遷移図は、粒度が違う相手としか
+      // 並んでいない。突き合わせずに「見ていない」と言う。
+      var partners = grain ? grain.partnersOf(d.name) : seqDocs;
+      var grainOut = !!grain && seqDocs.length > 0 && partners.length === 0;
+      var keys = grain ? grain.keysOf(partners) : seqKeys;
       transitionsOf(d.dsl).forEach(function(t) {
         var base = {
           docId: d.id, docName: d.name, line: t.line,
@@ -138,11 +209,19 @@ window.MA.traceCoverage = (function() {
         };
         if (hasDecl && !sd.covered(declaredCovers, t)) {
           base.status = 'out-of-scope';
+          base.reason = 'declared';
           base.seenIn = [];
           outOfScope.push(base);
           return;
         }
-        var m = seqDocs.length ? _match(t.keys, seqKeys) : { status: 'unknown', seenIn: [] };
+        if (grainOut) {
+          base.status = 'out-of-scope';
+          base.reason = 'grain';
+          base.seenIn = [];
+          outOfScope.push(base);
+          return;
+        }
+        var m = partners.length ? _match(t.keys, keys) : { status: 'unknown', seenIn: [] };
         base.status = m.status;
         base.seenIn = m.seenIn;
         rows.push(base);
@@ -161,6 +240,8 @@ window.MA.traceCoverage = (function() {
       // 宣言によって対象外になった遷移。0 件にはできないが、黙って消すと
       // 「見ていない遷移」が画面から消えるので、件数と中身は残す。
       outOfScope: outOfScope,
+      // 粒度が違うとして外した (状態遷移図 × シーケンス図) の組。
+      grainSkipped: grain ? grain.skipped : [],
       declared: hasDecl,
       declaredBy: declaredBy,
       declaredCovers: declaredCovers,
@@ -197,11 +278,17 @@ window.MA.traceCoverage = (function() {
       return 'この系統にシーケンス図が無いため突き合わせていません';
     }
     var oos = (family.outOfScope || []).length;
-    var scope = family.declared ? ' / 宣言対象外 ' + oos + ' 件は見ていません' : '';
+    var grainPairs = (family.grainSkipped || []).length;
+    var scope = family.declared
+      ? ' / 宣言対象外 ' + oos + ' 件は見ていません'
+      : (oos ? ' / 粒度違いで除外 ' + oos + ' 件 (' + grainPairs + ' 組)' : '');
     if (!family.rows.length) {
-      return family.declared
-        ? '宣言された遷移がありません (宣言対象外 ' + oos + ' 件)'
-        : 'ラベルの付いた遷移がありません';
+      if (family.declared) return '宣言された遷移がありません (宣言対象外 ' + oos + ' 件)';
+      if (oos) {
+        return '粒度が違うため突き合わせていません (遷移 ' + oos + ' 件 / ' + grainPairs + ' 組)'
+          + '。担当範囲を宣言すると突き合わせられます';
+      }
+      return 'ラベルの付いた遷移がありません';
     }
     var tail = (family.partial.length ? ' (部分一致 ' + family.partial.length + ' 件)' : '') + scope;
     var n = family.missing.length;
