@@ -943,6 +943,87 @@ window.MA.modules.plantumlActivity = (function() {
     };
   }
 
+  // design 4b: 図の隙間をクリックしたとき、まず「そこに置けるものだけ」を並べた
+  // 小さなメニューを出す。今までは常に Action のフォームが直接開き、if / fork を
+  // 入れるには種類セレクトを開き直す必要があった。
+  // 種別を選ぶと従来の showInsertForm へ、入力の要らない break / detach / kill /
+  // start / stop はその場で 1 行入れる。
+  function showInsertPicker(ctx, line, position) {
+    _renderInsertPicker(ctx, line, position, false);
+  }
+
+  function _renderInsertPicker(ctx, line, position, isOther) {
+    var AI = window.MA.activityInsert;
+    var modal = document.getElementById('act-modal');
+    var content = document.getElementById('act-modal-content');
+    if (!AI || !modal || !content) {
+      // modal が無い環境では従来どおり単一種別のフォーム (prompt へ落ちる) に戻す。
+      showInsertForm(ctx, line, position, 'action');
+      return;
+    }
+    var esc = window.MA.htmlUtils.escHtml;
+    var groups = AI.pickerKinds(ctx.getMmdText(), line);
+    var list = isOther ? groups.other : groups.primary;
+    var html = '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">' +
+        (isOther ? 'その他' : '＋ ここに挿入') + '</h3>' +
+      '<div id="act-pick-target" style="font-size:11px;color:var(--text-secondary);margin-bottom:12px;">' +
+        esc(AI.describePoint(ctx.getMmdText(), line, position)) + '</div>' +
+      '<div style="display:flex;flex-direction:column;gap:6px;">';
+    list.forEach(function(k) {
+      html += '<button id="act-pick-' + k.kind + '" data-kind="' + k.kind + '" class="act-pick-btn" ' +
+        'style="text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);' +
+        'padding:8px 10px;border-radius:4px;cursor:pointer;font-size:12px;">' +
+        esc(k.label) +
+        '<span style="color:var(--text-secondary);font-size:10px;margin-left:8px;">' + esc(k.hint) + '</span>' +
+        '</button>';
+    });
+    if (!isOther && groups.other.length) {
+      html += '<button id="act-pick-other" data-kind="other" class="act-pick-btn" ' +
+        'style="text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);' +
+        'padding:8px 10px;border-radius:4px;cursor:pointer;font-size:12px;">' +
+        'その他（repeat / break / detach / kill）…</button>';
+    }
+    html += '</div>';
+    if (isOther) {
+      html += '<button id="act-pick-back" style="width:100%;margin-top:12px;background:var(--bg-tertiary);' +
+        'border:1px solid var(--border);color:var(--text-secondary);padding:6px;border-radius:4px;cursor:pointer;font-size:11px;">' +
+        '← 種別を選び直す</button>';
+    }
+    html += '<button id="act-pick-cancel" style="width:100%;margin-top:8px;background:var(--bg-tertiary);' +
+      'border:1px solid var(--border);color:var(--text-primary);padding:8px;border-radius:4px;cursor:pointer;">キャンセル</button>';
+    content.innerHTML = html;
+    modal.style.display = 'flex';
+
+    Array.prototype.forEach.call(content.querySelectorAll('.act-pick-btn'), function(btn) {
+      btn.addEventListener('click', function() {
+        var kind = btn.getAttribute('data-kind');
+        if (kind === 'other') { _renderInsertPicker(ctx, line, position, true); return; }
+        if (AI.isBareKind(kind)) {
+          var src = ctx.getMmdText();
+          var out = _insertBareAtLine(src, line, position, AI.bareLineFor(kind));
+          if (out !== src) {
+            window.MA.history.pushHistory();
+            ctx.setMmdText(out);
+            ctx.onUpdate();
+          }
+          modal.style.display = 'none';
+          content.innerHTML = '';
+          return;
+        }
+        showInsertForm(ctx, line, position, kind);
+      });
+    });
+    if (isOther) {
+      document.getElementById('act-pick-back').addEventListener('click', function() {
+        _renderInsertPicker(ctx, line, position, false);
+      });
+    }
+    document.getElementById('act-pick-cancel').addEventListener('click', function() {
+      modal.style.display = 'none';
+      content.innerHTML = '';
+    });
+  }
+
   // Open a modal popup to insert a new node before/after the resolved line.
   // Supports all 7 kinds: action / if / while / repeat / fork / swimlane / note
   function showInsertForm(ctx, line, position, kind) {
@@ -2054,6 +2135,7 @@ window.MA.modules.plantumlActivity = (function() {
     _resolveInsertIndent: _resolveInsertIndent,
     resolveInsertLine: resolveInsertLine,
     showInsertForm: showInsertForm,
+    showInsertPicker: showInsertPicker,
     showElseifForm: showElseifForm,
     defaultInsertKind: 'action',
     capabilities: {
@@ -2061,6 +2143,7 @@ window.MA.modules.plantumlActivity = (function() {
       hoverInsert: true,
       participantDrag: false,
       showInsertForm: true,
+      insertPicker: true,
       multiSelectConnect: false,
     },
   };
