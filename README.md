@@ -333,6 +333,50 @@ npm run test:e2e    # Playwright — 80 E2E tests
 npm run test:all
 ```
 
+## 監査 CLI (`npm run audit`)
+
+GUI を開かずに、フォルダ内の `.puml` 一式へ監査 (名前突合・メソッド突合・整合チェック・
+系統突合) を掛けて JSON を返す。ブラウザは要らず、`window` のモックも自分で組む必要はない。
+
+```bash
+npm run audit -- <ファイル|フォルダ> [...] [オプション]
+
+node tools/audit.js E:\path\to\diagrams --summary          # 人が読む件数の要約
+node tools/audit.js E:\path\to\diagrams --out audit.json   # JSON をファイルへ
+node tools/audit.js a.puml b.puml --only name,method       # 監査を絞る
+```
+
+| オプション | 意味 |
+|---|---|
+| `--summary` | JSON ではなく件数の要約を日本語で出す |
+| `--out FILE` | JSON を FILE に書き、標準出力にはパスだけ出す |
+| `--only a,b` | 回す監査を絞る (`name` / `method` / `consistency` / `family`) |
+
+JSON の形:
+
+```jsonc
+{
+  "generatedAt": "...", "targets": ["..."], "docs": ["junior/UART.puml", ...],
+  "audits": {
+    // status は "ok" | "skipped" (モジュール無し) | "error" (監査が投げた)。
+    // 1 つ壊れても他の監査は結果を返す
+    "name":        { "status": "ok", "result": { "variants": [...], "undeclared": [...] } },
+    "method":      { "status": "ok", "result": { "issues": [...], "calls": [...] } },
+    "consistency": { "status": "ok", "result": { "naming": [], "unused": [], ... } },
+    "family":      { "status": "ok", "result": [ ... ] }
+  },
+  "summary": { "name": { "variants": 3, "undeclared": 0, "clean": false }, ... },
+  "totalIssues": 134
+}
+```
+
+終了コードは、監査が回れば指摘の有無に関わらず 0 (件数は JSON で読む)。
+引数不正・対象の `.puml` が 0 枚・監査モジュールの読み込み失敗だけが 1。
+読み込みに失敗したモジュールがあれば `loadErrors` に出る — 指摘 0 件が「問題なし」なのか
+「見ていない」なのかは、そこで区別する。
+
+`src/core/` は列挙して丸ごと読むので、本体が新しい依存を足しても呼び出し側の書き換えは要らない。
+
 ## 設計ドキュメント
 
 - **Tier1 master spec**: `docs/superpowers/specs/2026-04-24-plantuml-tier1-complete-master.md`
