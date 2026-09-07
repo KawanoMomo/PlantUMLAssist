@@ -8,14 +8,25 @@ test.describe('UC-7: onboarding 用 note 多数', () => {
     await loadFixture(page, 'sequence-success-msgs.puml');
     await page.waitForTimeout(1500);
 
-    var msgLines = [4, 5, 6]; // 3 messages (line 4 = User -> Auth : login 等)
+    // note を 1 件入れるたびに以降の行番号がずれるうえ、同じ message を
+    // 3 回クリックすると 1 件目の note の overlay 矩形がその message の矩形に
+    // 重なってクリックを奪う。題目どおり「既存 messages」3 本にそれぞれ note を
+    // 付けるため、毎回 DSL を読み直して i 本目の message の現在行を求める。
+    async function messageLineAt(index) {
+      var text = await getEditorText(page);
+      var lines = text.split('\n');
+      var hits = [];
+      for (var li = 0; li < lines.length; li++) {
+        if (/^\s*\S+\s+-+>>?\s+\S+\s*:/.test(lines[li])) hits.push(li + 1);
+      }
+      return hits[index];
+    }
+
     var notes = ['認証開始', 'トークン受信', 'リフレッシュ要求'];
-    for (var i = 0; i < msgLines.length; i++) {
-      // re-parse 後、note 追加で行が後ろにズレていくので、クリック対象の
-      // 行は各 iteration で再取得するのが理想だが、この UC は note 件数の
-      // 確認が主眼なので、同じ msg をクリックし続けても note 件数は増える。
-      // ここでは先頭付近の安定した行を繰り返し使う。
-      await clickOverlayByLine(page, msgLines[0]);
+    for (var i = 0; i < notes.length; i++) {
+      var target = await messageLineAt(i);
+      expect(target).toBeGreaterThan(0);
+      await clickOverlayByLine(page, target);
       await page.waitForTimeout(300);
       await page.locator('.seq-insert-note-after').click();
       await page.waitForTimeout(500);
@@ -28,6 +39,6 @@ test.describe('UC-7: onboarding 用 note 多数', () => {
 
     var t = await getEditorText(page);
     var noteCount = (t.match(/^note /gm) || []).length;
-    expect(noteCount).toBeGreaterThanOrEqual(2);
+    expect(noteCount).toBe(3);
   });
 });
