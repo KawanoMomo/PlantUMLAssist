@@ -1156,6 +1156,48 @@ html, body {
 }
 .cfg-tab:hover { color: var(--text-primary); }
 .cfg-tab.active { color: var(--text-primary); border-bottom-color: var(--accent); }
+/* design「1a 設定と網羅」5a: 描画方法は 速度 / 外部送信 の 2 行を持つカードで選ぶ */
+.cfg-mode-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  cursor: pointer;
+}
+.cfg-mode-card:hover { border-color: var(--accent); }
+.cfg-mode-card.disabled { cursor: default; opacity: 0.6; }
+.cfg-mode-card.disabled:hover { border-color: var(--border); }
+.cfg-mode-card input { margin-top: 3px; flex-shrink: 0; }
+.cfg-mode-body { flex: 1; min-width: 0; }
+.cfg-mode-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.cfg-mode-title { font-size: 12px; color: var(--text-primary); }
+.cfg-mode-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+.cfg-mode-badge.ok { color: var(--accent); border-color: var(--accent); }
+.cfg-mode-badge.warn { color: var(--accent-red); border-color: var(--accent-red); }
+.cfg-mode-speed { font-size: 11px; color: var(--text-primary); margin-top: 3px; }
+.cfg-mode-privacy { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+.cfg-mode-note { font-size: 10px; color: var(--text-secondary); margin-top: 4px; }
+.cfg-seg {
+  flex: 1;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 5px 8px;
+  border-radius: 3px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.cfg-seg.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 #cfg-close {
   background: none;
   border: none;
@@ -1656,16 +1698,17 @@ html, body {
     </div><!-- /#cfg-pane-autosave -->
 
     <div id="cfg-pane-render" class="cfg-pane" hidden>
-      <fieldset style="border:1px solid var(--border);border-radius:4px;padding:8px 10px;margin-bottom:10px;font-size:12px;">
-        <legend style="color:var(--text-secondary);padding:0 4px;">レンダリングモード</legend>
-        <label style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
-          <input type="radio" name="cfg-render-mode" value="local"> local (Java) — 常駐 JVM・外部送信なし
-        </label>
-        <label style="display:flex;align-items:center;gap:6px;">
-          <input type="radio" name="cfg-render-mode" value="online"> online (plantuml.com)
-        </label>
-      </fieldset>
+      <div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:6px;">描画方法 / Render mode</div>
+      <!-- 3 枚のカードは MA.renderModes.cards() から app.js が組み立てる -->
+      <div id="cfg-render-modes"></div>
+      <div id="cfg-render-warning" style="font-size:11px;color:var(--accent-red);margin-bottom:10px;"></div>
       <div id="cfg-render-note" style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;"></div>
+
+      <div style="border-top:1px solid var(--border);padding-top:10px;">
+        <div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:2px;">入力を止めてから描画するまで</div>
+        <div style="font-size:11px;color:var(--text-secondary);margin-bottom:6px;">短くすると反応が速く、長くすると描画回数が減ります。</div>
+        <div id="cfg-render-debounce" role="radiogroup" style="display:flex;gap:6px;"></div>
+      </div>
     </div>
 
     <div id="cfg-pane-editor" class="cfg-pane" hidden>
@@ -1727,6 +1770,7 @@ html, body {
 <script src="src/core/diagram-rail.js"></script>
 <script src="src/core/zoom-hud.js"></script>
 <script src="src/core/settings-tabs.js"></script>
+<script src="src/core/render-modes.js"></script>
 <script src="src/core/top-status.js"></script>
 <script src="src/core/family-audit.js"></script>
 <script src="src/core/consistency.js"></script>

@@ -43,6 +43,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path.startswith('/autosave'):
             return self._handle_autosave_get()
+        if self.path.split('?')[0] == '/env':
+            return self._send_json(200, detect_env())
         path = self.path.split('?')[0]
         if path == '/':
             path = '/plantuml-assist.html'
@@ -253,6 +255,61 @@ class Handler(BaseHTTPRequestHandler):
                 except OSError:
                     pass
         self._send_json(200, {'ok': True})
+
+
+# --- Environment probe (GET /env) --------------------------------------------
+#
+# design「1a 設定と網羅」5a は、設定のレンダリング画面に Java の検出結果を
+# その場で出すことを求める。local を選んだのに Java が無い環境では描画が
+# 落ちるまで気づけないため、選ぶ前に見えている必要がある。
+# `java -version` は 100ms 前後かかるので、プロセス内で 1 回だけ調べて使い回す。
+
+_env_lock = threading.Lock()
+_env_cache = None
+
+JAVA_VERSION_RE = re.compile(r'version "([0-9][0-9._]*)')
+
+
+def _java_major(version):
+    """'21.0.2' -> 21 / '1.8.0_402' -> 8 (Java 8 以前は 1.x 表記)."""
+    if not version:
+        return None
+    parts = version.replace('_', '.').split('.')
+    try:
+        first = int(parts[0])
+    except ValueError:
+        return None
+    if first == 1 and len(parts) > 1:
+        try:
+            return int(parts[1])
+        except ValueError:
+            return None
+    return first
+
+
+def detect_env():
+    """Report what the local render path needs: a java on PATH and the jar."""
+    global _env_cache
+    with _env_lock:
+        if _env_cache is not None:
+            return _env_cache
+    java = {'found': False, 'version': None, 'major': None}
+    try:
+        proc = subprocess.run(
+            ['java', '-version'],
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            timeout=10, **_SUBPROCESS_KWARGS,
+        )
+        out = (proc.stdout or b'').decode('utf-8', 'replace')
+        m = JAVA_VERSION_RE.search(out)
+        if proc.returncode == 0 and m:
+            java = {'found': True, 'version': m.group(1), 'major': _java_major(m.group(1))}
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        pass
+    env = {'java': java, 'jar': JAR_PATH.exists()}
+    with _env_lock:
+        _env_cache = env
+    return env
 
 
 # --- Local render: persistent Java daemon (fast path) ------------------------
