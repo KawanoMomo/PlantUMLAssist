@@ -16,7 +16,7 @@ import time
 import urllib.parse
 import urllib.request
 import urllib.error
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 ROOT = Path(__file__).parent
@@ -64,6 +64,13 @@ IDLE_SHUTDOWN_SEC = 300
 _state_lock = threading.Lock()
 _last_heartbeat = time.time()
 _shutdown_started = False
+
+# BLK-builder-20260908-0744-2-red: the server answers requests on one thread per
+# connection (ThreadingHTTPServer), so two clients can now be inside a handler at
+# the same time. Everything the handlers write to disk -- prefs, autosave DSL /
+# SVG, file-roles -- is read-modify-write on a shared file, so it is serialised
+# here. Renders are already serialised by _daemon_lock.
+_fs_lock = threading.Lock()
 
 
 def read_prefs():
@@ -211,11 +218,13 @@ def resolve_render_request(data):
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path.startswith('/autosave'):
-            return self._handle_autosave_get()
+            with _fs_lock:
+                return self._handle_autosave_get()
         if self.path.split('?')[0] == '/render':
             return self._send_json(200, RENDER_API_DOC)
         if self.path.split('?')[0] == '/prefs':
-            return self._send_json(200, read_prefs())
+            with _fs_lock:
+                return self._send_json(200, read_prefs())
         if self.path.split('?')[0] == '/env':
             return self._send_json(200, detect_env())
         path = self.path.split('?')[0]
@@ -245,13 +254,17 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         global _last_heartbeat, _shutdown_started
         if self.path == '/autosave':
-            return self._handle_autosave_post()
+            with _fs_lock:
+                return self._handle_autosave_post()
         if self.path == '/autosave-svg':
-            return self._handle_autosave_svg_post()
+            with _fs_lock:
+                return self._handle_autosave_svg_post()
         if self.path == '/file-roles':
-            return self._handle_file_roles_post()
+            with _fs_lock:
+                return self._handle_file_roles_post()
         if self.path == '/prefs':
-            return self._handle_prefs_post()
+            with _fs_lock:
+                return self._handle_prefs_post()
         if self.path == '/heartbeat':
             with _state_lock:
                 _last_heartbeat = time.time()
@@ -982,7 +995,14 @@ def main():
     # Warm up the JVM daemon in a background thread so the first /render
     # call doesn't pay the ~1s startup cost.
     threading.Thread(target=_get_daemon, daemon=True).start()
-    server = HTTPServer(('127.0.0.1', PORT), Handler)
+    # BLK-builder-20260908-0744-2-red: one thread per connection. A single
+    # /render holds the daemon for up to DAEMON_RENDER_TIMEOUT_SEC; on a
+    # single-threaded server every other request -- including the plain GET of
+    # plantuml-assist.html -- queued behind it. With several browsers open at
+    # once (playwright --workers=N) page loads timed out and whole specs went
+    # red for reasons that had nothing to do with what they tested.
+    server = ThreadingHTTPServer(('127.0.0.1', PORT), Handler)
+    server.daemon_threads = True
     # Grace period before the watchdog starts counting.
     global _last_heartbeat
     _last_heartbeat = time.time() + 30
