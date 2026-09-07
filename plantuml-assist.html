@@ -838,6 +838,68 @@ html, body {
 }
 #compare-svg svg { max-width: none; }
 
+/* 整合チェック (BLK-junior-20260907-0843-wish) */
+#check-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+#btn-check-run {
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+#btn-check-run:hover { background: var(--bg-tertiary); }
+#check-summary { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#check-summary.clean { color: var(--accent-green); }
+#check-summary.dirty { color: var(--accent-orange); }
+#check-list {
+  max-height: 34%;
+  overflow: auto;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-primary);
+  flex-shrink: 0;
+}
+#check-list[hidden] { display: none; }
+.check-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--bg-tertiary);
+}
+.check-row:hover { background: var(--bg-tertiary); }
+.check-row .check-kind {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  width: 62px;
+  flex-shrink: 0;
+  color: var(--accent);
+}
+.check-row .check-no {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-secondary);
+  width: 28px;
+  flex-shrink: 0;
+  text-align: right;
+}
+.check-row .check-msg { flex: 1; color: var(--text-primary); }
+#check-empty { padding: 6px 8px; font-size: 11px; color: var(--accent-green); }
+
 /* ── Floating zoom HUD (design 1a) ────────────────────────────────────────── */
 /* #preview-container ではなく #preview-pane を基準にするので、図をスクロール
    しても帯はキャンバスの右上に留まる。 */
@@ -1353,6 +1415,12 @@ html, body {
         <span id="compare-status"></span>
         <button type="button" id="btn-compare-close" title="並べて見るのをやめる">✕</button>
       </div>
+      <!-- BLK-junior-20260907-0843-wish: 参照図と編集中の図の食い違いを保存前に挙げる -->
+      <div id="check-bar">
+        <button type="button" id="btn-check-run" title="参照図と突き合わせて食い違いを探す">⚖ 整合チェック</button>
+        <span id="check-summary"></span>
+      </div>
+      <div id="check-list" hidden></div>
       <div id="compare-container">
         <div id="compare-svg"></div>
       </div>
@@ -1559,6 +1627,7 @@ html, body {
 <script src="src/core/line-edit.js"></script>
 <script src="src/core/outline.js"></script>
 <script src="src/core/compare-view.js"></script>
+<script src="src/core/consistency-check.js"></script>
 <script src="src/core/state-branch.js"></script>
 <script src="src/core/state-transition.js"></script>
 <script src="src/core/reuse-picker.js"></script>

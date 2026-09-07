@@ -3097,7 +3097,84 @@ function renderCompareView() {
   });
 }
 
+// ── 整合チェック (BLK-junior-20260907-0843-wish) ──────────────────────────
+// 同じ雛形を部品名だけ替えて書き写す業務では、打ち間違い・並べ間違いが毎回起きる。
+// 参照図と突き合わせて食い違いを保存前に挙げ、行を押すとその行へ飛ぶ。
+// 判断は consistency-check が持ち、ここは押した結果を並べるだけ。
+var _checkFindings = [];
+
+// 参照図を替えたら前の指摘は捨てる (どの図に対する指摘か分からなくなるため)。
+function _clearCheckList() {
+  _checkFindings = [];
+  var listEl = document.getElementById('check-list');
+  var sumEl = document.getElementById('check-summary');
+  if (listEl) { listEl.textContent = ''; listEl.hidden = true; }
+  if (sumEl) { sumEl.textContent = ''; sumEl.classList.remove('clean', 'dirty'); }
+}
+
+function renderCheckList() {
+  var listEl = document.getElementById('check-list');
+  var sumEl = document.getElementById('check-summary');
+  var cc = window.MA.consistencyCheck;
+  if (!listEl || !sumEl || !cc) return;
+
+  listEl.textContent = '';
+  listEl.hidden = false;
+  sumEl.textContent = cc.summary(_checkFindings);
+  sumEl.classList.remove('clean', 'dirty');
+  sumEl.classList.add(_checkFindings.length === 0 ? 'clean' : 'dirty');
+
+  if (_checkFindings.length === 0) {
+    var ok = document.createElement('div');
+    ok.id = 'check-empty';
+    ok.textContent = '参照図との食い違いはありません。';
+    listEl.appendChild(ok);
+    return;
+  }
+  var LABEL = { order: '並び', suffix: '語尾', typo: '打ち間違い' };
+  _checkFindings.forEach(function(f) {
+    var row = document.createElement('div');
+    row.className = 'check-row';
+    row.setAttribute('data-check-kind', f.kind);
+    if (f.line != null) row.setAttribute('data-check-line', String(f.line));
+    var kind = document.createElement('span');
+    kind.className = 'check-kind';
+    kind.textContent = LABEL[f.kind] || f.kind;
+    var no = document.createElement('span');
+    no.className = 'check-no';
+    no.textContent = f.line == null ? '—' : String(f.line + 1);
+    var msg = document.createElement('span');
+    msg.className = 'check-msg';
+    msg.textContent = f.message;
+    row.appendChild(kind); row.appendChild(no); row.appendChild(msg);
+    if (f.line != null) {
+      row.addEventListener('click', function() { gotoOutlineLine(f.line); });
+    }
+    listEl.appendChild(row);
+  });
+}
+
+function runConsistencyCheck() {
+  var cc = window.MA.consistencyCheck;
+  var cv = window.MA.compareView;
+  var sumEl = document.getElementById('check-summary');
+  var listEl = document.getElementById('check-list');
+  if (!cc || !cv || !sumEl) return;
+  var ref = _compareRefId ? cv.doc(_compareDocs(), _compareRefId) : null;
+  if (!ref) {
+    _checkFindings = [];
+    sumEl.classList.remove('clean', 'dirty');
+    sumEl.textContent = '参照図を選んでください';
+    if (listEl) { listEl.textContent = ''; listEl.hidden = true; }
+    return;
+  }
+  _checkFindings = cc.check(ref.dsl || '', mmdText).findings;
+  renderCheckList();
+}
+
 function setupCompareView() {
+  var checkBtn = document.getElementById('btn-check-run');
+  if (checkBtn) checkBtn.addEventListener('click', runConsistencyCheck);
   var btn = document.getElementById('btn-tab-compare');
   var sel = document.getElementById('compare-select');
   var close = document.getElementById('btn-compare-close');
@@ -3107,6 +3184,7 @@ function setupCompareView() {
     sel.addEventListener('change', function() {
       _compareRefId = sel.value;
       _compareShownDsl = null;
+      _clearCheckList();
       renderCompareView();
     });
   }
