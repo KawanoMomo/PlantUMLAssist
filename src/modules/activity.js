@@ -1796,6 +1796,51 @@ window.MA.modules.plantumlActivity = (function() {
     return null;
   }
 
+  function _findNodeByLine(nodes, line) {
+    if (!nodes) return null;
+    for (var i = 0; i < nodes.length; i++) {
+      var n = nodes[i];
+      if (n.line === line) return n;
+      if (n.branches) {
+        for (var j = 0; j < n.branches.length; j++) {
+          var found = _findNodeByLine(n.branches[j].body, line);
+          if (found) return found;
+        }
+      }
+      if (n.body) {
+        var found2 = _findNodeByLine(n.body, line);
+        if (found2) return found2;
+      }
+    }
+    return null;
+  }
+
+  // design 4b: 選択中アクションの右ペインの「↑ ↓」。これは挿入ではなく、
+  // 選んでいるアクションを**同じ親の中で**前後の兄弟と入れ替えるボタンである
+  // (1a の Sequence パネルの「↑ 上へ / ↓ 下へ」と同じ位置・同じ役割)。
+  // 判定と入れ替えは src/core/selection-reorder.js の純関数に任せる。親の境界
+  // (else / endif / start / stop など) に当たる位置では disabled にして、
+  // 「押したのに何も起きない」を作らない。
+  function _reorderHtml(text, line) {
+    var SR = window.MA.selectionReorder;
+    if (!SR) return '';
+    function btn(id, label, on, title) {
+      return '<button id="' + id + '"' + (on ? '' : ' disabled') +
+        ' title="' + window.MA.htmlUtils.escHtml(title) + '"' +
+        ' style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);' +
+        'color:var(--' + (on ? 'text-primary' : 'text-secondary') + ');padding:6px;' +
+        'border-radius:4px;font-size:11px;cursor:' + (on ? 'pointer' : 'not-allowed') + ';' +
+        (on ? '' : 'opacity:0.5;') + '">' + label + '</button>';
+    }
+    return '<div style="border-top:1px solid var(--border);padding-top:10px;margin-top:8px;">' +
+      '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">並び替え / Reorder</label>' +
+      '<div style="display:flex;gap:4px;">' +
+        btn('ac-move-up', '↑', SR.canMove(text, line, -1), '同じ親の中で 1 つ上の兄弟と入れ替える (Alt+↑)') +
+        btn('ac-move-down', '↓', SR.canMove(text, line, 1), '同じ親の中で 1 つ下の兄弟と入れ替える (Alt+↓)') +
+      '</div>' +
+    '</div>';
+  }
+
   function _renderActionEdit(sel, parsedData, propsEl, ctx) {
     var P = window.MA.properties;
     var node = _findNodeById(parsedData.nodes, sel.id);
@@ -1849,10 +1894,31 @@ window.MA.modules.plantumlActivity = (function() {
               '<button id="ac-insert-after" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↓ 後に</button>' +
             '</div>' +
           '</div>' +
+          _reorderHtml(ctx.getMmdText(), node.line) +
           '<div style="margin-top:10px;">' +
             P.primaryButtonHtml('ac-action-delete', '✕ 削除') +
           '</div>';
     propsEl.innerHTML = html;
+
+    // design 4b:「↑ ↓」— 同じ親の中の兄弟と入れ替える。行が動くので、
+    // 選択は id ではなく移動先の行番号から引き直す (id は文書順の連番で振り直される)。
+    function _moveAction(dir) {
+      var SR = window.MA.selectionReorder;
+      if (!SR) return;
+      var before = ctx.getMmdText();
+      var after = SR.move(before, node.line, dir);
+      if (after === before) return;          // 端 / 親の境界: 履歴も積まない
+      var newLine = SR.movedLine(before, node.line, dir);
+      window.MA.history.pushHistory();
+      ctx.setMmdText(after);
+      var moved = null;
+      try { moved = _findNodeByLine(parse(after).nodes, newLine); } catch (e) { moved = null; }
+      if (moved) window.MA.selection.setSelected([{ type: 'action', id: moved.id, line: moved.line }]);
+      else window.MA.selection.clearSelection();
+      ctx.onUpdate();
+    }
+    P.bindEvent('ac-move-up', 'click', function() { _moveAction(-1); });
+    P.bindEvent('ac-move-down', 'click', function() { _moveAction(1); });
 
     P.bindEvent('ac-insert-before', 'click', function() { showInsertPicker(ctx, node.line, 'before'); });
     P.bindEvent('ac-insert-after', 'click', function() { showInsertPicker(ctx, node.line, 'after'); });
