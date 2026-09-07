@@ -660,58 +660,87 @@ window.MA.modules.plantumlUsecase = (function() {
     propsEl.innerHTML = html;
   }
 
-  // ─── Multi-select Connect (Phase B Task 13) ─────────────────────────────
+  // ─── 関係を追加 / Add relation (design 3a) ───────────────────────────────
+  // 2 要素を選ぶとここが開く。UML の名称を主・意味の説明を副にして並べ、矢印の
+  // 見本を添える (relation-add.js のカタログ)。「追加される行」は実際に書き込む
+  // fmtRelation をそのまま通すので、見えている行と DSL が食い違わない。
   function _renderMultiSelectConnect(selData, parsedData, propsEl, ctx) {
     var P = window.MA.properties;
+    var RA = window.MA.relationAdd;
+    var esc = window.MA.htmlUtils.escHtml;
     var allElements = (parsedData.elements || []).filter(function(e) {
       return e.kind === 'actor' || e.kind === 'usecase';
     });
     var nameById = {};
     allElements.forEach(function(e) { nameById[e.id] = e.label || e.id; });
 
-    var fromOpt = nameById[selData[0].id] || selData[0].id;
-    var toOpt = nameById[selData[1].id] || selData[1].id;
+    var swapped = false;
+    var kind = RA.defaultKind('usecase');
+
+    function nameOf(item) { return nameById[item.id] || item.id; }
+    function ends() { return RA.orient(selData, swapped); }
 
     propsEl.innerHTML =
-      '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">UseCase - Connect 2 elements</div>' +
+      '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">関係を追加 / Add relation</div>' +
       '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
-        '<div style="margin:8px 0;">' +
-          'From: <strong id="uc-conn-from">' + window.MA.htmlUtils.escHtml(fromOpt) + '</strong> ' +
-          '<button id="uc-conn-swap" type="button">⇄ swap</button> ' +
-          'To: <strong id="uc-conn-to">' + window.MA.htmlUtils.escHtml(toOpt) + '</strong>' +
+        '<div class="rel-ends">' +
+          '<span class="rel-end"><span class="rel-end-cap">From</span>' +
+            '<strong id="uc-conn-from">' + esc(nameOf(selData[0])) + '</strong></span>' +
+          '<button id="uc-conn-swap" type="button" class="rel-swap" title="From と To を入れ替える">⇄</button>' +
+          '<span class="rel-end"><span class="rel-end-cap">To</span>' +
+            '<strong id="uc-conn-to">' + esc(nameOf(selData[1])) + '</strong></span>' +
         '</div>' +
-        P.selectFieldHtml('Kind', 'uc-conn-kind', [
-          { value: 'association', label: 'Association (-->)', selected: true },
-          { value: 'generalization', label: 'Generalization (<|--)' },
-          { value: 'include', label: 'Include (..>) <<include>>' },
-          { value: 'extend', label: 'Extend (..>) <<extend>>' },
-        ]) +
-        P.fieldHtml('Label', 'uc-conn-label', '', '任意') +
-        P.primaryButtonHtml('uc-conn-create', '+ Connect') +
+        '<div class="rel-section-cap">関係の種類 / Relation</div>' +
+        '<div id="uc-conn-kinds" class="rel-opts">' + RA.optionsHtml('usecase', 'uc-conn', kind) + '</div>' +
+        P.fieldHtml('ラベル / Label（任意）', 'uc-conn-label', '', '任意') +
+        '<div class="rel-section-cap">追加される行</div>' +
+        '<pre id="uc-conn-preview" class="rel-preview"></pre>' +
+        '<div class="rel-actions">' +
+          P.primaryButtonHtml('uc-conn-create', '関係を追加') +
+          '<button id="uc-conn-clear" type="button">選択解除</button>' +
+        '</div>' +
       '</div>';
 
-    var swapped = false;
+    function refreshPreview() {
+      var e = ends();
+      var label = (document.getElementById('uc-conn-label') || {}).value || '';
+      var line = RA.previewLine(fmtRelation, kind, e.from.id, e.to.id, label.trim());
+      var pre = document.getElementById('uc-conn-preview');
+      if (pre) pre.textContent = line;
+    }
+
     P.bindEvent('uc-conn-swap', 'click', function() {
       swapped = !swapped;
-      var fromEl = document.getElementById('uc-conn-from');
-      var toEl = document.getElementById('uc-conn-to');
-      var tmp = fromEl.textContent;
-      fromEl.textContent = toEl.textContent;
-      toEl.textContent = tmp;
+      var e = ends();
+      document.getElementById('uc-conn-from').textContent = nameOf(e.from);
+      document.getElementById('uc-conn-to').textContent = nameOf(e.to);
+      refreshPreview();
+    });
+
+    var kindsEl = document.getElementById('uc-conn-kinds');
+    if (kindsEl) {
+      kindsEl.addEventListener('change', function(ev) {
+        if (!ev.target || ev.target.type !== 'radio') return;
+        kind = ev.target.value;
+        refreshPreview();
+      });
+    }
+    P.bindEvent('uc-conn-label', 'input', refreshPreview);
+
+    P.bindEvent('uc-conn-clear', 'click', function() {
+      window.MA.selection.clearSelection();
     });
 
     P.bindEvent('uc-conn-create', 'click', function() {
       window.MA.history.pushHistory();
-      var fromId = swapped ? selData[1].id : selData[0].id;
-      var toId = swapped ? selData[0].id : selData[1].id;
-      var kind = document.getElementById('uc-conn-kind').value;
+      var e = ends();
       var label = document.getElementById('uc-conn-label').value.trim();
-      var t = ctx.getMmdText();
-      var out = addRelation(t, kind, fromId, toId, label);
-      ctx.setMmdText(out);
+      ctx.setMmdText(addRelation(ctx.getMmdText(), kind, e.from.id, e.to.id, label));
       window.MA.selection.clearSelection();
       ctx.onUpdate();
     });
+
+    refreshPreview();
   }
 
   // 3+ selection 用

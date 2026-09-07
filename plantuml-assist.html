@@ -983,6 +983,139 @@ html, body {
 .check-row .check-msg { flex: 1; color: var(--text-primary); }
 #check-empty { padding: 6px 8px; font-size: 11px; color: var(--accent-green); }
 
+/* ── 関係を追加 / Add relation (design 3a) ───────────────────────────────── */
+/* 2 要素を選んだときの右ペイン。UML 名称を主・説明を副に置き、右端に矢印の見本。 */
+#selection-notice {
+  position: absolute;
+  top: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  padding: 4px 12px;
+  border-radius: 20px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--accent);
+  color: var(--text-primary);
+  font-size: 11px;
+  white-space: nowrap;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.35);
+  pointer-events: none;
+}
+
+.rel-ends {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 12px;
+}
+
+.rel-end {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.rel-end-cap {
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.rel-end strong {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rel-swap {
+  flex: 0 0 auto;
+  align-self: flex-end;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border-radius: 4px;
+  padding: 2px 7px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.rel-section-cap {
+  font-size: 10px;
+  color: var(--accent);
+  font-weight: bold;
+  margin: 10px 0 4px;
+}
+
+.rel-opts {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+label.rel-opt {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 7px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+label.rel-opt:hover { background: var(--bg-tertiary); }
+
+.rel-opt-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 主: UML の名称。副: 意味の説明。 */
+.rel-opt-name { font-size: 12px; color: var(--text-primary); }
+.rel-opt-desc { font-size: 10px; color: var(--text-secondary); }
+
+.rel-opt-sample {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.rel-preview {
+  margin: 0;
+  padding: 6px 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-all;
+  min-height: 15px;
+}
+
+.rel-actions {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+  margin-top: 10px;
+}
+
+.rel-actions button:not([id$="-create"]) {
+  flex: 0 0 auto;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border-radius: 4px;
+  padding: 5px 10px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
 /* ── Floating zoom HUD (design 1a) ────────────────────────────────────────── */
 /* #preview-container ではなく #preview-pane を基準にするので、図をスクロール
    しても帯はキャンバスの右上に留まる。 */
@@ -1546,6 +1679,8 @@ html, body {
       </div>
       <!-- キャンバス上に浮くズーム帯 (design 1a)。中身は zoom-hud.js が描く -->
       <div id="zoom-hud" role="group" aria-label="ズーム"></div>
+      <!-- 選択件数の注記 (design 3a)。文言は relation-add.js、出し入れは app.js -->
+      <div id="selection-notice" role="status" hidden></div>
     </div>
 
     <!-- 参照ペイン: 別のタブの図を並べて出す (先輩の図を見ながら書く)。
@@ -1770,6 +1905,7 @@ html, body {
 <script src="src/core/command-palette.js"></script>
 <script src="src/core/diagram-rail.js"></script>
 <script src="src/core/zoom-hud.js"></script>
+<script src="src/core/relation-add.js"></script>
 <script src="src/core/settings-tabs.js"></script>
 <script src="src/core/render-modes.js"></script>
 <script src="src/core/top-status.js"></script>

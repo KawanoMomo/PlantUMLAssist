@@ -1453,6 +1453,7 @@ function init() {
     }
     // 選択状態に入ったらその瞬間に hover ガイドを消す (mousemove を待たない)
     if (sel.length > 0) clearHoverGuide();
+    updateSelectionNotice(sel);
     renderProps();
   });
 
@@ -4374,6 +4375,18 @@ function showPropsTab(which) {
   propsPane.hidden = settings;
   setPane.hidden = !settings;
   if (settings) renderDiagramSettings(false);
+}
+
+// design 3a: 2 つ選ぶと「関係を追加できます」とキャンバス上に出す。右ペインは
+// 視線の外にあるので、選択できた合図を図の側にも置く。
+function updateSelectionNotice(sel) {
+  var el = document.getElementById('selection-notice');
+  if (!el) return;
+  var text = moduleHas('multiSelectConnect')
+    ? window.MA.relationAdd.noticeText((sel || []).length)
+    : null;
+  el.textContent = text || '';
+  el.hidden = !text;
 }
 
 function renderProps(parsed) {
