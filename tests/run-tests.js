@@ -48,6 +48,7 @@ const sourceFiles = [
   'src/core/group-notation.js',
   'src/core/sequence-marks.js',
   'src/core/sequence-autonumber.js',
+  'src/core/insert-marker.js',
   'src/ui/properties.js',
   'src/ui/reuse-modal.js',
   'src/modules/sequence.js',

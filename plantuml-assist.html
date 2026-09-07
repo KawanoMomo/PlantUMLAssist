@@ -876,6 +876,40 @@ html, body {
   white-space: pre;
 }
 
+/* design 5c: 挿入先の行番号。ガター内なので背景だけで示す */
+#line-numbers .ln-insert-target {
+  color: var(--accent);
+  font-weight: bold;
+}
+
+/* design 5c: 挿入先の行に重ねる「← N 行目に挿入」。
+   高さ 19.5px は #editor の line-height (13px * 1.5) と揃える */
+#insert-marker {
+  position: absolute;
+  right: 8px;
+  height: 19.5px;
+  line-height: 19.5px;
+  padding: 0 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent);
+  background: var(--bg-secondary);
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 5;
+}
+
+/* design 5c: 右パネルの「いまは挿入位置を選んでいます」 */
+#props-insert-hint {
+  padding: 6px 10px;
+  font-size: 11px;
+  color: var(--accent);
+  background: rgba(124, 140, 248, 0.1);
+  border-bottom: 1px solid var(--border);
+}
+
 #editor {
   flex: 1;
   padding: 8px 10px;
@@ -1868,6 +1902,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <div id="editor-wrap">
         <div id="line-numbers">1</div>
         <textarea id="editor" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
+        <!-- design 5c: 挿入メニューを開いている間、入る行に「← N 行目に挿入」を重ねる -->
+        <div id="insert-marker" hidden></div>
       </div>
       <!-- 構造ビュー。行を選ぶと DSL タブに戻ってその行へ飛ぶ -->
       <div id="outline-pane">
@@ -1936,6 +1972,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button type="button" id="props-tab-props" class="props-tab active">Properties</button>
         <button type="button" id="props-tab-settings" class="props-tab">図の設定</button>
       </div>
+      <!-- design 5c: 挿入位置を選んでいる間だけ出る案内 -->
+      <div id="props-insert-hint" hidden></div>
       <div id="props-content">
         <p style="color:var(--text-secondary);font-size:11px;">タスクを選択してください</p>
       </div>
@@ -2179,6 +2217,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/relation-options.js"></script>
 <script src="src/core/group-notation.js"></script>
 <script src="src/core/sequence-marks.js"></script>
+<script src="src/core/insert-marker.js"></script>
 <script src="src/core/sequence-autonumber.js"></script>
 <script src="src/core/class-scaffold.js"></script>
 <script src="src/core/line-resolver.js"></script>

@@ -913,6 +913,14 @@ window.MA.modules.plantumlSequence = (function() {
     return 'DSL ' + target + ' 行目に挿入（' + line + ' 行目の' + (position === 'before' ? '前' : '後') + '）';
   }
 
+  // design 5c: 挿入メニューを開いている間、DSL の入る行に印を出す / 消す。
+  function _markerShow(line, position) {
+    if (window.MA.insertMarker) window.MA.insertMarker.show(line, position);
+  }
+  function _markerHide() {
+    if (window.MA.insertMarker) window.MA.insertMarker.hide();
+  }
+
   // kind 引数を _showInsertForm 用の (kind, opts) に正規化する。
   function _resolvePickedKind(picked) {
     if (picked === 'alt' || picked === 'loop') return { kind: 'block', opts: { blockKind: picked } };
@@ -955,6 +963,7 @@ window.MA.modules.plantumlSequence = (function() {
       'border:1px solid var(--border);color:var(--text-primary);padding:8px;border-radius:4px;cursor:pointer;">キャンセル</button>';
     content.innerHTML = html;
     modal.style.display = 'flex';
+    _markerShow(line, position);
 
     Array.prototype.forEach.call(content.querySelectorAll('.seq-pick-btn'), function(btn) {
       btn.addEventListener('click', function() {
@@ -974,6 +983,7 @@ window.MA.modules.plantumlSequence = (function() {
     }
     document.getElementById('seq-pick-cancel').addEventListener('click', function() {
       modal.style.display = 'none';
+      _markerHide();
     });
   }
 
@@ -1081,6 +1091,7 @@ window.MA.modules.plantumlSequence = (function() {
       '</div>';
     content.innerHTML = html;
     modal.style.display = 'flex';
+    _markerShow(line, position);
 
     var rleObj = null;
     if (kind === 'message') rleObj = window.MA.richLabelEditor.mount(document.getElementById('seq-mod-label-rle'), '');
@@ -1111,6 +1122,7 @@ window.MA.modules.plantumlSequence = (function() {
     }
     document.getElementById('seq-mod-cancel').addEventListener('click', function() {
       modal.style.display = 'none';
+      _markerHide();
       // FEAT-123 [F123-AC-1] / [F123-AC-3]: 退避した選択が空でなければ復帰する。
       // 空のときは setSelected を呼ばない (選択を新たに作らない)。
       if (prevSelection.length && window.MA.selection && window.MA.selection.setSelected) {
@@ -1179,6 +1191,7 @@ window.MA.modules.plantumlSequence = (function() {
       }
       ctx.setMmdText(t);
       modal.style.display = 'none';
+      _markerHide();
       ctx.onUpdate();
     });
   }
