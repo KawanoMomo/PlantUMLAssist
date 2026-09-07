@@ -2,6 +2,15 @@
 const { test, expect } = require('@playwright/test');
 const { gotoApp, getEditorText } = require('./helpers');
 
+// クラス矩形はボックス全体を覆うが、その中心には member 矩形が重なる
+// (UML のクラスは中央が属性/操作コンパートメント)。中心クリックは member を
+// 選ぶのが正しい振る舞いなので、クラス自体を掴むときはヘッダ帯を狙う。
+// class-v0.6.1.spec.js が既に使っている規約と同じ。
+async function clickEntity(page, locator, opts) {
+  var o = Object.assign({ position: { x: 10, y: 8 } }, opts || {});
+  await locator.click(o);
+}
+
 test.describe('Class diagram (v0.6.0)', () => {
   test.describe('α: DSL technical', () => {
     test('switching to Class loads template with class + interface', async ({ page }) => {
@@ -99,7 +108,7 @@ test.describe('Class diagram (v0.6.0)', () => {
       var rect = page.locator('#overlay-layer rect[data-type="class"]').first();
       var count = await rect.count();
       if (count === 0) test.skip();
-      await rect.click();
+      await clickEntity(page, rect);
       await page.waitForTimeout(300);
       var sel = await page.evaluate(function() { return window.MA.selection.getSelected(); });
       expect(sel[0].type).toBe('class');
@@ -125,8 +134,8 @@ test.describe('Class diagram (v0.6.0)', () => {
       var c = page.locator('#overlay-layer rect[data-type="class"]').first();
       var i = page.locator('#overlay-layer rect[data-type="interface"]').first();
       if ((await c.count()) === 0 || (await i.count()) === 0) test.skip();
-      await c.click();
-      await i.click({ modifiers: ['Shift'] });
+      await clickEntity(page, c);
+      await clickEntity(page, i, { modifiers: ['Shift'] });
       await page.waitForTimeout(300);
       var options = await page.locator('#cl-conn-kind option').allTextContents();
       expect(options.some(function(o) { return o.indexOf('Inheritance') >= 0; })).toBe(true);
@@ -145,8 +154,8 @@ test.describe('Class diagram (v0.6.0)', () => {
       var i = page.locator('#overlay-layer rect[data-type="interface"]').first();
       if ((await c.count()) === 0 || (await i.count()) === 0) test.skip();
       var lineCountBefore = (await getEditorText(page)).split('\n').length;
-      await c.click();
-      await i.click({ modifiers: ['Shift'] });
+      await clickEntity(page, c);
+      await clickEntity(page, i, { modifiers: ['Shift'] });
       await page.waitForTimeout(300);
       await page.locator('#cl-conn-create').click();
       await page.waitForTimeout(800);
@@ -162,7 +171,7 @@ test.describe('Class diagram (v0.6.0)', () => {
       await page.waitForTimeout(2500);
       var c = page.locator('#overlay-layer rect[data-type="class"]').first();
       if ((await c.count()) > 0) {
-        await c.click();
+        await clickEntity(page, c);
         await page.waitForTimeout(300);
       }
       var jsErrors = errors.filter(function(e) { return e.indexOf('favicon') < 0; });
