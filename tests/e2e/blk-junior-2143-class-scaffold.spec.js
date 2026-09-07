@@ -34,17 +34,17 @@ test.describe('BLK-junior-20260906-2143 クラス構成の一括追加', () => {
     await page.locator('#cl-sc-add-row').click();
     await fillClassRow(page, 3, 'CanFrame', '-id : uint32', 'none');
 
-    await page.locator('#cl-sc-rfrom-0').fill('CanDrvHs');
-    await page.locator('#cl-sc-rto-0').fill('CanBus');
+    // BLK-junior-20260907-0823: 関連の行は最初から 3 行あり、元 / 先は
+    // このモーダルで作る名前からの選択になった。
+    await page.locator('#cl-sc-rfrom-0').selectOption('CanDrvHs');
+    await page.locator('#cl-sc-rto-0').selectOption('CanBus');
     await page.locator('#cl-sc-rlabel-0').fill('uses');
-    await page.locator('#cl-sc-add-rel').click();
-    await page.locator('#cl-sc-rfrom-1').fill('CanDrvFd');
+    await page.locator('#cl-sc-rfrom-1').selectOption('CanDrvFd');
     await page.locator('#cl-sc-rkind-1').selectOption('aggregation');
-    await page.locator('#cl-sc-rto-1').fill('CanFrame');
-    await page.locator('#cl-sc-add-rel').click();
-    await page.locator('#cl-sc-rfrom-2').fill('CanBus');
+    await page.locator('#cl-sc-rto-1').selectOption('CanFrame');
+    await page.locator('#cl-sc-rfrom-2').selectOption('CanBus');
     await page.locator('#cl-sc-rkind-2').selectOption('composition');
-    await page.locator('#cl-sc-rto-2').fill('CanFrame');
+    await page.locator('#cl-sc-rto-2').selectOption('CanFrame');
 
     await page.locator('#cl-sc-confirm').click();
     await page.waitForTimeout(300);
@@ -72,14 +72,16 @@ test.describe('BLK-junior-20260906-2143 クラス構成の一括追加', () => {
     expect(preview).toContain('CanDrv <|-- CanDrvHs');
   });
 
-  test('UC-3: 未定義の相手への関連は確定できない', async ({ page }) => {
+  // BLK-junior-20260907-0823: 未定義の相手は打ち込めなくなったので、
+  // 「打てば止まる」ではなく「選べる名前がこのモーダルの中のものだけ」を見る。
+  test('UC-3: 関連の相手はこの構成にある名前からしか選べない', async ({ page }) => {
     await openClassDiagram(page);
     await openScaffold(page);
     await fillClassRow(page, 0, 'CanDrvHs', '', 'inheritance');
-    await page.locator('#cl-sc-rfrom-0').fill('CanDrvHs');
-    await page.locator('#cl-sc-rto-0').fill('Nowhere');
-    await expect(page.locator('#cl-sc-confirm')).toBeDisabled();
-    await expect(page.locator('#cl-sc-errors')).toContainText('Nowhere');
+    var opts = await page.locator('#cl-sc-rto-0 option').allTextContents();
+    expect(opts).toContain('CanDrv');
+    expect(opts).toContain('CanDrvHs');
+    expect(opts).not.toContain('Nowhere');
   });
 
   test('UC-4: クラス名が空なら確定できない', async ({ page }) => {
