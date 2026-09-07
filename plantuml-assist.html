@@ -1364,6 +1364,7 @@ html, body {
 }
 /* 選んだ部品名が出てくる図のタブ。1 枚ずつ開いて名前を照合しなくてよい */
 .tab.xref-hit { outline: 1px solid var(--accent); outline-offset: -1px; }
+#folder-panel .folder-missing { color: var(--accent-red); }
 /* 一括置換パネル (複数の図をまたいで部品名を置換する) */
 #rename-panel {
   display: none;
@@ -3092,7 +3093,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <div id="cfg-file-dir-row" style="display:none;margin-top:6px;font-size:12px;">
         <label style="display:block;margin-bottom:4px;color:var(--text-secondary);">保存先ディレクトリ</label>
         <input type="text" id="cfg-file-dir" placeholder="./autosave" style="width:100%;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-family:monospace;">
-        <div style="font-size:10px;color:var(--text-secondary);margin-top:2px;">server.py からの相対パス、 または絶対パス。 存在しなければ自動作成。</div>
+        <div style="font-size:10px;color:var(--text-secondary);margin-top:2px;">server.py からの相対パス、 または絶対パス。 存在しなければ保存時に自動作成。 区切りは / が安全です (\ は往復で壊れることがあるため / に直して保存します)。</div>
+        <div id="cfg-file-dir-msg" style="font-size:10px;color:var(--accent-red);margin-top:2px;white-space:pre-wrap;"></div>
       </div>
     </div>
 

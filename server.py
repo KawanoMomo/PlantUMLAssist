@@ -438,12 +438,18 @@ class Handler(BaseHTTPRequestHandler):
         # 1 図ずつ最終保存時刻と本文の指紋 (sha1) を返し、GUI 側で前回見た版と突き合わせる。
         files = []
         entries = []
-        if save_dir.exists():
+        # BLK-primary-20260908-0103: 存在しないディレクトリでも空の一覧を 200 で
+        # 返していたため、GUI からは「保存先が間違っている」と「まだ 1 枚も無い」が
+        # 区別できず、保存先の書式を誤ると一覧が黙って空になっていた。
+        # 実在するかどうかをそのまま返し、区別は GUI に任せる。
+        exists = save_dir.exists() and save_dir.is_dir()
+        if exists:
             for p in sorted(save_dir.glob('*.puml'), key=lambda q: q.stem):
                 files.append(p.stem)
                 entries.append(self._autosave_entry(p))
         meta = self._autosave_read_meta(save_dir)
-        self._send_json(200, {'files': files, 'entries': entries, 'meta': meta, 'dir': str(save_dir)})
+        self._send_json(200, {'files': files, 'entries': entries, 'meta': meta,
+                              'dir': str(save_dir), 'exists': exists})
 
     def _autosave_entry(self, path):
         """1 図分の {name, mtime, size, hash}。読めない図でも名前だけは返す。"""

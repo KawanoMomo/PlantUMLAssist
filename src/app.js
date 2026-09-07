@@ -1546,6 +1546,22 @@ function init() {
       for (var j = 0; j < backendRadios.length; j++) if (backendRadios[j].checked) { backend = backendRadios[j].value; break; }
       var fileDirEl = document.getElementById('cfg-file-dir');
       var fileDir = fileDirEl ? (fileDirEl.value.trim() || './autosave') : './autosave';
+      // BLK-primary-20260908-0103: バックスラッシュ区切りの絶対パスは往復で
+      // 壊れることがあり、壊れた値のまま保存されると 📂一覧が黙って空になる。
+      // 保存する前にここで直せる崩れは直し (\ → /)、直せない崩れは保存しない。
+      var dirMsgEl = document.getElementById('cfg-file-dir-msg');
+      if (dirMsgEl) dirMsgEl.textContent = '';
+      var SDH = window.MA.saveDirHandoff;
+      if (SDH && backend === 'file') {
+        var chk = SDH.check(fileDir);
+        if (!chk.ok) {
+          if (dirMsgEl) dirMsgEl.textContent = '⚠ ' + chk.reason;
+          if (fileDirEl) fileDirEl.focus();
+          return;   // 設定モーダルは閉じない。壊れた値のまま先へ進ませない
+        }
+        fileDir = chk.value;
+        if (fileDirEl) fileDirEl.value = fileDir;
+      }
       if (window.MA.autoSave) {
         window.MA.autoSave.setConfig({
           enabled: enabled,
@@ -3506,9 +3522,27 @@ function setupTabs() {
     var dir = _wsFileDir();
     var RW = window.MA.reviewWatch;
     var store = _reviewStore();
-    window.MA.workspace.listFileEntries(dir).then(function(entries) {
+    window.MA.workspace.listFolder(dir).then(function(res) {
+      var entries = (res && res.entries) || [];
       panel.textContent = '';
-      if (!entries || entries.length === 0) {
+      // BLK-primary-20260908-0103: 保存先の綴りを 1 文字誤っただけでも一覧は
+      // 「図がありません」としか言わず、間違いに気づけないまま作業が止まっていた。
+      // 実在しない保存先は「無い」と名指しで言い、直す場所まで書く。
+      if (res && res.exists === false) {
+        var gone = document.createElement('div');
+        gone.className = 'folder-empty folder-missing';
+        gone.id = 'folder-missing';
+        gone.textContent = '保存先フォルダが見つかりません: ' + (res.dir || dir);
+        panel.appendChild(gone);
+        var how = document.createElement('div');
+        how.className = 'folder-empty';
+        how.id = 'folder-missing-hint';
+        how.textContent = '⚙設定 → 自動保存 → 保存先ディレクトリを確かめてください'
+          + '(区切りは / が安全です)。渡された値があれば 🕸 参照関係 →「保存先を貼る」で入れられます。';
+        panel.appendChild(how);
+        return;
+      }
+      if (entries.length === 0) {
         var empty = document.createElement('div');
         empty.className = 'folder-empty';
         empty.textContent = '保存フォルダに図がありません';
