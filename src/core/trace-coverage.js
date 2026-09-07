@@ -109,15 +109,43 @@ window.MA.traceCoverage = (function() {
       fa.actionsOf(d.dsl).forEach(function(a) { seqKeys.push({ key: a.key, doc: d.name }); });
     });
 
+    // 担当範囲の宣言 (`' @covers A -> B`)。系統のシーケンス図が 1 枚でも
+    // 宣言していれば、宣言された遷移だけを突き合わせの対象にする。
+    // 「初期化専用シーケンス vs フル状態遷移」の粒度差を語彙一致率で
+    // 推測せず、書かれた意図で切る。
+    var sd = window.MA.scopeDecl;
+    var declaredCovers = [];
+    var declaredBy = [];
+    if (sd) {
+      seqDocs.forEach(function(d) {
+        var p = sd.parse(d.dsl);
+        if (!p.declared) return;
+        declaredBy.push(d.name);
+        p.covers.forEach(function(c) {
+          if (!declaredCovers.some(function(x) { return sd.same(x, c); })) declaredCovers.push(c);
+        });
+      });
+    }
+    var hasDecl = declaredBy.length > 0;
+
     var rows = [];
+    var outOfScope = [];
     stateDocs.forEach(function(d) {
       transitionsOf(d.dsl).forEach(function(t) {
-        var m = seqDocs.length ? _match(t.keys, seqKeys) : { status: 'unknown', seenIn: [] };
-        rows.push({
+        var base = {
           docId: d.id, docName: d.name, line: t.line,
           from: t.from, to: t.to, label: t.label, keys: t.keys,
-          status: m.status, seenIn: m.seenIn,
-        });
+        };
+        if (hasDecl && !sd.covered(declaredCovers, t)) {
+          base.status = 'out-of-scope';
+          base.seenIn = [];
+          outOfScope.push(base);
+          return;
+        }
+        var m = seqDocs.length ? _match(t.keys, seqKeys) : { status: 'unknown', seenIn: [] };
+        base.status = m.status;
+        base.seenIn = m.seenIn;
+        rows.push(base);
       });
     });
 
@@ -130,6 +158,12 @@ window.MA.traceCoverage = (function() {
       rows: rows,
       missing: missing,
       partial: rows.filter(function(r) { return r.status === 'partial'; }),
+      // 宣言によって対象外になった遷移。0 件にはできないが、黙って消すと
+      // 「見ていない遷移」が画面から消えるので、件数と中身は残す。
+      outOfScope: outOfScope,
+      declared: hasDecl,
+      declaredBy: declaredBy,
+      declaredCovers: declaredCovers,
       // 突き合わせが成立したか。状態遷移図とシーケンス図が片方でも欠けたら
       // 「漏れ 0 件」ではなく「見ていない」と言う。
       comparable: stateDocs.length > 0 && seqDocs.length > 0 && rows.length > 0,
@@ -162,14 +196,40 @@ window.MA.traceCoverage = (function() {
     if (!family.seqDocs.length) {
       return 'この系統にシーケンス図が無いため突き合わせていません';
     }
+    var oos = (family.outOfScope || []).length;
+    var scope = family.declared ? ' / 宣言対象外 ' + oos + ' 件は見ていません' : '';
     if (!family.rows.length) {
-      return 'ラベルの付いた遷移がありません';
+      return family.declared
+        ? '宣言された遷移がありません (宣言対象外 ' + oos + ' 件)'
+        : 'ラベルの付いた遷移がありません';
     }
-    var tail = family.partial.length ? ' (部分一致 ' + family.partial.length + ' 件)' : '';
+    var tail = (family.partial.length ? ' (部分一致 ' + family.partial.length + ' 件)' : '') + scope;
     var n = family.missing.length;
     return (n === 0
       ? '遷移 ' + family.rows.length + ' 件はすべてシーケンスに現れています (漏れ 0 件)'
       : 'どのシーケンスにも現れない遷移 ' + n + ' 件 / ' + family.rows.length + ' 件') + tail;
+  }
+
+  // 担当範囲を宣言する画面のためのチェックボックス一覧。系統の状態遷移図に
+  // 書かれた from→to を、宣言済みかどうかを付けて重複なしで返す。
+  function scopeChoices(family) {
+    var sd = window.MA.scopeDecl;
+    if (!family || !sd) return [];
+    var all = (family.rows || []).concat(family.outOfScope || []);
+    var out = [];
+    all.forEach(function(r) {
+      var hit = null;
+      for (var i = 0; i < out.length; i++) {
+        if (sd.same(out[i], r)) { hit = out[i]; break; }
+      }
+      if (hit) { if (hit.labels.indexOf(r.label) < 0) hit.labels.push(r.label); return; }
+      out.push({
+        from: r.from, to: r.to, labels: [r.label],
+        docName: r.docName, line: r.line,
+        declared: sd.covered(family.declaredCovers || [], r),
+      });
+    });
+    return out;
   }
 
   // ステータスバー等に出す全系統の合計。
@@ -185,6 +245,7 @@ window.MA.traceCoverage = (function() {
     coverFamily: coverFamily,
     audit: audit,
     summaryLine: summaryLine,
+    scopeChoices: scopeChoices,
     totalMissing: totalMissing,
   };
 })();
