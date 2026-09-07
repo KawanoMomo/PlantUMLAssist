@@ -60,6 +60,10 @@ var suppressSync = false;
 var syncRail = function() {};
 // キャンバス上のズーム帯を現在の倍率・図種に合わせ直す。setupZoomHud が実体を入れる。
 var syncZoomHud = function() {};
+// design 5a: エディタの見た目と「図クリック→該当行へ移動」の指定。設定モーダルの
+// 「保存」と起動時の applyEditorPrefs が唯一の書き手で、選択のたびにここを読む
+// (localStorage を選択ごとに読み直さないため)。
+var currentEditorPrefs = null;
 var syncStateTable = function() {};
 var renderTimer = null;
 var RENDER_DEBOUNCE_MS = 150;
@@ -979,7 +983,9 @@ function init() {
     // 保存された見た目を textarea に当てる。設定モーダルを開かずに起動した回でも
     // 前回の指定が効いている必要があるので、結線時に 1 度呼ぶ。
     function applyEditorPrefs(prefs) {
-      if (!ST || !editorEl) return;
+      if (!ST) return;
+      currentEditorPrefs = ST.normalizeEditorPrefs(prefs);
+      if (!editorEl) return;
       var s = ST.editorStyleFor(prefs);
       editorEl.style.fontSize = s.fontSize;
       editorEl.style.whiteSpace = s.whiteSpace;
@@ -1169,6 +1175,8 @@ function init() {
         if (fontSel) fontSel.value = String(prefs.fontSize);
         var wrapEl = document.getElementById('cfg-editor-wrap');
         if (wrapEl) wrapEl.checked = !!prefs.wrap;
+        var jumpEl = document.getElementById('cfg-editor-click-to-line');
+        if (jumpEl) jumpEl.checked = !!prefs.clickToLine;
         var savedTab = 'autosave';
         try { savedTab = localStorage.getItem(TAB_KEY) || 'autosave'; } catch (e) {}
         renderTabBar(ST.normalizeTab(savedTab));
@@ -1223,9 +1231,11 @@ function init() {
         }
         var fontSel2 = document.getElementById('cfg-editor-font');
         var wrapEl2 = document.getElementById('cfg-editor-wrap');
+        var jumpEl2 = document.getElementById('cfg-editor-click-to-line');
         var prefs2 = ST.normalizeEditorPrefs({
           fontSize: fontSel2 ? fontSel2.value : undefined,
           wrap: wrapEl2 ? wrapEl2.checked : false,
+          clickToLine: jumpEl2 ? jumpEl2.checked : true,
         });
         try { localStorage.setItem(EDITOR_PREFS_KEY, JSON.stringify(prefs2)); } catch (e) {}
         applyEditorPrefs(prefs2);
@@ -1630,6 +1640,8 @@ function init() {
     }
     // 選択状態に入ったらその瞬間に hover ガイドを消す (mousemove を待たない)
     if (sel.length > 0) clearHoverGuide();
+    // design 5a: 図で選んだものの DSL 行へエディタを動かす。
+    jumpEditorToSelection(sel);
     updateSelectionNotice(sel);
     renderProps();
     // 表の選択枠を図・右パネルと同じ選択に合わせる。
@@ -4791,6 +4803,36 @@ function updateSelectionNotice(sel) {
     : null;
   el.textContent = text || '';
   el.hidden = !text;
+}
+
+// design 5a「図をクリックしたら DSL の該当行へ移動」。
+// 図と DSL は行番号でしか結ばれていないので、対応を目で数えるしかなかった。
+// 設定 (エディタタブ) で切れる。DSL タブを開いていないときは動かさない
+// (構造タブを見ている最中に裏で textarea だけが動いても何も起きないため)。
+function jumpEditorToSelection(sel) {
+  var EJ = window.MA.editorJump;
+  if (!EJ || !editorEl) return;
+  if (currentEditorPrefs && currentEditorPrefs.clickToLine === false) return;
+  if (_outlineTab && _outlineTab !== 'dsl') return;
+  var line = EJ.targetLine(sel);
+  if (line === null) return;
+  var range = EJ.lineRange(editorEl.value, line);
+  if (!range) return;
+  var style = window.getComputedStyle(editorEl);
+  var lineHeight = parseFloat(style.lineHeight);
+  if (!isFinite(lineHeight)) lineHeight = (parseFloat(style.fontSize) || 13) * 1.5;
+  editorEl.scrollTop = EJ.scrollTopFor(range.line, {
+    lineHeight: lineHeight,
+    viewportHeight: editorEl.clientHeight,
+    scrollTop: editorEl.scrollTop,
+  });
+  // 行を選択状態にして、どこへ来たのかを見えるようにする。focus を奪うのは
+  // クリック元が図 (textarea の外) のときだけなので、入力中の邪魔にはならない。
+  try {
+    editorEl.focus({ preventScroll: true });
+    editorEl.setSelectionRange(range.start, range.end);
+  } catch (e) {}
+  updateLineNumbers();
 }
 
 function renderProps(parsed) {

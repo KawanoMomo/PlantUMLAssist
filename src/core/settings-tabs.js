@@ -70,7 +70,8 @@ window.MA.settingsTabs = (function() {
 
   var EDITOR_FONT_MIN = 10;
   var EDITOR_FONT_MAX = 24;
-  var EDITOR_DEFAULTS = { fontSize: 13, wrap: false };
+  // design 5a の設計では「図をクリックしたら DSL の該当行へ移動」は入りで有効。
+  var EDITOR_DEFAULTS = { fontSize: 13, wrap: false, clickToLine: true };
 
   function tabIds() {
     return TABS.map(function(t) { return t.id; });
@@ -201,7 +202,11 @@ window.MA.settingsTabs = (function() {
     var n = Number(p.fontSize);
     if (!isFinite(n)) n = EDITOR_DEFAULTS.fontSize;
     n = Math.max(EDITOR_FONT_MIN, Math.min(EDITOR_FONT_MAX, Math.round(n)));
-    return { fontSize: n, wrap: !!p.wrap };
+    // 未設定 (キーが無い) と false は区別する。既定が true なので、
+    // undefined を !! で潰すと保存前の状態が「無効」に見えてしまう。
+    var jump = p.clickToLine === undefined || p.clickToLine === null
+      ? EDITOR_DEFAULTS.clickToLine : !!p.clickToLine;
+    return { fontSize: n, wrap: !!p.wrap, clickToLine: jump };
   }
 
   // textarea に直接あてる style。折り返し無しでは横スクロールを残す。
