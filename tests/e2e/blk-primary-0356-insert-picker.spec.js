@@ -26,9 +26,14 @@ test.describe('BLK-primary-20260907-0356: 挿入位置の種別ピッカー', ()
   test('隙間クリックで 6 種別のメニューが開き、挿入先の行番号が出る', async ({ page }) => {
     await clickGap(page);
     await expect(page.locator('#seq-modal')).toBeVisible();
-    for (const id of ['message', 'note', 'alt', 'loop', 'activation', 'block']) {
+    // BLK-builder-20260907-1250-2: 6 つ目は design 5c どおり
+    // 「その他（区切り線 / 遅延 / 参照）」の見出しになり、block はその下位メニューへ移った。
+    for (const id of ['message', 'note', 'alt', 'loop', 'activation', 'other']) {
       await expect(page.locator('#seq-pick-' + id)).toBeVisible();
     }
+    await page.locator('#seq-pick-other').click();
+    await expect(page.locator('#seq-pick-block')).toBeVisible();
+    await page.locator('#seq-pick-back').click();
     const target = await page.locator('#seq-pick-target').textContent();
     expect(target).toMatch(/DSL \d+ 行目に挿入/);
   });
