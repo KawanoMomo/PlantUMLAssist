@@ -636,6 +636,18 @@ window.MA.modules.plantumlState = (function() {
     return before.concat(after).join('\n');
   }
 
+  // 遷移行 (1 始まり) の直後に `note on link` ブロックがあれば、その `end note` の
+  // 行番号を返す。無ければ遷移行そのもの。
+  function _linkNoteEndLine(lines, lineNum) {
+    var i = lineNum;   // lineNum は 1 始まりなので、これが「次の行」の添字
+    if (i >= lines.length) return lineNum;
+    if (!/^\s*note\s+(?:left\s+|right\s+|top\s+|bottom\s+)?on\s+link\s*$/i.test(lines[i])) return lineNum;
+    for (var j = i + 1; j < lines.length; j++) {
+      if (/^\s*end\s*note\s*$/i.test(lines[j])) return j + 1;
+    }
+    return lineNum;
+  }
+
   function deleteStateWithRefs(text, stateId) {
     var parsed = parse(text);
     var elt = null;
@@ -645,9 +657,12 @@ window.MA.modules.plantumlState = (function() {
     if (!elt) return text;
     var ranges = [];
     ranges.push({ start: elt.line, end: elt.endLine && elt.endLine > elt.line ? elt.endLine : elt.line });
+    var srcLines = text.split('\n');
     parsed.transitions.forEach(function(tr) {
       if (tr.from === stateId || tr.to === stateId) {
-        ranges.push({ start: tr.line, end: tr.line });
+        // 遷移に添えたノート (`note on link`) は遷移の一部。行き先を失った
+        // ノートが残らないよう、同じ範囲で消す (BLK-builder-20260907-1737-2)。
+        ranges.push({ start: tr.line, end: _linkNoteEndLine(srcLines, tr.line) });
       }
     });
     parsed.notes.forEach(function(n) {
@@ -1533,9 +1548,23 @@ window.MA.modules.plantumlState = (function() {
         colors: colors(),
         current: tr.color || '',
       }) +
+      // BLK-builder-20260907-1737-2 (design 4c):「この遷移にノートを添える」。
+      // UseCase / Component / Class の関係には 3c で入っているのに、遷移だけ
+      // `note on link` を DSL に手で書くしかなかった。
+      P.linkNoteHtml('st-tr-note', {
+        label: 'この遷移にノートを添える',
+        note: window.MA.relationOptions.noteAt(ctx.getMmdText(), tr.line) || '',
+        placeholder: '例: リトライ上限を超えた場合のみ',
+      }) +
       P.primaryButtonHtml('st-tr-update', '更新') +
       P.primaryButtonHtml('st-tr-delete', '✕ 削除');
     propsEl.innerHTML = html;
+
+    P.bindLinkNote('st-tr-note', function(noteText) {
+      window.MA.history.pushHistory();
+      ctx.setMmdText(window.MA.relationOptions.setNoteAt(ctx.getMmdText(), tr.line, noteText));
+      ctx.onUpdate();
+    });
 
     var refreshPreview = _bindPreview({
       preview: 'st-tr-preview', from: 'st-tr-from', to: 'st-tr-to',
@@ -1571,7 +1600,10 @@ window.MA.modules.plantumlState = (function() {
     });
     P.bindEvent('st-tr-delete', 'click', function() {
       window.MA.history.pushHistory();
-      ctx.setMmdText(deleteNode(ctx.getMmdText(), tr.line, tr.line));
+      // 添えたノートは遷移の一部なので、遷移を消すときに一緒に消す。
+      // 残すと行き先を失った `note on link` が DSL に取り残される。
+      var out = window.MA.relationOptions.setNoteAt(ctx.getMmdText(), tr.line, null);
+      ctx.setMmdText(deleteNode(out, tr.line, tr.line));
       window.MA.selection.clearSelection();
       ctx.onUpdate();
     });
