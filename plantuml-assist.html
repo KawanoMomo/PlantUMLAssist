@@ -877,6 +877,14 @@ html, body {
 #inbox-panel .ib-row .ib-who { color: var(--text-secondary); margin-left: 4px; }
 #inbox-panel .ib-row .ib-text { color: var(--text-primary); display: block; margin-top: 2px; }
 #btn-tab-findings.has-recheck { color: var(--accent-red); border-color: var(--accent-red); }
+#btn-tab-drivermap.has-red { color: var(--accent-red); border-color: var(--accent-red); }
+.dm-family { border: 1px solid var(--border); border-radius: 4px; padding: 10px 12px; margin-bottom: 10px; }
+.dm-family.red { border-color: var(--accent-red); }
+.dm-member { display: inline-block; border: 1px solid var(--border); border-radius: 3px; padding: 2px 8px; margin: 2px 4px 2px 0; cursor: pointer; font-size: 12px; }
+.dm-member.missing { border-color: var(--accent-red); color: var(--accent-red); cursor: default; }
+.dm-mismatch { font-size: 12px; margin-top: 6px; }
+.dm-mismatch .dm-row { cursor: pointer; padding: 2px 0; color: var(--accent-red); }
+
 #findings-panel {
   display: none;
   position: absolute;
@@ -2725,6 +2733,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <!-- BLK-primary-20260907-1403-wish: 顧客に出す前に、全図の title / note / 部品名を横断で見る -->
         <button class="tab-tool" id="btn-tab-submit" title="顧客提出前に、全図のタイトル・注釈・部品名を横断で見て社内略語を洗い出す">📤 提出前チェック</button>
         <button class="tab-tool" id="btn-tab-family" title="同じ系統の図を並べて、片方にしか無いメッセージ名・遷移名を探す">⇉ 系統チェック</button>
+        <button class="tab-tool" id="btn-tab-drivermap" title="どの図がどの図の相手かを系統として宣言し、1 プロジェクトとして持つ。宣言した対応が崩れたら赤くなる">🧩 系統マップ −</button>
         <!-- BLK-reviewer-20260907-1903-wish: 状態遷移がどのシーケンスにも現れない「トレース漏れ」を出す -->
         <button class="tab-tool" id="btn-tab-trace" title="状態遷移図の遷移が、同じ系統のシーケンス図のどれかに現れているかを見る">◎ トレース</button>
         <button class="tab-tool" id="btn-tab-lines" title="この図の 1 行だけを選んで書き換え・挿入・削除する">✎ 行編集</button>
@@ -3042,6 +3051,9 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <div id="dp-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="dp-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:620px;max-width:860px;max-height:84vh;overflow-y:auto;"></div>
 </div>
+<div id="dm-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+  <div id="dm-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:660px;max-width:940px;max-height:80vh;overflow-y:auto;"></div>
+</div>
 <div id="fa-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="fa-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:660px;max-width:940px;max-height:80vh;overflow-y:auto;"></div>
 </div>
@@ -3216,6 +3228,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/editor-indent.js"></script>
 <script src="src/core/top-status.js"></script>
 <script src="src/core/family-audit.js"></script>
+<script src="src/core/driver-map.js"></script>
 <script src="src/core/scope-decl.js"></script>
 <script src="src/core/trace-coverage.js"></script>
 <script src="src/core/consistency.js"></script>

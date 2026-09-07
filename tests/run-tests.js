@@ -22,6 +22,7 @@ const sourceFiles = [
   'src/core/template-new.js',
   'src/core/template-map.js',
   'src/core/family-audit.js',
+  'src/core/driver-map.js',
   'src/core/note-block.js',
   'src/core/family-clone.js',
   'src/core/subject-preset.js',
