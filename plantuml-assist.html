@@ -603,6 +603,22 @@ html, body {
 }
 #folder-panel .folder-row-draft .folder-name { color: var(--text-secondary); font-style: italic; }
 #tab-bar .tab-tool.tab-tool-on { color: var(--accent); }
+/* 無変更確定 (BLK-reviewer-20260907-2203-wish): 複製ボタンと、その可否の理由 */
+#folder-panel button.folder-carry {
+  margin-top: 2px;
+  color: var(--text-secondary);
+  font-size: 10px;
+  text-align: center;
+}
+#folder-panel button.folder-carry:disabled { opacity: 0.55; cursor: default; }
+#folder-panel .folder-carry-note {
+  font-size: 10px;
+  color: var(--text-secondary);
+  padding: 2px 4px;
+  text-align: left;
+  white-space: normal;
+}
+#folder-panel .folder-carry-note.recheck { color: var(--accent-orange); }
 #folder-panel button.folder-mark-seen {
   margin-top: 4px;
   border-top: 1px solid var(--border);
@@ -2817,6 +2833,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/workspace.js"></script>
 <script src="src/core/review-watch.js"></script>
 <script src="src/core/review-diff.js"></script>
+<script src="src/core/review-carry.js"></script>
 <script src="src/core/folder-select.js"></script>
 <script src="src/core/draft-mark.js"></script>
 <script src="src/core/folder-reopen.js"></script>

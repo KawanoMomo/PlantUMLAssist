@@ -3417,6 +3417,7 @@ function setupTabs() {
                                               function() { renderFolderPanel(); });
       });
       panel.appendChild(mark);
+      appendCarrySection(dir, sp.items);
       syncFolderPickUi();
     });
   }
@@ -3564,8 +3565,59 @@ function setupTabs() {
       }, function() {});
     });
     return Promise.all(jobs).then(function() {
-      return RD.save(_reviewStore(), dir, bodies);
+      var ok = RD.save(_reviewStore(), dir, bodies);
+      // 本文と一緒に「そのとき出ていた指摘一覧」と「監査の構え」も控える。
+      // 次の review で図が 1 行も変わっていなければ、この一覧をそのまま
+      // 今回の指摘として複製できる (BLK-reviewer-20260907-2203-wish)。
+      var RC = window.MA.reviewCarry;
+      if (RC) {
+        RC.save(_reviewStore(), dir, RC.makeRecord(
+          RC.collectPins(window.MA.reviewPins, bodies),
+          RC.signature(window.MA),
+          new Date().toISOString()
+        ));
+      }
+      return ok;
     });
+  }
+
+  // 無変更確定 (BLK-reviewer-20260907-2203-wish)。
+  // 「変更図 0 枚」を確かめた直後に、前回の指摘一覧をそのまま今回の指摘にする。
+  // 図が無変更でも監査ツール側が変わっていれば新しい指摘が出るので、そのときは
+  // 複製せずに再突合を促す。
+  function appendCarrySection(dir, rows) {
+    var RC = window.MA.reviewCarry;
+    if (!RC) return;
+    var store = _reviewStore();
+    var prev = RC.load(store, dir);
+    var p = RC.plan(prev, { rows: rows, signature: RC.signature(window.MA) });
+
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'folder-carry';
+    btn.setAttribute('data-carry-ok', p.ok ? '1' : '0');
+    btn.setAttribute('data-carry-reason', p.reason);
+    btn.setAttribute('data-carry-count', String(p.count));
+    btn.textContent = '前回の指摘をそのまま今回の指摘にする（' + p.count + ' 件）';
+    btn.title = '前回 review 時点から図が 1 行も変わっていないとき、前回の指摘一覧を複製して'
+      + '「' + RC.NOTE + '」を 1 行付けて確定する';
+    btn.disabled = !p.ok;
+    btn.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      var rec = RC.carry(prev, new Date().toISOString(), RC.signature(window.MA));
+      if (!rec) return;
+      RC.save(store, dir, rec);
+      if (window.MA.toast) window.MA.toast.show('無変更として確定しました（' + RC.statusText(rec) + '）');
+      renderFolderPanel();
+    });
+    panel.appendChild(btn);
+
+    var note = document.createElement('div');
+    note.className = 'folder-carry-note' + (p.recheck ? ' recheck' : '');
+    note.setAttribute('data-carry-reason', p.reason);
+    note.textContent = (prev && prev.carriedFrom && p.ok ? '確定済み: ' + RC.statusText(prev) + ' / ' : '')
+      + p.message;
+    panel.appendChild(note);
   }
 
   function folderPickBar() {
