@@ -430,6 +430,8 @@ html, body {
 #editor-pane {
   display: flex;
   flex-direction: column;
+  /* BLK-primary-20260908-0823-design: ツールメニューをタブ列の直下に浮かせる */
+  position: relative;
   width: 30%;
   min-width: 180px;
   border-right: 1px solid var(--border);
@@ -749,6 +751,60 @@ html, body {
 }
 #folder-panel .folder-row-draft .folder-name { color: var(--text-secondary); font-style: italic; }
 #tab-bar .tab-tool.tab-tool-on { color: var(--accent); }
+
+/* BLK-primary-20260908-0823-design (7a): 機能ボタンを「ツール」1 か所に畳む。
+   畳んだ状態では機能ボタンがタブ列から消え、6 分類のメニューから選ぶ。 */
+#tab-bar.tools-folded .tab-tool.tool-folded { display: none; }
+#btn-tab-tools[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); }
+#tool-menu {
+  position: absolute;
+  top: 26px;
+  left: 4px;
+  z-index: 40;
+  /* 6 分類が一度に見えるように、画面の高さいっぱいまで伸ばしてから溢れを送る */
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
+  min-width: 240px;
+  padding: 6px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+}
+#tool-menu[hidden] { display: none; }
+.tool-menu-note {
+  color: var(--text-secondary);
+  font-size: 10px;
+  padding: 2px 6px 6px;
+}
+.tool-menu-title {
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 6px 6px 2px;
+  border-top: 1px solid var(--border);
+}
+.tool-menu-group:first-of-type .tool-menu-title { border-top: none; }
+.tool-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 11px;
+  text-align: left;
+  padding: 3px 6px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.tool-menu-item:hover { background: var(--bg-primary); color: var(--accent); }
+.tool-menu-badge {
+  margin-left: auto;
+  color: var(--accent-orange);
+  font-size: 10px;
+}
 /* 無変更確定 (BLK-reviewer-20260907-2203-wish): 複製ボタンと、その可否の理由 */
 #folder-panel button.folder-carry {
   margin-top: 2px;
@@ -3218,6 +3274,9 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <div id="tab-bar">
         <button class="tab-tool" id="btn-tab-new" title="新しい図を開く">＋</button>
         <button class="tab-tool" id="btn-tab-folder" title="保存フォルダの図を一覧">📂 一覧</button>
+        <!-- BLK-primary-20260908-0823-design (7a): 機能ボタンを 6 分類のメニューに畳む -->
+        <button class="tab-tool" id="btn-tab-tools" aria-expanded="false" aria-controls="tool-menu"
+                title="ツールを分類から選ぶ (Ctrl+K でも同じ操作が引ける)">🧰 ツール ▾</button>
         <button class="tab-tool" id="btn-tab-peek" title="他の保存フォルダの図を読むだけで見る (保存先は変わりません)">👀 他フォルダ</button>
         <!-- BLK-junior-20260907-2009-wish: やり直し途中の控えに印を付け、📂 一覧で畳む -->
         <button class="tab-tool" id="btn-tab-draft" aria-pressed="false" title="この図に一時控え(下書き / やり直し途中)の印を付けて、📂 一覧から畳む">🗂 一時控え</button>
@@ -3266,6 +3325,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <!-- BLK-primary-20260907-1703-wish: 顧客に渡す最終成果物 (表紙+目次+差分要約+全図 SVG) を 1 つの zip にする -->
         <button class="tab-tool" id="btn-tab-delivery" title="表紙 (図一覧・版数・提出前チェック結果)・前回提出からの差分・全図 SVG を 1 つの納品 zip にまとめる">📦 納品パッケージ</button>
       </div>
+      <!-- BLK-primary-20260908-0823-design (7a): ツールを 6 分類で縦に並べるパネル -->
+      <div id="tool-menu" role="menu" aria-label="ツール" hidden></div>
       <!-- BLK-primary-20260907-2303-wish: この図に残された申し送り (なぜ直したか) -->
       <div id="hn-banner" style="display:none;">
         <span id="hn-banner-text"></span>
@@ -3763,6 +3824,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/file-role.js"></script>
 <script src="src/core/command-palette.js"></script>
 <script src="src/core/diagram-rail.js"></script>
+<script src="src/core/tool-menu.js"></script>
 <script src="src/core/zoom-hud.js"></script>
 <script src="src/core/relation-add.js"></script>
 <script src="src/core/settings-tabs.js"></script>
