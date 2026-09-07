@@ -3109,6 +3109,9 @@ function setupTabs() {
   // 印はパネルを開いている間だけ持つ (次に開いたときは白紙から選ぶ)。
   var folderPicked = [];
   var folderNames = [];
+  // BLK-reviewer-20260907-1803-wish: 図名 → new/changed/unchanged。
+  // 「変更のある図だけ選ぶ」と行ごとの [差分] がここを見る。
+  var folderStatus = {};
 
   function _openDocNames() {
     if (!window.MA.workspace) return [];
@@ -3143,6 +3146,8 @@ function setupTabs() {
     }
     if (FS) step();
   }
+
+  openFromFolderByName = function(name) { openFromFolder(name); };
 
   function openFromFolder(name) {
     closePanel();
@@ -3193,6 +3198,7 @@ function setupTabs() {
       }
       // 印は今の一覧に残っているものだけ持ち越す。
       folderNames = entries.map(function(e) { return e.name || e; });
+      folderStatus = {};
       if (window.MA.folderSelect) {
         folderPicked = window.MA.folderSelect.keepExisting(folderPicked, folderNames);
       }
@@ -3212,6 +3218,8 @@ function setupTabs() {
       panel.appendChild(head);
       panel.appendChild(folderPickBar());
 
+      rows.forEach(function(r) { folderStatus[r.name] = r.status; });
+      syncFolderPickUi();
       rows.forEach(function(r) {
         panel.appendChild(folderRow(r.name, RW.badge(r.status), RW.formatMtime(r.mtime), r.status));
       });
@@ -3232,7 +3240,12 @@ function setupTabs() {
       mark.addEventListener('click', function(ev) {
         ev.stopPropagation();
         RW.save(store, dir, RW.snapshot(entries));
-        renderFolderPanel();
+        // 指紋だけでなく本文も控える。次に開いたとき、変更図の旧DSL を
+        // 取り直さずに並べて出せる (BLK-reviewer-20260907-1803-wish)。
+        mark.disabled = true;
+        mark.textContent = '控えを取っています…';
+        saveSeenBodies(dir, folderNames).then(function() { renderFolderPanel(); },
+                                              function() { renderFolderPanel(); });
       });
       panel.appendChild(mark);
       syncFolderPickUi();
@@ -3260,7 +3273,67 @@ function setupTabs() {
     });
     row.appendChild(box);
     row.appendChild(b);
+    if (status === 'changed' || status === 'new') row.appendChild(folderDiffButton(name, status));
     return row;
+  }
+
+  // 前回見た版から変わった図にだけ付く [差分]。押すと旧DSL/新DSL を並べて出す。
+  // 図を開かずに読めるので、変更箇所の確認だけならタブを増やさずに済む。
+  function folderDiffButton(name, status) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'folder-diff';
+    b.setAttribute('data-diff-name', name);
+    b.textContent = '差分';
+    b.title = status === 'new'
+      ? '前回見たときには無かった図です。今の中身を全部追加として出します'
+      : '前回見た版と今の中身を左右に並べて、変わった行だけ色を付けて出します';
+    b.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      openReviewDiff(name);
+    });
+    return b;
+  }
+
+  // 変更のある図の名前 (一覧の並びのまま)。
+  function changedNames() {
+    return folderNames.filter(function(n) {
+      return folderStatus[n] === 'changed' || folderStatus[n] === 'new';
+    });
+  }
+
+  // 「変更図だけ選ぶ」。無変更の図に印を付けずに済むので、
+  // 変更のある図だけをまとめて開くのが 2 クリックで終わる。
+  function folderChangedButton() {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'folder-pick-changed';
+    b.textContent = '変更図だけ選ぶ（0 枚）';
+    b.title = '前回見た版から変わった図と新しい図にだけ印を付ける';
+    b.disabled = true;
+    b.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      var FS = window.MA.folderSelect;
+      if (!FS) return;
+      folderPicked = FS.selectAll(changedNames());
+      syncFolderPickUi();
+    });
+    return b;
+  }
+
+  // 一覧に出ている図の本文を全部読んで「前回見た版」として控える。
+  function saveSeenBodies(dir, names) {
+    var RD = window.MA.reviewDiff;
+    if (!RD || !window.MA.workspace) return Promise.resolve(false);
+    var bodies = {};
+    var jobs = (names || []).map(function(n) {
+      return window.MA.workspace.loadFile(n, dir).then(function(text) {
+        if (typeof text === 'string') bodies[n] = text;
+      }, function() {});
+    });
+    return Promise.all(jobs).then(function() {
+      return RD.save(_reviewStore(), dir, bodies);
+    });
   }
 
   function folderPickBar() {
@@ -3277,6 +3350,7 @@ function setupTabs() {
       syncFolderPickUi();
     });
     bar.appendChild(all);
+    bar.appendChild(folderChangedButton());
     // 一覧は長いと縦にスクロールする。開くボタンを末尾に置くと 14 枚のときに
     // 画面の外へ出るので、印を付ける行の上に固定して常に見えるようにする。
     bar.appendChild(folderOpenButton());
@@ -3312,6 +3386,12 @@ function setupTabs() {
     if (all) {
       all.textContent = FS.allPicked(folderPicked, folderNames)
         ? '印を全部外す' : '全部選ぶ（' + folderNames.length + ' 枚）';
+    }
+    var changed = panel.querySelector('.folder-pick-changed');
+    if (changed) {
+      var chNames = changedNames();
+      changed.textContent = '変更図だけ選ぶ（' + chNames.length + ' 枚）';
+      changed.disabled = chNames.length === 0;
     }
     var open = panel.querySelector('.folder-open-many');
     if (open) {
@@ -3353,6 +3433,159 @@ function setupTabs() {
     if (panel.contains(ev.target) || ev.target === btnFolder) return;
     closePanel();
   });
+}
+
+// ── 変更図の差分ビュー (BLK-reviewer-20260907-1803-wish) ──────────────────
+// 一覧の [差分] から開く。前回「見たことにする」で控えた本文を旧版として、
+// 保存フォルダの今の本文と左右に並べる。変わっていない行は畳んでおく
+// (無変更の行を読み直す作業そのものを無くすのがこの画面の目的)。
+var _rdFoldAll = true;
+var _rdName = '';
+// 一覧のパネルは自前の関数で図を開く。差分ビューからも同じ道で開けるように、
+// パネル側で実体を差し込む (パネルを作る前に押される画面は無い)。
+var openFromFolderByName = function() {};
+
+function _rdModal() { return document.getElementById('rd-modal'); }
+
+document.addEventListener('keydown', function(ev) {
+  if (ev.key !== 'Escape') return;
+  var m = _rdModal();
+  if (m && m.style.display === 'flex') { closeReviewDiff(); ev.stopPropagation(); }
+}, true);
+
+function closeReviewDiff() {
+  var m = _rdModal();
+  if (m) m.style.display = 'none';
+}
+
+function openReviewDiff(name) {
+  var m = _rdModal();
+  var box = document.getElementById('rd-modal-content');
+  var RD = window.MA.reviewDiff;
+  if (!m || !box || !RD || !window.MA.workspace) return;
+  _rdName = name;
+  _rdFoldAll = true;
+  m.style.display = 'flex';
+  if (!m.getAttribute('data-rd-bound')) {
+    m.setAttribute('data-rd-bound', '1');
+    m.addEventListener('click', function(ev) { if (ev.target === m) closeReviewDiff(); });
+  }
+  box.textContent = '';
+  var loading = document.createElement('div');
+  loading.className = 'rd-note';
+  loading.textContent = '読み込み中…';
+  box.appendChild(loading);
+  var dir = _wsFileDir();
+  window.MA.workspace.loadFile(name, dir).then(function(text) {
+    var bodies = RD.load(_reviewStore(), dir);
+    renderReviewDiff(name, RD.compare(bodies, name, text == null ? '' : text));
+  }, function() {
+    renderReviewDiff(name, { hasBefore: false, rows: [], stats: null });
+  });
+}
+
+function renderReviewDiff(name, cmp) {
+  var box = document.getElementById('rd-modal-content');
+  var RD = window.MA.reviewDiff;
+  if (!box || !RD) return;
+  box.textContent = '';
+
+  var head = document.createElement('div');
+  head.id = 'rd-head';
+  var title = document.createElement('span');
+  title.className = 'rd-title';
+  title.textContent = name;
+  head.appendChild(title);
+  var stats = document.createElement('span');
+  stats.className = 'rd-stats';
+  stats.textContent = cmp.hasBefore ? RD.statsText(cmp.stats) : '前回見た版の控えがありません（全部を新しい行として出しています）';
+  head.appendChild(stats);
+  var close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'rd-close';
+  close.textContent = '閉じる';
+  close.addEventListener('click', closeReviewDiff);
+  head.appendChild(close);
+  box.appendChild(head);
+
+  var list = document.createElement('div');
+  list.id = 'rd-list';
+  var cols = document.createElement('div');
+  cols.className = 'rd-cols';
+  var l = document.createElement('span');
+  l.textContent = cmp.hasBefore ? '前回見た版' : '（控えなし）';
+  var r = document.createElement('span');
+  r.textContent = '今の版';
+  cols.appendChild(l);
+  cols.appendChild(r);
+  list.appendChild(cols);
+
+  var rows = _rdFoldAll ? RD.fold(cmp.rows, 2) : cmp.rows;
+  if (rows.length === 0) {
+    var none = document.createElement('div');
+    none.className = 'rd-skip';
+    none.textContent = '中身がありません';
+    list.appendChild(none);
+  }
+  rows.forEach(function(row) { list.appendChild(_rdRow(row)); });
+  box.appendChild(list);
+
+  var foot = document.createElement('div');
+  foot.id = 'rd-foot';
+  var note = document.createElement('span');
+  note.className = 'rd-note';
+  note.textContent = _rdFoldAll
+    ? '変わった行の前後 2 行だけ出しています'
+    : '同じ行も含めて全部出しています';
+  foot.appendChild(note);
+  var toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'rd-toggle';
+  toggle.textContent = _rdFoldAll ? '同じ行も出す' : '変わった行だけにする';
+  toggle.addEventListener('click', function() {
+    _rdFoldAll = !_rdFoldAll;
+    renderReviewDiff(name, cmp);
+  });
+  foot.appendChild(toggle);
+  var open = document.createElement('button');
+  open.type = 'button';
+  open.className = 'rd-open';
+  open.textContent = 'この図を開く';
+  open.title = '差分で見た変更をその場で直すときに押す';
+  open.addEventListener('click', function() {
+    closeReviewDiff();
+    openFromFolderByName(name);
+  });
+  foot.appendChild(open);
+  box.appendChild(foot);
+}
+
+function _rdRow(row) {
+  var el = document.createElement('div');
+  if (row.kind === 'skip') {
+    el.className = 'rd-skip';
+    el.textContent = '… 同じ行 ' + row.count + ' 行';
+    return el;
+  }
+  el.className = 'rd-row rd-row-' + row.kind;
+  el.setAttribute('data-rd-kind', row.kind);
+  el.appendChild(_rdSide('left', row.leftNo, row.left));
+  el.appendChild(_rdSide('right', row.rightNo, row.right));
+  return el;
+}
+
+function _rdSide(side, no, text) {
+  var d = document.createElement('div');
+  d.className = 'rd-side rd-side-' + side;
+  var n = document.createElement('span');
+  n.className = 'rd-no';
+  n.textContent = no == null ? '' : String(no);
+  var t = document.createElement('span');
+  t.className = 'rd-text';
+  t.textContent = text == null ? '' : text;
+  d.appendChild(n);
+  d.appendChild(t);
+  return d;
 }
 
 // ── 一括置換 ───────────────────────────────────────────────────────────────

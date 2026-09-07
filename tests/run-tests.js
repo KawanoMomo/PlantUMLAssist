@@ -11,6 +11,7 @@ const sourceFiles = [
   'src/core/auto-save.js',
   'src/core/workspace.js',
   'src/core/review-watch.js',
+  'src/core/review-diff.js',
   'src/core/state-branch.js',
   'src/core/state-transition.js',
   'src/core/state-insert.js',
