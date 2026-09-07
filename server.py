@@ -3,6 +3,7 @@
 Serves static files + /render endpoint for PlantUML local/online rendering.
 """
 import atexit
+import collections
 import hashlib
 import json
 import os
@@ -554,6 +555,32 @@ def detect_env():
 _daemon_lock = threading.Lock()
 _daemon_proc = None
 _daemon_disabled = False  # set True once we decide to stop retrying the daemon
+# BLK-builder-20260907-2249-1: the daemon's stderr must never be left unread.
+# PlantUML logs through java.util.logging, whose ConsoleHandler writes to
+# System.err; on a diagram it cannot export (Logme.error) that is a full stack
+# trace. Nobody drained the pipe, so after a few such diagrams the OS buffer
+# filled and the JVM blocked forever inside FileOutputStream.writeBytes --
+# it stopped answering on stdout, /render never returned, and the
+# single-threaded HTTPServer stopped accepting connections for good.
+# Every following E2E test then failed with ERR_CONNECTION_REFUSED.
+_daemon_log = collections.deque(maxlen=200)  # last stderr lines, for diagnosis
+# Upper bound on one daemon render. A daemon that goes quiet is killed and the
+# request falls back to the one-shot -pipe path instead of wedging the server.
+DAEMON_RENDER_TIMEOUT_SEC = float(os.environ.get('PUA_RENDER_TIMEOUT', '30'))
+
+
+def _drain_daemon_stderr(proc):
+    """Keep the daemon's stderr pipe empty, remembering the last lines."""
+    try:
+        for line in iter(proc.stderr.readline, b''):
+            _daemon_log.append(line.decode('utf-8', errors='replace').rstrip())
+    except Exception:
+        pass
+
+
+def daemon_log_tail(n=20):
+    """Last few daemon stderr lines (most recent last)."""
+    return list(_daemon_log)[-n:]
 
 
 def _start_daemon():
@@ -572,6 +599,7 @@ def _start_daemon():
         )
     except FileNotFoundError:
         return None
+    threading.Thread(target=_drain_daemon_stderr, args=(proc,), daemon=True).start()
     # Give the JVM a moment to start; if it dies immediately (unsupported Java,
     # compile error, etc.) we detect that here rather than on first /render.
     time.sleep(0.05)
@@ -602,12 +630,37 @@ def _render_via_daemon(text):
     proc.stdin.write(struct.pack('>I', len(payload)))
     proc.stdin.write(payload)
     proc.stdin.flush()
-    status = struct.unpack('>I', _read_exact(proc.stdout, 4))[0]
-    body_len = struct.unpack('>I', _read_exact(proc.stdout, 4))[0]
-    body = _read_exact(proc.stdout, body_len)
+    status, body = _read_daemon_reply(proc, DAEMON_RENDER_TIMEOUT_SEC)
     if status == 0:
         return body, None
     return None, 'PlantUML error: ' + body.decode('utf-8', errors='replace')
+
+
+def _read_daemon_reply(proc, timeout):
+    """Read one [status][len][body] reply, giving up after `timeout` seconds.
+
+    The read runs on a helper thread so a wedged daemon raises here instead of
+    blocking the server's request thread forever (see BLK-builder-20260907-2249-1).
+    On timeout the caller kills the daemon, which unblocks the helper thread.
+    """
+    result = {}
+
+    def read_reply():
+        try:
+            status = struct.unpack('>I', _read_exact(proc.stdout, 4))[0]
+            body_len = struct.unpack('>I', _read_exact(proc.stdout, 4))[0]
+            result['reply'] = (status, _read_exact(proc.stdout, body_len))
+        except Exception as exc:  # re-raised on the calling thread below
+            result['error'] = exc
+
+    reader = threading.Thread(target=read_reply, daemon=True)
+    reader.start()
+    reader.join(timeout)
+    if reader.is_alive():
+        raise EOFError(f'daemon did not answer within {timeout:g}s')
+    if 'error' in result:
+        raise result['error']
+    return result['reply']
 
 
 def _read_exact(stream, n):
@@ -650,8 +703,12 @@ def render_local(text):
             svg, err = _render_via_daemon(text)
             if svg is not None or err is not None and err != 'daemon unavailable':
                 return svg, err
-        except (BrokenPipeError, EOFError, OSError):
-            # Daemon died mid-session; drop it and fall back for this request.
+        except (BrokenPipeError, EOFError, OSError) as exc:
+            # Daemon died or stopped answering; drop it and fall back for this
+            # request. Print what it last said so the next stall is diagnosable.
+            print(f'daemon unusable ({exc}); falling back to -pipe')
+            for line in daemon_log_tail(10):
+                print(f'  daemon stderr: {line}')
             if _daemon_proc is not None:
                 try:
                     _daemon_proc.kill()
