@@ -123,6 +123,22 @@ window.MA.modules.plantumlSequence = (function() {
   var MSG_RE = new RegExp('^' + MSG_RE_FROM + '\\s*(' + MSG_ARROW_ALT + ')\\s*' + MSG_RE_FROM + '(?:\\s*:\\s*(.+))?$');
 
   var GROUP_KINDS = ['alt', 'opt', 'loop', 'par', 'break', 'critical', 'group'];
+  // design 2d/5c:「各項目は『何が起きるか』を先に書き、記法は右に小さく置く」。
+  // ブロックの枠も同じ流儀で読めるよう、記法ごとに何が起きるかを 1 箇所に持つ。
+  var GROUP_DESC = {
+    alt:      '条件で分かれる',
+    opt:      '条件を満たすときだけ行う',
+    loop:     '繰り返す',
+    par:      '並行して進む',
+    'break':  '途中で抜ける',
+    critical: '割り込まれては困る区間',
+    group:    'ひとまとまりとして囲む',
+  };
+  function groupLabel(kind) {
+    return GROUP_DESC[kind] ? GROUP_DESC[kind] + ' (' + kind + ')' : kind;
+  }
+  // 「その他」の 2 段目に出すブロック。常時出す alt / loop は 1 段目にあるので除く。
+  var OTHER_GROUP_KINDS = ['par', 'break', 'critical', 'opt', 'group'];
   var GROUP_OPEN_RE = new RegExp('^(' + GROUP_KINDS.join('|') + ')(?:\\s+(.*))?$');
   var GROUP_ELSE_RE = /^else(?:\s+(.*))?$/;
   var GROUP_END_RE = /^end$/;
@@ -982,9 +998,11 @@ window.MA.modules.plantumlSequence = (function() {
     var marks = window.MA.sequenceMarks.marks().map(function(m) {
       return { value: m.value, label: m.label, hint: m.hint };
     });
-    return marks.concat([
-      { value: 'block', label: 'その他のブロック', hint: 'opt / par / break / critical / group' },
-    ]);
+    // design 5d: par / break / critical もパレットの行として並べる
+    // (フォームの select を開くまで見つからない状態にしない)。
+    return marks.concat(OTHER_GROUP_KINDS.map(function(k) {
+      return { value: 'block:' + k, label: GROUP_DESC[k], hint: k + ' … end' };
+    }));
   }
 
   function insertKindOptions() {
@@ -1016,6 +1034,10 @@ window.MA.modules.plantumlSequence = (function() {
   // kind 引数を _showInsertForm 用の (kind, opts) に正規化する。
   function _resolvePickedKind(picked) {
     if (picked === 'alt' || picked === 'loop') return { kind: 'block', opts: { blockKind: picked } };
+    // design 5d: パレットの `block:par` などは、その種別を選んだ状態でフォームを開く。
+    if (String(picked).indexOf('block:') === 0) {
+      return { kind: 'block', opts: { blockKind: String(picked).slice('block:'.length) } };
+    }
     return { kind: picked, opts: {} };
   }
 
@@ -1141,7 +1163,7 @@ window.MA.modules.plantumlSequence = (function() {
       // alt / loop / opt / par / break / critical / group。空ブロック (opener + end) を
       // 挿入位置に置く。中身は挿入後に既存の行編集/挿入で足す (末尾追加の block と同じ形)。
       var bkSel = opts.blockKind || 'alt';
-      var bkOpts = GROUP_KINDS.map(function(k) { return { value: k, label: k, selected: k === bkSel }; });
+      var bkOpts = GROUP_KINDS.map(function(k) { return { value: k, label: groupLabel(k), selected: k === bkSel }; });
       html +=
         P.selectFieldHtml('Kind', 'seq-mod-bkind', bkOpts) +
         P.fieldHtml('Label', 'seq-mod-blabel', '', '例: x > 0');
@@ -1531,6 +1553,9 @@ window.MA.modules.plantumlSequence = (function() {
     quickArrows: function() { return QUICK_ARROWS.slice(); },
     // design 2d: 「その他の矢印」パレット
     otherArrows: function() { return OTHER_ARROWS.slice(); },
+    // design 5d: ブロックの枠 (par / break / critical …) を「何が起きるか」で出す
+    groupKinds: function() { return GROUP_KINDS.slice(); },
+    groupLabel: groupLabel,
     applyArrowSpec: applyArrowSpec,
     activeArrowKey: activeArrowKey,
     // design 5d: 線の色
@@ -1721,7 +1746,7 @@ window.MA.modules.plantumlSequence = (function() {
               '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Text</label><div id="seq-tail-ntext-rle"></div></div>' +
               P.primaryButtonHtml('seq-tail-add', '+ 末尾に追加');
           } else if (kind === 'block') {
-            var bkOpts = GROUP_KINDS.map(function(k) { return { value: k, label: k, selected: k === 'alt' }; });
+            var bkOpts = GROUP_KINDS.map(function(k) { return { value: k, label: groupLabel(k), selected: k === 'alt' }; });
             html =
               P.selectFieldHtml('Kind', 'seq-tail-bkind', bkOpts) +
               P.fieldHtml('Label', 'seq-tail-blabel', '', '例: x > 0') +
@@ -2173,7 +2198,7 @@ window.MA.modules.plantumlSequence = (function() {
             if (groups[gk].id === sel.id || groups[gk].line === sel.line) { gg = groups[gk]; break; }
           }
           if (!gg) { propsEl.innerHTML = '<p style="color:var(--text-secondary);font-size:11px;">ブロックが見つかりません</p>'; return; }
-          var gtypeOpts = GROUP_KINDS.map(function(k) { return { value: k, label: k, selected: k === gg.gtype }; });
+          var gtypeOpts = GROUP_KINDS.map(function(k) { return { value: k, label: groupLabel(k), selected: k === gg.gtype }; });
           propsEl.innerHTML =
             '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>' + escHtml(gg.gtype + (gg.label ? ' ' + gg.label : '')) + '</strong><br><span style="color:var(--text-secondary);">Block · L' + gg.line + (gg.endLine ? '–L' + gg.endLine : '') + '</span></div>' +
             P.selectFieldHtml('Type', 'seq-edit-gtype', gtypeOpts) +
@@ -2233,7 +2258,7 @@ window.MA.modules.plantumlSequence = (function() {
           '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
             '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">一括アクション</label>' +
             GROUP_KINDS.map(function(k) {
-              return '<button class="seq-bulk-wrap" data-kind="' + k + '" data-start="' + range.start + '" data-end="' + range.end + '" style="width:100%;text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">⌗ ' + k + ' で囲む</button>';
+              return '<button class="seq-bulk-wrap" data-kind="' + k + '" data-start="' + range.start + '" data-end="' + range.end + '" style="width:100%;text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">⌗ ' + groupLabel(k) + ' で囲む</button>';
             }).join('') +
             '<button class="seq-bulk-duplicate" data-start="' + range.start + '" data-end="' + range.end + '" style="width:100%;text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">📋 範囲を複製</button>' +
             '<button class="seq-bulk-delete" data-start="' + range.start + '" data-end="' + range.end + '" style="width:100%;text-align:left;background:var(--accent-red);border:none;color:#fff;padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 範囲を一括削除</button>' +

@@ -45,9 +45,12 @@ describe('insertKindOptions (BLK-primary-20260907-0356)', function() {
     expect(vals).toEqual(['message', 'note', 'alt', 'loop', 'activation', 'other']);
   });
 
-  test('「その他」の下位メニューは 区切り線 / 遅延 / 参照 とブロックを並べる', function() {
+  // BLK-builder-20260907-1418-3: 5d の網羅表が挙げる par / break / critical を
+  // 「その他のブロック」1 行に畳まず、種別ごとの行として並べるようにした。
+  test('「その他」の下位メニューは 区切り線 / 遅延 / 参照 とブロック種別を並べる', function() {
     var vals = seq.otherInsertKinds().map(function(o) { return o.value; });
-    expect(vals).toEqual(['separator', 'delay', 'ref', 'block']);
+    expect(vals).toEqual(['separator', 'delay', 'ref',
+                          'block:par', 'block:break', 'block:critical', 'block:opt', 'block:group']);
   });
 
   test('各種別に日本語ラベルと DSL の例が付く', function() {

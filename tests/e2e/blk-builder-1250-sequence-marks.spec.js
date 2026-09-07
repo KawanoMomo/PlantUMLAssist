@@ -40,7 +40,9 @@ test.describe('BLK-builder-1250 挿入メニューの「その他」 (design 5c)
     await expect(page.locator('#seq-pick-separator')).toBeVisible();
     await expect(page.locator('#seq-pick-delay')).toBeVisible();
     await expect(page.locator('#seq-pick-ref')).toBeVisible();
-    await expect(page.locator('#seq-pick-block')).toBeVisible();
+    // BLK-builder-20260907-1418-3: 「その他のブロック」の 1 行は design 5d に合わせ、
+    // par / break / critical … の種別ごとの行に置き換わった。
+    await expect(page.locator('#seq-modal [data-kind="block:par"]')).toBeVisible();
   });
 
   test('2 段目からは「← 種別を選び直す」で 1 段目に戻れる', async ({ page }) => {
