@@ -2224,6 +2224,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <!-- BLK-primary-20260907-1403-wish: 顧客に出す前に、全図の title / note / 部品名を横断で見る -->
         <button class="tab-tool" id="btn-tab-submit" title="顧客提出前に、全図のタイトル・注釈・部品名を横断で見て社内略語を洗い出す">📤 提出前チェック</button>
         <button class="tab-tool" id="btn-tab-family" title="同じ系統の図を並べて、片方にしか無いメッセージ名・遷移名を探す">⇉ 系統チェック</button>
+        <!-- BLK-reviewer-20260907-1903-wish: 状態遷移がどのシーケンスにも現れない「トレース漏れ」を出す -->
+        <button class="tab-tool" id="btn-tab-trace" title="状態遷移図の遷移が、同じ系統のシーケンス図のどれかに現れているかを見る">◎ トレース</button>
         <button class="tab-tool" id="btn-tab-lines" title="この図の 1 行だけを選んで書き換え・挿入・削除する">✎ 行編集</button>
         <button class="tab-tool" id="btn-tab-compare" title="別のタブの図を右に並べて見ながら書く">⇔ 並べて見る</button>
         <!-- BLK-junior-20260907-0803-wish: 既存の図をテンプレートに新しい図を作る -->
@@ -2478,6 +2480,9 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <div id="fa-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="fa-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:660px;max-width:940px;max-height:80vh;overflow-y:auto;"></div>
 </div>
+<div id="tc-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+  <div id="tc-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:660px;max-width:940px;max-height:80vh;overflow-y:auto;"></div>
+</div>
 <div id="cfg-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="cfg-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:600px;max-width:680px;max-height:84vh;overflow-y:auto;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin:0 0 10px 0;">
@@ -2638,6 +2643,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/editor-indent.js"></script>
 <script src="src/core/top-status.js"></script>
 <script src="src/core/family-audit.js"></script>
+<script src="src/core/trace-coverage.js"></script>
 <script src="src/core/consistency.js"></script>
 <script src="src/core/event-sync.js"></script>
 <script src="src/core/line-edit.js"></script>

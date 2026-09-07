@@ -1994,6 +1994,7 @@ function init() {
   setupNameAudit();
   setupSubmitCheck();
   setupFamilyAudit();
+  setupTraceCoverage();
   setupHandoffPackage();
   setupDeliveryPackage();
   setupFamilyClone();
@@ -2108,6 +2109,7 @@ function initCommandPalette() {
       { id: 'consistency', title: '整合性チェックを開く / Consistency', hint: 'Review', keywords: ['consistency', 'check', 'せいごう', 'かくにん'], run: function() { clickById('status-consistency'); } },
       { id: 'eventsync', title: 'イベント整合を開く / Event sync', hint: 'Review', keywords: ['event', 'sync', 'method', 'いべんと', 'せいごう', 'めそっど'], run: function() { clickById('status-eventsync'); } },
       { id: 'family-audit', title: '系統チェックを開く / Family audit', hint: 'Tabs', keywords: ['family', 'audit', 'けいとう', 'とつごう'], run: function() { clickById('btn-tab-family'); } },
+      { id: 'trace-coverage', title: 'トレースカバレッジを開く / Trace coverage', hint: 'Tabs', keywords: ['trace', 'coverage', 'とれーす', 'もれ', 'せんい'], run: function() { clickById('btn-tab-trace'); } },
       // BLK-primary-20260907-0923: タブバーの道具はどれもパレットに無く、design 1a で
       // ペインが狭くなった後は潰れたラベルを目で数えて押すしか経路が無かった。
       { id: 'tab-new', title: '新しい図を開く / New diagram', hint: 'Tabs', keywords: ['new', 'tab', 'あたらしい', 'ず'], run: function() { clickById('btn-tab-new'); } },
@@ -5480,6 +5482,168 @@ function openFamilyAudit() {
   _familyAuditBind(families);
   modal.style.display = 'flex';
   return families;
+}
+
+// ── トレースカバレッジ ─────────────────────────────────────────────────────
+// BLK-reviewer-20260907-1903-wish: 状態遷移図に書いた遷移が、同じ系統の
+// シーケンス図のどこにも現れないことを見つけるのに、系統チェックの
+// 「片方にしか無い動作名」から目視で拾い上げていた。ここは向きを
+// 「状態遷移 → シーケンス」の 1 方向に固定し、系統ごとに遷移を全件並べて
+// どのシーケンスにも現れなかった行だけを赤にする。行をクリックすると
+// その状態遷移図のその行へ飛ぶ。
+
+var _traceRows = [];   // 表の行から図の行へ飛ぶための、表示中の系統の遷移一覧
+
+function _traceRender(families, selectedKey) {
+  var content = document.getElementById('tc-modal-content');
+  var tc = window.MA.traceCoverage;
+  if (!content || !tc) return;
+  var esc = window.MA.htmlUtils.escHtml;
+
+  var SECTION = 'font-size:10px;color:var(--accent);font-weight:bold;margin:12px 0 4px 0;';
+  var CELL = 'padding:3px 6px;border-bottom:1px solid var(--border);font-size:11px;color:var(--text-primary);';
+  var BTN = 'background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;padding:2px 8px;font-size:11px;';
+
+  var html = '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">トレースカバレッジ</h3>';
+
+  if (families.length === 0) {
+    html += '<div id="tc-empty" style="font-size:11px;color:var(--text-secondary);">'
+      + '状態遷移図が開かれていません。dma_state / dma_transfer_sequence のように'
+      + '系統の頭を揃えて名前を付けた状態遷移図とシーケンス図を開くと突き合わせられます。</div>'
+      + '<div style="display:flex;gap:8px;margin-top:14px;">'
+      + '<button id="tc-close" style="flex:1;' + BTN + 'padding:8px;">閉じる</button></div>';
+    content.innerHTML = html;
+    _traceRows = [];
+    return;
+  }
+
+  var sel = null;
+  for (var i = 0; i < families.length; i++) if (families[i].key === selectedKey) sel = families[i];
+  if (!sel) sel = families[0];
+  _traceRows = sel.rows;
+
+  html += '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">'
+    + '<label for="tc-family">系統</label> '
+    + '<select id="tc-family" style="background:var(--bg-primary);border:1px solid var(--border);'
+      + 'color:var(--text-primary);padding:3px 6px;border-radius:3px;font-family:var(--font-mono);">'
+    + families.map(function(f) {
+        return '<option value="' + esc(f.key) + '"' + (f === sel ? ' selected' : '') + '>'
+          + esc(f.key) + ' (遷移 ' + f.rows.length + ', 漏れ ' + f.missing.length + ' 件)</option>';
+      }).join('')
+    + '</select></div>';
+
+  html += '<div id="tc-summary" data-missing="' + sel.missing.length + '" '
+    + 'data-rows="' + sel.rows.length + '" data-comparable="' + (sel.comparable ? '1' : '0') + '" '
+    + 'style="font-size:11px;color:' + (sel.missing.length ? 'var(--accent-orange)' : 'var(--accent-green)') + ';">'
+    + esc(tc.summaryLine(sel)) + '</div>';
+
+  html += '<div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">'
+    + '突合先のシーケンス図: '
+    + (sel.seqDocs.length
+        ? sel.seqDocs.map(function(d) { return esc(d.name); }).join(' / ')
+        : '(なし)')
+    + '</div>';
+
+  html += '<div style="' + SECTION + '">遷移 × 現れたシーケンス (赤い行はどこにも現れない = トレース漏れの候補)</div>'
+    + '<table id="tc-table" style="border-collapse:collapse;width:100%;">'
+    + '<tr><th style="' + CELL + 'text-align:left;">遷移</th>'
+    + '<th style="' + CELL + 'text-align:left;">ラベル</th>'
+    + '<th style="' + CELL + 'text-align:left;">現れたシーケンス</th></tr>';
+
+  if (sel.rows.length === 0) {
+    html += '<tr><td id="tc-no-rows" colspan="3" style="' + CELL
+      + 'color:var(--text-secondary);">ラベルの付いた遷移がありません</td></tr>';
+  }
+  sel.rows.forEach(function(r, ri) {
+    var missing = r.status === 'missing';
+    var seen = r.status === 'unknown' ? '(突き合わせていません)'
+      : (r.seenIn.length ? r.seenIn.join(' / ') : 'どこにも現れない');
+    html += '<tr class="tc-row' + (missing ? ' tc-missing' : '') + '" data-row-index="' + ri + '"'
+      + ' data-status="' + esc(r.status) + '" data-label="' + esc(r.label) + '"'
+      + ' style="cursor:pointer;' + (missing ? 'background:rgba(255,140,0,0.10);' : '') + '">'
+      + '<td style="' + CELL + 'font-family:var(--font-mono);color:var(--text-secondary);">'
+        + esc(r.from) + ' → ' + esc(r.to) + '</td>'
+      + '<td style="' + CELL + 'font-family:var(--font-mono);'
+        + (missing ? 'color:var(--accent-orange);font-weight:bold;' : '') + '">' + esc(r.label) + '</td>'
+      + '<td style="' + CELL + (missing ? 'color:var(--accent-orange);' : 'color:var(--text-secondary);') + '">'
+        + esc(seen) + (r.status === 'partial' ? ' (部分一致)' : '') + '</td>'
+      + '</tr>';
+  });
+  html += '</table>'
+    + '<div style="display:flex;gap:8px;margin-top:14px;">'
+    + '<button id="tc-close" style="flex:1;' + BTN + 'padding:8px;">閉じる</button></div>';
+
+  content.innerHTML = html;
+}
+
+function _traceBind(families) {
+  var content = document.getElementById('tc-modal-content');
+  var modal = document.getElementById('tc-modal');
+  if (!content || !modal) return;
+
+  function close() { modal.style.display = 'none'; }
+  var closeBtn = document.getElementById('tc-close');
+  if (closeBtn) closeBtn.addEventListener('click', close);
+
+  var famSel = document.getElementById('tc-family');
+  if (famSel) famSel.addEventListener('change', function() {
+    _traceRender(families, this.value);
+    _traceBind(families);
+  });
+
+  // 行はその遷移が書かれている状態遷移図の、その行へのショートカット。
+  var rows = content.querySelectorAll('.tc-row');
+  for (var i = 0; i < rows.length; i++) {
+    rows[i].addEventListener('click', function(ev) {
+      var r = _traceRows[Number(ev.currentTarget.getAttribute('data-row-index'))];
+      if (!r || !r.docId || !window.MA.workspace) return;
+      close();
+      saveActiveDoc();
+      window.MA.workspace.setActive(r.docId);
+      applyActiveDoc();
+      _traceScrollToLine(r.line);
+    });
+  }
+}
+
+// 開いた図の該当行にキャレットを置く。editor-jump と同じ計算を使うので、
+// 表の行と DSL の行がずれない。
+function _traceScrollToLine(line) {
+  var EJ = window.MA.editorJump;
+  var el = editorEl || document.getElementById('editor');
+  if (!EJ || !el) return;
+  var range = EJ.lineRange(el.value, line);
+  if (!range) return;
+  try {
+    el.focus();
+    el.setSelectionRange(range.start, range.end);
+  } catch (e) { /* 表示のためだけなので、選択できない環境では黙る */ }
+}
+
+function openTraceCoverage() {
+  var modal = document.getElementById('tc-modal');
+  var tc = window.MA.traceCoverage;
+  if (!modal || !tc) return null;
+
+  // 系統チェックと同じく、突合の対象は開いているタブ (今の中身を見る)。
+  var docs = _renameDocs().map(function(d) {
+    return { id: d.id, name: d.name, diagramType: d.diagramType, dsl: d.dsl };
+  });
+  var families = tc.audit(docs);
+  _traceRender(families, families.length ? families[0].key : null);
+  _traceBind(families);
+  modal.style.display = 'flex';
+  return families;
+}
+
+function setupTraceCoverage() {
+  var btn = document.getElementById('btn-tab-trace');
+  var modal = document.getElementById('tc-modal');
+  if (!btn || !modal || !window.MA.traceCoverage) return;
+  btn.addEventListener('click', function() { openTraceCoverage(); });
+  modal.addEventListener('click', function(ev) {
+    if (ev.target === modal) modal.style.display = 'none';
+  });
 }
 
 // ── 整合性チェック ─────────────────────────────────────────────────────────

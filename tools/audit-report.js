@@ -65,6 +65,10 @@ const AUDITS = {
   method: (MA, docs) => (MA.methodAudit ? MA.methodAudit.audit(docs) : undefined),
   consistency: (MA, docs) => (MA.consistency ? MA.consistency.check(docs) : undefined),
   family: (MA, docs) => (MA.familyAudit ? MA.familyAudit.audit(docs) : undefined),
+  // BLK-reviewer-20260907-1903-wish: 状態遷移 → シーケンスの片方向だけを見る。
+  // family は両方向の食い違いを出すので、「シーケンスに書き漏らした遷移」は
+  // その中から目視で拾うしかなかった。
+  trace: (MA, docs) => (MA.traceCoverage ? MA.traceCoverage.audit(docs) : undefined),
 };
 
 function auditNames() { return Object.keys(AUDITS); }
@@ -106,6 +110,18 @@ function summarize(audits) {
       skippedPairs: f.result.reduce((n, g) => n + ((g.skipped || []).length), 0),
     };
   }
+  const t = audits.trace;
+  if (t && t.status === 'ok') {
+    s.trace = {
+      families: t.result.length,
+      transitions: t.result.reduce((n, g) => n + g.rows.length, 0),
+      missing: t.result.reduce((n, g) => n + g.missing.length, 0),
+      partial: t.result.reduce((n, g) => n + g.partial.length, 0),
+      // シーケンス図が無くて突き合わせられなかった系統。0 件を「漏れなし」と
+      // 読み違えないように、見ていない系統数を別に出す。
+      unmatchable: t.result.filter((g) => !g.comparable).length,
+    };
+  }
   return s;
 }
 
@@ -115,6 +131,7 @@ function totalIssues(summary) {
   if (summary.method) t += summary.method.issues;
   if (summary.consistency) t += summary.consistency.count;
   if (summary.family) t += summary.family.mismatched;
+  if (summary.trace) t += summary.trace.missing;
   return t;
 }
 
@@ -130,6 +147,11 @@ function formatSummary(report) {
   if (s.family) {
     const skipped = s.family.skippedPairs ? ` (粒度違いで突き合わせ対象外 ${s.family.skippedPairs} 組)` : '';
     lines.push(`系統: ${s.family.families} 系統中 ${s.family.mismatched} 系統に食い違い${skipped}`);
+  }
+  if (s.trace) {
+    const un = s.trace.unmatchable ? ` (シーケンス図が無く突き合わせ不能 ${s.trace.unmatchable} 系統)` : '';
+    const pa = s.trace.partial ? ` / 部分一致 ${s.trace.partial} 件` : '';
+    lines.push(`トレース: 遷移 ${s.trace.transitions} 件中 ${s.trace.missing} 件がどのシーケンスにも現れない${pa}${un}`);
   }
   for (const k of Object.keys(report.audits)) {
     const a = report.audits[k];
