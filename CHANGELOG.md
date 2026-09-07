@@ -1,3 +1,4 @@
+- BLK-builder-20260908-0743-1c-red: UC-8 (IEC 61508 Safety Case) の赤を解消 (FEAT-114 のフォーム化に spec を追従させ、note を付けた message とは別の message を alt で囲むようにした)
 - BLK-builder-20260908-0803-3-red: UC-6 (本番障害の root cause 反映: 注釈 + alt 囲み) の E2E が FEAT-114 の 1 枚フォームで通るようになった (known-red -1)
 - BLK-builder-20260908-0743-1b-red: UC-7 (onboarding 用 note を 3 件付与) の赤を解消 (同じ message を 3 回クリックする書き方をやめ、毎回 DSL から i 本目の message の現在行を求めて note を付ける)
 - BLK-builder-20260908-0807-2-red: コマンドパレット (Ctrl+K) で「保存」と打つと「ファイルを保存」が先頭に出るようになった (その語をたまたま含むだけの「保存フォルダの図を一覧」に押しのけられなくなった)
