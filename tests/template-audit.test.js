@@ -143,7 +143,8 @@ describe('method-audit — CRLF で保存された図でも突合が効く (BLK-
   });
 
   test('parseCall: 行末の \\r で呼び出しを取り逃さない', () => {
-    expect(M.parseCall('A -> B : Timer_Init()\r')).toEqual({ method: 'Timer_Init', args: 0 });
+    expect(M.parseCall('A -> B : Timer_Init()\r'))
+      .toEqual({ method: 'Timer_Init', args: 0, receiver: 'B' });
   });
 
   test('stateEvents: CRLF の図から LF と同じ件数・同じ行番号で拾う', () => {

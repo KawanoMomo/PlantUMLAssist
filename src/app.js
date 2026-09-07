@@ -3441,6 +3441,15 @@ function openNameAudit() {
   html += '<div id="na-method-summary" style="font-size:11px;color:var(--text-secondary);" ' +
     'data-calls="' + mres.calls.length + '" data-issues="' + mres.issues.length + '">' +
     '呼び出し ' + mres.calls.length + ' 件 — 指摘 ' + mres.issues.length + ' 件</div>';
+  // BLK-primary-20260907-1303: 何を対象外にしたかを表の上に書く。書かないと
+  // 「0 件」が「見ていないだけ」なのか「揃っている」のか、渡された側に分からない。
+  if (MAUD && MAUD.excludedLine) {
+    var exLine = MAUD.excludedLine(mres);
+    if (exLine) {
+      html += '<div id="na-method-excluded" style="font-size:11px;color:var(--text-secondary);" ' +
+        'data-count="' + ((mres.excludedEvents || []).length) + '">' + esc(exLine) + '</div>';
+    }
+  }
   if (mres.issues.length === 0) {
     html += '<div id="na-no-methods" style="font-size:11px;color:var(--text-secondary);">' +
       '呼び出しと宣言は一致しています</div>';
