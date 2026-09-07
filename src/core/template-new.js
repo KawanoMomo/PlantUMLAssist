@@ -78,6 +78,116 @@ window.MA.templateNew = (function() {
     return out;
   }
 
+  // ── 組み込みの雛形 (BLK-junior-20260907-0703) ────────────────────────────
+  // テンプレートは「既にある図」から作る仕組みだが、その図種の図がまだ 1 枚も
+  // 無いときは写す元が無く、利用者は構文込みの本文を全部打つことになる
+  // (コンポーネント 4 + 依存 6 で 184 字)。定番の構成をここに持っておけば、
+  // 1 枚目でも「雛形を選ぶ → 部品名を打つ」だけで済む。
+  //
+  // 各雛形の部品名は `Xxx` で始めてある。置換元をこの `Xxx` に決め打ちできるので、
+  // 利用者が打つのは作る部品名 (Gpio など) の 1 語だけになる。
+  var PLACEHOLDER = 'Xxx';
+
+  var BUILTINS = [
+    {
+      id: 'component-driver',
+      type: 'plantuml-component',
+      label: 'ドライバ構成 (部品 4 つ・依存 6 本)',
+      name: 'Xxx-component',
+      dsl: [
+        '@startuml',
+        'title Xxx ドライバ構成',
+        'component "Xxx アプリ" as XxxApp',
+        'component "Xxx ドライバ" as XxxDrv',
+        'component "Xxx HAL" as XxxHal',
+        'component "Xxx レジスタ" as XxxReg',
+        'XxxApp ..> XxxDrv',
+        'XxxApp ..> XxxHal',
+        'XxxDrv ..> XxxHal',
+        'XxxDrv ..> XxxReg',
+        'XxxHal ..> XxxReg',
+        'XxxDrv ..> XxxApp',
+        '@enduml',
+      ].join('\n'),
+    },
+    {
+      id: 'sequence-init',
+      type: 'plantuml-sequence',
+      label: '初期化シーケンス (参加者 3 つ・メッセージ 4 本)',
+      name: 'Xxx-init-sequence',
+      dsl: [
+        '@startuml',
+        'title Xxx 初期化',
+        'actor App',
+        'participant XxxDrv',
+        'participant XxxHal',
+        'App -> XxxDrv : Xxx_Init()',
+        'XxxDrv -> XxxHal : Xxx_HalInit()',
+        'XxxHal --> XxxDrv : OK',
+        'XxxDrv --> App : OK',
+        '@enduml',
+      ].join('\n'),
+    },
+    {
+      id: 'state-basic',
+      type: 'plantuml-state',
+      label: '状態遷移 (状態 3 つ・遷移 4 本)',
+      name: 'Xxx-state',
+      dsl: [
+        '@startuml',
+        'title Xxx 状態遷移',
+        '[*] --> Xxx_Uninit',
+        'Xxx_Uninit --> Xxx_Idle : Xxx_Init',
+        'Xxx_Idle --> Xxx_Busy : Xxx_Start',
+        'Xxx_Busy --> Xxx_Idle : Xxx_Done',
+        'Xxx_Idle --> Xxx_Uninit : Xxx_DeInit',
+        '@enduml',
+      ].join('\n'),
+    },
+    {
+      id: 'class-driver',
+      type: 'plantuml-class',
+      label: 'ドライバクラス (クラス 3 つ)',
+      name: 'Xxx-class',
+      dsl: [
+        '@startuml',
+        'title Xxx クラス構成',
+        'class XxxDriver {',
+        '  +Xxx_Init()',
+        '  +Xxx_DeInit()',
+        '}',
+        'class XxxHal {',
+        '  +Xxx_HalInit()',
+        '}',
+        'class XxxConfig {',
+        '  +mode',
+        '}',
+        'XxxDriver --> XxxHal',
+        'XxxDriver --> XxxConfig',
+        '@enduml',
+      ].join('\n'),
+    },
+  ];
+
+  // 組み込み雛形の一覧。diagramType を渡すと、その図種のものを先に並べる
+  // (今開いている図と同じ種類がいちばん上に来る)。
+  function builtins(diagramType) {
+    var t = _s(diagramType);
+    var list = BUILTINS.map(function(b) {
+      return { id: b.id, type: b.type, label: b.label, name: b.name, dsl: b.dsl, placeholder: PLACEHOLDER };
+    });
+    if (!t) return list;
+    return list.sort(function(a, b) {
+      return (b.type === t ? 1 : 0) - (a.type === t ? 1 : 0);
+    });
+  }
+
+  function builtin(id) {
+    var all = builtins();
+    for (var i = 0; i < all.length; i++) if (all[i].id === _s(id)) return all[i];
+    return null;
+  }
+
   // テンプレート DSL から新しい図の DSL を作る。
   function instantiate(dsl, from, to) {
     var text = _s(dsl);
@@ -216,6 +326,9 @@ window.MA.templateNew = (function() {
     instantiateAll: instantiateAll,
     caseVariants: caseVariants,
     instantiate: instantiate,
+    builtins: builtins,
+    builtin: builtin,
+    PLACEHOLDER: PLACEHOLDER,
     previewLines: previewLines,
     candidates: candidates,
     suggestName: suggestName,

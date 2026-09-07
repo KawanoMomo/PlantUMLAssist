@@ -2607,6 +2607,16 @@ function setupTemplateNew() {
     files.forEach(function(name) {
       html += '<option value="file:' + esc(name) + '">' + esc(name) + ' (保存フォルダ)</option>';
     });
+    // BLK-junior-20260907-0703: その図種の図がまだ 1 枚も無いときの写す元。
+    // 既にある図が既定なのは変えず、末尾に置く。今の図種の雛形が group の先頭に来る。
+    var bi = TN.builtins(currentDiagramType);
+    if (bi.length) {
+      html += '<optgroup label="組み込みの雛形">';
+      bi.forEach(function(b) {
+        html += '<option value="builtin:' + esc(b.id) + '">' + esc(b.label) + '</option>';
+      });
+      html += '</optgroup>';
+    }
     return html;
   }
 
@@ -2626,6 +2636,12 @@ function setupTemplateNew() {
       var name = v.slice(5);
       if (fileCache[name] == null) return null;
       return { name: name, dsl: fileCache[name] };
+    }
+    if (v.indexOf('builtin:') === 0) {
+      var b = TN.builtin(v.slice(8));
+      if (!b) return null;
+      // placeholder があるので、置換元は打たずに決まる。
+      return { name: b.name, dsl: b.dsl, placeholder: b.placeholder };
     }
     return null;
   }
@@ -2814,10 +2830,17 @@ function setupTemplateNew() {
       var tpl = currentTemplate();
       if (tpl) {
         fillCandidates(tpl.dsl);
-        // 置換元が空なら、いちばん多く出てくる語を入れておく
-        // (入力ゼロで押せる状態から始める)。
         var fromEl = document.getElementById('tpl-from');
-        if (fromEl && !fromEl.value) {
+        // BLK-junior-20260907-0703: 組み込みの雛形は部品名がぜんぶ `Xxx` で
+        // 始まるので、置換元は選んだ時点で決まる。利用者が打つのは
+        // 作る部品名の 1 語だけになり、そこへ焦点を移す。
+        if (tpl.placeholder && fromEl) {
+          fromEl.value = tpl.placeholder;
+          var toEl = document.getElementById('tpl-to');
+          if (toEl) toEl.focus();
+        } else if (fromEl && !fromEl.value) {
+          // 置換元が空なら、いちばん多く出てくる語を入れておく
+          // (入力ゼロで押せる状態から始める)。
           var cands = TN.candidates(tpl.dsl);
           if (cands.length && cands[0].count > 1) fromEl.value = cands[0].name;
         }
@@ -2855,7 +2878,7 @@ function setupTemplateNew() {
     content.innerHTML =
       '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">テンプレートから新規作成</h3>'
       + '<div style="font-size:11px;color:var(--text-secondary);">'
-      + '既にある図と同じ構成のまま、部品名だけを替えた図を新しいタブに作ります。</div>'
+      + '既にある図か組み込みの雛形と同じ構成のまま、部品名だけを替えた図を新しいタブに作ります。</div>'
       + '<label style="' + LABEL + '" for="tpl-source">テンプレートにする図</label>'
       + '<select id="tpl-source" style="' + FIELD + '">' + templateOptions() + '</select>'
       + '<div style="display:flex;gap:10px;">'
