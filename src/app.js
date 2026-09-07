@@ -5672,6 +5672,118 @@ function openFamilyAudit() {
 
 var _traceRows = [];   // 表の行から図の行へ飛ぶための、表示中の系統の遷移一覧
 
+// ── 担当範囲の宣言 ─────────────────────────────────────────────────────────
+// BLK-reviewer-20260907-2003-wish: 「初期化専用シーケンス vs フル状態遷移」の
+// 粒度差を、これまでは語彙一致率から推測していた。推測なので系統が増えるたび
+// 誤検出が出る。ここでシーケンス図が担当する遷移をチェックボックスで宣言し、
+// DSL に `' @covers Idle -> Configured` として書き込む。宣言のある系統では、
+// 宣言されていない遷移は最初から突き合わせの対象外になる。
+var _traceScopeDocId = null;   // 宣言を編集しているシーケンス図
+var _traceScopeChoices = [];   // 表示中のチェックボックス一覧
+
+function _traceScopeDoc(family) {
+  if (!family) return null;
+  var seq = (family.docs || []).filter(function(d) { return d.kind === 'sequence'; });
+  if (!seq.length) return null;
+  for (var i = 0; i < seq.length; i++) if (seq[i].id === _traceScopeDocId) return seq[i];
+  return seq[0];
+}
+
+function _traceScopeSection(family, SECTION, CELL, BTN) {
+  var tc = window.MA.traceCoverage;
+  var sd = window.MA.scopeDecl;
+  var esc = window.MA.htmlUtils.escHtml;
+  _traceScopeChoices = [];
+  if (!tc || !sd) return '';
+
+  var seq = (family.docs || []).filter(function(d) { return d.kind === 'sequence'; });
+  var html = '<div style="' + SECTION + '">担当範囲の宣言 '
+    + '(このシーケンス図が担当する遷移。宣言すると、宣言外の遷移は突き合わせない)</div>';
+  if (!seq.length) {
+    html += '<div id="tc-scope-empty" style="font-size:11px;color:var(--text-secondary);">'
+      + 'この系統にシーケンス図が無いので宣言できません。</div>';
+    return html;
+  }
+
+  var doc = _traceScopeDoc(family);
+  _traceScopeDocId = doc.id;
+  var mine = sd.parse(doc.dsl).covers;
+  _traceScopeChoices = tc.scopeChoices(family);
+
+  html += '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">'
+    + '<label for="tc-scope-doc">シーケンス図</label> '
+    + '<select id="tc-scope-doc" style="background:var(--bg-primary);border:1px solid var(--border);'
+      + 'color:var(--text-primary);padding:3px 6px;border-radius:3px;font-family:var(--font-mono);">'
+    + seq.map(function(d) {
+        return '<option value="' + esc(d.id) + '"' + (d.id === doc.id ? ' selected' : '') + '>'
+          + esc(d.name) + (sd.declared(d.dsl) ? ' (宣言あり)' : ' (宣言なし)') + '</option>';
+      }).join('')
+    + '</select></div>';
+
+  html += '<div id="tc-scope-list" data-declared="' + (mine.length ? '1' : '0') + '" '
+    + 'data-count="' + mine.length + '" style="max-height:150px;overflow-y:auto;border:1px solid var(--border);'
+    + 'border-radius:3px;padding:4px 6px;">';
+  if (!_traceScopeChoices.length) {
+    html += '<div id="tc-scope-none" style="font-size:11px;color:var(--text-secondary);">'
+      + 'この系統の状態遷移図にラベル付きの遷移がありません。</div>';
+  }
+  _traceScopeChoices.forEach(function(c, ci) {
+    var on = sd.covered(mine, c);
+    html += '<label class="tc-scope-item" style="display:block;font-size:11px;color:var(--text-primary);'
+      + 'font-family:var(--font-mono);padding:1px 0;cursor:pointer;">'
+      + '<input type="checkbox" class="tc-scope-cb" data-choice-index="' + ci + '"'
+      + ' data-from="' + esc(c.from) + '" data-to="' + esc(c.to) + '"'
+      + (on ? ' checked' : '') + '> '
+      + esc(sd.label(c))
+      + ' <span style="color:var(--text-secondary);">: ' + esc(c.labels.join(' / ')) + '</span>'
+      + '</label>';
+  });
+  html += '</div>';
+
+  html += '<div style="display:flex;gap:8px;margin-top:6px;align-items:center;">'
+    + '<button id="tc-scope-save" style="' + BTN + '">宣言を保存</button>'
+    + '<button id="tc-scope-all" style="' + BTN + '">全部にする</button>'
+    + '<button id="tc-scope-clear" style="' + BTN + '">宣言を消す</button>'
+    + '<span id="tc-scope-note" style="font-size:11px;color:var(--text-secondary);">'
+    + (family.declared
+        ? '宣言あり (' + esc(family.declaredBy.join(' / ')) + ') / 対象外 '
+          + (family.outOfScope || []).length + ' 件'
+        : '宣言なし: 遷移すべてを突き合わせています')
+    + '</span></div>';
+
+  if (family.declared && (family.outOfScope || []).length) {
+    html += '<div id="tc-scope-out" style="font-size:11px;color:var(--text-secondary);margin-top:4px;">'
+      + '宣言対象外: '
+      + family.outOfScope.map(function(r) { return esc(r.from + ' → ' + r.to); }).join(', ')
+      + '</div>';
+  }
+  return html;
+}
+
+// チェックの状態を DSL に書き戻す。正本は PlantUML テキストなので、
+// 宣言も図の中に置く (保存・再読込・差分のどれでも一緒に動く)。
+function _traceScopeSave(covers) {
+  var sd = window.MA.scopeDecl;
+  var ws = window.MA.workspace;
+  if (!sd || !ws || !_traceScopeDocId) return false;
+  var doc = null;
+  ws.list().forEach(function(d) { if (d.id === _traceScopeDocId) doc = d; });
+  if (!doc) return false;
+  var next = sd.apply(window.MA.dslUtils.docDsl(doc), covers);
+  if (window.MA.history) window.MA.history.pushHistory();
+  ws.updateDoc(doc.id, { dsl: next });
+  if (doc.id === ws.getActiveId()) {
+    mmdText = next;
+    suppressSync = true;
+    if (editorEl) editorEl.value = next;
+    suppressSync = false;
+    updateLineNumbers();
+    scheduleRefresh();
+  }
+  renderTabs();
+  return true;
+}
+
 function _traceRender(families, selectedKey) {
   var content = document.getElementById('tc-modal-content');
   var tc = window.MA.traceCoverage;
@@ -5722,6 +5834,8 @@ function _traceRender(families, selectedKey) {
         : '(なし)')
     + '</div>';
 
+  html += _traceScopeSection(sel, SECTION, CELL, BTN);
+
   html += '<div style="' + SECTION + '">遷移 × 現れたシーケンス (赤い行はどこにも現れない = トレース漏れの候補)</div>'
     + '<table id="tc-table" style="border-collapse:collapse;width:100%;">'
     + '<tr><th style="' + CELL + 'text-align:left;">遷移</th>'
@@ -5765,9 +5879,45 @@ function _traceBind(families) {
 
   var famSel = document.getElementById('tc-family');
   if (famSel) famSel.addEventListener('change', function() {
+    _traceScopeDocId = null;
     _traceRender(families, this.value);
     _traceBind(families);
   });
+
+  var selectedKey = famSel ? famSel.value : (families.length ? families[0].key : null);
+
+  var scopeSel = document.getElementById('tc-scope-doc');
+  if (scopeSel) scopeSel.addEventListener('change', function() {
+    _traceScopeDocId = this.value;
+    _traceRender(families, selectedKey);
+    _traceBind(families);
+  });
+
+  function checkedCovers() {
+    var covers = [];
+    var boxes = content.querySelectorAll('.tc-scope-cb');
+    for (var i = 0; i < boxes.length; i++) {
+      if (!boxes[i].checked) continue;
+      covers.push({ from: boxes[i].getAttribute('data-from'), to: boxes[i].getAttribute('data-to') });
+    }
+    return covers;
+  }
+
+  function saveScope(covers) {
+    if (!_traceScopeSave(covers)) return;
+    _traceRefresh(selectedKey);
+  }
+
+  var saveBtn = document.getElementById('tc-scope-save');
+  if (saveBtn) saveBtn.addEventListener('click', function() { saveScope(checkedCovers()); });
+
+  var allBtn = document.getElementById('tc-scope-all');
+  if (allBtn) allBtn.addEventListener('click', function() {
+    saveScope(_traceScopeChoices.map(function(c) { return { from: c.from, to: c.to }; }));
+  });
+
+  var clearBtn = document.getElementById('tc-scope-clear');
+  if (clearBtn) clearBtn.addEventListener('click', function() { saveScope([]); });
 
   // 行はその遷移が書かれている状態遷移図の、その行へのショートカット。
   var rows = content.querySelectorAll('.tc-row');
@@ -5798,6 +5948,20 @@ function _traceScrollToLine(line) {
   } catch (e) { /* 表示のためだけなので、選択できない環境では黙る */ }
 }
 
+// 宣言を書き換えたあと、同じ系統を選んだまま突合をやり直す。
+function _traceRefresh(key) {
+  var tc = window.MA.traceCoverage;
+  if (!tc) return null;
+  var docs = _renameDocs().map(function(d) {
+    return { id: d.id, name: d.name, diagramType: d.diagramType, dsl: d.dsl };
+  });
+  var families = tc.audit(docs);
+  var has = families.some(function(f) { return f.key === key; });
+  _traceRender(families, has ? key : (families.length ? families[0].key : null));
+  _traceBind(families);
+  return families;
+}
+
 function openTraceCoverage() {
   var modal = document.getElementById('tc-modal');
   var tc = window.MA.traceCoverage;
@@ -5808,6 +5972,7 @@ function openTraceCoverage() {
     return { id: d.id, name: d.name, diagramType: d.diagramType, dsl: d.dsl };
   });
   var families = tc.audit(docs);
+  _traceScopeDocId = null;
   _traceRender(families, families.length ? families[0].key : null);
   _traceBind(families);
   modal.style.display = 'flex';

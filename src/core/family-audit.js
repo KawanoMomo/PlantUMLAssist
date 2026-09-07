@@ -86,7 +86,8 @@ window.MA.familyAudit = (function() {
       var kind = viewKindOf(d);
       return {
         id: d.id, name: d.name, diagramType: d.diagramType || '',
-        kind: kind, actions: actionsOf(window.MA.dslUtils.docDsl(d)),
+        kind: kind, dsl: window.MA.dslUtils.docDsl(d),
+        actions: actionsOf(window.MA.dslUtils.docDsl(d)),
       };    });
     var rows = [];
     var index = {};
@@ -127,6 +128,10 @@ window.MA.familyAudit = (function() {
       if (partners[hitIdx[0]].length === 0) return;
       r.onlyIn = hits[0];
     });
+    // 担当範囲の宣言があるなら、語彙一致率より宣言を優先する。状態遷移図に
+    // しか無い動作名でも、その遷移がどのシーケンス図にも宣言されていなければ
+    // 「担当外」であって書き漏らしではない。
+    _applyScopeDecl(list, rows);
     var withActions = list.filter(function(d) { return d.actions.length > 0; }).length;
     return {
       docs: list,
@@ -138,6 +143,43 @@ window.MA.familyAudit = (function() {
       skipped: pairs.skipped,
       mismatches: rows.filter(function(r) { return !!r.onlyIn; }),
     };
+  }
+
+  // 宣言 (`' @covers A -> B`) による絞り込み。系統のシーケンス図が 1 枚でも
+  // 宣言していれば、状態遷移図の側にしか無い動作名のうち、宣言されていない
+  // 遷移から来たものを mismatch から外す (outOfScope に印を残す)。
+  function _applyScopeDecl(list, rows) {
+    var sd = window.MA.scopeDecl;
+    var tc = window.MA.traceCoverage;
+    if (!sd || !tc) return;
+    var covers = [];
+    list.forEach(function(d) {
+      if (String(d.kind).toLowerCase().replace(/^plantuml-/, '') !== 'sequence') return;
+      sd.parse(d.dsl).covers.forEach(function(c) {
+        if (!covers.some(function(x) { return sd.same(x, c); })) covers.push(c);
+      });
+    });
+    if (!covers.length) return;
+
+    // 状態遷移図の「動作名 → その遷移が宣言されているか」。
+    var declaredKey = {}, knownKey = {};
+    list.forEach(function(d) {
+      if (String(d.kind).toLowerCase().replace(/^plantuml-/, '') !== 'state') return;
+      tc.transitionsOf(d.dsl).forEach(function(t) {
+        var ok = sd.covered(covers, t);
+        t.keys.forEach(function(k) {
+          knownKey[k] = true;
+          if (ok) declaredKey[k] = true;
+        });
+      });
+    });
+
+    rows.forEach(function(r) {
+      if (!r.onlyIn) return;
+      if (!knownKey[r.key] || declaredKey[r.key]) return;
+      r.onlyIn = null;
+      r.outOfScope = true;
+    });
   }
 
   // 語彙の重なりで「突き合わせてよい組」を決める。
