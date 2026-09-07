@@ -209,6 +209,7 @@ function init() {
     // 前回保存時点との差分バッジを追従させる。
     try { renderDiffBadge(); } catch (e) {}
     try { renderConsistencyBadge(); } catch (e) {}
+    try { renderPinBadge(); } catch (e) {}
   });
 
   editorEl.addEventListener('scroll', function() {
@@ -1640,6 +1641,7 @@ function init() {
   setupTemplateNew();
   setupDiffPanel();
   setupChangeBoard();
+  setupPinPanel();
   setupNameAudit();
   setupFamilyAudit();
   setupConsistencyPanel();
@@ -1761,6 +1763,7 @@ function initCommandPalette() {
       { id: 'tab-compare', title: '並べて見る / Compare', hint: 'Tabs', keywords: ['compare', 'side', 'ならべて', 'みくらべ'], run: function() { clickById('btn-tab-compare'); } },
       { id: 'tab-template', title: 'テンプレートから新しい図を作る / Template', hint: 'Tabs', keywords: ['template', 'copy', 'てんぷれ', 'ふくせい'], run: function() { clickById('btn-tab-template'); } },
       { id: 'tab-diff', title: '前回保存からの差分 / Diff', hint: 'Tabs', keywords: ['diff', 'change', 'さぶん', 'へんこう'], run: function() { clickById('btn-tab-diff'); } },
+      { id: 'tab-pins', title: 'レビュー指摘 / Review pins', hint: 'Tabs', keywords: ['pin', 'review', 'してき', 'ぴん'], run: function() { clickById('btn-tab-pins'); } },
       { id: 'settings', title: '設定を開く / Settings', hint: 'Ctrl', keywords: ['settings', 'config', 'せってい'], run: function() { clickById('btn-config'); } },
       { id: 'undo', title: '元に戻す / Undo', hint: 'Ctrl+Z', keywords: ['undo', 'もどす'], run: function() { clickById('btn-undo'); } },
       { id: 'redo', title: 'やり直す / Redo', hint: 'Ctrl+Y', keywords: ['redo', 'やりなおす'], run: function() { clickById('btn-redo'); } },
@@ -2310,6 +2313,7 @@ function renderTabs() {
   });
   renderDiffBadge();
   try { renderConsistencyBadge(); } catch (e) {}
+  try { renderPinBadge(); } catch (e) {}
 }
 
 // ── 前回保存時点との差分 ──────────────────────────────
@@ -4385,6 +4389,227 @@ function exportClipboard() {
   });
 }
 
+// ── レビュー指摘のピン (BLK-reviewer-20260907-1203-wish) ────────────────────
+// 指摘を文章で書き直しては次の run で該当箇所を探し直す、を繰り返していた。
+// 指摘を図の行に貼れば、図を開いた瞬間に該当箇所へ赤い番号が出る。既読の印が
+// そのまま「反映を確認した」の記録になるので、前回指摘の追跡が diff 読みでなくなる。
+// 保存先は DSL のコメント行 (src/core/review-pins.js)。図と指摘が離れない。
+
+function _pins() {
+  return window.MA.reviewPins ? window.MA.reviewPins.list(mmdText) : [];
+}
+
+// 指摘を付ける先の行。図の要素を選んでいればその行、無ければエディタのキャレット行。
+function _pinTargetLine() {
+  var sel = (window.MA.selection && window.MA.selection.getRange) ? window.MA.selection.getRange() : null;
+  if (sel && sel.start) return sel.start;
+  if (!editorEl) return 0;
+  var before = editorEl.value.slice(0, editorEl.selectionStart || 0);
+  return before.split('\n').length;
+}
+
+function _pinLineText(line) {
+  var lines = String(mmdText || '').replace(/\r\n?/g, '\n').split('\n');
+  return (line >= 1 && line <= lines.length) ? lines[line - 1].trim() : '';
+}
+
+function renderPinBadge() {
+  var btn = document.getElementById('btn-tab-pins');
+  var RP = window.MA.reviewPins;
+  if (!btn || !RP) return null;
+  var sum = RP.summary(_pins());
+  btn.textContent = RP.badgeText(sum);
+  btn.className = sum.open > 0 ? 'tab-tool has-open' : 'tab-tool';
+  btn.title = sum.total
+    ? ('レビュー指摘 ' + sum.total + ' 件 (未読 ' + sum.open + ' / 迷子 ' + sum.stale + ')')
+    : 'この図にレビュー指摘はない';
+  return sum;
+}
+
+// 図の上の印。指摘先の行に当たる overlay の枠を探し、その左上に番号を置く。
+function drawPinMarkers(overlayEl) {
+  var RP = window.MA.reviewPins;
+  if (!overlayEl || !RP) return 0;
+  var SVG_NS = 'http://www.w3.org/2000/svg';
+  var byLine = RP.byLine(mmdText);
+  var drawn = 0;
+  Object.keys(byLine).forEach(function(line) {
+    var host = overlayEl.querySelector('[data-line="' + line + '"]');
+    if (!host) return;
+    var x = parseFloat(host.getAttribute('x')) || 0;
+    var y = parseFloat(host.getAttribute('y')) || 0;
+    byLine[line].forEach(function(pin, i) {
+      var g = document.createElementNS(SVG_NS, 'g');
+      g.setAttribute('class', 'review-pin');
+      g.setAttribute('data-pin-id', pin.id);
+      g.setAttribute('data-pin-state', pin.state);
+      g.setAttribute('data-pin-line', String(line));
+      g.style.cursor = 'pointer';
+      var c = document.createElementNS(SVG_NS, 'circle');
+      c.setAttribute('cx', String(x - 2 + i * 18));
+      c.setAttribute('cy', String(y - 2));
+      c.setAttribute('r', '9');
+      c.setAttribute('fill', RP.markerColor(pin));
+      c.setAttribute('stroke', '#ffffff');
+      c.setAttribute('stroke-width', '1.5');
+      var t = document.createElementNS(SVG_NS, 'text');
+      t.setAttribute('x', String(x - 2 + i * 18));
+      t.setAttribute('y', String(y + 2));
+      t.setAttribute('text-anchor', 'middle');
+      t.setAttribute('font-size', '11');
+      t.setAttribute('fill', '#ffffff');
+      t.textContent = RP.markerLabel(pin);
+      var title = document.createElementNS(SVG_NS, 'title');
+      title.textContent = (pin.state === 'read' ? '既読' : '未読') + ': ' + pin.text;
+      g.appendChild(c);
+      g.appendChild(t);
+      g.appendChild(title);
+      g.addEventListener('click', function(ev) {
+        ev.stopPropagation();
+        openPinPanel(pin.id);
+      });
+      overlayEl.appendChild(g);
+      drawn++;
+    });
+  });
+  return drawn;
+}
+
+function openPinPanel(focusId) {
+  var btn = document.getElementById('btn-tab-pins');
+  var panel = document.getElementById('pin-panel');
+  if (!btn || !panel) return;
+  renderPinPanel();
+  panel.classList.add('open');
+  var rect = btn.getBoundingClientRect();
+  panel.style.left = Math.max(4, rect.left) + 'px';
+  panel.style.top = (rect.bottom + 2) + 'px';
+  if (focusId) {
+    var row = panel.querySelector('.pin-row[data-pin-id="' + focusId + '"]');
+    if (row) {
+      row.style.background = 'var(--bg-secondary)';
+      if (row.scrollIntoView) row.scrollIntoView();
+    }
+  }
+}
+
+function renderPinPanel() {
+  var panel = document.getElementById('pin-panel');
+  var RP = window.MA.reviewPins;
+  if (!panel || !RP) return;
+  var esc = window.MA.htmlUtils.escHtml;
+  var pins = _pins();
+  var sum = RP.summary(pins);
+  var target = _pinTargetLine();
+
+  var html = '<div class="pin-head" data-total="' + sum.total + '" data-open="' + sum.open
+    + '" data-stale="' + sum.stale + '">レビュー指摘 ' + sum.total + ' 件 ・ 未読 ' + sum.open
+    + (sum.stale ? ' ・ 行が見つからない ' + sum.stale : '') + '</div>';
+  if (!pins.length) {
+    html += '<div class="pin-row" id="pin-empty">この図に指摘はありません</div>';
+  }
+  pins.forEach(function(p) {
+    html += '<div class="pin-row' + (p.state === 'read' ? ' read' : '') + (p.stale ? ' stale' : '') + '"'
+      + ' data-pin-id="' + esc(p.id) + '" data-pin-state="' + esc(p.state) + '">'
+      + '<span class="pin-where">#' + esc(p.id) + ' '
+      + (p.stale ? '行が見つかりません' : ('L' + p.line)) + '</span>'
+      + '<span class="pin-text">' + esc(p.text) + '</span>'
+      + '<span class="pin-anchor">' + esc(p.anchor) + '</span><br>'
+      + '<button type="button" class="pin-toggle" data-pin-id="' + esc(p.id) + '">'
+      + (p.state === 'read' ? '未読に戻す' : '既読にする') + '</button> '
+      + '<button type="button" class="pin-del" data-pin-id="' + esc(p.id) + '">消す</button>'
+      + '</div>';
+  });
+  html += '<div class="pin-new">'
+    + '<div class="pin-target" id="pin-target" data-line="' + target + '">'
+    + (target ? ('付ける先: L' + target + ' ' + esc(_pinLineText(target))) : '付ける先の行がありません')
+    + '</div>'
+    + '<input id="pin-text" placeholder="指摘の内容 (例: Timer_StartConv に対応する method が無い)">'
+    + '<button type="button" id="pin-add">この行に指摘を付ける</button></div>';
+  panel.innerHTML = html;
+
+  function bindAll(cls, fn) {
+    var els = panel.querySelectorAll('.' + cls);
+    for (var i = 0; i < els.length; i++) {
+      (function(el) {
+        el.addEventListener('click', function() { fn(el.getAttribute('data-pin-id'), el); });
+      })(els[i]);
+    }
+  }
+  bindAll('pin-toggle', function(id) {
+    _applyLineEditText(RP.toggleState(mmdText, id));
+    renderPinBadge();
+    renderPinPanel();
+  });
+  bindAll('pin-del', function(id) {
+    _applyLineEditText(RP.remove(mmdText, id));
+    renderPinBadge();
+    renderPinPanel();
+  });
+  var wheres = panel.querySelectorAll('.pin-where');
+  for (var i = 0; i < wheres.length; i++) {
+    (function(el) {
+      el.addEventListener('click', function() {
+        var row = el.parentNode;
+        var pin = null;
+        pins.forEach(function(p) { if (p.id === row.getAttribute('data-pin-id')) pin = p; });
+        if (!pin || pin.stale) return;
+        jumpToLine(pin.line);
+      });
+    })(wheres[i]);
+  }
+  var add = document.getElementById('pin-add');
+  if (add) {
+    add.addEventListener('click', function() {
+      var input = document.getElementById('pin-text');
+      var text = input ? input.value.trim() : '';
+      var line = _pinTargetLine();
+      if (!text || !line) return;
+      _applyLineEditText(RP.add(mmdText, {
+        line: line, text: text, author: 'reviewer', at: new Date().toISOString().slice(0, 16),
+      }));
+      renderPinBadge();
+      renderPinPanel();
+    });
+  }
+}
+
+// 指摘先の行へ飛ぶ。エディタのキャレットをその行に置き、行が見えるまでスクロールする。
+function jumpToLine(line) {
+  if (!editorEl || !line) return;
+  var r = window.MA.lineResolver.caretRangeForLine(editorEl.value, line - 1);
+  if (!r) return;
+  editorEl.focus();
+  editorEl.selectionStart = r.start;
+  editorEl.selectionEnd = r.end;
+  editorEl.scrollTop = Math.max(0, (line - 3) * 18);
+}
+
+function setupPinPanel() {
+  var btn = document.getElementById('btn-tab-pins');
+  var panel = document.getElementById('pin-panel');
+  if (!btn || !panel) return;
+  btn.addEventListener('click', function() {
+    if (panel.classList.contains('open')) { panel.classList.remove('open'); return; }
+    openPinPanel();
+  });
+  // 既読・削除・追加はその場でパネルを組み直す。組み直した後の click は
+  // 対象が DOM から外れていて panel.contains が偽になり、外側クリック扱いで
+  // パネルが閉じてしまう。パネル内の click はここで止める。
+  panel.addEventListener('click', function(ev) { ev.stopPropagation(); });
+  // 図を見に戻るときは Esc で閉じる (他のパネルと同じ作法)。
+  document.addEventListener('keydown', function(ev) {
+    if (ev.key === 'Escape') panel.classList.remove('open');
+  });
+  document.addEventListener('click', function(ev) {
+    if (!panel.classList.contains('open')) return;
+    if (panel.contains(ev.target) || ev.target === btn) return;
+    if (ev.target && ev.target.closest && ev.target.closest('.review-pin')) return;
+    panel.classList.remove('open');
+  });
+  renderPinBadge();
+}
+
 // ── Render pipeline ────────────────────────────────────────────────────────
 function scheduleRefresh() {
   if (renderTimer) clearTimeout(renderTimer);
@@ -4659,6 +4884,8 @@ function renderSvg() {
         var sel = window.MA.selection.getSelected() || [];
         window.MA.selectionRouter.applyHighlight(overlayEl, sel);
       }
+      // BLK-reviewer-20260907-1203-wish: 指摘の付いた行に印を置く。
+      try { drawPinMarkers(overlayEl); } catch (e) {}
     }
     renderStatusEl.textContent = 'OK (' + mode + ')';
     var took = elapsed();

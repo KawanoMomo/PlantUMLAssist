@@ -39,6 +39,7 @@ const sourceFiles = [
   'src/core/line-edit.js',
   'src/core/reuse-picker.js',
   'src/core/relation-kind-cards.js',
+  'src/core/review-pins.js',
   'src/ui/properties.js',
   'src/ui/reuse-modal.js',
   'src/modules/sequence.js',
