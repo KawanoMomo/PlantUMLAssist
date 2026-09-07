@@ -8,17 +8,15 @@ test.describe('UC-2: 不具合対応 (alt block を mid-insert)', () => {
     await loadFixture(page, 'sequence-10msg.puml');
     await page.waitForTimeout(1500);  // overlay build wait
 
-    // dialog 自動回答
-    page.on('dialog', async (dialog) => {
-      var msg = dialog.message();
-      if (msg.indexOf('種類') >= 0) await dialog.accept('alt');
-      else if (msg.indexOf('Label') >= 0) await dialog.accept('on-retry');
-      else await dialog.accept('');
-    });
-
     await clickOverlayByLine(page, 10); // resp1
     await page.waitForTimeout(300);
-    await page.locator('.seq-wrap-block').click();
+
+    // FEAT-114: 2 連 prompt() ではなく seq-modal の 1 枚フォームで種類とラベルを入れる。
+    await page.locator('.seq-wrap-block').first().click();
+    await page.waitForSelector('#seq-wrap-kind');
+    await page.selectOption('#seq-wrap-kind', 'alt');
+    await page.fill('#seq-wrap-label', 'on-retry');
+    await page.locator('#seq-wrap-confirm').click();
     await page.waitForTimeout(500);
 
     var t = await getEditorText(page);
