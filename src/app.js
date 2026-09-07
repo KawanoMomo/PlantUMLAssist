@@ -2283,12 +2283,23 @@ function initCommandPalette() {
     Array.prototype.forEach.call(propsEl.querySelectorAll('button'), function(btn, i) {
       var label = (btn.textContent || '').trim();
       if (!label || btn.disabled) return;
+      // 値を選ぶボタン (矢印の種類・関係の種類のカード、その開閉) は「操作」では
+      // ないので候補にしない。design 2a の Selected は「呼び出しの開始・終了を
+      // 自動で入れる」「条件分岐・繰り返しの枠で囲む」のような操作だけを並べる。
+      // 入れてしまうと矢印 20 種で上限が埋まり、肝心の操作が 1 つも出ない。
+      if (btn.hasAttribute('data-value') || btn.hasAttribute('aria-controls')) return;
+      // 本文欄の書式ボタン (B / I / U / 色) も、単体で選んでも意味が無いので外す。
+      if (/(^|\s)rle-/.test(btn.className || '')) return;
+      // design 2a: 候補名は「何が起きるか」、記法は右に小さく (hint)。
+      // ボタンの文字そのままだと「⚡ ライフライン推論 (activate/deactivate)」に
+      // なり、図種の語彙を知っている人にしか読み取れない。
+      var d = window.MA.commandPalette.describeAction(label);
       out.push({
         id: 'sel-' + i,
         group: 'selected',
-        title: label,
-        hint: '',
-        keywords: ['selected', 'せんたく', label],
+        title: d.title,
+        hint: d.hint,
+        keywords: ['selected', 'せんたく', label, d.title, d.hint],
         run: function() { btn.click(); },
       });
     });
