@@ -288,6 +288,26 @@ window.MA.workspace = (function() {
     }
   }
 
+  // BLK-reviewer-20260907-1403: 名前だけでなく最終保存時刻と本文の指紋も取る。
+  // 古い server は entries を返さないので、その場合は名前だけの entry に落とす。
+  function listFileEntries(fileDir) {
+    try {
+      return window.fetch('/autosave?dir=' + encodeURIComponent(_dir(fileDir)))
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(data) {
+          if (!data) return [];
+          if (Array.isArray(data.entries)) return data.entries;
+          if (Array.isArray(data.files)) {
+            return data.files.map(function(n) { return { name: n, mtime: null, hash: null }; });
+          }
+          return [];
+        })
+        .catch(function() { return []; });
+    } catch (e) {
+      return Promise.resolve([]);
+    }
+  }
+
   function loadFile(name, fileDir) {
     if (!isValidName(name)) return Promise.resolve(null);
     try {
@@ -336,6 +356,7 @@ window.MA.workspace = (function() {
     isValidName: isValidName,
     saveToFile: saveToFile,
     listFiles: listFiles,
+    listFileEntries: listFileEntries,
     loadFile: loadFile,
     detectType: detectType,
   };

@@ -3,6 +3,7 @@
 Serves static files + /render endpoint for PlantUML local/online rendering.
 """
 import atexit
+import hashlib
 import json
 import os
 import re
@@ -242,12 +243,33 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(content.encode('utf-8'))
             return
-        # List mode: return all .puml stems + meta
+        # List mode: return all .puml stems + meta.
+        # BLK-reviewer-20260907-1403: 名前だけでは「前回見た版から変わったか」が分からず、
+        # 変更が無い日でも全図を読み直して初めて「変更なし」と言えていた。
+        # 1 図ずつ最終保存時刻と本文の指紋 (sha1) を返し、GUI 側で前回見た版と突き合わせる。
         files = []
+        entries = []
         if save_dir.exists():
-            files = sorted(p.stem for p in save_dir.glob('*.puml'))
+            for p in sorted(save_dir.glob('*.puml'), key=lambda q: q.stem):
+                files.append(p.stem)
+                entries.append(self._autosave_entry(p))
         meta = self._autosave_read_meta(save_dir)
-        self._send_json(200, {'files': files, 'meta': meta, 'dir': str(save_dir)})
+        self._send_json(200, {'files': files, 'entries': entries, 'meta': meta, 'dir': str(save_dir)})
+
+    def _autosave_entry(self, path):
+        """1 図分の {name, mtime, size, hash}。読めない図でも名前だけは返す。"""
+        entry = {'name': path.stem, 'mtime': None, 'size': None, 'hash': None}
+        try:
+            st = path.stat()
+            entry['mtime'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(st.st_mtime))
+            entry['size'] = st.st_size
+        except OSError:
+            return entry
+        try:
+            entry['hash'] = hashlib.sha1(path.read_bytes()).hexdigest()
+        except OSError:
+            pass
+        return entry
 
     # --- autosave DELETE -----------------------------------------------------
 

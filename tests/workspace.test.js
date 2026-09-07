@@ -204,3 +204,68 @@ describe('workspace file folder bridge', function() {
     expect(body.dir).toBe('./diagrams');
   });
 });
+
+// BLK-reviewer-20260907-1403: 一覧に最終保存時刻と本文の指紋を載せる。
+// runner の test は同期なので、fetch の返しを同期で解ける thenable にして中身を見る。
+function syncThenable(value) {
+  return {
+    then: function(cb) {
+      var next = cb ? cb(value) : value;
+      // 返り値がまた thenable なら畳む (Promise と同じ振る舞い)
+      return (next && typeof next.then === 'function') ? next : syncThenable(next);
+    },
+    catch: function() { return syncThenable(value); },
+  };
+}
+
+describe('workspace listFileEntries', function() {
+  beforeEach(function() { fresh(); });
+
+  test('API として公開されている', function() {
+    expect(typeof ws.listFileEntries).toBe('function');
+  });
+
+  test('server の entries をそのまま返す', function() {
+    global.window.fetch = function() {
+      return syncThenable({ ok: true, json: function() {
+        return syncThenable({ files: ['a'], entries: [{ name: 'a', mtime: '2026-09-07T05:00:00Z', hash: 'h1' }] });
+      } });
+    };
+    var got = null;
+    ws.listFileEntries('./diagrams').then(function(v) { got = v; });
+    expect(got.length).toBe(1);
+    expect(got[0].name).toBe('a');
+    expect(got[0].hash).toBe('h1');
+  });
+
+  test('entries を返さない古い server では名前だけの entry に落とす', function() {
+    global.window.fetch = function() {
+      return syncThenable({ ok: true, json: function() { return syncThenable({ files: ['a', 'b'] }); } });
+    };
+    var got = null;
+    ws.listFileEntries('./diagrams').then(function(v) { got = v; });
+    expect(got.length).toBe(2);
+    expect(got[0].name).toBe('a');
+    expect(got[0].hash).toBeNull();
+  });
+
+  test('server が落ちていても空配列で返す (一覧が消えるだけ)', function() {
+    global.window.fetch = function() {
+      return syncThenable({ ok: false, json: function() { return syncThenable(null); } });
+    };
+    var got = null;
+    ws.listFileEntries('./diagrams').then(function(v) { got = v; });
+    expect(got).toEqual([]);
+  });
+
+  test('保存フォルダを問い合わせ先に載せる', function() {
+    var seen = null;
+    global.window.fetch = function(url) {
+      seen = url;
+      return syncThenable({ ok: true, json: function() { return syncThenable({ files: [] }); } });
+    };
+    ws.listFileEntries('./diagrams');
+    expect(seen).toContain('/autosave?dir=');
+    expect(seen).toContain(encodeURIComponent('./diagrams'));
+  });
+});

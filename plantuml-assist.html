@@ -467,6 +467,34 @@ html, body {
   cursor: pointer;
 }
 #folder-panel button:hover { background: var(--bg-secondary); }
+/* 前回見た版からの差 (BLK-reviewer-20260907-1403) */
+#folder-panel { min-width: 260px; }
+#folder-panel .folder-summary {
+  font-size: 10px;
+  color: var(--text-secondary);
+  padding: 3px 6px 5px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 3px;
+}
+#folder-panel button.folder-item {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+#folder-panel .folder-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; }
+#folder-panel .folder-badge { flex: 0 0 auto; font-size: 9px; line-height: 1; }
+#folder-panel .folder-badge-changed { color: var(--accent); }
+#folder-panel .folder-badge-new { color: var(--accent); font-weight: 700; }
+#folder-panel .folder-mtime { flex: 0 0 auto; font-size: 9px; color: var(--text-secondary); }
+#folder-panel button[data-review-status="unchanged"] .folder-name { color: var(--text-secondary); }
+#folder-panel .folder-gone { color: var(--text-secondary); font-style: italic; }
+#folder-panel button.folder-mark-seen {
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 10px;
+  text-align: center;
+}
 /* 差分バッジと一覧 (前回保存時点との差) */
 #tab-bar .tab .tab-dot {
   font-size: 9px;
@@ -2163,6 +2191,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/auto-save.js"></script>
 <script src="src/core/autosave-options.js"></script>
 <script src="src/core/workspace.js"></script>
+<script src="src/core/review-watch.js"></script>
 <script src="src/core/bulk-rename.js"></script>
 <script src="src/core/bulk-export.js"></script>
 <script src="src/core/handoff-package.js"></script>
