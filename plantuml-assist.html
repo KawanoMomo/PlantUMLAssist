@@ -1796,6 +1796,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <!-- BLK-reviewer-20260907-0803: 前回保存時点から変わった図があるかを常時見せる -->
         <button class="tab-tool" id="btn-tab-diff" title="前回保存した時点から変わった図の一覧">± 差分 −</button>
         <!-- BLK-primary-20260907-0923-wish: 変わった図の変更前後をまとめて 1 画面に並べる -->
+        <!-- BLK-junior-20260907-1203-wish: 同じ系統の図を 1 セットとしてまとめて題材替えする -->
+        <button class="tab-tool" id="btn-tab-set" title="同じ系統の図をまとめて 1 セットとして、対応表 1 回で全部複製する">⧉⧉ セット複製</button>
         <!-- BLK-reviewer-20260907-1203-wish: レビューの指摘を図の該当行に貼り、未読/既読で追う -->
         <button class="tab-tool" id="btn-tab-pins" title="この図に付いたレビュー指摘の一覧。図の上の印をクリックしても開く">📌 指摘 −</button>
         <button class="tab-tool" id="btn-tab-board" title="変わった図の変更前 DSL と変更後 DSL を全部まとめて 1 画面に並べる (レビュー会議用)">▤ 変更サマリ</button>
@@ -1945,6 +1947,10 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 </div>
 
 <!-- テンプレートから新規作成 (BLK-junior-20260907-0803-wish) -->
+<div id="fc-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+  <div id="fc-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:600px;max-width:820px;max-height:80vh;overflow-y:auto;"></div>
+</div>
+
 <div id="tpl-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="tpl-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:600px;max-width:820px;max-height:80vh;overflow-y:auto;"></div>
 </div>
@@ -2151,6 +2157,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/selection-router.js"></script>
 <script src="src/core/relation-kind-cards.js"></script>
 <script src="src/core/review-pins.js"></script>
+<script src="src/core/family-clone.js"></script>
 <script src="src/ui/properties.js"></script>
 <script src="src/ui/reuse-modal.js"></script>
 <script src="src/ui/sequence-overlay.js"></script>

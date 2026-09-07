@@ -16,6 +16,8 @@ const sourceFiles = [
   'src/core/name-audit.js',
   'src/core/template-new.js',
   'src/core/template-map.js',
+  'src/core/family-audit.js',
+  'src/core/family-clone.js',
   'src/core/activity-insert.js',
   'src/core/save-diff.js',
   'src/core/command-palette.js',
