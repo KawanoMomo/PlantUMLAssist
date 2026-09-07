@@ -1050,17 +1050,25 @@ window.MA.modules.plantumlSequence = (function() {
     _renderPicker(ctx, line, position, INSERT_KINDS, 'ここに挿入', false);
   }
 
+  // ボタンの id。kind には `block:par` のように CSS の id セレクタで拾えない
+  // 文字が混ざるので、id 用に `-` へ均す (data-kind は元の値のまま)。
+  function pickBtnId(kind) {
+    return 'seq-pick-' + String(kind).replace(/[^A-Za-z0-9_-]+/g, '-');
+  }
+
   function _renderPicker(ctx, line, position, kinds, title, isOther) {
     var modal = document.getElementById('seq-modal');
     var content = document.getElementById('seq-modal-content');
     if (!modal || !content) return;
+    // 挿入先の行が決まらないうちは開かない (見出しが空のピッカーを出さない)。
+    if (insertTargetLine(line, position) === null) return;
     var esc = window.MA.htmlUtils.escHtml;
     var html = '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">' + esc(title) + '</h3>' +
       '<div id="seq-pick-target" style="font-size:11px;color:var(--text-secondary);margin-bottom:12px;">' +
         esc(describeInsertTarget(line, position)) + '</div>' +
       '<div style="display:flex;flex-direction:column;gap:6px;">';
     kinds.forEach(function(k) {
-      html += '<button id="seq-pick-' + k.value + '" data-kind="' + k.value + '" class="seq-pick-btn" ' +
+      html += '<button id="' + pickBtnId(k.value) + '" data-kind="' + k.value + '" class="seq-pick-btn" ' +
         'style="text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);' +
         'padding:8px 10px;border-radius:4px;cursor:pointer;font-size:12px;">' +
         esc(k.label) +
@@ -1601,6 +1609,7 @@ window.MA.modules.plantumlSequence = (function() {
       _showInsertPicker(ctx, line, position);
     },
     insertKindOptions: insertKindOptions,
+    pickBtnId: pickBtnId,
     otherInsertKinds: otherInsertKinds,
     insertTargetLine: insertTargetLine,
     describeInsertTarget: describeInsertTarget,

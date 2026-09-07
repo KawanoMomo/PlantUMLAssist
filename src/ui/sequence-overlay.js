@@ -258,7 +258,11 @@ window.MA.sequenceOverlay = (function() {
         line: parseInt(r.getAttribute('data-line'), 10),
         y: parseFloat(r.getAttribute('y')) + parseFloat(r.getAttribute('height')) / 2,
       };
+    }).filter(function(it) {
+      // data-line が付いていない rect (描き直しの途中など) は挿入先にできない。
+      return !isNaN(it.line);
     }).sort(function(a, b) { return a.y - b.y; });
+    if (items.length === 0) return null;
     // y がどの rect の y より下か判定: 下端から遡って最初に「rect.y < y」なら after その rect
     for (var i = items.length - 1; i >= 0; i--) {
       if (y > items[i].y) return { line: items[i].line, position: 'after' };
