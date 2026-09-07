@@ -98,11 +98,168 @@ window.MA.activityInsert = (function() {
     return false;
   }
 
+
+  // ── 位置の読める説明 (BLK-junior-20260908-0103) ─────────────────────────────
+  // 「位置」の候補が行番号と DSL の生コード (例: `8: if (初期化失敗時?) then (異常) の後`)
+  // でしか出ていなかったため、どちらが異常側の行かを PlantUML の構文から自分で
+  // 判断する必要があった。DSL を 1 度なぞって「どの分岐の どちら側 の中か」を持ち、
+  // 候補を日本語の構造で言い直す。記法を覚えていなくても位置が選べる。
+  var L_IF = /^if\s*\(([^)]*)\)\s*(?:then\s*(?:\(([^)]*)\))?)?\s*$/i;
+  var L_ELSEIF = /^elseif\s*\(([^)]*)\)\s*(?:then\s*(?:\(([^)]*)\))?)?\s*$/i;
+  var L_ELSE = /^else(?:\s*\(([^)]*)\))?\s*$/i;
+  var L_ENDIF = /^endif\s*$/i;
+  var L_WHILE = /^while\s*\(([^)]*)\)\s*(?:is\s*\(([^)]*)\))?\s*$/i;
+  var L_ENDWHILE = /^endwhile\s*$/i;
+  var L_REPEAT = /^repeat\s*$/i;
+  var L_REPEAT_WHILE = /^repeat\s+while\s*\(([^)]*)\)\s*(?:is\s*\(([^)]*)\))?\s*$/i;
+  var L_FORK = /^fork\s*$/i;
+  var L_FORK_AGAIN = /^fork\s+again\s*$/i;
+  var L_END_FORK = /^end\s+fork\s*$/i;
+  var L_SWIMLANE = /^\|(?:#[^|]+\|)?\s*([^|]+?)\s*\|$/;
+  var L_ACTION = /^(?:#[A-Za-z0-9_]+(?:\/#?[A-Za-z0-9_]+)?\s*)?:(.*?);?\s*(?:<<[^>]*>>)?\s*$/;
+  var L_NOTE = /^note\b/i;
+
+  function _q(s) { return '「' + String(s == null ? '' : s).trim() + '」'; }
+
+  // 各行の「そこはどの構造の中か」。開いている構造を積んで 1 度なぞる。
+  // 返すのは行ごとの { depth, inside, self } (1 始まりの添字)。
+  //   inside — その行が属する枠 (分岐の側 / 繰り返しの中 / 並行処理の N 本目)
+  //   self   — その行そのものが何か
+  function structure(dsl) {
+    var lines = _lines(dsl);
+    var stack = [];
+    var out = [];
+    function top() { return stack.length ? stack[stack.length - 1] : null; }
+    function insideText() {
+      var t = top();
+      return t ? t.inside : '';
+    }
+    for (var i = 0; i < lines.length; i++) {
+      var t = lines[i].trim();
+      var m, self = '', depth = stack.length, inside = insideText();
+      if ((m = t.match(L_IF))) {
+        self = '分岐' + _q(m[1]) + 'の ' + (m[2] || 'yes') + ' 側のはじめ';
+        stack.push({ cond: m[1], inside: '分岐' + _q(m[1]) + 'の ' + (m[2] || 'yes') + ' 側' });
+      } else if ((m = t.match(L_ELSEIF)) && top() && top().cond != null) {
+        stack.pop();
+        self = '分岐' + _q(m[1]) + 'の ' + (m[2] || 'yes') + ' 側のはじめ';
+        stack.push({ cond: m[1], inside: '分岐' + _q(m[1]) + 'の ' + (m[2] || 'yes') + ' 側' });
+        depth = stack.length - 1;
+      } else if ((m = t.match(L_ELSE)) && top() && top().cond != null) {
+        var cond = top().cond;
+        stack.pop();
+        var lbl = m[1] || 'no';
+        self = '分岐' + _q(cond) + 'の ' + lbl + ' 側のはじめ';
+        stack.push({ cond: cond, inside: '分岐' + _q(cond) + 'の ' + lbl + ' 側' });
+        depth = stack.length - 1;
+      } else if (L_ENDIF.test(t)) {
+        var c2 = top() ? top().cond : null;
+        if (top() && top().cond != null) stack.pop();
+        depth = stack.length;
+        inside = insideText();
+        self = '分岐' + (c2 == null ? '' : _q(c2)) + 'を閉じた後';
+      } else if ((m = t.match(L_WHILE))) {
+        self = '繰り返し' + _q(m[1]) + 'の中のはじめ';
+        stack.push({ inside: '繰り返し' + _q(m[1]) + 'の中' });
+      } else if (L_ENDWHILE.test(t)) {
+        if (stack.length) stack.pop();
+        depth = stack.length;
+        inside = insideText();
+        self = '繰り返しを閉じた後';
+      } else if ((m = t.match(L_REPEAT_WHILE))) {
+        if (stack.length) stack.pop();
+        depth = stack.length;
+        inside = insideText();
+        self = '繰り返し' + _q(m[1]) + 'を閉じた後';
+      } else if (L_REPEAT.test(t)) {
+        self = '繰り返しの中のはじめ';
+        stack.push({ inside: '繰り返しの中' });
+      } else if (L_FORK.test(t)) {
+        self = '並行処理 1 本目のはじめ';
+        stack.push({ fork: 1, inside: '並行処理 1 本目' });
+      } else if (L_FORK_AGAIN.test(t)) {
+        var n = (top() && top().fork ? top().fork : 1) + 1;
+        if (top() && top().fork) stack.pop();
+        self = '並行処理 ' + n + ' 本目のはじめ';
+        stack.push({ fork: n, inside: '並行処理 ' + n + ' 本目' });
+        depth = stack.length - 1;
+      } else if (L_END_FORK.test(t)) {
+        if (stack.length) stack.pop();
+        depth = stack.length;
+        inside = insideText();
+        self = '並行処理を閉じた後';
+      } else if ((m = t.match(L_SWIMLANE))) {
+        self = 'レーン' + _q(m[1]) + 'のはじめ';
+      } else if (START_RE.test(t)) {
+        self = 'フローのはじめ';
+      } else if (TERM_RE.test(t)) {
+        self = 'フローの終わりの後';
+      } else if (L_NOTE.test(t)) {
+        self = 'ノートの後';
+      } else if (t && (m = t.match(L_ACTION)) && t.charAt(0) !== '@' && /:/.test(t)) {
+        self = 'アクション' + _q(m[1]) + 'の後';
+      }
+      out.push({ depth: depth, inside: inside, self: self, text: t });
+    }
+    return out;
+  }
+
+  // pointLabel: 「位置」の 1 行。構造で言い、行番号は末尾に小さく残す
+  // (DSL を読む人が突き合わせられるように)。
+  function pointLabel(dsl, lineNum, position) {
+    var st = structure(dsl);
+    var idx = lineNum - 1;
+    var s = (idx >= 0 && idx < st.length) ? st[idx] : null;
+    if (!s) return 'L' + lineNum;
+    if (position === 'before') return 'フローのはじめの前 (L' + lineNum + ')';
+    var body = s.self;
+    if (!body) body = _q(s.text) + 'の後';
+    // 分岐や繰り返しの中の行は、どの枠の中かを先に言う。
+    if (s.inside && s.self && s.self.indexOf('のはじめ') < 0 && s.self.indexOf('閉じた後') < 0) {
+      body = s.inside + ' ・ ' + body;
+    }
+    return body + ' (L' + lineNum + ')';
+  }
+
+
+  // pointIndexForLine: 図で選んだ要素の行に当たる候補の番号 (0 始まり)。
+  // 図形をクリックしてから「＋この位置に挿入」を開いたとき、位置を選び直さずに
+  // その要素の位置から始められるようにする。無ければ -1。
+  function pointIndexForLine(dsl, lineNum) {
+    var n = Number(lineNum);
+    if (!isFinite(n) || n < 1) return -1;
+    var pts = insertPoints(dsl);
+    for (var i = 0; i < pts.length; i++) {
+      if (pts[i].line === n && pts[i].position === 'after') return i;
+    }
+    return -1;
+  }
+
+  // defaultPointIndex: 既定の位置。図で要素を選んでいればその位置、
+  // 選んでいなければ本体の最後 (いちばんよく足す位置)。
+  function defaultPointIndex(dsl, selectedLine) {
+    var pts = insertPoints(dsl);
+    var i = pointIndexForLine(dsl, selectedLine);
+    if (i >= 0) return i;
+    var last = 0;
+    for (var d = 0; d < pts.length; d++) if (pts[d].inFlow) last = d;
+    return last;
+  }
+
+  // 図で選んだ要素に合わせたことを画面で言う 1 行。
+  function pickedNote(dsl, selectedLine) {
+    var i = pointIndexForLine(dsl, selectedLine);
+    if (i < 0) return '';
+    var pt = insertPoints(dsl)[i];
+    return '図で選んだ ' + pt.label.replace(/\s*\(L\d+\)$/, '') + ' に合わせました';
+  }
+
   // 挿入できる位置の一覧。行間ではなく「どの行の後ろか」で表す
   // (position: 'after' で addXxxAtLine にそのまま渡せる)。
   // 先頭の 1 件だけ position: 'before' で「いちばん前」を表す。
   function insertPoints(dsl) {
     var lines = _lines(dsl);
+    var st = structure(dsl);
     var pts = [];
     for (var i = 0; i < lines.length; i++) {
       var raw = lines[i];
@@ -115,7 +272,10 @@ window.MA.activityInsert = (function() {
         line: lineNum,
         position: 'after',
         text: t,
-        label: lineNum + ': ' + t + ' の後',
+        label: pointLabel(dsl, lineNum, 'after'),
+        raw: lineNum + ': ' + t + ' の後',
+        depth: st[i] ? st[i].depth : 0,
+        inside: st[i] ? st[i].inside : '',
         inFlow: inFlow(dsl, lineNum),
       });
     }
@@ -126,7 +286,10 @@ window.MA.activityInsert = (function() {
           line: j + 1,
           position: 'before',
           text: lines[j].trim(),
-          label: (j + 1) + ': start の前',
+          label: pointLabel(dsl, j + 1, 'before'),
+          raw: (j + 1) + ': start の前',
+          depth: 0,
+          inside: '',
           inFlow: false,
         });
         break;
@@ -300,6 +463,11 @@ window.MA.activityInsert = (function() {
     pickerKinds: pickerKinds,
     describePoint: describePoint,
     describeStructure: describeStructure,
+    structure: structure,
+    pointLabel: pointLabel,
+    pointIndexForLine: pointIndexForLine,
+    defaultPointIndex: defaultPointIndex,
+    pickedNote: pickedNote,
     insertPoints: insertPoints,
     pointAt: pointAt,
     fieldsFor: fieldsFor,

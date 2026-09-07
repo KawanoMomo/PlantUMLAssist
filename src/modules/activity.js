@@ -1456,6 +1456,59 @@ window.MA.modules.plantumlActivity = (function() {
     return null;
   }
 
+
+  // 分岐の枝ラベル (「異常」「正常」など) を、DSL の並び順で集める。
+  // PlantUML は枝ラベルを分岐の矢印の脇に <text> で描く。ラベルを選べるようにすると、
+  // 「この側に足す」が図の上のクリックで決まる (BLK-junior-20260908-0103)。
+  function _branchLabelTargets(nodes, out) {
+    out = out || [];
+    (nodes || []).forEach(function(n) {
+      if (n.kind === 'if' && n.branches) {
+        n.branches.forEach(function(b, bi) {
+          var label = String(b.label == null ? '' : b.label).trim();
+          if (label) out.push({ id: n.id + '#b' + bi, label: label, line: b.line, condition: n.condition });
+          _branchLabelTargets(b.body, out);
+        });
+        return;
+      }
+      if (n.branches) n.branches.forEach(function(b) { _branchLabelTargets(b.body, out); });
+      if (n.body) _branchLabelTargets(n.body, out);
+    });
+    return out;
+  }
+
+  // ラベルの文字と同じ <text> を、文書順に 1 つずつ割り当てる。
+  // 見つからないラベルは飛ばす (印が 1 つ欠けるだけで、既存の選択は壊さない)。
+  function _addBranchLabelRects(svgEl, parsedData, overlayEl) {
+    var targets = _branchLabelTargets(parsedData.nodes || []);
+    if (!targets.length) return 0;
+    var texts = svgEl.querySelectorAll('text');
+    var used = {};
+    var added = 0;
+    targets.forEach(function(t) {
+      for (var i = 0; i < texts.length; i++) {
+        if (used[i]) continue;
+        if (String(texts[i].textContent || '').trim() !== t.label) continue;
+        var bb = null;
+        try { bb = texts[i].getBBox(); } catch (e) { bb = null; }
+        if (!bb || !bb.width || !bb.height) {
+          // jsdom / 描画前は BBox が取れない。取れないラベルは印を置かない。
+          used[i] = true;
+          break;
+        }
+        used[i] = true;
+        OB.addRect(overlayEl, bb.x, bb.y, bb.width, bb.height, {
+          'data-type': 'branch',
+          'data-id': t.id,
+          'data-line': String(t.line),
+        });
+        added++;
+        break;
+      }
+    });
+    return added;
+  }
+
   function buildOverlay(svgEl, parsedData, overlayEl) {
     if (!svgEl || !overlayEl) return;
     OB.syncDimensions(svgEl, overlayEl);
@@ -1532,6 +1585,8 @@ window.MA.modules.plantumlActivity = (function() {
         console.warn('[activity.buildOverlay] note polygon count mismatch: model=' + notes.length + ' svg=' + notePolys.length);
       }
     }
+
+    _addBranchLabelRects(svgEl, parsedData, overlayEl);
   }
 
   function renderProps(selData, parsedData, propsEl, ctx) {
@@ -1542,13 +1597,47 @@ window.MA.modules.plantumlActivity = (function() {
     }
     if (selData.length === 1) {
       var sel = selData[0];
-      if (sel.type === 'action') return _renderActionEdit(sel, parsedData, propsEl, ctx);
-      if (sel.type === 'decision' || sel.type === 'fork') return _renderControlEdit(sel, parsedData, propsEl, ctx);
-      if (sel.type === 'start' || sel.type === 'stop' || sel.type === 'end') return _renderTerminatorEdit(sel, parsedData, propsEl, ctx);
-      if (sel.type === 'note') return _renderNoteEdit(sel, parsedData, propsEl, ctx);
-      if (sel.type === 'swimlane') return _renderSwimlaneEdit(sel, parsedData, propsEl, ctx);
+      if (sel.type === 'action') { _renderActionEdit(sel, parsedData, propsEl, ctx); return _appendInsertHere(sel, propsEl, ctx); }
+      if (sel.type === 'decision' || sel.type === 'fork') { _renderControlEdit(sel, parsedData, propsEl, ctx); return _appendInsertHere(sel, propsEl, ctx); }
+      if (sel.type === 'start' || sel.type === 'stop' || sel.type === 'end') { _renderTerminatorEdit(sel, parsedData, propsEl, ctx); return _appendInsertHere(sel, propsEl, ctx); }
+      if (sel.type === 'note') { _renderNoteEdit(sel, parsedData, propsEl, ctx); return _appendInsertHere(sel, propsEl, ctx); }
+      if (sel.type === 'swimlane') { _renderSwimlaneEdit(sel, parsedData, propsEl, ctx); return _appendInsertHere(sel, propsEl, ctx); }
+      if (sel.type === 'branch') { _renderBranchPick(sel, parsedData, propsEl, ctx); return _appendInsertHere(sel, propsEl, ctx); }
     }
     propsEl.innerHTML = '<div style="font-size:11px;color:var(--text-secondary);">複数選択は未対応 (Activity)</div>';
+  }
+
+  // 図の上で分岐の枝ラベル (異常 / 正常) を選んだとき。どちら側を選んだかを言い、
+  // 下の「＋ ここに挿入」がその側のはじめを既定にする。
+  function _renderBranchPick(sel, parsedData, propsEl, ctx) {
+    var AI = window.MA.activityInsert;
+    var esc = window.MA.htmlUtils.escHtml;
+    var where = AI ? AI.pointLabel(ctx.getMmdText(), sel.line, 'after') : ('L' + sel.line);
+    propsEl.innerHTML =
+      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">分岐の枝 (L' + sel.line + ')</div>' +
+      '<div style="font-size:11px;margin-bottom:8px;">' + esc(where) + '</div>' +
+      '<div style="font-size:10px;color:var(--text-secondary);">この側に足すものを下で選びます。' +
+      '枝の名前を変えるときは分岐の菱形を選んでください。</div>';
+  }
+
+  // 選んだ要素のフォームの下に「＋ ここに挿入」を足す (BLK-junior-20260908-0103)。
+  // 図で要素をクリックしたのに、挿入位置は右ペインの「追加」タブへ戻って
+  // 行番号と生コードのプルダウンから選び直す必要があった。選んだ要素の位置を
+  // 既定にして、その場で足せるようにする。位置は分岐のどちら側かで言い直す。
+  function _appendInsertHere(sel, propsEl, ctx) {
+    var AI = window.MA.activityInsert;
+    if (!AI || !propsEl) return;
+    var line = Number(sel && sel.line);
+    if (!isFinite(line) || line < 1) return;
+    var box = document.createElement('div');
+    box.style.cssText = 'border-top:1px solid var(--border);padding-top:10px;margin-top:10px;';
+    box.innerHTML =
+      '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">＋ ここに挿入</label>' +
+      '<div id="ac-ins-point-wrap"></div>' +
+      '<div id="ac-ins-kind-wrap"></div>' +
+      '<div id="ac-ins-detail" style="margin-top:6px;"></div>';
+    propsEl.appendChild(box);
+    _renderInsertHere(ctx, propsEl, line);
   }
 
   function _renderTerminatorEdit(sel, parsedData, propsEl, ctx) {
@@ -1772,7 +1861,19 @@ window.MA.modules.plantumlActivity = (function() {
     '</details>';
   }
 
-  function _renderInsertHere(ctx, propsEl) {
+  // 図で選んでいる要素の行。overlay のクリックでも右ペインの一覧でも同じ選択を見る。
+  function _selectedLine() {
+    var SEL = window.MA.selection;
+    if (!SEL || !SEL.getSelected) return 0;
+    var sel = SEL.getSelected() || [];
+    for (var i = 0; i < sel.length; i++) {
+      var n = Number(sel[i] && sel[i].line);
+      if (isFinite(n) && n >= 1) return n;
+    }
+    return 0;
+  }
+
+  function _renderInsertHere(ctx, propsEl, forcedLine) {
     var AI = window.MA.activityInsert;
     var P = window.MA.properties;
     if (!AI || !P) return;
@@ -1786,13 +1887,22 @@ window.MA.modules.plantumlActivity = (function() {
       pointWrap.innerHTML = '<div style="font-size:10px;color:var(--text-secondary);">挿入できる行がありません</div>';
       return;
     }
-    // 既定は本体の最後 (いちばんよく足す位置)。
-    var defIdx = 0;
-    for (var d = 0; d < pts.length; d++) if (pts[d].inFlow) defIdx = d;
+    // 既定は、図で要素を選んでいればその位置。選んでいなければ本体の最後。
+    // BLK-junior-20260908-0103: 図形をクリックしてから「＋この位置に挿入」を開いたとき、
+    // 位置をプルダウンから探し直さずに済ませる。
+    var selLine = (typeof forcedLine === 'number' && forcedLine >= 1) ? forcedLine : _selectedLine();
+    var defIdx = AI.defaultPointIndex(ctx.getMmdText(), selLine);
+    var note = AI.pickedNote(ctx.getMmdText(), selLine);
 
+    // 候補は行番号と生コードではなく「どの分岐のどちら側か」で並べ、入れ子は字下げする。
     pointWrap.innerHTML = P.selectFieldHtml('位置', 'ac-ins-point', pts.map(function(pt, i) {
-      return { value: String(i), label: pt.label, selected: i === defIdx };
-    }));
+      return {
+        value: String(i),
+        label: new Array((pt.depth || 0) + 1).join('　') + pt.label,
+        selected: i === defIdx,
+      };
+    })) + (note ? '<div id="ac-ins-picked" style="font-size:10px;color:var(--accent);margin:-4px 0 6px 0;">'
+      + window.MA.htmlUtils.escHtml(note) + '</div>' : '');
 
     function currentPoint() {
       var sel = document.getElementById('ac-ins-point');
