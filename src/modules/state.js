@@ -40,6 +40,21 @@ window.MA.modules.plantumlState = (function() {
   );
   var END_NOTE_RE = /^end\s+note\s*$/i;
 
+  // design 5d「UML 要素の網羅一覧」State 行の「その他パレット」:
+  // fork / join、入口・出口ポイント、並行領域。いずれも PlantUML では
+  // ステレオタイプ付きの state (と複合状態の中の `--`) として書く。
+  var PSEUDO_KIND_BY_STEREOTYPE = {
+    'choice': 'choice',
+    'history': 'history',
+    'historydeep': 'historyDeep',
+    'fork': 'fork',
+    'join': 'join',
+    'entrypoint': 'entryPoint',
+    'exitpoint': 'exitPoint',
+  };
+  // 複合状態の中の並行領域の区切り。PlantUML は `--` と `||` の両方を受ける。
+  var REGION_SEP_RE = /^(--+|\|\|+)$/;
+
   var DESCRIPTION_RE = new RegExp(
     '^(' + ID + ')\\s*:\\s*(?:(entry|exit|do)\\s*/\\s*)?(.+)$',
     'i'
@@ -57,6 +72,8 @@ window.MA.modules.plantumlState = (function() {
       states: [],
       transitions: [],
       notes: [],
+      // design 5d: 複合状態の中の並行領域の区切り (`--`)。
+      regions: [],
     };
     if (!text || !text.trim()) return result;
     var lines = text.split('\n');
@@ -102,6 +119,18 @@ window.MA.modules.plantumlState = (function() {
         continue;
       }
 
+      // 並行領域の区切りは複合状態の中にしか置けない。外側の `--` は
+      // skinparam 等の区切り線として書かれることがあるので拾わない。
+      if (REGION_SEP_RE.test(trimmed) && openCompositeStack.length > 0) {
+        result.regions.push({
+          kind: 'region',
+          id: '__r_' + result.regions.length,
+          parentId: openCompositeStack[openCompositeStack.length - 1].id,
+          line: lineNum,
+        });
+        continue;
+      }
+
       var sm = trimmed.match(STATE_RE);
       if (sm) {
         var sid, slabel;
@@ -113,10 +142,7 @@ window.MA.modules.plantumlState = (function() {
           ? openCompositeStack[openCompositeStack.length - 1].id : null;
         var qid = parentId ? parentId + '.' + sid : sid;
         var st = {
-          kind: stereotype === 'choice' ? 'choice'
-            : stereotype === 'history' ? 'history'
-            : stereotype === 'historydeep' ? 'historyDeep'
-            : 'state',
+          kind: PSEUDO_KIND_BY_STEREOTYPE[stereotype] || 'state',
           id: qid,
           label: slabel,
           stereotype: stereotype,
@@ -236,6 +262,24 @@ window.MA.modules.plantumlState = (function() {
     out = insertBeforeEnd(out, '}');
     return out;
   }
+  // design 5d: 並行領域の区切り (`--`) を、指定した複合状態の閉じ `}` の直前に置く。
+  // 複合状態でないもの (単純 state) を渡された場合は何もしない。
+  function addRegionSeparator(text, compositeId, parsed) {
+    if (!compositeId) return text;
+    var target = null;
+    var states = (parsed && parsed.states) || [];
+    for (var i = 0; i < states.length; i++) {
+      if (states[i].id === compositeId) { target = states[i]; break; }
+    }
+    if (!target || target.endLine <= target.line) return text;
+    var lines = text.split('\n');
+    var closeIdx = target.endLine - 1;
+    if (closeIdx < 0 || closeIdx >= lines.length) return text;
+    var indent = (lines[closeIdx].match(/^\s*/) || [''])[0] + '  ';
+    lines.splice(closeIdx, 0, indent + '--');
+    return lines.join('\n');
+  }
+
   function addTransition(text, from, to, trigger, guard, action) {
     return insertBeforeEnd(text, fmtTransition(from, to, trigger, guard, action));
   }
@@ -762,6 +806,13 @@ window.MA.modules.plantumlState = (function() {
     propsEl.innerHTML = '<div style="font-size:11px;color:var(--text-secondary);">複数選択は未対応 (State)</div>';
   }
 
+  // design 5d:「その他パレット」の 1 ボタン。1 クリックで 1 要素が入る形に揃える。
+  function _otherBtnHtml(id, label) {
+    return '<button id="' + id + '" style="font-size:11px;padding:4px 8px;' +
+      'background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);' +
+      'border-radius:3px;cursor:pointer;">' + label + '</button>';
+  }
+
   function _renderNoSelection(parsedData, propsEl, ctx) {
     var P = window.MA.properties;
     var allStates = parsedData.states || [];
@@ -769,6 +820,9 @@ window.MA.modules.plantumlState = (function() {
     if (stateOpts.length === 0) stateOpts = [{ value: '', label: '（state なし）' }];
     var stateOptsWithPseudo = [{ value: '[*]', label: '[*] (initial/final)' }].concat(stateOpts);
     var trSummaries = window.MA.stateTransition.summaries(parsedData);
+    // design 5d: 並行領域は複合状態 (`{` を持つ state) の中にしか置けない。
+    var compositeOpts = allStates.filter(function(s) { return s.endLine > s.line; })
+      .map(function(s) { return { value: s.id, label: s.label || s.id }; });
 
     var html =
       '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">State Diagram</div>' +
@@ -779,7 +833,9 @@ window.MA.modules.plantumlState = (function() {
           { value: 'composite', label: 'Composite State' },
           { value: 'transition', label: 'Transition' },
           { value: 'note', label: 'Note' },
-          { value: 'bulk', label: '一括 (複数行)' }
+          { value: 'bulk', label: '一括 (複数行)' },
+          // design 5d: 常時は出さず、ここに畳む要素 (fork / join / 入口・出口ポイント / 並行領域)。
+          { value: 'other', label: 'その他' }
         ]) +
         '<div id="st-tail-detail" style="margin-top:6px;"></div>' +
       '</div>' +
@@ -860,10 +916,58 @@ window.MA.modules.plantumlState = (function() {
             'Idle / state Active / Error : 異常検知 / Sel &lt;&lt;choice&gt;&gt; (state) /<br>' +
             '[*] --&gt; Idle / Idle --&gt; Active : start / Active --&gt; Error : fail [retry &gt; 3] / log()。' +
             '空行は無視されます</div>';
+      } else if (kind === 'other') {
+        // design 5d:「その他パレット」。1 行 1 種で、名前を入れて右のボタンを押すだけ。
+        html2 =
+          '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:6px;line-height:1.5;">' +
+            'よく使わない擬似状態をここに畳んでいます。</div>' +
+          P.fieldHtml('名前', 'st-other-id', '', '例: Split1') +
+          '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px;">' +
+            _otherBtnHtml('st-other-fork', '⑂ fork') +
+            _otherBtnHtml('st-other-join', '⑃ join') +
+            _otherBtnHtml('st-other-entry', '⊕ 入口ポイント') +
+            _otherBtnHtml('st-other-exit', '⊖ 出口ポイント') +
+          '</div>' +
+          '<div style="border-top:1px solid var(--border);padding-top:8px;">' +
+            (compositeOpts.length === 0
+              ? '<div style="font-size:10px;color:var(--text-secondary);">' +
+                  '並行領域を置くには複合状態 (Composite State) が要ります</div>'
+              : P.selectFieldHtml('並行領域を足す複合状態', 'st-other-composite', compositeOpts) +
+                _otherBtnHtml('st-other-region', '— 並行領域の区切りを足す')) +
+          '</div>';
       }
       detailEl.innerHTML = html2;
       // 一括欄は「既に他の図にある行」を打ち直させないためのボタンを持つ。
       window.MA.reuseModal.bindButton('st-tail-reuse', 'plantuml-state', 'st-tail-bulk');
+
+      if (kind === 'other') {
+        var addPseudo = function(stereo, fallbackPrefix) {
+          var raw = document.getElementById('st-other-id').value;
+          if (!raw || !raw.trim()) raw = fallbackPrefix;
+          var norm = normalizeIdInput(raw, parsedData);
+          if (!norm.valid) { alert('名前 必須'); return; }
+          var t0 = ctx.getMmdText();
+          var out0 = addState(t0, norm.id, norm.label, stereo);
+          if (out0 === t0) return;
+          window.MA.history.pushHistory();
+          ctx.setMmdText(out0);
+          ctx.onUpdate();
+        };
+        P.bindEvent('st-other-fork', 'click', function() { addPseudo('fork', 'Fork'); });
+        P.bindEvent('st-other-join', 'click', function() { addPseudo('join', 'Join'); });
+        P.bindEvent('st-other-entry', 'click', function() { addPseudo('entryPoint', 'In'); });
+        P.bindEvent('st-other-exit', 'click', function() { addPseudo('exitPoint', 'Out'); });
+        P.bindEvent('st-other-region', 'click', function() {
+          var selEl = document.getElementById('st-other-composite');
+          if (!selEl) return;
+          var t1 = ctx.getMmdText();
+          var out1 = addRegionSeparator(t1, selEl.value, parsedData);
+          if (out1 === t1) { alert('複合状態が見つかりません'); return; }
+          window.MA.history.pushHistory();
+          ctx.setMmdText(out1);
+          ctx.onUpdate();
+        });
+      }
 
       if (kind === 'transition') {
         _bindPreview({
@@ -1166,7 +1270,12 @@ window.MA.modules.plantumlState = (function() {
         { value: '', label: '(none)', selected: !st.stereotype },
         { value: 'choice', label: 'choice', selected: st.stereotype === 'choice' },
         { value: 'history', label: 'history', selected: st.stereotype === 'history' },
-        { value: 'historyDeep', label: 'historyDeep', selected: st.stereotype === 'historydeep' }
+        { value: 'historyDeep', label: 'historyDeep', selected: st.stereotype === 'historydeep' },
+        // design 5d: fork / join / 入口・出口ポイントも同じ 1 つの欄で選べるようにする。
+        { value: 'fork', label: 'fork', selected: st.stereotype === 'fork' },
+        { value: 'join', label: 'join', selected: st.stereotype === 'join' },
+        { value: 'entryPoint', label: 'entryPoint', selected: st.stereotype === 'entrypoint' },
+        { value: 'exitPoint', label: 'exitPoint', selected: st.stereotype === 'exitpoint' }
       ]) +
       '<div style="font-size:11px;margin:4px 0;color:var(--text-secondary);">Parent: ' + (st.parentId || '(root)') + '</div>' +
       // Behaviors section (StableState style: entry/exit single-line, do multi-line)
@@ -1530,6 +1639,7 @@ window.MA.modules.plantumlState = (function() {
     fmtNote: fmtNote,
     addState: addState,
     addCompositeState: addCompositeState,
+    addRegionSeparator: addRegionSeparator,
     addTransition: addTransition,
     addNote: addNote,
     addStateAtLine: addStateAtLine,
