@@ -95,9 +95,9 @@ describe('FEAT-138 不可触の固定 (非退行)', function() {
   // ARROWS の変更で崩れない」ことなので、逐語固定・件数固定をやめ、
   // 既存 10 種が順序ごと残っていることを見るに変える。
   test('[AC-7] ARROWS の既存 10 種が順序ごと残っている', function() {
-    var m = seqSrc.match(/var ARROWS = \[([^\]]*)\];/);
-    expect(!!m).toBe(true);
-    var got = m[1].split(',').map(function(x) { return x.trim().replace(/^'|'$/g, ''); });
+    // BLK-builder-20260907-0923-4: ARROWS に `-[#red]>` (中に `]`) が入り、
+    // 2 行になったのでソース走査をやめ、公開された ARROWS の順を見る。
+    var got = seq.ARROWS;
     var want = ['->', '-->', '->>', '-->>', '<-', '<--', '<<-', '<<--', '<->', '<-->'];
     var kept = got.filter(function(a) { return want.indexOf(a) >= 0; });
     expect(kept.join(' ')).toBe(want.join(' '));

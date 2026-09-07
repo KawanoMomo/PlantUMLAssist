@@ -79,12 +79,93 @@ window.MA.properties = (function() {
         + 'border:1px solid ' + (on ? 'var(--accent)' : 'var(--border)') + ';'
         + 'color:' + (on ? '#fff' : 'var(--text-primary)') + ';'
         + 'font-family:var(--font-mono);font-size:12px;padding:3px 4px;border-radius:3px;cursor:pointer;">'
-        + escHtml(options[i].label) + '</button>';
+        + escHtml(options[i].label)
+        // design 2d: 「何が起きるか」を先に、記法は小さく下に。sub 無しは従来どおり 1 行。
+        + (options[i].sub ? '<br><span style="font-size:9px;opacity:0.75;">' + escHtml(options[i].sub) + '</span>' : '')
+        + '</button>';
     }
     return '<div style="margin-bottom:8px;">' +
       '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">' + escHtml(label) + '</label>' +
       '<div id="' + id + '" style="display:flex;gap:3px;">' + btns + '</div>' +
     '</div>';
+  }
+
+  // arrowPickerHtml: design 2d「矢印のその他パレット」。
+  // よく使う数種を分節ボタンで常時出し、残りは「その他の矢印… ▾」を開いた
+  // パレットに置く。パレットの各行は「何が起きるか」が主で、記法は右に小さく。
+  // 現在値は hidden input (id) が持つので、送信側は `.value` で読める。
+  // quick  = [{ value, label, title }]
+  // others = [{ value, desc, notation }]
+  function arrowPickerHtml(label, id, quick, others, current) {
+    var seg = segmentedFieldHtml(label, id + '-seg', quick.map(function(q) {
+      return { value: q.value, label: q.label, sub: q.sub, title: q.title, selected: q.value === current };
+    }));
+    var inOthers = false;
+    var rows = '';
+    for (var i = 0; i < others.length; i++) {
+      var on = others[i].value === current;
+      if (on) inOthers = true;
+      rows += '<button type="button" class="prop-arrow-item' + (on ? ' active' : '') + '"'
+        + ' data-value="' + escHtml(others[i].value) + '"'
+        + ' aria-pressed="' + (on ? 'true' : 'false') + '"'
+        + ' style="display:flex;width:100%;align-items:baseline;gap:8px;text-align:left;'
+        + 'background:' + (on ? 'rgba(124,140,248,0.18)' : 'transparent') + ';border:0;'
+        + 'border-left:2px solid ' + (on ? 'var(--accent)' : 'transparent') + ';'
+        + 'color:var(--text-primary);padding:4px 6px;font-size:12px;cursor:pointer;">'
+        + '<span style="flex:1;min-width:0;">' + escHtml(others[i].desc) + '</span>'
+        + '<span style="flex:0 0 auto;font-family:var(--font-mono);font-size:10px;color:var(--text-secondary);">'
+        + escHtml(others[i].notation || others[i].value) + '</span>'
+        + '</button>';
+    }
+    return seg +
+      '<input type="hidden" id="' + id + '" value="' + escHtml(current || '') + '">' +
+      '<div style="margin-bottom:8px;">' +
+        '<button type="button" id="' + id + '-more-btn" aria-expanded="' + (inOthers ? 'true' : 'false') + '"'
+          + ' aria-controls="' + id + '-more"'
+          + ' style="width:100%;text-align:left;background:transparent;border:0;color:var(--text-secondary);'
+          + 'font-size:11px;padding:2px 0;cursor:pointer;">その他の矢印… <span class="prop-arrow-caret">'
+          + (inOthers ? '▴' : '▾') + '</span></button>' +
+        '<div id="' + id + '-more"' + (inOthers ? '' : ' hidden')
+          + ' style="border:1px solid var(--border);border-radius:3px;margin-top:2px;">' + rows + '</div>' +
+      '</div>';
+  }
+
+  // bindArrowPicker: 分節ボタンとパレットの両方を onPick(value) に繋ぎ、
+  // 「その他の矢印…」の開閉を配線する。
+  function bindArrowPicker(id, onPick) {
+    var hidden = document.getElementById(id);
+    var apply = function(v) {
+      if (hidden) hidden.value = v;
+      onPick(v);
+    };
+    var seg = document.getElementById(id + '-seg');
+    if (seg) {
+      var segBtns = seg.querySelectorAll('.prop-seg');
+      for (var i = 0; i < segBtns.length; i++) {
+        (function(b) {
+          b.addEventListener('click', function() { apply(b.getAttribute('data-value')); });
+        })(segBtns[i]);
+      }
+    }
+    var more = document.getElementById(id + '-more');
+    if (more) {
+      var items = more.querySelectorAll('.prop-arrow-item');
+      for (var j = 0; j < items.length; j++) {
+        (function(b) {
+          b.addEventListener('click', function() { apply(b.getAttribute('data-value')); });
+        })(items[j]);
+      }
+    }
+    var btn = document.getElementById(id + '-more-btn');
+    if (btn && more) {
+      btn.addEventListener('click', function() {
+        var open = more.hasAttribute('hidden');
+        if (open) more.removeAttribute('hidden'); else more.setAttribute('hidden', '');
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        var caret = btn.querySelector('.prop-arrow-caret');
+        if (caret) caret.textContent = open ? '▴' : '▾';
+      });
+    }
   }
 
   function selectFieldHtml(label, id, options, monoFont) {
@@ -214,6 +295,8 @@ window.MA.properties = (function() {
     fieldHtml: fieldHtml,
     selectFieldHtml: selectFieldHtml,
     segmentedFieldHtml: segmentedFieldHtml,
+    arrowPickerHtml: arrowPickerHtml,
+    bindArrowPicker: bindArrowPicker,
     panelHeaderHtml: panelHeaderHtml,
     sectionHeaderHtml: sectionHeaderHtml,
     sectionFooterHtml: sectionFooterHtml,

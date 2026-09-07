@@ -76,13 +76,17 @@ test.describe('BLK-builder-0823 From ⇄ To と矢印の分節ボタン', () => 
     expect((await getEditorText(page)).split('\n')[3]).toBe('User -> System : Request');
   });
 
-  test('10 種すべては「Arrow (その他)」のプルダウンに残っている', async ({ page }) => {
+  // BLK-builder-20260907-0923-4 (design 2d): 「Arrow (その他)」の素の select は
+  // 「その他の矢印…」パレットに置き換わった。意図 (分節に出さない
+  // 矢印も選べる) は同じなので、選ぶ先をパレットに変えて検証する。
+  test('分節に出さない矢印は「その他の矢印…」パレットから選べる', async ({ page }) => {
     await gotoApp(page);
     await typeDsl(page, DSL);
     await selectMessageLine(page, 4);
-    const opts = await page.locator('#seq-edit-arrow option').allTextContents();
-    expect(opts.length).toBeGreaterThan(9);
-    await page.locator('#seq-edit-arrow').selectOption('<->');
+    await page.locator('#seq-edit-arrow-more-btn').click();
+    const items = page.locator('#seq-edit-arrow-more .prop-arrow-item');
+    expect(await items.count()).toBeGreaterThan(9);
+    await page.locator('#seq-edit-arrow-more .prop-arrow-item[data-value="<->"]').click();
     await page.waitForTimeout(500);
     expect((await getEditorText(page)).split('\n')[3]).toBe('User <-> System : Request');
   });
