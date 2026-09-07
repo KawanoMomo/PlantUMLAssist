@@ -14,7 +14,48 @@ window.MA.settingsTabs = (function() {
     { id: 'editor',    label: 'エディタ',       en: 'Editor' },
     { id: 'shortcuts', label: 'ショートカット', en: '' },
     { id: 'data',      label: 'データ',         en: 'Data' },
+    // design 5d: 図種ごとの「常時表示 / その他パレット」の配分そのものをレビューする
+    { id: 'coverage',  label: 'UML 要素の網羅一覧', en: '' },
   ];
+
+  // design 5d: 「常時表示」は右パネルに出しっぱなしにするもの、「その他」はパレットに
+  // 畳むもの。どの図種でどこまで扱えるか、その配分が妥当かを 1 枚の表で見る。
+  // 図を 1 枚ずつ開いて確かめなくても、ここだけ読めば配分を指摘できる。
+  var COVERAGE = [
+    {
+      type: 'plantuml-sequence', label: 'Sequence',
+      always: ['participant / actor / database', 'メッセージ 4 種', 'note', 'alt・loop', 'activate'],
+      palette: ['<->', '[->', '->]', '->o', '->\\', '線色', '区切り線 ==', '遅延 ...', 'ref', 'par / break / critical', 'autonumber'],
+    },
+    {
+      type: 'plantuml-usecase', label: 'UseCase',
+      always: ['actor', 'usecase', 'package', '関連 / 包含 / 拡張 / 汎化'],
+      palette: ['向き反転', '矢印なし', '多重度', '線色', 'ノート', 'rectangle 表記'],
+    },
+    {
+      type: 'plantuml-component', label: 'Component',
+      always: ['component', 'interface', 'port', 'package', '関連 / 依存 / 提供 / 要求'],
+      palette: ['向き反転', '線色', 'ノート', 'folder / frame / node 表記', 'ステレオタイプ'],
+    },
+    {
+      type: 'plantuml-class', label: 'Class',
+      always: ['class / abstract / interface / enum', '属性・メソッド', '6 種の関係'],
+      palette: ['constructor', 'static', 'abstract', 'ジェネリクス', '内部クラス', '多重度', 'namespace', 'ノート'],
+    },
+    {
+      type: 'plantuml-activity', label: 'Activity',
+      always: ['start / stop', 'アクション', 'if / else', 'while', 'fork', 'note', 'スイムレーン'],
+      palette: ['repeat', 'break', 'detach', 'kill', '分岐ラベル', '色指定'],
+    },
+    {
+      type: 'plantuml-state', label: 'State',
+      always: ['単純 / 複合状態', 'choice', 'history', '開始 / 終了', '遷移（trigger・guard・action）'],
+      palette: ['fork / join', '入口・出口ポイント', 'entry / do / exit', '並行領域', '色・ステレオタイプ'],
+    },
+  ];
+
+  var COVERAGE_NOTE = '「常時表示」は右パネルに出しっぱなしにするもの、'
+    + '「その他パレット」は畳んで格納するもの。この配分自体をレビューするための一覧です。';
 
   var DEFAULT_TAB = 'autosave';
 
@@ -229,6 +270,66 @@ window.MA.settingsTabs = (function() {
     }).join('');
   }
 
+  // ── design 5d: UML 要素の網羅一覧 ─────────────────────────────────
+  function coverageRows(currentType) {
+    return COVERAGE.map(function(r) {
+      return {
+        type: r.type, label: r.label,
+        always: r.always.slice(), palette: r.palette.slice(),
+        alwaysCount: r.always.length, paletteCount: r.palette.length,
+        current: r.type === currentType,
+      };
+    });
+  }
+
+  // 要素名で絞り込む。図種名でも当てる（「Sequence の配分だけ見たい」に応える）。
+  // 行が 1 つも残らないときは空を返し、呼び出し側が「該当なし」を出す。
+  function filterCoverage(rows, query) {
+    var q = String(query == null ? '' : query).trim().toLowerCase();
+    if (!q) return rows;
+    var out = [];
+    rows.forEach(function(r) {
+      if (r.label.toLowerCase().indexOf(q) >= 0) { out.push(r); return; }
+      var always = r.always.filter(function(s) { return s.toLowerCase().indexOf(q) >= 0; });
+      var palette = r.palette.filter(function(s) { return s.toLowerCase().indexOf(q) >= 0; });
+      if (always.length === 0 && palette.length === 0) return;
+      out.push({
+        type: r.type, label: r.label, always: always, palette: palette,
+        alwaysCount: r.alwaysCount, paletteCount: r.paletteCount, current: r.current,
+      });
+    });
+    return out;
+  }
+
+  function coverageChipsHtml(items, kind) {
+    if (!items.length) return '<span class="cfg-cv-none">—</span>';
+    return items.map(function(s) {
+      return '<span class="cfg-cv-chip cfg-cv-' + kind + '">' + esc(s) + '</span>';
+    }).join('');
+  }
+
+  function coverageRowHtml(r) {
+    return '<tr class="cfg-cv-row' + (r.current ? ' cfg-cv-current' : '') + '"'
+      + ' data-cv-type="' + esc(r.type) + '"'
+      + ' data-cv-current="' + (r.current ? '1' : '0') + '">'
+      + '<th class="cfg-cv-kind">' + esc(r.label)
+      + (r.current ? '<span class="cfg-cv-badge" title="いま編集している図種">編集中</span>' : '')
+      + '<span class="cfg-cv-count">' + r.alwaysCount + ' / ' + r.paletteCount + '</span></th>'
+      + '<td class="cfg-cv-always">' + coverageChipsHtml(r.always, 'always') + '</td>'
+      + '<td class="cfg-cv-palette">' + coverageChipsHtml(r.palette, 'palette') + '</td>'
+      + '</tr>';
+  }
+
+  function buildCoverageHtml(currentType, query) {
+    var rows = filterCoverage(coverageRows(currentType), query);
+    if (rows.length === 0) {
+      return '<div id="cfg-cv-empty" class="cfg-cv-empty">該当する要素がありません</div>';
+    }
+    return '<table class="cfg-cv-table" id="cfg-cv-table" data-cv-rows="' + rows.length + '">'
+      + '<thead><tr><th>図種</th><th>常時表示</th><th>その他パレット</th></tr></thead>'
+      + '<tbody>' + rows.map(coverageRowHtml).join('') + '</tbody></table>';
+  }
+
   // ── レンダリングモード ────────────────────────────────────────────
   function normalizeRenderMode(m) {
     return String(m) === 'online' ? 'online' : 'local';
@@ -271,6 +372,12 @@ window.MA.settingsTabs = (function() {
     TABS: TABS,
     DEFAULT_TAB: DEFAULT_TAB,
     GROUPS: GROUPS,
+    COVERAGE: COVERAGE,
+    COVERAGE_NOTE: COVERAGE_NOTE,
+    coverageRows: coverageRows,
+    filterCoverage: filterCoverage,
+    coverageRowHtml: coverageRowHtml,
+    buildCoverageHtml: buildCoverageHtml,
     STATE_LABEL: STATE_LABEL,
     EDITOR_FONT_MIN: EDITOR_FONT_MIN,
     EDITOR_FONT_MAX: EDITOR_FONT_MAX,

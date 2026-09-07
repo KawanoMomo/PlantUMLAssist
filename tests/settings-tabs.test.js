@@ -14,9 +14,10 @@ try { delete require.cache[require.resolve('../src/core/settings-tabs.js')]; } c
 require('../src/core/settings-tabs.js');
 var ST = global.window.MA.settingsTabs;
 
-describe('settings-tabs — 設定モーダルの 5 タブ (design 1a)', () => {
-  test('design 1a の 5 タブがこの順で並ぶ', () => {
-    expect(ST.tabIds()).toEqual(['autosave', 'render', 'editor', 'shortcuts', 'data']);
+describe('settings-tabs — 設定モーダルのタブ (design 1a / 5d)', () => {
+  // design 1a の 5 タブに、design 5d の「UML 要素の網羅一覧」が末尾に加わって 6 タブ。
+  test('タブがこの順で並ぶ', () => {
+    expect(ST.tabIds()).toEqual(['autosave', 'render', 'editor', 'shortcuts', 'data', 'coverage']);
   });
 
   test('tabLabel: 和英併記のタブは「和 / 英」、ショートカットは和のみ', () => {
@@ -179,5 +180,85 @@ describe('settings-tabs — 設定モーダルの 5 タブ (design 1a)', () => {
       .toEqual({ fontSize: '15px', whiteSpace: 'pre-wrap', overflowX: 'auto' });
     expect(ST.editorStyleFor({ fontSize: 13, wrap: false }))
       .toEqual({ fontSize: '13px', whiteSpace: 'pre', overflowX: 'scroll' });
+  });
+});
+
+// design 5d: UML 要素の網羅一覧。図種ごとの「常時表示 / その他パレット」の配分を
+// 1 枚の表で見せ、配分そのものをレビュー対象にする。
+describe('design 5d — UML 要素の網羅一覧', function() {
+  test('6 図種すべてが表に載る', function() {
+    var rows = ST.coverageRows(null);
+    expect(rows.length).toBe(6);
+    expect(rows.map(function(r) { return r.label; }))
+      .toEqual(['Sequence', 'UseCase', 'Component', 'Class', 'Activity', 'State']);
+  });
+
+  test('どの図種も常時表示とその他パレットの両方を持つ', function() {
+    ST.coverageRows(null).forEach(function(r) {
+      expect(r.always.length).toBeGreaterThan(0);
+      expect(r.palette.length).toBeGreaterThan(0);
+      expect(r.alwaysCount).toBe(r.always.length);
+      expect(r.paletteCount).toBe(r.palette.length);
+    });
+  });
+
+  test('いま編集している図種だけ current が立つ', function() {
+    var rows = ST.coverageRows('plantuml-state');
+    var cur = rows.filter(function(r) { return r.current; });
+    expect(cur.length).toBe(1);
+    expect(cur[0].label).toBe('State');
+  });
+
+  test('タブ一覧に coverage が入り、既定タブは変わらない', function() {
+    expect(ST.tabIds().indexOf('coverage')).toBeGreaterThan(-1);
+    expect(ST.isValidTab('coverage')).toBe(true);
+    expect(ST.DEFAULT_TAB).toBe('autosave');
+    expect(ST.tabLabel('coverage')).toBe('UML 要素の網羅一覧');
+  });
+
+  test('要素名で絞ると、その要素を持つ図種の行だけが残る', function() {
+    var rows = ST.filterCoverage(ST.coverageRows(null), 'スイムレーン');
+    expect(rows.length).toBe(1);
+    expect(rows[0].label).toBe('Activity');
+    expect(rows[0].always).toEqual(['スイムレーン']);
+    // 件数は絞り込んでも元のままで、配分が読めなくならない
+    expect(rows[0].alwaysCount).toBe(7);
+  });
+
+  test('図種名でも絞れる', function() {
+    var rows = ST.filterCoverage(ST.coverageRows(null), 'sequence');
+    expect(rows.length).toBe(1);
+    expect(rows[0].label).toBe('Sequence');
+    expect(rows[0].always.length).toBe(rows[0].alwaysCount);
+  });
+
+  test('当たらない語では空になる', function() {
+    expect(ST.filterCoverage(ST.coverageRows(null), 'まったく無い要素').length).toBe(0);
+  });
+
+  test('空の検索語では全部返す', function() {
+    expect(ST.filterCoverage(ST.coverageRows(null), '  ').length).toBe(6);
+  });
+
+  test('buildCoverageHtml は 6 行の表を作り、編集中の図種に印を付ける', function() {
+    var html = ST.buildCoverageHtml('plantuml-class', '');
+    expect(html.indexOf('data-cv-rows="6"')).toBeGreaterThan(-1);
+    expect(html.indexOf('data-cv-type="plantuml-class"')).toBeGreaterThan(-1);
+    expect(html.indexOf('cfg-cv-current')).toBeGreaterThan(-1);
+    expect(html.indexOf('編集中')).toBeGreaterThan(-1);
+    expect(html.indexOf('常時表示')).toBeGreaterThan(-1);
+    expect(html.indexOf('その他パレット')).toBeGreaterThan(-1);
+  });
+
+  test('当たらない検索では該当なしを出す', function() {
+    var html = ST.buildCoverageHtml(null, 'まったく無い要素');
+    expect(html.indexOf('cfg-cv-empty')).toBeGreaterThan(-1);
+    expect(html.indexOf('該当する要素がありません')).toBeGreaterThan(-1);
+  });
+
+  test('要素名の < > は素通ししない (DSL の矢印記法をそのまま載せているため)', function() {
+    var html = ST.buildCoverageHtml('plantuml-sequence', '');
+    expect(html.indexOf('<->')).toBe(-1);
+    expect(html.indexOf('&lt;-&gt;')).toBeGreaterThan(-1);
   });
 });
