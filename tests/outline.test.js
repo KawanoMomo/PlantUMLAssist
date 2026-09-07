@@ -193,7 +193,8 @@ describe('MA.outline', () => {
       'stop',
       '@enduml',
     ].join('\n'));
-    assert.deepStrictEqual(kinds(r), ['lifeline', 'state', 'block', 'state', 'lifeline']);
+    // `:処理;` は状態ではなくアクション (design 4b は actions と数える)
+    assert.deepStrictEqual(kinds(r), ['lifeline', 'action', 'block', 'action', 'lifeline']);
     assert.strictEqual(r.nodes[2].detail, '成功?');
     assert.strictEqual(r.nodes[3].depth, 1);
     assert.strictEqual(r.ok, true);
