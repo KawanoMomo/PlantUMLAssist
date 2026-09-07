@@ -76,9 +76,11 @@ test.describe('Ctrl+Z / Ctrl+Y keybindings (userissue v1.2.4)', () => {
   test('Ctrl+Z is suppressed while typing in property panel input', async ({ page }) => {
     page.on('dialog', d => d.accept());
     await gotoApp(page);
-    // Focus the Title field (#seq-title) in the property panel — this is an
-    // input element where browser-native undo should be preserved.
-    const title = page.locator('#seq-title');
+    // Focus the Title field in the property panel — this is an input element
+    // where browser-native undo should be preserved。design 2b で Title は
+    // 「図の設定」タブ (#ds-title) に移ったので、そこを触る。
+    await page.locator('#props-tab-settings').click();
+    const title = page.locator('#ds-title');
     await title.fill('My Title');
     await title.press('Control+z');
     await page.waitForTimeout(200);

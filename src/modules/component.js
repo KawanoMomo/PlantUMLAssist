@@ -501,11 +501,6 @@ window.MA.modules.plantumlComponent = (function() {
     var html =
       '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Component Diagram</div>' +
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">Title 設定</label>' +
-        P.fieldHtml('Title', 'co-title', parsedData.meta.title) +
-        P.primaryButtonHtml('co-set-title', 'Title 適用') +
-      '</div>' +
-      '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">末尾に追加</label>' +
         P.selectFieldHtml('種類', 'co-tail-kind', [
           { value: 'component', label: 'Component', selected: true },
@@ -519,11 +514,6 @@ window.MA.modules.plantumlComponent = (function() {
       '</div>';
     propsEl.innerHTML = html;
 
-    P.bindEvent('co-set-title', 'click', function() {
-      window.MA.history.pushHistory();
-      ctx.setMmdText(setTitle(ctx.getMmdText(), document.getElementById('co-title').value.trim()));
-      ctx.onUpdate();
-    });
 
     var renderTailDetail = function() {
       var kind = document.getElementById('co-tail-kind').value;

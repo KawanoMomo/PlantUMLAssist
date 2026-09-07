@@ -1573,11 +1573,6 @@ window.MA.modules.plantumlActivity = (function() {
     var html =
       '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Activity Diagram</div>' +
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">Title 設定</label>' +
-        P.fieldHtml('Title', 'ac-title', (parsedData.meta && parsedData.meta.title) || '') +
-        P.primaryButtonHtml('ac-set-title', 'Title 適用') +
-      '</div>' +
-      '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">末尾に追加</label>' +
         P.selectFieldHtml('種類', 'ac-tail-kind', [
           { value: 'action', label: 'Action', selected: true },
@@ -1602,11 +1597,6 @@ window.MA.modules.plantumlActivity = (function() {
     propsEl.innerHTML = html;
     _renderInsertHere(ctx, propsEl);
 
-    P.bindEvent('ac-set-title', 'click', function() {
-      window.MA.history.pushHistory();
-      ctx.setMmdText(_setTitle(ctx.getMmdText(), document.getElementById('ac-title').value.trim()));
-      ctx.onUpdate();
-    });
 
     var renderTailDetail = function() {
       var kind = document.getElementById('ac-tail-kind').value;

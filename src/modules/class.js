@@ -1162,11 +1162,6 @@ window.MA.modules.plantumlClass = (function() {
     var html =
       '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Class Diagram</div>' +
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">Title 設定</label>' +
-        P.fieldHtml('Title', 'cl-title', parsedData.meta.title) +
-        P.primaryButtonHtml('cl-set-title', 'Title 適用') +
-      '</div>' +
-      '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">末尾に追加</label>' +
         P.selectFieldHtml('種類', 'cl-tail-kind', [
           { value: 'class',     label: 'Class', selected: true },
@@ -1189,11 +1184,6 @@ window.MA.modules.plantumlClass = (function() {
       _showScaffoldModal(parsedData, ctx);
     });
 
-    P.bindEvent('cl-set-title', 'click', function() {
-      window.MA.history.pushHistory();
-      ctx.setMmdText(setTitle(ctx.getMmdText(), document.getElementById('cl-title').value.trim()));
-      ctx.onUpdate();
-    });
 
     var renderTailDetail = function() {
       var kind = document.getElementById('cl-tail-kind').value;

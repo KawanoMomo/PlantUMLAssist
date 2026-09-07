@@ -39,4 +39,16 @@ async function clickOverlayByLine(page, line) {
   await page.locator('#overlay-layer rect[data-line="' + line + '"]').first().click();
 }
 
-module.exports = { gotoApp, loadFixture, getEditorText, getEditorLine, clickOverlayByLine };
+
+// design 2b: Title は無選択ペインではなく「図の設定」タブが持つ。
+// 図のタイトルを入れて、Properties タブに戻る。
+async function setDiagramTitle(page, title) {
+  await page.locator('#props-tab-settings').click();
+  await page.locator('#ds-title').fill(title);
+  await page.locator('#ds-title').dispatchEvent('change');
+  await page.waitForTimeout(500);
+  await page.locator('#props-tab-props').click();
+  await page.waitForTimeout(200);
+}
+
+module.exports = { gotoApp, loadFixture, getEditorText, getEditorLine, clickOverlayByLine, setDiagramTitle };
