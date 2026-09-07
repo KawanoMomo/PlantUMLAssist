@@ -61,21 +61,59 @@ window.MA.richLabelEditor = (function() {
     fireInput(ta);
   }
 
+  // design 2b: 色は `···` の内側に畳む。パネルは
+  // 「文字色 / Text color」の見本列 → 「最近使った色」 → 「色を外す」 → 「Esc で閉じる」の順。
+  function _swatch(cls, c, label) {
+    return '<button type="button" class="' + cls + '" data-color="' + escHtml(c) + '"'
+      + ' title="' + escHtml(label || ('色: ' + c)) + '"'
+      + ' style="background:' + escHtml(c) + ';width:16px;height:16px;border:2px solid var(--bg-secondary);'
+      + 'border-radius:3px;cursor:pointer;padding:0;"></button>';
+  }
+
+  function colorPanelHtml(recent) {
+    var LC = window.MA.labelColors;
+    var swatches = LC.PALETTE.map(function(c) {
+      return _swatch('rle-color', c.value, c.label + ' ' + c.value);
+    }).join('');
+    var recentHtml = (recent && recent.length)
+      ? '<div class="rle-recent-row" style="display:flex;gap:4px;align-items:center;margin-top:6px;">'
+        + '<span style="font-size:10px;color:var(--text-secondary);">最近使った色</span>'
+        + recent.map(function(c) { return _swatch('rle-color rle-recent', c, '最近使った色: ' + c); }).join('')
+        + '</div>'
+      : '';
+    return '<div class="rle-color-panel" hidden'
+      + ' style="position:absolute;z-index:10;top:100%;left:0;margin-top:2px;padding:8px;'
+      + 'background:var(--bg-secondary);border:1px solid var(--border);border-radius:4px;">'
+      + '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:4px;">文字色 / Text color</div>'
+      + '<div style="display:flex;gap:4px;align-items:center;">' + swatches + '</div>'
+      + recentHtml
+      + '<button type="button" class="rle-color-clear" style="display:block;width:100%;margin-top:8px;'
+      + 'background:transparent;border:1px dashed var(--text-secondary);color:var(--text-secondary);'
+      + 'border-radius:3px;cursor:pointer;font-size:11px;padding:3px 6px;">色を外す</button>'
+      + '<div style="font-size:10px;color:var(--text-secondary);margin-top:6px;">Esc で閉じる</div>'
+      + '</div>';
+  }
+
   // Editor を mount: container 要素内に textarea + toolbar + preview を構築
   function mount(container, initialValue, onChange) {
+    var LC = window.MA.labelColors;
+    // jsdom の opaque origin では localStorage を読むだけで例外になる。
+    // 最近使った色が残らないだけなので、取れなければ null で続ける。
+    var storage = null;
+    try { storage = window.localStorage || null; } catch (e) { storage = null; }
+    var recent = LC.load(storage, LC.RECENT_KEY);
+    var BTN = 'background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);'
+      + 'width:24px;height:24px;cursor:pointer;border-radius:3px;';
     container.innerHTML =
-      '<div class="rle-toolbar" style="display:flex;gap:4px;padding:4px;background:var(--bg-primary);border:1px solid var(--border);border-bottom:none;border-radius:3px 3px 0 0;align-items:center;flex-wrap:wrap;">' +
-        '<button type="button" class="rle-b" title="太字" style="background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);width:24px;height:24px;cursor:pointer;font-weight:700;border-radius:3px;">B</button>' +
-        '<button type="button" class="rle-i" title="斜体" style="background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);width:24px;height:24px;cursor:pointer;font-style:italic;border-radius:3px;">I</button>' +
-        '<button type="button" class="rle-u" title="下線" style="background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);width:24px;height:24px;cursor:pointer;text-decoration:underline;border-radius:3px;">U</button>' +
-        '<span style="border-left:1px solid var(--border);height:18px;margin:0 4px;"></span>' +
-        '<span style="font-size:10px;color:var(--text-secondary);">色:</span>' +
-        ['#f74a4a','#ffa657','#f1e05a','#7ee787','#7c8cf8','#d2a8ff','#8b949e'].map(function(c) {
-          return '<button type="button" class="rle-color" data-color="' + c + '" title="色: ' + c + '" style="background:' + c + ';width:16px;height:16px;border:2px solid var(--bg-secondary);border-radius:3px;cursor:pointer;padding:0;"></button>';
-        }).join('') +
-        '<button type="button" class="rle-color-clear" title="色解除" style="background:transparent;border:1px dashed var(--text-secondary);width:16px;height:16px;border-radius:3px;cursor:pointer;font-size:9px;color:var(--text-secondary);">✕</button>' +
-        '<span style="border-left:1px solid var(--border);height:18px;margin:0 4px;"></span>' +
-        '<button type="button" class="rle-newline" title="改行 \\n" style="background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);width:24px;height:24px;cursor:pointer;border-radius:3px;">↵</button>' +
+      '<div class="rle-toolbar" style="position:relative;display:flex;gap:4px;padding:4px;background:var(--bg-primary);border:1px solid var(--border);border-bottom:none;border-radius:3px 3px 0 0;align-items:center;">' +
+        '<button type="button" class="rle-b" title="太字" style="' + BTN + 'font-weight:700;">B</button>' +
+        '<button type="button" class="rle-i" title="斜体" style="' + BTN + 'font-style:italic;">I</button>' +
+        '<button type="button" class="rle-u" title="下線" style="' + BTN + 'text-decoration:underline;">U</button>' +
+        '<button type="button" class="rle-color-more" title="文字色" aria-expanded="false" style="' + BTN + '">···</button>' +
+        '<button type="button" class="rle-newline" title="改行 \\n" style="' + BTN + '">↵</button>' +
+        '<span class="rle-creole" title="creole 記法: **太字** // 斜体 // __下線__" ' +
+          'style="margin-left:auto;font-size:10px;color:var(--text-secondary);font-family:var(--font-mono);">creole</span>' +
+        colorPanelHtml(recent) +
       '</div>' +
       '<textarea class="rle-textarea" style="width:100%;min-height:60px;background:var(--bg-tertiary);border:1px solid var(--border);border-top:none;color:var(--text-primary);padding:6px;border-radius:0 0 3px 3px;font-family:var(--font-mono);font-size:12px;resize:vertical;box-sizing:border-box;">' + escHtml(initialValue || '') + '</textarea>' +
       '<div class="rle-preview" style="margin-top:6px;padding:6px 8px;background:#fff;color:#000;border-radius:3px;font-size:12px;font-family:-apple-system,Segoe UI,sans-serif;min-height:24px;">' + plantumlToHtml(initialValue || '') + '</div>';
@@ -120,26 +158,62 @@ window.MA.richLabelEditor = (function() {
       }
       if (e.key === 'Escape') {
         e.preventDefault();
+        // design 2b: 色パネルが開いていれば、まずそれだけを閉じる。
+        if (!panel.hasAttribute('hidden')) { setPanelOpen(false); return; }
         container.dispatchEvent(new window.CustomEvent('rle-escape', { bubbles: true }));
       }
     });
+
+    // design 2b: `···` で色パネルを開閉する。
+    var panel = container.querySelector('.rle-color-panel');
+    var moreBtn = container.querySelector('.rle-color-more');
+    function setPanelOpen(open) {
+      if (open) panel.removeAttribute('hidden'); else panel.setAttribute('hidden', '');
+      moreBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+    moreBtn.addEventListener('click', function() {
+      setPanelOpen(panel.hasAttribute('hidden'));
+    });
+    // パネル内の Esc でも閉じる (見本にフォーカスがあるとき)。
+    panel.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') { e.preventDefault(); setPanelOpen(false); moreBtn.focus(); }
+    });
+
+    // 使った色を「最近使った色」に積む。次に開いたときは同じ色がすぐ押せる。
+    function rememberColor(c) {
+      recent = LC.push(recent, c, LC.RECENT_MAX);
+      LC.save(storage, LC.RECENT_KEY, recent);
+      var row = container.querySelector('.rle-recent-row');
+      var fresh = document.createElement('div');
+      fresh.innerHTML = colorPanelHtml(recent);
+      var newRow = fresh.querySelector('.rle-recent-row');
+      if (!newRow) return;
+      if (row) row.parentNode.replaceChild(newRow, row);
+      else panel.insertBefore(newRow, container.querySelector('.rle-color-clear'));
+      bindColorButtons(newRow);
+    }
+
+    function bindColorButtons(scope) {
+      Array.prototype.forEach.call(scope.querySelectorAll('.rle-color'), function(btn) {
+        if (btn.getAttribute('data-bound') === '1') return;
+        btn.setAttribute('data-bound', '1');
+        btn.addEventListener('click', function() {
+          var c = btn.getAttribute('data-color');
+          insertWrapAtSelection(ta, '<color:' + c + '>', '</color>');
+          fireChange(ta);
+          rememberColor(c);
+        });
+      });
+    }
 
     container.querySelector('.rle-b').addEventListener('click', function() { insertWrapAtSelection(ta, '<b>', '</b>'); fireChange(ta); });
     container.querySelector('.rle-i').addEventListener('click', function() { insertWrapAtSelection(ta, '<i>', '</i>'); fireChange(ta); });
     container.querySelector('.rle-u').addEventListener('click', function() { insertWrapAtSelection(ta, '<u>', '</u>'); fireChange(ta); });
     container.querySelector('.rle-newline').addEventListener('click', function() { insertAtCursor(ta, '\\n'); fireChange(ta); });
-    Array.prototype.forEach.call(container.querySelectorAll('.rle-color'), function(btn) {
-      btn.addEventListener('click', function() {
-        var c = btn.getAttribute('data-color');
-        insertWrapAtSelection(ta, '<color:' + c + '>', '</color>');
-        fireChange(ta);
-      });
-    });
+    bindColorButtons(panel);
     container.querySelector('.rle-color-clear').addEventListener('click', function() {
       var s = ta.selectionStart, e = ta.selectionEnd;
-      var sel = ta.value.substring(s, e);
-      sel = sel.replace(/<color:[^>]+>/g, '').replace(/<\/color>/g, '');
-      ta.value = ta.value.substring(0, s) + sel + ta.value.substring(e);
+      ta.value = ta.value.substring(0, s) + LC.stripColor(ta.value.substring(s, e)) + ta.value.substring(e);
       fireInput(ta);
       fireChange(ta);
     });
