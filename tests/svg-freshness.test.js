@@ -215,3 +215,56 @@ describe('svgFreshness.contentBadge — 一覧の印', function() {
     expect(SF.contentBadge('???').mark).toBe('内容未確認');
   });
 });
+
+// BLK-reviewer-20260908-1103-wish: 印は書き出した側の申告なので、印を刻む前に置かれた
+// svg (実データの 22 枚) については何も言えなかった。上書きせずに描き直して比べた控えを
+// 根拠として受け取り、同じ「内容」の判定で言い切れるようにする。
+function ce(name, hash, svgHash, stamp) {
+  return { name: name, hash: hash, svgHash: svgHash, svgSource: stamp || null,
+           mtime: NEW, svgMtime: NEW };
+}
+function vrec(pumlHash, svgHash, result) {
+  return { pumlHash: pumlHash, svgHash: svgHash, result: result, at: NEW };
+}
+
+describe('svgFreshness.contentOf — 描き直して比べた控えも根拠にする', function() {
+  test('印が無くても、控えが今の指紋と一致していれば match', function() {
+    expect(SF.contentOf(ce('a', 'p1', 's1'), { a: vrec('p1', 's1', 'match') })).toBe('match');
+  });
+  test('控えが differ なら differ', function() {
+    expect(SF.contentOf(ce('a', 'p1', 's1'), { a: vrec('p1', 's1', 'differ') })).toBe('differ');
+  });
+  test('確かめた後に puml か svg が動けば未確認に戻る', function() {
+    expect(SF.contentOf(ce('a', 'p2', 's1'), { a: vrec('p1', 's1', 'match') })).toBe('unverified');
+    expect(SF.contentOf(ce('a', 'p1', 's2'), { a: vrec('p1', 's1', 'match') })).toBe('unverified');
+  });
+  test('控えが無ければ従来どおり unverified', function() {
+    expect(SF.contentOf(ce('a', 'p1', 's1'), {})).toBe('unverified');
+    expect(SF.contentOf(ce('a', 'p1', 's1'))).toBe('unverified');
+  });
+  test('印がある図は印で決める (控えを見に行かない)', function() {
+    expect(SF.contentOf(ce('a', 'p1', 's1', 'p1'), { a: vrec('p1', 's1', 'differ') })).toBe('match');
+    expect(SF.contentOf(ce('a', 'p1', 's1', 'pX'), { a: vrec('p1', 's1', 'match') })).toBe('differ');
+  });
+  test('svg が無ければ控えがあっても missing', function() {
+    var e = ce('a', 'p1', null); e.svgMtime = null;
+    expect(SF.contentOf(e, { a: vrec('p1', 's1', 'match') })).toBe('missing');
+  });
+});
+
+describe('svgFreshness.scan — 上書きせずに確かめられる図', function() {
+  var scanned = SF.scan([ce('done', 'p1', 's1'), ce('todo', 'p2', 's2'), ce('stamped', 'p3', 's3', 'p3')],
+    { done: vrec('p1', 's1', 'match') });
+  test('needsVerify は内容で言い切れていない図だけ', function() {
+    expect(scanned.needsVerify).toEqual(['todo']);
+  });
+  test('控えで一致した図は作り直しの対象から外れる', function() {
+    expect(scanned.needsRender).not.toContain('done');
+    expect(scanned.needsProof).not.toContain('done');
+  });
+  test('押す前に枚数が分かる', function() {
+    expect(SF.verifyLabel(scanned)).toBe('SVG の中身を確かめる（1 枚）');
+    expect(SF.verifyLabel(SF.scan([ce('a', 'p1', 's1', 'p1')], {})))
+      .toBe('中身を確かめる SVG はありません');
+  });
+});

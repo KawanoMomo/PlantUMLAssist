@@ -265,6 +265,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == '/file-roles':
             with _fs_lock:
                 return self._handle_file_roles_post()
+        if self.path == '/verify-svg':
+            with _fs_lock:
+                return self._handle_verify_svg_post()
         if self.path == '/prefs':
             with _fs_lock:
                 return self._handle_prefs_post()
@@ -429,6 +432,40 @@ class Handler(BaseHTTPRequestHandler):
         roles = data.get('roles') if isinstance(data, dict) else None
         return roles if isinstance(roles, dict) else {}
 
+    @classmethod
+    def _strip_svg_stamp(cls, svg_bytes):
+        """書き出し元の印を外した svg。描画の結果と比べられる形にする。"""
+        mark = ('\n' + cls.SVG_STAMP_PREFIX).encode('utf-8')
+        at = svg_bytes.rfind(mark)
+        return svg_bytes[:at] if at >= 0 else svg_bytes
+
+    def _svg_verify_path(self, save_dir):
+        """BLK-reviewer-20260908-1103-wish: 「この svg は本当に今の puml の姿か」の控え。
+
+        時刻ではなく指紋で持つ。{name: {pumlHash, svgHash, result, at}} で、
+        突き合わせた 2 つの指紋も一緒に控えるので、あとで puml か svg が動けば
+        その控えは今の 2 つについては何も言っていないことが GUI 側で分かる。
+        """
+        return save_dir / '_svg-verify.json'
+
+    def _read_svg_verify(self, save_dir):
+        p = self._svg_verify_path(save_dir)
+        if not p.exists():
+            return {}
+        try:
+            data = json.loads(p.read_text(encoding='utf-8'))
+        except (ValueError, OSError):
+            return {}
+        recs = data.get('verified') if isinstance(data, dict) else None
+        return recs if isinstance(recs, dict) else {}
+
+    def _write_svg_verify(self, save_dir, records):
+        try:
+            self._svg_verify_path(save_dir).write_text(
+                json.dumps({'verified': records}, ensure_ascii=False), encoding='utf-8')
+        except OSError:
+            pass  # 控えは best-effort。書けなければ次に確かめ直すだけ
+
     def _autosave_file_path(self, save_dir, dt):
         return save_dir / (dt + '.puml')
 
@@ -562,6 +599,70 @@ class Handler(BaseHTTPRequestHandler):
         digest = rest[:end].strip()
         return digest if len(digest) == 40 and all(c in '0123456789abcdef' for c in digest) else None
 
+    def _handle_verify_svg_post(self):
+        """保存中の {name}.svg が、今の {name}.puml を描いた結果そのものかを中身で確かめる。
+
+        BLK-reviewer-20260908-1103-wish: 時刻の比較では「puml が後に触られたか」しか
+        分からず、実データ 16 枚のうち中身まで食い違っていたのは 7 枚だった。
+        ここで 1 枚ずつ描き直してバイト比較し、結果を指紋つきで控える。
+        描画は重い (1 枚あたり数百 ms) ので、確かめる図は呼び出し側が選んで渡す。
+        """
+        length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(length).decode('utf-8')
+        try:
+            data = json.loads(body)
+        except ValueError:
+            self._send_json(400, {'error': 'invalid JSON'})
+            return
+        names = data.get('types')
+        if not isinstance(names, list) or not names:
+            self._send_json(400, {'error': "'types' に確かめる図の名前を 1 つ以上入れてください"})
+            return
+        if len(names) > 200:
+            self._send_json(400, {'error': '一度に確かめられるのは 200 枚までです'})
+            return
+        save_dir = self._autosave_resolve_dir(data.get('dir'))
+        mode = data.get('mode', 'local')
+        if mode not in ('local', 'online'):
+            self._send_json(400, {'error': "unknown mode: %r — 'local' か 'online' です" % (mode,)})
+            return
+        results = {}
+        recs = self._read_svg_verify(save_dir)
+        for name in names:
+            if not isinstance(name, str) or not self._autosave_validate_type(name):
+                results[str(name)] = {'status': 'error', 'error': 'invalid type'}
+                continue
+            puml_path = self._autosave_file_path(save_dir, name)
+            svg_path = puml_path.with_suffix('.svg')
+            try:
+                puml_bytes = puml_path.read_bytes()
+            except OSError:
+                results[name] = {'status': 'error', 'error': 'その名前の図が保存フォルダにありません'}
+                continue
+            try:
+                svg_bytes = svg_path.read_bytes()
+            except OSError:
+                results[name] = {'status': 'missing'}
+                continue
+            text = puml_bytes.decode('utf-8', errors='replace')
+            drawn, err = render_local(text) if mode == 'local' else render_online(text)
+            if drawn is None:
+                # 描けなかったものを「一致」とも「食い違い」とも言わない。控えも残さない。
+                results[name] = {'status': 'error', 'error': err or 'render failed'}
+                continue
+            # 保存中の svg には書き出し元の印 (BLK-reviewer-20260908-1103) が付いている。
+            # 印は描画の結果ではないので、比べる前に外す。
+            status = 'match' if drawn == self._strip_svg_stamp(svg_bytes) else 'differ'
+            recs[name] = {
+                'pumlHash': hashlib.sha1(puml_bytes).hexdigest(),
+                'svgHash': hashlib.sha1(svg_bytes).hexdigest(),
+                'result': status,
+                'at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+            }
+            results[name] = {'status': status}
+        self._write_svg_verify(save_dir, recs)
+        self._send_json(200, {'ok': True, 'results': results, 'verified': recs})
+
     def _handle_file_roles_post(self):
         """保存フォルダの _roles.json を丸ごと置き換える。
 
@@ -660,9 +761,12 @@ class Handler(BaseHTTPRequestHandler):
         # GUI が言うには、mtime を刻んだのと同じ時計の「今」が要る。閲覧している端末の
         # 時計と比べると、数分ずれているだけで全部が更新中にも全部が静止にも見える。
         now = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+        # BLK-reviewer-20260908-1103-wish: 中身まで突き合わせた控えも一覧と同時に返す。
+        # 別呼び出しにすると「未確認 22 枚」の一覧が一瞬出て、確かめた図まで疑わせる。
+        verified = self._read_svg_verify(save_dir) if exists else {}
         self._send_json(200, {'files': files, 'entries': entries, 'meta': meta,
                               'dir': str(save_dir), 'exists': exists, 'roles': roles,
-                              'now': now})
+                              'verified': verified, 'now': now})
 
     def _autosave_entry(self, path):
         """1 図分の {name, mtime, size, hash, svgMtime}。読めない図でも名前だけは返す。
@@ -672,13 +776,16 @@ class Handler(BaseHTTPRequestHandler):
         svg の最終更新時刻もここで返す (無ければ None)。
         """
         entry = {'name': path.stem, 'mtime': None, 'size': None, 'hash': None,
-                 'svgMtime': None, 'svgSource': None, 'pins': None}
+                 'svgMtime': None, 'svgSource': None, 'svgHash': None, 'pins': None}
         svg_path = path.with_suffix('.svg')
         try:
             svg_st = svg_path.stat()
             entry['svgMtime'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(svg_st.st_mtime))
             # BLK-reviewer-20260908-1103: この svg がどの puml から作られたか。
             entry['svgSource'] = self._read_svg_stamp(svg_path)
+            # BLK-reviewer-20260908-1103-wish: 「確かめたときの svg」と「今の svg」が
+            # 同じものかは時刻では言えない (保存し直しただけで時刻は動く)。指紋で持つ。
+            entry['svgHash'] = hashlib.sha1(svg_path.read_bytes()).hexdigest()
         except OSError:
             pass
         try:
