@@ -4,7 +4,23 @@
 // 手順が、1 度登録すれば「プリセットを選ぶ → 題材名を打つ → 生成」で済むことを実機で見る。
 // 4 周目 (I2C) は元の図がタブに 1 枚も無い状態から始められることが肝。
 const { test, expect } = require('@playwright/test');
-const { gotoApp } = require('./helpers');
+const { gotoApp, saveDirFor } = require('./helpers');
+
+// この spec の自動保存先を専用フォルダにする。既定のままだと成果物リポジトリ直下の
+// autosave/ を他の spec と共有し、先に走った spec が残した図が reload のときに
+// 復元されて「1 枚多い」状態から始まる (BLK-builder-20260908-1123-4 で発覚)。
+const DIR = saveDirFor(__filename);
+
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript((d) => {
+    try {
+      window.localStorage.setItem('plantuml-autosave-config',
+        JSON.stringify({ enabled: true, debounceMs: 200, restoreMode: 'auto', backend: 'file', fileDir: d }));
+    } catch (e) {}
+  }, DIR);
+  await page.request.delete('/autosave?dir=' + encodeURIComponent(DIR)).catch(() => {});
+});
+
 
 const SET = [
   {

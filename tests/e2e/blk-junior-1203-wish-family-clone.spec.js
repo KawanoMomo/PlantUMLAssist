@@ -2,7 +2,23 @@
 // BLK-junior-20260907-1203-wish: 同じ系統の図を 1 セットとして、対応表 1 回で全部複製する。
 // 図種の数だけテンプレート作成を繰り返す進め方が 1 操作で済むことを実機で見る。
 const { test, expect } = require('@playwright/test');
-const { gotoApp } = require('./helpers');
+const { gotoApp, saveDirFor } = require('./helpers');
+
+// この spec の自動保存先を専用フォルダにする。既定のままだと成果物リポジトリ直下の
+// autosave/ を他の spec と共有し、先に走った spec が残した図が reload のときに
+// 復元されて「1 枚多い」状態から始まる (BLK-builder-20260908-1123-4 で発覚)。
+const DIR = saveDirFor(__filename);
+
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript((d) => {
+    try {
+      window.localStorage.setItem('plantuml-autosave-config',
+        JSON.stringify({ enabled: true, debounceMs: 200, restoreMode: 'auto', backend: 'file', fileDir: d }));
+    } catch (e) {}
+  }, DIR);
+  await page.request.delete('/autosave?dir=' + encodeURIComponent(DIR)).catch(() => {});
+});
+
 
 const SET = [
   {

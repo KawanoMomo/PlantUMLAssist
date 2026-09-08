@@ -2,7 +2,7 @@
 // BLK-junior-20260908-1103-wish: 対応表の橙の行に「＋この図にも足す」を添える。
 // 見つけた要素を一括入力欄に打ち直さず、押すだけで自分の図に入ること。
 const { test, expect } = require('@playwright/test');
-const { gotoApp, getEditorText } = require('./helpers');
+const { gotoApp, getEditorText, saveDirFor } = require('./helpers');
 
 // 先輩の図。Configured と Idle --> Configured が自分の図に無い。
 const SENIOR = [
@@ -54,8 +54,18 @@ function refOnlyRow(page, type, text) {
     { hasText: text }).first();
 }
 
+// 自動保存の書き込み先をこの spec 専用にする。既定のまま走ると成果物リポジトリ直下の
+// autosave/ に図が残り、あとで走る spec がそれを 1 枚多い図として復元してしまう。
+const DIR = saveDirFor(__filename);
+
 test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => { try { window.localStorage.clear(); } catch (e) {} });
+  await page.addInitScript((d) => {
+    try {
+      window.localStorage.clear();
+      window.localStorage.setItem('plantuml-autosave-config',
+        JSON.stringify({ enabled: true, debounceMs: 200, restoreMode: 'auto', backend: 'file', fileDir: d }));
+    } catch (e) {}
+  }, DIR);
 });
 
 test('橙の行にだけ「＋この図にも足す」が付く', async ({ page }) => {
