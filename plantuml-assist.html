@@ -2477,6 +2477,17 @@ html, body {
 .map-row[data-map-match="mine-only"] { background: var(--bg-secondary); }
 .map-row .map-ref, .map-row .map-mine { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .map-row .map-ref { color: var(--text-primary); }
+/* クラス図の関係は「継承: 親 A ← 子 B」と長い。1 行に詰めて末尾を切ると、
+   肝心の子の名前が読めなくなるので、関係の行だけ折り返す
+   (BLK-junior-20260908-1203-wish)。 */
+.map-row[data-map-type="relation"] { align-items: flex-start; }
+.map-row[data-map-type="relation"] .map-ref,
+.map-row[data-map-type="relation"] .map-mine {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  word-break: break-word;
+}
 .map-row .map-mine { color: var(--text-secondary); }
 #map-empty { padding: 6px 8px; font-size: 11px; color: var(--text-secondary); }
 /* 橙の行から自分の図へ足す (BLK-junior-20260908-1103-wish) */
@@ -3883,10 +3894,11 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <span id="check-summary"></span>
       </div>
       <div id="check-list" hidden></div>
-      <!-- BLK-junior-20260908-0823-wish: 2 枚の状態遷移図の対応表。名前がばらばらでも
-           対応を機械的に取り、片方にしか無い状態・遷移だけを目立たせる。 -->
+      <!-- BLK-junior-20260908-0823-wish: 2 枚の図の対応表。名前がばらばらでも
+           対応を機械的に取り、片方にしか無い要素だけを目立たせる。
+           BLK-junior-20260908-1203-wish: 状態遷移図に加えクラス図 (クラスと関係) も同じ表で扱う。 -->
       <div id="map-bar">
-        <button type="button" id="btn-map-run" title="参照図と自分の図の状態・遷移の対応表を作る">🔀 対応表</button>
+        <button type="button" id="btn-map-run" title="参照図と自分の図の対応表を作る (状態遷移図は状態・遷移、クラス図はクラス・関係)">🔀 対応表</button>
         <span id="map-summary"></span>
       </div>
       <div id="map-warn" hidden></div>
@@ -4233,6 +4245,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/state-insert.js"></script>
 <script src="src/core/state-table.js"></script>
 <script src="src/core/state-map.js"></script>
+<script src="src/core/class-map.js"></script>
 <script src="src/core/reuse-picker.js"></script>
 <script src="src/core/relation-options.js"></script>
 <script src="src/core/group-notation.js"></script>

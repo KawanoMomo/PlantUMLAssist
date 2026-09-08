@@ -8036,12 +8036,34 @@ function runConsistencyCheck() {
 // 付ける。見つけた要素をそのまま自分の図の末尾に入れられれば、
 // 「読み比べて一括入力欄に打ち直す」がボタン 1 回になる。
 // 端点の対応が付かない遷移だけ、どの状態から出すかを 1 回聞き返す。
+//
+// BLK-junior-20260908-1203-wish: クラス図にも同じ対応表を出す。図種で使う規則を
+// 選ぶだけで、並べ方も「＋この図にも足す」も共通にする (図種によらず同じ操作)。
+// クラス図の関係は向き (どちらが親か) を行に持つので、取り込みでは参照図の向きを
+// そのまま写す。Relation フォームで From/To を選び直して逆向きに張る手間が消える。
 var _mapResult = null;
 var _mapMineParsed = null;
+var _mapModule = null;   // 今の対応表が使っている規則 (stateMap / classMap)
+
+function _mapper() { return _mapModule || window.MA.stateMap; }
+
+// 図種を選ぶ。自分の図が読めればそれに合わせる。読めないときだけ参照図を見る。
+function _pickMapModule(refText, mineText) {
+  var classMod = window.MA.modules && window.MA.modules.plantumlClass;
+  if (!window.MA.classMap || !classMod) return window.MA.stateMap;
+  if (classMod.detect(mineText || '')) return window.MA.classMap;
+  var stateMod = window.MA.modules && window.MA.modules.plantumlState;
+  var mineStates = stateMod ? stateMod.parse(mineText || '') : null;
+  var hasState = mineStates
+    && (((mineStates.states || []).length > 0) || ((mineStates.transitions || []).length > 0));
+  if (!hasState && classMod.detect(refText || '')) return window.MA.classMap;
+  return window.MA.stateMap;
+}
 
 function _clearStateMap() {
   _mapResult = null;
   _mapMineParsed = null;
+  _mapModule = null;
   var listEl = document.getElementById('map-list');
   var sumEl = document.getElementById('map-summary');
   var warnEl = document.getElementById('map-warn');
@@ -8058,7 +8080,7 @@ function _mapSection(listEl, title) {
 }
 
 function _mapRow(listEl, row) {
-  var sm = window.MA.stateMap;
+  var sm = _mapper();
   var el = document.createElement('div');
   el.className = 'map-row';
   el.setAttribute('data-map-match', row.match);
@@ -8071,9 +8093,11 @@ function _mapRow(listEl, row) {
   var ref = document.createElement('span');
   ref.className = 'map-ref';
   ref.textContent = row.ref || '—';
+  if (row.ref) ref.title = row.ref;
   var mine = document.createElement('span');
   mine.className = 'map-mine';
   mine.textContent = row.mine || '—';
+  if (row.mine) mine.title = row.mine;
   el.appendChild(match); el.appendChild(ref); el.appendChild(mine);
 
   // 自分の図に対応する行があるなら、押してそこへ飛ぶ。
@@ -8107,7 +8131,8 @@ function _mapConfirm(row, rowEl, plan) {
   var lead = document.createElement('div');
   lead.className = 'map-confirm-lead';
   lead.id = 'map-confirm-lead';
-  lead.textContent = plan.describe + '。自分の図に対応する状態が見つからない端点があります。';
+  lead.textContent = plan.describe + '。自分の図に対応する'
+    + (plan.kind === 'relation' ? 'クラス' : '状態') + 'が見つからない端点があります。';
   box.appendChild(lead);
 
   var sels = {};
@@ -8118,14 +8143,15 @@ function _mapConfirm(row, rowEl, plan) {
 
     var label = document.createElement('span');
     label.className = 'map-confirm-label';
-    label.textContent = (end.side === 'from' ? '出どころ' : '行き先') + ' 「' + end.name + '」';
+    label.textContent = (end.sideLabel || (end.side === 'from' ? '出どころ' : '行き先'))
+      + ' 「' + end.name + '」';
     line.appendChild(label);
 
     var sel = document.createElement('select');
     sel.className = 'map-confirm-sel';
     sel.id = 'map-confirm-' + end.side;
     var mk = document.createElement('option');
-    mk.value = window.MA.stateMap.NEW_STATE;
+    mk.value = _mapper().NEW_STATE;
     mk.textContent = '新しく作る: ' + (end.newLabel || end.newId);
     sel.appendChild(mk);
     (end.options || []).forEach(function(o) {
@@ -8172,7 +8198,7 @@ function _closeMapConfirm() {
 
 // 橙の行を 1 つ自分の図に足す。端点が全部決まっていれば聞かずに足す。
 function adoptMapRow(row, rowEl) {
-  var sm = window.MA.stateMap;
+  var sm = _mapper();
   if (!sm || !_mapResult || !editorEl) return;
   var plan = sm.adoptPlan(row, _mapResult, _mapMineParsed);
   if (!plan || !plan.adoptable) return;
@@ -8181,7 +8207,7 @@ function adoptMapRow(row, rowEl) {
 }
 
 function _applyMapAdopt(row, picks) {
-  var sm = window.MA.stateMap;
+  var sm = _mapper();
   if (!sm || !_mapResult || !editorEl) return;
   var out = sm.applyAdopt(editorEl.value, row, _mapResult, _mapMineParsed, picks);
   if (!out) return;
@@ -8197,7 +8223,7 @@ function renderStateMap() {
   var listEl = document.getElementById('map-list');
   var sumEl = document.getElementById('map-summary');
   var warnEl = document.getElementById('map-warn');
-  var sm = window.MA.stateMap;
+  var sm = _mapper();
   if (!listEl || !sumEl || !sm || !_mapResult) return;
 
   _closeMapConfirm();
@@ -8219,27 +8245,26 @@ function renderStateMap() {
   if (_mapResult.states.length === 0 && _mapResult.transitions.length === 0) {
     var empty = document.createElement('div');
     empty.id = 'map-empty';
-    empty.textContent = '状態遷移が読めません。どちらも状態遷移図にしてください。';
+    empty.textContent = sm.emptyMessage;
     listEl.appendChild(empty);
     return;
   }
   if (_mapResult.states.length > 0) {
-    _mapSection(listEl, '状態 (参照図 / 自分の図)');
+    _mapSection(listEl, sm.sectionTitles.states);
     _mapResult.states.forEach(function(r) { _mapRow(listEl, r); });
   }
   if (_mapResult.transitions.length > 0) {
-    _mapSection(listEl, '遷移 (参照図 / 自分の図)');
+    _mapSection(listEl, sm.sectionTitles.transitions);
     _mapResult.transitions.forEach(function(r) { _mapRow(listEl, r); });
   }
 }
 
 function runStateMap() {
-  var sm = window.MA.stateMap;
   var cv = window.MA.compareView;
   var stateMod = window.MA.modules && window.MA.modules.plantumlState;
   var sumEl = document.getElementById('map-summary');
   var listEl = document.getElementById('map-list');
-  if (!sm || !cv || !stateMod || !sumEl) return;
+  if (!cv || !stateMod || !sumEl) return;
 
   var ref = _compareRefId ? cv.doc(_compareDocs(), _compareRefId) : null;
   if (!ref) {
@@ -8248,10 +8273,15 @@ function runStateMap() {
     sumEl.classList.add('dirty');
     return;
   }
-  // 図種は見ずに、状態遷移として読めるかどうかで判断する。図種の設定が
-  // 実際の中身と食い違っていることがあり、設定を直させるより読める方を採る。
-  var refParsed = stateMod.parse(ref.dsl || '');
-  var mineParsed = stateMod.parse(mmdText || '');
+  // 図種の設定は見ずに、中身が何として読めるかで規則を選ぶ。設定が実際の中身と
+  // 食い違っていることがあり、設定を直させるより読める方を採る。
+  var sm = _pickMapModule(ref.dsl || '', mmdText || '');
+  _mapModule = sm;
+  var mod = (sm === window.MA.classMap)
+    ? (window.MA.modules && window.MA.modules.plantumlClass)
+    : stateMod;
+  var refParsed = mod.parse(ref.dsl || '');
+  var mineParsed = mod.parse(mmdText || '');
   _mapMineParsed = mineParsed;
   _mapResult = sm.build(refParsed, mineParsed);
   renderStateMap();
