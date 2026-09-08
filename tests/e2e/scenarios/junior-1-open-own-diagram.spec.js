@@ -155,3 +155,27 @@ test('版を開くと、今の図を上書きせずに別タブで開く', async
   }, DIR);
   expect(now).toContain('IDLE --> ERROR');
 });
+
+// BLK-junior-20260909-0403: ユースケース図は自分にも先輩にも手本が 1 枚も無く、
+// 新規タブのサンプルから 15 行を打ち直していた (実測 280 打鍵)。題材名 1 語で
+// ドライバのひな形を作れるようにする。
+test('手本が無いユースケース図を、題材名 1 語のひな形から始められる', async ({ page }) => {
+  // 新規タブをユースケース図にする (手順 1 の「新しい図を作る」入口)
+  await page.selectOption('#diagram-type', 'plantuml-usecase');
+  await page.waitForTimeout(600);
+
+  await page.fill('#uc-starter-subject', 'GPIO');
+  await expect(page.locator('#uc-starter-hint'))
+    .toHaveText('アクター 2 / ユースケース 6 / 関連 7 本の下書きを作ります');
+  await page.locator('#uc-starter-add').click();
+  await page.waitForTimeout(800);
+
+  const dsl = await page.evaluate(() => document.getElementById('editor').value);
+  expect(dsl).toContain('actor Developer as "開発者"');
+  expect(dsl).toContain('usecase GPIO_Init as "GPIO を初期化する"');
+  expect(dsl).toContain('GPIO_IrqNotify ..> GPIO_IrqSetup : <<extend>>');
+  expect((dsl.match(/^Developer --> /gm) || []).length).toBe(5);
+
+  // 図として描けている (パースが通り、要素が出そろっている)
+  await expect(page.locator('#status-parse')).toContainText('パース OK');
+});
