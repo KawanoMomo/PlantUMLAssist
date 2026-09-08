@@ -720,6 +720,37 @@ html, body {
   width: auto;
 }
 #folder-panel .folder-svg-verify-note { color: var(--text-primary); }
+/* 食い違いの中身 (BLK-reviewer-20260908-1203-wish) */
+#folder-panel .folder-svg-diff {
+  margin: 0 6px 4px;
+  border: 1px solid var(--accent-red);
+  border-radius: 3px;
+  padding: 3px 5px;
+  font-size: 10px;
+  color: var(--text-primary);
+}
+#folder-panel .folder-svg-diff-name { font-weight: bold; color: var(--accent-red); }
+#folder-panel .folder-svg-diff-sum { color: var(--text-secondary); margin-left: 4px; }
+#folder-panel .folder-svg-diff-row { padding-left: 8px; white-space: normal; word-break: break-all; }
+#folder-panel .folder-svg-diff-row.diff-missing::before { content: '欠落 '; color: var(--accent-red); }
+#folder-panel .folder-svg-diff-row.diff-leftover::before { content: '残存 '; color: var(--accent); }
+#folder-panel textarea.folder-svg-diff-report {
+  width: calc(100% - 12px);
+  margin: 0 6px 4px;
+  height: 90px;
+  font-family: inherit;
+  font-size: 10px;
+  background: var(--bg-input, var(--bg-panel));
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+#folder-panel button.folder-svg-diff-copy {
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  margin: 0 6px 4px;
+  width: auto;
+}
 /* 他のペルソナが今も書き込み中かもしれない図 (BLK-reviewer-20260908-0923-wish) */
 #folder-panel .folder-write-badge {
   font-size: 9px;
@@ -4157,6 +4188,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/save-diff.js"></script>
 <script src="src/core/version-timeline.js"></script>
 <script src="src/core/svg-freshness.js"></script>
+<script src="src/core/svg-diff-summary.js"></script>
 <script src="src/core/review-state.js"></script>
 <script src="src/core/write-activity.js"></script>
 <script src="src/core/file-role.js"></script>
