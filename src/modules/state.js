@@ -890,10 +890,14 @@ window.MA.modules.plantumlState = (function() {
               });
             }).join('')) +
       P.sectionFooterHtml() +
+      // BLK-primary-20260908-1403: レビュー指摘「この 4 遷移を 1 遷移にまとめる」を
+      // 当てる口。始点と終点を選ぶだけで、途中の状態の宣言ごと 1 本に畳む。
+      _collapseSectionHtml(parsedData) +
       '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
         '<button id="st-branch-open" style="width:100%;font-size:11px;padding:5px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">⑂ 分岐 (choice) を追加</button>' +
       '</div>';
     propsEl.innerHTML = html;
+    _bindCollapse(parsedData, ctx);
 
     Array.prototype.forEach.call(propsEl.querySelectorAll('.st-tr-pick'), function(btn) {
       btn.addEventListener('click', function() {
@@ -1118,6 +1122,95 @@ window.MA.modules.plantumlState = (function() {
     // design 2b: 種別はチップ 1 クリックで決める。値の持ち主は上の select のまま。
     window.MA.tailKindChips.mount('st-tail-kind');
     renderTailDetail();
+  }
+
+  // ── 遷移をまとめる (BLK-primary-20260908-1403) ────────────────────────────
+  // 「Idle→Configured→SrcDstSet→DmaReqEnabled→Transferring_Active の 4 遷移を
+  // 1 遷移 (Dma_Configure) にまとめる」というレビュー指摘を当てる口が無く、
+  // state 3 行 + 遷移 4 行を DSL エディタで選び直して打ち直していた。
+  // 始点と終点を選び、残す 1 本の名前を入れて押すだけで済ませる。
+  // まとめられる連なりが無い図では、この欄自体を出さない。
+  function _collapseSectionHtml(parsedData) {
+    var SC = window.MA.stateCollapse;
+    var P = window.MA.properties;
+    if (!SC || !P) return '';
+    var starts = SC.startOptions(parsedData);
+    if (starts.length === 0) return '';
+    var from = starts[0].value;
+    var ends = SC.endOptions(parsedData, from);
+    return '<div id="st-collapse" style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:10px;">' +
+      '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">遷移をまとめる / Collapse</label>' +
+      '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:6px;line-height:1.5;">' +
+        '1 本道に並んだ遷移を 1 本に畳みます (途中の状態の宣言も消えます)。</div>' +
+      P.selectFieldHtml('始点', 'st-cl-from', starts.map(function(o) {
+        return { value: o.value, label: o.label, selected: o.value === from };
+      })) +
+      P.selectFieldHtml('終点', 'st-cl-to', ends.map(function(o, i) {
+        return { value: o.value, label: o.label, selected: i === ends.length - 1 };
+      })) +
+      P.fieldHtml('まとめた遷移の名前', 'st-cl-label', '', '例: Dma_Configure') +
+      _previewBoxHtml('st-cl-preview') +
+      '<div id="st-cl-note" style="font-size:10px;color:var(--text-secondary);margin:-4px 0 8px 0;line-height:1.5;"></div>' +
+      P.primaryButtonHtml('st-cl-run', '⇒ 1 本にまとめる') +
+    '</div>';
+  }
+
+  function _bindCollapse(parsedData, ctx) {
+    var SC = window.MA.stateCollapse;
+    var P = window.MA.properties;
+    if (!SC || !P || !document.getElementById('st-collapse')) return;
+    function val(id) { var el = document.getElementById(id); return el ? el.value : ''; }
+
+    // 終点の選択肢は始点で決まる。始点を変えたら並べ直し、いちばん遠い先を既定にする
+    // (指摘は「この一続きを 1 本に」なので、いちばん多く畳む先が当たりやすい)。
+    function renderEnds() {
+      var sel = document.getElementById('st-cl-to');
+      if (!sel) return;
+      var ends = SC.endOptions(parsedData, val('st-cl-from'));
+      sel.innerHTML = ends.map(function(o, i) {
+        return '<option value="' + window.MA.htmlUtils.escHtml(o.value) + '"' +
+          (i === ends.length - 1 ? ' selected' : '') + '>' +
+          window.MA.htmlUtils.escHtml(o.label) + '</option>';
+      }).join('');
+    }
+
+    // 名前は畳む前のきっかけを並べた下書きを入れておく。人が打ち直せば上書きされる
+    // (打ち直しても 1 語で済むので、指摘の反映で 50 打を超えない)。
+    var labelTouched = false;
+    function refresh() {
+      var from = val('st-cl-from'), to = val('st-cl-to');
+      var labelEl = document.getElementById('st-cl-label');
+      if (labelEl && !labelTouched) labelEl.value = SC.suggestLabel(parsedData, from, to);
+      var pv = SC.preview(parsedData, from, to, labelEl ? labelEl.value : '');
+      var box = document.getElementById('st-cl-preview');
+      var note = document.getElementById('st-cl-note');
+      if (box) box.textContent = pv.ok ? pv.line : '';
+      if (note) note.textContent = pv.text;
+      var btn = document.getElementById('st-cl-run');
+      if (btn) btn.disabled = !pv.ok;
+    }
+
+    P.bindEvent('st-cl-from', 'change', function() { renderEnds(); labelTouched = false; refresh(); });
+    P.bindEvent('st-cl-to', 'change', function() { labelTouched = false; refresh(); });
+    var labelEl = document.getElementById('st-cl-label');
+    if (labelEl) {
+      labelEl.addEventListener('input', function() { labelTouched = true; refresh(); });
+      // 下書きはあくまで下書き。触った時点で全選択しておき、指摘の名前
+      // (Dma_Configure) を打てばそのまま置き換わるようにする
+      // (下書きを消す手が要ると、まとめる操作より消す方が長くなる)。
+      labelEl.addEventListener('focus', function() { try { labelEl.select(); } catch (e) {} });
+    }
+
+    P.bindEvent('st-cl-run', 'click', function() {
+      var t = ctx.getMmdText();
+      var out = SC.collapse(t, parsedData, val('st-cl-from'), val('st-cl-to'), val('st-cl-label'));
+      if (out === t) { alert('まとめられる 1 本道がありません'); return; }
+      window.MA.history.pushHistory();
+      ctx.setMmdText(out);
+      ctx.onUpdate();
+    });
+
+    refresh();
   }
 
   function _selectedOpt(o, sel) { return { value: o.value, label: o.label, selected: o.value === sel }; }
