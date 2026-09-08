@@ -614,8 +614,13 @@ class Handler(BaseHTTPRequestHandler):
         # BLK-reviewer-20260908-0203-wish: 実データ / テンプレの宣言は一覧と同時に要る。
         # 別呼び出しにすると、印が付く前の一覧が一瞬出て「未分類 22 枚」に見える。
         roles = self._read_file_roles(save_dir) if exists else {}
+        # BLK-reviewer-20260908-0923-wish: 「この図は直近 N 分以内に更新された」を
+        # GUI が言うには、mtime を刻んだのと同じ時計の「今」が要る。閲覧している端末の
+        # 時計と比べると、数分ずれているだけで全部が更新中にも全部が静止にも見える。
+        now = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
         self._send_json(200, {'files': files, 'entries': entries, 'meta': meta,
-                              'dir': str(save_dir), 'exists': exists, 'roles': roles})
+                              'dir': str(save_dir), 'exists': exists, 'roles': roles,
+                              'now': now})
 
     def _autosave_entry(self, path):
         """1 図分の {name, mtime, size, hash, svgMtime}。読めない図でも名前だけは返す。

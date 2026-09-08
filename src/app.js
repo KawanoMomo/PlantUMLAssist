@@ -4059,6 +4059,11 @@ function setupTabs() {
   // BLK-junior-20260908-0630-wish: 図名 → 指摘の反映状態 (未反映 / 反映済み)。
   // 「元図」と「元図(レビュー反映)」を別名で並べる代わりに、1 枚のバッジで見分ける。
   var reviewStatus = {};
+  // BLK-reviewer-20260908-0923-wish: 図名 → 直近 N 分以内に更新されたか。
+  // 他のペルソナが同じ tick の中で書き込み続けている図を、読む前に見分ける。
+  var writeStatus = {};
+  var writeAge = {};
+  var writeScan = null;
 
   function _openDocNames() {
     if (!window.MA.workspace) return [];
@@ -4231,6 +4236,13 @@ function setupTabs() {
       var RS = window.MA.reviewState;
       reviewStatus = RS ? RS.statusMap(entries) : {};
 
+      // 「今読んでいる版が、読み始めた瞬間のものか」は中身では分からない。
+      // server が返した「今」と各図の更新時刻の差だけで判定する。
+      var WA = window.MA.writeActivity;
+      writeScan = WA ? WA.scan(entries, res && res.now) : null;
+      writeStatus = WA ? WA.statusMap(writeScan) : {};
+      writeAge = WA ? WA.ageMap(writeScan) : {};
+
       // 消えた図の一時控えの印は捨てる (印だけが残り続けないようにする)。
       var DM = window.MA.draftMark;
       draftNames = DM ? DM.keepExisting(DM.load(store, dir), entries) : [];
@@ -4244,6 +4256,7 @@ function setupTabs() {
         appendReviewSection(panel);
         appendRoleSection(panel, dir);
         appendSvgSection(panel, dir);
+        appendWriteSection(panel, dir);
         plain.items.forEach(function(e) { panel.appendChild(folderRow(e.name || e, null, null)); });
         appendDraftSection(plain.drafts, function(e) { return folderRow(e.name || e, null, null); });
         syncFolderPickUi();
@@ -4265,6 +4278,7 @@ function setupTabs() {
       appendReviewSection(panel);
       appendRoleSection(panel, dir);
       appendSvgSection(panel, dir);
+      appendWriteSection(panel, dir);
 
       folderStatus = {};
       rows.forEach(function(r) { folderStatus[r.name] = r.status; });
@@ -4371,6 +4385,82 @@ function setupTabs() {
   // BLK-reviewer-20260908-0103: SVG が puml に追いついているかの要約と、
   // 追いついていない図だけを 1 押しで作り直すボタン。
   // 22 枚全部を毎回描き直すのではなく、古い枚数だけを描き直す。
+  // BLK-reviewer-20260908-0923-wish: 他のペルソナが今も書き込み中かもしれない図。
+  // 読み始めた版と読み終えた版が混ざると、古い版と新しい版が混ざった指摘になる。
+  // 「直近 N 分以内に更新された図」を名指しし、後回しにする / 取り直すの
+  // どちらかをその場で選べるようにする。
+  function appendWriteSection(panel, dir) {
+    var WA = window.MA.writeActivity;
+    if (!WA || !writeScan || !writeScan.rows.length) return;
+    var active = writeScan.counts.active > 0 || writeScan.counts.unknown > 0;
+    var sum = document.createElement('div');
+    sum.className = 'folder-write-summary' + (active ? ' has-active' : '');
+    sum.id = 'folder-write-summary';
+    sum.textContent = WA.summary(writeScan);
+    panel.appendChild(sum);
+    if (!active) return;
+
+    // 件数だけでは「どの図を後回しにするか」が 22 行の中の目視に戻る。
+    // 名前と「何分前か」を並べる (30 秒前と 5 分前では判断が変わる)。
+    var names = document.createElement('div');
+    names.className = 'folder-write-names';
+    var label = document.createElement('span');
+    label.className = 'folder-write-names-label';
+    label.textContent = '更新中の可能性';
+    names.appendChild(label);
+    writeScan.activeNames.forEach(function(name) {
+      var link = document.createElement('button');
+      link.type = 'button';
+      link.className = 'folder-write-name';
+      link.setAttribute('data-write-name', name);
+      link.textContent = name + '（' + WA.ageText(writeAge[name]) + '）';
+      link.title = '今も書き込みが続いているかもしれません。後回しにするか、一覧を取り直してから読んでください';
+      link.addEventListener('click', function(ev) {
+        ev.stopPropagation();
+        openFromFolder(name);
+      });
+      names.appendChild(link);
+    });
+    if (writeScan.activeNames.length) panel.appendChild(names);
+
+    var bar = document.createElement('div');
+    bar.className = 'folder-write-actions';
+
+    // 「後回しにする」の実体。落ち着いている図だけに印を付ければ、
+    // まとめて開く操作がそのまま「今読んでよい図だけを読む」になる。
+    var skip = document.createElement('button');
+    skip.type = 'button';
+    skip.className = 'folder-write-skip';
+    skip.textContent = '更新中を除いて選ぶ（' + WA.settledNames(writeScan).length + ' 枚）';
+    skip.title = '直近の窓に更新された図と、時刻が取れない図を外して印を付ける。'
+      + '書き込み中かもしれない図を後回しにしたまま、残りを読み進められる';
+    skip.disabled = !window.MA.folderSelect || WA.settledNames(writeScan).length === 0;
+    skip.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      var FS = window.MA.folderSelect;
+      if (!FS) return;
+      folderPicked = FS.selectAll(WA.settledNames(writeScan).filter(function(n) {
+        return folderNames.indexOf(n) >= 0;
+      }));
+      syncFolderPickUi();
+    });
+    bar.appendChild(skip);
+
+    // 「取り直す」の実体。時刻は開いた瞬間のもので止まっているので、
+    // 押した時点の更新時刻で判定し直す。
+    var again = document.createElement('button');
+    again.type = 'button';
+    again.className = 'folder-write-refresh';
+    again.textContent = '一覧を取り直す';
+    again.title = '保存フォルダの更新時刻をもう一度読み、この印を今の時刻で付け直す';
+    again.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      renderFolderPanel();
+    });
+    bar.appendChild(again);
+    panel.appendChild(bar);
+  }
+
   function appendSvgSection(panel, dir) {
     var SF = window.MA.svgFreshness;
     if (!SF || !svgScan || !svgScan.rows.length) return;
@@ -4839,6 +4929,20 @@ function setupTabs() {
       svgBadge.textContent = sb.mark;
       svgBadge.title = sb.title;
       b.appendChild(svgBadge);
+    }
+    // BLK-reviewer-20260908-0923-wish: 読み始める前に、その 1 枚が今も
+    // 書き換えられている最中かどうかが行の上で分かるようにする。
+    var WA = window.MA.writeActivity;
+    if (WA && writeStatus[name] && writeStatus[name] !== 'settled') {
+      var wb = WA.badge(writeStatus[name]);
+      var writeBadge = document.createElement('span');
+      writeBadge.className = 'folder-write-badge write-' + writeStatus[name];
+      writeBadge.setAttribute('data-write-status', writeStatus[name]);
+      writeBadge.textContent = wb.mark;
+      writeBadge.title = writeStatus[name] === 'active'
+        ? wb.title + '（最終更新 ' + WA.ageText(writeAge[name]) + '）'
+        : wb.title;
+      b.appendChild(writeBadge);
     }
     if (mtime) {
       var t = document.createElement('span');

@@ -328,7 +328,7 @@ window.MA.workspace = (function() {
   // 返り値: { entries, exists, dir }。exists が null なら server に尋ねられなかった。
   function listFolder(fileDir) {
     var asked = _dir(fileDir);
-    var miss = { entries: [], exists: null, dir: asked, roles: {} };
+    var miss = { entries: [], exists: null, dir: asked, roles: {}, now: null };
     try {
       return window.fetch('/autosave?dir=' + encodeURIComponent(asked))
         .then(function(r) { return r.ok ? r.json() : null; })
@@ -347,6 +347,10 @@ window.MA.workspace = (function() {
             // BLK-reviewer-20260908-0203-wish: 実データ / テンプレの宣言。
             // 一覧と同じ呼び出しで返る (別呼び出しにすると印の付く前が一瞬見える)。
             roles: (data.roles && typeof data.roles === 'object') ? data.roles : {},
+            // BLK-reviewer-20260908-0923-wish: mtime を刻んだのと同じ時計の「今」。
+            // 「直近 N 分以内に更新された」は端末の時計では判定できない。
+            // 古い server は返さない (その場合は判定しない = null)。
+            now: (typeof data.now === 'string' && data.now) ? data.now : null,
           };
         })
         .catch(function() { return miss; });
