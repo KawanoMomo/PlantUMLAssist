@@ -474,6 +474,25 @@ class Handler(BaseHTTPRequestHandler):
                 break
         return out
 
+    # BLK-reviewer-20260908-1303: 文字に現れない差 (矢印の向き・note の位置・
+    # 要素の並び) を数として掴むための、図形の内訳。svg 全文を GUI に渡さずに
+    # 「保存中の svg と、今 描いた svg で何個違うか」を言えるようにする。
+    SHAPE_TAGS = ('path', 'polygon', 'line', 'rect', 'ellipse', 'circle', 'text', 'polyline')
+
+    @classmethod
+    def _svg_shape_counts(cls, svg_bytes):
+        """svg に含まれる図形要素をタグごとに数える。読めない svg は空で返す。"""
+        try:
+            text = svg_bytes.decode('utf-8', errors='replace')
+        except Exception:
+            return {}
+        out = {}
+        for tag in cls.SHAPE_TAGS:
+            n = len(re.findall(r'<%s[\s/>]' % tag, text))
+            if n:
+                out[tag] = n
+        return out
+
     def _svg_verify_path(self, save_dir):
         """BLK-reviewer-20260908-1103-wish: 「この svg は本当に今の puml の姿か」の控え。
 
@@ -703,6 +722,15 @@ class Handler(BaseHTTPRequestHandler):
                 # GUI 側 (src/core/svg-diff-summary.js) が受け持つ。
                 results[name]['pumlText'] = text[:MAX_DIFF_PUML_CHARS]
                 results[name]['svgLabels'] = self._svg_text_labels(svg_bytes)
+                # BLK-reviewer-20260908-1303: puml と保存中の svg を突き合わせるだけでは、
+                # 「矢印の向き・note の位置・要素の並び」のように文字が同じまま構造だけ
+                # 変わった差を見分けられず、「文字の上での違い無し」が「実害なし」と
+                # 誤読される。ここでは描き直した結果そのもの (drawn) が手元にあるので、
+                # 保存中の svg と描き直した svg を直に比べる材料も添える。
+                results[name]['drawnLabels'] = self._svg_text_labels(drawn)
+                results[name]['svgShape'] = self._svg_shape_counts(
+                    self._strip_svg_stamp(svg_bytes))
+                results[name]['drawnShape'] = self._svg_shape_counts(drawn)
         self._write_svg_verify(save_dir, recs)
         self._send_json(200, {'ok': True, 'results': results, 'verified': recs})
 

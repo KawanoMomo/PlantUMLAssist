@@ -100,9 +100,14 @@ describe('svgDiffSummary.summary / reportText — そのまま指摘文にする
     var diff = SD.compare(SEQ, ['受注サービス', 'Order', '在庫サービス', '在庫を引き当てる']);
     expect(SD.summary(diff)).toBe('欠落 2 件 / SVG に残る古い名前 1 件');
   });
-  test('文字の差が無ければ、見た目だけの差だと言う', function() {
+  // BLK-reviewer-20260908-1303: 以前ここは「見た目だけの差です」を期待していたが、
+  // render は決定的なので、バイトが違う以上「実害なし」ではない。
+  // 「差なし」と読める文言を出さないことを、逆に固定する。
+  test('文字の差が無くても「差なし・見た目だけ」とは言わない', function() {
     var diff = SD.compare(SEQ, ['受注サービス', 'Order', 'Stock', '在庫を引き当てる', '引き当て結果']);
-    expect(SD.summary(diff)).toContain('見た目だけの差');
+    var s = SD.summary(diff);
+    expect(s).toContain('一致していません');
+    expect(s).not.toContain('見た目だけの差');
   });
   test('指摘文に図名・欠落・残存・直し方が入る', function() {
     var diff = SD.compare(SEQ, ['受注サービス', 'Order', '在庫サービス', '在庫を引き当てる']);
@@ -120,5 +125,91 @@ describe('svgDiffSummary.summary / reportText — そのまま指摘文にする
   });
   test('1 枚も無ければ空文字 (空の指摘文を渡さない)', function() {
     expect(SD.reportAll({})).toBe('');
+  });
+});
+
+// BLK-reviewer-20260908-1303: 文字に現れない食い違い。
+// reviewer が 7 枚のうち 6 枚で「文字の上での食い違いは見つかりませんでした
+// （描画の見た目だけの差です）」を受け取り、render が決定的である以上それが
+// 誤りであることを指摘した。文字で差が出ないときこそ、保存中の SVG と
+// 描き直した SVG を直に比べて構造の差を言う。
+describe('svgDiffSummary.compare — 文字に現れない差を構造として言う', function() {
+  var SAME = ['受注サービス', 'Order', 'Stock', '在庫を引き当てる', '引き当て結果'];
+
+  test('図形の数が違えば、種類ごとに保存中と描き直しの数を出す', function() {
+    var diff = SD.compare(SEQ, SAME, {
+      drawnLabels: SAME,
+      svgShape: { path: 4, polygon: 2, rect: 3 },
+      drawnShape: { path: 4, polygon: 4, rect: 3 },
+    });
+    expect(diff.empty).toBe(true);
+    expect(diff.structuralKnown).toBe(true);
+    expect(diff.structural.length).toBe(1);
+    expect(diff.structural[0].kind).toBe('shape');
+    expect(diff.structural[0].text).toContain('多角形');
+    expect(diff.structural[0].text).toContain('保存中 2 → 描き直すと 4');
+    expect(SD.summary(diff)).toContain('構造が違います');
+    expect(SD.summary(diff)).not.toContain('見た目だけ');
+  });
+
+  test('名前が同じまま並び順だけ変わった図を、並び順の違いとして言う', function() {
+    var diff = SD.compare(SEQ, ['受注サービス', 'Order', 'Stock'], {
+      drawnLabels: ['受注サービス', 'Stock', 'Order'],
+      svgShape: { path: 4 }, drawnShape: { path: 4 },
+    });
+    var ord = diff.structural.filter(function(r) { return r.kind === 'order'; });
+    expect(ord.length).toBe(1);
+    expect(ord[0].text).toContain('2 番目が「Order」→「Stock」');
+  });
+
+  test('puml との突き合わせが取りこぼした文字も、SVG どうしの比較で拾う', function() {
+    // 「引き当て結果」は puml にも保存中 SVG にも在るので missing/leftover には出ないが、
+    // 描き直すと消えている (= 今の puml では描かれない) ことは SVG どうしなら分かる。
+    var diff = SD.compare(SEQ, SAME, {
+      drawnLabels: ['受注サービス', 'Order', 'Stock', '在庫を引き当てる'],
+      svgShape: { path: 4 }, drawnShape: { path: 4 },
+    });
+    var gone = diff.structural.filter(function(r) { return r.kind === 'label-gone'; });
+    expect(gone.length).toBe(1);
+    expect(gone[0].label).toBe('引き当て結果');
+  });
+
+  test('図形も並びも同じなら、位置の差だと言い切る (差なしとは言わない)', function() {
+    var diff = SD.compare(SEQ, SAME, {
+      drawnLabels: SAME, svgShape: { path: 4 }, drawnShape: { path: 4 },
+    });
+    expect(diff.structural.length).toBe(0);
+    expect(SD.summary(diff)).toContain('一致していません');
+    expect(SD.summary(diff)).toContain('位置の差');
+  });
+
+  test('材料が来ていなければ「調べていない」と言う (調べて無かった、にしない)', function() {
+    var diff = SD.compare(SEQ, SAME);
+    expect(diff.structuralKnown).toBe(false);
+    expect(SD.summary(diff)).toContain('調べていません');
+    expect(SD.summary(diff)).toContain('一致していません');
+  });
+
+  test('指摘文にも構造の違いと「作り直してください」が入る', function() {
+    var diff = SD.compare(SEQ, SAME, {
+      drawnLabels: SAME,
+      svgShape: { polygon: 2 }, drawnShape: { polygon: 4 },
+    });
+    var text = SD.reportText('order_seq', diff);
+    expect(text).toContain('[order_seq]');
+    expect(text).toContain('多角形');
+    expect(text).toContain('作り直してください');
+    expect(text).not.toContain('レイアウトだけの差');
+  });
+
+  test('文字の差と構造の差が両方あれば、要約に両方の件数が出る', function() {
+    var diff = SD.compare(SEQ, ['受注サービス', 'Order', '在庫サービス', '在庫を引き当てる'], {
+      drawnLabels: ['受注サービス', 'Order', 'Stock', '在庫を引き当てる'],
+      svgShape: { polygon: 2 }, drawnShape: { polygon: 4 },
+    });
+    var s = SD.summary(diff);
+    expect(s).toContain('欠落 2 件');
+    expect(s).toContain('SVG に残る古い名前 1 件');
+    expect(s).toContain('構造の違い');
   });
 });

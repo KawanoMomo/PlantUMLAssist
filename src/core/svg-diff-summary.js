@@ -121,7 +121,85 @@ window.MA.svgDiffSummary = (function() {
   // puml と、保存中の SVG の文字列を突き合わせる。
   // missing  — puml にあるのに SVG に無い (描き直せば増えるもの)
   // leftover — SVG にあるのに puml に無い (旧名の残り。描き直せば消えるもの)
-  function compare(pumlText, svgLabels) {
+  // BLK-reviewer-20260908-1303: 文字に現れない差の内訳。
+  // 保存中の SVG と、今の puml を描き直した SVG を直に比べる。
+  // 図形の数 (矢印の先端・枠・線) と、文字の並び順は、名前が 1 文字も
+  // 変わらないまま構造だけ変わった差 — 矢印の向き、note の位置、要素の並び替え — で動く。
+  var SHAPE_LABEL = {
+    path: '線・曲線', polygon: '多角形（矢印の先端など）', line: '直線',
+    rect: '四角の枠', ellipse: '楕円', circle: '円', text: '文字', polyline: '折れ線',
+  };
+
+  function shapeLabel(tag) { return SHAPE_LABEL[tag] || tag; }
+
+  function _list(v) { return Array.isArray(v) ? v : []; }
+
+  // 両方に出てくる文字だけを取り出し、並びが違えばそれを言う。
+  // 名前が同じまま要素を入れ替えた図は、ここでしか差が出ない。
+  function _orderRow(oldLabels, newLabels) {
+    var inNew = {};
+    _list(newLabels).forEach(function(s) { inNew[String(s)] = true; });
+    var inOld = {};
+    _list(oldLabels).forEach(function(s) { inOld[String(s)] = true; });
+    var a = _list(oldLabels).map(String).filter(function(s) { return inNew[s]; });
+    var b = _list(newLabels).map(String).filter(function(s) { return inOld[s]; });
+    if (a.length < 2 || a.length !== b.length) return null;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] !== b[i]) {
+        return {
+          kind: 'order',
+          label: '文字の並び順',
+          was: a[i], now: b[i],
+          text: '文字の並び順が違います（' + (i + 1) + ' 番目が「' + a[i] + '」→「' + b[i] + '」）',
+        };
+      }
+    }
+    return null;
+  }
+
+  // 保存中の SVG と描き直した SVG の、図形の数の差。
+  function _shapeRows(oldShape, newShape) {
+    var o = oldShape && typeof oldShape === 'object' ? oldShape : {};
+    var n = newShape && typeof newShape === 'object' ? newShape : {};
+    var tags = {};
+    Object.keys(o).forEach(function(k) { tags[k] = true; });
+    Object.keys(n).forEach(function(k) { tags[k] = true; });
+    var rows = [];
+    Object.keys(tags).sort().forEach(function(tag) {
+      var was = o[tag] || 0, now = n[tag] || 0;
+      if (was === now) return;
+      rows.push({
+        kind: 'shape', label: shapeLabel(tag), was: was, now: now,
+        text: shapeLabel(tag) + ' の数が違います（保存中 ' + was + ' → 描き直すと ' + now + '）',
+      });
+    });
+    return rows;
+  }
+
+  // 保存中の SVG にしか無い / 描き直した SVG にしか無い文字。
+  // puml との突き合わせ (missing / leftover) が取りこぼした文字をここで拾う。
+  function _labelRows(oldLabels, newLabels, missing, leftover) {
+    var said = {};
+    (missing || []).forEach(function(r) { said[r.label] = true; });
+    (leftover || []).forEach(function(s) { said[String(s)] = true; });
+    var inOld = {}, inNew = {};
+    _list(oldLabels).forEach(function(s) { inOld[String(s)] = true; });
+    _list(newLabels).forEach(function(s) { inNew[String(s)] = true; });
+    var rows = [];
+    Object.keys(inOld).forEach(function(s) {
+      if (!inNew[s] && !said[s] && !_ignorable(s)) {
+        rows.push({ kind: 'label-gone', label: s, text: '描き直すと消える文字: ' + s });
+      }
+    });
+    Object.keys(inNew).forEach(function(s) {
+      if (!inOld[s] && !said[s] && !_ignorable(s)) {
+        rows.push({ kind: 'label-new', label: s, text: '描き直すと増える文字: ' + s });
+      }
+    });
+    return rows;
+  }
+
+  function compare(pumlText, svgLabels, extra) {
     var rows = pumlLabels(pumlText);
     var hay = _haystack(svgLabels);
     var puml = String(pumlText == null ? '' : pumlText);
@@ -133,22 +211,53 @@ window.MA.svgDiffSummary = (function() {
       seen[t] = true;
       return puml.indexOf(t) < 0;
     });
+    var ex = extra && typeof extra === 'object' ? extra : {};
+    // 材料が来ているか。来ていなければ「構造の差は調べていない」と言う
+    // (「調べたが無かった」と読ませない)。
+    var hasLabels = Array.isArray(ex.drawnLabels);
+    var hasShape = !!(ex.drawnShape && typeof ex.drawnShape === 'object');
+    var known = hasLabels || hasShape;
+    var structural = hasShape ? _shapeRows(ex.svgShape, ex.drawnShape) : [];
+    if (hasLabels) {
+      // 材料が無いのに「描き直すと消える文字」を並べない。
+      // 空の drawnLabels を「全部消える」と読むと、毎回すべての文字を名指しする。
+      structural = structural.concat(_labelRows(svgLabels, ex.drawnLabels, missing, leftover));
+      var ord = _orderRow(svgLabels, ex.drawnLabels);
+      if (ord) structural.push(ord);
+    }
     return {
       missing: missing,
       leftover: leftover,
       total: missing.length + leftover.length,
       empty: missing.length === 0 && leftover.length === 0,
+      structural: structural,
+      structuralKnown: !!known,
     };
+  }
+
+  // 文字でも構造でも差が出なかったのに、バイトでは一致しない図。
+  // ここで「差なし」と言い切ると primary が直さないので、必ず不一致だと言う。
+  function _noTextLine(diff) {
+    var st = (diff && diff.structural) || [];
+    if (st.length) {
+      return '文字の上での違いはありませんが、構造が違います（' + st[0].text
+        + (st.length > 1 ? ' ほか ' + (st.length - 1) + ' 件' : '') + '）';
+    }
+    if (diff && diff.structuralKnown) {
+      return '文字でも図形の数でも違いは出ませんでしたが、この SVG は今の puml を描いた結果と一致していません（座標・向きなど位置の差）';
+    }
+    return '文字の上での違いは見つかりませんでしたが、この SVG は今の puml を描いた結果と一致していません（構造の差は調べていません）';
   }
 
   // 1 行の要約。何枚ぶんも並ぶので、件数と種類だけを言う。
   function summary(diff) {
-    if (!diff || diff.empty) {
-      return '文字の上での食い違いは見つかりませんでした（描画の見た目だけの差です）';
-    }
+    if (!diff || diff.empty) return _noTextLine(diff);
     var parts = [];
     if (diff.missing.length) parts.push('欠落 ' + diff.missing.length + ' 件');
     if (diff.leftover.length) parts.push('SVG に残る古い名前 ' + diff.leftover.length + ' 件');
+    if (diff.structural && diff.structural.length) {
+      parts.push('構造の違い ' + diff.structural.length + ' 件');
+    }
     return parts.join(' / ');
   }
 
@@ -156,7 +265,11 @@ window.MA.svgDiffSummary = (function() {
   function reportText(name, diff) {
     var lines = ['[' + String(name) + '] SVG が今の puml と食い違っています'];
     if (!diff || diff.empty) {
-      lines.push('  - 文字の上での違いは見つかりませんでした（レイアウトだけの差です）');
+      lines.push('  - ' + _noTextLine(diff));
+      ((diff && diff.structural) || []).forEach(function(r) {
+        lines.push('  - ' + r.text);
+      });
+      lines.push('  → この図の SVG を今の puml から作り直してください');
       return lines.join('\n');
     }
     diff.missing.forEach(function(r) {
@@ -164,6 +277,9 @@ window.MA.svgDiffSummary = (function() {
     });
     diff.leftover.forEach(function(s) {
       lines.push('  - SVG に残っている古い文字: ' + s);
+    });
+    (diff.structural || []).forEach(function(r) {
+      lines.push('  - ' + r.text);
     });
     lines.push('  → この図の SVG を今の puml から作り直してください');
     return lines.join('\n');
@@ -182,6 +298,7 @@ window.MA.svgDiffSummary = (function() {
     compare: compare,
     summary: summary,
     kindLabel: kindLabel,
+    shapeLabel: shapeLabel,
     reportText: reportText,
     reportAll: reportAll,
   };
