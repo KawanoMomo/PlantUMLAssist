@@ -44,6 +44,7 @@ const sourceFiles = [
   'src/core/compare-view.js',
   'src/core/cross-ref-diff.js',
   'src/core/change-board.js',
+  'src/core/folder-filter.js',
   'src/core/line-resolver.js',
   'src/core/formatter-interface.js',
   'src/core/dsl-updater.js',

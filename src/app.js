@@ -4121,6 +4121,10 @@ function setupTabs() {
   // 印はパネルを開いている間だけ持つ (次に開いたときは白紙から選ぶ)。
   var folderPicked = [];
   var folderNames = [];
+  // BLK-junior-20260908-1103: 名前での絞り込み。一覧は 20 枚超の行が縦に並び、
+  // 行ごとに印・役割・差分のボタンが付くので、目的の 1 枚を一発で押し分けにくい。
+  var folderQuery = '';
+  var folderFocusFilter = false;   // 一覧を開いた直後だけ絞り込み欄にカーソルを置く
   // BLK-reviewer-20260907-1803-wish: 図名 → new/changed/unchanged。
   // 「変更のある図だけ選ぶ」と行ごとの [差分] がここを見る。
   var folderStatus = {};
@@ -4248,6 +4252,8 @@ function setupTabs() {
     }
     svgRenderNote = '';   // 前に押した結果は持ち越さない
     roleNote = '';
+    folderQuery = '';           // 絞り込みは開き直すたびに白紙に戻す
+    folderFocusFilter = true;   // 開いたらそのまま名前を打ち始められる
     panel.textContent = '';
     var loading = document.createElement('div');
     loading.className = 'folder-empty';
@@ -4336,6 +4342,7 @@ function setupTabs() {
         var plain = DM ? DM.split(entries, draftNames) : { items: entries, drafts: [] };
         setFolderNames(plain);
         folderStatus = {};
+        panel.appendChild(folderFilterBar());
         panel.appendChild(folderPickBar());
         appendReviewSection(panel);
         appendRoleSection(panel, dir);
@@ -4344,6 +4351,8 @@ function setupTabs() {
         plain.items.forEach(function(e) { panel.appendChild(folderRow(e.name || e, null, null)); });
         appendDraftSection(plain.drafts, function(e) { return folderRow(e.name || e, null, null); });
         syncFolderPickUi();
+        applyFolderFilter();
+        focusFolderFilter();
         return;
       }
       var seen = RW.load(store, dir);
@@ -4358,6 +4367,7 @@ function setupTabs() {
       head.className = 'folder-summary';
       head.textContent = first ? '前回見た版の控えがありません（全部を新規として出しています）' : RW.summary(sp.items);
       panel.appendChild(head);
+      panel.appendChild(folderFilterBar());
       panel.appendChild(folderPickBar());
       appendReviewSection(panel);
       appendRoleSection(panel, dir);
@@ -4399,7 +4409,18 @@ function setupTabs() {
       panel.appendChild(mark);
       appendCarrySection(dir, sp.items);
       syncFolderPickUi();
+      applyFolderFilter();
+      focusFolderFilter();
     });
+  }
+
+  // 一覧を開いた直後だけ絞り込み欄にカーソルを置く。行のボタンを押しての
+  // 再描画では奇うことをしない (押した場所から手が飛ばない)。
+  function focusFolderFilter() {
+    if (!folderFocusFilter) return;
+    folderFocusFilter = false;
+    var input = panel.querySelector('.folder-filter');
+    if (input && input.focus) { try { input.focus(); } catch (e) {} }
   }
 
   // 一覧の「選ぶ」対象は、今この場に出ている図だけ。畳んでいる一時控えを
@@ -4903,6 +4924,57 @@ function setupTabs() {
     note.textContent = (prev && prev.carriedFrom && p.ok ? '確定済み: ' + RC.statusText(prev) + ' / ' : '')
       + p.message;
     panel.appendChild(note);
+  }
+
+  // 名前で絞り込む欄。数文字打てば候補がその 1 枚になり、Enter でそのまま開ける。
+  function folderFilterBar() {
+    var bar = document.createElement('div');
+    bar.className = 'folder-filterbar';
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'folder-filter';
+    input.id = 'folder-filter';
+    input.value = folderQuery;
+    input.placeholder = '名前で絞り込む (Enter で 1 枚なら開く)';
+    input.title = '図の名前の一部を打つと、あてはまる行だけが残る。空白で区切るとその語を全部含む図だけになる';
+    input.addEventListener('click', function(ev) { ev.stopPropagation(); });
+    input.addEventListener('input', function() {
+      folderQuery = input.value;
+      applyFolderFilter();
+    });
+    input.addEventListener('keydown', function(ev) {
+      if (ev.key === 'Escape') { ev.stopPropagation(); input.value = ''; folderQuery = ''; applyFolderFilter(); return; }
+      if (ev.key !== 'Enter') return;
+      ev.preventDefault();
+      var FF = window.MA.folderFilter;
+      var only = FF ? FF.soleMatch(folderNames, folderQuery) : '';
+      if (only) openFromFolder(only);
+    });
+    bar.appendChild(input);
+    var state = document.createElement('span');
+    state.className = 'folder-filter-state';
+    state.id = 'folder-filter-state';
+    bar.appendChild(state);
+    return bar;
+  }
+
+  // 絞り込みを今の行に当てる。一覧を作り直さずに表示を消すだけなので、
+  // 印を付けた図・役割の印は絞り込んでも残る。
+  function applyFolderFilter() {
+    var FF = window.MA.folderFilter;
+    if (!FF) return;
+    var shown = 0;
+    var rows = panel.querySelectorAll('[data-file-name]');
+    for (var i = 0; i < rows.length; i++) {
+      var el = rows[i];
+      var name = el.getAttribute('data-file-name');
+      var host = (el.parentNode && el.parentNode.className === 'folder-row') ? el.parentNode : el;
+      var on = FF.match(name, folderQuery);
+      host.style.display = on ? '' : 'none';
+      if (on) shown++;
+    }
+    var state = panel.querySelector('.folder-filter-state');
+    if (state) state.textContent = FF.summaryText(shown, rows.length, folderQuery);
   }
 
   function folderPickBar() {
