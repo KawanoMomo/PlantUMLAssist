@@ -2618,6 +2618,54 @@ html, body {
   color: var(--text-secondary);
 }
 #map-asked[hidden] { display: none; }
+/* BLK-junior-20260908-0823: 対応をどこまで決めたか */
+#map-decision {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  font-size: 11px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-primary);
+  flex-shrink: 0;
+}
+#map-decision[hidden] { display: none; }
+#map-decision-text { flex: 1; min-width: 0; color: var(--accent-orange); }
+#map-decision.settled #map-decision-text { color: var(--accent-green); }
+#btn-map-reset {
+  flex-shrink: 0;
+  font-size: 10px;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+#btn-map-reset:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+#btn-map-reset[hidden] { display: none; }
+.map-row .map-decide {
+  flex-shrink: 0;
+  font-size: 10px;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.map-row .map-decide:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+.map-row .map-pick {
+  flex-shrink: 0;
+  max-width: 140px;
+  font-size: 10px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+.map-row[data-map-match="manual"] .map-match { color: var(--accent-green); }
+.map-row[data-map-decided="1"] { border-left: 2px solid var(--accent-green); }
 .map-confirm {
   display: flex;
   flex-wrap: wrap;
@@ -4025,6 +4073,13 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <span id="map-summary"></span>
       </div>
       <div id="map-warn" hidden></div>
+      <!-- BLK-junior-20260908-0823: 対応をどこまで人が決めたか。推測が残る間は
+           「参照図だけ」の行を先輩が足した要素と言い切らない。 -->
+      <div id="map-decision" hidden>
+        <span id="map-decision-text"></span>
+        <button type="button" id="btn-map-reset" hidden
+                title="手で決めた対応を全部取り消して、機械の推測に戻す">対応をやり直す</button>
+      </div>
       <!-- BLK-junior-20260908-0923-wish: 先輩・reviewer に預けた質問の件数 -->
       <div id="map-asked" hidden></div>
       <div id="map-list" hidden></div>
