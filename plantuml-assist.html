@@ -1681,6 +1681,7 @@ html, body {
 #peek-cohort .cohort-only-b { border-color: #5e81ac; color: #5e81ac; }
 #peek-cohort .cohort-none { color: var(--text-secondary); opacity: 0.7; }
 #peek-cohort-toggle.on { border-color: var(--accent); color: var(--accent); }
+#peek-template:disabled { opacity: 0.5; cursor: default; }
 #at-modal-content {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
@@ -5915,6 +5916,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <strong>他のフォルダを見る</strong>
       <span id="peek-notice"></span>
       <span id="peek-tools">
+        <button type="button" id="peek-template" disabled title="この図をテンプレートにして新しい図を作る">⧉ テンプレートとして開く</button>
         <button type="button" id="peek-cohort-toggle" title="同じドメイン名の図をフォルダ横断で並べる">🔀 ドメインで揃える</button>
         <button type="button" id="peek-prev" title="前の図">↑</button>
         <button type="button" id="peek-next" title="次の図">↓</button>
