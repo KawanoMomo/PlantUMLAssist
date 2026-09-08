@@ -12956,7 +12956,9 @@ function renderSaveCheck(res) {
     list.hidden = !html;
   }
   // 指摘が無いときは帯を出さない (毎回の保存で図が隠れる方が邪魔になる)。
-  if (!SC.shouldWarn(res)) { el.hidden = true; setSaveStatus(SC.summaryLine(res)); return; }
+  // 指摘が無いときは帯を出さず、突合の結果はステータスバーの保存先の後ろに足す。
+  // ここで setSaveStatus に置き換えると「どこに書いたか」が消える。
+  if (!SC.shouldWarn(res)) { el.hidden = true; appendSaveStatus(SC.checkLine(res)); return; }
   el.hidden = false;
 }
 
@@ -12992,6 +12994,15 @@ function setSaveStatus(msg) {
   el.textContent = msg;
   if (_saveStatusTimer) clearTimeout(_saveStatusTimer);
   _saveStatusTimer = setTimeout(function() { el.textContent = ''; }, 6000);
+}
+
+// 保存の直後に出した「どこに書いたか」の後ろへ、突合の結果を足す。
+// 保存先の文言は保存が成立したことの唯一の手掛かりなので、上書きしない。
+function appendSaveStatus(msg) {
+  var el = document.getElementById('status-save-result');
+  if (!el || !msg) return;
+  var cur = el.textContent || '';
+  setSaveStatus(cur ? cur + ' ／ ' + msg : msg);
 }
 
 // ── Export ─────────────────────────────────────────────────────────────────

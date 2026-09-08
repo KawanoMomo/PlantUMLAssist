@@ -98,9 +98,10 @@
     return { seen: next };
   }
 
-  // 図の上に出す 1 行。警告が無いときも「見た」ことは言う
-  // (押しても何も起きなかったのか、指摘が無かったのかを潰さない)。
-  function summaryLine(res) {
+  // 突合の結果だけを述べる 1 語句。「保存しました」は言わない。
+  // ステータスバーでは保存先の文言 (どこに書いたか) の後ろに足すので、
+  // ここが「保存しました」で始まると保存先を押しのけてしまう。
+  function checkLine(res) {
     var r = res || { added: [], repeated: [], resolved: 0, seen: [] };
     var added = _list(r.added).length, rep = _list(r.repeated).length;
     var parts = [];
@@ -110,13 +111,19 @@
         + (r.maxIgnored > 1 ? '（最長 ' + r.maxIgnored + ' 回そのまま保存）' : ''));
     }
     if (!parts.length) {
-      if (r.resolved) return '保存しました。この図の不一致 ' + r.resolved + ' 件が解消しました';
+      if (r.resolved) return 'この図の不一致 ' + r.resolved + ' 件が解消しました';
       return _list(r.seen).length
-        ? '保存しました。' + _list(r.seen).join('・') + ' を見て、この図に不一致はありません'
-        : '保存しました。突合は動きませんでした';
+        ? _list(r.seen).join('・') + ' を見て、この図に不一致はありません'
+        : '突合は動きませんでした';
     }
     if (r.resolved) parts.push('解消 ' + r.resolved + ' 件');
-    return '保存しました。' + parts.join(' / ');
+    return parts.join(' / ');
+  }
+
+  // 図の上に出す 1 行。警告が無いときも「見た」ことは言う
+  // (押しても何も起きなかったのか、指摘が無かったのかを潰さない)。
+  function summaryLine(res) {
+    return '保存しました。' + checkLine(res);
   }
 
   // 帯を出すか。新しい不一致か、未解消が残っているときだけ。
@@ -160,7 +167,7 @@
   var api = {
     storageKey: storageKey, keyOf: keyOf, rowsFor: rowsFor,
     evaluate: evaluate, advance: advance,
-    summaryLine: summaryLine, shouldWarn: shouldWarn, lines: lines,
+    summaryLine: summaryLine, checkLine: checkLine, shouldWarn: shouldWarn, lines: lines,
     load: load, save: save,
   };
 
