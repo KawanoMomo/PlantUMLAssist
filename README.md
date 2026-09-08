@@ -398,7 +398,12 @@ node tools/audit.js a.puml b.puml --only name,method       # 監査を絞る
 |---|---|
 | `--summary` | JSON ではなく件数の要約を日本語で出す |
 | `--out FILE` | JSON を FILE に書き、標準出力にはパスだけ出す |
-| `--only a,b` | 回す監査を絞る (`name` / `method` / `consistency` / `family`) |
+| `--only a,b` | 回す監査を絞る (`name` / `method` / `consistency` / `family` / `trace` / `label` / `svg` / `density`) |
+
+`label` は遷移ラベルが「対応するシーケンスのメッセージの何番目 (先頭 / 中間 / 末尾)」を指しているかを
+系統横断で数え、多数派とズレた系統を名指しする。実在チェック (`trace`) は実在する名前なら一致と出すので、
+「dma だけ末尾の内部呼び出し名をラベルにしている」は `label` でしか出ない。判定は画面の
+「⇉ 系統チェック」と同じ `src/core/label-position.js` — GUI と CLI で答えが割れることはない。
 
 JSON の形:
 
@@ -444,6 +449,19 @@ console.log(res.variants.length, res.undeclared.length);
 図 1 枚は `{ name, dsl }` で渡す。手で組み立てるときは `dsl` でも `text` でも読めるので、
 綴りを取り違えて**指摘 0 件**が返ってくることはない。`name` は突合結果の中で図を指す名前に
 なるだけなので、ファイル名でなくても構わない。
+
+`src/core/*.js` を `require` で 1 本だけ読むのは避ける。監査モジュールは互いを `window.MA` 越しに
+呼ぶので、兄弟が居ないと**例外ではなく空の結果**が返る (「問題なし」と読み違える)。`loadMA()` は
+`src/core` を丸ごと読むので、この取り違えが起きない。
+
+入力が他のモジュールの出力になっているものもある。`labelPosition.rank()` は
+`traceCoverage.audit(docs)` の結果を取る:
+
+```js
+const { MA } = loadMA();
+const r = MA.labelPosition.rank(MA.traceCoverage.audit(docs));
+console.log(r.commonLabel, r.odd.map((x) => x.key));   // 先頭 [ 'dma' ]
+```
 
 ## 指摘の着手状況 CLI (`npm run pins`)
 
