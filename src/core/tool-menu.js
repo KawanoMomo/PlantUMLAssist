@@ -107,6 +107,13 @@ window.MA.toolMenu = (function() {
     return groupOf(id) !== null;
   }
 
+  // 開いたときに畳むかどうか。design 7a/7b の既定は「畳む」。
+  // 一度でも自分で切り替えた人 ('0' / '1' が残っている人) はその選択が勝つ。
+  function foldedAtStart(saved) {
+    if (saved == null || saved === '') return true;
+    return saved === '1';
+  }
+
   function esc(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -138,6 +145,7 @@ window.MA.toolMenu = (function() {
     groupOf: groupOf,
     labelOf: labelOf,
     isFoldable: isFoldable,
+    foldedAtStart: foldedAtStart,
     buildMenuHtml: buildMenuHtml,
     NOTE: NOTE,
   };

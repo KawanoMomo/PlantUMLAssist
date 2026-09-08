@@ -22,7 +22,16 @@ function shotOut(name) {
   return path.join(REPO_ROOT, 'test-results', 'shots', name);
 }
 
-async function gotoApp(page) {
+// design 7a/7b: タブ列の既定は「ツールを畳んだ状態」。既存の spec は機能ボタン
+// (`#btn-tab-*`) を直接押すので、断らない限りこれまでどおり畳まない状態で開く。
+// 既定そのものを見る spec は gotoApp(page, { foldedTools: true }) で開く
+// (このとき helper は設定に触らないので、アプリの既定がそのまま出る)。
+async function gotoApp(page, opts) {
+  if (!(opts && opts.foldedTools)) {
+    await page.addInitScript(() => {
+      try { window.localStorage.setItem('plantuml-tools-folded', '0'); } catch (e) {}
+    });
+  }
   await page.goto('/');
   // BLK-builder-20260908-0744-2-red: no hard-coded cap here. 5s was shorter than
   // the time a page load can legitimately take while other workers are rendering,

@@ -1124,9 +1124,13 @@ function init() {
       if (e.key === 'Escape' && !menu.hidden) close();
     });
 
-    var saved = '0';
-    try { saved = localStorage.getItem(FOLD_KEY) || '0'; } catch (err) {}
-    applyFold(saved === '1');
+    // design 7a/7b: 既定は畳んだ状態。タブ列に 25 個の機能ボタンが並ぶと横スクロールが
+    // 要り、「今どれを見ているか」の図タブが「何をするか」に埋もれる。畳んだ側を既定に
+    // すると、タブ列は図のタブと ＋ / 一覧 / ツール ▾ だけになり、件数は下端に出る。
+    // 一度でも「タブ列に戻す」を押した人はその選択が残る。
+    var saved = null;
+    try { saved = localStorage.getItem(FOLD_KEY); } catch (err) {}
+    applyFold(tm.foldedAtStart(saved));
   })();
 
   // ── 下端の件数表示 (design 7a / 7b) ─────────────────────────────────────
@@ -3084,7 +3088,10 @@ function renderDiffBadge() {
   syncTabDirtyMarks(docs);
   var sum = SD.summary(docs);
   btn.textContent = SD.badgeText(sum);
-  btn.className = sum.hasChange ? 'tab-tool has-change' : 'tab-tool';
+  // BLK-builder-20260908-1123-4: 件数の描き直しで className を丸ごと入れ替えると、
+  // 「タブ列から畳む」で付けた tool-folded が消えて、畳んだはずのボタンが戻ってくる。
+  // 状態を表す 1 クラスだけを付け外しする (以下の件数ボタンも同じ)。
+  btn.classList.toggle('has-change', !!sum.hasChange);
   btn.title = sum.hasChange
     ? ('前回保存時点から変わった図: ' + sum.changed.concat(sum.added).join(', '))
     : '前回保存時点から変わった図はない';
@@ -3189,7 +3196,7 @@ function renderReviewBadge() {
   if (!btn || !RD) return null;
   var r = _reviewFindings();
   btn.textContent = RD.badgeText(r.findings);
-  btn.className = r.findings.length ? 'tab-tool has-finding' : 'tab-tool';
+  btn.classList.toggle('has-finding', r.findings.length > 0);
   var name = _activeDocName();
   var base = name ? RD.baselineOf(name) : null;
   btn.title = (base ? ('基準: ' + base.ref + ' / ') : '基準の図は未選択 / ') + r.summary;
@@ -3838,7 +3845,7 @@ function renderVersionBadge() {
   var name = _vtCurrentName();
   var n = name ? VT.revisitCount(name) : 0;
   btn.textContent = n > 0 ? ('⟲ 変遷 往復' + n) : '⟲ 変遷 −';
-  btn.className = n > 0 ? 'tab-tool has-change' : 'tab-tool';
+  btn.classList.toggle('has-change', n > 0);
   btn.title = n > 0
     ? (name + ' には前の版に戻った版が ' + n + ' 回あります')
     : 'この図が保存のたびにどう変わったかを通しで並べる。前の版に戻った「往復」には印が付く';
@@ -10333,7 +10340,7 @@ function renderPinBadge() {
   if (!btn || !RP) return null;
   var sum = RP.summary(_pins());
   btn.textContent = RP.badgeText(sum);
-  btn.className = sum.pending > 0 ? 'tab-tool has-open' : 'tab-tool';
+  btn.classList.toggle('has-open', sum.pending > 0);
   btn.title = sum.total
     ? ('レビュー指摘 ' + sum.total + ' 件 (未対応 ' + sum.pending + ' / 対応済み ' + sum.done
       + ' / 迷子 ' + sum.stale + ')')
@@ -10695,13 +10702,13 @@ function renderInboxBadge() {
   if (!btn || !PI) return null;
   if (!_inboxItems) {
     btn.textContent = '📥 指摘箱 −';
-    btn.className = 'tab-tool';
+    btn.classList.remove('has-open');
     btn.title = '保存フォルダの図をまたいで、未対応のレビュー指摘を集める';
     return null;
   }
   var sum = PI.summary(_inboxShown());
   btn.textContent = PI.badgeText(sum);
-  btn.className = sum.pending > 0 ? 'tab-tool has-open' : 'tab-tool';
+  btn.classList.toggle('has-open', sum.pending > 0);
   btn.title = PI.headText(sum);
   return sum;
 }
@@ -10944,7 +10951,7 @@ function renderFindingsBadge() {
   var rows = _mfRows();
   var sum = MF.summary(rows);
   btn.textContent = MF.badgeText(sum);
-  btn.className = sum.recheck > 0 ? 'tab-tool has-recheck' : 'tab-tool';
+  btn.classList.toggle('has-recheck', sum.recheck > 0);
   btn.title = MF.headText(sum);
   return sum;
 }
