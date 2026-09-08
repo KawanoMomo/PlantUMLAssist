@@ -19,6 +19,7 @@ const sourceFiles = [
   'src/core/state-transition.js',
   'src/core/state-insert.js',
   'src/core/class-scaffold.js',
+  'src/core/sequence-scaffold.js',
   'src/core/name-audit.js',
   'src/core/template-new.js',
   'src/core/template-map.js',
