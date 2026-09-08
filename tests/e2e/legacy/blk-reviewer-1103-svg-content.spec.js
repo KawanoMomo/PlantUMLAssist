@@ -115,6 +115,60 @@ test.describe('BLK-reviewer-20260908-1103: SVG が今の DSL から作られた�
     await expect(page.locator('#folder-svg-content')).toContainText('ずれ 1 枚');
   });
 
+  // BLK-reviewer-20260908-1103 (2103 差し戻し): 印は puml のバイト列が変われば
+  // 体裁だけの書き換えでも食い違うので、描かれる中身は同じ図まで「内容ずれ」に出て、
+  // しかも「上書きせずに確かめる」の対象から外れていた。reviewer は同じ 6 枚を毎回
+  // /render + labels 突合で切り分け直していた。
+  test('印だけでずれと出た図を、上書きせずに 1 押しで確かめられる', async ({ page }) => {
+    await bootWithDir(page);
+    await clearDir(page);
+    await putFile(page, 'R1103_stampdiff', A1);
+    // 実際に描いた svg を保存する (印はこの時の puml のもの)。
+    const svg = await page.evaluate(async (a) => {
+      const r = await fetch('/render', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: a.dsl, mode: 'local' }),
+      });
+      return r.ok ? await r.text() : null;
+    }, { dsl: A1 });
+    expect(svg).toContain('<svg');
+    const put = await page.evaluate(async (a) => {
+      const r = await fetch('/autosave-svg', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'R1103_stampdiff', dir: a.dir, svg: a.svg }),
+      });
+      return r.status;
+    }, { dir: DIR, svg });
+    expect(put).toBe(200);
+
+    // 描かれるものは変わらない書き換え (コメント行の追加) で puml を保存し直す。
+    await page.waitForTimeout(1200);
+    await putFile(page, 'R1103_stampdiff', A1.replace('@enduml', "' 覚え書き\n@enduml"));
+
+    const entry = await entryOf(page, 'R1103_stampdiff');
+    expect(entry.svgSource).not.toBe(entry.hash);   // 印は食い違う
+
+    await openFolder(page);
+    const row = page.locator('#folder-panel .folder-item[data-file-name="R1103_stampdiff"] .folder-svg-content-badge');
+    await expect(row).toHaveText('内容ずれ');
+    // 印だけの判定なので「作り直しが要る」とは言い切らない。
+    await expect(row).toHaveAttribute('title', /SVG の中身を確かめる/);
+
+    // 上書きせずに確かめるボタンがこの図を対象にしている (以前は 0 枚で押せなかった)。
+    const verify = page.locator('#folder-svg-verify');
+    await expect(verify).toContainText('SVG の中身を確かめる（1 枚）');
+    await expect(verify).toBeEnabled();
+    await verify.click();
+
+    // 描き直して比べた結果が印より優先され、名指しから外れる。
+    await expect(page.locator('#folder-svg-content')).not.toContainText('ずれ 1 枚', { timeout: 60000 });
+    await expect(row).not.toHaveText('内容ずれ');
+    await expect(page.locator('#folder-svg-verify')).toContainText('中身を確かめる SVG はありません');
+    // 保存されていた svg はそのまま (作り直していない)。
+    const after = await entryOf(page, 'R1103_stampdiff');
+    expect(after.svgHash).toBe(entry.svgHash);
+  });
+
   test('内容で言い切れない図は 1 押しで作り直され、印が付く', async ({ page }) => {
     await bootWithDir(page);
     await clearDir(page);

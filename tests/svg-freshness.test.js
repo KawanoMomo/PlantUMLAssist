@@ -244,9 +244,26 @@ describe('svgFreshness.contentOf — 描き直して比べた控えも根拠に�
     expect(SF.contentOf(ce('a', 'p1', 's1'), {})).toBe('unverified');
     expect(SF.contentOf(ce('a', 'p1', 's1'))).toBe('unverified');
   });
-  test('印がある図は印で決める (控えを見に行かない)', function() {
-    expect(SF.contentOf(ce('a', 'p1', 's1', 'p1'), { a: vrec('p1', 's1', 'differ') })).toBe('match');
-    expect(SF.contentOf(ce('a', 'p1', 's1', 'pX'), { a: vrec('p1', 's1', 'match') })).toBe('differ');
+  // BLK-reviewer-20260908-1103 (2103 差し戻し): 以前は「印がある図は印で決める」だったが、
+  // 印は puml のバイト列が変われば体裁だけの書き換えでも食い違うため、描き直して
+  // 比べた控えがあるのにそれを見ずに「内容ずれ」と言い続けていた (実データ 6 枚)。
+  test('印があっても、有効な控えがあれば控えで決める', function() {
+    expect(SF.contentOf(ce('a', 'p1', 's1', 'pX'), { a: vrec('p1', 's1', 'match') })).toBe('match');
+    expect(SF.contentOf(ce('a', 'p1', 's1', 'pX'), { a: vrec('p1', 's1', 'differ-format') })).toBe('format');
+    expect(SF.contentOf(ce('a', 'p1', 's1', 'p1'), { a: vrec('p1', 's1', 'differ-content') })).toBe('differ');
+    expect(SF.contentBasisOf(ce('a', 'p1', 's1', 'pX'), { a: vrec('p1', 's1', 'match') })).toBe('rerender');
+  });
+  test('控えが今の指紋に合わなければ印に落ちる', function() {
+    expect(SF.contentOf(ce('a', 'p1', 's1', 'pX'), { a: vrec('p0', 's1', 'match') })).toBe('differ');
+    expect(SF.contentOf(ce('a', 'p1', 's1', 'p1'), { a: vrec('p0', 's1', 'differ') })).toBe('match');
+    expect(SF.contentBasisOf(ce('a', 'p1', 's1', 'pX'), { a: vrec('p0', 's1', 'match') })).toBe('stamp');
+  });
+  test('印だけで出た「ずれ」は作り直しを言い切らない', function() {
+    var b = SF.contentBadge('differ', 'stamp');
+    expect(b.mark).toBe('内容ずれ');
+    expect(b.title).toContain('SVG の中身を確かめる');
+    expect(b.title).not.toContain('作り直しが要ります');
+    expect(SF.contentBadge('differ', 'rerender').title).toContain('作り直しが要ります');
   });
   test('svg が無ければ控えがあっても missing', function() {
     var e = ce('a', 'p1', null); e.svgMtime = null;
@@ -259,6 +276,21 @@ describe('svgFreshness.scan — 上書きせずに確かめられる図', functi
     { done: vrec('p1', 's1', 'match') });
   test('needsVerify は内容で言い切れていない図だけ', function() {
     expect(scanned.needsVerify).toEqual(['todo']);
+  });
+  // BLK-reviewer-20260908-1103 (2103 差し戻し): 印だけで「ずれ」と出た図は
+  // GUI から確かめる手段が無く、reviewer が毎回手で render + 突合していた。
+  test('印だけでずれと出た図も、上書きせずに確かめる対象に入る', function() {
+    var s = SF.scan([ce('stamp-differ', 'p1', 's1', 'pX'), ce('stamp-match', 'p2', 's2', 'p2')], {});
+    expect(s.needsVerify).toEqual(['stamp-differ']);
+    expect(SF.verifyLabel(s)).toBe('SVG の中身を確かめる（1 枚）');
+  });
+  test('確かめた後は対象から外れる (体裁差のみでも)', function() {
+    var s = SF.scan([ce('stamp-differ', 'p1', 's1', 'pX')],
+      { 'stamp-differ': vrec('p1', 's1', 'differ-format') });
+    expect(s.needsVerify).toEqual([]);
+    expect(s.needsRender).not.toContain('stamp-differ');
+    expect(s.contentCounts.format).toBe(1);
+    expect(s.contentCounts.differ).toBe(0);
   });
   test('控えで一致した図は作り直しの対象から外れる', function() {
     expect(scanned.needsRender).not.toContain('done');
