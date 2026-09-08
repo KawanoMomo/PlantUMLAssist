@@ -275,3 +275,95 @@ test.describe('junior 手順 1: 実体が無くサンプルから起こす', () 
       .toHaveValue('GpioDrv');
   });
 });
+
+// BLK-junior-20260909-0403-wish: ユースケース図を起こす周。コンポーネント図には
+// 「実際の呼び出し」候補が出るのに、ユースケース図の「末尾に追加」には候補が無く、
+// 誰が使うか (アクター) も何をするか (ユースケース) も白紙から考えて一括入力欄に
+// 打つしかなかった。同じ部品のシーケンス図から候補が出て、選ぶだけで
+// アクター・ユースケース・関連が図に入ることを確かめる。
+test.describe('junior 手順 1: シーケンス図からユースケース図を起こす', () => {
+  const GPIO_SEQ = [
+    '@startuml',
+    'actor "開発者" as A1',
+    'participant GpioDrv',
+    'participant Port_Drv',
+    'participant RTOS',
+    'A1 -> GpioDrv : Gpio_Init(cfg)',
+    'A1 -> GpioDrv : Gpio_WritePin(id, level)',
+    'RTOS -> GpioDrv : Gpio_EnableIrq()',
+    'GpioDrv -> Port_Drv : Port_SetMode()',
+    '@enduml',
+  ].join('\n');
+
+  async function typeDsl(page, text) {
+    await page.evaluate((t) => {
+      const ed = /** @type {HTMLTextAreaElement} */ (document.getElementById('editor'));
+      ed.value = t;
+      ed.dispatchEvent(new Event('input'));
+    }, text);
+    await page.waitForTimeout(500);
+  }
+
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => { try { window.localStorage.clear(); } catch (e) {} });
+    await gotoApp(page);
+    // 先輩の gpio シーケンス図を 1 枚開いておく。
+    await page.locator('#diagram-type').selectOption('plantuml-sequence');
+    await page.waitForTimeout(500);
+    await typeDsl(page, GPIO_SEQ);
+    await page.evaluate(() => {
+      const ws = window.MA.workspace;
+      ws.rename(ws.getActiveId(), 'gpio_init_sequence');
+    });
+    // 白紙のユースケース図のタブへ。
+    await page.locator('#btn-tab-new').click();
+    await page.locator('#diagram-type').selectOption('plantuml-usecase');
+    await page.waitForTimeout(500);
+    await typeDsl(page, '@startuml\n@enduml');
+  });
+
+  test('シーケンス図から拾ったアクター・ユースケース候補が理由付きで並ぶ', async ({ page }) => {
+    const summary = page.locator('#uc-src-summary');
+    await expect(summary).toContainText('アクター候補');
+    await expect(summary).toContainText('ユースケース候補');
+
+    const actors = page.locator('#uc-src-actors .uc-src-row');
+    await expect(actors.filter({ hasText: '開発者' })).toHaveCount(1);
+    await expect(actors.filter({ hasText: 'RTOS' })).toHaveCount(1);
+    // 部品自身はアクターにならない。
+    await expect(actors.filter({ hasText: 'GpioDrv' })).toHaveCount(0);
+    // どの図から来た候補かが出るので、先輩の図を開き直さずに確かめられる。
+    await expect(actors.filter({ hasText: '開発者' })).toContainText('gpio_init_sequence');
+
+    const ucs = page.locator('#uc-src-usecases .uc-src-row');
+    await expect(ucs.filter({ hasText: 'Gpio_Init()' })).toHaveCount(1);
+    await expect(ucs.filter({ hasText: 'Gpio_EnableIrq()' })).toHaveCount(1);
+    // 公開 API が先。上から押していける。
+    await expect(ucs.first()).toHaveAttribute('data-src-kind', 'usecase');
+    await expect(ucs.filter({ hasText: 'Gpio_EnableIrq()' })).toContainText('RTOS');
+  });
+
+  test('選んだ候補がアクター・ユースケース・関連になって図に入る', async ({ page }) => {
+    await page.locator('#uc-src-actors .uc-src-row').filter({ hasText: 'RTOS' })
+      .locator('input').check();
+    await page.locator('#uc-src-usecases .uc-src-row').filter({ hasText: 'Gpio_EnableIrq()' })
+      .locator('input').check();
+    await page.locator('#uc-src-add').click();
+
+    await expect.poll(async () => await getEditorText(page)).toContain('actor RTOS');
+    const dsl = await getEditorText(page);
+    expect(dsl).toContain('Gpio_EnableIrq()');
+    // 呼び出し元も一緒に選んだので関連の線まで引かれる (from/to を選び直さない)。
+    expect(dsl).toMatch(/RTOS\s+-->\s+U\d/);
+
+    // 足した分は候補から消える。
+    await expect(page.locator('#uc-src-actors .uc-src-row').filter({ hasText: 'RTOS' }))
+      .toHaveCount(0);
+  });
+
+  test('起点の部品を替えると候補も替わる', async ({ page }) => {
+    await expect(page.locator('#uc-src-subject')).toHaveValue('gpio');
+    const opts = await page.locator('#uc-src-subject option').allTextContents();
+    expect(opts.some((t) => t.indexOf('gpio') >= 0)).toBe(true);
+  });
+});
