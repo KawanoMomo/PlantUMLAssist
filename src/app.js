@@ -285,6 +285,12 @@ function init() {
     if (window.MA.insertMarker) window.MA.insertMarker.sync();
   });
 
+  // ── BLK-primary-20260908-1603: 選ぶ前の対応表示 (peek) ──
+  // 遷移ラベルを直すとき、いちばん手間なのは「どの矢印が DSL の何行目か」を
+  // 目で探す段階だった。overlay の rect は data-line を持っているので、
+  // DSL 側のキャレット行と、行番号にマウスが乗った行を、そのまま図形に映す。
+  setupLinePeek();
+
   initPaneResizers();
 
   // ── Hover 挿入ガイド ──
@@ -2751,6 +2757,58 @@ function updateUndoRedoButtons() {
   var btnRedo = document.getElementById('btn-redo');
   if (btnUndo) btnUndo.disabled = !hist.canUndo();
   if (btnRedo) btnRedo.disabled = !hist.canRedo();
+}
+
+// BLK-primary-20260908-1603: DSL 行 ⇄ SVG 図形の「選ぶ前の対応表示」。
+// キャレット行を既定の peek にし、行番号にマウスが乗っている間はその行を優先する
+// (マウスを外せばキャレット行に戻る)。選択 (selected) には触らない。
+var _peekHoverLine = null;
+
+function currentPeekLine() {
+  if (_peekHoverLine !== null) return _peekHoverLine;
+  if (!editorEl) return null;
+  var LP = window.MA.linePeek;
+  return LP ? LP.lineAtCaret(editorEl.value, editorEl.selectionStart) : null;
+}
+
+function refreshLinePeek() {
+  var LP = window.MA.linePeek;
+  if (!LP) return 0;
+  var line = currentPeekLine();
+  var n = LP.apply(document.getElementById('overlay-layer'), line);
+  if (lineNumbersEl) {
+    var marked = lineNumbersEl.querySelectorAll('.ln.ln-peek');
+    Array.prototype.forEach.call(marked, function(el) { el.classList.remove('ln-peek'); });
+    // 図形に当たった行だけ番号も光らせる。当たらない行 (title 行など) は素のまま
+    // にして、「この行には対応する図形が無い」ことが番号の側からも分かるようにする。
+    if (n > 0 && line !== null) {
+      var el = lineNumbersEl.querySelector('.ln[data-line="' + line + '"]');
+      if (el) el.classList.add('ln-peek');
+    }
+  }
+  return n;
+}
+
+function setupLinePeek() {
+  if (!editorEl || !window.MA.linePeek) return;
+  ['keyup', 'click', 'input', 'focus', 'select'].forEach(function(ev) {
+    editorEl.addEventListener(ev, function() { refreshLinePeek(); });
+  });
+  if (lineNumbersEl) {
+    lineNumbersEl.addEventListener('mousemove', function(e) {
+      var t = e.target;
+      var n = (t && t.getAttribute) ? parseInt(t.getAttribute('data-line'), 10) : NaN;
+      var next = isNaN(n) ? null : n;
+      if (next === _peekHoverLine) return;
+      _peekHoverLine = next;
+      refreshLinePeek();
+    });
+    lineNumbersEl.addEventListener('mouseleave', function() {
+      if (_peekHoverLine === null) return;
+      _peekHoverLine = null;
+      refreshLinePeek();
+    });
+  }
 }
 
 function updateLineNumbers() {
@@ -13485,6 +13543,9 @@ function renderSvg() {
       }
       // BLK-reviewer-20260907-1203-wish: 指摘の付いた行に印を置く。
       try { drawPinMarkers(overlayEl); } catch (e) {}
+      // BLK-primary-20260908-1603: overlay は描画のたびに作り直されるので、
+      // 今のキャレット行の対応表示を引き直す (再描画で peek が消えたままにしない)。
+      try { refreshLinePeek(); } catch (e) {}
     }
     renderStatusEl.textContent = 'OK (' + mode + ')';
     var took = elapsed();
