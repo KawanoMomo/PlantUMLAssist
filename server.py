@@ -158,6 +158,16 @@ RENDER_API_DOC = {
                 'svgSource (svg に刻まれた印) と hash (今の puml の sha1) を比べる。'
                 '印が無い svg は POST /verify-svg が描き直して中身で確かめる'),
         'header': 'X-PlantUMLAssist-Svg-Stamp',
+        # BLK-reviewer-20260908-0103 (1903 追記): POST /verify-svg の status は
+        # 生バイト比較そのものではない。何を意味するかをここで言う。
+        'verifyStatus': {
+            'match': 'バイトまで一致した',
+            'differ-format': ('描かれる中身 (文字・図形の数) は一致し、体裁'
+                              '(ヘッダ属性・XML 宣言の書式) だけが違う。作り直さなくても読める'),
+            'differ-content': '描かれるものが違う。作り直しが要る',
+            'missing': 'svg が無い',
+            'error': '描けなかった (判定していない)',
+        },
     },
     'response': {
         '200': ('image/svg+xml — 描画された SVG。X-PlantUMLAssist-Svg-Stamp ヘッダで'
@@ -730,15 +740,36 @@ class Handler(BaseHTTPRequestHandler):
                 continue
             # 保存中の svg には書き出し元の印 (BLK-reviewer-20260908-1103) が付いている。
             # 印は描画の結果ではないので、比べる前に外す。
-            status = 'match' if drawn == self._strip_svg_stamp(svg_bytes) else 'differ'
+            stripped = self._strip_svg_stamp(svg_bytes)
+            # BLK-reviewer-20260908-0103 (1903 追記): 生バイト比較だけで differ と言うと、
+            # 書き出し経路の違い (contentStyleType の大小・style="max-width…" の有無・
+            # XML 宣言の書式) しか差が無い svg も「食い違い」になる。実データ 7 枚が
+            # ラベル・図形数まで完全一致なのに differ と出て、reviewer は毎回
+            # labels/shape を目で見比べて判定し直していた。ここで中身の一致を先に見て、
+            #   differ-format  — 中身は一致。体裁 (ヘッダ属性など) だけが違う
+            #   differ-content — 描かれるものが違う。作り直しが要る
+            # に分ける。'match' は今までどおりバイトまで一致した図だけ。
+            if drawn == stripped:
+                status = 'match'
+            elif (self._svg_text_labels(drawn) == self._svg_text_labels(stripped)
+                  and self._svg_shape_counts(drawn) == self._svg_shape_counts(stripped)):
+                status = 'differ-format'
+            else:
+                status = 'differ-content'
             recs[name] = {
                 'pumlHash': hashlib.sha1(puml_bytes).hexdigest(),
                 'svgHash': hashlib.sha1(svg_bytes).hexdigest(),
                 'result': status,
                 'at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
             }
-            results[name] = {'status': status}
-            if status == 'differ':
+            results[name] = {'status': status, 'contentMatch': status != 'differ-content'}
+            if status == 'differ-format':
+                # 何が違ったのかを結果自身が言う。reviewer が server.py を読みに行かない。
+                results[name]['note'] = (
+                    '描かれる中身 (文字・図形の数) は今の puml と一致します。'
+                    '違うのは書き出し経路による体裁 (ヘッダ属性・XML 宣言の書式) だけなので、'
+                    '作り直さなくても読めます')
+            if status.startswith('differ'):
                 # BLK-reviewer-20260908-1203-wish: 「ずれている」だけでは、reviewer は
                 # 食い違った図を 1 枚ずつ開いて grep で中身を突き止めることになる。
                 # 中身を言うのに要る材料 — 今の puml の本文と、保存中の svg に実際に

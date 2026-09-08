@@ -5922,6 +5922,10 @@ function setupTabs() {
       if (queue.length === 0) {
         var parts = [];
         if (counts.match) parts.push('一致 ' + counts.match + ' 枚');
+        // BLK-reviewer-20260908-0103 (1903 追記): 体裁だけの差を「食い違い」に
+        // 混ぜると、作り直す必要の無い図が件数を膨らませる。別の数として言う。
+        if (counts['differ-format']) parts.push('体裁差のみ ' + counts['differ-format'] + ' 枚');
+        if (counts['differ-content']) parts.push('食い違い ' + counts['differ-content'] + ' 枚');
         if (counts.differ) parts.push('食い違い ' + counts.differ + ' 枚');
         if (counts.missing) parts.push('SVG 無し ' + counts.missing + ' 枚');
         if (counts.error) parts.push('確かめられず ' + counts.error + ' 枚');
@@ -5948,7 +5952,7 @@ function setupTabs() {
           counts[st]++;
           // BLK-reviewer-20260908-1203-wish: 食い違った図は、その場で中身まで言う。
           // 材料 (今の puml と svg に書かれている文字) は server が添えてくる。
-          if (st === 'differ' && SD && typeof r.pumlText === 'string') {
+          if (st === 'differ-content' && SD && typeof r.pumlText === 'string') {
             // BLK-reviewer-20260908-1303: 保存中の SVG と描き直した SVG を直に
             // 比べる材料も渡す。渡さないと「文字の上で差なし」を「差なし」と
             // 言ってしまう (render は決定的なので、バイトが違う以上 差はある)。
@@ -6538,7 +6542,7 @@ function setupTabs() {
     // (逆に、内容がずれている図は mtime に関わらず名指しする)。
     var SF = window.MA.svgFreshness;
     var content = svgContent[name];
-    if (SF && content === 'differ') {
+    if (SF && (content === 'differ' || content === 'format')) {
       var cb = SF.contentBadge(content, svgBasis[name]);
       var contentBadge = document.createElement('span');
       contentBadge.className = 'folder-svg-content-badge';
@@ -6547,7 +6551,7 @@ function setupTabs() {
       contentBadge.title = cb.title;
       b.appendChild(contentBadge);
     }
-    if (SF && content !== 'match' && svgStatus[name] && svgStatus[name] !== 'fresh') {
+    if (SF && !SF.isSettled(content) && svgStatus[name] && svgStatus[name] !== 'fresh') {
       var sb = SF.badge(svgStatus[name]);
       var svgBadge = document.createElement('span');
       svgBadge.className = 'folder-svg-badge svg-' + svgStatus[name];
