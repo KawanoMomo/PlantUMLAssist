@@ -113,6 +113,11 @@ window.MA.svgFreshness = (function() {
       // 作り直しと違い、保存されていた絵をそのまま残したまま白黒が付く。
       needsVerify: rows.filter(function(r) { return r.content === 'unverified'; })
         .map(function(r) { return r.name; }),
+      // BLK-reviewer-20260908-1203: 内容ずれと分かっている図。印 (svgSource) だけで
+      // ずれが分かった図は、確かめ直していないので「何が食い違うか」の材料が手元に無い。
+      // 中身を言うために server にもう一度突き合わせてもらう対象。
+      needsDiff: rows.filter(function(r) { return r.content === 'differ'; })
+        .map(function(r) { return r.name; }),
     };
   }
 
@@ -191,6 +196,13 @@ window.MA.svgFreshness = (function() {
     return n === 0 ? '中身を確かめる SVG はありません' : 'SVG の中身を確かめる（' + n + ' 枚）';
   }
 
+  // 食い違いの中身を調べるボタンの文言 (BLK-reviewer-20260908-1203)。
+  // 対象は「ずれ」と分かっている図のうち、まだ中身を出していないもの。
+  function diffLabel(pending) {
+    var n = (pending && pending.length) || 0;
+    return n === 0 ? '食い違いの中身は調べてあります' : '食い違いの中身を調べる（' + n + ' 枚）';
+  }
+
   function proofLabel(scanned) {
     var n = (scanned && scanned.needsProof && scanned.needsProof.length) || 0;
     return n === 0 ? '内容はすべて確かめてあります' : '内容を確かめる（' + n + ' 枚を作り直す）';
@@ -242,6 +254,7 @@ window.MA.svgFreshness = (function() {
     groupRenderLabel: groupRenderLabel,
     groupRenderTitle: groupRenderTitle,
     proofLabel: proofLabel,
+    diffLabel: diffLabel,
     verifyLabel: verifyLabel,
   };
 })();

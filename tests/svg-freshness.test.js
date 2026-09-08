@@ -290,3 +290,20 @@ describe('svgFreshness.groupRenderLabel / groupRenderTitle', function() {
     expect(t).toContain('ほかの図と puml には触らない');
   });
 });
+
+// BLK-reviewer-20260908-1203: 印だけで「内容ずれ」と分かった図も、
+// 何が食い違うのかの材料は手元に無い。調べ直す対象を名前で返す。
+describe('svgFreshness.scan.needsDiff — 中身を調べる対象', function() {
+  test('内容ずれの図だけを並べる', function() {
+    var entries = [
+      { name: 'a', mtime: NEW, svgMtime: NEW, hash: 'h1', svgSource: 'other' },
+      { name: 'b', mtime: NEW, svgMtime: NEW, hash: 'h2', svgSource: 'h2' },
+      { name: 'c', mtime: NEW, svgMtime: null, hash: 'h3', svgSource: null },
+    ];
+    expect(SF.scan(entries).needsDiff).toEqual(['a']);
+  });
+  test('0 枚なら押させない文言になる', function() {
+    expect(SF.diffLabel([])).toBe('食い違いの中身は調べてあります');
+    expect(SF.diffLabel(['a', 'b'])).toBe('食い違いの中身を調べる（2 枚）');
+  });
+});
