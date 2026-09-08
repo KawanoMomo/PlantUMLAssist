@@ -8430,6 +8430,69 @@ function runStateMap() {
   if (listEl) listEl.hidden = false;
 }
 
+// ── 雛形との差分 (BLK-junior-20260908-1303-wish) ───────────────────────────
+// UART / CAN / GPIO の初期化図は、同じ雛形をペリフェラル名だけ変えて複製したもの。
+// これまでは 2 枚をまっさらな図として全文読み比べ、構造が同じかどうかを毎回
+// 目で判断していた。参照図を雛形とみなし、題材語を伏せて行を突き合わせて
+// 「この図だけ / 雛形だけ」の行を出す。並び替えは差分にしない。
+function _clearTemplateDiff() {
+  var listEl = document.getElementById('td-list');
+  var noteEl = document.getElementById('td-note');
+  var sumEl = document.getElementById('td-summary');
+  if (listEl) { listEl.textContent = ''; listEl.hidden = true; }
+  if (noteEl) { noteEl.textContent = ''; noteEl.hidden = true; }
+  if (sumEl) { sumEl.textContent = ''; sumEl.classList.remove('clean', 'dirty'); }
+}
+
+function runTemplateDiff() {
+  var td = window.MA.templateDiff;
+  var cv = window.MA.compareView;
+  var sumEl = document.getElementById('td-summary');
+  var listEl = document.getElementById('td-list');
+  var noteEl = document.getElementById('td-note');
+  if (!td || !cv || !sumEl || !listEl) return;
+
+  var ref = _compareRefId ? cv.doc(_compareDocs(), _compareRefId) : null;
+  if (!ref) {
+    _clearTemplateDiff();
+    sumEl.textContent = '雛形にする参照図を選んでください';
+    sumEl.classList.add('dirty');
+    return;
+  }
+  var diff = td.build(ref.dsl || '', mmdText || '');
+  sumEl.textContent = td.summary(diff);
+  sumEl.classList.remove('clean', 'dirty');
+  var off = td.count(diff, 'added') + td.count(diff, 'removed');
+  sumEl.classList.add(off === 0 ? 'clean' : 'dirty');
+  if (noteEl) {
+    noteEl.textContent = td.subjectNote(diff);
+    noteEl.hidden = false;
+  }
+
+  listEl.textContent = '';
+  listEl.hidden = false;
+  if (diff.rows.length === 0) {
+    var empty = document.createElement('div');
+    empty.id = 'td-empty';
+    empty.textContent = '比べる行がありません。どちらにも図の中身を入れてください。';
+    listEl.appendChild(empty);
+    return;
+  }
+  diff.rows.forEach(function(row) {
+    var el = document.createElement('div');
+    el.className = 'td-row';
+    el.setAttribute('data-td-kind', row.kind);
+    var kind = document.createElement('span');
+    kind.className = 'td-kind';
+    kind.textContent = td.kindLabel(row.kind);
+    var text = document.createElement('span');
+    text.className = 'td-text';
+    text.textContent = row.derived || row.template;
+    el.appendChild(kind); el.appendChild(text);
+    listEl.appendChild(el);
+  });
+}
+
 // ── 他の人のフォルダの同じ図と突き合わせる (BLK-junior-20260908-0723-wish) ──
 // 先輩版と自分版の同種図を見比べる場面で、これまでは自分の保存先設定を先輩の
 // フォルダへ一時的に替えて開き、内容を憶えてから設定を戻し、記憶を頼りに
@@ -8687,6 +8750,8 @@ function setupCompareView() {
   if (checkBtn) checkBtn.addEventListener('click', runConsistencyCheck);
   var mapBtn = document.getElementById('btn-map-run');
   if (mapBtn) mapBtn.addEventListener('click', runStateMap);
+  var tdBtn = document.getElementById('btn-td-run');
+  if (tdBtn) tdBtn.addEventListener('click', runTemplateDiff);
   var btn = document.getElementById('btn-tab-compare');
   var sel = document.getElementById('compare-select');
   var close = document.getElementById('btn-compare-close');
@@ -8698,6 +8763,7 @@ function setupCompareView() {
       _compareShownDsl = null;
       _clearCheckList();
       _clearStateMap();
+      _clearTemplateDiff();
       renderCompareView();
     });
   }
