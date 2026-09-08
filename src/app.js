@@ -2111,6 +2111,7 @@ function init() {
   btnExport.addEventListener('click', function(e) {
     e.stopPropagation();
     exportMenu.classList.toggle('open');
+    if (exportMenu.classList.contains('open')) refreshFixExportEntry();
   });
   document.addEventListener('click', function() { exportMenu.classList.remove('open'); });
   document.getElementById('exp-svg').addEventListener('click', function() { exportMenu.classList.remove('open'); exportSVG(); });
@@ -2394,6 +2395,7 @@ function init() {
   setupReviewPanel();
   setupChangeBoard();
   setupExportPick();
+  setupFixExport();
   setupComponentPack();
   setupHandoverBanner();
   setupAuditTimeline();
@@ -2593,6 +2595,7 @@ function initCommandPalette() {
       { id: 'export-clip', title: 'クリップボードにコピー / Copy image', hint: 'Export', keywords: ['export', 'clipboard', 'copy'], run: function() { clickById('exp-clipboard'); } },
       { id: 'export-all', title: '全図を SVG で保存（zip）', hint: 'Export', keywords: ['export', 'svg', 'zip', 'all'], run: function() { clickById('exp-svg-all'); } },
       { id: 'export-pick', title: '図を選んで SVG で保存（zip）', hint: 'Export', keywords: ['export', 'svg', 'zip', 'pick', 'select', 'changed', 'fix'], run: function() { clickById('exp-svg-pick'); } },
+      { id: 'export-fix', title: '要修正のみを SVG で保存（zip）', hint: 'Export', keywords: ['export', 'svg', 'zip', 'fix', 'review'], run: function() { clickById('exp-svg-fix'); } },
       { id: 'export-pack', title: '部品の図をまとめて資料化（PNG）', hint: 'Export', keywords: ['export', 'png', 'pack', 'component', 'figure', 'zip'], run: function() { clickById('exp-png-pack'); } },
       { id: 'mode-local', title: 'レンダリング: local (Java)', hint: 'Render', keywords: ['render', 'mode', 'local'], run: function() { selectValue('render-mode', 'local'); } },
       { id: 'mode-online', title: 'レンダリング: online (plantuml.com)', hint: 'Render', keywords: ['render', 'mode', 'online'], run: function() { selectValue('render-mode', 'online'); } },
@@ -12881,6 +12884,56 @@ function setupComponentPack() {
   if (run) run.addEventListener('click', function() { runComponentPack(); });
   var modal = document.getElementById('cpack-modal');
   if (modal) modal.addEventListener('click', function(e) { if (e.target === modal) closeComponentPack(); });
+}
+
+// ── 指摘の付いた図だけを 1 押しで出す (BLK-primary-20260908-1903-friction) ──
+// 指摘対応で「名指しされた数枚だけ」を再エクスポートするのに、図を 1 枚ずつ開いて
+// Export ▾ → SVG を図の数だけ繰り返していた (図 2 枚で 6 クリック)。絞り込みの画面は
+// あるが Export メニューからは「全図」しか見えず、指摘対応の場面で見つからない。
+// メニューに該当枚数を出し、そこから 1 押しで [要修正] の図だけを zip にする。
+
+function _fixExportList() {
+  var ES = window.MA.exportSelect;
+  if (!ES || !window.MA.workspace) return [];
+  saveActiveDoc();
+  var SD = window.MA.saveDiff;
+  var RV = window.MA.reviewVerdicts;
+  return ES.buildList(window.MA.workspace.list(), {
+    statusOf: SD ? function(name, dsl) { return SD.statusOf(name, dsl); } : null,
+    fixCountOf: RV ? function(name) { return RV.counts(name).fix; } : null,
+  });
+}
+
+// メニューを開くたびに枚数を数え直す (印はボードでいつでも増減する)。
+function refreshFixExportEntry() {
+  var btn = document.getElementById('exp-svg-fix');
+  var ES = window.MA.exportSelect;
+  if (!btn || !ES) return;
+  var list = _fixExportList();
+  btn.textContent = ES.menuLabel(list, 'fix');
+  btn.disabled = ES.pickedByMode(list, 'fix').length === 0;
+}
+
+function exportFixedSVG() {
+  var ES = window.MA.exportSelect;
+  if (!ES) return Promise.resolve(null);
+  var picked = ES.pickedByMode(_fixExportList(), 'fix');
+  if (!picked.length) {
+    if (window.MA.toast) window.MA.toast.show('[要修正] の印が付いた図がありません');
+    return Promise.resolve(null);
+  }
+  return exportAllSVG(picked);
+}
+
+function setupFixExport() {
+  var btn = document.getElementById('exp-svg-fix');
+  if (!btn) return;
+  btn.addEventListener('click', function() {
+    var menu = document.getElementById('export-menu');
+    if (menu) menu.classList.remove('open');
+    exportFixedSVG();
+  });
+  refreshFixExportEntry();
 }
 
 // ── 提出用 zip の図選び (BLK-primary-20260908-1203-wish) ─────────────────────

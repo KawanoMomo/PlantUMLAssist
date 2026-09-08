@@ -121,7 +121,29 @@ window.MA.exportSelect = (function() {
     return marks.length ? (item.name + '（' + marks.join(' ・ ') + '）') : item.name;
   }
 
+  // menuLabel(list, mode) — Export メニューに直接置く 1 行。
+  //
+  // BLK-primary-20260908-1903-friction: 「指摘で名指しされた数枚だけ」を出すのに
+  // 図を 1 枚ずつ開いて Export する (図の数だけ 3 クリック) か、全部詰めるかの
+  // 二択になっていた。絞り込みの画面は既にあるが、Export メニューからは
+  // 「全部」しか見えないので指摘対応の場面で見つからない。何枚該当するのかを
+  // 名前に出して、メニューから 1 押しでその枚数だけ出せるようにする。
+  function menuLabel(list, mode) {
+    var m = normalizeMode(mode);
+    var n = 0;
+    (Array.isArray(list) ? list : []).forEach(function(it) { if (matches(it, m)) n++; });
+    if (n === 0) return MODE_LABEL[m] + 'はありません';
+    return MODE_LABEL[m] + ' ' + n + ' 枚をSVGで保存（zip）';
+  }
+
+  // pickedByMode(list, mode) — 絞り込みに合う図だけを bulkExport に渡せる形で返す。
+  function pickedByMode(list, mode) {
+    return selectedDocs(applyMode(list, mode));
+  }
+
   return {
+    menuLabel: menuLabel,
+    pickedByMode: pickedByMode,
     MODES: MODES,
     MODE_LABEL: MODE_LABEL,
     normalizeMode: normalizeMode,

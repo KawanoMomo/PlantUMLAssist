@@ -146,3 +146,37 @@ describe('exportSelect.counts', () => {
     expect(ES.counts(ES.buildList(DOCS, DEPS))).toEqual({ total: 3, selected: 3, changed: 2, fix: 1 });
   });
 });
+
+// BLK-primary-20260908-1903-friction: Export メニューから 1 押しで
+// 「指摘の付いた図だけ」を出せるようにする。
+describe('exportSelect.menuLabel', () => {
+  test('該当枚数が Export メニューの名前に出る', () => {
+    var list = ES.buildList(DOCS, DEPS);
+    expect(ES.menuLabel(list, 'fix')).toBe('要修正のみ 1 枚をSVGで保存（zip）');
+    expect(ES.menuLabel(list, 'changed')).toBe('変更図のみ 2 枚をSVGで保存（zip）');
+  });
+
+  test('0 枚なら枚数ではなく「ありません」と出す', () => {
+    var list = ES.buildList(DOCS, { statusOf: function() { return 'same'; } });
+    expect(ES.menuLabel(list, 'fix')).toBe('要修正のみはありません');
+  });
+});
+
+describe('exportSelect.pickedByMode', () => {
+  test('絞り込みに合う図だけを bulkExport に渡せる形で返す', () => {
+    var picked = ES.pickedByMode(ES.buildList(DOCS, DEPS), 'fix');
+    expect(picked.map(function(p) { return p.name; })).toEqual(['Can']);
+    expect(picked[0].dsl).toBe('@startuml\nC -> D: y\n@enduml');
+  });
+
+  test('該当が無ければ空 (全部詰めるほうへ落ちない)', () => {
+    var list = ES.buildList(DOCS, { statusOf: function() { return 'same'; } });
+    expect(ES.pickedByMode(list, 'fix').length).toBe(0);
+  });
+
+  test('絞り込み前の一覧は書き換わらない', () => {
+    var list = ES.buildList(DOCS, DEPS);
+    ES.pickedByMode(list, 'fix');
+    expect(selectedNames(list)).toEqual(['Gpio', 'Can', 'Spi']);
+  });
+});
