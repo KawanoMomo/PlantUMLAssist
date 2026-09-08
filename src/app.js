@@ -8130,6 +8130,8 @@ function toggleCompareView(open) {
   pane.hidden = !_compareOpen;
   if (_compareOpen) {
     _compareShownDsl = null;   // 開き直したら必ず描く
+    // 登録した雛形は 2 枚目のタブが無くても選べる (参照図が要らないのが登録の値打ち)。
+    renderTemplateRegistry();
     renderCompareView();
   }
 }
@@ -8766,22 +8768,145 @@ function _clearTemplateDiff() {
   if (sumEl) { sumEl.textContent = ''; sumEl.classList.remove('clean', 'dirty'); }
 }
 
+// ── 雛形を登録して残す (BLK-junior-20260908-1403-wish) ─────────────────────
+// 「雛形との差分」の相手は毎回その場で探していた。別の人のフォルダにある図なら
+// 「🧩 相手のフォルダ」に絶対パスを打ち直し、名前の近い図を選び直す。同じ 2 枚を
+// 何周も突き合わせる業務では、この探し直しだけが毎周積み上がる。
+// ここは雛形を 1 回登録して呼び名で選べるようにする。登録は localStorage に残るので
+// 次の周・次の図種でもそのまま選べる。保存先設定 (autoSave の fileDir) には触らない。
+var TR_KEY = 'pua.templateRegistry';
+var _trList = null;      // 登録済みの雛形 (遅延読み込み)
+var _trPickedId = '';    // 選んでいる登録の id。空なら参照図を雛形にする
+
+function _trMod() { return window.MA.templateRegistry; }
+
+function _trLoad() {
+  if (_trList) return _trList;
+  var TR = _trMod();
+  var raw = '';
+  try { raw = (window.localStorage && window.localStorage.getItem(TR_KEY)) || ''; } catch (e) { raw = ''; }
+  _trList = TR ? TR.parse(raw) : [];
+  return _trList;
+}
+
+function _trSave(list) {
+  var TR = _trMod();
+  _trList = TR ? TR.normalize(list) : [];
+  try {
+    if (window.localStorage) window.localStorage.setItem(TR_KEY, TR ? TR.serialize(_trList) : '[]');
+  } catch (e) { /* 使えない環境でも登録はその場では効く */ }
+  return _trList;
+}
+
+function _trMessage(text, cls) {
+  var el = document.getElementById('tr-note');
+  if (!el) return;
+  el.textContent = text || '';
+  el.className = cls || '';
+  el.hidden = !text;
+}
+
+// 一覧を描く。既定は「参照図を雛形にする」。図の名前に近い登録があればそれを既定に
+// 選んでおく (毎回どれと比べるかを選び直さないで済む)。
+function renderTemplateRegistry() {
+  var TR = _trMod();
+  var sel = document.getElementById('tr-pick');
+  var label = document.getElementById('tr-label');
+  if (!TR || !sel) return;
+  var list = _trLoad();
+  if (_trPickedId && !TR.get(list, _trPickedId)) _trPickedId = '';
+  if (!_trPickedId) {
+    var near = TR.suggestFor(list, _activeDocName());
+    if (near) _trPickedId = near.id;
+  }
+  sel.textContent = '';
+  var none = document.createElement('option');
+  none.value = '';
+  none.textContent = '参照図を雛形にする';
+  sel.appendChild(none);
+  list.forEach(function(e) {
+    var op = document.createElement('option');
+    op.value = e.id;
+    op.textContent = e.label;
+    if (e.id === _trPickedId) op.selected = true;
+    sel.appendChild(op);
+  });
+  if (label && !label.value) label.value = TR.suggestLabel(_activeDocName());
+  var picked = _trPickedId ? TR.get(list, _trPickedId) : null;
+  _trMessage(picked ? TR.originNote(picked) : TR.summary(list), picked ? 'clean' : '');
+}
+
+// いま開いている図を雛形として登録する。呼び名が空なら図の名前から下書きする。
+function registerTemplate() {
+  var TR = _trMod();
+  var labelEl = document.getElementById('tr-label');
+  if (!TR) return null;
+  var dsl = editorEl ? editorEl.value : (mmdText || '');
+  if (String(dsl).trim() === '') {
+    _trMessage('この図には中身がありません (雛形にできません)', 'dirty');
+    return null;
+  }
+  var label = labelEl ? labelEl.value.trim() : '';
+  if (!label) label = TR.suggestLabel(_activeDocName());
+  if (!label) {
+    _trMessage('雛形の呼び名を入れてください', 'dirty');
+    return null;
+  }
+  var before = _trLoad();
+  var existed = !!TR.byLabel(before, label);
+  var list = _trSave(TR.add(before, { label: label, source: _activeDocName(), dsl: dsl }));
+  var saved = TR.byLabel(list, label);
+  _trPickedId = saved ? saved.id : '';
+  if (labelEl) labelEl.value = '';
+  renderTemplateRegistry();
+  _trMessage('雛形「' + label + '」を' + (existed ? '登録し直しました' : '登録しました')
+    + ' (次からはこの呼び名を選ぶだけです)', 'clean');
+  return saved;
+}
+
+function forgetTemplate() {
+  var TR = _trMod();
+  if (!TR) return;
+  var list = _trLoad();
+  var picked = _trPickedId ? TR.get(list, _trPickedId) : null;
+  if (!picked) {
+    _trMessage('消す登録を選んでください', 'dirty');
+    return;
+  }
+  _trSave(TR.remove(list, picked.id));
+  _trPickedId = '';
+  _clearTemplateDiff();
+  renderTemplateRegistry();
+  _trMessage('雛形「' + picked.label + '」の登録を消しました', '');
+}
+
+// 差分の相手。登録した雛形を選んでいればそれ、選んでいなければ参照図。
+function _templateSource() {
+  var TR = _trMod();
+  var cv = window.MA.compareView;
+  var picked = (TR && _trPickedId) ? TR.get(_trLoad(), _trPickedId) : null;
+  if (picked) return { dsl: picked.dsl, note: TR.originNote(picked) };
+  var ref = (cv && _compareRefId) ? cv.doc(_compareDocs(), _compareRefId) : null;
+  if (ref) return { dsl: ref.dsl || '', note: '参照図「' + (ref.name || ref.id) + '」を雛形にしています' };
+  return null;
+}
+
 function runTemplateDiff() {
   var td = window.MA.templateDiff;
-  var cv = window.MA.compareView;
   var sumEl = document.getElementById('td-summary');
   var listEl = document.getElementById('td-list');
   var noteEl = document.getElementById('td-note');
-  if (!td || !cv || !sumEl || !listEl) return;
+  if (!td || !sumEl || !listEl) return;
 
-  var ref = _compareRefId ? cv.doc(_compareDocs(), _compareRefId) : null;
-  if (!ref) {
+  var src = _templateSource();
+  if (!src) {
     _clearTemplateDiff();
-    sumEl.textContent = '雛形にする参照図を選んでください';
+    sumEl.textContent = '雛形にする参照図を選んでください (この図を「📌 雛形に登録」しても比べられます)';
     sumEl.classList.add('dirty');
     return;
   }
-  var diff = td.build(ref.dsl || '', mmdText || '');
+  _trMessage(src.note, 'clean');
+  var diff = td.build(src.dsl, mmdText || '');
   sumEl.textContent = td.summary(diff);
   sumEl.classList.remove('clean', 'dirty');
   var off = td.count(diff, 'added') + td.count(diff, 'removed');
@@ -9148,6 +9273,19 @@ function setupCompareView() {
   }
   var tdBtn = document.getElementById('btn-td-run');
   if (tdBtn) tdBtn.addEventListener('click', runTemplateDiff);
+  // BLK-junior-20260908-1403-wish: 雛形の登録・選択・取り消し
+  var trAdd = document.getElementById('btn-tr-add');
+  if (trAdd) trAdd.addEventListener('click', function() { registerTemplate(); });
+  var trDel = document.getElementById('btn-tr-del');
+  if (trDel) trDel.addEventListener('click', forgetTemplate);
+  var trPick = document.getElementById('tr-pick');
+  if (trPick) {
+    trPick.addEventListener('change', function() {
+      _trPickedId = trPick.value;
+      _clearTemplateDiff();
+      renderTemplateRegistry();
+    });
+  }
   var btn = document.getElementById('btn-tab-compare');
   var sel = document.getElementById('compare-select');
   var close = document.getElementById('btn-compare-close');
