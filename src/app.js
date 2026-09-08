@@ -16469,14 +16469,51 @@ function _dsRenameActive(next) {
   return name;
 }
 
+// ── 図名とタイトルの末尾を連動させる ───────────────────────────────────────
+// BLK-junior-20260909-0003: 手順4「タイトルの末尾に (資料用) を付け足して保存」は、
+// 「タイトル / Title」と「図名 / File name」を別々に書き換える作業になっていた。
+// 片方だけ直すとファイル名と図の見出しがずれる。末尾を足した / 外しただけの編集は
+// もう片方にも同じことをして、何をしたかを欄の下に書く (黙って書き換えない)。
+var _dsLinkNotice = '';
+
+function _dsPropagateFromTitle(before, after) {
+  var L = window.MA.nameTitleLink;
+  if (!L) return;
+  var edit = L.suffixEdit(before, after);
+  if (!edit) return;
+  var cur = _dsActiveDocName();
+  var next = L.applyEdit(cur, edit);
+  if (!next) return;
+  var ws = window.MA.workspace;
+  if (ws && !ws.isValidName(next)) return;   // ファイル名に使えない末尾は付けない
+  if (_dsRenameActive(next)) {
+    _dsLinkNotice = L.noticeText('図名 / File name', cur, next);
+    renderDiagramSettings(true);
+  }
+}
+
+function _dsPropagateFromName(before, after) {
+  var L = window.MA.nameTitleLink;
+  if (!L) return;
+  var edit = L.suffixEdit(before, after);
+  if (!edit) return;
+  var cur = dsSettings ? (dsSettings.title || '') : '';
+  var next = L.applyEdit(cur, edit);
+  if (!next) return;
+  _dsLinkNotice = L.noticeText('タイトル / Title', cur, next);
+  dsSet({ title: next });
+}
+
 function renderDiagramSettings(keepState) {
   var host = document.getElementById('diagram-settings-content');
   var ds = window.MA.diagramSettings;
   if (!host || !ds) return;
   // タブを開いた時点の DSL を読み戻して、今の図の見た目に合わせる。
-  if (!keepState || !dsSettings) dsSettings = ds.readFrom(mmdText);
+  if (!keepState || !dsSettings) { dsSettings = ds.readFrom(mmdText); _dsLinkNotice = ''; }
   var resolved = ds.resolve(dsSettings);
-  while (host.firstChild) host.removeChild(host.firstChild);
+  // BLK-junior-20260909-0003: 欄の change から再描画が入れ子で走ると、先に消えた
+  // 子を removeChild しようとして例外になり、change の続き (連動) が止まっていた。
+  host.textContent = '';
 
   function group(labelText) {
     var g = document.createElement('div');
@@ -16517,7 +16554,11 @@ function renderDiagramSettings(keepState) {
   nameIn.id = 'ds-docname';
   nameIn.value = _dsActiveDocName();
   nameIn.title = window.MA.workspace ? window.MA.workspace.nameRuleText() : '';
-  nameIn.addEventListener('change', function() { _dsRenameActive(nameIn.value); });
+  nameIn.addEventListener('change', function() {
+    var before = _dsActiveDocName();
+    var after = _dsRenameActive(nameIn.value);
+    if (after) _dsPropagateFromName(before, after);
+  });
   gName.appendChild(nameIn);
   var nameHint = document.createElement('div');
   nameHint.id = 'ds-name-hint';
@@ -16531,6 +16572,13 @@ function renderDiagramSettings(keepState) {
   nameNotice.hidden = true;
   gName.appendChild(nameNotice);
   if (_dsRenameNotice) _dsShowRenameNotice(nameNotice);
+  // 連動したことの知らせ (BLK-junior-20260909-0003)。
+  var linkNotice = document.createElement('div');
+  linkNotice.id = 'ds-link-notice';
+  linkNotice.className = 'ds-note';
+  linkNotice.textContent = _dsLinkNotice;
+  linkNotice.hidden = !_dsLinkNotice;
+  gName.appendChild(linkNotice);
 
   // タイトル
   var gTitle = group('タイトル / Title');
@@ -16538,8 +16586,17 @@ function renderDiagramSettings(keepState) {
   title.type = 'text';
   title.id = 'ds-title';
   title.value = dsSettings.title || '';
-  title.addEventListener('change', function() { dsSet({ title: title.value }); });
+  title.addEventListener('change', function() {
+    var before = dsSettings.title || '';
+    var after = title.value;
+    try { dsSet({ title: after }); } finally { _dsPropagateFromTitle(before, after); }
+  });
   gTitle.appendChild(title);
+  var titleHint = document.createElement('div');
+  titleHint.id = 'ds-title-hint';
+  titleHint.className = 'ds-note';
+  titleHint.textContent = '末尾に付け足した文字は 図名 / File name にも同じように付きます (逆も同じ)';
+  gTitle.appendChild(titleHint);
 
   // 外観 / Theme
   var gTheme = group('外観 / Theme');
