@@ -13008,6 +13008,94 @@ function dsSet(patch) {
   renderDiagramSettings(true);
 }
 
+// ── 図名 (= ファイル名) の付け替え ─────────────────────────────────────────
+// BLK-junior-20260908-1603。名前を変えると、前の名前のファイルは保存フォルダに
+// 残る。そこに「名前を変える直前の自動保存」が入っていることがあるので
+// (前周の完了物が今回の編集で上書きされる)、戻せる版があるなら戻す口を出す。
+
+var _dsRenameNotice = null;      // { text, canRestore, from, dsl }
+
+function _dsActiveDocName() {
+  try {
+    var ws = window.MA.workspace;
+    if (!ws) return '';
+    var id = ws.getActiveId();
+    var hit = '';
+    ws.list().forEach(function(d) { if (d.id === id) hit = d.name; });
+    return hit;
+  } catch (e) { return ''; }
+}
+
+function _dsShowRenameNotice(el) {
+  var n = _dsRenameNotice;
+  if (!el || !n) return;
+  el.hidden = false;
+  el.textContent = '';
+  var msg = document.createElement('span');
+  msg.id = 'ds-name-notice-text';
+  msg.textContent = n.text;
+  el.appendChild(msg);
+  if (!n.canRestore) return;
+  var btn = document.createElement('button');
+  btn.type = 'button';
+  btn.id = 'btn-ds-name-restore';
+  btn.textContent = '↩ ' + n.from + ' を直前の版に戻す';
+  btn.addEventListener('click', function() {
+    var ws = window.MA.workspace;
+    if (!ws) return;
+    btn.disabled = true;
+    ws.saveToFile({ name: n.from, dsl: n.dsl }, _wsFileDir()).then(function(ok) {
+      msg.textContent = ok
+        ? n.from + ' を直前の版に戻しました'
+        : n.from + ' を戻せませんでした (保存フォルダを確かめてください)';
+      if (ok) { btn.remove(); _dsRenameNotice = null; }
+      else btn.disabled = false;
+    });
+  });
+  el.appendChild(btn);
+}
+
+// 図の設定から名前を変える。保存はしない (保存すると前の名前のファイルに
+// 今の内容が入ってしまう。事故の元がまさにそれ)。
+function _dsRenameActive(next) {
+  var ws = window.MA.workspace;
+  var RG = window.MA.renameGuard;
+  if (!ws) return null;
+  var from = _dsActiveDocName();
+  var to = String(next == null ? '' : next).trim();
+  // 同じ名前で確定し直したときは、直前の名前変更の知らせを消さない
+  // (input の change は fill と blur の両方で飛ぶので、2 度目で消すと
+  // 「戻す」ボタンが出た直後に消える)。
+  if (!to || to === from) { renderDiagramSettings(true); return null; }
+  if (!ws.isValidName(to)) {
+    _dsRenameNotice = { text: ws.nameRuleText(), canRestore: false, from: from, dsl: '' };
+    renderDiagramSettings(true);
+    return null;
+  }
+
+  // 前の名前で既にファイルが書かれているか。保存フォルダを使っていないなら
+  // 残るファイルも無い。
+  var cfg = null;
+  try { cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null; } catch (e) { cfg = null; }
+  var saved = !!(cfg && cfg.backend === 'file');
+  var VT = window.MA.versionTimeline;
+  var version = (RG && VT && saved) ? RG.previousVersion(VT.historyOf(from), mmdText) : null;
+
+  if (window.MA.reviewDesk) {
+    try { window.MA.reviewDesk.renameBaseline(from, to); } catch (e) {}
+  }
+  var id = ws.getActiveId();
+  ws.rename(id, to);
+  var name = _dsActiveDocName();
+  var note = RG ? RG.notice({ from: from, to: name, saved: saved, version: version }) : null;
+  _dsRenameNotice = note
+    ? { text: note.text, canRestore: note.canRestore, from: from, dsl: version ? version.dsl : '' }
+    : null;
+  renderTabs();
+  renderDiagramSettings(true);
+  return name;
+}
+
 function renderDiagramSettings(keepState) {
   var host = document.getElementById('diagram-settings-content');
   var ds = window.MA.diagramSettings;
@@ -13043,6 +13131,33 @@ function renderDiagramSettings(keepState) {
     g.appendChild(row);
     return row;
   }
+
+  // 図名 (= 保存されるファイル名)。
+  // BLK-junior-20260908-1603: 台本の「タイトルの末尾に付け足す」を DSL の title 行の
+  // ことだと思って editor を書き換えようとした。ファイル名を決めているのは図名の方で、
+  // その対応は画面のどこにも出ていなかった。ここで並べて出し、名前もここで変える
+  // (タブのダブルクリックの prompt はブラウザを止めるので、開いている間に自動保存が
+  // 走ると前の名前のファイルに今回の編集が入る)。
+  var gName = group('図名 / File name');
+  var nameIn = document.createElement('input');
+  nameIn.type = 'text';
+  nameIn.id = 'ds-docname';
+  nameIn.value = _dsActiveDocName();
+  nameIn.title = window.MA.workspace ? window.MA.workspace.nameRuleText() : '';
+  nameIn.addEventListener('change', function() { _dsRenameActive(nameIn.value); });
+  gName.appendChild(nameIn);
+  var nameHint = document.createElement('div');
+  nameHint.id = 'ds-name-hint';
+  nameHint.className = 'ds-note';
+  nameHint.textContent = window.MA.renameGuard
+    ? window.MA.renameGuard.hintText(_dsActiveDocName(), _wsFileDir()) : '';
+  gName.appendChild(nameHint);
+  var nameNotice = document.createElement('div');
+  nameNotice.id = 'ds-name-notice';
+  nameNotice.className = 'ds-note';
+  nameNotice.hidden = true;
+  gName.appendChild(nameNotice);
+  if (_dsRenameNotice) _dsShowRenameNotice(nameNotice);
 
   // タイトル
   var gTitle = group('タイトル / Title');
