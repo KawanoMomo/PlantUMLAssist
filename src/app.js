@@ -7350,6 +7350,22 @@ function _recordRename(from, to, docs) {
   } catch (e) { /* 履歴が残せなくても置換自体は通す */ }
 }
 
+// 置換を当てる直前の本文を、当たった図だけ控える (BLK-primary-20260908-2203-wish)。
+// docs は置換前の [{ id, name, dsl }]、changed は置換で変わった [{ id, dsl }]。
+function _captureBeforeRename(from, to, docs, changed) {
+  var BS = window.MA.beforeSnapshot;
+  if (!BS) return;
+  var hit = {};
+  (changed || []).forEach(function(c) { if (c && c.id != null) hit[c.id] = true; });
+  var entries = (docs || []).filter(function(d) { return d && hit[d.id]; })
+    .map(function(d) { return { name: d.name, dsl: d.dsl }; });
+  if (!entries.length) return;
+  try {
+    BS.capture(_reviewStore(), _wsFileDir(), entries, { from: from, to: to },
+      new Date().toISOString());
+  } catch (e) { /* 控えが残せなくても置換自体は通す */ }
+}
+
 function renderRenameHistory(from) {
   var box = document.getElementById('rename-history');
   var RH = window.MA.renameHistory;
@@ -7934,6 +7950,11 @@ function renameAcrossDocs(from, to, docs) {
 
   var res = br.apply(docs, from, to);
   if (res.changed.length === 0) return res;
+
+  // BLK-primary-20260908-2203-wish: 当てる前の本文を図ごとに控える。
+  // レビュー会議で「置換前はこうで、今はこうです」を 1 画面に並べられるように
+  // する (Ctrl+Z で戻すと変更後が消えるので、往復では見せられない)。
+  _captureBeforeRename(from, to, docs, res.changed);
 
   // アクティブな図はエディタごと差し替える。undo は 1 手で戻せるようにする。
   if (window.MA.history) window.MA.history.pushHistory();
@@ -9862,6 +9883,69 @@ function toggleCompareView(open) {
   }
 }
 
+// 編集中の図の「変更前スナップショット」(BLK-primary-20260908-2203-wish)。
+// 一括置換を当てたときにだけ控えられる。今の本文と同じなら null を返す
+// (並べても何も見えない候補を選択肢に出さない)。
+function _activeBeforeSnapshot(docs, activeId) {
+  var BS = window.MA.beforeSnapshot;
+  if (!BS || activeId == null) return null;
+  var active = null;
+  (docs || []).forEach(function(d) { if (d && d.id === activeId) active = d; });
+  if (!active) return null;
+  try {
+    var snap = BS.get(_reviewStore(), _wsFileDir(), active.name);
+    if (!snap || BS.isSame(snap, active.dsl)) return null;
+    return snap;
+  } catch (e) { return null; }
+}
+
+// 変更前を出しているときだけ「いつの・どの置換の前か」と「捨てる」を添える。
+// 何日も前の控えを今日の変更前だと思って会議で見せてしまわないようにする。
+function _renderCompareBeforeNote(snap, ref) {
+  var pane = document.getElementById('compare-pane');
+  var sel = document.getElementById('compare-select');
+  if (!pane || !sel) return;
+  var note = document.getElementById('compare-before-note');
+  var showing = !!(snap && ref && ref.isBefore);
+  if (!showing) { if (note) note.remove(); return; }
+  if (!note) {
+    note = document.createElement('div');
+    note.id = 'compare-before-note';
+    note.style.cssText = 'font-size:10px;color:var(--text-secondary);padding:3px 8px;'
+      + 'display:flex;align-items:center;gap:6px;flex-shrink:0;'
+      + 'border-bottom:1px solid var(--border);';
+    var txt = document.createElement('span');
+    txt.id = 'compare-before-label';
+    var drop = document.createElement('button');
+    drop.id = 'btn-compare-before-drop';
+    drop.type = 'button';
+    drop.textContent = '控えを捨てる';
+    drop.style.cssText = 'font-size:10px;padding:1px 5px;cursor:pointer;';
+    drop.addEventListener('click', function() {
+      var BS = window.MA.beforeSnapshot;
+      var docs = _compareDocs();
+      var activeId = window.MA.workspace ? window.MA.workspace.getActiveId() : null;
+      var active = null;
+      docs.forEach(function(d) { if (d && d.id === activeId) active = d; });
+      if (BS && active) {
+        try { BS.drop(_reviewStore(), _wsFileDir(), active.name); } catch (e) {}
+      }
+      _compareRefId = null;
+      _compareShownDsl = null;
+      renderCompareView();
+    });
+    note.appendChild(txt);
+    note.appendChild(drop);
+    // 見出しの行は横並びの flex なので、その中に入れると幅 0 に潰れて押せない。
+    // 見出しの「次の行」として置く。
+    var head = document.getElementById('compare-pane-header');
+    if (head && head.parentNode) head.parentNode.insertBefore(note, head.nextSibling);
+    else sel.parentNode.insertBefore(note, sel.nextSibling);
+  }
+  var label = document.getElementById('compare-before-label');
+  if (label) label.textContent = window.MA.beforeSnapshot.label(snap);
+}
+
 // 参照図の選択肢を出し直し、選ばれている図を描く。
 function renderCompareView() {
   var cv = window.MA.compareView;
@@ -9872,17 +9956,23 @@ function renderCompareView() {
 
   var docs = _compareDocs();
   var activeId = window.MA.workspace ? window.MA.workspace.getActiveId() : null;
-  var ref = cv.pick(docs, activeId, _compareRefId);
-  var opts = cv.options(docs, activeId);
+  var snap = _activeBeforeSnapshot(docs, activeId);
+  var ref = cv.pick(docs, activeId, _compareRefId, snap);
+  var opts = cv.options(docs, activeId, snap);
 
   sel.textContent = '';
   opts.forEach(function(o) {
     var op = document.createElement('option');
     op.value = String(o.id);
-    op.textContent = o.name + ' (' + String(o.diagramType || '').replace('plantuml-', '') + ')';
+    // 「変更前」の候補は図種を添えない。名前に既に (変更前) が入っており、
+    // 図種まで並ぶと別の図と読み違える。
+    op.textContent = o.isBefore ? o.name
+      : o.name + ' (' + String(o.diagramType || '').replace('plantuml-', '') + ')';
+    if (o.isBefore) op.setAttribute('data-before', '1');
     if (ref && o.id === ref.id) op.selected = true;
     sel.appendChild(op);
   });
+  _renderCompareBeforeNote(snap, ref);
 
   if (!ref) {
     _compareRefId = null;
@@ -9898,7 +9988,7 @@ function renderCompareView() {
   }
 
   _compareRefId = ref.id;
-  var full = cv.doc(docs, ref.id) || {};
+  var full = cv.doc(docs, ref.id, activeId, snap) || {};
   var dsl = full.dsl || '';
   if (dsl === _compareShownDsl) return;   // 中身が変わっていなければ描き直さない
   _compareShownDsl = dsl;
@@ -9907,7 +9997,7 @@ function renderCompareView() {
     // 描いている間に参照図が切り替わっていたら捨てる (遅れて届いた結果で上書きしない)
     if (!_compareOpen || _compareShownDsl !== dsl) return;
     host.innerHTML = svg;
-    if (status) status.textContent = '参照 (読むだけ)';
+    if (status) status.textContent = full.isBefore ? '変更前 (読むだけ)' : '参照 (読むだけ)';
   }).catch(function(err) {
     if (!_compareOpen || _compareShownDsl !== dsl) return;
     host.textContent = '';
