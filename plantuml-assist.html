@@ -2519,6 +2519,27 @@ html, body {
   white-space: nowrap;
 }
 .map-row .map-take:hover { background: var(--bg-tertiary); }
+/* 不一致の行を先輩・reviewer に預ける (BLK-junior-20260908-0923-wish)。
+   「足す」と並ぶので、自分で決める橙とは別の色にして押し間違えないようにする。 */
+.map-row .map-ask {
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 10px;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+.map-row .map-ask:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+.map-row .map-ask[disabled] { cursor: default; opacity: 0.7; }
+#map-asked {
+  padding: 3px 8px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+#map-asked[hidden] { display: none; }
 .map-confirm {
   display: flex;
   flex-wrap: wrap;
@@ -3918,6 +3939,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <span id="map-summary"></span>
       </div>
       <div id="map-warn" hidden></div>
+      <!-- BLK-junior-20260908-0923-wish: 先輩・reviewer に預けた質問の件数 -->
+      <div id="map-asked" hidden></div>
       <div id="map-list" hidden></div>
       <!-- BLK-junior-20260908-0723-wish: 他の人のフォルダの同じ図を相手にする -->
       <div id="xf-bar">
@@ -4263,6 +4286,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/relation-roles.js"></script>
 <script src="src/core/state-map.js"></script>
 <script src="src/core/class-map.js"></script>
+<script src="src/core/map-question.js"></script>
 <script src="src/core/reuse-picker.js"></script>
 <script src="src/core/relation-options.js"></script>
 <script src="src/core/group-notation.js"></script>
