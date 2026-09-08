@@ -4625,6 +4625,23 @@ function setupTabs() {
         });
         row.appendChild(link);
       });
+      // BLK-primary-20260908-1203: 下の「古い SVG を作り直す」は古い・無い・内容ずれを
+      // まとめて作り直すので、この行に名指しされた図だけを狙えない。行の末尾に
+      // 「この N 枚だけ作り直す」を置き、reviewer に指摘された分だけを 1 押しで直せるようにする。
+      if (SF.groupRenderLabel) {
+        var only = document.createElement('button');
+        only.type = 'button';
+        only.className = 'folder-svg-names-render';
+        only.setAttribute('data-svg-status', g.status);
+        only.textContent = SF.groupRenderLabel(g);
+        only.title = SF.groupRenderTitle(g);
+        only.addEventListener('click', function(ev) {
+          ev.stopPropagation();
+          only.disabled = true;
+          renderStaleSvgs(dir, g.names, only);
+        });
+        row.appendChild(only);
+      }
       panel.appendChild(row);
     });
 
