@@ -3310,6 +3310,7 @@ function setupReviewPanel() {
 
 var _cbFull = false;    // 全文を出すか (既定は差分行とその前後だけ)
 var _cbSame = false;    // 変わっていない図も並べるか
+var _cbFixOnly = false; // 「要修正」の印が付いた行だけに絞るか (BLK-primary-20260908-1103-wish)
 
 function _changeBoardModel() {
   var CB = window.MA.changeBoard;
@@ -3383,6 +3384,28 @@ function renderChangeBoard() {
 
   if (sumEl) sumEl.textContent = _cbSummaryText(board);
 
+  // 引き継ぎでは「今すぐ手を付ける行」だけを渡したいので、印の付いた行だけに
+  // 絞れる (BLK-primary-20260908-1103-wish)。絞り込み中は差分の前後行・省略行は出さない。
+  var filtered = null;
+  if (_cbFixOnly && RV) {
+    filtered = CB.filterVerdict(board, {
+      verdict: RV.FIX,
+      rowKeyOf: function(r) { return RV.rowKey(r); },
+      verdictOf: function(name, key) { return RV.verdictOf(name, key); },
+    });
+    var fEl = document.getElementById('cb-filter-state');
+    if (fEl) fEl.textContent = CB.filterText(filtered);
+    if (filtered.entries.length === 0) {
+      body.innerHTML = '<div class="cb-empty">' + esc(CB.filterText(filtered))
+        + '。行の右端の [要修正] を押すと、その行がここに残ります。</div>';
+      return board;
+    }
+  } else {
+    var fEl0 = document.getElementById('cb-filter-state');
+    if (fEl0) fEl0.textContent = '';
+  }
+  if (filtered) board = filtered;
+
   if (board.entries.length === 0) {
     // 差分が消えても申し送りは残る (引き継ぎで読むのはこちら)。
     body.innerHTML = '<div class="cb-empty">前回保存した時点から変わった図はありません。'
@@ -3428,7 +3451,8 @@ function renderChangeBoard() {
       + '</div>';
     html += '</div>';
   });
-  body.innerHTML = html + _cbNotesOnlyHtml(board);
+  // 絞り込み中は印の付いた行だけを見せる (ボードに出ていない図の申し送りは出さない)。
+  body.innerHTML = html + (filtered ? '' : _cbNotesOnlyHtml(board));
   _wireChangeBoardNotes(body);
   _wireChangeBoardVerdicts(body);
 
@@ -3547,6 +3571,8 @@ function setupHandoverBanner() {
 }
 
 function _cbCountText(e) {
+  // 絞り込み中は「この図で何行渡すのか」が増減より大事 (BLK-primary-20260908-1103-wish)。
+  if (e.matched) return '要修正 ' + e.matched + ' 行';
   if (e.status === 'same') return '変更なし';
   if (e.status === 'new') return '新規 +' + e.added;
   return '+' + e.added + ' −' + e.removed;
@@ -3582,6 +3608,11 @@ function setupChangeBoard() {
   if (full) full.addEventListener('change', function() { _cbFull = full.checked; renderChangeBoard(); });
   var same = document.getElementById('cb-same');
   if (same) same.addEventListener('change', function() { _cbSame = same.checked; renderChangeBoard(); });
+  var fixOnly = document.getElementById('cb-fixonly');
+  if (fixOnly) fixOnly.addEventListener('change', function() {
+    _cbFixOnly = fixOnly.checked;
+    renderChangeBoard();
+  });
 
   // 会議メモ。会議が終わった瞬間の中身をそのまま持ち出せるようにする
   // (BLK-primary-20260908-0923-wish)。

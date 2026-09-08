@@ -162,3 +162,86 @@ describe('changeBoard の見出し', () => {
     expect(cb.entryLabel({ name: 'b', status: 'changed', added: 2, removed: 1 })).toBe('b (+2 −1)');
   });
 });
+
+// BLK-primary-20260908-1103-wish: 引き継ぎでは「要修正」の行だけを渡したい。
+// 304 行のボードから印の付いた行だけを抜き出す絞り込み。
+describe('changeBoard.filterVerdict — 印の付いた行だけに絞る', () => {
+  function boardOf() {
+    return {
+      total: 3, changedCount: 2, hasChange: true, added: 3, removed: 1, markedAt: '2026-09-08T10:00',
+      entries: [
+        { name: 'a', status: 'changed', added: 2, removed: 1, rows: [
+          { kind: 'del', before: 'x', beforeNo: 1 },
+          { kind: 'add', after: 'y', afterNo: 1 },
+          { kind: 'gap', count: 4 },
+          { kind: 'add', after: 'z', afterNo: 5 },
+        ] },
+        { name: 'b', status: 'changed', added: 1, removed: 0, rows: [
+          { kind: 'add', after: 'q', afterNo: 2 },
+          { kind: 'same', before: 's', after: 's' },
+        ] },
+      ],
+    };
+  }
+  var marks = { 'a': { 'add|y': '要修正', 'del|x': '済' }, 'b': { 'add|q': '済' } };
+  var opts = {
+    verdict: '要修正',
+    rowKeyOf: function(r) {
+      if (r.kind === 'add') return 'add|' + String(r.after).trim();
+      if (r.kind === 'del') return 'del|' + String(r.before).trim();
+      return '';
+    },
+    verdictOf: function(name, key) { return (marks[name] || {})[key] || ''; },
+  };
+
+  test('印の付いた行だけを残し、印の無い図はボードから消える', () => {
+    var f = cb.filterVerdict(boardOf(), opts);
+    expect(f.entries.length).toBe(1);
+    expect(f.entries[0].name).toBe('a');
+    expect(f.entries[0].rows.length).toBe(1);
+    expect(f.entries[0].rows[0].after).toBe('y');
+    expect(f.matched).toBe(1);
+  });
+
+  test('省略行 (gap) と同じ行は絞り込みでは出さない', () => {
+    var f = cb.filterVerdict(boardOf(), opts);
+    var kindsOut = [];
+    f.entries.forEach(function(e) { e.rows.forEach(function(r) { kindsOut.push(r.kind); }); });
+    expect(kindsOut).not.toContain('gap');
+    expect(kindsOut).not.toContain('same');
+  });
+
+  test('図ごとの件数を entry.matched に持つ', () => {
+    var f = cb.filterVerdict(boardOf(), opts);
+    expect(f.entries[0].matched).toBe(1);
+  });
+
+  test('「済」でも同じ形で絞れる', () => {
+    var f = cb.filterVerdict(boardOf(), { verdict: '済', rowKeyOf: opts.rowKeyOf, verdictOf: opts.verdictOf });
+    expect(f.matched).toBe(2);
+    expect(f.entries.map(function(e) { return e.name; })).toEqual(['a', 'b']);
+  });
+
+  test('印が 1 つも無ければ空のボードになる (元のボードは壊さない)', () => {
+    var src = boardOf();
+    var f = cb.filterVerdict(src, { verdict: '要修正', rowKeyOf: opts.rowKeyOf, verdictOf: function() { return ''; } });
+    expect(f.entries.length).toBe(0);
+    expect(f.matched).toBe(0);
+    expect(f.hasChange).toBe(false);
+    expect(src.entries.length).toBe(2);
+    expect(src.entries[0].rows.length).toBe(4);
+  });
+
+  test('board や opts が足りなくても例外を投げない', () => {
+    expect(cb.filterVerdict(null, opts).entries).toEqual([]);
+    expect(cb.filterVerdict(boardOf(), null).entries).toEqual([]);
+    expect(cb.filterVerdict(boardOf(), { verdict: '要修正' }).entries).toEqual([]);
+  });
+
+  test('filterText: 絞り込み中の見出しは残った行数と枚数を出す', () => {
+    var f = cb.filterVerdict(boardOf(), opts);
+    expect(cb.filterText(f)).toBe('要修正のみ 1 行 / 1 枚');
+    var none = cb.filterVerdict(boardOf(), { verdict: '要修正', rowKeyOf: opts.rowKeyOf, verdictOf: function() { return ''; } });
+    expect(cb.filterText(none)).toBe('要修正の印が付いた行はありません');
+  });
+});

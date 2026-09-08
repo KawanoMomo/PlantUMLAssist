@@ -1400,6 +1400,8 @@ html, body {
 #cb-summary { min-width: 0; }
 #cb-tools #cb-minutes { border-color: var(--accent); color: var(--accent); }
 #cb-minutes-state { color: var(--text-secondary); font-size: 11px; max-width: 320px; }
+/* 要修正のみの絞り込み (BLK-primary-20260908-1103-wish) */
+#cb-filter-state { color: var(--accent); font-size: 11px; white-space: nowrap; }
 #cb-body { flex: 1; overflow-y: auto; padding: 6px 14px 14px 14px; }
 #cb-body .cb-empty { color: var(--text-secondary); font-size: 12px; padding: 20px 4px; }
 #cb-body .cb-entry { margin: 12px 0 0 0; border: 1px solid var(--border); border-radius: 4px; }
@@ -4099,6 +4101,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <span id="cb-tools">
         <label><input type="checkbox" id="cb-full"> 全文</label>
         <label><input type="checkbox" id="cb-same"> 変更なしも出す</label>
+        <label title="会議で [要修正] を付けた行だけを残す (新人に渡す分)"><input type="checkbox" id="cb-fixonly"> 要修正のみ</label>
+        <span id="cb-filter-state"></span>
         <button type="button" id="cb-minutes" title="開いた図ごとの要修正件数・印の付いた行・申し送りを 1 枚の Markdown にまとめて書き出す (会議の議事録)">📝 会議メモを書き出す</button>
         <button type="button" id="cb-minutes-copy" title="同じ内容をクリップボードにコピーする">コピー</button>
         <span id="cb-minutes-state"></span>
