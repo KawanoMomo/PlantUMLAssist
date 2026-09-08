@@ -150,8 +150,10 @@ describe('svgFreshness.scan — 内容の判定を持つ', function() {
   ];
 
   test('内容ごとに数える', function() {
+    // BLK-reviewer-20260908-0103 (1903 追記): 体裁だけの差 (format) が
+    // 「ずれ」と別の数になったので、内訳に format が並ぶ。
     expect(SF.scan(entries).contentCounts)
-      .toEqual({ match: 1, differ: 1, missing: 1, unverified: 1 });
+      .toEqual({ match: 1, format: 0, differ: 1, missing: 1, unverified: 1 });
   });
 
   test('内容が一致した図は、mtime が古くても作り直しの対象から外す', function() {

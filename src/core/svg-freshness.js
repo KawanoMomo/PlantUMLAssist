@@ -60,8 +60,27 @@ window.MA.svgFreshness = (function() {
     var r = records && records[entry.name];
     if (!r || typeof r !== 'object') return 'unverified';
     if (r.pumlHash !== hash || r.svgHash !== entry.svgHash) return 'unverified';
-    return (r.result === 'match' || r.result === 'differ') ? r.result : 'unverified';
+    return _fromResult(r.result);
   }
+
+  // BLK-reviewer-20260908-0103 (1903 追記): server の突合結果は 3 通りになった。
+  //   match          — バイトまで一致
+  //   differ-format  — 描かれる中身は一致。体裁 (ヘッダ属性・XML 宣言) だけが違う
+  //   differ-content — 描かれるものが違う
+  // 体裁だけの差を「ずれ」と呼ぶと、作り直す必要の無い図が毎回名指しされ、
+  // reviewer は labels/shape を自分で見比べて「実は一致」と判定し直すことになる
+  // (実データ 7 枚がそれだった)。ここでは 'format' という別の答えにする。
+  // 古い形 ('differ' だけを返す server) もそのまま読めるようにしておく。
+  function _fromResult(result) {
+    if (result === 'match') return 'match';
+    if (result === 'differ-format') return 'format';
+    if (result === 'differ-content' || result === 'differ') return 'differ';
+    return 'unverified';
+  }
+
+  // 作り直さなくても「今の puml の図として読める」状態か。
+  // 一致と体裁差はどちらも読める (作り直しの対象にしない)。
+  function isSettled(content) { return content === 'match' || content === 'format'; }
 
   // BLK-reviewer-20260908-0103 (1403 追記): 同じ「一致 / ずれ」でも、根拠は 2 通りある。
   //   stamp    — svg 末尾の印 (@pua-source-sha1) と今の puml の sha1 の突合
@@ -80,7 +99,7 @@ window.MA.svgFreshness = (function() {
     var r = records && records[entry.name];
     if (!r || typeof r !== 'object') return '';
     if (r.pumlHash !== hash || r.svgHash !== entry.svgHash) return '';
-    return (r.result === 'match' || r.result === 'differ') ? 'rerender' : '';
+    return _fromResult(r.result) === 'unverified' ? '' : 'rerender';
   }
 
   var BASIS_TEXT = {
@@ -92,6 +111,8 @@ window.MA.svgFreshness = (function() {
 
   var CONTENT_BADGES = {
     match: { mark: '内容一致', title: 'この SVG は今の puml から作られています (中身で確かめました)' },
+    format: { mark: '体裁差のみ', title: '描かれる中身 (文字・図形の数) は今の puml と一致します。'
+      + '違うのは書き出し経路による体裁 (ヘッダ属性・XML 宣言の書式) だけなので、作り直さなくても読めます' },
     differ: { mark: '内容ずれ', title: 'この SVG は別の内容の puml から作られています。作り直しが要ります' },
     missing: { mark: 'SVG 無', title: 'この図の SVG が保存フォルダにありません' },
     unverified: { mark: '内容未確認', title: '元の puml の印が無く、中身が一致するかは分かりません。作り直すと印が付きます' },
@@ -126,7 +147,7 @@ window.MA.svgFreshness = (function() {
       };
     }).filter(function(r) { return typeof r.name === 'string' && r.name !== ''; });
     var counts = { fresh: 0, stale: 0, missing: 0, unknown: 0 };
-    var contentCounts = { match: 0, differ: 0, missing: 0, unverified: 0 };
+    var contentCounts = { match: 0, format: 0, differ: 0, missing: 0, unverified: 0 };
     var basisCounts = { stamp: 0, rerender: 0 };
     rows.forEach(function(r) {
       counts[r.status]++;
@@ -142,10 +163,10 @@ window.MA.svgFreshness = (function() {
       // 必ず今の内容になるので対象に入れる。
       // 内容で一致が取れている図は、mtime が古くても作り直す必要が無いので外す
       // (BLK-reviewer-20260908-1103: ここで 16 枚が 7 枚に減る)。
-      needsRender: rows.filter(function(r) { return r.status !== 'fresh' && r.content !== 'match'; })
+      needsRender: rows.filter(function(r) { return r.status !== 'fresh' && !isSettled(r.content); })
         .map(function(r) { return r.name; }),
       // 内容で言い切るために作り直しが要る図。印の無い図も入る。
-      needsProof: rows.filter(function(r) { return r.content !== 'match'; })
+      needsProof: rows.filter(function(r) { return !isSettled(r.content); })
         .map(function(r) { return r.name; }),
       // 上書きせずに確かめられる図 (svg があって、まだ内容で言い切れていないもの)。
       // 作り直しと違い、保存されていた絵をそのまま残したまま白黒が付く。
@@ -178,7 +199,7 @@ window.MA.svgFreshness = (function() {
     var settled = 0;   // mtime では古いが、中身は今の puml と一致した図
     rows.forEach(function(r) {
       if (r.status === 'fresh') return;
-      if (r.content === 'match') { settled++; return; }
+      if (isSettled(r.content)) { settled++; return; }
       need[r.status]++;
     });
     var note = settled ? '（中身が一致した ' + settled + ' 枚は作り直し不要）' : '';
@@ -219,7 +240,7 @@ window.MA.svgFreshness = (function() {
     // 内容で一致が取れた図は、mtime が古くても読める図なので名前を出さない
     // (出すと「直すもの」の一覧に、直す必要の無い図が毎回混ざる)。
     SHORTFALL.forEach(function(g) {
-      var names = rows.filter(function(r) { return r.status === g.status && r.content !== 'match'; })
+      var names = rows.filter(function(r) { return r.status === g.status && !isSettled(r.content); })
         .map(function(r) { return r.name; });
       if (names.length) out.push({ status: g.status, label: g.label, title: g.title, names: names });
     });
@@ -229,12 +250,15 @@ window.MA.svgFreshness = (function() {
   // 内容での 1 行。mtime の要約 (summary) とは別に出す — 見ているものが違う。
   function contentSummary(scanned) {
     if (!scanned || !scanned.rows.length) return '';
-    var c = scanned.contentCounts || { match: 0, differ: 0, missing: 0, unverified: 0 };
+    var c = scanned.contentCounts || { match: 0, format: 0, differ: 0, missing: 0, unverified: 0 };
+    var fmt = c.format || 0;
     if (c.differ === 0 && c.missing === 0 && c.unverified === 0) {
-      return '内容: ' + c.match + ' 枚とも今の puml から作られています';
+      return '内容: ' + (c.match + fmt) + ' 枚とも今の puml から作られています'
+        + (fmt ? '（うち ' + fmt + ' 枚は体裁だけが違う）' : '');
     }
     var parts = [];
     if (c.match) parts.push('一致 ' + c.match + ' 枚');
+    if (fmt) parts.push('体裁差のみ ' + fmt + ' 枚');
     if (c.differ) parts.push('ずれ ' + c.differ + ' 枚');
     if (c.missing) parts.push('SVG 無 ' + c.missing + ' 枚');
     if (c.unverified) parts.push('未確認 ' + c.unverified + ' 枚');
@@ -318,6 +342,7 @@ window.MA.svgFreshness = (function() {
     contentOf: contentOf,
     basisMap: basisMap,
     contentBasisOf: contentBasisOf,
+    isSettled: isSettled,
     basisText: basisText,
     basisNote: basisNote,
     STAMP_NOTE: STAMP_NOTE,
