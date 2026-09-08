@@ -178,6 +178,13 @@ function summarize(audits) {
   if (dn && dn.status === 'ok') {
     s.density = {
       families: dn.result.rows.length,
+      // BLK-reviewer-20260908-1603: 数えた系統と、粒度が違って数えなかった系統を
+      // 分けて持つ。rows.length で「10 系統とも揃っている」と言うと、実際には
+      // 2 系統しか比べていない中央値を 10 系統の合意のように読ませてしまう。
+      counted: dn.result.rows.filter((r) => r.density != null).length,
+      skippedNames: dn.result.rows
+        .filter((r) => r.density == null && r.messages > 0 && r.stateDocs.length && !r.sameGrain)
+        .map((r) => r.key),
       median: dn.result.median,
       outliers: dn.result.outliers.length,
       // 系統名まで出す。件数だけだと「どの系統か」を探しに他の出力へ戻ることになる。
@@ -236,9 +243,16 @@ function formatSummary(report, prev, options) {
     // 粒度は「揃っていないと直す」判断が要る指摘で、名前の食い違いのような
     // 一意の正解が無い。合計には足さず、外れた系統を名指しするだけにする。
     const med = s.density.median == null ? '—' : (Math.round(s.density.median * 100) / 100).toFixed(2);
-    lines.push(s.density.outliers === 0
-      ? `遷移密度: ${s.density.families} 系統とも中央値 ${med} 遷移/メッセージに揃っている`
-      : `遷移密度: 中央値 ${med} から外れた系統 ${s.density.outliers} 件 (${s.density.outlierNames.join(', ')})`);
+    const skipped = s.density.skippedNames || [];
+    const tail = skipped.length
+      ? ` (シーケンス図が状態機械と同じ粒度でない系統 ${skipped.length} 件は数えていない: ${skipped.join(', ')})`
+      : '';
+    const counted = s.density.counted == null ? s.density.families : s.density.counted;
+    lines.push(counted < 3
+      ? `遷移密度: 比べられる系統が ${counted} 件しかない (中央値 ${med} 遷移/メッセージ)${tail}`
+      : (s.density.outliers === 0
+        ? `遷移密度: ${counted} 系統とも中央値 ${med} 遷移/メッセージに揃っている${tail}`
+        : `遷移密度: 中央値 ${med} から外れた系統 ${s.density.outliers} 件 (${s.density.outlierNames.join(', ')})${tail}`));
   }
   if (s.svg) {
     // 出力物は DSL の指摘ではないので合計には足さない。「図は直っているが
