@@ -12443,14 +12443,16 @@ function setupEventSyncPanel() {
 // 名前突合結果 / 直近の変更サマリ / SVG 一式) を 1 つの zip に固めて渡す。
 // 判定と HTML は src/core/handoff-package.js の職掌。ここは材料を集めるだけ。
 
-function buildHandoffPackage() {
+function buildHandoffPackage(targetDocs) {
   var HP = window.MA.handoffPackage;
   var BE = window.MA.bulkExport;
   if (!HP || !BE || !window.MA.workspace) return Promise.resolve(null);
   // 編集中の内容が workspace に載っていないと 1 枚だけ古い DSL で固まる。
   saveActiveDoc();
 
-  var docs = _renameDocs().map(function(d) {
+  // 対象は「対象確認」で確定したもの。渡されなければ開いているタブ。
+  var src = Array.isArray(targetDocs) && targetDocs.length ? targetDocs : _renameDocs();
+  var docs = src.map(function(d) {
     return { id: d.id, name: d.name, diagramType: d.diagramType, dsl: d.dsl };
   });
   var status = document.getElementById('bulk-export-status');
@@ -12484,17 +12486,195 @@ function buildHandoffPackage() {
     if (window.MA.handoverChecklist) window.MA.handoverChecklist.issue(snapshot.checklist);
     var name = HP.packageName();
     downloadBlob(name, new Blob([BE.buildZip(HP.files(snapshot))], { type: 'application/zip' }));
-    var msg = '引き継ぎパッケージを書き出しました（' + name + '） ' + snapshot.verdict;
+    // 何枚のうち何枚を出したかを結果にも残す (zip を開くまで気づけない欠落を作らない)。
+    var msg = '引き継ぎパッケージを書き出しました（' + name + '） '
+      + (_etResultLine ? _etResultLine + ' ・ ' : '') + snapshot.verdict;
     if (status) status.textContent = msg;
     if (window.MA.toast) window.MA.toast.show(msg);
     return snapshot;
   });
 }
 
+// ── 書き出す前の対象確認 ───────────────────────────────────────────────────
+// BLK-primary-20260908-2303-wish: 📦引き継ぎ は開いているタブだけを対象にする
+// ため、保存フォルダに 14 枚あってもタブ 2 枚分しか zip に入らず、受け取った
+// 新人が開いて初めて欠落に気づく。書き出す前に「対象 2 枚 / 保存フォルダ 14 枚」
+// の差分と「保存フォルダ全体を対象にする」への切替を出し、渡す前に直せるようにする。
+// 判定は src/core/export-target.js の職掌。ここは材料集めと結線だけ。
+
+var _etMode = null;      // 'open' | 'folder' | null (既定に任せる)
+var _etFileDocs = [];    // 保存フォルダから読んだ図 ({name, dsl})
+var _etRoles = {};
+var _etDir = '';
+var _etLoading = false;
+var _etSeq = 0;
+var _etOnBuild = null;   // 「書き出す」で呼ぶもの (docs, model) => Promise
+var _etTitle = '';
+var _etResultLine = '';  // 直前の書き出しの対象内訳。結果の 1 行に混ぜる
+
+function _etLoadFolder() {
+  var WS = window.MA.workspace;
+  if (!WS || !WS.listFolder || !_fiFolderMode()) {
+    _etFileDocs = []; _etRoles = {}; _etDir = ''; _etLoading = false;
+    return Promise.resolve(false);
+  }
+  var dir = _wsFileDir();
+  var seq = ++_etSeq;
+  _etLoading = true;
+  return WS.listFolder(dir).then(function(info) {
+    var names = ((info && info.entries) || []).map(function(e) {
+      return e && typeof e === 'object' ? e.name : e;
+    }).filter(function(n) { return n; });
+    var roles = (info && info.roles) || {};
+    return Promise.all(names.map(function(n) {
+      return WS.loadFile(n, dir).then(function(text) {
+        return typeof text === 'string' ? { name: n, dsl: text } : null;
+      }, function() { return null; });
+    })).then(function(docs) {
+      if (seq !== _etSeq) return false;
+      _etFileDocs = docs.filter(function(d) { return d; });
+      _etRoles = roles;
+      _etDir = dir;
+      _etLoading = false;
+      if (document.getElementById('et-modal-content')) renderExportTargetPanel();
+      return true;
+    });
+  }).catch(function() {
+    if (seq === _etSeq) { _etLoading = false; renderExportTargetPanel(); }
+    return false;
+  });
+}
+
+function _etModel() {
+  var ET = window.MA.exportTarget;
+  var WS = window.MA.workspace;
+  if (!ET) return null;
+  return ET.model({
+    openDocs: _renameDocs(),
+    folderDocs: _etFileDocs,
+    roles: _etRoles,
+    folderAvailable: _fiFolderMode() && _etFileDocs.length > 0,
+    folderDir: _etDir,
+    loading: _etLoading,
+    mode: _etMode,
+    detectType: (WS && WS.detectType) ? WS.detectType : null,
+  });
+}
+
+function renderExportTargetPanel() {
+  var content = document.getElementById('et-modal-content');
+  var m = _etModel();
+  if (!content || !m) return null;
+  var esc = window.MA.htmlUtils.escHtml;
+  var BTN = 'background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;padding:4px 12px;font-size:11px;';
+
+  var html = '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">' + esc(_etTitle) + ' — 対象確認</h3>'
+    + '<div style="font-size:11px;color:var(--text-secondary);">書き出す前に、何が入るかをここで確定します。</div>';
+
+  html += '<div id="et-line" data-warn="' + (m.warn ? '1' : '0')
+    + '" data-count="' + m.count + '" data-folder="' + m.folderCount + '"'
+    + ' data-missing="' + m.missing + '" data-mode="' + esc(m.mode) + '"'
+    + ' style="margin-top:10px;font-size:12px;'
+    + (m.warn ? 'color:var(--warning,#d98b00);' : 'color:var(--text-primary);') + '">'
+    + esc((m.warn ? '⚠ ' : '') + m.line) + '</div>';
+  if (m.hint) {
+    html += '<div id="et-hint" style="margin-top:2px;font-size:11px;color:var(--text-secondary);">'
+      + esc(m.hint) + '</div>';
+  }
+
+  html += '<div style="margin-top:10px;font-size:10px;color:var(--accent);font-weight:bold;">対象の的</div>'
+    + '<label style="display:block;font-size:11px;color:var(--text-primary);padding:2px 0;">'
+    + '<input type="radio" name="et-mode" id="et-mode-folder" value="folder"'
+    + (m.mode === 'folder' ? ' checked' : '') + (m.folderAvailable ? '' : ' disabled') + '> '
+    + '保存フォルダ全体（' + m.folderCount + ' 枚'
+    + (m.folderDir ? ' ・ ' + esc(m.folderDir) : '') + '）'
+    + (m.folderAvailable ? '' : ' — 保存先フォルダが未設定です') + '</label>'
+    + '<label style="display:block;font-size:11px;color:var(--text-primary);padding:2px 0;">'
+    + '<input type="radio" name="et-mode" id="et-mode-open" value="open"'
+    + (m.mode === 'open' ? ' checked' : '') + '> '
+    + '開いているタブだけ（' + m.openCount + ' 枚）</label>';
+  if (m.loading) {
+    html += '<div id="et-loading" style="font-size:11px;color:var(--text-secondary);">保存フォルダを読んでいます…</div>';
+  }
+
+  html += '<div id="et-list" style="max-height:200px;overflow-y:auto;border:1px solid var(--border);'
+    + 'border-radius:3px;margin-top:8px;padding:4px;">';
+  m.all.forEach(function(d) {
+    var on = m.targets.indexOf(d) !== -1;
+    html += '<div class="et-item" data-name="' + esc(d.name) + '" data-in="' + (on ? '1' : '0')
+      + '" data-open="' + (d.open ? '1' : '0') + '" data-role="' + esc(d.role || 'unset')
+      + '" style="font-size:11px;padding:1px 2px;color:'
+      + (on ? 'var(--text-primary)' : 'var(--text-secondary)') + ';">'
+      + (on ? '✔ ' : '− ') + esc(d.name)
+      + '<span style="color:var(--text-secondary);"> '
+      + esc(String(d.diagramType || '').replace('plantuml-', ''))
+      + (d.open ? '' : ' ・ 未オープン')
+      + (d.role === 'template' ? ' ・ テンプレ' : '') + '</span></div>';
+  });
+  html += '</div>';
+
+  html += '<div id="et-status" style="margin-top:8px;font-size:11px;color:var(--text-secondary);min-height:14px;"></div>';
+  html += '<div style="margin-top:10px;display:flex;gap:8px;justify-content:flex-end;">'
+    + '<button type="button" id="et-cancel" style="' + BTN + '">キャンセル</button>'
+    + '<button type="button" id="et-build" style="' + BTN + 'background:var(--accent);color:#fff;"'
+    + (m.canBuild ? '' : ' disabled') + '>この ' + m.count + ' 枚で書き出す</button></div>';
+
+  content.innerHTML = html;
+
+  var folder = document.getElementById('et-mode-folder');
+  if (folder) folder.addEventListener('change', function() { _etMode = 'folder'; renderExportTargetPanel(); });
+  var open = document.getElementById('et-mode-open');
+  if (open) open.addEventListener('change', function() { _etMode = 'open'; renderExportTargetPanel(); });
+  var cancel = document.getElementById('et-cancel');
+  if (cancel) cancel.addEventListener('click', function() { closeExportTargetPanel(); });
+  var build = document.getElementById('et-build');
+  if (build) build.addEventListener('click', function() { confirmExportTarget(); });
+  return m;
+}
+
+function openExportTargetPanel(title, onBuild) {
+  var modal = document.getElementById('et-modal');
+  if (!modal || !window.MA.exportTarget) return null;
+  _etTitle = title || '書き出し';
+  _etOnBuild = onBuild;
+  // 開くたびに的を取り直す (タブが増減した後で古い選択を引きずらない)。
+  _etMode = null;
+  _etFileDocs = [];
+  _etRoles = {};
+  _etDir = '';
+  _etLoadFolder();
+  var m = renderExportTargetPanel();
+  modal.style.display = 'flex';
+  return m;
+}
+
+function closeExportTargetPanel() {
+  var modal = document.getElementById('et-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+function confirmExportTarget() {
+  var ET = window.MA.exportTarget;
+  var m = _etModel();
+  if (!m || !m.canBuild) return Promise.resolve(null);
+  _etResultLine = ET.resultLine(m);
+  var fn = _etOnBuild;
+  closeExportTargetPanel();
+  if (typeof fn !== 'function') return Promise.resolve(null);
+  return Promise.resolve(fn(m.targets, m));
+}
+
 function setupHandoffPackage() {
   var btn = document.getElementById('btn-tab-handoff');
+  var modal = document.getElementById('et-modal');
   if (!btn || !window.MA.handoffPackage) return;
-  btn.addEventListener('click', function() { buildHandoffPackage(); });
+  btn.addEventListener('click', function() {
+    if (!window.MA.exportTarget || !modal) { buildHandoffPackage(); return; }
+    openExportTargetPanel('\u{1F4E6} 引き継ぎ', function(docs) { return buildHandoffPackage(docs); });
+  });
+  if (modal) modal.addEventListener('click', function(ev) {
+    if (ev.target === modal) closeExportTargetPanel();
+  });
 }
 
 // ── 納品パッケージ ─────────────────────────────────────────────────────────
