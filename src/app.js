@@ -16635,18 +16635,19 @@ function _dsRenameActive(next) {
 // もう片方にも同じことをして、何をしたかを欄の下に書く (黙って書き換えない)。
 var _dsLinkNotice = '';
 
+// BLK-junior-20260909-0103: 図名が新規タブの既定名 (diagram2_sequence-3 など) のままなら、
+// 末尾を足すだけでは本体が食い違う。既定名の間はタイトルの全体を図名にする。
 function _dsPropagateFromTitle(before, after) {
   var L = window.MA.nameTitleLink;
   if (!L) return;
-  var edit = L.suffixEdit(before, after);
-  if (!edit) return;
   var cur = _dsActiveDocName();
-  var next = L.applyEdit(cur, edit);
-  if (!next) return;
+  var sync = L.titleSync(before, after, cur);
+  if (!sync) return;
+  var next = sync.name;
   var ws = window.MA.workspace;
-  if (ws && !ws.isValidName(next)) return;   // ファイル名に使えない末尾は付けない
+  if (ws && !ws.isValidName(next)) return;   // ファイル名に使えない名前は付けない
   if (_dsRenameActive(next)) {
-    _dsLinkNotice = L.noticeText('図名 / File name', cur, next);
+    _dsLinkNotice = L.noticeText('図名 / File name', cur, _dsActiveDocName());
     renderDiagramSettings(true);
   }
 }

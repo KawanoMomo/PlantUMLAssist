@@ -64,3 +64,33 @@ test('手順4 図名の末尾を足してもタイトルが追いつく (逆向�
   expect(await page.locator('#ds-title').inputValue()).toBe(NAME);
   expect(await page.locator('#editor').inputValue()).toContain('(資料用)');
 });
+
+// BLK-junior-20260909-0103: 新規タブ (図名が既定名 diagram2 … のまま) にタイトルを書いたとき、
+// 末尾だけの連動では図名が「既定名 + (資料用)」になり、意図したファイル名にならなかった。
+test('手順4 新規タブでもタイトルを書けば図名がその名前になる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+
+  // 新しいタブを開く = 図名は既定名 (diagram2 など)、タイトルは空。
+  await page.locator('#btn-tab-new').click();
+  await page.waitForTimeout(400);
+  await S.typeDsl(page, S.GPIO_STATE);
+  await page.locator('#props-tab-settings').click();
+  const auto = await page.locator('#ds-docname').inputValue();
+  expect(auto).toMatch(/^diagram/);
+
+  // 書くのはタイトル 1 か所だけ。
+  const title = page.locator('#ds-title');
+  await title.fill(NAME);
+  await title.dispatchEvent('change');
+  await page.waitForTimeout(600);
+
+  expect(await page.locator('#ds-docname').inputValue()).toBe(NAME);
+  expect(auto === NAME).toBe(false);
+
+  await S.runCommand(page, 'ファイルを保存');
+  await page.waitForTimeout(1000);
+  const saved = await S.readDoc(page, DIR, NAME);
+  expect(saved).not.toBeNull();
+  expect(saved).toContain('(資料用)');
+});

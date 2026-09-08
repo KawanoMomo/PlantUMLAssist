@@ -58,3 +58,37 @@ describe('name-title-link — 図名とタイトルの末尾の連動', function
     expect(t).toContain('GPIO状態遷移(資料用)');
   });
 });
+
+// BLK-junior-20260909-0103: 新規タブでは図名が既定名 (diagram2_sequence-3 など) のままで、
+// 末尾だけを移すと「diagram2_sequence-3(資料用)」になり本体が食い違った。
+// 既定名の間はタイトルの全体を図名にする。
+describe('name-title-link — 既定名のタブはタイトルごと引き継ぐ', function() {
+  test('既定名を見分ける', function() {
+    expect(L.isAutoName('diagram1')).toBe(true);
+    expect(L.isAutoName('diagram2_sequence-3')).toBe(true);
+    expect(L.isAutoName('diagram')).toBe(true);
+    expect(L.isAutoName('GpioDrv派生クラス図')).toBe(false);
+    expect(L.isAutoName('diagram_gpio状態')).toBe(false);
+    expect(L.isAutoName('')).toBe(false);
+  });
+
+  test('既定名のタブはタイトルの全体が図名になる', function() {
+    expect(L.titleSync('', 'GpioDrv派生クラス図(資料用)', 'diagram2_sequence-3'))
+      .toEqual({ name: 'GpioDrv派生クラス図(資料用)', whole: true });
+    // 本体を書いた後に末尾を足す入力でも、図名はタイトルの全体に揃う
+    expect(L.titleSync('GpioDrv派生クラス図', 'GpioDrv派生クラス図(資料用)', 'diagram1'))
+      .toEqual({ name: 'GpioDrv派生クラス図(資料用)', whole: true });
+  });
+
+  test('人が名前を付けた図では末尾だけを移す', function() {
+    expect(L.titleSync('GPIO状態遷移', 'GPIO状態遷移(資料用)', 'gpio-state'))
+      .toEqual({ name: 'gpio-state(資料用)', whole: false });
+    // 名前ごと入れ替えたときは図名を巻き込まない
+    expect(L.titleSync('GPIO状態遷移', 'UART送信', 'gpio-state')).toBe(null);
+  });
+
+  test('タイトルが空 / 同じなら何もしない', function() {
+    expect(L.titleSync('', '', 'diagram1')).toBe(null);
+    expect(L.titleSync('diagram1', 'diagram1', 'diagram1')).toBe(null);
+  });
+});

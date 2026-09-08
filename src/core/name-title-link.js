@@ -54,6 +54,34 @@
     return null;
   }
 
+  // 新しいタブの既定名 (diagram1 / diagram2_sequence-3 …)。人が付けた名前ではないので、
+  // タイトルを書いたらタイトルごと引き継いでよい。
+  //
+  // BLK-junior-20260909-0103: 新規タブでタイトルに「GpioDrv派生クラス図(資料用)」と
+  // 書いたとき、末尾だけの連動では図名が「diagram2_sequence-3(資料用)」になり、
+  // タイトルの本体と図名の本体が食い違ったまま保存されていた。
+  function isAutoName(name) {
+    var n = _t(name);
+    if (!n) return false;
+    return /^diagram(\d+)?(_[A-Za-z0-9]+)*(-\d+)?$/.test(n);
+  }
+
+  // タイトルが before → after に変わったとき、図名 (currentName) をどうするか。
+  // 図名が既定名のままなら、タイトルの全体を図名にする (末尾だけでは足りない)。
+  // 人が名前を付けた図では、これまでどおり末尾の付け足し / 取り外しだけを移す。
+  function titleSync(before, after, currentName) {
+    var a = _t(after);
+    var cur = _s(currentName);
+    if (isAutoName(cur)) {
+      if (!a || a === _t(cur)) return null;
+      return { name: a, whole: true };
+    }
+    var edit = suffixEdit(before, after);
+    if (!edit) return null;
+    var next = applyEdit(cur, edit);
+    return next ? { name: next, whole: false } : null;
+  }
+
   // 連動したことを画面に出す文言。黙って書き換えない。
   function noticeText(fieldLabel, from, to) {
     return _s(fieldLabel) + ' も「' + _s(from) + '」→「' + _s(to) + '」に合わせました';
@@ -62,6 +90,8 @@
   var api = {
     suffixEdit: suffixEdit,
     applyEdit: applyEdit,
+    isAutoName: isAutoName,
+    titleSync: titleSync,
     noticeText: noticeText,
   };
 
