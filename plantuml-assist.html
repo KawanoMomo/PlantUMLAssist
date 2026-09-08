@@ -563,6 +563,26 @@ html, body {
 #folder-panel button:hover { background: var(--bg-secondary); }
 /* 前回見た版からの差 (BLK-reviewer-20260907-1403) */
 #folder-panel { min-width: 260px; }
+/* 名前での絞り込み (BLK-junior-20260908-1103) */
+#folder-panel .folder-filterbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px 5px;
+}
+#folder-panel input.folder-filter {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 3px 6px;
+}
+#folder-panel input.folder-filter:focus { outline: none; border-color: var(--accent); }
+#folder-panel .folder-filter-state { color: var(--accent); font-size: 10px; white-space: nowrap; }
 #folder-panel .folder-summary {
   font-size: 10px;
   color: var(--text-secondary);
@@ -3974,6 +3994,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/selected-endpoints.js"></script>
 <script src="src/core/review-carry.js"></script>
 <script src="src/core/folder-select.js"></script>
+<script src="src/core/folder-filter.js"></script>
 <script src="src/core/peek-folder.js"></script>
 <script src="src/core/draft-mark.js"></script>
 <script src="src/core/folder-reopen.js"></script>
