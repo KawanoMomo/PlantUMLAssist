@@ -192,16 +192,20 @@ describe('スナップショット', function() {
 });
 
 describe('index.html', function() {
-  test('4 つの節がこの順で並ぶ', function() {
+  // 申し送りチェックリストが 4 番目に入り、図一式は 5 番目になった
+  // (BLK-primary-20260908-1803-wish)。
+  test('5 つの節がこの順で並ぶ', function() {
     var html = HP.renderIndexHtml(snapshotOf(true));
     var i1 = html.indexOf('1. 系統チェック結果');
     var i2 = html.indexOf('2. 名前突合結果');
     var i3 = html.indexOf('3. 直近の変更サマリ');
-    var i4 = html.indexOf('4. 図一式');
+    var i4 = html.indexOf('4. 申し送りチェックリスト');
+    var i5 = html.indexOf('5. 図一式');
     expect(i1).toBeGreaterThan(-1);
     expect(i2).toBeGreaterThan(i1);
     expect(i3).toBeGreaterThan(i2);
     expect(i4).toBeGreaterThan(i3);
+    expect(i5).toBeGreaterThan(i4);
   });
 
   test('作成日時と引き継ぎ 1 行が上に出る', function() {

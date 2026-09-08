@@ -3537,6 +3537,9 @@ function _cbSummaryText(board) {
   if (hnSum) head += ' ・ ' + hnSum;
   var rvSum = window.MA.reviewVerdicts ? window.MA.reviewVerdicts.summaryText() : '';
   if (rvSum) head += ' ・ ' + rvSum;
+  // 渡した申し送りチェックリストの返信状況 (BLK-primary-20260908-1803-wish)。
+  var hcSum = _hcSummaryLine();
+  if (hcSum) head += ' ・ ' + hcSum;
   return head;
 }
 
@@ -3884,6 +3887,115 @@ function _cbCountText(e) {
   return '+' + e.added + ' −' + e.removed;
 }
 
+// ── 申し送りチェックリスト ──────────────────────────────────────────────
+// BLK-primary-20260908-1803-wish: 申し送りは差分がある間しか書けず、渡した後に
+// 新人が読んだかも分からなかった。引き継ぎを作る時点で申し送りを項目として固定し、
+// 新人が zip の index.html で返した JSON を読み込んで未読・要フォローを見る。
+// 判定は src/core/handover-checklist.js の職掌。ここは画面と入出力だけ。
+
+function _hcSummaryLine() {
+  var HC = window.MA.handoverChecklist;
+  if (!HC) return '';
+  var cur = HC.current();
+  if (!cur.summary.total) return '';
+  return '引き継ぎ ' + cur.summary.line;
+}
+
+function renderChecklistState() {
+  var HC = window.MA.handoverChecklist;
+  var el = document.getElementById('cb-checklist-state');
+  if (!HC || !el) return null;
+  var cur = HC.current();
+  if (!cur.summary.total) {
+    el.textContent = 'まだ引き継ぎパッケージを渡していません';
+    el.title = '';
+    return cur;
+  }
+  el.textContent = cur.summary.line;
+  var fu = HC.followUps(cur.items).map(function(it) { return it.name; });
+  el.title = fu.length ? ('分からなかった: ' + fu.join(', ')) : '';
+  return cur;
+}
+
+// 図を選んで申し送りを足す。差分が無い図 (基準に取り込み済み) にも書けるようにする。
+function renderChecklistDocOptions() {
+  var sel = document.getElementById('cb-note-doc');
+  if (!sel) return null;
+  var docs = _renameDocs();
+  var keep = sel.value;
+  var esc = window.MA.htmlUtils.escHtml;
+  var html = '';
+  docs.forEach(function(d) {
+    html += '<option value="' + esc(d.name) + '">' + esc(d.name) + '</option>';
+  });
+  sel.innerHTML = html;
+  if (keep) sel.value = keep;
+  if (!sel.value) {
+    var doc = window.MA.workspace ? window.MA.workspace.getActive() : null;
+    if (doc) sel.value = doc.name;
+  }
+  return docs;
+}
+
+function addHandoverNoteFromBar() {
+  var HN = window.MA.handoverNotes;
+  var sel = document.getElementById('cb-note-doc');
+  var input = document.getElementById('cb-note-text');
+  var state = document.getElementById('cb-note-add-state');
+  if (!HN || !sel || !input) return null;
+  var name = sel.value;
+  var saved = HN.set(name, input.value, {});
+  if (state) state.textContent = saved ? (name + ' に申し送りを足しました') : '文が空です';
+  if (!saved) return null;
+  input.value = '';
+  renderChangeBoard();
+  renderHandoverBanner();
+  return saved;
+}
+
+// 新人が返した JSON を取り込む。控えが無い / 読めないときは何も変えない。
+function receiveHandoverReply(text) {
+  var HC = window.MA.handoverChecklist;
+  var state = document.getElementById('cb-checklist-state');
+  if (!HC) return null;
+  var r = HC.receive(text);
+  if (!r) {
+    if (state) state.textContent = '返信ファイルを読めません (handover-reply.json を選んでください)';
+    return null;
+  }
+  var cur = renderChecklistState();
+  var sumEl = document.getElementById('cb-summary');
+  if (sumEl) sumEl.textContent = _cbSummaryText(_changeBoardModel());
+  if (window.MA.toast && cur) window.MA.toast.show('返信を読み込みました ・ ' + cur.summary.line);
+  return r;
+}
+
+function setupHandoverChecklist() {
+  var add = document.getElementById('cb-note-add');
+  if (add) add.addEventListener('click', function() { addHandoverNoteFromBar(); });
+  var input = document.getElementById('cb-note-text');
+  if (input) input.addEventListener('keydown', function(ev) {
+    if (ev.key === 'Enter') { ev.preventDefault(); addHandoverNoteFromBar(); }
+  });
+  var file = document.getElementById('cb-reply-file');
+  if (file) file.addEventListener('change', function() {
+    var f = file.files && file.files[0];
+    if (!f) return;
+    var reader = new FileReader();
+    reader.onload = function() { receiveHandoverReply(String(reader.result || '')); file.value = ''; };
+    reader.readAsText(f);
+  });
+  // 起動時に「未読 N 件・要フォロー M 件」を出す。口頭で「あれ伝わった?」と
+  // 聞かないための機能なので、ボードを開く前に見えている必要がある。
+  var cur = window.MA.handoverChecklist ? window.MA.handoverChecklist.current() : null;
+  var btn = document.getElementById('btn-tab-board');
+  if (cur && cur.summary.total && btn) {
+    btn.title = '変更サマリ ・ 引き継ぎ ' + cur.summary.line;
+    btn.classList.add('has-handover-followup');
+    if (window.MA.toast) window.MA.toast.show('引き継ぎ ' + cur.summary.line);
+  }
+}
+
 function toggleChangeBoard(open) {
   var modal = document.getElementById('cb-modal');
   if (!modal) return;
@@ -3891,6 +4003,8 @@ function toggleChangeBoard(open) {
   if (!want) { modal.style.display = 'none'; return; }
   modal.style.display = 'flex';
   renderChangeBoard();
+  renderChecklistDocOptions();
+  renderChecklistState();
   var body = document.getElementById('cb-body');
   if (body) body.scrollTop = 0;
 }
@@ -3935,6 +4049,8 @@ function setupChangeBoard() {
   });
   var mapExport = document.getElementById('cb-map-export');
   if (mapExport) mapExport.addEventListener('click', function() { writeFindingMap(); });
+
+  setupHandoverChecklist();
 }
 
 // いまの対応表を 1 枚の Markdown にして書き出す。会議で「この差分はどの指摘か」を
@@ -11415,7 +11531,10 @@ function buildHandoffPackage() {
       names: NA ? NA.audit(docs) : null,
       board: _changeBoardModel(),
       svgs: svgs,
+      notes: window.MA.handoverNotes ? window.MA.handoverNotes.list() : [],
     });
+    // 渡した時点のチェックリストを控える。次の起動で未読・要フォローを出すため。
+    if (window.MA.handoverChecklist) window.MA.handoverChecklist.issue(snapshot.checklist);
     var name = HP.packageName();
     downloadBlob(name, new Blob([BE.buildZip(HP.files(snapshot))], { type: 'application/zip' }));
     var msg = '引き継ぎパッケージを書き出しました（' + name + '） ' + snapshot.verdict;

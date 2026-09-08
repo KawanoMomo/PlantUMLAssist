@@ -76,7 +76,8 @@ test.describe('BLK-primary-1303-wish 引き継ぎパッケージ', () => {
     expect(text).toContain('svg/Adc_State.svg');
   });
 
-  test('書き出した中身に 4 つの節と判定が入る', async ({ page }) => {
+  // 節は 5 つになった (4 = 申し送りチェックリスト。BLK-primary-20260908-1803-wish)。
+  test('書き出した中身に 5 つの節と判定が入る', async ({ page }) => {
     await openTwoDiagrams(page);
     // zip を解かずに中身を確かめるため、同じ材料からモデルを組み立てて見る。
     const model = await page.evaluate(() => {
@@ -96,7 +97,8 @@ test.describe('BLK-primary-1303-wish 引き継ぎパッケージ', () => {
     expect(model.html).toContain('1. 系統チェック結果');
     expect(model.html).toContain('2. 名前突合結果');
     expect(model.html).toContain('3. 直近の変更サマリ');
-    expect(model.html).toContain('4. 図一式');
+    expect(model.html).toContain('4. 申し送りチェックリスト');
+    expect(model.html).toContain('5. 図一式');
     // 2 枚は同じ動作名で揃えてあるので「問題なし」で渡せる。
     expect(model.verdict).toContain('問題なし');
   });

@@ -1721,6 +1721,11 @@ html, body {
 #cb-summary, #ri-summary { min-width: 0; }
 .board-tools #cb-minutes { border-color: var(--accent); color: var(--accent); }
 #cb-minutes-state { color: var(--text-secondary); font-size: 11px; max-width: 320px; }
+/* 申し送りチェックリストの行 (BLK-primary-20260908-1803-wish) */
+#cb-handover-bar { gap: 6px; flex-wrap: wrap; font-size: 11px; }
+#cb-handover-bar input[type="text"] { flex: 1; min-width: 180px; }
+#cb-checklist-state, #cb-note-add-state { color: var(--text-secondary); font-size: 11px; }
+.tab-tool.has-handover-followup { border-color: var(--accent); }
 /* 要修正のみの絞り込み (BLK-primary-20260908-1103-wish) */
 #cb-filter-state { color: var(--accent); font-size: 11px; white-space: nowrap; }
 .diff-board { flex: 1; overflow-y: auto; padding: 6px 14px 14px 14px; }
@@ -4884,6 +4889,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/change-board.js"></script>
 <script src="src/core/export-select.js"></script>
 <script src="src/core/handover-notes.js"></script>
+<script src="src/core/handover-checklist.js"></script>
 <script src="src/core/review-verdicts.js"></script>
 <script src="src/core/meeting-notes.js"></script>
 <script src="src/core/audit-timeline.js"></script>
@@ -4973,6 +4979,19 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <span id="cb-minutes-state"></span>
         <button type="button" id="cb-close">閉じる</button>
       </span>
+    </div>
+    <!-- BLK-primary-20260908-1803-wish: 申し送りは差分がある間しか書けなかった。
+         ここで図を選んで直接書けば、直し終えて基準に取り込んだ後でも残せる。
+         引き継ぎ後は、新人が返した JSON を読み込んで未読・要フォローを見る。 -->
+    <div class="board-head" id="cb-handover-bar">
+      <label for="cb-note-doc">申し送りを足す</label>
+      <select id="cb-note-doc" title="申し送りを添える図 (差分が無い図にも書ける)"></select>
+      <input type="text" id="cb-note-text" placeholder="なぜ直したか" maxlength="200">
+      <button type="button" id="cb-note-add" title="選んだ図に申し送りを足す (差分の有無によらない)">追加</button>
+      <span id="cb-note-add-state"></span>
+      <label for="cb-reply-file" title="新人が引き継ぎパッケージで返した handover-reply.json を読み込む">📥 返信を読み込む</label>
+      <input type="file" id="cb-reply-file" accept=".json,application/json">
+      <span id="cb-checklist-state"></span>
     </div>
     <div id="cb-body" class="diff-board"></div>
   </div>
