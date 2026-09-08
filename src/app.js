@@ -2394,6 +2394,7 @@ function init() {
   setupReviewPanel();
   setupChangeBoard();
   setupExportPick();
+  setupComponentPack();
   setupHandoverBanner();
   setupAuditTimeline();
   setupAuditBoard();
@@ -2592,6 +2593,7 @@ function initCommandPalette() {
       { id: 'export-clip', title: 'クリップボードにコピー / Copy image', hint: 'Export', keywords: ['export', 'clipboard', 'copy'], run: function() { clickById('exp-clipboard'); } },
       { id: 'export-all', title: '全図を SVG で保存（zip）', hint: 'Export', keywords: ['export', 'svg', 'zip', 'all'], run: function() { clickById('exp-svg-all'); } },
       { id: 'export-pick', title: '図を選んで SVG で保存（zip）', hint: 'Export', keywords: ['export', 'svg', 'zip', 'pick', 'select', 'changed', 'fix'], run: function() { clickById('exp-svg-pick'); } },
+      { id: 'export-pack', title: '部品の図をまとめて資料化（PNG）', hint: 'Export', keywords: ['export', 'png', 'pack', 'component', 'figure', 'zip'], run: function() { clickById('exp-png-pack'); } },
       { id: 'mode-local', title: 'レンダリング: local (Java)', hint: 'Render', keywords: ['render', 'mode', 'local'], run: function() { selectValue('render-mode', 'local'); } },
       { id: 'mode-online', title: 'レンダリング: online (plantuml.com)', hint: 'Render', keywords: ['render', 'mode', 'online'], run: function() { selectValue('render-mode', 'online'); } },
     ];
@@ -12608,6 +12610,196 @@ function exportAllSVG(pickedDocs, statusEl) {
     if (window.MA.toast) window.MA.toast.show(msg);
     return summary;
   });
+}
+
+// ── 部品の図をまとめて資料化 (BLK-junior-20260908-1903-wish) ─────────────────
+// 設計書には同じ部品の全図種を並べて貼る。1 枚ずつ「開き直す → Export → PNG」を
+// 図種の数だけ繰り返していたので、枚数に比例して手数が伸びていた。保存フォルダの
+// 名前から部品を割り出して全図種を集め、図番号・図名を振った PNG セットと図一覧を
+// 1 つの zip で出す。図を開き直す必要も、図番号を手で振り直す必要も無くなる。
+
+function _cpackEsc(s) { return window.MA.htmlUtils.escHtml(String(s == null ? '' : s)); }
+
+var _cpackGroups = [];
+var _cpackPick = '';
+
+// SVG 文字列を PNG の Blob にする。画面の SVG ではなく描画結果を直接使うので、
+// タブを切り替えずに何枚でも書き出せる。
+function svgTextToPngBlob(svgText, transparent) {
+  return new Promise(function(resolve, reject) {
+    var m = /<svg[^>]*\bwidth="([\d.]+)/.exec(svgText);
+    var m2 = /<svg[^>]*\bheight="([\d.]+)/.exec(svgText);
+    var w = m ? parseFloat(m[1]) : 800;
+    var h = m2 ? parseFloat(m2[1]) : 400;
+    if (!(w > 0)) w = 800;
+    if (!(h > 0)) h = 400;
+    var img = new Image();
+    img.onload = function() {
+      try {
+        var canvas = document.createElement('canvas');
+        canvas.width = Math.ceil(w);
+        canvas.height = Math.ceil(h);
+        var ctx = canvas.getContext('2d');
+        if (!transparent) { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+        ctx.drawImage(img, 0, 0, w, h);
+        canvas.toBlob(function(blob) {
+          if (blob) resolve(blob); else reject(new Error('PNG 変換に失敗しました'));
+        });
+      } catch (e) { reject(e); }
+    };
+    img.onerror = function() { reject(new Error('SVG 読み込みエラー')); };
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgText);
+  });
+}
+
+function _cpackRenderList() {
+  var body = document.getElementById('cpack-body');
+  var count = document.getElementById('cpack-count');
+  var run = document.getElementById('cpack-run');
+  if (!body) return;
+  if (!_cpackGroups.length) {
+    body.innerHTML = '<div class="cpack-empty">保存フォルダに .puml がありません。図を保存してから開いてください。</div>';
+    if (count) count.textContent = '';
+    if (run) run.disabled = true;
+    _cpackPreview();
+    return;
+  }
+  if (count) count.textContent = _cpackGroups.length + ' 部品';
+  var html = '';
+  for (var i = 0; i < _cpackGroups.length; i++) {
+    var g = _cpackGroups[i];
+    var checked = g.component === _cpackPick ? ' checked' : '';
+    html += '<label class="cpack-row"><input type="radio" name="cpack-pick" class="cpack-radio" value="'
+      + _cpackEsc(g.component) + '"' + checked + '><span class="cpack-name">' + _cpackEsc(g.component) + '</span>'
+      + '<span class="cpack-count">' + g.files.length + ' 枚</span></label>';
+  }
+  body.innerHTML = html;
+  var radios = body.querySelectorAll('.cpack-radio');
+  for (var r = 0; r < radios.length; r++) {
+    radios[r].addEventListener('change', function() {
+      _cpackPick = this.value;
+      if (run) run.disabled = false;
+      _cpackPreview();
+    });
+  }
+  if (run) run.disabled = !_cpackPick;
+  _cpackPreview();
+}
+
+function _cpackGroupOf(name) {
+  for (var i = 0; i < _cpackGroups.length; i++) if (_cpackGroups[i].component === name) return _cpackGroups[i];
+  return null;
+}
+
+// 押す前に「図1 が何になるか」を見せる。設計書に貼ってから番号がずれると
+// 貼り直しになるので、番号の並びは書き出し前に確かめられる必要がある。
+function _cpackPreview() {
+  var el = document.getElementById('cpack-preview');
+  if (!el) return;
+  var CP = window.MA.componentPack;
+  var g = _cpackGroupOf(_cpackPick);
+  if (!CP || !g) { el.innerHTML = '部品を選ぶと、振られる図番号がここに出ます。'; return; }
+  var items = CP.planPack(g.component, g.files);
+  var html = '';
+  for (var i = 0; i < items.length; i++) html += '<div class="cpack-fig">' + _cpackEsc(items[i].title) + '</div>';
+  el.innerHTML = html || '書き出せる図がありません。';
+}
+
+function openComponentPack() {
+  var modal = document.getElementById('cpack-modal');
+  var CP = window.MA.componentPack;
+  if (!modal || !CP || !window.MA.workspace) return Promise.resolve();
+  var state = document.getElementById('cpack-state');
+  if (state) state.textContent = '';
+  _cpackGroups = [];
+  _cpackPick = '';
+  _cpackRenderList();
+  modal.style.display = 'flex';
+  return window.MA.workspace.listFiles(_wsFileDir()).then(function(list) {
+    _cpackGroups = CP.groupByComponent(list || []);
+    if (_cpackGroups.length === 1) _cpackPick = _cpackGroups[0].component;
+    _cpackRenderList();
+  });
+}
+
+function closeComponentPack() {
+  var modal = document.getElementById('cpack-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+// 選んだ部品の図を 1 枚ずつ読み → 描画 → PNG にして、図一覧と一緒に zip で保存する。
+// 1 枚失敗しても残りは続ける (1 枚のエラーで資料が丸ごと出ないほうが困る)。
+function runComponentPack() {
+  var CP = window.MA.componentPack;
+  var g = _cpackGroupOf(_cpackPick);
+  var state = document.getElementById('cpack-state');
+  var run = document.getElementById('cpack-run');
+  if (!CP || !g) return Promise.resolve(null);
+  var items = CP.planPack(g.component, g.files);
+  if (run) run.disabled = true;
+  if (state) state.textContent = 'PNG を書き出しています… 0 / ' + items.length;
+
+  var dir = _wsFileDir();
+  var files = [];
+  var results = [];
+
+  function step(i) {
+    if (i >= items.length) return Promise.resolve();
+    var it = items[i];
+    return Promise.resolve(window.MA.workspace.loadFile(it.source, dir))
+      .then(function(dsl) {
+        if (!dsl || String(dsl).trim() === '') throw new Error('中身が空です');
+        return renderDslToSvg(dsl);
+      })
+      .then(function(svg) { return svgTextToPngBlob(svg, true); })
+      .then(function(blob) { return blob.arrayBuffer(); })
+      .then(function(buf) {
+        files.push({ name: it.filename, content: new Uint8Array(buf) });
+        results.push({ filename: it.filename, ok: true, error: null });
+      })
+      .catch(function(e) {
+        results.push({ filename: it.filename, ok: false, error: String(e && e.message ? e.message : e) });
+      })
+      .then(function() {
+        if (state) state.textContent = 'PNG を書き出しています… ' + results.length + ' / ' + items.length;
+        return step(i + 1);
+      });
+  }
+
+  return step(0).then(function() {
+    var summary = CP.summarize(g.component, results);
+    summary.items = items;
+    if (files.length > 0) {
+      files.push({ name: '図一覧.md', content: CP.indexText(g.component, items) });
+      var zipName = CP.packName(g.component);
+      downloadBlob(zipName, new Blob([window.MA.bulkExport.buildZip(files)], { type: 'application/zip' }));
+      summary.message = summary.message + '（' + zipName + '）';
+      summary.zipName = zipName;
+    }
+    if (state) state.textContent = summary.message;
+    if (window.MA.toast) window.MA.toast.show(summary.message);
+    if (run) run.disabled = false;
+    return summary;
+  });
+}
+
+function setupComponentPack() {
+  var open = document.getElementById('exp-png-pack');
+  if (open) open.addEventListener('click', function() {
+    var menu = document.getElementById('export-menu');
+    if (menu) menu.classList.remove('open');
+    openComponentPack();
+  });
+  var modalEl = document.getElementById('cpack-modal');
+  document.addEventListener('keydown', function(ev) {
+    if (ev.key === 'Escape' && modalEl && modalEl.style.display === 'flex') closeComponentPack();
+  });
+  var close = document.getElementById('cpack-close');
+  if (close) close.addEventListener('click', closeComponentPack);
+  var run = document.getElementById('cpack-run');
+  if (run) run.addEventListener('click', function() { runComponentPack(); });
+  var modal = document.getElementById('cpack-modal');
+  if (modal) modal.addEventListener('click', function(e) { if (e.target === modal) closeComponentPack(); });
 }
 
 // ── 提出用 zip の図選び (BLK-primary-20260908-1203-wish) ─────────────────────

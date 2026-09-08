@@ -143,7 +143,18 @@ window.MA.bulkExport = (function() {
   function _push32(arr, v) { arr.push(v & 0xFF, (v >>> 8) & 0xFF, (v >>> 16) & 0xFF, (v >>> 24) & 0xFF); }
   function _pushBytes(arr, bytes) { for (var i = 0; i < bytes.length; i++) arr.push(bytes[i]); }
 
+  // 項目の中身をバイト列にする。文字列は UTF-8、Uint8Array (PNG など) はそのまま。
+  // 資料用の PNG は文字列に直すと壊れるので、バイト列を素通しできる必要がある。
+  function _bytesOf(content) {
+    if (content == null) return new Uint8Array(0);
+    if (content instanceof Uint8Array) return content;
+    if (typeof ArrayBuffer !== 'undefined' && content instanceof ArrayBuffer) return new Uint8Array(content);
+    if (Array.isArray(content)) return new Uint8Array(content);
+    return _utf8(content);
+  }
+
   // buildZip([{ name, content }]) — 無圧縮 zip を Uint8Array で返す。
+  // content は文字列でもバイト列 (Uint8Array / ArrayBuffer) でもよい。
   function buildZip(files) {
     var list = Array.isArray(files) ? files : [];
     var out = [];
@@ -153,7 +164,7 @@ window.MA.bulkExport = (function() {
 
     for (i = 0; i < list.length; i++) {
       var nameBytes = _utf8(list[i].name);
-      var data = _utf8(list[i].content == null ? '' : list[i].content);
+      var data = _bytesOf(list[i].content);
       var crc = _crc32(data);
       offsets.push(out.length);
 
