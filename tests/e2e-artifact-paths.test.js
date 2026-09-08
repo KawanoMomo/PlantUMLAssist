@@ -6,7 +6,18 @@ var fs = require('fs');
 var path = require('path');
 
 var E2E_DIR = path.join(__dirname, 'e2e');
-var SPECS = fs.readdirSync(E2E_DIR).filter(function(f) { return /\.spec\.js$/.test(f); });
+
+// BLK-releaser-20260908-2030-1: spec は scenarios/ と legacy/ に分かれたので下位も見る
+function walk(dir, prefix) {
+  var out = [];
+  fs.readdirSync(dir, { withFileTypes: true }).forEach(function(e) {
+    var rel = prefix ? prefix + '/' + e.name : e.name;
+    if (e.isDirectory()) out = out.concat(walk(path.join(dir, e.name), rel));
+    else if (/\.spec\.js$/.test(e.name)) out.push(rel);
+  });
+  return out;
+}
+var SPECS = walk(E2E_DIR, '');
 
 function read(f) { return fs.readFileSync(path.join(E2E_DIR, f), 'utf8'); }
 
@@ -43,7 +54,7 @@ describe('E2E の成果物の置き場 (BLK-releaser-20260908-0800)', () => {
     var users = SPECS.filter(function(f) { return /\bshotOut\(/.test(read(f)); });
     expect(users.length).toBeGreaterThan(0);
     users.forEach(function(f) {
-      expect(read(f).indexOf("require('./helpers')") >= 0).toBe(true);
+      expect(/require\('\.{1,2}\/helpers'\)/.test(read(f))).toBe(true);
     });
   });
 
