@@ -8941,6 +8941,78 @@ function setupBulkRename() {
 // 上限になるので、経験の浅い担当者はそもそも探索を始められない。症状文をその
 // まま貼れば関連度順に図が並び、当たった行を押せばその図のその行へ運ぶ。
 
+// BLK-primary-20260909-0203-wish: 症状検索の探索範囲。既定は開いているタブだけ
+// だが、不具合対応で要る図 (dma_transfer_sequence など) は開いていないことの
+// ほうが多い。保存フォルダを入れると、開いていない図も列に載る。
+function _symptomScanFolder() {
+  var el = document.getElementById('symptom-scan-folder');
+  return !!(el && el.checked) && _fiFolderMode();
+}
+
+function _symptomDocs() {
+  return _symptomScanFolder() ? _fiRows() : _renameDocs();
+}
+
+// 系統の行から図を開く。開いていない図はまず開いてから行へ運ぶ。
+function _symptomOpenDoc(row) {
+  if (!row) return;
+  if (row.id != null && String(row.id).indexOf('file:') !== 0) {
+    jumpToDocLine(row.id, row.line);
+    return;
+  }
+  openFromFolderByName(row.name);
+}
+
+// 系統ごとの段。ここが「当たらなかった系統に気付く」ための面なので、
+// 関連度上位だけに絞らず、語ごとに当たった図を全部出す。
+function renderSymptomSystems(docs, text) {
+  var box = document.getElementById('symptom-systems');
+  var sys = window.MA.symptomSystems;
+  if (!box) return;
+  box.textContent = '';
+  if (!sys) return;
+  var g = sys.group(docs, text);
+  box.setAttribute('data-systems', String(g.systems.length));
+  if (!g.terms.length) return;
+
+  g.systems.forEach(function(row) {
+    var item = document.createElement('div');
+    item.className = 'sym-sys';
+    item.setAttribute('data-term', row.term);
+    item.setAttribute('data-docs', String(row.docCount));
+    var head = document.createElement('div');
+    head.className = 'sym-sys-head';
+    head.textContent = sys.systemLabel(row);
+    item.appendChild(head);
+    row.docs.forEach(function(d) {
+      var b = document.createElement('div');
+      b.className = 'sym-sys-doc' + (d.open ? '' : ' closed');
+      b.setAttribute('data-doc-name', d.name);
+      b.setAttribute('data-line', String(d.line));
+      b.title = d.name + ' の ' + d.line + ' 行目へ移動 (' + d.term + ' → ' + d.target + ')';
+      var n = document.createElement('span');
+      n.textContent = d.name;
+      var k = document.createElement('span');
+      k.className = 'sym-sys-kind';
+      k.textContent = d.kindLabel + ' / ' + d.target;
+      b.appendChild(n);
+      b.appendChild(k);
+      b.addEventListener('click', function() { _symptomOpenDoc(d); });
+      item.appendChild(b);
+    });
+    box.appendChild(item);
+  });
+
+  if (g.actions.length) {
+    var act = document.createElement('div');
+    act.className = 'sym-act';
+    act.id = 'symptom-actions-line';
+    act.textContent = '動作の語 (系統ではない): '
+      + g.actions.map(function(a) { return a.term; }).join('・');
+    box.appendChild(act);
+  }
+}
+
 function renderSymptomSearch() {
   var ss = window.MA.symptomSearch;
   var textEl = document.getElementById('symptom-text');
@@ -8949,7 +9021,7 @@ function renderSymptomSearch() {
   var resEl = document.getElementById('symptom-results');
   if (!ss || !textEl || !termsEl || !headEl || !resEl) return;
   var text = textEl.value;
-  var docs = _renameDocs();
+  var docs = _symptomDocs();
   var ov = ss.overview(docs, text);
   var rows = ss.search(docs, text);
 
@@ -8974,6 +9046,16 @@ function renderSymptomSearch() {
     headEl.textContent = ov.terms.length + ' 語で ' + rows.length + ' 図が該当'
       + (ov.missed.length ? ' / 当たらなかった語: ' + ov.missed.join('・') : '');
   }
+
+  var sys = window.MA.symptomSystems;
+  if (sys && ov.terms.length && rows.length) {
+    var g = sys.group(docs, text);
+    headEl.setAttribute('data-systems', String(g.systems.length));
+    headEl.textContent = sys.headline(g);
+  } else if (sys) {
+    headEl.setAttribute('data-systems', '0');
+  }
+  renderSymptomSystems(docs, text);
 
   resEl.textContent = '';
   rows.forEach(function(r) {
@@ -9032,6 +9114,16 @@ function setupSymptomSearch() {
     panel.style.left = Math.max(4, rect.left - 60) + 'px';
     panel.style.top = (rect.bottom + 2) + 'px';
     panel.classList.add('open');
+    var scan = document.getElementById('symptom-scan-folder');
+    if (scan) {
+      var ok = _fiFolderMode();
+      scan.disabled = !ok;
+      if (!ok) scan.checked = false;
+      var lab = scan.parentNode;
+      if (lab) lab.title = ok ? '保存フォルダの .puml も探索範囲に入れる'
+        : '保存先がフォルダのときだけ使えます (設定 → 自動保存)';
+    }
+    if (_symptomScanFolder()) loadFolderImpact(false).then(function() { renderSymptomSearch(); });
     renderSymptomSearch();
     textEl.focus();
   });
@@ -9048,6 +9140,18 @@ function setupSymptomSearch() {
     textEl.focus();
   });
   if (closeBtn) closeBtn.addEventListener('click', closePanel);
+
+  // 保存フォルダを探索範囲に入れる。読み込みはフォルダ保存のときだけ意味がある
+  // ので、それ以外では押せないようにして理由を出す。
+  var scanEl = document.getElementById('symptom-scan-folder');
+  if (scanEl) {
+    scanEl.addEventListener('change', function() {
+      if (!scanEl.checked) { renderSymptomSearch(); return; }
+      loadFolderImpact(false).then(function() { renderSymptomSearch(); },
+        function() { renderSymptomSearch(); });
+      renderSymptomSearch();
+    });
+  }
 
   // 受け取った側。渡された保存先を打ち直さず、検証してから設定に反映する
   // (BLK-primary-20260908-0103-wish)。書式の崩れは反映前にここで止める。

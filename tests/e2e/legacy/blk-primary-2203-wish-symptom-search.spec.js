@@ -113,3 +113,91 @@ test.describe('BLK-primary-2203 症状文からの関連図サジェスト', () 
     await expect(page.locator('#symptom-results .sym-doc')).toHaveCount(0);
   });
 });
+
+// BLK-primary-20260909-0203-wish: 症状が複数系統 (SPI 起点 → DMA 停止) にまたがる
+// とき、関連度順の 1 本の列では SPI の図が上位を占め、DMA の図は下に沈む。
+// 系統ごとの段があれば、DMA の入口が 2 つあることがその場で見える。
+const SEQ_SPI = [
+  '@startuml',
+  'title Spi_Init_Sequence',
+  'participant Spi_Driver',
+  'participant Hw_Spi',
+  'Spi_Driver -> Hw_Spi : Spi_Init',
+  'Hw_Spi -> Spi_Driver : Ready',
+  '@enduml',
+].join('\n');
+
+const STATE_DMA = [
+  '@startuml',
+  'title DMA_State',
+  'state Idle',
+  'state Transferring_Active',
+  'Idle --> Transferring_Active : Spi_TransmitDma',
+  'Transferring_Active --> Idle : TransferComplete',
+  '@enduml',
+].join('\n');
+
+const MULTI_SYMPTOM = 'SPI初期化直後にDMA転送が完了しないままタイムアウトする。割り込みは一度も発火していない模様';
+
+async function setupThreeDocs(page) {
+  await gotoApp(page);
+  await typeDsl(page, SEQ_SPI);
+  await page.locator('#btn-tab-new').click();
+  await typeDsl(page, SEQ_DMA);
+  await page.locator('#btn-tab-new').click();
+  await typeDsl(page, STATE_DMA);
+  await expect(page.locator('#tab-bar .tab')).toHaveCount(3);
+}
+
+test.describe('BLK-primary-0203 系統ごとに図を並べる', () => {
+  test.beforeEach(async ({ page }) => { await freshWorkspace(page); });
+
+  test('複数系統の症状で、系統ごとの段に分かれて出る', async ({ page }) => {
+    await setupThreeDocs(page);
+    await openSymptom(page);
+    await page.locator('#symptom-text').fill(MULTI_SYMPTOM);
+    await page.waitForTimeout(250);
+
+    const systems = page.locator('#symptom-systems .sym-sys');
+    expect(await systems.count()).toBeGreaterThan(1);
+    await expect(page.locator('#symptom-head')).toContainText('系統');
+  });
+
+  test('DMA 系統の図が 2 枚とも同じ段に並ぶ (1 枚で終わらない)', async ({ page }) => {
+    await setupThreeDocs(page);
+    await openSymptom(page);
+    await page.locator('#symptom-text').fill(MULTI_SYMPTOM);
+    await page.waitForTimeout(250);
+
+    const dma = page.locator('#symptom-systems .sym-sys[data-term="DMA"]');
+    await expect(dma).toHaveCount(1);
+    await expect(dma).toHaveAttribute('data-docs', '2');
+    await expect(dma.locator('.sym-sys-doc')).toHaveCount(2);
+  });
+
+  test('当たらなかった系統の語が見出しに出る (未探索の系統に気付く)', async ({ page }) => {
+    await setupThreeDocs(page);
+    await openSymptom(page);
+    await page.locator('#symptom-text').fill(MULTI_SYMPTOM);
+    await page.waitForTimeout(250);
+    await expect(page.locator('#symptom-head')).toContainText('当たらなかった語');
+    await expect(page.locator('#symptom-head')).toContainText('割り込み');
+  });
+
+  test('系統の行を 1 クリックでその図のその行へ移れる', async ({ page }) => {
+    await setupThreeDocs(page);
+    await openSymptom(page);
+    await page.locator('#symptom-text').fill(MULTI_SYMPTOM);
+    await page.waitForTimeout(250);
+
+    // SPI の図を見て手詰まり、という場面から DMA 側へ移る
+    const row = page.locator('#symptom-systems .sym-sys[data-term="DMA"] .sym-sys-doc')
+      .filter({ hasText: 'DMA_State' }).first();
+    const target = (await row.count()) ? row
+      : page.locator('#symptom-systems .sym-sys[data-term="DMA"] .sym-sys-doc').first();
+    await target.click();
+    await page.waitForTimeout(400);
+    const dsl = await page.evaluate(() => /** @type {HTMLTextAreaElement} */ (document.getElementById('editor')).value);
+    expect(dsl).toContain('Spi_TransmitDma');
+  });
+});
