@@ -7329,6 +7329,105 @@ function _fiRows() {
   return FI.merge(open, _fiFileDocs, _fiRoles);
 }
 
+// ── 改名履歴タイムライン (BLK-primary-20260908-2103-wish) ────────────────────
+// 影響プレビューは「今」のヒット数しか出さないので、ヒット 0 件が「置換済みだから 0」
+// なのか「元から無いから 0」なのかを区別できず、旧称が残っていないかを確かめるには
+// 図を 1 枚ずつ開いて中身を読むしかなかった。置換したときの記録を残し、部品名で
+// 引いて「いつ・どの図で・何件」を出す。開くのは名前が挙がった図だけで済む。
+function _renameHistoryList() {
+  var RH = window.MA.renameHistory;
+  return RH ? RH.load(_reviewStore(), _wsFileDir()) : [];
+}
+
+// 置換の結果を履歴に足す。開いている図とフォルダ直書きの両方が同じ 1 件になる
+// (利用者にとっては 1 回の置換なので、経路の違いで 2 行に割らない)。
+function _recordRename(from, to, docs) {
+  var RH = window.MA.renameHistory;
+  if (!RH || !from || !to) return;
+  try {
+    RH.record(_reviewStore(), _wsFileDir(), RH.makeEntry(from, to, docs, new Date().toISOString()));
+  } catch (e) { /* 履歴が残せなくても置換自体は通す */ }
+}
+
+function renderRenameHistory(from) {
+  var box = document.getElementById('rename-history');
+  var RH = window.MA.renameHistory;
+  if (!box || !RH) return;
+  box.textContent = '';
+  var list = _renameHistoryList();
+  var name = String(from == null ? '' : from);
+  var rows = name ? RH.forName(list, name) : list;
+
+  var head = document.createElement('div');
+  head.className = 'rh-head';
+  var label = document.createElement('span');
+  label.className = 'rh-head-label';
+  label.textContent = '改名履歴';
+  head.appendChild(label);
+  var copy = document.createElement('button');
+  copy.type = 'button';
+  copy.className = 'rh-copy';
+  copy.id = 'btn-rename-history-copy';
+  copy.textContent = '控える';
+  copy.title = '改名履歴の表をクリップボードに写す。不具合票にそのまま貼れます';
+  copy.disabled = !rows.length;
+  copy.addEventListener('click', function(ev) {
+    ev.stopPropagation();
+    var text = RH.text(list, name);
+    var done = function() { if (window.MA.toast) window.MA.toast.show('改名履歴を控えました'); };
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, done);
+        return;
+      }
+    } catch (e) {}
+    done();
+  });
+  head.appendChild(copy);
+  box.appendChild(head);
+
+  var sum = document.createElement('div');
+  sum.className = 'rh-summary ' + RH.summaryClass(list, name);
+  sum.id = 'rename-history-summary';
+  sum.setAttribute('data-rh-entries', String(rows.length));
+  sum.setAttribute('data-rh-docs', String(RH.docNames(rows).length));
+  sum.textContent = RH.summary(list, name);
+  box.appendChild(sum);
+  if (!rows.length) return;
+
+  var host = document.createElement('div');
+  host.className = 'rh-rows';
+  host.id = 'rename-history-rows';
+  rows.forEach(function(e) {
+    var entry = document.createElement('div');
+    entry.className = 'rh-entry';
+    entry.setAttribute('data-rh-from', e.from);
+    entry.setAttribute('data-rh-to', e.to);
+    var line = document.createElement('div');
+    line.className = 'rh-line';
+    line.textContent = RH.line(e);
+    entry.appendChild(line);
+    var docs = document.createElement('div');
+    docs.className = 'rh-docs';
+    e.docs.forEach(function(d) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'rh-doc';
+      b.setAttribute('data-rh-doc', d.name);
+      b.textContent = d.name + ' (' + d.count + ')';
+      b.title = d.name + ' を開く（この図で ' + d.count + ' 件 改名しています）';
+      b.addEventListener('click', function(ev) {
+        ev.stopPropagation();
+        openFromFolderByName(d.name);
+      });
+      docs.appendChild(b);
+    });
+    entry.appendChild(docs);
+    host.appendChild(entry);
+  });
+  box.appendChild(host);
+}
+
 function renderRenameFolder() {
   var box = document.getElementById('rename-folder');
   var FI = window.MA.folderImpact;
@@ -7540,7 +7639,7 @@ function applyRenameToUnopenedFiles(from, to) {
   var FI = window.MA.folderImpact;
   var br = window.MA.bulkRename;
   var WS = window.MA.workspace;
-  var empty = { docs: 0, total: 0, failed: 0 };
+  var empty = { docs: 0, total: 0, failed: 0, rows: [] };
   if (!FI || !br || !WS || !_fiEnabled() || !from || !br.isValidTarget(to) || from === to) {
     return Promise.resolve(empty);
   }
@@ -7550,7 +7649,7 @@ function applyRenameToUnopenedFiles(from, to) {
   var rows = FI.merge([], _fiFileDocs, _fiRoles).filter(function(r) { return !openNames[r.name]; });
   var targets = FI.applyTargets(rows, from);
   if (targets.length === 0) return Promise.resolve(empty);
-  var res = { docs: 0, total: 0, failed: 0 };
+  var res = { docs: 0, total: 0, failed: 0, rows: [] };
   return Promise.all(targets.map(function(r) {
     var next = br.replaceIn(r.dsl, from, to);
     var n = br.countIn(r.dsl, from);
@@ -7558,6 +7657,7 @@ function applyRenameToUnopenedFiles(from, to) {
       if (!ok) { res.failed++; return; }
       res.docs++;
       res.total += n;
+      res.rows.push({ name: r.name, count: n });
       // 読み込み済みの控えも進めておく。次のプレビューが古い本文を数えないように。
       _fiFileDocs.forEach(function(d) { if (d.name === r.name) d.dsl = next; });
       if (window.MA.saveDiff) { try { window.MA.saveDiff.mark(r.name, next); } catch (e) {} }
@@ -7603,6 +7703,7 @@ function updateRenamePreview() {
   renderRenameImpact(docs, from);
   renderSignatureApply(docs, from);
   renderRenameFolder();
+  renderRenameHistory(from);
 
   // 開いていない図しか当たらない語でも置換できるようにする。フォルダを数えて
   // いるのにボタンが押せないのでは、結局その図を開く手順が残る。
@@ -8358,6 +8459,10 @@ function setupBulkRename() {
       var total = openTotal + f.total;
       var docs = openDocs + f.docs;
       if (total === 0) return;
+      // 履歴は「1 回の置換」で 1 件。開いている図とフォルダ直書きを 1 つにまとめる。
+      _recordRename(from, to, ((res && res.changed) || []).map(function(c) {
+        return { name: c.name, count: c.count };
+      }).concat(f.rows || []));
       fromEl.value = '';
       toEl.value = '';
       fillCandidates();
