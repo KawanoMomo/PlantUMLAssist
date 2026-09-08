@@ -1540,6 +1540,226 @@ window.MA.modules.plantumlSequence = (function() {
     return text;
   }
 
+  // BLK-junior-20260906-2143: 参加者数人 + メッセージ数本を 1 つのフォームで組む。
+  // 「末尾に追加」は 1 件ごとに種類 select を選び直し、逃げ道の「一括 (複数行)」は
+  // 矢印構文ごと打たせるため、どちらも DSL エディタに直接打つのと手数が変わらない。
+  // class-scaffold と同じく、名前・本文という短い値だけを受け取って構文は自動生成する。
+  function _showSeqScaffoldModal(parsedData, ctx) {
+    var modal = document.getElementById('seq-sc-modal');
+    var content = document.getElementById('seq-sc-modal-content');
+    if (!modal || !content) return;
+    var SS = window.MA.sequenceScaffold;
+    var esc = window.MA.htmlUtils.escHtml;
+    var P = window.MA.properties;
+
+    var existing = (parsedData.elements || [])
+      .filter(function(e) { return e.kind === 'participant'; })
+      .map(function(e) { return e.label || e.id; });
+
+    var INPUT = 'background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:3px 6px;border-radius:3px;font-size:12px;';
+    var ARROW_OPTS = [
+      ['sync', '同期 ->'],
+      ['async', '非同期 ->>'],
+      ['reply', '応答 -->'],
+      ['asyncReply', '非同期応答 -->>'],
+      ['lost', '消失 ->x'],
+    ];
+
+    var datalist = '<datalist id="seq-sc-names">' +
+      existing.map(function(n) { return '<option value="' + esc(n) + '"></option>'; }).join('') +
+      '</datalist>';
+
+    function partRowHtml(i) {
+      return '<div class="seq-sc-row" data-i="' + i + '" style="display:flex;gap:6px;margin-bottom:5px;align-items:center;">' +
+        '<select id="seq-sc-ptype-' + i + '" style="' + INPUT + '">' +
+          SS.PARTICIPANT_TYPES.map(function(t) {
+            return '<option value="' + t + '"' + (t === 'participant' ? ' selected' : '') + '>' + t + '</option>';
+          }).join('') +
+        '</select>' +
+        '<input id="seq-sc-pname-' + i + '" list="seq-sc-names" type="text" placeholder="参加者名 (例: TIMER ドライバ)" style="flex:1;' + INPUT + '">' +
+        '<button id="seq-sc-pdel-' + i + '" title="この行を削除" style="background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;padding:2px 7px;">✕</button>' +
+      '</div>';
+    }
+
+    // メッセージの From / To は参加者行と図の既存参加者からの選択にする。
+    // 名前を打ち直す手が要らず、綴り違いで別人が生まれることもない。
+    function namePickHtml(id) {
+      return '<select id="' + id + '" class="seq-sc-name-pick" style="flex:1;' + INPUT + '">' +
+        '<option value="">（選ぶ）</option></select>';
+    }
+
+    function msgRowHtml(j) {
+      return '<div class="seq-sc-msg-row" data-j="' + j + '" style="display:flex;gap:6px;margin-bottom:5px;align-items:center;">' +
+        namePickHtml('seq-sc-mfrom-' + j) +
+        '<select id="seq-sc-marrow-' + j + '" style="' + INPUT + '">' +
+          ARROW_OPTS.map(function(o) { return '<option value="' + o[0] + '">' + esc(o[1]) + '</option>'; }).join('') +
+        '</select>' +
+        namePickHtml('seq-sc-mto-' + j) +
+        '<input id="seq-sc-mtext-' + j + '" type="text" placeholder="本文 (例: Timer_Init())" style="flex:2;' + INPUT + '">' +
+        '<button id="seq-sc-mdel-' + j + '" title="この行を削除" style="background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;padding:2px 7px;">✕</button>' +
+      '</div>';
+    }
+
+    var SECTION = 'font-size:10px;color:var(--accent);font-weight:bold;margin:10px 0 4px 0;';
+    var pRows = '', mRows = '', ri;
+    for (ri = 0; ri < 4; ri++) pRows += partRowHtml(ri);
+    for (ri = 0; ri < 4; ri++) mRows += msgRowHtml(ri);
+    content.innerHTML = datalist +
+      '<h3 style="margin:0 0 12px 0;color:var(--text-primary);">シーケンス構成をまとめて追加</h3>' +
+      '<div style="' + SECTION + '">タイトル (省略可)</div>' +
+      '<input id="seq-sc-title" type="text" placeholder="例: TIMER ドライバ初期化" style="width:100%;box-sizing:border-box;' + INPUT + '">' +
+      '<div style="' + SECTION + '">参加者 (種類 / 名前)</div>' +
+      '<div id="seq-sc-rows">' + pRows + '</div>' +
+      '<button id="seq-sc-add-row" style="font-size:11px;padding:3px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">＋ 参加者を追加</button>' +
+      '<div style="' + SECTION + '">メッセージ (From / 矢印 / To / 本文)</div>' +
+      '<div id="seq-sc-msg-rows">' + mRows + '</div>' +
+      '<button id="seq-sc-add-msg" style="font-size:11px;padding:3px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">＋ メッセージを追加</button>' +
+      '<div style="' + SECTION + '">追加される行</div>' +
+      '<pre id="seq-sc-preview" style="margin:0;background:var(--bg-primary);border:1px solid var(--border);border-radius:3px;padding:6px;font-family:Consolas,monospace;font-size:11px;color:var(--text-primary);white-space:pre-wrap;min-height:34px;"></pre>' +
+      '<div id="seq-sc-errors" style="font-size:11px;color:var(--accent-red);margin-top:6px;min-height:14px;"></div>' +
+      '<div style="display:flex;gap:8px;margin-top:12px;">' +
+        '<button id="seq-sc-cancel" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:8px;border-radius:4px;cursor:pointer;">キャンセル</button>' +
+        '<button id="seq-sc-confirm" style="flex:1;background:var(--accent);border:none;color:#fff;padding:8px;border-radius:4px;cursor:pointer;">確定</button>' +
+      '</div>';
+    modal.style.display = 'flex';
+
+    function val(id) { var el = document.getElementById(id); return el ? el.value : ''; }
+
+    function collectSpec() {
+      var participants = [];
+      var rows = content.querySelectorAll('.seq-sc-row');
+      for (var i = 0; i < rows.length; i++) {
+        var idx = rows[i].getAttribute('data-i');
+        participants.push({ name: val('seq-sc-pname-' + idx), type: val('seq-sc-ptype-' + idx) });
+      }
+      var messages = [];
+      var mrows = content.querySelectorAll('.seq-sc-msg-row');
+      for (var j = 0; j < mrows.length; j++) {
+        var jdx = mrows[j].getAttribute('data-j');
+        messages.push({
+          from: val('seq-sc-mfrom-' + jdx),
+          to: val('seq-sc-mto-' + jdx),
+          arrow: val('seq-sc-marrow-' + jdx),
+          text: val('seq-sc-mtext-' + jdx),
+        });
+      }
+      return { title: val('seq-sc-title'), participants: participants, messages: messages };
+    }
+
+    // From / To の選択肢は「今この画面で打っている参加者名 + 図に既にある参加者」。
+    // 打ちながら増えるので、行を足すたびに選び直しに戻らずに済む。
+    function candidateNames() {
+      var names = [], seen = {};
+      function push(v) {
+        var t = (v || '').trim();
+        if (!t || seen[t]) return;
+        seen[t] = true; names.push(t);
+      }
+      var rows = content.querySelectorAll('.seq-sc-row');
+      for (var i = 0; i < rows.length; i++) push(val('seq-sc-pname-' + rows[i].getAttribute('data-i')));
+      existing.forEach(push);
+      return names;
+    }
+
+    function refreshPicks() {
+      var names = candidateNames();
+      var picks = content.querySelectorAll('.seq-sc-name-pick');
+      for (var i = 0; i < picks.length; i++) {
+        var cur = picks[i].value;
+        picks[i].innerHTML = '<option value="">（選ぶ）</option>' +
+          names.map(function(n) {
+            return '<option value="' + esc(n) + '"' + (n === cur ? ' selected' : '') + '>' + esc(n) + '</option>';
+          }).join('');
+        if (cur && names.indexOf(cur) < 0) picks[i].value = '';
+      }
+    }
+
+    function refresh() {
+      refreshPicks();
+      var spec = collectSpec();
+      var text = ctx.getMmdText();
+      var pre = document.getElementById('seq-sc-preview');
+      if (pre) pre.textContent = SS.preview(text, spec).join('\n');
+      var res = SS.validate(spec, text);
+      var errEl = document.getElementById('seq-sc-errors');
+      if (errEl) errEl.textContent = res.ok ? '' : res.errors.join(' / ');
+      var confirmBtn = document.getElementById('seq-sc-confirm');
+      if (confirmBtn) {
+        confirmBtn.disabled = !res.ok;
+        confirmBtn.style.opacity = res.ok ? '1' : '0.5';
+        confirmBtn.style.cursor = res.ok ? 'pointer' : 'not-allowed';
+      }
+    }
+
+    function bindRemovable(btnId, rowSel, key, keyVal) {
+      P.bindEvent(btnId, 'click', function() {
+        var rows = content.querySelectorAll(rowSel);
+        if (rows.length <= 1) return;
+        for (var k = 0; k < rows.length; k++) {
+          if (rows[k].getAttribute(key) === String(keyVal)) {
+            rows[k].parentNode.removeChild(rows[k]);
+            break;
+          }
+        }
+        refresh();
+      });
+    }
+
+    function bindPartRow(i) {
+      P.bindEvent('seq-sc-pname-' + i, 'input', refresh);
+      P.bindEvent('seq-sc-ptype-' + i, 'change', refresh);
+      bindRemovable('seq-sc-pdel-' + i, '.seq-sc-row', 'data-i', i);
+    }
+    function bindMsgRow(j) {
+      P.bindEvent('seq-sc-mtext-' + j, 'input', refresh);
+      ['seq-sc-mfrom-' + j, 'seq-sc-mto-' + j, 'seq-sc-marrow-' + j].forEach(function(id) {
+        P.bindEvent(id, 'change', refresh);
+      });
+      bindRemovable('seq-sc-mdel-' + j, '.seq-sc-msg-row', 'data-j', j);
+    }
+    for (ri = 0; ri < 4; ri++) { bindPartRow(ri); bindMsgRow(ri); }
+    P.bindEvent('seq-sc-title', 'input', refresh);
+
+    var nextPart = 4, nextMsg = 4;
+    P.bindEvent('seq-sc-add-row', 'click', function() {
+      var rows = document.getElementById('seq-sc-rows');
+      if (!rows) return;
+      var i = nextPart++;
+      rows.insertAdjacentHTML('beforeend', partRowHtml(i));
+      bindPartRow(i);
+      var el = document.getElementById('seq-sc-pname-' + i);
+      if (el && el.focus) el.focus();
+      refresh();
+    });
+    P.bindEvent('seq-sc-add-msg', 'click', function() {
+      var rows = document.getElementById('seq-sc-msg-rows');
+      if (!rows) return;
+      var j = nextMsg++;
+      rows.insertAdjacentHTML('beforeend', msgRowHtml(j));
+      bindMsgRow(j);
+      refresh();
+      var el = document.getElementById('seq-sc-mfrom-' + j);
+      if (el && el.focus) el.focus();
+    });
+
+    function close() { modal.style.display = 'none'; content.innerHTML = ''; }
+    P.bindEvent('seq-sc-cancel', 'click', close);
+    P.bindEvent('seq-sc-confirm', 'click', function() {
+      var spec = collectSpec();
+      var text = ctx.getMmdText();
+      if (!SS.validate(spec, text).ok) return;
+      window.MA.history.pushHistory();
+      ctx.setMmdText(SS.apply(text, spec));
+      ctx.onUpdate();
+      close();
+    });
+
+    refresh();
+    // 開いた直後はタイトルから打ち始めるので、最初からフォーカスを載せる。
+    var first = document.getElementById('seq-sc-title');
+    if (first && first.focus) first.focus();
+  }
+
   return {
     type: 'plantuml-sequence',
     displayName: 'Sequence',
@@ -1691,9 +1911,17 @@ window.MA.modules.plantumlSequence = (function() {
             ]) +
             '<div id="seq-tail-detail" style="margin-top:6px;"></div>' +
           '</div>' +
+          // BLK-junior-20260906-2143: 参加者とメッセージをまとめて組む入口。
+          '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
+            '<button id="seq-scaffold-open" style="width:100%;font-size:11px;padding:5px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">⌗ シーケンス構成をまとめて追加</button>' +
+          '</div>' +
           '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;color:var(--text-secondary);font-size:11px;">' +
             'プレビュー上で要素をクリックすると編集パネルが開きます' +
           '</div>';
+
+        P.bindEvent('seq-scaffold-open', 'click', function() {
+          _showSeqScaffoldModal(parsedData, ctx);
+        });
 
         // autonumber checkbox
         P.bindEvent('seq-autonumber', 'change', function() {
