@@ -4267,10 +4267,12 @@ function renderLineageModal() {
   var openBtn = document.getElementById('lg-open');
   var adoptBtn = document.getElementById('lg-adopt');
   var clearBtn = document.getElementById('lg-clear');
+  var markBtn = document.getElementById('lg-mark');
   var rec = child ? LG.get(child) : null;
   if (openBtn) openBtn.disabled = !rec;
   if (clearBtn) clearBtn.disabled = !rec;
   if (adoptBtn) adoptBtn.disabled = true;
+  if (markBtn) markBtn.disabled = true;
 
   if (!rec) {
     if (sum) { sum.textContent = '継承元は未登録です'; sum.classList.remove('lg-updated'); }
@@ -4289,6 +4291,7 @@ function renderLineageModal() {
       sum.classList.toggle('lg-updated', s.updated);
     }
     if (adoptBtn) adoptBtn.disabled = !s.updated;
+    if (markBtn) markBtn.disabled = !s.updated;
     var head = '<div class="lg-empty">継承元: ' + esc(rec.parent)
       + (rec.dir ? ' (' + esc(rec.dir) + ')' : '')
       + ' · 前回取り込み ' + esc(rec.adoptedAt || rec.at || '') + '</div>';
@@ -4335,6 +4338,52 @@ function openLineageParent() {
     renderTabs();
     toggleLineage(false);
   }, function() {});
+}
+
+// BLK-junior-20260908-1703-wish: 差分の行数まで出ても、増えた行が画面のどれかは
+// 自分で探すしかなかった。増減行が名指している相手を鍵にして、いまの図の同じ
+// 相手を指す図形を overlay 上で色付けし、当たらなかった行は図の上の帯に並べる。
+function markLineageDiff() {
+  var LG = window.MA.lineage;
+  var LM = window.MA.lineageMark;
+  var child = _lgChildName();
+  if (!LG || !LM || !child) return;
+  _lgFetch(child, function(rec, dsl) {
+    if (!rec || dsl == null) return;
+    var plan = LM.plan(LG.diffLines(child, dsl), mmdText);
+    LM.apply(document.getElementById('overlay-layer'), plan.lines);
+    renderLineageMarkOverlay(plan);
+    toggleLineage(false);
+  });
+}
+
+function renderLineageMarkOverlay(plan) {
+  var box = document.getElementById('lg-mark-overlay');
+  var sum = document.getElementById('lgm-summary');
+  var list = document.getElementById('lgm-list');
+  var LM = window.MA.lineageMark;
+  if (!box || !sum || !list || !LM) return;
+  box.hidden = false;
+  box.setAttribute('data-marked', String(plan.lines.length));
+  box.setAttribute('data-missing', String(plan.missing.length));
+  sum.textContent = LM.summaryLine(plan);
+  list.textContent = '';
+  plan.missing.forEach(function(m) {
+    var li = document.createElement('li');
+    li.className = 'lgm-missing';
+    li.setAttribute('data-kind', m.kind);
+    li.textContent = (m.kind === 'add' ? '+ ' : '- ') + m.text.trim();
+    list.appendChild(li);
+  });
+}
+
+function clearLineageMarks() {
+  if (window.MA.lineageMark) window.MA.lineageMark.clear(document.getElementById('overlay-layer'));
+  var box = document.getElementById('lg-mark-overlay');
+  if (box) {
+    box.hidden = true;
+    box.setAttribute('data-marked', '0');
+  }
 }
 
 function toggleLineage(open) {
@@ -4431,6 +4480,11 @@ function setupLineage() {
 
   var openBtn = document.getElementById('lg-open');
   if (openBtn) openBtn.addEventListener('click', openLineageParent);
+
+  var markBtn = document.getElementById('lg-mark');
+  if (markBtn) markBtn.addEventListener('click', markLineageDiff);
+  var lgmClose = document.getElementById('btn-lgm-close');
+  if (lgmClose) lgmClose.addEventListener('click', clearLineageMarks);
 
   renderLineageBadge();
 }

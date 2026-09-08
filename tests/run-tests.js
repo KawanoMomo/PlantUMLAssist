@@ -41,6 +41,7 @@ const sourceFiles = [
   'src/core/outline.js',
   'src/core/select-at-line.js',
   'src/core/line-peek.js',
+  'src/core/lineage-mark.js',
   'src/core/tail-kind-chips.js',
   'src/core/compare-view.js',
   'src/core/cross-ref-diff.js',
