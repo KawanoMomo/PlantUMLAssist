@@ -88,3 +88,11 @@ test('タブ列から畳むと機能ボタンが消え、次に開いても畳�
   await page.locator('#tool-menu-fold').click();
   await expect(page.locator('#btn-tab-board')).toBeVisible();
 });
+
+// BLK-builder-20260908-0858-2: パネル類 (外側 click で閉じる作りのもの) をメニューから開くと、
+// 選んだ click がそのまま document へ上がって開いた直後に閉じていた。
+test('メニューから「この図の指摘」を開くと、パネルが開いたまま残る', async ({ page }) => {
+  await page.locator('#btn-tab-tools').click();
+  await page.locator('[data-target="btn-tab-pins"]').click();
+  await expect(page.locator('#pin-panel')).toHaveClass(/open/);
+});

@@ -3215,6 +3215,22 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   cursor: pointer;
 }
 #status-consistency:hover, #status-eventsync:hover { background: var(--bg-tertiary); }
+/* BLK-builder-20260908-0858-2 (design 7a/7b): 下端に寄せた件数表示。整合と同じ見た目に揃える */
+#status-diff, #status-pins, #status-inbox {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 0 6px;
+  cursor: pointer;
+}
+#status-diff:hover, #status-pins:hover, #status-inbox:hover { background: var(--bg-tertiary); }
+#status-diff.has-open, #status-pins.has-open, #status-inbox.has-open {
+  color: var(--accent-orange);
+  border-color: var(--accent-orange);
+}
 #status-consistency.has-warning, #status-eventsync.has-warning { color: var(--accent-orange); border-color: var(--accent-orange); }
 
 /* イベント⇔メソッド整合のバッジ (BLK-primary-20260907-1803-wish) */
@@ -3682,6 +3698,10 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <span id="status-autosave" style="color:var(--text-secondary);"></span>
     <span id="status-save-result" role="status" style="color:var(--text-secondary);"></span>
     <span id="status-info"></span>
+    <!-- BLK-builder-20260908-0858-2 (design 7a/7b): 件数を持つものを下端に寄せ、押せばそのパネルが開く -->
+    <button type="button" id="status-diff" title="前回保存した時点から変わった図の一覧">± 差分 −</button>
+    <button type="button" id="status-pins" title="この図に付いたレビュー指摘の一覧">指摘 −</button>
+    <button type="button" id="status-inbox" title="保存フォルダの図をまたいだ未対応のレビュー指摘">指摘箱 −</button>
     <!-- BLK-reviewer-20260907-0843: 整合性チェックの警告件数を常時出す -->
     <button type="button" id="status-consistency" title="命名規約・未使用 participant・メソッド不一致・粒度不一致の一覧">整合 —</button>
     <!-- BLK-primary-20260907-1803-wish: state の遷移イベントと class のメソッドの突合表 -->
@@ -3936,6 +3956,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/command-palette.js"></script>
 <script src="src/core/diagram-rail.js"></script>
 <script src="src/core/tool-menu.js"></script>
+<script src="src/core/status-counters.js"></script>
 <script src="src/core/zoom-hud.js"></script>
 <script src="src/core/relation-add.js"></script>
 <script src="src/core/settings-tabs.js"></script>
