@@ -126,7 +126,11 @@ window.MA.svgFreshness = (function() {
       + '違うのは書き出し経路による体裁 (ヘッダ属性・XML 宣言の書式) だけなので、作り直さなくても読めます' },
     differ: { mark: '内容ずれ', title: 'この SVG は別の内容の puml から作られています。作り直しが要ります' },
     missing: { mark: 'SVG 無', title: 'この図の SVG が保存フォルダにありません' },
-    unverified: { mark: '内容未確認', title: '元の puml の印が無く、中身が一致するかは分かりません。作り直すと印が付きます' },
+    // BLK-reviewer-20260908-2003-wish: 「内容未確認」では、確かめ損ねたのか、そもそも
+    // 印が無くて確かめようが無いのかが読めない。実データでこの状態になるのは
+    // 「印を刻む前に保存された svg」だけなので、その事実をそのまま印にする。
+    unverified: { mark: '未刻印', title: '印を刻む前に保存された SVG です。元の puml の印が無いので、'
+      + '中身が一致するかはこの一覧だけでは言えません。「SVG の中身を確かめる」で白黒が付きます' },
   };
 
   // 印だけで出た「ずれ」は、体裁だけの差でもそう出る。作り直しを言い切らない。
@@ -269,6 +273,37 @@ window.MA.svgFreshness = (function() {
     return out;
   }
 
+  // BLK-reviewer-20260908-2003-wish: 印の無い図は、要約の「未確認 N 枚」に件数としてしか
+  // 出ておらず、どの 1 枚かは 22 行を目で探すか audit.js を回して突き止めるしかなかった
+  // (実データでは 22 枚中 1 枚。5 枚は印だけで即座に片が付くのに、その 1 枚を名指しする
+  // 表示が無いために毎回全図を確かめ直していた)。名前をここで束ねて返す。
+  // 作り直し (shortfall) の行と混ぜない — 印が無い図に必要なのは作り直しではなく、
+  // 上書きせずに描き直して比べること (保存されていた絵をそのまま残せる)。
+  var UNSTAMPED_TITLE = '印を刻む前に保存された SVG。中身が一致するかはこの一覧では言えないので、'
+    + '上書きせずに 1 回描き直して比べる';
+
+  function unstamped(scanned) {
+    var names = ((scanned && scanned.rows) || [])
+      .filter(function(r) { return r.content === 'unverified'; })
+      .map(function(r) { return r.name; });
+    if (!names.length) return null;
+    return { status: 'unverified', label: '未刻印（印を刻む前の SVG）', title: UNSTAMPED_TITLE, names: names };
+  }
+
+  // その行だけを確かめるボタンの文言。作り直しの「この N 枚だけ作り直す」と
+  // 見分けが付くように、何をするか (確かめる) を言葉に出す。
+  function unstampedVerifyLabel(group) {
+    var n = (group && Array.isArray(group.names) && group.names.length) || 0;
+    return n === 0 ? '' : 'この ' + n + ' 枚だけ中身を確かめる';
+  }
+
+  // 図ごとの SVG 書き出し時刻。行に puml の保存時刻と並べて出すためのもの。
+  function svgMtimeMap(scanned) {
+    var out = {};
+    ((scanned && scanned.rows) || []).forEach(function(r) { out[r.name] = r.svgMtime || ''; });
+    return out;
+  }
+
   // 内容での 1 行。mtime の要約 (summary) とは別に出す — 見ているものが違う。
   function contentSummary(scanned) {
     if (!scanned || !scanned.rows.length) return '';
@@ -376,6 +411,9 @@ window.MA.svgFreshness = (function() {
     summary: summary,
     contentSummary: contentSummary,
     shortfall: shortfall,
+    unstamped: unstamped,
+    unstampedVerifyLabel: unstampedVerifyLabel,
+    svgMtimeMap: svgMtimeMap,
     renderLabel: renderLabel,
     groupRenderLabel: groupRenderLabel,
     groupRenderTitle: groupRenderTitle,

@@ -213,8 +213,50 @@ describe('svgFreshness.contentBadge — 一覧の印', function() {
   test('一致した図は「内容一致」と言い切れる', function() {
     expect(SF.contentBadge('match').mark).toBe('内容一致');
   });
-  test('知らない状態は unverified に落ちる', function() {
-    expect(SF.contentBadge('???').mark).toBe('内容未確認');
+  // BLK-reviewer-20260908-2003-wish: 「内容未確認」だと、確かめ損ねたのか印が無いのかが
+  // 読めない。この状態になるのは印を刻む前に保存された svg だけなので、そう名指しする。
+  test('知らない状態は unverified に落ち、印が無いことを名乗る', function() {
+    expect(SF.contentBadge('???').mark).toBe('未刻印');
+    expect(SF.contentBadge('unverified').title).toContain('印を刻む前に保存された SVG');
+  });
+});
+
+// BLK-reviewer-20260908-2003-wish: 要約の「未確認 N 枚」だけでは、その 1 枚が
+// 22 行のどれかは分からず、audit.js を回して突き止めることになっていた。
+describe('svgFreshness.unstamped — 印の無い図を名指しする', function() {
+  function row(name, hash, stamp) {
+    return { name: name, mtime: NEW, svgMtime: NEW, hash: hash, svgSource: stamp || null };
+  }
+  test('印の無い図だけを並べる', function() {
+    var scanned = SF.scan([row('a', 'h1', 'h1'), row('b', 'h2', null), row('c', 'h3', 'other')]);
+    var g = SF.unstamped(scanned);
+    expect(g.names).toEqual(['b']);
+    expect(g.status).toBe('unverified');
+    expect(g.label).toContain('未刻印');
+  });
+  test('印が全部揃っていれば行そのものを出さない', function() {
+    expect(SF.unstamped(SF.scan([row('a', 'h1', 'h1')]))).toBe(null);
+    expect(SF.unstamped(null)).toBe(null);
+  });
+  test('その行だけを確かめる文言は枚数を言う (作り直しではない)', function() {
+    expect(SF.unstampedVerifyLabel({ names: ['b'] })).toBe('この 1 枚だけ中身を確かめる');
+    expect(SF.unstampedVerifyLabel({ names: [] })).toBe('');
+    expect(SF.unstampedVerifyLabel(null)).toBe('');
+  });
+  test('描き直して比べた控えがあれば未刻印から外れる', function() {
+    var scanned = SF.scan([row('b', 'h2', null)], { b: { pumlHash: 'h2', svgHash: undefined, result: 'match' } });
+    expect(SF.unstamped(scanned)).toBe(null);
+  });
+});
+
+// BLK-reviewer-20260908-2003-wish: 「puml は直っているが SVG だけ古い」を行で言うには、
+// 両方の時刻が同じ行に要る (片方だけでは ls -l を見に行くことになる)。
+describe('svgFreshness.svgMtimeMap — 図名 → SVG の書き出し時刻', function() {
+  test('SVG の時刻を図名で引ける', function() {
+    var scanned = SF.scan([e('a', NEW, OLD), e('b', NEW, null)]);
+    expect(SF.svgMtimeMap(scanned).a).toBe(OLD);
+    expect(SF.svgMtimeMap(scanned).b).toBe('');
+    expect(SF.svgMtimeMap(null)).toEqual({});
   });
 });
 

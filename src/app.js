@@ -5258,6 +5258,10 @@ function setupTabs() {
   var svgContent = {};
   // 図名 → その内容判定の根拠 ('stamp' / 'rerender')。何を見た答えかを印にも書く。
   var svgBasis = {};
+  // 図名 → 行に並べる 3 つの値 (puml 変更 / SVG 書き出し / labels 一致) と印の有無。
+  var svgCompare = {};
+  // 図名 → SVG の書き出し時刻 (ISO8601)。puml の保存時刻と並べて行に出す。
+  var svgMtimes = {};
   var svgScan = null;
   // 作り直した結果の 1 行。一覧を開き直すまで残す (押した結果が消えない)。
   var svgRenderNote = '';
@@ -5496,6 +5500,14 @@ function setupTabs() {
       // BLK-reviewer-20260908-1103: mtime とは別に、内容 (svg に刻んだ元 puml の sha1) での判定。
       svgContent = SF && SF.contentMap ? SF.contentMap(svgScan) : {};
       svgBasis = SF && SF.basisMap ? SF.basisMap(svgScan) : {};
+      // BLK-reviewer-20260908-2003-wish: 行に「puml 変更 / SVG 書き出し / labels 一致」を
+      // 並べ、印を持たない図に「未刻印」を出すための 1 行ぶんの値。
+      var SCR = window.MA.svgCompareRow;
+      svgCompare = SCR ? SCR.map(entries, (res && res.verified) || {}) : {};
+      // BLK-reviewer-20260908-2003-wish: puml の保存時刻と SVG の書き出し時刻を
+      // 同じ行に並べる。片方しか出ていない間は「いつ書き出した SVG か」を
+      // ls -l で見に行くことになっていた。
+      svgMtimes = SF && SF.svgMtimeMap ? SF.svgMtimeMap(svgScan) : {};
 
       // 指摘の反映状態は server が一覧と一緒に返す pins から作る。図を開かなくても
       // 一覧の時点で「未反映が残っている図」が分かる (別名保存を続けなくてよい)。
@@ -5797,6 +5809,26 @@ function setupTabs() {
     // 「描き直してのバイト比較」で出た答えなのかが画面に無く、同じ判定を自分で
     // やろうとすると、印の付かない /render の応答とバイト比較して全件ずれに見える。
     // 何を見た答えかをその場に書く (server.py を読みに行かせない)。
+    // BLK-reviewer-20260908-2003-wish: 上の 2 行は「mtime で古いか」「内容が一致するか」を
+    // 別々に言う。reviewer が手順4.10・6 で毎回作っていたのは、この 2 つを図ごとに
+    // 突き合わせた「labels が一致しているか」の一覧なので、その集計をそのまま 1 行にする。
+    var SCR = window.MA.svgCompareRow;
+    if (SCR) {
+      var cmpRows = [];
+      svgScan.rows.forEach(function(r) {
+        var c = svgCompare[r.name];
+        if (c) cmpRows.push(c);
+      });
+      var lsum = document.createElement('div');
+      var lbad = SCR.counts(cmpRows);
+      lsum.className = 'folder-svg-labels-summary' + (lbad.differ || lbad.missing ? ' has-stale' : '');
+      lsum.id = 'folder-svg-labels-summary';
+      lsum.textContent = SCR.summary(cmpRows);
+      lsum.title = '各図の行に「puml の保存時刻 / SVG の書き出し時刻 / labels 一致」が並んでいます。'
+        + '未確認の図は「未刻印」の行から確かめられます';
+      panel.appendChild(lsum);
+    }
+
     if (SF.basisNote) {
       var bnote = document.createElement('div');
       bnote.className = 'folder-svg-basis';
@@ -5848,6 +5880,47 @@ function setupTabs() {
       }
       panel.appendChild(row);
     });
+
+    // BLK-reviewer-20260908-2003-wish: 印の無い図の名前。要約の「未確認 N 枚」だけでは
+    // どの 1 枚かが分からず、毎回 audit.js を挟んで突き止めていた (実データ 22 枚中 1 枚)。
+    // 行末の押しでその図だけを、上書きせずに描き直して確かめる。
+    var un = SF.unstamped ? SF.unstamped(svgScan) : null;
+    if (un) {
+      var urow = document.createElement('div');
+      urow.className = 'folder-svg-names svg-unverified';
+      urow.id = 'folder-svg-unstamped';
+      urow.setAttribute('data-svg-status', 'unverified');
+      var ulabel = document.createElement('span');
+      ulabel.className = 'folder-svg-names-label';
+      ulabel.textContent = un.label;
+      urow.appendChild(ulabel);
+      un.names.forEach(function(name) {
+        var link = document.createElement('button');
+        link.type = 'button';
+        link.className = 'folder-svg-name';
+        link.textContent = name;
+        link.title = un.title;
+        link.addEventListener('click', function(ev) {
+          ev.stopPropagation();
+          openFromFolder(name);
+        });
+        urow.appendChild(link);
+      });
+      var uonly = document.createElement('button');
+      uonly.type = 'button';
+      uonly.className = 'folder-svg-names-verify';
+      uonly.setAttribute('data-svg-status', 'unverified');
+      uonly.textContent = SF.unstampedVerifyLabel(un);
+      uonly.title = 'この行の図だけを、保存中の SVG を上書きせずに 1 回描き直して比べる。'
+        + '一致すれば「内容一致」になり、以後この一覧だけで判定できる';
+      uonly.addEventListener('click', function(ev) {
+        ev.stopPropagation();
+        uonly.disabled = true;
+        verifySvgContents(dir, un.names, uonly);
+      });
+      urow.appendChild(uonly);
+      panel.appendChild(urow);
+    }
 
     var btn = document.createElement('button');
     btn.type = 'button';
@@ -6983,7 +7056,11 @@ function setupTabs() {
     // (逆に、内容がずれている図は mtime に関わらず名指しする)。
     var SF = window.MA.svgFreshness;
     var content = svgContent[name];
-    if (SF && (content === 'differ' || content === 'format')) {
+    // BLK-reviewer-20260908-2003-wish: 印の無い図 (unverified) もここに出す。
+    // 出ていない間、その 1 枚がどれかは行からは分からず、audit.js を回して
+    // 突き止めるしかなかった。「未刻印」は作り直しの催促ではなく、
+    // 「この一覧では言えない 1 枚」の名指しとして出す。
+    if (SF && (content === 'differ' || content === 'format' || content === 'unverified')) {
       var cb = SF.contentBadge(content, svgBasis[name]);
       var contentBadge = document.createElement('span');
       contentBadge.className = 'folder-svg-content-badge';
@@ -7019,8 +7096,36 @@ function setupTabs() {
       var t = document.createElement('span');
       t.className = 'folder-mtime';
       t.textContent = mtime;
-      t.title = '最終保存時刻';
+      t.title = 'puml の最終保存時刻';
       b.appendChild(t);
+    }
+    // BLK-reviewer-20260908-2003-wish: puml の保存時刻の隣に SVG の書き出し時刻。
+    // 「puml は直っているが SVG だけ古い」を、行を見るだけで言えるようにする。
+    var RW = window.MA.reviewWatch;
+    if (RW && RW.formatMtime) {
+      var svgAt = RW.formatMtime(svgMtimes[name]);
+      var st = document.createElement('span');
+      st.className = 'folder-svg-mtime';
+      st.setAttribute('data-svg-mtime', svgAt || '');
+      st.textContent = svgAt ? 'SVG ' + svgAt : 'SVG —';
+      st.title = svgAt ? 'SVG を書き出した時刻' : 'この図の SVG が保存フォルダにありません';
+      b.appendChild(st);
+    }
+    // BLK-reviewer-20260908-2003-wish (2303/0203 追記): 2 つの時刻の隣に、その SVG の
+    // 文字が今の puml と一致しているか。時刻だけでは「保存し直しただけ」と「中身が
+    // 追いついていない」が同じ「古い」に見えるので、突合の答えを行に置く。
+    var cmp = svgCompare[name];
+    if (cmp) {
+      var lb = document.createElement('span');
+      lb.className = 'folder-svg-labels labels-' + cmp.labels;
+      lb.setAttribute('data-svg-labels', cmp.labels);
+      lb.setAttribute('data-tone', cmp.tone);
+      lb.textContent = cmp.labelsText;
+      // 3 つの値は行の上で 1 まとまりとして読む。説明 (title) には 3 つを並べて書く —
+      // 幅の狭い行では時刻が省かれることがあるため。
+      var SCR2 = window.MA.svgCompareRow;
+      lb.title = SCR2 && SCR2.rowTitle ? SCR2.rowTitle(cmp) : cmp.title;
+      b.appendChild(lb);
     }
     if (bdg && bdg.title) b.title = bdg.title + (mtime ? '（最終保存 ' + mtime + '）' : '');
     b.addEventListener('click', function() { openFromFolder(name); });

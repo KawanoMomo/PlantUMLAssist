@@ -923,6 +923,35 @@ html, body {
   padding: 0 3px;
   white-space: nowrap;
 }
+/* 未刻印 / 体裁差のみ は「直せ」ではなく「この一覧では言えない」なので赤にしない
+   (BLK-reviewer-20260908-2003-wish) */
+#folder-panel .folder-svg-content-badge[data-svg-content="unverified"],
+#folder-panel .folder-svg-content-badge[data-svg-content="format"] {
+  border-color: var(--border);
+  color: var(--text-secondary);
+  font-weight: normal;
+}
+/* 未刻印の図だけを確かめる (BLK-reviewer-20260908-2003-wish) */
+#folder-panel button.folder-svg-names-verify {
+  border: 1px solid var(--border); border-radius: 3px; background: var(--bg-tertiary);
+  color: var(--text-primary); font-size: 10px; padding: 0 6px; width: auto; cursor: pointer;
+  margin-left: auto; white-space: nowrap;
+}
+#folder-panel button.folder-svg-names-verify:disabled { color: var(--text-secondary); cursor: default; }
+#folder-panel .folder-svg-mtime { flex: 0 0 auto; font-size: 9px; color: var(--text-secondary); opacity: 0.85; }
+/* puml 変更 / SVG 書き出し と並べる labels の突合結果 (BLK-reviewer-20260908-2003-wish)。
+   時刻の隣に置くので、時刻と同じ大きさで、色だけで一致・不一致を分ける。 */
+#folder-panel .folder-svg-labels {
+  flex: 0 0 auto; font-size: 9px; white-space: nowrap;
+  border: 1px solid var(--border); border-radius: 2px; padding: 0 3px;
+  color: var(--text-secondary);
+}
+#folder-panel .folder-svg-labels[data-tone="ok"] { border-color: var(--accent); color: var(--accent); }
+#folder-panel .folder-svg-labels[data-tone="bad"] { border-color: var(--accent-red); color: var(--accent-red); font-weight: bold; }
+#folder-panel .folder-svg-labels-summary {
+  font-size: 10px; color: var(--text-secondary); padding: 0 6px 2px;
+}
+#folder-panel .folder-svg-labels-summary.has-stale { color: var(--accent-red); }
 #folder-panel button.folder-svg-proof-btn,
 #folder-panel button.folder-svg-render {
   border: 1px solid var(--border);
@@ -5386,6 +5415,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/version-timeline.js"></script>
 <script src="src/core/lineage.js"></script>
 <script src="src/core/svg-freshness.js"></script>
+<script src="src/core/svg-compare-row.js"></script>
 <script src="src/core/svg-diff-summary.js"></script>
 <script src="src/core/review-state.js"></script>
 <script src="src/core/write-activity.js"></script>
