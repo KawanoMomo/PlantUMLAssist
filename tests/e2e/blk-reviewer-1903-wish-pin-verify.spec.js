@@ -136,7 +136,7 @@ test.describe('BLK-reviewer-1903-wish: 指摘が SVG に反映されたかの判
     const row = rowOf(page, D_STALE);
     await expect(row).toBeVisible();
     expect(await row.getAttribute('data-reflect')).toBe('puml-only');
-    expect(await row.getAttribute('data-svg')).toBe('differ');
+    expect(await row.getAttribute('data-svg')).toBe('differ-content');
     await expect(row.locator('.ib-verify')).toHaveText('SVG 未反映');
     // 判定の根拠は puml 側と SVG 側の両方をその場に出す
     await expect(row.locator('.ib-verify-why')).toHaveText(/puml: /);

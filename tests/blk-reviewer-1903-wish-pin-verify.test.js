@@ -69,11 +69,26 @@ describe('pin-verify — 指摘 1 件の反映判定', () => {
   });
 
   test('puml は直ったが SVG が食い違っていれば SVG 未反映', () => {
-    const j = judgeOne(fixed(), { status: 'differ' });
+    const j = judgeOne(fixed(), { status: 'differ-content' });
     expect(j.key).toBe('puml-only');
     expect(j.label).toBe('SVG 未反映');
     expect(j.done).toBe(false);
-    expect(j.svg.state).toBe('differ');
+    expect(j.svg.state).toBe('differ-content');
+  });
+
+  test('体裁だけが違う SVG は反映済み (作り直させない)', () => {
+    // BLK-reviewer-20260908-0103: 書き出し経路の違い (ヘッダ属性・XML 宣言の書式) しか
+    // 差が無い図まで「未反映」と言うと、reviewer は毎回作り直して確かめ直すことになる。
+    const j = judgeOne(fixed(), { status: 'differ-format' });
+    expect(j.key).toBe('reflected');
+    expect(j.svg.ok).toBe(true);
+    expect(j.svg.text).toContain('中身 (文字・図形の数) は今の puml と一致');
+  });
+
+  test('古い server の differ は中身の食い違いとして扱う', () => {
+    const j = judgeOne(fixed(), { status: 'differ' });
+    expect(j.key).toBe('puml-only');
+    expect(j.svg.state).toBe('differ-content');
   });
 
   test('SVG が無い図も、直っただけでは反映済みにしない', () => {
@@ -102,7 +117,7 @@ describe('pin-verify — 指摘 1 件の反映判定', () => {
       body,
       ['Dma_Configure', 'Idle', 'Busy'],
       { drawnLabels: ['Dma_Start', 'Idle', 'Busy'], svgShape: { path: 4 }, drawnShape: { path: 6 } });
-    const j = judgeOne(fixed(), { status: 'differ' }, { svgDiffs: { [DOC]: diff } });
+    const j = judgeOne(fixed(), { status: 'differ-content' }, { svgDiffs: { [DOC]: diff } });
     expect(j.key).toBe('puml-only');
     // 旧ラベルが SVG に残っていることも、図形の数が違うことも 1 行で言う
     expect(j.svg.text).toContain('SVG に残る古い名前');

@@ -13616,7 +13616,7 @@ function _inboxRunVerify() {
         svgs[name] = r;
         // 食い違った図は、ラベルと図形の数まで言う。この 1 行が無いと
         // reviewer は「どこが違うのか」をまた別の入口で調べ直すことになる。
-        if (r.status === 'differ' && SD && typeof r.pumlText === 'string') {
+        if (r.status === 'differ-content' && SD && typeof r.pumlText === 'string') {
           svgDiffs[name] = SD.compare(r.pumlText, r.svgLabels, {
             drawnLabels: r.drawnLabels, svgShape: r.svgShape, drawnShape: r.drawnShape,
           });
@@ -13664,7 +13664,7 @@ function _inboxShown() {
     // SVG がそもそも無い図はここでは残さない。書き出していない保存フォルダで
     // 解消済みの指摘が全部戻ってくると、箱が「まだ直っていない指摘」でなくなる。
     var j = _inboxVerifyOf(p);
-    return !!(j && j.svg && j.svg.state === 'differ');
+    return !!(j && j.svg && j.svg.state === 'differ-content');
   });
 }
 

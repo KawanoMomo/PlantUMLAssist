@@ -65,19 +65,35 @@ window.MA.pinVerify = (function() {
 
   // ---- SVG 側 --------------------------------------------------------------
 
-  // res は /verify-svg の 1 図ぶんの結果 {status: 'match'|'differ'|'missing'|'error'}。
-  // diff は svg-diff-summary.compare の結果 (differ のときだけ来る)。
+  // res は /verify-svg の 1 図ぶんの結果
+  //   match          — バイトまで一致した
+  //   differ-format  — 描かれる中身 (文字・図形の数) は一致。体裁だけが違う
+  //   differ-content — 描かれるものが違う。作り直しが要る
+  //   missing / error
+  // diff は svg-diff-summary.compare の結果 (食い違いのときだけ来る)。
   // 何も渡されなければ 'unchecked'。「確かめていない」を「一致」と言わない。
+  //
+  // 体裁だけの差で「SVG 未反映」と言わない。書き出し経路が違うだけの図を
+  // 作り直させると、reviewer は毎回同じ figure を作り直して確かめ直すことになる
+  // (それが BLK-reviewer-20260908-0103 の「differ 誤答」で起きていたこと)。
   function svgSide(res, diff) {
     var st = res ? _s(res.status) : '';
     if (st === 'match') {
       return { state: 'match', ok: true, text: 'SVG は今の puml を描いた結果と一致しています' };
     }
-    if (st === 'differ') {
+    if (st === 'differ-format') {
+      return {
+        state: 'differ-format', ok: true,
+        text: 'SVG に描かれている中身 (文字・図形の数) は今の puml と一致しています'
+          + '（違うのは書き出し経路による体裁だけ）',
+      };
+    }
+    // 'differ' は differ-content を分ける前の server の答え。中身の差として扱う。
+    if (st === 'differ-content' || st === 'differ') {
       var SD = window.MA.svgDiffSummary;
       var why = (diff && SD) ? SD.summary(diff) : '';
       return {
-        state: 'differ', ok: false,
+        state: 'differ-content', ok: false,
         text: 'SVG は今の puml と食い違っています' + (why ? '（' + why + '）' : ''),
       };
     }
@@ -107,7 +123,7 @@ window.MA.pinVerify = (function() {
     var key;
     if (!puml.fixed) key = 'open';
     else if (svg.ok) key = 'reflected';
-    else if (svg.state === 'differ' || svg.state === 'missing') key = 'puml-only';
+    else if (svg.state === 'differ-content' || svg.state === 'missing') key = 'puml-only';
     else key = 'unknown';
     var v = VERDICT[key];
     return {
