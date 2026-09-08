@@ -175,29 +175,184 @@ window.MA.componentDeps = (function() {
       .sort(function(a, b) { return b.count - a.count || a.name.localeCompare(b.name); });
   }
 
+  // BLK-junior-20260909-0303-wish: 同じ部品のシーケンス図・状態遷移図で
+  // 実際に呼んでいる相手を、定石とは別枠の候補にする。
+  //
+  // 定石 (catalog) は題材によらず常に同じ 6 件なので、GPIO ドライバが本当に
+  // その依存を持つかは分からず、先輩のシーケンス図を開いて見比べる手間が残っていた。
+  // ここは「自分の図が実際に呼んでいる相手」だけを拾うので、チェックを付けるのに
+  // 見比べが要らない。他部品の図から拾う peer とは出所が違う (あちらは他人の実績)。
+  //
+  // 「同じ部品」は名前の語で見る。GpioDrv のコンポーネント図と
+  // gpio_init_sequence は gpio が共通なので同じ部品と見なす。
+  // init / sequence / drv のような、どの部品にも付く語は判定から外す —
+  // 残すと全部の図が「同じ部品」になり、実績の意味が消える。
+  var GENERIC_TOKENS = {
+    init: 1, sequence: 1, seq: 1, state: 1, st: 1, states: 1, diagram: 1, dia: 1,
+    drv: 1, driver: 1, component: 1, comp: 1, flow: 1, main: 1, sub: 1,
+    sw: 1, hw: 1, mcu: 1, module: 1, spec: 1, design: 1, puml: 1, uml: 1,
+    'ドライバ': 1, '図': 1, 'シーケンス': 1, '状態遷移': 1, '状態': 1,
+  };
+
+  // 部品を見分ける語だけ。1 文字の語は偶然合いすぎるので落とす。
+  function keyTokens(s) {
+    var out = [];
+    var seen = {};
+    _tokens(s).forEach(function(t) {
+      if (t.length < 2 || GENERIC_TOKENS[t] || seen[t]) return;
+      seen[t] = true;
+      out.push(t);
+    });
+    return out;
+  }
+
+  function _shareToken(a, b) {
+    for (var i = 0; i < a.length; i++) if (b.indexOf(a[i]) >= 0) return true;
+    return false;
+  }
+
+  // 図の外を表す疑似端点。参加者ではないので呼び出し先にしない。
+  function _isPseudo(n) {
+    var t = _s(n).trim();
+    return !t || t === '[' || t === ']' || t === '[*]';
+  }
+
+  // 状態遷移図の action から呼び出し先を取る。`IrqCtrl.enable()` `Power_Ctrl::on`
+  // のように「相手.操作」で書かれたものだけを見る。動詞だけの action
+  // (`保存する`) には相手がいないので拾わない。
+  var ACTION_TARGET_RE = /([A-Za-z_][A-Za-z0-9_]*)\s*(?:\.|::|->)\s*[A-Za-z_]/g;
+
+  function _actionTargets(text) {
+    var out = [];
+    var s = _s(text);
+    var m;
+    ACTION_TARGET_RE.lastIndex = 0;
+    while ((m = ACTION_TARGET_RE.exec(s)) !== null) out.push(m[1]);
+    return out;
+  }
+
+  // 同じ部品の図で subject が実際に呼んでいる相手。
+  // シーケンス図は「subject から出るメッセージの宛先」、状態遷移図は
+  // 「遷移の action が呼んでいる相手」。どちらも無ければその図は黙って飛ばす。
+  function usageTargets(dsl, docs, exceptId, subject) {
+    var subjKeys = keyTokens(subject || defaultSubject(dsl));
+    if (!subjKeys.length) return [];
+    var acc = {};
+
+    function add(name, docName, how) {
+      var t = _s(name).trim();
+      if (_isPseudo(t)) return;
+      var k = normName(t);
+      if (!k || _shareToken(keyTokens(t), subjKeys)) return;
+      if (!acc[k]) acc[k] = { name: t, docs: [], hows: [], count: 0 };
+      acc[k].count++;
+      if (acc[k].docs.indexOf(docName) < 0) acc[k].docs.push(docName);
+      if (acc[k].hows.indexOf(how) < 0) acc[k].hows.push(how);
+    }
+
+    (docs || []).forEach(function(d) {
+      if (!d) return;
+      if (exceptId != null && d.id === exceptId) return;
+      var type = d.diagramType;
+      if (type !== 'plantuml-sequence' && type !== 'plantuml-state') return;
+      var dslText = window.MA.dslUtils ? window.MA.dslUtils.docDsl(d) : _s(d.dsl);
+      if (!_s(dslText).trim()) return;
+      var name = _s(d.name);
+
+      if (type === 'plantuml-sequence') {
+        var seq = window.MA.modules && window.MA.modules.plantumlSequence;
+        if (!seq) return;
+        var p = seq.parse(dslText);
+        var parts = (p.elements || []).filter(function(e) { return e.kind === 'participant'; });
+        // この図の中の「自分」。名前の語が部品名と重なる参加者。
+        var self = null;
+        parts.forEach(function(e) {
+          if (self) return;
+          if (_shareToken(keyTokens(e.id), subjKeys) || _shareToken(keyTokens(e.label), subjKeys)) self = e;
+        });
+        // 図の名前が部品名と重ならず、自分も見つからないなら別部品の図。
+        if (!self && !_shareToken(keyTokens(name), subjKeys)) return;
+        var labelOf = {};
+        parts.forEach(function(e) { labelOf[e.id] = e.label || e.id; });
+        (p.relations || []).forEach(function(r) {
+          if (self && r.from !== self.id) return;
+          add(labelOf[r.to] || r.to, name, 'メッセージ');
+        });
+        return;
+      }
+
+      // 状態遷移図。状態の名前は部品の内部状態なので依存先にはならない。
+      // 見るのは action の呼び出し先だけ。
+      if (!_shareToken(keyTokens(name), subjKeys)) return;
+      var stm = window.MA.modules && window.MA.modules.plantumlState;
+      if (!stm) return;
+      var sp = stm.parse(dslText);
+      (sp.transitions || []).forEach(function(tr) {
+        _actionTargets(tr.action || tr.label).forEach(function(t) {
+          add(t, name, '遷移の動作');
+        });
+      });
+    });
+
+    return Object.keys(acc).map(function(k) { return acc[k]; })
+      .sort(function(a, b) { return b.count - a.count || a.name.localeCompare(b.name); });
+  }
+
   // チェックリスト本体。
-  // rows: この図に無い候補 (定石が先、実績が後)。present: 既にある定石。
-  function check(dsl, docs, exceptId) {
+  // rows: この図に無い候補 (実績が先、定石、他の図の順)。present: 既にある定石。
+  // 実績を先に置くのは、見比べずにチェックできる確かな候補だから。
+  function check(dsl, docs, exceptId, subject) {
     var names = namesIn(dsl);
     var rows = [];
     var present = [];
     var takenKeys = {};
+    var have = {};
+    names.forEach(function(n) { have[normName(n)] = true; });
+
+    // 実績。定石と同じ相手なら、定石の名前・理由も併せて 1 行にまとめる —
+    // 同じ依存が「実績」と「定石」で 2 行に割れると、どちらを押すか迷う。
+    var usageRows = [];
+    usageTargets(dsl, docs, exceptId, subject).forEach(function(t) {
+      var k = normName(t.name);
+      if (!k || have[k] || takenKeys[k]) return;
+      var entry = null;
+      for (var i = 0; i < CATALOG.length; i++) {
+        if (hasEntry([t.name], CATALOG[i])) { entry = CATALOG[i]; break; }
+      }
+      if (entry && hasEntry(names, entry)) return; // 表記違いで既に図にある
+      takenKeys[k] = true;
+      if (entry) {
+        [entry.name].concat(entry.aliases || []).forEach(function(a) {
+          var ak = normName(a);
+          if (ak) takenKeys[ak] = true;
+        });
+      }
+      usageRows.push({
+        key: 'use:' + t.name, source: 'usage', id: t.name,
+        name: entry ? entry.name : t.name,
+        label: entry ? entry.label : '',
+        relLabel: entry ? entry.label : '依存',
+        docs: t.docs,
+        why: 'この部品の ' + t.docs.join(' / ') + ' で '
+          + t.hows.join('・') + ' の相手になっています'
+          + (entry ? ' (' + entry.why + ')' : ''),
+      });
+    });
+    rows = rows.concat(usageRows);
 
     CATALOG.forEach(function(e) {
       var row = {
         key: 'cat:' + e.id, source: 'catalog', id: e.id, name: e.name,
         label: e.label, why: e.why, docs: [],
       };
+      var claimed = takenKeys[normName(e.name)]; // 実績が同じ相手を先に出している
       [e.name].concat(e.aliases || []).forEach(function(a) {
         var k = normName(a);
         if (k) takenKeys[k] = true;
       });
       if (hasEntry(names, e)) present.push(row);
-      else rows.push(row);
+      else if (!claimed) rows.push(row);
     });
-
-    var have = {};
-    names.forEach(function(n) { have[normName(n)] = true; });
 
     peerTargets(docs, exceptId).forEach(function(t) {
       var k = normName(t.name);
@@ -212,6 +367,7 @@ window.MA.componentDeps = (function() {
 
     return {
       rows: rows, present: present,
+      usageMissing: rows.filter(function(r) { return r.source === 'usage'; }).length,
       catalogMissing: rows.filter(function(r) { return r.source === 'catalog'; }).length,
       peerMissing: rows.filter(function(r) { return r.source === 'peer'; }).length,
     };
@@ -232,7 +388,8 @@ window.MA.componentDeps = (function() {
     if (!subj || !list.length) return '';
     var decl = list.map(function(r) { return 'component ' + _s(r.name).trim(); });
     var rel = list.map(function(r) {
-      return subj + ' ..> ' + _s(r.name).trim() + ' : ' + (r.source === 'peer' ? '依存' : r.label);
+      var lbl = r.relLabel || (r.source === 'peer' ? '依存' : r.label);
+      return subj + ' ..> ' + _s(r.name).trim() + ' : ' + lbl;
     });
     return decl.concat(rel).join('\n');
   }
@@ -244,6 +401,7 @@ window.MA.componentDeps = (function() {
       return '定石の依存先はすべて図にあります (' + res.present.length + ' 件)';
     }
     var parts = [];
+    if (res.usageMissing) parts.push('実際に呼んでいる相手 ' + res.usageMissing + ' 件');
     if (res.catalogMissing) parts.push('定石 ' + res.catalogMissing + ' 件');
     if (res.peerMissing) parts.push('他の図にあって無い依存 ' + res.peerMissing + ' 件');
     return '図に無い依存先: ' + parts.join(' / ')
@@ -260,6 +418,8 @@ window.MA.componentDeps = (function() {
     subjects: subjects,
     defaultSubject: defaultSubject,
     peerTargets: peerTargets,
+    keyTokens: keyTokens,
+    usageTargets: usageTargets,
     check: check,
     findRow: findRow,
     blockFor: blockFor,

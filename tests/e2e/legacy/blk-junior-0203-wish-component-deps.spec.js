@@ -25,6 +25,21 @@ const UART = [
   '@enduml',
 ].join('\n');
 
+// 同じ部品のシーケンス図。GpioDrv が実際に呼んでいる相手が書いてある。
+// Logger は定石に無い相手 — 一般論の 6 件だけでは絶対に出てこない。
+const GPIO_SEQ = [
+  '@startuml',
+  'title GpioDrv 初期化',
+  'participant GpioDrv',
+  'participant IRQCtrl',
+  'participant Board_Cfg',
+  'participant Logger',
+  'GpioDrv -> Board_Cfg : ピン割り当て取得',
+  'GpioDrv -> IRQCtrl : 割り込み設定依頼',
+  'GpioDrv -> Logger : 初期化完了を記録',
+  '@enduml',
+].join('\n');
+
 async function freshWorkspace(page) {
   await page.addInitScript(() => {
     try {
@@ -111,6 +126,48 @@ test.describe('BLK-junior-0203 定石の依存チェック (コンポーネン�
 
     // Power_Ctrl は定石にもあるので、二重には出ない。
     await expect(page.locator('#co-deps-list .co-dep-row').filter({ hasText: 'Power_Ctrl' })).toHaveCount(1);
+  });
+
+  // BLK-junior-20260909-0303-wish: 定石は題材によらず常に同じ 6 件なので、
+  // GPIO ドライバが本当にその依存を持つかは分からなかった。自分のシーケンス図で
+  // 実際に呼んでいる相手を別枠で出し、見比べずにチェックできるようにする。
+  test('同じ部品のシーケンス図で呼んでいる相手が「実際の呼び出し」として先に並ぶ', async ({ page }) => {
+    await gotoApp(page);
+    await page.locator('#diagram-type').selectOption('plantuml-sequence');
+    await page.waitForTimeout(500);
+    await typeDsl(page, GPIO_SEQ);
+    await page.locator('#btn-tab-new').click();
+    await page.locator('#diagram-type').selectOption('plantuml-component');
+    await page.waitForTimeout(500);
+    await typeDsl(page, GPIO);
+    await expect(page.locator('#tab-bar .tab')).toHaveCount(2);
+
+    const summary = page.locator('#co-deps-summary');
+    await expect(summary).toContainText('実際に呼んでいる相手');
+    await expect(summary).toHaveAttribute('data-usage-missing', '3');
+
+    const rows = page.locator('#co-deps-list .co-dep-row');
+    // 確かな候補が先。定石を読み飛ばして上から押せる。
+    await expect(rows.first()).toHaveAttribute('data-dep-source', 'usage');
+    const usage = page.locator('#co-deps-list .co-dep-row[data-dep-source="usage"]');
+    await expect(usage).toHaveCount(3);
+    await expect(usage.filter({ hasText: 'IrqCtrl' })).toHaveCount(1);
+    await expect(usage.filter({ hasText: 'Logger' })).toHaveCount(1);
+    // どの図で呼んでいるかが出るので、先輩の図を開き直さずに確かめられる。
+    await expect(usage.filter({ hasText: 'IrqCtrl' })).toContainText('メッセージ');
+    // 定石と同じ相手が 2 行に割れない。
+    await expect(rows.filter({ hasText: 'IrqCtrl' })).toHaveCount(1);
+    // 定石には無い相手も出る (一般論では絶対に出てこない)。
+    await expect(rows.filter({ hasText: 'Logger' })).toHaveCount(1);
+
+    await usage.filter({ hasText: 'Logger' }).locator('input').check();
+    await usage.filter({ hasText: 'IrqCtrl' }).locator('input').check();
+    await page.locator('#co-deps-add').click();
+
+    await expect.poll(async () => await getEditorText(page)).toContain('component Logger');
+    const dsl = await getEditorText(page);
+    expect(dsl).toMatch(/GpioDrv\s+\.\.>\s+Logger\s*:\s*依存/);
+    expect(dsl).toMatch(/GpioDrv\s+\.\.>\s+IrqCtrl\s*:\s*割り込み制御/);
   });
 
   test('定石が全部あれば欠け無しと言い、リストは出ない', async ({ page }) => {
