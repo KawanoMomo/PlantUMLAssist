@@ -7239,6 +7239,98 @@ function renderRenameImpact(docs, from) {
   box.appendChild(rows);
 }
 
+// BLK-primary-20260909-0103-wish: 影響プレビューは行を 1 つの役割に決めるので、
+// 「遷移の端点」と「遷移のイベント名」が同じ 1 本になる。壊れ方が違うのに同じ
+// 数字では、置換後に開いて確かめる図を絞れない。出現 1 個ずつを意味で呼び分け、
+// 役割ごとに参照元の図を並べ、押せばその行へ運ぶ。
+function renderRenameSemantic(docs, from) {
+  var box = document.getElementById('rename-semantic');
+  var SR = window.MA.semanticRefs;
+  if (!box || !SR) return;
+  box.textContent = '';
+  if (!from) return;
+
+  // 影響ボードと同じ図の集合 (開いているタブ + 保存フォルダにしか無い図)。
+  // 参照先は開いていない図にこそ残るので、開いているタブだけでは絞り込めない。
+  var all = _renameImpactDocs(from);
+  var res = SR.collect(all.length ? all : docs, from);
+  var head = document.createElement('div');
+  head.className = 'sr-head';
+  head.id = 'rename-semantic-head';
+  head.textContent = res.roles.length === 0
+    ? '「' + from + '」を参照している図はありません'
+    : from + ' の意味的な参照 ' + res.total + ' 件 / ' + res.roles.length + ' 種類';
+  head.setAttribute('data-sr-total', String(res.total));
+  head.setAttribute('data-sr-roles', String(res.roles.length));
+  head.setAttribute('data-sr-docs', String(res.docs));
+  box.appendChild(head);
+  if (res.roles.length === 0) return;
+
+  var sent = document.createElement('div');
+  sent.className = 'sr-sentence';
+  sent.id = 'rename-semantic-sentence';
+  sent.textContent = res.sentence;
+  box.appendChild(sent);
+
+  var rows = document.createElement('div');
+  rows.className = 'sr-rows';
+  rows.id = 'rename-semantic-rows';
+  res.roles.forEach(function(g) {
+    var item = document.createElement('div');
+    item.className = 'sr-role';
+    item.setAttribute('data-sr-role', g.role);
+    item.setAttribute('data-sr-count', String(g.count));
+    item.setAttribute('data-sr-docs', g.docs.join(','));
+    var line = document.createElement('div');
+    line.className = 'sr-role-name';
+    var n = document.createElement('span');
+    n.textContent = g.label;
+    var c = document.createElement('span');
+    c.className = 'sr-role-count';
+    c.textContent = g.count + ' ' + g.unit + ' / ' + g.docs.length + ' 図';
+    line.appendChild(n);
+    line.appendChild(c);
+    item.appendChild(line);
+    g.refs.forEach(function(r) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'sr-ref';
+      b.setAttribute('data-sr-doc', r.docName);
+      b.setAttribute('data-sr-line', String(r.line));
+      b.title = r.docName + ' (' + r.kindLabel + ') の ' + r.line + ' 行目へ移動';
+      var d = document.createElement('span');
+      d.className = 'sr-ref-doc';
+      d.textContent = r.docName;
+      var t = document.createElement('span');
+      t.className = 'sr-ref-text';
+      t.textContent = r.text.trim();
+      b.appendChild(d);
+      b.appendChild(t);
+      // 開いていない図は、まず開く (開いてからでないと行へは運べない)。
+      b.addEventListener('click', function() {
+        if (r.docId) jumpToDocLine(r.docId, r.line);
+        else openFromFolderByName(r.docName);
+      });
+      item.appendChild(b);
+    });
+    rows.appendChild(item);
+  });
+  box.appendChild(rows);
+
+  // 置換後に開いて確かめるべき図。ノートや題だけの図は挙げない
+  // (綴りが変わっても図の意味は変わらないため)。
+  var check = SR.docsToCheck(res);
+  var foot = document.createElement('div');
+  foot.className = 'sr-check';
+  foot.id = 'rename-semantic-check';
+  foot.setAttribute('data-sr-check', String(check.length));
+  foot.textContent = check.length === 0
+    ? '置換後に開いて確かめるべき図はありません'
+    : '置換後に開いて確かめる図 ' + check.length + ' 枚: '
+      + check.map(function(c) { return c.docName + ' (' + c.label + ')'; }).join('、');
+  box.appendChild(foot);
+}
+
 // 影響範囲プレビューの行から、その図のその行へ運ぶ。図を切り替えてから
 // エディタのキャレットを置くので、押した先で編集をそのまま続けられる。
 function jumpToDocLine(docId, line) {
@@ -8045,6 +8137,7 @@ function updateRenamePreview() {
   });
 
   renderRenameImpact(docs, from);
+  renderRenameSemantic(docs, from);
   renderSignatureApply(docs, from);
   renderRenameFolder();
   renderRenameHistory(from);
