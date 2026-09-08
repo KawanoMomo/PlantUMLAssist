@@ -348,6 +348,47 @@ function init() {
     return '+ DSL ' + target + ' 行目に挿入';
   }
 
+  // ── 矢印に乗せたときの相手表示 ──
+  // BLK-junior-20260908-1703: 同じ部品から出る点線が 2 本あると色も太さも同じで、
+  // 1 本クリックしては右パネルの From/To を読み、違えばもう 1 本、という当て物に
+  // なっていた。overlay の rect が持つ data-hint を、乗せた位置に出すだけ。
+  // 選択も再描画もしないので、目的の線が分かってからクリックすれば 1 回で当たる。
+  var edgeHintEl = document.getElementById('edge-hint');
+
+  function hideEdgeHint() {
+    if (!edgeHintEl) return;
+    edgeHintEl.hidden = true;
+    edgeHintEl.textContent = '';
+  }
+
+  function showEdgeHint(text, clientX, clientY) {
+    if (!edgeHintEl || !previewContainerForHover) return;
+    edgeHintEl.textContent = text;
+    edgeHintEl.hidden = false;
+    var box = previewContainerForHover.getBoundingClientRect();
+    // 線そのものを隠さないよう、カーソルの少し右下に置く。右端では左へ寄せる。
+    var x = clientX - box.left + previewContainerForHover.scrollLeft + 12;
+    var y = clientY - box.top + previewContainerForHover.scrollTop + 16;
+    var w = edgeHintEl.offsetWidth || 0;
+    if (x + w > previewContainerForHover.scrollLeft + box.width) {
+      x = Math.max(0, previewContainerForHover.scrollLeft + box.width - w - 4);
+    }
+    edgeHintEl.style.left = x + 'px';
+    edgeHintEl.style.top = y + 'px';
+  }
+
+  if (overlayElForHover && edgeHintEl) {
+    overlayElForHover.addEventListener('mousemove', function(e) {
+      var t = e.target;
+      var hint = t && t.getAttribute && t.getAttribute('data-hint');
+      if (!hint) { hideEdgeHint(); return; }
+      showEdgeHint(hint, e.clientX, e.clientY);
+    });
+    overlayElForHover.addEventListener('mouseleave', hideEdgeHint);
+    // 図を描き直すと rect ごと作り直されるので、残った吹き出しを消す。
+    overlayElForHover.addEventListener('click', hideEdgeHint);
+  }
+
   // 選択中は hover-insert ガイドと挿入 popup を両方抑制する。
   // 理由: 選択 = 編集モードでユーザーは選択項目を扱っており、別の箇所への
   // 挿入を示唆する点線ガイドは視覚ノイズになる。また空白クリックは選択解除に

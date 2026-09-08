@@ -4060,6 +4060,26 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   pointer-events: none;
 }
 
+/* ── 矢印に乗せたときの相手表示 (BLK-junior-20260908-1703) ──────────────────── */
+/* 同じ色・太さの線が複数あると、クリックして右パネルの From/To を読むまで
+   どれがどれか分からなかった。乗せた時点で相手を出し、当て物をなくす。 */
+#edge-hint {
+  position: absolute;
+  z-index: 30;
+  pointer-events: none;
+  max-width: 90%;
+  padding: 3px 8px;
+  border: 1px solid #7c8cf8;
+  border-radius: 3px;
+  background: rgba(20, 22, 34, 0.96);
+  color: #e6e8f0;
+  font-size: 11px;
+  font-family: 'IBM Plex Mono', monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* ── Participant drag-reorder (Sprint 10 C19) ─────────────────────────────── */
 .seq-drag-ghost {
   position: fixed;
@@ -4442,6 +4462,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <div id="preview-svg"></div>
         <svg id="overlay-layer" width="0" height="0"></svg>
         <svg id="hover-layer" width="0" height="0" style="position:absolute;top:16px;left:16px;pointer-events:none;transform-origin:0 0;"></svg>
+        <!-- 矢印に乗せたときの「From → To」。文言は core/edge-hint.js -->
+        <div id="edge-hint" hidden></div>
       </div>
       <!-- キャンバス上に浮くズーム帯 (design 1a)。中身は zoom-hud.js が描く -->
       <div id="zoom-hud" role="group" aria-label="ズーム"></div>
@@ -4893,6 +4915,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/selection.js"></script>
 <script src="src/core/connection-mode.js"></script>
 <script src="src/core/overlay-builder.js"></script>
+<script src="src/core/edge-hint.js"></script>
 <script src="src/core/selection-router.js"></script>
 <script src="src/core/relation-kind-cards.js"></script>
 <script src="src/core/review-pins.js"></script>
