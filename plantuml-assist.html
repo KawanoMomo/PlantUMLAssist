@@ -2660,6 +2660,31 @@ table.vault-table button.vault-open:hover { border-color: var(--accent); }
 #rename-impact .impact-line:hover { background: var(--bg-hover, rgba(127,127,127,0.15)); color: var(--text-primary); }
 #rename-impact .impact-line-no { min-width: 2.5em; text-align: right; opacity: 0.7; }
 #rename-impact .impact-line-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 意味的な参照 (役割ごとに参照元の図を並べる) */
+#rename-semantic { margin-top: 6px; font-size: 10px; }
+#rename-semantic .sr-head {
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 3px;
+  margin-bottom: 3px;
+}
+#rename-semantic .sr-sentence { color: var(--text-primary); padding-bottom: 3px; }
+#rename-semantic .sr-rows { max-height: 180px; overflow-y: auto; }
+#rename-semantic .sr-role { padding: 2px 0; }
+#rename-semantic .sr-role-name {
+  display: flex; justify-content: space-between; gap: 6px;
+  color: var(--accent);
+}
+#rename-semantic .sr-role-count { color: var(--text-secondary); white-space: nowrap; }
+#rename-semantic button.sr-ref {
+  display: flex; gap: 6px; width: 100%; text-align: left;
+  padding: 1px 0 1px 8px; cursor: pointer; background: none; border: none;
+  color: var(--text-secondary); font-family: var(--font-mono); font-size: 10px;
+}
+#rename-semantic button.sr-ref:hover { background: var(--bg-hover, rgba(127,127,127,0.15)); color: var(--text-primary); }
+#rename-semantic .sr-ref-doc { white-space: nowrap; }
+#rename-semantic .sr-ref-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#rename-semantic .sr-check { color: var(--text-secondary); padding-top: 3px; }
 /* シグネチャ変更 (戻り値型・引数) をまとめて当てる欄 */
 #rename-signature { margin-top: 6px; font-size: 10px; }
 #rename-signature .sig-head { color: var(--text-secondary); padding-bottom: 3px; }
@@ -4755,6 +4780,9 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <div id="rename-folder"></div>
         <!-- 置換を実行する前に、図種 × 関係の内訳で影響範囲を見る -->
         <div id="rename-impact"></div>
+        <!-- BLK-primary-20260909-0103-wish: 出現 1 個ずつを意味 (遷移イベント /
+             メソッド宣言 / 端点) で呼び分け、役割ごとに参照元の図を並べる -->
+        <div id="rename-semantic"></div>
         <!-- 綴りが変わらない仕様変更 (戻り値型・引数) を全図へ 1 回で当てる -->
         <div id="rename-signature"></div>
         <!-- BLK-primary-20260908-2103-wish: この部品名がいつ・どの図で改名されたか -->
@@ -5312,6 +5340,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/diagram-settings.js"></script>
 <script src="src/core/name-audit.js"></script>
 <script src="src/core/save-dir-handoff.js"></script>
+<script src="src/core/semantic-refs.js"></script>
 <script src="src/core/xref-graph.js"></script>
 <script src="src/core/method-audit.js"></script>
 <script src="src/core/template-new.js"></script>

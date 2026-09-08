@@ -12,6 +12,10 @@ const DIR = saveDirFor(__filename);
 const SPI = '@startuml\ntitle SPI 初期化\nparticipant SpiDrv\nparticipant Hal\nSpiDrv -> Hal : init\n@enduml';
 const SPI_STATE = '@startuml\n[*] --> Idle\nIdle --> Busy : SpiDrv.start\n@enduml';
 const ADC = '@startuml\ntitle ADC 初期化\nparticipant AdcDrv\nparticipant Hal\nAdcDrv -> Hal : init\n@enduml';
+// BLK-primary-20260909-0103-wish: 同じ綴りが「クラスのメソッド宣言・継承の端点」
+// 「状態遷移のイベント名」「シーケンスの participant」として現れる一式。
+// 文字列のヒット数ではこの 3 つが混ざるので、役割で分かれることを見る材料にする。
+const CLASS = '@startuml\nclass SpiDrv {\n  +SpiDrv_Start() : void\n}\nDriverBase <|-- SpiDrv\n@enduml';
 
 async function boot(page) {
   await page.addInitScript((d) => {
@@ -146,5 +150,81 @@ test.describe('primary 手順 4: 旧称が残っていないかを確かめる',
     await expect(page.locator('#rename-history-summary')).toHaveAttribute('data-rh-entries', '2');
     const first = page.locator('#rename-history-rows .rh-entry').first();
     await expect(first).toHaveAttribute('data-rh-from', 'AdcDrv');
+  });
+});
+
+// BLK-primary-20260909-0103-wish: 改名履歴と影響プレビューは「文字列としての
+// ヒット数」しか出さず、その名前がどの図の何 (状態遷移のイベント名 / クラスの
+// メソッド宣言 / シーケンスの participant) に効くかは種類別に出ない。
+// 置換後に開いて確かめる図を、意味的な参照の一覧から先に絞り込めることを見る。
+test.describe('primary 手順 4: 意味的な参照で確かめる図を絞る', () => {
+  test.beforeEach(async ({ page }) => {
+    await boot(page);
+    await clearDir(page);
+    await putFile(page, 'spi_init_sequence', SPI);
+    await putFile(page, 'spi_state', SPI_STATE);
+    await putFile(page, 'driver_common_class', CLASS);
+    await putFile(page, 'adc_init_sequence', ADC);
+    await page.waitForTimeout(500);
+    await page.reload();
+    await page.waitForSelector('#preview-svg');
+  });
+
+  test.afterEach(async ({ page }) => {
+    await clearDir(page).catch(() => {});
+  });
+
+  test('部品名を入れると、役割ごとに参照元の図が並ぶ', async ({ page }) => {
+    await openRename(page);
+    await page.fill('#rename-from', 'SpiDrv');
+    // 保存フォルダの読み込みは非同期。開いていない図まで数え終わるのを待つ。
+    const head = page.locator('#rename-semantic-head');
+    await expect(head).toBeVisible();
+    await expect(head).toHaveAttribute('data-sr-docs', '3');
+    // participant 宣言・呼び出しの相手・遷移イベント・継承の端点・メソッド宣言
+    await expect(page.locator('#rename-semantic-rows .sr-role[data-sr-role="decl"]')).toHaveCount(1);
+    await expect(page.locator('#rename-semantic-rows .sr-role[data-sr-role="event"]')).toHaveCount(1);
+    await expect(page.locator('#rename-semantic-rows .sr-role[data-sr-role="inherit"]')).toHaveCount(1);
+    await expect(page.locator('.sr-role[data-sr-role="event"]'))
+      .toHaveAttribute('data-sr-docs', 'spi_state');
+  });
+
+  test('「どの図の何から参照されているか」が 1 文で読める', async ({ page }) => {
+    await openRename(page);
+    await page.fill('#rename-from', 'SpiDrv');
+    await expect(page.locator('#rename-semantic-head')).toHaveAttribute('data-sr-docs', '3');
+    const sent = page.locator('#rename-semantic-sentence');
+    await expect(sent).toContainText('spi_state の遷移イベント');
+    await expect(sent).toContainText('driver_common_class');
+  });
+
+  test('置換後に開いて確かめる図を先に絞り込める（題・ノートだけの図は挙げない）', async ({ page }) => {
+    await openRename(page);
+    await page.fill('#rename-from', 'SpiDrv');
+    await expect(page.locator('#rename-semantic-head')).toHaveAttribute('data-sr-docs', '3');
+    const foot = page.locator('#rename-semantic-check');
+    await expect(foot).toHaveAttribute('data-sr-check', '3');
+    await expect(foot).toContainText('spi_state');
+    await expect(foot).not.toContainText('adc_init_sequence');
+  });
+
+  test('参照の行を押すとその図のその行へ運ばれる', async ({ page }) => {
+    await openRename(page);
+    await page.fill('#rename-from', 'SpiDrv');
+    await expect(page.locator('#rename-semantic-head')).toHaveAttribute('data-sr-docs', '3');
+    await page.locator('button.sr-ref[data-sr-doc="spi_state"]').first().click();
+    await page.waitForTimeout(700);
+    const name = await page.evaluate(() => {
+      const doc = window.MA.workspace.getActive();
+      return doc ? doc.name : '';
+    });
+    expect(name).toContain('spi_state');
+  });
+
+  test('参照が無い名前は黙らず「参照している図はありません」と出る', async ({ page }) => {
+    await openRename(page);
+    await page.fill('#rename-from', 'CanDrv');
+    await expect(page.locator('#rename-semantic-head')).toContainText('参照している図はありません');
+    await expect(page.locator('#rename-semantic-head')).toHaveAttribute('data-sr-total', '0');
   });
 });
