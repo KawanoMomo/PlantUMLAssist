@@ -5197,6 +5197,10 @@ function setupTabs() {
   // 今の一覧との突合結果。手順 1 の「14 枚あるか」を目で数えずに済ませる。
   var targetNames = [];
   var targetScan = null;
+  // BLK-junior-20260908-2003-wish: 棚卸しで見ている部品。null は「まだ選んでいない」で、
+  // このときだけ今開いている図の部品を自動で選ぶ。'' は「選択を外した」であり、
+  // 自動選択で埋め直さない (外したのに別の部品が出ると、見ている棚卸しを取り違える)。
+  var _invPick = null;
   // BLK-reviewer-20260908-0103: 図名 → SVG が puml に追いついているか。
   // `ls -l` で puml と svg を 1 枚ずつ突き合わせる代わりに、一覧が答える。
   var svgStatus = {};
@@ -5435,6 +5439,7 @@ function setupTabs() {
         panel.appendChild(folderFilterBar());
         panel.appendChild(folderPickBar());
         appendTargetSection(panel, dir);
+        appendInventorySection(panel);
         appendReviewSection(panel);
         appendRoleSection(panel, dir);
         appendSvgSection(panel, dir);
@@ -5461,6 +5466,7 @@ function setupTabs() {
       panel.appendChild(folderFilterBar());
       panel.appendChild(folderPickBar());
       appendTargetSection(panel, dir);
+      appendInventorySection(panel);
       appendReviewSection(panel);
       appendRoleSection(panel, dir);
       appendSvgSection(panel, dir);
@@ -6291,6 +6297,123 @@ function setupTabs() {
       bar.appendChild(off);
     }
     host.appendChild(bar);
+  }
+
+  // BLK-junior-20260908-2003-wish: 部品の図種の棚卸し。
+  // 資料化の周は「前周までに作った状態遷移図を開く」から始まるのに、その図が
+  // 実データに残っていないことがある。今は一覧のファイル名を読み比べて初めて
+  // 「無い」に気付くので、部品を選ぶと図種ごとに「あり (ファイル名) / なし」を
+  // 並べ、欠けを周の頭で言い切る。「なし」の行は開くものが無いのだから、
+  // ファイル名のボタンも出さない (押せないボタンで探させない)。
+  function appendInventorySection(host) {
+    var CI = window.MA.componentInventory;
+    if (!CI) return;
+    var records = CI.build(folderNames);
+
+    var bar = document.createElement('div');
+    bar.className = 'folder-inv-bar';
+    var pick = document.createElement('select');
+    pick.className = 'folder-inv-pick';
+    pick.id = 'folder-inv-pick';
+    pick.title = '部品を選ぶと、その部品の図種ごとの有無が出ます';
+    var none = document.createElement('option');
+    none.value = '';
+    none.textContent = records.length ? '部品を選ぶ…' : '部品を判別できる図がありません';
+    pick.appendChild(none);
+    records.forEach(function(r) {
+      var o = document.createElement('option');
+      o.value = r.component;
+      o.textContent = r.component + '（' + r.have + '/' + r.total + '）';
+      pick.appendChild(o);
+    });
+    // 選び直させない: まだ一度も選んでいなければ、今開いている図の部品を出す。
+    if (_invPick === null) {
+      var doc = window.MA.workspace ? window.MA.workspace.getActive() : null;
+      var auto = CI.pickFor(records, doc ? doc.name : '');
+      _invPick = auto ? auto.component : '';
+    }
+    var rec = _invPick ? CI.pick(records, _invPick) : null;
+    if (!rec) _invPick = '';
+    pick.value = _invPick;
+    pick.addEventListener('change', function(ev) {
+      ev.stopPropagation();
+      _invPick = pick.value;
+      renderFolderPanel();
+    });
+    bar.appendChild(pick);
+
+    var copy = document.createElement('button');
+    copy.type = 'button';
+    copy.className = 'folder-inv-copy';
+    copy.id = 'folder-inv-copy';
+    copy.textContent = '棚卸しを控える';
+    copy.title = '図種ごとの有無の表をクリップボードに写す。周の頭のメモにそのまま貼れます';
+    copy.disabled = !rec;
+    copy.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      if (!rec) return;
+      var text = CI.text(rec);
+      var done = function() { if (window.MA.toast) window.MA.toast.show(rec.component + ' の棚卸しを控えました'); };
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(done, done);
+          return;
+        }
+      } catch (e) {}
+      done();
+    });
+    bar.appendChild(copy);
+    host.appendChild(bar);
+
+    var line = document.createElement('div');
+    line.className = 'folder-inv-summary ' + CI.summaryClass(rec);
+    line.id = 'folder-inv-summary';
+    if (rec) {
+      line.setAttribute('data-inv-component', rec.component);
+      line.setAttribute('data-inv-have', String(rec.have));
+      line.setAttribute('data-inv-total', String(rec.total));
+      line.setAttribute('data-inv-missing', String(rec.missing.length));
+    }
+    line.textContent = CI.summary(rec);
+    host.appendChild(line);
+    if (!rec) return;
+
+    rec.rows.forEach(function(r) {
+      var row = document.createElement('div');
+      row.className = 'folder-inv-row ' + (r.present ? 'inv-have' : 'inv-miss');
+      row.setAttribute('data-inv-kind', r.kind);
+      row.setAttribute('data-inv-present', r.present ? '1' : '0');
+      var kind = document.createElement('span');
+      kind.className = 'folder-inv-kind';
+      kind.textContent = r.kind;
+      row.appendChild(kind);
+      var mark = document.createElement('span');
+      mark.className = 'folder-inv-mark';
+      mark.textContent = r.present ? 'あり' : 'なし';
+      row.appendChild(mark);
+      r.files.forEach(function(f) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'folder-inv-file';
+        b.setAttribute('data-inv-file', f);
+        b.textContent = f;
+        b.title = f + ' を開く';
+        b.addEventListener('click', function(ev) {
+          ev.stopPropagation();
+          openFromFolder(f);
+        });
+        row.appendChild(b);
+      });
+      host.appendChild(row);
+    });
+
+    if (rec.unknown.length) {
+      var un = document.createElement('div');
+      un.className = 'folder-inv-unknown';
+      un.id = 'folder-inv-unknown';
+      un.textContent = '図種が名前から分からない図: ' + rec.unknown.join(' / ');
+      host.appendChild(un);
+    }
   }
 
   // 行ごとの「対象 / 対象にする」。取り直しをせずに 1 枚だけ足す / 外せる。
