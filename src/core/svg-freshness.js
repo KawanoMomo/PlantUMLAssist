@@ -32,6 +32,38 @@ window.MA.svgFreshness = (function() {
     return svg >= puml ? 'fresh' : 'stale';
   }
 
+  // ── 内容での判定 (BLK-reviewer-20260908-1103) ─────────────────────────────
+  // mtime の比較は「puml が svg より後に触られたか」しか見ていない。保存し直しただけで
+  // 中身は追いついている図と、前々回の編集から追いついていない図が、同じ「古い」に見える。
+  // 実際、mtime が古いと出た 16 枚のうち中身まで食い違っていたのは 7 枚だけで、
+  // 残り 9 枚を確かめるのに 1 枚ずつ再描画して diff を取る手作業が要った。
+  // server は svg を書き出すとき、その元になった puml の sha1 を svg の末尾に刻む
+  // (entry.svgSource)。ここはその印と今の puml の sha1 (entry.hash) を突き合わせる。
+  //   match      — この svg は今の puml から作られている (mtime が古くても中身は一致)
+  //   differ     — 別の内容の puml から作られている (作り直しが要る。確実)
+  //   missing    — svg が無い
+  //   unverified — 印が無い。印を刻む前に書き出した svg なので内容では言えない
+  function contentOf(entry) {
+    if (!entry) return 'unverified';
+    if (_time(entry.svgMtime) === null) return 'missing';
+    var stamp = entry.svgSource;
+    if (typeof stamp !== 'string' || stamp === '') return 'unverified';
+    var hash = entry.hash;
+    if (typeof hash !== 'string' || hash === '') return 'unverified';
+    return stamp === hash ? 'match' : 'differ';
+  }
+
+  var CONTENT_BADGES = {
+    match: { mark: '内容一致', title: 'この SVG は今の puml から作られています (中身で確かめました)' },
+    differ: { mark: '内容ずれ', title: 'この SVG は別の内容の puml から作られています。作り直しが要ります' },
+    missing: { mark: 'SVG 無', title: 'この図の SVG が保存フォルダにありません' },
+    unverified: { mark: '内容未確認', title: '元の puml の印が無く、中身が一致するかは分かりません。作り直すと印が付きます' },
+  };
+
+  function contentBadge(content) {
+    return CONTENT_BADGES[content] || CONTENT_BADGES.unverified;
+  }
+
   var BADGES = {
     fresh: { mark: '', title: 'SVG は今の puml から作られています' },
     stale: { mark: 'SVG 古', title: 'SVG が puml より古い。作り直すまでは前のレイアウトです' },
@@ -46,16 +78,26 @@ window.MA.svgFreshness = (function() {
   // 一覧ぶんの判定。作り直しが要るものを needsRender にまとめる。
   function scan(entries) {
     var rows = (Array.isArray(entries) ? entries : []).map(function(e) {
-      return { name: e && e.name, status: statusOf(e), mtime: e && e.mtime, svgMtime: e && e.svgMtime };
+      return {
+        name: e && e.name, status: statusOf(e), content: contentOf(e),
+        mtime: e && e.mtime, svgMtime: e && e.svgMtime,
+      };
     }).filter(function(r) { return typeof r.name === 'string' && r.name !== ''; });
     var counts = { fresh: 0, stale: 0, missing: 0, unknown: 0 };
-    rows.forEach(function(r) { counts[r.status]++; });
+    var contentCounts = { match: 0, differ: 0, missing: 0, unverified: 0 };
+    rows.forEach(function(r) { counts[r.status]++; contentCounts[r.content]++; });
     return {
       rows: rows,
       counts: counts,
+      contentCounts: contentCounts,
       // unknown は作り直しても「分からない」が消える保証が無いが、作り直せば
       // 必ず今の内容になるので対象に入れる。
-      needsRender: rows.filter(function(r) { return r.status !== 'fresh'; })
+      // 内容で一致が取れている図は、mtime が古くても作り直す必要が無いので外す
+      // (BLK-reviewer-20260908-1103: ここで 16 枚が 7 枚に減る)。
+      needsRender: rows.filter(function(r) { return r.status !== 'fresh' && r.content !== 'match'; })
+        .map(function(r) { return r.name; }),
+      // 内容で言い切るために作り直しが要る図。印の無い図も入る。
+      needsProof: rows.filter(function(r) { return r.content !== 'match'; })
         .map(function(r) { return r.name; }),
     };
   }
@@ -92,12 +134,46 @@ window.MA.svgFreshness = (function() {
   function shortfall(scanned) {
     var rows = (scanned && scanned.rows) || [];
     var out = [];
+    // mtime では見つからない食い違い。svg の方が新しいのに、別の内容の puml から
+    // 作られている図 — 時刻だけを見ていた頃は「追いついている」と読み違えていた。
+    var differ = rows.filter(function(r) { return r.content === 'differ' && r.status === 'fresh'; })
+      .map(function(r) { return r.name; });
+    if (differ.length) {
+      out.push({
+        status: 'differ', label: 'SVG の内容が古い',
+        title: 'この SVG は別の内容の puml から作られています。作り直すまでは前のレイアウトです',
+        names: differ,
+      });
+    }
+    // 内容で一致が取れた図は、mtime が古くても読める図なので名前を出さない
+    // (出すと「直すもの」の一覧に、直す必要の無い図が毎回混ざる)。
     SHORTFALL.forEach(function(g) {
-      var names = rows.filter(function(r) { return r.status === g.status; })
+      var names = rows.filter(function(r) { return r.status === g.status && r.content !== 'match'; })
         .map(function(r) { return r.name; });
       if (names.length) out.push({ status: g.status, label: g.label, title: g.title, names: names });
     });
     return out;
+  }
+
+  // 内容での 1 行。mtime の要約 (summary) とは別に出す — 見ているものが違う。
+  function contentSummary(scanned) {
+    if (!scanned || !scanned.rows.length) return '';
+    var c = scanned.contentCounts || { match: 0, differ: 0, missing: 0, unverified: 0 };
+    if (c.differ === 0 && c.missing === 0 && c.unverified === 0) {
+      return '内容: ' + c.match + ' 枚とも今の puml から作られています';
+    }
+    var parts = [];
+    if (c.match) parts.push('一致 ' + c.match + ' 枚');
+    if (c.differ) parts.push('ずれ ' + c.differ + ' 枚');
+    if (c.missing) parts.push('SVG 無 ' + c.missing + ' 枚');
+    if (c.unverified) parts.push('未確認 ' + c.unverified + ' 枚');
+    return '内容: ' + parts.join(' / ');
+  }
+
+  // 内容で言い切れるようにするボタンの文言。
+  function proofLabel(scanned) {
+    var n = (scanned && scanned.needsProof && scanned.needsProof.length) || 0;
+    return n === 0 ? '内容はすべて確かめてあります' : '内容を確かめる（' + n + ' 枚を作り直す）';
   }
 
   // 作り直しボタンの文言。0 枚なら押させない。
@@ -106,13 +182,24 @@ window.MA.svgFreshness = (function() {
     return n === 0 ? '古い SVG はありません' : '古い SVG を作り直す（' + n + ' 枚）';
   }
 
+  function contentMap(scanned) {
+    var out = {};
+    ((scanned && scanned.rows) || []).forEach(function(r) { out[r.name] = r.content; });
+    return out;
+  }
+
   return {
     statusOf: statusOf,
+    contentOf: contentOf,
     badge: badge,
+    contentBadge: contentBadge,
     scan: scan,
     statusMap: statusMap,
+    contentMap: contentMap,
     summary: summary,
+    contentSummary: contentSummary,
     shortfall: shortfall,
     renderLabel: renderLabel,
+    proofLabel: proofLabel,
   };
 })();

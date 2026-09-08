@@ -510,7 +510,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         svg_path = puml_path.with_suffix('.svg')
         try:
-            svg_path.write_text(svg, encoding='utf-8')
+            svg_path.write_text(svg + self._svg_stamp(puml_path), encoding='utf-8')
         except OSError as e:
             self._send_json(500, {'error': f'write failed: {e}'})
             return
@@ -519,6 +519,48 @@ class Handler(BaseHTTPRequestHandler):
         except OSError:
             mtime = None
         self._send_json(200, {'ok': True, 'path': str(svg_path), 'svgMtime': mtime})
+
+    # BLK-reviewer-20260908-1103: mtime 比較だけでは「svg が今の puml から作られたか」は
+    # 分からない (保存し直しただけで中身は追いついている図と、前々回の編集から
+    # 追いついていない図が同じ「古い」に見える)。書き出した svg の末尾に、その時の
+    # puml の sha1 を 1 行だけ刻む。以後は一覧がこの印と今の puml の sha1 を突き合わせ、
+    # 内容の一致・不一致を言い切れる (再描画して diff を取る手作業が要らなくなる)。
+    SVG_STAMP_PREFIX = '<!-- @pua-source-sha1 '
+    SVG_STAMP_SUFFIX = ' -->'
+
+    @classmethod
+    def _svg_stamp(cls, puml_path):
+        """svg の末尾に付ける印。puml が読めなければ印を付けない (嘘を刻まない)。"""
+        try:
+            digest = hashlib.sha1(puml_path.read_bytes()).hexdigest()
+        except OSError:
+            return ''
+        return '\n' + cls.SVG_STAMP_PREFIX + digest + cls.SVG_STAMP_SUFFIX + '\n'
+
+    @classmethod
+    def _read_svg_stamp(cls, svg_path):
+        """svg の末尾から sha1 の印を読む。無ければ None。
+
+        末尾 200 バイトだけを読む — 図が大きくても一覧の生成が遅くならないように。
+        """
+        try:
+            with open(svg_path, 'rb') as f:
+                try:
+                    f.seek(-200, 2)
+                except OSError:
+                    f.seek(0)
+                tail = f.read().decode('utf-8', 'replace')
+        except OSError:
+            return None
+        at = tail.rfind(cls.SVG_STAMP_PREFIX)
+        if at < 0:
+            return None
+        rest = tail[at + len(cls.SVG_STAMP_PREFIX):]
+        end = rest.find(cls.SVG_STAMP_SUFFIX)
+        if end < 0:
+            return None
+        digest = rest[:end].strip()
+        return digest if len(digest) == 40 and all(c in '0123456789abcdef' for c in digest) else None
 
     def _handle_file_roles_post(self):
         """保存フォルダの _roles.json を丸ごと置き換える。
@@ -630,10 +672,13 @@ class Handler(BaseHTTPRequestHandler):
         svg の最終更新時刻もここで返す (無ければ None)。
         """
         entry = {'name': path.stem, 'mtime': None, 'size': None, 'hash': None,
-                 'svgMtime': None, 'pins': None}
+                 'svgMtime': None, 'svgSource': None, 'pins': None}
+        svg_path = path.with_suffix('.svg')
         try:
-            svg_st = path.with_suffix('.svg').stat()
+            svg_st = svg_path.stat()
             entry['svgMtime'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(svg_st.st_mtime))
+            # BLK-reviewer-20260908-1103: この svg がどの puml から作られたか。
+            entry['svgSource'] = self._read_svg_stamp(svg_path)
         except OSError:
             pass
         try:

@@ -663,6 +663,13 @@ html, body {
   white-space: nowrap;
 }
 #folder-panel .folder-svg-badge.svg-unknown { border-color: var(--text-secondary); color: var(--text-secondary); }
+/* 内容での判定 (BLK-reviewer-20260908-1103)。mtime の「古い」より強い印 —
+   こちらは中身を突き合わせた結果なので、作り直しが要ることが確実に分かる。 */
+#folder-panel .folder-svg-badge.svg-differ {
+  border-color: var(--accent-red); color: var(--accent-red); font-weight: bold;
+}
+#folder-panel .folder-svg-names.svg-differ .folder-svg-names-label { color: var(--accent-red); }
+#folder-panel .folder-svg-names.svg-differ button.folder-svg-name { border-color: var(--accent-red); }
 #folder-panel .folder-svg-summary {
   font-size: 10px;
   color: var(--text-secondary);
@@ -682,6 +689,23 @@ html, body {
 }
 #folder-panel .folder-svg-names.svg-missing button.folder-svg-name { border-color: var(--accent-red); }
 #folder-panel button.folder-svg-name:hover { border-color: var(--accent); }
+/* 内容での 1 行と、内容を確かめるボタン (BLK-reviewer-20260908-1103) */
+#folder-panel .folder-svg-content {
+  font-size: 10px;
+  color: var(--text-secondary);
+  padding: 0 6px 2px;
+}
+#folder-panel .folder-svg-content.has-stale { color: var(--accent-red); }
+#folder-panel .folder-svg-content-badge {
+  font-size: 9px;
+  border: 1px solid var(--accent-red);
+  color: var(--accent-red);
+  font-weight: bold;
+  border-radius: 2px;
+  padding: 0 3px;
+  white-space: nowrap;
+}
+#folder-panel button.folder-svg-proof-btn,
 #folder-panel button.folder-svg-render {
   border: 1px solid var(--border);
   border-radius: 3px;
