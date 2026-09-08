@@ -1907,6 +1907,38 @@ html, body {
 #cpack-preview { padding: 6px 14px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-secondary); max-height: 22vh; overflow-y: auto; }
 #cpack-preview div { padding: 1px 0; }
 #cpack-state { padding: 8px 14px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-secondary); min-height: 16px; }
+/* 1 枚を資料化 (BLK-junior-20260908-2303-wish) */
+#mexp-modal-content {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  width: 52vw;
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+}
+#mexp-head {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px; border-bottom: 1px solid var(--border);
+  font-size: 12px; color: var(--text-primary);
+}
+#mexp-tools { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+#mexp-tools button {
+  border: 1px solid var(--border); background: var(--bg-tertiary); color: var(--text-primary);
+  border-radius: 3px; cursor: pointer; font-size: 11px; padding: 3px 10px; white-space: nowrap;
+}
+#mexp-tools #mexp-run { border-color: var(--accent); color: var(--accent); }
+#mexp-tools #mexp-run[disabled] { opacity: 0.5; cursor: default; border-color: var(--border); color: var(--text-secondary); }
+#mexp-body { padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; }
+#mexp-body label.mexp-field {
+  display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-primary);
+}
+#mexp-body label.mexp-field select {
+  flex: 1; background: var(--bg-tertiary); color: var(--text-primary);
+  border: 1px solid var(--border); border-radius: 3px; font-size: 12px; padding: 3px 6px;
+}
+#mexp-plan { padding: 6px 14px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-secondary); }
+#mexp-state { padding: 8px 14px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-secondary); min-height: 16px; }
 /* 変更サマリボード (BLK-primary-20260907-0923-wish) */
 .board-modal {
   background: var(--bg-secondary);
@@ -4489,6 +4521,10 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <!-- BLK-junior-20260908-1903-wish: 設計書に貼る資料は「同じ部品の全図種」で 1 組。
              保存フォルダから部品ごとに図を集め、図番号を振った PNG セットにして 1 回で出す -->
         <button id="exp-png-pack" title="保存フォルダから同じ部品の図を全図種まとめ、図番号を振った PNG セット（zip）にして書き出す">部品の図をまとめて資料化（PNG）…</button>
+        <!-- BLK-junior-20260908-2303-wish: 1 枚ぶんの資料化。図種ごとに決まっている
+             形式 (状態遷移図=SVG / 他=PNG透過) を利用者に覚えさせず、部品と図種を
+             選ぶだけで 題名の(資料用)・書き出し・保存・提出物庫への控えまでを 1 回で行う -->
+        <button id="exp-material" title="部品と図種を選ぶと、その図種に決まっている形式で書き出し、題名に（資料用）を付けて保存フォルダと提出物庫にも入れる">1 枚を資料化（形式は図種で自動）…</button>
       </div>
       <div id="bulk-export-status" role="status"></div>
     </div>
@@ -5170,6 +5206,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/bulk-apply.js"></script>
 <script src="src/core/bulk-export.js"></script>
 <script src="src/core/component-pack.js"></script>
+<script src="src/core/material-export.js"></script>
 <script src="src/core/rename-history.js"></script>
 <script src="src/core/vault.js"></script>
 <script src="src/core/component-inventory.js"></script>
@@ -5441,6 +5478,29 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <div id="cpack-body"></div>
     <div id="cpack-preview" role="status"></div>
     <div id="cpack-state" role="status"></div>
+  </div>
+</div>
+<!-- 1 枚を資料化 (BLK-junior-20260908-2303-wish) -->
+<div id="mexp-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+  <div id="mexp-modal-content">
+    <div id="mexp-head">
+      <strong>資料化</strong>
+      <span id="mexp-count" role="status"></span>
+      <span id="mexp-tools">
+        <button type="button" id="mexp-run" disabled>資料化する</button>
+        <button type="button" id="mexp-close">閉じる</button>
+      </span>
+    </div>
+    <div id="mexp-body">
+      <label class="mexp-field">部品
+        <select id="mexp-component"></select>
+      </label>
+      <label class="mexp-field">図種
+        <select id="mexp-kind"></select>
+      </label>
+    </div>
+    <div id="mexp-plan" role="status">部品と図種を選ぶと、書き出す形式と名前がここに出ます。</div>
+    <div id="mexp-state" role="status"></div>
   </div>
 </div>
 <!-- 監査履歴 (BLK-reviewer-20260907-2303-wish) -->
