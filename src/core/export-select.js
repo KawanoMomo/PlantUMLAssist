@@ -13,8 +13,9 @@ window.MA = window.MA || {};
 // このモジュールは DOM も localStorage も見ない。描画は app.js の職掌。
 window.MA.exportSelect = (function() {
 
-  var MODES = ['all', 'changed', 'fix'];
-  var MODE_LABEL = { all: '全部', changed: '変更図のみ', fix: '要修正のみ' };
+  var MODES = ['all', 'changed', 'fix', 'since'];
+  var MODE_LABEL = { all: '全部', changed: '変更図のみ', fix: '要修正のみ',
+                     since: '前回書き出しから変わった図のみ' };
 
   function normalizeMode(mode) {
     return MODES.indexOf(mode) >= 0 ? mode : 'all';
@@ -22,13 +23,18 @@ window.MA.exportSelect = (function() {
 
   // buildList(docs, deps) — 開いている図を 1 行 1 図の候補にする。
   // deps.statusOf(name, dsl) は save-diff の statusOf ('new' / 'changed' / 'same')。
-  // deps.fixCountOf(name) は review-verdicts の [要修正] 件数。どちらも無ければ
+  // deps.sinceStatusOf(name, dsl) は export-log の statusOf (前回この zip を
+  // 書き出した時点との差)。save-diff の「前回保存から」とは基準が違う
+  // (BLK-primary-20260909-0003-wish: 客先に出した版からの差でなければ、
+  //  出し直す図を絞れない)。
+  // deps.fixCountOf(name) は review-verdicts の [要修正] 件数。どれも無ければ
   // 「基準が分からない」ものとして status='new'、fix=0 として扱う (絞り込みで
   //  黙って落とさない。落とすと提出物から図が欠ける)。
   function buildList(docs, deps) {
     var d = deps || {};
     var statusOf = (typeof d.statusOf === 'function') ? d.statusOf : function() { return 'new'; };
     var fixOf = (typeof d.fixCountOf === 'function') ? d.fixCountOf : function() { return 0; };
+    var sinceOf = (typeof d.sinceStatusOf === 'function') ? d.sinceStatusOf : function() { return 'new'; };
     var out = [];
     (Array.isArray(docs) ? docs : []).forEach(function(doc) {
       if (!doc || typeof doc.dsl !== 'string' || doc.dsl.trim() === '') return;   // 空の図は書き出せない
@@ -36,10 +42,14 @@ window.MA.exportSelect = (function() {
       var status = statusOf(name, doc.dsl);
       if (status !== 'changed' && status !== 'same') status = 'new';
       var fix = Number(fixOf(name)) || 0;
+      var since = sinceOf(name, doc.dsl);
+      if (since !== 'changed' && since !== 'same') since = 'new';
       out.push({
         id: doc.id, name: name, dsl: doc.dsl,
         diagramType: doc.diagramType || '',
         status: status,
+        sinceStatus: since,
+        sinceChanged: since !== 'same',
         changed: status !== 'same',
         fix: fix < 0 ? 0 : fix,
         selected: true,
@@ -56,6 +66,7 @@ window.MA.exportSelect = (function() {
     switch (normalizeMode(mode)) {
       case 'changed': return !!item.changed;
       case 'fix': return item.fix > 0;
+      case 'since': return !!item.sinceChanged;
       default: return true;
     }
   }
@@ -90,12 +101,13 @@ window.MA.exportSelect = (function() {
   }
 
   function counts(list) {
-    var out = { total: 0, selected: 0, changed: 0, fix: 0 };
+    var out = { total: 0, selected: 0, changed: 0, fix: 0, sinceChanged: 0 };
     (Array.isArray(list) ? list : []).forEach(function(it) {
       if (!it) return;
       out.total++;
       if (it.selected) out.selected++;
       if (it.changed) out.changed++;
+      if (it.sinceChanged) out.sinceChanged++;
       if (it.fix > 0) out.fix++;
     });
     return out;

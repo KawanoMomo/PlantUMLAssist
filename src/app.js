@@ -12701,6 +12701,63 @@ var _dpFolderDir = null; // 読み込み済みのフォルダ。開き直すた�
 var _dpLoading = false;
 var _dpSeq = 0;
 
+// BLK-primary-20260909-0003-wish: 「前回いつ・どの版を客先に出したか」の控えは
+// 保存フォルダに置く (localStorage だけだと開き直すたびに消え、同じフォルダで
+// 何度出しても毎回「初回提出 (23 枚すべて新規)」になっていた)。
+// ここは読み込んだ控えを持つだけ。判定は src/core/export-log.js の職掌。
+var _elLog = null;        // 保存フォルダの控え。null は「まだ読んでいない」
+var _elDir = null;        // その控えを読んだフォルダ
+
+function _elHas(channel) {
+  var EL = window.MA.exportLog;
+  return !!(EL && _elLog && EL.latest(_elLog, channel).at);
+}
+
+// 前回書き出しの控えを保存フォルダから読む。フォルダ運用でなければ何もしない。
+function _elLoad() {
+  var WS = window.MA.workspace;
+  var EL = window.MA.exportLog;
+  if (!WS || !EL || !WS.listFolder || !_fiFolderMode()) return Promise.resolve(null);
+  var dir = _wsFileDir();
+  return WS.listFolder(dir).then(function(info) {
+    _elLog = EL.parse((info && info.exportLog) || null);
+    _elDir = dir;
+    return _elLog;
+  }, function() { return null; });
+}
+
+// 控えに 1 件足してフォルダに書き戻す。書けなくても書き出し自体は成り立つ。
+function _elRecord(channel, entry) {
+  var WS = window.MA.workspace;
+  var EL = window.MA.exportLog;
+  if (!EL) return Promise.resolve(null);
+  _elLog = EL.record(_elLog || EL.empty(), channel, entry);
+  if (!WS || !WS.saveExportLog || !_fiFolderMode()) return Promise.resolve(_elLog);
+  return WS.saveExportLog(_elLog, _wsFileDir()).then(function() { return _elLog; },
+                                                     function() { return _elLog; });
+}
+
+// 前回提出時点の DSL。フォルダの控えがあればそれが基準、無ければ localStorage の控え。
+function _dpBaselineOf(name) {
+  var EL = window.MA.exportLog;
+  var DP = window.MA.deliveryPackage;
+  if (EL && _elHas('delivery')) return EL.baselineOf(_elLog, 'delivery', name);
+  return DP ? DP.baselineOf(name) : null;
+}
+
+// 前回提出の見出し。フォルダの控えを localStorage より優先する。
+function _dpLastDelivery() {
+  var EL = window.MA.exportLog;
+  var DP = window.MA.deliveryPackage;
+  if (EL && _elHas('delivery')) {
+    var e = EL.latest(_elLog, 'delivery');
+    return { title: e.title, revision: e.revision, at: e.at, count: e.count, file: e.file };
+  }
+  var l = DP ? DP.lastDelivery() : { title: '', revision: '', at: '', count: 0 };
+  l.file = '';
+  return l;
+}
+
 // 開いているタブ + 保存フォルダ。判定は delivery-package.candidates の職掌。
 function _dpCandidates() {
   var DP = window.MA.deliveryPackage;
@@ -12739,6 +12796,12 @@ function _dpLoadFolder() {
       }, function() { return null; });
     })).then(function(docs) {
       if (seq !== _dpSeq) return false;
+      // 図の一覧と同じ呼び出しで控えも受け取る (別呼び出しにすると
+      // 「初回提出」と出したあとで履歴が現れる、という見え方になる)。
+      if (window.MA.exportLog) {
+        _elLog = window.MA.exportLog.parse((info && info.exportLog) || null);
+        _elDir = dir;
+      }
       _dpFileDocs = docs.filter(function(d) { return d; });
       _dpRoles = roles;
       _dpFolderDir = dir;
@@ -12759,13 +12822,36 @@ function _dpBoard(docs) {
   var DP = window.MA.deliveryPackage;
   if (!CB || !DP) return null;
   // 提出物の一覧なので、変わっていない図も「変更なし」と書いて並べる。
-  return CB.build(docs, DP.baselineOf, { includeSame: true, collapse: true, context: 0 });
+  return CB.build(docs, _dpBaselineOf, { includeSame: true, collapse: true, context: 0 });
 }
 
 function _dpSubmitResult(docs) {
   var SC = window.MA.submitCheck;
   if (!SC) return null;
   return SC.check(docs, SC.parseDict(_scLoadDict()));
+}
+
+// 納品履歴の節。保存フォルダの控えにある提出を新しい順に出す。
+// 「過去に何度も同じフォルダで作っているのに前回が分からない」を無くすための一覧。
+function _dpHistoryHtml(esc) {
+  var EL = window.MA.exportLog;
+  var list = EL ? EL.entries(_elLog, 'delivery') : [];
+  var html = '<div id="dp-history" data-count="' + list.length
+    + '" style="margin-top:8px;font-size:11px;color:var(--text-secondary);'
+    + 'border:1px solid var(--border);border-radius:3px;padding:6px;">'
+    + '<div style="font-size:10px;color:var(--accent);font-weight:bold;">納品履歴（このフォルダ）</div>';
+  if (list.length === 0) {
+    html += '<div class="dp-hist-row">このフォルダからの提出はまだ記録されていません</div>';
+  } else {
+    list.slice(0, 5).forEach(function(e, i) {
+      html += '<div class="dp-hist-row"' + (i === 0 ? ' data-latest="1"' : '') + '>'
+        + esc((i === 0 ? '前回 ' : '') + EL.historyLine(e, 'delivery')) + '</div>';
+    });
+    if (list.length > 5) {
+      html += '<div class="dp-hist-row">ほか ' + esc(String(list.length - 5)) + ' 件</div>';
+    }
+  }
+  return html + '</div>';
 }
 
 function renderDeliveryPanel() {
@@ -12777,7 +12863,7 @@ function renderDeliveryPanel() {
   if (!_dpDocs) _dpDocs = DP.defaultPicks(all);
   var picked = _dpSelectedDocs();
   var cover = DP.coverage(all, _dpDocs);
-  var last = DP.lastDelivery();
+  var last = _dpLastDelivery();
   var submit = _dpSubmitResult(picked);
   var board = _dpBoard(picked);
   var change = DP.changeSection(board, last);
@@ -12794,8 +12880,12 @@ function renderDeliveryPanel() {
   var html = '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">\u{1F4E6} 納品パッケージ</h3>'
     + '<div id="dp-last" style="font-size:11px;color:var(--text-secondary);">'
     + esc(last.at ? '前回提出 ' + (last.revision || '版数なし') + ' ・ ' + last.at.replace('T', ' ').slice(0, 16)
-                  + ' ・ ' + last.count + ' 枚'
+                  + ' ・ ' + last.count + ' 枚' + (last.file ? ' ・ ' + last.file : '')
                 : 'まだ 1 度も提出していません（今回が初回提出になります）') + '</div>';
+
+  // 納品履歴。「前回いつ・どの版を出したか」は表紙の材料であり、
+  // 次に確かめる図を絞る基準でもあるので、対象を選ぶ前に見せる。
+  html += _dpHistoryHtml(esc);
 
   html += '<div style="display:flex;gap:12px;margin-top:10px;">'
     + '<label style="flex:2;font-size:10px;color:var(--accent);font-weight:bold;">タイトル'
@@ -12809,7 +12899,12 @@ function renderDeliveryPanel() {
     + esc(picked.length + ' / ' + all.length + ' 枚') + '</span>'
     + (_dpLoading ? ' <span id="dp-loading" style="color:var(--text-secondary);font-weight:normal;">保存フォルダを読んでいます…</span>' : '')
     + ' <button type="button" id="dp-all" style="' + BTN + 'padding:1px 8px;">全部</button>'
-    + ' <button type="button" id="dp-none" style="' + BTN + 'padding:1px 8px;">全部外す</button></div>';
+    + ' <button type="button" id="dp-none" style="' + BTN + 'padding:1px 8px;">全部外す</button>'
+    // 前回提出からの差分だけを見る。23 枚全部の要確認を毎回目視する代わりに、
+    // 「前回提出以降に変わった図」だけを対象に絞れるようにする。
+    + ' <button type="button" id="dp-changed" style="' + BTN + 'padding:1px 8px;"'
+    + (_elHas('delivery') ? '' : ' disabled title="まだ 1 度も提出していません"')
+    + '>前回提出から変わった図だけ</button></div>';
   // 欠落の警告。枚数を数えなくても「9 枚落ちる」と読めるようにする。
   html += '<div id="dp-coverage" data-warn="' + (cover.warn ? '1' : '0')
     + '" data-total="' + cover.total + '" data-picked="' + cover.picked + '"'
@@ -12876,6 +12971,13 @@ function renderDeliveryPanel() {
   });
   var noneBtn = document.getElementById('dp-none');
   if (noneBtn) noneBtn.addEventListener('click', function() { _dpDocs = []; renderDeliveryPanel(); });
+  var changedBtn = document.getElementById('dp-changed');
+  if (changedBtn) changedBtn.addEventListener('click', function() {
+    var EL = window.MA.exportLog;
+    if (!EL || !_elHas('delivery')) return;
+    _dpDocs = EL.changedNames(_elLog, 'delivery', all);
+    renderDeliveryPanel();
+  });
   var buildBtn = document.getElementById('dp-build');
   if (buildBtn) buildBtn.addEventListener('click', function() { buildDeliveryPackage(); });
   var reviewBtn = document.getElementById('dp-review');
@@ -12916,7 +13018,7 @@ function buildDeliveryPackage() {
   }
   var title = (document.getElementById('dp-title') || {}).value || '';
   var revision = (document.getElementById('dp-revision') || {}).value || '';
-  var last = DP.lastDelivery();
+  var last = _dpLastDelivery();
   var submit = _dpSubmitResult(docs);
   var board = _dpBoard(docs);
 
@@ -12938,6 +13040,7 @@ function buildDeliveryPackage() {
     var name = DP.packageName();
     downloadBlob(name, new Blob([BE.buildZip(DP.files(pkg))], { type: 'application/zip' }));
     // 出した時点を控える。次に作るときの「前回提出から」の基準になる。
+    // localStorage (この端末の控え) と保存フォルダ (図に付いて回る控え) の両方に残す。
     DP.markDelivered(docs, { title: pkg.title, revision: pkg.revision });
     // 何枚のうち何枚を出したかを結果にも残す (zip を開くまで気づけない欠落を作らない)。
     var cov = DP.coverage(_dpCandidates(), _dpDocs);
@@ -12945,7 +13048,17 @@ function buildDeliveryPackage() {
       + (cov.missing > 0 ? ' ／ ⚠ ' + cov.missing + ' 枚は対象外' : '');
     if (status) status.textContent = msg;
     if (window.MA.toast) window.MA.toast.show(msg);
-    return pkg;
+    // 控えを保存フォルダにも残し、画面の納品履歴を今出した分まで進める
+    // (書き出した直後に「まだ 1 度も提出していません」と出ていると控えを信用できない)。
+    return _elRecord('delivery', { title: pkg.title, revision: pkg.revision, file: name, docs: docs })
+      .then(function() {
+        if (document.getElementById('dp-modal-content')) {
+          renderDeliveryPanel();
+          var st = document.getElementById('dp-status');
+          if (st) st.textContent = msg;
+        }
+        return pkg;
+      });
   });
 }
 
@@ -12976,7 +13089,7 @@ function _drLoad(name) {
   if (_drCache[name]) return Promise.resolve(_drCache[name]);
   var doc = _drDocByName(name);
   if (!doc || !DP) return Promise.resolve({ before: null, after: null });
-  var base = DP.baselineOf(name);
+  var base = _dpBaselineOf(name);
   var jobs = [
     Promise.resolve(renderDslToSvg(doc.dsl)).then(function(s) { return s; }, function() { return null; }),
     base ? Promise.resolve(renderDslToSvg(base.dsl)).then(function(s) { return s; }, function() { return null; })
@@ -13677,10 +13790,22 @@ function exportAllSVG(pickedDocs, statusEl) {
       var name = window.MA.bulkExport.zipName();
       downloadBlob(name, new Blob([window.MA.bulkExport.buildZip(files)], { type: 'application/zip' }));
       msg = msg + '（' + name + '）';
+      summary.zipFile = name;
     }
     if (status) status.textContent = msg;
     if (window.MA.toast) window.MA.toast.show(msg);
-    return summary;
+    // BLK-primary-20260909-0003-wish: 出した時点を保存フォルダに控える。
+    // 次に書き出すときの「前回書き出しから変わった図」の基準になる。
+    if (!summary.zipFile) return summary;
+    return _elRecord('svg', { file: summary.zipFile, docs: docs }).then(function() {
+      if (document.getElementById('expick-modal') &&
+          document.getElementById('expick-modal').style.display === 'flex') {
+        _expickList = _expickBuild();
+        renderExportPick();
+        if (status) status.textContent = msg;
+      }
+      return summary;
+    });
   });
 }
 
@@ -14352,10 +14477,27 @@ function _expickBuild() {
   if (!ES) return [];
   var SD = window.MA.saveDiff;
   var RV = window.MA.reviewVerdicts;
+  var EL = window.MA.exportLog;
   return ES.buildList(_expickDocs(), {
     statusOf: SD ? function(name, dsl) { return SD.statusOf(name, dsl); } : null,
     fixCountOf: RV ? function(name) { return RV.counts(name).fix; } : null,
+    // BLK-primary-20260909-0003-wish: 「前回この zip を出した時点から」の差。
+    // 保存からの差 (statusOf) では、出したあとに保存し直しただけの図と
+    // 出してから中身が変わった図が区別できない。
+    sinceStatusOf: EL ? function(name, dsl) { return EL.statusOf(_elLog, 'svg', name, dsl); } : null,
   });
+}
+
+// 「前回書き出しはいつで、そこから何枚変わったか」の 1 行。
+function _expickSinceLine() {
+  var EL = window.MA.exportLog;
+  var el = document.getElementById('expick-since');
+  if (!el) return '';
+  var line = EL ? EL.sinceLine(_elLog, 'svg', _expickList) : '';
+  el.textContent = line;
+  var btn = document.getElementById('expick-mode-since');
+  if (btn) btn.disabled = !_elHas('svg');
+  return line;
 }
 
 function renderExportPick() {
@@ -14378,6 +14520,7 @@ function renderExportPick() {
   }
   var count = document.getElementById('expick-count');
   if (count) count.textContent = ES.countText(_expickList, _expickMode);
+  _expickSinceLine();
   ES.MODES.forEach(function(m) {
     var b = document.getElementById('expick-mode-' + m);
     if (b) b.classList.toggle('on', m === _expickMode);
@@ -14397,6 +14540,13 @@ function toggleExportPick(open) {
   if (state) state.textContent = '';
   modal.style.display = 'flex';
   renderExportPick();
+  // 保存フォルダの控えは開くたびに読み直す (別の端末で出した分も基準に入れる)。
+  _elLoad().then(function(log) {
+    if (!log || modal.style.display !== 'flex') return;
+    _expickList = _expickBuild();
+    _expickList = window.MA.exportSelect.applyMode(_expickList, _expickMode);
+    renderExportPick();
+  });
   var body = document.getElementById('expick-body');
   if (body) body.scrollTop = 0;
 }

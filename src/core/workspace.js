@@ -369,11 +369,29 @@ window.MA.workspace = (function() {
             // BLK-junior-20260908-2003: 本体が消えて、上書き前の控えだけが
             // 残っている図。現存する図と混ぜずに別枠で受け取る。
             gone: Array.isArray(data.gone) ? data.gone : [],
+            // BLK-primary-20260909-0003-wish: 「いつ・どの版で何を客先に出したか」の
+            // 控え。図と同じフォルダに置く (localStorage だと開き直すたびに消え、
+            // 何度出しても毎回「初回提出」になっていた)。古い server は返さない。
+            exportLog: (data.exportLog && typeof data.exportLog === 'object') ? data.exportLog : null,
           };
         })
         .catch(function() { return miss; });
     } catch (e) {
       return Promise.resolve(miss);
+    }
+  }
+
+  // saveExportLog — 書き出しの控えを保存フォルダに書く。
+  // 書けたかどうかだけを返す (書けなくても書き出し自体は成り立つ)。
+  function saveExportLog(log, fileDir) {
+    try {
+      return window.fetch('/export-log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dir: _dir(fileDir), log: log }),
+      }).then(function(r) { return !!(r && r.ok); }).catch(function() { return false; });
+    } catch (e) {
+      return Promise.resolve(false);
     }
   }
 
@@ -428,6 +446,7 @@ window.MA.workspace = (function() {
     listFiles: listFiles,
     listFileEntries: listFileEntries,
     listFolder: listFolder,
+    saveExportLog: saveExportLog,
     loadFile: loadFile,
     detectType: detectType,
   };

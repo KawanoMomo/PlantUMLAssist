@@ -1858,6 +1858,7 @@ html, body {
 #expick-tools button.expick-mode.on { border-color: var(--accent); color: var(--accent); }
 #expick-tools #expick-save { border-color: var(--accent); color: var(--accent); }
 #expick-tools #expick-save[disabled] { opacity: 0.5; cursor: default; border-color: var(--border); color: var(--text-secondary); }
+#expick-since { padding: 6px 14px; border-bottom: 1px solid var(--border); font-size: 11px; color: var(--text-secondary); }
 #expick-body { flex: 1; overflow-y: auto; padding: 8px 14px; }
 #expick-body .expick-empty { color: var(--text-secondary); font-size: 12px; padding: 20px 4px; }
 #expick-body label.expick-row {
@@ -5260,6 +5261,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/component-inventory.js"></script>
 <script src="src/core/export-target.js"></script>
 <script src="src/core/handoff-package.js"></script>
+<script src="src/core/export-log.js"></script>
 <script src="src/core/delivery-package.js"></script>
 <script src="src/core/delivery-review.js"></script>
 <script src="src/core/save-prefs.js"></script>
@@ -5504,11 +5506,13 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <span id="expick-tools">
         <button type="button" class="expick-mode" id="expick-mode-all" data-mode="all">全部</button>
         <button type="button" class="expick-mode" id="expick-mode-changed" data-mode="changed" title="前回提出時の基準と中身が違う図と、まだ提出していない図">変更図のみ</button>
+        <button type="button" class="expick-mode" id="expick-mode-since" data-mode="since" title="前回この zip を書き出した時点と中身が違う図と、まだ出していない図">前回書き出しから</button>
         <button type="button" class="expick-mode" id="expick-mode-fix" data-mode="fix" title="変更サマリボードで [要修正] の印が付いた行を持つ図">要修正のみ</button>
         <button type="button" id="expick-save">選んだ図を zip で保存</button>
         <button type="button" id="expick-close">閉じる</button>
       </span>
     </div>
+    <div id="expick-since" role="status"></div>
     <div id="expick-body"></div>
     <div id="expick-state" role="status"></div>
   </div>
