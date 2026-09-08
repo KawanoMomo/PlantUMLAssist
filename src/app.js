@@ -4138,6 +4138,8 @@ function setupTabs() {
   var svgScan = null;
   // 作り直した結果の 1 行。一覧を開き直すまで残す (押した結果が消えない)。
   var svgRenderNote = '';
+  // BLK-reviewer-20260908-1103-wish: 描き直して比べた結果の 1 行。
+  var svgVerifyNote = '';
   // BLK-reviewer-20260908-0203-wish: 図名 → {role, status}。実データ / テンプレの宣言と、
   // テンプレの中身が宣言時から変わっていないか。22 枚を毎回同列に扱わなくて済むように。
   var fileRoles = {};        // 保存フォルダの _roles.json の中身
@@ -4252,6 +4254,7 @@ function setupTabs() {
       window.MA.workspace.updateActive({ dsl: mmdText, diagramType: currentDiagramType });
     }
     svgRenderNote = '';   // 前に押した結果は持ち越さない
+    svgVerifyNote = '';
     roleNote = '';
     folderQuery = '';           // 絞り込みは開き直すたびに白紙に戻す
     folderFocusFilter = true;   // 開いたらそのまま名前を打ち始められる
@@ -4319,7 +4322,9 @@ function setupTabs() {
 
       // SVG の追いつきは、図の中身とは別に一覧の時点で分かる。
       var SF = window.MA.svgFreshness;
-      svgScan = SF ? SF.scan(entries) : null;
+      // BLK-reviewer-20260908-1103-wish: 印の無い svg でも、上書きせずに描き直して
+      // 比べた控えがあれば内容で言い切れる。server が一覧と一緒に返す。
+      svgScan = SF ? SF.scan(entries, (res && res.verified) || {}) : null;
       svgStatus = SF ? SF.statusMap(svgScan) : {};
       // BLK-reviewer-20260908-1103: mtime とは別に、内容 (svg に刻んだ元 puml の sha1) での判定。
       svgContent = SF && SF.contentMap ? SF.contentMap(svgScan) : {};
@@ -4655,6 +4660,75 @@ function setupTabs() {
       });
       panel.appendChild(pbtn);
     }
+
+    // BLK-reviewer-20260908-1103-wish: 作り直しは「今そう見える」に揃えるだけで、
+    // 保存されていた絵が正しかったかは分からなくなる。こちらは上書きせずに
+    // 裏で 1 回描き直してバイト比較し、結果だけを控える。実データ 22 枚を
+    // curl と diff で 1 枚ずつ確かめ直す手順が、この 1 押しに置き換わる。
+    if (SF.verifyLabel) {
+      if (svgVerifyNote) {
+        var vnote = document.createElement('div');
+        vnote.className = 'folder-svg-summary folder-svg-verify-note';
+        vnote.id = 'folder-svg-verify-note';
+        vnote.textContent = svgVerifyNote;
+        panel.appendChild(vnote);
+      }
+      var vbtn = document.createElement('button');
+      vbtn.type = 'button';
+      vbtn.className = 'folder-svg-verify-btn';
+      vbtn.id = 'folder-svg-verify';
+      vbtn.textContent = SF.verifyLabel(svgScan);
+      vbtn.title = '内容で言い切れない SVG を、上書きせずに裏で 1 回描き直して'
+        + 'バイト単位で比べる。食い違った図は「内容ずれ」として名指しされる';
+      vbtn.disabled = !(svgScan.needsVerify && svgScan.needsVerify.length);
+      vbtn.addEventListener('click', function(ev) {
+        ev.stopPropagation();
+        vbtn.disabled = true;
+        verifySvgContents(dir, svgScan.needsVerify, vbtn);
+      });
+      panel.appendChild(vbtn);
+    }
+  }
+
+  // 描画は 1 枚あたり数百 ms かかる。何枚目まで進んだかを押したボタンに出しながら、
+  // 10 枚ずつ server に渡す (1 枚ずつだと往復が、全部一度だと無反応が長い)。
+  function verifySvgContents(dir, names, btn) {
+    var queue = names.slice();
+    var total = queue.length;
+    var counts = { match: 0, differ: 0, missing: 0, error: 0 };
+    var mode = (document.getElementById('render-mode') || {}).value || 'local';
+    function step() {
+      if (queue.length === 0) {
+        var parts = [];
+        if (counts.match) parts.push('一致 ' + counts.match + ' 枚');
+        if (counts.differ) parts.push('食い違い ' + counts.differ + ' 枚');
+        if (counts.missing) parts.push('SVG 無し ' + counts.missing + ' 枚');
+        if (counts.error) parts.push('確かめられず ' + counts.error + ' 枚');
+        svgVerifyNote = total + ' 枚を描き直して比べました（' + parts.join(' / ') + '）';
+        renderFolderPanel();
+        return;
+      }
+      var chunk = queue.splice(0, 10);
+      btn.textContent = '描き直して比べています…（残り ' + queue.length + ' 枚）';
+      fetch('/verify-svg', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dir: dir, types: chunk, mode: mode }),
+      }).then(function(resp) {
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        return resp.json();
+      }).then(function(res) {
+        var results = (res && res.results) || {};
+        chunk.forEach(function(name) {
+          var st = (results[name] && results[name].status) || 'error';
+          if (counts[st] === undefined) counts[st] = 0;
+          counts[st]++;
+        });
+      }).catch(function() {
+        counts.error += chunk.length;
+      }).then(step);
+    }
+    step();
   }
 
   // 古い SVG を 1 枚ずつ直列に作り直す。1 枚失敗しても残りは進める

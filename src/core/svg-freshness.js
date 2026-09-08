@@ -43,14 +43,24 @@ window.MA.svgFreshness = (function() {
   //   differ     — 別の内容の puml から作られている (作り直しが要る。確実)
   //   missing    — svg が無い
   //   unverified — 印が無い。印を刻む前に書き出した svg なので内容では言えない
-  function contentOf(entry) {
+  //
+  // BLK-reviewer-20260908-1103-wish: 印は「書き出した側の申告」なので、印を刻む前に
+  // 置かれた svg (実データの 22 枚がそれ) については何も言えず、作り直して上書きしない限り
+  // 未確認のままだった。作り直すと「今そう見える」だけで「保存されていた絵が正しかったか」は
+  // 分からなくなる。そこで、上書きせずに 1 回描き直してバイト比較した結果 (records) も
+  // 根拠として受け取る。records は {name: {pumlHash, svgHash, result}} で、
+  // 突き合わせた 2 つの指紋が今のものと一致している間だけ有効。
+  function contentOf(entry, records) {
     if (!entry) return 'unverified';
     if (_time(entry.svgMtime) === null) return 'missing';
-    var stamp = entry.svgSource;
-    if (typeof stamp !== 'string' || stamp === '') return 'unverified';
     var hash = entry.hash;
     if (typeof hash !== 'string' || hash === '') return 'unverified';
-    return stamp === hash ? 'match' : 'differ';
+    var stamp = entry.svgSource;
+    if (typeof stamp === 'string' && stamp !== '') return stamp === hash ? 'match' : 'differ';
+    var r = records && records[entry.name];
+    if (!r || typeof r !== 'object') return 'unverified';
+    if (r.pumlHash !== hash || r.svgHash !== entry.svgHash) return 'unverified';
+    return (r.result === 'match' || r.result === 'differ') ? r.result : 'unverified';
   }
 
   var CONTENT_BADGES = {
@@ -76,10 +86,10 @@ window.MA.svgFreshness = (function() {
   }
 
   // 一覧ぶんの判定。作り直しが要るものを needsRender にまとめる。
-  function scan(entries) {
+  function scan(entries, records) {
     var rows = (Array.isArray(entries) ? entries : []).map(function(e) {
       return {
-        name: e && e.name, status: statusOf(e), content: contentOf(e),
+        name: e && e.name, status: statusOf(e), content: contentOf(e, records),
         mtime: e && e.mtime, svgMtime: e && e.svgMtime,
       };
     }).filter(function(r) { return typeof r.name === 'string' && r.name !== ''; });
@@ -98,6 +108,10 @@ window.MA.svgFreshness = (function() {
         .map(function(r) { return r.name; }),
       // 内容で言い切るために作り直しが要る図。印の無い図も入る。
       needsProof: rows.filter(function(r) { return r.content !== 'match'; })
+        .map(function(r) { return r.name; }),
+      // 上書きせずに確かめられる図 (svg があって、まだ内容で言い切れていないもの)。
+      // 作り直しと違い、保存されていた絵をそのまま残したまま白黒が付く。
+      needsVerify: rows.filter(function(r) { return r.content === 'unverified'; })
         .map(function(r) { return r.name; }),
     };
   }
@@ -171,6 +185,12 @@ window.MA.svgFreshness = (function() {
   }
 
   // 内容で言い切れるようにするボタンの文言。
+  // 押す前に何枚を描き直して比べるかが分かるようにする (1 枚あたり数百 ms かかる)。
+  function verifyLabel(scanned) {
+    var n = (scanned && scanned.needsVerify && scanned.needsVerify.length) || 0;
+    return n === 0 ? '中身を確かめる SVG はありません' : 'SVG の中身を確かめる（' + n + ' 枚）';
+  }
+
   function proofLabel(scanned) {
     var n = (scanned && scanned.needsProof && scanned.needsProof.length) || 0;
     return n === 0 ? '内容はすべて確かめてあります' : '内容を確かめる（' + n + ' 枚を作り直す）';
@@ -201,5 +221,6 @@ window.MA.svgFreshness = (function() {
     shortfall: shortfall,
     renderLabel: renderLabel,
     proofLabel: proofLabel,
+    verifyLabel: verifyLabel,
   };
 })();
