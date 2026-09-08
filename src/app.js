@@ -1092,6 +1092,8 @@ function init() {
   // 「ツール ▾」の中の「タブ列から畳む / タブ列に戻す」で切り替える。
   (function setupToolMenu() {
     var btn = document.getElementById('btn-tab-tools');
+    // 静かなタブ列で「ツール ▾」の代わりに出る小さな入口 (BLK-primary-20260908-1803)
+    var mini = document.getElementById('btn-tab-tools-mini');
     var menu = document.getElementById('tool-menu');
     var bar = document.getElementById('tab-bar');
     var tm = window.MA.toolMenu;
@@ -1125,6 +1127,11 @@ function init() {
     function syncToolButton() {
       bar.classList.toggle('tools-hide-tool-btn',
         !tm.showsToolButton(isFolded(), isQuiet()));
+      // 「ツール ▾」を出さないときは、代わりに「他 N 件」の札を出す。
+      // N は今タブ列から消えているボタンの数 (メニューに載っている数と同じ)。
+      bar.classList.toggle('tools-hide-mini-btn',
+        !tm.showsMiniButton(isFolded(), isQuiet()));
+      if (mini) mini.textContent = tm.miniLabel(foldable().length);
     }
 
     function applyQuiet(quiet) {
@@ -1143,9 +1150,14 @@ function init() {
       return out;
     }
 
+    function setExpanded(v) {
+      btn.setAttribute('aria-expanded', v ? 'true' : 'false');
+      if (mini) mini.setAttribute('aria-expanded', v ? 'true' : 'false');
+    }
+
     function close() {
       menu.hidden = true;
-      btn.setAttribute('aria-expanded', 'false');
+      setExpanded(false);
     }
 
     function open() {
@@ -1160,13 +1172,16 @@ function init() {
         + (isQuiet() ? 'ツール ▾ をタブ列に出す' : 'タブ列を図のタブだけにする')
         + '</span></button></div>';
       menu.hidden = false;
-      btn.setAttribute('aria-expanded', 'true');
+      setExpanded(true);
     }
 
-    btn.addEventListener('click', function(e) {
+    function toggle(e) {
       e.stopPropagation();
       if (menu.hidden) open(); else close();
-    });
+    }
+
+    btn.addEventListener('click', toggle);
+    if (mini) mini.addEventListener('click', toggle);
 
     menu.addEventListener('click', function(e) {
       var item = e.target && e.target.closest ? e.target.closest('.tool-menu-item') : null;
@@ -1199,6 +1214,7 @@ function init() {
     document.addEventListener('click', function(e) {
       if (menu.hidden) return;
       if (menu.contains(e.target) || btn.contains(e.target)) return;
+      if (mini && mini.contains(e.target)) return;
       close();
     });
     document.addEventListener('keydown', function(e) {

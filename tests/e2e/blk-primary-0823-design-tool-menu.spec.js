@@ -34,7 +34,10 @@ test('ツールボタンで 6 分類のメニューが開き、Ctrl+K の注記�
 test('「レビュー」の分類から変更サマリを開ける', async ({ page }) => {
   await page.locator('#btn-tab-tools').click();
   const group = page.locator('.tool-menu-group[data-group="review"]');
-  await expect(group.locator('.tool-menu-item')).toHaveCount(7);
+  // 件数は tool-menu.js の分類を正本にする (項目が増えるたびに数字を書き換えない)。
+  const want = await page.evaluate(() => window.MA.toolMenu.groups()
+    .filter((g) => g.key === 'review')[0].items.length);
+  await expect(group.locator('.tool-menu-item')).toHaveCount(want);
   await group.locator('[data-target="btn-tab-board"]').click();
 
   // メニューは選んだ時点で閉じ、元のボタンと同じパネルが開く

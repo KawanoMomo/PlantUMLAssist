@@ -954,6 +954,16 @@ html, body {
    「ツール ▾」も消し、機能の入口は Ctrl+K だけにする。 */
 #tab-bar.tools-hide-tool-btn #btn-tab-tools { display: none; }
 #btn-tab-tools[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); }
+/* BLK-primary-20260908-1803: 「ツール ▾」を出さないときの小さな入口 (他 N 件)。
+   タブ列を静かに保ったまま、畳んだ機能の一覧を 1 クリックで開けるようにする。 */
+#tab-bar.tools-hide-mini-btn #btn-tab-tools-mini { display: none; }
+#btn-tab-tools-mini {
+  color: var(--text-secondary);
+  font-size: 10px;
+  padding: 1px 5px;
+}
+#btn-tab-tools-mini:hover { color: var(--accent); }
+#btn-tab-tools-mini[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); }
 #tool-menu {
   position: absolute;
   top: 26px;
@@ -4203,6 +4213,9 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <!-- BLK-primary-20260908-0823-design (7a): 機能ボタンを 6 分類のメニューに畳む -->
         <button class="tab-tool" id="btn-tab-tools" aria-expanded="false" aria-controls="tool-menu"
                 title="ツールを分類から選ぶ (Ctrl+K でも同じ操作が引ける)">🧰 ツール ▾</button>
+        <!-- BLK-primary-20260908-1803: 静かなタブ列でも、畳んだ機能の入口を 1 クリック分残す -->
+        <button class="tab-tool tab-tool-mini" id="btn-tab-tools-mini" aria-expanded="false" aria-controls="tool-menu"
+                title="畳んでいるツールの一覧を開く (Ctrl+K でも同じ操作が引ける)">他 0 件</button>
         <button class="tab-tool" id="btn-tab-peek" title="他の保存フォルダの図を読むだけで見る (保存先は変わりません)">👀 他フォルダ</button>
         <!-- BLK-junior-20260907-2009-wish: やり直し途中の控えに印を付け、📂 一覧で畳む -->
         <button class="tab-tool" id="btn-tab-draft" aria-pressed="false" title="この図に一時控え(下書き / やり直し途中)の印を付けて、📂 一覧から畳む">🗂 一時控え</button>
