@@ -6010,6 +6010,9 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <span id="peek-notice"></span>
       <span id="peek-tools">
         <button type="button" id="peek-template" disabled title="この図をテンプレートにして新しい図を作る">⧉ テンプレートとして開く</button>
+        <!-- BLK-junior-20260909-0603-wish: 覗いた手本を閉じずに右へ据える。
+             以降は書きかけと手本が同時に見え、対応表で足りない状態・遷移が出る。 -->
+        <button type="button" id="peek-compare" disabled title="この図を手本として自分の書きかけの右に並べ、対応表で足りない状態・遷移を出す">⇔ 自分の図と並べる</button>
         <button type="button" id="peek-cohort-toggle" title="同じドメイン名の図をフォルダ横断で並べる">🔀 ドメインで揃える</button>
         <button type="button" id="peek-cohort-templates" style="display:none;" title="アプリ同梱テンプレ・既定サンプル由来のドメインも突合に含める">📄 テンプレも表示</button>
         <button type="button" id="peek-prev" title="前の図">↑</button>

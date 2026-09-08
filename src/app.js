@@ -5117,6 +5117,7 @@ function _peekEls() {
     cohort: document.getElementById('peek-cohort'),
     cohortToggle: document.getElementById('peek-cohort-toggle'),
     template: document.getElementById('peek-template'),
+    compare: document.getElementById('peek-compare'),
     cohortTemplates: document.getElementById('peek-cohort-templates'),
   };
 }
@@ -5524,6 +5525,42 @@ function renderPeekTemplateBtn() {
   el.template.disabled = !seed;
   el.template.setAttribute('data-seed', seed ? seed.value : '');
   el.template.title = PF.seedNotice(seed);
+  renderPeekCompareBtn();
+}
+
+// ── 覗いた図を手本として右に並べる (BLK-junior-20260909-0603-wish) ──
+// 覗く画面は全面のモーダルなので、開いている間は自分の書きかけが見えない。
+// 「テンプレートとして開く」は白紙から起こす用で、書きかけの図には使えない
+// (今のタブを捨てて新しいタブを作る)。ここは書きかけをそのままに、手本だけを
+// 参照図の位置へ据える。据えたあとは既にある見比べ・対応表・整合チェックが
+// そのまま手本に効くので、新しい見方を覚え直さなくてよい。
+function renderPeekCompareBtn() {
+  var el = _peekEls();
+  if (!el.compare) return;
+  var ok = !!(_peekName && _peekDsl && _peekDsl.replace(/\s/g, ''));
+  el.compare.disabled = !ok;
+  el.compare.title = ok
+    ? _peekName + ' を手本として右に並べます (保存先も今のタブも変わりません)'
+    : '図を選ぶと、手本として右に並べられます';
+}
+
+function comparePeekAsRef() {
+  var cv = window.MA.compareView;
+  var PF = window.MA.peekFolder;
+  if (!cv || !PF || !_peekName || !_peekDsl) return false;
+  var set = cv.setPeek(PF.baseName(_peekDir), _peekName, _peekDsl, '');
+  if (!set) return false;
+  closePeekFolder();
+  _compareRefId = cv.PEEK_ID;
+  _compareShownDsl = null;      // 相手が変わったので必ず描き直す
+  _clearCheckList();            // 前の参照図に対する食い違いを残さない
+  _clearStateMap();
+  toggleCompareView(true, 'ref');
+  renderCompareView();
+  // 手本と自分の図の対応表は、この機能の目的そのもの (どの状態・遷移が
+  // 自分の図に無いかを色で出す)。押し直させずにその場で出す。
+  runStateMap();
+  return true;
 }
 
 // 覗いている図をテンプレートに据えて、新規作成の画面へ渡す。
@@ -5761,6 +5798,7 @@ function setupPeekFolder() {
   var close = closePeekFolder;
   renderPeekTemplateBtn();
   if (el.template) el.template.addEventListener('click', usePeekAsTemplate);
+  if (el.compare) el.compare.addEventListener('click', comparePeekAsRef);
   var closeBtn = document.getElementById('peek-close');
   if (closeBtn) closeBtn.addEventListener('click', close);
   if (el.cohortToggle) {
@@ -11396,9 +11434,12 @@ function renderCompareView() {
     op.value = String(o.id);
     // 「変更前」の候補は図種を添えない。名前に既に (変更前) が入っており、
     // 図種まで並ぶと別の図と読み違える。
-    op.textContent = o.isBefore ? o.name
+    // 覗いた 1 枚も図種を添えない (名前が `primary / timer_state.puml` の形で、
+    // どこの図かは名前だけで読める)。
+    op.textContent = (o.isBefore || o.isPeek) ? o.name
       : o.name + ' (' + String(o.diagramType || '').replace('plantuml-', '') + ')';
     if (o.isBefore) op.setAttribute('data-before', '1');
+    if (o.isPeek) op.setAttribute('data-peek', '1');
     if (ref && o.id === ref.id) op.selected = true;
     sel.appendChild(op);
   });
@@ -11412,7 +11453,8 @@ function renderCompareView() {
     var msg = document.createElement('div');
     msg.id = 'compare-empty';
     msg.style.cssText = 'font-size:11px;color:var(--text-secondary);';
-    msg.textContent = '並べる図がありません。＋ で 2 枚目のタブを開いてください。';
+    msg.textContent = '並べる図がありません。＋ で 2 枚目のタブを開くか、'
+      + '「他の保存フォルダを覗く」で手本を選んで「⇔ 自分の図と並べる」を押してください。';
     host.appendChild(msg);
     return;
   }
@@ -11427,7 +11469,11 @@ function renderCompareView() {
     // 描いている間に参照図が切り替わっていたら捨てる (遅れて届いた結果で上書きしない)
     if (!_compareOpen || _compareShownDsl !== dsl) return;
     host.innerHTML = svg;
-    if (status) status.textContent = full.isBefore ? '変更前 (読むだけ)' : '参照 (読むだけ)';
+    if (status) {
+      status.textContent = full.isBefore ? '変更前 (読むだけ)'
+        : full.isPeek ? '手本 ' + (full.folder || '他フォルダ') + ' (読むだけ)'
+        : '参照 (読むだけ)';
+    }
   }).catch(function(err) {
     if (!_compareOpen || _compareShownDsl !== dsl) return;
     host.textContent = '';
