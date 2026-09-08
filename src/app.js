@@ -7472,6 +7472,122 @@ function runConsistencyCheck() {
   renderCheckList();
 }
 
+// ── 対応表 (BLK-junior-20260908-0823-wish) ────────────────────────────────
+// 先輩の図と自分の図は、同じ GPIO ドライバの状態遷移でも状態名・イベント名・
+// 抽象度がばらばらで、読み比べても「先輩が後から足した 1 要素」を名前だけでは
+// 当てられない。名前の形だけで対応を機械的に取り、対応が付いた組と
+// 片方にしか無い状態・遷移を分けて出す。行を押すと自分の図のその行へ飛ぶ
+// (参照図だけの行は、押しても飛び先が無いので参照図の行番号を出すだけ)。
+// 対応の規則は state-map が持ち、ここは並べるだけ。
+var _mapResult = null;
+
+function _clearStateMap() {
+  _mapResult = null;
+  var listEl = document.getElementById('map-list');
+  var sumEl = document.getElementById('map-summary');
+  var warnEl = document.getElementById('map-warn');
+  if (listEl) { listEl.textContent = ''; listEl.hidden = true; }
+  if (warnEl) { warnEl.textContent = ''; warnEl.hidden = true; }
+  if (sumEl) { sumEl.textContent = ''; sumEl.classList.remove('clean', 'dirty'); }
+}
+
+function _mapSection(listEl, title) {
+  var head = document.createElement('div');
+  head.className = 'map-head';
+  head.textContent = title;
+  listEl.appendChild(head);
+}
+
+function _mapRow(listEl, row) {
+  var sm = window.MA.stateMap;
+  var el = document.createElement('div');
+  el.className = 'map-row';
+  el.setAttribute('data-map-match', row.match);
+  el.setAttribute('data-map-type', row.type);
+  if (row.mineLine != null) el.setAttribute('data-map-line', String(row.mineLine));
+
+  var match = document.createElement('span');
+  match.className = 'map-match';
+  match.textContent = sm.matchLabel(row.match);
+  var ref = document.createElement('span');
+  ref.className = 'map-ref';
+  ref.textContent = row.ref || '—';
+  var mine = document.createElement('span');
+  mine.className = 'map-mine';
+  mine.textContent = row.mine || '—';
+  el.appendChild(match); el.appendChild(ref); el.appendChild(mine);
+
+  // 自分の図に対応する行があるなら、押してそこへ飛ぶ。
+  // 参照図は読むだけなので、参照図だけの行は飛び先を持たない。
+  if (row.mineLine != null) {
+    el.addEventListener('click', function() { gotoOutlineLine(row.mineLine - 1); });
+  }
+  listEl.appendChild(el);
+}
+
+function renderStateMap() {
+  var listEl = document.getElementById('map-list');
+  var sumEl = document.getElementById('map-summary');
+  var warnEl = document.getElementById('map-warn');
+  var sm = window.MA.stateMap;
+  if (!listEl || !sumEl || !sm || !_mapResult) return;
+
+  listEl.textContent = '';
+  listEl.hidden = false;
+  sumEl.textContent = sm.summary(_mapResult);
+  sumEl.classList.remove('clean', 'dirty');
+  var onlyCount = _mapResult.states.concat(_mapResult.transitions).filter(function(r) {
+    return r.match === 'ref-only' || r.match === 'mine-only';
+  }).length;
+  sumEl.classList.add(onlyCount === 0 ? 'clean' : 'dirty');
+
+  var warn = sm.abstractionWarning(_mapResult);
+  if (warnEl) {
+    warnEl.textContent = warn;
+    warnEl.hidden = (warn === '');
+  }
+
+  if (_mapResult.states.length === 0 && _mapResult.transitions.length === 0) {
+    var empty = document.createElement('div');
+    empty.id = 'map-empty';
+    empty.textContent = '状態遷移が読めません。どちらも状態遷移図にしてください。';
+    listEl.appendChild(empty);
+    return;
+  }
+  if (_mapResult.states.length > 0) {
+    _mapSection(listEl, '状態 (参照図 / 自分の図)');
+    _mapResult.states.forEach(function(r) { _mapRow(listEl, r); });
+  }
+  if (_mapResult.transitions.length > 0) {
+    _mapSection(listEl, '遷移 (参照図 / 自分の図)');
+    _mapResult.transitions.forEach(function(r) { _mapRow(listEl, r); });
+  }
+}
+
+function runStateMap() {
+  var sm = window.MA.stateMap;
+  var cv = window.MA.compareView;
+  var stateMod = window.MA.modules && window.MA.modules.plantumlState;
+  var sumEl = document.getElementById('map-summary');
+  var listEl = document.getElementById('map-list');
+  if (!sm || !cv || !stateMod || !sumEl) return;
+
+  var ref = _compareRefId ? cv.doc(_compareDocs(), _compareRefId) : null;
+  if (!ref) {
+    _clearStateMap();
+    sumEl.textContent = '参照図を選んでください';
+    sumEl.classList.add('dirty');
+    return;
+  }
+  // 図種は見ずに、状態遷移として読めるかどうかで判断する。図種の設定が
+  // 実際の中身と食い違っていることがあり、設定を直させるより読める方を採る。
+  var refParsed = stateMod.parse(ref.dsl || '');
+  var mineParsed = stateMod.parse(mmdText || '');
+  _mapResult = sm.build(refParsed, mineParsed);
+  renderStateMap();
+  if (listEl) listEl.hidden = false;
+}
+
 // ── 他の人のフォルダの同じ図と突き合わせる (BLK-junior-20260908-0723-wish) ──
 // 先輩版と自分版の同種図を見比べる場面で、これまでは自分の保存先設定を先輩の
 // フォルダへ一時的に替えて開き、内容を憶えてから設定を戻し、記憶を頼りに
@@ -7674,6 +7790,8 @@ function setupCompareView() {
   setupCrossRefDiff();
   var checkBtn = document.getElementById('btn-check-run');
   if (checkBtn) checkBtn.addEventListener('click', runConsistencyCheck);
+  var mapBtn = document.getElementById('btn-map-run');
+  if (mapBtn) mapBtn.addEventListener('click', runStateMap);
   var btn = document.getElementById('btn-tab-compare');
   var sel = document.getElementById('compare-select');
   var close = document.getElementById('btn-compare-close');
@@ -7684,6 +7802,7 @@ function setupCompareView() {
       _compareRefId = sel.value;
       _compareShownDsl = null;
       _clearCheckList();
+      _clearStateMap();
       renderCompareView();
     });
   }
