@@ -13538,6 +13538,105 @@ function _progressOf(item) {
   return _inboxProgress[PP.keyOf(item)] || null;
 }
 
+// ── 反映の判定 (BLK-reviewer-20260908-1903-wish) ───────────────────────────
+// 着手状況が言えるのは puml 側だけで、客が見る SVG に出ているかは別に確かめていた
+// (puml diff・label-position 監査・/render 再描画・/verify-svg を 4 本別々に回す)。
+// 指摘の付いている図だけを描き直して突き合わせ、1 件ごとに 1 つの札にする。
+// 判定の規則は src/core/pin-verify.js。ここは材料集めと画面だけ。
+var _inboxVerify = null;      // { key2: judgement } 直近の判定
+var _inboxVerifyState = '';   // '' | 'running' | 'done' | 'failed'
+
+function _inboxVerifyOf(item) {
+  if (!_inboxVerify || !item) return null;
+  return _inboxVerify[String(item.doc) + '#' + String(item.id)] || null;
+}
+
+function _inboxVerifyList() {
+  var out = [];
+  if (!_inboxVerify) return out;
+  Object.keys(_inboxVerify).forEach(function(k) { out.push(_inboxVerify[k]); });
+  return out;
+}
+
+// 前回控え (review-diff) との行差分。puml 側の「変更点」はここから取る。
+function _inboxDiffs(docs) {
+  var RD = window.MA.reviewDiff;
+  if (!RD) return {};
+  var bodies = RD.load(window.localStorage, _wsFileDir());
+  var out = {};
+  (docs || []).forEach(function(name) {
+    out[name] = RD.compare(bodies, name, _inboxDsl(name));
+  });
+  return out;
+}
+
+// 指摘の付いている図だけを 10 枚ずつ描き直して突き合わせる。
+// 箱は先に開く (判定は後から差し込む)。1 枚も確かめられなくても箱は使える。
+function _inboxRunVerify() {
+  var PV = window.MA.pinVerify;
+  if (!PV || !_inboxProgress) { _inboxVerify = null; _inboxVerifyState = ''; return Promise.resolve(null); }
+  var entries = _progressEntries();
+  var docs = PV.docsOf(entries).slice(0, 40);
+  if (!docs.length) { _inboxVerify = null; _inboxVerifyState = ''; return Promise.resolve(null); }
+  var dir = _wsFileDir();
+  var mode = (document.getElementById('render-mode') || {}).value || 'local';
+  var svgs = {}, svgDiffs = {};
+  var queue = docs.slice();
+  _inboxVerifyState = 'running';
+
+  function finish() {
+    var list = PV.judgeAll(entries, {
+      svgs: svgs, diffs: _inboxDiffs(docs), svgDiffs: svgDiffs,
+    });
+    var map = {};
+    list.forEach(function(j) { map[j.key2] = j; });
+    _inboxVerify = map;
+    return list;
+  }
+
+  function step() {
+    if (!queue.length) {
+      _inboxVerifyState = 'done';
+      finish();
+      return Promise.resolve(true);
+    }
+    var chunk = queue.splice(0, 10);
+    return fetch('/verify-svg', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dir: dir, types: chunk, mode: mode }),
+    }).then(function(resp) {
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      return resp.json();
+    }).then(function(res) {
+      var results = (res && res.results) || {};
+      var SD = window.MA.svgDiffSummary;
+      chunk.forEach(function(name) {
+        var r = results[name] || { status: 'error' };
+        svgs[name] = r;
+        // 食い違った図は、ラベルと図形の数まで言う。この 1 行が無いと
+        // reviewer は「どこが違うのか」をまた別の入口で調べ直すことになる。
+        if (r.status === 'differ-content' && SD && typeof r.pumlText === 'string') {
+          svgDiffs[name] = SD.compare(r.pumlText, r.svgLabels, {
+            drawnLabels: r.drawnLabels, svgShape: r.svgShape, drawnShape: r.drawnShape,
+          });
+        }
+      });
+      return step();
+    }, function() {
+      // server が答えられなくても「反映済み」とは言わない (未確認のまま出す)。
+      chunk.forEach(function(name) { svgs[name] = { status: 'error', error: '確かめられませんでした' }; });
+      return step();
+    });
+  }
+
+  return step().then(function() { return _inboxVerify; }, function() {
+    _inboxVerifyState = 'failed';
+    finish();
+    return _inboxVerify;
+  });
+}
+
 function _progressEntries() {
   var out = [];
   if (!_inboxProgress) return out;
@@ -13558,7 +13657,14 @@ function _inboxShown() {
   // 指摘した行がもう無いなら未対応ではない (押印待ちで箱に残り続けていた)。
   return list.filter(function(p) {
     var e = _progressOf(p);
-    return !(e && e.status === 'resolved');
+    if (!(e && e.status === 'resolved')) return true;
+    // BLK-reviewer-20260908-1903-wish: puml が直っていても、保存中の SVG が
+    // 直す前のままなら依頼は終わっていない。作り直し漏れと分かったものは
+    // 解消として落とさず箱に残す (落とすと、再エクスポート漏れは誰も見ない)。
+    // SVG がそもそも無い図はここでは残さない。書き出していない保存フォルダで
+    // 解消済みの指摘が全部戻ってくると、箱が「まだ直っていない指摘」でなくなる。
+    var j = _inboxVerifyOf(p);
+    return !!(j && j.svg && j.svg.state === 'differ-content');
   });
 }
 
@@ -13698,6 +13804,20 @@ function renderInboxPanel() {
       + esc(PP.headText(psum)) + '</div>';
   }
 
+  // 反映の判定の帯 (BLK-reviewer-20260908-1903-wish)。puml と SVG を 1 つの札にした
+  // 結果をここで先に言う。手順 8 (前回指摘の反映確認) はこの 1 行で終わる。
+  var PV = window.MA.pinVerify;
+  if (PV && _inboxVerifyState === 'running') {
+    html += '<div class="ib-verify-head" id="ib-verify-head" data-state="running">'
+      + 'SVG に反映されたかを確かめています…</div>';
+  } else if (PV && _inboxVerify) {
+    var vsum = PV.summary(_inboxVerifyList());
+    html += '<div class="ib-verify-head" id="ib-verify-head" data-state="' + esc(_inboxVerifyState) + '"'
+      + ' data-reflected="' + vsum.reflected + '" data-pumlonly="' + vsum['puml-only'] + '"'
+      + ' data-open="' + vsum.open + '" data-unknown="' + vsum.unknown + '">'
+      + esc(PV.headText(vsum)) + '</div>';
+  }
+
   // BLK-reviewer-20260908-0003: 手で書いた指摘は audit.js のどの監査にも当たらず、
   // 根拠 (別の図の中身) が消えても「DSL 無変更 → 前回のまま」で引き継がれ続ける。
   // 受信箱を開いた時点で、根拠が崩れたものだけを名指しで先頭に出す。
@@ -13731,11 +13851,20 @@ function renderInboxPanel() {
       // これが無いと、reviewer は次の run で図をまたいで全部を確かめ直すことになる。
       var reply = _inboxReply(p);
       var prog = _progressOf(p);
+      var jv = _inboxVerifyOf(p);
       html += '<div class="ib-row' + (p.state === 'read' ? ' read' : '') + (p.stale ? ' stale' : '')
         + '" data-doc="' + esc(p.doc) + '" data-pin-id="' + esc(p.id) + '" data-line="' + p.line + '"'
         + ' data-verdict="' + esc(reply ? reply.verdict : '') + '"'
         + (prog ? ' data-progress="' + esc(prog.status) + '" data-passes="' + prog.passes + '"' : '')
+        + (jv ? ' data-reflect="' + esc(jv.key) + '" data-svg="' + esc(jv.svg.state) + '"' : '')
         + '>'
+        + (jv
+          ? '<span class="ib-verify ' + esc(jv.key) + '" title="' + esc(jv.title) + '">'
+            + esc(jv.label) + '</span>'
+            + '<span class="ib-verify-why">' + esc('puml: ' + jv.puml.text
+              + (jv.puml.change ? '（' + jv.puml.change + '）' : '')
+              + ' / SVG: ' + jv.svg.text) + '</span>'
+          : '')
         + (prog
           ? '<span class="ib-prog ' + esc(prog.status) + '" title="' + esc(prog.title + ' — ' + prog.why) + '">'
             + esc(window.MA.pinProgress.entryText(prog)) + '</span>'
@@ -13807,6 +13936,10 @@ function renderInboxPanel() {
 
 function loadInbox() {
   _inboxLoading = true;
+  // 前回の判定はここで捨てる。走査し直したのに古い札が残っていると、
+  // 「もう直った」を前の run の材料で言うことになる。
+  _inboxVerify = null;
+  _inboxVerifyState = '';
   renderInboxPanel();
   return scanPinInbox().then(function(items) {
     _inboxItems = items;
@@ -13815,7 +13948,12 @@ function loadInbox() {
     _inboxTrackProgress();
     renderInboxPanel();
     renderInboxBadge();
-    return items;
+    // SVG に出ているかは描き直しが要るので、箱を開いたあとで差し込む。
+    return _inboxRunVerify().then(function() {
+      renderInboxPanel();
+      renderInboxBadge();
+      return items;
+    }, function() { return items; });
   }, function() {
     _inboxLoading = false;
     _inboxItems = _inboxItems || [];
