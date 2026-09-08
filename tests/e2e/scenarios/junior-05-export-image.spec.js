@@ -182,3 +182,81 @@ test('手順3〜5 資料一式: 選んだ図種をまとめて 1 回で資料化
   await expect(page.locator('#mboard-summary')).toContainText('すべて最新');
   await expect(page.locator('tr.mboard-row[data-kind="クラス図"]')).toHaveAttribute('data-status', 'fresh');
 });
+
+// 「要求ID対応」— 図の要素と設計書の ASPICE 要求 ID (SWReq-xxx) の対応。
+// BLK-junior-20260909-0103-wish: 手順5 は「画像を書き出す」だけでなく
+// 「要求ID対応表も同時に確定させる」に変わる。図を作った後で別文書に
+// 対応表を作り直す二度手間を無くす。
+async function openReqTrace(page) {
+  await page.locator('#btn-export').click();
+  await page.waitForSelector('#export-menu', { state: 'visible' });
+  await page.locator('#exp-req-trace').click();
+  await page.waitForSelector('#req-modal', { state: 'visible' });
+  await page.waitForTimeout(300);
+}
+
+test('手順5 要求ID対応: クラス図の要素が一覧に出て、要求IDを付けると図に残る', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.typeDsl(page, GPIO_CLASS);
+  await S.renameActive(page, 'GPIOドライバ派生クラス');
+  await openReqTrace(page);
+
+  // 到達条件その1: 要求 ID を付けられる要素 (クラス・メソッド) が並ぶ。
+  await expect(page.locator('tr.req-row[data-key="Gpio_Driver"]')).toHaveCount(1);
+  await expect(page.locator('tr.req-row[data-key="Gpio_Driver.Init()"]')).toHaveCount(1);
+  await expect(page.locator('#req-summary')).toContainText('要求 ID が付いています');
+
+  // 到達条件その2: 付けた対応は図 (DSL) に残る — 別文書を作らない。
+  await page.locator('tr.req-row[data-key="Gpio_Driver.Init()"] input.req-ids').fill('SWReq-101, SWReq-102');
+  await page.locator('tr.req-row[data-key="Gpio_Driver.Init()"] input.req-ids').blur();
+  await page.waitForTimeout(400);
+  await expect(page.locator('tr.req-row[data-key="Gpio_Driver.Init()"]')).toHaveAttribute('data-status', 'assigned');
+  const dsl = await page.locator('#editor').inputValue();
+  expect(dsl).toContain("' @req Gpio_Driver.Init() = SWReq-101, SWReq-102");
+  // 付け忘れは一覧のまま残る (どれが残っているかが読める)。
+  await expect(page.locator('#req-summary')).toContainText('残り');
+});
+
+test('手順5 要求ID対応: 画像と一緒に対応表(CSV)が書き出せる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.typeDsl(page, GPIO_CLASS);
+  await S.renameActive(page, 'GPIOドライバ派生クラス');
+  await openReqTrace(page);
+
+  await page.locator('tr.req-row[data-key="Gpio_Driver.Init()"] input.req-ids').fill('SWReq-101');
+  await page.locator('tr.req-row[data-key="Gpio_Driver.Init()"] input.req-ids').blur();
+  await page.waitForTimeout(300);
+
+  const dl = page.waitForEvent('download', { timeout: 30000 }).catch(() => null);
+  await page.locator('#req-export').click();
+  const download = await dl;
+
+  // 到達条件: 画像と並ぶ名前の対応表が 1 本出る。
+  expect(download).not.toBeNull();
+  expect(download.suggestedFilename()).toBe('GPIOドライバ派生クラス_要求対応表.csv');
+});
+
+test('手順5 要求ID対応: 脚注に入れると、書き出す画像そのものが対応表を持つ', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.typeDsl(page, GPIO_CLASS);
+  await S.renameActive(page, 'GPIOドライバ派生クラス');
+  await openReqTrace(page);
+
+  await page.locator('tr.req-row[data-key="Gpio_Driver.Init()"] input.req-ids').fill('SWReq-101');
+  await page.locator('tr.req-row[data-key="Gpio_Driver.Init()"] input.req-ids').blur();
+  await page.waitForTimeout(300);
+  await page.locator('#req-footnote').check();
+  await page.waitForTimeout(500);
+
+  // 到達条件: 図に脚注が入り、描画も通る (画像だけを貼っても対応が伝わる)。
+  const dsl = await page.locator('#editor').inputValue();
+  expect(dsl).toContain('legend bottom');
+  expect(dsl).toContain('Gpio_Driver.Init() : SWReq-101');
+  await page.waitForTimeout(1500);
+  await expect(page.locator('#preview-svg svg')).toBeVisible();
+
+  // 外せば元に戻る (脚注入りのまま配り続けない)。
+  await page.locator('#req-footnote').uncheck();
+  await page.waitForTimeout(400);
+  expect(await page.locator('#editor').inputValue()).not.toContain('legend bottom');
+});

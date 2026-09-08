@@ -1940,6 +1940,43 @@ html, body {
 }
 #mexp-plan { padding: 6px 14px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-secondary); }
 #mexp-state { padding: 8px 14px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-secondary); min-height: 16px; }
+/* 要求ID対応 (BLK-junior-20260909-0103-wish) */
+#req-modal-content {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  width: 76vw;
+  max-width: 900px;
+  max-height: 84vh;
+  display: flex;
+  flex-direction: column;
+}
+#req-head {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px; border-bottom: 1px solid var(--border);
+}
+#req-tools { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+#req-tools button, #req-tools label {
+  background: var(--bg-tertiary); border: 1px solid var(--border);
+  color: var(--text-primary); border-radius: 4px; padding: 4px 10px; font-size: 12px; cursor: pointer;
+}
+#req-tools #req-export { border-color: var(--accent); color: var(--accent); }
+#req-tools #req-export[disabled] { opacity: 0.5; cursor: default; border-color: var(--border); color: var(--text-secondary); }
+#req-summary { padding: 6px 14px; border-bottom: 1px solid var(--border); font-size: 11px; color: var(--text-secondary); }
+#req-body { padding: 4px 14px 10px; overflow: auto; }
+#req-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+#req-table th, #req-table td {
+  border-bottom: 1px solid var(--border); padding: 4px 6px; text-align: left; vertical-align: middle;
+}
+#req-table th { color: var(--text-secondary); font-weight: normal; font-size: 11px; }
+#req-table td.req-kind { white-space: nowrap; color: var(--text-secondary); }
+#req-table input.req-ids {
+  width: 100%; background: var(--bg-primary); color: var(--text-primary);
+  border: 1px solid var(--border); border-radius: 3px; padding: 2px 6px; font-size: 12px;
+}
+tr.req-row[data-status="none"] td.req-kind { color: #d19a66; }
+tr.req-row[data-status="orphan"] td.req-element { color: #e06c75; }
+#req-state { padding: 8px 14px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-secondary); min-height: 16px; }
 /* 部品の資料一式 (BLK-junior-20260909-0003-wish) */
 #mboard-modal-content {
   background: var(--bg-secondary);
@@ -4572,6 +4609,9 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <!-- BLK-junior-20260909-0003-wish: 設計書に貼る資料は 1 部品の複数図種で 1 組。
              どの図種の資料用がまだ無いか・元の図が資料用より新しくないかを一覧で見せ、
              手当ての要る図種だけをまとめて 1 回で書き出す -->
+        <!-- BLK-junior-20260909-0103-wish: 図の要素と設計書の要求 ID (SWReq-xxx) の対応を
+             図の中に持ち、Export のときに対応表 (CSV) と画像の脚注を同時に確定させる -->
+        <button id="exp-req-trace" title="クラス・メソッド・状態・遷移に要求ID（SWReq-xxx）を付け、対応表をCSVで書き出す（画像の脚注にも入れられる）">要求ID対応を付ける／対応表を書き出す…</button>
         <button id="exp-material-board" title="部品の図種を全部並べ、資料用が無い図種・元が新しい図種を色分けで見せて、選んだ図種をまとめて資料化する">部品の資料一式を見る／まとめて資料化…</button>
       </div>
       <div id="bulk-export-status" role="status"></div>
@@ -5256,6 +5296,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/component-pack.js"></script>
 <script src="src/core/material-export.js"></script>
 <script src="src/core/material-board.js"></script>
+<script src="src/core/req-trace.js"></script>
 <script src="src/core/rename-history.js"></script>
 <script src="src/core/vault.js"></script>
 <script src="src/core/component-inventory.js"></script>
@@ -5580,6 +5621,30 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       </table>
     </div>
     <div id="mboard-state" role="status"></div>
+  </div>
+</div>
+<!-- 要求ID対応 (BLK-junior-20260909-0103-wish) -->
+<div id="req-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+  <div id="req-modal-content">
+    <div id="req-head">
+      <strong>要求ID対応</strong>
+      <span id="req-title"></span>
+      <span id="req-tools">
+        <label><input type="checkbox" id="req-footnote"> 画像の脚注にも入れる</label>
+        <button type="button" id="req-export">対応表を書き出す</button>
+        <button type="button" id="req-close">閉じる</button>
+      </span>
+    </div>
+    <div id="req-summary" role="status"></div>
+    <div id="req-body">
+      <table id="req-table">
+        <thead>
+          <tr><th>種別</th><th>要素</th><th>要求ID（SWReq-101, SWReq-102 …）</th></tr>
+        </thead>
+        <tbody id="req-rows"></tbody>
+      </table>
+    </div>
+    <div id="req-state" role="status"></div>
   </div>
 </div>
 <!-- 監査履歴 (BLK-reviewer-20260907-2303-wish) -->
