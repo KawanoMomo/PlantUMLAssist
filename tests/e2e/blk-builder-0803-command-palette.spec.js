@@ -67,7 +67,11 @@ test.describe('BLK-builder-0803 コマンドパレット', () => {
     await gotoApp(page);
     await expect(page.locator('#diagram-type')).toHaveValue('plantuml-sequence');
     await page.keyboard.press('Control+k');
-    await page.locator('#cp-input').fill('状態遷移');
+    // BLK-builder-20260908-0908-3: 「状態遷移」だけだと、ツール分類に入った
+    // 「状態遷移のトレース漏れ」も当たり、先に並ぶ (分類の見出しがコマンドより上)。
+    // ここが見たいのは図種の切り替えなので、図種の候補を名指しする。
+    await page.locator('#cp-input').fill('図種を切り替え: State');
+    await expect(page.locator('#cp-list .cp-item')).toHaveCount(1);
     await page.keyboard.press('Enter');
     await expect(page.locator('#cp-modal')).toBeHidden();
     await expect(page.locator('#diagram-type')).toHaveValue('plantuml-state');

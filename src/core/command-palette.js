@@ -22,17 +22,71 @@ window.MA = window.MA || {};
 // element と relation は別 kind で同じ 'jump' に入る)。
 window.MA.commandPalette = (function() {
   // 見出しの並び。開いた直後にまず「図に足せるもの」が見える順にする。
-  var GROUPS = ['add', 'jump', 'selected', 'command'];
+  // design「実装現況」7b: タブ列を畳むと、機能の存在に気付く手掛かりは Ctrl+K だけになる。
+  // 道具を 1 つの「コマンド」見出しに 30 件積んだままでは、名前を先に知っている道具しか
+  // 引けない。7a のツールメニューと同じ 6 分類で見出しを分け、Tab の絞り込み先もそこにする。
+  // 分類の正本は tool-menu.js (メニューと同じ並び・同じ言葉)。ここでは写さない
+  // — 2 か所に書くと、道具が増えたときにメニューにはあってパレットには無い、が起きる。
+  var TOOL_GROUPS = ['make', 'edit', 'find', 'check', 'review', 'give'];
+  var GROUPS = ['add', 'jump', 'selected'].concat(TOOL_GROUPS).concat(['command']);
   var GROUP_LABELS = {
     add: '図に足す / Add',
     jump: '図の要素へ移動 / Jump to element',
     selected: '選択中の要素に対して / Selected',
+    make: '図をつくる / Make',
+    edit: '書き換える / Edit',
+    find: '探す・見比べる / Find',
+    check: '確かめる / Check',
+    review: 'レビュー / Review',
+    give: '渡す / Deliver',
     command: 'コマンド / Command',
+  };
+  // 行の左に出す短い分類チップ。見出しの外へ絞り込んでも、その行が何の仲間かが
+  // 1 語で分かるようにする (design 7b のパレットは行ごとに分類を出している)。
+  var GROUP_CHIPS = {
+    make: '図をつくる', edit: '書き換える', find: '探す・見比べる',
+    check: '確かめる', review: 'レビュー', give: '渡す',
   };
   // 見出しの下に 1 行だけ出す補足。何が起きるか読まずに分かるようにする。
   var GROUP_NOTES = {
     jump: '選ぶとその行を選択し、右パネルで編集できます。',
   };
+
+  function _toolMenu() {
+    return (typeof window !== 'undefined' && window.MA) ? window.MA.toolMenu : null;
+  }
+
+  // コマンドが押すボタンの id → 6 分類。tool-menu に載っていないボタン
+  // (ファイル操作・ズーム・図種切替) は道具ではないので分類しない。
+  function groupOfButton(buttonId) {
+    var tm = _toolMenu();
+    if (!tm || !buttonId) return null;
+    var g = tm.groupOf(buttonId);
+    return (g && TOOL_GROUPS.indexOf(g) >= 0) ? g : null;
+  }
+
+  // メニューに出ている「何をするか」の言い換え。パレットでも同じ言葉にする
+  // (メニューで覚えた語で引けるように)。
+  function labelOfButton(buttonId) {
+    var tm = _toolMenu();
+    return (tm && buttonId) ? tm.labelOf(buttonId) : null;
+  }
+
+  function groupChip(g) { return GROUP_CHIPS[g] || ''; }
+
+  // 道具の題 (「名前突合を開く / Name audit」) から、右端に置く短い呼び名を作る。
+  // 英語併記と「を開く」等の動詞は落とす — 分類チップと本文で何をするかは
+  // もう言えているので、右端は「どの道具か」の 1 語でよい。
+  function _toolHint(title, label) {
+    var short = toolShortName(title);
+    return short === label ? '' : short;
+  }
+
+  function toolShortName(title) {
+    var s = String(title == null ? '' : title).split('/')[0].trim();
+    s = s.replace(/(を|に)?(開く|作る|する|見る)$/, '').trim();
+    return s;
+  }
   // relation 行の矢印。長いものから並べる (-> が -->> を食わないように)。
   var REL_ARROWS = [
     '<-->', '-->>', '-->x', '<<--', '<|--', '<|..', '--|>', '..|>',
@@ -189,15 +243,23 @@ window.MA.commandPalette = (function() {
   function buildItems(commands, dslText) {
     var cmds = (commands || []).map(function(c) {
       var g = c.group || 'command';
+      // 道具のコマンドは 6 分類へ移す。行の見出しはメニューと同じ言い換えにし、
+      // 元の title は右端に回して「どの道具か」を残す (design 7b の 3 段組)。
+      var toolGroup = (g === 'command') ? groupOfButton(c.button) : null;
+      var toolLabel = toolGroup ? labelOfButton(c.button) : null;
+      if (toolGroup) g = toolGroup;
       return {
         id: (g === 'command' ? 'command:' : g + ':') + c.id,
         kind: g === 'command' ? 'command' : g,
         group: g,
-        badge: c.badge || (g === 'add' ? '追加' : g === 'selected' ? '選択中' : 'コマンド'),
-        title: c.title,
-        hint: c.hint || '',
+        badge: c.badge || (g === 'add' ? '追加' : g === 'selected' ? '選択中'
+          : toolGroup ? groupChip(toolGroup) : 'コマンド'),
+        title: toolLabel || c.title,
+        // 右端は「どの道具か」。言い換えと同じ文字になるなら出さない (同じ語が 2 度並ぶ)。
+        hint: toolLabel ? _toolHint(c.title, toolLabel) : (c.hint || ''),
         run: c.run,
-        keywords: [c.title].concat(c.keywords || []),
+        // メニューの言い換えでも元の題でも引けるようにする。どちらで覚えたかは人による。
+        keywords: [c.title].concat(toolLabel ? [toolLabel] : []).concat(c.keywords || []),
       };
     });
     return sortByGroup(cmds.concat(elementItems(dslText)).concat(relationItems(dslText)));
@@ -298,6 +360,15 @@ window.MA.commandPalette = (function() {
   // 並びは group を最優先にする。見出しごとに区切って出す (design 2a) 以上、
   // 同じ group の候補が離れて並ぶと見出しが繰り返されて読めなくなる。
   // group の中では近い順 (score)。
+  // 完全一致した道具のコマンドは 0、それ以外は 1。見出しをまたぐのはこの 1 段だけ。
+  // 図の中身 (図に足す / 要素へ移動) は見出し順のまま読ませる — そちらは
+  // 「何を探しているか」ではなく「今どこを見ているか」で並んでいた方が読める。
+  function _exactRank(item, s) {
+    if (s >= 0) return 1;
+    var g = (item && item.group) || 'command';
+    return (g === 'command' || TOOL_GROUPS.indexOf(g) >= 0) ? 0 : 1;
+  }
+
   function filter(items, query) {
     var q = _s(query).trim();
     if (!q) return (items || []).slice();
@@ -307,8 +378,13 @@ window.MA.commandPalette = (function() {
       if (s === null) return;
       scored.push({ item: item, s: s, i: i });
     });
+    // BLK-builder-20260908-0908-3: 見出しが 4 つから 9 つに増えたので、見出し順を
+    // 最優先にしたままだと、その語で名指しされた候補 (完全一致) が、たまたま同じ語を
+    // 含むだけの候補に前の見出しから抜かれる (「保存」で「前回保存からの差分」が 1 位に
+    // なった)。完全一致だけは見出しより先に出す。それ以外は従来どおり見出し順。
     scored.sort(function(a, b) {
-      return groupIndex(a.item) - groupIndex(b.item) || a.s - b.s || a.i - b.i;
+      return _exactRank(a.item, a.s) - _exactRank(b.item, b.s)
+        || groupIndex(a.item) - groupIndex(b.item) || a.s - b.s || a.i - b.i;
     });
     return scored.map(function(x) { return x.item; });
   }
@@ -330,6 +406,10 @@ window.MA.commandPalette = (function() {
     relationItems: relationItems,
     sortByGroup: sortByGroup,
     groupLabel: groupLabel,
+    groupChip: groupChip,
+    groupOfButton: groupOfButton,
+    toolShortName: toolShortName,
+    TOOL_GROUPS: TOOL_GROUPS,
     groupNote: groupNote,
     groupsOf: groupsOf,
     cycleGroup: cycleGroup,

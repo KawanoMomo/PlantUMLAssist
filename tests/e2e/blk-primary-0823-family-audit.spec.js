@@ -123,7 +123,9 @@ test.describe('BLK-primary-0823 系統チェック', () => {
   test('コマンドパレットからも開ける', async ({ page }) => {
     await setupFourDocs(page);
     await page.keyboard.press('Control+k');
-    await page.locator('#cp-input').fill('系統');
+    // BLK-builder-20260908-0908-3: 「系統」だけでは「系統ごと複製する」
+    // (図をつくる) も当たり、分類の見出し順で先に並ぶ。開きたい道具を名指しする。
+    await page.locator('#cp-input').fill('系統内の動作名');
     await page.keyboard.press('Enter');
     await expect(page.locator('#fa-modal')).toBeVisible();
   });
