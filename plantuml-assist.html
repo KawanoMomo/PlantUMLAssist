@@ -303,8 +303,13 @@ html, body {
   font-family: var(--font-mono);
   font-size: 10px;
   color: var(--accent);
-  width: 46px;
+  /* design 7b: チップが分類名 (探す・見比べる) になったので 46px では切れる。
+     題の左端はそろえたいので、幅は固定のまま広げる。 */
+  width: 78px;
   flex-shrink: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 /* design「1a 展開」2a: 候補を「図に足す / 移動 / 選択中 / コマンド」の見出しで区切る */
 .cp-group {

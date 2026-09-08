@@ -121,7 +121,9 @@ test.describe('BLK-builder-0923 コマンドパレットの見出しと Tab 絞�
     await page.keyboard.press('Tab');
     await expect(heads.first()).toHaveText('図の要素へ移動 / Jump to element');
 
-    await page.keyboard.press('Tab');   // command
+    // BLK-builder-20260908-0908-3: 見出しは 4 つ固定ではなく、道具の 6 分類が
+    // 加わって図と選択の状態で増減する。残りを一周ぶん送って「全部」に戻す。
+    for (let i = 2; i < all; i++) await page.keyboard.press('Tab');
     await page.keyboard.press('Tab');   // 全部に戻る
     await expect(heads).toHaveCount(all);
     await expect(foot).not.toContainText('図に足す / Add');
