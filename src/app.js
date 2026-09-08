@@ -15264,8 +15264,32 @@ function renderSvg() {
   });
 }
 
+// BLK-junior-20260908-1903: 保存先 (backend / fileDir) はブラウザの好みではなく
+// マシンの置き場所なので server が `.assist-prefs.json` に覚えている。だがその
+// 取り込み (autoSave.init → hydrateFromServer) は「前回の DSL を復元する」処理の
+// 中にあり、ワークスペースが残っているプロファイルでは丸ごと飛ばされていた。
+// その結果、覚えているのに設定は既定 (localStorage / ./autosave) に戻り、
+// 起動のたびに ⚙設定 → バックエンドを file → フルパスを打ち直すことになっていた。
+//
+// 取り込みは復元とは別の仕事なので init より前に置く。保存先は init の中で
+// ワークスペース復元・自動保存の宛先として既に使われるため、後から入れ替えると
+// 「最初の 1 枚だけ既定のフォルダに保存される」ずれを作る。
+function bootWithSavedPrefs() {
+  var as = window.MA.autoSave;
+  if (!as || !as.hydrateFromServer) { init(); return; }
+  var started = false;
+  function go() { if (!started) { started = true; init(); } }
+  // server が黙っていても画面は開く。3 秒でこの回は諦める (次の起動で入る)。
+  var timer = window.setTimeout(go, 3000);
+  function done() { window.clearTimeout(timer); go(); }
+  var p;
+  try { p = as.hydrateFromServer(); } catch (e) { p = null; }
+  if (!p || typeof p.then !== 'function') { done(); return; }
+  p.then(done, done);
+}
+
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', init);
+  document.addEventListener('DOMContentLoaded', bootWithSavedPrefs);
 } else {
-  init();
+  bootWithSavedPrefs();
 }

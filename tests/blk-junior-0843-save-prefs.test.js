@@ -155,6 +155,21 @@ describe('autoSave — 保存先の引き継ぎ', function() {
     }, function(err) { global.window.fetch = saved; throw err; });
   });
 
+  // BLK-junior-20260908-1903: 起動の入口で 1 回、autoSave.init でもう 1 回
+  // 呼ばれるようになった。2 回目が 1 回目の結果を崩さないことを確かめる。
+  test('2 度呼んでも保存先は動かない (2 回目は取り込むものが無い)', function() {
+    serverPrefs = { backend: 'file', fileDir: 'E:/persona-data/junior' };
+    return as.hydrateFromServer().then(function(first) {
+      expect(first).toEqual({ backend: 'file', fileDir: 'E:/persona-data/junior' });
+      // 2 回目の前に server 側が別の値になっていても、このブラウザの指定が勝つ。
+      serverPrefs = { backend: 'file', fileDir: 'E:/persona-data/primary' };
+      return as.hydrateFromServer();
+    }).then(function(second) {
+      expect(second).toEqual({});
+      expect(as.getConfig().fileDir).toBe('E:/persona-data/junior');
+    });
+  });
+
   test('server が居なくても getConfig は既定のまま動く', function() {
     var saved = global.window.fetch;
     global.window.fetch = function() { return Promise.reject(new Error('ECONNREFUSED')); };
