@@ -11710,12 +11710,67 @@ function setupHandoffPackage() {
 // ここは対象の枚数・題・版数を選ばせ、1 つの zip にまとめて出す。
 // 判定と HTML は src/core/delivery-package.js の職掌。ここは材料を集めるだけ。
 
-var _dpDocs = null;      // 対象に選んでいる図 (name の配列)。null は「全部」
+var _dpDocs = null;      // 対象に選んでいる図 (name の配列)。null は「まだ既定を決めていない」
+
+// BLK-primary-20260908-1903: 対象の的は保存フォルダ全体。開いているタブだけを
+// 見ていたので、14 枚のフォルダで 5 枚しかタブが無いと残り 9 枚が黙って落ちた。
+var _dpFileDocs = [];    // 保存フォルダから読んだ図 ({name, dsl})
+var _dpRoles = {};       // file-role (テンプレは既定から外す)
+var _dpFolderDir = null; // 読み込み済みのフォルダ。開き直すたびに取り直す
+var _dpLoading = false;
+var _dpSeq = 0;
+
+// 開いているタブ + 保存フォルダ。判定は delivery-package.candidates の職掌。
+function _dpCandidates() {
+  var DP = window.MA.deliveryPackage;
+  var WS = window.MA.workspace;
+  var open = _renameDocs();
+  if (!DP || !DP.candidates) return open;
+  return DP.candidates(open, _dpFileDocs, _dpRoles,
+    (WS && WS.detectType) ? WS.detectType : null);
+}
 
 function _dpSelectedDocs() {
-  var docs = _renameDocs();
+  var docs = _dpCandidates();
   if (!_dpDocs) return docs;
   return docs.filter(function(d) { return _dpDocs.indexOf(d.name) !== -1; });
+}
+
+// 保存フォルダの全 puml を読む。localStorage 運用では「フォルダ全体」という的が
+// 無いので何もしない (その場合の的は開いているタブのまま)。
+function _dpLoadFolder() {
+  var WS = window.MA.workspace;
+  if (!WS || !WS.listFolder || !_fiFolderMode()) {
+    _dpFileDocs = []; _dpRoles = {}; _dpFolderDir = null;
+    return Promise.resolve(false);
+  }
+  var dir = _wsFileDir();
+  var seq = ++_dpSeq;
+  _dpLoading = true;
+  return WS.listFolder(dir).then(function(info) {
+    var names = ((info && info.entries) || []).map(function(e) {
+      return e && typeof e === 'object' ? e.name : e;
+    }).filter(function(n) { return n; });
+    var roles = (info && info.roles) || {};
+    return Promise.all(names.map(function(n) {
+      return WS.loadFile(n, dir).then(function(text) {
+        return typeof text === 'string' ? { name: n, dsl: text } : null;
+      }, function() { return null; });
+    })).then(function(docs) {
+      if (seq !== _dpSeq) return false;
+      _dpFileDocs = docs.filter(function(d) { return d; });
+      _dpRoles = roles;
+      _dpFolderDir = dir;
+      _dpLoading = false;
+      // フォルダが読めたので既定を取り直す (タブだけの既定を引きずらない)。
+      _dpDocs = null;
+      if (document.getElementById('dp-modal-content')) renderDeliveryPanel();
+      return true;
+    });
+  }).catch(function() {
+    if (seq === _dpSeq) { _dpLoading = false; renderDeliveryPanel(); }
+    return false;
+  });
 }
 
 function _dpBoard(docs) {
@@ -11737,9 +11792,10 @@ function renderDeliveryPanel() {
   var content = document.getElementById('dp-modal-content');
   if (!DP || !content) return null;
   var esc = window.MA.htmlUtils.escHtml;
-  var all = _renameDocs();
-  if (!_dpDocs) _dpDocs = all.map(function(d) { return d.name; });
+  var all = _dpCandidates();
+  if (!_dpDocs) _dpDocs = DP.defaultPicks(all);
   var picked = _dpSelectedDocs();
+  var cover = DP.coverage(all, _dpDocs);
   var last = DP.lastDelivery();
   var submit = _dpSubmitResult(picked);
   var board = _dpBoard(picked);
@@ -11770,19 +11826,35 @@ function renderDeliveryPanel() {
   html += '<div style="margin-top:12px;font-size:10px;color:var(--accent);font-weight:bold;">'
     + '対象の図 <span id="dp-count" style="color:var(--text-secondary);font-weight:normal;">'
     + esc(picked.length + ' / ' + all.length + ' 枚') + '</span>'
+    + (_dpLoading ? ' <span id="dp-loading" style="color:var(--text-secondary);font-weight:normal;">保存フォルダを読んでいます…</span>' : '')
     + ' <button type="button" id="dp-all" style="' + BTN + 'padding:1px 8px;">全部</button>'
     + ' <button type="button" id="dp-none" style="' + BTN + 'padding:1px 8px;">全部外す</button></div>';
+  // 欠落の警告。枚数を数えなくても「9 枚落ちる」と読めるようにする。
+  html += '<div id="dp-coverage" data-warn="' + (cover.warn ? '1' : '0')
+    + '" data-total="' + cover.total + '" data-picked="' + cover.picked + '"'
+    + ' data-missing="' + cover.missing + '" data-unopened="' + cover.missingUnopened + '"'
+    + ' style="margin-top:4px;font-size:11px;'
+    + (cover.warn ? 'color:var(--warning,#d98b00);' : 'color:var(--text-secondary);') + '">'
+    + esc((cover.warn ? '⚠ ' : '') + cover.line) + '</div>';
   html += '<div id="dp-list" style="max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:3px;margin-top:4px;padding:4px;">';
   all.forEach(function(d) {
     var on = _dpDocs.indexOf(d.name) !== -1;
     var st = '';
     (board ? board.entries : []).forEach(function(e) { if (e.name === d.name) st = e.status; });
     var label = st === 'new' ? '新規' : (st === 'changed' ? '変更' : (st === 'same' ? '変更なし' : ''));
-    html += '<label class="dp-item" style="display:block;font-size:11px;color:var(--text-primary);padding:1px 2px;">'
+    // 開いていない図・テンプレはその旨を出す。既定から外れる理由が見えないと
+    // 「勝手に減った」と同じになる。
+    var where = d.open === false ? '未オープン' : '';
+    var role = d.role === 'template' ? 'テンプレ' : '';
+    html += '<label class="dp-item" data-open="' + (d.open === false ? '0' : '1')
+      + '" data-role="' + esc(d.role || 'unset')
+      + '" style="display:block;font-size:11px;color:var(--text-primary);padding:1px 2px;">'
       + '<input type="checkbox" class="dp-pick" data-name="' + esc(d.name) + '"' + (on ? ' checked' : '') + '> '
       + esc(d.name)
       + '<span style="color:var(--text-secondary);"> ' + esc(String(d.diagramType || '').replace('plantuml-', ''))
-      + (label ? ' ・ ' + esc(label) : '') + '</span></label>';
+      + (label ? ' ・ ' + esc(label) : '')
+      + (where ? ' ・ ' + esc(where) : '')
+      + (role ? ' ・ ' + esc(role) : '') + '</span></label>';
   });
   html += '</div>';
 
@@ -11842,6 +11914,8 @@ function openDeliveryPanel() {
   _drName = null;
   var content = document.getElementById('dp-modal-content');
   if (content) content.innerHTML = '';
+  // 保存フォルダ全体が対象の的。読み終わったら _dpLoadFolder が描き直す。
+  _dpLoadFolder();
   var model = renderDeliveryPanel();
   modal.style.display = 'flex';
   return model;
@@ -11884,7 +11958,10 @@ function buildDeliveryPackage() {
     downloadBlob(name, new Blob([BE.buildZip(DP.files(pkg))], { type: 'application/zip' }));
     // 出した時点を控える。次に作るときの「前回提出から」の基準になる。
     DP.markDelivered(docs, { title: pkg.title, revision: pkg.revision });
-    var msg = '納品パッケージを書き出しました（' + name + '） ' + pkg.verdict;
+    // 何枚のうち何枚を出したかを結果にも残す (zip を開くまで気づけない欠落を作らない)。
+    var cov = DP.coverage(_dpCandidates(), _dpDocs);
+    var msg = '納品パッケージを書き出しました（' + name + '） ' + cov.picked + ' / ' + cov.total + ' 枚 ・ ' + pkg.verdict
+      + (cov.missing > 0 ? ' ／ ⚠ ' + cov.missing + ' 枚は対象外' : '');
     if (status) status.textContent = msg;
     if (window.MA.toast) window.MA.toast.show(msg);
     return pkg;
