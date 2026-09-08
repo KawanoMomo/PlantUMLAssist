@@ -11009,18 +11009,35 @@ function _consistencyDocs() {
   return window.MA.workspace.list();
 }
 
+// BLK-reviewer-20260908-1703: ラベル位置の慣習ズレは「⇉ 系統チェック」を開けば
+// 並ぶが、開くまで在ることに気付けない。実在チェックを通ってしまうズレなので、
+// 気付く手掛かりが要る。同じ突合結果を下端の 整合 の件数にも数え、開く前から出す。
+function _labelOddRows(docs) {
+  var LP = window.MA.labelPosition;
+  var TC = window.MA.traceCoverage;
+  if (!LP || !TC) return [];
+  var r = LP.rank(TC.audit(docs));
+  return (r && r.odd) ? r.odd : [];
+}
+
 function renderConsistencyBadge() {
   var btn = document.getElementById('status-consistency');
   var ck = window.MA.consistency;
   if (!btn || !ck) return null;
-  var result = ck.check(_consistencyDocs());
-  btn.textContent = ck.badgeLabel(result);
-  btn.className = result.count > 0 ? 'has-warning' : '';
-  btn.title = result.count > 0
+  var docs = _consistencyDocs();
+  var result = ck.check(docs);
+  result.labelPos = _labelOddRows(docs);
+  var total = result.count + result.labelPos.length;
+  btn.textContent = ck.badgeLabel({ count: total });
+  btn.className = total > 0 ? 'has-warning' : '';
+  btn.setAttribute('data-label-pos', String(result.labelPos.length));
+  btn.title = total > 0
     ? ('命名 ' + result.naming.length + ' / 未使用 ' + result.unused.length
        + ' / メソッド ' + result.methods.length + ' / 粒度 ' + result.granularity.length
-       + ' / イベント ' + result.events.length)
-    : '命名規約・未使用 participant・メソッド不一致・粒度不一致・イベント名不一致はない';
+       + ' / イベント ' + result.events.length
+       + ' / ラベル位置 ' + result.labelPos.length)
+    : '命名規約・未使用 participant・メソッド不一致・粒度不一致・イベント名不一致・'
+      + 'ラベル位置の慣習ズレはない';
   return result;
 }
 
@@ -11030,7 +11047,9 @@ function openConsistencyPanel() {
   var ck = window.MA.consistency;
   if (!modal || !content || !ck) return null;
   var esc = window.MA.htmlUtils.escHtml;
-  var result = ck.check(_consistencyDocs());
+  var ckDocs = _consistencyDocs();
+  var result = ck.check(ckDocs);
+  result.labelPos = _labelOddRows(ckDocs);
 
   var SECTION = 'font-size:10px;color:var(--accent);font-weight:bold;margin:12px 0 4px 0;';
   var ROW = 'font-size:11px;color:var(--text-primary);padding:2px 0;border-bottom:1px solid var(--border);';
@@ -11049,14 +11068,29 @@ function openConsistencyPanel() {
     return html;
   }
 
+  var ckTotal = result.count + result.labelPos.length;
   var html = '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">整合性チェック</h3>'
-    + '<div id="ck-summary" data-count="' + result.count + '" '
+    + '<div id="ck-summary" data-count="' + ckTotal + '" '
+    + 'data-label-pos="' + result.labelPos.length + '" '
     + 'data-naming="' + result.naming.length + '" data-unused="' + result.unused.length + '" '
     + 'data-methods="' + result.methods.length + '" data-granularity="' + result.granularity.length + '" '
     + 'data-events="' + result.events.length + '" '
     + 'data-method-replies="' + (result.methodReplies || []).length + '" '
-    + 'style="font-size:11px;color:' + (result.count ? 'var(--accent-orange)' : 'var(--accent-green)') + ';">'
-    + (result.count === 0 ? '警告はありません' : '警告 ' + result.count + ' 件') + '</div>';
+    + 'style="font-size:11px;color:' + (ckTotal ? 'var(--accent-orange)' : 'var(--accent-green)') + ';">'
+    + (ckTotal === 0 ? '警告はありません' : '警告 ' + ckTotal + ' 件') + '</div>';
+
+  // 4.11 の慣習ズレ。実在チェックは通ってしまうので、ここに出さないと
+  // 系統ごとの図を開いて「ラベルが何番目の呼び出しか」を数えるしかない。
+  html += section('ck-labelpos', 'ラベル位置の慣習ズレ (他系統と違う位置のメッセージを指している)',
+    result.labelPos, function(r) {
+      var ex = (r.entries || []).filter(function(e) { return e.odd; })[0] || (r.entries || [])[0];
+      return '<span style="font-family:var(--font-mono);color:var(--accent-orange);">' + esc(r.key) + '</span>'
+        + ' — ' + esc(r.conventionLabel || '')
+        + ' を指す (他系統は ' + esc(r.commonLabel || '') + ')'
+        + (ex ? ' <span style="color:var(--text-secondary);">' + esc(ex.label || '')
+                + (ex.message && ex.message !== ex.label ? ' = ' + esc(ex.message) : '')
+                + ' は ' + ex.ordinal + '/' + ex.total + ' 番目</span>' : '');
+    });
 
   html += section('ck-naming', '命名規約の逸脱 (多数派の接尾辞から外れている)', result.naming, function(r) {
     return '<span style="font-family:var(--font-mono);color:var(--accent-orange);">' + esc(r.name) + '</span>'
@@ -11102,6 +11136,24 @@ function openConsistencyPanel() {
   var rows = content.querySelectorAll('.ck-row');
   for (var i = 0; i < rows.length; i++) rows[i].setAttribute('style', ROW);
   modal.style.display = 'flex';
+
+  // ズレの行から「⇉ 系統チェック」のその系統へ降りる。ここで系統名を覚えて
+  // 別のパネルを探し直す、をしないで済むようにする。
+  var lpRows = content.querySelectorAll('#ck-labelpos .ck-row');
+  for (var j = 0; j < lpRows.length; j++) {
+    lpRows[j].setAttribute('style', ROW + 'cursor:pointer;');
+    lpRows[j].setAttribute('data-key', (result.labelPos[j] || {}).key || '');
+    lpRows[j].addEventListener('click', function(ev) {
+      var key = ev.currentTarget.getAttribute('data-key');
+      modal.style.display = 'none';
+      openFamilyAudit();
+      var sel = document.getElementById('fa-family');
+      if (sel && key && sel.value !== key) {
+        sel.value = key;
+        sel.dispatchEvent(new Event('change'));
+      }
+    });
+  }
 
   var closeBtn = document.getElementById('ck-close');
   if (closeBtn) closeBtn.addEventListener('click', function() { modal.style.display = 'none'; });
