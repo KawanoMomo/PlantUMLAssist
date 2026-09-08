@@ -1415,6 +1415,56 @@ html, body {
 #at-body table.at-table tr[data-at-status="再分類"] .at-chip { color: var(--accent-orange); border-color: var(--accent-orange); }
 #at-body table.at-table tr[data-at-status="解消"] .at-chip { color: var(--accent); border-color: var(--accent); }
 #at-body table.at-table tr[data-at-status="新規"] .at-chip { color: var(--accent-red); border-color: var(--accent-red); }
+/* 提出用 zip の図選び (BLK-primary-20260908-1203-wish) */
+#expick-modal-content {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  width: 72vw;
+  max-width: 900px;
+  max-height: 84vh;
+  display: flex;
+  flex-direction: column;
+}
+#expick-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-primary);
+}
+#expick-count { color: var(--accent); white-space: nowrap; }
+#expick-tools { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+#expick-tools button {
+  border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+#expick-tools button.expick-mode.on { border-color: var(--accent); color: var(--accent); }
+#expick-tools #expick-save { border-color: var(--accent); color: var(--accent); }
+#expick-tools #expick-save[disabled] { opacity: 0.5; cursor: default; border-color: var(--border); color: var(--text-secondary); }
+#expick-body { flex: 1; overflow-y: auto; padding: 8px 14px; }
+#expick-body .expick-empty { color: var(--text-secondary); font-size: 12px; padding: 20px 4px; }
+#expick-body label.expick-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  font-size: 12px;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+#expick-body label.expick-row .expick-mark { color: var(--text-secondary); font-size: 11px; }
+#expick-body label.expick-row .expick-mark.fix { color: var(--accent); }
+#expick-state { padding: 8px 14px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-secondary); min-height: 16px; }
 /* 変更サマリボード (BLK-primary-20260907-0923-wish) */
 #cb-modal-content {
   background: var(--bg-secondary);
@@ -3492,6 +3542,9 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button id="exp-png-transparent">PNG（透過背景）</button>
         <button id="exp-clipboard">クリップボードにコピー</button>
         <button id="exp-svg-all">全図をSVGで保存（zip）</button>
+        <!-- BLK-primary-20260908-1203-wish: 提出用 zip に詰める図を、変更サマリボードと
+             同じ「変更図のみ / 要修正のみ」でその場で絞り込んで選ぶ -->
+        <button id="exp-svg-pick" title="変更図のみ・要修正のみで絞り込んで、選んだ図だけを zip に詰める">図を選んでSVGで保存（zip）…</button>
       </div>
       <div id="bulk-export-status" role="status"></div>
     </div>
@@ -4134,6 +4187,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/cross-ref-diff.js"></script>
 <script src="src/core/count-compare.js"></script>
 <script src="src/core/change-board.js"></script>
+<script src="src/core/export-select.js"></script>
 <script src="src/core/handover-notes.js"></script>
 <script src="src/core/review-verdicts.js"></script>
 <script src="src/core/meeting-notes.js"></script>
@@ -4209,6 +4263,25 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       </span>
     </div>
     <div id="cb-body"></div>
+  </div>
+</div>
+<!-- BLK-primary-20260908-1203-wish: 提出用 zip に詰める図を選ぶ。
+     絞り込みは変更サマリボードと同じ「変更図のみ / 要修正のみ」 -->
+<div id="expick-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+  <div id="expick-modal-content">
+    <div id="expick-head">
+      <strong>提出用 zip に詰める図を選ぶ</strong>
+      <span id="expick-count" role="status"></span>
+      <span id="expick-tools">
+        <button type="button" class="expick-mode" id="expick-mode-all" data-mode="all">全部</button>
+        <button type="button" class="expick-mode" id="expick-mode-changed" data-mode="changed" title="前回提出時の基準と中身が違う図と、まだ提出していない図">変更図のみ</button>
+        <button type="button" class="expick-mode" id="expick-mode-fix" data-mode="fix" title="変更サマリボードで [要修正] の印が付いた行を持つ図">要修正のみ</button>
+        <button type="button" id="expick-save">選んだ図を zip で保存</button>
+        <button type="button" id="expick-close">閉じる</button>
+      </span>
+    </div>
+    <div id="expick-body"></div>
+    <div id="expick-state" role="status"></div>
   </div>
 </div>
 <!-- 監査履歴 (BLK-reviewer-20260907-2303-wish) -->

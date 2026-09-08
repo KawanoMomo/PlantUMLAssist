@@ -2213,6 +2213,7 @@ function init() {
   setupDiffPanel();
   setupReviewPanel();
   setupChangeBoard();
+  setupExportPick();
   setupHandoverBanner();
   setupAuditTimeline();
   setupVersionTimeline();
@@ -2402,6 +2403,7 @@ function initCommandPalette() {
       { id: 'export-png-t', title: 'PNG（透過背景）/ Export PNG transparent', hint: 'Export', keywords: ['export', 'png', 'transparent'], run: function() { clickById('exp-png-transparent'); } },
       { id: 'export-clip', title: 'クリップボードにコピー / Copy image', hint: 'Export', keywords: ['export', 'clipboard', 'copy'], run: function() { clickById('exp-clipboard'); } },
       { id: 'export-all', title: '全図を SVG で保存（zip）', hint: 'Export', keywords: ['export', 'svg', 'zip', 'all'], run: function() { clickById('exp-svg-all'); } },
+      { id: 'export-pick', title: '図を選んで SVG で保存（zip）', hint: 'Export', keywords: ['export', 'svg', 'zip', 'pick', 'select', 'changed', 'fix'], run: function() { clickById('exp-svg-pick'); } },
       { id: 'mode-local', title: 'レンダリング: local (Java)', hint: 'Render', keywords: ['render', 'mode', 'local'], run: function() { selectValue('render-mode', 'local'); } },
       { id: 'mode-online', title: 'レンダリング: online (plantuml.com)', hint: 'Render', keywords: ['render', 'mode', 'online'], run: function() { selectValue('render-mode', 'online'); } },
     ];
@@ -9947,12 +9949,12 @@ function downloadBlob(filename, blob) {
   setTimeout(function() { URL.revokeObjectURL(url); }, 10000);
 }
 
-function exportAllSVG() {
+function exportAllSVG(pickedDocs, statusEl) {
   if (!window.MA.bulkExport || !window.MA.workspace) return;
   // 編集中の内容が workspace に載っていないと 1 枚だけ古い DSL で書き出される。
   saveActiveDoc();
-  var docs = window.MA.workspace.list();
-  var status = document.getElementById('bulk-export-status');
+  var docs = Array.isArray(pickedDocs) ? pickedDocs : window.MA.workspace.list();
+  var status = statusEl || document.getElementById('bulk-export-status');
   if (status) { status.style.display = 'block'; status.textContent = 'SVG を書き出しています…'; }
   var files = [];
   return window.MA.bulkExport.run(docs, {
@@ -9972,6 +9974,133 @@ function exportAllSVG() {
     if (window.MA.toast) window.MA.toast.show(msg);
     return summary;
   });
+}
+
+// ── 提出用 zip の図選び (BLK-primary-20260908-1203-wish) ─────────────────────
+// 「全図をSVGで保存（zip）」は開いている図を無条件に全部詰める。顧客に渡すのは
+// ふつう「前回提出後に変わった図」か「[要修正] が付いた図」だけなので、見比べた
+// 結果を頭に置いたまま Export に戻って選び直す二度手間になっていた。
+// ▤ ボードと同じ絞り込みをこの画面に持たせ、選んだ図だけを zip に詰める。
+
+var _expickList = [];
+var _expickMode = 'all';
+
+function _expickDocs() {
+  if (!window.MA.workspace) return [];
+  saveActiveDoc();
+  return window.MA.workspace.list();
+}
+
+function _expickBuild() {
+  var ES = window.MA.exportSelect;
+  if (!ES) return [];
+  var SD = window.MA.saveDiff;
+  var RV = window.MA.reviewVerdicts;
+  return ES.buildList(_expickDocs(), {
+    statusOf: SD ? function(name, dsl) { return SD.statusOf(name, dsl); } : null,
+    fixCountOf: RV ? function(name) { return RV.counts(name).fix; } : null,
+  });
+}
+
+function renderExportPick() {
+  var ES = window.MA.exportSelect;
+  var body = document.getElementById('expick-body');
+  if (!ES || !body) return;
+  var esc = window.MA.htmlUtils.escHtml;
+  if (_expickList.length === 0) {
+    body.innerHTML = '<div class="expick-empty">書き出せる図がありません（DSL が空の図は詰められません）</div>';
+  } else {
+    body.innerHTML = _expickList.map(function(it) {
+      var marks = [];
+      if (it.status === 'new') marks.push('<span class="expick-mark">新規</span>');
+      else if (it.status === 'changed') marks.push('<span class="expick-mark">変更あり</span>');
+      if (it.fix > 0) marks.push('<span class="expick-mark fix">要修正 ' + it.fix + '</span>');
+      return '<label class="expick-row"><input type="checkbox" class="expick-check" data-id="'
+        + esc(String(it.id)) + '"' + (it.selected ? ' checked' : '') + '>'
+        + '<span>' + esc(it.name) + '</span>' + marks.join(' ') + '</label>';
+    }).join('');
+  }
+  var count = document.getElementById('expick-count');
+  if (count) count.textContent = ES.countText(_expickList, _expickMode);
+  ES.MODES.forEach(function(m) {
+    var b = document.getElementById('expick-mode-' + m);
+    if (b) b.classList.toggle('on', m === _expickMode);
+  });
+  var save = document.getElementById('expick-save');
+  if (save) save.disabled = (ES.counts(_expickList).selected === 0);
+}
+
+function toggleExportPick(open) {
+  var modal = document.getElementById('expick-modal');
+  if (!modal) return;
+  var want = (open == null) ? (modal.style.display === 'none' || !modal.style.display) : !!open;
+  if (!want) { modal.style.display = 'none'; return; }
+  _expickList = _expickBuild();
+  _expickMode = 'all';
+  var state = document.getElementById('expick-state');
+  if (state) state.textContent = '';
+  modal.style.display = 'flex';
+  renderExportPick();
+  var body = document.getElementById('expick-body');
+  if (body) body.scrollTop = 0;
+}
+
+function exportPickedSVG() {
+  var ES = window.MA.exportSelect;
+  var state = document.getElementById('expick-state');
+  if (!ES) return null;
+  var picked = ES.selectedDocs(_expickList);
+  if (picked.length === 0) {
+    if (state) state.textContent = '図が 1 枚も選ばれていません';
+    return null;
+  }
+  return exportAllSVG(picked, state);
+}
+
+function setupExportPick() {
+  var open = document.getElementById('exp-svg-pick');
+  var modal = document.getElementById('expick-modal');
+  if (!open || !modal) return;
+  var exportMenu = document.getElementById('export-menu');
+  open.addEventListener('click', function() {
+    if (exportMenu) exportMenu.classList.remove('open');
+    toggleExportPick(true);
+  });
+
+  var closeBtn = document.getElementById('expick-close');
+  if (closeBtn) closeBtn.addEventListener('click', function() { toggleExportPick(false); });
+  modal.addEventListener('click', function(ev) {
+    if (ev.target === modal) toggleExportPick(false);
+  });
+  document.addEventListener('keydown', function(ev) {
+    if (ev.key === 'Escape' && modal.style.display === 'flex') toggleExportPick(false);
+  });
+
+  (window.MA.exportSelect ? window.MA.exportSelect.MODES : []).forEach(function(m) {
+    var b = document.getElementById('expick-mode-' + m);
+    if (!b) return;
+    b.addEventListener('click', function() {
+      _expickMode = m;
+      _expickList = window.MA.exportSelect.applyMode(_expickList, m);
+      renderExportPick();
+    });
+  });
+
+  // 絞り込んだ後の 1 枚単位の足し引き。絞り込みの名前はそのまま残す
+  // (「要修正のみ + この 1 枚」を選んだことが見出しから分かるようにする)。
+  var body = document.getElementById('expick-body');
+  if (body) body.addEventListener('change', function(ev) {
+    var t = ev.target;
+    if (!t || !t.classList || !t.classList.contains('expick-check')) return;
+    _expickList = window.MA.exportSelect.setSelected(_expickList, t.getAttribute('data-id'), t.checked);
+    var count = document.getElementById('expick-count');
+    if (count) count.textContent = window.MA.exportSelect.countText(_expickList, _expickMode);
+    var save = document.getElementById('expick-save');
+    if (save) save.disabled = (window.MA.exportSelect.counts(_expickList).selected === 0);
+  });
+
+  var save = document.getElementById('expick-save');
+  if (save) save.addEventListener('click', function() { exportPickedSVG(); });
 }
 
 function svgToCanvas(transparent, callback) {
