@@ -1387,6 +1387,11 @@ html, body {
   font-size: 11px;
   padding: 3px 10px;
 }
+/* 会議メモの書き出し (BLK-primary-20260908-0923-wish) */
+#cb-tools button, #cb-tools label { white-space: nowrap; }
+#cb-summary { min-width: 0; }
+#cb-tools #cb-minutes { border-color: var(--accent); color: var(--accent); }
+#cb-minutes-state { color: var(--text-secondary); font-size: 11px; max-width: 320px; }
 #cb-body { flex: 1; overflow-y: auto; padding: 6px 14px 14px 14px; }
 #cb-body .cb-empty { color: var(--text-secondary); font-size: 12px; padding: 20px 4px; }
 #cb-body .cb-entry { margin: 12px 0 0 0; border: 1px solid var(--border); border-radius: 4px; }
@@ -4020,6 +4025,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/change-board.js"></script>
 <script src="src/core/handover-notes.js"></script>
 <script src="src/core/review-verdicts.js"></script>
+<script src="src/core/meeting-notes.js"></script>
 <script src="src/core/audit-timeline.js"></script>
 <script src="src/core/consistency-check.js"></script>
 <script src="src/core/manual-findings.js"></script>
@@ -4083,6 +4089,9 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <span id="cb-tools">
         <label><input type="checkbox" id="cb-full"> 全文</label>
         <label><input type="checkbox" id="cb-same"> 変更なしも出す</label>
+        <button type="button" id="cb-minutes" title="開いた図ごとの要修正件数・印の付いた行・申し送りを 1 枚の Markdown にまとめて書き出す (会議の議事録)">📝 会議メモを書き出す</button>
+        <button type="button" id="cb-minutes-copy" title="同じ内容をクリップボードにコピーする">コピー</button>
+        <span id="cb-minutes-state"></span>
         <button type="button" id="cb-close">閉じる</button>
       </span>
     </div>

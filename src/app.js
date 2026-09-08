@@ -3578,6 +3578,55 @@ function setupChangeBoard() {
   if (full) full.addEventListener('change', function() { _cbFull = full.checked; renderChangeBoard(); });
   var same = document.getElementById('cb-same');
   if (same) same.addEventListener('change', function() { _cbSame = same.checked; renderChangeBoard(); });
+
+  // 会議メモ。会議が終わった瞬間の中身をそのまま持ち出せるようにする
+  // (BLK-primary-20260908-0923-wish)。
+  var minutes = document.getElementById('cb-minutes');
+  if (minutes) minutes.addEventListener('click', function() { writeMeetingNotes(false); });
+  var minutesCopy = document.getElementById('cb-minutes-copy');
+  if (minutesCopy) minutesCopy.addEventListener('click', function() { writeMeetingNotes(true); });
+}
+
+// いまのボードの中身を 1 枚の Markdown にして書き出す。copy=true ならファイルではなく
+// クリップボードへ (会議のチャットにそのまま貼るため)。
+function buildMeetingNotes() {
+  var MN = window.MA.meetingNotes;
+  if (!MN) return null;
+  var at = '';
+  try { at = new Date().toISOString(); } catch (e) { at = ''; }
+  return MN.build({
+    board: _changeBoardModel(),
+    verdicts: window.MA.reviewVerdicts,
+    notes: window.MA.handoverNotes,
+    at: at,
+  });
+}
+
+function writeMeetingNotes(copy) {
+  var MN = window.MA.meetingNotes;
+  var state = document.getElementById('cb-minutes-state');
+  var res = buildMeetingNotes();
+  if (!res) { if (state) state.textContent = '会議メモを作れません'; return null; }
+  if (copy) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(res.text).then(function() {
+        if (state) state.textContent = 'コピーしました (' + res.fixTotal + ' 件の要修正)';
+      }, function() {
+        if (state) state.textContent = 'コピーできません';
+      });
+    } else if (state) {
+      state.textContent = 'コピーできません';
+    }
+    return res;
+  }
+  var blob = new Blob([res.text], { type: 'text/markdown' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = res.fileName;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  if (state) state.textContent = MN.resultText(res);
+  return res;
 }
 
 // ── 監査履歴 (BLK-reviewer-20260907-2303-wish) ──────────────────────────
