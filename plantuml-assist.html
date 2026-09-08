@@ -585,7 +585,9 @@ html, body {
   display: none;
   position: absolute;
   z-index: 40;
-  max-height: 240px;
+  /* BLK-junior-20260908-2003-wish: 240px では見出し・絞り込み・対象set で埋まり、
+     棚卸しの 8 行が窓の外に出ていた。画面の高さに合わせて伸ばす。 */
+  max-height: min(70vh, 620px);
   overflow-y: auto;
   min-width: 180px;
   background: var(--bg-primary);
@@ -702,6 +704,12 @@ html, body {
 }
 #folder-panel .folder-inv-summary.inv-ok { color: var(--accent); }
 #folder-panel .folder-inv-summary.inv-short { color: var(--accent-red); font-weight: bold; }
+#folder-panel .folder-inv-rows {
+  max-height: 200px;
+  overflow-y: auto;
+  border-left: 2px solid var(--border);
+  margin: 0 6px 3px;
+}
 #folder-panel .folder-inv-row {
   display: flex;
   gap: 4px;
