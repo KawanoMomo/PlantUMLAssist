@@ -193,15 +193,107 @@ window.MA.crossRefDiff = (function() {
     return { onlyRef: onlyRef, onlySelf: onlySelf, common: common, renamed: map || null };
   }
 
+  // ── 突き合わせが成り立っているか ─────────────────────────────────────
+  // BLK-junior-20260908-0823: 名前が 1 つも一致しない 2 枚 (電気的な出力状態で
+  // 描いた図と、Uninit/Busy/Error の抽象度で描いた図) を突き合わせると、
+  // 全要素が「相手にしかない」に落ちる。これを「先輩が後から足した差分」として
+  // 出すと、利用者は取り込む 1 個を選べないまま数字だけ信じることになる。
+  // 共通が 0 件なら差分ではなく「土俵が違う」と言い切る。
+  //   aligned  … 共通が多数。片方にしか無い要素は足された / 消された要素と読める
+  //   partial  … 共通はあるが少ない。名前の付け方が揃っていない疑いがある
+  //   disjoint … 共通 0 件。別の粒度で描かれていて、要素単位では比べられない
+  var PARTIAL_RATIO = 0.25;
+
+  function comparability(result) {
+    var r = result || {};
+    var a = (r.onlyRef || []).length, b = (r.onlySelf || []).length;
+    var common = r.common || 0;
+    var total = common + a + b;
+    if (total === 0) return { level: 'aligned', ratio: 1, common: 0 };
+    var ratio = common / total;
+    // 片方が空 (相手が空の図など) は「土俵が違う」ではなく、素直に片寄りとして扱う。
+    if (common === 0 && a > 0 && b > 0) return { level: 'disjoint', ratio: 0, common: 0 };
+    if (ratio < PARTIAL_RATIO) return { level: 'partial', ratio: ratio, common: common };
+    return { level: 'aligned', ratio: ratio, common: common };
+  }
+
   // 見出しの 1 行。数を読む側が引き算しなくて済むように言い切る。
   function summary(result) {
     var r = result || {};
     var a = (r.onlyRef || []).length, b = (r.onlySelf || []).length;
     if (a === 0 && b === 0) return '同じ要素が揃っています (' + (r.common || 0) + ' 件)';
+    var c = comparability(r);
+    if (c.level === 'disjoint') {
+      return '対応する要素が 1 つもありません (相手 ' + a + ' 件 / 自分 ' + b + ' 件)。'
+        + '同じものを別の粒度で描いている可能性があります';
+    }
     var parts = [];
     if (a > 0) parts.push('相手にしかない ' + a + ' 件');
     if (b > 0) parts.push('自分にしかない ' + b + ' 件');
-    return parts.join(' · ') + ' (共通 ' + (r.common || 0) + ' 件)';
+    var s = parts.join(' · ') + ' (共通 ' + (r.common || 0) + ' 件)';
+    if (c.level === 'partial') s += ' — 共通が少なく、名前の付け方が揃っていない可能性があります';
+    return s;
+  }
+
+  // ── 名前が合わないときの、形での見比べ ───────────────────────────────
+  // 名前で対応が付かなくても「状態がいくつ / 遷移がいくつ / 擬似状態や注釈があるか」
+  // なら比べられる。どちらが細かく描いてあるかが 1 目で分かるので、
+  // 「取り込む 1 個」を選ぶ前に、そもそも同じ粒度かを確かめられる。
+  var KIND_LABELS = {
+    state: '状態', relation: '遷移・関係', note: '注釈', action: '動作',
+    participant: '参加者', actor: 'アクター', class: 'クラス',
+    component: '部品', usecase: 'ユースケース', block: 'ブロック', if: '分岐',
+  };
+
+  function kindLabel(kind) {
+    return KIND_LABELS[_s(kind)] || _s(kind);
+  }
+
+  // 図の形。種別ごとの件数と、状態遷移図の擬似状態 ([*] / choice / fork) の件数。
+  function shape(dsl) {
+    var counts = {};
+    _nodes(dsl).forEach(function(n) {
+      var k = _s(n.kind);
+      counts[k] = (counts[k] || 0) + 1;
+    });
+    var pseudo = 0;
+    _s(dsl).split('\n').forEach(function(line) {
+      if (/\[\*\]/.test(line)) pseudo++;
+      if (/^\s*state\s+\S+\s*<<\s*(choice|fork|join|end|start|history)\s*>>/i.test(line)) pseudo++;
+    });
+    return { counts: counts, pseudo: pseudo };
+  }
+
+  // 2 枚の形を並べた表。件数が違う種別が上に来る (見るべき所から並べる)。
+  function shapeRows(selfDsl, refDsl) {
+    var a = shape(selfDsl), b = shape(refDsl);
+    var kinds = {};
+    Object.keys(a.counts).forEach(function(k) { kinds[k] = true; });
+    Object.keys(b.counts).forEach(function(k) { kinds[k] = true; });
+    var rows = Object.keys(kinds).map(function(k) {
+      return { kind: k, label: kindLabel(k), self: a.counts[k] || 0, ref: b.counts[k] || 0 };
+    });
+    if (a.pseudo || b.pseudo) {
+      rows.push({ kind: 'pseudo', label: '擬似状態 ([*] / choice など)', self: a.pseudo, ref: b.pseudo });
+    }
+    rows.sort(function(x, y) {
+      var dx = Math.abs(x.self - x.ref), dy = Math.abs(y.self - y.ref);
+      return dy - dx || x.label.localeCompare(y.label);
+    });
+    return rows;
+  }
+
+  // 形の見比べの 1 行。どちらが細かいかを言い切る。
+  function shapeSummary(selfDsl, refDsl) {
+    var rows = shapeRows(selfDsl, refDsl);
+    var self = 0, ref = 0;
+    rows.forEach(function(r) {
+      if (r.kind === 'pseudo') return;   // 擬似状態は状態・遷移に既に数えられている
+      self += r.self; ref += r.ref;
+    });
+    if (self === ref) return '要素の数は同じ (どちらも ' + self + ' 件)。粒度の違いは中身で見てください';
+    var more = ref > self ? '相手' : '自分';
+    return more + 'の方が細かく描いてあります (相手 ' + ref + ' 件 / 自分 ' + self + ' 件)';
   }
 
   // ── 足りない 1 行を入れる場所 ─────────────────────────────────────────
@@ -248,6 +340,11 @@ window.MA.crossRefDiff = (function() {
     keyOf: keyOf,
     diff: diff,
     summary: summary,
+    comparability: comparability,
+    kindLabel: kindLabel,
+    shape: shape,
+    shapeRows: shapeRows,
+    shapeSummary: shapeSummary,
     insertPlan: insertPlan,
     applyInsert: applyInsert,
   };

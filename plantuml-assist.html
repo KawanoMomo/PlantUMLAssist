@@ -2372,6 +2372,16 @@ html, body {
   flex-shrink: 0;
 }
 #xf-list[hidden] { display: none; }
+/* BLK-junior-20260908-0823: 名前で対応が付かないときの、形の見比べ */
+#xf-shape { padding: 6px 8px; border-top: 1px solid var(--border); }
+#xf-shape[hidden] { display: none; }
+.xf-shape-lead { color: var(--text-secondary); font-size: 11px; line-height: 1.5; }
+.xf-shape-sum { color: var(--accent-orange); font-size: 11px; margin: 4px 0 6px; }
+.xf-shape-table { border-collapse: collapse; font-family: var(--font-mono); font-size: 11px; }
+.xf-shape-table th, .xf-shape-table td { padding: 2px 10px 2px 0; text-align: left; }
+.xf-shape-table th { color: var(--text-secondary); font-weight: 600; }
+.xf-shape-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.xf-shape-row.differs td { color: var(--accent-orange); }
 .xf-row {
   display: flex;
   align-items: baseline;
@@ -3640,6 +3650,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <span id="xf-rename"></span>
       </div>
       <div id="xf-summary" hidden></div>
+      <!-- BLK-junior-20260908-0823: 名前で対応が付かない 2 枚を、形 (種別ごとの件数) で見比べる -->
+      <div id="xf-shape" hidden></div>
       <div id="xf-list" hidden></div>
       <div id="compare-container">
         <div id="compare-svg"></div>
