@@ -8940,6 +8940,101 @@ function runTemplateDiff() {
   });
 }
 
+// ── 系統ぜんぶと比べる (BLK-junior-20260908-1403) ──────────────────────────
+// 2 枚比べ (雛形との差分) は、先発版と後発版の間に固有の行が 1 つも無いとき
+// 「違いは語の言い換えだけ」で行き止まりになり、「取り込む対象がどこにあるのか /
+// 本当にどこにも無いのか」を人が同じ 2 枚を読み直して判断し続けることになる。
+// 開いている図 (と、相手フォルダで引き当てた図) をまとめて突き合わせ、
+// 行ごとにどの図にあるかを出す。1 枚にだけある行が取り込み候補で、0 件なら
+// 「N 枚とも同じ雛形の複製」と言い切る。
+function _clearTemplateCohort() {
+  var listEl = document.getElementById('tc-list');
+  var noteEl = document.getElementById('tc-note');
+  var vEl = document.getElementById('tc-verdict');
+  var sumEl = document.getElementById('tc-summary');
+  if (listEl) { listEl.textContent = ''; listEl.hidden = true; }
+  if (noteEl) { noteEl.textContent = ''; noteEl.hidden = true; }
+  if (vEl) { vEl.textContent = ''; vEl.hidden = true; }
+  if (sumEl) { sumEl.textContent = ''; sumEl.classList.remove('clean', 'dirty'); }
+}
+
+// 並べる図。開いているタブ全部に、相手フォルダで引き当てた図があればそれも足す
+// (先輩のフォルダの版を相手にしたまま系統を見たい場面がそのまま繋がる)。
+function _cohortDocs() {
+  var docs = _compareDocs().map(function(d) {
+    return { name: d.name, dsl: d.dsl || '', id: d.id };
+  });
+  if (_xfFile && _xfRefDsl) {
+    var label = '相手: ' + _xfFile;
+    var dup = docs.filter(function(d) { return d.name === label; }).length > 0;
+    if (!dup) docs.push({ name: label, dsl: _xfRefDsl, id: null });
+  }
+  return docs;
+}
+
+function runTemplateCohort() {
+  var tc = window.MA.templateCohort;
+  var sumEl = document.getElementById('tc-summary');
+  var listEl = document.getElementById('tc-list');
+  var noteEl = document.getElementById('tc-note');
+  var vEl = document.getElementById('tc-verdict');
+  if (!tc || !sumEl || !listEl) return;
+
+  _clearTemplateCohort();   // 前回の結果を残さない (少ない枚数で押し直したときに混ざる)
+  var docs = _cohortDocs();
+  var result = tc.build(docs);
+  var mine = _activeDocName();
+  var total = result.docs.length;
+
+  sumEl.textContent = tc.summary(result);
+  sumEl.classList.remove('clean', 'dirty');
+  if (tc.isComparable(result)) {
+    sumEl.classList.add(tc.count(result, 'only') > 0 ? 'dirty' : 'clean');
+  }
+
+  if (vEl) {
+    var v = tc.verdict(result, mine);
+    vEl.textContent = v;
+    vEl.hidden = (v === '');
+  }
+  if (noteEl) {
+    var note = tc.subjectNote(result);
+    noteEl.textContent = note;
+    noteEl.hidden = (note === '');
+  }
+
+  listEl.textContent = '';
+  listEl.hidden = false;
+  // 1 枚しかないときは行を並べない。全部の行が「共通」に見えてしまい、
+  // 比べていないことが表から読み取れなくなる。
+  if (!tc.isComparable(result)) {
+    var empty = document.createElement('div');
+    empty.id = 'tc-empty';
+    empty.textContent = (total < 2)
+      ? '並べる図が足りません。＋ でもう 1 枚開くか、🔍 探す で相手の図を引き当ててください。'
+      : '比べる行がありません。図の中身を入れてください。';
+    listEl.appendChild(empty);
+    return;
+  }
+  result.rows.forEach(function(row) {
+    var el = document.createElement('div');
+    el.className = 'tc-row';
+    el.setAttribute('data-tc-kind', row.kind);
+    if (row.owner) el.setAttribute('data-tc-owner', row.owner);
+    var kind = document.createElement('span');
+    kind.className = 'tc-kind';
+    kind.textContent = tc.kindLabel(row.kind);
+    var text = document.createElement('span');
+    text.className = 'tc-text';
+    text.textContent = row.sample;
+    var where = document.createElement('span');
+    where.className = 'tc-where';
+    where.textContent = tc.whereLabel(row, total);
+    el.appendChild(kind); el.appendChild(text); el.appendChild(where);
+    listEl.appendChild(el);
+  });
+}
+
 // ── 他の人のフォルダの同じ図と突き合わせる (BLK-junior-20260908-0723-wish) ──
 // 先輩版と自分版の同種図を見比べる場面で、これまでは自分の保存先設定を先輩の
 // フォルダへ一時的に替えて開き、内容を憶えてから設定を戻し、記憶を頼りに
@@ -9286,6 +9381,8 @@ function setupCompareView() {
       renderTemplateRegistry();
     });
   }
+  var tcBtn = document.getElementById('btn-tc-run');
+  if (tcBtn) tcBtn.addEventListener('click', runTemplateCohort);
   var btn = document.getElementById('btn-tab-compare');
   var sel = document.getElementById('compare-select');
   var close = document.getElementById('btn-compare-close');

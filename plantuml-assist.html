@@ -2631,6 +2631,72 @@ html, body {
 .td-row[data-td-kind="added"], .td-row[data-td-kind="removed"] { background: var(--bg-secondary); }
 .td-row .td-text { flex: 1; min-width: 0; font-family: var(--font-mono); word-break: break-all; }
 #td-empty { padding: 6px 8px; font-size: 11px; color: var(--text-secondary); }
+/* 系統ぜんぶと比べる (BLK-junior-20260908-1403)。雛形との差分と同じ並びにする。 */
+#tc-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+#btn-tc-run {
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+#btn-tc-run:hover { background: var(--bg-tertiary); }
+#tc-summary { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#tc-summary.clean { color: var(--accent-green); }
+#tc-summary.dirty { color: var(--accent-orange); }
+#tc-verdict {
+  padding: 4px 8px;
+  font-size: 11px;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+  flex-shrink: 0;
+}
+#tc-verdict[hidden] { display: none; }
+#tc-note {
+  padding: 4px 8px;
+  font-size: 10px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-primary);
+  flex-shrink: 0;
+}
+#tc-note[hidden] { display: none; }
+#tc-list {
+  max-height: 40%;
+  overflow: auto;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-primary);
+  flex-shrink: 0;
+}
+#tc-list[hidden] { display: none; }
+.tc-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 8px;
+  font-size: 11px;
+  border-bottom: 1px solid var(--bg-tertiary);
+}
+.tc-row .tc-kind { font-family: var(--font-mono); font-size: 10px; width: 54px; flex-shrink: 0; color: var(--text-secondary); }
+.tc-row[data-tc-kind="only"] .tc-kind, .tc-row[data-tc-kind="some"] .tc-kind { color: var(--accent-orange); }
+.tc-row[data-tc-kind="only"], .tc-row[data-tc-kind="some"] { background: var(--bg-secondary); }
+.tc-row .tc-text { flex: 1; min-width: 0; font-family: var(--font-mono); word-break: break-all; }
+.tc-row .tc-where { flex-shrink: 0; font-size: 10px; color: var(--text-secondary); max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#tc-empty { padding: 6px 8px; font-size: 11px; color: var(--text-secondary); }
 /* 橙の行から自分の図へ足す (BLK-junior-20260908-1103-wish) */
 .map-row .map-take {
   flex-shrink: 0;
@@ -4150,6 +4216,16 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       </div>
       <div id="td-note" hidden></div>
       <div id="td-list" hidden></div>
+      <!-- BLK-junior-20260908-1403: 2 枚比べだと「片方にだけある要素は無い」で行き止まりになる。
+           開いている図を全部まとめて突き合わせ、行ごとにどの図にあるかを出す。 -->
+      <div id="tc-bar">
+        <button type="button" id="btn-tc-run"
+                title="開いている図を全部まとめて突き合わせ、1 枚にだけある行 (取り込み候補) を出す">🧩 系統ぜんぶと比べる</button>
+        <span id="tc-summary"></span>
+      </div>
+      <div id="tc-verdict" hidden></div>
+      <div id="tc-note" hidden></div>
+      <div id="tc-list" hidden></div>
       <!-- BLK-junior-20260908-0723-wish: 他の人のフォルダの同じ図を相手にする -->
       <div id="xf-bar">
         <input type="text" id="xf-dir" placeholder="相手のフォルダ (例 ..\primary)"
@@ -4498,6 +4574,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/state-map.js"></script>
 <script src="src/core/template-diff.js"></script>
 <script src="src/core/template-registry.js"></script>
+<script src="src/core/template-cohort.js"></script>
 <script src="src/core/class-map.js"></script>
 <script src="src/core/map-question.js"></script>
 <script src="src/core/reuse-picker.js"></script>
