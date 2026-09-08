@@ -41,6 +41,21 @@ AUTOSAVE_RESERVED = ({'con', 'prn', 'aux', 'nul'}
                      | {'lpt%d' % i for i in range(1, 10)})
 
 
+def _version_head(text):
+    """版の中身から「何の図だったか」を 1 行で言う。
+
+    `@startuml` の次にある最初の中身の行 (コメントと空行は飛ばす) を返す。
+    state / participant / class のような宣言がここに出るので、同じ名前で
+    上書きされた別図種の版でも、開く前に見分けられる。
+    """
+    for line in str(text or '').splitlines():
+        s = line.strip()
+        if not s or s.startswith("'") or s.startswith('@start') or s.startswith('@end'):
+            continue
+        return s[:80]
+    return ''
+
+
 def is_safe_autosave_name(name):
     """True if `name` can be used as a bare filename stem (Japanese included)."""
     if not name or not isinstance(name, str):
@@ -253,6 +268,9 @@ def resolve_render_request(data):
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
+        if self.path.split('?')[0] == '/autosave-versions':
+            with _fs_lock:
+                return self._handle_autosave_versions()
         if self.path.startswith('/autosave'):
             with _fs_lock:
                 return self._handle_autosave_get()
@@ -567,6 +585,132 @@ class Handler(BaseHTTPRequestHandler):
     def _autosave_file_path(self, save_dir, dt):
         return save_dir / (dt + '.puml')
 
+    # --- 版の控え (BLK-junior-20260908-2003) ---------------------------------
+    #
+    # 保存は「図の名前 = ファイル名」で、同じ名前に別の図を書けば前の中身は
+    # 黙って消える。名前を既定の diagram1 のまま図種だけ変えて作業を続けると、
+    # 完走した図が次の周で上書きされ、保存フォルダには最後の 1 枚しか残らない。
+    # 上書きの直前に前の中身を `_versions/` へ退避しておけば、消えた図は
+    # 一覧から開き直せる。退避は保存の副作用なので、失敗しても保存は止めない。
+    VERSIONS_DIRNAME = '_versions'
+    VERSIONS_KEEP = 20      # 1 図あたりに残す版の数 (古いものから捨てる)
+    VERSION_SEP = '--'      # {name}--{YYYYMMDD-HHMMSS}.puml
+
+    def _versions_dir(self, save_dir):
+        return save_dir / self.VERSIONS_DIRNAME
+
+    def _version_path(self, save_dir, dt, stamp):
+        return self._versions_dir(save_dir) / (dt + self.VERSION_SEP + stamp + '.puml')
+
+    def _version_stamps(self, save_dir, dt):
+        """`dt` の過去版の刻印を新しい順に返す。無ければ空リスト。"""
+        vdir = self._versions_dir(save_dir)
+        prefix = dt + self.VERSION_SEP
+        stamps = []
+        try:
+            for p in vdir.glob('*.puml'):
+                if p.stem.startswith(prefix):
+                    stamps.append(p.stem[len(prefix):])
+        except OSError:
+            return []
+        stamps.sort(reverse=True)
+        return stamps
+
+    def _version_counts(self, save_dir):
+        """図名 → 控えてある版の数。一覧に「履歴 N」を出すために 1 回だけ数える。"""
+        counts = {}
+        try:
+            for p in self._versions_dir(save_dir).glob('*.puml'):
+                head = p.stem.rsplit(self.VERSION_SEP, 1)
+                if len(head) != 2:
+                    continue
+                counts[head[0]] = counts.get(head[0], 0) + 1
+        except OSError:
+            pass
+        return counts
+
+    def _stash_version(self, save_dir, dt, new_dsl):
+        """上書きの直前に、今ある中身を `_versions/` へ退避する。
+
+        中身が変わらない保存 (自動保存は何度も走る) では版を増やさない。
+        増やすと 1 分で上限に達し、本当に別物だった版から先に捨ててしまう。
+        """
+        file_path = self._autosave_file_path(save_dir, dt)
+        try:
+            if not file_path.exists():
+                return
+            old = file_path.read_text(encoding='utf-8')
+        except OSError:
+            return
+        if old == new_dsl:
+            return
+        vdir = self._versions_dir(save_dir)
+        try:
+            vdir.mkdir(parents=True, exist_ok=True)
+            stamp = time.strftime('%Y%m%d-%H%M%S', time.gmtime())
+            target = self._version_path(save_dir, dt, stamp)
+            # 同じ秒に 2 回保存しても前の退避を潰さない (末尾に連番を足す)。
+            n = 1
+            while target.exists():
+                target = self._version_path(save_dir, dt, '%s.%d' % (stamp, n))
+                n += 1
+            target.write_text(old, encoding='utf-8')
+        except OSError:
+            return
+        # 上限を超えた分は古い方から捨てる。
+        stamps = self._version_stamps(save_dir, dt)
+        for old_stamp in stamps[self.VERSIONS_KEEP:]:
+            try:
+                self._version_path(save_dir, dt, old_stamp).unlink()
+            except OSError:
+                pass
+
+    def _handle_autosave_versions(self):
+        """GET /autosave-versions?dir=&type=[&stamp=] — 過去版の一覧、または 1 版の本文。"""
+        parsed = urllib.parse.urlparse(self.path)
+        params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
+        save_dir = self._autosave_resolve_dir(params.get('dir'))
+        dt = params.get('type', '')
+        if not self._autosave_validate_type(dt):
+            self._send_json(400, {'error': 'invalid type — パス区切り・制御文字・Windows の禁止文字は使えません'})
+            return
+        stamp = params.get('stamp', '')
+        if stamp:
+            if not is_safe_autosave_name(stamp):
+                self._send_json(400, {'error': 'invalid stamp'})
+                return
+            path = self._version_path(save_dir, dt, stamp)
+            if not path.exists():
+                self.send_error(404, 'version not found')
+                return
+            try:
+                content = path.read_text(encoding='utf-8')
+            except OSError as e:
+                self._send_json(500, {'error': f'read failed: {e}'})
+                return
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/plain; charset=utf-8')
+            self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+            self.end_headers()
+            self.wfile.write(content.encode('utf-8'))
+            return
+        versions = []
+        for s in self._version_stamps(save_dir, dt):
+            path = self._version_path(save_dir, dt, s)
+            item = {'stamp': s, 'size': None, 'lines': None, 'head': ''}
+            try:
+                text = path.read_text(encoding='utf-8')
+            except OSError:
+                versions.append(item)
+                continue
+            item['size'] = len(text.encode('utf-8'))
+            item['lines'] = len(text.splitlines())
+            # 図種が変わって消えた版を見分けるのに要るのは最初の宣言行だけ。
+            # 本文全部を一覧に載せると、20 版で数百 KB を毎回運ぶことになる。
+            item['head'] = _version_head(text)
+            versions.append(item)
+        self._send_json(200, {'name': dt, 'dir': str(save_dir), 'versions': versions})
+
     def _autosave_read_meta(self, save_dir):
         p = self._autosave_meta_path(save_dir)
         if not p.exists():
@@ -602,6 +746,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(500, {'error': f'cannot create directory: {e}'})
             return
         file_path = self._autosave_file_path(save_dir, dt)
+        # BLK-junior-20260908-2003: 上書きで消える中身を先に控える。
+        self._stash_version(save_dir, dt, dsl)
         try:
             file_path.write_text(dsl, encoding='utf-8')
         except OSError as e:
@@ -887,10 +1033,19 @@ class Handler(BaseHTTPRequestHandler):
         # 区別できず、保存先の書式を誤ると一覧が黙って空になっていた。
         # 実在するかどうかをそのまま返し、区別は GUI に任せる。
         exists = save_dir.exists() and save_dir.is_dir()
+        # BLK-junior-20260908-2003: 「この図には前の版が N 個ある」は一覧の時点で要る。
+        # 消えたと思った図を探すのに 22 枚を 1 枚ずつ開き直させないため。
+        vcounts = self._version_counts(save_dir) if exists else {}
         if exists:
             for p in sorted(save_dir.glob('*.puml'), key=lambda q: q.stem):
                 files.append(p.stem)
-                entries.append(self._autosave_entry(p))
+                entry = self._autosave_entry(p)
+                entry['versions'] = vcounts.get(p.stem, 0)
+                entries.append(entry)
+        # 本体がもう無いのに版だけ残っている図。消えた図こそ探す対象なので、
+        # 現存する図の一覧 (entries) とは混ぜず、別枠で名前と版数だけ返す。
+        gone = [{'name': n, 'versions': vcounts[n]}
+                for n in sorted(set(vcounts) - set(files))]
         meta = self._autosave_read_meta(save_dir)
         # BLK-reviewer-20260908-0203-wish: 実データ / テンプレの宣言は一覧と同時に要る。
         # 別呼び出しにすると、印が付く前の一覧が一瞬出て「未分類 22 枚」に見える。
@@ -904,7 +1059,7 @@ class Handler(BaseHTTPRequestHandler):
         verified = self._read_svg_verify(save_dir) if exists else {}
         self._send_json(200, {'files': files, 'entries': entries, 'meta': meta,
                               'dir': str(save_dir), 'exists': exists, 'roles': roles,
-                              'verified': verified, 'now': now})
+                              'verified': verified, 'now': now, 'gone': gone})
 
     def _autosave_entry(self, path):
         """1 図分の {name, mtime, size, hash, svgMtime}。読めない図でも名前だけは返す。
@@ -1000,6 +1155,18 @@ class Handler(BaseHTTPRequestHandler):
                         side.unlink()
                     except OSError:
                         pass
+            # BLK-junior-20260908-2003: 図を全部消すなら過去版も一緒に消す。
+            # 残すと、消したはずの図が「履歴」から出続けることになる。
+            vdir = self._versions_dir(save_dir)
+            try:
+                for p in vdir.glob('*.puml'):
+                    try:
+                        p.unlink()
+                    except OSError:
+                        pass
+                vdir.rmdir()
+            except OSError:
+                pass
         self._send_json(200, {'ok': True})
 
 
