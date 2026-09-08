@@ -12957,6 +12957,9 @@ function buildHandoffPackage(targetDocs) {
 // 判定は src/core/export-target.js の職掌。ここは材料集めと結線だけ。
 
 var _etMode = null;      // 'open' | 'folder' | null (既定に任せる)
+// BLK-primary-20260909-0403-wish: 「-編集中」等のスクラッチは既定で対象外。
+// 渡す側が意図してチェックを入れたときだけ同梱する (開き直すと既定に戻る)。
+var _etIncludeScratch = false;
 var _etFileDocs = [];    // 保存フォルダから読んだ図 ({name, dsl})
 var _etRoles = {};
 var _etDir = '';
@@ -13011,6 +13014,7 @@ function _etModel() {
     folderDir: _etDir,
     loading: _etLoading,
     mode: _etMode,
+    includeScratch: _etIncludeScratch,
     detectType: (WS && WS.detectType) ? WS.detectType : null,
   });
 }
@@ -13028,6 +13032,7 @@ function renderExportTargetPanel() {
   html += '<div id="et-line" data-warn="' + (m.warn ? '1' : '0')
     + '" data-count="' + m.count + '" data-folder="' + m.folderCount + '"'
     + ' data-missing="' + m.missing + '" data-mode="' + esc(m.mode) + '"'
+    + ' data-scratch="' + m.scratch + '" data-include-scratch="' + (m.includeScratch ? '1' : '0') + '"'
     + ' style="margin-top:10px;font-size:12px;'
     + (m.warn ? 'color:var(--warning,#d98b00);' : 'color:var(--text-primary);') + '">'
     + esc((m.warn ? '⚠ ' : '') + m.line) + '</div>';
@@ -13047,6 +13052,12 @@ function renderExportTargetPanel() {
     + '<input type="radio" name="et-mode" id="et-mode-open" value="open"'
     + (m.mode === 'open' ? ' checked' : '') + '> '
     + '開いているタブだけ（' + m.openCount + ' 枚）</label>';
+  if (m.scratch > 0) {
+    html += '<label id="et-scratch-row" style="display:block;font-size:11px;padding:4px 0 0;'
+      + 'color:var(--warning,#d98b00);">'
+      + '<input type="checkbox" id="et-include-scratch"' + (m.includeScratch ? ' checked' : '') + '> '
+      + esc(m.scratchLine) + '</label>';
+  }
   if (m.loading) {
     html += '<div id="et-loading" style="font-size:11px;color:var(--text-secondary);">保存フォルダを読んでいます…</div>';
   }
@@ -13056,13 +13067,15 @@ function renderExportTargetPanel() {
   m.all.forEach(function(d) {
     var on = m.targets.indexOf(d) !== -1;
     html += '<div class="et-item" data-name="' + esc(d.name) + '" data-in="' + (on ? '1' : '0')
-      + '" data-open="' + (d.open ? '1' : '0') + '" data-role="' + esc(d.role || 'unset')
+      + '" data-open="' + (d.open ? '1' : '0') + '" data-scratch="' + (d.scratch ? '1' : '0')
+      + '" data-role="' + esc(d.role || 'unset')
       + '" style="font-size:11px;padding:1px 2px;color:'
       + (on ? 'var(--text-primary)' : 'var(--text-secondary)') + ';">'
       + (on ? '✔ ' : '− ') + esc(d.name)
       + '<span style="color:var(--text-secondary);"> '
       + esc(String(d.diagramType || '').replace('plantuml-', ''))
       + (d.open ? '' : ' ・ 未オープン')
+      + (d.scratch ? ' ・ ⚠ 未確定' : '')
       + (d.role === 'template' ? ' ・ テンプレ' : '') + '</span></div>';
   });
   html += '</div>';
@@ -13079,6 +13092,10 @@ function renderExportTargetPanel() {
   if (folder) folder.addEventListener('change', function() { _etMode = 'folder'; renderExportTargetPanel(); });
   var open = document.getElementById('et-mode-open');
   if (open) open.addEventListener('change', function() { _etMode = 'open'; renderExportTargetPanel(); });
+  var inc = document.getElementById('et-include-scratch');
+  if (inc) inc.addEventListener('change', function() {
+    _etIncludeScratch = !!inc.checked; renderExportTargetPanel();
+  });
   var cancel = document.getElementById('et-cancel');
   if (cancel) cancel.addEventListener('click', function() { closeExportTargetPanel(); });
   var build = document.getElementById('et-build');
@@ -13093,6 +13110,7 @@ function openExportTargetPanel(title, onBuild) {
   _etOnBuild = onBuild;
   // 開くたびに的を取り直す (タブが増減した後で古い選択を引きずらない)。
   _etMode = null;
+  _etIncludeScratch = false;
   _etFileDocs = [];
   _etRoles = {};
   _etDir = '';

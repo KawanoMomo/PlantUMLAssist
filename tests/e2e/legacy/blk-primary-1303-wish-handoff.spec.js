@@ -235,3 +235,78 @@ test.describe('BLK-primary-2303-wish 書き出す前の対象確認', () => {
     await expect(page.locator('#et-modal')).toBeHidden();
   });
 });
+
+// BLK-primary-20260909-0403-wish 「未確定 (スクラッチ) を新人に渡さない」。
+// 保存フォルダに残る `spi_init_sequence-編集中` が、対象一覧で正式な図と同格に並び、
+// タブでうっかり開いていれば黙って zip に入っていた。印を出し、既定で外す。
+const SCRATCH_FILES = Object.assign({}, FOLDER_FILES, {
+  'spi_init_sequence-編集中': SEQ,
+  'dma_state-作業中': ST,
+});
+
+function writeScratchFolder() {
+  try { fs.rmSync(ABS_DIR, { recursive: true, force: true }); } catch (e) {}
+  fs.mkdirSync(ABS_DIR, { recursive: true });
+  Object.keys(SCRATCH_FILES).forEach((n) => {
+    fs.writeFileSync(path.join(ABS_DIR, n + '.puml'), SCRATCH_FILES[n], 'utf8');
+  });
+}
+
+async function openWithScratchFolder(page) {
+  await openWithFolder(page);
+  writeScratchFolder();
+}
+
+test.describe('BLK-primary-0403-wish 未確定は既定で渡さない', () => {
+
+  test('対象一覧で未確定に印が付き、既定で対象から外れる', async ({ page }) => {
+    await openWithScratchFolder(page);
+    await page.locator('#btn-tab-handoff').click();
+    await expect(page.locator('#et-line')).toHaveAttribute('data-scratch', '2');
+    await expect(page.locator('#et-line')).toHaveAttribute('data-include-scratch', '0');
+    // 正式な 6 枚だけが的に載る (スクラッチ 2 枚は数に入らない)。
+    await expect(page.locator('#et-line')).toHaveAttribute('data-count', '6');
+    await expect(page.locator('#et-line')).toContainText('未確定 2 枚は対象から外しました');
+    await expect(page.locator('.et-item[data-scratch="1"]')).toHaveCount(2);
+    await expect(page.locator('.et-item[data-name="spi_init_sequence-編集中"]'))
+      .toContainText('⚠ 未確定');
+    await expect(page.locator('.et-item[data-name="spi_init_sequence-編集中"]'))
+      .toHaveAttribute('data-in', '0');
+    await expect(page.locator('#et-build')).toContainText('6 枚で書き出す');
+  });
+
+  test('チェックを入れれば同梱でき、外せばまた外れる', async ({ page }) => {
+    await openWithScratchFolder(page);
+    await page.locator('#btn-tab-handoff').click();
+    await page.locator('#et-include-scratch').check();
+    await expect(page.locator('#et-line')).toHaveAttribute('data-count', '8');
+    await expect(page.locator('#et-line')).toContainText('未確定 2 枚を入れています');
+    await page.locator('#et-include-scratch').uncheck();
+    await expect(page.locator('#et-line')).toHaveAttribute('data-count', '6');
+  });
+
+  test('タブで開いていても未確定は zip に入らず、結果の 1 行に除外が残る', async ({ page }) => {
+    await openWithScratchFolder(page);
+    // うっかり開いてしまった状況を作る。
+    await page.locator('#btn-tab-new').click();
+    await page.waitForTimeout(400);
+    await page.evaluate((dsl) => {
+      var ws = window.MA.workspace;
+      ws.rename(ws.getActiveId(), 'spi_init_sequence-編集中');
+      var ed = /** @type {HTMLTextAreaElement} */ (document.getElementById('editor'));
+      ed.value = dsl;
+      ed.dispatchEvent(new Event('input'));
+    }, SEQ);
+    await page.waitForTimeout(700);
+    const dl = page.waitForEvent('download', { timeout: 90000 });
+    await page.locator('#btn-tab-handoff').click();
+    await page.locator('#et-mode-open').check();
+    await expect(page.locator('.et-item[data-name="spi_init_sequence-編集中"]'))
+      .toHaveAttribute('data-in', '0');
+    await page.locator('#et-build').click();
+    const text = fs.readFileSync(await (await dl).path()).toString('latin1');
+    expect(text).not.toContain('編集中');
+    // 何枚外したかはフォルダの中身で変わる。残すべきは「外した」と言い切ること。
+    await expect(page.locator('#bulk-export-status')).toContainText(/未確定 \d+ 枚を除外/);
+  });
+});

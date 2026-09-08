@@ -20,6 +20,17 @@ window.MA.exportTarget = (function() {
   var MODE_OPEN = 'open';
   var MODE_FOLDER = 'folder';
 
+  // BLK-primary-20260909-0403-wish: 保存フォルダには「-編集中」のような、まだ確定して
+  // いない作業用ファイルが残る。名前だけでは正式版と見分けが付かないので、渡された
+  // 新人はどちらを読めばいいか判断できない。ここで命名規則から「未確定」を見分け、
+  // 既定で対象から外す (入れたいときは呼び出し側が includeScratch を立てる)。
+  // 末尾の連番 (-編集中2) と拡張子の前だけを見る。図の本名の途中にある語は拾わない。
+  var SCRATCH_RE = /(?:[-_ ](?:編集中|作業中|一時|仮|下書き|wip|WIP|tmp|temp|TMP|TEMP|copy|COPY)|のコピー|コピー)\d*$/;
+
+  function isScratchName(name) {
+    return SCRATCH_RE.test(String(name == null ? '' : name));
+  }
+
   function _role(roles, name) {
     var rmap = roles && typeof roles === 'object' ? roles : {};
     var rec = rmap[name];
@@ -49,6 +60,7 @@ window.MA.exportTarget = (function() {
         diagramType: d.diagramType || det(dsl) || '',
         open: !!open,
         role: r,
+        scratch: isScratchName(name),
         deliverable: r !== 'template',
       });
     }
@@ -77,7 +89,11 @@ window.MA.exportTarget = (function() {
     if (mode === MODE_FOLDER && !folderAvailable) mode = MODE_OPEN;
 
     // テンプレは渡す相手の成果物ではないので、どちらの的でも外す。
-    var pool = all.filter(function(d) { return d.deliverable; });
+    var deliverable = all.filter(function(d) { return d.deliverable; });
+    // 未確定 (スクラッチ) は既定で外す。渡す側が意図して入れたときだけ的に載せる。
+    var includeScratch = !!o.includeScratch;
+    var scratchDocs = deliverable.filter(function(d) { return d.scratch; });
+    var pool = includeScratch ? deliverable : deliverable.filter(function(d) { return !d.scratch; });
     var targets = mode === MODE_FOLDER ? pool : pool.filter(function(d) { return d.open; });
 
     var openCount = pool.filter(function(d) { return d.open; }).length;
@@ -95,6 +111,18 @@ window.MA.exportTarget = (function() {
       line = '対象 ' + targets.length + ' 枚（保存先フォルダが未設定のため、開いているタブが対象のすべてです）';
     }
     if (template > 0) line += '（テンプレ ' + template + ' 枚は対象外）';
+
+    // 未確定は、外していても入れていても 1 行で言う (どちらも渡す前に見せる)。
+    var scratchNames = scratchDocs.map(function(d) { return d.name; });
+    var scratchLine = '';
+    if (scratchDocs.length > 0) {
+      scratchLine = includeScratch
+        ? '⚠ 未確定 ' + scratchDocs.length + ' 枚を入れています: '
+          + scratchNames.slice(0, 3).join(', ') + (scratchNames.length > 3 ? ' ほか' : '')
+        : '⚠ 未確定 ' + scratchDocs.length + ' 枚は対象から外しました: '
+          + scratchNames.slice(0, 3).join(', ') + (scratchNames.length > 3 ? ' ほか' : '');
+      line += '（' + scratchLine + '）';
+    }
 
     var names = [];
     pool.forEach(function(d) {
@@ -124,8 +152,12 @@ window.MA.exportTarget = (function() {
       template: template,
       missing: missing,
       missingUnopened: missingUnopened,
+      includeScratch: includeScratch,
+      scratch: scratchDocs.length,
+      scratchNames: scratchNames,
+      scratchLine: scratchLine,
       line: line,
-      warn: missing > 0,
+      warn: missing > 0 || scratchDocs.length > 0,
       hint: hint,
       canBuild: targets.length > 0,
     };
@@ -137,12 +169,17 @@ window.MA.exportTarget = (function() {
     var s = m.count + ' 枚';
     if (m.folderAvailable) s += ' / 保存フォルダ ' + m.folderCount + ' 枚';
     if (m.missing > 0) s += ' ・ ⚠ ' + m.missing + ' 枚は対象外';
+    if (m.scratch > 0) {
+      s += m.includeScratch
+        ? ' ・ ⚠ 未確定 ' + m.scratch + ' 枚を同梱'
+        : ' ・ 未確定 ' + m.scratch + ' 枚を除外';
+    }
     return s;
   }
 
   return {
     MODE_OPEN: MODE_OPEN, MODE_FOLDER: MODE_FOLDER,
-    candidates: candidates, defaultMode: defaultMode,
+    candidates: candidates, defaultMode: defaultMode, isScratchName: isScratchName,
     model: model, resultLine: resultLine,
   };
 })();
