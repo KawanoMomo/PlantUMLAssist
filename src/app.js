@@ -5096,6 +5096,13 @@ var _cohortResult = null;    // 選んだドメインの compare 結果
 // 毎回 puml の中身を読んで選り分けることになる。既定で外し、押せば戻せる。
 var _cohortShowTemplates = false;
 
+// BLK-reviewer-20260909-0603-wish: 覗いたフォルダの一覧はファイル名しか出しておらず、
+// 「その図の SVG が今の puml から作られたものか」は GUI からは分からなかった
+// (毎回 CLI で /verify-svg を叩いて確かめていた)。一覧と同じ呼び出しで判定の材料も
+// 取り、行に印を出す。
+var _peekScan = null;      // svg-freshness の scan 結果 (覗いているフォルダぶん)
+var _peekVerifying = false;
+
 function _peekEls() {
   return {
     modal: document.getElementById('peek-modal'),
@@ -5569,15 +5576,92 @@ function renderPeekFiles() {
   head.id = 'peek-files-head';
   head.textContent = _peekDir ? (_peekNames.length + ' 枚') : 'フォルダを選んでください';
   el.files.appendChild(head);
+  appendPeekSvgSection(el.files);
   _peekNames.forEach(function(n) {
     var b = document.createElement('button');
     b.type = 'button';
     b.className = 'peek-file' + (n === _peekName ? ' selected' : '');
     b.setAttribute('data-file-name', n);
-    b.textContent = n;
+    var label = document.createElement('span');
+    label.className = 'peek-file-name';
+    label.textContent = n;
+    b.appendChild(label);
+    appendPeekSvgBadge(b, n);
     b.addEventListener('click', function() { showPeekFile(n); });
     el.files.appendChild(b);
   });
+}
+
+// 行の印。判定は svg-freshness、見せ方は peek-freshness に置く。
+function appendPeekSvgBadge(host, name) {
+  var PFR = window.MA.peekFreshness;
+  if (!PFR || !_peekScan) return;
+  var badge = PFR.rowBadge(_peekScan, name);
+  if (!badge) return;
+  var span = document.createElement('span');
+  span.className = 'peek-svg-badge' + (badge.alert ? ' alert' : '');
+  span.setAttribute('data-svg-content', badge.content);
+  span.textContent = badge.mark;
+  span.title = badge.title;
+  host.appendChild(span);
+}
+
+// 一覧の見出しの下に、フォルダ全体の 1 行と「中身を確かめる」ボタンを出す。
+function appendPeekSvgSection(host) {
+  var PFR = window.MA.peekFreshness;
+  if (!PFR || !_peekScan || !_peekScan.rows.length) return;
+  var sum = document.createElement('div');
+  sum.className = 'peek-svg-summary' + (PFR.hasIssue(_peekScan) ? ' has-issue' : '');
+  sum.id = 'peek-svg-summary';
+  sum.textContent = PFR.summary(_peekScan);
+  host.appendChild(sum);
+  var targets = PFR.verifyTargets(_peekScan);
+  var btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'peek-svg-verify';
+  btn.id = 'peek-svg-verify';
+  btn.textContent = _peekVerifying ? '確かめています…' : PFR.verifyLabel(_peekScan);
+  btn.title = PFR.verifyTitle();
+  btn.disabled = _peekVerifying || !targets.length;
+  btn.addEventListener('click', function(ev) {
+    ev.stopPropagation();
+    verifyPeekSvg();
+  });
+  host.appendChild(btn);
+}
+
+// 覗いているフォルダの判定材料を読み直す。名前の一覧とは別の呼び出しにしない
+// (印の付く前の一覧が一瞬出ると、確かめてある図まで疑わせる)。
+function loadPeekScan(dir) {
+  var WS = window.MA.workspace;
+  var PFR = window.MA.peekFreshness;
+  if (!WS || !PFR || !WS.listFolder) return Promise.resolve(null);
+  return WS.listFolder(dir).then(function(folder) {
+    if (!window.MA.peekFolder.samePath(dir, _peekDir)) return null;   // 途中で選び直された
+    _peekScan = PFR.scan(folder);
+    return _peekScan;
+  }).catch(function() { return null; });
+}
+
+// 上書きせずに 1 枚ずつ描き直して比べる。覗いているのは他人のフォルダなので、
+// ここから作り直し (書き戻し) は決してしない。
+function verifyPeekSvg() {
+  var PFR = window.MA.peekFreshness;
+  var dir = _peekDir;
+  var targets = PFR ? PFR.verifyTargets(_peekScan) : [];
+  if (!targets.length || _peekVerifying || !dir) return Promise.resolve(false);
+  _peekVerifying = true;
+  renderPeekFiles();
+  return fetch('/verify-svg', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dir: dir, types: targets, mode: 'local' }),
+  }).then(function(r) { return r.ok; }).catch(function() { return false; })
+    .then(function(ok) {
+      _peekVerifying = false;
+      if (!window.MA.peekFolder.samePath(dir, _peekDir)) return false;
+      return loadPeekScan(dir).then(function() { renderPeekFiles(); return ok; });
+    });
 }
 
 function selectPeekDir(dir) {
@@ -5586,9 +5670,13 @@ function selectPeekDir(dir) {
   _peekDir = dir;
   _peekName = null;
   _peekNames = [];
+  _peekScan = null;
   renderPeekDirs();
   renderPeekFiles();
-  return WS.listFiles(dir).then(function(names) {
+  // 名前と判定を同時に取る。判定を後追いにすると、印の無い一覧が先に出て
+  // 「確かめた結果うまくいっている」と読み違える余地ができる。
+  return Promise.all([WS.listFiles(dir), loadPeekScan(dir)]).then(function(got) {
+    var names = got[0];
     if (!window.MA.peekFolder.samePath(dir, _peekDir)) return false;   // 途中で選び直された
     _peekNames = (names || []).filter(function(n) { return n; });
     renderPeekFiles();
