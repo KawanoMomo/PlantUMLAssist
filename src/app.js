@@ -2399,6 +2399,7 @@ function init() {
   setupExportPick();
   setupFixExport();
   setupComponentPack();
+  setupMaterialExport();
   setupHandoverBanner();
   setupAuditTimeline();
   setupAuditBoard();
@@ -2599,6 +2600,7 @@ function initCommandPalette() {
       { id: 'export-all', title: '全図を SVG で保存（zip）', hint: 'Export', keywords: ['export', 'svg', 'zip', 'all'], run: function() { clickById('exp-svg-all'); } },
       { id: 'export-pick', title: '図を選んで SVG で保存（zip）', hint: 'Export', keywords: ['export', 'svg', 'zip', 'pick', 'select', 'changed', 'fix'], run: function() { clickById('exp-svg-pick'); } },
       { id: 'export-fix', title: '要修正のみを SVG で保存（zip）', hint: 'Export', keywords: ['export', 'svg', 'zip', 'fix', 'review'], run: function() { clickById('exp-svg-fix'); } },
+      { id: 'export-material', title: '1 枚を資料化（形式は図種で自動）/ Make material', hint: 'Export', keywords: ['material', 'export', 'しりょう', '資料', 'png', 'svg'], run: function() { clickById('exp-material'); } },
       { id: 'export-pack', title: '部品の図をまとめて資料化（PNG）', hint: 'Export', keywords: ['export', 'png', 'pack', 'component', 'figure', 'zip'], run: function() { clickById('exp-png-pack'); } },
       { id: 'mode-local', title: 'レンダリング: local (Java)', hint: 'Render', keywords: ['render', 'mode', 'local'], run: function() { selectValue('render-mode', 'local'); } },
       { id: 'mode-online', title: 'レンダリング: online (plantuml.com)', hint: 'Render', keywords: ['render', 'mode', 'online'], run: function() { selectValue('render-mode', 'online'); } },
@@ -5281,6 +5283,7 @@ function setupTabs() {
   }
 
   openFromFolderByName = function(name) { openFromFolder(name); };
+  refreshFolderPanelNow = function() { if (panel.classList.contains('open')) renderFolderPanel(); };
 
   // BLK-junior-20260907-1803: 開いているタブと同じ名前を一覧から押したときに
   // 画面が何も動かないと、「保存できている」のか「一覧が効いていない」のかが
@@ -7002,6 +7005,9 @@ var _rdName = '';
 // 一覧のパネルは自前の関数で図を開く。差分ビューからも同じ道で開けるように、
 // パネル側で実体を差し込む (パネルを作る前に押される画面は無い)。
 var openFromFolderByName = function() {};
+// 資料化のように、パネルの外で保存フォルダを書き換える操作から一覧を描き直すための口
+// (BLK-junior-20260908-2303-wish)。パネルを開いていなければ何もしない。
+var refreshFolderPanelNow = function() {};
 
 function _rdModal() { return document.getElementById('rd-modal'); }
 
@@ -13865,6 +13871,187 @@ function setupComponentPack() {
   if (run) run.addEventListener('click', function() { runComponentPack(); });
   var modal = document.getElementById('cpack-modal');
   if (modal) modal.addEventListener('click', function(e) { if (e.target === modal) closeComponentPack(); });
+}
+
+// ── 1 枚を資料化 (BLK-junior-20260908-2303-wish) ─────────────────────────────
+// 設計書に貼る資料を作る場面は「題名に (資料用) を付けて保存」「図種に合わせた形式で
+// Export」「保存先確認」「一覧から開き直す」の 4 操作に分かれ、しかも形式 (状態遷移図
+// = SVG、他 = PNG 透過) は利用者が覚えて選んでいた。覚え違いは実際に手戻りになっている。
+// 形式は図種で一意に決まるので materialExport が持ち、画面で選ぶのは部品と図種だけ。
+// 押すと 元の図を読む → 題名に (資料用) → 決まった形式で書き出す → 保存フォルダに
+// 保存 → 提出物庫へ控える → 一覧を描き直す、までが 1 回で終わる。
+
+var _mexpFiles = [];
+
+function _mexpEsc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"]/g, function(c) {
+    return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c];
+  });
+}
+
+function _mexpSel(id) { return document.getElementById(id); }
+
+function _mexpPlan() {
+  var ME = window.MA.materialExport;
+  var comp = _mexpSel('mexp-component');
+  var kind = _mexpSel('mexp-kind');
+  if (!ME || !comp || !kind) return null;
+  return ME.plan(_mexpFiles, comp.value, kind.value);
+}
+
+// 図種の選択肢は部品によって変わる。形式は選択肢そのものに出す
+// (プルダウンを開いた時点で「状態遷移図 → SVG」と読めるようにする)。
+function _mexpRenderKinds() {
+  var ME = window.MA.materialExport;
+  var comp = _mexpSel('mexp-component');
+  var kindSel = _mexpSel('mexp-kind');
+  if (!ME || !comp || !kindSel) return;
+  var want = kindSel.value;
+  var rows = ME.kindsFor(_mexpFiles, comp.value);
+  var html = '';
+  for (var i = 0; i < rows.length; i++) {
+    html += '<option value="' + _mexpEsc(rows[i].kind) + '">'
+      + _mexpEsc(rows[i].kind) + '（' + _mexpEsc(rows[i].formatLabel) + '）</option>';
+  }
+  kindSel.innerHTML = html;
+  for (var j = 0; j < rows.length; j++) if (rows[j].kind === want) kindSel.value = want;
+  _mexpRenderPlan();
+}
+
+function _mexpRenderPlan() {
+  var ME = window.MA.materialExport;
+  var el = _mexpSel('mexp-plan');
+  var run = _mexpSel('mexp-run');
+  if (!ME) return;
+  var p = _mexpPlan();
+  if (el) el.textContent = ME.planText(p);
+  if (run) run.disabled = !p;
+}
+
+function _mexpRenderComponents() {
+  var ME = window.MA.materialExport;
+  var comp = _mexpSel('mexp-component');
+  var count = _mexpSel('mexp-count');
+  if (!ME || !comp) return;
+  var list = ME.components(_mexpFiles);
+  var html = '';
+  for (var i = 0; i < list.length; i++) {
+    html += '<option value="' + _mexpEsc(list[i].component) + '">' + _mexpEsc(list[i].component) + '</option>';
+  }
+  comp.innerHTML = html;
+  if (count) count.textContent = list.length ? (list.length + ' 部品') : '';
+  var empty = ME.emptyText(_mexpFiles);
+  if (empty) {
+    var el = _mexpSel('mexp-plan');
+    if (el) el.textContent = empty;
+    var run = _mexpSel('mexp-run');
+    if (run) run.disabled = true;
+    return;
+  }
+  _mexpRenderKinds();
+}
+
+function openMaterialExport() {
+  var modal = document.getElementById('mexp-modal');
+  if (!modal || !window.MA.materialExport || !window.MA.workspace) return Promise.resolve();
+  var state = _mexpSel('mexp-state');
+  if (state) state.textContent = '';
+  _mexpFiles = [];
+  _mexpRenderComponents();
+  modal.style.display = 'flex';
+  return window.MA.workspace.listFiles(_wsFileDir()).then(function(list) {
+    _mexpFiles = list || [];
+    _mexpRenderComponents();
+  });
+}
+
+function closeMaterialExport() {
+  var modal = document.getElementById('mexp-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+// 押したら全部やる。途中で失敗したら何が失敗したかを言い、
+// 半端に (資料用) の名前だけが保存フォルダに残らないよう、書き出せてから保存する。
+function runMaterialExport() {
+  var ME = window.MA.materialExport;
+  var WS = window.MA.workspace;
+  var p = _mexpPlan();
+  var state = _mexpSel('mexp-state');
+  var run = _mexpSel('mexp-run');
+  if (!ME || !WS || !p) return Promise.resolve(null);
+  var dir = _wsFileDir();
+  if (run) run.disabled = true;
+  if (state) state.textContent = p.source + ' を ' + p.formatLabel + ' で資料化しています…';
+
+  var dsl = '';
+  return Promise.resolve(WS.loadFile(p.source, dir))
+    .then(function(text) {
+      if (!text || String(text).trim() === '') throw new Error('元の図が空です');
+      dsl = ME.applyTitle(text, p.title);
+      return renderDslToSvg(dsl);
+    })
+    .then(function(svg) {
+      if (p.format === 'svg') {
+        return new Blob([svg], { type: 'image/svg+xml' });
+      }
+      return svgTextToPngBlob(svg, true);
+    })
+    .then(function(blob) {
+      downloadBlob(p.filename, blob);
+      // 資料用の版を保存フォルダにも残す (次の周に開き直せないと資料を作り直しになる)。
+      return WS.saveToFile({ name: p.docName, dsl: dsl }, dir);
+    })
+    .then(function() {
+      // 開いているタブを資料用の版に切り替える。一覧から開き直す手順がここで済む。
+      saveActiveDoc();
+      var detected = WS.detectType(dsl);
+      openExistingFile({
+        name: p.docName,
+        dsl: dsl,
+        diagramType: (detected && modules[detected]) ? detected : currentDiagramType,
+      });
+      applyActiveDoc();
+      // 書き出した瞬間が周の区切り。Export と同じく庫へ控える。
+      return stashToVault(p.formatLabel);
+    })
+    .then(function() {
+      var msg = ME.doneMessage(p);
+      if (state) state.textContent = msg;
+      if (window.MA.toast) window.MA.toast.show(msg);
+      if (run) run.disabled = false;
+      try { refreshFolderPanelNow(); } catch (e) {}
+      closeMaterialExport();
+      return p;
+    })
+    .catch(function(e) {
+      var msg = ME.failMessage(p, e);
+      if (state) state.textContent = msg;
+      if (window.MA.toast) window.MA.toast.show(msg);
+      if (run) run.disabled = false;
+      return null;
+    });
+}
+
+function setupMaterialExport() {
+  var open = document.getElementById('exp-material');
+  if (open) open.addEventListener('click', function() {
+    var menu = document.getElementById('export-menu');
+    if (menu) menu.classList.remove('open');
+    openMaterialExport();
+  });
+  var modal = document.getElementById('mexp-modal');
+  document.addEventListener('keydown', function(ev) {
+    if (ev.key === 'Escape' && modal && modal.style.display === 'flex') closeMaterialExport();
+  });
+  var close = document.getElementById('mexp-close');
+  if (close) close.addEventListener('click', closeMaterialExport);
+  var run = document.getElementById('mexp-run');
+  if (run) run.addEventListener('click', function() { runMaterialExport(); });
+  var comp = document.getElementById('mexp-component');
+  if (comp) comp.addEventListener('change', _mexpRenderKinds);
+  var kind = document.getElementById('mexp-kind');
+  if (kind) kind.addEventListener('change', _mexpRenderPlan);
+  if (modal) modal.addEventListener('click', function(e) { if (e.target === modal) closeMaterialExport(); });
 }
 
 // ── 指摘の付いた図だけを 1 押しで出す (BLK-primary-20260908-1903-friction) ──
