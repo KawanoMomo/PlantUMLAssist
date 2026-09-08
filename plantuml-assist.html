@@ -1760,6 +1760,42 @@ html, body {
 }
 .diff-board table.cb-diff tr[data-verdict="要修正"] td { background: rgba(220, 80, 80, 0.28); }
 .diff-board table.cb-diff tr[data-verdict="済"] td { opacity: 0.55; }
+/* 指摘と変更の対応表 (BLK-primary-20260908-1703-wish) */
+.diff-board .cb-map { margin: 4px 0 0 0; border: 1px solid var(--accent); border-radius: 4px; }
+.diff-board .cb-map-head {
+  display: flex; align-items: center; gap: 10px; padding: 4px 10px; font-size: 12px;
+  background: var(--bg-tertiary); border-bottom: 1px solid var(--border); border-radius: 4px 4px 0 0;
+}
+.diff-board .cb-map-head .cb-map-count { color: var(--accent); font-family: var(--font-mono); font-size: 11px; }
+.diff-board table.cb-map-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.diff-board table.cb-map-table th {
+  text-align: left; padding: 2px 8px; color: var(--text-secondary); font-weight: normal;
+  border-bottom: 1px solid var(--border);
+}
+.diff-board table.cb-map-table td { padding: 2px 8px; vertical-align: top; }
+.diff-board table.cb-map-table td.cb-map-where { font-family: var(--font-mono); white-space: nowrap; }
+.diff-board table.cb-map-table td.cb-map-text { word-break: break-all; }
+.diff-board table.cb-map-table td.cb-map-state { white-space: nowrap; }
+.diff-board table.cb-map-table tr[data-map-status="none"] td.cb-map-state { color: var(--accent-red); }
+.diff-board table.cb-map-table tr[data-map-status="linked"] td.cb-map-state { color: var(--accent); }
+.diff-board table.cb-map-table tr[data-map-status="linked"] td { opacity: 0.7; }
+.diff-board table.cb-map-table button.cb-map-goto {
+  border: 1px solid var(--border); background: var(--bg-tertiary); color: var(--text-secondary);
+  border-radius: 3px; font-size: 10px; padding: 0 5px; cursor: pointer; margin-right: 3px;
+}
+.diff-board table.cb-map-table button.cb-map-goto:hover { color: var(--text-primary); border-color: var(--accent); }
+.diff-board .cb-map-empty { color: var(--text-secondary); font-size: 11px; padding: 8px; }
+.diff-board .cb-links { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; padding: 3px 10px; font-size: 11px; }
+.diff-board .cb-links > span { color: var(--text-secondary); }
+.diff-board .cb-links button.cb-link-btn {
+  border: 1px solid var(--border); background: var(--bg-tertiary); color: var(--text-secondary);
+  border-radius: 3px; font-size: 10px; padding: 1px 6px; cursor: pointer; max-width: 320px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.diff-board .cb-links button.cb-link-btn:hover { color: var(--text-primary); border-color: var(--accent); }
+.diff-board .cb-links button.cb-link-btn[aria-pressed="true"] {
+  border-color: var(--accent); color: var(--accent); background: var(--bg-secondary);
+}
 #hn-banner.hn-fix { border-color: var(--accent-red); }
 #diff-panel .diff-actions button {
   border: 1px solid var(--border);
@@ -4862,6 +4898,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/review-pins.js"></script>
 <script src="src/core/pin-jump.js"></script>
 <script src="src/core/pin-inbox.js"></script>
+<script src="src/core/finding-link.js"></script>
 <script src="src/core/pin-reply.js"></script>
 <script src="src/core/pin-progress.js"></script>
 <script src="src/core/claim-check.js"></script>
@@ -4893,6 +4930,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <label><input type="checkbox" id="cb-same"> 変更なしも出す</label>
         <label title="会議で [要修正] を付けた行だけを残す (新人に渡す分)"><input type="checkbox" id="cb-fixonly"> 要修正のみ</label>
         <span id="cb-filter-state"></span>
+        <label title="指摘と変更の対応表で、まだ図を結んでいない指摘 (会議で「対応なし」と言う分) だけを出す"><input type="checkbox" id="cb-map-pending"> 未対応の指摘のみ</label>
+        <button type="button" id="cb-map-export" title="指摘 1 件ごとに「どの図の変更で対応したか / 対応なし」を並べた対応表を Markdown で書き出す (会議資料)">🔗 対応表を書き出す</button>
         <button type="button" id="cb-minutes" title="開いた図ごとの要修正件数・印の付いた行・申し送りを 1 枚の Markdown にまとめて書き出す (会議の議事録)">📝 会議メモを書き出す</button>
         <button type="button" id="cb-minutes-copy" title="同じ内容をクリップボードにコピーする">コピー</button>
         <span id="cb-minutes-state"></span>
