@@ -50,17 +50,29 @@ window.MA.svgFreshness = (function() {
   // 分からなくなる。そこで、上書きせずに 1 回描き直してバイト比較した結果 (records) も
   // 根拠として受け取る。records は {name: {pumlHash, svgHash, result}} で、
   // 突き合わせた 2 つの指紋が今のものと一致している間だけ有効。
+  // BLK-reviewer-20260908-1103 (2103 差し戻し): 印は「どの puml バイト列から書き出したか」
+  // しか言わないので、puml をヘッダの書式だけ書き換えて保存し直した図も印は食い違い、
+  // 描かれる中身は同じなのに「内容ずれ」と名指しされる。reviewer は同じ 6 枚を毎回
+  // /render + labels 突合で切り分け直していた。描き直して比べた控え (records) の方が
+  // 「読めるか」を直に見た強い根拠なので、控えが今の指紋に対して有効な間は控えを先に採り、
+  // 控えが無いときだけ印に落とす。
+  function _validRecord(entry, records) {
+    var r = records && records[entry.name];
+    if (!r || typeof r !== 'object') return null;
+    if (r.pumlHash !== entry.hash || r.svgHash !== entry.svgHash) return null;
+    return _fromResult(r.result) === 'unverified' ? null : r;
+  }
+
   function contentOf(entry, records) {
     if (!entry) return 'unverified';
     if (_time(entry.svgMtime) === null) return 'missing';
     var hash = entry.hash;
     if (typeof hash !== 'string' || hash === '') return 'unverified';
+    var r = _validRecord(entry, records);
+    if (r) return _fromResult(r.result);
     var stamp = entry.svgSource;
     if (typeof stamp === 'string' && stamp !== '') return stamp === hash ? 'match' : 'differ';
-    var r = records && records[entry.name];
-    if (!r || typeof r !== 'object') return 'unverified';
-    if (r.pumlHash !== hash || r.svgHash !== entry.svgHash) return 'unverified';
-    return _fromResult(r.result);
+    return 'unverified';
   }
 
   // BLK-reviewer-20260908-0103 (1903 追記): server の突合結果は 3 通りになった。
@@ -94,12 +106,11 @@ window.MA.svgFreshness = (function() {
     if (_time(entry.svgMtime) === null) return '';
     var hash = entry.hash;
     if (typeof hash !== 'string' || hash === '') return '';
+    // contentOf と同じ順序で見る (答えと根拠が食い違わないように)。
+    if (_validRecord(entry, records)) return 'rerender';
     var stamp = entry.svgSource;
     if (typeof stamp === 'string' && stamp !== '') return 'stamp';
-    var r = records && records[entry.name];
-    if (!r || typeof r !== 'object') return '';
-    if (r.pumlHash !== hash || r.svgHash !== entry.svgHash) return '';
-    return _fromResult(r.result) === 'unverified' ? '' : 'rerender';
+    return '';
   }
 
   var BASIS_TEXT = {
@@ -118,8 +129,14 @@ window.MA.svgFreshness = (function() {
     unverified: { mark: '内容未確認', title: '元の puml の印が無く、中身が一致するかは分かりません。作り直すと印が付きます' },
   };
 
+  // 印だけで出た「ずれ」は、体裁だけの差でもそう出る。作り直しを言い切らない。
+  var STAMP_DIFFER_TITLE = 'この SVG は印 (@pua-source-sha1) が今の puml と違います。'
+    + 'ただし体裁だけを書き換えて保存し直した図も印は違うので、'
+    + '作り直しが要るかは「SVG の中身を確かめる」で確定します';
+
   function contentBadge(content, basis) {
     var b = CONTENT_BADGES[content] || CONTENT_BADGES.unverified;
+    if (content === 'differ' && basis === 'stamp') b = { mark: b.mark, title: STAMP_DIFFER_TITLE };
     var t = basisText(basis);
     if (!t) return b;
     // 何を見て出した答えかを印そのものに持たせる。実装を読まずに分かるようにする。
@@ -170,8 +187,13 @@ window.MA.svgFreshness = (function() {
         .map(function(r) { return r.name; }),
       // 上書きせずに確かめられる図 (svg があって、まだ内容で言い切れていないもの)。
       // 作り直しと違い、保存されていた絵をそのまま残したまま白黒が付く。
-      needsVerify: rows.filter(function(r) { return r.content === 'unverified'; })
-        .map(function(r) { return r.name; }),
+      // BLK-reviewer-20260908-1103 (2103 差し戻し): 印だけで「ずれ」と出た図もここに入れる。
+      // 印は体裁だけの差でも食い違うので、確かめるまでは作り直しが要るかが決まらない。
+      // 対象から外していた間、reviewer はその図を GUI からは確かめられず、
+      // 毎回 /render + labels 突合を手でやり直していた。
+      needsVerify: rows.filter(function(r) {
+        return r.content === 'unverified' || (r.content === 'differ' && r.basis === 'stamp');
+      }).map(function(r) { return r.name; }),
       // BLK-reviewer-20260908-1203: 内容ずれと分かっている図。印 (svgSource) だけで
       // ずれが分かった図は、確かめ直していないので「何が食い違うか」の材料が手元に無い。
       // 中身を言うために server にもう一度突き合わせてもらう対象。
