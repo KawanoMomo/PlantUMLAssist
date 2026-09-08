@@ -94,4 +94,46 @@ describe('source-lock — 開いた元ファイルを自動保存から守る (B
     // 改名済みのタブには何も出さない
     expect(SL.label('doc1', 'b')).toBe(null);
   });
+
+  // BLK-primary-20260909-0403: 開いたファイルの数だけ確認が挟まる問題。
+  describe('返事を既定にすれば、他の開いたファイルでは聞かない', () => {
+    test('「元のまま保つ」を全体に適用すると、他のタブは聞かずに控えへ書く', () => {
+      SL.mark('doc1', 'spi_init_sequence');
+      SL.mark('doc2', 'can_init_sequence');
+      expect(SL.answer('doc1', 'keep', [], true)).toEqual({ action: 'write', name: 'spi_init_sequence-編集中' });
+      expect(SL.defaultChoice()).toBe('keep');
+      expect(SL.decide('doc2', 'can_init_sequence')).toEqual({ action: 'write', name: 'can_init_sequence-編集中' });
+      // 既定が当たったタブは、以後も控えへ書き続ける (状態として残る)
+      expect(SL.stateOf('doc2').mode).toBe('copy');
+    });
+
+    test('「上書き」を全体に適用すると、他のタブは聞かずに元ファイルへ書く', () => {
+      SL.mark('doc1', 'a'); SL.mark('doc2', 'b');
+      SL.answer('doc1', 'overwrite', [], true);
+      expect(SL.decide('doc2', 'b')).toEqual({ action: 'write', name: 'b' });
+    });
+
+    test('全体に適用しなければ、他のタブでは今までどおり聞く', () => {
+      SL.mark('doc1', 'a'); SL.mark('doc2', 'b');
+      SL.answer('doc1', 'keep', [], false);
+      expect(SL.defaultChoice()).toBe(null);
+      expect(SL.decide('doc2', 'b')).toEqual({ action: 'ask', origin: 'b' });
+    });
+
+    test('既定を当てるときも、控えの名前は既存タブと衝突させない', () => {
+      SL.setDefault('keep');
+      SL.mark('doc2', 'a');
+      expect(SL.decide('doc2', 'a', ['a-編集中'])).toEqual({ action: 'write', name: 'a-編集中-2' });
+    });
+
+    test('clearAll は既定も消す', () => {
+      SL.setDefault('overwrite');
+      SL.clearAll();
+      expect(SL.defaultChoice()).toBe(null);
+    });
+
+    test('確認の文言は「他のファイルも同じ扱いにする」を言う', () => {
+      expect(SL.askText('a').all).toContain('毎回聞かない');
+    });
+  });
 });

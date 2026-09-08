@@ -128,6 +128,12 @@ function updateTopSourceLock() {
   el.title = info.title;
 }
 
+// 開いているタブの名前一覧 (控えの名前が既存タブと衝突しないように渡す)。
+function _openDocNames() {
+  try { return window.MA.workspace ? window.MA.workspace.list().map(function(d) { return d.name; }) : []; }
+  catch (e) { return []; }
+}
+
 // 確認は 1 枚のドキュメントにつき 1 回きり。開いている間に何度も出さない。
 var _sourceAskOpenFor = null;
 function askSourceLock(doc) {
@@ -136,7 +142,7 @@ function askSourceLock(doc) {
   if (document.getElementById('source-lock-modal')) return;
   _sourceAskOpenFor = doc.id;
   var t = SL.askText(doc.name);
-  var used = window.MA.workspace ? window.MA.workspace.list().map(function(d) { return d.name; }) : [];
+  var used = _openDocNames();
   var wrap = document.createElement('div');
   wrap.id = 'source-lock-modal';
   wrap.innerHTML = '<div id="source-lock-panel" role="dialog" aria-modal="true" aria-label="' + t.title + '">'
@@ -145,20 +151,28 @@ function askSourceLock(doc) {
     + '<div style="display:flex;flex-direction:column;gap:6px;">'
     + '<button type="button" id="source-lock-keep">' + t.keep + '</button>'
     + '<button type="button" id="source-lock-overwrite">' + t.overwrite + '</button>'
-    + '</div></div>';
+    + '</div>'
+    // BLK-primary-20260909-0403: 開いたファイルの数だけ聞かれると、タブを切り替える
+    // たびに割り込まれる。既定で「他のファイルも同じ扱い」にして 1 回で済ませる。
+    + '<label id="source-lock-all-label" style="display:flex;gap:6px;align-items:center;margin-top:10px;font-size:12px;">'
+    + '<input type="checkbox" id="source-lock-all" checked>' + t.all + '</label>'
+    + '</div>';
   document.body.appendChild(wrap);
   function close() {
     _sourceAskOpenFor = null;
     if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
   }
   function answer(choice) {
-    var res = SL.answer(doc.id, choice, used);
+    var allEl = wrap.querySelector('#source-lock-all');
+    var all = !allEl || allEl.checked;
+    var res = SL.answer(doc.id, choice, used, all);
     close();
+    var also = all ? '（開いている他のファイルも同じ扱いにします）' : '';
     if (choice === 'keep' && window.MA.workspace) {
       // 控えの名前でしか書かないので、書き先が無い状態は作らない。
-      setSaveStatus('🔒 ' + doc.name + '.puml は変更前のまま保ちます（' + res.name + '.puml に書きます）');
+      setSaveStatus('🔒 ' + doc.name + '.puml は変更前のまま保ちます（' + res.name + '.puml に書きます）' + also);
     } else {
-      setSaveStatus('✎ ' + res.name + '.puml を書き換えます');
+      setSaveStatus('✎ ' + res.name + '.puml を書き換えます' + also);
     }
     updateTopSourceLock();
     saveActiveDoc();
@@ -3227,12 +3241,14 @@ function saveActiveDoc() {
       // BLK-junior-20260908-1803-wish: 開いたままのファイルへ最初に書き戻す前に
       // 一度だけ聞く。答えるまでは書かない (見比べ中の元ファイルを守る)。
       var SL = window.MA.sourceLock;
-      var d = SL ? SL.decide(doc.id, doc.name) : { action: 'write', name: doc.name };
+      var d = SL ? SL.decide(doc.id, doc.name, _openDocNames()) : { action: 'write', name: doc.name };
       if (d.action === 'ask') {
         try { askSourceLock(doc); } catch (e) {}
         renderDiffBadge();
         return doc;
       }
+      // 既定が当たって書き先が変わることがあるので、上部バーの錠表示も合わせ直す。
+      try { updateTopSourceLock(); } catch (e) {}
       if (d.name !== doc.name) doc = { id: doc.id, name: d.name, diagramType: doc.diagramType, dsl: doc.dsl };
       window.MA.workspace.saveToFile(doc, cfg.fileDir);
       // 保存した時点を差分の基準にする (BLK-reviewer-20260907-0803)。
@@ -14068,7 +14084,7 @@ function saveFile() {
   // 「元のまま保つ」を選んだあとに保存を押して元が消えたら、選ばせた意味が無い。
   var SLm = window.MA.sourceLock;
   if (doc && SLm && cfg && cfg.backend === 'file') {
-    var dm = SLm.decide(doc.id, doc.name);
+    var dm = SLm.decide(doc.id, doc.name, _openDocNames());
     if (dm.action === 'ask') { try { askSourceLock(doc); } catch (e) {} return; }
     if (dm.name !== doc.name) doc = { id: doc.id, name: dm.name, diagramType: doc.diagramType, dsl: doc.dsl };
   }
