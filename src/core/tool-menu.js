@@ -61,6 +61,20 @@ window.MA.toolMenu = (function() {
 
   var NOTE = 'Ctrl+K でも同じ操作が引ける';
 
+  // 単独キーを持つツール。ボタン id → ショートカット表 (settings-tabs) の行 id。
+  // メニューの右端にそのキーを出し、「次からはメニューを開かずに押せる」ことを
+  // メニューを開いた人に見せる (キーの正本は表側。ここには文字列を書かない)。
+  var KEY_ROWS = { 'btn-tab-rename': 'bulk-rename' };
+
+  // いま効いているキー。差し替えられていればその姿で出す。無ければ ''。
+  function keyHintOf(id) {
+    var rowId = KEY_ROWS[id];
+    if (!rowId) return '';
+    var KB = window.MA.keyBindings;
+    if (!KB || !KB.keysFor) return '';
+    return KB.keysFor(rowId) || '';
+  }
+
   function groups() {
     // 呼び出し側が書き換えても内部が壊れないよう複製を返す。
     return GROUPS.map(function(g) {
@@ -156,8 +170,10 @@ window.MA.toolMenu = (function() {
     var body = GROUPS.map(function(g) {
       var items = g.items.map(function(it) {
         var badge = b[it.id];
+        var key = keyHintOf(it.id);
         return '<button type="button" class="tool-menu-item" data-target="' + esc(it.id) + '">'
           + '<span class="tool-menu-label">' + esc(it.label) + '</span>'
+          + (key ? '<span class="tool-menu-key">' + esc(key) + '</span>' : '')
           + (badge ? '<span class="tool-menu-badge">' + esc(badge) + '</span>' : '')
           + '</button>';
       }).join('');
@@ -180,6 +196,7 @@ window.MA.toolMenu = (function() {
     showsToolButton: showsToolButton,
     showsMiniButton: showsMiniButton,
     miniLabel: miniLabel,
+    keyHintOf: keyHintOf,
     buildMenuHtml: buildMenuHtml,
     NOTE: NOTE,
   };

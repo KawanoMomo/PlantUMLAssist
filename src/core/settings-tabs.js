@@ -79,6 +79,10 @@ window.MA.settingsTabs = (function() {
         // 「一覧に無いのに効くキー」になってしまうので、割り当ての正本はここに置く。
         { id: 'exp-svg',   keys: 'Ctrl+Shift+S', desc: 'SVG として保存する',                 state: 'done', remap: true },
         { id: 'exp-clipboard', keys: 'Ctrl+Shift+C', desc: 'クリップボードにコピーする',     state: 'done', remap: true },
+        // 一括置換は台本の主戦場で、ツールは既定でタブ列から畳まれている (design 7b)。
+        // メニューを辿るか Ctrl+K でコマンド名を打つかしか入口が無いと、同じ手順の
+        // 手数が「今どのボタンが出ているか」で上下する。単独キーを 1 つ与えて固定する。
+        { id: 'bulk-rename', keys: 'Ctrl+H', desc: '部品名を一括置換する',                   state: 'done', remap: true },
       ],
     },
     {

@@ -16,12 +16,10 @@ test('手順10 手順2 の手数がクリック 10 以下・キー入力 50 以�
   let clicks = 0;
   let keys = 0;
 
-  await page.keyboard.press('Control+k'); keys += 2;
-  await page.waitForSelector('#cp-modal');
-  await page.locator('#cp-input').fill('一括置換'); keys += 4;
-  await page.waitForTimeout(250);
-  await page.keyboard.press('Enter'); keys += 1;
-  await page.waitForTimeout(500);
+  // BLK-primary-20260909-0303: 以前は Ctrl+K → 「一括置換」4 打鍵 → Enter で 7 打鍵だった。
+  // 一括置換に単独キーが付いたので、タブ列にボタンが出ているかによらず 2 打鍵で開く。
+  await page.keyboard.press('Control+h'); keys += 2;
+  await page.waitForSelector('#rename-panel.open');
 
   const allDocs = page.locator('#rename-all-docs');
   if (!(await allDocs.isChecked())) { await allDocs.check(); clicks += 1; }

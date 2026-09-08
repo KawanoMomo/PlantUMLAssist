@@ -2266,12 +2266,20 @@ function init() {
     var hit = null;
     if (KB.matches('render', e)) hit = 'render';
     else if (KB.matches('save', e)) hit = 'save';
+    // 一括置換 (BLK-primary-20260909-0303)。既定でタブ列から畳まれているツールなので、
+    // メニューを辿らず / Ctrl+K でコマンド名を打たずに開ける道を 1 本用意する。
+    else if (KB.matches('bulk-rename', e)) hit = 'bulk-rename';
     if (!hit) return;
     var ae0 = document.activeElement;
     if (ae0 && ae0 !== editorEl
       && (ae0.tagName === 'INPUT' || ae0.tagName === 'TEXTAREA' || ae0.tagName === 'SELECT' || ae0.isContentEditable)) return;
     e.preventDefault();
     if (hit === 'render') { scheduleRefresh(); return; }
+    if (hit === 'bulk-rename') {
+      var renameBtn = document.getElementById('btn-tab-rename');
+      if (renameBtn) renameBtn.click();
+      return;
+    }
     var saveBtn = document.getElementById('btn-save');
     if (saveBtn) saveBtn.click();
   });
