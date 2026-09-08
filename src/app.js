@@ -3141,12 +3141,32 @@ function syncDraftButton() {
     : 'この図に一時控え(下書き / やり直し途中)の印を付けて、📂 一覧から畳む';
 }
 
+// BLK-junior-20260908-1803: 「この名前のファイルに書いてよいか」を答える門。
+// テンプレ宣言を知っている側 (一覧を持つ setupTabs の中) が起動時に差し込む。
+// 書き先を持つ経路が 2 つある (auto-save.js のディスク写しと、ここの saveActiveDoc)
+// ので、判断は 1 か所に置いて両方から引く。
+var _fileWriteBlock = null;   // function(name) -> 理由 / null
+function _blockedFileWrite(name) {
+  if (!_fileWriteBlock || !name) return null;
+  try { return _fileWriteBlock(String(name)) || null; } catch (e) { return null; }
+}
+
 // アクティブなタブの現在の編集内容を workspace に書き戻す。
 function saveActiveDoc() {
   if (!window.MA.workspace) return null;
   var doc = window.MA.workspace.updateActive({ dsl: mmdText, diagramType: currentDiagramType });
   try {
     var cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null;
+    // テンプレ宣言のあるファイルには書かない (見比べのために開いた前周の完了物が、
+    // 図名を変えるまでの間に編集途中の内容で壊れる事故を止める)。
+    var blocked = doc ? _blockedFileWrite(doc.name) : null;
+    if (blocked) {
+      if (window.MA.autoSave && window.MA.autoSave.noteFileBlocked) {
+        window.MA.autoSave.noteFileBlocked(doc.name, blocked);
+      }
+      renderDiffBadge();
+      return doc;
+    }
     if (doc && cfg && cfg.backend === 'file') {
       // BLK-junior-20260908-1803-wish: 開いたままのファイルへ最初に書き戻す前に
       // 一度だけ聞く。答えるまでは書かない (見比べ中の元ファイルを守る)。
@@ -6074,6 +6094,49 @@ function setupTabs() {
       renderFolderPanel();
     });
   }
+
+  // ── テンプレへの自動保存を止める (BLK-junior-20260908-1803) ──────────────
+  // 見比べのために Open で開いたテンプレ (前周の完了物) へ、図名を変えるまでの間に
+  // 自動保存が書き込み、編集途中の内容でテンプレが壊れる事故があった。
+  // 汚染を後から赤く出す (テンプレ宣言) 仕組みは既にあるので、その宣言をそのまま
+  // 「書き込ませない」に使う。編集内容は localStorage 側に残るので失われない。
+  (function setupTemplateAutosaveGuard() {
+    var AS = window.MA.autoSave;
+    var FR = window.MA.fileRole;
+    if (!AS || !FR || !AS.setFileGuard) return;
+
+    function blockOf(diagramType) {
+      var name = String(diagramType == null ? '' : diagramType);
+      if (!name) return null;
+      // 書き先は {図名}.puml。宣言は一覧の名前で持っている (拡張子の有無は問わない)。
+      if (FR.blocksAutosave(fileRoles, name)) return FR.blockedMessage(name);
+      if (FR.blocksAutosave(fileRoles, name + '.puml')) return FR.blockedMessage(name + '.puml');
+      return null;
+    }
+    AS.setFileGuard(blockOf);
+    _fileWriteBlock = blockOf;
+
+    if (AS.onFileBlocked) {
+      AS.onFileBlocked(function(info) {
+        if (window.MA.toast) {
+          try { window.MA.toast.show(info.reason); } catch (e) {}
+        }
+      });
+    }
+
+    // 開き直した直後 (一覧をまだ開いていない) でも宣言を知っているようにする。
+    var WS = window.MA.workspace;
+    if (WS && WS.listFolder) {
+      try {
+        WS.listFolder(_wsFileDir()).then(function(res) {
+          if (!res) return;
+          // 一覧を先に開いていたらそちらが正本。ここで上書きしない。
+          if (Object.keys(fileRoles).length > 0) return;
+          fileRoles = FR.keepExisting((res && res.roles) || {}, res.entries || []);
+        }).catch(function() {});
+      } catch (e) {}
+    }
+  })();
 
   function folderRow(name, bdg, mtime, status) {
     var FS = window.MA.folderSelect;

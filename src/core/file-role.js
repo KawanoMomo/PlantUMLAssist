@@ -158,6 +158,21 @@ window.MA.fileRole = (function() {
     return setRole(map, entry, 'template', now);
   }
 
+  // BLK-junior-20260908-1803: テンプレ宣言したファイルには自動保存を書き込ませない。
+  // 見比べのためにテンプレを Open で開くと、図名を変えるまでの一瞬でも自動保存が
+  // そのファイル名へ書き、テンプレ (前周の完了物) が編集途中の内容で壊れる。
+  // 汚染を後から赤く出すより、そもそも書かせない方が手戻りが無い。
+  function blocksAutosave(map, name) {
+    var n = name == null ? '' : String(name);
+    if (!n) return false;
+    return roleOf(parse(map), n) === 'template';
+  }
+
+  // 書かせなかったときに一度だけ出す文言。何が起きなかったか / どうすれば書けるかを言う。
+  function blockedMessage(name) {
+    return 'テンプレ「' + _s(name) + '」には自動保存しません（図名を変えると新しいファイルに保存されます）';
+  }
+
   // 消えた図の宣言は捨てる (印だけが残り続けないようにする)。
   function keepExisting(map, entries) {
     var live = {};
@@ -185,6 +200,8 @@ window.MA.fileRole = (function() {
     nextRole: nextRole,
     setRole: setRole,
     accept: accept,
+    blocksAutosave: blocksAutosave,
+    blockedMessage: blockedMessage,
     keepExisting: keepExisting,
   };
 })();
