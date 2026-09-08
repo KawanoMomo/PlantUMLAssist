@@ -6378,6 +6378,12 @@ function setupTabs() {
     host.appendChild(line);
     if (!rec) return;
 
+    // 8 行は 📂 一覧 (max-height 240px) を食い尽くすので、棚卸しは自前で
+    // スクロールする。図の一覧まで下ろすのに 8 行ぶん送らせない。
+    var rowsHost = document.createElement('div');
+    rowsHost.className = 'folder-inv-rows';
+    host.appendChild(rowsHost);
+
     rec.rows.forEach(function(r) {
       var row = document.createElement('div');
       row.className = 'folder-inv-row ' + (r.present ? 'inv-have' : 'inv-miss');
@@ -6404,7 +6410,7 @@ function setupTabs() {
         });
         row.appendChild(b);
       });
-      host.appendChild(row);
+      rowsHost.appendChild(row);
     });
 
     if (rec.unknown.length) {
