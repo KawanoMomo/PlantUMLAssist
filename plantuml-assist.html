@@ -1915,7 +1915,33 @@ html, body {
   font-size: 12px;
   color: var(--text-primary);
 }
-#cb-summary, #ri-summary { color: var(--accent); }
+#cb-summary, #ri-summary, #dg-summary { color: var(--accent); }
+/* 部品名の依存グラフ (BLK-primary-20260908-2003-wish)。
+   上が矢印の絵、下が影響の届く図の一覧。絵だけでは「開いて直す図」を数えられない。 */
+#dg-body { flex: 1; overflow-y: auto; padding: 6px 14px 14px 14px; }
+#dg-canvas { border: 1px solid var(--border); border-radius: 4px; background: var(--bg-primary); overflow-x: auto; }
+#dg-canvas .dg-empty { color: var(--text-secondary); font-size: 12px; padding: 20px 10px; }
+#dg-canvas svg { display: block; }
+#dg-canvas svg text { font-family: var(--font-mono); font-size: 11px; fill: var(--text-primary); }
+#dg-canvas svg text.dg-count { fill: var(--text-secondary); font-size: 10px; }
+#dg-canvas svg line.dg-edge { stroke: var(--accent); stroke-width: 1.4; }
+#dg-canvas svg rect.dg-box { fill: var(--bg-tertiary); stroke: var(--border); }
+#dg-canvas svg g.dg-node[data-side="center"] rect.dg-box { stroke: var(--accent); stroke-width: 1.6; }
+#dg-impact { margin-top: 12px; border: 1px solid var(--border); border-radius: 4px; }
+#dg-impact .dg-impact-head {
+  display: flex; align-items: center; gap: 10px; padding: 6px 10px;
+  background: var(--bg-tertiary); border-bottom: 1px solid var(--border); font-size: 12px;
+}
+#dg-impact table { width: 100%; border-collapse: collapse; font-size: 11px; }
+#dg-impact th {
+  text-align: left; padding: 2px 8px; color: var(--text-secondary);
+  font-weight: normal; border-bottom: 1px solid var(--border);
+}
+#dg-impact td { padding: 2px 8px; vertical-align: top; }
+#dg-impact td.dg-doc-name { font-family: var(--font-mono); white-space: nowrap; }
+#dg-impact td.dg-via { color: var(--text-secondary); word-break: break-all; }
+#dg-impact tr.dg-doc[data-hop="0"] td.dg-hop { color: var(--accent); }
+#dg-impact tr.dg-doc[data-hop] td.dg-hop { white-space: nowrap; }
 .board-tools { margin-left: auto; display: flex; align-items: center; gap: 12px; }
 .board-tools label { display: flex; align-items: center; gap: 4px; color: var(--text-secondary); cursor: pointer; }
 .board-tools button {
@@ -4575,6 +4601,9 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
           <!-- BLK-primary-20260908-1303-wish: 適用する前に、当たった図の該当行が
                どう変わるかを変更サマリボードと同じ見た目で並べて確かめる -->
           <button id="btn-rename-preview" disabled title="この置換をヒットした図全部に当てたら、各図の該当行がどう変わるかを並べて見る (まだ置換はしません)">▤ 影響を見る</button>
+          <!-- BLK-primary-20260908-2003-wish: 影響を見るはヒット行を図ごとに並べるだけで、
+               図と図の参照の連鎖は見えない。部品名 1 つから参照元・参照先を矢印で出す -->
+          <button id="btn-rename-depgraph" title="この部品名を参照している図・参照している先を矢印で一望する (連鎖で影響が届く図も出す)">◈ 依存グラフ</button>
           <button id="btn-rename-apply" disabled>置換</button>
           <button id="btn-rename-cancel">閉じる</button>
         </div>
@@ -5169,6 +5198,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/consistency-check.js"></script>
 <script src="src/core/manual-findings.js"></script>
 <script src="src/core/component-deps.js"></script>
+<script src="src/core/dep-graph.js"></script>
 <script src="src/core/review-desk.js"></script>
 <script src="src/core/state-branch.js"></script>
 <script src="src/core/state-transition.js"></script>
@@ -5282,6 +5312,35 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       </span>
     </div>
     <div id="ri-body" class="diff-board"></div>
+  </div>
+</div>
+<!-- BLK-primary-20260908-2003-wish: 部品名の依存グラフ。⇄ 一括置換の「▤ 影響を見る」は
+     ヒット行を図ごとにテキストで並べるだけなので、どの図がどの図を参照して連鎖しているかは
+     各図を開いて目視で推測するしかなかった。名前を 1 つ選ぶと参照元 (左) → 名前 (中央) →
+     参照先 (右) が矢印で並び、隣の名前を経由して影響が届く図まで一覧に出る。 -->
+<div id="dg-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+  <div class="board-modal">
+    <div class="board-head">
+      <strong>部品名の依存グラフ</strong>
+      <span id="dg-summary" role="status"></span>
+      <span class="board-tools">
+        <label for="dg-name">部品名</label>
+        <select id="dg-name" title="参照の本数が多い順に並ぶ"></select>
+        <label for="dg-hops" title="隣の名前を何段まで辿って影響が及ぶ図を数えるか">連鎖</label>
+        <select id="dg-hops">
+          <option value="0">直接だけ</option>
+          <option value="1">1 段</option>
+          <option value="2" selected>2 段</option>
+          <option value="3">3 段</option>
+        </select>
+        <button type="button" id="dg-use" title="この名前を一括置換の「置換前」に入れる">この名前を置換前に入れる</button>
+        <button type="button" id="dg-close">閉じる</button>
+      </span>
+    </div>
+    <div id="dg-body">
+      <div id="dg-canvas"></div>
+      <div id="dg-impact"></div>
+    </div>
   </div>
 </div>
 <!-- BLK-primary-20260908-1203-wish: 提出用 zip に詰める図を選ぶ。

@@ -2386,6 +2386,7 @@ function init() {
   setupTabs();
   setupBulkRename();
   setupRenameImpact();
+  setupDepGraph();
   setupSymptomSearch();
   setupPatternCheck();
   setupXrefGraph();
@@ -7633,6 +7634,198 @@ function setupRenameImpact() {
   });
 }
 
+// ── 部品名の依存グラフ (BLK-primary-20260908-2003-wish) ──────────────────────
+// ▤ 影響を見る はヒットした行を図ごとにテキストで並べるだけなので、
+// 「どの図がどの図を参照して連鎖しているか」は各図を開いて目視で推測するしかない。
+// 名前を 1 つ選ぶと参照元 (左) → その名前 (中央) → 参照先 (右) が矢印で並び、
+// 隣の名前を経由して影響が届く図まで一覧に出る。ここでは何も書き換えない。
+var _dgName = '';
+var _dgHops = 2;
+
+// グラフに載せる図。開いているタブ (未保存の編集を含む) + 保存フォルダの全ファイル。
+// 置換の的と揃えるため、テンプレは除く (中身が変わらないものを連鎖に数えると
+// 「直す図」の数が実際より増える)。
+function _dgDocs() {
+  var FI = window.MA.folderImpact;
+  return _fiRows().filter(function(r) {
+    return !FI || FI.isTarget(r);
+  }).map(function(r) {
+    return { id: r.id, name: r.name, dsl: r.dsl };
+  });
+}
+
+function _dgSvgHtml(view) {
+  var DG = window.MA.depGraph;
+  var esc = window.MA.htmlUtils.escHtml;
+  var lay = DG.layout(view);
+  var boxW = 150;
+  var boxH = 20;
+  var html = '<svg id="dg-svg" width="' + lay.width + '" height="' + lay.height + '" '
+    + 'viewBox="0 0 ' + lay.width + ' ' + lay.height + '">'
+    + '<defs><marker id="dg-arrow" viewBox="0 0 10 10" refX="9" refY="5" '
+    + 'markerWidth="7" markerHeight="7" orient="auto-start-reverse">'
+    + '<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor" class="dg-arrow-head"/></marker></defs>';
+  // 辺を先に引く。あとから箱を重ねると、線の端が名前の下に隠れて向きが読める。
+  lay.edges.forEach(function(e) {
+    html += '<line class="dg-edge" data-from="' + esc(e.from) + '" data-to="' + esc(e.to) + '" '
+      + 'x1="' + (e.x1 + boxW / 2) + '" y1="' + e.y1 + '" '
+      + 'x2="' + (e.x2 - boxW / 2) + '" y2="' + e.y2 + '" marker-end="url(#dg-arrow)"/>';
+  });
+  lay.nodes.forEach(function(n) {
+    html += '<g class="dg-node" data-name="' + esc(n.name) + '" data-side="' + esc(n.side) + '">'
+      + '<rect class="dg-box" x="' + (n.x - boxW / 2) + '" y="' + (n.y - boxH / 2) + '" '
+      + 'width="' + boxW + '" height="' + boxH + '" rx="3"/>'
+      + '<text x="' + n.x + '" y="' + (n.y + 4) + '" text-anchor="middle">' + esc(n.name) + '</text>';
+    if (n.count) {
+      html += '<text class="dg-count" x="' + n.x + '" y="' + (n.y + boxH / 2 + 11) + '" '
+        + 'text-anchor="middle">' + n.count + ' 本</text>';
+    }
+    html += '</g>';
+  });
+  return html + '</svg>';
+}
+
+function _dgImpactHtml(impact) {
+  var esc = window.MA.htmlUtils.escHtml;
+  var list = impact || [];
+  var far = list.filter(function(r) { return r.hop > 0; }).length;
+  var html = '<div class="dg-impact-head"><span>影響が届く図</span>'
+    + '<span id="dg-impact-count">' + list.length + ' 図 (直接 ' + (list.length - far)
+    + ' / 連鎖 ' + far + ')</span></div>';
+  if (list.length === 0) {
+    return html + '<div class="cb-empty">部品名を選ぶと、その名前から辿れる図が並びます。</div>';
+  }
+  html += '<table><thead><tr><th>図</th><th>届き方</th><th>経由した部品名</th><th></th></tr></thead><tbody>';
+  list.forEach(function(r) {
+    html += '<tr class="dg-doc" data-doc="' + esc(r.doc) + '" data-hop="' + r.hop + '">'
+      + '<td class="dg-doc-name">' + esc(r.doc) + '</td>'
+      + '<td class="dg-hop">' + (r.hop === 0 ? '直接' : '連鎖 ' + r.hop + ' 段') + '</td>'
+      + '<td class="dg-via">' + esc((r.via || []).join(', ')) + '</td>'
+      + '<td><button type="button" class="dg-open">この図を開く</button></td></tr>';
+  });
+  return html + '</tbody></table>';
+}
+
+function renderDepGraph() {
+  var DG = window.MA.depGraph;
+  var canvas = document.getElementById('dg-canvas');
+  var impactEl = document.getElementById('dg-impact');
+  var sel = document.getElementById('dg-name');
+  var sumEl = document.getElementById('dg-summary');
+  if (!DG || !canvas || !impactEl || !sel) return null;
+  var esc = window.MA.htmlUtils.escHtml;
+
+  var graph = DG.build(_dgDocs());
+  var names = DG.names(graph);
+  // 名前が 1 つも無い = 関係行がまだ書かれていない。空の select を出すより、
+  // 「この図の束には辿れる参照が無い」と言い切る方が次の手が決まる。
+  if (names.length === 0) {
+    sel.innerHTML = '';
+    canvas.innerHTML = '<div class="dg-empty">参照の矢印 (A --&gt; B) を持つ図がありません。'
+      + '関係を 1 本でも書くと、ここに依存が出ます。</div>';
+    impactEl.innerHTML = _dgImpactHtml([]);
+    if (sumEl) sumEl.textContent = DG.summaryText(null, []);
+    return null;
+  }
+
+  if (!_dgName || !graph.nodes[_dgName]) _dgName = names[0].name;
+  var opts = '';
+  names.forEach(function(n) {
+    opts += '<option value="' + esc(n.name) + '"' + (n.name === _dgName ? ' selected' : '') + '>'
+      + esc(n.name) + ' (' + n.degree + ' 本 / ' + n.docs.length + ' 図)</option>';
+  });
+  sel.innerHTML = opts;
+
+  var view = DG.forName(graph, _dgName);
+  var impact = DG.impactDocs(graph, _dgName, _dgHops);
+  canvas.innerHTML = _dgSvgHtml(view);
+  impactEl.innerHTML = _dgImpactHtml(impact);
+  if (sumEl) sumEl.textContent = DG.summaryText(view, impact);
+
+  // 中央以外の名前を押すと、そこを起点に読み替える。連鎖を辿るのに
+  // select を開き直させると、辿った回数だけクリックが増える。
+  var nodes = canvas.querySelectorAll('.dg-node');
+  for (var i = 0; i < nodes.length; i++) {
+    (function(g) {
+      g.style.cursor = 'pointer';
+      g.addEventListener('click', function() {
+        var nm = g.getAttribute('data-name');
+        if (!nm || nm === _dgName) return;
+        _dgName = nm;
+        renderDepGraph();
+      });
+    })(nodes[i]);
+  }
+  var opens = impactEl.querySelectorAll('.dg-open');
+  for (var j = 0; j < opens.length; j++) {
+    (function(btn) {
+      btn.addEventListener('click', function() {
+        var row = btn.parentNode.parentNode;
+        toggleDepGraph(false);
+        openFromFolderByName(row.getAttribute('data-doc'));
+      });
+    })(opens[j]);
+  }
+  return { graph: graph, view: view, impact: impact };
+}
+
+function toggleDepGraph(open) {
+  var modal = document.getElementById('dg-modal');
+  if (!modal) return;
+  var want = (open == null) ? (modal.style.display === 'none' || !modal.style.display) : !!open;
+  if (!want) { modal.style.display = 'none'; return; }
+  // 置換前に打った名前をそのまま起点にする (打ち直させない)。
+  var from = (document.getElementById('rename-from') || {}).value || '';
+  if (from) _dgName = from;
+  modal.style.display = 'flex';
+  renderDepGraph();
+  var body = document.getElementById('dg-body');
+  if (body) body.scrollTop = 0;
+}
+
+function setupDepGraph() {
+  var btn = document.getElementById('btn-rename-depgraph');
+  var modal = document.getElementById('dg-modal');
+  if (!btn || !modal) return;
+  btn.addEventListener('click', function(ev) {
+    ev.stopPropagation();
+    // 保存フォルダぶんが未読なら読んでから出す。開いているタブだけのグラフでは
+    // 「開いていない図への連鎖」がそのまま抜け落ちる。
+    if (_fiEnabled()) loadFolderImpact().then(function() { toggleDepGraph(true); });
+    else toggleDepGraph(true);
+  });
+
+  var closeBtn = document.getElementById('dg-close');
+  if (closeBtn) closeBtn.addEventListener('click', function() { toggleDepGraph(false); });
+  modal.addEventListener('click', function(ev) {
+    if (ev.target === modal) toggleDepGraph(false);
+  });
+  document.addEventListener('keydown', function(ev) {
+    if (ev.key === 'Escape' && modal.style.display === 'flex') toggleDepGraph(false);
+  });
+
+  var sel = document.getElementById('dg-name');
+  if (sel) sel.addEventListener('change', function() { _dgName = sel.value; renderDepGraph(); });
+  var hops = document.getElementById('dg-hops');
+  if (hops) hops.addEventListener('change', function() {
+    _dgHops = parseInt(hops.value, 10);
+    if (isNaN(_dgHops)) _dgHops = 2;
+    renderDepGraph();
+  });
+
+  // 見た名前をそのまま置換の的にする。グラフから一括置換へ戻る手が
+  // 「読んで覚えて打ち直す」では、見落としを防ぐ意味が薄れる。
+  var use = document.getElementById('dg-use');
+  if (use) use.addEventListener('click', function() {
+    var from = document.getElementById('rename-from');
+    if (from && _dgName) {
+      from.value = _dgName;
+      from.dispatchEvent(new Event('input'));
+    }
+    toggleDepGraph(false);
+  });
+}
+
 // 開いていない図への置換。タブを開かずに保存フォルダへ直接書き戻す
 // (開いてから直すのでは、枚数ぶんのタブを開く手順が残ってしまう)。
 function applyRenameToUnopenedFiles(from, to) {
@@ -8486,6 +8679,9 @@ function setupBulkRename() {
     // (閉じてしまうと、見た後に置換前後を直す手が消える)。
     var ri = document.getElementById('ri-modal');
     if (ri && ri.contains(ev.target)) return;
+    // 依存グラフも同じ理由でパネルの続き (見た名前を置換前に入れて戻る)。
+    var dg = document.getElementById('dg-modal');
+    if (dg && dg.contains(ev.target)) return;
     closePanel();
   });
 }
