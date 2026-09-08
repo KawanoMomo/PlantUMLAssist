@@ -131,6 +131,19 @@ window.MA.toolMenu = (function() {
     return !quiet;
   }
 
+  // 静かなタブ列 (7b) でも、畳んだ機能の一覧を 1 クリックで開ける入口は残す。
+  // 「ツール ▾」を出さないときに代わりに出る小さな札で、押すと同じメニューが開く。
+  // コマンド名を知らない人 (新人) が Ctrl+K でしか入口に辿り着けない状態を作らない。
+  function showsMiniButton(folded, quiet) {
+    return !showsToolButton(folded, quiet);
+  }
+
+  // 札の文字。畳んで見えなくなっているボタンの数を出す (「他 25 件」)。
+  function miniLabel(count) {
+    var n = (typeof count === 'number' && count > 0) ? count : 0;
+    return '他 ' + n + ' 件';
+  }
+
   function esc(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -165,6 +178,8 @@ window.MA.toolMenu = (function() {
     foldedAtStart: foldedAtStart,
     quietAtStart: quietAtStart,
     showsToolButton: showsToolButton,
+    showsMiniButton: showsMiniButton,
+    miniLabel: miniLabel,
     buildMenuHtml: buildMenuHtml,
     NOTE: NOTE,
   };
