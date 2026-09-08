@@ -2506,6 +2506,62 @@ html, body {
 }
 .map-row .map-mine { color: var(--text-secondary); }
 #map-empty { padding: 6px 8px; font-size: 11px; color: var(--text-secondary); }
+/* 雛形との差分 (BLK-junior-20260908-1303-wish)。対応表と同じ並びにする。 */
+#td-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+#btn-td-run {
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+#btn-td-run:hover { background: var(--bg-tertiary); }
+#td-summary { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#td-summary.clean { color: var(--accent-green); }
+#td-summary.dirty { color: var(--accent-orange); }
+#td-note {
+  padding: 4px 8px;
+  font-size: 10px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-primary);
+  flex-shrink: 0;
+}
+#td-note[hidden] { display: none; }
+#td-list {
+  max-height: 40%;
+  overflow: auto;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-primary);
+  flex-shrink: 0;
+}
+#td-list[hidden] { display: none; }
+.td-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 8px;
+  font-size: 11px;
+  border-bottom: 1px solid var(--bg-tertiary);
+}
+.td-row .td-kind { font-family: var(--font-mono); font-size: 10px; width: 62px; flex-shrink: 0; color: var(--text-secondary); }
+.td-row[data-td-kind="added"] .td-kind, .td-row[data-td-kind="removed"] .td-kind { color: var(--accent-orange); }
+.td-row[data-td-kind="added"], .td-row[data-td-kind="removed"] { background: var(--bg-secondary); }
+.td-row .td-text { flex: 1; min-width: 0; font-family: var(--font-mono); word-break: break-all; }
+#td-empty { padding: 6px 8px; font-size: 11px; color: var(--text-secondary); }
 /* 橙の行から自分の図へ足す (BLK-junior-20260908-1103-wish) */
 .map-row .map-take {
   flex-shrink: 0;
@@ -3942,6 +3998,14 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <!-- BLK-junior-20260908-0923-wish: 先輩・reviewer に預けた質問の件数 -->
       <div id="map-asked" hidden></div>
       <div id="map-list" hidden></div>
+      <!-- BLK-junior-20260908-1303-wish: 派生図は雛形をペリフェラル名だけ変えて複製したもの。
+           題材語を伏せて突き合わせ、「この図だけ / 雛形だけ」の行を出す。 -->
+      <div id="td-bar">
+        <button type="button" id="btn-td-run" title="参照図を雛形として、この図との差分 (題材語の違いは除く) を出す">🧩 雛形との差分</button>
+        <span id="td-summary"></span>
+      </div>
+      <div id="td-note" hidden></div>
+      <div id="td-list" hidden></div>
       <!-- BLK-junior-20260908-0723-wish: 他の人のフォルダの同じ図を相手にする -->
       <div id="xf-bar">
         <input type="text" id="xf-dir" placeholder="相手のフォルダ (例 ..\primary)"
@@ -4285,6 +4349,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/state-table.js"></script>
 <script src="src/core/relation-roles.js"></script>
 <script src="src/core/state-map.js"></script>
+<script src="src/core/template-diff.js"></script>
 <script src="src/core/class-map.js"></script>
 <script src="src/core/map-question.js"></script>
 <script src="src/core/reuse-picker.js"></script>
