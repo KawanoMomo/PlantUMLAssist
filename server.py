@@ -311,6 +311,9 @@ API_INDEX = {
         {'endpoint': 'GET /peek-dirs', 'summary': '保存フォルダの候補を覗く'},
         {'endpoint': 'GET /vault', 'summary': '保管庫の中身', 'request': '?dir='},
         {'endpoint': 'POST /vault', 'summary': '保管庫へ入れる'},
+        {'endpoint': 'GET /tickets', 'summary': '変更チケットの一覧', 'request': '?dir='},
+        {'endpoint': 'POST /tickets', 'summary': '変更チケットを 1 枚書く', 'request': "{dir, ticket}"},
+        {'endpoint': 'DELETE /tickets', 'summary': '変更チケットを 1 枚消す', 'request': '?dir=&id='},
         {'endpoint': 'POST /file-roles', 'summary': '保存フォルダの _roles.json を置き換える',
          'request': "{dir, roles}"},
         {'endpoint': 'POST /export-log', 'summary': '書き出しの控えを 1 件足す'},
@@ -398,6 +401,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.split('?')[0] == '/vault':
             with _fs_lock:
                 return self._handle_vault_get()
+        if self.path.split('?')[0] == '/tickets':
+            with _fs_lock:
+                return self._handle_tickets_get()
         if self.path.startswith('/autosave'):
             with _fs_lock:
                 return self._handle_autosave_get()
@@ -450,6 +456,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == '/vault':
             with _fs_lock:
                 return self._handle_vault_post()
+        if self.path == '/tickets':
+            with _fs_lock:
+                return self._handle_tickets_post()
         if self.path == '/file-roles':
             with _fs_lock:
                 return self._handle_file_roles_post()
@@ -977,6 +986,91 @@ class Handler(BaseHTTPRequestHandler):
         meta['stamp'] = puml.stem
         self._send_json(200, {'dir': str(save_dir), 'entry': meta})
 
+    # --- 変更チケット (BLK-primary-20260909-0603-wish) ------------------------
+    #
+    # 依存グラフの影響一覧はモーダルを閉じると消えるので、1 つの仕様変更が
+    # 数日・複数 run にまたがると「15 枚のうちどこまで直したか」を持ち越せない。
+    # 札を保存フォルダに置くのは、run をまたぐ・ペルソナをまたぐため
+    # (localStorage では reviewer が読めず、指摘.md への転記が要る)。
+    # 図と同じ階層に置くと作業ファイルに紛れるので `_tickets/` に隔離する。
+    TICKETS_DIRNAME = '_tickets'
+
+    def _tickets_dir(self, save_dir):
+        return save_dir / self.TICKETS_DIRNAME
+
+    def _tickets_entries(self, save_dir):
+        out = []
+        try:
+            paths = sorted(self._tickets_dir(save_dir).glob('*.json'))
+        except OSError:
+            return out
+        for p in paths:
+            try:
+                data = json.loads(p.read_text(encoding='utf-8'))
+            except (ValueError, OSError):
+                continue
+            if not isinstance(data, dict):
+                continue
+            data['id'] = p.stem
+            out.append(data)
+        return out
+
+    def _handle_tickets_get(self):
+        """GET /tickets?dir= — その保存フォルダの変更チケット全件."""
+        parsed = urllib.parse.urlparse(self.path)
+        params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
+        save_dir = self._autosave_resolve_dir(params.get('dir'))
+        self._send_json(200, {'dir': str(save_dir), 'tickets': self._tickets_entries(save_dir)})
+
+    def _handle_tickets_post(self):
+        """POST /tickets {dir, ticket} — 1 枚まるごと置き換える。
+
+        差分ではなく全文で書くのは、直した印を 1 個立てるたびに
+        server 側で札を組み直さないため (組み立ての正本は change-ticket.js の 1 か所)。
+        """
+        length = int(self.headers.get('Content-Length', 0))
+        try:
+            data = json.loads(self.rfile.read(length).decode('utf-8'))
+        except ValueError:
+            self._send_json(400, {'error': 'invalid JSON'})
+            return
+        if not isinstance(data, dict):
+            self._send_json(400, {'error': 'body must be an object'})
+            return
+        ticket = data.get('ticket')
+        if not isinstance(ticket, dict):
+            self._send_json(400, {'error': 'ticket must be an object'})
+            return
+        ticket_id = ticket.get('id')
+        if not isinstance(ticket_id, str) or not is_safe_autosave_name(ticket_id):
+            self._send_json(400, {'error': 'invalid ticket id'})
+            return
+        save_dir = self._autosave_resolve_dir(data.get('dir'))
+        tdir = self._tickets_dir(save_dir)
+        try:
+            tdir.mkdir(parents=True, exist_ok=True)
+            (tdir / (ticket_id + '.json')).write_text(
+                json.dumps(ticket, ensure_ascii=False, indent=1), encoding='utf-8')
+        except OSError as e:
+            self._send_json(500, {'error': f'write failed: {e}'})
+            return
+        self._send_json(200, {'dir': str(save_dir), 'ticket': ticket})
+
+    def _handle_tickets_delete(self):
+        """DELETE /tickets?dir=&id= — 済んだ札を畳む."""
+        parsed = urllib.parse.urlparse(self.path)
+        params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
+        ticket_id = params.get('id', '')
+        if not is_safe_autosave_name(ticket_id):
+            self._send_json(400, {'error': 'invalid ticket id'})
+            return
+        save_dir = self._autosave_resolve_dir(params.get('dir'))
+        try:
+            (self._tickets_dir(save_dir) / (ticket_id + '.json')).unlink()
+        except OSError:
+            pass
+        self._send_json(200, {'ok': True})
+
     def _autosave_read_meta(self, save_dir):
         p = self._autosave_meta_path(save_dir)
         if not p.exists():
@@ -1480,6 +1574,9 @@ class Handler(BaseHTTPRequestHandler):
     # --- autosave DELETE -----------------------------------------------------
 
     def do_DELETE(self):
+        if self.path.split('?')[0] == '/tickets':
+            with _fs_lock:
+                return self._handle_tickets_delete()
         if self.path.startswith('/autosave'):
             return self._handle_autosave_delete()
         self.send_error(404)
@@ -1532,6 +1629,19 @@ class Handler(BaseHTTPRequestHandler):
                         except OSError:
                             pass
                     vault.rmdir()
+                except OSError:
+                    pass
+            # 変更チケットも同じ理由で残す。仕様変更は図を作り直しても続いている
+            # ので、作業ファイルを片付けたら進捗が消えるのでは持ち越せていない。
+            if params.get('tickets') == '1':
+                tdir = self._tickets_dir(save_dir)
+                try:
+                    for p in tdir.iterdir():
+                        try:
+                            p.unlink()
+                        except OSError:
+                            pass
+                    tdir.rmdir()
                 except OSError:
                     pass
         self._send_json(200, {'ok': True})

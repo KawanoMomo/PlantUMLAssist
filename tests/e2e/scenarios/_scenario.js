@@ -77,6 +77,14 @@ async function clearDir(page, dir) {
   }, dir);
 }
 
+// 変更チケット (BLK-primary-20260909-0603-wish) は clearDir では消えない
+// (仕様変更は図を作り直しても続いているため)。下ごしらえでは明示して消す。
+async function clearTickets(page, dir) {
+  await page.evaluate(async (d) => {
+    await fetch('/autosave?tickets=1&dir=' + encodeURIComponent(d), { method: 'DELETE' });
+  }, dir);
+}
+
 // 📂 一覧 から名前で開く (junior 手順 1・8、primary の openFolderItem と同じ経路)。
 // 押すたびに開閉が入れ替わるので、開いていないときだけ押す。
 async function openFolder(page) {
@@ -200,7 +208,7 @@ function docFor(name, spiName) {
 module.exports = {
   PRIMARY_DOCS, docFor,
   dirFor, absDirFor, bootWithSaveDir, bootPlain, bootDownloadMode,
-  putDoc, readDoc, listDir, clearDir,
+  putDoc, readDoc, listDir, clearDir, clearTickets,
   openFolder, openFolderItem, overwriteOpenedFile, typeDsl, renameActive, runCommand, exportVia,
   GPIO_STATE, GPIO_SEQ,
 };
