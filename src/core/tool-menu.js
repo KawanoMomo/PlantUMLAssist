@@ -114,6 +114,21 @@ window.MA.toolMenu = (function() {
     return saved === '1';
   }
 
+  // design 7b: タブ列にはボタンを 1 つも置かない。7a で 25 個を「ツール ▾」1 個に
+  // 畳んだが、7b はその 1 個も置かず、機能はすべて Ctrl+K から引く。
+  // 既定は静か (true) で、「ツール ▾ をタブ列に出す」を押した人はその選択が残る。
+  function quietAtStart(saved) {
+    if (saved == null || saved === '') return true;
+    return saved !== '0';
+  }
+
+  // 「ツール ▾」をタブ列に出すか。畳んでいないとき (機能ボタンが並んでいるとき) は、
+  // 畳み直す入口が要るので静かの設定にかかわらず出す。
+  function showsToolButton(folded, quiet) {
+    if (!folded) return true;
+    return !quiet;
+  }
+
   function esc(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -146,6 +161,8 @@ window.MA.toolMenu = (function() {
     labelOf: labelOf,
     isFoldable: isFoldable,
     foldedAtStart: foldedAtStart,
+    quietAtStart: quietAtStart,
+    showsToolButton: showsToolButton,
     buildMenuHtml: buildMenuHtml,
     NOTE: NOTE,
   };
