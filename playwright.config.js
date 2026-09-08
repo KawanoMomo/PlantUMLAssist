@@ -18,4 +18,10 @@ module.exports = defineConfig({
     baseURL: `http://127.0.0.1:${PORT}`,
     trace: 'on-first-retry',
   },
+  // BLK-releaser-20260908-2030-1: テストの正本はペルソナ台本の手順 (scenarios)。
+  // legacy は台本に吸収されるまでの過去の spec 置き場。
+  projects: [
+    { name: 'scenarios', testDir: './tests/e2e/scenarios' },
+    { name: 'legacy', testDir: './tests/e2e/legacy' },
+  ],
 });

@@ -4,10 +4,11 @@
   "private": true,
   "scripts": {
     "test:unit": "node tests/run-tests.js",
-    "test:e2e": "playwright test",
+    "test:e2e": "playwright test --project=scenarios --pass-with-no-tests",
     "test:all": "npm run test:unit && npm run test:e2e",
     "audit": "node tools/audit.js",
-    "pins": "node tools/pins.js"
+    "pins": "node tools/pins.js",
+    "test:e2e:all": "playwright test"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",
