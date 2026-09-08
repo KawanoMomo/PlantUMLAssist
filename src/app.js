@@ -8264,9 +8264,58 @@ function runConsistencyCheck() {
 // 選ぶだけで、並べ方も「＋この図にも足す」も共通にする (図種によらず同じ操作)。
 // クラス図の関係は向き (どちらが親か) を行に持つので、取り込みでは参照図の向きを
 // そのまま写す。Relation フォームで From/To を選び直して逆向きに張る手間が消える。
+//
+// BLK-junior-20260908-0823 (差し戻し 1 回目): 名前の形だけで組んだ対応は、
+// 抽象度の違う 2 枚では当たらない。「参照図だけ」の行が先輩の足した要素なのか、
+// 対応を取り損ねただけなのかを機械は決められない。対応そのものを人が
+// 「同じもの」「対応なし」で決められるようにし、推測が 0 件になった時点で
+// 残った「参照図だけ」を言い切る。決めた内容は図の組ごとに憶えておく。
 var _mapResult = null;
 var _mapMineParsed = null;
+var _mapRefParsed = null;
 var _mapModule = null;   // 今の対応表が使っている規則 (stateMap / classMap)
+var _mapOverrides = null;
+var _mapOverrideKey = '';
+
+var MAP_OVERRIDE_KEY = 'plantuml-state-map-overrides';
+
+function _loadMapOverrides(key) {
+  var sm = _mapper();
+  var empty = (sm && sm.overrides) ? sm.overrides(null) : { pairs: [], none: [] };
+  if (!key) return empty;
+  try {
+    var raw = window.localStorage.getItem(MAP_OVERRIDE_KEY);
+    if (raw == null) return empty;
+    var all = JSON.parse(raw);
+    if (!all || typeof all !== 'object') return empty;
+    return (sm && sm.overrides) ? sm.overrides(all[key]) : empty;
+  } catch (e) { return empty; }
+}
+
+function _saveMapOverrides(key, ov) {
+  if (!key) return;
+  try {
+    var raw = window.localStorage.getItem(MAP_OVERRIDE_KEY);
+    var all = {};
+    if (raw != null) {
+      var v = JSON.parse(raw);
+      if (v && typeof v === 'object') all = v;
+    }
+    if ((ov.pairs || []).length === 0 && (ov.none || []).length === 0) delete all[key];
+    else all[key] = ov;
+    window.localStorage.setItem(MAP_OVERRIDE_KEY, JSON.stringify(all));
+  } catch (e) { /* 憶えられなくても対応表そのものは使える */ }
+}
+
+// 決めた内容を入れ替えて、対応表を組み直して描き直す。
+function setMapOverrides(ov) {
+  var sm = _mapper();
+  if (!sm || !sm.supportsOverrides || !_mapRefParsed || !_mapMineParsed) return;
+  _mapOverrides = sm.overrides(ov);
+  _saveMapOverrides(_mapOverrideKey, _mapOverrides);
+  _mapResult = sm.build(_mapRefParsed, _mapMineParsed, _mapOverrides);
+  renderStateMap();
+}
 
 function _mapper() { return _mapModule || window.MA.stateMap; }
 
@@ -8286,11 +8335,16 @@ function _pickMapModule(refText, mineText) {
 function _clearStateMap() {
   _mapResult = null;
   _mapMineParsed = null;
+  _mapRefParsed = null;
   _mapModule = null;
+  _mapOverrides = null;
+  _mapOverrideKey = '';
   var listEl = document.getElementById('map-list');
   var sumEl = document.getElementById('map-summary');
   var warnEl = document.getElementById('map-warn');
   var askedEl = document.getElementById('map-asked');
+  var decEl = document.getElementById('map-decision');
+  if (decEl) decEl.hidden = true;
   if (listEl) { listEl.textContent = ''; listEl.hidden = true; }
   if (warnEl) { warnEl.textContent = ''; warnEl.hidden = true; }
   if (askedEl) { askedEl.textContent = ''; askedEl.hidden = true; }
@@ -8310,6 +8364,7 @@ function _mapRow(listEl, row) {
   el.className = 'map-row';
   el.setAttribute('data-map-match', row.match);
   el.setAttribute('data-map-type', row.type);
+  if (row.decided) el.setAttribute('data-map-decided', '1');
   if (row.mineLine != null) el.setAttribute('data-map-line', String(row.mineLine));
 
   var match = document.createElement('span');
@@ -8330,6 +8385,7 @@ function _mapRow(listEl, row) {
   if (row.mineLine != null) {
     el.addEventListener('click', function() { gotoOutlineLine(row.mineLine - 1); });
   }
+  _mapDecideControls(el, row);
   // 不一致の行は、機械では「どちらが後から足したか」まで決められない。
   // 自分で決め切らずに先輩・reviewer へ 1 件の質問として預けて、次へ進む
   // (BLK-junior-20260908-0923-wish)。
@@ -8364,6 +8420,81 @@ function _mapRow(listEl, row) {
     el.appendChild(take);
   }
   listEl.appendChild(el);
+}
+
+// 1 行に「同じもの」「対応なし」「戻す」を付ける (BLK-junior-20260908-0823)。
+// 機械が組んだ行は人が見て確かめるまで推測のままで、決めた行だけが確定になる。
+function _mapDecideControls(el, row) {
+  var sm = _mapper();
+  if (!sm || !sm.supportsOverrides || !_mapOverrides) return;
+  var ov = _mapOverrides;
+
+  function btn(text, title, onClick) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'map-decide';
+    b.textContent = text;
+    b.title = title;
+    b.addEventListener('click', function(e) { e.stopPropagation(); onClick(); });
+    el.appendChild(b);
+    return b;
+  }
+
+  if (row.decided) {
+    btn('戻す', 'この行の対応の決めを取り消して、機械の推測に戻す', function() {
+      var next = ov;
+      if (row.ref) next = sm.without(next, row.type, 'ref', row.ref);
+      if (row.mine) next = sm.without(next, row.type, 'mine', row.mine);
+      setMapOverrides(next);
+    });
+    return;
+  }
+
+  // 機械が組にした行 — その組でよいか、別物かを決める。
+  if (row.ref && row.mine) {
+    btn('同じもの', 'この 2 つは同じものだと決める (推測が 1 件減る)', function() {
+      setMapOverrides(sm.withPair(ov, row.type, row.ref, row.mine));
+    });
+    btn('別もの', 'この 2 つは別ものだと決め、それぞれ相手のいない要素として分ける', function() {
+      var next = sm.withNone(ov, row.type, 'ref', row.ref);
+      next = sm.withNone(next, row.type, 'mine', row.mine);
+      setMapOverrides(next);
+    });
+    return;
+  }
+
+  // 片方だけの行 — 相手を選び直すか、相手がいないと決める。
+  var side = row.match === 'ref-only' ? 'ref' : 'mine';
+  var name = side === 'ref' ? row.ref : row.mine;
+  if (!name) return;
+  var opts = sm.pairOptions(_mapResult, row);
+  if (opts.length > 0) {
+    var sel = document.createElement('select');
+    sel.className = 'map-pick';
+    sel.title = 'この要素に対応する相手を選ぶ';
+    var head = document.createElement('option');
+    head.value = '';
+    head.textContent = '対応を選ぶ…';
+    sel.appendChild(head);
+    opts.forEach(function(o) {
+      var op = document.createElement('option');
+      op.value = o.value;
+      op.textContent = o.label;
+      sel.appendChild(op);
+    });
+    sel.addEventListener('click', function(e) { e.stopPropagation(); });
+    sel.addEventListener('change', function(e) {
+      e.stopPropagation();
+      if (sel.value === '') return;
+      var refName = side === 'ref' ? name : sel.value;
+      var mineName = side === 'ref' ? sel.value : name;
+      setMapOverrides(sm.withPair(ov, row.type, refName, mineName));
+    });
+    el.appendChild(sel);
+  }
+  btn('対応なし', '自分の図に対応する相手はいないと決める (足すかどうかはこの後に選ぶ)', function() {
+    setMapOverrides(sm.withNone(ov, row.type, side, name));
+  });
 }
 
 // 端点の対応が付かない遷移を足す前の確認。聞くのは対応の付かなかった端点だけ。
@@ -8459,6 +8590,11 @@ function _applyMapAdopt(row, picks) {
   editorEl.value = out.text;
   editorEl.dispatchEvent(new Event('input'));
   jumpToLine(out.line);
+  // 足したものは自分の図に入ったので、「対応なし」と決めた覚えは外す
+  // (外さないと、足したのに参照図だけの行として残り続ける)。
+  if (sm.supportsOverrides && _mapOverrides && row.ref) {
+    _saveMapOverrides(_mapOverrideKey, sm.without(_mapOverrides, row.type, 'ref', row.ref));
+  }
   // 足した分だけ橙が減るので、対応表を作り直して残りを見せる。
   runStateMap();
   if (window.MA.toast) window.MA.toast.show('自分の図に足しました: ' + out.added.join(' / '));
@@ -8497,6 +8633,28 @@ function renderMapAsked() {
   el.hidden = (text === '');
 }
 
+// 対応をどこまで決めたか。ここが「取り込む 1 個を選んでよいか」の判断そのものなので、
+// 表の上に常に出す (行を 1 つ決めるたびに件数が減る)。
+function renderMapDecision() {
+  var el = document.getElementById('map-decision');
+  var textEl = document.getElementById('map-decision-text');
+  var resetEl = document.getElementById('btn-map-reset');
+  var sm = _mapper();
+  if (!el || !textEl) return;
+  if (!sm || !sm.supportsOverrides || !_mapResult) {
+    el.hidden = true;
+    return;
+  }
+  var text = sm.decisionSummary(_mapResult);
+  el.hidden = (text === '');
+  textEl.textContent = text;
+  el.classList.toggle('settled', sm.settled(_mapResult));
+  if (resetEl) {
+    var ov = _mapOverrides || { pairs: [], none: [] };
+    resetEl.hidden = ((ov.pairs || []).length + (ov.none || []).length) === 0;
+  }
+}
+
 function renderStateMap() {
   var listEl = document.getElementById('map-list');
   var sumEl = document.getElementById('map-summary');
@@ -8515,6 +8673,7 @@ function renderStateMap() {
   sumEl.classList.add(onlyCount === 0 ? 'clean' : 'dirty');
 
   renderMapAsked();
+  renderMapDecision();
   var warn = sm.abstractionWarning(_mapResult);
   if (warnEl) {
     warnEl.textContent = warn;
@@ -8562,7 +8721,14 @@ function runStateMap() {
   var refParsed = mod.parse(ref.dsl || '');
   var mineParsed = mod.parse(mmdText || '');
   _mapMineParsed = mineParsed;
-  _mapResult = sm.build(refParsed, mineParsed);
+  _mapRefParsed = refParsed;
+  // 決めた対応は「この参照図とこの図」の組ごとに憶える。別の図を相手にしたときに
+  // 前の決めが混ざると、決めていない対応が決まったことになってしまう。
+  _mapOverrideKey = sm.supportsOverrides
+    ? (String(ref.name || ref.id || '') + ' | ' + String(_activeDocName() || ''))
+    : '';
+  _mapOverrides = sm.supportsOverrides ? _loadMapOverrides(_mapOverrideKey) : null;
+  _mapResult = sm.build(refParsed, mineParsed, _mapOverrides);
   renderStateMap();
   if (listEl) listEl.hidden = false;
 }
@@ -8954,6 +9120,13 @@ function setupCompareView() {
   if (checkBtn) checkBtn.addEventListener('click', runConsistencyCheck);
   var mapBtn = document.getElementById('btn-map-run');
   if (mapBtn) mapBtn.addEventListener('click', runStateMap);
+  var mapReset = document.getElementById('btn-map-reset');
+  if (mapReset) {
+    mapReset.addEventListener('click', function() {
+      var sm = _mapper();
+      setMapOverrides(sm && sm.EMPTY_OVERRIDES ? sm.EMPTY_OVERRIDES : null);
+    });
+  }
   var tdBtn = document.getElementById('btn-td-run');
   if (tdBtn) tdBtn.addEventListener('click', runTemplateDiff);
   var btn = document.getElementById('btn-tab-compare');

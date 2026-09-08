@@ -81,6 +81,121 @@ window.MA.stateMap = (function() {
     return 'none';
   }
 
+  // ── 手で決めた対応 (BLK-junior-20260908-0823) ─────────────────────────
+  //
+  // 名前の形だけで組んだ対応は、抽象度の違う 2 枚では当たらない。
+  // `[*] --> Idle` と `AnomalyCheck --> Idle` のように、行き先が同じというだけで
+  // 部分一致に落ちる組が並ぶと、残った「参照図だけ」の行が本当に先輩の足した
+  // 要素なのか、対応を取り損ねただけなのかが読む側で判別できない。
+  // 名前をいくら賢く比べてもここは埋まらない (埋めるのに要るのは意味であって形ではない)。
+  //
+  // そこで対応そのものを人が決められるようにする。1 組ずつ「これは同じもの」
+  // 「これは対応なし」と言い切っていけば、言い切った分だけ推測が消え、
+  // 推測が 0 件になった時点で残った「参照図だけ」は先輩が足した要素だと言える。
+  //
+  // 手で決めた対応は名前で持つ (id は行の並びで変わる)。
+  //   pairs … [{ type, ref, mine }]  この 2 つは同じものだと決めた
+  //   none  … [{ type, side, name }] この要素に対応する相手はいないと決めた
+  var EMPTY_OVERRIDES = { pairs: [], none: [] };
+
+  function overrides(ov) {
+    var o = ov || {};
+    return {
+      pairs: (o.pairs || []).filter(function(p) {
+        return p && _s(p.ref) !== '' && _s(p.mine) !== '';
+      }).map(function(p) {
+        return { type: _s(p.type) || 'state', ref: _s(p.ref), mine: _s(p.mine) };
+      }),
+      none: (o.none || []).filter(function(n) {
+        return n && _s(n.name) !== '' && (n.side === 'ref' || n.side === 'mine');
+      }).map(function(n) {
+        return { type: _s(n.type) || 'state', side: n.side, name: _s(n.name) };
+      }),
+    };
+  }
+
+  // 1 組を「同じもの」と決める。どちらかが別の組・別の「対応なし」に
+  // 使われていればそれを外してから足す (1 つの要素は 1 か所にしか居ない)。
+  function withPair(ov, type, refName, mineName) {
+    var o = overrides(ov);
+    var t = _s(type) || 'state', r = _s(refName), m = _s(mineName);
+    if (r === '' || m === '') return o;
+    o = _drop(o, t, 'ref', r);
+    o = _drop(o, t, 'mine', m);
+    o.pairs.push({ type: t, ref: r, mine: m });
+    return o;
+  }
+
+  // 1 つを「対応する相手はいない」と決める。
+  function withNone(ov, type, side, name) {
+    var o = overrides(ov);
+    var t = _s(type) || 'state', n = _s(name);
+    if (n === '' || (side !== 'ref' && side !== 'mine')) return o;
+    o = _drop(o, t, side, n);
+    o.none.push({ type: t, side: side, name: n });
+    return o;
+  }
+
+  // 手で決めたことを取り消して、機械の推測に戻す。
+  function without(ov, type, side, name) {
+    return _drop(overrides(ov), _s(type) || 'state', side, _s(name));
+  }
+
+  function _drop(o, type, side, name) {
+    return {
+      pairs: o.pairs.filter(function(p) {
+        return !(p.type === type && _s(p[side === 'ref' ? 'ref' : 'mine']) === name);
+      }),
+      none: o.none.filter(function(n) {
+        return !(n.type === type && n.side === side && n.name === name);
+      }),
+    };
+  }
+
+  // その要素について人が何か決めているか。'pair' / 'none' / null。
+  function decisionOf(ov, type, side, name) {
+    var o = overrides(ov), t = _s(type) || 'state', n = _s(name), i;
+    for (i = 0; i < o.pairs.length; i++) {
+      if (o.pairs[i].type === t && _s(o.pairs[i][side === 'ref' ? 'ref' : 'mine']) === n) return 'pair';
+    }
+    for (i = 0; i < o.none.length; i++) {
+      if (o.none[i].type === t && o.none[i].side === side && o.none[i].name === n) return 'none';
+    }
+    return null;
+  }
+
+  // 手で決めた分を先に取り出し、残りだけを機械の推測に回す。
+  // keyOf は要素から表示名を作る関数 (状態なら状態名、遷移なら「A -(e)-> B」)。
+  function _splitByOverrides(refs, mines, keyOf, type, ov) {
+    var o = overrides(ov);
+    var usedL = {}, usedR = {}, forced = [], refNone = [], mineNone = [];
+    var byRef = {}, byMine = {}, i;
+    refs.forEach(function(x, li) { if (byRef[keyOf(x)] == null) byRef[keyOf(x)] = li; });
+    mines.forEach(function(x, ri) { if (byMine[keyOf(x)] == null) byMine[keyOf(x)] = ri; });
+
+    o.pairs.forEach(function(p) {
+      if (p.type !== type) return;
+      var li = byRef[p.ref], ri = byMine[p.mine];
+      if (li == null || ri == null || usedL[li] || usedR[ri]) return;
+      usedL[li] = true; usedR[ri] = true;
+      forced.push({ li: li, ri: ri });
+    });
+    o.none.forEach(function(n) {
+      if (n.type !== type) return;
+      if (n.side === 'ref') {
+        var li = byRef[n.name];
+        if (li != null && !usedL[li]) { usedL[li] = true; refNone.push(li); }
+      } else {
+        var ri = byMine[n.name];
+        if (ri != null && !usedR[ri]) { usedR[ri] = true; mineNone.push(ri); }
+      }
+    });
+    var restL = [], restR = [];
+    refs.forEach(function(x, li) { if (!usedL[li]) restL.push(li); });
+    mines.forEach(function(x, ri) { if (!usedR[ri]) restR.push(ri); });
+    return { forced: forced, refNone: refNone, mineNone: mineNone, restL: restL, restR: restR };
+  }
+
   // 貪欲な組み合わせ。点数の高い組から順に確定し、片側が既に使われていれば飛ばす。
   // 総当たりで最適解を取ることもできるが、対応表は人が見て直すものなので、
   // 「なぜこの組になったか」を説明できる単純な規則の方が使える。
@@ -122,41 +237,51 @@ window.MA.stateMap = (function() {
   // 状態の対応表。ref が参照図 (先輩)、mine が編集中の図。
   // 行は [対応が付いた組] → [参照図だけ] → [自分の図だけ] の順。
   // 「片方だけ」を下にまとめるのは、そこが選ぶ対象だから。
-  function mapStates(refParsed, mineParsed) {
+  function mapStates(refParsed, mineParsed, ov) {
     var refs = _states(refParsed);
     var mines = _states(mineParsed);
-    var res = _pair(refs, mines, stateName);
+    var split = _splitByOverrides(refs, mines, stateName, 'state', ov);
+    var restRefs = split.restL.map(function(i) { return refs[i]; });
+    var restMines = split.restR.map(function(i) { return mines[i]; });
+    var res = _pair(restRefs, restMines, stateName);
     var rows = [];
 
-    res.pairs.forEach(function(p) {
-      var r = refs[p.li], m = mines[p.ri];
-      rows.push({
-        type: 'state',
-        match: kindOf(p.score),
-        score: p.score,
-        ref: stateName(r), refId: r.id, refLine: r.line,
-        mine: stateName(m), mineId: m.id, mineLine: m.line,
-      });
+    // 人が決めた組が先。決め終わった行から順に読めるように上へ置く。
+    split.forced.forEach(function(p) {
+      rows.push(_stateRow('manual', 1, refs[p.li], mines[p.ri]));
     });
-    rows.sort(function(a, b) { return b.score - a.score; });
 
-    refs.forEach(function(r, i) {
-      if (res.usedL[i]) return;
-      rows.push({
-        type: 'state', match: 'ref-only', score: 0,
-        ref: stateName(r), refId: r.id, refLine: r.line,
-        mine: '', mineId: null, mineLine: null,
-      });
+    var guessed = res.pairs.map(function(p) {
+      return _stateRow(kindOf(p.score), p.score, restRefs[p.li], restMines[p.ri]);
     });
-    mines.forEach(function(m, i) {
+    guessed.sort(function(a, b) { return b.score - a.score; });
+    rows = rows.concat(guessed);
+
+    split.refNone.forEach(function(i) {
+      rows.push(_stateRow('ref-only', 0, refs[i], null, true));
+    });
+    restRefs.forEach(function(r, i) {
+      if (res.usedL[i]) return;
+      rows.push(_stateRow('ref-only', 0, r, null));
+    });
+    split.mineNone.forEach(function(i) {
+      rows.push(_stateRow('mine-only', 0, null, mines[i], true));
+    });
+    restMines.forEach(function(m, i) {
       if (res.usedR[i]) return;
-      rows.push({
-        type: 'state', match: 'mine-only', score: 0,
-        ref: '', refId: null, refLine: null,
-        mine: stateName(m), mineId: m.id, mineLine: m.line,
-      });
+      rows.push(_stateRow('mine-only', 0, null, m));
     });
     return rows;
+  }
+
+  // decided は「人が決めた行かどうか」。機械の推測と混ぜて数えないための印。
+  function _stateRow(match, score, r, m, decided) {
+    return {
+      type: 'state', match: match, score: score,
+      decided: !!decided || match === 'manual',
+      ref: r ? stateName(r) : '', refId: r ? r.id : null, refLine: r ? r.line : null,
+      mine: m ? stateName(m) : '', mineId: m ? m.id : null, mineLine: m ? m.line : null,
+    };
   }
 
   // 遷移の表示名。「From -(きっかけ)-> To」。状態は表示名に直す。
@@ -192,9 +317,16 @@ window.MA.stateMap = (function() {
 
   // 遷移の対応表。状態の対応が付いていれば、それを踏まえて端点を読み替えてから
   // 名前を突き合わせる。状態名が違うだけで遷移まで「片方だけ」に落ちるのを防ぐ。
-  function mapTransitions(refParsed, mineParsed, stateRows) {
-    var refs = ((refParsed && refParsed.transitions) || []).slice();
-    var mines = ((mineParsed && mineParsed.transitions) || []).slice();
+  function mapTransitions(refParsed, mineParsed, stateRows, ov) {
+    var allRefs = ((refParsed && refParsed.transitions) || []).slice();
+    var allMines = ((mineParsed && mineParsed.transitions) || []).slice();
+    var refKeyOf = function(tr) { return transitionName(tr, refParsed); };
+    var mineKeyOf = function(tr) { return transitionName(tr, mineParsed); };
+    // 手で決めた組は名前で持つので、参照側・自分側で名前の作り方を分ける
+    // (状態名の言い換えが入るため、同じ関数では引けない)。
+    var split = _splitTransitions(allRefs, allMines, refKeyOf, mineKeyOf, ov);
+    var refs = split.restL.map(function(i) { return allRefs[i]; });
+    var mines = split.restR.map(function(i) { return allMines[i]; });
 
     // 参照図の状態 id → 自分の図の状態 id
     var alias = {};
@@ -223,43 +355,81 @@ window.MA.stateMap = (function() {
       if (a.li !== b.li) return a.li - b.li;
       return a.ri - b.ri;
     });
-    var usedL = {}, usedR = {}, rows = [];
+    function pairRow(match, sc, r, m, decided) {
+      var row = {
+        type: 'transition', match: match, score: sc, decided: !!decided || match === 'manual',
+        ref: r ? transitionName(r, refParsed) : '', refId: r ? r.id : null, refLine: r ? r.line : null,
+        mine: m ? transitionName(m, mineParsed) : '', mineId: m ? m.id : null, mineLine: m ? m.line : null,
+      };
+      return r ? _withRefEnds(row, r, refParsed) : row;
+    }
+
+    var rows = split.forced.map(function(p) {
+      return pairRow('manual', 1, allRefs[p.li], allMines[p.ri], true);
+    });
+
+    var usedL = {}, usedR = {}, guessed = [];
     cands.forEach(function(c) {
       if (usedL[c.li] || usedR[c.ri]) return;
       usedL[c.li] = true; usedR[c.ri] = true;
-      var r = refs[c.li], m = mines[c.ri];
-      rows.push(_withRefEnds({
-        type: 'transition', match: kindOf(c.score), score: c.score,
-        ref: transitionName(r, refParsed), refId: r.id, refLine: r.line,
-        mine: transitionName(m, mineParsed), mineId: m.id, mineLine: m.line,
-      }, r, refParsed));
+      guessed.push(pairRow(kindOf(c.score), c.score, refs[c.li], mines[c.ri]));
     });
-    rows.sort(function(a, b) { return b.score - a.score; });
+    guessed.sort(function(a, b) { return b.score - a.score; });
+    rows = rows.concat(guessed);
 
+    split.refNone.forEach(function(i) {
+      rows.push(pairRow('ref-only', 0, allRefs[i], null, true));
+    });
     refs.forEach(function(r, i) {
       if (usedL[i]) return;
-      rows.push(_withRefEnds({
-        type: 'transition', match: 'ref-only', score: 0,
-        ref: transitionName(r, refParsed), refId: r.id, refLine: r.line,
-        mine: '', mineId: null, mineLine: null,
-      }, r, refParsed));
+      rows.push(pairRow('ref-only', 0, r, null));
+    });
+    split.mineNone.forEach(function(i) {
+      rows.push(pairRow('mine-only', 0, null, allMines[i], true));
     });
     mines.forEach(function(m, i) {
       if (usedR[i]) return;
-      rows.push({
-        type: 'transition', match: 'mine-only', score: 0,
-        ref: '', refId: null, refLine: null,
-        mine: transitionName(m, mineParsed), mineId: m.id, mineLine: m.line,
-      });
+      rows.push(pairRow('mine-only', 0, null, m));
     });
     return rows;
   }
 
+  // 遷移は参照側と自分側で表示名の作り方が違う (それぞれの図の状態名で組む)。
+  // 手で決めた対応はその表示名で持っているので、側ごとに引き当てる。
+  function _splitTransitions(refs, mines, refKeyOf, mineKeyOf, ov) {
+    var o = overrides(ov);
+    var byRef = {}, byMine = {};
+    refs.forEach(function(x, li) { if (byRef[refKeyOf(x)] == null) byRef[refKeyOf(x)] = li; });
+    mines.forEach(function(x, ri) { if (byMine[mineKeyOf(x)] == null) byMine[mineKeyOf(x)] = ri; });
+    var usedL = {}, usedR = {}, forced = [], refNone = [], mineNone = [];
+    o.pairs.forEach(function(p) {
+      if (p.type !== 'transition') return;
+      var li = byRef[p.ref], ri = byMine[p.mine];
+      if (li == null || ri == null || usedL[li] || usedR[ri]) return;
+      usedL[li] = true; usedR[ri] = true;
+      forced.push({ li: li, ri: ri });
+    });
+    o.none.forEach(function(n) {
+      if (n.type !== 'transition') return;
+      if (n.side === 'ref') {
+        var li = byRef[n.name];
+        if (li != null && !usedL[li]) { usedL[li] = true; refNone.push(li); }
+      } else {
+        var ri = byMine[n.name];
+        if (ri != null && !usedR[ri]) { usedR[ri] = true; mineNone.push(ri); }
+      }
+    });
+    var restL = [], restR = [];
+    refs.forEach(function(x, li) { if (!usedL[li]) restL.push(li); });
+    mines.forEach(function(x, ri) { if (!usedR[ri]) restR.push(ri); });
+    return { forced: forced, refNone: refNone, mineNone: mineNone, restL: restL, restR: restR };
+  }
+
   // 対応表 1 回分。状態と遷移をこの順で作る (遷移は状態の対応に依存する)。
-  function build(refParsed, mineParsed) {
-    var states = mapStates(refParsed, mineParsed);
-    var transitions = mapTransitions(refParsed, mineParsed, states);
-    return { states: states, transitions: transitions };
+  function build(refParsed, mineParsed, ov) {
+    var states = mapStates(refParsed, mineParsed, ov);
+    var transitions = mapTransitions(refParsed, mineParsed, states, ov);
+    return { states: states, transitions: transitions, overrides: overrides(ov) };
   }
 
   // ── 参照図だけの行を自分の図にも足す (BLK-junior-20260908-1103-wish) ──
@@ -420,34 +590,94 @@ window.MA.stateMap = (function() {
 
   // 見出し。人が最初に知りたいのは「片方にしか無いものが何件あるか」なので、
   // それを先に出す。0 件なら「対応が全部付いた」と言い切る。
+  function _rows(map) {
+    return ((map && map.states) || []).concat((map && map.transitions) || []);
+  }
+
+  // 機械が形だけで決めた、まだ人が見ていない行。ここが 0 件になるまでは
+  // 「参照図だけ」の行を「先輩が後から足した要素」とは呼べない
+  // (対応を取り損ねただけかもしれない)。完全一致は名前が同じなので推測に数えない。
+  function isGuess(row) {
+    if (!row || row.decided) return false;
+    return row.match === 'partial' || row.match === 'ref-only' || row.match === 'mine-only';
+  }
+
+  function guessCount(map) {
+    return _rows(map).filter(isGuess).length;
+  }
+
+  // 推測が残っていないか。残っていなければ、参照図だけの行は言い切れる。
+  function settled(map) {
+    return _rows(map).length > 0 && guessCount(map) === 0;
+  }
+
+  // 「先輩が後から足した要素」と言い切れる行。推測が残る間は 1 件も返さない。
+  function addedByRef(map) {
+    if (!settled(map)) return [];
+    return _rows(map).filter(function(r) { return r.match === 'ref-only'; });
+  }
+
   function summary(map) {
-    var rows = ((map && map.states) || []).concat((map && map.transitions) || []);
+    var rows = _rows(map);
     if (rows.length === 0) return '状態遷移が読めません';
     var refOnly = _count(rows, 'ref-only');
     var mineOnly = _count(rows, 'mine-only');
     var exact = _count(rows, 'exact');
     var partial = _count(rows, 'partial');
+    var manual = _count(rows, 'manual');
+    var pairs = '一致 ' + exact + ' / 部分一致 ' + partial
+      + (manual ? ' / 手で対応 ' + manual : '');
     if (refOnly === 0 && mineOnly === 0) {
-      return '片方だけ 0 件 (一致 ' + exact + ' / 部分一致 ' + partial + ')';
+      return '片方だけ 0 件 (' + pairs + ')';
     }
-    return '参照図だけ ' + refOnly + ' / 自分だけ ' + mineOnly
-      + ' (一致 ' + exact + ' / 部分一致 ' + partial + ')';
+    return '参照図だけ ' + refOnly + ' / 自分だけ ' + mineOnly + ' (' + pairs + ')';
+  }
+
+  // 対応をどこまで決めたか。ここが「取り込む 1 個を選んでよいか」の判断そのもの。
+  function decisionSummary(map) {
+    var rows = _rows(map);
+    if (rows.length === 0) return '';
+    var g = guessCount(map);
+    if (g > 0) {
+      return '機械の推測が ' + g + ' 件残っています。'
+        + '「同じもの」「対応なし」を決めるまで、参照図だけの行は先輩が足した要素とは限りません';
+    }
+    var added = addedByRef(map).length;
+    if (added === 0) return '対応は全部決まりました。参照図にあって自分の図に無い要素はありません';
+    return '対応は全部決まりました。参照図にあって自分の図に無い要素は ' + added + ' 件です';
   }
 
   // 抽象度が違いすぎて対応が取れない状態を、行き詰まる前に言う。
   // 対応が付いた組が状態の半分に満たなければ、名前で突き合わせても意味がない。
+  // 手で決めた組は「付いた」に数える (決め終われば警告は消える)。
   function abstractionWarning(map) {
     var states = (map && map.states) || [];
     if (states.length === 0) return '';
-    var paired = _count(states, 'exact') + _count(states, 'partial');
+    if (settled(map)) return '';
+    var paired = _count(states, 'exact') + _count(states, 'partial') + _count(states, 'manual');
     if (paired * 2 >= states.length) return '';
     return '状態名の対応が ' + paired + '/' + states.length
-      + ' しか付きません。抽象度が違う図どうしの可能性があります';
+      + ' しか付きません。抽象度が違う図どうしの可能性があります。'
+      + '各行の「同じもの」「対応なし」で対応を決めてください';
+  }
+
+  // 片方だけの行に対して、相手側の選び直し候補を出す。
+  // 既に組になっているものは候補にしない (1 つの要素は 1 か所にしか居ない)。
+  function pairOptions(map, row) {
+    if (!row || (row.match !== 'ref-only' && row.match !== 'mine-only')) return [];
+    var want = row.match === 'ref-only' ? 'mine-only' : 'ref-only';
+    var key = row.match === 'ref-only' ? 'mine' : 'ref';
+    return _rows(map).filter(function(r) {
+      return r.type === row.type && r.match === want && _s(r[key]) !== '';
+    }).map(function(r) {
+      return { value: _s(r[key]), label: _s(r[key]) };
+    });
   }
 
   var MATCH_LABEL = {
     'exact': '一致',
     'partial': '部分一致',
+    'manual': '手で対応',
     'ref-only': '参照図だけ',
     'mine-only': '自分だけ',
   };
@@ -467,6 +697,20 @@ window.MA.stateMap = (function() {
     summary: summary,
     abstractionWarning: abstractionWarning,
     matchLabel: matchLabel,
+    // 手で決める対応 (BLK-junior-20260908-0823)
+    supportsOverrides: true,
+    EMPTY_OVERRIDES: EMPTY_OVERRIDES,
+    overrides: overrides,
+    withPair: withPair,
+    withNone: withNone,
+    without: without,
+    decisionOf: decisionOf,
+    isGuess: isGuess,
+    guessCount: guessCount,
+    settled: settled,
+    addedByRef: addedByRef,
+    decisionSummary: decisionSummary,
+    pairOptions: pairOptions,
     NEW_STATE: NEW_STATE,
     aliasMap: aliasMap,
     mineOptions: mineOptions,
