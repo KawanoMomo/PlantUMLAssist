@@ -15,6 +15,15 @@ test('手順5.5 参加者名だけの指摘は、対象図だけに絞って反�
   await S.openFolderItem(page, 'can_init_sequence');
   expect(await page.locator('#editor').inputValue()).toContain('participant Can_Driver');
 
+  // BLK-primary-20260909-0403 で入った「開いたファイルを書き換えるか」の問いに、
+  // 指摘を直す目的で開いた側の答え (書き換える) を先に返す。答える前に他の操作へ
+  // 進むと、この問いが操作を受け取ってしまう。
+  const lock = page.locator('#source-lock-modal');
+  if (await lock.isVisible().catch(() => false)) {
+    await page.locator('#source-lock-overwrite').click();
+    await page.waitForTimeout(800);
+  }
+
   await S.runCommand(page, '一括置換');
   const allDocs = page.locator('#rename-all-docs');
   if (await allDocs.isChecked()) await allDocs.uncheck();
@@ -34,4 +43,77 @@ test('手順5.5 参加者名だけの指摘は、対象図だけに絞って反�
 
   // 到達条件その3: 絞ったので、触っていない図は元のまま残る。
   expect(await S.readDoc(page, DIR, 'can_state')).not.toContain('Can_Ctrl');
+});
+
+// BLK-primary-20260909-0503-wish: 同じ 5.5 の中でも、指摘が「junior の GPIO 図と
+// primary の GPIO 図が別物」のときは、差分を見た後に決めたこと (統一する / 別物と
+// する) を自分の図へ反映する手段が無く、他人のフォルダを別途覗いて手で見比べ、
+// 手で打ち替えるしかなかった。突合の場でそのまま決められることを到達条件にする。
+// 突合は「隣り合うフォルダ」を相手にするので、この 2 件だけが隣になる場所を使う
+// (手順5.5 の一括置換が使う DIR と混ぜない)。
+const COHORT_ROOT = DIR + '-cohort';
+const MINE_DIR = COHORT_ROOT + '/primary';
+const OTHER_DIR = COHORT_ROOT + '/junior';
+
+const GPIO_MINE = [
+  '@startuml', 'title GPIO 初期化シーケンス',
+  'participant Gpio_Driver', 'participant Hw_Ctrl',
+  'Gpio_Driver -> Hw_Ctrl : Gpio_Init', '@enduml',
+].join('\n');
+const GPIO_OTHER = [
+  '@startuml', 'title GPIO 初期化シーケンス',
+  'participant GpioDrv', 'participant Hw_Ctrl', 'participant Nvic',
+  'GpioDrv -> Hw_Ctrl : Gpio_Init', '@enduml',
+].join('\n');
+
+async function openCohort(page) {
+  await page.locator('#btn-tab-peek').click();
+  await page.waitForSelector('#peek-modal');
+  await page.locator('#peek-cohort-toggle').click();
+  await page.waitForSelector('#peek-cohort .cohort-pair');
+}
+
+test('手順5.5 ドメインの食い違いは、突合の場で「統一する」と決めて自分の図に反映できる', async ({ page }) => {
+  await S.bootWithSaveDir(page, MINE_DIR);
+  await S.clearDir(page, MINE_DIR);
+  await S.clearDir(page, OTHER_DIR);
+  await S.putDoc(page, MINE_DIR, 'gpio_init_sequence', GPIO_MINE);
+  await S.putDoc(page, OTHER_DIR, 'gpio_init_sequence', GPIO_OTHER);
+  await page.reload();
+  await page.waitForSelector('#btn-tab-peek');
+
+  await openCohort(page);
+  // 到達条件その1: 相手を探さなくても、食い違いが組として出る。
+  const pair = page.locator('#peek-cohort .cohort-pair').first();
+  await expect(pair).toHaveAttribute('data-cohort-matched', '0');
+  await expect(pair.locator('.cohort-verdict-btn[data-verdict="shared"]')).toBeVisible();
+
+  // 到達条件その2: 押すだけで自分の図の綴りが相手に揃い、その場で結果が読める。
+  await pair.locator('.cohort-verdict-btn[data-verdict="shared"]').click();
+  await page.waitForTimeout(2000);
+  const saved = (await S.readDoc(page, MINE_DIR, 'gpio_init_sequence')) || '';
+  expect(saved).toContain('participant GpioDrv');
+  expect(saved).not.toContain('Gpio_Driver');
+  // 到達条件その3: 決めたことがファイルに残り、次に突合したとき判断済みと分かる。
+  expect(saved).toContain("' domain-verdict: shared gpio vs junior");
+  expect(await S.readDoc(page, OTHER_DIR, 'gpio_init_sequence')).toBe(GPIO_OTHER);
+});
+
+test('手順5.5 「別物」と決めたときは title に明示され、部品名は動かない', async ({ page }) => {
+  await S.bootWithSaveDir(page, MINE_DIR);
+  await S.clearDir(page, MINE_DIR);
+  await S.clearDir(page, OTHER_DIR);
+  await S.putDoc(page, MINE_DIR, 'gpio_init_sequence', GPIO_MINE);
+  await S.putDoc(page, OTHER_DIR, 'gpio_init_sequence', GPIO_OTHER);
+  await page.reload();
+  await page.waitForSelector('#btn-tab-peek');
+
+  await openCohort(page);
+  await page.locator('#peek-cohort .cohort-pair').first()
+    .locator('.cohort-verdict-btn[data-verdict="separate"]').click();
+  await page.waitForTimeout(2000);
+  const saved = (await S.readDoc(page, MINE_DIR, 'gpio_init_sequence')) || '';
+  expect(saved).toContain('title GPIO 初期化シーケンス (junior の gpio とは別のドメイン)');
+  expect(saved).toContain('participant Gpio_Driver');
+  expect(saved).toContain("' domain-verdict: separate gpio vs junior");
 });

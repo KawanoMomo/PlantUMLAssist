@@ -1684,6 +1684,17 @@ html, body {
 #peek-template:disabled { opacity: 0.5; cursor: default; }
 #peek-cohort-templates.on { border-color: var(--accent); color: var(--accent); }
 #peek-dirs .cohort-hint { font-size: 11px; color: var(--text-secondary); padding: 4px 2px; }
+#peek-cohort .cohort-verdict {
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  padding-top: 6px; margin-top: 4px; border-top: 1px dashed var(--border);
+}
+#peek-cohort .cohort-verdict-note { font-size: 10px; color: var(--text-secondary); }
+#peek-cohort .cohort-verdict-btn {
+  font-size: 10px; padding: 2px 8px; border-radius: 3px;
+  border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);
+  cursor: pointer;
+}
+#peek-cohort .cohort-verdict-btn:hover { border-color: var(--accent); color: var(--accent); }
 #at-modal-content {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
@@ -5462,6 +5473,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/peek-folder.js"></script>
 <script src="src/core/audit-scope.js"></script>
 <script src="src/core/domain-cohort.js"></script>
+<script src="src/core/domain-verdict.js"></script>
 <script src="src/core/version-history.js"></script>
 <script src="src/core/diagram-kind.js"></script>
 <script src="src/core/draft-mark.js"></script>

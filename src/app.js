@@ -5240,8 +5240,104 @@ function renderCohortCompare() {
     box.appendChild(t);
     _cohortChips(box, '部品名', p.diff.names, p.a.folder, p.b.folder);
     _cohortChips(box, '矢印ラベル', p.diff.labels, p.a.folder, p.b.folder);
+    _cohortVerdictRow(box, r.domain, p);
     el.cohort.appendChild(box);
   });
+}
+
+// ── 判断 (統一する / 別物と明示する) ──
+// BLK-primary-20260909-0503-wish: 突合で差分は見えても、見た後にできることが
+// 無かった。統一するなら綴りを手で打ち替え、別物とするなら title を手で書き足す
+// しかなく、決めたこと自体はどこにも残らないので次の突合で同じ食い違いがまた出る。
+// 組の片方が自分の保存フォルダのときだけ、その 1 枚に書き戻す 2 つのボタンを出す。
+function _myPeekDir() {
+  // 覗き先の一覧が自分の保存先を current として持っている。設定の値は相対パス
+  // (./autosave) のことがあり、一覧の絶対パスとは字面が合わないので、
+  // 比べるのは必ず一覧の側の path にする。
+  for (var i = 0; i < _peekDirs.length; i++) {
+    if (_peekDirs[i].current) return _peekDirs[i].path;
+  }
+  return _wsFileDir();
+}
+
+function _cohortSides(p) {
+  var PF = window.MA.peekFolder;
+  var dir = _myPeekDir();
+  if (!PF) return null;
+  var a = (p.a.doc || {})._dir, b = (p.b.doc || {})._dir;
+  if (PF.samePath(a, dir)) return { mine: p.a, other: p.b };
+  if (PF.samePath(b, dir)) return { mine: p.b, other: p.a };
+  return null;   // どちらも他人の図。読むだけ (勝手に直さない)
+}
+
+function _cohortVerdictRow(box, domain, p) {
+  var DV = window.MA.domainVerdict;
+  var sides = DV ? _cohortSides(p) : null;
+  var row = document.createElement('div');
+  row.className = 'cohort-verdict';
+  if (!sides) {
+    row.textContent = 'どちらも自分の保存フォルダの図ではありません (読むだけ)';
+    box.appendChild(row);
+    return;
+  }
+  var mineDoc = sides.mine.doc, otherDoc = sides.other.doc;
+  var mark = DV.readVerdict(mineDoc.dsl, sides.other.folder);
+  var key = sides.mine.name + '|' + sides.other.name;
+  var note = document.createElement('span');
+  note.className = 'cohort-verdict-note';
+  note.id = 'cohort-verdict-note';
+  note.textContent = _cohortVerdictMsgs[key] ? _cohortVerdictMsgs[key] : mark
+    ? (mark.kind === 'shared' ? '判断済み: ' + sides.other.folder + ' と共有ドメイン'
+                              : '判断済み: ' + sides.other.folder + ' とは別物')
+    : sides.mine.folder + ' / ' + sides.mine.base + ' に書き戻します';
+  row.appendChild(note);
+  [
+    { kind: 'shared', label: '共有ドメインとして統一する' },
+    { kind: 'separate', label: '別物として title に明示する' },
+  ].forEach(function(spec) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'cohort-verdict-btn';
+    b.setAttribute('data-verdict', spec.kind);
+    b.textContent = spec.label;
+    b.addEventListener('click', function() {
+      applyCohortVerdict(spec.kind, domain, sides, note, b, key);
+    });
+    row.appendChild(b);
+  });
+  box.appendChild(row);
+  if (mineDoc && otherDoc) box.setAttribute('data-cohort-mine', sides.mine.folder);
+}
+
+var _cohortVerdictMsgs = {};   // 組ごとの「直前に何をしたか」。突合し直しても残す
+
+function applyCohortVerdict(kind, domain, sides, note, btn, key) {
+  var DV = window.MA.domainVerdict;
+  var WS = window.MA.workspace;
+  var mine = sides.mine, other = sides.other;
+  var src = mine.doc || {};
+  var res = DV.apply(kind, src, other.doc, {
+    domain: domain, otherFolder: other.folder, base: mine.base,
+  });
+  if (!res) return Promise.resolve(false);
+  if (btn) btn.disabled = true;
+  return WS.saveToFile({ name: src._file.replace(/\.[^.]+$/, ''), dsl: res.dsl }, src._dir)
+    .then(function(ok) {
+      if (btn) btn.disabled = false;
+      if (!ok) { note.textContent = '書き戻せませんでした (保存先を確認してください)'; return false; }
+
+      src.dsl = res.dsl;
+      var msg = DV.summaryLine(res) + ' — ' + mine.folder + ' / ' + mine.base + ' に保存しました';
+      _cohortVerdictMsgs[key] = msg;
+      note.textContent = msg;
+      // 突合し直す。直した結果が同じ画面にすぐ出ないと、直ったか確かめる手が増える。
+      return selectCohortDomain(domain).then(function() { return true; });
+    })
+    .catch(function() {
+      if (btn) btn.disabled = false;
+      note.textContent = '書き戻せませんでした (保存先を確認してください)';
+      return false;
+    });
 }
 
 function renderCohortDomains() {
