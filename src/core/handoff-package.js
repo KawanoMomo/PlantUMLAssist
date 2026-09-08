@@ -97,6 +97,8 @@ window.MA.handoffPackage = (function() {
   // input = { docs, families, names, board, svgs, now }
   //   docs   = [{ id, name, diagramType, dsl }] (workspace.list() の形)
   //   svgs   = { <doc id>: '<svg …>' }。無い図は「書き出せませんでした」と出す
+  //   notes  = handoverNotes.list() の形。渡す時点で申し送りをチェックリストに固定する
+  //            (BLK-primary-20260908-1803-wish。差分が消えた後も項目は残る)
   function buildSnapshot(input) {
     var o = input || {};
     var docs = Array.isArray(o.docs) ? o.docs : [];
@@ -115,6 +117,8 @@ window.MA.handoffPackage = (function() {
     var family = familySection(o.families);
     var name = nameSection(o.names);
     var change = changeSection(o.board);
+    var HC = window.MA.handoverChecklist;
+    var checklist = HC ? HC.build(o.notes, o.checklistAt) : { createdAt: '', items: [] };
     var failed = diagrams.filter(function(d) { return !d.rendered; }).length;
     return {
       createdAt: stamp(o.now),
@@ -124,6 +128,7 @@ window.MA.handoffPackage = (function() {
       family: family,
       names: name,
       change: change,
+      checklist: checklist,
       // 引き継ぎ 1 行。渡す側も渡された側もまずここを読む。
       verdict: (family.ok && name.ok)
         ? diagrams.length + ' 枚 ・ 系統チェックと名前突合はどちらも問題なし'
@@ -214,6 +219,12 @@ window.MA.handoffPackage = (function() {
     return out || '<p class="muted">図がありません。</p>';
   }
 
+  function _checklistHtml(snapshot) {
+    var HC = window.MA.handoverChecklist;
+    if (!HC) return '<p class="muted">申し送りはありません。</p>';
+    return HC.renderHtml(snapshot && snapshot.checklist);
+  }
+
   var CSS = [
     'body{font-family:system-ui,"Segoe UI",sans-serif;margin:0;padding:24px;background:#f5f5f7;color:#1d1d20;}',
     'main{max-width:1000px;margin:0 auto;}',
@@ -238,13 +249,30 @@ window.MA.handoffPackage = (function() {
     'footer{margin-top:32px;font-size:11px;color:#6a6a72;}',
   ].join('\n');
 
+  function _checklistCss() {
+    var HC = window.MA.handoverChecklist;
+    return HC ? HC.styleCss() : '';
+  }
+
+  function _checklistScript() {
+    var HC = window.MA.handoverChecklist;
+    return HC ? HC.scriptHtml() : '';
+  }
+
+  // 節の 1 行。渡された側が「何件返すのか」をここだけで分かるようにする。
+  function _checklistLine(snapshot) {
+    var items = (snapshot && snapshot.checklist && snapshot.checklist.items) || [];
+    if (items.length === 0) return '申し送りはありません。';
+    return '申し送り ' + items.length + ' 件。読んだ / 対応した / 分からなかった を選んで返信してください。';
+  }
+
   function renderIndexHtml(snapshot) {
     var s = snapshot || {};
     return [
       '<!DOCTYPE html>',
       '<html lang="ja"><head><meta charset="utf-8">',
       '<title>引き継ぎパッケージ ' + esc(s.createdAt) + '</title>',
-      '<style>' + CSS + '</style>',
+      '<style>' + CSS + '\n' + _checklistCss() + '</style>',
       '</head><body><main>',
       '<header><h1>引き継ぎパッケージ</h1>',
       '<small>作成 ' + esc(s.createdAt) + ' ・ 図 ' + esc(String(s.total)) + ' 枚'
@@ -264,11 +292,16 @@ window.MA.handoffPackage = (function() {
       '<p>' + esc(s.change ? s.change.line : '') + '</p>',
       _changeHtml(s.change || {}),
 
-      '<h2>4. 図一式</h2>',
+      '<h2>4. 申し送りチェックリスト</h2>',
+      '<p>' + esc(_checklistLine(s)) + '</p>',
+      _checklistHtml(s),
+
+      '<h2>5. 図一式</h2>',
       _diagramsHtml(s),
 
       '<footer>PlantUMLAssist の「引き継ぎパッケージ」が作成。この HTML 1 枚で、作成時点の'
         + '確認結果と図をそのまま見られます。個々の SVG は同じ zip の svg/ にあります。</footer>',
+      _checklistScript(),
       '</main></body></html>',
     ].join('\n');
   }
@@ -279,6 +312,11 @@ window.MA.handoffPackage = (function() {
   function files(snapshot) {
     var s = snapshot || {};
     var out = [{ name: 'index.html', content: renderIndexHtml(s) }];
+    var HC = window.MA.handoverChecklist;
+    if (HC && s.checklist && (s.checklist.items || []).length > 0) {
+      // 返信 JSON と突き合わせるための控え。渡した側も同じものを手元に持つ。
+      out.push({ name: 'handover-checklist.json', content: HC.serialize(s.checklist) });
+    }
     (s.diagrams || []).forEach(function(d) {
       if (d.rendered) out.push({ name: d.filename, content: d.svg });
     });
@@ -294,6 +332,7 @@ window.MA.handoffPackage = (function() {
     changeSection: changeSection,
     buildSnapshot: buildSnapshot,
     renderIndexHtml: renderIndexHtml,
+    checklistLine: _checklistLine,
     files: files,
   };
 })();
