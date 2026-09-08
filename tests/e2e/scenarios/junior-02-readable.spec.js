@@ -7,6 +7,36 @@ const S = require('./_scenario');
 
 const DIR = S.dirFor(__filename);
 
+// BLK-junior-20260909-0603-wish: 手本は `persona-data\primary` にあり、自分のタブに
+// 無い。覗く画面は全面のモーダルなので、開くと書きかけが見えず、閉じると手本が
+// 消える。手本と書きかけが同時に見えて、足りない状態・遷移が色で出ることを確かめる。
+// 覗ける相手は「隣り合うフォルダ」なので、この 2 件だけが隣になる場所を使う。
+const PEEK_ROOT = DIR + '-peek';
+const MINE_DIR = PEEK_ROOT + '/junior';
+const SENIOR_DIR = PEEK_ROOT + '/primary';
+
+// 先輩の TIMER 状態遷移図 (手本)。自分の書きかけには Halted と 2 本の遷移が無い。
+const SENIOR_STATE = [
+  '@startuml',
+  'title TIMERドライバ状態遷移',
+  '[*] --> Uninit',
+  'Uninit --> Ready : Timer_Init',
+  'Ready --> Running : Timer_Start',
+  'Running --> Ready : Timer_Stop',
+  'Running --> Halted : Timer_Fault',
+  'Halted --> Uninit : Timer_DeInit',
+  '@enduml',
+].join('\n');
+
+const MINE_STATE = [
+  '@startuml',
+  'title TIMERドライバ状態遷移',
+  '[*] --> Uninit',
+  'Uninit --> Ready : Timer_Init',
+  'Ready --> Running : Timer_Start',
+  '@enduml',
+].join('\n');
+
 test('手順2 タイトルと要素名が読め、読みにくければ GUI で直せる', async ({ page }) => {
   await S.bootWithSaveDir(page, DIR);
   await S.typeDsl(page, S.GPIO_STATE);
@@ -92,4 +122,45 @@ test('手順2 先輩の構成(参加者5・メッセージ6)を名前と本文�
   expect(t).toContain('P1 -> Timer_Hw : setPrescaler()');
   expect(t).toContain('P1 -> Det : Det_ReportError()');
   expect(t).toContain('P1 --> Dev : E_OK');
+});
+
+// BLK-junior-20260909-0603-wish: 手本を「見て → 閉じて → 記憶で打つ」の往復をなくす。
+// 覗いたその 1 枚を閉じずに書きかけの右へ据え、足りない状態・遷移を色で出す。
+test('手順2 先輩の図を手本として右に据えたまま、自分に無い状態・遷移が色で分かる', async ({ page }) => {
+  await S.bootWithSaveDir(page, MINE_DIR);
+  await S.clearDir(page, MINE_DIR);
+  await S.clearDir(page, SENIOR_DIR);
+  await S.putDoc(page, SENIOR_DIR, 'timer_state', SENIOR_STATE);
+  await page.reload();
+  await page.waitForSelector('#btn-tab-peek');
+
+  // 書きかけ (手順 2 の途中。手本の 5 遷移のうち 2 本しか打てていない)。
+  await S.typeDsl(page, MINE_STATE);
+
+  // 手本を覗いて、そのまま右に据える。
+  await page.locator('#btn-tab-peek').click();
+  await page.waitForSelector('#peek-modal');
+  await page.locator('.peek-file[data-file-name="timer_state"]').click();
+  await expect(page.locator('#peek-compare')).toBeEnabled();
+  await page.locator('#peek-compare').click();
+
+  // 到達条件その1: 覗く画面は閉じ、書きかけを見たまま手本が右に並ぶ。
+  await expect(page.locator('#peek-modal')).toBeHidden();
+  await expect(page.locator('#compare-pane')).toBeVisible();
+  await expect(page.locator('#compare-select option[data-peek="1"]')).toHaveText('primary / timer_state');
+  expect(await page.locator('#compare-select').inputValue()).toBe('@peek');
+  expect(await getEditorText(page)).toContain('Timer_Start');   // 自分の図はそのまま
+
+  // 到達条件その2: 対応表が押さずに出ており、手本にしかない状態・遷移が
+  // 「参照図だけ」として並ぶ (Halted / Timer_Fault / Timer_Stop / Timer_DeInit)。
+  await expect(page.locator('#map-list')).toBeVisible();
+  const refOnly = page.locator('#map-list .map-row[data-map-match="ref-only"]');
+  await expect(refOnly.filter({ hasText: 'Halted' }).first()).toBeVisible();
+  await expect(refOnly.filter({ hasText: 'Timer_Fault' }).first()).toBeVisible();
+  // 両方にある遷移は「参照図だけ」に混ざらない。
+  await expect(refOnly.filter({ hasText: 'Timer_Init' })).toHaveCount(0);
+
+  // 到達条件その3: 据えたのは読むだけで、先輩のファイルも自分の保存先も動かない。
+  expect(await S.readDoc(page, SENIOR_DIR, 'timer_state')).toBe(SENIOR_STATE);
+  await expect(page.locator('#compare-status')).toHaveText(/手本 primary \(読むだけ\)/, { timeout: 30000 });
 });
