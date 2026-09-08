@@ -773,6 +773,18 @@ html, body {
   background: transparent;
   color: var(--text-primary);
 }
+/* 図種のバッジと要約 (BLK-junior-20260908-2003)。名前が diagram1 のままでも
+   何の図かが行で分かり、要約の 0 で「その図種は 1 枚も無い」が分かる。 */
+#folder-panel .folder-kind {
+  flex: 0 0 auto;
+  font-size: 9px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 4px;
+  margin-left: 3px;
+  color: var(--text-secondary);
+}
+#folder-panel .folder-kinds { color: var(--text-secondary); }
 #folder-panel .folder-gone-versions-head { color: var(--accent-red); }
 #folder-panel button.folder-gone-name {
   flex: 1 1 auto;
@@ -5142,6 +5154,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/folder-filter.js"></script>
 <script src="src/core/peek-folder.js"></script>
 <script src="src/core/version-history.js"></script>
+<script src="src/core/diagram-kind.js"></script>
 <script src="src/core/draft-mark.js"></script>
 <script src="src/core/target-set.js"></script>
 <script src="src/core/folder-reopen.js"></script>

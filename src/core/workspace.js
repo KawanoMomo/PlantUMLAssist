@@ -283,7 +283,18 @@ window.MA.workspace = (function() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: doc.name, dsl: doc.dsl, dir: _dir(fileDir) }),
         keepalive: true,
-      }).then(function(r) { return !!(r && r.ok); }).catch(function() { return false; });
+      }).then(function(r) {
+        if (!(r && r.ok)) return false;
+        // BLK-junior-20260908-2003: 図種が変わる保存は server が別ファイルへ回す。
+        // 回された先は autoSave の知らせに寄せる (聞き手は 1 か所でよい)。
+        if (!r.json) return true;
+        return r.json().then(function(data) {
+          if (window.MA.autoSave && window.MA.autoSave.noteFileRenamed) {
+            window.MA.autoSave.noteFileRenamed(data);
+          }
+          return true;
+        }).catch(function() { return true; });
+      }).catch(function() { return false; });
     } catch (e) {
       return Promise.resolve(false);
     }
