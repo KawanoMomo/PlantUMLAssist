@@ -81,6 +81,11 @@ const AUDITS = {
   // timer_state.puml だけ SVG が無いことに気付いたのは 17 枚の目視突合の産物で、
   // 仕組みとしては存在しなかった。出力物の有無は DSL ではなくフォルダに書いてある。
   svg: (MA, docs) => (MA.svgFreshness ? MA.svgFreshness.scan(svgEntries(docs)) : undefined),
+  // BLK-primary-20260908-1403-wish: 「dma_state だけ 1 メッセージが 4 遷移」は
+  // 名前の食い違いではないので family / trace のどこにも出ず、出力テキストを
+  // 目で読んで気付くしかなかった。系統ごとの遷移密度を並べ、中央値から外れた
+  // 系統を名指しする。
+  density: (MA, docs) => (MA.transitionDensity ? MA.transitionDensity.rank(docs) : undefined),
 };
 
 // .puml の隣に置かれた同名の .svg を見て、svg-freshness が読む形の行にする。
@@ -169,6 +174,16 @@ function summarize(audits) {
       staleNames: sv.result.rows.filter((r) => r.status === 'stale').map((r) => r.name),
     };
   }
+  const dn = audits.density;
+  if (dn && dn.status === 'ok') {
+    s.density = {
+      families: dn.result.rows.length,
+      median: dn.result.median,
+      outliers: dn.result.outliers.length,
+      // 系統名まで出す。件数だけだと「どの系統か」を探しに他の出力へ戻ることになる。
+      outlierNames: dn.result.outliers.map((r) => r.key),
+    };
+  }
   return s;
 }
 
@@ -216,6 +231,14 @@ function formatSummary(report, prev, options) {
     const un = parts.length ? ` (${parts.join(' / ')})` : '';
     const pa = s.trace.partial ? ` / 部分一致 ${s.trace.partial} 件` : '';
     lines.push(`トレース: 遷移 ${s.trace.transitions} 件中 ${s.trace.missing} 件がどのシーケンスにも現れない${pa}${un}`);
+  }
+  if (s.density) {
+    // 粒度は「揃っていないと直す」判断が要る指摘で、名前の食い違いのような
+    // 一意の正解が無い。合計には足さず、外れた系統を名指しするだけにする。
+    const med = s.density.median == null ? '—' : (Math.round(s.density.median * 100) / 100).toFixed(2);
+    lines.push(s.density.outliers === 0
+      ? `遷移密度: ${s.density.families} 系統とも中央値 ${med} 遷移/メッセージに揃っている`
+      : `遷移密度: 中央値 ${med} から外れた系統 ${s.density.outliers} 件 (${s.density.outlierNames.join(', ')})`);
   }
   if (s.svg) {
     // 出力物は DSL の指摘ではないので合計には足さない。「図は直っているが

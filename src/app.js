@@ -3746,6 +3746,7 @@ function _atRunAudits() {
   one('consistency', function() { return window.MA.consistency ? window.MA.consistency.check(docs) : undefined; });
   one('family', function() { return window.MA.familyAudit ? window.MA.familyAudit.audit(docs) : undefined; });
   one('trace', function() { return window.MA.traceCoverage ? window.MA.traceCoverage.audit(docs) : undefined; });
+  one('density', function() { return window.MA.transitionDensity ? window.MA.transitionDensity.rank(docs) : undefined; });
   return { audits: out, docs: docs.length };
 }
 
@@ -9190,6 +9191,42 @@ function setupOutline() {
 // 対になる道具で、こちらは動作名 (矢印のラベル) を見る。
 
 var _familyAuditDocs = [];   // 表の行から図へ飛ぶための、表示中の系統の図一覧
+var _familyDensity = null;   // BLK-primary-20260908-1403-wish: 系統ごとの遷移密度
+
+// 遷移密度の表。系統ごとに「1 メッセージ何遷移か」を並べ、他系統の中央値から
+// 外れた系統を上に置く。レビュー指摘の粒度差は、これまで指摘の文章を読んでから
+// 他系統を自分で開いて見比べるしかなかった。ここを見れば相手を選ばずに済む。
+function _densityTableHtml(result, SECTION, CELL) {
+  var td = window.MA.transitionDensity;
+  var esc = window.MA.htmlUtils.escHtml;
+  if (!td || !result) return '';
+  var html = '<div style="' + SECTION + '">遷移密度 (系統ごと・外れた系統が上)</div>'
+    + '<div id="fd-summary" data-outliers="' + result.outliers.length + '" '
+    + 'data-median="' + (result.median == null ? '' : result.median) + '" '
+    + 'style="font-size:11px;color:' + (result.outliers.length ? 'var(--accent-orange)' : 'var(--accent-green)') + ';">'
+    + esc(td.summaryLine(result)) + '</div>';
+  if (!result.rows.length) return html;
+  html += '<table id="fd-table" style="border-collapse:collapse;width:100%;margin-top:4px;">'
+    + '<tr>'
+    + ['系統', '状態数', '遷移数', 'メッセージ数', '遷移/メッセージ', ''].map(function(h) {
+        return '<th style="' + CELL + 'text-align:left;color:var(--text-secondary);font-weight:normal;">'
+          + esc(h) + '</th>';
+      }).join('') + '</tr>';
+  result.rows.forEach(function(r) {
+    var mark = r.outlier ? 'color:var(--accent-orange);' : '';
+    html += '<tr class="fd-row' + (r.outlier ? ' fd-outlier' : '') + '" data-key="' + esc(r.key) + '"'
+      + ' data-density="' + (r.density == null ? '' : r.density) + '"'
+      + ' data-outlier="' + (r.outlier ? '1' : '0') + '" style="cursor:pointer;">'
+      + '<td style="' + CELL + 'font-family:var(--font-mono);' + mark + '">' + esc(r.key) + '</td>'
+      + '<td style="' + CELL + '">' + r.states + '</td>'
+      + '<td style="' + CELL + '">' + r.transitions + '</td>'
+      + '<td style="' + CELL + '">' + r.messages + '</td>'
+      + '<td class="fd-density" style="' + CELL + mark + '">' + esc(td.densityText(r)) + '</td>'
+      + '<td style="' + CELL + 'color:var(--text-secondary);">' + esc(r.reason || '') + '</td>'
+      + '</tr>';
+  });
+  return html + '</table>';
+}
 
 function _familyAuditRender(families, selectedKey) {
   var content = document.getElementById('fa-modal-content');
@@ -9202,6 +9239,7 @@ function _familyAuditRender(families, selectedKey) {
   var BTN = 'background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;padding:2px 8px;font-size:11px;';
 
   var html = '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">系統チェック</h3>';
+  html += _densityTableHtml(_familyDensity, SECTION, CELL);
 
   if (families.length === 0) {
     html += '<div id="fa-empty" style="font-size:11px;color:var(--text-secondary);">'
@@ -9274,6 +9312,34 @@ function _familyAuditBind(families) {
   var closeBtn = document.getElementById('fa-close');
   if (closeBtn) closeBtn.addEventListener('click', close);
 
+  // 密度の行 → その系統の突合表へ。外れた系統をクリックしたらすぐ中身が見える。
+  // 系統チェックに載らない系統 (1 枚しか無い) は、その状態遷移図を開く。
+  var dRows = content.querySelectorAll('.fd-row');
+  for (var k = 0; k < dRows.length; k++) {
+    dRows[k].addEventListener('click', function(ev) {
+      var key = ev.currentTarget.getAttribute('data-key');
+      var hit = null;
+      for (var i = 0; i < families.length; i++) if (families[i].key === key) hit = families[i];
+      if (hit) {
+        _familyAuditRender(families, key);
+        _familyAuditBind(families);
+        return;
+      }
+      var row = null;
+      if (_familyDensity) {
+        for (var j = 0; j < _familyDensity.rows.length; j++) {
+          if (_familyDensity.rows[j].key === key) row = _familyDensity.rows[j];
+        }
+      }
+      var doc = row && (row.stateDocs[0] || row.seqDocs[0]);
+      if (!doc || !doc.id || !window.MA.workspace) return;
+      close();
+      saveActiveDoc();
+      window.MA.workspace.setActive(doc.id);
+      applyActiveDoc();
+    });
+  }
+
   var famSel = document.getElementById('fa-family');
   if (famSel) famSel.addEventListener('change', function() {
     _familyAuditRender(families, this.value);
@@ -9306,7 +9372,14 @@ function openFamilyAudit() {
     return { id: d.id, name: d.name, diagramType: d.diagramType, dsl: d.dsl };
   });
   var families = fa.audit(docs);
-  _familyAuditRender(families, families.length ? families[0].key : null);
+  _familyDensity = window.MA.transitionDensity ? window.MA.transitionDensity.rank(docs) : null;
+  // 外れた系統があるなら、開いた時点でその系統を出す (指摘の相手を探す手間を消す)。
+  var firstKey = families.length ? families[0].key : null;
+  if (_familyDensity && _familyDensity.outliers.length) {
+    var wanted = _familyDensity.outliers[0].key;
+    for (var i = 0; i < families.length; i++) if (families[i].key === wanted) firstKey = wanted;
+  }
+  _familyAuditRender(families, firstKey);
   _familyAuditBind(families);
   modal.style.display = 'flex';
   return families;
