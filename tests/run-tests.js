@@ -27,6 +27,7 @@ const sourceFiles = [
   'src/core/note-block.js',
   'src/core/family-clone.js',
   'src/core/subject-preset.js',
+  'src/core/driver-usecase-starter.js',
   'src/core/activity-insert.js',
   'src/core/save-diff.js',
   'src/core/version-timeline.js',

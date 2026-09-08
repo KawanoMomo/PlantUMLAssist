@@ -540,6 +540,33 @@ window.MA.modules.plantumlUsecase = (function() {
     });
   }
 
+  // BLK-junior-20260909-0403: ひな形は「白紙 (新規タブのサンプルのまま)」に置く
+  // ものなので、既に描き始めている図では黙って捨てない。3 件以上の要素があるときだけ
+  // 確認する (サンプルの actor User / usecase Login は白紙とみなす)。
+  function _bindStarter(parsedData, ctx) {
+    var P = window.MA.properties;
+    var DS = window.MA.driverUsecaseStarter;
+    var inputEl = document.getElementById('uc-starter-subject');
+    var hintEl = document.getElementById('uc-starter-hint');
+    if (!DS || !inputEl || !hintEl) return;
+    var refresh = function() {
+      hintEl.textContent = DS.summary(DS.plan(inputEl.value));
+    };
+    inputEl.addEventListener('input', refresh);
+    refresh();
+
+    P.bindEvent('uc-starter-add', 'click', function() {
+      var plan = DS.plan(inputEl.value);
+      if (!plan) { alert('題材名を入れてください (例: GPIO)'); return; }
+      var count = (parsedData.elements || []).length;
+      if (count >= 3 && !window.confirm('今の図の ' + count + ' 件を、'
+        + plan.display + ' ドライバのひな形で置き換えます。よろしいですか')) return;
+      window.MA.history.pushHistory();
+      ctx.setMmdText(DS.dsl(inputEl.value));
+      ctx.onUpdate();
+    });
+  }
+
   function _renderNoSelection(parsedData, propsEl, ctx) {
     var P = window.MA.properties;
     var elements = parsedData.elements || [];
@@ -569,10 +596,25 @@ window.MA.modules.plantumlUsecase = (function() {
         '<div id="uc-src-summary" style="font-size:10px;color:var(--text-secondary);margin-bottom:6px;line-height:1.5;"></div>' +
         '<div id="uc-src-body"></div>' +
       '</div>' +
+      // BLK-junior-20260909-0403: 手本になる図が 1 枚も無いところから始まる場面。
+      // ドライバのユースケース図は題材が替わっても骨格が同じなので、題材名 1 語で
+      // 下書きを作る (アクター・ユースケース・関連の 15 行を打ち直させない)。
+      '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' +
+          '白紙から: ドライバのひな形</label>' +
+        P.fieldHtml('題材名', 'uc-starter-subject', '', '例: GPIO / UART / CAN') +
+        '<div id="uc-starter-hint" style="font-size:10px;color:var(--text-secondary);margin:-4px 0 6px;line-height:1.5;"></div>' +
+        P.primaryButtonHtml('uc-starter-add', '＋ ひな形を作る') +
+        '<div style="font-size:10px;color:var(--text-secondary);margin-top:4px;line-height:1.5;">' +
+          '開発者・RTOS と、初期化 / ピンモード設定 / 読み取り / 書き込み / 割り込み設定 / 割り込み通知 の下書きです。' +
+          '要らない行はそのまま消して使えます</div>' +
+      '</div>' +
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;color:var(--text-secondary);font-size:11px;">' +
         'DSL エディタで行をクリックすると編集パネルが開きます (v0.5.0 で SVG クリック対応予定)' +
       '</div>';
     propsEl.innerHTML = html;
+
+    _bindStarter(parsedData, ctx);
 
     _renderSourceCandidates(parsedData, ctx);
 
