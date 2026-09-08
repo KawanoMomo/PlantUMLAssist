@@ -4,7 +4,9 @@
 // (前回提出からの差分) を人手で足していた作業を、1 画面 + 1 クリックにする。
 const fs = require('fs');
 const { test, expect } = require('@playwright/test');
-const { gotoApp } = require('../helpers');
+const { gotoApp, saveDirFor } = require('../helpers');
+
+const DIR = saveDirFor(__filename);
 
 const SEQ = [
   '@startuml', 'title ADC 初期化', 'participant App', 'participant Adc',
@@ -154,6 +156,61 @@ test.describe('BLK-primary-1703-wish 納品パッケージ', () => {
     expect(html).toContain('2. 前回提出からの差分');
     expect(html).toContain('3. 図面');
     expect(html).toContain('Adc_Seq');
+  });
+
+  // BLK-primary-20260909-0003-wish: 控えが localStorage にしか無かったので、
+  // 同じフォルダで何度出していても開き直すたびに「初回提出」に戻っていた。
+  // 保存フォルダに控えを置き、納品履歴と「前回提出から変わった図だけ」を出す。
+  test('納品履歴が保存フォルダに残り、開き直しても前回提出が基準になる', async ({ page }) => {
+    test.setTimeout(150 * 1000);
+    async function boot() {
+      await page.addInitScript((d) => {
+        try {
+          window.localStorage.clear();
+          window.localStorage.setItem('plantuml-autosave-config', JSON.stringify({
+            enabled: true, debounceMs: 200, restoreMode: 'auto', backend: 'file', fileDir: d,
+          }));
+        } catch (e) {}
+      }, DIR);
+      await gotoApp(page);
+    }
+    async function put(name, dsl) {
+      await page.evaluate(async (a) => {
+        await fetch('/autosave', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: a.name, dir: a.dir, dsl: a.dsl }),
+        });
+      }, { dir: DIR, name, dsl });
+    }
+
+    await boot();
+    await page.evaluate(async (d) => {
+      await fetch('/autosave?dir=' + encodeURIComponent(d), { method: 'DELETE' });
+    }, DIR);
+    await put('Adc_Seq', SEQ);
+    await put('Adc_State', ST);
+
+    await page.locator('#btn-tab-delivery').click();
+    await expect(page.locator('#dp-history')).toContainText('提出はまだ記録されていません');
+    await expect(page.locator('#dp-count')).toContainText('枚');
+    await page.locator('#dp-title').fill('GpioDrv 設計書');
+    const dl = page.waitForEvent('download', { timeout: 90000 });
+    await page.locator('#dp-build').click();
+    const file = await dl;
+    await expect(page.locator('#dp-history')).toContainText(file.suggestedFilename());
+
+    // 開き直す (localStorage は消える。フォルダの控えだけが残る)。
+    await boot();
+    // Adc_Seq だけをフォルダ側で直す。
+    await put('Adc_Seq', SEQ.replace('@enduml', ['App -> Adc : Start', '@enduml'].join('\n')));
+    await page.locator('#btn-tab-delivery').click();
+    await expect(page.locator('#dp-last')).toContainText('前回提出 1.0');
+    await expect(page.locator('#dp-history')).toContainText('前回 ');
+    await expect(page.locator('#dp-change-line')).not.toContainText('初回提出');
+    await expect(page.locator('#dp-change-line')).toContainText('変更 1 枚');
+    // 前回提出から変わった図だけに絞れる。
+    await page.locator('#dp-changed').click();
+    await expect(page.locator('#dp-count')).toContainText(/^1 \/ \d+ 枚$/);
   });
 
   test('Ctrl+K のコマンドパレットからも開ける', async ({ page }) => {

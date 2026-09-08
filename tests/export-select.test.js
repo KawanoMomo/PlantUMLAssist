@@ -143,7 +143,44 @@ describe('exportSelect.countText / rowLabel', () => {
 
 describe('exportSelect.counts', () => {
   test('全体・選択・変更・要修正の枚数', () => {
-    expect(ES.counts(ES.buildList(DOCS, DEPS))).toEqual({ total: 3, selected: 3, changed: 2, fix: 1 });
+    // sinceChanged は「前回書き出しから変わったか」(BLK-primary-20260909-0003-wish)。
+    // 基準を渡していないので 3 枚とも new = 前回書き出しから変わった扱いになる。
+    expect(ES.counts(ES.buildList(DOCS, DEPS)))
+      .toEqual({ total: 3, selected: 3, changed: 2, fix: 1, sinceChanged: 3 });
+  });
+});
+
+// BLK-primary-20260909-0003-wish: 「前回書き出しから変わった図のみ」の絞り込み。
+// save-diff の「前回保存から」とは基準が違う (出した後に保存し直しただけの図は残さない)。
+describe('exportSelect since (前回書き出しから)', () => {
+  var SINCE = {
+    statusOf: function() { return 'same'; },
+    sinceStatusOf: function(name) {
+      if (name === 'Gpio') return 'changed';
+      if (name === 'Can') return 'same';
+      return 'new';
+    },
+  };
+
+  test('前回書き出しから変わった図と、まだ出していない図だけが残る', () => {
+    var picked = ES.pickedByMode(ES.buildList(DOCS, SINCE), 'since');
+    expect(picked.map(function(p) { return p.name; })).toEqual(['Gpio', 'Spi']);
+  });
+
+  test('保存からの差 (changed) とは別の答えになる', () => {
+    var list = ES.buildList(DOCS, SINCE);
+    expect(ES.pickedByMode(list, 'changed').length).toBe(0);
+    expect(ES.pickedByMode(list, 'since').length).toBe(2);
+  });
+
+  test('基準を渡さなければ全部 new (出していないものを黙って落とさない)', () => {
+    var list = ES.buildList(DOCS, { statusOf: function() { return 'same'; } });
+    expect(ES.pickedByMode(list, 'since').length).toBe(3);
+  });
+
+  test('絞り込みの名前が保存ボタンの脇に出る', () => {
+    var list = ES.applyMode(ES.buildList(DOCS, SINCE), 'since');
+    expect(ES.countText(list, 'since')).toContain('前回書き出しから変わった図のみ');
   });
 });
 

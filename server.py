@@ -374,6 +374,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == '/file-roles':
             with _fs_lock:
                 return self._handle_file_roles_post()
+        if self.path == '/export-log':
+            with _fs_lock:
+                return self._handle_export_log_post()
         if self.path == '/verify-svg':
             with _fs_lock:
                 return self._handle_verify_svg_post()
@@ -532,6 +535,25 @@ class Handler(BaseHTTPRequestHandler):
         別の PC で開いても・audit.js から読んでも同じ答えになる。
         """
         return save_dir / '_roles.json'
+
+    def _export_log_path(self, save_dir):
+        """BLK-primary-20260909-0003-wish: 「いつ・どの版で何を客先に出したか」の控え。
+
+        図の隣に置く。ブラウザの localStorage に置いていたときは、開き直す・
+        別の端末で開くたびに控えが消え、同じフォルダで何度出しても毎回
+        「初回提出」になっていた。控えはフォルダの属性なので図に従う。
+        """
+        return save_dir / '_export-log.json'
+
+    def _read_export_log(self, save_dir):
+        p = self._export_log_path(save_dir)
+        if not p.exists():
+            return None
+        try:
+            data = json.loads(p.read_text(encoding='utf-8'))
+        except (ValueError, OSError):
+            return None
+        return data if isinstance(data, dict) else None
 
     def _read_file_roles(self, save_dir):
         p = self._roles_path(save_dir)
@@ -1201,6 +1223,38 @@ class Handler(BaseHTTPRequestHandler):
             return
         self._send_json(200, {'ok': True, 'roles': clean})
 
+    def _handle_export_log_post(self):
+        """保存フォルダの _export-log.json を丸ごと置き換える。
+
+        中身の形 (channels / entries) は GUI の職掌なのでここでは見ない。
+        オブジェクトであること・保存フォルダが実在することだけを確かめる。
+        """
+        length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(length).decode('utf-8')
+        try:
+            data = json.loads(body)
+        except ValueError:
+            self._send_json(400, {'error': 'invalid JSON'})
+            return
+        if not isinstance(data, dict):
+            self._send_json(400, {'error': 'body must be an object'})
+            return
+        log = data.get('log')
+        if not isinstance(log, dict):
+            self._send_json(400, {'error': 'log must be an object'})
+            return
+        save_dir = self._autosave_resolve_dir(data.get('dir'))
+        if not (save_dir.exists() and save_dir.is_dir()):
+            self._send_json(404, {'error': '保存フォルダがありません'})
+            return
+        try:
+            self._export_log_path(save_dir).write_text(
+                json.dumps(log, ensure_ascii=False, indent=1), encoding='utf-8')
+        except OSError as e:
+            self._send_json(500, {'error': f'write failed: {e}'})
+            return
+        self._send_json(200, {'ok': True, 'dir': str(save_dir)})
+
     # --- autosave GET --------------------------------------------------------
 
     def _handle_autosave_get(self):
@@ -1263,9 +1317,11 @@ class Handler(BaseHTTPRequestHandler):
         # BLK-reviewer-20260908-1103-wish: 中身まで突き合わせた控えも一覧と同時に返す。
         # 別呼び出しにすると「未確認 22 枚」の一覧が一瞬出て、確かめた図まで疑わせる。
         verified = self._read_svg_verify(save_dir) if exists else {}
+        export_log = self._read_export_log(save_dir) if exists else None
         self._send_json(200, {'files': files, 'entries': entries, 'meta': meta,
                               'dir': str(save_dir), 'exists': exists, 'roles': roles,
-                              'verified': verified, 'now': now, 'gone': gone})
+                              'verified': verified, 'now': now, 'gone': gone,
+                              'exportLog': export_log})
 
     def _autosave_entry(self, path):
         """1 図分の {name, mtime, size, hash, svgMtime}。読めない図でも名前だけは返す。
