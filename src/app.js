@@ -8153,8 +8153,10 @@ function _clearStateMap() {
   var listEl = document.getElementById('map-list');
   var sumEl = document.getElementById('map-summary');
   var warnEl = document.getElementById('map-warn');
+  var askedEl = document.getElementById('map-asked');
   if (listEl) { listEl.textContent = ''; listEl.hidden = true; }
   if (warnEl) { warnEl.textContent = ''; warnEl.hidden = true; }
+  if (askedEl) { askedEl.textContent = ''; askedEl.hidden = true; }
   if (sumEl) { sumEl.textContent = ''; sumEl.classList.remove('clean', 'dirty'); }
 }
 
@@ -8190,6 +8192,26 @@ function _mapRow(listEl, row) {
   // 参照図は読むだけなので、参照図だけの行は飛び先を持たない。
   if (row.mineLine != null) {
     el.addEventListener('click', function() { gotoOutlineLine(row.mineLine - 1); });
+  }
+  // 不一致の行は、機械では「どちらが後から足したか」まで決められない。
+  // 自分で決め切らずに先輩・reviewer へ 1 件の質問として預けて、次へ進む
+  // (BLK-junior-20260908-0923-wish)。
+  var mq = window.MA.mapQuestion;
+  if (mq && mq.askable(row)) {
+    var ask = document.createElement('button');
+    ask.type = 'button';
+    ask.className = 'map-ask';
+    var asked = mq.hasAsked(mmdText, row);
+    ask.textContent = mq.buttonLabel(mmdText, row);
+    ask.title = asked
+      ? 'この行はもう ' + mq.defaultTo().join(' / ') + ' に預けてあります'
+      : 'この行を ' + mq.defaultTo().join(' / ') + ' への質問 1 件にして図に残す (答えは待たない)';
+    ask.disabled = asked;
+    ask.addEventListener('click', function(e) {
+      e.stopPropagation();
+      askMapRow(row);
+    });
+    el.appendChild(ask);
   }
   // 参照図だけの行は「まだ自分の図に無い要素」なので、その場で足せる。
   if (row.match === 'ref-only') {
@@ -8305,6 +8327,39 @@ function _applyMapAdopt(row, picks) {
   if (window.MA.toast) window.MA.toast.show('自分の図に足しました: ' + out.added.join(' / '));
 }
 
+// 不一致の行 1 つを、先輩・reviewer 宛ての質問 1 件にして自分の図に残す
+// (BLK-junior-20260908-0923-wish)。図と一緒に保存フォルダへ渡るので、相手の
+// 「📮 指摘箱」に並ぶ。ここで答えを待たないのが要点なので、飛び先へは移動しない。
+function askMapRow(row) {
+  var mq = window.MA.mapQuestion;
+  if (!mq || !editorEl) return;
+  var out = mq.ask(mmdText, row, {
+    author: (typeof _inboxMe === 'function' && _inboxMe()) || 'junior',
+    at: new Date().toISOString().slice(0, 16),
+  });
+  if (!out) {
+    if (window.MA.toast) window.MA.toast.show('この行はもう預けてあります');
+    return;
+  }
+  _applyLineEditText(out.text);
+  renderPinBadge();
+  renderPinPanel();
+  // 「聞き済み」に変わった印を出すため対応表を描き直す (組み直しはしない)。
+  renderStateMap();
+  if (window.MA.toast) {
+    window.MA.toast.show(out.to.join(' / ') + ' に預けました: ' + out.question);
+  }
+}
+
+function renderMapAsked() {
+  var el = document.getElementById('map-asked');
+  var mq = window.MA.mapQuestion;
+  if (!el) return;
+  var text = mq ? mq.summary(mmdText) : '';
+  el.textContent = text;
+  el.hidden = (text === '');
+}
+
 function renderStateMap() {
   var listEl = document.getElementById('map-list');
   var sumEl = document.getElementById('map-summary');
@@ -8322,6 +8377,7 @@ function renderStateMap() {
   }).length;
   sumEl.classList.add(onlyCount === 0 ? 'clean' : 'dirty');
 
+  renderMapAsked();
   var warn = sm.abstractionWarning(_mapResult);
   if (warnEl) {
     warnEl.textContent = warn;
