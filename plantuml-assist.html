@@ -525,16 +525,16 @@ html, body {
 }
 #hn-banner button:hover { color: var(--text-primary); border-color: var(--accent); }
 /* 変更サマリボードの行に添える一言 */
-#cb-body .cb-note-row {
+.diff-board .cb-note-row {
   display: flex; align-items: center; gap: 6px;
   padding: 4px 10px; border-top: 1px solid var(--border);
   font-size: 11px;
 }
-#cb-body .cb-note-row input {
+.diff-board .cb-note-row input {
   flex: 1; background: var(--bg-primary); color: var(--text-primary);
   border: 1px solid var(--border); border-radius: 3px; padding: 2px 6px; font-size: 11px;
 }
-#cb-body .cb-note-row .cb-note-state { color: var(--accent); font-size: 10px; min-width: 84px; }
+.diff-board .cb-note-row .cb-note-state { color: var(--accent); font-size: 10px; min-width: 84px; }
 #folder-panel {
   display: none;
   position: absolute;
@@ -1513,7 +1513,7 @@ html, body {
 #expick-body label.expick-row .expick-mark.fix { color: var(--accent); }
 #expick-state { padding: 8px 14px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-secondary); min-height: 16px; }
 /* 変更サマリボード (BLK-primary-20260907-0923-wish) */
-#cb-modal-content {
+.board-modal {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -1523,7 +1523,7 @@ html, body {
   display: flex;
   flex-direction: column;
 }
-#cb-head {
+.board-head {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1532,10 +1532,10 @@ html, body {
   font-size: 12px;
   color: var(--text-primary);
 }
-#cb-summary { color: var(--accent); }
-#cb-tools { margin-left: auto; display: flex; align-items: center; gap: 12px; }
-#cb-tools label { display: flex; align-items: center; gap: 4px; color: var(--text-secondary); cursor: pointer; }
-#cb-tools button {
+#cb-summary, #ri-summary { color: var(--accent); }
+.board-tools { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.board-tools label { display: flex; align-items: center; gap: 4px; color: var(--text-secondary); cursor: pointer; }
+.board-tools button {
   border: 1px solid var(--border);
   background: var(--bg-tertiary);
   color: var(--text-primary);
@@ -1545,16 +1545,16 @@ html, body {
   padding: 3px 10px;
 }
 /* 会議メモの書き出し (BLK-primary-20260908-0923-wish) */
-#cb-tools button, #cb-tools label { white-space: nowrap; }
-#cb-summary { min-width: 0; }
-#cb-tools #cb-minutes { border-color: var(--accent); color: var(--accent); }
+.board-tools button, .board-tools label { white-space: nowrap; }
+#cb-summary, #ri-summary { min-width: 0; }
+.board-tools #cb-minutes { border-color: var(--accent); color: var(--accent); }
 #cb-minutes-state { color: var(--text-secondary); font-size: 11px; max-width: 320px; }
 /* 要修正のみの絞り込み (BLK-primary-20260908-1103-wish) */
 #cb-filter-state { color: var(--accent); font-size: 11px; white-space: nowrap; }
-#cb-body { flex: 1; overflow-y: auto; padding: 6px 14px 14px 14px; }
-#cb-body .cb-empty { color: var(--text-secondary); font-size: 12px; padding: 20px 4px; }
-#cb-body .cb-entry { margin: 12px 0 0 0; border: 1px solid var(--border); border-radius: 4px; }
-#cb-body .cb-entry-head {
+.diff-board { flex: 1; overflow-y: auto; padding: 6px 14px 14px 14px; }
+.diff-board .cb-empty { color: var(--text-secondary); font-size: 12px; padding: 20px 4px; }
+.diff-board .cb-entry { margin: 12px 0 0 0; border: 1px solid var(--border); border-radius: 4px; }
+.diff-board .cb-entry-head {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1564,8 +1564,8 @@ html, body {
   color: var(--text-primary);
   border-bottom: 1px solid var(--border);
 }
-#cb-body .cb-entry-head .cb-count { color: var(--accent); font-family: var(--font-mono); font-size: 11px; }
-#cb-body .cb-entry-head .cb-goto {
+.diff-board .cb-entry-head .cb-count { color: var(--accent); font-family: var(--font-mono); font-size: 11px; }
+.diff-board .cb-entry-head .cb-goto {
   margin-left: auto;
   border: 1px solid var(--border);
   background: var(--bg-secondary);
@@ -1575,29 +1575,29 @@ html, body {
   font-size: 11px;
   padding: 2px 8px;
 }
-#cb-body .cb-cols { display: flex; font-size: 11px; color: var(--text-secondary); }
-#cb-body .cb-cols > span { flex: 1; padding: 3px 10px; }
-#cb-body .cb-cols > span + span { border-left: 1px solid var(--border); }
-#cb-body table.cb-diff { width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: 11px; }
-#cb-body table.cb-diff td { padding: 1px 6px; vertical-align: top; white-space: pre-wrap; word-break: break-all; }
-#cb-body table.cb-diff td.cb-no { width: 34px; text-align: right; color: var(--text-secondary); user-select: none; }
-#cb-body table.cb-diff td.cb-before, #cb-body table.cb-diff td:last-child { width: 50%; }
-#cb-body table.cb-diff td.cb-after { border-left: 1px solid var(--border); }
-#cb-body table.cb-diff tr.cb-del td { background: rgba(220, 80, 80, 0.16); }
-#cb-body table.cb-diff tr.cb-add td { background: rgba(80, 180, 110, 0.16); }
-#cb-body table.cb-diff tr.cb-gap td { color: var(--text-secondary); text-align: center; padding: 2px 6px; }
+.diff-board .cb-cols { display: flex; font-size: 11px; color: var(--text-secondary); }
+.diff-board .cb-cols > span { flex: 1; padding: 3px 10px; }
+.diff-board .cb-cols > span + span { border-left: 1px solid var(--border); }
+.diff-board table.cb-diff { width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: 11px; }
+.diff-board table.cb-diff td { padding: 1px 6px; vertical-align: top; white-space: pre-wrap; word-break: break-all; }
+.diff-board table.cb-diff td.cb-no { width: 34px; text-align: right; color: var(--text-secondary); user-select: none; }
+.diff-board table.cb-diff td.cb-before, .diff-board table.cb-diff td:last-child { width: 50%; }
+.diff-board table.cb-diff td.cb-after { border-left: 1px solid var(--border); }
+.diff-board table.cb-diff tr.cb-del td { background: rgba(220, 80, 80, 0.16); }
+.diff-board table.cb-diff tr.cb-add td { background: rgba(80, 180, 110, 0.16); }
+.diff-board table.cb-diff tr.cb-gap td { color: var(--text-secondary); text-align: center; padding: 2px 6px; }
 /* 差分行のレビュー結果 (BLK-primary-20260908-0823-wish) */
-#cb-body table.cb-diff td.cb-verdict { width: 88px; white-space: nowrap; text-align: right; padding: 0 6px; }
-#cb-body table.cb-diff td.cb-verdict button {
+.diff-board table.cb-diff td.cb-verdict { width: 88px; white-space: nowrap; text-align: right; padding: 0 6px; }
+.diff-board table.cb-diff td.cb-verdict button {
   border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-secondary);
   border-radius: 3px; cursor: pointer; font-size: 10px; padding: 0 5px; margin-left: 3px;
 }
-#cb-body table.cb-diff td.cb-verdict button:hover { color: var(--text-primary); border-color: var(--accent); }
-#cb-body table.cb-diff td.cb-verdict button[aria-pressed="true"] {
+.diff-board table.cb-diff td.cb-verdict button:hover { color: var(--text-primary); border-color: var(--accent); }
+.diff-board table.cb-diff td.cb-verdict button[aria-pressed="true"] {
   color: var(--text-primary); border-color: var(--accent); background: var(--bg-tertiary); font-weight: bold;
 }
-#cb-body table.cb-diff tr[data-verdict="要修正"] td { background: rgba(220, 80, 80, 0.28); }
-#cb-body table.cb-diff tr[data-verdict="済"] td { opacity: 0.55; }
+.diff-board table.cb-diff tr[data-verdict="要修正"] td { background: rgba(220, 80, 80, 0.28); }
+.diff-board table.cb-diff tr[data-verdict="済"] td { opacity: 0.55; }
 #hn-banner.hn-fix { border-color: var(--accent-red); }
 #diff-panel .diff-actions button {
   border: 1px solid var(--border);
@@ -3820,6 +3820,9 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <div id="rename-signature"></div>
         <div id="rename-summary"></div>
         <div class="rename-actions">
+          <!-- BLK-primary-20260908-1303-wish: 適用する前に、当たった図の該当行が
+               どう変わるかを変更サマリボードと同じ見た目で並べて確かめる -->
+          <button id="btn-rename-preview" disabled title="この置換をヒットした図全部に当てたら、各図の該当行がどう変わるかを並べて見る (まだ置換はしません)">▤ 影響を見る</button>
           <button id="btn-rename-apply" disabled>置換</button>
           <button id="btn-rename-cancel">閉じる</button>
         </div>
@@ -4398,11 +4401,11 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   <div id="rd-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:720px;max-width:1080px;max-height:88vh;overflow-y:auto;"></div>
 </div>
 <div id="cb-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
-  <div id="cb-modal-content">
-    <div id="cb-head">
+  <div class="board-modal">
+    <div class="board-head">
       <strong>変更サマリボード</strong>
       <span id="cb-summary"></span>
-      <span id="cb-tools">
+      <span class="board-tools">
         <label><input type="checkbox" id="cb-full"> 全文</label>
         <label><input type="checkbox" id="cb-same"> 変更なしも出す</label>
         <label title="会議で [要修正] を付けた行だけを残す (新人に渡す分)"><input type="checkbox" id="cb-fixonly"> 要修正のみ</label>
@@ -4413,7 +4416,23 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button type="button" id="cb-close">閉じる</button>
       </span>
     </div>
-    <div id="cb-body"></div>
+    <div id="cb-body" class="diff-board"></div>
+  </div>
+</div>
+<!-- BLK-primary-20260908-1303-wish: ⇄ 一括置換の「▤ 影響を見る」。適用する前に、
+     ヒットした図の該当行が置換でどう変わるかを変更サマリボードと同じ見た目で並べる。 -->
+<div id="ri-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+  <div class="board-modal">
+    <div class="board-head">
+      <strong>置換の影響</strong>
+      <span id="ri-summary"></span>
+      <span class="board-tools">
+        <label title="ヒット行の前後だけでなく図の全文を出す"><input type="checkbox" id="ri-full"> 全文</label>
+        <button type="button" id="ri-apply">この内容で置換する</button>
+        <button type="button" id="ri-close">閉じる</button>
+      </span>
+    </div>
+    <div id="ri-body" class="diff-board"></div>
   </div>
 </div>
 <!-- BLK-primary-20260908-1203-wish: 提出用 zip に詰める図を選ぶ。

@@ -91,6 +91,44 @@ window.MA.bulkRename = (function() {
     return result;
   }
 
+  // BLK-primary-20260908-1303-wish: 適用する前に「当てたら各図の該当行がどう変わるか」を
+  // 並べて見る。ヒット件数 (N 件) だけでは想定外の行に当たっていても気付けず、
+  // 適用してから巻き戻すやり直しが要る。ここは置換後の DSL まで作って返すだけで、
+  // 行の突き合わせ (before/after) は changeBoard.diffRows に任せる。
+  // docs: [{ id, name, dsl, unopened? }] → 当たった図だけを before/after で返す。
+  function impact(docs, from, to) {
+    var out = { entries: [], total: 0, docs: 0, unopened: 0, valid: false };
+    var rep = String(to == null ? '' : to);
+    out.valid = !!from && isValidTarget(rep) && from !== rep;
+    (Array.isArray(docs) ? docs : []).forEach(function(d) {
+      if (!d) return;
+      var before = String(d.dsl == null ? '' : d.dsl);
+      var n = countIn(before, from);
+      if (n === 0) return;
+      out.entries.push({
+        id: d.id, name: d.name, count: n,
+        unopened: !!d.unopened,
+        before: before,
+        // 置換後が未入力・不正のときは「どこに当たっているか」だけ見せる
+        // (before と同じ行を並べても読めないので、後ろ側は置換前のまま)。
+        after: out.valid ? replaceIn(before, from, rep) : before,
+      });
+      out.total += n;
+      out.docs++;
+      if (d.unopened) out.unopened++;
+    });
+    return out;
+  }
+
+  // ボードの 1 行見出し。適用ボタンの文言 (N 件 / M 枚) と同じ数え方にする。
+  function impactText(res, from, to) {
+    if (!res || res.docs === 0) return '「' + String(from || '') + '」は見つかりません';
+    var head = res.total + ' 件 / ' + res.docs + ' 枚'
+      + (res.unopened > 0 ? ' (うち未オープン ' + res.unopened + ' 枚)' : '');
+    if (!res.valid) return head + ' に当たっています (置換後の名前を入れると変更後が出ます)';
+    return head + ' を「' + from + '」→「' + to + '」に置換します';
+  }
+
   // 図に出てくる識別子の候補を集める。置換前の語をプルダウンから選べるようにして
   // タイプ量そのものを減らすため。宣言行の名前を優先的に拾う。
   var DECL_RES = [
@@ -132,6 +170,8 @@ window.MA.bulkRename = (function() {
     preview: preview,
     totalCount: totalCount,
     apply: apply,
+    impact: impact,
+    impactText: impactText,
     identifiers: identifiers,
   };
 })();
