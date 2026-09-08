@@ -2260,6 +2260,7 @@ function init() {
   setupExportPick();
   setupHandoverBanner();
   setupAuditTimeline();
+  setupAuditBoard();
   setupVersionTimeline();
   setupPeekFolder();
   setupPinPanel();
@@ -2432,6 +2433,7 @@ function initCommandPalette() {
       { id: 'tab-apply', title: '複数クラスに一括適用 / Bulk apply', hint: 'Tabs', keywords: ['apply', 'bulk', 'いっかつ', 'てきよう'], button: 'btn-tab-apply', run: function() { clickById('btn-tab-apply'); } },
       { id: 'tab-peek', title: '他の保存フォルダを覗く / Peek folder', hint: 'Tabs', keywords: ['peek', 'folder', 'ほかの', 'ふぉるだ'], button: 'btn-tab-peek', run: function() { clickById('btn-tab-peek'); } },
       { id: 'tab-drivermap', title: '系統マップを開く / Driver map', hint: 'Tabs', keywords: ['driver', 'map', 'けいとう', 'まっぷ'], button: 'btn-tab-drivermap', run: function() { clickById('btn-tab-drivermap'); } },
+      { id: 'tab-cross', title: '突合ボード / Cross-check board', hint: 'Tabs', keywords: ['cross', 'board', 'audit', 'とつごう', 'ぼーど'], button: 'btn-tab-cross', run: function() { clickById('btn-tab-cross'); } },
       { id: 'tab-audit-timeline', title: '監査履歴を開く / Audit timeline', hint: 'Tabs', keywords: ['audit', 'timeline', 'かんさ', 'りれき'], button: 'btn-tab-audit-timeline', run: function() { clickById('btn-tab-audit-timeline'); } },
       { id: 'tab-review', title: '基準の図と突き合わせる / Review desk', hint: 'Tabs', keywords: ['review', 'desk', 'きじゅん', 'つきあわせ'], button: 'btn-tab-review', run: function() { clickById('btn-tab-review'); } },
       { id: 'tab-inbox', title: '図をまたぐ指摘箱 / Pin inbox', hint: 'Tabs', keywords: ['inbox', 'pin', 'してきばこ'], button: 'btn-tab-inbox', run: function() { clickById('btn-tab-inbox'); } },
@@ -3805,6 +3807,141 @@ function toggleAuditTimeline(open) {
   modal.style.display = open ? 'flex' : 'none';
 }
 
+// ── 突合ダッシュボード (BLK-reviewer-20260908-1403-wish) ────────────────────
+// 突合そのものは既にある (名前突合・整合・系統・トレース・SVG・手動指摘)。
+// ただし出口がモーダルごとに分かれているので、13 枚を 1 プロジェクトとして
+// 横断で見るには node で audit.js を叩き、その場のスクリプトで並べ直すしかない。
+// ここは全部を 1 つの表に集め、カテゴリと図名で絞り込み、行から図へ飛ぶ。
+// 並べ方と数え方は audit-board が持ち、ここは走査と画面だけ。
+
+var _abKind = '';        // 絞り込み中のカテゴリ (空 = 全部)
+var _abDoc = '';         // 絞り込み中の図名 (空 = 全部)
+var _abBoard = null;     // 直近に組んだ一覧 (コピーで作り直さない)
+var _abSvgScan = null;   // 📂 一覧が読んだ SVG の追いつき。開いていなければ null
+
+function _abBuild() {
+  var AB = window.MA.auditBoard;
+  if (!AB) return null;
+  var run = _atRunAudits();
+  var findings = null;
+  try { findings = _mfRows(); } catch (e) { findings = null; }
+  _abBoard = AB.build({ audits: run.audits, svg: _abSvgScan, findings: findings });
+  return _abBoard;
+}
+
+function renderAuditBoard() {
+  var body = document.getElementById('ab-body');
+  var sumEl = document.getElementById('ab-summary');
+  var AB = window.MA.auditBoard;
+  if (!body || !AB) return;
+  var esc = window.MA.htmlUtils.escHtml;
+  var b = _abBuild();
+  if (sumEl) sumEl.textContent = AB.summaryLine(b);
+
+  // 絞り込みの選択肢は、いま出ている一覧そのものから作る (空の箱を並べない)。
+  function fill(id, cur, items, allLabel) {
+    var sel = document.getElementById(id);
+    if (!sel) return;
+    var html = '<option value="">' + allLabel + '</option>';
+    items.forEach(function(it) {
+      html += '<option value="' + esc(it.key) + '"' + (it.key === cur ? ' selected' : '') + '>'
+        + esc(it.label) + ' (' + it.count + ')</option>';
+    });
+    sel.innerHTML = html;
+  }
+  fill('ab-kind', _abKind, b.byCategory, 'すべてのカテゴリ');
+  fill('ab-doc', _abDoc, b.byDoc, 'すべての図');
+
+  var rows = AB.filter(b, { kind: _abKind, doc: _abDoc });
+  if (rows.length === 0) {
+    body.innerHTML = '<div class="ab-empty">'
+      + (b.total === 0
+        ? '突合の指摘はありません。'
+          + (b.seen.length ? '（見た突合: ' + esc(b.seen.join('・')) + '）' : '')
+        : 'この絞り込みに当たる指摘はありません。')
+      + '</div>';
+    return;
+  }
+
+  var html = '<table class="ab-table"><thead><tr>'
+    + '<th>カテゴリ</th><th>図</th><th>対象</th><th>内容</th></tr></thead><tbody>';
+  rows.forEach(function(r) {
+    html += '<tr class="ab-row" data-ab-kind="' + esc(r.kind) + '" data-ab-doc="' + esc(r.doc) + '"'
+      + ' data-ab-line="' + r.line + '"' + (r.keep ? ' data-ab-keep="1"' : '') + '>'
+      + '<td class="ab-cat">' + esc(r.category) + '</td>'
+      + '<td class="ab-doc">' + esc(r.doc) + '</td>'
+      + '<td class="ab-title">' + esc(r.title) + '</td>'
+      + '<td class="ab-detail">' + esc(r.detail) + '</td></tr>';
+  });
+  html += '</tbody></table>';
+  body.innerHTML = html;
+
+  Array.prototype.forEach.call(body.querySelectorAll('.ab-row'), function(tr) {
+    tr.addEventListener('click', function() {
+      _abJump(tr.getAttribute('data-ab-doc'), Number(tr.getAttribute('data-ab-line')) || 1);
+    });
+  });
+}
+
+// 行からその図へ。開いていない図はここでは開けないので、そう言う
+// (黙って何も起きないと「押しても飛ばない画面」に見える)。
+function _abJump(name, line) {
+  var st = document.getElementById('ab-summary');
+  var AB = window.MA.auditBoard;
+  if (!window.MA.workspace || !name || (AB && name === AB.CROSS)) return;
+  var hit = null;
+  window.MA.workspace.list().forEach(function(d) { if (d.name === name) hit = d; });
+  if (!hit) {
+    if (st) st.textContent = name + ' は開いていません（📂 一覧から開くと飛べます）';
+    return;
+  }
+  jumpToDocLine(hit.id, line);
+  toggleAuditBoard(false);
+}
+
+function copyAuditBoard() {
+  var AB = window.MA.auditBoard;
+  var st = document.getElementById('ab-summary');
+  if (!AB) return null;
+  var b = _abBoard || _abBuild();
+  var text = AB.markdown(b, '突合ダッシュボード');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(function() {
+      if (st) st.textContent = '指摘.md 用にコピーしました (' + b.total + ' 件)';
+    }, function() {
+      if (st) st.textContent = 'コピーできません';
+    });
+  } else if (st) {
+    st.textContent = 'コピーできません';
+  }
+  return text;
+}
+
+function toggleAuditBoard(open) {
+  var modal = document.getElementById('ab-modal');
+  if (!modal) return;
+  if (open) renderAuditBoard();
+  modal.style.display = open ? 'flex' : 'none';
+}
+
+function setupAuditBoard() {
+  var btn = document.getElementById('btn-tab-cross');
+  var modal = document.getElementById('ab-modal');
+  if (!btn || !modal || !window.MA.auditBoard) return;
+  btn.addEventListener('click', function() { toggleAuditBoard(true); });
+  var close = document.getElementById('ab-close');
+  if (close) close.addEventListener('click', function() { toggleAuditBoard(false); });
+  var copy = document.getElementById('ab-copy');
+  if (copy) copy.addEventListener('click', function() { copyAuditBoard(); });
+  var kind = document.getElementById('ab-kind');
+  if (kind) kind.addEventListener('change', function() { _abKind = this.value; renderAuditBoard(); });
+  var doc = document.getElementById('ab-doc');
+  if (doc) doc.addEventListener('change', function() { _abDoc = this.value; renderAuditBoard(); });
+  modal.addEventListener('click', function(ev) {
+    if (ev.target === modal) toggleAuditBoard(false);
+  });
+}
+
 // ── 変遷履歴 (BLK-reviewer-20260908-0723-wish) ─────────────────────────────
 // save-diff は「前回保存した 1 点」しか持たないので、A → B → A と書き換えが
 // 往復しても毎回「変わりました」としか出ず、往復そのものが見えなかった。
@@ -4383,6 +4520,8 @@ function setupTabs() {
       // BLK-reviewer-20260908-1103-wish: 印の無い svg でも、上書きせずに描き直して
       // 比べた控えがあれば内容で言い切れる。server が一覧と一緒に返す。
       svgScan = SF ? SF.scan(entries, (res && res.verified) || {}) : null;
+      // 突合ダッシュボードの「出力物」はここで読んだ結果を使う (一覧を開くまでは見ていない)。
+      _abSvgScan = svgScan;
       svgStatus = SF ? SF.statusMap(svgScan) : {};
       // BLK-reviewer-20260908-1103: mtime とは別に、内容 (svg に刻んだ元 puml の sha1) での判定。
       svgContent = SF && SF.contentMap ? SF.contentMap(svgScan) : {};
