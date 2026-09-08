@@ -65,11 +65,15 @@ describe('server API の窓口が自分で仕様を返す (BLK-reviewer-20260909
   test('/verify-svg の 400 は必ず expected と example を添える (1 回目の失敗で形が分かる)', function() {
     var at = SERVER.indexOf('def _handle_verify_svg_post');
     var body = SERVER.slice(at, SERVER.indexOf('\n    def _handle_file_roles_post', at));
-    var bad = body.match(/_send_json\(400, [^)]*\)/g) || [];
-    expect(bad.length).toBeGreaterThan(0);
-    bad.forEach(function(call) {
-      expect(call).toContain('VERIFY_SVG_EXPECTED');
-    });
+    // 400 を返す箇所は複数行の dict で書かれるので、各 _send_json(400 の直後 400 字に
+    // expected が居ることで見る (「1 つでも素の 400 を返していない」ことの検査)。
+    var at = 0;
+    var found = 0;
+    while ((at = body.indexOf('_send_json(400', at + 1)) !== -1) {
+      found++;
+      expect(body.slice(at, at + 400)).toContain('VERIFY_SVG_EXPECTED');
+    }
+    expect(found).toBeGreaterThan(0);
     var exp = SERVER.slice(SERVER.indexOf('VERIFY_SVG_EXPECTED = {'));
     expect(exp).toContain("'doc': 'GET /verify-svg'");
     expect(exp).toContain("'example'");
