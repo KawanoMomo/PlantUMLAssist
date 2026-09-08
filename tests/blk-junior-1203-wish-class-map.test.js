@@ -20,6 +20,7 @@ if (!global.window) {
 
 [
   '../src/core/html-utils.js',
+  '../src/core/relation-roles.js',
   '../src/core/dsl-utils.js',
   '../src/core/regex-parts.js',
   '../src/core/id-normalizer.js',
