@@ -522,6 +522,10 @@ window.MA.modules.plantumlComponent = (function() {
   // BLK-junior-20260908-0203-wish: 定石の依存チェック。
   // 判断は core/component-deps.js に置き、ここは並べて選ばせるだけ。
   // 候補は「この図に無いもの」しか来ないので、押した数だけ図が埋まる。
+  // 候補の出所。実績 (usage) は自分の他の図、定石 (catalog) は一般論、
+  // 他の図 (peer) は別部品の実績。どれを信じて押すかが分かれるので必ず出す。
+  var SOURCE_TAG = { usage: '実際の呼び出し', catalog: '定石', peer: '他の図' };
+
   function _renderDepsCheck(parsedData, ctx) {
     var CD = window.MA.componentDeps;
     var P = window.MA.properties;
@@ -534,17 +538,22 @@ window.MA.modules.plantumlComponent = (function() {
     var docs = (ws && ws.list) ? ws.list() : [];
     var activeId = (ws && ws.getActiveId) ? ws.getActiveId() : null;
     var dsl = ctx.getMmdText();
-    var res = CD.check(dsl, docs, activeId);
+    // BLK-junior-20260909-0303-wish: 実績は「依存の起点」ごとに変わるので、
+    // 選び直したらチェックリストも引き直す。
+    var subjEl0 = document.getElementById('co-deps-subject');
+    var subject = (subjEl0 && subjEl0.value) || CD.defaultSubject(dsl);
+    var res = CD.check(dsl, docs, activeId, subject);
 
     sumEl.textContent = CD.summaryText(res);
     sumEl.setAttribute('data-missing', String(res.rows.length));
+    sumEl.setAttribute('data-usage-missing', String(res.usageMissing));
     sumEl.setAttribute('data-catalog-missing', String(res.catalogMissing));
     sumEl.setAttribute('data-peer-missing', String(res.peerMissing));
 
     if (!res.rows.length) { bodyEl.innerHTML = ''; return; }
 
-    var subjOpts = CD.subjects(dsl).map(function(s, i) {
-      return { value: s.id, label: s.label, selected: i === 0 };
+    var subjOpts = CD.subjects(dsl).map(function(s) {
+      return { value: s.id, label: s.label, selected: s.id === subject };
     });
     if (!subjOpts.length) {
       bodyEl.innerHTML = '<div id="co-deps-nosubject" style="font-size:10px;color:var(--text-secondary);">'
@@ -558,11 +567,11 @@ window.MA.modules.plantumlComponent = (function() {
         + '<input type="checkbox" class="co-dep-check" data-i="' + i + '" style="margin-top:2px;">'
         + '<span style="flex:1;">'
           + '<span style="font-size:12px;color:var(--text-primary);">' + esc(r.name) + '</span>'
-          + (r.source === 'catalog' ? ' <span style="font-size:10px;color:var(--accent);">' + esc(r.label) + '</span>' : '')
+          + (r.label ? ' <span style="font-size:10px;color:var(--accent);">' + esc(r.label) + '</span>' : '')
           + '<span style="display:block;font-size:10px;color:var(--text-secondary);line-height:1.4;">' + esc(r.why) + '</span>'
         + '</span>'
         + '<span style="font-size:9px;color:var(--text-secondary);white-space:nowrap;">'
-          + (r.source === 'catalog' ? '定石' : '他の図') + '</span>'
+          + esc(SOURCE_TAG[r.source] || r.source) + '</span>'
       + '</label>';
     }).join('');
 
@@ -571,6 +580,12 @@ window.MA.modules.plantumlComponent = (function() {
       '<div id="co-deps-list" style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:3px;padding:4px;margin-top:6px;">'
         + rows + '</div>' +
       P.primaryButtonHtml('co-deps-add', '+ 選んだ依存を追加');
+
+    // 起点を替えたら実績も替わる。押す前に候補が起点に追随しないと、
+    // 他の部品の呼び出しを自分の依存として足してしまう。
+    P.bindEvent('co-deps-subject', 'change', function() {
+      _renderDepsCheck(parsedData, ctx);
+    });
 
     P.bindEvent('co-deps-add', 'click', function() {
       var picks = [];
@@ -664,7 +679,7 @@ window.MA.modules.plantumlComponent = (function() {
       // BLK-junior-20260908-0203-wish: ドライバの図で「定石の依存先のうち今の図に
       // 無いもの」を出す。先輩の他部品の図を 1 枚ずつ開いて見比べる代わり。
       '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">定石の依存チェック</label>' +
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">依存チェック</label>' +
         '<div id="co-deps-summary" style="font-size:10px;color:var(--text-secondary);margin-bottom:6px;line-height:1.5;"></div>' +
         '<div id="co-deps-body"></div>' +
       '</div>';
