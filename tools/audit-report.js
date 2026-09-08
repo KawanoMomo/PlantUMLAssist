@@ -76,7 +76,30 @@ const AUDITS = {
   // family は両方向の食い違いを出すので、「シーケンスに書き漏らした遷移」は
   // その中から目視で拾うしかなかった。
   trace: (MA, docs) => (MA.traceCoverage ? MA.traceCoverage.audit(docs) : undefined),
+  // BLK-reviewer-20260908-0823-wish: ここまでの監査は DSL の中しか見ていないので、
+  // 「.puml はあるが .svg が書き出されていない」は 1 枚も検知できなかった。
+  // timer_state.puml だけ SVG が無いことに気付いたのは 17 枚の目視突合の産物で、
+  // 仕組みとしては存在しなかった。出力物の有無は DSL ではなくフォルダに書いてある。
+  svg: (MA, docs) => (MA.svgFreshness ? MA.svgFreshness.scan(svgEntries(docs)) : undefined),
 };
+
+// .puml の隣に置かれた同名の .svg を見て、svg-freshness が読む形の行にする。
+// 判定 (無い / 古い / 追いついている) は GUI と同じモジュールに任せる。
+// path を持たない docs (テストが手で組んだもの) は unknown ではなく対象外にする
+// — 「ファイルとして存在しない図」に出力漏れを問うても直しようがない。
+function svgEntries(docs) {
+  const out = [];
+  for (const d of (Array.isArray(docs) ? docs : [])) {
+    if (!d || !d.path) continue;
+    const svgPath = d.path.replace(/\.[^.\\/]+$/, '') + '.svg';
+    let mtime = null;
+    let svgMtime = null;
+    try { mtime = fs.statSync(d.path).mtime.toISOString(); } catch (e) { mtime = null; }
+    try { svgMtime = fs.statSync(svgPath).mtime.toISOString(); } catch (e) { svgMtime = null; }
+    out.push({ name: d.name, mtime: mtime, svgMtime: svgMtime });
+  }
+  return out;
+}
 
 function auditNames() { return Object.keys(AUDITS); }
 
@@ -134,6 +157,18 @@ function summarize(audits) {
       outOfScope: t.result.reduce((n, g) => n + (g.outOfScope || []).length, 0),
     };
   }
+  const sv = audits.svg;
+  if (sv && sv.status === 'ok') {
+    s.svg = {
+      files: sv.result.rows.length,
+      missing: sv.result.counts.missing,
+      stale: sv.result.counts.stale,
+      unknown: sv.result.counts.unknown,
+      // 名前まで出す。件数だけだと「どの図か」を探すのに結局 ls の突合に戻る。
+      missingNames: sv.result.rows.filter((r) => r.status === 'missing').map((r) => r.name),
+      staleNames: sv.result.rows.filter((r) => r.status === 'stale').map((r) => r.name),
+    };
+  }
   return s;
 }
 
@@ -181,6 +216,19 @@ function formatSummary(report, prev, options) {
     const un = parts.length ? ` (${parts.join(' / ')})` : '';
     const pa = s.trace.partial ? ` / 部分一致 ${s.trace.partial} 件` : '';
     lines.push(`トレース: 遷移 ${s.trace.transitions} 件中 ${s.trace.missing} 件がどのシーケンスにも現れない${pa}${un}`);
+  }
+  if (s.svg) {
+    // 出力物は DSL の指摘ではないので合計には足さない。「図は直っているが
+    // 書き出していない」は別の直し方 (作り直す) をするため、行を分けて出す。
+    if (s.svg.missing === 0 && s.svg.stale === 0 && s.svg.unknown === 0) {
+      lines.push(`出力物: SVG は ${s.svg.files} 枚とも puml に追いついている`);
+    } else {
+      const parts = [];
+      if (s.svg.missing) parts.push(`SVG が無い ${s.svg.missing} 枚 (${s.svg.missingNames.join(', ')})`);
+      if (s.svg.stale) parts.push(`SVG が古い ${s.svg.stale} 枚 (${s.svg.staleNames.join(', ')})`);
+      if (s.svg.unknown) parts.push(`時刻が取れず不明 ${s.svg.unknown} 枚`);
+      lines.push(`出力物: ${parts.join(' / ')}`);
+    }
   }
   for (const k of Object.keys(report.audits)) {
     const a = report.audits[k];
