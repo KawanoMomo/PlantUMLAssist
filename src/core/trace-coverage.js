@@ -82,21 +82,37 @@ window.MA.traceCoverage = (function() {
   // 「現れている」と言い切らないための下限。
   var PARTIAL_MIN = 5;
 
+  // 突き合わせた相手のメッセージ名も返す (BLK-primary-20260908-1603-wish)。
+  // 図の名前だけだと「対応するメッセージ名に直す」ときに、どの名前に
+  // 合わせればよいかがこの表からは読めない。
   function _match(keys, seqKeys) {
     var exact = [];
     var partial = [];
+    var exactHits = [];
+    var partialHits = [];
+    function hit(list, entry) {
+      for (var i = 0; i < list.length; i++) {
+        if (list[i].name === entry.label && list[i].doc === entry.doc) return;
+      }
+      list.push({ name: entry.label, doc: entry.doc });
+    }
     keys.forEach(function(k) {
       seqKeys.forEach(function(entry) {
-        if (entry.key === k) { if (exact.indexOf(entry.doc) < 0) exact.push(entry.doc); return; }
+        if (entry.key === k) {
+          if (exact.indexOf(entry.doc) < 0) exact.push(entry.doc);
+          hit(exactHits, entry);
+          return;
+        }
         if (k.length < PARTIAL_MIN && entry.key.length < PARTIAL_MIN) return;
         if (entry.key.indexOf(k) >= 0 || k.indexOf(entry.key) >= 0) {
           if (partial.indexOf(entry.doc) < 0) partial.push(entry.doc);
+          hit(partialHits, entry);
         }
       });
     });
-    if (exact.length) return { status: 'covered', seenIn: exact };
-    if (partial.length) return { status: 'partial', seenIn: partial };
-    return { status: 'missing', seenIn: [] };
+    if (exact.length) return { status: 'covered', seenIn: exact, matched: exactHits };
+    if (partial.length) return { status: 'partial', seenIn: partial, matched: partialHits };
+    return { status: 'missing', seenIn: [], matched: [] };
   }
 
   // 状態遷移図 1 枚に対して「突き合わせてよいシーケンス図」を決める。
@@ -117,7 +133,9 @@ window.MA.traceCoverage = (function() {
     var need = fa.CROSS_KIND_JACCARD;
     var seqKeysOf = {};
     seqDocs.forEach(function(d) {
-      seqKeysOf[d.name] = fa.actionsOf(d.dsl).map(function(a) { return { key: a.key, doc: d.name }; });
+      seqKeysOf[d.name] = fa.actionsOf(d.dsl).map(function(a) {
+        return { key: a.key, label: a.label, doc: d.name };
+      });
     });
 
     var partners = {};
@@ -165,7 +183,9 @@ window.MA.traceCoverage = (function() {
 
     var seqKeys = [];
     seqDocs.forEach(function(d) {
-      fa.actionsOf(d.dsl).forEach(function(a) { seqKeys.push({ key: a.key, doc: d.name }); });
+      fa.actionsOf(d.dsl).forEach(function(a) {
+        seqKeys.push({ key: a.key, label: a.label, doc: d.name });
+      });
     });
 
     // 担当範囲の宣言 (`' @covers A -> B`)。系統のシーケンス図が 1 枚でも
@@ -211,6 +231,7 @@ window.MA.traceCoverage = (function() {
           base.status = 'out-of-scope';
           base.reason = 'declared';
           base.seenIn = [];
+          base.matched = [];
           outOfScope.push(base);
           return;
         }
@@ -218,14 +239,27 @@ window.MA.traceCoverage = (function() {
           base.status = 'out-of-scope';
           base.reason = 'grain';
           base.seenIn = [];
+          base.matched = [];
           outOfScope.push(base);
           return;
         }
-        var m = partners.length ? _match(t.keys, keys) : { status: 'unknown', seenIn: [] };
+        var m = partners.length ? _match(t.keys, keys) : { status: 'unknown', seenIn: [], matched: [] };
         base.status = m.status;
         base.seenIn = m.seenIn;
+        // 実際に対応したシーケンスのメッセージ名 ({name, doc})。
+        base.matched = m.matched || [];
         rows.push(base);
       });
+    });
+
+    // 系統のシーケンス図に実在するメッセージ名。架空のラベルを実在名に
+    // 直すとき、この一覧が候補の出どころになる。
+    var messages = [];
+    seqKeys.forEach(function(e) {
+      for (var i = 0; i < messages.length; i++) {
+        if (messages[i].key === e.key && messages[i].doc === e.doc) return;
+      }
+      messages.push({ name: e.label, key: e.key, doc: e.doc });
     });
 
     var missing = rows.filter(function(r) { return r.status === 'missing'; });
@@ -235,6 +269,7 @@ window.MA.traceCoverage = (function() {
       stateDocs: stateDocs.map(function(d) { return { id: d.id, name: d.name }; }),
       seqDocs: seqDocs.map(function(d) { return { id: d.id, name: d.name }; }),
       rows: rows,
+      messages: messages,
       missing: missing,
       partial: rows.filter(function(r) { return r.status === 'partial'; }),
       // 宣言によって対象外になった遷移。0 件にはできないが、黙って消すと

@@ -2702,9 +2702,11 @@ html, body {
   white-space: nowrap;
 }
 #btn-tc-run:hover { background: var(--bg-tertiary); }
-#tc-summary { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#tc-summary.clean { color: var(--accent-green); }
-#tc-summary.dirty { color: var(--accent-orange); }
+/* 系統ぜんぶと比べる の見出し。トレースカバレッジのモーダルにも見出しがあるので
+   id は分けてある (同じ id が 2 つあると、どちらを見ているか誰にも分からない) */
+#tcoh-summary { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#tcoh-summary.clean { color: var(--accent-green); }
+#tcoh-summary.dirty { color: var(--accent-orange); }
 #tc-verdict {
   padding: 4px 8px;
   font-size: 11px;
@@ -4308,7 +4310,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <div id="tc-bar">
         <button type="button" id="btn-tc-run"
                 title="開いている図を全部まとめて突き合わせ、1 枚にだけある行 (取り込み候補) を出す">🧩 系統ぜんぶと比べる</button>
-        <span id="tc-summary"></span>
+        <span id="tcoh-summary"></span>
       </div>
       <div id="tc-verdict" hidden></div>
       <div id="tc-note" hidden></div>
@@ -4634,6 +4636,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/scope-decl.js"></script>
 <script src="src/core/trace-coverage.js"></script>
 <script src="src/core/transition-density.js"></script>
+<script src="src/core/trace-label-table.js"></script>
 <script src="src/core/consistency.js"></script>
 <script src="src/core/event-sync.js"></script>
 <script src="src/core/line-edit.js"></script>

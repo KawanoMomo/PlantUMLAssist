@@ -9106,7 +9106,7 @@ function _clearTemplateCohort() {
   var listEl = document.getElementById('tc-list');
   var noteEl = document.getElementById('tc-note');
   var vEl = document.getElementById('tc-verdict');
-  var sumEl = document.getElementById('tc-summary');
+  var sumEl = document.getElementById('tcoh-summary');
   if (listEl) { listEl.textContent = ''; listEl.hidden = true; }
   if (noteEl) { noteEl.textContent = ''; noteEl.hidden = true; }
   if (vEl) { vEl.textContent = ''; vEl.hidden = true; }
@@ -9129,7 +9129,7 @@ function _cohortDocs() {
 
 function runTemplateCohort() {
   var tc = window.MA.templateCohort;
-  var sumEl = document.getElementById('tc-summary');
+  var sumEl = document.getElementById('tcoh-summary');
   var listEl = document.getElementById('tc-list');
   var noteEl = document.getElementById('tc-note');
   var vEl = document.getElementById('tc-verdict');
@@ -9582,6 +9582,8 @@ function setupOutline() {
 
 var _familyAuditDocs = [];   // 表の行から図へ飛ぶための、表示中の系統の図一覧
 var _familyDensity = null;   // BLK-primary-20260908-1403-wish: 系統ごとの遷移密度
+var _familyTrace = [];       // BLK-primary-20260908-1603-wish: 系統ごとのトレース突合
+var _familyLabelRows = [];   // 上の表の行 → 図の行へ飛ぶための控え
 
 // 遷移密度の表。系統ごとに「1 メッセージ何遷移か」を並べ、他系統の中央値から
 // 外れた系統を上に置く。レビュー指摘の粒度差は、これまで指摘の文章を読んでから
@@ -9613,6 +9615,56 @@ function _densityTableHtml(result, SECTION, CELL) {
       + '<td style="' + CELL + '">' + r.messages + '</td>'
       + '<td class="fd-density" style="' + CELL + mark + '">' + esc(td.densityText(r)) + '</td>'
       + '<td style="' + CELL + 'color:var(--text-secondary);">' + esc(r.reason || '') + '</td>'
+      + '</tr>';
+  });
+  return html + '</table>';
+}
+
+// ラベル突合表。系統の状態遷移のラベルを「対応するシーケンスのメッセージ名」と
+// 並べ、対応が無い行を先頭に置く。遷移密度が件数しか見ないので、件数は揃って
+// いるのにラベルだけが架空 (Dma_Configure) という食い違いはここでしか出ない。
+// 対応が無い行には、その系統に実在するメッセージ名の候補を添える。
+function _labelTableHtml(key, SECTION, CELL) {
+  var TT = window.MA.traceLabelTable;
+  var esc = window.MA.htmlUtils.escHtml;
+  _familyLabelRows = [];
+  if (!TT) return '';
+  var fam = null;
+  for (var i = 0; i < _familyTrace.length; i++) {
+    if (_familyTrace[i].key === key) fam = _familyTrace[i];
+  }
+  var html = '<div style="' + SECTION + '">'
+    + '遷移ラベル × シーケンスのメッセージ (対応が無い行が上)</div>';
+  if (!fam) {
+    return html + '<div id="fl-empty" style="font-size:11px;color:var(--text-secondary);">'
+      + 'この系統に状態遷移図がありません。</div>';
+  }
+  var t = TT.build(fam);
+  _familyLabelRows = t.rows;
+  html += '<div id="fl-summary" data-missing="' + t.counts.missing + '" '
+    + 'data-rows="' + t.rows.length + '" '
+    + 'style="font-size:11px;color:' + (t.counts.missing ? 'var(--accent-orange)' : 'var(--accent-green)') + ';">'
+    + esc(TT.summaryLine(t)) + '</div>';
+  if (!t.rows.length) return html;
+  html += '<table id="fl-table" style="border-collapse:collapse;width:100%;margin-top:4px;">'
+    + '<tr>'
+    + ['遷移', 'ラベル', '対応するメッセージ', ''].map(function(h) {
+        return '<th style="' + CELL + 'text-align:left;color:var(--text-secondary);font-weight:normal;">'
+          + esc(h) + '</th>';
+      }).join('') + '</tr>';
+  t.rows.forEach(function(r, ri) {
+    var bad = r.status === 'missing';
+    html += '<tr class="fl-row' + (bad ? ' fl-missing' : '') + '" data-row-index="' + ri + '"'
+      + ' data-status="' + esc(r.status) + '" data-label="' + esc(r.label) + '"'
+      + ' style="cursor:pointer;' + (bad ? 'background:rgba(255,140,0,0.10);' : '') + '">'
+      + '<td style="' + CELL + 'font-family:var(--font-mono);color:var(--text-secondary);">'
+        + esc(r.from) + ' → ' + esc(r.to) + '</td>'
+      + '<td class="fl-label" style="' + CELL + 'font-family:var(--font-mono);'
+        + (bad ? 'color:var(--accent-orange);font-weight:bold;' : '') + '">' + esc(r.label) + '</td>'
+      + '<td class="fl-match" style="' + CELL
+        + (bad ? 'color:var(--accent-orange);' : 'color:var(--text-secondary);') + '">'
+        + esc(TT.matchText(r)) + '</td>'
+      + '<td style="' + CELL + 'color:var(--text-secondary);">' + esc(r.statusLabel) + '</td>'
       + '</tr>';
   });
   return html + '</table>';
@@ -9661,6 +9713,8 @@ function _familyAuditRender(families, selectedKey) {
     + 'data-docs="' + sel.docs.length + '" data-comparable="' + (sel.comparable ? '1' : '0') + '" '
     + 'style="font-size:11px;color:' + (sel.mismatches.length ? 'var(--accent-orange)' : 'var(--accent-green)') + ';">'
     + esc(fa.summaryLine(sel)) + '</div>';
+
+  html += _labelTableHtml(sel.key, SECTION, CELL);
 
   html += '<div style="' + SECTION + '">動作名 × 図 (● がある方にだけ名前がある行が食い違い)</div>'
     + '<table id="fa-matrix" style="border-collapse:collapse;width:100%;">'
@@ -9730,6 +9784,20 @@ function _familyAuditBind(families) {
     });
   }
 
+  // ラベル突合表の行 → その遷移が書かれている状態遷移図の、その行へ。
+  var lRows = content.querySelectorAll('.fl-row');
+  for (var m = 0; m < lRows.length; m++) {
+    lRows[m].addEventListener('click', function(ev) {
+      var r = _familyLabelRows[Number(ev.currentTarget.getAttribute('data-row-index'))];
+      if (!r || !r.docId || !window.MA.workspace) return;
+      close();
+      saveActiveDoc();
+      window.MA.workspace.setActive(r.docId);
+      applyActiveDoc();
+      _traceScrollToLine(r.line);
+    });
+  }
+
   var famSel = document.getElementById('fa-family');
   if (famSel) famSel.addEventListener('change', function() {
     _familyAuditRender(families, this.value);
@@ -9763,6 +9831,8 @@ function openFamilyAudit() {
   });
   var families = fa.audit(docs);
   _familyDensity = window.MA.transitionDensity ? window.MA.transitionDensity.rank(docs) : null;
+  // ラベル突合はトレースカバレッジと同じ突合を使う (同じ食い違いを 2 通りに数えない)。
+  _familyTrace = window.MA.traceCoverage ? window.MA.traceCoverage.audit(docs) : [];
   // 外れた系統があるなら、開いた時点でその系統を出す (指摘の相手を探す手間を消す)。
   var firstKey = families.length ? families[0].key : null;
   if (_familyDensity && _familyDensity.outliers.length) {
