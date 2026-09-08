@@ -40,7 +40,7 @@ window.MA.reuseModal = (function() {
       (items.length === 0
         ? '<div id="reuse-empty" style="font-size:12px;color:var(--text-secondary);">同じ図種の他の図がまだありません</div>'
         : '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:6px;">選んだ行が入力欄に入ります (打ち直し不要)</div>' +
-          '<input id="reuse-filter" type="text" placeholder="絞り込む" style="width:100%;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-size:12px;margin-bottom:6px;">' +
+          '<input id="reuse-filter" type="text" placeholder="絞り込む (図名・部品名でも)" style="width:100%;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-size:12px;margin-bottom:6px;">' +
           '<div style="margin-bottom:6px;"><button id="reuse-all" style="font-size:11px;padding:2px 8px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">表示中を全部選ぶ</button></div>' +
           '<div id="reuse-list" style="max-height:320px;overflow-y:auto;border:1px solid var(--border);border-radius:3px;padding:4px;">' + rows + '</div>') +
       '<div style="display:flex;gap:8px;margin-top:12px;">' +
@@ -60,7 +60,11 @@ window.MA.reuseModal = (function() {
         var q = (filter.value || '').trim().toLowerCase();
         Array.prototype.forEach.call(content.querySelectorAll('.reuse-row'), function(row) {
           var i = parseInt(row.querySelector('.reuse-check').getAttribute('data-i'), 10);
-          var hit = !q || items[i].text.toLowerCase().indexOf(q) >= 0;
+          // 出処 (図名 → 部品名) でも絞れる。シーケンス図から起こすときは
+          // 「その部品が送る列だけ」に絞って全部選ぶのが 1 手なので、
+          // 本文だけの絞り込みでは足りない (BLK-junior-20260909-0203-wish)。
+          var hay = (items[i].text + ' ' + (items[i].from || '')).toLowerCase();
+          var hit = !q || hay.indexOf(q) >= 0;
           row.hidden = !hit;
           if (!hit) row.querySelector('.reuse-check').checked = false;
         });

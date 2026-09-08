@@ -68,6 +68,33 @@ window.MA.reusePicker = (function() {
         out.push({ text: text, kind: kind, from: _s(d.name) });
       });
     });
+    crossKind(docs, diagramType, exceptId).forEach(function(it) {
+      if (seen[it.text]) return;
+      seen[it.text] = true;
+      out.push(it);
+    });
+    return out;
+  }
+
+  // BLK-junior-20260909-0203-wish: 同じ図種の行だけでは、シーケンス図に書いてある
+  // 処理順をアクティビティ図に持ち込めない。図種をまたいでそのまま Action に
+  // なるものは、シーケンス図の「1 つの部品が送るメッセージ列」だけなので、
+  // 出処 (図名 → 部品名) を付けてここで足す。順序が意味を持つので並べ替えない。
+  function crossKind(docs, diagramType, exceptId) {
+    if (diagramType !== 'plantuml-activity') return [];
+    var s2a = window.MA && window.MA.seqToActivity;
+    if (!s2a) return [];
+    var out = [];
+    s2a.candidates(docs, exceptId).forEach(function(c) {
+      c.labels.forEach(function(label, i) {
+        out.push({
+          text: label, kind: 'action',
+          from: c.docName + ' → ' + c.participant,
+          group: c.docName + '/' + c.participant,
+          seq: i,
+        });
+      });
+    });
     return out;
   }
 
@@ -94,6 +121,7 @@ window.MA.reusePicker = (function() {
   }
 
   return {
+    crossKind: crossKind,
     kindOfLine: kindOfLine,
     lineFor: lineFor,
     collect: collect,

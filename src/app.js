@@ -75,6 +75,41 @@ function openExistingFile(spec) {
   return doc;
 }
 
+// BLK-junior-20260909-0203-wish: シーケンス図に書いてある処理順を、
+// アクティビティ図側で打ち直さずにたたき台として起こす。対象は「いちばん多く
+// メッセージを送っている部品」で、それがその図の主役だから (選ばせない)。
+// 起こしたものはたたき台なので、別タブで開いて元の図はそのままにする。
+function makeActivityFromSequence() {
+  var S2A = window.MA.seqToActivity;
+  var WS = window.MA.workspace;
+  if (!S2A || !WS) return null;
+  saveActiveDoc();
+  var doc = WS.getActive();
+  var dsl = doc ? doc.dsl : '';
+  if (!doc || doc.diagramType !== 'plantuml-sequence') {
+    if (window.MA.toast) window.MA.toast.show('シーケンス図を開いてから使ってください');
+    return null;
+  }
+  var who = S2A.mainParticipant(dsl);
+  var labels = S2A.actions(dsl, who);
+  if (!labels.length) {
+    if (window.MA.toast) window.MA.toast.show('この図には取り込めるメッセージがありません');
+    return null;
+  }
+  var name = WS.sanitizeName(S2A.draftName(doc.name, who));
+  openExistingFile({
+    name: name,
+    dsl: S2A.draft(dsl, who, name),
+    diagramType: 'plantuml-activity',
+  });
+  applyActiveDoc();
+  if (window.MA.toast) {
+    window.MA.toast.show(doc.name + ' の ' + who + ' が送る ' + labels.length
+      + ' 件を Action にした下書きを別タブで開きました');
+  }
+  return name;
+}
+
 function markOpenedSource(doc) {
   if (!doc || !window.MA.sourceLock) return;
   try { window.MA.sourceLock.mark(doc.id, doc.name); } catch (e) {}
@@ -2555,6 +2590,7 @@ function initCommandPalette() {
       // BLK-primary-20260908-0923-design (7b): タブ列から「ツール ▾」も消えるので、
       // 6 分類のメニュー自体を引く経路をここに置く (メニューは画面左上に開く)。
       { id: 'tab-tools', title: 'ツールを分類から選ぶ / Tools', hint: 'Tabs', keywords: ['tool', 'menu', 'つーる', 'どうぐ', 'ぶんるい', 'めにゅー'], run: function() { setTimeout(function() { clickById('btn-tab-tools'); }, 0); } },
+      { id: 'seq-to-activity', title: 'シーケンス図からアクティビティ図を起こす / Sequence to activity', hint: 'Tabs', keywords: ['activity', 'sequence', 'draft', 'あくてぃびてぃ', 'しーけんす', 'おこす', 'したがき'], run: function() { makeActivityFromSequence(); } },
       { id: 'tab-new', title: '新しい図を開く / New diagram', hint: 'Tabs', keywords: ['new', 'tab', 'あたらしい', 'ず'], button: 'btn-tab-new', run: function() { clickById('btn-tab-new'); } },
       { id: 'tab-folder', title: '保存フォルダの図を一覧 / Folder', hint: 'Tabs', keywords: ['folder', 'list', 'いちらん', 'ふぉるだ'], button: 'btn-tab-folder', run: function() { clickById('btn-tab-folder'); } },
       { id: 'vault', title: '提出物庫を開く / Deliverable vault', hint: 'Tabs', keywords: ['vault', 'export', 'ていしゅつ', 'こ', 'かこ', 'ぜんかい'], run: function() { toggleVault(true); } },
