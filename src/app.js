@@ -4735,6 +4735,10 @@ function setupTabs() {
   // BLK-junior-20260907-2009-wish: 一時控えの印が付いた図名。畳んでいる間は
   // folderNames に入れない (「全部選ぶ」や「変更図だけ選ぶ」が控えを掴まない)。
   var draftNames = [];
+  // BLK-primary-20260908-1703: 「揃っているべき一式」として登録した図名と、
+  // 今の一覧との突合結果。手順 1 の「14 枚あるか」を目で数えずに済ませる。
+  var targetNames = [];
+  var targetScan = null;
   // BLK-reviewer-20260908-0103: 図名 → SVG が puml に追いついているか。
   // `ls -l` で puml と svg を 1 枚ずつ突き合わせる代わりに、一覧が答える。
   var svgStatus = {};
@@ -4960,12 +4964,19 @@ function setupTabs() {
       draftNames = DM ? DM.keepExisting(DM.load(store, dir), entries) : [];
       if (DM) DM.save(store, dir, draftNames);
 
+      // 対象 set は「今そこにあるもの」ではなく利用者が決めた期待値なので、
+      // 消えた図の名前を落とさない (落とすと「足りない」が言えなくなる)。
+      var TS = window.MA.targetSet;
+      targetNames = TS ? TS.load(store, dir) : [];
+      targetScan = TS ? TS.reconcile(targetNames, entries) : null;
+
       if (!RW) {
         var plain = DM ? DM.split(entries, draftNames) : { items: entries, drafts: [] };
         setFolderNames(plain);
         folderStatus = {};
         panel.appendChild(folderFilterBar());
         panel.appendChild(folderPickBar());
+        appendTargetSection(panel, dir);
         appendReviewSection(panel);
         appendRoleSection(panel, dir);
         appendSvgSection(panel, dir);
@@ -4991,6 +5002,7 @@ function setupTabs() {
       panel.appendChild(head);
       panel.appendChild(folderFilterBar());
       panel.appendChild(folderPickBar());
+      appendTargetSection(panel, dir);
       appendReviewSection(panel);
       appendRoleSection(panel, dir);
       appendSvgSection(panel, dir);
@@ -5652,6 +5664,7 @@ function setupTabs() {
     row.appendChild(b);
     if ((roleStatus[name] || {}).status === 'dirty') row.appendChild(folderRoleAcceptButton(name));
     if (status === 'changed' || status === 'new') row.appendChild(folderDiffButton(name, status));
+    if (window.MA.targetSet) row.appendChild(folderTargetButton(name));
     row.appendChild(folderDraftButton(name));
     return row;
   }
@@ -5721,6 +5734,76 @@ function setupTabs() {
       if (!FS) return;
       folderPicked = FS.selectAll(pendingNames());
       syncFolderPickUi();
+    });
+    return b;
+  }
+
+  // BLK-primary-20260908-1703: 一覧を開いた瞬間に「対象 14 枚のうち何枚あるか /
+  // どれが足りないか」を見出しで言う。未登録のときも黙らず、登録の入口を出す
+  // (「まだ数えていない」と「揃っている」を取り違えないため)。
+  function appendTargetSection(host, dir) {
+    var TS = window.MA.targetSet;
+    if (!TS) return;
+    var rec = targetScan || TS.reconcile(targetNames, []);
+    var line = document.createElement('div');
+    line.className = 'folder-target-summary ' + TS.summaryClass(rec);
+    line.id = 'folder-target-summary';
+    line.setAttribute('data-target-expected', String(rec.expected));
+    line.setAttribute('data-target-present', String(rec.present));
+    line.textContent = TS.summary(rec);
+    host.appendChild(line);
+
+    var bar = document.createElement('div');
+    bar.className = 'folder-target-bar';
+    var set = document.createElement('button');
+    set.type = 'button';
+    set.className = 'folder-target-set';
+    set.id = 'folder-target-set';
+    set.textContent = TS.buttonLabel(rec);
+    set.title = TS.buttonTitle(rec);
+    set.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      // 一時控えは成果物ではないので対象 set に入れない (畳んだ控えが
+      // 期待枚数を押し上げると、翌日の過不足が読めなくなる)。
+      var DM = window.MA.draftMark;
+      var pick = folderNames.filter(function(n) { return !(DM && DM.has(draftNames, n)); });
+      TS.save(_reviewStore(), dir, pick);
+      renderFolderPanel();
+    });
+    bar.appendChild(set);
+    if (rec.configured) {
+      var off = document.createElement('button');
+      off.type = 'button';
+      off.className = 'folder-target-clear';
+      off.id = 'folder-target-clear';
+      off.textContent = TS.clearLabel();
+      off.title = 'このフォルダの対象 set を外す。見出しの過不足は出なくなる';
+      off.addEventListener('click', function(ev) {
+        ev.stopPropagation();
+        TS.clear(_reviewStore(), dir);
+        renderFolderPanel();
+      });
+      bar.appendChild(off);
+    }
+    host.appendChild(bar);
+  }
+
+  // 行ごとの「対象 / 対象にする」。取り直しをせずに 1 枚だけ足す / 外せる。
+  function folderTargetButton(name) {
+    var TS = window.MA.targetSet;
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'folder-target';
+    b.setAttribute('data-target-name', name);
+    var inSet = TS.has(targetNames, name);
+    if (inSet) b.classList.add('folder-target-on');
+    b.textContent = TS.rowLabel(inSet);
+    b.title = TS.rowTitle(inSet);
+    b.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      targetNames = TS.toggle(targetNames, name);
+      TS.save(_reviewStore(), _wsFileDir(), targetNames);
+      renderFolderPanel();
     });
     return b;
   }

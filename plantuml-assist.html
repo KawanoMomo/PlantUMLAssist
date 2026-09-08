@@ -590,6 +590,37 @@ html, body {
   border-bottom: 1px solid var(--border);
   margin-bottom: 3px;
 }
+/* 対象 set との突合 (BLK-primary-20260908-1703) */
+#folder-panel .folder-target-summary {
+  font-size: 10px;
+  padding: 3px 6px;
+  color: var(--text-secondary);
+}
+#folder-panel .folder-target-summary.target-set-ok { color: var(--accent); }
+#folder-panel .folder-target-summary.target-set-short { color: var(--accent-red); font-weight: bold; }
+#folder-panel .folder-target-bar { padding: 0 6px 4px; display: flex; gap: 4px; }
+#folder-panel button.folder-target-set,
+#folder-panel button.folder-target-clear {
+  flex: 0 0 auto;
+  font-size: 10px;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+#folder-panel button.folder-target {
+  flex: 0 0 auto;
+  font-size: 10px;
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+#folder-panel button.folder-target.folder-target-on { border-color: var(--accent); color: var(--accent); }
 /* 実データ / テンプレの分類 (BLK-reviewer-20260908-0203-wish) */
 #folder-panel button.folder-role {
   flex: 0 0 auto;
@@ -4714,6 +4745,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/folder-filter.js"></script>
 <script src="src/core/peek-folder.js"></script>
 <script src="src/core/draft-mark.js"></script>
+<script src="src/core/target-set.js"></script>
 <script src="src/core/folder-reopen.js"></script>
 <script src="src/core/bulk-rename.js"></script>
 <script src="src/core/impact-scan.js"></script>
