@@ -2531,6 +2531,51 @@ html, body {
 .map-row .map-mine { color: var(--text-secondary); }
 #map-empty { padding: 6px 8px; font-size: 11px; color: var(--text-secondary); }
 /* 雛形との差分 (BLK-junior-20260908-1303-wish)。対応表と同じ並びにする。 */
+#tr-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+#tr-bar select, #tr-bar input {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 2px 4px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  min-width: 0;
+}
+#tr-pick { flex: 1 1 40%; }
+#tr-label { flex: 1 1 40%; }
+#tr-bar button {
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+#tr-bar button:hover { background: var(--bg-tertiary); }
+#tr-note {
+  padding: 4px 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+#tr-note.clean { color: var(--accent-green); }
+#tr-note.dirty { color: var(--accent-orange); }
+#tr-note[hidden] { display: none; }
 #td-bar {
   display: flex;
   align-items: center;
@@ -4087,8 +4132,20 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <div id="map-list" hidden></div>
       <!-- BLK-junior-20260908-1303-wish: 派生図は雛形をペリフェラル名だけ変えて複製したもの。
            題材語を伏せて突き合わせ、「この図だけ / 雛形だけ」の行を出す。 -->
+      <!-- BLK-junior-20260908-1403-wish: 雛形は 1 回だけ登録して呼び名で選ぶ。
+           以降は相手フォルダの絶対パスを打ち直さなくてよい。 -->
+      <div id="tr-bar">
+        <select id="tr-pick" title="比べる雛形を選ぶ (登録した雛形は次の周でもそのまま使える)">
+          <option value="">参照図を雛形にする</option>
+        </select>
+        <input type="text" id="tr-label" placeholder="呼び名 (例 GPIO系初期化)"
+               title="この図を雛形として登録するときの呼び名">
+        <button type="button" id="btn-tr-add" title="いま開いている図を雛形として登録する (以降は呼び名で選べる)">📌 雛形に登録</button>
+        <button type="button" id="btn-tr-del" title="選んでいる登録を消す">✕</button>
+      </div>
+      <div id="tr-note" hidden></div>
       <div id="td-bar">
-        <button type="button" id="btn-td-run" title="参照図を雛形として、この図との差分 (題材語の違いは除く) を出す">🧩 雛形との差分</button>
+        <button type="button" id="btn-td-run" title="選んだ雛形 (未選択なら参照図) と、この図との差分 (題材語の違いは除く) を出す">🧩 雛形との差分</button>
         <span id="td-summary"></span>
       </div>
       <div id="td-note" hidden></div>
@@ -4440,6 +4497,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/relation-roles.js"></script>
 <script src="src/core/state-map.js"></script>
 <script src="src/core/template-diff.js"></script>
+<script src="src/core/template-registry.js"></script>
 <script src="src/core/class-map.js"></script>
 <script src="src/core/map-question.js"></script>
 <script src="src/core/reuse-picker.js"></script>
