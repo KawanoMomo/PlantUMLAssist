@@ -5079,6 +5079,7 @@ var _peekDirs = [];
 var _peekDir = null;
 var _peekNames = [];
 var _peekName = null;
+var _peekDsl = '';        // 今出している 1 枚の本文 (テンプレートの材料)
 
 // BLK-reviewer-20260909-0403-wish: フォルダを 1 つ選んで 1 枚ずつ読む形だと、
 // 「同じドメインの図が他のフォルダにもあるか」はファイル名を推測して開いて
@@ -5100,6 +5101,7 @@ function _peekEls() {
     notice: document.getElementById('peek-notice'),
     cohort: document.getElementById('peek-cohort'),
     cohortToggle: document.getElementById('peek-cohort-toggle'),
+    template: document.getElementById('peek-template'),
   };
 }
 
@@ -5337,6 +5339,43 @@ function setCohortMode(on) {
   });
 }
 
+// ── 覗いた図をテンプレートにする (BLK-junior-20260909-0503-wish) ──
+// 読むだけで見た図は、そのまま「テンプレートから新規作成」の材料にできる。
+// 覚えて打ち直す工程が無くなるので、写し違いが起きる余地がない。
+function _peekSeed() {
+  var PF = window.MA.peekFolder;
+  return PF ? PF.templateSeed(_peekDir, _peekName, _peekDsl) : null;
+}
+
+function renderPeekTemplateBtn() {
+  var el = _peekEls();
+  var PF = window.MA.peekFolder;
+  if (!el.template || !PF) return;
+  var seed = _peekSeed();
+  el.template.disabled = !seed;
+  el.template.setAttribute('data-seed', seed ? seed.value : '');
+  el.template.title = PF.seedNotice(seed);
+}
+
+// 覗いている図をテンプレートに据えて、新規作成の画面へ渡す。
+// 保存先も workspace も動かさない (材料として本文を渡すだけ)。
+function usePeekAsTemplate() {
+  var seed = _peekSeed();
+  if (!seed || !_openTemplateNew) return false;
+  closePeekFolder();
+  _openTemplateNew(false, seed);
+  return true;
+}
+
+function closePeekFolder() {
+  var el = _peekEls();
+  if (el.modal) el.modal.style.display = 'none';
+  _peekName = null;
+  _peekDsl = '';
+  renderPeekTemplateBtn();
+  setCohortMode(false);
+}
+
 function renderPeekDirs() {
   var el = _peekEls();
   var PF = window.MA.peekFolder;
@@ -5406,7 +5445,9 @@ function showPeekFile(name) {
   var WS = window.MA.workspace;
   if (!WS || !el.svg) return Promise.resolve(false);
   _peekName = name;
+  _peekDsl = '';
   renderPeekFiles();
+  renderPeekTemplateBtn();
   if (el.title) el.title.textContent = name + '（読むだけ・編集も保存もしません）';
   el.svg.style.display = '';
   el.svg.textContent = '';
@@ -5419,6 +5460,8 @@ function showPeekFile(name) {
       return false;
     }
     if (el.dsl) el.dsl.textContent = text;
+    _peekDsl = text;
+    renderPeekTemplateBtn();
     return renderDslToSvg(text).then(function(svg) {
       if (name !== _peekName) return false;
       el.svg.innerHTML = svg;
@@ -5465,11 +5508,9 @@ function setupPeekFolder() {
   var el = _peekEls();
   if (!btn || !el.modal) return;
   btn.addEventListener('click', function() { openPeekFolder(); });
-  function close() {
-    el.modal.style.display = 'none';
-    _peekName = null;
-    setCohortMode(false);
-  }
+  var close = closePeekFolder;
+  renderPeekTemplateBtn();
+  if (el.template) el.template.addEventListener('click', usePeekAsTemplate);
   var closeBtn = document.getElementById('peek-close');
   if (closeBtn) closeBtn.addEventListener('click', close);
   if (el.cohortToggle) {
@@ -8667,6 +8708,10 @@ function applyBulkRename() {
 // 元の図を開いて構造を覚え、新しいタブでゼロから打ち直していた (模写)。
 // 「元の図 + 置換元語 + 置換先語」を選ぶだけで新しいタブが出来るようにする。
 // 置換結果は確定前に行単位で見せるので、写し間違いが起きる余地がない。
+// 覗いた図など、外から渡されたテンプレートで新規作成の画面を開くための入口。
+// setupTemplateNew の中の open をここに預ける。
+var _openTemplateNew = null;
+
 function setupTemplateNew() {
   var btn = document.getElementById('btn-tab-template');
   var modal = document.getElementById('tpl-modal');
@@ -8679,6 +8724,9 @@ function setupTemplateNew() {
   var docs = [];          // [{ id, name, dsl }] 開いているタブ
   var files = [];         // 保存フォルダのファイル名
   var fileCache = {};     // name → dsl (読み込み済み)
+  // 他のフォルダから覗いた 1 枚 (BLK-junior-20260909-0503-wish)。
+  // 自分の保存フォルダには無いので、渡された本文をそのまま材料にする。
+  var seedTpl = null;
 
   var LABEL = 'display:block;font-size:10px;color:var(--accent);font-weight:bold;margin:10px 0 3px 0;';
   var FIELD = 'width:100%;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);'
@@ -8690,6 +8738,10 @@ function setupTemplateNew() {
 
   function templateOptions() {
     var html = '';
+    // 覗いてきた図は「これを写したい」と決めて来ているので先頭に置く。
+    if (seedTpl) {
+      html += '<option value="' + esc(seedTpl.value) + '">' + esc(seedTpl.label) + '</option>';
+    }
     docs.forEach(function(d) {
       html += '<option value="doc:' + esc(d.id) + '">' + esc(d.name) + ' (開いている図)</option>';
     });
@@ -8725,6 +8777,9 @@ function setupTemplateNew() {
       var name = v.slice(5);
       if (fileCache[name] == null) return null;
       return { name: name, dsl: fileCache[name] };
+    }
+    if (seedTpl && v === seedTpl.value) {
+      return { name: seedTpl.name, dsl: seedTpl.dsl };
     }
     if (v.indexOf('builtin:') === 0) {
       var b = TN.builtin(v.slice(8));
@@ -9031,7 +9086,15 @@ function setupTemplateNew() {
           // 置換元が空なら、いちばん多く出てくる語を入れておく
           // (入力ゼロで押せる状態から始める)。
           var cands = TN.candidates(tpl.dsl);
-          if (cands.length && cands[0].count > 1) fromEl.value = cands[0].name;
+          var PF = window.MA.peekFolder;
+          // 覗いてきた図は、写したい部品名がファイル名に出ている
+          // (timer_init_sequence.puml → Timer)。出現数だけで選ぶと、
+          // どの図にもある App が勝って置換元を選び直すことになる。
+          if (seedTpl && PF && tpl.name === seedTpl.name && tpl.dsl === seedTpl.dsl) {
+            fromEl.value = PF.seedHint(seedTpl.name, cands);
+          } else if (cands.length && cands[0].count > 1) {
+            fromEl.value = cands[0].name;
+          }
         }
       }
       syncName();
@@ -9223,11 +9286,12 @@ function setupTemplateNew() {
     if (SK) bindSkeleton();
   }
 
-  function open(focusSkeleton) {
+  function open(focusSkeleton, seed) {
     saveActiveDoc();
     docs = window.MA.workspace ? window.MA.workspace.list() : [];
     files = [];
     fileCache = {};
+    seedTpl = seed || null;
     nameTouched = false;
     render();
     modal.style.display = 'flex';
@@ -9235,7 +9299,16 @@ function setupTemplateNew() {
       var sub = document.getElementById('skel-subject');
       if (sub) sub.focus();
     }
+    // 覗いてきた図で開いたときは、置換先だけ打てば作れる状態にしておく。
+    if (seedTpl) {
+      var sel0 = document.getElementById('tpl-source');
+      if (sel0) sel0.value = seedTpl.value;
+    }
     onSourceChange();
+    if (seedTpl) {
+      var toEl0 = document.getElementById('tpl-to');
+      if (toEl0) toEl0.focus();
+    }
     // 保存フォルダの図もテンプレートに選べる (先輩が保存した図が主な出所)。
     window.MA.workspace.listFiles(_wsFileDir()).then(function(list) {
       files = (list || []).filter(function(n) { return n; });
@@ -9249,6 +9322,7 @@ function setupTemplateNew() {
     });
   }
 
+  _openTemplateNew = open;
   btn.addEventListener('click', function() { open(false); });
   var btnSkel = document.getElementById('btn-tab-skeleton');
   if (btnSkel) btnSkel.addEventListener('click', function() { open(true); });
