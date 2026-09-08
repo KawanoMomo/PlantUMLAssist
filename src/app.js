@@ -2401,6 +2401,7 @@ function init() {
   setupComponentPack();
   setupMaterialExport();
   setupMaterialBoard();
+  setupReqTrace();
   setupHandoverBanner();
   setupAuditTimeline();
   setupAuditBoard();
@@ -14230,6 +14231,150 @@ function setupMaterialExport() {
   var kind = document.getElementById('mexp-kind');
   if (kind) kind.addEventListener('change', _mexpRenderPlan);
   if (modal) modal.addEventListener('click', function(e) { if (e.target === modal) closeMaterialExport(); });
+}
+
+// ── 要求ID対応 (BLK-junior-20260909-0103-wish) ──────────────────────────────
+// 設計書に貼る資料では、クラス・メソッドの横に対応する ASPICE 要求 ID を書く。
+// 今まで GUI にはそれを書く場所も見る場所も無く、図を作ったあとで別文書に対応表を
+// 手で作り直していた (図と表の二重管理。名前を直すと表だけが古くなる)。
+// 図の要素を一覧にして要求 ID を付けられるようにし、Export のときに対応表 (CSV) と
+// 画像の脚注を同時に確定させる。対応そのものは DSL の注記行として図に残る。
+
+function _reqSel(id) { return document.getElementById(id); }
+
+function _reqDocName() {
+  var doc = window.MA.workspace ? window.MA.workspace.getActive() : null;
+  return (doc && doc.name) ? doc.name : '図';
+}
+
+// DSL を書き換えて画面に戻す。編集中の内容が正本なので mmdText を通す。
+function _reqSetDsl(next) {
+  if (next === mmdText) return;
+  if (window.MA.history) window.MA.history.pushHistory();
+  mmdText = next;
+  suppressSync = true;
+  if (editorEl) editorEl.value = mmdText;
+  suppressSync = false;
+  scheduleRefresh();
+  saveActiveDoc();
+}
+
+function _reqRenderRows() {
+  var RT = window.MA.reqTrace;
+  var body = _reqSel('req-rows');
+  var sum = _reqSel('req-summary');
+  var exp = _reqSel('req-export');
+  if (!RT || !body) return;
+  var rows = RT.rows(mmdText);
+  var html = '';
+  rows.forEach(function(r) {
+    html += '<tr class="req-row" data-key="' + _mexpEsc(r.key) + '" data-kind="' + _mexpEsc(r.kind)
+      + '" data-status="' + _mexpEsc(r.status) + '">'
+      + '<td class="req-kind">' + _mexpEsc(r.kindLabel) + '</td>'
+      + '<td class="req-element">' + _mexpEsc((r.owner ? r.owner + '.' : '') + r.label) + '</td>'
+      + '<td><input type="text" class="req-ids" data-key="' + _mexpEsc(r.key)
+      + '" value="' + _mexpEsc(r.ids.join(', ')) + '"></td>'
+      + '</tr>';
+  });
+  body.innerHTML = html || '<tr><td colspan="3">要求 ID を付けられる要素がありません。</td></tr>';
+  if (sum) sum.textContent = RT.summary(rows);
+  if (exp) exp.disabled = RT.assignedRows(rows).length === 0;
+
+  // 入力は離れた時点で図に書き戻す (打つたびに履歴が積もらない)。
+  var inputs = body.querySelectorAll('input.req-ids');
+  for (var i = 0; i < inputs.length; i++) {
+    inputs[i].addEventListener('change', function(ev) {
+      _reqApplyInput(ev.target);
+    });
+  }
+}
+
+function _reqApplyInput(input) {
+  var RT = window.MA.reqTrace;
+  var state = _reqSel('req-state');
+  if (!RT || !input) return;
+  var key = input.getAttribute('data-key');
+  var bad = RT.invalidIds(input.value);
+  _reqSetDsl(RT.setIds(mmdText, key, input.value));
+  // 脚注を出しているときは、付け替えがそのまま脚注に映る (出し直さなくてよい)。
+  if (_reqSel('req-footnote') && _reqSel('req-footnote').checked) _reqApplyFootnote(true);
+  _reqRenderRows();
+  if (state) {
+    state.textContent = bad.length
+      ? '要求 ID として読めない語は入れていません：' + bad.join('、')
+      : (key + ' の要求 ID を図に書き込みました');
+  }
+}
+
+// 脚注 (legend) の出し入れ。図そのものに入るので、書き出した画像がそのまま
+// 対応表を持つ (画像だけを設計書に貼っても対応が伝わる)。
+function _reqApplyFootnote(on) {
+  var RT = window.MA.reqTrace;
+  if (!RT) return;
+  var base = RT.stripFootnote(mmdText);
+  _reqSetDsl(on ? RT.applyFootnote(base, RT.rows(base)) : base);
+}
+
+function openReqTrace() {
+  var modal = _reqSel('req-modal');
+  var RT = window.MA.reqTrace;
+  if (!modal || !RT) return;
+  var title = _reqSel('req-title');
+  var state = _reqSel('req-state');
+  var foot = _reqSel('req-footnote');
+  if (title) title.textContent = _reqDocName();
+  if (state) state.textContent = '';
+  if (foot) foot.checked = RT.stripFootnote(mmdText) !== mmdText;
+  modal.style.display = 'flex';
+  _reqRenderRows();
+}
+
+function closeReqTrace() {
+  var modal = _reqSel('req-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+// 対応表を書き出す。画像と並べて設計書に貼るので、名前は画像と揃える。
+function runReqExport() {
+  var RT = window.MA.reqTrace;
+  var state = _reqSel('req-state');
+  if (!RT) return null;
+  var name = _reqDocName();
+  var plan = RT.plan(mmdText, name);
+  // Excel が既定の文字コードで開けるように BOM を付ける (対応表は Excel で読む)。
+  var blob = new Blob(['﻿' + RT.tableCsv(plan.rows, plan.title)],
+    { type: 'text/csv;charset=utf-8' });
+  downloadBlob(plan.filename, blob);
+  var msg = RT.doneMessage(plan);
+  if (state) state.textContent = msg;
+  if (window.MA.toast) window.MA.toast.show(msg);
+  return plan;
+}
+
+function setupReqTrace() {
+  var open = document.getElementById('exp-req-trace');
+  if (open) open.addEventListener('click', function() {
+    var menu = document.getElementById('export-menu');
+    if (menu) menu.classList.remove('open');
+    openReqTrace();
+  });
+  var modal = document.getElementById('req-modal');
+  document.addEventListener('keydown', function(ev) {
+    if (ev.key === 'Escape' && modal && modal.style.display === 'flex') closeReqTrace();
+  });
+  var close = document.getElementById('req-close');
+  if (close) close.addEventListener('click', closeReqTrace);
+  var exp = document.getElementById('req-export');
+  if (exp) exp.addEventListener('click', function() { runReqExport(); });
+  var foot = document.getElementById('req-footnote');
+  if (foot) foot.addEventListener('change', function(ev) {
+    _reqApplyFootnote(ev.target.checked);
+    var state = _reqSel('req-state');
+    if (state) state.textContent = ev.target.checked
+      ? '書き出す画像の下に要求ID対応の脚注が入ります'
+      : '脚注を外しました';
+  });
+  if (modal) modal.addEventListener('click', function(e) { if (e.target === modal) closeReqTrace(); });
 }
 
 // ── 部品の資料一式 (BLK-junior-20260909-0003-wish) ───────────────────────────
