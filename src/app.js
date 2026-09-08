@@ -2248,6 +2248,7 @@ function init() {
 
   setupTabs();
   setupBulkRename();
+  setupRenameImpact();
   setupSymptomSearch();
   setupPatternCheck();
   setupXrefGraph();
@@ -5961,6 +5962,134 @@ function _fiFolderApply(from) {
   return out;
 }
 
+// ── 置換の影響ボード (BLK-primary-20260908-1303-wish) ────────────────────────
+// ⇄ 一括置換はヒット件数しか出さないので、「想定外の行に当たっていないか」は
+// 適用してからでないと分からず、当たっていれば巻き戻すやり直しが要る。
+// 適用する前に、ヒットした図の該当行が置換でどう変わるかを ▤ 変更サマリボードと
+// 同じ見た目 (行番号 + 変更前 / 変更後) で並べる。ここでは何も書き換えない。
+var _riFull = false;
+
+// ボードに載せる図。開いているタブ (未保存の編集を含む) と、保存フォルダにしか
+// 無い図。パネルの「開いている図すべて」を外していれば今の図だけにする。
+function _renameImpactDocs(from) {
+  var WS = window.MA.workspace;
+  var FI = window.MA.folderImpact;
+  var docs = [];
+  if (WS) {
+    var activeId = WS.getActiveId();
+    var allDocs = (document.getElementById('rename-all-docs') || {}).checked;
+    WS.list().forEach(function(d) {
+      if (!allDocs && d.id !== activeId) return;
+      docs.push({ id: d.id, name: d.name, dsl: d.id === activeId ? mmdText : d.dsl });
+    });
+  }
+  if (FI && _fiEnabled() && from) {
+    var openNames = {};
+    docs.forEach(function(d) { openNames[d.name] = true; });
+    FI.applyTargets(FI.merge([], _fiFileDocs, _fiRoles).filter(function(r) {
+      return !openNames[r.name];
+    }), from).forEach(function(r) {
+      docs.push({ id: '', name: r.name, dsl: r.dsl, unopened: true });
+    });
+  }
+  return docs;
+}
+
+function renderRenameImpactBoard() {
+  var br = window.MA.bulkRename;
+  var CB = window.MA.changeBoard;
+  var body = document.getElementById('ri-body');
+  var sumEl = document.getElementById('ri-summary');
+  if (!br || !CB || !body) return null;
+  var esc = window.MA.htmlUtils.escHtml;
+  var from = (document.getElementById('rename-from') || {}).value || '';
+  var to = (document.getElementById('rename-to') || {}).value || '';
+  var res = br.impact(_renameImpactDocs(from), from, to);
+
+  if (sumEl) sumEl.textContent = br.impactText(res, from, to);
+  var applyBtn = document.getElementById('ri-apply');
+  var srcApply = document.getElementById('btn-rename-apply');
+  if (applyBtn) applyBtn.disabled = !res.valid || res.docs === 0 || !srcApply || srcApply.disabled;
+
+  if (res.docs === 0) {
+    body.innerHTML = '<div class="cb-empty">'
+      + esc('「' + from + '」に当たる行はありません。置換前の部品名を確かめてください。')
+      + '</div>';
+    return res;
+  }
+
+  var html = '';
+  res.entries.forEach(function(e) {
+    var df = CB.diffRows(e.before, e.after);
+    var rows = _riFull ? df.rows : CB.collapse(df.rows, 2);
+    html += '<div class="cb-entry" data-doc-id="' + esc(e.id) + '" data-doc-name="' + esc(e.name) + '">'
+      + '<div class="cb-entry-head"><span>' + esc(e.name)
+      + (e.unopened ? ' (未オープン)' : '') + '</span>'
+      + '<span class="cb-count">' + esc(e.count + ' 件') + '</span></div>'
+      + '<div class="cb-cols"><span>今</span><span>置換後</span></div>'
+      + '<table class="cb-diff"><tbody>';
+    rows.forEach(function(r) {
+      if (r.kind === 'gap') {
+        html += '<tr class="cb-gap"><td colspan="4">⋯ 同じ行 ' + r.count + ' 行 ⋯</td></tr>';
+        return;
+      }
+      html += '<tr class="cb-' + r.kind + '">'
+        + '<td class="cb-no">' + (r.beforeNo || '') + '</td>'
+        + '<td class="cb-before">' + esc(r.before == null ? '' : r.before) + '</td>'
+        + '<td class="cb-no cb-after">' + (r.afterNo || '') + '</td>'
+        + '<td>' + esc(r.after == null ? '' : r.after) + '</td></tr>';
+    });
+    html += '</tbody></table></div>';
+  });
+  body.innerHTML = html;
+  return res;
+}
+
+function toggleRenameImpact(open) {
+  var modal = document.getElementById('ri-modal');
+  if (!modal) return;
+  var want = (open == null) ? (modal.style.display === 'none' || !modal.style.display) : !!open;
+  if (!want) { modal.style.display = 'none'; return; }
+  modal.style.display = 'flex';
+  renderRenameImpactBoard();
+  var body = document.getElementById('ri-body');
+  if (body) body.scrollTop = 0;
+}
+
+function setupRenameImpact() {
+  var btn = document.getElementById('btn-rename-preview');
+  var modal = document.getElementById('ri-modal');
+  if (!btn || !modal) return;
+  btn.addEventListener('click', function(ev) {
+    ev.stopPropagation();
+    toggleRenameImpact(true);
+  });
+
+  var closeBtn = document.getElementById('ri-close');
+  if (closeBtn) closeBtn.addEventListener('click', function() { toggleRenameImpact(false); });
+  modal.addEventListener('click', function(ev) {
+    if (ev.target === modal) toggleRenameImpact(false);
+  });
+  document.addEventListener('keydown', function(ev) {
+    if (ev.key === 'Escape' && modal.style.display === 'flex') toggleRenameImpact(false);
+  });
+
+  var full = document.getElementById('ri-full');
+  if (full) full.addEventListener('change', function() {
+    _riFull = full.checked;
+    renderRenameImpactBoard();
+  });
+
+  // 見て納得したらそのまま適用する。置換そのものは一括置換パネルの経路を通す
+  // (適用の手順を 2 か所に持たない)。
+  var apply = document.getElementById('ri-apply');
+  if (apply) apply.addEventListener('click', function() {
+    var src = document.getElementById('btn-rename-apply');
+    toggleRenameImpact(false);
+    if (src && !src.disabled) src.click();
+  });
+}
+
 // 開いていない図への置換。タブを開かずに保存フォルダへ直接書き戻す
 // (開いてから直すのでは、枚数ぶんのタブを開く手順が残ってしまう)。
 function applyRenameToUnopenedFiles(from, to) {
@@ -6052,6 +6181,10 @@ function updateRenamePreview() {
   summary.setAttribute('data-grand-total', String(grand));
   summary.setAttribute('data-unopened-docs', String(folder.docs));
   applyBtn.disabled = !ok;
+  // 「▤ 影響を見る」は置換後の名前がまだでも押せる。どの行に当たっているかを
+  // 先に確かめてから置換後を決める、という順序を塞がないため。
+  var prevBtn = document.getElementById('btn-rename-preview');
+  if (prevBtn) prevBtn.disabled = !from || grand === 0;
 }
 
 // 置換前・置換後を決めたあとの共通処理。一括置換パネルと名前突合の
@@ -6800,6 +6933,10 @@ function setupBulkRename() {
   document.addEventListener('click', function(ev) {
     if (!panel.classList.contains('open')) return;
     if (panel.contains(ev.target) || ev.target === btn) return;
+    // 影響ボードはこのパネルの続きなので、外側クリック扱いにしない
+    // (閉じてしまうと、見た後に置換前後を直す手が消える)。
+    var ri = document.getElementById('ri-modal');
+    if (ri && ri.contains(ev.target)) return;
     closePanel();
   });
 }
