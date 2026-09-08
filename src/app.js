@@ -8762,13 +8762,80 @@ function renderCrossRefDiff() {
   // 「相手が足した差分」として出しても取り込む 1 個を選べない。
   // 形 (種別ごとの件数) の見比べに切り替えて、同じ粒度かどうかを先に見せる。
   var comp = CRD.comparability(_xfResult);
-  _xfRenderShape(comp.level === 'disjoint' ? CRD.shapeRows(selfDsl, _xfRefDsl) : null,
-    comp.level === 'disjoint' ? CRD.shapeSummary(selfDsl, _xfRefDsl) : '');
+  // BLK-junior-20260908-1303: 名前が対応しなくても、種別の並びが位置ごとに
+  // 一致していれば「別の粒度」ではなく「同じ骨格の言い換え」。形の件数表より、
+  // 位置で対応させた語の対応表の方が「取り込む要素は無い」と言い切れる。
+  var par = CRD.parallel(selfDsl, _xfRefDsl);
+  var isParallel = CRD.isRephrase(par);
+  if (isParallel) _xfShowMessage(CRD.parallelSummary(par), 'clean');
+  _xfRenderParallel(isParallel ? par : null);
+  _xfRenderShape((comp.level === 'disjoint' && !isParallel) ? CRD.shapeRows(selfDsl, _xfRefDsl) : null,
+    (comp.level === 'disjoint' && !isParallel) ? CRD.shapeSummary(selfDsl, _xfRefDsl) : '');
 
   list.textContent = '';
   _xfResult.onlyRef.forEach(function(e) { list.appendChild(_xfRow(e, 'ref')); });
   _xfResult.onlySelf.forEach(function(e) { list.appendChild(_xfRow(e, 'self')); });
-  list.hidden = (_xfResult.onlyRef.length + _xfResult.onlySelf.length) === 0;
+  // 骨格が同じ 2 枚では「相手だけ」の行は言い換えであって足された要素ではない。
+  // 「取り込む」を出すと、同じ手順を別の語でもう 1 本足すことになる。
+  list.hidden = isParallel || (_xfResult.onlyRef.length + _xfResult.onlySelf.length) === 0;
+}
+
+// 語の対応表。par が null なら畳む (骨格が違う 2 枚には出さない)。
+function _xfRenderParallel(par) {
+  var host = _xfEl('xf-parallel');
+  if (!host) return;
+  host.textContent = '';
+  if (!par) { host.hidden = true; return; }
+  host.hidden = false;
+  var CRD = window.MA.crossRefDiff;
+
+  var lead = document.createElement('div');
+  lead.className = 'xf-shape-lead';
+  lead.id = 'xf-parallel-lead';
+  lead.textContent = '要素の並びが位置ごとに一致しています。'
+    + '片方にだけある要素は無いので、違いは語の言い換えだけです。';
+  host.appendChild(lead);
+
+  var table = document.createElement('table');
+  table.className = 'xf-shape-table';
+  table.id = 'xf-parallel-table';
+  var head = document.createElement('tr');
+  ['#', '要素', '自分', '相手'].forEach(function(t) {
+    var th = document.createElement('th');
+    th.textContent = t;
+    head.appendChild(th);
+  });
+  table.appendChild(head);
+  par.pairs.forEach(function(p, i) {
+    var tr = document.createElement('tr');
+    tr.className = 'xf-parallel-row' + (p.same ? '' : ' differs');
+    tr.setAttribute('data-kind', p.kind);
+    [String(i + 1), p.label, p.self.label, p.ref.label].forEach(function(t) {
+      var td = document.createElement('td');
+      td.textContent = t;
+      tr.appendChild(td);
+    });
+    table.appendChild(tr);
+  });
+  host.appendChild(table);
+
+  // 対応表を目で写して申し送りに貼る手を残さない。
+  var copy = document.createElement('button');
+  copy.type = 'button';
+  copy.id = 'btn-xf-parallel-copy';
+  copy.className = 'xf-parallel-copy';
+  copy.textContent = '対応表をコピー';
+  copy.title = '語の対応表を申し送り・レビュー依頼にそのまま貼れる形でコピーする';
+  copy.addEventListener('click', function() {
+    var text = CRD.parallelText(par, _xfSelfName(), _xfFile);
+    var done = function() { copy.textContent = 'コピーしました'; };
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, done);
+      } else { done(); }
+    } catch (e) { done(); }
+  });
+  host.appendChild(copy);
 }
 
 // 形の見比べの表。rows が null なら畳む (名前で対応が付いているときは要らない)。
