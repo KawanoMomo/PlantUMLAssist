@@ -59,6 +59,79 @@ function updateTopSaveTarget() {
   else el.classList.remove('configured');
 }
 
+// ── 開いたファイルの錠 (BLK-junior-20260908-1803-wish) ──────────────────
+// 見比べのために開いた元ファイルが、名前を変え終える前の自動保存で壊れないように、
+// 開いた瞬間に錠をかけ、最初に書き戻す直前で一度だけ確認する。
+
+// 開いて作った / 読み直したタブに錠をかける。
+// 既に同じ名前のタブが開いていれば、それは「今この瞬間に開いたファイル」では
+// ないので錠はかけない (自分で作って保存した図に確認を出さない)。
+function openExistingFile(spec) {
+  var WS = window.MA.workspace;
+  var already = false;
+  try { already = !!(WS.findByName && WS.findByName(WS.sanitizeName(spec.name || ''))); } catch (e) {}
+  var doc = WS.openOrActivate(spec);
+  if (!already) markOpenedSource(doc);
+  return doc;
+}
+
+function markOpenedSource(doc) {
+  if (!doc || !window.MA.sourceLock) return;
+  try { window.MA.sourceLock.mark(doc.id, doc.name); } catch (e) {}
+  try { updateTopSourceLock(); } catch (e) {}
+}
+
+function updateTopSourceLock() {
+  var el = document.getElementById('top-source-lock');
+  var SL = window.MA.sourceLock;
+  if (!el) return;
+  var doc = window.MA.workspace ? window.MA.workspace.getActive() : null;
+  var info = (SL && doc) ? SL.label(doc.id, doc.name) : null;
+  if (!info) { el.hidden = true; el.textContent = ''; el.title = ''; return; }
+  el.hidden = false;
+  el.textContent = info.text;
+  el.title = info.title;
+}
+
+// 確認は 1 枚のドキュメントにつき 1 回きり。開いている間に何度も出さない。
+var _sourceAskOpenFor = null;
+function askSourceLock(doc) {
+  var SL = window.MA.sourceLock;
+  if (!SL || !doc || _sourceAskOpenFor === doc.id) return;
+  if (document.getElementById('source-lock-modal')) return;
+  _sourceAskOpenFor = doc.id;
+  var t = SL.askText(doc.name);
+  var used = window.MA.workspace ? window.MA.workspace.list().map(function(d) { return d.name; }) : [];
+  var wrap = document.createElement('div');
+  wrap.id = 'source-lock-modal';
+  wrap.innerHTML = '<div id="source-lock-panel" role="dialog" aria-modal="true" aria-label="' + t.title + '">'
+    + '<h3 style="margin:0 0 8px;">' + t.title + '</h3>'
+    + '<p id="source-lock-body" style="margin:0 0 12px;line-height:1.6;">' + t.body + '</p>'
+    + '<div style="display:flex;flex-direction:column;gap:6px;">'
+    + '<button type="button" id="source-lock-keep">' + t.keep + '</button>'
+    + '<button type="button" id="source-lock-overwrite">' + t.overwrite + '</button>'
+    + '</div></div>';
+  document.body.appendChild(wrap);
+  function close() {
+    _sourceAskOpenFor = null;
+    if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
+  }
+  function answer(choice) {
+    var res = SL.answer(doc.id, choice, used);
+    close();
+    if (choice === 'keep' && window.MA.workspace) {
+      // 控えの名前でしか書かないので、書き先が無い状態は作らない。
+      setSaveStatus('🔒 ' + doc.name + '.puml は変更前のまま保ちます（' + res.name + '.puml に書きます）');
+    } else {
+      setSaveStatus('✎ ' + res.name + '.puml を書き換えます');
+    }
+    updateTopSourceLock();
+    saveActiveDoc();
+  }
+  wrap.querySelector('#source-lock-keep').addEventListener('click', function() { answer('keep'); });
+  wrap.querySelector('#source-lock-overwrite').addEventListener('click', function() { answer('overwrite'); });
+}
+
 // updateTopRenderStatus: レンダリングの相と所要時間を上部バーに映す。
 function updateTopRenderStatus(phase, ms) {
   if (!topRenderStatusEl || !window.MA.topStatus) return;
@@ -3075,6 +3148,16 @@ function saveActiveDoc() {
   try {
     var cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null;
     if (doc && cfg && cfg.backend === 'file') {
+      // BLK-junior-20260908-1803-wish: 開いたままのファイルへ最初に書き戻す前に
+      // 一度だけ聞く。答えるまでは書かない (見比べ中の元ファイルを守る)。
+      var SL = window.MA.sourceLock;
+      var d = SL ? SL.decide(doc.id, doc.name) : { action: 'write', name: doc.name };
+      if (d.action === 'ask') {
+        try { askSourceLock(doc); } catch (e) {}
+        renderDiffBadge();
+        return doc;
+      }
+      if (d.name !== doc.name) doc = { id: doc.id, name: d.name, diagramType: doc.diagramType, dsl: doc.dsl };
       window.MA.workspace.saveToFile(doc, cfg.fileDir);
       // 保存した時点を差分の基準にする (BLK-reviewer-20260907-0803)。
       if (window.MA.saveDiff) window.MA.saveDiff.mark(doc.name, doc.dsl);
@@ -3172,6 +3255,7 @@ function renderTabs() {
         ev.stopPropagation();
         var wasActive = doc.id === window.MA.workspace.getActiveId();
         if (wasActive) saveActiveDoc();
+        if (window.MA.sourceLock) { try { window.MA.sourceLock.release(doc.id); } catch (e) {} }
         if (window.MA.workspace.close(doc.id)) {
           if (wasActive) applyActiveDoc(); else renderTabs();
         }
@@ -3192,12 +3276,16 @@ function renderTabs() {
         try { window.MA.lineage.rename(doc.name, window.MA.workspace.sanitizeName(next)); } catch (e) {}
       }
       window.MA.workspace.rename(doc.id, next);
+      // 図名欄で名前を変え終えたら、開いた元ファイルの錠は用済み (BLK-junior-20260908-1803-wish)。
+      if (window.MA.sourceLock) { try { window.MA.sourceLock.release(doc.id); } catch (e) {} }
       renderTabs();
+      try { updateTopSourceLock(); } catch (e) {}
       try { renderLineageBadge(); } catch (e) {}
     });
     bar.insertBefore(el, firstTool);
   });
   renderDiffBadge();
+  try { updateTopSourceLock(); } catch (e) {}
   try { renderConsistencyBadge(); } catch (e) {}
   try { renderEventSyncBadge(); } catch (e) {}
   try { renderPinBadge(); } catch (e) {}
@@ -5140,7 +5228,7 @@ function setupTabs() {
       window.MA.workspace.loadFile(name, dir).then(function(text) {
         if (text != null) {
           var detected = window.MA.workspace.detectType(text);
-          window.MA.workspace.openOrActivate({
+          openExistingFile({
             name: name,
             dsl: text,
             diagramType: (detected && modules[detected]) ? detected : currentDiagramType,
@@ -5173,7 +5261,7 @@ function setupTabs() {
         : { kind: text == null ? 'missing' : 'opened', changed: text != null, message: '' };
       if (text != null) {
         var detected = window.MA.workspace.detectType(text);
-        window.MA.workspace.openOrActivate({
+        openExistingFile({
           name: name,
           dsl: text,
           diagramType: (detected && modules[detected]) ? detected : currentDiagramType,
@@ -12089,7 +12177,7 @@ function onFilePicked(e) {
     if (window.MA.workspace) {
       saveActiveDoc();
       var detected = window.MA.workspace.detectType(text);
-      window.MA.workspace.openOrActivate({
+      openExistingFile({
         name: window.MA.workspace.sanitizeName(file.name),
         dsl: text,
         diagramType: (detected && modules[detected]) ? detected : currentDiagramType,
@@ -12119,6 +12207,14 @@ function saveFile() {
   var doc = saveActiveDoc();
   var cfg = null;
   try { cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null; } catch (e) { cfg = null; }
+  // 手で押した「保存」も、開いた元ファイルの錠に従う (BLK-junior-20260908-1803-wish)。
+  // 「元のまま保つ」を選んだあとに保存を押して元が消えたら、選ばせた意味が無い。
+  var SLm = window.MA.sourceLock;
+  if (doc && SLm && cfg && cfg.backend === 'file') {
+    var dm = SLm.decide(doc.id, doc.name);
+    if (dm.action === 'ask') { try { askSourceLock(doc); } catch (e) {} return; }
+    if (dm.name !== doc.name) doc = { id: doc.id, name: dm.name, diagramType: doc.diagramType, dsl: doc.dsl };
+  }
   var ST = window.MA.saveTarget;
   var target = ST ? ST.decide(cfg, doc, title) : { mode: 'download', name: title };
 
