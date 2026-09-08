@@ -1915,7 +1915,34 @@ html, body {
   font-size: 12px;
   color: var(--text-primary);
 }
-#cb-summary, #ri-summary, #dg-summary { color: var(--accent); }
+#cb-summary, #ri-summary, #dg-summary, #vault-summary { color: var(--accent); }
+/* 提出物庫 (BLK-junior-20260908-2203-wish) */
+table.vault-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+table.vault-table th {
+  text-align: left; padding: 3px 8px; color: var(--text-secondary);
+  font-weight: normal; border-bottom: 1px solid var(--border);
+}
+table.vault-table td { padding: 3px 8px; vertical-align: top; }
+table.vault-table td.vault-at { font-family: var(--font-mono); white-space: nowrap; }
+table.vault-table td.vault-back { white-space: nowrap; color: var(--text-secondary); }
+table.vault-table tr.vault-row[data-back="0"] td.vault-back { color: var(--accent); }
+table.vault-table td.vault-title { word-break: break-all; }
+table.vault-table button.vault-open {
+  border: 1px solid var(--border); background: var(--bg-tertiary); color: var(--text-primary);
+  border-radius: 3px; font-size: 10px; padding: 1px 8px; cursor: pointer; white-space: nowrap;
+}
+table.vault-table button.vault-open:hover { border-color: var(--accent); }
+.folder-vault-bar { display: flex; align-items: center; gap: 8px; padding: 4px 10px; font-size: 11px; }
+.folder-vault-bar .folder-vault-open {
+  border: 1px solid var(--border); background: var(--bg-tertiary); color: var(--text-primary);
+  border-radius: 3px; font-size: 11px; padding: 2px 8px; cursor: pointer; white-space: nowrap;
+}
+.folder-vault-bar .folder-vault-open:hover { border-color: var(--accent); }
+.folder-vault-bar .folder-vault-state { color: var(--text-secondary); }
+.folder-inv-row .folder-inv-vault {
+  border: 1px solid var(--accent); background: var(--bg-secondary); color: var(--accent);
+  border-radius: 3px; font-size: 10px; padding: 0 6px; cursor: pointer; white-space: nowrap;
+}
 /* 部品名の依存グラフ (BLK-primary-20260908-2003-wish)。
    上が矢印の絵、下が影響の届く図の一覧。絵だけでは「開いて直す図」を数えられない。 */
 #dg-body { flex: 1; overflow-y: auto; padding: 6px 14px 14px 14px; }
@@ -5128,6 +5155,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/bulk-export.js"></script>
 <script src="src/core/component-pack.js"></script>
 <script src="src/core/rename-history.js"></script>
+<script src="src/core/vault.js"></script>
 <script src="src/core/component-inventory.js"></script>
 <script src="src/core/handoff-package.js"></script>
 <script src="src/core/delivery-package.js"></script>
@@ -5342,6 +5370,25 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <div id="dg-canvas"></div>
       <div id="dg-impact"></div>
     </div>
+  </div>
+</div>
+<!-- BLK-junior-20260908-2203-wish: 提出物庫。画像を書き出した瞬間の DSL を刻印で積んだ庫。
+     作業ファイルが同じ名前で上書きされても、ここに積んだ提出物は消えない。
+     手順 1 は「部品 × 図種 × 前回分を選んで開く」だけで済む。 -->
+<div id="vault-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+  <div class="board-modal">
+    <div class="board-head">
+      <strong>提出物庫</strong>
+      <span id="vault-summary" role="status"></span>
+      <span class="board-tools">
+        <label for="vault-subject">部品名</label>
+        <select id="vault-subject"></select>
+        <label for="vault-kind">図種</label>
+        <select id="vault-kind"></select>
+        <button type="button" id="vault-close">閉じる</button>
+      </span>
+    </div>
+    <div id="vault-body" class="diff-board"></div>
   </div>
 </div>
 <!-- BLK-primary-20260908-1203-wish: 提出用 zip に詰める図を選ぶ。
