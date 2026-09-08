@@ -2261,6 +2261,7 @@ function init() {
   setupHandoverBanner();
   setupAuditTimeline();
   setupAuditBoard();
+  setupSaveCheck();
   setupVersionTimeline();
   setupPeekFolder();
   setupPinPanel();
@@ -11069,6 +11070,8 @@ function saveFile() {
     // saveActiveDoc() が既に書き出しているが、ここでは結果を待って利用者に伝える。
     window.MA.workspace.saveToFile(doc, target.dir).then(function(ok) {
       setSaveStatus(ST.messageFor(target, ok));
+      // 保存できた図にだけ、その場で突合を掛ける (BLK-reviewer-20260908-1503-wish)。
+      if (ok) runSaveCheck(doc && doc.name);
     });
     return;
   }
@@ -11080,6 +11083,82 @@ function saveFile() {
   a.click();
   URL.revokeObjectURL(a.href);
   if (ST) setSaveStatus(ST.messageFor(target, true));
+  runSaveCheck(doc && doc.name);
+}
+
+// ── 保存時チェック (BLK-reviewer-20260908-1503-wish) ────────────────────────
+// 「保存」を押したその場で突合ボードと同じ突合を掛け、いま保存した図に新しく
+// 生えた不一致を図の上に出す。判定は src/core/save-check.js。ここは結線だけ。
+
+function _svckState() {
+  var SC = window.MA.saveCheck;
+  return SC ? SC.load(_reviewStore(), _wsFileDir()) : { seen: {} };
+}
+
+// 保存した図 1 枚について突合を掛け、警告を作る。控えは進めない (描画側で進める)。
+function _svckEvaluate(docName) {
+  var SC = window.MA.saveCheck, AB = window.MA.auditBoard;
+  if (!SC || !AB || !docName) return null;
+  var run = _atRunAudits();
+  var findings = null;
+  try { findings = _mfRows(); } catch (e) { findings = null; }
+  // SVG 実体のずれは 📂 一覧が読んだ結果があるときだけ載る (保存で読みに行かない)。
+  var board = AB.build({ audits: run.audits, svg: _abSvgScan, findings: findings });
+  _abBoard = board;
+  return SC.evaluate(board, { doc: docName, state: _svckState() });
+}
+
+function hideSaveCheck() {
+  var el = document.getElementById('save-check-overlay');
+  if (el) el.hidden = true;
+}
+
+function renderSaveCheck(res) {
+  var SC = window.MA.saveCheck;
+  var el = document.getElementById('save-check-overlay');
+  if (!SC || !el) return;
+  var esc = window.MA.htmlUtils.escHtml;
+  var sum = document.getElementById('sck-summary');
+  var list = document.getElementById('sck-list');
+  if (!res) { el.hidden = true; return; }
+
+  if (sum) sum.textContent = SC.summaryLine(res);
+  if (list) {
+    var html = '';
+    SC.lines(res).forEach(function(l) {
+      html += '<li class="' + (l.isNew ? 'sck-new' : 'sck-old') + '">'
+        + '<span class="sck-tag">' + (l.isNew ? '新規' : 'そのまま ' + l.ignored + ' 回')
+        + '</span>' + esc(l.text) + '</li>';
+    });
+    list.innerHTML = html;
+    list.hidden = !html;
+  }
+  // 指摘が無いときは帯を出さない (毎回の保存で図が隠れる方が邪魔になる)。
+  if (!SC.shouldWarn(res)) { el.hidden = true; setSaveStatus(SC.summaryLine(res)); return; }
+  el.hidden = false;
+}
+
+// 保存のたびに呼ぶ。突合が落ちても保存そのものは成立させる。
+function runSaveCheck(docName) {
+  var SC = window.MA.saveCheck;
+  if (!SC) return null;
+  var res = null;
+  try { res = _svckEvaluate(docName); } catch (e) { res = null; }
+  if (!res) { hideSaveCheck(); return null; }
+  try { renderSaveCheck(res); } catch (e) { /* 表示できなくても控えは進める */ }
+  try { SC.save(_reviewStore(), _wsFileDir(), SC.advance(_svckState(), res)); } catch (e) {}
+  return res;
+}
+
+function setupSaveCheck() {
+  // 帯は #preview-container の中にある。キャンバスのクリック (挿入ピッカー) へ
+  // 抜けさせない。抜けると帯のボタンを押すたびに挿入ピッカーが開く。
+  var el = document.getElementById('save-check-overlay');
+  if (el) el.addEventListener('click', function(ev) { ev.stopPropagation(); });
+  var close = document.getElementById('btn-sck-close');
+  if (close) close.addEventListener('click', hideSaveCheck);
+  var board = document.getElementById('btn-sck-board');
+  if (board) board.addEventListener('click', function() { toggleAuditBoard(true); });
 }
 
 // 保存の結果をステータスバーに数秒だけ出す。押しても何も起きないように
