@@ -4142,6 +4142,10 @@ function setupTabs() {
   var svgRenderNote = '';
   // BLK-reviewer-20260908-1103-wish: 描き直して比べた結果の 1 行。
   var svgVerifyNote = '';
+  // BLK-reviewer-20260908-1203-wish: 食い違った図の中身。図名 → svgDiffSummary.compare の結果。
+  // 「ずれ」と分かった直後に材料が手に入るので、その場で持っておく
+  // (もう一度描き直さないと中身が言えない、では手順が 1 つ増える)。
+  var svgVerifyDiffs = {};
   // BLK-reviewer-20260908-0203-wish: 図名 → {role, status}。実データ / テンプレの宣言と、
   // テンプレの中身が宣言時から変わっていないか。22 枚を毎回同列に扱わなくて済むように。
   var fileRoles = {};        // 保存フォルダの _roles.json の中身
@@ -4257,6 +4261,7 @@ function setupTabs() {
     }
     svgRenderNote = '';   // 前に押した結果は持ち越さない
     svgVerifyNote = '';
+    svgVerifyDiffs = {};
     roleNote = '';
     folderQuery = '';           // 絞り込みは開き直すたびに白紙に戻す
     folderFocusFilter = true;   // 開いたらそのまま名前を打ち始められる
@@ -4690,6 +4695,86 @@ function setupTabs() {
       });
       panel.appendChild(vbtn);
     }
+
+    appendSvgDiffSection(panel);
+  }
+
+  // BLK-reviewer-20260908-1203-wish: 「内容ずれ」と分かった図の、食い違いの中身。
+  // ここが無かった頃は、ずれた 7 枚を 1 枚ずつ開いて旧 participant 名や欠けた遷移を
+  // grep で突き止めていた (1 枚あたり 10 行前後)。欠落と残存を図ごとに並べ、
+  // primary へ渡す指摘文をその場でコピーできるようにする。
+  function appendSvgDiffSection(panel) {
+    var SD = window.MA.svgDiffSummary;
+    if (!SD) return;
+    var names = Object.keys(svgVerifyDiffs);
+    if (!names.length) return;
+    names.sort();
+    var head = document.createElement('div');
+    head.className = 'folder-svg-content has-stale';
+    head.id = 'folder-svg-diff-head';
+    head.textContent = '内容ずれの中身（' + names.length + ' 枚）';
+    panel.appendChild(head);
+
+    names.forEach(function(name) {
+      var diff = svgVerifyDiffs[name];
+      var box = document.createElement('div');
+      box.className = 'folder-svg-diff';
+      box.setAttribute('data-svg-diff', name);
+      var title = document.createElement('div');
+      var nm = document.createElement('span');
+      nm.className = 'folder-svg-diff-name';
+      nm.textContent = name;
+      title.appendChild(nm);
+      var sm = document.createElement('span');
+      sm.className = 'folder-svg-diff-sum';
+      sm.textContent = SD.summary(diff);
+      title.appendChild(sm);
+      box.appendChild(title);
+      diff.missing.forEach(function(r) {
+        var row = document.createElement('div');
+        row.className = 'folder-svg-diff-row diff-missing';
+        row.textContent = SD.kindLabel(r.kind) + ': ' + r.label;
+        box.appendChild(row);
+      });
+      diff.leftover.forEach(function(s) {
+        var row = document.createElement('div');
+        row.className = 'folder-svg-diff-row diff-leftover';
+        row.textContent = s;
+        box.appendChild(row);
+      });
+      panel.appendChild(box);
+    });
+
+    // 指摘文はコピーする前に読めるようにする。読まずに渡す文は指摘にならない。
+    var report = document.createElement('textarea');
+    report.className = 'folder-svg-diff-report';
+    report.id = 'folder-svg-diff-report';
+    report.readOnly = true;
+    report.value = SD.reportAll(svgVerifyDiffs);
+    report.addEventListener('click', function(ev) { ev.stopPropagation(); });
+    panel.appendChild(report);
+
+    var copy = document.createElement('button');
+    copy.type = 'button';
+    copy.className = 'folder-svg-diff-copy';
+    copy.id = 'folder-svg-diff-copy';
+    copy.textContent = '指摘文をコピー';
+    copy.title = '食い違いの一覧を primary への指摘文としてコピーする';
+    copy.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      report.select();
+      var done = function() { copy.textContent = 'コピーしました'; };
+      // クリップボードが使えない場面 (権限なし・http 以外) でも、
+      // 選択済みの本文が残るので手で copy すれば渡せる。
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(report.value).then(done, function() { done(); });
+          return;
+        }
+      } catch (e) {}
+      done();
+    });
+    panel.appendChild(copy);
   }
 
   // 描画は 1 枚あたり数百 ms かかる。何枚目まで進んだかを押したボタンに出しながら、
@@ -4721,10 +4806,17 @@ function setupTabs() {
         return resp.json();
       }).then(function(res) {
         var results = (res && res.results) || {};
+        var SD = window.MA.svgDiffSummary;
         chunk.forEach(function(name) {
-          var st = (results[name] && results[name].status) || 'error';
+          var r = results[name] || {};
+          var st = r.status || 'error';
           if (counts[st] === undefined) counts[st] = 0;
           counts[st]++;
+          // BLK-reviewer-20260908-1203-wish: 食い違った図は、その場で中身まで言う。
+          // 材料 (今の puml と svg に書かれている文字) は server が添えてくる。
+          if (st === 'differ' && SD && typeof r.pumlText === 'string') {
+            svgVerifyDiffs[name] = SD.compare(r.pumlText, r.svgLabels);
+          }
         });
       }).catch(function() {
         counts.error += chunk.length;

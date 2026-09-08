@@ -60,6 +60,11 @@ if sys.platform == 'win32':
 # Browser client POSTs /heartbeat every ~5s; if the tab is closed the
 # pings stop and the watchdog terminates the server automatically.
 IDLE_SHUTDOWN_SEC = 300
+# BLK-reviewer-20260908-1203-wish: 食い違いの中身を言うために /verify-svg に添える材料の上限。
+# puml は数 KB、text 要素は 1 枚の図で数十〜数百なので、この上限に当たるのは
+# 図でない何かを掴んだときだけ。当たっても応答が肥らないようにするための蓋。
+MAX_DIFF_PUML_CHARS = 65536
+MAX_DIFF_LABELS = 2000
 
 _state_lock = threading.Lock()
 _last_heartbeat = time.time()
@@ -439,6 +444,36 @@ class Handler(BaseHTTPRequestHandler):
         at = svg_bytes.rfind(mark)
         return svg_bytes[:at] if at >= 0 else svg_bytes
 
+    @staticmethod
+    def _svg_text_labels(svg_bytes):
+        """svg に実際に書かれている文字列 (text 要素の中身) を、出てくる順に重複なく。
+
+        BLK-reviewer-20260908-1203-wish: 食い違いの中身を言うには「その svg に何と
+        書いてあるか」が要る。svg 全文を返すと 1 枚あたり数百 KB になるので、
+        描かれている文字だけを抜いて渡す。読めない svg は空で返す (落とさない)。
+        """
+        try:
+            text = svg_bytes.decode('utf-8', errors='replace')
+        except Exception:
+            return []
+        out, seen = [], set()
+        for raw in re.findall(r'<text[^>]*>(.*?)</text>', text, re.S):
+            s = re.sub(r'<[^>]*>', '', raw)
+            # PlantUML は ASCII 以外を数値参照 (&#21463; など) で書く。
+            # 戻さないと「受注サービス」が図の中に無いことになってしまう。
+            s = re.sub(r'&#(x[0-9a-fA-F]+|[0-9]+);',
+                       lambda m: chr(int(m.group(1)[1:], 16) if m.group(1)[0] in 'xX'
+                                     else int(m.group(1))), s)
+            s = (s.replace('&lt;', '<').replace('&gt;', '>').replace('&quot;', '"')
+                  .replace('&apos;', "'").replace('&amp;', '&')).strip()
+            if not s or s in seen:
+                continue
+            seen.add(s)
+            out.append(s)
+            if len(out) >= MAX_DIFF_LABELS:
+                break
+        return out
+
     def _svg_verify_path(self, save_dir):
         """BLK-reviewer-20260908-1103-wish: 「この svg は本当に今の puml の姿か」の控え。
 
@@ -660,6 +695,14 @@ class Handler(BaseHTTPRequestHandler):
                 'at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
             }
             results[name] = {'status': status}
+            if status == 'differ':
+                # BLK-reviewer-20260908-1203-wish: 「ずれている」だけでは、reviewer は
+                # 食い違った図を 1 枚ずつ開いて grep で中身を突き止めることになる。
+                # 中身を言うのに要る材料 — 今の puml の本文と、保存中の svg に実際に
+                # 書かれている文字列 — をこの結果に添える。突き合わせと言葉づかいは
+                # GUI 側 (src/core/svg-diff-summary.js) が受け持つ。
+                results[name]['pumlText'] = text[:MAX_DIFF_PUML_CHARS]
+                results[name]['svgLabels'] = self._svg_text_labels(svg_bytes)
         self._write_svg_verify(save_dir, recs)
         self._send_json(200, {'ok': True, 'results': results, 'verified': recs})
 
