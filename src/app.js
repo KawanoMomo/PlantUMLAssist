@@ -12705,6 +12705,7 @@ var _dpSeq = 0;
 // 保存フォルダに置く (localStorage だけだと開き直すたびに消え、同じフォルダで
 // 何度出しても毎回「初回提出 (23 枚すべて新規)」になっていた)。
 // ここは読み込んだ控えを持つだけ。判定は src/core/export-log.js の職掌。
+var _dpMetaTouched = false;  // 題・版数を手で書き換えたか (書き換えていなければ控えから引き直す)
 var _elLog = null;        // 保存フォルダの控え。null は「まだ読んでいない」
 var _elDir = null;        // その控えを読んだフォルダ
 
@@ -12872,10 +12873,12 @@ function renderDeliveryPanel() {
   var BTN = 'background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;padding:4px 12px;font-size:11px;';
   var IN = 'background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;padding:3px 6px;font-size:12px;';
 
+  // 手で書き換えていないうちは、画面に残っている値ではなく前回提出の控えから引く
+  // (保存フォルダの控えは開いた後から届くので、届く前の既定を固定しない)。
   var titleVal = document.getElementById('dp-title');
   var revVal = document.getElementById('dp-revision');
-  var title = titleVal ? titleVal.value : (last.title || '設計書 図面集');
-  var rev = revVal ? revVal.value : DP.nextRevision(last.revision);
+  var title = (_dpMetaTouched && titleVal) ? titleVal.value : (last.title || '設計書 図面集');
+  var rev = (_dpMetaTouched && revVal) ? revVal.value : DP.nextRevision(last.revision);
 
   var html = '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">\u{1F4E6} 納品パッケージ</h3>'
     + '<div id="dp-last" style="font-size:11px;color:var(--text-secondary);">'
@@ -12948,6 +12951,11 @@ function renderDeliveryPanel() {
 
   content.innerHTML = html;
 
+  ['dp-title', 'dp-revision'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('input', function() { _dpMetaTouched = true; });
+  });
+
   var closeBtn = document.getElementById('dp-close');
   if (closeBtn) closeBtn.addEventListener('click', function() {
     var m = document.getElementById('dp-modal');
@@ -12992,6 +13000,7 @@ function openDeliveryPanel() {
   // 題と版数も、閉じたときの入力ではなく前回提出の控えから引き直す
   // (前回 1.0 で出したなら次は 1.1 が既定になる)。
   _dpDocs = null;
+  _dpMetaTouched = false;
   // 見比べ用に描いた SVG も捨てる (前に開いたときの絵を今の puml として見せない)。
   _drCache = {};
   _drName = null;
