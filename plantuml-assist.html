@@ -127,6 +127,14 @@ html, body {
 .rail-btn.active::before { background: var(--accent); }
 .rail-btn.active .rail-glyph { opacity: 1; }
 .rail-btn:focus { outline: none; border-color: var(--accent); }
+/* design 7a: 図種の列と最下段の設定を分ける 1px の区切り線 */
+#rail .rail-divider {
+  width: 28px;
+  height: 1px;
+  background: var(--border);
+  margin: 6px 0;
+  flex-shrink: 0;
+}
 
 /* ── Toolbar ───────────────────────────────────────────────────────────────── */
 #toolbar {
@@ -3348,6 +3356,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <span class="rail-logo" title="PlantUMLAssist">P</span>
     <div id="rail-types"></div>
     <div class="rail-spacer"></div>
+    <div class="rail-divider"></div>
+    <!-- 設定 (design 7a): 中身は diagram-rail.buildConfigHtml で差し替える -->
     <button type="button" class="rail-btn" id="rail-config" title="設定">⚙</button>
   </div>
 

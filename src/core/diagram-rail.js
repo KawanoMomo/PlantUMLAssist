@@ -39,6 +39,15 @@ window.MA.diagramRail = (function() {
       + '<path d="M13.4 5.6v4.8"/>',
   };
 
+  // レール最下段の設定も図種ボタンと同じ作りにする (design 7a)。
+  // 絵文字 ⚙ はフォント依存で大きさも色も揃わないので、つまみ付きの 2 本線を
+  // 同じ 16x16 の座標系で描き、略号を CFG にする。config は図種ではないので
+  // ITEMS には入れない (巡回とレール本体に混ざらない)。
+  GLYPHS['config'] =
+    '<path d="M2.5 5.5h11M2.5 10.5h11"/>'
+    + '<circle cx="6" cy="5.5" r="1.6"/>'
+    + '<circle cx="10.5" cy="10.5" r="1.6"/>';
+
   // 並び順は design の左レール (SEQ / UC / CMP / CLS / ACT / ST) に合わせる。
   var ITEMS = [
     { type: 'plantuml-sequence',  code: 'SEQ', label: 'Sequence',  title: 'シーケンス図' },
@@ -118,8 +127,17 @@ window.MA.diagramRail = (function() {
     }).join('');
   }
 
+  // レール最下段の設定ボタン。図種ボタンと同じ .rail-btn / 線画→略号の順で作る。
+  // 設定は図種の切り替えではないので data-type を持たず、active にもならない。
+  function buildConfigHtml() {
+    return '<button type="button" class="rail-btn" id="rail-config" title="設定">'
+      + glyphSvg('config')
+      + '<span class="rail-code">CFG</span></button>';
+  }
+
   return {
     items: items,
+    buildConfigHtml: buildConfigHtml,
     indexOfType: indexOfType,
     codeFor: codeFor,
     labelFor: labelFor,
