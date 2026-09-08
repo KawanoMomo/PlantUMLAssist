@@ -331,6 +331,32 @@ window.MA.modules.plantumlComponent = (function() {
   var moveLineDown = window.MA.dslUpdater.moveLineDown;
   var renameWithRefs = window.MA.dslUpdater.renameWithRefs;
 
+  // BLK-junior-20260909-0303: 新規タブのサンプル (WebApp / IAuth) を自分の部品名へ
+  // 付け替えるのに、要素ごとに「選択 → Alias/Label を打ち直す → 変更を反映 →
+  // Alias 変更を関連 Relation にも追従」を繰り返していた。edits をまとめて当て、
+  // 関連への追従も同時に済ませる。
+  // edits: [{ line, id, label }]。空欄と同値は無視する。id は関連にも追従する。
+  function renameElements(text, edits) {
+    var out = String(text == null ? '' : text);
+    if (!Array.isArray(edits) || !edits.length) return out;
+    var byLine = {};
+    parse(out).elements.forEach(function(e) { byLine[e.line] = e; });
+    edits.forEach(function(ed) {
+      if (!ed) return;
+      var el = byLine[Number(ed.line)];
+      if (!el || (el.kind !== 'component' && el.kind !== 'interface')) return;
+      var newId = ed.id == null ? '' : String(ed.id).trim();
+      var newLabel = ed.label == null ? '' : String(ed.label).trim();
+      // Alias を先に当てる。宣言行の行番号は置換で動かないので Label は後から効く。
+      if (newId && newId !== el.id) out = renameWithRefs(out, el.id, newId);
+      if (newLabel && newLabel !== el.label) {
+        var fn = el.kind === 'component' ? updateComponent : updateInterface;
+        out = fn(out, el.line, 'label', newLabel);
+      }
+    });
+    return out;
+  }
+
   function setTitle(text, newTitle) {
     var lines = text.split('\n');
     for (var i = 0; i < lines.length; i++) {
@@ -565,6 +591,56 @@ window.MA.modules.plantumlComponent = (function() {
     });
   }
 
+  // BLK-junior-20260909-0303: 図の全要素の Alias / Label を 1 枚の表で書き換える。
+  // 要素を 1 個ずつ選び直す往復と「関連にも追従」の押下を無くすため、反映は
+  // 常に関連 Relation まで追従する。
+  function _renameTableHtml(elements) {
+    var esc = window.MA.htmlUtils.escHtml;
+    var targets = elements.filter(function(e) {
+      return e.kind === 'component' || e.kind === 'interface';
+    });
+    if (!targets.length) return '';
+    var rows = targets.map(function(e) {
+      return '<div class="co-rename-row" data-line="' + e.line + '"'
+        + ' style="display:flex;gap:4px;align-items:center;margin-bottom:4px;">'
+        + '<span style="flex:0 0 34px;font-size:9px;color:var(--text-secondary);">'
+          + (e.kind === 'interface' ? 'I/F' : 'Cmp') + '</span>'
+        + '<input class="co-rename-id" type="text" value="' + esc(e.id) + '" placeholder="Alias"'
+          + ' style="flex:1;min-width:0;font-size:11px;padding:3px;">'
+        + '<input class="co-rename-label" type="text" value="' + esc(e.label) + '" placeholder="Label"'
+          + ' style="flex:1;min-width:0;font-size:11px;padding:3px;">'
+        + '</div>';
+    }).join('');
+    return '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">'
+      + '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">'
+        + '要素名をまとめて付け替え</label>'
+      + '<div id="co-rename-list">' + rows + '</div>'
+      + window.MA.properties.primaryButtonHtml('co-rename-apply', 'まとめて反映 (関連にも追従)')
+      + '<div style="font-size:10px;color:var(--text-secondary);margin-top:4px;line-height:1.5;">'
+        + 'Tab で次の欄へ移れます。Alias の変更は関連 Relation にも自動で追従します</div>'
+      + '</div>';
+  }
+
+  function _bindRenameTable(ctx) {
+    window.MA.properties.bindEvent('co-rename-apply', 'click', function() {
+      var rows = document.querySelectorAll('#co-rename-list .co-rename-row');
+      var edits = [];
+      for (var i = 0; i < rows.length; i++) {
+        edits.push({
+          line: Number(rows[i].getAttribute('data-line')),
+          id: rows[i].querySelector('.co-rename-id').value,
+          label: rows[i].querySelector('.co-rename-label').value,
+        });
+      }
+      var t = ctx.getMmdText();
+      var out = renameElements(t, edits);
+      if (out === t) { alert('付け替える名前がありません'); return; }
+      window.MA.history.pushHistory();
+      ctx.setMmdText(out);
+      ctx.onUpdate();
+    });
+  }
+
   function _renderNoSelection(parsedData, propsEl, ctx) {
     var P = window.MA.properties;
     var elements = parsedData.elements || [];
@@ -584,6 +660,7 @@ window.MA.modules.plantumlComponent = (function() {
         ]) +
         '<div id="co-tail-detail" style="margin-top:6px;"></div>' +
       '</div>' +
+      _renameTableHtml(elements) +
       // BLK-junior-20260908-0203-wish: ドライバの図で「定石の依存先のうち今の図に
       // 無いもの」を出す。先輩の他部品の図を 1 枚ずつ開いて見比べる代わり。
       '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
@@ -594,6 +671,7 @@ window.MA.modules.plantumlComponent = (function() {
     propsEl.innerHTML = html;
 
     _renderDepsCheck(parsedData, ctx);
+    _bindRenameTable(ctx);
 
 
     var renderTailDetail = function() {
@@ -1010,6 +1088,7 @@ window.MA.modules.plantumlComponent = (function() {
     moveLineDown: moveLineDown,
     setTitle: setTitle,
     renameWithRefs: renameWithRefs,
+    renameElements: renameElements,
     renderProps: renderProps,
     capabilities: {
       overlaySelection: true,
