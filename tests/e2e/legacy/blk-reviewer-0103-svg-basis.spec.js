@@ -104,3 +104,82 @@ test.describe('BLK-reviewer-0103: 内容判定の根拠を画面と API で言�
     expect(doc.comparison.header).toBe('X-PlantUMLAssist-Svg-Stamp');
   });
 });
+
+// BLK-reviewer-20260909-0403: /verify-svg の要求の形が呼び出し側 (src/app.js) にしか無く、
+// curl / node から叩くと `{puml, svg}` を渡して 400 を 2 回踏み、grep で形を探していた。
+// 窓口自身が仕様を返し、400 も「何を期待しているか」を連れてくることを確かめる。
+test.describe('BLK-reviewer-0403: /verify-svg の形を窓口自身が言う', () => {
+
+  test('GET /api が全窓口の索引を返し、/verify-svg の要求の形をそこで名指しする', async ({ page }) => {
+    await bootWithDir(page);
+    const doc = await page.evaluate(async () => (await fetch('/api')).json());
+    const eps = doc.endpoints.map((e) => e.endpoint);
+    expect(eps).toContain('POST /verify-svg');
+    expect(eps).toContain('POST /render');
+    expect(eps).toContain('GET /autosave');
+    const v = doc.endpoints.filter((e) => e.endpoint === 'POST /verify-svg')[0];
+    expect(v.request).toContain('dir');
+    expect(v.request).toContain('types');
+  });
+
+  test('GET /verify-svg が仕様を返し、puml / svg は渡さないと言う', async ({ page }) => {
+    await bootWithDir(page);
+    const doc = await page.evaluate(async () => (await fetch('/verify-svg')).json());
+    expect(doc.endpoint).toBe('POST /verify-svg');
+    expect(Object.keys(doc.request.fields).sort()).toEqual(['dir', 'mode', 'types']);
+    expect(doc.request.note).toContain('puml / svg そのものは受け取らない');
+    expect(doc.example).toContain('/verify-svg');
+    expect(doc.status['differ-format']).toContain('体裁');
+  });
+
+  test('`{puml, svg}` で叩いた 1 回目の 400 が、正しい形と実例を連れてくる', async ({ page }) => {
+    await bootWithDir(page);
+    const res = await page.evaluate(async (dsl) => {
+      const r = await fetch('/verify-svg', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ puml: dsl, svg: '<svg/>' }),
+      });
+      return { status: r.status, body: await r.json() };
+    }, A1);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain("'types'");
+    expect(Object.keys(res.body.expected.fields).sort()).toEqual(['dir', 'mode', 'types']);
+    expect(res.body.expected.doc).toBe('GET /verify-svg');
+    expect(res.body.expected.example).toContain('curl');
+  });
+
+  test('mode を間違えた 400 も同じ形を連れてくる (2 回目の往復を作らない)', async ({ page }) => {
+    await bootWithDir(page);
+    const res = await page.evaluate(async (d) => {
+      const r = await fetch('/verify-svg', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dir: d, types: ['R0403_x'], mode: 'offline' }),
+      });
+      return { status: r.status, body: await r.json() };
+    }, DIR);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain('unknown mode');
+    expect(res.body.expected.doc).toBe('GET /verify-svg');
+  });
+
+  test('索引どおりの形で叩けば 200 で判定が返る (grep の往復が要らない)', async ({ page }) => {
+    await bootWithDir(page);
+    await clearDir(page);
+    await putFile(page, 'R0403_one', A1);
+    const res = await page.evaluate(async (d) => {
+      const r = await fetch('/verify-svg', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dir: d, types: ['R0403_one'], mode: 'local' }),
+      });
+      return { status: r.status, body: await r.json() };
+    }, DIR);
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    // svg をまだ保存していないので missing。形が通ったことが分かればよい。
+    expect(res.body.results.R0403_one.status).toBe('missing');
+  });
+});
+

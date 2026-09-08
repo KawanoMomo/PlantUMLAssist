@@ -247,6 +247,81 @@ RENDER_API_DOC = {
     ) % PORT,
 }
 
+# BLK-reviewer-20260909-0403: POST /verify-svg の要求の形が呼び出し側 (src/app.js) に
+# しか無く、curl / node から叩く人は `{puml, svg}` を渡して 400 を 2 回踏み、
+# src/app.js を grep してようやく `{dir, types, mode}` に辿り着いていた。毎 tick 同じ
+# 調べ直しが起きるので、/render と同じく「窓口自身が仕様を返す」形にする:
+#   - GET /verify-svg は仕様そのものを返す
+#   - POST /verify-svg の 400 には expected と example を必ず添える
+#   - GET /api は全エンドポイントの索引を返す (どこから読み始めるかを迷わせない)
+VERIFY_SVG_API_DOC = {
+    'endpoint': 'POST /verify-svg',
+    'summary': ('保存フォルダの {name}.svg が、今の {name}.puml を描いた結果そのものかを'
+                '1 枚ずつ描き直して中身で確かめる。puml と svg は server が dir から読むので'
+                '本文には渡さない'),
+    'request': {
+        'content-type': 'application/json',
+        'fields': {
+            'types': "必須。確かめる図の名前 (拡張子なし) の配列。1〜200 件",
+            'dir': "任意。保存フォルダ。省略すると既定の保存フォルダ",
+            'mode': "任意。'local' (既定、同梱 Java) または 'online' (plantuml.com へ送信)",
+        },
+        'note': ('puml / svg そのものは受け取らない (dir と types から server が読む)。'
+                 '1 枚あたり数百 ms かかるので、確かめる図は呼ぶ側が絞って渡す'),
+    },
+    'response': {
+        '200': ('application/json {ok, results: {<name>: {status, ...}}, verified} — '
+                'status は match / differ-format / differ-content / missing / error'),
+        '400': "application/json {error, expected, example} — types が無い / 201 件以上 / mode が不正",
+    },
+    'status': RENDER_API_DOC['comparison']['verifyStatus'],
+    'example': (
+        'curl -sS -X POST http://127.0.0.1:%d/verify-svg '
+        '-H "Content-Type: application/json" '
+        """-d '{"dir": "E:/01_Loop/persona-data/primary", "types": ["spi_init_sequence"], "mode": "local"}'"""
+    ) % PORT,
+}
+
+# 400 に必ず添える「何を期待しているか」。呼ぶ側が 1 回目の失敗で形を直せるようにする。
+VERIFY_SVG_EXPECTED = {
+    'fields': VERIFY_SVG_API_DOC['request']['fields'],
+    'doc': 'GET /verify-svg',
+    'example': VERIFY_SVG_API_DOC['example'],
+}
+
+# GET /api — 窓口の索引。docs/api.md と同じ並びで、1 行ずつ何をするかを言う。
+API_INDEX = {
+    'name': 'PlantUMLAssist server API',
+    'doc': 'docs/api.md (同じ内容。GET /api が正本)',
+    'endpoints': [
+        {'endpoint': 'GET /api', 'summary': 'この索引'},
+        {'endpoint': 'GET /render', 'summary': 'POST /render の仕様'},
+        {'endpoint': 'POST /render', 'summary': 'DSL を描いて SVG を返す',
+         'request': "{text, mode}"},
+        {'endpoint': 'GET /verify-svg', 'summary': 'POST /verify-svg の仕様'},
+        {'endpoint': 'POST /verify-svg', 'summary': '保存中の svg が今の puml の結果かを中身で確かめる',
+         'request': "{dir, types: [名前...], mode}"},
+        {'endpoint': 'GET /autosave', 'summary': '保存フォルダの図の一覧 (dsl・hash・svgSource)',
+         'request': '?dir=&type='},
+        {'endpoint': 'POST /autosave', 'summary': '図の DSL を保存する', 'request': "{type, dir, dsl}"},
+        {'endpoint': 'DELETE /autosave', 'summary': '保存を消す', 'request': '?dir=&type='},
+        {'endpoint': 'POST /autosave-svg', 'summary': '書き出した svg を保存する (印を刻む)',
+         'request': "{type, dir, svg}"},
+        {'endpoint': 'GET /autosave-versions', 'summary': '1 枚の図の版の一覧', 'request': '?dir=&type='},
+        {'endpoint': 'GET /peek-dirs', 'summary': '保存フォルダの候補を覗く'},
+        {'endpoint': 'GET /vault', 'summary': '保管庫の中身', 'request': '?dir='},
+        {'endpoint': 'POST /vault', 'summary': '保管庫へ入れる'},
+        {'endpoint': 'POST /file-roles', 'summary': '保存フォルダの _roles.json を置き換える',
+         'request': "{dir, roles}"},
+        {'endpoint': 'POST /export-log', 'summary': '書き出しの控えを 1 件足す'},
+        {'endpoint': 'GET /prefs', 'summary': 'この機械に保存した設定'},
+        {'endpoint': 'POST /prefs', 'summary': '設定を書く'},
+        {'endpoint': 'GET /env', 'summary': 'Java / jar の有無など実行環境'},
+        {'endpoint': 'POST /heartbeat', 'summary': '生存通知 (無音 300 秒で server は落ちる)'},
+        {'endpoint': 'POST /shutdown', 'summary': '停止を予約する'},
+    ],
+}
+
 # PlantUML のエラー画の目印。src/core/render-error.js の detect と同じ 3 条件。
 # 片方だけ変えないこと。
 _ERR_GREEN_MARK = b'fill="#33FF02"'
@@ -331,6 +406,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self._handle_peek_dirs()
         if self.path.split('?')[0] == '/render':
             return self._send_json(200, RENDER_API_DOC)
+        if self.path.split('?')[0] == '/verify-svg':
+            return self._send_json(200, VERIFY_SVG_API_DOC)
+        if self.path.split('?')[0] == '/api':
+            return self._send_json(200, API_INDEX)
         if self.path.split('?')[0] == '/prefs':
             with _fs_lock:
                 return self._send_json(200, read_prefs())
@@ -1086,19 +1165,27 @@ class Handler(BaseHTTPRequestHandler):
         try:
             data = json.loads(body)
         except ValueError:
-            self._send_json(400, {'error': 'invalid JSON'})
+            self._send_json(400, {'error': 'invalid JSON', 'expected': VERIFY_SVG_EXPECTED})
             return
         names = data.get('types')
         if not isinstance(names, list) or not names:
-            self._send_json(400, {'error': "'types' に確かめる図の名前を 1 つ以上入れてください"})
+            self._send_json(400, {
+                'error': ("'types' に確かめる図の名前を 1 つ以上入れてください "
+                          "(puml / svg は渡さない。server が dir から読む)"),
+                'expected': VERIFY_SVG_EXPECTED,
+            })
             return
         if len(names) > 200:
-            self._send_json(400, {'error': '一度に確かめられるのは 200 枚までです'})
+            self._send_json(400, {'error': '一度に確かめられるのは 200 枚までです',
+                                  'expected': VERIFY_SVG_EXPECTED})
             return
         save_dir = self._autosave_resolve_dir(data.get('dir'))
         mode = data.get('mode', 'local')
         if mode not in ('local', 'online'):
-            self._send_json(400, {'error': "unknown mode: %r — 'local' か 'online' です" % (mode,)})
+            self._send_json(400, {
+                'error': "unknown mode: %r — 'local' か 'online' です" % (mode,),
+                'expected': VERIFY_SVG_EXPECTED,
+            })
             return
         results = {}
         recs = self._read_svg_verify(save_dir)
