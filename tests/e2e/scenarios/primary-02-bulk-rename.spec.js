@@ -35,3 +35,44 @@ test('手順2 一括置換の全図適用で、旧名 SpiDrv が全図から消�
   expect(seq).toContain('Spi_Driver');
   expect(seq).not.toContain('SpiDrv ');
 });
+
+// BLK-primary-20260908-2003-wish: 置換の前に「この名前はどの図から参照されているか」を
+// 各図を開いて目視で推測していた。◈ 依存グラフ で参照元・参照先と、連鎖で影響が
+// 届く図までを開かずに数える。
+test('手順2 依存グラフが、置換する部品名の参照元・参照先と影響の届く図を出す', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  for (const n of S.PRIMARY_DOCS) await S.putDoc(page, DIR, n, S.docFor(n, 'SpiDrv'));
+  await page.reload();
+  await page.waitForSelector('#preview-svg');
+
+  await S.runCommand(page, '一括置換');
+  await page.locator('#rename-from').fill('SpiDrv');
+  await page.waitForTimeout(900);
+
+  await page.locator('#btn-rename-depgraph').click();
+  await page.waitForSelector('#dg-modal', { state: 'visible' });
+  await page.waitForTimeout(600);
+
+  // 到達条件その1: 打った名前が中央に立ち、参照元と参照先が矢印で分かれている。
+  const center = page.locator('#dg-svg .dg-node[data-side="center"]');
+  await expect(center).toHaveAttribute('data-name', 'SpiDrv');
+  await expect(page.locator('#dg-svg .dg-node[data-side="out"][data-name="Hw_Ctrl"]')).toHaveCount(1);
+  await expect(page.locator('#dg-svg .dg-node[data-side="in"][data-name="Hw_Ctrl"]')).toHaveCount(1);
+  const edges = page.locator('#dg-svg line.dg-edge');
+  expect(await edges.count()).toBeGreaterThan(1);
+  await expect(page.locator('#dg-summary')).toContainText('SpiDrv');
+
+  // 到達条件その2: 開かずに「直す図」が数えられる。矢印を持たない共通クラス図
+  // (class SpiDrv と書いてあるだけ) も直接の対象として並ぶ。
+  const direct = page.locator('#dg-impact tr.dg-doc[data-hop="0"]');
+  await expect(direct.filter({ hasText: 'spi_init_sequence' })).toHaveCount(1);
+  await expect(direct.filter({ hasText: 'driver_common_class' })).toHaveCount(1);
+
+  // 到達条件その3: 見た名前をそのまま置換の的にできる (打ち直さない)。
+  await page.locator('#dg-name').selectOption('Hw_Ctrl');
+  await page.waitForTimeout(400);
+  await page.locator('#dg-use').click();
+  await expect(page.locator('#dg-modal')).toBeHidden();
+  await expect(page.locator('#rename-from')).toHaveValue('Hw_Ctrl');
+});

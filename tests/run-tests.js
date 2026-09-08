@@ -82,6 +82,7 @@ const sourceFiles = [
   'src/core/manual-findings.js',
   'src/core/meeting-notes.js',
   'src/core/component-deps.js',
+  'src/core/dep-graph.js',
   'src/ui/properties.js',
   'src/ui/reuse-modal.js',
   'src/modules/sequence.js',
