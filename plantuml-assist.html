@@ -2393,6 +2393,48 @@ html, body {
 }
 #rename-hits .hit { display: flex; justify-content: space-between; padding: 1px 0; }
 #rename-hits .hit.zero { opacity: 0.45; }
+/* 改名履歴タイムライン (BLK-primary-20260908-2103-wish) */
+#rename-history { margin-top: 6px; font-size: 10px; }
+#rename-history .rh-head {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 3px;
+}
+#rename-history .rh-head-label { flex: 1 1 auto; }
+#rename-history button.rh-copy {
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 10px;
+  padding: 0 5px;
+  cursor: pointer;
+}
+#rename-history .rh-summary { padding: 3px 0; }
+#rename-history .rh-summary.rh-found { color: var(--accent); }
+#rename-history .rh-summary.rh-none { color: var(--text-secondary); }
+#rename-history .rh-rows { max-height: 150px; overflow-y: auto; font-family: var(--font-mono); }
+#rename-history .rh-entry { padding: 2px 0; border-bottom: 1px solid var(--bg-tertiary); }
+#rename-history .rh-line { color: var(--text-primary); }
+#rename-history .rh-docs { display: flex; flex-wrap: wrap; gap: 3px; padding-top: 2px; }
+#rename-history button.rh-doc {
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 10px;
+  padding: 0 4px;
+  cursor: pointer;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#rename-history button.rh-doc:hover { border-color: var(--accent); color: var(--accent); }
 /* 開いていない図も含めた影響範囲一覧 (保存フォルダの全ファイルを先に数える) */
 #rename-folder { margin-top: 6px; font-size: 10px; }
 #rename-folder .folder-head {
@@ -4526,6 +4568,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <div id="rename-impact"></div>
         <!-- 綴りが変わらない仕様変更 (戻り値型・引数) を全図へ 1 回で当てる -->
         <div id="rename-signature"></div>
+        <!-- BLK-primary-20260908-2103-wish: この部品名がいつ・どの図で改名されたか -->
+        <div id="rename-history"></div>
         <div id="rename-summary"></div>
         <div class="rename-actions">
           <!-- BLK-primary-20260908-1303-wish: 適用する前に、当たった図の該当行が
@@ -5054,6 +5098,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/bulk-apply.js"></script>
 <script src="src/core/bulk-export.js"></script>
 <script src="src/core/component-pack.js"></script>
+<script src="src/core/rename-history.js"></script>
 <script src="src/core/component-inventory.js"></script>
 <script src="src/core/handoff-package.js"></script>
 <script src="src/core/delivery-package.js"></script>
