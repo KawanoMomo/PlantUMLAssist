@@ -472,5 +472,7 @@ window.MA.stateMap = (function() {
     mineOptions: mineOptions,
     adoptPlan: adoptPlan,
     applyAdopt: applyAdopt,
+    sectionTitles: { states: '状態 (参照図 / 自分の図)', transitions: '遷移 (参照図 / 自分の図)' },
+    emptyMessage: '状態遷移が読めません。どちらも状態遷移図にしてください。',
   };
 })();
