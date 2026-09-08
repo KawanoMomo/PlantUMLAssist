@@ -1386,6 +1386,46 @@ html, body {
 }
 #at-summary { color: var(--accent); font-family: var(--font-mono); }
 
+/* ── 突合ダッシュボード (BLK-reviewer-20260908-1403-wish) ────────────
+   別々のモーダルに分かれていた突合の出口を 1 枚の表にまとめる。 */
+#ab-modal-content {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  width: 92vw;
+  max-width: 1280px;
+  height: 88vh;
+  display: flex;
+  flex-direction: column;
+}
+#ab-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-primary);
+}
+#ab-summary { color: var(--accent); font-family: var(--font-mono); }
+#ab-tools { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+#ab-body { flex: 1; overflow: auto; padding: 10px 14px; }
+.ab-empty { color: var(--text-secondary); font-size: 12px; padding: 12px 0; }
+.ab-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.ab-table th {
+  text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--border);
+  color: var(--text-secondary); font-weight: normal; position: sticky; top: 0;
+  background: var(--bg-secondary);
+}
+.ab-table td { padding: 4px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.ab-row { cursor: pointer; }
+.ab-row:hover { background: var(--bg-primary); }
+.ab-row[data-ab-keep="1"] { opacity: 0.6; }
+.ab-cat { white-space: nowrap; color: var(--accent-orange); }
+.ab-doc { white-space: nowrap; font-family: var(--font-mono); }
+.ab-title { font-family: var(--font-mono); }
+.ab-detail { color: var(--text-secondary); }
+
 /* ── 変遷履歴 (BLK-reviewer-20260908-0723-wish) ─────────────────────────────
    1 図の版を新しい順に並べ、前の版に戻った版 (往復) を目で拾えるようにする。 */
 #vt-modal-content {
@@ -3960,6 +4000,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <!-- BLK-reviewer-20260908-0003-wish: 監査ツールが拾えない手動の指摘を実体 id で追う -->
         <button class="tab-tool" id="btn-tab-findings" title="reviewer が図を読んで気づいた指摘を「対象ファイル+行+行の指紋」で憶え、次に開いたとき『未変更のため前回判定を維持』と『要再確認』に仕分ける">🔖 手動指摘 −</button>
         <!-- BLK-reviewer-20260907-2303-wish: 監査ツールが育つと、同じ欠陥が別カテゴリへ移る -->
+        <button class="tab-tool" id="btn-tab-cross" title="名前の不一致・未使用 participant・粒度のばらつき・SVG 実体不一致・手動指摘を、保存フォルダ 1 つ分の 1 画面にまとめて出す。行を押すとその図へ飛ぶ">▦ 突合ボード</button>
         <button class="tab-tool" id="btn-tab-audit-timeline" title="監査を回すたびに記録し、同じ欠陥が run ごとにどのカテゴリへ分類されたかを 1 本の帯で並べる。解消と再分類を分けて出す">◷ 監査履歴</button>
         <!-- BLK-junior-20260907-1403-wish: 型の基準にした図と突き合わせて、書いている間ずっと見てもらう -->
         <button class="tab-tool" id="btn-tab-review" title="型の基準にした図と突き合わせて、この図のずれと図種特有の間違いを出す">👁 レビュー −</button>
@@ -4562,6 +4603,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/review-verdicts.js"></script>
 <script src="src/core/meeting-notes.js"></script>
 <script src="src/core/audit-timeline.js"></script>
+<script src="src/core/audit-board.js"></script>
 <script src="src/core/consistency-check.js"></script>
 <script src="src/core/manual-findings.js"></script>
 <script src="src/core/component-deps.js"></script>
@@ -4691,6 +4733,23 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       </span>
     </div>
     <div id="at-body"></div>
+  </div>
+</div>
+
+<!-- BLK-reviewer-20260908-1403-wish: 突合の結果を 1 画面に集める -->
+<div id="ab-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+  <div id="ab-modal-content">
+    <div id="ab-head">
+      <strong>突合ダッシュボード</strong>
+      <span id="ab-summary"></span>
+      <span id="ab-tools">
+        <select id="ab-kind" aria-label="カテゴリで絞る"></select>
+        <select id="ab-doc" aria-label="図で絞る"></select>
+        <button type="button" id="ab-copy">指摘.md 用にコピー</button>
+        <button type="button" id="ab-close">閉じる</button>
+      </span>
+    </div>
+    <div id="ab-body"></div>
   </div>
 </div>
 
