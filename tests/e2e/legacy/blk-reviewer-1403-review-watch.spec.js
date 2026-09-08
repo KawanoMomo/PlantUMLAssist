@@ -55,7 +55,7 @@ test.describe('BLK-reviewer-1403: 前回見た版からの差を一覧で出す'
     await putFile(page, 'R1403_b', B1);
 
     await openFolder(page);
-    await expect(page.locator('#folder-panel .folder-summary')).toContainText('控えがありません');
+    await expect(page.locator('#folder-panel .folder-summary:not(.folder-kinds)')).toContainText('控えがありません');
     // 開いていたタブも保存フォルダに書き出されるので、置いた 2 枚を名指しで見る。
     await expect(page.locator('#folder-panel .folder-item[data-file-name="R1403_a"]'))
       .toHaveAttribute('data-review-status', 'new');
@@ -66,7 +66,7 @@ test.describe('BLK-reviewer-1403: 前回見た版からの差を一覧で出す'
 
     await page.locator('#folder-panel .folder-mark-seen').click();
     await page.waitForSelector('#folder-panel .folder-item[data-review-status="unchanged"]');
-    await expect(page.locator('#folder-panel .folder-summary')).toContainText('すべて前回見た版のまま');
+    await expect(page.locator('#folder-panel .folder-summary:not(.folder-kinds)')).toContainText('すべて前回見た版のまま');
     await expect(page.locator('#folder-panel .folder-item[data-file-name="R1403_a"] .folder-badge')).toHaveCount(0);
     await expect(page.locator('#folder-panel .folder-item[data-file-name="R1403_b"] .folder-badge')).toHaveCount(0);
   });
@@ -87,7 +87,7 @@ test.describe('BLK-reviewer-1403: 前回見た版からの差を一覧で出す'
       .toHaveAttribute('data-review-status', 'changed');
     await expect(page.locator('#folder-panel .folder-item[data-file-name="R1403_b"]'))
       .toHaveAttribute('data-review-status', 'unchanged');
-    await expect(page.locator('#folder-panel .folder-summary')).toContainText('変更 1 枚');
+    await expect(page.locator('#folder-panel .folder-summary:not(.folder-kinds)')).toContainText('変更 1 枚');
   });
 
   test('中身が同じまま保存し直しただけなら変更なしのまま', async ({ page }) => {
@@ -103,7 +103,7 @@ test.describe('BLK-reviewer-1403: 前回見た版からの差を一覧で出す'
     await openFolder(page);
     await expect(page.locator('#folder-panel .folder-item[data-file-name="R1403_a"]'))
       .toHaveAttribute('data-review-status', 'unchanged');
-    await expect(page.locator('#folder-panel .folder-summary')).toContainText('すべて前回見た版のまま');
+    await expect(page.locator('#folder-panel .folder-summary:not(.folder-kinds)')).toContainText('すべて前回見た版のまま');
   });
 
   test('後から増えた図は新規として出る', async ({ page }) => {
@@ -119,7 +119,7 @@ test.describe('BLK-reviewer-1403: 前回見た版からの差を一覧で出す'
     await openFolder(page);
     await expect(page.locator('#folder-panel .folder-item[data-file-name="R1403_c"]'))
       .toHaveAttribute('data-review-status', 'new');
-    await expect(page.locator('#folder-panel .folder-summary')).toContainText('新規 1 枚');
+    await expect(page.locator('#folder-panel .folder-summary:not(.folder-kinds)')).toContainText('新規 1 枚');
   });
 
   test('バッジが付いていても図はこれまでどおり開ける', async ({ page }) => {
