@@ -3434,6 +3434,28 @@ function setupReviewPanel() {
 var _cbFull = false;    // 全文を出すか (既定は差分行とその前後だけ)
 var _cbSame = false;    // 変わっていない図も並べるか
 var _cbFixOnly = false; // 「要修正」の印が付いた行だけに絞るか (BLK-primary-20260908-1103-wish)
+var _cbMapPending = false; // 対応表を未対応の指摘だけに絞るか (BLK-primary-20260908-1703-wish)
+
+// ── 指摘と変更の対応表 (BLK-primary-20260908-1703-wish) ──────────────────
+// ボードは「今回どの図が変わったか」を出すが、「この差分はどの指摘への対応か」は
+// 会議直前に記憶で突き合わせるしかなかった。指摘 1 件ごとに、対応した図をその場で
+// 1 クリック結び、「指摘 → 差分 / 対応なし」の一覧を会議前に自動で作る。
+
+// 開いている図の指摘 (📌 指摘ピン) を全部集める。ボードと同じ _diffDocs() を見るので、
+// 保存前の編集中の指摘もそのまま出る (受信箱のようにフォルダを読み直さない)。
+function _cbFindings() {
+  var PI = window.MA.pinInbox;
+  if (!PI) return [];
+  return PI.collect(_diffDocs().map(function(d) {
+    return { name: d.name, dsl: d.dsl };
+  }));
+}
+
+function _cbFindingTable(board) {
+  var FL = window.MA.findingLink;
+  if (!FL) return null;
+  return FL.buildTable({ findings: _cbFindings(), board: board });
+}
 
 function _changeBoardModel() {
   var CB = window.MA.changeBoard;
@@ -3495,6 +3517,100 @@ function _wireChangeBoardVerdicts(body) {
   }
 }
 
+// 対応表の 1 枚。ボードの先頭に置く (会議は「指摘がどう片付いたか」から入る)。
+function _cbMapHtml(table) {
+  var FL = window.MA.findingLink;
+  if (!FL || !table) return '';
+  var esc = window.MA.htmlUtils.escHtml;
+  // 変更図のエントリ (.cb-entry) とは別の枠にする。ボードの「変わった図は何枚か」を
+  // 数える所 (差分・絞り込みの見出し) に対応表が 1 枚として混ざらないようにする。
+  var head = '<div class="cb-map"><div class="cb-map-head">'
+    + '<span>指摘と変更の対応表</span>'
+    + '<span class="cb-map-count">' + esc(FL.summaryText(table) || '指摘なし') + '</span></div>';
+  if (!table.total) {
+    return head + '<div class="cb-map-empty">開いている図に 📌 指摘ピンがありません。'
+      + 'プレビューの行に指摘を付けると、その指摘がここに並びます。</div></div>';
+  }
+  var rows = _cbMapPending ? FL.pendingRows(table) : table.rows;
+  if (rows.length === 0) {
+    return head + '<div class="cb-map-empty">未対応の指摘はありません。'
+      + '全 ' + table.total + ' 件に対応した図が結ばれています。</div></div>';
+  }
+  var html = head + '<table class="cb-map-table"><thead><tr>'
+    + '<th>指摘</th><th>内容</th><th>対応</th><th>変更した図</th></tr></thead><tbody>';
+  rows.forEach(function(r) {
+    var where = r.doc + (r.line > 0 ? (':' + r.line) : '') + ' #' + r.id;
+    var docsHtml = r.docs.length
+      ? r.docs.map(function(n) {
+        return '<button type="button" class="cb-map-goto" data-doc-name="' + esc(n) + '">'
+          + esc(n) + '</button>';
+      }).join('')
+      : '<span>—</span>';
+    html += '<tr data-map-status="' + esc(r.status) + '" data-pin-key="' + esc(r.key) + '">'
+      + '<td class="cb-map-where">' + esc(where) + (r.done ? ' ✓' : '') + '</td>'
+      + '<td class="cb-map-text">' + esc(r.text) + '</td>'
+      + '<td class="cb-map-state">' + esc(FL.statusLabel(r.status)) + '</td>'
+      + '<td>' + docsHtml + '</td></tr>';
+  });
+  return html + '</tbody></table></div>';
+}
+
+// ボードの 1 エントリに添える指摘の結び目。押した指摘がその図に結ばれる。
+function _cbLinkRowHtml(docName, table) {
+  var FL = window.MA.findingLink;
+  if (!FL || !table || !table.total) return '';
+  var esc = window.MA.htmlUtils.escHtml;
+  var html = '<div class="cb-links" data-doc-name="' + esc(docName) + '"><span>対応する指摘</span>';
+  // 表の並びは「対応なし」が先だが、ボタンの並びは指摘の番号順で固定する。
+  // 押すたびに並びが変わると、2 件目を押すのに探し直すことになる。
+  var byId = table.rows.slice().sort(function(a, b) {
+    if (a.doc !== b.doc) return a.doc < b.doc ? -1 : 1;
+    return (parseInt(a.id, 10) || 0) - (parseInt(b.id, 10) || 0);
+  });
+  byId.forEach(function(r) {
+    var on = r.docs.indexOf(docName) >= 0;
+    var label = r.doc + '#' + r.id + ' ' + (r.text || '(本文なし)');
+    html += '<button type="button" class="cb-link-btn" data-doc-name="' + esc(docName) + '"'
+      + ' data-pin-key="' + esc(r.key) + '" aria-pressed="' + (on ? 'true' : 'false') + '"'
+      + ' title="' + esc(label) + ' — 押すとこの図の変更を対応として結ぶ (もう一度押すと外す)">'
+      + esc(label) + '</button>';
+  });
+  return html + '</div>';
+}
+
+function _wireChangeBoardLinks(body) {
+  var FL = window.MA.findingLink;
+  if (!FL || !body) return;
+  var btns = body.querySelectorAll('button.cb-link-btn');
+  for (var i = 0; i < btns.length; i++) {
+    (function(btn) {
+      btn.addEventListener('click', function() {
+        FL.toggle(btn.getAttribute('data-pin-key'), btn.getAttribute('data-doc-name'));
+        var scroll = body.scrollTop;
+        renderChangeBoard();
+        var again = document.getElementById('cb-body');
+        if (again) again.scrollTop = scroll;
+      });
+    })(btns[i]);
+  }
+  // 対応表の図名を押したら、その図のエントリまで飛ぶ (会議で「これがその差分です」)。
+  var gotos = body.querySelectorAll('button.cb-map-goto');
+  for (var j = 0; j < gotos.length; j++) {
+    (function(btn) {
+      btn.addEventListener('click', function() {
+        var name = btn.getAttribute('data-doc-name');
+        var rows = body.querySelectorAll('.cb-links');
+        for (var k = 0; k < rows.length; k++) {
+          if (rows[k].getAttribute('data-doc-name') === name) {
+            rows[k].parentNode.scrollIntoView();
+            return;
+          }
+        }
+      });
+    })(gotos[j]);
+  }
+}
+
 function renderChangeBoard() {
   var CB = window.MA.changeBoard;
   var body = document.getElementById('cb-body');
@@ -3506,6 +3622,11 @@ function renderChangeBoard() {
   if (!board) return null;
 
   if (sumEl) sumEl.textContent = _cbSummaryText(board);
+
+  // 対応表は絞り込みの前の board で作る。「要修正のみ」で行を減らしても、
+  // その指摘に対応した図が変わった事実は変わらない。
+  var mapTable = _cbFindingTable(board);
+  var mapHtml = _cbMapHtml(mapTable);
 
   // 引き継ぎでは「今すぐ手を付ける行」だけを渡したいので、印の付いた行だけに
   // 絞れる (BLK-primary-20260908-1103-wish)。絞り込み中は差分の前後行・省略行は出さない。
@@ -3519,8 +3640,9 @@ function renderChangeBoard() {
     var fEl = document.getElementById('cb-filter-state');
     if (fEl) fEl.textContent = CB.filterText(filtered);
     if (filtered.entries.length === 0) {
-      body.innerHTML = '<div class="cb-empty">' + esc(CB.filterText(filtered))
+      body.innerHTML = mapHtml + '<div class="cb-empty">' + esc(CB.filterText(filtered))
         + '。行の右端の [要修正] を押すと、その行がここに残ります。</div>';
+      _wireChangeBoardLinks(body);
       return board;
     }
   } else {
@@ -3531,13 +3653,14 @@ function renderChangeBoard() {
 
   if (board.entries.length === 0) {
     // 差分が消えても申し送りは残る (引き継ぎで読むのはこちら)。
-    body.innerHTML = '<div class="cb-empty">前回保存した時点から変わった図はありません。'
+    body.innerHTML = mapHtml + '<div class="cb-empty">前回保存した時点から変わった図はありません。'
       + '「± 差分」の [今の内容を基準にする] を押すと、そこからの変更がここに並びます。</div>'
       + _cbNotesOnlyHtml();
+    _wireChangeBoardLinks(body);
     return board;
   }
 
-  var html = '';
+  var html = mapHtml;
   board.entries.forEach(function(e) {
     var t = String(e.diagramType || '').replace('plantuml-', '');
     html += '<div class="cb-entry" data-doc-id="' + esc(e.id) + '">'
@@ -3563,6 +3686,8 @@ function renderChangeBoard() {
         + '<td class="cb-verdict">' + _cbVerdictButtonsHtml(e.name, vKey, v) + '</td></tr>';
     });
     html += '</tbody></table>';
+    // この差分がどの指摘への対応かをその場で結ぶ (BLK-primary-20260908-1703-wish)。
+    html += _cbLinkRowHtml(e.name, mapTable);
     // なぜ直したかを 1 行だけ添える。次にこの図を開いた人に帯で出る。
     var note = window.MA.handoverNotes ? window.MA.handoverNotes.get(e.name) : null;
     html += '<div class="cb-note-row" data-doc-name="' + esc(e.name) + '">'
@@ -3578,6 +3703,7 @@ function renderChangeBoard() {
   body.innerHTML = html + (filtered ? '' : _cbNotesOnlyHtml(board));
   _wireChangeBoardNotes(body);
   _wireChangeBoardVerdicts(body);
+  _wireChangeBoardLinks(body);
 
   var gotos = body.querySelectorAll('.cb-goto');
   for (var i = 0; i < gotos.length; i++) {
@@ -3743,6 +3869,41 @@ function setupChangeBoard() {
   if (minutes) minutes.addEventListener('click', function() { writeMeetingNotes(false); });
   var minutesCopy = document.getElementById('cb-minutes-copy');
   if (minutesCopy) minutesCopy.addEventListener('click', function() { writeMeetingNotes(true); });
+
+  // 指摘と変更の対応表 (BLK-primary-20260908-1703-wish)。
+  var mapPending = document.getElementById('cb-map-pending');
+  if (mapPending) mapPending.addEventListener('change', function() {
+    _cbMapPending = mapPending.checked;
+    renderChangeBoard();
+  });
+  var mapExport = document.getElementById('cb-map-export');
+  if (mapExport) mapExport.addEventListener('click', function() { writeFindingMap(); });
+}
+
+// いまの対応表を 1 枚の Markdown にして書き出す。会議で「この差分はどの指摘か」を
+// 聞かれたときに開く資料そのものなので、ボードを開いたまま押せる所に置く。
+function buildFindingMap() {
+  var FL = window.MA.findingLink;
+  if (!FL) return null;
+  var at = '';
+  try { at = new Date().toISOString(); } catch (e) { at = ''; }
+  var table = _cbFindingTable(_changeBoardModel());
+  return { table: table, at: at, text: FL.toMarkdown(table, { at: at }), fileName: FL.fileName(at) };
+}
+
+function writeFindingMap() {
+  var FL = window.MA.findingLink;
+  var state = document.getElementById('cb-minutes-state');
+  var res = buildFindingMap();
+  if (!res) { if (state) state.textContent = '対応表を作れません'; return null; }
+  var blob = new Blob([res.text], { type: 'text/markdown' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = res.fileName;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  if (state) state.textContent = res.fileName + ' に書き出しました (' + (FL.summaryText(res.table) || '指摘なし') + ')';
+  return res;
 }
 
 // いまのボードの中身を 1 枚の Markdown にして書き出す。copy=true ならファイルではなく
@@ -3752,12 +3913,23 @@ function buildMeetingNotes() {
   if (!MN) return null;
   var at = '';
   try { at = new Date().toISOString(); } catch (e) { at = ''; }
-  return MN.build({
-    board: _changeBoardModel(),
+  var board = _changeBoardModel();
+  var res = MN.build({
+    board: board,
     verdicts: window.MA.reviewVerdicts,
     notes: window.MA.handoverNotes,
     at: at,
   });
+  // 議事録にも対応表を付ける。会議で最初に聞かれるのが「どの指摘への対応か」なので、
+  // 別のファイルを開かせない (BLK-primary-20260908-1703-wish)。
+  var FL = window.MA.findingLink;
+  if (res && FL) {
+    var table = _cbFindingTable(board);
+    if (table && table.total > 0) {
+      res.text = res.text + '\n\n' + FL.toMarkdown(table, { at: at });
+    }
+  }
+  return res;
 }
 
 function writeMeetingNotes(copy) {
@@ -11888,6 +12060,12 @@ function exportAllSVG(pickedDocs, statusEl) {
   }).then(function(summary) {
     var msg = summary.message;
     if (files.length > 0) {
+      // 会議資料は「図 + どの指摘への対応か」で 1 組。指摘を 1 件でも結んでいれば
+      // 対応表を同じ zip に入れる (BLK-primary-20260908-1703-wish)。
+      var map = buildFindingMap();
+      if (map && map.table && map.table.total > 0) {
+        files.push({ name: '指摘対応表.md', content: map.text });
+      }
       var name = window.MA.bulkExport.zipName();
       downloadBlob(name, new Blob([window.MA.bulkExport.buildZip(files)], { type: 'application/zip' }));
       msg = msg + '（' + name + '）';
