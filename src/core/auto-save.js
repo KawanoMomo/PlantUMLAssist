@@ -151,6 +151,55 @@ window.MA.autoSave = (function() {
     });
   }
 
+  // ── 書き込みを止める門 (BLK-junior-20260908-1803) ────────────────────────
+  // ディスクへ写す前に「この名前に書いてよいか」を聞く。答えるのは app.js
+  // (保存フォルダの役割宣言を知っているのはあちら)。ここは知らないまま止められる形にする。
+  var _fileGuard = null;      // function(diagramType) -> 理由の文字列 / null
+  var _blockedListeners = [];
+  var _blockedSeen = {};      // 名前 → 最後に知らせた時刻。1 打鍵ごとには鳴らさない
+  var BLOCK_QUIET_MS = 5000;  // この間は同じ名前で鳴らさない (打鍵のたびの通知を防ぐ)
+
+  function setFileGuard(fn) {
+    _fileGuard = (typeof fn === 'function') ? fn : null;
+  }
+
+  function _blockedBy(diagramType) {
+    if (!_fileGuard) return null;
+    try {
+      var r = _fileGuard(diagramType);
+      return r ? String(r) : null;
+    } catch (e) {
+      return null;   // 門が壊れていても保存は止めない
+    }
+  }
+
+  function _notifyBlocked(diagramType, reason) {
+    // 直前に知らせたばかりなら黙る。ただし時間が空いたら言い直す
+    // (開いた直後の通知が別の通知に押し流され、編集中は何も言わない状態を作らない)。
+    var now = Date.now();
+    var last = _blockedSeen[diagramType];
+    if (last && (now - last) < BLOCK_QUIET_MS) return;
+    _blockedSeen[diagramType] = now;
+    for (var i = 0; i < _blockedListeners.length; i++) {
+      try { _blockedListeners[i]({ diagramType: diagramType, reason: reason }); } catch (e) {}
+    }
+  }
+
+  // 別の経路 (app.js の saveActiveDoc) が止めたときも、知らせ方はここに揃える。
+  function noteFileBlocked(diagramType, reason) {
+    _notifyBlocked(String(diagramType == null ? '' : diagramType), reason);
+  }
+
+  function onFileBlocked(listener) {
+    if (typeof listener === 'function') _blockedListeners.push(listener);
+  }
+
+  // 図名を変えたら (= 別のファイルになったら) また鳴らせるようにする。
+  function resetFileBlocked(diagramType) {
+    if (diagramType == null) _blockedSeen = {};
+    else delete _blockedSeen[diagramType];
+  }
+
   function _doWrite(diagramType, dsl) {
     var ok = _writeRaw(DSL_PREFIX + diagramType, dsl);
     if (!ok) return null;
@@ -159,7 +208,15 @@ window.MA.autoSave = (function() {
     // If file backend selected, mirror the write to disk via the server.
     var cfg = getConfig();
     if (cfg.backend === 'file') {
-      _fileBackendWrite(diagramType, dsl, cfg.fileDir);
+      // BLK-junior-20260908-1803: 書いてはいけないファイル (テンプレ宣言済み) には
+      // ディスクへ写さない。localStorage 側は残すので、編集内容は失われず、
+      // 図名を変えればそのまま新しいファイルに保存される。
+      var block = _blockedBy(diagramType);
+      if (block) {
+        _notifyBlocked(diagramType, block);
+      } else {
+        _fileBackendWrite(diagramType, dsl, cfg.fileDir);
+      }
     }
     for (var i = 0; i < _saveListeners.length; i++) {
       try { _saveListeners[i](meta); } catch (e) { /* listener errors must not block */ }
@@ -277,5 +334,9 @@ window.MA.autoSave = (function() {
     hydrateFromServer: hydrateFromServer,
     isAvailable: isAvailable,
     onSave: onSave,
+    setFileGuard: setFileGuard,
+    onFileBlocked: onFileBlocked,
+    noteFileBlocked: noteFileBlocked,
+    resetFileBlocked: resetFileBlocked,
   };
 })();
