@@ -296,6 +296,79 @@ window.MA.crossRefDiff = (function() {
     return more + 'の方が細かく描いてあります (相手 ' + ref + ' 件 / 自分 ' + self + ' 件)';
   }
 
+  // ── 骨格は同じで、語だけが違う 2 枚 ──────────────────────────────────
+  // BLK-junior-20260908-1303: 同じ台本から起こした 2 枚 (UART 版と CAN 版) は、
+  // start → 4 アクション → if → stop まで並びが完全に同じで、違うのはドメインの語
+  // (UART クロック有効化 / CAN クロック有効化) だけ。名前が 1 つも一致しないので
+  // 「対応する要素が 1 つもない = 別の粒度」と診断されるが、実際は逆で、
+  // 粒度は同じ・骨格も同じ・後から作った方にだけある要素は 1 つも無い。
+  // 種別の並びが位置ごとに一致するなら、それは「土俵が違う」ではなく
+  // 「同じ骨格の言い換え」なので、位置で対応させた語の対応表を出す。
+  function parallel(selfDsl, refDsl) {
+    var a = _nodes(selfDsl), b = _nodes(refDsl);
+    var out = { aligned: false, pairs: [], differing: 0, same: 0, count: 0 };
+    if (a.length === 0 || a.length !== b.length) return out;
+    for (var i = 0; i < a.length; i++) {
+      if (_s(a[i].kind) !== _s(b[i].kind)) return out;
+    }
+    var selfLines = _s(selfDsl).split('\n');
+    var refLines = _s(refDsl).split('\n');
+    out.aligned = true;
+    out.count = a.length;
+    for (var j = 0; j < a.length; j++) {
+      var same = keyOf(a[j]) === keyOf(b[j]);
+      out.pairs.push({
+        kind: _s(a[j].kind),
+        label: kindLabel(a[j].kind),
+        same: same,
+        self: _entry(a[j], selfLines, null),
+        ref: _entry(b[j], refLines, null),
+      });
+      if (same) out.same++; else out.differing++;
+    }
+    return out;
+  }
+
+  // 骨格が同じでも、12 箇所のうち 1 箇所だけ語が違うのは「先輩が後から直した 1 行」で、
+  // それは取り込む対象になる。言い換え (別題材で起こし直した 2 枚) と読めるのは、
+  // 違う箇所が 2 つ以上あって、かつ全体の 1/4 以上を占めるとき。
+  var REPHRASE_RATIO = 0.25;
+
+  // 逆に、位置ごとの語が 1 つも共通しないときは「同じ骨格の言い換え」とは言えない。
+  // BLK-junior-20260908-0823 の 2 枚 (電気的な出力状態 / ドライバの生死) は
+  // たまたま状態も遷移も同数なので並びは揃うが、共有する語が 1 つも無く、
+  // 実際には別の粒度で描かれている。共通の語が 1 つ以上あることを条件にする。
+  function isRephrase(par) {
+    var p = par || {};
+    if (!p.aligned || !p.count || p.differing < 2) return false;
+    if (!p.same) return false;
+    return (p.differing / p.count) >= REPHRASE_RATIO;
+  }
+
+  // 骨格が同じときの 1 行。手順が「取り込む 1 個を選ぶ」で止まらないよう、
+  // 「取り込む要素は無い」までを言い切る。
+  function parallelSummary(par) {
+    var p = par || {};
+    if (!p.aligned) return '';
+    if (p.differing === 0) {
+      return '要素の並びも語も同じです (' + p.count + ' 箇所)。取り込む要素はありません';
+    }
+    return '骨格は同じで、語だけが違います (' + p.count + ' 箇所中 ' + p.differing + ' 箇所)。'
+      + '片方にだけある要素はありません — 取り込む対象ではなく、言い換えの対応表として読んでください';
+  }
+
+  // 語の対応表を申し送りに貼れる形にする。表を目で写す手を残さないため。
+  function parallelText(par, selfName, refName) {
+    var p = par || {};
+    if (!p.aligned) return '';
+    var head = '骨格は同じで語だけが違う ' + (p.differing || 0) + ' 箇所'
+      + ' (' + _s(selfName || '自分') + ' ↔ ' + _s(refName || '相手') + ')';
+    var body = (p.pairs || []).filter(function(x) { return !x.same; }).map(function(x) {
+      return '- ' + x.label + ': ' + _s(x.self.label) + ' ↔ ' + _s(x.ref.label);
+    }).join('\n');
+    return body ? (head + '\n' + body) : head;
+  }
+
   // ── 足りない 1 行を入れる場所 ─────────────────────────────────────────
   // 宣言 (participant / class / state …) は最後の宣言の直後、
   // それ以外 (関係・注釈) は @enduml の直前。@enduml が無ければ末尾。
@@ -345,6 +418,10 @@ window.MA.crossRefDiff = (function() {
     shape: shape,
     shapeRows: shapeRows,
     shapeSummary: shapeSummary,
+    parallel: parallel,
+    isRephrase: isRephrase,
+    parallelSummary: parallelSummary,
+    parallelText: parallelText,
     insertPlan: insertPlan,
     applyInsert: applyInsert,
   };

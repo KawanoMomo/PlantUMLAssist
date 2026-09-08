@@ -2730,8 +2730,13 @@ html, body {
 }
 #xf-list[hidden] { display: none; }
 /* BLK-junior-20260908-0823: 名前で対応が付かないときの、形の見比べ */
-#xf-shape { padding: 6px 8px; border-top: 1px solid var(--border); }
-#xf-shape[hidden] { display: none; }
+#xf-shape, #xf-parallel { padding: 6px 8px; border-top: 1px solid var(--border); }
+#xf-shape[hidden], #xf-parallel[hidden] { display: none; }
+.xf-parallel-row.differs td { color: var(--accent-orange); }
+.xf-parallel-copy {
+  margin-top: 6px; border: 1px solid var(--border); background: var(--bg-secondary);
+  color: var(--text-primary); border-radius: 3px; cursor: pointer; font-size: 11px; padding: 2px 8px;
+}
 .xf-shape-lead { color: var(--text-secondary); font-size: 11px; line-height: 1.5; }
 .xf-shape-sum { color: var(--accent-orange); font-size: 11px; margin: 4px 0 6px; }
 .xf-shape-table { border-collapse: collapse; font-family: var(--font-mono); font-size: 11px; }
@@ -4044,6 +4049,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <div id="xf-summary" hidden></div>
       <!-- BLK-junior-20260908-0823: 名前で対応が付かない 2 枚を、形 (種別ごとの件数) で見比べる -->
       <div id="xf-shape" hidden></div>
+      <!-- BLK-junior-20260908-1303: 骨格が同じで語だけ違う 2 枚の対応表 -->
+      <div id="xf-parallel" hidden></div>
       <div id="xf-list" hidden></div>
       <div id="compare-container">
         <div id="compare-svg"></div>
