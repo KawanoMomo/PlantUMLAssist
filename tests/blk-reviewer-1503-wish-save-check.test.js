@@ -157,4 +157,18 @@ describe('save-check — 保存した図の不一致をその場で分ける', f
     const res = sc.evaluate(board.build({ audits: {} }), { doc: 'a.puml', state: { seen: {} } });
     expect(sc.summaryLine(res)).toContain('突合は動きませんでした');
   });
+
+  test('checkLine は突合の結果だけを述べ、「保存しました」を言わない', function() {
+    // ステータスバーでは保存先の文言の後ろに足すので、ここが「保存しました」で
+    // 始まると「どこに書いたか」を押しのけてしまう (known-red の 2 件の原因)。
+    const cases = [
+      sc.evaluate(board.build({ audits: {} }), { doc: 'a.puml', state: { seen: {} } }),
+      sc.evaluate(board.build({ audits: { 'a.puml': { rows: [{ text: 'New1', kind: 'diff' }] } } }),
+        { doc: 'a.puml', state: { seen: {} } }),
+    ];
+    cases.forEach(function(res) {
+      expect(sc.checkLine(res)).not.toContain('保存しました');
+      expect(sc.summaryLine(res)).toBe('保存しました。' + sc.checkLine(res));
+    });
+  });
 });
