@@ -1682,6 +1682,8 @@ html, body {
 #peek-cohort .cohort-none { color: var(--text-secondary); opacity: 0.7; }
 #peek-cohort-toggle.on { border-color: var(--accent); color: var(--accent); }
 #peek-template:disabled { opacity: 0.5; cursor: default; }
+#peek-cohort-templates.on { border-color: var(--accent); color: var(--accent); }
+#peek-dirs .cohort-hint { font-size: 11px; color: var(--text-secondary); padding: 4px 2px; }
 #at-modal-content {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
@@ -5458,6 +5460,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/folder-select.js"></script>
 <script src="src/core/folder-filter.js"></script>
 <script src="src/core/peek-folder.js"></script>
+<script src="src/core/audit-scope.js"></script>
 <script src="src/core/domain-cohort.js"></script>
 <script src="src/core/version-history.js"></script>
 <script src="src/core/diagram-kind.js"></script>
@@ -5918,6 +5921,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <span id="peek-tools">
         <button type="button" id="peek-template" disabled title="この図をテンプレートにして新しい図を作る">⧉ テンプレートとして開く</button>
         <button type="button" id="peek-cohort-toggle" title="同じドメイン名の図をフォルダ横断で並べる">🔀 ドメインで揃える</button>
+        <button type="button" id="peek-cohort-templates" style="display:none;" title="アプリ同梱テンプレ・既定サンプル由来のドメインも突合に含める">📄 テンプレも表示</button>
         <button type="button" id="peek-prev" title="前の図">↑</button>
         <button type="button" id="peek-next" title="次の図">↓</button>
         <button type="button" id="peek-close">閉じる</button>

@@ -36,6 +36,7 @@ const sourceFiles = [
   'src/core/svg-compare-row.js',
   'src/core/review-state.js',
   'src/core/file-role.js',
+  'src/core/audit-scope.js',
   'src/core/command-palette.js',
   'src/core/diagram-rail.js',
   'src/core/tool-menu.js',

@@ -232,6 +232,11 @@ function summarize(audits) {
         .map((g) => g.domain + ' [' + g.folders.join(' × ') + ']'),
       // 同名ドメインだが図種が噛み合わず突き合わせていない組。
       unpairedNames: ch.result.groups.filter((g) => g.unpaired).map((g) => g.domain),
+      // BLK-reviewer-20260909-0503-wish: テンプレを各自が複製しただけのドメイン
+      // (plantuml-*.puml の plantuml 等) は既定で突合から外す。外したことを数字で
+      // 残さないと、前回の run との件数比較で「食い違いが直った」と読めてしまう。
+      excludedTemplateDomains: (ch.result.templateDomains || []).map((t) => t.domain),
+      templateFiles: ch.result.templateFiles || 0,
     };
   }
   return s;
@@ -337,11 +342,15 @@ function formatSummary(report, prev, options) {
     const tail = s.cohort.unpairedNames.length
       ? ` (図種が噛み合わず比べられないドメイン ${s.cohort.unpairedNames.length} 件: ${s.cohort.unpairedNames.join(', ')})`
       : '';
+    // 外したテンプレ由来のドメインは必ず添える。黙って減らすと、前回との
+    // 件数比較で「食い違いが直った」と読めてしまう。
+    const ex = s.cohort.excludedTemplateDomains || [];
+    const note = ex.length ? ` (テンプレ由来 ${ex.length} ドメインは除外: ${ex.join(', ')})` : '';
     lines.push(s.cohort.crossFolder === 0
-      ? `ドメイン突合: フォルダをまたぐドメインがありません (全 ${s.cohort.domains} ドメイン)`
+      ? `ドメイン突合: フォルダをまたぐドメインがありません (全 ${s.cohort.domains} ドメイン)${note}`
       : (s.cohort.mismatched === 0
-        ? `ドメイン突合: フォルダをまたぐ ${s.cohort.crossFolder} ドメインは名前もラベルも揃っている${tail}`
-        : `ドメイン突合: ${s.cohort.crossFolder} ドメイン中 ${s.cohort.mismatched} 件が食い違い (${s.cohort.mismatchedNames.join(', ')})${tail}`));
+        ? `ドメイン突合: フォルダをまたぐ ${s.cohort.crossFolder} ドメインは名前もラベルも揃っている${tail}${note}`
+        : `ドメイン突合: ${s.cohort.crossFolder} ドメイン中 ${s.cohort.mismatched} 件が食い違い (${s.cohort.mismatchedNames.join(', ')})${tail}${note}`));
   }
   for (const k of Object.keys(report.audits)) {
     const a = report.audits[k];

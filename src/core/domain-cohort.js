@@ -22,6 +22,27 @@ window.MA.domainCohort = (function() {
 
   function _fa() { return window.MA.familyAudit; }
   function _na() { return window.MA.nameAudit; }
+  function _scope() { return window.MA.auditScope; }
+
+  // BLK-reviewer-20260909-0503-wish: 突合を GPIO の外へ広げた回、`plantuml`
+  // ドメインが junior/primary/reviewer の 3 フォルダで「食い違い」と出た。中身は
+  // plantuml-sequence.puml 等のアプリ同梱テンプレ (Sample Sequence / User→System→DB) を
+  // 各自が独立に複製しただけの練習用で、GPIO のような業務上の名前空間衝突ではない。
+  // テンプレ由来と業務データを同じ「食い違い」件数に混ぜると、reviewer は毎回
+  // puml の中身を読んで「これはテンプレか」を手で選り分けることになる。
+  //
+  // 分類は audit-scope の実データ / テンプレ判定をそのまま使う (CLI の --summary の
+  // 「内訳: 実データ n 枚 / テンプレ n 枚」と画面の除外が同じ規則になる)。
+  // 名前で決める判定なので、本文をまだ読んでいない一覧の段階でも効く。
+  // 返り値はテンプレなら理由の文字列、実データなら ''。
+  function templateReasonOf(docName) {
+    var as = _scope();
+    if (!as || !as.classify) return '';
+    var c = as.classify(docName);
+    return c && c.kind === 'template' ? (c.reason || 'テンプレ') : '';
+  }
+
+  function isTemplate(docName) { return templateReasonOf(docName) !== ''; }
 
   // `junior/gpio_state.puml` → `junior`。フォルダの無い名前は '' (= 分類なし)。
   // 深い階層は先頭 1 段だけを見る。ペルソナ = 保存フォルダ 1 段という置き方に合わせる。
@@ -110,12 +131,15 @@ window.MA.domainCohort = (function() {
       if (!byKey[key]) { byKey[key] = { domain: key, entries: [], folders: [] }; order.push(key); }
       var g = byKey[key];
       var folder = folderOf(d.name);
+      var reason = templateReasonOf(d.name);
       var entry = {
         doc: d,
         name: _s(d.name),
         base: baseOf(d.name),
         folder: folder,
         kind: kindOf(d),
+        template: reason !== '',
+        templateReason: reason,
       };
       g.entries.push(entry);
       if (g.folders.indexOf(folder) < 0) g.folders.push(folder);
@@ -129,14 +153,37 @@ window.MA.domainCohort = (function() {
         return a.base < b.base ? -1 : a.base > b.base ? 1 : 0;
       });
       g.crossFolder = g.folders.length >= 2;
+      // 業務データだけで数え直した姿。テンプレを混ぜたまま「3 フォルダに
+      // またがる」と言うと、除外した後で比べる相手がいなくなる組が残る。
+      g.dataEntries = g.entries.filter(function(e) { return !e.template; });
+      g.templateEntries = g.entries.filter(function(e) { return e.template; });
+      g.dataFolders = [];
+      g.dataEntries.forEach(function(e) {
+        if (g.dataFolders.indexOf(e.folder) < 0) g.dataFolders.push(e.folder);
+      });
+      g.dataFolders.sort();
+      // 1 枚も業務データが無いドメイン = テンプレを各自が複製しただけの雑音。
+      g.templateOnly = g.dataEntries.length === 0;
+      g.crossFolderData = g.dataFolders.length >= 2;
       return g;
     });
   }
 
   // 2 フォルダ以上にまたがるドメインだけ。1 フォルダにしか無いドメインは
   // 「並べて比べる」対象にならない (比べる相手がいない)。
-  function crossFolder(list) {
-    return (list || []).filter(function(g) { return g && g.crossFolder; });
+  // テンプレ由来だけのドメインは既定で落とす (opts.includeTemplates で戻せる)。
+  function crossFolder(list, opts) {
+    var inc = !!(opts && opts.includeTemplates);
+    return (list || []).filter(function(g) {
+      if (!g) return false;
+      return inc ? g.crossFolder : (!g.templateOnly && g.crossFolderData);
+    });
+  }
+
+  // 除外したテンプレ由来のドメイン。件数を黙って減らすと「食い違いが消えた」と
+  // 読めてしまうので、何を外したかを必ず数えられるようにする。
+  function templateOnly(list) {
+    return (list || []).filter(function(g) { return g && g.templateOnly && g.crossFolder; });
   }
 
   // ── 突合 ────────────────────────────────────────────────────────────
@@ -178,8 +225,11 @@ window.MA.domainCohort = (function() {
 
   // 同じドメインの、フォルダの違う、同じ図種の組。
   // 図種が違う 2 枚 (シーケンス × 状態遷移) は family/trace の職掌なのでここでは組まない。
-  function pairsFor(group) {
-    var entries = (group && group.entries) || [];
+  // テンプレ由来の図は既定で組まない。同じテンプレの複製どうしは「揃っていて
+  // 当たり前」なので、揃っていれば水増し、題材語を替えてあれば偽の食い違いになる。
+  function pairsFor(group, opts) {
+    var inc = !!(opts && opts.includeTemplates);
+    var entries = (group && (inc ? group.entries : group.dataEntries || group.entries)) || [];
     var out = [];
     for (var i = 0; i < entries.length; i++) {
       for (var j = i + 1; j < entries.length; j++) {
@@ -192,42 +242,75 @@ window.MA.domainCohort = (function() {
     return out;
   }
 
-  function compare(group) {
-    var pairs = pairsFor(group).map(function(p) {
+  function compare(group, opts) {
+    var inc = !!(opts && opts.includeTemplates);
+    var pairs = pairsFor(group, opts).map(function(p) {
       p.diff = diff(p.a.doc, p.b.doc);
       return p;
     });
     return {
       domain: group.domain,
-      folders: group.folders,
+      folders: inc ? group.folders : (group.dataFolders || group.folders),
       entries: group.entries,
+      // 突合から外したテンプレ由来の枚数。0 でない行は「全部は比べていない」。
+      templates: (group.templateEntries || []).length,
+      includedTemplates: inc,
       pairs: pairs,
       // 突き合わせた組のうち、片方にしか無い名前・ラベルを持つ組の数。
       mismatched: pairs.filter(function(p) { return !p.diff.matched; }).length,
       // 同じドメイン名だが図種が噛み合わず比べられなかったフォルダ跨ぎの枚数。
       // 0 件を「揃っている」と読み違えないために別に数える。
-      unpaired: group.crossFolder && pairs.length === 0,
+      unpaired: (inc ? group.crossFolder : group.crossFolderData) && pairs.length === 0,
     };
   }
 
   // 監査の入口。tools/audit-report.js の AUDITS.cohort から呼ばれる。
-  function audit(docs) {
+  function audit(docs, opts) {
+    var inc = !!(opts && opts.includeTemplates);
     var all = groups(docs);
-    var cross = crossFolder(all).map(compare);
+    var cross = crossFolder(all, opts).map(function(g) { return compare(g, opts); });
+    var tpl = templateOnly(all);
     return {
       groups: cross,
       // 1 フォルダにしか無いドメイン = 相手がいないので比べていない。
-      soloDomains: all.filter(function(g) { return !g.crossFolder; })
-        .map(function(g) { return g.domain; }),
+      soloDomains: all.filter(function(g) {
+        if (inc) return !g.crossFolder;
+        return !g.templateOnly && !g.crossFolderData;
+      }).map(function(g) { return g.domain; }),
+      // 突合から外したテンプレ由来のドメイン。0 件を「食い違いなし」と読ませない
+      // ために、除外そのものを結果に残す (画面でも --summary でも出す)。
+      templateDomains: tpl.map(function(g) {
+        return {
+          domain: g.domain,
+          folders: g.folders,
+          files: g.entries.length,
+          reason: (g.entries[0] && g.entries[0].templateReason) || 'テンプレ',
+        };
+      }),
+      templateFiles: all.reduce(function(n, g) { return n + (g.templateEntries || []).length; }, 0),
+      includedTemplates: inc,
       domains: all.length,
     };
+  }
+
+  // 除外したテンプレを言う尾。「テンプレも数えた件数」との差が読めないと、
+  // 前回の run と件数を比べたときに「直った」と読み違える。
+  function templateNote(result) {
+    var tpl = (result && result.templateDomains) || [];
+    if (result && result.includedTemplates) {
+      return tpl.length ? ' (テンプレ由来 ' + tpl.length + ' ドメインも含めている)' : '';
+    }
+    if (!tpl.length) return '';
+    return ' (テンプレ由来 ' + tpl.length + ' ドメインは除外: '
+      + tpl.map(function(t) { return t.domain; }).join(', ') + ')';
   }
 
   function summaryLine(result) {
     var r = result || {};
     var g = r.groups || [];
+    var note = templateNote(r);
     if (!g.length) {
-      return 'ドメイン突合: フォルダをまたぐドメインがありません (全 ' + (r.domains | 0) + ' ドメイン)';
+      return 'ドメイン突合: フォルダをまたぐドメインがありません (全 ' + (r.domains | 0) + ' ドメイン)' + note;
     }
     var bad = g.filter(function(x) { return x.mismatched > 0; });
     var unpaired = g.filter(function(x) { return x.unpaired; }).map(function(x) { return x.domain; });
@@ -235,10 +318,10 @@ window.MA.domainCohort = (function() {
       ? ' (図種が噛み合わず比べられないドメイン ' + unpaired.length + ' 件: ' + unpaired.join(', ') + ')'
       : '';
     if (!bad.length) {
-      return 'ドメイン突合: フォルダをまたぐ ' + g.length + ' ドメインは名前もラベルも揃っている' + tail;
+      return 'ドメイン突合: フォルダをまたぐ ' + g.length + ' ドメインは名前もラベルも揃っている' + tail + note;
     }
     return 'ドメイン突合: ' + g.length + ' ドメイン中 ' + bad.length + ' 件が食い違い ('
-      + bad.map(function(x) { return x.domain + ' [' + x.folders.join(' × ') + ']'; }).join(', ') + ')' + tail;
+      + bad.map(function(x) { return x.domain + ' [' + x.folders.join(' × ') + ']'; }).join(', ') + ')' + tail + note;
   }
 
   // 画面の行。左が自分のフォルダ、右が相手。押せば peek でその図を開ける。
@@ -270,6 +353,10 @@ window.MA.domainCohort = (function() {
     labelsOf: labelsOf,
     groups: groups,
     crossFolder: crossFolder,
+    templateOnly: templateOnly,
+    templateReasonOf: templateReasonOf,
+    isTemplate: isTemplate,
+    templateNote: templateNote,
     pairsFor: pairsFor,
     diff: diff,
     compare: compare,
