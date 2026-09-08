@@ -4330,6 +4330,33 @@ function setupTabs() {
     sum.textContent = SF.summary(svgScan);
     panel.appendChild(sum);
 
+    // BLK-reviewer-20260908-0823-wish: 件数だけだと「どの図か」を 22 行の中から
+    // 目で探すことになり、SVG の書き出し漏れに気付くのが偶然に戻る。
+    // 無い図・古い図の名前をここに並べ、押せばその図を開けるようにする。
+    var short = SF.shortfall ? SF.shortfall(svgScan) : [];
+    short.forEach(function(g) {
+      var row = document.createElement('div');
+      row.className = 'folder-svg-names svg-' + g.status;
+      row.setAttribute('data-svg-status', g.status);
+      var label = document.createElement('span');
+      label.className = 'folder-svg-names-label';
+      label.textContent = g.label;
+      row.appendChild(label);
+      g.names.forEach(function(name) {
+        var link = document.createElement('button');
+        link.type = 'button';
+        link.className = 'folder-svg-name';
+        link.textContent = name;
+        link.title = g.title;
+        link.addEventListener('click', function(ev) {
+          ev.stopPropagation();
+          openFromFolder(name);
+        });
+        row.appendChild(link);
+      });
+      panel.appendChild(row);
+    });
+
     var btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'folder-svg-render';

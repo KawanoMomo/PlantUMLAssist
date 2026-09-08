@@ -79,6 +79,27 @@ window.MA.svgFreshness = (function() {
     return 'SVG: ' + parts.join(' / ');
   }
 
+  // BLK-reviewer-20260908-0823-wish: 「無い N 枚」だけでは、どの図を書き出し忘れたかを
+  // 一覧の行から目で探すことになる (17 枚の突合で 1 枚見つけた、が偶然だった原因)。
+  // 直し方ごとに名前を束ねて返し、一覧がそのまま名前を出せるようにする。
+  // fresh と unknown は入れない — 前者は直す必要が無く、後者は名前を出しても
+  // 「何をすればよいか」が決まらないため (要約の件数としては残る)。
+  var SHORTFALL = [
+    { status: 'missing', label: 'SVG が無い', title: 'この図の SVG が保存フォルダにありません。書き出すと消えます' },
+    { status: 'stale', label: 'SVG が古い', title: 'SVG が puml より古い。作り直すまでは前のレイアウトです' },
+  ];
+
+  function shortfall(scanned) {
+    var rows = (scanned && scanned.rows) || [];
+    var out = [];
+    SHORTFALL.forEach(function(g) {
+      var names = rows.filter(function(r) { return r.status === g.status; })
+        .map(function(r) { return r.name; });
+      if (names.length) out.push({ status: g.status, label: g.label, title: g.title, names: names });
+    });
+    return out;
+  }
+
   // 作り直しボタンの文言。0 枚なら押させない。
   function renderLabel(scanned) {
     var n = (scanned && scanned.needsRender.length) || 0;
@@ -91,6 +112,7 @@ window.MA.svgFreshness = (function() {
     scan: scan,
     statusMap: statusMap,
     summary: summary,
+    shortfall: shortfall,
     renderLabel: renderLabel,
   };
 })();

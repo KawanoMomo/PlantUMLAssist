@@ -34,6 +34,10 @@
     // 「移った」が「解消した」に見え、件数表を見た側が図を疑う羽目になる。
     'consistency.methodReplies': '整合/メソッド(応答として除外)',
     'trace.outOfScope': 'トレース/除外',
+    // BLK-reviewer-20260908-0823-wish: DSL ではなく出力物の欠落。直し方が
+    // 「図を直す」ではなく「書き出す」なので、指摘とは別カテゴリで数える。
+    'svg.missing': '出力物/SVG 無',
+    'svg.stale': '出力物/SVG 古',
   };
 
   // 除外バケツ。ここへ移った指摘は「消えた」ではなく「見ないことにした」。
@@ -77,6 +81,8 @@
       case 'family.mismatches': return _s(it.family) + ':' + _s(it.key || it.label);
       case 'trace.missing':
       case 'trace.outOfScope': return _s(it.family) + ':' + _s(it.from) + '→' + _s(it.to) + ':' + _s(it.label || it.event);
+      case 'svg.missing':
+      case 'svg.stale': return _s(it.name);
       default: return JSON.stringify(it);
     }
   }
@@ -108,6 +114,8 @@
       case 'trace.outOfScope': return it.family;
       case 'consistency.unused': return it.doc;
       case 'name.undeclared': return it.doc || it.docs;
+      case 'svg.missing':
+      case 'svg.stale': return it.name;
       default: return '';
     }
   }
@@ -126,6 +134,8 @@
       case 'consistency.unused': return it.name;
       case 'name.variants': return it.key || it.suggested;
       case 'name.undeclared': return it.name;
+      case 'svg.missing': return 'SVG 無';
+      case 'svg.stale': return 'SVG 古';
       default: return '';
     }
   }
@@ -208,6 +218,13 @@
         });
       });
     }
+    // 出力物の欠落。図を開かずに「どの図を書き出し忘れたか」が run 間で追える。
+    if (_ok(a.svg)) {
+      (a.svg.result.rows || []).forEach(function(r) {
+        if (r.status === 'missing') push('svg.missing', [{ name: r.name }]);
+        else if (r.status === 'stale') push('svg.stale', [{ name: r.name }]);
+      });
+    }
     return out;
   }
 
@@ -234,6 +251,10 @@
     if (_ok(a.trace)) {
       add('trace.missing', true);
       add('trace.outOfScope', true);
+    }
+    if (_ok(a.svg)) {
+      add('svg.missing', true);
+      add('svg.stale', true);
     }
     return out;
   }

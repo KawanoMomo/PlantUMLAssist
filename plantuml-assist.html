@@ -636,6 +636,19 @@ html, body {
   padding: 2px 6px;
 }
 #folder-panel .folder-svg-summary.has-stale { color: var(--accent-red); }
+/* 書き出し漏れ・作り直しが要る図の名前 (BLK-reviewer-20260908-0823-wish) */
+#folder-panel .folder-svg-names {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
+  font-size: 10px; padding: 1px 6px 3px;
+}
+#folder-panel .folder-svg-names-label { color: var(--text-secondary); }
+#folder-panel .folder-svg-names.svg-missing .folder-svg-names-label { color: var(--accent-red); }
+#folder-panel button.folder-svg-name {
+  border: 1px solid var(--border); border-radius: 3px; background: var(--bg-tertiary);
+  color: var(--text-primary); font-size: 10px; padding: 0 5px; width: auto; cursor: pointer;
+}
+#folder-panel .folder-svg-names.svg-missing button.folder-svg-name { border-color: var(--accent-red); }
+#folder-panel button.folder-svg-name:hover { border-color: var(--accent); }
 #folder-panel button.folder-svg-render {
   border: 1px solid var(--border);
   border-radius: 3px;
