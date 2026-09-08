@@ -63,9 +63,11 @@ window.MA.insertMarker = (function() {
   function gutterHtml(count, t, escHtml) {
     var esc = escHtml || function(s) { return String(s); };
     var out = [];
+    // BLK-primary-20260908-1603: 行番号にマウスを乗せて対応する図形を光らせたいので、
+    // どの番号も data-line を持つ span で包む (挿入先だけ従来どおり目印の class が付く)。
     for (var i = 1; i <= count; i++) {
-      if (i === t) out.push('<span class="ln-insert-target">' + esc(String(i)) + '</span>');
-      else out.push(esc(String(i)));
+      var cls = 'ln' + (i === t ? ' ln-insert-target' : '');
+      out.push('<span class="' + cls + '" data-line="' + i + '">' + esc(String(i)) + '</span>');
     }
     return out.join('\n');
   }

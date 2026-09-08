@@ -95,14 +95,21 @@ describe('行番号ガター', function() {
 
   test('挿入先の行だけ目印の class が付く', function() {
     var html = IM.gutterHtml(3, 2, esc);
-    expect(html).toBe('1\n<span class="ln-insert-target">2</span>\n3');
+    // BLK-primary-20260908-1603 で全行が data-line 付きの span になった
+    // (行番号を「対応する図形を指す取っ手」にするため)。挿入先の目印は据置き。
+    expect(html).toBe('<span class="ln" data-line="1">1</span>\n'
+      + '<span class="ln ln-insert-target" data-line="2">2</span>\n'
+      + '<span class="ln" data-line="3">3</span>');
   });
 
-  test('挿入先が無ければ素の番号列 (今までと同じ見た目)', function() {
-    expect(IM.gutterHtml(3, null, esc)).toBe('1\n2\n3');
+  test('挿入先が無ければどの番号にも目印の class は付かない', function() {
+    expect(IM.gutterHtml(3, null, esc)).toBe('<span class="ln" data-line="1">1</span>\n'
+      + '<span class="ln" data-line="2">2</span>\n'
+      + '<span class="ln" data-line="3">3</span>');
   });
 
   test('挿入先が行数を超えていても番号列は壊れない', function() {
-    expect(IM.gutterHtml(2, 9, esc)).toBe('1\n2');
+    expect(IM.gutterHtml(2, 9, esc)).toBe('<span class="ln" data-line="1">1</span>\n'
+      + '<span class="ln" data-line="2">2</span>');
   });
 });

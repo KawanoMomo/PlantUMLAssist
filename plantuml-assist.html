@@ -2356,6 +2356,12 @@ html, body {
   color: var(--accent);
   font-weight: bold;
 }
+/* BLK-primary-20260908-1603: 行番号は「対応する図形を指す」取っ手になった */
+#line-numbers .ln { cursor: default; }
+#line-numbers .ln.ln-peek {
+  color: rgb(255, 190, 90);
+  font-weight: bold;
+}
 
 /* design 5c: 挿入先の行に重ねる「← N 行目に挿入」。
    高さ 19.5px は #editor の line-height (13px * 1.5) と揃える */
@@ -3410,6 +3416,15 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 }
 #overlay-layer rect.selectable:hover:not(.selected) {
   fill: rgba(255, 255, 255, 0.05);
+}
+/* BLK-primary-20260908-1603: 選ぶ前の対応表示。DSL のキャレット行・行番号に
+   マウスが乗った行に対応する図形を薄く光らせる。選択 (青の実線) と見分けが
+   付くよう、破線の琥珀にする */
+#overlay-layer rect.selectable.peek:not(.selected) {
+  fill: rgba(255, 190, 90, 0.16);
+  stroke: rgba(255, 190, 90, 0.85);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
 }
 
 /* ── Properties Pane ───────────────────────────────────────────────────────── */
@@ -4708,6 +4723,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/group-notation.js"></script>
 <script src="src/core/sequence-marks.js"></script>
 <script src="src/core/insert-marker.js"></script>
+<script src="src/core/line-peek.js"></script>
 <script src="src/core/label-colors.js"></script>
 <script src="src/core/submit-check.js"></script>
 <script src="src/core/sequence-autonumber.js"></script>
