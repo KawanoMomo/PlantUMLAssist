@@ -1939,6 +1939,49 @@ html, body {
 }
 #mexp-plan { padding: 6px 14px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-secondary); }
 #mexp-state { padding: 8px 14px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-secondary); min-height: 16px; }
+/* 部品の資料一式 (BLK-junior-20260909-0003-wish) */
+#mboard-modal-content {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  width: 76vw;
+  max-width: 900px;
+  max-height: 84vh;
+  display: flex;
+  flex-direction: column;
+}
+#mboard-head {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px; border-bottom: 1px solid var(--border);
+  font-size: 12px; color: var(--text-primary);
+}
+#mboard-head label.mboard-field { display: flex; align-items: center; gap: 6px; }
+#mboard-head select {
+  background: var(--bg-tertiary); color: var(--text-primary);
+  border: 1px solid var(--border); border-radius: 3px; font-size: 12px; padding: 3px 6px;
+}
+#mboard-tools { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+#mboard-tools button {
+  border: 1px solid var(--border); background: var(--bg-tertiary); color: var(--text-primary);
+  border-radius: 3px; cursor: pointer; font-size: 11px; padding: 3px 10px; white-space: nowrap;
+}
+#mboard-tools #mboard-run { border-color: var(--accent); color: var(--accent); }
+#mboard-tools #mboard-run[disabled] { opacity: 0.5; cursor: default; border-color: var(--border); color: var(--text-secondary); }
+#mboard-summary { padding: 6px 14px; border-bottom: 1px solid var(--border); font-size: 11px; color: var(--text-secondary); }
+#mboard-body { padding: 4px 14px 10px; overflow: auto; }
+#mboard-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+#mboard-table th, #mboard-table td {
+  text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--border);
+  color: var(--text-primary); vertical-align: top;
+}
+#mboard-table th { color: var(--text-secondary); font-weight: normal; font-size: 11px; }
+#mboard-table th.mboard-pick, #mboard-table td.mboard-pick { width: 24px; }
+#mboard-table td.mboard-note { color: var(--text-secondary); font-size: 11px; }
+tr.mboard-row td.mboard-status { white-space: nowrap; }
+tr.mboard-row[data-status="none"] td.mboard-status { color: #e06c75; }
+tr.mboard-row[data-status="stale"] td.mboard-status { color: #d19a66; }
+tr.mboard-row[data-status="fresh"] td.mboard-status { color: #98c379; }
+#mboard-state { padding: 8px 14px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-secondary); min-height: 16px; }
 /* 変更サマリボード (BLK-primary-20260907-0923-wish) */
 .board-modal {
   background: var(--bg-secondary);
@@ -4525,6 +4568,10 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
              形式 (状態遷移図=SVG / 他=PNG透過) を利用者に覚えさせず、部品と図種を
              選ぶだけで 題名の(資料用)・書き出し・保存・提出物庫への控えまでを 1 回で行う -->
         <button id="exp-material" title="部品と図種を選ぶと、その図種に決まっている形式で書き出し、題名に（資料用）を付けて保存フォルダと提出物庫にも入れる">1 枚を資料化（形式は図種で自動）…</button>
+        <!-- BLK-junior-20260909-0003-wish: 設計書に貼る資料は 1 部品の複数図種で 1 組。
+             どの図種の資料用がまだ無いか・元の図が資料用より新しくないかを一覧で見せ、
+             手当ての要る図種だけをまとめて 1 回で書き出す -->
+        <button id="exp-material-board" title="部品の図種を全部並べ、資料用が無い図種・元が新しい図種を色分けで見せて、選んだ図種をまとめて資料化する">部品の資料一式を見る／まとめて資料化…</button>
       </div>
       <div id="bulk-export-status" role="status"></div>
     </div>
@@ -5207,6 +5254,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/bulk-export.js"></script>
 <script src="src/core/component-pack.js"></script>
 <script src="src/core/material-export.js"></script>
+<script src="src/core/material-board.js"></script>
 <script src="src/core/rename-history.js"></script>
 <script src="src/core/vault.js"></script>
 <script src="src/core/component-inventory.js"></script>
@@ -5501,6 +5549,32 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     </div>
     <div id="mexp-plan" role="status">部品と図種を選ぶと、書き出す形式と名前がここに出ます。</div>
     <div id="mexp-state" role="status"></div>
+  </div>
+</div>
+<!-- 部品の資料一式 (BLK-junior-20260909-0003-wish) -->
+<div id="mboard-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+  <div id="mboard-modal-content">
+    <div id="mboard-head">
+      <strong>部品の資料一式</strong>
+      <label class="mboard-field">部品
+        <select id="mboard-component"></select>
+      </label>
+      <span id="mboard-tools">
+        <button type="button" id="mboard-pending">手当ての要る図種だけ選ぶ</button>
+        <button type="button" id="mboard-run" disabled>資料化する</button>
+        <button type="button" id="mboard-close">閉じる</button>
+      </span>
+    </div>
+    <div id="mboard-summary" role="status"></div>
+    <div id="mboard-body">
+      <table id="mboard-table">
+        <thead>
+          <tr><th class="mboard-pick"></th><th>図種</th><th>状態</th><th>形式</th><th>元の図 → 書き出す名前</th></tr>
+        </thead>
+        <tbody id="mboard-rows"></tbody>
+      </table>
+    </div>
+    <div id="mboard-state" role="status"></div>
   </div>
 </div>
 <!-- 監査履歴 (BLK-reviewer-20260907-2303-wish) -->

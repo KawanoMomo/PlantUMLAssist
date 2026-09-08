@@ -95,3 +95,90 @@ test('手順5 資料化: シーケンス図を選ぶと PNG(透過背景)に切�
   expect(download).not.toBeNull();
   expect(download.suggestedFilename()).toBe('GPIOドライバ初期化シーケンス(資料用).png');
 });
+
+// 「部品の資料一式」— 設計書に貼る資料は 1 部品の複数図種で 1 組。
+// BLK-junior-20260909-0003-wish: どの図種の資料用がまだ無いか・元の図が資料用より
+// 新しくないかを一覧で見せ、手当ての要る図種だけをまとめて 1 回で書き出す。
+const GPIO_CLASS = [
+  '@startuml',
+  'title GPIOドライバ派生クラス',
+  'class Gpio_Driver {',
+  '  + Init() : void',
+  '}',
+  'class Gpio_PortDrv',
+  'Gpio_Driver <|-- Gpio_PortDrv',
+  '@enduml',
+].join('\n');
+
+async function openMaterialBoard(page) {
+  await page.locator('#btn-export').click();
+  await page.waitForSelector('#export-menu', { state: 'visible' });
+  await page.locator('#exp-material-board').click();
+  await page.waitForSelector('#mboard-modal', { state: 'visible' });
+  await page.waitForTimeout(700);
+  await page.locator('#mboard-component').selectOption('GPIOドライバ');
+  await page.waitForTimeout(200);
+}
+
+// 前周までの成果物の並び: 状態遷移は資料用が最新、シーケンスは元のほうが新しい、
+// クラス図は資料用がまだ無い。mtime は 1 秒刻みなので、間を置いて置き直す。
+async function setupBoardFixture(page) {
+  await S.clearDir(page, DIR);
+  await S.putDoc(page, DIR, 'GPIOドライバ初期化シーケンス(資料用)', S.GPIO_SEQ);
+  await S.putDoc(page, DIR, 'GPIOドライバ状態遷移', S.GPIO_STATE);
+  await page.waitForTimeout(1500);
+  await S.putDoc(page, DIR, 'GPIOドライバ初期化シーケンス', S.GPIO_SEQ);
+  await S.putDoc(page, DIR, 'GPIOドライバ状態遷移(資料用)', S.GPIO_STATE);
+  await S.putDoc(page, DIR, 'GPIOドライバ派生クラス', GPIO_CLASS);
+  await page.reload();
+  await page.waitForTimeout(800);
+}
+
+test('手順1 資料一式: 部品を選ぶと、資料用が無い図種・元が新しい図種が一覧で分かる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await setupBoardFixture(page);
+  await openMaterialBoard(page);
+
+  // 到達条件: 3 図種が並び、状態が行ごとに読める (名前と日時を読み比べなくてよい)。
+  await expect(page.locator('#mboard-rows tr.mboard-row')).toHaveCount(3);
+  await expect(page.locator('tr.mboard-row[data-kind="クラス図"]')).toHaveAttribute('data-status', 'none');
+  await expect(page.locator('tr.mboard-row[data-kind="シーケンス図"]')).toHaveAttribute('data-status', 'stale');
+  await expect(page.locator('tr.mboard-row[data-kind="状態遷移図"]')).toHaveAttribute('data-status', 'fresh');
+  await expect(page.locator('#mboard-summary')).toContainText('2 図種の資料化が要ります');
+
+  // 形式は図種で決まっている (利用者は覚えなくてよい)。
+  await expect(page.locator('tr.mboard-row[data-kind="状態遷移図"] td.mboard-format')).toHaveText('SVG');
+  await expect(page.locator('tr.mboard-row[data-kind="クラス図"] td.mboard-format')).toContainText('PNG');
+
+  // 既定で選ばれているのは手当ての要る 2 図種だけ (最新の図は描き直さない)。
+  await expect(page.locator('tr.mboard-row[data-kind="クラス図"] input.mboard-check')).toBeChecked();
+  await expect(page.locator('tr.mboard-row[data-kind="シーケンス図"] input.mboard-check')).toBeChecked();
+  await expect(page.locator('tr.mboard-row[data-kind="状態遷移図"] input.mboard-check')).not.toBeChecked();
+  await expect(page.locator('#mboard-run')).toContainText('2 図種');
+});
+
+test('手順3〜5 資料一式: 選んだ図種をまとめて 1 回で資料化できる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await setupBoardFixture(page);
+  await openMaterialBoard(page);
+
+  const files = [];
+  page.on('download', (d) => files.push(d.suggestedFilename()));
+  await page.locator('#mboard-run').click();
+  await expect(page.locator('#mboard-state')).toContainText('資料化しました', { timeout: 90000 });
+
+  // 到達条件その1: 図種ごとに決まった形式で 2 枚が出る (クラス図=PNG、シーケンス=PNG)。
+  expect(files.sort()).toEqual([
+    'GPIOドライバ初期化シーケンス(資料用).png',
+    'GPIOドライバ派生クラス(資料用).png',
+  ]);
+
+  // 到達条件その2: 資料用の版が保存フォルダにも残る (次の周に開き直せる)。
+  const saved = await S.readDoc(page, DIR, 'GPIOドライバ派生クラス(資料用)');
+  expect(saved).not.toBeNull();
+  expect(saved).toContain('(資料用)');
+
+  // 到達条件その3: 出したあとは一覧がその場で「最新」に変わる (確かめ直しが要らない)。
+  await expect(page.locator('#mboard-summary')).toContainText('すべて最新');
+  await expect(page.locator('tr.mboard-row[data-kind="クラス図"]')).toHaveAttribute('data-status', 'fresh');
+});
