@@ -909,6 +909,9 @@ html, body {
 /* BLK-primary-20260908-0823-design (7a): 機能ボタンを「ツール」1 か所に畳む。
    畳んだ状態では機能ボタンがタブ列から消え、6 分類のメニューから選ぶ。 */
 #tab-bar.tools-folded .tab-tool.tool-folded { display: none; }
+/* BLK-primary-20260908-0923-design (7b): タブ列にはボタンを 1 つも置かない。
+   「ツール ▾」も消し、機能の入口は Ctrl+K だけにする。 */
+#tab-bar.tools-hide-tool-btn #btn-tab-tools { display: none; }
 #btn-tab-tools[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); }
 #tool-menu {
   position: absolute;

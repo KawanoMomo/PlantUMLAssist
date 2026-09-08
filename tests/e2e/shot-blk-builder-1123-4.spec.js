@@ -18,7 +18,11 @@ test('shot: 畳んだタブ列とツールメニュー', async ({ page }) => {
   await gotoApp(page, { foldedTools: true });
   const folded = await page.locator('#tab-bar').getAttribute('class');
   if (folded && folded.indexOf('tools-folded') >= 0) {
-    await page.locator('#btn-tab-tools').click();
+    // BLK-primary-20260908-0923-design (7b): 既定ではタブ列に「ツール ▾」も無いので、
+    // メニューは Ctrl+K から開く。
+    await page.keyboard.press('Control+k');
+    await page.locator('#cp-input').fill('ツールを分類から選ぶ');
+    await page.keyboard.press('Enter');
     await page.waitForTimeout(300);
   }
   await page.screenshot({ path: OUT });

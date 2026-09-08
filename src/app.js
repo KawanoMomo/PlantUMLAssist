@@ -1051,6 +1051,8 @@ function init() {
     if (!btn || !menu || !bar || !tm) return;
 
     var FOLD_KEY = 'plantuml-tools-folded';
+    // design 7b: 「ツール ▾」自体もタブ列に置かない。既定は静か。
+    var QUIET_KEY = 'plantuml-tools-quiet';
 
     function foldable() {
       return Array.prototype.filter.call(bar.querySelectorAll('.tab-tool'), function(b) {
@@ -1061,10 +1063,26 @@ function init() {
     function applyFold(folded) {
       foldable().forEach(function(b) { b.classList.add('tool-folded'); });
       bar.classList.toggle('tools-folded', !!folded);
+      syncToolButton();
     }
 
     function isFolded() {
       return bar.classList.contains('tools-folded');
+    }
+
+    function isQuiet() {
+      return bar.classList.contains('tools-quiet');
+    }
+
+    // 「ツール ▾」を出すかどうかは畳み方と静かさの組で決まる (tool-menu.js が正本)。
+    function syncToolButton() {
+      bar.classList.toggle('tools-hide-tool-btn',
+        !tm.showsToolButton(isFolded(), isQuiet()));
+    }
+
+    function applyQuiet(quiet) {
+      bar.classList.toggle('tools-quiet', !!quiet);
+      syncToolButton();
     }
 
     // タブ列のボタン文字の末尾に出る件数 (「📌 指摘 3」の 3) をメニューにも出す。
@@ -1088,6 +1106,11 @@ function init() {
         + '<div class="tool-menu-group"><button type="button" class="tool-menu-item" id="tool-menu-fold">'
         + '<span class="tool-menu-label">'
         + (isFolded() ? 'タブ列に戻す' : 'タブ列から畳む')
+        + '</span></button>'
+        // design 7b: タブ列を図のタブだけにする / ツール ▾ を出す の切り替え。
+        + '<button type="button" class="tool-menu-item" id="tool-menu-quiet">'
+        + '<span class="tool-menu-label">'
+        + (isQuiet() ? 'ツール ▾ をタブ列に出す' : 'タブ列を図のタブだけにする')
         + '</span></button></div>';
       menu.hidden = false;
       btn.setAttribute('aria-expanded', 'true');
@@ -1103,8 +1126,19 @@ function init() {
       if (!item) return;
       if (item.id === 'tool-menu-fold') {
         var next = !isFolded();
+        // 畳み方をここで自分で選んだ人は「ツール ▾」を入口として使っている。
+        // 7b の静かな既定は解いて、入口をタブ列に残す (Ctrl+K だけにしない)。
+        applyQuiet(false);
         applyFold(next);
         try { localStorage.setItem(FOLD_KEY, next ? '1' : '0'); } catch (err) {}
+        try { localStorage.setItem(QUIET_KEY, '0'); } catch (err) {}
+        close();
+        return;
+      }
+      if (item.id === 'tool-menu-quiet') {
+        var q = !isQuiet();
+        applyQuiet(q);
+        try { localStorage.setItem(QUIET_KEY, q ? '1' : '0'); } catch (err) {}
         close();
         return;
       }
@@ -1128,8 +1162,13 @@ function init() {
     // 要り、「今どれを見ているか」の図タブが「何をするか」に埋もれる。畳んだ側を既定に
     // すると、タブ列は図のタブと ＋ / 一覧 / ツール ▾ だけになり、件数は下端に出る。
     // 一度でも「タブ列に戻す」を押した人はその選択が残る。
+    // design 7b: さらに「ツール ▾」も置かない。タブ列は図のタブと ＋ / 一覧 だけになり、
+    // 機能は Ctrl+K から引く (件数は下端の状態表示に出ている)。
     var saved = null;
+    var savedQuiet = null;
     try { saved = localStorage.getItem(FOLD_KEY); } catch (err) {}
+    try { savedQuiet = localStorage.getItem(QUIET_KEY); } catch (err) {}
+    applyQuiet(tm.quietAtStart(savedQuiet));
     applyFold(tm.foldedAtStart(saved));
   })();
 
@@ -2365,6 +2404,9 @@ function initCommandPalette() {
       { id: 'trace-coverage', title: 'トレースカバレッジを開く / Trace coverage', hint: 'Tabs', keywords: ['trace', 'coverage', 'とれーす', 'もれ', 'せんい'], button: 'btn-tab-trace', run: function() { clickById('btn-tab-trace'); } },
       // BLK-primary-20260907-0923: タブバーの道具はどれもパレットに無く、design 1a で
       // ペインが狭くなった後は潰れたラベルを目で数えて押すしか経路が無かった。
+      // BLK-primary-20260908-0923-design (7b): タブ列から「ツール ▾」も消えるので、
+      // 6 分類のメニュー自体を引く経路をここに置く (メニューは画面左上に開く)。
+      { id: 'tab-tools', title: 'ツールを分類から選ぶ / Tools', hint: 'Tabs', keywords: ['tool', 'menu', 'つーる', 'どうぐ', 'ぶんるい', 'めにゅー'], run: function() { setTimeout(function() { clickById('btn-tab-tools'); }, 0); } },
       { id: 'tab-new', title: '新しい図を開く / New diagram', hint: 'Tabs', keywords: ['new', 'tab', 'あたらしい', 'ず'], button: 'btn-tab-new', run: function() { clickById('btn-tab-new'); } },
       { id: 'tab-folder', title: '保存フォルダの図を一覧 / Folder', hint: 'Tabs', keywords: ['folder', 'list', 'いちらん', 'ふぉるだ'], button: 'btn-tab-folder', run: function() { clickById('btn-tab-folder'); } },
       { id: 'tab-rename', title: '部品名を一括置換 / Bulk rename', hint: 'Tabs', keywords: ['rename', 'replace', 'いっかつ', 'ちかん'], button: 'btn-tab-rename', run: function() { clickById('btn-tab-rename'); } },
