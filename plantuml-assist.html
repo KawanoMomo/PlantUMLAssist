@@ -1654,6 +1654,33 @@ html, body {
   overflow-x: auto;
   margin: 10px 0 0;
 }
+/* BLK-reviewer-20260909-0403-wish: フォルダ横断のドメイン突合。
+   共通 / 片方だけ を色で分ける (どちらのフォルダの側かは接頭辞で言う)。 */
+#peek-cohort { padding-bottom: 10px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+#peek-cohort .cohort-head { font-size: 12px; font-weight: 600; padding-bottom: 6px; }
+#peek-cohort .cohort-hint { font-size: 11px; color: var(--text-secondary); padding: 4px 0; }
+#peek-cohort .cohort-pair {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+}
+#peek-cohort .cohort-pair.mismatched { border-color: var(--accent); }
+#peek-cohort .cohort-pair-title { font-size: 11px; padding-bottom: 4px; }
+#peek-cohort .cohort-line { display: flex; flex-wrap: wrap; gap: 4px; align-items: baseline; padding: 2px 0; }
+#peek-cohort .cohort-line-title { font-size: 10px; color: var(--text-secondary); min-width: 5.5em; }
+#peek-cohort .cohort-chip {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  border-radius: 3px;
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+}
+#peek-cohort .cohort-both { color: var(--text-secondary); }
+#peek-cohort .cohort-only-a { border-color: #d08770; color: #d08770; }
+#peek-cohort .cohort-only-b { border-color: #5e81ac; color: #5e81ac; }
+#peek-cohort .cohort-none { color: var(--text-secondary); opacity: 0.7; }
+#peek-cohort-toggle.on { border-color: var(--accent); color: var(--accent); }
 #at-modal-content {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
@@ -5427,6 +5454,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/folder-select.js"></script>
 <script src="src/core/folder-filter.js"></script>
 <script src="src/core/peek-folder.js"></script>
+<script src="src/core/domain-cohort.js"></script>
 <script src="src/core/version-history.js"></script>
 <script src="src/core/diagram-kind.js"></script>
 <script src="src/core/draft-mark.js"></script>
@@ -5882,6 +5910,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <strong>他のフォルダを見る</strong>
       <span id="peek-notice"></span>
       <span id="peek-tools">
+        <button type="button" id="peek-cohort-toggle" title="同じドメイン名の図をフォルダ横断で並べる">🔀 ドメインで揃える</button>
         <button type="button" id="peek-prev" title="前の図">↑</button>
         <button type="button" id="peek-next" title="次の図">↓</button>
         <button type="button" id="peek-close">閉じる</button>
@@ -5891,6 +5920,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <div id="peek-dirs"></div>
       <div id="peek-files"></div>
       <div id="peek-view">
+        <div id="peek-cohort" style="display:none;"></div>
         <div id="peek-title"></div>
         <div id="peek-svg"></div>
         <pre id="peek-dsl"></pre>

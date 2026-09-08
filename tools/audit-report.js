@@ -93,6 +93,11 @@ const AUDITS = {
   // だけだったので node からは回せなかった。配線はここ 1 行で足りる。
   label: (MA, docs) => (MA.labelPosition && MA.traceCoverage
     ? MA.labelPosition.rank(MA.traceCoverage.audit(docs)) : undefined),
+  // BLK-reviewer-20260909-0403-wish: 他の監査はどれもフォルダを捨てて系統だけを見るので、
+  // 「junior の gpio_state と primary の gpio_state が別物」はどこにも出ず、
+  // 該当ファイルを名前で推測して 4 枚個別に開き目で比べるしかなかった。
+  // フォルダを軸に残したまま、同じドメイン・同じ図種の組だけを突き合わせる。
+  cohort: (MA, docs) => (MA.domainCohort ? MA.domainCohort.audit(docs) : undefined),
 };
 
 // .puml の隣に置かれた同名の .svg を見て、svg-freshness が読む形の行にする。
@@ -215,6 +220,20 @@ function summarize(audits) {
       mixedNames: lp.result.rows.filter((r) => r.mixed).map((r) => r.key),
     };
   }
+  const ch = audits.cohort;
+  if (ch && ch.status === 'ok') {
+    s.cohort = {
+      domains: ch.result.domains,
+      // フォルダをまたぐドメインだけが比較の母数。domains で語ると、
+      // 1 フォルダにしか無いドメインまで「揃っている」に数えてしまう。
+      crossFolder: ch.result.groups.length,
+      mismatched: ch.result.groups.filter((g) => g.mismatched > 0).length,
+      mismatchedNames: ch.result.groups.filter((g) => g.mismatched > 0)
+        .map((g) => g.domain + ' [' + g.folders.join(' × ') + ']'),
+      // 同名ドメインだが図種が噛み合わず突き合わせていない組。
+      unpairedNames: ch.result.groups.filter((g) => g.unpaired).map((g) => g.domain),
+    };
+  }
   return s;
 }
 
@@ -311,6 +330,18 @@ function formatSummary(report, prev, options) {
       if (s.svg.unknown) parts.push(`時刻が取れず不明 ${s.svg.unknown} 枚`);
       lines.push(`出力物: ${parts.join(' / ')}`);
     }
+  }
+  if (s.cohort) {
+    // 「該当ファイルを名前で推測して 4 枚開く」を置き換える 1 行。
+    // どのドメインが・どのフォルダの間で食い違っているかまでここで名指しする。
+    const tail = s.cohort.unpairedNames.length
+      ? ` (図種が噛み合わず比べられないドメイン ${s.cohort.unpairedNames.length} 件: ${s.cohort.unpairedNames.join(', ')})`
+      : '';
+    lines.push(s.cohort.crossFolder === 0
+      ? `ドメイン突合: フォルダをまたぐドメインがありません (全 ${s.cohort.domains} ドメイン)`
+      : (s.cohort.mismatched === 0
+        ? `ドメイン突合: フォルダをまたぐ ${s.cohort.crossFolder} ドメインは名前もラベルも揃っている${tail}`
+        : `ドメイン突合: ${s.cohort.crossFolder} ドメイン中 ${s.cohort.mismatched} 件が食い違い (${s.cohort.mismatchedNames.join(', ')})${tail}`));
   }
   for (const k of Object.keys(report.audits)) {
     const a = report.audits[k];

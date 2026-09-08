@@ -5080,6 +5080,15 @@ var _peekDir = null;
 var _peekNames = [];
 var _peekName = null;
 
+// BLK-reviewer-20260909-0403-wish: フォルダを 1 つ選んで 1 枚ずつ読む形だと、
+// 「同じドメインの図が他のフォルダにもあるか」はファイル名を推測して開いて
+// 確かめるしかなかった (GPIO の突合は 4 枚を個別に開いてテキスト比較)。
+// ドメイン名でフォルダを横断して束ね、同じ図種の組の差分をその場で色分けする。
+var _cohortOn = false;
+var _cohortGroups = [];      // [{ domain, folders, entries }] — 本文はまだ読んでいない
+var _cohortDomain = null;
+var _cohortResult = null;    // 選んだドメインの compare 結果
+
 function _peekEls() {
   return {
     modal: document.getElementById('peek-modal'),
@@ -5089,7 +5098,243 @@ function _peekEls() {
     svg: document.getElementById('peek-svg'),
     dsl: document.getElementById('peek-dsl'),
     notice: document.getElementById('peek-notice'),
+    cohort: document.getElementById('peek-cohort'),
+    cohortToggle: document.getElementById('peek-cohort-toggle'),
   };
+}
+
+// ── ドメイン横断の突合 ──
+// 行き先一覧 (_peekDirs) の各フォルダのファイル名を集め、`folder/name` の形の
+// 疑似 doc にしてドメインで束ねる。本文はここでは読まない (フォルダ数 × 枚数の
+// 読み込みを、見る気になっていない段階で走らせない)。
+function _cohortLoadIndex() {
+  var WS = window.MA.workspace;
+  var DC = window.MA.domainCohort;
+  if (!WS || !DC) return Promise.resolve([]);
+  var dirs = _peekDirs.slice();
+  return Promise.all(dirs.map(function(d) {
+    return WS.listFiles(d.path).then(function(names) {
+      return { dir: d, names: (names || []).filter(function(n) { return n; }) };
+    }).catch(function() { return { dir: d, names: [] }; });
+  })).then(function(sets) {
+    var docs = [];
+    sets.forEach(function(set) {
+      set.names.forEach(function(n) {
+        docs.push({ name: set.dir.name + '/' + n, dsl: '', _dir: set.dir.path, _file: n });
+      });
+    });
+    return DC.crossFolder(DC.groups(docs));
+  });
+}
+
+// 選んだドメインの図だけ本文を読み、突合する。
+function _cohortCompare(group) {
+  var WS = window.MA.workspace;
+  var DC = window.MA.domainCohort;
+  if (!WS || !DC || !group) return Promise.resolve(null);
+  return Promise.all(group.entries.map(function(e) {
+    var src = e.doc || {};
+    return WS.loadFile(src._file, src._dir).then(function(text) {
+      return { name: e.name, dsl: typeof text === 'string' ? text : '', _dir: src._dir, _file: src._file };
+    }).catch(function() { return { name: e.name, dsl: '', _dir: src._dir, _file: src._file }; });
+  })).then(function(docs) {
+    var groups = DC.groups(docs);
+    for (var i = 0; i < groups.length; i++) {
+      if (groups[i].domain === group.domain) return DC.compare(groups[i]);
+    }
+    return null;
+  });
+}
+
+function _cohortChips(host, title, part, aLabel, bLabel) {
+  var wrap = document.createElement('div');
+  wrap.className = 'cohort-line';
+  var head = document.createElement('span');
+  head.className = 'cohort-line-title';
+  head.textContent = title;
+  wrap.appendChild(head);
+  function add(list, cls, prefix) {
+    (list || []).forEach(function(v) {
+      var chip = document.createElement('span');
+      chip.className = 'cohort-chip ' + cls;
+      chip.textContent = prefix + v;
+      wrap.appendChild(chip);
+    });
+  }
+  add(part.both, 'cohort-both', '');
+  add(part.onlyA, 'cohort-only-a', aLabel + ' だけ: ');
+  add(part.onlyB, 'cohort-only-b', bLabel + ' だけ: ');
+  if (!part.both.length && !part.onlyA.length && !part.onlyB.length) {
+    var none = document.createElement('span');
+    none.className = 'cohort-chip cohort-none';
+    none.textContent = 'なし';
+    wrap.appendChild(none);
+  }
+  host.appendChild(wrap);
+}
+
+function renderCohortCompare() {
+  var el = _peekEls();
+  var DK = window.MA.diagramKind;
+  if (!el.cohort) return;
+  el.cohort.textContent = '';
+  if (!_cohortOn) { el.cohort.style.display = 'none'; return; }
+  el.cohort.style.display = 'block';
+  if (!_cohortDomain) {
+    var hint = document.createElement('div');
+    hint.className = 'cohort-hint';
+    hint.id = 'cohort-hint';
+    hint.textContent = _cohortGroups.length
+      ? 'フォルダをまたぐドメインを ' + _cohortGroups.length + ' 件見つけました。左でドメインを選んでください。'
+      : 'フォルダをまたぐ同じドメイン名の図がありません。';
+    el.cohort.appendChild(hint);
+    return;
+  }
+  var r = _cohortResult;
+  if (!r) {
+    var loading = document.createElement('div');
+    loading.className = 'cohort-hint';
+    loading.textContent = '読み込み中…';
+    el.cohort.appendChild(loading);
+    return;
+  }
+  var head = document.createElement('div');
+  head.className = 'cohort-head';
+  head.id = 'cohort-head';
+  head.textContent = r.domain + ' — ' + r.folders.join(' × ')
+    + ' (' + r.pairs.length + ' 組を突合、食い違い ' + r.mismatched + ' 組)';
+  el.cohort.appendChild(head);
+  if (!r.pairs.length) {
+    var un = document.createElement('div');
+    un.className = 'cohort-hint';
+    un.id = 'cohort-unpaired';
+    un.textContent = '同じ図種の組がフォルダ間にありません (片方にしか無い図種です)。下の一覧から 1 枚ずつ読んでください。';
+    el.cohort.appendChild(un);
+    return;
+  }
+  r.pairs.forEach(function(p) {
+    var box = document.createElement('div');
+    box.className = 'cohort-pair' + (p.diff.matched ? ' matched' : ' mismatched');
+    box.setAttribute('data-cohort-kind', p.kind);
+    box.setAttribute('data-cohort-matched', p.diff.matched ? '1' : '0');
+    var t = document.createElement('div');
+    t.className = 'cohort-pair-title';
+    var kindLabel = (DK && DK.label(String(p.kind).replace(/^plantuml-/, ''))) || '';
+    t.textContent = (kindLabel ? kindLabel + ' — ' : '')
+      + p.a.folder + ' / ' + p.a.base + '  ×  ' + p.b.folder + ' / ' + p.b.base
+      + (p.diff.matched ? '  ✓ 揃っている' : '  ✗ ' + p.diff.gaps + ' 件が片方にしかない');
+    box.appendChild(t);
+    _cohortChips(box, '部品名', p.diff.names, p.a.folder, p.b.folder);
+    _cohortChips(box, '矢印ラベル', p.diff.labels, p.a.folder, p.b.folder);
+    el.cohort.appendChild(box);
+  });
+}
+
+function renderCohortDomains() {
+  var el = _peekEls();
+  if (!el.dirs) return;
+  el.dirs.textContent = '';
+  var head = document.createElement('div');
+  head.className = 'peek-head';
+  head.id = 'peek-dirs-head';
+  head.textContent = _cohortGroups.length
+    ? 'ドメイン (' + _cohortGroups.length + ')'
+    : 'フォルダをまたぐドメインがありません';
+  el.dirs.appendChild(head);
+  _cohortGroups.forEach(function(g) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'peek-dir cohort-domain' + (g.domain === _cohortDomain ? ' selected' : '');
+    b.setAttribute('data-domain', g.domain);
+    b.textContent = g.domain + ' (' + g.folders.join(' × ') + ' / ' + g.entries.length + ' 枚)';
+    b.addEventListener('click', function() { selectCohortDomain(g.domain); });
+    el.dirs.appendChild(b);
+  });
+  if (el.notice) el.notice.textContent = 'ドメインで揃えています (読むだけ・保存先は動きません)';
+}
+
+// 選んだドメインの図を、フォルダ付きの名前で一覧に出す。押せば従来どおり 1 枚読む。
+function renderCohortFiles() {
+  var el = _peekEls();
+  if (!el.files) return;
+  el.files.textContent = '';
+  var head = document.createElement('div');
+  head.className = 'peek-head';
+  head.id = 'peek-files-head';
+  var group = _cohortGroupOf(_cohortDomain);
+  head.textContent = group ? (group.entries.length + ' 枚') : 'ドメインを選んでください';
+  el.files.appendChild(head);
+  if (!group) return;
+  group.entries.forEach(function(e) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    var src = e.doc || {};
+    b.className = 'peek-file' + (src._file === _peekName && src._dir === _peekDir ? ' selected' : '');
+    b.setAttribute('data-file-name', src._file);
+    b.setAttribute('data-folder', e.folder);
+    b.textContent = e.folder + ' / ' + e.base;
+    b.addEventListener('click', function() {
+      _peekDir = src._dir;
+      showPeekFile(src._file).then(renderCohortFiles);
+    });
+    el.files.appendChild(b);
+  });
+}
+
+function _cohortGroupOf(domain) {
+  for (var i = 0; i < _cohortGroups.length; i++) {
+    if (_cohortGroups[i].domain === domain) return _cohortGroups[i];
+  }
+  return null;
+}
+
+function selectCohortDomain(domain) {
+  _cohortDomain = domain;
+  _cohortResult = null;
+  renderCohortDomains();
+  renderCohortFiles();
+  renderCohortCompare();
+  var group = _cohortGroupOf(domain);
+  return _cohortCompare(group).then(function(r) {
+    if (_cohortDomain !== domain) return false;   // 途中で選び直された
+    _cohortResult = r;
+    renderCohortCompare();
+    return true;
+  });
+}
+
+function setCohortMode(on) {
+  var el = _peekEls();
+  _cohortOn = !!on;
+  if (el.cohortToggle) {
+    el.cohortToggle.setAttribute('aria-pressed', _cohortOn ? 'true' : 'false');
+    el.cohortToggle.classList.toggle('on', _cohortOn);
+  }
+  if (!_cohortOn) {
+    _cohortDomain = null;
+    _cohortResult = null;
+    renderCohortCompare();
+    renderPeekDirs();
+    renderPeekFiles();
+    return Promise.resolve(true);
+  }
+  // 突合に切り替えたら、前に読んでいた 1 枚は消す。別ドメインの図が下に
+  // 残っていると、上の突合結果と同じドメインのものだと読み違える。
+  _peekName = null;
+  if (el.title) el.title.textContent = '';
+  if (el.svg) { el.svg.textContent = ''; el.svg.style.display = 'none'; }
+  if (el.dsl) el.dsl.textContent = '';
+  renderCohortCompare();
+  return _cohortLoadIndex().then(function(groups) {
+    if (!_cohortOn) return false;
+    _cohortGroups = groups;
+    renderCohortDomains();
+    renderCohortFiles();
+    // 1 件しか無いなら開いておく (押して確かめる手を増やさない)。
+    if (_cohortGroups.length === 1) return selectCohortDomain(_cohortGroups[0].domain);
+    renderCohortCompare();
+    return true;
+  });
 }
 
 function renderPeekDirs() {
@@ -5163,6 +5408,7 @@ function showPeekFile(name) {
   _peekName = name;
   renderPeekFiles();
   if (el.title) el.title.textContent = name + '（読むだけ・編集も保存もしません）';
+  el.svg.style.display = '';
   el.svg.textContent = '';
   if (el.dsl) el.dsl.textContent = '読み込み中…';
   var dir = _peekDir;
@@ -5222,9 +5468,13 @@ function setupPeekFolder() {
   function close() {
     el.modal.style.display = 'none';
     _peekName = null;
+    setCohortMode(false);
   }
   var closeBtn = document.getElementById('peek-close');
   if (closeBtn) closeBtn.addEventListener('click', close);
+  if (el.cohortToggle) {
+    el.cohortToggle.addEventListener('click', function() { setCohortMode(!_cohortOn); });
+  }
   el.modal.addEventListener('click', function(ev) { if (ev.target === el.modal) close(); });
   var prev = document.getElementById('peek-prev');
   var next = document.getElementById('peek-next');
