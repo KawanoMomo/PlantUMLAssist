@@ -4720,6 +4720,26 @@ function setupTabs() {
       panel.appendChild(vbtn);
     }
 
+    // BLK-reviewer-20260908-1203: 印だけで「内容ずれ」と分かった図は、確かめ直して
+    // いないので中身の材料が手元に無い。ここを押せば、その図だけをもう一度
+    // (上書きせずに) 突き合わせて、何が食い違うのかまで出す。
+    if (SF.diffLabel) {
+      var pending = (svgScan.needsDiff || []).filter(function(n) { return !svgVerifyDiffs[n]; });
+      var dbtn = document.createElement('button');
+      dbtn.type = 'button';
+      dbtn.className = 'folder-svg-diff-scan';
+      dbtn.id = 'folder-svg-diff-scan';
+      dbtn.textContent = SF.diffLabel(pending);
+      dbtn.title = '内容ずれの図をもう一度描き直して、欠落した要素と SVG に残る古い名前を出す';
+      dbtn.disabled = !pending.length;
+      dbtn.addEventListener('click', function(ev) {
+        ev.stopPropagation();
+        dbtn.disabled = true;
+        verifySvgContents(dir, pending, dbtn);
+      });
+      panel.appendChild(dbtn);
+    }
+
     appendSvgDiffSection(panel);
   }
 
