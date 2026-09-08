@@ -167,8 +167,50 @@ window.MA.changeBoard = (function() {
       + ' 枚 ・ +' + board.added + ' −' + board.removed + ' 行';
   }
 
+  // BLK-primary-20260908-1103-wish: 引き継ぎでは「要修正」の行だけを渡したい。
+  // build() の結果から、印 (済 / 要修正) の付いた行だけを残したボードを作る。
+  // 印の持ち主は review-verdicts だが、ここは DOM も localStorage も見ないので
+  // 行の鍵と印を引く関数を opts で受け取る (テストでも差し替えられる)。
+  // 元のボードは書き換えない (絞り込みを外したら全行に戻るため)。
+  function filterVerdict(board, opts) {
+    var o = opts || {};
+    var out = { entries: [], matched: 0, filtered: true, verdict: o.verdict || '',
+      total: board ? board.total : 0, changedCount: 0, hasChange: false,
+      added: board ? board.added : 0, removed: board ? board.removed : 0,
+      markedAt: board ? board.markedAt : '' };
+    if (!board || !Array.isArray(board.entries)
+      || typeof o.rowKeyOf !== 'function' || typeof o.verdictOf !== 'function') return out;
+    board.entries.forEach(function(e) {
+      var rows = (Array.isArray(e.rows) ? e.rows : []).filter(function(r) {
+        if (!r || (r.kind !== 'add' && r.kind !== 'del')) return false;   // gap / same は印を持てない
+        var key = o.rowKeyOf(r);
+        return !!key && o.verdictOf(e.name, key) === o.verdict;
+      });
+      if (rows.length === 0) return;
+      var copy = {};
+      for (var k in e) { if (Object.prototype.hasOwnProperty.call(e, k)) copy[k] = e[k]; }
+      copy.rows = rows;
+      copy.matched = rows.length;
+      out.entries.push(copy);
+      out.matched += rows.length;
+    });
+    out.changedCount = out.entries.length;
+    out.hasChange = out.matched > 0;
+    return out;
+  }
+
+  // 絞り込み中の 1 行見出し。何行 / 何枚を新人に渡すのかが分かればよい。
+  function filterText(filtered) {
+    if (!filtered || !filtered.matched) {
+      return (filtered && filtered.verdict ? filtered.verdict : '要修正') + 'の印が付いた行はありません';
+    }
+    return filtered.verdict + 'のみ ' + filtered.matched + ' 行 / ' + filtered.entries.length + ' 枚';
+  }
+
   return {
     diffRows: diffRows,
+    filterVerdict: filterVerdict,
+    filterText: filterText,
     collapse: collapse,
     entryLabel: entryLabel,
     build: build,
