@@ -3332,6 +3332,32 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   white-space: pre-wrap;
 }
 
+/* BLK-reviewer-20260908-1503-wish: 保存時チェックの帯。エラー帯と同じ位置に
+   重ねるが、色は警告 (図は読める) で分ける。 */
+#save-check-overlay {
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 29;
+  margin: -16px -16px 12px -16px;
+  padding: 6px 12px;
+  background: rgba(58, 46, 10, 0.96);
+  color: #ffa657;
+  border-bottom: 1px solid #7a5c15;
+  font-size: 12px;
+}
+/* 右端はズーム帯の下になるので、文字を流し込まない */
+#save-check-overlay .sck-head { display: flex; align-items: center; gap: 8px; padding-right: 150px; }
+#save-check-overlay .sck-head span { flex: 1; }
+#save-check-overlay button { font-size: 11px; padding: 1px 6px; cursor: pointer; }
+#sck-list { margin: 4px 0 0; padding-left: 18px; padding-right: 150px; max-height: 120px; overflow-y: auto; }
+#sck-list li { margin: 2px 0; line-height: 1.4; }
+#sck-list li.sck-new { color: #ffd08a; }
+#sck-list li .sck-tag {
+  display: inline-block; margin-right: 6px; padding: 0 4px;
+  border: 1px solid currentColor; border-radius: 3px; font-size: 10px;
+}
+
 #preview-svg {
   display: inline-block;
   transform-origin: 0 0;
@@ -4203,6 +4229,18 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <div id="preview-container">
         <!-- design 5a: 描画エラーを図の上に重ねる帯。直前の図はそのまま残す -->
         <div id="render-error-overlay" role="alert" hidden></div>
+        <!-- BLK-reviewer-20260908-1503-wish: 保存したその場で突合を掛け、
+             この図に新しく生えた不一致を図の上に出す。中身は save-check.js -->
+        <div id="save-check-overlay" role="status" hidden>
+          <!-- ボタンは左に置く。右上にはズーム帯 (#zoom-hud) が浮いていて、
+               右端に置くと押せない位置になる。 -->
+          <div class="sck-head">
+            <button type="button" id="btn-sck-close" title="この警告を閉じる（次の保存でまた出ます）">✕</button>
+            <button type="button" id="btn-sck-board" title="突合ボードを開いて全部の図で見る">▦ 突合ボード</button>
+            <span id="sck-summary"></span>
+          </div>
+          <ul id="sck-list"></ul>
+        </div>
         <div id="preview-svg"></div>
         <svg id="overlay-layer" width="0" height="0"></svg>
         <svg id="hover-layer" width="0" height="0" style="position:absolute;top:16px;left:16px;pointer-events:none;transform-origin:0 0;"></svg>
@@ -4612,6 +4650,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/meeting-notes.js"></script>
 <script src="src/core/audit-timeline.js"></script>
 <script src="src/core/audit-board.js"></script>
+<script src="src/core/save-check.js"></script>
 <script src="src/core/consistency-check.js"></script>
 <script src="src/core/manual-findings.js"></script>
 <script src="src/core/component-deps.js"></script>
