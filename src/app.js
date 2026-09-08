@@ -7743,10 +7743,63 @@ function renderCrossRefDiff() {
   var clean = _xfResult.onlyRef.length === 0 && _xfResult.onlySelf.length === 0;
   _xfShowMessage(CRD.summary(_xfResult), clean ? 'clean' : 'dirty');
 
+  // BLK-junior-20260908-0823: 名前が 1 つも対応しない 2 枚は、行の一覧を
+  // 「相手が足した差分」として出しても取り込む 1 個を選べない。
+  // 形 (種別ごとの件数) の見比べに切り替えて、同じ粒度かどうかを先に見せる。
+  var comp = CRD.comparability(_xfResult);
+  _xfRenderShape(comp.level === 'disjoint' ? CRD.shapeRows(selfDsl, _xfRefDsl) : null,
+    comp.level === 'disjoint' ? CRD.shapeSummary(selfDsl, _xfRefDsl) : '');
+
   list.textContent = '';
   _xfResult.onlyRef.forEach(function(e) { list.appendChild(_xfRow(e, 'ref')); });
   _xfResult.onlySelf.forEach(function(e) { list.appendChild(_xfRow(e, 'self')); });
   list.hidden = (_xfResult.onlyRef.length + _xfResult.onlySelf.length) === 0;
+}
+
+// 形の見比べの表。rows が null なら畳む (名前で対応が付いているときは要らない)。
+function _xfRenderShape(rows, headline) {
+  var host = _xfEl('xf-shape');
+  if (!host) return;
+  host.textContent = '';
+  if (!rows) { host.hidden = true; return; }
+  host.hidden = false;
+
+  var lead = document.createElement('div');
+  lead.className = 'xf-shape-lead';
+  lead.id = 'xf-shape-lead';
+  lead.textContent = '名前では対応が付かないので、形で見比べます。'
+    + '同じ粒度で描き直すか、粒度の違いを申し送りに残すかを先に決めてください。';
+  host.appendChild(lead);
+
+  var sum = document.createElement('div');
+  sum.className = 'xf-shape-sum';
+  sum.id = 'xf-shape-sum';
+  sum.textContent = headline;
+  host.appendChild(sum);
+
+  var table = document.createElement('table');
+  table.className = 'xf-shape-table';
+  table.id = 'xf-shape-table';
+  var head = document.createElement('tr');
+  ['要素', '自分', '相手'].forEach(function(t) {
+    var th = document.createElement('th');
+    th.textContent = t;
+    head.appendChild(th);
+  });
+  table.appendChild(head);
+  rows.forEach(function(r) {
+    var tr = document.createElement('tr');
+    tr.className = 'xf-shape-row' + (r.self === r.ref ? '' : ' differs');
+    tr.setAttribute('data-kind', r.kind);
+    [r.label, String(r.self), String(r.ref)].forEach(function(t, i) {
+      var td = document.createElement('td');
+      td.textContent = t;
+      if (i > 0) td.className = 'num';
+      tr.appendChild(td);
+    });
+    table.appendChild(tr);
+  });
+  host.appendChild(table);
 }
 
 // 1 行。相手にしかない行には「取り込む」を付ける (自分にしかない行は取り込めない)。
