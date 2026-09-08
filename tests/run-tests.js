@@ -72,6 +72,7 @@ const sourceFiles = [
   'src/core/trace-coverage.js',
   'src/core/audit-timeline.js',
   'src/core/manual-findings.js',
+  'src/core/meeting-notes.js',
   'src/core/component-deps.js',
   'src/ui/properties.js',
   'src/ui/reuse-modal.js',
