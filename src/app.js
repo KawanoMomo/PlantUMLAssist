@@ -2400,6 +2400,7 @@ function init() {
   setupFixExport();
   setupComponentPack();
   setupMaterialExport();
+  setupMaterialBoard();
   setupHandoverBanner();
   setupAuditTimeline();
   setupAuditBoard();
@@ -13972,6 +13973,49 @@ function closeMaterialExport() {
 
 // 押したら全部やる。途中で失敗したら何が失敗したかを言い、
 // 半端に (資料用) の名前だけが保存フォルダに残らないよう、書き出せてから保存する。
+// runMaterialPlan(p, opts) — 1 件の計画を最後まで流す。1 枚の資料化と、
+// 資料一式ボードのまとめ資料化が同じ道を通るようにここに切り出す
+// (2 通りの手順を持つと、まとめて出したときだけ庫に入らない、が起きる)。
+// opts.open=false のときはタブを開き直さない (まとめて流すときに図種の数だけ
+// タブが開くと、終わったあとの画面が資料の最後の 1 枚で埋まる)。
+function runMaterialPlan(p, opts) {
+  var ME = window.MA.materialExport;
+  var WS = window.MA.workspace;
+  if (!ME || !WS || !p) return Promise.resolve(null);
+  var o = opts || {};
+  var openTab = o.open !== false;
+  var dir = _wsFileDir();
+  var dsl = '';
+  return Promise.resolve(WS.loadFile(p.source, dir))
+    .then(function(text) {
+      if (!text || String(text).trim() === '') throw new Error('元の図が空です');
+      dsl = ME.applyTitle(text, p.title);
+      return renderDslToSvg(dsl);
+    })
+    .then(function(svg) {
+      if (p.format === 'svg') return new Blob([svg], { type: 'image/svg+xml' });
+      return svgTextToPngBlob(svg, true);
+    })
+    .then(function(blob) {
+      downloadBlob(p.filename, blob);
+      return WS.saveToFile({ name: p.docName, dsl: dsl }, dir);
+    })
+    .then(function() {
+      if (openTab) {
+        saveActiveDoc();
+        var detected = WS.detectType(dsl);
+        openExistingFile({
+          name: p.docName,
+          dsl: dsl,
+          diagramType: (detected && modules[detected]) ? detected : currentDiagramType,
+        });
+        applyActiveDoc();
+      }
+      return stashToVault(p.formatLabel);
+    })
+    .then(function() { return p; });
+}
+
 function runMaterialExport() {
   var ME = window.MA.materialExport;
   var WS = window.MA.workspace;
@@ -14052,6 +14096,190 @@ function setupMaterialExport() {
   var kind = document.getElementById('mexp-kind');
   if (kind) kind.addEventListener('change', _mexpRenderPlan);
   if (modal) modal.addEventListener('click', function(e) { if (e.target === modal) closeMaterialExport(); });
+}
+
+// ── 部品の資料一式 (BLK-junior-20260909-0003-wish) ───────────────────────────
+// 設計書に貼る資料は 1 部品の複数図種で 1 組なのに、資料化は 1 枚ずつしかできず、
+// 「どの図種の資料用がまだ無いか」「元の図が資料用より新しくないか」は保存フォルダの
+// 名前と日時を人が読み比べるしかなかった。開いてから初めて気付くので、手順 1 で
+// 前周の成果物を探すところから毎回やり直しになっていた。
+// 部品を選べば図種が全部並び、状態が色分けで読め、手当ての要る図種だけを
+// まとめて 1 回で書き出せるようにする。状態の決めかたは materialBoard が持つ。
+
+var _mboardEntries = [];
+var _mboardPicked = {};   // kind -> true。部品を切り替えたら選び直す
+
+function _mboardSel(id) { return document.getElementById(id); }
+
+function _mboardRows() {
+  var MB = window.MA.materialBoard;
+  var comp = _mboardSel('mboard-component');
+  if (!MB || !comp) return [];
+  return MB.rows(_mboardEntries, comp.value);
+}
+
+function _mboardSelectedKinds() {
+  return _mboardRows().filter(function(r) { return _mboardPicked[r.kind]; })
+    .map(function(r) { return r.kind; });
+}
+
+function _mboardRenderRows() {
+  var MB = window.MA.materialBoard;
+  var body = _mboardSel('mboard-rows');
+  var sum = _mboardSel('mboard-summary');
+  var run = _mboardSel('mboard-run');
+  if (!MB || !body) return;
+  var rows = _mboardRows();
+  var html = '';
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    html += '<tr class="mboard-row" data-kind="' + _mexpEsc(r.kind) + '" data-status="' + _mexpEsc(r.status) + '">'
+      + '<td class="mboard-pick"><input type="checkbox" class="mboard-check" data-kind="' + _mexpEsc(r.kind) + '"'
+      + (_mboardPicked[r.kind] ? ' checked' : '') + '></td>'
+      + '<td class="mboard-kind">' + _mexpEsc(r.kind) + '</td>'
+      + '<td class="mboard-status">' + _mexpEsc(r.statusLabel) + '</td>'
+      + '<td class="mboard-format">' + _mexpEsc(r.formatLabel) + '</td>'
+      + '<td class="mboard-note">' + _mexpEsc(MB.rowText(r)) + '</td>'
+      + '</tr>';
+  }
+  body.innerHTML = html;
+  if (sum) {
+    var empty = MB.emptyText(_mboardEntries);
+    sum.textContent = empty ? empty : MB.summaryText(rows);
+  }
+  var picked = _mboardSelectedKinds();
+  if (run) {
+    run.disabled = picked.length === 0;
+    run.textContent = MB.runText(picked);
+  }
+  var checks = body.querySelectorAll('input.mboard-check');
+  for (var c = 0; c < checks.length; c++) {
+    checks[c].addEventListener('change', function(ev) {
+      var k = ev.target.getAttribute('data-kind');
+      if (ev.target.checked) _mboardPicked[k] = true; else delete _mboardPicked[k];
+      _mboardRenderRows();
+    });
+  }
+}
+
+// 部品を選び直したら、手当ての要る図種を選び直す (最新の図種まで既定で選ぶと、
+// 変わっていない図を毎回描き直すことになる)。
+function _mboardResetPicks() {
+  var MB = window.MA.materialBoard;
+  _mboardPicked = {};
+  if (!MB) return;
+  MB.pendingKinds(_mboardRows()).forEach(function(k) { _mboardPicked[k] = true; });
+}
+
+function _mboardRenderComponents() {
+  var MB = window.MA.materialBoard;
+  var comp = _mboardSel('mboard-component');
+  if (!MB || !comp) return;
+  var want = comp.value;
+  var list = MB.components(_mboardEntries);
+  var html = '';
+  for (var i = 0; i < list.length; i++) {
+    html += '<option value="' + _mexpEsc(list[i].component) + '">' + _mexpEsc(list[i].component) + '</option>';
+  }
+  comp.innerHTML = html;
+  for (var j = 0; j < list.length; j++) if (list[j].component === want) comp.value = want;
+  _mboardResetPicks();
+  _mboardRenderRows();
+}
+
+function openMaterialBoard() {
+  var modal = document.getElementById('mboard-modal');
+  var WS = window.MA.workspace;
+  if (!modal || !window.MA.materialBoard || !WS) return Promise.resolve();
+  var state = _mboardSel('mboard-state');
+  if (state) state.textContent = '';
+  _mboardEntries = [];
+  _mboardRenderComponents();
+  modal.style.display = 'flex';
+  // 日時が要る (資料用より元が新しいかを言うため)。日時の取れない一覧しか
+  // 返らない環境でも materialBoard は動く (鮮度を「最新」に倒さない)。
+  var p = WS.listFileEntries ? WS.listFileEntries(_wsFileDir()) : WS.listFiles(_wsFileDir());
+  return Promise.resolve(p).then(function(list) {
+    _mboardEntries = list || [];
+    _mboardRenderComponents();
+  });
+}
+
+function closeMaterialBoard() {
+  var modal = document.getElementById('mboard-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+// 選んだ図種を順に流す。1 件失敗しても残りは続ける (1 枚のしくじりで
+// 資料一式の作り直しにならないように)。結果はどれが落ちたかまで言う。
+function runMaterialBoard() {
+  var MB = window.MA.materialBoard;
+  var comp = _mboardSel('mboard-component');
+  var state = _mboardSel('mboard-state');
+  var run = _mboardSel('mboard-run');
+  if (!MB || !comp) return Promise.resolve([]);
+  var plans = MB.plans(_mboardEntries, comp.value, _mboardSelectedKinds());
+  if (!plans.length) {
+    if (state) state.textContent = MB.doneMessage([]);
+    return Promise.resolve([]);
+  }
+  if (run) run.disabled = true;
+  var results = [];
+  var chain = Promise.resolve();
+  plans.forEach(function(p, i) {
+    chain = chain.then(function() {
+      if (state) state.textContent = '(' + (i + 1) + '/' + plans.length + ') ' + p.source
+        + ' を ' + p.formatLabel + ' で資料化しています…';
+      return runMaterialPlan(p, { open: false })
+        .then(function() { results.push({ ok: true, kind: p.kind, filename: p.filename }); })
+        .catch(function() { results.push({ ok: false, kind: p.kind, filename: p.filename }); });
+    });
+  });
+  return chain.then(function() {
+    var msg = MB.doneMessage(results);
+    if (state) state.textContent = msg;
+    if (window.MA.toast) window.MA.toast.show(msg);
+    try { refreshFolderPanelNow(); } catch (e) {}
+    // 出したあとの一覧をその場で描き直す (作った資料用がすぐ「最新」になる)。
+    var WS = window.MA.workspace;
+    var next = WS.listFileEntries ? WS.listFileEntries(_wsFileDir()) : WS.listFiles(_wsFileDir());
+    return Promise.resolve(next).then(function(list) {
+      _mboardEntries = list || [];
+      _mboardResetPicks();
+      _mboardRenderRows();
+      if (state) state.textContent = msg;
+      if (run) run.disabled = _mboardSelectedKinds().length === 0;
+      return results;
+    });
+  });
+}
+
+function setupMaterialBoard() {
+  var open = document.getElementById('exp-material-board');
+  if (open) open.addEventListener('click', function() {
+    var menu = document.getElementById('export-menu');
+    if (menu) menu.classList.remove('open');
+    openMaterialBoard();
+  });
+  var modal = document.getElementById('mboard-modal');
+  document.addEventListener('keydown', function(ev) {
+    if (ev.key === 'Escape' && modal && modal.style.display === 'flex') closeMaterialBoard();
+  });
+  var close = document.getElementById('mboard-close');
+  if (close) close.addEventListener('click', closeMaterialBoard);
+  var run = document.getElementById('mboard-run');
+  if (run) run.addEventListener('click', function() { runMaterialBoard(); });
+  var pending = document.getElementById('mboard-pending');
+  if (pending) pending.addEventListener('click', function() {
+    _mboardResetPicks();
+    _mboardRenderRows();
+  });
+  var comp = document.getElementById('mboard-component');
+  if (comp) comp.addEventListener('change', function() {
+    _mboardResetPicks();
+    _mboardRenderRows();
+  });
+  if (modal) modal.addEventListener('click', function(e) { if (e.target === modal) closeMaterialBoard(); });
 }
 
 // ── 指摘の付いた図だけを 1 押しで出す (BLK-primary-20260908-1903-friction) ──

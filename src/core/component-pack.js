@@ -226,6 +226,9 @@ window.MA.componentPack = (function() {
   }
 
   return {
+    // 図種の並びは資料の並び順そのもの。資料一式ボードもこの順で並べるので公開する
+    // (順を 2 か所に持つと、まとめ資料化と一覧で図の順がずれる)。
+    KIND_ORDER: KIND_ORDER,
     kindOf: kindOf,
     baseOf: baseOf,
     variantOf: variantOf,
