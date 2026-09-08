@@ -4698,6 +4698,9 @@ function setupTabs() {
     var btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'folder-svg-render';
+    // 集計行と同じ枚数を言っているかを外から見られるようにする
+    // (BLK-primary-20260908-1303: この 2 つが違う基準で数えていた)。
+    btn.id = 'folder-svg-render';
     btn.textContent = SF.renderLabel(svgScan);
     btn.title = '保存フォルダの puml から SVG を描き直す。puml には触らないので、'
       + '「SVG が古い」がこの 1 押しで消える';

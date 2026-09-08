@@ -127,17 +127,31 @@ window.MA.svgFreshness = (function() {
     return out;
   }
 
+  // BLK-primary-20260908-1303: 集計行が mtime だけを見て「SVG: 古い 2 枚」と言う一方、
+  // 同じ画面の「古い SVG を作り直す」は内容一致まで見て「古い SVG はありません」と
+  // 押せなかった。基準が 2 つあると、見出しからは「本当に古いのか」が分からず、
+  // 「内容はすべて確かめてあります」まで開いて確かめる 1 手間が毎回要る。
+  // 数える基準を needsRender と同じ (mtime が古く、かつ内容が一致していないもの) に
+  // 揃え、内容一致で落ちた分は括弧で名指しして「なぜ数が減ったか」を消さない。
   function summary(scanned) {
     if (!scanned || !scanned.rows.length) return '';
-    var c = scanned.counts;
-    if (c.stale === 0 && c.missing === 0 && c.unknown === 0) {
-      return 'SVG は ' + c.fresh + ' 枚とも puml に追いついています';
+    var rows = scanned.rows;
+    var need = { stale: 0, missing: 0, unknown: 0 };
+    var settled = 0;   // mtime では古いが、中身は今の puml と一致した図
+    rows.forEach(function(r) {
+      if (r.status === 'fresh') return;
+      if (r.content === 'match') { settled++; return; }
+      need[r.status]++;
+    });
+    var note = settled ? '（中身が一致した ' + settled + ' 枚は作り直し不要）' : '';
+    if (need.stale === 0 && need.missing === 0 && need.unknown === 0) {
+      return 'SVG は ' + rows.length + ' 枚とも puml に追いついています' + note;
     }
     var parts = [];
-    if (c.stale) parts.push('古い ' + c.stale + ' 枚');
-    if (c.missing) parts.push('無い ' + c.missing + ' 枚');
-    if (c.unknown) parts.push('不明 ' + c.unknown + ' 枚');
-    return 'SVG: ' + parts.join(' / ');
+    if (need.stale) parts.push('古い ' + need.stale + ' 枚');
+    if (need.missing) parts.push('無い ' + need.missing + ' 枚');
+    if (need.unknown) parts.push('不明 ' + need.unknown + ' 枚');
+    return 'SVG: ' + parts.join(' / ') + note;
   }
 
   // BLK-reviewer-20260908-0823-wish: 「無い N 枚」だけでは、どの図を書き出し忘れたかを
