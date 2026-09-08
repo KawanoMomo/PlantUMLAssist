@@ -741,6 +741,8 @@ html, body {
 #folder-panel .folder-svg-diff-row { padding-left: 8px; white-space: normal; word-break: break-all; }
 #folder-panel .folder-svg-diff-row.diff-missing::before { content: '欠落 '; color: var(--accent-red); }
 #folder-panel .folder-svg-diff-row.diff-leftover::before { content: '残存 '; color: var(--accent); }
+/* BLK-reviewer-20260908-1303: 文字に現れない差 (図形の数・並び順)。 */
+#folder-panel .folder-svg-diff-row.diff-structural::before { content: '構造 '; color: var(--accent-orange, var(--accent)); }
 #folder-panel textarea.folder-svg-diff-report {
   width: calc(100% - 12px);
   margin: 0 6px 4px;

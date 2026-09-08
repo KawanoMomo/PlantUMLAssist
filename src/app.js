@@ -4832,6 +4832,14 @@ function setupTabs() {
         row.textContent = s;
         box.appendChild(row);
       });
+      // BLK-reviewer-20260908-1303: 文字に現れない差 (図形の数・並び順) も並べる。
+      // 「文字の上での違い無し」だけを見せると、レイアウトだけの差と誤読される。
+      (diff.structural || []).forEach(function(r) {
+        var row = document.createElement('div');
+        row.className = 'folder-svg-diff-row diff-structural';
+        row.textContent = r.text;
+        box.appendChild(row);
+      });
       panel.appendChild(box);
     });
 
@@ -4905,7 +4913,14 @@ function setupTabs() {
           // BLK-reviewer-20260908-1203-wish: 食い違った図は、その場で中身まで言う。
           // 材料 (今の puml と svg に書かれている文字) は server が添えてくる。
           if (st === 'differ' && SD && typeof r.pumlText === 'string') {
-            svgVerifyDiffs[name] = SD.compare(r.pumlText, r.svgLabels);
+            // BLK-reviewer-20260908-1303: 保存中の SVG と描き直した SVG を直に
+            // 比べる材料も渡す。渡さないと「文字の上で差なし」を「差なし」と
+            // 言ってしまう (render は決定的なので、バイトが違う以上 差はある)。
+            svgVerifyDiffs[name] = SD.compare(r.pumlText, r.svgLabels, {
+              drawnLabels: r.drawnLabels,
+              svgShape: r.svgShape,
+              drawnShape: r.drawnShape,
+            });
           }
         });
       }).catch(function() {
