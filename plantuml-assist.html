@@ -3472,6 +3472,31 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   stroke-width: 1.5;
   stroke-dasharray: 4 3;
 }
+/* BLK-junior-20260908-1703-wish: 継承元の差分に対応する図形。peek (琥珀の破線) と
+   選択 (青) のどちらとも見分けが付くよう、緑の実線で太く囲う */
+#overlay-layer rect.selectable.lg-mark:not(.selected) {
+  fill: rgba(90, 220, 140, 0.18);
+  stroke: rgba(90, 220, 140, 0.95);
+  stroke-width: 2.5;
+}
+
+/* 色付けしたときに図の上に出る帯 */
+#lg-mark-overlay {
+  /* 右上にはズーム帯 (#zoom-hud) が浮いている。右端まで伸ばすと文が隠れる */
+  position: absolute; top: 8px; left: 8px; right: 230px; z-index: 6;
+  background: rgba(20, 46, 32, 0.95); color: #b7f0cd;
+  border: 1px solid rgba(90, 220, 140, 0.6); border-radius: 4px;
+  padding: 6px 8px; font-size: 11px; max-height: 40%; overflow-y: auto;
+}
+#lg-mark-overlay[hidden] { display: none; }
+#lg-mark-overlay .lgm-head { display: flex; align-items: flex-start; gap: 8px; }
+#lgm-summary { flex: 1; min-width: 0; }
+#lg-mark-overlay .lgm-head button {
+  background: transparent; color: inherit; border: 1px solid rgba(90, 220, 140, 0.5);
+  border-radius: 3px; cursor: pointer; font-size: 11px; padding: 1px 6px;
+}
+#lgm-list { margin: 4px 0 0; padding-left: 16px; font-family: var(--font-mono); }
+#lgm-list li { list-style: disc; }
 
 /* ── Properties Pane ───────────────────────────────────────────────────────── */
 #props-pane {
@@ -4338,6 +4363,15 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
           </div>
           <ul id="sck-list"></ul>
         </div>
+        <!-- BLK-junior-20260908-1703-wish: 継承元の増減行に対応する図形を
+             図の上で色付けしたときの帯。当たらなかった行はここに並べる -->
+        <div id="lg-mark-overlay" role="status" hidden>
+          <div class="lgm-head">
+            <button type="button" id="btn-lgm-close" title="色付けを消す">✕</button>
+            <span id="lgm-summary"></span>
+          </div>
+          <ul id="lgm-list"></ul>
+        </div>
         <div id="preview-svg"></div>
         <svg id="overlay-layer" width="0" height="0"></svg>
         <svg id="hover-layer" width="0" height="0" style="position:absolute;top:16px;left:16px;pointer-events:none;transform-origin:0 0;"></svg>
@@ -4774,6 +4808,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/sequence-marks.js"></script>
 <script src="src/core/insert-marker.js"></script>
 <script src="src/core/line-peek.js"></script>
+<script src="src/core/lineage-mark.js"></script>
 <script src="src/core/label-colors.js"></script>
 <script src="src/core/submit-check.js"></script>
 <script src="src/core/sequence-autonumber.js"></script>
@@ -4928,6 +4963,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <span id="lg-child"></span>
       <span id="lg-summary"></span>
       <span id="lg-tools">
+        <button type="button" id="lg-mark" title="増えた行・減った行に対応する図形を、いまの図の上で色付けする">差分を図で色付け</button>
         <button type="button" id="lg-open" title="登録した継承元をタブで開く">継承元を開く</button>
         <button type="button" id="lg-adopt" title="いまの継承元の中身を取り込み済みにする">取り込み済みにする</button>
         <button type="button" id="lg-clear" title="この図の継承元の登録を外す">継承元を外す</button>
