@@ -7,6 +7,7 @@ const { gotoApp, saveDirFor } = require('../helpers');
 
 const DIR = saveDirFor(__filename);
 const TEMPLATE = 'plantuml-usecase-template';
+const TEMPLATE2 = 'plantuml-usecase-template-2';
 const ORIGINAL = '@startuml\nleft to right direction\nactor 運転者\n(エンジンを始動する)\n運転者 --> (エンジンを始動する)\n@enduml';
 
 async function boot(page) {
@@ -61,6 +62,7 @@ test.describe('BLK-junior-20260908-1803-wish: 開いた元ファイルを自動�
     await boot(page);
     await clearDir(page);
     await putFile(page, TEMPLATE, ORIGINAL);
+    await putFile(page, TEMPLATE2, ORIGINAL);
     await page.waitForTimeout(300);
   });
 
@@ -121,5 +123,36 @@ test.describe('BLK-junior-20260908-1803-wish: 開いた元ファイルを自動�
     await page.waitForTimeout(1000);
     expect(await readFile(page, 'J1803_自分版')).toContain('MARKER_E');
     expect(await readFile(page, TEMPLATE)).toBe(ORIGINAL);
+  });
+
+  // BLK-primary-20260909-0403: 開いたファイルが複数あると、タブを切り替えるたびに
+  // 同じ確認が挟まる。1 回答えたら残りにも同じ扱いを当てて、二度と聞かない。
+  test('1 回答えれば、他の開いたファイルでは確認が出ない', async ({ page }) => {
+    await openFromFolder(page, TEMPLATE);
+    await editEditor(page, ORIGINAL + '\n\' MARKER_F');
+    await expect(page.locator('#source-lock-all')).toBeChecked();
+    await page.locator('#source-lock-keep').click();
+    await page.waitForTimeout(1000);
+
+    // 2 枚目を開いて打っても、もう聞かれない
+    await openFromFolder(page, TEMPLATE2);
+    await editEditor(page, ORIGINAL + '\n\' MARKER_G');
+    await expect(page.locator('#source-lock-modal')).toHaveCount(0);
+    await page.waitForTimeout(1000);
+    expect(await readFile(page, TEMPLATE2)).toBe(ORIGINAL);
+    expect(await readFile(page, TEMPLATE2 + '-編集中')).toContain('MARKER_G');
+    await expect(page.locator('#top-source-lock')).toHaveText('🔒 元ファイル保護');
+  });
+
+  test('チェックを外して答えれば、他のファイルでは今までどおり聞く', async ({ page }) => {
+    await openFromFolder(page, TEMPLATE);
+    await editEditor(page, ORIGINAL + '\n\' MARKER_H');
+    await page.locator('#source-lock-all').uncheck();
+    await page.locator('#source-lock-keep').click();
+    await page.waitForTimeout(800);
+
+    await openFromFolder(page, TEMPLATE2);
+    await editEditor(page, ORIGINAL + '\n\' MARKER_I');
+    await expect(page.locator('#source-lock-modal')).toBeVisible();
   });
 });
