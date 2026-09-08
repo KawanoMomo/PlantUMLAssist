@@ -180,6 +180,83 @@ window.MA.deliveryPackage = (function() {
     };
   }
 
+  // ── 対象の図 ──────────────────────────────────────────────────────────────
+  // BLK-primary-20260908-1903: 対象の既定が「今開いているタブ」だったので、
+  // 14 枚あるフォルダで 5 枚しかタブを開いていないと、残り 9 枚が黙って
+  // zip から落ちた。モーダルも「5 / 5 枚」としか出さないので欠落に気づけない。
+  // 提出物の的は保存フォルダ全体であって、たまたま開いているタブではない。
+
+  // candidates — 開いているタブ + 保存フォルダを 1 本の候補一覧にする。
+  // 同名は開いているタブが勝つ (未保存の編集分が入っているのはこちら)。
+  // テンプレ (file-role の template) は納品物ではないので既定から外すが、
+  // 一覧には残す (外したことが見えないと「消えた」と同じになる)。
+  // detectType はフォルダから読んだ図の種類を推測する関数 (workspace.detectType)。
+  function candidates(openDocs, fileDocs, roles, detectType) {
+    var rmap = roles && typeof roles === 'object' ? roles : {};
+    var det = typeof detectType === 'function' ? detectType : function() { return ''; };
+    function role(name) {
+      var rec = rmap[name];
+      var r = rec && typeof rec === 'object' ? String(rec.role == null ? '' : rec.role) : String(rec == null ? '' : rec);
+      return (r === 'data' || r === 'template') ? r : 'unset';
+    }
+    var out = [];
+    var seen = {};
+    function push(d, open) {
+      if (!d) return;
+      var name = String(d.name == null ? '' : d.name);
+      if (!name || seen[name]) return;
+      seen[name] = true;
+      var r = role(name);
+      var dsl = String(d.dsl == null ? '' : d.dsl);
+      out.push({
+        id: open ? d.id : 'file:' + name,
+        name: name,
+        dsl: dsl,
+        diagramType: d.diagramType || det(dsl) || '',
+        open: !!open,
+        role: r,
+        deliverable: r !== 'template',
+      });
+    }
+    (Array.isArray(openDocs) ? openDocs : []).forEach(function(d) { push(d, true); });
+    (Array.isArray(fileDocs) ? fileDocs : []).forEach(function(d) { push(d, false); });
+    return out;
+  }
+
+  // 既定で対象にする図の名前。テンプレ以外の全部 — フォルダ全体が的になる。
+  function defaultPicks(cands) {
+    return (Array.isArray(cands) ? cands : [])
+      .filter(function(c) { return c && c.deliverable; })
+      .map(function(c) { return c.name; });
+  }
+
+  // coverage — 「全体の何枚を出そうとしているか」と、落ちている図の内訳。
+  // warn が true のとき、納品物のはずの図が対象から外れている。
+  function coverage(cands, pickedNames) {
+    var list = Array.isArray(cands) ? cands : [];
+    var pick = {};
+    (Array.isArray(pickedNames) ? pickedNames : []).forEach(function(n) { pick[String(n)] = true; });
+    var c = { total: list.length, picked: 0, missing: 0, missingUnopened: 0, template: 0, line: '', warn: false };
+    var names = [];
+    list.forEach(function(d) {
+      if (!d) return;
+      if (pick[d.name]) { c.picked++; return; }
+      if (!d.deliverable) { c.template++; return; }
+      c.missing++;
+      if (!d.open) c.missingUnopened++;
+      if (names.length < 5) names.push(d.name);
+    });
+    c.warn = c.missing > 0;
+    c.line = c.picked + ' / ' + c.total + ' 枚';
+    if (c.template > 0) c.line += '（テンプレ ' + c.template + ' 枚は対象外）';
+    if (c.missing > 0) {
+      c.line += ' — ' + c.missing + ' 枚が対象から外れています'
+        + (c.missingUnopened > 0 ? '（うち ' + c.missingUnopened + ' 枚はタブを開いていない図）' : '')
+        + ': ' + names.join(', ') + (c.missing > names.length ? ' ほか' : '');
+    }
+    return c;
+  }
+
   // zip の中の SVG 名。bulk-export.plan と同じ一意化 (-2, -3 …) をする。
   function svgFileNames(docs) {
     var list = Array.isArray(docs) ? docs : [];
@@ -376,6 +453,9 @@ window.MA.deliveryPackage = (function() {
     baselineOf: baselineOf,
     markDelivered: markDelivered,
     reset: reset,
+    candidates: candidates,
+    defaultPicks: defaultPicks,
+    coverage: coverage,
     svgFileNames: svgFileNames,
     submitSection: submitSection,
     changeSection: changeSection,
