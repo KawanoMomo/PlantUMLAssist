@@ -10739,6 +10739,37 @@ function openPinPanel(focusId) {
   }
 }
 
+// 指摘 1 件ぶんの「直す側の応答」(BLK-reviewer-20260908-1303-wish)。
+// 応答が書かれていれば誰が何と言ったかを出し、書かれていなければ書く欄を出す。
+// 応答は指摘 1 件に何度でも返せる (保留 → 対応した が履歴として残る)。
+function _pinReplyHtml(p, esc) {
+  var PR = window.MA.pinReply;
+  if (!PR) return '';
+  var id = esc(p.id);
+  var now = PR.latest(mmdText, p.id);
+  var html = '<div class="pin-reply" data-pin-id="' + id + '"'
+    + ' data-verdict="' + esc(now ? now.verdict : '') + '">';
+  if (now) {
+    html += '<span class="pin-reply-now">' + esc(PR.statusText(mmdText, p.id)) + '</span>'
+      + '<button type="button" class="pin-reply-del" data-pin-id="' + id + '"'
+      + ' title="応答を取り消してもう一度書く">応答を消す</button>';
+  }
+  html += '<select class="pin-reply-verdict" data-pin-id="' + id + '">';
+  PR.verdicts().forEach(function(v) {
+    html += '<option value="' + esc(v) + '" title="' + esc(PR.verdictTitle(v)) + '">'
+      + esc(PR.verdictLabel(v)) + '</option>';
+  });
+  html += '</select>'
+    + '<input class="pin-reply-text" data-pin-id="' + id + '"'
+    + ' placeholder="理由 (保留・直さない には必須。いつ・何待ちか)">'
+    + '<button type="button" class="pin-reply-add" data-pin-id="' + id + '"'
+    + ' title="この指摘に応答を返す。reviewer は次の run で全部を調べ直さずに済む">'
+    + (now ? '応答を書き足す' : '応答を書く') + '</button>'
+    + '<span class="pin-reply-err" data-pin-id="' + id + '" hidden></span>'
+    + '</div>';
+  return html;
+}
+
 function renderPinPanel() {
   var panel = document.getElementById('pin-panel');
   var RP = window.MA.reviewPins;
@@ -10753,6 +10784,16 @@ function renderPinPanel() {
     + '" data-stale="' + sum.stale + '">レビュー指摘 ' + sum.total + ' 件 ・ 未対応 ' + sum.pending
     + ' ・ 対応済み ' + sum.done
     + (sum.stale ? ' ・ 行が見つからない ' + sum.stale : '') + '</div>';
+  // 直す側の応答の内訳 (BLK-reviewer-20260908-1303-wish)。reviewer が最初に
+  // 知りたいのは「全部確かめ直すのか、裏取りだけでよいのか」なので先頭に置く。
+  var PR = window.MA.pinReply;
+  if (PR && pins.length) {
+    var rsum = PR.summary(pins, mmdText);
+    html += '<div class="pin-reply-head" id="pin-reply-head"'
+      + ' data-recheck="' + rsum.recheck + '" data-waiting="' + rsum.waiting
+      + '" data-unanswered="' + rsum.unanswered + '">'
+      + esc(PR.headText(rsum)) + '</div>';
+  }
   if (!pins.length) {
     html += '<div class="pin-row" id="pin-empty">この図に指摘はありません</div>';
   }
@@ -10782,6 +10823,7 @@ function renderPinPanel() {
           + '<button type="button" class="pin-toggle" data-pin-id="' + esc(p.id) + '">'
           + (p.state === 'read' ? '未読に戻す' : '既読にする') + '</button> ')
       + '<button type="button" class="pin-del" data-pin-id="' + esc(p.id) + '">消す</button>'
+      + _pinReplyHtml(p, esc)
       + '</div>';
   });
   html += '<div class="pin-jump-bar">'
@@ -10825,7 +10867,40 @@ function renderPinPanel() {
     renderPinPanel();
   });
   bindAll('pin-del', function(id) {
-    _applyLineEditText(RP.remove(mmdText, id));
+    // 指摘を消したら、その指摘への応答も一緒に消す (相手のいない応答を残さない)。
+    var PRd = window.MA.pinReply;
+    var next = RP.remove(mmdText, id);
+    if (PRd) next = PRd.removeFor(next, id);
+    _applyLineEditText(next);
+    renderPinBadge();
+    renderPinPanel();
+  });
+  // 直す側の応答 (BLK-reviewer-20260908-1303-wish)。
+  bindAll('pin-reply-add', function(id) {
+    var PRa = window.MA.pinReply;
+    if (!PRa) return;
+    var sel = panel.querySelector('.pin-reply-verdict[data-pin-id="' + id + '"]');
+    var txt = panel.querySelector('.pin-reply-text[data-pin-id="' + id + '"]');
+    var err = panel.querySelector('.pin-reply-err[data-pin-id="' + id + '"]');
+    var verdict = sel ? sel.value : '';
+    var text = txt ? txt.value : '';
+    var msg = PRa.replyError(verdict, text);
+    if (msg) {
+      // 理由の無い保留は、次の run でゼロから調べ直しになる。書かせてから通す。
+      if (err) { err.textContent = msg; err.hidden = false; }
+      return;
+    }
+    _applyLineEditText(PRa.add(mmdText, id, {
+      verdict: verdict, text: text,
+      author: _inboxMe() || 'primary', at: new Date().toISOString().slice(0, 16),
+    }));
+    renderPinBadge();
+    renderPinPanel();
+  });
+  bindAll('pin-reply-del', function(id) {
+    var PRr = window.MA.pinReply;
+    if (!PRr) return;
+    _applyLineEditText(PRr.removeFor(mmdText, id));
     renderPinBadge();
     renderPinPanel();
   });
@@ -11062,6 +11137,28 @@ function openInboxItem(item) {
   }, function() { /* 読めない図は開かない。受信箱はそのまま */ });
 }
 
+// 受信箱の 1 件に対する応答。受信箱の項目は図名しか持たないので、
+// 走査で読んだ図の本文 (_inboxDocs) から引き直す。
+function _inboxDsl(doc) {
+  var list = _inboxDocs || [];
+  for (var i = 0; i < list.length; i++) {
+    if (list[i] && list[i].name === doc) return list[i].dsl;
+  }
+  return '';
+}
+
+function _inboxReply(item) {
+  var PR = window.MA.pinReply;
+  if (!PR || !item) return null;
+  return PR.latest(_inboxDsl(item.doc), item.id);
+}
+
+function _inboxReplyText(item) {
+  var PR = window.MA.pinReply;
+  if (!PR || !item) return '';
+  return PR.statusText(_inboxDsl(item.doc), item.id);
+}
+
 function renderInboxPanel() {
   var panel = document.getElementById('inbox-panel');
   var PI = window.MA.pinInbox;
@@ -11111,11 +11208,19 @@ function renderInboxPanel() {
     html += '<div class="ib-group" data-doc="' + esc(g.doc) + '" data-open="' + g.open + '">'
       + '<div class="ib-doc">' + esc(PI.groupText(g)) + '</div>';
     g.items.forEach(function(p) {
-      html += '<div class="ib-row' + (p.state === 'read' ? ' read' : '') + (p.stale ? ' stale' : '') + '"'
-        + ' data-doc="' + esc(p.doc) + '" data-pin-id="' + esc(p.id) + '" data-line="' + p.line + '">'
+      // 直す側の応答を指摘と同じ行に出す (BLK-reviewer-20260908-1303-wish)。
+      // これが無いと、reviewer は次の run で図をまたいで全部を確かめ直すことになる。
+      var reply = _inboxReply(p);
+      html += '<div class="ib-row' + (p.state === 'read' ? ' read' : '') + (p.stale ? ' stale' : '')
+        + '" data-doc="' + esc(p.doc) + '" data-pin-id="' + esc(p.id) + '" data-line="' + p.line + '"'
+        + ' data-verdict="' + esc(reply ? reply.verdict : '') + '">'
         + '<span class="ib-where">' + (p.stale ? '行が見つかりません' : ('L' + p.line)) + '</span> '
         + '<span class="ib-who">' + esc(p.author || '?') + '</span>'
-        + '<span class="ib-text">' + esc(p.text) + '</span></div>';
+        + '<span class="ib-text">' + esc(p.text) + '</span>'
+        + (reply
+          ? '<span class="ib-reply">↩ ' + esc(_inboxReplyText(p)) + '</span>'
+          : '<span class="ib-reply none">↩ 応答なし</span>')
+        + '</div>';
     });
     html += '</div>';
   });

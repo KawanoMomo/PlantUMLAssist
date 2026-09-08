@@ -1169,6 +1169,22 @@ html, body {
 #pin-panel .pin-row .pin-jump[disabled] { opacity: 0.45; cursor: default; border-color: var(--border); color: var(--text-secondary); }
 #pin-panel .pin-jump-bar { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 6px; }
 #pin-panel #pin-jump-note { color: var(--text-secondary); padding: 4px 2px 0 2px; }
+/* 直す側の応答 (BLK-reviewer-20260908-1303-wish)。指摘の下にぶら下げる。 */
+#pin-panel .pin-reply-head { color: var(--text-secondary); padding: 0 4px 4px 4px; }
+#pin-panel .pin-row .pin-reply {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
+  margin-top: 4px; padding-top: 4px; border-top: 1px dashed var(--border);
+}
+#pin-panel .pin-row .pin-reply .pin-reply-now { flex-basis: 100%; color: var(--text-primary); }
+#pin-panel .pin-row .pin-reply[data-verdict="done"] .pin-reply-now { color: var(--accent-green); }
+#pin-panel .pin-row .pin-reply[data-verdict="held"] .pin-reply-now { color: var(--accent-orange); }
+#pin-panel .pin-row .pin-reply[data-verdict="wontfix"] .pin-reply-now { color: var(--text-secondary); }
+#pin-panel .pin-row .pin-reply .pin-reply-text { flex: 1; min-width: 120px; }
+#pin-panel .pin-row .pin-reply .pin-reply-err { flex-basis: 100%; color: var(--accent-red); }
+#pin-panel .pin-row .pin-reply select {
+  border: 1px solid var(--border); background: var(--bg-tertiary);
+  color: var(--text-primary); border-radius: 3px; font-size: 11px; padding: 2px 4px;
+}
 #pin-panel .pin-new { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 6px; }
 #pin-panel .pin-new input { width: 100%; margin-bottom: 4px; }
 #pin-panel .pin-target { color: var(--text-secondary); padding-bottom: 4px; }
@@ -1225,6 +1241,12 @@ html, body {
 #inbox-panel .ib-row .ib-where { color: var(--accent); font-family: var(--font-mono); }
 #inbox-panel .ib-row.stale .ib-where { color: var(--accent-red); }
 #inbox-panel .ib-row.read { opacity: 0.65; }
+/* 直す側の応答 (BLK-reviewer-20260908-1303-wish) */
+#inbox-panel .ib-row .ib-reply { display: block; padding-left: 12px; }
+#inbox-panel .ib-row .ib-reply.none { color: var(--text-secondary); opacity: 0.7; }
+#inbox-panel .ib-row[data-verdict="done"] .ib-reply { color: var(--accent-green); }
+#inbox-panel .ib-row[data-verdict="held"] .ib-reply { color: var(--accent-orange); }
+
 #inbox-panel .ib-row .ib-who { color: var(--text-secondary); margin-left: 4px; }
 #inbox-panel .ib-row .ib-text { color: var(--text-primary); display: block; margin-top: 2px; }
 #btn-tab-findings.has-recheck { color: var(--accent-red); border-color: var(--accent-red); }
@@ -4381,6 +4403,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/review-pins.js"></script>
 <script src="src/core/pin-jump.js"></script>
 <script src="src/core/pin-inbox.js"></script>
+<script src="src/core/pin-reply.js"></script>
 <script src="src/core/claim-check.js"></script>
 <script src="src/core/note-block.js"></script>
 <script src="src/core/family-clone.js"></script>
