@@ -1257,6 +1257,19 @@ html, body {
 #inbox-panel .ib-row[data-verdict="done"] .ib-reply { color: var(--accent-green); }
 #inbox-panel .ib-row[data-verdict="held"] .ib-reply { color: var(--accent-orange); }
 
+/* 着手状況 (BLK-reviewer-20260908-1603-wish) */
+#inbox-panel .ib-progress {
+  padding: 3px 6px; border-bottom: 1px solid var(--border-color);
+  color: var(--text-secondary); font-size: 11px;
+}
+#inbox-panel .ib-row .ib-prog {
+  display: inline-block; margin-right: 6px; padding: 0 5px; border-radius: 8px;
+  border: 1px solid var(--border-color); font-size: 10px; white-space: nowrap;
+}
+#inbox-panel .ib-row .ib-prog.untouched { color: var(--accent-red); border-color: var(--accent-red); }
+#inbox-panel .ib-row .ib-prog.started { color: var(--accent-orange); border-color: var(--accent-orange); }
+#inbox-panel .ib-row .ib-prog.resolved { color: var(--accent-green); border-color: var(--accent-green); }
+
 #inbox-panel .ib-row .ib-who { color: var(--text-secondary); margin-left: 4px; }
 #inbox-panel .ib-row .ib-text { color: var(--text-primary); display: block; margin-top: 2px; }
 #btn-tab-findings.has-recheck { color: var(--accent-red); border-color: var(--accent-red); }
@@ -4697,6 +4710,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/pin-jump.js"></script>
 <script src="src/core/pin-inbox.js"></script>
 <script src="src/core/pin-reply.js"></script>
+<script src="src/core/pin-progress.js"></script>
 <script src="src/core/claim-check.js"></script>
 <script src="src/core/note-block.js"></script>
 <script src="src/core/family-clone.js"></script>

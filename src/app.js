@@ -11916,12 +11916,78 @@ function _inboxSetUnreadOnly(v) {
   try { window.localStorage.setItem('pua.pin-inbox.unread', v ? '1' : '0'); } catch (e) { /* 同上 */ }
 }
 
+// ── 着手状況の追跡 (BLK-reviewer-20260908-1603-wish) ───────────────────────
+// 受信箱は「まだ直っていない指摘」を並べるが、並ぶのは指摘であって着手状況ではない。
+// 前回の依頼に手が付いたかを知るには audit.js --since-files で保存フォルダの全図の
+// 指紋を控えと突き合わせるしかなく、何 tick 放置されているかも数え直していた。
+// 走査のたびに指摘 1 件ずつを未着手 / 着手 / 解消へ仕分け、控えを憶えておく。
+// 仕分けの規則は src/core/pin-progress.js。ここは控えの出し入れと画面だけ。
+var _inboxProgress = null;   // { key: entry } 直近の走査で付けた着手状況
+
+function _progressKey() {
+  return 'pua.pin-progress:' + String(_wsFileDir() || './autosave');
+}
+function _progressMemo() {
+  try {
+    var raw = window.localStorage.getItem(_progressKey());
+    if (!raw) return {};
+    var v = JSON.parse(raw);
+    return (v && typeof v === 'object') ? v : {};
+  } catch (e) { return {}; }
+}
+function _progressSaveMemo(memo) {
+  try { window.localStorage.setItem(_progressKey(), JSON.stringify(memo || {})); } catch (e) { /* 控えが残らなくても仕分けは出る */ }
+}
+// 解消も出すか。既定は出さない (受信箱は「まだ直っていない指摘」の箱のまま)。
+function _inboxShowResolved() {
+  try { return window.localStorage.getItem('pua.pin-inbox.resolved') === '1'; } catch (e) { return false; }
+}
+function _inboxSetShowResolved(v) {
+  try { window.localStorage.setItem('pua.pin-inbox.resolved', v ? '1' : '0'); } catch (e) { /* 同上 */ }
+}
+
+// 走査結果に着手状況を付け直し、控えを更新する。
+function _inboxTrackProgress() {
+  var PP = window.MA.pinProgress;
+  _inboxProgress = null;
+  if (!PP || !_inboxItems) return null;
+  var res = PP.observe(_inboxItems, _inboxDocs || [], _progressMemo(), {
+    now: new Date().toISOString(),
+  });
+  _progressSaveMemo(res.memo);
+  var map = {};
+  res.entries.forEach(function(e) { map[e.key] = e; });
+  _inboxProgress = map;
+  return res;
+}
+
+function _progressOf(item) {
+  var PP = window.MA.pinProgress;
+  if (!PP || !_inboxProgress || !item) return null;
+  return _inboxProgress[PP.keyOf(item)] || null;
+}
+
+function _progressEntries() {
+  var out = [];
+  if (!_inboxProgress) return out;
+  Object.keys(_inboxProgress).forEach(function(k) { out.push(_inboxProgress[k]); });
+  return out;
+}
+
 function _inboxShown() {
   var PI = window.MA.pinInbox;
   if (!PI || !_inboxItems) return [];
-  // 受信箱は「まだ直っていない指摘」の箱。対応済み (対応した修正を記録済み) は常に落とす。
-  return PI.filter(_inboxItems, {
-    unreadOnly: _inboxUnreadOnly(), pendingOnly: true, excludeAuthor: _inboxMe(),
+  // 受信箱は「まだ直っていない指摘」の箱。対応済み (対応した修正を記録済み) は
+  // 既定で落とす。追跡ビューとして「解消も出す」を選んだときだけ残す。
+  var list = PI.filter(_inboxItems, {
+    unreadOnly: _inboxUnreadOnly(), pendingOnly: !_inboxShowResolved(), excludeAuthor: _inboxMe(),
+  });
+  if (_inboxShowResolved() || !_inboxProgress) return list;
+  // 観測して解消と分かったものも落とす。対応済みの印が押されていなくても、
+  // 指摘した行がもう無いなら未対応ではない (押印待ちで箱に残り続けていた)。
+  return list.filter(function(p) {
+    var e = _progressOf(p);
+    return !(e && e.status === 'resolved');
   });
 }
 
@@ -12045,8 +12111,21 @@ function renderInboxPanel() {
     + '<div class="ib-filter">'
     + '<label><input type="checkbox" id="ib-unread"' + (_inboxUnreadOnly() ? ' checked' : '')
     + '> 未対応だけ</label> '
+    + '<label><input type="checkbox" id="ib-resolved"' + (_inboxShowResolved() ? ' checked' : '')
+    + '> 解消も出す</label> '
     + '<label>自分 <input id="ib-me" placeholder="junior" value="' + esc(_inboxMe()) + '"></label>'
     + ' <button type="button" id="ib-reload">読み直す</button></div>';
+
+  // 着手状況の帯 (BLK-reviewer-20260908-1603-wish)。指摘そのものではなく
+  // 「前回の依頼に手が付いたか」を先に出す。手順 1 はこの 1 行で足りる。
+  var PP = window.MA.pinProgress;
+  if (PP && _inboxProgress) {
+    var psum = PP.summary(_progressEntries());
+    html += '<div class="ib-progress" id="ib-progress"'
+      + ' data-untouched="' + psum.untouched + '" data-started="' + psum.started + '"'
+      + ' data-resolved="' + psum.resolved + '" data-stalled="' + psum.stalled + '">'
+      + esc(PP.headText(psum)) + '</div>';
+  }
 
   // BLK-reviewer-20260908-0003: 手で書いた指摘は audit.js のどの監査にも当たらず、
   // 根拠 (別の図の中身) が消えても「DSL 無変更 → 前回のまま」で引き継がれ続ける。
@@ -12080,9 +12159,16 @@ function renderInboxPanel() {
       // 直す側の応答を指摘と同じ行に出す (BLK-reviewer-20260908-1303-wish)。
       // これが無いと、reviewer は次の run で図をまたいで全部を確かめ直すことになる。
       var reply = _inboxReply(p);
+      var prog = _progressOf(p);
       html += '<div class="ib-row' + (p.state === 'read' ? ' read' : '') + (p.stale ? ' stale' : '')
         + '" data-doc="' + esc(p.doc) + '" data-pin-id="' + esc(p.id) + '" data-line="' + p.line + '"'
-        + ' data-verdict="' + esc(reply ? reply.verdict : '') + '">'
+        + ' data-verdict="' + esc(reply ? reply.verdict : '') + '"'
+        + (prog ? ' data-progress="' + esc(prog.status) + '" data-passes="' + prog.passes + '"' : '')
+        + '>'
+        + (prog
+          ? '<span class="ib-prog ' + esc(prog.status) + '" title="' + esc(prog.title + ' — ' + prog.why) + '">'
+            + esc(window.MA.pinProgress.entryText(prog)) + '</span>'
+          : '')
         + '<span class="ib-where">' + (p.stale ? '行が見つかりません' : ('L' + p.line)) + '</span> '
         + '<span class="ib-who">' + esc(p.author || '?') + '</span>'
         + '<span class="ib-text">' + esc(p.text) + '</span>'
@@ -12099,6 +12185,14 @@ function renderInboxPanel() {
   if (unread) {
     unread.addEventListener('change', function() {
       _inboxSetUnreadOnly(unread.checked);
+      renderInboxPanel();
+      renderInboxBadge();
+    });
+  }
+  var resolvedBox = document.getElementById('ib-resolved');
+  if (resolvedBox) {
+    resolvedBox.addEventListener('change', function() {
+      _inboxSetShowResolved(resolvedBox.checked);
       renderInboxPanel();
       renderInboxBadge();
     });
@@ -12146,6 +12240,8 @@ function loadInbox() {
   return scanPinInbox().then(function(items) {
     _inboxItems = items;
     _inboxLoading = false;
+    // 走査のたびに着手状況を付け直す。控えと突き合わせるのはここ 1 か所。
+    _inboxTrackProgress();
     renderInboxPanel();
     renderInboxBadge();
     return items;
