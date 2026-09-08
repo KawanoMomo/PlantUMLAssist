@@ -27,18 +27,54 @@ window.MA.componentInventory = (function() {
 
   function kinds() { return KINDS.slice(); }
 
-  // build(names) — 保存フォルダの名前一覧 → 部品ごとの棚卸し。
-  // 各件: { component, files, rows:[{kind, files, present}], have, missing, unknown }
-  function build(names) {
-    var CP = _cp();
-    if (!CP) return [];
-    var groups = CP.groupByComponent(names);
-    return groups.map(function(g) { return buildOne(g.component, g.files); });
+  // 部品名の突き合わせ。groupByComponent と同じく「片方が他方の頭に丸ごと
+  // 収まる」ときだけ同じ部品とみなす (GPIO と GPIOドライバ)。
+  function _sameComponent(a, b) {
+    var x = _s(a).toLowerCase();
+    var y = _s(b).toLowerCase();
+    if (!x || !y) return false;
+    if (x === y) return true;
+    if (x.length < 2 || y.length < 2) return false;
+    return x.indexOf(y) === 0 || y.indexOf(x) === 0;
   }
 
-  function buildOne(component, files) {
+  // build(names, vaultRows) — 保存フォルダの名前一覧 (+ 提出物庫) → 部品ごとの棚卸し。
+  // 各件: { component, files, rows:[{kind, files, vault, present, source}], have, missing, unknown }
+  //
+  // BLK-junior-20260908-2203-wish: 名前だけで数えると、次の周が同じファイル名で
+  // 上書きした瞬間に前の周の完走物が「なし」に変わる。実際には提出済みなのに
+  // 棚卸しが赤くなるので、庫に積まれているものも「あり」に数える。
+  function build(names, vaultRows) {
+    var CP = _cp();
+    if (!CP) return [];
+    var vault = Array.isArray(vaultRows) ? vaultRows : [];
+    var groups = CP.groupByComponent(names);
+    var out = groups.map(function(g) { return buildOne(g.component, g.files, vault); });
+    // ファイルがもう 1 枚も残っていない部品。庫にしか無いのだから、ここで
+    // 出さなければ「消えた」ままで、この機能の目的を果たさない。
+    var seen = {};
+    out.forEach(function(rec) { seen[rec.component] = true; });
+    var extras = [];
+    vault.forEach(function(r) {
+      var s = _s(r && r.subject);
+      if (!s) return;
+      var known = false;
+      out.forEach(function(rec) { if (_sameComponent(rec.component, s)) known = true; });
+      if (known || extras.indexOf(s) >= 0) return;
+      extras.push(s);
+    });
+    extras.sort();
+    extras.forEach(function(s) { out.push(buildOne(s, [], vault)); });
+    out.sort(function(a, b) { return a.component < b.component ? -1 : (a.component > b.component ? 1 : 0); });
+    return out;
+  }
+
+  function buildOne(component, files, vaultRows) {
     var CP = _cp();
     var list = (Array.isArray(files) ? files : []).filter(function(f) { return _s(f) !== ''; });
+    var mine = (Array.isArray(vaultRows) ? vaultRows : []).filter(function(r) {
+      return r && _sameComponent(component, r.subject);
+    });
     var byKind = {};
     var unknown = [];
     list.forEach(function(f) {
@@ -47,14 +83,26 @@ window.MA.componentInventory = (function() {
       if (!byKind[k]) byKind[k] = [];
       byKind[k].push(f);
     });
+    var vaultByKind = {};
+    mine.forEach(function(r) {
+      var k = _s(r.kind);
+      if (KINDS.indexOf(k) < 0) return;
+      if (!vaultByKind[k]) vaultByKind[k] = [];
+      vaultByKind[k].push(r);
+    });
     var rows = KINDS.map(function(k) {
       var fs = (byKind[k] || []).slice().sort();
-      return { kind: k, files: fs, present: fs.length > 0 };
+      var vs = (vaultByKind[k] || []).slice();
+      // 「どちらにあるか」を分けて持つ。作業ファイルが消えていても提出済みなら
+      // あり、という判定の根拠が行から読めないと、棚卸しを信じて次に進めない。
+      var source = fs.length && vs.length ? 'both' : (fs.length ? 'file' : (vs.length ? 'vault' : ''));
+      return { kind: k, files: fs, vault: vs, present: fs.length > 0 || vs.length > 0, source: source };
     });
     var missing = rows.filter(function(r) { return !r.present; }).map(function(r) { return r.kind; });
     return {
       component: _s(component),
       files: list.slice().sort(),
+      vault: mine,
       rows: rows,
       have: rows.length - missing.length,
       total: rows.length,
@@ -120,8 +168,11 @@ window.MA.componentInventory = (function() {
     var lines = ['# ' + rec.component + ' 図種の棚卸し', '', summary(rec), '',
                  '| 図種 | 有無 | ファイル |', '| --- | --- | --- |'];
     rec.rows.forEach(function(r) {
-      lines.push('| ' + r.kind + ' | ' + (r.present ? 'あり' : 'なし') + ' | '
-        + (r.files.length ? r.files.join(' / ') : '—') + ' |');
+      // 作業ファイルが消えていて庫にしか無い行は、そのことを書く。
+      // 「あり」とだけ書くと、開こうとして一覧に無く、また詰まる。
+      var where = r.files.length ? r.files.join(' / ')
+        : (r.vault && r.vault.length ? '提出物庫 ' + r.vault.length + ' 件（最新 ' + r.vault[0].label + '）' : '—');
+      lines.push('| ' + r.kind + ' | ' + (r.present ? 'あり' : 'なし') + ' | ' + where + ' |');
     });
     if (rec.unknown.length) {
       lines.push('');

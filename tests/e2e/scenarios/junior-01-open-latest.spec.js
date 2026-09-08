@@ -49,6 +49,14 @@ async function clearDir(page) {
   }, DIR);
 }
 
+// 提出物庫は「図を全部消す」では消えない (それが庫の役目)。
+// 前の周の積み残しがテストに混ざらないよう、下ごしらえでだけ明示的に空にする。
+async function clearVault(page) {
+  await page.evaluate(async (d) => {
+    await fetch('/autosave?vault=1&dir=' + encodeURIComponent(d), { method: 'DELETE' });
+  }, DIR);
+}
+
 async function openFolder(page) {
   await page.locator('#btn-tab-folder').click();
   await page.waitForSelector('#folder-panel.open #folder-inv-summary');
@@ -63,6 +71,7 @@ test.describe('junior 手順 1: 前周までの最新版を開く', () => {
   test.beforeEach(async ({ page }) => {
     await bootWithDir(page);
     await clearDir(page);
+    await clearVault(page);
     for (const n of GPIO.concat(OTHER)) await putFile(page, n);
     await page.waitForTimeout(400);
   });
@@ -128,6 +137,82 @@ test.describe('junior 手順 1: 前周までの最新版を開く', () => {
     await expect(line).toContainText('欠けはありません');
     await expect(page.locator('.folder-inv-row[data-inv-kind="状態遷移図"]'))
       .toHaveAttribute('data-inv-present', '1');
+  });
+
+  // BLK-junior-20260908-2203-wish: 前の周に完走して画像を出した図は、次の周が
+  // 同じファイル名で保存すれば作業ファイルからは消える。庫に積んであれば
+  // 棚卸しは「あり」のままで、手順 1 はそこから前回分を開くだけで済む。
+  test('画像を書き出すと提出物庫に積まれ、作業ファイルが無くても棚卸しが「あり」になる', async ({ page }) => {
+    // 前の周: GPIO 状態遷移図を書いて SVG で書き出す (= 完走の区切り)。
+    await page.evaluate(() => {
+      const ed = /** @type {HTMLTextAreaElement} */ (document.getElementById('editor'));
+      ed.value = '@startuml\ntitle GPIOドライバ状態遷移\n[*] --> Uninit\nUninit --> Ready : Gpio_Init\n@enduml';
+      ed.dispatchEvent(new Event('input'));
+    });
+    await page.waitForTimeout(900);
+    await page.locator('#btn-export').click();
+    await page.waitForSelector('#export-menu', { state: 'visible' });
+    const dl = page.waitForEvent('download', { timeout: 20000 }).catch(() => null);
+    await page.locator('#exp-svg').click();
+    expect(await dl).not.toBeNull();
+    await page.waitForTimeout(900);
+
+    // 到達条件その1: 庫に積まれている (ファイル名ではなく図種と部品名で引ける)。
+    const entries = await page.evaluate(async (d) => {
+      const r = await fetch('/vault?dir=' + encodeURIComponent(d));
+      return r.ok ? (await r.json()).entries : [];
+    }, DIR);
+    expect(entries.length).toBe(1);
+    expect(entries[0].kind).toBe('状態遷移図');
+    expect(entries[0].subject).toBe('GPIOドライバ');
+
+    // 到達条件その2: 保存フォルダに GPIO の状態遷移図は 1 枚も無いのに、
+    // 棚卸しは「あり」で、その行から庫を開ける。
+    await openFolder(page);
+    await pickComponent(page, 'GPIOドライバ');
+    const state = page.locator('.folder-inv-row[data-inv-kind="状態遷移図"]');
+    await expect(state).toHaveAttribute('data-inv-present', '1');
+    await expect(state).toHaveAttribute('data-inv-source', 'vault');
+    await expect(state.locator('button.folder-inv-file')).toHaveCount(0);
+    await state.locator('button.folder-inv-vault').click();
+
+    // 到達条件その3: 部品 × 図種で絞られた庫が開き、その版を開ける (手順 1 の完了)。
+    await page.waitForSelector('#vault-modal', { state: 'visible' });
+    await page.waitForTimeout(500);
+    const rows = page.locator('#vault-body tr.vault-row');
+    await expect(rows).toHaveCount(1);
+    await expect(rows.first()).toHaveAttribute('data-kind', '状態遷移図');
+    await expect(page.locator('#vault-body tr.vault-row td.vault-back').first()).toHaveText('最新');
+    await rows.first().locator('button.vault-open').click();
+    await page.waitForTimeout(900);
+    const opened = await page.evaluate(() => {
+      const doc = window.MA.workspace.getActive();
+      return doc ? { name: doc.name, dsl: doc.dsl } : null;
+    });
+    expect(opened.name).toContain('GPIOドライバ状態遷移@');
+    expect(opened.dsl).toContain('Uninit --> Ready');
+  });
+
+  test('提出物庫は「図を全部消す」では消えない（上書きから守るための庫）', async ({ page }) => {
+    await page.evaluate(() => {
+      const ed = /** @type {HTMLTextAreaElement} */ (document.getElementById('editor'));
+      ed.value = '@startuml\ntitle GPIOドライバ状態遷移\n[*] --> Uninit\n@enduml';
+      ed.dispatchEvent(new Event('input'));
+    });
+    await page.waitForTimeout(900);
+    await page.locator('#btn-export').click();
+    await page.waitForSelector('#export-menu', { state: 'visible' });
+    const dl = page.waitForEvent('download', { timeout: 20000 }).catch(() => null);
+    await page.locator('#exp-svg').click();
+    await dl;
+    await page.waitForTimeout(700);
+
+    await clearDir(page);
+    const entries = await page.evaluate(async (d) => {
+      const r = await fetch('/vault?dir=' + encodeURIComponent(d));
+      return r.ok ? (await r.json()).entries : [];
+    }, DIR);
+    expect(entries.length).toBe(1);
   });
 
   test('図種が名前から分からない図は「なし」に数えず別に出す', async ({ page }) => {

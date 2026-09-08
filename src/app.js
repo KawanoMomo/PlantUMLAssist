@@ -2387,6 +2387,7 @@ function init() {
   setupBulkRename();
   setupRenameImpact();
   setupDepGraph();
+  setupVault();
   setupSymptomSearch();
   setupPatternCheck();
   setupXrefGraph();
@@ -2553,6 +2554,7 @@ function initCommandPalette() {
       { id: 'tab-tools', title: 'ツールを分類から選ぶ / Tools', hint: 'Tabs', keywords: ['tool', 'menu', 'つーる', 'どうぐ', 'ぶんるい', 'めにゅー'], run: function() { setTimeout(function() { clickById('btn-tab-tools'); }, 0); } },
       { id: 'tab-new', title: '新しい図を開く / New diagram', hint: 'Tabs', keywords: ['new', 'tab', 'あたらしい', 'ず'], button: 'btn-tab-new', run: function() { clickById('btn-tab-new'); } },
       { id: 'tab-folder', title: '保存フォルダの図を一覧 / Folder', hint: 'Tabs', keywords: ['folder', 'list', 'いちらん', 'ふぉるだ'], button: 'btn-tab-folder', run: function() { clickById('btn-tab-folder'); } },
+      { id: 'vault', title: '提出物庫を開く / Deliverable vault', hint: 'Tabs', keywords: ['vault', 'export', 'ていしゅつ', 'こ', 'かこ', 'ぜんかい'], run: function() { toggleVault(true); } },
       { id: 'tab-rename', title: '部品名を一括置換 / Bulk rename', hint: 'Tabs', keywords: ['rename', 'replace', 'いっかつ', 'ちかん'], button: 'btn-tab-rename', run: function() { clickById('btn-tab-rename'); } },
       { id: 'tab-symptom', title: '症状から関連図を探す / Symptom search', hint: 'Tabs', keywords: ['symptom', 'search', 'しょうじょう', 'けんさく', 'ふぐあい'], button: 'btn-tab-symptom', run: function() { clickById('btn-tab-symptom'); } },
       { id: 'tab-pattern', title: '同じ観点で全図を棚卸し / Pattern check', hint: 'Tabs', keywords: ['pattern', 'check', 'かんてん', 'いっかつ', 'してき', 'たなおろし'], button: 'btn-tab-pattern', run: function() { clickById('btn-tab-pattern'); } },
@@ -5354,8 +5356,40 @@ function setupTabs() {
 
   // BLK-reviewer-20260907-1403: 図ごとに「前回見た版から変わったか」を出す。
   // 変更が無い日に 17 枚を全部読み直さなくても、バッジの付いた図だけ読めばよくなる。
+  // 提出物庫への入口。棚卸しの判定も庫を見るので、一覧を描く前に 1 回読む
+  // (BLK-junior-20260908-2203-wish)。読めたら描き直す。
+  function appendVaultEntry(host) {
+    var V = window.MA.vault;
+    if (!V) return;
+    var bar = document.createElement('div');
+    bar.className = 'folder-vault-bar';
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.id = 'btn-vault';
+    b.className = 'folder-vault-open';
+    b.textContent = '🔒 提出物庫';
+    b.title = '画像を書き出した時点の図が積んである庫。あとの周が同じ名前で上書きしても消えません';
+    b.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      closePanel();
+      toggleVault(true);
+    });
+    bar.appendChild(b);
+    var state = document.createElement('span');
+    state.className = 'folder-vault-state';
+    state.id = 'folder-vault-state';
+    state.textContent = V.summaryText(_vaultRows, '');
+    bar.appendChild(state);
+    host.appendChild(bar);
+  }
+
   function renderFolderPanel() {
     var dir = _wsFileDir();
+    // 庫をまだ読んでいなければ読んでから描き直す。棚卸しの「あり / なし」が
+    // 庫を見ずに出ると、提出済みの図種が一瞬「なし」で出る。
+    if (_fiFolderMode() && _vaultDir !== dir && !_vaultLoading) {
+      loadVault().then(function() { renderFolderPanel(); });
+    }
     var RW = window.MA.reviewWatch;
     var store = _reviewStore();
     window.MA.workspace.listFolder(dir).then(function(res) {
@@ -5383,6 +5417,10 @@ function setupTabs() {
         empty.className = 'folder-empty';
         empty.textContent = '保存フォルダに図がありません';
         panel.appendChild(empty);
+        // 作業ファイルが 1 枚も無くても提出物庫には残っている。ここで黙ると、
+        // 「前の周の図が消えた」に見えるのが BLK-junior-20260908-2203-wish の詰まり。
+        appendVaultEntry(panel);
+        appendInventorySection(panel);
         return;
       }
       // 実データ / テンプレの宣言は保存フォルダに置いてある (GUI の設定ではない)。
@@ -5453,6 +5491,7 @@ function setupTabs() {
         panel.appendChild(folderFilterBar());
         panel.appendChild(folderPickBar());
         appendTargetSection(panel, dir);
+        appendVaultEntry(panel);
         appendInventorySection(panel);
         appendReviewSection(panel);
         appendRoleSection(panel, dir);
@@ -5481,6 +5520,7 @@ function setupTabs() {
       panel.appendChild(folderFilterBar());
       panel.appendChild(folderPickBar());
       appendTargetSection(panel, dir);
+      appendVaultEntry(panel);
       appendInventorySection(panel);
       appendReviewSection(panel);
       appendRoleSection(panel, dir);
@@ -6449,7 +6489,9 @@ function setupTabs() {
   function appendInventorySection(host) {
     var CI = window.MA.componentInventory;
     if (!CI) return;
-    var records = CI.build(folderNames);
+    // BLK-junior-20260908-2203-wish: 作業ファイルが上書きで消えていても、
+    // 提出物庫に積んであれば「あり」に数える (提出済みの図種を赤くしない)。
+    var records = CI.build(folderNames, _vaultRows);
 
     var bar = document.createElement('div');
     bar.className = 'folder-inv-bar';
@@ -6538,6 +6580,27 @@ function setupTabs() {
       mark.className = 'folder-inv-mark';
       mark.textContent = r.present ? 'あり' : 'なし';
       row.appendChild(mark);
+      row.setAttribute('data-inv-source', r.source || '');
+      // 作業ファイルがもう無く、庫にしか残っていない図種。押せばその提出物を開く。
+      // ここでファイル名のボタンだけを出すと、「あり」なのに開けない行になる。
+      if (r.vault && r.vault.length) {
+        var vb = document.createElement('button');
+        vb.type = 'button';
+        vb.className = 'folder-inv-vault';
+        vb.setAttribute('data-inv-vault-kind', r.kind);
+        vb.textContent = '提出物庫 ' + r.vault.length + ' 件';
+        vb.title = r.kind + ' の提出物（最新 ' + r.vault[0].label + '）を開く';
+        vb.addEventListener('click', function(ev) {
+          ev.stopPropagation();
+          // 庫の行が持っている綴りをそのまま渡す (棚卸しの部品名は
+          // ファイル名から切った形なので、庫の絞り込みに一致しないことがある)。
+          _vaultSubject = r.vault[0].subject;
+          _vaultKind = r.kind;
+          closePanel();
+          toggleVault(true);
+        });
+        row.appendChild(vb);
+      }
       r.files.forEach(function(f) {
         var b = document.createElement('button');
         b.type = 'button';
@@ -13302,6 +13365,9 @@ function exportSVG() {
   a.download = ((currentParsed.meta && currentParsed.meta.title) || 'untitled') + '.svg';
   a.click();
   URL.revokeObjectURL(a.href);
+  // 書き出した瞬間が「この周を完走した」区切り。ここで庫へロックする
+  // (BLK-junior-20260908-2203-wish)。
+  stashToVault('SVG');
 }
 
 // BLK-primary-20260907-0443: 図が増えるほど「タブ切替 → Export → SVG」の 3 クリックが
@@ -13767,7 +13833,222 @@ function exportPNG(transparent) {
       a.download = ((currentParsed.meta && currentParsed.meta.title) || 'untitled') + '.png';
       a.click();
       URL.revokeObjectURL(a.href);
+      stashToVault(transparent ? 'PNG（透過背景）' : 'PNG');
     });
+  });
+}
+
+// ── 提出物庫 (BLK-junior-20260908-2203-wish) ─────────────────────────────────
+// 保存は「図の名前 = ファイル名」なので、次の周が diagram1 という同じ名前で
+// 始まれば前の周に完走した図は上書きで消える。_versions の控えは残るが、そこに
+// 積まれるのは「上書きされた中身」で、どれが提出物かは開くまで分からない。
+// 「周を 1 つ完走して画像を出した」という区切りが記録されていないのが根っこ
+// なので、画像を書き出した瞬間の DSL を、ファイル名と無関係な刻印で庫へ積む。
+// 庫は追記しかしない。あとの周が同じ名前で上書きしても、前回分は消えない。
+var _vaultRows = [];
+var _vaultDir = null;
+var _vaultLoading = false;
+var _vaultSubject = null;   // null = まだ選んでいない (開いている図から決める)
+var _vaultKind = '';
+
+function loadVault(force) {
+  if (!_fiFolderMode()) { _vaultRows = []; _vaultDir = null; return Promise.resolve([]); }
+  var dir = _wsFileDir();
+  if (!force && _vaultDir === dir && !_vaultLoading) return Promise.resolve(_vaultRows);
+  _vaultLoading = true;
+  return window.fetch('/vault?dir=' + encodeURIComponent(dir))
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(data) {
+      _vaultRows = window.MA.vault ? window.MA.vault.rows(data) : [];
+      _vaultDir = dir;
+      _vaultLoading = false;
+      return _vaultRows;
+    }, function() {
+      // 読めなくても「読んだ」ことにする。読み直しを繰り返すと、一覧を開く
+      // たびに再描画が走り続ける (庫は無くても一覧は使える)。
+      _vaultDir = dir;
+      _vaultLoading = false;
+      return _vaultRows;
+    });
+}
+
+// 画像を書き出した瞬間に呼ぶ。積めなくても書き出しは止めない (庫は副作用)。
+function stashToVault(format) {
+  var V = window.MA.vault;
+  if (!V || !_fiFolderMode()) return Promise.resolve(null);
+  var dsl = mmdText;
+  if (!dsl || !dsl.trim()) return Promise.resolve(null);
+  var doc = window.MA.workspace ? window.MA.workspace.getActive() : null;
+  var entry = V.entryFor({
+    dsl: dsl,
+    title: (currentParsed && currentParsed.meta && currentParsed.meta.title) || '',
+    name: doc ? doc.name : '',
+    format: format,
+  });
+  entry.dsl = dsl;
+  entry.dir = _wsFileDir();
+  return window.fetch('/vault', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(entry),
+  }).then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(res) {
+      if (!res) return null;
+      _vaultDir = null;          // 次に開いたときに読み直す
+      if (window.MA.toast) {
+        window.MA.toast.show('提出物庫に控えました（' + (entry.subject || entry.name || '図')
+          + ' / ' + (entry.kind || '図種不明') + '）。あとの周で上書きしても消えません');
+      }
+      return res;
+    }, function() { return null; });
+}
+
+function renderVaultBoard() {
+  var V = window.MA.vault;
+  var body = document.getElementById('vault-body');
+  var subjSel = document.getElementById('vault-subject');
+  var kindSel = document.getElementById('vault-kind');
+  var sumEl = document.getElementById('vault-summary');
+  if (!V || !body || !subjSel || !kindSel) return;
+  var esc = window.MA.htmlUtils.escHtml;
+  var all = _vaultRows;
+
+  var subs = V.subjects(all);
+  // まだ選んでいなければ、今開いている図の部品を出す (選び直させない)。
+  if (_vaultSubject === null) {
+    var doc = window.MA.workspace ? window.MA.workspace.getActive() : null;
+    var want = V.subjectOf((currentParsed && currentParsed.meta && currentParsed.meta.title) || '',
+                           doc ? doc.name : '');
+    _vaultSubject = '';
+    for (var i = 0; i < subs.length; i++) {
+      if (subs[i].subject === want) { _vaultSubject = want; break; }
+    }
+  }
+  var opts = '<option value="">すべての部品</option>';
+  subs.forEach(function(s) {
+    opts += '<option value="' + esc(s.subject) + '"' + (s.subject === _vaultSubject ? ' selected' : '')
+      + '>' + esc(s.subject) + '（' + s.count + ' 件 / ' + s.kinds.length + ' 図種）</option>';
+  });
+  subjSel.innerHTML = opts;
+
+  var scoped = V.filter(all, _vaultSubject, '');
+  var kinds = Object.keys(V.byKind(scoped, _vaultSubject)).sort();
+  if (_vaultKind && kinds.indexOf(_vaultKind) < 0) _vaultKind = '';
+  var kopts = '<option value="">すべての図種</option>';
+  kinds.forEach(function(k) {
+    kopts += '<option value="' + esc(k) + '"' + (k === _vaultKind ? ' selected' : '') + '>'
+      + esc(k) + '</option>';
+  });
+  kindSel.innerHTML = kopts;
+
+  if (sumEl) sumEl.textContent = V.summaryText(all, _vaultSubject);
+
+  var hits = V.filter(all, _vaultSubject, _vaultKind);
+  if (!hits.length) {
+    body.innerHTML = '<div class="cb-empty">'
+      + esc(all.length ? 'この絞り込みに当たる提出物はありません。'
+                       : '提出物庫はまだ空です。Export から画像を書き出すと、その時点の図がここに積まれます。')
+      + '</div>';
+    return;
+  }
+  // 新しい順。先頭が最新、その次が「前回分」— 手順 1 が探すのはここ。
+  var html = '<table class="vault-table"><thead><tr>'
+    + '<th>いつ</th><th>版</th><th>部品名</th><th>図種</th><th>題名</th><th>書き出し</th><th></th>'
+    + '</tr></thead><tbody>';
+  // 「最新 / 前回分」は同じ部品の同じ図種の中でしか意味を持たない。絞り込む前に
+  // 並び順で数えると、別の図の行が「前回分」に見えて取り違える。
+  var ranked = !!(_vaultSubject && _vaultKind);
+  hits.forEach(function(r, i) {
+    html += '<tr class="vault-row" data-stamp="' + esc(r.stamp) + '" data-subject="' + esc(r.subject)
+      + '" data-kind="' + esc(r.kind) + '" data-back="' + i + '">'
+      + '<td class="vault-at">' + esc(r.label) + '</td>'
+      + '<td class="vault-back">'
+      + (ranked ? (i === 0 ? '最新' : (i === 1 ? '前回分' : i + ' つ前')) : '—') + '</td>'
+      + '<td>' + esc(r.subject || '—') + '</td>'
+      + '<td>' + esc(r.kind || '図種不明') + '</td>'
+      + '<td class="vault-title">' + esc(r.title || r.name || '—') + '</td>'
+      + '<td>' + esc(r.format || '—') + '</td>'
+      + '<td><button type="button" class="vault-open">この版を開く</button></td></tr>';
+  });
+  body.innerHTML = html + '</tbody></table>';
+
+  var opens = body.querySelectorAll('.vault-open');
+  for (var j = 0; j < opens.length; j++) {
+    (function(btn) {
+      btn.addEventListener('click', function() {
+        var row = btn.parentNode.parentNode;
+        openVaultEntry(row.getAttribute('data-stamp'));
+      });
+    })(opens[j]);
+  }
+}
+
+// 庫の 1 件を別タブで開く。タブ名に刻印を付けるので、開いたまま自動保存が
+// 走っても今の作業ファイルを過去の中身で塗り潰さない。
+function openVaultEntry(stamp) {
+  var url = '/vault?dir=' + encodeURIComponent(_wsFileDir()) + '&stamp=' + encodeURIComponent(stamp);
+  return window.fetch(url).then(function(r) { return r.ok ? r.text() : null; }).then(function(text) {
+    if (text == null) {
+      if (window.MA.toast) window.MA.toast.show('この提出物を読めませんでした');
+      return;
+    }
+    var row = null;
+    _vaultRows.forEach(function(r) { if (r.stamp === stamp) row = r; });
+    toggleVault(false);
+    saveActiveDoc();
+    var detected = window.MA.workspace.detectType(text);
+    var base = (row && (row.title || row.name)) || '提出物';
+    openExistingFile({
+      name: base + '@' + stamp,
+      dsl: text,
+      diagramType: (detected && modules[detected]) ? detected : currentDiagramType,
+    });
+    applyActiveDoc();
+    if (window.MA.toast) {
+      window.MA.toast.show(base + '（' + (row ? row.label : stamp)
+        + ' の提出物）を別タブで開きました');
+    }
+  });
+}
+
+function toggleVault(open) {
+  var modal = document.getElementById('vault-modal');
+  if (!modal) return;
+  var want = (open == null) ? (modal.style.display === 'none' || !modal.style.display) : !!open;
+  if (!want) { modal.style.display = 'none'; return; }
+  modal.style.display = 'flex';
+  renderVaultBoard();
+  loadVault().then(function() { renderVaultBoard(); });
+  var body = document.getElementById('vault-body');
+  if (body) body.scrollTop = 0;
+}
+
+function setupVault() {
+  var modal = document.getElementById('vault-modal');
+  if (!modal) return;
+  var btn = document.getElementById('btn-vault');
+  if (btn) btn.addEventListener('click', function(ev) {
+    ev.stopPropagation();
+    toggleVault(true);
+  });
+  var closeBtn = document.getElementById('vault-close');
+  if (closeBtn) closeBtn.addEventListener('click', function() { toggleVault(false); });
+  modal.addEventListener('click', function(ev) {
+    if (ev.target === modal) toggleVault(false);
+  });
+  document.addEventListener('keydown', function(ev) {
+    if (ev.key === 'Escape' && modal.style.display === 'flex') toggleVault(false);
+  });
+  var subj = document.getElementById('vault-subject');
+  if (subj) subj.addEventListener('change', function() {
+    _vaultSubject = subj.value;
+    _vaultKind = '';
+    renderVaultBoard();
+  });
+  var kind = document.getElementById('vault-kind');
+  if (kind) kind.addEventListener('change', function() {
+    _vaultKind = kind.value;
+    renderVaultBoard();
   });
 }
 

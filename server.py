@@ -271,6 +271,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.split('?')[0] == '/autosave-versions':
             with _fs_lock:
                 return self._handle_autosave_versions()
+        if self.path.split('?')[0] == '/vault':
+            with _fs_lock:
+                return self._handle_vault_get()
         if self.path.startswith('/autosave'):
             with _fs_lock:
                 return self._handle_autosave_get()
@@ -316,6 +319,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == '/autosave-svg':
             with _fs_lock:
                 return self._handle_autosave_svg_post()
+        if self.path == '/vault':
+            with _fs_lock:
+                return self._handle_vault_post()
         if self.path == '/file-roles':
             with _fs_lock:
                 return self._handle_file_roles_post()
@@ -710,6 +716,116 @@ class Handler(BaseHTTPRequestHandler):
             item['head'] = _version_head(text)
             versions.append(item)
         self._send_json(200, {'name': dt, 'dir': str(save_dir), 'versions': versions})
+
+    # --- 提出物庫 (BLK-junior-20260908-2203-wish) -----------------------------
+    #
+    # `_versions/` はファイル名ごとの控えなので、「周を 1 つ完走して画像を出した」
+    # という区切りは残らない。名前を既定の diagram1 のまま次の周を始めれば、
+    # 完走した図は上書きの控えとして 20 版の中に紛れ、どれが提出物かは分からない。
+    # 提出物庫は「画像を書き出した瞬間の DSL」をファイル名と無関係な刻印で積む
+    # だけの、追記しかしない置き場。上書きも削除もしないので前回分は消えない。
+    VAULT_DIRNAME = '_vault'
+
+    def _vault_dir(self, save_dir):
+        return save_dir / self.VAULT_DIRNAME
+
+    def _vault_paths(self, save_dir, stamp):
+        vdir = self._vault_dir(save_dir)
+        return vdir / (stamp + '.puml'), vdir / (stamp + '.json')
+
+    def _vault_entries(self, save_dir):
+        """庫にある提出物を新しい順に。刻印が名前なので、並べ替えは名前順でよい。"""
+        out = []
+        try:
+            paths = sorted(self._vault_dir(save_dir).glob('*.json'), reverse=True)
+        except OSError:
+            return out
+        for p in paths:
+            try:
+                meta = json.loads(p.read_text(encoding='utf-8'))
+            except (ValueError, OSError):
+                continue
+            if not isinstance(meta, dict):
+                continue
+            meta['stamp'] = p.stem
+            out.append(meta)
+        return out
+
+    def _handle_vault_get(self):
+        """GET /vault?dir=[&stamp=] — 提出物の一覧、または 1 件の DSL 本文。"""
+        parsed = urllib.parse.urlparse(self.path)
+        params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
+        save_dir = self._autosave_resolve_dir(params.get('dir'))
+        stamp = params.get('stamp', '')
+        if stamp:
+            if not is_safe_autosave_name(stamp):
+                self._send_json(400, {'error': 'invalid stamp'})
+                return
+            puml, _meta = self._vault_paths(save_dir, stamp)
+            if not puml.exists():
+                self.send_error(404, 'vault entry not found')
+                return
+            try:
+                content = puml.read_text(encoding='utf-8')
+            except OSError as e:
+                self._send_json(500, {'error': f'read failed: {e}'})
+                return
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/plain; charset=utf-8')
+            self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+            self.end_headers()
+            self.wfile.write(content.encode('utf-8'))
+            return
+        self._send_json(200, {'dir': str(save_dir), 'entries': self._vault_entries(save_dir)})
+
+    def _handle_vault_post(self):
+        """POST /vault {dir, dsl, name, title, subject, kind, format} — 1 件積む。
+
+        書き出しの副作用なので、失敗しても画像の書き出しは止めない (GUI 側で握る)。
+        """
+        length = int(self.headers.get('Content-Length', 0))
+        try:
+            data = json.loads(self.rfile.read(length).decode('utf-8'))
+        except ValueError:
+            self._send_json(400, {'error': 'invalid JSON'})
+            return
+        if not isinstance(data, dict):
+            self._send_json(400, {'error': 'body must be an object'})
+            return
+        dsl = data.get('dsl')
+        if not isinstance(dsl, str) or dsl.strip() == '':
+            self._send_json(400, {'error': 'dsl must be a non-empty string'})
+            return
+        save_dir = self._autosave_resolve_dir(data.get('dir'))
+        vdir = self._vault_dir(save_dir)
+        try:
+            vdir.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            self._send_json(500, {'error': f'mkdir failed: {e}'})
+            return
+        stamp = time.strftime('%Y%m%d-%H%M%S', time.gmtime())
+        puml, meta_path = self._vault_paths(save_dir, stamp)
+        n = 1
+        while puml.exists():
+            puml, meta_path = self._vault_paths(save_dir, '%s.%d' % (stamp, n))
+            n += 1
+        meta = {
+            'name': str(data.get('name') or ''),
+            'title': str(data.get('title') or ''),
+            'subject': str(data.get('subject') or ''),
+            'kind': str(data.get('kind') or ''),
+            'format': str(data.get('format') or ''),
+            'at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+            'lines': len(dsl.splitlines()),
+        }
+        try:
+            puml.write_text(dsl, encoding='utf-8')
+            meta_path.write_text(json.dumps(meta, ensure_ascii=False), encoding='utf-8')
+        except OSError as e:
+            self._send_json(500, {'error': f'write failed: {e}'})
+            return
+        meta['stamp'] = puml.stem
+        self._send_json(200, {'dir': str(save_dir), 'entry': meta})
 
     def _autosave_read_meta(self, save_dir):
         p = self._autosave_meta_path(save_dir)
@@ -1167,6 +1283,20 @@ class Handler(BaseHTTPRequestHandler):
                 vdir.rmdir()
             except OSError:
                 pass
+            # 提出物庫は「図を全部消す」では消えない。上書きから守るための庫なので、
+            # 作業ファイルを片付けたら提出物も消えるのでは守れていない。
+            # 消せるのは `?vault=1` を明示したときだけ (テストの下ごしらえ用)。
+            if params.get('vault') == '1':
+                vault = self._vault_dir(save_dir)
+                try:
+                    for p in vault.iterdir():
+                        try:
+                            p.unlink()
+                        except OSError:
+                            pass
+                    vault.rmdir()
+                except OSError:
+                    pass
         self._send_json(200, {'ok': True})
 
 
