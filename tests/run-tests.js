@@ -36,6 +36,7 @@ const sourceFiles = [
   'src/core/command-palette.js',
   'src/core/diagram-rail.js',
   'src/core/tool-menu.js',
+  'src/core/status-counters.js',
   'src/core/zoom-hud.js',
   'src/core/outline.js',
   'src/core/select-at-line.js',

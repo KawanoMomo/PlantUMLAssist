@@ -1106,7 +1106,9 @@ function init() {
       }
       var target = document.getElementById(item.getAttribute('data-target'));
       close();
-      if (target) target.click();
+      // パネル類は「外側の click で閉じる」を document に付けているので、
+      // 今の click を配り終えてから鳴らす (同期だと開いた直後に閉じる)。
+      if (target) setTimeout(function() { target.click(); }, 0);
     });
 
     document.addEventListener('click', function(e) {
@@ -1121,6 +1123,40 @@ function init() {
     var saved = '0';
     try { saved = localStorage.getItem(FOLD_KEY) || '0'; } catch (err) {}
     applyFold(saved === '1');
+  })();
+
+  // ── 下端の件数表示 (design 7a / 7b) ─────────────────────────────────────
+  // 差分・指摘・指摘箱の件数はタブ列のボタン文字にしか出ておらず、ツールを畳むと
+  // 画面から消える。件数は状態表示なので下端に寄せ、押したら従来と同じパネルを開く。
+  // 数え直しはそれぞれの render*Badge が持っているので、ここはタブ列のボタン文字を
+  // 写すだけにする (二重に数えて食い違うのを避ける)。
+  (function setupStatusCounters() {
+    var SC = window.MA.statusCounters;
+    if (!SC) return;
+    SC.items().forEach(function(it) {
+      var out = document.getElementById(it.id);
+      var src = document.getElementById(it.src);
+      if (!out || !src) return;
+
+      function sync() {
+        out.textContent = SC.statusText(it.prefix, src.textContent);
+        out.classList.toggle('has-open', SC.isActive(src.textContent));
+        out.title = src.title || it.title;
+      }
+      // パネル類は「外側の click で閉じる」を document に付けている。ここで同期に
+      // src.click() を鳴らすと、開いた直後に今の click がそのまま document へ上がり、
+      // 外側クリック扱いで閉じてしまう。今の click を配り終えてから鳴らす。
+      out.addEventListener('click', function() {
+        setTimeout(function() { src.click(); }, 0);
+      });
+      if (typeof MutationObserver === 'function') {
+        new MutationObserver(sync).observe(src, {
+          childList: true, characterData: true, subtree: true, attributes: true,
+          attributeFilter: ['title'],
+        });
+      }
+      sync();
+    });
   })();
 
   // Open / Save
