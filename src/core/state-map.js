@@ -176,6 +176,20 @@ window.MA.stateMap = (function() {
     return _s(id);
   }
 
+  // 遷移の行に、参照図側の端点をそのまま持たせる。表示名だけだと
+  // 「この遷移を自分の図にも足す」ときに、どの状態から出す遷移なのかを
+  // 名前から逆に引き直すことになり、同名の状態が 2 つあると当てられない。
+  function _withRefEnds(row, tr, refParsed) {
+    row.refFrom = _s(tr.from);
+    row.refTo = _s(tr.to);
+    row.refFromName = row.refFrom === '[*]' ? '[*]' : _labelOf(tr.from, refParsed);
+    row.refToName = row.refTo === '[*]' ? '[*]' : _labelOf(tr.to, refParsed);
+    row.refTrigger = _s(tr.trigger);
+    row.refGuard = _s(tr.guard);
+    row.refAction = _s(tr.action);
+    return row;
+  }
+
   // 遷移の対応表。状態の対応が付いていれば、それを踏まえて端点を読み替えてから
   // 名前を突き合わせる。状態名が違うだけで遷移まで「片方だけ」に落ちるのを防ぐ。
   function mapTransitions(refParsed, mineParsed, stateRows) {
@@ -214,21 +228,21 @@ window.MA.stateMap = (function() {
       if (usedL[c.li] || usedR[c.ri]) return;
       usedL[c.li] = true; usedR[c.ri] = true;
       var r = refs[c.li], m = mines[c.ri];
-      rows.push({
+      rows.push(_withRefEnds({
         type: 'transition', match: kindOf(c.score), score: c.score,
         ref: transitionName(r, refParsed), refId: r.id, refLine: r.line,
         mine: transitionName(m, mineParsed), mineId: m.id, mineLine: m.line,
-      });
+      }, r, refParsed));
     });
     rows.sort(function(a, b) { return b.score - a.score; });
 
     refs.forEach(function(r, i) {
       if (usedL[i]) return;
-      rows.push({
+      rows.push(_withRefEnds({
         type: 'transition', match: 'ref-only', score: 0,
         ref: transitionName(r, refParsed), refId: r.id, refLine: r.line,
         mine: '', mineId: null, mineLine: null,
-      });
+      }, r, refParsed));
     });
     mines.forEach(function(m, i) {
       if (usedR[i]) return;
@@ -246,6 +260,158 @@ window.MA.stateMap = (function() {
     var states = mapStates(refParsed, mineParsed);
     var transitions = mapTransitions(refParsed, mineParsed, states);
     return { states: states, transitions: transitions };
+  }
+
+  // ── 参照図だけの行を自分の図にも足す (BLK-junior-20260908-1103-wish) ──
+  //
+  // 対応表は「先輩にしかない要素」を見つけるところまでしかやらず、足すのは
+  // 一括入力欄に自分で書き直す作業だった。名前も抽象度も違う 2 枚を読み比べて
+  // 打ち直すのは、対応表を作る前と同じ手間がそのまま残っている。
+  //
+  // ここは「橙の行 1 つ」から、自分の図の末尾に足す DSL を組み立てる。
+  // 状態はそのまま足せる。遷移は端点が要るので、対応表で対応の付いた状態は
+  // 自分の側の id に読み替え、対応が付かない端点だけを「どの状態から出すか」
+  // として聞き返す (聞くのは付かなかった端点だけ。付いた端点は聞かない)。
+
+  var NEW_STATE = '__new__';
+
+  function _bare(id) {
+    var s = _s(id);
+    return s.indexOf('.') >= 0 ? s.split('.').pop() : s;
+  }
+
+  // 参照図の状態 id → 自分の図の状態 id。対応が付いた組だけ。
+  function aliasMap(map) {
+    var alias = {};
+    ((map && map.states) || []).forEach(function(row) {
+      if (row.refId && row.mineId) alias[row.refId] = row.mineId;
+    });
+    return alias;
+  }
+
+  // 端点に選べる自分の状態。開始・終了 (`[*]`) も端点なので混ぜる。
+  function mineOptions(mineParsed) {
+    var opts = [{ value: '[*]', label: '[*] (開始・終了)' }];
+    _states(mineParsed).forEach(function(st) {
+      opts.push({ value: st.id, label: stateName(st) });
+    });
+    return opts;
+  }
+
+  // 新しく作る状態の id。自分の図と、この 1 回で作る分にぶつからないものを返す。
+  function _newState(name, mineParsed, taken) {
+    var stateMod = window.MA.modules && window.MA.modules.plantumlState;
+    var extra = (taken || []).map(function(id) { return { id: id, label: id }; });
+    var parsed = { states: _states(mineParsed).concat(extra) };
+    var norm = stateMod
+      ? stateMod.normalizeIdInput(name, parsed)
+      : { id: _bare(name), label: name };
+    var id = norm.id, label = norm.label;
+    var used = {};
+    parsed.states.forEach(function(st) { used[_bare(st.id)] = true; });
+    var base = id, n = 2;
+    while (used[id]) { id = base + '_' + n; n++; }
+    return { id: id, label: label };
+  }
+
+  function _endpoint(side, refId, refName, alias, mineParsed, taken) {
+    var end = { side: side, name: refName || refId, resolved: null };
+    if (_s(refId) === '[*]') {
+      end.resolved = '[*]';
+      return end;
+    }
+    if (alias[_s(refId)]) {
+      end.resolved = alias[_s(refId)];
+      return end;
+    }
+    // 対応表で組にならなくても、同じ名前の状態が自分の図にあればそれを使う
+    // (対応表は 1 対 1 で組むので、同名が 2 つあると片方が余る)。
+    var same = null;
+    _states(mineParsed).forEach(function(st) {
+      if (same === null && normalize(stateName(st)) === normalize(refName)) same = st.id;
+    });
+    if (same) { end.resolved = same; return end; }
+    var made = _newState(refName || refId, mineParsed, taken);
+    end.newId = made.id;
+    end.newLabel = made.label;
+    end.options = mineOptions(mineParsed);
+    return end;
+  }
+
+  // 1 行を足す計画。ready なら押すだけで足せる。ready でなければ needs に
+  // 「どの状態にするか」を聞く端点が入る。
+  function adoptPlan(row, map, mineParsed) {
+    if (!row || row.match !== 'ref-only') {
+      return { adoptable: false, reason: '参照図だけの行しか足せません' };
+    }
+    if (row.type === 'state') {
+      var made = _newState(row.ref, mineParsed, []);
+      return {
+        adoptable: true, kind: 'state', ready: true, needs: [],
+        state: made,
+        describe: '状態「' + (made.label || made.id) + '」を足します',
+      };
+    }
+    var alias = aliasMap(map);
+    var taken = [];
+    var from = _endpoint('from', row.refFrom, row.refFromName, alias, mineParsed, taken);
+    if (from.newId) taken.push(from.newId);
+    var to = _endpoint('to', row.refTo, row.refToName, alias, mineParsed, taken);
+    if (to.newId) taken.push(to.newId);
+    var needs = [from, to].filter(function(e) { return e.resolved === null; });
+    return {
+      adoptable: true, kind: 'transition', ready: needs.length === 0, needs: needs,
+      from: from, to: to,
+      trigger: row.refTrigger || '', guard: row.refGuard || '', action: row.refAction || '',
+      describe: '遷移「' + row.ref + '」を足します',
+    };
+  }
+
+  // 端点 1 つを id に決める。picks が無ければ、対応が付いた側はその id、
+  // 付かない側は新しく作る。picks に自分の状態が選ばれていればそれを使う。
+  function _pickEnd(end, pick) {
+    if (end.resolved !== null) return { id: end.resolved, create: null };
+    if (pick && pick !== NEW_STATE) return { id: pick, create: null };
+    return { id: end.newId, create: { id: end.newId, label: end.newLabel } };
+  }
+
+  // 末尾に 1 行足し、その行番号 (1 始まり) を返す。
+  function _append(text, line) {
+    var out = window.MA.dslUpdater.insertBeforeEnd(text, line);
+    var lines = out.split('\n');
+    for (var i = lines.length - 1; i >= 0; i--) {
+      if (lines[i] === line) return { text: out, line: i + 1 };
+    }
+    return { text: out, line: lines.length };
+  }
+
+  // 計画を自分の DSL に書き込む。戻り値の line は「足した本体の行」。
+  // 端点を新しく作った場合はその state 行も先に足す (足りない状態だけ)。
+  function applyAdopt(text, row, map, mineParsed, picks) {
+    var stateMod = window.MA.modules && window.MA.modules.plantumlState;
+    if (!stateMod || !window.MA.dslUpdater) return null;
+    var plan = adoptPlan(row, map, mineParsed);
+    if (!plan.adoptable) return null;
+    var out = _s(text), res, added = [];
+
+    if (plan.kind === 'state') {
+      res = _append(out, stateMod.fmtState(plan.state.id, plan.state.label));
+      added.push(plan.state.label || plan.state.id);
+      return { text: res.text, line: res.line, added: added, plan: plan };
+    }
+
+    var p = picks || {};
+    var from = _pickEnd(plan.from, p.from);
+    var to = _pickEnd(plan.to, p.to);
+    [from, to].forEach(function(e) {
+      if (!e.create) return;
+      res = _append(out, stateMod.fmtState(e.create.id, e.create.label));
+      out = res.text;
+      added.push(e.create.label || e.create.id);
+    });
+    res = _append(out, stateMod.fmtTransition(from.id, to.id, plan.trigger, plan.guard, plan.action));
+    added.push(from.id + ' --> ' + to.id);
+    return { text: res.text, line: res.line, added: added, plan: plan };
   }
 
   function _count(rows, match) {
@@ -301,5 +467,10 @@ window.MA.stateMap = (function() {
     summary: summary,
     abstractionWarning: abstractionWarning,
     matchLabel: matchLabel,
+    NEW_STATE: NEW_STATE,
+    aliasMap: aliasMap,
+    mineOptions: mineOptions,
+    adoptPlan: adoptPlan,
+    applyAdopt: applyAdopt,
   };
 })();
