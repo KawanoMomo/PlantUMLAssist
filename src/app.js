@@ -5208,6 +5208,10 @@ function setupTabs() {
   // 無いのに版だけ残っている図。server が一覧と同じ呼び出しで返す。
   var versionCounts = {};
   var goneVersions = [];
+  // BLK-junior-20260908-2003: 図名 → 図種。「自分の状態遷移図が無い」を、
+  // 22 枚を 1 枚ずつ開いて確かめるのではなく一覧の時点で言うため。
+  var kindByName = {};
+  var kindEntries = [];
   // BLK-reviewer-20260908-0103: 図名 → SVG が puml に追いついているか。
   // `ls -l` で puml と svg を 1 枚ずつ突き合わせる代わりに、一覧が答える。
   var svgStatus = {};
@@ -5468,6 +5472,12 @@ function setupTabs() {
       goneVersions = window.MA.versionHistory
         ? window.MA.versionHistory.goneRows(res) : [];
 
+      kindEntries = entries;
+      kindByName = {};
+      entries.forEach(function(e) {
+        if (e && e.name) kindByName[e.name] = e.kind || '';
+      });
+
       var WA = window.MA.writeActivity;
       writeScan = WA ? WA.scan(entries, res && res.now) : null;
       writeStatus = WA ? WA.statusMap(writeScan) : {};
@@ -5497,6 +5507,7 @@ function setupTabs() {
         appendRoleSection(panel, dir);
         appendSvgSection(panel, dir);
         appendWriteSection(panel, dir);
+        appendKindSummary(panel);
         plain.items.forEach(function(e) { panel.appendChild(folderRow(e.name || e, null, null)); });
         appendDraftSection(plain.drafts, function(e) { return folderRow(e.name || e, null, null); });
         appendGoneVersionsSection(panel);
@@ -5533,6 +5544,7 @@ function setupTabs() {
       function rowOf(r) {
         return folderRow(r.name, RW.badge(r.status), RW.formatMtime(r.mtime), r.status);
       }
+      appendKindSummary(panel);
       sp.items.forEach(function(r) { panel.appendChild(rowOf(r)); });
       appendDraftSection(sp.drafts, rowOf);
       appendGoneVersionsSection(panel);
@@ -6195,6 +6207,28 @@ function setupTabs() {
       });
     }
 
+    // BLK-junior-20260908-2003: 図種が変わる保存は server が `{名前}_{図種}` へ回す。
+    // 画面の図名をその先に合わせないと、次の保存も回り続け、図名と実ファイルが
+    // ずれたまま「どこに保存されたか分からない」になる。
+    if (AS.onFileRenamed) {
+      AS.onFileRenamed(function(info) {
+        var DK = window.MA.diagramKind;
+        var notice = DK ? DK.renameNotice(info) : null;
+        if (!notice) return;
+        try {
+          var docs = window.MA.workspace.list() || [];
+          for (var i = 0; i < docs.length; i++) {
+            if (docs[i].name !== notice.from) continue;
+            window.MA.workspace.rename(docs[i].id, notice.to);
+            if (window.MA.saveDiff) window.MA.saveDiff.mark(notice.to, docs[i].dsl);
+            renderTabs();
+            break;
+          }
+        } catch (e) {}
+        if (window.MA.toast) { try { window.MA.toast.show(notice.text); } catch (e) {} }
+      });
+    }
+
     // 開き直した直後 (一覧をまだ開いていない) でも宣言を知っているようにする。
     var WS = window.MA.workspace;
     if (WS && WS.listFolder) {
@@ -6233,9 +6267,39 @@ function setupTabs() {
     if (status === 'changed' || status === 'new') row.appendChild(folderDiffButton(name, status));
     if (window.MA.targetSet) row.appendChild(folderTargetButton(name));
     row.appendChild(folderDraftButton(name));
+    var kb = folderKindBadge(name);
+    if (kb) row.appendChild(kb);
     var vb = folderVersionButton(name);
     if (vb) row.appendChild(vb);
     return row;
+  }
+
+  // BLK-junior-20260908-2003: この保存先に何の図種が何枚あるか。0 枚の図種も出す。
+  // 「前の周に作ったはずの状態遷移図が見当たらない」を、一覧を目で舐めるのではなく
+  // この 1 行で終わらせる (無いなら無いと分かるのが手順 1 の答えになる)。
+  function appendKindSummary(host) {
+    var DK = window.MA.diagramKind;
+    if (!DK) return;
+    var line = document.createElement('div');
+    line.className = 'folder-summary folder-kinds';
+    line.id = 'folder-kinds';
+    line.textContent = DK.summaryLine(kindEntries);
+    line.title = '図種は保存された本文から判定しています。0 の図種はこの保存先に 1 枚もありません';
+    host.appendChild(line);
+  }
+
+  // 行に付く図種のバッジ。名前が diagram1 でも何の図かがその場で分かる。
+  function folderKindBadge(name) {
+    var DK = window.MA.diagramKind;
+    if (!DK) return null;
+    var label = DK.label(kindByName[name]);
+    if (!label) return null;
+    var el = document.createElement('span');
+    el.className = 'folder-kind';
+    el.setAttribute('data-kind-of', name);
+    el.textContent = label;
+    el.title = 'この図の図種（本文から判定）';
+    return el;
   }
 
   // BLK-junior-20260908-2003: 同じ名前に別の図を保存すると前の中身は消える。

@@ -66,6 +66,55 @@ def is_safe_autosave_name(name):
         return False
     return not any(ch in AUTOSAVE_UNSAFE_CHARS for ch in name)
 
+
+# --- 図種で保存先を分ける (BLK-junior-20260908-2003) -------------------------
+#
+# 保存は「図の名前 = ファイル名」なので、名前を既定の diagram1 のままにして
+# 図種だけ変えて周を重ねると、前の周に完走した図が次の周の保存で消える。
+# 控え (_versions) は消えた中身を救うが、「自分の状態遷移図を開く」ときに
+# 版を探させる時点で手順が増える。図種が変わる保存は上書きではなく
+# `{名前}_{図種}` へ回し、図種ごとに 1 枚ずつ残す。
+DIAGRAM_KIND_PATTERNS = [
+    ('state', re.compile(r'^(state\b|\[\*\]\s*-->)', re.I)),
+    ('sequence', re.compile(r'^(participant|actor|boundary|control|entity|database|collections|queue)\b', re.I)),
+    ('class', re.compile(r'^(class|interface|abstract|enum)\b', re.I)),
+    ('usecase', re.compile(r'^(usecase|rectangle)\b|^:.*:\s+as\b', re.I)),
+    ('component', re.compile(r'^component\b|^\[.+\]\s*(as\b|$)', re.I)),
+    ('activity', re.compile(r'^(start\b|if\s*\()|^:.*;$', re.I)),
+]
+DIAGRAM_KIND_SLUGS = [slug for slug, _ in DIAGRAM_KIND_PATTERNS]
+# 図の中身ではない行。ここで止めずに読み飛ばして、最初に図種の分かる行を採る。
+KIND_SKIP_RE = re.compile(
+    r"^(@\w|'|/'|title\b|header\b|footer\b|caption\b|legend\b|end\s|skinparam\b|!|hide\b|show\b|"
+    r"scale\b|autonumber\b|allow_mixing\b|left to right\b|top to bottom\b)", re.I)
+
+
+def dsl_kind(text):
+    """DSL の本文から図種の slug を当てる。当てられなければ ''。
+
+    当てられない図には手を出さない (分からないまま別名に回す方が危ない)。
+    """
+    if not isinstance(text, str):
+        return ''
+    for line in text.splitlines():
+        s = line.strip()
+        if not s or KIND_SKIP_RE.match(s):
+            continue
+        for slug, pat in DIAGRAM_KIND_PATTERNS:
+            if pat.match(s):
+                return slug
+    return ''
+
+
+def kind_base_name(name):
+    """`diagram1_state` → `diagram1`。図種で分けた名前をもう一度分けない。"""
+    for slug in DIAGRAM_KIND_SLUGS:
+        tail = '_' + slug
+        if name.endswith(tail) and len(name) > len(tail):
+            return name[:-len(tail)]
+    return name
+
+
 # Windows: suppress the console window that otherwise flashes every time
 # we spawn java (once per /render call). No-op on other platforms.
 _SUBPROCESS_KWARGS = {}
@@ -861,9 +910,11 @@ class Handler(BaseHTTPRequestHandler):
         except OSError as e:
             self._send_json(500, {'error': f'cannot create directory: {e}'})
             return
-        file_path = self._autosave_file_path(save_dir, dt)
-        # BLK-junior-20260908-2003: 上書きで消える中身を先に控える。
-        self._stash_version(save_dir, dt, dsl)
+        # BLK-junior-20260908-2003: 図種が変わる保存は上書きではなく別ファイルへ回す。
+        target, prev_kind, new_kind = self._resolve_save_target(save_dir, dt, dsl)
+        file_path = self._autosave_file_path(save_dir, target)
+        # 同じ図種の中での上書きは今までどおり。消える中身は先に控える。
+        self._stash_version(save_dir, target, dsl)
         try:
             file_path.write_text(dsl, encoding='utf-8')
         except OSError as e:
@@ -871,13 +922,52 @@ class Handler(BaseHTTPRequestHandler):
             return
         meta = {
             'lastSavedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
-            'lastSavedType': dt,
+            'lastSavedType': target,
         }
         try:
             self._autosave_meta_path(save_dir).write_text(json.dumps(meta), encoding='utf-8')
         except OSError:
             pass  # meta is best-effort
-        self._send_json(200, {'ok': True, 'meta': meta, 'path': str(file_path)})
+        out = {'ok': True, 'meta': meta, 'path': str(file_path),
+               'savedAs': target, 'kind': new_kind}
+        if target != dt:
+            out['renamedFrom'] = dt
+            out['prevKind'] = prev_kind
+        self._send_json(200, out)
+
+    def _resolve_save_target(self, save_dir, dt, dsl):
+        """書き先の名前を決める。(名前, 前の図種, 今の図種)。
+
+        既にある同名ファイルが別の図種なら、上書きせず `{名前}_{図種}` へ回す。
+        その名前も別の図種で埋まっていれば連番を足す。図種が読めないときは
+        今までどおり上書きする (当てずっぽうで名前を増やさない)。
+        """
+        new_kind = dsl_kind(dsl)
+        path = self._autosave_file_path(save_dir, dt)
+        try:
+            if not path.exists():
+                return dt, '', new_kind
+            prev_kind = dsl_kind(path.read_text(encoding='utf-8'))
+        except OSError:
+            return dt, '', new_kind
+        if not new_kind or not prev_kind or new_kind == prev_kind:
+            return dt, prev_kind, new_kind
+        base = kind_base_name(dt) + '_' + new_kind
+        for cand in [base] + ['%s-%d' % (base, i) for i in range(2, 21)]:
+            if not is_safe_autosave_name(cand):
+                break
+            p = self._autosave_file_path(save_dir, cand)
+            try:
+                if not p.exists():
+                    return cand, prev_kind, new_kind
+                k = dsl_kind(p.read_text(encoding='utf-8'))
+            except OSError:
+                break
+            if not k or k == new_kind:
+                return cand, prev_kind, new_kind
+        # 行き先が決められないときは、消さない方を採って刻印付きの名前にする。
+        stamp = time.strftime('%Y%m%d-%H%M%S', time.gmtime())
+        return base + '-' + stamp, prev_kind, new_kind
 
     def _handle_autosave_svg_post(self):
         """保存フォルダの {type}.svg だけを書き直す。
@@ -1185,7 +1275,8 @@ class Handler(BaseHTTPRequestHandler):
         svg の最終更新時刻もここで返す (無ければ None)。
         """
         entry = {'name': path.stem, 'mtime': None, 'size': None, 'hash': None,
-                 'svgMtime': None, 'svgSource': None, 'svgHash': None, 'pins': None}
+                 'svgMtime': None, 'svgSource': None, 'svgHash': None, 'pins': None,
+                 'kind': ''}
         svg_path = path.with_suffix('.svg')
         try:
             svg_st = svg_path.stat()
@@ -1211,6 +1302,9 @@ class Handler(BaseHTTPRequestHandler):
             # 22 枚を 1 枚ずつ開き直すのは、別名保存を続けるのと同じ手間になる。
             # 本文はここで既に読んでいるので、その場で数えて一覧に載せる。
             entry['pins'] = self._pin_counts(raw)
+            # BLK-junior-20260908-2003: 「状態遷移図が無い」を一覧の時点で言うために、
+            # 1 枚ずつ開かなくても図種が分かるようにする (本文はここで既に読んでいる)。
+            entry['kind'] = dsl_kind(raw.decode('utf-8', 'replace'))
         except OSError:
             pass
         return entry

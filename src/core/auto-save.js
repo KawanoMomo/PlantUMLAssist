@@ -70,6 +70,16 @@ window.MA.autoSave = (function() {
         headers: { 'Content-Type': 'application/json' },
         body: body,
         keepalive: true,
+      }).then(function(r) {
+        // BLK-junior-20260908-2003: 図種が変わる保存は server が別ファイルへ回す。
+        // 回された先を知らせないと、画面の図名と書かれたファイルがずれたまま
+        // 次の保存も同じように回り続ける (図名を直すのは app.js)。
+        if (!r || !r.ok || !r.json) return null;
+        return r.json().catch(function() { return null; });
+      }).then(function(data) {
+        if (data && data.renamedFrom && data.savedAs && data.renamedFrom !== data.savedAs) {
+          _notifyRenamed(data);
+        }
       }).catch(function(e) {
         if (typeof console !== 'undefined' && console.warn) {
           console.warn('[autoSave] file write failed:', e);
@@ -192,6 +202,26 @@ window.MA.autoSave = (function() {
 
   function onFileBlocked(listener) {
     if (typeof listener === 'function') _blockedListeners.push(listener);
+  }
+
+  // ── 図種が変わって別ファイルへ回されたとき (BLK-junior-20260908-2003) ────
+  var _renamedListeners = [];
+
+  function _notifyRenamed(info) {
+    for (var i = 0; i < _renamedListeners.length; i++) {
+      try { _renamedListeners[i](info); } catch (e) {}
+    }
+  }
+
+  function onFileRenamed(listener) {
+    if (typeof listener === 'function') _renamedListeners.push(listener);
+  }
+
+  // 別の経路 (workspace.saveToFile) が書いたときも、知らせ方はここに揃える。
+  function noteFileRenamed(info) {
+    if (info && info.renamedFrom && info.savedAs && info.renamedFrom !== info.savedAs) {
+      _notifyRenamed(info);
+    }
   }
 
   // 図名を変えたら (= 別のファイルになったら) また鳴らせるようにする。
@@ -336,6 +366,8 @@ window.MA.autoSave = (function() {
     onSave: onSave,
     setFileGuard: setFileGuard,
     onFileBlocked: onFileBlocked,
+    onFileRenamed: onFileRenamed,
+    noteFileRenamed: noteFileRenamed,
     noteFileBlocked: noteFileBlocked,
     resetFileBlocked: resetFileBlocked,
   };
