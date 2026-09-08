@@ -16,6 +16,7 @@ if (!global.window) {
   '../src/core/name-audit.js',
   '../src/core/scope-decl.js',
   '../src/core/family-audit.js',
+  '../src/core/audit-scope.js',
   '../src/core/domain-cohort.js',
 ].forEach(function(f) {
   try { delete require.cache[require.resolve(f)]; } catch (e) {}
@@ -180,5 +181,93 @@ describe('domainCohort.audit', function() {
     expect(rows[0].right).toBe('primary / gpio_init_sequence');
     expect(rows[0].matched).toBe(false);
     expect(rows[1].matched).toBe(true);
+  });
+});
+
+// BLK-reviewer-20260909-0503-wish: 突合を GPIO の外へ広げた回、`plantuml` ドメインが
+// junior/primary/reviewer の 3 フォルダで「食い違い」と出た。中身はアプリ同梱テンプレ
+// (plantuml-sequence.puml の Sample Sequence / User→System→DB) を各自が独立に複製した
+// 練習用ファイルで、業務上の名前空間衝突ではない。テンプレ由来の雑音を業務データの
+// 食い違いと同じ件数に混ぜないことを、ここで守る。
+describe('domainCohort のテンプレ除外', function() {
+  function tpl(folder, base, title) {
+    return {
+      name: folder + '/' + base + '.puml',
+      dsl: ['@startuml', 'title ' + title, 'actor User', 'participant System', 'database DB',
+        'User -> System : Request', 'System -> DB : Query', '@enduml'].join('\n'),
+    };
+  }
+  // 3 人がそれぞれ同梱テンプレを複製し、うち 1 人だけが少し書き換えた状態。
+  var TPL_DOCS = [
+    tpl('junior', 'plantuml-sequence', 'Sample Sequence'),
+    tpl('primary', 'plantuml-sequence', 'Sample Sequence'),
+    {
+      name: 'reviewer/plantuml-sequence.puml',
+      dsl: ['@startuml', 'title Sample Sequence', 'actor User', 'participant System',
+        'User -> System : Ping', '@enduml'].join('\n'),
+    },
+    // 新規タブの既定サンプル。フォルダをまたいで同名で残りやすい。
+    { name: 'junior/diagram1.puml', dsl: '@startuml\n[*] --> Idle\n@enduml' },
+    { name: 'primary/diagram1.puml', dsl: '@startuml\n[*] --> Ready\n@enduml' },
+  ];
+
+  test('テンプレ由来のファイルに印が付く', function() {
+    var all = dc.groups(TPL_DOCS);
+    var g = all.filter(function(x) { return x.domain === 'plantuml'; })[0];
+    expect(g.entries.length).toBe(3);
+    expect(g.templateOnly).toBe(true);
+    expect(g.dataEntries.length).toBe(0);
+    expect(g.entries[0].template).toBe(true);
+    expect(g.entries[0].templateReason).toBe('アプリ同梱テンプレ');
+    expect(dc.isTemplate('junior/gpio_state.puml')).toBe(false);
+  });
+
+  test('テンプレだけのドメインは食い違いに数えず、除外として別に持つ', function() {
+    var out = dc.audit(TPL_DOCS);
+    expect(out.groups).toEqual([]);
+    expect(out.templateDomains.map(function(t) { return t.domain; })).toEqual(['diagram1', 'plantuml']);
+    expect(out.templateDomains[1].folders).toEqual(['junior', 'primary', 'reviewer']);
+    expect(out.templateFiles).toBe(5);
+    // 「相手がいないので比べていない」ドメインにも混ぜない (直し方が違う)。
+    expect(out.soloDomains).toEqual([]);
+  });
+
+  test('除外した件数は要約に必ず出る (黙って減らさない)', function() {
+    var line = dc.summaryLine(dc.audit(TPL_DOCS));
+    expect(line).toContain('テンプレ由来 2 ドメインは除外: diagram1, plantuml');
+  });
+
+  test('業務データの食い違いはテンプレを混ぜても変わらない', function() {
+    var out = dc.audit(DOCS.concat(TPL_DOCS));
+    expect(out.groups.map(function(g) { return g.domain; })).toEqual(['gpio']);
+    expect(out.groups[0].mismatched).toBe(1);
+    expect(dc.summaryLine(out)).toContain('gpio [junior × primary]');
+  });
+
+  test('見たいときは includeTemplates で戻せる', function() {
+    var out = dc.audit(TPL_DOCS, { includeTemplates: true });
+    expect(out.groups.map(function(g) { return g.domain; })).toEqual(['diagram1', 'plantuml']);
+    // reviewer だけ書き換えているので、含めれば食い違いとして出る。
+    var pl = out.groups[1];
+    expect(pl.mismatched).toBeGreaterThan(0);
+    expect(dc.summaryLine(out)).toContain('テンプレ由来 2 ドメインも含めている');
+  });
+
+  test('テンプレと業務データが同じドメインに混ざったら、業務データだけで組む', function() {
+    var docs = [
+      { name: 'junior/sample.puml', dsl: '@startuml\n[*] --> Idle\n@enduml' },   // 既定名のまま
+      { name: 'primary/sample_gpio_state.puml', dsl: '@startuml\n[*] --> Ready\n@enduml' },
+      { name: 'reviewer/sample_gpio_state.puml', dsl: '@startuml\n[*] --> Ready\n@enduml' },
+    ];
+    var g = dc.groups(docs)[0];
+    expect(g.domain).toBe('sample');
+    expect(g.templateEntries.length).toBe(1);
+    expect(g.dataFolders).toEqual(['primary', 'reviewer']);
+    var out = dc.audit(docs);
+    expect(out.groups.length).toBe(1);
+    expect(out.groups[0].folders).toEqual(['primary', 'reviewer']);
+    expect(out.groups[0].templates).toBe(1);
+    expect(out.groups[0].pairs.length).toBe(1);
+    expect(out.groups[0].mismatched).toBe(0);
   });
 });

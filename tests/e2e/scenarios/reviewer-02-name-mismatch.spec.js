@@ -79,3 +79,45 @@ test('手順2 フォルダをまたぐ同じドメインの図を、探さずに
   // 到達条件 3: 指摘に書ける 1 行が、この 1 回の呼び出しから出る。
   expect(MA.domainCohort.summaryLine(result)).toContain('gpio [junior × primary]');
 });
+
+// 突合を GPIO の外へ広げた回 (BLK-reviewer-20260909-0503-wish)。`plantuml` ドメインが
+// 3 フォルダで「食い違い」と出たが、中身はアプリ同梱テンプレを各自が複製しただけの
+// 練習用ファイルだった。テンプレ由来の雑音と業務データの食い違いを区別できることを
+// 到達条件にする (区別できないと、毎回 puml の中身を読んで選り分けることになる)。
+test('手順2 テンプレ由来の食い違いは、中身を読まずに業務データと分けて出る', () => {
+  const { MA } = loadMA();
+
+  const stock = ['@startuml', 'title Sample Sequence', 'actor User',
+    'participant System', 'database DB', 'User -> System : Request', '@enduml'].join('\n');
+  const docs = [
+    // 業務データ: 本物の名前空間衝突 (junior は Gpio_Driver、primary は GpioDrv)。
+    {
+      name: 'junior/gpio_init_sequence.puml',
+      dsl: ['@startuml', 'participant Gpio_Driver', 'participant Hw_Ctrl',
+        'Gpio_Driver -> Hw_Ctrl : Gpio_Setup', '@enduml'].join('\n'),
+    },
+    { name: 'primary/gpio_init_sequence.puml', dsl: R.DOCS.gpio_init_sequence },
+    // テンプレ由来の雑音: 同梱テンプレを 3 人が独立に複製しただけ。
+    { name: 'junior/plantuml-sequence.puml', dsl: stock },
+    { name: 'primary/plantuml-sequence.puml', dsl: stock },
+    { name: 'reviewer/plantuml-sequence.puml', dsl: stock.replace('Request', 'Ping') },
+    // 新規タブの既定サンプルも同じ名前でフォルダをまたいで残る。
+    { name: 'junior/diagram1.puml', dsl: '@startuml\n[*] --> Idle\n@enduml' },
+    { name: 'primary/diagram1.puml', dsl: '@startuml\n[*] --> Ready\n@enduml' },
+  ];
+
+  const result = MA.domainCohort.audit(docs);
+  // 到達条件 1: 既定で出るのは業務データの食い違いだけ。
+  expect(result.groups.map((g) => g.domain)).toEqual(['gpio']);
+  expect(result.groups[0].mismatched).toBe(1);
+
+  // 到達条件 2: 外したテンプレは黙って消えず、何を外したかが数えられる。
+  expect(result.templateDomains.map((t) => t.domain)).toEqual(['diagram1', 'plantuml']);
+  expect(result.templateDomains[1].reason).toBe('アプリ同梱テンプレ');
+  expect(MA.domainCohort.summaryLine(result))
+    .toContain('テンプレ由来 2 ドメインは除外: diagram1, plantuml');
+
+  // 到達条件 3: テンプレも見たいときは 1 回の呼び直しで戻せる。
+  const withTpl = MA.domainCohort.audit(docs, { includeTemplates: true });
+  expect(withTpl.groups.map((g) => g.domain)).toEqual(['diagram1', 'gpio', 'plantuml']);
+});

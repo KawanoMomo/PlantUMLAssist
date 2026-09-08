@@ -5086,9 +5086,15 @@ var _peekDsl = '';        // 今出している 1 枚の本文 (テンプレー�
 // 確かめるしかなかった (GPIO の突合は 4 枚を個別に開いてテキスト比較)。
 // ドメイン名でフォルダを横断して束ね、同じ図種の組の差分をその場で色分けする。
 var _cohortOn = false;
-var _cohortGroups = [];      // [{ domain, folders, entries }] — 本文はまだ読んでいない
+var _cohortGroups = [];      // 表示中のドメイン (既定は業務データだけ)
+var _cohortAllGroups = [];   // [{ domain, folders, entries }] — 本文はまだ読んでいない
 var _cohortDomain = null;
 var _cohortResult = null;    // 選んだドメインの compare 結果
+// BLK-reviewer-20260909-0503-wish: plantuml-*.puml / diagram1.puml のような
+// アプリ同梱テンプレ・既定サンプルは各自が独立に複製しただけなので、フォルダを
+// またいで同名で並ぶ。突合に混ぜると本物の食い違い (GPIO) と同じ列に出て、
+// 毎回 puml の中身を読んで選り分けることになる。既定で外し、押せば戻せる。
+var _cohortShowTemplates = false;
 
 function _peekEls() {
   return {
@@ -5102,6 +5108,7 @@ function _peekEls() {
     cohort: document.getElementById('peek-cohort'),
     cohortToggle: document.getElementById('peek-cohort-toggle'),
     template: document.getElementById('peek-template'),
+    cohortTemplates: document.getElementById('peek-cohort-templates'),
   };
 }
 
@@ -5125,7 +5132,8 @@ function _cohortLoadIndex() {
         docs.push({ name: set.dir.name + '/' + n, dsl: '', _dir: set.dir.path, _file: n });
       });
     });
-    return DC.crossFolder(DC.groups(docs));
+    // テンプレ込みで束ねておき、表示側で外す (押して戻すときに読み直さない)。
+    return DC.groups(docs);
   });
 }
 
@@ -5142,7 +5150,9 @@ function _cohortCompare(group) {
   })).then(function(docs) {
     var groups = DC.groups(docs);
     for (var i = 0; i < groups.length; i++) {
-      if (groups[i].domain === group.domain) return DC.compare(groups[i]);
+      if (groups[i].domain === group.domain) {
+        return DC.compare(groups[i], { includeTemplates: _cohortShowTemplates });
+      }
     }
     return null;
   });
@@ -5186,9 +5196,11 @@ function renderCohortCompare() {
     var hint = document.createElement('div');
     hint.className = 'cohort-hint';
     hint.id = 'cohort-hint';
-    hint.textContent = _cohortGroups.length
+    var exN = _cohortExcluded().length;
+    var exNote = exN ? ' (テンプレ由来 ' + exN + ' ドメインは外しています)' : '';
+    hint.textContent = (_cohortGroups.length
       ? 'フォルダをまたぐドメインを ' + _cohortGroups.length + ' 件見つけました。左でドメインを選んでください。'
-      : 'フォルダをまたぐ同じドメイン名の図がありません。';
+      : 'フォルダをまたぐ同じドメイン名の図がありません。') + exNote;
     el.cohort.appendChild(hint);
     return;
   }
@@ -5243,6 +5255,16 @@ function renderCohortDomains() {
     ? 'ドメイン (' + _cohortGroups.length + ')'
     : 'フォルダをまたぐドメインがありません';
   el.dirs.appendChild(head);
+  var ex = _cohortExcluded();
+  if (ex.length) {
+    var note = document.createElement('div');
+    note.className = 'cohort-hint';
+    note.id = 'cohort-excluded';
+    note.setAttribute('data-excluded', String(ex.length));
+    note.textContent = 'テンプレ由来 ' + ex.length + ' ドメインは外しています ('
+      + ex.map(function(g) { return g.domain; }).join(', ') + ')';
+    el.dirs.appendChild(note);
+  }
   _cohortGroups.forEach(function(g) {
     var b = document.createElement('button');
     b.type = 'button';
@@ -5283,6 +5305,20 @@ function renderCohortFiles() {
   });
 }
 
+// 表示するドメイン。既定はテンプレ由来を外した業務データだけ。
+function _cohortVisibleGroups() {
+  var DC = window.MA.domainCohort;
+  if (!DC) return _cohortAllGroups.slice();
+  return DC.crossFolder(_cohortAllGroups, { includeTemplates: _cohortShowTemplates });
+}
+
+// 外したテンプレ由来のドメイン。件数を黙って減らさないために画面に必ず出す。
+function _cohortExcluded() {
+  var DC = window.MA.domainCohort;
+  if (!DC || _cohortShowTemplates) return [];
+  return DC.templateOnly(_cohortAllGroups);
+}
+
 function _cohortGroupOf(domain) {
   for (var i = 0; i < _cohortGroups.length; i++) {
     if (_cohortGroups[i].domain === domain) return _cohortGroups[i];
@@ -5312,6 +5348,7 @@ function setCohortMode(on) {
     el.cohortToggle.setAttribute('aria-pressed', _cohortOn ? 'true' : 'false');
     el.cohortToggle.classList.toggle('on', _cohortOn);
   }
+  _syncCohortTemplateBtn();
   if (!_cohortOn) {
     _cohortDomain = null;
     _cohortResult = null;
@@ -5329,7 +5366,9 @@ function setCohortMode(on) {
   renderCohortCompare();
   return _cohortLoadIndex().then(function(groups) {
     if (!_cohortOn) return false;
-    _cohortGroups = groups;
+    _cohortAllGroups = groups;
+    _cohortGroups = _cohortVisibleGroups();
+    _syncCohortTemplateBtn();
     renderCohortDomains();
     renderCohortFiles();
     // 1 件しか無いなら開いておく (押して確かめる手を増やさない)。
@@ -5337,6 +5376,31 @@ function setCohortMode(on) {
     renderCohortCompare();
     return true;
   });
+}
+
+// テンプレ由来を含める / 外す。読み直しはしない (束ねる所まではテンプレ込み)。
+function setCohortTemplates(on) {
+  _cohortShowTemplates = !!on;
+  _syncCohortTemplateBtn();
+  _cohortGroups = _cohortVisibleGroups();
+  // 外した結果、選んでいたドメインが表示から消えたら選択も解く。
+  if (_cohortDomain && !_cohortGroupOf(_cohortDomain)) {
+    _cohortDomain = null;
+    _cohortResult = null;
+  }
+  renderCohortDomains();
+  renderCohortFiles();
+  if (!_cohortDomain) { renderCohortCompare(); return Promise.resolve(true); }
+  return selectCohortDomain(_cohortDomain);
+}
+
+function _syncCohortTemplateBtn() {
+  var el = _peekEls();
+  if (!el.cohortTemplates) return;
+  el.cohortTemplates.style.display = _cohortOn ? '' : 'none';
+  el.cohortTemplates.setAttribute('aria-pressed', _cohortShowTemplates ? 'true' : 'false');
+  el.cohortTemplates.classList.toggle('on', _cohortShowTemplates);
+  el.cohortTemplates.textContent = _cohortShowTemplates ? '📄 テンプレも表示中' : '📄 テンプレも表示';
 }
 
 // ── 覗いた図をテンプレートにする (BLK-junior-20260909-0503-wish) ──
@@ -5515,6 +5579,12 @@ function setupPeekFolder() {
   if (closeBtn) closeBtn.addEventListener('click', close);
   if (el.cohortToggle) {
     el.cohortToggle.addEventListener('click', function() { setCohortMode(!_cohortOn); });
+  }
+  if (el.cohortTemplates) {
+    el.cohortTemplates.addEventListener('click', function() {
+      setCohortTemplates(!_cohortShowTemplates);
+    });
+    _syncCohortTemplateBtn();
   }
   el.modal.addEventListener('click', function(ev) { if (ev.target === el.modal) close(); });
   var prev = document.getElementById('peek-prev');
