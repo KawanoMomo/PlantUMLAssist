@@ -667,6 +667,73 @@ html, body {
   cursor: pointer;
 }
 #folder-panel button.folder-target.folder-target-on { border-color: var(--accent); color: var(--accent); }
+/* 部品の図種の棚卸し (BLK-junior-20260908-2003-wish) */
+#folder-panel .folder-inv-bar {
+  padding: 3px 6px 4px;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  border-top: 1px solid var(--border);
+}
+#folder-panel select.folder-inv-pick {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 10px;
+  padding: 1px 4px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-primary);
+}
+#folder-panel button.folder-inv-copy {
+  flex: 0 0 auto;
+  font-size: 10px;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+#folder-panel .folder-inv-summary {
+  font-size: 10px;
+  padding: 0 6px 3px;
+  color: var(--text-secondary);
+}
+#folder-panel .folder-inv-summary.inv-ok { color: var(--accent); }
+#folder-panel .folder-inv-summary.inv-short { color: var(--accent-red); font-weight: bold; }
+#folder-panel .folder-inv-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  padding: 1px 6px;
+  font-size: 10px;
+}
+#folder-panel .folder-inv-kind { flex: 0 0 88px; color: var(--text-secondary); }
+#folder-panel .folder-inv-mark {
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 4px;
+}
+#folder-panel .folder-inv-row.inv-have .folder-inv-mark { border-color: var(--accent); color: var(--accent); }
+#folder-panel .folder-inv-row.inv-miss .folder-inv-mark { border-color: var(--accent-red); color: var(--accent-red); }
+#folder-panel .folder-inv-row.inv-miss .folder-inv-kind { color: var(--accent-red); }
+#folder-panel button.folder-inv-file {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+#folder-panel .folder-inv-unknown { font-size: 10px; padding: 1px 6px 4px; color: var(--text-secondary); }
 /* 実データ / テンプレの分類 (BLK-reviewer-20260908-0203-wish) */
 #folder-panel button.folder-role {
   flex: 0 0 auto;
@@ -4939,6 +5006,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/bulk-apply.js"></script>
 <script src="src/core/bulk-export.js"></script>
 <script src="src/core/component-pack.js"></script>
+<script src="src/core/component-inventory.js"></script>
 <script src="src/core/handoff-package.js"></script>
 <script src="src/core/delivery-package.js"></script>
 <script src="src/core/delivery-review.js"></script>
