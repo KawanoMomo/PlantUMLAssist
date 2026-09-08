@@ -7816,10 +7816,17 @@ function runConsistencyCheck() {
 // 片方にしか無い状態・遷移を分けて出す。行を押すと自分の図のその行へ飛ぶ
 // (参照図だけの行は、押しても飛び先が無いので参照図の行番号を出すだけ)。
 // 対応の規則は state-map が持ち、ここは並べるだけ。
+//
+// BLK-junior-20260908-1103-wish: 参照図だけの行 (橙) には「＋この図にも足す」を
+// 付ける。見つけた要素をそのまま自分の図の末尾に入れられれば、
+// 「読み比べて一括入力欄に打ち直す」がボタン 1 回になる。
+// 端点の対応が付かない遷移だけ、どの状態から出すかを 1 回聞き返す。
 var _mapResult = null;
+var _mapMineParsed = null;
 
 function _clearStateMap() {
   _mapResult = null;
+  _mapMineParsed = null;
   var listEl = document.getElementById('map-list');
   var sumEl = document.getElementById('map-summary');
   var warnEl = document.getElementById('map-warn');
@@ -7859,7 +7866,116 @@ function _mapRow(listEl, row) {
   if (row.mineLine != null) {
     el.addEventListener('click', function() { gotoOutlineLine(row.mineLine - 1); });
   }
+  // 参照図だけの行は「まだ自分の図に無い要素」なので、その場で足せる。
+  if (row.match === 'ref-only') {
+    var take = document.createElement('button');
+    take.type = 'button';
+    take.className = 'map-take';
+    take.textContent = '＋この図にも足す';
+    take.title = 'この要素を自分の図の末尾に足す';
+    take.addEventListener('click', function(e) {
+      e.stopPropagation();
+      adoptMapRow(row, el);
+    });
+    el.appendChild(take);
+  }
   listEl.appendChild(el);
+}
+
+// 端点の対応が付かない遷移を足す前の確認。聞くのは対応の付かなかった端点だけ。
+function _mapConfirm(row, rowEl, plan) {
+  _closeMapConfirm();
+  var box = document.createElement('div');
+  box.className = 'map-confirm';
+  box.id = 'map-confirm';
+
+  var lead = document.createElement('div');
+  lead.className = 'map-confirm-lead';
+  lead.id = 'map-confirm-lead';
+  lead.textContent = plan.describe + '。自分の図に対応する状態が見つからない端点があります。';
+  box.appendChild(lead);
+
+  var sels = {};
+  plan.needs.forEach(function(end) {
+    var line = document.createElement('div');
+    line.className = 'map-confirm-row';
+    line.setAttribute('data-side', end.side);
+
+    var label = document.createElement('span');
+    label.className = 'map-confirm-label';
+    label.textContent = (end.side === 'from' ? '出どころ' : '行き先') + ' 「' + end.name + '」';
+    line.appendChild(label);
+
+    var sel = document.createElement('select');
+    sel.className = 'map-confirm-sel';
+    sel.id = 'map-confirm-' + end.side;
+    var mk = document.createElement('option');
+    mk.value = window.MA.stateMap.NEW_STATE;
+    mk.textContent = '新しく作る: ' + (end.newLabel || end.newId);
+    sel.appendChild(mk);
+    (end.options || []).forEach(function(o) {
+      var op = document.createElement('option');
+      op.value = o.value;
+      op.textContent = o.label;
+      sel.appendChild(op);
+    });
+    line.appendChild(sel);
+    sels[end.side] = sel;
+    box.appendChild(line);
+  });
+
+  var ok = document.createElement('button');
+  ok.type = 'button';
+  ok.className = 'map-confirm-ok';
+  ok.id = 'btn-map-confirm-ok';
+  ok.textContent = 'これで足す';
+  ok.addEventListener('click', function() {
+    var picks = {};
+    Object.keys(sels).forEach(function(k) { picks[k] = sels[k].value; });
+    _closeMapConfirm();
+    _applyMapAdopt(row, picks);
+  });
+  box.appendChild(ok);
+
+  var cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.className = 'map-confirm-cancel';
+  cancel.id = 'btn-map-confirm-cancel';
+  cancel.textContent = 'やめる';
+  cancel.addEventListener('click', function() { _closeMapConfirm(); });
+  box.appendChild(cancel);
+
+  if (rowEl && rowEl.parentNode) rowEl.parentNode.insertBefore(box, rowEl.nextSibling);
+  // 一覧は高さが限られているので、聞き返しが下に隠れたままにならないようにする。
+  if (box.scrollIntoView) box.scrollIntoView({ block: 'nearest' });
+}
+
+function _closeMapConfirm() {
+  var old = document.getElementById('map-confirm');
+  if (old && old.parentNode) old.parentNode.removeChild(old);
+}
+
+// 橙の行を 1 つ自分の図に足す。端点が全部決まっていれば聞かずに足す。
+function adoptMapRow(row, rowEl) {
+  var sm = window.MA.stateMap;
+  if (!sm || !_mapResult || !editorEl) return;
+  var plan = sm.adoptPlan(row, _mapResult, _mapMineParsed);
+  if (!plan || !plan.adoptable) return;
+  if (!plan.ready) { _mapConfirm(row, rowEl, plan); return; }
+  _applyMapAdopt(row, null);
+}
+
+function _applyMapAdopt(row, picks) {
+  var sm = window.MA.stateMap;
+  if (!sm || !_mapResult || !editorEl) return;
+  var out = sm.applyAdopt(editorEl.value, row, _mapResult, _mapMineParsed, picks);
+  if (!out) return;
+  editorEl.value = out.text;
+  editorEl.dispatchEvent(new Event('input'));
+  jumpToLine(out.line);
+  // 足した分だけ橙が減るので、対応表を作り直して残りを見せる。
+  runStateMap();
+  if (window.MA.toast) window.MA.toast.show('自分の図に足しました: ' + out.added.join(' / '));
 }
 
 function renderStateMap() {
@@ -7869,6 +7985,7 @@ function renderStateMap() {
   var sm = window.MA.stateMap;
   if (!listEl || !sumEl || !sm || !_mapResult) return;
 
+  _closeMapConfirm();
   listEl.textContent = '';
   listEl.hidden = false;
   sumEl.textContent = sm.summary(_mapResult);
@@ -7920,6 +8037,7 @@ function runStateMap() {
   // 実際の中身と食い違っていることがあり、設定を直させるより読める方を採る。
   var refParsed = stateMod.parse(ref.dsl || '');
   var mineParsed = stateMod.parse(mmdText || '');
+  _mapMineParsed = mineParsed;
   _mapResult = sm.build(refParsed, mineParsed);
   renderStateMap();
   if (listEl) listEl.hidden = false;
