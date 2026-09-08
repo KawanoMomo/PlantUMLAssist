@@ -47,6 +47,7 @@ window.MA.toolMenu = (function() {
       { id: 'btn-tab-findings', label: '手動指摘の台帳' },
       { id: 'btn-tab-diff',     label: '前回保存からの差分' },
       { id: 'btn-tab-versions', label: 'この図の変遷' },
+      { id: 'btn-tab-lineage',  label: 'この図の継承元' },
       { id: 'btn-tab-board',    label: '変更サマリ' },
     ] },
     { key: 'give', title: '渡す', items: [

@@ -1447,6 +1447,52 @@ html, body {
 .ab-title { font-family: var(--font-mono); }
 .ab-detail { color: var(--text-secondary); }
 
+/* ── 継承元 (BLK-junior-20260908-1603-wish) ─────────────────────────────────
+   この図がどの図の後継かを 1 回登録し、継承元の更新を差分の行数で見せる。 */
+#lg-modal-content {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  width: 80vw;
+  max-width: 900px;
+  height: 72vh;
+  display: flex;
+  flex-direction: column;
+}
+#lg-head, #lg-set-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-primary);
+  flex-wrap: wrap;
+}
+#lg-child { font-family: var(--font-mono); color: var(--text-secondary); }
+#lg-summary { color: var(--accent); font-family: var(--font-mono); font-size: 11px; }
+#lg-summary.lg-updated { color: var(--accent-orange); }
+#lg-tools { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+#lg-note { color: var(--text-secondary); font-size: 11px; }
+#lg-dir {
+  background: var(--bg-tertiary); color: var(--text-primary);
+  border: 1px solid var(--border); border-radius: 3px; font-size: 11px; padding: 3px 6px; width: 240px;
+}
+#lg-parent {
+  background: var(--bg-tertiary); color: var(--text-primary);
+  border: 1px solid var(--border); border-radius: 3px; font-size: 11px; padding: 3px 6px; max-width: 320px;
+}
+#lg-head button, #lg-set-row button {
+  background: var(--bg-tertiary); color: var(--text-primary);
+  border: 1px solid var(--border); border-radius: 3px; font-size: 11px; padding: 3px 8px; cursor: pointer;
+}
+#lg-head button[disabled], #lg-set-row button[disabled] { opacity: 0.45; cursor: default; }
+#lg-body { flex: 1; overflow-y: auto; padding: 10px 14px 14px; font-size: 11px; }
+.lg-empty { color: var(--text-secondary); padding: 10px 0; }
+.lg-diff { font-family: var(--font-mono); white-space: pre-wrap; }
+.lg-diff .lg-d-add { color: var(--accent-green, #4caf50); display: block; }
+.lg-diff .lg-d-del { color: var(--accent-red); display: block; }
+
 /* ── 変遷履歴 (BLK-reviewer-20260908-0723-wish) ─────────────────────────────
    1 図の版を新しい順に並べ、前の版に戻った版 (往復) を目で拾えるようにする。 */
 #vt-modal-content {
@@ -4072,6 +4118,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button class="tab-tool" id="btn-tab-diff" title="前回保存した時点から変わった図の一覧">± 差分 −</button>
         <!-- BLK-reviewer-20260908-0723-wish: 単発 diff では見えない「行って戻った」を履歴の上で見る -->
         <button class="tab-tool" id="btn-tab-versions" title="この図が保存のたびにどう変わったかを通しで並べる。前の版に戻った「往復」には印が付く">⟲ 変遷 −</button>
+        <!-- BLK-junior-20260908-1603-wish: この図がどの図の後継かを 1 回登録し、継承元の更新を自動で言う -->
+        <button class="tab-tool" id="btn-tab-lineage" title="この図の継承元 (どの図から派生したか) を 1 回登録すると、継承元が更新されたときに差分の行数で知らせる">⇡ 継承元 −</button>
         <!-- BLK-primary-20260907-0923-wish: 変わった図の変更前後をまとめて 1 画面に並べる -->
         <!-- BLK-junior-20260907-1203-wish: 同じ系統の図を 1 セットとしてまとめて題材替えする -->
         <button class="tab-tool" id="btn-tab-set" title="同じ系統の図をまとめて 1 セットとして、対応表 1 回で全部複製する">⧉⧉ セット複製</button>
@@ -4660,6 +4708,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/swimlane-move.js"></script>
 <script src="src/core/save-diff.js"></script>
 <script src="src/core/version-timeline.js"></script>
+<script src="src/core/lineage.js"></script>
 <script src="src/core/svg-freshness.js"></script>
 <script src="src/core/svg-diff-summary.js"></script>
 <script src="src/core/review-state.js"></script>
@@ -4868,6 +4917,31 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       </span>
     </div>
     <div id="vt-body"></div>
+  </div>
+</div>
+<!-- BLK-junior-20260908-1603-wish: この図の継承元を覚え、更新されたら差分の行数で知らせる -->
+<div id="lg-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+  <div id="lg-modal-content">
+    <div id="lg-head">
+      <strong>継承元</strong>
+      <span id="lg-child"></span>
+      <span id="lg-summary"></span>
+      <span id="lg-tools">
+        <button type="button" id="lg-open" title="登録した継承元をタブで開く">継承元を開く</button>
+        <button type="button" id="lg-adopt" title="いまの継承元の中身を取り込み済みにする">取り込み済みにする</button>
+        <button type="button" id="lg-clear" title="この図の継承元の登録を外す">継承元を外す</button>
+        <button type="button" id="lg-close">閉じる</button>
+      </span>
+    </div>
+    <div id="lg-set-row">
+      <label for="lg-dir">継承元のフォルダ</label>
+      <input type="text" id="lg-dir" aria-label="継承元のフォルダ" placeholder="./autosave">
+      <label for="lg-parent">継承元にする図</label>
+      <select id="lg-parent" aria-label="継承元にする図"></select>
+      <button type="button" id="lg-set">この図を継承元にする</button>
+      <span id="lg-note"></span>
+    </div>
+    <div id="lg-body"></div>
   </div>
 </div>
 <!-- 他の保存フォルダの図を「読むだけ」で見る (保存先は動かさない) -->

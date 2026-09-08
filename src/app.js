@@ -2269,6 +2269,7 @@ function init() {
   setupAuditBoard();
   setupSaveCheck();
   setupVersionTimeline();
+  setupLineage();
   setupPeekFolder();
   setupPinPanel();
   setupPinInbox();
@@ -2446,6 +2447,7 @@ function initCommandPalette() {
       { id: 'tab-inbox', title: '図をまたぐ指摘箱 / Pin inbox', hint: 'Tabs', keywords: ['inbox', 'pin', 'してきばこ'], button: 'btn-tab-inbox', run: function() { clickById('btn-tab-inbox'); } },
       { id: 'tab-findings', title: '手動指摘の台帳 / Manual findings', hint: 'Tabs', keywords: ['findings', 'manual', 'してき', 'だいちょう'], button: 'btn-tab-findings', run: function() { clickById('btn-tab-findings'); } },
       { id: 'tab-versions', title: 'この図の変遷を見る / Version timeline', hint: 'Tabs', keywords: ['version', 'timeline', 'へんせん', 'りれき'], button: 'btn-tab-versions', run: function() { clickById('btn-tab-versions'); } },
+      { id: 'tab-lineage', title: 'この図の継承元を見る / Lineage', hint: 'Tabs', keywords: ['lineage', 'parent', 'けいしょう', 'もと', 'とりこみ'], button: 'btn-tab-lineage', run: function() { clickById('btn-tab-lineage'); } },
       { id: 'tab-board', title: '変更サマリを開く / Change board', hint: 'Tabs', keywords: ['board', 'summary', 'へんこう', 'さまり'], button: 'btn-tab-board', run: function() { clickById('btn-tab-board'); } },
       { id: 'settings', title: '設定を開く / Settings', hint: 'Ctrl', keywords: ['settings', 'config', 'せってい'], run: function() { clickById('btn-config'); } },
       { id: 'undo', title: '元に戻す / Undo', hint: 'Ctrl+Z', keywords: ['undo', 'もどす'], run: function() { clickById('btn-undo'); } },
@@ -3026,6 +3028,7 @@ function saveActiveDoc() {
   } catch (e) { /* 保存フォルダへの書き出しは best-effort */ }
   renderDiffBadge();
   renderVersionBadge();
+  try { renderLineageBadge(); } catch (e) {}
   return doc;
 }
 
@@ -3056,6 +3059,8 @@ function applyActiveDoc() {
   renderTabs();
   // 指摘は図ごとに違う。タブを替えたらその図の基準で引き直す。
   try { renderReviewBadge(); } catch (e) {}
+  // 継承元も図ごとに違う。開いた時点で「継承元が更新されています」と言えるよう引き直す。
+  try { renderLineageBadge(); } catch (e) {}
 }
 
 function switchToDoc(id) {
@@ -3125,8 +3130,13 @@ function renderTabs() {
       if (window.MA.reviewDesk) {
         try { window.MA.reviewDesk.renameBaseline(doc.name, next); } catch (e) {}
       }
+      // 図の名前が変わっても継承元の関係は付いていく (BLK-junior-20260908-1603-wish)。
+      if (window.MA.lineage) {
+        try { window.MA.lineage.rename(doc.name, window.MA.workspace.sanitizeName(next)); } catch (e) {}
+      }
       window.MA.workspace.rename(doc.id, next);
       renderTabs();
+      try { renderLineageBadge(); } catch (e) {}
     });
     bar.insertBefore(el, firstTool);
   });
@@ -4132,6 +4142,297 @@ function setupVersionTimeline() {
     });
   }
   renderVersionBadge();
+}
+
+// ── 継承元 (BLK-junior-20260908-1603-wish) ─────────────────────────────────
+// 「この図はどの図の後継か」を画面が覚えていないので、毎周「先輩の同種図を探す →
+// 開く → 記憶と見比べる」を手でやっていた。継承元を 1 回登録すれば、以後は
+// 開いたときにボタンが「+3 -1」と言い、モーダルの「継承元を開く」1 クリックで
+// その図に飛べる。取り込んだら基準を進める。
+var _lgLast = { child: '', parent: '', dsl: null };
+
+function _lgChildName() {
+  try {
+    var a = window.MA.workspace.getActive();
+    return a && a.name ? a.name : '';
+  } catch (e) { return ''; }
+}
+
+// 継承元の今の中身を読む。読めなければ dsl は null (「更新あり」と言い切らない)。
+function _lgFetch(child, cb) {
+  var LG = window.MA.lineage;
+  var WS = window.MA.workspace;
+  var rec = (LG && child) ? LG.get(child) : null;
+  if (!rec || !WS) { cb(null, null); return; }
+  var dir = rec.dir || _wsFileDir();
+  try {
+    WS.loadFile(rec.parent, dir).then(function(text) {
+      _lgLast = { child: child, parent: rec.parent, dsl: (typeof text === 'string') ? text : null };
+      cb(rec, _lgLast.dsl);
+    }, function() { cb(rec, null); });
+  } catch (e) { cb(rec, null); }
+}
+
+function renderLineageBadge() {
+  var btn = document.getElementById('btn-tab-lineage');
+  var LG = window.MA.lineage;
+  if (!btn || !LG) return;
+  var child = _lgChildName();
+  if (!child || !LG.get(child)) {
+    btn.textContent = LG.badgeText(child, null);
+    btn.classList.remove('has-change');
+    btn.title = 'この図の継承元 (どの図から派生したか) を 1 回登録すると、'
+      + '継承元が更新されたときに差分の行数で知らせる';
+    return;
+  }
+  _lgFetch(child, function(rec, dsl) {
+    if (_lgChildName() !== child) return;   // 読んでいる間にタブが変わった
+    var s = LG.status(child, dsl);
+    btn.textContent = LG.badgeText(child, dsl);
+    btn.classList.toggle('has-change', s.updated);
+    btn.title = LG.statusLine(child, dsl);
+  });
+}
+
+// 継承元を探すフォルダ。既定は自分の保存先だが、先輩の図は別フォルダに
+// あることがあるので打ち替えられる (打ち替えたフォルダが関係と一緒に残る)。
+function _lgDir() {
+  var el = document.getElementById('lg-dir');
+  var v = el ? String(el.value || '').trim() : '';
+  return v || _wsFileDir();
+}
+
+var _lgFillToken = 0;
+// 一覧から選んだ継承元。フォルダの読み込みが後から届いて一覧を組み直しても、
+// 選んだものを見失わないために覚えておく (組み直しで選択が消え、登録が
+// 空振りしたことがあった)。
+var _lgParentPick = '';
+
+function _lgFillParentOptions(child) {
+  var sel = document.getElementById('lg-parent');
+  var WS = window.MA.workspace;
+  var LG = window.MA.lineage;
+  if (!sel || !WS) return;
+  var esc = window.MA.htmlUtils.escHtml;
+  var rec = LG ? LG.get(child) : null;
+  var cur = rec ? rec.parent : '';
+  var names = [];
+  try {
+    WS.list().forEach(function(d) { if (d.name && d.name !== child) names.push(d.name); });
+  } catch (e) {}
+
+  function paint() {
+    var seen = {};
+    var opts = [];
+    names.forEach(function(n) {
+      if (n === child || seen[n]) return;
+      seen[n] = 1;
+      opts.push(n);
+    });
+    opts.sort();
+    var keep = sel.value || _lgParentPick || cur;
+    sel.innerHTML = opts.map(function(n) {
+      return '<option value="' + esc(n) + '"' + (n === keep ? ' selected' : '') + '>' + esc(n) + '</option>';
+    }).join('') || '<option value="">(このフォルダに他の図がありません)</option>';
+    if (keep && opts.indexOf(keep) >= 0) sel.value = keep;
+    _lgParentPick = sel.value || '';
+  }
+
+  // まだ何も出ていないときだけ先に描く。既に出ているものをフォルダの応答より
+  // 先に空へ差し替えると、選んだ直後に一覧が消える。
+  if (!sel.options || sel.options.length === 0) paint();
+  var token = ++_lgFillToken;
+  try {
+    WS.listFileEntries(_lgDir()).then(function(entries) {
+      if (token !== _lgFillToken) return;   // フォルダを打ち替えた後の古い応答
+      (entries || []).forEach(function(e) {
+        var n = e && e.name ? e.name : e;
+        if (typeof n === 'string' && n) names.push(n);
+      });
+      paint();
+    }, function() { paint(); });
+  } catch (e) { paint(); }
+}
+
+function renderLineageModal() {
+  var LG = window.MA.lineage;
+  var body = document.getElementById('lg-body');
+  var sum = document.getElementById('lg-summary');
+  var childEl = document.getElementById('lg-child');
+  if (!LG || !body) return;
+  var esc = window.MA.htmlUtils.escHtml;
+  var child = _lgChildName();
+  if (childEl) childEl.textContent = child || '(図がありません)';
+
+  var openBtn = document.getElementById('lg-open');
+  var adoptBtn = document.getElementById('lg-adopt');
+  var clearBtn = document.getElementById('lg-clear');
+  var rec = child ? LG.get(child) : null;
+  if (openBtn) openBtn.disabled = !rec;
+  if (clearBtn) clearBtn.disabled = !rec;
+  if (adoptBtn) adoptBtn.disabled = true;
+
+  if (!rec) {
+    if (sum) { sum.textContent = '継承元は未登録です'; sum.classList.remove('lg-updated'); }
+    body.innerHTML = '<div class="lg-empty" id="lg-empty">'
+      + 'まだ継承元がありません。下の一覧から「この図の元になった図」を選んで登録すると、'
+      + '次からは開いた時点で更新の有無と差分の行数が出ます</div>';
+    return;
+  }
+
+  if (sum) sum.textContent = '継承元 ' + rec.parent + ' を読んでいます…';
+  _lgFetch(child, function(r, dsl) {
+    if (_lgChildName() !== child) return;
+    var s = LG.status(child, dsl);
+    if (sum) {
+      sum.textContent = LG.statusLine(child, dsl);
+      sum.classList.toggle('lg-updated', s.updated);
+    }
+    if (adoptBtn) adoptBtn.disabled = !s.updated;
+    var head = '<div class="lg-empty">継承元: ' + esc(rec.parent)
+      + (rec.dir ? ' (' + esc(rec.dir) + ')' : '')
+      + ' · 前回取り込み ' + esc(rec.adoptedAt || rec.at || '') + '</div>';
+    if (!s.known) {
+      body.innerHTML = head + '<div class="lg-empty">継承元のファイルを読めませんでした。'
+        + '保存先か図の名前が変わっていないか確かめてください</div>';
+      return;
+    }
+    if (!s.updated) {
+      body.innerHTML = head + '<div class="lg-empty" id="lg-nochange">'
+        + '前回取り込んだ時点から継承元は変わっていません (見比べる必要はありません)</div>';
+      return;
+    }
+    var d = LG.diffLines(child, dsl);
+    body.innerHTML = head + '<div class="lg-diff" id="lg-diff">'
+      + d.removed.map(function(l) { return '<span class="lg-d-del">- ' + esc(l) + '</span>'; }).join('')
+      + d.added.map(function(l) { return '<span class="lg-d-add">+ ' + esc(l) + '</span>'; }).join('')
+      + '</div>';
+  });
+}
+
+// 継承元を 1 クリックで開く。別のフォルダに置いてあっても登録した保存先から読む。
+function openLineageParent() {
+  var LG = window.MA.lineage;
+  var WS = window.MA.workspace;
+  var child = _lgChildName();
+  var rec = (LG && child) ? LG.get(child) : null;
+  if (!rec || !WS) return;
+  saveActiveDoc();
+  var dir = rec.dir || _wsFileDir();
+  WS.loadFile(rec.parent, dir).then(function(text) {
+    if (text == null) {
+      var sum = document.getElementById('lg-summary');
+      if (sum) sum.textContent = '継承元 ' + rec.parent + ' を読めませんでした (保存先を確かめてください)';
+      return;
+    }
+    var detected = WS.detectType(text);
+    WS.openOrActivate({
+      name: rec.parent,
+      dsl: text,
+      diagramType: (detected && modules[detected]) ? detected : currentDiagramType,
+    });
+    applyActiveDoc();
+    renderTabs();
+    toggleLineage(false);
+  }, function() {});
+}
+
+function toggleLineage(open) {
+  var modal = document.getElementById('lg-modal');
+  if (!modal) return;
+  if (open) {
+    var child = _lgChildName();
+    var dirEl = document.getElementById('lg-dir');
+    if (dirEl && !dirEl.value) {
+      var rec0 = window.MA.lineage ? window.MA.lineage.get(child) : null;
+      dirEl.value = (rec0 && rec0.dir) ? rec0.dir : _wsFileDir();
+    }
+    _lgFillParentOptions(child);
+    renderLineageModal();
+  }
+  modal.style.display = open ? 'flex' : 'none';
+}
+
+function setupLineage() {
+  var btn = document.getElementById('btn-tab-lineage');
+  var modal = document.getElementById('lg-modal');
+  var LG = window.MA.lineage;
+  if (!btn || !modal || !LG) return;
+  btn.addEventListener('click', function() { toggleLineage(true); });
+
+  var closeBtn = document.getElementById('lg-close');
+  if (closeBtn) closeBtn.addEventListener('click', function() { toggleLineage(false); });
+  modal.addEventListener('click', function(ev) {
+    if (ev.target === modal) toggleLineage(false);
+  });
+  document.addEventListener('keydown', function(ev) {
+    if (ev.key === 'Escape' && modal.style.display === 'flex') toggleLineage(false);
+  });
+
+  var dirEl = document.getElementById('lg-dir');
+  if (dirEl) {
+    dirEl.addEventListener('change', function() { _lgFillParentOptions(_lgChildName()); });
+  }
+
+  var parentSel = document.getElementById('lg-parent');
+  if (parentSel) {
+    parentSel.addEventListener('change', function() { _lgParentPick = this.value || ''; });
+  }
+
+  var setBtn = document.getElementById('lg-set');
+  if (setBtn) {
+    setBtn.addEventListener('click', function() {
+      var sel = document.getElementById('lg-parent');
+      var child = _lgChildName();
+      var parent = (sel && sel.value) || _lgParentPick;
+      var note = document.getElementById('lg-note');
+      if (!child || !parent) return;
+      var dir = _lgDir();
+      // 登録した時点の継承元の中身を基準にする。読めなければ登録しない
+      // (基準が空のまま登録すると、次に開いた瞬間に全行が「更新」に見える)。
+      window.MA.workspace.loadFile(parent, dir).then(function(text) {
+        if (text == null) {
+          if (note) note.textContent = parent + ' を読めませんでした。保存してから登録してください';
+          return;
+        }
+        LG.set(child, parent, text, { dir: dir });
+        if (note) note.textContent = parent + ' を継承元にしました';
+        renderLineageModal();
+        renderLineageBadge();
+      }, function() {});
+    });
+  }
+
+  var adoptBtn = document.getElementById('lg-adopt');
+  if (adoptBtn) {
+    adoptBtn.addEventListener('click', function() {
+      var child = _lgChildName();
+      if (!child) return;
+      _lgFetch(child, function(rec, dsl) {
+        if (!rec || dsl == null) return;
+        LG.adopt(child, dsl);
+        renderLineageModal();
+        renderLineageBadge();
+      });
+    });
+  }
+
+  var clearBtn = document.getElementById('lg-clear');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', function() {
+      var child = _lgChildName();
+      if (!child) return;
+      LG.clear(child);
+      _lgFillParentOptions(child);
+      renderLineageModal();
+      renderLineageBadge();
+    });
+  }
+
+  var openBtn = document.getElementById('lg-open');
+  if (openBtn) openBtn.addEventListener('click', openLineageParent);
+
+  renderLineageBadge();
 }
 
 function setupAuditTimeline() {
