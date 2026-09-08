@@ -445,6 +445,41 @@ console.log(res.variants.length, res.undeclared.length);
 綴りを取り違えて**指摘 0 件**が返ってくることはない。`name` は突合結果の中で図を指す名前に
 なるだけなので、ファイル名でなくても構わない。
 
+## 指摘の着手状況 CLI (`npm run pins`)
+
+GUI の「📥 指摘箱」が 1 件ずつに付ける **未着手 / 着手 / 解消** を、ブラウザを開かずに読む。
+前回の依頼に手が付いたかを、`audit.js --since-files` で全図の指紋を突き合わせずに 1 コマンドで出せる。
+
+```bash
+npm run pins -- <ファイル|フォルダ> [...] [オプション]
+
+node tools/pins.js E:\path\to\diagrams                    # 未解消 (未着手 + 着手) を人が読む形で
+node tools/pins.js E:\path\to\diagrams --json             # 同じ結果を JSON で
+node tools/pins.js E:\path\to\diagrams --all              # 解消も出す (反映確認)
+node tools/pins.js E:\path\to\diagrams --author reviewer  # 自分が書いた指摘だけ
+```
+
+| 状況 | 意味 |
+|---|---|
+| 未着手 | 指摘のあと、その図はまだ 1 度も書き換わっていない |
+| 着手 | 図は書き換わったのに指摘した行はそのまま (または応答が返っている) |
+| 解消 | 指摘した行が図から無くなった / 対応済みの印が付いた |
+
+| オプション | 意味 |
+|---|---|
+| `--json` / `--out FILE` | JSON を標準出力 / ファイルへ |
+| `--all` | 解消も並べる (既定は未解消だけ) |
+| `--author 名前` | その名前が書いた指摘だけに絞る |
+| `--state FILE` / `--no-state` | 控えの置き場所を変える / 控えを使わない |
+
+「図が書き換わったか」は控え (図ごとの指紋) との突き合わせで見るので、**同じフォルダを続けて観測する**と
+見送り回数 (直す機会があったのに直っていない回数) が積まれる。控えは `.assist-pins-state.json` に
+対象フォルダごとに分けて残る (画面が保存フォルダごとに localStorage の鍵を分けているのと同じ)。
+仕分けの規則は画面と同じ `src/core/pin-progress.js` — GUI と CLI で答えが割れることはない。
+
+終了コードは、走れば未解消の有無に関わらず 0 (件数は要約か JSON で読む)。
+引数不正・対象の `.puml` が 0 枚だけが 1。
+
 ## 設計ドキュメント
 
 - **Tier1 master spec**: `docs/superpowers/specs/2026-04-24-plantuml-tier1-complete-master.md`
