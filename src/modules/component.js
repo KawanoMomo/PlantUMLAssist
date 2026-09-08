@@ -1151,12 +1151,21 @@ window.MA.modules.plantumlComponent = (function() {
         if (!lineEl) continue;
         var bb = OB.extractEdgeBBox(lineEl, 8);
         if (!bb) continue;
-        OB.addRect(overlayEl, bb.x, bb.y, bb.width, bb.height, {
+        // BLK-junior-20260908-1703: 同じ部品から出る線は色も太さも同じで、
+        // クリックして右パネルの From/To を読むまで相手が分からなかった。
+        // 乗せた時点で相手が読めるよう、rect に相手を持たせる。
+        var EH = window.MA.edgeHint;
+        var relAttrs = {
           'data-type': 'relation',
           'data-id': relations[ri].id,
           'data-line': relations[ri].line,
           'data-relation-kind': relations[ri].kind,
-        });
+        };
+        if (EH) {
+          var hintAttrs = EH.hintAttrs(relations[ri]);
+          Object.keys(hintAttrs).forEach(function(k) { relAttrs[k] = hintAttrs[k]; });
+        }
+        OB.addRect(overlayEl, bb.x, bb.y, bb.width, bb.height, relAttrs);
       }
 
       return {

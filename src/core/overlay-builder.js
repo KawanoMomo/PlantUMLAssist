@@ -18,6 +18,15 @@ window.MA.overlayBuilder = (function() {
     if (attrs) {
       Object.keys(attrs).forEach(function(k) { rect.setAttribute(k, attrs[k]); });
     }
+    // BLK-junior-20260908-1703: data-hint を持つ rect には SVG の <title> も付ける。
+    // 画面の吹き出し (#edge-hint) が出ない場面 (SVG を書き出して別のビューアで
+    // 開く、ブラウザ既定のツールチップに頼る) でも相手が読めるようにする。
+    var hint = attrs && attrs['data-hint'];
+    if (hint) {
+      var titleEl = document.createElementNS(SVG_NS, 'title');
+      titleEl.textContent = hint;
+      rect.appendChild(titleEl);
+    }
     overlayEl.appendChild(rect);
     return rect;
   }
