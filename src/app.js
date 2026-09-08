@@ -9959,7 +9959,9 @@ function _densityTableHtml(result, SECTION, CELL) {
   if (!result.rows.length) return html;
   html += '<table id="fd-table" style="border-collapse:collapse;width:100%;margin-top:4px;">'
     + '<tr>'
-    + ['系統', '状態数', '遷移数', 'メッセージ数', '遷移/メッセージ', ''].map(function(h) {
+    // BLK-reviewer-20260908-1603: メッセージが遷移と同じ粒度かを見せる。
+    // 「6 メッセージ」だけでは、それが初期化 1 回の内訳なのか状態機械の動作なのか分からない。
+    + ['系統', '状態数', '遷移数', 'メッセージ数', '遷移に対応', '遷移/メッセージ', ''].map(function(h) {
         return '<th style="' + CELL + 'text-align:left;color:var(--text-secondary);font-weight:normal;">'
           + esc(h) + '</th>';
       }).join('') + '</tr>';
@@ -9972,8 +9974,11 @@ function _densityTableHtml(result, SECTION, CELL) {
       + '<td style="' + CELL + '">' + r.states + '</td>'
       + '<td style="' + CELL + '">' + r.transitions + '</td>'
       + '<td style="' + CELL + '">' + r.messages + '</td>'
+      + '<td class="fd-matched" style="' + CELL + (r.sameGrain ? '' : 'color:var(--text-secondary);') + '">'
+      + (r.msgMatched || 0) + '</td>'
       + '<td class="fd-density" style="' + CELL + mark + '">' + esc(td.densityText(r)) + '</td>'
-      + '<td style="' + CELL + 'color:var(--text-secondary);">' + esc(r.reason || '') + '</td>'
+      + '<td class="fd-why" style="' + CELL + 'color:var(--text-secondary);">'
+      + esc(r.reason || '') + '</td>'
       + '</tr>';
   });
   return html + '</table>';
