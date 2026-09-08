@@ -3746,6 +3746,25 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   margin-bottom: 4px;
 }
 #diagram-settings-content .ds-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+/* BLK-junior-20260908-1603: 図名とファイル名の対応、名前を変えたあとの知らせ */
+#diagram-settings-content .ds-note {
+  font-size: 10px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-top: 4px;
+}
+#ds-name-notice { color: var(--accent-orange); }
+#ds-name-notice button {
+  display: block;
+  margin-top: 4px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--accent-orange);
+  color: var(--accent-orange);
+  border-radius: 3px;
+  padding: 2px 8px;
+  font-size: 11px;
+  cursor: pointer;
+}
 #diagram-settings-content input[type="text"] {
   width: 100%;
   background: var(--bg-tertiary);
@@ -4650,6 +4669,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/trace-coverage.js"></script>
 <script src="src/core/transition-density.js"></script>
 <script src="src/core/trace-label-table.js"></script>
+<script src="src/core/rename-guard.js"></script>
 <script src="src/core/consistency.js"></script>
 <script src="src/core/event-sync.js"></script>
 <script src="src/core/line-edit.js"></script>
