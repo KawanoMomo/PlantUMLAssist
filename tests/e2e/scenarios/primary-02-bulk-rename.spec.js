@@ -13,7 +13,11 @@ test('手順2 一括置換の全図適用で、旧名 SpiDrv が全図から消�
   await page.reload();
   await page.waitForSelector('#preview-svg');
 
-  await S.runCommand(page, '一括置換');
+  // BLK-primary-20260909-0303: ⇄ 一括置換は既定でタブ列から畳まれている (design 7b)。
+  // 台本の主戦場なので、メニューを辿らず Ctrl+K でコマンド名も打たずに開ける。
+  await page.keyboard.press('Control+h');
+  await page.waitForSelector('#rename-panel.open', { timeout: 5000 });
+
   const allDocs = page.locator('#rename-all-docs');
   await expect(allDocs).toHaveCount(1);
   if (!(await allDocs.isChecked())) await allDocs.check();

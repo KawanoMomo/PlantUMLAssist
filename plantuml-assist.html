@@ -1214,6 +1214,15 @@ html, body {
   color: var(--accent-orange);
   font-size: 10px;
 }
+/* 単独キーを持つツールの割り当て (BLK-primary-20260909-0303)。件数の badge と
+   同じ右端に寄せるが、色は控えめにして件数と読み違えないようにする。 */
+.tool-menu-key {
+  margin-left: auto;
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-family: var(--font-mono, monospace);
+}
+.tool-menu-key + .tool-menu-badge { margin-left: 6px; }
 /* 無変更確定 (BLK-reviewer-20260907-2203-wish): 複製ボタンと、その可否の理由 */
 #folder-panel button.folder-carry {
   margin-top: 2px;
