@@ -3072,6 +3072,45 @@ table.vault-table button.vault-open:hover { border-color: var(--accent); }
   background: var(--bg-primary);
 }
 #compare-pane[hidden] { display: none; }
+/* 見比べ方のタブ。差分タブの間は参照側 (選択・整合チェック・対応表…) を丸ごと畳む */
+#compare-modes {
+  display: flex;
+  gap: 4px;
+  padding: 3px 6px 0 6px;
+  background: var(--bg-secondary);
+  flex-shrink: 0;
+}
+.compare-mode {
+  border: 1px solid var(--border);
+  border-bottom: none;
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 3px 3px 0 0;
+  cursor: pointer;
+}
+.compare-mode.active { color: var(--accent); border-color: var(--accent); }
+#compare-diff-view { display: none; }
+#compare-pane.mode-diff > *:not(#compare-modes):not(#compare-diff-view) { display: none !important; }
+#compare-pane.mode-diff #compare-diff-view {
+  display: block;
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+  padding: 6px 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+#compare-diff-view .cd-head { color: var(--text-secondary); padding-bottom: 4px; }
+#compare-diff-view .cd-line { white-space: pre-wrap; word-break: break-all; }
+#compare-diff-view .cd-line.add { color: var(--accent); }
+#compare-diff-view .cd-line.del { color: var(--accent-orange); }
+#compare-diff-view .cd-line.skip { color: var(--text-secondary); }
+#compare-diff-view .cd-others { border-top: 1px solid var(--border); margin-top: 6px; padding-top: 4px; }
+#compare-diff-view .cd-other { cursor: pointer; padding: 2px 0; }
+#compare-diff-view .cd-other:hover { color: var(--accent); }
 #compare-pane-header {
   display: flex;
   align-items: center;
@@ -5034,6 +5073,15 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <!-- 参照ペイン: 別のタブの図を並べて出す (先輩の図を見ながら書く)。
          スクロールは主ペインと独立。既定では畳んでいる。 -->
     <div id="compare-pane" hidden>
+      <!-- BLK-primary-20260909-0303-wish: 「変更前後を見せる」1 つの業務のために
+           「⇔ 並べて見る」と「± 差分」の 2 画面を選び分けていた。同じペインの中の
+           タブにして、会議中どちらを聞かれても閉じずに切り替えられるようにする。 -->
+      <div id="compare-modes" role="tablist" aria-label="見比べ方">
+        <button type="button" id="compare-mode-ref" class="compare-mode active" role="tab"
+                aria-selected="true" title="他の開いている図 (と、控えた変更前) と並べて見る">⇔ 見比べ</button>
+        <button type="button" id="compare-mode-diff" class="compare-mode" role="tab"
+                aria-selected="false" title="この図の前回保存時点との差分を行で見る">± 差分</button>
+      </div>
       <div id="compare-pane-header">
         <select id="compare-select" title="並べて見る図を選ぶ"></select>
         <span id="compare-status"></span>
@@ -5112,6 +5160,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <div id="compare-container">
         <div id="compare-svg"></div>
       </div>
+      <!-- 「± 差分」タブの中身 (この図の前回保存時点との行差分と、変わった図の一覧) -->
+      <div id="compare-diff-view"></div>
     </div>
 
     <div class="pane-resizer" id="resizer-right"></div>

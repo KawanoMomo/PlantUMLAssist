@@ -3297,7 +3297,15 @@ function renderTabs() {
     el.className = 'tab' + (doc.id === activeId ? ' active' : '');
     el.setAttribute('data-doc-id', doc.id);
     el.setAttribute('data-doc-name', doc.name);
-    el.title = doc.name + ' (' + doc.diagramType.replace('plantuml-', '') + ') — ダブルクリックで名前変更';
+    el.title = doc.name + ' (' + doc.diagramType.replace('plantuml-', '')
+      + ') — ダブルクリックで名前変更 / 右クリックで変更前後を見る';
+    // BLK-primary-20260909-0303-wish: 会議で「この図、変わった?」と聞かれた所から
+    // 1 手で入れる入口。開く先は差分タブだが、そのまま見比べへ切り替えられる。
+    el.addEventListener('contextmenu', function(ev) {
+      ev.preventDefault();
+      switchToDoc(doc.id);
+      toggleCompareView(true, 'diff');
+    });
     // 前回保存時点から変わっている図にだけ印を付ける。
     var st = window.MA.saveDiff ? window.MA.saveDiff.statusOf(doc.name, doc.dsl) : 'same';
     if (st !== 'same') {
@@ -3452,6 +3460,9 @@ function setupDiffPanel() {
         + '<span>' + esc(d.name) + '</span><span>' + esc(mark) + '</span></div>';
     });
     html += '<div class="diff-actions">'
+      // BLK-primary-20260909-0303-wish: 会議中はここから参照ペインへ入り、
+      // 以降は「この図の前後」と「他の図と見比べ」をタブで行き来する。
+      + '<button type="button" id="diff-open-pane">ペインで見る (見比べと切替)</button>'
       + '<button type="button" id="diff-open-board">変更サマリボード</button>'
       + '<button type="button" id="diff-mark-all">今の内容を基準にする</button></div>';
     panel.innerHTML = html;
@@ -3464,6 +3475,13 @@ function setupDiffPanel() {
           switchToDoc(row.getAttribute('data-doc-id'));
         });
       })(rows[i]);
+    }
+    var openPane = document.getElementById('diff-open-pane');
+    if (openPane) {
+      openPane.addEventListener('click', function() {
+        close();
+        toggleCompareView(true, 'diff');
+      });
     }
     var openBoard = document.getElementById('diff-open-board');
     if (openBoard) {
@@ -10343,16 +10361,94 @@ function _compareDocs() {
   try { return window.MA.workspace.list() || []; } catch (e) { return []; }
 }
 
-function toggleCompareView(open) {
+// BLK-primary-20260909-0303-wish: 「この図の変更前後」と「他の図との見比べ」は
+// 同じ 1 つの業務 (会議で変わったところを見せる) の裏表なので、同じペインの
+// タブにする。開いたまま切り替えられれば、外れた方を閉じ直す往復が消える。
+var _compareMode = 'ref';   // 'ref' … 他の図/変更前と並べる, 'diff' … 前回保存との差分
+
+function toggleCompareView(open, mode) {
   var pane = document.getElementById('compare-pane');
   if (!pane) return;
+  // モード指定つきで呼ばれたときは、開いているなら閉じずにそのタブへ切り替える。
+  if (mode && _compareOpen && open !== false) { setCompareMode(mode); return; }
   _compareOpen = (open == null) ? !_compareOpen : !!open;
   pane.hidden = !_compareOpen;
   if (_compareOpen) {
     _compareShownDsl = null;   // 開き直したら必ず描く
     // 登録した雛形は 2 枚目のタブが無くても選べる (参照図が要らないのが登録の値打ち)。
     renderTemplateRegistry();
-    renderCompareView();
+    setCompareMode(mode || _compareMode);
+  }
+}
+
+function setCompareMode(mode) {
+  var pane = document.getElementById('compare-pane');
+  if (!pane) return;
+  _compareMode = (mode === 'diff') ? 'diff' : 'ref';
+  pane.classList.toggle('mode-diff', _compareMode === 'diff');
+  [['compare-mode-ref', 'ref'], ['compare-mode-diff', 'diff']].forEach(function(p) {
+    var b = document.getElementById(p[0]);
+    if (!b) return;
+    b.classList.toggle('active', _compareMode === p[1]);
+    b.setAttribute('aria-selected', _compareMode === p[1] ? 'true' : 'false');
+  });
+  if (_compareMode === 'diff') renderCompareDiffView();
+  else { _compareShownDsl = null; renderCompareView(); }
+}
+
+// 「± 差分」タブ: 編集中の図の前回保存時点からの行差分と、他に変わった図の一覧。
+function renderCompareDiffView() {
+  var view = document.getElementById('compare-diff-view');
+  var SD = window.MA.saveDiff;
+  if (!view || !SD) return;
+  var esc = window.MA.htmlUtils.escHtml;
+  var docs = _diffDocs();
+  var activeId = window.MA.workspace ? window.MA.workspace.getActiveId() : null;
+  var active = null;
+  docs.forEach(function(d) { if (d && d.id === activeId) active = d; });
+
+  var html = '';
+  if (!active) {
+    html = '<div class="cd-head" id="compare-diff-empty">図を開くと、前回保存時点との差分が出ます。</div>';
+  } else {
+    var st = SD.statusOf(active.name, active.dsl);
+    var at = SD.markedAt(active.name);
+    var c = SD.changedLines(active.name, active.dsl);
+    var head = esc(active.name) + ' ・ ';
+    if (st === 'new') head += 'まだ保存していない (基準なし)';
+    else if (st === 'same') head += '前回保存時点から変更なし';
+    else head += '前回保存時点から +' + c.added + ' −' + c.removed;
+    if (at) head += ' ・ 基準 ' + esc(at.replace('T', ' ').slice(0, 16));
+    html += '<div class="cd-head" id="compare-diff-head">' + head + '</div>';
+    if (st === 'changed') {
+      SD.diffLines(active.name, active.dsl).forEach(function(r) {
+        var cls = r.mark === '+' ? 'add' : (r.mark === '-' ? 'del' : (r.mark === '…' ? 'skip' : ''));
+        html += '<div class="cd-line ' + cls + '">' + esc(r.mark + ' ' + r.text) + '</div>';
+      });
+    }
+  }
+
+  var others = docs.filter(function(d) {
+    return d && d.id !== activeId && SD.statusOf(d.name, d.dsl) !== 'same';
+  });
+  html += '<div class="cd-others" id="compare-diff-others">';
+  html += others.length
+    ? '他に変わった図 ' + others.length + ' 件'
+    : '他に変わった図はありません';
+  others.forEach(function(d) {
+    html += '<div class="cd-other" data-doc-id="' + esc(d.id) + '">' + esc(d.name) + '</div>';
+  });
+  html += '</div>';
+  view.innerHTML = html;
+
+  var rows = view.querySelectorAll('.cd-other');
+  for (var i = 0; i < rows.length; i++) {
+    (function(row) {
+      row.addEventListener('click', function() {
+        switchToDoc(row.getAttribute('data-doc-id'));
+        renderCompareDiffView();
+      });
+    })(rows[i]);
   }
 }
 
@@ -11675,8 +11771,12 @@ function setupCompareView() {
   var btn = document.getElementById('btn-tab-compare');
   var sel = document.getElementById('compare-select');
   var close = document.getElementById('btn-compare-close');
-  if (btn) btn.addEventListener('click', function() { toggleCompareView(); });
+  if (btn) btn.addEventListener('click', function() { toggleCompareView(null, 'ref'); });
   if (close) close.addEventListener('click', function() { toggleCompareView(false); });
+  var mRef = document.getElementById('compare-mode-ref');
+  var mDiff = document.getElementById('compare-mode-diff');
+  if (mRef) mRef.addEventListener('click', function() { setCompareMode('ref'); });
+  if (mDiff) mDiff.addEventListener('click', function() { setCompareMode('diff'); });
   if (sel) {
     sel.addEventListener('change', function() {
       _compareRefId = sel.value;
