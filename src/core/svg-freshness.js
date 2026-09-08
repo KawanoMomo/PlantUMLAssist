@@ -63,6 +63,33 @@ window.MA.svgFreshness = (function() {
     return (r.result === 'match' || r.result === 'differ') ? r.result : 'unverified';
   }
 
+  // BLK-reviewer-20260908-0103 (1403 追記): 同じ「一致 / ずれ」でも、根拠は 2 通りある。
+  //   stamp    — svg 末尾の印 (@pua-source-sha1) と今の puml の sha1 の突合
+  //   rerender — 上書きせずに 1 回描き直してバイト比較した結果
+  // どちらで出た答えかが画面に出ていないため、reviewer は「印の突合である」ことを
+  // server.py の SVG_STAMP_PREFIX を読んで初めて知った。印は保存した svg にしか付かず
+  // /render の応答には付かないので、生の再描画結果とバイト比較すると必ず食い違う
+  // (実データ 17 枚が全て不一致に見えた原因がこれ)。根拠を行にも要約にも書く。
+  function contentBasisOf(entry, records) {
+    if (!entry) return '';
+    if (_time(entry.svgMtime) === null) return '';
+    var hash = entry.hash;
+    if (typeof hash !== 'string' || hash === '') return '';
+    var stamp = entry.svgSource;
+    if (typeof stamp === 'string' && stamp !== '') return 'stamp';
+    var r = records && records[entry.name];
+    if (!r || typeof r !== 'object') return '';
+    if (r.pumlHash !== hash || r.svgHash !== entry.svgHash) return '';
+    return (r.result === 'match' || r.result === 'differ') ? 'rerender' : '';
+  }
+
+  var BASIS_TEXT = {
+    stamp: '印 (@pua-source-sha1) の突合',
+    rerender: '描き直してのバイト比較',
+  };
+
+  function basisText(basis) { return BASIS_TEXT[basis] || ''; }
+
   var CONTENT_BADGES = {
     match: { mark: '内容一致', title: 'この SVG は今の puml から作られています (中身で確かめました)' },
     differ: { mark: '内容ずれ', title: 'この SVG は別の内容の puml から作られています。作り直しが要ります' },
@@ -70,8 +97,12 @@ window.MA.svgFreshness = (function() {
     unverified: { mark: '内容未確認', title: '元の puml の印が無く、中身が一致するかは分かりません。作り直すと印が付きます' },
   };
 
-  function contentBadge(content) {
-    return CONTENT_BADGES[content] || CONTENT_BADGES.unverified;
+  function contentBadge(content, basis) {
+    var b = CONTENT_BADGES[content] || CONTENT_BADGES.unverified;
+    var t = basisText(basis);
+    if (!t) return b;
+    // 何を見て出した答えかを印そのものに持たせる。実装を読まずに分かるようにする。
+    return { mark: b.mark, title: b.title + ' — 根拠: ' + t };
   }
 
   var BADGES = {
@@ -90,16 +121,23 @@ window.MA.svgFreshness = (function() {
     var rows = (Array.isArray(entries) ? entries : []).map(function(e) {
       return {
         name: e && e.name, status: statusOf(e), content: contentOf(e, records),
+        basis: contentBasisOf(e, records),
         mtime: e && e.mtime, svgMtime: e && e.svgMtime,
       };
     }).filter(function(r) { return typeof r.name === 'string' && r.name !== ''; });
     var counts = { fresh: 0, stale: 0, missing: 0, unknown: 0 };
     var contentCounts = { match: 0, differ: 0, missing: 0, unverified: 0 };
-    rows.forEach(function(r) { counts[r.status]++; contentCounts[r.content]++; });
+    var basisCounts = { stamp: 0, rerender: 0 };
+    rows.forEach(function(r) {
+      counts[r.status]++;
+      contentCounts[r.content]++;
+      if (r.basis) basisCounts[r.basis]++;
+    });
     return {
       rows: rows,
       counts: counts,
       contentCounts: contentCounts,
+      basisCounts: basisCounts,
       // unknown は作り直しても「分からない」が消える保証が無いが、作り直せば
       // 必ず今の内容になるので対象に入れる。
       // 内容で一致が取れている図は、mtime が古くても作り直す必要が無いので外す
@@ -203,6 +241,22 @@ window.MA.svgFreshness = (function() {
     return '内容: ' + parts.join(' / ');
   }
 
+  // BLK-reviewer-20260908-0103 (1403 追記): 「内容: 一致 17 枚」が何を見た答えかを
+  // 画面で言う。ここが無いと、同じ判定を自分でやろうとした人が /render の応答と
+  // 保存中の svg をバイト比較し、印のぶんだけ必ず食い違って全件ずれに見える。
+  var STAMP_NOTE = '保存した SVG の末尾にだけ印が付くので、/render の応答と'
+    + 'そのままバイト比較すると必ず食い違います';
+
+  function basisNote(scanned) {
+    if (!scanned || !scanned.rows.length) return '';
+    var b = scanned.basisCounts || { stamp: 0, rerender: 0 };
+    var parts = [];
+    if (b.stamp) parts.push('印 (@pua-source-sha1) の突合 ' + b.stamp + ' 枚');
+    if (b.rerender) parts.push('描き直してのバイト比較 ' + b.rerender + ' 枚');
+    if (!parts.length) return '判定の根拠: まだ 1 枚も内容で判定していません (印が無く、確かめてもいない)';
+    return '判定の根拠: ' + parts.join(' / ') + '。' + (b.stamp ? STAMP_NOTE : '保存中の SVG は上書きしていません');
+  }
+
   // 内容で言い切れるようにするボタンの文言。
   // 押す前に何枚を描き直して比べるかが分かるようにする (1 枚あたり数百 ms かかる)。
   function verifyLabel(scanned) {
@@ -253,9 +307,20 @@ window.MA.svgFreshness = (function() {
     return out;
   }
 
+  function basisMap(scanned) {
+    var out = {};
+    ((scanned && scanned.rows) || []).forEach(function(r) { out[r.name] = r.basis; });
+    return out;
+  }
+
   return {
     statusOf: statusOf,
     contentOf: contentOf,
+    basisMap: basisMap,
+    contentBasisOf: contentBasisOf,
+    basisText: basisText,
+    basisNote: basisNote,
+    STAMP_NOTE: STAMP_NOTE,
     badge: badge,
     contentBadge: contentBadge,
     scan: scan,

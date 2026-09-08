@@ -124,6 +124,13 @@ def write_prefs(partial):
 # GET /render の 'aliases' で「正式な名前は text」であることを毎回伝える。
 DSL_FIELD_ALIASES = ('dsl', 'source', 'uml', 'puml', 'diagram')
 
+# POST /render の 200 に必ず付ける注記。ヘッダ値は ASCII しか通らないので英語で書く。
+# 「保存中の svg とこの応答をバイト比較する」使い方を、応答の側で止めるためのもの。
+SVG_STAMP_HEADER = ('none; saved {name}.svg ends with <!-- @pua-source-sha1 ... --> '
+                    'which this response never carries, so byte-comparing them always differs. '
+                    'Compare GET /autosave entry.svgSource with entry.hash instead, '
+                    'or POST /verify-svg to re-render and compare contents')
+
 RENDER_API_DOC = {
     'endpoint': 'POST /render',
     'request': {
@@ -139,8 +146,22 @@ RENDER_API_DOC = {
                      '正式な名前は text'),
         },
     },
+    # BLK-reviewer-20260908-0103 (1403 追記): 「保存中の svg が今の puml から作られたか」を
+    # curl で確かめようとして、この応答と保存中の svg をバイト比較した run があった。
+    # 保存する svg にだけ末尾へ `<!-- @pua-source-sha1 ... -->` を刻むので、内容が
+    # 完全に一致していてもバイト比較は必ず不一致になる (実データ 17 枚が全滅に見えた)。
+    # 応答の説明とヘッダの両方でそれを言う — 応答だけを見て使う人に届くように。
+    'comparison': {
+        'note': ('この応答には @pua-source-sha1 の印が付かない。保存された {name}.svg には'
+                 '末尾に印があるため、生のバイト比較は内容が同じでも必ず食い違う'),
+        'how': ('保存中の svg が今の puml から作られたかは、GET /autosave の entry の'
+                'svgSource (svg に刻まれた印) と hash (今の puml の sha1) を比べる。'
+                '印が無い svg は POST /verify-svg が描き直して中身で確かめる'),
+        'header': 'X-PlantUMLAssist-Svg-Stamp',
+    },
     'response': {
-        '200': 'image/svg+xml — 描画された SVG',
+        '200': ('image/svg+xml — 描画された SVG。X-PlantUMLAssist-Svg-Stamp ヘッダで'
+                '「この応答に印は付かない」ことを伝える (comparison を参照)'),
         '400': "application/json {error} — text (と別名) が無い / 文字列でない / 空",
         '422': "application/json {error, line} — DSL の文法エラー (PlantUML のエラー画)",
         '500': 'application/json {error} — 描画そのものの失敗',
@@ -329,6 +350,9 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header('Content-Type', 'image/svg+xml')
             self.send_header('Cache-Control', 'no-cache')
+            # BLK-reviewer-20260908-0103 (1403 追記): この応答には印が付かない。
+            # 保存中の svg とバイト比較する使い方をここで止める (ASCII のみ)。
+            self.send_header('X-PlantUMLAssist-Svg-Stamp', SVG_STAMP_HEADER)
             # 別名で受理したことは 200 でも必ず伝える (黙って呑まない)。
             # ヘッダ値は ASCII しか通らないので日本語は %xx で包む。
             if warning:

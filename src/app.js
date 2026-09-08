@@ -4325,6 +4325,8 @@ function setupTabs() {
   // `ls -l` で puml と svg を 1 枚ずつ突き合わせる代わりに、一覧が答える。
   var svgStatus = {};
   var svgContent = {};
+  // 図名 → その内容判定の根拠 ('stamp' / 'rerender')。何を見た答えかを印にも書く。
+  var svgBasis = {};
   var svgScan = null;
   // 作り直した結果の 1 行。一覧を開き直すまで残す (押した結果が消えない)。
   var svgRenderNote = '';
@@ -4525,6 +4527,7 @@ function setupTabs() {
       svgStatus = SF ? SF.statusMap(svgScan) : {};
       // BLK-reviewer-20260908-1103: mtime とは別に、内容 (svg に刻んだ元 puml の sha1) での判定。
       svgContent = SF && SF.contentMap ? SF.contentMap(svgScan) : {};
+      svgBasis = SF && SF.basisMap ? SF.basisMap(svgScan) : {};
 
       // 指摘の反映状態は server が一覧と一緒に返す pins から作る。図を開かなくても
       // 一覧の時点で「未反映が残っている図」が分かる (別名保存を続けなくてよい)。
@@ -4789,6 +4792,18 @@ function setupTabs() {
       csum.id = 'folder-svg-content';
       csum.textContent = SF.contentSummary(svgScan);
       panel.appendChild(csum);
+    }
+
+    // BLK-reviewer-20260908-0103 (1403 追記): 上の 1 行が「印の突合」で出た答えなのか
+    // 「描き直してのバイト比較」で出た答えなのかが画面に無く、同じ判定を自分で
+    // やろうとすると、印の付かない /render の応答とバイト比較して全件ずれに見える。
+    // 何を見た答えかをその場に書く (server.py を読みに行かせない)。
+    if (SF.basisNote) {
+      var bnote = document.createElement('div');
+      bnote.className = 'folder-svg-basis';
+      bnote.id = 'folder-svg-basis';
+      bnote.textContent = SF.basisNote(svgScan);
+      panel.appendChild(bnote);
     }
 
     // BLK-reviewer-20260908-0823-wish: 件数だけだと「どの図か」を 22 行の中から
@@ -5529,7 +5544,7 @@ function setupTabs() {
     var SF = window.MA.svgFreshness;
     var content = svgContent[name];
     if (SF && content === 'differ') {
-      var cb = SF.contentBadge(content);
+      var cb = SF.contentBadge(content, svgBasis[name]);
       var contentBadge = document.createElement('span');
       contentBadge.className = 'folder-svg-content-badge';
       contentBadge.setAttribute('data-svg-content', content);
