@@ -2444,6 +2444,7 @@ function init() {
   setupBulkRename();
   setupRenameImpact();
   setupDepGraph();
+  setupTicketBoard();
   setupVault();
   setupSymptomSearch();
   setupPatternCheck();
@@ -2615,6 +2616,7 @@ function initCommandPalette() {
       { id: 'seq-to-activity', title: 'シーケンス図からアクティビティ図を起こす / Sequence to activity', hint: 'Tabs', keywords: ['activity', 'sequence', 'draft', 'あくてぃびてぃ', 'しーけんす', 'おこす', 'したがき'], run: function() { makeActivityFromSequence(); } },
       { id: 'tab-new', title: '新しい図を開く / New diagram', hint: 'Tabs', keywords: ['new', 'tab', 'あたらしい', 'ず'], button: 'btn-tab-new', run: function() { clickById('btn-tab-new'); } },
       { id: 'tab-folder', title: '保存フォルダの図を一覧 / Folder', hint: 'Tabs', keywords: ['folder', 'list', 'いちらん', 'ふぉるだ'], button: 'btn-tab-folder', run: function() { clickById('btn-tab-folder'); } },
+      { id: 'change-ticket', title: '変更チケットを開く / Change tickets', hint: 'Tabs', keywords: ['ticket', 'change', 'impact', 'ちけっと', 'へんこう', 'つづき', 'しようへんこう'], run: function() { toggleTicketBoard(true); } },
       { id: 'vault', title: '提出物庫を開く / Deliverable vault', hint: 'Tabs', keywords: ['vault', 'export', 'ていしゅつ', 'こ', 'かこ', 'ぜんかい'], run: function() { toggleVault(true); } },
       { id: 'tab-rename', title: '部品名を一括置換 / Bulk rename', hint: 'Tabs', keywords: ['rename', 'replace', 'いっかつ', 'ちかん'], button: 'btn-tab-rename', run: function() { clickById('btn-tab-rename'); } },
       { id: 'tab-symptom', title: '症状から関連図を探す / Symptom search', hint: 'Tabs', keywords: ['symptom', 'search', 'しょうじょう', 'けんさく', 'ふぐあい'], button: 'btn-tab-symptom', run: function() { clickById('btn-tab-symptom'); } },
@@ -6016,6 +6018,27 @@ function setupTabs() {
     state.id = 'folder-vault-state';
     state.textContent = V.summaryText(_vaultRows, '');
     bar.appendChild(state);
+    // 変更チケットへの入口 (BLK-primary-20260909-0603-wish)。仕様変更の続きは
+    // 「どの図を開くか」から始まるので、フォルダ一覧と同じ場所に置く。
+    if (window.MA.changeTicket) {
+      var ct = document.createElement('button');
+      ct.type = 'button';
+      ct.id = 'btn-change-ticket';
+      ct.className = 'folder-vault-open';
+      ct.textContent = '🎫 変更チケット';
+      ct.title = '仕様変更で直す図の一覧と「直した」印。前回の続きから直せます';
+      ct.addEventListener('click', function(ev) {
+        ev.stopPropagation();
+        closePanel();
+        toggleTicketBoard(true);
+      });
+      bar.appendChild(ct);
+      var ctState = document.createElement('span');
+      ctState.className = 'folder-vault-state';
+      ctState.id = 'folder-ticket-state';
+      ctState.textContent = window.MA.changeTicket.listText(_ctRows);
+      bar.appendChild(ctState);
+    }
     host.appendChild(bar);
   }
 
@@ -6025,6 +6048,10 @@ function setupTabs() {
     // 庫を見ずに出ると、提出済みの図種が一瞬「なし」で出る。
     if (_fiFolderMode() && _vaultDir !== dir && !_vaultLoading) {
       loadVault().then(function() { renderFolderPanel(); });
+    }
+    // 札の残り本数も同じ理由で先に読む (未完の変更があることに気づける)。
+    if (_fiFolderMode() && _ctDir !== dir && !_ctLoading) {
+      loadTickets().then(function() { renderFolderPanel(); });
     }
     var RW = window.MA.reviewWatch;
     var store = _reviewStore();
@@ -8786,6 +8813,17 @@ function setupDepGraph() {
 
   // 見た名前をそのまま置換の的にする。グラフから一括置換へ戻る手が
   // 「読んで覚えて打ち直す」では、見落としを防ぐ意味が薄れる。
+  // 見た影響一覧をその場で札にする。閉じてから開き直させると、
+  // 「一度きりの一覧が消える」という元の困り事がそのまま残る。
+  var ticket = document.getElementById('dg-ticket');
+  if (ticket) ticket.addEventListener('click', function() {
+    makeTicketFromDepGraph().then(function(t) {
+      if (!t) return;
+      toggleDepGraph(false);
+      toggleTicketBoard(true);
+    });
+  });
+
   var use = document.getElementById('dg-use');
   if (use) use.addEventListener('click', function() {
     var from = document.getElementById('rename-from');
@@ -8794,6 +8832,227 @@ function setupDepGraph() {
       from.dispatchEvent(new Event('input'));
     }
     toggleDepGraph(false);
+  });
+}
+
+// ── 変更チケット (BLK-primary-20260909-0603-wish) ────────────────────────────
+// 依存グラフの影響一覧は一度きりで、モーダルを閉じると消える。仕様変更は数日・
+// 複数 run にまたがるので、「15 枚のうちどこまで直したか」を持ち越す先が要る。
+// 影響一覧を札にして保存フォルダ (`_tickets/`) に置き、次の run は札の未チェック
+// だけを見る。ペルソナをまたぐので localStorage ではなく server に置く
+// (reviewer も同じ札を読める = 指摘.md への転記が要らない)。
+var _ctRows = [];
+var _ctDir = null;
+var _ctId = '';
+var _ctLoading = false;
+
+function loadTickets(force) {
+  if (!_fiFolderMode()) { _ctRows = []; _ctDir = null; return Promise.resolve([]); }
+  var dir = _wsFileDir();
+  if (!force && _ctDir === dir && !_ctLoading) return Promise.resolve(_ctRows);
+  _ctLoading = true;
+  return window.fetch('/tickets?dir=' + encodeURIComponent(dir))
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(data) {
+      _ctRows = window.MA.changeTicket ? window.MA.changeTicket.rows(data) : [];
+      _ctDir = dir;
+      _ctLoading = false;
+      return _ctRows;
+    }, function() {
+      // 読めなくても「読んだ」ことにする (読み直しが毎描画で走り続けるのを避ける)。
+      _ctDir = dir;
+      _ctLoading = false;
+      return _ctRows;
+    });
+}
+
+// 札を 1 枚まるごと書く。手元の一覧も同じ札で差し替える (書いてから読み直すと、
+// チェックを 1 個入れるたびに全件の往復が要る)。
+function saveTicket(ticket) {
+  var CT = window.MA.changeTicket;
+  if (!CT || !ticket || !_fiFolderMode()) return Promise.resolve(null);
+  return window.fetch('/tickets', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dir: _wsFileDir(), ticket: ticket }),
+  }).then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(res) {
+      if (!res) return null;
+      var next = _ctRows.filter(function(t) { return t.id !== ticket.id; });
+      next.push(CT.normalize(ticket));
+      _ctRows = CT.rows({ tickets: next });
+      return res;
+    }, function() { return null; });
+}
+
+function deleteTicket(id) {
+  if (!id || !_fiFolderMode()) return Promise.resolve(null);
+  var url = '/tickets?dir=' + encodeURIComponent(_wsFileDir()) + '&id=' + encodeURIComponent(id);
+  return window.fetch(url, { method: 'DELETE' })
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(res) {
+      _ctRows = _ctRows.filter(function(t) { return t.id !== id; });
+      if (_ctId === id) _ctId = '';
+      return res;
+    }, function() { return null; });
+}
+
+// 今の依存グラフの影響一覧を札にする。中央の名前がそのまま変更の主題。
+function makeTicketFromDepGraph() {
+  var CT = window.MA.changeTicket;
+  var DG = window.MA.depGraph;
+  if (!CT || !DG || !_dgName) return Promise.resolve(null);
+  if (!_fiFolderMode()) {
+    if (window.MA.toast) {
+      window.MA.toast.show('変更チケットは保存フォルダ運用のときだけ残せます（設定で保存先をフォルダにしてください）');
+    }
+    return Promise.resolve(null);
+  }
+  var graph = DG.build(_dgDocs());
+  var impact = DG.impactDocs(graph, _dgName, _dgHops);
+  if (!impact.length) return Promise.resolve(null);
+  var ticket = CT.fromImpact(_dgName, impact, { hops: _dgHops });
+  return saveTicket(ticket).then(function(res) {
+    if (!res) return null;
+    _ctId = ticket.id;
+    if (window.MA.toast) {
+      window.MA.toast.show('変更チケットにしました（' + ticket.title + ' / '
+        + impact.length + ' 図）。次からは「変更チケット」を開けば続きから直せます');
+    }
+    return ticket;
+  });
+}
+
+function _ctCurrent() {
+  var CT = window.MA.changeTicket;
+  if (!CT) return null;
+  return CT.find(_ctRows, _ctId) || _ctRows[0] || null;
+}
+
+function _ctItemsHtml(ticket) {
+  var CT = window.MA.changeTicket;
+  var esc = window.MA.htmlUtils.escHtml;
+  var items = (ticket && ticket.items) || [];
+  if (!items.length) return '<div class="ct-empty">この札には対象の図がありません。</div>';
+  var p = CT.progress(ticket);
+  var pct = p.total ? Math.round((p.done / p.total) * 100) : 0;
+  var html = '<div id="ct-progress"><span id="ct-progress-text">' + esc(CT.progressText(ticket))
+    + '</span><span class="ct-bar"><i style="width:' + pct + '%"></i></span>'
+    + '<span class="ct-note">起票 ' + esc((ticket.at || '').slice(0, 16).replace('T', ' ')) + '</span></div>';
+  html += '<table class="ct-table"><thead><tr><th>直した</th><th>図</th><th>届き方</th>'
+    + '<th>経由した部品名</th><th></th></tr></thead><tbody>';
+  items.forEach(function(it) {
+    html += '<tr class="ct-item" data-doc="' + esc(it.doc) + '" data-hop="' + it.hop + '" '
+      + 'data-done="' + (it.done ? 1 : 0) + '" data-gone="' + (it.gone ? 1 : 0) + '">'
+      + '<td><input type="checkbox" class="ct-done" ' + (it.done ? 'checked' : '')
+      + ' aria-label="' + esc(it.doc) + ' を直した"></td>'
+      + '<td class="ct-doc-name">' + esc(it.doc) + '</td>'
+      + '<td class="ct-hop">' + (it.hop === 0 ? '直接' : '連鎖 ' + it.hop + ' 段') + '</td>'
+      + '<td class="ct-via">' + esc((it.via || []).join(', ')) + '</td>'
+      + '<td><button type="button" class="ct-open">この図を開く</button></td></tr>';
+  });
+  return html + '</tbody></table>';
+}
+
+function renderTicketBoard() {
+  var CT = window.MA.changeTicket;
+  var body = document.getElementById('ct-body');
+  var pick = document.getElementById('ct-pick');
+  var sumEl = document.getElementById('ct-summary');
+  if (!CT || !body || !pick) return null;
+  var esc = window.MA.htmlUtils.escHtml;
+
+  if (!_ctRows.length) {
+    pick.innerHTML = '';
+    body.innerHTML = '<div class="ct-empty">変更チケットはまだありません。'
+      + '⇄ 一括置換 の ◈ 依存グラフ で影響を出し、「この変更をチケットにする」で残せます。</div>';
+    if (sumEl) sumEl.textContent = CT.listText(_ctRows);
+    return null;
+  }
+
+  var cur = _ctCurrent();
+  _ctId = cur ? cur.id : '';
+  var opts = '';
+  _ctRows.forEach(function(t) {
+    var p = CT.progress(t);
+    opts += '<option value="' + esc(t.id) + '"' + (t.id === _ctId ? ' selected' : '') + '>'
+      + esc(t.title) + ' (' + p.done + '/' + p.total + ')</option>';
+  });
+  pick.innerHTML = opts;
+  body.innerHTML = _ctItemsHtml(cur);
+  if (sumEl) sumEl.textContent = CT.summaryText(cur) + ' — ' + CT.listText(_ctRows);
+
+  var boxes = body.querySelectorAll('input.ct-done');
+  for (var i = 0; i < boxes.length; i++) {
+    (function(box) {
+      box.addEventListener('change', function() {
+        var row = box.parentNode.parentNode;
+        var next = CT.setDone(_ctCurrent(), row.getAttribute('data-doc'), box.checked);
+        if (!next) return;
+        saveTicket(next).then(function() { renderTicketBoard(); });
+      });
+    })(boxes[i]);
+  }
+  var opens = body.querySelectorAll('button.ct-open');
+  for (var j = 0; j < opens.length; j++) {
+    (function(btn) {
+      btn.addEventListener('click', function() {
+        var row = btn.parentNode.parentNode;
+        toggleTicketBoard(false);
+        openFromFolderByName(row.getAttribute('data-doc'));
+      });
+    })(opens[j]);
+  }
+  return cur;
+}
+
+function toggleTicketBoard(open) {
+  var modal = document.getElementById('ct-modal');
+  if (!modal) return;
+  var want = (open == null) ? (modal.style.display === 'none' || !modal.style.display) : !!open;
+  if (!want) { modal.style.display = 'none'; return; }
+  modal.style.display = 'flex';
+  renderTicketBoard();
+  loadTickets().then(function() { renderTicketBoard(); });
+}
+
+function setupTicketBoard() {
+  var modal = document.getElementById('ct-modal');
+  if (!modal) return;
+  var closeBtn = document.getElementById('ct-close');
+  if (closeBtn) closeBtn.addEventListener('click', function() { toggleTicketBoard(false); });
+  modal.addEventListener('click', function(ev) {
+    if (ev.target === modal) toggleTicketBoard(false);
+  });
+  document.addEventListener('keydown', function(ev) {
+    if (ev.key === 'Escape' && modal.style.display === 'flex') toggleTicketBoard(false);
+  });
+
+  var pick = document.getElementById('ct-pick');
+  if (pick) pick.addEventListener('change', function() { _ctId = pick.value; renderTicketBoard(); });
+
+  // 洗い直し。図が増減しても札を作り直させない (直した印が消えるため)。
+  var refresh = document.getElementById('ct-refresh');
+  if (refresh) refresh.addEventListener('click', function() {
+    var CT = window.MA.changeTicket;
+    var DG = window.MA.depGraph;
+    var cur = _ctCurrent();
+    if (!CT || !DG || !cur) return;
+    var run = function() {
+      var graph = DG.build(_dgDocs());
+      var hops = (typeof cur.hops === 'number') ? cur.hops : 2;
+      var next = CT.refresh(cur, DG.impactDocs(graph, cur.subject, hops));
+      saveTicket(next).then(function() { renderTicketBoard(); });
+    };
+    if (_fiEnabled()) loadFolderImpact(true).then(run);
+    else run();
+  });
+
+  var del = document.getElementById('ct-delete');
+  if (del) del.addEventListener('click', function() {
+    var cur = _ctCurrent();
+    if (!cur) return;
+    deleteTicket(cur.id).then(function() { renderTicketBoard(); });
   });
 }
 

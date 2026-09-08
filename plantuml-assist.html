@@ -2148,7 +2148,34 @@ tr.mboard-row[data-status="fresh"] td.mboard-status { color: #98c379; }
   font-size: 12px;
   color: var(--text-primary);
 }
-#cb-summary, #ri-summary, #dg-summary, #vault-summary { color: var(--accent); }
+#cb-summary, #ri-summary, #dg-summary, #vault-summary, #ct-summary { color: var(--accent); }
+/* 変更チケット (BLK-primary-20260909-0603-wish)。
+   残りが一目で分かることだけが要件なので、済んだ行は沈めて未チェックを前に出す。 */
+#ct-body { flex: 1; overflow-y: auto; padding: 6px 14px 14px 14px; }
+#ct-body .ct-empty { color: var(--text-secondary); font-size: 12px; padding: 20px 10px; }
+#ct-progress {
+  display: flex; align-items: center; gap: 10px; font-size: 12px;
+  padding: 4px 0 8px 0; color: var(--text-primary);
+}
+#ct-progress .ct-bar { flex: 1; height: 6px; background: var(--bg-tertiary); border-radius: 3px; overflow: hidden; }
+#ct-progress .ct-bar > i { display: block; height: 100%; background: var(--accent); }
+#ct-progress .ct-note { color: var(--text-secondary); }
+table.ct-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+table.ct-table th {
+  text-align: left; padding: 3px 8px; color: var(--text-secondary);
+  font-weight: normal; border-bottom: 1px solid var(--border);
+}
+table.ct-table td { padding: 3px 8px; vertical-align: top; }
+table.ct-table tr.ct-item[data-done="1"] td { color: var(--text-secondary); text-decoration: line-through; }
+table.ct-table tr.ct-item[data-gone="1"] td.ct-doc-name::after { content: ' (図が見当たりません)'; color: var(--text-secondary); }
+table.ct-table td.ct-hop { white-space: nowrap; color: var(--text-secondary); }
+table.ct-table tr.ct-item[data-hop="0"] td.ct-hop { color: var(--accent); }
+table.ct-table td.ct-via { color: var(--text-secondary); word-break: break-all; }
+table.ct-table button.ct-open {
+  border: 1px solid var(--border); background: var(--bg-tertiary); color: var(--text-primary);
+  border-radius: 3px; font-size: 10px; padding: 1px 8px; cursor: pointer; white-space: nowrap;
+}
+table.ct-table button.ct-open:hover { border-color: var(--accent); }
 /* 提出物庫 (BLK-junior-20260908-2203-wish) */
 table.vault-table { width: 100%; border-collapse: collapse; font-size: 11px; }
 table.vault-table th {
@@ -5603,6 +5630,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/component-deps.js"></script>
 <script src="src/core/usecase-source.js"></script>
 <script src="src/core/dep-graph.js"></script>
+<script src="src/core/change-ticket.js"></script>
 <script src="src/core/review-desk.js"></script>
 <script src="src/core/state-branch.js"></script>
 <script src="src/core/state-transition.js"></script>
@@ -5740,6 +5768,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
           <option value="3">3 段</option>
         </select>
         <button type="button" id="dg-use" title="この名前を一括置換の「置換前」に入れる">この名前を置換前に入れる</button>
+        <button type="button" id="dg-ticket" title="今出ている影響一覧を「変更チケット」として保存フォルダに残す。次の run はこの札の未チェックだけを直せばよい">この変更をチケットにする</button>
         <button type="button" id="dg-close">閉じる</button>
       </span>
     </div>
@@ -5747,6 +5776,25 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <div id="dg-canvas"></div>
       <div id="dg-impact"></div>
     </div>
+  </div>
+</div>
+<!-- BLK-primary-20260909-0603-wish: 変更チケット。1 回の仕様変更で直す図の一覧と
+     「直した」印を保存フォルダに残す。次の run は依存グラフを開き直さず、
+     この札の未チェックだけを見れば続きから直せる。 -->
+<div id="ct-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+  <div class="board-modal">
+    <div class="board-head">
+      <strong>変更チケット</strong>
+      <span id="ct-summary" role="status"></span>
+      <span class="board-tools">
+        <label for="ct-pick">変更</label>
+        <select id="ct-pick" title="新しい変更が上に並ぶ"></select>
+        <button type="button" id="ct-refresh" title="今の図から影響を洗い直して札に取り込む (直した印は残る)">影響を洗い直す</button>
+        <button type="button" id="ct-delete" title="この札を畳む (図は消えない)">この札を畳む</button>
+        <button type="button" id="ct-close">閉じる</button>
+      </span>
+    </div>
+    <div id="ct-body"></div>
   </div>
 </div>
 <!-- BLK-junior-20260908-2203-wish: 提出物庫。画像を書き出した瞬間の DSL を刻印で積んだ庫。

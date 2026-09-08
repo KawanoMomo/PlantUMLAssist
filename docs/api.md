@@ -76,6 +76,9 @@ curl -sS -X POST http://127.0.0.1:8766/verify-svg -H "Content-Type: application/
 | --- | --- | --- |
 | `GET /vault` | `?dir=` | 保管庫の中身 |
 | `POST /vault` | — | 保管庫へ入れる |
+| `GET /tickets` | `?dir=` | 変更チケットの一覧 |
+| `POST /tickets` | `{dir, ticket}` | 変更チケットを 1 枚書く (id ごと置き換え) |
+| `DELETE /tickets` | `?dir=&id=` | 変更チケットを 1 枚消す |
 | `GET /prefs` | — | この機械に保存した設定 |
 | `POST /prefs` | — | 設定を書く |
 | `GET /env` | — | Java / jar の有無など実行環境 |

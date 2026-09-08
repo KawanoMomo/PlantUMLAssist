@@ -80,3 +80,51 @@ test('手順2 依存グラフが、置換する部品名の参照元・参照先
   await expect(page.locator('#dg-modal')).toBeHidden();
   await expect(page.locator('#rename-from')).toHaveValue('Hw_Ctrl');
 });
+
+// BLK-primary-20260909-0603-wish: 依存グラフで洗った影響一覧はモーダルを閉じると消える。
+// 仕様変更は複数 run にまたがるので、「何枚中どこまで直したか」を持ち越す先が要る。
+// 影響一覧を変更チケットにして保存フォルダに残し、次の run は札の未チェックだけを見る。
+test('手順2 洗った影響一覧を変更チケットにすると、run をまたいで続きから直せる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  await S.clearTickets(page, DIR);
+  for (const n of S.PRIMARY_DOCS) await S.putDoc(page, DIR, n, S.docFor(n, 'SpiDrv'));
+  await page.reload();
+  await page.waitForSelector('#preview-svg');
+
+  await S.runCommand(page, '一括置換');
+  await page.locator('#rename-from').fill('SpiDrv');
+  await page.waitForTimeout(900);
+  await page.locator('#btn-rename-depgraph').click();
+  await page.waitForSelector('#dg-modal', { state: 'visible' });
+  await page.waitForTimeout(600);
+
+  const impactCount = await page.locator('#dg-impact tr.dg-doc').count();
+  expect(impactCount).toBeGreaterThan(1);
+
+  // 到達条件その1: 見ているその場で札にできる (閉じて開き直させない)。
+  await page.locator('#dg-ticket').click();
+  await page.waitForSelector('#ct-modal', { state: 'visible' });
+  await expect(page.locator('#dg-modal')).toBeHidden();
+  const items = page.locator('#ct-body tr.ct-item');
+  await expect(items).toHaveCount(impactCount);
+  await expect(page.locator('#ct-summary')).toContainText('SpiDrv の仕様変更');
+  await expect(page.locator('#ct-progress-text')).toContainText('0 / ' + impactCount);
+
+  // 到達条件その2: 直した図に印を立てると、残りが減る。
+  const first = items.filter({ hasText: 'spi_init_sequence' }).first();
+  await first.locator('input.ct-done').check();
+  await page.waitForTimeout(600);
+  await expect(page.locator('#ct-progress-text')).toContainText('1 / ' + impactCount);
+
+  // 到達条件その3: 次の run (= 読み込み直し) でも札と印が残っていて、
+  // 依存グラフを開き直さずに続きから直せる。
+  await page.reload();
+  await page.waitForSelector('#preview-svg');
+  await S.runCommand(page, '変更チケット');
+  await page.waitForSelector('#ct-modal', { state: 'visible' });
+  await page.waitForTimeout(800);
+  await expect(page.locator('#ct-progress-text')).toContainText('1 / ' + impactCount);
+  await expect(page.locator('#ct-body tr.ct-item[data-done="1"]')).toHaveCount(1);
+  await expect(page.locator('#ct-body tr.ct-item[data-done="1"]')).toContainText('spi_init_sequence');
+});
