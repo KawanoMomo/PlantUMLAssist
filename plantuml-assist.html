@@ -264,6 +264,52 @@ html, body {
   padding: 0 4px;
   color: var(--text-secondary);
 }
+/* BLK-junior-20260908-1803-wish: 開いた元ファイルを書き換える前の一度きりの確認 */
+/* 画面を塞がない。見比べのために別の図を開く・一覧を出すといった作業を
+   止めずに、答えるまで元ファイルへの書き込みだけを保留する。 */
+#source-lock-modal {
+  position: fixed;
+  top: 8px;
+  left: 0;
+  right: 0;
+  z-index: 1300;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+#source-lock-panel {
+  pointer-events: auto;
+  width: 520px;
+  max-width: 90vw;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 16px 18px;
+  color: var(--text-primary);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+}
+#source-lock-panel button {
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 8px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: left;
+}
+#source-lock-panel button:hover { border-color: var(--accent); color: var(--accent); }
+#source-lock-keep { border-color: var(--accent) !important; }
+#top-source-lock {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--accent);
+  padding: 2px 6px;
+  font-size: 11px;
+  cursor: default;
+  white-space: nowrap;
+}
+
 #cp-modal {
   display: none;
   position: fixed;
@@ -4140,6 +4186,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <span id="top-file-name" title="編集中の図">(無題).puml</span>
     <!-- BLK-junior-20260907-2009: 保存先が既に覚えられていることを常時見せる -->
     <button id="top-save-target" type="button" title="保存先">⬇ ダウンロード</button>
+    <button id="top-source-lock" type="button" hidden></button>
 
     <!-- BLK-builder-20260907-0803-1 (design 1a): コマンド中心。名前を打って実行する入口 -->
     <button class="tb-btn" id="btn-command-palette" title="コマンド・要素を検索 (Ctrl+K)">
@@ -4835,6 +4882,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/delivery-package.js"></script>
 <script src="src/core/save-prefs.js"></script>
 <script src="src/core/save-target.js"></script>
+<script src="src/core/source-lock.js"></script>
 <script src="src/core/export-shortcuts.js"></script>
 <script src="src/core/diagram-settings.js"></script>
 <script src="src/core/name-audit.js"></script>
