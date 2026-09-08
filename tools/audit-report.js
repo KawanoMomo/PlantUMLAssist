@@ -86,6 +86,13 @@ const AUDITS = {
   // 目で読んで気付くしかなかった。系統ごとの遷移密度を並べ、中央値から外れた
   // 系統を名指しする。
   density: (MA, docs) => (MA.transitionDensity ? MA.transitionDensity.rank(docs) : undefined),
+  // BLK-reviewer-20260908-1803: ラベル位置の慣習ズレ (実在する名前なので trace は
+  // 一致と出す) は「⇉ 系統チェック」でしか出せず、CLI からは method 順を目で読んで
+  // 「dma だけ末尾」と毎 tick 確かめ直していた。label-position.js は純関数だが、
+  // 入力が trace-coverage.audit() の結果で、それを組み立てているのが app.js
+  // だけだったので node からは回せなかった。配線はここ 1 行で足りる。
+  label: (MA, docs) => (MA.labelPosition && MA.traceCoverage
+    ? MA.labelPosition.rank(MA.traceCoverage.audit(docs)) : undefined),
 };
 
 // .puml の隣に置かれた同名の .svg を見て、svg-freshness が読む形の行にする。
@@ -191,6 +198,23 @@ function summarize(audits) {
       outlierNames: dn.result.outliers.map((r) => r.key),
     };
   }
+  const lp = audits.label;
+  if (lp && lp.status === 'ok') {
+    s.label = {
+      families: lp.result.rows.length,
+      // 慣習を言えた系統だけが比較の母数。rows.length で「9 系統とも揃っている」と
+      // 言うと、対応の付いたラベルが 1 本も無い系統まで「揃っている」に数えてしまう。
+      known: lp.result.rows.filter((r) => !!r.convention).length,
+      common: lp.result.common,
+      commonLabel: lp.result.commonLabel,
+      odd: lp.result.odd.length,
+      // 系統名と、その系統がどこを指しているかまで出す。件数だけだと
+      // 「どの系統か」を探しに GUI へ戻ることになる (それがこの配線の目的)。
+      oddNames: lp.result.odd.map((r) => r.key + ' (' + r.conventionLabel + ')'),
+      // 系統内で位置が割れている系統。多数派とはズレていなくても直す対象になる。
+      mixedNames: lp.result.rows.filter((r) => r.mixed).map((r) => r.key),
+    };
+  }
   return s;
 }
 
@@ -201,6 +225,11 @@ function totalIssues(summary) {
   if (summary.consistency) t += summary.consistency.count;
   if (summary.family) t += summary.family.mismatched;
   if (summary.trace) t += summary.trace.missing;
+  // ラベル位置のズレは画面でも下端の「整合」の件数に足している
+  // (BLK-reviewer-20260908-1703)。CLI の合計だけ数えないと、同じ図に対して
+  // GUI と CLI で件数が割れる。密度と違い「多数派に揃える」という直し方が
+  // 決まっているので、判断の要る指摘ではなく数える指摘として扱う。
+  if (summary.label) t += summary.label.odd;
   return t;
 }
 
@@ -253,6 +282,22 @@ function formatSummary(report, prev, options) {
       : (s.density.outliers === 0
         ? `遷移密度: ${counted} 系統とも中央値 ${med} 遷移/メッセージに揃っている${tail}`
         : `遷移密度: 中央値 ${med} から外れた系統 ${s.density.outliers} 件 (${s.density.outlierNames.join(', ')})${tail}`));
+  }
+  if (s.label) {
+    // 「dma だけ末尾」を毎 tick 目で確かめ直していた行。名指しまでここで済ませる。
+    const mixed = s.label.mixedNames && s.label.mixedNames.length
+      ? ` (系統内で位置が割れている ${s.label.mixedNames.length} 系統: ${s.label.mixedNames.join(', ')})`
+      : '';
+    if (!s.label.known) {
+      lines.push('ラベル位置: 対応の付いた遷移ラベルを持つ系統がない');
+    } else if (!s.label.common) {
+      lines.push(`ラベル位置: 慣習を比べられる系統が ${s.label.known} 件しかない${mixed}`);
+    } else if (!s.label.odd) {
+      lines.push(`ラベル位置: ${s.label.known} 系統とも遷移ラベルは${s.label.commonLabel}のメッセージを指している${mixed}`);
+    } else {
+      lines.push(`ラベル位置: 多数派 (${s.label.commonLabel}) とズレた系統 ${s.label.odd} 件 / ${s.label.known} 件`
+        + ` (${s.label.oddNames.join(', ')})${mixed}`);
+    }
   }
   if (s.svg) {
     // 出力物は DSL の指摘ではないので合計には足さない。「図は直っているが
