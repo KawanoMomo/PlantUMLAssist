@@ -133,4 +133,46 @@ describe('diagram-rail — 左端の図種レール (design 1a)', () => {
       expect(btn.indexOf('<svg')).toBeLessThan(btn.indexOf('rail-code'));
     });
   });
+
+  // ── design 7a: レール最下段の設定も線画 + 略号 CFG にする (BLK-builder-20260908-1103-1)
+  describe('設定ボタン (design 7a)', () => {
+    test('glyphSvg: config も 6 図種と同じ 16x16・線幅 1 の <svg> になる', () => {
+      var svg = rail.glyphSvg('config');
+      expect(svg).toContain('viewBox="0 0 16 16"');
+      expect(svg).toContain('stroke="currentColor"');
+      expect(svg).toContain('stroke-width="1"');
+      expect(svg).toContain('class="rail-glyph"');
+      expect(svg).toContain('aria-hidden="true"');
+    });
+
+    test('glyphFor: config の線画は 6 図種のどれとも違う', () => {
+      var g = rail.glyphFor('config');
+      expect(g.length).toBeGreaterThan(0);
+      rail.items().forEach(function(it) {
+        expect(rail.glyphFor(it.type)).not.toBe(g);
+      });
+    });
+
+    test('config は図種ではない (図種の巡回・レール本体には出ない)', () => {
+      expect(rail.isKnownType('config')).toBe(false);
+      expect(rail.items().map(it => it.type)).not.toContain('config');
+      expect(rail.stepType('plantuml-state', 1)).toBe('plantuml-sequence');
+      expect(rail.buildRailHtml('plantuml-sequence')).not.toContain('rail-config');
+    });
+
+    test('buildConfigHtml: id=rail-config の .rail-btn に線画と略号 CFG が入る', () => {
+      var html = rail.buildConfigHtml();
+      expect(html).toContain('id="rail-config"');
+      expect(html).toContain('class="rail-btn"');
+      expect((html.match(/<svg/g) || []).length).toBe(1);
+      expect(html).toContain('<span class="rail-code">CFG</span>');
+      expect(html).toContain('title="設定"');
+    });
+
+    test('buildConfigHtml: 略号は線画の後ろ (図種ボタンと同じ読み上げ順)で、絵文字は使わない', () => {
+      var html = rail.buildConfigHtml();
+      expect(html.indexOf('<svg')).toBeLessThan(html.indexOf('rail-code'));
+      expect(html).not.toContain('⚙');
+    });
+  });
 });

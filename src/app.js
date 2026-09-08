@@ -1030,6 +1030,10 @@ function init() {
 
     var cfg = document.getElementById('rail-config');
     var cfgBtn = document.getElementById('btn-config');
+    // design 7a: 最下段の設定も線画 + 略号 CFG に差し替える。絵文字 ⚙ だと
+    // 大きさも色も図種ボタンと揃わないため (HTML 側は fallback として残す)。
+    if (cfg && rail.buildConfigHtml) cfg.outerHTML = rail.buildConfigHtml();
+    cfg = document.getElementById('rail-config');
     if (cfg && cfgBtn) cfg.addEventListener('click', function() { cfgBtn.click(); });
   })();
 
