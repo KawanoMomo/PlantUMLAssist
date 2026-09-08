@@ -11792,6 +11792,7 @@ function renderDeliveryPanel() {
 
   html += '<div id="dp-status" style="margin-top:8px;font-size:11px;color:var(--text-secondary);"></div>';
   html += '<div style="display:flex;gap:8px;margin-top:12px;">'
+    + '<button id="dp-review" style="flex:2;' + BTN + 'padding:8px;">\u{1F50D} 変更前後を見比べる</button>'
     + '<button id="dp-build" style="flex:2;' + BTN + 'padding:8px;">\u{1F4E6} この内容で zip を作る</button>'
     + '<button id="dp-close" style="flex:1;' + BTN + 'padding:8px;">閉じる</button></div>';
 
@@ -11822,6 +11823,8 @@ function renderDeliveryPanel() {
   if (noneBtn) noneBtn.addEventListener('click', function() { _dpDocs = []; renderDeliveryPanel(); });
   var buildBtn = document.getElementById('dp-build');
   if (buildBtn) buildBtn.addEventListener('click', function() { buildDeliveryPackage(); });
+  var reviewBtn = document.getElementById('dp-review');
+  if (reviewBtn) reviewBtn.addEventListener('click', function() { openDeliveryReview(null); });
   return { picked: picked, submit: sub, change: change };
 }
 
@@ -11832,6 +11835,9 @@ function openDeliveryPanel() {
   // 題と版数も、閉じたときの入力ではなく前回提出の控えから引き直す
   // (前回 1.0 で出したなら次は 1.1 が既定になる)。
   _dpDocs = null;
+  // 見比べ用に描いた SVG も捨てる (前に開いたときの絵を今の puml として見せない)。
+  _drCache = {};
+  _drName = null;
   var content = document.getElementById('dp-modal-content');
   if (content) content.innerHTML = '';
   var model = renderDeliveryPanel();
@@ -11883,6 +11889,143 @@ function buildDeliveryPackage() {
   });
 }
 
+// ── 提出前レビュー (変更前後を並べて出す) ─────────────────────────────────
+// BLK-primary-20260908-1903-wish: 納品パッケージは「差分の行数」までしか言わず、
+// 客の目に何が違って見えるかはタブを 1 枚ずつ切り替えて見比べるしかなかった。
+// ここは前回提出時点の puml を描き直した SVG と今の SVG を、並べる / 重ねるで出す。
+// 判断は src/core/delivery-review.js の職掌。ここは描画と DOM だけ。
+
+var _drMode = 'side';   // 'side' | 'overlay'
+var _drName = null;     // 今見比べている図の name
+var _drCache = {};      // name -> { before: svg|null, after: svg|null }
+
+function _drEntries() {
+  var board = _dpBoard(_dpSelectedDocs());
+  return board ? board.entries : [];
+}
+
+function _drDocByName(name) {
+  var found = null;
+  _dpSelectedDocs().forEach(function(d) { if (d.name === name) found = d; });
+  return found;
+}
+
+// 前回提出時点の SVG と今の SVG を用意する。前回が無い図 (新規) は before が null。
+function _drLoad(name) {
+  var DP = window.MA.deliveryPackage;
+  if (_drCache[name]) return Promise.resolve(_drCache[name]);
+  var doc = _drDocByName(name);
+  if (!doc || !DP) return Promise.resolve({ before: null, after: null });
+  var base = DP.baselineOf(name);
+  var jobs = [
+    Promise.resolve(renderDslToSvg(doc.dsl)).then(function(s) { return s; }, function() { return null; }),
+    base ? Promise.resolve(renderDslToSvg(base.dsl)).then(function(s) { return s; }, function() { return null; })
+         : Promise.resolve(null),
+  ];
+  return Promise.all(jobs).then(function(r) {
+    _drCache[name] = { after: r[0], before: r[1] };
+    return _drCache[name];
+  });
+}
+
+function renderDeliveryReview(pair) {
+  var DR = window.MA.deliveryReview;
+  var content = document.getElementById('dr-modal-content');
+  if (!DR || !content) return null;
+  var esc = window.MA.htmlUtils.escHtml;
+  var entries = _drEntries();
+  var rows = DR.plan(entries);
+  var p = pair || { before: null, after: null };
+  var d = DR.diff(p.before, p.after);
+
+  var BTN = 'background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;padding:3px 10px;font-size:11px;';
+  var html = '<style>' + DR.overlayCss() + '</style>'
+    + '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">\u{1F50D} 提出前レビュー（変更前後を並べる）</h3>'
+    + '<div id="dr-headline" style="font-size:11px;color:var(--text-secondary);">' + esc(DR.headline(entries)) + '</div>';
+
+  html += '<div id="dr-tabs" style="display:flex;flex-wrap:wrap;gap:4px;margin:10px 0;">';
+  rows.forEach(function(r) {
+    var on = r.name === _drName;
+    var mark = r.status === 'changed' ? '変更' : (r.status === 'new' ? '新規' : '同じ');
+    html += '<button type="button" class="dr-pick" data-name="' + esc(r.name) + '" style="' + BTN
+      + (on ? 'outline:2px solid var(--accent);' : '') + '">' + esc(r.name)
+      + ' <span style="color:var(--text-secondary);">' + esc(mark) + '</span></button>';
+  });
+  html += '</div>';
+
+  html += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">'
+    + '<button type="button" id="dr-mode" style="' + BTN + '">' + esc(DR.modeLabel(_drMode))
+    + '（切り替え）</button>'
+    + '<span id="dr-summary" style="font-size:11px;color:var(--text-primary);">' + esc(DR.summaryLine(d)) + '</span>'
+    + '</div>';
+
+  var before = p.before ? p.before : '';
+  var after = p.after ? p.after : '<div style="font-size:11px;color:var(--text-secondary);">描けませんでした</div>';
+  html += '<div id="dr-view" style="border:1px solid var(--border);border-radius:3px;padding:8px;background:var(--bg-primary);overflow:auto;max-height:52vh;">';
+  if (_drMode === 'overlay') {
+    html += '<div class="dr-stack">'
+      + '<div class="dr-before">' + before + '</div>'
+      + '<div class="dr-after">' + after + '</div></div>';
+  } else {
+    html += '<div class="dr-side">'
+      + '<div><div style="font-size:10px;color:var(--accent);font-weight:bold;">前回提出</div>'
+      + (before || '<div style="font-size:11px;color:var(--text-secondary);">前回提出には入っていません</div>') + '</div>'
+      + '<div><div style="font-size:10px;color:var(--accent);font-weight:bold;">今回</div>' + after + '</div>'
+      + '</div>';
+  }
+  html += '</div>';
+
+  html += '<div id="dr-detail" style="margin-top:8px;font-size:11px;color:var(--text-primary);">';
+  if (d.added.length) {
+    html += '<div id="dr-added">増えた文字: ' + esc(d.added.join(' / ')) + '</div>';
+  }
+  if (d.removed.length) {
+    html += '<div id="dr-removed">消えた文字: ' + esc(d.removed.join(' / ')) + '</div>';
+  }
+  d.shape.forEach(function(s) {
+    html += '<div class="dr-shape">' + esc(s.label + ' の数 ' + s.was + ' → ' + s.now) + '</div>';
+  });
+  html += '</div>';
+
+  html += '<div style="display:flex;gap:8px;margin-top:12px;">'
+    + '<button type="button" id="dr-close" style="flex:1;' + BTN + 'padding:8px;">納品パッケージに戻る</button></div>';
+
+  content.innerHTML = html;
+
+  Array.prototype.forEach.call(content.querySelectorAll('.dr-pick'), function(b) {
+    b.addEventListener('click', function() { openDeliveryReview(b.getAttribute('data-name')); });
+  });
+  var modeBtn = document.getElementById('dr-mode');
+  if (modeBtn) modeBtn.addEventListener('click', function() {
+    _drMode = window.MA.deliveryReview.toggleMode(_drMode);
+    renderDeliveryReview(_drCache[_drName] || p);
+  });
+  var close = document.getElementById('dr-close');
+  if (close) close.addEventListener('click', function() {
+    var m = document.getElementById('dr-modal');
+    if (m) m.style.display = 'none';
+  });
+  return d;
+}
+
+function openDeliveryReview(name) {
+  var DR = window.MA.deliveryReview;
+  var modal = document.getElementById('dr-modal');
+  if (!DR || !modal) return Promise.resolve(null);
+  var target = name || DR.firstOf(_drEntries());
+  if (!target) return Promise.resolve(null);
+  _drName = target;
+  modal.style.display = 'flex';
+  renderDeliveryReview(_drCache[target] || { before: null, after: null });
+  var head = document.getElementById('dr-summary');
+  if (head && !_drCache[target]) head.textContent = '描いています…';
+  return _drLoad(target).then(function(pair) {
+    // 描いている間に別の図に移っていたら、その図の表示を上書きしない。
+    if (_drName !== target) return null;
+    return renderDeliveryReview(pair);
+  });
+}
+
 function setupDeliveryPackage() {
   var btn = document.getElementById('btn-tab-delivery');
   var modal = document.getElementById('dp-modal');
@@ -11890,6 +12033,10 @@ function setupDeliveryPackage() {
   btn.addEventListener('click', function() { openDeliveryPanel(); });
   modal.addEventListener('click', function(ev) {
     if (ev.target === modal) modal.style.display = 'none';
+  });
+  var review = document.getElementById('dr-modal');
+  if (review) review.addEventListener('click', function(ev) {
+    if (ev.target === review) review.style.display = 'none';
   });
 }
 
