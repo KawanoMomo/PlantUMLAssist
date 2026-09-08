@@ -126,6 +126,58 @@ window.MA.saveDiff = (function() {
     return { added: added, removed: removed };
   }
 
+  // BLK-primary-20260909-0303-wish: 会議で「この図、変わった?」に答えるには件数では足りず、
+  // どの行が消えてどの行が入ったかを見せる必要がある。基準と今の本文を行単位で並べる。
+  // 変わっていない行は前後 ctx 行だけ残す (全文を出すと変更点が埋もれる)。
+  function diffLines(name, dsl, ctx) {
+    var b = baselineOf(name);
+    var now = normalize(dsl).split('\n');
+    var before = b ? b.dsl.split('\n') : [];
+    var keep = (ctx == null) ? 1 : Math.max(0, ctx);
+
+    // 共通部分列 (LCS) の長さ表。図 1 枚の行数なので素直に組む。
+    var n = before.length, m = now.length;
+    var lcs = [];
+    for (var i = 0; i <= n; i++) lcs.push(new Array(m + 1).fill(0));
+    for (i = n - 1; i >= 0; i--) {
+      for (var j = m - 1; j >= 0; j--) {
+        lcs[i][j] = before[i] === now[j]
+          ? lcs[i + 1][j + 1] + 1
+          : Math.max(lcs[i + 1][j], lcs[i][j + 1]);
+      }
+    }
+    var all = [];
+    i = 0; j = 0;
+    while (i < n && j < m) {
+      if (before[i] === now[j]) { all.push({ mark: ' ', text: before[i] }); i++; j++; }
+      else if (lcs[i + 1][j] >= lcs[i][j + 1]) { all.push({ mark: '-', text: before[i] }); i++; }
+      else { all.push({ mark: '+', text: now[j] }); j++; }
+    }
+    while (i < n) { all.push({ mark: '-', text: before[i] }); i++; }
+    while (j < m) { all.push({ mark: '+', text: now[j] }); j++; }
+
+    // 変更が 1 行も無ければ空にする (「変わっていない」を件数 0 で言い切れる)。
+    var changed = all.some(function(r) { return r.mark !== ' '; });
+    if (!changed) return [];
+
+    // 変更行の前後 keep 行だけを残す。落とした区間は 1 行にまとめる。
+    var near = all.map(function() { return false; });
+    all.forEach(function(r, k) {
+      if (r.mark === ' ') return;
+      for (var t = k - keep; t <= k + keep; t++) if (t >= 0 && t < all.length) near[t] = true;
+    });
+    var out = [];
+    var skipped = 0;
+    all.forEach(function(r, k) {
+      if (near[k]) {
+        if (skipped) { out.push({ mark: '…', text: '変更なし ' + skipped + ' 行' }); skipped = 0; }
+        out.push(r);
+      } else skipped++;
+    });
+    if (skipped) out.push({ mark: '…', text: '変更なし ' + skipped + ' 行' });
+    return out;
+  }
+
   // 開いている全図の内訳。reviewer はこれ 1 つで読む要否を判断する。
   function summary(docs) {
     var out = { total: 0, changed: [], added: [], same: [], changedCount: 0, hasChange: false, markedAt: '' };
@@ -171,6 +223,7 @@ window.MA.saveDiff = (function() {
     statusOf: statusOf,
     isDirty: isDirty,
     changedLines: changedLines,
+    diffLines: diffLines,
     summary: summary,
     badgeText: badgeText,
     reset: reset,

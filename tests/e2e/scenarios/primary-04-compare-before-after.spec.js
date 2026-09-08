@@ -5,6 +5,10 @@
 // BLK-primary-20260908-2203-wish: 「並べて見る」は今開いているタブどうしを並べるだけで、
 // 同じ図の変更前と今は並べられなかった(Ctrl+Z で戻すと変更後が消えるので往復になる)。
 // 一括置換を当てた瞬間に変更前を控え、その図自身を候補に出すようにした。
+//
+// BLK-primary-20260909-0303-wish: 「変更前後を見せる」1 つの業務に「⇔ 並べて見る」と
+// 「± 差分」の 2 画面があり、外れた方を開いて閉じ直す往復が毎回出ていた。
+// 参照ペインの中のタブにして、開いたまま行き来できるようにした。
 const { test, expect } = require('@playwright/test');
 const { shotOut } = require('../helpers');
 const S = require('./_scenario');
@@ -61,10 +65,29 @@ test('手順4 置換の前後を並べて見せられ、その画面を控えら
   // いつの・どの置換の前かが読める(古い控えを今日の変更前と取り違えない)。
   await expect(page.locator('#compare-before-note')).toContainText('SpiDrv → Spi_Driver');
 
-  // 到達条件その4: 会議で見せるための静止画を控えられる。
+  // 到達条件その4: 「この図、変わった?」と聞かれたら、同じパネルの中でタブを
+  // 切り替えるだけで前回保存時点との差分に移れる (BLK-primary-20260909-0303-wish)。
+  // 「並べて見る」を閉じて「± 差分」を開き直す往復が要らないことがこの手順の肝。
+  await page.locator('#compare-mode-diff').click();
+  await expect(page.locator('#compare-pane')).toBeVisible();
+  await expect(page.locator('#compare-diff-view')).toBeVisible();
+  await expect(page.locator('#compare-diff-head')).toContainText('spi_init_sequence');
+
+  // 差分タブは「前回保存時点と比べてどうか」を言い切る (自動保存が効いていれば
+  // 「変更なし」、直後に直していれば +N −M。どちらでも会議の場で答えになる)。
+  // 何行がどう変わったかの中身は unit (blk-primary-0303-wish-compare-diff-lines) で守る。
+  await expect(page.locator('#compare-diff-head')).toContainText('前回保存時点');
+
+  // 到達条件その5: 差分から見比べへ戻っても、変更前の図はそのまま出ている
+  // (会議中にパネルを開き直さない)。
+  await page.locator('#compare-mode-ref').click();
+  await expect(page.locator('#compare-svg')).toContainText('SpiDrv', { timeout: 20000 });
+  await expect(sel).toHaveValue('@before');
+
+  // 会議で見せるための静止画を控えられる。
   await page.screenshot({ path: shotOut('primary-04-compare.png'), fullPage: true });
 
-  // 到達条件その5: 会議が終わったら控えを捨てられ、候補も消える
+  // 到達条件その6: 会議が終わったら控えを捨てられ、候補も消える
   // (何日も前の控えが「変更前」として出続けない)。
   await page.locator('#btn-compare-before-drop').click();
   await page.waitForTimeout(500);
