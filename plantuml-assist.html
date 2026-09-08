@@ -742,6 +742,45 @@ html, body {
   cursor: pointer;
 }
 #folder-panel .folder-inv-unknown { font-size: 10px; padding: 1px 6px 4px; color: var(--text-secondary); }
+/* 上書きされる前の版 (BLK-junior-20260908-2003)。行の末尾に付き、押すと
+   すぐ下に版が開く。版のある図にしか出ないので、普段の一覧は今までのまま。 */
+#folder-panel button.folder-versions {
+  flex: 0 0 auto;
+  width: auto;
+  font-size: 9px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 4px;
+  margin-left: 3px;
+  background: transparent;
+  color: var(--text-secondary);
+}
+#folder-panel .folder-version-list {
+  padding: 2px 6px 4px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+#folder-panel button.folder-version {
+  width: 100%;
+  text-align: left;
+  font-size: 10px;
+  padding: 1px 4px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-primary);
+}
+#folder-panel .folder-gone-versions-head { color: var(--accent-red); }
+#folder-panel button.folder-gone-name {
+  flex: 1 1 auto;
+  text-align: left;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+}
 /* 実データ / テンプレの分類 (BLK-reviewer-20260908-0203-wish) */
 #folder-panel button.folder-role {
   flex: 0 0 auto;
@@ -5002,6 +5041,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/folder-select.js"></script>
 <script src="src/core/folder-filter.js"></script>
 <script src="src/core/peek-folder.js"></script>
+<script src="src/core/version-history.js"></script>
 <script src="src/core/draft-mark.js"></script>
 <script src="src/core/target-set.js"></script>
 <script src="src/core/folder-reopen.js"></script>

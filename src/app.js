@@ -5201,6 +5201,10 @@ function setupTabs() {
   // このときだけ今開いている図の部品を自動で選ぶ。'' は「選択を外した」であり、
   // 自動選択で埋め直さない (外したのに別の部品が出ると、見ている棚卸しを取り違える)。
   var _invPick = null;
+  // BLK-junior-20260908-2003: 図名 → 上書き前に控えてある版の数と、本体がもう
+  // 無いのに版だけ残っている図。server が一覧と同じ呼び出しで返す。
+  var versionCounts = {};
+  var goneVersions = [];
   // BLK-reviewer-20260908-0103: 図名 → SVG が puml に追いついているか。
   // `ls -l` で puml と svg を 1 枚ずつ突き合わせる代わりに、一覧が答える。
   var svgStatus = {};
@@ -5416,6 +5420,15 @@ function setupTabs() {
 
       // 「今読んでいる版が、読み始めた瞬間のものか」は中身では分からない。
       // server が返した「今」と各図の更新時刻の差だけで判定する。
+      // BLK-junior-20260908-2003: 上書きで消えた中身の控え。一覧の時点で
+      // 「この図には前の版がある」「本体は消えたが版は残っている」を出す。
+      versionCounts = {};
+      entries.forEach(function(e) {
+        if (e && e.name && typeof e.versions === 'number') versionCounts[e.name] = e.versions;
+      });
+      goneVersions = window.MA.versionHistory
+        ? window.MA.versionHistory.goneRows(res) : [];
+
       var WA = window.MA.writeActivity;
       writeScan = WA ? WA.scan(entries, res && res.now) : null;
       writeStatus = WA ? WA.statusMap(writeScan) : {};
@@ -5446,6 +5459,7 @@ function setupTabs() {
         appendWriteSection(panel, dir);
         plain.items.forEach(function(e) { panel.appendChild(folderRow(e.name || e, null, null)); });
         appendDraftSection(plain.drafts, function(e) { return folderRow(e.name || e, null, null); });
+        appendGoneVersionsSection(panel);
         syncFolderPickUi();
         applyFolderFilter();
         focusFolderFilter();
@@ -5480,6 +5494,7 @@ function setupTabs() {
       }
       sp.items.forEach(function(r) { panel.appendChild(rowOf(r)); });
       appendDraftSection(sp.drafts, rowOf);
+      appendGoneVersionsSection(panel);
 
       RW.removed(seen, entries).forEach(function(name) {
         var gone = document.createElement('div');
@@ -6177,7 +6192,132 @@ function setupTabs() {
     if (status === 'changed' || status === 'new') row.appendChild(folderDiffButton(name, status));
     if (window.MA.targetSet) row.appendChild(folderTargetButton(name));
     row.appendChild(folderDraftButton(name));
+    var vb = folderVersionButton(name);
+    if (vb) row.appendChild(vb);
     return row;
+  }
+
+  // BLK-junior-20260908-2003: 同じ名前に別の図を保存すると前の中身は消える。
+  // server は上書きの直前に控えを取るので、その版を一覧から開けるようにする。
+  // 版が無い図にはボタンを出さない (押しても何も無い行を増やさない)。
+  function folderVersionButton(name) {
+    var VH = window.MA.versionHistory;
+    if (!VH) return null;
+    var label = VH.countLabel(versionCounts[name]);
+    if (!label) return null;
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'folder-versions';
+    b.setAttribute('data-versions-name', name);
+    b.textContent = label;
+    b.title = 'この名前で上書きされる前の中身。図種を変えて保存し直した前の図もここに残っています';
+    b.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      toggleVersionList(name, b);
+    });
+    return b;
+  }
+
+  // 版の一覧を、押した行のすぐ下に開く / 閉じる。パネルを閉じないので、
+  // 「どの版がその図だったか」を見比べてから 1 回で開ける。
+  function toggleVersionList(name, btn) {
+    var host = btn.parentNode || panel;
+    var open = panel.querySelector('[data-version-list="' + name + '"]');
+    if (open) { open.parentNode.removeChild(open); return; }
+    var box = document.createElement('div');
+    box.className = 'folder-version-list';
+    box.setAttribute('data-version-list', name);
+    box.textContent = '読み込み中…';
+    if (host.nextSibling) host.parentNode.insertBefore(box, host.nextSibling);
+    else host.parentNode.appendChild(box);
+    loadVersions(name).then(function(rows) {
+      box.textContent = '';
+      if (!rows.length) {
+        box.textContent = '控えてある版がありません';
+        return;
+      }
+      rows.forEach(function(r) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'folder-version';
+        b.setAttribute('data-version-stamp', r.stamp);
+        b.setAttribute('data-version-of', name);
+        b.textContent = r.label + (r.kind ? '  ' + r.kind : '')
+          + (r.lines != null ? '  ' + r.lines + ' 行' : '');
+        b.title = r.head || 'この版を別のタブで開く（今の図は上書きしません）';
+        b.addEventListener('click', function(ev) {
+          ev.stopPropagation();
+          openVersion(name, r.stamp);
+        });
+        box.appendChild(b);
+      });
+    }, function() { box.textContent = '版の一覧を読めませんでした'; });
+  }
+
+  function loadVersions(name) {
+    var VH = window.MA.versionHistory;
+    var url = '/autosave-versions?dir=' + encodeURIComponent(_wsFileDir())
+      + '&type=' + encodeURIComponent(name);
+    return window.fetch(url)
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(data) { return VH ? VH.rows(data) : []; });
+  }
+
+  // 版を開く。タブ名に刻印を付けるので、開いたまま自動保存が走っても
+  // 今の {name}.puml を過去の中身で塗り潰さない。
+  function openVersion(name, stamp) {
+    var VH = window.MA.versionHistory;
+    var url = '/autosave-versions?dir=' + encodeURIComponent(_wsFileDir())
+      + '&type=' + encodeURIComponent(name) + '&stamp=' + encodeURIComponent(stamp);
+    window.fetch(url).then(function(r) { return r.ok ? r.text() : null; }).then(function(text) {
+      if (text == null) {
+        if (window.MA.toast) window.MA.toast.show('この版を読めませんでした');
+        return;
+      }
+      closePanel();
+      saveActiveDoc();
+      var detected = window.MA.workspace.detectType(text);
+      openExistingFile({
+        name: VH ? VH.openName(name, stamp) : (name + '@' + stamp),
+        dsl: text,
+        diagramType: (detected && modules[detected]) ? detected : currentDiagramType,
+      });
+      applyActiveDoc();
+      if (window.MA.toast) {
+        window.MA.toast.show(name + ' の ' + (VH ? VH.label(stamp) : stamp)
+          + ' の版を別タブで開きました（今の図はそのままです）');
+      }
+    });
+  }
+
+  // 本体が消えて版だけ残っている図。junior の状態遷移図のように、
+  // 同じ名前へ別の図を保存し続けて実体が無くなったものはここにだけ出る。
+  function appendGoneVersionsSection(host) {
+    if (!goneVersions.length) return;
+    var head = document.createElement('div');
+    head.className = 'folder-summary folder-gone-versions-head';
+    head.id = 'folder-gone-versions';
+    head.textContent = '今は無いが前の版が残っている図（' + goneVersions.length + ' 件）';
+    host.appendChild(head);
+    goneVersions.forEach(function(g) {
+      var row = document.createElement('div');
+      row.className = 'folder-row folder-gone-row';
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'folder-gone-name';
+      b.setAttribute('data-gone-name', g.name);
+      b.textContent = g.name;
+      b.title = 'この名前の図はもうありませんが、上書きされる前の中身が残っています';
+      row.appendChild(b);
+      versionCounts[g.name] = g.versions;
+      var vb = folderVersionButton(g.name);
+      if (vb) row.appendChild(vb);
+      b.addEventListener('click', function(ev) {
+        ev.stopPropagation();
+        toggleVersionList(g.name, vb || b);
+      });
+      host.appendChild(row);
+    });
   }
 
   // 前回見た版から変わった図にだけ付く [差分]。押すと旧DSL/新DSL を並べて出す。
