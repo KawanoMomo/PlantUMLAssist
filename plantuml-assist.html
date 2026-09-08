@@ -1642,6 +1642,35 @@ html, body {
 #peek-dirs .peek-dir.selected, #peek-files .peek-file.selected { border-color: var(--accent); }
 #peek-dirs .peek-dir.current { color: var(--text-secondary); }
 #peek-dirs .peek-head, #peek-files .peek-head { color: var(--text-secondary); padding: 2px 6px 6px; }
+/* BLK-reviewer-20260909-0603-wish: 覗いたフォルダの一覧にも SVG の鮮度を出す。
+   行の印は一致にも出す (無印を「確かめてある」と読ませない)。 */
+#peek-files .peek-file { display: flex; align-items: center; gap: 6px; }
+#peek-files .peek-file .peek-file-name {
+  flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+#peek-files .peek-svg-badge {
+  flex: 0 0 auto;
+  font-size: 9px;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  border-radius: 2px;
+  padding: 0 3px;
+  white-space: nowrap;
+}
+#peek-files .peek-svg-badge.alert {
+  border-color: var(--accent-red); color: var(--accent-red); font-weight: bold;
+}
+#peek-files .peek-svg-summary {
+  font-size: 10px; color: var(--text-secondary); padding: 0 6px 4px; line-height: 1.5;
+}
+#peek-files .peek-svg-summary.has-issue { color: var(--accent-red); }
+#peek-files button.peek-svg-verify {
+  display: block; width: 100%; text-align: left;
+  border: 1px solid var(--border); border-radius: 3px; background: var(--bg-tertiary);
+  color: var(--text-primary); font-size: 10px; padding: 2px 6px; cursor: pointer;
+  margin: 0 0 6px;
+}
+#peek-files button.peek-svg-verify:disabled { color: var(--text-secondary); cursor: default; }
 #peek-view { flex: 1 1 0; min-width: 0; overflow: auto; padding: 10px 14px; }
 #peek-title { font-size: 12px; color: var(--text-primary); padding-bottom: 6px; }
 #peek-svg { background: #fff; border-radius: 4px; padding: 8px; overflow: auto; }
@@ -5471,6 +5500,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/folder-select.js"></script>
 <script src="src/core/folder-filter.js"></script>
 <script src="src/core/peek-folder.js"></script>
+<script src="src/core/peek-freshness.js"></script>
 <script src="src/core/audit-scope.js"></script>
 <script src="src/core/domain-cohort.js"></script>
 <script src="src/core/domain-verdict.js"></script>

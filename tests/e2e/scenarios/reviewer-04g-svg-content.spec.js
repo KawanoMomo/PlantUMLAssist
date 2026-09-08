@@ -65,6 +65,14 @@ async function putRawSvg(page, name, dsl) {
   fs.writeFileSync(path.join(ABS, name + '.svg'), svg, 'utf-8');
 }
 
+// 同じものを任意のフォルダに置く (覗き先の図を用意するため)。
+async function putRawSvgIn(page, dir, name, dsl) {
+  const svg = await render(page, dsl);
+  expect(svg).not.toBeNull();
+  const abs = path.join(__dirname, '..', '..', '..', dir.replace(/^\.\//, ''));
+  fs.writeFileSync(path.join(abs, name + '.svg'), svg, 'utf-8');
+}
+
 function clearDir(page) {
   return page.evaluate(async (d) => {
     await fetch('/autosave?dir=' + encodeURIComponent(d), { method: 'DELETE' });
@@ -118,4 +126,92 @@ test('手順4.10 印の無い SVG を一覧の上で名指しし、その図だ�
   await expect(page.locator('#folder-svg-unstamped')).toHaveCount(0);
   await expect(page.locator('#folder-svg-labels-summary'))
     .toHaveText('labels: 2 枚とも今の puml と一致しています');
+});
+
+// BLK-reviewer-20260909-0603-wish: 同じ手順4.10 でも、見るのが他人のフォルダ
+// (primary が置いた図) のときは、GUI の「他のフォルダを見る」一覧にファイル名と
+// 更新日時しか出ず、puml と svg の中身が食い違っているかは分からなかった。
+// 実際 primary/diagram1.puml の書き換えに svg が追いついていない事故に気付けたのは、
+// reviewer が毎回 CLI で /verify-svg を叩いていたからで、GUI からではない。
+// 覗いた一覧の行に最初から印が付き、印だけでは言えない図もその場で確かめられる
+// ことを到達条件にする。
+const PEEK_ROOT = DIR + '-peek';
+const MY_DIR = PEEK_ROOT + '/reviewer';
+const OTHER_DIR = PEEK_ROOT + '/primary';
+
+const OLD_DSL = '@startuml\nparticipant Spi_Drv\nparticipant Mcu\n'
+  + 'Spi_Drv -> Mcu: init\n@enduml';
+
+function putFileIn(page, dir, name, dsl) {
+  return page.evaluate(async (a) => {
+    await fetch('/autosave', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: a.name, dir: a.dir, dsl: a.dsl }),
+    });
+  }, { name, dsl, dir });
+}
+
+async function putStampedSvgIn(page, dir, name, dsl) {
+  const svg = await render(page, dsl);
+  expect(svg).not.toBeNull();
+  await page.evaluate(async (a) => {
+    await fetch('/autosave-svg', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: a.name, dir: a.dir, svg: a.svg }),
+    });
+  }, { name, dir, svg });
+}
+
+test('手順4.10 他人のフォルダを覗いた一覧にも SVG の鮮度が最初から出る', async ({ page }) => {
+  test.setTimeout(180000);
+  await page.addInitScript((d) => {
+    try {
+      window.localStorage.clear();
+      window.localStorage.setItem('plantuml-autosave-config',
+        JSON.stringify({ enabled: true, debounceMs: 200, restoreMode: 'auto', backend: 'file', fileDir: d }));
+    } catch (e) {}
+  }, MY_DIR);
+  await gotoApp(page);
+  await page.evaluate(async (a) => {
+    for (const d of [a.mine, a.other]) {
+      await fetch('/autosave?dir=' + encodeURIComponent(d), { method: 'DELETE' });
+    }
+  }, { mine: MY_DIR, other: OTHER_DIR });
+  // 自分のフォルダにも 1 枚置く (覗き先の一覧が「隣のフォルダ」として出る形にする)。
+  await putFileIn(page, MY_DIR, 'R04g_mine', NOW);
+  // 追いついている図 / 書き換えに svg が追いついていない図 / 印を刻む前の svg。
+  await putFileIn(page, OTHER_DIR, 'R04g_ok', NOW);
+  await putStampedSvgIn(page, OTHER_DIR, 'R04g_ok', NOW);
+  await putFileIn(page, OTHER_DIR, 'R04g_drift', OLD_DSL);
+  await putStampedSvgIn(page, OTHER_DIR, 'R04g_drift', OLD_DSL);
+  await putFileIn(page, OTHER_DIR, 'R04g_drift', NOW);      // puml だけ書き換える
+  await putFileIn(page, OTHER_DIR, 'R04g_raw', NOW);
+  await putRawSvgIn(page, OTHER_DIR, 'R04g_raw', NOW);
+
+  // 到達条件その1: 覗いただけで (隣が 1 つなので追加のクリック無しで) 印が並ぶ。
+  await page.locator('#btn-tab-peek').click();
+  await page.waitForSelector('#peek-modal');
+  const files = page.locator('#peek-files');
+  await expect(files.locator('.peek-file[data-file-name="R04g_ok"] .peek-svg-badge'))
+    .toHaveText('内容一致');
+  await expect(files.locator('.peek-file[data-file-name="R04g_drift"] .peek-svg-badge'))
+    .toHaveText('内容ずれ');
+  await expect(files.locator('.peek-file[data-file-name="R04g_raw"] .peek-svg-badge'))
+    .toHaveText('未刻印');
+
+  // 到達条件その2: フォルダ全体の答えが 1 行で出る (/verify-svg を叩き直さない)。
+  await expect(page.locator('#peek-svg-summary'))
+    .toHaveText('内容: 一致 1 枚 / ずれ 1 枚 / 未確認 1 枚');
+
+  // 到達条件その3: 印だけでは言えない図は、その場で上書きせずに確かめられる。
+  const verify = page.locator('#peek-svg-verify');
+  await expect(verify).toHaveText('SVG の中身を確かめる（2 枚）');
+  await verify.click();
+  await expect(page.locator('#peek-svg-summary'))
+    .toHaveText('内容: 一致 2 枚 / ずれ 1 枚', { timeout: 120000 });
+  await expect(files.locator('.peek-file[data-file-name="R04g_raw"] .peek-svg-badge'))
+    .toHaveText('内容一致');
+  // 確かめても、ずれている図は「ずれ」のまま (作り直しは持ち主の仕事)。
+  await expect(files.locator('.peek-file[data-file-name="R04g_drift"] .peek-svg-badge'))
+    .toHaveText('内容ずれ');
 });
