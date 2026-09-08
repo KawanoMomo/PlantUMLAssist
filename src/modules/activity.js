@@ -449,8 +449,42 @@ window.MA.modules.plantumlActivity = (function() {
 
   var insertBeforeEnd = window.MA.dslUpdater.insertBeforeEnd;
 
+  // Activity では stop / end / kill / detach が流れの終端。末尾追加を @enduml の
+  // 直前に置くと足した行が終端の後ろに落ち、プレビューでは前とつながらない別フローに
+  // なる (気付くのに時間がかかり、直すには終端の移動か削除が要る)。
+  // 末尾が終端ならその手前に入れて、流れの中に置く。
+  var TERMINAL_RE = /^(stop|end|kill|detach)$/i;
+  function _tailTerminalIndex(lines) {
+    for (var i = lines.length - 1; i >= 0; i--) {
+      var s = lines[i].trim();
+      if (!s || RP.isEndUml(s)) continue;
+      return TERMINAL_RE.test(s) ? i : -1;
+    }
+    return -1;
+  }
+  // 流れの終端の手前に 1 行入れる。終端が無ければ従来どおり @enduml の直前。
+  function insertBeforeFlowEnd(text, newLine) {
+    var lines = text.split('\n');
+    var idx = _tailTerminalIndex(lines);
+    if (idx < 0) return insertBeforeEnd(text, newLine);
+    lines.splice(idx, 0, newLine);
+    return lines.join('\n');
+  }
+
+  // 新規タブの雛形 `start / :Hello world; / stop` の Hello world はプレースホルダ。
+  // 最初のアクションを足した時点で落とす。残すと利用者が別途消すことになり、
+  // 消し忘れると自分のアクション列が孤立フローに見える原因になる。
+  // 手を入れた図を巻き込まないよう、雛形と完全一致するときだけ落とす。
+  function _dropPlaceholder(text) {
+    var norm = String(text == null ? '' : text).replace(/\r\n/g, '\n');
+    if (norm.trim() !== template().trim()) return text;
+    return norm.split('\n').filter(function(l) {
+      return l.trim() !== ':Hello world;';
+    }).join('\n');
+  }
+
   function addAction(text, actionText) {
-    return insertBeforeEnd(text, fmtAction(actionText || ''));
+    return insertBeforeFlowEnd(_dropPlaceholder(text), fmtAction(actionText || ''));
   }
 
   // 複数行テキストの 1 行 = 1 アクションとして、末尾へまとめて追加する。
@@ -471,46 +505,47 @@ window.MA.modules.plantumlActivity = (function() {
 
   function addActions(text, block) {
     var items = splitActionLines(block);
-    var out = text;
+    if (!items.length) return text;
+    var out = _dropPlaceholder(text);
     for (var i = 0; i < items.length; i++) {
-      out = insertBeforeEnd(out, fmtAction(items[i]));
+      out = insertBeforeFlowEnd(out, fmtAction(items[i]));
     }
     return out;
   }
 
   function addIf(text, condition, thenLabel, elseLabel) {
     var out = text;
-    out = insertBeforeEnd(out, fmtIf(condition, thenLabel || 'yes'));
-    if (elseLabel) out = insertBeforeEnd(out, fmtElse(elseLabel));
-    out = insertBeforeEnd(out, 'endif');
+    out = insertBeforeFlowEnd(out, fmtIf(condition, thenLabel || 'yes'));
+    if (elseLabel) out = insertBeforeFlowEnd(out, fmtElse(elseLabel));
+    out = insertBeforeFlowEnd(out, 'endif');
     return out;
   }
 
   function addWhile(text, condition, label) {
     var out = text;
-    out = insertBeforeEnd(out, fmtWhile(condition, label || 'yes'));
-    out = insertBeforeEnd(out, 'endwhile');
+    out = insertBeforeFlowEnd(out, fmtWhile(condition, label || 'yes'));
+    out = insertBeforeFlowEnd(out, 'endwhile');
     return out;
   }
 
   function addRepeat(text, condition, label) {
     var out = text;
-    out = insertBeforeEnd(out, 'repeat');
-    out = insertBeforeEnd(out, fmtRepeatWhile(condition, label || 'yes'));
+    out = insertBeforeFlowEnd(out, 'repeat');
+    out = insertBeforeFlowEnd(out, fmtRepeatWhile(condition, label || 'yes'));
     return out;
   }
 
   function addFork(text, branchCount) {
     var n = Math.max(1, branchCount || 2);
     var out = text;
-    out = insertBeforeEnd(out, 'fork');
-    for (var i = 1; i < n; i++) out = insertBeforeEnd(out, 'fork again');
-    out = insertBeforeEnd(out, 'end fork');
+    out = insertBeforeFlowEnd(out, 'fork');
+    for (var i = 1; i < n; i++) out = insertBeforeFlowEnd(out, 'fork again');
+    out = insertBeforeFlowEnd(out, 'end fork');
     return out;
   }
 
   function addSwimlane(text, label) {
-    return insertBeforeEnd(text, fmtSwimlane(label));
+    return insertBeforeFlowEnd(text, fmtSwimlane(label));
   }
 
   function addNote(text, afterLine, position, noteText) {

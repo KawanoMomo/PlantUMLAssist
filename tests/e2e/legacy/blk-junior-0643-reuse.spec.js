@@ -105,6 +105,19 @@ test.describe('BLK-junior-0643 他の図から取り込む', () => {
     expect(bulk).not.toContain('Spi_Init()');
   });
 
+  // BLK-junior-20260909-0203: 真似る相手が 1 枚に決まっているとき、その図の名前で
+  // 絞れれば「表示中を全部選ぶ」がそのまま使える。
+  test('出どころの図名でも絞り込める', async ({ page }) => {
+    await twoTabs(page);
+    await page.locator('#seq-tail-reuse').click();
+    await page.locator('#reuse-filter').fill('diagram1');
+    await page.waitForTimeout(200);
+    await expect(page.locator('#reuse-list .reuse-row:visible')).toHaveCount(6);
+    await page.locator('#reuse-filter').fill('diagram9');
+    await page.waitForTimeout(200);
+    await expect(page.locator('#reuse-list .reuse-row:visible')).toHaveCount(0);
+  });
+
   test('書きかけの行は消えず、重複も増えない', async ({ page }) => {
     await twoTabs(page);
     await page.locator('#seq-tail-bulk').fill('actor Dev\nparticipant GpioDrv');

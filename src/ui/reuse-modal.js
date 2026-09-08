@@ -65,7 +65,10 @@ window.MA.reuseModal = (function() {
           // 本文だけの絞り込みでは足りない (BLK-junior-20260909-0203-wish)。
           var hay = (items[i].text + ' ' + (items[i].from || '')).toLowerCase();
           var hit = !q || hay.indexOf(q) >= 0;
+          // 行は inline style で display:flex を持つので、hidden 属性だけでは
+          // 隠れない (絞り込んでも一覧の見た目が変わらない)。display も切り替える。
           row.hidden = !hit;
+          row.style.display = hit ? 'flex' : 'none';
           if (!hit) row.querySelector('.reuse-check').checked = false;
         });
       });
