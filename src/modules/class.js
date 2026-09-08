@@ -1206,6 +1206,9 @@ window.MA.modules.plantumlClass = (function() {
           P.fieldHtml('Label', 'cl-tail-label', '', '例: domain') +
           P.primaryButtonHtml('cl-tail-add', '+ ' + kind + ' 追加');
       } else if (kind === 'relation') {
+        // BLK-junior-20260908-1203: From/To のどちらが親かがフォームから読めず、
+        // 継承を逆向きに張ってしまう。種類ごとの呼び名を見出しに出し、
+        // 「押すとこう入る」の 1 行と ⇄ 入替を添えて、追加する前に確かめられるようにする。
         html2 =
           P.selectFieldHtml('Kind', 'cl-tail-rkind', [
             { value: 'association',    label: 'Association (--)', selected: true },
@@ -1216,8 +1219,10 @@ window.MA.modules.plantumlClass = (function() {
             { value: 'nested',         label: 'Nested (+--)' },
             { value: 'dependency',     label: 'Dependency (..>)' },
           ]) +
-          P.selectFieldHtml('From', 'cl-tail-from', allOpts) +
-          P.selectFieldHtml('To', 'cl-tail-to', allOpts) +
+          _roleSelectHtml('cl-tail-from', 'from', 'association', allOpts) +
+          '<button id="cl-tail-rswap" type="button" style="font-size:11px;padding:3px 10px;margin:0 0 8px;cursor:pointer;">⇄ 入替</button>' +
+          _roleSelectHtml('cl-tail-to', 'to', 'association', allOpts) +
+          '<div id="cl-tail-rpreview" style="margin-bottom:8px;padding:4px 6px;font-family:var(--font-mono);font-size:11px;color:var(--text-secondary);background:var(--bg-tertiary);border-radius:3px;word-break:break-all;"></div>' +
           P.fieldHtml('Label', 'cl-tail-rlabel', '', '任意') +
           P.primaryButtonHtml('cl-tail-add', '+ Relation 追加');
       } else if (kind === 'note') {
@@ -1238,6 +1243,7 @@ window.MA.modules.plantumlClass = (function() {
           P.primaryButtonHtml('cl-tail-add', '+ Note 追加');
       }
       detailEl.innerHTML = html2;
+      if (kind === 'relation') _bindRelationRoles();
 
       P.bindEvent('cl-tail-add', 'click', function() {
         var t = ctx.getMmdText();
@@ -1790,6 +1796,53 @@ window.MA.modules.plantumlClass = (function() {
     });
   }
 
+  // 関係の From/To を「親/子」「全体/部分」のように呼ぶ (BLK-junior-20260908-1203)。
+  // 呼び名の表は relation-roles が持ち、ここは見出しと 1 行の下書きに使うだけ。
+  function _roleSelectHtml(id, side, kind, opts) {
+    var esc = window.MA.htmlUtils.escHtml;
+    var optsHtml = '';
+    for (var i = 0; i < opts.length; i++) {
+      optsHtml += '<option value="' + esc(opts[i].value) + '"'
+        + (opts[i].selected ? ' selected' : '') + '>' + esc(opts[i].label) + '</option>';
+    }
+    return '<div style="margin-bottom:8px;">' +
+      '<label id="' + id + '-label" style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">'
+        + esc(window.MA.relationRoles.fieldLabel(kind, side)) + '</label>' +
+      '<select id="' + id + '" style="width:100%;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:3px 6px;border-radius:3px;font-size:12px;">'
+        + optsHtml + '</select>' +
+    '</div>';
+  }
+
+  function _bindRelationRoles() {
+    var kindEl = document.getElementById('cl-tail-rkind');
+    var fromEl = document.getElementById('cl-tail-from');
+    var toEl = document.getElementById('cl-tail-to');
+    var fromLabel = document.getElementById('cl-tail-from-label');
+    var toLabel = document.getElementById('cl-tail-to-label');
+    var prevEl = document.getElementById('cl-tail-rpreview');
+    if (!kindEl || !fromEl || !toEl) return;
+
+    function refresh() {
+      var k = kindEl.value;
+      if (fromLabel) fromLabel.textContent = window.MA.relationRoles.fieldLabel(k, 'from');
+      if (toLabel) toLabel.textContent = window.MA.relationRoles.fieldLabel(k, 'to');
+      if (prevEl) prevEl.textContent = window.MA.relationRoles.preview(k, fromEl.value, toEl.value);
+    }
+    kindEl.addEventListener('change', refresh);
+    fromEl.addEventListener('change', refresh);
+    toEl.addEventListener('change', refresh);
+    var swap = document.getElementById('cl-tail-rswap');
+    if (swap) {
+      swap.addEventListener('click', function() {
+        var tmp = fromEl.value;
+        fromEl.value = toEl.value;
+        toEl.value = tmp;
+        refresh();
+      });
+    }
+    refresh();
+  }
+
   function _renderRelationEdit(relation, parsedData, propsEl, ctx) {
     var P = window.MA.properties;
     var RC = window.MA.relationKindCards;
@@ -1799,9 +1852,11 @@ window.MA.modules.plantumlClass = (function() {
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">RELATION (L' + relation.line + ')</label>' +
         // design 3c: 関係の種類は記法ではなく「UML 名称 + 意味の説明」のカードで選ぶ
         RC.cardsHtml('cl-rel-card', RC.kindsOf('class'), relation.kind) +
-        P.fieldHtml('From', 'cl-rel-from', relation.from) +
+        // BLK-junior-20260908-1203: 追加フォームと同じ呼び名で出す。既にある関係を
+        // 直すときも、親子のどちらを触っているかが見出しから読める。
+        P.fieldHtml(window.MA.relationRoles.fieldLabel(relation.kind, 'from'), 'cl-rel-from', relation.from) +
         '<button id="cl-rel-swap" type="button" style="font-size:11px;padding:4px 10px;margin:4px 0;cursor:pointer;">⇄ From/To 入替</button>' +
-        P.fieldHtml('To', 'cl-rel-to', relation.to) +
+        P.fieldHtml(window.MA.relationRoles.fieldLabel(relation.kind, 'to'), 'cl-rel-to', relation.to) +
         P.fieldHtml('Label', 'cl-rel-label', relation.label || '') +
         P.relationOptionsFor('cl-rel-more', ctx.getMmdText(), relation.line) +
         P.primaryButtonHtml('cl-rel-apply', '変更を反映') +

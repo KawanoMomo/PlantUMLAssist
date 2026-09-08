@@ -39,19 +39,10 @@ window.MA.classMap = (function() {
     'enum': '列挙',
   };
 
-  // 関係の種類。左が親 (矢の根元) になるものは parentFirst を立てる。
-  // 「From/To」ではなく「親/子」で聞けば、向きを間違える余地が無くなる。
-  var REL = {
-    'inheritance':    { label: '継承', from: '親', to: '子', arrow: '<|--' },
-    'implementation': { label: '実装', from: 'インタフェース', to: '実装クラス', arrow: '<|..' },
-    'composition':    { label: 'コンポジション', from: '全体', to: '部分', arrow: '*--' },
-    'aggregation':    { label: '集約', from: '全体', to: '部分', arrow: 'o--' },
-    'nested':         { label: '入れ子', from: '外側', to: '内側', arrow: '+--' },
-    'dependency':     { label: '依存', from: '使う側', to: '使われる側', arrow: '..>' },
-    'association':    { label: '関連', from: '一方', to: 'もう一方', arrow: '--' },
-  };
-
-  function relInfo(kind) { return REL[_s(kind)] || REL.association; }
+  // 関係の種類ごとの呼び名 (親/子・全体/部分) と矢印は relation-roles が持つ。
+  // フォームの見出しと対応表の行で同じ言葉を使うため、表はここに二重に置かない
+  // (BLK-junior-20260908-1203)。
+  function relInfo(kind) { return window.MA.relationRoles.of(kind); }
 
   function elementName(el) {
     if (!el) return '';
@@ -416,7 +407,6 @@ window.MA.classMap = (function() {
 
   return {
     KIND_LABEL: KIND_LABEL,
-    REL: REL,
     relInfo: relInfo,
     elementName: elementName,
     relationName: relationName,
