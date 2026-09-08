@@ -1357,6 +1357,23 @@ html, body {
 #inbox-panel .ib-row .ib-prog.started { color: var(--accent-orange); border-color: var(--accent-orange); }
 #inbox-panel .ib-row .ib-prog.resolved { color: var(--accent-green); border-color: var(--accent-green); }
 
+/* 反映の判定 (BLK-reviewer-20260908-1903-wish) */
+#inbox-panel .ib-verify-head {
+  padding: 3px 6px; border-bottom: 1px solid var(--border-color);
+  color: var(--text-secondary); font-size: 11px;
+}
+#inbox-panel .ib-row .ib-verify {
+  display: inline-block; margin-right: 6px; padding: 0 5px; border-radius: 8px;
+  border: 1px solid var(--border-color); font-size: 10px; white-space: nowrap; font-weight: 600;
+}
+#inbox-panel .ib-row .ib-verify.open { color: var(--accent-red); border-color: var(--accent-red); }
+#inbox-panel .ib-row .ib-verify.puml-only { color: var(--accent-orange); border-color: var(--accent-orange); }
+#inbox-panel .ib-row .ib-verify.reflected { color: var(--accent-green); border-color: var(--accent-green); }
+#inbox-panel .ib-row .ib-verify.unknown { color: var(--text-secondary); }
+#inbox-panel .ib-row .ib-verify-why {
+  display: block; margin: 2px 0; color: var(--text-secondary); font-size: 10px;
+}
+
 #inbox-panel .ib-row .ib-who { color: var(--text-secondary); margin-left: 4px; }
 #inbox-panel .ib-row .ib-text { color: var(--text-primary); display: block; margin-top: 2px; }
 #btn-tab-findings.has-recheck { color: var(--accent-red); border-color: var(--accent-red); }
@@ -5033,6 +5050,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/finding-link.js"></script>
 <script src="src/core/pin-reply.js"></script>
 <script src="src/core/pin-progress.js"></script>
+<script src="src/core/pin-verify.js"></script>
 <script src="src/core/claim-check.js"></script>
 <script src="src/core/note-block.js"></script>
 <script src="src/core/family-clone.js"></script>

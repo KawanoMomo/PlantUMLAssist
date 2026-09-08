@@ -473,10 +473,20 @@ class Handler(BaseHTTPRequestHandler):
 
     @classmethod
     def _strip_svg_stamp(cls, svg_bytes):
-        """書き出し元の印を外した svg。描画の結果と比べられる形にする。"""
-        mark = ('\n' + cls.SVG_STAMP_PREFIX).encode('utf-8')
+        """書き出し元の印を外した svg。描画の結果と比べられる形にする。
+
+        BLK-reviewer-20260908-1903-wish: 印の前の改行だけを見て探すと、CRLF に
+        変換されて保存された svg (Windows の write_text の既定) では印が見つからず、
+        印を含んだままバイト比較して全件 differ になる。改行の形は問わずに探し、
+        直前の改行も一緒に外す。
+        """
+        mark = cls.SVG_STAMP_PREFIX.encode('utf-8')
         at = svg_bytes.rfind(mark)
-        return svg_bytes[:at] if at >= 0 else svg_bytes
+        if at < 0:
+            return svg_bytes
+        while at > 0 and svg_bytes[at - 1:at] in (b'\n', b'\r'):
+            at -= 1
+        return svg_bytes[:at]
 
     @staticmethod
     def _svg_text_labels(svg_bytes):
@@ -635,7 +645,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         svg_path = puml_path.with_suffix('.svg')
         try:
-            svg_path.write_text(svg + self._svg_stamp(puml_path), encoding='utf-8')
+            # newline='' — 改行を CRLF に変換させない。変換すると、描き直した
+            # 結果とはバイトで必ず食い違い、/verify-svg が全件 differ と答える。
+            svg_path.write_text(svg + self._svg_stamp(puml_path), encoding='utf-8', newline='')
         except OSError as e:
             self._send_json(500, {'error': f'write failed: {e}'})
             return

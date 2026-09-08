@@ -67,6 +67,8 @@ const sourceFiles = [
   'src/core/pin-inbox.js',
   'src/core/pin-reply.js',
   'src/core/pin-progress.js',
+  'src/core/svg-diff-summary.js',
+  'src/core/pin-verify.js',
   'src/core/relation-options.js',
   'src/core/group-notation.js',
   'src/core/sequence-marks.js',
