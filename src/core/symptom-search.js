@@ -31,12 +31,17 @@ window.MA.symptomSearch = (function() {
     usecase: 'usecase 宣言',
     label: '矢印ラベル',
     title: 'タイトル',
+    note: 'ノート',
   };
 
   // 宣言は「その図の登場人物」なので、ラベル (1 回の動作) より重い。
   var ROLE_WEIGHT = {
     participant: 3, class: 3, state: 3, component: 3, usecase: 3,
     title: 3, label: 2,
+    // ノートは図の説明文。宣言名ではないので系統の根拠にはしないが、日本語で
+    // 書かれた事情 (「IRQ 系統は ClockCtrl を持たない」) はここにしか無いので、
+    // 語が当たる先としては数える。
+    note: 1,
   };
 
   var ARROW_RE = /(?:<\|--|--\|>|\*--|--\*|o--|--o|<\.\.|\.\.>|<--|-->|<-|->|\.\.|--)/;
@@ -47,6 +52,12 @@ window.MA.symptomSearch = (function() {
   var KATA = /[ァ-ヶー]{2,}/g;
   var KANJI = /[一-鿿]{2,}/g;
   var ASCII = /[A-Za-z][A-Za-z0-9_]{1,}/g;
+  // 「割り込み」「読み出し」「立ち上がり」のような送り仮名を挟む複合語。
+  // 漢字の連なりだけを見ると 1 文字ずつに割れて全部落ちるが、この形はこの分野の
+  // 名詞そのもの (系統名になる) なので、語として取れないと症状文の芯が消える。
+  // 挟めるひらがなは送り仮名だけで、助詞は挟めない (「転送が完了」を
+  // 「送が完」という語にしないため)。
+  var COMPOUND = /[一-鿿](?:(?![はがをにへとものやかでね])[ぁ-ん]){1,2}[一-鿿](?:(?![はがをにへとものやかでね])[ぁ-ん]){0,2}/g;
 
   function _push(out, seen, word) {
     var key = word.toLowerCase();
@@ -59,7 +70,7 @@ window.MA.symptomSearch = (function() {
     var s = String(text == null ? '' : text);
     var out = [];
     var seen = {};
-    [ASCII, KATA, KANJI].forEach(function(re) {
+    [ASCII, KATA, COMPOUND, KANJI].forEach(function(re) {
       re.lastIndex = 0;
       var m;
       while ((m = re.exec(s)) !== null) _push(out, seen, m[0]);
@@ -97,6 +108,11 @@ window.MA.symptomSearch = (function() {
     text.split('\n').forEach(function(line, i) {
       var raw = String(line);
       if (/^\s*'/.test(raw) || /^\s*@/.test(raw)) return;
+      var nt = raw.match(/^\s*note\s+(?:(?:left|right|top|bottom)(?:\s+of\s+\S+)?|over\s+[^:]+)\s*:\s*(.+)$/);
+      if (nt) {
+        out.push({ text: nt[1].trim(), role: 'note', line: i + 1, raw: raw });
+        return;
+      }
       var t = raw.match(/^\s*title\s+(.+)$/);
       if (t) {
         out.push({ text: t[1].trim(), role: 'title', line: i + 1, raw: raw });
