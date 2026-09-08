@@ -9943,6 +9943,7 @@ var _familyAuditDocs = [];   // 表の行から図へ飛ぶための、表示中
 var _familyDensity = null;   // BLK-primary-20260908-1403-wish: 系統ごとの遷移密度
 var _familyTrace = [];       // BLK-primary-20260908-1603-wish: 系統ごとのトレース突合
 var _familyLabelRows = [];   // 上の表の行 → 図の行へ飛ぶための控え
+var _familyLabelPos = null;  // BLK-reviewer-20260908-1703-wish: ラベル位置の慣習
 
 // 遷移密度の表。系統ごとに「1 メッセージ何遷移か」を並べ、他系統の中央値から
 // 外れた系統を上に置く。レビュー指摘の粒度差は、これまで指摘の文章を読んでから
@@ -9984,6 +9985,60 @@ function _densityTableHtml(result, SECTION, CELL) {
   return html + '</table>';
 }
 
+// ラベル位置の慣習。系統ごとに「遷移ラベルが対応するメッセージの何番目を
+// 指しているか」を並べ、他系統の多数派からズレた系統を上に置く。
+// ラベル突合 (下の表) は実在するかどうかまでしか見ないので、実在名を使って
+// いても系統だけが末尾の内部呼び出し名を指している、という慣習のズレは
+// ここでしか出ない (今までは 9 系統 × 2 図を開いて何番目かを数えていた)。
+function _labelPositionHtml(result, SECTION, CELL) {
+  var lp = window.MA.labelPosition;
+  var esc = window.MA.htmlUtils.escHtml;
+  if (!lp || !result) return '';
+  var html = '<div style="' + SECTION + '">ラベル位置の慣習 (系統ごと・ズレた系統が上)</div>'
+    + '<div id="lp-summary" data-odd="' + result.odd.length + '" '
+    + 'data-common="' + esc(result.common || '') + '" '
+    + 'style="font-size:11px;color:' + (result.odd.length ? 'var(--accent-orange)' : 'var(--accent-green)') + ';">'
+    + esc(lp.summaryLine(result)) + '</div>';
+  if (!result.rows.length) return html;
+  html += '<table id="lp-table" style="border-collapse:collapse;width:100%;margin-top:4px;">'
+    + '<tr>'
+    + ['系統', '対応した遷移', 'ラベルが指す位置', '例'].map(function(h) {
+        return '<th style="' + CELL + 'text-align:left;color:var(--text-secondary);font-weight:normal;">'
+          + esc(h) + '</th>';
+      }).join('') + '</tr>';
+  result.rows.forEach(function(r) {
+    var mark = r.odd ? 'color:var(--accent-orange);' : '';
+    // 例は「ズレている行」を優先して出す。ズレの中身をこの 1 行で読ませる。
+    var ex = null;
+    r.entries.forEach(function(e) { if (!ex && e.odd) ex = e; });
+    if (!ex) ex = r.entries[0];
+    html += '<tr class="lp-row' + (r.odd ? ' lp-odd' : '') + '" data-key="' + esc(r.key) + '"'
+      + ' data-convention="' + esc(r.convention || '') + '"'
+      + ' data-odd="' + (r.odd ? '1' : '0') + '" style="cursor:pointer;'
+      + (r.odd ? 'background:rgba(255,140,0,0.10);' : '') + '">'
+      + '<td style="' + CELL + 'font-family:var(--font-mono);' + mark + '">' + esc(r.key) + '</td>'
+      + '<td style="' + CELL + '">' + r.matched + '</td>'
+      + '<td class="lp-pos" style="' + CELL + mark + '">' + esc(lp.positionText(r)) + '</td>'
+      + '<td class="lp-example" style="' + CELL + 'color:var(--text-secondary);'
+        + 'font-family:var(--font-mono);">'
+      + (ex ? esc(ex.label + ' → ' + ex.message + ' (' + ex.ordinal + '/' + ex.total + ')') : '')
+      + '</td>'
+      + '</tr>';
+  });
+  return html + '</table>';
+}
+
+// 系統 1 つぶんの「行 → 位置」。ラベル突合表に位置の列を足すために引く。
+function _labelPosEntries(key) {
+  var out = {};
+  if (!_familyLabelPos) return out;
+  _familyLabelPos.rows.forEach(function(r) {
+    if (r.key !== key) return;
+    r.entries.forEach(function(e) { out[e.docId + '#' + e.line] = e; });
+  });
+  return out;
+}
+
 // ラベル突合表。系統の状態遷移のラベルを「対応するシーケンスのメッセージ名」と
 // 並べ、対応が無い行を先頭に置く。遷移密度が件数しか見ないので、件数は揃って
 // いるのにラベルだけが架空 (Dma_Configure) という食い違いはここでしか出ない。
@@ -10012,12 +10067,17 @@ function _labelTableHtml(key, SECTION, CELL) {
   if (!t.rows.length) return html;
   html += '<table id="fl-table" style="border-collapse:collapse;width:100%;margin-top:4px;">'
     + '<tr>'
-    + ['遷移', 'ラベル', '対応するメッセージ', ''].map(function(h) {
+    + ['遷移', 'ラベル', '対応するメッセージ', '位置', ''].map(function(h) {
         return '<th style="' + CELL + 'text-align:left;color:var(--text-secondary);font-weight:normal;">'
           + esc(h) + '</th>';
       }).join('') + '</tr>';
+  var posOf = _labelPosEntries(key);
+  var LP = window.MA.labelPosition;
   t.rows.forEach(function(r, ri) {
     var bad = r.status === 'missing';
+    // その遷移が指しているメッセージの位置。慣習からズレた行は色を変える
+    // (系統の中でどの行がズレの元かを、上の表から降りて 1 目で見せる)。
+    var pe = posOf[r.docId + '#' + r.line];
     html += '<tr class="fl-row' + (bad ? ' fl-missing' : '') + '" data-row-index="' + ri + '"'
       + ' data-status="' + esc(r.status) + '" data-label="' + esc(r.label) + '"'
       + ' style="cursor:pointer;' + (bad ? 'background:rgba(255,140,0,0.10);' : '') + '">'
@@ -10028,6 +10088,10 @@ function _labelTableHtml(key, SECTION, CELL) {
       + '<td class="fl-match" style="' + CELL
         + (bad ? 'color:var(--accent-orange);' : 'color:var(--text-secondary);') + '">'
         + esc(TT.matchText(r)) + '</td>'
+      + '<td class="fl-pos" data-position="' + esc(pe ? pe.position : '') + '"'
+        + ' data-odd="' + (pe && pe.odd ? '1' : '0') + '" style="' + CELL
+        + (pe && pe.odd ? 'color:var(--accent-orange);' : 'color:var(--text-secondary);') + '">'
+        + esc(pe && LP ? pe.positionLabel + ' ' + pe.ordinal + '/' + pe.total : '') + '</td>'
       + '<td style="' + CELL + 'color:var(--text-secondary);">' + esc(r.statusLabel) + '</td>'
       + '</tr>';
   });
@@ -10046,6 +10110,7 @@ function _familyAuditRender(families, selectedKey) {
 
   var html = '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">系統チェック</h3>';
   html += _densityTableHtml(_familyDensity, SECTION, CELL);
+  html += _labelPositionHtml(_familyLabelPos, SECTION, CELL);
 
   if (families.length === 0) {
     html += '<div id="fa-empty" style="font-size:11px;color:var(--text-secondary);">'
@@ -10148,6 +10213,20 @@ function _familyAuditBind(families) {
     });
   }
 
+  // ラベル位置の行 → その系統のラベル突合表へ (ズレの中身をその場で開く)。
+  var pRows = content.querySelectorAll('.lp-row');
+  for (var p = 0; p < pRows.length; p++) {
+    pRows[p].addEventListener('click', function(ev) {
+      var key = ev.currentTarget.getAttribute('data-key');
+      for (var i = 0; i < families.length; i++) {
+        if (families[i].key !== key) continue;
+        _familyAuditRender(families, key);
+        _familyAuditBind(families);
+        return;
+      }
+    });
+  }
+
   // ラベル突合表の行 → その遷移が書かれている状態遷移図の、その行へ。
   var lRows = content.querySelectorAll('.fl-row');
   for (var m = 0; m < lRows.length; m++) {
@@ -10197,10 +10276,16 @@ function openFamilyAudit() {
   _familyDensity = window.MA.transitionDensity ? window.MA.transitionDensity.rank(docs) : null;
   // ラベル突合はトレースカバレッジと同じ突合を使う (同じ食い違いを 2 通りに数えない)。
   _familyTrace = window.MA.traceCoverage ? window.MA.traceCoverage.audit(docs) : [];
+  // ラベル位置の慣習は、同じトレース突合の結果から数える (同じ食い違いを
+  // 2 通りに突き合わせない)。
+  _familyLabelPos = window.MA.labelPosition ? window.MA.labelPosition.rank(_familyTrace) : null;
   // 外れた系統があるなら、開いた時点でその系統を出す (指摘の相手を探す手間を消す)。
   var firstKey = families.length ? families[0].key : null;
-  if (_familyDensity && _familyDensity.outliers.length) {
-    var wanted = _familyDensity.outliers[0].key;
+  var wanted = null;
+  if (_familyDensity && _familyDensity.outliers.length) wanted = _familyDensity.outliers[0].key;
+  // 密度が揃っている系統でも、ラベルの指す位置だけがズレていることがある。
+  else if (_familyLabelPos && _familyLabelPos.odd.length) wanted = _familyLabelPos.odd[0].key;
+  if (wanted) {
     for (var i = 0; i < families.length; i++) if (families[i].key === wanted) firstKey = wanted;
   }
   _familyAuditRender(families, firstKey);
