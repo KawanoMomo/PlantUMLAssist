@@ -3,9 +3,11 @@
 // 先輩だけにある状態・遷移が橙で並び、そこに「＋この図にも足す」が付いて、
 // 端点の対応が付かない遷移では行き先の聞き返しが出ているところを撮る。
 const { test } = require('@playwright/test');
-const { gotoApp, shotOut } = require('./helpers');
+const { gotoApp, shotOut, saveDirFor } = require('./helpers');
 
 const OUT = shotOut('shot-blk-junior-1103-wish.png');
+// 自動保存の書き込み先をこの spec 専用にする (既定だと autosave/ に図が残る)。
+const DIR = saveDirFor(__filename);
 
 const SENIOR = [
   '@startuml',
@@ -37,7 +39,13 @@ async function typeDsl(page, text) {
 }
 
 test('shot: 対応表の橙の行から自分の図に足す', async ({ page }) => {
-  await page.addInitScript(() => { try { window.localStorage.clear(); } catch (e) {} });
+  await page.addInitScript((d) => {
+    try {
+      window.localStorage.clear();
+      window.localStorage.setItem('plantuml-autosave-config',
+        JSON.stringify({ enabled: true, debounceMs: 200, restoreMode: 'auto', backend: 'file', fileDir: d }));
+    } catch (e) {}
+  }, DIR);
   await gotoApp(page);
   await typeDsl(page, SENIOR);
   await page.locator('#btn-tab-new').click();

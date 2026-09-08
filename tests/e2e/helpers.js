@@ -28,8 +28,14 @@ function shotOut(name) {
 // (このとき helper は設定に触らないので、アプリの既定がそのまま出る)。
 async function gotoApp(page, opts) {
   if (!(opts && opts.foldedTools)) {
+    // 未設定のときだけ書く。test の中で畳み方を切り替えた spec は、その選択が
+    // reload をまたいで残る (init script は navigation のたびに走るため)。
     await page.addInitScript(() => {
-      try { window.localStorage.setItem('plantuml-tools-folded', '0'); } catch (e) {}
+      try {
+        if (window.localStorage.getItem('plantuml-tools-folded') == null) {
+          window.localStorage.setItem('plantuml-tools-folded', '0');
+        }
+      } catch (e) {}
     });
   }
   await page.goto('/');
