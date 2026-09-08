@@ -78,7 +78,7 @@ test.describe('系統ぜんぶと比べる (BLK-junior-20260908-1403)', () => {
     await expect(only.first()).toContainText(':CANビットレートを設定;');
     await expect(only.first()).toContainText('can');
     await expect(page.locator('#tc-verdict')).toContainText('取り込む対象');
-    await expect(page.locator('#tc-summary')).toContainText('1 枚にだけある行 1');
+    await expect(page.locator('#tcoh-summary')).toContainText('1 枚にだけある行 1');
   });
 
   test('固有の行が無い 3 枚は「同じ雛形の複製」と言い切る', async ({ page }) => {
@@ -87,7 +87,7 @@ test.describe('系統ぜんぶと比べる (BLK-junior-20260908-1403)', () => {
     await expect(page.locator('#tc-list')).toBeVisible();
 
     await expect(page.locator('.tc-row[data-tc-kind="only"]')).toHaveCount(0);
-    await expect(page.locator('#tc-summary')).toContainText('3 枚は同じ雛形の複製です');
+    await expect(page.locator('#tcoh-summary')).toContainText('3 枚は同じ雛形の複製です');
     await expect(page.locator('#tc-verdict')).toContainText('取り込む対象はありません');
   });
 
@@ -138,7 +138,7 @@ test.describe('系統ぜんぶと比べる (BLK-junior-20260908-1403)', () => {
     await typeDsl(page, CAN);
     await page.locator('#btn-tab-compare').click();
     await page.locator('#btn-tc-run').click();
-    await expect(page.locator('#tc-summary')).toContainText('1 枚しかありません');
+    await expect(page.locator('#tcoh-summary')).toContainText('1 枚しかありません');
     await expect(page.locator('#tc-empty')).toBeVisible();
   });
 
