@@ -4134,6 +4134,7 @@ function setupTabs() {
   // BLK-reviewer-20260908-0103: 図名 → SVG が puml に追いついているか。
   // `ls -l` で puml と svg を 1 枚ずつ突き合わせる代わりに、一覧が答える。
   var svgStatus = {};
+  var svgContent = {};
   var svgScan = null;
   // 作り直した結果の 1 行。一覧を開き直すまで残す (押した結果が消えない)。
   var svgRenderNote = '';
@@ -4320,6 +4321,8 @@ function setupTabs() {
       var SF = window.MA.svgFreshness;
       svgScan = SF ? SF.scan(entries) : null;
       svgStatus = SF ? SF.statusMap(svgScan) : {};
+      // BLK-reviewer-20260908-1103: mtime とは別に、内容 (svg に刻んだ元 puml の sha1) での判定。
+      svgContent = SF && SF.contentMap ? SF.contentMap(svgScan) : {};
 
       // 指摘の反映状態は server が一覧と一緒に返す pins から作る。図を開かなくても
       // 一覧の時点で「未反映が残っている図」が分かる (別名保存を続けなくてよい)。
@@ -4575,6 +4578,17 @@ function setupTabs() {
     sum.textContent = SF.summary(svgScan);
     panel.appendChild(sum);
 
+    // BLK-reviewer-20260908-1103: mtime の 1 行だけでは「見た目が読めるか」は言えない。
+    // svg に刻んだ元 puml の sha1 と今の puml を突き合わせた結果を、その下に 1 行で出す。
+    if (SF.contentSummary) {
+      var csum = document.createElement('div');
+      var differ = (svgScan.contentCounts && svgScan.contentCounts.differ) > 0;
+      csum.className = 'folder-svg-content' + (differ ? ' has-stale' : '');
+      csum.id = 'folder-svg-content';
+      csum.textContent = SF.contentSummary(svgScan);
+      panel.appendChild(csum);
+    }
+
     // BLK-reviewer-20260908-0823-wish: 件数だけだと「どの図か」を 22 行の中から
     // 目で探すことになり、SVG の書き出し漏れに気付くのが偶然に戻る。
     // 無い図・古い図の名前をここに並べ、押せばその図を開けるようにする。
@@ -4621,6 +4635,26 @@ function setupTabs() {
       renderStaleSvgs(dir, svgScan.needsRender, btn);
     });
     panel.appendChild(btn);
+
+    // BLK-reviewer-20260908-1103: 印の無い svg は、mtime が揃っていても中身までは言えない。
+    // 1 押しで作り直せば印が付き、以後はこの一覧だけで内容の一致を言い切れる
+    // (22 枚を curl + diff で確かめ直す手順が要らなくなる)。
+    if (SF.proofLabel) {
+      var pbtn = document.createElement('button');
+      pbtn.type = 'button';
+      pbtn.className = 'folder-svg-proof-btn';
+      pbtn.id = 'folder-svg-proof';
+      pbtn.textContent = SF.proofLabel(svgScan);
+      pbtn.title = '内容の一致を言い切れない SVG を puml から作り直し、'
+        + 'どの puml から作ったかを SVG に刻む。次からは一覧を見るだけで済む';
+      pbtn.disabled = !(svgScan.needsProof && svgScan.needsProof.length);
+      pbtn.addEventListener('click', function(ev) {
+        ev.stopPropagation();
+        pbtn.disabled = true;
+        renderStaleSvgs(dir, svgScan.needsProof, pbtn);
+      });
+      panel.appendChild(pbtn);
+    }
   }
 
   // 古い SVG を 1 枚ずつ直列に作り直す。1 枚失敗しても残りは進める
@@ -5076,8 +5110,21 @@ function setupTabs() {
       rb.title = RS.badgeTitle(rc);
       b.appendChild(rb);
     }
+    // BLK-reviewer-20260908-1103: 印は内容での判定を優先する。mtime が古くても
+    // 中身が今の puml と一致している図は読める図なので、印を付けない
+    // (逆に、内容がずれている図は mtime に関わらず名指しする)。
     var SF = window.MA.svgFreshness;
-    if (SF && svgStatus[name] && svgStatus[name] !== 'fresh') {
+    var content = svgContent[name];
+    if (SF && content === 'differ') {
+      var cb = SF.contentBadge(content);
+      var contentBadge = document.createElement('span');
+      contentBadge.className = 'folder-svg-content-badge';
+      contentBadge.setAttribute('data-svg-content', content);
+      contentBadge.textContent = cb.mark;
+      contentBadge.title = cb.title;
+      b.appendChild(contentBadge);
+    }
+    if (SF && content !== 'match' && svgStatus[name] && svgStatus[name] !== 'fresh') {
       var sb = SF.badge(svgStatus[name]);
       var svgBadge = document.createElement('span');
       svgBadge.className = 'folder-svg-badge svg-' + svgStatus[name];
