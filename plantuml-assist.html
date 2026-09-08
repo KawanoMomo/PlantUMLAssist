@@ -689,6 +689,13 @@ html, body {
 }
 #folder-panel .folder-svg-names.svg-missing button.folder-svg-name { border-color: var(--accent-red); }
 #folder-panel button.folder-svg-name:hover { border-color: var(--accent); }
+/* その行の図だけを作り直す (BLK-primary-20260908-1203) */
+#folder-panel button.folder-svg-names-render {
+  border: 1px solid var(--accent); border-radius: 3px; background: var(--bg-tertiary);
+  color: var(--accent); font-size: 10px; padding: 0 6px; width: auto; cursor: pointer;
+  margin-left: auto; white-space: nowrap;
+}
+#folder-panel button.folder-svg-names-render:disabled { border-color: var(--border); color: var(--text-secondary); cursor: default; }
 /* 内容での 1 行と、内容を確かめるボタン (BLK-reviewer-20260908-1103) */
 #folder-panel .folder-svg-content {
   font-size: 10px;

@@ -268,3 +268,25 @@ describe('svgFreshness.scan — 上書きせずに確かめられる図', functi
       .toBe('中身を確かめる SVG はありません');
   });
 });
+
+// BLK-primary-20260908-1203: 名前の行ごとに「この N 枚だけ作り直す」を出す。
+// 「古い SVG を作り直す」は古い・無い・内容ずれをまとめて直すので、
+// reviewer に名指しされた分だけを狙えなかった。
+describe('svgFreshness.groupRenderLabel / groupRenderTitle', function() {
+  test('その行に並んでいる枚数を文言に入れる', function() {
+    expect(SF.groupRenderLabel({ label: 'SVG が古い', names: ['a', 'b', 'c'] })).toBe('この 3 枚だけ作り直す');
+    expect(SF.groupRenderLabel({ label: 'SVG が無い', names: ['a'] })).toBe('この 1 枚だけ作り直す');
+  });
+
+  test('名前が無い行にはボタンの文言を出さない', function() {
+    expect(SF.groupRenderLabel({ label: 'SVG が古い', names: [] })).toBe('');
+    expect(SF.groupRenderLabel(null)).toBe('');
+  });
+
+  test('説明にその行の見出しと「ほかには触らない」が入る', function() {
+    var t = SF.groupRenderTitle({ label: 'SVG の内容が古い', names: ['a', 'b'] });
+    expect(t).toContain('SVG の内容が古い');
+    expect(t).toContain('2 枚');
+    expect(t).toContain('ほかの図と puml には触らない');
+  });
+});

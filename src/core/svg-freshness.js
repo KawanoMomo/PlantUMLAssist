@@ -196,6 +196,25 @@ window.MA.svgFreshness = (function() {
     return n === 0 ? '内容はすべて確かめてあります' : '内容を確かめる（' + n + ' 枚を作り直す）';
   }
 
+  // BLK-primary-20260908-1203: 「古い SVG を作り直す」は古い・無い・内容ずれを
+  // まとめて作り直すので、reviewer に名指しされた 5 枚だけを狙えず、1 枚ずつ開いて
+  // ⟳Render → Export▾ → SVG を 5 回繰り返すことになっていた。
+  // 名前の行 (SVG が無い / SVG が古い / SVG の内容が古い) ごとに、その行の図だけを
+  // 作り直せる文言を返す。行に並んでいる名前がそのまま作り直す対象になる。
+  function groupRenderLabel(group) {
+    var n = (group && Array.isArray(group.names) && group.names.length) || 0;
+    return n === 0 ? '' : 'この ' + n + ' 枚だけ作り直す';
+  }
+
+  // その行の作り直しが何をするかの説明。行によって「無い図を書き出す」「古い図を
+  // 描き直す」と中身が違うので、行の label をそのまま織り込む。
+  function groupRenderTitle(group) {
+    var label = (group && group.label) || '';
+    var n = (group && Array.isArray(group.names) && group.names.length) || 0;
+    return '「' + label + '」に並んでいる ' + n + ' 枚だけを puml から作り直す。'
+      + 'ほかの図と puml には触らない';
+  }
+
   // 作り直しボタンの文言。0 枚なら押させない。
   function renderLabel(scanned) {
     var n = (scanned && scanned.needsRender.length) || 0;
@@ -220,6 +239,8 @@ window.MA.svgFreshness = (function() {
     contentSummary: contentSummary,
     shortfall: shortfall,
     renderLabel: renderLabel,
+    groupRenderLabel: groupRenderLabel,
+    groupRenderTitle: groupRenderTitle,
     proofLabel: proofLabel,
     verifyLabel: verifyLabel,
   };
