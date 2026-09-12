@@ -164,3 +164,100 @@ test('手順2 先輩の図を手本として右に据えたまま、自分に無
   expect(await S.readDoc(page, SENIOR_DIR, 'timer_state')).toBe(SENIOR_STATE);
   await expect(page.locator('#compare-status')).toHaveText(/手本 primary \(読むだけ\)/, { timeout: 30000 });
 });
+
+// BLK-junior-20260909-0703-wish: クラス図の手順 2。先輩の共通クラス図 (親 + 派生 +
+// 周辺クラス) を手本に TimerDrv 派生クラス図を起こすとき、親の宣言・メンバ・
+// IRQCtrl への関連を「見て覚えて打ち直す」しかなかった。親を選んだまま派生を
+// 1 つ起こせて、親の関連も「同じ関連を引く」で選べることを確かめる。
+const COMMON_CLASS = [
+  '@startuml',
+  'title ドライバ共通クラス図',
+  'abstract class Driver_Common {',
+  '  +Init() : void',
+  '  +Write(d) : void',
+  '  -state : int',
+  '}',
+  'class Spi_Driver {',
+  '  +Transmit() : void',
+  '}',
+  'class IRQCtrl',
+  'Driver_Common <|-- Spi_Driver',
+  'Driver_Common --> IRQCtrl : uses',
+  '@enduml',
+].join('\n');
+
+async function clickOverlay(page, selector) {
+  await page.evaluate((sel) => {
+    const el = document.querySelector('#overlay-layer ' + sel);
+    if (!el) throw new Error(sel + ' が overlay に無い');
+    el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  }, selector);
+  await page.waitForTimeout(400);
+}
+
+test('手順2 手本の親から派生クラスを 1 つ起こし、親の関連も同じものを引ける', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await page.locator('#diagram-type').selectOption('plantuml-class');
+  await page.waitForTimeout(400);
+  await S.typeDsl(page, COMMON_CLASS);
+  await page.waitForTimeout(2000);
+
+  // 手本の親を選ぶ → 「この親から派生を 1 つ作る」。
+  await clickOverlay(page, 'rect[data-id="Driver_Common"]');
+  await page.locator('#cl-derive-open').click();
+  await expect(page.locator('#cl-sc-modal')).toBeVisible();
+
+  // 到達条件その1: 親の宣言とメンバが引き継がれた状態で開く (打ち直さない)。
+  await expect(page.locator('#cl-dv-parent')).toContainText('abstract class Driver_Common');
+  expect(await page.locator('#cl-dv-members').inputValue())
+    .toBe('+Init() : void\n+Write(d) : void\n-state : int');
+
+  // 到達条件その2: 親が引いている関連が「同じ関連を引く」として出ている。
+  await expect(page.locator('#cl-dv-rels')).toContainText('(派生) --> IRQCtrl : uses');
+  await expect(page.locator('#cl-dv-rel-0')).toBeChecked();
+
+  // 埋めるのは名前と固有メンバだけ。
+  await page.locator('#cl-dv-name').fill('Timer_Driver');
+  await page.locator('#cl-dv-members').fill('+Init() : void\n+Start(us) : void');
+  await expect(page.locator('#cl-dv-preview')).toContainText('Driver_Common <|-- Timer_Driver');
+  await page.locator('#cl-dv-confirm').click();
+  await page.waitForTimeout(800);
+
+  // 到達条件その3: 派生の宣言・メンバ・継承・同じ関連が 1 回の確定で入る。
+  const t = await getEditorText(page);
+  expect(t).toContain('class Timer_Driver {');
+  expect(t).toContain('  +Start(us) : void');
+  expect(t).toContain('Driver_Common <|-- Timer_Driver');
+  // 手本の矢印の種類 (-->) がそのまま引き継がれる
+  expect(t).toContain('Timer_Driver --> IRQCtrl : uses');
+  // 手本の行は 1 つも書き換わらない
+  expect(t).toContain('Driver_Common <|-- Spi_Driver');
+  expect(t).toContain('  +Transmit() : void');
+});
+
+test('手順2 手本の矢印から、種類を選び直さずに同じ関連を引ける', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await page.locator('#diagram-type').selectOption('plantuml-class');
+  await page.waitForTimeout(400);
+  await S.typeDsl(page, COMMON_CLASS);
+  await page.waitForTimeout(2000);
+
+  // 手本の `Driver_Common --> IRQCtrl : uses` を選ぶ。
+  await clickOverlay(page, 'rect[data-type="relation"][data-line="13"]');
+  await page.locator('#cl-rel-same').click();
+  await expect(page.locator('#cl-sc-modal')).toBeVisible();
+
+  // 到達条件その1: 種類はこの矢印のまま示され、選び直す欄が無い。
+  await expect(page.locator('#cl-sr-kind')).toContainText('-->');
+
+  // 元を派生側に差し替えるだけで、同じ関連がもう 1 本引ける。
+  await page.locator('#cl-sr-from').selectOption('Spi_Driver');
+  await expect(page.locator('#cl-sr-preview')).toContainText('Spi_Driver --> IRQCtrl : uses');
+  await page.locator('#cl-sr-confirm').click();
+  await page.waitForTimeout(800);
+
+  // 到達条件その2: 矢印の記法もラベルも手本のままの行が 1 本増える。
+  const t = await getEditorText(page);
+  expect(t).toContain('Spi_Driver --> IRQCtrl : uses');
+  expect(t).toContain('Driver_Common --> IRQCtrl : uses');
+});
