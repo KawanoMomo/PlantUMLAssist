@@ -92,4 +92,27 @@ test('手順4 置換の前後を並べて見せられ、その画面を控えら
   await page.locator('#btn-compare-before-drop').click();
   await page.waitForTimeout(500);
   await expect(sel.locator('option[data-before="1"]')).toHaveCount(0);
+
+  // 到達条件その7: 会議の一覧 (変更サマリボード) が、いつもの 14 枚に入らない図まで
+  // 拾う (BLK-primary-20260912-2103-wish)。別件で開き直して書き出した図は
+  // タブを閉じた時点でボードから消えていたので、「これは対象外だから口頭で」という
+  // 抜け漏れ確認が会議前に毎回要った。
+  await page.waitForTimeout(1200);   // 基準の時刻より後に更新された、と言える差を作る
+  // 名前は開いているタブと重ならないものにする (開いている図は従来どおりの経路で並ぶ)。
+  await S.putDoc(page, DIR, 'review_scratch', '@startuml\nclass Adhoc_Note\n@enduml');
+
+  await page.locator('#btn-tab-board').click();
+  const board = page.locator('#cb-modal');
+  await expect(board).toBeVisible();
+  const adhoc = page.locator('#cb-body .cb-entry[data-doc-name="review_scratch"]');
+  await expect(adhoc).toHaveCount(1, { timeout: 10000 });
+  // 開いていないフォルダのファイルだと分かる印が付く (会議で 14 枚の外だと言える)
+  await expect(adhoc).toHaveAttribute('data-origin', 'folder');
+  await expect(adhoc.locator('.cb-origin')).toContainText('フォルダ');
+  await expect(page.locator('#cb-summary')).toContainText('保存フォルダ');
+
+  // 拾い方を切れば従来どおり (開いている図だけ) に戻せる
+  await page.locator('#cb-scan-folder').uncheck();
+  await page.waitForTimeout(600);
+  await expect(page.locator('#cb-body .cb-entry[data-doc-name="review_scratch"]')).toHaveCount(0);
 });
