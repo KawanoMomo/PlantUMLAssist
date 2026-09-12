@@ -1,0 +1,10 @@
+@startuml
+start
+:Receive;
+if (valid?) then (yes)
+  :Accept;
+else (no)
+  :Reject;
+endif
+stop
+@enduml

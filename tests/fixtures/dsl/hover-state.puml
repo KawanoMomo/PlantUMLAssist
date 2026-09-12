@@ -1,0 +1,9 @@
+@startuml
+state Idle
+state Running
+state Error
+[*] --> Idle
+Idle --> Running : start [ready] / init
+Running --> Idle : stop
+Running --> Error : fail
+@enduml

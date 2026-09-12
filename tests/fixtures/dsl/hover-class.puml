@@ -1,0 +1,6 @@
+@startuml
+class Order
+class Item
+Order "1" *-- "0..*" Item : contains
+Order --> Customer : places
+@enduml

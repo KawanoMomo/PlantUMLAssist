@@ -380,3 +380,218 @@ test('手順2 手本の無い部品のコンポーネント図を、部品名 1 
   await page.waitForTimeout(400);
   await expect(page.locator('#co-deps-summary')).toHaveAttribute('data-catalog-missing', '0');
 });
+// BLK-human-20260912-2130: 手順 2 で junior が起こす 5 図種 (状態遷移・クラス・
+// コンポーネント・ユースケース・アクティビティ) でも、シーケンスと同じく
+// 「ホバーすると選択範囲が枠で見え、その枠内のどこを押しても同じ要素が選べる」こと。
+// 仕様を知らなくても押す前に何が選ばれるか分かる、が守りたい性質。
+const HOVER_CASES = [
+  {
+    kind: 'plantuml-state',
+    name: '状態遷移',
+    dsl: [
+      '@startuml',
+      'state Uninit',
+      'state Ready',
+      'state Busy',
+      'Uninit --> Ready : Gpio_Init [cfg] / setup',
+      'Ready --> Busy : Gpio_Write',
+      '@enduml',
+    ].join('\n'),
+    elementType: 'state',
+    relationType: 'transition',
+  },
+  {
+    kind: 'plantuml-class',
+    name: 'クラス',
+    dsl: [
+      '@startuml',
+      'class Gpio_Driver',
+      'class Port_Ctrl',
+      'Gpio_Driver "1" --> "0..*" Port_Ctrl : controls',
+      '@enduml',
+    ].join('\n'),
+    elementType: 'class',
+    relationType: 'relation',
+  },
+  {
+    kind: 'plantuml-component',
+    name: 'コンポーネント',
+    dsl: [
+      '@startuml',
+      'component Gpio_Driver',
+      'component Port_Ctrl',
+      'Gpio_Driver --> Port_Ctrl : writes',
+      '@enduml',
+    ].join('\n'),
+    elementType: 'component',
+    relationType: 'relation',
+  },
+  {
+    kind: 'plantuml-usecase',
+    name: 'ユースケース',
+    dsl: [
+      '@startuml',
+      'actor Dev',
+      'usecase Configure',
+      'Dev --> Configure : performs',
+      '@enduml',
+    ].join('\n'),
+    elementType: 'usecase',
+    otherType: 'actor',   // ユースケースは 1 つなので、選択の逃がし先はアクター
+    relationType: 'relation',
+  },
+  {
+    kind: 'plantuml-activity',
+    name: 'アクティビティ',
+    dsl: [
+      '@startuml',
+      'start',
+      ':Gpio_Init;',
+      ':Gpio_Write;',
+      'stop',
+      '@enduml',
+    ].join('\n'),
+    elementType: 'action',
+    relationType: null,   // アクティビティの矢印は要素を持たない (分岐ラベルが相当)
+  },
+];
+
+// data-type と data-id で選んだ当たり判定の「画面上の箱」を全部返す。
+async function hitBoxes(page, type, id) {
+  return page.evaluate((a) => {
+    const sel = '#overlay-layer rect.selectable[data-type="' + a.type + '"]'
+      + (a.id ? '[data-id="' + a.id + '"]' : '');
+    return Array.prototype.map.call(document.querySelectorAll(sel), (r) => {
+      const b = r.getBoundingClientRect();
+      return { id: r.getAttribute('data-id'), x: b.x, y: b.y, w: b.width, h: b.height };
+    }).filter((b) => b.w > 2 && b.h > 2);
+  }, { type, id });
+}
+
+// マウスを乗せた点にある当たり判定の枠 (hover の見た目) を読む。
+async function frameAt(page, x, y) {
+  await page.mouse.move(x, y);
+  await page.waitForTimeout(120);
+  return page.evaluate((p) => {
+    const el = document.elementFromPoint(p.x, p.y);
+    if (!el || !el.getAttribute || !el.getAttribute('data-type')) return null;
+    const cs = window.getComputedStyle(el);
+    return {
+      type: el.getAttribute('data-type'),
+      id: el.getAttribute('data-id'),
+      stroke: cs.stroke,
+      dash: cs.strokeDasharray,
+      fill: cs.fill,
+    };
+  }, { x, y });
+}
+
+// 選ばれている要素。再描画で overlay は作り直されるので、見た目 (.selected) では
+// なく選択そのものを読む。
+// 図の空白を押して選択を解いた状態に戻す (当たり判定の無い所を探して押す)。
+async function clearSelectionByBlankClick(page) {
+  const pt = await page.evaluate(() => {
+    const ov = document.getElementById('overlay-layer');
+    const b = ov.getBoundingClientRect();
+    for (let y = b.top + 4; y < b.bottom - 4; y += 6) {
+      for (let x = b.left + 4; x < b.right - 4; x += 6) {
+        const e = document.elementFromPoint(x, y);
+        if (e && e.classList && e.classList.contains('overlay-background')) return { x, y };
+      }
+    }
+    return null;
+  });
+  if (pt) {
+    await page.mouse.click(pt.x, pt.y);
+    await page.waitForTimeout(200);
+  }
+}
+
+async function selectedId(page) {
+  return page.evaluate(() => {
+    const sel = window.MA.selection.getSelected();
+    if (sel && sel.length) return sel[0].id;
+    const el = document.querySelector('#overlay-layer rect.selectable.selected');
+    return el ? el.getAttribute('data-id') : null;
+  });
+}
+
+// 対象の選択を確実に外す。同じ要素を続けて押すと選択が外れる (押し直しで解除) ので、
+// 「別の要素を押す」→ それでも駄目なら「図の空白を押す」の順で選択を対象から離す。
+// .selected が付いたままだと hover の枠も出ないので、枠を読む前にもこれを通す。
+async function parkSelection(page, avoidId, otherBox) {
+  if (otherBox) {
+    await page.mouse.click(otherBox.x + otherBox.w / 2, otherBox.y + otherBox.h / 2);
+    await page.waitForTimeout(200);
+  }
+  if (await selectedId(page) === avoidId) {
+    await clearSelectionByBlankClick(page);
+  }
+  expect(await selectedId(page)).not.toBe(avoidId);
+}
+
+for (const c of HOVER_CASES) {
+  test('手順2 ' + c.name + '図: ホバーで選択範囲が枠で出て、枠内の別の場所を押しても同じ要素が選ばれる', async ({ page }) => {
+    await S.bootWithSaveDir(page, DIR);
+    await page.locator('#diagram-type').selectOption(c.kind);
+    await page.waitForTimeout(400);
+    await S.typeDsl(page, c.dsl);
+    await page.waitForTimeout(2500);
+
+    // ── 要素 (状態・クラス・部品・ユースケース・アクション) ──
+    const elBoxes = await hitBoxes(page, c.elementType, null);
+    expect(elBoxes.length).toBeGreaterThan(0);
+    const el = elBoxes[0];
+    // 選択を逃がす先 (対象とは別の要素)。
+    const others = c.otherType ? await hitBoxes(page, c.otherType, null) : elBoxes;
+    const other = others.find((b) => b.id !== el.id);
+    expect(other).toBeTruthy();
+
+    // 到達条件その1: マウスを乗せると当たり判定の範囲が枠 (青の破線) で見える。
+    const elFrame = await frameAt(page, el.x + el.w / 2, el.y + el.h / 2);
+    expect(elFrame).not.toBeNull();
+    expect(elFrame.id).toBe(el.id);
+    expect(elFrame.dash).not.toBe('none');
+    expect(elFrame.stroke).not.toBe('none');
+
+    // 到達条件その2: 枠の中の別の場所 (左上寄り・右下寄り) を押しても同じ要素。
+    for (const p of [[el.x + el.w * 0.2, el.y + el.h * 0.2],
+                     [el.x + el.w * 0.8, el.y + el.h * 0.8]]) {
+      await parkSelection(page, el.id, other);
+      await page.mouse.click(p[0], p[1]);
+      await page.waitForTimeout(200);
+      expect(await selectedId(page)).toBe(el.id);
+    }
+
+    if (!c.relationType) return;
+
+    // ── 関係 (遷移・関連・依存) ──
+    // ラベル・ガード・多重度も含めて 1 つの当たり判定 (= 同じ data-id)。
+    const anyRel = await hitBoxes(page, c.relationType, null);
+    expect(anyRel.length).toBeGreaterThan(0);
+    const relId = anyRel[0].id;
+    const relBoxes = await hitBoxes(page, c.relationType, relId);
+    // 矢印の範囲とラベルの範囲の 2 か所以上が同じ関係を指す。
+    expect(relBoxes.length).toBeGreaterThan(1);
+
+    let checked = 0;
+    for (const b of relBoxes) {
+      const cx = b.x + b.w / 2;
+      const cy = b.y + b.h / 2;
+      await parkSelection(page, relId, other);
+      const f = await frameAt(page, cx, cy);
+      // 別の要素が手前にある点は飛ばす (矢じりが図形の縁に接する所)。
+      if (!f || f.type !== c.relationType) continue;
+      // 到達条件その3: 関係のどの場所でも枠が出て、指す関係は同じ。
+      expect(f.id).toBe(relId);
+      expect(f.dash).not.toBe('none');
+      await page.mouse.click(cx, cy);
+      await page.waitForTimeout(200);
+      // 到達条件その4: 矢印を押してもラベルを押しても同じ関係が選ばれる。
+      expect(await selectedId(page)).toBe(relId);
+      checked++;
+    }
+    // 矢印の範囲とラベルの範囲の両方で確かめられたこと。
+    expect(checked).toBeGreaterThan(1);
+  });
+}

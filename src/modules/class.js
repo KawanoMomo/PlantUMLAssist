@@ -2397,14 +2397,19 @@ window.MA.modules.plantumlClass = (function() {
         var lg = linkGroups[ri];
         var lineEl = lg.querySelector('line, path');
         if (!lineEl) continue;
-        var bb2 = OB.extractEdgeBBox(lineEl, 8);
-        if (!bb2) continue;
-        OB.addRect(overlayEl, bb2.x, bb2.y, bb2.width, bb2.height, {
+        // BLK-human-20260912-2130: ラベル (contains) や多重度 (1 / 0..*) も
+        // 同じ関係の当たり判定に入れる。どれを押しても同じ関係が選べる。
+        var relAttrs2 = {
           'data-type': 'relation',
           'data-id': relations[ri].id,
           'data-line': relations[ri].line,
           'data-relation-kind': relations[ri].kind,
-        });
+        };
+        if (!OB.addLinkRects(overlayEl, lg, relAttrs2, 8)) {
+          var bb2 = OB.extractEdgeBBox(lineEl, 8);
+          if (!bb2) continue;
+          OB.addRect(overlayEl, bb2.x, bb2.y, bb2.width, bb2.height, relAttrs2);
+        }
         matched.relation++;
       }
 
@@ -2433,6 +2438,9 @@ window.MA.modules.plantumlClass = (function() {
           console.warn('[class.buildOverlay] note polygon count mismatch: model=' + notes.length + ' svg=' + notePolys.length);
         }
       }
+
+      // BLK-human-20260912-2130: 小さい当たり判定を手前に。共通実装 (src/core)
+      OB.raiseSmallestLast(overlayEl);
 
       return { matched: matched, unmatched: {} };
     },

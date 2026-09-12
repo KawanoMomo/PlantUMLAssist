@@ -1231,15 +1231,23 @@ window.MA.modules.plantumlUsecase = (function() {
         var lg = linkGroups[ri];
         var lineEl = lg.querySelector('line, path');
         if (!lineEl) continue;
-        var bb = OB.extractEdgeBBox(lineEl, 8);
-        if (!bb) continue;
-        OB.addRect(overlayEl, bb.x, bb.y, bb.width, bb.height, {
+        // BLK-human-20260912-2130: 線・矢じり・ラベル (<<include>> 等) をまとめて
+        // 1 つの当たり判定にする
+        var ucRelAttrs = {
           'data-type': 'relation',
           'data-id': relations[ri].id,
           'data-line': relations[ri].line,
           'data-relation-kind': relations[ri].kind,
-        });
+        };
+        if (!OB.addLinkRects(overlayEl, lg, ucRelAttrs, 8)) {
+          var bb = OB.extractEdgeBBox(lineEl, 8);
+          if (!bb) continue;
+          OB.addRect(overlayEl, bb.x, bb.y, bb.width, bb.height, ucRelAttrs);
+        }
       }
+
+      // BLK-human-20260912-2130: 小さい当たり判定を手前に。共通実装 (src/core)
+      OB.raiseSmallestLast(overlayEl);
 
       return {
         matched: {

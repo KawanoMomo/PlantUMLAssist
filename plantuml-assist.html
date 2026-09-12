@@ -4320,8 +4320,13 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 }
 /* BLK-human-20260912-0900: シーケンスのメッセージは矢印からラベル・番号・
    ステレオタイプまでが 1 つの当たり判定。どこまで押せば同じメッセージを選べるかが
-   見て分かるよう、hover で範囲を青の破線で囲う (選択の青の実線とは見分けが付く) */
-#overlay-layer rect.selectable[data-type="message"]:hover:not(.selected) {
+   見て分かるよう、hover で範囲を青の破線で囲う (選択の青の実線とは見分けが付く)
+   BLK-human-20260912-2130: 同じ見た目を全図種の要素・関係に広げる。
+   data-type を持つ当たり判定は全部この枠を出す (peek / lg-mark は別の印なので除く) */
+#overlay-layer rect.selectable[data-type]:hover:not(.selected):not(.peek):not(.lg-mark),
+/* 同じ要素・関係の当たり判定が複数の rect に分かれるとき (関係の箱とラベルの箱) は
+   app.js が .hit-hover をまとめて付ける。枠 = 当たり判定の範囲、を崩さないため */
+#overlay-layer rect.selectable[data-type].hit-hover:not(.selected):not(.peek):not(.lg-mark) {
   fill: rgba(80, 160, 255, 0.10);
   stroke: rgba(80, 160, 255, 0.55);
   stroke-width: 1;

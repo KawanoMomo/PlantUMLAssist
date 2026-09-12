@@ -1,0 +1,7 @@
+@startuml
+actor User
+usecase Login
+usecase Auth
+User --> Login : performs
+Login ..> Auth : include
+@enduml

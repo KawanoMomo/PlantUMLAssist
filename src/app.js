@@ -557,6 +557,41 @@ function init() {
     overlayElForHover.addEventListener('click', hideEdgeHint);
   }
 
+  // BLK-human-20260912-2130: 1 つの要素・関係の当たり判定は複数の rect に分かれる
+  // (関係なら「線と矢じりとラベルを囲う箱」+「ラベルごとの小さい箱」)。CSS の :hover は
+  // マウスの下の 1 枚しか光らせないので、ラベルに乗せるとラベルの分だけが枠になり、
+  // 「どこまで押せば同じものを選べるか」が枠から読めない。同じ data-type / data-id を
+  // 持つ rect を全部まとめて光らせ、枠 = 当たり判定の範囲、を図種によらず成り立たせる。
+  if (overlayElForHover) {
+    var _hoverPeerKey = null;
+    function _clearHoverPeers() {
+      if (!_hoverPeerKey) return;
+      Array.prototype.forEach.call(
+        overlayElForHover.querySelectorAll('rect.hit-hover'),
+        function(r) { r.classList.remove('hit-hover'); });
+      _hoverPeerKey = null;
+    }
+    overlayElForHover.addEventListener('mousemove', function(e) {
+      var t = e.target;
+      var type = t && t.getAttribute && t.getAttribute('data-type');
+      var id = type ? t.getAttribute('data-id') : null;
+      if (!type || id == null) { _clearHoverPeers(); return; }
+      var key = type + ' ' + id;
+      if (key === _hoverPeerKey) return;
+      _clearHoverPeers();
+      _hoverPeerKey = key;
+      // data-id は利用者が付けた名前なので、セレクタに埋めず属性を直接見比べる。
+      Array.prototype.forEach.call(
+        overlayElForHover.querySelectorAll('rect.selectable[data-type]'),
+        function(r) {
+          if (r.getAttribute('data-type') === type && r.getAttribute('data-id') === id) {
+            r.classList.add('hit-hover');
+          }
+        });
+    });
+    overlayElForHover.addEventListener('mouseleave', _clearHoverPeers);
+  }
+
   // 選択中は hover-insert ガイドと挿入 popup を両方抑制する。
   // 理由: 選択 = 編集モードでユーザーは選択項目を扱っており、別の箇所への
   // 挿入を示唆する点線ガイドは視覚ノイズになる。また空白クリックは選択解除に

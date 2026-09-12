@@ -143,7 +143,10 @@ describe('extractUnionBBox', function() {
 describe('message の hover 表示', function() {
   test('当たり判定の範囲が分かる hover スタイルを持つ', function() {
     var html = fs.readFileSync(path.join(__dirname, '../plantuml-assist.html'), 'utf8');
-    var i = html.indexOf('#overlay-layer rect.selectable[data-type="message"]:hover:not(.selected)');
+    // BLK-human-20260912-2130: hover の枠はシーケンス専用セレクタをやめ、
+    // data-type を持つ当たり判定全部 (= 全図種) に共通の 1 ルールにした。
+    // メッセージにも同じ枠が出るので、確かめる対象を共通のセレクタに寄せる。
+    var i = html.indexOf('#overlay-layer rect.selectable[data-type]:hover:not(.selected)');
     expect(i > -1).toBe(true);
     var block = html.slice(i, html.indexOf('}', i));
     expect(block.indexOf('stroke:') > -1).toBe(true);
