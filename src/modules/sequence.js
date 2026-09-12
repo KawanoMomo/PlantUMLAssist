@@ -775,6 +775,17 @@ window.MA.modules.plantumlSequence = (function() {
     return window.MA.textUpdater.insertAfterLine(text, lineNum, line);
   }
 
+  // BLK-human-20260912-0901: 挿入の確定で使う関数を、帯を見て決める。
+  // 帯が絡まないときは従来の insertBefore / insertAfter と同じ行に入る。
+  function _activationAwareInsertFn(text, line, position, kind) {
+    var plain = position === 'before' ? insertBefore : insertAfter;
+    if (kind === 'activation' || kind === 'participant') return plain;
+    var res = _resolveInsert(text, line, position);
+    if (!res) return plain;
+    var target = res.target;
+    return function(t, _line, k, props) { return insertBefore(t, target, k, props); };
+  }
+
   // FEAT-076 (HFR-003): lineNum の message 行を、同一の from / to / arrow / label で
   // **その直後**に 1 行だけ複製する。生成は _formatLine / 挿入は insertAfter の再利用であり
   // 挿入 modal の確定処理と同一経路。message でない行・不在行では text を 1 文字も変えない。
@@ -1009,23 +1020,48 @@ window.MA.modules.plantumlSequence = (function() {
     return INSERT_KINDS.map(function(k) { return { value: k.value, label: k.label, hint: k.hint }; });
   }
 
-  // 挿入結果が DSL の何行目になるか。before は line そのもの、after は line の次。
-  function insertTargetLine(line, position) {
+  // BLK-human-20260912-0901: activate / deactivate の帯を見て挿入行を決める。
+  // text を渡せなかった (= 帯が分からない) ときだけ、従来の素朴な前/後に落ちる。
+  function _resolveInsert(text, line, position) {
+    var ai = window.MA.sequenceActivationInsert;
+    if (!ai || typeof text !== 'string') return null;
+    return ai.resolve(text, line, position);
+  }
+
+  // 挿入結果が DSL の何行目になるか。text があれば帯を避けた行、無ければ
+  // before は line そのもの、after は line の次。
+  function insertTargetLine(line, position, text) {
     var n = parseInt(line, 10);
     if (isNaN(n)) return null;
+    var res = _resolveInsert(text, n, position);
+    if (res) return res.target;
     return position === 'before' ? n : n + 1;
   }
 
   // ピッカー / フォームの見出しに出す「どこに入るか」の 1 行説明。
-  function describeInsertTarget(line, position) {
-    var target = insertTargetLine(line, position);
+  // 帯の内側 / 外側が決まっているときは、それも添える。
+  function describeInsertTarget(line, position, text) {
+    var target = insertTargetLine(line, position, text);
     if (target === null) return '';
-    return 'DSL ' + target + ' 行目に挿入（' + line + ' 行目の' + (position === 'before' ? '前' : '後') + '）';
+    var base = 'DSL ' + target + ' 行目に挿入（' + line + ' 行目の' + (position === 'before' ? '前' : '後') + '）';
+    var res = _resolveInsert(text, line, position);
+    var zone = res ? window.MA.sequenceActivationInsert.zoneLabel(res) : '';
+    return zone ? base + ' · ' + zone : base;
+  }
+
+  // ガイド線に出す 1 行。帯の内側 / 外側まで見せて、クリック前に行き先が分かるようにする。
+  function describeInsertGuide(line, position, text) {
+    var target = insertTargetLine(line, position, text);
+    if (target === null) return null;
+    var res = _resolveInsert(text, line, position);
+    var zone = res ? window.MA.sequenceActivationInsert.zoneLabel(res) : '';
+    return '+ DSL ' + target + ' 行目に挿入' + (zone ? '（' + zone + '）' : '');
   }
 
   // design 5c: 挿入メニューを開いている間、DSL の入る行に印を出す / 消す。
-  function _markerShow(line, position) {
-    if (window.MA.insertMarker) window.MA.insertMarker.show(line, position);
+  function _markerShow(line, position, text) {
+    if (!window.MA.insertMarker) return;
+    window.MA.insertMarker.show(line, position, insertTargetLine(line, position, text));
   }
   function _markerHide() {
     if (window.MA.insertMarker) window.MA.insertMarker.hide();
@@ -1061,11 +1097,12 @@ window.MA.modules.plantumlSequence = (function() {
     var content = document.getElementById('seq-modal-content');
     if (!modal || !content) return;
     // 挿入先の行が決まらないうちは開かない (見出しが空のピッカーを出さない)。
-    if (insertTargetLine(line, position) === null) return;
+    var pickText = ctx && ctx.getMmdText ? ctx.getMmdText() : null;
+    if (insertTargetLine(line, position, pickText) === null) return;
     var esc = window.MA.htmlUtils.escHtml;
     var html = '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">' + esc(title) + '</h3>' +
       '<div id="seq-pick-target" style="font-size:11px;color:var(--text-secondary);margin-bottom:12px;">' +
-        esc(describeInsertTarget(line, position)) + '</div>' +
+        esc(describeInsertTarget(line, position, pickText)) + '</div>' +
       '<div style="display:flex;flex-direction:column;gap:6px;">';
     kinds.forEach(function(k) {
       html += '<button id="' + pickBtnId(k.value) + '" data-kind="' + k.value + '" class="seq-pick-btn" ' +
@@ -1085,7 +1122,7 @@ window.MA.modules.plantumlSequence = (function() {
       'border:1px solid var(--border);color:var(--text-primary);padding:8px;border-radius:4px;cursor:pointer;">キャンセル</button>';
     content.innerHTML = html;
     modal.style.display = 'flex';
-    _markerShow(line, position);
+    _markerShow(line, position, pickText);
 
     Array.prototype.forEach.call(content.querySelectorAll('.seq-pick-btn'), function(btn) {
       btn.addEventListener('click', function() {
@@ -1143,7 +1180,7 @@ window.MA.modules.plantumlSequence = (function() {
     var html = '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">' + title + '</h3>' +
       // BLK-primary-20260907-0356: フォームでも「DSL の何行目に入るか」を示し続ける。
       '<div id="seq-mod-target" style="font-size:11px;color:var(--text-secondary);margin-bottom:12px;">' +
-        window.MA.htmlUtils.escHtml(describeInsertTarget(line, position)) + '</div>';
+        window.MA.htmlUtils.escHtml(describeInsertTarget(line, position, ctx && ctx.getMmdText ? ctx.getMmdText() : null)) + '</div>';
     if (kind === 'message') {
       var arrowOpts = ARROWS.map(function(a) { return { value: a, label: arrowLabel(a), selected: a === '->' }; });
       // FEAT-001: From はアンカー行の from を初期選択する (アンカー不在時は従来どおり先頭)。
@@ -1213,7 +1250,7 @@ window.MA.modules.plantumlSequence = (function() {
       '</div>';
     content.innerHTML = html;
     modal.style.display = 'flex';
-    _markerShow(line, position);
+    _markerShow(line, position, ctx && ctx.getMmdText ? ctx.getMmdText() : null);
 
     var rleObj = null;
     if (kind === 'message') rleObj = window.MA.richLabelEditor.mount(document.getElementById('seq-mod-label-rle'), '');
@@ -1253,7 +1290,9 @@ window.MA.modules.plantumlSequence = (function() {
     });
     document.getElementById('seq-mod-confirm').addEventListener('click', function() {
       var t = ctx.getMmdText();
-      var insertFn = position === 'before' ? insertBefore : insertAfter;
+      // BLK-human-20260912-0901: 帯 (activate/deactivate) を見て行を決め直す。
+      // activation / participant 自体の挿入は帯の内外という概念を持たないので素通し。
+      var insertFn = _activationAwareInsertFn(t, line, position, kind);
       if (kind === 'message') {
         var fr = document.getElementById('seq-mod-from').value;
         var to = document.getElementById('seq-mod-to').value;
@@ -1833,6 +1872,7 @@ window.MA.modules.plantumlSequence = (function() {
     otherInsertKinds: otherInsertKinds,
     insertTargetLine: insertTargetLine,
     describeInsertTarget: describeInsertTarget,
+    describeInsertGuide: describeInsertGuide,
     // design 5c: hover ガイドも「DSL の何行目に入るか」を出す。app.js の hover 側は
     // currentModule.resolveInsertLine しか見ないので、click 側と同じ解決を module から
     // 公開する (無いと汎用の「+ ここに挿入」に落ち、行番号も列も出ない)。

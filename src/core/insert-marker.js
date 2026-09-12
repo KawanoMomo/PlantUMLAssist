@@ -99,9 +99,13 @@ window.MA.insertMarker = (function() {
     els.gutter.innerHTML = gutterHtml(count, target, esc);
   }
 
-  // show(line, position) — 挿入メニューを開くときに呼ぶ。
-  function show(line, position) {
-    var t = targetLine(line, position);
+  // show(line, position, explicitTarget) — 挿入メニューを開くときに呼ぶ。
+  // BLK-human-20260912-0901: activate/deactivate の帯を避けて挿入行がずれることが
+  // あるので、呼び出し側が決めた行を渡せる (渡さなければ従来の before/after 計算)。
+  function show(line, position, explicitTarget) {
+    var t = (typeof explicitTarget === 'number' && !isNaN(explicitTarget))
+      ? explicitTarget
+      : targetLine(line, position);
     if (t === null) return null;
     target = t;
     if (!els) return t;
