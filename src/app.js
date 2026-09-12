@@ -3391,6 +3391,49 @@ function _blockedFileWrite(name) {
   try { return _fileWriteBlock(String(name)) || null; } catch (e) { return null; }
 }
 
+// BLK-primary-20260913-0206: 一括置換・改名の後始末が、開いているタブを丸ごと
+// 保存フォルダへ書き戻していた。そこには (a) 今回の置換が 1 文字も当たっていない図、
+// (b) テンプレ宣言で書き込みを止めてある図、(c) 錠に「元のまま保つ」と答えた図が
+// 混ざる。どれもタブが持っている本文で元ファイルを潰すので、見比べのために開いた
+// 完了物の中身が別の図の本文に入れ替わった (reviewer の言う「内容シャッフル」)。
+//
+// 保存フォルダへ書くのはこの 1 か所だけにして、書いてよいかの判定を saveActiveDoc と
+// 同じにする。まだ答えていない錠 (ask) は **聞かずに書かない** —— 後始末は利用者が
+// 起こした操作ではないので、ここで問いを積むと操作が止まる。答えは次の編集で聞く。
+// 戻り値は書いたかどうか。
+function writeDocToFolder(doc, fileDir) {
+  if (!doc || !window.MA.workspace) return false;
+  if (_blockedFileWrite(doc.name)) {
+    if (window.MA.autoSave && window.MA.autoSave.noteFileBlocked) {
+      window.MA.autoSave.noteFileBlocked(doc.name, _blockedFileWrite(doc.name));
+    }
+    return false;
+  }
+  var SL = window.MA.sourceLock;
+  var d = SL ? SL.decide(doc.id, doc.name, _openDocNames()) : { action: 'write', name: doc.name };
+  if (d.action === 'ask') return false;
+  var out = (d.name === doc.name) ? doc
+    : { id: doc.id, name: d.name, diagramType: doc.diagramType, dsl: doc.dsl };
+  window.MA.workspace.saveToFile(out, fileDir);
+  if (window.MA.saveDiff) window.MA.saveDiff.mark(out.name, out.dsl);
+  if (window.MA.versionTimeline) window.MA.versionTimeline.push(out.name, out.dsl);
+  return true;
+}
+
+// 置換・改名の後始末。**変えた図だけ**を書き戻す (list() を丸ごと書かない)。
+function writeChangedToFolder(changed) {
+  try {
+    var cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null;
+    if (!cfg || cfg.backend !== 'file') return;
+    var byId = {};
+    (window.MA.workspace ? window.MA.workspace.list() : []).forEach(function(d) { byId[d.id] = d; });
+    (changed || []).forEach(function(c) {
+      var d = byId[c && c.id];
+      if (d) writeDocToFolder(d, cfg.fileDir);
+    });
+  } catch (e) {}
+}
+
 // アクティブなタブの現在の編集内容を workspace に書き戻す。
 function saveActiveDoc() {
   if (!window.MA.workspace) return null;
@@ -8901,16 +8944,8 @@ function applySignatureChange(name, spec) {
   updateLineNumbers();
   scheduleRefresh();
   renderTabs();
-  try {
-    var cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null;
-    if (cfg && cfg.backend === 'file') {
-      window.MA.workspace.list().forEach(function(d) {
-        window.MA.workspace.saveToFile(d, cfg.fileDir);
-        if (window.MA.saveDiff) window.MA.saveDiff.mark(d.name, d.dsl);
-        if (window.MA.versionTimeline) window.MA.versionTimeline.push(d.name, d.dsl);
-      });
-    }
-  } catch (e) { /* best-effort */ }
+  // 保存フォルダ運用時は、置換が当たった図だけを書き出す (BLK-primary-20260913-0206)。
+  writeChangedToFolder(res.changed);
   if (window.MA.toast) {
     try { window.MA.toast.show(res.updated + ' 行 / ' + res.changed.length + ' 枚に適用しました'); } catch (e) {}
   }
@@ -9874,17 +9909,8 @@ function renameAcrossDocs(from, to, docs) {
   updateLineNumbers();
   scheduleRefresh();
   renderTabs();
-  // 保存フォルダ運用時は置換後の全図を書き出す。
-  try {
-    var cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null;
-    if (cfg && cfg.backend === 'file') {
-      window.MA.workspace.list().forEach(function(d) {
-        window.MA.workspace.saveToFile(d, cfg.fileDir);
-        if (window.MA.saveDiff) window.MA.saveDiff.mark(d.name, d.dsl);
-        if (window.MA.versionTimeline) window.MA.versionTimeline.push(d.name, d.dsl);
-      });
-    }
-  } catch (e) { /* best-effort */ }
+  // 保存フォルダ運用時は、置換が当たった図だけを書き出す (BLK-primary-20260913-0206)。
+  writeChangedToFolder(res.changed);
   return res;
 }
 
@@ -11496,18 +11522,7 @@ function setupBulkApply() {
     scheduleRefresh();
     renderTabs();
     // 保存フォルダ運用時は当てた図を書き出す (一括置換と同じ扱い)。
-    try {
-      var cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null;
-      if (cfg && cfg.backend === 'file') {
-        res.changed.forEach(function(c) {
-          var d = window.MA.workspace.list().filter(function(x) { return x.id === c.id; })[0];
-          if (!d) return;
-          window.MA.workspace.saveToFile(d, cfg.fileDir);
-          if (window.MA.saveDiff) window.MA.saveDiff.mark(d.name, d.dsl);
-        if (window.MA.versionTimeline) window.MA.versionTimeline.push(d.name, d.dsl);
-        });
-      }
-    } catch (e) { /* best-effort */ }
+    writeChangedToFolder(res.changed);
     renderTargets();
     summary.textContent = res.added + ' 件 / ' + res.changed.length + ' 枚に追加しました';
     summary.setAttribute('data-applied', String(res.added));

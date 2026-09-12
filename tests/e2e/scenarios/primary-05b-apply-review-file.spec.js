@@ -45,6 +45,59 @@ test('手順5.5 参加者名だけの指摘は、対象図だけに絞って反�
   expect(await S.readDoc(page, DIR, 'can_state')).not.toContain('Can_Ctrl');
 });
 
+// BLK-primary-20260913-0206: 同じ手順5.5 の一括置換の後始末が、開いているタブを
+// 丸ごと保存フォルダへ書き戻していた。見比べのために開いて「元のまま保つ」と答えた
+// ファイルまで、タブの編集途中の本文で潰される。primary から見ると「打ち直して保存した
+// 内容が別の図のファイルに入っている」= 内容シャッフルとして現れる。
+// 置換が当たった図だけを書き、錠の答えはここでも効く、を到達条件にする。
+const LOCK_DIR = DIR + '-lock';
+
+test('手順5.5 「元のまま保つ」と答えた図は、一括置換の後始末でも書き換わらない', async ({ page }) => {
+  await S.bootWithSaveDir(page, LOCK_DIR);
+  await S.clearDir(page, LOCK_DIR);
+  await S.putDoc(page, LOCK_DIR, 'driver_common_class', S.docFor('driver_common_class'));
+  await S.putDoc(page, LOCK_DIR, 'can_init_sequence', S.docFor('can_init_sequence'));
+  await page.reload();
+  await page.waitForSelector('#editor');
+  await page.waitForTimeout(600);
+
+  // 見比べ目的で開き、手を入れたうえで「元ファイルは元のまま保つ」を選ぶ。
+  await S.openFolderItem(page, 'driver_common_class');
+  const opened = await page.locator('#editor').inputValue();
+  await S.typeDsl(page, opened.replace('Spi_Driver', 'Spi_Ctrl'));
+  await page.waitForTimeout(900);
+  const lock = page.locator('#source-lock-modal');
+  await expect(lock).toBeVisible();
+  // この 1 枚だけの答えにする (既定は「以後も同じ扱い」が入っている)。
+  const applyAll = page.locator('#source-lock-all');
+  if (await applyAll.isChecked()) await applyAll.uncheck();
+  await page.locator('#source-lock-keep').click();
+  await page.waitForTimeout(1200);
+  // 前提: この時点では元ファイルは守られ、編集は控えの側に出ている。
+  expect(await S.readDoc(page, LOCK_DIR, 'driver_common_class')).not.toContain('Spi_Ctrl');
+
+  // 置換が当たる図も開いておく (当たらないと後始末まで進まない)。
+  await S.openFolderItem(page, 'can_init_sequence');
+  await S.overwriteOpenedFile(page);
+
+  await S.runCommand(page, '一括置換');
+  const allDocs = page.locator('#rename-all-docs');
+  if (await allDocs.count() && !(await allDocs.isChecked())) await allDocs.check();
+  await page.locator('#rename-from').fill('Can_Driver');
+  await page.locator('#rename-to').fill('Can_Ctrl');
+  await page.waitForTimeout(1200);
+  await expect(page.locator('#btn-rename-apply')).toBeEnabled();
+  await page.locator('#btn-rename-apply').click();
+  await page.waitForTimeout(1800);
+
+  // 到達条件その1: 置換が当たった図には反映される。
+  expect(await S.readDoc(page, LOCK_DIR, 'can_init_sequence')).toContain('Can_Ctrl');
+  // 到達条件その2: 錠に「元のまま保つ」と答えた図は、後始末でも書き換わらない。
+  const kept = await S.readDoc(page, LOCK_DIR, 'driver_common_class');
+  expect(kept).not.toContain('Spi_Ctrl');
+  expect(kept).toContain('Spi_Driver');
+});
+
 // BLK-primary-20260909-0503-wish: 同じ 5.5 の中でも、指摘が「junior の GPIO 図と
 // primary の GPIO 図が別物」のときは、差分を見た後に決めたこと (統一する / 別物と
 // する) を自分の図へ反映する手段が無く、他人のフォルダを別途覗いて手で見比べ、
