@@ -201,3 +201,94 @@ test.describe('BLK-primary-0203 系統ごとに図を並べる', () => {
     expect(dsl).toContain('Spi_TransmitDma');
   });
 });
+
+// BLK-primary-20260909-0703-wish: 当たった図を 1 枚ずつ開いて「シーケンスの
+// メッセージに対応する状態が状態遷移図にあるか」を目で突き合わせていた。
+// 突合の段があれば、矛盾のある図だけを開けば済む。
+const SEQ_DMA_GAP = [
+  '@startuml',
+  'title dma_transfer_sequence',
+  'participant Spi_Driver',
+  'participant Dma_Ctrl',
+  'Spi_Driver -> Dma_Ctrl : Spi_TransmitDma',
+  'Dma_Ctrl -> Spi_Driver : Dma_FaultNotify',
+  '@enduml',
+].join('\n');
+
+const STATE_DMA_PARTIAL = [
+  '@startuml',
+  'title dma_state',
+  'state Idle',
+  'state Transmitting_Dma',
+  'Idle --> Transmitting_Dma : Spi_TransmitDma',
+  'Transmitting_Dma --> Idle : TransferComplete',
+  '@enduml',
+].join('\n');
+
+const FLOW_SYMPTOM = 'DMA転送がSpi_TransmitDmaのメッセージ付近で止まる';
+
+async function setupFlowDocs(page) {
+  await gotoApp(page);
+  await typeDsl(page, SEQ_DMA_GAP);
+  await page.locator('#btn-tab-new').click();
+  await typeDsl(page, STATE_DMA_PARTIAL);
+  await page.locator('#btn-tab-new').click();
+  await typeDsl(page, CLS_ADC);
+  await expect(page.locator('#tab-bar .tab')).toHaveCount(3);
+}
+
+test.describe('BLK-primary-0703 当たった図どうしの流れ突合', () => {
+  test.beforeEach(async ({ page }) => { await freshWorkspace(page); });
+
+  test('対応の無い流れを持つ図だけが浮き、対応済みの図は「開かなくてよい」と出る', async ({ page }) => {
+    await setupFlowDocs(page);
+    await openSymptom(page);
+    await page.locator('#symptom-text').fill(FLOW_SYMPTOM);
+    await page.waitForTimeout(300);
+
+    await expect(page.locator('#symptom-flow')).toHaveAttribute('data-gap-docs', '1');
+    await expect(page.locator('#symptom-flow-head')).toContainText('対応の無い流れ');
+    await expect(page.locator('#symptom-flow-head')).toContainText('開かなくてよい');
+
+    // 浮くのはシーケンス図。先頭に来る (開くべき図が一番上)
+    const first = page.locator('#symptom-flow .sym-fl').first();
+    await expect(first).toHaveAttribute('data-status', 'gap');
+    // 図の名前はタブ名 (diagram1 = シーケンス図 / diagram2 = 状態遷移図)
+    await expect(first).toHaveAttribute('data-doc-name', 'diagram1');
+    await expect(first.locator('.sym-fl-gap')).toHaveCount(1);
+    await expect(first.locator('.sym-fl-gap')).toContainText('Dma_FaultNotify');
+
+    // 対応が全部付いた図は開かなくてよい側に落ちる
+    const okRow = page.locator('#symptom-flow .sym-fl[data-doc-name="diagram2"]');
+    await expect(okRow).toHaveAttribute('data-status', 'ok');
+  });
+
+  test('欠落した流れを 1 クリックでその図のその行へ開ける', async ({ page }) => {
+    await setupFlowDocs(page);
+    await openSymptom(page);
+    await page.locator('#symptom-text').fill(FLOW_SYMPTOM);
+    await page.waitForTimeout(300);
+
+    const gap = page.locator('#symptom-flow .sym-fl-gap').first();
+    await expect(gap).toBeVisible();
+    await gap.click();
+    await page.waitForTimeout(400);
+    const dsl = await page.evaluate(() => /** @type {HTMLTextAreaElement} */ (document.getElementById('editor')).value);
+    expect(dsl).toContain('Dma_FaultNotify');
+  });
+
+  test('突合を切れば段が消える (従来どおりの関連度順だけに戻せる)', async ({ page }) => {
+    await setupFlowDocs(page);
+    await openSymptom(page);
+    await page.locator('#symptom-text').fill(FLOW_SYMPTOM);
+    await page.waitForTimeout(300);
+    await expect(page.locator('#symptom-flow .sym-fl').first()).toBeVisible();
+
+    await page.locator('#symptom-cross').uncheck();
+    await page.waitForTimeout(250);
+    await expect(page.locator('#symptom-flow .sym-fl')).toHaveCount(0);
+    await expect(page.locator('#symptom-flow-head')).toHaveText('');
+    // 関連度順の列はそのまま残る
+    expect(await page.locator('#symptom-results .sym-doc').count()).toBeGreaterThan(0);
+  });
+});

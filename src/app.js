@@ -10071,6 +10071,76 @@ function renderSymptomSystems(docs, text) {
   }
 }
 
+// BLK-primary-20260909-0703-wish: 当たった図どうしの流れ突合。
+// 症状検索で 6 図が当たったあと、利用者は「シーケンスのメッセージに対応する状態が
+// 状態遷移図にあるか」を 1 枚ずつ開いて目で確かめていた。ここで先に突き合わせ、
+// 対応の無い流れを持つ図だけを赤く浮かせ、対応済みの図は「開かなくてよい」と名指しする。
+function _symptomCrossOn() {
+  var el = document.getElementById('symptom-cross');
+  return !el || !!el.checked;
+}
+
+function renderSymptomFlow(docs, text) {
+  var box = document.getElementById('symptom-flow');
+  var headEl = document.getElementById('symptom-flow-head');
+  var sf = window.MA.symptomFlow;
+  if (!box || !headEl) return;
+  box.textContent = '';
+  headEl.textContent = '';
+  box.removeAttribute('data-gap-docs');
+  if (!sf) return;
+  if (!_symptomCrossOn()) { headEl.textContent = ''; return; }
+
+  var x = sf.cross(docs, text);
+  box.setAttribute('data-gap-docs', String(x.gapDocs));
+  box.setAttribute('data-ok-docs', String(x.okDocs));
+  headEl.setAttribute('data-gap-docs', String(x.gapDocs));
+  if (!x.rows.length) return;
+  headEl.textContent = sf.headline(x);
+
+  x.rows.forEach(function(r) {
+    var item = document.createElement('div');
+    item.className = 'sym-fl ' + r.status;
+    item.setAttribute('data-doc-name', r.name);
+    item.setAttribute('data-status', r.status);
+    item.setAttribute('data-gaps', String(r.gapCount));
+    var head = document.createElement('div');
+    head.className = 'sym-fl-head';
+    head.title = r.name + ' を開く';
+    var n = document.createElement('span');
+    n.textContent = (r.status === 'gap' ? '⚠ ' : '') + r.name;
+    var note = document.createElement('span');
+    note.className = 'sym-fl-note';
+    note.textContent = r.kindLabel + ' / ' + r.note;
+    head.appendChild(n);
+    head.appendChild(note);
+    head.addEventListener('click', function() {
+      _symptomOpenDoc({ id: r.id, name: r.name, line: r.gaps.length ? r.gaps[0].line : 1 });
+    });
+    item.appendChild(head);
+    // 欠落した流れは行ごとに出す。押せばその図のその行へ運ぶ (開くのはここだけでよい)。
+    r.gaps.forEach(function(g) {
+      var row = document.createElement('div');
+      row.className = 'sym-fl-gap';
+      row.setAttribute('data-name', g.name);
+      row.setAttribute('data-line', String(g.line));
+      row.title = r.name + ' の ' + g.line + ' 行目へ移動 (対応する状態/遷移が見当たりません)';
+      var no = document.createElement('span');
+      no.className = 'sym-fl-line';
+      no.textContent = String(g.line);
+      var tx = document.createElement('span');
+      tx.textContent = g.name + ' → 対応なし';
+      row.appendChild(no);
+      row.appendChild(tx);
+      row.addEventListener('click', function() {
+        _symptomOpenDoc({ id: r.id, name: r.name, line: g.line });
+      });
+      item.appendChild(row);
+    });
+    box.appendChild(item);
+  });
+}
+
 function renderSymptomSearch() {
   var ss = window.MA.symptomSearch;
   var textEl = document.getElementById('symptom-text');
@@ -10114,6 +10184,7 @@ function renderSymptomSearch() {
     headEl.setAttribute('data-systems', '0');
   }
   renderSymptomSystems(docs, text);
+  renderSymptomFlow(docs, text);
 
   resEl.textContent = '';
   rows.forEach(function(r) {
@@ -10198,6 +10269,10 @@ function setupSymptomSearch() {
     textEl.focus();
   });
   if (closeBtn) closeBtn.addEventListener('click', closePanel);
+
+  // 流れ突合の入切。既定は入 (当たった図を 1 枚ずつ開く手数がこの段で消える)。
+  var crossEl = document.getElementById('symptom-cross');
+  if (crossEl) crossEl.addEventListener('change', renderSymptomSearch);
 
   // 保存フォルダを探索範囲に入れる。読み込みはフォルダ保存のときだけ意味がある
   // ので、それ以外では押せないようにして理由を出す。
