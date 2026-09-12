@@ -114,3 +114,13 @@ test('手順7 deactivate の後を指したときは帯の外に入る', async (
   expect(lines.findIndex((l) => l.indexOf('Notify') >= 0))
     .toBeGreaterThan(lines.indexOf('deactivate Hw_Ctrl'));
 });
+
+// BLK-human-20260912-0900: 足した図に指摘を反映するときも、プレビューでの選択が入口。
+// ステレオタイプを付けた図でも、ステレオタイプ・ラベル・矢印のどこを押しても同じメッセージが選べること。
+test('手順7 ステレオタイプ付きのシーケンスでも、ステレオタイプ・ラベル・矢印のどこを押しても同じメッセージが選べる', async ({ page }) => {
+  await S.bootPlain(page);
+  const dsl = ['@startuml', 'participant Adc_Driver', 'participant Hw_Ctrl',
+    'Adc_Driver -> Hw_Ctrl : <<async>>' + String.fromCharCode(92) + 'nAdc_Driver_Init',
+    'Hw_Ctrl --> Adc_Driver : Adc_Driver_Done', '@enduml'].join(String.fromCharCode(10));
+  await S.expectMessageHitUniform(page, expect, dsl, 0);
+});

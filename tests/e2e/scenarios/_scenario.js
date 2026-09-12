@@ -205,10 +205,63 @@ function docFor(name, spiName) {
     'Hw_Ctrl --> ' + who + ' : ' + who + '_Done', '@enduml'].join('\n');
 }
 
+
+// BLK-human-20260912-0900: シーケンスのメッセージは、ステレオタイプ・autonumber を
+// 付けても「矢印・ラベル・番号・ステレオタイプのどこを押しても」同じメッセージが選ばれる。
+// g.message の中の押されうる点 (各 text の中心と矢印の中点) の画面座標を集める。
+async function messageClickPoints(page, msgIndex) {
+  return page.evaluate((i) => {
+    const gs = document.querySelectorAll('#preview-container svg g.message');
+    const g = gs[i];
+    if (!g) return null;
+    const pts = [];
+    g.querySelectorAll('text').forEach((t) => {
+      const r = t.getBoundingClientRect();
+      if (r.width > 0) pts.push({ x: r.x + r.width / 2, y: r.y + r.height / 2, what: 'text:' + t.textContent });
+    });
+    const line = g.querySelector('line');
+    if (line) {
+      const r = line.getBoundingClientRect();
+      pts.push({ x: r.x + r.width / 2, y: r.y + r.height / 2, what: 'arrow' });
+    }
+    return pts;
+  }, msgIndex);
+}
+
+async function selectedMessageLine(page) {
+  return page.evaluate(() => {
+    const r = document.querySelector('#overlay-layer rect.selectable.selected[data-type="message"]');
+    return r ? r.getAttribute('data-line') : null;
+  });
+}
+
+// dsl を読み込み、msgIndex 番目のメッセージのどの点を押しても同じ行が選ばれることを確かめる。
+// 戻り値は押した点の数 (= クリック数の実測に使う)。
+async function expectMessageHitUniform(page, expectFn, dsl, msgIndex) {
+  await typeDsl(page, dsl);
+  await page.waitForTimeout(1200);
+  const pts = await messageClickPoints(page, msgIndex);
+  expectFn(pts && pts.length >= 2).toBe(true);
+  let line = null;
+  for (const pt of pts) {
+    await page.mouse.click(pt.x, pt.y);
+    await page.waitForTimeout(150);
+    const got = await selectedMessageLine(page);
+    expectFn(got === null ? 'none (' + pt.what + ')' : got).not.toBe('none (' + pt.what + ')');
+    if (line === null) line = got;
+    expectFn(got + ' @' + pt.what).toBe(line + ' @' + pt.what);
+    // 同じ rect をもう一度押すと選択が外れる仕様なので、次の点の前に解除しておく。
+    await page.mouse.click(pt.x, pt.y);
+    await page.waitForTimeout(100);
+  }
+  return pts.length;
+}
+
 module.exports = {
   PRIMARY_DOCS, docFor,
   dirFor, absDirFor, bootWithSaveDir, bootPlain, bootDownloadMode,
   putDoc, readDoc, listDir, clearDir, clearTickets,
   openFolder, openFolderItem, overwriteOpenedFile, typeDsl, renameActive, runCommand, exportVia,
   GPIO_STATE, GPIO_SEQ,
+  messageClickPoints, selectedMessageLine, expectMessageHitUniform,
 };

@@ -136,7 +136,11 @@ window.MA.sequenceOverlay = (function() {
     var msgBest = OB.pickBestOffset(svgEl, parsedData.relations, 'g.message', candidates);
     var msgMatches = msgBest.matches;
     msgMatches.forEach(function(m) {
-      var bb = OB.extractBBox(m.groupEl);
+      // BLK-human-20260912-0900: 矢印・ラベル・番号 (autonumber)・ステレオタイプの
+      // どこを押しても同じメッセージが選ばれるよう、g.message の子要素全部を覆う。
+      // 最初の <text> だけを見る extractBBox では、autonumber なら番号の上、
+      // ステレオタイプ付きならステレオタイプの上しか反応しなかった。
+      var bb = OB.extractUnionBBox(m.groupEl) || OB.extractBBox(m.groupEl);
       if (!bb) return;
       OB.addRect(overlayEl, bb.x - 4, bb.y - 4, (bb.width || 60) + 8, (bb.height || 14) + 8, {
         'data-type': 'message',

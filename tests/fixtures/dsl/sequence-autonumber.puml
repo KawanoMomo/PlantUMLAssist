@@ -1,0 +1,11 @@
+@startuml
+autonumber
+actor User
+participant System
+database DB
+
+User -> System : Login
+System -> DB : Query
+DB --> System : Result
+System --> User : Response
+@enduml
