@@ -281,7 +281,13 @@ window.MA.workspace = (function() {
       return window.fetch('/autosave', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: doc.name, dsl: doc.dsl, dir: _dir(fileDir) }),
+        // BLK-junior-20260912-2103-wish: 保存した図種を一緒に送り、server に控えさせる。
+        // 次にフォルダから開くときは本文判定ではなくこの控えを使う。
+        // doc が図種を持たない経路 (一括の書き戻し) では送らない = 前の控えが残る。
+        body: JSON.stringify({
+          type: doc.name, dsl: doc.dsl, dir: _dir(fileDir),
+          kind: (window.MA.savedKind ? window.MA.savedKind.slugOf(doc.diagramType) : '') || undefined,
+        }),
         keepalive: true,
       }).then(function(r) {
         if (!(r && r.ok)) return false;
@@ -340,7 +346,7 @@ window.MA.workspace = (function() {
   function listFolder(fileDir) {
     var asked = _dir(fileDir);
     var miss = { entries: [], exists: null, dir: asked, roles: {}, verified: {}, now: null,
-                 gone: [] };
+                 gone: [], kinds: {} };
     try {
       return window.fetch('/autosave?dir=' + encodeURIComponent(asked))
         .then(function(r) { return r.ok ? r.json() : null; })
@@ -373,6 +379,10 @@ window.MA.workspace = (function() {
             // 控え。図と同じフォルダに置く (localStorage だと開き直すたびに消え、
             // 何度出しても毎回「初回提出」になっていた)。古い server は返さない。
             exportLog: (data.exportLog && typeof data.exportLog === 'object') ? data.exportLog : null,
+            // BLK-junior-20260912-2103-wish: 図ごとの「保存したときの図種」。
+            // 一覧の行に印として出し、開くときの図種にも使う。
+            // 古い server は返さない (その場合は今までどおり本文から当てる)。
+            kinds: (data.kinds && typeof data.kinds === 'object') ? data.kinds : {},
           };
         })
         .catch(function() { return miss; });

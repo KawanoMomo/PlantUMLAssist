@@ -261,3 +261,50 @@ test('手順2 手本の矢印から、種類を選び直さずに同じ関連を
   expect(t).toContain('Spi_Driver --> IRQCtrl : uses');
   expect(t).toContain('Driver_Common --> IRQCtrl : uses');
 });
+
+// BLK-junior-20260912-2103-wish: 手順 2 で先輩の図の構成をそのまま持ち込むと、
+// `actor` を持ち、ラベルに括弧の付くシーケンスは本文判定でユースケースに倒れる。
+// 保存した図種を控えておき、一覧の行に印として出し、そのまま開けることを守る。
+const KIND_SEQ = [
+  '@startuml',
+  'title TIMERドライバ初期化シーケンス',
+  'actor Dev',
+  'participant Timer_Driver',
+  'Dev -> Timer_Driver : Timer_Init(cfg)',
+  'Timer_Driver --> Dev : E_OK',
+  '@enduml',
+].join('\n');
+
+test('手順2 保存した図種の印が一覧に出て、押すとその図種のまま開く', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+
+  // 先輩の構成を真似た「紛らわしい書き方」のシーケンスを、図種を選んで保存する。
+  await page.locator('#diagram-type').selectOption('plantuml-sequence');
+  await page.waitForTimeout(300);
+  await S.typeDsl(page, KIND_SEQ);
+  await S.renameActive(page, 'timer_init_sequence');
+  await S.runCommand(page, 'ファイルを保存');
+  await page.waitForTimeout(1200);
+
+  // 本文だけを見ると、この図はユースケースに倒れる (直す前の挙動)。
+  const guess = await page.evaluate((t) => window.MA.workspace.detectType(t), KIND_SEQ);
+  expect(guess).toBe('plantuml-usecase');
+
+  // 別の図種の図に移って、今の図種をシーケンス以外にしておく。
+  await page.locator('#diagram-type').selectOption('plantuml-class');
+  await page.waitForTimeout(400);
+
+  // 到達条件その1: 一覧の行に「前回保存した図種」の印が出る。
+  await page.locator('#btn-tab-folder').click();
+  await page.waitForTimeout(800);
+  const badge = page.locator('#folder-panel .folder-kind[data-kind-of="timer_init_sequence"]');
+  await expect(badge).toHaveAttribute('data-saved-kind', 'sequence');
+  await expect(badge).toHaveText(/シーケンス/);
+
+  // 到達条件その2: その印を押すと、本文判定に関係なくシーケンスのまま開く。
+  await badge.click();
+  await page.waitForTimeout(1200);
+  expect(await page.locator('#diagram-type').inputValue()).toBe('plantuml-sequence');
+  expect(await page.locator('#editor').inputValue()).toContain('Timer_Init(cfg)');
+});

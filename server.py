@@ -802,6 +802,48 @@ class Handler(BaseHTTPRequestHandler):
         """
         return save_dir / '_roles.json'
 
+    def _kinds_path(self, save_dir):
+        """BLK-junior-20260912-2103-wish: 保存したときの図種の控え。
+
+        本文からの判定 (dsl_kind) は「別図種と紛らわしい書き方」で外れる
+        (actor を持ち、ラベルに括弧の付くシーケンスはユースケースに見える)。
+        保存した側が知っている図種をフォルダの属性として残し、開くときはこれを使う。
+        図の本文には足さない (puml をバイトで突き合わせるレビューを濁らせないため)。
+        """
+        return save_dir / '_kinds.json'
+
+    def _read_saved_kinds(self, save_dir):
+        p = self._kinds_path(save_dir)
+        if not p.exists():
+            return {}
+        try:
+            data = json.loads(p.read_text(encoding='utf-8'))
+        except (ValueError, OSError):
+            return {}
+        kinds = data.get('kinds') if isinstance(data, dict) else None
+        if not isinstance(kinds, dict):
+            return {}
+        return {k: v for k, v in kinds.items()
+                if isinstance(k, str) and v in DIAGRAM_KIND_SLUGS}
+
+    def _note_saved_kind(self, save_dir, name, kind):
+        """1 枚分の控えを書き足す。図種が読めない保存は前の控えを消さない。
+
+        呼び出し元 (do_POST) が既に _fs_lock を持っているのでここでは取らない
+        (threading.Lock は入れ子にできず、取ると保存が固まる)。
+        """
+        if kind not in DIAGRAM_KIND_SLUGS:
+            return
+        kinds = self._read_saved_kinds(save_dir)
+        if kinds.get(name) == kind:
+            return
+        kinds[name] = kind
+        try:
+            self._kinds_path(save_dir).write_text(
+                json.dumps({'kinds': kinds}, ensure_ascii=False), encoding='utf-8')
+        except OSError:
+            pass  # 控えは best-effort。書けなくても保存そのものは通す
+
     def _export_log_path(self, save_dir):
         """BLK-primary-20260909-0003-wish: 「いつ・どの版で何を客先に出したか」の控え。
 
@@ -1301,8 +1343,14 @@ class Handler(BaseHTTPRequestHandler):
             self._autosave_meta_path(save_dir).write_text(json.dumps(meta), encoding='utf-8')
         except OSError:
             pass  # meta is best-effort
+        # BLK-junior-20260912-2103-wish: 保存した側が知っている図種だけを控える。
+        # 本文からの判定 (new_kind) は控えに入れない —— 紛らわしい書き方の図で
+        # 外れた判定を控えてしまうと、次に開くときも同じ図種で開いてしまう
+        # (控えの値打ちは「判定に頼らないこと」にある)。
+        self._note_saved_kind(save_dir, target, data.get('kind'))
         out = {'ok': True, 'meta': meta, 'path': str(file_path),
-               'savedAs': target, 'kind': new_kind}
+               'savedAs': target, 'kind': new_kind,
+               'savedKind': self._read_saved_kinds(save_dir).get(target, '')}
         if target != dt:
             out['renamedFrom'] = dt
             out['prevKind'] = prev_kind
@@ -1677,10 +1725,15 @@ class Handler(BaseHTTPRequestHandler):
         # 別呼び出しにすると「未確認 22 枚」の一覧が一瞬出て、確かめた図まで疑わせる。
         verified = self._read_svg_verify(save_dir) if exists else {}
         export_log = self._read_export_log(save_dir) if exists else None
+        # BLK-junior-20260912-2103-wish: 保存したときの図種の控え。一覧と同時に返す
+        # (別呼び出しにすると、図種の印が付く前の一覧が一瞬出る)。
+        saved_kinds = self._read_saved_kinds(save_dir) if exists else {}
+        for entry in entries:
+            entry['savedKind'] = saved_kinds.get(entry['name'], '')
         self._send_json(200, {'files': files, 'entries': entries, 'meta': meta,
                               'dir': str(save_dir), 'exists': exists, 'roles': roles,
                               'verified': verified, 'now': now, 'gone': gone,
-                              'exportLog': export_log})
+                              'exportLog': export_log, 'kinds': saved_kinds})
 
     def _autosave_entry(self, path):
         """1 図分の {name, mtime, size, hash, svgMtime}。読めない図でも名前だけは返す。
