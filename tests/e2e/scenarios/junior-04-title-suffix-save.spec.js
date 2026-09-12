@@ -75,12 +75,17 @@ test('手順4 先輩のシーケンス図から活動図を組み立て、(資�
   await S.putDoc(page, DIR, 'gpio_init_sequence', S.GPIO_SEQ);
   await S.openFolderItem(page, 'gpio_init_sequence');
 
-  // 新しいタブを活動図にすると、雛形は start / :Hello world; / stop。
+  // 新しいタブを活動図にすると、出るのは骨格 (start / stop) だけ。
+  // BLK-junior-20260909-0703: 以前はここに :Hello world; というサンプルの工程が
+  // 入っており、手本を持っている人は打ち始める前に消す一手間が要った。
   await page.locator('#btn-tab-new').click();
   await page.waitForTimeout(400);
   await page.locator('#diagram-type').selectOption('plantuml-activity');
   await page.waitForTimeout(600);
-  expect(await page.locator('#editor').inputValue()).toContain(':Hello world;');
+  const fresh = await page.locator('#editor').inputValue();
+  expect(fresh).not.toContain('Hello world');
+  expect(fresh).toContain('start');
+  expect(fresh).toContain('stop');
 
   // 工程名は先輩の図の矢印ラベルから借りる (打ち直さない)。
   await page.locator('#ac-tail-reuse').click();
