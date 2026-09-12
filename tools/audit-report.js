@@ -237,6 +237,13 @@ function summarize(audits) {
       // 残さないと、前回の run との件数比較で「食い違いが直った」と読めてしまう。
       excludedTemplateDomains: (ch.result.templateDomains || []).map((t) => t.domain),
       templateFiles: ch.result.templateFiles || 0,
+      // BLK-reviewer-20260909-0703-wish: 図の中の宣言 (' domain-verdict: ...) を読み、
+      // 「決定済み」を食い違いから外す。外した数と、宣言が実体と合っていない組は
+      // 必ず残す (外した分だけ件数が減ると「直った」と読めてしまう)。
+      declared: ch.result.declared || 0,
+      conflicts: ch.result.conflicts || 0,
+      conflictNames: ch.result.groups.reduce((out, g) => out.concat(
+        (g.conflictPairs || []).map((p) => `${g.domain} [${p.a.folder} × ${p.b.folder}]: ${p.verdict.text}`)), []),
     };
   }
   return s;
@@ -345,12 +352,19 @@ function formatSummary(report, prev, options) {
     // 外したテンプレ由来のドメインは必ず添える。黙って減らすと、前回との
     // 件数比較で「食い違いが直った」と読めてしまう。
     const ex = s.cohort.excludedTemplateDomains || [];
-    const note = ex.length ? ` (テンプレ由来 ${ex.length} ドメインは除外: ${ex.join(', ')})` : '';
+    // 図の中の宣言で決着済みの組も同じ理由で数えて出す。
+    const vparts = [];
+    if (s.cohort.declared) vparts.push(`宣言済み ${s.cohort.declared} 組は除外`);
+    if (s.cohort.conflicts) vparts.push(`宣言と実体の食い違い ${s.cohort.conflicts} 組`);
+    const note = (vparts.length ? ` (${vparts.join(' / ')})` : '')
+      + (ex.length ? ` (テンプレ由来 ${ex.length} ドメインは除外: ${ex.join(', ')})` : '');
     lines.push(s.cohort.crossFolder === 0
       ? `ドメイン突合: フォルダをまたぐドメインがありません (全 ${s.cohort.domains} ドメイン)${note}`
       : (s.cohort.mismatched === 0
         ? `ドメイン突合: フォルダをまたぐ ${s.cohort.crossFolder} ドメインは名前もラベルも揃っている${tail}${note}`
         : `ドメイン突合: ${s.cohort.crossFolder} ドメイン中 ${s.cohort.mismatched} 件が食い違い (${s.cohort.mismatchedNames.join(', ')})${tail}${note}`));
+    // 宣言が実体と合っていない組は、件数だけでは直しようがないので名指しする。
+    for (const c of (s.cohort.conflictNames || [])) lines.push(`  宣言ずれ: ${c}`);
   }
   for (const k of Object.keys(report.audits)) {
     const a = report.audits[k];

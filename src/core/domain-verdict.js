@@ -158,6 +158,35 @@ window.MA.domainVerdict = (function() {
     return "' domain-verdict: " + _s(kind) + ' ' + _s(domain) + ' vs ' + _s(otherFolder);
   }
 
+  // BLK-reviewer-20260909-0703-wish: 印は 1 本だけ読めればよい、ではなくなった。
+  // reviewer は突合のたびに「この組は宣言済みか」を全部の相手について知りたい。
+  // 図 1 枚が持っている宣言を、書いてある順に全部返す。
+  function listMarks(dsl) {
+    var out = [];
+    _s(dsl).split(/\r?\n/).forEach(function(line, i) {
+      var m = line.match(MARK_RE);
+      if (m) out.push({ kind: m[1].toLowerCase(), domain: m[2], other: m[3], line: i + 1 });
+    });
+    return out;
+  }
+
+  // 印を 1 本外す (「やっぱり決めていないことにする」)。相手を指定しなければ全部。
+  function removeMark(dsl, otherFolder) {
+    var want = _s(otherFolder).toLowerCase();
+    return _s(dsl).split(/\r?\n/).filter(function(line) {
+      var m = line.match(MARK_RE);
+      if (!m) return true;
+      return want ? m[3].toLowerCase() !== want : false;
+    }).join('\n');
+  }
+
+  // 画面に出す 1 行。宣言は「同一」「別物」の 2 語しかない。
+  function markText(mark) {
+    if (!mark) return '';
+    return _s(mark.other) + ': ' + (mark.kind === 'shared' ? '同一ドメイン' : '別ドメイン')
+      + (mark.domain ? ' (' + _s(mark.domain) + ')' : '');
+  }
+
   function readVerdict(dsl, otherFolder) {
     var lines = _s(dsl).split(/\r?\n/);
     var want = _s(otherFolder).toLowerCase();
@@ -232,6 +261,9 @@ window.MA.domainVerdict = (function() {
     distinguishPlan: distinguishPlan,
     applyDistinguish: applyDistinguish,
     markLine: markLine,
+    listMarks: listMarks,
+    removeMark: removeMark,
+    markText: markText,
     readVerdict: readVerdict,
     applyMark: applyMark,
     apply: apply,

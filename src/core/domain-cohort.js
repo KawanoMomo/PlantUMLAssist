@@ -207,6 +207,54 @@ window.MA.domainCohort = (function() {
   function _id(x) { return x.key; }
   function _label(x) { return x.name || x.label; }
 
+  // ── 宣言を読む (BLK-reviewer-20260909-0703-wish) ────────────────────────
+  // 「この図は向こうのフォルダの同名ドメインとは別物」という判断は、図の中の
+  // `' domain-verdict: ...` 行に残っている。これまで突合はその行を一切見なかったので、
+  // reviewer は突合が出した食い違いを 1 件ずつ grep で「決定済みか」確かめ直していた。
+  // ここで組ごとに宣言を読み、突合の結果を 3 つに分ける:
+  //   - 宣言なしの食い違い … これから判断すべきもの (従来の「食い違い」)
+  //   - 宣言どおり         … 見なくてよいもの
+  //   - 宣言と実体の食い違い … 宣言が現実と合っていないもの (reviewer が見るべき本命)
+  function _verdictOf(doc, otherFolder) {
+    var dv = window.MA.domainVerdict;
+    if (!dv || !dv.readVerdict) return null;
+    return dv.readVerdict(_dsl(doc), otherFolder);
+  }
+
+  // 組 1 つの宣言。どちらのフォルダが宣言したかも残す (片方しか書いていない図を
+  // 「両方が決めた」と読ませない)。
+  function verdictFor(pair) {
+    var a = pair && pair.a, b = pair && pair.b;
+    if (!a || !b) return { kind: '', by: [], conflict: '', text: '' };
+    var va = _verdictOf(a.doc, b.folder);
+    var vb = _verdictOf(b.doc, a.folder);
+    var by = [];
+    if (va) by.push(a.folder);
+    if (vb) by.push(b.folder);
+    var kind = '', conflict = '';
+    if (va && vb && va.kind !== vb.kind) {
+      // 両者が逆のことを宣言している。どちらかが古いので、機械では決められない。
+      kind = '';
+      conflict = 'declaration';
+    } else {
+      kind = (va && va.kind) || (vb && vb.kind) || '';
+    }
+    var matched = !!(pair.diff && pair.diff.matched);
+    if (!conflict && kind === 'separate' && matched) conflict = 'separate-but-same';
+    if (!conflict && kind === 'shared' && !matched) conflict = 'shared-but-differs';
+    return { kind: kind, by: by, conflict: conflict, text: verdictText(kind, conflict, by) };
+  }
+
+  function verdictText(kind, conflict, by) {
+    var who = (by || []).length ? ' (' + by.join(', ') + ' が宣言)' : '';
+    if (conflict === 'declaration') return '宣言が食い違う: 同一と別物が両方書かれている' + who;
+    if (conflict === 'separate-but-same') return '宣言と実体の食い違い: 別物と宣言されているのに中身が揃っている' + who;
+    if (conflict === 'shared-but-differs') return '宣言と実体の食い違い: 同一と宣言されているのに中身が食い違う' + who;
+    if (kind === 'separate') return '別ドメインと宣言済み' + who;
+    if (kind === 'shared') return '同一ドメインと宣言済み' + who;
+    return '';
+  }
+
   // 図 2 枚の差分。部品名と矢印ラベルを別々に出す
   // (直し方が違う: 名前は改名、ラベルは書き漏らしか架空の遷移)。
   function diff(a, b) {
@@ -246,8 +294,13 @@ window.MA.domainCohort = (function() {
     var inc = !!(opts && opts.includeTemplates);
     var pairs = pairsFor(group, opts).map(function(p) {
       p.diff = diff(p.a.doc, p.b.doc);
+      p.verdict = verdictFor(p);
       return p;
     });
+    // 宣言どおりの組は「食い違い」から外す。外した数は必ず残す
+    // (黙って減らすと、前回の件数と比べたときに「直った」と読めてしまう)。
+    var declared = pairs.filter(function(p) { return p.verdict.kind && !p.verdict.conflict; });
+    var conflicts = pairs.filter(function(p) { return !!p.verdict.conflict; });
     return {
       domain: group.domain,
       folders: inc ? group.folders : (group.dataFolders || group.folders),
@@ -256,8 +309,15 @@ window.MA.domainCohort = (function() {
       templates: (group.templateEntries || []).length,
       includedTemplates: inc,
       pairs: pairs,
-      // 突き合わせた組のうち、片方にしか無い名前・ラベルを持つ組の数。
-      mismatched: pairs.filter(function(p) { return !p.diff.matched; }).length,
+      // 突き合わせた組のうち、まだ判断されていない食い違いの数。
+      // 「別物と宣言済み」の組はここに数えない (決定済みを毎回見せない)。
+      mismatched: pairs.filter(function(p) {
+        return !p.diff.matched && p.verdict.kind !== 'separate' && !p.verdict.conflict;
+      }).length,
+      // 宣言どおりで見なくてよい組と、宣言が現実と合っていない組。
+      declared: declared.length,
+      conflicts: conflicts.length,
+      conflictPairs: conflicts,
       // 同じドメイン名だが図種が噛み合わず比べられなかったフォルダ跨ぎの枚数。
       // 0 件を「揃っている」と読み違えないために別に数える。
       unpaired: (inc ? group.crossFolder : group.crossFolderData) && pairs.length === 0,
@@ -287,6 +347,10 @@ window.MA.domainCohort = (function() {
           reason: (g.entries[0] && g.entries[0].templateReason) || 'テンプレ',
         };
       }),
+      // 宣言済みで突合から降りた組と、宣言が実体と合っていない組 (BLK-reviewer-20260909-0703-wish)。
+      // reviewer が見るべきは conflicts と、宣言なしの食い違い (groups[].mismatched) だけ。
+      declared: cross.reduce(function(n, g) { return n + (g.declared | 0); }, 0),
+      conflicts: cross.reduce(function(n, g) { return n + (g.conflicts | 0); }, 0),
       templateFiles: all.reduce(function(n, g) { return n + (g.templateEntries || []).length; }, 0),
       includedTemplates: inc,
       domains: all.length,
@@ -305,10 +369,40 @@ window.MA.domainCohort = (function() {
       + tpl.map(function(t) { return t.domain; }).join(', ') + ')';
   }
 
+  // 宣言を数えた尾 (BLK-reviewer-20260909-0703-wish)。宣言済みを黙って外すと
+  // 件数の減りが「直った」に見えるので、外した数と、宣言が実体と合っていない数を必ず言う。
+  function verdictNote(result) {
+    var r = result || {};
+    var parts = [];
+    if (r.declared) parts.push('宣言済み ' + r.declared + ' 組は除外');
+    if (r.conflicts) parts.push('宣言と実体の食い違い ' + r.conflicts + ' 組');
+    return parts.length ? ' (' + parts.join(' / ') + ')' : '';
+  }
+
+  // 宣言が実体と合っていない組だけを並べる。reviewer が手順 4.7 で最初に見る一覧。
+  function conflictRows(result) {
+    var out = [];
+    ((result && result.groups) || []).forEach(function(g) {
+      (g.conflictPairs || []).forEach(function(p) {
+        out.push({
+          domain: g.domain,
+          kind: p.kind,
+          left: p.a.folder + ' / ' + p.a.base,
+          right: p.b.folder + ' / ' + p.b.base,
+          leftName: p.a.name,
+          rightName: p.b.name,
+          conflict: p.verdict.conflict,
+          text: p.verdict.text,
+        });
+      });
+    });
+    return out;
+  }
+
   function summaryLine(result) {
     var r = result || {};
     var g = r.groups || [];
-    var note = templateNote(r);
+    var note = verdictNote(r) + templateNote(r);
     if (!g.length) {
       return 'ドメイン突合: フォルダをまたぐドメインがありません (全 ' + (r.domains | 0) + ' ドメイン)' + note;
     }
@@ -339,6 +433,8 @@ window.MA.domainCohort = (function() {
           gaps: p.diff.gaps,
           matched: p.diff.matched,
           diff: p.diff,
+          // 宣言済みの組は行に印が出る。「決定済みかどうか」を grep で確かめ直さない。
+          verdict: p.verdict || { kind: '', by: [], conflict: '', text: '' },
         });
       });
     });
@@ -357,6 +453,10 @@ window.MA.domainCohort = (function() {
     templateReasonOf: templateReasonOf,
     isTemplate: isTemplate,
     templateNote: templateNote,
+    verdictFor: verdictFor,
+    verdictText: verdictText,
+    verdictNote: verdictNote,
+    conflictRows: conflictRows,
     pairsFor: pairsFor,
     diff: diff,
     compare: compare,
