@@ -229,6 +229,8 @@ window.MA.classScaffold = (function() {
 
   return {
     existingIds: existingIds,
+    // class-derive が同じ差し込み位置 (@enduml の直前) を使うため公開する。
+    insertBeforeEnd: _insertBeforeEnd,
     normalizeId: normalizeId,
     parseMembers: parseMembers,
     normalizeSpec: normalizeSpec,

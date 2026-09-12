@@ -898,6 +898,188 @@ window.MA.modules.plantumlClass = (function() {
     });
   }
 
+  // BLK-junior-20260909-0703-wish: 手本のクラス図で親を選んだまま、派生を 1 つ起こす。
+  // 親の宣言とメンバは原文のまま引き継ぎ (打ち直さない)、親が既に引いている関連は
+  // 「同じ関連を引く」のチェックで派生にも引ける。埋めるのは名前と固有メンバだけ。
+  function _showDeriveModal(element, parsedData, ctx) {
+    var modal = document.getElementById('cl-sc-modal');
+    var content = document.getElementById('cl-sc-modal-content');
+    if (!modal || !content) return;
+    var CD = window.MA.classDerive;
+    var esc = window.MA.htmlUtils.escHtml;
+    var P = window.MA.properties;
+    var text0 = ctx.getMmdText();
+
+    var inherited = CD.memberSource(text0, element);
+    var cands = CD.relationCandidates(text0, parsedData, element.id);
+    var INPUT = 'background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:3px 6px;border-radius:3px;font-size:12px;';
+    var SECTION = 'font-size:10px;color:var(--accent);font-weight:bold;margin:10px 0 4px 0;';
+
+    var relHtml = cands.length
+      ? cands.map(function(c, i) {
+          return '<label class="cl-dv-rel" style="display:block;font-size:11px;color:var(--text-primary);margin-bottom:3px;cursor:pointer;">' +
+            '<input type="checkbox" id="cl-dv-rel-' + i + '" data-i="' + i + '" checked> ' +
+            esc(CD.candidateText(c, element.id)) + '</label>';
+        }).join('')
+      : '<div style="font-size:11px;color:var(--text-secondary);">この親から出ている関連はありません</div>';
+
+    content.innerHTML =
+      '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">この親から派生を 1 つ作る</h3>' +
+      '<div id="cl-dv-parent" style="font-size:11px;color:var(--text-secondary);margin-bottom:12px;">' +
+        esc(CD.declOf(element)) + ' を継承します</div>' +
+      '<div style="' + SECTION + '">派生クラス名</div>' +
+      '<input id="cl-dv-name" type="text" placeholder="例: Timer_Driver" style="width:100%;box-sizing:border-box;' + INPUT + '">' +
+      '<div style="' + SECTION + '">メンバ (親の分を引き継いでいます。要らない行は消す)</div>' +
+      '<textarea id="cl-dv-members" rows="5" style="width:100%;box-sizing:border-box;font-family:Consolas,monospace;' + INPUT + '">' +
+        esc(inherited) + '</textarea>' +
+      '<div style="' + SECTION + '">同じ関連を引く</div>' +
+      '<div id="cl-dv-rels">' + relHtml + '</div>' +
+      '<div style="' + SECTION + '">追加される行</div>' +
+      '<pre id="cl-dv-preview" style="margin:0;background:var(--bg-primary);border:1px solid var(--border);border-radius:3px;padding:6px;font-family:Consolas,monospace;font-size:11px;color:var(--text-primary);white-space:pre-wrap;min-height:34px;"></pre>' +
+      '<div id="cl-dv-errors" style="font-size:11px;color:var(--accent-red);margin-top:6px;min-height:14px;"></div>' +
+      '<div style="display:flex;gap:8px;margin-top:12px;">' +
+        '<button id="cl-dv-cancel" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:8px;border-radius:4px;cursor:pointer;">キャンセル</button>' +
+        '<button id="cl-dv-confirm" style="flex:1;background:var(--accent);border:none;color:#fff;padding:8px;border-radius:4px;cursor:pointer;">確定</button>' +
+      '</div>';
+    modal.style.display = 'flex';
+
+    function val(id) { var el = document.getElementById(id); return el ? el.value : ''; }
+
+    function collectSpec() {
+      var picked = [];
+      for (var i = 0; i < cands.length; i++) {
+        var cb = document.getElementById('cl-dv-rel-' + i);
+        if (cb && cb.checked) picked.push(i);
+      }
+      return {
+        parentId: element.id,
+        parentKind: element.kind,
+        name: val('cl-dv-name'),
+        members: val('cl-dv-members'),
+        picked: picked,
+      };
+    }
+
+    function refresh() {
+      var spec = collectSpec();
+      var text = ctx.getMmdText();
+      var pre = document.getElementById('cl-dv-preview');
+      if (pre) pre.textContent = CD.preview(text, parsedData, spec).join('\n');
+      var v = CD.validate(text, parsedData, spec);
+      var errEl = document.getElementById('cl-dv-errors');
+      if (errEl) errEl.textContent = spec.name ? v.errors.join(' / ') : '';
+      var btn = document.getElementById('cl-dv-confirm');
+      if (btn) {
+        btn.disabled = !v.ok;
+        btn.style.opacity = v.ok ? '1' : '0.5';
+        btn.style.cursor = v.ok ? 'pointer' : 'not-allowed';
+      }
+    }
+
+    ['cl-dv-name', 'cl-dv-members'].forEach(function(id) { P.bindEvent(id, 'input', refresh); });
+    for (var i = 0; i < cands.length; i++) P.bindEvent('cl-dv-rel-' + i, 'change', refresh);
+    P.bindEvent('cl-dv-cancel', 'click', function() { modal.style.display = 'none'; });
+    P.bindEvent('cl-dv-confirm', 'click', function() {
+      var spec = collectSpec();
+      var text = ctx.getMmdText();
+      if (!CD.validate(text, parsedData, spec).ok) return;
+      window.MA.history.pushHistory();
+      ctx.setMmdText(CD.apply(text, parsedData, spec));
+      modal.style.display = 'none';
+      ctx.onUpdate();
+    });
+    refresh();
+    var nameEl = document.getElementById('cl-dv-name');
+    if (nameEl && nameEl.focus) nameEl.focus();
+  }
+
+  // BLK-junior-20260909-0703-wish: 選んだ矢印と同じ種類・同じラベルの関連をもう 1 本引く。
+  // 種類はこの矢印のものに固定なので、カードから選び直す手が要らない。
+  function _showSameRelationModal(relation, parsedData, ctx) {
+    var modal = document.getElementById('cl-sc-modal');
+    var content = document.getElementById('cl-sc-modal-content');
+    if (!modal || !content) return;
+    var CS = window.MA.classScaffold;
+    var esc = window.MA.htmlUtils.escHtml;
+    var P = window.MA.properties;
+    // 記法は kind から組み直さず、選んだ行に書かれているものをそのまま見せる
+    // (`-->` を `--` と出したら「同じ関連」を引いたことにならない)。
+    var arrow = window.MA.classDerive.arrowBetween(ctx.getMmdText(), relation)
+      || CS.ARROWS[relation.kind] || '--';
+    var kindCard = window.MA.relationKindCards.kindsOf('class').filter(function(k) {
+      return k.value === relation.kind;
+    })[0];
+    var names = (parsedData.elements || []).map(function(e) { return e.id; });
+    var INPUT = 'background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:3px 6px;border-radius:3px;font-size:12px;';
+
+    function pick(id, selected) {
+      return '<select id="' + id + '" style="flex:1;' + INPUT + '">' +
+        names.map(function(n) {
+          return '<option value="' + esc(n) + '"' + (n === selected ? ' selected' : '') + '>' + esc(n) + '</option>';
+        }).join('') + '</select>';
+    }
+
+    content.innerHTML =
+      '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">同じ関連を引く</h3>' +
+      '<div id="cl-sr-kind" style="font-size:11px;color:var(--text-secondary);margin-bottom:12px;">' +
+        esc((kindCard ? kindCard.name : relation.kind) + ' ' + arrow) + ' のまま引きます</div>' +
+      '<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">' +
+        pick('cl-sr-from', relation.from) +
+        '<span style="font-family:Consolas,monospace;font-size:12px;color:var(--text-secondary);">' + esc(arrow) + '</span>' +
+        pick('cl-sr-to', relation.to) +
+      '</div>' +
+      '<input id="cl-sr-label" type="text" placeholder="ラベル" value="' + esc(relation.label || '') + '" style="width:100%;box-sizing:border-box;' + INPUT + '">' +
+      '<pre id="cl-sr-preview" style="margin:10px 0 0 0;background:var(--bg-primary);border:1px solid var(--border);border-radius:3px;padding:6px;font-family:Consolas,monospace;font-size:11px;color:var(--text-primary);white-space:pre-wrap;min-height:20px;"></pre>' +
+      '<div id="cl-sr-errors" style="font-size:11px;color:var(--accent-red);margin-top:6px;min-height:14px;"></div>' +
+      '<div style="display:flex;gap:8px;margin-top:12px;">' +
+        '<button id="cl-sr-cancel" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:8px;border-radius:4px;cursor:pointer;">キャンセル</button>' +
+        '<button id="cl-sr-confirm" style="flex:1;background:var(--accent);border:none;color:#fff;padding:8px;border-radius:4px;cursor:pointer;">確定</button>' +
+      '</div>';
+    modal.style.display = 'flex';
+
+    function val(id) { var el = document.getElementById(id); return el ? el.value : ''; }
+    // 元の行を写して端点とラベルだけ差し替える (矢印の記法・多重度はそのまま残す。
+    // kind から組み直すと手本の `-->` が `--` に化けて「同じ関連」にならない)。
+    function newLine(text) {
+      var line = window.MA.classDerive.sameRelationLine(text, relation, val('cl-sr-from'), val('cl-sr-to'));
+      if (!line) return '';
+      var label = val('cl-sr-label');
+      var cut = line.indexOf(' : ');
+      var head = cut >= 0 ? line.slice(0, cut) : line;
+      return label ? head + ' : ' + label : head;
+    }
+
+    function refresh() {
+      var text = ctx.getMmdText();
+      var pre = document.getElementById('cl-sr-preview');
+      if (pre) pre.textContent = newLine(text);
+      var same = val('cl-sr-from') === val('cl-sr-to');
+      var errEl = document.getElementById('cl-sr-errors');
+      if (errEl) errEl.textContent = same ? '元と先が同じクラスです' : '';
+      var btn = document.getElementById('cl-sr-confirm');
+      if (btn) {
+        btn.disabled = same;
+        btn.style.opacity = same ? '0.5' : '1';
+        btn.style.cursor = same ? 'not-allowed' : 'pointer';
+      }
+    }
+
+    ['cl-sr-from', 'cl-sr-to'].forEach(function(id) { P.bindEvent(id, 'change', refresh); });
+    P.bindEvent('cl-sr-label', 'input', refresh);
+    P.bindEvent('cl-sr-cancel', 'click', function() { modal.style.display = 'none'; });
+    P.bindEvent('cl-sr-confirm', 'click', function() {
+      if (val('cl-sr-from') === val('cl-sr-to')) return;
+      var text = ctx.getMmdText();
+      var line = newLine(text);
+      if (!line) return;
+      window.MA.history.pushHistory();
+      ctx.setMmdText(CS.insertBeforeEnd(text, [line]));
+      modal.style.display = 'none';
+      ctx.onUpdate();
+    });
+    refresh();
+  }
+
   // 親 1 つ + 派生クラス数個 + 関連数本を 1 つのフォームで組む。
   // class 追加フォームと Relation 追加フォームを開き直す回数が
   // クラス数 + 関連数に比例してしまい、DSL を直接打つ方が早くなるため、
@@ -1391,6 +1573,8 @@ window.MA.modules.plantumlClass = (function() {
           '<button id="cl-move-down" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↓ 下へ</button>' +
           '<button id="cl-delete" style="flex:0 0 60px;background:var(--accent-red);color:#fff;border:none;padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 削除</button>' +
         '</div>' +
+        // BLK-junior-20260909-0703-wish: 手本の親を選んだまま派生を 1 つ起こす。
+        '<button id="cl-derive-open" style="width:100%;margin-top:8px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">⬇ この親から派生を 1 つ作る</button>' +
       '</div>';
 
     // design 4a: 属性 / Attributes と メソッド / Methods を別の節に分け、
@@ -1498,6 +1682,11 @@ window.MA.modules.plantumlClass = (function() {
           '</div>';
 
     propsEl.innerHTML = html;
+
+    // BLK-junior-20260909-0703-wish: 選んでいるクラスを親にして派生を 1 つ起こす。
+    P.bindEvent('cl-derive-open', 'click', function() {
+      _showDeriveModal(element, parsedData, ctx);
+    });
 
     P.bindEvent('cl-edit-apply', 'click', function() {
       window.MA.history.pushHistory();
@@ -1861,8 +2050,14 @@ window.MA.modules.plantumlClass = (function() {
         P.relationOptionsFor('cl-rel-more', ctx.getMmdText(), relation.line) +
         P.primaryButtonHtml('cl-rel-apply', '変更を反映') +
         ' <button id="cl-rel-delete" type="button" style="background:var(--accent-red);color:#fff;border:none;padding:6px 10px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 削除</button>' +
+        // BLK-junior-20260909-0703-wish: 手本の矢印から種類を選び直さずに同じ関連を引く。
+        '<button id="cl-rel-same" type="button" style="width:100%;margin-top:8px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">⇢ この関連と同じものを引く</button>' +
       '</div>';
     propsEl.innerHTML = html;
+
+    P.bindEvent('cl-rel-same', 'click', function() {
+      _showSameRelationModal(relation, parsedData, ctx);
+    });
 
     // design 3c: 細かい指定は「その他の設定」に畳み、押した時点で DSL へ反映する。
     P.bindRelationOptionsFor('cl-rel-more', relation.line, ctx);
