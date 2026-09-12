@@ -1294,8 +1294,7 @@ window.MA.modules.plantumlComponent = (function() {
         var lg = linkGroups[ri];
         var lineEl = lg.querySelector('line, path');
         if (!lineEl) continue;
-        var bb = OB.extractEdgeBBox(lineEl, 8);
-        if (!bb) continue;
+        var bb = null;
         // BLK-junior-20260908-1703: 同じ部品から出る線は色も太さも同じで、
         // クリックして右パネルの From/To を読むまで相手が分からなかった。
         // 乗せた時点で相手が読めるよう、rect に相手を持たせる。
@@ -1310,8 +1309,16 @@ window.MA.modules.plantumlComponent = (function() {
           var hintAttrs = EH.hintAttrs(relations[ri]);
           Object.keys(hintAttrs).forEach(function(k) { relAttrs[k] = hintAttrs[k]; });
         }
-        OB.addRect(overlayEl, bb.x, bb.y, bb.width, bb.height, relAttrs);
+        // BLK-human-20260912-2130: 線・矢じり・ラベルをまとめて 1 つの当たり判定にする
+        if (!OB.addLinkRects(overlayEl, lg, relAttrs, 8)) {
+          bb = OB.extractEdgeBBox(lineEl, 8);
+          if (!bb) continue;
+          OB.addRect(overlayEl, bb.x, bb.y, bb.width, bb.height, relAttrs);
+        }
       }
+
+      // BLK-human-20260912-2130: 小さい当たり判定を手前に。共通実装 (src/core)
+      OB.raiseSmallestLast(overlayEl);
 
       return {
         matched: {

@@ -115,6 +115,28 @@ window.MA.overlayBuilder = (function() {
         height: parseFloat(n.getAttribute('height')) || 0,
       };
     }
+    if (tag === 'ellipse') {
+      var cx = parseFloat(n.getAttribute('cx')) || 0;
+      var cy = parseFloat(n.getAttribute('cy')) || 0;
+      var rx = parseFloat(n.getAttribute('rx')) || 0;
+      var ry = parseFloat(n.getAttribute('ry')) || 0;
+      return { x: cx - rx, y: cy - ry, width: rx * 2, height: ry * 2 };
+    }
+    if (tag === 'path') {
+      // jsdom には getBBox が無い。d から座標を拾って外接矩形を作る
+      // (曲線の制御点も含むので実際の線より少し広いが、当たり判定としては安全側)。
+      var dnums = (n.getAttribute('d') || '').match(/-?\d+(?:\.\d+)?/g);
+      if (!dnums || dnums.length < 2) return null;
+      var pxs = [], pys = [];
+      for (var di = 0; di + 1 < dnums.length; di += 2) {
+        pxs.push(parseFloat(dnums[di])); pys.push(parseFloat(dnums[di + 1]));
+      }
+      return {
+        x: Math.min.apply(null, pxs), y: Math.min.apply(null, pys),
+        width: Math.max.apply(null, pxs) - Math.min.apply(null, pxs),
+        height: Math.max.apply(null, pys) - Math.min.apply(null, pys),
+      };
+    }
     return null;
   }
 
@@ -132,6 +154,95 @@ window.MA.overlayBuilder = (function() {
     });
     if (minX === null) return null;
     return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+  }
+
+  // BLK-human-20260912-2130: 関係 (遷移・関連・依存・矢印) の当たり判定を全図種で 1 つに寄せる。
+  // PlantUML は <g class="link"> の中に 線 (path/line) + 矢じり (polygon) +
+  // ラベル・ガード・多重度 (text) をまとめて置く。シーケンスのメッセージ (extractUnionBBox) と
+  // 同じ考え方で子要素全部の和集合を 1 つの当たり判定にし、図種ごとに別実装しない。
+  // ラベルだけ・矢印だけを押しても同じ関係が選ばれ、hover の枠でその範囲が見える。
+  function extractLinkBBox(linkGroupEl, padding) {
+    var pad = padding == null ? 8 : padding;
+    var bb = extractUnionBBox(linkGroupEl, 'path, line, polygon, polyline, text, rect, ellipse');
+    if (!bb) return null;
+    return {
+      x: bb.x - pad, y: bb.y - pad,
+      width: bb.width + 2 * pad, height: bb.height + 2 * pad,
+    };
+  }
+
+  // BLK-human-20260912-2130: 関係 1 本ぶんの当たり判定を置く。全図種でここだけを呼ぶ。
+  //  1. 和集合の rect …… 線・矢じり・ラベル・ガード・多重度を囲う「選択範囲」。
+  //     hover の枠がこれで出るので、押す前にどこまでが同じ関係か見て分かる。
+  //  2. ラベル (<text>) ごとの小さい rect …… 同じ data-id / data-type を持つ。
+  //     斜めの関係どうしは 1. の箱が重なりうる。ラベルの上だけは必ず自分の関係が
+  //     選ばれるよう、小さい箱を手前 (raiseSmallestLast) に重ねて取りこぼしを防ぐ。
+  // どちらを押しても選ばれる関係は同じなので、利用者から見た当たり判定は 1 つ。
+  function addLinkRects(overlayEl, linkGroupEl, attrs, padding) {
+    if (!overlayEl || !linkGroupEl) return null;
+    var bb = extractLinkBBox(linkGroupEl, padding);
+    if (!bb) return null;
+    // data-hit-kind="link" は raiseSmallestLast が「関係は要素より後ろ」に置くための印。
+    var linkAttrs = {};
+    Object.keys(attrs || {}).forEach(function(k) { linkAttrs[k] = attrs[k]; });
+    linkAttrs['data-hit-kind'] = 'link';
+    var main = addRect(overlayEl, bb.x, bb.y, bb.width, bb.height, linkAttrs);
+    var labelPad = 3;
+    Array.prototype.forEach.call(linkGroupEl.querySelectorAll('text'), function(t) {
+      var tb = _nodeBBox(t);
+      if (!tb || !tb.width) return;
+      addRect(overlayEl,
+        tb.x - labelPad, tb.y - labelPad,
+        tb.width + 2 * labelPad, tb.height + 2 * labelPad, linkAttrs);
+    });
+    return main;
+  }
+
+  // 関係を表す <g> の集合。図種ごとにセレクタを書き分けない。
+  function linkGroups(svgEl) {
+    if (!svgEl) return [];
+    return svgEl.querySelectorAll('g.link, g[class*="link_"]');
+  }
+
+  // 矢じり等の子要素から、それを含む関係の <g> を遡って探す。
+  function closestLinkGroup(el) {
+    var n = el;
+    while (n && n.getAttribute) {
+      var cls = n.getAttribute('class') || '';
+      if (n.tagName && n.tagName.toLowerCase() === 'g' && /(^|\s|_)link(_|\s|$)/.test(cls)) return n;
+      n = n.parentNode;
+    }
+    return null;
+  }
+
+  // BLK-human-20260912-2130: 当たり判定を広げると、大きい箱 (斜めの関係・入れ物) が
+  // 小さい箱 (状態・クラス・部品) を覆い隠し、押しても手前の大きい方が選ばれてしまう。
+  // 前後関係を 2 段で決める。hitTestTopmost もブラウザの pointer-events も
+  // 「後ろの子が手前」なので、これ 1 つで「枠内のどこを押してもその要素が選べる」が
+  // 図種によらず成り立つ。
+  //  1. 関係 (data-hit-kind="link") は要素より必ず後ろ。関係の箱は線の周りに
+  //     余白を取るので端が要素に食い込む。食い込んだ所は要素が勝つ ——
+  //     図形の上を押したら図形、というのが利用者の期待。
+  //  2. 同じ段の中では面積の大きい順 = 小さい (より具体的な) 当たり判定が手前。
+  //     入れ物 (パッケージ・合成状態) の中の要素が押せなくならない。
+  // 背景 rect (overlay-background) は選択解除のため必ず最背面に残す。
+  function raiseSmallestLast(overlayEl) {
+    if (!overlayEl) return;
+    var rects = Array.prototype.slice.call(overlayEl.querySelectorAll('rect.selectable'));
+    if (rects.length < 2) return;
+    var area = function(r) {
+      return (parseFloat(r.getAttribute('width')) || 0) * (parseFloat(r.getAttribute('height')) || 0);
+    };
+    var isLink = function(r) { return r.getAttribute('data-hit-kind') === 'link' ? 0 : 1; };
+    // 元の並び順を保つ安定ソート (面積が同じものの前後関係を変えない)
+    rects.forEach(function(r, i) { r.__ovIdx = i; });
+    rects.sort(function(a, b) {
+      var k = isLink(a) - isLink(b);
+      if (k !== 0) return k;
+      var d = area(b) - area(a);
+      return d !== 0 ? d : a.__ovIdx - b.__ovIdx;
+    });
+    rects.forEach(function(r) { delete r.__ovIdx; overlayEl.appendChild(r); });
   }
 
   function extractEdgeBBox(pathEl, padding) {
@@ -306,16 +417,21 @@ window.MA.overlayBuilder = (function() {
 
   return {
     addBackground: addBackground,
+    addLinkRects: addLinkRects,
     addRect: addRect,
+    closestLinkGroup: closestLinkGroup,
     dedupById: dedupById,
     extractBBox: extractBBox,
     extractEdgeBBox: extractEdgeBBox,
+    extractLinkBBox: extractLinkBBox,
+    linkGroups: linkGroups,
     extractUnionBBox: extractUnionBBox,
     extractMultiLineTextBBoxes: extractMultiLineTextBBoxes,
     hitTestTopmost: hitTestTopmost,
     matchByDataSourceLine: matchByDataSourceLine,
     matchByOrder: matchByOrder,
     pickBestOffset: pickBestOffset,
+    raiseSmallestLast: raiseSmallestLast,
     syncDimensions: syncDimensions,
     warnIfMismatch: warnIfMismatch,
   };

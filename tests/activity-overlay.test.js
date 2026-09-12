@@ -165,11 +165,17 @@ describe('activity buildOverlay: shape classification (real PlantUML SVG signatu
     expect(overlay.querySelectorAll('rect[data-type="start"]').length).toBe(1);
     expect(overlay.querySelectorAll('rect[data-type="action"]').length).toBe(1);
     expect(overlay.querySelectorAll('rect[data-type="stop"]').length).toBe(1);
-    // Verify document order via data-id
-    var allRects = overlay.querySelectorAll('rect.selectable');
-    expect(allRects[0].getAttribute('data-id')).toBe('__a_0');
-    expect(allRects[1].getAttribute('data-id')).toBe('__a_1');
-    expect(allRects[2].getAttribute('data-id')).toBe('__a_2');
+    // BLK-human-20260912-2130: overlay の並びは「面積の大きい順」になった
+    // (OB.raiseSmallestLast)。小さい当たり判定を手前に置かないと、広げた関係の箱が
+    // 要素を覆って押せなくなるため。DOM の並びは描画順ではなくなったので、
+    // ここでは「3 つの node がそれぞれ 1 枚ずつ出ている」ことを id で確かめる。
+    var ids = Array.prototype.map.call(
+      overlay.querySelectorAll('rect.selectable'),
+      function(r) { return r.getAttribute('data-id'); });
+    expect(ids.length).toBe(3);
+    expect(ids.indexOf('__a_0') > -1).toBe(true);
+    expect(ids.indexOf('__a_1') > -1).toBe(true);
+    expect(ids.indexOf('__a_2') > -1).toBe(true);
   });
 
   test('skips overlay generation when shape count mismatches node count', function() {

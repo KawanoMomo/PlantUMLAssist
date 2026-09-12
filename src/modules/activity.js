@@ -1532,7 +1532,11 @@ window.MA.modules.plantumlActivity = (function() {
           break;
         }
         used[i] = true;
-        OB.addRect(overlayEl, bb.x, bb.y, bb.width, bb.height, {
+        // BLK-human-20260912-2130: 分岐ラベル (yes / no) は文字の外周ちょうどだと
+        // 当たり判定が数 px しかなく、狙って押すのが難しい。他図種の関係と同じく
+        // 少し広げ、hover の枠でその範囲が見えるようにする。
+        var pad = 4;
+        OB.addRect(overlayEl, bb.x - pad, bb.y - pad, bb.width + 2 * pad, bb.height + 2 * pad, {
           'data-type': 'branch',
           'data-id': t.id,
           'data-line': String(t.line),
@@ -1622,6 +1626,9 @@ window.MA.modules.plantumlActivity = (function() {
     }
 
     _addBranchLabelRects(svgEl, parsedData, overlayEl);
+
+    // BLK-human-20260912-2130: 小さい当たり判定を手前に。共通実装 (src/core)
+    OB.raiseSmallestLast(overlayEl);
   }
 
   function renderProps(selData, parsedData, propsEl, ctx) {

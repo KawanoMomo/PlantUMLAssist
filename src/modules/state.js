@@ -792,11 +792,20 @@ window.MA.modules.plantumlState = (function() {
           var minY = Math.min.apply(null, ys);
           var maxX = Math.max.apply(null, xs);
           var maxY = Math.max.apply(null, ys);
-          OB.addRect(overlayEl, minX - 8, minY - 8, (maxX - minX) + 16, (maxY - minY) + 16, {
+          // BLK-human-20260912-2130: 矢じりだけだと当たり判定が 16px 角しかなく、
+          // 遷移ラベル (start [ready] / init) を押しても何も選べなかった。
+          // PlantUML は線・矢じり・ラベルを同じ <g class="link"> に入れるので、
+          // その和集合を当たり判定にして「線・矢じり・ラベル・ガードのどこでも選べる」に統一する。
+          var trAttrs = {
             'data-type': 'transition',
             'data-id': tr.id,
             'data-line': String(tr.line),
-          });
+          };
+          var lg = OB.closestLinkGroup(p);
+          if (!lg || !OB.addLinkRects(overlayEl, lg, trAttrs, 8)) {
+            OB.addRect(overlayEl, minX - 8, minY - 8,
+              (maxX - minX) + 16, (maxY - minY) + 16, trAttrs);
+          }
         });
       } else if (typeof console !== 'undefined' && console.warn) {
         console.warn('[state.buildOverlay] transition arrow mismatch: model=' + transitions.length + ' svg=' + arrowHeads.length);
@@ -827,6 +836,9 @@ window.MA.modules.plantumlState = (function() {
         });
       }
     }
+
+    // BLK-human-20260912-2130: 小さい当たり判定を手前に。共通実装 (src/core)
+    OB.raiseSmallestLast(overlayEl);
   }
 
   function renderProps(selData, parsedData, propsEl, ctx) {
