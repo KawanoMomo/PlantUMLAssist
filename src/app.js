@@ -464,8 +464,15 @@ function init() {
   // ガイド線のラベル。挿入先の DSL 行番号を module に計算させる (module が
   // insertTargetLine を持たない場合は汎用文言に落ちる)。
   function _insertGuideLabel(res) {
-    if (!res || !currentModule || typeof currentModule.insertTargetLine !== 'function') return null;
-    var target = currentModule.insertTargetLine(res.line, res.position);
+    if (!res || !currentModule) return null;
+    // BLK-human-20260912-0901: 帯 (activate/deactivate) の内側 / 外側までガイドに出す。
+    // module に describeInsertGuide があれば、現在の DSL を渡してそちらに任せる。
+    if (typeof currentModule.describeInsertGuide === 'function') {
+      var label = currentModule.describeInsertGuide(res.line, res.position, mmdText);
+      if (label) return label;
+    }
+    if (typeof currentModule.insertTargetLine !== 'function') return null;
+    var target = currentModule.insertTargetLine(res.line, res.position, mmdText);
     if (target === null || typeof target === 'undefined') return null;
     return '+ DSL ' + target + ' 行目に挿入';
   }
