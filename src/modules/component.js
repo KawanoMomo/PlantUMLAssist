@@ -606,6 +606,42 @@ window.MA.modules.plantumlComponent = (function() {
     });
   }
 
+  // BLK-junior-20260912-2206-wish: 手本になるコンポーネント図が 1 枚も無い部品を、
+  // 部品名 1 語から起こす。判断は core/component-starter.js に置き、ここは
+  // 「この部品の図はまだ無い」の確認と、押したときの引き渡しだけをする。
+  function _bindStarter() {
+    var CS = window.MA.componentStarter;
+    var P = window.MA.properties;
+    var inputEl = document.getElementById('co-starter-subject');
+    var hintEl = document.getElementById('co-starter-hint');
+    var haveEl = document.getElementById('co-starter-have');
+    if (!CS || !inputEl || !hintEl || !haveEl) return;
+
+    var refresh = function() {
+      var ws = window.MA.workspace;
+      var docs = (ws && ws.list) ? ws.list() : [];
+      var plan = CS.plan(inputEl.value, docs);
+      hintEl.textContent = CS.summary(plan);
+      hintEl.setAttribute('data-deps', String(plan ? plan.rows.length : 0));
+      hintEl.setAttribute('data-usage', String(plan ? plan.usageCount : 0));
+      // 既にこの部品の図があるなら、下書きより先にそれを開く方が早い。
+      var have = plan ? CS.existingDocs(inputEl.value, docs) : [];
+      haveEl.setAttribute('data-have', String(have.length));
+      haveEl.textContent = !plan ? ''
+        : (have.length
+          ? 'この部品のコンポーネント図は既にあります: ' + have.map(function(d) { return d.name; }).join(' / ')
+          : 'この部品のコンポーネント図はまだありません');
+    };
+    inputEl.addEventListener('input', refresh);
+    refresh();
+
+    P.bindEvent('co-starter-add', 'click', function() {
+      if (!window.MA.makeComponentDraft) { alert('下書きを作れませんでした'); return; }
+      if (!CS.normalizeSubject(inputEl.value)) { alert('部品名を入れてください (例: TIMER)'); return; }
+      window.MA.makeComponentDraft(inputEl.value);
+    });
+  }
+
   // BLK-junior-20260909-0303: 図の全要素の Alias / Label を 1 枚の表で書き換える。
   // 要素を 1 個ずつ選び直す往復と「関連にも追従」の押下を無くすため、反映は
   // 常に関連 Relation まで追従する。
@@ -676,6 +712,20 @@ window.MA.modules.plantumlComponent = (function() {
         '<div id="co-tail-detail" style="margin-top:6px;"></div>' +
       '</div>' +
       _renameTableHtml(elements) +
+      // BLK-junior-20260912-2206-wish: 手本が 1 枚も無い部品は、本体を末尾に追加して
+      // から依存チェックの起点を選び直す、という組み立てを毎回手でやることになる。
+      // 部品名 1 語で「本体 + 依存」の下書きを別タブに起こす。
+      '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' +
+          '白紙から: 定石構成の下書き</label>' +
+        P.fieldHtml('部品名', 'co-starter-subject', '', '例: TIMER / GPIO / CAN') +
+        '<div id="co-starter-have" style="font-size:10px;color:var(--text-secondary);margin:-4px 0 2px;line-height:1.5;"></div>' +
+        '<div id="co-starter-hint" style="font-size:10px;color:var(--text-secondary);margin:0 0 6px;line-height:1.5;"></div>' +
+        P.primaryButtonHtml('co-starter-add', '＋ 定石構成から下書き') +
+        '<div style="font-size:10px;color:var(--text-secondary);margin-top:4px;line-height:1.5;">' +
+          '本体 1 つと、この部品のシーケンス図・状態遷移図に出てくる相手・定石の依存先を入れた' +
+          '下書きを別タブで開きます。要らない依存はそのまま消して使えます</div>' +
+      '</div>' +
       // BLK-junior-20260908-0203-wish: ドライバの図で「定石の依存先のうち今の図に
       // 無いもの」を出す。先輩の他部品の図を 1 枚ずつ開いて見比べる代わり。
       '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
@@ -686,6 +736,7 @@ window.MA.modules.plantumlComponent = (function() {
     propsEl.innerHTML = html;
 
     _renderDepsCheck(parsedData, ctx);
+    _bindStarter();
     _bindRenameTable(ctx);
 
 
