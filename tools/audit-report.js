@@ -20,6 +20,12 @@ const auditScope = require('../src/core/audit-scope');
 // ディレクトリなら再帰して .puml を集める。ファイルならそれ 1 枚。
 // name は入力ルートからの相対パスにする (同名 basename が別フォルダにあっても
 // 突合結果の doc 名で区別できるようにするため)。
+// BLK-reviewer-20260909-0703: 保存フォルダの中の自動保存の控え。図そのものではなく
+// 上書き前の版なので、監査の対象に混ぜると (a) 同じ図が版の数だけ重なり、
+// (b) `_versions` がペルソナのフォルダ名として突合に出る。
+// 名指しで渡されたとき (その中を意図して見に行った場合) だけ辿る。
+const BOOKKEEPING_DIRS = ['_versions', '_vault'];
+
 function collectDocs(targets, options) {
   const opts = options || {};
   const exts = opts.extensions || ['.puml', '.pu', '.plantuml'];
@@ -30,24 +36,38 @@ function collectDocs(targets, options) {
     const key = path.resolve(filePath);
     if (seen[key]) return;
     seen[key] = true;
-    docs.push({ name: name.replace(/\\/g, '/'), dsl: fs.readFileSync(filePath, 'utf-8'), path: key });
+    docs.push({ name: name.split(path.sep).join('/'), dsl: fs.readFileSync(filePath, 'utf-8'), path: key });
   }
 
-  function walk(dir, base) {
+  function walk(dir, base, prefix) {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       if (entry.name === 'node_modules' || entry.name === '.git') continue;
       const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) walk(full, base);
-      else if (exts.indexOf(path.extname(entry.name).toLowerCase()) >= 0) {
-        pushFile(full, path.relative(base, full));
+      if (entry.isDirectory()) {
+        if (BOOKKEEPING_DIRS.indexOf(entry.name) >= 0) continue;
+        walk(full, base, prefix);
+      } else if (exts.indexOf(path.extname(entry.name).toLowerCase()) >= 0) {
+        pushFile(full, path.join(prefix, path.relative(base, full)));
       }
     }
   }
 
-  for (const t of (Array.isArray(targets) ? targets : [targets])) {
+  const list = Array.isArray(targets) ? targets : [targets];
+  // BLK-reviewer-20260909-0703: フォルダを 2 つ以上渡すのは「フォルダ同士を
+  // 突き合わせたい」ということなので、名前の先頭 1 段にフォルダ名を付ける。
+  // 付けないと primary と junior のどちらの図かが名前から消え、フォルダを
+  // またぐドメインが 0 件になっていた (絶対パスで渡したときも同じ)。
+  // フォルダ 1 つのときは今までどおり、そのフォルダからの相対名。
+  const withFolder = list.filter(
+    (t) => fs.existsSync(t) && fs.statSync(t).isDirectory()).length > 1;
+
+  for (const t of list) {
     if (!fs.existsSync(t)) throw new Error('見つかりません: ' + t);
-    if (fs.statSync(t).isDirectory()) walk(t, t);
-    else pushFile(t, path.basename(t));
+    if (fs.statSync(t).isDirectory()) {
+      walk(t, t, withFolder ? path.basename(path.resolve(t)) : '');
+    } else {
+      pushFile(t, path.basename(t));
+    }
   }
 
   docs.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));

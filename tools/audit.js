@@ -32,6 +32,8 @@ const USAGE = [
   '使い方: node tools/audit.js <ファイル|フォルダ> [...] [オプション]',
   '',
   '  --only a,b    回す監査を絞る (' + report.auditNames().join(', ') + ')',
+  '  --cohort      ドメイン突合だけを要約で出す (= --only cohort --summary)。',
+  '                フォルダを 2 つ以上渡すと、名前の先頭 1 段がそのフォルダ名になる',
   '  --summary     JSON ではなく人が読む要約を出す',
   '  --out FILE    JSON をファイルに書く (標準出力にはパスだけ)',
   '  --since FILE  前回の監査 JSON と突き合わせ、増えた指摘・消えた指摘と、',
@@ -48,6 +50,9 @@ function parseArgs(argv) {
     const a = argv[i];
     if (a === '--help' || a === '-h') opts.help = true;
     else if (a === '--summary') opts.summary = true;
+    // BLK-reviewer-20260909-0703: 手順 4.7 は毎 tick これだけを打つ。
+    // `--only cohort --summary` の 24 打鍵を 8 打鍵にする。
+    else if (a === '--cohort') { opts.only = ['cohort']; opts.summary = true; }
     else if (a === '--only') opts.only = String(argv[++i] || '').split(',').map((s) => s.trim()).filter(Boolean);
     else if (a.indexOf('--only=') === 0) opts.only = a.slice(7).split(',').map((s) => s.trim()).filter(Boolean);
     else if (a === '--since') opts.since = argv[++i];
