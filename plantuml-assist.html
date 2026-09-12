@@ -2581,6 +2581,42 @@ table.vault-table button.vault-open:hover { border-color: var(--accent); }
 #symptom-systems .sym-sys-doc .sym-sys-kind { color: var(--text-secondary); white-space: nowrap; }
 #symptom-systems .sym-sys-doc.closed .sym-sys-kind::after { content: ' (未開封)'; }
 #symptom-systems .sym-act { color: var(--text-secondary); padding: 2px 0; }
+#symptom-flow-head {
+  font-size: 10px;
+  color: var(--text-secondary);
+  margin: 2px 0;
+}
+#symptom-flow { max-height: 160px; overflow-y: auto; font-size: 10px; margin-bottom: 4px; }
+#symptom-flow .sym-fl {
+  padding: 2px 0;
+  border-bottom: 1px dotted var(--border);
+  font-family: var(--font-mono);
+}
+#symptom-flow .sym-fl-head {
+  display: flex;
+  gap: 5px;
+  cursor: pointer;
+  color: var(--text-primary);
+  padding: 1px 0;
+}
+#symptom-flow .sym-fl-head:hover { background: var(--bg-secondary); }
+#symptom-flow .sym-fl-note { color: var(--text-secondary); white-space: nowrap; }
+/* 矛盾のある図だけを浮かせる。対応済み・対象外は沈める (開かなくてよい図) */
+#symptom-flow .sym-fl.gap .sym-fl-head { color: var(--accent-red); font-weight: 600; }
+#symptom-flow .sym-fl.ok, #symptom-flow .sym-fl.skip { opacity: 0.5; }
+#symptom-flow .sym-fl-gap {
+  display: flex;
+  gap: 5px;
+  cursor: pointer;
+  padding: 1px 0 1px 10px;
+  color: var(--text-primary);
+}
+#symptom-flow .sym-fl-gap:hover { background: var(--bg-secondary); }
+#symptom-flow .sym-fl-gap .sym-fl-line {
+  color: var(--text-secondary);
+  min-width: 2em;
+  text-align: right;
+}
 #symptom-panel .symptom-actions { display: flex; gap: 4px; margin-top: 6px; }
 #symptom-panel .symptom-actions button {
   flex: 1;
@@ -5011,6 +5047,10 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <div id="symptom-head"></div>
         <!-- 系統ごと。複数系統にまたがる不具合で、当たらなかった系統に気付くための段 -->
         <div id="symptom-systems"></div>
+        <!-- 当たった図どうしの流れ突合。矛盾がある図だけを浮かせ、対応済みの図は「開かなくてよい」と名指しする -->
+        <label class="sym-opt"><input type="checkbox" id="symptom-cross" checked> 当たった図どうしの流れを突合する (メッセージ⇔状態/遷移)</label>
+        <div id="symptom-flow-head"></div>
+        <div id="symptom-flow"></div>
         <div id="symptom-results"></div>
         <div class="symptom-actions">
           <button id="btn-symptom-clear">消す</button>
@@ -5542,6 +5582,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/signature-change.js"></script>
 <script src="src/core/symptom-search.js"></script>
 <script src="src/core/symptom-systems.js"></script>
+<script src="src/core/symptom-flow.js"></script>
 <script src="src/core/pattern-check.js"></script>
 <script src="src/core/bulk-apply.js"></script>
 <script src="src/core/bulk-export.js"></script>
