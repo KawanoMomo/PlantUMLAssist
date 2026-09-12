@@ -5,6 +5,7 @@ const path = require('path');
 const projectRoot = path.resolve(__dirname, '..');
 const sourceFiles = [
   'src/core/html-utils.js',
+  'src/core/saved-kind.js',
   'src/core/dsl-utils.js',
   'src/core/regex-parts.js',
   'src/core/id-normalizer.js',

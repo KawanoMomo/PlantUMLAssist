@@ -6009,6 +6009,11 @@ function setupTabs() {
   // 22 枚を 1 枚ずつ開いて確かめるのではなく一覧の時点で言うため。
   var kindByName = {};
   var kindEntries = [];
+  // BLK-junior-20260912-2103-wish: 図名 → 保存したときの図種 (server の _kinds.json)。
+  // 本文からの判定 (kindByName) と違い、保存した側が知っている図種なので、
+  // 「別図種と紛らわしい書き方」をしていても開くときに図種が入れ替わらない。
+  var savedKindByName = {};
+  var savedKindsLoaded = false;
   // BLK-reviewer-20260908-0103: 図名 → SVG が puml に追いついているか。
   // `ls -l` で puml と svg を 1 枚ずつ突き合わせる代わりに、一覧が答える。
   var svgStatus = {};
@@ -6044,6 +6049,33 @@ function setupTabs() {
   var writeAge = {};
   var writeScan = null;
 
+  // BLK-junior-20260912-2103-wish: フォルダから開くときの図種。
+  // 控え (保存したときの図種) > 本文からの判定 > 今の図種。
+  function _folderOpenType(name, text) {
+    var SK = window.MA.savedKind;
+    if (!SK) {
+      var d0 = window.MA.workspace.detectType(text);
+      return (d0 && modules[d0]) ? d0 : currentDiagramType;
+    }
+    return SK.resolveType({
+      savedKind: SK.pick(savedKindByName, name),
+      dsl: text,
+      detectType: window.MA.workspace.detectType,
+      known: modules,
+      fallback: currentDiagramType,
+    });
+  }
+
+  // 一覧をまだ一度も読んでいないときだけ控えを取りに行く
+  // (開くたびに読み直すと、一覧から連続で開く手が毎回 1 往復ぶん待たされる)。
+  function _ensureSavedKinds(dir) {
+    if (savedKindsLoaded || !window.MA.workspace.listFolder) return Promise.resolve();
+    return window.MA.workspace.listFolder(dir).then(function(res) {
+      savedKindByName = (res && res.kinds && typeof res.kinds === 'object') ? res.kinds : {};
+      savedKindsLoaded = true;
+    }, function() {});
+  }
+
   function _openDocNames() {
     if (!window.MA.workspace) return [];
     return window.MA.workspace.list().map(function(d) { return d.name; });
@@ -6068,11 +6100,10 @@ function setupTabs() {
       var name = queue.shift();
       window.MA.workspace.loadFile(name, dir).then(function(text) {
         if (text != null) {
-          var detected = window.MA.workspace.detectType(text);
           openExistingFile({
             name: name,
             dsl: text,
-            diagramType: (detected && modules[detected]) ? detected : currentDiagramType,
+            diagramType: _folderOpenType(name, text),
           });
         }
         step();
@@ -6095,6 +6126,7 @@ function setupTabs() {
     var active = window.MA.workspace.getActive();
     var sameTab = !!(active && active.name === name);
     if (!sameTab) saveActiveDoc();
+    _ensureSavedKinds(dir).then(function() {
     window.MA.workspace.loadFile(name, dir).then(function(text) {
       var FR = window.MA.folderReopen;
       var before = mmdText;
@@ -6102,11 +6134,10 @@ function setupTabs() {
         ? FR.describe(name, text, before, sameTab)
         : { kind: text == null ? 'missing' : 'opened', changed: text != null, message: '' };
       if (text != null) {
-        var detected = window.MA.workspace.detectType(text);
         openExistingFile({
           name: name,
           dsl: text,
-          diagramType: (detected && modules[detected]) ? detected : currentDiagramType,
+          diagramType: _folderOpenType(name, text),
         });
         applyActiveDoc();
       }
@@ -6120,6 +6151,7 @@ function setupTabs() {
           window.MA.toast.show(info.message);
         }
       }
+    });
     });
   }
 
@@ -6312,6 +6344,8 @@ function setupTabs() {
       entries.forEach(function(e) {
         if (e && e.name) kindByName[e.name] = e.kind || '';
       });
+      savedKindByName = (res && res.kinds && typeof res.kinds === 'object') ? res.kinds : {};
+      savedKindsLoaded = true;
 
       var WA = window.MA.writeActivity;
       writeScan = WA ? WA.scan(entries, res && res.now) : null;
@@ -7187,14 +7221,29 @@ function setupTabs() {
   // 行に付く図種のバッジ。名前が diagram1 でも何の図かがその場で分かる。
   function folderKindBadge(name) {
     var DK = window.MA.diagramKind;
+    var SK = window.MA.savedKind;
     if (!DK) return null;
-    var label = DK.label(kindByName[name]);
+    // BLK-junior-20260912-2103-wish: 控えがあれば、それをこのまま開く図種として出す。
+    // 控えの無い図だけ、今までどおり本文からの判定を出す。
+    var saved = SK ? SK.pick(savedKindByName, name) : '';
+    var badge = saved && SK ? SK.badge(saved) : null;
+    var label = badge ? badge.label : DK.label(kindByName[name]);
     if (!label) return null;
     var el = document.createElement('span');
     el.className = 'folder-kind';
     el.setAttribute('data-kind-of', name);
-    el.textContent = label;
-    el.title = 'この図の図種（本文から判定）';
+    el.setAttribute('data-kind-source', badge ? 'saved' : 'guess');
+    if (badge) el.setAttribute('data-saved-kind', saved);
+    el.textContent = badge ? (badge.mark + ' ' + badge.label) : label;
+    el.title = badge ? badge.title : 'この図の図種（本文から判定）';
+    if (badge) {
+      // 印そのものを押しても開く (「それをクリックするとその図種のまま開く」)。
+      el.style.cursor = 'pointer';
+      el.addEventListener('click', function(ev) {
+        ev.stopPropagation();
+        openFromFolder(name);
+      });
+    }
     return el;
   }
 

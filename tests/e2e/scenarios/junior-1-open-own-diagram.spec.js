@@ -91,8 +91,10 @@ test('📂 一覧が図種を言う。行のバッジと「状態遷移 1」の�
 
   await expect(page.locator('#folder-kinds')).toContainText('状態遷移 1');
   await expect(page.locator('#folder-kinds')).toContainText('シーケンス 1');
-  await expect(page.locator('#folder-panel [data-kind-of="diagram1_state"]')).toHaveText('状態遷移');
-  await expect(page.locator('#folder-panel [data-kind-of="diagram1"]')).toHaveText('シーケンス');
+  // BLK-junior-20260912-2103-wish: 控え (保存したときの図種) のある行は、図種名の
+  // 左に印が付く (「この図種のまま開く」ことを行の上で言うため)。図種名そのものは変わらない。
+  await expect(page.locator('#folder-panel [data-kind-of="diagram1_state"]')).toContainText('状態遷移');
+  await expect(page.locator('#folder-panel [data-kind-of="diagram1"]')).toContainText('シーケンス');
 });
 
 test('状態遷移図が 1 枚も無い保存先では、要約が 0 と言う', async ({ page }) => {
