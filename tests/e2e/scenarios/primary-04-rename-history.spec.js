@@ -228,3 +228,126 @@ test.describe('primary 手順 4: 意味的な参照で確かめる図を絞る',
     await expect(page.locator('#rename-semantic-head')).toHaveAttribute('data-sr-total', '0');
   });
 });
+
+// BLK-primary-20260913-0206-wish: 手順 4 の場面「顧客向け資料に図を組み込む」。
+// 社内略語 (SpiDrv / IRQCtrl / DmaCtrl) の洗い出し → 個別に一括置換 → SVG を
+// 1 枚ずつ目視、の 3 工程だったものを、📤 提出前チェックの中の対応表 1 枚に寄せる。
+// 表を確定すると全図に当たり、当てたあとの残存件数を表が言い切る。
+const GL_SPI = '@startuml\ntitle SPI 初期化\nparticipant SpiDrv\nparticipant IRQCtrl\nSpiDrv -> IRQCtrl : enable\n@enduml';
+const GL_DMA = '@startuml\ntitle DMA 初期化\nparticipant DmaCtrl\nparticipant SpiDrv\nDmaCtrl -> SpiDrv : ready\n@enduml';
+const GL_CLASS = '@startuml\nclass Spi_Driver\nclass Hal\nSpi_Driver --> Hal\n@enduml';
+
+const FILES = [
+  ['spi_init_sequence', GL_SPI],
+  ['dma_init_sequence', GL_DMA],
+  ['driver_common_class', GL_CLASS],
+];
+
+test.describe('primary 手順 4: 社内略語の対応表を確定して顧客向けに出す', () => {
+  test.beforeEach(async ({ page }) => {
+    await boot(page);
+    await clearDir(page);
+    await putFile(page, 'spi_init_sequence', GL_SPI);
+    await putFile(page, 'dma_init_sequence', GL_DMA);
+    await putFile(page, 'driver_common_class', GL_CLASS);
+    await page.waitForTimeout(500);
+    await page.reload();
+    await page.waitForSelector('#preview-svg');
+    // 手順 1 の状態 (14 枚を開いてある) を作る。
+    // タブを開くと自動保存がエディタの中身 (前のタブの本文) を新しいタブへ
+    // 書き戻すことがあり、図種が変われば名前まで `_sequence` へ回る。
+    // 開いた id を控えておいて、落ち着いてから本文と名前を揃え直す。
+    const ids = await page.evaluate((files) => {
+      const WS = window.MA.workspace;
+      const opened = files.map((f) => (WS.open({ name: f[0], dsl: f[1] }) || {}).id);
+      window.switchToDoc(opened[0]);
+      // 起動時の見本タブは閉じる (見本の略語が今日の 14 枚に混ざらないように)。
+      WS.list().filter((d) => opened.indexOf(d.id) === -1).forEach((d) => WS.close(d.id));
+      return opened;
+    }, FILES);
+    await page.waitForTimeout(800);
+    await page.evaluate((a) => {
+      const WS = window.MA.workspace;
+      a.ids.forEach((id, i) => {
+        WS.updateDoc(id, { dsl: a.files[i][1] });
+        WS.rename(id, a.files[i][0]);
+      });
+      window.switchToDoc(a.ids[0]);
+    }, { ids, files: FILES });
+    await page.waitForTimeout(400);
+  });
+
+  test.afterEach(async ({ page }) => {
+    await clearDir(page).catch(() => {});
+  });
+
+  test('表は社内略語だけを挙げ、正式名称が既に入っている（打鍵ゼロで確定できる）', async ({ page }) => {
+    await page.locator('#btn-tab-submit').click();
+    await page.waitForSelector('#gl-table');
+
+    // 洗い出し: 略語だけが並ぶ。既に正式名称の Spi_Driver と略語でない Hal は挙げない。
+    await expect(page.locator('.gl-row[data-term="SpiDrv"]')).toHaveCount(1);
+    await expect(page.locator('.gl-row[data-term="IRQCtrl"]')).toHaveCount(1);
+    await expect(page.locator('.gl-row[data-term="DmaCtrl"]')).toHaveCount(1);
+    await expect(page.locator('.gl-row[data-term="Spi_Driver"]')).toHaveCount(0);
+    await expect(page.locator('.gl-row[data-term="Hal"]')).toHaveCount(0);
+
+    // 正式名称の既定値が入っているので、確定までに打つ文字は無い。
+    await expect(page.locator('.gl-to[data-to="SpiDrv"]')).toHaveValue('Spi_Driver');
+    await expect(page.locator('.gl-to[data-to="IRQCtrl"]')).toHaveValue('IRQ_Controller');
+    await expect(page.locator('.gl-to[data-to="DmaCtrl"]')).toHaveValue('Dma_Controller');
+  });
+
+  test('表を確定すると全図に当たり、残存略語ゼロを表が言い切る', async ({ page }) => {
+    await page.locator('#btn-tab-submit').click();
+    await page.waitForSelector('#gl-table');
+    await page.locator('#gl-apply').click();
+
+    // 到達条件その1: 目視の代わりになる 1 行が出る。
+    const verdict = page.locator('#gl-verdict');
+    await expect(verdict).toHaveAttribute('data-remaining', '0');
+    await expect(verdict).toContainText('残存略語 0 件');
+    await expect(verdict).toContainText('顧客向けに出せます');
+
+    // 到達条件その2: 行ごとの残存も 0 になる (どの略語が残っているかで読める)。
+    await expect(page.locator('.gl-left[data-left-of="SpiDrv"]')).toHaveText('0 件');
+    await expect(page.locator('.gl-left[data-left-of="IRQCtrl"]')).toHaveText('0 件');
+
+    // 到達条件その3: 3 枚の本文が正式名称に置き換わっている (1 回の確定で全図)。
+    const dsls = await page.evaluate(() => window.MA.workspace.list()
+      .map((d) => ({ name: d.name, dsl: d.dsl })));
+    const spi = dsls.find((d) => d.name === 'spi_init_sequence');
+    const dma = dsls.find((d) => d.name === 'dma_init_sequence');
+    expect(spi.dsl).toContain('participant Spi_Driver');
+    expect(spi.dsl).toContain('IRQ_Controller');
+    expect(spi.dsl).not.toContain('SpiDrv');
+    expect(dma.dsl).not.toContain('DmaCtrl');
+  });
+
+  test('正式名称を空にした略語は「未設定」と名指しされ、0 件に混ぜられない', async ({ page }) => {
+    await page.locator('#btn-tab-submit').click();
+    await page.waitForSelector('#gl-table');
+    await page.locator('.gl-to[data-to="DmaCtrl"]').fill('');
+    await page.locator('#gl-apply').click();
+
+    const verdict = page.locator('#gl-verdict');
+    await expect(verdict).toContainText('未設定の略語が 1 件');
+    await expect(verdict).toContainText('DmaCtrl');
+    // 当てなかった略語は図に残る。残っているものを 0 と言わない。
+    await expect(page.locator('.gl-left[data-left-of="DmaCtrl"]')).toHaveText('2 件');
+    await expect(verdict).toHaveAttribute('data-remaining', '2');
+  });
+
+  test('確定は 1 操作。Ctrl+Z 1 回で表を当てる前に戻る', async ({ page }) => {
+    await page.locator('#btn-tab-submit').click();
+    await page.waitForSelector('#gl-table');
+    await page.locator('#gl-apply').click();
+    await expect(page.locator('#gl-verdict')).toHaveAttribute('data-remaining', '0');
+
+    await page.locator('#sc-close').click();
+    await page.locator('#editor').press('Control+z');
+    await page.waitForTimeout(800);
+    // 表を当てたのは 1 手なので、Ctrl+Z 1 回で開いている図が元の綴りに戻る。
+    expect(await page.locator('#editor').inputValue()).toContain('SpiDrv');
+  });
+});
