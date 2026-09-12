@@ -117,3 +117,57 @@ test('手順5.5 「別物」と決めたときは title に明示され、部品
   expect(saved).toContain('participant Gpio_Driver');
   expect(saved).toContain("' domain-verdict: separate gpio vs junior");
 });
+
+// BLK-primary-20260912-2206-wish: reviewer の最重要指摘 (driver_common_class /
+// plantuml-class / diagram1 の 3 枚が雛形と完全一致) を反映する手順。
+// 3 枚同時の事故を保存のその場で全部挙げ、過去版を探さずに 1 操作で戻せることを固定する。
+const SWAP_DIR = './test-results/scn-primary-05b-swap';
+const TEMPLATE_CLASS = ['@startuml', 'class Foo', '@enduml'].join('\n');
+const TEMPLATE_SEQ = ['@startuml', 'A -> B : x', 'B -> A : y', '@enduml'].join('\n');
+const FULL_CLASS = ['@startuml', 'title driver_common_class'].concat(
+  ['Spi_Driver', 'Can_Driver', 'Gpio_Driver', 'Irq_Driver', 'Uart_Driver', 'Adc_Driver', 'Timer_Driver']
+    .map((c) => 'class ' + c + ' {\n  +Init()\n  +DeInit()\n  +Read()\n}')
+).concat(['@enduml']).join('\n');
+
+test('手順5.5 中身が入れ替わった図は、一致した組を全部挙げて 1 操作で戻せる', async ({ page }) => {
+  await S.bootWithSaveDir(page, SWAP_DIR);
+  await S.clearDir(page, SWAP_DIR);
+  // 事故の直前の保存フォルダ: 中身の詰まった図と、別名の雛形が並んでいる。
+  await S.putDoc(page, SWAP_DIR, 'driver_common_class', FULL_CLASS);
+  await S.putDoc(page, SWAP_DIR, 'plantuml-class', TEMPLATE_CLASS);
+  await S.putDoc(page, SWAP_DIR, 'spi_dma_sequence', TEMPLATE_SEQ);
+  await S.putDoc(page, SWAP_DIR, 'plantuml-sequence', TEMPLATE_SEQ);
+  await S.openFolderItem(page, 'driver_common_class');
+  await S.overwriteOpenedFile(page);
+
+  // 上書きされる前の中身を控えに積む (server が _versions/ へ退避する)。
+  await S.typeDsl(page, FULL_CLASS);
+  await page.locator('#btn-save').dispatchEvent('click');
+  await page.waitForTimeout(1800);
+
+  // 事故: 開いたまま雛形で上書きしてしまった。
+  await S.typeDsl(page, TEMPLATE_CLASS);
+  await page.locator('#btn-save').dispatchEvent('click');
+  await page.waitForTimeout(2500);
+
+  // 到達条件その1: 保存したその場で、フォルダの一致した組が全部並ぶ。
+  // 保存していない spi_dma_sequence の組も出る (起動時の既定図が diagram1 を取るので名前を替えている) (reviewer の突合を待たずに 3 枚目に気付ける)。
+  const twins = page.locator('#ssw-twins');
+  await expect(twins).toBeVisible();
+  await expect(twins).toContainText('driver_common_class と plantuml-class');
+  await expect(twins).toContainText('plantuml-sequence と spi_dma_sequence');
+
+  // 到達条件その2: 巻き込まれた図に「戻す」が出て、どの版に戻るのかが押す前に読める。
+  const restore = page.locator('#btn-ssw-restore');
+  await expect(restore).toBeVisible();
+  await expect(restore).toContainText('行）');
+
+  // 到達条件その3: 1 回押すだけで、エディタも保存フォルダのファイルも元の中身に戻る
+  // (_versions/ の過去版を 1 枚ずつ探して打ち直す作業が要らない)。
+  await restore.click();
+  await page.waitForTimeout(2500);
+  expect(await page.locator('#editor').inputValue()).toContain('class Timer_Driver');
+  const saved = (await S.readDoc(page, SWAP_DIR, 'driver_common_class')) || '';
+  expect(saved).toContain('class Timer_Driver');
+  expect(saved).not.toBe(TEMPLATE_CLASS);
+});
