@@ -264,6 +264,13 @@ function summarize(audits) {
       conflicts: ch.result.conflicts || 0,
       conflictNames: ch.result.groups.reduce((out, g) => out.concat(
         (g.conflictPairs || []).map((p) => `${g.domain} [${p.a.folder} × ${p.b.folder}]: ${p.verdict.text}`)), []),
+      // BLK-reviewer-20260912-2206: 件数とドメイン名までは出ていたが、食い違って
+      // いる部品名は出ていなかったので、reviewer は毎回 2 フォルダの同名ファイルを
+      // 開いて手 diff していた。組ごとの名前差をそのまま要約に載せる。
+      // 文面は domain-cohort が作る (画面と CLI で同じ言葉にする)。
+      diffLines: (ch.result.diffRows || []).map((r) => r.text),
+      // 同名ファイルどうしの組の数。0 なら「同じ図の 2 人の版」は 1 組も無い。
+      sameBasePairs: (ch.result.diffRows || []).filter((r) => r.sameBase).length,
     };
   }
   return s;
@@ -385,6 +392,14 @@ function formatSummary(report, prev, options) {
         : `ドメイン突合: ${s.cohort.crossFolder} ドメイン中 ${s.cohort.mismatched} 件が食い違い (${s.cohort.mismatchedNames.join(', ')})${tail}${note}`));
     // 宣言が実体と合っていない組は、件数だけでは直しようがないので名指しする。
     for (const c of (s.cohort.conflictNames || [])) lines.push(`  宣言ずれ: ${c}`);
+    // 食い違っている名前そのもの。ここが出ないと、reviewer は 2 フォルダの
+    // 同名ファイルを開いて手 diff するところまで毎回戻る。
+    // 要約を潰さないよう既定は 10 組まで。打ち切ったら残り件数を必ず言う
+    // (「これで全部」と読ませない。全部要るなら --pairs-max で伸ばす)。
+    const dl = s.cohort.diffLines || [];
+    const cap = opts.pairsMax > 0 ? opts.pairsMax : 10;
+    for (const l of dl.slice(0, cap)) lines.push(`  差分: ${l}`);
+    if (dl.length > cap) lines.push(`  差分: ほか ${dl.length - cap} 組 (--pairs-max で全部出す)`);
   }
   for (const k of Object.keys(report.audits)) {
     const a = report.audits[k];

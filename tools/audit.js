@@ -40,12 +40,50 @@ const USAGE = [
   '                実データ/テンプレ別のファイル内容の変化を要約に足す',
   '  --since-files DIR  前回の図フォルダ (控え) から指紋を採り直して内容変化を比べる。',
   '                     指紋を持たない古い JSON と比べる run でも 1 回で切り分けられる',
+  '  --personas a,b (-p) ペルソナ名だけで保存フォルダを対象にする (長いパスを打たない)。',
+  '                 根は PUA_PERSONA_DATA、既定はリポジトリの隣の persona-data',
+  '  --pairs-max N 突合の差分行を N 組まで出す (既定 10、0 で全部)。',
   '  --no-state    前回比較用の控え (.assist-audit-last.json) を読み書きしない',
   '  --help        この説明',
 ].join('\n');
 
+// BLK-reviewer-20260912-2206: 突合の対象は毎回 persona-data の 2 フォルダで、しかも
+// フォルダごと渡すと `_vault` / `_versions` の控えを拾って偽の食い違いが出る
+// (BLK-reviewer-20260909-0703)。reviewer はその回避として `.puml` を自分で glob し、
+// 長いパスを 2 本打ち直していた。ペルソナ名だけで同じ対象になる口を用意する。
+function personaRoot() {
+  return process.env.PUA_PERSONA_DATA || path.resolve(__dirname, '..', '..', 'persona-data');
+}
+
+// フォルダのまま渡す。collectDocs は `_vault` / `_versions` に降りず、フォルダを
+// 2 つ以上渡したときだけ名前の先頭 1 段をフォルダ名にする — 突合はその 1 段で
+// 「どちらのペルソナの図か」を見るので、.puml を直に並べると (名前が basename だけに
+// なり) フォルダをまたぐドメインが 0 件になる。ここは必ずフォルダを渡す。
+function personaTargets(names) {
+  const root = personaRoot();
+  const out = [];
+  for (const raw of names) {
+    const name = String(raw).trim();
+    if (!name) continue;
+    const dir = path.join(root, name);
+    if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) {
+      throw new Error('ペルソナの保存フォルダが見つかりません: ' + dir);
+    }
+    out.push(dir);
+  }
+  if (out.length === 0) throw new Error('--personas にペルソナ名を渡します (例: --personas junior,primary)');
+  return out;
+}
+
+// 0 は「全部出す」。数でない値は黙って既定に落とさず、打ち直せるように落とす。
+function _num(v, flag) {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n < 0) throw new Error(flag + ' には 0 以上の数を渡します: ' + v);
+  return n === 0 ? Infinity : n;
+}
+
 function parseArgs(argv) {
-  const opts = { targets: [], only: null, summary: false, out: null, help: false, since: null, sinceFiles: null, state: true };
+  const opts = { targets: [], only: null, summary: false, out: null, help: false, since: null, sinceFiles: null, state: true, pairsMax: 0, personas: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--help' || a === '-h') opts.help = true;
@@ -59,6 +97,11 @@ function parseArgs(argv) {
     else if (a.indexOf('--since=') === 0) opts.since = a.slice(8);
     else if (a === '--since-files') opts.sinceFiles = argv[++i];
     else if (a.indexOf('--since-files=') === 0) opts.sinceFiles = a.slice(14);
+    // 手順 4 の突合は毎 tick これを打つので 1 文字の別名を持たせる (--cohort と同じ理由)。
+    else if (a === '--personas' || a === '-p') opts.personas = String(argv[++i] || '').split(',').map((s) => s.trim()).filter(Boolean);
+    else if (a.indexOf('--personas=') === 0) opts.personas = a.slice(11).split(',').map((s) => s.trim()).filter(Boolean);
+    else if (a === '--pairs-max') opts.pairsMax = _num(argv[++i], a);
+    else if (a.indexOf('--pairs-max=') === 0) opts.pairsMax = _num(a.slice(12), '--pairs-max');
     else if (a === '--no-state') opts.state = false;
     else if (a === '--out') opts.out = argv[++i];
     else if (a.indexOf('--out=') === 0) opts.out = a.slice(6);
@@ -75,6 +118,16 @@ function main(argv) {
   } catch (e) {
     console.error(e.message + '\n\n' + USAGE);
     return 1;
+  }
+  // ペルソナ名は対象の書き方の 1 つ。先に実パスへ開いてから、以降は
+  // 今までどおりフォルダを渡されたのと同じ道を通す。
+  if (opts.personas) {
+    try {
+      opts.targets = personaTargets(opts.personas).concat(opts.targets);
+    } catch (e) {
+      console.error(e.message);
+      return 1;
+    }
   }
   if (opts.help || opts.targets.length === 0) {
     console.log(USAGE);
@@ -109,6 +162,7 @@ function main(argv) {
       console.error('前回の監査 JSON が読めません: ' + opts.since);
       return 1;
     }
+    if (opts.pairsMax) fmtOpts.pairsMax = opts.pairsMax;
     if (opts.sinceFiles) {
       let prevDocs;
       try {
