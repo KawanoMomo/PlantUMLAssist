@@ -5038,7 +5038,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button class="tab-tool" id="btn-tab-audit" title="開いている図の部品名を突き合わせて表記揺れを探す">🔍 名前突合</button>
         <!-- BLK-primary-20260907-0823-wish: 同じ系統の複数枚で動作名が揃っているかを見る -->
         <!-- BLK-primary-20260907-1403-wish: 顧客に出す前に、全図の title / note / 部品名を横断で見る -->
-        <button class="tab-tool" id="btn-tab-submit" title="顧客提出前に、全図のタイトル・注釈・部品名を横断で見て社内略語を洗い出す">📤 提出前チェック</button>
+        <button class="tab-tool" id="btn-tab-submit" title="顧客提出前に、全図のタイトル・注釈・部品名を横断で見て社内略語を洗い出し、正式名称の対応表を確定して全図に当てる">📤 提出前チェック</button>
         <button class="tab-tool" id="btn-tab-family" title="同じ系統の図を並べて、片方にしか無いメッセージ名・遷移名を探す">⇉ 系統チェック</button>
         <button class="tab-tool" id="btn-tab-drivermap" title="どの図がどの図の相手かを系統として宣言し、1 プロジェクトとして持つ。宣言した対応が崩れたら赤くなる">🧩 系統マップ −</button>
         <!-- BLK-reviewer-20260907-1903-wish: 状態遷移がどのシーケンスにも現れない「トレース漏れ」を出す -->
@@ -5829,6 +5829,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/lineage-mark.js"></script>
 <script src="src/core/label-colors.js"></script>
 <script src="src/core/submit-check.js"></script>
+<script src="src/core/glossary.js"></script>
 <script src="src/core/sequence-autonumber.js"></script>
 <script src="src/core/class-scaffold.js"></script>
 <script src="src/core/class-derive.js"></script>
