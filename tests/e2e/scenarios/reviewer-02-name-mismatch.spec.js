@@ -121,3 +121,47 @@ test('手順2 テンプレ由来の食い違いは、中身を読まずに業務
   const withTpl = MA.domainCohort.audit(docs, { includeTemplates: true });
   expect(withTpl.groups.map((g) => g.domain)).toEqual(['diagram1', 'gpio', 'plantuml']);
 });
+
+// BLK-reviewer-20260909-0703-wish: 「junior の GPIO とは意図して別物」という判断は
+// primary が puml のコメント行に手で書いていたが、突合はその行を読まなかった。
+// reviewer は突合が出した食い違い 1 件ごとに grep で「もう決まっているか」を確かめ
+// 直しており、書き忘れ・typo があれば同じ指摘を再起票し続けた。手順を
+// 「宣言を読む」から「宣言と実体の食い違いだけを見る」に変えることを到達条件にする。
+test('手順2 判断済みの別ドメインは突合が最初から外し、宣言と実体の食い違いだけが残る', () => {
+  const { MA } = loadMA();
+  const DV = MA.domainVerdict;
+  expect(DV).toBeTruthy();
+
+  const junior = ['@startuml', 'participant Gpio_Driver', 'participant Hw_Ctrl',
+    'Gpio_Driver -> Hw_Ctrl : Gpio_Setup', '@enduml'].join('\n');
+  const primary = ['@startuml', 'participant GpioDrv', 'participant HwCtl',
+    'GpioDrv -> HwCtl : Gpio_Init', '@enduml'].join('\n');
+  const pair = (j, p) => [
+    { name: 'junior/gpio_init_sequence.puml', dsl: j },
+    { name: 'primary/gpio_init_sequence.puml', dsl: p },
+  ];
+
+  // 宣言が無い間は、これまでどおり「これから判断する食い違い」として出る。
+  expect(MA.domainCohort.audit(pair(junior, primary)).groups[0].mismatched).toBe(1);
+
+  // 「別ドメイン」と宣言した図は、grep しなくても突合が判断済みと分かる。
+  const declared = MA.domainCohort.audit(
+    pair(DV.applyMark(junior, 'separate', 'gpio', 'primary'), primary));
+  expect(declared.groups[0].mismatched).toBe(0);
+  expect(declared.declared).toBe(1);
+  const row = MA.domainCohort.rows(declared)[0];
+  expect(row.verdict.kind).toBe('separate');
+  expect(row.verdict.by).toEqual(['junior']);
+  // 外したことは 1 行に残る (件数が減っただけを「直った」と読ませない)。
+  expect(MA.domainCohort.summaryLine(declared)).toContain('宣言済み 1 組は除外');
+
+  // 宣言が現実と合っていない組だけが、名指しで残る。ここが手順 4.7 で見る一覧。
+  const conflicted = MA.domainCohort.audit(
+    pair(DV.applyMark(junior, 'shared', 'gpio', 'primary'), primary));
+  expect(conflicted.conflicts).toBe(1);
+  expect(conflicted.groups[0].mismatched).toBe(0);
+  const conf = MA.domainCohort.conflictRows(conflicted);
+  expect(conf.map((c) => c.conflict)).toEqual(['shared-but-differs']);
+  expect(conf[0].text).toContain('同一と宣言されているのに中身が食い違う');
+  expect(MA.domainCohort.summaryLine(conflicted)).toContain('宣言と実体の食い違い 1 組');
+});

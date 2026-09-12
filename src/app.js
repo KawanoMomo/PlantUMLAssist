@@ -18245,6 +18245,135 @@ function refresh() {
 // 書き込まれ、書き込まれる行も同じ画面に出す。
 var dsSettings = null;
 
+// ── ドメイン宣言 (BLK-reviewer-20260909-0703-wish) ──────────────────────────
+// 図の設定に置く「隣のフォルダの同名ドメインと同一 / 別物」の宣言欄。
+// 書くのは domain-verdict の印 1 行だけで、名前の置換や title の書き換えはしない
+// (それは突合の画面で差分を見ながら決めること)。宣言は手順 4 / 4.7 の突合が読む。
+
+// 隣のフォルダ名の候補。覗きの一覧をまだ取っていなければ 1 回だけ取りに行き、
+// 取れたら描き直す (取れなくても欄は使える — 手で打てる)。
+var _dsPeekFetched = false;
+
+function _dsOtherFolders() {
+  var PF = window.MA.peekFolder;
+  var mine = _myPeekDir();
+  return (_peekDirs || []).filter(function(d) {
+    return d && d.path && !(PF && PF.samePath(d.path, mine));
+  }).map(function(d) { return window.MA.domainCohort ? window.MA.domainCohort.baseOf(d.path) : d.path; });
+}
+
+function _dsEnsurePeekDirs() {
+  if (_dsPeekFetched || (_peekDirs && _peekDirs.length)) return;
+  _dsPeekFetched = true;
+  var PF = window.MA.peekFolder;
+  if (!PF || !window.fetch) return;
+  fetch('/peek-dirs?dir=' + encodeURIComponent(_wsFileDir()))
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(data) {
+      if (!data) return;
+      _peekDirs = PF.choices(data);
+      renderDiagramSettings(true);
+    }).catch(function() {});
+}
+
+function _dsSetDsl(next) {
+  if (next === mmdText) return;
+  if (window.MA.history) window.MA.history.pushHistory();
+  mmdText = next;
+  suppressSync = true;
+  editorEl.value = next;
+  suppressSync = false;
+  scheduleRefresh();
+}
+
+function dsVerdictGroup(group) {
+  var DV = window.MA.domainVerdict;
+  var DC = window.MA.domainCohort;
+  if (!DV || !DC) return;
+  _dsEnsurePeekDirs();
+  var g = group('ドメイン宣言 / Domain verdict');
+  g.id = 'ds-verdict-group';
+  var domain = DC.domainOf(_dsActiveDocName());
+
+  var marks = DV.listMarks(mmdText);
+  var list = document.createElement('div');
+  list.id = 'ds-verdict-list';
+  list.className = 'ds-note';
+  if (!marks.length) {
+    list.textContent = 'まだ宣言していません (突合では「これから判断するもの」として出ます)';
+  } else {
+    marks.forEach(function(m) {
+      var row = document.createElement('div');
+      row.className = 'ds-row';
+      row.setAttribute('data-verdict-other', m.other);
+      var text = document.createElement('span');
+      text.textContent = DV.markText(m);
+      row.appendChild(text);
+      var off = document.createElement('button');
+      off.type = 'button';
+      off.className = 'ds-choice';
+      off.textContent = '解除';
+      off.title = m.other + ' についての宣言を消す';
+      off.addEventListener('click', function() {
+        _dsSetDsl(DV.removeMark(mmdText, m.other));
+        renderDiagramSettings(true);
+      });
+      row.appendChild(off);
+      list.appendChild(row);
+    });
+  }
+  g.appendChild(list);
+
+  var others = _dsOtherFolders();
+  var pick = document.createElement('input');
+  pick.type = 'text';
+  pick.id = 'ds-verdict-folder';
+  pick.placeholder = '相手のフォルダ名 (例: junior)';
+  pick.setAttribute('list', 'ds-verdict-folders');
+  if (others.length === 1) pick.value = others[0];
+  g.appendChild(pick);
+  var dl = document.createElement('datalist');
+  dl.id = 'ds-verdict-folders';
+  others.forEach(function(f) {
+    var o = document.createElement('option');
+    o.value = f;
+    dl.appendChild(o);
+  });
+  g.appendChild(dl);
+
+  var note = document.createElement('div');
+  note.id = 'ds-verdict-note';
+  note.className = 'ds-note';
+  note.textContent = domain ? 'このドメイン: ' + domain : 'ドメイン名が図名から決まりません';
+  var row = document.createElement('div');
+  row.className = 'ds-row';
+  [
+    { kind: 'shared', label: '同一ドメイン', hint: '同じものを指している。名前の食い違いは直すべき指摘' },
+    { kind: 'separate', label: '別ドメイン', hint: '名前が同じだけの別物。突合は以後この組を出さない' },
+  ].forEach(function(spec) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'ds-choice';
+    b.id = 'ds-verdict-' + spec.kind;
+    b.textContent = spec.label;
+    b.title = spec.hint;
+    b.addEventListener('click', function() {
+      var folder = (pick.value || '').trim();
+      if (!folder) { note.textContent = '相手のフォルダ名を入れてください'; return; }
+      _dsSetDsl(DV.applyMark(mmdText, spec.kind, domain, folder));
+      note.textContent = folder + ' とは' + (spec.kind === 'shared' ? '同一' : '別')
+        + 'ドメインと宣言しました (突合がこの宣言を読みます)';
+      var msg = note.textContent;
+      renderDiagramSettings(true);
+      var after = document.getElementById('ds-verdict-note');
+      if (after) after.textContent = msg;
+    });
+    row.appendChild(b);
+  });
+  g.appendChild(row);
+  g.appendChild(note);
+}
+
 function dsApplyToDsl() {
   var ds = window.MA.diagramSettings;
   var next = ds.apply(mmdText, dsSettings, currentDiagramType);
@@ -18480,6 +18609,13 @@ function renderDiagramSettings(keepState) {
   titleHint.className = 'ds-note';
   titleHint.textContent = '末尾に付け足した文字は 図名 / File name にも同じように付きます (逆も同じ)';
   gTitle.appendChild(titleHint);
+
+  // ドメイン宣言 / Domain verdict (BLK-reviewer-20260909-0703-wish)
+  // 「この図は隣のフォルダの同名ドメインと同一か別物か」は、これまで突合の画面まで
+  // 行かないと決められず、決めた印は DSL のコメント行の手書き規約だった。reviewer は
+  // 突合が出した食い違い 1 件ごとに「もう判断済みか」を grep で確かめ直していた。
+  // 図を開いたまま宣言でき、宣言済みの組は突合が最初から外す。
+  dsVerdictGroup(group);
 
   // 外観 / Theme
   var gTheme = group('外観 / Theme');
