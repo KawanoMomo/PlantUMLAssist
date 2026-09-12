@@ -5282,6 +5282,9 @@ var _cohortShowTemplates = false;
 // (毎回 CLI で /verify-svg を叩いて確かめていた)。一覧と同じ呼び出しで判定の材料も
 // 取り、行に印を出す。
 var _peekScan = null;      // svg-freshness の scan 結果 (覗いているフォルダぶん)
+// BLK-junior-20260912-2206: 覗いているフォルダの一覧 entry (図種つき)。
+// 名前だけの一覧では、語尾から図種を推測しながら 30 枚を上から読むことになる。
+var _peekEntries = [];
 var _peekVerifying = false;
 
 function _peekEls() {
@@ -6108,6 +6111,7 @@ function renderPeekFiles() {
   head.id = 'peek-files-head';
   head.textContent = _peekDir ? (_peekNames.length + ' 枚') : 'フォルダを選んでください';
   el.files.appendChild(head);
+  appendPeekKindSummary(el.files);
   appendPeekSvgSection(el.files);
   _peekNames.forEach(function(n) {
     var b = document.createElement('button');
@@ -6118,10 +6122,54 @@ function renderPeekFiles() {
     label.className = 'peek-file-name';
     label.textContent = n;
     b.appendChild(label);
+    appendPeekKindBadge(b, n);
     appendPeekSvgBadge(b, n);
     b.addEventListener('click', function() { showPeekFile(n); });
     el.files.appendChild(b);
   });
+}
+
+// ── 覗き一覧の図種 (BLK-junior-20260912-2206) ──────────────────────────────
+// 自分の 📂 一覧と同じ印を覗き一覧にも出す。junior は先輩のフォルダに
+// 「コンポーネント図があるか」を見に行くのに、名前だけの一覧を 30 行読んで
+// 語尾から図種を推測していた。0 枚の図種も要約に出すので、
+// 「1 枚も無い」が一覧を読まずに決まる。
+
+function _peekEntryFor(name) {
+  var n = String(name == null ? '' : name);
+  for (var i = 0; i < _peekEntries.length; i++) {
+    if (_peekEntries[i] && _peekEntries[i].name === n) return _peekEntries[i];
+  }
+  return null;
+}
+
+// フォルダ全体の図種の内訳。0 枚の図種も「0」で出す
+// (「コンポーネント図は 1 枚も無い」と分かることが探しに来た答えになる)。
+function appendPeekKindSummary(host) {
+  var DK = window.MA.diagramKind;
+  if (!DK || !_peekDir || !_peekEntries.length) return;
+  var line = document.createElement('div');
+  line.className = 'peek-kinds';
+  line.id = 'peek-kinds';
+  line.textContent = DK.summaryLine(_peekEntries);
+  line.title = '覗いているフォルダの図種の内訳。0 の図種はこのフォルダに 1 枚もありません';
+  host.appendChild(line);
+}
+
+// 行の図種の印。保存した図種の控えがあればそれを、無ければ本文からの判定を出す
+// (📂 一覧の folderKindBadge と同じ決め方)。
+function appendPeekKindBadge(host, name) {
+  var PF = window.MA.peekFolder;
+  var badge = PF ? PF.kindBadge(_peekEntryFor(name)) : null;
+  if (!badge) return;
+  var span = document.createElement('span');
+  span.className = 'peek-kind';
+  span.setAttribute('data-kind-of', name);
+  span.setAttribute('data-kind-source', badge.source);
+  span.setAttribute('data-kind', badge.slug);
+  span.textContent = badge.text;
+  span.title = badge.title;
+  host.appendChild(span);
 }
 
 // 行の印。判定は svg-freshness、見せ方は peek-freshness に置く。
@@ -6202,15 +6250,20 @@ function selectPeekDir(dir) {
   _peekDir = dir;
   _peekName = null;
   _peekNames = [];
+  _peekEntries = [];
   _peekScan = null;
   renderPeekDirs();
   renderPeekFiles();
   // 名前と判定を同時に取る。判定を後追いにすると、印の無い一覧が先に出て
   // 「確かめた結果うまくいっている」と読み違える余地ができる。
-  return Promise.all([WS.listFiles(dir), loadPeekScan(dir)]).then(function(got) {
-    var names = got[0];
+  // 図種は名前と同じ一覧応答に載っている (listFolder)。別呼び出しにすると
+  // 印の無い一覧が先に出て、そこで「無い」と読み違える余地ができる。
+  return Promise.all([WS.listFolder(dir), loadPeekScan(dir)]).then(function(got) {
+    var info = got[0] || {};
+    var entries = (info.entries || []).filter(function(e) { return e && e.name; });
     if (!window.MA.peekFolder.samePath(dir, _peekDir)) return false;   // 途中で選び直された
-    _peekNames = (names || []).filter(function(n) { return n; });
+    _peekEntries = entries;
+    _peekNames = entries.map(function(e) { return e.name; });
     renderPeekFiles();
     // 1 枚目をそのまま出す。選んだ後に「どれか押す」を挟むと、読むだけの用でも
     // クリックが 1 つ増える。
