@@ -32,6 +32,7 @@ const sourceFiles = [
   'src/core/driver-usecase-starter.js',
   'src/core/activity-insert.js',
   'src/core/app-bridge.js',
+  'src/core/blank-doc.js',
   'src/core/save-diff.js',
   'src/core/version-timeline.js',
   'src/core/svg-freshness.js',

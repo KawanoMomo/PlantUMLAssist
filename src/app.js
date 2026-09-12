@@ -2472,6 +2472,10 @@ function init() {
     if (window.MA.workspace) {
       try { wsDoc = window.MA.workspace.updateActive({ dsl: mmdText, diagramType: t }); } catch (e) {}
     }
+    // BLK-junior-20260909-0703: 切り替える前の図が白紙・見本のままだったかを
+    // 見てから差し替える (白紙のタブで図種を選び直しただけの人に見本を出さない)。
+    var prevType = currentDiagramType;
+    var prevTemplate = currentModule && currentModule.template ? currentModule.template() : '';
     currentDiagramType = t;
     window.MA.history.pushHistory();
     currentModule = mod;  // explicit user choice overrides auto-detection
@@ -2479,7 +2483,11 @@ function init() {
     // over the default template. Type switch is an explicit user action so
     // we silently restore (no confirm() prompt regardless of restoreMode).
     var savedForType = window.MA.autoSave ? window.MA.autoSave.restoreFor(t) : null;
-    mmdText = (savedForType != null && savedForType !== '') ? savedForType : mod.template();
+    var BDs = window.MA.blankDoc;
+    mmdText = BDs
+      ? BDs.dslForTypeSwitch(mmdText, savedForType, mod.template(), prevTemplate,
+          { fromType: prevType, toType: t })
+      : ((savedForType != null && savedForType !== '') ? savedForType : mod.template());
     suppressSync = true;
     editorEl.value = mmdText;
     suppressSync = false;
@@ -5962,11 +5970,15 @@ function setupTabs() {
   if (btnNew) {
     btnNew.addEventListener('click', function() {
       saveActiveDoc();
-      var mod = modules[currentDiagramType];
+      // BLK-junior-20260909-0703: 新規タブは白紙で作る。手本を持っている人には
+      // 雛形のサンプル (Class なら User / IAuth) は打ち始める前に全消去する
+      // 一手間にしかならない。見本が要る人には無選択時の右ペインに
+      // 「まとめて追加」「白紙から: ひな形」があり、そちらから入れられる。
+      var BD = window.MA.blankDoc;
       window.MA.workspace.open({
         name: 'diagram' + (window.MA.workspace.count() + 1),
         diagramType: currentDiagramType,
-        dsl: mod ? mod.template() : '',
+        dsl: BD ? BD.blankDsl(currentDiagramType) : '@startuml\n@enduml',
       });
       applyActiveDoc();
       // 新規タブも作った時点でフォルダに現れる (BLK-primary-20260907-0823)。
