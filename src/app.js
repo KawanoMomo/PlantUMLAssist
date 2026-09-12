@@ -2802,6 +2802,7 @@ function initCommandPalette() {
       // design 7b: タブ列を畳むと Ctrl+K だけが手掛かりになるので、ツールメニューに
       // 載っている道具はすべてパレットからも引けなければならない。ここは
       // 「メニューにはあるがパレットに無かった」道具。題はメニューの言い換えに揃える。
+      { id: 'part-starter', title: '部品を起こす (6 図種まとめて) / New part', hint: 'Tabs', keywords: ['part', 'starter', 'new', 'ぶひん', 'おこす', 'したがき', '6', 'ろく', 'ずしゅ'], button: 'btn-tab-part', run: function() { clickById('btn-tab-part'); } },
       { id: 'tab-skeleton', title: '骨格から作る / Skeleton', hint: 'Tabs', keywords: ['skeleton', 'こっかく', 'ひな形'], button: 'btn-tab-skeleton', run: function() { clickById('btn-tab-skeleton'); } },
       { id: 'tab-draft', title: '一時控えにする / Draft', hint: 'Tabs', keywords: ['draft', 'ひかえ', 'いちじ'], button: 'btn-tab-draft', run: function() { clickById('btn-tab-draft'); } },
       { id: 'tab-apply', title: '複数クラスに一括適用 / Bulk apply', hint: 'Tabs', keywords: ['apply', 'bulk', 'いっかつ', 'てきよう'], button: 'btn-tab-apply', run: function() { clickById('btn-tab-apply'); } },
@@ -10435,9 +10436,133 @@ function setupTemplateNew() {
     updateSkeleton();
   }
 
+  // ── 部品を起こす (BLK-junior-20260913-0206-wish) ─────────────────────────
+  // 手本がまったく無い部品を起こす周では、6 図種を別々のタブ・別々の下書き機能で
+  // やり直し、部品名を図種ごとに打ち直していた。ここは部品名 1 語で 6 図種ぶんの
+  // 下書きをまとめて開く。打つのは 1 回なので、図種を跨いだ綴りが割れない。
+  var PS = window.MA.partStarter;
+
+  function partSubject() {
+    var el = document.getElementById('part-subject');
+    return el ? el.value : '';
+  }
+
+  function partPlan() {
+    return PS ? PS.plan(partSubject(), docs) : null;
+  }
+
+  // どの図種を開くか。既にある図種は既定で外す (書きかけを二重に持たない)。
+  function partKeys() {
+    var out = [];
+    var boxes = content.querySelectorAll('input[data-part-kind]');
+    for (var i = 0; i < boxes.length; i++) {
+      if (boxes[i].checked) out.push(boxes[i].getAttribute('data-part-kind'));
+    }
+    return out;
+  }
+
+  function updatePart() {
+    if (!PS) return;
+    var p = partPlan();
+    var summary = document.getElementById('part-summary');
+    var btn = document.getElementById('btn-part-create');
+    var list = document.getElementById('part-sheets');
+    if (!summary || !btn || !list) return;
+    summary.textContent = PS.summary(p);
+    summary.setAttribute('data-new', String(p ? p.newCount : 0));
+    if (!p) {
+      list.innerHTML = '';
+      btn.disabled = true;
+      btn.textContent = '6 図種の下書きを開く';
+      return;
+    }
+    // 図種の行は部品名を打ち替えても組み替えない (チェックの選び直しになる)。
+    if (list.getAttribute('data-subject') !== p.subject) {
+      list.setAttribute('data-subject', p.subject);
+      list.innerHTML = p.sheets.map(function(s) {
+        return '<label data-part-row="' + esc(s.key) + '" '
+          + 'style="display:flex;gap:6px;align-items:baseline;font-size:11px;padding:1px 0;">'
+          + '<input type="checkbox" data-part-kind="' + esc(s.key) + '"'
+          + (s.existing.length ? '' : ' checked') + '>'
+          + '<span style="min-width:7em;">' + esc(s.label) + '</span>'
+          + '<span data-part-name="' + esc(s.key) + '" style="color:var(--text-secondary);">'
+          + esc(s.name) + '</span>'
+          + '<span data-part-had="' + esc(s.key) + '" style="color:var(--accent-orange);">'
+          + (s.existing.length ? '既にあります (' + esc(s.existing[0]) + ')' : '') + '</span>'
+          + '</label>';
+      }).join('');
+      var boxes = list.querySelectorAll('input[data-part-kind]');
+      for (var i = 0; i < boxes.length; i++) boxes[i].addEventListener('change', updatePart);
+    } else {
+      // 名前だけ打ち替えに追随させる。
+      p.sheets.forEach(function(s) {
+        var n = list.querySelector('[data-part-name="' + s.key + '"]');
+        if (n) n.textContent = s.name;
+        var h = list.querySelector('[data-part-had="' + s.key + '"]');
+        if (h) h.textContent = s.existing.length ? '既にあります (' + s.existing[0] + ')' : '';
+      });
+    }
+    var keys = partKeys();
+    btn.disabled = !keys.length;
+    btn.textContent = keys.length + ' 図種の下書きを開く';
+  }
+
+  function partCreate() {
+    var p = partPlan();
+    if (!p || !PS) return null;
+    var sheets = PS.selected(p, partKeys());
+    if (!sheets.length) return null;
+    saveActiveDoc();
+    var opened = [];
+    sheets.forEach(function(s) {
+      window.MA.workspace.open({ name: s.name, dsl: s.dsl, diagramType: s.type });
+      opened.push(s.name);
+      // 開いた時点で保存フォルダにも現れる (テンプレート・骨格と同じ)。
+      applyActiveDoc();
+      saveActiveDoc();
+    });
+    close();
+    if (window.MA.toast) {
+      window.MA.toast.show(p.body + ' の下書きを ' + opened.length
+        + ' 図種ぶん、別タブで開きました');
+    }
+    return opened;
+  }
+
+  function partSectionHtml() {
+    return '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">部品を起こす (6 図種まとめて)</h3>'
+      + '<div style="font-size:11px;color:var(--text-secondary);">'
+      + '手本の無い部品を起こすときに使います。部品名を 1 回打つと、シーケンス・状態遷移・クラス・'
+      + 'アクティビティ・コンポーネント・ユースケースの下書きが、同じ名前で揃って別タブに開きます。</div>'
+      + '<div style="display:flex;gap:8px;align-items:flex-end;margin-top:6px;">'
+      + '<div style="flex:1;"><label style="' + LABEL + '" for="part-subject">部品名</label>'
+      + '<input id="part-subject" autocomplete="off" spellcheck="false" placeholder="TIMER" style="'
+      + FIELD + '"></div>'
+      + '<button id="btn-part-create" style="' + BTN + '" disabled>6 図種の下書きを開く</button>'
+      + '</div>'
+      + '<div id="part-summary" data-new="0" '
+      + 'style="font-size:11px;color:var(--text-secondary);margin-top:4px;"></div>'
+      + '<div id="part-sheets" data-subject="" style="margin-top:4px;"></div>'
+      + '<hr style="border:0;border-top:1px solid var(--border);margin:12px 0;">';
+  }
+
+  function bindPart() {
+    var sub = document.getElementById('part-subject');
+    var btn = document.getElementById('btn-part-create');
+    if (sub) {
+      sub.addEventListener('input', updatePart);
+      sub.addEventListener('keydown', function(ev) {
+        if (ev.key === 'Enter') { ev.preventDefault(); partCreate(); }
+      });
+    }
+    if (btn) btn.addEventListener('click', partCreate);
+    updatePart();
+  }
+
   function render() {
     content.innerHTML =
-      (SK ? skelSectionHtml() : '')
+      (PS ? partSectionHtml() : '')
+      + (SK ? skelSectionHtml() : '')
       + '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">テンプレートから新規作成</h3>'
       + '<div style="font-size:11px;color:var(--text-secondary);">'
       + '既にある図か組み込みの雛形と同じ構成のまま、部品名だけを替えた図を新しいタブに作ります。</div>'
@@ -10479,6 +10604,7 @@ function setupTemplateNew() {
     document.getElementById('btn-tpl-create').addEventListener('click', create);
     document.getElementById('btn-tpl-cancel').addEventListener('click', close);
     if (SK) bindSkeleton();
+    if (PS) bindPart();
   }
 
   function open(focusSkeleton, seed) {
@@ -10490,7 +10616,10 @@ function setupTemplateNew() {
     nameTouched = false;
     render();
     modal.style.display = 'flex';
-    if (focusSkeleton) {
+    if (focusSkeleton === 'part') {
+      var psub = document.getElementById('part-subject');
+      if (psub) psub.focus();
+    } else if (focusSkeleton) {
       var sub = document.getElementById('skel-subject');
       if (sub) sub.focus();
     }
@@ -10521,6 +10650,8 @@ function setupTemplateNew() {
   btn.addEventListener('click', function() { open(false); });
   var btnSkel = document.getElementById('btn-tab-skeleton');
   if (btnSkel) btnSkel.addEventListener('click', function() { open(true); });
+  var btnPart = document.getElementById('btn-tab-part');
+  if (btnPart) btnPart.addEventListener('click', function() { open('part'); });
 
   modal.addEventListener('click', function(ev) { if (ev.target === modal) close(); });
   document.addEventListener('keydown', function(ev) {

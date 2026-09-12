@@ -14,6 +14,7 @@ window.MA.toolMenu = (function() {
   // タブ列のボタン文字 (絵文字 + 短い語) ではなく「何をするか」で読める形にする。
   var GROUPS = [
     { key: 'make', title: '図をつくる', items: [
+      { id: 'btn-tab-part',     label: '部品を起こす (6 図種まとめて)' },
       { id: 'btn-tab-template', label: 'テンプレートから作る' },
       { id: 'btn-tab-skeleton', label: '骨格から作る' },
       { id: 'btn-tab-set',      label: '系統ごと複製する' },

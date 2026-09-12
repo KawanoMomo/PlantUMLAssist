@@ -367,3 +367,95 @@ test.describe('junior 手順 1: シーケンス図からユースケース図を
     expect(opts.some((t) => t.indexOf('gpio') >= 0)).toBe(true);
   });
 });
+
+// ── BLK-junior-20260913-0206-wish ───────────────────────────────────────
+// 新部品を起こす周 (TIMER) の手順 1〜2 は、シーケンス → 状態遷移 → クラス →
+// アクティビティ → コンポーネント → ユースケースの 6 図種を、その都度別のタブを
+// 新規に開いて別々にやり直していた。下書きを作る機能が図種ごとに別々なので、
+// 図種を移るたびにどの機能を使うかを思い出し、部品名を打ち直すことになる。
+// 部品名を 1 回打てば 6 図種が同じ名前で揃って開くことを到達条件にする。
+test.describe('junior 手順 1〜2: 手本の無い部品を 1 回の入力で起こす', () => {
+  test.beforeEach(async ({ page }) => {
+    await bootWithDir(page);
+    await clearDir(page);
+    await clearVault(page);
+  });
+
+  test.afterEach(async ({ page }) => {
+    await clearDir(page).catch(() => {});
+  });
+
+  test('部品名を 1 回打つと、6 図種の下書きが同じ名前で別タブに開く', async ({ page }) => {
+    await page.locator('#btn-tab-part').click();
+    await page.waitForSelector('#part-subject');
+    await page.fill('#part-subject', 'TIMER');
+
+    // 到達条件 1: 押す前に、何が何の名前で開くかが 6 行で読める。
+    const rows = page.locator('#part-sheets [data-part-row]');
+    await expect(rows).toHaveCount(6);
+    await expect(page.locator('#part-summary')).toContainText('TIMER_Driver');
+    await expect(page.locator('#part-summary')).toContainText('6 図種');
+    const names = await page.locator('#part-sheets [data-part-name]').allTextContents();
+    expect(names).toEqual(['timer_sequence', 'timer_state', 'timer_class',
+      'timer_activity', 'timer_component', 'timer_usecase']);
+
+    // 到達条件 2: 1 回押すだけで 6 図種ぶんのタブが開く (図種ごとのやり直しが無い)。
+    await page.locator('#btn-part-create').click();
+    await page.waitForTimeout(900);
+    const opened = await page.evaluate(() => window.MA.workspace.list()
+      .map((d) => ({ name: d.name, type: d.diagramType, dsl: d.dsl })));
+    const mine = opened.filter((d) => d.name.indexOf('timer_') === 0);
+    expect(mine.map((d) => d.name)).toEqual(['timer_sequence', 'timer_state',
+      'timer_class', 'timer_activity', 'timer_component', 'timer_usecase']);
+    expect(mine.map((d) => d.type)).toEqual(['plantuml-sequence', 'plantuml-state',
+      'plantuml-class', 'plantuml-activity', 'plantuml-component', 'plantuml-usecase']);
+
+    // 到達条件 3: 図種を跨いだ綴りの食い違いが起きない (打ったのは 1 回だから)。
+    for (const d of mine) {
+      expect(d.dsl).toContain('TIMER');
+      expect(d.dsl).not.toContain('Timer');
+    }
+
+    // 到達条件 4: どれも白紙ではなく、そのまま描ける DSL になっている。
+    const codes = await page.evaluate(async (dsls) => {
+      const out = [];
+      for (const t of dsls) {
+        const r = await fetch('/render', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: t, mode: 'local' }),
+        });
+        out.push(r.status);
+      }
+      return out;
+    }, mine.map((d) => d.dsl));
+    expect(codes).toEqual([200, 200, 200, 200, 200, 200]);
+  });
+
+  // 同じ部品の図を既に開いているタブがあれば、その図種は既定で外す
+  // (押し間違えて書きかけを別タブで二重に持つと、どちらを直したか分からなくなる)。
+  test('既に開いた図種は 2 度目には開かない側に寄り、選べば作り直せる', async ({ page }) => {
+    await page.locator('#btn-tab-part').click();
+    await page.waitForSelector('#part-subject');
+    await page.fill('#part-subject', 'TIMER');
+    await page.locator('#btn-part-create').click();
+    await page.waitForTimeout(900);
+
+    // 2 度目。6 図種とも「既にあります」になり、何も開かない状態から始まる。
+    await page.locator('#btn-tab-part').click();
+    await page.waitForSelector('#part-subject');
+    await page.fill('#part-subject', 'TIMER');
+    const had = page.locator('#part-sheets [data-part-had]');
+    await expect(had.first()).toContainText('既にあります');
+    const boxes = page.locator('#part-sheets input[data-part-kind]');
+    expect(await boxes.count()).toBe(6);
+    for (let i = 0; i < 6; i++) await expect(boxes.nth(i)).not.toBeChecked();
+    await expect(page.locator('#part-summary')).toContainText('6 図種は既にある');
+    await expect(page.locator('#btn-part-create')).toBeDisabled();
+
+    // 作り直したければその場で選べる (勝手に外して終わりにしない)。
+    await page.locator('#part-sheets [data-part-row="state"] input[data-part-kind]').check();
+    await expect(page.locator('#btn-part-create')).toHaveText('1 図種の下書きを開く');
+    await expect(page.locator('#btn-part-create')).toBeEnabled();
+  });
+});
