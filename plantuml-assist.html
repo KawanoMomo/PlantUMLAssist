@@ -1648,6 +1648,16 @@ html, body {
 #peek-files .peek-file .peek-file-name {
   flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+/* BLK-junior-20260912-2206: 覗き一覧にも図種の印と内訳を出す
+   (名前の語尾から図種を推測しながら 30 行読む手を無くす)。 */
+#peek-files .peek-kinds {
+  padding: 4px 8px; font-size: 11px; color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-color);
+}
+#peek-files .peek-kind {
+  margin-left: 6px; padding: 0 5px; border-radius: 3px; font-size: 10px;
+  background: var(--bg-tertiary); color: var(--text-secondary); white-space: nowrap;
+}
 #peek-files .peek-svg-badge {
   flex: 0 0 auto;
   font-size: 9px;

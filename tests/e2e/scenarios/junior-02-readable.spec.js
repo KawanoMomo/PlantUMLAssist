@@ -140,6 +140,15 @@ test('手順2 先輩の図を手本として右に据えたまま、自分に無
   // 手本を覗いて、そのまま右に据える。
   await page.locator('#btn-tab-peek').click();
   await page.waitForSelector('#peek-modal');
+
+  // BLK-junior-20260912-2206: 覗き一覧は図名だけで図種の印が無く、「先輩に
+  // コンポーネント図があるか」を 30 行の語尾 (_state / _sequence) から推測して
+  // いた。自分の 📂 一覧と同じ内訳と印を、開いた時点で出す。
+  await expect(page.locator('#peek-kinds')).toContainText('コンポーネント 0');
+  await expect(page.locator('#peek-kinds')).toContainText('状態遷移 1');
+  await expect(page.locator('.peek-file[data-file-name="timer_state"] .peek-kind'))
+    .toContainText('状態遷移');
+
   await page.locator('.peek-file[data-file-name="timer_state"]').click();
   await expect(page.locator('#peek-compare')).toBeEnabled();
   await page.locator('#peek-compare').click();

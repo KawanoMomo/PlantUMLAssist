@@ -114,6 +114,27 @@ window.MA.peekFolder = (function() {
     return list.length ? _s(list[0].name) : '';
   }
 
+  // 覗き一覧の 1 行に出す図種の印 (BLK-junior-20260912-2206)。
+  // junior は先輩のフォルダにコンポーネント図があるかを見に行くのに、名前だけの
+  // 一覧を 30 行読んで語尾 (_state / _sequence) から図種を推測していた。
+  // 自分の 📂 一覧と同じ決め方にする: 保存したときの図種の控え (savedKind) が
+  // あればそれ、無ければ server の本文判定 (kind)。どちらも無ければ印を出さない
+  // (当てずっぽうの印は、無い図種を「有る」と読ませる)。
+  function kindBadge(entry) {
+    var SK = window.MA.savedKind, DK = window.MA.diagramKind;
+    var e = entry || {};
+    var saved = (SK && SK.label(e.savedKind)) ? _s(e.savedKind) : '';
+    if (saved && SK) {
+      var b = SK.badge(saved);
+      return { slug: saved, source: 'saved', text: b.mark + ' ' + b.label,
+               title: '保存したときの図種は' + b.label + '図' };
+    }
+    var label = DK ? DK.label(e.kind) : '';
+    if (!label) return null;
+    return { slug: _s(e.kind), source: 'guess', text: label,
+             title: 'この図の図種（本文から判定）' };
+  }
+
   // テンプレートとして開けるかどうかの 1 行。押せないときは理由を出す。
   function seedNotice(seed) {
     if (!seed) return '図を選ぶとテンプレートとして開けます';
@@ -128,6 +149,7 @@ window.MA.peekFolder = (function() {
     samePath: samePath,
     noticeText: noticeText,
     step: step,
+    kindBadge: kindBadge,
     templateSeed: templateSeed,
     seedNotice: seedNotice,
     seedHint: seedHint,
