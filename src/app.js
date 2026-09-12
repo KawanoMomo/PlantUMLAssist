@@ -5298,6 +5298,8 @@ function _peekEls() {
     template: document.getElementById('peek-template'),
     compare: document.getElementById('peek-compare'),
     cohortTemplates: document.getElementById('peek-cohort-templates'),
+    sbs: document.getElementById('peek-sbs'),
+    sbsToggle: document.getElementById('peek-sbs-toggle'),
   };
 }
 
@@ -5305,10 +5307,9 @@ function _peekEls() {
 // 行き先一覧 (_peekDirs) の各フォルダのファイル名を集め、`folder/name` の形の
 // 疑似 doc にしてドメインで束ねる。本文はここでは読まない (フォルダ数 × 枚数の
 // 読み込みを、見る気になっていない段階で走らせない)。
-function _cohortLoadIndex() {
+function _peekIndexDocs() {
   var WS = window.MA.workspace;
-  var DC = window.MA.domainCohort;
-  if (!WS || !DC) return Promise.resolve([]);
+  if (!WS) return Promise.resolve([]);
   var dirs = _peekDirs.slice();
   return Promise.all(dirs.map(function(d) {
     return WS.listFiles(d.path).then(function(names) {
@@ -5321,9 +5322,15 @@ function _cohortLoadIndex() {
         docs.push({ name: set.dir.name + '/' + n, dsl: '', _dir: set.dir.path, _file: n });
       });
     });
-    // テンプレ込みで束ねておき、表示側で外す (押して戻すときに読み直さない)。
-    return DC.groups(docs);
+    return docs;
   });
+}
+
+function _cohortLoadIndex() {
+  var DC = window.MA.domainCohort;
+  if (!DC) return Promise.resolve([]);
+  // テンプレ込みで束ねておき、表示側で外す (押して戻すときに読み直さない)。
+  return _peekIndexDocs().then(function(docs) { return DC.groups(docs); });
 }
 
 // 選んだドメインの図だけ本文を読み、突合する。
@@ -5629,6 +5636,8 @@ function selectCohortDomain(domain) {
 function setCohortMode(on) {
   var el = _peekEls();
   _cohortOn = !!on;
+  // 2 つの並べ方を同時に出さない (同名で並べる方を先に畳む)。
+  if (_cohortOn && _sbsOn) setSbsMode(false);
   if (el.cohortToggle) {
     el.cohortToggle.setAttribute('aria-pressed', _cohortOn ? 'true' : 'false');
     el.cohortToggle.classList.toggle('on', _cohortOn);
@@ -5687,6 +5696,310 @@ function _syncCohortTemplateBtn() {
   el.cohortTemplates.classList.toggle('on', _cohortShowTemplates);
   el.cohortTemplates.textContent = _cohortShowTemplates ? '📄 テンプレも表示中' : '📄 テンプレも表示';
 }
+
+// ── 同名ファイルを左右に並べる (BLK-reviewer-20260912-2206-wish) ──
+// reviewer は junior/primary の同じファイル名の図を突き合わせる。ドメイン突合は
+// 「どの名前が食い違うか」をチップで出すが、どの行のどの語かは本文を自分で
+// 開き直さないと分からず、2 フォルダから同名ファイルをテキストとして開いて
+// 読み比べることになっていた。ここは本文そのものを 2 列に並べ、食い違う語だけを
+// 光らせる。揃え方 (どちらの綴りに寄せるか) もその場で当てられる。
+var _sbsOn = false;
+var _sbsPairs = [];        // 同名で組めた組 (本文は未読)
+var _sbsKey = null;        // 選んでいる組
+var _sbsView = null;       // { pair, a, b, rows, marks, summary }
+var _sbsMsg = '';          // 直前に何をしたか (揃えた結果)
+
+function _sbsPairKey(p) { return p.base + '|' + p.a.folder + '|' + p.b.folder; }
+
+function _sbsPairOf(key) {
+  for (var i = 0; i < _sbsPairs.length; i++) {
+    if (_sbsPairKey(_sbsPairs[i]) === key) return _sbsPairs[i];
+  }
+  return null;
+}
+
+function setSbsMode(on) {
+  var el = _peekEls();
+  _sbsOn = !!on;
+  if (el.sbsToggle) {
+    el.sbsToggle.setAttribute('aria-pressed', _sbsOn ? 'true' : 'false');
+    el.sbsToggle.classList.toggle('on', _sbsOn);
+  }
+  if (!_sbsOn) {
+    _sbsKey = null;
+    _sbsView = null;
+    _sbsMsg = '';
+    renderSbs();
+    if (el.modal && el.modal.style.display !== 'none') { renderPeekDirs(); renderPeekFiles(); }
+    return Promise.resolve(true);
+  }
+  // 2 つの並べ方を同時に出さない。上下に別の突合が並ぶと、どちらの結果を
+  // 見ているのかが画面からは決まらない。
+  if (_cohortOn) setCohortMode(false);
+  _peekName = null;
+  if (el.title) el.title.textContent = '';
+  if (el.svg) { el.svg.textContent = ''; el.svg.style.display = 'none'; }
+  if (el.dsl) el.dsl.textContent = '';
+  _sbsMsg = '';
+  renderSbs();
+  return _peekIndexDocs().then(function(docs) {
+    if (!_sbsOn) return false;
+    var SBS = window.MA.sideBySide;
+    _sbsPairs = SBS ? SBS.pairsByFile(docs) : [];
+    renderSbsPairs();
+    renderSbsFiles();
+    // 1 組しか無いなら開いておく (押して確かめる手を増やさない)。
+    if (_sbsPairs.length === 1) return selectSbsPair(_sbsPairKey(_sbsPairs[0]));
+    renderSbs();
+    return true;
+  });
+}
+
+// 選んだ組の本文だけを読む。一覧の段階では読まない (フォルダ数 × 枚数の
+// 読み込みを、見る気になっていない段階で走らせない)。
+function selectSbsPair(key) {
+  var WS = window.MA.workspace;
+  var SBS = window.MA.sideBySide;
+  _sbsKey = key;
+  _sbsView = null;
+  _sbsMsg = '';
+  renderSbsPairs();
+  renderSbsFiles();
+  renderSbs();
+  var pair = _sbsPairOf(key);
+  if (!pair || !WS || !SBS) { renderSbs(); return Promise.resolve(false); }
+  function load(side) {
+    var src = side.doc || {};
+    return WS.loadFile(src._file, src._dir)
+      .then(function(t) { return { name: side.name, dsl: typeof t === 'string' ? t : '', _dir: src._dir, _file: src._file }; })
+      .catch(function() { return { name: side.name, dsl: '', _dir: src._dir, _file: src._file }; });
+  }
+  return Promise.all([load(pair.a), load(pair.b)]).then(function(both) {
+    if (_sbsKey !== key) return false;   // 途中で選び直された
+    _sbsView = {
+      pair: pair, a: both[0], b: both[1],
+      rows: SBS.rows(both[0], both[1]),
+      marks: SBS.marks(both[0], both[1]),
+      summary: SBS.summaryLine(both[0], both[1]),
+    };
+    renderSbs();
+    return true;
+  });
+}
+
+function renderSbsPairs() {
+  var el = _peekEls();
+  if (!el.dirs) return;
+  el.dirs.textContent = '';
+  var head = document.createElement('div');
+  head.className = 'peek-head';
+  head.id = 'sbs-pairs-head';
+  head.textContent = _sbsPairs.length
+    ? '同名ファイル (' + _sbsPairs.length + ')'
+    : '同じファイル名を 2 人が持っている組がありません';
+  el.dirs.appendChild(head);
+  _sbsPairs.forEach(function(p) {
+    var key = _sbsPairKey(p);
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'peek-dir sbs-pair' + (key === _sbsKey ? ' selected' : '');
+    b.setAttribute('data-sbs-pair', p.base);
+    b.textContent = p.base + ' (' + p.a.folder + ' × ' + p.b.folder + ')';
+    b.addEventListener('click', function() { selectSbsPair(key); });
+    el.dirs.appendChild(b);
+  });
+  if (el.notice) el.notice.textContent = '同名ファイルを並べています (読むだけ・保存先は動きません)';
+}
+
+// 組の 2 枚。押せば従来どおり 1 枚だけ本文と SVG で読める。
+function renderSbsFiles() {
+  var el = _peekEls();
+  if (!el.files) return;
+  el.files.textContent = '';
+  var head = document.createElement('div');
+  head.className = 'peek-head';
+  head.id = 'sbs-files-head';
+  var pair = _sbsPairOf(_sbsKey);
+  head.textContent = pair ? '2 枚' : '組を選んでください';
+  el.files.appendChild(head);
+  if (!pair) return;
+  [pair.a, pair.b].forEach(function(side) {
+    var src = side.doc || {};
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'peek-file' + (src._file === _peekName && src._dir === _peekDir ? ' selected' : '');
+    b.setAttribute('data-file-name', src._file);
+    b.setAttribute('data-folder', side.folder);
+    b.textContent = side.folder + ' / ' + side.base;
+    b.addEventListener('click', function() {
+      _peekDir = src._dir;
+      showPeekFile(src._file).then(renderSbsFiles);
+    });
+    el.files.appendChild(b);
+  });
+}
+
+function _sbsSegmentSpans(host, segs, side) {
+  (segs || []).forEach(function(s) {
+    if (!s.mark) { host.appendChild(document.createTextNode(s.text)); return; }
+    var span = document.createElement('span');
+    span.className = 'sbs-mark sbs-mark-' + s.mark;
+    span.setAttribute('data-sbs-mark', s.mark);
+    span.setAttribute('data-sbs-side', side);
+    span.textContent = s.text;
+    // 相手側の綴りを添える。押さずに読んで分かるようにする。
+    span.title = s.mark === 'spelling'
+      ? '綴り違い: ' + s.left + ' / ' + s.right
+      : 'この図にしかありません';
+    host.appendChild(span);
+  });
+}
+
+function renderSbs() {
+  var el = _peekEls();
+  if (!el.sbs) return;
+  el.sbs.textContent = '';
+  if (!_sbsOn) { el.sbs.style.display = 'none'; return; }
+  el.sbs.style.display = 'block';
+
+  if (!_sbsKey) {
+    var hint = document.createElement('div');
+    hint.className = 'sbs-hint';
+    hint.id = 'sbs-hint';
+    hint.textContent = _sbsPairs.length
+      ? '同じファイル名を 2 人が持っている組を ' + _sbsPairs.length + ' 件見つけました。左で組を選んでください。'
+      : '同じファイル名を 2 人が持っている組がありません。';
+    el.sbs.appendChild(hint);
+    return;
+  }
+  var v = _sbsView;
+  if (!v) {
+    var loading = document.createElement('div');
+    loading.className = 'sbs-hint';
+    loading.textContent = '読み込み中…';
+    el.sbs.appendChild(loading);
+    return;
+  }
+  var pair = v.pair;
+  var head = document.createElement('div');
+  head.className = 'sbs-head';
+  head.id = 'sbs-head';
+  head.textContent = window.MA.sideBySide.headerLabel(pair);
+  el.sbs.appendChild(head);
+
+  var sum = document.createElement('div');
+  sum.className = 'sbs-summary';
+  sum.id = 'sbs-summary';
+  sum.textContent = _sbsMsg || v.summary;
+  el.sbs.appendChild(sum);
+
+  var grid = document.createElement('div');
+  grid.className = 'sbs-grid';
+  grid.id = 'sbs-grid';
+  [' ', pair.a.folder + ' / ' + pair.a.base, ' ', pair.b.folder + ' / ' + pair.b.base]
+    .forEach(function(t, i) {
+      var h = document.createElement('div');
+      h.className = 'sbs-col-head' + (i === 0 || i === 2 ? ' sbs-ln' : '');
+      h.textContent = t;
+      grid.appendChild(h);
+    });
+  v.rows.forEach(function(r) {
+    function cell(cls, text) {
+      var d = document.createElement('div');
+      d.className = cls;
+      if (text != null) d.textContent = text;
+      return d;
+    }
+    var rowCls = ' sbs-row-' + r.kind;
+    var lnA = cell('sbs-ln' + rowCls, r.lineA == null ? '' : String(r.lineA));
+    var left = cell('sbs-text sbs-text-left' + rowCls, null);
+    if (r.left == null) left.classList.add('sbs-gap');
+    else _sbsSegmentSpans(left, r.leftSegments, 'left');
+    var lnB = cell('sbs-ln' + rowCls, r.lineB == null ? '' : String(r.lineB));
+    var right = cell('sbs-text sbs-text-right' + rowCls, null);
+    if (r.right == null) right.classList.add('sbs-gap');
+    else _sbsSegmentSpans(right, r.rightSegments, 'right');
+    left.setAttribute('data-sbs-kind', r.kind);
+    right.setAttribute('data-sbs-kind', r.kind);
+    grid.appendChild(lnA); grid.appendChild(left);
+    grid.appendChild(lnB); grid.appendChild(right);
+  });
+  el.sbs.appendChild(grid);
+  _renderSbsAlign(el.sbs, v);
+}
+
+// 綴り違いを「どちらに揃えるか」。書き戻せるのは自分の保存フォルダにある方だけ
+// (他人の図を勝手に直さない)。
+function _renderSbsAlign(host, v) {
+  var SBS = window.MA.sideBySide;
+  var PF = window.MA.peekFolder;
+  var spell = SBS.gaps(v.marks).filter(function(r) { return r.status === 'spelling'; });
+  if (!spell.length) return;
+  var dir = _myPeekDir();
+  var mineIsA = !!(PF && PF.samePath(v.a._dir, dir));
+  var mineIsB = !!(PF && PF.samePath(v.b._dir, dir));
+  spell.forEach(function(r) {
+    var row = document.createElement('div');
+    row.className = 'sbs-align';
+    row.setAttribute('data-sbs-align', r.key);
+    var note = document.createElement('span');
+    note.className = 'sbs-align-note';
+    note.textContent = r.left + ' / ' + r.right
+      + (r.by === '部分一致' ? ' (対応候補)' : '') + ' — ';
+    row.appendChild(note);
+    if (!mineIsA && !mineIsB) {
+      var ro = document.createElement('span');
+      ro.className = 'sbs-align-note';
+      ro.textContent = 'どちらも自分の保存フォルダの図ではありません (読むだけ)';
+      row.appendChild(ro);
+      host.appendChild(row);
+      return;
+    }
+    // 自分の図を、相手の綴りに書き替える方だけを出す。
+    var mine = mineIsA ? v.a : v.b;
+    var from = mineIsA ? r.left : r.right;
+    var to = mineIsA ? r.right : r.left;
+    var otherFolder = mineIsA ? v.pair.b.folder : v.pair.a.folder;
+    if (!from || !to) { host.appendChild(row); return; }
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'sbs-align-btn';
+    b.setAttribute('data-sbs-align-to', to);
+    b.textContent = otherFolder + ' の「' + to + '」に揃える';
+    b.addEventListener('click', function() { applySbsAlign(mine, from, to, b); });
+    row.appendChild(b);
+    host.appendChild(row);
+  });
+}
+
+function applySbsAlign(mine, from, to, btn) {
+  var BR = window.MA.bulkRename;
+  var WS = window.MA.workspace;
+  if (!BR || !WS) return Promise.resolve(false);
+  var n = BR.countIn(mine.dsl, from);
+  if (!n) { _sbsMsg = '「' + from + '」は本文に見当たりません'; renderSbs(); return Promise.resolve(false); }
+  var next = BR.replaceIn(mine.dsl, from, to);
+  if (btn) btn.disabled = true;
+  return WS.saveToFile({ name: mine._file.replace(/\.[^.]+$/, ''), dsl: next }, mine._dir)
+    .then(function(ok) {
+      if (btn) btn.disabled = false;
+      if (!ok) { _sbsMsg = '書き戻せませんでした (保存先を確認してください)'; renderSbs(); return false; }
+      var msg = from + ' → ' + to + ' を ' + n + ' 箇所、' + mine.name + ' に保存しました';
+      // 並べ直す。直った姿が同じ画面にすぐ出ないと、直ったか確かめる手が増える。
+      return selectSbsPair(_sbsKey).then(function() {
+        _sbsMsg = msg;
+        renderSbs();
+        return true;
+      });
+    })
+    .catch(function() {
+      if (btn) btn.disabled = false;
+      _sbsMsg = '書き戻せませんでした (保存先を確認してください)';
+      renderSbs();
+      return false;
+    });
+}
+
 
 // ── 覗いた図をテンプレートにする (BLK-junior-20260909-0503-wish) ──
 // 読むだけで見た図は、そのまま「テンプレートから新規作成」の材料にできる。
@@ -5759,6 +6072,7 @@ function closePeekFolder() {
   _peekDsl = '';
   renderPeekTemplateBtn();
   setCohortMode(false);
+  setSbsMode(false);
 }
 
 function renderPeekDirs() {
@@ -5982,6 +6296,9 @@ function setupPeekFolder() {
   if (closeBtn) closeBtn.addEventListener('click', close);
   if (el.cohortToggle) {
     el.cohortToggle.addEventListener('click', function() { setCohortMode(!_cohortOn); });
+  }
+  if (el.sbsToggle) {
+    el.sbsToggle.addEventListener('click', function() { setSbsMode(!_sbsOn); });
   }
   if (el.cohortTemplates) {
     el.cohortTemplates.addEventListener('click', function() {

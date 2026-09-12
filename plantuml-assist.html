@@ -1724,6 +1724,40 @@ html, body {
   cursor: pointer;
 }
 #peek-cohort .cohort-verdict-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* BLK-reviewer-20260912-2206-wish: 同名ファイルを左右に並べて読む。
+   食い違う語だけに色を置き、揃っている語は本文と同じ色のままにする
+   (全部光ると、どこを見ればよいかが本文を読み直さないと決まらない)。 */
+#peek-sbs { padding-bottom: 10px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+#peek-sbs .sbs-head { font-size: 12px; font-weight: 600; padding-bottom: 4px; }
+#peek-sbs .sbs-summary { font-size: 11px; color: var(--text-secondary); padding-bottom: 6px; }
+#peek-sbs .sbs-hint { font-size: 11px; color: var(--text-secondary); padding: 4px 0; }
+#peek-sbs .sbs-grid {
+  display: grid; grid-template-columns: 2.5em 1fr 2.5em 1fr;
+  font-family: var(--mono, monospace); font-size: 11px; line-height: 1.6;
+  border: 1px solid var(--border); border-radius: 4px; overflow: auto; max-height: 46vh;
+}
+#peek-sbs .sbs-col-head {
+  position: sticky; top: 0; background: var(--bg-secondary, #2e3440);
+  font-weight: 600; padding: 3px 6px; border-bottom: 1px solid var(--border);
+}
+#peek-sbs .sbs-ln { color: var(--text-secondary); opacity: 0.6; text-align: right; padding: 0 6px; user-select: none; }
+#peek-sbs .sbs-text { padding: 0 6px; white-space: pre-wrap; word-break: break-all; }
+#peek-sbs .sbs-row-changed .sbs-text { background: rgba(235, 203, 139, 0.10); }
+#peek-sbs .sbs-row-only-left .sbs-text-left,
+#peek-sbs .sbs-row-only-right .sbs-text-right { background: rgba(163, 190, 140, 0.12); }
+#peek-sbs .sbs-gap { opacity: 0.35; }
+#peek-sbs .sbs-mark { border-radius: 2px; padding: 0 1px; }
+#peek-sbs .sbs-mark-spelling { background: rgba(235, 203, 139, 0.30); color: #ebcb8b; }
+#peek-sbs .sbs-mark-only { background: rgba(191, 97, 106, 0.25); color: #bf616a; }
+#peek-sbs .sbs-align { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; padding: 4px 0 0 0; }
+#peek-sbs .sbs-align-note { font-size: 10px; color: var(--text-secondary); }
+#peek-sbs .sbs-align-btn {
+  font-size: 10px; padding: 1px 6px; border: 1px solid var(--border);
+  border-radius: 3px; background: transparent; color: var(--text); cursor: pointer;
+}
+#peek-sbs .sbs-align-btn:hover { border-color: var(--accent); color: var(--accent); }
+#peek-sbs-toggle.on { border-color: var(--accent); color: var(--accent); }
 #at-modal-content {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
@@ -5646,6 +5680,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/audit-scope.js"></script>
 <script src="src/core/blank-doc.js"></script>
 <script src="src/core/domain-cohort.js"></script>
+<script src="src/core/side-by-side.js"></script>
 <script src="src/core/domain-verdict.js"></script>
 <script src="src/core/version-history.js"></script>
 <script src="src/core/diagram-kind.js"></script>
@@ -6140,6 +6175,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
              以降は書きかけと手本が同時に見え、対応表で足りない状態・遷移が出る。 -->
         <button type="button" id="peek-compare" disabled title="この図を手本として自分の書きかけの右に並べ、対応表で足りない状態・遷移を出す">⇔ 自分の図と並べる</button>
         <button type="button" id="peek-cohort-toggle" title="同じドメイン名の図をフォルダ横断で並べる">🔀 ドメインで揃える</button>
+        <button type="button" id="peek-sbs-toggle" title="同じファイル名を持つ 2 人の図を左右に並べ、部品名・メッセージ名の食い違いだけを光らせる">⇔ 同名で並べる</button>
         <button type="button" id="peek-cohort-templates" style="display:none;" title="アプリ同梱テンプレ・既定サンプル由来のドメインも突合に含める">📄 テンプレも表示</button>
         <button type="button" id="peek-prev" title="前の図">↑</button>
         <button type="button" id="peek-next" title="次の図">↓</button>
@@ -6151,6 +6187,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <div id="peek-files"></div>
       <div id="peek-view">
         <div id="peek-cohort" style="display:none;"></div>
+        <div id="peek-sbs" style="display:none;"></div>
         <div id="peek-title"></div>
         <div id="peek-svg"></div>
         <pre id="peek-dsl"></pre>
