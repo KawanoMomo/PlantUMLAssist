@@ -418,8 +418,20 @@ window.MA.workspace = (function() {
 
   // DSL 本文から図の種類を推測する。フォルダから開いた図に対して
   // 正しいモジュールを選ぶために使う。
+  //
+  // BLK-junior-20260912-2103: 判定は parserUtils.detectDiagramType 1 つに寄せる。
+  // ここに独自の規則を持っていたため、同じ本文がエディタでは Sequence・フォルダから
+  // 開くと UseCase になっていた (`Dev -> Timer : Timer_Init()` の丸括弧が
+  // `actor` と組んで usecase 判定に当たる。parserUtils は行頭の `(...)` だけを
+  // UseCase と読み、矢印があれば Sequence に寄せるので取り違えない)。
+  // 下の規則は parserUtils が載っていない / 判定できないときの控えとして残す。
   function detectType(dsl) {
     var t = String(dsl == null ? '' : dsl);
+    var PU = window.MA.parserUtils;
+    if (PU && typeof PU.detectDiagramType === 'function') {
+      var byParser = PU.detectDiagramType(t);
+      if (byParser) return byParser;
+    }
     if (/^\s*(start|:.*;|if\s*\()/m.test(t) && /@startuml/.test(t) && /(^|\n)\s*(start|stop|:)/.test(t)) {
       if (/(^|\n)\s*start\s*$/m.test(t) || /(^|\n)\s*:.*;\s*$/m.test(t)) return 'plantuml-activity';
     }

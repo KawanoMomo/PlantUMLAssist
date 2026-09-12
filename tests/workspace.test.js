@@ -18,9 +18,15 @@ global.document = dom.window.document;
   Object.defineProperty(global.window, 'localStorage', { configurable: true, value: stub });
 })();
 
-try { delete require.cache[require.resolve('../src/core/workspace.js')]; } catch (e) {}
-require('../src/core/workspace.js');
+// BLK-junior-20260912-2103: detectType は parserUtils に寄せたので、実機と同じく
+// regex-parts / parser-utils も載せた状態で確かめる。
+['../src/core/regex-parts.js', '../src/core/parser-utils.js', '../src/core/workspace.js']
+  .forEach(function(m) {
+    try { delete require.cache[require.resolve(m)]; } catch (e) {}
+    require(m);
+  });
 var ws = global.window.MA.workspace;
+var PU = global.window.MA.parserUtils;
 
 function fresh() {
   global.window.localStorage.__reset();
@@ -159,6 +165,46 @@ describe('workspace detectType', function() {
   });
   test('returns null when nothing matches', function() {
     expect(ws.detectType('@startuml\n@enduml')).toBeNull();
+  });
+
+  // BLK-junior-20260912-2103: メッセージ名の丸括弧 (`Timer_Init()`) が `actor` と
+  // 組んで UseCase 判定に当たっていた。フォルダから開いた図がエディタと違う図種に
+  // なると、その図種でしか使えない機能 (シーケンス図からアクティビティ図を起こす)
+  // が使えなくなる。
+  var SEQ_WITH_PARENS = [
+    '@startuml',
+    'title TIMERドライバ初期化シーケンス',
+    'actor Dev',
+    'participant Timer_Driver',
+    'Dev -> Timer_Driver : Timer_Init()',
+    'Timer_Driver --> Dev : E_OK',
+    '@enduml',
+  ].join('\n');
+
+  test('メッセージ名に丸括弧があっても Sequence と読む', function() {
+    expect(ws.detectType(SEQ_WITH_PARENS)).toBe('plantuml-sequence');
+  });
+
+  test('participant が無く actor だけでも、矢印があれば Sequence と読む', function() {
+    expect(ws.detectType('@startuml\nactor Dev\nDev -> Timer : Timer_Init()\n@enduml'))
+      .toBe('plantuml-sequence');
+  });
+
+  test('本物の UseCase (行頭の丸括弧) は UseCase のまま', function() {
+    expect(ws.detectType('@startuml\nactor User\n(ログインする)\nUser -- (ログインする)\n@enduml'))
+      .toBe('plantuml-usecase');
+  });
+
+  test('フォルダから開く判定とエディタの判定が一致する', function() {
+    [
+      SEQ_WITH_PARENS,
+      '@startuml\n[*] --> Idle\nIdle --> Busy : go\n@enduml',
+      '@startuml\nclass Spi {\n}\n@enduml',
+      '@startuml\nactor User\n(ログインする)\n@enduml',
+      '@startuml\nstart\n:Timer_Init();\nstop\n@enduml',
+    ].forEach(function(dsl) {
+      expect(ws.detectType(dsl)).toBe(PU.detectDiagramType(dsl));
+    });
   });
 });
 
