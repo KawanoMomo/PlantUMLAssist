@@ -4239,6 +4239,15 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 #overlay-layer rect.selectable:hover:not(.selected) {
   fill: rgba(255, 255, 255, 0.05);
 }
+/* BLK-human-20260912-0900: シーケンスのメッセージは矢印からラベル・番号・
+   ステレオタイプまでが 1 つの当たり判定。どこまで押せば同じメッセージを選べるかが
+   見て分かるよう、hover で範囲を青の破線で囲う (選択の青の実線とは見分けが付く) */
+#overlay-layer rect.selectable[data-type="message"]:hover:not(.selected) {
+  fill: rgba(80, 160, 255, 0.10);
+  stroke: rgba(80, 160, 255, 0.55);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
 /* BLK-primary-20260908-1603: 選ぶ前の対応表示。DSL のキャレット行・行番号に
    マウスが乗った行に対応する図形を薄く光らせる。選択 (青の実線) と見分けが
    付くよう、破線の琥珀にする */

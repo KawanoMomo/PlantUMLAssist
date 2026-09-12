@@ -61,6 +61,79 @@ window.MA.overlayBuilder = (function() {
     return null;
   }
 
+  // BLK-human-20260912-0900: g.message は「矢印 (line/polygon) + ラベル + 番号
+  // (autonumber) + ステレオタイプ」を子に持ち、何を付けたかで <text> の並びが変わる。
+  // extractBBox は最初の <text> しか見ないため、autonumber を付けると番号の上、
+  // ステレオタイプを付けるとステレオタイプの上だけがクリックに反応していた。
+  // 子要素全部の和集合を取り、設定に関わらず同じ当たり判定にする。
+  function _nodeBBox(n) {
+    var tag = (n.tagName || '').toLowerCase();
+    if (typeof n.getBBox === 'function') {
+      try {
+        var bb = n.getBBox();
+        if (bb && (bb.width || bb.height)) {
+          return { x: bb.x, y: bb.y, width: bb.width, height: bb.height };
+        }
+      } catch (e) { /* jsdom fallback */ }
+    }
+    if (tag === 'text') {
+      var tx = parseFloat(n.getAttribute('x')) || 0;
+      var ty = parseFloat(n.getAttribute('y')) || 0;  // baseline
+      var tw = parseFloat(n.getAttribute('textLength'))
+        || parseFloat(n.getAttribute('width'))
+        || (n.textContent || '').length * 7;
+      var fsz = parseFloat(n.getAttribute('font-size')) || 13;
+      return { x: tx, y: ty - fsz, width: tw, height: fsz + 4 };
+    }
+    if (tag === 'line') {
+      var x1 = parseFloat(n.getAttribute('x1')) || 0;
+      var x2 = parseFloat(n.getAttribute('x2')) || 0;
+      var y1 = parseFloat(n.getAttribute('y1')) || 0;
+      var y2 = parseFloat(n.getAttribute('y2')) || 0;
+      return {
+        x: Math.min(x1, x2), y: Math.min(y1, y2),
+        width: Math.abs(x2 - x1), height: Math.abs(y2 - y1),
+      };
+    }
+    if (tag === 'polygon' || tag === 'polyline') {
+      var nums = (n.getAttribute('points') || '').split(/[\s,]+/)
+        .map(parseFloat).filter(function(v) { return !isNaN(v); });
+      if (nums.length < 2) return null;
+      var xs = [], ys = [];
+      for (var i = 0; i + 1 < nums.length; i += 2) { xs.push(nums[i]); ys.push(nums[i + 1]); }
+      return {
+        x: Math.min.apply(null, xs), y: Math.min.apply(null, ys),
+        width: Math.max.apply(null, xs) - Math.min.apply(null, xs),
+        height: Math.max.apply(null, ys) - Math.min.apply(null, ys),
+      };
+    }
+    if (tag === 'rect') {
+      return {
+        x: parseFloat(n.getAttribute('x')) || 0,
+        y: parseFloat(n.getAttribute('y')) || 0,
+        width: parseFloat(n.getAttribute('width')) || 0,
+        height: parseFloat(n.getAttribute('height')) || 0,
+      };
+    }
+    return null;
+  }
+
+  function extractUnionBBox(g, selector) {
+    if (!g) return null;
+    var nodes = g.querySelectorAll(selector || 'text, line, polygon, polyline, path, rect');
+    var minX = null, minY = null, maxX = null, maxY = null;
+    Array.prototype.forEach.call(nodes, function(n) {
+      var bb = _nodeBBox(n);
+      if (!bb) return;
+      if (minX === null || bb.x < minX) minX = bb.x;
+      if (minY === null || bb.y < minY) minY = bb.y;
+      if (maxX === null || bb.x + bb.width > maxX) maxX = bb.x + bb.width;
+      if (maxY === null || bb.y + bb.height > maxY) maxY = bb.y + bb.height;
+    });
+    if (minX === null) return null;
+    return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+  }
+
   function extractEdgeBBox(pathEl, padding) {
     var pad = padding || 8;
     if (!pathEl) return null;
@@ -237,6 +310,7 @@ window.MA.overlayBuilder = (function() {
     dedupById: dedupById,
     extractBBox: extractBBox,
     extractEdgeBBox: extractEdgeBBox,
+    extractUnionBBox: extractUnionBBox,
     extractMultiLineTextBBoxes: extractMultiLineTextBBoxes,
     hitTestTopmost: hitTestTopmost,
     matchByDataSourceLine: matchByDataSourceLine,

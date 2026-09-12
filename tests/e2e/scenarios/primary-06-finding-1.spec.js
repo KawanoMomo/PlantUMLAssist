@@ -26,3 +26,13 @@ test('手順6 指摘 1(図名・行・内容)の行へ跳んで直せる', async
   expect(after).toContain('Irq_Driver_Enable');
   expect(after).not.toContain('Irq_Driver_Write');
 });
+
+// BLK-human-20260912-0900: 指摘を反映するときはまずプレビューでその要素を選ぶ。
+// autonumber を付けた図でも、番号・ラベル・矢印のどこを押しても同じメッセージが選べること。
+test('手順6 autonumber 付きのシーケンスでも、番号・ラベル・矢印のどこを押しても同じメッセージが選べる', async ({ page }) => {
+  await S.bootPlain(page);
+  const dsl = ['@startuml', 'autonumber', 'participant Irq_Driver', 'participant Hw_Ctrl',
+    'Irq_Driver -> Hw_Ctrl : Irq_Driver_Enable',
+    'Hw_Ctrl --> Irq_Driver : Irq_Driver_Done', '@enduml'].join(String.fromCharCode(10));
+  await S.expectMessageHitUniform(page, expect, dsl, 0);
+});
