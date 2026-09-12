@@ -2547,6 +2547,7 @@ function init() {
   setupAuditTimeline();
   setupAuditBoard();
   setupSaveCheck();
+  setupSaveSwap();
   setupVersionTimeline();
   setupLineage();
   setupPeekFolder();
@@ -15235,7 +15236,11 @@ function saveFile() {
     window.MA.workspace.saveToFile(doc, target.dir).then(function(ok) {
       setSaveStatus(ST.messageFor(target, ok));
       // 保存できた図にだけ、その場で突合を掛ける (BLK-reviewer-20260908-1503-wish)。
-      if (ok) runSaveCheck(doc && doc.name);
+      if (ok) {
+        runSaveCheck(doc && doc.name);
+        // この保存で中身が別名の図と入れ替わっていないか (BLK-reviewer-20260912-2103-wish)
+        runSaveSwapCheck(doc && doc.name, doc && doc.dsl);
+      }
     });
     return;
   }
@@ -15243,6 +15248,7 @@ function saveFile() {
   downloadBlob(target.name + '.puml', new Blob([mmdText], { type: 'text/plain' }));
   if (ST) setSaveStatus(ST.messageFor(target, true));
   runSaveCheck(doc && doc.name);
+  runSaveSwapCheck(doc && doc.name, doc && doc.dsl);
 }
 
 // ── 保存時チェック (BLK-reviewer-20260908-1503-wish) ────────────────────────
@@ -15309,6 +15315,114 @@ function runSaveCheck(docName) {
   try { renderSaveCheck(res); } catch (e) { /* 表示できなくても控えは進める */ }
   try { SC.save(_reviewStore(), _wsFileDir(), SC.advance(_svckState(), res)); } catch (e) {}
   return res;
+}
+
+// ── 保存の入れ替わり検知 (BLK-reviewer-20260912-2103-wish) ──────────────────
+// 「この保存で図の中身が別名の図と入れ替わっていないか」を保存のその場で言い、
+// 保存操作そのものをファイル名込みで控える。判定は src/core/save-swap.js。
+//
+// 直前の中身は、この画面がその図を最後に保存したときのものを覚えておく
+// (server 側の _versions/ は中身は残るが「どの操作で」が残らない)。
+var _sswPrev = {};       // 図の名前 → この画面が最後に保存した中身
+var _sswLogOpen = false;
+
+function _sswFolderDocs() {
+  // 保存フォルダを読んであれば、その一覧と突き合わせる。読んでいないときは
+  // 開いているタブどうしで突き合わせる (何とも比べずに黙るより手掛かりになる)。
+  if (_fiFileDocs && _fiFileDocs.length) return _fiFileDocs;
+  return _diffDocs();
+}
+
+function hideSaveSwap() {
+  var el = document.getElementById('save-swap-overlay');
+  if (el) el.hidden = true;
+}
+
+function renderSaveSwapLog() {
+  var SS = window.MA.saveSwap;
+  var box = document.getElementById('ssw-log');
+  if (!SS || !box) return;
+  box.hidden = !_sswLogOpen;
+  if (!_sswLogOpen) return;
+  var esc = window.MA.htmlUtils.escHtml;
+  var log = SS.load(_reviewStore(), _wsFileDir());
+  if (!log.entries.length) {
+    box.innerHTML = '<li>この保存フォルダへの保存の記録はまだありません</li>';
+    return;
+  }
+  var html = '';
+  log.entries.forEach(function(e) {
+    html += '<li>' + esc(SS.logLine(e)) + '</li>';
+  });
+  box.innerHTML = html;
+}
+
+function renderSaveSwap(res) {
+  var SS = window.MA.saveSwap;
+  var el = document.getElementById('save-swap-overlay');
+  if (!SS || !el) return;
+  var esc = window.MA.htmlUtils.escHtml;
+  var sum = document.getElementById('ssw-summary');
+  var list = document.getElementById('ssw-list');
+  if (sum) sum.textContent = res ? SS.summaryLine(res) : '';
+  if (list) {
+    var html = '';
+    if (res) res.lines.forEach(function(t) { html += '<li>' + esc(t) + '</li>'; });
+    list.innerHTML = html;
+    list.hidden = !html;
+  }
+  el.setAttribute('data-warn', res && res.warn ? '1' : '0');
+  // 警告が無いときは帯を出さない。ただし記録を開いているなら出したままにする
+  // (事故を追っている最中に、次の保存で画面が消えないようにする)。
+  el.hidden = !(res && res.warn) && !_sswLogOpen;
+  renderSaveSwapLog();
+}
+
+// 保存のたびに呼ぶ。判定が落ちても保存そのものは成立させる。
+function runSaveSwapCheck(docName, dsl) {
+  var SS = window.MA.saveSwap;
+  if (!SS || !docName) return null;
+  var prev = _sswPrev[docName] || null;
+  _sswPrev[docName] = String(dsl == null ? '' : dsl);
+
+  function evaluate() {
+    var res = null;
+    try {
+      res = SS.inspect({ name: docName, dsl: dsl, prev: prev, folderDocs: _sswFolderDocs() });
+    } catch (e) { res = null; }
+    if (!res) { hideSaveSwap(); return null; }
+    try {
+      SS.save(_reviewStore(), _wsFileDir(),
+        SS.record(SS.load(_reviewStore(), _wsFileDir()), res,
+          new Date().toISOString(), SS.lineCount(dsl)));
+    } catch (e) {}
+    try { renderSaveSwap(res); } catch (e) {}
+    return res;
+  }
+
+  // 突き合わせる相手は保存フォルダの全ファイル。入れ替わりの相手は開いていない
+  // ことのほうが多い (雛形はふつう開かない) ので、判定の直前に一覧を取り直す。
+  if (_fiFolderMode()) {
+    loadFolderImpact(true).then(evaluate, evaluate);
+    return null;
+  }
+  return evaluate();
+}
+
+function setupSaveSwap() {
+  var el = document.getElementById('save-swap-overlay');
+  if (el) el.addEventListener('click', function(ev) { ev.stopPropagation(); });
+  var close = document.getElementById('btn-ssw-close');
+  if (close) close.addEventListener('click', function() {
+    _sswLogOpen = false;
+    hideSaveSwap();
+  });
+  var log = document.getElementById('btn-ssw-log');
+  if (log) log.addEventListener('click', function() {
+    _sswLogOpen = !_sswLogOpen;
+    if (el) el.hidden = false;
+    renderSaveSwapLog();
+  });
 }
 
 function setupSaveCheck() {
