@@ -3807,21 +3807,17 @@ function _cbFolderOn() {
   return (el ? !!el.checked : _cbFolder) && _fiFolderMode();
 }
 
-// 基準の時刻。開いている図の基準のうち最も新しいものを使う。
-// 基準がまだ無ければ今日の 0 時 (= 「今日更新されたファイル」) に落とす。
+// どこから後の更新を拾うか。今日の 0 時 (手元の時計) から。
+//
+// 「開いている図の基準の時刻」にはしない。基準は自動保存のたびに今へ動くので、
+// フォルダのファイルが基準より後になることが無くなり、拾う対象が常に空になる。
+// 会議で見せたいのは「今日この保存フォルダで更新された分」なので、
+// 日の変わり目という動かない線で切る。
 function _cbFolderSince() {
-  var SD = window.MA.saveDiff;
-  var latest = '';
-  if (SD) {
-    _diffDocs().forEach(function(d) {
-      var b = d && d.name ? SD.baselineOf(d.name) : null;
-      if (b && b.at && b.at > latest) latest = b.at;
-    });
-  }
-  if (latest) return latest;
   var n = new Date();
-  return new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate()))
-    .toISOString().replace(/\.\d+Z$/, 'Z');
+  try {
+    return new Date(n.getFullYear(), n.getMonth(), n.getDate()).toISOString();
+  } catch (e) { return ''; }
 }
 
 function _changeBoardModel() {
@@ -4040,7 +4036,7 @@ function renderChangeBoard() {
     // 開いていない保存フォルダの図は、その旨と更新時刻を名前の横に出す
     // (会議で「14 枚の外の図」と分かる)。
     var org = (e.origin === 'folder')
-      ? '<span class="cb-origin" title="開いていない保存フォルダのファイル。基準より後に更新された分">📂 フォルダ'
+      ? '<span class="cb-origin" title="開いていない保存フォルダのファイル。今日更新された分">📂 フォルダ'
         + (e.mtime ? ' ' + esc(e.mtime.replace('T', ' ').slice(0, 16)) : '') + '</span>'
       : '';
     html += '<div class="cb-entry" data-doc-id="' + esc(e.id) + '" data-doc-name="' + esc(e.name) + '"'
@@ -4336,7 +4332,7 @@ function toggleChangeBoard(open) {
     scan.disabled = !ok;
     var lab = scan.parentNode;
     if (lab) lab.title = ok
-      ? '保存フォルダで基準より後に更新されたファイルも並べる (いつもの 14 枚に限らない)'
+      ? '今日この保存フォルダで更新されたファイルも並べる (いつもの 14 枚に限らない)'
       : '保存先がフォルダのときだけ使えます (設定 → 自動保存)';
   }
   if (_cbFolderOn()) loadFolderImpact(true).then(function() { renderChangeBoard(); }, function() {});

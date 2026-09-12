@@ -120,6 +120,11 @@ window.MA.changeBoard = (function() {
     return entry.name + ' (+' + entry.added + ' −' + entry.removed + ')';
   }
 
+  // ISO 時刻を秒までに落とす ("2026-09-12T12:21:02.829Z" → "2026-09-12T12:21:02")。
+  function _sec(iso) {
+    return String(iso == null ? '' : iso).replace(/\.\d+/, '').replace(/Z$/, '');
+  }
+
   // BLK-primary-20260912-2103-wish: ボードは開いている図しか並べていなかった。
   // 会議で見せたいのは「今日この保存フォルダで更新されたもの全部」で、いつもの
   // 14 枚に入らない雑多な図 (別件で開き直して書き出した図) はタブを閉じた時点で
@@ -127,17 +132,11 @@ window.MA.changeBoard = (function() {
   //
   // ここではフォルダの一覧 (名前・中身・mtime) と開いている図を突き合わせ、
   // **開いていないフォルダの図のうち since より後に更新されたもの**を
-  // ボードに載せられる形にする。since は基準を取った時刻なので、
-  // 「基準より後に触られたファイル」= 会議で見せる分、という線引きが
-  // 開いている図と揃う (14 枚かどうかは条件に入れない)。
+  // ボードに載せられる形にする。呼び出し側は since に今日の 0 時を渡す。
+  // 14 枚かどうかは条件に入れない。
   //
   // mtime が無いファイルは「いつ更新されたか言えない」ので載せない。
   // 載せると、フォルダに昔から居るだけの図が毎回「新規」として並ぶ。
-  // ISO 時刻を秒までに落とす ("2026-09-12T12:21:02.829Z" → "2026-09-12T12:21:02")。
-  function _sec(iso) {
-    return String(iso == null ? '' : iso).replace(/\.\d+/, '').replace(/Z$/, '');
-  }
-
   function folderExtras(fileDocs, openDocs, opts) {
     var o = opts || {};
     var since = String(o.since == null ? '' : o.since);
@@ -150,8 +149,8 @@ window.MA.changeBoard = (function() {
       if (!f || !f.name || open[String(f.name)]) return;
       var mt = String(f.mtime == null ? '' : f.mtime);
       if (since) {
-        // 秒で比べる。基準の時刻はミリ秒まで、ファイルの mtime は秒までしか
-        // 無いので、同じ秒は「基準より後」として載せる。落として気付かないより、
+        // 秒で比べる。since はミリ秒まで、ファイルの mtime は秒までしか
+        // 無いので、同じ秒は「since より後」として載せる。落として気付かないより、
         // 会議の一覧に 1 枚余分に並ぶほうがよい (抜け漏れを無くすのが目的)。
         if (!mt || _sec(mt) < _sec(since)) return;
       }
