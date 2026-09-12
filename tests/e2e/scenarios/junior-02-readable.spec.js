@@ -287,9 +287,12 @@ test('手順2 保存した図種の印が一覧に出て、押すとその図種
   await S.runCommand(page, 'ファイルを保存');
   await page.waitForTimeout(1200);
 
-  // 本文だけを見ると、この図はユースケースに倒れる (直す前の挙動)。
+  // 守るのは「本文の判定がどう転んでも、保存した図種のまま開く」こと。
+  // BLK-builder-20260912-2103 で本文判定自体が parserUtils に寄って、この書き方は
+  // シーケンスと判定できるようになったので、判定結果を固定する書き方はやめる
+  // (判定が良くなるたびにこの spec が赤くなる)。
   const guess = await page.evaluate((t) => window.MA.workspace.detectType(t), KIND_SEQ);
-  expect(guess).toBe('plantuml-usecase');
+  expect(typeof guess).toBe('string');
 
   // 別の図種の図に移って、今の図種をシーケンス以外にしておく。
   await page.locator('#diagram-type').selectOption('plantuml-class');
@@ -307,4 +310,64 @@ test('手順2 保存した図種の印が一覧に出て、押すとその図種
   await page.waitForTimeout(1200);
   expect(await page.locator('#diagram-type').inputValue()).toBe('plantuml-sequence');
   expect(await page.locator('#editor').inputValue()).toContain('Timer_Init(cfg)');
+});
+
+// BLK-junior-20260912-2206-wish: 手本のコンポーネント図が 1 枚も無い部品は、
+// 「先輩のフォルダを 1 枚ずつ覗いて手本が無いことを確かめる」→「末尾に追加で本体を作る」
+// →「依存チェックの起点を選び直して定石から足す」を部品が替わるたびに組み立て直すことになる。
+// 部品名 1 語で、本体と依存の入った下書きが別タブに出ることを確かめる。
+const TIMER_SEQ_FOR_DRAFT = [
+  '@startuml',
+  'title TIMERドライバ初期化シーケンス',
+  'participant Timer_Driver',
+  'participant Clock_Ctrl',
+  'Timer_Driver -> Clock_Ctrl : 分周設定',
+  'Clock_Ctrl --> Timer_Driver : E_OK',
+  '@enduml',
+].join('\n');
+
+test('手順2 手本の無い部品のコンポーネント図を、部品名 1 語で下書きにできる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+
+  // 手順1 で起こした、この部品のシーケンス図。依存の実績はここから拾われる。
+  await page.locator('#diagram-type').selectOption('plantuml-sequence');
+  await page.waitForTimeout(300);
+  await S.typeDsl(page, TIMER_SEQ_FOR_DRAFT);
+  await S.renameActive(page, 'timer_init_sequence');
+  await page.waitForTimeout(600);
+
+  // 白紙のコンポーネント図のタブに立つ (ここが「手本が無い」と気付く場所)。
+  await page.locator('#btn-tab-new').click();
+  await page.waitForTimeout(400);
+  await page.locator('#diagram-type').selectOption('plantuml-component');
+  await page.waitForTimeout(800);
+
+  // 到達条件その1: 部品名を打つと「この部品の図はまだ無い」と何件入るかが出る
+  // (先輩のフォルダを 1 枚ずつ覗いて確かめ直さない)。
+  await page.locator('#co-starter-subject').fill('TIMER');
+  await page.waitForTimeout(300);
+  await expect(page.locator('#co-starter-have')).toHaveAttribute('data-have', '0');
+  await expect(page.locator('#co-starter-have')).toContainText('まだありません');
+  // シーケンス図に出てくる相手 1 件が実績として入る。
+  await expect(page.locator('#co-starter-hint')).toHaveAttribute('data-usage', '1');
+  await expect(page.locator('#co-starter-hint')).toHaveAttribute('data-deps', '6');
+
+  // 到達条件その2: 押すと本体 1 + 依存 6 の下書きが別タブで開く。
+  await page.locator('#co-starter-add').click();
+  await page.waitForTimeout(1200);
+  const draft = await getEditorText(page);
+  expect(draft).toContain('component TIMER_Driver');
+  expect(draft).toContain('TIMER_Driver ..> Clock_Ctrl : クロック制御');
+  expect(draft).toContain('TIMER_Driver ..> Power_Ctrl : 電源制御');
+  expect(await page.locator('#diagram-type').inputValue()).toBe('plantuml-component');
+
+  // 到達条件その3: 元のタブ (白紙のコンポーネント図) は下書きで置き換わっていない。
+  const names = await page.evaluate(() => window.MA.workspace.list().map((d) => d.name));
+  expect(names).toContain('timer_component');
+  expect(names).toContain('timer_init_sequence');
+
+  // 到達条件その4: 出来た下書きに対して依存チェックは「定石は全部ある」と言う
+  // (足し忘れたまま先へ進まない)。
+  await page.waitForTimeout(400);
+  await expect(page.locator('#co-deps-summary')).toHaveAttribute('data-catalog-missing', '0');
 });
