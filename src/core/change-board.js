@@ -120,13 +120,64 @@ window.MA.changeBoard = (function() {
     return entry.name + ' (+' + entry.added + ' −' + entry.removed + ')';
   }
 
+  // BLK-primary-20260912-2103-wish: ボードは開いている図しか並べていなかった。
+  // 会議で見せたいのは「今日この保存フォルダで更新されたもの全部」で、いつもの
+  // 14 枚に入らない雑多な図 (別件で開き直して書き出した図) はタブを閉じた時点で
+  // ボードから消え、「これは対象外だから口頭で」と人が覚えておく必要があった。
+  //
+  // ここではフォルダの一覧 (名前・中身・mtime) と開いている図を突き合わせ、
+  // **開いていないフォルダの図のうち since より後に更新されたもの**を
+  // ボードに載せられる形にする。since は基準を取った時刻なので、
+  // 「基準より後に触られたファイル」= 会議で見せる分、という線引きが
+  // 開いている図と揃う (14 枚かどうかは条件に入れない)。
+  //
+  // mtime が無いファイルは「いつ更新されたか言えない」ので載せない。
+  // 載せると、フォルダに昔から居るだけの図が毎回「新規」として並ぶ。
+  // ISO 時刻を秒までに落とす ("2026-09-12T12:21:02.829Z" → "2026-09-12T12:21:02")。
+  function _sec(iso) {
+    return String(iso == null ? '' : iso).replace(/\.\d+/, '').replace(/Z$/, '');
+  }
+
+  function folderExtras(fileDocs, openDocs, opts) {
+    var o = opts || {};
+    var since = String(o.since == null ? '' : o.since);
+    var open = {};
+    (Array.isArray(openDocs) ? openDocs : []).forEach(function(d) {
+      if (d && d.name) open[String(d.name)] = true;
+    });
+    var out = [];
+    (Array.isArray(fileDocs) ? fileDocs : []).forEach(function(f) {
+      if (!f || !f.name || open[String(f.name)]) return;
+      var mt = String(f.mtime == null ? '' : f.mtime);
+      if (since) {
+        // 秒で比べる。基準の時刻はミリ秒まで、ファイルの mtime は秒までしか
+        // 無いので、同じ秒は「基準より後」として載せる。落として気付かないより、
+        // 会議の一覧に 1 枚余分に並ぶほうがよい (抜け漏れを無くすのが目的)。
+        if (!mt || _sec(mt) < _sec(since)) return;
+      }
+      out.push({
+        id: 'file:' + f.name, name: String(f.name),
+        dsl: String(f.dsl == null ? '' : f.dsl),
+        diagramType: f.diagramType || '',
+        origin: 'folder', mtime: mt,
+      });
+    });
+    // 新しく更新されたものが上。会議は「さっき直した分」から話す。
+    out.sort(function(a, b) {
+      if (a.mtime !== b.mtime) return a.mtime < b.mtime ? 1 : -1;
+      return a.name < b.name ? -1 : (a.name > b.name ? 1 : 0);
+    });
+    return out;
+  }
+
   // ボードの中身。baselineOf(name) は save-diff の baselineOf をそのまま渡す。
   // opts.includeSame を立てると変わっていない図も並ぶ (既定は変わった図だけ)。
   // opts.context は畳むときの前後行数。opts.collapse=false で全文。
   function build(docs, baselineOf, opts) {
     var o = opts || {};
     var get = (typeof baselineOf === 'function') ? baselineOf : function() { return null; };
-    var out = { entries: [], total: 0, changedCount: 0, hasChange: false, added: 0, removed: 0, markedAt: '' };
+    var out = { entries: [], total: 0, changedCount: 0, hasChange: false, added: 0, removed: 0,
+                markedAt: '', folderCount: 0 };
     (Array.isArray(docs) ? docs : []).forEach(function(d) {
       if (!d || !d.name) return;
       out.total++;
@@ -141,6 +192,9 @@ window.MA.changeBoard = (function() {
         id: d.id, name: d.name, diagramType: d.diagramType || '',
         status: status, before: beforeDsl, after: String(d.dsl == null ? '' : d.dsl),
         markedAt: base ? (base.at || '') : '',
+        // どこから来た図か。'folder' は開いていない保存フォルダのファイル
+        // (いつもの 14 枚に入らない図もここに出る)。
+        origin: d.origin || 'open', mtime: String(d.mtime == null ? '' : d.mtime),
         rows: rows, allRows: df.rows, added: df.added, removed: df.removed,
       };
       out.entries.push(entry);
@@ -148,6 +202,7 @@ window.MA.changeBoard = (function() {
         out.changedCount++;
         out.added += df.added;
         out.removed += df.removed;
+        if (entry.origin === 'folder') out.folderCount++;
       }
     });
     out.hasChange = out.changedCount > 0;
@@ -163,8 +218,12 @@ window.MA.changeBoard = (function() {
   // ボード全体の 1 行見出し。会議の冒頭で「今日は 4 枚」と言うための数。
   function summaryText(board) {
     if (!board || !board.hasChange) return '変わった図はありません';
-    return '変わった図 ' + board.changedCount + '/' + board.total
+    var txt = '変わった図 ' + board.changedCount + '/' + board.total
       + ' 枚 ・ +' + board.added + ' −' + board.removed + ' 行';
+    // 開いていないフォルダの図が混じっているなら枚数を言う。会議で
+    // 「14 枚の外にも今日直した図がある」と気付けるのがこの数字。
+    if (board.folderCount) txt += ' ・ うち保存フォルダ ' + board.folderCount + ' 枚 (未オープン)';
+    return txt;
   }
 
   // BLK-primary-20260908-1103-wish: 引き継ぎでは「要修正」の行だけを渡したい。
@@ -209,6 +268,7 @@ window.MA.changeBoard = (function() {
 
   return {
     diffRows: diffRows,
+    folderExtras: folderExtras,
     filterVerdict: filterVerdict,
     filterText: filterText,
     collapse: collapse,

@@ -3797,11 +3797,42 @@ function _cbFindingTable(board) {
   return FL.buildTable({ findings: _cbFindings(), board: board });
 }
 
+// BLK-primary-20260912-2103-wish: ボードに保存フォルダの図も入れるか。
+// 既定は入。会議で見せるのは「今日この保存フォルダで更新された分」であって、
+// たまたまタブを開いたままの図ではない。
+var _cbFolder = true;
+
+function _cbFolderOn() {
+  var el = document.getElementById('cb-scan-folder');
+  return (el ? !!el.checked : _cbFolder) && _fiFolderMode();
+}
+
+// 基準の時刻。開いている図の基準のうち最も新しいものを使う。
+// 基準がまだ無ければ今日の 0 時 (= 「今日更新されたファイル」) に落とす。
+function _cbFolderSince() {
+  var SD = window.MA.saveDiff;
+  var latest = '';
+  if (SD) {
+    _diffDocs().forEach(function(d) {
+      var b = d && d.name ? SD.baselineOf(d.name) : null;
+      if (b && b.at && b.at > latest) latest = b.at;
+    });
+  }
+  if (latest) return latest;
+  var n = new Date();
+  return new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate()))
+    .toISOString().replace(/\.\d+Z$/, 'Z');
+}
+
 function _changeBoardModel() {
   var CB = window.MA.changeBoard;
   var SD = window.MA.saveDiff;
   if (!CB || !SD) return null;
-  return CB.build(_diffDocs(), SD.baselineOf, {
+  var docs = _diffDocs();
+  if (_cbFolderOn()) {
+    docs = docs.concat(CB.folderExtras(_fiFileDocs, docs, { since: _cbFolderSince() }));
+  }
+  return CB.build(docs, SD.baselineOf, {
     includeSame: _cbSame,
     collapse: !_cbFull,
     context: 2,
@@ -4006,8 +4037,16 @@ function renderChangeBoard() {
   var html = mapHtml;
   board.entries.forEach(function(e) {
     var t = String(e.diagramType || '').replace('plantuml-', '');
-    html += '<div class="cb-entry" data-doc-id="' + esc(e.id) + '">'
+    // 開いていない保存フォルダの図は、その旨と更新時刻を名前の横に出す
+    // (会議で「14 枚の外の図」と分かる)。
+    var org = (e.origin === 'folder')
+      ? '<span class="cb-origin" title="開いていない保存フォルダのファイル。基準より後に更新された分">📂 フォルダ'
+        + (e.mtime ? ' ' + esc(e.mtime.replace('T', ' ').slice(0, 16)) : '') + '</span>'
+      : '';
+    html += '<div class="cb-entry" data-doc-id="' + esc(e.id) + '" data-doc-name="' + esc(e.name) + '"'
+      + ' data-origin="' + esc(e.origin || 'open') + '">'
       + '<div class="cb-entry-head"><span>' + esc(e.name) + (t ? ' (' + esc(t) + ')' : '') + '</span>'
+      + org
       + '<span class="cb-count">' + esc(_cbCountText(e)) + '</span>'
       + '<button type="button" class="cb-goto">この図を開く</button></div>'
       + '<div class="cb-cols"><span>変更前' + (e.markedAt ? ' (' + esc(e.markedAt.replace('T', ' ').slice(0, 16)) + ')' : ' (基準なし)') + '</span>'
@@ -4054,7 +4093,11 @@ function renderChangeBoard() {
       btn.addEventListener('click', function() {
         var entry = btn.parentNode.parentNode;
         toggleChangeBoard(false);
-        switchToDoc(entry.getAttribute('data-doc-id'));
+        var id = entry.getAttribute('data-doc-id');
+        // 開いていない保存フォルダの図は、まず開いてから見せる
+        // (BLK-primary-20260912-2103-wish)。
+        if (String(id).indexOf('file:') === 0) openFromFolderByName(entry.getAttribute('data-doc-name'));
+        else switchToDoc(id);
       });
     })(gotos[i]);
   }
@@ -4285,6 +4328,18 @@ function toggleChangeBoard(open) {
   var want = (open == null) ? (modal.style.display === 'none' || !modal.style.display) : !!open;
   if (!want) { modal.style.display = 'none'; return; }
   modal.style.display = 'flex';
+  // BLK-primary-20260912-2103-wish: フォルダの図もボードに載せるので、開くたびに
+  // 一覧を取り直す (会議直前に別の経路で書き出した図を落とさないため)。
+  var scan = document.getElementById('cb-scan-folder');
+  if (scan) {
+    var ok = _fiFolderMode();
+    scan.disabled = !ok;
+    var lab = scan.parentNode;
+    if (lab) lab.title = ok
+      ? '保存フォルダで基準より後に更新されたファイルも並べる (いつもの 14 枚に限らない)'
+      : '保存先がフォルダのときだけ使えます (設定 → 自動保存)';
+  }
+  if (_cbFolderOn()) loadFolderImpact(true).then(function() { renderChangeBoard(); }, function() {});
   renderChangeBoard();
   renderChecklistDocOptions();
   renderChecklistState();
@@ -4311,6 +4366,12 @@ function setupChangeBoard() {
   if (full) full.addEventListener('change', function() { _cbFull = full.checked; renderChangeBoard(); });
   var same = document.getElementById('cb-same');
   if (same) same.addEventListener('change', function() { _cbSame = same.checked; renderChangeBoard(); });
+  var scanFolder = document.getElementById('cb-scan-folder');
+  if (scanFolder) scanFolder.addEventListener('change', function() {
+    _cbFolder = scanFolder.checked;
+    if (_cbFolderOn()) loadFolderImpact(true).then(function() { renderChangeBoard(); }, function() {});
+    renderChangeBoard();
+  });
   var fixOnly = document.getElementById('cb-fixonly');
   if (fixOnly) fixOnly.addEventListener('change', function() {
     _cbFixOnly = fixOnly.checked;
@@ -8391,6 +8452,12 @@ function loadFolderImpact(force) {
     var names = ((info && info.entries) || []).map(function(e) {
       return e && typeof e === 'object' ? e.name : e;
     }).filter(function(n) { return n; });
+    // BLK-primary-20260912-2103-wish: 変更サマリボードが「基準より後に更新された
+    // ファイル」を選ぶのに mtime が要る。一覧と同じ応答に載っているので拾っておく。
+    var mtimes = {};
+    ((info && info.entries) || []).forEach(function(e) {
+      if (e && typeof e === 'object' && e.name) mtimes[e.name] = e.mtime || '';
+    });
     var roles = (info && info.roles) || {};
     return Promise.all(names.map(function(n) {
       return WS.loadFile(n, dir).then(function(text) {
@@ -8399,6 +8466,7 @@ function loadFolderImpact(force) {
     })).then(function(docs) {
       if (seq !== _fiSeq) return false;
       _fiFileDocs = docs.filter(function(d) { return d; });
+      _fiFileDocs.forEach(function(d) { d.mtime = mtimes[d.name] || ''; });
       _fiRoles = roles;
       _fiDir = dir;
       _fiLoading = false;
