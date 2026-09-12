@@ -5477,6 +5477,21 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <div id="cfg-render-warning" style="font-size:11px;color:var(--accent-red);margin-bottom:10px;"></div>
       <div id="cfg-render-note" style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;"></div>
 
+      <!-- BLK-human-20260909-2200: plantuml.jar も Java も配布物に同梱しない。
+           どこにあるか / 入っているかをここで見せ、足りなければここから入れる。 -->
+      <div id="cfg-engine" style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:10px;">
+        <div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">描画エンジン / PlantUML と Java</div>
+        <div id="cfg-jar-status" style="font-size:11px;margin-bottom:4px;"></div>
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;">
+          <input id="cfg-jar-path" type="text" placeholder="plantuml.jar のパス"
+                 style="flex:1;min-width:0;font-size:11px;padding:4px;background:var(--bg-input,#222);color:inherit;border:1px solid var(--border);border-radius:3px;">
+          <button type="button" id="cfg-jar-pick" title="plantuml.jar をファイルダイアログで選ぶ">jar を選ぶ</button>
+          <button type="button" id="cfg-jar-fetch" title="PlantUML の公式リリースから jar を取得する (この操作で初めて外部へ接続します)">公式から取得</button>
+        </div>
+        <div id="cfg-java-status" style="font-size:11px;"></div>
+        <div id="cfg-engine-note" style="font-size:11px;color:var(--text-secondary);margin-top:4px;"></div>
+      </div>
+
       <div style="border-top:1px solid var(--border);padding-top:10px;">
         <div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:2px;">入力を止めてから描画するまで</div>
         <div style="font-size:11px;color:var(--text-secondary);margin-bottom:6px;">短くすると反応が速く、長くすると描画回数が減ります。</div>
@@ -5607,6 +5622,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/export-log.js"></script>
 <script src="src/core/delivery-package.js"></script>
 <script src="src/core/delivery-review.js"></script>
+<script src="src/core/app-bridge.js"></script>
 <script src="src/core/save-prefs.js"></script>
 <script src="src/core/save-target.js"></script>
 <script src="src/core/source-lock.js"></script>

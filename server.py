@@ -3,6 +3,8 @@
 Serves static files + /render endpoint for PlantUML local/online rendering.
 """
 import atexit
+import base64
+import binascii
 import collections
 import hashlib
 import json
@@ -19,17 +21,46 @@ import urllib.error
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-ROOT = Path(__file__).parent
-JAR_PATH = ROOT / 'lib' / 'plantuml.jar'
+# BLK-human-20260909-2200: 配布先には Python も PlantUML も無い。exe 化 (PyInstaller)
+# すると `__file__` は展開先の一時フォルダ (sys._MEIPASS) を指し、そこは再起動で消え
+# 書き込みも失われる。読むもの (html / src / lib) と書くもの (設定・autosave) を分ける。
+FROZEN = bool(getattr(sys, 'frozen', False))
+ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).parent))
+
+
+def _data_root():
+    """設定と autosave を置く、再起動しても残る場所。"""
+    if not FROZEN:
+        return Path(__file__).parent
+    base = os.environ.get('APPDATA') or str(Path.home())
+    d = Path(base) / 'PlantUMLAssist'
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return Path(base)
+    return d
+
+
+DATA_ROOT = _data_root()
+# 同梱しない約束の jar の、同梱していた頃からの置き場所 (Web 版はここに置けば設定不要)。
+DEFAULT_JAR_PATH = ROOT / 'lib' / 'plantuml.jar'
 DAEMON_SRC = ROOT / 'lib' / 'PlantUMLDaemon.java'
+FETCH_SCRIPT = ROOT / 'lib' / 'fetch-plantuml.ps1'
+# Java も同梱しない。無いときに案内する公式配布元。
+JAVA_DOWNLOAD_URL = 'https://adoptium.net/temurin/releases/'
 PORT = int(os.environ.get('PUA_PORT', '8766'))
-AUTOSAVE_DEFAULT_DIR = ROOT / 'autosave'
+AUTOSAVE_DEFAULT_DIR = DATA_ROOT / 'autosave'
+
+# app.py (pywebview 版) が差し込むネイティブのファイルダイアログ。
+# Web 版では None のままで、保存はブラウザのダウンロードに落ちる。
+NATIVE_DIALOG = None
 # BLK-junior-20260907-0843: 保存先ディレクトリは localStorage にしか無く、
 # 新しいタブ・別プロファイルで開くたびに既定へ戻るため、図種を変えるたびに
 # ⚙設定 → ファイル → パス再入力 → OK を打ち直すことになっていた。
 # 保存先はブラウザではなくこのマシンの設定なので、server 側の 1 ファイルに置く。
-PREFS_PATH = ROOT / '.assist-prefs.json'
-PREFS_KEYS = ('backend', 'fileDir')
+PREFS_PATH = DATA_ROOT / '.assist-prefs.json'
+# jarPath: plantuml.jar を同梱しないので、利用者が選んだ場所をこの機械の設定として覚える。
+PREFS_KEYS = ('backend', 'fileDir', 'jarPath')
 # BLK-junior-20260907-1203: 図の名前はそのままファイル名 ({name}.puml) になる。
 # 以前は [A-Za-z0-9_-]+ しか通さず、「GPIOドライバユースケース」のような日本語名の図が
 # 保存フォルダから読めず、保存も 400 になって黙って download に落ちていた。
@@ -145,7 +176,9 @@ _fs_lock = threading.Lock()
 def read_prefs():
     """Saved-on-this-machine preferences. Missing/broken file → empty dict."""
     try:
-        data = json.loads(PREFS_PATH.read_text(encoding='utf-8'))
+        # BOM 付きで書かれた設定ファイル (PowerShell の Out-File など) も読む。
+        # 読めないと jarPath を見失い、jar があるのに「無い」と言うことになる。
+        data = json.loads(PREFS_PATH.read_text(encoding='utf-8-sig'))
     except (OSError, ValueError):
         return {}
     if not isinstance(data, dict):
@@ -168,6 +201,38 @@ def write_prefs(partial):
     except OSError:
         pass
     return merged
+
+
+# BLK-human-20260909-2200: jar は同梱しないので、どこにあるかは利用者しか知らない。
+# 設定 (`.assist-prefs.json` の jarPath) を正とし、無ければ従来の lib/plantuml.jar。
+def jar_path():
+    """実際に描画に使う plantuml.jar のパス (存在は保証しない)。"""
+    p = read_prefs().get('jarPath')
+    if p:
+        return Path(p)
+    return DEFAULT_JAR_PATH
+
+
+def use_jar(path):
+    """jar のパスを設定に書き、走っている daemon を捨てる (古い jar を掴み続けるため)。
+
+    返り値は (ok, message)。存在しないファイルは受け取らない。
+    """
+    p = Path(str(path or '').strip('"'))
+    if not str(p).strip():
+        return False, 'パスが空です'
+    if not p.is_file():
+        return False, f'ファイルがありません: {p}'
+    if p.suffix.lower() != '.jar':
+        return False, f'.jar ではありません: {p.name}'
+    write_prefs({'jarPath': str(p)})
+    _shutdown_daemon()
+    global _daemon_disabled, _env_cache
+    with _daemon_lock:
+        _daemon_disabled = False
+    with _env_lock:
+        _env_cache = None
+    return True, str(p)
 
 
 # BLK-reviewer-20260907-0043: /render のリクエスト仕様がどこにも書いておらず、
@@ -319,6 +384,10 @@ API_INDEX = {
         {'endpoint': 'POST /export-log', 'summary': '書き出しの控えを 1 件足す'},
         {'endpoint': 'GET /prefs', 'summary': 'この機械に保存した設定'},
         {'endpoint': 'POST /prefs', 'summary': '設定を書く'},
+        {'endpoint': 'POST /jar-path', 'summary': 'plantuml.jar の場所を設定する {path}'},
+        {'endpoint': 'POST /pick-jar', 'summary': 'アプリ版: jar をファイルダイアログで選ぶ'},
+        {'endpoint': 'POST /fetch-jar', 'summary': 'アプリ版/Windows: 公式から jar を取得する'},
+        {'endpoint': 'POST /native-save', 'summary': 'アプリ版: 保存ダイアログで書き出す {fileName, text|base64}'},
         {'endpoint': 'GET /env', 'summary': 'Java / jar の有無など実行環境'},
         {'endpoint': 'POST /heartbeat', 'summary': '生存通知 (無音 300 秒で server は落ちる)'},
         {'endpoint': 'POST /shutdown', 'summary': '停止を予約する'},
@@ -471,6 +540,18 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == '/prefs':
             with _fs_lock:
                 return self._handle_prefs_post()
+        # BLK-human-20260909-2200: jar と Java は同梱しない。選ぶ・取ってくるの 3 窓口。
+        if self.path == '/jar-path':
+            with _fs_lock:
+                return self._handle_jar_path_post()
+        if self.path == '/pick-jar':
+            with _fs_lock:
+                return self._handle_pick_jar_post()
+        if self.path == '/fetch-jar':
+            return self._handle_fetch_jar_post()
+        # アプリ版の保存はブラウザのダウンロードではなくネイティブのダイアログ。
+        if self.path == '/native-save':
+            return self._handle_native_save_post()
         if self.path == '/heartbeat':
             with _state_lock:
                 _last_heartbeat = time.time()
@@ -534,6 +615,103 @@ class Handler(BaseHTTPRequestHandler):
                                  urllib.parse.quote(warning, safe=''))
             self.end_headers()
             self.wfile.write(svg)
+
+    # --- jar / Java (BLK-human-20260909-2200) --------------------------------
+    #
+    # 配布物に plantuml.jar も Java も同梱しない (ライセンスと容量)。jar は
+    # 「利用者が選ぶ」「利用者の操作で公式から取る」の 2 経路だけで入り、
+    # 選んだ場所は `.assist-prefs.json` の jarPath に残る。Java が無いときは
+    # /env の javaUrl (Temurin) を画面に出す。ここから外へ図は出さない。
+
+    def _read_json_object(self):
+        """Body を dict として読む。読めなければ 400 を返して None。"""
+        length = int(self.headers.get('Content-Length', 0))
+        raw = self.rfile.read(length).decode('utf-8') if length else ''
+        try:
+            data = json.loads(raw) if raw else {}
+        except ValueError:
+            self._send_json(400, {'error': 'invalid JSON'})
+            return None
+        if not isinstance(data, dict):
+            self._send_json(400, {'error': 'body must be an object'})
+            return None
+        return data
+
+    def _handle_jar_path_post(self):
+        data = self._read_json_object()
+        if data is None:
+            return
+        ok, msg = use_jar(data.get('path'))
+        if not ok:
+            return self._send_json(400, {'error': msg})
+        self._send_json(200, {'jarPath': msg, 'env': detect_env()})
+
+    def _handle_pick_jar_post(self):
+        if NATIVE_DIALOG is None:
+            return self._send_json(409, {'error': 'ファイルダイアログはアプリ版だけで使えます'})
+        picked = NATIVE_DIALOG.open_file('plantuml.jar を選ぶ', ('Jar files (*.jar)',))
+        if not picked:
+            return self._send_json(200, {'canceled': True, 'env': detect_env()})
+        ok, msg = use_jar(picked)
+        if not ok:
+            return self._send_json(400, {'error': msg})
+        self._send_json(200, {'jarPath': msg, 'env': detect_env()})
+
+    def _handle_fetch_jar_post(self):
+        """利用者が押したときだけ lib/fetch-plantuml.ps1 を回して jar を取る。"""
+        if os.name != 'nt' or not FETCH_SCRIPT.exists():
+            return self._send_json(409, {'error': 'fetch-plantuml.ps1 が使えない環境です'})
+        dest_dir = DATA_ROOT / 'lib'
+        try:
+            dest_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            return self._send_json(500, {'error': f'保存先を作れません: {exc}'})
+        env = dict(os.environ, PLANTUML_OUT=str(dest_dir))
+        try:
+            proc = subprocess.run(
+                ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass',
+                 '-File', str(FETCH_SCRIPT)],
+                cwd=str(dest_dir), capture_output=True, timeout=600, env=env,
+                **_SUBPROCESS_KWARGS,
+            )
+        except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+            return self._send_json(500, {'error': f'取得に失敗しました: {exc}'})
+        out = (proc.stdout or b'').decode('utf-8', 'replace') + (proc.stderr or b'').decode('utf-8', 'replace')
+        got = dest_dir / 'plantuml.jar'
+        if proc.returncode != 0 or not got.is_file():
+            return self._send_json(500, {'error': '取得に失敗しました', 'log': out[-2000:]})
+        ok, msg = use_jar(got)
+        if not ok:
+            return self._send_json(500, {'error': msg, 'log': out[-2000:]})
+        self._send_json(200, {'jarPath': msg, 'env': detect_env()})
+
+    # --- native save (BLK-human-20260909-2200) -------------------------------
+
+    def _handle_native_save_post(self):
+        """アプリ版: 保存ダイアログを出して書く。Web 版は 409 (呼び出し側が download に落ちる)。"""
+        if NATIVE_DIALOG is None:
+            return self._send_json(409, {'error': 'ネイティブ保存はアプリ版だけで使えます'})
+        data = self._read_json_object()
+        if data is None:
+            return
+        name = str(data.get('fileName') or '').strip()
+        if not name:
+            return self._send_json(400, {'error': 'fileName が必要です'})
+        if 'base64' in data:
+            try:
+                blob = base64.b64decode(str(data.get('base64') or ''), validate=True)
+            except (ValueError, binascii.Error):
+                return self._send_json(400, {'error': 'base64 が壊れています'})
+        else:
+            blob = str(data.get('text') or '').encode('utf-8')
+        target = NATIVE_DIALOG.save_file(name)
+        if not target:
+            return self._send_json(200, {'canceled': True})
+        try:
+            Path(target).write_bytes(blob)
+        except OSError as exc:
+            return self._send_json(500, {'error': f'保存できません: {exc}'})
+        self._send_json(200, {'path': str(target)})
 
     def _send_json(self, code, payload):
         # BLK-reviewer-20260907-0043: エラーメッセージも API 仕様も日本語なので、
@@ -1682,7 +1860,7 @@ def detect_env():
     global _env_cache
     with _env_lock:
         if _env_cache is not None:
-            return _env_cache
+            return _env_report(_env_cache['java'])
     java = {'found': False, 'version': None, 'major': None}
     try:
         proc = subprocess.run(
@@ -1696,10 +1874,22 @@ def detect_env():
             java = {'found': True, 'version': m.group(1), 'major': _java_major(m.group(1))}
     except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
         pass
-    env = {'java': java, 'jar': JAR_PATH.exists()}
     with _env_lock:
-        _env_cache = env
-    return env
+        _env_cache = {'java': java}
+    return _env_report(java)
+
+
+def _env_report(java):
+    """/env の答え。jar の有無と app モードは毎回見る (走行中に変わる)。"""
+    jar = jar_path()
+    return {
+        'java': java,
+        'javaUrl': JAVA_DOWNLOAD_URL,
+        'jar': jar.exists(),
+        'jarPath': str(jar) if jar.exists() else '',
+        'app': NATIVE_DIALOG is not None,
+        'canFetchJar': FETCH_SCRIPT.exists() and os.name == 'nt',
+    }
 
 
 # --- Local render: persistent Java daemon (fast path) ------------------------
@@ -1745,12 +1935,13 @@ def daemon_log_tail(n=20):
 
 def _start_daemon():
     """Spawn the persistent PlantUML daemon. Returns the Popen, or None on failure."""
-    if not JAR_PATH.exists() or not DAEMON_SRC.exists():
+    jar = jar_path()
+    if not jar.exists() or not DAEMON_SRC.exists():
         return None
     try:
         proc = subprocess.Popen(
             ['java', '--source', '11',
-             '-cp', str(JAR_PATH),
+             '-cp', str(jar),
              str(DAEMON_SRC)],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
@@ -1839,7 +2030,7 @@ def _render_via_pipe(text):
     """Fallback: one-shot `java -jar plantuml.jar -pipe` (slower, Java 8+ compatible)."""
     try:
         proc = subprocess.run(
-            ['java', '-jar', str(JAR_PATH), '-tsvg', '-pipe', '-charset', 'UTF-8'],
+            ['java', '-jar', str(jar_path()), '-tsvg', '-pipe', '-charset', 'UTF-8'],
             input=text.encode('utf-8'),
             capture_output=True,
             timeout=30,
@@ -1856,8 +2047,10 @@ def _render_via_pipe(text):
 
 def render_local(text):
     global _daemon_proc
-    if not JAR_PATH.exists():
-        return None, f'plantuml.jar not found at {JAR_PATH}'
+    jar = jar_path()
+    if not jar.exists():
+        return None, (f'plantuml.jar not found at {jar}. '
+                      '設定 → レンダリング で jar を選ぶか「公式から取得」を押してください')
     with _daemon_lock:
         try:
             svg, err = _render_via_daemon(text)
@@ -1969,7 +2162,8 @@ def _idle_watchdog(server):
 def main():
     print(f'PlantUMLAssist server starting on http://127.0.0.1:{PORT}')
     print(f'  ROOT: {ROOT}')
-    print(f'  JAR:  {JAR_PATH} (exists={JAR_PATH.exists()})')
+    print(f'  DATA: {DATA_ROOT}')
+    print(f'  JAR:  {jar_path()} (exists={jar_path().exists()})')
     print(f'  IDLE_SHUTDOWN: {IDLE_SHUTDOWN_SEC}s (auto-stops if browser tab closes)')
     print('Press Ctrl+C to stop.')
     # Warm up the JVM daemon in a background thread so the first /render

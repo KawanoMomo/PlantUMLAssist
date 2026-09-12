@@ -1,0 +1,55 @@
+# Windows アプリ (exe + インストーラ) のビルド — BLK-human-20260909-2200。
+#
+# リポジトリにバイナリは入れない。タグを打ったときだけ作り、Releases に添付する。
+# plantuml.jar も Java も同梱しないので、成果物は数十 MB で収まる。
+name: windows-app
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install build deps
+        run: python -m pip install --upgrade pip pywebview pyinstaller
+
+      - name: Build exe
+        run: pyinstaller packaging/PlantUMLAssist.spec --noconfirm
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $version = if ($env:GITHUB_REF -like 'refs/tags/v*') { $env:GITHUB_REF -replace '^refs/tags/v','' } else { '0.0.0' }
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" packaging\installer.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed with $LASTEXITCODE" }
+
+      - name: Zip the portable build
+        shell: pwsh
+        run: Compress-Archive -Path dist\PlantUMLAssist\* -DestinationPath dist\PlantUMLAssist-portable.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PlantUMLAssist-windows
+          path: |
+            dist/*.exe
+            dist/PlantUMLAssist-portable.zip
+
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*setup.exe
+            dist/PlantUMLAssist-portable.zip
