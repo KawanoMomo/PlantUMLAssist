@@ -292,6 +292,33 @@ python server.py
 
 Windows では `start.bat` をダブルクリックでも起動可能 (server.py を起動してブラウザを自動で開きます)。
 
+### Windows アプリ版 (exe / インストーラ)
+
+Python も Java も PlantUML も入っていない相手に配る形です。画面は Web 版と同じ
+`plantuml-assist.html` / `src/` を読むので、機能に差はありません。
+
+```bash
+python -m pip install pywebview      # 開発機で試すとき
+python app.py                        # 窓で開く (Web 版は python server.py のまま)
+```
+
+配布物は GitHub Actions (`.github/workflows/windows-app.yml`) が `v*` タグで作ります。
+リポジトリにバイナリは入れません。手元で作るなら:
+
+```bash
+python -m pip install pywebview pyinstaller
+pyinstaller packaging/PlantUMLAssist.spec --noconfirm
+iscc packaging\installer.iss           # Inno Setup 6 が要ります
+```
+
+- **plantuml.jar は同梱しません**。初回起動後、⚙設定 → レンダリング →
+  「jar を選ぶ」でファイルを指定するか、「公式から取得」を押してください。
+  選んだ場所は `.assist-prefs.json` (アプリ版では `%APPDATA%\PlantUMLAssist\`) に残ります。
+- **Java も同梱しません**。同じ画面に検出結果が出ます。無ければ
+  [Temurin](https://adoptium.net/temurin/releases/) を入れてください (Java 11 以上)。
+- アプリ版の保存・書き出しはネイティブのファイルダイアログです
+  (Web 版は従来どおりブラウザのダウンロード)。
+
 **自動停止**: ブラウザタブを閉じるとサーバーも自動で停止します (heartbeat 方式、タブ close 後 2〜6秒以内に終了)。F5 リロードは自動判定で継続。明示的に止めたい場合は `Ctrl+C`。
 
 ## HTTP API

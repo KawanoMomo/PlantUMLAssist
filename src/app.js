@@ -1752,10 +1752,86 @@ function init() {
         _renderEnv = { java: { found: false, version: null, major: null }, jar: true };
       }).then(function() {
         _renderEnvLoading = false;
+        if (window.MA.appBridge) window.MA.appBridge.setEnv(_renderEnv);
         renderModeCards();
         refreshRenderNote();
+        refreshEngineSection();
       });
     }
+
+    // ── 描画エンジン (BLK-human-20260909-2200) ────────────────────────────
+    // 配布物に plantuml.jar も Java も同梱しない。「どこにあるか」「入っているか」を
+    // 設定のレンダリングタブに常時出し、足りなければこの場で入れられるようにする。
+    // 判定と文言は src/core/app-bridge.js、ここは結線だけ。
+    function refreshEngineSection() {
+      var AB = window.MA.appBridge;
+      if (!AB) return;
+      var env = _renderEnv || {};
+      var jar = AB.jarStatus(env);
+      var java = AB.javaStatus(env);
+      var jarEl = document.getElementById('cfg-jar-status');
+      if (jarEl) {
+        jarEl.textContent = jar.text;
+        jarEl.style.color = jar.ok ? 'var(--text-secondary)' : 'var(--accent-red)';
+      }
+      var pathEl = document.getElementById('cfg-jar-path');
+      if (pathEl && document.activeElement !== pathEl) pathEl.value = env.jarPath || '';
+      var javaEl = document.getElementById('cfg-java-status');
+      if (javaEl) {
+        javaEl.textContent = java.text;
+        javaEl.style.color = java.ok ? 'var(--text-secondary)' : 'var(--accent-red)';
+        if (!java.ok && java.url) {
+          javaEl.textContent = java.text + ' — ';
+          var link = document.createElement('a');
+          link.href = java.url;
+          link.target = '_blank';
+          link.rel = 'noopener';
+          link.id = 'cfg-java-link';
+          link.textContent = 'Temurin を入手';
+          javaEl.appendChild(link);
+        }
+      }
+      var fetchBtn = document.getElementById('cfg-jar-fetch');
+      if (fetchBtn) fetchBtn.disabled = !jar.canFetch;
+      var pickBtn = document.getElementById('cfg-jar-pick');
+      // Web 版にはネイティブのダイアログが無いので、パス欄に打って反映させる。
+      if (pickBtn) pickBtn.textContent = AB.isApp(env) ? 'jar を選ぶ' : 'このパスを使う';
+    }
+
+    function setEngineNote(msg, bad) {
+      var el = document.getElementById('cfg-engine-note');
+      if (!el) return;
+      el.textContent = msg || '';
+      el.style.color = bad ? 'var(--accent-red)' : 'var(--text-secondary)';
+    }
+
+    function afterEngineChange(res) {
+      if (!res) return;
+      if (res.canceled) { setEngineNote('選ばれませんでした'); return; }
+      if (res.error) { setEngineNote(res.error, true); return; }
+      _renderEnv = res.env || _renderEnv;
+      setEngineNote('plantuml.jar: ' + (res.jarPath || ''));
+      renderModeCards();
+      refreshRenderNote();
+      refreshEngineSection();
+    }
+
+    (function wireEngineButtons() {
+      var AB = window.MA.appBridge;
+      if (!AB) return;
+      var pickBtn = document.getElementById('cfg-jar-pick');
+      if (pickBtn) pickBtn.addEventListener('click', function() {
+        var pathEl = document.getElementById('cfg-jar-path');
+        setEngineNote('選んでいます…');
+        if (AB.isApp(_renderEnv)) AB.pickJar().then(afterEngineChange);
+        else AB.setJarPath(pathEl ? pathEl.value : '').then(afterEngineChange);
+      });
+      var fetchBtn = document.getElementById('cfg-jar-fetch');
+      if (fetchBtn) fetchBtn.addEventListener('click', function() {
+        setEngineNote('公式から取得しています… (数十 MB あります)');
+        AB.fetchJar().then(afterEngineChange);
+      });
+    })();
 
     if (ST) {
       // design 5b: 「⌕ 操作名で検索」で表を絞る。打つたびに引き直すので、
@@ -4276,12 +4352,7 @@ function writeFindingMap() {
   var state = document.getElementById('cb-minutes-state');
   var res = buildFindingMap();
   if (!res) { if (state) state.textContent = '対応表を作れません'; return null; }
-  var blob = new Blob([res.text], { type: 'text/markdown' });
-  var a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = res.fileName;
-  a.click();
-  URL.revokeObjectURL(a.href);
+  downloadBlob(res.fileName, new Blob([res.text], { type: 'text/markdown' }));
   if (state) state.textContent = res.fileName + ' に書き出しました (' + (FL.summaryText(res.table) || '指摘なし') + ')';
   return res;
 }
@@ -4329,12 +4400,7 @@ function writeMeetingNotes(copy) {
     }
     return res;
   }
-  var blob = new Blob([res.text], { type: 'text/markdown' });
-  var a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = res.fileName;
-  a.click();
-  URL.revokeObjectURL(a.href);
+  downloadBlob(res.fileName, new Blob([res.text], { type: 'text/markdown' }));
   if (state) state.textContent = MN.resultText(res);
   return res;
 }
@@ -10607,12 +10673,7 @@ function setupXrefGraph() {
   if (exportBtn) exportBtn.addEventListener('click', function() {
     var cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null;
     var txt = window.MA.xrefGraph.toText(window.MA.xrefGraph.build(_renameDocs()), cfg);
-    var blob = new Blob([txt], { type: 'text/markdown' });
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'xref.md';
-    a.click();
-    URL.revokeObjectURL(a.href);
+    downloadBlob('xref.md', new Blob([txt], { type: 'text/markdown' }));
     setSaveStatus('参照関係を xref.md に書き出しました');
   });
   if (closeBtn) closeBtn.addEventListener('click', closePanel);
@@ -15066,12 +15127,7 @@ function saveFile() {
     return;
   }
 
-  var blob = new Blob([mmdText], { type: 'text/plain' });
-  var a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = target.name + '.puml';
-  a.click();
-  URL.revokeObjectURL(a.href);
+  downloadBlob(target.name + '.puml', new Blob([mmdText], { type: 'text/plain' }));
   if (ST) setSaveStatus(ST.messageFor(target, true));
   runSaveCheck(doc && doc.name);
 }
@@ -15178,12 +15234,8 @@ function exportSVG() {
   var svgEl = previewSvgEl.querySelector('svg');
   if (!svgEl) return;
   var clone = svgEl.cloneNode(true);
-  var blob = new Blob([new XMLSerializer().serializeToString(clone)], { type: 'image/svg+xml' });
-  var a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = ((currentParsed.meta && currentParsed.meta.title) || 'untitled') + '.svg';
-  a.click();
-  URL.revokeObjectURL(a.href);
+  downloadBlob(((currentParsed.meta && currentParsed.meta.title) || 'untitled') + '.svg',
+    new Blob([new XMLSerializer().serializeToString(clone)], { type: 'image/svg+xml' }));
   // 書き出した瞬間が「この周を完走した」区切り。ここで庫へロックする
   // (BLK-junior-20260908-2203-wish)。
   stashToVault('SVG');
@@ -15207,7 +15259,7 @@ function renderDslToSvg(dsl) {
   });
 }
 
-function downloadBlob(filename, blob) {
+function browserDownload(filename, blob) {
   var url = URL.createObjectURL(blob);
   var a = document.createElement('a');
   a.href = url;
@@ -15217,6 +15269,27 @@ function downloadBlob(filename, blob) {
   a.click();
   document.body.removeChild(a);
   setTimeout(function() { URL.revokeObjectURL(url); }, 10000);
+}
+
+// BLK-human-20260909-2200: アプリ版 (pywebview) にはブラウザのダウンロード先が無く、
+// a[download] を押しても何も起きない。アプリ版のときだけネイティブの保存ダイアログに
+// 回し、断られた・使えないときは従来どおりダウンロードに落ちる (Web 版は素通り)。
+function downloadBlob(filename, blob) {
+  var AB = window.MA && window.MA.appBridge;
+  if (!AB || !AB.isApp() || typeof FileReader !== 'function') {
+    browserDownload(filename, blob);
+    return;
+  }
+  var fr = new FileReader();
+  fr.onload = function() {
+    var b64 = String(fr.result || '').split(',')[1] || '';
+    AB.nativeSave(filename, { base64: b64 }).then(function(res) {
+      if (res && res.fallback) browserDownload(filename, blob);
+      else if (res && res.path) setSaveStatus(res.path + ' に書き出しました');
+    });
+  };
+  fr.onerror = function() { browserDownload(filename, blob); };
+  fr.readAsDataURL(blob);
 }
 
 function exportAllSVG(pickedDocs, statusEl) {
@@ -16236,11 +16309,7 @@ function exportPNG(transparent) {
   svgToCanvas(transparent, function(canvas) {
     canvas.toBlob(function(blob) {
       if (!blob) return;
-      var a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = ((currentParsed.meta && currentParsed.meta.title) || 'untitled') + '.png';
-      a.click();
-      URL.revokeObjectURL(a.href);
+      downloadBlob(((currentParsed.meta && currentParsed.meta.title) || 'untitled') + '.png', blob);
       stashToVault(transparent ? 'PNG（透過背景）' : 'PNG');
     });
   });

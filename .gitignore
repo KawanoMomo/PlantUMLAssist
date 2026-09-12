@@ -49,3 +49,7 @@ autosave/
 
 # builder がループの手順で残す run ログ (成果物ではない)
 runs/
+
+# PyInstaller / Inno Setup の出力 (リポジトリにバイナリは入れない)
+build/
+dist/
