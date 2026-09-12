@@ -284,9 +284,14 @@ window.MA.domainCohort = (function() {
         var a = entries[i], b = entries[j];
         if (a.folder === b.folder) continue;
         if (!a.kind || a.kind !== b.kind) continue;
-        out.push({ kind: a.kind, a: a, b: b });
+        // BLK-reviewer-20260912-2206: ファイル名まで同じ組は「同じ図の 2 人の版」で、
+        // ドメイン+図種が同じだけの組 (gpio_init_sequence × gpio_read_sequence) とは
+        // 突合の意味が違う。組み方は変えず印だけ付け、並びで先に出す。
+        out.push({ kind: a.kind, a: a, b: b, sameBase: a.base === b.base });
       }
     }
+    // 同名ファイルの組を先頭へ。reviewer が最初に読む行が毎回そこになる。
+    out.sort(function(x, y) { return (y.sameBase ? 1 : 0) - (x.sameBase ? 1 : 0); });
     return out;
   }
 
@@ -330,8 +335,13 @@ window.MA.domainCohort = (function() {
     var all = groups(docs);
     var cross = crossFolder(all, opts).map(function(g) { return compare(g, opts); });
     var tpl = templateOnly(all);
+    // BLK-reviewer-20260912-2206: 食い違っている名前そのものを結果に載せる。
+    // CLI も画面もここを読むだけにして、手 diff に戻る口を残さない。
+    var dr = diffRows({ groups: cross });
+    dr.forEach(function(r) { r.text = diffRowText(r); });
     return {
       groups: cross,
+      diffRows: dr,
       // 1 フォルダにしか無いドメイン = 相手がいないので比べていない。
       soloDomains: all.filter(function(g) {
         if (inc) return !g.crossFolder;
@@ -399,6 +409,70 @@ window.MA.domainCohort = (function() {
     return out;
   }
 
+  // BLK-reviewer-20260912-2206: これまで CLI が出すのは「どのドメインが食い違うか」
+  // までで、食い違っている名前そのものは出なかった。reviewer は毎回 2 フォルダから
+  // 同名ファイルを開いて手 diff し、そこで初めて `Gpio` vs `Gpio_Driver` に気づいていた。
+  // 突き合わせた組ごとに、どちらにしか無い部品名・ラベルを名指しする行を返す。
+  // 判定は既存の diff をそのまま読むだけで、突合の規則は変えない。
+  function diffRows(result, opts) {
+    var o = opts || {};
+    // 既定は「これから見るべき組」だけ。宣言どおりの組まで並べると、
+    // 決着済みの名前差を毎回読み直すことになる。
+    var all = !!o.all;
+    var out = [];
+    ((result && result.groups) || []).forEach(function(g) {
+      (g.pairs || []).forEach(function(p) {
+        var v = p.verdict || {};
+        if (!all) {
+          if (p.diff && p.diff.matched && !v.conflict) return;
+          if (v.kind === 'separate' && !v.conflict) return;
+        }
+        out.push({
+          domain: g.domain,
+          kind: p.kind,
+          sameBase: !!p.sameBase,
+          left: p.a.folder + ' / ' + p.a.base,
+          right: p.b.folder + ' / ' + p.b.base,
+          leftFolder: p.a.folder,
+          rightFolder: p.b.folder,
+          leftName: p.a.name,
+          rightName: p.b.name,
+          gaps: (p.diff && p.diff.gaps) | 0,
+          names: (p.diff && p.diff.names) || { both: [], onlyA: [], onlyB: [] },
+          labels: (p.diff && p.diff.labels) || { both: [], onlyA: [], onlyB: [] },
+          conflict: v.conflict || '',
+          verdictText: v.text || '',
+        });
+      });
+    });
+    return out;
+  }
+
+  // diffRows の 1 行を人が読む 1 行にする。CLI も画面もこの文面を使う
+  // (同じ突合を二か所で別々の言葉にしない)。長い側は max 件で打ち切り、
+  // 打ち切った数を必ず添える (「これで全部」と読ませない)。
+  function diffRowText(row, max) {
+    var cap = max > 0 ? max : 6;
+    function list(arr) {
+      var a = arr || [];
+      if (!a.length) return '';
+      return a.length > cap ? a.slice(0, cap).join(', ') + ' ほか ' + (a.length - cap) + ' 件' : a.join(', ');
+    }
+    function part(title, d) {
+      var seg = [];
+      var la = list(d.onlyA), lb = list(d.onlyB);
+      if (la) seg.push(row.leftFolder + ' だけ: ' + la);
+      if (lb) seg.push(row.rightFolder + ' だけ: ' + lb);
+      return seg.length ? title + ': ' + seg.join(' / ') : '';
+    }
+    var head = row.domain + ' ' + (row.kind || '?') + (row.sameBase ? ' [同名]' : '')
+      + ' ' + row.left + ' × ' + row.right;
+    var body = [part('部品名', row.names), part('ラベル', row.labels)].filter(Boolean).join('; ');
+    if (!body) body = row.conflict ? row.verdictText : '差分なし';
+    else if (row.conflict) body += ' (' + row.verdictText + ')';
+    return head + ' — ' + body;
+  }
+
   function summaryLine(result) {
     var r = result || {};
     var g = r.groups || [];
@@ -457,6 +531,8 @@ window.MA.domainCohort = (function() {
     verdictText: verdictText,
     verdictNote: verdictNote,
     conflictRows: conflictRows,
+    diffRows: diffRows,
+    diffRowText: diffRowText,
     pairsFor: pairsFor,
     diff: diff,
     compare: compare,
