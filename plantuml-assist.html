@@ -4207,6 +4207,31 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   display: inline-block; margin-right: 6px; padding: 0 4px;
   border: 1px solid currentColor; border-radius: 3px; font-size: 10px;
 }
+/* BLK-reviewer-20260912-2103-wish: 中身の入れ替わりは「読めるが間違っている」
+   状態なので、突合の警告より強い色 (エラー寄り) で出す。 */
+#save-swap-overlay {
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 30;
+  margin: -16px -16px 12px -16px;
+  padding: 6px 12px;
+  background: rgba(60, 14, 14, 0.96);
+  color: #ff9a9a;
+  border-bottom: 1px solid #8a2323;
+  font-size: 12px;
+}
+#save-swap-overlay .ssw-head { display: flex; align-items: center; gap: 8px; padding-right: 150px; }
+#save-swap-overlay .ssw-head span { flex: 1; }
+#save-swap-overlay button { font-size: 11px; padding: 1px 6px; cursor: pointer; }
+#ssw-list { margin: 4px 0 0; padding-left: 18px; padding-right: 150px; max-height: 100px; overflow-y: auto; }
+#ssw-list li { margin: 2px 0; line-height: 1.4; }
+#ssw-log {
+  margin: 6px 0 0; padding-left: 20px; padding-right: 150px;
+  max-height: 140px; overflow-y: auto;
+  font-family: var(--font-mono); font-size: 10px; color: #ffd0d0;
+}
+#ssw-log li { margin: 1px 0; }
 
 #preview-svg {
   display: inline-block;
@@ -5211,6 +5236,18 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
           </div>
           <ul id="sck-list"></ul>
         </div>
+        <!-- BLK-reviewer-20260912-2103-wish: この保存で中身が別名の図と入れ替わって
+             いないかを保存のその場で言う帯。あわせて保存操作の控えをここで読む。
+             中身は save-swap.js -->
+        <div id="save-swap-overlay" role="alert" hidden>
+          <div class="ssw-head">
+            <button type="button" id="btn-ssw-close" title="この警告を閉じる（次の保存でまた出ます）">✕</button>
+            <button type="button" id="btn-ssw-log" title="この保存フォルダへの直近の保存操作を、ファイル名込みで見る">🧾 保存の記録</button>
+            <span id="ssw-summary"></span>
+          </div>
+          <ul id="ssw-list"></ul>
+          <ol id="ssw-log" hidden></ol>
+        </div>
         <!-- BLK-junior-20260908-1703-wish: 継承元の増減行に対応する図形を
              図の上で色付けしたときの帯。当たらなかった行はここに並べる -->
         <div id="lg-mark-overlay" role="status" hidden>
@@ -5699,6 +5736,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/audit-timeline.js"></script>
 <script src="src/core/audit-board.js"></script>
 <script src="src/core/save-check.js"></script>
+<script src="src/core/save-swap.js"></script>
 <script src="src/core/consistency-check.js"></script>
 <script src="src/core/manual-findings.js"></script>
 <script src="src/core/component-deps.js"></script>
