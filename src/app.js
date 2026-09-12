@@ -15383,11 +15383,82 @@ function renderSaveSwap(res) {
     list.innerHTML = html;
     list.hidden = !html;
   }
+  renderTwinRestore(res);
   el.setAttribute('data-warn', res && res.warn ? '1' : '0');
   // 警告が無いときは帯を出さない。ただし記録を開いているなら出したままにする
   // (事故を追っている最中に、次の保存で画面が消えないようにする)。
-  el.hidden = !(res && res.warn) && !_sswLogOpen;
+  el.hidden = !(res && res.warn) && !_sswLogOpen && !_trGroups.length;
   renderSaveSwapLog();
+}
+
+// ── 一致した組の一覧と 1 操作の復元 (BLK-primary-20260912-2206-wish) ────────
+// save-swap は「いま保存した 1 枚」の相手しか言わない。3 枚が同時に雛形へ落ちた
+// primary の事故では、保存した 1 枚を直しても残りが黙って壊れたままになる。
+// ここはフォルダ全体の一致した組を並べ、保存した図には「戻す」を 1 つ出す。
+// 判定は src/core/twin-restore.js。ここは結線だけ。
+
+var _trGroups = [];      // フォルダ全体で中身が一致した組
+var _trPick = null;      // 保存した図の戻し先 { stamp, label, lines }
+var _trName = '';        // 戻す対象の図の名前
+
+function renderTwinRestore(res) {
+  var TR = window.MA.twinRestore;
+  var box = document.getElementById('ssw-twins');
+  var btn = document.getElementById('btn-ssw-restore');
+  if (!TR) return;
+  if (box) {
+    var esc = window.MA.htmlUtils.escHtml;
+    var html = '';
+    TR.groupLines(_trGroups).forEach(function(t) { html += '<li>' + esc(t) + '</li>'; });
+    box.innerHTML = html;
+    box.hidden = !html;
+  }
+  if (btn) {
+    btn.hidden = !_trPick;
+    if (_trPick) {
+      btn.textContent = TR.restoreLabel(_trPick);
+      btn.title = _trName + ' を、上書きされる前のこの版に戻します（保存フォルダにも書き戻します）';
+    }
+  }
+}
+
+// 保存した図の戻し先を `_versions/` の一覧から選ぶ。版が読めない・戻せる版が
+// 無いときは何も出さない (中身の分からない版を押し付けない)。
+function _trLoadPick(name, dsl) {
+  var TR = window.MA.twinRestore, VH = window.MA.versionHistory;
+  _trPick = null;
+  _trName = String(name == null ? '' : name);
+  if (!TR || !VH || !_trName) return Promise.resolve(null);
+  var url = '/autosave-versions?dir=' + encodeURIComponent(_wsFileDir())
+    + '&type=' + encodeURIComponent(_trName);
+  return window.fetch(url)
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(data) {
+      _trPick = TR.pickVersion(VH.rows(data), { currentLines: TR.lineCount(dsl) });
+      return _trPick;
+    })
+    .catch(function() { _trPick = null; return null; });
+}
+
+// 戻す。エディタ・プレビュー・保存フォルダを 1 手で揃え、undo 1 回で取り消せる
+// ようにする (_applyLineEditText が履歴を 1 手だけ積む)。
+function restoreTwinDoc() {
+  var TR = window.MA.twinRestore;
+  if (!TR || !_trPick || !_trName) return;
+  var url = '/autosave-versions?dir=' + encodeURIComponent(_wsFileDir())
+    + '&type=' + encodeURIComponent(_trName) + '&stamp=' + encodeURIComponent(_trPick.stamp);
+  var pick = _trPick, name = _trName;
+  window.fetch(url).then(function(r) { return r.ok ? r.text() : null; }).then(function(text) {
+    if (text == null) {
+      if (window.MA.toast) window.MA.toast.show('この版を読めませんでした');
+      return;
+    }
+    if (!_applyLineEditText(text)) return;
+    _trPick = null;
+    renderTwinRestore(null);
+    if (window.MA.toast) window.MA.toast.show(TR.restoredLine(name, pick));
+    appendSaveStatus(TR.restoredLine(name, pick));
+  });
 }
 
 // 保存のたびに呼ぶ。判定が落ちても保存そのものは成立させる。
@@ -15399,10 +15470,26 @@ function runSaveSwapCheck(docName, dsl) {
 
   function evaluate() {
     var res = null;
+    var docs = _sswFolderDocs();
     try {
-      res = SS.inspect({ name: docName, dsl: dsl, prev: prev, folderDocs: _sswFolderDocs() });
+      res = SS.inspect({ name: docName, dsl: dsl, prev: prev, folderDocs: docs });
     } catch (e) { res = null; }
+    // フォルダ全体の一致した組は、保存した図が入っていなくても挙げる
+    // (3 枚目に気付けるのはここだけ)。判定が落ちても保存は成立させる。
+    try {
+      var TR = window.MA.twinRestore;
+      _trGroups = TR ? TR.groups(docs.concat([{ name: docName, dsl: dsl }])) : [];
+    } catch (e) { _trGroups = []; }
     if (!res) { hideSaveSwap(); return null; }
+    // 巻き込まれた図にだけ「戻す」を出す。版の一覧は読めてから帯に足す。
+    if (_trGroups.length && window.MA.twinRestore
+        && window.MA.twinRestore.groupFor(_trGroups, docName)) {
+      _trLoadPick(docName, dsl).then(function() {
+        try { renderTwinRestore(res); } catch (e) {}
+      });
+    } else {
+      _trPick = null;
+    }
     try {
       SS.save(_reviewStore(), _wsFileDir(),
         SS.record(SS.load(_reviewStore(), _wsFileDir()), res,
@@ -15428,6 +15515,11 @@ function setupSaveSwap() {
   if (close) close.addEventListener('click', function() {
     _sswLogOpen = false;
     hideSaveSwap();
+  });
+  var restore = document.getElementById('btn-ssw-restore');
+  if (restore) restore.addEventListener('click', function(ev) {
+    ev.stopPropagation();
+    restoreTwinDoc();
   });
   var log = document.getElementById('btn-ssw-log');
   if (log) log.addEventListener('click', function() {

@@ -4226,6 +4226,9 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 #save-swap-overlay button { font-size: 11px; padding: 1px 6px; cursor: pointer; }
 #ssw-list { margin: 4px 0 0; padding-left: 18px; padding-right: 150px; max-height: 100px; overflow-y: auto; }
 #ssw-list li { margin: 2px 0; line-height: 1.4; }
+#ssw-twins { margin: 4px 0 0; padding-left: 18px; padding-right: 150px; max-height: 100px; overflow-y: auto; }
+#ssw-twins li { margin: 2px 0; line-height: 1.4; color: #ffc9c9; }
+#btn-ssw-restore { margin: 6px 0 2px; font-size: 11px; padding: 2px 8px; cursor: pointer; }
 #ssw-log {
   margin: 6px 0 0; padding-left: 20px; padding-right: 150px;
   max-height: 140px; overflow-y: auto;
@@ -5246,6 +5249,10 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
             <span id="ssw-summary"></span>
           </div>
           <ul id="ssw-list"></ul>
+          <!-- BLK-primary-20260912-2206-wish: フォルダ全体で中身が一致した組と、
+               巻き込まれた図を 1 操作で戻すボタン。中身は twin-restore.js -->
+          <ul id="ssw-twins" hidden></ul>
+          <button type="button" id="btn-ssw-restore" hidden></button>
           <ol id="ssw-log" hidden></ol>
         </div>
         <!-- BLK-junior-20260908-1703-wish: 継承元の増減行に対応する図形を
@@ -5738,6 +5745,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/audit-board.js"></script>
 <script src="src/core/save-check.js"></script>
 <script src="src/core/save-swap.js"></script>
+<script src="src/core/twin-restore.js"></script>
 <script src="src/core/consistency-check.js"></script>
 <script src="src/core/manual-findings.js"></script>
 <script src="src/core/component-deps.js"></script>
