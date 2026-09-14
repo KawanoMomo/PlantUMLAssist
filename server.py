@@ -1175,6 +1175,33 @@ class Handler(BaseHTTPRequestHandler):
             pass
         return counts
 
+    # 1 版あたりに一覧へ載せる本文の上限。これを超える控えは差分の材料に
+    # しない (一覧の応答に巨大な生成物を紛れ込ませない)。
+    PREV_TEXT_LIMIT = 256 * 1024
+
+    def _attach_prev_version(self, save_dir, entry):
+        """一覧の 1 行に「直前の退避版」の刻印と本文を足す。
+
+        BLK-junior-20260914-1306-wish: 先輩の図を取り込む側が要るのは
+        「前回保存から何が増え何が消えたか」で、判定の材料は直前版 1 つで足りる
+        (20 版すべてを運ぶ必要はない)。控えが無い図は刻印も本文も付けない ——
+        付けないこと自体が「このフォルダで初めての保存」を意味する。
+        """
+        entry['prevStamp'] = None
+        entry['prevText'] = None
+        stamps = self._version_stamps(save_dir, entry.get('name', ''))
+        if not stamps:
+            return
+        path = self._version_path(save_dir, entry['name'], stamps[0])
+        try:
+            if path.stat().st_size > self.PREV_TEXT_LIMIT:
+                entry['prevStamp'] = stamps[0]
+                return
+            entry['prevText'] = path.read_text(encoding='utf-8')
+        except OSError:
+            return
+        entry['prevStamp'] = stamps[0]
+
     def _stash_version(self, save_dir, dt, new_dsl):
         """上書きの直前に、今ある中身を `_versions/` へ退避する。
 
@@ -1865,6 +1892,11 @@ class Handler(BaseHTTPRequestHandler):
         # クラスのメソッドに在るか) は本文が要る。1 枚ずつ取りに行くと図の枚数だけ
         # 往復が増え、印の付く前の一覧が先に出てしまうので、頼まれたら一覧と同時に返す。
         want_texts = params.get('texts') in ('1', 'true', 'yes')
+        # BLK-junior-20260914-1306-wish: 「この図は前回保存から何を足され何を消されたか」を
+        # 一覧の行で言うには、直前の退避版の本文が要る。1 枚ずつ /autosave-versions を
+        # 叩くと図の枚数だけ往復が増え、印の付く前の一覧が先に出てしまうので、
+        # 頼まれたら一覧と同時に返す (`prev=1`)。頼まれなければ読まない。
+        want_prev = params.get('prev') in ('1', 'true', 'yes')
         # BLK-junior-20260908-2003: 「この図には前の版が N 個ある」は一覧の時点で要る。
         # 消えたと思った図を探すのに 22 枚を 1 枚ずつ開き直させないため。
         vcounts = self._version_counts(save_dir) if exists else {}
@@ -1873,6 +1905,8 @@ class Handler(BaseHTTPRequestHandler):
                 files.append(p.stem)
                 entry = self._autosave_entry(p, with_text=want_texts)
                 entry['versions'] = vcounts.get(p.stem, 0)
+                if want_prev:
+                    self._attach_prev_version(save_dir, entry)
                 entries.append(entry)
         # 本体がもう無いのに版だけ残っている図。消えた図こそ探す対象なので、
         # 現存する図の一覧 (entries) とは混ぜず、別枠で名前と版数だけ返す。

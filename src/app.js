@@ -5604,10 +5604,16 @@ var _peekScan = null;      // svg-freshness の scan 結果 (覗いているフ�
 // 名前だけの一覧では、語尾から図種を推測しながら 30 枚を上から読むことになる。
 var _peekEntries = [];
 var _peekVerifying = false;
+// BLK-junior-20260914-1306-wish: 「先輩の図の変更を自分の図に取り込む」ときに要るのは
+// 「先輩の 1 枚が前回保存からどこを変えたか」。無いと複合図を丸ごと開いて目で差分を
+// 探すことになり、変わっていない図まで開いて見比べる往復が残る。
+var _peekChanges = null;       // peek-changes の report (覗いているフォルダぶん)
+var _peekChangedOnly = false;  // 変更のある図だけに絞っているか
 
 function _peekEls() {
   return {
     modal: document.getElementById('peek-modal'),
+    changes: document.getElementById('peek-changes'),
     dirs: document.getElementById('peek-dirs'),
     files: document.getElementById('peek-files'),
     title: document.getElementById('peek-title'),
@@ -7204,7 +7210,8 @@ function renderPeekFiles() {
   el.files.appendChild(head);
   appendPeekKindSummary(el.files);
   appendPeekSvgSection(el.files);
-  _peekNames.forEach(function(n) {
+  appendPeekChangeSection(el.files);
+  peekVisibleNames().forEach(function(n) {
     var b = document.createElement('button');
     b.type = 'button';
     b.className = 'peek-file' + (n === _peekName ? ' selected' : '');
@@ -7215,6 +7222,7 @@ function renderPeekFiles() {
     b.appendChild(label);
     appendPeekKindBadge(b, n);
     appendPeekSvgBadge(b, n);
+    appendPeekChangeBadge(b, n);
     b.addEventListener('click', function() { showPeekFile(n); });
     el.files.appendChild(b);
   });
@@ -7301,6 +7309,82 @@ function appendPeekSvgSection(host) {
   host.appendChild(btn);
 }
 
+// ── 前回保存からの差分 (BLK-junior-20260914-1306-wish) ─────────────────────
+// 先輩の図を自分の図に取り込む場面では、要るのは「どの図が変わったか」と
+// 「何が増えて何が消えたか」だけ。今までは複合図 (driver_common_class 等) を
+// 丸ごと開いて目で差分を探し、変わっていない図まで開いて見比べていた。
+
+// 一覧に並べる名前。判定があれば「変更のある図が上」の順に、絞り込み中なら
+// 変更のある図だけに。判定が無ければ受け取った順のまま (印の無い一覧を並べ替えない)。
+function peekVisibleNames() {
+  var PC = window.MA.peekChanges;
+  var names = PC ? PC.visibleNames(_peekChanges, _peekChangedOnly) : null;
+  return names || _peekNames;
+}
+
+// 行の印。「＋2」だけでなく内訳を title に置く (部品が増えたのか、つなぎ方が
+// 変わったのかで、取り込む側の手の動かし方が変わる)。
+function appendPeekChangeBadge(host, name) {
+  var PC = window.MA.peekChanges;
+  if (!PC || !_peekChanges) return;
+  var badge = PC.rowBadge(PC.find(_peekChanges, name));
+  if (!badge) return;
+  var span = document.createElement('span');
+  span.className = 'peek-change-badge' + (badge.changed ? ' changed' : '');
+  span.setAttribute('data-change-of', name);
+  span.setAttribute('data-change', badge.verdict);
+  span.textContent = badge.text;
+  span.title = badge.title;
+  host.appendChild(span);
+}
+
+// 見出しの下の 1 行と、「変更のある図だけ」の絞り込み。
+function appendPeekChangeSection(host) {
+  var PC = window.MA.peekChanges;
+  if (!PC || !_peekChanges || !_peekChanges.total) return;
+  var sum = document.createElement('div');
+  sum.className = 'peek-change-summary' + (PC.hasChanges(_peekChanges) ? ' has-changes' : '');
+  sum.id = 'peek-change-summary';
+  sum.textContent = PC.summary(_peekChanges);
+  host.appendChild(sum);
+  var btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'peek-change-filter' + (_peekChangedOnly ? ' on' : '');
+  btn.id = 'peek-change-filter';
+  btn.textContent = PC.filterLabel(_peekChanges, _peekChangedOnly);
+  btn.title = '前回保存から部品・関係が変わった図だけを一覧に残します';
+  btn.disabled = !PC.hasChanges(_peekChanges);
+  btn.addEventListener('click', function(ev) {
+    ev.stopPropagation();
+    _peekChangedOnly = !_peekChangedOnly;
+    renderPeekFiles();
+  });
+  host.appendChild(btn);
+}
+
+// 開いた 1 枚の内訳。本文 (peek-dsl) を上から読まずに、写す先が決まるようにする。
+function renderPeekChangeDetail(name) {
+  var el = _peekEls();
+  var PC = window.MA.peekChanges;
+  if (!el.changes) return;
+  el.changes.textContent = '';
+  var row = (PC && _peekChanges) ? PC.find(_peekChanges, name) : null;
+  if (!row) { el.changes.style.display = 'none'; return; }
+  el.changes.style.display = '';
+  var notice = document.createElement('div');
+  notice.className = 'peek-change-notice';
+  notice.id = 'peek-change-notice';
+  notice.textContent = PC.detailNotice(row);
+  el.changes.appendChild(notice);
+  PC.detailLines(row).forEach(function(d) {
+    var line = document.createElement('div');
+    line.className = 'peek-change-line' + (d.sign === '+' ? ' add' : ' del');
+    line.setAttribute('data-change-sign', d.sign);
+    line.textContent = d.sign + ' ' + d.line + ': ' + d.text;
+    el.changes.appendChild(line);
+  });
+}
+
 // 覗いているフォルダの判定材料を読み直す。名前の一覧とは別の呼び出しにしない
 // (印の付く前の一覧が一瞬出ると、確かめてある図まで疑わせる)。
 function loadPeekScan(dir) {
@@ -7343,22 +7427,28 @@ function selectPeekDir(dir) {
   _peekNames = [];
   _peekEntries = [];
   _peekScan = null;
+  _peekChanges = null;
+  _peekChangedOnly = false;
   renderPeekDirs();
   renderPeekFiles();
   // 名前と判定を同時に取る。判定を後追いにすると、印の無い一覧が先に出て
   // 「確かめた結果うまくいっている」と読み違える余地ができる。
   // 図種は名前と同じ一覧応答に載っている (listFolder)。別呼び出しにすると
   // 印の無い一覧が先に出て、そこで「無い」と読み違える余地ができる。
-  return Promise.all([WS.listFolder(dir), loadPeekScan(dir)]).then(function(got) {
+  // 前回保存との差分も同じ一覧応答で受け取る (prev)。1 枚ずつ版を取りに行くと
+  // 図の枚数だけ往復が増え、印の付く前の一覧が先に出る。
+  return Promise.all([WS.listFolder(dir, { prev: true }), loadPeekScan(dir)]).then(function(got) {
     var info = got[0] || {};
     var entries = (info.entries || []).filter(function(e) { return e && e.name; });
     if (!window.MA.peekFolder.samePath(dir, _peekDir)) return false;   // 途中で選び直された
     _peekEntries = entries;
     _peekNames = entries.map(function(e) { return e.name; });
+    _peekChanges = window.MA.peekChanges ? window.MA.peekChanges.report(entries) : null;
     renderPeekFiles();
     // 1 枚目をそのまま出す。選んだ後に「どれか押す」を挟むと、読むだけの用でも
-    // クリックが 1 つ増える。
-    if (_peekNames.length) showPeekFile(_peekNames[0]);
+    // クリックが 1 つ増える。変更のある図が上に来ているので、取り込む 1 枚目が最初に開く。
+    var first = peekVisibleNames()[0];
+    if (first) showPeekFile(first);
     return true;
   }).catch(function() { return false; });
 }
@@ -7374,6 +7464,7 @@ function showPeekFile(name) {
   renderPartChips();
   renderPeekFiles();
   renderPeekTemplateBtn();
+  renderPeekChangeDetail(name);
   if (el.title) el.title.textContent = name + '（読むだけ・編集も保存もしません）';
   el.svg.style.display = '';
   el.svg.textContent = '';
@@ -7404,7 +7495,8 @@ function showPeekFile(name) {
 }
 
 function stepPeekFile(delta) {
-  var next = window.MA.peekFolder.step(_peekNames, _peekName, delta);
+  // ↑↓ は一覧に見えている順で送る (絞り込み中に、隠れている図へ飛ばさない)。
+  var next = window.MA.peekFolder.step(peekVisibleNames(), _peekName, delta);
   if (next) showPeekFile(next);
 }
 
