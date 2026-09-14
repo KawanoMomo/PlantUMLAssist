@@ -6,6 +6,7 @@
 // 「資料化」で部品と図種を選ぶだけで、形式・題名の (資料用)・保存・庫までを 1 回で行う。
 const { test, expect } = require('@playwright/test');
 const S = require('./_scenario');
+const path = require('path');
 
 const DIR = S.dirFor(__filename);
 
@@ -491,4 +492,68 @@ test('手順4 資料化: 部品欄の行で、その部品がどの図種を持�
   const kinds = await page.locator('#mexp-kind option').allTextContents();
   // 図種欄は印と形式 (［未］シーケンス図（PNG（透過背景））) を添えるので、図種名だけに揃える。
   expect(kinds.map((t) => t.replace(/^［.］\s*/, '').replace(/（.*$/, '').trim())).toEqual(listed);
+});
+
+// BLK-junior-20260915-0007: 資料化は押した直後にモーダルが閉じ、根拠は一瞬出る
+// トーストだけだった。見落とすと「保存先に置けたか」を確かめる手段がモーダルに
+// 残らず、📂一覧を開き直して名前で探すまで確信が持てない (資料化 1 枚ごとに
+// フォルダタブ → フィルタ入力 → クリック が付く)。実行してもモーダルは閉じず、
+// 保存先の一覧を読み直した結果がその場に残る。
+const TIMER_ACTIVITY = [
+  '@startuml',
+  'title TIMERドライバ初期化アクティビティ',
+  'start',
+  ':クロックを有効化;',
+  ':プリスケーラを設定;',
+  ':割り込みを許可;',
+  'stop',
+  '@enduml',
+].join('\n');
+
+test('手順5 資料化: 実行後もモーダルが閉じず、保存先に置けたことがその場に残る', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  await S.putDoc(page, DIR, 'TIMERドライバ初期化アクティビティ', TIMER_ACTIVITY);
+  await page.reload();
+  await page.waitForTimeout(800);
+
+  await page.locator('#btn-export').click();
+  await page.waitForSelector('#export-menu', { state: 'visible' });
+  await page.locator('#exp-material').click();
+  await page.waitForSelector('#mexp-modal', { state: 'visible' });
+  await page.waitForTimeout(600);
+
+  // 押す前に根拠欄は出ていない (前の回の確認が残っていると読み違える)。
+  await expect(page.locator('#mexp-result')).toBeHidden();
+
+  // 残りの表のマスを押して選ぶ (部品欄の名は図名の括りで決まるので、表から選ぶ)。
+  await page.locator('#mexp-matrix-rows td.mexp-cell[data-kind="アクティビティ図"]').first().click();
+  await page.waitForTimeout(300);
+  await expect(page.locator('#mexp-kind')).toHaveValue('アクティビティ図');
+  await expect(page.locator('#mexp-run')).toBeEnabled();
+
+  const dl = page.waitForEvent('download', { timeout: 30000 }).catch(() => null);
+  await page.locator('#mexp-run').click();
+  await dl;
+
+  // 到達条件その1: モーダルは閉じず、保存先に置けたことが名前つきで残る。
+  const result = page.locator('#mexp-result');
+  await expect(result).toBeVisible({ timeout: 20000 });
+  await expect(result).toHaveAttribute('data-verified', '1', { timeout: 20000 });
+  await expect(page.locator('#mexp-modal')).toBeVisible();
+  await expect(page.locator('#mexp-result-text'))
+    .toContainText('TIMERドライバ初期化アクティビティ(資料用).puml を置けました');
+  // 保存先フォルダも名指しされる (どこに置けたかを覚えていなくてよい)。
+  await expect(page.locator('#mexp-result-text')).toContainText(path.basename(S.dirFor(__filename)));
+
+  // 根拠は実物と合っている (一覧を開き直さずに済むのは、これが実測だから)。
+  const saved = await S.readDoc(page, DIR, 'TIMERドライバ初期化アクティビティ(資料用)');
+  expect(saved).toContain('(資料用)');
+
+  // 到達条件その2: そのまま次の 1 枚を続けられ、根拠は新しい図に入れ替わる。
+  await page.locator('#mexp-result-open').click();
+  await expect(page.locator('#mexp-modal')).toBeHidden();
+  await expect(page.locator('#folder-panel')).toHaveClass(/open/);
+  await expect(page.locator('#folder-filter'))
+    .toHaveValue('TIMERドライバ初期化アクティビティ(資料用)');
 });

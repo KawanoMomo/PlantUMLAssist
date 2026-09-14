@@ -2581,6 +2581,18 @@ html, body {
 #mexp-lookup-table td.mexp-lfile { color: var(--text-secondary); }
 #mexp-plan { padding: 6px 14px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-secondary); }
 #mexp-state { padding: 8px 14px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-secondary); min-height: 16px; }
+/* 資料化の根拠 (BLK-junior-20260915-0007)。実行しても閉じずにここに残る。 */
+#mexp-result {
+  display: flex; align-items: center; gap: 10px; padding: 8px 14px;
+  border-top: 1px solid var(--border); font-size: 11px; color: var(--text-primary);
+}
+#mexp-result[hidden] { display: none; }   /* display:flex が [hidden] を打ち消すため */
+#mexp-result[data-verified="1"] { border-left: 3px solid var(--accent); }
+#mexp-result[data-verified="0"] { border-left: 3px solid #d08a2a; }
+#mexp-result button {
+  margin-left: auto; flex: none; background: var(--bg-tertiary); border: 1px solid var(--border);
+  color: var(--text-primary); border-radius: 4px; padding: 2px 8px; font-size: 11px; cursor: pointer;
+}
 /* 要求ID対応 (BLK-junior-20260909-0103-wish) */
 #req-modal-content {
   background: var(--bg-secondary);
@@ -6581,6 +6593,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/bulk-export.js"></script>
 <script src="src/core/component-pack.js"></script>
 <script src="src/core/material-export.js"></script>
+<script src="src/core/material-verify.js"></script>
 <script src="src/core/material-board.js"></script>
 <script src="src/core/material-matrix.js"></script>
 <script src="src/core/material-anchor.js"></script>
@@ -7014,6 +7027,13 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     </div>
     <div id="mexp-plan" role="status">部品と図種を選ぶと、書き出す形式と名前がここに出ます。</div>
     <div id="mexp-state" role="status"></div>
+    <!-- BLK-junior-20260915-0007: 資料化の根拠を、資料化したその場に残す。
+         実行してもモーダルは閉じず、保存先の一覧を読み直した結果 (置けたか) が
+         ここに出たままになる。トーストを見落としても📂一覧へ戻らなくてよい。 -->
+    <div id="mexp-result" hidden>
+      <span id="mexp-result-text" role="status"></span>
+      <button type="button" id="mexp-result-open" title="この図を保存フォルダの一覧で開く">📂 一覧で見る</button>
+    </div>
   </div>
 </div>
 <!-- 部品の資料一式 (BLK-junior-20260909-0003-wish) -->
