@@ -2161,6 +2161,21 @@ html, body {
 }
 #peek-parts .peek-part-chip:hover { border-color: var(--accent); color: var(--accent); }
 #peek-parts .peek-part-chip.selected { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+/* BLK-junior-20260915-0506-wish: 相乗り図の部品フィルタ。 */
+#peek-focus { padding-bottom: 8px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+#peek-focus .peek-focus-head { font-size: 11px; color: var(--text-secondary); padding-bottom: 4px; }
+#peek-focus .peek-focus-chip, #peek-focus .peek-focus-mode {
+  font-size: 11px; padding: 2px 8px; margin: 2px 4px 2px 0; border-radius: 10px;
+  border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer;
+}
+#peek-focus .peek-focus-chip:hover, #peek-focus .peek-focus-mode:hover { border-color: var(--accent); color: var(--accent); }
+#peek-focus .peek-focus-chip.selected, #peek-focus .peek-focus-mode.on {
+  border-color: var(--accent); color: var(--accent); font-weight: 600;
+}
+#peek-focus .peek-focus-modes { padding-top: 4px; }
+#peek-focus .peek-focus-label { font-size: 11px; color: var(--accent); padding-top: 4px; }
+#peek-dsl .peek-dsl-dim { opacity: 0.35; }
+#peek-dsl .peek-dsl-keep { color: var(--text-primary); font-weight: 600; }
 #at-modal-content {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
@@ -6728,6 +6743,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/name-pairing.js"></script>
 <script src="src/core/side-by-side.js"></script>
 <script src="src/core/part-slice.js"></script>
+<script src="src/core/part-focus.js"></script>
 <script src="src/core/review-note.js"></script>
 <script src="src/core/finding-actions.js"></script>
 <script src="src/core/finding-variant.js"></script>
@@ -7439,6 +7455,9 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <!-- BLK-junior-20260914-1006-wish: 開いた図が複合図 (共通基底 + 各ドライバ) なら、
              部品を並べる。押すとその部品の所だけを切り出し、自分の同じ部品の図と並べる。 -->
         <div id="peek-parts" style="display:none;"></div>
+        <!-- BLK-junior-20260915-0506-wish: 相乗り図を切り出さずに 1 枚のまま眺めるための
+             部品フィルタ。押した部品に関係するクラス・関連だけが浮き、他は淡色 / 非表示。 -->
+        <div id="peek-focus" style="display:none;"></div>
         <div id="peek-title"></div>
         <!-- BLK-junior-20260914-1306-wish: 開いた 1 枚が前回保存から何を足され何を消されたか。
              取り込む側は本文ではなく「＋部品 −関係」を読むので、図の上に出す。 -->

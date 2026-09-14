@@ -826,6 +826,53 @@ test.describe('junior 手順 1: 先輩の複合図から部品を切り出して
     await page.locator('#peek-files .peek-file[data-file-name="gpio_init_sequence"]').click();
     await page.waitForTimeout(600);
     await expect(page.locator('#peek-parts')).toBeHidden();
+    await expect(page.locator('#peek-focus')).toBeHidden();
+  });
+
+  // BLK-junior-20260915-0506-wish: 切り出しは「その部品だけの別の 1 枚」を作るので、
+  // 相乗り図のどこに自分の部品が居て何と線でつながっているかという元の絵は失われる。
+  // 手順 1 でしたいのは新しい図を作ることではなく、先輩の 1 枚を絞って眺めること。
+  // 部品を 1 回押せば、1 枚のまま自部品の所だけが浮き、他が淡色 (または非表示) に
+  // なることを到達条件にする。
+  test('相乗り図を 1 枚のまま部品で絞ると、自部品のクラス・関連だけが浮かぶ', async ({ page }) => {
+    await page.locator('#btn-tab-peek').click();
+    await page.waitForSelector('#peek-modal');
+    await page.locator('#peek-files .peek-file[data-file-name="driver_common_class"]').click();
+
+    // 到達条件その1: 押す前に「何部品の相乗りか」が読める。
+    await page.waitForSelector('#peek-focus .peek-focus-chip');
+    await expect(page.locator('#peek-focus-head')).toContainText('4 部品の相乗り');
+
+    // 到達条件その2: 1 回押すと、残る所と落ちる所が数で言われる。
+    await page.locator('#peek-focus .peek-focus-chip[data-focus-part="Spi_Driver"]').click();
+    await expect(page.locator('#peek-focus-label')).toContainText('Spi_Driver');
+    await expect(page.locator('#peek-focus-label')).toContainText('3 クラス');
+    await expect(page.locator('#peek-focus-label')).toContainText('淡色');
+
+    // 到達条件その3: 図は 1 枚のまま。関係しない部品も絵に残り (位置が分かる)、
+    // 淡色が実際に描画まで届いている。
+    await page.waitForSelector('#peek-svg[data-focus="Spi_Driver:dim"] svg');
+    const svg = await page.locator('#peek-svg').innerHTML();
+    expect(svg).toContain('Can_Driver');
+    expect(svg).toContain('Gpio_Driver');
+    expect(svg.toUpperCase()).toContain('#DDDDDD');
+
+    // 到達条件その4: 本文も同じ絞りで読める (打ち写す側で行が見分けられる)。
+    const kept = await page.locator('#peek-dsl .peek-dsl-keep').allInnerTexts();
+    expect(kept.join('\n')).toContain('Spi_Init');
+    const dimmed = await page.locator('#peek-dsl .peek-dsl-dim').allInnerTexts();
+    expect(dimmed.join('\n')).toContain('Can_Init');
+
+    // 到達条件その5: 非表示に切り替えると、関係しない所は本文からも消える。
+    await page.locator('#peek-focus .peek-focus-mode[data-focus-mode="hide"]').click();
+    await expect(page.locator('#peek-focus-label')).toContainText('非表示');
+    await expect(page.locator('#peek-dsl')).not.toContainText('Can_Init');
+    await expect(page.locator('#peek-dsl')).toContainText('Spi_Init');
+
+    // 到達条件その6: 解除すれば元の 1 枚に戻る (先輩の本文は書き換わっていない)。
+    await page.locator('#peek-focus-clear').click();
+    await expect(page.locator('#peek-dsl')).toContainText('Can_Init');
+    await expect(page.locator('#peek-focus-label')).toHaveText('');
   });
 });
 
