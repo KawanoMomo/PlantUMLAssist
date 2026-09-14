@@ -315,3 +315,55 @@ describe('workspace listFileEntries', function() {
     expect(seen).toContain(encodeURIComponent('./diagrams'));
   });
 });
+
+// BLK-primary-20260914-1306-wish: 図を 1 枚だけ消す窓口。これが無いので、重複した
+// 「-編集中」を片付けるには保存フォルダを直接触るしかなかった。消せたかどうかを
+// 必ず返す (黙って失敗すると、一覧に残った図を「消したつもり」で見送る)。
+describe('workspace deleteFile', function() {
+  beforeEach(function() { fresh(); });
+
+  test('API として公開されている', function() {
+    expect(typeof ws.deleteFile).toBe('function');
+  });
+
+  test('図名と保存フォルダを載せて DELETE で送る', function() {
+    var seen = null, opt = null;
+    global.window.fetch = function(url, o) { seen = url; opt = o; return syncThenable({ ok: true }); };
+    ws.deleteFile('can_init_sequence-編集中', './diagrams');
+    expect(opt.method).toBe('DELETE');
+    expect(seen).toContain('/autosave?dir=');
+    expect(seen).toContain(encodeURIComponent('./diagrams'));
+    expect(seen).toContain(encodeURIComponent('can_init_sequence-編集中'));
+  });
+
+  test('消せたら ok を返す', function() {
+    global.window.fetch = function() { return syncThenable({ ok: true }); };
+    var got = null;
+    ws.deleteFile('a', './d').then(function(v) { got = v; });
+    expect(got.ok).toBe(true);
+  });
+
+  test('server が断ったら理由を添えて ok:false を返す', function() {
+    global.window.fetch = function() { return syncThenable({ ok: false, status: 404 }); };
+    var got = null;
+    ws.deleteFile('a', './d').then(function(v) { got = v; });
+    expect(got.ok).toBe(false);
+    expect(got.error).toContain('404');
+  });
+
+  // 規則外の名前と server が居ない場合の答えは Promise で返る (runner は同期なので
+  // 中身を開けない)。ここでは「送らない」「落ちない」だけを見る。
+  test('名前の規則に外れる図名は送らない', function() {
+    var called = false;
+    global.window.fetch = function() { called = true; return syncThenable({ ok: true }); };
+    var p = ws.deleteFile('a/b', './d');
+    expect(called).toBe(false);
+    expect(typeof p.then).toBe('function');
+  });
+
+  test('server に届かなくても落ちない', function() {
+    global.window.fetch = function() { throw new Error('offline'); };
+    var p = ws.deleteFile('a', './d');
+    expect(typeof p.then).toBe('function');
+  });
+});

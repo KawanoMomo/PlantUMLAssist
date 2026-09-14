@@ -394,6 +394,28 @@ window.MA.workspace = (function() {
     }
   }
 
+  // deleteFile — 保存フォルダから図を 1 枚だけ消す
+  // (BLK-primary-20260914-1306-wish)。過去版は server 側で残るので、
+  // 取り違えて消しても「今は無いが前の版が残っている図」から戻せる。
+  // 返り値: { ok, error }。消せたかどうかを呼び出し側に必ず返す
+  // (黙って失敗すると、一覧に残ったままの図を「消したつもり」で見送る)。
+  function deleteFile(name, fileDir) {
+    if (!isValidName(name)) {
+      return Promise.resolve({ ok: false, error: nameRuleText() });
+    }
+    try {
+      return window.fetch('/autosave?dir=' + encodeURIComponent(_dir(fileDir))
+                          + '&type=' + encodeURIComponent(name), { method: 'DELETE' })
+        .then(function(r) {
+          if (r && r.ok) return { ok: true };
+          return { ok: false, error: '保存フォルダから消せませんでした (' + ((r && r.status) || '?') + ')' };
+        })
+        .catch(function() { return { ok: false, error: '保存フォルダに届きませんでした' }; });
+    } catch (e) {
+      return Promise.resolve({ ok: false, error: '保存フォルダに届きませんでした' });
+    }
+  }
+
   // saveExportLog — 書き出しの控えを保存フォルダに書く。
   // 書けたかどうかだけを返す (書けなくても書き出し自体は成り立つ)。
   function saveExportLog(log, fileDir) {
@@ -471,6 +493,7 @@ window.MA.workspace = (function() {
     listFiles: listFiles,
     listFileEntries: listFileEntries,
     listFolder: listFolder,
+    deleteFile: deleteFile,
     saveExportLog: saveExportLog,
     loadFile: loadFile,
     detectType: detectType,
