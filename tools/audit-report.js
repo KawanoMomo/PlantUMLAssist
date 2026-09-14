@@ -16,6 +16,10 @@ const auditDiff = require('./audit-diff');
 // 対象外扱いのテンプレの汚染かを区別できない。ファイルの分類と内容の指紋を
 // レポートに載せ、次回の --since / 控えとの比較で「どちらが動いたか」を出す。
 const auditScope = require('../src/core/audit-scope');
+// BLK-reviewer-20260914-2106: stale と出た図が「コメントを足しただけ」なのか
+// 「中身が変わった」のかを、描き直さずに言うための材料。svg に畳まれている
+// 元の DSL を開き、今の .puml と「描かれる行」だけで突き合わせる。
+const svgEmbeddedSrc = require('./svg-embedded-src');
 
 // ディレクトリなら再帰して .puml を集める。ファイルならそれ 1 枚。
 // name は入力ルートからの相対パスにする (同名 basename が別フォルダにあっても
@@ -100,7 +104,8 @@ const AUDITS = {
   // 「.puml はあるが .svg が書き出されていない」は 1 枚も検知できなかった。
   // timer_state.puml だけ SVG が無いことに気付いたのは 17 枚の目視突合の産物で、
   // 仕組みとしては存在しなかった。出力物の有無は DSL ではなくフォルダに書いてある。
-  svg: (MA, docs) => (MA.svgFreshness ? MA.svgFreshness.scan(svgEntries(docs)) : undefined),
+  svg: (MA, docs) => (MA.svgFreshness
+    ? withStaleReasons(MA, MA.svgFreshness.scan(svgEntries(docs)), docs) : undefined),
   // BLK-primary-20260908-1403-wish: 「dma_state だけ 1 メッセージが 4 遷移」は
   // 名前の食い違いではないので family / trace のどこにも出ず、出力テキストを
   // 目で読んで気付くしかなかった。系統ごとの遷移密度を並べ、中央値から外れた
@@ -140,6 +145,42 @@ function svgEntries(docs) {
     out.push({ name: d.name, mtime: mtime, svgMtime: svgMtime });
   }
   return out;
+}
+
+// BLK-reviewer-20260914-2106: 「SVG が古い」の中身を割る。
+// svg に畳まれている書き出し当時の DSL と、今の .puml を、描かれる行だけで比べる。
+//   same    — コメント・空行の差だけ。絵は同じ (見かけ上の stale)
+//   differ  — 描かれる行が違う。作り直しが要る
+//   unknown — 畳まれた DSL が無く、中身では言えない (従来どおり手で確かめる 1 枚)
+// render も server も要らないので、audit.js を打つだけでその場で答えが出る。
+function withStaleReasons(MA, scan, docs) {
+  const VD = MA.dslVisibleDiff;
+  if (!scan || !VD) return scan;
+  const dslByName = {};
+  for (const d of (Array.isArray(docs) ? docs : [])) {
+    if (d && d.name) dslByName[d.name] = { dsl: d.dsl, path: d.path };
+  }
+  const reasons = {};
+  const detail = {};
+  for (const row of (scan.rows || [])) {
+    if (row.status !== 'stale') continue;
+    const doc = dslByName[row.name];
+    if (!doc || !doc.path) { reasons[row.name] = 'unknown'; continue; }
+    let svgText = null;
+    try {
+      svgText = fs.readFileSync(doc.path.replace(/\.[^.\\/]+$/, '') + '.svg', 'utf-8');
+    } catch (e) { svgText = null; }
+    const folded = svgEmbeddedSrc.decode(svgText);
+    if (folded === null) { reasons[row.name] = 'unknown'; continue; }
+    const r = VD.compare(folded, doc.dsl);
+    reasons[row.name] = r.verdict;
+    if (r.verdict === 'differ') {
+      detail[row.name] = { added: r.added.slice(0, 10), removed: r.removed.slice(0, 10) };
+    }
+  }
+  scan.staleReasons = reasons;
+  scan.staleDetail = detail;
+  return scan;
 }
 
 function auditNames() { return Object.keys(AUDITS); }
@@ -230,6 +271,15 @@ function summarize(audits) {
       missingNames: sv.result.rows.filter((r) => r.status === 'missing').map((r) => r.name),
       staleNames: sv.result.rows.filter((r) => r.status === 'stale').map((r) => r.name),
     };
+    // BLK-reviewer-20260914-2106: 「SVG が古い」を 3 つに割る。割らないと
+    // reviewer は 1 枚ずつ render API を叩いて文字列 diff を取る使い捨ての
+    // スクリプトを書くことになり、図が増えるほど手作業が線形に増える。
+    const reasons = sv.result.staleReasons || {};
+    const pick = (v) => s.svg.staleNames.filter((n) => reasons[n] === v);
+    // 件数は名前の数なので持たない (要約の行数はそのまま grep のしやすさになる)。
+    s.svg.staleCommentOnlyNames = pick('same');
+    s.svg.staleContentNames = pick('differ');
+    s.svg.staleUnknownNames = pick('unknown');
   }
   const dn = audits.density;
   if (dn && dn.status === 'ok') {
@@ -327,7 +377,8 @@ const SUMMARY_FIELDS = {
   consistency: ['naming', 'unused', 'methods', 'methodReplies', 'granularity', 'events', 'count'],
   family: ['families', 'mismatched', 'skippedPairs'],
   trace: ['families', 'transitions', 'missing', 'partial', 'unmatchable', 'noSequence', 'grainSkipped', 'outOfScope'],
-  svg: ['files', 'missing', 'stale', 'unknown', 'missingNames', 'staleNames'],
+  svg: ['files', 'missing', 'stale', 'unknown', 'missingNames', 'staleNames',
+    'staleCommentOnlyNames', 'staleContentNames', 'staleUnknownNames'],
   density: ['families', 'counted', 'skippedNames', 'median', 'outliers', 'outlierNames'],
   label: ['families', 'known', 'common', 'commonLabel', 'odd', 'oddNames', 'mixedNames'],
   cohort: ['domains', 'crossFolder', 'mismatched', 'mismatchedNames', 'unpairedNames',
@@ -477,7 +528,24 @@ function formatSummary(report, prev, options) {
     } else {
       const parts = [];
       if (s.svg.missing) parts.push(`SVG が無い ${s.svg.missing} 枚 (${s.svg.missingNames.join(', ')})`);
-      if (s.svg.stale) parts.push(`SVG が古い ${s.svg.stale} 枚 (${s.svg.staleNames.join(', ')})`);
+      if (s.svg.stale) {
+        // 「古い」だけでは作り直しの要否が決まらない。中身で割った内訳を同じ行に出す。
+        const why = [];
+        const content = s.svg.staleContentNames || [];
+        const commentOnly = s.svg.staleCommentOnlyNames || [];
+        const noSrc = s.svg.staleUnknownNames || [];
+        if (content.length) {
+          why.push(`可視内容の食い違い ${content.length} 枚 (${content.join(', ')})`);
+        }
+        if (commentOnly.length) {
+          why.push(`コメント等ソース変化のみ ${commentOnly.length} 枚 (${commentOnly.join(', ')})`);
+        }
+        if (noSrc.length) {
+          why.push(`畳まれた DSL が無く中身では言えない ${noSrc.length} 枚 (${noSrc.join(', ')})`);
+        }
+        parts.push(`SVG が古い ${s.svg.stale} 枚 (${s.svg.staleNames.join(', ')})`
+          + (why.length ? ` — ${why.join(' / ')}` : ''));
+      }
       if (s.svg.unknown) parts.push(`時刻が取れず不明 ${s.svg.unknown} 枚`);
       lines.push(`出力物: ${parts.join(' / ')}`);
     }
