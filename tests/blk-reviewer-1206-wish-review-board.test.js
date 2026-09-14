@@ -110,7 +110,10 @@ describe('review-board.build — 4 つの情報源を 1 枚に束ねる', functi
 
   test('どの前回指摘にも当たらない行が新規として残る', function() {
     expect(view.fresh.map((r) => r.doc)).toEqual(['adc_state.puml']);
-    expect(view.counts).toEqual({ carried: 3, resolved: 1, sameDoc: 0, unmatched: 0, fresh: 1, changed: 2 });
+    // regressed は BLK-reviewer-20260914-2206 で足した内数 (継続のうち本当の出戻り)。
+    expect(view.counts).toEqual({
+      carried: 3, regressed: 0, resolved: 1, sameDoc: 0, unmatched: 0, fresh: 1, changed: 2,
+    });
   });
 
   test('名指しの対象は消えたが同じ図に別の指摘が残る場合、解消と言い切らない', function() {
