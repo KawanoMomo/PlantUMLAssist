@@ -6004,7 +6004,11 @@ function selectSbsPair(key) {
       summary: SBS.summaryLine(both[0], both[1]),
     };
     renderSbs();
-    return true;
+    // 指摘.md は並べる相手を選ぶのとは別の口なので、読めたら 1 行を足し直す。
+    return _noteLoad().then(function() {
+      if (_sbsKey === key) renderSbs();
+      return true;
+    });
   });
 }
 
@@ -6114,6 +6118,19 @@ function renderSbs() {
   sum.textContent = _sbsMsg || v.summary;
   el.sbs.appendChild(sum);
 
+  // BLK-junior-20260913-0306-wish (追記): 指摘.md にこの図の名前が挙がっているか。
+  // 挙がっていなければ「指摘はありません」と言い切る (確かめるために指摘.md を
+  // 全文読み直す工程を消す)。図に残る判断の注記 (domain-verdict) も添える。
+  var noteText = _noteDocStatusText();
+  if (noteText) {
+    var ns = document.createElement('div');
+    ns.className = 'sbs-summary';
+    ns.id = 'sbs-note-status';
+    ns.setAttribute('data-note-clear', /指摘はありません/.test(noteText) ? '1' : '0');
+    ns.textContent = '🔖 ' + noteText;
+    el.sbs.appendChild(ns);
+  }
+
   var grid = document.createElement('div');
   grid.className = 'sbs-grid';
   grid.id = 'sbs-grid';
@@ -6221,6 +6238,182 @@ function applySbsAlign(mine, from, to, btn) {
     });
 }
 
+// ── 指摘.md の 1 件から並べて見る (BLK-junior-20260913-0306-wish) ──
+// junior は reviewer の指摘.md を GUI の外でテキストとして読み、そこに書かれた
+// 図名を目で拾い、覗き機能で自分と先輩のフォルダから同じ名前を探し当ててから
+// ようやく見比べていた。指摘 1 件を押せば、その図の組が並んだ状態で出る所まで
+// 画面が連れて行く。指摘文と図の対応付けは reviewNote が持つ (ここは描画だけ)。
+var _noteOn = false;
+var _noteRows = [];        // reviewNote.rows の戻り
+var _noteFile = null;      // 読んだ指摘.md ({folder, name, text})
+var _noteKey = null;       // 選んでいる指摘の id
+var _noteMsg = '';         // 押した結果 (組が無かったときの理由など)
+
+function _noteEls() {
+  return { note: document.getElementById('peek-note'),
+           noteToggle: document.getElementById('peek-note-toggle') };
+}
+
+function _noteRowOf(id) {
+  for (var i = 0; i < _noteRows.length; i++) {
+    if (_noteRows[i].id === id) return _noteRows[i];
+  }
+  return null;
+}
+
+// 指摘.md と図名の突き合わせを読む。パネルを開いているかどうかとは別に持つ
+// (並べた図に「指摘なし」と言い切るのに、指摘を開いていることを条件にしない)。
+var _noteLoading = null;
+
+function _noteLoad(force) {
+  var RN = window.MA.reviewNote;
+  if (!RN) return Promise.resolve(false);
+  if (!force && _noteFile) return Promise.resolve(true);
+  if (!force && _noteLoading) return _noteLoading;
+  var dir = _wsFileDir();
+  // 指摘 (.md) と、突き合わせる図名の一覧を同時に取る。図名は実在するものだけを
+  // 使う (本文から「それらしい語」を拾うと md5 値やコマンド名が図名として並ぶ)。
+  _noteLoading = Promise.all([
+    fetch('/peek-notes?dir=' + encodeURIComponent(dir))
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .catch(function() { return null; }),
+    _peekIndexDocs(),
+  ]).then(function(both) {
+    var data = both[0] || {};
+    _noteFile = RN.pickNote(data.notes);
+    _noteRows = _noteFile ? RN.rows(RN.parse(_noteFile.text), RN.index(both[1])) : [];
+    _noteLoading = null;
+    return true;
+  }).catch(function() {
+    _noteRows = [];
+    _noteLoading = null;
+    return false;
+  });
+  return _noteLoading;
+}
+
+// 並べている図に付ける 1 行。指摘.md にその図名が 1 件も挙がっていなければ
+// 「指摘はありません」と言い切り、図に残る判断の注記 (domain-verdict) も添える。
+function _noteDocStatusText() {
+  var RN = window.MA.reviewNote;
+  if (!RN || !_noteFile || !_sbsView) return '';
+  var v = _sbsView;
+  var docs = [
+    { folder: v.pair.a.folder, dsl: v.a.dsl },
+    { folder: v.pair.b.folder, dsl: v.b.dsl },
+  ];
+  return RN.docStatus(_noteRows, v.pair.base, docs).text;
+}
+
+function setNoteMode(on) {
+  var el = _noteEls();
+  _noteOn = !!on;
+  if (el.noteToggle) {
+    el.noteToggle.setAttribute('aria-pressed', _noteOn ? 'true' : 'false');
+    el.noteToggle.classList.toggle('on', _noteOn);
+  }
+  _noteMsg = '';
+  if (!_noteOn) {
+    _noteKey = null;
+    renderNotePanel();
+    return Promise.resolve(true);
+  }
+  _noteRows = [];
+  _noteFile = null;
+  renderNotePanel();
+  return _noteLoad(true).then(function(ok) {
+    if (!_noteOn) return false;
+    renderNotePanel();
+    return ok;
+  });
+}
+
+// 指摘 1 件を押したときの中身。図の組が取れていれば、その組を並べて見る画面で開く。
+function selectNoteFinding(id) {
+  var row = _noteRowOf(id);
+  _noteKey = id;
+  _noteMsg = '';
+  if (!row) { renderNotePanel(); return Promise.resolve(false); }
+  if (!row.pairs.length) {
+    _noteMsg = row.docs.length
+      ? '「' + row.docs[0].name + '」は ' + (row.docs[0].folders.join('・') || '—')
+        + ' にしかありません (並べる相手がいません)'
+      : 'この指摘には、保存フォルダにある図の名前が書かれていません';
+    renderNotePanel();
+    return Promise.resolve(false);
+  }
+  var p = row.pairs[0];
+  var key = p.base + '|' + p.a + '|' + p.b;
+  renderNotePanel();
+  // 並べて見る画面は同名ファイルで組む。組の索引はそこが持っているので、
+  // 開いてから同じ鍵で選ぶ (指摘側で組を作り直すと、左右の決め方が二重になる)。
+  var open = _sbsOn ? Promise.resolve(true) : setSbsMode(true);
+  return open.then(function() {
+    return selectSbsPair(key);
+  }).then(function(ok) {
+    _noteMsg = ok
+      ? p.base + ' を ' + p.a + ' ⇔ ' + p.b + ' で並べました'
+      : p.base + ' の本文を読めませんでした';
+    renderNotePanel();
+    return ok;
+  });
+}
+
+function renderNotePanel() {
+  var el = _noteEls();
+  var RN = window.MA.reviewNote;
+  if (!el.note) return;
+  el.note.textContent = '';
+  if (!_noteOn) { el.note.style.display = 'none'; return; }
+  el.note.style.display = 'block';
+
+  var head = document.createElement('div');
+  head.className = 'note-head';
+  head.id = 'note-head';
+  head.textContent = _noteFile
+    ? (_noteFile.folder + ' / ' + _noteFile.name)
+    : '隣のフォルダに指摘 (.md) がありません';
+  el.note.appendChild(head);
+
+  var sum = document.createElement('div');
+  sum.className = 'note-summary';
+  sum.id = 'note-summary';
+  sum.textContent = _noteMsg || (RN ? RN.summaryText(_noteRows) : '');
+  el.note.appendChild(sum);
+
+  if (!_noteRows.length) {
+    var hint = document.createElement('div');
+    hint.className = 'note-hint';
+    hint.id = 'note-hint';
+    hint.textContent = _noteFile
+      ? '指摘.md に見出し (## ...) がありません'
+      : '指摘は保存先の隣のフォルダ (reviewer など) の .md から読みます';
+    el.note.appendChild(hint);
+    return;
+  }
+
+  _noteRows.forEach(function(r) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'note-finding' + (r.id === _noteKey ? ' selected' : '');
+    b.setAttribute('data-note-id', r.id);
+    b.setAttribute('data-note-ready', r.ready ? '1' : '0');
+    b.setAttribute('data-note-docs', r.docs.map(function(d) { return d.name; }).join(','));
+    if (r.pairs.length) b.setAttribute('data-note-pair', r.pairs[0].base);
+    r.marks.forEach(function(m) {
+      var s = document.createElement('span');
+      s.className = 'note-mark';
+      s.textContent = m;
+      b.appendChild(s);
+    });
+    var label = document.createElement('span');
+    label.className = 'note-docs';
+    label.textContent = RN ? RN.rowLabel(r) : r.title;
+    b.appendChild(label);
+    b.addEventListener('click', function() { selectNoteFinding(r.id); });
+    el.note.appendChild(b);
+  });
+}
 
 // ── 覗いた図をテンプレートにする (BLK-junior-20260909-0503-wish) ──
 // 読むだけで見た図は、そのまま「テンプレートから新規作成」の材料にできる。
@@ -6291,9 +6484,13 @@ function closePeekFolder() {
   if (el.modal) el.modal.style.display = 'none';
   _peekName = null;
   _peekDsl = '';
+  // 次に開いたときは読み直す (指摘.md は reviewer が run ごとに書き替える)。
+  _noteFile = null;
+  _noteRows = [];
   renderPeekTemplateBtn();
   setCohortMode(false);
   setSbsMode(false);
+  setNoteMode(false);
 }
 
 function renderPeekDirs() {
@@ -6571,6 +6768,8 @@ function setupPeekFolder() {
   if (el.sbsToggle) {
     el.sbsToggle.addEventListener('click', function() { setSbsMode(!_sbsOn); });
   }
+  var noteToggle = document.getElementById('peek-note-toggle');
+  if (noteToggle) noteToggle.addEventListener('click', function() { setNoteMode(!_noteOn); });
   if (el.cohortTemplates) {
     el.cohortTemplates.addEventListener('click', function() {
       setCohortTemplates(!_cohortShowTemplates);
