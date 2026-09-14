@@ -109,12 +109,18 @@ window.MA.svgFreshness = (function() {
     // contentOf と同じ順序で見る (答えと根拠が食い違わないように)。
     if (_validRecord(entry, records)) return 'rerender';
     var stamp = entry.svgSource;
-    if (typeof stamp === 'string' && stamp !== '') return 'stamp';
+    if (typeof stamp === 'string' && stamp !== '') {
+      // BLK-reviewer-20260914-0906: 印が無い svg でも、PlantUML が svg に畳んだ
+      // 元の DSL から持ち主が分かる。印の突合と混ぜて出すと「印があった」と
+      // 読めてしまうので、根拠は別の名前で言う。
+      return entry.svgSourceFrom === 'embedded' ? 'embedded' : 'stamp';
+    }
     return '';
   }
 
   var BASIS_TEXT = {
     stamp: '印 (@pua-source-sha1) の突合',
+    embedded: 'SVG に畳まれた元の DSL の突合',
     rerender: '描き直してのバイト比較',
   };
 
@@ -138,9 +144,15 @@ window.MA.svgFreshness = (function() {
     + 'ただし体裁だけを書き換えて保存し直した図も印は違うので、'
     + '作り直しが要るかは「SVG の中身を確かめる」で確定します';
 
+  // 畳まれた DSL は「その svg を描いたときの本文そのもの」なので、印と違って
+  // 体裁だけの差では食い違わない。ずれと出たら作り直しが要ると言い切ってよい。
+  var EMBEDDED_DIFFER_TITLE = 'この SVG に畳まれている元の DSL が、今の puml と違います。'
+    + '描かれているのは別の内容なので、作り直しが要ります';
+
   function contentBadge(content, basis) {
     var b = CONTENT_BADGES[content] || CONTENT_BADGES.unverified;
     if (content === 'differ' && basis === 'stamp') b = { mark: b.mark, title: STAMP_DIFFER_TITLE };
+    if (content === 'differ' && basis === 'embedded') b = { mark: b.mark, title: EMBEDDED_DIFFER_TITLE };
     var t = basisText(basis);
     if (!t) return b;
     // 何を見て出した答えかを印そのものに持たせる。実装を読まずに分かるようにする。
@@ -169,7 +181,7 @@ window.MA.svgFreshness = (function() {
     }).filter(function(r) { return typeof r.name === 'string' && r.name !== ''; });
     var counts = { fresh: 0, stale: 0, missing: 0, unknown: 0 };
     var contentCounts = { match: 0, format: 0, differ: 0, missing: 0, unverified: 0 };
-    var basisCounts = { stamp: 0, rerender: 0 };
+    var basisCounts = { stamp: 0, embedded: 0, rerender: 0 };
     rows.forEach(function(r) {
       counts[r.status]++;
       contentCounts[r.content]++;
@@ -330,9 +342,11 @@ window.MA.svgFreshness = (function() {
 
   function basisNote(scanned) {
     if (!scanned || !scanned.rows.length) return '';
-    var b = scanned.basisCounts || { stamp: 0, rerender: 0 };
+    var b = scanned.basisCounts || { stamp: 0, embedded: 0, rerender: 0 };
     var parts = [];
     if (b.stamp) parts.push('印 (@pua-source-sha1) の突合 ' + b.stamp + ' 枚');
+    // BLK-reviewer-20260914-0906: 印の無い svg は、PlantUML が畳んだ元の DSL で判定する。
+    if (b.embedded) parts.push('SVG に畳まれた元の DSL の突合 ' + b.embedded + ' 枚');
     if (b.rerender) parts.push('描き直してのバイト比較 ' + b.rerender + ' 枚');
     if (!parts.length) return '判定の根拠: まだ 1 枚も内容で判定していません (印が無く、確かめてもいない)';
     return '判定の根拠: ' + parts.join(' / ') + '。' + (b.stamp ? STAMP_NOTE : '保存中の SVG は上書きしていません');

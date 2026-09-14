@@ -122,3 +122,26 @@ describe('svgCross.summaryLine / saveLine', () => {
     expect(sx.saveLine(null, 'a')).toBe('');
   });
 });
+
+// BLK-reviewer-20260914-0906: 印の無い svg は、PlantUML が畳んだ元の DSL から
+// 持ち主を突き止めている (server が svgSourceFrom で言う)。何を見て名指ししたのかを
+// 行の側にも書く — 印があったと読まれると、reviewer は確かめ直す手間に戻る。
+describe('svgCross — 名指しの根拠', () => {
+  var EMBEDDED = [
+    { name: 'driver_common_class', hash: 'aaa', svgSource: 'bbb', svgSourceFrom: 'embedded' },
+    { name: 'plantuml-class', hash: 'bbb', svgSource: 'bbb', svgSourceFrom: 'stamp' },
+  ];
+
+  test('印から分かった行は from=stamp のまま', () => {
+    var row = sx.nameOf(sx.scan(SWAPPED), 'driver_common_class');
+    expect(row.from).toBe('stamp');
+    expect(sx.badge(row).title).not.toContain('畳まれている元の DSL');
+  });
+
+  test('畳まれた DSL から分かった行は、印が無かったことを印に書く', () => {
+    var row = sx.nameOf(sx.scan(EMBEDDED), 'driver_common_class');
+    expect(row.of).toBe('plantuml-class');
+    expect(row.from).toBe('embedded');
+    expect(sx.badge(row).title).toContain('この SVG に印は無く、畳まれている元の DSL から判定しました');
+  });
+});

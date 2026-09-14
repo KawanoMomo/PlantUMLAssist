@@ -48,7 +48,8 @@ window.MA.svgCross = (function() {
       if (stamp === hash) return;          // 自分の puml の絵。正常
       var of = (owners[stamp] || []).filter(function(n) { return n !== name; });
       if (!of.length) return;              // ずれてはいるが、相手はこのフォルダに居ない
-      var row = { name: name, of: of[0], others: of.slice(1), kind: 'cross' };
+      var row = { name: name, of: of[0], others: of.slice(1), kind: 'cross',
+        from: _s(e && e.svgSourceFrom) || 'stamp' };
       rows.push(row);
       byName[name] = row;
     });
@@ -79,6 +80,12 @@ window.MA.svgCross = (function() {
     if (!row) return null;
     var extra = row.others && row.others.length
       ? '（同じ中身の図が他にも: ' + row.others.join(', ') + '）' : '';
+    // BLK-reviewer-20260914-0906: 印の無い svg は、PlantUML が畳んだ元の DSL から
+    // 持ち主を突き止めている。何を見て名指ししたのかを印の側に書く
+    // (reviewer が render API を叩いて確かめ直さなくて済むように)。
+    if (row.from === 'embedded') {
+      extra += '（この SVG に印は無く、畳まれている元の DSL から判定しました）';
+    }
     if (row.kind === 'swapped') {
       return {
         mark: '絵が入れ替わり',
