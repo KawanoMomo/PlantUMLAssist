@@ -11,10 +11,11 @@
 // ここは、先輩のフォルダを 1 回決めておけば、いま開いている図の相手を自動で選び、
 // 画面の横に置いたままにするための判断を持つ。DOM と通信は app.js。
 //
-// 相手の選び方は 3 段。フォルダを跨いだ同名 (= パスまで見れば別物) を最優先にする。
+// 相手の選び方は 4 段。フォルダを跨いだ同名 (= パスまで見れば別物) を最優先にする。
 //   1. 同じファイル名          → その 1 枚
 //   2. 同じドメイン + 同じ図種 → その 1 枚 (名前の付け方が違っても対になる)
 //   3. 同じドメインだけ        → 候補として並べる (複合図はここに来る)
+//   4. 同じ図種の共通図        → その中から自分の部品の所だけを抜き出す (senior-slice)
 // どれにも当たらなければ「この図に当たる先輩の図はありません」と言い切る
 // (先頭の 1 枚を黙って出すと、別ドメインの図を相手と読み違える)。
 (function() {
@@ -50,11 +51,22 @@
   }
 
   // 図種 = 名前に出てくる図種の語。無ければ ''。
+  //
+  // ASCII の語は区切りで切れるので語の一致で見るが、`TimerDrv派生クラス図` のように
+  // 日本語の名前は区切りが無く 1 語に潰れる。カナ・漢字の語だけは名前に含まれるかで
+  // 見る (英字を含みで見ると `classic` のような語を図種と読み違える)。
   function kindOf(name) {
     var t = _tokens(name);
+    var base = baseOf(name).toLowerCase();
     for (var i = 0; i < KINDS.length; i++) {
       for (var j = 0; j < t.length; j++) {
         if (KINDS[i].words.indexOf(t[j]) >= 0) return KINDS[i].key;
+      }
+    }
+    for (i = 0; i < KINDS.length; i++) {
+      for (var k = 0; k < KINDS[i].words.length; k++) {
+        var w = KINDS[i].words[k];
+        if (!/^[\x20-\x7e]*$/.test(w) && base.indexOf(w) >= 0) return KINDS[i].key;
       }
     }
     return '';
@@ -75,12 +87,24 @@
       && baseOf(mine && mine.name).toLowerCase() === baseOf(theirs && theirs.name).toLowerCase();
   }
 
+  // 共通図 = 1 枚に複数の部品をまとめた図。部品名で 1:1 に引けないので、
+  // 名前で相手を決める 3 段には掛からない。名前だけで見分ける (中身は
+  // 相手が決まってから読むので、ここでは読めない)。
+  function isCommonSheet(name) {
+    var b = baseOf(name).toLowerCase();
+    return b.indexOf('common') >= 0 || b.indexOf('共通') >= 0 || b.indexOf('全体') >= 0;
+  }
+
   // いま開いている図 (active) に当たる先輩の図を選ぶ。
   // active: { name, dir }、names: 先輩フォルダのファイル名一覧。
-  function pickCounterpart(active, names, seniorDir) {
+  // pickCounterpart(active, names, seniorDir, partKeys)
+  //
+  // partKeys は「自分の図がどの部品の図か」を表す語 (senior-slice.partKeysOf)。
+  // 渡すと 4 段目 (共通図の抜き出し) を試す。渡さなければ 3 段で止まる。
+  function pickCounterpart(active, names, seniorDir, partKeys) {
     var mine = { name: _s(active && active.name), dir: _s(active && active.dir) };
     var list = (names || []).map(_s).filter(function(n) { return !!n; });
-    var out = { name: '', how: 'none', candidates: [], reason: '' };
+    var out = { name: '', how: 'none', candidates: [], reason: '', key: '', keys: [] };
     if (!mine.name || !list.length) {
       out.reason = list.length ? 'まだ図を開いていません' : '先輩のフォルダに図がありません';
       return out;
@@ -122,6 +146,25 @@
       return out;
     }
 
+    // 4. 同じ図種の共通図 → その中から自分の部品の所だけを抜き出す。
+    //    BLK-junior-20260914-2206-wish: 先輩のクラス図は全ドライバ共通の 1 枚で、
+    //    部品名で 1:1 に引けないため 1〜3 段のどれにも掛からず常に「−」だった。
+    var keys = (partKeys || []).filter(function(k) { return !!_s(k); });
+    if (kind && keys.length) {
+      var common = list.filter(function(n) {
+        return kindOf(n) === kind && isCommonSheet(n);
+      });
+      if (common.length) {
+        out.name = common[0];
+        out.how = 'common-slice';
+        out.candidates = common;
+        out.key = keys[0];
+        out.keys = keys;
+        out.reason = '共通図から「' + keys[0] + '」の部分';
+        return out;
+      }
+    }
+
     out.reason = 'この図 (' + baseOf(mine.name) + ') に当たる先輩の図はありません';
     return out;
   }
@@ -150,6 +193,14 @@
     }
     if (!pick || pick.how === 'none') {
       return { label: '👀 先輩 −', title: (pick && pick.reason) || '先輩のフォルダを選んでください', count: 0 };
+    }
+    if (pick.how === 'common-slice' && pick.name) {
+      return {
+        label: '👀 先輩 ' + baseOf(pick.name) + '（' + pick.key + '）',
+        title: '先輩の共通図 ' + baseOf(pick.name) + ' から「' + pick.key
+          + '」に当たる所だけを抜き出して横に出します (読むだけ)',
+        count: 1,
+      };
     }
     if (pick.name) {
       return {
@@ -192,7 +243,7 @@
   var api = {
     STORE_KEY: STORE_KEY,
     baseOf: baseOf, domainOf: domainOf, kindOf: kindOf,
-    samePath: samePath, isSelf: isSelf,
+    samePath: samePath, isSelf: isSelf, isCommonSheet: isCommonSheet,
     pickCounterpart: pickCounterpart, noticeText: noticeText, statusText: statusText,
     normalize: normalize, load: load, save: save,
   };

@@ -8180,6 +8180,11 @@ function openPeekFolder() {
 var _seniorNames = [];   // 先輩フォルダのファイル名一覧
 var _seniorName = '';    // いま右に出している先輩の図
 var _seniorPick = null;  // 直近の相手選び (候補の表示に使う)
+// BLK-junior-20260914-2206-wish: 先輩のクラス図は全ドライバ共通の 1 枚で、
+// 部品名では引けない。相手が共通図のときは中身を部品名で絞って出す。
+var _seniorText = '';      // いま出している先輩の図の本文 (絞り直しに使う)
+var _seniorSliceKey = '';  // 抜き出す部品名 (自分の図の名前から起こし、打ち替えられる)
+var _seniorSliceOn = true; // 部品だけ / 共通図の全体
 
 function _seniorEls() {
   return {
@@ -8189,6 +8194,9 @@ function _seniorEls() {
     cands: document.getElementById('senior-candidates'),
     svg: document.getElementById('senior-svg'),
     dsl: document.getElementById('senior-dsl'),
+    slice: document.getElementById('senior-slice'),
+    sliceKey: document.getElementById('senior-slice-key'),
+    sliceMode: document.getElementById('senior-slice-mode'),
     btn: document.getElementById('btn-tab-senior'),
   };
 }
@@ -8249,6 +8257,15 @@ function _seniorLabel() {
   return PF.baseName(st.dir);
 }
 
+// 自分の図がどの部品の図か。共通図から抜き出す語になる。
+function _seniorPartKeys() {
+  var SS = window.MA.seniorSlice;
+  var WS = window.MA.workspace;
+  var active = WS ? WS.getActive() : null;
+  if (!SS || !active) return [];
+  return SS.partKeysOf(active.name);
+}
+
 function renderSeniorCandidates() {
   var el = _seniorEls();
   if (!el.cands) return;
@@ -8283,19 +8300,69 @@ function showSeniorFile(name) {
       el.dsl.textContent = '読めませんでした';
       return false;
     }
-    el.dsl.textContent = text;
-    return renderDslToSvg(text).then(function(svg) {
-      if (name !== _seniorName || !el.svg) return false;
-      el.svg.innerHTML = svg;
-      return true;
-    }).catch(function() {
-      if (el.svg) el.svg.textContent = '図の描画に失敗しました (本文は下に出ています)';
-      return false;
-    });
+    _seniorText = text;
+    return renderSeniorBody();
   }).catch(function() {
     el.dsl.textContent = '読めませんでした';
     return false;
   });
+}
+
+// 枠に出す本文を組み立てて描く。相手が共通図なら、部品名に当たる所だけを抜き出す
+// (BLK-junior-20260914-2206-wish: 共通図をそのまま出すと、自分の部品がどこかを
+// 目で探すことになり「先輩の粒度に合わせる」手順が共通図を読む作業に戻る)。
+function renderSeniorBody() {
+  var el = _seniorEls();
+  var SS = window.MA.seniorSlice;
+  var name = _seniorName;
+  var isCommon = !!(_seniorPick && _seniorPick.how === 'common-slice');
+  var res = null;
+  var shown = _seniorText;
+
+  if (isCommon && SS && _seniorSliceOn && _seniorSliceKey) {
+    // 自分の図の名前から起こした語は `Timer` / `TimerDrv` のように何通りかある。
+    // 当たるまで順に試し、当たった語を欄に出す (打ち替えた語は 1 つだけ試す)。
+    var keys = [_seniorSliceKey];
+    var known = (_seniorPick.keys || []);
+    var at = known.indexOf(_seniorSliceKey);
+    if (at >= 0) keys = known.slice(at);
+    for (var i = 0; i < keys.length; i++) {
+      res = SS.slice(_seniorText, [keys[i]],
+        { title: SS.baseOf(name) + '（' + keys[i] + ' の部分）' });
+      if (res.matched) { _seniorSliceKey = keys[i]; shown = res.dsl; break; }
+    }
+  }
+  renderSeniorSliceRow();
+  if (isCommon && el.notice && SS) {
+    el.notice.textContent = _seniorSliceOn
+      ? SS.sliceNotice(res, name, _seniorSliceKey)
+      : '先輩の共通図 ' + SS.baseOf(name) + ' の全体（読むだけ）';
+  }
+  if (!el.dsl) return Promise.resolve(false);
+  el.dsl.textContent = shown;
+  if (!el.svg) return Promise.resolve(true);
+  return renderDslToSvg(shown).then(function(svg) {
+    if (name !== _seniorName || !el.svg) return false;
+    el.svg.innerHTML = svg;
+    return true;
+  }).catch(function() {
+    if (el.svg) el.svg.textContent = '図の描画に失敗しました (本文は下に出ています)';
+    return false;
+  });
+}
+
+// 部品名の欄は、相手が共通図のときだけ出す (1:1 で引けている図種では要らない)。
+function renderSeniorSliceRow() {
+  var el = _seniorEls();
+  if (!el.slice) return;
+  var isCommon = !!(_seniorPick && _seniorPick.how === 'common-slice');
+  el.slice.hidden = !isCommon;
+  if (!isCommon) return;
+  if (el.sliceKey && document.activeElement !== el.sliceKey) el.sliceKey.value = _seniorSliceKey;
+  if (el.sliceMode) {
+    el.sliceMode.setAttribute('aria-pressed', _seniorSliceOn ? 'true' : 'false');
+    el.sliceMode.textContent = _seniorSliceOn ? '部品だけ' : '全体';
+  }
 }
 
 // いま開いている図に当たる先輩の図へ入れ替える。図を切り替えるたびに呼ぶ。
@@ -8340,7 +8407,8 @@ function _seniorRefreshPick() {
   if (!SP || !WS) return;
   var active = WS.getActive();
   _seniorPick = SP.pickCounterpart(
-    { name: active ? active.name : '', dir: _wsFileDir() }, _seniorNames, _seniorState().dir);
+    { name: active ? active.name : '', dir: _wsFileDir() }, _seniorNames, _seniorState().dir,
+    _seniorPartKeys());
   renderSeniorStatus();
 }
 
@@ -8352,18 +8420,25 @@ function syncSeniorCounterpart() {
   if (!el.pane || el.pane.hidden || !SP || !WS) { _seniorRefreshPick(); return; }
   var active = WS.getActive();
   var pick = SP.pickCounterpart(
-    { name: active ? active.name : '', dir: _wsFileDir() }, _seniorNames, st.dir);
+    { name: active ? active.name : '', dir: _wsFileDir() }, _seniorNames, st.dir,
+    _seniorPartKeys());
   _seniorPick = pick;
+  // 図を切り替えたら、抜き出す語もその図の部品に付け替える (打ち替えた語は
+  // その図を見ている間だけ効く。次の図に持ち越すと別部品の所を見せてしまう)。
+  _seniorSliceKey = pick.key || '';
   if (el.notice) el.notice.textContent = SP.noticeText(pick, _seniorLabel());
   renderSeniorStatus();
   renderSeniorCandidates();
+  renderSeniorSliceRow();
   if (!pick.name) {
     _seniorName = '';
+    _seniorText = '';
     if (el.dsl) el.dsl.textContent = '';
     if (el.svg) el.svg.textContent = '';
     return;
   }
   if (pick.name !== _seniorName) showSeniorFile(pick.name);
+  else renderSeniorBody();
 }
 
 function selectSeniorDir(dir) {
@@ -8429,6 +8504,20 @@ function setupSeniorPane() {
   var close = document.getElementById('senior-close');
   if (close) close.addEventListener('click', function() { toggleSeniorPane(false); });
   if (el.dir) el.dir.addEventListener('change', function() { selectSeniorDir(this.value); });
+  // 部品名を打てば、共通図のその所だけが浮かぶ (この BLK の的)。
+  if (el.sliceKey) {
+    el.sliceKey.addEventListener('input', function() {
+      _seniorSliceKey = this.value.trim();
+      _seniorSliceOn = true;
+      renderSeniorBody();
+    });
+  }
+  if (el.sliceMode) {
+    el.sliceMode.addEventListener('click', function() {
+      _seniorSliceOn = !_seniorSliceOn;
+      renderSeniorBody();
+    });
+  }
   // 下端の入口。折りたたみを通らずに 1 クリックで先輩の図の枠へ着く。
   var status = document.getElementById('status-senior');
   if (status) status.addEventListener('click', function() { toggleSeniorPane(el.pane.hidden); });
