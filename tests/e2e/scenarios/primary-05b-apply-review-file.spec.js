@@ -463,8 +463,11 @@ test.describe('手順5.5 指摘.md を貼る → 提案一覧 → [適用]', () 
     await expect(page.locator('#note-summary')).toContainText('spi_init_sequence');
 
     // 到達条件その2: 画面だけでなく保存フォルダの実体が直っている。
+    // 書き戻しは画面の 1 行より後に着くことがあるので、ファイルが追いつくまで読み直す
+    // (即読みだと「当たったのに古い本文を読んだ」だけで赤になる)。
+    await expect.poll(async () => (await S.readDoc(page, ACT_MINE, 'spi_init_sequence')) || '',
+      { timeout: 15000 }).toContain('participant Spi_Driver');
     const saved = (await S.readDoc(page, ACT_MINE, 'spi_init_sequence')) || '';
-    expect(saved).toContain('participant Spi_Driver');
     expect(saved).not.toContain('SpiDrv');
     // 到達条件その3: 指摘が名指ししていない図は動かない (全図適用にしない)。
     expect(await S.readDoc(page, ACT_MINE, 'gpio_state')).toBe(S.GPIO_STATE);
@@ -616,5 +619,89 @@ test.describe('手順5.5 指摘.md の前置きを一覧の外に出す', () => 
       .toContainText('driver_common_class に足しました', { timeout: 20000 });
     const saved = (await S.readDoc(page, PRE_MINE, 'driver_common_class')) || '';
     expect(saved).toContain('+Timer_Start()');
+  });
+});
+
+// BLK-reviewer-20260914-2006: 同じ手順5.5 の入口。指摘.md に書かれた依頼が何件・
+// 最長何 tick 継続しているかは、直す側 (primary) の画面のどこにも出ていなかった。
+// 継続 tick 数を読めるのは reviewer 側の CLI (`npm run requests`) だけで、primary は
+// 手順を始める前に指摘.md を GUI の外で開いて読むしかなく、読み忘れた回はそのまま
+// 1 tick 放置になる。下端の帯に常時出ていること、指摘.md が書き替わったら継続 tick が
+// 積まれること、押せば指摘の一覧まで 1 手で届くことを到達条件にする。
+const RQ_ROOT = DIR + '-requests';
+const RQ_MINE = RQ_ROOT + '/primary';
+const RQ_REVIEWER = RQ_ROOT + '/reviewer';
+
+const RQ_NOTE_1 = [
+  '# primary への指摘 (reviewer runs/20260914-1906 時点)',
+  '',
+  '## primary への依頼(優先順)',
+  '1. (最優先・継続)`plantuml-usecase-編集中.puml` の内容を `plantuml-usecase.puml` 本体に',
+  '   差し替え、`-編集中` ファイルを削除する。',
+  '2. (継続)`diagram1.puml` に `\' domain-verdict` のコメント行を復元する。',
+  '',
+].join('\n');
+
+// 次の tick。扱いの括弧だけが変わり、依頼の中身は同じ (= 2 tick 目の継続)。
+const RQ_NOTE_2 = RQ_NOTE_1
+  .replace('runs/20260914-1906', 'runs/20260914-2006')
+  .replace('(最優先・継続)', '(最優先・2 tick 継続)');
+
+test.describe('primary 手順5.5: 未着手の依頼が何件・何 tick 続いているかが画面に出る', () => {
+  test.beforeEach(async ({ page }) => {
+    fs.mkdirSync(absOf(RQ_REVIEWER), { recursive: true });
+    fs.writeFileSync(nodePath.join(absOf(RQ_REVIEWER), '指摘.md'), RQ_NOTE_1, 'utf-8');
+    await S.bootWithSaveDir(page, RQ_MINE);
+    await S.clearDir(page, RQ_MINE);
+    await S.putDoc(page, RQ_MINE, 'plantuml-usecase', S.docFor('can_init_sequence'));
+    await S.putDoc(page, RQ_MINE, 'diagram1', S.docFor('can_state'));
+    await page.reload();
+    await page.waitForSelector('#status-requests');
+  });
+
+  test('指摘.md を開かなくても、未解消の依頼の件数と最長継続 tick 数が下端に出る', async ({ page }) => {
+    const badge = page.locator('#status-requests');
+    // 到達条件その1: 指摘.md を GUI の外で開かずに、件数と継続 tick 数が読める。
+    await expect(badge).toHaveText('継続依頼 2 (最長 1 tick)', { timeout: 20000 });
+    await expect(badge).toHaveAttribute('data-open', '2');
+    // 到達条件その2: 未解消がある回は目を引く色になる (見落として 1 tick 放置しない)。
+    // 初出の回は「未着手」とはまだ言えないので、色は 1 段弱いほうで出す。
+    await expect(badge).toHaveClass(/has-open/);
+    await expect(badge).toHaveAttribute('data-tone', 'working');
+    // 到達条件その3: どの依頼が何 tick 放置かまで、押す前に読める。
+    const tip = (await badge.getAttribute('title')) || '';
+    expect(tip).toContain('未解消 2 件');
+    expect(tip).toContain('plantuml-usecase');
+    expect(tip).toContain('連続 1 tick');
+  });
+
+  test('指摘.md が次の版に書き替わると、同じ依頼は 2 tick 目として数えられる', async ({ page }) => {
+    const badge = page.locator('#status-requests');
+    await expect(badge).toHaveText('継続依頼 2 (最長 1 tick)', { timeout: 20000 });
+
+    // reviewer が次の run で指摘.md を上書きする。扱いの括弧しか変わっていないので
+    // 依頼としては同じ 2 件で、放置が 1 tick 伸びる。
+    fs.writeFileSync(nodePath.join(absOf(RQ_REVIEWER), '指摘.md'), RQ_NOTE_2, 'utf-8');
+    await S.openFolderItem(page, 'diagram1');
+    await expect(badge).toHaveText('継続依頼 2 (最長 2 tick)', { timeout: 20000 });
+    await expect(badge).toHaveAttribute('data-worst', '2');
+    // 2 tick 目に入っても図が動いていない依頼は「未着手」。ここで色が 1 段上がる。
+    await expect(badge).toHaveAttribute('data-tone', 'stalled');
+    expect((await badge.getAttribute('title')) || '').toContain('[未着手]');
+
+    // 同じ版をもう一度読み直しても、継続 tick 数は伸びない (画面を触った回数ではなく
+    // 指摘.md の版の数で放置を測る)。
+    await S.openFolderItem(page, 'plantuml-usecase');
+    await page.waitForTimeout(1200);
+    await expect(badge).toHaveText('継続依頼 2 (最長 2 tick)');
+  });
+
+  test('押せば、その場で依頼の一覧まで届く', async ({ page }) => {
+    await expect(page.locator('#status-requests')).toHaveText('継続依頼 2 (最長 1 tick)', { timeout: 20000 });
+    await page.locator('#status-requests').click();
+    // 到達条件: 押した先が指摘.md の一覧 (どの reviewer の、どのファイルかまで出る)。
+    await page.waitForSelector('#peek-note .note-finding', { timeout: 20000 });
+    await expect(page.locator('#peek-note')).toContainText('指摘.md');
+    await expect(page.locator('#peek-note')).toContainText('primary への依頼');
   });
 });
