@@ -216,6 +216,46 @@ test('手順2 中身が消えた図を、直前版との差分で名指しでき
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+// BLK-reviewer-20260914-1706: 名前突合は「表記揺れ 3 組」という件数と正規化キーだけを出し、
+// どの綴りがどの綴りと対応するのか・その宣言行がどのファイルの何行目なのかは出なかった。
+// reviewer は件数を得たあと結局 2 フォルダを grep し直していた。手順2 を
+// 「件数を見て grep する」から「1 回のコマンドで指摘に写す」に変える。
+test('手順2 表記揺れを、どの図のどの宣言行かまで 1 回のコマンドで出せる', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const { execFileSync } = require('child_process');
+  const REPO = path.join(__dirname, '..', '..', '..');
+
+  // 事故の実物と同じ形 (primary は IRQCtrl / ClockCtrl、junior は Irq_Ctrl / Clock_Ctrl)。
+  const root = path.join(REPO, 'test-results', 'reviewer-02-names');
+  fs.rmSync(root, { recursive: true, force: true });
+  for (const p of ['primary', 'junior']) fs.mkdirSync(path.join(root, p), { recursive: true });
+
+  fs.writeFileSync(path.join(root, 'primary', 'driver_common_class.puml'),
+    ['@startuml', 'class IRQCtrl {', '  + Init() : void', '}', 'class ClockCtrl',
+      'IRQCtrl --> ClockCtrl', '@enduml'].join('\n'), 'utf-8');
+  fs.writeFileSync(path.join(root, 'junior', 'diagram1.puml'),
+    ['@startuml', 'participant Irq_Ctrl', 'participant Clock_Ctrl',
+      'Irq_Ctrl -> Clock_Ctrl : Init()', '@enduml'].join('\n'), 'utf-8');
+
+  // --names は `--only name --summary` の別名 (手順2 で毎 tick 打つので短くする)。
+  const out = execFileSync(process.execPath,
+    [path.join(REPO, 'tools', 'audit.js'), path.join(root, 'primary'), path.join(root, 'junior'),
+      '--names', '--no-state'],
+    { cwd: REPO, encoding: 'utf-8' });
+
+  // 到達条件 1: 件数は今までどおり出る。
+  expect(out).toContain('表記揺れ 2 組');
+  // 到達条件 2: どの綴りがどの綴りと対応し、どちらに揃えるかが 1 行で読める。
+  expect(out).toMatch(/IRQCtrl ⇔ Irq_Ctrl — 揃える先: /);
+  // 到達条件 3: 指摘に写す「図名 + 行 + 内容」が、grep し直さずにその場で出る。
+  expect(out).toContain('primary/driver_common_class.puml:2 宣言  class IRQCtrl {');
+  expect(out).toContain('junior/diagram1.puml:2 宣言  participant Irq_Ctrl');
+  expect(out).toContain('ClockCtrl');
+
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
 // BLK-reviewer-20260914-1406-wish: `plantuml-usecase.puml`(図種はユースケース)の中身が
 // 丸ごと `dma_transfer_sequence.puml` の複製になっている事故を見つけたのは、31 枚の DSL を
 // 1 枚ずつ読んだ結果だった。図種の宣言 (ファイル名) と本文の食い違いを見る監査は

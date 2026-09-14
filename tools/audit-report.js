@@ -159,7 +159,19 @@ function runAudits(MA, docs, only) {
 function summarize(audits) {
   const s = {};
   const n = audits.name;
-  if (n && n.status === 'ok') s.name = { variants: n.result.variants.length, undeclared: n.result.undeclared.length, clean: !!n.result.clean };
+  // BLK-reviewer-20260914-1706: 件数と正規化キーだけでは、どの綴りがどの綴りと
+  // 対応するのか・その宣言行がどのファイルの何行目なのかが出ず、毎回ソースを
+  // grep し直すことになっていた。文面は name-audit が作る (画面と CLI で同じ言葉)。
+  if (n && n.status === 'ok') s.name = {
+    variants: n.result.variants.length,
+    undeclared: n.result.undeclared.length,
+    clean: !!n.result.clean,
+    variantLines: n.result.variantLines || [],
+    undeclaredLines: n.result.undeclared.map((r) => {
+      const at = (r.at && r.at[0]) ? `${r.at[0].doc}:${r.at[0].line}  ${r.at[0].text}` : r.docs.join(', ');
+      return `${r.name}  ${at}`;
+    }),
+  };
   const m = audits.method;
   // BLK-reviewer-20260914-1406: 指摘の総数だけでは「クラスを足したら減った」が
   // 正しい修正なのか、メソッド名をクラスとして宣言した誤り・写しにだけ入れた
@@ -310,7 +322,7 @@ function summarize(audits) {
 // 監査は status で名指しし、数字は 0 ではなく null にする (0 件と「見ていない」を
 // 取り違えない)。フィールドの既定はここ 1 か所に書く。
 const SUMMARY_FIELDS = {
-  name: ['variants', 'undeclared', 'clean'],
+  name: ['variants', 'undeclared', 'clean', 'variantLines', 'undeclaredLines'],
   method: ['issues', 'suspect'],
   consistency: ['naming', 'unused', 'methods', 'methodReplies', 'granularity', 'events', 'count'],
   family: ['families', 'mismatched', 'skippedPairs'],
@@ -394,7 +406,12 @@ function formatSummary(report, prev, options) {
   const opts = options || {};
   const lines = [`図 ${report.docs.length} 枚 (${report.targets.join(', ')})`];
   const s = report.summary;
-  if (s.name) lines.push(`名前突合: 表記揺れ ${s.name.variants} 組 / 宣言なし ${s.name.undeclared} 件`);
+  if (s.name) {
+    lines.push(`名前突合: 表記揺れ ${s.name.variants} 組 / 宣言なし ${s.name.undeclared} 件`);
+    // 件数の下に、どの綴りとどの綴りが・どのファイルの何行目で揺れているかを開く。
+    for (const l of (s.name.variantLines || [])) lines.push('  ' + l);
+    for (const l of (s.name.undeclaredLines || [])) lines.push('  宣言なし: ' + l);
+  }
   if (s.method) lines.push(`メソッド突合: 指摘 ${s.method.issues} 件`
     + (s.method.suspect ? ` (うち宣言の付け方の疑い ${s.method.suspect} 件)` : ''));
   if (s.consistency) lines.push(`整合: 命名 ${s.consistency.naming} / 未使用 ${s.consistency.unused} / メソッド ${s.consistency.methods}`
