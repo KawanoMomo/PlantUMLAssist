@@ -984,8 +984,10 @@ window.MA.modules.plantumlState = (function() {
           P.selectFieldHtml('From', 'st-tail-from', stateOptsWithPseudo) +
           P.selectFieldHtml('To', 'st-tail-to', stateOptsWithPseudo) +
           P.fieldHtml('きっかけ / trigger', 'st-tail-trig', '', '例: start') +
+          P.vocabPickerHtml('st-tail-trig-vocab', { roles: ['method', 'event'] }) +
           P.fieldHtml('条件 / guard', 'st-tail-guard', '', '例: retry > 3') +
           P.fieldHtml('実行する処理 / action', 'st-tail-act', '', '例: log()') +
+          P.vocabPickerHtml('st-tail-act-vocab', { roles: ['method'] }) +
           _previewBoxHtml('st-tail-preview') +
           P.primaryButtonHtml('st-tail-add', '+ Transition 追加');
       } else if (kind === 'note') {
@@ -1063,10 +1065,12 @@ window.MA.modules.plantumlState = (function() {
       }
 
       if (kind === 'transition') {
-        _bindPreview({
+        var tailPreview = _bindPreview({
           preview: 'st-tail-preview', from: 'st-tail-from', to: 'st-tail-to',
           trigger: 'st-tail-trig', guard: 'st-tail-guard', action: 'st-tail-act',
         });
+        P.bindVocabPicker('st-tail-trig-vocab', 'st-tail-trig', tailPreview);
+        P.bindVocabPicker('st-tail-act-vocab', 'st-tail-act', tailPreview);
       }
 
       P.bindEvent('st-tail-add', 'click', function() {
@@ -1520,6 +1524,8 @@ window.MA.modules.plantumlState = (function() {
       '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' +
       (st.stereotype ? st.stereotype + ' ' : '') + 'State (L' + st.line + ')</div>' +
       P.fieldHtml('ID', 'st-id', st.id) +
+      // BLK-junior-20260915-0406-wish: 状態名も同じ部品の他の図と揃える。
+      P.vocabPickerHtml('st-id-vocab', { roles: ['state'] }) +
       P.fieldHtml('Label', 'st-label', st.label || '') +
       P.selectFieldHtml('Stereotype', 'st-stereo', [
         { value: '', label: '(none)', selected: !st.stereotype },
@@ -1586,6 +1592,8 @@ window.MA.modules.plantumlState = (function() {
       P.primaryButtonHtml('st-delete', '✕ 削除 (cascade)') +
       '</div>';
     propsEl.innerHTML = html;
+
+    P.bindVocabPicker('st-id-vocab', 'st-id');
 
     P.bindEvent('st-update', 'click', function() {
       window.MA.history.pushHistory();
@@ -1703,8 +1711,12 @@ window.MA.modules.plantumlState = (function() {
       '<button id="st-tr-swap" title="From と To を入れ替える" style="width:100%;font-size:11px;padding:3px 8px;margin-bottom:8px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">⇄ 向きを入れ替え</button>' +
       P.selectFieldHtml('To', 'st-tr-to', toOpts) +
       P.fieldHtml('きっかけ / trigger', 'st-tr-trig', tr.trigger || '', '例: start') +
+      // BLK-junior-20260915-0406-wish: きっかけの綴りは同じ部品のシーケンス図と
+      // 揃っていなければならない。名前帳から選べば、先輩の図を別に開かずに揃う。
+      P.vocabPickerHtml('st-tr-trig-vocab', { roles: ['method', 'event'] }) +
       P.fieldHtml('条件 / guard', 'st-tr-guard', tr.guard || '', '例: retry > 3') +
       P.fieldHtml('実行する処理 / action', 'st-tr-act', tr.action || '', '例: log()') +
+      P.vocabPickerHtml('st-tr-act-vocab', { roles: ['method'] }) +
       _previewBoxHtml('st-tr-preview') +
       // BLK-builder-20260907-1306-2 (design 5d): 線の色も「その他… ▾」に畳む。
       P.colorPaletteHtml('st-tr-more', {
@@ -1736,6 +1748,9 @@ window.MA.modules.plantumlState = (function() {
       preview: 'st-tr-preview', from: 'st-tr-from', to: 'st-tr-to',
       trigger: 'st-tr-trig', guard: 'st-tr-guard', action: 'st-tr-act',
     });
+
+    P.bindVocabPicker('st-tr-trig-vocab', 'st-tr-trig', refreshPreview);
+    P.bindVocabPicker('st-tr-act-vocab', 'st-tr-act', refreshPreview);
 
     P.bindEvent('st-tr-swap', 'click', function() {
       var fromEl = document.getElementById('st-tr-from');

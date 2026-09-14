@@ -662,3 +662,78 @@ test('手順2 先輩が足したメソッドを、記法を打ち直さずに自
   // 先輩のファイルは読むだけ (書き換えない)。
   expect(await S.readDoc(page, SENIOR_DIR, 'driver_common_class')).toBe(SENIOR_IRQ);
 });
+
+// BLK-junior-20260915-0406-wish: 先輩の図を手本に SPI の状態遷移図を打ち直すとき、
+// 遷移ラベル (Spi_Init / Spi_Transmit / TransferComplete …) は先輩のシーケンス図に
+// も出てくるはずだが、GUI は図ごとに独立していて名前の対応を教えてくれない。
+// 合っているかは先輩の図を別に開いて目で見比べるしかなかった。
+// 同じ部品名の図を 1 冊の名前帳にまとめ、遷移ラベルの欄から選べることを確かめる。
+const SENIOR_SPI_SEQ = [
+  '@startuml',
+  'title SPIドライバ初期化シーケンス',
+  'participant Dev',
+  'participant Spi_Driver',
+  'Dev -> Spi_Driver : Spi_Init()',
+  'Dev -> Spi_Driver : Spi_Transmit(buf, len)',
+  'Spi_Driver --> Dev : TransferComplete',
+  'Spi_Driver --> Dev : Fault',
+  '@enduml',
+].join('\n');
+
+const MY_SPI_STATE = [
+  '@startuml',
+  'title SPIドライバ状態遷移',
+  'state Uninit',
+  'state Idle',
+  'state Busy',
+  '[*] --> Uninit',
+  'Uninit --> Idle : Spi_Init',
+  '@enduml',
+].join('\n');
+
+test('手順2 遷移ラベルを、先輩の図を開かずに部品の名前帳から選べる', async ({ page }) => {
+  await S.bootWithSaveDir(page, MINE_DIR);
+  await S.clearDir(page, MINE_DIR);
+  await S.clearDir(page, SENIOR_DIR);
+  await S.putDoc(page, SENIOR_DIR, 'spi_init_sequence', SENIOR_SPI_SEQ);
+  await page.reload();
+  await page.waitForSelector('#btn-tab-peek');
+  await page.locator('#diagram-type').selectOption('plantuml-state');
+  await page.waitForTimeout(400);
+  // 名前帳は「同じ部品名の図」で引くので、自分の図も部品名で名乗る。
+  await S.renameActive(page, 'spi_state');
+  await S.typeDsl(page, MY_SPI_STATE);
+  await page.waitForTimeout(1200);
+
+  await page.locator('#st-tail-kind').selectOption('transition');
+  await page.waitForSelector('#st-tail-trig');
+
+  // 到達条件その1: 先輩のシーケンスにしか出ていない名前が、遷移ラベルの欄の
+  // 下に候補として並ぶ (先輩の図を開かない)。
+  const picker = page.locator('#st-tail-trig-vocab');
+  await expect(picker).toBeVisible();
+  await expect(picker.locator('.vocab-head')).toContainText('SPI の名前帳');
+  await expect(picker.locator('.vocab-chip[data-name="Spi_Transmit"]')).toHaveCount(1);
+  await expect(picker.locator('.vocab-chip[data-name="TransferComplete"]')).toHaveCount(1);
+  // 型 (participant) は遷移ラベルにならないので候補に出ない。
+  await expect(picker.locator('.vocab-chip[data-name="Spi_Driver"]')).toHaveCount(0);
+
+  // 到達条件その2: 押すだけで欄が埋まり、そのまま遷移を足せる (打ち直さない)。
+  await picker.locator('.vocab-chip[data-name="Spi_Transmit"]').click();
+  await expect(page.locator('#st-tail-trig')).toHaveValue('Spi_Transmit');
+  await page.locator('#st-tail-from').selectOption('Idle');
+  await page.locator('#st-tail-to').selectOption('Busy');
+  await page.locator('#st-tail-add').click();
+  await page.waitForTimeout(400);
+  expect(await getEditorText(page)).toContain('Idle --> Busy : Spi_Transmit');
+
+  // 到達条件その3: 手で打った綴りが先輩と揺れていれば、その場で相手の綴りが出る。
+  await page.locator('#st-tail-kind').selectOption('transition');
+  await page.waitForSelector('#st-tail-trig');
+  await page.locator('#st-tail-trig').fill('SpiInit');
+  await page.waitForTimeout(200);
+  await expect(page.locator('#st-tail-trig-vocab .vocab-warn')).toContainText('Spi_Init');
+
+  // 先輩のファイルは読むだけ (書き換えない)。
+  expect(await S.readDoc(page, SENIOR_DIR, 'spi_init_sequence')).toBe(SENIOR_SPI_SEQ);
+});

@@ -2246,6 +2246,9 @@ window.MA.modules.plantumlSequence = (function() {
               '<input id="seq-edit-stereotype" type="text" value="' + escHtml(msgParts.stereotype) + '" placeholder="例: async / sync / important" style="width:100%;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-size:12px;box-sizing:border-box;">' +
             '</div>' +
             '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">本文</label><div id="seq-edit-msg-label-rle"></div></div>' +
+            // BLK-junior-20260915-0406-wish: メッセージ名は同じ部品の状態遷移図・
+            // クラス図と同じ綴りでなければならない。名前帳から選べば最初から揃う。
+            P.vocabPickerHtml('seq-edit-msg-vocab', { roles: ['method', 'event'], callSuffix: true }) +
             actionBarHtml(mm.line, 'message');
           var mln = mm.line;
           var swapBtn = document.getElementById('seq-edit-swap');
@@ -2291,6 +2294,9 @@ window.MA.modules.plantumlSequence = (function() {
             ctx.setMmdText(updateMessage(ctx.getMmdText(), mln, 'label', combined));
             ctx.onUpdate();
           });
+          P.bindVocabPicker('seq-edit-msg-vocab',
+            document.querySelector('#seq-edit-msg-label-rle .rle-textarea'));
+
           var _stereoPushed = false;
           document.getElementById('seq-edit-stereotype').addEventListener('change', function() {
             if (!_stereoPushed) { window.MA.history.pushHistory(); _stereoPushed = true; }
