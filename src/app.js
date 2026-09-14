@@ -2676,6 +2676,7 @@ function init() {
   setupVault();
   setupSymptomSearch();
   setupBlamePoint();
+  setupVersionDiff();
   setupPatternCheck();
   setupXrefGraph();
   setupBulkApply();
@@ -15476,10 +15477,21 @@ function renderBlamePoint(payload) {
     open.textContent = '開く';
     open.title = r.file + ' の ' + r.label + ' の版を別タブで開く';
     open.addEventListener('click', function() { _blameOpenVersion(r.file, r.stamp); });
+    // 混入点の行から 1 クリックで「この版 vs 直前の版」の全文差分へ
+    // (BLK-primary-20260915-0606-wish。開く → 前版と目で照合 の 2 手を畳む)。
+    var diff = document.createElement('button');
+    diff.className = 'bp-diff';
+    diff.type = 'button';
+    diff.textContent = '差分';
+    diff.title = r.file + ' の ' + r.label + ' の版と、その直前の版を全文で並べる';
+    diff.addEventListener('click', function() {
+      openVersionDiff(r.file, r.stamp, r.label, terms);
+    });
     head.appendChild(at);
     head.appendChild(file);
     head.appendChild(delta);
     head.appendChild(open);
+    head.appendChild(diff);
     row.appendChild(head);
 
     r.removed.forEach(function(l) {
@@ -15510,6 +15522,135 @@ function renderBlamePoint(payload) {
   });
 }
 
+// ── 全文差分ビュー (BLK-primary-20260915-0606-wish) ─────────────────────────
+// 混入点の行が指す版と、その直前の版を全文で並べる。混入点は当たった行しか
+// 返さないので、原因を直すのに要る前後の文脈がそこでは読めず、版を開いて前版も
+// 開いて目で照合する 2 手が部品数 × 該当版数ぶん積み上がっていた。
+var _vdiffLast = null;   // { file, stamp, label, terms, rows, expanded }
+
+function _vdiffLineEl(r, terms) {
+  var VD = window.MA.versionFullDiff;
+  var d = document.createElement('div');
+  if (r.kind === 'gap') {
+    d.className = 'vd-line vd-gap';
+    var g = document.createElement('span');
+    g.textContent = VD.gapText(r);
+    d.appendChild(g);
+    return d;
+  }
+  d.className = 'vd-line vd-' + r.kind;
+  var hit = false;
+  for (var k = 0; k < terms.length; k++) {
+    if (r.kind !== 'same' && r.text.indexOf(terms[k]) >= 0) { hit = true; break; }
+  }
+  if (hit) d.className += ' vd-hit';
+  var no = document.createElement('span');
+  no.className = 'vd-no';
+  // 前の版の行番号 → この版の行番号。片方にしか無い行は片側だけ出す。
+  no.textContent = (r.a ? String(r.a) : '·') + ':' + (r.b ? String(r.b) : '·');
+  var sg = document.createElement('span');
+  sg.className = 'vd-sign';
+  sg.textContent = r.kind === 'add' ? '＋' : (r.kind === 'del' ? '−' : ' ');
+  var tx = document.createElement('span');
+  tx.appendChild(_blameMark(r.text, terms));
+  d.appendChild(no);
+  d.appendChild(sg);
+  d.appendChild(tx);
+  return d;
+}
+
+function renderVersionDiff() {
+  var VD = window.MA.versionFullDiff;
+  var bodyEl = document.getElementById('vdiff-body');
+  var headEl = document.getElementById('vdiff-head');
+  var titleEl = document.getElementById('vdiff-title');
+  var jumpEl = document.getElementById('vdiff-jump');
+  var allBtn = document.getElementById('btn-vdiff-all');
+  if (!VD || !bodyEl || !headEl || !titleEl || !jumpEl) return;
+  bodyEl.textContent = '';
+  jumpEl.textContent = '';
+  var st = _vdiffLast;
+  if (!st) { headEl.textContent = ''; titleEl.textContent = ''; return; }
+  if (st.error) {
+    titleEl.textContent = st.file || '';
+    headEl.textContent = st.error;
+    return;
+  }
+  titleEl.textContent = VD.title(st.file, st.label, st.prevLabel);
+  headEl.textContent = VD.summaryText(st.rows);
+  headEl.setAttribute('data-vd-added', String(VD.counts(st.rows).added));
+  headEl.setAttribute('data-vd-removed', String(VD.counts(st.rows).removed));
+
+  // 混入点から来ているので、探していた語が居る変更行を先に名指ししておく
+  // (全文を上から読ませない)。
+  var hits = VD.termRows(st.rows, st.terms);
+  if (hits.length) {
+    jumpEl.textContent = '探していた語が動いた行: ' + hits.length + ' 行 (黄色の枠)';
+    jumpEl.setAttribute('data-vd-hits', String(hits.length));
+  } else {
+    jumpEl.removeAttribute('data-vd-hits');
+  }
+
+  var shown = st.expanded ? st.rows : VD.collapse(st.rows, 3);
+  if (allBtn) allBtn.textContent = st.expanded ? '変更の周りだけ' : '全文を出す';
+  shown.forEach(function(r) { bodyEl.appendChild(_vdiffLineEl(r, st.terms)); });
+  bodyEl.setAttribute('data-vd-lines', String(shown.length));
+}
+
+function openVersionDiff(file, stamp, label, terms) {
+  var panel = document.getElementById('vdiff-panel');
+  var headEl = document.getElementById('vdiff-head');
+  if (!panel || !window.MA.versionFullDiff) return;
+  var blame = document.getElementById('blame-panel');
+  if (blame) {
+    var rect = blame.getBoundingClientRect();
+    panel.style.left = Math.max(4, rect.left) + 'px';
+    panel.style.top = (rect.top + 20) + 'px';
+  }
+  panel.classList.add('open');
+  if (headEl) headEl.textContent = '版を読んでいます…';
+  _vdiffLast = { file: file, stamp: stamp || '', label: label || '', prevLabel: '',
+                 terms: (terms || []).slice(), rows: [], expanded: false };
+  var url = '/version-diff?dir=' + encodeURIComponent(_wsFileDir())
+    + '&type=' + encodeURIComponent(file)
+    + (stamp ? '&stamp=' + encodeURIComponent(stamp) : '');
+  window.fetch(url).then(function(r) { return r.json(); }).then(function(data) {
+    var VH = window.MA.versionHistory;
+    if (!data || data.error) {
+      _vdiffLast = { file: file, error: (data && data.error) || 'この版を読めませんでした' };
+      renderVersionDiff();
+      return;
+    }
+    _vdiffLast.prevLabel = data.prev ? (VH ? VH.label(data.prev) : data.prev) : '';
+    _vdiffLast.rows = window.MA.versionFullDiff.rows(data.before, data.after);
+    renderVersionDiff();
+  }, function() {
+    _vdiffLast = { file: file, error: 'この版を読めませんでした' };
+    renderVersionDiff();
+  });
+}
+
+function setupVersionDiff() {
+  var panel = document.getElementById('vdiff-panel');
+  if (!panel || !window.MA.versionFullDiff) return;
+  var closeBtn = document.getElementById('btn-vdiff-close');
+  var allBtn = document.getElementById('btn-vdiff-all');
+  var openBtn = document.getElementById('btn-vdiff-open');
+  if (closeBtn) closeBtn.addEventListener('click', function() { panel.classList.remove('open'); });
+  if (allBtn) allBtn.addEventListener('click', function() {
+    if (!_vdiffLast || _vdiffLast.error) return;
+    _vdiffLast.expanded = !_vdiffLast.expanded;
+    renderVersionDiff();
+  });
+  if (openBtn) openBtn.addEventListener('click', function() {
+    if (!_vdiffLast || _vdiffLast.error) return;
+    _blameOpenVersion(_vdiffLast.file, _vdiffLast.stamp);
+  });
+  panel.addEventListener('keydown', function(ev) {
+    if (ev.key === 'Escape') { ev.preventDefault(); panel.classList.remove('open'); }
+  });
+}
+
 function setupBlamePoint() {
   var panel = document.getElementById('blame-panel');
   var btn = document.getElementById('btn-tab-blame');
@@ -15518,7 +15659,12 @@ function setupBlamePoint() {
   var runBtn = document.getElementById('btn-blame-run');
   var closeBtn = document.getElementById('btn-blame-close');
 
-  function closePanel() { panel.classList.remove('open'); }
+  function closePanel() {
+    panel.classList.remove('open');
+    // 差分ビューは混入点の行から開くので、元を閉じたら一緒に畳む (置き去りにしない)
+    var vd = document.getElementById('vdiff-panel');
+    if (vd) vd.classList.remove('open');
+  }
 
   function run() {
     var BP = window.MA.blamePoint;

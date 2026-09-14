@@ -429,4 +429,68 @@ test.describe('primary 手順 4: 部品名の混入点を過去版から特定�
     }, stamp);
     expect(await page.locator('#editor').inputValue()).toContain('participant SpiDrv');
   });
+
+  // BLK-primary-20260915-0606-wish: 混入点は当たった行しか出さないので、原因を
+  // 直すのに要る前後の文脈 (その participant がどこで呼ばれ始めたか) が読めず、
+  // 版を開く → 前の版も開いて目で照合、の 2 手が部品数 × 該当版数ぶん積み上がる。
+  // 行の「差分」からその 2 手を挟まずに全文差分へ進めることを見る。
+  test('混入点の行から 1 クリックで「その版 vs 直前の版」の全文差分が出る', async ({ page }) => {
+    await search(page, 'SpiDrv Spi_Driver');
+    const mix = page.locator('#blame-results .bp-row[data-bp-mix]');
+    await mix.locator('button.bp-diff').click();
+    await page.waitForSelector('#vdiff-panel.open');
+    await page.waitForSelector('#vdiff-head[data-vd-added]');
+    // 版を 1 枚も個別に開いていない (今の図はそのまま)。
+    expect(await page.evaluate(() => window.MA.workspace.getActive().name)).not.toContain('@');
+    // 前の版 → この版、と何と何を並べているかが見出しで分かる。
+    await expect(page.locator('#vdiff-title')).toContainText('spi_init_sequence');
+    await expect(page.locator('#vdiff-title')).toContainText('→');
+    await expect(page.locator('#vdiff-head')).toHaveAttribute('data-vd-added', '1');
+    await expect(page.locator('#vdiff-head')).toHaveAttribute('data-vd-removed', '0');
+    // 増えた行と、その前後の文脈 (変わっていない行) が同じ画面に出る。
+    await expect(page.locator('#vdiff-body .vd-add')).toContainText('participant SpiDrv');
+    await expect(page.locator('#vdiff-body .vd-line.vd-same')
+      .filter({ hasText: 'participant Spi_Driver' })).toHaveCount(1);
+    // 探していた語が動いた行は名指しされ、枠が付く (全文を上から読まない)。
+    await expect(page.locator('#vdiff-jump')).toHaveAttribute('data-vd-hits', '1');
+    await expect(page.locator('#vdiff-body .vd-hit')).toHaveCount(1);
+  });
+
+  test('全文差分から、その版を開くところへそのまま進める', async ({ page }) => {
+    await search(page, 'SpiDrv Spi_Driver');
+    const mix = page.locator('#blame-results .bp-row[data-bp-mix]');
+    const stamp = await mix.getAttribute('data-bp-stamp');
+    await mix.locator('button.bp-diff').click();
+    await page.waitForSelector('#vdiff-head[data-vd-added]');
+    await page.locator('#btn-vdiff-open').click();
+    await page.waitForFunction((s) => {
+      const a = window.MA.workspace.getActive();
+      return !!a && a.name === 'spi_init_sequence@' + s;
+    }, stamp);
+  });
+
+  test('変わらない行が長く続く版でも、既定は変更の周りだけ (「全文を出す」で開く)', async ({ page }) => {
+    // 40 行の本体に 1 行だけ挿した版を積む。畳まないと 1 行の変更を探して
+    // 全文を目で追うことになる。
+    const body = Array.from({ length: 40 }, (_, i) => `Spi_Driver -> Hal : step${i}`).join('\n');
+    const base = `@startuml\ntitle SPI 長い\n${body}\n@enduml`;
+    const after = base.replace('step20', 'step20\nparticipant SpiDrv');
+    await putFile(page, 'spi_long_sequence', base);
+    await page.waitForTimeout(1100);
+    await putFile(page, 'spi_long_sequence', after);
+    await page.waitForTimeout(400);
+    await page.reload();
+    await page.waitForSelector('#preview-svg');
+    await search(page, 'SpiDrv');
+    const row = page.locator('#blame-results .bp-row[data-bp-file="spi_long_sequence"]').first();
+    await row.locator('button.bp-diff').click();
+    await page.waitForSelector('#vdiff-head[data-vd-added]');
+    const folded = Number(await page.locator('#vdiff-body').getAttribute('data-vd-lines'));
+    expect(folded).toBeLessThan(15);
+    await expect(page.locator('#vdiff-body .vd-gap')).toHaveCount(2);
+    await page.locator('#btn-vdiff-all').click();
+    const all = Number(await page.locator('#vdiff-body').getAttribute('data-vd-lines'));
+    expect(all).toBeGreaterThan(40);
+    await expect(page.locator('#vdiff-body .vd-gap')).toHaveCount(0);
+  });
 });
