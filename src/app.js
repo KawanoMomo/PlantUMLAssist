@@ -6732,6 +6732,8 @@ function _noteApplyRename(plan) {
           var n = dsl == null ? 0 : BR.countIn(dsl, plan.from);
           if (!n) return null;
           var next = BR.replaceIn(dsl, plan.from, plan.to);
+          // 書く前を基準に置く (BLK-primary-20260914-1206)。
+          if (window.MA.saveDiff) { try { window.MA.saveDiff.markIfAbsent(f.name, dsl); } catch (e) {} }
           return WS.saveToFile({ name: f.name, dsl: next }, f.dir)
             .then(function(ok) {
               if (!ok) return;
@@ -6767,6 +6769,7 @@ function _noteApplyVerdict(plan) {
         var domain = DC ? DC.domainOf(f.name) : f.name;
         var next = DV.applyMark(dsl, 'separate', domain, plan.otherFolder);
         if (next === dsl) { done.push(f.name); return null; }
+        if (window.MA.saveDiff) { try { window.MA.saveDiff.markIfAbsent(f.name, dsl); } catch (e) {} }
         return WS.saveToFile({ name: f.name, dsl: next }, f.dir).then(function(ok) {
           if (!ok) return;
           done.push(f.name);
@@ -11208,7 +11211,10 @@ function applyRenameToUnopenedFiles(from, to) {
       res.rows.push({ name: r.name, count: n, before: r.dsl, after: next });
       // 読み込み済みの控えも進めておく。次のプレビューが古い本文を数えないように。
       _fiFileDocs.forEach(function(d) { if (d.name === r.name) d.dsl = next; });
-      if (window.MA.saveDiff) { try { window.MA.saveDiff.mark(r.name, next); } catch (e) {} }
+      // BLK-primary-20260914-1206: 書いた後を基準にすると「変更なし」になり、
+      // 後から開いたときに直した前後が出せない。基準がまだ無い図は書く **前** を
+      // 基準にする (この置換がそのまま ± 差分として読める)。
+      if (window.MA.saveDiff) { try { window.MA.saveDiff.markIfAbsent(r.name, r.dsl); } catch (e) {} }
     });
   })).then(function() { return res; });
 }
@@ -13634,6 +13640,29 @@ function setCompareMode(mode) {
 }
 
 // 「± 差分」タブ: 編集中の図の前回保存時点からの行差分と、他に変わった図の一覧。
+// 保存フォルダへ直接書いた回を ± 差分の基準に使えるか (BLK-primary-20260914-1206)。
+// 使うのは「前回保存時点という基準が役に立たないとき」だけ:
+//  - 基準がまだ無い (開き直した図・一度も保存していない図)
+//  - 基準はあるが今と同じ (書いた後が基準になっていて、直した前後が出ない)
+// どちらでもなければ従来どおり前回保存時点と比べる (意味を勝手にすり替えない)。
+function _diffFallbackBasis(active, st) {
+  var WH = window.MA.writeHistory;
+  var SD = window.MA.saveDiff;
+  if (!WH || !SD || !active || (st !== 'new' && st !== 'same')) return null;
+  try {
+    var entries = WH.forDoc(_reviewStore(), _wsFileDir(), active.name);
+    for (var i = 0; i < entries.length; i++) {
+      var pair = WH.pairOf(entries[i], active.name);
+      if (!pair || SD.normalize(pair.before) === SD.normalize(active.dsl)) continue;
+      return {
+        dsl: pair.before,
+        label: WH.kindLabel(entries[i].kind) + ' ' + WH.when(entries[i]) + ' の前',
+      };
+    }
+  } catch (e) {}
+  return null;
+}
+
 function renderCompareDiffView() {
   var view = document.getElementById('compare-diff-view');
   var SD = window.MA.saveDiff;
@@ -13652,17 +13681,28 @@ function renderCompareDiffView() {
     var at = SD.markedAt(active.name);
     var c = SD.changedLines(active.name, active.dsl);
     var head = esc(active.name) + ' ・ ';
+    // BLK-primary-20260914-1206: 保存フォルダへ直接書いた図は「前回保存時点」が
+    // 無い (または書いた後と同じ) ので、これまでは「まだ保存していない (基準なし)」
+    // としか出ず、レビュー会議でその図の前後を出せなかった。基準が無い/変わって
+    // いないときは、書き込み履歴の直近の回の **書く前** を基準に据える。
+    var fb = _diffFallbackBasis(active, st);
     if (st === 'new') head += 'まだ保存していない (基準なし)';
     else if (st === 'same') head += '前回保存時点から変更なし';
     else head += '前回保存時点から +' + c.added + ' −' + c.removed;
     if (at) head += ' ・ 基準 ' + esc(at.replace('T', ' ').slice(0, 16));
-    html += '<div class="cd-head" id="compare-diff-head">' + head + '</div>';
-    if (st === 'changed') {
-      SD.diffLines(active.name, active.dsl).forEach(function(r) {
-        var cls = r.mark === '+' ? 'add' : (r.mark === '-' ? 'del' : (r.mark === '…' ? 'skip' : ''));
-        html += '<div class="cd-line ' + cls + '">' + esc(r.mark + ' ' + r.text) + '</div>';
-      });
-    }
+    // 前回保存時点では前後が出せないとき、書き込み履歴の回を **足して** 出す。
+    // 「前回保存時点と比べてどうか」は言い切ったままにする (意味をすり替えない)。
+    var fc = fb ? SD.countBetween(fb.dsl, active.dsl) : null;
+    if (fb) head += ' ・ ' + esc(fb.label) + 'から +' + fc.added + ' −' + fc.removed;
+    html += '<div class="cd-head" id="compare-diff-head"'
+      + (fb ? ' data-basis="write-history"' : '') + '>' + head + '</div>';
+    var rowsOut = fb
+      ? SD.diffBetween(fb.dsl, active.dsl)
+      : (st === 'changed' ? SD.diffLines(active.name, active.dsl) : []);
+    rowsOut.forEach(function(r) {
+      var cls = r.mark === '+' ? 'add' : (r.mark === '-' ? 'del' : (r.mark === '…' ? 'skip' : ''));
+      html += '<div class="cd-line ' + cls + '">' + esc(r.mark + ' ' + r.text) + '</div>';
+    });
   }
 
   var others = docs.filter(function(d) {

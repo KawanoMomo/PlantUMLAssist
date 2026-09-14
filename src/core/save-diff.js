@@ -108,11 +108,25 @@ window.MA.saveDiff = (function() {
     return statusOf(name, dsl) !== 'same';
   }
 
-  // 変わった行だけを拾う。パネルに「どこが変わったか」を 1 行で出すため。
-  function changedLines(name, dsl) {
+  // この図にまだ基準が無いときだけ、渡した本文を基準にする
+  // (BLK-primary-20260914-1206)。⇄ 一括置換・🔖 [適用] は保存フォルダへ直接書くので、
+  // 書いた後の本文を基準にすると「変更なし」になり、直した前後が出せなくなる。
+  // 書き込む **前** の本文を基準に置けば、その操作がそのまま差分として読める。
+  // 既に基準があるときは動かさない (前回保存時点という意味を壊さない)。
+  function markIfAbsent(name, dsl, at) {
+    if (!name) return null;
     var b = baselineOf(name);
+    if (b) return b;
+    return mark(name, dsl, at);
+  }
+
+  // 変わった行だけを拾う。パネルに「どこが変わったか」を 1 行で出すため。
+  // 基準を外から渡す形 (countBetween) と、この図の基準を使う形 (changedLines) の 2 つを出す。
+  // 保存フォルダへ直接書いた回の控え (write-history) と比べるときは前者を使う。
+  function countBetween(beforeDsl, dsl) {
     var now = normalize(dsl).split('\n');
-    var before = b ? b.dsl.split('\n') : [];
+    var bs = beforeDsl == null ? '' : normalize(beforeDsl);
+    var before = bs === '' ? [] : bs.split('\n');   // 基準が無いときは全行が追加
     var added = 0, removed = 0;
     var beforeCount = {};
     before.forEach(function(l) { beforeCount[l] = (beforeCount[l] || 0) + 1; });
@@ -126,13 +140,18 @@ window.MA.saveDiff = (function() {
     return { added: added, removed: removed };
   }
 
+  function changedLines(name, dsl) {
+    var b = baselineOf(name);
+    return countBetween(b ? b.dsl : '', dsl);
+  }
+
   // BLK-primary-20260909-0303-wish: 会議で「この図、変わった?」に答えるには件数では足りず、
   // どの行が消えてどの行が入ったかを見せる必要がある。基準と今の本文を行単位で並べる。
   // 変わっていない行は前後 ctx 行だけ残す (全文を出すと変更点が埋もれる)。
-  function diffLines(name, dsl, ctx) {
-    var b = baselineOf(name);
+  function diffBetween(beforeDsl, dsl, ctx) {
     var now = normalize(dsl).split('\n');
-    var before = b ? b.dsl.split('\n') : [];
+    var bs = beforeDsl == null ? '' : normalize(beforeDsl);
+    var before = bs === '' ? [] : bs.split('\n');   // 基準が無いときは全行が追加
     var keep = (ctx == null) ? 1 : Math.max(0, ctx);
 
     // 共通部分列 (LCS) の長さ表。図 1 枚の行数なので素直に組む。
@@ -178,6 +197,11 @@ window.MA.saveDiff = (function() {
     return out;
   }
 
+  function diffLines(name, dsl, ctx) {
+    var b = baselineOf(name);
+    return diffBetween(b ? b.dsl : '', dsl, ctx);
+  }
+
   // 開いている全図の内訳。reviewer はこれ 1 つで読む要否を判断する。
   function summary(docs) {
     var out = { total: 0, changed: [], added: [], same: [], changedCount: 0, hasChange: false, markedAt: '' };
@@ -217,6 +241,9 @@ window.MA.saveDiff = (function() {
     normalize: normalize,
     mark: mark,
     markAll: markAll,
+    markIfAbsent: markIfAbsent,
+    countBetween: countBetween,
+    diffBetween: diffBetween,
     forget: forget,
     baselineOf: baselineOf,
     markedAt: markedAt,
