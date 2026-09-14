@@ -43,13 +43,29 @@ window.MA.sourceLock = (function() {
     catch (e) { return false; }
   }
 
-  // mark(docId, originName) — 既存ファイルを開いて作った / 読み直したタブに錠をかける。
+  // BLK-junior-20260914-0906: 開いたときの本文の指紋。守るべきものが本当にあるか
+  // (= 開いてから本文が変わったか) を、聞く前に機械で決めるために憶える。
+  // FNV-1a 32bit。暗号強度は要らない (要るのは「同じ本文なら同じ値」だけ)。
+  function fingerprint(dsl) {
+    var s = String(dsl == null ? '' : dsl).replace(/\r\n?/g, '\n');
+    var h = 0x811c9dc5;
+    for (var i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+    }
+    var hex = h.toString(16);
+    while (hex.length < 8) hex = '0' + hex;
+    return hex;
+  }
+
+  // mark(docId, originName, originDsl) — 既存ファイルを開いて作った / 読み直したタブに錠をかける。
   // 既に錠があるドキュメントは上書きしない (2 回目に開いても確認をやり直さない)。
-  function mark(docId, originName) {
+  function mark(docId, originName, originDsl) {
     if (!docId || !originName) return null;
     var map = _read();
     if (map[docId] && map[docId].origin === originName) return map[docId];
-    map[docId] = { origin: originName, mode: 'ask', alias: null };
+    map[docId] = { origin: originName, mode: 'ask', alias: null,
+                   opened: originDsl == null ? null : fingerprint(originDsl) };
     _write(map);
     return map[docId];
   }
@@ -110,13 +126,23 @@ window.MA.sourceLock = (function() {
   // 図名欄で名前を変えたら (docName !== origin) 錠は用済みなので外す。
   // 「名前を変え終えるまで」という利用者の言い方をそのまま条件にしている。
   // used を渡せば、既定を当てるときの控えの名前が既存タブと衝突しない。
-  function decide(docId, docName, used) {
+  //
+  // BLK-junior-20260914-0906: dsl を渡せば「開いたときから本文が変わっていない」
+  // ことを見る。変わっていなければ書き戻す中身が元ファイルと同じなので、守るものも
+  // 書く必要も無い。一覧から開いて眺めるだけの手順 (junior 手順 1) で毎回
+  // 確認が割り込んでいたのはここで、聞かずに黙って何もしない:
+  //   { action: 'skip' } … 開いたときのまま。書かない・聞かない
+  function decide(docId, docName, used, dsl) {
     var name = String(docName == null ? '' : docName);
     var e = docId ? _read()[docId] : null;
     if (!e) return { action: 'write', name: name };
     if (name !== e.origin) { release(docId); return { action: 'write', name: name }; }
     if (e.mode === 'copy' && e.alias) return { action: 'write', name: e.alias };
     if (e.mode === 'overwrite') return { action: 'write', name: e.origin };
+    // 開いたままの本文なら、元ファイルは既にその内容なので聞く理由が無い。
+    if (typeof dsl === 'string' && e.opened && fingerprint(dsl) === e.opened) {
+      return { action: 'skip', name: e.origin, reason: 'unchanged' };
+    }
     // まだ聞いていないが、既に同じ問いに答えている日は聞き直さない。
     var def = defaultChoice();
     if (def) return answer(docId, def, used, false);
@@ -150,10 +176,14 @@ window.MA.sourceLock = (function() {
   function askText(origin) {
     return {
       title: '開いたファイルを上書きしますか',
-      body: '「' + origin + '.puml」は開いたままのファイルです。'
-        + 'このまま編集を続けると自動保存が元ファイルを書き換えます。',
+      // BLK-junior-20260914-0906: 「なぜ今これを聞かれるのか」と「どちらを選んでも
+      // 古い控えの中身が図に入ることはない」を本文で言い切る。開いただけでは
+      // 聞かれない (decide が skip を返す) ので、出たときは必ず本文を変えている。
+      body: '「' + origin + '.puml」は一覧から開いたファイルです。開いたときから本文が変わったので、'
+        + 'このまま自動保存すると元ファイルを書き換えます。どちらを選んでも、書かれるのは'
+        + 'いま画面に出ている本文です（' + origin + COPY_SUFFIX + ' などの古い控えの中身が図に入ることはありません）。',
       overwrite: 'このファイルを書き換える',
-      keep: '元ファイルは変更前のまま保つ（' + origin + COPY_SUFFIX + ' に書く）',
+      keep: '元ファイルは変更前のまま保つ（いまの本文は ' + origin + COPY_SUFFIX + ' に書く）',
       all: '開いている他のファイルも同じ扱いにする（毎回聞かない）',
     };
   }
@@ -169,11 +199,14 @@ window.MA.sourceLock = (function() {
     if (e.mode === 'overwrite') {
       return { text: '✎ ' + e.origin, title: '開いた ' + e.origin + '.puml をそのまま書き換えます' };
     }
-    return { text: '🔒 ' + e.origin, title: '開いたファイルです。最初の自動保存の前に、上書きしてよいか一度だけ確認します' };
+    return { text: '🔒 ' + e.origin,
+             title: '一覧から開いたファイルです。読むだけなら何も書きません。本文を変えたときだけ、'
+               + '元ファイルを書き換えてよいか一度だけ確認します' };
   }
 
   return {
     mark: mark,
+    fingerprint: fingerprint,
     stateOf: stateOf,
     release: release,
     clearAll: clearAll,

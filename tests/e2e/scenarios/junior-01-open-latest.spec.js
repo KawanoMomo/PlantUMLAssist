@@ -575,3 +575,51 @@ test.describe('junior 手順 1: 指摘.md の 1 件から先輩の図と並べ�
     await expect(page.locator('#note-summary')).toContainText('にしかありません');
   });
 });
+
+// BLK-junior-20260914-0906: 一覧から自分の図を開き直すだけの手順 1 で、
+// 「開いたファイルを上書きしますか」が毎回割り込んでいた (過去 run が残した
+// -編集中 の控えがあるため錠が ask のまま、開いた直後の自動保存がその問いに当たる)。
+// 読むだけの回は聞かれず、本文を変えたときだけ聞かれることを到達条件にする。
+const LOCK_DIR = DIR + '-lock';
+const LOCK_DOC = 'GPIOドライバ状態遷移(資料用)';
+const LOCK_DSL = ['@startuml', 'title GPIOドライバ状態遷移',
+  '[*] --> Uninit', 'Uninit --> Ready : Gpio_Init', '@enduml'].join('\n');
+
+test.describe('junior 手順 1: 開き直すだけの回は錠に止められない', () => {
+  test.beforeEach(async ({ page }) => {
+    await S1.bootWithSaveDir(page, LOCK_DIR);
+    await S1.clearDir(page, LOCK_DIR);
+    await S1.putDoc(page, LOCK_DIR, LOCK_DOC, LOCK_DSL);
+    // 過去 run のツールが残した控え。これがあると錠は「聞く」のまま残る。
+    await S1.putDoc(page, LOCK_DIR, LOCK_DOC + '-編集中', LOCK_DSL);
+    await page.reload();
+    await page.waitForSelector('#editor');
+  });
+
+  test('一覧から開いて眺めるだけなら、上書きの確認は出ない', async ({ page }) => {
+    await S1.openFolderItem(page, LOCK_DOC);
+    await page.waitForTimeout(1500);
+    // 到達条件その1: 開いた本文が出ていて、確認は割り込まない。
+    expect(await page.locator('#editor').inputValue()).toContain('Gpio_Init');
+    await expect(page.locator('#source-lock-modal')).toHaveCount(0);
+    // 到達条件その2: 錠はかかったままで、何も書かないことが読める。
+    await expect(page.locator('#top-source-lock')).toBeVisible();
+    expect(await page.locator('#top-source-lock').getAttribute('title'))
+      .toContain('読むだけなら何も書きません');
+  });
+
+  test('本文を変えたときだけ、今までどおり一度だけ聞かれる', async ({ page }) => {
+    await S1.openFolderItem(page, LOCK_DOC);
+    await page.waitForTimeout(1200);
+    await expect(page.locator('#source-lock-modal')).toHaveCount(0);
+
+    const opened = await page.locator('#editor').inputValue();
+    await S1.typeDsl(page, opened.replace('Gpio_Init', 'Gpio_Init2'));
+    await page.waitForTimeout(1200);
+    const modal = page.locator('#source-lock-modal');
+    await expect(modal).toBeVisible();
+    // 到達条件その3: なぜ今聞かれるかと、古い控えが図に入らないことを本文が言う。
+    await expect(page.locator('#source-lock-body')).toContainText('開いたときから本文が変わった');
+    await expect(page.locator('#source-lock-body')).toContainText('古い控えの中身が図に入ることはありません');
+  });
+});
