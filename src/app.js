@@ -5626,6 +5626,10 @@ var _peekVerifying = false;
 // 探すことになり、変わっていない図まで開いて見比べる往復が残る。
 var _peekChanges = null;       // peek-changes の report (覗いているフォルダぶん)
 var _peekChangedOnly = false;  // 変更のある図だけに絞っているか
+// BLK-junior-20260914-1806-wish: 題材 1 つぶんの「6 図種の対応要否」。
+// 自分のフォルダの一覧 (控えを読むので本文つき) と、覗いているフォルダの一覧で作る。
+var _kmMine = [];
+var _kmSubject = '';
 
 function _peekEls() {
   return {
@@ -7529,6 +7533,105 @@ function verifyPeekSvg() {
     });
 }
 
+// ── 題材 × 図種のマトリクス (BLK-junior-20260914-1806-wish) ────────────────
+// 図種を 1 つずつ担当する進め方だと、👀 他フォルダでの対応要否の確認が
+// 6 周にまたがって 1 枚ずつになる。題材を選べば 6 図種ぶんの結論がここに出る。
+function _kmEls() {
+  return { host: document.getElementById('peek-matrix') };
+}
+
+// 自分のフォルダの一覧。控え (@peek 行) を読むので本文も一緒に取る。
+function loadKindMatrixMine() {
+  var dir = _wsFileDir();
+  var url = '/autosave?dir=' + encodeURIComponent(dir) + '&texts=1';
+  return window.fetch(url).then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(data) {
+      _kmMine = (data && Array.isArray(data.entries)) ? data.entries : [];
+      return _kmMine;
+    }).catch(function() { _kmMine = []; return _kmMine; });
+}
+
+function renderKindMatrix() {
+  var KM = window.MA.kindMatrix;
+  var el = _kmEls();
+  if (!KM || !el.host) return;
+  el.host.textContent = '';
+  if (!_peekDir || !_peekEntries.length) { el.host.hidden = true; return; }
+  el.host.hidden = false;
+
+  var subs = KM.subjects(_kmMine, _peekEntries);
+  if (!subs.length) { el.host.hidden = true; return; }
+  // 既定の題材は「いま開いている自分の図」の題材。今読んでいるものの続きから出す。
+  if (!_kmSubject || subs.indexOf(_kmSubject) < 0) {
+    var doc = null;
+    try { doc = window.MA.workspace ? window.MA.workspace.getActive() : null; } catch (e) {}
+    var mine = doc ? KM.subjectOf(doc.name) : '';
+    _kmSubject = (mine && subs.indexOf(mine) >= 0) ? mine : subs[0];
+  }
+  var who = window.MA.peekFolder ? window.MA.peekFolder.baseName(_peekDir) : _peekDir;
+  var sc = KM.scan(_kmSubject, _kmMine, _peekEntries, who);
+
+  var head = document.createElement('div');
+  head.className = 'pkm-head';
+  var sel = document.createElement('select');
+  sel.id = 'peek-subject';
+  sel.title = '題材を選ぶと、その題材の 6 図種すべての対応要否がこの場に出る';
+  subs.forEach(function(name) {
+    var o = document.createElement('option');
+    o.value = name;
+    o.textContent = name.toUpperCase();
+    if (name === _kmSubject) o.selected = true;
+    sel.appendChild(o);
+  });
+  sel.addEventListener('change', function() {
+    _kmSubject = sel.value;
+    renderKindMatrix();
+  });
+  head.appendChild(sel);
+  var sum = document.createElement('span');
+  sum.id = 'peek-matrix-summary';
+  sum.className = sc.todo ? 'has-todo' : '';
+  sum.textContent = KM.summary(sc);
+  sum.title = who + ' と自分の保存フォルダを、題材ごとに 6 図種ぶんまとめて突き合わせた結果です';
+  head.appendChild(sum);
+  el.host.appendChild(head);
+
+  sc.rows.forEach(function(r) {
+    var row = document.createElement('div');
+    row.className = 'pkm-row';
+    row.setAttribute('data-kind', r.kind);
+    row.setAttribute('data-state', r.state);
+    var k = document.createElement('span');
+    k.className = 'pkm-kind';
+    k.textContent = r.label;
+    row.appendChild(k);
+    var mark = document.createElement('span');
+    mark.className = 'pkm-mark';
+    mark.textContent = r.mark;
+    mark.title = KM.rowTitle(r, who);
+    row.appendChild(mark);
+    var cnt = document.createElement('span');
+    cnt.className = 'pkm-count';
+    cnt.textContent = '相手 ' + r.theirCount + ' / 自分 ' + r.mineCount;
+    row.appendChild(cnt);
+    var target = KM.openTarget(r);
+    if (target) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'pkm-open';
+      b.setAttribute('data-open', target);
+      b.textContent = '開く';
+      b.title = target + ' を読むだけで開く';
+      b.addEventListener('click', function(ev) {
+        ev.stopPropagation();
+        showPeekFile(target);
+      });
+      row.appendChild(b);
+    }
+    el.host.appendChild(row);
+  });
+}
+
 function selectPeekDir(dir) {
   var WS = window.MA.workspace;
   if (!WS) return Promise.resolve(false);
@@ -7539,6 +7642,7 @@ function selectPeekDir(dir) {
   _peekScan = null;
   _peekChanges = null;
   _peekChangedOnly = false;
+  renderKindMatrix();
   renderPeekDirs();
   renderPeekFiles();
   // 名前と判定を同時に取る。判定を後追いにすると、印の無い一覧が先に出て
@@ -7555,6 +7659,8 @@ function selectPeekDir(dir) {
     _peekNames = entries.map(function(e) { return e.name; });
     _peekChanges = window.MA.peekChanges ? window.MA.peekChanges.report(entries) : null;
     renderPeekFiles();
+    // 6 図種ぶんの対応要否は、フォルダを選んだ時点で出す (図を 1 枚開くまで待たせない)。
+    loadKindMatrixMine().then(function() { renderKindMatrix(); });
     // 1 枚目をそのまま出す。選んだ後に「どれか押す」を挟むと、読むだけの用でも
     // クリックが 1 つ増える。変更のある図が上に来ているので、取り込む 1 枚目が最初に開く。
     var first = peekVisibleNames()[0];

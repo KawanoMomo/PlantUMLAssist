@@ -1121,3 +1121,66 @@ test.describe('junior 手順 1〜2: 先輩に実体が無い図種の結論を�
     expect(await S1.readDoc(page, NOTE_MINE, 'gpio_state') || '').toContain("' @peek アクティビティ");
   });
 });
+
+// BLK-junior-20260914-1806-wish: 手順 1〜2 の「対応要否の確認」は、図種を 1 つずつ担当する
+// 進め方だと 6 周にまたがって 1 枚ずつになる (GPIO だけで 9 周目の今も 3 図種目)。
+// 題材を選べば 6 図種ぶんの結論がその場で並び、残りの図種も周を待たずに分かる。
+const MTX_ROOT = SLICE_ROOT + '-matrix';
+const MTX_MINE = MTX_ROOT + '/junior';
+const MTX_SENIOR = MTX_ROOT + '/primary';
+
+const MTX_SEQ = ['@startuml', 'participant Gpio_Driver', 'participant Hw_Ctrl',
+  'Gpio_Driver -> Hw_Ctrl : Gpio_Init', '@enduml'].join('\n');
+const MTX_STATE = ['@startuml', '[*] --> Ready', 'Ready --> Busy : Gpio_Init', '@enduml'].join('\n');
+const MTX_CLASS = ['@startuml', 'class Gpio_Driver {', '  + Gpio_Init() : void', '}', '@enduml'].join('\n');
+const MTX_COMPONENT = ['@startuml', 'component Gpio_Driver', 'component Hw_Ctrl', '@enduml'].join('\n');
+
+test.describe('junior 手順 1〜2: 題材ごとに 6 図種の対応要否を 1 画面で見る', () => {
+  test.beforeEach(async ({ page }) => {
+    await S1.bootWithSaveDir(page, MTX_MINE);
+    await S1.clearDir(page, MTX_MINE);
+    await S1.clearDir(page, MTX_SENIOR);
+    // 自分: シーケンス・状態遷移・クラスの 3 枚 (コンポーネントはまだ無い)。
+    await S1.putDoc(page, MTX_MINE, 'gpio_init_sequence', MTX_SEQ);
+    await S1.putDoc(page, MTX_MINE, 'gpio_state', MTX_STATE);
+    await S1.putDoc(page, MTX_MINE, 'gpio_class', MTX_CLASS);
+    // 先輩: 状態遷移・クラス・コンポーネントの 3 枚 (シーケンスは持っていない)。
+    await S1.putDoc(page, MTX_SENIOR, 'gpio_state', MTX_STATE);
+    await S1.putDoc(page, MTX_SENIOR, 'gpio_class', MTX_CLASS);
+    await S1.putDoc(page, MTX_SENIOR, 'gpio_component', MTX_COMPONENT);
+    await page.reload();
+    await page.waitForSelector('#btn-tab-peek');
+  });
+
+  test('題材を選ぶと 6 図種すべての対応要否がその場で並ぶ', async ({ page }) => {
+    await page.locator('#btn-tab-peek').click();
+    await page.waitForSelector('#peek-modal');
+    await page.waitForSelector('#peek-matrix .pkm-row');
+
+    // 題材を選ぶ (台本の「GPIO を選ぶと」に当たる 1 操作)。
+    await page.locator('#peek-subject').selectOption('gpio');
+    await page.waitForTimeout(300);
+
+    // 到達条件その1: 6 図種ぶんの行が必ず出る (自分にも先輩にも無い図種を落とさない)。
+    expect(await page.locator('#peek-matrix .pkm-row').count()).toBe(6);
+    await expect(page.locator('#peek-subject')).toHaveValue('gpio');
+
+    // 到達条件その2: 図種ごとに、この周ですることが向きごとに分かる。
+    await expect(page.locator('#peek-matrix .pkm-row[data-kind="state"]'))
+      .toHaveAttribute('data-state', 'check');
+    await expect(page.locator('#peek-matrix .pkm-row[data-kind="component"]'))
+      .toHaveAttribute('data-state', 'mine-missing');
+    await expect(page.locator('#peek-matrix .pkm-row[data-kind="usecase"]'))
+      .toHaveAttribute('data-state', 'no-model');
+
+    // 到達条件その3: 残りが何図種あるかを見出しが先に言う (周が来るまで待たない)。
+    await expect(page.locator('#peek-matrix-summary')).toContainText('GPIO: 6 図種のうち');
+    await expect(page.locator('#peek-matrix-summary')).toContainText('未確認 2');
+    await expect(page.locator('#peek-matrix-summary')).toContainText('自分に無し 1');
+
+    // 到達条件その4: その行から先輩の 1 枚をそのまま開ける (一覧を目で探し直さない)。
+    await page.locator('#peek-matrix .pkm-row[data-kind="component"] .pkm-open').click();
+    await page.waitForTimeout(1200);
+    await expect(page.locator('#peek-title')).toContainText('gpio_component');
+  });
+});
