@@ -96,6 +96,46 @@ test('手順5 資料化: シーケンス図を選ぶと PNG(透過背景)に切�
   expect(download.suggestedFilename()).toBe('GPIOドライバ初期化シーケンス(資料用).png');
 });
 
+// 資料化の残りが部品をまたいで見える (BLK-junior-20260914-2006-wish)。
+// 部品を 1 つ選ぶまで図種の残りが見えないと、GPIO がほぼ済んでいて TIMER が
+// 丸ごと未着手でも、部品欄を選び直すまで分からなかった。
+test('手順4 資料化: 開いた時点で部品をまたいだ残りが読め、マスを押すと選択が合う', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  await S.putDoc(page, DIR, 'GPIOドライバ状態遷移', S.GPIO_STATE);
+  await S.putDoc(page, DIR, 'GPIOドライバ状態遷移(資料用)', S.GPIO_STATE);
+  await S.putDoc(page, DIR, 'TIMERドライバ状態遷移', S.GPIO_STATE);
+  await S.putDoc(page, DIR, 'TIMERドライバ初期化シーケンス', S.GPIO_SEQ);
+  await page.reload();
+  await page.waitForTimeout(800);
+
+  await page.locator('#btn-export').click();
+  await page.waitForSelector('#export-menu', { state: 'visible' });
+  await page.locator('#exp-material').click();
+  await page.waitForSelector('#mexp-modal', { state: 'visible' });
+  await page.waitForTimeout(800);
+
+  // 到達条件その1: 部品を選ばなくても 2 部品の残りが 1 枚で読める。
+  await expect(page.locator('#mexp-matrix-rows tr.mexp-mrow')).toHaveCount(2);
+  await expect(page.locator('#mexp-matrix-summary')).toContainText('残り 2 件');
+  // 残りのある TIMER が上に来る (次に着手する順)。
+  await expect(page.locator('#mexp-matrix-rows tr.mexp-mrow').first())
+    .toHaveAttribute('data-component', 'TIMERドライバ');
+  await expect(page.locator('tr[data-component="TIMERドライバ"] td[data-kind="シーケンス図"]'))
+    .toHaveAttribute('data-status', 'none');
+  await expect(page.locator('tr[data-component="GPIOドライバ"] td[data-kind="状態遷移図"]'))
+    .toHaveAttribute('data-status', 'fresh');
+
+  // 到達条件その2: 未着手のマスを押すと部品欄・図種欄がそこに合う
+  // (GPIO → TIMER と選び直す往復が要らない)。
+  await page.locator('tr[data-component="TIMERドライバ"] td[data-kind="シーケンス図"]').click();
+  await page.waitForTimeout(300);
+  await expect(page.locator('#mexp-component')).toHaveValue('TIMERドライバ');
+  await expect(page.locator('#mexp-kind')).toHaveValue('シーケンス図');
+  await expect(page.locator('#mexp-plan')).toContainText('(資料用)');
+  await expect(page.locator('#mexp-run')).toBeEnabled();
+});
+
 // 「部品の資料一式」— 設計書に貼る資料は 1 部品の複数図種で 1 組。
 // BLK-junior-20260909-0003-wish: どの図種の資料用がまだ無いか・元の図が資料用より
 // 新しくないかを一覧で見せ、手当ての要る図種だけをまとめて 1 回で書き出す。

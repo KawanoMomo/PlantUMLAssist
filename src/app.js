@@ -20168,6 +20168,7 @@ function setupComponentPack() {
 // 保存 → 提出物庫へ控える → 一覧を描き直す、までが 1 回で終わる。
 
 var _mexpFiles = [];
+var _mexpEntries = [];
 
 function _mexpEsc(s) {
   return String(s == null ? '' : s).replace(/[&<>"]/g, function(c) {
@@ -20212,6 +20213,7 @@ function _mexpRenderPlan() {
   var p = _mexpPlan();
   if (el) el.textContent = ME.planText(p);
   if (run) run.disabled = !p;
+  _mexpMarkPicked();
 }
 
 function _mexpRenderComponents() {
@@ -20226,6 +20228,7 @@ function _mexpRenderComponents() {
   }
   comp.innerHTML = html;
   if (count) count.textContent = list.length ? (list.length + ' 部品') : '';
+  _mexpRenderMatrix();
   var empty = ME.emptyText(_mexpFiles);
   if (empty) {
     var el = _mexpSel('mexp-plan');
@@ -20237,16 +20240,110 @@ function _mexpRenderComponents() {
   _mexpRenderKinds();
 }
 
+// ── 資料化の残り (部品 × 図種) — BLK-junior-20260914-2006-wish ──────────────
+// 部品を 1 つ選ぶまで図種の残りが見えないと、GPIO がほぼ済んでいて TIMER が
+// 丸ごと未着手でも、選び直すまでそれが分からない。開いた時点で全部品の残りを
+// 出し、マスを押せば部品欄・図種欄がそこに合う (選び直しの往復が消える)。
+// 状態の判定は materialMatrix / materialBoard が持つ。ここは描くだけ。
+
+function _mexpScan() {
+  var MM = window.MA.materialMatrix;
+  return MM ? MM.scan(_mexpEntries.length ? _mexpEntries : _mexpFiles) : null;
+}
+
+// 選ばれている部品の行に印を付ける (表と下のプルダウンが別のことを言わない)。
+function _mexpMarkPicked() {
+  var body = _mexpSel('mexp-matrix-rows');
+  var comp = _mexpSel('mexp-component');
+  if (!body || !comp) return;
+  var rows = body.querySelectorAll('tr.mexp-mrow');
+  for (var i = 0; i < rows.length; i++) {
+    rows[i].setAttribute('data-picked',
+      rows[i].getAttribute('data-component') === comp.value ? '1' : '0');
+  }
+}
+
+function _mexpPickCell(component, kind) {
+  var comp = _mexpSel('mexp-component');
+  var kindSel = _mexpSel('mexp-kind');
+  if (!comp) return;
+  comp.value = component;
+  _mexpRenderKinds();
+  if (kindSel && kind) {
+    var opts = kindSel.options;
+    for (var i = 0; i < opts.length; i++) {
+      if (opts[i].value === kind) { kindSel.value = kind; break; }
+    }
+  }
+  _mexpRenderPlan();
+}
+
+function _mexpRenderMatrix() {
+  var MM = window.MA.materialMatrix;
+  var head = _mexpSel('mexp-matrix-head');
+  var body = _mexpSel('mexp-matrix-rows');
+  var sum = _mexpSel('mexp-matrix-summary');
+  var leg = _mexpSel('mexp-matrix-legend');
+  if (!MM || !head || !body) return;
+  var sc = _mexpScan();
+  if (sum) sum.textContent = MM.summaryText(sc);
+  if (leg) leg.textContent = sc && sc.rows.length ? MM.legend() : '';
+  if (!sc || !sc.rows.length) { head.innerHTML = ''; body.innerHTML = ''; return; }
+
+  var h = '<th>部品</th><th>残り</th>';
+  sc.kinds.forEach(function(k) { h += '<th>' + _mexpEsc(k) + '</th>'; });
+  head.innerHTML = h;
+
+  var html = '';
+  sc.rows.forEach(function(row) {
+    html += '<tr class="mexp-mrow" data-component="' + _mexpEsc(row.component)
+      + '" data-todo="' + row.todo + '">'
+      + '<td class="mexp-mcomp" title="' + _mexpEsc(MM.rowText(row)) + '">'
+      + _mexpEsc(row.component) + '</td>'
+      + '<td class="mexp-mtodo">' + row.todo + '/' + row.total + '</td>';
+    row.cells.forEach(function(c) {
+      html += '<td class="mexp-cell" data-component="' + _mexpEsc(row.component)
+        + '" data-kind="' + _mexpEsc(c.kind) + '"'
+        + ' data-status="' + _mexpEsc(c.status) + '"'
+        + (c.absent ? ' data-absent="1"' : '')
+        + ' title="' + _mexpEsc(MM.cellText(row.component, c)) + '">'
+        + _mexpEsc(c.absent ? '−' : c.mark) + '</td>';
+    });
+    html += '</tr>';
+  });
+  body.innerHTML = html;
+
+  var cells = body.querySelectorAll('td.mexp-cell, td.mexp-mcomp');
+  for (var i = 0; i < cells.length; i++) {
+    cells[i].addEventListener('click', function(ev) {
+      var td = ev.currentTarget;
+      var c = td.getAttribute('data-component')
+        || td.parentNode.getAttribute('data-component');
+      if (td.getAttribute('data-absent') === '1') return;
+      _mexpPickCell(c, td.getAttribute('data-kind') || '');
+    });
+  }
+  _mexpMarkPicked();
+}
+
 function openMaterialExport() {
   var modal = document.getElementById('mexp-modal');
   if (!modal || !window.MA.materialExport || !window.MA.workspace) return Promise.resolve();
   var state = _mexpSel('mexp-state');
   if (state) state.textContent = '';
   _mexpFiles = [];
+  _mexpEntries = [];
   _mexpRenderComponents();
   modal.style.display = 'flex';
-  return window.MA.workspace.listFiles(_wsFileDir()).then(function(list) {
-    _mexpFiles = list || [];
+  // 日時が要る (資料用より元の図が新しいかを残りの表に出すため)。日時の取れない
+  // 一覧しか返らない環境でも表は出る (materialBoard が鮮度を「最新」に倒さない)。
+  var WS = window.MA.workspace;
+  var p = WS.listFileEntries ? WS.listFileEntries(_wsFileDir()) : WS.listFiles(_wsFileDir());
+  return Promise.resolve(p).then(function(list) {
+    _mexpEntries = list || [];
+    _mexpFiles = _mexpEntries.map(function(e) {
+      return (e && typeof e === 'object') ? String(e.name || '') : String(e == null ? '' : e);
+    }).filter(function(n) { return n !== ''; });
     _mexpRenderComponents();
   });
 }
