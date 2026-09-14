@@ -777,6 +777,18 @@ html, body {
   font-size: 10px;
   color: var(--text-secondary);
 }
+/* 版 1 本ぶんの行。「開く」と「戻す」を横に並べる (BLK-primary-20260913-0306-friction) */
+#folder-panel .folder-version-row { display: flex; gap: 2px; align-items: stretch; }
+#folder-panel button.folder-version-restore {
+  flex: 0 0 auto;
+  font-size: 10px;
+  padding: 1px 6px;
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--accent);
+  white-space: nowrap;
+}
 #folder-panel button.folder-version {
   width: 100%;
   text-align: left;

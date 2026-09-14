@@ -116,3 +116,29 @@ describe('versionHistory.goneRows', () => {
     expect(vh.goneRows(null)).toEqual([]);
   });
 });
+
+// BLK-primary-20260913-0306-friction: 版は「別タブで開く」ことしかできず、壊れた図を
+// 直すには開いた版を全文選択して打ち直すしかなかった (59 行・約 1000 字を 1 手順で
+// 打ち直した run がある)。一覧の版に「戻す」を出すための文言をここに置く。
+describe('versionHistory の「戻す」', () => {
+  test('ボタンの文言は短く 1 語', () => {
+    expect(vh.restoreLabel()).toBe('戻す');
+  });
+
+  test('説明は、どの図をいつの版に戻すかと、取り消せることを言う', () => {
+    var t = vh.restoreTitle('driver_common_class', '20260913-031500');
+    expect(t).toContain('driver_common_class を');
+    expect(t).toContain(vh.label('20260913-031500'));
+    expect(t).toContain('Ctrl+Z');
+  });
+
+  test('戻したあとの 1 行は、戻した先の版を名指しする', () => {
+    expect(vh.restoredLine('diagram1', '20260913-031500'))
+      .toBe('diagram1 を ' + vh.label('20260913-031500') + ' の版に戻しました（Ctrl+Z で取り消せます）');
+  });
+
+  test('同じ中身の版に押したときは、何も起きなかったように見せない', () => {
+    expect(vh.unchangedLine('diagram1', '20260913-031500'))
+      .toContain('既に');
+  });
+});

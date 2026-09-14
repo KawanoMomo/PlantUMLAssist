@@ -70,6 +70,27 @@ window.MA.versionHistory = (function() {
     return _s(name) + '@' + _s(stamp);
   }
 
+  // ── 版を今の図に流し込む (BLK-primary-20260913-0306-friction) ────────────
+  // 版は「別タブで開く」ことしかできず、内容が壊れた図を直すには開いた版を全文
+  // 選択して元の図に打ち直すしかなかった (59 行・約 1000 字を 1 手順で打ち直した
+  // run がある)。一覧の版に「戻す」を付け、打鍵ではなく 1 クリックで戻せるようにする。
+  // 直前の中身は server が上書きの手前で退避するので、戻し自体も取り消せる。
+  function restoreLabel() { return '戻す'; }
+
+  function restoreTitle(name, stamp) {
+    return _s(name) + ' を ' + label(stamp) + ' の版の中身に戻します'
+      + '（今の中身は控えに残り、Ctrl+Z でも取り消せます）';
+  }
+
+  function restoredLine(name, stamp) {
+    return _s(name) + ' を ' + label(stamp) + ' の版に戻しました（Ctrl+Z で取り消せます）';
+  }
+
+  // 同じ中身の版に「戻す」を押したとき。何も起きなかったように見せない。
+  function unchangedLine(name, stamp) {
+    return _s(name) + ' は既に ' + label(stamp) + ' の版と同じ中身です';
+  }
+
   // 一覧のボタンに出す「履歴 N」。0 のときはボタン自体を出さない。
   function countLabel(n) {
     var c = typeof n === 'number' && n > 0 ? n : 0;
@@ -95,6 +116,8 @@ window.MA.versionHistory = (function() {
     kindOf: kindOf,
     rows: rows,
     openName: openName,
+    restoreLabel: restoreLabel, restoreTitle: restoreTitle,
+    restoredLine: restoredLine, unchangedLine: unchangedLine,
     countLabel: countLabel,
     goneRows: goneRows,
   };
