@@ -353,6 +353,34 @@ VERIFY_SVG_EXPECTED = {
     'fields': VERIFY_SVG_API_DOC['request']['fields'],
     'doc': 'GET /verify-svg',
     'example': VERIFY_SVG_API_DOC['example'],
+    # BLK-reviewer-20260914-1606: 日本語の説明は端末が cp932 だと化けて読めない。
+    # **化けた応答をそのまま読んでも形が分かる**ように、同じ内容を ASCII でも併記する
+    # (読み直しの打鍵をゼロにする。文字コードを選ぶ逃げ道は二の矢)。
+    'fieldsAscii': {
+        'types': "required. array of diagram names without extension, 1 to 200",
+        'dir': "optional. save folder, full path. default: the default save folder",
+        'mode': "optional. 'local' (default, bundled Java) or 'online' (sends to plantuml.com)",
+    },
+    'charset': "garbled? add ?charset=ascii to the URL (or send Accept-Charset: shift_jis)",
+}
+
+# BLK-reviewer-20260914-1606: 応答本文は常に utf-8 で返しているが、cp932 のコンソールから
+# curl / python で叩くと端末の側で日本語が化け、fields の説明も example も読めないまま
+# server.py を grep し直すことになっていた。どの文字コードで受け取るかを呼ぶ側が選べるようにする
+# (既定は今までどおり utf-8。宣言する charset と実バイト列は必ず一致させる):
+#   - `?charset=ascii` / `Accept-Charset: us-ascii` → \uXXXX 逃がしの純 ASCII。端末を問わず化けない
+#   - `?charset=cp932` / `Accept-Charset: shift_jis` → cp932。日本語 Windows の端末でそのまま読める
+JSON_CHARSETS = {
+    '': ('utf-8', 'utf-8'),
+    'utf-8': ('utf-8', 'utf-8'),
+    'utf8': ('utf-8', 'utf-8'),
+    'ascii': ('us-ascii', 'ascii'),
+    'us-ascii': ('us-ascii', 'ascii'),
+    'cp932': ('Shift_JIS', 'cp932'),
+    'ms932': ('Shift_JIS', 'cp932'),
+    'sjis': ('Shift_JIS', 'cp932'),
+    'shift_jis': ('Shift_JIS', 'cp932'),
+    'shift-jis': ('Shift_JIS', 'cp932'),
 }
 
 # GET /api — 窓口の索引。docs/api.md と同じ並びで、1 行ずつ何をするかを言う。
@@ -823,12 +851,34 @@ class Handler(BaseHTTPRequestHandler):
             return self._send_json(500, {'error': f'保存できません: {exc}'})
         self._send_json(200, {'path': str(target)})
 
+    def _json_charset(self):
+        """応答本文の文字コードを呼ぶ側の希望から決める (BLK-reviewer-20260914-1606)。
+
+        `?charset=` を優先し、無ければ `Accept-Charset` の先頭を見る。知らない名前は
+        既定の utf-8。戻り値は (Content-Type に書く名前, python の codec 名)。
+        """
+        want = ''
+        try:
+            vals = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get('charset')
+        except ValueError:
+            vals = None
+        if vals:
+            want = vals[0]
+        if not want:
+            want = (self.headers.get('Accept-Charset') or '').split(',')[0].split(';')[0]
+        return JSON_CHARSETS.get(want.strip().lower(), JSON_CHARSETS[''])
+
     def _send_json(self, code, payload):
         # BLK-reviewer-20260907-0043: エラーメッセージも API 仕様も日本語なので、
         # エスケープに潰さずそのまま読める形で返す (curl から読む窓口である)。
-        body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+        # BLK-reviewer-20260914-1606: 既定は utf-8 のまま、呼ぶ側が ascii / cp932 を選べる。
+        label, codec = self._json_charset()
+        text = json.dumps(payload, ensure_ascii=(codec == 'ascii'))
+        # cp932 に無い文字 (絵文字・⇄ など) は \uXXXX に逃がす。宣言した文字コードで
+        # 必ず decode できる形にして、「宣言と実バイト列が食い違う」を作らない。
+        body = text.encode(codec, 'backslashreplace')
         self.send_response(code)
-        self.send_header('Content-Type', 'application/json; charset=utf-8')
+        self.send_header('Content-Type', 'application/json; charset=%s' % label)
         self.send_header('Content-Length', str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -1673,18 +1723,23 @@ class Handler(BaseHTTPRequestHandler):
         try:
             data = json.loads(body)
         except ValueError:
-            self._send_json(400, {'error': 'invalid JSON', 'expected': VERIFY_SVG_EXPECTED})
+            self._send_json(400, {'error': 'invalid JSON',
+                                  'errorAscii': 'request body is not valid JSON',
+                                  'expected': VERIFY_SVG_EXPECTED})
             return
         names = data.get('types')
         if not isinstance(names, list) or not names:
             self._send_json(400, {
                 'error': ("'types' に確かめる図の名前を 1 つ以上入れてください "
                           "(puml / svg は渡さない。server が dir から読む)"),
+                # 化けても読める言い直し (BLK-reviewer-20260914-1606)。
+                'errorAscii': "'types' is required: a non-empty array of diagram names",
                 'expected': VERIFY_SVG_EXPECTED,
             })
             return
         if len(names) > 200:
             self._send_json(400, {'error': '一度に確かめられるのは 200 枚までです',
+                                  'errorAscii': "'types' holds at most 200 names",
                                   'expected': VERIFY_SVG_EXPECTED})
             return
         save_dir = self._autosave_resolve_dir(data.get('dir'))
@@ -1692,6 +1747,7 @@ class Handler(BaseHTTPRequestHandler):
         if mode not in ('local', 'online'):
             self._send_json(400, {
                 'error': "unknown mode: %r — 'local' か 'online' です" % (mode,),
+                'errorAscii': "'mode' is 'local' or 'online'",
                 'expected': VERIFY_SVG_EXPECTED,
             })
             return
