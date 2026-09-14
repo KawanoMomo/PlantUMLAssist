@@ -8,6 +8,7 @@
 // その項目を skipped にするだけで、残りの監査は結果を返す。
 
 const fs = require('fs');
+const crypto = require('crypto');
 const path = require('path');
 // BLK-reviewer-20260907-2203: 件数表だけでは「同じ 5 件」の中身が入れ替わった
 // ことも、カテゴリが新設されたことも読めない。前回の JSON との差分を要約に足す。
@@ -117,7 +118,7 @@ const AUDITS = {
   // timer_state.puml だけ SVG が無いことに気付いたのは 17 枚の目視突合の産物で、
   // 仕組みとしては存在しなかった。出力物の有無は DSL ではなくフォルダに書いてある。
   svg: (MA, docs) => (MA.svgFreshness
-    ? withStaleReasons(MA, MA.svgFreshness.scan(svgEntries(docs)), docs) : undefined),
+    ? withStaleReasons(MA, MA.svgFreshness.scan(svgEntries(docs, MA)), docs) : undefined),
   // BLK-primary-20260908-1403-wish: 「dma_state だけ 1 メッセージが 4 遷移」は
   // 名前の食い違いではないので family / trace のどこにも出ず、出力テキストを
   // 目で読んで気付くしかなかった。系統ごとの遷移密度を並べ、中央値から外れた
@@ -145,19 +146,41 @@ const AUDITS = {
 // 判定 (無い / 古い / 追いついている) は GUI と同じモジュールに任せる。
 // path を持たない docs (テストが手で組んだもの) は unknown ではなく対象外にする
 // — 「ファイルとして存在しない図」に出力漏れを問うても直しようがない。
-function svgEntries(docs) {
+// BLK-reviewer-20260915-0406: ここが載せていたのは mtime 2 つだけで、GUI の一覧
+// (server の /autosave) が持つ hash (今の puml の sha1) と svgSource (svg 末尾の印)
+// が入っていなかった。svg-freshness.contentOf は印と hash の突合で内容一致を言うので、
+// 入っていなければ答えは常に 'unverified' — isSettled を一度も通らず、mtime だけで
+// 「SVG 古」になっていた (findings.js の継続追跡もその誤検知をそのまま持ち越す)。
+// server と同じ 3 つを、同じ読み方でここでも載せる。
+function svgEntries(docs, MA) {
   const out = [];
+  const stamp = MA && MA.svgStamp;
   for (const d of (Array.isArray(docs) ? docs : [])) {
     if (!d || !d.path) continue;
-    const svgPath = d.path.replace(/\.[^.\\/]+$/, '') + '.svg';
+    const svgPath = d.path.replace(/\.[^.\/]+$/, '') + '.svg';
     let mtime = null;
     let svgMtime = null;
     try { mtime = fs.statSync(d.path).mtime.toISOString(); } catch (e) { mtime = null; }
     try { svgMtime = fs.statSync(svgPath).mtime.toISOString(); } catch (e) { svgMtime = null; }
-    out.push({ name: d.name, mtime: mtime, svgMtime: svgMtime });
+    const entry = { name: d.name, mtime: mtime, svgMtime: svgMtime,
+      hash: null, svgSource: null, svgHash: null };
+    // 読めなかったものは null のまま = 従来どおり「言えない」に落とす (嘘を足さない)。
+    try { entry.hash = _sha1(fs.readFileSync(d.path)); } catch (e) { entry.hash = null; }
+    if (svgMtime !== null) {
+      try {
+        const raw = fs.readFileSync(svgPath);
+        entry.svgHash = _sha1(raw);
+        const n = stamp ? stamp.tailBytes() : 200;
+        const tail = raw.slice(Math.max(0, raw.length - n)).toString('utf-8');
+        entry.svgSource = (stamp ? stamp.readStamp(tail) : '') || null;
+      } catch (e) { /* 読めない svg は印なし扱い */ }
+    }
+    out.push(entry);
   }
   return out;
 }
+
+function _sha1(buf) { return crypto.createHash('sha1').update(buf).digest('hex'); }
 
 // BLK-reviewer-20260914-2106: 「SVG が古い」の中身を割る。
 // svg に畳まれている書き出し当時の DSL と、今の .puml を、描かれる行だけで比べる。
