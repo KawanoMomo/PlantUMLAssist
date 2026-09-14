@@ -82,6 +82,13 @@ test('手順4 置換の前後を並べて見せられ、その画面を控えら
   // 何行がどう変わったかの中身は unit (blk-primary-0303-wish-compare-diff-lines) で守る。
   await expect(page.locator('#compare-diff-head')).toContainText('前回保存時点');
 
+  // BLK-primary-20260914-1206: 自動保存で「前回保存時点から変更なし」になった図は、
+  // それだけでは会議で前後を出せない。書き込み履歴の回を基準にした前後を同じ行に
+  // 足し、差分の行も出す (どちらの基準の話かは文言で読み分けられる)。
+  await expect(page.locator('#compare-diff-head')).toHaveAttribute('data-basis', 'write-history');
+  await expect(page.locator('#compare-diff-head')).toContainText('の前から');
+  await expect(page.locator('#compare-diff-view .cd-line.del').first()).toContainText('SpiDrv');
+
   // 到達条件その5: 差分から見比べへ戻っても、変更前の図はそのまま出ている
   // (会議中にパネルを開き直さない)。
   await page.locator('#compare-mode-ref').click();
@@ -248,6 +255,17 @@ test('手順4 保存フォルダへ直接書いた回を、後から履歴で選
   await expect(page.locator('#compare-svg')).toContainText('SpiDrv', { timeout: 25000 });
   await expect(page.locator('#compare-status')).toHaveText('変更前 (読むだけ)', { timeout: 25000 });
 
+  // 到達条件その2b (BLK-primary-20260914-1206): 同じパネルの「± 差分」に移っても
+  // 「まだ保存していない (基準なし)」で止まらない。保存フォルダへ直接書いた図は
+  // 書く前が基準になるので、直した行がそのまま + / − で読める。
+  await page.locator('#compare-mode-diff').click();
+  const dhead = page.locator('#compare-diff-head');
+  await expect(dhead).toContainText('driver_common_class');
+  await expect(dhead).not.toContainText('基準なし');
+  await expect(page.locator('#compare-diff-view .cd-line.del').first()).toContainText('SpiDrv');
+  await expect(page.locator('#compare-diff-view .cd-line.add').first()).toContainText('Spi_Driver');
+  await page.locator('#compare-mode-ref').click();
+
   await page.screenshot({ path: shotOut('primary-04-write-history.png'), fullPage: true });
 
   // 到達条件その3: ブラウザを開き直しても同じ回を出せる (会議の準備を、直した
@@ -262,6 +280,17 @@ test('手順4 保存フォルダへ直接書いた回を、後から履歴で選
   await entry2.locator('.wh-file[data-doc-name="driver_common_class"]').click();
   await page2.waitForTimeout(1500);
   await expect(page2.locator('#compare-svg')).toContainText('SpiDrv', { timeout: 25000 });
+
+  // 到達条件その3b: 開き直して自動保存が走り、前回保存時点が「今」になった後でも、
+  // ± 差分 は書き込み履歴のその回を基準にして前後を出す (基準ごと今になって
+  // 変更前が消える、が起きない)。
+  await page2.waitForTimeout(1500);
+  await page2.locator('#compare-mode-diff').click();
+  const dhead2 = page2.locator('#compare-diff-head');
+  await expect(dhead2).not.toContainText('基準なし');
+  await expect(page2.locator('#compare-diff-view .cd-line.del').first()).toContainText('SpiDrv');
+  await expect(page2.locator('#compare-diff-view .cd-line.add').first()).toContainText('Spi_Driver');
+  await page2.locator('#compare-mode-ref').click();
 
   // 到達条件その4: 会議が終われば回ごとに捨てられる (古い回が出続けない)。
   await page2.locator('#compare-hist-list .wh-entry').first().locator('.wh-drop').click();
