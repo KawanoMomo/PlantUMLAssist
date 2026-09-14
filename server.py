@@ -414,6 +414,10 @@ API_INDEX = {
         {'endpoint': 'GET /rename-pairs', 'summary': 'そのフォルダで打たれた置換の組', 'request': '?dir='},
         {'endpoint': 'POST /rename-pairs', 'summary': '置換の組を 1 つ覚える',
          'request': "{dir, from, to, hits}"},
+        {'endpoint': 'GET /doc-sets', 'summary': 'そのフォルダに登録した資料セット', 'request': '?dir='},
+        {'endpoint': 'POST /doc-sets', 'summary': '資料セットを 1 つ登録する (同じ名前は置き換え)',
+         'request': "{dir, name, docs}"},
+        {'endpoint': 'DELETE /doc-sets', 'summary': '資料セットを 1 つ消す', 'request': '?dir=&name='},
         {'endpoint': 'POST /file-roles', 'summary': '保存フォルダの _roles.json を置き換える',
          'request': "{dir, roles}"},
         {'endpoint': 'POST /export-log', 'summary': '書き出しの控えを 1 件足す'},
@@ -614,6 +618,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.split('?')[0] == '/rename-pairs':
             with _fs_lock:
                 return self._handle_rename_pairs_get()
+        if self.path.split('?')[0] == '/doc-sets':
+            with _fs_lock:
+                return self._handle_doc_sets_get()
         if self.path.startswith('/autosave'):
             with _fs_lock:
                 return self._handle_autosave_get()
@@ -675,6 +682,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == '/rename-pairs':
             with _fs_lock:
                 return self._handle_rename_pairs_post()
+        if self.path == '/doc-sets':
+            with _fs_lock:
+                return self._handle_doc_sets_post()
         if self.path == '/file-roles':
             with _fs_lock:
                 return self._handle_file_roles_post()
@@ -1605,6 +1615,111 @@ class Handler(BaseHTTPRequestHandler):
             return
         self._send_json(200, {'dir': str(save_dir), 'pairs': pairs})
 
+    # --- 資料セット (BLK-primary-20260914-2006-wish) --------------------------
+    #
+    # 「全図を SVG で保存 (zip)」の対象は開いているタブだけで、保存フォルダに
+    # 25 枚あってもタブが 1 枚なら 1 枚しか入らなかった。資料に入れる図の組は
+    # タブの状態ではなく利用者の決めごとなので、名前を付けてフォルダ側に置く。
+    # 図と同じフォルダの持ち物なので、ブラウザやプロファイルが変わっても残る。
+    SETS_DIRNAME = '_sets'
+    SETS_MAX = 50
+
+    def _sets_path(self, save_dir):
+        return save_dir / self.SETS_DIRNAME / 'sets.json'
+
+    def _read_doc_sets(self, save_dir):
+        try:
+            data = json.loads(self._sets_path(save_dir).read_text(encoding='utf-8'))
+        except (ValueError, OSError):
+            return []
+        if not isinstance(data, dict):
+            return []
+        sets = data.get('sets')
+        if not isinstance(sets, list):
+            return []
+        out = []
+        for s in sets:
+            if not isinstance(s, dict):
+                continue
+            name = s.get('name')
+            docs = s.get('docs')
+            if not isinstance(name, str) or not name or not isinstance(docs, list):
+                continue
+            out.append({'name': name,
+                        'docs': [d for d in docs if isinstance(d, str) and d],
+                        'at': s.get('at') if isinstance(s.get('at'), str) else ''})
+        return out
+
+    def _write_doc_sets(self, save_dir, sets):
+        path = self._sets_path(save_dir)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        _atomic_write_text(path, json.dumps({'sets': sets}, ensure_ascii=False, indent=1))
+
+    def _handle_doc_sets_get(self):
+        """GET /doc-sets?dir= — そのフォルダに登録した資料セット."""
+        parsed = urllib.parse.urlparse(self.path)
+        params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
+        save_dir = self._autosave_resolve_dir(params.get('dir'))
+        self._send_json(200, {'dir': str(save_dir), 'sets': self._read_doc_sets(save_dir)})
+
+    def _handle_doc_sets_post(self):
+        """POST /doc-sets {dir, name, docs} — 1 つ登録する (同じ名前は置き換え)."""
+        length = int(self.headers.get('Content-Length', 0))
+        try:
+            data = json.loads(self.rfile.read(length).decode('utf-8'))
+        except ValueError:
+            self._send_json(400, {'error': 'invalid JSON'})
+            return
+        if not isinstance(data, dict):
+            self._send_json(400, {'error': 'body must be an object'})
+            return
+        name = data.get('name')
+        docs = data.get('docs')
+        if not isinstance(name, str) or not name.strip():
+            self._send_json(400, {'error': 'name must be a non-empty string'})
+            return
+        if not isinstance(docs, list):
+            self._send_json(400, {'error': 'docs must be a list'})
+            return
+        # 図が 1 枚も無いセットは作らない。選べてしまうと、また 0 枚の zip が出る。
+        names = []
+        for d in docs:
+            if isinstance(d, str) and d and d not in names:
+                names.append(d)
+        if not names:
+            self._send_json(400, {'error': 'docs must not be empty'})
+            return
+        name = name.strip()
+        save_dir = self._autosave_resolve_dir(data.get('dir'))
+        entry = {'name': name, 'docs': names,
+                 'at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}
+        sets = [s for s in self._read_doc_sets(save_dir) if s.get('name') != name]
+        sets.insert(0, entry)
+        sets = sets[:self.SETS_MAX]
+        try:
+            self._write_doc_sets(save_dir, sets)
+        except OSError as e:
+            self._send_json(500, {'error': f'write failed: {e}'})
+            return
+        self._send_json(200, {'dir': str(save_dir), 'sets': sets})
+
+    def _handle_doc_sets_delete(self):
+        """DELETE /doc-sets?dir=&name= — 1 つ消す."""
+        parsed = urllib.parse.urlparse(self.path)
+        params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
+        name = (params.get('name') or '').strip()
+        if not name:
+            self._send_json(400, {'error': 'name is required'})
+            return
+        save_dir = self._autosave_resolve_dir(params.get('dir'))
+        sets = [s for s in self._read_doc_sets(save_dir) if s.get('name') != name]
+        try:
+            self._write_doc_sets(save_dir, sets)
+        except OSError as e:
+            self._send_json(500, {'error': f'write failed: {e}'})
+            return
+        self._send_json(200, {'dir': str(save_dir), 'sets': sets})
+
     def _autosave_read_meta(self, save_dir):
         p = self._autosave_meta_path(save_dir)
         if not p.exists():
@@ -2186,6 +2301,9 @@ class Handler(BaseHTTPRequestHandler):
     # --- autosave DELETE -----------------------------------------------------
 
     def do_DELETE(self):
+        if self.path.split('?')[0] == '/doc-sets':
+            with _fs_lock:
+                return self._handle_doc_sets_delete()
         if self.path.split('?')[0] == '/tickets':
             with _fs_lock:
                 return self._handle_tickets_delete()
