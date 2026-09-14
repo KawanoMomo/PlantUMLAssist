@@ -1738,6 +1738,24 @@ html, body {
 /* BLK-reviewer-20260912-2206-wish: 同名ファイルを左右に並べて読む。
    食い違う語だけに色を置き、揃っている語は本文と同じ色のままにする
    (全部光ると、どこを見ればよいかが本文を読み直さないと決まらない)。 */
+/* 指摘.md を 1 件ずつ並べる (BLK-junior-20260913-0306-wish) */
+#peek-note { padding-bottom: 10px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+#peek-note .note-head { font-size: 12px; font-weight: 600; padding-bottom: 2px; }
+#peek-note .note-summary { font-size: 11px; color: var(--text-secondary); padding-bottom: 6px; }
+#peek-note .note-hint { font-size: 11px; color: var(--text-secondary); padding: 4px 0; }
+#peek-note .note-finding {
+  display: block; width: 100%; text-align: left; margin: 0 0 4px 0; padding: 5px 7px;
+  font-size: 11px; line-height: 1.5; background: var(--bg-secondary);
+  border: 1px solid var(--border); border-radius: 3px; color: var(--text-primary); cursor: pointer;
+}
+#peek-note .note-finding:hover { border-color: var(--accent); }
+#peek-note .note-finding.selected { border-color: var(--accent); color: var(--accent); }
+#peek-note .note-finding[data-note-ready="0"] { opacity: 0.62; cursor: default; }
+#peek-note .note-mark {
+  display: inline-block; margin-right: 4px; padding: 0 4px; border-radius: 2px;
+  font-size: 10px; background: rgba(235, 203, 139, 0.22); color: #ebcb8b;
+}
+#peek-note .note-docs { color: var(--text-secondary); }
 #peek-sbs { padding-bottom: 10px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
 #peek-sbs .sbs-head { font-size: 12px; font-weight: 600; padding-bottom: 4px; }
 #peek-sbs .sbs-summary { font-size: 11px; color: var(--text-secondary); padding-bottom: 6px; }
@@ -5725,6 +5743,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/blank-doc.js"></script>
 <script src="src/core/domain-cohort.js"></script>
 <script src="src/core/side-by-side.js"></script>
+<script src="src/core/review-note.js"></script>
 <script src="src/core/domain-verdict.js"></script>
 <script src="src/core/version-history.js"></script>
 <script src="src/core/diagram-kind.js"></script>
@@ -6227,6 +6246,9 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button type="button" id="peek-compare" disabled title="この図を手本として自分の書きかけの右に並べ、対応表で足りない状態・遷移を出す">⇔ 自分の図と並べる</button>
         <button type="button" id="peek-cohort-toggle" title="同じドメイン名の図をフォルダ横断で並べる">🔀 ドメインで揃える</button>
         <button type="button" id="peek-sbs-toggle" title="同じファイル名を持つ 2 人の図を左右に並べ、部品名・メッセージ名の食い違いだけを光らせる">⇔ 同名で並べる</button>
+        <!-- BLK-junior-20260913-0306-wish: 指摘.md の 1 件を選ぶと、そこに書かれた
+             図名を自分と先輩のフォルダから見つけ、並べて見る画面をその組で開く。 -->
+        <button type="button" id="peek-note-toggle" title="隣のフォルダの指摘.md を 1 件ずつ並べ、押した指摘の図を自分と先輩のフォルダから見つけて並べて見る">🔖 指摘から選ぶ</button>
         <button type="button" id="peek-cohort-templates" style="display:none;" title="アプリ同梱テンプレ・既定サンプル由来のドメインも突合に含める">📄 テンプレも表示</button>
         <button type="button" id="peek-prev" title="前の図">↑</button>
         <button type="button" id="peek-next" title="次の図">↓</button>
@@ -6237,6 +6259,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <div id="peek-dirs"></div>
       <div id="peek-files"></div>
       <div id="peek-view">
+        <div id="peek-note" style="display:none;"></div>
         <div id="peek-cohort" style="display:none;"></div>
         <div id="peek-sbs" style="display:none;"></div>
         <div id="peek-title"></div>

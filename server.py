@@ -374,6 +374,8 @@ API_INDEX = {
          'request': "{type, dir, svg}"},
         {'endpoint': 'GET /autosave-versions', 'summary': '1 枚の図の版の一覧', 'request': '?dir=&type='},
         {'endpoint': 'GET /peek-dirs', 'summary': '保存フォルダの候補を覗く'},
+        {'endpoint': 'GET /peek-notes', 'summary': '隣のフォルダに置かれた指摘 (.md) を読む',
+         'request': '?dir='},
         {'endpoint': 'GET /vault', 'summary': '保管庫の中身', 'request': '?dir='},
         {'endpoint': 'POST /vault', 'summary': '保管庫へ入れる'},
         {'endpoint': 'GET /tickets', 'summary': '変更チケットの一覧', 'request': '?dir='},
@@ -479,6 +481,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.split('?')[0] == '/peek-dirs':
             with _fs_lock:
                 return self._handle_peek_dirs()
+        if self.path.split('?')[0] == '/peek-notes':
+            with _fs_lock:
+                return self._handle_peek_notes()
         if self.path.split('?')[0] == '/render':
             return self._send_json(200, RENDER_API_DOC)
         if self.path.split('?')[0] == '/verify-svg':
@@ -786,6 +791,57 @@ class Handler(BaseHTTPRequestHandler):
         # 図が 1 枚も無いフォルダは行き先にならない (自分の保存先だけは空でも残す)。
         entries = [e for e in entries if e['files'] > 0 or e['current']]
         self._send_json(200, {'current': str(cur), 'parent': str(parent), 'dirs': entries})
+
+    def _handle_peek_notes(self):
+        """BLK-junior-20260913-0306-wish: 隣のフォルダに置かれた指摘 (.md) を読む。
+
+        reviewer の指摘は `.puml` ではないので /peek-dirs の行き先にも
+        /autosave の一覧にも出ない (指摘.md だけのフォルダは図が 0 枚)。
+        GUI から指摘を 1 件ずつ選べるようにするには本文が要るので、ここで
+        「保存先とその兄弟フォルダの直下にある .md」だけを読んで返す。
+        読むだけの口で、親より上は辿らないし書き込みもしない。
+        """
+        parsed = urllib.parse.urlparse(self.path)
+        params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
+        cur = self._autosave_resolve_dir(params.get('dir'))
+        notes = []
+        seen = set()
+        # 1 ファイルの上限。指摘は人が書く文章なので、これを超えるものは
+        # 指摘ではない (巨大な生成物を GUI へ流し込まない)。
+        limit = 256 * 1024
+
+        def add_dir(path):
+            key = str(path)
+            if key in seen:
+                return
+            seen.add(key)
+            try:
+                if not (path.exists() and path.is_dir()):
+                    return
+                files = sorted(
+                    (f for f in path.iterdir() if f.is_file() and f.suffix.lower() == '.md'),
+                    key=lambda f: f.name.lower())
+            except OSError:
+                return
+            for f in files:
+                try:
+                    if f.stat().st_size > limit:
+                        continue
+                    text = f.read_text(encoding='utf-8', errors='replace')
+                except OSError:
+                    continue
+                notes.append({'folder': path.name, 'dir': str(path), 'name': f.name,
+                              'path': str(f), 'text': text,
+                              'current': str(path) == str(cur)})
+
+        add_dir(cur)
+        try:
+            for child in sorted(cur.parent.iterdir(), key=lambda p: p.name.lower()):
+                if child.is_dir():
+                    add_dir(child)
+        except OSError:
+            pass
+        self._send_json(200, {'current': str(cur), 'notes': notes})
 
     def _autosave_validate_type(self, dt):
         """Return True if dt is a safe filename component."""

@@ -459,3 +459,119 @@ test.describe('junior 手順 1〜2: 手本の無い部品を 1 回の入力で�
     await expect(page.locator('#btn-part-create')).toBeEnabled();
   });
 });
+
+// BLK-junior-20260913-0306-wish: 8 周目の手順 1 は「persona-data\reviewer\指摘.md を
+// 開き、自分宛の指摘を確認する。併せて persona-data\primary の該当図を開いて先輩側の
+// 詳細を見る」。指摘.md は GUI の外のテキストなので、junior は指摘文から図名を目で拾い、
+// 覗き機能で自分と先輩のフォルダから同じ名前を探し当ててから見比べていた。
+// 指摘 1 件を押せば、その図が junior ⇔ primary で並んだ状態で出ることを到達条件にする。
+const fs = require('fs');
+const nodePath = require('path');
+const S1 = require('./_scenario');
+
+const NOTE_ROOT = DIR + '-note';
+const NOTE_MINE = NOTE_ROOT + '/junior';
+const NOTE_SENIOR = NOTE_ROOT + '/primary';
+const NOTE_REVIEWER = NOTE_ROOT + '/reviewer';
+
+function absOf(rel) {
+  return nodePath.join(__dirname, '..', '..', '..', rel.replace(/^\.\//, ''));
+}
+
+// reviewer が実際に書いている形 (自由文、見出しに【】、図名は本文に混ざる)。
+const REVIEW_NOTE = [
+  '# junior への指摘',
+  '自分宛の分だけ読んでください。',
+  '',
+  '## 【継続】gpio_init_sequence の部品名不一致',
+  'junior 側 `Gpio`(2行のみ)/ primary 側 `Gpio_Driver` 詳細化、のまますり合わせ未反映。',
+  'md5: 70bc06fa662e369d0b8da6a0596f766a',
+  '',
+  '## 【参考】gpio_state は問題なし',
+  'そのままで構いません。',
+].join('\n');
+
+const MINE_SEQ = ['@startuml', 'title GPIO 初期化シーケンス',
+  'participant Gpio', 'participant Hw_Ctrl',
+  'Gpio -> Hw_Ctrl : Gpio_Init', '@enduml'].join('\n');
+const SENIOR_SEQ = ['@startuml', 'title GPIO 初期化シーケンス',
+  'participant Gpio_Driver', 'participant Hw_Ctrl', 'participant Nvic',
+  'Gpio_Driver -> Hw_Ctrl : Gpio_Init',
+  'Gpio_Driver -> Nvic : Gpio_EnableIrq', '@enduml'].join('\n');
+
+test.describe('junior 手順 1: 指摘.md の 1 件から先輩の図と並べて見る', () => {
+  test.beforeEach(async ({ page }) => {
+    await S1.bootWithSaveDir(page, NOTE_MINE);
+    await S1.clearDir(page, NOTE_MINE);
+    await S1.clearDir(page, NOTE_SENIOR);
+    await S1.putDoc(page, NOTE_MINE, 'gpio_init_sequence', MINE_SEQ);
+    await S1.putDoc(page, NOTE_MINE, 'gpio_state', S1.GPIO_STATE);
+    await S1.putDoc(page, NOTE_SENIOR, 'gpio_init_sequence', SENIOR_SEQ);
+    // 指摘.md は図ではないので GUI からは置けない (reviewer が置くファイル)。
+    fs.mkdirSync(absOf(NOTE_REVIEWER), { recursive: true });
+    fs.writeFileSync(nodePath.join(absOf(NOTE_REVIEWER), '指摘.md'), REVIEW_NOTE, 'utf-8');
+    await page.reload();
+    await page.waitForSelector('#btn-tab-peek');
+  });
+
+  test('指摘 1 件を押すと、その図が自分 ⇔ 先輩で並んで出る', async ({ page }) => {
+    // 到達条件その1: 指摘.md の件が、押す前に「何が出るか」つきで並ぶ。
+    await page.locator('#btn-tab-peek').click();
+    await page.waitForSelector('#peek-modal');
+    await page.locator('#peek-note-toggle').click();
+    await page.waitForSelector('#peek-note .note-finding');
+    const first = page.locator('#peek-note .note-finding').first();
+    await expect(first).toContainText('継続');
+    await expect(first).toContainText('gpio_init_sequence (junior ⇔ primary) を並べる');
+    await expect(page.locator('#note-summary')).toContainText('1 件はクリック 1 回で');
+
+    // 到達条件その2: 押すだけで、本文が左右に並んだ状態になる (図名を自分で
+    // 拾って探し当てる工程が要らない)。
+    await first.click();
+    await page.waitForSelector('#sbs-grid');
+    await expect(page.locator('#sbs-head')).toContainText('gpio_init_sequence');
+    await expect(page.locator('#sbs-head')).toContainText('junior');
+    await expect(page.locator('#sbs-head')).toContainText('primary');
+
+    // 到達条件その3: 指摘された食い違い (Gpio / Gpio_Driver) がその場で光る。
+    await expect(page.locator('#sbs-summary')).toContainText('Gpio');
+    expect(await page.locator('#sbs-grid .sbs-mark').count()).toBeGreaterThan(0);
+
+    // 到達条件その4: 並べた図が指摘.md のどの件に当たるかが、その画面で読める。
+    await expect(page.locator('#sbs-note-status')).toContainText('部品名不一致');
+    await expect(page.locator('#sbs-note-status')).toHaveAttribute('data-note-clear', '0');
+  });
+
+  // 追記 (junior run 20260914-0906): 指摘.md に名前の挙がらない図を開いたとき、
+  // 「本当に指摘が無いか」を確かめるのに指摘.md を全文読み直していた。
+  test('指摘に挙がっていない図は「指摘はありません」と注記つきで言い切る', async ({ page }) => {
+    // 指摘.md に名前の出ない図。先輩側には別ドメインと決めた注記が残っている。
+    const TIMER = ['@startuml', 'state Uninit', 'Uninit --> Ready : Timer_Init', '@enduml'].join('\n');
+    await S1.putDoc(page, NOTE_MINE, 'timer_state', TIMER);
+    await S1.putDoc(page, NOTE_SENIOR, 'timer_state',
+      ['@startuml', "' domain-verdict: separate timer vs junior",
+        'state Uninit', 'Uninit --> Ready : Timer_Init', '@enduml'].join('\n'));
+    await page.reload();
+    await page.waitForSelector('#btn-tab-peek');
+
+    await page.locator('#btn-tab-peek').click();
+    await page.waitForSelector('#peek-modal');
+    await page.locator('#peek-sbs-toggle').click();
+    await page.waitForSelector('#peek-dirs .sbs-pair[data-sbs-pair="timer_state"]');
+    await page.locator('#peek-dirs .sbs-pair[data-sbs-pair="timer_state"]').click();
+    await page.waitForSelector('#sbs-note-status');
+    await expect(page.locator('#sbs-note-status')).toContainText('指摘はありません');
+    await expect(page.locator('#sbs-note-status')).toContainText('domain-verdict: separate');
+  });
+
+  test('並べる相手がいない指摘は、押しても理由が出るだけで済む', async ({ page }) => {
+    await page.locator('#btn-tab-peek').click();
+    await page.waitForSelector('#peek-modal');
+    await page.locator('#peek-note-toggle').click();
+    await page.waitForSelector('#peek-note .note-finding');
+    const second = page.locator('#peek-note .note-finding').nth(1);
+    await expect(second).toHaveAttribute('data-note-ready', '0');
+    await second.click();
+    await expect(page.locator('#note-summary')).toContainText('にしかありません');
+  });
+});
