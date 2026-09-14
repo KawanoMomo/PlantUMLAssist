@@ -69,12 +69,31 @@ window.MA.lineage = (function() {
     } catch (e) { return false; }
   }
 
+  // 図の在り処はフォルダと名前の対。部品名の付け方を先輩と揃えていると
+  // 「先輩の gpio_init_sequence」と「自分の gpio_init_sequence」が同名になるので、
+  // 名前だけで自分と同一視すると、先輩の図を継承元にできない
+  // (BLK-junior-20260914-1406)。同じフォルダの同じ名前だけが「自分自身」。
+  function samePath(dirA, dirB) {
+    var a = String(dirA == null ? '' : dirA).replace(/[\\/]+$/, '');
+    var b = String(dirB == null ? '' : dirB).replace(/[\\/]+$/, '');
+    return a.replace(/\\/g, '/').toLowerCase() === b.replace(/\\/g, '/').toLowerCase();
+  }
+
+  // 継承元に選べない相手か。フォルダが分からないときは名前が一致すれば自分とみなす
+  // (分からないまま登録すると、自分自身との差分を見続けることになる)。
+  function isSelf(child, parent, parentDir, selfDir) {
+    if (child !== parent) return false;
+    if (parentDir == null || selfDir == null || parentDir === '' ) return true;
+    return samePath(parentDir, selfDir);
+  }
+
   // 継承元を登録する。登録した時点の継承元の中身が「取り込み済みの基準」になる
   // (登録直後に「更新されています」と言われては、登録した意味がないため)。
   function set(child, parent, parentDsl, opts) {
     if (!child || !parent) return null;
-    if (child === parent) return null;   // 自分は自分の継承元になれない
     opts = opts || {};
+    // 自分は自分の継承元になれない。同名でもフォルダが違えば別の図なので登録できる。
+    if (isSelf(child, parent, opts.dir, opts.selfDir)) return null;
     var at = opts.at || _now();
     var rec = {
       parent: parent,
@@ -164,14 +183,24 @@ window.MA.lineage = (function() {
     };
   }
 
+  // 画面に出す継承元の呼び名。自分と同名の図 (先輩の同名図) はフォルダまで言わないと
+  // 自分自身を指しているように読める。
+  function parentLabel(child, parent, dir) {
+    var p = String(parent == null ? '' : parent);
+    if (p === '') return '';
+    if (p !== child || !dir) return p;
+    return p + ' (' + dir + ')';
+  }
+
   // 画面に出す 1 行。更新されているときは差分の行数まで言い切る
   // (「変わりました」だけでは、結局開いて見比べることになるため)。
   function statusLine(child, currentParentDsl) {
     var s = status(child, currentParentDsl);
     if (!s.has) return '継承元は未登録です';
-    if (!s.known) return '継承元 ' + s.parent + ' を読めませんでした (保存先を確かめてください)';
-    if (!s.updated) return '継承元 ' + s.parent + ' は取り込み済みです (前回取り込み時点から差分なし)';
-    return '継承元 ' + s.parent + ' が更新されています'
+    var name = parentLabel(child, s.parent, s.dir);
+    if (!s.known) return '継承元 ' + name + ' を読めませんでした (保存先を確かめてください)';
+    if (!s.updated) return '継承元 ' + name + ' は取り込み済みです (前回取り込み時点から差分なし)';
+    return '継承元 ' + name + ' が更新されています'
       + ' (前回取り込み時点との差分 ' + s.changed + ' 行: +' + s.added + ' -' + s.removed + ')';
   }
 
@@ -250,6 +279,9 @@ window.MA.lineage = (function() {
     delta: delta,
     status: status,
     statusLine: statusLine,
+    samePath: samePath,
+    isSelf: isSelf,
+    parentLabel: parentLabel,
     badgeText: badgeText,
     diffLines: diffLines,
     adopt: adopt,

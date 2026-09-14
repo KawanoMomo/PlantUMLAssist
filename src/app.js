@@ -5272,16 +5272,24 @@ function _lgFillParentOptions(child) {
   var esc = window.MA.htmlUtils.escHtml;
   var rec = LG ? LG.get(child) : null;
   var cur = rec ? rec.parent : '';
+  // BLK-junior-20260914-1406: 部品名の付け方を先輩と揃えていると、先輩の図も自分の図も
+  // 同じ名前になる。継承元にできるかどうかはフォルダと名前の対で決まるので、
+  // 探しているフォルダが自分の保存先と違うなら、同名の図も候補に残す。
+  var other = LG ? !LG.samePath(_lgDir(), _wsFileDir()) : false;
   var names = [];
-  try {
-    WS.list().forEach(function(d) { if (d.name && d.name !== child) names.push(d.name); });
-  } catch (e) {}
+  // 開いているタブは自分の保存先の図。別のフォルダを見ているときは混ぜない
+  // (同じ名前が 2 つ並び、どちらが先輩の図か選べなくなる)。
+  if (!other) {
+    try {
+      WS.list().forEach(function(d) { if (d.name && d.name !== child) names.push(d.name); });
+    } catch (e) {}
+  }
 
   function paint() {
     var seen = {};
     var opts = [];
     names.forEach(function(n) {
-      if (n === child || seen[n]) return;
+      if ((n === child && !other) || seen[n]) return;
       seen[n] = 1;
       opts.push(n);
     });
@@ -5385,8 +5393,16 @@ function openLineageParent() {
       return;
     }
     var detected = WS.detectType(text);
+    // 先輩の図が自分の図と同名のとき、そのままの名前で開くと自分のタブが
+    // 継承元の中身で塗り潰される。別フォルダの同名図はフォルダ名を冠して開く
+    // (BLK-junior-20260914-1406)。
+    var name = rec.parent;
+    if (rec.parent === child && !LG.samePath(dir, _wsFileDir())) {
+      var PF = window.MA.peekFolder;
+      name = (PF ? PF.baseName(dir) : dir) + '_' + rec.parent;
+    }
     WS.openOrActivate({
-      name: rec.parent,
+      name: name,
       dsl: text,
       diagramType: (detected && modules[detected]) ? detected : currentDiagramType,
     });
@@ -5500,8 +5516,13 @@ function setupLineage() {
           if (note) note.textContent = parent + ' を読めませんでした。保存してから登録してください';
           return;
         }
-        LG.set(child, parent, text, { dir: dir });
-        if (note) note.textContent = parent + ' を継承元にしました';
+        // 同名でもフォルダが違えば別の図。自分自身だけを断る (BLK-junior-20260914-1406)。
+        if (!LG.set(child, parent, text, { dir: dir, selfDir: _wsFileDir() })) {
+          if (note) note.textContent = '自分自身は継承元にできません'
+            + '（先輩の同名の図を選ぶときは、上のフォルダを先輩の保存先に変えてください）';
+          return;
+        }
+        if (note) note.textContent = LG.parentLabel(child, parent, dir) + ' を継承元にしました';
         renderLineageModal();
         renderLineageBadge();
       }, function() {});
