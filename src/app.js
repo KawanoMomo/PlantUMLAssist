@@ -20322,9 +20322,14 @@ function _mexpRenderPlan() {
   var run = _mexpSel('mexp-run');
   if (!ME) return;
   var p = _mexpPlan();
-  if (el) el.textContent = ME.planText(p);
+  // 貼付先が登録済みなら計画の行にも出す。押す前に「どの節に貼る画像を作るのか」
+  // が読めれば、資料化の直後に確かめに戻る手順が要らない。
+  var MAn = window.MA.materialAnchor;
+  var anchor = (MAn && p) ? MAn.get(_mexpAnchors(), p.component, p.kind) : '';
+  if (el) el.textContent = ME.planText(p) + (anchor ? '／貼付先 ' + anchor : '');
   if (run) run.disabled = !p;
   _mexpMarkPicked();
+  _mexpRenderAnchor();
 }
 
 function _mexpRenderComponents() {
@@ -20378,7 +20383,95 @@ function _mexpRenderComponents() {
 
 function _mexpScan() {
   var MM = window.MA.materialMatrix;
-  return MM ? MM.scan(_mexpEntries.length ? _mexpEntries : _mexpFiles) : null;
+  if (!MM) return null;
+  var sc = MM.scan(_mexpEntries.length ? _mexpEntries : _mexpFiles);
+  var MAn = window.MA.materialAnchor;
+  if (MAn) MAn.annotate(sc, _mexpAnchors());
+  return sc;
+}
+
+// ── 貼付先の見出し (BLK-junior-20260914-2106-wish) ──────────────────────────
+// 資料化した画像が設計書のどの見出しに貼るものかは、今までどこにも残らず
+// ファイル名から人が思い出していた。マスに 1 回登録すれば以後ずっと残り、
+// 設計書側からは「この見出しの最新画像はどれか」を逆引きできる。
+// 台帳は保存フォルダではなくこの端末に置く (図そのものではなく、図を
+// 設計書のどこに置くかという利用者側の割り付けなので、図を配ると一緒に
+// 付いて回るのはかえって邪魔になる)。
+var MEXP_ANCHOR_KEY = 'plantuml-material-anchors';
+var _mexpAnchorCache = null;
+
+function _mexpAnchors() {
+  var MAn = window.MA.materialAnchor;
+  if (!MAn) return {};
+  if (_mexpAnchorCache) return _mexpAnchorCache;
+  var raw = null;
+  try { raw = JSON.parse(window.localStorage.getItem(MEXP_ANCHOR_KEY) || '{}'); } catch (e) { raw = null; }
+  _mexpAnchorCache = MAn.normalize(raw);
+  return _mexpAnchorCache;
+}
+
+function _mexpSetAnchor(component, kind, heading) {
+  var MAn = window.MA.materialAnchor;
+  if (!MAn) return;
+  var next = MAn.set(_mexpAnchors(), component, kind, heading, new Date().toISOString());
+  _mexpAnchorCache = next;
+  try { window.localStorage.setItem(MEXP_ANCHOR_KEY, JSON.stringify(next)); } catch (e) {}
+}
+
+// 入力欄は「いま選ばれているマス」の見出しを映す。候補には既に使った見出しを
+// 出す (「4.3 状態遷移」と「4.3節 状態遷移」の揺れを作らせない)。
+function _mexpRenderAnchor(sc) {
+  var MAn = window.MA.materialAnchor;
+  var input = _mexpSel('mexp-anchor');
+  var sum = _mexpSel('mexp-anchor-summary');
+  var list = _mexpSel('mexp-anchor-list');
+  if (!MAn) return;
+  var comp = _mexpSel('mexp-component');
+  var kindSel = _mexpSel('mexp-kind');
+  var c = comp ? comp.value : '';
+  var k = kindSel ? kindSel.value : '';
+  if (input) {
+    input.value = MAn.get(_mexpAnchors(), c, k);
+    input.disabled = !(c && k);
+    input.title = MAn.cellText(c, k, input.value);
+  }
+  if (sum) sum.textContent = MAn.summaryText(sc || _mexpScan());
+  if (list) {
+    list.innerHTML = MAn.headings(_mexpAnchors()).map(function(h) {
+      return '<option value="' + _mexpEsc(h) + '"></option>';
+    }).join('');
+  }
+  _mexpRenderLookup(sc);
+}
+
+// 逆引き: 設計書の見出しの並びで「そこに貼る最新画像」を出す。行を押すと
+// そのマスに移るので、手当ての要る見出しからそのまま資料化に入れる。
+function _mexpRenderLookup(sc) {
+  var MAn = window.MA.materialAnchor;
+  var body = _mexpSel('mexp-lookup-rows');
+  var sum = _mexpSel('mexp-lookup-summary');
+  if (!MAn || !body) return;
+  var rows = MAn.lookup(sc || _mexpScan(), _mexpAnchors());
+  if (sum) sum.textContent = MAn.lookupSummary(rows);
+  body.innerHTML = rows.map(function(r) {
+    return '<tr class="mexp-lrow" data-status="' + _mexpEsc(r.status) + '"'
+      + ' data-heading="' + _mexpEsc(r.heading) + '"'
+      + ' data-component="' + _mexpEsc(r.component) + '"'
+      + ' data-kind="' + _mexpEsc(r.kind) + '"'
+      + ' title="' + _mexpEsc(MAn.lookupText(r)) + '">'
+      + '<td class="mexp-lhead">' + _mexpEsc(r.heading) + '</td>'
+      + '<td>' + _mexpEsc(r.component) + ' / ' + _mexpEsc(r.kind) + '</td>'
+      + '<td class="mexp-lstatus">' + _mexpEsc(r.mark) + '</td>'
+      + '<td class="mexp-lfile">' + _mexpEsc(r.status === 'none' ? 'まだありません' : r.filename) + '</td>'
+      + '</tr>';
+  }).join('');
+  var trs = body.querySelectorAll('tr.mexp-lrow');
+  for (var i = 0; i < trs.length; i++) {
+    trs[i].addEventListener('click', function(ev) {
+      var tr = ev.currentTarget;
+      _mexpPickCell(tr.getAttribute('data-component'), tr.getAttribute('data-kind'));
+    });
+  }
 }
 
 // 選ばれている部品の行に印を付ける (表と下のプルダウンが別のことを言わない)。
@@ -20436,7 +20529,10 @@ function _mexpRenderMatrix() {
         + '" data-kind="' + _mexpEsc(c.kind) + '"'
         + ' data-status="' + _mexpEsc(c.status) + '"'
         + (c.absent ? ' data-absent="1"' : '')
-        + ' title="' + _mexpEsc(MM.cellText(row.component, c)) + '">'
+        + (c.anchored ? ' data-anchored="1" data-heading="' + _mexpEsc(c.heading) + '"' : '')
+        + ' title="' + _mexpEsc(MM.cellText(row.component, c)
+            + (c.absent ? '' : '\n' + (window.MA.materialAnchor
+                ? window.MA.materialAnchor.cellText(row.component, c.kind, c.heading) : ''))) + '">'
         + _mexpEsc(c.absent ? '−' : c.mark) + '</td>';
     });
     html += '</tr>';
@@ -20454,6 +20550,7 @@ function _mexpRenderMatrix() {
     });
   }
   _mexpMarkPicked();
+  _mexpRenderAnchor(sc);
 }
 
 function openMaterialExport() {
@@ -20573,6 +20670,11 @@ function runMaterialExport() {
     })
     .then(function() {
       var msg = ME.doneMessage(p);
+      // 貼付先が登録済みなら、出来た画像をどの見出しに貼るかまでを 1 行で言う
+      // (BLK-junior-20260914-2106-wish: 資料化の直後に確かめに戻らないため)。
+      var MAn2 = window.MA.materialAnchor;
+      var anch = MAn2 ? MAn2.get(_mexpAnchors(), p.component, p.kind) : '';
+      if (anch) msg += '。貼付先は「' + anch + '」です';
       if (state) state.textContent = msg;
       if (window.MA.toast) window.MA.toast.show(msg);
       if (run) run.disabled = false;
@@ -20608,6 +20710,26 @@ function setupMaterialExport() {
   if (comp) comp.addEventListener('change', function() { _mexpPicked = comp.value; _mexpRenderKinds(); });
   var kind = document.getElementById('mexp-kind');
   if (kind) kind.addEventListener('change', _mexpRenderPlan);
+  // 貼付先の見出し (BLK-junior-20260914-2106-wish)。入れ終えた時点で覚える
+  // (別に「登録」ボタンを押させると、押し忘れたぶんだけ対応が抜ける)。
+  var anchor = document.getElementById('mexp-anchor');
+  if (anchor) anchor.addEventListener('change', function() {
+    var comp2 = document.getElementById('mexp-component');
+    var kind2 = document.getElementById('mexp-kind');
+    if (!comp2 || !kind2) return;
+    _mexpSetAnchor(comp2.value, kind2.value, anchor.value);
+    _mexpRenderMatrix();
+    _mexpRenderPlan();
+  });
+  var toggle = document.getElementById('mexp-anchor-toggle');
+  if (toggle) toggle.addEventListener('click', function() {
+    var panel = document.getElementById('mexp-lookup');
+    if (!panel) return;
+    var open = panel.style.display !== 'none';
+    panel.style.display = open ? 'none' : 'block';
+    toggle.textContent = open ? '見出しから逆引き…' : '逆引きを閉じる';
+    if (!open) _mexpRenderLookup();
+  });
   if (modal) modal.addEventListener('click', function(e) { if (e.target === modal) closeMaterialExport(); });
 }
 

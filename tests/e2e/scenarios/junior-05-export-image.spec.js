@@ -136,6 +136,76 @@ test('手順4 資料化: 開いた時点で部品をまたいだ残りが読め�
   await expect(page.locator('#mexp-run')).toBeEnabled();
 });
 
+// 貼付先の見出し (BLK-junior-20260914-2106-wish)。資料化した画像が設計書のどの
+// 見出しに貼るものかを GUI が覚えないため、ファイル名から毎回思い出していた。
+// マスに 1 回登録すれば残り、設計書側から「この見出しの最新画像はどれか」を引ける。
+test('手順5 資料化: マスに貼付先の見出しを登録すると、見出しから最新画像を逆引きできる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  await S.putDoc(page, DIR, 'GPIOドライバ状態遷移', S.GPIO_STATE);
+  await S.putDoc(page, DIR, 'GPIOドライバ状態遷移(資料用)', S.GPIO_STATE);
+  await S.putDoc(page, DIR, 'TIMERドライバ状態遷移', S.GPIO_STATE.replace(/Gpio/g, 'Timer'));
+  await page.reload();
+  await page.waitForTimeout(800);
+
+  await page.locator('#btn-export').click();
+  await page.waitForSelector('#export-menu', { state: 'visible' });
+  await page.locator('#exp-material').click();
+  await page.waitForSelector('#mexp-modal', { state: 'visible' });
+  await page.waitForTimeout(900);
+
+  // 開いた時点では 1 マスも登録されていない (何マス残っているかが読める)。
+  await expect(page.locator('#mexp-anchor-summary')).toContainText('未登録');
+
+  // 到達条件その1: マスを押して見出しを入れると、そのマスに残る。
+  await page.locator('tr[data-component="GPIOドライバ"] td[data-kind="状態遷移図"]').click();
+  await page.waitForTimeout(300);
+  await page.locator('#mexp-anchor').fill('4.3 状態遷移');
+  await page.locator('#mexp-anchor').blur();
+  await page.waitForTimeout(400);
+  await expect(page.locator('tr[data-component="GPIOドライバ"] td[data-kind="状態遷移図"]'))
+    .toHaveAttribute('data-anchored', '1');
+  // 押す前に「どの節に貼る画像を作るのか」が計画の行から読める。
+  await expect(page.locator('#mexp-plan')).toContainText('貼付先 4.3 状態遷移');
+
+  await page.locator('tr[data-component="TIMERドライバ"] td[data-kind="状態遷移図"]').click();
+  await page.waitForTimeout(300);
+  await expect(page.locator('#mexp-anchor')).toHaveValue('');   // マスごとに別の貼付先
+  await page.locator('#mexp-anchor').fill('4.2 タイマ状態遷移');
+  await page.locator('#mexp-anchor').blur();
+  await page.waitForTimeout(400);
+  await expect(page.locator('#mexp-anchor-summary')).toContainText('2 マスすべて登録済み');
+
+  // 到達条件その2: 設計書の見出しの順に「そこへ貼る画像」が引ける。
+  await page.locator('#mexp-anchor-toggle').click();
+  await page.waitForTimeout(400);
+  const rows = page.locator('#mexp-lookup-rows tr.mexp-lrow');
+  await expect(rows).toHaveCount(2);
+  await expect(rows.first().locator('td.mexp-lhead')).toHaveText('4.2 タイマ状態遷移');
+  // 画像がまだ無い見出しは、貼ってから気付かないようにそう書く。
+  await expect(rows.first()).toHaveAttribute('data-status', 'none');
+  await expect(rows.first().locator('td.mexp-lfile')).toHaveText('まだありません');
+  await expect(rows.nth(1).locator('td.mexp-lfile')).toHaveText('GPIOドライバ状態遷移(資料用).svg');
+
+  // 到達条件その3: 対応はこの端末に残り、開き直しても思い出し直しが要らない
+  // (spec の起動は毎回 localStorage を消して開くので、残っていることは
+  //  保存の中身と、閉じて開き直した画面の両方で確かめる)。
+  const stored = await page.evaluate(() => window.localStorage.getItem('plantuml-material-anchors'));
+  expect(stored).toContain('4.2 タイマ状態遷移');
+  expect(stored).toContain('4.3 状態遷移');
+
+  await page.locator('#mexp-close').click();
+  await page.waitForTimeout(300);
+  await page.locator('#btn-export').click();
+  await page.waitForSelector('#export-menu', { state: 'visible' });
+  await page.locator('#exp-material').click();
+  await page.waitForSelector('#mexp-modal', { state: 'visible' });
+  await page.waitForTimeout(900);
+  await expect(page.locator('#mexp-anchor-summary')).toContainText('2 マスすべて登録済み');
+  await expect(page.locator('tr[data-component="TIMERドライバ"] td[data-kind="状態遷移図"]'))
+    .toHaveAttribute('data-heading', '4.2 タイマ状態遷移');
+});
+
 // 「部品の資料一式」— 設計書に貼る資料は 1 部品の複数図種で 1 組。
 // BLK-junior-20260909-0003-wish: どの図種の資料用がまだ無いか・元の図が資料用より
 // 新しくないかを一覧で見せ、手当ての要る図種だけをまとめて 1 回で書き出す。

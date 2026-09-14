@@ -2554,6 +2554,28 @@ html, body {
 #mexp-matrix tr.mexp-mrow[data-picked="1"] td { background: var(--bg-tertiary); }
 #mexp-matrix td.mexp-mcomp { cursor: pointer; }
 #mexp-matrix-legend { padding: 3px 14px 6px; font-size: 10px; color: var(--text-secondary); }
+/* 貼付先の見出し (BLK-junior-20260914-2106-wish) */
+#mexp-matrix td.mexp-cell[data-anchored="1"] { text-decoration: underline; text-underline-offset: 2px; }
+#mexp-anchor-bar { display: flex; align-items: center; gap: 10px; padding: 0 14px 6px; font-size: 11px; color: var(--text-secondary); }
+#mexp-anchor-bar button {
+  margin-left: auto; background: var(--bg-tertiary); border: 1px solid var(--border);
+  color: var(--text-primary); border-radius: 4px; padding: 2px 8px; font-size: 11px; cursor: pointer;
+}
+#mexp-anchor-field input {
+  background: var(--bg-primary); color: var(--text-primary);
+  border: 1px solid var(--border); border-radius: 3px; padding: 2px 6px; font-size: 12px; min-width: 180px;
+}
+#mexp-lookup { padding: 0 14px 8px; max-height: 26vh; overflow: auto; }
+#mexp-lookup-summary { font-size: 11px; color: var(--text-secondary); padding: 2px 0 4px; }
+#mexp-lookup-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+#mexp-lookup-table th, #mexp-lookup-table td {
+  border-bottom: 1px solid var(--border); padding: 3px 6px; text-align: left; color: var(--text-primary);
+}
+#mexp-lookup-table th { color: var(--text-secondary); font-weight: normal; }
+#mexp-lookup-table tr.mexp-lrow { cursor: pointer; }
+#mexp-lookup-table tr.mexp-lrow[data-status="none"] td.mexp-lstatus { color: var(--accent); }
+#mexp-lookup-table tr.mexp-lrow[data-status="stale"] td.mexp-lstatus { color: #d08a2a; }
+#mexp-lookup-table td.mexp-lfile { color: var(--text-secondary); }
 #mexp-plan { padding: 6px 14px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-secondary); }
 #mexp-state { padding: 8px 14px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-secondary); min-height: 16px; }
 /* 要求ID対応 (BLK-junior-20260909-0103-wish) */
@@ -6421,6 +6443,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/material-export.js"></script>
 <script src="src/core/material-board.js"></script>
 <script src="src/core/material-matrix.js"></script>
+<script src="src/core/material-anchor.js"></script>
 <script src="src/core/req-trace.js"></script>
 <script src="src/core/rename-history.js"></script>
 <script src="src/core/rename-redo.js"></script>
@@ -6795,6 +6818,20 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       </table>
     </div>
     <div id="mexp-matrix-legend"></div>
+    <!-- BLK-junior-20260914-2106-wish: マスに「設計書のどの見出しに貼る画像か」を
+         1 回登録しておく。以後は資料化のたびに対応が残り、設計書側からは
+         「この見出しの最新画像はどれか」を逆引きできる。 -->
+    <div id="mexp-anchor-bar">
+      <span id="mexp-anchor-summary" role="status"></span>
+      <button type="button" id="mexp-anchor-toggle">見出しから逆引き…</button>
+    </div>
+    <div id="mexp-lookup" style="display:none;">
+      <div id="mexp-lookup-summary" role="status"></div>
+      <table id="mexp-lookup-table">
+        <thead><tr><th>貼付先の見出し</th><th>部品 / 図種</th><th>状態</th><th>貼る画像</th></tr></thead>
+        <tbody id="mexp-lookup-rows"></tbody>
+      </table>
+    </div>
     <div id="mexp-body">
       <label class="mexp-field">部品
         <select id="mexp-component"></select>
@@ -6805,6 +6842,10 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <label class="mexp-field">図種
         <select id="mexp-kind"></select>
       </label>
+      <label class="mexp-field" id="mexp-anchor-field">貼付先の見出し
+        <input type="text" id="mexp-anchor" list="mexp-anchor-list" placeholder="例: 4.3 状態遷移">
+      </label>
+      <datalist id="mexp-anchor-list"></datalist>
     </div>
     <div id="mexp-plan" role="status">部品と図種を選ぶと、書き出す形式と名前がここに出ます。</div>
     <div id="mexp-state" role="status"></div>
