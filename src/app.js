@@ -8182,6 +8182,7 @@ function setupTabs() {
         appendDupeSection(panel, dir);
       appendSyncSection(panel, dir);
         appendKindSummary(panel);
+        appendKindMismatchSummary(panel);
         plain.items.forEach(function(e) { panel.appendChild(folderRow(e.name || e, null, null)); });
         appendDraftSection(plain.drafts, function(e) { return folderRow(e.name || e, null, null); });
         appendGoneVersionsSection(panel);
@@ -8224,6 +8225,7 @@ function setupTabs() {
         return folderRow(r.name, RW.badge(r.status), RW.formatMtime(r.mtime), r.status);
       }
       appendKindSummary(panel);
+      appendKindMismatchSummary(panel);
       sp.items.forEach(function(r) { panel.appendChild(rowOf(r)); });
       appendDraftSection(sp.drafts, rowOf);
       appendGoneVersionsSection(panel);
@@ -9536,6 +9538,13 @@ function setupTabs() {
     }
     var kb = folderKindBadge(name);
     if (kb) row.appendChild(kb);
+    // BLK-reviewer-20260914-1406-wish: 名乗り (ファイル名の図種) と本文の図種が
+    // 食い違う図だけに付く印。複製・貼り間違いを、全文を読む前にこの行で出す。
+    var km = folderKindMismatchBadge(name);
+    if (km) {
+      row.appendChild(km);
+      row.classList.add('folder-kind-bad');
+    }
     var vb = folderVersionButton(name);
     if (vb) row.appendChild(vb);
     // BLK-primary-20260914-1306-wish: 中身が同じ図の印と、1 枚だけ消すボタン。
@@ -9560,6 +9569,52 @@ function setupTabs() {
     line.id = 'folder-kinds';
     line.textContent = DK.summaryLine(kindEntries);
     line.title = '図種は保存された本文から判定しています。0 の図種はこの保存先に 1 枚もありません';
+    host.appendChild(line);
+  }
+
+  // BLK-reviewer-20260914-1406-wish: ファイルが名乗っている図種 (plantuml-usecase) と、
+  // 本文が実際に描く図種の食い違い。中身が別の図で塗り潰される事故は、これまで
+  // 31 枚の DSL を 1 枚ずつ読むまで誰にも見えなかった。
+  function kindMismatchEntries() {
+    var list = kindEntries && kindEntries.length
+      ? kindEntries
+      : Object.keys(kindByName).map(function(n) { return { name: n, kind: kindByName[n] }; });
+    return list.map(function(e) {
+      var name = (e && e.name) || '';
+      return { name: name, kind: (e && e.kind) || kindByName[name] || '', savedKind: savedKindByName[name] || '' };
+    });
+  }
+
+  function folderKindMismatchBadge(name) {
+    var KM = window.MA.kindMismatch;
+    if (!KM) return null;
+    var b = KM.badge({ name: name, kind: kindByName[name] || '', savedKind: savedKindByName[name] || '' });
+    if (!b) return null;
+    var el = document.createElement('span');
+    el.className = 'folder-kind-warn folder-kind-warn-' + b.severity;
+    el.setAttribute('data-kind-mismatch', name);
+    el.setAttribute('data-kind-severity', b.severity);
+    el.textContent = b.mark + ' ' + b.label;
+    el.title = b.title;
+    return el;
+  }
+
+  // 一覧の下に出す 1 行。0 件でも「何枚を照合しての 0 件か」を書く
+  // (照合できていないだけの 0 件と読み分けられないと、この行は読む意味が無い)。
+  function appendKindMismatchSummary(host) {
+    var KM = window.MA.kindMismatch;
+    if (!KM) return;
+    var entries = kindMismatchEntries();
+    var bad = KM.mismatches(entries);
+    var line = document.createElement('div');
+    // 一覧の他の要約行 (.folder-summary) とは別の class にする。あちらは
+    // 「前回から何枚変わったか」を 1 行で言う枠で、そこへ足すと既存の spec の
+    // locator が 2 つに割れる (見た目は下の CSS で揃える)。
+    line.className = 'folder-kind-mismatch' + (bad.length ? ' folder-kind-mismatch-bad' : '');
+    line.id = 'folder-kind-mismatch';
+    line.textContent = KM.summaryLine(entries);
+    line.title = '名乗りはファイル名の図種、本文は DSL から判定した図種です。'
+      + '食い違う図は中身が別の図で塗り潰されている疑いがあります';
     host.appendChild(line);
   }
 

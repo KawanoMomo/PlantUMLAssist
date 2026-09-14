@@ -215,3 +215,50 @@ test('手順2 中身が消えた図を、直前版との差分で名指しでき
 
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+// BLK-reviewer-20260914-1406-wish: `plantuml-usecase.puml`(図種はユースケース)の中身が
+// 丸ごと `dma_transfer_sequence.puml` の複製になっている事故を見つけたのは、31 枚の DSL を
+// 1 枚ずつ読んだ結果だった。図種の宣言 (ファイル名) と本文の食い違いを見る監査は
+// GUI にも CLI にも無く、同じ事故 (driver_common_class / plantuml-class の入れ替わり) は
+// 過去にも起きている。手順2 を「全文を読む」から「食い違いだけを読む」に変える。
+test('手順2 名乗っている図種と本文の図種の食い違いを、全文を読まずに名指しできる', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const { execFileSync } = require('child_process');
+  const REPO = path.join(__dirname, '..', '..', '..');
+
+  const dir = path.join(REPO, 'test-results', 'reviewer-02-kind');
+  fs.rmSync(dir, { recursive: true, force: true });
+  fs.mkdirSync(dir, { recursive: true });
+
+  const SEQ = ['@startuml', 'title DMA 転送シーケンス',
+    'participant Dma_Driver', 'participant Spi_Driver',
+    'Dma_Driver -> Spi_Driver : Dma_Start', '@enduml'].join('\n');
+  const UC = ['@startuml', 'left to right direction', 'actor 開発者',
+    '(ドライバを設定する)', '開発者 --> (ドライバを設定する)', '@enduml'].join('\n');
+  // 事故の実物: 図種はユースケースを名乗るのに、中身はシーケンス図の複製。
+  fs.writeFileSync(path.join(dir, 'plantuml-usecase.puml'), SEQ, 'utf-8');
+  fs.writeFileSync(path.join(dir, 'dma_transfer_sequence.puml'), SEQ, 'utf-8');
+  fs.writeFileSync(path.join(dir, 'driver_use_case.puml'), UC, 'utf-8');
+  // 名前に図種を持たない図は「照合できない」であって「問題なし」ではない。
+  fs.writeFileSync(path.join(dir, 'diagram1.puml'), SEQ, 'utf-8');
+
+  const out = execFileSync(process.execPath,
+    [path.join(REPO, 'tools', 'audit.js'), dir, '--only', 'kind', '--summary', '--no-state'],
+    { cwd: REPO, encoding: 'utf-8' });
+
+  // 到達条件 1: 食い違った図が名指しで 1 枚だけ出る (複製元は巻き込まれない)。
+  expect(out).toContain('名乗りと本文が食い違う図 1 枚 (plantuml-usecase.puml)');
+  expect(out).not.toContain('dma_transfer_sequence.puml');
+  // 到達条件 2: 何枚を照合しての件数かが出る (名乗りの無い図を「問題なし」に数えない)。
+  expect(out).toContain('3 枚を照合');
+  // 到達条件 3: 指摘の件数に入る (件数だけを見ている run でも見落とさない)。
+  expect(out).toContain('合計 1 件');
+
+  // 監査結果の JSON からも、指摘に写す 1 行がそのまま読める。
+  const { MA } = loadMA();
+  const row = MA.kindMismatch.rowOf({ name: 'plantuml-usecase.puml', dsl: SEQ });
+  expect(row.text).toContain('名乗りはユースケース図、本文はシーケンス図');
+
+  fs.rmSync(dir, { recursive: true, force: true });
+});

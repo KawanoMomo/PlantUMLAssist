@@ -811,6 +811,30 @@ html, body {
   color: var(--text-secondary);
 }
 #folder-panel .folder-kinds { color: var(--text-secondary); }
+/* 名乗り (ファイル名の図種) と本文の図種の食い違い (BLK-reviewer-20260914-1406-wish)。
+   中身が別の図で塗り潰される事故は、これまで全文を読むまで誰にも見えなかった。
+   赤はファイル名と食い違った図だけに付け、保存時の控えとの差は橙に留める
+   (控えとの差は「紛らわしい書き方」で普通に出るので、赤にすると印が効かなくなる)。 */
+#folder-panel .folder-kind-warn {
+  flex: 0 0 auto;
+  font-size: 9px;
+  border: 1px solid var(--accent-red);
+  border-radius: 3px;
+  padding: 0 4px;
+  margin-left: 3px;
+  color: var(--accent-red);
+}
+#folder-panel .folder-kind-warn-note {
+  border-color: var(--accent-orange);
+  color: var(--accent-orange);
+}
+#folder-panel .folder-row.folder-kind-bad { border-left: 2px solid var(--accent-red); }
+#folder-panel .folder-kind-mismatch {
+  color: var(--text-secondary);
+  font-size: 10px;
+  padding: 2px 6px;
+}
+#folder-panel .folder-kind-mismatch-bad { color: var(--accent-red); }
 /* 版のバッジと、選んでいる指摘が指す版の光り (BLK-junior-20260914-1106-wish)。
    資料用・編集中・旧版が同じ図種の枠に並んでも、名前の末尾を読み比べずに済む。 */
 #folder-panel .folder-variant {
@@ -6098,6 +6122,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/version-history.js"></script>
 <script src="src/core/diagram-kind.js"></script>
 <script src="src/core/saved-kind.js"></script>
+<script src="src/core/kind-mismatch.js"></script>
 <script src="src/core/draft-mark.js"></script>
 <script src="src/core/target-set.js"></script>
 <script src="src/core/folder-reopen.js"></script>

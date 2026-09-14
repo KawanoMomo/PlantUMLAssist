@@ -118,6 +118,10 @@ const AUDITS = {
   // 該当ファイルを名前で推測して 4 枚個別に開き目で比べるしかなかった。
   // フォルダを軸に残したまま、同じドメイン・同じ図種の組だけを突き合わせる。
   cohort: (MA, docs) => (MA.domainCohort ? MA.domainCohort.audit(docs) : undefined),
+  // BLK-reviewer-20260914-1406-wish: 他の監査はどれも「本文どうしの整合」しか見ないので、
+  // ファイルが名乗っている図種と本文の図種が食い違う事故 (plantuml-usecase.puml の中身が
+  // dma_transfer_sequence.puml の複製になっていた) は、31 枚を 1 枚ずつ読むまで出なかった。
+  kind: (MA, docs) => (MA.kindMismatch ? MA.kindMismatch.audit(docs) : undefined),
 };
 
 // .puml の隣に置かれた同名の .svg を見て、svg-freshness が読む形の行にする。
@@ -240,6 +244,20 @@ function summarize(audits) {
       mixedNames: lp.result.rows.filter((r) => r.mixed).map((r) => r.key),
     };
   }
+  const km = audits.kind;
+  if (km && km.status === 'ok') {
+    s.kind = {
+      files: km.result.files,
+      // 名乗りと本文の両方が読めた枚数。files で語ると、名前に図種の無い図
+      // (diagram1) まで「照合して問題なし」に数えてしまう。
+      checked: km.result.checked,
+      mismatched: km.result.mismatched,
+      mismatchedNames: km.result.mismatchedNames,
+      // 保存時の控えとの差。本文判定は紛らわしい書き方で普通に外れるので、
+      // 指摘には数えずここに残す。
+      notes: km.result.notes,
+    };
+  }
   const ch = audits.cohort;
   if (ch && ch.status === 'ok') {
     s.cohort = {
@@ -294,6 +312,7 @@ const SUMMARY_FIELDS = {
   cohort: ['domains', 'crossFolder', 'mismatched', 'mismatchedNames', 'unpairedNames',
     'excludedTemplateDomains', 'templateFiles', 'declared', 'conflicts', 'conflictNames',
     'diffLines', 'sameBasePairs'],
+  kind: ['files', 'checked', 'mismatched', 'mismatchedNames', 'notes'],
 };
 
 // 監査 1 つ分の枠。status は 'ok' / 'skipped' (--only で外した) /
@@ -342,6 +361,9 @@ function totalIssues(summary) {
   // GUI と CLI で件数が割れる。密度と違い「多数派に揃える」という直し方が
   // 決まっているので、判断の要る指摘ではなく数える指摘として扱う。
   if (summary.label) t += summary.label.odd;
+  // 名乗りと本文の食い違いは、直し方 (中身を戻すか名前を変えるか) が要る事故なので
+  // 合計に数える。控えとの差 (notes) は雑音になるので数えない。
+  if (summary.kind) t += summary.kind.mismatched;
   return t;
 }
 
@@ -410,6 +432,15 @@ function formatSummary(report, prev, options) {
       lines.push(`ラベル位置: 多数派 (${s.label.commonLabel}) とズレた系統 ${s.label.odd} 件 / ${s.label.known} 件`
         + ` (${s.label.oddNames.join(', ')})${mixed}`);
     }
+  }
+  if (s.kind) {
+    // 名乗り (ファイル名) と本文の食い違い。0 件のときも「何枚を照合しての 0 件か」を
+    // 出す —— 名前に図種の無い図は照合できないので、files で語ると嘘になる。
+    const note = s.kind.notes ? ` / 保存時の控えとの差 ${s.kind.notes} 件` : '';
+    lines.push(s.kind.mismatched === 0
+      ? `図種: 名乗りと本文が食い違う図はない (${s.kind.files} 枚中 ${s.kind.checked} 枚を照合)${note}`
+      : `図種: 名乗りと本文が食い違う図 ${s.kind.mismatched} 枚 (${s.kind.mismatchedNames.join(', ')})`
+        + ` / ${s.kind.checked} 枚を照合${note}`);
   }
   if (s.svg) {
     // 出力物は DSL の指摘ではないので合計には足さない。「図は直っているが
