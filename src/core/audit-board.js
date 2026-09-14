@@ -145,6 +145,11 @@
     });
   }
 
+  // BLK-reviewer-20260915-0606: 内容で追いついていると分かった図 (一致 / 体裁差) は
+  // 作り直しが要らないので、mtime が古くても指摘にしない (svg-freshness.isSettled と
+  // 同じ線。ここは MA に依存しないモジュールなので、判定の言葉だけを写す)。
+  function _settled(content) { return content === 'match' || content === 'format'; }
+
   // svg-freshness.scan() の結果。内容ずれ (differ) は mtime の新旧に関わらず出す
   // (中身が食い違う図は、印が新しくても読める図ではない)。
   function _fromSvg(scan, out) {
@@ -157,7 +162,7 @@
       }
       if (r.status === 'missing') {
         out.push(_row('svg.missing', name, name, 'SVG が書き出されていません'));
-      } else if (r.status === 'stale') {
+      } else if (r.status === 'stale' && !_settled(r.content)) {
         out.push(_row('svg.stale', name, name, 'SVG が図より古いままです'));
       }
     });
