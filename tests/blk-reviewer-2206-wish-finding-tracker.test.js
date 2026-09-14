@@ -134,8 +134,9 @@ function byTitle(list) {
   s = run(s, { method: ok({ issues: [SPI] }), consistency: consistency() }, 't2');
   s = T.setVerdict(s, 'F-02', 'partial', 'クラス図側のみ未反映', 't2').state;
   const md = T.markdown(s, '指摘トラッカー');
-  assert.ok(md.indexOf('| id | 状態 | 初出 | 対象 | 分類 | 備考 |') >= 0);
-  assert.ok(md.indexOf('| F-01 | 解消 | t1 |') >= 0);
+  // BLK-reviewer-20260915-0307-wish で「意図」列が 状態 の次に入った。
+  assert.ok(md.indexOf('| id | 状態 | 意図 | 初出 | 対象 | 分類 | 備考 |') >= 0);
+  assert.ok(md.indexOf('| F-01 | 解消 | 未対応 | t1 |') >= 0);
   assert.ok(md.indexOf('部分解消') >= 0 && md.indexOf('クラス図側のみ未反映') >= 0);
   assert.ok(md.indexOf('記録した tick: t1 → t2') >= 0);
   assert.ok(T.summaryText(T.rows(s)).indexOf('部分解消 1') >= 0);

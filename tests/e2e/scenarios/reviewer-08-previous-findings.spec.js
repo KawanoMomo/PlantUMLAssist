@@ -323,9 +323,11 @@ test('手順8 前回の判断が次の tick に残り、書き直さず 1 行だ
   expect(done.state).toBe('resolved');
   expect(done.open).toBe(false);
 
-  // 表はそのまま 指摘.md に貼れる (id・状態・初出・対象が 1 行に並ぶ)。
+  // 表はそのまま 指摘.md に貼れる (id・状態・意図・初出・対象が 1 行に並ぶ)。
+  // 「意図」は BLK-reviewer-20260915-0307-wish で入った列。図の側に意図的な省略と
+  // 書いてあるかで、手書きしていた 対応済み / 未対応 の区別がそのまま出る。
   const md = tracker.markdown(s, '指摘トラッカー');
-  expect(md).toContain('| id | 状態 | 初出 | 対象 | 分類 | 備考 |');
-  expect(md).toContain('| F-01 | 解消（判断） | runs/20260914-2106 |');
+  expect(md).toContain('| id | 状態 | 意図 | 初出 | 対象 | 分類 | 備考 |');
+  expect(md).toContain('| F-01 | 解消（判断） | 未対応 | runs/20260914-2106 |');
   expect(md).toContain('記録した tick: runs/20260914-2106 → runs/20260914-2206 → runs/20260914-2306');
 });

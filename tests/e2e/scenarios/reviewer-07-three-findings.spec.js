@@ -113,3 +113,54 @@ test('手順7 下書きの反映待ちを、ファイル名の推測なしに言
   // 反映済みの下書きは依頼ではなく片付け対象として分かれる (依頼件数を水増ししない)。
   expect(SQ.pending(q).map((r) => r.name)).toEqual(['plantuml-usecase']);
 });
+
+// BLK-reviewer-20260915-0307-wish: まとめには「同じ no-method 系でも、図の側で
+// 意図的な省略と明記済みのもの」と「まだ何も答えていないもの」が混ざる。その区別は
+// 監査のカテゴリには出ないので、reviewer は puml の note を人力で読み直し、
+// 指摘.md に手書きの表を作っていた。findings.js が図から意図を読んで仕分ける。
+const findingsCli = require('../../../tools/findings');
+
+test('手順7 意図明記済みと未対応が、note を読み直さずに分かれてまとまる', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pua-reviewer-07-intent-'));
+  fs.writeFileSync(path.join(dir, 'drv_class.puml'), [
+    '@startuml',
+    'class Spi_Driver {',
+    '  +Spi_Init(cfg): Std_ReturnType',
+    '}',
+    'class ClockCtrl {',
+    '  +Reset(): void',
+    '}',
+    'note top of ClockCtrl : ClockCtrl.EnableClock() は呼び先の詳細を意図的に割愛(依頼2への回答)',
+    '@enduml',
+  ].join('\n'), 'utf-8');
+  fs.writeFileSync(path.join(dir, 'spi_init_sequence.puml'), [
+    '@startuml',
+    'participant Spi_Driver',
+    'participant ClockCtrl',
+    'participant SpiRegs',
+    'Spi_Driver -> ClockCtrl : EnableClock(id)',
+    'Spi_Driver -> SpiRegs : WriteConfig(cfg)',
+    '@enduml',
+  ].join('\n'), 'utf-8');
+
+  const state = path.join(dir, 'st.json');
+  const out = [];
+  expect(findingsCli.main([dir, '--tick', 't1', '--state', state], { out: (s) => out.push(s), err: () => {} })).toBe(0);
+
+  // 到達条件: まとめが「未解消のうち何件が意図明記済みで、何件が未対応か」を言う。
+  const text = out.join('\n');
+  expect(text).toContain('未解消の内訳: 意図明記済み 1 件 / 未対応 ');
+  expect(text).toContain('意図明記済み(note) — drv_class.puml');
+
+  // 指摘.md に貼る表にも、その区別が列として出る (手書きの表を作り直さない)。
+  const md = [];
+  expect(findingsCli.main([dir, '--tick', 't1', '--state', state, '--md'], { out: (s) => md.push(s), err: () => {} })).toBe(0);
+  expect(md.join('\n')).toContain('| id | 状態 | 意図 | 初出 | 対象 | 分類 | 備考 |');
+  expect(md.join('\n')).toContain('意図的に割愛');
+
+  // 未対応だけに絞れば、primary へ返す「まだ答えが要る」分がそのまま出る。
+  const only = [];
+  expect(findingsCli.main([dir, '--tick', 't1', '--state', state, '--undeclared'], { out: (s) => only.push(s), err: () => {} })).toBe(0);
+  expect(only.join('\n')).toContain('SpiRegs.WriteConfig');
+  expect(only.join('\n')).not.toContain('意図明記済み(note) — drv_class.puml');
+});
