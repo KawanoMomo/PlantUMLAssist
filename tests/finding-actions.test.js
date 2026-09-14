@@ -76,10 +76,13 @@ describe('findingActions.planFor — 手段の読み取り', () => {
     expect(p.text).toContain('junior とは別のドメイン');
   });
 
+  // BLK-primary-20260914-1106-wish: この例 (クラスがクラス図に不在) は定型なので
+  // addclass で当てるようになった。manual に残るのは「どちらにするか決めてくれ」と
+  // 書かれた件の方なので、例をそちらに差し替える。
   test('手段が書かれていない指摘は当てない (manual)', () => {
-    var r = row('note-6', '【継続】インフラ系クラスがクラス図に不在',
-      '`ClockCtrl` / `*Regs` / `NVIC` が 1つも定義されていない。',
-      [doc('driver_common_class', ['primary'])]);
+    var r = row('note-6', '【継続】can/spi の「編集中」ファイルの整理',
+      '編集中のまま残っている図があります。残すか消すかを決めてください。',
+      [doc('can', ['primary'])]);
     var p = FA.planFor(r, { mineFolder: 'primary' });
     expect(p.kind).toBe('manual');
     expect(p.ready).toBe(false);
@@ -142,6 +145,65 @@ describe('findingActions — 実物の指摘.md で外していたところ', ()
     var r = row('note-11', 'gpio の不一致', '「別ドメイン」を明示する。',
       [doc('gpio_init_sequence', ['junior', 'primary'])]);
     expect(FA.planFor(r, { mineFolder: 'primary' }).kind).toBe('verdict');
+  });
+});
+
+// BLK-primary-20260914-1106-wish: 指摘 9 件中 5 件が manual のまま見送られていた。
+// うち「このクラスにこのメソッドを追加する」「クラス図にこのクラスが不在」は定型なので
+// [適用] に載せる。
+describe('findingActions — メソッド追加 / クラス追加', () => {
+  test('遷移ラベルに対応するメソッドが無い指摘は、メソッド追加になる', () => {
+    var r = row('note-20', '【新規】timer_state.puml の遷移ラベルに対応するクラスメソッドが無い(5件)',
+      '`driver_common_class.puml` の `Timer_Driver` クラスは `Timer_Init()` しか宣言していないが、\n'
+      + '`timer_state.puml` は `Timer_Start`/`Timer_Stop` の遷移ラベルを使っている。\n'
+      + 'クラス図にメソッドを足すか、遷移ラベルを実在する操作名に揃える必要がある。',
+      [doc('timer_state', ['primary']), doc('driver_common_class', ['primary'])]);
+    var p = FA.planFor(r, { mineFolder: 'primary' });
+    expect(p.kind).toBe('addmethod');
+    expect(p.ready).toBe(true);
+    // 足す先は突合が決めるので、当てる範囲は保存フォルダ全体。
+    expect(p.scope).toBe('folder');
+    expect(p.text).toContain('メソッド追加');
+  });
+
+  test('クラスがクラス図に不在の指摘は、名指しされたクラスのクラス追加になる', () => {
+    var r = row('note-21', '【継続】メソッド突合(4.9): インフラ系クラスがクラス図に不在',
+      '`ClockCtrl` / `*Regs` / `NVIC` / `DmaCtrl` / `DmaChannel` が `driver_common_class.puml` に\n'
+      + 'まだ定義されていない(method 監査 issues:13、内容不変)。',
+      [doc('driver_common_class', ['primary'])]);
+    var p = FA.planFor(r, { mineFolder: 'primary' });
+    expect(p.kind).toBe('addclass');
+    expect(p.ready).toBe(true);
+    // `*Regs` はワイルドカード、`driver_common_class.puml` はファイル名なので取らない。
+    expect(p.classes).toEqual(['ClockCtrl', 'NVIC', 'DmaCtrl', 'DmaChannel']);
+    expect(p.text).toContain('ClockCtrl');
+  });
+
+  test('クラスの名前が名指しされていなければ当てない', () => {
+    var r = row('note-22', 'クラスがクラス図に不在', '足りないクラスがあります。', []);
+    var p = FA.planFor(r, { mineFolder: 'primary' });
+    expect(p.kind).toBe('addclass');
+    expect(p.ready).toBe(false);
+  });
+
+  test('再出力を頼まれた件は、メソッドの話に触れていても再出力のまま', () => {
+    var r = row('note-23', '依頼', 'メソッドを追加する。あわせて `x.svg` を再エクスポート。',
+      [doc('x', ['primary'])]);
+    expect(FA.planFor(r, { mineFolder: 'primary' }).kind).toBe('reexport');
+  });
+
+  test('突合サマリのように「メソッド」が数として出るだけの行は当てない', () => {
+    var r = row('note-24', '突合サマリ(`tools/audit.js -p primary`, 30枚)',
+      '命名 2 / 未使用 0 / メソッド 0(応答除外9) / 粒度 8。', []);
+    expect(FA.planFor(r, { mineFolder: 'primary' }).kind).toBe('manual');
+  });
+
+  test('当てたあとの 1 行は、足したものと足した先を言う', () => {
+    var p = { kind: 'addmethod' };
+    expect(FA.resultText(p, { ok: true, added: ['Timer_Start'], done: ['driver_common_class'] }))
+      .toBe('Timer_Start を driver_common_class に足しました');
+    expect(FA.resultText({ kind: 'addclass' }, { ok: true, added: ['NVIC'], done: ['c'] }))
+      .toBe('NVIC を c に宣言しました');
   });
 });
 
