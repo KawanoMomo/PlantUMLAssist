@@ -325,3 +325,60 @@ test('手順4.10 印が食い違った図の「見かけ上の stale」と「内
   await expect(page.locator('#svg-visual-report')).toHaveValue(/R04g_renamed/);
   await expect(page.locator('#svg-visual-report')).toHaveValue(/- Spi_Driver/);
 });
+
+// BLK-reviewer-20260915-0606: 手順4.10 は GUI の一覧だけでなく
+// `node tools/audit.js <フォルダ> --board` からも通る。その CLI 側は判定材料が
+// 指紋 (印 / 畳まれた DSL の sha1) しか無く、コメントや体裁だけを書き換えて
+// 保存し直した図まで「出力物/SVG 内容ずれ」= 作り直し要 として名指ししていた。
+// reviewer は --board を打つたびに、名指しされた枚数ぶん /verify-svg へ curl して
+// differ-format (体裁差のみ) と裏取りし、指摘.md への誤報告を防いでいた。
+// 畳まれた元の DSL と今の puml を「描かれる行だけ」で比べれば、その裏取りは要らない。
+const auditReport = require('../../../tools/audit-report');
+const cliBoard = require('../../../src/core/audit-board');
+const { loadMA: loadCliMA } = require('../../../tools/audit-runtime');
+
+const CLI_DIR = DIR + '-cli';
+const CLI_ABS = path.join(__dirname, '..', '..', '..', CLI_DIR.replace(/^\.\//, ''));
+
+test('手順4.10 --board が体裁だけの差を「内容ずれ」と言わない (verify-svg への裏取り不要)', async ({ page }) => {
+  test.setTimeout(180000);
+  await page.addInitScript((d) => {
+    try {
+      window.localStorage.clear();
+      window.localStorage.setItem('plantuml-autosave-config',
+        JSON.stringify({ enabled: true, debounceMs: 200, restoreMode: 'auto', backend: 'file', fileDir: d }));
+    } catch (e) {}
+  }, CLI_DIR);
+  await gotoApp(page);
+  await page.evaluate(async (d) => {
+    await fetch('/autosave?dir=' + encodeURIComponent(d), { method: 'DELETE' });
+  }, CLI_DIR);
+
+  // 1 枚目: 書き出したあとコメント行を足しただけ。絵は 1 ドットも変わらない。
+  await putFileIn(page, CLI_DIR, 'R04g_cli_comment', NOW);
+  await putStampedSvgIn(page, CLI_DIR, 'R04g_cli_comment', NOW);
+  await putFileIn(page, CLI_DIR, 'R04g_cli_comment', "'domain-verdict: ok\n" + NOW);
+  // 2 枚目: participant 名を変えた。絵が変わるので作り直しが要る。
+  await putFileIn(page, CLI_DIR, 'R04g_cli_renamed', NOW);
+  await putStampedSvgIn(page, CLI_DIR, 'R04g_cli_renamed', NOW);
+  await putFileIn(page, CLI_DIR, 'R04g_cli_renamed', NOW.replace(/Spi_Driver/g, 'Spi_Drv'));
+
+  // CLI と同じ入口で同じフォルダを監査する (audit.js が呼ぶ 2 本をそのまま呼ぶ)。
+  const rt = loadCliMA();
+  const docs = auditReport.collectDocs([CLI_ABS]);
+  const scan = auditReport.runAudits(rt.MA, docs, ['svg']).svg.result;
+  const rowOf = (n) => scan.rows.filter((r) => r.name === n + '.puml')[0];
+
+  // 到達条件その1: コメントだけの差は「体裁差のみ」。根拠も画面に出る言葉で言う。
+  expect(rowOf('R04g_cli_comment').content).toBe('format');
+  expect(rowOf('R04g_cli_comment').basis).toBe('visible');
+  // 到達条件その2: 絵が変わった図は今までどおり「内容ずれ」。
+  expect(rowOf('R04g_cli_renamed').content).toBe('differ');
+
+  // 到達条件その3: --board の指摘一覧に出るのは作り直しが要る 1 枚だけ。
+  const rows = cliBoard.build({ audits: {}, svg: scan }).rows;
+  expect(rows.map((r) => r.kind + ' ' + r.doc))
+    .toEqual(['svg.differ R04g_cli_renamed.puml']);
+  // 到達条件その4: 作り直す対象にも入らない (裏取りの curl が 0 回になる)。
+  expect(scan.needsRender).toEqual(['R04g_cli_renamed.puml']);
+});

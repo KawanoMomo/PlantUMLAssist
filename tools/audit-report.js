@@ -163,7 +163,7 @@ function svgEntries(docs, MA) {
     try { mtime = fs.statSync(d.path).mtime.toISOString(); } catch (e) { mtime = null; }
     try { svgMtime = fs.statSync(svgPath).mtime.toISOString(); } catch (e) { svgMtime = null; }
     const entry = { name: d.name, mtime: mtime, svgMtime: svgMtime,
-      hash: null, svgSource: null, svgHash: null };
+      hash: null, svgSource: null, svgHash: null, visibleMatch: null };
     // 読めなかったものは null のまま = 従来どおり「言えない」に落とす (嘘を足さない)。
     try { entry.hash = _sha1(fs.readFileSync(d.path)); } catch (e) { entry.hash = null; }
     if (svgMtime !== null) {
@@ -174,10 +174,30 @@ function svgEntries(docs, MA) {
         const tail = raw.slice(Math.max(0, raw.length - n)).toString('utf-8');
         entry.svgSource = (stamp ? stamp.readStamp(tail) : '') || null;
       } catch (e) { /* 読めない svg は印なし扱い */ }
+      // BLK-reviewer-20260915-0606: 指紋 (印 / 畳まれた DSL の sha1) はコメントや
+      // 体裁だけの書き換えでも食い違うので、それだけで出す答えは「内容ずれ」に倒れる。
+      // server の /verify-svg は描き直して differ-format (描かれる中身は一致) と答えるが、
+      // audit.js は server を持たないため、reviewer は --board 1 回ごとに枚数ぶん
+      // curl で裏取りしていた。畳まれた DSL と今の puml を描かれる行だけで比べれば、
+      // 同じ答えが Java も server も無しにここで出る。
+      entry.visibleMatch = visibleMatchOf(MA, d, svgPath);
     }
     out.push(entry);
   }
   return out;
+}
+
+// svg に畳まれた元の DSL と今の .puml を、描かれる行だけで比べる。
+// 'same' / 'differ' / null (畳まれた DSL が無い = 描かれる行では言えない)。
+function visibleMatchOf(MA, doc, svgPath) {
+  const VD = MA && MA.dslVisibleDiff;
+  if (!VD || !doc || typeof doc.dsl !== 'string') return null;
+  let svgText = null;
+  try { svgText = fs.readFileSync(svgPath, 'utf-8'); } catch (e) { return null; }
+  const folded = svgEmbeddedSrc.decode(svgText);
+  if (folded === null) return null;
+  const v = VD.compare(folded, doc.dsl).verdict;
+  return (v === 'same' || v === 'differ') ? v : null;
 }
 
 function _sha1(buf) { return crypto.createHash('sha1').update(buf).digest('hex'); }
