@@ -128,3 +128,56 @@ test('手順2 洗った影響一覧を変更チケットにすると、run を�
   await expect(page.locator('#ct-body tr.ct-item[data-done="1"]')).toHaveCount(1);
   await expect(page.locator('#ct-body tr.ct-item[data-done="1"]')).toContainText('spi_init_sequence');
 });
+
+// BLK-primary-20260914-1106-friction: 同じ組を当て直す運用では、旧称がもう残って
+// いないことを確かめるためだけに SpiDrv / Spi_Driver を毎回打ち直していた
+// (ヒット 0 件は打ち終えてからしか出ない)。パネルを開いた時点で過去の組と
+// 今の残存件数が並び、残っている組は 1 クリックで置換前・置換後に入る。
+test('手順2 過去に当てた置換の組が、打つ前に「適用済み / 残り N 件」で分かる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  for (const n of S.PRIMARY_DOCS) await S.putDoc(page, DIR, n, S.docFor(n, 'SpiDrv'));
+  await page.reload();
+  await page.waitForSelector('#preview-svg');
+
+  // 1 回目は今までどおり打って当てる (ここで履歴に組が残る)。
+  await page.keyboard.press('Control+h');
+  await page.waitForSelector('#rename-panel.open', { timeout: 5000 });
+  await page.locator('#rename-from').fill('SpiDrv');
+  await page.locator('#rename-to').fill('Spi_Driver');
+  await page.waitForTimeout(900);
+  await page.locator('#btn-rename-apply').click();
+  await page.waitForTimeout(1500);
+
+  // 到達条件その1: 開き直すと、打つ前から「適用済み」と分かる (空打ちが要らない)。
+  await page.keyboard.press('Control+h');
+  await page.waitForTimeout(200);
+  await page.keyboard.press('Control+h');
+  await page.waitForSelector('#rename-panel.open', { timeout: 5000 });
+  await page.waitForTimeout(900);
+  const row = page.locator('#rename-redo-rows button.rr-row[data-from="SpiDrv"][data-to="Spi_Driver"]');
+  await expect(row).toHaveCount(1);
+  await expect(row).toHaveAttribute('data-state', 'done');
+  await expect(row).toHaveAttribute('data-remaining', '0');
+  await expect(page.locator('#rename-redo-summary')).toContainText('適用済み');
+  // 打っていないので、置換前の欄はまだ空のまま。
+  await expect(page.locator('#rename-from')).toHaveValue('');
+
+  // 旧称が戻った状態 (別の担当者が古い綴りで書いた図を足した等) を作る。
+  await page.locator('#rename-from').fill('Spi_Driver');
+  await page.locator('#rename-to').fill('SpiDrv');
+  await page.waitForTimeout(900);
+  await page.locator('#btn-rename-apply').click();
+  await page.waitForTimeout(1500);
+
+  // 到達条件その2: 残っている組は「残り N 件」で出て、押すだけで置換に進める。
+  await page.waitForTimeout(600);
+  const back = page.locator('#rename-redo-rows button.rr-row[data-from="SpiDrv"][data-to="Spi_Driver"]');
+  await expect(back).toHaveAttribute('data-state', 'pending');
+  await expect(page.locator('#rename-redo-summary')).toContainText('残っています');
+  await back.click();
+  await page.waitForTimeout(600);
+  await expect(page.locator('#rename-from')).toHaveValue('SpiDrv');
+  await expect(page.locator('#rename-to')).toHaveValue('Spi_Driver');
+  await expect(page.locator('#btn-rename-apply')).toBeEnabled();
+});
