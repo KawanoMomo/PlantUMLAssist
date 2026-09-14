@@ -3670,6 +3670,10 @@ function renderTabs() {
   // 申し送りは開いた時点で見えていないと口頭説明の代わりにならない。
   // 復元で開いた場合も出したいので、タブを組み立て直すたびに引き直す。
   try { renderHandoverBanner(); } catch (e) {}
+  // 依頼バッジ (BLK-reviewer-20260914-2006)。指摘.md は reviewer が run ごとに
+  // 書き替えるので、タブを組み立て直す機会に読み直す (控えは版で数えるので、
+  // 同じ版を何度読んでも継続 tick 数は伸びない)。
+  try { renderRequestBadge(); refreshRequestBadge(); } catch (e) {}
 }
 
 // ── 前回保存時点との差分 ──────────────────────────────
@@ -6687,6 +6691,91 @@ function _noteLoad(force) {
     return false;
   });
   return _noteLoading;
+}
+
+// ── 依頼バッジ (BLK-reviewer-20260914-2006) ────────────────────────────────
+// 指摘.md に書かれた依頼は、直す側 (primary) の画面には何も出ていなかった。
+// 継続 tick 数は `npm run requests` で読めるが、それは書いた側 (reviewer) の CLI で、
+// 直す側は業務を始める前に指摘.md を GUI の外で開いて読むしかない。読み忘れた回は
+// そのまま 1 tick 放置になる。未解消の件数と最長継続 tick 数を下端に常時出し、
+// 「今日は未着手の依頼があるか」を確かめる動作そのものを無くす。
+// 数え方は CLI と同じ request-ledger。1 tick = 指摘.md の 1 版 (本文の指紋)。
+var _rqRows = [];
+var _rqSum = null;
+var _rqTick = '';       // 最後に控えに足した tick (同じ版で数え直さない)
+var _rqBusy = false;
+var _rqWired = false;
+
+function _rqStore(dir, next) {
+  var RB = window.MA.requestBadge;
+  if (!RB) return null;
+  var key = RB.storageKey(dir);
+  try {
+    if (next === undefined) return localStorage.getItem(key);
+    localStorage.setItem(key, JSON.stringify(next));
+  } catch (e) {}
+  return null;
+}
+
+// 指摘.md と保存フォルダの指紋を取り、控えに 1 tick 足して行を作り直す。
+function refreshRequestBadge(force) {
+  var RL = window.MA.requestLedger;
+  var RB = window.MA.requestBadge;
+  var RN = window.MA.reviewNote;
+  var WS = window.MA.workspace;
+  if (!RL || !RB || !RN || !WS) return Promise.resolve(false);
+  if (_rqBusy) return Promise.resolve(false);
+  _rqBusy = true;
+  var dir = _wsFileDir();
+  return Promise.all([
+    fetch('/peek-notes?dir=' + encodeURIComponent(dir))
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .catch(function() { return null; }),
+    WS.listFileEntries(dir).catch(function() { return []; }),
+  ]).then(function(both) {
+    var note = RN.pickNote((both[0] || {}).notes);
+    if (!note) { _rqRows = []; _rqSum = null; renderRequestBadge(); return false; }
+    var tick = RB.tickLabel(note.text);
+    // 図の指紋。本文までは取りに行かず、一覧が返す hash をそのまま指紋に使う
+    // (依頼が名指しした図が前の版から動いたか、だけが要る)。
+    var docs = {};
+    (both[1] || []).forEach(function(e) {
+      if (e && e.name) docs[e.name] = String(e.hash || e.mtime || '');
+    });
+    var state = RL.update(RL.readState(_rqStore(dir)), {
+      label: tick, at: new Date().toISOString(), markdown: note.text, docs: docs,
+    });
+    _rqStore(dir, state);
+    _rqTick = tick;
+    _rqRows = RL.rows(state);
+    _rqSum = RB.summarize(_rqRows);
+    renderRequestBadge();
+    return true;
+  }).catch(function() {
+    return false;
+  }).then(function(v) { _rqBusy = false; return v; });
+}
+
+function renderRequestBadge() {
+  var RB = window.MA.requestBadge;
+  var btn = document.getElementById('status-requests');
+  if (!RB || !btn) return;
+  btn.textContent = RB.badgeText(_rqSum);
+  btn.classList.toggle('has-open', RB.isActive(_rqSum));
+  btn.setAttribute('data-tone', RB.tone(_rqSum));
+  btn.setAttribute('data-open', _rqSum ? String(_rqSum.open) : '');
+  btn.setAttribute('data-worst', _rqSum ? String(_rqSum.worst) : '');
+  btn.title = RB.titleText(_rqRows, _rqSum);
+  if (_rqWired) return;
+  _rqWired = true;
+  // 押したら指摘.md の一覧まで連れて行く (件数を見てから中身を読むまでが 1 手)。
+  // タブ列の 👀 は畳まれていることがあるので、ボタンではなく画面を直に開く。
+  btn.addEventListener('click', function() {
+    try {
+      openPeekFolder();
+      setNoteMode(true);
+    } catch (e) {}
+  });
 }
 
 // 並べている図に付ける 1 行。指摘.md にその図名が 1 件も挙がっていなければ
