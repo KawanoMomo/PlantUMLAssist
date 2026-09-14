@@ -4859,6 +4859,13 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   background: transparent; color: var(--accent);
 }
 
+/* BLK-primary-20260914-2206: 保存フォルダへまだ書けていない回 (錠の返事待ち) は、
+   💾 を灰色の「たった今」のままにせず、押せる警告として出す。 */
+#status-autosave.autosave-pending {
+  color: #ffd79a; background: rgba(60, 40, 14, 0.96);
+  border: 1px solid #8a6a23; border-radius: 3px; padding: 0 6px;
+}
+
 #save-redirect-overlay {
   position: sticky; top: 0; left: 0; z-index: 31;
   margin: -16px -16px 12px -16px; padding: 6px 12px;
@@ -6468,6 +6475,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/alias-hint.js"></script>
 <script src="src/core/auto-save.js"></script>
 <script src="src/core/autosave-options.js"></script>
+<script src="src/core/autosave-status.js"></script>
 <script src="src/core/workspace.js"></script>
 <script src="src/core/review-watch.js"></script>
 <script src="src/core/review-diff.js"></script>
