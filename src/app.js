@@ -7763,6 +7763,14 @@ function setupTabs() {
   // 「別図種と紛らわしい書き方」をしていても開くときに図種が入れ替わらない。
   var savedKindByName = {};
   var savedKindsLoaded = false;
+  // BLK-reviewer-20260914-1406-wish: 図名 → 本文 (名乗りと食い違って見えた図だけ)。
+  // 一覧の entry.kind は server の判定で、`actor` を持つユースケース図はシーケンスに
+  // 倒れる (saved-kind.js と同じ事情)。それをそのまま「食い違い」と出すと、正しい
+  // ユースケース図が毎回赤くなって印が効かなくなる。疑いの出た図だけ本文を取り寄せ、
+  // メッセージの有無まで見て確かめる (全 31 枚を読みに行く往復は作らない)。
+  var kindBodyByName = {};
+  var kindBodyBusy = false;
+  var kindBodySig = null;
   // BLK-reviewer-20260908-0103: 図名 → SVG が puml に追いついているか。
   // `ls -l` で puml と svg を 1 枚ずつ突き合わせる代わりに、一覧が答える。
   var svgStatus = {};
@@ -8145,6 +8153,11 @@ function setupTabs() {
       if (noteSig !== noteBoardSig) {
         noteBoardSig = noteSig;
         noteBoardReady = false;
+      }
+      // 図が 1 枚でも書き換われば、疑いの確かめ直しも要る。
+      if (noteSig !== kindBodySig) {
+        kindBodySig = noteSig;
+        kindBodyByName = {};
       }
 
       var WA = window.MA.writeActivity;
@@ -9518,6 +9531,14 @@ function setupTabs() {
     row.appendChild(box);
     if (window.MA.fileRole) row.appendChild(folderRoleButton(name));
     row.appendChild(b);
+    // BLK-reviewer-20260914-1406-wish: 名乗り (ファイル名の図種) と本文の図種が
+    // 食い違う図だけに付く印。複製・貼り間違いを、全文を読む前にこの行で出す。
+    // 行の末尾ではなく名前のすぐ隣に置く — 末尾はボタンが並んで押し出される。
+    var km = folderKindMismatchBadge(name);
+    if (km) {
+      row.appendChild(km);
+      row.classList.add('folder-kind-bad');
+    }
     if ((roleStatus[name] || {}).status === 'dirty') row.appendChild(folderRoleAcceptButton(name));
     if (status === 'changed' || status === 'new') row.appendChild(folderDiffButton(name, status));
     if (window.MA.targetSet) row.appendChild(folderTargetButton(name));
@@ -9538,13 +9559,6 @@ function setupTabs() {
     }
     var kb = folderKindBadge(name);
     if (kb) row.appendChild(kb);
-    // BLK-reviewer-20260914-1406-wish: 名乗り (ファイル名の図種) と本文の図種が
-    // 食い違う図だけに付く印。複製・貼り間違いを、全文を読む前にこの行で出す。
-    var km = folderKindMismatchBadge(name);
-    if (km) {
-      row.appendChild(km);
-      row.classList.add('folder-kind-bad');
-    }
     var vb = folderVersionButton(name);
     if (vb) row.appendChild(vb);
     // BLK-primary-20260914-1306-wish: 中身が同じ図の印と、1 枚だけ消すボタン。
@@ -9575,20 +9589,28 @@ function setupTabs() {
   // BLK-reviewer-20260914-1406-wish: ファイルが名乗っている図種 (plantuml-usecase) と、
   // 本文が実際に描く図種の食い違い。中身が別の図で塗り潰される事故は、これまで
   // 31 枚の DSL を 1 枚ずつ読むまで誰にも見えなかった。
+  // 1 枚分の材料。本文を取り寄せてある図は本文で判定する
+  // (server の判定より細かく見られる)。行の印と下の 1 行は必ず同じ材料で出す。
+  function kindEntryOf(name, kind) {
+    var n = name || '';
+    var body = kindBodyByName[n];
+    if (typeof body === 'string') {
+      return { name: n, dsl: body, savedKind: savedKindByName[n] || '' };
+    }
+    return { name: n, kind: kind || kindByName[n] || '', savedKind: savedKindByName[n] || '' };
+  }
+
   function kindMismatchEntries() {
     var list = kindEntries && kindEntries.length
       ? kindEntries
       : Object.keys(kindByName).map(function(n) { return { name: n, kind: kindByName[n] }; });
-    return list.map(function(e) {
-      var name = (e && e.name) || '';
-      return { name: name, kind: (e && e.kind) || kindByName[name] || '', savedKind: savedKindByName[name] || '' };
-    });
+    return list.map(function(e) { return kindEntryOf((e && e.name) || '', e && e.kind); });
   }
 
   function folderKindMismatchBadge(name) {
     var KM = window.MA.kindMismatch;
     if (!KM) return null;
-    var b = KM.badge({ name: name, kind: kindByName[name] || '', savedKind: savedKindByName[name] || '' });
+    var b = KM.badge(kindEntryOf(name));
     if (!b) return null;
     var el = document.createElement('span');
     el.className = 'folder-kind-warn folder-kind-warn-' + b.severity;
@@ -9616,6 +9638,29 @@ function setupTabs() {
     line.title = '名乗りはファイル名の図種、本文は DSL から判定した図種です。'
       + '食い違う図は中身が別の図で塗り潰されている疑いがあります';
     host.appendChild(line);
+    kindBodyScan(_wsFileDir(), bad);
+  }
+
+  // 疑いの出た図だけ本文を取り寄せて確かめ、取れたら一覧を描き直す。
+  // 疑いが 0 件なら 1 往復も出さない (一覧を開くたびの待ちを作らない)。
+  function kindBodyScan(dir, bad) {
+    var WS = window.MA.workspace;
+    if (!WS || kindBodyBusy || !bad || !bad.length) return;
+    var want = bad.filter(function(r) {
+      return r.name && typeof kindBodyByName[r.name] !== 'string';
+    }).map(function(r) { return r.name; });
+    if (!want.length) return;
+    kindBodyBusy = true;
+    Promise.all(want.map(function(n) {
+      return WS.loadFile(n, dir).then(function(t) {
+        if (typeof t === 'string') kindBodyByName[n] = t;
+      }, function() {});
+    })).then(function() {
+      kindBodyBusy = false;
+      try { refreshFolderPanelNow(); } catch (e) {}
+    }, function() {
+      kindBodyBusy = false;
+    });
   }
 
   // 行に付く版のバッジ。本番用 (無印) には付けない — 全行に印が付くと印でなくなる。

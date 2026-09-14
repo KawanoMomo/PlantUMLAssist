@@ -35,6 +35,10 @@ test('手順1 中身が別の図で塗り潰された 1 枚を、全文を読ま
   for (const n of S.PRIMARY_DOCS) await S.putDoc(page, DIR, n, S.docFor(n));
   // 事故そのもの: ユースケース図のファイルに、別の図 (SPI 初期化シーケンス) の本文が丸ごと入る。
   await S.putDoc(page, DIR, 'plantuml-usecase', S.docFor('spi_init_sequence'));
+  // 正しいユースケース図。server の図種判定は `actor` をシーケンスと読むので、
+  // ここが赤くなると印が毎回出て役に立たなくなる (疑いの出た図は本文まで見る)。
+  await S.putDoc(page, DIR, 'driver_use_case', ['@startuml', 'left to right direction',
+    'actor 開発者', '(ドライバを設定する)', '開発者 --> (ドライバを設定する)', '@enduml'].join('\n'));
 
   await S.openFolder(page);
   // 到達条件 1: 一覧の 1 行が、食い違った図を名指しする (枚数も出るので、
@@ -49,5 +53,7 @@ test('手順1 中身が別の図で塗り潰された 1 枚を、全文を読ま
   await expect(badge).toBeVisible();
   await expect(badge).toContainText('名乗り ユースケース');
   await expect(badge).toContainText('本文 シーケンス');
+  // 到達条件 3: 正しいユースケース図は赤くならない (印が付くのは事故の 1 枚だけ)。
+  await expect(page.locator('#folder-panel [data-kind-mismatch="driver_use_case"]')).toHaveCount(0);
   expect(await page.locator('#folder-panel [data-kind-mismatch]').count()).toBe(1);
 });
