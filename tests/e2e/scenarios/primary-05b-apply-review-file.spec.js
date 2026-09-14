@@ -705,3 +705,52 @@ test.describe('primary 手順5.5: 未着手の依頼が何件・何 tick 続い�
     await expect(page.locator('#peek-note')).toContainText('primary への依頼');
   });
 });
+
+// BLK-primary-20260914-2106: 起動すると既定のタブ (diagram1) が図種の見本で作られる。
+// 画面のバッジは数を出すために saveActiveDoc() を通るので、利用者が 1 文字も
+// 打っていないのに見本が diagram1.puml としてディスクへ書かれ、同じ名前で保存して
+// あった本物の図 (domain-verdict 宣言行つき) が見本で潰れていた。開き直すたびに
+// 再発するので、GUI 経由での SVG 再生成 (stale 解消) ができなくなる。
+const VERDICT_DOC = [
+  '@startuml',
+  "' domain-verdict: reviewed 2026-09-14",
+  'title diagram1',
+  'participant App',
+  'participant Drv',
+  'App -> Drv : Init()',
+  '@enduml',
+].join('\n');
+
+test('手順5.5 保存フォルダの diagram1 は、起動しただけでは見本で潰れない', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  await S.putDoc(page, DIR, 'diagram1', VERDICT_DOC);
+
+  // 開き直す = 既定のタブ名 diagram1 でこの画面が立ち上がる場面そのもの。
+  await page.reload();
+  await page.waitForTimeout(1800);
+
+  // 到達条件その1: 同じ名前の図が保存フォルダにあるなら、タブの中身はその図。
+  const shown = await page.locator('#editor').inputValue();
+  expect(shown).toContain('domain-verdict');
+
+  // 到達条件その2: 起動しただけで保存フォルダの本体が書き換わらない。
+  const onDisk = await S.readDoc(page, DIR, 'diagram1');
+  expect(onDisk).toContain('domain-verdict');
+  expect(onDisk).not.toContain('Sample Sequence');
+
+  // 到達条件その3: 一覧から開き直しても同じで、そのまま保存しても宣言行は残る
+  // (= GUI から SVG を作り直せる)。
+  await S.openFolderItem(page, 'diagram1');
+  await page.waitForTimeout(600);
+  const lock = page.locator('#source-lock-modal');
+  if (await lock.isVisible().catch(() => false)) {
+    await page.locator('#source-lock-overwrite').click();
+    await page.waitForTimeout(600);
+  }
+  expect(await page.locator('#editor').inputValue()).toContain('domain-verdict');
+  // 画面に出ている保存は上部バーの [💾 保存] (#btn-save はツールを畳むと隠れる)。
+  await page.locator('#top-save').click();
+  await page.waitForTimeout(1500);
+  expect(await S.readDoc(page, DIR, 'diagram1')).toContain('domain-verdict');
+});

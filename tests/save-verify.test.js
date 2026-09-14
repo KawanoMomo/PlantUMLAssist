@@ -121,6 +121,21 @@ describe('saveVerify — 引き継ぐ前に読む 1 行', function() {
     expect(SV.rowLabel(SV.rows()[0])).toBe('× b');
   });
 
+
+  // BLK-primary-20260914-2106: まだ見本のままのタブは、自動の書き戻しでは
+  // ディスクへ書かない。書かなかった道として控え、理由が読めること。
+  test('見本のままで書かなかった道は「書く必要が無かった」側に数える', function() {
+    SV.note('diagram1', '@startuml\n@enduml', 'untouched');
+    expect(SV.statusOf('diagram1')).toBe('ok');
+    expect(SV.pending()).toEqual([]);
+    expect(SV.rows()[0].reason).toContain('見本');
+  });
+
+  test('知らない道の名前は written に倒す (控えが空にならない)', function() {
+    SV.note('diagram1', 'x', 'なんだかわからない');
+    expect(SV.rows()[0].outcome).toBe('written');
+  });
+
   test('忘れさせれば台帳から消える', function() {
     SV.note('a', 'x', 'written');
     SV.forget('a');
