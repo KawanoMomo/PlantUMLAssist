@@ -292,7 +292,82 @@ python server.py
 
 Windows では `start.bat` をダブルクリックでも起動可能 (server.py を起動してブラウザを自動で開きます)。
 
+### Windows アプリ版 (exe / インストーラ)
+
+Python も Java も PlantUML も入っていない相手に配る形です。画面は Web 版と同じ
+`plantuml-assist.html` / `src/` を読むので、機能に差はありません。
+
+```bash
+python -m pip install pywebview      # 開発機で試すとき
+python app.py                        # 窓で開く (Web 版は python server.py のまま)
+```
+
+配布物は GitHub Actions (`.github/workflows/windows-app.yml`) が `v*` タグで作ります。
+リポジトリにバイナリは入れません。手元で作るなら:
+
+```bash
+python -m pip install pywebview pyinstaller
+pyinstaller packaging/PlantUMLAssist.spec --noconfirm
+iscc packaging\installer.iss           # Inno Setup 6 が要ります
+```
+
+- **plantuml.jar は同梱しません**。初回起動後、⚙設定 → レンダリング →
+  「jar を選ぶ」でファイルを指定するか、「公式から取得」を押してください。
+  選んだ場所は `.assist-prefs.json` (アプリ版では `%APPDATA%\PlantUMLAssist\`) に残ります。
+- **Java も同梱しません**。同じ画面に検出結果が出ます。無ければ
+  [Temurin](https://adoptium.net/temurin/releases/) を入れてください (Java 11 以上)。
+- アプリ版の保存・書き出しはネイティブのファイルダイアログです
+  (Web 版は従来どおりブラウザのダウンロード)。
+
 **自動停止**: ブラウザタブを閉じるとサーバーも自動で停止します (heartbeat 方式、タブ close 後 2〜6秒以内に終了)。F5 リロードは自動判定で継続。明示的に止めたい場合は `Ctrl+C`。
+
+## HTTP API
+
+curl などから直接使う窓口。**仕様は `GET /render` が自分で返す**ので、覚えていなくても
+`curl http://127.0.0.1:8766/render` を叩けば以下と同じ内容が JSON で得られます。
+
+### `POST /render` — DSL を SVG にする
+
+リクエストは `application/json`。DSL を渡すフィールドの正式な名前は **`text`** ですが、
+**`dsl` / `source` / `uml` / `puml` / `diagram` も別名として受理します**。名前を思い出せなくても
+1 回目の POST が通り、`GET /render` を先に読まないと使えない窓口ではありません。
+
+| フィールド | 必須 | 内容 |
+|---|---|---|
+| `text` | 必須 | PlantUML の DSL 全文 (`@startuml` … `@enduml`)。別名: `dsl` / `source` / `uml` / `puml` / `diagram` |
+| `mode` | 任意 | `local` (既定・同梱 Java) / `online` (plantuml.com へ送信) |
+
+別名で送った場合も描画は成功 (`200`) し、レスポンスに
+`X-PlantUMLAssist-Warning` ヘッダ (URL エンコード) が付いて正式な名前が `text` であることを伝えます。
+別名を 2 つ以上同時に送ったときだけ、どれを描くか決められないので `400` になります。
+
+```bash
+curl -sS -X POST http://127.0.0.1:8766/render   -H "Content-Type: application/json"   -d '{"text": "@startuml
+A -> B
+@enduml", "mode": "local"}'
+```
+
+レスポンス:
+
+| ステータス | 内容 |
+|---|---|
+| `200` | `image/svg+xml` — 描画された SVG |
+| `400` | `{"error": ...}` — `text` (と別名) が 1 つも無い / 文字列でない / 空、または別名が複数 |
+| `422` | `{"error": "3 行目: Syntax Error?", "line": 3}` — DSL の文法エラー |
+| `500` | `{"error": ...}` — 描画そのものの失敗 |
+
+> PlantUML 自身は文法エラーでも「Syntax Error?」と描いた SVG を 200 で返します。
+> この server はそれを `422` に落とすので、`curl` の終了コードとステータスだけで
+> 成功と失敗を見分けられます。
+
+### その他
+
+| エンドポイント | 内容 |
+|---|---|
+| `GET /render` | 上の仕様そのものを JSON で返す |
+| `GET /env` | Java の検出結果など実行環境 |
+| `GET|POST /prefs` | 保存先 (`backend` / `fileDir`) をこのマシンに覚えさせる |
+| `GET|POST|DELETE /autosave` | 保存フォルダの読み書き |
 
 ## 要件
 
@@ -332,6 +407,154 @@ npm run test:unit   # Node runner — 308 unit tests
 npm run test:e2e    # Playwright — 80 E2E tests
 npm run test:all
 ```
+
+## 監査 CLI (`npm run audit`)
+
+GUI を開かずに、フォルダ内の `.puml` 一式へ監査 (名前突合・メソッド突合・整合チェック・
+系統突合) を掛けて JSON を返す。ブラウザは要らず、`window` のモックも自分で組む必要はない。
+
+```bash
+npm run audit -- <ファイル|フォルダ> [...] [オプション]
+
+node tools/audit.js E:\path\to\diagrams --summary          # 人が読む件数の要約
+node tools/audit.js E:\path\to\diagrams --out audit.json   # JSON をファイルへ
+node tools/audit.js a.puml b.puml --only name,method       # 監査を絞る
+```
+
+| オプション | 意味 |
+|---|---|
+| `--summary` | JSON ではなく件数の要約を日本語で出す |
+| `--out FILE` | JSON を FILE に書き、標準出力にはパスだけ出す |
+| `--only a,b` | 回す監査を絞る (`name` / `method` / `consistency` / `family` / `trace` / `label` / `svg` / `density`) |
+
+`label` は遷移ラベルが「対応するシーケンスのメッセージの何番目 (先頭 / 中間 / 末尾)」を指しているかを
+系統横断で数え、多数派とズレた系統を名指しする。実在チェック (`trace`) は実在する名前なら一致と出すので、
+「dma だけ末尾の内部呼び出し名をラベルにしている」は `label` でしか出ない。判定は画面の
+「⇉ 系統チェック」と同じ `src/core/label-position.js` — GUI と CLI で答えが割れることはない。
+
+JSON の形:
+
+```jsonc
+{
+  "generatedAt": "...", "targets": ["..."], "docs": ["junior/UART.puml", ...],
+  "audits": {
+    // status は "ok" | "skipped" (モジュール無し) | "error" (監査が投げた)。
+    // 1 つ壊れても他の監査は結果を返す
+    "name":        { "status": "ok", "result": { "variants": [...], "undeclared": [...] } },
+    "method":      { "status": "ok", "result": { "issues": [...], "calls": [...] } },
+    "consistency": { "status": "ok", "result": { "naming": [], "unused": [], ... } },
+    "family":      { "status": "ok", "result": [ ... ] }
+  },
+  "summary": { "name": { "variants": 3, "undeclared": 0, "clean": false }, ... },
+  "totalIssues": 134
+}
+```
+
+終了コードは、監査が回れば指摘の有無に関わらず 0 (件数は JSON で読む)。
+引数不正・対象の `.puml` が 0 枚・監査モジュールの読み込み失敗だけが 1。
+読み込みに失敗したモジュールがあれば `loadErrors` に出る — 指摘 0 件が「問題なし」なのか
+「見ていない」なのかは、そこで区別する。
+
+`src/core/` は列挙して丸ごと読むので、本体が新しい依存を足しても呼び出し側の書き換えは要らない。
+
+### 自分のスクリプトから監査モジュールを呼ぶ
+
+`npm run audit` で足りない集計をしたいときは、`tools/audit-runtime.js` を使う。
+`window` のモックを自分で組んだり、`src/core/*.js` を依存順に手で `require` したりする
+必要はない (本体が新しい依存を足しても、このスクリプトは書き換えずに動く)。
+
+```js
+const { loadMA, docsFrom } = require('./tools/audit-runtime');
+
+const { MA, errors } = loadMA();          // errors が空でなければ「見ていない」監査がある
+const docs = docsFrom('E:\path\to\diagrams');  // [{ name, dsl, path }]
+
+const res = MA.nameAudit.audit(docs);     // MA.methodAudit / MA.consistency / MA.familyAudit も同様
+console.log(res.variants.length, res.undeclared.length);
+```
+
+図 1 枚は `{ name, dsl }` で渡す。手で組み立てるときは `dsl` でも `text` でも読めるので、
+綴りを取り違えて**指摘 0 件**が返ってくることはない。`name` は突合結果の中で図を指す名前に
+なるだけなので、ファイル名でなくても構わない。
+
+`src/core/*.js` を `require` で 1 本だけ読むのは避ける。監査モジュールは互いを `window.MA` 越しに
+呼ぶので、兄弟が居ないと**例外ではなく空の結果**が返る (「問題なし」と読み違える)。`loadMA()` は
+`src/core` を丸ごと読むので、この取り違えが起きない。
+
+入力が他のモジュールの出力になっているものもある。`labelPosition.rank()` は
+`traceCoverage.audit(docs)` の結果を取る:
+
+```js
+const { MA } = loadMA();
+const r = MA.labelPosition.rank(MA.traceCoverage.audit(docs));
+console.log(r.commonLabel, r.odd.map((x) => x.key));   // 先頭 [ 'dma' ]
+```
+
+## 指摘の着手状況 CLI (`npm run pins`)
+
+GUI の「📥 指摘箱」が 1 件ずつに付ける **未着手 / 着手 / 解消** を、ブラウザを開かずに読む。
+前回の依頼に手が付いたかを、`audit.js --since-files` で全図の指紋を突き合わせずに 1 コマンドで出せる。
+
+```bash
+npm run pins -- <ファイル|フォルダ> [...] [オプション]
+
+node tools/pins.js E:\path\to\diagrams                    # 未解消 (未着手 + 着手) を人が読む形で
+node tools/pins.js E:\path\to\diagrams --json             # 同じ結果を JSON で
+node tools/pins.js E:\path\to\diagrams --all              # 解消も出す (反映確認)
+node tools/pins.js E:\path\to\diagrams --author reviewer  # 自分が書いた指摘だけ
+```
+
+| 状況 | 意味 |
+|---|---|
+| 未着手 | 指摘のあと、その図はまだ 1 度も書き換わっていない |
+| 着手 | 図は書き換わったのに指摘した行はそのまま (または応答が返っている) |
+| 解消 | 指摘した行が図から無くなった / 対応済みの印が付いた |
+
+| オプション | 意味 |
+|---|---|
+| `--json` / `--out FILE` | JSON を標準出力 / ファイルへ |
+| `--all` | 解消も並べる (既定は未解消だけ) |
+| `--author 名前` | その名前が書いた指摘だけに絞る |
+| `--state FILE` / `--no-state` | 控えの置き場所を変える / 控えを使わない |
+
+「図が書き換わったか」は控え (図ごとの指紋) との突き合わせで見るので、**同じフォルダを続けて観測する**と
+見送り回数 (直す機会があったのに直っていない回数) が積まれる。控えは `.assist-pins-state.json` に
+対象フォルダごとに分けて残る (画面が保存フォルダごとに localStorage の鍵を分けているのと同じ)。
+仕分けの規則は画面と同じ `src/core/pin-progress.js` — GUI と CLI で答えが割れることはない。
+
+終了コードは、走れば未解消の有無に関わらず 0 (件数は要約か JSON で読む)。
+引数不正・対象の `.puml` が 0 枚だけが 1。
+
+## 依頼の台帳 CLI (`npm run requests`)
+
+`指摘.md` に書いた **primary への依頼** が、いつ初めて出て・何 tick 続いていて・手が付いたかを読む。
+1 回叩くごとに 1 tick を控えに足すので、`runs/` の過去ログを遡って数え直す必要がない。
+指摘ピン (`npm run pins`) が追うのは図の行に貼った指摘、こちらが追うのは文書に書いた依頼。
+
+```bash
+npm run requests -- <指摘.md> [オプション]
+
+node tools/requests.js E:\path	o\指摘.md                              # 未解消の依頼を人が読む形で
+node tools/requests.js E:\path	o\指摘.md --docs E:\path	o\diagrams  # 着手したかも見る
+node tools/requests.js E:\path	o\指摘.md --tick 20260914-1906 --json   # run を名前で控えて JSON で
+node tools/requests.js E:\path	o\指摘.md --all                         # 解消した依頼も並べる
+```
+
+| 状況 | 意味 |
+|---|---|
+| 新規 | この tick で初めて出た依頼 |
+| 未着手 | 依頼は残っていて、名指しされた図も前回 tick から動いていない |
+| 着手 | 依頼は残っているが、名指しされた図は前回 tick から書き換わっている |
+| 再発 | 一度 `指摘.md` から消えたのに、また書かれた (退行) |
+| 解消 | 今回の `指摘.md` にはもう無い |
+
+依頼は「依頼」と書かれた見出しの下の番号つき箇条書きから 1 件ずつ切り出す (その節が無い回は
+`## 【未解消】依頼1: …` の見出しそのものを読む)。`(最優先・継続)` のような**その回の扱いを表す括弧は
+指紋から外す**ので、扱いを書き換えただけで別の依頼になることはない。名指しされた `*.puml` は
+着手を見る先として憶える。控えは `.assist-requests-state.json` に `指摘.md` ごとに分けて残り、
+`--tick` を同じラベルで 2 度渡しても tick は増えない (数え直しで継続日数が伸びない)。
+
+終了コードは、走れば依頼の有無に関わらず 0。引数不正・`指摘.md` が読めないときだけ 1。
 
 ## 設計ドキュメント
 

@@ -52,8 +52,9 @@ window.MA.modules.plantumlUsecase = (function() {
     if (label && label !== id) return 'usecase "' + label + '" as ' + id;
     return 'usecase ' + id;
   }
-  function fmtPackage(label) {
-    return 'package "' + label + '" {';
+  // design 5d: 境界の表記 (UseCase は package / rectangle)。
+  function fmtPackage(label, notation) {
+    return window.MA.groupNotation.fmtOpen(notation, label, 'plantuml-usecase');
   }
   function fmtRelation(kind, from, to, label) {
     var lbl = label || '';
@@ -80,12 +81,120 @@ window.MA.modules.plantumlUsecase = (function() {
 
   function addActor(text, id, label) { return insertBeforeEnd(text, fmtActor(id, label || id)); }
   function addUsecase(text, id, label) { return insertBeforeEnd(text, fmtUsecase(id, label || id)); }
-  function addPackage(text, label) {
-    var open = fmtPackage(label);
+  function addPackage(text, label, notation) {
+    var open = fmtPackage(label, notation);
     return insertBeforeEnd(insertBeforeEnd(text, open), '}');
   }
   function addRelation(text, kind, from, to, label) {
     return insertBeforeEnd(text, fmtRelation(kind, from, to, label));
+  }
+
+  // design 5d: UseCase の「その他パレット」の ノート。書式は図種で変わらないので
+  // src/core/note-block.js に置いた純関数をそのまま使う。
+  function addNote(text, targetId, position, noteText) {
+    var out = text;
+    window.MA.noteBlock.format(position, targetId, noteText || '').forEach(function(l) {
+      out = insertBeforeEnd(out, l);
+    });
+    return out;
+  }
+  function updateNote(text, startLine, endLine, fields) {
+    return window.MA.noteBlock.update(text, startLine, endLine, fields);
+  }
+  function deleteNote(text, startLine, endLine) {
+    return window.MA.noteBlock.remove(text, startLine, endLine);
+  }
+
+  // 既にある境界の表記だけを差し替える (ラベル・中身・閉じ括弧はそのまま)。
+  function changeGroupNotation(text, lineNum, notation) {
+    return window.MA.groupNotation.changeNotation(text, lineNum, notation, 'plantuml-usecase');
+  }
+
+  // ─── Bulk tail add (1 行 = 1 件) ──────────────────────────────────────
+  // 要素は `actor User` / `:User:`(アクター)、`usecase 起動` / `(起動)` / 装飾なし(ユースケース)。
+  // `Alias : Label` で表示名を指定できる。関係は
+  //   `A --> B : label`(association) / `A <|-- B`(generalization) /
+  //   `A ..> B : extend`(extend) / `A ..> B`(include)。
+  var UC_BULK_ARROW_RE = /\s(<\|--|--\|>|\.\.>|\.\.|-->|->|--)\s/;
+
+  function _ucStripDeco(s) {
+    var t = String(s || '').trim();
+    t = t.replace(/^:(.*):$/, '$1').replace(/^\((.*)\)$/, '$1')
+         .replace(/^(actor|usecase)\s+/i, '');
+    return t.replace(/^"(.*)"$/, '$1').trim();
+  }
+
+  function _ucArrowKind(arrow, label) {
+    if (arrow === '<|--' || arrow === '--|>') return 'generalization';
+    if (arrow === '..>' || arrow === '..') {
+      return /extend/i.test(label || '') ? 'extend' : 'include';
+    }
+    return 'association';
+  }
+
+  function parseBulkLines(block) {
+    var out = [];
+    if (!block) return out;
+    var lines = String(block).split(/\r?\n/);
+    for (var i = 0; i < lines.length; i++) {
+      var s = lines[i].trim();
+      if (!s || s.indexOf("'") === 0 || s.indexOf('#') === 0) continue;
+      var am = s.match(UC_BULK_ARROW_RE);
+      if (am) {
+        var pos = s.indexOf(am[0]);
+        var left = s.slice(0, pos);
+        var rest = s.slice(pos + am[0].length);
+        var lbl = '';
+        var ci = rest.indexOf(':');
+        if (ci >= 0) { lbl = rest.slice(ci + 1).trim(); rest = rest.slice(0, ci); }
+        var from = _ucStripDeco(left);
+        var to = _ucStripDeco(rest);
+        if (!from || !to) continue;
+        var kind = _ucArrowKind(am[1], lbl);
+        var arrow = am[1];
+        if (arrow === '--|>') { var sw = from; from = to; to = sw; }
+        out.push({
+          op: 'relation', kind: kind, from: from, to: to,
+          // include/extend/generalization のラベルは記法側に持つので捨てる
+          label: kind === 'association' ? lbl : '',
+        });
+        continue;
+      }
+      var isActor = /^actor\s+/i.test(s) || /^:.*:$/.test(s);
+      var body = s.replace(/^(actor|usecase)\s+/i, '').replace(/^:(.*):$/, '$1');
+      var label2 = '';
+      var ci2 = body.indexOf(':');
+      if (ci2 >= 0) { label2 = body.slice(ci2 + 1).trim(); body = body.slice(0, ci2); }
+      var id = _ucStripDeco(body);
+      if (!id) continue;
+      out.push({ op: isActor ? 'actor' : 'usecase', id: id, label: label2 });
+    }
+    return out;
+  }
+
+  // 要素を先に全部宣言してから関係を並べるので、入力順は問わない。
+  function addBulk(text, block, parsed) {
+    var ops = parseBulkLines(block);
+    var out = text;
+    var idMap = {};
+    var taken = _existingUsecaseIdSet(parsed || { elements: [] });
+    var i;
+    for (i = 0; i < ops.length; i++) {
+      var o = ops[i];
+      if (o.op !== 'actor' && o.op !== 'usecase') continue;
+      var norm = window.MA.idNormalizer.normalize(o.id, taken, o.op === 'actor' ? 'A' : 'U');
+      if (!norm.valid) continue;
+      idMap[o.id] = norm.id;
+      taken[norm.id] = true;
+      var lbl = o.label || norm.label || o.id;
+      out = (o.op === 'actor') ? addActor(out, norm.id, lbl) : addUsecase(out, norm.id, lbl);
+    }
+    for (i = 0; i < ops.length; i++) {
+      var r = ops[i];
+      if (r.op !== 'relation') continue;
+      out = addRelation(out, r.kind, idMap[r.from] || r.from, idMap[r.to] || r.to, r.label);
+    }
+    return out;
   }
 
   // ─── Update operations (pure: text + lineNum + field/value → text) ───
@@ -139,7 +248,8 @@ window.MA.modules.plantumlUsecase = (function() {
     if (idx < 0 || idx >= lines.length) return text;
     var indent = lines[idx].match(/^(\s*)/)[1];
     var trimmed = lines[idx].trim();
-    var m = trimmed.match(RELATION_RE);
+    var deco = window.MA.relationOptions.decorationsOf(lines[idx]);
+    var m = window.MA.relationOptions.plainLine(trimmed).match(RELATION_RE);
     if (!m) return text;
     var fromRaw = m[1], arrow = m[2], toRaw = m[3], lbl = (m[4] || '').trim();
     var from = DU.unquote(fromRaw), to = DU.unquote(toRaw);
@@ -158,7 +268,9 @@ window.MA.modules.plantumlUsecase = (function() {
     else if (field === 'to') to = value;
     else if (field === 'label') lbl = value;
 
-    lines[idx] = indent + fmtRelation(kind, from, to, lbl);
+    // 多重度・線の色は種別やラベルの書き換えでは失われない (design 3c)。
+    lines[idx] = window.MA.relationOptions.applyDecorations(
+      indent + fmtRelation(kind, from, to, lbl), deco);
     return lines.join('\n');
   }
 
@@ -193,16 +305,29 @@ window.MA.modules.plantumlUsecase = (function() {
 
   // ─── Parser ─────────────────────────────────────────────────────────────
   function parse(text) {
-    var result = { meta: { title: '', startUmlLine: null }, elements: [], relations: [], groups: [] };
+    var result = { meta: { title: '', startUmlLine: null }, elements: [], relations: [], groups: [], notes: [] };
     if (!text || !text.trim()) return result;
     var lines = text.split('\n');
 
     var packageStack = [];
     var packageCounter = 0;
 
+    // 注釈は行を跨ぐ (`note left of X` … `end note`) ので、要素の走査とは別に
+    // 1 回で拾う。注釈の中の本文行が actor / relation として読まれないよう、
+    // 拾った範囲は下の走査で飛ばす。
+    // note-block が読み込まれていない環境 (単体テストが window を差し替えた後など)
+    // でも、注釈が出ないだけで要素と関係は読めるようにする。
+    var NB = window.MA.noteBlock;
+    result.notes = NB ? NB.collect(text) : [];
+    var inNote = {};
+    result.notes.forEach(function(n) {
+      for (var ln = n.line; ln <= n.endLine; ln++) inNote[ln] = true;
+    });
+
     for (var i = 0; i < lines.length; i++) {
       var lineNum = i + 1;
       var trimmed = lines[i].trim();
+      if (inNote[lineNum]) continue;
       if (!trimmed || DU.isPlantumlComment(trimmed)) continue;
       if (RP.isStartUml(trimmed)) {
         if (result.meta.startUmlLine === null) result.meta.startUmlLine = lineNum;
@@ -216,7 +341,7 @@ window.MA.modules.plantumlUsecase = (function() {
         var label0 = pm[1] !== undefined ? pm[1] : pm[2];
         var pkgId = '__pkg_' + (packageCounter++);
         var parent = packageStack.length > 0 ? packageStack[packageStack.length - 1].id : null;
-        var pkg = { kind: 'package', id: pkgId, label: label0, startLine: lineNum, endLine: 0, parentId: parent };
+        var pkg = { kind: 'package', notation: (window.MA.groupNotation.notationOf(trimmed) || 'package'), id: pkgId, label: label0, startLine: lineNum, endLine: 0, parentId: parent };
         result.groups.push(pkg);
         packageStack.push(pkg);
         continue;
@@ -270,7 +395,7 @@ window.MA.modules.plantumlUsecase = (function() {
         continue;
       }
       // relation
-      m = trimmed.match(RELATION_RE);
+      m = window.MA.relationOptions.plainLine(trimmed).match(RELATION_RE);
       if (m) {
         var fromRaw = m[1], arrow = m[2], toRaw = m[3], lbl = (m[4] || '').trim();
         var from = DU.unquote(fromRaw);
@@ -297,6 +422,17 @@ window.MA.modules.plantumlUsecase = (function() {
 
   // ─── Property Panel ─────────────────────────────────────────────────────
   function renderProps(selData, parsedData, propsEl, ctx) {
+    // 注釈は element でも relation でもないので、共通のディスパッチに乗る前に拾う
+    // (class.js の note と同じ扱い)。
+    if (selData && selData.length === 1 && selData[0].type === 'note') {
+      var notes = parsedData.notes || [];
+      for (var i = 0; i < notes.length; i++) {
+        if (notes[i].id === selData[0].id) {
+          _renderNoteEdit(notes[i], parsedData, propsEl, ctx);
+          return;
+        }
+      }
+    }
     window.MA.propsRenderer.renderByDispatch(selData, parsedData, propsEl, {
       onNoSelection: function(parsed, el) { _renderNoSelection(parsed, el, ctx); },
       onElement: function(elt, parsed, el) { _renderElementEdit(elt, parsed, el, ctx); },
@@ -304,6 +440,130 @@ window.MA.modules.plantumlUsecase = (function() {
       onGroup: function(grp, parsed, el) { _renderGroupReadOnly(grp, parsed, el, ctx); },
       onMultiSelectConnect: function(sel, parsed, el) { _renderMultiSelectConnect(sel, parsed, el, ctx); },
       onMultiSelect: function(sel, parsed, el) { _renderMultiSelect(sel, el); },
+    });
+  }
+
+  // BLK-junior-20260909-0403-wish: シーケンス図からアクター・ユースケース候補。
+  // 判断は core/usecase-source.js に置き、ここは並べて選ばせるだけ。
+  // アクターとユースケースを 1 枚の一覧に混ぜず 2 段に分けるのは、
+  // 「誰が使うか」と「何をするか」が別の問いだから — 混ぜると選ぶ側が読み分ける。
+  function _renderSourceCandidates(parsedData, ctx) {
+    var US = window.MA.usecaseSource;
+    var P = window.MA.properties;
+    var esc = window.MA.htmlUtils.escHtml;
+    var sumEl = document.getElementById('uc-src-summary');
+    var bodyEl = document.getElementById('uc-src-body');
+    if (!US || !sumEl || !bodyEl) return;
+
+    var ws = window.MA.workspace;
+    var docs = (ws && ws.list) ? ws.list() : [];
+    var activeId = (ws && ws.getActiveId) ? ws.getActiveId() : null;
+    var dsl = ctx.getMmdText();
+
+    var subjOpts0 = US.subjects(docs, activeId);
+    if (!subjOpts0.length) {
+      sumEl.textContent = '同じ部品のシーケンス図がまだありません';
+      sumEl.setAttribute('data-actors', '0');
+      sumEl.setAttribute('data-usecases', '0');
+      bodyEl.innerHTML = '';
+      return;
+    }
+
+    // 起点になる部品。既定は今の図の名前と語が重なるもの。選び直したら引き直す。
+    var activeName = '';
+    for (var di = 0; di < docs.length; di++) {
+      if (docs[di] && docs[di].id === activeId) activeName = docs[di].name || '';
+    }
+    var hint = activeName + ' ' + ((parsedData && parsedData.meta && parsedData.meta.title) || '');
+    var subjEl0 = document.getElementById('uc-src-subject');
+    var subject = (subjEl0 && subjEl0.value) || US.defaultSubject(docs, activeId, hint);
+    var res = US.candidates(dsl, docs, activeId, subject);
+
+    sumEl.textContent = US.summaryText(res);
+    sumEl.setAttribute('data-actors', String(res.actors.length));
+    sumEl.setAttribute('data-usecases', String(res.usecases.length));
+
+    var rowsAll = res.actors.concat(res.usecases);
+    var subjOpts = subjOpts0.map(function(s) {
+      return { value: s.id, label: s.label, selected: s.id === subject };
+    });
+
+    function rowHtml(r) {
+      var i = rowsAll.indexOf(r);
+      return '<label class="uc-src-row" data-src-key="' + esc(r.key) + '" data-src-kind="' + esc(r.kind) + '"'
+        + ' style="display:flex;align-items:flex-start;gap:6px;padding:3px 4px;border-radius:3px;cursor:pointer;">'
+        + '<input type="checkbox" class="uc-src-check" data-i="' + i + '" style="margin-top:2px;">'
+        + '<span style="flex:1;">'
+          + '<span style="font-size:12px;color:var(--text-primary);">' + esc(r.name) + '</span>'
+          + '<span style="display:block;font-size:10px;color:var(--text-secondary);line-height:1.4;">'
+            + esc(r.why) + '</span>'
+        + '</span>'
+      + '</label>';
+    }
+
+    function section(title, list, emptyText, id) {
+      return '<div style="margin-top:6px;">'
+        + '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:2px;">' + title + '</div>'
+        + '<div id="' + id + '" style="max-height:150px;overflow-y:auto;border:1px solid var(--border);'
+          + 'border-radius:3px;padding:4px;">'
+        + (list.length ? list.map(rowHtml).join('')
+            : '<div style="font-size:10px;color:var(--text-secondary);">' + emptyText + '</div>')
+        + '</div></div>';
+    }
+
+    bodyEl.innerHTML =
+      P.selectFieldHtml('部品 (起点)', 'uc-src-subject', subjOpts) +
+      section('アクター候補 — 誰が使うか', res.actors, '候補はすべて図にあります', 'uc-src-actors') +
+      section('ユースケース候補 — 何をするか', res.usecases, '候補はすべて図にあります', 'uc-src-usecases') +
+      P.primaryButtonHtml('uc-src-add', '+ 選んだ候補を追加') +
+      '<div style="font-size:10px;color:var(--text-secondary);margin-top:4px;line-height:1.5;">' +
+        'アクターと、そのアクターが呼んでいるユースケースを一緒に選ぶと関連の線も引かれます</div>';
+
+    P.bindEvent('uc-src-subject', 'change', function() {
+      _renderSourceCandidates(parsedData, ctx);
+    });
+
+    P.bindEvent('uc-src-add', 'click', function() {
+      var picks = [];
+      var checks = document.querySelectorAll('#uc-src-body .uc-src-check');
+      for (var i = 0; i < checks.length; i++) {
+        if (checks[i].checked) picks.push(rowsAll[Number(checks[i].getAttribute('data-i'))]);
+      }
+      if (!picks.length) { alert('追加する候補を選んでください'); return; }
+      var block = US.blockFor(picks);
+      var t = ctx.getMmdText();
+      var out = addBulk(t, block, parsedData);
+      if (out === t) { alert('追加できる行がありません'); return; }
+      window.MA.history.pushHistory();
+      ctx.setMmdText(out);
+      ctx.onUpdate();
+    });
+  }
+
+  // BLK-junior-20260909-0403: ひな形は「白紙 (新規タブのサンプルのまま)」に置く
+  // ものなので、既に描き始めている図では黙って捨てない。3 件以上の要素があるときだけ
+  // 確認する (サンプルの actor User / usecase Login は白紙とみなす)。
+  function _bindStarter(parsedData, ctx) {
+    var P = window.MA.properties;
+    var DS = window.MA.driverUsecaseStarter;
+    var inputEl = document.getElementById('uc-starter-subject');
+    var hintEl = document.getElementById('uc-starter-hint');
+    if (!DS || !inputEl || !hintEl) return;
+    var refresh = function() {
+      hintEl.textContent = DS.summary(DS.plan(inputEl.value));
+    };
+    inputEl.addEventListener('input', refresh);
+    refresh();
+
+    P.bindEvent('uc-starter-add', 'click', function() {
+      var plan = DS.plan(inputEl.value);
+      if (!plan) { alert('題材名を入れてください (例: GPIO)'); return; }
+      var count = (parsedData.elements || []).length;
+      if (count >= 3 && !window.confirm('今の図の ' + count + ' 件を、'
+        + plan.display + ' ドライバのひな形で置き換えます。よろしいですか')) return;
+      window.MA.history.pushHistory();
+      ctx.setMmdText(DS.dsl(inputEl.value));
+      ctx.onUpdate();
     });
   }
 
@@ -316,55 +576,98 @@ window.MA.modules.plantumlUsecase = (function() {
     var html =
       '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">UseCase Diagram</div>' +
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">Title 設定</label>' +
-        P.fieldHtml('Title', 'uc-title', parsedData.meta.title) +
-        P.primaryButtonHtml('uc-set-title', 'Title 適用') +
-      '</div>' +
-      '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">末尾に追加</label>' +
         P.selectFieldHtml('種類', 'uc-tail-kind', [
           { value: 'actor',    label: 'Actor', selected: true },
           { value: 'usecase',  label: 'Usecase' },
-          { value: 'package',  label: 'Package境界' },
+          { value: 'package',  label: '境界 (package / rectangle)' },
           { value: 'relation', label: 'Relation (関係)' },
+          { value: 'note',     label: 'Note (注釈)' },
+          { value: 'bulk',     label: '一括 (複数行)' },
         ]) +
         '<div id="uc-tail-detail" style="margin-top:6px;"></div>' +
+      '</div>' +
+      // BLK-junior-20260909-0403-wish: 同じ部品のシーケンス図から、誰が使うか
+      // (アクター) と何をするか (ユースケース) の候補を出す。白紙から考えて
+      // 一括入力欄に打つ代わり。
+      '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' +
+          'シーケンス図から候補</label>' +
+        '<div id="uc-src-summary" style="font-size:10px;color:var(--text-secondary);margin-bottom:6px;line-height:1.5;"></div>' +
+        '<div id="uc-src-body"></div>' +
+      '</div>' +
+      // BLK-junior-20260909-0403: 手本になる図が 1 枚も無いところから始まる場面。
+      // ドライバのユースケース図は題材が替わっても骨格が同じなので、題材名 1 語で
+      // 下書きを作る (アクター・ユースケース・関連の 15 行を打ち直させない)。
+      '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' +
+          '白紙から: ドライバのひな形</label>' +
+        P.fieldHtml('題材名', 'uc-starter-subject', '', '例: GPIO / UART / CAN') +
+        '<div id="uc-starter-hint" style="font-size:10px;color:var(--text-secondary);margin:-4px 0 6px;line-height:1.5;"></div>' +
+        P.primaryButtonHtml('uc-starter-add', '＋ ひな形を作る') +
+        '<div style="font-size:10px;color:var(--text-secondary);margin-top:4px;line-height:1.5;">' +
+          '開発者・RTOS と、初期化 / ピンモード設定 / 読み取り / 書き込み / 割り込み設定 / 割り込み通知 の下書きです。' +
+          '要らない行はそのまま消して使えます</div>' +
       '</div>' +
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;color:var(--text-secondary);font-size:11px;">' +
         'DSL エディタで行をクリックすると編集パネルが開きます (v0.5.0 で SVG クリック対応予定)' +
       '</div>';
     propsEl.innerHTML = html;
 
-    // Title button
-    P.bindEvent('uc-set-title', 'click', function() {
-      window.MA.history.pushHistory();
-      ctx.setMmdText(setTitle(ctx.getMmdText(), document.getElementById('uc-title').value.trim()));
-      ctx.onUpdate();
-    });
+    _bindStarter(parsedData, ctx);
+
+    _renderSourceCandidates(parsedData, ctx);
+
 
     // 末尾追加 detail switcher
     var renderTailDetail = function() {
       var kind = document.getElementById('uc-tail-kind').value;
       var detailEl = document.getElementById('uc-tail-detail');
-      var actorOpts = actors.map(function(a) { return { value: a.id, label: a.label }; });
-      var usecaseOpts = usecases.map(function(u) { return { value: u.id, label: u.label }; });
+      // 表示名と識別子がずれている要素は「ラベル (id)」で出す。日本語を打つと
+      // 識別子は自動採番されるので、プルダウンの表示が DSL のどの行を指すのか
+      // 併記しないと選び直すときに確信が持てない (BLK-junior-20260908-0630)。
+      var AH = window.MA.aliasHint;
+      var actorOpts = actors.map(function(a) { return { value: a.id, label: AH.optionLabel(a.id, a.label) }; });
+      var usecaseOpts = usecases.map(function(u) { return { value: u.id, label: AH.optionLabel(u.id, u.label) }; });
+      // Alias 欄の下の 1 行。打った文字がどの識別子になるかを打っている最中に出す。
+      function aliasHintHtml() {
+        return '<div id="uc-tail-alias-hint" style="margin:-4px 0 8px;font-size:10px;' +
+          'color:var(--text-secondary);line-height:1.5;min-height:1.4em;"></div>';
+      }
+      function bindAliasHint(prefix) {
+        var inputEl = document.getElementById('uc-tail-alias');
+        var hintEl = document.getElementById('uc-tail-alias-hint');
+        if (!inputEl || !hintEl) return;
+        var taken = _existingUsecaseIdSet(parsedData);
+        var refresh = function() {
+          hintEl.textContent = AH.hintFor(inputEl.value, taken, prefix).text;
+        };
+        inputEl.addEventListener('input', refresh);
+        refresh();
+      }
       var allOpts = actorOpts.concat(usecaseOpts);
       if (allOpts.length === 0) allOpts = [{ value: '', label: '（要素なし）' }];
       var html = '';
       if (kind === 'actor') {
         html =
-          P.fieldHtml('Alias', 'uc-tail-alias', '', '例: User') +
-          P.fieldHtml('Label', 'uc-tail-label', '', '省略可、Alias と異なる場合に表示用') +
+          P.fieldHtml('Alias (識別子)', 'uc-tail-alias', '', '例: User（日本語は表示名になります）') +
+          aliasHintHtml() +
+          P.fieldHtml('Label (表示名)', 'uc-tail-label', '', '省略可、Alias と異なる場合に表示用') +
           P.primaryButtonHtml('uc-tail-add', '+ Actor 追加');
       } else if (kind === 'usecase') {
         html =
-          P.fieldHtml('Alias', 'uc-tail-alias', '', '例: L1') +
-          P.fieldHtml('Label', 'uc-tail-label', '', '省略可、Alias と異なる場合に表示用') +
+          P.fieldHtml('Alias (識別子)', 'uc-tail-alias', '', '例: L1（日本語は表示名になります）') +
+          aliasHintHtml() +
+          P.fieldHtml('Label (表示名)', 'uc-tail-label', '', '省略可、Alias と異なる場合に表示用') +
           P.primaryButtonHtml('uc-tail-add', '+ Usecase 追加');
       } else if (kind === 'package') {
         html =
           P.fieldHtml('Label', 'uc-tail-label', '', '例: Auth Module') +
-          P.primaryButtonHtml('uc-tail-add', '+ Package 追加');
+          P.selectFieldHtml('表記', 'uc-tail-notation', window.MA.groupNotation
+            .notationsFor('plantuml-usecase').map(function(n, i) {
+              return { value: n.id, label: n.label + ' — ' + n.hint, selected: i === 0 };
+            })) +
+          P.primaryButtonHtml('uc-tail-add', '+ 境界 追加');
       } else if (kind === 'relation') {
         html =
           P.selectFieldHtml('Kind', 'uc-tail-rkind', [
@@ -377,8 +680,35 @@ window.MA.modules.plantumlUsecase = (function() {
           P.selectFieldHtml('To', 'uc-tail-to', allOpts) +
           P.fieldHtml('Label', 'uc-tail-rlabel', '', 'association のみ任意') +
           P.primaryButtonHtml('uc-tail-add', '+ Relation 追加');
+      } else if (kind === 'note') {
+        // 注釈は必ず既存の要素に付く。付ける相手が無いうちは足させない
+        // (`note left of` の後ろが空の DSL は PlantUML が描けない)。
+        html =
+          P.selectFieldHtml('Target', 'uc-tail-ntarget', allOpts) +
+          P.selectFieldHtml('Position', 'uc-tail-npos', [
+            { value: 'left',   label: 'Left', selected: true },
+            { value: 'right',  label: 'Right' },
+            { value: 'top',    label: 'Top' },
+            { value: 'bottom', label: 'Bottom' },
+          ]) +
+          '<label style="display:block;font-size:10px;color:var(--text-secondary);">Text</label>' +
+          '<textarea id="uc-tail-ntext" style="width:100%;min-height:60px;font-family:inherit;font-size:12px;"></textarea>' +
+          P.primaryButtonHtml('uc-tail-add', '+ Note 追加');
+      } else if (kind === 'bulk') {
+        html =
+          '<label style="display:block;font-size:10px;color:var(--text-secondary);">要素と関係を 1 行 1 件で</label>' +
+          window.MA.reuseModal.buttonHtml('uc-tail-reuse') +
+          '<textarea id="uc-tail-bulk" style="width:100%;min-height:90px;font-family:inherit;font-size:12px;"></textarea>' +
+          P.primaryButtonHtml('uc-tail-add', '+ まとめて末尾に追加') +
+          '<div id="uc-tail-bulk-hint" style="font-size:10px;color:var(--text-secondary);margin-top:4px;line-height:1.5;">' +
+            'actor 開発者 / :Tester: (アクター) / 起動 / (診断実行) : ラベル (ユースケース) /<br>' +
+            'A --&gt; B : label / A ..&gt; B(include) / A ..&gt; B : extend / A &lt;|-- B。空行は無視されます</div>';
       }
       detailEl.innerHTML = html;
+      if (kind === 'actor') bindAliasHint('A');
+      else if (kind === 'usecase') bindAliasHint('U');
+      // 一括欄は「既に他の図にある行」を打ち直させないためのボタンを持つ。
+      window.MA.reuseModal.bindButton('uc-tail-reuse', 'plantuml-usecase', 'uc-tail-bulk');
 
       P.bindEvent('uc-tail-add', 'click', function() {
         var t = ctx.getMmdText();
@@ -401,7 +731,8 @@ window.MA.modules.plantumlUsecase = (function() {
           var lbl = document.getElementById('uc-tail-label').value.trim();
           if (!lbl) { alert('Label 必須'); return; }
           window.MA.history.pushHistory();
-          out = addPackage(t, lbl);
+          var notaEl = document.getElementById('uc-tail-notation');
+          out = addPackage(t, lbl, notaEl ? notaEl.value : 'package');
         } else if (kind === 'relation') {
           var fr = document.getElementById('uc-tail-from').value;
           var to = document.getElementById('uc-tail-to').value;
@@ -409,13 +740,65 @@ window.MA.modules.plantumlUsecase = (function() {
           var rkind = document.getElementById('uc-tail-rkind').value;
           window.MA.history.pushHistory();
           out = addRelation(t, rkind, fr, to, document.getElementById('uc-tail-rlabel').value.trim());
+        } else if (kind === 'note') {
+          var ntarget = document.getElementById('uc-tail-ntarget').value;
+          if (!ntarget) { alert('Target 必須 (先に actor/usecase を追加)'); return; }
+          window.MA.history.pushHistory();
+          out = addNote(t, ntarget,
+            document.getElementById('uc-tail-npos').value,
+            document.getElementById('uc-tail-ntext').value);
+        } else if (kind === 'bulk') {
+          var block = document.getElementById('uc-tail-bulk').value;
+          var bulkOut = addBulk(t, block, parsedData);
+          if (bulkOut === t) { alert('追加できる行がありません'); return; }
+          window.MA.history.pushHistory();
+          out = bulkOut;
         }
         ctx.setMmdText(out);
         ctx.onUpdate();
       });
     };
     document.getElementById('uc-tail-kind').addEventListener('change', renderTailDetail);
+    // design 2b: 種別はチップ 1 クリックで決める。値の持ち主は上の select のまま。
+    window.MA.tailKindChips.mount('uc-tail-kind');
     renderTailDetail();
+  }
+
+  // 注釈の編集。付ける相手 (Target) は動かさない — 付け替えは実質「別の注釈」なので、
+  // 消して足す操作に寄せる (class.js の note パネルと同じ判断)。
+  function _renderNoteEdit(note, parsedData, propsEl, ctx) {
+    var P = window.MA.properties;
+    var esc = window.MA.htmlUtils.escHtml;
+    propsEl.innerHTML =
+      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">Note (L' + note.line + ')</div>' +
+      '<div style="margin-bottom:6px;font-size:11px;"><b>Target:</b> ' + esc(note.targetId) +
+        ' <span style="color:var(--text-secondary);">(付け替えは削除して追加)</span></div>' +
+      P.selectFieldHtml('Position', 'uc-note-pos', [
+        { value: 'left',   label: 'Left',   selected: note.position === 'left' },
+        { value: 'right',  label: 'Right',  selected: note.position === 'right' },
+        { value: 'top',    label: 'Top',    selected: note.position === 'top' },
+        { value: 'bottom', label: 'Bottom', selected: note.position === 'bottom' },
+      ]) +
+      '<label style="display:block;font-size:10px;color:var(--text-secondary);">Text</label>' +
+      '<textarea id="uc-note-text" style="width:100%;min-height:70px;font-family:inherit;font-size:12px;">' +
+        esc(note.text || '') + '</textarea>' +
+      P.primaryButtonHtml('uc-note-update', '更新') +
+      P.primaryButtonHtml('uc-note-delete', '✕ 削除');
+
+    P.bindEvent('uc-note-update', 'click', function() {
+      window.MA.history.pushHistory();
+      ctx.setMmdText(updateNote(ctx.getMmdText(), note.line, note.endLine, {
+        position: document.getElementById('uc-note-pos').value,
+        text: document.getElementById('uc-note-text').value,
+      }));
+      ctx.onUpdate();
+    });
+    P.bindEvent('uc-note-delete', 'click', function() {
+      window.MA.history.pushHistory();
+      ctx.setMmdText(deleteNote(ctx.getMmdText(), note.line, note.endLine));
+      window.MA.selection.clearSelection();
+      ctx.onUpdate();
+    });
   }
 
   function _renderElementEdit(element, parsedData, propsEl, ctx) {
@@ -439,7 +822,44 @@ window.MA.modules.plantumlUsecase = (function() {
           '<button id="uc-delete" style="flex:0 0 60px;background:var(--accent-red);color:#fff;border:none;padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 削除</button>' +
         '</div>' +
       '</div>';
+
+    // この要素に付いている注釈。ここに出さないと、付けたあと編集・削除に
+    // 辿り着く道が無い (注釈は SVG 上のクリック対象になっていない)。
+    var esc = window.MA.htmlUtils.escHtml;
+    var myNotes = (parsedData.notes || []).filter(function(n) { return n.targetId === element.id; });
+    if (myNotes.length) {
+      html += '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">Note (注釈)</label>';
+      myNotes.forEach(function(n, idx) {
+        var preview = String(n.text || '').replace(/\n/g, ' ⏎ ').slice(0, 40);
+        if (String(n.text || '').length > 40) preview += '…';
+        html += '<div style="display:flex;align-items:center;gap:4px;font-size:11px;margin-bottom:2px;">' +
+          '<span style="flex:1;">' + esc(n.position) + ' 「' + esc(preview) + '」 (L' + n.line + ')</span>' +
+          '<button id="uc-note-edit-' + idx + '" data-id="' + esc(n.id) + '" data-line="' + n.line + '">edit</button>' +
+          '<button id="uc-note-del-' + idx + '" data-line="' + n.line + '" data-end="' + n.endLine + '">✕</button>' +
+          '</div>';
+      });
+      html += '</div>';
+    }
     propsEl.innerHTML = html;
+
+    myNotes.forEach(function(n, idx) {
+      P.bindEvent('uc-note-edit-' + idx, 'click', function(e) {
+        var btn = e.currentTarget;
+        window.MA.selection.setSelected([{
+          type: 'note', id: btn.getAttribute('data-id'),
+          line: parseInt(btn.getAttribute('data-line'), 10),
+        }]);
+      });
+      P.bindEvent('uc-note-del-' + idx, 'click', function(e) {
+        var btn = e.currentTarget;
+        window.MA.history.pushHistory();
+        ctx.setMmdText(deleteNote(ctx.getMmdText(),
+          parseInt(btn.getAttribute('data-line'), 10),
+          parseInt(btn.getAttribute('data-end'), 10)));
+        ctx.onUpdate();
+      });
+    });
 
     P.bindEvent('uc-edit-apply', 'click', function() {
       var rawNewId = document.getElementById('uc-edit-id').value.trim();
@@ -491,20 +911,18 @@ window.MA.modules.plantumlUsecase = (function() {
 
   function _renderRelationEdit(relation, parsedData, propsEl, ctx) {
     var P = window.MA.properties;
+    var RC = window.MA.relationKindCards;
     var html =
       '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">UseCase Diagram</div>' +
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">RELATION (L' + relation.line + ')</label>' +
-        P.selectFieldHtml('Kind', 'uc-rel-kind', [
-          { value: 'association',    label: 'Association (-->)', selected: relation.kind === 'association' },
-          { value: 'generalization', label: 'Generalization (<|--)', selected: relation.kind === 'generalization' },
-          { value: 'include',        label: 'Include (..> <<include>>)', selected: relation.kind === 'include' },
-          { value: 'extend',         label: 'Extend (..> <<extend>>)', selected: relation.kind === 'extend' },
-        ]) +
+        // design 3c: 関係の種類は記法ではなく「UML 名称 + 意味の説明」のカードで選ぶ
+        RC.cardsHtml('uc-rel-card', RC.kindsOf('usecase'), relation.kind) +
         P.fieldHtml('From', 'uc-rel-from', relation.from) +
         '<button id="uc-rel-swap" type="button" style="font-size:11px;padding:4px 10px;margin:4px 0;cursor:pointer;">⇄ From/To 入替</button>' +
         P.fieldHtml('To', 'uc-rel-to', relation.to) +
         P.fieldHtml('Label', 'uc-rel-label', relation.label) +
+        P.relationOptionsFor('uc-rel-more', ctx.getMmdText(), relation.line) +
         P.primaryButtonHtml('uc-rel-apply', '変更を反映') +
         '<div style="margin-top:8px;">' +
           '<button id="uc-delete" style="background:var(--accent-red);color:#fff;border:none;padding:6px 10px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 削除</button>' +
@@ -512,14 +930,24 @@ window.MA.modules.plantumlUsecase = (function() {
       '</div>';
     propsEl.innerHTML = html;
 
+    // design 3c: 細かい指定は「その他の設定」に畳み、押した時点で DSL へ反映する。
+    P.bindRelationOptionsFor('uc-rel-more', relation.line, ctx);
+
+    // 種別はカードを押した時点で確定する (Component と同じ)。
+    // From / To / Label は自由入力なので「変更を反映」に残す。
+    RC.bindCards(propsEl, 'uc-rel-card', function(newKind) {
+      if (newKind === relation.kind) return;
+      window.MA.history.pushHistory();
+      ctx.setMmdText(updateRelation(ctx.getMmdText(), relation.line, 'kind', newKind));
+      relation.kind = newKind;   // 「変更を反映」での二重適用を防ぐ
+      ctx.onUpdate();
+    });
     P.bindEvent('uc-rel-apply', 'click', function() {
-      var newKind = document.getElementById('uc-rel-kind').value;
       var newFrom = document.getElementById('uc-rel-from').value.trim();
       var newTo = document.getElementById('uc-rel-to').value.trim();
       var newLabel = document.getElementById('uc-rel-label').value.trim();
       window.MA.history.pushHistory();
       var t = ctx.getMmdText();
-      if (newKind !== relation.kind) t = updateRelation(t, relation.line, 'kind', newKind);
       if (newFrom !== relation.from) t = updateRelation(t, relation.line, 'from', newFrom);
       if (newTo !== relation.to) t = updateRelation(t, relation.line, 'to', newTo);
       if (newLabel !== relation.label) t = updateRelation(t, relation.line, 'label', newLabel);
@@ -547,64 +975,108 @@ window.MA.modules.plantumlUsecase = (function() {
       '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">UseCase Diagram</div>' +
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">PACKAGE (L' + pkg.startLine + '-' + pkg.endLine + ')</label>' +
-        '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">Label: ' + pkg.label + '</div>' +
-        '<div style="font-size:10px;color:var(--text-secondary);">v0.3.0: package のラベル変更 / 範囲指定 wrap は v0.5.0 で対応</div>' +
+        '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">Label: ' + window.MA.htmlUtils.escHtml(pkg.label || '') + '</div>' +
+        // design 5d: 表記を後から差し替える (中身と閉じ括弧はそのまま)
+        window.MA.properties.selectFieldHtml('表記', 'uc-grp-notation',
+          window.MA.groupNotation.notationsFor('plantuml-usecase').map(function(n) {
+            return { value: n.id, label: n.label + ' — ' + n.hint, selected: n.id === (pkg.notation || 'package') };
+          })) +
+        window.MA.properties.primaryButtonHtml('uc-grp-notation-apply', '表記を変更') +
+        '<div style="font-size:10px;color:var(--text-secondary);margin-top:8px;">v0.3.0: ラベル変更 / 範囲指定 wrap は v0.5.0 で対応</div>' +
       '</div>';
     propsEl.innerHTML = html;
+    window.MA.properties.bindEvent('uc-grp-notation-apply', 'click', function() {
+      var v = document.getElementById('uc-grp-notation').value;
+      if (v === (pkg.notation || 'package')) return;
+      window.MA.history.pushHistory();
+      ctx.setMmdText(changeGroupNotation(ctx.getMmdText(), pkg.startLine, v));
+      ctx.onUpdate();
+    });
   }
 
-  // ─── Multi-select Connect (Phase B Task 13) ─────────────────────────────
+  // ─── 関係を追加 / Add relation (design 3a) ───────────────────────────────
+  // 2 要素を選ぶとここが開く。UML の名称を主・意味の説明を副にして並べ、矢印の
+  // 見本を添える (relation-add.js のカタログ)。「追加される行」は実際に書き込む
+  // fmtRelation をそのまま通すので、見えている行と DSL が食い違わない。
   function _renderMultiSelectConnect(selData, parsedData, propsEl, ctx) {
     var P = window.MA.properties;
+    var RA = window.MA.relationAdd;
+    var esc = window.MA.htmlUtils.escHtml;
     var allElements = (parsedData.elements || []).filter(function(e) {
       return e.kind === 'actor' || e.kind === 'usecase';
     });
     var nameById = {};
-    allElements.forEach(function(e) { nameById[e.id] = e.label || e.id; });
-
-    var fromOpt = nameById[selData[0].id] || selData[0].id;
-    var toOpt = nameById[selData[1].id] || selData[1].id;
-
-    propsEl.innerHTML =
-      '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">UseCase - Connect 2 elements</div>' +
-      '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
-        '<div style="margin:8px 0;">' +
-          'From: <strong id="uc-conn-from">' + window.MA.htmlUtils.escHtml(fromOpt) + '</strong> ' +
-          '<button id="uc-conn-swap" type="button">⇄ swap</button> ' +
-          'To: <strong id="uc-conn-to">' + window.MA.htmlUtils.escHtml(toOpt) + '</strong>' +
-        '</div>' +
-        P.selectFieldHtml('Kind', 'uc-conn-kind', [
-          { value: 'association', label: 'Association (-->)', selected: true },
-          { value: 'generalization', label: 'Generalization (<|--)' },
-          { value: 'include', label: 'Include (..>) <<include>>' },
-          { value: 'extend', label: 'Extend (..>) <<extend>>' },
-        ]) +
-        P.fieldHtml('Label', 'uc-conn-label', '', '任意') +
-        P.primaryButtonHtml('uc-conn-create', '+ Connect') +
-      '</div>';
+    allElements.forEach(function(e) {
+      nameById[e.id] = window.MA.aliasHint.optionLabel(e.id, e.label || e.id);
+    });
 
     var swapped = false;
+    var kind = RA.defaultKind('usecase');
+
+    function nameOf(item) { return nameById[item.id] || item.id; }
+    function ends() { return RA.orient(selData, swapped); }
+
+    propsEl.innerHTML =
+      '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">関係を追加 / Add relation</div>' +
+      '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
+        '<div class="rel-ends">' +
+          '<span class="rel-end"><span class="rel-end-cap">From</span>' +
+            '<strong id="uc-conn-from">' + esc(nameOf(selData[0])) + '</strong></span>' +
+          '<button id="uc-conn-swap" type="button" class="rel-swap" title="From と To を入れ替える">⇄</button>' +
+          '<span class="rel-end"><span class="rel-end-cap">To</span>' +
+            '<strong id="uc-conn-to">' + esc(nameOf(selData[1])) + '</strong></span>' +
+        '</div>' +
+        '<div class="rel-section-cap">関係の種類 / Relation</div>' +
+        '<div id="uc-conn-kinds" class="rel-opts">' + RA.optionsHtml('usecase', 'uc-conn', kind) + '</div>' +
+        P.fieldHtml('ラベル / Label（任意）', 'uc-conn-label', '', '任意') +
+        '<div class="rel-section-cap">追加される行</div>' +
+        '<pre id="uc-conn-preview" class="rel-preview"></pre>' +
+        '<div class="rel-actions">' +
+          P.primaryButtonHtml('uc-conn-create', '関係を追加') +
+          '<button id="uc-conn-clear" type="button">選択解除</button>' +
+        '</div>' +
+      '</div>';
+
+    function refreshPreview() {
+      var e = ends();
+      var label = (document.getElementById('uc-conn-label') || {}).value || '';
+      var line = RA.previewLine(fmtRelation, kind, e.from.id, e.to.id, label.trim());
+      var pre = document.getElementById('uc-conn-preview');
+      if (pre) pre.textContent = line;
+    }
+
     P.bindEvent('uc-conn-swap', 'click', function() {
       swapped = !swapped;
-      var fromEl = document.getElementById('uc-conn-from');
-      var toEl = document.getElementById('uc-conn-to');
-      var tmp = fromEl.textContent;
-      fromEl.textContent = toEl.textContent;
-      toEl.textContent = tmp;
+      var e = ends();
+      document.getElementById('uc-conn-from').textContent = nameOf(e.from);
+      document.getElementById('uc-conn-to').textContent = nameOf(e.to);
+      refreshPreview();
+    });
+
+    var kindsEl = document.getElementById('uc-conn-kinds');
+    if (kindsEl) {
+      kindsEl.addEventListener('change', function(ev) {
+        if (!ev.target || ev.target.type !== 'radio') return;
+        kind = ev.target.value;
+        refreshPreview();
+      });
+    }
+    P.bindEvent('uc-conn-label', 'input', refreshPreview);
+
+    P.bindEvent('uc-conn-clear', 'click', function() {
+      window.MA.selection.clearSelection();
     });
 
     P.bindEvent('uc-conn-create', 'click', function() {
       window.MA.history.pushHistory();
-      var fromId = swapped ? selData[1].id : selData[0].id;
-      var toId = swapped ? selData[0].id : selData[1].id;
-      var kind = document.getElementById('uc-conn-kind').value;
+      var e = ends();
       var label = document.getElementById('uc-conn-label').value.trim();
-      var t = ctx.getMmdText();
-      var out = addRelation(t, kind, fromId, toId, label);
-      ctx.setMmdText(out);
+      ctx.setMmdText(addRelation(ctx.getMmdText(), kind, e.from.id, e.to.id, label));
       window.MA.selection.clearSelection();
       ctx.onUpdate();
     });
+
+    refreshPreview();
   }
 
   // 3+ selection 用
@@ -628,6 +1100,11 @@ window.MA.modules.plantumlUsecase = (function() {
     addUsecase: addUsecase,
     addPackage: addPackage,
     addRelation: addRelation,
+    addNote: addNote,
+    updateNote: updateNote,
+    deleteNote: deleteNote,
+    parseBulkLines: parseBulkLines,
+    addBulk: addBulk,
     updateActor: updateActor,
     updateUsecase: updateUsecase,
     updateRelation: updateRelation,
@@ -754,15 +1231,23 @@ window.MA.modules.plantumlUsecase = (function() {
         var lg = linkGroups[ri];
         var lineEl = lg.querySelector('line, path');
         if (!lineEl) continue;
-        var bb = OB.extractEdgeBBox(lineEl, 8);
-        if (!bb) continue;
-        OB.addRect(overlayEl, bb.x, bb.y, bb.width, bb.height, {
+        // BLK-human-20260912-2130: 線・矢じり・ラベル (<<include>> 等) をまとめて
+        // 1 つの当たり判定にする
+        var ucRelAttrs = {
           'data-type': 'relation',
           'data-id': relations[ri].id,
           'data-line': relations[ri].line,
           'data-relation-kind': relations[ri].kind,
-        });
+        };
+        if (!OB.addLinkRects(overlayEl, lg, ucRelAttrs, 8)) {
+          var bb = OB.extractEdgeBBox(lineEl, 8);
+          if (!bb) continue;
+          OB.addRect(overlayEl, bb.x, bb.y, bb.width, bb.height, ucRelAttrs);
+        }
       }
+
+      // BLK-human-20260912-2130: 小さい当たり判定を手前に。共通実装 (src/core)
+      OB.raiseSmallestLast(overlayEl);
 
       return {
         matched: {

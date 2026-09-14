@@ -81,6 +81,30 @@ window.MA.parserUtils = (function() {
     return null;
   }
 
+  // `actor A` だけの図は Sequence にも UseCase にもなり得る。detectDiagramType は
+  // 従来どおり usecase を返すが、これは当て推量なので、図種を自分で選んで
+  // 組み立てている最中(空のシーケンス図に参加者を 1 人足した直後など)に
+  // モジュールを勝手に載せ替えてはならない。この関数が true を返す間は
+  // 呼び出し側が現在の図種を保つ。
+  function isAmbiguousType(text) {
+    if (!text || !text.trim()) return true;
+    var lines = text.split('\n');
+    var inBlock = false;
+    var hasActor = false;
+    for (var i = 0; i < lines.length; i++) {
+      var t = lines[i].trim();
+      if (!t || t.indexOf("'") === 0) continue;
+      if (window.MA.regexParts.isStartUml(t)) { inBlock = true; continue; }
+      if (window.MA.regexParts.isEndUml(t)) break;
+      if (!inBlock) continue;
+      if (/^actor\b/.test(t)) { hasActor = true; continue; }
+      // actor 以外の実質的な行が 1 つでもあれば、その行が図種を決める
+      if (!/^(@|skinparam\b|title\b|hide\b|show\b|scale\b|autonumber\b)/.test(t)) return false;
+    }
+    // 中身が無い、または actor 宣言しか無い
+    return true;
+  }
+
   function splitLinesWithMeta(text) {
     if (!text) return [];
     var lines = text.split('\n');
@@ -99,8 +123,43 @@ window.MA.parserUtils = (function() {
     return result;
   }
 
+  // FEAT-177 (resolves HFR-042): 宣言されているが 1 度も参照されない participant を返す。
+  // 入力は sequence モジュールの parseSequence(text) の返り値と同じ形の
+  // { elements: [...], relations: [...] } である (生テキストは受け取らない)。
+  // message の from/to・activation の target・note の targets のいずれにも現れない
+  // participant を「未使用」とみなす。引数オブジェクトは変更しない。
+  function findUnusedParticipants(parsed) {
+    if (!parsed || !parsed.elements) return [];
+    var used = {};
+    function mark(name) {
+      if (name == null) return;
+      var k = String(name).trim();
+      if (k !== '') used[k] = true;
+    }
+    var rels = parsed.relations || [];
+    for (var i = 0; i < rels.length; i++) {
+      if (rels[i] && rels[i].kind === 'message') { mark(rels[i].from); mark(rels[i].to); }
+    }
+    for (var j = 0; j < parsed.elements.length; j++) {
+      var el = parsed.elements[j];
+      if (!el) continue;
+      if (el.kind === 'activation') mark(el.target);
+      if (el.kind === 'note' && el.targets) {
+        for (var t = 0; t < el.targets.length; t++) mark(el.targets[t]);
+      }
+    }
+    var out = [];
+    for (var k2 = 0; k2 < parsed.elements.length; k2++) {
+      var p = parsed.elements[k2];
+      if (p && p.kind === 'participant' && !used[String(p.id).trim()]) out.push(p);
+    }
+    return out;
+  }
+
   return {
     detectDiagramType: detectDiagramType,
+    isAmbiguousType: isAmbiguousType,
     splitLinesWithMeta: splitLinesWithMeta,
+    findUnusedParticipants: findUnusedParticipants,
   };
 })();

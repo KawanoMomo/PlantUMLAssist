@@ -1,0 +1,307 @@
+'use strict';
+window.MA = window.MA || {};
+
+// finding-actions — 指摘 1 件を「対象図 + 当てる操作」に翻訳する。
+//
+// BLK-primary-20260914-1006-wish: 指摘.md の 1 件を押すと図の組が並ぶ所までは
+// 来たが (review-note)、そこから先は primary が自分で「これは ⇄一括置換 か、
+// 再出力か、別ドメイン宣言か」を毎回読んで決め、対応する画面を探して開いていた。
+// 指摘が 1 件増えるたびに、この「読む→手段を決める→画面を探す」が増える。
+//
+// reviewer の指摘文は手段まで書いてある (「再エクスポートが必要」「junior 側と
+// 揃える」「別ドメインを明示」)。書いてあるものを機械が読めば、画面は
+// 「対象図 ◯◯ に 再出力 を当てる [適用]」という 1 行にできる。
+//
+// ここは翻訳だけを持つ。どの図が自分のものかは呼び手が渡し (mineFolder)、
+// 実際に当てるのは app.js (bulk-rename / domain-verdict / /autosave-svg)。
+// 手段が読み取れない指摘は manual にして、当てない理由をそのまま出す
+// (勝手に近い操作を当てると、指摘と違うことをした図が黙って増える)。
+window.MA.findingActions = (function() {
+  function _s(v) { return v == null ? '' : String(v); }
+
+  var KINDS = {
+    reexport: { label: '再出力', verb: 'SVG を出し直す' },
+    rename: { label: 'ラベル統一', verb: '部品名を揃える' },
+    verdict: { label: '別ドメイン明示', verb: '別物と決めて印を残す' },
+    addmethod: { label: 'メソッド追加', verb: '遷移ラベルに対応するメソッドをクラス図に足す' },
+    addclass: { label: 'クラス追加', verb: 'クラス図に宣言を足す' },
+    manual: { label: '手で判断', verb: '' },
+  };
+
+  function kindLabel(kind) {
+    var k = KINDS[_s(kind)];
+    return k ? k.label : '';
+  }
+
+  // ── 読み取り ────────────────────────────────────────────────────────────
+  // 「A を B に統一 / 揃える」。指摘文が綴りを名指ししている形。
+  // 「直す」「変更」は指摘文のどこにでも出るので取らない (指摘と違う綴りを
+  // 当ててしまう)。綴りの言い換えを明示している語だけを合図にする。
+  var RENAME_RE = /`?([A-Za-z_][\w]*)`?\s*(?:を|→|->|⇒)\s*`?([A-Za-z_][\w]*)`?\s*(?:に|へ)?\s*(?:統一|揃え|揃う|改名|改める)/;
+  // 「junior `Timer_Start` 等(接頭辞あり) vs primary `Start` 等(接頭辞なし)」。
+  // 接頭辞の有無で書かれた形。直すのは接頭辞が無い側なので from/to は逆に取る。
+  var PREFIX_RE = /`([A-Za-z_][\w]*)`[^\n]{0,16}[(（]接頭辞あり[)）][^\n]{0,24}vs[^\n]{0,24}`([A-Za-z_][\w]*)`[^\n]{0,16}[(（]接頭辞なし[)）]/;
+
+  // `domain-verdict` は「印が未反映」という状況説明としても書かれるので合図にしない
+  // (BLK-primary-20260914-1006-friction: 再出力を頼まれた件が印の話に化けた)。
+  var VERDICT_RE = /別ドメイン|別のドメイン|別物|すり合わせ|未宣言/;
+  var REEXPORT_RE = /再エクスポート|再出力|出し直|書き出し直/;
+  // 「再出力」と書かれていなくても、svg の中身が違うと言っていれば出し直すしかない。
+  // ただし svg の話だと分かるときだけにする (BLK-primary-20260914-1006-friction:
+  // 「部品名不一致」= すり合わせの依頼まで再出力に化けた)。
+  var SVG_RE = /svg/i;
+  var SVG_BAD_RE = /入れ替わ|クロス|残存|不一致|食い違/;
+
+  function svgIsBad(text) { return SVG_RE.test(text) && SVG_BAD_RE.test(text); }
+
+  // 「このクラスにこのメソッドを追加する」型 (BLK-primary-20260914-1106-wish)。
+  // 遷移ラベル / メッセージに対応するメソッドがクラス図に無い、という指摘は
+  // 突合 (eventSync) がそのまま「足す先のクラスと足すメソッド名」まで出せるので、
+  // primary が ⇄突合の画面を自分で開き直す理由が無い。
+  // 「メソッド」を含むだけでは取らない (突合サマリの見出しに毎回出る語)。
+  var ADDMETHOD_RE = /(?:クラス(?:図)?に[^\n]{0,12})?メソッド[^\n]{0,8}を(?:足す|追加)|(?:クラス)?メソッド[^\n]{0,8}が(?:1つも|一つも)?(?:無い|ない|存在しない|不足)/;
+  // 「クラス図にこのクラスが無い」型。足すのは宣言だけ (メンバは後で足せる)。
+  var ADDCLASS_RE = /クラス[^\n]{0,16}(?:クラス図に)?(?:不在|定義されていない|定義されてない|存在しない)|クラス図に[^\n]{0,24}を(?:追加|足す)/;
+
+  // 指摘文が `バッククォート` で名指ししている識別子。クラス名の候補。
+  // `*Regs` のようなワイルドカードと `foo.puml` のようなファイル名は取らない
+  // (そのままの綴りでクラスを宣言すると、実在しない名前の箱が図に増える)。
+  function classNames(text) {
+    var out = [];
+    var seen = {};
+    var re = /`([^`\n]+)`/g;
+    var m;
+    while ((m = re.exec(_s(text)))) {
+      var w = m[1].trim();
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(w)) continue;
+      if (seen[w]) continue;
+      seen[w] = true;
+      out.push(w);
+    }
+    return out;
+  }
+
+  function renamePair(text) {
+    var s = _s(text);
+    var m = s.match(PREFIX_RE);
+    if (m) return { from: m[2], to: m[1] };
+    m = s.match(RENAME_RE);
+    if (m && m[1] !== m[2]) return { from: m[1], to: m[2] };
+    return null;
+  }
+
+  // 指摘文がその図を名指ししているか。語の切れ目で見る。
+  // BLK-primary-20260914-1006-friction: 実物の指摘.md で `spi` / `can` という短い名前の
+  // 図が、本文の `Can_Driver` / `spi_dma` に含まれるというだけで対象に挙がり、
+  // 指摘が触れていない図まで [適用] が書き換えていた。読むだけなら余計な行が 1 本
+  // 増えるだけだが、当てる側では黙って別の図を書き替える。
+  function mentions(text, name) {
+    var s = _s(text).toLowerCase();
+    var w = _s(name).toLowerCase();
+    if (!s || !w) return false;
+    var at = s.indexOf(w);
+    while (at >= 0) {
+      var before = at > 0 ? s.charAt(at - 1) : '';
+      var after = s.charAt(at + w.length);
+      if (!/[\w]/.test(before) && !/[\w]/.test(after)) return true;
+      at = s.indexOf(w, at + 1);
+    }
+    return false;
+  }
+
+  // 自分のフォルダにあり、かつ指摘文が名指ししている図だけ。
+  // 指摘は他人の図の話も書くが、当てられるのは自分の図。
+  // text は呼び手が渡す (reviewNote.rows の行は text を持たず、title + body で組む)。
+  function mineDocs(row, mineFolder, findingText) {
+    var mine = _s(mineFolder);
+    var text = _s(findingText == null ? (row && row.text) : findingText);
+    return ((row && row.docs) || []).filter(function(d) {
+      if (mine && (d.folders || []).indexOf(mine) < 0) return false;
+      return !text || mentions(text, d.name);
+    });
+  }
+
+  // 相手のフォルダ (別ドメインの印に書く名前)。同名の図を持つ、自分でない方。
+  function otherFolderOf(docs, mineFolder) {
+    var mine = _s(mineFolder);
+    for (var i = 0; i < docs.length; i++) {
+      var fs = docs[i].folders || [];
+      for (var j = 0; j < fs.length; j++) if (fs[j] !== mine) return fs[j];
+    }
+    return '';
+  }
+
+  // ── 1 件ぶんの提案 ──────────────────────────────────────────────────────
+  function planFor(row, opts) {
+    var o = opts || {};
+    var mineFolder = _s(o.mineFolder);
+    var text = _s(row && row.text) || (_s(row && row.title) + '\n' + _s(row && row.body));
+    var docs = mineDocs(row, mineFolder, text);
+    var names = docs.map(function(d) { return d.name; });
+    var base = {
+      id: _s(row && row.id), heading: _s(row && row.heading) || _s(row && row.title),
+      docs: names, from: '', to: '', otherFolder: '', scope: 'docs', classes: [],
+    };
+
+    // 「再エクスポートが必要」のように手段が名指しされている件は、本文が
+    // 別ドメインの話にも触れていても、頼まれた通り再出力にする
+    // (BLK-primary-20260914-1006-friction: gpio_state の再出力依頼が印の話に化けた)。
+    if (REEXPORT_RE.test(text)) return _finish(_reexport(base, names));
+
+    var pair = renamePair(text);
+    if (pair) {
+      base.kind = 'rename';
+      base.from = pair.from;
+      base.to = pair.to;
+      // 図名が書かれていなければ、自分のフォルダから綴りを含む図を探して当てる
+      // (「timer の接頭辞を揃える」のように、綴りだけで来る指摘がある)。
+      base.scope = names.length ? 'docs' : 'folder';
+      base.ready = true;
+      base.reason = '';
+      return _finish(base);
+    }
+
+    if (VERDICT_RE.test(text)) {
+      base.kind = 'verdict';
+      base.otherFolder = otherFolderOf(docs, mineFolder);
+      base.ready = names.length > 0 && !!base.otherFolder;
+      base.reason = base.ready ? ''
+        : (names.length ? '同じ名前の図を持つ相手のフォルダが見つかりません'
+                        : 'この指摘には自分の保存フォルダにある図の名前がありません');
+      return _finish(base);
+    }
+
+    if (svgIsBad(text)) return _finish(_reexport(base, names));
+
+    // メソッド追加は突合が足す先を決めるので、指摘文が図を名指ししていなくてよい
+    // (「遷移ラベルに対応するメソッドが無い」だけで、当てる先は保存フォルダ全体)。
+    if (ADDMETHOD_RE.test(text)) {
+      base.kind = 'addmethod';
+      base.scope = 'folder';
+      base.ready = true;
+      base.reason = '';
+      return _finish(base);
+    }
+
+    if (ADDCLASS_RE.test(text)) {
+      base.kind = 'addclass';
+      base.scope = 'folder';
+      base.classes = classNames(text);
+      base.ready = base.classes.length > 0;
+      base.reason = base.ready ? '' : '指摘文が足すクラスの名前を名指ししていません';
+      return _finish(base);
+    }
+
+    base.kind = 'manual';
+    base.ready = false;
+    base.reason = '指摘文に当てる操作が書かれていません (読んで決めてください)';
+    return _finish(base);
+  }
+
+  function _reexport(base, names) {
+    base.kind = 'reexport';
+    base.ready = names.length > 0;
+    base.reason = base.ready ? '' : 'この指摘には自分の保存フォルダにある図の名前がありません';
+    return base;
+  }
+
+  function _finish(p) {
+    p.label = kindLabel(p.kind);
+    p.text = planText(p);
+    return p;
+  }
+
+  // 押す前に読む 1 行。「何を、どの図に」を言い切る。
+  function planText(p) {
+    if (!p) return '';
+    var docs = (p.docs || []).join('・');
+    if (p.kind === 'rename') {
+      var where = p.scope === 'folder' ? '保存フォルダの当たる図' : docs;
+      return 'ラベル統一: ' + p.from + ' → ' + p.to + ' を ' + where + ' に当てる';
+    }
+    if (p.kind === 'verdict') {
+      return p.ready
+        ? '別ドメイン明示: ' + docs + ' を「' + p.otherFolder + ' とは別のドメイン」と決める'
+        : '別ドメイン明示: ' + (p.reason || '当てられません');
+    }
+    if (p.kind === 'reexport') {
+      return p.ready ? '再出力: ' + docs + ' の SVG を出し直す'
+                     : '再出力: ' + (p.reason || '当てられません');
+    }
+    if (p.kind === 'addmethod') {
+      return 'メソッド追加: 遷移ラベルに対応するメソッドを保存フォルダのクラス図に足す';
+    }
+    if (p.kind === 'addclass') {
+      return p.ready
+        ? 'クラス追加: ' + (p.classes || []).join('・') + ' を保存フォルダのクラス図に足す'
+        : 'クラス追加: ' + (p.reason || '当てられません');
+    }
+    return '手で判断: ' + (p.reason || '');
+  }
+
+  function plans(rows, opts) {
+    return (rows || []).map(function(r) { return planFor(r, opts); });
+  }
+
+  function planOf(plans_, id) {
+    var want = _s(id);
+    for (var i = 0; i < (plans_ || []).length; i++) {
+      if (plans_[i] && plans_[i].id === want) return plans_[i];
+    }
+    return null;
+  }
+
+  // 一覧の見出し。今日 [適用] だけで済む件数を先に言う。
+  function summaryText(plans_) {
+    var list = plans_ || [];
+    if (!list.length) return '指摘.md がありません';
+    var ready = list.filter(function(p) { return p.ready; }).length;
+    var by = {};
+    list.forEach(function(p) { if (p.ready) by[p.kind] = (by[p.kind] || 0) + 1; });
+    var parts = [];
+    ['reexport', 'rename', 'verdict', 'addmethod', 'addclass'].forEach(function(k) {
+      if (by[k]) parts.push(kindLabel(k) + ' ' + by[k] + ' 件');
+    });
+    if (!ready) return '指摘 ' + list.length + ' 件 (適用できるものはありません)';
+    return '指摘 ' + list.length + ' 件 / うち ' + ready + ' 件は [適用] で当てられます ('
+      + parts.join(' / ') + ')';
+  }
+
+  // 当てたあとに出す 1 行。何件の図に何が起きたかを言う。
+  function resultText(plan, res) {
+    var r = res || {};
+    var done = (r.done || []).join('・');
+    if (!r.ok) return (plan ? kindLabel(plan.kind) + ': ' : '') + (r.message || '当てられませんでした');
+    if (plan && plan.kind === 'rename') {
+      return plan.from + ' → ' + plan.to + ' を ' + (r.hits || 0) + ' 箇所、' + done + ' に保存しました';
+    }
+    if (plan && plan.kind === 'verdict') return done + ' に「別のドメイン」の印を書きました';
+    if (plan && plan.kind === 'reexport') return done + ' の SVG を出し直しました';
+    if (plan && plan.kind === 'addmethod') {
+      return (r.added || []).join('・') + ' を ' + done + ' に足しました';
+    }
+    if (plan && plan.kind === 'addclass') {
+      return (r.added || []).join('・') + ' を ' + done + ' に宣言しました';
+    }
+    return r.message || '当てました';
+  }
+
+  var api = {
+    KINDS: KINDS,
+    kindLabel: kindLabel,
+    renamePair: renamePair,
+    mentions: mentions,
+    classNames: classNames,
+    mineDocs: mineDocs,
+    otherFolderOf: otherFolderOf,
+    planFor: planFor,
+    planText: planText,
+    plans: plans,
+    planOf: planOf,
+    summaryText: summaryText,
+    resultText: resultText,
+  };
+
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  return api;
+})();

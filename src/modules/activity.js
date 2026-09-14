@@ -9,6 +9,25 @@ window.MA.modules.plantumlActivity = (function() {
   var START_RE = /^start$/i;
   var STOP_RE = /^stop$/i;
   var END_RE = /^end$/i;
+  // design 5d Activity「その他パレット」の色指定: `#LightBlue:保存する;` のように
+  // 本文の前に色を書ける。色を読めないとその行がアクションとして見えなくなり、
+  // 図の上でも右パネルでも触れなくなるので、色は本文と分けて持つ。
+  var ACTION_COLOR_RE = /^(#[A-Za-z0-9_]+(?:\/#?[A-Za-z0-9_]+)?)\s*:/;
+  // 同梱の plantuml.jar は前置き `#色:本文;` を deprecated として図の上に警告帯を出す。
+  // 書き出しは警告の出ない後置き `:本文; <<#色>>` にするが、既存の図や手書きには
+  // 前置きが残っているので、読みは両方受ける。
+  var ACTION_TAIL_COLOR_RE = /;\s*<<(#[A-Za-z0-9_]+(?:\/#?[A-Za-z0-9_]+)?)>>\s*$/;
+
+  // 1 行から色を剥がす。戻りの body は色を含まない行。
+  function _splitActionColor(trimmedLine) {
+    var color = null;
+    var body = trimmedLine;
+    var tail = body.match(ACTION_TAIL_COLOR_RE);
+    if (tail) { color = tail[1]; body = body.substring(0, tail.index + 1); }
+    var head = body.match(ACTION_COLOR_RE);
+    if (head) { if (!color) color = head[1]; body = body.substring(head[0].length - 1); }
+    return { color: color, body: body };
+  }
   var ACTION_OPEN_RE = /^:(.*)$/;
   var ACTION_CLOSED_RE = /^:(.*);$/;
 
@@ -103,14 +122,18 @@ window.MA.modules.plantumlActivity = (function() {
 
       // Multi-line action collection
       if (openAction) {
-        var endsWithSemi = /;\s*$/.test(trimmed);
-        var bodyTextLine = endsWithSemi ? trimmed.replace(/;\s*$/, '') : trimmed;
+        var closeSplit = _splitActionColor(trimmed);
+        if (closeSplit.color && !openAction.color) openAction.color = closeSplit.color;
+        var closeLine = closeSplit.body;
+        var endsWithSemi = /;\s*$/.test(closeLine);
+        var bodyTextLine = endsWithSemi ? closeLine.replace(/;\s*$/, '') : closeLine;
         openAction.bodyLines.push(bodyTextLine);
         if (endsWithSemi) {
           _appendNode(state, {
             kind: 'action',
             id: _newId(state),
             text: openAction.bodyLines.join('\n'),
+            color: openAction.color || null,
             line: openAction.startLine,
             endLine: lineNum,
             swimlaneId: null,
@@ -368,28 +391,33 @@ window.MA.modules.plantumlActivity = (function() {
       }
 
       // Action (after control-structure tokens to avoid confusion)
-      if (trimmed.charAt(0) === ':') {
-        var closedMatch = trimmed.match(ACTION_CLOSED_RE);
+      // 色つき `#色:本文;` は色を外した `:本文;` として、以降まったく同じ扱いにする。
+      var split = _splitActionColor(trimmed);
+      var actionColor = split.color;
+      var actionBody = split.body;
+      if (actionBody.charAt(0) === ':') {
+        var closedMatch = actionBody.match(ACTION_CLOSED_RE);
         if (closedMatch) {
           _appendNode(state, {
             kind: 'action',
             id: _newId(state),
             text: closedMatch[1],
+            color: actionColor,
             line: lineNum,
             endLine: lineNum,
             swimlaneId: null,
           });
           continue;
         }
-        openAction = { startLine: lineNum, bodyLines: [trimmed.substring(1)] };
+        openAction = { startLine: lineNum, color: actionColor, bodyLines: [actionBody.substring(1)] };
         continue;
       }
     }
     return result;
   }
 
-  function fmtAction(text) {
-    return ':' + (text || '') + ';';
+  function fmtAction(text, color) {
+    return ':' + (text || '') + ';' + (color ? ' <<' + color + '>>' : '');
   }
   function fmtIf(condition, thenLabel) {
     return 'if (' + condition + ') then (' + (thenLabel || 'yes') + ')';
@@ -421,43 +449,103 @@ window.MA.modules.plantumlActivity = (function() {
 
   var insertBeforeEnd = window.MA.dslUpdater.insertBeforeEnd;
 
+  // Activity では stop / end / kill / detach が流れの終端。末尾追加を @enduml の
+  // 直前に置くと足した行が終端の後ろに落ち、プレビューでは前とつながらない別フローに
+  // なる (気付くのに時間がかかり、直すには終端の移動か削除が要る)。
+  // 末尾が終端ならその手前に入れて、流れの中に置く。
+  var TERMINAL_RE = /^(stop|end|kill|detach)$/i;
+  function _tailTerminalIndex(lines) {
+    for (var i = lines.length - 1; i >= 0; i--) {
+      var s = lines[i].trim();
+      if (!s || RP.isEndUml(s)) continue;
+      return TERMINAL_RE.test(s) ? i : -1;
+    }
+    return -1;
+  }
+  // 流れの終端の手前に 1 行入れる。終端が無ければ従来どおり @enduml の直前。
+  function insertBeforeFlowEnd(text, newLine) {
+    var lines = text.split('\n');
+    var idx = _tailTerminalIndex(lines);
+    if (idx < 0) return insertBeforeEnd(text, newLine);
+    lines.splice(idx, 0, newLine);
+    return lines.join('\n');
+  }
+
+  // 新規タブの雛形 `start / :Hello world; / stop` の Hello world はプレースホルダ。
+  // 最初のアクションを足した時点で落とす。残すと利用者が別途消すことになり、
+  // 消し忘れると自分のアクション列が孤立フローに見える原因になる。
+  // 手を入れた図を巻き込まないよう、雛形と完全一致するときだけ落とす。
+  function _dropPlaceholder(text) {
+    var norm = String(text == null ? '' : text).replace(/\r\n/g, '\n');
+    if (norm.trim() !== template().trim()) return text;
+    return norm.split('\n').filter(function(l) {
+      return l.trim() !== ':Hello world;';
+    }).join('\n');
+  }
+
   function addAction(text, actionText) {
-    return insertBeforeEnd(text, fmtAction(actionText || ''));
+    return insertBeforeFlowEnd(_dropPlaceholder(text), fmtAction(actionText || ''));
+  }
+
+  // 複数行テキストの 1 行 = 1 アクションとして、末尾へまとめて追加する。
+  // 空行と行頭・行末の空白は捨てる。先頭の ':' と末尾の ';' が付いていても受け付ける。
+  function splitActionLines(block) {
+    var out = [];
+    if (!block) return out;
+    var lines = String(block).split(/\r?\n/);
+    for (var i = 0; i < lines.length; i++) {
+      var s = lines[i].trim();
+      if (!s) continue;
+      s = s.replace(/^:/, '').replace(/;$/, '').trim();
+      if (!s) continue;
+      out.push(s);
+    }
+    return out;
+  }
+
+  function addActions(text, block) {
+    var items = splitActionLines(block);
+    if (!items.length) return text;
+    var out = _dropPlaceholder(text);
+    for (var i = 0; i < items.length; i++) {
+      out = insertBeforeFlowEnd(out, fmtAction(items[i]));
+    }
+    return out;
   }
 
   function addIf(text, condition, thenLabel, elseLabel) {
     var out = text;
-    out = insertBeforeEnd(out, fmtIf(condition, thenLabel || 'yes'));
-    if (elseLabel) out = insertBeforeEnd(out, fmtElse(elseLabel));
-    out = insertBeforeEnd(out, 'endif');
+    out = insertBeforeFlowEnd(out, fmtIf(condition, thenLabel || 'yes'));
+    if (elseLabel) out = insertBeforeFlowEnd(out, fmtElse(elseLabel));
+    out = insertBeforeFlowEnd(out, 'endif');
     return out;
   }
 
   function addWhile(text, condition, label) {
     var out = text;
-    out = insertBeforeEnd(out, fmtWhile(condition, label || 'yes'));
-    out = insertBeforeEnd(out, 'endwhile');
+    out = insertBeforeFlowEnd(out, fmtWhile(condition, label || 'yes'));
+    out = insertBeforeFlowEnd(out, 'endwhile');
     return out;
   }
 
   function addRepeat(text, condition, label) {
     var out = text;
-    out = insertBeforeEnd(out, 'repeat');
-    out = insertBeforeEnd(out, fmtRepeatWhile(condition, label || 'yes'));
+    out = insertBeforeFlowEnd(out, 'repeat');
+    out = insertBeforeFlowEnd(out, fmtRepeatWhile(condition, label || 'yes'));
     return out;
   }
 
   function addFork(text, branchCount) {
     var n = Math.max(1, branchCount || 2);
     var out = text;
-    out = insertBeforeEnd(out, 'fork');
-    for (var i = 1; i < n; i++) out = insertBeforeEnd(out, 'fork again');
-    out = insertBeforeEnd(out, 'end fork');
+    out = insertBeforeFlowEnd(out, 'fork');
+    for (var i = 1; i < n; i++) out = insertBeforeFlowEnd(out, 'fork again');
+    out = insertBeforeFlowEnd(out, 'end fork');
     return out;
   }
 
   function addSwimlane(text, label) {
-    return insertBeforeEnd(text, fmtSwimlane(label));
+    return insertBeforeFlowEnd(text, fmtSwimlane(label));
   }
 
   function addNote(text, afterLine, position, noteText) {
@@ -470,8 +558,44 @@ window.MA.modules.plantumlActivity = (function() {
     return before.concat(newLines).concat(after).join('\n');
   }
 
+  // 本文を書き換えても行に付いている色は落とさない (色は本文と別の指定なので、
+  // 文言を直しただけで見た目が変わるのは意図しない副作用になる)。
+  // 色は前置きなら先頭行、後置きなら閉じる行に付くので、両方の行を見る。
+  function actionColorAt(text, startLine, endLine) {
+    var lines = text.split('\n');
+    var last = endLine == null ? startLine : endLine;
+    for (var ln = startLine; ln <= last; ln++) {
+      var idx = ln - 1;
+      if (idx < 0 || idx >= lines.length) continue;
+      var c = _splitActionColor(lines[idx].trim()).color;
+      if (c) return c;
+    }
+    return null;
+  }
+
+  // アクションの色だけを差し替える。color が空なら色を外す。
+  // 古い前置きが付いていた行は、この操作で警告の出ない後置きに揃う。
+  function setActionColor(text, startLine, endLine, color) {
+    var lines = text.split('\n');
+    var last = endLine == null ? startLine : endLine;
+    var sIdx = startLine - 1;
+    var eIdx = last - 1;
+    if (sIdx < 0 || eIdx >= lines.length || eIdx < sIdx) return text;
+    var sIndent = lines[sIdx].match(/^(\s*)/)[1];
+    var sBody = _splitActionColor(lines[sIdx].trim()).body;
+    if (sBody.charAt(0) !== ':') return text;   // アクション行でなければ触らない
+    lines[sIdx] = sIndent + sBody;
+    var eIndent = lines[eIdx].match(/^(\s*)/)[1];
+    var eBody = _splitActionColor(lines[eIdx].trim()).body;
+    if (!/;$/.test(eBody)) return text;         // 閉じていないアクションには付けない
+    var norm = color ? (color.charAt(0) === '#' ? color : '#' + color) : '';
+    lines[eIdx] = eIndent + eBody + (norm ? ' <<' + norm + '>>' : '');
+    return lines.join('\n');
+  }
+
   function updateAction(text, startLine, endLine, newText) {
     var lines = text.split('\n');
+    var keepColor = actionColorAt(text, startLine, endLine);
     var newBody = (newText || '').split('\n');
     var firstLine = ':' + newBody[0] + (newBody.length === 1 ? ';' : '');
     var rest = [];
@@ -479,6 +603,7 @@ window.MA.modules.plantumlActivity = (function() {
       rest.push(i === newBody.length - 1 ? newBody[i] + ';' : newBody[i]);
     }
     var newLines = [firstLine].concat(rest);
+    if (keepColor) newLines[newLines.length - 1] += ' <<' + keepColor + '>>';
     var before = lines.slice(0, startLine - 1);
     var after = lines.slice(endLine);
     return before.concat(newLines).concat(after).join('\n');
@@ -506,6 +631,33 @@ window.MA.modules.plantumlActivity = (function() {
       lines[idx] = indent + fmtElseif(em[1], newLabel);
     } else if ((em = trimmed.match(ELSE_RE))) {
       lines[idx] = indent + fmtElse(newLabel);
+    } else {
+      return text;
+    }
+    return lines.join('\n');
+  }
+
+  // design 5d: 分岐ラベルは prompt ではなく右ペインのフォームで直す。if / elseif は
+  // 条件とラベルが同じ行に同居するので、渡されなかった側は今の値を残す。
+  // fields: { condition?, label? }。else 行には condition が無いので無視する。
+  function updateBranch(text, lineNum, fields) {
+    var f = fields || {};
+    var lines = text.split('\n');
+    var idx = lineNum - 1;
+    if (idx < 0 || idx >= lines.length) return text;
+    var trimmed = lines[idx].trim();
+    var indent = lines[idx].match(/^(\s*)/)[1];
+    var m;
+    if ((m = trimmed.match(IF_OPEN_RE))) {
+      lines[idx] = indent + fmtIf(
+        f.condition === undefined ? m[1] : f.condition,
+        f.label === undefined ? (m[2] || 'yes') : f.label);
+    } else if ((m = trimmed.match(ELSEIF_RE))) {
+      lines[idx] = indent + fmtElseif(
+        f.condition === undefined ? m[1] : f.condition,
+        f.label === undefined ? (m[2] || 'yes') : f.label);
+    } else if ((m = trimmed.match(ELSE_RE))) {
+      lines[idx] = indent + fmtElse(f.label === undefined ? (m[1] || 'no') : f.label);
     } else {
       return text;
     }
@@ -637,6 +789,23 @@ window.MA.modules.plantumlActivity = (function() {
     // Splice block into lines
     var args = [targetIdx, 0].concat(block);
     Array.prototype.splice.apply(lines, args);
+    return lines.join('\n');
+  }
+
+  // よく使う分岐パターンを、条件・枝ラベル・枝の中身ごと 1 手で入れる
+  // (BLK-junior-20260907-1803-wish)。addControlAtLine の if は枠だけを入れて
+  // 中身が `:;` のままなので、型として繰り返し使うにはここが別に要る。
+  function addBranchPatternAtLine(text, lineNum, position, pattern) {
+    var BP = window.MA.activityBranchPattern;
+    if (!BP || !pattern) return text;
+    var lines = text.split('\n');
+    var targetIdx = position === 'before' ? lineNum - 1 : lineNum;
+    if (targetIdx < 0) targetIdx = 0;
+    if (targetIdx > lines.length) targetIdx = lines.length;
+    var indent = _resolveInsertIndent(lines, Math.min(targetIdx, lines.length - 1));
+    var block = BP.linesFor(pattern, indent);
+    if (!block.length) return text;
+    Array.prototype.splice.apply(lines, [targetIdx, 0].concat(block));
     return lines.join('\n');
   }
 
@@ -853,6 +1022,183 @@ window.MA.modules.plantumlActivity = (function() {
     };
   }
 
+  // design 4b: 図の隙間をクリックしたとき、まず「そこに置けるものだけ」を並べた
+  // 小さなメニューを出す。今までは常に Action のフォームが直接開き、if / fork を
+  // 入れるには種類セレクトを開き直す必要があった。
+  // 種別を選ぶと従来の showInsertForm へ、入力の要らない break / detach / kill /
+  // start / stop はその場で 1 行入れる。
+  // design 5c: 挿入メニューを開いている間、DSL の入る行に印を出す / 消す。
+  function _markerShow(line, position) {
+    if (window.MA.insertMarker) window.MA.insertMarker.show(line, position);
+  }
+  function _markerHide() {
+    if (window.MA.insertMarker) window.MA.insertMarker.hide();
+  }
+
+  function showInsertPicker(ctx, line, position) {
+    _renderInsertPicker(ctx, line, position, false);
+  }
+
+  function _renderInsertPicker(ctx, line, position, isOther) {
+    var AI = window.MA.activityInsert;
+    var modal = document.getElementById('act-modal');
+    var content = document.getElementById('act-modal-content');
+    if (!AI || !modal || !content) {
+      // modal が無い環境では従来どおり単一種別のフォーム (prompt へ落ちる) に戻す。
+      showInsertForm(ctx, line, position, 'action');
+      return;
+    }
+    var esc = window.MA.htmlUtils.escHtml;
+    var groups = AI.pickerKinds(ctx.getMmdText(), line);
+    var list = isOther ? groups.other : groups.primary;
+    var html = '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">' +
+        (isOther ? 'その他' : '＋ ここに挿入') + '</h3>' +
+      '<div id="act-pick-target" style="font-size:11px;color:var(--text-secondary);margin-bottom:12px;">' +
+        esc(AI.describePoint(ctx.getMmdText(), line, position)) + '</div>' +
+      '<div style="display:flex;flex-direction:column;gap:6px;">';
+    list.forEach(function(k) {
+      html += '<button id="act-pick-' + k.kind + '" data-kind="' + k.kind + '" class="act-pick-btn" ' +
+        'style="text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);' +
+        'padding:8px 10px;border-radius:4px;cursor:pointer;font-size:12px;">' +
+        esc(k.label) +
+        '<span style="color:var(--text-secondary);font-size:10px;margin-left:8px;">' + esc(k.hint) + '</span>' +
+        '</button>';
+    });
+    // 分岐は「毎回同じ形」を打ち直していることが多いので、if の枠だけを入れる
+    // 導線の隣に、型ごと入れる導線を出す (BLK-junior-20260907-1803-wish)。
+    var canBranch = !isOther && list.some(function(k) { return k.kind === 'if'; });
+    if (canBranch) {
+      html += '<button id="act-pick-pattern" class="act-pick-btn2" ' +
+        'style="text-align:left;background:var(--bg-tertiary);border:1px solid var(--accent);color:var(--text-primary);' +
+        'padding:8px 10px;border-radius:4px;cursor:pointer;font-size:12px;">' +
+        'よく使う分岐パターン' +
+        '<span style="color:var(--text-secondary);font-size:10px;margin-left:8px;">条件と両枝の中身ごと入る</span>' +
+        '</button>';
+    }
+    if (!isOther && groups.other.length) {
+      html += '<button id="act-pick-other" data-kind="other" class="act-pick-btn" ' +
+        'style="text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);' +
+        'padding:8px 10px;border-radius:4px;cursor:pointer;font-size:12px;">' +
+        'その他（repeat / break / detach / kill）…</button>';
+    }
+    html += '</div>';
+    if (isOther) {
+      html += '<button id="act-pick-back" style="width:100%;margin-top:12px;background:var(--bg-tertiary);' +
+        'border:1px solid var(--border);color:var(--text-secondary);padding:6px;border-radius:4px;cursor:pointer;font-size:11px;">' +
+        '← 種別を選び直す</button>';
+    }
+    html += '<button id="act-pick-cancel" style="width:100%;margin-top:8px;background:var(--bg-tertiary);' +
+      'border:1px solid var(--border);color:var(--text-primary);padding:8px;border-radius:4px;cursor:pointer;">キャンセル</button>';
+    content.innerHTML = html;
+    modal.style.display = 'flex';
+    _markerShow(line, position);
+
+    Array.prototype.forEach.call(content.querySelectorAll('.act-pick-btn'), function(btn) {
+      btn.addEventListener('click', function() {
+        var kind = btn.getAttribute('data-kind');
+        if (kind === 'other') { _renderInsertPicker(ctx, line, position, true); return; }
+        if (AI.isBareKind(kind)) {
+          var src = ctx.getMmdText();
+          var out = _insertBareAtLine(src, line, position, AI.bareLineFor(kind));
+          if (out !== src) {
+            window.MA.history.pushHistory();
+            ctx.setMmdText(out);
+            ctx.onUpdate();
+          }
+          modal.style.display = 'none';
+          content.innerHTML = '';
+          _markerHide();
+          return;
+        }
+        showInsertForm(ctx, line, position, kind);
+      });
+    });
+    if (canBranch) {
+      document.getElementById('act-pick-pattern').addEventListener('click', function() {
+        _renderPatternPicker(ctx, line, position);
+      });
+    }
+    if (isOther) {
+      document.getElementById('act-pick-back').addEventListener('click', function() {
+        _renderInsertPicker(ctx, line, position, false);
+      });
+    }
+    document.getElementById('act-pick-cancel').addEventListener('click', function() {
+      modal.style.display = 'none';
+      content.innerHTML = '';
+      _markerHide();
+    });
+  }
+
+  // 「よく使う分岐パターン」の一覧。組み込みの型と、開いている他のアクティビティ図
+  // から採った型 (先輩や自分の過去図) を並べ、1 クリックで挿入する。
+  // 条件文言だけ直したいことがあるので、挿入前に条件を書き換えられる欄も置く。
+  function _renderPatternPicker(ctx, line, position) {
+    var BP = window.MA.activityBranchPattern;
+    var AI = window.MA.activityInsert;
+    var modal = document.getElementById('act-modal');
+    var content = document.getElementById('act-modal-content');
+    if (!BP || !modal || !content) { showInsertForm(ctx, line, position, 'if'); return; }
+    var esc = window.MA.htmlUtils.escHtml;
+    var ws = window.MA.workspace;
+    var docs = (ws && ws.list) ? ws.list() : [];
+    var activeId = (ws && ws.getActiveId) ? ws.getActiveId() : null;
+    var list = BP.patterns(docs, activeId);
+
+    var html = '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">よく使う分岐パターン</h3>' +
+      '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;">' +
+        esc(AI ? AI.describePoint(ctx.getMmdText(), line, position) : '') + '</div>' +
+      '<div id="act-pat-list" style="display:flex;flex-direction:column;gap:6px;max-height:280px;overflow:auto;">';
+    list.forEach(function(p, i) {
+      html += '<button class="act-pat-btn" data-i="' + i + '" id="act-pat-' + p.id + '" ' +
+        'style="text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);' +
+        'padding:8px 10px;border-radius:4px;cursor:pointer;font-size:12px;">' +
+        '<div>' + esc(p.label) + (p.from ? '<span style="color:var(--text-secondary);font-size:10px;margin-left:8px;">' + esc(p.from) + '</span>' : '') + '</div>' +
+        '<div style="color:var(--text-secondary);font-size:10px;margin-top:2px;">' + esc(BP.summary(p)) + '</div>' +
+        '</button>';
+    });
+    html += '</div>' +
+      '<label style="display:block;font-size:10px;color:var(--text-secondary);margin:10px 0 2px 0;">条件を変える (空なら型のまま)</label>' +
+      '<input id="act-pat-cond" type="text" style="width:100%;box-sizing:border-box;background:var(--bg-primary);' +
+        'border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:3px;font-size:12px;">' +
+      '<button id="act-pat-back" style="width:100%;margin-top:12px;background:var(--bg-tertiary);' +
+        'border:1px solid var(--border);color:var(--text-secondary);padding:6px;border-radius:4px;cursor:pointer;font-size:11px;">' +
+        '← 種別を選び直す</button>' +
+      '<button id="act-pat-cancel" style="width:100%;margin-top:8px;background:var(--bg-tertiary);' +
+        'border:1px solid var(--border);color:var(--text-primary);padding:8px;border-radius:4px;cursor:pointer;">キャンセル</button>';
+    content.innerHTML = html;
+    modal.style.display = 'flex';
+    _markerShow(line, position);
+
+    Array.prototype.forEach.call(content.querySelectorAll('.act-pat-btn'), function(btn) {
+      btn.addEventListener('click', function() {
+        var p = list[parseInt(btn.getAttribute('data-i'), 10)];
+        if (!p) return;
+        var condEl = document.getElementById('act-pat-cond');
+        var cond = condEl && condEl.value.trim();
+        if (cond) { p = JSON.parse(JSON.stringify(p)); p.cond = cond; }
+        var src = ctx.getMmdText();
+        var out = addBranchPatternAtLine(src, line, position, p);
+        if (out !== src) {
+          window.MA.history.pushHistory();
+          ctx.setMmdText(out);
+          ctx.onUpdate();
+        }
+        modal.style.display = 'none';
+        content.innerHTML = '';
+        _markerHide();
+      });
+    });
+    document.getElementById('act-pat-back').addEventListener('click', function() {
+      _renderInsertPicker(ctx, line, position, false);
+    });
+    document.getElementById('act-pat-cancel').addEventListener('click', function() {
+      modal.style.display = 'none';
+      content.innerHTML = '';
+      _markerHide();
+    });
+  }
+
   // Open a modal popup to insert a new node before/after the resolved line.
   // Supports all 7 kinds: action / if / while / repeat / fork / swimlane / note
   function showInsertForm(ctx, line, position, kind) {
@@ -887,6 +1233,7 @@ window.MA.modules.plantumlActivity = (function() {
         '<button id="act-mod-confirm" style="flex:1;background:var(--accent);border:none;color:#fff;padding:8px;border-radius:4px;cursor:pointer;">確定</button>' +
       '</div>';
     modal.style.display = 'flex';
+    _markerShow(line, position);
 
     function renderFields() {
       var k = document.getElementById('act-mod-kind').value;
@@ -922,7 +1269,7 @@ window.MA.modules.plantumlActivity = (function() {
     renderFields();
     P.bindEvent('act-mod-kind', 'change', renderFields);
 
-    function close() { modal.style.display = 'none'; content.innerHTML = ''; }
+    function close() { modal.style.display = 'none'; content.innerHTML = ''; _markerHide(); }
     P.bindEvent('act-mod-cancel', 'click', close);
     P.bindEvent('act-mod-confirm', 'click', function() {
       var k = document.getElementById('act-mod-kind').value;
@@ -965,6 +1312,50 @@ window.MA.modules.plantumlActivity = (function() {
       }
       close();
     });
+  }
+
+  // FEAT-115 (HFR-061): elseif の condition と label を 1 枚のフォームで入力する (3 手 → 2 手)。
+  // showInsertForm と同じ作法で act-modal に描き、modal が無ければ prompt() 2 回に戻る ([AC-5])。
+  function showElseifForm(ctx, node) {
+    var modal = document.getElementById('act-modal');
+    var content = document.getElementById('act-modal-content');
+    if (!modal || !content) {
+      var pCond = window.prompt('elseif condition:', '');
+      if (pCond === null) return;
+      var pLbl = window.prompt('elseif label (default: yes):', 'yes') || 'yes';
+      window.MA.history.pushHistory();
+      ctx.setMmdText(addElseifBranch(ctx.getMmdText(), node.line, pCond, pLbl));
+      ctx.onUpdate();
+      return;
+    }
+    var P = window.MA.properties;
+    content.innerHTML =
+      '<h3 style="margin:0 0 12px 0;color:var(--text-primary);">elseif を追加</h3>' +
+      P.fieldHtml('elseif condition', 'act-ei-cond', '', '例: 認証失敗?') +
+      P.fieldHtml('elseif label (default: yes)', 'act-ei-lbl', 'yes') +
+      '<div style="display:flex;gap:8px;margin-top:12px;">' +
+        '<button id="act-ei-cancel" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:8px;border-radius:4px;cursor:pointer;">キャンセル</button>' +
+        '<button id="act-ei-confirm" style="flex:1;background:var(--accent);border:none;color:#fff;padding:8px;border-radius:4px;cursor:pointer;">確定</button>' +
+      '</div>';
+    modal.style.display = 'flex';
+    function close() { modal.style.display = 'none'; content.innerHTML = ''; }
+    function confirmForm() {
+      var cond = document.getElementById('act-ei-cond').value;
+      var lbl = document.getElementById('act-ei-lbl').value || 'yes';
+      window.MA.history.pushHistory();
+      ctx.setMmdText(addElseifBranch(ctx.getMmdText(), node.line, cond, lbl));
+      ctx.onUpdate();
+      close();
+    }
+    P.bindEvent('act-ei-cancel', 'click', close);
+    P.bindEvent('act-ei-confirm', 'click', confirmForm);
+    // 欄への明示のフォーカス移動が手数 (charter §5) に加算され旧経路より増えるのを避けるため、
+    // 開いた時点で condition 欄にフォーカスを置き、どちらの欄でも Enter で確定できるようにする。
+    function onEnter(e) { if (e.key === 'Enter') { e.preventDefault(); confirmForm(); } }
+    P.bindEvent('act-ei-cond', 'keydown', onEnter);
+    P.bindEvent('act-ei-lbl', 'keydown', onEnter);
+    var condEl = document.getElementById('act-ei-cond');
+    if (condEl && condEl.focus) condEl.focus();
   }
 
   var OB = window.MA.overlayBuilder;
@@ -1100,6 +1491,63 @@ window.MA.modules.plantumlActivity = (function() {
     return null;
   }
 
+
+  // 分岐の枝ラベル (「異常」「正常」など) を、DSL の並び順で集める。
+  // PlantUML は枝ラベルを分岐の矢印の脇に <text> で描く。ラベルを選べるようにすると、
+  // 「この側に足す」が図の上のクリックで決まる (BLK-junior-20260908-0103)。
+  function _branchLabelTargets(nodes, out) {
+    out = out || [];
+    (nodes || []).forEach(function(n) {
+      if (n.kind === 'if' && n.branches) {
+        n.branches.forEach(function(b, bi) {
+          var label = String(b.label == null ? '' : b.label).trim();
+          if (label) out.push({ id: n.id + '#b' + bi, label: label, line: b.line, condition: n.condition });
+          _branchLabelTargets(b.body, out);
+        });
+        return;
+      }
+      if (n.branches) n.branches.forEach(function(b) { _branchLabelTargets(b.body, out); });
+      if (n.body) _branchLabelTargets(n.body, out);
+    });
+    return out;
+  }
+
+  // ラベルの文字と同じ <text> を、文書順に 1 つずつ割り当てる。
+  // 見つからないラベルは飛ばす (印が 1 つ欠けるだけで、既存の選択は壊さない)。
+  function _addBranchLabelRects(svgEl, parsedData, overlayEl) {
+    var targets = _branchLabelTargets(parsedData.nodes || []);
+    if (!targets.length) return 0;
+    var texts = svgEl.querySelectorAll('text');
+    var used = {};
+    var added = 0;
+    targets.forEach(function(t) {
+      for (var i = 0; i < texts.length; i++) {
+        if (used[i]) continue;
+        if (String(texts[i].textContent || '').trim() !== t.label) continue;
+        var bb = null;
+        try { bb = texts[i].getBBox(); } catch (e) { bb = null; }
+        if (!bb || !bb.width || !bb.height) {
+          // jsdom / 描画前は BBox が取れない。取れないラベルは印を置かない。
+          used[i] = true;
+          break;
+        }
+        used[i] = true;
+        // BLK-human-20260912-2130: 分岐ラベル (yes / no) は文字の外周ちょうどだと
+        // 当たり判定が数 px しかなく、狙って押すのが難しい。他図種の関係と同じく
+        // 少し広げ、hover の枠でその範囲が見えるようにする。
+        var pad = 4;
+        OB.addRect(overlayEl, bb.x - pad, bb.y - pad, bb.width + 2 * pad, bb.height + 2 * pad, {
+          'data-type': 'branch',
+          'data-id': t.id,
+          'data-line': String(t.line),
+        });
+        added++;
+        break;
+      }
+    });
+    return added;
+  }
+
   function buildOverlay(svgEl, parsedData, overlayEl) {
     if (!svgEl || !overlayEl) return;
     OB.syncDimensions(svgEl, overlayEl);
@@ -1176,6 +1624,11 @@ window.MA.modules.plantumlActivity = (function() {
         console.warn('[activity.buildOverlay] note polygon count mismatch: model=' + notes.length + ' svg=' + notePolys.length);
       }
     }
+
+    _addBranchLabelRects(svgEl, parsedData, overlayEl);
+
+    // BLK-human-20260912-2130: 小さい当たり判定を手前に。共通実装 (src/core)
+    OB.raiseSmallestLast(overlayEl);
   }
 
   function renderProps(selData, parsedData, propsEl, ctx) {
@@ -1186,13 +1639,47 @@ window.MA.modules.plantumlActivity = (function() {
     }
     if (selData.length === 1) {
       var sel = selData[0];
-      if (sel.type === 'action') return _renderActionEdit(sel, parsedData, propsEl, ctx);
-      if (sel.type === 'decision' || sel.type === 'fork') return _renderControlEdit(sel, parsedData, propsEl, ctx);
-      if (sel.type === 'start' || sel.type === 'stop' || sel.type === 'end') return _renderTerminatorEdit(sel, parsedData, propsEl, ctx);
-      if (sel.type === 'note') return _renderNoteEdit(sel, parsedData, propsEl, ctx);
-      if (sel.type === 'swimlane') return _renderSwimlaneEdit(sel, parsedData, propsEl, ctx);
+      if (sel.type === 'action') { _renderActionEdit(sel, parsedData, propsEl, ctx); return _appendInsertHere(sel, propsEl, ctx); }
+      if (sel.type === 'decision' || sel.type === 'fork') { _renderControlEdit(sel, parsedData, propsEl, ctx); return _appendInsertHere(sel, propsEl, ctx); }
+      if (sel.type === 'start' || sel.type === 'stop' || sel.type === 'end') { _renderTerminatorEdit(sel, parsedData, propsEl, ctx); return _appendInsertHere(sel, propsEl, ctx); }
+      if (sel.type === 'note') { _renderNoteEdit(sel, parsedData, propsEl, ctx); return _appendInsertHere(sel, propsEl, ctx); }
+      if (sel.type === 'swimlane') { _renderSwimlaneEdit(sel, parsedData, propsEl, ctx); return _appendInsertHere(sel, propsEl, ctx); }
+      if (sel.type === 'branch') { _renderBranchPick(sel, parsedData, propsEl, ctx); return _appendInsertHere(sel, propsEl, ctx); }
     }
     propsEl.innerHTML = '<div style="font-size:11px;color:var(--text-secondary);">複数選択は未対応 (Activity)</div>';
+  }
+
+  // 図の上で分岐の枝ラベル (異常 / 正常) を選んだとき。どちら側を選んだかを言い、
+  // 下の「＋ ここに挿入」がその側のはじめを既定にする。
+  function _renderBranchPick(sel, parsedData, propsEl, ctx) {
+    var AI = window.MA.activityInsert;
+    var esc = window.MA.htmlUtils.escHtml;
+    var where = AI ? AI.pointLabel(ctx.getMmdText(), sel.line, 'after') : ('L' + sel.line);
+    propsEl.innerHTML =
+      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">分岐の枝 (L' + sel.line + ')</div>' +
+      '<div style="font-size:11px;margin-bottom:8px;">' + esc(where) + '</div>' +
+      '<div style="font-size:10px;color:var(--text-secondary);">この側に足すものを下で選びます。' +
+      '枝の名前を変えるときは分岐の菱形を選んでください。</div>';
+  }
+
+  // 選んだ要素のフォームの下に「＋ ここに挿入」を足す (BLK-junior-20260908-0103)。
+  // 図で要素をクリックしたのに、挿入位置は右ペインの「追加」タブへ戻って
+  // 行番号と生コードのプルダウンから選び直す必要があった。選んだ要素の位置を
+  // 既定にして、その場で足せるようにする。位置は分岐のどちら側かで言い直す。
+  function _appendInsertHere(sel, propsEl, ctx) {
+    var AI = window.MA.activityInsert;
+    if (!AI || !propsEl) return;
+    var line = Number(sel && sel.line);
+    if (!isFinite(line) || line < 1) return;
+    var box = document.createElement('div');
+    box.style.cssText = 'border-top:1px solid var(--border);padding-top:10px;margin-top:10px;';
+    box.innerHTML =
+      '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">＋ ここに挿入</label>' +
+      '<div id="ac-ins-point-wrap"></div>' +
+      '<div id="ac-ins-kind-wrap"></div>' +
+      '<div id="ac-ins-detail" style="margin-top:6px;"></div>';
+    propsEl.appendChild(box);
+    _renderInsertHere(ctx, propsEl, line);
   }
 
   function _renderTerminatorEdit(sel, parsedData, propsEl, ctx) {
@@ -1217,11 +1704,6 @@ window.MA.modules.plantumlActivity = (function() {
     var html =
       '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Activity Diagram</div>' +
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">Title 設定</label>' +
-        P.fieldHtml('Title', 'ac-title', (parsedData.meta && parsedData.meta.title) || '') +
-        P.primaryButtonHtml('ac-set-title', 'Title 適用') +
-      '</div>' +
-      '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">末尾に追加</label>' +
         P.selectFieldHtml('種類', 'ac-tail-kind', [
           { value: 'action', label: 'Action', selected: true },
@@ -1235,14 +1717,17 @@ window.MA.modules.plantumlActivity = (function() {
           { value: 'swimlane', label: 'Swimlane' }
         ]) +
         '<div id="ac-tail-detail" style="margin-top:6px;"></div>' +
+      '</div>' +
+      // design 4b: 位置を選ぶと、その位置に置ける要素だけがメニューに出る。
+      '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">＋ この位置に挿入</label>' +
+        '<div id="ac-ins-point-wrap"></div>' +
+        '<div id="ac-ins-kind-wrap"></div>' +
+        '<div id="ac-ins-detail" style="margin-top:6px;"></div>' +
       '</div>';
     propsEl.innerHTML = html;
+    _renderInsertHere(ctx, propsEl);
 
-    P.bindEvent('ac-set-title', 'click', function() {
-      window.MA.history.pushHistory();
-      ctx.setMmdText(_setTitle(ctx.getMmdText(), document.getElementById('ac-title').value.trim()));
-      ctx.onUpdate();
-    });
 
     var renderTailDetail = function() {
       var kind = document.getElementById('ac-tail-kind').value;
@@ -1251,8 +1736,12 @@ window.MA.modules.plantumlActivity = (function() {
       if (kind === 'action') {
         html2 =
           '<label style="display:block;font-size:10px;color:var(--text-secondary);">Text (改行可)</label>' +
+          window.MA.reuseModal.buttonHtml('ac-tail-reuse') +
           '<textarea id="ac-tail-text" style="width:100%;min-height:50px;font-family:inherit;font-size:12px;"></textarea>' +
-          P.primaryButtonHtml('ac-tail-add', '+ Action 追加');
+          P.primaryButtonHtml('ac-tail-add', '+ Action 追加') +
+          P.primaryButtonHtml('ac-tail-add-lines', '+ 各行を Action として一括追加') +
+          '<div id="ac-tail-lines-hint" style="font-size:10px;color:var(--text-secondary);margin-top:4px;">' +
+            '1 行 = 1 アクション。空行は無視されます</div>';
       } else if (kind === 'start' || kind === 'stop' || kind === 'end') {
         html2 = P.primaryButtonHtml('ac-tail-add', '+ ' + kind + ' 追加');
       } else if (kind === 'if') {
@@ -1281,6 +1770,18 @@ window.MA.modules.plantumlActivity = (function() {
           P.primaryButtonHtml('ac-tail-add', '+ swimlane 追加');
       }
       detailEl.innerHTML = html2;
+      // 一括欄は「既に他の図にある行」を打ち直させないためのボタンを持つ。
+      window.MA.reuseModal.bindButton('ac-tail-reuse', 'plantuml-activity', 'ac-tail-text');
+
+      P.bindEvent('ac-tail-add-lines', 'click', function() {
+        var t0 = ctx.getMmdText();
+        var out0 = addActions(t0, document.getElementById('ac-tail-text').value);
+        if (out0 !== t0) {
+          window.MA.history.pushHistory();
+          ctx.setMmdText(out0);
+          ctx.onUpdate();
+        }
+      });
 
       P.bindEvent('ac-tail-add', 'click', function() {
         var t = ctx.getMmdText();
@@ -1318,7 +1819,219 @@ window.MA.modules.plantumlActivity = (function() {
       });
     };
     P.bindEvent('ac-tail-kind', 'change', renderTailDetail);
+    // design 2b: 種別はチップ 1 クリックで決める。値の持ち主は上の select のまま。
+    window.MA.tailKindChips.mount('ac-tail-kind');
     renderTailDetail();
+  }
+
+  // design 4b「Activity — 途中に挿入」。フローのどの行間に置くかを先に選ぶと、
+  // そこに置ける要素だけがメニューに残り、if / while / fork は開始と終了が対で入る。
+  // 生の構文を打つ必要がないので、`start` / `:Hello world;` / `stop` しかない
+  // 図にも分岐や繰り返しをその場で足せる。
+  // design 5d Activityの「その他パレット」の色指定。
+  // 使うのは工程図での強調がほとんどなので、名前で選べる見本を並べ、
+  // それ以外は自由入力に逃がす。現在色があれば開いた状態で出す。
+  var ACTION_COLORS = [
+    { value: '', label: 'なし', swatch: 'transparent' },
+    { value: '#LightBlue', label: 'LightBlue', swatch: '#ADD8E6' },
+    { value: '#LightGreen', label: 'LightGreen', swatch: '#90EE90' },
+    { value: '#Yellow', label: 'Yellow', swatch: '#FFFF00' },
+    { value: '#Orange', label: 'Orange', swatch: '#FFA500' },
+    { value: '#Pink', label: 'Pink', swatch: '#FFC0CB' },
+  ];
+
+  // design 4b: 選択中アクションの「スイムレーン / Swimlane」チップ。
+  // 「（なし）」は今そこに居るときだけ押せる (PlantUML に外す印が無いため)。
+  function _swimlaneChipsHtml(dsl, line) {
+    var SM = window.MA.swimlaneMove;
+    if (!SM) return '';
+    var esc = window.MA.htmlUtils.escHtml;
+    var list = SM.chips(dsl, line);
+    var btns = '';
+    for (var i = 0; i < list.length; i++) {
+      var c = list[i];
+      var dis = !c.selectable && !c.checked;
+      btns += '<button type="button" class="ac-swim-chip" id="ac-swim-' + i + '"'
+        + ' data-lane="' + esc(c.id) + '"'
+        + ' aria-pressed="' + (c.checked ? 'true' : 'false') + '"'
+        + (dis ? ' disabled' : '')
+        + ' style="flex:0 0 auto;'
+        + 'background:' + (c.checked ? 'var(--accent)' : 'var(--bg-tertiary)') + ';'
+        + 'border:1px solid ' + (c.checked ? 'var(--accent)' : 'var(--border)') + ';'
+        + 'color:' + (c.checked ? '#fff' : 'var(--text-primary)') + ';'
+        + 'opacity:' + (dis ? '0.5' : '1') + ';'
+        + 'font-size:11px;padding:3px 8px;border-radius:3px;cursor:' + (dis ? 'default' : 'pointer') + ';">'
+        + esc(c.label) + '</button>';
+    }
+    return '<div id="ac-swimlane" style="margin-bottom:8px;">' +
+      '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">スイムレーン / Swimlane</label>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:4px;">' + btns + '</div>' +
+      '</div>';
+  }
+
+  function _actionColorHtml(current) {
+    var P = window.MA.properties;
+    var cur = (current || '').toLowerCase();
+    var known = false;
+    var btns = '';
+    for (var i = 0; i < ACTION_COLORS.length; i++) {
+      var c = ACTION_COLORS[i];
+      var on = c.value.toLowerCase() === cur;
+      if (on && c.value) known = true;
+      btns += '<button type="button" id="ac-color-' + i + '" data-value="' + c.value + '"'
+        + ' aria-pressed="' + (on ? 'true' : 'false') + '"'
+        + ' style="flex:0 0 auto;display:flex;align-items:center;gap:4px;'
+        + 'background:' + (on ? 'var(--accent)' : 'var(--bg-tertiary)') + ';'
+        + 'border:1px solid ' + (on ? 'var(--accent)' : 'var(--border)') + ';'
+        + 'color:' + (on ? '#fff' : 'var(--text-primary)') + ';'
+        + 'font-size:11px;padding:3px 6px;border-radius:3px;cursor:pointer;">'
+        + '<span style="width:10px;height:10px;border-radius:2px;border:1px solid var(--border);'
+        + 'background:' + c.swatch + ';"></span>' + c.label + '</button>';
+    }
+    var open = !!current;
+    return '<details' + (open ? ' open' : '') +
+      ' id="ac-action-more" style="border-top:1px solid var(--border);padding-top:6px;margin-top:8px;">' +
+      '<summary id="ac-action-more-summary" style="font-size:11px;color:var(--text-secondary);cursor:pointer;">' +
+        'その他（色）' + (current ? ' — ' + window.MA.htmlUtils.escHtml(current) : '') +
+      '</summary>' +
+      '<div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap;">' + btns + '</div>' +
+      '<div style="margin-top:6px;">' +
+        P.fieldHtml('その他の色 (名前または #RRGGBB)', 'ac-color-custom',
+          known ? '' : (current || ''), '例: #AliceBlue') +
+        P.primaryButtonHtml('ac-color-go', 'この色にする') +
+      '</div>' +
+    '</details>';
+  }
+
+  // 図で選んでいる要素の行。overlay のクリックでも右ペインの一覧でも同じ選択を見る。
+  function _selectedLine() {
+    var SEL = window.MA.selection;
+    if (!SEL || !SEL.getSelected) return 0;
+    var sel = SEL.getSelected() || [];
+    for (var i = 0; i < sel.length; i++) {
+      var n = Number(sel[i] && sel[i].line);
+      if (isFinite(n) && n >= 1) return n;
+    }
+    return 0;
+  }
+
+  function _renderInsertHere(ctx, propsEl, forcedLine) {
+    var AI = window.MA.activityInsert;
+    var P = window.MA.properties;
+    if (!AI || !P) return;
+    var pointWrap = document.getElementById('ac-ins-point-wrap');
+    var kindWrap = document.getElementById('ac-ins-kind-wrap');
+    var detailEl = document.getElementById('ac-ins-detail');
+    if (!pointWrap || !kindWrap || !detailEl) return;
+
+    var pts = AI.insertPoints(ctx.getMmdText());
+    if (!pts.length) {
+      pointWrap.innerHTML = '<div style="font-size:10px;color:var(--text-secondary);">挿入できる行がありません</div>';
+      return;
+    }
+    // 既定は、図で要素を選んでいればその位置。選んでいなければ本体の最後。
+    // BLK-junior-20260908-0103: 図形をクリックしてから「＋この位置に挿入」を開いたとき、
+    // 位置をプルダウンから探し直さずに済ませる。
+    var selLine = (typeof forcedLine === 'number' && forcedLine >= 1) ? forcedLine : _selectedLine();
+    var defIdx = AI.defaultPointIndex(ctx.getMmdText(), selLine);
+    var note = AI.pickedNote(ctx.getMmdText(), selLine);
+
+    // 候補は行番号と生コードではなく「どの分岐のどちら側か」で並べ、入れ子は字下げする。
+    pointWrap.innerHTML = P.selectFieldHtml('位置', 'ac-ins-point', pts.map(function(pt, i) {
+      return {
+        value: String(i),
+        label: new Array((pt.depth || 0) + 1).join('　') + pt.label,
+        selected: i === defIdx,
+      };
+    })) + (note ? '<div id="ac-ins-picked" style="font-size:10px;color:var(--accent);margin:-4px 0 6px 0;">'
+      + window.MA.htmlUtils.escHtml(note) + '</div>' : '');
+
+    function currentPoint() {
+      var sel = document.getElementById('ac-ins-point');
+      var i = sel ? parseInt(sel.value, 10) : defIdx;
+      return pts[isNaN(i) ? defIdx : i] || pts[defIdx];
+    }
+
+    function renderKinds() {
+      var pt = currentPoint();
+      var allowed = AI.allowedKinds(ctx.getMmdText(), pt.line);
+      kindWrap.innerHTML = P.selectFieldHtml('要素', 'ac-ins-kind', allowed.map(function(k, i) {
+        return { value: k.kind, label: k.label + '  (' + k.hint + ')', selected: i === 0 };
+      })) +
+      (pt.inFlow ? '' : '<div style="font-size:10px;color:var(--text-secondary);margin:-4px 0 6px 0;">'
+        + 'フローの外なので、置けるのはレーンと start / stop だけです</div>');
+      P.bindEvent('ac-ins-kind', 'change', renderDetail);
+      renderDetail();
+    }
+
+    function renderDetail() {
+      var kindSel = document.getElementById('ac-ins-kind');
+      var kind = kindSel ? kindSel.value : 'action';
+      var fields = AI.fieldsFor(kind);
+      var h = '';
+      fields.forEach(function(f) {
+        h += P.fieldHtml(f.label, 'ac-ins-f-' + f.id, f.value || '', f.placeholder || '');
+      });
+      h += P.primaryButtonHtml('ac-ins-do', '＋ ' + AI.labelFor(kind) + ' を挿入');
+      detailEl.innerHTML = h;
+      P.bindEvent('ac-ins-do', 'click', doInsert);
+    }
+
+    function fieldVal(id) {
+      var el = document.getElementById('ac-ins-f-' + id);
+      return el ? el.value : '';
+    }
+
+    function doInsert() {
+      var pt = currentPoint();
+      var kindSel = document.getElementById('ac-ins-kind');
+      var kind = kindSel ? kindSel.value : 'action';
+      if (!AI.isAllowed(ctx.getMmdText(), pt.line, kind)) return;
+      var t = ctx.getMmdText();
+      var out = t;
+      if (kind === 'action') {
+        out = addActionAtLine(t, pt.line, pt.position, fieldVal('text'));
+      } else if (kind === 'if') {
+        out = addControlAtLine(t, pt.line, pt.position, 'if', {
+          cond: fieldVal('cond'), thenLabel: fieldVal('thenLabel') || 'yes',
+          elseLabel: fieldVal('elseLabel') || null,
+        });
+      } else if (kind === 'while' || kind === 'repeat') {
+        out = addControlAtLine(t, pt.line, pt.position, kind, {
+          cond: fieldVal('cond'), label: fieldVal('label') || 'yes',
+        });
+      } else if (kind === 'fork') {
+        out = addControlAtLine(t, pt.line, pt.position, 'fork', {
+          branchCount: parseInt(fieldVal('branchCount'), 10) || 2,
+        });
+      } else if (kind === 'note') {
+        out = addNoteAtLine(t, pt.line, pt.position, { position: 'right', text: fieldVal('text') });
+      } else if (kind === 'swimlane') {
+        out = addSwimlaneAtLine(t, pt.line, pt.position, fieldVal('name'));
+      } else if (AI.isBareKind(kind)) {
+        out = _insertBareAtLine(t, pt.line, pt.position, AI.bareLineFor(kind));
+      }
+      if (out !== t) {
+        window.MA.history.pushHistory();
+        ctx.setMmdText(out);
+        ctx.onUpdate();
+      }
+    }
+
+    P.bindEvent('ac-ins-point', 'change', renderKinds);
+    renderKinds();
+  }
+
+  // break / detach / kill / start / stop のように入力の要らない 1 行を置く。
+  function _insertBareAtLine(text, lineNum, position, word) {
+    if (!word) return text;
+    var lines = text.split('\n');
+    var targetIdx = position === 'before' ? lineNum - 1 : lineNum;
+    if (targetIdx < 0) targetIdx = 0;
+    if (targetIdx > lines.length) targetIdx = lines.length;
+    var indent = _resolveInsertIndent(lines, Math.min(targetIdx, lines.length - 1));
+    lines.splice(targetIdx, 0, indent + word);
+    return lines.join('\n');
   }
 
   function _setTitle(text, title) {
@@ -1354,6 +2067,52 @@ window.MA.modules.plantumlActivity = (function() {
     return null;
   }
 
+  function _findNodeByLine(nodes, line) {
+    if (!nodes) return null;
+    for (var i = 0; i < nodes.length; i++) {
+      var n = nodes[i];
+      if (n.line === line) return n;
+      if (n.branches) {
+        for (var j = 0; j < n.branches.length; j++) {
+          var found = _findNodeByLine(n.branches[j].body, line);
+          if (found) return found;
+        }
+      }
+      if (n.body) {
+        var found2 = _findNodeByLine(n.body, line);
+        if (found2) return found2;
+      }
+    }
+    return null;
+  }
+
+  // design 4b: 選択中アクションの右ペインの「↑ ↓」。これは挿入ではなく、
+  // 選んでいるアクションを**同じ親の中で**前後の兄弟と入れ替えるボタンである
+  // (1a の Sequence パネルの「↑ 上へ / ↓ 下へ」と同じ位置・同じ役割)。
+  // 判定と入れ替えは src/core/selection-reorder.js の純関数に任せる。親の境界
+  // (else / endif / start / stop など) に当たる位置では disabled にして、
+  // 「押したのに何も起きない」を作らない。
+  function _reorderHtml(text, line) {
+    var SR = window.MA.selectionReorder;
+    if (!SR) return '';
+    function btn(id, label, on, title) {
+      return '<button id="' + id + '"' + (on ? '' : ' disabled') +
+        ' title="' + window.MA.htmlUtils.escHtml(title) + '"' +
+        ' style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);' +
+        'color:var(--' + (on ? 'text-primary' : 'text-secondary') + ');padding:6px;' +
+        'border-radius:4px;font-size:14px;line-height:1;cursor:' + (on ? 'pointer' : 'not-allowed') + ';' +
+        // 押せない側は目で分かる程度に落とす (0.5 だと隣と見分けが付かない)。
+        (on ? '' : 'opacity:0.3;') + '">' + label + '</button>';
+    }
+    return '<div style="border-top:1px solid var(--border);padding-top:10px;margin-top:8px;">' +
+      '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">並び替え / Reorder</label>' +
+      '<div style="display:flex;gap:4px;">' +
+        btn('ac-move-up', '↑', SR.canMove(text, line, -1), '同じ親の中で 1 つ上の兄弟と入れ替える (Alt+↑)') +
+        btn('ac-move-down', '↓', SR.canMove(text, line, 1), '同じ親の中で 1 つ下の兄弟と入れ替える (Alt+↓)') +
+      '</div>' +
+    '</div>';
+  }
+
   function _renderActionEdit(sel, parsedData, propsEl, ctx) {
     var P = window.MA.properties;
     var node = _findNodeById(parsedData.nodes, sel.id);
@@ -1363,21 +2122,23 @@ window.MA.modules.plantumlActivity = (function() {
     for (var ai = 0; ai < allNotes.length; ai++) {
       if (allNotes[ai].attachedNodeId === node.id) attachedNotes.push(allNotes[ai]);
     }
-    var swimlane = null;
-    var sws = parsedData.swimlanes || [];
-    for (var si = 0; si < sws.length; si++) {
-      if (sws[si].id === node.swimlaneId) { swimlane = sws[si]; break; }
-    }
-    var swimLabel = swimlane ? swimlane.label : '(なし)';
-
+    // design 4b: 居場所は行番号ではなく構造で示す (条件分岐「有効?」の yes 側、1 番目)。
+    var AI = window.MA.activityInsert;
+    var place = (AI && AI.describeStructure) ? AI.describeStructure(ctx.getMmdText(), node.line) : '';
     var html =
       '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">Action (L' + node.line + ')</div>' +
-      '<div style="margin-bottom:6px;font-size:11px;"><b>Swimlane:</b> ' + window.MA.htmlUtils.escHtml(swimLabel) + ' <span style="color:var(--text-secondary);">(read-only)</span></div>' +
+      '<div id="ac-action-place" style="margin-bottom:8px;font-size:11px;">' +
+        '<span style="color:var(--text-secondary);">位置</span> ' +
+        window.MA.htmlUtils.escHtml(place || 'フローの外') +
+      '</div>' +
+      // design 4b: スイムレーンは読むだけでなく、チップで選び直せる。
+      _swimlaneChipsHtml(ctx.getMmdText(), node.line) +
       '<div style="margin-bottom:6px;">' +
         '<label style="display:block;font-size:10px;color:var(--text-secondary);">Text</label>' +
         '<textarea id="ac-action-text" style="width:100%;min-height:60px;">' + window.MA.htmlUtils.escHtml(node.text || '') + '</textarea>' +
       '</div>' +
       P.primaryButtonHtml('ac-action-update', '更新') +
+      _actionColorHtml(node.color || '') +
       '<div style="border-top:1px solid var(--border);padding-top:8px;margin-top:8px;">' +
         '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">Notes</div>';
     if (attachedNotes.length === 0) {
@@ -1396,11 +2157,88 @@ window.MA.modules.plantumlActivity = (function() {
     html += '<div id="ac-add-note-form" style="margin-top:6px;"></div>' +
             '<button id="ac-add-note-btn" style="margin-top:4px;">+ Note 追加</button>' +
           '</div>' +
+          // design 4b:「この位置に挿入 / Insert here」— 選んでいるアクションの前後に足す。
+          // 押すと図の隙間クリックと同じ挿入メニュー (showInsertPicker) がその位置で開く。
+          '<div style="border-top:1px solid var(--border);padding-top:10px;margin-top:8px;">' +
+            '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">この位置に挿入 / Insert here</label>' +
+            '<div style="display:flex;gap:4px;">' +
+              '<button id="ac-insert-before" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↑ 前に</button>' +
+              '<button id="ac-insert-after" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↓ 後に</button>' +
+            '</div>' +
+          '</div>' +
+          _reorderHtml(ctx.getMmdText(), node.line) +
           '<div style="margin-top:10px;">' +
             P.primaryButtonHtml('ac-action-delete', '✕ 削除') +
           '</div>';
     propsEl.innerHTML = html;
 
+    // design 4b:「↑ ↓」— 同じ親の中の兄弟と入れ替える。行が動くので、
+    // 選択は id ではなく移動先の行番号から引き直す (id は文書順の連番で振り直される)。
+    function _moveAction(dir) {
+      var SR = window.MA.selectionReorder;
+      if (!SR) return;
+      var before = ctx.getMmdText();
+      var after = SR.move(before, node.line, dir);
+      if (after === before) return;          // 端 / 親の境界: 履歴も積まない
+      var newLine = SR.movedLine(before, node.line, dir);
+      window.MA.history.pushHistory();
+      ctx.setMmdText(after);
+      var moved = null;
+      try { moved = _findNodeByLine(parse(after).nodes, newLine); } catch (e) { moved = null; }
+      if (moved) window.MA.selection.setSelected([{ type: 'action', id: moved.id, line: moved.line }]);
+      else window.MA.selection.clearSelection();
+      ctx.onUpdate();
+    }
+    P.bindEvent('ac-move-up', 'click', function() { _moveAction(-1); });
+    P.bindEvent('ac-move-down', 'click', function() { _moveAction(1); });
+
+    P.bindEvent('ac-insert-before', 'click', function() { showInsertPicker(ctx, node.line, 'before'); });
+    P.bindEvent('ac-insert-after', 'click', function() { showInsertPicker(ctx, node.line, 'after'); });
+
+    // 色を選んだ時点で DSL へ入れる (design 3c と同じ流儀)。
+    for (var ci = 0; ci < ACTION_COLORS.length; ci++) {
+      (function(idx) {
+        P.bindEvent('ac-color-' + idx, 'click', function(e) {
+          var v = e.currentTarget.getAttribute('data-value');
+          var before = ctx.getMmdText();
+          var after = setActionColor(before, node.line, node.endLine, v);
+          if (after === before) return;
+          window.MA.history.pushHistory();
+          ctx.setMmdText(after);
+          ctx.onUpdate();
+        });
+      })(ci);
+    }
+    P.bindEvent('ac-color-go', 'click', function() {
+      var v = document.getElementById('ac-color-custom').value.trim();
+      var before = ctx.getMmdText();
+      var after = setActionColor(before, node.line, node.endLine, v);
+      if (after === before) return;
+      window.MA.history.pushHistory();
+      ctx.setMmdText(after);
+      ctx.onUpdate();
+    });
+    // design 4b: スイムレーンのチップ。押した時点で DSL の印を入れ直す。
+    (function() {
+      var SM = window.MA.swimlaneMove;
+      if (!SM) return;
+      var wrap = document.getElementById('ac-swimlane');
+      if (!wrap) return;
+      Array.prototype.forEach.call(wrap.querySelectorAll('.ac-swim-chip'), function(btn) {
+        btn.addEventListener('click', function() {
+          if (btn.disabled) return;
+          var lane = btn.getAttribute('data-lane') || '';
+          var before = ctx.getMmdText();
+          var after = SM.setSwimlane(before, node.line, lane, node.endLine);
+          if (after === before) return;
+          window.MA.history.pushHistory();
+          ctx.setMmdText(after);
+          // 行がずれるので選択は外す (別の要素を掴んだままにしない)。
+          window.MA.selection.clearSelection();
+          ctx.onUpdate();
+        });
+      });
+    })();
     P.bindEvent('ac-action-update', 'click', function() {
       var newText = document.getElementById('ac-action-text').value;
       window.MA.history.pushHistory();
@@ -1458,6 +2296,8 @@ window.MA.modules.plantumlActivity = (function() {
 
     if (node.kind === 'if') {
       html += P.fieldHtml('Condition', 'ac-if-cond', node.condition || '');
+      // design 5d: 分岐ラベルは prompt に隠さず、条件と同じ右ペインに置いて 1 回の更新で直す。
+      // then は if 行そのものなので、その label 欄も Branches の 1 行目として出す。
       html += '<div style="border-top:1px solid var(--border);padding-top:6px;margin-top:6px;">' +
                 '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">Branches</div>';
       var brs = node.branches || [];
@@ -1469,10 +2309,12 @@ window.MA.modules.plantumlActivity = (function() {
         if (b.kind === 'elseif' || b.kind === 'else') {
           deleteBtn = ' <button id="ac-branch-del-' + bi + '" data-line="' + b.line + '" title="この branch を削除" style="background:var(--accent-red);border:none;color:#fff;padding:2px 6px;border-radius:3px;cursor:pointer;font-size:10px;">✕</button>';
         }
-        html += '<div style="font-size:11px;margin-bottom:2px;">' +
-                  '▸ ' + b.kind + ' (' + window.MA.htmlUtils.escHtml(b.label || '') + ')' + (b.condition ? ' cond: ' + window.MA.htmlUtils.escHtml(b.condition) : '') + ' (L' + b.line + ')' +
-                  ' <button id="ac-branch-edit-' + bi + '" data-line="' + b.line + '">edit label</button>' +
-                  deleteBtn +
+        html += '<div class="ac-branch-row" data-line="' + b.line + '" style="font-size:11px;margin-bottom:6px;">' +
+                  '<div style="margin-bottom:2px;">▸ ' + b.kind + ' (L' + b.line + ')' + deleteBtn + '</div>' +
+                  (b.kind === 'elseif'
+                    ? P.fieldHtml('condition', 'ac-branch-cond-' + bi, b.condition || '')
+                    : '') +
+                  P.fieldHtml('label', 'ac-branch-lbl-' + bi, b.label || '') +
                 '</div>';
       }
       // Branch add buttons
@@ -1514,8 +2356,21 @@ window.MA.modules.plantumlActivity = (function() {
       var t = ctx.getMmdText();
       var out = t;
       if (node.kind === 'if') {
+        // design 5d: 条件と全分岐のラベルを 1 回の更新で書き戻す。
+        // 行数は変わらないので行番号のまま順に当てられる。
         var c = document.getElementById('ac-if-cond').value;
-        out = updateIfCondition(t, node.line, c);
+        var ubrs = node.branches || [];
+        for (var ui = 0; ui < ubrs.length; ui++) {
+          var ub = ubrs[ui];
+          var lblEl = document.getElementById('ac-branch-lbl-' + ui);
+          var condEl = document.getElementById('ac-branch-cond-' + ui);
+          var patch = {};
+          if (lblEl) patch.label = lblEl.value;
+          if (ub.kind === 'then') patch.condition = c;
+          else if (condEl) patch.condition = condEl.value;
+          out = updateBranch(out, ub.line, patch);
+        }
+        if (!ubrs.length) out = updateIfCondition(out, node.line, c);
       } else if (node.kind === 'while') {
         out = updateWhileCondition(t, node.line, document.getElementById('ac-while-cond').value);
         var lines = out.split('\n');
@@ -1548,13 +2403,6 @@ window.MA.modules.plantumlActivity = (function() {
       for (var bj = 0; bj < brs2.length; bj++) {
         (function(b) {
           var bIdx = brs2.indexOf(b);
-          P.bindEvent('ac-branch-edit-' + bIdx, 'click', function() {
-            var newLabel = prompt('Branch label:', b.label || '');
-            if (newLabel === null) return;
-            window.MA.history.pushHistory();
-            ctx.setMmdText(updateBranchLabel(ctx.getMmdText(), b.line, newLabel));
-            ctx.onUpdate();
-          });
           if (b.kind === 'elseif' || b.kind === 'else') {
             P.bindEvent('ac-branch-del-' + bIdx, 'click', function() {
               if (!confirm(b.kind + ' を削除します。続行しますか？')) return;
@@ -1566,14 +2414,8 @@ window.MA.modules.plantumlActivity = (function() {
           }
         })(brs2[bj]);
       }
-      P.bindEvent('ac-add-elseif', 'click', function() {
-        var cond = window.prompt('elseif condition:', '');
-        if (cond === null) return;
-        var lbl = window.prompt('elseif label (default: yes):', 'yes') || 'yes';
-        window.MA.history.pushHistory();
-        ctx.setMmdText(addElseifBranch(ctx.getMmdText(), node.line, cond, lbl));
-        ctx.onUpdate();
-      });
+      // FEAT-115: prompt() 2 回 → 1 枚のフォーム (showElseifForm)。
+      P.bindEvent('ac-add-elseif', 'click', function() { showElseifForm(ctx, node); });
       P.bindEvent('ac-add-else', 'click', function() {
         var lbl = window.prompt('else label (default: no):', 'no') || 'no';
         window.MA.history.pushHistory();
@@ -1687,6 +2529,8 @@ window.MA.modules.plantumlActivity = (function() {
     fmtSwimlane: fmtSwimlane,
     fmtNote: fmtNote,
     addAction: addAction,
+    addActions: addActions,
+    splitActionLines: splitActionLines,
     addIf: addIf,
     addWhile: addWhile,
     addRepeat: addRepeat,
@@ -1694,14 +2538,19 @@ window.MA.modules.plantumlActivity = (function() {
     addSwimlane: addSwimlane,
     addNote: addNote,
     updateAction: updateAction,
+    actionColorAt: actionColorAt,
+    setActionColor: setActionColor,
     updateIfCondition: updateIfCondition,
     updateBranchLabel: updateBranchLabel,
+    updateBranch: updateBranch,
     updateWhileCondition: updateWhileCondition,
     updateSwimlane: updateSwimlane,
     updateNote: updateNote,
     deleteNode: deleteNode,
     addActionAtLine: addActionAtLine,
     addControlAtLine: addControlAtLine,
+    addBranchPatternAtLine: addBranchPatternAtLine,
+    insertBareAtLine: _insertBareAtLine,
     addSwimlaneAtLine: addSwimlaneAtLine,
     addNoteAtLine: addNoteAtLine,
     addElseifBranch: addElseifBranch,
@@ -1711,12 +2560,15 @@ window.MA.modules.plantumlActivity = (function() {
     _resolveInsertIndent: _resolveInsertIndent,
     resolveInsertLine: resolveInsertLine,
     showInsertForm: showInsertForm,
+    showInsertPicker: showInsertPicker,
+    showElseifForm: showElseifForm,
     defaultInsertKind: 'action',
     capabilities: {
       overlaySelection: true,
       hoverInsert: true,
       participantDrag: false,
       showInsertForm: true,
+      insertPicker: true,
       multiSelectConnect: false,
     },
   };

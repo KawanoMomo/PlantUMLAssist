@@ -14,7 +14,8 @@ $ErrorActionPreference = 'Stop'
 $version = if ($env:PLANTUML_VERSION) { $env:PLANTUML_VERSION } else { '1.2026.2' }
 $variant = if ($env:PLANTUML_VARIANT) { $env:PLANTUML_VARIANT } else { '' }
 
-$dir = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$dir = if ($env:PLANTUML_OUT) { $env:PLANTUML_OUT } else { Split-Path -Parent $MyInvocation.MyCommand.Definition }
+if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
 $out = Join-Path $dir 'plantuml.jar'
 $asset = "plantuml${variant}-${version}.jar"
 $url = "https://github.com/plantuml/plantuml/releases/download/v${version}/${asset}"

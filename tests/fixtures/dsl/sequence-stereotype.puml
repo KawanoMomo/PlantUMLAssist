@@ -1,0 +1,10 @@
+@startuml
+actor User
+participant System
+database DB
+
+User -> System : <<async>>\nLogin
+System -> DB : <<sync>>\nQuery
+DB --> System : Result
+System --> User : Response
+@enduml

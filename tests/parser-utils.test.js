@@ -79,3 +79,34 @@ describe('detectDiagramType — PlantUML', function() {
     expect(parserUtils.detectDiagramType(t)).toBe('plantuml-class');
   });
 });
+
+// BLK-builder-20260908-0743-4-red: 空のシーケンス図に actor を 1 人足しただけで
+// 図種が UseCase へ載せ替わり、「末尾に追加」ペインが消えて 2 人目を足せなかった。
+// actor しか無い間は「決められない」と答えさせ、選んである図種を保たせる。
+describe('isAmbiguousType — actor だけの図は図種を決めない', function() {
+  test('actor 宣言だけなら ambiguous', function() {
+    expect(parserUtils.isAmbiguousType('@startuml\nactor User\n@enduml')).toBe(true);
+  });
+  test('actor が複数でも ambiguous', function() {
+    expect(parserUtils.isAmbiguousType('@startuml\nactor User\nactor Admin\n@enduml')).toBe(true);
+  });
+  test('空文字は ambiguous', function() {
+    expect(parserUtils.isAmbiguousType('')).toBe(true);
+    expect(parserUtils.isAmbiguousType('@startuml\n@enduml')).toBe(true);
+  });
+  test('skinparam / title は図種を決めないので ambiguous のまま', function() {
+    expect(parserUtils.isAmbiguousType('@startuml\ntitle 認証\nactor User\n@enduml')).toBe(true);
+  });
+  test('participant が来たら決まる', function() {
+    expect(parserUtils.isAmbiguousType('@startuml\nactor User\nparticipant System\n@enduml')).toBe(false);
+  });
+  test('メッセージが来たら決まる', function() {
+    expect(parserUtils.isAmbiguousType('@startuml\nactor User\nUser -> System : login\n@enduml')).toBe(false);
+  });
+  test('usecase が来たら決まる', function() {
+    expect(parserUtils.isAmbiguousType('@startuml\nactor User\nusecase Login\n@enduml')).toBe(false);
+  });
+  test('コメント行は図種を決めない', function() {
+    expect(parserUtils.isAmbiguousType("@startuml\n' メモ\nactor User\n@enduml")).toBe(true);
+  });
+});

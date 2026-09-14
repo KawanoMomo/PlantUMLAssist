@@ -13,7 +13,7 @@ window.MA.autoSave = (function() {
     fileDir: './autosave',
   };
 
-  var _pending = null;       // { diagramType, dsl }
+  var _pending = null;       // { diagramType, dsl, fileName }
   var _timerId = null;
   var _saveListeners = [];
 
@@ -70,6 +70,16 @@ window.MA.autoSave = (function() {
         headers: { 'Content-Type': 'application/json' },
         body: body,
         keepalive: true,
+      }).then(function(r) {
+        // BLK-junior-20260908-2003: 図種が変わる保存は server が別ファイルへ回す。
+        // 回された先を知らせないと、画面の図名と書かれたファイルがずれたまま
+        // 次の保存も同じように回り続ける (図名を直すのは app.js)。
+        if (!r || !r.ok || !r.json) return null;
+        return r.json().catch(function() { return null; });
+      }).then(function(data) {
+        if (data && data.renamedFrom && data.savedAs && data.renamedFrom !== data.savedAs) {
+          _notifyRenamed(data);
+        }
       }).catch(function(e) {
         if (typeof console !== 'undefined' && console.warn) {
           console.warn('[autoSave] file write failed:', e);
@@ -126,18 +136,147 @@ window.MA.autoSave = (function() {
       if ('fileDir' in partial) merged.fileDir = partial.fileDir;
     }
     _writeJson(KEY_CONFIG, merged);
+    // BLK-junior-20260907-0843: 保存先はブラウザではなくマシンの設定なので、
+    // 新しいタブ・別プロファイルでも引き継げるよう server 側にも書き写す。
+    if (window.MA.savePrefs) window.MA.savePrefs.save(merged);
     return getConfig();
   }
 
-  function _doWrite(diagramType, dsl) {
+  // hydrateFromServer() — localStorage に保存先の指定が無いときだけ、
+  // server が覚えている保存先を取り込む。取り込んだ値は書き戻して次回以降
+  // localStorage 側でも効かせる。返り値は取り込んだキーの object。
+  function hydrateFromServer() {
+    var SP = window.MA.savePrefs;
+    if (!SP) return Promise.resolve({});
+    return SP.load().then(function(remote) {
+      // stored はここで読む。fetch が飛んでいる間に設定画面から保存された値を
+      // 後から来た server の値で上書きしない (init 直後に setConfig が走る)。
+      var stored = _readJson(KEY_CONFIG, {});
+      var apply = SP.applicable(stored, remote);
+      if (Object.keys(apply).length === 0) return {};
+      var merged = getConfig();
+      SP.KEYS.forEach(function(k) { if (k in apply) merged[k] = apply[k]; });
+      _writeJson(KEY_CONFIG, merged);
+      return apply;
+    });
+  }
+
+  // ── 書き込みを止める門 (BLK-junior-20260908-1803) ────────────────────────
+  // ディスクへ写す前に「この名前に書いてよいか」を聞く。答えるのは app.js
+  // (保存フォルダの役割宣言を知っているのはあちら)。ここは知らないまま止められる形にする。
+  var _fileGuard = null;      // function(diagramType) -> 理由の文字列 / null
+  var _blockedListeners = [];
+  var _blockedSeen = {};      // 名前 → 最後に知らせた時刻。1 打鍵ごとには鳴らさない
+  var BLOCK_QUIET_MS = 5000;  // この間は同じ名前で鳴らさない (打鍵のたびの通知を防ぐ)
+
+  function setFileGuard(fn) {
+    _fileGuard = (typeof fn === 'function') ? fn : null;
+  }
+
+  function _blockedBy(diagramType) {
+    if (!_fileGuard) return null;
+    try {
+      var r = _fileGuard(diagramType);
+      return r ? String(r) : null;
+    } catch (e) {
+      return null;   // 門が壊れていても保存は止めない
+    }
+  }
+
+  function _notifyBlocked(diagramType, reason) {
+    // 直前に知らせたばかりなら黙る。ただし時間が空いたら言い直す
+    // (開いた直後の通知が別の通知に押し流され、編集中は何も言わない状態を作らない)。
+    var now = Date.now();
+    var last = _blockedSeen[diagramType];
+    if (last && (now - last) < BLOCK_QUIET_MS) return;
+    _blockedSeen[diagramType] = now;
+    for (var i = 0; i < _blockedListeners.length; i++) {
+      try { _blockedListeners[i]({ diagramType: diagramType, reason: reason }); } catch (e) {}
+    }
+  }
+
+  // 別の経路 (app.js の saveActiveDoc) が止めたときも、知らせ方はここに揃える。
+  function noteFileBlocked(diagramType, reason) {
+    _notifyBlocked(String(diagramType == null ? '' : diagramType), reason);
+  }
+
+  function onFileBlocked(listener) {
+    if (typeof listener === 'function') _blockedListeners.push(listener);
+  }
+
+  // ── 図種が変わって別ファイルへ回されたとき (BLK-junior-20260908-2003) ────
+  var _renamedListeners = [];
+
+  function _notifyRenamed(info) {
+    for (var i = 0; i < _renamedListeners.length; i++) {
+      try { _renamedListeners[i](info); } catch (e) {}
+    }
+  }
+
+  function onFileRenamed(listener) {
+    if (typeof listener === 'function') _renamedListeners.push(listener);
+  }
+
+  // 別の経路 (workspace.saveToFile) が書いたときも、知らせ方はここに揃える。
+  function noteFileRenamed(info) {
+    if (info && info.renamedFrom && info.savedAs && info.renamedFrom !== info.savedAs) {
+      _notifyRenamed(info);
+    }
+  }
+
+  // 図名を変えたら (= 別のファイルになったら) また鳴らせるようにする。
+  function resetFileBlocked(diagramType) {
+    if (diagramType == null) _blockedSeen = {};
+    else delete _blockedSeen[diagramType];
+  }
+
+  // ── ディスクへ書く名前を決める門 (BLK-primary-20260913-0306) ─────────────
+  // localStorage の鍵は図種 (plantuml-sequence 等) でよいが、保存フォルダの
+  // ファイル名は「図の名前」でなければならない。図種を鍵にしたまま写すと、
+  // diagram1 を打つたびに plantuml-sequence.puml が diagram1 の中身で
+  // 上書きされ、一度も開いていない図の中身が入れ替わる (primary が実測)。
+  // 名前を知っているのは workspace を持つ app.js なので、ここは聞くだけにする。
+  // 解決器が無い間は従来どおり図種で書く (単体では localStorage 運用と同じ)。
+  var _fileNameResolver = null;   // function(diagramType) -> 名前 / '' (書かない)
+
+  function setFileNameResolver(fn) {
+    _fileNameResolver = (typeof fn === 'function') ? fn : null;
+  }
+
+  // 返り値: 書くべきファイル名、または null (= ディスクへは書かない)
+  function _fileNameFor(diagramType) {
+    if (!_fileNameResolver) return diagramType;
+    var n;
+    try {
+      n = _fileNameResolver(diagramType);
+    } catch (e) {
+      return null;   // 名前が分からないなら書かない (取り違えより無書き込み)
+    }
+    n = (n == null) ? '' : String(n);
+    return n ? n : null;
+  }
+
+  function _doWrite(diagramType, dsl, fileName) {
     var ok = _writeRaw(DSL_PREFIX + diagramType, dsl);
     if (!ok) return null;
     var meta = { lastSavedAt: new Date().toISOString(), lastSavedType: diagramType };
     _writeJson(KEY_META, meta);
     // If file backend selected, mirror the write to disk via the server.
     var cfg = getConfig();
-    if (cfg.backend === 'file') {
-      _fileBackendWrite(diagramType, dsl, cfg.fileDir);
+    if (fileName === undefined) fileName = _fileNameFor(diagramType);
+    // fileName が null なら、名前が決まらないタブ (未命名・記号入り) なので
+    // ディスクへは写さない。localStorage には残るので編集内容は消えず、
+    // Ctrl+S で名前を付ければそのまま書ける。取り違えて別の図を潰すより良い。
+    if (cfg.backend === 'file' && fileName != null) {
+      // BLK-junior-20260908-1803: 書いてはいけないファイル (テンプレ宣言済み) には
+      // ディスクへ写さない。localStorage 側は残すので、編集内容は失われず、
+      // 図名を変えればそのまま新しいファイルに保存される。
+      var block = _blockedBy(fileName);
+      if (block) {
+        _notifyBlocked(fileName, block);
+      } else {
+        _fileBackendWrite(fileName, dsl, cfg.fileDir);
+      }
     }
     for (var i = 0; i < _saveListeners.length; i++) {
       try { _saveListeners[i](meta); } catch (e) { /* listener errors must not block */ }
@@ -155,14 +294,21 @@ window.MA.autoSave = (function() {
     _pending = null;
     var cfg = getConfig();
     if (!cfg.enabled) return;
-    _doWrite(p.diagramType, p.dsl);
+    _doWrite(p.diagramType, p.dsl, p.fileName);
   }
 
   function scheduleSave(diagramType, dsl) {
     if (!diagramType) return;
     var cfg = getConfig();
     if (!cfg.enabled) return;
-    _pending = { diagramType: diagramType, dsl: String(dsl == null ? '' : dsl) };
+    // 書き先の名前は「打った時点」で決める。debounce の 1 秒の間にタブを
+    // 切り替えられると、あとで聞き直した名前は次のタブのものになり、
+    // 前のタブの中身が次のタブのファイルへ流れ込む (これも入れ替わりの形)。
+    _pending = {
+      diagramType: diagramType,
+      dsl: String(dsl == null ? '' : dsl),
+      fileName: _fileNameFor(diagramType),
+    };
     if (_timerId != null) {
       try { clearTimeout(_timerId); } catch (e) {}
     }
@@ -216,8 +362,14 @@ window.MA.autoSave = (function() {
   // app.js bootRestore must check for the Promise and await it before
   // doing the restoreFor() lookups.
   function init() {
+    // 保存先の引き継ぎが先。これを待たずに getConfig() を読むと、
+    // 新しいタブでは既定の ./autosave を見にいってしまう。
+    return hydrateFromServer().then(_initWithConfig, function() { return _initWithConfig({}); });
+  }
+
+  function _initWithConfig() {
     var cfg = getConfig();
-    if (cfg.backend !== 'file') return;
+    if (cfg.backend !== 'file') return null;
     return _fileBackendList(cfg.fileDir).then(function(data) {
       if (!data || !Array.isArray(data.files)) return;
       // Fetch every file in parallel and seed localStorage with them.
@@ -246,7 +398,15 @@ window.MA.autoSave = (function() {
     clearAll: clearAll,
     getConfig: getConfig,
     setConfig: setConfig,
+    hydrateFromServer: hydrateFromServer,
     isAvailable: isAvailable,
     onSave: onSave,
+    setFileGuard: setFileGuard,
+    setFileNameResolver: setFileNameResolver,
+    onFileBlocked: onFileBlocked,
+    onFileRenamed: onFileRenamed,
+    noteFileRenamed: noteFileRenamed,
+    noteFileBlocked: noteFileBlocked,
+    resetFileBlocked: resetFileBlocked,
   };
 })();

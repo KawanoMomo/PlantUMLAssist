@@ -3,8 +3,79 @@ window.MA = window.MA || {};
 window.MA.modules = window.MA.modules || {};
 
 window.MA.modules.plantumlSequence = (function() {
-  var PARTICIPANT_TYPES = ['participant', 'actor', 'boundary', 'control', 'entity', 'database', 'queue', 'collections'];
-  var ARROWS = ['->', '-->', '->>', '-->>', '<-', '<--', '<<-', '<<--', '<->', '<-->'];
+  // FEAT-015: 削除確認ダイアログの代替。削除は即実行し、直後に「元に戻す」付きトーストを出す。
+  // FEAT-104 (resolves UI-011): 取り消しをグローバル undo スタックの pop から、
+  // 「削除直前のテキストのスナップショットへの直接復元」に変える。
+  // 旧実装は MA.history.undo() を呼んでおり、トースト表示中 (HIDE_MS=6000ms) に
+  // pushHistory を伴う編集が 1 つでも起きると undoStack の先頭が置き換わり、
+  // 「元に戻す」が削除ではなくその編集を取り消していた (表示と実体の乖離)。
+  // ctx は本関数のスコープからは見えない (各 bind 関数の引数) ため第 3 引数で受け取る。
+  function _toastUndo(msg, snapshot, ctx) {
+    if (!window.MA || !window.MA.toast) return;
+    window.MA.toast.show(msg, '元に戻す', function() {
+      window.MA.history.pushHistory();   // 復元操作自体も undo 可能にする
+      ctx.setMmdText(snapshot);
+      window.MA.selection.clearSelection();
+      ctx.onUpdate();
+    });
+  }
+
+  var PARTICIPANT_TYPES =['participant', 'actor', 'boundary', 'control', 'entity', 'database', 'queue', 'collections'];
+  var ARROWS = ['->', '-->', '->>', '-->>', '->x', '-->x', '<-', '<--', '<<-', '<<--', '<->', '<-->',
+                '->o', '->\\', '-[#red]>'];
+  // design 1a の右ペインで分節ボタンに出す 4 種。
+  // 残りは design 2d の「その他の矢印…」パレットから選ぶ。
+  var QUICK_ARROWS = ['->', '-->', '->>', '->x'];
+  // design 2d と同じく、常時出す 4 種も「何が起きるか」を主に、記法を従に置く。
+  var QUICK_ARROW_DESC = { '->': '同期', '-->': '応答・戻り', '->>': '非同期', '->x': '届かない' };
+
+  // design 2d「矢印のその他パレット」:
+  //   「各項目は『何が起きるか』を先に書き、記法は右に小さく置く」
+  // 各行は行をどう書き換えるかを持つ。arrow だけ変えるものと、
+  // 図の外 (`[` / `]`) を相手にすえるものがある。
+  var OTHER_ARROWS = [
+    { desc: '両方向のやり取り',         arrow: '<->' },
+    { desc: '図の外から入ってくる',     arrow: '->',  from: '[', notation: '[->' },
+    { desc: '図の外へ出ていく',         arrow: '->',  to: ']',   notation: '->]' },
+    { desc: '相手の手前で止まる',       arrow: '->o' },
+    { desc: '片羽根 (返り値の表現)',   arrow: '->\\' },
+    { desc: '線の色を変える',           arrow: '-[#red]>' },
+    { desc: '同期 (逆向き)',           arrow: '<-' },
+    { desc: '応答・戻り (逆向き)',     arrow: '<--' },
+    { desc: '非同期 (逆向き)',         arrow: '<<-' },
+    { desc: '非同期の応答 (逆向き)',   arrow: '<<--' },
+    { desc: '非同期の応答',             arrow: '-->>' },
+    { desc: '届かない応答',             arrow: '-->x' },
+    { desc: '両方向の応答',             arrow: '<-->' },
+  ];
+  // パレットの行を 1 つに定める key。notation があればそれ (`[->`)、
+  // 無ければ arrow そのもの。DOM の data-value と spec を紐付ける。
+  function arrowSpecKey(spec) { return spec.notation || spec.arrow; }
+  // 図の外を表す疑似端点。参加者ではないので participants には入れない。
+  function isOuterEnd(name) { return name === '[' || name === ']'; }
+  // P.arrowPickerHtml に渡す 2 つのリスト。
+  function quickArrowOptions() {
+    return QUICK_ARROWS.map(function(a) {
+      return { value: a, label: QUICK_ARROW_DESC[a] || a, sub: a, title: arrowLabel(a) };
+    });
+  }
+  function otherArrowOptions() {
+    return OTHER_ARROWS.map(function(sp) {
+      return { value: arrowSpecKey(sp), desc: sp.desc, notation: arrowSpecKey(sp) };
+    });
+  }
+  function findArrowSpec(key) {
+    for (var i = 0; i < OTHER_ARROWS.length; i++) {
+      if (arrowSpecKey(OTHER_ARROWS[i]) === key) return OTHER_ARROWS[i];
+    }
+    return null;
+  }
+  // 行の現状 (from/to/arrow) から、どのパレット行が選ばれているかを戻す。
+  function activeArrowKey(from, to, arrow) {
+    if (from === '[') return '[->';
+    if (to === ']') return '->]';
+    return arrow;
+  }
   // Display labels: UML 有識者が形で思い出せる最小の注釈を添える。
   // 形: -> 実線 / --> 破線 / ->> 開矢印 (async) / -->> 破線+開矢印 (async return)
   var ARROW_META = {
@@ -12,20 +83,62 @@ window.MA.modules.plantumlSequence = (function() {
     '-->':   '-->   返信/戻り (破線)',
     '->>':   '->>   非同期メッセージ (開矢印)',
     '-->>':  '-->>  非同期返信 (破線+開矢印)',
+    '->x':   '->x   届かない (ロスト)',
+    '-->x':  '-->x  届かない返信 (破線)',
     '<-':    '<-    同期 (逆向き)',
     '<--':   '<--   返信 (逆向き)',
     '<<-':   '<<-   非同期 (逆向き)',
     '<<--':  '<<--  非同期返信 (逆向き)',
     '<->':   '<->   双方向 同期',
     '<-->':  '<-->  双方向 返信',
+    '->o':   '->o   相手の手前で止まる',
+    '->\\':  '->\\   片羽根 (返り値の表現)',
+    '-[#red]>': '-[#red]>  線の色を変える',
   };
   function arrowLabel(a) { return ARROW_META[a] || a; }
 
   var PART_RE = new RegExp('^(' + PARTICIPANT_TYPES.join('|') + ')\\s+(?:"([^"]+)"\\s+as\\s+(\\S+)|(\\S+)(?:\\s+as\\s+"([^"]+)")?)\\s*$');
-  var MSG_RE_FROM = '([A-Za-z_][A-Za-z0-9_]*|"[^"]+")';
-  var MSG_RE = new RegExp('^' + MSG_RE_FROM + '\\s+(->|-->|->>|-->>|<-|<--|<<-|<<--|<->|<-->)\\s+' + MSG_RE_FROM + '(?:\\s*:\\s*(.+))?$');
+  // design 2d: 図の外とのやり取り (`[-> System` / `System ->]`) を読めるように、
+  // 端点に疑似参加者 `[` `]` を許す。これらは矢印と空白無しで
+  // 接するので、区切りは `\s*` である必要がある。
+  var MSG_RE_FROM = '(\\[|\\]|[A-Za-z_][A-Za-z0-9_]*|"[^"]+")';
+  // design 5d「Sequence のその他パレット: 線色」: 色は矢印の最初の `-` の直後に
+  // `[#色]` として入る (`-[#red]->` / `<-[#red]--`)。矢印の形はそのまま残るので、
+  // 読む側は「色を挟んだ形」も同じ矢印として認識できる必要がある。
+  var ARROW_COLOR_PART = '(?:\\[#[A-Za-z0-9_]+\\])?';
+  function _reEsc(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+  // 1 つの矢印トークンを「色を挟んでもよい」正規表現の断片にする。
+  function _arrowAlt(a) {
+    var i = a.indexOf('-');
+    if (i < 0) return _reEsc(a);
+    return _reEsc(a.slice(0, i + 1)) + ARROW_COLOR_PART + _reEsc(a.slice(i + 1));
+  }
+  // 長いトークンから並べる (`->o` `->\` を `->` より先に)。
+  var MSG_ARROW_ALT = ARROWS
+    .filter(function(a) { return a.indexOf('[#') < 0; })
+    .slice()
+    .sort(function(a, b) { return b.length - a.length; })
+    .map(_arrowAlt)
+    .join('|');
+  var MSG_RE = new RegExp('^' + MSG_RE_FROM + '\\s*(' + MSG_ARROW_ALT + ')\\s*' + MSG_RE_FROM + '(?:\\s*:\\s*(.+))?$');
 
   var GROUP_KINDS = ['alt', 'opt', 'loop', 'par', 'break', 'critical', 'group'];
+  // design 2d/5c:「各項目は『何が起きるか』を先に書き、記法は右に小さく置く」。
+  // ブロックの枠も同じ流儀で読めるよう、記法ごとに何が起きるかを 1 箇所に持つ。
+  var GROUP_DESC = {
+    alt:      '条件で分かれる',
+    opt:      '条件を満たすときだけ行う',
+    loop:     '繰り返す',
+    par:      '並行して進む',
+    'break':  '途中で抜ける',
+    critical: '割り込まれては困る区間',
+    group:    'ひとまとまりとして囲む',
+  };
+  function groupLabel(kind) {
+    return GROUP_DESC[kind] ? GROUP_DESC[kind] + ' (' + kind + ')' : kind;
+  }
+  // 「その他」の 2 段目に出すブロック。常時出す alt / loop は 1 段目にあるので除く。
+  var OTHER_GROUP_KINDS = ['par', 'break', 'critical', 'opt', 'group'];
   var GROUP_OPEN_RE = new RegExp('^(' + GROUP_KINDS.join('|') + ')(?:\\s+(.*))?$');
   var GROUP_ELSE_RE = /^else(?:\s+(.*))?$/;
   var GROUP_END_RE = /^end$/;
@@ -41,7 +154,12 @@ window.MA.modules.plantumlSequence = (function() {
   // Pure formatters — used by both add* (末尾追加) and _formatLine (位置駆動挿入)
   // 同一形式を一箇所で管理 (parser-format drift を防ぐ)
   function fmtMessage(from, to, arrow, label) {
-    return from + ' ' + (arrow || '->') + ' ' + to + (label ? ' : ' + label : '');
+    var a = arrow || '->';
+    // design 2d: 図の外とのやり取りは PlantUML の書き方に合わせ、
+    // `[-> System` / `System ->]` と空白無しで接す。
+    var head = from === '[' ? '[' + a : from + ' ' + a;
+    var body = to === ']' ? head + ']' : head + ' ' + to;
+    return body + (label ? ' : ' + label : '');
   }
   function fmtNote(position, targets, text) {
     var t = Array.isArray(targets) ? targets.join(', ') : targets;
@@ -188,12 +306,14 @@ window.MA.modules.plantumlSequence = (function() {
 
       var mm = trimmed.match(MSG_RE);
       if (mm) {
-        var from = ensurePart(mm[1]);
+        // design 2d: `[` / `]` は「図の外」を表す疑似端点であり、参加者ではない。
+        // 参加者一覧に混ぜると左レールや Outline に `[` が並んでしまう。
+        var from = isOuterEnd(mm[1]) ? mm[1] : ensurePart(mm[1]);
         var arrow = mm[2];
-        var to = ensurePart(mm[3]);
+        var to = isOuterEnd(mm[3]) ? mm[3] : ensurePart(mm[3]);
         var label = mm[4] || '';
-        if (!participantMap[from].line) participantMap[from].line = lineNum;
-        if (!participantMap[to].line) participantMap[to].line = lineNum;
+        if (participantMap[from] && !participantMap[from].line) participantMap[from].line = lineNum;
+        if (participantMap[to] && !participantMap[to].line) participantMap[to].line = lineNum;
         result.relations.push({
           kind: 'message', id: '__m_' + (msgCounter++),
           from: from, to: to, arrow: arrow, label: label, line: lineNum,
@@ -213,8 +333,104 @@ window.MA.modules.plantumlSequence = (function() {
     return insertBeforeEnd(text, fmtMessage(from, to, arrow, label));
   }
 
+  // ─── Bulk tail add (参加者 + メッセージをまとめて末尾に追加) ───
+  // 1 件ずつの挿入フォームだと参加者 5 + メッセージ 6 で手数が 10 を超えるため、
+  // DSL そのままの書き方で貼れる入口を用意する。
+  var SEQ_BULK_ARROW_RE = new RegExp('\\s(' + ARROWS.slice().sort(function(a, b) {
+    return b.length - a.length;
+  }).map(function(a) {
+    return a.replace(/[-\\^$*+?.()|[\]{}<>]/g, '\\$&');
+  }).join('|') + ')\\s');
+
+  function _seqStripDeco(s) {
+    var t = String(s || '').trim();
+    return t.replace(/^"(.*)"$/, '$1').trim();
+  }
+
+  function parseBulkLines(block) {
+    var out = [];
+    if (!block) return out;
+    var lines = String(block).split(/\r?\n/);
+    for (var i = 0; i < lines.length; i++) {
+      var s = lines[i].trim();
+      if (!s || s.indexOf("'") === 0 || s.indexOf('#') === 0) continue;
+      if (/^@(start|end)uml\b/i.test(s)) continue;
+      var am = s.match(SEQ_BULK_ARROW_RE);
+      if (am) {
+        var pos = s.indexOf(am[0]);
+        var left = s.slice(0, pos);
+        var rest = s.slice(pos + am[0].length);
+        var lbl = '';
+        var ci = rest.indexOf(':');
+        if (ci >= 0) { lbl = rest.slice(ci + 1).trim(); rest = rest.slice(0, ci); }
+        var from = _seqStripDeco(left);
+        var to = _seqStripDeco(rest);
+        if (!from || !to) continue;
+        out.push({ op: 'message', from: from, to: to, arrow: am[1], label: lbl });
+        continue;
+      }
+      // 参加者宣言。`participant "表示名" as Alias` と `actor Dev : 表示名` の両方を受ける。
+      var ptype = 'participant';
+      var body = s;
+      var km = body.match(new RegExp('^(' + PARTICIPANT_TYPES.join('|') + ')\\s+(.*)$', 'i'));
+      if (km) { ptype = km[1].toLowerCase(); body = km[2].trim(); }
+      var label = '';
+      var asm = body.match(/^(.*?)\s+as\s+(\S+)$/i);
+      if (asm) {
+        label = _seqStripDeco(asm[1]);
+        body = asm[2];
+      } else {
+        var ci2 = body.indexOf(':');
+        if (ci2 >= 0) { label = body.slice(ci2 + 1).trim(); body = body.slice(0, ci2); }
+      }
+      var id = _seqStripDeco(body);
+      if (!id) continue;
+      out.push({ op: 'participant', ptype: ptype, id: id, label: label });
+    }
+    return out;
+  }
+
+  // 参加者を先に全部宣言してからメッセージを並べるので、入力順は問わない。
+  function addBulk(text, block, parsed) {
+    var ops = parseBulkLines(block);
+    var out = text;
+    var idMap = {};
+    var taken = _existingParticipantIdSet(parsed || { elements: [] });
+    var i;
+    for (i = 0; i < ops.length; i++) {
+      var o = ops[i];
+      if (o.op !== 'participant') continue;
+      var norm = window.MA.idNormalizer.normalize(o.id, taken, 'P');
+      if (!norm.valid) continue;
+      idMap[o.id] = norm.id;
+      // 既に宣言済みの参加者は重複宣言せず、メッセージ側の参照先としてだけ使う。
+      if (taken[norm.id]) continue;
+      taken[norm.id] = true;
+      out = addParticipant(out, o.ptype, norm.id, o.label || norm.label || o.id);
+    }
+    for (i = 0; i < ops.length; i++) {
+      var m = ops[i];
+      if (m.op !== 'message') continue;
+      out = addMessage(out, idMap[m.from] || m.from, idMap[m.to] || m.to, m.arrow, m.label);
+    }
+    return out;
+  }
+
   function deleteLine(text, lineNum) {
     return window.MA.textUpdater.deleteLine(text, lineNum);
+  }
+
+  // FEAT-014 (resolves UI-002 / HFR-001): 行削除を「履歴 → 本文 → 選択解除 → 再描画」の
+  // 1 単位としてまとめた入口。app.js の Delete / Backspace ルーターから呼ばれる。
+  // 右パネルの「✕ 削除」ボタン (seq-delete-line) は FEAT-015 が確認ダイアログの置換を
+  // 担当中であり、その差分と衝突させないため本 run では書き換えない (「ついでに直さない」)。
+  // undo はアプリ共通の単一スタック (window.MA.history) に載る。取り消し対象は常に
+  // 「直前の 1 操作」であり、キー操作の UI 上もそれ以上の約束をしない (UI-011 の教訓)。
+  function deleteSelectedLine(ctx, lineNum) {
+    window.MA.history.pushHistory();
+    ctx.setMmdText(deleteLine(ctx.getMmdText(), lineNum));
+    window.MA.selection.clearSelection();
+    ctx.onUpdate();
   }
 
   function updateParticipant(text, lineNum, field, value) {
@@ -243,6 +459,127 @@ window.MA.modules.plantumlSequence = (function() {
     return lines.join('\n');
   }
 
+  // design 1a: From と To の間の ⇄ 。向きを逆にするのに select を
+  // 2 往復させず、両端をその場で入れ替える。矢印の種類と本文は変えない。
+  function swapMessageEnds(text, lineNum) {
+    var lines = text.split('\n');
+    var idx = lineNum - 1;
+    if (idx < 0 || idx >= lines.length) return text;
+    var indent = lines[idx].match(/^(\s*)/)[1];
+    var m = lines[idx].trim().match(MSG_RE);
+    if (!m) return text;
+    var label = m[4] || '';
+    // design 2d: 図の外 (`[` / `]`) を入れ替えるときは向きに合う側の記号にする。
+    var swapEnd = function(e) { return e === '[' ? ']' : (e === ']' ? '[' : e); };
+    lines[idx] = indent + fmtMessage(swapEnd(m[3]), swapEnd(m[1]), m[2], label);
+    return lines.join('\n');
+  }
+
+  // ─── design 5d: 線の色 / Line color ─────────────────────────────────
+  // UseCase / Component / Class の「その他の設定」と同じ 6 色を、Sequence の
+  // メッセージにも出す。色は矢印の形 (`-->` / `->>` …) を壊さずに差し替える。
+  var ARROW_COLOR_RE = /\[#([A-Za-z0-9_]+)\]/;
+  function stripArrowColor(arrow) { return String(arrow == null ? '' : arrow).replace(ARROW_COLOR_RE, ''); }
+  function arrowColor(arrow) {
+    var m = String(arrow == null ? '' : arrow).match(ARROW_COLOR_RE);
+    return m ? m[1] : '';
+  }
+  // 片羽根 `->\` だけは PlantUML が `-[#red]>\` を受け付けない (構文エラー)。
+  // 色を付けられない矢印はパレットを閉じ、理由をその場に出す。
+  function arrowSupportsColor(arrow) { return stripArrowColor(arrow).indexOf('\\') < 0; }
+  function setArrowColor(arrow, color) {
+    var base = stripArrowColor(arrow);
+    var c = String(color == null ? '' : color).trim().replace(/^#/, '');
+    if (!c || !arrowSupportsColor(base)) return base;
+    var i = base.indexOf('-');
+    if (i < 0) return base;
+    return base.slice(0, i + 1) + '[#' + c + ']' + base.slice(i + 1);
+  }
+  // 色見本は他図種と同じ 6 色 (relation-options が正本)。読み込み順に依存しないよう
+  // 呼ばれた時点で引き、無ければ同じ内容の控えを使う。
+  var FALLBACK_COLORS = [
+    { value: '',       label: '既定',   swatch: '#111114' },
+    { value: 'red',    label: '赤',     swatch: '#f87171' },
+    { value: 'orange', label: '橙',     swatch: '#fbbf24' },
+    { value: 'green',  label: '緑',     swatch: '#6ee7a8' },
+    { value: 'blue',   label: '青',     swatch: '#38bdf8' },
+    { value: 'violet', label: '紫',     swatch: '#a78bfa' },
+  ];
+  function _lineColors() {
+    var ro = window.MA.relationOptions;
+    return (ro && ro.COLORS ? ro.COLORS : FALLBACK_COLORS).slice();
+  }
+
+  // 色見本の 1 行。UseCase / Component / Class の「その他の設定」と同じ見た目。
+  function lineColorRowHtml(idPrefix, current, supported) {
+    var esc = window.MA.htmlUtils.escHtml;
+    if (!supported) {
+      return '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);' +
+        'margin-bottom:2px;">線の色 / Line color</label>' +
+        '<div id="' + idPrefix + '-unsupported" style="font-size:10px;color:var(--text-secondary);">' +
+        'この矢印 (片羽根) は色を指定できません</div></div>';
+    }
+    var html = '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);' +
+      'margin-bottom:2px;">線の色 / Line color</label><div style="display:flex;gap:4px;flex-wrap:wrap;">';
+    _lineColors().forEach(function(c) {
+      var on = (c.value || '') === (current || '');
+      html += '<button type="button" class="' + idPrefix + '-swatch" id="' + idPrefix + '-' + (c.value || 'default') + '"' +
+        ' data-color="' + esc(c.value) + '" title="' + esc(c.label) + '" aria-pressed="' + (on ? 'true' : 'false') + '"' +
+        ' style="width:22px;height:22px;background:' + c.swatch + ';border:1px solid var(--border);border-radius:4px;' +
+        'cursor:pointer;' + (on ? 'box-shadow:0 0 0 2px var(--accent);' : '') + '"></button>';
+    });
+    return html + '</div></div>';
+  }
+
+  // 行から読む / 行へ書く。書き戻しは updateMessage を通すので書式は 1 箇所のまま。
+  function messageColor(text, lineNum) {
+    var lines = String(text == null ? '' : text).split('\n');
+    var idx = lineNum - 1;
+    if (idx < 0 || idx >= lines.length) return '';
+    var m = lines[idx].trim().match(MSG_RE);
+    return m ? arrowColor(m[2]) : '';
+  }
+  function setMessageColor(text, lineNum, color) {
+    var lines = String(text == null ? '' : text).split('\n');
+    var idx = lineNum - 1;
+    if (idx < 0 || idx >= lines.length) return text;
+    var m = lines[idx].trim().match(MSG_RE);
+    if (!m) return text;
+    return updateMessage(text, lineNum, 'arrow', setArrowColor(m[2], color));
+  }
+
+  // design 2d:「その他の矢印」パレットの 1 行を、選択中のメッセージ行に適用する。
+  // 矢印だけを変える行と、相手を図の外 (`[` / `]`) に付け替える行がある。
+  // 図の外に付け替えたあと通常の矢印を選び直すと、外れていた側は元の相手に戻す。
+  function applyArrowSpec(text, lineNum, key) {
+    var spec = findArrowSpec(key);
+    // 分節ボタン (色を持たない 4 種) は、いま付いている線の色を引き継ぐ。
+    if (!spec) return updateMessage(text, lineNum, 'arrow', setArrowColor(key, messageColor(text, lineNum)));
+    var lines = text.split('\n');
+    var idx = lineNum - 1;
+    if (idx < 0 || idx >= lines.length) return text;
+    var indent = lines[idx].match(/^(\s*)/)[1];
+    var m = lines[idx].trim().match(MSG_RE);
+    if (!m) return text;
+    var from = unquote(m[1]), to = unquote(m[3]), label = m[4] || '';
+    from = spec.from || (isOuterEnd(from) ? outerFallback(text, lineNum, 'from') : from);
+    to = spec.to || (isOuterEnd(to) ? outerFallback(text, lineNum, 'to') : to);
+    // design 5d: 形を選び直しても線の色は保つ (色は別のパレットの持ち物)。
+    var specArrow = arrowColor(spec.arrow) ? spec.arrow : setArrowColor(spec.arrow, arrowColor(m[2]));
+    lines[idx] = indent + fmtMessage(from, to, specArrow, label);
+    return lines.join('\n');
+  }
+
+  // 図の外を外したときに置く相手。図に宣言されている参加者の先頭を使い、
+  // 1 人も居なければ相手側と同じにはできないので 'Participant' を作る。
+  function outerFallback(text, lineNum, side) {
+    var parsed = parseSequence(text);
+    for (var i = 0; i < parsed.elements.length; i++) {
+      if (parsed.elements[i].kind === 'participant') return parsed.elements[i].id;
+    }
+    return 'Participant';
+  }
+
   function updateMessage(text, lineNum, field, value) {
     var lines = text.split('\n');
     var idx = lineNum - 1;
@@ -255,7 +592,7 @@ window.MA.modules.plantumlSequence = (function() {
     else if (field === 'to') to = value;
     else if (field === 'arrow') arrow = value;
     else if (field === 'label') label = value;
-    lines[idx] = indent + from + ' ' + arrow + ' ' + to + (label ? ' : ' + label : '');
+    lines[idx] = indent + fmtMessage(from, to, arrow, label);
     return lines.join('\n');
   }
 
@@ -419,6 +756,10 @@ window.MA.modules.plantumlSequence = (function() {
       if (!props.kind) return '';
       return fmtBlock(props.kind, props.label);
     }
+    // design 5c: 区切り線 / 遅延 / 参照 の書式は core/sequence-marks.js が持つ。
+    if (window.MA.sequenceMarks.isMarkKind(kind)) {
+      return window.MA.sequenceMarks.formatLine(kind, props);
+    }
     return '';
   }
 
@@ -432,6 +773,32 @@ window.MA.modules.plantumlSequence = (function() {
     var line = _formatLine(kind, props);
     if (!line) return text;
     return window.MA.textUpdater.insertAfterLine(text, lineNum, line);
+  }
+
+  // BLK-human-20260912-0901: 挿入の確定で使う関数を、帯を見て決める。
+  // 帯が絡まないときは従来の insertBefore / insertAfter と同じ行に入る。
+  function _activationAwareInsertFn(text, line, position, kind) {
+    var plain = position === 'before' ? insertBefore : insertAfter;
+    if (kind === 'activation' || kind === 'participant') return plain;
+    var res = _resolveInsert(text, line, position);
+    if (!res) return plain;
+    var target = res.target;
+    return function(t, _line, k, props) { return insertBefore(t, target, k, props); };
+  }
+
+  // FEAT-076 (HFR-003): lineNum の message 行を、同一の from / to / arrow / label で
+  // **その直後**に 1 行だけ複製する。生成は _formatLine / 挿入は insertAfter の再利用であり
+  // 挿入 modal の確定処理と同一経路。message でない行・不在行では text を 1 文字も変えない。
+  function duplicateMessage(text, lineNum) {
+    var rels = (parseSequence(text).relations) || [];
+    for (var i = 0; i < rels.length; i++) {
+      var r = rels[i];
+      if (r.kind === 'message' && r.line === lineNum) {
+        return insertAfter(text, lineNum, 'message',
+          { from: r.from, to: r.to, arrow: r.arrow, label: r.label });
+      }
+    }
+    return text;
   }
 
   function bindActionBar(propsEl, ctx) {
@@ -448,14 +815,10 @@ window.MA.modules.plantumlSequence = (function() {
       var ln = parseInt(btn.getAttribute('data-line'), 10);
       _showInsertForm(ctx, ln, 'after', 'note');
     });
+    // FEAT-114 / HFR-060: 2 連 prompt() を seq-modal の 1 枚フォームへ置き換える。
     P.bindAllByClass(propsEl, 'seq-wrap-block', function(btn) {
       var ln = parseInt(btn.getAttribute('data-line'), 10);
-      var kind = prompt('ブロック種類 (alt/opt/loop/par)', 'alt');
-      if (!kind) return;
-      var label = prompt('Label/Condition', '');
-      window.MA.history.pushHistory();
-      ctx.setMmdText(wrapWith(ctx.getMmdText(), ln, ln, kind, label || ''));
-      ctx.onUpdate();
+      _showWrapForm(ctx, ln, ln);
     });
     function _moveAndReselect(ln, direction) {
       var oldText = ctx.getMmdText();
@@ -485,30 +848,24 @@ window.MA.modules.plantumlSequence = (function() {
     });
     P.bindAllByClass(propsEl, 'seq-delete-line', function(btn) {
       var ln = parseInt(btn.getAttribute('data-line'), 10);
-      if (!confirm('この行を削除しますか？')) return;
+      // FEAT-015: 削除の確認ダイアログを廃し、削除後の「元に戻す」トーストで代替する。
+      // FEAT-104: 削除直前のテキストを捕捉し、トーストの復元先として渡す。
+      var _snap = ctx.getMmdText();
       window.MA.history.pushHistory();
       ctx.setMmdText(deleteLine(ctx.getMmdText(), ln));
       window.MA.selection.clearSelection();
       ctx.onUpdate();
+      _toastUndo('1 件削除しました', _snap, ctx);
     });
     // C3: participant 左右挿入 (participant 選択時のみ描画される)
+    // FEAT-142 / HFR-075: 2 連 prompt() を seq-modal の 1 枚フォームへ置き換える
+    // (FEAT-114 / HFR-060 の _showWrapForm と同じ作法)。挿入本体・pushHistory()・
+    // onUpdate() の並びは変えず、変えるのは値の取得手段だけである。
     P.bindAllByClass(propsEl, 'seq-insert-part-before', function(btn) {
-      var ln = parseInt(btn.getAttribute('data-line'), 10);
-      var alias = prompt('新しい参加者の Alias');
-      if (!alias) return;
-      var ptype = prompt('Type (participant/actor/database/boundary/control/entity/queue/collections)', 'participant');
-      window.MA.history.pushHistory();
-      ctx.setMmdText(insertBefore(ctx.getMmdText(), ln, 'participant', { ptype: ptype || 'participant', alias: alias }));
-      ctx.onUpdate();
+      _showPartForm(ctx, parseInt(btn.getAttribute('data-line'), 10), 'before');
     });
     P.bindAllByClass(propsEl, 'seq-insert-part-after', function(btn) {
-      var ln = parseInt(btn.getAttribute('data-line'), 10);
-      var alias = prompt('新しい参加者の Alias');
-      if (!alias) return;
-      var ptype = prompt('Type (participant/actor/database/boundary/control/entity/queue/collections)', 'participant');
-      window.MA.history.pushHistory();
-      ctx.setMmdText(insertAfter(ctx.getMmdText(), ln, 'participant', { ptype: ptype || 'participant', alias: alias }));
-      ctx.onUpdate();
+      _showPartForm(ctx, parseInt(btn.getAttribute('data-line'), 10), 'after');
     });
     // C9: メッセージ選択時、対応する activate/deactivate を推論挿入
     P.bindAllByClass(propsEl, 'seq-infer-activation', function(btn) {
@@ -519,8 +876,286 @@ window.MA.modules.plantumlSequence = (function() {
     });
   }
 
-  function _showInsertForm(ctx, line, position, kind) {
+  // FEAT-001: 挿入位置のアンカー行 (line が指す message relation) を返す。
+  // 該当する message が無い場合 (先頭挿入・participant 行など) は null。
+  function resolveAnchor(parsed, line) {
+    if (!parsed || !parsed.relations) return null;
+    for (var i = 0; i < parsed.relations.length; i++) {
+      var r = parsed.relations[i];
+      if (r.kind === 'message' && r.line === line) return r;
+    }
+    return null;
+  }
+
+  // FEAT-001: selectFieldHtml 用 option 配列に selected を付与した新しい配列を返す。
+  // 元配列は破壊しない。value が null/undefined なら selected は 1件も立たない。
+  function withSelected(options, value) {
+    return options.map(function(o) {
+      return { value: o.value, label: o.label, selected: o.value === value };
+    });
+  }
+
+  // FEAT-114 / HFR-060: 「ブロックで囲む」の 2 連 prompt() を 1 枚のフォームにまとめる。
+  // 種類は 4 択のドロップダウンに限定し、任意文字列が DSL に入る経路を塞ぐ ([AC-4])。
+  var WRAP_KINDS = ['alt', 'opt', 'loop', 'par'];
+
+  function wrapFormHtml(selectedKind) {
+    var P = window.MA.properties;
+    var kind = selectedKind || WRAP_KINDS[0];
+    var opts = WRAP_KINDS.map(function(k) {
+      return { value: k, label: k, selected: k === kind };
+    });
+    return '<h3 style="margin:0 0 12px 0;color:var(--text-primary);">ブロックで囲む</h3>' +
+      P.selectFieldHtml('ブロック種類', 'seq-wrap-kind', opts) +
+      '<div style="margin-bottom:8px;">' +
+        '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Label/Condition</label>' +
+        '<input id="seq-wrap-label" type="text" style="width:100%;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-size:12px;box-sizing:border-box;">' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;margin-top:12px;">' +
+        '<button id="seq-wrap-cancel" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:8px;border-radius:4px;cursor:pointer;">キャンセル</button>' +
+        '<button id="seq-wrap-confirm" style="flex:1;background:var(--accent);border:none;color:#fff;padding:8px;border-radius:4px;cursor:pointer;">確定</button>' +
+      '</div>';
+  }
+
+  function _showWrapForm(ctx, startLine, endLine) {
     var modal = document.getElementById('seq-modal');
+    var content = document.getElementById('seq-modal-content');
+    content.innerHTML = wrapFormHtml(WRAP_KINDS[0]);
+    modal.style.display = 'flex';
+    var labelEl = document.getElementById('seq-wrap-label');
+    if (labelEl && labelEl.focus) labelEl.focus();
+    // [AC-3] キャンセルは DSL を 1 バイトも変えず pushHistory() も呼ばない。
+    document.getElementById('seq-wrap-cancel').addEventListener('click', function() {
+      modal.style.display = 'none';
+    });
+    // [AC-2] 書き戻しは既存の wrapWith をそのまま呼ぶ (出力はバイト単位で従来と同一)。
+    // [AC-5] pushHistory() は書き戻しの直前に 1 回だけ = Ctrl+Z 1 回で戻る。
+    document.getElementById('seq-wrap-confirm').addEventListener('click', function() {
+      var kind = document.getElementById('seq-wrap-kind').value;
+      var label = document.getElementById('seq-wrap-label').value;
+      window.MA.history.pushHistory();
+      ctx.setMmdText(wrapWith(ctx.getMmdText(), startLine, endLine, kind, label || ''));
+      modal.style.display = 'none';
+      ctx.onUpdate();
+    });
+  }
+
+  // FEAT-142 / HFR-075: participant 左右挿入の 2 連 prompt() を 1 枚のフォームにまとめる。
+  // Type は PARTICIPANT_TYPES の 8 択のドロップダウンに限定し、旧 prompt が通していた
+  // 任意文字列が DSL に入る経路を塞ぐ ([AC-2])。既定値は 'participant'。
+  function partFormHtml(position) {
+    var P = window.MA.properties;
+    var opts = PARTICIPANT_TYPES.map(function(pt) {
+      return { value: pt, label: pt, selected: pt === 'participant' };
+    });
+    return '<h3 style="margin:0 0 12px 0;color:var(--text-primary);">参加者を' +
+        (position === 'before' ? '左' : '右') + 'に追加</h3>' +
+      '<div style="margin-bottom:8px;">' +
+        '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Alias</label>' +
+        '<input id="seq-part-alias" type="text" style="width:100%;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-size:12px;box-sizing:border-box;">' +
+      '</div>' +
+      P.selectFieldHtml('Type', 'seq-part-type', opts) +
+      '<div style="display:flex;gap:8px;margin-top:12px;">' +
+        '<button id="seq-part-cancel" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:8px;border-radius:4px;cursor:pointer;">キャンセル</button>' +
+        '<button id="seq-part-confirm" style="flex:1;background:var(--accent);border:none;color:#fff;padding:8px;border-radius:4px;cursor:pointer;">確定</button>' +
+      '</div>';
+  }
+
+  function _showPartForm(ctx, line, position) {
+    var modal = document.getElementById('seq-modal');
+    var content = document.getElementById('seq-modal-content');
+    content.innerHTML = partFormHtml(position);
+    modal.style.display = 'flex';
+    var aliasEl = document.getElementById('seq-part-alias');
+    if (aliasEl && aliasEl.focus) aliasEl.focus();
+    // [AC-6] キャンセルは DSL を 1 バイトも変えず pushHistory() も呼ばない。
+    document.getElementById('seq-part-cancel').addEventListener('click', function() {
+      modal.style.display = 'none';
+    });
+    document.getElementById('seq-part-confirm').addEventListener('click', function() {
+      var alias = document.getElementById('seq-part-alias').value;
+      // [AC-5] Alias 未入力では旧 prompt 経路の `if (!alias) return;` と同じく何もしない。
+      if (!alias) return;
+      var ptype = document.getElementById('seq-part-type').value;
+      // [AC-3] [AC-4] 書き戻しは既存の insertBefore / insertAfter をそのまま呼ぶ
+      // (出力はバイト単位で従来と同一)。
+      window.MA.history.pushHistory();
+      var text = ctx.getMmdText();
+      var opt = { ptype: ptype || 'participant', alias: alias };
+      ctx.setMmdText(position === 'before'
+        ? insertBefore(text, line, 'participant', opt)
+        : insertAfter(text, line, 'participant', opt));
+      modal.style.display = 'none';
+      ctx.onUpdate();
+    });
+  }
+
+  // BLK-primary-20260907-0356 (design 5c): プレビュー上の挿入ガイドをクリックしたとき、
+  // 「メッセージだけ」ではなく挿入できる要素種別のメニューを出す。
+  // value は _showInsertForm の kind に対応する。alt / loop は block の preset。
+  var INSERT_KINDS = [
+    { value: 'message', label: 'メッセージ', hint: 'A -> B : 本文' },
+    { value: 'note', label: '注釈 (note)', hint: 'note over A : 本文' },
+    { value: 'alt', label: '条件分岐 (alt)', hint: 'alt … end' },
+    { value: 'loop', label: '繰り返し (loop)', hint: 'loop … end' },
+    { value: 'activation', label: '実行中の帯 (activate)', hint: 'activate A' },
+    // design 5c: 最後は「その他（区切り線 / 遅延 / 参照）」で、押すと下位メニューが開く。
+    { value: 'other', label: 'その他（区切り線 / 遅延 / 参照）', hint: '▸' },
+  ];
+
+  // 「その他」を開いたときに並ぶもの。区切り線 / 遅延 / 参照 (design 5c・5b の網羅表)
+  // に、従来の「その他のブロック」を続ける。
+  function otherInsertKinds() {
+    var marks = window.MA.sequenceMarks.marks().map(function(m) {
+      return { value: m.value, label: m.label, hint: m.hint };
+    });
+    // design 5d: par / break / critical もパレットの行として並べる
+    // (フォームの select を開くまで見つからない状態にしない)。
+    return marks.concat(OTHER_GROUP_KINDS.map(function(k) {
+      return { value: 'block:' + k, label: GROUP_DESC[k], hint: k + ' … end' };
+    }));
+  }
+
+  function insertKindOptions() {
+    return INSERT_KINDS.map(function(k) { return { value: k.value, label: k.label, hint: k.hint }; });
+  }
+
+  // BLK-human-20260912-0901: activate / deactivate の帯を見て挿入行を決める。
+  // text を渡せなかった (= 帯が分からない) ときだけ、従来の素朴な前/後に落ちる。
+  function _resolveInsert(text, line, position) {
+    var ai = window.MA.sequenceActivationInsert;
+    if (!ai || typeof text !== 'string') return null;
+    return ai.resolve(text, line, position);
+  }
+
+  // 挿入結果が DSL の何行目になるか。text があれば帯を避けた行、無ければ
+  // before は line そのもの、after は line の次。
+  function insertTargetLine(line, position, text) {
+    var n = parseInt(line, 10);
+    if (isNaN(n)) return null;
+    var res = _resolveInsert(text, n, position);
+    if (res) return res.target;
+    return position === 'before' ? n : n + 1;
+  }
+
+  // ピッカー / フォームの見出しに出す「どこに入るか」の 1 行説明。
+  // 帯の内側 / 外側が決まっているときは、それも添える。
+  function describeInsertTarget(line, position, text) {
+    var target = insertTargetLine(line, position, text);
+    if (target === null) return '';
+    var base = 'DSL ' + target + ' 行目に挿入（' + line + ' 行目の' + (position === 'before' ? '前' : '後') + '）';
+    var res = _resolveInsert(text, line, position);
+    var zone = res ? window.MA.sequenceActivationInsert.zoneLabel(res) : '';
+    return zone ? base + ' · ' + zone : base;
+  }
+
+  // ガイド線に出す 1 行。帯の内側 / 外側まで見せて、クリック前に行き先が分かるようにする。
+  function describeInsertGuide(line, position, text) {
+    var target = insertTargetLine(line, position, text);
+    if (target === null) return null;
+    var res = _resolveInsert(text, line, position);
+    var zone = res ? window.MA.sequenceActivationInsert.zoneLabel(res) : '';
+    return '+ DSL ' + target + ' 行目に挿入' + (zone ? '（' + zone + '）' : '');
+  }
+
+  // design 5c: 挿入メニューを開いている間、DSL の入る行に印を出す / 消す。
+  function _markerShow(line, position, text) {
+    if (!window.MA.insertMarker) return;
+    window.MA.insertMarker.show(line, position, insertTargetLine(line, position, text));
+  }
+  function _markerHide() {
+    if (window.MA.insertMarker) window.MA.insertMarker.hide();
+  }
+
+  // kind 引数を _showInsertForm 用の (kind, opts) に正規化する。
+  function _resolvePickedKind(picked) {
+    if (picked === 'alt' || picked === 'loop') return { kind: 'block', opts: { blockKind: picked } };
+    // design 5d: パレットの `block:par` などは、その種別を選んだ状態でフォームを開く。
+    if (String(picked).indexOf('block:') === 0) {
+      return { kind: 'block', opts: { blockKind: String(picked).slice('block:'.length) } };
+    }
+    return { kind: picked, opts: {} };
+  }
+
+  // _showInsertPicker は kinds を差し替えて 2 段目 (その他) にも使う。
+  function _showOtherPicker(ctx, line, position) {
+    _renderPicker(ctx, line, position, otherInsertKinds(), 'その他', true);
+  }
+
+  function _showInsertPicker(ctx, line, position) {
+    _renderPicker(ctx, line, position, INSERT_KINDS, 'ここに挿入', false);
+  }
+
+  // ボタンの id。kind には `block:par` のように CSS の id セレクタで拾えない
+  // 文字が混ざるので、id 用に `-` へ均す (data-kind は元の値のまま)。
+  function pickBtnId(kind) {
+    return 'seq-pick-' + String(kind).replace(/[^A-Za-z0-9_-]+/g, '-');
+  }
+
+  function _renderPicker(ctx, line, position, kinds, title, isOther) {
+    var modal = document.getElementById('seq-modal');
+    var content = document.getElementById('seq-modal-content');
+    if (!modal || !content) return;
+    // 挿入先の行が決まらないうちは開かない (見出しが空のピッカーを出さない)。
+    var pickText = ctx && ctx.getMmdText ? ctx.getMmdText() : null;
+    if (insertTargetLine(line, position, pickText) === null) return;
+    var esc = window.MA.htmlUtils.escHtml;
+    var html = '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">' + esc(title) + '</h3>' +
+      '<div id="seq-pick-target" style="font-size:11px;color:var(--text-secondary);margin-bottom:12px;">' +
+        esc(describeInsertTarget(line, position, pickText)) + '</div>' +
+      '<div style="display:flex;flex-direction:column;gap:6px;">';
+    kinds.forEach(function(k) {
+      html += '<button id="' + pickBtnId(k.value) + '" data-kind="' + k.value + '" class="seq-pick-btn" ' +
+        'style="text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);' +
+        'padding:8px 10px;border-radius:4px;cursor:pointer;font-size:12px;">' +
+        esc(k.label) +
+        '<span style="color:var(--text-secondary);font-size:10px;margin-left:8px;">' + esc(k.hint) + '</span>' +
+        '</button>';
+    });
+    html += '</div>';
+    if (isOther) {
+      html += '<button id="seq-pick-back" style="width:100%;margin-top:12px;background:var(--bg-tertiary);' +
+        'border:1px solid var(--border);color:var(--text-secondary);padding:6px;border-radius:4px;cursor:pointer;font-size:11px;">' +
+        '← 種別を選び直す</button>';
+    }
+    html += '<button id="seq-pick-cancel" style="width:100%;margin-top:8px;background:var(--bg-tertiary);' +
+      'border:1px solid var(--border);color:var(--text-primary);padding:8px;border-radius:4px;cursor:pointer;">キャンセル</button>';
+    content.innerHTML = html;
+    modal.style.display = 'flex';
+    _markerShow(line, position, pickText);
+
+    Array.prototype.forEach.call(content.querySelectorAll('.seq-pick-btn'), function(btn) {
+      btn.addEventListener('click', function() {
+        var kindAttr = btn.getAttribute('data-kind');
+        // design 5c: 「その他」は form ではなく 2 段目のメニューを開く。
+        if (kindAttr === 'other') { _showOtherPicker(ctx, line, position); return; }
+        var picked = _resolvePickedKind(kindAttr);
+        picked.opts.fromPicker = true;
+        if (isOther) picked.opts.fromOther = true;
+        _showInsertForm(ctx, line, position, picked.kind, picked.opts);
+      });
+    });
+    if (isOther) {
+      document.getElementById('seq-pick-back').addEventListener('click', function() {
+        _showInsertPicker(ctx, line, position);
+      });
+    }
+    document.getElementById('seq-pick-cancel').addEventListener('click', function() {
+      modal.style.display = 'none';
+      _markerHide();
+    });
+  }
+
+  function _showInsertForm(ctx, line, position, kind, opts) {
+    opts = opts || {};
+    var modal = document.getElementById('seq-modal');
+    // FEAT-123 (resolves UI-014 / HFR-064): フォームを開く直前の選択を退避し、
+    // 「キャンセル」で閉じたときに復帰する ([F123-AC-1])。
+    // getSelected() は slice() 済みの複製を返すが、参照を共有しないことを
+    // 呼出側でも明示するため slice() を重ねる。
+    var prevSelection = (window.MA.selection && window.MA.selection.getSelected)
+      ? window.MA.selection.getSelected().slice()
+      : [];
     var content = document.getElementById('seq-modal-content');
     var P = window.MA.properties;
     var parsed = parseSequence(ctx.getMmdText());
@@ -531,14 +1166,32 @@ window.MA.modules.plantumlSequence = (function() {
     var partOptsWithNew = partOpts.slice();
     partOptsWithNew.push({ value: '__new__', label: '+ 新規追加…' });
 
-    var title = (position === 'before' ? '前に' : '後に') + (kind === 'message' ? 'メッセージを挿入' : '注釈を挿入');
-    var html = '<h3 style="margin:0 0 12px 0;color:var(--text-primary);">' + title + '</h3>';
+    var KIND_TITLE = {
+      message: 'メッセージを挿入',
+      note: '注釈を挿入',
+      block: 'ブロックを挿入',
+      activation: '実行中の帯を挿入',
+      // design 5c の「その他」
+      separator: '区切り線を挿入',
+      delay: '遅延を挿入',
+      ref: '参照を挿入',
+    };
+    var title = (position === 'before' ? '前に' : '後に') + (KIND_TITLE[kind] || 'メッセージを挿入');
+    var html = '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">' + title + '</h3>' +
+      // BLK-primary-20260907-0356: フォームでも「DSL の何行目に入るか」を示し続ける。
+      '<div id="seq-mod-target" style="font-size:11px;color:var(--text-secondary);margin-bottom:12px;">' +
+        window.MA.htmlUtils.escHtml(describeInsertTarget(line, position, ctx && ctx.getMmdText ? ctx.getMmdText() : null)) + '</div>';
     if (kind === 'message') {
       var arrowOpts = ARROWS.map(function(a) { return { value: a, label: arrowLabel(a), selected: a === '->' }; });
+      // FEAT-001: From はアンカー行の from を初期選択する (アンカー不在時は従来どおり先頭)。
+      var anchorRel = resolveAnchor(parsed, line);
+      var fromOpts = withSelected(partOptsWithNew, anchorRel ? anchorRel.from : null);
+      // FEAT-002: To もアンカー行の to を初期選択する (アンカー不在時は従来どおり先頭)。
+      var toOpts = withSelected(partOptsWithNew, anchorRel ? anchorRel.to : null);
       html +=
-        P.selectFieldHtml('From', 'seq-mod-from', partOptsWithNew) +
+        P.selectFieldHtml('From', 'seq-mod-from', fromOpts) +
         P.selectFieldHtml('Arrow', 'seq-mod-arrow', arrowOpts) +
-        P.selectFieldHtml('To', 'seq-mod-to', partOptsWithNew) +
+        P.selectFieldHtml('To', 'seq-mod-to', toOpts) +
         // userissue v1.2.7+: 「ここに挿入」 modal にも Stereotype 入力欄を追加。
         '<div style="margin-bottom:8px;">' +
           '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Stereotype <span style="color:#32CD32;">&lt;&lt; &gt;&gt;</span> <span style="color:var(--text-secondary);font-weight:normal;">(任意・上段にライムグリーンで表示)</span></label>' +
@@ -551,6 +1204,29 @@ window.MA.modules.plantumlSequence = (function() {
         P.selectFieldHtml('Position', 'seq-mod-npos', posOpts) +
         P.selectFieldHtml('Target', 'seq-mod-ntarget', partOpts) +
         '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">本文</label><div id="seq-mod-ntext-rle"></div></div>';
+    } else if (kind === 'block') {
+      // alt / loop / opt / par / break / critical / group。空ブロック (opener + end) を
+      // 挿入位置に置く。中身は挿入後に既存の行編集/挿入で足す (末尾追加の block と同じ形)。
+      var bkSel = opts.blockKind || 'alt';
+      var bkOpts = GROUP_KINDS.map(function(k) { return { value: k, label: groupLabel(k), selected: k === bkSel }; });
+      html +=
+        P.selectFieldHtml('Kind', 'seq-mod-bkind', bkOpts) +
+        P.fieldHtml('Label', 'seq-mod-blabel', '', '例: x > 0');
+    } else if (kind === 'separator' || kind === 'delay') {
+      // design 5c: どちらも本文 1 つだけ。記法は placeholder で見せる。
+      html += P.fieldHtml('本文（任意）', 'seq-mod-mtext', '',
+        kind === 'separator' ? '例: 初期化ここまで' : '例: 応答待ち');
+    } else if (kind === 'ref') {
+      html +=
+        P.selectFieldHtml('かかる参加者 / Over', 'seq-mod-rtarget', partOpts) +
+        P.fieldHtml('本文', 'seq-mod-mtext', '', '例: 認証シーケンス参照');
+    } else if (kind === 'activation') {
+      html +=
+        P.selectFieldHtml('Action', 'seq-mod-aact', [
+          { value: 'activate', label: 'activate', selected: true },
+          { value: 'deactivate', label: 'deactivate' },
+        ]) +
+        P.selectFieldHtml('Target', 'seq-mod-atgt', withSelected(partOpts, (resolveAnchor(parsed, line) || {}).to));
     }
     if (kind === 'message') {
       html +=
@@ -562,6 +1238,11 @@ window.MA.modules.plantumlSequence = (function() {
           '</select>' +
         '</div>';
     }
+    if (opts.fromPicker) {
+      html += '<button id="seq-mod-back" style="width:100%;margin-top:12px;background:var(--bg-tertiary);' +
+        'border:1px solid var(--border);color:var(--text-secondary);padding:6px;border-radius:4px;cursor:pointer;font-size:11px;">' +
+        '← 種別を選び直す</button>';
+    }
     html +=
       '<div style="display:flex;gap:8px;margin-top:12px;">' +
         '<button id="seq-mod-cancel" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:8px;border-radius:4px;cursor:pointer;">キャンセル</button>' +
@@ -569,10 +1250,13 @@ window.MA.modules.plantumlSequence = (function() {
       '</div>';
     content.innerHTML = html;
     modal.style.display = 'flex';
+    _markerShow(line, position, ctx && ctx.getMmdText ? ctx.getMmdText() : null);
 
     var rleObj = null;
     if (kind === 'message') rleObj = window.MA.richLabelEditor.mount(document.getElementById('seq-mod-label-rle'), '');
     else if (kind === 'note') rleObj = window.MA.richLabelEditor.mount(document.getElementById('seq-mod-ntext-rle'), '');
+    // FEAT-004: message 種別に限り、modal 表示直後に本文 textarea へフォーカスする。
+    if (kind === 'message' && rleObj && rleObj.element) rleObj.element.focus();
 
     // From/To で '__new__' が選ばれたら inline 入力を表示/非表示
     if (kind === 'message') {
@@ -589,12 +1273,26 @@ window.MA.modules.plantumlSequence = (function() {
       if (toSel) toSel.addEventListener('change', maybeShowInline);
     }
 
+    if (opts.fromPicker) {
+      document.getElementById('seq-mod-back').addEventListener('click', function() {
+        if (opts.fromOther) _showOtherPicker(ctx, line, position);
+        else _showInsertPicker(ctx, line, position);
+      });
+    }
     document.getElementById('seq-mod-cancel').addEventListener('click', function() {
       modal.style.display = 'none';
+      _markerHide();
+      // FEAT-123 [F123-AC-1] / [F123-AC-3]: 退避した選択が空でなければ復帰する。
+      // 空のときは setSelected を呼ばない (選択を新たに作らない)。
+      if (prevSelection.length && window.MA.selection && window.MA.selection.setSelected) {
+        window.MA.selection.setSelected(prevSelection);
+      }
     });
     document.getElementById('seq-mod-confirm').addEventListener('click', function() {
       var t = ctx.getMmdText();
-      var insertFn = position === 'before' ? insertBefore : insertAfter;
+      // BLK-human-20260912-0901: 帯 (activate/deactivate) を見て行を決め直す。
+      // activation / participant 自体の挿入は帯の内外という概念を持たないので素通し。
+      var insertFn = _activationAwareInsertFn(t, line, position, kind);
       if (kind === 'message') {
         var fr = document.getElementById('seq-mod-from').value;
         var to = document.getElementById('seq-mod-to').value;
@@ -626,9 +1324,35 @@ window.MA.modules.plantumlSequence = (function() {
           targets: [document.getElementById('seq-mod-ntarget').value],
           text: rleObj ? rleObj.getValue() : '',
         });
+      } else if (kind === 'block') {
+        window.MA.history.pushHistory();
+        t = insertFn(t, line, 'block', {
+          kind: document.getElementById('seq-mod-bkind').value,
+          label: document.getElementById('seq-mod-blabel').value.trim(),
+        });
+      } else if (kind === 'separator' || kind === 'delay') {
+        window.MA.history.pushHistory();
+        t = insertFn(t, line, kind, { text: document.getElementById('seq-mod-mtext').value });
+      } else if (kind === 'ref') {
+        var rtgt = document.getElementById('seq-mod-rtarget').value;
+        if (!rtgt) { alert('かかる参加者は必須です'); return; }
+        window.MA.history.pushHistory();
+        t = insertFn(t, line, 'ref', {
+          targets: [rtgt],
+          text: document.getElementById('seq-mod-mtext').value,
+        });
+      } else if (kind === 'activation') {
+        var atgt = document.getElementById('seq-mod-atgt').value;
+        if (!atgt) { alert('Target 必須'); return; }
+        window.MA.history.pushHistory();
+        t = insertFn(t, line, 'activation', {
+          action: document.getElementById('seq-mod-aact').value,
+          target: atgt,
+        });
       }
       ctx.setMmdText(t);
       modal.style.display = 'none';
+      _markerHide();
       ctx.onUpdate();
     });
   }
@@ -855,6 +1579,226 @@ window.MA.modules.plantumlSequence = (function() {
     return text;
   }
 
+  // BLK-junior-20260906-2143: 参加者数人 + メッセージ数本を 1 つのフォームで組む。
+  // 「末尾に追加」は 1 件ごとに種類 select を選び直し、逃げ道の「一括 (複数行)」は
+  // 矢印構文ごと打たせるため、どちらも DSL エディタに直接打つのと手数が変わらない。
+  // class-scaffold と同じく、名前・本文という短い値だけを受け取って構文は自動生成する。
+  function _showSeqScaffoldModal(parsedData, ctx) {
+    var modal = document.getElementById('seq-sc-modal');
+    var content = document.getElementById('seq-sc-modal-content');
+    if (!modal || !content) return;
+    var SS = window.MA.sequenceScaffold;
+    var esc = window.MA.htmlUtils.escHtml;
+    var P = window.MA.properties;
+
+    var existing = (parsedData.elements || [])
+      .filter(function(e) { return e.kind === 'participant'; })
+      .map(function(e) { return e.label || e.id; });
+
+    var INPUT = 'background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:3px 6px;border-radius:3px;font-size:12px;';
+    var ARROW_OPTS = [
+      ['sync', '同期 ->'],
+      ['async', '非同期 ->>'],
+      ['reply', '応答 -->'],
+      ['asyncReply', '非同期応答 -->>'],
+      ['lost', '消失 ->x'],
+    ];
+
+    var datalist = '<datalist id="seq-sc-names">' +
+      existing.map(function(n) { return '<option value="' + esc(n) + '"></option>'; }).join('') +
+      '</datalist>';
+
+    function partRowHtml(i) {
+      return '<div class="seq-sc-row" data-i="' + i + '" style="display:flex;gap:6px;margin-bottom:5px;align-items:center;">' +
+        '<select id="seq-sc-ptype-' + i + '" style="' + INPUT + '">' +
+          SS.PARTICIPANT_TYPES.map(function(t) {
+            return '<option value="' + t + '"' + (t === 'participant' ? ' selected' : '') + '>' + t + '</option>';
+          }).join('') +
+        '</select>' +
+        '<input id="seq-sc-pname-' + i + '" list="seq-sc-names" type="text" placeholder="参加者名 (例: TIMER ドライバ)" style="flex:1;' + INPUT + '">' +
+        '<button id="seq-sc-pdel-' + i + '" title="この行を削除" style="background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;padding:2px 7px;">✕</button>' +
+      '</div>';
+    }
+
+    // メッセージの From / To は参加者行と図の既存参加者からの選択にする。
+    // 名前を打ち直す手が要らず、綴り違いで別人が生まれることもない。
+    function namePickHtml(id) {
+      return '<select id="' + id + '" class="seq-sc-name-pick" style="flex:1;' + INPUT + '">' +
+        '<option value="">（選ぶ）</option></select>';
+    }
+
+    function msgRowHtml(j) {
+      return '<div class="seq-sc-msg-row" data-j="' + j + '" style="display:flex;gap:6px;margin-bottom:5px;align-items:center;">' +
+        namePickHtml('seq-sc-mfrom-' + j) +
+        '<select id="seq-sc-marrow-' + j + '" style="' + INPUT + '">' +
+          ARROW_OPTS.map(function(o) { return '<option value="' + o[0] + '">' + esc(o[1]) + '</option>'; }).join('') +
+        '</select>' +
+        namePickHtml('seq-sc-mto-' + j) +
+        '<input id="seq-sc-mtext-' + j + '" type="text" placeholder="本文 (例: Timer_Init())" style="flex:2;' + INPUT + '">' +
+        '<button id="seq-sc-mdel-' + j + '" title="この行を削除" style="background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;padding:2px 7px;">✕</button>' +
+      '</div>';
+    }
+
+    var SECTION = 'font-size:10px;color:var(--accent);font-weight:bold;margin:10px 0 4px 0;';
+    var pRows = '', mRows = '', ri;
+    for (ri = 0; ri < 4; ri++) pRows += partRowHtml(ri);
+    for (ri = 0; ri < 4; ri++) mRows += msgRowHtml(ri);
+    content.innerHTML = datalist +
+      '<h3 style="margin:0 0 12px 0;color:var(--text-primary);">シーケンス構成をまとめて追加</h3>' +
+      '<div style="' + SECTION + '">タイトル (省略可)</div>' +
+      '<input id="seq-sc-title" type="text" placeholder="例: TIMER ドライバ初期化" style="width:100%;box-sizing:border-box;' + INPUT + '">' +
+      '<div style="' + SECTION + '">参加者 (種類 / 名前)</div>' +
+      '<div id="seq-sc-rows">' + pRows + '</div>' +
+      '<button id="seq-sc-add-row" style="font-size:11px;padding:3px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">＋ 参加者を追加</button>' +
+      '<div style="' + SECTION + '">メッセージ (From / 矢印 / To / 本文)</div>' +
+      '<div id="seq-sc-msg-rows">' + mRows + '</div>' +
+      '<button id="seq-sc-add-msg" style="font-size:11px;padding:3px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">＋ メッセージを追加</button>' +
+      '<div style="' + SECTION + '">追加される行</div>' +
+      '<pre id="seq-sc-preview" style="margin:0;background:var(--bg-primary);border:1px solid var(--border);border-radius:3px;padding:6px;font-family:Consolas,monospace;font-size:11px;color:var(--text-primary);white-space:pre-wrap;min-height:34px;"></pre>' +
+      '<div id="seq-sc-errors" style="font-size:11px;color:var(--accent-red);margin-top:6px;min-height:14px;"></div>' +
+      '<div style="display:flex;gap:8px;margin-top:12px;">' +
+        '<button id="seq-sc-cancel" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:8px;border-radius:4px;cursor:pointer;">キャンセル</button>' +
+        '<button id="seq-sc-confirm" style="flex:1;background:var(--accent);border:none;color:#fff;padding:8px;border-radius:4px;cursor:pointer;">確定</button>' +
+      '</div>';
+    modal.style.display = 'flex';
+
+    function val(id) { var el = document.getElementById(id); return el ? el.value : ''; }
+
+    function collectSpec() {
+      var participants = [];
+      var rows = content.querySelectorAll('.seq-sc-row');
+      for (var i = 0; i < rows.length; i++) {
+        var idx = rows[i].getAttribute('data-i');
+        participants.push({ name: val('seq-sc-pname-' + idx), type: val('seq-sc-ptype-' + idx) });
+      }
+      var messages = [];
+      var mrows = content.querySelectorAll('.seq-sc-msg-row');
+      for (var j = 0; j < mrows.length; j++) {
+        var jdx = mrows[j].getAttribute('data-j');
+        messages.push({
+          from: val('seq-sc-mfrom-' + jdx),
+          to: val('seq-sc-mto-' + jdx),
+          arrow: val('seq-sc-marrow-' + jdx),
+          text: val('seq-sc-mtext-' + jdx),
+        });
+      }
+      return { title: val('seq-sc-title'), participants: participants, messages: messages };
+    }
+
+    // From / To の選択肢は「今この画面で打っている参加者名 + 図に既にある参加者」。
+    // 打ちながら増えるので、行を足すたびに選び直しに戻らずに済む。
+    function candidateNames() {
+      var names = [], seen = {};
+      function push(v) {
+        var t = (v || '').trim();
+        if (!t || seen[t]) return;
+        seen[t] = true; names.push(t);
+      }
+      var rows = content.querySelectorAll('.seq-sc-row');
+      for (var i = 0; i < rows.length; i++) push(val('seq-sc-pname-' + rows[i].getAttribute('data-i')));
+      existing.forEach(push);
+      return names;
+    }
+
+    function refreshPicks() {
+      var names = candidateNames();
+      var picks = content.querySelectorAll('.seq-sc-name-pick');
+      for (var i = 0; i < picks.length; i++) {
+        var cur = picks[i].value;
+        picks[i].innerHTML = '<option value="">（選ぶ）</option>' +
+          names.map(function(n) {
+            return '<option value="' + esc(n) + '"' + (n === cur ? ' selected' : '') + '>' + esc(n) + '</option>';
+          }).join('');
+        if (cur && names.indexOf(cur) < 0) picks[i].value = '';
+      }
+    }
+
+    function refresh() {
+      refreshPicks();
+      var spec = collectSpec();
+      var text = ctx.getMmdText();
+      var pre = document.getElementById('seq-sc-preview');
+      if (pre) pre.textContent = SS.preview(text, spec).join('\n');
+      var res = SS.validate(spec, text);
+      var errEl = document.getElementById('seq-sc-errors');
+      if (errEl) errEl.textContent = res.ok ? '' : res.errors.join(' / ');
+      var confirmBtn = document.getElementById('seq-sc-confirm');
+      if (confirmBtn) {
+        confirmBtn.disabled = !res.ok;
+        confirmBtn.style.opacity = res.ok ? '1' : '0.5';
+        confirmBtn.style.cursor = res.ok ? 'pointer' : 'not-allowed';
+      }
+    }
+
+    function bindRemovable(btnId, rowSel, key, keyVal) {
+      P.bindEvent(btnId, 'click', function() {
+        var rows = content.querySelectorAll(rowSel);
+        if (rows.length <= 1) return;
+        for (var k = 0; k < rows.length; k++) {
+          if (rows[k].getAttribute(key) === String(keyVal)) {
+            rows[k].parentNode.removeChild(rows[k]);
+            break;
+          }
+        }
+        refresh();
+      });
+    }
+
+    function bindPartRow(i) {
+      P.bindEvent('seq-sc-pname-' + i, 'input', refresh);
+      P.bindEvent('seq-sc-ptype-' + i, 'change', refresh);
+      bindRemovable('seq-sc-pdel-' + i, '.seq-sc-row', 'data-i', i);
+    }
+    function bindMsgRow(j) {
+      P.bindEvent('seq-sc-mtext-' + j, 'input', refresh);
+      ['seq-sc-mfrom-' + j, 'seq-sc-mto-' + j, 'seq-sc-marrow-' + j].forEach(function(id) {
+        P.bindEvent(id, 'change', refresh);
+      });
+      bindRemovable('seq-sc-mdel-' + j, '.seq-sc-msg-row', 'data-j', j);
+    }
+    for (ri = 0; ri < 4; ri++) { bindPartRow(ri); bindMsgRow(ri); }
+    P.bindEvent('seq-sc-title', 'input', refresh);
+
+    var nextPart = 4, nextMsg = 4;
+    P.bindEvent('seq-sc-add-row', 'click', function() {
+      var rows = document.getElementById('seq-sc-rows');
+      if (!rows) return;
+      var i = nextPart++;
+      rows.insertAdjacentHTML('beforeend', partRowHtml(i));
+      bindPartRow(i);
+      var el = document.getElementById('seq-sc-pname-' + i);
+      if (el && el.focus) el.focus();
+      refresh();
+    });
+    P.bindEvent('seq-sc-add-msg', 'click', function() {
+      var rows = document.getElementById('seq-sc-msg-rows');
+      if (!rows) return;
+      var j = nextMsg++;
+      rows.insertAdjacentHTML('beforeend', msgRowHtml(j));
+      bindMsgRow(j);
+      refresh();
+      var el = document.getElementById('seq-sc-mfrom-' + j);
+      if (el && el.focus) el.focus();
+    });
+
+    function close() { modal.style.display = 'none'; content.innerHTML = ''; }
+    P.bindEvent('seq-sc-cancel', 'click', close);
+    P.bindEvent('seq-sc-confirm', 'click', function() {
+      var spec = collectSpec();
+      var text = ctx.getMmdText();
+      if (!SS.validate(spec, text).ok) return;
+      window.MA.history.pushHistory();
+      ctx.setMmdText(SS.apply(text, spec));
+      ctx.onUpdate();
+      close();
+    });
+
+    refresh();
+    // 開いた直後はタイトルから打ち始めるので、最初からフォーカスを載せる。
+    var first = document.getElementById('seq-sc-title');
+    if (first && first.focus) first.focus();
+  }
+
   return {
     type: 'plantuml-sequence',
     displayName: 'Sequence',
@@ -866,9 +1810,29 @@ window.MA.modules.plantumlSequence = (function() {
     addParticipant: addParticipant,
     normalizeIdInput: normalizeIdInput,
     addMessage: addMessage,
+    parseBulkLines: parseBulkLines,
+    addBulk: addBulk,
     deleteLine: deleteLine,
+    deleteSelectedLine: deleteSelectedLine,
     updateParticipant: updateParticipant,
     updateMessage: updateMessage,
+    swapMessageEnds: swapMessageEnds,
+    quickArrows: function() { return QUICK_ARROWS.slice(); },
+    // design 2d: 「その他の矢印」パレット
+    otherArrows: function() { return OTHER_ARROWS.slice(); },
+    // design 5d: ブロックの枠 (par / break / critical …) を「何が起きるか」で出す
+    groupKinds: function() { return GROUP_KINDS.slice(); },
+    groupLabel: groupLabel,
+    applyArrowSpec: applyArrowSpec,
+    activeArrowKey: activeArrowKey,
+    // design 5d: 線の色
+    lineColors: function() { return _lineColors(); },
+    stripArrowColor: stripArrowColor,
+    arrowColor: arrowColor,
+    arrowSupportsColor: arrowSupportsColor,
+    setArrowColor: setArrowColor,
+    messageColor: messageColor,
+    setMessageColor: setMessageColor,
     setTitle: setTitle,
     toggleAutonumber: toggleAutonumber,
     addGroup: addGroup,
@@ -876,6 +1840,9 @@ window.MA.modules.plantumlSequence = (function() {
     insertElseIntoGroup: insertElseIntoGroup,
     updateGroup: updateGroup,
     wrapWith: wrapWith,
+    WRAP_KINDS: WRAP_KINDS,
+    wrapFormHtml: wrapFormHtml,
+    partFormHtml: partFormHtml,
     unwrap: unwrap,
     addNote: addNote,
     updateNote: updateNote,
@@ -886,6 +1853,9 @@ window.MA.modules.plantumlSequence = (function() {
     formatLabelWithStereotype: formatLabelWithStereotype,
     insertBefore: insertBefore,
     insertAfter: insertAfter,
+    duplicateMessage: duplicateMessage,
+    resolveAnchor: resolveAnchor,
+    withSelected: withSelected,
     renameWithRefs: renameWithRefs,
     duplicateRange: duplicateRange,
     inferActivations: inferActivations,
@@ -893,6 +1863,22 @@ window.MA.modules.plantumlSequence = (function() {
     moveParticipant: moveParticipant,
     showInsertForm: function(ctx, line, position, kind) {
       _showInsertForm(ctx, line, position, kind);
+    },
+    showInsertPicker: function(ctx, line, position) {
+      _showInsertPicker(ctx, line, position);
+    },
+    insertKindOptions: insertKindOptions,
+    pickBtnId: pickBtnId,
+    otherInsertKinds: otherInsertKinds,
+    insertTargetLine: insertTargetLine,
+    describeInsertTarget: describeInsertTarget,
+    describeInsertGuide: describeInsertGuide,
+    // design 5c: hover ガイドも「DSL の何行目に入るか」を出す。app.js の hover 側は
+    // currentModule.resolveInsertLine しか見ないので、click 側と同じ解決を module から
+    // 公開する (無いと汎用の「+ ここに挿入」に落ち、行番号も列も出ない)。
+    resolveInsertLine: function(overlayEl, x, y) {
+      if (!window.MA.sequenceOverlay || !window.MA.sequenceOverlay.resolveInsertLine) return null;
+      return window.MA.sequenceOverlay.resolveInsertLine(overlayEl, x, y);
     },
     template: function() {
       return [
@@ -914,6 +1900,8 @@ window.MA.modules.plantumlSequence = (function() {
       hoverInsert: true,
       participantDrag: true,
       showInsertForm: true,
+      insertPicker: true,
+      deleteSelectedLine: true,
       multiSelectConnect: false,
     },
     buildOverlay: function(svgEl, parsedData, overlayEl) {
@@ -946,11 +1934,6 @@ window.MA.modules.plantumlSequence = (function() {
         propsEl.innerHTML =
           '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Sequence Diagram</div>' +
           '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-            '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">Title 設定</label>' +
-            P.fieldHtml('Title', 'seq-title', parsedData.meta.title) +
-            P.primaryButtonHtml('seq-set-title', 'Title 適用') +
-          '</div>' +
-          '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
             '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-primary);cursor:pointer;">' +
               '<input id="seq-autonumber" type="checkbox" ' + autonumChecked + '>' +
               ' autonumber (自動採番)' +
@@ -964,19 +1947,22 @@ window.MA.modules.plantumlSequence = (function() {
               { value: 'note', label: '注釈 (note)' },
               { value: 'block', label: 'ブロック (alt/loop/...)' },
               { value: 'activation', label: 'ライフライン (activate/deactivate)' },
+              { value: 'bulk', label: '一括 (複数行)' },
             ]) +
             '<div id="seq-tail-detail" style="margin-top:6px;"></div>' +
+          '</div>' +
+          // BLK-junior-20260906-2143: 参加者とメッセージをまとめて組む入口。
+          '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
+            '<button id="seq-scaffold-open" style="width:100%;font-size:11px;padding:5px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">⌗ シーケンス構成をまとめて追加</button>' +
           '</div>' +
           '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;color:var(--text-secondary);font-size:11px;">' +
             'プレビュー上で要素をクリックすると編集パネルが開きます' +
           '</div>';
 
-        // Title button
-        P.bindEvent('seq-set-title', 'click', function() {
-          window.MA.history.pushHistory();
-          ctx.setMmdText(setTitle(ctx.getMmdText(), document.getElementById('seq-title').value.trim()));
-          ctx.onUpdate();
+        P.bindEvent('seq-scaffold-open', 'click', function() {
+          _showSeqScaffoldModal(parsedData, ctx);
         });
+
         // autonumber checkbox
         P.bindEvent('seq-autonumber', 'change', function() {
           window.MA.history.pushHistory();
@@ -991,13 +1977,31 @@ window.MA.modules.plantumlSequence = (function() {
           if (partOpts.length === 0) partOpts = [{ value: '', label: '（参加者なし）' }];
           var html = '';
           if (kind === 'message') {
-            var arrowOpts = ARROWS.map(function(a) { return { value: a, label: arrowLabel(a), selected: a === '->' }; });
             var partOptsWithNew = partOpts.slice();
             partOptsWithNew.push({ value: '__new__', label: '+ 新規追加…' });
+            // BLK-junior-20260907-2203: 直前に選んだメッセージの当事者を初期値にする。
+            // 応答を 1 本足すたびに From / To を選び直さずに済む。憶えが無いとき
+            // (何も選ばずに開いたとき) はこれまでどおり先頭の参加者のまま。
+            var SE = window.MA.selectedEndpoints;
+            var tailDef = SE ? SE.defaultsFor(participants.map(function(p) { return p.id; })) : { source: 'none' };
+            var fromOptsT = tailDef.from ? withSelected(partOptsWithNew, tailDef.from) : partOptsWithNew;
+            var toOptsT = tailDef.to ? withSelected(partOptsWithNew, tailDef.to) : partOptsWithNew;
+            var tailNote = SE ? SE.noteText(tailDef, function(id) {
+              for (var i = 0; i < participants.length; i++) if (participants[i].id === id) return participants[i].label;
+              return id;
+            }) : '';
             html =
-              P.selectFieldHtml('From', 'seq-tail-from', partOptsWithNew) +
-              P.selectFieldHtml('Arrow', 'seq-tail-arrow', arrowOpts) +
-              P.selectFieldHtml('To', 'seq-tail-to', partOptsWithNew) +
+              (tailNote ? '<div id="seq-tail-endpoint-note" style="font-size:10px;color:var(--text-secondary);margin-bottom:6px;">'
+                + window.MA.htmlUtils.escHtml(tailNote) + '</div>' : '') +
+              P.selectFieldHtml('From', 'seq-tail-from', fromOptsT) +
+              // design 2d: 末尾追加でも同じ矢印パレットから選ぶ。
+              // 現在値は hidden #seq-tail-arrow が持つ。
+              P.arrowPickerHtml('矢印の種類 / Arrow', 'seq-tail-arrow',
+                quickArrowOptions(), otherArrowOptions(), '->') +
+              // design 5d: 末尾追加でも線の色を先に決められる。
+              lineColorRowHtml('seq-tail-color', '', true) +
+              '<input type="hidden" id="seq-tail-color" value="">' +
+              P.selectFieldHtml('To', 'seq-tail-to', toOptsT) +
               // userissue v1.2.7+: 末尾追加でも Stereotype を入力できるように。
               '<div style="margin-bottom:8px;">' +
                 '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Stereotype <span style="color:#32CD32;">&lt;&lt; &gt;&gt;</span> <span style="color:var(--text-secondary);font-weight:normal;">(任意・上段にライムグリーンで表示)</span></label>' +
@@ -1028,7 +2032,7 @@ window.MA.modules.plantumlSequence = (function() {
               '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Text</label><div id="seq-tail-ntext-rle"></div></div>' +
               P.primaryButtonHtml('seq-tail-add', '+ 末尾に追加');
           } else if (kind === 'block') {
-            var bkOpts = GROUP_KINDS.map(function(k) { return { value: k, label: k, selected: k === 'alt' }; });
+            var bkOpts = GROUP_KINDS.map(function(k) { return { value: k, label: groupLabel(k), selected: k === 'alt' }; });
             html =
               P.selectFieldHtml('Kind', 'seq-tail-bkind', bkOpts) +
               P.fieldHtml('Label', 'seq-tail-blabel', '', '例: x > 0') +
@@ -1041,12 +2045,40 @@ window.MA.modules.plantumlSequence = (function() {
               ]) +
               P.selectFieldHtml('Target', 'seq-tail-atgt', partOpts) +
               P.primaryButtonHtml('seq-tail-add', '+ 末尾に追加');
+          } else if (kind === 'bulk') {
+            html =
+              '<div style="margin-bottom:4px;font-size:10px;color:var(--text-secondary);">1 行 1 件。参加者とメッセージを混ぜて書けます</div>' +
+              window.MA.reuseModal.buttonHtml('seq-tail-reuse') +
+              '<textarea id="seq-tail-bulk" style="width:100%;min-height:90px;font-family:inherit;font-size:12px;"></textarea>' +
+              P.primaryButtonHtml('seq-tail-add', '+ まとめて末尾に追加') +
+              '<div id="seq-tail-bulk-hint" style="font-size:10px;color:var(--text-secondary);margin-top:4px;line-height:1.5;">' +
+                'actor Dev / participant "SPI ドライバ" as SpiDrv / DB : データベース → 参加者<br>' +
+                'Dev -&gt; SpiDrv : Spi_Init() → メッセージ (矢印は -&gt; --&gt; -&gt;&gt; など)<br>' +
+                '参加者は書いた順に宣言され、メッセージは後ろにまとまります' +
+              '</div>';
           }
           detailEl.innerHTML = html;
+          // 一括欄は「既に他の図にある行」を打ち直させないためのボタンを持つ。
+          window.MA.reuseModal.bindButton('seq-tail-reuse', 'plantuml-sequence', 'seq-tail-bulk');
           var rleObj = null;
           if (kind === 'message') rleObj = window.MA.richLabelEditor.mount(document.getElementById('seq-tail-label-rle'), '');
           else if (kind === 'note') rleObj = window.MA.richLabelEditor.mount(document.getElementById('seq-tail-ntext-rle'), '');
           if (kind === 'message') {
+            // design 5d: 末尾追加の色見本。選んだ色は hidden #seq-tail-color が持つ。
+            var tColorBtns = detailEl.querySelectorAll('.seq-tail-color-swatch');
+            for (var tci = 0; tci < tColorBtns.length; tci++) {
+              (function(b) {
+                b.addEventListener('click', function() {
+                  var hid = document.getElementById('seq-tail-color');
+                  if (hid) hid.value = b.getAttribute('data-color');
+                  for (var k = 0; k < tColorBtns.length; k++) {
+                    var on = tColorBtns[k] === b;
+                    tColorBtns[k].setAttribute('aria-pressed', on ? 'true' : 'false');
+                    tColorBtns[k].style.boxShadow = on ? '0 0 0 2px var(--accent)' : '';
+                  }
+                });
+              })(tColorBtns[tci]);
+            }
             var inline = document.getElementById('seq-tail-new-inline');
             function maybeShowInline() {
               var frSel = document.getElementById('seq-tail-from');
@@ -1058,6 +2090,15 @@ window.MA.modules.plantumlSequence = (function() {
             var toSel = document.getElementById('seq-tail-to');
             if (frSel) frSel.addEventListener('change', maybeShowInline);
             if (toSel) toSel.addEventListener('change', maybeShowInline);
+            // design 2d: 矢印パレットの選択を hidden #seq-tail-arrow に反映する。
+            // 図の外を選んだときは、その側の From/To を伏せる。
+            P.bindArrowPicker('seq-tail-arrow', function(v) {
+              var sp = findArrowSpec(v);
+              var frWrap = document.getElementById('seq-tail-from');
+              var toWrap = document.getElementById('seq-tail-to');
+              if (frWrap) frWrap.disabled = !!(sp && sp.from);
+              if (toWrap) toWrap.disabled = !!(sp && sp.to);
+            });
           }
           P.bindEvent('seq-tail-add', 'click', function() {
             var t = ctx.getMmdText();
@@ -1065,7 +2106,18 @@ window.MA.modules.plantumlSequence = (function() {
             if (kind === 'message') {
               var fr = document.getElementById('seq-tail-from').value;
               var to = document.getElementById('seq-tail-to').value;
-              var arrow = document.getElementById('seq-tail-arrow').value;
+              // design 2d: パレットの行は `[->` のように相手も決めるので、
+              // spec を引いて from/to を差し替えてから書式化する。
+              var arrowKey = document.getElementById('seq-tail-arrow').value;
+              var arrowSpec = findArrowSpec(arrowKey);
+              var arrow = arrowSpec ? arrowSpec.arrow : arrowKey;
+              // design 5d: 色見本で選んだ色を、矢印の形を保ったまま載せる。
+              var tailColorEl = document.getElementById('seq-tail-color');
+              if (tailColorEl && tailColorEl.value && !arrowColor(arrow)) {
+                arrow = setArrowColor(arrow, tailColorEl.value);
+              }
+              if (arrowSpec && arrowSpec.from) fr = arrowSpec.from;
+              if (arrowSpec && arrowSpec.to) to = arrowSpec.to;
               var labelVal = (rleObj ? rleObj.getValue() : '').trim();
               if (fr === '__new__' || to === '__new__') {
                 var rawNewAl = document.getElementById('seq-tail-new-alias').value;
@@ -1104,6 +2156,12 @@ window.MA.modules.plantumlSequence = (function() {
               if (!atg) { alert('Target 必須'); return; }
               window.MA.history.pushHistory();
               out = addActivation(t, document.getElementById('seq-tail-aact').value, atg);
+            } else if (kind === 'bulk') {
+              var block = document.getElementById('seq-tail-bulk').value;
+              var bulkOut = addBulk(t, block, parsedData);
+              if (bulkOut === t) { alert('追加できる行がありません'); return; }
+              window.MA.history.pushHistory();
+              out = bulkOut;
             }
             ctx.setMmdText(out);
             ctx.onUpdate();
@@ -1111,6 +2169,8 @@ window.MA.modules.plantumlSequence = (function() {
         };
         renderTailDetail();
         P.bindEvent('seq-tail-kind', 'change', renderTailDetail);
+        // design 2b: 種別はチップ 1 クリックで決める。値の持ち主は上の select のまま。
+        window.MA.tailKindChips.mount('seq-tail-kind');
         return;
       }
 
@@ -1153,17 +2213,34 @@ window.MA.modules.plantumlSequence = (function() {
           var mm = null;
           for (var jj = 0; jj < messages.length; jj++) if (messages[jj].id === sel.id) { mm = messages[jj]; break; }
           if (!mm) { propsEl.innerHTML = '<p style="color:var(--text-secondary);font-size:11px;">メッセージが見つかりません</p>'; return; }
+          // BLK-junior-20260907-2203: 選んだ行の当事者を憶えておき、選択を外して
+          // 「末尾に追加」を開いたときの From / To の初期値にする。
+          if (window.MA.selectedEndpoints) window.MA.selectedEndpoints.remember(mm);
           var partOpts2 = participants.map(function(p) { return { value: p.id, label: p.label }; });
           var fromOpts = partOpts2.map(function(o) { return { value: o.value, label: o.label, selected: o.value === mm.from }; });
           var toOpts = partOpts2.map(function(o) { return { value: o.value, label: o.label, selected: o.value === mm.to }; });
-          var arrowOpts2 = ARROWS.map(function(a) { return { value: a, label: arrowLabel(a), selected: a === mm.arrow }; });
+          // design 2d: 図の外が相手のときは、その旨を From/To にも出す
+          // (選択肢に無いと select が先頭の参加者を指してしまう)。
+          if (mm.from === '[') fromOpts.unshift({ value: '[', label: '（図の外）', selected: true });
+          if (mm.to === ']') toOpts.unshift({ value: ']', label: '（図の外）', selected: true });
           // userissue v1.2.7: 既存ラベルから <<stereotype>> 部を分離して個別フィールドへ。
           var msgParts = extractStereotype(mm.label);
           propsEl.innerHTML =
             '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>' + escHtml(mm.from + ' ' + mm.arrow + ' ' + mm.to) + '</strong><br><span style="color:var(--text-secondary);">Message · L' + mm.line + '</span></div>' +
-            P.selectFieldHtml('From', 'seq-edit-from', fromOpts) +
-            P.selectFieldHtml('Arrow', 'seq-edit-arrow', arrowOpts2) +
-            P.selectFieldHtml('To', 'seq-edit-to', toOpts) +
+            // design 1a: From ⇄ To を横並びにし、間の ⇄ で 1 クリック入替。
+            '<div style="display:flex;align-items:flex-end;gap:4px;margin-bottom:8px;">' +
+              '<div style="flex:1;min-width:0;">' + P.selectFieldHtml('From', 'seq-edit-from', fromOpts) + '</div>' +
+              '<button type="button" id="seq-edit-swap" title="From と To を入れ替える" ' +
+                'style="flex:0 0 28px;height:24px;margin-bottom:8px;background:var(--bg-tertiary);border:1px solid var(--border);' +
+                'color:var(--text-primary);border-radius:3px;font-size:12px;cursor:pointer;">⇄</button>' +
+              '<div style="flex:1;min-width:0;">' + P.selectFieldHtml('To', 'seq-edit-to', toOpts) + '</div>' +
+            '</div>' +
+            // design 2d: よく使う 4 種は常時、残りは「その他の矢印… ▾」のパレットに。
+            P.arrowPickerHtml('矢印の種類 / Arrow', 'seq-edit-arrow',
+              quickArrowOptions(), otherArrowOptions(),
+              activeArrowKey(mm.from, mm.to, stripArrowColor(mm.arrow))) +
+            // design 5d: 線色。矢印の形はそのままに色だけ差し替える。
+            lineColorRowHtml('seq-edit-color', arrowColor(mm.arrow), arrowSupportsColor(mm.arrow)) +
             '<div style="margin-bottom:8px;">' +
               '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Stereotype <span style="color:#32CD32;">&lt;&lt; &gt;&gt;</span> <span style="color:var(--text-secondary);font-weight:normal;">(任意・上段にライムグリーンで表示)</span></label>' +
               '<input id="seq-edit-stereotype" type="text" value="' + escHtml(msgParts.stereotype) + '" placeholder="例: async / sync / important" style="width:100%;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-size:12px;box-sizing:border-box;">' +
@@ -1171,7 +2248,33 @@ window.MA.modules.plantumlSequence = (function() {
             '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">本文</label><div id="seq-edit-msg-label-rle"></div></div>' +
             actionBarHtml(mm.line, 'message');
           var mln = mm.line;
-          ['from', 'arrow', 'to'].forEach(function(f) {
+          var swapBtn = document.getElementById('seq-edit-swap');
+          if (swapBtn) {
+            swapBtn.addEventListener('click', function() {
+              window.MA.history.pushHistory();
+              ctx.setMmdText(swapMessageEnds(ctx.getMmdText(), mln));
+              ctx.onUpdate();
+            });
+          }
+          // design 2d: 分節ボタンもパレットも押した瞬間に確定する。
+          // パレットの行は矢印だけでなく相手 (図の外) も変えるので applyArrowSpec を通す。
+          // design 5d: 色見本を押した時点で確定する (他図種の「その他の設定」と同じ)。
+          var mColorBtns = propsEl.querySelectorAll('.seq-edit-color-swatch');
+          for (var ci = 0; ci < mColorBtns.length; ci++) {
+            (function(b) {
+              b.addEventListener('click', function() {
+                window.MA.history.pushHistory();
+                ctx.setMmdText(setMessageColor(ctx.getMmdText(), mln, b.getAttribute('data-color')));
+                ctx.onUpdate();
+              });
+            })(mColorBtns[ci]);
+          }
+          P.bindArrowPicker('seq-edit-arrow', function(v) {
+            window.MA.history.pushHistory();
+            ctx.setMmdText(applyArrowSpec(ctx.getMmdText(), mln, v));
+            ctx.onUpdate();
+          });
+          ['from', 'to'].forEach(function(f) {
             document.getElementById('seq-edit-' + f).addEventListener('change', function() {
               window.MA.history.pushHistory();
               ctx.setMmdText(updateMessage(ctx.getMmdText(), mln, f, this.value));
@@ -1384,7 +2487,7 @@ window.MA.modules.plantumlSequence = (function() {
             if (groups[gk].id === sel.id || groups[gk].line === sel.line) { gg = groups[gk]; break; }
           }
           if (!gg) { propsEl.innerHTML = '<p style="color:var(--text-secondary);font-size:11px;">ブロックが見つかりません</p>'; return; }
-          var gtypeOpts = GROUP_KINDS.map(function(k) { return { value: k, label: k, selected: k === gg.gtype }; });
+          var gtypeOpts = GROUP_KINDS.map(function(k) { return { value: k, label: groupLabel(k), selected: k === gg.gtype }; });
           propsEl.innerHTML =
             '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>' + escHtml(gg.gtype + (gg.label ? ' ' + gg.label : '')) + '</strong><br><span style="color:var(--text-secondary);">Block · L' + gg.line + (gg.endLine ? '–L' + gg.endLine : '') + '</span></div>' +
             P.selectFieldHtml('Type', 'seq-edit-gtype', gtypeOpts) +
@@ -1417,11 +2520,14 @@ window.MA.modules.plantumlSequence = (function() {
             ctx.onUpdate();
           });
           document.getElementById('seq-edit-group-delete').addEventListener('click', function() {
-            if (!confirm('このブロックの開始行と end 行を削除しますか？ (中身は保持されます)')) return;
+            // FEAT-015: 削除の確認ダイアログを廃し、削除後の「元に戻す」トーストで代替する。
+            // FEAT-104: 削除直前のテキストを捕捉し、トーストの復元先として渡す。
+            var _snap = ctx.getMmdText();
             window.MA.history.pushHistory();
             ctx.setMmdText(deleteGroup(ctx.getMmdText(), gLine, gEnd || gLine + 1));
             window.MA.selection.clearSelection();
             ctx.onUpdate();
+            _toastUndo('ブロックの開始行と end 行を削除しました (中身は保持)', _snap, ctx);
           });
         }
 
@@ -1441,7 +2547,7 @@ window.MA.modules.plantumlSequence = (function() {
           '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
             '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">一括アクション</label>' +
             GROUP_KINDS.map(function(k) {
-              return '<button class="seq-bulk-wrap" data-kind="' + k + '" data-start="' + range.start + '" data-end="' + range.end + '" style="width:100%;text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">⌗ ' + k + ' で囲む</button>';
+              return '<button class="seq-bulk-wrap" data-kind="' + k + '" data-start="' + range.start + '" data-end="' + range.end + '" style="width:100%;text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">⌗ ' + groupLabel(k) + ' で囲む</button>';
             }).join('') +
             '<button class="seq-bulk-duplicate" data-start="' + range.start + '" data-end="' + range.end + '" style="width:100%;text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">📋 範囲を複製</button>' +
             '<button class="seq-bulk-delete" data-start="' + range.start + '" data-end="' + range.end + '" style="width:100%;text-align:left;background:var(--accent-red);border:none;color:#fff;padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 範囲を一括削除</button>' +
@@ -1466,15 +2572,19 @@ window.MA.modules.plantumlSequence = (function() {
           ctx.onUpdate();
         });
         P.bindAllByClass(propsEl, 'seq-bulk-delete', function(btn) {
-          if (!confirm('選択範囲を一括削除しますか？')) return;
+          // FEAT-015: 削除の確認ダイアログを廃し、削除後の「元に戻す」トーストで代替する。
           var s = parseInt(btn.getAttribute('data-start'), 10);
           var e = parseInt(btn.getAttribute('data-end'), 10);
+          // FEAT-104: 削除直前のテキストを捕捉し、トーストの復元先として渡す。
+          var _snap = ctx.getMmdText();
           window.MA.history.pushHistory();
           var lines = ctx.getMmdText().split('\n');
-          lines.splice(s - 1, e - s + 1);
+          var removed = e - s + 1;
+          lines.splice(s - 1, removed);
           ctx.setMmdText(lines.join('\n'));
           window.MA.selection.clearSelection();
           ctx.onUpdate();
+          _toastUndo(removed + ' 件削除しました', _snap, ctx);
         });
         return;
       }

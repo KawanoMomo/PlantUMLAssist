@@ -64,6 +64,397 @@ window.MA.properties = (function() {
 
   // selectFieldHtml: select dropdown with label
   // options: array of { value, label, selected? }
+  // segmentedFieldHtml: 選択肢を横並びのボタンにして、押した瞬間に確定させる
+  // (design 1a の右ペイン)。プルダウンを開く 1 手が消えるので、よく使う
+  // 数個の値はこちらに出す。options = [{ value, label, title, selected }]
+  function segmentedFieldHtml(label, id, options) {
+    var btns = '';
+    for (var i = 0; i < options.length; i++) {
+      var on = !!options[i].selected;
+      btns += '<button type="button" class="prop-seg' + (on ? ' active' : '') + '"'
+        + ' data-value="' + escHtml(options[i].value) + '"'
+        + ' aria-pressed="' + (on ? 'true' : 'false') + '"'
+        + (options[i].title ? ' title="' + escHtml(options[i].title) + '"' : '')
+        + ' style="flex:1;min-width:34px;background:' + (on ? 'var(--accent)' : 'var(--bg-tertiary)') + ';'
+        + 'border:1px solid ' + (on ? 'var(--accent)' : 'var(--border)') + ';'
+        + 'color:' + (on ? '#fff' : 'var(--text-primary)') + ';'
+        + 'font-family:var(--font-mono);font-size:12px;padding:3px 4px;border-radius:3px;cursor:pointer;">'
+        + escHtml(options[i].label)
+        // design 2d: 「何が起きるか」を先に、記法は小さく下に。sub 無しは従来どおり 1 行。
+        + (options[i].sub ? '<br><span style="font-size:9px;opacity:0.75;">' + escHtml(options[i].sub) + '</span>' : '')
+        + '</button>';
+    }
+    return '<div style="margin-bottom:8px;">' +
+      '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">' + escHtml(label) + '</label>' +
+      '<div id="' + id + '" style="display:flex;gap:3px;">' + btns + '</div>' +
+    '</div>';
+  }
+
+  // arrowPickerHtml: design 2d「矢印のその他パレット」。
+  // よく使う数種を分節ボタンで常時出し、残りは「その他の矢印… ▾」を開いた
+  // パレットに置く。パレットの各行は「何が起きるか」が主で、記法は右に小さく。
+  // 現在値は hidden input (id) が持つので、送信側は `.value` で読める。
+  // quick  = [{ value, label, title }]
+  // others = [{ value, desc, notation }]
+  function arrowPickerHtml(label, id, quick, others, current) {
+    var seg = segmentedFieldHtml(label, id + '-seg', quick.map(function(q) {
+      return { value: q.value, label: q.label, sub: q.sub, title: q.title, selected: q.value === current };
+    }));
+    var inOthers = false;
+    var rows = '';
+    for (var i = 0; i < others.length; i++) {
+      var on = others[i].value === current;
+      if (on) inOthers = true;
+      rows += '<button type="button" class="prop-arrow-item' + (on ? ' active' : '') + '"'
+        + ' data-value="' + escHtml(others[i].value) + '"'
+        + ' aria-pressed="' + (on ? 'true' : 'false') + '"'
+        + ' style="display:flex;width:100%;align-items:baseline;gap:8px;text-align:left;'
+        + 'background:' + (on ? 'rgba(124,140,248,0.18)' : 'transparent') + ';border:0;'
+        + 'border-left:2px solid ' + (on ? 'var(--accent)' : 'transparent') + ';'
+        + 'color:var(--text-primary);padding:4px 6px;font-size:12px;cursor:pointer;">'
+        + '<span style="flex:1;min-width:0;">' + escHtml(others[i].desc) + '</span>'
+        + '<span style="flex:0 0 auto;font-family:var(--font-mono);font-size:10px;color:var(--text-secondary);">'
+        + escHtml(others[i].notation || others[i].value) + '</span>'
+        + '</button>';
+    }
+    return seg +
+      '<input type="hidden" id="' + id + '" value="' + escHtml(current || '') + '">' +
+      '<div style="margin-bottom:8px;">' +
+        '<button type="button" id="' + id + '-more-btn" aria-expanded="' + (inOthers ? 'true' : 'false') + '"'
+          + ' aria-controls="' + id + '-more"'
+          + ' style="width:100%;text-align:left;background:transparent;border:0;color:var(--text-secondary);'
+          + 'font-size:11px;padding:2px 0;cursor:pointer;">その他の矢印… <span class="prop-arrow-caret">'
+          + (inOthers ? '▴' : '▾') + '</span></button>' +
+        '<div id="' + id + '-more"' + (inOthers ? '' : ' hidden')
+          + ' style="border:1px solid var(--border);border-radius:3px;margin-top:2px;">' + rows + '</div>' +
+      '</div>';
+  }
+
+  // bindArrowPicker: 分節ボタンとパレットの両方を onPick(value) に繋ぎ、
+  // 「その他の矢印…」の開閉を配線する。
+  function bindArrowPicker(id, onPick) {
+    var hidden = document.getElementById(id);
+    var apply = function(v) {
+      if (hidden) hidden.value = v;
+      onPick(v);
+    };
+    var seg = document.getElementById(id + '-seg');
+    if (seg) {
+      var segBtns = seg.querySelectorAll('.prop-seg');
+      for (var i = 0; i < segBtns.length; i++) {
+        (function(b) {
+          b.addEventListener('click', function() { apply(b.getAttribute('data-value')); });
+        })(segBtns[i]);
+      }
+    }
+    var more = document.getElementById(id + '-more');
+    if (more) {
+      var items = more.querySelectorAll('.prop-arrow-item');
+      for (var j = 0; j < items.length; j++) {
+        (function(b) {
+          b.addEventListener('click', function() { apply(b.getAttribute('data-value')); });
+        })(items[j]);
+      }
+    }
+    var btn = document.getElementById(id + '-more-btn');
+    if (btn && more) {
+      btn.addEventListener('click', function() {
+        var open = more.hasAttribute('hidden');
+        if (open) more.removeAttribute('hidden'); else more.setAttribute('hidden', '');
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        var caret = btn.querySelector('.prop-arrow-caret');
+        if (caret) caret.textContent = open ? '▴' : '▾';
+      });
+    }
+  }
+
+  // relationOptionsHtml: design 3c「関係のその他の設定」。
+  // 主要な「関係の種類」は呼び出し側が常時表示のまま出し、細かい指定 (向き / 多重度 /
+  // 線の色 / 線へのノート) をここに畳む。Sequence の「その他の矢印…」と同じ流儀で、
+  // 現在値が既定から外れていれば開いた状態で出す。
+  // opts = { direction, leftMult, rightMult, color, note } (relationOptions.optionsAt の戻り)
+  function relationOptionsHtml(id, opts) {
+    var o = opts || {};
+    var RO = window.MA.relationOptions;
+    var dirty = (o.direction && o.direction !== 'forward') || !!o.leftMult || !!o.rightMult
+      || !!o.color || o.note != null;
+
+    var dirs = [
+      { value: 'forward',  label: 'From → To' },
+      { value: 'backward', label: 'To → From' },
+      { value: 'none',     label: '矢印なし' },
+    ];
+    var dirBtns = '';
+    for (var i = 0; i < dirs.length; i++) {
+      var on = dirs[i].value === o.direction;
+      dirBtns += '<button type="button" class="prop-rel-dir' + (on ? ' active' : '') + '"'
+        + ' data-value="' + dirs[i].value + '" aria-pressed="' + (on ? 'true' : 'false') + '"'
+        + ' style="flex:1;background:' + (on ? 'var(--accent)' : 'var(--bg-tertiary)') + ';'
+        + 'border:1px solid ' + (on ? 'var(--accent)' : 'var(--border)') + ';'
+        + 'color:' + (on ? '#fff' : 'var(--text-primary)') + ';'
+        + 'font-size:11px;padding:4px 2px;border-radius:3px;cursor:pointer;">' + dirs[i].label + '</button>';
+    }
+
+    var colors = (RO && RO.COLORS) || [];
+    var swatches = '';
+    for (var j = 0; j < colors.length; j++) {
+      var sel = colors[j].value === (o.color || '');
+      swatches += '<button type="button" class="prop-rel-color' + (sel ? ' active' : '') + '"'
+        + ' data-value="' + escHtml(colors[j].value) + '" title="' + escHtml(colors[j].label) + '"'
+        + ' aria-pressed="' + (sel ? 'true' : 'false') + '"'
+        + ' style="width:18px;height:18px;padding:0;border-radius:4px;cursor:pointer;'
+        + 'background:' + colors[j].swatch + ';'
+        + 'border:' + (sel ? '2px solid var(--accent)' : '1px solid var(--border)') + ';"></button>';
+    }
+
+    var noted = o.note != null;
+    return '<div style="margin-bottom:8px;">' +
+      '<button type="button" id="' + id + '-btn" aria-expanded="' + (dirty ? 'true' : 'false') + '"'
+        + ' aria-controls="' + id + '"'
+        + ' style="width:100%;text-align:left;background:transparent;border:0;color:var(--text-secondary);'
+        + 'font-size:11px;padding:2px 0;cursor:pointer;">その他の設定… '
+        + '<span class="prop-rel-caret">' + (dirty ? '▴' : '▾') + '</span></button>' +
+      '<div id="' + id + '"' + (dirty ? '' : ' hidden')
+        + ' style="border:1px solid var(--border);border-radius:3px;padding:8px;margin-top:2px;">' +
+        '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:3px;">向き / Direction</div>' +
+        '<div id="' + id + '-dir" style="display:flex;gap:3px;margin-bottom:8px;">' + dirBtns + '</div>' +
+        '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:3px;">多重度 / Multiplicity</div>' +
+        '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">' +
+          '<input id="' + id + '-mult-left" type="text" value="' + escHtml(o.leftMult || '') + '" placeholder="1"'
+            + ' style="flex:1;min-width:0;background:var(--bg-tertiary);border:1px solid var(--border);'
+            + 'color:var(--text-primary);padding:3px 6px;border-radius:3px;font-family:var(--font-mono);font-size:12px;">' +
+          '<span style="font-size:11px;color:var(--text-secondary);">—</span>' +
+          '<input id="' + id + '-mult-right" type="text" value="' + escHtml(o.rightMult || '') + '" placeholder="*"'
+            + ' style="flex:1;min-width:0;background:var(--bg-tertiary);border:1px solid var(--border);'
+            + 'color:var(--text-primary);padding:3px 6px;border-radius:3px;font-family:var(--font-mono);font-size:12px;">' +
+        '</div>' +
+        '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:3px;">線の色 / Line color</div>' +
+        '<div id="' + id + '-colors" style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">' + swatches +
+          '<span style="margin-left:auto;font-family:var(--font-mono);font-size:10px;color:var(--text-secondary);">-[#red]&gt;</span>' +
+        '</div>' +
+        '<label style="display:flex;align-items:center;justify-content:space-between;font-size:12px;cursor:pointer;">' +
+          '<span>この線にノートを添える</span>' +
+          '<input id="' + id + '-note-on" type="checkbox"' + (noted ? ' checked' : '') + '>' +
+        '</label>' +
+        '<textarea id="' + id + '-note"' + (noted ? '' : ' hidden')
+          + ' style="width:100%;min-height:48px;margin-top:4px;background:var(--bg-tertiary);'
+          + 'border:1px solid var(--border);color:var(--text-primary);font-size:12px;">'
+          + escHtml(o.note || '') + '</textarea>' +
+        '<div style="display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:10px;'
+          + 'color:var(--text-secondary);margin-top:6px;"><span>Esc で閉じる</span>'
+          + '<span>変更は即座に DSL へ反映</span></div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  // colorPaletteHtml / bindColorPalette: BLK-builder-20260907-1306-2 (design 5d)。
+  // State のように「関係の設定」を丸ごとは持たないが色だけは畳んで置きたいところ用に、
+  // 色見本の一列と、それを包む「その他… ▾」を切り出したもの。
+  // 現在値が既定 (色なし) から外れていれば開いた状態で出す — 3c の流儀と同じ。
+  // colors = [{ value, label, swatch }]、current = 選択中の value ('' なら既定)。
+  function colorSwatchesHtml(id, colors, current) {
+    var out = '';
+    for (var i = 0; i < colors.length; i++) {
+      var sel = colors[i].value === (current || '');
+      out += '<button type="button" class="prop-color-swatch' + (sel ? ' active' : '') + '"'
+        + ' data-value="' + escHtml(colors[i].value) + '" title="' + escHtml(colors[i].label) + '"'
+        + ' aria-pressed="' + (sel ? 'true' : 'false') + '"'
+        + ' style="width:18px;height:18px;padding:0;border-radius:4px;cursor:pointer;'
+        + 'background:' + colors[i].swatch + ';'
+        + 'border:' + (sel ? '2px solid var(--accent)' : '1px solid var(--border)') + ';"></button>';
+    }
+    return '<div id="' + id + '-colors" style="display:flex;gap:6px;align-items:center;">' + out + '</div>';
+  }
+
+  // label = 見出し (「色 / Color」など)、notation = 右端に小さく出す記法の見本。
+  function colorPaletteHtml(id, opts) {
+    var o = opts || {};
+    var colors = o.colors || [];
+    var current = o.current || '';
+    var dirty = !!current;
+    return '<div style="margin-bottom:8px;">' +
+      '<button type="button" id="' + id + '-btn" aria-expanded="' + (dirty ? 'true' : 'false') + '"'
+        + ' aria-controls="' + id + '"'
+        + ' style="width:100%;text-align:left;background:transparent;border:0;color:var(--text-secondary);'
+        + 'font-size:11px;padding:2px 0;cursor:pointer;">' + escHtml(o.title || 'その他… ')
+        + '<span class="prop-color-caret">' + (dirty ? '▴' : '▾') + '</span></button>' +
+      '<div id="' + id + '"' + (dirty ? '' : ' hidden')
+        + ' style="border:1px solid var(--border);border-radius:3px;padding:8px;margin-top:2px;">' +
+        '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:3px;">' + escHtml(o.label || '色 / Color') + '</div>' +
+        '<div style="display:flex;align-items:center;">' +
+          colorSwatchesHtml(id, colors, current) +
+          (o.notation ? '<span style="margin-left:auto;font-family:var(--font-mono);font-size:10px;'
+            + 'color:var(--text-secondary);">' + escHtml(o.notation) + '</span>' : '') +
+        '</div>' +
+        '<div style="font-family:var(--font-mono);font-size:10px;color:var(--text-secondary);margin-top:6px;">'
+          + '押した時点で DSL へ反映</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function bindColorPalette(id, onPick) {
+    var panel = document.getElementById(id);
+    var btn = document.getElementById(id + '-btn');
+    if (btn && panel) {
+      btn.addEventListener('click', function() {
+        var open = panel.hasAttribute('hidden');
+        if (open) panel.removeAttribute('hidden'); else panel.setAttribute('hidden', '');
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        var caret = btn.querySelector('.prop-color-caret');
+        if (caret) caret.textContent = open ? '▴' : '▾';
+      });
+    }
+    var host = document.getElementById(id + '-colors');
+    if (!host || !onPick) return;
+    var btns = host.querySelectorAll('.prop-color-swatch');
+    for (var i = 0; i < btns.length; i++) {
+      (function(b) {
+        b.addEventListener('click', function() { onPick(b.getAttribute('data-value')); });
+      })(btns[i]);
+    }
+  }
+
+  // linkNoteHtml / bindLinkNote: BLK-builder-20260907-1737-2 (design 4c)。
+  // 「この線にノートを添える」は relationOptionsHtml の中にしか無かったので、
+  // 「その他の設定」を丸ごとは持たない State の遷移でも同じことができるように切り出す。
+  // チェックを外すとノートを消すところまで含めて 1 つの操作なので、
+  // 見た目と繋ぎこみを対にして置く。
+  function linkNoteHtml(id, opts) {
+    var o = opts || {};
+    var noted = !!o.note;
+    return '<div style="margin-bottom:8px;">' +
+      '<label style="display:flex;align-items:center;justify-content:space-between;font-size:12px;cursor:pointer;">' +
+        '<span>' + escHtml(o.label || 'この線にノートを添える') + '</span>' +
+        '<input id="' + id + '-on" type="checkbox"' + (noted ? ' checked' : '') + '>' +
+      '</label>' +
+      '<textarea id="' + id + '"' + (noted ? '' : ' hidden')
+        + ' placeholder="' + escHtml(o.placeholder || '') + '"'
+        + ' style="width:100%;min-height:48px;margin-top:4px;background:var(--bg-tertiary);'
+        + 'border:1px solid var(--border);color:var(--text-primary);font-size:12px;">'
+        + escHtml(o.note || '') + '</textarea>' +
+    '</div>';
+  }
+
+  // onChange(textOrNull) — null はノートを外すこと。チェックを入れた直後は
+  // まだ本文が無いので投げない (空のノート行を作らない)。
+  function bindLinkNote(id, onChange) {
+    var box = document.getElementById(id + '-on');
+    var ta = document.getElementById(id);
+    if (!box || !ta) return;
+    box.addEventListener('change', function() {
+      if (box.checked) {
+        ta.removeAttribute('hidden');
+        ta.focus();
+        return;
+      }
+      ta.setAttribute('hidden', '');
+      if (onChange) onChange(null);
+    });
+    ta.addEventListener('change', function() {
+      if (!onChange) return;
+      var v = ta.value.trim();
+      onChange(v ? v : null);
+    });
+  }
+
+  // bindRelationOptions: 「その他の設定」の各操作を、行番号を渡された 1 つのハンドラに繋ぐ。
+  // handlers = { onDirection(v), onMultiplicity(l, r), onColor(v), onNote(textOrNull) }
+  // どの操作も押した / 離れた時点で即座に DSL へ反映する (design 3c)。
+  function bindRelationOptions(id, handlers) {
+    var panel = document.getElementById(id);
+    var btn = document.getElementById(id + '-btn');
+    if (btn && panel) {
+      btn.addEventListener('click', function() {
+        var open = panel.hasAttribute('hidden');
+        if (open) panel.removeAttribute('hidden'); else panel.setAttribute('hidden', '');
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        var caret = btn.querySelector('.prop-rel-caret');
+        if (caret) caret.textContent = open ? '▴' : '▾';
+      });
+    }
+    // Esc は「その他の設定」だけを閉じる。選択そのものは解除しない。
+    if (panel) {
+      panel.addEventListener('keydown', function(e) {
+        if (e.key !== 'Escape') return;
+        e.stopPropagation();
+        panel.setAttribute('hidden', '');
+        if (btn) {
+          btn.setAttribute('aria-expanded', 'false');
+          var c = btn.querySelector('.prop-rel-caret');
+          if (c) c.textContent = '▾';
+          btn.focus();
+        }
+      });
+    }
+    var dirs = document.getElementById(id + '-dir');
+    if (dirs && handlers.onDirection) {
+      var dbtns = dirs.querySelectorAll('.prop-rel-dir');
+      for (var i = 0; i < dbtns.length; i++) {
+        (function(b) {
+          b.addEventListener('click', function() { handlers.onDirection(b.getAttribute('data-value')); });
+        })(dbtns[i]);
+      }
+    }
+    var colors = document.getElementById(id + '-colors');
+    if (colors && handlers.onColor) {
+      var cbtns = colors.querySelectorAll('.prop-rel-color');
+      for (var j = 0; j < cbtns.length; j++) {
+        (function(b) {
+          b.addEventListener('click', function() { handlers.onColor(b.getAttribute('data-value')); });
+        })(cbtns[j]);
+      }
+    }
+    var ml = document.getElementById(id + '-mult-left');
+    var mr = document.getElementById(id + '-mult-right');
+    if (ml && mr && handlers.onMultiplicity) {
+      var applyMult = function() { handlers.onMultiplicity(ml.value.trim(), mr.value.trim()); };
+      ml.addEventListener('change', applyMult);
+      mr.addEventListener('change', applyMult);
+    }
+    var on = document.getElementById(id + '-note-on');
+    var ta = document.getElementById(id + '-note');
+    if (on && ta && handlers.onNote) {
+      on.addEventListener('change', function() {
+        if (on.checked) {
+          ta.removeAttribute('hidden');
+          ta.focus();
+          if (ta.value.trim()) handlers.onNote(ta.value);
+        } else {
+          ta.setAttribute('hidden', '');
+          handlers.onNote(null);
+        }
+      });
+      ta.addEventListener('change', function() {
+        handlers.onNote(ta.value.trim() ? ta.value : null);
+      });
+    }
+  }
+
+  // relationOptionsFor / bindRelationOptionsFor: UseCase / Component / Class が
+  // 「関係行の行番号」と ctx だけを渡せば design 3c の一式が付く入口。
+  // 図種ごとの差は無いので、3 モジュールはこの 2 行を呼ぶだけでよい。
+  function relationOptionsFor(id, text, lineNum) {
+    return relationOptionsHtml(id, window.MA.relationOptions.optionsAt(text, lineNum));
+  }
+
+  function bindRelationOptionsFor(id, lineNum, ctx) {
+    var RO = window.MA.relationOptions;
+    var apply = function(fn) {
+      var before = ctx.getMmdText();
+      var after = fn(before);
+      if (after === before) return;
+      window.MA.history.pushHistory();
+      ctx.setMmdText(after);
+      ctx.onUpdate();
+    };
+    bindRelationOptions(id, {
+      onDirection: function(v) { apply(function(t) { return RO.setDirectionAt(t, lineNum, v); }); },
+      onMultiplicity: function(l, r) { apply(function(t) { return RO.setMultiplicityAt(t, lineNum, l, r); }); },
+      onColor: function(v) { apply(function(t) { return RO.setLineColorAt(t, lineNum, v); }); },
+      onNote: function(v) { apply(function(t) { return RO.setNoteAt(t, lineNum, v); }); },
+    });
+  }
+
   function selectFieldHtml(label, id, options, monoFont) {
     var opts = '';
     for (var i = 0; i < options.length; i++) {
@@ -190,6 +581,17 @@ window.MA.properties = (function() {
     // HTML builders
     fieldHtml: fieldHtml,
     selectFieldHtml: selectFieldHtml,
+    segmentedFieldHtml: segmentedFieldHtml,
+    arrowPickerHtml: arrowPickerHtml,
+    bindArrowPicker: bindArrowPicker,
+    colorPaletteHtml: colorPaletteHtml,
+    bindColorPalette: bindColorPalette,
+    relationOptionsHtml: relationOptionsHtml,
+    linkNoteHtml: linkNoteHtml,
+    bindLinkNote: bindLinkNote,
+    bindRelationOptions: bindRelationOptions,
+    relationOptionsFor: relationOptionsFor,
+    bindRelationOptionsFor: bindRelationOptionsFor,
     panelHeaderHtml: panelHeaderHtml,
     sectionHeaderHtml: sectionHeaderHtml,
     sectionFooterHtml: sectionFooterHtml,

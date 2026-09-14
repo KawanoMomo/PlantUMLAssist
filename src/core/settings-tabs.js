@@ -1,0 +1,408 @@
+'use strict';
+window.MA = window.MA || {};
+
+// settings-tabs — 設定モーダルの 5 タブ (design 1a)。
+//
+// 設定モーダルは自動保存だけの 1 枚もののフォームで、レンダリングモードや
+// エディタの見た目、ショートカット一覧を確かめる経路が無かった。design 1a は
+// これを「自動保存 / レンダリング / エディタ / ショートカット / データ」の
+// 5 タブに割る。ここは DOM に触らない純関数だけを置き、結線は app.js。
+window.MA.settingsTabs = (function() {
+  var TABS = [
+    { id: 'autosave',  label: '自動保存',       en: 'Autosave' },
+    { id: 'render',    label: 'レンダリング',   en: 'Render' },
+    { id: 'editor',    label: 'エディタ',       en: 'Editor' },
+    { id: 'shortcuts', label: 'ショートカット', en: '' },
+    { id: 'data',      label: 'データ',         en: 'Data' },
+    // design 5d: 図種ごとの「常時表示 / その他パレット」の配分そのものをレビューする
+    { id: 'coverage',  label: 'UML 要素の網羅一覧', en: '' },
+  ];
+
+  // design 5d: 「常時表示」は右パネルに出しっぱなしにするもの、「その他」はパレットに
+  // 畳むもの。どの図種でどこまで扱えるか、その配分が妥当かを 1 枚の表で見る。
+  // 図を 1 枚ずつ開いて確かめなくても、ここだけ読めば配分を指摘できる。
+  var COVERAGE = [
+    {
+      type: 'plantuml-sequence', label: 'Sequence',
+      always: ['participant / actor / database', 'メッセージ 4 種', 'note', 'alt・loop', 'activate'],
+      palette: ['<->', '[->', '->]', '->o', '->\\', '線色', '区切り線 ==', '遅延 ...', 'ref', 'par / break / critical', 'autonumber'],
+    },
+    {
+      type: 'plantuml-usecase', label: 'UseCase',
+      always: ['actor', 'usecase', 'package', '関連 / 包含 / 拡張 / 汎化'],
+      palette: ['向き反転', '矢印なし', '多重度', '線色', 'ノート', 'rectangle 表記'],
+    },
+    {
+      type: 'plantuml-component', label: 'Component',
+      always: ['component', 'interface', 'port', 'package', '関連 / 依存 / 提供 / 要求'],
+      palette: ['向き反転', '線色', 'ノート', 'folder / frame / node 表記', 'ステレオタイプ'],
+    },
+    {
+      type: 'plantuml-class', label: 'Class',
+      always: ['class / abstract / interface / enum', '属性・メソッド', '6 種の関係'],
+      palette: ['constructor', 'static', 'abstract', 'ジェネリクス', '内部クラス', '多重度', 'namespace', 'ノート'],
+    },
+    {
+      type: 'plantuml-activity', label: 'Activity',
+      always: ['start / stop', 'アクション', 'if / else', 'while', 'fork', 'note', 'スイムレーン'],
+      palette: ['repeat', 'break', 'detach', 'kill', '分岐ラベル', '色指定'],
+    },
+    {
+      type: 'plantuml-state', label: 'State',
+      always: ['単純 / 複合状態', 'choice', 'history', '開始 / 終了', '遷移（trigger・guard・action）'],
+      palette: ['fork / join', '入口・出口ポイント', 'entry / do / exit', '並行領域', '色・ステレオタイプ'],
+    },
+  ];
+
+  var COVERAGE_NOTE = '「常時表示」は右パネルに出しっぱなしにするもの、'
+    + '「その他パレット」は畳んで格納するもの。この配分自体をレビューするための一覧です。';
+
+  var DEFAULT_TAB = 'autosave';
+
+  // ショートカット表 (design 5b)。フラットな一覧では「どのキーがどの状況で効くのか」も
+  // 「まだ効かないキーがどれか」も読めなかった。design 5b は
+  //   ・効く状況ごとに 4 つのグループへ束ねる
+  //   ・実装済み (●) と 新設（未実装） を同じ表の上で区別する
+  //   ・操作名で絞り込める
+  // と定める。区別を表の上に置くのは「既存の割り当てと衝突させないため」なので、
+  // 未実装の行も消さずに載せる。app.js のハンドラを増やしたら state を 'done' にする。
+  var GROUPS = [
+    {
+      id: 'global', label: '全体', note: '',
+      rows: [
+        { id: 'palette', keys: 'Ctrl+K',    desc: 'コマンドパレットを開く',                  state: 'done', remap: true },
+        { id: 'render',  keys: 'Ctrl+R',    desc: '再描画する',                              state: 'done', remap: true },
+        { id: 'undo-redo', keys: 'Ctrl+Z / Ctrl+Y', desc: '元に戻す / やり直す',             state: 'done' },
+        { id: 'save',    keys: 'Ctrl+S',    desc: 'ファイルを保存する',                      state: 'done', remap: true },
+        { id: 'export-menu', keys: 'Ctrl+E', desc: 'エクスポートメニューを開く',             state: 'done', remap: true },
+        // design 2c の書き出し 2 つ。表に載っていないと差し替えの衝突判定に入らず、
+        // 「一覧に無いのに効くキー」になってしまうので、割り当ての正本はここに置く。
+        { id: 'exp-svg',   keys: 'Ctrl+Shift+S', desc: 'SVG として保存する',                 state: 'done', remap: true },
+        { id: 'exp-clipboard', keys: 'Ctrl+Shift+C', desc: 'クリップボードにコピーする',     state: 'done', remap: true },
+        // 一括置換は台本の主戦場で、ツールは既定でタブ列から畳まれている (design 7b)。
+        // メニューを辿るか Ctrl+K でコマンド名を打つかしか入口が無いと、同じ手順の
+        // 手数が「今どのボタンが出ているか」で上下する。単独キーを 1 つ与えて固定する。
+        { id: 'bulk-rename', keys: 'Ctrl+H', desc: '部品名を一括置換する',                   state: 'done', remap: true },
+      ],
+    },
+    {
+      id: 'diagram', label: '図の編集', note: '図形を選んでいるとき',
+      rows: [
+        { id: 'sel-move',   keys: '↑ / ↓',           desc: '前後の図形へ選択を移す',                  state: 'done' },
+        { id: 'sel-insert', keys: 'Enter',           desc: '選択の直後に挿入する',                    state: 'done' },
+        { id: 'sel-delete', keys: 'Delete',          desc: '選択を削除する',                          state: 'done' },
+        { id: 'sel-dup',    keys: 'Ctrl+D',          desc: '選択を複製する',                          state: 'done' },
+        { id: 'sel-clear',  keys: 'Esc',             desc: '選択を解除する / 開いているものを閉じる',  state: 'done' },
+        { id: 'sel-arrow',  keys: 'D',               desc: '選択中メッセージの矢印を切り替える',      state: 'done' },
+        { id: 'sel-tail',   keys: 'Ctrl+Enter',      desc: '末尾に追加する',                          state: 'done' },
+        { id: 'sel-reorder', keys: 'Alt+↑ / Alt+↓',  desc: '選択を上下に並び替える — 同じ親の中だけ', state: 'done' },
+      ],
+    },
+    {
+      id: 'editor', label: 'DSL エディタ', note: 'テキスト欄にカーソルがあるとき',
+      rows: [
+        { id: 'ed-comment', keys: 'Ctrl+/',          desc: '選択行をコメント化 / 解除する',   state: 'done' },
+        { id: 'ed-indent',  keys: 'Tab / Shift+Tab', desc: 'インデント / 解除する',           state: 'done' },
+        { id: 'ed-move',    keys: 'Alt+↑ / Alt+↓',   desc: 'カーソル行を上下に移動する',      state: 'done' },
+      ],
+    },
+    {
+      id: 'view', label: '表示', note: '',
+      rows: [
+        { id: 'view-zoom', keys: 'Ctrl+ + / − / 0',  desc: '拡大 / 縮小 / 幅に合わせる',      state: 'done' },
+        { id: 'view-type', keys: 'Ctrl+1 … Ctrl+6',  desc: '図の種類を切り替える',            state: 'done' },
+      ],
+    },
+  ];
+
+  var STATE_LABEL = { done: '実装済み', 'new': '新設（未実装）' };
+
+  var EDITOR_FONT_MIN = 10;
+  var EDITOR_FONT_MAX = 24;
+  // design 5a の設計では「図をクリックしたら DSL の該当行へ移動」は入りで有効。
+  var EDITOR_DEFAULTS = { fontSize: 13, wrap: false, clickToLine: true };
+
+  function tabIds() {
+    return TABS.map(function(t) { return t.id; });
+  }
+
+  function isValidTab(id) {
+    return tabIds().indexOf(String(id)) >= 0;
+  }
+
+  // 不明な id は既定タブに落とす。localStorage に古い id が残っていても
+  // 「どのペインも出ない設定モーダル」にはしない。
+  function normalizeTab(id) {
+    return isValidTab(id) ? String(id) : DEFAULT_TAB;
+  }
+
+  function tabLabel(id) {
+    for (var i = 0; i < TABS.length; i++) {
+      if (TABS[i].id === id) return TABS[i].en ? (TABS[i].label + ' / ' + TABS[i].en) : TABS[i].label;
+    }
+    return '';
+  }
+
+  function esc(s) {
+    return (window.MA.htmlUtils && window.MA.htmlUtils.escHtml)
+      ? window.MA.htmlUtils.escHtml(s) : String(s);
+  }
+
+  function buildTabsHtml(activeId) {
+    var active = normalizeTab(activeId);
+    return TABS.map(function(t) {
+      return '<button type="button" class="cfg-tab' + (t.id === active ? ' active' : '')
+        + '" id="cfg-tab-' + t.id + '" data-cfg-tab="' + t.id + '"'
+        + (t.id === active ? ' aria-selected="true"' : ' aria-selected="false"')
+        + '>' + esc(tabLabel(t.id)) + '</button>';
+    }).join('');
+  }
+
+  // 書き出しのキー割り当ては export-shortcuts が持っている (design 2c)。
+  // 一覧はそこから引いて足し、キー文字列を 2 箇所に書かない。
+  //
+  // 既定の一覧。差し替え (design 5b の「行をクリックすると割り当てを変更」) を
+  // 当てる前の姿で、key-bindings はここを唯一の既定として読む。
+  function defaultGroups() {
+    var extra = (window.MA.exportShortcuts && window.MA.exportShortcuts.shortcutRows)
+      ? window.MA.exportShortcuts.shortcutRows() : [];
+    return GROUPS.map(function(g) {
+      var rows = g.rows.map(function(r) {
+        return { id: r.id, keys: r.keys, desc: r.desc, state: r.state, remap: !!r.remap };
+      });
+      // Export の 2 つは全体のキーなので「全体」に合流させる。
+      if (g.id === 'global') {
+        extra.forEach(function(r) {
+          rows.push({ id: r.id, keys: r.keys, desc: r.desc, state: 'done', remap: true });
+        });
+      }
+      return { id: g.id, label: g.label, note: g.note, rows: rows };
+    });
+  }
+
+  function defaultRows() {
+    var out = [];
+    defaultGroups().forEach(function(g) { g.rows.forEach(function(r) { out.push(r); }); });
+    return out;
+  }
+
+  // 表に出す姿。差し替え済みのキーがあればそちらを出す
+  // (表と実際に効くキーが食い違うと、衝突の見つけ場所が無くなる)。
+  function shortcutGroups() {
+    var KB = window.MA.keyBindings;
+    var ov = KB ? KB.readOverrides() : {};
+    return defaultGroups().map(function(g) {
+      var rows = g.rows.map(function(r) {
+        var keys = (KB && r.remap && ov[r.id]) ? ov[r.id] : r.keys;
+        return {
+          id: r.id, keys: keys, desc: r.desc, state: r.state, remap: r.remap,
+          changed: keys !== r.keys,
+        };
+      });
+      return { id: g.id, label: g.label, note: g.note, rows: rows };
+    });
+  }
+
+  // 平らな一覧。旧 API の呼び出し元と、件数を数えたいテストのため。
+  function shortcutRows() {
+    var out = [];
+    shortcutGroups().forEach(function(g) {
+      g.rows.forEach(function(r) { out.push(r); });
+    });
+    return out;
+  }
+
+  // 「⌕ 操作名で検索」。操作名だけでなくキー文字列でも当てる
+  // (「ctrl+d は何だったか」を引ける方が、割り当ての衝突を見つけやすい)。
+  // 空になったグループは見出しごと落とす。
+  function filterGroups(groups, query) {
+    var q = String(query == null ? '' : query).trim().toLowerCase();
+    if (!q) return groups;
+    var out = [];
+    groups.forEach(function(g) {
+      var rows = g.rows.filter(function(r) {
+        return (r.desc + ' ' + r.keys).toLowerCase().indexOf(q) >= 0;
+      });
+      if (rows.length > 0) out.push({ id: g.id, label: g.label, note: g.note, rows: rows });
+    });
+    return out;
+  }
+
+  function groupHeading(g) {
+    return g.note ? (g.label + '（' + g.note + '）') : g.label;
+  }
+
+  // 状態は ● / 「新設」のチップで示す。色だけに頼らないよう文字も出す。
+  function stateChipHtml(state) {
+    var s = state === 'new' ? 'new' : 'done';
+    return '<span class="cfg-sc-state cfg-sc-' + s + '" title="' + esc(STATE_LABEL[s]) + '">'
+      + (s === 'done' ? '●' : '新設') + '</span>';
+  }
+
+  // 1 行。差し替えできる行はクリックできることを見た目でも言う
+  // (押しても何も起きない行を押させない)。
+  // capturingId の行はキー待ちで、そこだけ表記を「キーを押してください」に替える。
+  function shortcutRowHtml(r, capturingId) {
+    var remap = !!r.remap;
+    var capturing = remap && capturingId && r.id === capturingId;
+    var cls = 'cfg-sc-row' + (remap ? ' cfg-sc-remap' : '') + (capturing ? ' cfg-sc-capturing' : '');
+    var keyCell = capturing
+      ? '<span class="cfg-sc-capture-hint">キーを押してください… Esc で取り消し</span>'
+      : '<kbd>' + esc(r.keys) + '</kbd>' + (r.changed ? '<span class="cfg-sc-changed" title="既定から変更されています">変更</span>' : '');
+    return '<tr class="' + cls + '" data-sc-state="' + esc(r.state) + '"'
+      + ' data-sc-id="' + esc(r.id || '') + '"'
+      + ' data-sc-remap="' + (remap ? '1' : '0') + '"'
+      + (remap ? ' tabindex="0" role="button" title="クリックすると割り当てを変更します"' : '')
+      + '>'
+      + '<th>' + keyCell + '</th>'
+      + '<td>' + esc(r.desc) + '</td>'
+      + '<td class="cfg-sc-state-cell">' + stateChipHtml(r.state) + '</td>'
+      + '</tr>';
+  }
+
+  function buildShortcutsHtml(query, capturingId) {
+    var groups = filterGroups(shortcutGroups(), query);
+    if (groups.length === 0) {
+      return '<div id="cfg-sc-empty" class="cfg-sc-empty">該当する操作がありません</div>';
+    }
+    return groups.map(function(g) {
+      return '<div class="cfg-sc-group" data-sc-group="' + esc(g.id) + '">'
+        + '<div class="cfg-sc-heading">' + esc(groupHeading(g)) + '</div>'
+        + '<table class="cfg-sc-table"><tbody>'
+        + g.rows.map(function(r) { return shortcutRowHtml(r, capturingId); }).join('')
+        + '</tbody></table></div>';
+    }).join('');
+  }
+
+  // ── design 5d: UML 要素の網羅一覧 ─────────────────────────────────
+  function coverageRows(currentType) {
+    return COVERAGE.map(function(r) {
+      return {
+        type: r.type, label: r.label,
+        always: r.always.slice(), palette: r.palette.slice(),
+        alwaysCount: r.always.length, paletteCount: r.palette.length,
+        current: r.type === currentType,
+      };
+    });
+  }
+
+  // 要素名で絞り込む。図種名でも当てる（「Sequence の配分だけ見たい」に応える）。
+  // 行が 1 つも残らないときは空を返し、呼び出し側が「該当なし」を出す。
+  function filterCoverage(rows, query) {
+    var q = String(query == null ? '' : query).trim().toLowerCase();
+    if (!q) return rows;
+    var out = [];
+    rows.forEach(function(r) {
+      if (r.label.toLowerCase().indexOf(q) >= 0) { out.push(r); return; }
+      var always = r.always.filter(function(s) { return s.toLowerCase().indexOf(q) >= 0; });
+      var palette = r.palette.filter(function(s) { return s.toLowerCase().indexOf(q) >= 0; });
+      if (always.length === 0 && palette.length === 0) return;
+      out.push({
+        type: r.type, label: r.label, always: always, palette: palette,
+        alwaysCount: r.alwaysCount, paletteCount: r.paletteCount, current: r.current,
+      });
+    });
+    return out;
+  }
+
+  function coverageChipsHtml(items, kind) {
+    if (!items.length) return '<span class="cfg-cv-none">—</span>';
+    return items.map(function(s) {
+      return '<span class="cfg-cv-chip cfg-cv-' + kind + '">' + esc(s) + '</span>';
+    }).join('');
+  }
+
+  function coverageRowHtml(r) {
+    return '<tr class="cfg-cv-row' + (r.current ? ' cfg-cv-current' : '') + '"'
+      + ' data-cv-type="' + esc(r.type) + '"'
+      + ' data-cv-current="' + (r.current ? '1' : '0') + '">'
+      + '<th class="cfg-cv-kind">' + esc(r.label)
+      + (r.current ? '<span class="cfg-cv-badge" title="いま編集している図種">編集中</span>' : '')
+      + '<span class="cfg-cv-count">' + r.alwaysCount + ' / ' + r.paletteCount + '</span></th>'
+      + '<td class="cfg-cv-always">' + coverageChipsHtml(r.always, 'always') + '</td>'
+      + '<td class="cfg-cv-palette">' + coverageChipsHtml(r.palette, 'palette') + '</td>'
+      + '</tr>';
+  }
+
+  function buildCoverageHtml(currentType, query) {
+    var rows = filterCoverage(coverageRows(currentType), query);
+    if (rows.length === 0) {
+      return '<div id="cfg-cv-empty" class="cfg-cv-empty">該当する要素がありません</div>';
+    }
+    return '<table class="cfg-cv-table" id="cfg-cv-table" data-cv-rows="' + rows.length + '">'
+      + '<thead><tr><th>図種</th><th>常時表示</th><th>その他パレット</th></tr></thead>'
+      + '<tbody>' + rows.map(coverageRowHtml).join('') + '</tbody></table>';
+  }
+
+  // ── レンダリングモード ────────────────────────────────────────────
+  function normalizeRenderMode(m) {
+    return String(m) === 'online' ? 'online' : 'local';
+  }
+
+  // online は DSL が plantuml.com に出ていく。設定画面でそれを明示する。
+  function renderModeNote(mode) {
+    return normalizeRenderMode(mode) === 'online'
+      ? '⚠ online では DSL が plantuml.com に送信されます。'
+      : '常駐 JVM で描画します。外部送信はありません。';
+  }
+
+  // ── エディタの見た目 ──────────────────────────────────────────────
+  function normalizeEditorPrefs(prefs) {
+    var p = prefs || {};
+    var n = Number(p.fontSize);
+    if (!isFinite(n)) n = EDITOR_DEFAULTS.fontSize;
+    n = Math.max(EDITOR_FONT_MIN, Math.min(EDITOR_FONT_MAX, Math.round(n)));
+    // 未設定 (キーが無い) と false は区別する。既定が true なので、
+    // undefined を !! で潰すと保存前の状態が「無効」に見えてしまう。
+    var jump = p.clickToLine === undefined || p.clickToLine === null
+      ? EDITOR_DEFAULTS.clickToLine : !!p.clickToLine;
+    // design 5a: インデント幅。判定は editor-indent が持つ (Tab キーと同じ表を使う)。
+    var EI = window.MA.editorIndent;
+    var indent = EI ? EI.normalize(p.indent) : '2';
+    return { fontSize: n, wrap: !!p.wrap, clickToLine: jump, indent: indent };
+  }
+
+  // textarea に直接あてる style。折り返し無しでは横スクロールを残す。
+  function editorStyleFor(prefs) {
+    var p = normalizeEditorPrefs(prefs);
+    return {
+      fontSize: p.fontSize + 'px',
+      whiteSpace: p.wrap ? 'pre-wrap' : 'pre',
+      overflowX: p.wrap ? 'auto' : 'scroll',
+    };
+  }
+
+  return {
+    TABS: TABS,
+    DEFAULT_TAB: DEFAULT_TAB,
+    GROUPS: GROUPS,
+    COVERAGE: COVERAGE,
+    COVERAGE_NOTE: COVERAGE_NOTE,
+    coverageRows: coverageRows,
+    filterCoverage: filterCoverage,
+    coverageRowHtml: coverageRowHtml,
+    buildCoverageHtml: buildCoverageHtml,
+    STATE_LABEL: STATE_LABEL,
+    EDITOR_FONT_MIN: EDITOR_FONT_MIN,
+    EDITOR_FONT_MAX: EDITOR_FONT_MAX,
+    EDITOR_DEFAULTS: EDITOR_DEFAULTS,
+    tabIds: tabIds,
+    isValidTab: isValidTab,
+    normalizeTab: normalizeTab,
+    tabLabel: tabLabel,
+    buildTabsHtml: buildTabsHtml,
+    shortcutRows: shortcutRows,
+    shortcutGroups: shortcutGroups,
+    defaultGroups: defaultGroups,
+    defaultRows: defaultRows,
+    shortcutRowHtml: shortcutRowHtml,
+    filterGroups: filterGroups,
+    groupHeading: groupHeading,
+    stateChipHtml: stateChipHtml,
+    buildShortcutsHtml: buildShortcutsHtml,
+    normalizeRenderMode: normalizeRenderMode,
+    renderModeNote: renderModeNote,
+    normalizeEditorPrefs: normalizeEditorPrefs,
+    editorStyleFor: editorStyleFor,
+  };
+})();

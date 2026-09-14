@@ -8,6 +8,7 @@ global.document = dom.window.document;
 
 var depPaths = [
   '../src/core/dsl-utils.js',
+  '../src/core/state-transition.js',
   '../src/core/regex-parts.js',
   '../src/core/line-resolver.js',
   '../src/core/text-updater.js',
@@ -190,6 +191,33 @@ describe('state parser - description lines (entry/do/exit)', function() {
     expect(s.exit).toBe('c');
     expect(s.descriptions.length).toBe(1);
     expect(s.descriptions[0]).toBe('note d');
+  });
+});
+
+describe('state kbdSelectables (FEAT-109)', function() {
+  var T = '@startuml\nstate A\nstate B\n[*] --> A\nA --> B : go\nnote right of A : hi\n@enduml';
+  test('returns states and transitions in DSL line order, notes excluded', function() {
+    var r = stMod.kbdSelectables(stMod.parse(T));
+    expect(r.map(function(x) { return x.line; })).toEqual([2, 3, 4, 5]);
+    expect(r.map(function(x) { return x.type; })).toEqual(['state', 'state', 'transition', 'transition']);
+    expect(r[0].id).toBe('A');
+    expect(r[1].id).toBe('B');
+    // notes は候補に含めない (line 6 が出ないことで確認)。
+    expect(r.length).toBe(4);
+  });
+  test('every item carries a non-empty id and a numeric line', function() {
+    stMod.kbdSelectables(stMod.parse(T)).forEach(function(x) {
+      expect(typeof x.line).toBe('number');
+      expect(typeof x.id).toBe('string');
+      expect(x.id.length).toBeGreaterThan(0);
+    });
+  });
+  test('returns empty array for empty diagram and for null input', function() {
+    expect(stMod.kbdSelectables(stMod.parse('@startuml\n@enduml'))).toEqual([]);
+    expect(stMod.kbdSelectables(null)).toEqual([]);
+  });
+  test('capabilities.showInsertForm is open so Enter reaches the insert form', function() {
+    expect(stMod.capabilities.showInsertForm).toBe(true);
   });
 });
 

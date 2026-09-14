@@ -1,0 +1,195 @@
+// @ts-check
+// reviewer 台本 手順8: 前回の指摘が反映されたか確認する。
+//
+// BLK-reviewer-20260914-1206-wish: これまでは、前回の指摘文書・手順2〜7 で出した今回の指摘・
+// 前回控えとの diff の 3 つを手で突き合わせ、1 件ずつ「反映済み / 継続」を頭の中で
+// 振り分け、継続の回数も自分で憶えていた。いまは前回の 指摘.md をそのまま渡せば、
+// 振り分けと継続 tick 数まで 1 枚の画面が出す。
+//
+// BLK-reviewer-20260914-1306-wish: それでも「前回の指摘文書」を持って来る必要は残っていた。
+// 指摘.md が手元に無い tick や、2 tick より前から続いている指摘の初出を知りたいときは、
+// audit.js --summary-json を叩き直して run ログを遡るしかなかった。いまは監査を記録して
+// おけば、台帳が指摘 1 件ごとに 対象ファイル:行 / 初出 tick / 解消 tick を並べる。
+const { test, expect } = require('@playwright/test');
+const R = require('./_reviewer-docs');
+const auditBoard = require('../../../src/core/audit-board');
+const reviewBoard = require('../../../src/core/review-board');
+const timeline = require('../../../src/core/audit-timeline');
+const ledger = require('../../../src/core/finding-ledger');
+// BLK-reviewer-20260914-1406: 監査は window.MA 前提なので、spec からは CLI と
+// 同じ入口 (tools/audit-runtime) で読む。CLI が出す数字とここが同じ根拠になる。
+const { loadMA } = require('../../../tools/audit-runtime');
+
+// 前回 primary に返した指摘文書そのもの (reviewer が 指摘.md に上書き保存した形)。
+const 指摘 = [
+  '# primary への指摘(前回)',
+  '',
+  '## 【継続・2回目】gpio_init_sequence.puml の participant 名が他図と揃っていない',
+  '`GpioDrv` は他図の `Gpio_Driver` と揃っていない。初出: runs/20260913-0206。継続 2 tick 目。',
+  '',
+  '## 【継続】spi_init_sequence.puml の participant 名が他図と揃っていない',
+  '`SpiDrv` は他図の `Spi_Driver` と揃っていない。',
+  '',
+  '## 突合サマリ',
+  '命名 2 件。どちらも継続・未着手。',
+].join('\n');
+
+// 手順2〜7 で今回出した指摘。台本どおり DSL を読んで拾う。
+function findingsOfToday() {
+  const out = [];
+  Object.entries(R.DOCS).forEach(([doc, dsl]) => {
+    dsl.split('\n').forEach((line, i) => {
+      if (/^participant\s+\w+Drv\b/.test(line)) {
+        const name = line.split(/\s+/)[1];
+        out.push({ doc: doc + '.puml', line: i + 1, keep: false, label: '要再確認',
+          text: name + ' は他図の Gpio_Driver と揃っていない' });
+      }
+    });
+  });
+  const seq = R.DOCS.gpio_init_sequence;
+  const used = new Set(R.arrowEnds(seq));
+  R.participants(seq).forEach((p) => {
+    if (used.has(p)) return;
+    out.push({ doc: 'gpio_init_sequence.puml', line: 0, keep: false, label: '要再確認',
+      text: p + ' は宣言だけで使われていない' });
+  });
+  return out;
+}
+
+test('手順8 前回の指摘それぞれに、反映済みか継続かを画面が言う', () => {
+  const board = auditBoard.build({ findings: findingsOfToday() });
+  const view = reviewBoard.build({
+    board: board,
+    findings: 指摘,
+    // 前回控えとの diff。spi 側だけが実際に書き換わっている。
+    changedFiles: ['spi_init_sequence.puml'],
+  });
+
+  const byDoc = {};
+  view.carried.forEach((c) => { byDoc[c.finding.docs[0]] = c; });
+
+  // GpioDrv は今回も指摘に出る = 継続。tick 数は前回の 2 から 1 つ進む。
+  const gpio = byDoc.gpio_init_sequence;
+  expect(gpio.verdict).toBe('carried');
+  expect(gpio.tick).toBe(3);
+  expect(gpio.finding.since).toBe('runs/20260913-0206');
+  expect(gpio.rows.length).toBe(1);
+  // 前回控えから 1 行も変わっていない = 未着手、まで同じ行で分かる。
+  expect(gpio.touched).toEqual([]);
+
+  // SpiDrv は直っている = 解消。前回控えから中身も変わっている。
+  const spi = byDoc.spi_init_sequence;
+  expect(spi.verdict).toBe('resolved');
+  expect(spi.rows).toEqual([]);
+
+  // 件数表の節は指摘として振り分けない (本文に「継続・未着手」が出てきても)。
+  expect(view.carried.length).toBe(2);
+  expect(view.counts.carried).toBe(1);
+  expect(view.counts.resolved).toBe(1);
+  // 前回の指摘に当たらない今回の指摘は、新規として別に残る。
+  expect(view.fresh.map((r) => r.title)).toEqual(['Dbg_Trace は宣言だけで使われていない']);
+
+  // 到達条件: 4 種類の情報源を手で束ねずに、1 枚の文面がそのまま読める。
+  const md = reviewBoard.markdown(view, '前回の指摘の反映状況');
+  expect(md).toContain('## 前回の指摘 — 継続（1 件）');
+  expect(md).toContain('3 tick 目');
+  expect(md).toContain('前回控えから 1 行も変わっていません = 未着手');
+  expect(md).toContain('## 前回の指摘 — 解消（1 件）');
+  expect(md).toContain('## 今回の新規（1 件）');
+  expect(md).toContain('## 前回控えから変わった図（1 枚）');
+});
+
+// 監査を回すたびに記録しておいた 3 tick 分。gpio の名前不一致は 3 tick 目で直り、
+// spi の名前不一致は最後まで残る (台本の「継続 / 反映済み」がそのまま出る形)。
+function ok(result) { return { status: 'ok', result: result }; }
+function nameRun(variants) {
+  return { name: ok({ variants: variants, undeclared: [] }) };
+}
+const GPIO_VAR = {
+  key: 'Gpio_Driver', suggested: 'Gpio_Driver',
+  members: [{ name: 'GpioDrv', docs: ['gpio_init_sequence.puml'] }, { name: 'Gpio_Driver', docs: ['gpio_state.puml'] }],
+};
+const SPI_VAR = {
+  key: 'Spi_Driver', suggested: 'Spi_Driver',
+  members: [{ name: 'SpiDrv', docs: ['spi_init_sequence.puml'] }, { name: 'Spi_Driver', docs: ['spi_state.puml'] }],
+};
+
+test('手順8 指摘.md を持って来なくても、台帳が初出 tick と解消 tick を言う', () => {
+  const snaps = [
+    timeline.snapshot(nameRun([GPIO_VAR, SPI_VAR]), { label: 'runs/20260913-0206' }),
+    timeline.snapshot(nameRun([GPIO_VAR, SPI_VAR]), { label: 'runs/20260914-1206' }),
+    timeline.snapshot(nameRun([SPI_VAR]), { label: 'runs/20260914-1306' }),
+  ];
+  const view = ledger.build({
+    snapshots: snaps,
+    docs: Object.entries(R.DOCS).map(([name, dsl]) => ({ name: name + '.puml', dsl: dsl })),
+  });
+
+  const byTitle = {};
+  view.rows.forEach((r) => { byTitle[r.title] = r; });
+
+  // GpioDrv は 3 tick 目で消えた = 反映済み。いつ直ったかまで 1 行で出る。
+  const gpio = byTitle.Gpio_Driver;
+  expect(gpio.open).toBe(false);
+  expect(gpio.since).toBe('runs/20260913-0206');
+  expect(gpio.resolvedAt).toBe('runs/20260914-1306');
+  // 対象ファイルと、その綴りが出ている行。puml を開き直して数えなくてよい。
+  expect(ledger.whereText(gpio)).toContain('gpio_init_sequence.puml:3');
+
+  // SpiDrv は最後の tick にも出ている = 継続。継続 tick 数も台帳が数える。
+  const spi = byTitle.Spi_Driver;
+  expect(spi.open).toBe(true);
+  expect(spi.resolvedAt).toBe(null);
+  expect(spi.ticks).toBe(3);
+  expect(spi.spark).toBe('●●●');
+
+  // 手順1 (前回の BLK をもう一度出すか) は、この一覧がそのまま答えになる。
+  expect(ledger.carriedOver(view).map((r) => r.title)).toEqual(['Spi_Driver']);
+
+  // 到達条件: audit.js を叩き直さずに、継続と解消が 1 枚の文面で読める。
+  const md = ledger.markdown(view, '前回の指摘の反映状況');
+  expect(md).toContain('## 継続（1 件）');
+  expect(md).toContain('## 解消（1 件）');
+  expect(md).toContain('解消 runs/20260914-1306');
+  expect(md).toContain('初出 runs/20260913-0206');
+});
+
+// BLK-reviewer-20260914-1406: 手順8 の裏取りは「指摘が減ったか」だけでは終わらない。
+// メソッド名をそのままクラスとして宣言した行でも、写しにだけ入れた修正でも件数は減り、
+// これまでは該当 diff を 1 枚ずつ読み直すか sha1 を手で比べるまで気付けなかった。
+test('手順8 指摘が減った理由が誤った宣言なら、diff を読み直す前に監査が名指しする', () => {
+  const MA = loadMA().MA;
+  const seq = { name: 'adc_sequence.puml',
+    dsl: ['@startuml', 'Adc_Driver -> AdcRegs : WriteConfig()', '@enduml'].join('\n') };
+  const 前回 = { name: 'driver_common_class.puml',
+    dsl: ['@startuml', 'class Adc_Driver {', '  +Adc_Init()', '}', '@enduml'].join('\n') };
+  // primary の「対応」。受け手のクラスと一緒に、メソッド名のクラスまで足してある。
+  const 今回 = { name: 'driver_common_class.puml', dsl: ['@startuml',
+    'class Adc_Driver {', '  +Adc_Init()', '}',
+    'class AdcRegs', 'class WriteConfig', '@enduml'].join('\n') };
+
+  const before = MA.methodAudit.audit([前回, seq]);
+  const after = MA.methodAudit.audit([今回, seq]);
+  // 「クラス無し」は確かに消える。ここまでしか見ないと直ったように読める。
+  expect(before.issues.filter((i) => i.kind === 'no-class').length).toBe(1);
+  expect(after.issues.filter((i) => i.kind === 'no-class').length).toBe(0);
+
+  // 到達条件: 誤った宣言が指摘として出るので、合計は減らない。
+  const suspect = after.issues.filter((i) => i.kind === 'method-as-class');
+  expect(suspect.map((i) => i.method)).toEqual(['WriteConfig']);
+  expect(MA.methodAudit.describe(suspect[0])).toContain('メソッド宣言を独立したクラスとして書いた誤りの疑い');
+  expect(after.issues.length).toBeGreaterThanOrEqual(before.issues.length);
+});
+
+test('手順8 本体ではなく写しにだけ入った修正を、sha1 を手で比べずに名指しする', () => {
+  const MA = loadMA().MA;
+  const seq = { name: 'timer_sequence.puml',
+    dsl: ['@startuml', 'App -> Timer_Driver : Timer_Init(cfg)', '@enduml'].join('\n') };
+  const 写し = { name: 'driver_common_class-編集中.puml',
+    dsl: ['@startuml', 'class Timer_Driver {', '  +Timer_Init(cfg)', '}', '@enduml'].join('\n') };
+  const r = MA.methodAudit.audit([写し, seq]);
+  expect(r.issues.map((i) => i.kind)).toEqual(['draft-only']);
+  // 到達条件: どのファイルにだけ宣言があるかまで 1 行で読める。
+  expect(MA.methodAudit.describe(r.issues[0]))
+    .toContain('写しの driver_common_class-編集中.puml にしかない');
+});

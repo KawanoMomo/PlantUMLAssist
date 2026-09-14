@@ -1,0 +1,76 @@
+// @ts-check
+// BLK-builder-20260908-0908-3 (design「実装現況」7b): タブ列を畳むと、機能の存在に
+// 気付く手掛かりは Ctrl+K だけになる。道具が 1 つの「コマンド」見出しに 30 件積まれた
+// ままだと、名前を先に知っている道具しか引けない。ツールメニューと同じ 6 分類で
+// 並び、Tab でその分類に絞り込め、メニューで覚えた語で引けることを見る。
+const { test, expect } = require('@playwright/test');
+const { gotoApp } = require('../helpers');
+
+test.describe('BLK-builder-0908-3 パレットのツール 6 分類', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => { try { window.localStorage.clear(); } catch (e) {} });
+  });
+
+  test('6 分類の見出しが並び、道具はその下に入る', async ({ page }) => {
+    await gotoApp(page);
+    await page.keyboard.press('Control+k');
+    const heads = page.locator('#cp-list .cp-group');
+    await expect(heads.filter({ hasText: '確かめる / Check' })).toHaveCount(1);
+    await expect(heads.filter({ hasText: 'レビュー / Review' })).toHaveCount(1);
+    await expect(heads.filter({ hasText: '渡す / Deliver' })).toHaveCount(1);
+    // 名前突合はメニューの言い換えで並び、右端に道具の呼び名が残る。
+    const row = page.locator('#cp-list .cp-item', { hasText: '名前の表記揺れ' });
+    await expect(row).toHaveCount(1);
+    await expect(row.locator('.cp-kind')).toHaveText('確かめる');
+    await expect(row.locator('.cp-hint')).toHaveText('名前突合');
+  });
+
+  test('メニューに載っている道具は全部パレットから引ける', async ({ page }) => {
+    await gotoApp(page);
+    const missing = await page.evaluate(() => {
+      const TM = window.MA.toolMenu;
+      const CP = window.MA.commandPalette;
+      // app.js が実際に組み立てる候補を使う (テストが独自に作った表ではない)。
+      const ids = {};
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }));
+      document.querySelectorAll('#cp-list .cp-item').forEach((el) => { ids[el.dataset.cpId] = true; });
+      return TM.menuIds().filter((id) => {
+        const g = CP.groupOfButton(id);
+        return !g || !Object.keys(ids).some((k) => k.indexOf(g + ':') === 0);
+      });
+    });
+    expect(missing).toEqual([]);
+  });
+
+  test('Tab で「確かめる」だけに絞り込める', async ({ page }) => {
+    await gotoApp(page);
+    await page.keyboard.press('Control+k');
+    // 「確かめる」の見出しに着くまで Tab を送る (前に add / jump などが並ぶ)。
+    for (let i = 0; i < 12; i++) {
+      const foot = await page.locator('#cp-foot').textContent();
+      if (foot && foot.indexOf('(確かめる / Check)') >= 0) break;
+      await page.keyboard.press('Tab');
+    }
+    await expect(page.locator('#cp-foot')).toContainText('(確かめる / Check)');
+    await expect(page.locator('#cp-list .cp-group')).toHaveCount(1);
+    await expect(page.locator('#cp-list .cp-item', { hasText: '名前の表記揺れ' })).toHaveCount(1);
+    await expect(page.locator('#cp-list .cp-item', { hasText: '引き継ぎ zip' })).toHaveCount(0);
+  });
+
+  test('メニューで覚えた言葉でも、元の道具名でも引ける', async ({ page }) => {
+    await gotoApp(page);
+    await page.keyboard.press('Control+k');
+    await page.locator('#cp-input').fill('表記揺れ');
+    await expect(page.locator('#cp-list .cp-item')).toHaveCount(1);
+    await page.locator('#cp-input').fill('Name audit');
+    await expect(page.locator('#cp-list .cp-item', { hasText: '名前の表記揺れ' })).toHaveCount(1);
+  });
+
+  test('選ぶとその道具が開く (畳んだ後も経路が残る)', async ({ page }) => {
+    await gotoApp(page);
+    await page.keyboard.press('Control+k');
+    await page.locator('#cp-input').fill('変更サマリ');
+    await page.locator('#cp-list .cp-item').first().click();
+    await expect(page.locator('#cb-modal')).toBeVisible();
+  });
+});

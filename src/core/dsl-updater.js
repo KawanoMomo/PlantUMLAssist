@@ -63,10 +63,41 @@ window.MA.dslUpdater = (function() {
     }).join('\n');
   }
 
+  // FEAT-180 (resolves HFR-041): 既存の skinparam 行をすべて取り除き、
+  // presetLines で与えられた skinparam 行群を @startuml の直後に挿入して返す。
+  // プリセットの中身(何を何色にするか)は呼び出し側が持ち、本関数は差し替えのみを行う。
+  // presetLines が空配列のときは「プリセット無し」= 既存 skinparam の除去のみ。
+  function applySkinparamPreset(text, presetLines) {
+    if (text == null) return '';
+    var add = [];
+    var src = presetLines || [];
+    for (var a = 0; a < src.length; a++) {
+      var s = String(src[a]);
+      if (s.trim() !== '') add.push(s);
+    }
+    var lines = String(text).split('\n');
+    var kept = [];
+    for (var i = 0; i < lines.length; i++) {
+      if (/^\s*skinparam\b/i.test(lines[i])) continue;
+      kept.push(lines[i]);
+    }
+    if (add.length === 0) return kept.join('\n');
+    var startIdx = -1;
+    for (var j = 0; j < kept.length; j++) {
+      if (/^\s*@startuml\b/i.test(kept[j])) { startIdx = j; break; }
+    }
+    if (startIdx < 0) return add.concat(kept).join('\n');
+    return kept.slice(0, startIdx + 1)
+      .concat(add)
+      .concat(kept.slice(startIdx + 1))
+      .join('\n');
+  }
+
   return {
     insertBeforeEnd: insertBeforeEnd,
     moveLineUp: moveLineUp,
     moveLineDown: moveLineDown,
     renameWithRefs: renameWithRefs,
+    applySkinparamPreset: applySkinparamPreset,
   };
 })();

@@ -35,3 +35,24 @@ docs/userissue/
 
 # Auto-save file-backend runtime data
 autosave/
+.server_stdout_tmp.log
+
+
+# Machine-local prefs (save destination). Not shared via git.
+.assist-prefs.json
+
+# 監査 CLI の前回比較用の控え (BLK-reviewer-20260907-2203)
+.assist-audit-last.json
+
+# 指摘の着手状況 CLI の控え (BLK-reviewer-20260908-1803-wish)
+.assist-pins-state.json
+
+# 依頼の台帳 CLI の控え (BLK-reviewer-20260914-1906-wish)
+.assist-requests-state.json
+
+# builder がループの手順で残す run ログ (成果物ではない)
+runs/
+
+# PyInstaller / Inno Setup の出力 (リポジトリにバイナリは入れない)
+build/
+dist/

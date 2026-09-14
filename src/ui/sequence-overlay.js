@@ -136,7 +136,11 @@ window.MA.sequenceOverlay = (function() {
     var msgBest = OB.pickBestOffset(svgEl, parsedData.relations, 'g.message', candidates);
     var msgMatches = msgBest.matches;
     msgMatches.forEach(function(m) {
-      var bb = OB.extractBBox(m.groupEl);
+      // BLK-human-20260912-0900: 矢印・ラベル・番号 (autonumber)・ステレオタイプの
+      // どこを押しても同じメッセージが選ばれるよう、g.message の子要素全部を覆う。
+      // 最初の <text> だけを見る extractBBox では、autonumber なら番号の上、
+      // ステレオタイプ付きならステレオタイプの上しか反応しなかった。
+      var bb = OB.extractUnionBBox(m.groupEl) || OB.extractBBox(m.groupEl);
       if (!bb) return;
       OB.addRect(overlayEl, bb.x - 4, bb.y - 4, (bb.width || 60) + 8, (bb.height || 14) + 8, {
         'data-type': 'message',
@@ -257,14 +261,31 @@ window.MA.sequenceOverlay = (function() {
       return {
         line: parseInt(r.getAttribute('data-line'), 10),
         y: parseFloat(r.getAttribute('y')) + parseFloat(r.getAttribute('height')) / 2,
+        // 隣のメッセージの矢印が占める横幅。ガイド線をこの列に収めるために返す
+        // (図の端から端まで伸びる線は、どのメッセージの隙間を指しているのか読めない)。
+        rectX: parseFloat(r.getAttribute('x')),
+        rectWidth: parseFloat(r.getAttribute('width')),
       };
+    }).filter(function(it) {
+      // data-line が付いていない rect (描き直しの途中など) は挿入先にできない。
+      return !isNaN(it.line);
     }).sort(function(a, b) { return a.y - b.y; });
+    if (items.length === 0) return null;
     // y がどの rect の y より下か判定: 下端から遡って最初に「rect.y < y」なら after その rect
     for (var i = items.length - 1; i >= 0; i--) {
-      if (y > items[i].y) return { line: items[i].line, position: 'after' };
+      if (y > items[i].y) return _hit(items[i], 'after');
     }
     // 全 rect より上 → 最上位 rect の before
-    return { line: items[0].line, position: 'before' };
+    return _hit(items[0], 'before');
+  }
+
+  function _hit(item, position) {
+    var res = { line: item.line, position: position };
+    if (!isNaN(item.rectX) && !isNaN(item.rectWidth)) {
+      res.rectX = item.rectX;
+      res.rectWidth = item.rectWidth;
+    }
+    return res;
   }
 
   return {
