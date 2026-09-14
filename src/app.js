@@ -7339,6 +7339,20 @@ function stepPeekFile(delta) {
   if (next) showPeekFile(next);
 }
 
+// 覗ける行き先の一覧。覗く画面を開かないまま指摘.md を読む画面 (📂一覧) のために、
+// 一度だけ取りに行く (BLK-junior-20260914-1206-wish)。
+function _ensurePeekDirs() {
+  var PF = window.MA.peekFolder;
+  if (_peekDirs && _peekDirs.length) return Promise.resolve(true);
+  if (!PF || !window.fetch) return Promise.resolve(false);
+  return fetch('/peek-dirs?dir=' + encodeURIComponent(_wsFileDir()))
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(data) {
+      if (data) _peekDirs = PF.choices(data);
+      return true;
+    }).catch(function() { return false; });
+}
+
 function openPeekFolder() {
   var el = _peekEls();
   var PF = window.MA.peekFolder;
@@ -7463,6 +7477,16 @@ function setupTabs() {
   // 22 枚を 1 枚ずつ開いて確かめるのではなく一覧の時点で言うため。
   var kindByName = {};
   var kindEntries = [];
+  // BLK-junior-20260914-1206-wish: 指摘.md を一覧の側から読んだ結果。
+  // noteBoard は「どの図をどの指摘が指しているか」、noteBoardStatus はその 1 枚の判定。
+  // 本文は対象の図だけ取り寄せる (対象外と言うために全部読むのでは往復が画面に移るだけ)。
+  var noteBoard = null;
+  var noteBoardStatus = {};
+  var noteBoardHasFile = false;
+  var noteBoardReady = false;
+  var noteBoardDir = '';
+  var noteBoardBusy = false;
+  var noteBoardSig = null;
   // BLK-junior-20260912-2103-wish: 図名 → 保存したときの図種 (server の _kinds.json)。
   // 本文からの判定 (kindByName) と違い、保存した側が知っている図種なので、
   // 「別図種と紛らわしい書き方」をしていても開くときに図種が入れ替わらない。
@@ -7817,6 +7841,17 @@ function setupTabs() {
       savedKindByName = (res && res.kinds && typeof res.kinds === 'object') ? res.kinds : {};
       savedKindsLoaded = true;
 
+      // BLK-junior-20260914-1206-wish: 指摘の判定は図の本文から出しているので、
+      // 図が 1 枚でも書き換われば取り直す。一覧は描くたびに読み直されるので、
+      // 「読み直した」ではなく「中身が変わった」で取り直す (毎回だと描画が回り続ける)。
+      var noteSig = entries.map(function(e) {
+        return (e && e.name) + '@' + ((e && e.mtime) || '');
+      }).join('|');
+      if (noteSig !== noteBoardSig) {
+        noteBoardSig = noteSig;
+        noteBoardReady = false;
+      }
+
       var WA = window.MA.writeActivity;
       writeScan = WA ? WA.scan(entries, res && res.now) : null;
       writeStatus = WA ? WA.statusMap(writeScan) : {};
@@ -7843,6 +7878,7 @@ function setupTabs() {
         appendVaultEntry(panel);
         appendInventorySection(panel);
         appendReviewSection(panel);
+        appendNoteSection(panel, dir);
         appendRoleSection(panel, dir);
         appendSvgSection(panel, dir);
       appendPartCrossSection(panel);
@@ -7874,6 +7910,7 @@ function setupTabs() {
       appendVaultEntry(panel);
       appendInventorySection(panel);
       appendReviewSection(panel);
+      appendNoteSection(panel, dir);
       appendRoleSection(panel, dir);
       appendSvgSection(panel, dir);
       appendPartCrossSection(panel);
@@ -8775,6 +8812,10 @@ function setupTabs() {
     // 版は行の上で 1 文字で分かるようにする (名前の末尾を読み比べない)。
     var vr = folderVariantBadge(name);
     if (vr) row.appendChild(vr);
+    // BLK-junior-20260914-1206-wish: 指摘.md から見たこの図の立場。
+    // 対象外なら開かずに次へ進める (自分と先輩の両方を開いて突き合わせない)。
+    var nb = folderNoteBadge(name);
+    if (nb) row.appendChild(nb);
     var hit = noteHitOf(name);
     if (hit) {
       row.classList.add('folder-note-hit');
@@ -9335,6 +9376,91 @@ function setupTabs() {
   }
 
   // 一覧の頭に出す 1 行。0 件でも黙らない (「指摘が無い」と「数えていない」は別物)。
+  // BLK-junior-20260914-1206-wish: 指摘.md を一覧の側から読み、図 1 枚ずつに
+  // 対象外 / ⚠未確認 / ✅対応済み を付ける。手順 1〜2 は「対象外の行は開かず次へ」で
+  // 済み、指摘の無い図ごとに自分と先輩の両方を開いて突き合わせる往復が消える。
+  function appendNoteSection(host, dir) {
+    var NB = window.MA.noteBoard;
+    if (!NB) return;
+    var line = document.createElement('div');
+    line.className = 'folder-note-summary';
+    line.id = 'folder-note-summary';
+    line.setAttribute('data-note-ready', noteBoardReady ? '1' : '0');
+    line.textContent = noteBoardReady
+      ? NB.summaryText({ board: noteBoard, names: folderNoteNames(),
+                         statusByName: noteBoardStatus, hasNote: noteBoardHasFile })
+      : '指摘.md を読み込んでいます…';
+    line.title = '指摘.md（隣の reviewer フォルダ）を、図 1 枚ずつに割り当てた結果です';
+    host.appendChild(line);
+    noteBoardScan(dir);
+  }
+
+  function folderNoteNames() { return (folderNames || []).slice(); }
+
+  // 行に付く指摘のバッジ。対象外も出す — 「印が無い」は「まだ読めていない」と
+  // 見分けが付かず、開かずに飛ばす根拠にならない。
+  function folderNoteBadge(name) {
+    var NB = window.MA.noteBoard;
+    if (!NB || !noteBoardReady || !noteBoardHasFile) return null;
+    var st = noteBoardStatus[name];
+    if (!st) return null;
+    var el = document.createElement('span');
+    el.className = 'folder-note-badge folder-note-' + st.key;
+    el.setAttribute('data-note-of', name);
+    el.setAttribute('data-note-status', st.key);
+    el.textContent = st.mark;
+    el.title = st.title;
+    return el;
+  }
+
+  // 指摘.md と、対象になった図の本文を取り寄せて判定する。
+  // 一覧を開くたびに走るが、同じ保存先で一度読めていれば読み直さない。
+  function noteBoardScan(dir) {
+    var NB = window.MA.noteBoard;
+    if (!NB || noteBoardBusy) return;
+    if (noteBoardReady && noteBoardDir === dir) return;
+    noteBoardBusy = true;
+    noteBoardDir = dir;
+    var sigAt = noteBoardSig;
+    var names = folderNoteNames();
+    _ensurePeekDirs()
+      .then(function() { return _noteLoad(true); })
+      .then(function() {
+        noteBoardHasFile = !!_noteFile;
+        noteBoard = NB.scan({
+          rows: _noteRows, targets: _noteTargets, names: names,
+          kindOf: function(n) { return kindByName[n] || ''; },
+        });
+        noteBoardStatus = NB.statusMap({ board: noteBoard, names: names, dslByName: {},
+                                         mineFolder: _noteMineFolder() });
+        // 対象の図だけ本文を読む。読めない図があっても残りの判定は出す。
+        var WS = window.MA.workspace;
+        var want = NB.pendingNames(noteBoard);
+        if (!WS || !want.length) return {};
+        var bodies = {};
+        return Promise.all(want.map(function(n) {
+          return WS.loadFile(n, dir).then(function(t) {
+            if (typeof t === 'string') bodies[n] = t;
+          }, function() {});
+        })).then(function() { return bodies; });
+      })
+      .then(function(bodies) {
+        noteBoardStatus = NB.statusMap({ board: noteBoard, names: names,
+                                         dslByName: bodies || {}, mineFolder: _noteMineFolder() });
+        // 読んでいる間に図が書き換わっていたら、出すのは今の判定ではない。
+        // 次の描画で取り直させる (古い ✅ を残すと、直していない図を飛ばす)。
+        noteBoardReady = (noteBoardSig === sigAt);
+        noteBoardBusy = false;
+        try { refreshFolderPanelNow(); } catch (e) {}
+      })
+      .catch(function() {
+        noteBoardHasFile = false;
+        noteBoardReady = true;
+        noteBoardBusy = false;
+        try { refreshFolderPanelNow(); } catch (e) {}
+      });
+  }
+
   function appendReviewSection(host) {
     var RS = window.MA.reviewState;
     if (!RS) return;

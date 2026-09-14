@@ -901,6 +901,37 @@ html, body {
   color: var(--text-secondary);
   padding: 2px 6px;
 }
+/* 指摘.md から見た 1 枚の立場 (BLK-junior-20260914-1206-wish)。
+   対象外もはっきり出す — 印が無いだけだと「まだ読めていない」と区別できず、
+   開かずに飛ばす根拠にならない */
+#folder-panel .folder-note-badge {
+  flex: 0 0 auto;
+  font-size: 9px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 0 3px;
+  margin-left: 3px;
+  white-space: nowrap;
+  color: var(--text-secondary);
+}
+#folder-panel .folder-note-badge.folder-note-todo {
+  border-color: var(--accent-red);
+  color: var(--accent-red);
+  font-weight: bold;
+}
+#folder-panel .folder-note-badge.folder-note-done {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+#folder-panel .folder-note-badge.folder-note-off {
+  border-style: dashed;
+  opacity: 0.75;
+}
+#folder-panel .folder-note-summary {
+  font-size: 10px;
+  color: var(--text-secondary);
+  padding: 2px 6px;
+}
 /* SVG が puml に追いついているか (BLK-reviewer-20260908-0103) */
 #folder-panel .folder-svg-badge {
   font-size: 9px;
@@ -5913,6 +5944,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/review-note.js"></script>
 <script src="src/core/finding-actions.js"></script>
 <script src="src/core/finding-variant.js"></script>
+<script src="src/core/note-board.js"></script>
 <script src="src/core/domain-verdict.js"></script>
 <script src="src/core/version-history.js"></script>
 <script src="src/core/diagram-kind.js"></script>
