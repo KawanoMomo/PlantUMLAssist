@@ -1184,3 +1184,75 @@ test.describe('junior 手順 1〜2: 題材ごとに 6 図種の対応要否を 1
     await expect(page.locator('#peek-title')).toContainText('gpio_component');
   });
 });
+
+// BLK-junior-20260914-1406: 手順 1 の「先輩の該当図を開いて見る」を、⇡継承元の登録で
+// 済ませようとすると詰まっていた。部品名の付け方を先輩と揃えているので自分の図も
+// 先輩の図も gpio_init_sequence で、継承元の候補が名前だけで自分と同一視され、
+// フォルダを先輩の保存先に変えても候補から消えていた。
+const LG_ROOT = DIR + '-lineage';
+const LG_MINE = LG_ROOT + '/junior';
+const LG_SENIOR = LG_ROOT + '/primary';
+const SAME = 'gpio_init_sequence';
+
+test.describe('junior 手順 1: 同名の先輩の図を継承元にする', () => {
+  test('フォルダを先輩の保存先に変えれば、自分と同名の図でも継承元にできる', async ({ page }) => {
+    await S1.bootWithSaveDir(page, LG_MINE);
+    await S1.clearDir(page, LG_MINE);
+    await S1.clearDir(page, LG_SENIOR);
+    await S1.putDoc(page, LG_MINE, SAME, MINE_SEQ);
+    await S1.putDoc(page, LG_SENIOR, SAME, SENIOR_SEQ);
+    await page.reload();
+    await page.waitForSelector('#btn-tab-lineage');
+    await page.evaluate(() => window.MA.lineage.reset());
+    // 自分の図 (先輩と同じ名前) を開いている状態にする。
+    await page.evaluate((n) => {
+      window.MA.workspace.rename(window.MA.workspace.getActiveId(), n);
+    }, SAME);
+    await S1.typeDsl(page, MINE_SEQ);
+
+    await page.locator('#btn-tab-lineage').click();
+    await expect(page.locator('#lg-modal')).toBeVisible();
+    await page.locator('#lg-dir').fill(LG_SENIOR);
+    await page.locator('#lg-dir').dispatchEvent('change');
+    await page.waitForTimeout(600);
+
+    // 到達条件その1: 先輩のフォルダに切り替えれば、自分と同名の図が候補に出る。
+    const opts = await page.locator('#lg-parent option').allTextContents();
+    expect(opts).toContain(SAME);
+
+    // 到達条件その2: 登録できる (同名でもフォルダが違えば別の図)。
+    await page.locator('#lg-parent').selectOption(SAME);
+    await page.locator('#lg-set').click();
+    await page.waitForTimeout(600);
+    await expect(page.locator('#lg-note')).toContainText('継承元にしました');
+    // どちらの gpio_init_sequence かがフォルダまで出る (自分自身と読めない)。
+    await expect(page.locator('#lg-summary')).toContainText(LG_SENIOR);
+
+    // 到達条件その3: 先輩が直せば、差分の行数がそのまま出る (手で書き写さない)。
+    await S1.putDoc(page, LG_SENIOR, SAME, SENIOR_SEQ.replace('@enduml', 'Nvic --> Gpio_Driver : Gpio_IrqReady\n@enduml'));
+    await page.locator('#lg-close').click();
+    await page.locator('#btn-tab-lineage').click();
+    await expect(page.locator('#lg-summary')).toContainText('継承元 ' + SAME + ' (' + LG_SENIOR + ')');
+    await expect(page.locator('#lg-summary')).toContainText('差分 1 行');
+    await expect(page.locator('#lg-diff')).toContainText('Gpio_IrqReady');
+  });
+
+  test('同じフォルダの自分自身は継承元にできないままで、理由が出る', async ({ page }) => {
+    await S1.bootWithSaveDir(page, LG_MINE);
+    await S1.clearDir(page, LG_MINE);
+    await S1.putDoc(page, LG_MINE, SAME, MINE_SEQ);
+    await page.reload();
+    await page.waitForSelector('#btn-tab-lineage');
+    await page.evaluate(() => window.MA.lineage.reset());
+    await page.evaluate((n) => {
+      window.MA.workspace.rename(window.MA.workspace.getActiveId(), n);
+    }, SAME);
+    await S1.typeDsl(page, MINE_SEQ);
+
+    await page.locator('#btn-tab-lineage').click();
+    await expect(page.locator('#lg-modal')).toBeVisible();
+    // 自分の保存先のままなら、自分と同じ名前は候補に出ない。
+    const opts = await page.locator('#lg-parent option').allTextContents();
+    expect(opts).not.toContain(SAME);
+  });
+});
