@@ -37,3 +37,56 @@ test('手順5 直し漏れ(旧名の残存)が横断で見つかり、その場�
   // (適用そのものが保存先へ書き戻ることは 手順2 の spec が受け持つ)
   await expect(page.locator('#btn-rename-apply')).toBeEnabled();
 });
+
+// BLK-primary-20260914-1406: 手順5.5 (指摘反映の保存)。file backend にして 💾 保存を
+// 押しても本体の中身が変わらない、という詰まりが 3 周続いた。書かれてはいたが、
+// 書かれた先が `{名前}-編集中.puml` だった (source-lock の「元ファイルは変更前のまま保つ」に
+// 既定で付く「開いている他のファイルも同じ扱い」が、以後に開く図を黙って控えへ逸らす)。
+// ここで守るのは「逸れたら保存のその場で言うこと」と「1 押しで本体に入ること」。
+test('手順5.5 保存が控えへ逸れたらその場で名指しされ、1 押しで本体に入る', async ({ page }) => {
+  const DIR2 = DIR + '-redirect';
+  await S.bootWithSaveDir(page, DIR2);
+  await S.clearDir(page, DIR2);
+  const BASE = ['@startuml', 'class AdcRegs', 'class SpiRegs', '@enduml'].join('\n');
+  await S.putDoc(page, DIR2, 'driver_common_class', BASE);
+  await S.putDoc(page, DIR2, 'plantuml-usecase', BASE);
+
+  // 1 枚目: 「元ファイルは変更前のまま保つ」を選ぶ (既定で「他のファイルも同じ扱い」が付く)。
+  await S.openFolderItem(page, 'driver_common_class');
+  await S.typeDsl(page, BASE + '\nclass Keep');
+  await page.waitForTimeout(900);
+  const modal = page.locator('#source-lock-modal');
+  await expect(modal).toBeVisible();
+  await expect(page.locator('#source-lock-all')).toBeChecked();
+  await page.locator('#source-lock-keep').click();
+  await page.waitForTimeout(900);
+
+  // 2 枚目: もう何も聞かれない。編集して 💾 保存を押す。
+  await S.openFolderItem(page, 'plantuml-usecase');
+  await S.typeDsl(page, BASE + '\nclass WriteConfig');
+  await page.waitForTimeout(900);
+  await page.locator('#btn-save').dispatchEvent('click');
+  await page.waitForTimeout(1500);
+
+  // 到達条件その1: 書いた先と、変わっていない本体の両方が帯で名指しされる。
+  const band = page.locator('#save-redirect-overlay');
+  await expect(band).toBeVisible();
+  await expect(page.locator('#srd-summary')).toContainText('plantuml-usecase-編集中.puml に書きました');
+  await expect(page.locator('#srd-summary')).toContainText('plantuml-usecase.puml は変更前のままです');
+  // 実際、この時点の本体はまだ編集前のまま (詰まりの再現)。
+  expect(await S.readDoc(page, DIR2, 'plantuml-usecase')).not.toContain('WriteConfig');
+
+  // 到達条件その2: [本体に書く] の 1 押しでディスクの本体が今の本文になる。
+  await page.locator('#btn-srd-overwrite').click();
+  await page.waitForTimeout(1500);
+  await expect(band).toBeHidden();
+  expect(await S.readDoc(page, DIR2, 'plantuml-usecase')).toContain('WriteConfig');
+
+  // 到達条件その3: 以後この図の保存は本体へ入る (押すたびに逸れ直さない)。
+  await S.typeDsl(page, BASE + '\nclass WriteConfig\nclass EnableDmaReq');
+  await page.waitForTimeout(900);
+  await page.locator('#btn-save').dispatchEvent('click');
+  await page.waitForTimeout(1500);
+  await expect(band).toBeHidden();
+  expect(await S.readDoc(page, DIR2, 'plantuml-usecase')).toContain('EnableDmaReq');
+});
