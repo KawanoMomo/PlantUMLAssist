@@ -33,6 +33,9 @@
     { status: 'fresh', label: '新規', re: /新規|初出/ },
   ];
 
+  // 前回の状態を 1 語で言い直すための表 (スコープ外の行が「前回のまま」と言うのに使う)。
+  var VERDICT_OF_STATUS = { partial: '部分解消', resolved: '解消', carried: '継続', fresh: '新規' };
+
   // BLK-reviewer-20260914-2206: 「puml 側は解消・svg 再エクスポートのみ継続」のように
   // 1 件の中で解消した所と残っている所を書き分けた指摘は、`解消` の 2 文字だけを見ると
   // 「解消」に落ちる。次の run で残っている方に当たると「前回は解消と書いたのに再発」と
@@ -54,6 +57,48 @@
   function _s(v) { return v == null ? '' : String(v); }
 
   function _list(v) { return Array.isArray(v) ? v : []; }
+
+  // ---- 今回どの監査を回したか (スコープ) -----------------------------------
+
+  // BLK-reviewer-20260914-2206 (3 件目): `--board --only svg` のように監査を絞って
+  // 呼ぶと、突合行には svg のものしか来ない。今までは「今回の突合に出ていない」を
+  // そのまま『解消』と読んでいたので、メソッド指摘のようなスコープ外の指摘まで
+  // 「解消」と出た。さらに絞った回でも継続 tick を数え直すので、呼び出しオプション
+  // の違いだけで新規/継続/tick 数がぶれていた。
+  // 見ていない物は解消でも継続でもなく「今回は見ていない」と言う。tick も触らない。
+
+  // 指摘文がどの監査の話かの手がかり。監査名は audit-report.js の AUDITS のキー
+  // (= 突合行の kind の前置き)。reviewer は自然文で書くので、当てられない
+  // 指摘は「分からない」に落とす (絞った回に勝手な解消を出さないため)。
+  var AUDIT_HINTS = [
+    { audit: 'svg', re: /svg|エクスポート|書き出/i },
+    { audit: 'consistency', re: /メソッド|イベント|未使用|命名|語尾|粒度|クラス図/ },
+    { audit: 'method', re: /メソッド|引数|戻り値|呼び先/ },
+    { audit: 'name', re: /表記揺れ|綴り|宣言|別名/ },
+    { audit: 'trace', re: /遷移|トレース|シーケンス図に/ },
+    { audit: 'family', re: /系統|食い違い/ },
+  ];
+
+  function _auditsOf(finding) {
+    var text = _s(finding && finding.heading) + '\n' + _s(finding && finding.body);
+    var out = [];
+    AUDIT_HINTS.forEach(function(h) {
+      if (h.re.test(text) && out.indexOf(h.audit) < 0) out.push(h.audit);
+    });
+    return out;
+  }
+
+  // scope に入っていない指摘か。scope が空 (= 全部回した) なら常に false。
+  function _outOfScope(finding, scope) {
+    if (!scope || !scope.length) return false;
+    var mine = _auditsOf(finding);
+    // どの監査の話か当てられない指摘は、絞った回では判定しない。
+    if (!mine.length) return true;
+    for (var i = 0; i < mine.length; i++) {
+      if (scope.indexOf(mine[i]) >= 0) return false;
+    }
+    return true;
+  }
 
   // 図名の正規化。拡張子とフォルダを落とす。
   function docKey(name) {
@@ -244,8 +289,10 @@
   //   board        — audit-board.build() の結果 (今回の突合)
   //   findings     — parseFindings() の結果 (前回の指摘文書)、または指摘.md の本文
   //   changedFiles — 前回控えとの diff で「変わった」と出たファイル名の配列
+  //   scope        — 今回回した監査名の配列 (--only の中身)。空 / 未指定は全部回した
   function build(input) {
     var inp = input || {};
+    var scope = _list(inp.scope).map(_s).filter(function(s) { return s !== ''; });
     var board = inp.board || { rows: [] };
     var rows = _list(board.rows);
     var findings = typeof inp.findings === 'string'
@@ -260,6 +307,15 @@
     findings.forEach(function(f) {
       // サマリ節・依頼節は指摘ではないので振り分けない。
       if (f.status === 'other') return;
+      // 見ていない監査の指摘は、突合行に当たる当たらない以前に判定できない。
+      // 時計を進めず、前回の状態のまま据え置く。
+      if (_outOfScope(f, scope)) {
+        carried.push({ finding: f, verdict: 'outOfScope', tick: f.tick, rows: [],
+          note: '今回は --only で ' + scope.join('・') + ' だけを回したので、この指摘は見ていません。'
+            + '前回の状態 (' + (VERDICT_OF_STATUS[f.status] || f.status) + (f.tick ? ' ' + f.tick + ' tick 目' : '')
+            + ') のままです' });
+        return;
+      }
       var m = _match(f, rows);
       if (m === null) {
         carried.push({ finding: f, verdict: 'unmatched', tick: f.tick, rows: [],
@@ -323,11 +379,14 @@
       carried: carried,
       fresh: fresh,
       changedFiles: changed,
+      scope: scope,
       counts: {
         carried: carried.filter(function(c) { return c.verdict === 'carried'; }).length,
         // 本当の出戻り。読み直しが要るのはここだけ (継続との区別が付かないと全件読む羽目になる)。
         regressed: carried.filter(function(c) { return c.regressed; }).length,
         resolved: carried.filter(function(c) { return c.verdict === 'resolved'; }).length,
+        // 今回回していない監査の指摘。解消にも継続にも数えない。
+        outOfScope: carried.filter(function(c) { return c.verdict === 'outOfScope'; }).length,
         sameDoc: carried.filter(function(c) { return c.verdict === 'sameDoc'; }).length,
         unmatched: carried.filter(function(c) { return c.verdict === 'unmatched'; }).length,
         fresh: fresh.length,
@@ -347,7 +406,8 @@
 
   function summaryLine(view) {
     var c = (view && view.counts)
-      || { carried: 0, resolved: 0, fresh: 0, sameDoc: 0, unmatched: 0, changed: 0, regressed: 0 };
+      || { carried: 0, resolved: 0, fresh: 0, sameDoc: 0, unmatched: 0, changed: 0, regressed: 0,
+           outOfScope: 0 };
     var s = '継続 ' + c.carried;
     // 出戻りは継続の内数。0 件なら書かない (毎回出る数字は読み飛ばされる)。
     if (c.regressed) s += '（うち出戻り ' + c.regressed + '）';
@@ -355,6 +415,7 @@
     var re = [];
     if (c.sameDoc) re.push('同じ図に別の指摘 ' + c.sameDoc + ' 件');
     if (c.unmatched) re.push('要読み直し ' + c.unmatched + ' 件');
+    if (c.outOfScope) re.push('今回は見ていない ' + c.outOfScope + ' 件');
     if (re.length) s += '（' + re.join('・') + '）';
     s += '、前回控えから変わった図 ' + c.changed + ' 枚';
     var l = longestCarry(view);
@@ -362,20 +423,27 @@
     return s;
   }
 
-  var VERDICT = { carried: '継続', resolved: '解消', sameDoc: '同じ図に別の指摘', unmatched: '要読み直し' };
+  var VERDICT = { carried: '継続', resolved: '解消', sameDoc: '同じ図に別の指摘', unmatched: '要読み直し',
+                  outOfScope: '今回は見ていない (スコープ外)' };
 
   // 1 枚の常設ビュー。そのまま次の指摘.md の下敷きになる形で出す。
   function markdown(view, title) {
     var v = view || { carried: [], fresh: [], changedFiles: [] };
     var out = ['# ' + (_s(title) || 'レビュー結果'), '', summaryLine(v), ''];
+    // 絞って回した回は、その旨を画面の頭で言う (解消の少なさを実態と読み違えないため)。
+    if (_list(v.scope).length) {
+      out.push('※ 今回は `--only ' + v.scope.join(',') + '` で回しています。'
+        + 'ここに出ていない監査の指摘は「今回は見ていない」として前回の状態のまま据え置きです。', '');
+    }
 
-    var order = ['carried', 'sameDoc', 'unmatched', 'resolved'];
+    var order = ['carried', 'sameDoc', 'unmatched', 'outOfScope', 'resolved'];
     order.forEach(function(kind) {
       var items = _list(v.carried).filter(function(c) { return c.verdict === kind; });
       if (!items.length) return;
       out.push('## 前回の指摘 — ' + VERDICT[kind] + '（' + items.length + ' 件）');
       items.forEach(function(c) {
         var head = '- ' + c.finding.title;
+        if (kind === 'outOfScope' && c.tick) head += '（前回のまま ' + c.tick + ' tick 目）';
         if (kind === 'carried') {
           head += '（' + c.tick + ' tick 目' + (c.atLeast ? '以上' : '') + '）';
           // 読み直しが要る 1 件を、行の頭で見分けられるようにする。
