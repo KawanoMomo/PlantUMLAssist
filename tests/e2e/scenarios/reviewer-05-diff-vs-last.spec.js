@@ -137,3 +137,48 @@ test('手順5 直した内容が編集中の下書きにしか入っていない
   // 揃っている図は名指ししない (全行に印が付くと印でなくなる)。
   expect(await page.locator('.folder-sync-row[data-sync-name="timer_init_sequence"]').count()).toBe(0);
 });
+
+// BLK-reviewer-20260914-1806: 手順5 は「下書きが本体に反映されたか」を、audit.js の
+// 出力 (kind 不一致 1 件) と前回控えとの byte 比較・下書きの目視でしか判定できず、
+// 同じ図を 2 tick 続けて手で確かめていた。reviewer は GUI を開かない運用なので、
+// 台帳 (swap-queue) と前回控えの内訳をテキスト側にも出す。
+test('手順5 下書きの反映待ちと、前回控えとの増減の内訳を、GUI を開かずに読める', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const { execFileSync } = require('child_process');
+  const REPO = path.join(__dirname, '..', '..', '..');
+  const dir = path.join(REPO, 'test-results', 'reviewer-05-drafts');
+
+  fs.rmSync(dir, { recursive: true, force: true });
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'plantuml-usecase.puml'), BASE_CLASS, 'utf-8');
+  fs.writeFileSync(path.join(dir, 'plantuml-usecase-編集中.puml'), DRAFT_CLASS, 'utf-8');
+  const old = new Date(Date.now() - 60000);
+  fs.utimesSync(path.join(dir, 'plantuml-usecase.puml'), old, old);
+
+  // 到達条件 1: 「下書きが未反映のまま残っているか」が 1 本のコマンドで出る。
+  const out = execFileSync(process.execPath,
+    [path.join(REPO, 'tools', 'audit.js'), dir, '--drafts'], { cwd: REPO, encoding: 'utf-8' });
+  expect(out).toContain('本体へ差し替え待ち 1 枚');
+  expect(out).toContain('plantuml-usecase-編集中.puml → plantuml-usecase.puml');
+
+  // 到達条件 2: 32→25 枚の内訳で、改名が「消失 + 追加」に化けない。
+  const { loadMA } = require('../../../tools/audit-runtime');
+  const scope = require('../../../src/core/audit-scope');
+  const prev = scope.fileEntries([
+    { name: 'old_name.puml', dsl: BASE_CLASS },
+    { name: 'gone.puml', dsl: DRAFT_CLASS },
+  ]);
+  const cur = scope.fileEntries([
+    { name: 'new_name.puml', dsl: BASE_CLASS },
+    { name: 'new_name-編集中.puml', dsl: BASE_CLASS + '\nclass Extra' },
+  ]);
+  const text = scope.formatFileDiff(scope.diffFiles(prev, cur), cur).join('\n');
+  expect(text).toContain('改名: old_name.puml → new_name.puml');
+  expect(text).toContain('消失: gone.puml');
+  // 到達条件 3: 新しく起こした下書きは「増えた図」と数え分けられる。
+  expect(text).toContain('うち新しい下書き 1 枚');
+  expect(loadMA().MA).toBeTruthy();
+
+  fs.rmSync(dir, { recursive: true, force: true });
+});
