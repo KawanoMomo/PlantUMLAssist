@@ -446,3 +446,49 @@ test('手順5 資料化: 図種欄は［未］の図種が先頭にまとまり�
   await expect(page.locator('#mexp-plan')).toContainText('SVG');
   await expect(page.locator('#mexp-run')).toBeEnabled();
 });
+
+// BLK-junior-20260914-2206: 部品欄に「TIMERドライバ（資料化が要る 2/5 図種）」と
+// 「TimerDrv派生クラス（資料化が要る 1/1 図種）」が並ぶと、先頭が似ている
+// (ローマ字表記かカナ表記かの差しかない) ので上を選んでしまう。図種欄を開いて
+// 目当ての「クラス図」が無いと分かってから選び直す — そのまま押していれば
+// 無関係な画像を上書き書き出しするところだった。部品欄の行に図種名を並べる。
+test('手順4 資料化: 部品欄の行で、その部品がどの図種を持つかが読める', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  // 起票時の形。TIMERドライバ はシーケンスと状態遷移だけで、クラス図を持たない。
+  await S.putDoc(page, DIR, 'TIMERドライバ初期化シーケンス', S.GPIO_SEQ.replace(/Gpio/g, 'Timer'));
+  await S.putDoc(page, DIR, 'TIMERドライバ状態遷移', S.GPIO_STATE.replace(/Gpio/g, 'Timer'));
+  await S.putDoc(page, DIR, 'TimerDrv派生クラス', S.GPIO_CLASS
+    ? S.GPIO_CLASS.replace(/Gpio/g, 'Timer')
+    : ['@startuml', 'class Timer_Driver {', '  +Timer_Init()', '}', '@enduml'].join('\n'));
+  await page.reload();
+  await page.waitForTimeout(800);
+
+  await page.locator('#btn-export').click();
+  await page.waitForSelector('#export-menu', { state: 'visible' });
+  await page.locator('#exp-material').click();
+  await page.waitForSelector('#mexp-modal', { state: 'visible' });
+  await page.waitForTimeout(900);
+
+  const comp = page.locator('#mexp-component');
+  const timer = comp.locator('option[value="TIMERドライバ"]');
+  const drv = comp.locator('option[value="TimerDrv"]');
+
+  // 到達条件その1: どちらの行にも図種名が並ぶ。
+  await expect(timer).toHaveText(/シーケンス図/);
+  await expect(timer).toHaveText(/状態遷移図/);
+  await expect(drv).toHaveText(/クラス図/);
+
+  // 到達条件その2: 「クラス図」を持つのはどちらか が、選ぶ前に読んで分かる。
+  expect(await timer.textContent()).not.toContain('クラス図');
+  expect(await drv.textContent()).toContain('クラス図');
+
+  // 到達条件その3: 部品欄で読んだ図種の並びが、選んだ先の図種欄の並びと同じ。
+  await comp.selectOption('TIMERドライバ');
+  await page.waitForTimeout(500);
+  const label = await timer.textContent();
+  const listed = label.slice(label.indexOf('：') + 1).replace(/）$/, '').split('・');
+  const kinds = await page.locator('#mexp-kind option').allTextContents();
+  // 図種欄は印と形式 (［未］シーケンス図（PNG（透過背景））) を添えるので、図種名だけに揃える。
+  expect(kinds.map((t) => t.replace(/^［.］\s*/, '').replace(/（.*$/, '').trim())).toEqual(listed);
+});
