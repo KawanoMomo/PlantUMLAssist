@@ -165,3 +165,53 @@ test('手順2 判断済みの別ドメインは突合が最初から外し、宣
   expect(conf[0].text).toContain('同一と宣言されているのに中身が食い違う');
   expect(MA.domainCohort.summaryLine(conflicted)).toContain('宣言と実体の食い違い 1 組');
 });
+
+// BLK-reviewer-20260913-0306-wish: 保存直後の複数ファイルが同じ中身に収束して
+// 正しい内容がどこにも残らない事故が起きたとき、手順2 は指摘を書く前に
+// 「どのファイルが最新の正か」を過去 run の控え (runs/*/tmp、たまたま複製して
+// いただけ) を漁って推測する作業になっていた。控えは保存のたびに server が
+// `_versions/` へ 1 世代取っているので、手順2 を「直前版とのdiffを見る」に
+// 変えられることを到達条件にする。
+test('手順2 中身が消えた図を、直前版との差分で名指しできる', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const { execFileSync } = require('child_process');
+  const REPO = path.join(__dirname, '..', '..', '..');
+
+  // 事故の前後を、実際の保存フォルダと同じ形 (図 + `_versions/{name}--{刻印}.puml`) で作る。
+  const dir = path.join(REPO, 'test-results', 'reviewer-02-versions');
+  fs.rmSync(dir, { recursive: true, force: true });
+  fs.mkdirSync(path.join(dir, '_versions'), { recursive: true });
+
+  const FULL = ['@startuml', 'title Driver_Common_Class',
+    'class Driver_Common {', '  + Init() : void', '  + DeInit() : void', '}',
+    'class Spi_Driver', 'class Can_Driver', 'class Gpio_Driver', '@enduml'].join('\n');
+  const TEMPLATE = ['@startuml', 'title Sample Sequence', 'actor User',
+    'participant System', '@enduml'].join('\n');
+
+  // 事故: plantuml-class に別の図が被さり、driver_common_class は普通に書き足された。
+  fs.writeFileSync(path.join(dir, 'plantuml-class.puml'), TEMPLATE, 'utf-8');
+  fs.writeFileSync(path.join(dir, '_versions', 'plantuml-class--20260914-001252.puml'), FULL, 'utf-8');
+  fs.writeFileSync(path.join(dir, 'driver_common_class.puml'), FULL + '\nclass Irq_Driver', 'utf-8');
+  fs.writeFileSync(path.join(dir, '_versions', 'driver_common_class--20260913-031500.puml'), FULL, 'utf-8');
+  // 控えのまだ無い図は「初めての保存」で、疑いに数えない。
+  fs.writeFileSync(path.join(dir, 'spi_state.puml'), ['@startuml', '[*] --> Idle', '@enduml'].join('\n'), 'utf-8');
+
+  const out = execFileSync(process.execPath,
+    [path.join(REPO, 'tools', 'audit.js'), dir, '--versions'],
+    { cwd: REPO, encoding: 'utf-8' });
+
+  // 到達条件 1: 消えた図が、推測ではなく名指しで、先頭に出る。
+  const lines = out.split('\n').filter((l) => /^\s*[⚠・]/.test(l));
+  expect(lines[0]).toContain('plantuml-class.puml');
+  expect(lines[0]).toContain('別の図で塗り潰された疑い');
+  // 到達条件 2: 普通の書き足しと、控えの無い図は疑いに混ざらない。
+  expect(out).toContain('疑い 1 件 / 3 枚');
+  expect(out).toContain('driver_common_class.puml  書き足し・直し');
+  expect(out).toContain('spi_state.puml  控えなし');
+  // 到達条件 3: 指摘に写す材料 (消えた行と、戻し先の版) がその場で読める。
+  expect(out).toContain('- 2  title Driver_Common_Class');
+  expect(out).toContain('plantuml-class@20260914-001252');
+
+  fs.rmSync(dir, { recursive: true, force: true });
+});
