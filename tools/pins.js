@@ -15,6 +15,13 @@
 // 終了コードは、走れば指摘の有無に関わらず 0 (件数は要約か JSON で読む)。
 // 引数不正・対象なしだけが 1。「未解消があると落ちる」にしないのは、
 // これが CI ゲートではなく観測の口だから (audit.js と同じ約束)。
+//
+// BLK-reviewer-20260915-0206-wish: 読む口はあっても書く口が画面にしか無く、
+// ブラウザを開かない reviewer は指摘を `指摘.md` に「[図名] 行N 内容」と
+// 書き写すしかなかった。--add は同じ CLI から指摘を図そのものに貼る。
+// 貼り先は行番号ではなく対象の名前 (participant / class / state) で指定する。
+//
+//   node tools/pins.js dma_state.puml --add "対応する method が無い" --on Timer_StartConv
 
 const fs = require('fs');
 const path = require('path');
@@ -28,6 +35,14 @@ const STATE_FILE = '.assist-pins-state.json';
 
 const USAGE = [
   '使い方: node tools/pins.js <ファイル|フォルダ> [...] [オプション]',
+  '        node tools/pins.js <ファイル.puml> --add 内容 --on 対象の名前 [オプション]',
+  '',
+  '  --add 内容    指摘を 1 件、その図に貼る (書き込み)',
+  '  --on 名前     貼る相手。participant / class / state などの名前 (行番号は要らない)',
+  '  --as 名前     指摘した人 (既定 reviewer)',
+  '  --at 日時     指摘の日時 (既定 いまの時刻)',
+  '  --line N      --on の名前が何度も出る図で、貼る行を選び直す',
+  '  --dry-run     貼らずに、貼り先だけ出す',
   '',
   '  --json        人が読む要約ではなく JSON を出す',
   '  --all         解消も出す (既定は未解消 = 未着手 + 着手 のみ)',
@@ -44,10 +59,25 @@ const USAGE = [
 ].join('\n');
 
 function parseArgs(argv) {
-  const opts = { targets: [], json: false, all: false, author: null, out: null, state: STATE_FILE, useState: true, help: false };
+  const opts = {
+    targets: [], json: false, all: false, author: null, out: null,
+    state: STATE_FILE, useState: true, help: false,
+    add: null, on: null, as: null, at: null, line: 0, dryRun: false,
+  };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--help' || a === '-h') opts.help = true;
+    else if (a === '--add') opts.add = argv[++i];
+    else if (a.indexOf('--add=') === 0) opts.add = a.slice(6);
+    else if (a === '--on') opts.on = argv[++i];
+    else if (a.indexOf('--on=') === 0) opts.on = a.slice(5);
+    else if (a === '--as') opts.as = argv[++i];
+    else if (a.indexOf('--as=') === 0) opts.as = a.slice(5);
+    else if (a === '--at') opts.at = argv[++i];
+    else if (a.indexOf('--at=') === 0) opts.at = a.slice(5);
+    else if (a === '--line') opts.line = parseInt(argv[++i], 10) || 0;
+    else if (a.indexOf('--line=') === 0) opts.line = parseInt(a.slice(7), 10) || 0;
+    else if (a === '--dry-run') opts.dryRun = true;
     else if (a === '--json') opts.json = true;
     else if (a === '--all') opts.all = true;
     else if (a === '--no-state') opts.useState = false;
@@ -83,6 +113,79 @@ function writeState(file, state) {
   try { fs.writeFileSync(file, JSON.stringify(state, null, 2), 'utf-8'); } catch (e) { /* noop */ }
 }
 
+// 指摘の日時。画面が書くのと同じ「分まで」の形 (秒は指摘の同定に効かない)。
+function nowStamp(d) {
+  return (d || new Date()).toISOString().slice(0, 16);
+}
+
+// --add: 指摘を 1 件、対象の名前を頼りに図へ貼る。
+// 対象は .puml 1 枚だけ。フォルダを許すと「どの図に貼ったのか」が
+// 打った側から見えなくなる (読む側の --json と違い、こちらは書き込み)。
+function runAdd(opts, io) {
+  const out = (io && io.out) || console.log;
+  const err = (io && io.err) || console.error;
+
+  if (opts.targets.length !== 1) {
+    err('--add は図 1 枚を指定してください: node tools/pins.js <ファイル.puml> --add 内容 --on 名前');
+    return 1;
+  }
+  if (!opts.on) {
+    err('--on がありません。指摘を貼る相手 (participant / class / state の名前) を指定してください');
+    return 1;
+  }
+  if (!String(opts.add).trim()) {
+    err('--add の内容が空です');
+    return 1;
+  }
+  const file = path.resolve(opts.targets[0]);
+  if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) {
+    err('図が読めません: ' + file);
+    return 1;
+  }
+
+  const rt = loadMA();
+  const PP = rt.MA.pinPlace;
+  if (!PP) {
+    err('pin-place が読めません (src/core/pin-place.js)');
+    for (const e of rt.errors) err('読み込み失敗: ' + e.file + ' — ' + e.message);
+    return 1;
+  }
+
+  const dsl = fs.readFileSync(file, 'utf-8');
+  const res = PP.place(dsl, {
+    name: opts.on,
+    text: String(opts.add).trim(),
+    author: opts.as || 'reviewer',
+    at: opts.at || nowStamp(),
+    line: opts.line,
+  });
+
+  if (!res.ok) {
+    err(PP.reasonText(res.reason, opts.on));
+    const cands = (res.resolved && res.resolved.candidates) || [];
+    if (cands.length) {
+      err('その名前が出てくる行:');
+      for (const c of cands) err('  --line ' + c.line + '  (' + c.label + ') ' + c.text);
+    }
+    return 1;
+  }
+
+  if (!opts.dryRun) fs.writeFileSync(file, res.dsl, 'utf-8');
+
+  const r = res.resolved;
+  const head = opts.dryRun ? '貼り先 (--dry-run なので書いていない)' : '指摘 #' + res.pin.id + ' を貼った';
+  out(head + ': ' + path.basename(file) + ' ' + PP.describe(r));
+  out('  内容: ' + res.pin.text);
+  if (r.ambiguous) {
+    out('  ※ 同じ近さの行が他にもある。貼り直すなら --line で選ぶ:');
+    for (const c of r.candidates) {
+      if (c.line === r.line) continue;
+      out('    --line ' + c.line + '  (' + c.label + ') ' + c.text);
+    }
+  }
+  return 0;
+}
+
 function main(argv, io) {
   const out = (io && io.out) || console.log;
   const err = (io && io.err) || console.error;
@@ -97,6 +200,8 @@ function main(argv, io) {
     (opts.help ? out : err)(USAGE);
     return opts.help ? 0 : 1;
   }
+
+  if (opts.add != null) return runAdd(opts, io);
 
   let docs;
   try {
@@ -153,4 +258,4 @@ function main(argv, io) {
 }
 
 if (require.main === module) process.exit(main(process.argv.slice(2)));
-module.exports = { main, parseArgs, USAGE, STATE_FILE };
+module.exports = { main, parseArgs, runAdd, nowStamp, USAGE, STATE_FILE };
