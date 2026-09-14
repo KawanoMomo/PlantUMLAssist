@@ -410,6 +410,8 @@ API_INDEX = {
         {'endpoint': 'POST /autosave-svg', 'summary': '書き出した svg を保存する (印を刻む)',
          'request': "{type, dir, svg}"},
         {'endpoint': 'GET /autosave-versions', 'summary': '1 枚の図の版の一覧', 'request': '?dir=&type='},
+        {'endpoint': 'GET /version-search', 'summary': '保存フォルダの全図の版から部品名を探す (混入点の材料)',
+         'request': '?dir=&q='},
         {'endpoint': 'GET /peek-dirs', 'summary': '保存フォルダの候補を覗く'},
         {'endpoint': 'GET /peek-notes', 'summary': '隣のフォルダに置かれた指摘 (.md) を読む',
          'request': '?dir='},
@@ -616,6 +618,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.split('?')[0] == '/autosave-versions':
             with _fs_lock:
                 return self._handle_autosave_versions()
+        if self.path.split('?')[0] == '/version-search':
+            with _fs_lock:
+                return self._handle_version_search()
         if self.path.split('?')[0] == '/vault':
             with _fs_lock:
                 return self._handle_vault_get()
@@ -1359,6 +1364,80 @@ class Handler(BaseHTTPRequestHandler):
             item['head'] = _version_head(text)
             versions.append(item)
         self._send_json(200, {'name': dt, 'dir': str(save_dir), 'versions': versions})
+
+    # --- 混入点の検索 (BLK-primary-20260915-0506-wish) ------------------------
+    #
+    # 不具合対応では「この部品名がいつの版から入ったか」を知りたい。今までは
+    # /autosave-versions を図ごとに引き、返ってきた版を 1 つずつ開いて中身を
+    # 読み比べるしかなく、開く回数が「図の枚数 × 版数」で増えていた。
+    # ここは保存フォルダの全図・全版を 1 回で走査し、**語が当たった行だけ**を返す。
+    # 版と版の突き合わせ (どこで増えたか) は GUI 側 (blame-point.js) の仕事なので、
+    # server は数えて抜き出すところまでしかやらない。本文全部は返さない
+    # (14 枚 × 20 版の本文を毎回運ぶと、それ自体が待ち時間になる)。
+    SEARCH_TERMS_MAX = 6        # 1 回に突き合わせる語の数 (混在は 2〜3 語で足りる)
+    SEARCH_LINES_PER_VERSION = 40   # 1 版から返す当たり行の上限
+
+    def _search_hits(self, text, terms):
+        """本文 → 語ごとの出現数と、当たった行 (行番号つき)。"""
+        counts = [0] * len(terms)
+        lines = []
+        for no, line in enumerate(str(text or '').splitlines(), 1):
+            hit = False
+            for i, t in enumerate(terms):
+                c = line.count(t)
+                if c:
+                    counts[i] += c
+                    hit = True
+            if hit and len(lines) < self.SEARCH_LINES_PER_VERSION:
+                lines.append({'no': no, 'text': line.rstrip()[:200]})
+        return counts, lines
+
+    def _handle_version_search(self):
+        """GET /version-search?dir=&q= — 保存フォルダの全図の版から語を探す。
+
+        `q` は空白区切りの語 (混在を見るので複数可)。返すのは図ごとの
+        「古い順の版 + いまの中身」で、各版に語ごとの出現数と当たり行が付く。
+        """
+        parsed = urllib.parse.urlparse(self.path)
+        params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
+        save_dir = self._autosave_resolve_dir(params.get('dir'))
+        raw = params.get('q', '')
+        terms = [t for t in str(raw).split() if t][:self.SEARCH_TERMS_MAX]
+        if not terms:
+            self._send_json(400, {'error': 'q is required — 探す部品名を 1 つ以上'})
+            return
+        names = []
+        try:
+            for p in sorted(save_dir.iterdir(), key=lambda x: x.name.lower()):
+                if p.is_file() and p.suffix.lower() == '.puml':
+                    names.append(p.stem)
+        except OSError:
+            names = []
+        files = []
+        scanned = 0
+        for name in names:
+            versions = []
+            # 古い順。刻印は昇順に並べれば時系列になる (server は同じ書式で打つ)。
+            for stamp in sorted(self._version_stamps(save_dir, name)):
+                try:
+                    text = self._version_path(save_dir, name, stamp).read_text(encoding='utf-8')
+                except OSError:
+                    continue
+                counts, lines = self._search_hits(text, terms)
+                versions.append({'stamp': stamp, 'current': False,
+                                 'counts': counts, 'lines': lines})
+                scanned += 1
+            try:
+                text = (save_dir / (name + '.puml')).read_text(encoding='utf-8')
+            except OSError:
+                text = ''
+            counts, lines = self._search_hits(text, terms)
+            versions.append({'stamp': '', 'current': True,
+                             'counts': counts, 'lines': lines})
+            scanned += 1
+            files.append({'name': name, 'versions': versions})
+        self._send_json(200, {'terms': terms, 'dir': str(save_dir),
+                              'files': files, 'scanned': scanned})
 
     # --- 提出物庫 (BLK-junior-20260908-2203-wish) -----------------------------
     #
