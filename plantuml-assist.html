@@ -952,6 +952,16 @@ html, body {
   font-size: 10px; color: var(--text-secondary); padding: 0 6px 2px;
 }
 #folder-panel .folder-svg-labels-summary.has-stale { color: var(--accent-red); }
+/* 出力先のクロス (BLK-reviewer-20260914-0906-wish)。「内容ずれ」より強い断定なので、
+   行の中でいちばん目に付く印にする — 相手の名前は title に入れる。 */
+#folder-panel .folder-svg-cross {
+  flex: 0 0 auto; font-size: 9px; white-space: nowrap; font-weight: bold;
+  border: 1px solid var(--accent-red); border-radius: 2px; padding: 0 3px;
+  color: var(--accent-red);
+}
+#folder-panel .folder-svg-cross-summary {
+  font-size: 10px; color: var(--accent-red); font-weight: bold; padding: 0 6px 2px;
+}
 #folder-panel button.folder-svg-proof-btn,
 #folder-panel button.folder-svg-render {
   border: 1px solid var(--border);
@@ -5798,6 +5808,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/lineage.js"></script>
 <script src="src/core/svg-freshness.js"></script>
 <script src="src/core/svg-compare-row.js"></script>
+<script src="src/core/svg-cross.js"></script>
 <script src="src/core/svg-diff-summary.js"></script>
 <script src="src/core/review-state.js"></script>
 <script src="src/core/write-activity.js"></script>
