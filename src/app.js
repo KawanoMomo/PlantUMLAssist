@@ -8214,6 +8214,11 @@ var _seniorPick = null;  // 直近の相手選び (候補の表示に使う)
 var _seniorText = '';      // いま出している先輩の図の本文 (絞り直しに使う)
 var _seniorSliceKey = '';  // 抜き出す部品名 (自分の図の名前から起こし、打ち替えられる)
 var _seniorSliceOn = true; // 部品だけ / 共通図の全体
+// BLK-junior-20260915-0007-wish: 先輩が 1 枚も持たない図種 (アクティビティ図) では
+// 4 段のどれにも当たらず「ありません」で手本が絶える。自分の他部品で作り終えた
+// 同じ図種を見本として代わりに出す。どれを見本にするかは peer-sample が持つ。
+var _peerNames = [];     // 自分の保存フォルダのファイル名一覧 (見本の候補元)
+var _peerDir = '';       // その一覧を取ったフォルダ
 
 function _seniorEls() {
   return {
@@ -8295,6 +8300,40 @@ function _seniorPartKeys() {
   return SS.partKeysOf(active.name);
 }
 
+// 見本の候補元 = 自分の保存フォルダ。保存先が変わったときだけ取り直す
+// (図を切り替えるたびに読みに行くと、図の切り替えがフォルダ読みを待つことになる)。
+function _peerEnsureNames() {
+  var WS = window.MA.workspace;
+  var dir = _wsFileDir();
+  if (!WS || !dir || dir === _peerDir) return;
+  _peerDir = dir;
+  _peerNames = [];
+  WS.listFolder(dir).then(function(info) {
+    if (_peerDir !== dir) return;
+    _peerNames = ((info && info.entries) || [])
+      .filter(function(e) { return e && e.name; })
+      .map(function(e) { return e.name; });
+    // 取れた時点で描き直す (それまでは見本なしの表示で動く)。
+    syncSeniorPane();
+  }).catch(function() { /* 読めなくても先輩の枠はそのまま動く */ });
+}
+
+// 先輩に相手がいないときだけ、自分の他部品の同図種を見本に差し替える。
+// 先輩が決まっているときは触らない (見本は手本が無いときの代役)。
+function _withPeerSample(pick) {
+  var PS = window.MA.peerSample;
+  var WS = window.MA.workspace;
+  _peerEnsureNames();
+  if (!PS || !WS || (pick && pick.name)) return pick;
+  var active = WS.getActive();
+  var s = PS.pickSample({ name: active ? active.name : '', dir: _peerDir },
+    _peerNames, _peerDir);
+  if (s.how !== 'peer-sample') return pick;
+  // 先輩がいない理由も残す (枠の 1 行が「先輩の代わり」だと読めるように)。
+  s.seniorReason = (pick && pick.reason) || '';
+  return s;
+}
+
 function renderSeniorCandidates() {
   var el = _seniorEls();
   if (!el.cands) return;
@@ -8317,13 +8356,15 @@ function showSeniorFile(name) {
   var el = _seniorEls();
   var WS = window.MA.workspace;
   var st = _seniorState();
-  if (!WS || !el.dsl || !st.dir) return Promise.resolve(false);
+  // 見本は自分のフォルダから読む (先輩のフォルダで探すと必ず空振りする)。
+  var dir = (_seniorPick && _seniorPick.how === 'peer-sample' && _seniorPick.dir) || st.dir;
+  if (!WS || !el.dsl || !dir) return Promise.resolve(false);
   _seniorName = name;
   _seniorSave({ name: name });
   renderSeniorCandidates();
   el.dsl.textContent = '読み込み中…';
   if (el.svg) el.svg.textContent = '';
-  return WS.loadFile(name, st.dir).then(function(text) {
+  return WS.loadFile(name, dir).then(function(text) {
     if (name !== _seniorName) return false;
     if (typeof text !== 'string') {
       el.dsl.textContent = '読めませんでした';
@@ -8402,7 +8443,9 @@ function renderSeniorStatus() {
   var btn = document.getElementById('status-senior');
   if (!btn || !SP) return;
   var open = !(_seniorEls().pane || {}).hidden;
-  var txt = SP.statusText(_seniorPick, { ready: !!(_seniorPick && _seniorNames.length) });
+  var PS = window.MA.peerSample;
+  var txt = (PS && PS.statusText(_seniorPick))
+    || SP.statusText(_seniorPick, { ready: !!(_seniorPick && _seniorNames.length) });
   btn.textContent = txt.label;
   btn.title = txt.title;
   btn.setAttribute('data-count', String(txt.count));
@@ -8418,7 +8461,8 @@ function _seniorPrime() {
   var SP = window.MA.seniorPane;
   var WS = window.MA.workspace;
   var dir = SP ? _seniorState().dir : '';
-  if (!SP || !WS || !dir) { renderSeniorStatus(); return Promise.resolve(false); }
+  // 先輩のフォルダをまだ決めていなくても、見本は自分のフォルダだけで選べる。
+  if (!SP || !WS || !dir) { _seniorRefreshPick(); return Promise.resolve(false); }
   if (_seniorNames.length) { _seniorRefreshPick(); return Promise.resolve(true); }
   return WS.listFolder(dir).then(function(info) {
     _seniorNames = ((info && info.entries) || [])
@@ -8435,9 +8479,9 @@ function _seniorRefreshPick() {
   var WS = window.MA.workspace;
   if (!SP || !WS) return;
   var active = WS.getActive();
-  _seniorPick = SP.pickCounterpart(
+  _seniorPick = _withPeerSample(SP.pickCounterpart(
     { name: active ? active.name : '', dir: _wsFileDir() }, _seniorNames, _seniorState().dir,
-    _seniorPartKeys());
+    _seniorPartKeys()));
   renderSeniorStatus();
 }
 
@@ -8448,14 +8492,19 @@ function syncSeniorCounterpart() {
   var st = _seniorState();
   if (!el.pane || el.pane.hidden || !SP || !WS) { _seniorRefreshPick(); return; }
   var active = WS.getActive();
-  var pick = SP.pickCounterpart(
+  var pick = _withPeerSample(SP.pickCounterpart(
     { name: active ? active.name : '', dir: _wsFileDir() }, _seniorNames, st.dir,
-    _seniorPartKeys());
+    _seniorPartKeys()));
   _seniorPick = pick;
   // 図を切り替えたら、抜き出す語もその図の部品に付け替える (打ち替えた語は
   // その図を見ている間だけ効く。次の図に持ち越すと別部品の所を見せてしまう)。
   _seniorSliceKey = pick.key || '';
-  if (el.notice) el.notice.textContent = SP.noticeText(pick, _seniorLabel());
+  var PS = window.MA.peerSample;
+  if (el.notice) {
+    el.notice.textContent = (pick.how === 'peer-sample' && PS)
+      ? PS.noticeText(pick, pick.seniorReason)
+      : SP.noticeText(pick, _seniorLabel());
+  }
   renderSeniorStatus();
   renderSeniorCandidates();
   renderSeniorSliceRow();
