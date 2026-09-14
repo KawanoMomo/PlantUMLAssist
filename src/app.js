@@ -257,6 +257,9 @@ var suppressSync = false;
 var syncRail = function() {};
 // キャンバス上のズーム帯を現在の倍率・図種に合わせ直す。setupZoomHud が実体を入れる。
 var syncZoomHud = function() {};
+// 状態バーの 💾 を引き直す。setupAutoSaveStatus が実体を入れる
+// (BLK-primary-20260914-2206: 保存が届いた先は図を替えても言い続ける)。
+var renderAutoSaveStatus = function() {};
 // design 5a: エディタの見た目と「図クリック→該当行へ移動」の指定。設定モーダルの
 // 「保存」と起動時の applyEditorPrefs が唯一の書き手で、選択のたびにここを読む
 // (localStorage を選択ごとに読み直さないため)。
@@ -471,15 +474,19 @@ function init() {
     mmdText = editorEl.value;
     updateLineNumbers();
     scheduleRefresh();
+    // アクティブなタブの中身を先に更新する (タブ切替とリロードで残る)。
+    // BLK-primary-20260914-2206: 自動保存より **前** に書き戻すこと。自動保存は
+    // 書き先を決めるのに「タブの本文が開いたときから変わったか」を見るので、
+    // 古い本文のまま聞くと、1 回の編集 (貼り付け・一括流し込み) はいつも
+    // 「開いたときのまま」と判定され、ディスクへ 1 文字も届かない。
+    if (window.MA.workspace) {
+      try { window.MA.workspace.updateActive({ dsl: mmdText, diagramType: currentDiagramType }); } catch (e) {}
+    }
     // Auto-save: schedule a debounced write of the current DSL keyed by
     // the active diagram-type (closure-tracked, kept in sync by the
     // diagram-type change handler).
     if (window.MA.autoSave) {
       window.MA.autoSave.scheduleSave(currentDiagramType, mmdText);
-    }
-    // アクティブなタブの中身も更新する (タブ切替とリロードで残る)。
-    if (window.MA.workspace) {
-      try { window.MA.workspace.updateActive({ dsl: mmdText, diagramType: currentDiagramType }); } catch (e) {}
     }
     // 前回保存時点との差分バッジを追従させる。
     try { renderDiffBadge(); } catch (e) {}
@@ -2743,16 +2750,29 @@ function init() {
       if (sec < 3600) return Math.floor(sec / 60) + '分前';
       return Math.floor(sec / 3600) + '時間前';
     }
+    var _autoSavePending = null;
     function update() {
       if (!window.MA.autoSave.isAvailable()) {
         span.textContent = '';
         return;
       }
       var meta = window.MA.autoSave.getMeta();
-      if (!meta) { span.textContent = ''; return; }
-      span.textContent = '💾 ' + relTime(meta.lastSavedAt);
-      span.title = '最終保存: ' + meta.lastSavedAt + ' (' + (meta.lastSavedType || '').replace('plantuml-', '') + ')';
+      var AST = window.MA.autosaveStatus;
+      if (!meta || !AST) { span.textContent = ''; return; }
+      var doc = window.MA.workspace ? window.MA.workspace.getActive() : null;
+      var last = window.MA.autoSave.getLastWrite ? window.MA.autoSave.getLastWrite() : null;
+      var d = AST.describe(meta, last, relTime(meta.lastSavedAt), doc && doc.name);
+      span.textContent = d.text;
+      span.title = d.title;
+      // 返事待ちは押せば進む。文字だけだと「出ているのに何もできない」になる。
+      span.classList.toggle('autosave-pending', !!d.pending);
+      span.style.cursor = d.pending ? 'pointer' : '';
+      _autoSavePending = d.pending ? doc : null;
     }
+    span.addEventListener('click', function() {
+      if (_autoSavePending) { try { askSourceLock(_autoSavePending); } catch (e) {} }
+    });
+    renderAutoSaveStatus = update;
     window.MA.autoSave.onSave(function() { update(); });
     update();
     setInterval(update, 5000);
@@ -3502,6 +3522,9 @@ function writeDocToFolder(doc, fileDir) {
   var out = (d.name === doc.name) ? doc
     : { id: doc.id, name: d.name, diagramType: doc.diagramType, dsl: doc.dsl };
   window.MA.workspace.saveToFile(out, fileDir);
+  if (window.MA.autoSave && window.MA.autoSave.noteFileWritten) {
+    window.MA.autoSave.noteFileWritten(out.name, out.diagramType);
+  }
   if (window.MA.saveDiff) window.MA.saveDiff.mark(out.name, out.dsl);
   if (window.MA.versionTimeline) window.MA.versionTimeline.push(out.name, out.dsl);
   return true;
@@ -3579,6 +3602,10 @@ function saveActiveDoc() {
       try { updateTopSourceLock(); } catch (e) {}
       if (d.name !== doc.name) doc = { id: doc.id, name: d.name, diagramType: doc.diagramType, dsl: doc.dsl };
       window.MA.workspace.saveToFile(doc, cfg.fileDir);
+      // 届いた先を状態バーにも揃える (BLK-primary-20260914-2206)。
+      if (window.MA.autoSave && window.MA.autoSave.noteFileWritten) {
+        window.MA.autoSave.noteFileWritten(doc.name, doc.diagramType);
+      }
       // 書きに行った。効いたかどうかはディスクと突き合わせるまで分からないので、
       // 「何を書くつもりだったか」だけを控える (BLK-primary-20260914-1406-wish)。
       _noteSaveVerify(doc, 'written');
@@ -3624,6 +3651,8 @@ function applyActiveDoc() {
   try { renderReviewBadge(); } catch (e) {}
   // 継承元も図ごとに違う。開いた時点で「継承元が更新されています」と言えるよう引き直す。
   try { renderLineageBadge(); } catch (e) {}
+  // 保存が届いた先も図ごとに違う (BLK-primary-20260914-2206)。
+  try { renderAutoSaveStatus(); } catch (e) {}
 }
 
 function switchToDoc(id) {
@@ -10415,25 +10444,42 @@ function setupTabs() {
   (function setupAutosaveFileName() {
     var AS = window.MA.autoSave;
     if (!AS || !AS.setFileNameResolver) return;
+    // BLK-primary-20260914-2206: 書かなかったときは **訳も返す**。訳が無いと
+    // 状態バーは「書けなかった」と「書く必要が無かった」を区別できず、💾 が
+    // 「たった今」と出たまま保存フォルダの .puml は何時間でも変わらない。
     AS.setFileNameResolver(function() {
       var WS = window.MA.workspace;
-      if (!WS || !WS.getActive) return '';
+      if (!WS || !WS.getActive) return { name: '', reason: 'no-name' };
       var doc = WS.getActive();
       var name = (doc && doc.name) || '';
-      if (!name) return '';
-      if (WS.isValidName && !WS.isValidName(name)) return '';
+      if (!name) return { name: '', reason: 'no-name' };
+      if (WS.isValidName && !WS.isValidName(name)) return { name: '', reason: 'no-name' };
       // 見比べのために開いた元ファイルの錠も、Ctrl+S と同じように効かせる。
       // ここを素通しすると「元のまま保つ」と答えた図へ自動保存だけが書き続ける。
       var SL = window.MA.sourceLock;
       if (SL && doc) {
         var d;
-        try { d = SL.decide(doc.id, doc.name, _openDocNames(), doc.dsl); } catch (e) { return ''; }
-        if (!d || d.action === 'ask') return '';   // 返事を待つ間は書かない
-        if (d.action === 'skip') return '';        // 開いたときのまま。書かない
+        try { d = SL.decide(doc.id, doc.name, _openDocNames(), doc.dsl); }
+        catch (e) { return { name: '', reason: 'no-name' }; }
+        if (!d || d.action === 'ask') return { name: '', reason: 'ask' };   // 返事を待つ間は書かない
+        if (d.action === 'skip') return { name: '', reason: 'unchanged' };  // 開いたときのまま。書かない
         if (d.name) return d.name;                 // 控えの名前へ逃がす
       }
       return name;
     });
+
+    // 返事待ちで書かなかった回は、その場で確認を出す。自動保存の側から聞かないと、
+    // 「打っているのにディスクに何も起きない」が黙って続く (ペルソナが 5 周詰まった形)。
+    if (AS.onFileDeferred) {
+      AS.onFileDeferred(function(info) {
+        if (!info || info.reason !== 'ask') return;
+        var WS = window.MA.workspace;
+        var doc = WS && WS.getActive ? WS.getActive() : null;
+        if (!doc) return;
+        try { askSourceLock(doc); } catch (e) {}
+        try { renderAutoSaveStatus(); } catch (e) {}
+      });
+    }
   })();
 
   // ── テンプレへの自動保存を止める (BLK-junior-20260908-1803) ──────────────
