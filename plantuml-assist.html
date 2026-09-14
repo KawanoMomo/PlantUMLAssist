@@ -1499,6 +1499,20 @@ html, body {
   cursor: default;
 }
 #folder-panel button.folder-open-many:disabled:hover { background: transparent; }
+/* 印を付けた図を開かずに zip にする (BLK-primary-20260914-1806-wish)。
+   「開く」と同じ列に並べる —— どちらも印を付けた図をどうするかのボタン。 */
+#folder-panel button.folder-export-svg {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--accent);
+  font-size: 11px;
+  text-align: right;
+}
+#folder-panel button.folder-export-svg:disabled {
+  color: var(--text-secondary);
+  cursor: default;
+}
+#folder-panel button.folder-export-svg:disabled:hover { background: transparent; }
 /* 差分バッジと一覧 (前回保存時点との差) */
 #tab-bar .tab .tab-dot {
   font-size: 9px;
@@ -6124,6 +6138,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/selected-endpoints.js"></script>
 <script src="src/core/review-carry.js"></script>
 <script src="src/core/folder-select.js"></script>
+<script src="src/core/folder-export.js"></script>
 <script src="src/core/folder-filter.js"></script>
 <script src="src/core/peek-folder.js"></script>
 <script src="src/core/peek-verdict.js"></script>
