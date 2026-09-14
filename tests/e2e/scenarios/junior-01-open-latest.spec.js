@@ -1733,3 +1733,68 @@ test.describe('junior 手順 1: 先輩が持たない図種では自分の他部
     await expect(notice).not.toContainText('見本');
   });
 });
+
+// ── BLK-junior-20260915-0307-wish ───────────────────────────────────────
+// 16 周目の手順 2 は「下書きは汎用ひな形なので、中身を消して先輩の対応図を手本に
+// 打ち直す」。SPI を起こすと 6 図種とも決まった汎用 DSL で埋まるが、先輩 (primary) は
+// SPI のシーケンス図を既に持っていて、参加者も並びも汎用ひな形とは違う。
+// 手本のある図種は、開いた時点で先輩の実図が入っていることを到達条件にする
+// (手順 2 が「打ち直す」から「差分だけ直す」に変わる)。
+const REF_ROOT = DIR + '-ref';
+const REF_MINE = REF_ROOT + '/junior';
+const REF_SENIOR = REF_ROOT + '/primary';
+
+const SENIOR_SPI_SEQ = ['@startuml', 'title SPIREF ドライバ 初期化シーケンス',
+  'participant "SPIREF_Driver" as Spi', 'participant "ClockCtrl" as Clk',
+  'participant "IRQCtrl" as Irq',
+  'Spi -> Clk : EnableClock()', 'Clk --> Spi : Ack',
+  'Spi -> Irq : Register()', 'Irq --> Spi : Ack', '@enduml'].join('\n');
+
+test.describe('junior 手順 2: 先輩の実図を手本に新部品を起こす', () => {
+  test.beforeEach(async ({ page }) => {
+    await S1.bootWithSaveDir(page, REF_MINE);
+    await S1.clearDir(page, REF_MINE);
+    await S1.clearDir(page, REF_SENIOR);
+    await S1.putDoc(page, REF_SENIOR, 'spiref_init_sequence', SENIOR_SPI_SEQ);
+    await page.reload();
+    await page.waitForSelector('#btn-tab-part');
+  });
+
+  test.afterEach(async ({ page }) => {
+    await S1.clearDir(page, REF_MINE).catch(() => {});
+    await S1.clearDir(page, REF_SENIOR).catch(() => {});
+  });
+
+  test('先輩に同じ部品名の実図がある図種は、下書きがその実図で開く', async ({ page }) => {
+    await page.locator('#btn-tab-part').click();
+    await page.waitForSelector('#part-subject');
+    await page.fill('#part-subject', 'SPIREF');
+
+    // 到達条件 1: 押す前に「どの図種が先輩の実図で、どれがひな形か」が読める。
+    const srcSeq = page.locator('#part-sheets [data-part-src="sequence"]');
+    await expect(srcSeq).toContainText('primary / spiref_init_sequence');
+    await expect(page.locator('#part-summary')).toContainText('1 図種は先輩の実図を写します');
+    await expect(page.locator('#part-sheets [data-part-src="state"]')).toHaveText('');
+
+    // 到達条件 2: 開いた下書きの中身が先輩の実図そのもの (打ち直しが要らない)。
+    await page.locator('#btn-part-create').click();
+    await page.waitForTimeout(900);
+    const opened = await page.evaluate(() => window.MA.workspace.list()
+      .map((d) => ({ name: d.name, dsl: d.dsl })));
+    const seq = opened.find((d) => d.name === 'spiref_sequence');
+    expect(seq).toBeTruthy();
+    expect(seq.dsl).toContain('ClockCtrl');
+    expect(seq.dsl).toContain('IRQCtrl');
+    expect(seq.dsl).toContain('Ack');
+    // 汎用ひな形の並びは入っていない (消してから打ち直す工程が消える)。
+    expect(seq.dsl).not.toContain('SPIREF_IrqNotify');
+
+    // 到達条件 3: 手本の無い図種は今までどおりひな形で開く (欠けない)。
+    const state = opened.find((d) => d.name === 'spiref_state');
+    expect(state).toBeTruthy();
+    expect(state.dsl).toContain('SPIREF_Init');
+
+    // 名前は自分の名前のまま。先輩のファイル名にはならない。
+    expect(opened.some((d) => d.name === 'spiref_init_sequence')).toBe(false);
+  });
+});
