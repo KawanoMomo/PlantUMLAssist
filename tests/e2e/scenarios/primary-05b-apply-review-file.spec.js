@@ -171,6 +171,42 @@ test('手順5.5 「別物」と決めたときは title に明示され、部品
   expect(saved).toContain("' domain-verdict: separate gpio vs junior");
 });
 
+// BLK-reviewer-20260914-1706-wish: 突合の画面は「primary だけ / junior だけ」の 2 列までで、
+// IRQCtrl と Irq_Ctrl が同じ部品の別表記であることは読む側が目で結び直していた
+// (reviewer は CLI で件数を得た後、どの名前がどの名前かを grep で探していた)。
+// 揺れている組が対応表の 1 行として出ることを到達条件にする。
+const IRQ_MINE = ['@startuml', 'title IRQ 初期化シーケンス',
+  'participant IRQCtrl', 'participant ClockCtrl', 'participant Hw_Ctrl',
+  'IRQCtrl -> ClockCtrl : Irq_Init', '@enduml'].join('\n');
+const IRQ_OTHER = ['@startuml', 'title IRQ 初期化シーケンス',
+  'participant Irq_Ctrl', 'participant Clock_Ctrl', 'participant Hw_Ctrl',
+  'Irq_Ctrl -> Clock_Ctrl : Irq_Init', '@enduml'].join('\n');
+
+test('手順5.5 表記揺れの部品名が、どちらの綴りと対応するかまで 1 つの表で読める', async ({ page }) => {
+  await S.bootWithSaveDir(page, MINE_DIR);
+  await S.clearDir(page, MINE_DIR);
+  await S.clearDir(page, OTHER_DIR);
+  await S.putDoc(page, MINE_DIR, 'irq_init_sequence', IRQ_MINE);
+  await S.putDoc(page, OTHER_DIR, 'irq_init_sequence', IRQ_OTHER);
+  await page.reload();
+  await page.waitForSelector('#btn-tab-peek');
+
+  await openCohort(page);
+  const pair = page.locator('#peek-cohort .cohort-pair').first();
+  // 到達条件 1: 揺れている組が、探さずに 1 行として出る。
+  const rows = pair.locator('.cohort-pair-row[data-pair-kind="variant"]');
+  await expect(rows).toHaveCount(2);
+  // 組は「どちらのフォルダが左か」に依らず、2 つの綴りが 1 行に並ぶ。
+  const pairs = await rows.evaluateAll((els) => els.map(
+    (e) => [e.getAttribute('data-pair-a'), e.getAttribute('data-pair-b')].sort().join('⇔')).sort());
+  expect(pairs).toEqual(['ClockCtrl⇔Clock_Ctrl', 'IRQCtrl⇔Irq_Ctrl']);
+  // 到達条件 2: 何を見ての件数かが 1 行で出る (一致している部品も母数に入る)。
+  await expect(pair.locator('.cohort-pairs-head')).toContainText('表記揺れ 2');
+  await expect(pair.locator('.cohort-pairs-head')).toContainText('一致 1');
+  // 到達条件 3: 表記揺れと「似ているだけ」を取り違えない。
+  await expect(rows.first()).toContainText('表記揺れ');
+});
+
 // BLK-primary-20260912-2206-wish: reviewer の最重要指摘 (driver_common_class /
 // plantuml-class / diagram1 の 3 枚が雛形と完全一致) を反映する手順。
 // 3 枚同時の事故を保存のその場で全部挙げ、過去版を探さずに 1 操作で戻せることを固定する。
