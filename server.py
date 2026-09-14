@@ -370,7 +370,8 @@ API_INDEX = {
         {'endpoint': 'GET /autosave', 'summary': '保存フォルダの図の一覧 (dsl・hash・svgSource)',
          'request': '?dir=&type='},
         {'endpoint': 'POST /autosave', 'summary': '図の DSL を保存する', 'request': "{type, dir, dsl}"},
-        {'endpoint': 'DELETE /autosave', 'summary': '保存を消す', 'request': '?dir=&type='},
+        {'endpoint': 'DELETE /autosave', 'summary': 'type を付ければその図 1 枚 (版は残す)、省けば保存フォルダの図を全部消す',
+         'request': '?dir=&type='},
         {'endpoint': 'POST /autosave-svg', 'summary': '書き出した svg を保存する (印を刻む)',
          'request': "{type, dir, svg}"},
         {'endpoint': 'GET /autosave-versions', 'summary': '1 枚の図の版の一覧', 'request': '?dir=&type='},
@@ -2031,6 +2032,13 @@ class Handler(BaseHTTPRequestHandler):
         params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
         dir_raw = params.get('dir')
         save_dir = self._autosave_resolve_dir(dir_raw)
+        # BLK-primary-20260914-1306-wish: 1 枚だけ消す窓口。これが無いため、
+        # 本体と byte 単位で同じ「-編集中」が積み上がっても、GUI からは
+        # 「全部消す」か「保存フォルダを直接触る」しか手が無かった。
+        dt = params.get('type', '')
+        if dt:
+            with _fs_lock:
+                return self._autosave_delete_one(save_dir, dt)
         if save_dir.exists():
             for p in save_dir.glob('*.puml'):
                 # BLK-reviewer-20260908-0103: puml だけ消すと {name}.svg が残り、
@@ -2090,6 +2098,50 @@ class Handler(BaseHTTPRequestHandler):
                 except OSError:
                     pass
         self._send_json(200, {'ok': True})
+
+    def _autosave_delete_one(self, save_dir, dt):
+        """図を 1 枚だけ消す (BLK-primary-20260914-1306-wish)。
+
+        消すのは {name}.puml と隣の {name}.svg、それに「この図はこういう図種だ /
+        実データだ / svg を確かめた」の控えの当該行だけ。**過去版は消さない** ——
+        重複の片付けは取り違えると戻せないので、消した図は `gone` (本体は無いが
+        版は残っている図) として一覧に出続け、そこから中身を取り戻せる。
+        """
+        if not self._autosave_validate_type(dt):
+            self._send_json(400, {'error': 'invalid type — パス区切り・制御文字・Windows の禁止文字は使えません'})
+            return
+        path = self._autosave_file_path(save_dir, dt)
+        if not path.exists():
+            self._send_json(404, {'error': 'その名前の図が保存フォルダにありません'})
+            return
+        for target in (path, path.with_suffix('.svg')):
+            try:
+                target.unlink()
+            except OSError:
+                pass
+        kinds = self._read_saved_kinds(save_dir)
+        if dt in kinds:
+            del kinds[dt]
+            try:
+                self._kinds_path(save_dir).write_text(
+                    json.dumps({'kinds': kinds}, ensure_ascii=False), encoding='utf-8')
+            except OSError:
+                pass
+        roles = self._read_file_roles(save_dir)
+        if dt in roles:
+            del roles[dt]
+            try:
+                self._roles_path(save_dir).write_text(
+                    json.dumps({'version': 1, 'roles': roles}, ensure_ascii=False, indent=1),
+                    encoding='utf-8')
+            except OSError:
+                pass
+        verified = self._read_svg_verify(save_dir)
+        if dt in verified:
+            del verified[dt]
+            self._write_svg_verify(save_dir, verified)
+        self._send_json(200, {'ok': True, 'deleted': dt,
+                              'versions': self._version_counts(save_dir).get(dt, 0)})
 
 
 # --- Environment probe (GET /env) --------------------------------------------

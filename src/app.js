@@ -7534,6 +7534,12 @@ function setupTabs() {
   var writeStatus = {};
   var writeAge = {};
   var writeScan = null;
+  // BLK-primary-20260914-1306-wish: 中身が byte 単位で同じ図の束。
+  // 「-編集中」が本体と同一のまま積み上がっても、一覧には開く・名前を変えるしか
+  // 無かったので、片付けるには保存フォルダを直接触るしかなかった。
+  var dupeGroups = [];
+  // 行の 🗑 を 1 回押した名前 (2 回目で消す)。描き直すと白紙に戻る。
+  var deleteArmed = '';
 
   // BLK-junior-20260912-2103-wish: フォルダから開くときの図種。
   // 控え (保存したときの図種) > 本文からの判定 > 今の図種。
@@ -7825,6 +7831,11 @@ function setupTabs() {
       var RS = window.MA.reviewState;
       reviewStatus = RS ? RS.statusMap(entries) : {};
 
+      // BLK-primary-20260914-1306-wish: 束ねる判定は一覧が既に持っている hash だけで
+      // 済む (本文を取り直さないので、一覧を開いた時点で言い切れる)。
+      var DPM = window.MA.dupeMerge;
+      dupeGroups = DPM ? DPM.scan(entries) : [];
+
       // 「今読んでいる版が、読み始めた瞬間のものか」は中身では分からない。
       // server が返した「今」と各図の更新時刻の差だけで判定する。
       // BLK-junior-20260908-2003: 上書きで消えた中身の控え。一覧の時点で
@@ -7886,6 +7897,7 @@ function setupTabs() {
         appendSvgSection(panel, dir);
       appendPartCrossSection(panel);
         appendWriteSection(panel, dir);
+        appendDupeSection(panel, dir);
         appendKindSummary(panel);
         plain.items.forEach(function(e) { panel.appendChild(folderRow(e.name || e, null, null)); });
         appendDraftSection(plain.drafts, function(e) { return folderRow(e.name || e, null, null); });
@@ -7918,6 +7930,7 @@ function setupTabs() {
       appendSvgSection(panel, dir);
       appendPartCrossSection(panel);
       appendWriteSection(panel, dir);
+      appendDupeSection(panel, dir);
 
       folderStatus = {};
       rows.forEach(function(r) { folderStatus[r.name] = r.status; });
@@ -8044,6 +8057,136 @@ function setupTabs() {
   // BLK-reviewer-20260914-1106-wish: 状態遷移図の遷移ラベルとクラス図のメソッドの
   // 対応は、これまで tools/audit.js を実行して JSON を読み解くしかなかった。
   // 部品ごとに 3 枚を束ねた行を一覧の頭に置き、宣言の無い名前を赤字で名指しする。
+  // ── 中身が同じ図の統合と、1 枚だけの削除 (BLK-primary-20260914-1306-wish) ──
+  // 指摘.md は毎回「can_init_sequence-編集中 が本体と byte 単位で同一のまま」の
+  // 整理を求めるのに、📂一覧には開く・名前を変えるしか無く、実現するには保存
+  // フォルダを直接触るしかなかった (体験の規律で禁止)。ここで「統合」を 1 押しに
+  // する。消した図の過去版は server に残るので、取り違えても版から戻せる。
+
+  // 名前を順に消す。1 枚しくじっても残りは続ける (途中で止まると、
+  // どこまで消えたのかを保存フォルダで数え直すことになる)。
+  function deleteFolderFiles(names, dir) {
+    var WS = window.MA.workspace;
+    if (!WS || !WS.deleteFile || !names || !names.length) return Promise.resolve([]);
+    var results = [];
+    var chain = Promise.resolve();
+    names.forEach(function(n) {
+      chain = chain.then(function() {
+        return Promise.resolve(WS.deleteFile(n, dir)).then(function(r) {
+          results.push({ name: n, ok: !!(r && r.ok), error: (r && r.error) || '' });
+        });
+      });
+    });
+    return chain.then(function() {
+      var ok = results.filter(function(r) { return r.ok; });
+      var ng = results.filter(function(r) { return !r.ok; });
+      if (window.MA.toast) {
+        var msg = ok.length ? ok.map(function(r) { return r.name; }).join('・') + ' を消しました（過去版は残っています）'
+                            : '';
+        if (ng.length) msg += (msg ? ' / ' : '') + ng[0].name + ' を消せませんでした: ' + ng[0].error;
+        window.MA.toast.show(msg);
+      }
+      deleteArmed = '';
+      renderFolderPanel();
+      return results;
+    });
+  }
+
+  function appendDupeSection(host, dir) {
+    var DPM = window.MA.dupeMerge;
+    if (!DPM || !dupeGroups.length) return;
+    var WS = window.MA.workspace;
+    var sum = document.createElement('div');
+    sum.className = 'folder-dupe-summary';
+    sum.id = 'folder-dupe-summary';
+    sum.textContent = DPM.summary(dupeGroups);
+    sum.title = '保存フォルダの中で本文が byte 単位で同じ図です。'
+      + '「統合」を押すと残す 1 枚だけにします（消した図の過去版は残ります）';
+    host.appendChild(sum);
+    dupeGroups.forEach(function(g) {
+      var row = document.createElement('div');
+      row.className = 'folder-dupe-row';
+      row.setAttribute('data-dupe-hash', g.hash);
+      var txt = document.createElement('span');
+      txt.className = 'folder-dupe-label';
+      txt.textContent = DPM.label(g);
+      row.appendChild(txt);
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'folder-dupe-merge';
+      b.setAttribute('data-dupe-keep', g.keep);
+      b.textContent = '統合';
+      b.title = g.keep + ' を残し、' + g.drop.join('・') + ' を保存フォルダから消します';
+      if (!WS || !WS.deleteFile) { b.disabled = true; b.title = 'この保存先では消せません'; }
+      b.addEventListener('click', function(ev) {
+        ev.stopPropagation();
+        b.disabled = true;
+        b.textContent = '統合中…';
+        deleteFolderFiles(g.drop, dir);
+      });
+      row.appendChild(b);
+      host.appendChild(row);
+    });
+    if (dupeGroups.length > 1) {
+      var all = document.createElement('div');
+      all.className = 'folder-dupe-row';
+      var ab = document.createElement('button');
+      ab.type = 'button';
+      ab.className = 'folder-dupe-merge';
+      ab.id = 'folder-dupe-merge-all';
+      var drops = dupeGroups.reduce(function(acc, g) { return acc.concat(g.drop); }, []);
+      ab.textContent = 'すべて統合（' + drops.length + ' 枚を消す）';
+      ab.title = drops.join('・') + ' を消します（それぞれの本体は残ります）';
+      ab.addEventListener('click', function(ev) {
+        ev.stopPropagation();
+        ab.disabled = true;
+        ab.textContent = '統合中…';
+        deleteFolderFiles(drops, dir);
+      });
+      all.appendChild(ab);
+      host.appendChild(all);
+    }
+  }
+
+  // 行に付く「本体 / 写し」の印。重複のある図にしか出ない。
+  function folderDupeBadge(name) {
+    var DPM = window.MA.dupeMerge;
+    if (!DPM || !dupeGroups.length) return null;
+    var b = DPM.badge(dupeGroups, name);
+    if (!b) return null;
+    var el = document.createElement('span');
+    el.className = 'folder-dupe-badge folder-dupe-' + b.kind;
+    el.setAttribute('data-dupe-of', name);
+    el.setAttribute('data-dupe-kind', b.kind);
+    el.textContent = b.mark;
+    el.title = b.title;
+    return el;
+  }
+
+  // 行ごとの「1 枚だけ消す」。重複していない図も消せる (⚙設定の全削除しか
+  // 無かったので、1 枚を消すには保存フォルダを直接触るしかなかった)。
+  // 1 回目は身構えるだけ、2 回目で消す (押し間違いで図が消えない)。
+  function folderDeleteButton(name) {
+    var WS = window.MA.workspace;
+    if (!WS || !WS.deleteFile) return null;
+    var armed = deleteArmed === name;
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'folder-delete' + (armed ? ' folder-delete-armed' : '');
+    b.setAttribute('data-delete-name', name);
+    b.textContent = armed ? '本当に消す' : '🗑';
+    b.title = armed
+      ? name + ' を保存フォルダから消します（過去版は残るので戻せます）'
+      : name + ' を保存フォルダから消す（もう一度押すと消えます）';
+    b.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      if (!armed) { deleteArmed = name; renderFolderPanel(); return; }
+      b.disabled = true;
+      deleteFolderFiles([name], _wsFileDir());
+    });
+    return b;
+  }
+
   function appendPartCrossSection(panel) {
     var PC = window.MA.partCross;
     if (!PC || !partCross) return;
@@ -8829,6 +8972,11 @@ function setupTabs() {
     if (kb) row.appendChild(kb);
     var vb = folderVersionButton(name);
     if (vb) row.appendChild(vb);
+    // BLK-primary-20260914-1306-wish: 中身が同じ図の印と、1 枚だけ消すボタン。
+    var db = folderDupeBadge(name);
+    if (db) row.appendChild(db);
+    var xb = folderDeleteButton(name);
+    if (xb) row.appendChild(xb);
     return row;
   }
 

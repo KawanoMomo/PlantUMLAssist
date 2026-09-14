@@ -1038,6 +1038,32 @@ html, body {
 #folder-panel .folder-svg-cross-summary {
   font-size: 10px; color: var(--accent-red); font-weight: bold; padding: 0 6px 2px;
 }
+/* 中身が同じ図の統合と 1 枚削除 (BLK-primary-20260914-1306-wish)。
+   重複が 0 組なら行ごと出さないので、普段の一覧は今までのまま。 */
+#folder-panel .folder-dupe-summary {
+  font-size: 10px; color: var(--accent); padding: 2px 6px;
+}
+#folder-panel .folder-dupe-row {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 0 6px 3px;
+}
+#folder-panel .folder-dupe-label { font-size: 10px; color: var(--text-secondary); }
+#folder-panel button.folder-dupe-merge {
+  flex: 0 0 auto; width: auto; font-size: 9px; white-space: nowrap;
+  border: 1px solid var(--accent); border-radius: 3px; padding: 1px 6px;
+  background: transparent; color: var(--accent); cursor: pointer;
+}
+#folder-panel button.folder-dupe-merge:disabled { opacity: 0.5; cursor: default; }
+#folder-panel .folder-dupe-badge { font-size: 9px; margin-left: 3px; white-space: nowrap; }
+#folder-panel .folder-dupe-copy { color: var(--accent); }
+#folder-panel .folder-dupe-keep { color: var(--text-secondary); }
+#folder-panel button.folder-delete {
+  flex: 0 0 auto; width: auto; font-size: 9px; white-space: nowrap;
+  border: 1px solid var(--border); border-radius: 3px; padding: 1px 5px;
+  margin-left: 3px; background: transparent; color: var(--text-secondary); cursor: pointer;
+}
+#folder-panel button.folder-delete.folder-delete-armed {
+  border-color: var(--accent-red); color: var(--accent-red); font-weight: bold;
+}
 /* 部品ごとの突合 (BLK-reviewer-20260914-1106-wish)。audit.js の JSON を読む代わりに
    一覧の頭で読む行なので、欠落は赤字で、束ねた図はその場で開けるボタンにする。 */
 #folder-panel .folder-part-cross-summary {
@@ -5952,6 +5978,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/draft-mark.js"></script>
 <script src="src/core/target-set.js"></script>
 <script src="src/core/folder-reopen.js"></script>
+<script src="src/core/dupe-merge.js"></script>
 <script src="src/core/bulk-rename.js"></script>
 <script src="src/core/impact-scan.js"></script>
 <script src="src/core/folder-impact.js"></script>
