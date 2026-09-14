@@ -6307,6 +6307,9 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <!-- BLK-junior-20260909-0603-wish: 覗いた手本を閉じずに右へ据える。
              以降は書きかけと手本が同時に見え、対応表で足りない状態・遷移が出る。 -->
         <button type="button" id="peek-compare" disabled title="この図を手本として自分の書きかけの右に並べ、対応表で足りない状態・遷移を出す">⇔ 自分の図と並べる</button>
+        <!-- BLK-junior-20260914-1006: ファイル名が対をなさない相手 (複合図) でも、
+             今開いている自分の図の部品名から「先輩のどの図に載っているか」を名指しする。 -->
+        <button type="button" id="peek-find-part" title="今開いている自分の図の部品名で、このフォルダの図の中身を引き、載っている図を名指しする">🔎 自分の部品を探す</button>
         <button type="button" id="peek-cohort-toggle" title="同じドメイン名の図をフォルダ横断で並べる">🔀 ドメインで揃える</button>
         <button type="button" id="peek-sbs-toggle" title="同じファイル名を持つ 2 人の図を左右に並べ、部品名・メッセージ名の食い違いだけを光らせる">⇔ 同名で並べる</button>
         <!-- BLK-junior-20260913-0306-wish: 指摘.md の 1 件を選ぶと、そこに書かれた
