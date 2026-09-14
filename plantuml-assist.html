@@ -1804,6 +1804,17 @@ html, body {
 }
 /* BLK-junior-20260912-2206: 覗き一覧にも図種の印と内訳を出す
    (名前の語尾から図種を推測しながら 30 行読む手を無くす)。 */
+/* 確認の結論の控え (BLK-junior-20260914-1706-wish)。相手に 0 枚の図種にだけ出る。 */
+#peek-files .peek-verdict-row {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 1px 6px 3px;
+}
+#peek-files .peek-verdict-text { font-size: 10px; color: var(--text-secondary); }
+#peek-files .peek-verdict-text.is-stale { color: var(--accent-red); font-weight: bold; }
+#peek-files button.peek-verdict-act {
+  flex: 0 0 auto; width: auto; font-size: 9px; white-space: nowrap;
+  border: 1px solid var(--border); border-radius: 3px; padding: 1px 6px;
+  background: transparent; color: var(--text-primary); cursor: pointer;
+}
 #peek-files .peek-kinds {
   padding: 4px 8px; font-size: 11px; color: var(--text-secondary);
   border-bottom: 1px solid var(--border-color);
@@ -6027,6 +6038,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/folder-select.js"></script>
 <script src="src/core/folder-filter.js"></script>
 <script src="src/core/peek-folder.js"></script>
+<script src="src/core/peek-verdict.js"></script>
 <script src="src/core/peek-freshness.js"></script>
 <script src="src/core/peek-changes.js"></script>
 <script src="src/core/audit-scope.js"></script>

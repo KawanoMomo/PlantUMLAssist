@@ -7226,6 +7226,7 @@ function renderPeekFiles() {
   head.textContent = _peekDir ? (_peekNames.length + ' 枚') : 'フォルダを選んでください';
   el.files.appendChild(head);
   appendPeekKindSummary(el.files);
+  appendPeekVerdictOffer(el.files);
   appendPeekSvgSection(el.files);
   appendPeekChangeSection(el.files);
   peekVisibleNames().forEach(function(n) {
@@ -7270,6 +7271,76 @@ function appendPeekKindSummary(host) {
   line.textContent = DK.summaryLine(_peekEntries);
   line.title = '覗いているフォルダの図種の内訳。0 の図種はこのフォルダに 1 枚もありません';
   host.appendChild(line);
+}
+
+// BLK-junior-20260914-1706-wish: 覗いた相手にその図種が 1 枚も無かったとき、
+// 「対応不要（手本なし）」を今開いている自分の図の中に控える。控えないと、この確認は
+// 本人の記憶にしか残らず、次に同じ図を担当するたびに 👀他フォルダからやり直しになる。
+function appendPeekVerdictOffer(host) {
+  var DK = window.MA.diagramKind;
+  var PV = window.MA.peekVerdict;
+  var PF = window.MA.peekFolder;
+  var WS = window.MA.workspace;
+  if (!DK || !PV || !WS || !_peekDir || !_peekEntries.length) return;
+  var doc = WS.getActive();
+  if (!doc) return;
+  var counts = DK.counts(_peekEntries);
+  var dirName = PF ? PF.baseName(_peekDir) : _peekDir;
+  DK.ORDER.forEach(function(slug) {
+    var n = counts[slug] || 0;
+    var kind = DK.label(slug);
+    var had = PV.find(doc.dsl, kind, dirName);
+    if (n > 0 && !had) return;      // 取り込む変更があるうちは聞かない
+    var row = document.createElement('div');
+    row.className = 'peek-verdict-row';
+    row.setAttribute('data-peek-verdict', kind);
+    var txt = document.createElement('span');
+    txt.className = 'peek-verdict-text';
+    if (had) {
+      var b = PV.badge(had, n);
+      txt.className += b.stale ? ' is-stale' : '';
+      txt.textContent = b.mark + ' ' + kind;
+      txt.title = b.title;
+      row.appendChild(txt);
+      var off = document.createElement('button');
+      off.type = 'button';
+      off.className = 'peek-verdict-act';
+      off.setAttribute('data-peek-verdict-clear', kind);
+      off.textContent = '控えを外す';
+      off.title = '確かめ直したので、この控えを ' + doc.name + ' から外します';
+      off.addEventListener('click', function(ev) {
+        ev.stopPropagation();
+        _writePeekVerdict(PV.remove(doc.dsl, kind, dirName));
+      });
+      row.appendChild(off);
+    } else {
+      txt.textContent = PV.offerText(kind, dirName, n);
+      row.appendChild(txt);
+      var on = document.createElement('button');
+      on.type = 'button';
+      on.className = 'peek-verdict-act';
+      on.setAttribute('data-peek-verdict-keep', kind);
+      on.textContent = '対応不要として控える';
+      on.title = doc.name + ' に「' + dirName + ' に ' + kind + ' は 0 枚」と書き残します';
+      on.addEventListener('click', function(ev) {
+        ev.stopPropagation();
+        _writePeekVerdict(PV.write(doc.dsl, {
+          kind: kind, dir: dirName, count: n, at: new Date().toISOString().slice(0, 16),
+        }));
+      });
+      row.appendChild(on);
+    }
+    host.appendChild(row);
+  });
+}
+
+// 控えは自分の図の本文なので、書いたらそのまま保存の道に乗せる。
+function _writePeekVerdict(nextDsl) {
+  var ed = document.getElementById('editor');
+  if (ed) { ed.value = nextDsl; ed.dispatchEvent(new Event('input')); }
+  else if (window.MA.workspace) window.MA.workspace.updateActive({ dsl: nextDsl });
+  if (window.MA.toast) window.MA.toast.show('確認の結論をこの図に控えました');
+  try { renderPeekFiles(); } catch (e) {}
 }
 
 // 行の図種の印。保存した図種の控えがあればそれを、無ければ本文からの判定を出す
