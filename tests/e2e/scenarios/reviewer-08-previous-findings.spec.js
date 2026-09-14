@@ -99,6 +99,53 @@ test('手順8 前回の指摘それぞれに、反映済みか継続かを画面
   expect(md).toContain('## 前回控えから変わった図（1 枚）');
 });
 
+// BLK-reviewer-20260914-2206: 前回の指摘文書に「puml 側は解消・svg 再エクスポートのみ継続」の
+// ように複合の状態を書くと、--board は「解消」の 2 文字だけを見て今回の突合と付き合わせ、
+// 残っている方に当たった所で「前回は解消と書いていますが、今回また当たっています」と出していた。
+// 内容が前回から 1 文字も変わっていない継続まで再発に見えるので、図の中身を読み直していた。
+test('手順8 内容据え置きの継続と、本当の出戻りを --board が区別する', () => {
+  const 複合 = [
+    '# primary への指摘(前回)',
+    '',
+    '## 指摘2 `domain-verdict` の宣言 (diagram1.puml)',
+    'diagram1.puml 側は宣言を入れたので解消、svg の再エクスポートのみ継続。継続 2 tick 目。',
+    '',
+    '## 【解消】`Gpio_Driver` の participant 名 (gpio_init_sequence.puml)',
+    '前回の指摘どおり揃えたので解消。',
+  ].join('\n');
+  // 今回の突合。diagram1 は出力物 (svg) だけが古い。gpio は宣言そのものが戻っている。
+  const rows = [
+    { doc: 'diagram1', docs: ['diagram1'], kind: 'svg.stale', category: 'SVG が古い',
+      title: 'diagram1.svg が diagram1.puml より古い', detail: '再エクスポート待ち' },
+    { doc: 'gpio_init_sequence', docs: ['gpio_init_sequence'], kind: 'name.variant', category: '命名',
+      title: '`Gpio_Driver` が GpioDrv に戻っている', detail: 'gpio_init_sequence.puml:3' },
+  ];
+  const view = reviewBoard.build({ board: { rows: rows }, findings: 複合, changedFiles: [] });
+  const byDoc = {};
+  view.carried.forEach((c) => { byDoc[c.finding.docs[0]] = c; });
+
+  // 到達条件その1: 部分解消の残りに当たっただけの指摘は出戻りにならず、
+  // 継続 tick も前回の続きから数える (1 に戻らない)。
+  const d1 = byDoc.diagram1;
+  expect(d1.verdict).toBe('carried');
+  expect(d1.regressed).toBe(false);
+  expect(d1.tick).toBe(3);
+  expect(d1.note).toContain('出戻りではありません');
+
+  // 到達条件その2: 解消と書いた本体にまた当たったものだけが出戻りとして残る。
+  const gpio = byDoc.gpio_init_sequence;
+  expect(gpio.regressed).toBe(true);
+  expect(gpio.tick).toBe(1);
+  expect(gpio.note).toBe('前回は解消と書いていますが、今回また当たっています');
+
+  // 到達条件その3: 読み直しが要る件数が要約と一覧の行頭で分かる (全件読み直さない)。
+  expect(view.counts.regressed).toBe(1);
+  expect(reviewBoard.summaryLine(view)).toContain('継続 2（うち出戻り 1）');
+  const md = reviewBoard.markdown(view, '前回の指摘の反映状況');
+  expect(md).toContain('（出戻り）');
+  expect(md).toContain('（SVG 再エクスポート待ち）');
+});
+
 // 監査を回すたびに記録しておいた 3 tick 分。gpio の名前不一致は 3 tick 目で直り、
 // spi の名前不一致は最後まで残る (台本の「継続 / 反映済み」がそのまま出る形)。
 function ok(result) { return { status: 'ok', result: result }; }

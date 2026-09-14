@@ -27,10 +27,25 @@
   // 指摘.md の見出しに付く印。reviewer が手で書く言葉をそのまま読む
   // (書式を新しく決めると、過去の指摘文書が全部「その他」に落ちるため)。
   var MARKS = [
+    { status: 'partial', label: '部分解消', re: /部分解消|一部解消/ },
     { status: 'resolved', label: '解消', re: /解消/ },
     { status: 'carried', label: '継続', re: /継続|未着手|再掲/ },
     { status: 'fresh', label: '新規', re: /新規|初出/ },
   ];
+
+  // BLK-reviewer-20260914-2206: 「puml 側は解消・svg 再エクスポートのみ継続」のように
+  // 1 件の中で解消した所と残っている所を書き分けた指摘は、`解消` の 2 文字だけを見ると
+  // 「解消」に落ちる。次の run で残っている方に当たると「前回は解消と書いたのに再発」と
+  // 読める文が出て、reviewer が図の中身を読み直す羽目になる。同じ文の中に解消と
+  // 残りの両方が書かれていれば、それは部分解消として読む。
+  var STILL_RE = /継続|残(?:っ|り|る)|まだ|のみ|未(?:反映|対応|着手|完了)|待ち/;
+  function _isPartial(text) {
+    var lines = _s(text).split(/[\n。]/);
+    for (var i = 0; i < lines.length; i++) {
+      if (/解消/.test(lines[i]) && STILL_RE.test(lines[i])) return true;
+    }
+    return false;
+  }
 
   // 図名として拾う綴り。拡張子は落として突き合わせる (指摘文は
   // `timer_state.puml` とも `timer_state.svg` とも書くが、同じ図を指す)。
@@ -65,9 +80,11 @@
     }
     if (NOT_A_FINDING.test(head)) return 'other';
     var src = mark ? head.replace(/【[^】]*】/g, '') : head;
+    if (_isPartial(src)) return 'partial';
     for (var j = 0; j < MARKS.length; j++) {
       if (MARKS[j].re.test(src)) return MARKS[j].status;
     }
+    if (_isPartial(body)) return 'partial';
     for (var k = 0; k < MARKS.length; k++) {
       if (MARKS[k].re.test(_s(body))) return MARKS[k].status;
     }
@@ -197,7 +214,7 @@
     });
     var keys = _list(finding.keys);
     // 図しか名指ししていない指摘は、図名の一致が持っている一番強い手がかり。
-    if (!keys.length && !finding.svgIssue) return { hit: onDoc, rest: [] };
+    if (!keys.length && !finding.svgIssue) return { hit: onDoc, rest: [], keyHit: onDoc };
 
     function byKey(r) {
       var text = _s(r.title) + ' ' + _s(r.detail);
@@ -214,7 +231,13 @@
       if (byKey(r)) return true;
       return finding.svgIssue && onDoc.indexOf(r) >= 0 && _s(r.kind).indexOf('svg.') === 0;
     });
-    return { hit: hit, rest: onDoc.filter(function(r) { return hit.indexOf(r) < 0; }) };
+    // 名指しの語で当たった行と、図の出力物 (svg) だけで当たった行を分けて持つ。
+    // 「本体は直ったが svg の書き出しだけが残っている」を出戻りと呼ばないため。
+    return {
+      hit: hit,
+      rest: onDoc.filter(function(r) { return hit.indexOf(r) < 0; }),
+      keyHit: hit.filter(byKey),
+    };
   }
 
   // build({ board, findings, changedFiles })
@@ -256,9 +279,28 @@
       if (hit.length) {
         // 当たった = まだ直っていない。前回まで数えた回数に 1 を足す。
         // 前回が「解消」だった指摘に今回また当たったら、それは出戻りなので 1 から数える。
-        var tick = f.status === 'resolved' ? 1 : (f.tick || 0) + 1;
+        //
+        // BLK-reviewer-20260914-2206: ただし「解消」の一言だけで出戻りと言い切ると、
+        // 内容が前回から 1 文字も変わっていない継続まで「再発」に見える。出戻りと
+        // 呼ばないのは次の 2 つ:
+        //   ・前回を『部分解消』と書いた指摘 — 残ると書いた方に当たっただけ
+        //   ・当たったのが図の出力物 (svg) の行だけ — 本体は消え、再エクスポート待ちが残っている
+        var svgOnly = !m.keyHit.length && hit.every(function(r) {
+          return _s(r.kind).indexOf('svg.') === 0;
+        });
+        var regressed = f.status === 'resolved' && !svgOnly;
+        var tick = regressed ? 1 : (f.tick || 0) + 1;
+        var note = '';
+        if (regressed) note = '前回は解消と書いていますが、今回また当たっています';
+        else if (f.status === 'partial') {
+          note = '前回は部分解消 (直った所と残る所を書き分けた指摘) です。'
+            + '残ると書いた方に当たっているので、出戻りではありません';
+        } else if (f.status === 'resolved') {
+          note = '前回は解消と書いた本体に当たっておらず、残っているのは図の出力物 (SVG) だけです。'
+            + '再エクスポート待ちの継続で、出戻りではありません';
+        }
         carried.push({ finding: f, verdict: 'carried', tick: tick, atLeast: f.atLeast, rows: hit,
-          note: f.status === 'resolved' ? '前回は解消と書いていますが、今回また当たっています' : '' });
+          regressed: regressed, svgOnly: svgOnly, note: note });
       } else {
         carried.push({ finding: f, verdict: 'resolved', tick: f.tick, rows: [],
           note: '今回の突合に出ていません' });
@@ -283,6 +325,8 @@
       changedFiles: changed,
       counts: {
         carried: carried.filter(function(c) { return c.verdict === 'carried'; }).length,
+        // 本当の出戻り。読み直しが要るのはここだけ (継続との区別が付かないと全件読む羽目になる)。
+        regressed: carried.filter(function(c) { return c.regressed; }).length,
         resolved: carried.filter(function(c) { return c.verdict === 'resolved'; }).length,
         sameDoc: carried.filter(function(c) { return c.verdict === 'sameDoc'; }).length,
         unmatched: carried.filter(function(c) { return c.verdict === 'unmatched'; }).length,
@@ -302,8 +346,12 @@
   }
 
   function summaryLine(view) {
-    var c = (view && view.counts) || { carried: 0, resolved: 0, fresh: 0, sameDoc: 0, unmatched: 0, changed: 0 };
-    var s = '継続 ' + c.carried + ' / 解消 ' + c.resolved + ' / 新規 ' + c.fresh + ' 件';
+    var c = (view && view.counts)
+      || { carried: 0, resolved: 0, fresh: 0, sameDoc: 0, unmatched: 0, changed: 0, regressed: 0 };
+    var s = '継続 ' + c.carried;
+    // 出戻りは継続の内数。0 件なら書かない (毎回出る数字は読み飛ばされる)。
+    if (c.regressed) s += '（うち出戻り ' + c.regressed + '）';
+    s += ' / 解消 ' + c.resolved + ' / 新規 ' + c.fresh + ' 件';
     var re = [];
     if (c.sameDoc) re.push('同じ図に別の指摘 ' + c.sameDoc + ' 件');
     if (c.unmatched) re.push('要読み直し ' + c.unmatched + ' 件');
@@ -330,6 +378,9 @@
         var head = '- ' + c.finding.title;
         if (kind === 'carried') {
           head += '（' + c.tick + ' tick 目' + (c.atLeast ? '以上' : '') + '）';
+          // 読み直しが要る 1 件を、行の頭で見分けられるようにする。
+          if (c.regressed) head += '（出戻り）';
+          else if (c.svgOnly) head += '（SVG 再エクスポート待ち）';
           head += c.touched && c.touched.length
             ? '（' + c.touched.join('・') + ' は前回控えから変わっています）'
             : '（前回控えから 1 行も変わっていません = 未着手）';
