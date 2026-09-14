@@ -85,6 +85,8 @@ curl -sS -X POST http://127.0.0.1:8766/verify-svg -H "Content-Type: application/
 | `GET /version-search` | `?dir=&q=` | 保存フォルダの全図の版から部品名を探す (混入点の材料) |
 | `GET /peek-dirs` | — | 保存フォルダの候補を覗く |
 | `GET /peek-notes` | `?dir=` | 隣のフォルダに置かれた指摘 (`.md`) を読む |
+| `GET /name-registry` | `?dir=` | 保存フォルダの**親**にある正式表記の登録簿 (`_names.json`。3 人で共有) |
+| `POST /name-registry` | `{dir, entries}` | 正式表記の登録簿を丸ごと置き換える |
 | `POST /file-roles` | `{dir, roles}` | `_roles.json` を丸ごと置き換える |
 | `POST /export-log` | — | 書き出しの控えを 1 件足す |
 
