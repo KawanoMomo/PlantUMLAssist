@@ -395,6 +395,33 @@ function init() {
     function doRestore() {
       var cfg = as.getConfig();
       if (!cfg.enabled) return;
+      // BLK-primary-20260914-2106: 保存フォルダに、開いているタブと同じ名前の図が
+      // あるなら、そのタブの中身はその図そのものでなければならない。ここで図種の
+      // 下書き (plantuml-sequence 等の鍵) を当てると、diagram1 のタブに別の図の
+      // 下書きが入り、そのまま保存すると diagram1.puml がその下書きで潰れる。
+      // ディスクの本文は init() が localStorage に写しているので、図名で引ける。
+      if (cfg.backend === 'file' && window.MA.workspace) {
+        var act = null;
+        try { act = window.MA.workspace.getActive(); } catch (e) { act = null; }
+        var onDisk = (act && act.name) ? as.restoreFor(act.name) : null;
+        if (onDisk != null && _isUntouchedDoc(act)) {
+          // 見本のままのタブに、同じ名前のディスクの本文を載せるだけ。利用者の
+          // 打った中身は 1 文字も無いので、聞かずに載せてよい (聞いて「いいえ」だと
+          // 見本のまま開いたことになり、そのあとの保存でディスクが潰れる)。
+          mmdText = onDisk;
+          suppressSync = true;
+          editorEl.value = mmdText;
+          suppressSync = false;
+          var det = window.MA.workspace.detectType(mmdText);
+          if (det && modules[det]) {
+            currentDiagramType = det;
+            currentModule = modules[det];
+            if (dtSelect) dtSelect.value = det;
+          }
+          try { window.MA.workspace.updateActive({ dsl: mmdText, diagramType: currentDiagramType }); } catch (e) {}
+          return;
+        }
+      }
       var saved = as.restoreFor(lastDiagramType);
       if (saved == null || saved === mmdText) return;
       var apply = false;
@@ -3427,6 +3454,25 @@ function _blockedFileWrite(name) {
   try { return _fileWriteBlock(String(name)) || null; } catch (e) { return null; }
 }
 
+// BLK-primary-20260914-2106: まだ見本 (または白紙) のままのタブを、保存フォルダへ
+// 自動で書き戻さないための門。起動すると既定のタブ `diagram1` が図種の見本で作られ、
+// 画面のバッジ (整合・⇄ イベント・指摘・書き出し一覧) は数を出すために saveActiveDoc()
+// を通る。その結果、利用者が 1 文字も打っていないのに見本が `diagram1.puml` として
+// ディスクへ書かれ、同じ名前で保存してあった本物の図が見本で丸ごと潰れていた
+// (primary の diagram1.puml から domain-verdict 宣言行が消え、開き直すたびに再発)。
+// 見本・白紙には利用者の成果が 1 文字も無い。書かなくても失うものは無く、書くと
+// 既にある図を壊すことがあるので書かない。見本をわざとファイルに落としたいときは、
+// 手で押す [💾 保存] が別経路で書く (止めるのは自動の書き戻しだけ)。
+// 判定そのものは blankDoc が持つ (見本・白紙の定義を 2 か所に置かない)。
+function _isUntouchedDoc(doc) {
+  var BD = window.MA.blankDoc;
+  if (!BD || !doc) return false;
+  var mod = modules[doc.diagramType];
+  var tpl = '';
+  try { tpl = mod && mod.template ? mod.template() : ''; } catch (e) { tpl = ''; }
+  try { return BD.isUntouched(doc.dsl, tpl, doc.diagramType); } catch (e) { return false; }
+}
+
 // BLK-primary-20260913-0206: 一括置換・改名の後始末が、開いているタブを丸ごと
 // 保存フォルダへ書き戻していた。そこには (a) 今回の置換が 1 文字も当たっていない図、
 // (b) テンプレ宣言で書き込みを止めてある図、(c) 錠に「元のまま保つ」と答えた図が
@@ -3439,6 +3485,8 @@ function _blockedFileWrite(name) {
 // 戻り値は書いたかどうか。
 function writeDocToFolder(doc, fileDir) {
   if (!doc || !window.MA.workspace) return false;
+  // まだ見本のままのタブは書かない (BLK-primary-20260914-2106)。
+  if (_isUntouchedDoc(doc)) { _noteSaveVerify(doc, 'untouched'); return false; }
   if (_blockedFileWrite(doc.name)) {
     if (window.MA.autoSave && window.MA.autoSave.noteFileBlocked) {
       window.MA.autoSave.noteFileBlocked(doc.name, _blockedFileWrite(doc.name));
@@ -3500,6 +3548,13 @@ function saveActiveDoc() {
       return doc;
     }
     if (doc && cfg && cfg.backend !== 'file') _noteSaveVerify(doc, 'download');
+    // まだ見本・白紙のままのタブは、自動の書き戻しではディスクへ書かない
+    // (BLK-primary-20260914-2106: 起動しただけで既存の図が見本で潰れる)。
+    if (doc && cfg && cfg.backend === 'file' && _isUntouchedDoc(doc)) {
+      _noteSaveVerify(doc, 'untouched');
+      renderDiffBadge();
+      return doc;
+    }
     if (doc && cfg && cfg.backend === 'file') {
       // BLK-junior-20260908-1803-wish: 開いたままのファイルへ最初に書き戻す前に
       // 一度だけ聞く。答えるまでは書かない (見比べ中の元ファイルを守る)。
