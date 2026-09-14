@@ -1,4 +1,4 @@
-﻿// @ts-check
+// @ts-check
 // junior 台本 手順 1「persona-data\junior の自分の GPIO 図(前周までの最新版)を開く」。
 //
 // BLK-junior-20260908-2003-wish: 資料化の周は「前周に作った状態遷移図を開く」から
