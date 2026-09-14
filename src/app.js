@@ -9937,6 +9937,66 @@ function _captureBeforeRename(from, to, docs, changed) {
   } catch (e) { /* 控えが残せなくても置換自体は通す */ }
 }
 
+// ── 過去の置換の組 (BLK-primary-20260914-1106-friction) ─────────────────────
+// ヒット件数は置換前・置換後を打ち終えてからしか出ないので、同じ組を当て直す
+// 運用では「もう残っていないこと」を確かめるためだけに毎回打ち直していた。
+// パネルを開いた時点で、過去の組と今の残存件数を並べる。残っている組を押せば
+// 置換前・置換後がそのまま入る (打鍵ゼロで置換に進める)。
+function _renameRedoDocs() {
+  return _fiEnabled() ? _fiRows() : _renameDocs();
+}
+
+function renderRenameRedo() {
+  var box = document.getElementById('rename-redo');
+  var RR = window.MA.renameRedo;
+  if (!box || !RR) return;
+  box.textContent = '';
+  var rows = RR.pairs(_renameHistoryList(), _renameRedoDocs());
+
+  var sum = document.createElement('div');
+  sum.className = 'rr-summary ' + RR.summaryClass(rows);
+  sum.id = 'rename-redo-summary';
+  sum.setAttribute('data-rr-pairs', String(rows.length));
+  sum.setAttribute('data-rr-pending', String(rows.filter(function(r) {
+    return r.state === 'pending';
+  }).length));
+  sum.textContent = RR.summary(rows);
+  box.appendChild(sum);
+  if (!rows.length) return;
+
+  var host = document.createElement('div');
+  host.className = 'rr-rows';
+  host.id = 'rename-redo-rows';
+  rows.forEach(function(r) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'rr-row';
+    b.setAttribute('data-state', r.state);
+    b.setAttribute('data-from', r.from);
+    b.setAttribute('data-to', r.to);
+    b.setAttribute('data-remaining', String(r.remaining));
+    b.title = RR.title(r);
+    var pair = document.createElement('span');
+    pair.className = 'rr-pair';
+    pair.textContent = r.from + ' → ' + r.to;
+    var st = document.createElement('span');
+    st.className = 'rr-state';
+    st.textContent = RR.stateText(r);
+    b.appendChild(pair);
+    b.appendChild(st);
+    b.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      var f = document.getElementById('rename-from');
+      var t = document.getElementById('rename-to');
+      if (f) f.value = r.from;
+      if (t) t.value = r.to;
+      updateRenamePreview();
+    });
+    host.appendChild(b);
+  });
+  box.appendChild(host);
+}
+
 function renderRenameHistory(from) {
   var box = document.getElementById('rename-history');
   var RH = window.MA.renameHistory;
@@ -10717,6 +10777,7 @@ function updateRenamePreview() {
   renderSignatureApply(docs, from);
   renderRenameFolder();
   renderRenameHistory(from);
+  renderRenameRedo();
 
   // 開いていない図しか当たらない語でも置換できるようにする。フォルダを数えて
   // いるのにボタンが押せないのでは、結局その図を開く手順が残る。
