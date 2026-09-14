@@ -18,6 +18,8 @@ const DIR = S.dirFor(__filename);
 const DIR2 = S.dirFor(__filename) + '-show';
 // 保存フォルダへ直接書いた回を後から見返す場面 (BLK-primary-20260914-1206-wish)。
 const DIR3 = S.dirFor(__filename) + '-hist';
+// 納品履歴から前回渡した版と見比べる場面 (BLK-primary-20260914-2106-wish)。
+const DIR4 = S.dirFor(__filename) + '-deliv';
 
 // 手順2 と同じ一括置換を当てる。手順4 が見せるのはその前後なので、
 // ここを踏まないと「変更前」がそもそも存在しない。
@@ -352,4 +354,70 @@ test('手順4 引き継ぐ前に、この周で保存が効かなかった図を
   expect((await page.locator('#folder-save-verify').textContent()) || '').not.toContain('効かなかった');
 
   await S.clearDir(page, DIR);
+});
+
+// BLK-primary-20260914-2106-wish: 手順3 (見比べ) と手順4 (顧客向け資料まとめ) で、
+// 同じ「前回どの版を渡したか」を 2 回別々に調べていた。納品履歴の行は日時と枚数しか
+// 言わないので、「前回渡した版と比べてどの図が変わったか」は zip を開くしかない。
+// 履歴の行を押すだけで、その回と今が図ごとに並ぶことを到達条件にする。
+test('手順4 前回渡した版と今を、納品履歴の行から図ごとに見比べられる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR4);
+  await S.clearDir(page, DIR4);
+  await S.putDoc(page, DIR4, 'spi_init_sequence', S.docFor('spi_init_sequence', 'SpiDrv'));
+  await S.putDoc(page, DIR4, 'can_init_sequence', S.docFor('can_init_sequence'));
+  await S.openFolderItem(page, 'spi_init_sequence');
+  await page.waitForTimeout(800);
+
+  // 1 回目の提出。ここが「前回顧客に渡した版」になる。
+  await S.runCommand(page, '納品パッケージ');
+  await expect(page.locator('#dp-modal')).toBeVisible();
+  await page.waitForTimeout(2500);
+  const dl = page.waitForEvent('download', { timeout: 60000 });
+  await page.locator('#dp-build').click();
+  await dl;
+  await expect(page.locator('#dp-status')).toContainText('書き出しました', { timeout: 60000 });
+  await page.locator('#dp-close').click();
+
+  // 提出後に 1 枚だけ直す (顧客に渡した版との差はこの 1 枚だけ)。
+  await S.typeDsl(page, S.docFor('spi_init_sequence', 'Spi_Driver'));
+  await page.waitForTimeout(1200);
+  const lock = page.locator('#source-lock-modal');
+  if (await lock.isVisible().catch(() => false)) {
+    await page.locator('#source-lock-overwrite').click();
+    await page.waitForTimeout(1200);
+  }
+  // 提出後に増えた図も 1 枚置く (「新規」が出るかを見る)。
+  await S.putDoc(page, DIR4, 'adc_state', S.docFor('adc_state'));
+
+  await S.runCommand(page, '納品パッケージ');
+  await page.waitForTimeout(3000);
+
+  // 到達条件その1: 履歴の行そのものが「今と比べる」入口になっている。
+  const row = page.locator('#dp-history .dp-hist-row[data-latest="1"]');
+  await expect(row).toBeVisible();
+  await row.click();
+  await page.waitForTimeout(600);
+
+  // 到達条件その2: その回と今が、図ごとに 1 画面で並ぶ。
+  const cmp = page.locator('#dp-hist-compare');
+  await expect(cmp).toBeVisible();
+  await expect(cmp).toHaveAttribute('data-exact', '1');
+  await expect(cmp.locator('.dp-hist-doc[data-name="spi_init_sequence"]')).toHaveAttribute('data-status', 'changed');
+  await expect(cmp.locator('.dp-hist-doc[data-name="can_init_sequence"]')).toHaveAttribute('data-status', 'same');
+  await expect(cmp.locator('.dp-hist-doc[data-name="adc_state"]')).toHaveAttribute('data-status', 'new');
+  await expect(page.locator('#dp-hist-line')).toContainText('変更 1 枚');
+
+  // 到達条件その3: 見比べた流れのまま、その差分だけを次の納品の対象にできる
+  // (履歴を見る画面と対象を選ぶ画面を行き来しない)。
+  await page.locator('#dp-hist-pick').click();
+  await page.waitForTimeout(600);
+  // 直した 1 枚と増えた 1 枚だけが残る (開いているタブの下書きが候補に混ざるので総枚数は見ない)。
+  await expect(page.locator('#dp-count')).toContainText('2 / ');
+  await expect(page.locator('.dp-pick[data-name="spi_init_sequence"]')).toBeChecked();
+  await expect(page.locator('.dp-pick[data-name="adc_state"]')).toBeChecked();
+  await expect(page.locator('.dp-pick[data-name="can_init_sequence"]')).not.toBeChecked();
+
+  await page.screenshot({ path: shotOut('primary-04-delivery-history.png'), fullPage: true });
+  await page.locator('#dp-close').click();
+  await S.clearDir(page, DIR4);
 });
