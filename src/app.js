@@ -10427,7 +10427,66 @@ function setupTabs() {
     // 一覧は長いと縦にスクロールする。開くボタンを末尾に置くと 14 枚のときに
     // 画面の外へ出るので、印を付ける行の上に固定して常に見えるようにする。
     bar.appendChild(folderOpenButton());
+    // BLK-primary-20260914-1806-wish: 印を付けた図を、開かずにそのまま zip にする。
+    // 「開く」の隣に置く —— どちらも「印を付けた図をどうするか」のボタンで、
+    // 資料を作る場面では開かずに出せることがここで分かる必要がある。
+    bar.appendChild(folderExportButton());
     return bar;
+  }
+
+  function folderExportButton() {
+    var FE = window.MA.folderExport;
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'folder-export-svg';
+    b.setAttribute('data-export-count', '0');
+    if (FE) b.title = FE.buttonTitle();
+    b.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      exportPickedFromFolder();
+    });
+    return b;
+  }
+
+  // 印を付けた図の本文を保存フォルダから読み、開かずに zip へ。
+  // 読めない図があっても残りは出す (1 枚のために資料作りが止まらない)。
+  function exportPickedFromFolder() {
+    var FE = window.MA.folderExport;
+    var WS = window.MA.workspace;
+    if (!FE || !WS) return Promise.resolve(null);
+    var names = FE.toExport(folderPicked, folderNames);
+    if (!names.length) {
+      if (window.MA.toast) window.MA.toast.show('書き出す図に印が付いていません');
+      return Promise.resolve(null);
+    }
+    var dir = _wsFileDir();
+    // 開いているタブの編集中の内容は、先に保存フォルダへ書き戻してから読む
+    // (ファイルの中身を出す口なので、書き戻す前に読むと 1 枚だけ古い図が出る)。
+    saveActiveDoc();
+    var btn = panel.querySelector('.folder-export-svg');
+    if (btn) { btn.disabled = true; btn.textContent = 'SVG を書き出しています…'; }
+    var texts = {};
+    return Promise.all(names.map(function(n) {
+      return WS.loadFile(n, dir).then(function(t) {
+        if (typeof t === 'string') texts[n] = t;
+      }, function() {});
+    })).then(function() {
+      var built = FE.docsFrom(names, texts);
+      if (!built.docs.length) {
+        if (window.MA.toast) window.MA.toast.show('選んだ図の本文を読めませんでした');
+        syncFolderPickUi();
+        return null;
+      }
+      return exportAllSVG(built.docs).then(function(summary) {
+        var note = FE.missingNote(built.missing);
+        if (note && window.MA.toast) window.MA.toast.show(summary.message + note);
+        syncFolderPickUi();
+        return summary;
+      });
+    }, function() {
+      syncFolderPickUi();
+      return null;
+    });
   }
 
   function folderOpenButton() {
@@ -10476,6 +10535,15 @@ function setupTabs() {
     if (open) {
       open.textContent = FS.openLabel(folderPicked, folderNames, _openDocNames());
       open.disabled = FS.toOpen(folderPicked, folderNames, _openDocNames()).length === 0;
+    }
+    // BLK-primary-20260914-1806-wish: 書き出しは「開いていない図」も対象なので、
+    // 枚数は印そのものの数 (開く側と違い、開いているタブを引かない)。
+    var exp = panel.querySelector('.folder-export-svg');
+    var FE = window.MA.folderExport;
+    if (exp && FE) {
+      var expNames = FE.toExport(folderPicked, folderNames);
+      exp.textContent = FE.buttonLabel(expNames.length);
+      exp.disabled = expNames.length === 0;
     }
   }
 
