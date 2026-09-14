@@ -10335,6 +10335,9 @@ function setupTabs() {
     }
     if ((roleStatus[name] || {}).status === 'dirty') row.appendChild(folderRoleAcceptButton(name));
     if (status === 'changed' || status === 'new') row.appendChild(folderDiffButton(name, status));
+    if (svgMtimes[name] && svgContent[name] !== 'match') {
+      row.appendChild(folderSvgVisualButton(name));
+    }
     if (window.MA.targetSet) row.appendChild(folderTargetButton(name));
     row.appendChild(folderDraftButton(name));
     // BLK-junior-20260914-1106-wish: 同じ図種の枠に版が並ぶようになったので、
@@ -10704,6 +10707,25 @@ function setupTabs() {
     b.addEventListener('click', function(ev) {
       ev.stopPropagation();
       openReviewDiff(name);
+    });
+    return b;
+  }
+
+  // BLK-reviewer-20260914-2106-wish: 印 (@pua-source-sha1) が食い違った 1 枚に付く [可視差分]。
+  // 印だけでは「コメント行を足しただけの見かけ上の stale」と「実質的な内容変更」が
+  // 同じ「内容ずれ」に見える。旧 SVG と描き直した SVG を並べて切り分ける画面をここから開く。
+  function folderSvgVisualButton(name) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'folder-svg-visual';
+    b.setAttribute('data-visual-name', name);
+    b.textContent = '可視差分';
+    b.title = '保存中の SVG と、今の puml を描き直した SVG を並べ、'
+      + '追加・削除・移動したものだけを光らせる'
+      + '（コメント行だけの差なら「可視内容は同一」と出ます）';
+    b.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      openSvgVisualDiff(name);
     });
     return b;
   }
@@ -11555,6 +11577,12 @@ function setupTabs() {
   document.addEventListener('click', function(ev) {
     if (!panel.classList.contains('open')) return;
     if (panel.contains(ev.target) || ev.target === btnFolder) return;
+    // BLK-reviewer-20260914-2106-wish: 可視差分は一覧の行から開く。ここで一覧まで
+    // 閉じると、2 枚目を確かめるたびに一覧を開き直すことになる (確かめる図は複数ある)。
+    var vm = document.getElementById('svg-visual-modal');
+    // 閉じるを押した時点でモーダルは既に display:none なので、表示中かどうかは見ない
+    // (見ると「閉じた瞬間の 1 クリック」で一覧まで閉じる)。
+    if (vm && vm.contains(ev.target)) return;
     closePanel();
   });
 }
@@ -11583,6 +11611,148 @@ document.addEventListener('keydown', function(ev) {
 function closeReviewDiff() {
   var m = _rdModal();
   if (m) m.style.display = 'none';
+}
+
+// ── 可視差分プレビュー (BLK-reviewer-20260914-2106-wish) ────────
+// 一覧の行の [可視差分] から開く。保存中の SVG と、今の puml を描き直した SVG を
+// 左右に並べ、追加・削除・移動したものだけを光らせる。
+// stale (印の不一致) が出たとき、それがコメント行の追加などによる
+// 見かけ上の stale なのか、実質的な内容変更なのかをこの 1 画面で言い切る
+// (前は 1 枚ごとに /render を叩いて `<?plantuml-src ?>` を除いた文字列 diff を書いていた)。
+var _svdName = '';
+
+function _svdModal() { return document.getElementById('svg-visual-modal'); }
+
+function closeSvgVisualDiff() {
+  var m = _svdModal();
+  if (m) m.style.display = 'none';
+}
+
+// 描かれている文字に印を付ける。mark は added / removed / moved。
+// 同じ文字が複数ある図でも、先頭から順に数だけ付ける
+// (どの 1 つかまでは言わない。言えないことを言い切らない)。
+var _SVD_COLOR = { added: '#0a7d00', removed: '#c00000', moved: '#b06000' };
+
+function _svdMark(host, texts, mark) {
+  if (!host || !texts || !texts.length) return;
+  var nodes = host.querySelectorAll('text');
+  var want = {};
+  texts.forEach(function(t) { want[t] = (want[t] || 0) + 1; });
+  for (var i = 0; i < nodes.length; i++) {
+    var t = (nodes[i].textContent || '').replace(/\s+/g, ' ').trim();
+    if (!want[t]) continue;
+    want[t]--;
+    nodes[i].setAttribute('data-visual-mark', mark);
+    nodes[i].setAttribute('fill', _SVD_COLOR[mark] || '#c00000');
+    nodes[i].setAttribute('font-weight', 'bold');
+  }
+}
+
+function _svdRender(name, result, savedSvg, drawnSvg) {
+  var VD = window.MA.svgVisualDiff;
+  var head = document.getElementById('svg-visual-verdict');
+  var counts = document.getElementById('svg-visual-counts');
+  var title = document.getElementById('svg-visual-title');
+  var names = document.getElementById('svg-visual-names');
+  var oldHost = document.getElementById('svg-visual-old');
+  var newHost = document.getElementById('svg-visual-new');
+  var report = document.getElementById('svg-visual-report');
+  if (!VD || !head || !counts || !names || !oldHost || !newHost) return;
+  if (title) title.textContent = '可視差分: ' + name;
+  head.setAttribute('data-verdict', result.verdict);
+  head.className = 'svg-visual-verdict verdict-' + result.verdict;
+  head.textContent = VD.verdictText(result);
+  head.title = VD.verdictTitle(result);
+  counts.textContent = VD.countsText(result);
+  names.textContent = '';
+  function row(mark, label, text) {
+    var d = document.createElement('div');
+    d.className = 'svg-visual-name';
+    d.setAttribute('data-visual-name-mark', mark);
+    d.textContent = label + ' ' + text;
+    names.appendChild(d);
+  }
+  result.addedLabels.forEach(function(t) { row('added', '＋', t); });
+  result.removedLabels.forEach(function(t) { row('removed', '－', t); });
+  result.movedLabels.forEach(function(m) {
+    row('moved', '〜', m.text + '（' + (m.dx >= 0 ? '+' : '') + m.dx
+      + ', ' + (m.dy >= 0 ? '+' : '') + m.dy + '）');
+  });
+  oldHost.innerHTML = savedSvg || '';
+  newHost.innerHTML = drawnSvg || '';
+  // 旧にしか無いものは旧の側で、新にしか無いものは新の側で光らせる。
+  // 両方に出すと「どちらにあるのか」を読み取る作業が残る。
+  _svdMark(oldHost, result.removedLabels, 'removed');
+  _svdMark(newHost, result.addedLabels, 'added');
+  var moved = result.movedLabels.map(function(m) { return m.text; });
+  _svdMark(oldHost, moved, 'moved');
+  _svdMark(newHost, moved, 'moved');
+  if (report) report.value = VD.report(name, result);
+}
+
+function openSvgVisualDiff(name) {
+  var m = _svdModal();
+  var VD = window.MA.svgVisualDiff;
+  if (!m || !VD) return;
+  _svdName = name;
+  m.style.display = 'flex';
+  if (!m.getAttribute('data-svd-bound')) {
+    m.setAttribute('data-svd-bound', '1');
+    m.addEventListener('click', function(ev) { if (ev.target === m) closeSvgVisualDiff(); });
+    var close = document.getElementById('svg-visual-close');
+    if (close) close.addEventListener('click', closeSvgVisualDiff);
+    var copy = document.getElementById('svg-visual-copy');
+    if (copy) {
+      copy.addEventListener('click', function() {
+        var ta = document.getElementById('svg-visual-report');
+        if (!ta) return;
+        ta.select();
+        var done = function() { copy.textContent = 'コピーしました'; };
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(ta.value).then(done, done);
+            return;
+          }
+        } catch (e) {}
+        done();
+      });
+    }
+  }
+  var head = document.getElementById('svg-visual-verdict');
+  if (head) {
+    head.removeAttribute('data-verdict');
+    head.textContent = '描き直して見比べています…';
+  }
+  var oldHost = document.getElementById('svg-visual-old');
+  var newHost = document.getElementById('svg-visual-new');
+  if (oldHost) oldHost.textContent = '';
+  if (newHost) newHost.textContent = '';
+  var mode = (document.getElementById('render-mode') || {}).value || 'local';
+  fetch('/verify-svg', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dir: _wsFileDir(), types: [name], mode: mode, withSvg: true }),
+  }).then(function(resp) {
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    return resp.json();
+  }).then(function(res) {
+    var r = ((res && res.results) || {})[name] || {};
+    if (typeof r.savedSvg !== 'string' || typeof r.drawnSvg !== 'string') {
+      if (head) {
+        head.setAttribute('data-verdict', 'unknown');
+        head.textContent = r.svgOmitted || r.error
+          || (r.status === 'missing' ? 'SVG が保存フォルダにありません'
+            : '比べられませんでした');
+      }
+      return;
+    }
+    _svdRender(name, VD.compare(r.savedSvg, r.drawnSvg), r.savedSvg, r.drawnSvg);
+  }).catch(function() {
+    if (head) {
+      head.setAttribute('data-verdict', 'unknown');
+      head.textContent = '比べられませんでした';
+    }
+  });
 }
 
 function openReviewDiff(name) {

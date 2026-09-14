@@ -6497,6 +6497,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/svg-cross.js"></script>
 <script src="src/core/part-cross.js"></script>
 <script src="src/core/svg-diff-summary.js"></script>
+<script src="src/core/svg-visual-diff.js"></script>
 <script src="src/core/review-state.js"></script>
 <script src="src/core/write-activity.js"></script>
 <script src="src/core/file-role.js"></script>
@@ -6986,6 +6987,47 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <span id="lg-note"></span>
     </div>
     <div id="lg-body"></div>
+  </div>
+</div>
+<!-- BLK-reviewer-20260914-2106-wish: stale と出た 1 枚について、保存中の SVG と
+     今の puml を描き直した SVG を並べ、可視差分 (追加・削除・移動) だけを光らせる。
+     これが無い間、reviewer は 1 枚ごとに /render を叩いて `<?plantuml-src ?>` を
+     取り除いた文字列 diff を書いていた。中身は src/core/svg-visual-diff.js -->
+<div id="svg-visual-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1001;align-items:center;justify-content:center;">
+  <div id="svg-visual-content" style="background:#fff;color:#222;width:92vw;height:88vh;display:flex;flex-direction:column;border-radius:6px;overflow:hidden;">
+    <style>
+      /* 判定は 3 つとも色で分ける。文字だけだと、一覧に戻ってから
+         「どちらの答えだったか」を読み直すことになる。 */
+      #svg-visual-verdict { font-weight: bold; }
+      #svg-visual-verdict[data-verdict="same"] { color: #0a7d00; }
+      #svg-visual-verdict[data-verdict="moved"] { color: #b06000; }
+      #svg-visual-verdict[data-verdict="changed"] { color: #c00000; }
+      #svg-visual-verdict[data-verdict="unknown"] { color: #555; }
+      .svg-visual-name { font-family: monospace; }
+      .svg-visual-name[data-visual-name-mark="added"] { color: #0a7d00; }
+      .svg-visual-name[data-visual-name-mark="removed"] { color: #c00000; }
+      .svg-visual-name[data-visual-name-mark="moved"] { color: #b06000; }
+      .svg-visual-pane-head { color: #444; font-weight: bold; }
+    </style>
+    <div id="svg-visual-head" style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid #ddd;flex-wrap:wrap;">
+      <strong id="svg-visual-title">可視差分</strong>
+      <span id="svg-visual-verdict"></span>
+      <span id="svg-visual-counts" style="color:#555;"></span>
+      <button type="button" id="svg-visual-copy" title="この判定を primary への指摘文としてコピーする">指摘文をコピー</button>
+      <button type="button" id="svg-visual-close" style="margin-left:auto;">閉じる</button>
+    </div>
+    <div id="svg-visual-names" style="padding:4px 12px;max-height:22%;overflow:auto;"></div>
+    <div id="svg-visual-panes" style="display:flex;flex:1;min-height:0;">
+      <div class="svg-visual-pane" style="flex:1;min-width:0;overflow:auto;border-right:1px solid #ddd;">
+        <div class="svg-visual-pane-head" style="padding:4px 8px;background:#f4f4f4;">保存中の SVG（旧）</div>
+        <div id="svg-visual-old" style="position:relative;padding:8px;"></div>
+      </div>
+      <div class="svg-visual-pane" style="flex:1;min-width:0;overflow:auto;">
+        <div class="svg-visual-pane-head" style="padding:4px 8px;background:#f4f4f4;">今の puml を描き直した SVG（新）</div>
+        <div id="svg-visual-new" style="position:relative;padding:8px;"></div>
+      </div>
+    </div>
+    <textarea id="svg-visual-report" readonly style="height:0;opacity:0;position:absolute;left:-9999px;"></textarea>
   </div>
 </div>
 <!-- 他の保存フォルダの図を「読むだけ」で見る (保存先は動かさない) -->

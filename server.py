@@ -161,6 +161,10 @@ IDLE_SHUTDOWN_SEC = 300
 # 図でない何かを掴んだときだけ。当たっても応答が肥らないようにするための蓋。
 MAX_DIFF_PUML_CHARS = 65536
 MAX_DIFF_LABELS = 2000
+# BLK-reviewer-20260914-2106-wish: 可視差分プレビューに渡す SVG 本体の上限。
+# 1 枚だけを確かめるときにしか添えない (withSvg) ので、実データの 1 枚ぶん
+# (数十〜数百 KB) が収まれば足りる。超える図は添えずに理由を返す。
+MAX_VISUAL_SVG_BYTES = 2 * 1024 * 1024
 
 _state_lock = threading.Lock()
 _last_heartbeat = time.time()
@@ -268,6 +272,9 @@ RENDER_API_DOC = {
         'fields': {
             'text': "必須。PlantUML の DSL 全文 (@startuml … @enduml)",
             'mode': "任意。'local' (既定、同梱 Java) または 'online' (plantuml.com へ送信)",
+            'withSvg': ("任意。true にすると、保存中の svg (印を外したもの) と描き直した svg の"
+                        "本文そのものを savedSvg / drawnSvg として返す。可視差分プレビュー用。"
+                        "応答が重いので types が 1 件のときだけ効く"),
         },
         'aliases': {
             'fields': list(DSL_FIELD_ALIASES),
@@ -1942,6 +1949,12 @@ class Handler(BaseHTTPRequestHandler):
                 'expected': VERIFY_SVG_EXPECTED,
             })
             return
+        # BLK-reviewer-20260914-2106-wish: stale と出た 1 枚について、旧 SVG と
+        # 描き直した SVG を並べて可視差分を見る画面のための材料。server は
+        # 既に両方を手元に持っているので、ここで返せば GUI は /render を
+        # 別に叩き直さずに済む (reviewer が使い捨てスクリプトを書いていた所)。
+        # 一覧ぶん (最大 200 枚) を毎回返すと応答が肥るので 1 枚のときだけ。
+        with_svg = bool(data.get('withSvg')) and len(names) == 1
         results = {}
         recs = self._read_svg_verify(save_dir)
         for name in names:
@@ -2014,6 +2027,16 @@ class Handler(BaseHTTPRequestHandler):
                 results[name]['svgShape'] = self._svg_shape_counts(
                     self._strip_svg_stamp(svg_bytes))
                 results[name]['drawnShape'] = self._svg_shape_counts(drawn)
+            if with_svg:
+                # 印は描画の結果ではないので、外した形で渡す (印が付いたままだと
+                # 「差がある」と見えるのは印のせいなのか中身なのかが濁る)。
+                if len(stripped) > MAX_VISUAL_SVG_BYTES or len(drawn) > MAX_VISUAL_SVG_BYTES:
+                    results[name]['svgOmitted'] = (
+                        'SVG が大きすぎるため本文は添えていません (上限 %d bytes)'
+                        % MAX_VISUAL_SVG_BYTES)
+                else:
+                    results[name]['savedSvg'] = stripped.decode('utf-8', errors='replace')
+                    results[name]['drawnSvg'] = drawn.decode('utf-8', errors='replace')
         self._write_svg_verify(save_dir, recs)
         self._send_json(200, {'ok': True, 'results': results, 'verified': recs})
 
