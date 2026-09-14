@@ -199,6 +199,65 @@ window.MA.materialBoard = (function() {
     return '📚 ' + ok.length + ' 図種を資料化しましたが、' + ng.length + ' 図種が失敗しました：' + names;
   }
 
+  // ── 部品をまたいだ残り (BLK-junior-20260914-2006) ──────────────────────────
+  // 「1 枚を資料化」の部品欄は先頭の部品で開き、図種欄にはその部品の図種しか
+  // 出ない。ほぼ資料化済みの部品が先頭に来ていると、実際に手を付けるべき部品は
+  // 部品欄を 1 つずつ選び直して図種欄を見るまで分からない。部品が増えるほど
+  // 遠回りになるので、どの部品に何図種残っているかは開いた時点で並べて出す。
+  //
+  // 数え方は 1 部品の表 (rows) と同じ判定をそのまま使う
+  // (別に数えると、部品欄の残り件数と開いた先の表が食い違う)。
+  function componentProgress(entries) {
+    return components(entries).map(function(g) {
+      var rs = rows(entries, g.component);
+      var n = { none: 0, stale: 0, fresh: 0 };
+      rs.forEach(function(r) { n[r.status] = (n[r.status] || 0) + 1; });
+      return {
+        component: g.component,
+        total: rs.length,
+        none: n.none,
+        stale: n.stale,
+        fresh: n.fresh,
+        pending: n.none + n.stale,
+      };
+    }).filter(function(r) { return r.total > 0; });
+  }
+
+  // progressLabel(p) — 部品欄に出す 1 行。残りが 0 でも黙らない
+  // (「済んでいる」と言い切られないと、結局開いて確かめることになる)。
+  function progressLabel(p) {
+    if (!p) return '';
+    if (p.pending === 0) return p.component + '（' + p.total + ' 図種すべて最新）';
+    return p.component + '（資料化が要る ' + p.pending + ' / ' + p.total + ' 図種）';
+  }
+
+  // 開いた時点で選んでおく部品。残りの多い部品を先に出す
+  // (同数なら componentPack の並び = 保存フォルダの並びを保つ)。
+  // 残りがどこにも無ければ先頭の部品 (選び直す理由が無い)。
+  function pendingComponents(entries) {
+    var list = componentProgress(entries).filter(function(r) { return r.pending > 0; });
+    return list.sort(function(a, b) { return b.pending - a.pending; });
+  }
+
+  function firstPending(entries) {
+    var list = pendingComponents(entries);
+    if (list.length) return list[0].component;
+    var all = componentProgress(entries);
+    return all.length ? all[0].component : '';
+  }
+
+  // 部品欄の脇に出す 1 行。全部品を見渡した残りを数える。
+  function progressSummary(entries) {
+    var all = componentProgress(entries);
+    if (!all.length) return '';
+    // 並びは部品欄で選んでおく順と同じ (残りの多い順)。見出しと初期選択が
+    // 食い違うと、結局どれを開けばいいのか読み直すことになる。
+    var left = pendingComponents(entries);
+    if (!left.length) return all.length + ' 部品すべて最新';
+    return all.length + ' 部品／資料化が要るのは ' + left.length + ' 部品（'
+      + left.map(function(r) { return r.component + ' ' + r.pending; }).join('・') + '）';
+  }
+
   return {
     STATUS: STATUS,
     isMaterial: isMaterial,
@@ -211,5 +270,10 @@ window.MA.materialBoard = (function() {
     runText: runText,
     emptyText: emptyText,
     doneMessage: doneMessage,
+    componentProgress: componentProgress,
+    progressLabel: progressLabel,
+    pendingComponents: pendingComponents,
+    firstPending: firstPending,
+    progressSummary: progressSummary,
   };
 })();

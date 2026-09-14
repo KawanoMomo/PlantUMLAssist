@@ -20169,6 +20169,9 @@ function setupComponentPack() {
 
 var _mexpFiles = [];
 var _mexpEntries = [];
+// 利用者が部品欄で選び直した部品。選び直していない間だけ、残りの多い部品を
+// 初期値に差し替える (BLK-junior-20260914-2006)。
+var _mexpPicked = '';
 
 function _mexpEsc(s) {
   return String(s == null ? '' : s).replace(/[&<>"]/g, function(c) {
@@ -20195,13 +20198,32 @@ function _mexpRenderKinds() {
   if (!ME || !comp || !kindSel) return;
   var want = kindSel.value;
   var rows = ME.kindsFor(_mexpFiles, comp.value);
+  // BLK-junior-20260914-2006: 図種にも「未 / 古 / 済」を出す。どれが済んでいるかは
+  // 資料一式ボードを開かないと分からず、済んだ図種をもう一度選んでしまっていた。
+  var MB = window.MA.materialBoard;
+  var mark = {};
+  if (MB) {
+    MB.rows(_mexpEntries, comp.value).forEach(function(r) { mark[r.kind] = r; });
+  }
   var html = '';
   for (var i = 0; i < rows.length; i++) {
-    html += '<option value="' + _mexpEsc(rows[i].kind) + '">'
+    var st = mark[rows[i].kind];
+    html += '<option value="' + _mexpEsc(rows[i].kind) + '"'
+      + (st ? ' data-status="' + _mexpEsc(st.status) + '"' : '') + '>'
+      + (st ? '［' + _mexpEsc(st.statusMark) + '］' : '')
       + _mexpEsc(rows[i].kind) + '（' + _mexpEsc(rows[i].formatLabel) + '）</option>';
   }
   kindSel.innerHTML = html;
-  for (var j = 0; j < rows.length; j++) if (rows[j].kind === want) kindSel.value = want;
+  var chosen = '';
+  for (var j = 0; j < rows.length; j++) if (rows[j].kind === want) chosen = want;
+  // 選び直していないなら、手当ての要る図種を先に選んでおく (済んだ図種で開かない)。
+  if (!chosen && MB) {
+    var pending = MB.pendingKinds(MB.rows(_mexpEntries, comp.value));
+    for (var k = 0; k < rows.length; k++) {
+      if (pending.indexOf(rows[k].kind) >= 0) { chosen = rows[k].kind; break; }
+    }
+  }
+  if (chosen) kindSel.value = chosen;
   _mexpRenderPlan();
 }
 
@@ -20218,15 +20240,34 @@ function _mexpRenderPlan() {
 
 function _mexpRenderComponents() {
   var ME = window.MA.materialExport;
+  var MB = window.MA.materialBoard;
   var comp = _mexpSel('mexp-component');
   var count = _mexpSel('mexp-count');
   if (!ME || !comp) return;
   var list = ME.components(_mexpFiles);
+  // BLK-junior-20260914-2006: 部品欄は先頭の部品で開き、図種欄にはその部品の
+  // 図種しか出ない。ほぼ資料化済みの部品が先頭に来ていると、手を付けるべき
+  // 部品は 1 つずつ選び直して図種欄を見るまで分からなかった。残りを行に書き、
+  // 残りの多い部品を開いた時点で選んでおく。
+  var progress = MB ? MB.componentProgress(_mexpEntries) : [];
+  var byName = {};
+  progress.forEach(function(r) { byName[r.component] = r; });
   var html = '';
   for (var i = 0; i < list.length; i++) {
-    html += '<option value="' + _mexpEsc(list[i].component) + '">' + _mexpEsc(list[i].component) + '</option>';
+    var name = list[i].component;
+    var pr = byName[name];
+    var label = (MB && pr) ? MB.progressLabel(pr) : name;
+    html += '<option value="' + _mexpEsc(name) + '"'
+      + (pr ? ' data-pending="' + pr.pending + '"' : '')
+      + '>' + _mexpEsc(label) + '</option>';
   }
   comp.innerHTML = html;
+  // 残りのある部品を選んでおく。選び直している途中に一覧が届いても
+  // 利用者の選択を奪わない (読み込み前の初期値のときだけ差し替える)。
+  if (MB && (!_mexpPicked || !byName[_mexpPicked])) _mexpPicked = MB.firstPending(_mexpEntries);
+  if (_mexpPicked) comp.value = _mexpPicked;
+  var sum = _mexpSel('mexp-progress');
+  if (sum && MB) sum.textContent = MB.progressSummary(_mexpEntries);
   if (count) count.textContent = list.length ? (list.length + ' 部品') : '';
   _mexpRenderMatrix();
   var empty = ME.emptyText(_mexpFiles);
@@ -20333,6 +20374,7 @@ function openMaterialExport() {
   if (state) state.textContent = '';
   _mexpFiles = [];
   _mexpEntries = [];
+  _mexpPicked = '';
   _mexpRenderComponents();
   modal.style.display = 'flex';
   // 日時が要る (資料用より元の図が新しいかを残りの表に出すため)。日時の取れない
@@ -20474,7 +20516,7 @@ function setupMaterialExport() {
   var run = document.getElementById('mexp-run');
   if (run) run.addEventListener('click', function() { runMaterialExport(); });
   var comp = document.getElementById('mexp-component');
-  if (comp) comp.addEventListener('change', _mexpRenderKinds);
+  if (comp) comp.addEventListener('change', function() { _mexpPicked = comp.value; _mexpRenderKinds(); });
   var kind = document.getElementById('mexp-kind');
   if (kind) kind.addEventListener('change', _mexpRenderPlan);
   if (modal) modal.addEventListener('click', function(e) { if (e.target === modal) closeMaterialExport(); });

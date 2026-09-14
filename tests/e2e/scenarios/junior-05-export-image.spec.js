@@ -300,3 +300,43 @@ test('手順5 要求ID対応: 脚注に入れると、書き出す画像その�
   await page.waitForTimeout(400);
   expect(await page.locator('#editor').inputValue()).not.toContain('legend bottom');
 });
+
+// BLK-junior-20260914-2006: 「1 枚を資料化」の部品欄は先頭の部品で開き、図種欄には
+// その部品の図種しか出ない。ほぼ資料化済みの GPIO が先頭に来ていると、実際に手を
+// 付けるべき TIMER (全図種未着手) は部品欄を 1 つずつ選び直して図種欄を見るまで
+// 分からなかった。残りは開いた時点で部品欄に出し、残りの多い部品を選んでおく。
+test('手順4 資料化: 開いた時点で部品ごとの残りが読め、手当ての要る部品が選ばれている', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  // GPIO は資料化済み、TIMER は 2 図種とも未着手 (起票時の形)。
+  await S.putDoc(page, DIR, 'GPIOドライバ状態遷移', S.GPIO_STATE);
+  await S.putDoc(page, DIR, 'GPIOドライバ状態遷移(資料用)', S.GPIO_STATE);
+  await S.putDoc(page, DIR, 'TIMERドライバ初期化シーケンス', S.GPIO_SEQ.replace(/Gpio/g, 'Timer'));
+  await S.putDoc(page, DIR, 'TIMERドライバ状態遷移', S.GPIO_STATE.replace(/Gpio/g, 'Timer'));
+  await page.reload();
+  await page.waitForTimeout(800);
+
+  await page.locator('#btn-export').click();
+  await page.waitForSelector('#export-menu', { state: 'visible' });
+  await page.locator('#exp-material').click();
+  await page.waitForSelector('#mexp-modal', { state: 'visible' });
+  await page.waitForTimeout(900);
+
+  // 到達条件その1: 部品欄の各行が残り件数を持つ (選び直さずに読める)。
+  const comp = page.locator('#mexp-component');
+  const timer = comp.locator('option[value="TIMERドライバ"]');
+  await expect(timer).toHaveAttribute('data-pending', '2');
+  await expect(timer).toHaveText(/資料化が要る 2 \/ 2 図種/);
+  await expect(comp.locator('option[value="GPIOドライバ"]')).toHaveAttribute('data-pending', '0');
+
+  // 到達条件その2: 全部品を見渡した残りが 1 行で出る。
+  await expect(page.locator('#mexp-progress')).toContainText('TIMERドライバ 2');
+
+  // 到達条件その3: 残りの多い部品が選ばれた状態で開く (GPIO のまま開かない)。
+  await expect(comp).toHaveValue('TIMERドライバ');
+
+  // 到達条件その4: 図種欄も未着手が選ばれ、済んだ図種には印が付く。
+  await expect(page.locator('#mexp-kind option').first()).toHaveAttribute('data-status', 'none');
+  const plan = await page.locator('#mexp-plan').textContent();
+  expect(plan).toContain('TIMERドライバ');
+});

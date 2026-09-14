@@ -6788,6 +6788,9 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <label class="mexp-field">部品
         <select id="mexp-component"></select>
       </label>
+      <!-- BLK-junior-20260914-2006: どの部品に何図種残っているかを、
+           部品を選び直さずに開いた時点で読めるようにする -->
+      <span id="mexp-progress" role="status"></span>
       <label class="mexp-field">図種
         <select id="mexp-kind"></select>
       </label>
