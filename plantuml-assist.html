@@ -2573,6 +2573,28 @@ html, body {
   margin-left: auto; background: var(--bg-tertiary); border: 1px solid var(--border);
   color: var(--text-primary); border-radius: 4px; padding: 2px 8px; font-size: 11px; cursor: pointer;
 }
+#mexp-anchor-bar button#mexp-summary-toggle { margin-left: 0; }
+/* 部品サマリカード (BLK-junior-20260915-0206-wish) */
+#mexp-summary { padding: 0 14px 8px; max-height: 40vh; overflow: auto; }
+#mexp-summary[hidden] { display: none; }
+#mexp-summary-head { display: flex; align-items: baseline; gap: 10px; font-size: 11px; color: var(--text-primary); padding: 2px 0; }
+#mexp-summary-sub { font-size: 10px; color: var(--text-secondary); display: flex; gap: 10px; padding-bottom: 4px; }
+#mexp-summary-cards { display: flex; flex-wrap: wrap; gap: 8px; }
+#mexp-summary-cards figure.mexp-card {
+  margin: 0; width: 150px; border: 1px solid var(--border); border-radius: 4px;
+  padding: 4px; background: var(--bg-primary);
+}
+#mexp-summary-cards figure.mexp-card[data-status="none"] { border-color: var(--accent); }
+#mexp-summary-cards figure.mexp-card[data-status="stale"] { border-color: #d08a2a; }
+#mexp-summary-cards .mexp-thumb {
+  height: 92px; display: flex; align-items: center; justify-content: center;
+  overflow: hidden; background: var(--bg-tertiary); border-radius: 3px;
+  font-size: 10px; color: var(--text-secondary);
+}
+#mexp-summary-cards .mexp-thumb svg { max-width: 100%; max-height: 92px; }
+#mexp-summary-cards figure.mexp-card[data-status="none"] .mexp-thumb { opacity: 0.45; }
+#mexp-summary-cards figcaption { font-size: 10px; color: var(--text-secondary); padding-top: 3px; }
+#mexp-summary-cards figcaption .mexp-card-kind { color: var(--text-primary); display: block; }
 #mexp-anchor-field input {
   background: var(--bg-primary); color: var(--text-primary);
   border: 1px solid var(--border); border-radius: 3px; padding: 2px 6px; font-size: 12px; min-width: 180px;
@@ -6646,6 +6668,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/material-readback.js"></script>
 <script src="src/core/material-board.js"></script>
 <script src="src/core/material-matrix.js"></script>
+<script src="src/core/material-summary.js"></script>
 <script src="src/core/material-anchor.js"></script>
 <script src="src/core/req-trace.js"></script>
 <script src="src/core/rename-history.js"></script>
@@ -7053,6 +7076,21 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <div id="mexp-anchor-bar">
       <span id="mexp-anchor-summary" role="status"></span>
       <button type="button" id="mexp-anchor-toggle">見出しから逆引き…</button>
+      <!-- BLK-junior-20260915-0206-wish: 書き出し終えたあと「6 図種とも揃っているか」を
+           見返すための 1 枚。部品の図種を絵と保存日時ごと並べる (一覧を部品名で
+           フィルタして 1 枚ずつ開き直す確認が要らなくなる)。 -->
+      <button type="button" id="mexp-summary-toggle">📋 部品サマリカード…</button>
+    </div>
+    <div id="mexp-summary" hidden>
+      <div id="mexp-summary-head">
+        <strong id="mexp-summary-title"></strong>
+        <span id="mexp-summary-text" role="status"></span>
+      </div>
+      <div id="mexp-summary-sub">
+        <span id="mexp-summary-missing" role="status"></span>
+        <span id="mexp-summary-span" role="status"></span>
+      </div>
+      <div id="mexp-summary-cards"></div>
     </div>
     <div id="mexp-lookup" style="display:none;">
       <div id="mexp-lookup-summary" role="status"></div>
