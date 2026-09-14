@@ -167,7 +167,9 @@ function promptComponentDraft() {
 
 function markOpenedSource(doc) {
   if (!doc || !window.MA.sourceLock) return;
-  try { window.MA.sourceLock.mark(doc.id, doc.name); } catch (e) {}
+  // 開いたときの本文も憶える。読むだけの回で確認が割り込まないための材料
+  // (BLK-junior-20260914-0906)。
+  try { window.MA.sourceLock.mark(doc.id, doc.name, doc.dsl); } catch (e) {}
   try { updateTopSourceLock(); } catch (e) {}
 }
 
@@ -3439,8 +3441,10 @@ function writeDocToFolder(doc, fileDir) {
     return false;
   }
   var SL = window.MA.sourceLock;
-  var d = SL ? SL.decide(doc.id, doc.name, _openDocNames()) : { action: 'write', name: doc.name };
+  var d = SL ? SL.decide(doc.id, doc.name, _openDocNames(), doc.dsl) : { action: 'write', name: doc.name };
   if (d.action === 'ask') return false;
+  // 開いたときのまま (読むだけ) なら、書き戻す中身は元ファイルと同じ。何もしない。
+  if (d.action === 'skip') return false;
   var out = (d.name === doc.name) ? doc
     : { id: doc.id, name: d.name, diagramType: doc.diagramType, dsl: doc.dsl };
   window.MA.workspace.saveToFile(out, fileDir);
@@ -3483,9 +3487,16 @@ function saveActiveDoc() {
       // BLK-junior-20260908-1803-wish: 開いたままのファイルへ最初に書き戻す前に
       // 一度だけ聞く。答えるまでは書かない (見比べ中の元ファイルを守る)。
       var SL = window.MA.sourceLock;
-      var d = SL ? SL.decide(doc.id, doc.name, _openDocNames()) : { action: 'write', name: doc.name };
+      var d = SL ? SL.decide(doc.id, doc.name, _openDocNames(), doc.dsl) : { action: 'write', name: doc.name };
       if (d.action === 'ask') {
         try { askSourceLock(doc); } catch (e) {}
+        renderDiffBadge();
+        return doc;
+      }
+      // BLK-junior-20260914-0906: 一覧から開いて眺めるだけの回。本文は開いたときの
+      // ままなので、元ファイルは既にこの内容で、書く必要も守るものも無い。聞かない。
+      if (d.action === 'skip') {
+        try { updateTopSourceLock(); } catch (e) {}
         renderDiffBadge();
         return doc;
       }
@@ -8013,8 +8024,9 @@ function setupTabs() {
       var SL = window.MA.sourceLock;
       if (SL && doc) {
         var d;
-        try { d = SL.decide(doc.id, doc.name, _openDocNames()); } catch (e) { return ''; }
+        try { d = SL.decide(doc.id, doc.name, _openDocNames(), doc.dsl); } catch (e) { return ''; }
         if (!d || d.action === 'ask') return '';   // 返事を待つ間は書かない
+        if (d.action === 'skip') return '';        // 開いたときのまま。書かない
         if (d.name) return d.name;                 // 控えの名前へ逃がす
       }
       return name;
@@ -16461,7 +16473,9 @@ function saveFile() {
   // 「元のまま保つ」を選んだあとに保存を押して元が消えたら、選ばせた意味が無い。
   var SLm = window.MA.sourceLock;
   if (doc && SLm && cfg && cfg.backend === 'file') {
-    var dm = SLm.decide(doc.id, doc.name, _openDocNames());
+    // 手で押した保存は、本文が開いたときのまま (skip) でも元ファイルへ書いてよい
+    // (利用者が自分で押している。decide は skip でも書き先に元の名前を返す)。
+    var dm = SLm.decide(doc.id, doc.name, _openDocNames(), doc.dsl);
     if (dm.action === 'ask') { try { askSourceLock(doc); } catch (e) {} return; }
     if (dm.name !== doc.name) doc = { id: doc.id, name: dm.name, diagramType: doc.diagramType, dsl: doc.dsl };
   }
