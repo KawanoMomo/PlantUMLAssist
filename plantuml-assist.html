@@ -186,6 +186,20 @@ html, body {
   text-overflow: ellipsis;
 }
 #top-save-target:hover { color: var(--text-primary); border-color: var(--accent); }
+/* 保存ボタン (BLK-junior-20260913-0306)。保存先チップと同じ形にして隣に置く。 */
+#top-save {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1px 10px;
+  margin-right: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+#top-save:hover { border-color: var(--accent); color: var(--accent); }
 #top-save-target.configured { color: var(--accent); border-color: var(--accent); }
 #top-render-status {
   font-family: var(--font-mono);
@@ -4983,6 +4997,9 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <span id="top-file-name" title="編集中の図">(無題).puml</span>
     <!-- BLK-junior-20260907-2009: 保存先が既に覚えられていることを常時見せる -->
     <button id="top-save-target" type="button" title="保存先">⬇ ダウンロード</button>
+    <!-- BLK-junior-20260913-0306: 一覧・覗く・書き出すはボタンを押せるのに、毎周必ず通る
+         保存だけが Ctrl+K でコマンド名を打つ経路しか無かった。保存先の隣に常時出す。 -->
+    <button id="top-save" type="button" title="保存">💾 保存</button>
     <button id="top-source-lock" type="button" hidden></button>
 
     <!-- BLK-builder-20260907-0803-1 (design 1a): コマンド中心。名前を打って実行する入口 -->

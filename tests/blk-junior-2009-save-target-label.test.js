@@ -27,7 +27,10 @@ assert.strictEqual(file.text, '📁 junior');
 // 「もう設定されている」ことと、次にやるべき操作を title で言い切る。
 assert.ok(/保存先は設定済みです/.test(file.title));
 assert.ok(/E:\\01_Loop\\persona-data\\junior/.test(file.title), 'フルパスは title に残す');
-assert.ok(/ファイルを保存/.test(file.title), '設定を開き直さずに済むことを伝える');
+// BLK-junior-20260913-0306: 保存の入口が Ctrl+K の「ファイルを保存」から、
+// このチップの隣の [💾 保存] ボタンに変わった。案内先もそちらにする。
+assert.ok(/💾 保存/.test(file.title), '次にどこを押せば保存されるかを伝える');
+assert.ok(!/Ctrl\+K/.test(file.title), '無くなった経路を案内しない');
 
 // fileDir が空でも backend が file なら既定の保存先を出す (無表示にしない)。
 assert.strictEqual(st.label({ backend: 'file' }).text, '📁 autosave');
