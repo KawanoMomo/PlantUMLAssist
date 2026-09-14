@@ -1619,3 +1619,110 @@ test.describe('junior 手順 1〜2: 先輩の図を横に置いたまま自分�
     expect(raw).toContain('Uart_Driver');
   });
 });
+
+
+// BLK-junior-20260915-0007-wish: 先輩 (primary) が 1 枚も持たない図種がある
+// (アクティビティ図)。先輩の枠は 4 段のどれにも当たらず「当たる先輩の図は
+// ありません」で止まり、手順 1 の「粒度と命名の手本を見る」相手が絶えていた。
+// junior 自身は GPIO/UART/CAN で同じ図種を作り終えているので、その 1 枚を
+// 見本として代わりに横に出す。
+test.describe('junior 手順 1: 先輩が持たない図種では自分の他部品を見本にする', () => {
+  // 自分の保存フォルダ。他部品の完成形 (GPIO/CAN のアクティビティ図) が並ぶ。
+  const MINE_ACT = 'TIMERドライバ初期化アクティビティ図';
+  const PEERS = ['GPIOドライバ初期化アクティビティ図', 'CANドライバ初期化アクティビティ図'];
+  // 写し (資料用) は見本に出さない。同じ図が 2 枚並ぶだけになる。
+  const COPY = 'GPIOドライバ初期化アクティビティ図(資料用)';
+
+  test.beforeEach(async ({ page }) => {
+    await bootWithDir(page);
+    await clearDir(page);
+    await clearSenior(page);
+    // 先輩はシーケンスと状態遷移しか持たない (アクティビティ図が無い)。
+    await putIn(page, SENIOR_DIR, 'gpio_init_sequence');
+    await putIn(page, SENIOR_DIR, 'gpio_state');
+    for (const n of PEERS) await putIn(page, DIR, n);
+    await putIn(page, DIR, COPY);
+    // 自分のフォルダの並びは開いた時点の物を使うので、置いてから開き直す。
+    await page.reload();
+    await page.waitForTimeout(600);
+  });
+
+  test.afterEach(async ({ page }) => {
+    await clearDir(page).catch(() => {});
+    await clearSenior(page).catch(() => {});
+  });
+
+  // 先輩の枠を開いて先輩フォルダを選ぶ (上の describe と同じ手順)。
+  async function pickSeniorValue(page) {
+    return page.evaluate((base) => {
+      const sel = document.getElementById('senior-dir');
+      const hit = Array.prototype.slice.call(sel.options).filter(function(o) {
+        var v = o.value.toLowerCase().split(String.fromCharCode(92)).join('/');
+        return v.indexOf(base) >= 0;
+      })[0];
+      return hit ? hit.value : '';
+    }, SENIOR_BASE);
+  }
+
+  async function openSenior(page) {
+    await page.locator('#btn-tab-senior').click();
+    await page.waitForSelector('#senior-pane:not([hidden])');
+    await page.waitForFunction((base) => {
+      const sel = document.getElementById('senior-dir');
+      return !!sel && Array.prototype.slice.call(sel.options).some(function(o) {
+        return o.value.toLowerCase().split(String.fromCharCode(92)).join('/').indexOf(base) >= 0;
+      });
+    }, SENIOR_BASE);
+    await page.selectOption('#senior-dir', await pickSeniorValue(page));
+    await page.waitForTimeout(800);
+  }
+
+  test('先輩にその図種が無ければ、自分の他部品の同じ図種が見本として横に出る', async ({ page }) => {
+    await openMine(page, MINE_ACT);
+    await openSenior(page);
+    await page.waitForTimeout(600);
+
+    const notice = page.locator('#senior-notice');
+    // 先輩がいないことを隠さない (横の図を先輩の図と読み違えない)。
+    await expect(notice).toContainText('当たる先輩の図はありません');
+    await expect(notice).toContainText('見本');
+    await expect(notice).toContainText('読むだけ');
+    // 出るのは自分の他部品 (TIMER ではない) の同じ図種。
+    // 前半には自分の図の名前が出る (先輩がいない理由) ので、後半だけを見る。
+    const shown = (await notice.textContent()).split('代わりに自分の')[1] || '';
+    expect(shown).toContain('ドライバ初期化アクティビティ図');
+    expect(shown).not.toContain('TIMER');
+    // 本文が空のまま「見本」と言わない (読める中身が横に出ている)。
+    await expect(page.locator('#senior-dsl')).not.toHaveText('');
+    await expect(page.locator('#senior-dsl')).toContainText('@startuml');
+  });
+
+  test('写し (資料用) は見本にしない。部品ごとに 1 枚だけ候補に並ぶ', async ({ page }) => {
+    await openMine(page, MINE_ACT);
+    await openSenior(page);
+    await page.waitForTimeout(600);
+
+    const names = await page.evaluate(() => {
+      return Array.prototype.slice.call(document.querySelectorAll('#senior-candidates button'))
+        .map((b) => b.textContent);
+    });
+    expect(names.length).toBe(2);           // GPIO と CAN の 2 部品
+    expect(names.join('|')).not.toContain('資料用');
+  });
+
+  test('下端の「👀」は、開く前から見本が出ることを言う', async ({ page }) => {
+    await openMine(page, MINE_ACT);
+    await openSenior(page);
+    await page.waitForTimeout(600);
+    await expect(page.locator('#status-senior')).toContainText('見本');
+  });
+
+  test('先輩に相手がいる図種では、見本ではなく先輩の図を出す', async ({ page }) => {
+    await openMine(page, 'gpio_state');
+    await openSenior(page);
+    await page.waitForTimeout(600);
+    const notice = page.locator('#senior-notice');
+    await expect(notice).toContainText('gpio_state');
+    await expect(notice).not.toContainText('見本');
+  });
+});
