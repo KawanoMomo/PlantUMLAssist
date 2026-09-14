@@ -988,6 +988,27 @@ html, body {
 #folder-panel .folder-svg-cross-summary {
   font-size: 10px; color: var(--accent-red); font-weight: bold; padding: 0 6px 2px;
 }
+/* 部品ごとの突合 (BLK-reviewer-20260914-1106-wish)。audit.js の JSON を読む代わりに
+   一覧の頭で読む行なので、欠落は赤字で、束ねた図はその場で開けるボタンにする。 */
+#folder-panel .folder-part-cross-summary {
+  font-size: 10px; color: var(--text-secondary); padding: 0 6px 2px;
+}
+#folder-panel .folder-part-cross-summary.has-stale { color: var(--accent-red); font-weight: bold; }
+#folder-panel .folder-part-cross-row {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 0 6px 3px;
+}
+#folder-panel .folder-part-cross-missing {
+  font-size: 10px; color: var(--accent-red); font-weight: bold;
+}
+#folder-panel button.folder-part-cross-doc {
+  font-size: 9px; width: auto; padding: 0 4px;
+  border: 1px solid var(--border); border-radius: 3px;
+}
+#folder-panel .folder-part-cross {
+  flex: 0 0 auto; font-size: 9px; white-space: nowrap; font-weight: bold;
+  border: 1px solid var(--accent-red); border-radius: 2px; padding: 0 3px;
+  color: var(--accent-red);
+}
 #folder-panel button.folder-svg-proof-btn,
 #folder-panel button.folder-svg-render {
   border: 1px solid var(--border);
@@ -5892,6 +5913,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/svg-freshness.js"></script>
 <script src="src/core/svg-compare-row.js"></script>
 <script src="src/core/svg-cross.js"></script>
+<script src="src/core/part-cross.js"></script>
 <script src="src/core/svg-diff-summary.js"></script>
 <script src="src/core/review-state.js"></script>
 <script src="src/core/write-activity.js"></script>

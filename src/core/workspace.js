@@ -348,7 +348,10 @@ window.MA.workspace = (function() {
     var miss = { entries: [], exists: null, dir: asked, roles: {}, verified: {}, now: null,
                  gone: [], kinds: {} };
     try {
-      return window.fetch('/autosave?dir=' + encodeURIComponent(asked))
+      // BLK-reviewer-20260914-1106-wish: 一覧と同時に本文も受け取る。部品ごとの
+      // 突合 (遷移ラベル / メッセージ名がクラスに在るか) は本文が無いと判定できず、
+      // 図を 1 枚ずつ取りに行くと 📂一覧が開いてから印が付くまで遅れて出る。
+      return window.fetch('/autosave?dir=' + encodeURIComponent(asked) + '&texts=1')
         .then(function(r) { return r.ok ? r.json() : null; })
         .then(function(data) {
           if (!data) return miss;

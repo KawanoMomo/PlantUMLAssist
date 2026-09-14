@@ -7270,6 +7270,8 @@ function setupTabs() {
   // BLK-reviewer-20260914-0906-wish: {name}.svg に刻まれた元 puml の sha1 が、
   // 同じフォルダの別の図のものだったとき、その相手を名指しするための判定。
   var svgCross = null;
+  // BLK-reviewer-20260914-1106-wish: 部品 (クラス) ごとに図を束ねた突合の結果。
+  var partCross = null;
   // 図名 → SVG の書き出し時刻 (ISO8601)。puml の保存時刻と並べて行に出す。
   var svgMtimes = {};
   var svgScan = null;
@@ -7571,6 +7573,12 @@ function setupTabs() {
       var SX = window.MA.svgCross;
       svgCross = SX ? SX.scan(entries) : null;
       _svgCrossLatest = svgCross;
+      // BLK-reviewer-20260914-1106-wish: 同じ部品を持つ状態遷移図・シーケンス図・
+      // クラス図を束ね、遷移ラベル / メッセージ名がクラスのメソッドに無ければ
+      // 名指しする。判定は method-audit と同じ規則で、見る範囲だけが
+      // 「開いている図」から「保存フォルダの全部」に広がる。
+      var PC = window.MA.partCross;
+      partCross = PC ? PC.scan(entries) : null;
       // BLK-reviewer-20260908-2003-wish: puml の保存時刻と SVG の書き出し時刻を
       // 同じ行に並べる。片方しか出ていない間は「いつ書き出した SVG か」を
       // ls -l で見に行くことになっていた。
@@ -7628,6 +7636,7 @@ function setupTabs() {
         appendReviewSection(panel);
         appendRoleSection(panel, dir);
         appendSvgSection(panel, dir);
+      appendPartCrossSection(panel);
         appendWriteSection(panel, dir);
         appendKindSummary(panel);
         plain.items.forEach(function(e) { panel.appendChild(folderRow(e.name || e, null, null)); });
@@ -7658,6 +7667,7 @@ function setupTabs() {
       appendReviewSection(panel);
       appendRoleSection(panel, dir);
       appendSvgSection(panel, dir);
+      appendPartCrossSection(panel);
       appendWriteSection(panel, dir);
 
       folderStatus = {};
@@ -7782,6 +7792,65 @@ function setupTabs() {
   // 読み始めた版と読み終えた版が混ざると、古い版と新しい版が混ざった指摘になる。
   // 「直近 N 分以内に更新された図」を名指しし、後回しにする / 取り直すの
   // どちらかをその場で選べるようにする。
+  // BLK-reviewer-20260914-1106-wish: 状態遷移図の遷移ラベルとクラス図のメソッドの
+  // 対応は、これまで tools/audit.js を実行して JSON を読み解くしかなかった。
+  // 部品ごとに 3 枚を束ねた行を一覧の頭に置き、宣言の無い名前を赤字で名指しする。
+  function appendPartCrossSection(panel) {
+    var PC = window.MA.partCross;
+    if (!PC || !partCross) return;
+    var line = PC.summaryLine(partCross);
+    if (!line) return;
+    var bad = partCross.missingTotal > 0 || partCross.orphans.length > 0;
+    var sum = document.createElement('div');
+    sum.className = 'folder-part-cross-summary' + (bad ? ' has-stale' : '');
+    sum.id = 'folder-part-cross-summary';
+    sum.textContent = line;
+    sum.title = '同じ部品名のクラス図・状態遷移図・シーケンス図を束ねて突き合わせた結果です。'
+      + '接頭辞を持たない UML のイベント名（Tick / Reset など）は対象外です';
+    panel.appendChild(sum);
+    if (!bad) return;
+
+    partCross.parts.forEach(function(r) {
+      if (!r.missing.length) return;
+      var row = document.createElement('div');
+      row.className = 'folder-part-cross-row';
+      row.setAttribute('data-part', r.part);
+      var txt = document.createElement('span');
+      txt.className = 'folder-part-cross-missing';
+      txt.textContent = PC.partLine(r);
+      txt.title = PC.partTitle(r);
+      row.appendChild(txt);
+      // 束ねた 3 枚はその場で開ける。名指しの後に「どのファイルか」を
+      // 一覧の中から目で探し直すなら、突き合わせの手間は残ったままになる。
+      r.docs.forEach(function(name) {
+        var link = document.createElement('button');
+        link.type = 'button';
+        link.className = 'folder-part-cross-doc';
+        link.setAttribute('data-file-name', name);
+        link.textContent = name;
+        link.title = name + ' を開く';
+        link.addEventListener('click', function(ev) {
+          ev.stopPropagation();
+          openFromFolder(name);
+        });
+        row.appendChild(link);
+      });
+      panel.appendChild(row);
+    });
+
+    partCross.orphans.forEach(function(o) {
+      var row = document.createElement('div');
+      row.className = 'folder-part-cross-row folder-part-cross-orphan';
+      row.setAttribute('data-owner', o.owner);
+      var txt = document.createElement('span');
+      txt.className = 'folder-part-cross-missing';
+      txt.textContent = PC.orphanLine(o);
+      txt.title = o.docs.join(', ') + ' に出てくる名前です。クラス図にこの型がありません';
+      row.appendChild(txt);
+      panel.appendChild(row);
+    });
+  }
+
   function appendWriteSection(panel, dir) {
     var WA = window.MA.writeActivity;
     if (!WA || !writeScan || !writeScan.rows.length) return;
@@ -9319,6 +9388,19 @@ function setupTabs() {
     }
     // BLK-reviewer-20260914-0906-wish: その svg が「どの図の絵か」。
     // 相手が分かる図にだけ出す (分からない図は上の「内容ずれ」のまま)。
+    // BLK-reviewer-20260914-1106-wish: この図の遷移ラベル / メッセージ名で
+    // クラスに宣言が無いもの。上の束ねた行と同じ答えを行の側にも置く
+    // (一覧を絞り込んで読んでいるときに、束ねた行が視界の外へ出るため)。
+    var PC3 = window.MA.partCross;
+    var pbd = PC3 ? PC3.badge(partCross, name) : null;
+    if (pbd) {
+      var pb = document.createElement('span');
+      pb.className = 'folder-part-cross';
+      pb.setAttribute('data-part-cross', pbd.part);
+      pb.textContent = pbd.mark;
+      pb.title = pbd.title;
+      b.appendChild(pb);
+    }
     var SX3 = window.MA.svgCross;
     var xrow = SX3 ? SX3.nameOf(svgCross, name) : null;
     if (xrow) {

@@ -1860,13 +1860,17 @@ class Handler(BaseHTTPRequestHandler):
         # 区別できず、保存先の書式を誤ると一覧が黙って空になっていた。
         # 実在するかどうかをそのまま返し、区別は GUI に任せる。
         exists = save_dir.exists() and save_dir.is_dir()
+        # BLK-reviewer-20260914-1106-wish: 部品ごとの突合 (遷移ラベル / メッセージ名が
+        # クラスのメソッドに在るか) は本文が要る。1 枚ずつ取りに行くと図の枚数だけ
+        # 往復が増え、印の付く前の一覧が先に出てしまうので、頼まれたら一覧と同時に返す。
+        want_texts = params.get('texts') in ('1', 'true', 'yes')
         # BLK-junior-20260908-2003: 「この図には前の版が N 個ある」は一覧の時点で要る。
         # 消えたと思った図を探すのに 22 枚を 1 枚ずつ開き直させないため。
         vcounts = self._version_counts(save_dir) if exists else {}
         if exists:
             for p in sorted(save_dir.glob('*.puml'), key=lambda q: q.stem):
                 files.append(p.stem)
-                entry = self._autosave_entry(p)
+                entry = self._autosave_entry(p, with_text=want_texts)
                 entry['versions'] = vcounts.get(p.stem, 0)
                 entries.append(entry)
         # 本体がもう無いのに版だけ残っている図。消えた図こそ探す対象なので、
@@ -1940,8 +1944,11 @@ class Handler(BaseHTTPRequestHandler):
             e['svgSource'] = by_norm.get(norm) or ('embedded:' + hashlib.sha1(norm.encode('utf-8')).hexdigest())
             e['svgSourceFrom'] = 'embedded'
 
-    def _autosave_entry(self, path):
+    def _autosave_entry(self, path, with_text=False):
         """1 図分の {name, mtime, size, hash, svgMtime}。読めない図でも名前だけは返す。
+
+        with_text=True のときは本文 (`text`) も入れる。保存フォルダをまたいだ突合
+        (BLK-reviewer-20260914-1106-wish) は本文が無いと判定できない。
 
         BLK-reviewer-20260908-0103: 隣に置いた {name}.svg が puml より古いかどうかを
         `ls -l` で 1 枚ずつ突き合わせていた。同じ一覧で答えられるよう、
@@ -1978,6 +1985,8 @@ class Handler(BaseHTTPRequestHandler):
             # BLK-junior-20260908-2003: 「状態遷移図が無い」を一覧の時点で言うために、
             # 1 枚ずつ開かなくても図種が分かるようにする (本文はここで既に読んでいる)。
             entry['kind'] = dsl_kind(raw.decode('utf-8', 'replace'))
+            if with_text:
+                entry['text'] = raw.decode('utf-8', 'replace')
         except OSError:
             pass
         return entry
