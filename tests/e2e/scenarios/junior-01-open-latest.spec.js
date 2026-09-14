@@ -1507,4 +1507,38 @@ test.describe('junior 手順 1〜2: 先輩の図を横に置いたまま自分�
     await expect(page.locator('#senior-dir')).toHaveValue(chosen);
     await expect(page.locator('#senior-notice')).toContainText('gpio_init_sequence');
   });
+
+  // BLK-junior-20260908-1103: 先輩の図を見る入口が 🧰 ツールの折りたたみの奥にあり、
+  // 図種ごとの初回は毎回そこを通っていた (1 つの確認に 5 クリック)。常に見えている
+  // 下端の「👀 先輩」から 1 クリックで着けることを到達条件にする。
+  test('下端の「👀 先輩」から、折りたたみを通らずに 1 クリックで先輩の図に着く', async ({ page }) => {
+    // まず 1 回だけフォルダを決める (以後この回答は覚えている)。
+    await openSenior(page);
+    await openMine(page, 'gpio_state');
+    await page.waitForTimeout(800);
+    await page.locator('#senior-close').click();
+    await expect(page.locator('#senior-pane')).toHaveAttribute('hidden', '');
+
+    // 到達条件その1: 枠を閉じていても、下端に「いま横に出る先輩の図」が出ている
+    // (押す前に、目当ての図かどうかが読める)。
+    const status = page.locator('#status-senior');
+    await expect(status).toBeVisible();
+    await expect(status).toHaveText(/gpio_state/, { timeout: 10000 });
+    await expect(status).toHaveAttribute('data-count', '1');
+
+    // 到達条件その2: その 1 クリックだけで先輩の図が横に出る
+    // (🧰 ツール → 一覧 → 他の保存フォルダを覗く、を通らない)。
+    await status.click();
+    await page.waitForSelector('#senior-pane:not([hidden])');
+    await expect(page.locator('#senior-notice')).toContainText('gpio_state');
+    await expect(page.locator('#senior-dsl')).not.toHaveText('');
+    await expect(status).toHaveAttribute('aria-pressed', 'true');
+
+    // 到達条件その3: 図を切り替えれば下端の相手も入れ替わる
+    // (閉じていても、次に押したときに出る図が下端で分かる)。
+    await status.click();
+    await expect(page.locator('#senior-pane')).toHaveAttribute('hidden', '');
+    await openMine(page, 'gpio_init_sequence');
+    await expect(status).toHaveText(/gpio_init_sequence/, { timeout: 10000 });
+  });
 });

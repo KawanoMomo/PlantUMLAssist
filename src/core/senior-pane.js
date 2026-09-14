@@ -137,6 +137,35 @@
     return who + ' に ' + pick.candidates.length + ' 枚の候補（' + pick.reason + '）。選んでください';
   }
 
+  // statusText(pick, opts) — 下端の状態バーに出す 1 行 (design 7b: 件数を持つものは
+  // タブ列に置かず下端に寄せ、押せばそのパネルが開く)。
+  //
+  // BLK-junior-20260908-1103: 先輩の図を見る入口 (👀 他フォルダ / 先輩の枠) は
+  // 🧰 ツールの折りたたみの奥にあり、図種ごとの初回は毎回そこを通っていた。
+  // 常に見えている下端に「いま横に出る先輩の図」を出し、押せば 1 クリックで枠が開く。
+  function statusText(pick, opts) {
+    var o = opts || {};
+    if (!o.ready) {
+      return { label: '👀 先輩 −', title: '先輩の図を読むだけで横に出します (押すと開きます)', count: 0 };
+    }
+    if (!pick || pick.how === 'none') {
+      return { label: '👀 先輩 −', title: (pick && pick.reason) || '先輩のフォルダを選んでください', count: 0 };
+    }
+    if (pick.name) {
+      return {
+        label: '👀 先輩 ' + baseOf(pick.name),
+        title: '横に出る先輩の図: ' + baseOf(pick.name) + ' (' + pick.reason + '・読むだけ)',
+        count: 1,
+      };
+    }
+    var n = (pick.candidates || []).length;
+    return {
+      label: '👀 先輩 ' + n + ' 候補',
+      title: pick.reason + ' が ' + n + ' 枚あります (押すと枠が開き、選べます)',
+      count: n,
+    };
+  }
+
   // ---- 覚えておくもの -------------------------------------------------------
   // 「開いたままにする」が値打ちなので、開閉と選んだフォルダは覚える。
   function normalize(state) {
@@ -164,7 +193,7 @@
     STORE_KEY: STORE_KEY,
     baseOf: baseOf, domainOf: domainOf, kindOf: kindOf,
     samePath: samePath, isSelf: isSelf,
-    pickCounterpart: pickCounterpart, noticeText: noticeText,
+    pickCounterpart: pickCounterpart, noticeText: noticeText, statusText: statusText,
     normalize: normalize, load: load, save: save,
   };
 
