@@ -1986,6 +1986,23 @@ html, body {
 #peek-cohort .cohort-only-a { border-color: #d08770; color: #d08770; }
 #peek-cohort .cohort-only-b { border-color: #5e81ac; color: #5e81ac; }
 #peek-cohort .cohort-none { color: var(--text-secondary); opacity: 0.7; }
+/* 部品名の対応表 (BLK-reviewer-20260914-1706-wish)。2 列の「片方だけ」を結び直す
+   代わりに、揺れている組だけを 1 行ずつ出す。 */
+#peek-cohort .cohort-pairs { padding: 4px 0 2px; }
+#peek-cohort .cohort-pairs-head { font-size: 10px; color: var(--text-secondary); padding-bottom: 2px; }
+#peek-cohort .cohort-pairs-none { font-size: 10px; color: var(--text-secondary); opacity: 0.8; }
+#peek-cohort .cohort-pair-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
+  font-size: 11px;
+  padding: 2px 4px;
+  border-left: 2px solid var(--accent-orange);
+}
+#peek-cohort .cohort-pair-variant { border-left-color: var(--accent-red); }
+#peek-cohort .cohort-pair-arrow { color: var(--text-secondary); }
+#peek-cohort .cohort-pair-note { font-size: 10px; color: var(--text-secondary); }
 #peek-cohort-toggle.on { border-color: var(--accent); color: var(--accent); }
 #peek-template:disabled { opacity: 0.5; cursor: default; }
 #peek-cohort-templates.on { border-color: var(--accent); color: var(--accent); }
@@ -6170,6 +6187,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/audit-scope.js"></script>
 <script src="src/core/blank-doc.js"></script>
 <script src="src/core/domain-cohort.js"></script>
+<script src="src/core/name-pairing.js"></script>
 <script src="src/core/side-by-side.js"></script>
 <script src="src/core/part-slice.js"></script>
 <script src="src/core/review-note.js"></script>

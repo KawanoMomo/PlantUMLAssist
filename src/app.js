@@ -5783,10 +5783,63 @@ function renderCohortCompare() {
       + (p.diff.matched ? '  ✓ 揃っている' : '  ✗ ' + p.diff.gaps + ' 件が片方にしかない');
     box.appendChild(t);
     _cohortChips(box, '部品名', p.diff.names, p.a.folder, p.b.folder);
+    // BLK-reviewer-20260914-1706-wish: 「片方だけ」の 2 列は、どの名前がどの名前の
+    // 別表記なのかを読む側が結び直すことになる。対応表にして揺れている行だけを残す。
+    _cohortPairTable(box, p.diff.names, p.a.folder, p.b.folder);
     _cohortChips(box, '矢印ラベル', p.diff.labels, p.a.folder, p.b.folder);
     _cohortVerdictRow(box, r.domain, p);
     el.cohort.appendChild(box);
   });
+}
+
+// BLK-reviewer-20260914-1706-wish: 部品名の対応表。IRQCtrl ⇔ Irq_Ctrl のような
+// 表記揺れを、grep と目の結び直しではなく 1 つの表で出す。既定は揺れている行だけ。
+// 一致している行は数えて畳む (読む目的は揺れている行で、一致が先頭に並ぶと探し直しになる)。
+function _cohortPairTable(box, part, aFolder, bFolder) {
+  var NP = window.MA.namePairing;
+  if (!NP) return;
+  var t = NP.table(part, aFolder, bFolder);
+  var wrap = document.createElement('div');
+  wrap.className = 'cohort-pairs';
+  wrap.setAttribute('data-pair-variants', String(t.variants));
+  var head = document.createElement('div');
+  head.className = 'cohort-pairs-head';
+  head.textContent = NP.summaryLine(t);
+  wrap.appendChild(head);
+  var rows = NP.mismatchRows(t);
+  if (!rows.length) {
+    var none = document.createElement('div');
+    none.className = 'cohort-pairs-none';
+    none.textContent = '対応の付く表記揺れはありません';
+    wrap.appendChild(none);
+    box.appendChild(wrap);
+    return;
+  }
+  rows.forEach(function(r) {
+    var line = document.createElement('div');
+    line.className = 'cohort-pair-row cohort-pair-' + r.kind;
+    line.setAttribute('data-pair-kind', r.kind);
+    line.setAttribute('data-pair-a', r.a);
+    line.setAttribute('data-pair-b', r.b);
+    var a = document.createElement('span');
+    a.className = 'cohort-pair-a';
+    a.textContent = aFolder + ' / ' + (r.a || '—');
+    var arrow = document.createElement('span');
+    arrow.className = 'cohort-pair-arrow';
+    arrow.textContent = '⇔';
+    var b = document.createElement('span');
+    b.className = 'cohort-pair-b';
+    b.textContent = bFolder + ' / ' + (r.b || '—');
+    var note = document.createElement('span');
+    note.className = 'cohort-pair-note';
+    note.textContent = r.note;
+    line.appendChild(a);
+    line.appendChild(arrow);
+    line.appendChild(b);
+    line.appendChild(note);
+    wrap.appendChild(line);
+  });
+  box.appendChild(wrap);
 }
 
 // ── 判断 (統一する / 別物と明示する) ──
