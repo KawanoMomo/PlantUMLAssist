@@ -24,17 +24,47 @@ const auditBoard = require('../src/core/audit-board');
 // 台帳そのもの (src/core/swap-queue.js) は DOM に触らないので CLI からも引ける。
 const swapQueue = require('../src/core/swap-queue');
 const reviewBoard = require('../src/core/review-board');
+// BLK-reviewer-20260914-2206: 控えは対象の組ごとに分けて持つ (src/core/audit-state.js)。
+const auditState = require('../src/core/audit-state');
 
 // 前回比較用の控え。CLI を打つ場所 (リポジトリ直下) に置く。
 const STATE_FILE = '.assist-audit-last.json';
 
-// 壊れた控えで CLI を落とさない。読めなければ「前回なし」と同じ扱い。
+// 壊れた控えで CLI を落とさない。読めなければ空の store (「前回なし」と同じ扱い)。
+function readStore(file) {
+  try {
+    if (!fs.existsSync(file)) return { scopes: {} };
+    return auditState.readStore(fs.readFileSync(file, 'utf-8'));
+  } catch (e) { return { scopes: {} }; }
+}
+
+// --since で名指しされた JSON。対象が今回と違う控えと比べると、図がバイト無差分でも
+// 全枚が「変わった図」に出る。落とさずに読み、対象の食い違いは呼び出し元が言う。
 function readReport(file) {
   try {
     if (!fs.existsSync(file)) return null;
     const r = JSON.parse(fs.readFileSync(file, 'utf-8'));
-    return (r && r.audits) ? r : null;
+    if (r && r.audits) return r;
+    // 対象ごとの store を --since に渡されたら、今回の対象の 1 件を取り出す。
+    return null;
   } catch (e) { return null; }
+}
+
+// 控えを書き戻す。他の対象の控えは消さずに残す (対象を切り替えて打っても、
+// それぞれが自分の前回と比べ続けられるようにする)。書けない場所でも監査は成功させる。
+function saveState(file, targets, result) {
+  try {
+    fs.writeFileSync(file, auditState.serialize(
+      auditState.put(readStore(file), targets, result, result.generatedAt)), 'utf-8');
+  } catch (e) {}
+}
+
+// 今回の対象と控えの対象がずれていれば、その旨の 1 行。ずれていなければ null。
+function scopeMismatch(prevTargets, curTargets) {
+  if (!prevTargets || !prevTargets.length) return null;
+  if (auditState.scopeKey(prevTargets) === auditState.scopeKey(curTargets)) return null;
+  return '控えの対象が今回と違います (控え: ' + prevTargets.join(' / ')
+    + ' / 今回: ' + curTargets.join(' / ') + ')。図の変化と指摘の新規/継続は比べていません';
 }
 
 const USAGE = [
@@ -66,7 +96,9 @@ const USAGE = [
   '  --board [MD]  突合結果・前回の指摘文書 (MD、既定は保存フォルダの 指摘.md)・',
   '                前回控えとの差分を 1 枚に束ねて出す。前回の指摘 1 件ごとに',
   '                解消/継続/新規を振り分け、継続には tick 数を数えて付ける',
-  '  --no-state    前回比較用の控え (.assist-audit-last.json) を読み書きしない',
+  '  --no-state    前回比較用の控え (.assist-audit-last.json) を読み書きしない。',
+  '                控えは渡した対象の組ごとに分けて持つので、-p primary と',
+  '                -p junior,primary を交互に打っても、それぞれが自分の前回と比べる',
   '  --help        この説明',
 ].join('\n');
 
@@ -203,7 +235,7 @@ function findingsPath(opts) {
 // 突合結果・前回の指摘文書・前回控えとの差分を 1 枚にする。
 // 指摘文書が無ければ「前回の指摘なし」として今回の突合だけを出す
 // (初回の run でも同じ 1 本のコマンドで済むようにする)。
-function runBoard(result, opts, prev, fmtOpts) {
+function runBoard(result, opts, prev, fmtOpts, prevNote) {
   const audits = result.audits || {};
   const b = auditBoard.build({
     audits: audits,
@@ -218,8 +250,15 @@ function runBoard(result, opts, prev, fmtOpts) {
     ? fmtOpts.prevFiles
     : (prev && prev.files && prev.files.length ? prev.files : null);
   const fd = base ? auditScope.diffFiles(base, result.files) : null;
+  // BLK-reviewer-20260914-2206: 「変わった図」は --names (formatFileDiff) と同じ
+  // 同一性判定で数える。改名は diffFiles が中身の指紋で見分けて added から外して
+  // いるので、ここでは新しく起こした下書き (`{本体}-編集中.puml`) も除く
+  // (--names は「うち新しい下書き N 枚」と別に数えており、本体の図は動いていない)。
+  const draftNames = {};
+  if (fd) (fd.addedDrafts || []).forEach((f) => { draftNames[f.name] = true; });
   const changed = fd && fd.contentComparable
-    ? fd.changed.map((f) => f.name).concat(fd.added.map((f) => f.name))
+    ? fd.changed.map((f) => f.name)
+      .concat(fd.added.filter((f) => !draftNames[f.name]).map((f) => f.name))
     : [];
 
   // BLK-reviewer-20260914-2206 (3 件目): --only で絞った回は、回していない監査の
@@ -229,9 +268,29 @@ function runBoard(result, opts, prev, fmtOpts) {
     scope: opts.only && opts.only.length ? opts.only : null });
   const lines = [reviewBoard.markdown(view, 'レビュー結果 — ' + opts.targets.join(' / '))];
   lines.push('前回の指摘文書: ' + (fpath || '(無し。今回の突合だけを出しています)'));
+  if (prevNote) lines.push(prevNote);
   lines.push('前回控えとの比較: ' + (base
     ? (fd && fd.contentComparable ? '内容まで比較' : '名前だけ比較 (前回に指紋が無い)')
     : '(控えが無いため比較なし)'));
+  // 「変わった図」に数えなかった物は黙って落とさず、--names と同じ語で名指しする
+  // (数えたか数えていないかを reviewer が prev/ との手 diff で確かめ直さずに済む)。
+  if (fd && fd.contentComparable) {
+    if ((fd.renamed || []).length) {
+      lines.push('改名 ' + fd.renamed.length + ' 枚: ' + fd.renamed.slice(0, 5).map(
+        (r) => r.from + ' → ' + r.to).join(', ')
+        + (fd.renamed.length > 5 ? ', ほか ' + (fd.renamed.length - 5) + ' 枚' : '')
+        + ' (中身は同じ。変わった図に数えていません)');
+    }
+    if ((fd.addedDrafts || []).length) {
+      lines.push('新しい下書き ' + fd.addedDrafts.length + ' 枚: '
+        + fd.addedDrafts.slice(0, 5).map((f) => f.name).join(', ')
+        + ' (作業中の控え。変わった図に数えていません)');
+    }
+    if ((fd.removed || []).length) {
+      lines.push('消えた図 ' + fd.removed.length + ' 枚: '
+        + fd.removed.slice(0, 5).map((f) => f.name).join(', ') + ' (改名は上の行に分けてあります)');
+    }
+  }
   lines.push('今回の突合: ' + auditBoard.summaryLine(b));
   if (opts.only && opts.only.length) {
     lines.push('前回控えの更新: 絞った回なので更新していません (次の素の回が前回のまま比べます)');
@@ -353,17 +412,30 @@ function main(argv) {
   // のはここが根。絞った回は読むだけで、控えは全部回した回だけが書き替える。
   const partial = !!(opts.only && opts.only.length);
   let prev = null;
+  // 控えがどの対象のいつの物か。--board / --summary に必ず 1 行出して、
+  // 「今の数字が何と比べた数字か」を手で裏取りせずに読めるようにする。
+  let prevNote = null;
   // BLK-reviewer-20260908-0203 (0723 追記): 指紋を載せる前に採った JSON と比べる run は
   // 「追えない」で終わり、その 1 回だけは 22 枚の手 diff に戻っていた。前回の図が
   // フォルダで残っているなら、そこから指紋を採り直して同じ 1 回で内容変化を出す。
   const fmtOpts = {};
   // --board も前回との比較を使う (前回控えから変わった図を同じ画面に並べる)。
   if (opts.summary || opts.board) {
-    const from = opts.since ? path.resolve(opts.since) : (opts.state ? statePath : null);
-    if (from) prev = readReport(from);
-    if (opts.since && !prev) {
-      console.error('前回の監査 JSON が読めません: ' + opts.since);
-      return 1;
+    if (opts.since) {
+      prev = readReport(path.resolve(opts.since));
+      if (!prev) {
+        console.error('前回の監査 JSON が読めません: ' + opts.since);
+        return 1;
+      }
+      const bad = scopeMismatch(prev.targets, opts.targets);
+      if (bad) { prev = null; prevNote = '前回控え: ' + bad; }
+      else prevNote = '前回控え: ' + auditState.describe({ targets: prev.targets, savedAt: prev.generatedAt });
+    } else if (opts.state) {
+      // 対象の組ごとに別の控えを見る。別の対象で採った控えとは比べない
+      // (比べると、図が無差分でも全枚が「変わった図」に、指摘が全件「新規」に出る)。
+      const entry = auditState.pick(readStore(statePath), opts.targets);
+      prev = entry ? entry.report : null;
+      prevNote = '前回控え: ' + auditState.describe(entry);
     }
     if (opts.pairsMax) fmtOpts.pairsMax = opts.pairsMax;
     if (opts.sinceFiles) {
@@ -398,13 +470,13 @@ function main(argv) {
       fs.writeFileSync(opts.out, json, 'utf-8');
       console.log(path.resolve(opts.out));
     }
-    console.log(runBoard(result, opts, prev, fmtOpts));
+    console.log(runBoard(result, opts, prev, fmtOpts, prevNote));
     if (opts.summary) console.log('\n' + report.formatSummary(result, prev, fmtOpts));
     // --summary-json と併記されたら、画面の後ろに要約 JSON も出す
     // (読む口と機械で読む口を 1 回の実行で両方取れるようにする)。
     if (viewJson) console.log('\n' + viewJson);
     if (opts.state && !partial) {
-      try { fs.writeFileSync(statePath, json, 'utf-8'); } catch (e) {}
+      saveState(statePath, opts.targets, result);
     }
     if (rt.errors.length) {
       for (const e of rt.errors) console.error('読み込み失敗: ' + e.file + ' — ' + e.message);
@@ -422,12 +494,13 @@ function main(argv) {
     if (opts.summary) console.log(report.formatSummary(result, prev, fmtOpts));
   } else if (opts.summary) {
     console.log(report.formatSummary(result, prev, fmtOpts));
+    if (prevNote) console.log(prevNote);
   } else {
     console.log(json);
   }
   // 次回の比較のために控えを置く。書けない場所でも監査自体は成功させる。
   if (opts.state && !partial) {
-    try { fs.writeFileSync(statePath, json, 'utf-8'); } catch (e) {}
+    saveState(statePath, opts.targets, result);
   }
   if (rt.errors.length) {
     for (const e of rt.errors) console.error('読み込み失敗: ' + e.file + ' — ' + e.message);
