@@ -181,3 +181,82 @@ test('手順2 過去に当てた置換の組が、打つ前に「適用済み / 
   await expect(page.locator('#rename-to')).toHaveValue('Spi_Driver');
   await expect(page.locator('#btn-rename-apply')).toBeEnabled();
 });
+
+// BLK-primary-20260914-1306-friction: 上のケースは「当たった置換」が履歴に残ることに
+// 頼っている。primary の実運用ではもう全図が置換済みでヒット 0 件なので [適用] に
+// 届かず、組はどこにも残らないまま毎回 SpiDrv / Spi_Driver を打ち直していた
+// (clicks=4 / keys=18 が下がらない下限)。組は図と同じく保存フォルダの持ち物として
+// 残し、ブラウザが変わっても次の run は押すだけで済むようにする。
+test('手順2 ヒット 0 件で打った組も保存フォルダに残り、次の run は打鍵ゼロで呼べる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  // 最初から全図 Spi_Driver (= 前の run までに置換し終えている状態)。
+  for (const n of S.PRIMARY_DOCS) await S.putDoc(page, DIR, n, S.docFor(n, 'Spi_Driver'));
+  await page.reload();
+  await page.waitForSelector('#preview-svg');
+
+  await page.keyboard.press('Control+h');
+  await page.waitForSelector('#rename-panel.open', { timeout: 5000 });
+  await page.locator('#rename-from').fill('SpiDrv');
+  await page.locator('#rename-to').fill('Spi_Driver');
+  await page.waitForTimeout(900);
+  // ヒット 0 件なので [適用] も [▤ 影響を見る] も押せない。ここが起票の状況。
+  await expect(page.locator('#btn-rename-apply')).toBeDisabled();
+  // 打ち終わり (欄から離れる) の時点で組を覚える。
+  await page.locator('#rename-to').blur();
+  await page.waitForTimeout(900);
+
+  // 別のブラウザ・別のプロファイルで開き直した状況を作る。localStorage の
+  // 改名履歴は消えるが、フォルダ側の組は図と一緒に残っているはず。
+  await page.evaluate(() => window.localStorage.clear());
+  await page.reload();
+  await page.waitForSelector('#preview-svg');
+  await page.keyboard.press('Control+h');
+  await page.waitForSelector('#rename-panel.open', { timeout: 5000 });
+  await page.waitForTimeout(1200);
+
+  const row = page.locator('#rename-redo-rows button.rr-row[data-from="SpiDrv"][data-to="Spi_Driver"]');
+  await expect(row).toHaveCount(1);
+  await expect(row).toHaveAttribute('data-remaining', '0');
+  // 到達条件: 1 クリックで置換前・置換後が入る (from/to の打鍵は 0)。
+  await row.click();
+  await page.waitForTimeout(600);
+  await expect(page.locator('#rename-from')).toHaveValue('SpiDrv');
+  await expect(page.locator('#rename-to')).toHaveValue('Spi_Driver');
+});
+
+// BLK-primary-20260914-1306-friction (継続): 上のケースは「欄から離れる」ことに
+// 頼っている。primary が実際に踏んだのは Ctrl+H → from/to を打つ → そのまま閉じる
+// (ヒット 0 件で [適用] が押せないときの普通の終わり方) で、blur を通らないため
+// 組が残らないままだった。閉じる時点でも覚える。
+test('手順2 欄から離れずに閉じても、打った組は保存フォルダに残る', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  for (const n of S.PRIMARY_DOCS) await S.putDoc(page, DIR, n, S.docFor(n, 'Spi_Driver'));
+  await page.reload();
+  await page.waitForSelector('#preview-svg');
+
+  await page.keyboard.press('Control+h');
+  await page.waitForSelector('#rename-panel.open', { timeout: 5000 });
+  await page.locator('#rename-from').fill('SpiDrv');
+  await page.locator('#rename-to').fill('Spi_Driver');
+  await page.waitForTimeout(900);
+  await expect(page.locator('#btn-rename-apply')).toBeDisabled();
+  // blur を挟まず、置換後の欄にカーソルを置いたまま Esc で閉じる。
+  await page.locator('#rename-to').press('Escape');
+  await page.waitForTimeout(900);
+
+  await page.evaluate(() => window.localStorage.clear());
+  await page.reload();
+  await page.waitForSelector('#preview-svg');
+  await page.keyboard.press('Control+h');
+  await page.waitForSelector('#rename-panel.open', { timeout: 5000 });
+  await page.waitForTimeout(1200);
+
+  const row = page.locator('#rename-redo-rows button.rr-row[data-from="SpiDrv"][data-to="Spi_Driver"]');
+  await expect(row).toHaveCount(1);
+  await row.click();
+  await page.waitForTimeout(600);
+  await expect(page.locator('#rename-from')).toHaveValue('SpiDrv');
+  await expect(page.locator('#rename-to')).toHaveValue('Spi_Driver');
+});

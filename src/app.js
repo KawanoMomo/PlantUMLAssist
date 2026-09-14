@@ -601,7 +601,7 @@ function init() {
       var type = t && t.getAttribute && t.getAttribute('data-type');
       var id = type ? t.getAttribute('data-id') : null;
       if (!type || id == null) { _clearHoverPeers(); return; }
-      var key = type + ' ' + id;
+      var key = type + '\u0000' + id;
       if (key === _hoverPeerKey) return;
       _clearHoverPeers();
       _hoverPeerKey = key;
@@ -11972,12 +11972,70 @@ function _renameRedoDocs() {
   return _fiEnabled() ? _fiRows() : _renameDocs();
 }
 
+// 組はフォルダ側にも置く (BLK-primary-20260914-1306-friction)。localStorage の
+// 改名履歴は「当たった置換」しか残さず、ブラウザが変われば消える。同じ組を
+// 週をまたいで当て直す運用では、それだと毎回 from/to を打ち直すことになる。
+var _rpRows = [];
+var _rpDir = null;
+var _rpLoading = false;
+
+function loadRenamePairs(force) {
+  if (!_fiFolderMode()) { _rpRows = []; _rpDir = null; return Promise.resolve([]); }
+  var dir = _wsFileDir();
+  // 読み込み中は待つ。描画のたびに往復すると、パネルを開いた直後に同じ GET が
+  // 何本も飛ぶ。
+  if (_rpLoading) return Promise.resolve(_rpRows);
+  if (!force && _rpDir === dir) return Promise.resolve(_rpRows);
+  _rpLoading = true;
+  return window.fetch('/rename-pairs?dir=' + encodeURIComponent(dir))
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(data) {
+      var RP = window.MA.renamePairs;
+      _rpRows = RP ? RP.normalize(data && data.pairs) : [];
+      _rpDir = dir;
+      _rpLoading = false;
+      if (typeof renderRenameRedo === 'function') renderRenameRedo();
+      return _rpRows;
+    }, function() {
+      // 読めなくても「読んだ」ことにする (毎描画で往復し続けるのを避ける)。
+      _rpDir = dir;
+      _rpLoading = false;
+      return _rpRows;
+    });
+}
+
+// 打った組を覚える。当たらなかった組 (hits 0) も残すのは、「もう残っていない」
+// と分かったこと自体が、次の run で打ち直さずに済む知識だから。
+function rememberRenamePair(from, to, hits) {
+  var RP = window.MA.renamePairs;
+  if (!RP || !RP.shouldRemember(from, to)) return Promise.resolve(null);
+  var row = { from: String(from).trim(), to: String(to).trim(), at: new Date().toISOString() };
+  _rpRows = RP.merge([row], _rpRows);
+  if (typeof renderRenameRedo === 'function') renderRenameRedo();
+  if (!_fiFolderMode()) return Promise.resolve(null);
+  return window.fetch('/rename-pairs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dir: _wsFileDir(), from: row.from, to: row.to, hits: Number(hits || 0) }),
+  }).then(function(r) { return r.ok ? r.json() : null; }, function() { return null; });
+}
+
+// renameRedo に渡す組。フォルダの組が先 (run をまたいで残る方が正本)。
+function _renameRedoPairs() {
+  var RP = window.MA.renamePairs;
+  var hist = _renameHistoryList();
+  return RP ? RP.merge(_rpRows, hist) : hist;
+}
+
 function renderRenameRedo() {
   var box = document.getElementById('rename-redo');
   var RR = window.MA.renameRedo;
   if (!box || !RR) return;
   box.textContent = '';
-  var rows = RR.pairs(_renameHistoryList(), _renameRedoDocs());
+  // フォルダ側の組をまだ読んでいなければ読んでから描き直す (読めた時点で
+  // loadRenamePairs がここを呼び直す)。
+  loadRenamePairs(false);
+  var rows = RR.pairs(_renameRedoPairs(), _renameRedoDocs());
 
   var sum = document.createElement('div');
   sum.className = 'rr-summary ' + RR.summaryClass(rows);
@@ -12766,6 +12824,11 @@ function applyRenameToUnopenedFiles(from, to) {
   })).then(function() { return res; });
 }
 
+// 直近のプレビューで数えた総ヒット数。組を覚えるときの hits に使う
+// (0 件だったことも覚える値なので、数えた側で持つ)。
+var _renameGrand = 0;
+function _renameGrandTotal() { return _renameGrand; }
+
 function updateRenamePreview() {
   var br = window.MA.bulkRename;
   var hits = document.getElementById('rename-hits');
@@ -12825,6 +12888,7 @@ function updateRenamePreview() {
     summary.textContent = grand + ' 件 / ' + grandDocs + ' 枚を置換します'
       + (folder.docs > 0 ? ' (うち未オープン ' + folder.docs + ' 枚)' : '');
   }
+  _renameGrand = grand;
   summary.setAttribute('data-total', String(total));
   summary.setAttribute('data-grand-total', String(grand));
   summary.setAttribute('data-unopened-docs', String(folder.docs));
@@ -13722,7 +13786,13 @@ function setupBulkRename() {
   var applyBtn = document.getElementById('btn-rename-apply');
   var summary = document.getElementById('rename-summary');
 
-  function closePanel() { panel.classList.remove('open'); }
+  // 閉じるときも組を覚える。欄から離れずに Esc・[閉じる] で終える打ち方
+  // (ヒット 0 件で [適用] が押せないときの普通の終わり方) だと blur が来ず、
+  // 打った組がどこにも残らないままになる (BLK-primary-20260914-1306-friction)。
+  function closePanel() {
+    panel.classList.remove('open');
+    rememberRenamePair(fromEl && fromEl.value, toEl && toEl.value, _renameGrandTotal());
+  }
 
   function fillCandidates() {
     var dl = document.getElementById('rename-candidates');
@@ -13752,6 +13822,9 @@ function setupBulkRename() {
     if (scanRow && scanRow.parentNode) {
       scanRow.parentNode.style.display = _fiFolderMode() ? '' : 'none';
     }
+    // 過去の組はフォルダ側にも溜まっている。開いた時点で読み直す
+    // (前の run が別のブラウザ・別のプロファイルでも、組はここに残っている)。
+    loadRenamePairs(true);
     updateRenamePreview();
     // 保存フォルダは開いた時点で数え始める。押してから待たせると、
     // 「まず全ファイルを数えさせる」ための 1 手が増えるだけになる。
@@ -13762,6 +13835,12 @@ function setupBulkRename() {
   [fromEl, toEl].forEach(function(el) {
     if (!el) return;
     el.addEventListener('input', updateRenamePreview);
+    // 組は「打ち終わった時点」で覚える。ヒット 0 件だと [適用] は押せないまま
+    // なので、適用のときだけ覚えていては、空打ちの組が永久に残らない
+    // (BLK-primary-20260914-1306-friction)。打ち終わり = 欄から離れたとき。
+    el.addEventListener('blur', function() {
+      rememberRenamePair(fromEl.value, toEl.value, _renameGrandTotal());
+    });
     el.addEventListener('keydown', function(ev) {
       if (ev.key === 'Enter' && !applyBtn.disabled) { ev.preventDefault(); doApply(); }
       if (ev.key === 'Escape') { ev.preventDefault(); closePanel(); }
@@ -13785,6 +13864,8 @@ function setupBulkRename() {
     applyRenameToUnopenedFiles(from, to).then(function(f) {
       var total = openTotal + f.total;
       var docs = openDocs + f.docs;
+      // 当たっても当たらなくても組は覚える。次の run はこの行を押すだけで済む。
+      rememberRenamePair(from, to, total);
       if (total === 0) return;
       // 履歴は「1 回の置換」で 1 件。開いている図とフォルダ直書きを 1 つにまとめる。
       _recordRename(from, to, ((res && res.changed) || []).map(function(c) {

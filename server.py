@@ -411,6 +411,9 @@ API_INDEX = {
         {'endpoint': 'GET /tickets', 'summary': '変更チケットの一覧', 'request': '?dir='},
         {'endpoint': 'POST /tickets', 'summary': '変更チケットを 1 枚書く', 'request': "{dir, ticket}"},
         {'endpoint': 'DELETE /tickets', 'summary': '変更チケットを 1 枚消す', 'request': '?dir=&id='},
+        {'endpoint': 'GET /rename-pairs', 'summary': 'そのフォルダで打たれた置換の組', 'request': '?dir='},
+        {'endpoint': 'POST /rename-pairs', 'summary': '置換の組を 1 つ覚える',
+         'request': "{dir, from, to, hits}"},
         {'endpoint': 'POST /file-roles', 'summary': '保存フォルダの _roles.json を置き換える',
          'request': "{dir, roles}"},
         {'endpoint': 'POST /export-log', 'summary': '書き出しの控えを 1 件足す'},
@@ -608,6 +611,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.split('?')[0] == '/tickets':
             with _fs_lock:
                 return self._handle_tickets_get()
+        if self.path.split('?')[0] == '/rename-pairs':
+            with _fs_lock:
+                return self._handle_rename_pairs_get()
         if self.path.startswith('/autosave'):
             with _fs_lock:
                 return self._handle_autosave_get()
@@ -666,6 +672,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == '/tickets':
             with _fs_lock:
                 return self._handle_tickets_post()
+        if self.path == '/rename-pairs':
+            with _fs_lock:
+                return self._handle_rename_pairs_post()
         if self.path == '/file-roles':
             with _fs_lock:
                 return self._handle_file_roles_post()
@@ -1528,6 +1537,73 @@ class Handler(BaseHTTPRequestHandler):
         except OSError:
             pass
         self._send_json(200, {'ok': True})
+
+    # --- 置換の組 (BLK-primary-20260914-1306-friction) ------------------------
+    #
+    # 「過去に当てた置換の組」は localStorage にしか無かったので、ブラウザを
+    # 変える・プロファイルが新しくなるだけで消え、同じ SpiDrv → Spi_Driver を
+    # 毎回打ち直すことになっていた。組は図と同じく保存フォルダの持ち物なので、
+    # フォルダ側に置く。当たらなかった組 (hits 0) も残すのは、「もう残っていない
+    # ことを確かめるためだけの空打ち」こそ消したい手数だから。
+    RENAMES_DIRNAME = '_renames'
+    RENAMES_MAX = 200
+
+    def _renames_path(self, save_dir):
+        return save_dir / self.RENAMES_DIRNAME / 'pairs.json'
+
+    def _read_rename_pairs(self, save_dir):
+        try:
+            data = json.loads(self._renames_path(save_dir).read_text(encoding='utf-8'))
+        except (ValueError, OSError):
+            return []
+        if not isinstance(data, dict):
+            return []
+        pairs = data.get('pairs')
+        return [p for p in pairs if isinstance(p, dict)] if isinstance(pairs, list) else []
+
+    def _handle_rename_pairs_get(self):
+        """GET /rename-pairs?dir= — その保存フォルダで打たれた置換の組."""
+        parsed = urllib.parse.urlparse(self.path)
+        params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
+        save_dir = self._autosave_resolve_dir(params.get('dir'))
+        self._send_json(200, {'dir': str(save_dir), 'pairs': self._read_rename_pairs(save_dir)})
+
+    def _handle_rename_pairs_post(self):
+        """POST /rename-pairs {dir, from, to, hits} — 組を 1 つ覚える (新しい順)."""
+        length = int(self.headers.get('Content-Length', 0))
+        try:
+            data = json.loads(self.rfile.read(length).decode('utf-8'))
+        except ValueError:
+            self._send_json(400, {'error': 'invalid JSON'})
+            return
+        if not isinstance(data, dict):
+            self._send_json(400, {'error': 'body must be an object'})
+            return
+        src = data.get('from')
+        dst = data.get('to')
+        if not isinstance(src, str) or not isinstance(dst, str) or not src or not dst:
+            self._send_json(400, {'error': 'from and to must be non-empty strings'})
+            return
+        save_dir = self._autosave_resolve_dir(data.get('dir'))
+        entry = {
+            'from': src,
+            'to': dst,
+            'at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+            'hits': int(data.get('hits') or 0),
+        }
+        # 同じ組は 1 行。打ち直すたびに先頭へ上がるので、最近の関心が上に並ぶ。
+        pairs = [p for p in self._read_rename_pairs(save_dir)
+                 if not (p.get('from') == src and p.get('to') == dst)]
+        pairs.insert(0, entry)
+        pairs = pairs[:self.RENAMES_MAX]
+        path = self._renames_path(save_dir)
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            _atomic_write_text(path, json.dumps({'pairs': pairs}, ensure_ascii=False, indent=1))
+        except OSError as e:
+            self._send_json(500, {'error': f'write failed: {e}'})
+            return
+        self._send_json(200, {'dir': str(save_dir), 'pairs': pairs})
 
     def _autosave_read_meta(self, save_dir):
         p = self._autosave_meta_path(save_dir)
