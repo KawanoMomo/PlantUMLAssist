@@ -36,6 +36,10 @@ const USAGE = [
   '  --cohort      ドメイン突合だけを要約で出す (= --only cohort --summary)。',
   '                フォルダを 2 つ以上渡すと、名前の先頭 1 段がそのフォルダ名になる',
   '  --summary     JSON ではなく人が読む要約を出す',
+  '  --summary-json  要約だけを、どの run でも同じ形・同じ順の JSON で出す',
+  '                (別名 --summary-only)。totalIssues が先頭付近に固定で出て、',
+  '                回らなかった監査も status: skipped/error として必ず並ぶので、',
+  '                大きい JSON を grep -n で探し直さずに済む',
   '  --out FILE    JSON をファイルに書く (標準出力にはパスだけ)',
   '  --since FILE  前回の監査 JSON と突き合わせ、増えた指摘・消えた指摘と、',
   '                実データ/テンプレ別のファイル内容の変化を要約に足す',
@@ -133,11 +137,14 @@ function runVersions(targets, max) {
 }
 
 function parseArgs(argv) {
-  const opts = { targets: [], only: null, summary: false, out: null, help: false, since: null, sinceFiles: null, state: true, pairsMax: 0, personas: null, versions: false, versionsMax: 6 };
+  const opts = { targets: [], only: null, summary: false, summaryJson: false, out: null, help: false, since: null, sinceFiles: null, state: true, pairsMax: 0, personas: null, versions: false, versionsMax: 6 };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--help' || a === '-h') opts.help = true;
     else if (a === '--summary') opts.summary = true;
+    // BLK-reviewer-20260906-2043: 要約だけを固定の形で出す。--summary の人向け
+    // テキストは目で読む用、こちらは jq / node -e から位置を探さずに読む用。
+    else if (a === '--summary-json' || a === '--summary-only') opts.summaryJson = true;
     // BLK-reviewer-20260909-0703: 手順 4.7 は毎 tick これだけを打つ。
     // `--only cohort --summary` の 24 打鍵を 8 打鍵にする。
     else if (a === '--cohort') { opts.only = ['cohort']; opts.summary = true; }
@@ -248,10 +255,18 @@ function main(argv) {
   }
 
   const json = JSON.stringify(result, null, 2);
+  // BLK-reviewer-20260906-2043: --summary-json は「要約だけ」を返す口なので、
+  // 標準出力へ出すのは要約に差し替える。--out は今までどおり全部の JSON を
+  // 書く (控えとして残すのも、次回の --since で読むのも全部の JSON)。
+  const viewJson = opts.summaryJson ? JSON.stringify(report.summaryView(result), null, 2) : null;
   if (opts.out) {
     fs.mkdirSync(path.dirname(path.resolve(opts.out)), { recursive: true });
     fs.writeFileSync(opts.out, json, 'utf-8');
     console.log(path.resolve(opts.out));
+    if (viewJson) console.log(viewJson);
+    if (opts.summary) console.log(report.formatSummary(result, prev, fmtOpts));
+  } else if (viewJson) {
+    console.log(viewJson);
     if (opts.summary) console.log(report.formatSummary(result, prev, fmtOpts));
   } else if (opts.summary) {
     console.log(report.formatSummary(result, prev, fmtOpts));
