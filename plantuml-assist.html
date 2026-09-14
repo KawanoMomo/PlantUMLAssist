@@ -4651,6 +4651,17 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 }
 /* BLK-reviewer-20260912-2103-wish: 中身の入れ替わりは「読めるが間違っている」
    状態なので、突合の警告より強い色 (エラー寄り) で出す。 */
+#save-redirect-overlay {
+  position: sticky; top: 0; left: 0; z-index: 31;
+  margin: -16px -16px 12px -16px; padding: 6px 12px;
+  background: rgba(60, 40, 14, 0.96); color: #ffd79a;
+  border-bottom: 1px solid #8a6a23; font-size: 12px;
+}
+#save-redirect-overlay .srd-head { display: flex; align-items: center; gap: 8px; }
+#save-redirect-overlay .srd-head span { flex: 1; }
+#save-redirect-overlay button { font-size: 11px; padding: 1px 6px; cursor: pointer; }
+#save-redirect-overlay button:disabled { opacity: 0.6; cursor: default; }
+
 #save-swap-overlay {
   position: sticky;
   top: 0;
@@ -5710,6 +5721,15 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
           <button type="button" id="btn-ssw-restore" hidden></button>
           <ol id="ssw-log" hidden></ol>
         </div>
+        <!-- BLK-primary-20260914-1406: 押した保存が控え (`{名前}-編集中`) へ逸れたことを
+             その場で言い、1 押しで本体へ書き直せる帯。中身は save-redirect.js -->
+        <div id="save-redirect-overlay" role="alert" hidden>
+          <div class="srd-head">
+            <span id="srd-summary"></span>
+            <button type="button" id="btn-srd-overwrite"></button>
+            <button type="button" id="btn-srd-keep"></button>
+          </div>
+        </div>
         <!-- BLK-junior-20260908-1703-wish: 継承元の増減行に対応する図形を
              図の上で色付けしたときの帯。当たらなかった行はここに並べる -->
         <div id="lg-mark-overlay" role="status" hidden>
@@ -6154,6 +6174,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/app-bridge.js"></script>
 <script src="src/core/save-prefs.js"></script>
 <script src="src/core/save-target.js"></script>
+<script src="src/core/save-redirect.js"></script>
 <script src="src/core/source-lock.js"></script>
 <script src="src/core/export-shortcuts.js"></script>
 <script src="src/core/diagram-settings.js"></script>

@@ -18362,22 +18362,102 @@ function onFilePicked(e) {
 // BLK-primary-20260907-0823: 保存先ディレクトリを設定していても「保存」は
 // ダウンロードしか起こさず、フォルダに .puml ができなかった。保存先を設定して
 // いる間は、保存先へ書くのが「保存」である。判定は save-target が唯一の規約。
+// ── 保存が控えへ逸れたときの帯 (BLK-primary-20260914-1406) ──────────────────
+// 「保存を押したのにディスクが変わらない」の正体は、source-lock の既定が
+// 黙って `{名前}-編集中` へ書き先を移していたこと。帯で書いた先を名指しし、
+// [本体に書く] の 1 押しで本体へ入れられるようにする。
+function hideSaveRedirect() {
+  var el = document.getElementById('save-redirect-overlay');
+  if (el) el.hidden = true;
+}
+
+function showSaveRedirect(info, dir) {
+  var SR = window.MA.saveRedirect;
+  var el = document.getElementById('save-redirect-overlay');
+  if (!el) return;
+  var n = (SR && info) ? SR.notice(info.origin, info.written, info.reason, dir) : null;
+  if (!n) { el.hidden = true; return; }
+  el.hidden = false;
+  el.setAttribute('data-redirect', SR.key(n.origin, n.written));
+  var sum = document.getElementById('srd-summary');
+  if (sum) { sum.textContent = n.text; sum.title = n.detail; }
+  var ow = document.getElementById('btn-srd-overwrite');
+  if (ow) {
+    ow.textContent = n.overwriteLabel;
+    ow.title = n.overwriteTitle;
+    ow.disabled = false;
+    ow.onclick = function() { writeRedirectToOrigin(info, dir); };
+  }
+  var keep = document.getElementById('btn-srd-keep');
+  if (keep) {
+    keep.textContent = n.keepLabel;
+    keep.title = n.keepTitle;
+    keep.onclick = function() { hideSaveRedirect(); };
+  }
+}
+
+// [本体に書く]。この図の錠を「上書き」に倒し、今の本文を本体へ書く。
+// あわせて「他のファイルも同じ扱い」の既定を外す —— 黙って逸れたことが
+// 詰まりの原因なので、次からは逸らす前に聞く。
+function writeRedirectToOrigin(info, dir) {
+  var SL = window.MA.sourceLock;
+  var SR = window.MA.saveRedirect;
+  var WS = window.MA.workspace;
+  if (!info || !WS) return;
+  try { if (SL) SL.answer(info.docId, 'overwrite', _openDocNames(), false); } catch (e) {}
+  try { if (SL && SL.setDefault) SL.setDefault(null); } catch (e) {}
+  var out = { id: info.docId, name: info.origin, diagramType: info.diagramType, dsl: info.dsl };
+  var btn = document.getElementById('btn-srd-overwrite');
+  if (btn) { btn.disabled = true; btn.textContent = '書いています…'; }
+  WS.saveToFile(out, dir).then(function(ok) {
+    hideSaveRedirect();
+    if (!ok) {
+      if (window.MA.toast) window.MA.toast.show('⚠ ' + info.origin + '.puml に書けませんでした');
+      return;
+    }
+    if (window.MA.saveDiff) window.MA.saveDiff.mark(out.name, out.dsl);
+    if (window.MA.versionTimeline) window.MA.versionTimeline.push(out.name, out.dsl);
+    try { updateTopSourceLock(); } catch (e) {}
+    var ST = window.MA.saveTarget;
+    if (ST) setSaveStatus(ST.messageFor({ mode: 'file', name: out.name, dir: dir }, true));
+    if (window.MA.toast && SR) window.MA.toast.show(SR.doneText(info.origin));
+  });
+}
+
 function saveFile() {
   var title = (currentParsed && currentParsed.meta && currentParsed.meta.title) || 'untitled';
   // 押した時点の編集内容を workspace のアクティブなドキュメントに書き戻してから
   // 保存する (打った直後に押しても最後の 1 文字が落ちない)。
   var doc = saveActiveDoc();
+  // BLK-primary-20260914-1406: saveActiveDoc は錠が効いたとき控えの名前を持つ doc を返す。
+  // そのまま錠に問い直すと「名前が変わった」と見えて錠が外れ、逸れたことも言えなくなる。
+  // 画面で開いている図の名前は workspace から取り直す。
+  var openName = doc ? doc.name : '';
+  try {
+    var live = window.MA.workspace ? window.MA.workspace.getActive() : null;
+    if (live && live.name) openName = live.name;
+  } catch (e) {}
+  if (doc && openName && doc.name !== openName) {
+    doc = { id: doc.id, name: openName, diagramType: doc.diagramType, dsl: doc.dsl };
+  }
   var cfg = null;
   try { cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null; } catch (e) { cfg = null; }
   // 手で押した「保存」も、開いた元ファイルの錠に従う (BLK-junior-20260908-1803-wish)。
   // 「元のまま保つ」を選んだあとに保存を押して元が消えたら、選ばせた意味が無い。
   var SLm = window.MA.sourceLock;
+  // BLK-primary-20260914-1406: 押した保存が控え (`{名前}-編集中`) へ逸れたことを、
+  // 保存のその場で言うために「開いている図の名前」を控えておく。
+  var redirected = null;
   if (doc && SLm && cfg && cfg.backend === 'file') {
     // 手で押した保存は、本文が開いたときのまま (skip) でも元ファイルへ書いてよい
     // (利用者が自分で押している。decide は skip でも書き先に元の名前を返す)。
     var dm = SLm.decide(doc.id, doc.name, _openDocNames(), doc.dsl);
     if (dm.action === 'ask') { try { askSourceLock(doc); } catch (e) {} return; }
-    if (dm.name !== doc.name) doc = { id: doc.id, name: dm.name, diagramType: doc.diagramType, dsl: doc.dsl };
+    if (dm.name !== doc.name) {
+      redirected = { docId: doc.id, origin: doc.name, written: dm.name,
+                     reason: 'lock-copy', diagramType: doc.diagramType, dsl: doc.dsl };
+      doc = { id: doc.id, name: dm.name, diagramType: doc.diagramType, dsl: doc.dsl };
+    }
   }
   var ST = window.MA.saveTarget;
   var target = ST ? ST.decide(cfg, doc, title) : { mode: 'download', name: title };
@@ -18388,6 +18468,9 @@ function saveFile() {
       setSaveStatus(ST.messageFor(target, ok));
       // 保存できた図にだけ、その場で突合を掛ける (BLK-reviewer-20260908-1503-wish)。
       if (ok) {
+        // 書いた先が開いている図と違うなら、そのことを最優先で言う。
+        // 状態バーの 1 行だけでは「保存した」と「本体が変わった」の食い違いが読めない。
+        showSaveRedirect(redirected, target.dir);
         runSaveCheck(doc && doc.name);
         // この保存で中身が別名の図と入れ替わっていないか (BLK-reviewer-20260912-2103-wish)
         runSaveSwapCheck(doc && doc.name, doc && doc.dsl);
