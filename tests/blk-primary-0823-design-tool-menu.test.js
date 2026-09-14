@@ -30,10 +30,13 @@ describe('ツールメニューの分類', function() {
     });
   });
 
-  test('タブ列に残すのは ＋ と 📂 一覧 だけで、それらは畳まない', function() {
-    expect(tm.keepIds()).toEqual(['btn-tab-new', 'btn-tab-folder']);
+  // BLK-junior-20260914-1406-wish: ⇔ 先輩の図 を残す側に足した。開いて終わる道具ではなく
+  // 画面の枠の出し入れで、畳むと据え置き (深い経路を通らない) の値打ちが消えるため。
+  test('タブ列に残すのは 図の出し入れ と 枠の出し入れ だけで、それらは畳まない', function() {
+    expect(tm.keepIds()).toEqual(['btn-tab-new', 'btn-tab-folder', 'btn-tab-senior']);
     expect(tm.isFoldable('btn-tab-new')).toBe(false);
     expect(tm.isFoldable('btn-tab-folder')).toBe(false);
+    expect(tm.isFoldable('btn-tab-senior')).toBe(false);
     expect(tm.isFoldable('btn-tab-board')).toBe(true);
     // メニューに載っていない未知のボタンは畳まない (画面から消してしまわない)
     expect(tm.isFoldable('btn-tab-unknown')).toBe(false);

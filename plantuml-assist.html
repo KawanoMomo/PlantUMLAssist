@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
@@ -4903,6 +4903,41 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 #lgm-list li { list-style: disc; }
 
 /* ── Properties Pane ───────────────────────────────────────────────────────── */
+/* ── 先輩の図の枠 (BLK-junior-20260914-1406-wish) ───────────────────────────
+   モーダルではなく据え置きの 2 枠目。左で自分の図を編集したまま、右に
+   先輩の同じ図が読み専用で残る。 */
+#senior-pane {
+  display: flex;
+  flex-direction: column;
+  width: 360px;
+  min-width: 220px;
+  border-left: 1px solid var(--border);
+  background: var(--bg-secondary);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+#senior-head {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 8px; border-bottom: 1px solid var(--border);
+  font-size: 12px; color: var(--text-primary);
+}
+#senior-head select { flex: 1; min-width: 0; font-size: 11px; }
+#senior-head button { border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer; }
+#senior-notice { padding: 4px 8px; font-size: 11px; color: var(--text-secondary); }
+#senior-candidates { padding: 0 8px 4px 8px; display: flex; flex-wrap: wrap; gap: 4px; }
+#senior-candidates .senior-cand {
+  font-size: 11px; padding: 1px 8px; border-radius: 10px;
+  border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer;
+}
+#senior-candidates .senior-cand.selected { border-color: var(--accent); color: var(--accent); }
+#senior-view { flex: 1; overflow: auto; padding: 0 8px 8px 8px; }
+#senior-svg svg { max-width: 100%; height: auto; }
+#senior-dsl {
+  font-family: var(--font-mono); font-size: 11px; white-space: pre-wrap;
+  color: var(--text-secondary); margin: 6px 0 0 0;
+}
+#btn-tab-senior.on { border-color: var(--accent); color: var(--accent); }
+
 #props-pane {
   display: flex;
   flex-direction: column;
@@ -5565,6 +5600,10 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button class="tab-tool tab-tool-mini" id="btn-tab-tools-mini" aria-expanded="false" aria-controls="tool-menu"
                 title="畳んでいるツールの一覧を開く (Ctrl+K でも同じ操作が引ける)">他 0 件</button>
         <button class="tab-tool" id="btn-tab-peek" title="他の保存フォルダの図を読むだけで見る (保存先は変わりません)">👀 他フォルダ</button>
+        <!-- BLK-junior-20260914-1406-wish: 先輩のフォルダを 1 回選べば、いま開いている図に
+             当たる先輩の図が右の枠に読み専用で出たままになる (保存先は切り替えない) -->
+        <button class="tab-tool" id="btn-tab-senior" aria-pressed="false"
+                title="先輩の保存フォルダを右の枠に据え置く。図を切り替えると、その図に当たる先輩の図が自動で入れ替わる (読むだけ)">⇔ 先輩</button>
         <!-- BLK-junior-20260907-2009-wish: やり直し途中の控えに印を付け、📂 一覧で畳む -->
         <button class="tab-tool" id="btn-tab-draft" aria-pressed="false" title="この図に一時控え(下書き / やり直し途中)の印を付けて、📂 一覧から畳む">🗂 一時控え</button>
         <button class="tab-tool" id="btn-tab-rename" title="開いている図をまたいで部品名を一括置換">⇄ 一括置換</button>
@@ -5980,6 +6019,22 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <div id="compare-diff-view"></div>
     </div>
 
+    <!-- BLK-junior-20260914-1406-wish: 先輩の図を読み専用の 2 枠目として据え置く。
+         フォルダを 1 回選べば、図を切り替えても相手が自動で入れ替わる。 -->
+    <div id="senior-pane" hidden>
+      <div id="senior-head">
+        <strong>先輩の図</strong>
+        <select id="senior-dir" aria-label="先輩の保存フォルダ"></select>
+        <button type="button" id="senior-close" title="この枠を閉じる">×</button>
+      </div>
+      <div id="senior-notice"></div>
+      <div id="senior-candidates"></div>
+      <div id="senior-view">
+        <div id="senior-svg"></div>
+        <pre id="senior-dsl"></pre>
+      </div>
+    </div>
+
     <div class="pane-resizer" id="resizer-right"></div>
 
     <!-- Properties pane (280px) -->
@@ -6255,6 +6310,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/peek-folder.js"></script>
 <script src="src/core/peek-verdict.js"></script>
 <script src="src/core/kind-matrix.js"></script>
+<script src="src/core/senior-pane.js"></script>
 <script src="src/core/peek-freshness.js"></script>
 <script src="src/core/peek-changes.js"></script>
 <script src="src/core/audit-scope.js"></script>
