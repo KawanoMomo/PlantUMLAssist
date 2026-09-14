@@ -331,3 +331,54 @@ test('手順8 前回の判断が次の tick に残り、書き直さず 1 行だ
   expect(md).toContain('| F-01 | 解消（判断） | 未対応 | runs/20260914-2106 |');
   expect(md).toContain('記録した tick: runs/20260914-2106 → runs/20260914-2206 → runs/20260914-2306');
 });
+
+// BLK-reviewer-20260914-2206: 手順8 は素の `--board` を 1 本打って読むだけのはずが、
+// 「前回控えから変わった図 24 枚」を鵜呑みにできず、毎回 prev/ との手 diff で裏取り
+// していた。根は、前回比較用の控えを CLI を打つ場所に 1 個だけ持ち、どの対象を渡した
+// 回でも上書きしていたこと — 対象を切り替えて打つ (手順2 は junior,primary、手順8 は
+// primary) だけで、図を 1 バイトも触っていない回が全枚「変わった」に化けていた。
+test('手順8 対象を切り替えて打っても、変わった図の数が打つ順で変わらない', () => {
+  const fs = require('fs');
+  const os = require('os');
+  const path = require('path');
+  const cp = require('child_process');
+  const audit = path.resolve(__dirname, '..', '..', '..', 'tools', 'audit.js');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pua-r08-'));
+  const write = (dir, name, body) => {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, name), '@startuml\n' + body + '\n@enduml\n', 'utf-8');
+  };
+  const primary = path.join(root, 'primary');
+  const junior = path.join(root, 'junior');
+  write(primary, 'gpio_init_sequence.puml', 'participant Gpio_Driver\nGpio_Driver -> Gpio_Driver : Gpio_Init()');
+  write(junior, 'spi_init_sequence.puml', 'participant Spi_Driver\nSpi_Driver -> Spi_Driver : Spi_Init()');
+  // 手順8 の 1 本。cwd も一時フォルダにして、リポジトリ直下の控えを踏まない。
+  const board = (...dirs) => {
+    const r = cp.spawnSync(process.execPath, [audit, ...dirs, '--board'], { cwd: root, encoding: 'utf-8' });
+    expect(r.status, r.stderr).toBe(0);
+    return r.stdout;
+  };
+  const changed = (out) => {
+    const m = out.match(/前回控えから変わった図（(\d+) 枚）/);
+    expect(m, out).toBeTruthy();
+    return Number(m[1]);
+  };
+  try {
+    board(primary);
+    expect(changed(board(primary))).toBe(0);
+    board(junior, primary);            // 手順2 の対象を挟む
+    const after = board(primary);
+    expect(changed(after)).toBe(0);    // 触っていないので 0 枚のまま
+    // 何と比べた数字かが画面に出るので、prev/ との手 diff で裏取りしない。
+    expect(after).toContain('前回控え:');
+    expect(after).toContain(primary);
+    // 本当に 1 枚触れば 1 枚出る (黙って 0 枚にしているのではない)。
+    write(primary, 'gpio_init_sequence.puml',
+      'participant Gpio_Driver\nGpio_Driver -> Gpio_Driver : Gpio_Init()\nGpio_Driver -> Gpio_Driver : Gpio_Reset()');
+    const touched = board(primary);
+    expect(changed(touched)).toBe(1);
+    expect(touched).toContain('gpio_init_sequence.puml');
+  } finally {
+    try { fs.rmSync(root, { recursive: true, force: true }); } catch (e) {}
+  }
+});
