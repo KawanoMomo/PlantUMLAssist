@@ -415,6 +415,10 @@ API_INDEX = {
         {'endpoint': 'GET /peek-dirs', 'summary': '保存フォルダの候補を覗く'},
         {'endpoint': 'GET /peek-notes', 'summary': '隣のフォルダに置かれた指摘 (.md) を読む',
          'request': '?dir='},
+        {'endpoint': 'GET /name-registry', 'summary': '保存フォルダの親にある正式表記の登録簿 (3 人で共有)',
+         'request': '?dir='},
+        {'endpoint': 'POST /name-registry', 'summary': '正式表記の登録簿を置き換える',
+         'request': "{dir, entries: [{canonical, variants, note, by, at}]}"},
         {'endpoint': 'GET /vault', 'summary': '保管庫の中身', 'request': '?dir='},
         {'endpoint': 'POST /vault', 'summary': '保管庫へ入れる'},
         {'endpoint': 'GET /tickets', 'summary': '変更チケットの一覧', 'request': '?dir='},
@@ -636,6 +640,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.startswith('/autosave'):
             with _fs_lock:
                 return self._handle_autosave_get()
+        if self.path.split('?')[0] == '/name-registry':
+            with _fs_lock:
+                return self._handle_name_registry_get()
         if self.path.split('?')[0] == '/peek-dirs':
             with _fs_lock:
                 return self._handle_peek_dirs()
@@ -697,6 +704,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == '/doc-sets':
             with _fs_lock:
                 return self._handle_doc_sets_post()
+        if self.path == '/name-registry':
+            with _fs_lock:
+                return self._handle_name_registry_post()
         if self.path == '/file-roles':
             with _fs_lock:
                 return self._handle_file_roles_post()
@@ -1740,6 +1750,105 @@ class Handler(BaseHTTPRequestHandler):
         path = self._sets_path(save_dir)
         path.parent.mkdir(parents=True, exist_ok=True)
         _atomic_write_text(path, json.dumps({'sets': sets}, ensure_ascii=False, indent=1))
+
+    # BLK-reviewer-20260915-0506-wish: 表記揺れの「揃える先」を 3 人が同じ 1 冊で
+    # 見るための口。保存フォルダはペルソナごとに別なので、共有できる場所は親
+    # (persona-data) だけ。ここが唯一の置き場所で、親より上は辿らない。
+    NAME_REGISTRY_FILE = '_names.json'
+    # 人が決めた語の一覧。これを超える大きさは登録簿ではない。
+    NAME_REGISTRY_MAX = 512 * 1024
+
+    def _name_registry_path(self, save_dir):
+        return Path(save_dir).parent / self.NAME_REGISTRY_FILE
+
+    def _read_name_registry(self, save_dir):
+        path = self._name_registry_path(save_dir)
+        try:
+            if not path.exists() or path.stat().st_size > self.NAME_REGISTRY_MAX:
+                return {'entries': []}
+            data = json.loads(path.read_text(encoding='utf-8-sig'))
+        except (OSError, ValueError):
+            return {'entries': []}
+        if isinstance(data, list):
+            data = {'entries': data}
+        if not isinstance(data, dict) or not isinstance(data.get('entries'), list):
+            return {'entries': []}
+        out = []
+        for e in data['entries']:
+            if not isinstance(e, dict):
+                continue
+            canonical = e.get('canonical')
+            if not isinstance(canonical, str) or not canonical.strip():
+                continue
+            variants = [v for v in (e.get('variants') or []) if isinstance(v, str) and v.strip()]
+            out.append({
+                'canonical': canonical.strip(),
+                'variants': variants,
+                'note': e.get('note') if isinstance(e.get('note'), str) else '',
+                'by': e.get('by') if isinstance(e.get('by'), str) else '',
+                'at': e.get('at') if isinstance(e.get('at'), str) else '',
+            })
+        return {'entries': out}
+
+    def _handle_name_registry_get(self):
+        """GET /name-registry?dir= — 保存フォルダの親にある正式表記の登録簿."""
+        parsed = urllib.parse.urlparse(self.path)
+        params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
+        save_dir = self._autosave_resolve_dir(params.get('dir'))
+        reg = self._read_name_registry(save_dir)
+        self._send_json(200, {'dir': str(save_dir), 'path': str(self._name_registry_path(save_dir)),
+                              'entries': reg['entries']})
+
+    def _handle_name_registry_post(self):
+        """POST /name-registry {dir, entries} — 登録簿を丸ごと置き換える.
+
+        1 語ずつの差分ではなく全体を受けるのは、揃える先の決定が
+        src/core/name-registry.js にしか無いため (同じ規則を 2 つ持たない)。
+        """
+        data = self._read_json_object()
+        if data is None:
+            return
+        entries = data.get('entries')
+        if not isinstance(entries, list):
+            self._send_json(400, {'error': 'entries must be a list'})
+            return
+        save_dir = self._autosave_resolve_dir(data.get('dir'))
+        path = self._name_registry_path(save_dir)
+        clean = self._read_name_registry_payload(entries)
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            _atomic_write_text(path, json.dumps({'entries': clean}, ensure_ascii=False, indent=2) + '\n')
+        except OSError as e:
+            self._send_json(500, {'error': f'書き込めません: {e}'})
+            return
+        self._send_json(200, {'dir': str(save_dir), 'path': str(path), 'entries': clean})
+
+    @staticmethod
+    def _read_name_registry_payload(entries):
+        out = []
+        seen = set()
+        for e in entries:
+            if not isinstance(e, dict):
+                continue
+            canonical = e.get('canonical')
+            if not isinstance(canonical, str) or not canonical.strip():
+                continue
+            canonical = canonical.strip()
+            key = re.sub(r'[^a-z0-9]', '', canonical.lower())
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            variants = sorted({v.strip() for v in (e.get('variants') or [])
+                               if isinstance(v, str) and v.strip() and v.strip() != canonical})
+            out.append({
+                'canonical': canonical,
+                'variants': variants,
+                'note': (e.get('note') or '') if isinstance(e.get('note'), str) else '',
+                'by': (e.get('by') or '') if isinstance(e.get('by'), str) else '',
+                'at': (e.get('at') or '') if isinstance(e.get('at'), str) else '',
+            })
+        out.sort(key=lambda x: x['canonical'])
+        return out
 
     def _handle_doc_sets_get(self):
         """GET /doc-sets?dir= — そのフォルダに登録した資料セット."""

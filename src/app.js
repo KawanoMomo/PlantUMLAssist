@@ -25674,6 +25674,29 @@ function _loadVocabFolders() {
     .catch(function() {});
 }
 
+// BLK-reviewer-20260915-0506-wish: 表記揺れの「揃える先」は reviewer が 1 度だけ
+// 決めて保存フォルダの親 (persona-data) の `_names.json` に置く。junior/primary は
+// それを読むだけで、入力欄が揺れた綴りをその場で正式表記へ指す。
+// 名前帳 (partVocab) が「この部品の図に出てくる名前」なのに対し、こちらは
+// 「人が揃える先として決めた綴り」なので、両方を並べて出す。
+var _registryDir = null;
+
+function refreshNameRegistry(force) {
+  var NR = window.MA.nameRegistry;
+  if (!NR || !window.fetch) return;
+  var dir = _wsFileDir();
+  if (!force && _registryDir === dir) return;
+  _registryDir = dir;
+  window.fetch('/name-registry?dir=' + encodeURIComponent(dir))
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(data) {
+      NR.setCurrent(data ? { entries: (data && data.entries) || [] } : null);
+      try { renderProps(); } catch (e) { /* 描けなければ次の描画で出る */ }
+    })
+    // 登録簿が読めないだけで名前を打つ手順を止めない (登録簿なしと同じ扱い)。
+    .catch(function() { NR.setCurrent(null); });
+}
+
 function refreshPartVocab() {
   var PV = window.MA.partVocab;
   var WS = window.MA.workspace;
@@ -25702,6 +25725,7 @@ function refreshPartVocab() {
 
 function renderProps(parsed) {
   if (!parsed) parsed = currentParsed;
+  refreshNameRegistry();
   refreshPartVocab();
   var sel = window.MA.selection.getSelected();
   updatePropsTabLabel(sel);

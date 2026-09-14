@@ -26,6 +26,9 @@ const swapQueue = require('../src/core/swap-queue');
 const reviewBoard = require('../src/core/review-board');
 // BLK-reviewer-20260914-2206: 控えは対象の組ごとに分けて持つ (src/core/audit-state.js)。
 const auditState = require('../src/core/audit-state');
+// BLK-reviewer-20260915-0506-wish: 表記揺れの「揃える先」を毎 tick 推定し直さず、
+// 1 度決めて 3 人で共有する登録簿。判定も書式も 1 箇所 (GUI と同じ規則)。
+const nameRegistry = require('../src/core/name-registry');
 
 // 前回比較用の控え。CLI を打つ場所 (リポジトリ直下) に置く。
 const STATE_FILE = '.assist-audit-last.json';
@@ -99,6 +102,12 @@ const USAGE = [
   '  --no-state    前回比較用の控え (.assist-audit-last.json) を読み書きしない。',
   '                控えは渡した対象の組ごとに分けて持つので、-p primary と',
   '                -p junior,primary を交互に打っても、それぞれが自分の前回と比べる',
+  '  --registry [FILE]  表記揺れを「正式表記の登録簿」と突き合わせる。登録済みの組は',
+  '                     揃える先を決め直さず、登録簿に無い組だけが「要決定」で残る。',
+  '                     既定の置き場は対象フォルダの親の `_names.json` (3 人で共有)',
+  '  --register    --registry の「要決定」を、突合が推す綴りで登録簿に書き込む',
+  '                (揃える先を変えたいときは、書いた後に _names.json を直す)',
+  '  --by NAME     --register が登録簿に残す登録者名 (既定 reviewer)',
   '  --help        この説明',
 ].join('\n');
 
@@ -212,6 +221,86 @@ function runVersions(targets, max) {
   return 0;
 }
 
+// ── 正式表記の登録簿 (BLK-reviewer-20260915-0506-wish) ────────────────────
+// 置き場は対象フォルダの親。ペルソナごとに保存フォルダが別なので、3 人が
+// 同じ 1 冊を見られる場所は親しかない (server.py の /name-registry と同じ)。
+function registryPath(opts) {
+  if (opts.registryFile) return path.resolve(opts.registryFile);
+  for (const t of opts.targets) {
+    try {
+      if (fs.statSync(t).isDirectory()) return path.join(path.dirname(path.resolve(t)), nameRegistry.FILENAME);
+    } catch (e) { /* 次の対象を見る */ }
+  }
+  return path.join(personaRoot(), nameRegistry.FILENAME);
+}
+
+function readRegistry(file) {
+  try { return nameRegistry.parse(fs.readFileSync(file, 'utf-8')); } catch (e) { return nameRegistry.empty(); }
+}
+
+// --registry / --register の本体。突合の結果を登録簿で 2 つに割る。
+//   登録済み … 揃える先はもう決まっている。reviewer は何も決めない
+//   要決定   … 登録簿に無い新しい略語。ここだけを 1 回決めて登録する
+function runRegistry(opts) {
+  const rt = loadMA();
+  const docs = report.collectDocs(opts.targets);
+  if (docs.length === 0) {
+    console.error('対象の .puml が 1 枚もありません: ' + opts.targets.join(', '));
+    return 1;
+  }
+  const NA = rt.MA && rt.MA.nameAudit;
+  if (!NA) {
+    console.error('名前突合が読み込めません (src/core/name-audit.js)');
+    return 1;
+  }
+
+  const file = registryPath(opts);
+  let reg = readRegistry(file);
+  const groups = NA.variants(docs);
+  let pend = nameRegistry.pending(reg, groups);
+
+  const lines = [];
+  lines.push('登録簿: ' + file);
+  if (opts.register && pend.length) {
+    const at = new Date().toISOString().slice(0, 10);
+    const res = nameRegistry.registerAll(reg, pend, { by: opts.by || 'reviewer', at: at });
+    try {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, nameRegistry.format(res.registry), 'utf-8');
+    } catch (e) {
+      console.error('登録簿に書けません: ' + file + ' — ' + e.message);
+      return 1;
+    }
+    reg = res.registry;
+    lines.push('登録しました: ' + res.added + ' 語 (揃える先は突合の推し。変えるなら _names.json を直す)');
+    pend = nameRegistry.pending(reg, groups);
+  }
+
+  lines.push(nameRegistry.summary(reg));
+  nameRegistry.lines(reg).forEach((l) => lines.push('  ' + l));
+
+  const done = nameRegistry.covered(reg, groups);
+  lines.push('');
+  lines.push('表記揺れ ' + groups.length + ' 組 / 登録済み ' + done.length + ' 組 / 要決定 ' + pend.length + ' 組');
+  done.forEach((g) => {
+    const e = nameRegistry.find(reg, g.suggested);
+    lines.push('  登録済み  ' + g.members.map((m) => m.name).join(' ⇔ ') + ' — 揃える先: ' + e.canonical);
+  });
+  pend.forEach((g) => {
+    lines.push('  要決定    ' + g.members.map((m) => m.name).join(' ⇔ ') + ' — 推し: ' + g.suggested);
+    NA.variantLines([g], { max: 1 }).slice(1).forEach((l) => lines.push('  ' + l));
+  });
+  if (!opts.register && pend.length) {
+    lines.push('');
+    lines.push('→ 揃える先を登録する: 同じコマンドに --register を足す');
+  }
+  if (!pend.length) {
+    lines.push('→ 決め直す組はありません (登録済みの揺れは junior/primary の入力欄で揃います)');
+  }
+  console.log(lines.join('\n'));
+  return 0;
+}
+
 // --board の指摘文書。名指しが無ければ最初の対象フォルダの `指摘.md` を見る
 // (reviewer はそこに上書き保存しているので、既定で当たる)。
 function findingsPath(opts) {
@@ -299,7 +388,7 @@ function runBoard(result, opts, prev, fmtOpts, prevNote) {
 }
 
 function parseArgs(argv) {
-  const opts = { targets: [], only: null, summary: false, summaryJson: false, out: null, help: false, since: null, sinceFiles: null, state: true, pairsMax: 0, personas: null, versions: false, versionsMax: 6, board: false, boardFile: null, drafts: false };
+  const opts = { targets: [], only: null, summary: false, summaryJson: false, out: null, help: false, since: null, sinceFiles: null, state: true, pairsMax: 0, personas: null, versions: false, versionsMax: 6, board: false, boardFile: null, drafts: false, registry: false, registryFile: null, register: false, by: '' };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--help' || a === '-h') opts.help = true;
@@ -336,6 +425,16 @@ function parseArgs(argv) {
       if (next && next.indexOf('--') !== 0 && /\.(md|markdown)$/i.test(next)) opts.boardFile = argv[++i];
     }
     else if (a.indexOf('--board=') === 0) { opts.board = true; opts.boardFile = a.slice(8); }
+    // --registry も引数を任意で取る。次が対象パスのときは食べない (--board と同じ)。
+    else if (a === '--registry') {
+      opts.registry = true;
+      const next = argv[i + 1];
+      if (next && next.indexOf('--') !== 0 && /\.json$/i.test(next)) opts.registryFile = argv[++i];
+    }
+    else if (a.indexOf('--registry=') === 0) { opts.registry = true; opts.registryFile = a.slice(11); }
+    else if (a === '--register') { opts.registry = true; opts.register = true; }
+    else if (a === '--by') opts.by = String(argv[++i] || '').trim();
+    else if (a.indexOf('--by=') === 0) opts.by = a.slice(5).trim();
     else if (a === '--no-state') opts.state = false;
     else if (a === '--out') opts.out = argv[++i];
     else if (a.indexOf('--out=') === 0) opts.out = a.slice(6);
@@ -384,6 +483,16 @@ function main(argv) {
   if (opts.versions) {
     try {
       return runVersions(opts.targets, opts.versionsMax);
+    } catch (e) {
+      console.error(e.message);
+      return 1;
+    }
+  }
+
+  // --registry は監査の件数表ではなく「揃える先が決まっているか」だけを見る口。
+  if (opts.registry) {
+    try {
+      return runRegistry(opts);
     } catch (e) {
       console.error(e.message);
       return 1;

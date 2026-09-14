@@ -302,3 +302,70 @@ test('手順2 名乗っている図種と本文の図種の食い違いを、全
 
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+// BLK-reviewer-20260915-0506-wish: 表記揺れは機械で見つかるようになったが、「揃える先」は
+// 出現数からの推定で毎回作り直されるだけで、junior/primary のどちらにも共有されない。
+// reviewer は毎 tick 同じ組を見つけ→指摘.md に揃える先を書き→次の run で読ませる、という
+// 最短 2 tick の伝言を続けていた (IRQCtrl 系は継続 4 tick 以上)。手順2 を
+// 「毎回決め直す」から「登録簿に無い組だけを 1 回決める」に変える。
+test('手順2 揃える先を 1 度登録すると、次の tick は決め直す組が残らない', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const { execFileSync } = require('child_process');
+  const REPO = path.join(__dirname, '..', '..', '..');
+
+  // 事故の実物と同じ形 (primary は IRQCtrl / ClockCtrl、junior は Irq_Ctrl / Clock_Ctrl)。
+  const root = path.join(REPO, 'test-results', 'reviewer-02-registry');
+  fs.rmSync(root, { recursive: true, force: true });
+  for (const p of ['primary', 'junior']) fs.mkdirSync(path.join(root, p), { recursive: true });
+  fs.writeFileSync(path.join(root, 'primary', 'driver_common_class.puml'),
+    ['@startuml', 'class IRQCtrl {', '  + Init() : void', '}', 'class ClockCtrl',
+      'IRQCtrl --> ClockCtrl', '@enduml'].join('\n'), 'utf-8');
+  fs.writeFileSync(path.join(root, 'junior', 'diagram1.puml'),
+    ['@startuml', 'participant Irq_Ctrl', 'participant Clock_Ctrl',
+      'Irq_Ctrl -> Clock_Ctrl : Init()', '@enduml'].join('\n'), 'utf-8');
+
+  const run = (...extra) => execFileSync(process.execPath,
+    [path.join(REPO, 'tools', 'audit.js'), path.join(root, 'primary'), path.join(root, 'junior'),
+      '--no-state', ...extra],
+    { cwd: REPO, encoding: 'utf-8' });
+
+  // 1 tick 目: 揃える先がまだ決まっていない組が名指しで出る。
+  const before = run('--registry');
+  expect(before).toContain('表記揺れ 2 組 / 登録済み 0 組 / 要決定 2 組');
+  expect(before).toMatch(/要決定\s+IRQCtrl ⇔ Irq_Ctrl/);
+  // 決めるための材料 (どの図のどの宣言行か) が同じ画面に出る。
+  expect(before).toContain('primary/driver_common_class.puml:2 宣言  class IRQCtrl {');
+  expect(before).toContain('→ 揃える先を登録する: 同じコマンドに --register を足す');
+
+  // 登録は 1 回。置き場は 2 つのフォルダの親なので、3 人が同じ 1 冊を見る。
+  const wrote = run('--register', '--by', 'reviewer');
+  expect(wrote).toContain('登録しました: 2 語');
+  const file = path.join(root, '_names.json');
+  expect(fs.existsSync(file)).toBe(true);
+
+  // 2 tick 目: 図は 1 文字も直っていないのに、決め直す組はもう無い。
+  const after = run('--registry');
+  expect(after).toContain('表記揺れ 2 組 / 登録済み 2 組 / 要決定 0 組');
+  expect(after).toContain('→ 決め直す組はありません');
+  expect(after).toContain('IRQCtrl ← Irq_Ctrl');
+  expect(after).toContain('登録: reviewer');
+
+  // 新しい略語が出た回だけ、その 1 組が要決定に戻る (登録済みは蒸し返さない)。
+  fs.writeFileSync(path.join(root, 'junior', 'dma_sequence.puml'),
+    ['@startuml', 'participant Dma_Driver', 'participant Irq_Ctrl',
+      'Dma_Driver -> Irq_Ctrl : Dma_Start', '@enduml'].join('\n'), 'utf-8');
+  fs.writeFileSync(path.join(root, 'primary', 'dma_class.puml'),
+    ['@startuml', 'class DmaDriver', '@enduml'].join('\n'), 'utf-8');
+  const next = run('--registry');
+  expect(next).toContain('要決定 1 組');
+  expect(next).toMatch(/要決定\s+.*Dma/);
+
+  // 揃える先は junior / primary の GUI が読む 1 冊なので、機械が読める形で残る。
+  const saved = JSON.parse(fs.readFileSync(file, 'utf-8'));
+  const irq = saved.entries.find((e) => e.canonical === 'IRQCtrl');
+  expect(irq.variants).toEqual(['Irq_Ctrl']);
+  expect(irq.by).toBe('reviewer');
+
+  fs.rmSync(root, { recursive: true, force: true });
+});
