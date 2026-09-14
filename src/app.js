@@ -6282,6 +6282,8 @@ var _noteRows = [];        // reviewNote.rows の戻り
 var _noteFile = null;      // 読んだ指摘.md ({folder, name, text})
 var _noteKey = null;       // 選んでいる指摘の id
 var _noteMsg = '';         // 押した結果 (組が無かったときの理由など)
+var _notePlans = [];       // findingActions.plans の戻り (指摘 1 件 = 当てる操作 1 つ)
+var _noteBusy = '';        // 当てている最中の指摘 id
 
 function _noteEls() {
   return { note: document.getElementById('peek-note'),
@@ -6316,10 +6318,12 @@ function _noteLoad(force) {
     var data = both[0] || {};
     _noteFile = RN.pickNote(data.notes);
     _noteRows = _noteFile ? RN.rows(RN.parse(_noteFile.text), RN.index(both[1])) : [];
+    _notePlans = _notePlansFor(_noteRows);
     _noteLoading = null;
     return true;
   }).catch(function() {
     _noteRows = [];
+    _notePlans = [];
     _noteLoading = null;
     return false;
   });
@@ -6353,6 +6357,7 @@ function setNoteMode(on) {
     return Promise.resolve(true);
   }
   _noteRows = [];
+  _notePlans = [];
   _noteFile = null;
   renderNotePanel();
   return _noteLoad(true).then(function(ok) {
@@ -6393,6 +6398,160 @@ function selectNoteFinding(id) {
   });
 }
 
+// ── 指摘 1 件を [適用] で当てる (BLK-primary-20260914-1006-wish) ──
+// 指摘.md の 1 件から図の組が並ぶ所までは来たが、そこから先の「これは ⇄一括置換 か、
+// 再出力か、別ドメイン宣言か」は primary が毎回指摘文を読んで決め、対応する画面を
+// 探して開いていた。手段は指摘文に書いてあるので、翻訳は findingActions に任せ、
+// ここは当てるだけにする (どの画面を開くかを人が決めなくてよくする)。
+function _noteMineFolder() {
+  for (var i = 0; i < _peekDirs.length; i++) {
+    if (_peekDirs[i] && _peekDirs[i].current) return _peekDirs[i].name;
+  }
+  return '';
+}
+
+function _notePlansFor(rows) {
+  var FA = window.MA.findingActions;
+  if (!FA) return [];
+  return FA.plans(rows, { mineFolder: _noteMineFolder() });
+}
+
+function _notePlanOf(id) {
+  var FA = window.MA.findingActions;
+  return FA ? FA.planOf(_notePlans, id) : null;
+}
+
+// 指摘に挙がった図のうち、自分のフォルダにある実体 ({_dir, _file})。
+function _noteMineFiles(plan) {
+  var mine = _noteMineFolder();
+  var out = [];
+  (plan && plan.docs || []).forEach(function(name) {
+    var row = _noteRowOf(plan.id);
+    ((row && row.docs) || []).forEach(function(d) {
+      if (d.name !== name) return;
+      (d.docs || []).forEach(function(pd) {
+        if (!pd || !pd._dir || !pd._file) return;
+        if (mine && String(pd.name).indexOf(mine + '/') !== 0) return;
+        out.push({ name: name, dir: pd._dir, file: pd._file });
+      });
+    });
+  });
+  return out;
+}
+
+// 再出力: 指摘の図を 1 枚ずつ描き直して保存フォルダの .svg を置き換える。
+// 1 枚失敗しても残りは進める (1 枚のために全部止まると手作業に戻る)。
+function _noteApplyReexport(plan) {
+  var WS = window.MA.workspace;
+  var files = _noteMineFiles(plan);
+  if (!WS || !files.length) return Promise.resolve({ ok: false, message: '出し直せる図がありません' });
+  var done = [];
+  var failed = [];
+  return files.reduce(function(chain, f) {
+    return chain.then(function() {
+      return WS.loadFile(f.file, f.dir).then(function(dsl) {
+        if (dsl == null) throw new Error('読めません');
+        return renderDslToSvg(dsl);
+      }).then(function(svg) {
+        return fetch('/autosave-svg', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: f.name, dir: f.dir, svg: svg }),
+        });
+      }).then(function(resp) {
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        done.push(f.name);
+      }).catch(function() { failed.push(f.name); });
+    });
+  }, Promise.resolve()).then(function() {
+    return { ok: done.length > 0, done: done,
+             message: failed.length ? failed.join('・') + ' は出し直せませんでした' : '' };
+  });
+}
+
+// ラベル統一: 綴りの言い換えを、指摘が名指しした図 (無ければ自分のフォルダの
+// 当たる図) だけに当てる。全図に当てない (指摘は対象を絞って書かれている)。
+function _noteApplyRename(plan) {
+  var WS = window.MA.workspace;
+  var BR = window.MA.bulkRename;
+  if (!WS || !BR) return Promise.resolve({ ok: false, message: '一括置換が使えません' });
+  var dir = _wsFileDir();
+  var pick = plan.scope === 'folder'
+    ? WS.listFiles(dir).then(function(names) {
+        return (names || []).map(function(n) { return { name: n, dir: dir, file: n }; });
+      })
+    : Promise.resolve(_noteMineFiles(plan));
+  return pick.then(function(files) {
+    if (!files.length) return { ok: false, message: '当てる図がありません' };
+    var done = [];
+    var hits = 0;
+    return files.reduce(function(chain, f) {
+      return chain.then(function() {
+        return WS.loadFile(f.file, f.dir).then(function(dsl) {
+          var n = dsl == null ? 0 : BR.countIn(dsl, plan.from);
+          if (!n) return null;
+          return WS.saveToFile({ name: f.name, dsl: BR.replaceIn(dsl, plan.from, plan.to) }, f.dir)
+            .then(function(ok) { if (ok) { hits += n; done.push(f.name); } });
+        }).catch(function() { return null; });
+      });
+    }, Promise.resolve()).then(function() {
+      return done.length
+        ? { ok: true, done: done, hits: hits }
+        : { ok: false, message: '「' + plan.from + '」は保存フォルダの図に見当たりません' };
+    });
+  });
+}
+
+// 別ドメイン明示: 相手と名前が同じでも別物、という判断を自分の図に書き残す。
+// 書く形は突合の場 (domain-verdict) と同じにする (次に突合したとき判断済みと読める)。
+function _noteApplyVerdict(plan) {
+  var WS = window.MA.workspace;
+  var DV = window.MA.domainVerdict;
+  var files = _noteMineFiles(plan);
+  if (!WS || !DV || !files.length) return Promise.resolve({ ok: false, message: '印を書ける図がありません' });
+  var done = [];
+  return files.reduce(function(chain, f) {
+    return chain.then(function() {
+      return WS.loadFile(f.file, f.dir).then(function(dsl) {
+        if (dsl == null) return null;
+        var DC = window.MA.domainCohort;
+        var domain = DC ? DC.domainOf(f.name) : f.name;
+        var next = DV.applyMark(dsl, 'separate', domain, plan.otherFolder);
+        if (next === dsl) { done.push(f.name); return null; }
+        return WS.saveToFile({ name: f.name, dsl: next }, f.dir).then(function(ok) {
+          if (ok) done.push(f.name);
+        });
+      }).catch(function() { return null; });
+    });
+  }, Promise.resolve()).then(function() {
+    return done.length ? { ok: true, done: done } : { ok: false, message: '書き戻せませんでした' };
+  });
+}
+
+function applyNoteFinding(id) {
+  var FA = window.MA.findingActions;
+  var plan = _notePlanOf(id);
+  _noteKey = id;
+  if (!FA || !plan || !plan.ready) {
+    _noteMsg = plan ? (plan.reason || '当てられません') : '指摘が見つかりません';
+    renderNotePanel();
+    return Promise.resolve(false);
+  }
+  _noteBusy = id;
+  _noteMsg = plan.text + ' …';
+  renderNotePanel();
+  var run = plan.kind === 'rename' ? _noteApplyRename(plan)
+          : plan.kind === 'verdict' ? _noteApplyVerdict(plan)
+          : _noteApplyReexport(plan);
+  return run.catch(function() {
+    return { ok: false, message: '当てられませんでした' };
+  }).then(function(res) {
+    _noteBusy = '';
+    _noteMsg = FA.resultText(plan, res);
+    renderNotePanel();
+    return !!(res && res.ok);
+  });
+}
+
 function renderNotePanel() {
   var el = _noteEls();
   var RN = window.MA.reviewNote;
@@ -6414,6 +6573,16 @@ function renderNotePanel() {
   sum.id = 'note-summary';
   sum.textContent = _noteMsg || (RN ? RN.summaryText(_noteRows) : '');
   el.note.appendChild(sum);
+
+  // 「今日 [適用] だけで済む件数」は、並べて見られる件数とは別の数なので別行にする。
+  var FA = window.MA.findingActions;
+  if (FA && _notePlans.length) {
+    var asum = document.createElement('div');
+    asum.className = 'note-summary';
+    asum.id = 'note-apply-summary';
+    asum.textContent = FA.summaryText(_notePlans);
+    el.note.appendChild(asum);
+  }
 
   if (!_noteRows.length) {
     var hint = document.createElement('div');
@@ -6446,6 +6615,32 @@ function renderNotePanel() {
     b.appendChild(label);
     b.addEventListener('click', function() { selectNoteFinding(r.id); });
     el.note.appendChild(b);
+
+    // 提案アクション 1 行と [適用]。押す前に「何を、どの図に」が読める。
+    var plan = _notePlanOf(r.id);
+    if (!plan) return;
+    var row = document.createElement('div');
+    row.className = 'note-action-row';
+    row.setAttribute('data-note-action-for', r.id);
+    row.setAttribute('data-note-action', plan.kind);
+    row.setAttribute('data-note-action-ready', plan.ready ? '1' : '0');
+    var what = document.createElement('span');
+    what.className = 'note-action-text';
+    what.textContent = plan.text;
+    row.appendChild(what);
+    var apply = document.createElement('button');
+    apply.type = 'button';
+    apply.className = 'note-apply';
+    apply.setAttribute('data-note-apply', r.id);
+    apply.textContent = _noteBusy === r.id ? '適用中…' : '適用';
+    apply.disabled = !plan.ready || !!_noteBusy;
+    apply.title = plan.ready ? plan.text : (plan.reason || '当てられません');
+    apply.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      applyNoteFinding(r.id);
+    });
+    row.appendChild(apply);
+    el.note.appendChild(row);
   });
 }
 
@@ -6521,6 +6716,7 @@ function closePeekFolder() {
   // 次に開いたときは読み直す (指摘.md は reviewer が run ごとに書き替える)。
   _noteFile = null;
   _noteRows = [];
+  _notePlans = [];
   renderPeekTemplateBtn();
   setCohortMode(false);
   setSbsMode(false);
