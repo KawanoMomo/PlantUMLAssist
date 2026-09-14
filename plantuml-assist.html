@@ -1147,6 +1147,22 @@ html, body {
 #folder-panel .folder-sync-badge-base-ahead, #folder-panel .folder-sync-badge-unknown {
   color: var(--text-secondary);
 }
+/* 宛先の書かれていない指摘 (BLK-junior-20260914-1306)。
+   自分宛だけを目立たせる。他の人宛・宛先不明も隠さない (隠すと指摘が落ちる)。 */
+#folder-panel .folder-unaddr { padding: 0 6px 3px; }
+#folder-panel button.folder-unaddr-head {
+  width: 100%; text-align: left; font-size: 10px; padding: 1px 5px;
+  border: 1px solid var(--border); border-radius: 3px;
+  background: transparent; color: var(--text-secondary); cursor: pointer;
+}
+#folder-panel .folder-unaddr-mine button.folder-unaddr-head {
+  border-color: var(--accent); color: var(--accent); font-weight: bold;
+}
+#folder-panel .folder-unaddr-body {
+  white-space: pre-wrap; font-size: 10px; color: var(--text-primary);
+  border: 1px solid var(--border); border-top: 0; border-radius: 0 0 3px 3px;
+  padding: 3px 5px; max-height: 160px; overflow: auto;
+}
 /* 下書き ↔ 本体の差し替え待ちキュー (BLK-reviewer-20260914-1806-wish)。
    反映漏れの節が「食い違う図」だけを出すのに対し、ここは下書きの全部を台帳にする。
    削除予定は落ち着いた色にする (消してよい行が赤く並ぶと、直す行と見分けられない)。 */

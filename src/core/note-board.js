@@ -278,13 +278,82 @@ window.MA.noteBoard = (function() {
       + done + ' 枚 / 対象外 ' + off + ' 枚（対象外は開かずに次へ進めます）';
     var un = (board.unaddressed || []).length;
     if (un) {
-      s += ' — 図名も図種も書かれていない指摘 ' + un + ' 件は、どの図にも割り当てていません';
+      // 件数だけでは「自分宛か」を確かめに GUI の外へ出ることになる。
+      // 宛先まで言い切れる分は言う (BLK-junior-20260914-1306)。
+      s += ' — ' + unaddressedSummary(board, o);
     }
     return s;
   }
 
+  // ── 宛先の書かれていない指摘 ────────────────────────────────────────────
+  // BLK-junior-20260914-1306: 図名も図種も書かれていない件はどの図にも割り当てられず、
+  // 一覧は件数だけを言っていた。その件が自分宛かどうかは、結局 GUI の外で
+  // 指摘.md の全文を読むまで分からない。宛先は本文に書かれていることが多いので
+  // (「junior 側 …」「primary への依頼」「junior は …」)、そこまでは機械で言う。
+  // 言い切れないものは「宛先不明」として、本文をその場で読めるようにする
+  // (誤って「自分宛ではない」と決めて指摘を落とすより、1 件読む方が安い)。
+  var ADDRESSEE = {
+    mine: { key: 'mine', mark: '自分宛' },
+    other: { key: 'other', mark: '他の人宛' },
+    unknown: { key: 'unknown', mark: '宛先不明' },
+  };
+
+  // 本文にフォルダ名 (= ペルソナ名) が語として出てくるか。
+  function _mentions(text, who) {
+    return _hasWord(_s(text).toLowerCase(), _s(who).toLowerCase());
+  }
+
+  // addresseeOf(row, {mineFolder, otherFolders}) → { key, mark, why }
+  function addresseeOf(row, opts) {
+    var o = opts || {};
+    var text = _rowText(row);
+    var mine = _s(o.mineFolder);
+    var others = Array.isArray(o.otherFolders) ? o.otherFolders : [];
+    var hitMine = mine && _mentions(text, mine);
+    var hitOther = '';
+    others.forEach(function(f) {
+      if (!hitOther && _s(f) && _s(f).toLowerCase() !== mine.toLowerCase() && _mentions(text, f)) {
+        hitOther = _s(f);
+      }
+    });
+    // 自分の名前が出ていれば、他の人の名前も出ていても自分宛として読む
+    // (「junior 側 Gpio / primary 側 Gpio_Driver」は自分が直す件)。
+    if (hitMine) return { key: 'mine', mark: ADDRESSEE.mine.mark, why: '本文に ' + mine + ' が出てきます' };
+    if (hitOther) return { key: 'other', mark: ADDRESSEE.other.mark, why: '本文に ' + hitOther + ' しか出てきません' };
+    return { key: 'unknown', mark: ADDRESSEE.unknown.mark, why: '本文に誰宛かが書かれていません' };
+  }
+
+  // 一覧に出す行。本文もそのまま持たせる (GUI の外で指摘.md を開かなくて済む)。
+  function unaddressedRows(board, opts) {
+    return ((board && board.unaddressed) || []).map(function(row) {
+      var to = addresseeOf(row, opts);
+      return {
+        id: row.id, index: row.index, head: _head(row), marks: row.marks || [],
+        body: _s(row.body) || _rowText(row),
+        to: to.key, toMark: to.mark, why: to.why,
+      };
+    });
+  }
+
+  // 見出しの 1 行。何件が自分宛かを先に言う (全文を読ませない)。
+  function unaddressedSummary(board, opts) {
+    var rows_ = unaddressedRows(board, opts);
+    if (!rows_.length) return '';
+    var n = { mine: 0, other: 0, unknown: 0 };
+    rows_.forEach(function(r) { n[r.to]++; });
+    var parts = [];
+    if (n.mine) parts.push('自分宛 ' + n.mine + ' 件');
+    if (n.other) parts.push('他の人宛 ' + n.other + ' 件');
+    if (n.unknown) parts.push('宛先不明 ' + n.unknown + ' 件');
+    return '図名も図種も書かれていない指摘 ' + rows_.length + ' 件（' + parts.join('・') + '）';
+  }
+
   var api = {
     BADGE: BADGE,
+    ADDRESSEE: ADDRESSEE,
+    addresseeOf: addresseeOf,
+    unaddressedRows: unaddressedRows,
+    unaddressedSummary: unaddressedSummary,
     keyOf: keyOf,
     scan: scan,
     hitsOf: hitsOf,
