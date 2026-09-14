@@ -2153,6 +2153,39 @@ html, body {
 }
 #peek-sbs .sbs-align-btn:hover { border-color: var(--accent); color: var(--accent); }
 #peek-sbs-toggle.on { border-color: var(--accent); color: var(--accent); }
+/* BLK-junior-20260915-0606-wish: 部品ビュー。6 図種 × (先輩 / 自分) を 1 画面に。 */
+#peek-board-toggle.on { border-color: var(--accent); color: var(--accent); }
+#peek-board { padding: 6px; font-size: 11px; }
+#peek-board .pb-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-bottom: 6px; }
+#peek-board-summary { color: var(--text-secondary); }
+#peek-board-summary.has-todo { color: var(--accent-red); font-weight: bold; }
+#peek-board .pb-row {
+  display: grid; grid-template-columns: 6.5em 1fr 1fr; gap: 6px;
+  border-top: 1px solid var(--border); padding: 6px 0; align-items: start;
+}
+#peek-board .pb-kind { color: var(--text-secondary); padding-top: 4px; }
+#peek-board .pb-row[data-editing="1"] .pb-kind { color: var(--accent); font-weight: 600; }
+#peek-board .pb-row[data-editing="1"] .pb-mine-text { border-color: var(--accent); }
+#peek-board .pb-row[data-state="mine-missing"] .pb-kind { color: var(--accent-red); }
+#peek-board .pb-col-head { font-size: 10px; color: var(--text-secondary); padding-bottom: 2px; }
+#peek-board .pb-ref-text, #peek-board .pb-mine-text {
+  width: 100%; max-height: 150px; min-height: 90px; overflow: auto; box-sizing: border-box;
+  font-family: var(--mono, monospace); font-size: 10px; line-height: 1.45;
+  background: var(--bg-primary); color: var(--text); border: 1px solid var(--border);
+  border-radius: 3px; padding: 4px; white-space: pre; margin: 0;
+}
+#peek-board .pb-mine-text { resize: vertical; }
+#peek-board .pb-names { padding-top: 3px; }
+#peek-board .pb-name {
+  font-size: 10px; padding: 1px 6px; margin: 2px 3px 0 0; border-radius: 9px;
+  border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer;
+}
+#peek-board .pb-name:hover { border-color: var(--accent); color: var(--accent); }
+#peek-board .pb-name[data-role="method"] { border-color: var(--accent); }
+#peek-board .pb-acts { padding-top: 3px; display: flex; gap: 6px; align-items: center; }
+#peek-board .pb-acts button { font-size: 10px; padding: 1px 8px; }
+#peek-board .pb-msg { font-size: 10px; color: var(--accent); }
+#peek-board .pb-empty { font-size: 10px; color: var(--text-secondary); padding: 4px; }
 #peek-parts { padding-bottom: 8px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
 #peek-parts .peek-parts-head { font-size: 11px; color: var(--text-secondary); padding-bottom: 4px; }
 #peek-parts .peek-part-chip {
@@ -6820,6 +6853,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/side-by-side.js"></script>
 <script src="src/core/part-slice.js"></script>
 <script src="src/core/part-focus.js"></script>
+<script src="src/core/part-board.js"></script>
 <script src="src/core/review-note.js"></script>
 <script src="src/core/finding-actions.js"></script>
 <script src="src/core/finding-variant.js"></script>
@@ -7516,6 +7550,9 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button type="button" id="peek-find-part" title="今開いている自分の図の部品名で、このフォルダの図の中身を引き、載っている図を名指しする">🔎 自分の部品を探す</button>
         <button type="button" id="peek-cohort-toggle" title="同じドメイン名の図をフォルダ横断で並べる">🔀 ドメインで揃える</button>
         <button type="button" id="peek-sbs-toggle" title="同じファイル名を持つ 2 人の図を左右に並べ、部品名・メッセージ名の食い違いだけを光らせる">⇔ 同名で並べる</button>
+        <!-- BLK-junior-20260915-0606-wish: 部品を 1 つ選ぶと、その部品の 6 図種が
+             先輩・自分の 2 列で並ぶ。自分の欄はその場で直して保存できる。 -->
+        <button type="button" id="peek-board-toggle" title="部品を 1 つ選び、その部品の 6 図種を先輩・自分の 2 列で並べる（自分の欄はその場で直して保存できる）">🧩 部品ビュー</button>
         <!-- BLK-junior-20260913-0306-wish: 指摘.md の 1 件を選ぶと、そこに書かれた
              図名を自分と先輩のフォルダから見つけ、並べて見る画面をその組で開く。 -->
         <button type="button" id="peek-note-toggle" title="隣のフォルダの指摘.md を 1 件ずつ並べ、押した指摘の図を自分と先輩のフォルダから見つけて並べて見る">🔖 指摘から選ぶ</button>
@@ -7536,6 +7573,10 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <div id="peek-note" style="display:none;"></div>
         <div id="peek-cohort" style="display:none;"></div>
         <div id="peek-sbs" style="display:none;"></div>
+        <!-- BLK-junior-20260915-0606-wish: 部品ビュー。行 = 6 図種、左 = 先輩の本文、
+             右 = 自分の本文 (編集可)。先輩の欄の名前を押すと自分の欄に綴りが入る。
+             中身は part-board.js -->
+        <div id="peek-board" style="display:none;"></div>
         <!-- BLK-junior-20260914-1006-wish: 開いた図が複合図 (共通基底 + 各ドライバ) なら、
              部品を並べる。押すとその部品の所だけを切り出し、自分の同じ部品の図と並べる。 -->
         <div id="peek-parts" style="display:none;"></div>

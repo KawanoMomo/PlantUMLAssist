@@ -8368,6 +8368,307 @@ function _kmRenderGrid(host, all, who) {
   host.appendChild(leg);
 }
 
+// ── 部品ビュー (BLK-junior-20260915-0606-wish) ─────────────────────────────
+// 図 (ファイル) ごとにタブを開く作りだと、1 部品の 6 図種を見比べるのは毎回タブの
+// 往復になる。先輩のクラス図でメソッド名を確かめてから自分の活動図に打ち直す、という
+// 手順は「タブ切替 → フィルタ → 控え書き → タブ切替 → 打ち直す」に広がっていた
+// (BLK-junior-20260915-0606)。ここは部品を 1 つ選ぶと、その部品の 6 図種が
+// 先輩・自分の 2 列で同時に出る。自分の欄はその場で直して保存でき、先輩の欄の名前は
+// 押すと自分の欄に入るので、控え書き自体が要らなくなる。
+var _pbOn = false;
+var _pbPart = '';
+var _pbRefDocs = [];     // 覗いているフォルダの図 (選んだ部品ぶんだけ本文を読んだもの)
+var _pbEdits = {};       // 自分の欄の編集中の本文 (図種 → 本文)
+var _pbMsg = {};         // 図種 → 直前の保存の結果
+// 名前を押したときの行き先。図種をまたいだ参照がこの画面の的なので、名前は
+// 「押した行」ではなく「いま打っている行」に入る (先輩のクラス図のメソッド名を、
+// 自分の活動図の欄へそのまま入れる)。
+var _pbFocus = '';
+
+function _pbEls() { return { host: document.getElementById('peek-board') }; }
+
+function _pbBoard() {
+  var PB = window.MA.partBoard;
+  if (!PB || !_pbPart) return null;
+  return PB.board(_pbPart, _kmMine, _pbRefDocs);
+}
+
+// 選んだ部品ぶんの本文だけを読む。フォルダ全部を読むと、見る気になっていない
+// 段階で枚数ぶんの往復が走る。部品名で拾えない図種 (相乗り図) は、その図種の
+// 残りだけを読んで本文で拾い直す。
+function _pbLoadRef(part) {
+  var WS = window.MA.workspace;
+  var PB = window.MA.partBoard;
+  if (!WS || !PB || !_peekDir) return Promise.resolve([]);
+  var want = [];
+  var seen = {};
+  function add(e) {
+    if (!e || !e.name || seen[e.name]) return;
+    seen[e.name] = true;
+    want.push(e);
+  }
+  _peekEntries.forEach(function(e) { if (PB.partOf(e) === part) add(e); });
+  var covered = {};
+  want.forEach(function(e) { covered[e.savedKind || e.kind] = true; });
+  PB.order().forEach(function(kind) {
+    if (covered[kind]) return;
+    _peekEntries.forEach(function(e) {
+      if ((e.savedKind || e.kind) === kind && want.length < 14) add(e);
+    });
+  });
+  return Promise.all(want.map(function(e) {
+    return WS.loadFile(e.name, _peekDir).then(function(text) {
+      return { name: e.name, kind: e.savedKind || e.kind, text: typeof text === 'string' ? text : '' };
+    }).catch(function() { return { name: e.name, kind: e.savedKind || e.kind, text: '' }; });
+  }));
+}
+
+function setPartBoardMode(on) {
+  var el = _peekEls();
+  var toggle = document.getElementById('peek-board-toggle');
+  _pbOn = !!on;
+  if (toggle) {
+    toggle.setAttribute('aria-pressed', _pbOn ? 'true' : 'false');
+    toggle.classList.toggle('on', _pbOn);
+  }
+  if (!_pbOn) {
+    _pbEdits = {};
+    _pbMsg = {};
+    renderPartBoard();
+    return Promise.resolve(true);
+  }
+  // 並べ方を 2 つ同時に出さない (どちらの結果を見ているのかが画面から決まらない)。
+  if (_cohortOn) setCohortMode(false);
+  if (_sbsOn) setSbsMode(false);
+  _peekName = null;
+  if (el.title) el.title.textContent = '';
+  if (el.svg) { el.svg.textContent = ''; el.svg.style.display = 'none'; }
+  if (el.dsl) el.dsl.textContent = '';
+  _pbEdits = {};
+  _pbMsg = {};
+  renderPartBoard();
+  return loadKindMatrixMine().then(function() {
+    var PB = window.MA.partBoard;
+    var list = PB ? PB.parts(_kmMine, _peekEntries) : [];
+    if (!_pbPart || list.indexOf(_pbPart) < 0) {
+      // 既定は「いま開いている自分の図」の部品。読んでいるものの続きから出す。
+      var doc = null;
+      try { doc = window.MA.workspace ? window.MA.workspace.getActive() : null; } catch (e) {}
+      var mine = doc && PB ? PB.partOf(doc.name) : '';
+      _pbPart = (mine && list.indexOf(mine) >= 0) ? mine : (list[0] || '');
+    }
+    return selectPartBoardPart(_pbPart);
+  });
+}
+
+function selectPartBoardPart(part) {
+  _pbPart = String(part || '');
+  _pbEdits = {};
+  _pbMsg = {};
+  _pbFocus = '';
+  _pbRefDocs = [];
+  renderPartBoard();
+  if (!_pbPart) return Promise.resolve(false);
+  var want = _pbPart;
+  return _pbLoadRef(want).then(function(docs) {
+    if (want !== _pbPart || !_pbOn) return false;
+    _pbRefDocs = docs;
+    renderPartBoard();
+    return true;
+  });
+}
+
+// 自分の欄を保存する。保存先は自分の保存フォルダ (覗いているフォルダには書かない)。
+// 図種は送らない = server の控えが残る (この画面は本文だけを直す)。
+function savePartBoardRow(kind) {
+  var WS = window.MA.workspace;
+  var bd = _pbBoard();
+  if (!WS || !bd) return Promise.resolve(false);
+  var row = bd.rows.filter(function(r) { return r.kind === kind; })[0];
+  if (!row || row.mine.missing) return Promise.resolve(false);
+  var name = row.mine.name;
+  var dsl = _pbEdits[kind] != null ? _pbEdits[kind] : row.mine.text;
+  return WS.saveToFile({ name: name, dsl: dsl }, _wsFileDir()).then(function(ok) {
+    _pbMsg[kind] = ok ? '保存しました (' + name + ')' : '保存できませんでした';
+    if (ok) {
+      // 控えの側も今の本文にそろえる (保存した直後に読み直すと前の本文が出る、を避ける)。
+      _kmMine.forEach(function(e) {
+        if (e && (e.name === name || e.type === name)) e.text = dsl;
+      });
+      delete _pbEdits[kind];
+    }
+    renderPartBoard();
+    return ok;
+  }).catch(function() {
+    _pbMsg[kind] = '保存できませんでした';
+    renderPartBoard();
+    return false;
+  });
+}
+
+function renderPartBoard() {
+  var PB = window.MA.partBoard;
+  var host = _pbEls().host;
+  if (!host) return;
+  host.textContent = '';
+  if (!_pbOn || !PB) { host.style.display = 'none'; return; }
+  host.style.display = 'block';
+
+  var list = PB.parts(_kmMine, _peekEntries);
+  var head = document.createElement('div');
+  head.className = 'pb-head';
+  var sel = document.createElement('select');
+  sel.id = 'peek-board-part';
+  sel.title = '部品を選ぶと、その部品の 6 図種が先輩・自分の 2 列で並ぶ';
+  list.forEach(function(name) {
+    var o = document.createElement('option');
+    o.value = name;
+    o.textContent = name.toUpperCase();
+    if (name === _pbPart) o.selected = true;
+    sel.appendChild(o);
+  });
+  sel.addEventListener('change', function() { selectPartBoardPart(sel.value); });
+  head.appendChild(sel);
+  var sum = document.createElement('span');
+  sum.id = 'peek-board-summary';
+  var bd = _pbBoard();
+  var c = bd ? PB.counts(bd) : null;
+  sum.className = (c && (c.mineMissing || c.none)) ? 'has-todo' : '';
+  sum.textContent = bd ? PB.summary(bd) : '';
+  head.appendChild(sum);
+  host.appendChild(head);
+
+  if (!bd || !list.length) {
+    var empty = document.createElement('div');
+    empty.className = 'pb-empty';
+    empty.textContent = '並べられる部品がありません (隣のフォルダを選んでください)。';
+    host.appendChild(empty);
+    return;
+  }
+
+  var who = window.MA.peekFolder ? window.MA.peekFolder.baseName(_peekDir) : '相手';
+  bd.rows.forEach(function(r) { host.appendChild(_pbRow(r, who)); });
+}
+
+function _pbRow(r, who) {
+  var PB = window.MA.partBoard;
+  var row = document.createElement('div');
+  row.className = 'pb-row';
+  row.setAttribute('data-board-kind', r.kind);
+  row.setAttribute('data-state', r.state);
+
+  var kind = document.createElement('div');
+  kind.className = 'pb-kind';
+  kind.textContent = r.label;
+  kind.title = PB.rowLabel(r);
+  row.appendChild(kind);
+
+  // 左 = 先輩の欄。読むだけ (相手のファイルには書かない)。
+  var refCol = document.createElement('div');
+  var refHead = document.createElement('div');
+  refHead.className = 'pb-col-head';
+  refHead.textContent = r.ref.missing ? who + ': 手本なし'
+    : who + ' / ' + r.ref.name + (r.ref.shared ? '（相乗り図）' : '');
+  refCol.appendChild(refHead);
+  var refText = document.createElement('pre');
+  refText.className = 'pb-ref-text';
+  refText.setAttribute('data-board-ref', r.kind);
+  refText.textContent = r.ref.missing ? '' : r.ref.text;
+  refCol.appendChild(refText);
+  // 手本から拾った名前。押すと自分の欄に綴りが入る (控え書きが要らなくなる)。
+  if (!r.ref.missing) {
+    var names = PB.names(r.ref.text, r.kind);
+    var chips = document.createElement('div');
+    chips.className = 'pb-names';
+    names.slice(0, 24).forEach(function(n) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'pb-name';
+      b.setAttribute('data-board-name', n.name);
+      b.setAttribute('data-role', n.role);
+      b.textContent = n.name;
+      b.title = n.roleLabel + '『' + n.name + '』を、いま打っている自分の欄のカーソル位置に入れる';
+      b.addEventListener('click', function() { _pbInsert(_pbFocus || r.kind, n.name); });
+      chips.appendChild(b);
+    });
+    refCol.appendChild(chips);
+  }
+  row.appendChild(refCol);
+
+  // 右 = 自分の欄。ここで直してそのまま保存する。
+  var mineCol = document.createElement('div');
+  var mineHead = document.createElement('div');
+  mineHead.className = 'pb-col-head';
+  mineHead.textContent = r.mine.missing ? '自分: まだ無い' : '自分 / ' + r.mine.name;
+  mineCol.appendChild(mineHead);
+  if (r.mine.missing) {
+    var none = document.createElement('div');
+    none.className = 'pb-empty';
+    none.textContent = 'この図種はまだ起こしていません（➕部品を起こす で作れます）。';
+    mineCol.appendChild(none);
+  } else {
+    var ta = document.createElement('textarea');
+    ta.className = 'pb-mine-text';
+    ta.setAttribute('data-board-edit', r.kind);
+    ta.value = _pbEdits[r.kind] != null ? _pbEdits[r.kind] : r.mine.text;
+    ta.addEventListener('input', function() { _pbEdits[r.kind] = ta.value; });
+    ta.addEventListener('focus', function() { _pbFocus = r.kind; renderPartBoardFocusMark(); });
+    mineCol.appendChild(ta);
+    var acts = document.createElement('div');
+    acts.className = 'pb-acts';
+    var save = document.createElement('button');
+    save.type = 'button';
+    save.setAttribute('data-board-save', r.kind);
+    save.textContent = '保存';
+    save.title = r.mine.name + ' を自分の保存フォルダに上書き保存する';
+    save.addEventListener('click', function() { savePartBoardRow(r.kind); });
+    acts.appendChild(save);
+    var open = document.createElement('button');
+    open.type = 'button';
+    open.setAttribute('data-board-open', r.kind);
+    open.textContent = 'タブで開く';
+    open.title = r.mine.name + ' をタブで開く（Export から画像を書き出せる）';
+    open.addEventListener('click', function() {
+      closePeekFolder();
+      openFromFolderByName(r.mine.name);
+    });
+    acts.appendChild(open);
+    var msg = document.createElement('span');
+    msg.className = 'pb-msg';
+    msg.setAttribute('data-board-msg', r.kind);
+    msg.textContent = _pbMsg[r.kind] || '';
+    acts.appendChild(msg);
+    mineCol.appendChild(acts);
+  }
+  row.appendChild(mineCol);
+  return row;
+}
+
+// いま打っている欄を画面にも出す (名前がどこへ入るかが押す前に分かるように)。
+function renderPartBoardFocusMark() {
+  var host = _pbEls().host;
+  if (!host) return;
+  var rows = host.querySelectorAll('.pb-row');
+  for (var i = 0; i < rows.length; i++) {
+    var k = rows[i].getAttribute('data-board-kind');
+    rows[i].setAttribute('data-editing', k === _pbFocus ? '1' : '0');
+  }
+}
+
+function _pbInsert(kind, name) {
+  var PB = window.MA.partBoard;
+  var ta = document.querySelector('#peek-board [data-board-edit="' + kind + '"]');
+  if (!ta || !PB) return false;
+  var res = PB.insertName(ta.value, ta.selectionStart, ta.selectionEnd, name);
+  ta.value = res.text;
+  _pbEdits[kind] = res.text;
+  try {
+    ta.focus();
+    ta.setSelectionRange(res.caret, res.caret);
+  } catch (e) {}
+  return true;
+}
+
 function selectPeekDir(dir) {
   var WS = window.MA.workspace;
   if (!WS) return Promise.resolve(false);
@@ -8396,7 +8697,11 @@ function selectPeekDir(dir) {
     _peekChanges = window.MA.peekChanges ? window.MA.peekChanges.report(entries) : null;
     renderPeekFiles();
     // 6 図種ぶんの対応要否は、フォルダを選んだ時点で出す (図を 1 枚開くまで待たせない)。
-    loadKindMatrixMine().then(function() { renderKindMatrix(); });
+    loadKindMatrixMine().then(function() {
+      renderKindMatrix();
+      // 部品ビューを出したままフォルダを選び直したら、その相手で組み直す。
+      if (_pbOn) selectPartBoardPart(_pbPart);
+    });
     // 1 枚目をそのまま出す。選んだ後に「どれか押す」を挟むと、読むだけの用でも
     // クリックが 1 つ増える。変更のある図が上に来ているので、取り込む 1 枚目が最初に開く。
     var first = peekVisibleNames()[0];
@@ -8916,6 +9221,11 @@ function setupPeekFolder() {
   }
   if (el.sbsToggle) {
     el.sbsToggle.addEventListener('click', function() { setSbsMode(!_sbsOn); });
+  }
+  // BLK-junior-20260915-0606-wish: 部品ビュー。
+  var boardToggle = document.getElementById('peek-board-toggle');
+  if (boardToggle) {
+    boardToggle.addEventListener('click', function() { setPartBoardMode(!_pbOn); });
   }
   var findPart = document.getElementById('peek-find-part');
   if (findPart) findPart.addEventListener('click', function() { findPeekPartHome(); });
