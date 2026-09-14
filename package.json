@@ -8,6 +8,7 @@
     "test:all": "npm run test:unit && npm run test:e2e",
     "audit": "node tools/audit.js",
     "pins": "node tools/pins.js",
+    "requests": "node tools/requests.js",
     "test:e2e:all": "playwright test"
   },
   "devDependencies": {
