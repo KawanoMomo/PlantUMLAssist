@@ -57,6 +57,22 @@ function updateTopSaveTarget() {
   el.setAttribute('data-mode', info.mode);
   if (info.configured) el.classList.add('configured');
   else el.classList.remove('configured');
+  updateTopSaveButton();
+}
+
+// BLK-junior-20260913-0306: 保存だけがボタンを持たず、Ctrl+K で「ファイルを保存」と
+// 打つ経路しか無かった。文言は保存先によって変わる (フォルダ運用なら上書き保存)。
+function updateTopSaveButton() {
+  var btn = document.getElementById('top-save');
+  var ST = window.MA.saveTarget;
+  if (!btn || !ST || !ST.saveButton) return;
+  var cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null;
+  var doc = null;
+  try { doc = window.MA.workspace ? window.MA.workspace.getActive() : null; } catch (e) { doc = null; }
+  var info = ST.saveButton(cfg, doc, (currentParsed && currentParsed.meta && currentParsed.meta.title) || '');
+  btn.textContent = info.text;
+  btn.title = info.title;
+  btn.setAttribute('data-mode', info.mode);
 }
 
 // ── 開いたファイルの錠 (BLK-junior-20260908-1803-wish) ──────────────────
@@ -408,6 +424,13 @@ function init() {
     if (!el) return;
     el.addEventListener('click', function() {
       var btn = document.getElementById('btn-config');
+      if (btn) btn.click();
+    });
+    // 保存先の隣の [💾 保存] (BLK-junior-20260913-0306)。押す先は Ctrl+K の
+    // 「ファイルを保存」と同じ 1 本 (#btn-save) にして、経路を 2 つに分けない。
+    var save = document.getElementById('top-save');
+    if (save) save.addEventListener('click', function() {
+      var btn = document.getElementById('btn-save');
       if (btn) btn.click();
     });
     updateTopSaveTarget();

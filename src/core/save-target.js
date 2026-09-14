@@ -63,7 +63,7 @@ window.MA.saveTarget = (function() {
       return {
         mode: 'file',
         text: '📁 ' + tail,
-        title: '保存先は設定済みです: ' + dir + '\n保存は Ctrl+K →「ファイルを保存」だけで済みます (押すと設定を開きます)',
+        title: '保存先は設定済みです: ' + dir + '\n保存は隣の [💾 保存] を押すだけです (このチップを押すと設定を開きます)',
         configured: true,
       };
     }
@@ -75,5 +75,27 @@ window.MA.saveTarget = (function() {
     };
   }
 
-  return { decide: decide, messageFor: messageFor, tailOf: tailOf, label: label };
+  // BLK-junior-20260913-0306: 保存だけが上部バーにボタンを持たず、Ctrl+K で
+  // 「ファイルを保存」と打つ経路しか無かった。一覧・覗く・書き出すはボタンを
+  // 押せるのに、毎周必ず通る保存だけがコマンド名を思い出す手順になっていた。
+  // 保存先の隣に常時出すボタンの文言を決める。押したときに何がどこへ書かれるかを
+  // title で言い切る (押してから「どこへ行ったのか」を探さないで済むように)。
+  function saveButton(cfg, doc, fallbackName) {
+    var t = decide(cfg, doc, fallbackName);
+    if (t.mode === 'file') {
+      return {
+        mode: 'file',
+        text: '💾 上書き保存',
+        title: t.dir + '/' + t.name + '.puml に上書き保存します (Ctrl+S)',
+      };
+    }
+    return {
+      mode: 'download',
+      text: '💾 保存',
+      title: t.name + '.puml をダウンロードします。保存先フォルダを決めると上書き保存になります (Ctrl+S)',
+    };
+  }
+
+  return { decide: decide, messageFor: messageFor, tailOf: tailOf, label: label,
+    saveButton: saveButton };
 })();
