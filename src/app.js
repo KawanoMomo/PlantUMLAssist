@@ -20637,7 +20637,21 @@ function _mexpRenderKinds() {
   var MB = window.MA.materialBoard;
   var mark = {};
   if (MB) {
-    MB.rows(_mexpEntries, comp.value).forEach(function(r) { mark[r.kind] = r; });
+    var boardRows = MB.rows(_mexpEntries, comp.value);
+    boardRows.forEach(function(r) { mark[r.kind] = r; });
+    // BLK-junior-20260914-2106: 印を付けただけでは、欲しい図種を上から目で探して
+    // ［未］／［済］を読み比べることになる。手当ての要る図種を先頭にまとめる
+    // (状態の分からない図種は末尾に、元の順のまま残す)。
+    var order = MB.kindOrder(boardRows);
+    if (order.length) {
+      rows = rows.map(function(r, i) { return { r: r, i: i }; }).sort(function(a, b) {
+        var oa = order.indexOf(a.r.kind);
+        var ob = order.indexOf(b.r.kind);
+        if (oa < 0) oa = order.length + a.i;
+        if (ob < 0) ob = order.length + b.i;
+        return oa !== ob ? oa - ob : a.i - b.i;
+      }).map(function(x) { return x.r; });
+    }
   }
   var html = '';
   for (var i = 0; i < rows.length; i++) {
