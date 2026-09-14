@@ -103,6 +103,7 @@ const sourceFiles = [
   'src/core/dep-graph.js',
   'src/core/change-ticket.js',
   'src/core/material-verify.js',
+  'src/core/material-readback.js',
   'src/core/bulk-note.js',
   'src/core/fix-walk.js',
   'src/ui/properties.js',
