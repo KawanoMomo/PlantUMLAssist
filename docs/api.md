@@ -12,6 +12,25 @@ curl -sS http://127.0.0.1:8766/verify-svg     # POST /verify-svg の仕様
 
 ポートは `PUA_PORT` で変わる (既定 8766)。
 
+## 応答の文字コード
+
+`POST /verify-svg` の 400 は、日本語の `error` / `expected.fields` と並べて
+**ASCII だけの言い直し** (`errorAscii` と `expected.fieldsAscii`、それに ASCII の `example`) を必ず返す。
+端末の文字コードが何であれ、返ってきた応答をそのまま読めば正しい形が分かる (打ち直しは要らない)。
+
+JSON の応答は既定で utf-8 (`Content-Type: application/json; charset=utf-8`)。日本語が
+端末で化けるときは、呼ぶ側が文字コードを選べる。宣言する charset と実バイト列は常に一致する。
+
+```
+curl -sS "http://127.0.0.1:8766/verify-svg?charset=ascii"          # \uXXXX 逃がしの純 ASCII
+curl -sS -H "Accept-Charset: shift_jis" http://127.0.0.1:8766/api  # cp932 (日本語 Windows の端末)
+```
+
+`?charset=` は GET で、`Accept-Charset:` は GET / POST どちらでも効く
+(POST の窓口はパスを完全一致で見るので、クエリではなくヘッダで指定する)。
+`ascii` / `us-ascii`、`cp932` / `ms932` / `sjis` / `shift_jis` / `shift-jis`、`utf-8` / `utf8` を解する。
+知らない名前は utf-8 に落ちる。cp932 に無い文字 (絵文字など) は JSON の `\uXXXX` に逃がす。
+
 ## 描画
 
 | 窓口 | 要求 | 返り |
@@ -31,7 +50,7 @@ curl -sS http://127.0.0.1:8766/verify-svg     # POST /verify-svg の仕様
 | 窓口 | 要求 | 返り |
 | --- | --- | --- |
 | `GET /verify-svg` | — | `POST /verify-svg` の仕様 |
-| `POST /verify-svg` | `{dir, types: [名前...], mode}` | 200 `{ok, results, verified}` / 400 `{error, expected, example}` |
+| `POST /verify-svg` | `{dir, types: [名前...], mode}` | 200 `{ok, results, verified}` / 400 `{error, errorAscii, expected}` |
 
 **puml と svg は本文に渡さない。** server が `dir` と `types` (拡張子なしの図の名前) から読む。
 `types` は 1〜200 件の必須。`dir` を省くと既定の保存フォルダ。1 枚あたり数百 ms かかる。
