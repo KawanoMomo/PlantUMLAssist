@@ -2665,6 +2665,7 @@ function init() {
   setupRenameImpact();
   setupDepGraph();
   setupTicketBoard();
+  setupFixWalk();
   setupVault();
   setupSymptomSearch();
   setupPatternCheck();
@@ -12908,13 +12909,17 @@ function _dgImpactHtml(impact) {
   var far = list.filter(function(r) { return r.hop > 0; }).length;
   var html = '<div class="dg-impact-head"><span>影響が届く図</span>'
     + '<span id="dg-impact-count">' + list.length + ' 図 (直接 ' + (list.length - far)
-    + ' / 連鎖 ' + far + ')</span></div>';
+    + ' / 連鎖 ' + far + ')</span>'
+    + (list.length ? '<button type="button" id="dg-walk" title="この一覧を 1 枚目から順に開き、'
+      + '下端のバーで次の図へ送りながら直す">順に手当てする</button>' : '')
+    + '</div>';
   if (list.length === 0) {
     return html + '<div class="cb-empty">部品名を選ぶと、その名前から辿れる図が並びます。</div>';
   }
   html += '<table><thead><tr><th>図</th><th>届き方</th><th>経由した部品名</th><th></th></tr></thead><tbody>';
   list.forEach(function(r) {
-    html += '<tr class="dg-doc" data-doc="' + esc(r.doc) + '" data-hop="' + r.hop + '">'
+    var mark = _fwMarkAttrs(r.doc);
+    html += '<tr class="dg-doc" data-doc="' + esc(r.doc) + '" data-hop="' + r.hop + '"' + mark + '>'
       + '<td class="dg-doc-name">' + esc(r.doc) + '</td>'
       + '<td class="dg-hop">' + (r.hop === 0 ? '直接' : '連鎖 ' + r.hop + ' 段') + '</td>'
       + '<td class="dg-via">' + esc((r.via || []).join(', ')) + '</td>'
@@ -12973,16 +12978,21 @@ function renderDepGraph() {
       });
     })(nodes[i]);
   }
+  // 1 行だけ開くときも、閉じた先で「次の図へ」が続くように列に入れる
+  // (開いた瞬間に一覧が消えて 📂一覧へ戻る、が元の困り事)。
   var opens = impactEl.querySelectorAll('.dg-open');
   for (var j = 0; j < opens.length; j++) {
     (function(btn) {
       btn.addEventListener('click', function() {
         var row = btn.parentNode.parentNode;
-        toggleDepGraph(false);
-        openFromFolderByName(row.getAttribute('data-doc'));
+        startFixWalk(_dgName, impact, { startDoc: row.getAttribute('data-doc'), hops: _dgHops });
       });
     })(opens[j]);
   }
+  var walkBtn = document.getElementById('dg-walk');
+  if (walkBtn) walkBtn.addEventListener('click', function() {
+    startFixWalk(_dgName, impact, { hops: _dgHops });
+  });
   return { graph: graph, view: view, impact: impact };
 }
 
@@ -13052,6 +13062,106 @@ function setupDepGraph() {
     }
     toggleDepGraph(false);
   });
+}
+
+// ── 影響の手当て列 (BLK-primary-20260914-2206-wish) ──────────────────────────
+// 依存グラフの行から図は開けるが、開いた瞬間にモーダルが閉じて一覧が消える。
+// 6 図あれば「◈依存グラフ → 行を探す → 開く」を 6 回繰り返すことになり、
+// 確認 (依存グラフ) と反映 (図の編集) が別経路のままだった。洗った一覧を下端の
+// バーに残し、直しながら「次へ」で送る。列の持ち方は core/fix-walk。
+var _fwWalk = null;
+
+// 一覧の行に付ける印。手当て済み・今開いている図が、一覧を開き直しても分かる。
+function _fwMarkAttrs(doc) {
+  var FW = window.MA.fixWalk;
+  if (!FW || !_fwWalk) return '';
+  var at = FW.indexOf(_fwWalk, doc);
+  if (at < 0) return '';
+  return (_fwWalk.items[at].done ? ' data-fixed="1"' : '')
+    + (at === _fwWalk.index ? ' data-current="1"' : '');
+}
+
+function renderFixWalk() {
+  var FW = window.MA.fixWalk;
+  var bar = document.getElementById('fw-bar');
+  if (!bar || !FW) return;
+  if (!_fwWalk || !_fwWalk.items.length) { bar.hidden = true; return; }
+  bar.hidden = false;
+  var p = FW.progress(_fwWalk);
+  var label = document.getElementById('fw-label');
+  if (label) {
+    label.textContent = FW.labelText(_fwWalk);
+    label.className = p.complete ? 'is-complete' : '';
+  }
+  var prev = document.getElementById('fw-prev');
+  var next = document.getElementById('fw-next');
+  var done = document.getElementById('fw-done');
+  if (prev) prev.disabled = _fwWalk.index <= 0;
+  if (next) next.disabled = _fwWalk.index >= _fwWalk.items.length - 1;
+  // 全部済んだら送り先が無い。押せるままだと「直した」が空振りしたように見える。
+  if (done) done.disabled = p.complete;
+}
+
+function _fwOpenCurrent() {
+  var FW = window.MA.fixWalk;
+  var cur = FW ? FW.current(_fwWalk) : null;
+  renderFixWalk();
+  if (cur) openFromFolderByName(cur.doc);
+}
+
+// 直した印は、札から始めた列なら札にも書き戻す (同じ変更の進捗を 2 つ持たない)。
+function _fwSyncTicket() {
+  var CT = window.MA.changeTicket;
+  if (!CT || !_fwWalk || !_fwWalk.ticketId) return;
+  var t = null;
+  for (var i = 0; i < _ctRows.length; i++) if (_ctRows[i].id === _fwWalk.ticketId) t = _ctRows[i];
+  if (!t) return;
+  _fwWalk.items.forEach(function(it) { t = CT.setDone(t, it.doc, it.done) || t; });
+  saveTicket(t);
+}
+
+function startFixWalk(subject, rows, opts) {
+  var FW = window.MA.fixWalk;
+  if (!FW) return;
+  _fwWalk = FW.start(subject, rows, opts || {});
+  toggleDepGraph(false);
+  toggleTicketBoard(false);
+  _fwOpenCurrent();
+}
+
+function setupFixWalk() {
+  var FW = window.MA.fixWalk;
+  var bar = document.getElementById('fw-bar');
+  if (!bar || !FW) return;
+
+  var prev = document.getElementById('fw-prev');
+  if (prev) prev.addEventListener('click', function() {
+    _fwWalk = FW.go(_fwWalk, -1);
+    _fwOpenCurrent();
+  });
+  var next = document.getElementById('fw-next');
+  if (next) next.addEventListener('click', function() {
+    _fwWalk = FW.go(_fwWalk, 1);
+    _fwOpenCurrent();
+  });
+  var done = document.getElementById('fw-done');
+  if (done) done.addEventListener('click', function() {
+    _fwWalk = FW.doneNext(_fwWalk);
+    _fwSyncTicket();
+    _fwOpenCurrent();
+  });
+  // 一覧に戻るのは「どこを飛ばしたか」を見たいときだけ。列は消さない。
+  var list = document.getElementById('fw-list');
+  if (list) list.addEventListener('click', function() {
+    if (_fwWalk && _fwWalk.subject) _dgName = _fwWalk.subject;
+    toggleDepGraph(true);
+  });
+  var close = document.getElementById('fw-close');
+  if (close) close.addEventListener('click', function() {
+    _fwWalk = null;
+    renderFixWalk();
+  });
+  renderFixWalk();
 }
 
 // ── 変更チケット (BLK-primary-20260909-0603-wish) ────────────────────────────
@@ -13212,13 +13322,15 @@ function renderTicketBoard() {
       });
     })(boxes[i]);
   }
+  // 札からも同じ手当ての列に入る (札を開き直さずに次の未チェックへ送れる)。
   var opens = body.querySelectorAll('button.ct-open');
   for (var j = 0; j < opens.length; j++) {
     (function(btn) {
       btn.addEventListener('click', function() {
         var row = btn.parentNode.parentNode;
-        toggleTicketBoard(false);
-        openFromFolderByName(row.getAttribute('data-doc'));
+        startFixWalk(cur.subject, cur.items, {
+          startDoc: row.getAttribute('data-doc'), ticketId: cur.id, hops: cur.hops,
+        });
       });
     })(opens[j]);
   }

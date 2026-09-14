@@ -5424,6 +5424,39 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 }
 
 /* ── Status Bar ────────────────────────────────────────────────────────────── */
+/* BLK-primary-20260914-2206-wish: 影響の手当て列。状態バーの上に細く残し、
+   図を開いている間も「何枚目 / 残り何枚」と次への送りが手元にある */
+#fw-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 10px;
+  background: var(--bg-tertiary);
+  border-top: 1px solid var(--accent);
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+#fw-bar[hidden] { display: none; }
+#fw-label { flex: 1; color: var(--accent); }
+#fw-label.is-complete { color: var(--accent-green); }
+#fw-bar button {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 0 6px;
+  cursor: pointer;
+}
+#fw-bar button:hover:not(:disabled) { border-color: var(--accent); }
+#fw-bar button:disabled { opacity: 0.4; cursor: default; }
+#fw-done { border-color: var(--accent); }
+/* 手当て済みの行は一覧でも済みと分かる (同じ図を二度開かない) */
+#dg-impact tr.dg-doc[data-fixed="1"] td.dg-doc-name { text-decoration: line-through; }
+#dg-impact tr.dg-doc[data-current="1"] td { background: var(--bg-tertiary); }
+
 #statusbar {
   display: flex;
   align-items: center;
@@ -6150,6 +6183,17 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 
   </div><!-- /#main -->
 
+  <!-- BLK-primary-20260914-2206-wish: 影響の手当て列。依存グラフ/変更チケットで洗った図を
+       1 枚ずつ開いて直す間、下端に残り続ける。閉じて開き直さずに次の図へ送れる。 -->
+  <div id="fw-bar" hidden>
+    <span id="fw-label" role="status"></span>
+    <button type="button" id="fw-prev" title="前の図へ戻る">◀ 前</button>
+    <button type="button" id="fw-done" title="この図は直した。まだ直していない次の図を開く">✓ 直した · 次へ</button>
+    <button type="button" id="fw-next" title="直した印を付けずに次の図へ送る">次へ ▶</button>
+    <button type="button" id="fw-list" title="手当ての一覧 (依存グラフ) を開く">一覧</button>
+    <button type="button" id="fw-close" title="手当ての列を閉じる">×</button>
+  </div>
+
   <!-- ── Status bar ──────────────────────────────────────────────────────── -->
   <div id="statusbar">
     <span id="status-parse">Ready</span>
@@ -6562,6 +6606,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/usecase-source.js"></script>
 <script src="src/core/dep-graph.js"></script>
 <script src="src/core/change-ticket.js"></script>
+<script src="src/core/fix-walk.js"></script>
 <script src="src/core/review-desk.js"></script>
 <script src="src/core/state-branch.js"></script>
 <script src="src/core/state-transition.js"></script>
