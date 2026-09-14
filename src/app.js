@@ -6386,6 +6386,128 @@ function renderSbsFiles() {
 // 押した部品の所だけを切り出して、自分の同じ部品の図と左右に並べる。
 var _partSel = '';
 
+// ── 相乗り図を 1 枚のまま部品で絞る ──
+// BLK-junior-20260915-0506-wish: 先輩の 1 枚に 8 部品が相乗りしていると、手本に
+// すべきクラスを全文精読で読み分けるしかなかった。切り出し (上の部品チップ) は
+// 「その部品だけの別の 1 枚」を作るので、相乗り図のどこに自分の部品が居るかは
+// 失われる。ここは絵をそのままにして、関係しない所の色だけを落とす。
+var _focusSel = '';
+var _focusMode = 'dim';
+
+function renderPartFocus() {
+  var host = document.getElementById('peek-focus');
+  var PF = window.MA.partFocus;
+  if (!host) return;
+  host.textContent = '';
+  var list = (PF && _peekDsl && PF.isComposite(_peekDsl)) ? PF.parts(_peekDsl) : [];
+  if (!list.length) { host.style.display = 'none'; _focusSel = ''; return; }
+  host.style.display = 'block';
+
+  var head = document.createElement('div');
+  head.className = 'peek-focus-head';
+  head.id = 'peek-focus-head';
+  head.textContent = PF.compositeLabel(_peekDsl);
+  host.appendChild(head);
+
+  list.forEach(function(p) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'peek-focus-chip' + (p.name === _focusSel ? ' selected' : '');
+    b.setAttribute('data-focus-part', p.name);
+    b.textContent = p.name;
+    b.addEventListener('click', function() { selectPartFocus(p.name); });
+    host.appendChild(b);
+  });
+
+  var modes = document.createElement('div');
+  modes.className = 'peek-focus-modes';
+  [{ k: 'dim', t: '他を淡色' }, { k: 'hide', t: '他を非表示' }].forEach(function(m) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'peek-focus-mode' + (_focusMode === m.k ? ' on' : '');
+    b.setAttribute('data-focus-mode', m.k);
+    b.textContent = m.t;
+    b.addEventListener('click', function() { setPartFocusMode(m.k); });
+    modes.appendChild(b);
+  });
+  if (_focusSel) {
+    var clr = document.createElement('button');
+    clr.type = 'button';
+    clr.className = 'peek-focus-mode';
+    clr.id = 'peek-focus-clear';
+    clr.textContent = 'フィルタ解除';
+    clr.addEventListener('click', function() { clearPartFocus(); });
+    modes.appendChild(clr);
+  }
+  host.appendChild(modes);
+
+  var label = document.createElement('div');
+  label.className = 'peek-focus-label';
+  label.id = 'peek-focus-label';
+  var res = _focusSel ? PF.focus(_peekDsl, _focusSel, _focusMode) : null;
+  label.textContent = res ? PF.focusLabel(res) : '';
+  if (res) label.setAttribute('data-focus-kept', String(res.kept.length));
+  host.appendChild(label);
+}
+
+// 本文も同じ絞りで読めるようにする (図で浮いた所が、打ち写す本文でも分かる)。
+function renderPeekDslText() {
+  var el = _peekEls();
+  var PF = window.MA.partFocus;
+  if (!el.dsl) return;
+  el.dsl.textContent = '';
+  if (!_focusSel || !PF) { el.dsl.textContent = _peekDsl; return; }
+  var flags = PF.lineFlags(_peekDsl, _focusSel);
+  var lines = String(_peekDsl).split(/\r?\n/);
+  lines.forEach(function(line, i) {
+    if (_focusMode === 'hide' && flags[i] === 'dim') return;
+    var span = document.createElement('span');
+    if (flags[i]) span.className = 'peek-dsl-' + flags[i];
+    span.textContent = line + '\n';
+    el.dsl.appendChild(span);
+  });
+}
+
+// 選んだ部品で図を出し直す。元の本文 (_peekDsl) は書き換えない
+// (覗く画面は読むだけなので、先輩のファイルにも自分の図にも触らない)。
+function applyPartFocus() {
+  var el = _peekEls();
+  var PF = window.MA.partFocus;
+  if (!el.svg) return Promise.resolve(false);
+  renderPartFocus();
+  renderPeekDslText();
+  var res = (_focusSel && PF) ? PF.focus(_peekDsl, _focusSel, _focusMode) : null;
+  var dsl = res ? res.dsl : _peekDsl;
+  var name = _peekName;
+  if (!dsl) return Promise.resolve(false);
+  el.svg.setAttribute('data-focus', '');
+  return renderDslToSvg(dsl).then(function(svg) {
+    if (name !== _peekName) return false;
+    el.svg.innerHTML = svg;
+    // 描き終わってから印を付ける (絞った絵が出る前の 1 枚と見分けが付くように)。
+    el.svg.setAttribute('data-focus', _focusSel ? _focusSel + ':' + _focusMode : '');
+    return true;
+  }).catch(function() {
+    el.svg.textContent = '図の描画に失敗しました (本文は下に出ています)';
+    return false;
+  });
+}
+
+function selectPartFocus(partName) {
+  _focusSel = _focusSel === partName ? '' : partName;
+  return applyPartFocus();
+}
+
+function setPartFocusMode(mode) {
+  _focusMode = mode === 'hide' ? 'hide' : 'dim';
+  return applyPartFocus();
+}
+
+function clearPartFocus() {
+  _focusSel = '';
+  return applyPartFocus();
+}
+
 function _peekFolderName(dir) {
   var PF = window.MA.peekFolder;
   for (var i = 0; i < _peekDirs.length; i++) {
@@ -8186,7 +8308,9 @@ function showPeekFile(name) {
   _peekName = name;
   _peekDsl = '';
   _partSel = '';
+  _focusSel = '';
   renderPartChips();
+  renderPartFocus();
   renderPeekFiles();
   renderPeekTemplateBtn();
   renderPeekChangeDetail(name);
@@ -8207,6 +8331,9 @@ function showPeekFile(name) {
     // 開いた図が複合図なら、部品で切り出す入口をその場に出す。
     _partSel = '';
     renderPartChips();
+    // 切り出さずに 1 枚のまま絞る入口も同時に出す (読むだけなら絞る方が近い)。
+    _focusSel = '';
+    renderPartFocus();
     return renderDslToSvg(text).then(function(svg) {
       if (name !== _peekName) return false;
       el.svg.innerHTML = svg;
