@@ -170,6 +170,29 @@ window.MA.svgFreshness = (function() {
     return BADGES[status] || BADGES.unknown;
   }
 
+  // BLK-reviewer-20260915-0406-wish: mtime では古いが、中身は今の puml と一致した図。
+  // ここまでは行から印が全部消えていたので、「確かめた結果 追いついていた」のか
+  // 「そもそも古くなかった」のかが画面から読めず、reviewer は指摘.md を書く前に
+  // 9 枚ぶん render API で描き直してバイト比較する裏取りを毎回やり直していた。
+  // 「古い」と「作り直しが要る」を分けた第三の印として、行に出す。
+  var STALE_SETTLED = {
+    mark: 'SVG 古(内容一致)',
+    title: '書き出しの時刻は puml より古いままですが、中身は今の puml と一致しています。'
+      + '保存し直しただけで絵は変わっていないので、作り直しは要りません',
+  };
+
+  // その図が第三の状態か。mtime は古く、内容では追いついている。
+  function isStaleSettled(status, content) {
+    return status === 'stale' && isSettled(content);
+  }
+
+  // 何を見て「内容は一致」と言ったかを印に添える (contentBadge と同じ作法)。
+  function staleSettledBadge(basis) {
+    var t = basisText(basis);
+    if (!t) return STALE_SETTLED;
+    return { mark: STALE_SETTLED.mark, title: STALE_SETTLED.title + ' — 根拠: ' + t };
+  }
+
   // 一覧ぶんの判定。作り直しが要るものを needsRender にまとめる。
   function scan(entries, records) {
     var rows = (Array.isArray(entries) ? entries : []).map(function(e) {
@@ -419,6 +442,8 @@ window.MA.svgFreshness = (function() {
     STAMP_NOTE: STAMP_NOTE,
     badge: badge,
     contentBadge: contentBadge,
+    isStaleSettled: isStaleSettled,
+    staleSettledBadge: staleSettledBadge,
     scan: scan,
     statusMap: statusMap,
     contentMap: contentMap,

@@ -966,6 +966,11 @@ html, body {
   white-space: nowrap;
 }
 #folder-panel .folder-svg-badge.svg-unknown { border-color: var(--text-secondary); color: var(--text-secondary); }
+/* mtime だけが古く、中身は追いついている図 (BLK-reviewer-20260915-0406-wish)。
+   作り直しの催促ではないので、赤ではなく控えめな色で出す。 */
+#folder-panel .folder-svg-badge.svg-stale-settled {
+  border-color: var(--text-secondary); color: var(--text-secondary); font-weight: normal;
+}
 /* 内容での判定 (BLK-reviewer-20260908-1103)。mtime の「古い」より強い印 —
    こちらは中身を突き合わせた結果なので、作り直しが要ることが確実に分かる。 */
 #folder-panel .folder-svg-badge.svg-differ {
