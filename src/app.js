@@ -7980,6 +7980,10 @@ function setupTabs() {
   // 反映状況の節で差分を開いている図の名前 (もう一度押すと畳む)。
   var syncOpen = '';
   var syncDiffCache = {};
+  // BLK-reviewer-20260914-1806-wish: 下書き ↔ 本体の差し替え待ちキュー。
+  var swapQueue = null;
+  // キューのまとめ (手順7 で primary に渡す文面) を開いているか。
+  var swapReportOpen = false;
   // 行の 🗑 を 1 回押した名前 (2 回目で消す)。描き直すと白紙に戻る。
   var deleteArmed = '';
 
@@ -8284,6 +8288,13 @@ function setupTabs() {
       var SS = window.MA.syncState;
       syncScan = SS ? SS.scan(entries, (res && res.verified) || {}) : null;
 
+      // BLK-reviewer-20260914-1806-wish: 下書きと本体の差し替え待ちキュー。
+      // sync-state は「反映漏れのある図」だけを名指しするので、中身が揃って
+      // もう消してよい下書きは一覧から消える。キューはそれも載せて
+      // 「下書きが何枚・うち何枚が反映待ちで何枚が削除予定か」を全部言う。
+      var SQ = window.MA.swapQueue;
+      swapQueue = SQ ? SQ.build(entries, (res && res.verified) || {}) : null;
+
       // 「今読んでいる版が、読み始めた瞬間のものか」は中身では分からない。
       // server が返した「今」と各図の更新時刻の差だけで判定する。
       // BLK-junior-20260908-2003: 上書きで消えた中身の控え。一覧の時点で
@@ -8353,6 +8364,7 @@ function setupTabs() {
         appendSaveVerifySection(panel, dir);
         appendDupeSection(panel, dir);
       appendSyncSection(panel, dir);
+        appendSwapQueueSection(panel, dir);
         appendKindSummary(panel);
         appendKindMismatchSummary(panel);
         plain.items.forEach(function(e) { panel.appendChild(folderRow(e.name || e, null, null)); });
@@ -8389,6 +8401,7 @@ function setupTabs() {
       appendSaveVerifySection(panel, dir);
       appendDupeSection(panel, dir);
       appendSyncSection(panel, dir);
+      appendSwapQueueSection(panel, dir);
 
       folderStatus = {};
       rows.forEach(function(r) { folderStatus[r.name] = r.status; });
@@ -8840,6 +8853,103 @@ function setupTabs() {
       }
       host.appendChild(row);
     });
+  }
+
+  // BLK-reviewer-20260914-1806-wish: 差し替え待ちキュー。
+  // 反映漏れの節 (appendSyncSection) が出すのは「食い違っている図」だけなので、
+  // 下書きの全体像 —— 何枚あって、どれが本体待ちで、どれがもう消してよいか —— は
+  // `-編集中` を ls して目で拾うしかなかった。ここはその台帳を 1 つの節にまとめ、
+  // 手順7 で primary へ渡す文面をそのまま取り出せるようにする。
+  function appendSwapQueueSection(host, dir) {
+    var SQ = window.MA.swapQueue;
+    if (!SQ || !swapQueue) return;
+    var sec = document.createElement('div');
+    sec.className = 'folder-swapq';
+    sec.id = 'folder-swapq';
+    sec.setAttribute('data-swapq-total', String(swapQueue.counts.total));
+
+    var sum = document.createElement('div');
+    sum.className = 'folder-swapq-summary'
+      + (swapQueue.counts.apply || swapQueue.counts.restore ? ' has-pending' : '');
+    sum.id = 'folder-swapq-summary';
+    sum.textContent = SQ.summary(swapQueue);
+    sum.title = '`-編集中` などの下書きと、その本体の対応表です。'
+      + '「削除予定」は本体に中身が入っている下書きで、消しても内容は失われません';
+    sec.appendChild(sum);
+
+    swapQueue.rows.forEach(function(r) {
+      var row = document.createElement('div');
+      row.className = 'folder-swapq-row folder-swapq-' + r.action;
+      row.setAttribute('data-swapq-name', r.name);
+      row.setAttribute('data-swapq-action', r.action);
+
+      var txt = document.createElement('span');
+      txt.className = 'folder-swapq-label';
+      txt.textContent = r.draft + ' → ' + r.base + ' … ' + r.label
+        + (r.reason ? '（' + r.reason + '）' : '');
+      row.appendChild(txt);
+
+      // 直す先をその場で開く (名指しの後に一覧から目で探し直さない)。
+      [r.baseMissing ? null : r.name, r.draftName].forEach(function(n) {
+        if (!n) return;
+        var o = document.createElement('button');
+        o.type = 'button';
+        o.className = 'folder-swapq-open';
+        o.setAttribute('data-swapq-open', n);
+        o.textContent = '開く: ' + n;
+        o.title = n + '.puml を開きます';
+        o.addEventListener('click', function(ev) {
+          ev.stopPropagation();
+          openFromFolder(n);
+        });
+        row.appendChild(o);
+      });
+      sec.appendChild(row);
+    });
+
+    var acts = document.createElement('div');
+    acts.className = 'folder-swapq-acts';
+    var rb = document.createElement('button');
+    rb.type = 'button';
+    rb.className = 'folder-swapq-report-btn';
+    rb.id = 'folder-swapq-report-btn';
+    rb.textContent = swapReportOpen ? 'まとめを閉じる' : '依頼のまとめを出す';
+    rb.title = '「下書きは用意済み、反映待ち」を、ファイル名込みの文面で出します'
+      + '（手順7 で primary にそのまま渡せます）';
+    rb.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      swapReportOpen = !swapReportOpen;
+      renderFolderPanel();
+    });
+    acts.appendChild(rb);
+    sec.appendChild(acts);
+
+    if (swapReportOpen) {
+      var box = document.createElement('textarea');
+      box.className = 'folder-swapq-report';
+      box.id = 'folder-swapq-report';
+      box.readOnly = true;
+      box.rows = Math.min(12, swapQueue.rows.length + 2);
+      box.value = SQ.reportText(swapQueue);
+      box.addEventListener('click', function(ev) { ev.stopPropagation(); box.select(); });
+      sec.appendChild(box);
+    }
+    host.appendChild(sec);
+  }
+
+  // 行に付く「本体 / 差し替え待ち / 削除予定」。下書きのある図とその下書きにだけ付く
+  // (全行に付くと印でなくなる)。手順1 はこの 1 語で役割が読める。
+  function folderSwapBadge(name) {
+    var SQ = window.MA.swapQueue;
+    if (!SQ || !swapQueue || !swapQueue.byName[name]) return null;
+    var st = SQ.fileState(swapQueue, name);
+    var el = document.createElement('span');
+    el.className = 'folder-swapq-badge folder-swapq-badge-' + (st.action || 'none');
+    el.setAttribute('data-swapq-badge-of', name);
+    el.setAttribute('data-swapq-state', st.state);
+    el.textContent = st.state;
+    el.title = st.title;
+    return el;
   }
 
   // 差分の控えは本文が書き換わったら捨てる (古い diff を今の中身として見せない)。
@@ -9726,6 +9836,9 @@ function setupTabs() {
     // BLK-reviewer-20260914-1506-wish: 本体に入っていない下書きの印。
     var sb = folderSyncBadge(name);
     if (sb) row.appendChild(sb);
+    // BLK-reviewer-20260914-1806-wish: 本体 / 差し替え待ち / 削除予定。
+    var qb = folderSwapBadge(name);
+    if (qb) row.appendChild(qb);
     var xb = folderDeleteButton(name);
     if (xb) row.appendChild(xb);
     return row;
