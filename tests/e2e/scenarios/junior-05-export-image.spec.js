@@ -19,6 +19,9 @@ test('手順5(状態遷移図) SVG として書き出せる', async ({ page }) =
   // 到達条件: SVG が 1 本書き出される。
   expect(download).not.toBeNull();
   expect(download.suggestedFilename()).toMatch(/\.svg$/);
+  // BLK-junior-20260915-0406: 書き出し名は title (title GPIOドライバ状態遷移) ではなく
+  // .puml の保存名 (図の名前) に揃うので、保存フォルダで .puml と対になる。
+  expect(download.suggestedFilename()).toBe('gpio_state_doc.svg');
 });
 
 test('手順5(他の図種) PNG(透過背景)も同じメニューから選べる', async ({ page }) => {
@@ -29,6 +32,7 @@ test('手順5(他の図種) PNG(透過背景)も同じメニューから選べ�
   const download = await (await S.exportVia(page, 'exp-png-transparent'));
   expect(download).not.toBeNull();
   expect(download.suggestedFilename()).toMatch(/\.png$/);
+  expect(download.suggestedFilename()).toBe('gpio_seq_doc.png');
 });
 
 // 「資料化」— 部品と図種を選ぶだけで、正しい形式が自動で決まる。

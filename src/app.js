@@ -20933,11 +20933,23 @@ function appendSaveStatus(msg) {
 }
 
 // ── Export ─────────────────────────────────────────────────────────────────
+// BLK-junior-20260915-0406: 1 枚書き出しの名前は .puml の保存名 (図の名前) に揃える。
+// title を使うと spi_state.puml の隣に「SPI ドライバ 状態遷移.svg」が並び、
+// 一覧でどれとどれが対か名前だけでは分からなくなる。
+function exportFileName(ext) {
+  var doc = null;
+  try { doc = window.MA.workspace ? window.MA.workspace.getActive() : null; } catch (e) { doc = null; }
+  var meta = currentParsed && currentParsed.meta;
+  var EN = window.MA.exportName;
+  if (!EN) return ((meta && meta.title) || 'untitled') + '.' + ext;
+  return EN.fileName(doc, meta, ext);
+}
+
 function exportSVG() {
   var svgEl = previewSvgEl.querySelector('svg');
   if (!svgEl) return;
   var clone = svgEl.cloneNode(true);
-  downloadBlob(((currentParsed.meta && currentParsed.meta.title) || 'untitled') + '.svg',
+  downloadBlob(exportFileName('svg'),
     new Blob([new XMLSerializer().serializeToString(clone)], { type: 'image/svg+xml' }));
   // 書き出した瞬間が「この周を完走した」区切り。ここで庫へロックする
   // (BLK-junior-20260908-2203-wish)。
@@ -22793,7 +22805,7 @@ function exportPNG(transparent) {
   svgToCanvas(transparent, function(canvas) {
     canvas.toBlob(function(blob) {
       if (!blob) return;
-      downloadBlob(((currentParsed.meta && currentParsed.meta.title) || 'untitled') + '.png', blob);
+      downloadBlob(exportFileName('png'), blob);
       stashToVault(transparent ? 'PNG（透過背景）' : 'PNG');
     });
   });
