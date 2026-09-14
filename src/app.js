@@ -18316,6 +18316,11 @@ var _dpMetaTouched = false;  // 題・版数を手で書き換えたか (書き�
 var _elLog = null;        // 保存フォルダの控え。null は「まだ読んでいない」
 var _elDir = null;        // その控えを読んだフォルダ
 
+// BLK-primary-20260914-2106-wish: 履歴の行を選ぶと、その回に渡した版と今を
+// 図ごとに突き合わせて出す。null は「まだどの回も開いていない」。
+var _dpHistPick = null;
+var _dpHistResult = null; // 開いている回の突き合わせ結果 (対象の選び直しに使う)
+
 function _elHas(channel) {
   var EL = window.MA.exportLog;
   return !!(EL && _elLog && EL.latest(_elLog, channel).at);
@@ -18452,13 +18457,53 @@ function _dpHistoryHtml(esc) {
     html += '<div class="dp-hist-row">このフォルダからの提出はまだ記録されていません</div>';
   } else {
     list.slice(0, 5).forEach(function(e, i) {
-      html += '<div class="dp-hist-row"' + (i === 0 ? ' data-latest="1"' : '') + '>'
-        + esc((i === 0 ? '前回 ' : '') + EL.historyLine(e, 'delivery')) + '</div>';
+      // 行そのものが「その回と今を比べる」ボタン。日時と枚数だけの行だと、
+      // 何が変わったかは zip を開くしかない (これが元の不満)。
+      var on = _dpHistPick === i;
+      html += '<button type="button" class="dp-hist-row" data-idx="' + i + '"'
+        + (i === 0 ? ' data-latest="1"' : '') + (on ? ' data-open="1"' : '')
+        + ' style="display:block;width:100%;text-align:left;font-size:11px;padding:2px 3px;'
+        + 'border:1px solid ' + (on ? 'var(--accent)' : 'transparent') + ';border-radius:3px;'
+        + 'background:' + (on ? 'var(--bg-tertiary)' : 'transparent')
+        + ';color:var(--text-secondary);cursor:pointer;">'
+        + esc((i === 0 ? '前回 ' : '') + EL.historyLine(e, 'delivery'))
+        + ' <span style="color:var(--accent);">' + (on ? '▾' : '▸') + ' 今と比べる</span></button>';
+      if (on) html += _dpHistCompareHtml(esc, i);
     });
     if (list.length > 5) {
       html += '<div class="dp-hist-row">ほか ' + esc(String(list.length - 5)) + ' 件</div>';
     }
   }
+  return html + '</div>';
+}
+
+// 履歴の 1 回と今の図を図ごとに並べた表。判定は delivery-history の職掌。
+function _dpHistCompareHtml(esc, idx) {
+  var DH = window.MA.deliveryHistory;
+  if (!DH) return '';
+  var res = DH.compare(_elLog, 'delivery', idx, _dpCandidates());
+  _dpHistResult = res;
+  var html = '<div id="dp-hist-compare" data-idx="' + idx + '"'
+    + ' data-exact="' + (res.exact ? '1' : '0')
+    + '" data-changed="' + res.counts.changed + '" data-new="' + res.counts['new']
+    + '" data-removed="' + res.counts.removed + '" data-same="' + res.counts.same + '"'
+    + ' style="margin:4px 0 2px 0;border:1px solid var(--border);border-radius:3px;padding:5px;">'
+    + '<div id="dp-hist-line" style="font-size:11px;color:var(--text-primary);">'
+    + esc(res.label + ' → 今: ' + res.line) + '</div>'
+    + '<div id="dp-hist-rows" style="max-height:120px;overflow-y:auto;margin-top:3px;">';
+  res.rows.forEach(function(r) {
+    html += '<div class="dp-hist-doc" data-name="' + esc(r.name) + '" data-status="' + r.status + '"'
+      + ' style="font-size:11px;color:var(--text-primary);">'
+      + esc(r.name) + '<span style="color:var(--text-secondary);"> ・ '
+      + esc(DH.statusLabel(r.status)) + '</span></div>';
+  });
+  html += '</div>';
+  var picks = DH.pickNames(res);
+  html += '<button type="button" id="dp-hist-pick" data-count="' + picks.length + '"'
+    + (picks.length ? '' : ' disabled title="この回から変わった図はありません"')
+    + ' style="margin-top:4px;background:var(--bg-tertiary);border:1px solid var(--border);'
+    + 'color:var(--text-primary);border-radius:3px;cursor:pointer;padding:2px 8px;font-size:11px;">'
+    + 'この回から変わった図だけを対象にする（' + picks.length + ' 枚）</button>';
   return html + '</div>';
 }
 
@@ -18579,6 +18624,23 @@ function renderDeliveryPanel() {
       renderDeliveryPanel();
     });
   });
+  // 履歴の行 = その回と今の突き合わせ。もう一度押すと畳む。
+  Array.prototype.forEach.call(content.querySelectorAll('.dp-hist-row[data-idx]'), function(row) {
+    row.addEventListener('click', function() {
+      var i = parseInt(row.getAttribute('data-idx'), 10);
+      _dpHistPick = (_dpHistPick === i) ? null : i;
+      renderDeliveryPanel();
+    });
+  });
+  var histPick = document.getElementById('dp-hist-pick');
+  if (histPick) histPick.addEventListener('click', function() {
+    var DH = window.MA.deliveryHistory;
+    if (!DH || !_dpHistResult) return;
+    var names = DH.pickNames(_dpHistResult);
+    if (!names.length) return;
+    _dpDocs = names;
+    renderDeliveryPanel();
+  });
   var allBtn = document.getElementById('dp-all');
   if (allBtn) allBtn.addEventListener('click', function() {
     _dpDocs = all.map(function(d) { return d.name; });
@@ -18608,6 +18670,8 @@ function openDeliveryPanel() {
   // (前回 1.0 で出したなら次は 1.1 が既定になる)。
   _dpDocs = null;
   _dpMetaTouched = false;
+  _dpHistPick = null;
+  _dpHistResult = null;
   // 見比べ用に描いた SVG も捨てる (前に開いたときの絵を今の puml として見せない)。
   _drCache = {};
   _drName = null;
