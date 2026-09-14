@@ -2538,6 +2538,22 @@ html, body {
   flex: 1; background: var(--bg-tertiary); color: var(--text-primary);
   border: 1px solid var(--border); border-radius: 3px; font-size: 12px; padding: 3px 6px;
 }
+/* 資料化の残り (部品 × 図種) — BLK-junior-20260914-2006-wish */
+#mexp-matrix-summary { padding: 8px 14px 4px; font-size: 11px; color: var(--text-primary); }
+#mexp-matrix-wrap { max-height: 34vh; overflow: auto; padding: 0 14px; }
+#mexp-matrix { border-collapse: collapse; font-size: 11px; width: 100%; }
+#mexp-matrix th, #mexp-matrix td {
+  border: 1px solid var(--border); padding: 2px 6px; color: var(--text-primary); white-space: nowrap;
+}
+#mexp-matrix th { background: var(--bg-tertiary); font-weight: normal; }
+#mexp-matrix td.mexp-cell { text-align: center; cursor: pointer; }
+#mexp-matrix td.mexp-cell[data-absent="1"] { cursor: default; color: var(--text-secondary); }
+#mexp-matrix td.mexp-cell[data-status="none"] { color: var(--accent); font-weight: bold; }
+#mexp-matrix td.mexp-cell[data-status="stale"] { color: #d08a2a; font-weight: bold; }
+#mexp-matrix td.mexp-cell[data-status="fresh"] { color: var(--text-secondary); }
+#mexp-matrix tr.mexp-mrow[data-picked="1"] td { background: var(--bg-tertiary); }
+#mexp-matrix td.mexp-mcomp { cursor: pointer; }
+#mexp-matrix-legend { padding: 3px 14px 6px; font-size: 10px; color: var(--text-secondary); }
 #mexp-plan { padding: 6px 14px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-secondary); }
 #mexp-state { padding: 8px 14px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-secondary); min-height: 16px; }
 /* 要求ID対応 (BLK-junior-20260909-0103-wish) */
@@ -6395,6 +6411,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/component-pack.js"></script>
 <script src="src/core/material-export.js"></script>
 <script src="src/core/material-board.js"></script>
+<script src="src/core/material-matrix.js"></script>
 <script src="src/core/req-trace.js"></script>
 <script src="src/core/rename-history.js"></script>
 <script src="src/core/rename-redo.js"></script>
@@ -6757,6 +6774,16 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button type="button" id="mexp-close">閉じる</button>
       </span>
     </div>
+    <!-- BLK-junior-20260914-2006-wish: 部品を選ぶ前に、部品 × 図種の残りを 1 枚で見せる。
+         マスを押すと下の部品欄・図種欄がそこに合う (プルダウンの往復を無くす)。 -->
+    <div id="mexp-matrix-summary" role="status"></div>
+    <div id="mexp-matrix-wrap">
+      <table id="mexp-matrix">
+        <thead><tr id="mexp-matrix-head"></tr></thead>
+        <tbody id="mexp-matrix-rows"></tbody>
+      </table>
+    </div>
+    <div id="mexp-matrix-legend"></div>
     <div id="mexp-body">
       <label class="mexp-field">部品
         <select id="mexp-component"></select>
