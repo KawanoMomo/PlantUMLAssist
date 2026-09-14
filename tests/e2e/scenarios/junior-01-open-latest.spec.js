@@ -1183,6 +1183,61 @@ test.describe('junior 手順 1〜2: 題材ごとに 6 図種の対応要否を 1
     await page.waitForTimeout(1200);
     await expect(page.locator('#peek-title')).toContainText('gpio_component');
   });
+
+  // BLK-junior-20260914-1906-wish: 担当は GPIO だけではない (UART / CAN / TIMER)。
+  // 題材を選び直して 6 図種ずつ確かめる周回をやめ、部品 × 図種を 1 枚の表で出す。
+  test('すべての部品を選ぶと、部品 × 図種の表が 1 枚で出る', async ({ page }) => {
+    // UART は自分に 1 枚も無く、先輩に 2 枚ある (GPIO より残りが多い部品)。
+    await S1.putDoc(page, MTX_SENIOR, 'uart_state', MTX_STATE);
+    await S1.putDoc(page, MTX_SENIOR, 'uart_class', MTX_CLASS);
+    await S1.putDoc(page, MTX_MINE, 'uart_init_sequence', MTX_SEQ);
+    await page.reload();
+    await page.waitForSelector('#btn-tab-peek');
+    await page.locator('#btn-tab-peek').click();
+    await page.waitForSelector('#peek-modal');
+    await page.waitForSelector('#peek-matrix .pkm-head');
+
+    // 選ぶのは 1 回だけ (部品ごとに選び直さない)。
+    await page.locator('#peek-subject').selectOption('*');
+    await page.waitForSelector('#peek-matrix-grid');
+
+    // 到達条件その1: 担当している部品が全部行になり、横に 6 図種が並ぶ。
+    const rows = page.locator('#peek-matrix-grid .pkm-grow');
+    await expect(page.locator('.pkm-grow[data-subject="gpio"]')).toHaveCount(1);
+    await expect(page.locator('.pkm-grow[data-subject="uart"]')).toHaveCount(1);
+    await expect(page.locator('#peek-matrix-grid th[data-kind]')).toHaveCount(6);
+    await expect(page.locator('.pkm-grow[data-subject="gpio"] .pkm-cell')).toHaveCount(6);
+
+    // 到達条件その2: 残りの多い部品が上に来る (次に着手する順に並ぶ)。
+    await expect(rows.first()).toHaveAttribute('data-subject', 'gpio');
+    await expect(rows.first()).toHaveAttribute('data-todo', '3');
+
+    // 到達条件その3: セルがその組の対応要否を言う。
+    await expect(page.locator('.pkm-grow[data-subject="gpio"] .pkm-cell[data-kind="component"]'))
+      .toHaveAttribute('data-state', 'mine-missing');
+    await expect(page.locator('.pkm-grow[data-subject="uart"] .pkm-cell[data-kind="state"]'))
+      .toHaveAttribute('data-state', 'mine-missing');
+    await expect(page.locator('#peek-matrix-summary')).toContainText('図種: 残り');
+    await expect(page.locator('#peek-matrix-next')).toContainText('GPIO');
+    await expect(page.locator('#peek-matrix-legend')).toContainText('自分に無し');
+
+    // 到達条件その4: 表のセルから先輩の 1 枚をそのまま開ける (部品を選び直さない)。
+    await page.locator('.pkm-grow[data-subject="uart"] .pkm-cell[data-kind="class"]').click();
+    await page.waitForTimeout(1200);
+    await expect(page.locator('#peek-title')).toContainText('uart_class');
+  });
+
+  test('部品名を押せば、その部品だけの 6 行に戻れる', async ({ page }) => {
+    await page.locator('#btn-tab-peek').click();
+    await page.waitForSelector('#peek-modal');
+    await page.waitForSelector('#peek-matrix .pkm-head');
+    await page.locator('#peek-subject').selectOption('*');
+    await page.waitForSelector('#peek-matrix-grid');
+    await page.locator('.pkm-grow[data-subject="gpio"] .pkm-gname').click();
+    await page.waitForTimeout(300);
+    await expect(page.locator('#peek-subject')).toHaveValue('gpio');
+    expect(await page.locator('#peek-matrix .pkm-row').count()).toBe(6);
+  });
 });
 
 // BLK-junior-20260914-1406: 手順 1 の「先輩の該当図を開いて見る」を、⇡継承元の登録で

@@ -116,3 +116,71 @@ describe('kindMatrix.scan — 題材 1 つぶんの 6 行', function() {
     expect(KM.openTarget(uc)).toBe('');
   });
 });
+
+// BLK-junior-20260914-1906-wish: 題材を 1 つずつ選び直すと、担当している部品の数だけ
+// 6 図種の確認を周回することになる。縦に部品・横に図種の 1 枚で「次はどの部品の
+// どの図種か」を出す。
+describe('部品 × 図種の表 (BLK-junior-20260914-1906-wish)', function() {
+  var all = KM.scanAll(MINE, THEIRS, 'primary');
+
+  test('担当している部品が全部行になる (選び直さない)', function() {
+    expect(all.rows.map(function(r) { return r.subject; }).sort()).toEqual(['gpio', 'spi']);
+    expect(all.kinds.length).toBe(6);
+  });
+
+  test('残りの多い部品が上に来る (次に着手する順)', function() {
+    expect(all.rows[0].subject).toBe('gpio');
+    expect(all.rows[0].todo).toBe(3);
+  });
+
+  test('セルの印は 1 つの部品を選んだときの状態と同じ', function() {
+    var gpio = all.rows[0];
+    var byKind = {};
+    gpio.rows.forEach(function(r) { byKind[r.kind] = r; });
+    expect(KM.cellMark(byKind.state)).toBe('👀');          // 未確認
+    expect(KM.cellMark(byKind.component)).toBe('△');       // 自分に無し
+    expect(KM.cellMark(byKind.sequence)).toBe('✓');        // 控え済み
+    expect(KM.cellMark(byKind.usecase)).toBe('·');         // 手本なし (未控え)
+  });
+
+  test('見出しが全部品ぶんの残り件数と、残っている部品の数を言う', function() {
+    var s = KM.summaryAll(all);
+    expect(s).toContain('2 部品 × 6 図種');
+    expect(s).toContain('残り ' + all.todo + ' 件 / ' + all.subjectsTodo + ' 部品');
+    expect(all.todo).toBe(all.rows.reduce(function(n, r) { return n + r.todo; }, 0));
+  });
+
+  test('次に見る 1 マスを表が名指しする (どこから着手するかを迷わない)', function() {
+    var next = KM.nextCell(all);
+    expect(next.subject).toBe('gpio');
+    // 要確認が無ければ未確認から。図種の並び順の先頭は sequence だが、
+    // gpio の sequence は控え済みなので state が先に来る。
+    expect(next.row.state).toBe('check');
+    expect(['state', 'class']).toContain(next.kind);
+  });
+
+  test('相手に図が増えていれば、その部品の行が要確認になる', function() {
+    var mine = MINE.concat([]);
+    var theirs = THEIRS.concat([doc('gpio_init_sequence', 'sequence')]);
+    var a2 = KM.scanAll(mine, theirs, 'primary');
+    var gpio = a2.rows.filter(function(r) { return r.subject === 'gpio'; })[0];
+    var seq = gpio.rows.filter(function(r) { return r.kind === 'sequence'; })[0];
+    expect(seq.state).toBe('recheck');
+    expect(KM.cellMark(seq)).toBe('👀!');
+    expect(KM.nextCell(a2).kind).toBe('sequence');
+  });
+
+  test('凡例が印の意味を全部言う (セルだけでは読めない)', function() {
+    var leg = KM.legend();
+    ['要確認', '未確認', '自分に無し', '控え済み', '手本なし'].forEach(function(w) {
+      expect(leg).toContain(w);
+    });
+  });
+
+  test('図が 1 枚も無ければ行も 0 (空の表を出さない)', function() {
+    var a = KM.scanAll([], [], 'primary');
+    expect(a.rows).toEqual([]);
+    expect(KM.summaryAll(a)).toBe('');
+    expect(KM.nextCell(a)).toBeNull();
+  });
+});

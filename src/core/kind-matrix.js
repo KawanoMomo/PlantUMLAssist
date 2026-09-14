@@ -185,6 +185,85 @@ window.MA.kindMatrix = (function() {
     return (row && row.theirs.length) ? row.theirs[0] : '';
   }
 
+  // ── 部品をまたいだ表 (BLK-junior-20260914-1906-wish) ──────────────────
+  // 題材を 1 つずつ選び直すと、担当している部品の数だけ 6 図種の確認を周回する
+  // ことになる (GPIO で 6 回、UART / CAN / TIMER でまた 6 回ずつ)。縦に部品・
+  // 横に図種の 1 枚にすれば、「次はどの部品のどの図種か」が選び直さずに読める。
+  // 中身は scan() をそのまま並べるだけ —— 判定を 2 か所に書かない。
+
+  // 表のセルは 1〜2 文字にする。言葉は行の title と凡例が持つ。
+  var CELL_MARKS = {
+    recheck: '👀!',
+    check: '👀',
+    noted: '✓',
+    'no-model': '·',
+    'mine-missing': '△',
+  };
+
+  function cellMark(row) {
+    return (row && CELL_MARKS[row.state]) || '';
+  }
+
+  function _addCounts(into, from) {
+    Object.keys(into).forEach(function(k) { into[k] += (from[k] || 0); });
+    return into;
+  }
+
+  // scanAll — 部品 × 図種の表。残りの多い部品を上に出す (次に着手する順)。
+  function scanAll(mine, theirs, dir) {
+    var subs = subjects(mine, theirs);
+    var rows = subs.map(function(sub) { return scan(sub, mine, theirs, dir); });
+    rows.sort(function(a, b) {
+      if (b.todo !== a.todo) return b.todo - a.todo;
+      return a.subject < b.subject ? -1 : (a.subject > b.subject ? 1 : 0);
+    });
+    var counts = { recheck: 0, check: 0, noted: 0, 'no-model': 0, 'mine-missing': 0 };
+    rows.forEach(function(r) { _addCounts(counts, r.counts); });
+    return {
+      dir: _s(dir),
+      kinds: order().map(function(k) { return { kind: k, label: kindLabel(k) }; }),
+      rows: rows,
+      counts: counts,
+      todo: rows.reduce(function(n, r) { return n + r.todo; }, 0),
+      subjectsTodo: rows.filter(function(r) { return r.todo > 0; }).length,
+    };
+  }
+
+  // 見出し。残り件数と、残っている部品の数を先に言う。
+  function summaryAll(all) {
+    if (!all || !all.rows.length) return '';
+    var c = all.counts;
+    var parts = [];
+    if (c.recheck) parts.push('要確認 ' + c.recheck);
+    if (c.check) parts.push('未確認 ' + c.check);
+    if (c['mine-missing']) parts.push('自分に無し ' + c['mine-missing']);
+    if (c.noted) parts.push('控え済み ' + c.noted);
+    if (c['no-model']) parts.push('手本なし ' + c['no-model']);
+    return all.rows.length + ' 部品 × ' + all.kinds.length + ' 図種: 残り ' + all.todo
+      + ' 件 / ' + all.subjectsTodo + ' 部品（' + parts.join('・') + '）';
+  }
+
+  // 次に着手する 1 マス。要確認 → 未確認 → 自分に無し の順に、表の上から探す。
+  function nextCell(all) {
+    var ORDER = ['recheck', 'check', 'mine-missing'];
+    for (var i = 0; i < ORDER.length; i++) {
+      for (var r = 0; r < ((all && all.rows) || []).length; r++) {
+        var sc = all.rows[r];
+        for (var k = 0; k < sc.rows.length; k++) {
+          if (sc.rows[k].state === ORDER[i]) {
+            return { subject: sc.subject, kind: sc.rows[k].kind, row: sc.rows[k] };
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  // 凡例。表のセルだけでは印の意味が読めない。
+  function legend() {
+    return ['👀! 要確認', '👀 未確認', '△ 自分に無し', '✓ 控え済み', '· 手本なし'].join(' / ');
+  }
+
   return {
     order: order,
     kindLabel: kindLabel,
@@ -194,6 +273,12 @@ window.MA.kindMatrix = (function() {
     summary: summary,
     rowTitle: rowTitle,
     openTarget: openTarget,
+    scanAll: scanAll,
+    summaryAll: summaryAll,
+    cellMark: cellMark,
+    nextCell: nextCell,
+    legend: legend,
     MARKS: MARKS,
+    CELL_MARKS: CELL_MARKS,
   };
 })();
