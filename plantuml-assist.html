@@ -2763,6 +2763,21 @@ table.vault-table button.vault-open:hover { border-color: var(--accent); }
 #dg-impact td.dg-via { color: var(--text-secondary); word-break: break-all; }
 #dg-impact tr.dg-doc[data-hop="0"] td.dg-hop { color: var(--accent); }
 #dg-impact tr.dg-doc[data-hop] td.dg-hop { white-space: nowrap; }
+/* 影響先へのまとめ note (BLK-primary-20260915-0007)。一覧のすぐ下に出す
+   (見た一覧と打つ先が同じ画面にないと、結局 1 枚ずつ開き直すことになる)。 */
+#dg-note-box { margin-top: 10px; border: 1px solid var(--accent); border-radius: 4px; padding: 8px 10px; }
+#dg-note-box .dg-note-head { display: flex; align-items: center; gap: 10px; font-size: 12px; margin-bottom: 6px; }
+#dg-note-box #dg-note-summary { color: var(--text-secondary); }
+#dg-note-box #dg-note-run { margin-left: auto; }
+#dg-note-box textarea {
+  width: 100%; box-sizing: border-box; font-family: var(--font-mono); font-size: 11px;
+  background: var(--bg-primary); color: var(--text-primary);
+  border: 1px solid var(--border); border-radius: 3px; padding: 4px 6px; resize: vertical;
+}
+#dg-note-box .dg-note-pick { font-size: 11px; color: var(--text-secondary); margin: 6px 0 2px 0; }
+#dg-note-targets { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11px; }
+#dg-note-targets label { display: flex; align-items: center; gap: 4px; font-family: var(--font-mono); cursor: pointer; }
+#dg-note-targets label.skip { color: var(--text-secondary); text-decoration: line-through; }
 .board-tools { margin-left: auto; display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
 .board-tools > * { flex: none; }   /* 文字が 1 文字ずつ縦に潰れないようにする */
 .board-tools label { display: flex; align-items: center; gap: 4px; color: var(--text-secondary); cursor: pointer; }
@@ -6631,6 +6646,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/component-starter.js"></script>
 <script src="src/core/usecase-source.js"></script>
 <script src="src/core/dep-graph.js"></script>
+<script src="src/core/bulk-note.js"></script>
 <script src="src/core/change-ticket.js"></script>
 <script src="src/core/fix-walk.js"></script>
 <script src="src/core/review-desk.js"></script>
@@ -6786,6 +6802,23 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <div id="dg-body">
       <div id="dg-canvas"></div>
       <div id="dg-impact"></div>
+      <!-- BLK-primary-20260915-0007: 影響先すべてに同じ note を 1 回で打つ。
+           「意図的な省略を note で明記する」対応は、影響が届く図の枚数だけ
+           同じ文言を打ち直す作業になっていた (1 図ずつ📂一覧から開き直す)。 -->
+      <div id="dg-note-box" hidden>
+        <div class="dg-note-head">
+          <strong>同じ note を影響先へまとめて打つ</strong>
+          <span id="dg-note-summary" role="status"></span>
+          <button type="button" id="dg-note-run" disabled>この note を打つ</button>
+          <button type="button" id="dg-note-cancel">やめる</button>
+        </div>
+        <textarea id="dg-note-text" rows="2"
+          placeholder="例: ClockCtrl の呼び先は意図的に省略 (reviewer依頼2への回答)"></textarea>
+        <div class="dg-note-pick">
+          <label><input type="checkbox" id="dg-note-all" checked> 影響先すべて</label>
+        </div>
+        <div id="dg-note-targets"></div>
+      </div>
     </div>
   </div>
 </div>

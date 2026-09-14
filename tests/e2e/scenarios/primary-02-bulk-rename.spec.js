@@ -370,3 +370,60 @@ test('手順2 下端の統一バッジが、置換の残りを開かずに言う
   await expect(page.locator('#rename-to')).toHaveValue('Spi_Driver');
   await expect(page.locator('#btn-rename-apply')).toBeEnabled();
 });
+
+// BLK-primary-20260915-0007: 「意図的な省略を note で明記する」対応は、依存グラフが
+// 挙げた影響先の枚数だけ同じ文言を打ち直す作業になっていた (1 図ずつ📂一覧から開き、
+// DSL 欄の末尾にカーソルを合わせて同じ 1 行をタイプする)。文面は 1 つなのに手数が
+// 枚数に比例する。一覧のすぐ下で 1 度打ち、影響先すべてへ 1 回で書き込む。
+test('手順4 依存グラフの影響先すべてに、同じ note を 1 回で打てる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  for (const n of S.PRIMARY_DOCS) await S.putDoc(page, DIR, n, S.docFor(n, 'SpiDrv'));
+  await page.reload();
+  await page.waitForSelector('#preview-svg');
+
+  await S.runCommand(page, '一括置換');
+  await page.locator('#rename-from').fill('SpiDrv');
+  await page.waitForTimeout(900);
+  await page.locator('#btn-rename-depgraph').click();
+  await page.waitForSelector('#dg-modal', { state: 'visible' });
+  await page.waitForTimeout(600);
+
+  const rows = page.locator('#dg-impact tr.dg-doc');
+  const total = await rows.count();
+  expect(total).toBeGreaterThan(1);
+  const docs = await rows.evaluateAll((els) => els.map((e) => e.getAttribute('data-doc')));
+
+  // 到達条件その1: 一覧のすぐ下で文面を 1 度打つと、影響先すべてが既定で打つ先になる。
+  await page.locator('#dg-note').click();
+  const box = page.locator('#dg-note-box');
+  await expect(box).toBeVisible();
+  await expect(page.locator('#dg-note-targets label')).toHaveCount(total);
+  await expect(page.locator('#dg-note-all')).toBeChecked();
+
+  const NOTE = 'ClockCtrl の呼び先は意図的に省略 (reviewer依頼2への回答)';
+  await page.locator('#dg-note-text').fill(NOTE);
+  const summary = page.locator('#dg-note-summary');
+  await expect(summary).toHaveAttribute('data-add', String(total));
+  await expect(page.locator('#dg-note-run')).toBeEnabled();
+
+  // 到達条件その2: 1 回押すだけで、影響先の図すべてに同じ note が入る
+  // (開いていない図は開かずに保存フォルダへ書き戻る)。
+  await page.locator('#dg-note-run').click();
+  await expect(summary).toHaveAttribute('data-applied', String(total), { timeout: 15000 });
+  await page.waitForTimeout(800);
+  for (const d of docs) {
+    const dsl = await S.readDoc(page, DIR, d);
+    expect(dsl).toContain(NOTE);
+    // note は @enduml の直前に入る (図が壊れない)。
+    expect(dsl.trim().endsWith('@enduml')).toBe(true);
+  }
+
+  // 到達条件その3: 同じ文面をもう一度打っても二重にならない (既にあり、と出る)。
+  await page.locator('#dg-note-text').fill(NOTE);
+  await page.waitForTimeout(400);
+  await expect(summary).toHaveAttribute('data-add', '0');
+  await expect(page.locator('#dg-note-run')).toBeDisabled();
+  const again = await S.readDoc(page, DIR, docs[0]);
+  expect(again.split(NOTE).length - 1).toBe(1);
+});
