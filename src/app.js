@@ -601,7 +601,7 @@ function init() {
       var type = t && t.getAttribute && t.getAttribute('data-type');
       var id = type ? t.getAttribute('data-id') : null;
       if (!type || id == null) { _clearHoverPeers(); return; }
-      var key = type + ' ' + id;
+      var key = type + '\u0000' + id;
       if (key === _hoverPeerKey) return;
       _clearHoverPeers();
       _hoverPeerKey = key;
@@ -13786,7 +13786,13 @@ function setupBulkRename() {
   var applyBtn = document.getElementById('btn-rename-apply');
   var summary = document.getElementById('rename-summary');
 
-  function closePanel() { panel.classList.remove('open'); }
+  // 閉じるときも組を覚える。欄から離れずに Esc・[閉じる] で終える打ち方
+  // (ヒット 0 件で [適用] が押せないときの普通の終わり方) だと blur が来ず、
+  // 打った組がどこにも残らないままになる (BLK-primary-20260914-1306-friction)。
+  function closePanel() {
+    panel.classList.remove('open');
+    rememberRenamePair(fromEl && fromEl.value, toEl && toEl.value, _renameGrandTotal());
+  }
 
   function fillCandidates() {
     var dl = document.getElementById('rename-candidates');
