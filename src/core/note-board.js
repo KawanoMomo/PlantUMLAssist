@@ -1,0 +1,303 @@
+'use strict';
+window.MA = window.MA || {};
+
+// note-board — 指摘.md を 📂一覧の側から読み、保存フォルダの図 1 枚ずつに
+// 「対象外 / ⚠未確認 / ✅対応済み」を付ける。
+//
+// BLK-junior-20260914-1206-wish: 指摘.md は自由文で、「対象図種・部品・対応要否」が
+// 構造化されていない。junior は図を 1 枚開くたびに、自分のフォルダと先輩のフォルダの
+// 両方を開いて突き合わせ、「この図は対応不要」を自分で判定していた。指摘の無い図でも
+// 同じ往復をするので、判定の手間は図の枚数ぶん増える (指摘の件数ではなく)。
+// 8 周目は 5 図種のうち 4 図種が「指摘なし」で、その 4 回ぶんが丸ごと無駄だった。
+//
+// 判定は開く前に、一覧の上で出す。
+//   対象外   指摘.md のどの件もこの図を指していない  → 開かずに次へ進める
+//   ⚠未確認 指している件があり、反映を確かめていない → 開いて直す
+//   ✅対応済み 指している件が、本文を見るかぎり反映済み → 開かずに次へ進める
+//
+// 「指している」は 3 通り。名前が本文に綴られている (review-note の docs)、
+// 指摘文が版を名指ししていて findingVariant がその 1 枚を選んだ、
+// 図名は無いが図種が名指しされている (その図種の図を全部指したものとして扱う)。
+// 図名も図種も書かれていない件はどの図にも割り当てない。割り当てると全図が
+// ⚠ になり、対象外という答えが 1 つも出せなくなる。代わりに件数を summaryText で
+// 言う (「宛先の書かれていない指摘が残っている」と読めれば、junior はそこだけ読む)。
+//
+// ✅ は本文に証拠があるときだけ出す。「対応済みらしい」で ✅ を出すと、直していない
+// 図を開かずに飛ばしてしまう — 対象外と違い、間違えたときに指摘が落ちる側の誤り。
+// 証拠は 2 つ: 指摘が綴りの言い換え (`Gpio` を `Gpio_Driver` に統一) を書いていて
+// 古い綴りが本文に残っていない、または domain-verdict の注記が本文にある。
+// それ以外は判定できないので ⚠未確認 のまま (開いて確かめる)。
+//
+// DOM にも fetch にも触らない。本文の取り寄せと描画は app.js の職掌。
+window.MA.noteBoard = (function() {
+
+  var BADGE = {
+    off: {
+      key: 'off', mark: '対象外',
+      title: '指摘.md にこの図の名前も図種も挙がっていません（開かずに次へ進めます）',
+    },
+    todo: {
+      key: 'todo', mark: '⚠未確認',
+      title: 'この図あての指摘があります（反映されているかはまだ確かめていません）',
+    },
+    done: {
+      key: 'done', mark: '✅対応済み',
+      title: 'この図あての指摘は、本文を見るかぎり反映済みです',
+    },
+  };
+
+  function _s(v) { return v == null ? '' : String(v); }
+
+  function _fv() { return window.MA.findingVariant; }
+  function _fa() { return window.MA.findingActions; }
+  function _rn() { return window.MA.reviewNote; }
+
+  // 一覧のファイル名 → 突き合わせ用の鍵。フォルダ名も拡張子も落として小文字にする
+  // (一覧は `GPIOドライバ初期化シーケンス`、指摘の索引は `junior/…​.puml` から
+  // 切り出した名前で、同じ図が違う綴りで来る)。
+  function keyOf(name) {
+    var RN = _rn();
+    var s = _s(name).split('\\').join('/');
+    s = s.slice(s.lastIndexOf('/') + 1);
+    if (RN) s = RN.baseName(s);
+    else s = s.replace(/\.(puml|plantuml|uml|txt)$/i, '');
+    return s.trim().toLowerCase();
+  }
+
+  function _rowText(row) {
+    if (!row) return '';
+    if (_s(row.text)) return _s(row.text);
+    return _s(row.title) + '\n' + (Array.isArray(row.body) ? row.body.join('\n') : _s(row.body));
+  }
+
+  // 語として含まれているか。前後が英数字・アンダースコアなら別の語の一部。
+  function _hasWord(body, word) {
+    var w = _s(word);
+    if (!w) return false;
+    var esc = w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp('(^|[^A-Za-z0-9_])' + esc + '([^A-Za-z0-9_]|$)').test(_s(body));
+  }
+
+  function _head(row) {
+    return _s(row && (row.heading || row.title)) || ('指摘 ' + _s(row && row.index));
+  }
+
+  // ── どの図を指しているか ────────────────────────────────────────────────
+  // scan({rows, targets, names, kindOf})
+  //   rows    reviewNote.rows の戻り
+  //   targets { 指摘 id: findingVariant.choose の戻り } (無くてもよい)
+  //   names   一覧にあるファイル名
+  //   kindOf  name → 図種 (無ければ図種による割り当てをしない)
+  // 戻り: { byName: {name: [hit…]}, unaddressed: [row…], names: [name…] }
+  //   hit = { id, head, why: 'name'|'variant'|'kind', row }
+  function scan(opts) {
+    var o = opts || {};
+    var FV = _fv();
+    var rows = Array.isArray(o.rows) ? o.rows : [];
+    var names = Array.isArray(o.names) ? o.names : [];
+    var targets = o.targets || {};
+    var kindOf = (typeof o.kindOf === 'function') ? o.kindOf : function() { return ''; };
+
+    var byKey = {};   // 鍵 → 一覧のファイル名 (複数あれば先に出たものを採る)
+    names.forEach(function(n) {
+      var k = keyOf(n);
+      if (k && !byKey[k]) byKey[k] = n;
+    });
+
+    var byName = {};
+    var unaddressed = [];
+
+    function hit(name, row, why) {
+      if (!name) return false;
+      if (!byName[name]) byName[name] = [];
+      for (var i = 0; i < byName[name].length; i++) {
+        if (byName[name][i].id === row.id) return true;
+      }
+      byName[name].push({ id: row.id, head: _head(row), why: why, row: row });
+      return true;
+    }
+
+    rows.forEach(function(row) {
+      var got = false;
+      // 1. 本文に綴られている図名。
+      (row.docs || []).forEach(function(d) {
+        var name = byKey[keyOf(d && d.name)];
+        if (name) got = hit(name, row, 'name') || got;
+      });
+      // 2. 指摘文が名指しした版。本文にその綴りが無くても選ばれている。
+      var pick = targets[row.id];
+      if (pick && pick.name) {
+        var pn = byKey[keyOf(pick.name)];
+        if (pn) got = hit(pn, row, 'variant') || got;
+      }
+      if (got) return;
+      // 3. 図名は無いが図種が名指しされている。その図種の図を全部指す。
+      var kind = FV ? FV.wantedKind(_rowText(row)) : '';
+      if (kind) {
+        names.forEach(function(n) {
+          if (_s(kindOf(n)) === kind) got = hit(n, row, 'kind') || got;
+        });
+      }
+      if (!got) unaddressed.push(row);
+    });
+
+    var hitNames = [];
+    names.forEach(function(n) { if (byName[n]) hitNames.push(n); });
+
+    return { byName: byName, unaddressed: unaddressed, names: hitNames };
+  }
+
+  function hitsOf(board, name) {
+    return (board && board.byName && board.byName[name]) || [];
+  }
+
+  // 「junior 側 `Gpio` / primary 側 `Gpio_Driver`」。reviewer が食い違いを書くときの形で、
+  // 直す向き (自分の綴りを相手の綴りへ) がそのまま書かれている。
+  // 「〜を〜に統一」と違い動詞が無いので finding-actions の renamePair では取れないが、
+  // どちらが自分の綴りかはフォルダ名で決まるので、反映されたかは機械で言える。
+  var SIDE_RE = /([A-Za-z0-9_぀-ヿ一-鿿]+)\s*側[^\n`]{0,8}`([A-Za-z_][\w]*)`/g;
+
+  function sidePairs(text) {
+    var out = [];
+    var s = _s(text);
+    SIDE_RE.lastIndex = 0;
+    var m;
+    while ((m = SIDE_RE.exec(s))) {
+      out.push({ side: m[1], name: m[2] });
+    }
+    return out;
+  }
+
+  // 自分のフォルダの綴り → 相手のフォルダの綴り、の組。どちらも書かれていなければ null。
+  function sideRename(text, mineFolder) {
+    var mine = _s(mineFolder).toLowerCase();
+    if (!mine) return null;
+    var pairs = sidePairs(text);
+    var from = '', to = '';
+    pairs.forEach(function(p) {
+      if (_s(p.side).toLowerCase() === mine) { if (!from) from = p.name; }
+      else if (!to) to = p.name;
+    });
+    if (!from || !to || from === to) return null;
+    return { from: from, to: to };
+  }
+
+  // ── 反映されているか ────────────────────────────────────────────────────
+  // verdictOf(row, dsl, opts) — 本文に残る証拠だけで決める。判定できなければ done:false。
+  // opts.mineFolder があれば「自分側 / 相手側」で書かれた食い違いも読む。
+  function verdictOf(row, dsl, opts) {
+    var FA = _fa();
+    var RN = _rn();
+    var text = _rowText(row);
+    var body = _s(dsl);
+    if (!body) return { done: false, why: '本文をまだ読んでいません' };
+
+    var pair = FA ? FA.renamePair(text) : null;
+    if (!pair) pair = sideRename(text, (opts || {}).mineFolder);
+    if (pair && pair.from && pair.to) {
+      // 語の切れ目で見る。`Gpio` を `Gpio_Driver` に統一した図には `Gpio_Driver` が
+      // 並ぶので、素の indexOf では直した図が永遠に「まだ残っています」になる。
+      if (_hasWord(body, pair.from)) {
+        return { done: false, why: '「' + pair.from + '」がまだ残っています' };
+      }
+      // 消えただけでは足りない。直した綴りが入っていて初めて「揃えた」と言える
+      // (部品ごと消しても古い綴りは消える)。
+      if (_hasWord(body, pair.to)) {
+        return { done: true, why: '「' + pair.to + '」に揃っています' };
+      }
+      return { done: false, why: 'どちらの綴りも見当たりません（開いて確かめてください）' };
+    }
+
+    var notes = RN ? RN.verdictNotes(body) : [];
+    if (notes.length) return { done: true, why: notes.join('、') };
+
+    return { done: false, why: '本文からは判定できません（開いて確かめてください）' };
+  }
+
+  // 図 1 枚の状態。dsl が無いうちは ⚠未確認 のまま (「読めていない」を ✅ にしない)。
+  function statusOf(opts) {
+    var o = opts || {};
+    var hits = Array.isArray(o.hits) ? o.hits : [];
+    if (!hits.length) {
+      return { key: 'off', mark: BADGE.off.mark, title: BADGE.off.title, hits: [], reasons: [] };
+    }
+    var reasons = [];
+    var allDone = true;
+    hits.forEach(function(h) {
+      var v = verdictOf(h.row, o.dsl, { mineFolder: o.mineFolder });
+      if (!v.done) allDone = false;
+      reasons.push(h.head + ': ' + v.why);
+    });
+    var b = allDone ? BADGE.done : BADGE.todo;
+    return {
+      key: b.key, mark: b.mark,
+      title: b.title + ' — ' + reasons.join(' / '),
+      hits: hits, reasons: reasons,
+    };
+  }
+
+  // statusMap({board, names, dslByName}) → { name: statusOf の戻り }
+  function statusMap(opts) {
+    var o = opts || {};
+    var board = o.board || { byName: {} };
+    var names = Array.isArray(o.names) ? o.names : Object.keys(board.byName || {});
+    var dsl = o.dslByName || {};
+    var out = {};
+    names.forEach(function(n) {
+      out[n] = statusOf({ hits: hitsOf(board, n), dsl: dsl[n], mineFolder: o.mineFolder });
+    });
+    return out;
+  }
+
+  // 本文を取り寄せる価値のある図だけ。対象外の図は読まない
+  // (「開かなくてよい」と言うために全部読むのでは、往復が画面の中に移るだけ)。
+  function pendingNames(board) {
+    return (board && board.names) ? board.names.slice() : [];
+  }
+
+  function badge(key) {
+    return BADGE[_s(key)] || null;
+  }
+
+  // 一覧の見出し 1 行。今日開かなくてよい枚数を先に言う。
+  function summaryText(opts) {
+    var o = opts || {};
+    var board = o.board;
+    if (!board) return '指摘.md を読み込んでいます…';
+    var names = Array.isArray(o.names) ? o.names : [];
+    if (!o.hasNote) return '指摘.md がありません（この保存先の隣に置かれていません）';
+    var map = o.statusByName || {};
+    var off = 0, todo = 0, done = 0;
+    names.forEach(function(n) {
+      var k = (map[n] && map[n].key) || 'off';
+      if (k === 'todo') todo++;
+      else if (k === 'done') done++;
+      else off++;
+    });
+    var s = '指摘.md: ' + names.length + ' 枚のうち ⚠未確認 ' + todo + ' 枚 / ✅対応済み '
+      + done + ' 枚 / 対象外 ' + off + ' 枚（対象外は開かずに次へ進めます）';
+    var un = (board.unaddressed || []).length;
+    if (un) {
+      s += ' — 図名も図種も書かれていない指摘 ' + un + ' 件は、どの図にも割り当てていません';
+    }
+    return s;
+  }
+
+  var api = {
+    BADGE: BADGE,
+    keyOf: keyOf,
+    scan: scan,
+    hitsOf: hitsOf,
+    sidePairs: sidePairs,
+    sideRename: sideRename,
+    verdictOf: verdictOf,
+    statusOf: statusOf,
+    statusMap: statusMap,
+    pendingNames: pendingNames,
+    badge: badge,
+    summaryText: summaryText,
+  };
+
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  return api;
+})();
