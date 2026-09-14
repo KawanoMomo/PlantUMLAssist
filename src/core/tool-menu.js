@@ -58,7 +58,9 @@ window.MA.toolMenu = (function() {
   ];
 
   // タブ列に残すもの。図そのものの出し入れ (＋ / 📂 一覧) はツールではないので畳まない。
-  var KEEP_IN_TAB_BAR = ['btn-tab-new', 'btn-tab-folder'];
+  // ⇔ 先輩の図 (BLK-junior-20260914-1406-wish) も畳まない。開いて終わる道具ではなく
+  // 画面の枠の出し入れで、畳むと「据え置き」の値打ち (深い経路を通らない) が消える。
+  var KEEP_IN_TAB_BAR = ['btn-tab-new', 'btn-tab-folder', 'btn-tab-senior'];
 
   var NOTE = 'Ctrl+K でも同じ操作が引ける';
 

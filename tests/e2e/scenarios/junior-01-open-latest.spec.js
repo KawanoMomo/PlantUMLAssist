@@ -1,4 +1,4 @@
-// @ts-check
+﻿// @ts-check
 // junior 台本 手順 1「persona-data\junior の自分の GPIO 図(前周までの最新版)を開く」。
 //
 // BLK-junior-20260908-2003-wish: 資料化の周は「前周に作った状態遷移図を開く」から
@@ -1367,5 +1367,144 @@ test.describe('junior 手順 1: 宛先の書かれていない指摘を GUI の�
     await mine.locator('.folder-unaddr-head').click();
     await page.waitForTimeout(500);
     await expect(page.locator('#folder-unaddr-body')).toContainText('IRQCtrl');
+  });
+});
+
+
+// BLK-junior-20260914-1406-wish: 手順1 は「先輩の該当図を開いて詳細を見る」から始まり、
+// 手順2 の「自分の図に反映」との往復になる。👀 他フォルダはモーダルなので自分の図を
+// 書く間は閉じることになり、保存先設定を行き来して開き直していた。
+// ⇔ 先輩の図 は据え置きの 2 枠目で、図を切り替えると相手も自動で入れ替わる。
+const SENIOR_DIR = DIR + '-senior';
+const SENIOR_BASE = SENIOR_DIR.slice(SENIOR_DIR.lastIndexOf('/') + 1).toLowerCase();
+
+// 自分の図を開く。復元で同名のタブが既にあるならそれへ切り替える
+// (rename にすると名前が `-2` に逃げ、同名判定の話にならない)。
+async function openMine(page, name) {
+  await page.evaluate((n) => {
+    const ws = window.MA.workspace;
+    const base = (s) => String(s || '').replace(/\.(puml|plantuml)$/i, '');
+    const hit = ws.list().filter((d) => base(d.name) === n)[0];
+    if (hit) switchToDoc(hit.id); else ws.rename(ws.getActiveId(), n);
+    renderTabs();
+  }, name);
+  await page.waitForTimeout(300);
+}
+
+async function clearSenior(page) {
+  await page.evaluate(async (d) => {
+    await fetch('/autosave?dir=' + encodeURIComponent(d), { method: 'DELETE' });
+  }, SENIOR_DIR);
+  await page.waitForTimeout(200);
+}
+
+async function putIn(page, dir, name) {
+  await page.evaluate(async (a) => {
+    await fetch('/autosave', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: a.name, dir: a.dir, dsl: a.dsl }),
+    });
+  }, { name, dsl: DSL, dir });
+}
+
+test.describe('junior 手順 1〜2: 先輩の図を横に置いたまま自分の図を直す', () => {
+  test.beforeEach(async ({ page }) => {
+    await bootWithDir(page);
+    await clearDir(page);
+    await clearSenior(page);
+    // 自分と先輩に、フォルダ違いの同名図を 1 枚ずつ置く。継承元が「自分自身」と
+    // みなして使えなかったのがこの形。前の test の置き土産が残っていると
+    // 同じ名前が `-2` に逃げて同名判定が消えるので、先に空にする。
+    // 自分側はタブの名前だけで足りる。同じ名前のファイルを自分の保存先にも
+    // 置くと、タブの名前が `-2` に逃げて「フォルダ違いの同名」の話にならない。
+    await putIn(page, SENIOR_DIR, 'gpio_init_sequence');
+    await putIn(page, SENIOR_DIR, 'gpio_state');
+    await page.waitForTimeout(400);
+  });
+
+  test.afterEach(async ({ page }) => {
+    await clearDir(page).catch(() => {});
+    await clearSenior(page).catch(() => {});
+  });
+
+  async function openSenior(page) {
+    // 入口はタブ列に出ている。ツールの折りたたみを開かずに 1 クリックで届く。
+    await page.locator('#btn-tab-senior').click();
+    await page.waitForSelector('#senior-pane:not([hidden])');
+    // 並びに出るのは server が返す実パスなので、末尾で見つけて選ぶ。
+    // フォルダの一覧は開いたあとに取りに行くので、並ぶまで待つ。
+    await page.waitForFunction((base) => {
+      const sel = document.getElementById('senior-dir');
+      return !!sel && Array.prototype.slice.call(sel.options).some(function(o) {
+        return o.value.toLowerCase().split(String.fromCharCode(92)).join('/').indexOf(base) >= 0;
+      });
+    }, SENIOR_BASE);
+    const value = await seniorOptionValue(page);
+    await page.selectOption('#senior-dir', value);
+    await page.waitForTimeout(800);
+    return value;
+  }
+
+  async function seniorOptionValue(page) {
+    return page.evaluate((base) => {
+      const sel = document.getElementById('senior-dir');
+      const hit = Array.prototype.slice.call(sel.options).filter(function(o) {
+        var v = o.value.toLowerCase().split(String.fromCharCode(92)).join('/');
+        return v.indexOf(base) >= 0;
+      })[0];
+      return hit ? hit.value : '';
+    }, SENIOR_BASE);
+  }
+
+  test('先輩のフォルダを選ぶと、いま開いている図の相手が横に出たままになる', async ({ page }) => {
+    await openMine(page, 'gpio_init_sequence');
+    await openSenior(page);
+
+    // 同名でもフォルダが違えば自分自身ではない (継承元が使えなかった所)。
+    await expect(page.locator('#senior-notice')).toContainText('gpio_init_sequence');
+    await expect(page.locator('#senior-notice')).toContainText('読むだけ');
+    // 自分の図は左でそのまま編集できる (モーダルで覆わない)。
+    await expect(page.locator('#editor')).toBeVisible();
+    await expect(page.locator('#senior-dsl')).not.toHaveText('');
+  });
+
+  test('自分の図を切り替えると、先輩側も同じ図に入れ替わる (保存先は動かさない)', async ({ page }) => {
+    await openMine(page, 'gpio_init_sequence');
+    await openSenior(page);
+
+    const before = await page.locator('#senior-notice').textContent();
+    expect(before).toContain('gpio_init_sequence');
+
+    await openMine(page, 'gpio_state');
+    await page.waitForTimeout(800);
+    await expect(page.locator('#senior-notice')).toContainText('gpio_state');
+
+    // 保存先は先輩を見ている間も自分のまま (ここが切り替わると手順3 が壊れる)。
+    const dir = await page.evaluate(() => window.MA.autoSave.getConfig().fileDir);
+    expect(dir).toBe(DIR);
+  });
+
+  test('相手のいない図では、先頭の 1 枚を黙って出さずに「無い」と言う', async ({ page }) => {
+    await openMine(page, 'adc_state');
+    await openSenior(page);
+    await expect(page.locator('#senior-notice')).toContainText('当たる先輩の図はありません');
+    await expect(page.locator('#senior-dsl')).toHaveText('');
+  });
+
+  test('開いたままにした枠とフォルダは次に開いたときも残る', async ({ page }) => {
+    await openMine(page, 'gpio_init_sequence');
+    await openSenior(page);
+
+    const chosen = await seniorOptionValue(page);
+    await page.locator('#senior-close').click();
+    await expect(page.locator('#senior-pane')).toHaveAttribute('hidden', '');
+
+    // 開き直しても、フォルダを選ぶところからやり直さない。
+    await page.locator('#btn-tab-senior').click();
+    await page.waitForSelector('#senior-pane:not([hidden])');
+    await page.waitForTimeout(800);
+    await expect(page.locator('#senior-dir')).toHaveValue(chosen);
+    await expect(page.locator('#senior-notice')).toContainText('gpio_init_sequence');
   });
 });

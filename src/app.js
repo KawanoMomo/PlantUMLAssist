@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 
 var modules = {};
 function _registerModules() {
@@ -2658,6 +2658,7 @@ function init() {
   setupVersionTimeline();
   setupLineage();
   setupPeekFolder();
+  setupSeniorPane();
   setupPinPanel();
   setupPinInbox();
   setupManualFindings();
@@ -3583,6 +3584,7 @@ function renderTabs() {
   updateTopFileName();
   syncDraftButton();
   syncDriverMapBadge();
+  syncSeniorPane();
   var tabs = bar.querySelectorAll('.tab');
   for (var i = 0; i < tabs.length; i++) bar.removeChild(tabs[i]);
   var firstTool = bar.querySelector('.tab-tool');
@@ -7912,6 +7914,222 @@ function openPeekFolder() {
       renderPeekDirs();
       return false;
     });
+}
+
+// ── 先輩の図の枠 (BLK-junior-20260914-1406-wish) ────────────────────────────
+// 先輩の変更を自分の図へ取り込む手順は、先輩を見る ↔ 自分を直す の往復になる。
+// 👀 他フォルダはモーダルなので、自分の図を書く間は閉じることになり、
+// 開くまでにツールの折りたたみを通って 5 クリックかかっていた。ここは
+// 先輩のフォルダを 1 回選べば、右の枠に読み専用で据え置く。図を切り替えると
+// その図に当たる先輩の図へ自動で入れ替わる (保存先は動かさない)。
+// どれを相手にするかの判断は senior-pane が持ち、ここは通信と画面だけ。
+var _seniorNames = [];   // 先輩フォルダのファイル名一覧
+var _seniorName = '';    // いま右に出している先輩の図
+var _seniorPick = null;  // 直近の相手選び (候補の表示に使う)
+
+function _seniorEls() {
+  return {
+    pane: document.getElementById('senior-pane'),
+    dir: document.getElementById('senior-dir'),
+    notice: document.getElementById('senior-notice'),
+    cands: document.getElementById('senior-candidates'),
+    svg: document.getElementById('senior-svg'),
+    dsl: document.getElementById('senior-dsl'),
+    btn: document.getElementById('btn-tab-senior'),
+  };
+}
+
+function _seniorState() {
+  var SP = window.MA.seniorPane;
+  return SP ? SP.load() : { open: false, dir: '', name: '' };
+}
+
+function _seniorSave(over) {
+  var SP = window.MA.seniorPane;
+  if (!SP) return null;
+  var cur = SP.load();
+  return SP.save({
+    open: over && over.open !== undefined ? over.open : cur.open,
+    dir: over && over.dir !== undefined ? over.dir : cur.dir,
+    name: over && over.name !== undefined ? over.name : cur.name,
+  });
+}
+
+// 選べるフォルダ = 覗ける行き先のうち、自分の保存先でないもの。
+function renderSeniorDirs() {
+  var el = _seniorEls();
+  var PF = window.MA.peekFolder;
+  if (!el.dir || !PF) return;
+  var st = _seniorState();
+  var others = PF.others(_peekDirs);
+  el.dir.innerHTML = '';
+  if (!others.length) {
+    var none = document.createElement('option');
+    none.value = '';
+    none.textContent = '隣に読めるフォルダがありません';
+    el.dir.appendChild(none);
+    return;
+  }
+  if (!st.dir) {
+    var ph = document.createElement('option');
+    ph.value = '';
+    ph.textContent = '先輩のフォルダを選ぶ…';
+    el.dir.appendChild(ph);
+  }
+  others.forEach(function(d) {
+    var o = document.createElement('option');
+    o.value = d.path;
+    o.textContent = PF.label ? PF.label(d) : d.name;
+    if (PF.samePath(d.path, st.dir)) o.selected = true;
+    el.dir.appendChild(o);
+  });
+}
+
+function _seniorLabel() {
+  var PF = window.MA.peekFolder;
+  var st = _seniorState();
+  if (!PF || !st.dir) return '先輩';
+  for (var i = 0; i < _peekDirs.length; i++) {
+    if (PF.samePath(_peekDirs[i].path, st.dir)) return _peekDirs[i].name;
+  }
+  return PF.baseName(st.dir);
+}
+
+function renderSeniorCandidates() {
+  var el = _seniorEls();
+  if (!el.cands) return;
+  el.cands.innerHTML = '';
+  var list = (_seniorPick && _seniorPick.candidates) || [];
+  // 1 枚に決まっているときは並べない (押す物が増えるだけになる)。
+  if (list.length < 2) return;
+  list.forEach(function(name) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'senior-cand' + (name === _seniorName ? ' selected' : '');
+    b.textContent = window.MA.seniorPane.baseOf(name);
+    b.addEventListener('click', function() { showSeniorFile(name); });
+    el.cands.appendChild(b);
+  });
+}
+
+// 右の枠に 1 枚出す。読むだけなので workspace には入れない。
+function showSeniorFile(name) {
+  var el = _seniorEls();
+  var WS = window.MA.workspace;
+  var st = _seniorState();
+  if (!WS || !el.dsl || !st.dir) return Promise.resolve(false);
+  _seniorName = name;
+  _seniorSave({ name: name });
+  renderSeniorCandidates();
+  el.dsl.textContent = '読み込み中…';
+  if (el.svg) el.svg.textContent = '';
+  return WS.loadFile(name, st.dir).then(function(text) {
+    if (name !== _seniorName) return false;
+    if (typeof text !== 'string') {
+      el.dsl.textContent = '読めませんでした';
+      return false;
+    }
+    el.dsl.textContent = text;
+    return renderDslToSvg(text).then(function(svg) {
+      if (name !== _seniorName || !el.svg) return false;
+      el.svg.innerHTML = svg;
+      return true;
+    }).catch(function() {
+      if (el.svg) el.svg.textContent = '図の描画に失敗しました (本文は下に出ています)';
+      return false;
+    });
+  }).catch(function() {
+    el.dsl.textContent = '読めませんでした';
+    return false;
+  });
+}
+
+// いま開いている図に当たる先輩の図へ入れ替える。図を切り替えるたびに呼ぶ。
+function syncSeniorCounterpart() {
+  var el = _seniorEls();
+  var SP = window.MA.seniorPane;
+  var WS = window.MA.workspace;
+  var st = _seniorState();
+  if (!el.pane || el.pane.hidden || !SP || !WS) return;
+  var active = WS.getActive();
+  var pick = SP.pickCounterpart(
+    { name: active ? active.name : '', dir: _wsFileDir() }, _seniorNames, st.dir);
+  _seniorPick = pick;
+  if (el.notice) el.notice.textContent = SP.noticeText(pick, _seniorLabel());
+  renderSeniorCandidates();
+  if (!pick.name) {
+    _seniorName = '';
+    if (el.dsl) el.dsl.textContent = '';
+    if (el.svg) el.svg.textContent = '';
+    return;
+  }
+  if (pick.name !== _seniorName) showSeniorFile(pick.name);
+}
+
+function selectSeniorDir(dir) {
+  var el = _seniorEls();
+  var WS = window.MA.workspace;
+  _seniorSave({ dir: dir });
+  _seniorNames = [];
+  _seniorName = '';
+  // 自動で選んだときも、選ばれている物が枠の上に出ていないと
+  // 「まだ選んでいない」と読める。決まった時点で並びを描き直す。
+  renderSeniorDirs();
+  if (!dir || !WS) { syncSeniorCounterpart(); return Promise.resolve(false); }
+  if (el.notice) el.notice.textContent = '読み込み中…';
+  return WS.listFolder(dir).then(function(info) {
+    var entries = ((info && info.entries) || []).filter(function(e) { return e && e.name; });
+    _seniorNames = entries.map(function(e) { return e.name; });
+    syncSeniorCounterpart();
+    return true;
+  }).catch(function() {
+    if (el.notice) el.notice.textContent = '先輩のフォルダを読めませんでした';
+    return false;
+  });
+}
+
+function toggleSeniorPane(open) {
+  var el = _seniorEls();
+  if (!el.pane) return Promise.resolve(false);
+  el.pane.hidden = !open;
+  if (el.btn) {
+    el.btn.setAttribute('aria-pressed', open ? 'true' : 'false');
+    el.btn.className = 'tab-tool' + (open ? ' on' : '');
+  }
+  _seniorSave({ open: !!open });
+  if (!open) return Promise.resolve(true);
+  return _ensurePeekDirs().then(function() {
+    renderSeniorDirs();
+    var st = _seniorState();
+    var PF = window.MA.peekFolder;
+    // 隣が 1 つだけなら選ばせない (この枠の値打ちは「切り替えずに済む」ことなので、
+    // 開いた直後に選択を 1 つ挟むと元の往復に戻る)。
+    if (!st.dir && PF) {
+      var others = PF.others(_peekDirs);
+      if (others.length === 1) return selectSeniorDir(others[0].path);
+    }
+    if (st.dir && !_seniorNames.length) return selectSeniorDir(st.dir);
+    syncSeniorCounterpart();
+    return true;
+  });
+}
+
+// 図を切り替えたとき、開いていれば相手も入れ替える (renderTabs から)。
+function syncSeniorPane() {
+  var el = _seniorEls();
+  if (!el.pane || el.pane.hidden) return;
+  syncSeniorCounterpart();
+}
+
+function setupSeniorPane() {
+  var el = _seniorEls();
+  if (!el.pane || !el.btn || !window.MA.seniorPane) return;
+  el.btn.addEventListener('click', function() { toggleSeniorPane(el.pane.hidden); });
+  var close = document.getElementById('senior-close');
+  if (close) close.addEventListener('click', function() { toggleSeniorPane(false); });
+  if (el.dir) el.dir.addEventListener('change', function() { selectSeniorDir(this.value); });
+  // 前回開いたままなら、次に開いたときも開いたままにする (据え置きが値打ちなので)。
+  if (_seniorState().open) toggleSeniorPane(true);
 }
 
 function setupPeekFolder() {
