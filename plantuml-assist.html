@@ -3132,6 +3132,77 @@ table.vault-table button.vault-open:hover { border-color: var(--accent); }
   color: var(--text-primary);
   cursor: pointer;
 }
+/* 混入点パネル (部品名がどの版から入ったかを時系列で見る) */
+#blame-panel {
+  display: none;
+  position: absolute;
+  z-index: 41;
+  width: 400px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px;
+  font-size: 11px;
+  color: var(--text-primary);
+}
+#blame-panel.open { display: block; }
+#blame-panel label {
+  display: block;
+  font-size: 10px;
+  color: var(--text-secondary);
+  margin: 0 0 2px;
+}
+#blame-panel input[type="text"] {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 3px 4px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+#blame-head {
+  margin-top: 5px;
+  font-size: 10px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 3px;
+}
+#blame-origin { margin-top: 4px; font-size: 10px; }
+#blame-origin .bp-origin { color: var(--text-primary); }
+#blame-origin .bp-origin.bp-none { color: var(--text-secondary); }
+#blame-results { max-height: 220px; overflow-y: auto; font-size: 10px; margin-top: 4px; }
+#blame-results .bp-row { padding: 3px 0; border-bottom: 1px solid var(--border); }
+#blame-results .bp-row-head {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  font-family: var(--font-mono);
+}
+#blame-results .bp-at { color: var(--text-secondary); white-space: nowrap; }
+#blame-results .bp-file { color: var(--text-primary); }
+#blame-results .bp-delta { margin-left: auto; white-space: nowrap; }
+#blame-results .bp-mix { color: var(--accent-red); font-weight: bold; }
+#blame-results .bp-line {
+  display: flex;
+  gap: 5px;
+  font-family: var(--font-mono);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+#blame-results .bp-line .bp-sign { width: 1em; flex: 0 0 auto; }
+#blame-results .bp-add .bp-sign { color: var(--accent-green, #4a4); }
+#blame-results .bp-del { opacity: 0.7; text-decoration: line-through; }
+#blame-results .bp-line mark {
+  background: var(--accent-yellow, #ffd54f);
+  color: #000;
+  padding: 0 1px;
+}
+#blame-results .bp-open { font-size: 10px; padding: 0 4px; margin-left: 6px; }
+.blame-actions { margin-top: 6px; display: flex; gap: 4px; justify-content: flex-end; }
+
 /* 症状検索パネル (症状文から関連図を出す) */
 #symptom-panel {
   display: none;
@@ -5873,6 +5944,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button class="tab-tool" id="btn-tab-rename" title="開いている図をまたいで部品名を一括置換">⇄ 一括置換</button>
         <!-- BLK-primary-20260907-2203-wish: 症状文を貼るだけで関連しそうな図を出す -->
         <button class="tab-tool" id="btn-tab-symptom" title="不具合の症状文を貼ると、部品名を思い付かなくても関連しそうな図を関連度順に出す">⇄ 症状検索</button>
+        <!-- BLK-primary-20260915-0506-wish: 部品名がどの版から入ったか (混入点) を全図の版から 1 回で出す -->
+        <button class="tab-tool" id="btn-tab-blame" title="部品名を入れると、保存フォルダの全図の過去版を一度に走査して「その名前が増えた版・消えた版」を時系列で出す。表記が混在し始めた版にも印が付く">◉ 混入点</button>
         <!-- BLK-junior-20260908-0003-wish: 指摘 1 件を観点として全図に当て、欠けている図だけを出す -->
         <button class="tab-tool" id="btn-tab-pattern" title="レビュー指摘を観点として開いている図全部に当て、同じ抜けがある図だけを一覧する">◎ 観点一括</button>
         <button class="tab-tool" id="btn-tab-apply" title="指摘に並んだ複数のクラスへ同じメソッド・属性を 1 回で追加する">⊞ 一括適用</button>
@@ -5974,6 +6047,19 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
           <button id="btn-rename-depgraph" title="この部品名を参照している図・参照している先を矢印で一望する (連鎖で影響が届く図も出す)">◈ 依存グラフ</button>
           <button id="btn-rename-apply" disabled>置換</button>
           <button id="btn-rename-cancel">閉じる</button>
+        </div>
+      </div>
+      <!-- 部品名がどの版から入ったか (混入点) を、全図の版を 1 回走査して時系列に並べる -->
+      <div id="blame-panel">
+        <label for="blame-term">探す部品名 (空白区切りで複数。混在を見るなら 2 つ)</label>
+        <input type="text" id="blame-term" autocomplete="off" spellcheck="false"
+          placeholder="SpiDrv Spi_Driver">
+        <div id="blame-head"></div>
+        <div id="blame-origin"></div>
+        <div id="blame-results"></div>
+        <div class="blame-actions">
+          <button id="btn-blame-run">探す</button>
+          <button id="btn-blame-close">閉じる</button>
         </div>
       </div>
       <!-- 症状文を貼って、関連しそうな図を関連度順に出す (部品名を思い付かなくても始められる) -->
@@ -6648,6 +6734,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/note-board.js"></script>
 <script src="src/core/domain-verdict.js"></script>
 <script src="src/core/version-history.js"></script>
+<script src="src/core/blame-point.js"></script>
 <script src="src/core/diagram-kind.js"></script>
 <script src="src/core/saved-kind.js"></script>
 <script src="src/core/kind-mismatch.js"></script>

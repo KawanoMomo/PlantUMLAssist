@@ -2675,6 +2675,7 @@ function init() {
   setupFixWalk();
   setupVault();
   setupSymptomSearch();
+  setupBlamePoint();
   setupPatternCheck();
   setupXrefGraph();
   setupBulkApply();
@@ -2865,6 +2866,7 @@ function initCommandPalette() {
       { id: 'vault', title: '提出物庫を開く / Deliverable vault', hint: 'Tabs', keywords: ['vault', 'export', 'ていしゅつ', 'こ', 'かこ', 'ぜんかい'], run: function() { toggleVault(true); } },
       { id: 'tab-rename', title: '部品名を一括置換 / Bulk rename', hint: 'Tabs', keywords: ['rename', 'replace', 'いっかつ', 'ちかん'], button: 'btn-tab-rename', run: function() { clickById('btn-tab-rename'); } },
       { id: 'tab-symptom', title: '症状から関連図を探す / Symptom search', hint: 'Tabs', keywords: ['symptom', 'search', 'しょうじょう', 'けんさく', 'ふぐあい'], button: 'btn-tab-symptom', run: function() { clickById('btn-tab-symptom'); } },
+      { id: 'tab-blame', title: '部品名の混入点を探す / Blame point', hint: 'Tabs', keywords: ['blame', 'origin', 'version', 'こんにゅう', 'いつから', 'かこばん', 'ふぐあい'], button: 'btn-tab-blame', run: function() { clickById('btn-tab-blame'); } },
       { id: 'tab-pattern', title: '同じ観点で全図を棚卸し / Pattern check', hint: 'Tabs', keywords: ['pattern', 'check', 'かんてん', 'いっかつ', 'してき', 'たなおろし'], button: 'btn-tab-pattern', run: function() { clickById('btn-tab-pattern'); } },
       { id: 'tab-submit', title: '提出前チェックを開く / Submit check', hint: 'Tabs', keywords: ['submit', 'check', 'ていしゅつ', 'かくにん', '略語'], button: 'btn-tab-submit', run: function() { clickById('btn-tab-submit'); } },
       { id: 'tab-xref', title: '参照関係を開く / Cross-reference', hint: 'Tabs', keywords: ['xref', 'reference', 'project', 'さんしょう', 'かんけい'], button: 'btn-tab-xref', run: function() { clickById('btn-tab-xref'); } },
@@ -15234,6 +15236,210 @@ function renderSymptomSearch() {
     });
     resEl.appendChild(item);
   });
+}
+
+// ── 混入点 (BLK-primary-20260915-0506-wish) ─────────────────────────────────
+// 部品名を 1 回入れると、保存フォルダの全図の版を server 側で走査して
+// 「その名前が増えた版・消えた版」を時系列で出す。版を 1 つずつ開いて
+// 前の版と見比べる往復 (図の枚数 × 版数) を、1 回の検索に畳む。
+var _blameLast = null;   // 直近の答え (行を押したときに版を開くため)
+
+function _blameMark(text, terms) {
+  // 当たった語だけを強調する。行は DSL なので textContent で組み、
+  // 語の位置に mark を差し込む (innerHTML に本文を流し込まない)。
+  var frag = document.createDocumentFragment();
+  var s = String(text == null ? '' : text);
+  var i = 0;
+  var guard = 0;
+  while (i < s.length && guard++ < 500) {
+    var at = -1, hit = '';
+    for (var k = 0; k < terms.length; k++) {
+      var p = s.indexOf(terms[k], i);
+      if (p >= 0 && (at < 0 || p < at || (p === at && terms[k].length > hit.length))) {
+        at = p; hit = terms[k];
+      }
+    }
+    if (at < 0) break;
+    if (at > i) frag.appendChild(document.createTextNode(s.slice(i, at)));
+    var m = document.createElement('mark');
+    m.textContent = hit;
+    frag.appendChild(m);
+    i = at + hit.length;
+  }
+  if (i < s.length) frag.appendChild(document.createTextNode(s.slice(i)));
+  return frag;
+}
+
+function _blameOpenVersion(file, stamp) {
+  var VH = window.MA.versionHistory;
+  var dir = _wsFileDir();
+  // 「いま」の行は控えではなく今の中身なので、その図そのものを開く
+  // (刻印つきの別名で開くと、開いた先を直しても保存先に返らない)。
+  var load = stamp
+    ? window.fetch('/autosave-versions?dir=' + encodeURIComponent(dir)
+        + '&type=' + encodeURIComponent(file) + '&stamp=' + encodeURIComponent(stamp))
+        .then(function(r) { return r.ok ? r.text() : null; })
+    : window.MA.workspace.loadFile(file, dir);
+
+  Promise.resolve(load).then(function(text) {
+    if (text == null) {
+      if (window.MA.toast) window.MA.toast.show('この版を読めませんでした');
+      return;
+    }
+    saveActiveDoc();
+    var detected = window.MA.workspace.detectType(text);
+    openExistingFile({
+      name: stamp ? (VH ? VH.openName(file, stamp) : (file + '@' + stamp)) : file,
+      dsl: text,
+      diagramType: (detected && modules[detected]) ? detected : currentDiagramType,
+    });
+    applyActiveDoc();
+    if (window.MA.toast) {
+      window.MA.toast.show(stamp
+        ? (file + ' の ' + (VH ? VH.label(stamp) : stamp) + ' の版を別タブで開きました（今の図はそのままです）')
+        : (file + ' を開きました'));
+    }
+  });
+}
+
+function renderBlamePoint(payload) {
+  var BP = window.MA.blamePoint;
+  var headEl = document.getElementById('blame-head');
+  var origEl = document.getElementById('blame-origin');
+  var resEl = document.getElementById('blame-results');
+  if (!BP || !headEl || !origEl || !resEl) return;
+  origEl.textContent = '';
+  resEl.textContent = '';
+  if (!payload) { headEl.textContent = '探す部品名を入れて「探す」を押してください'; return; }
+  if (payload.error) { headEl.textContent = payload.error; return; }
+  var terms = (payload.terms || []).map(String);
+  var rows = BP.rows(payload);
+  _blameLast = { terms: terms, rows: rows };
+  headEl.textContent = BP.headline(payload, rows);
+  headEl.setAttribute('data-bp-rows', String(rows.length));
+
+  BP.origin(rows, terms).forEach(function(o) {
+    var d = document.createElement('div');
+    d.className = 'bp-origin' + (o.reason === 'none' ? ' bp-none' : '');
+    d.textContent = BP.originText(o);
+    origEl.appendChild(d);
+  });
+
+  rows.forEach(function(r) {
+    var row = document.createElement('div');
+    row.className = 'bp-row';
+    row.setAttribute('data-bp-file', r.file);
+    row.setAttribute('data-bp-stamp', r.stamp || '');
+    if (r.mixStart) row.setAttribute('data-bp-mix', '1');
+    if (r.first) row.setAttribute('data-bp-first', '1');
+    var head = document.createElement('div');
+    head.className = 'bp-row-head';
+    var at = document.createElement('span');
+    at.className = 'bp-at';
+    at.textContent = r.label;
+    var file = document.createElement('span');
+    file.className = 'bp-file';
+    file.textContent = r.file;
+    var delta = document.createElement('span');
+    delta.className = 'bp-delta' + (r.mixStart ? ' bp-mix' : '');
+    delta.textContent = (r.mixStart ? '混在ここから ' : '') + BP.deltaText(r, terms);
+    var open = document.createElement('button');
+    open.className = 'bp-open';
+    open.type = 'button';
+    open.textContent = '開く';
+    open.title = r.file + ' の ' + r.label + ' の版を別タブで開く';
+    open.addEventListener('click', function() { _blameOpenVersion(r.file, r.stamp); });
+    head.appendChild(at);
+    head.appendChild(file);
+    head.appendChild(delta);
+    head.appendChild(open);
+    row.appendChild(head);
+
+    r.removed.forEach(function(l) {
+      var d = document.createElement('div');
+      d.className = 'bp-line bp-del';
+      var sg = document.createElement('span');
+      sg.className = 'bp-sign';
+      sg.textContent = '−';
+      var tx = document.createElement('span');
+      tx.appendChild(_blameMark(l.text, terms));
+      d.appendChild(sg);
+      d.appendChild(tx);
+      row.appendChild(d);
+    });
+    r.added.forEach(function(l) {
+      var d = document.createElement('div');
+      d.className = 'bp-line bp-add';
+      var sg = document.createElement('span');
+      sg.className = 'bp-sign';
+      sg.textContent = '＋';
+      var tx = document.createElement('span');
+      tx.appendChild(_blameMark(l.text, terms));
+      d.appendChild(sg);
+      d.appendChild(tx);
+      row.appendChild(d);
+    });
+    resEl.appendChild(row);
+  });
+}
+
+function setupBlamePoint() {
+  var panel = document.getElementById('blame-panel');
+  var btn = document.getElementById('btn-tab-blame');
+  if (!panel || !btn || !window.MA.blamePoint) return;
+  var termEl = document.getElementById('blame-term');
+  var runBtn = document.getElementById('btn-blame-run');
+  var closeBtn = document.getElementById('btn-blame-close');
+
+  function closePanel() { panel.classList.remove('open'); }
+
+  function run() {
+    var BP = window.MA.blamePoint;
+    var headEl = document.getElementById('blame-head');
+    var terms = BP.terms(termEl ? termEl.value : '');
+    if (!terms.length) { renderBlamePoint(null); return; }
+    if (!_fiFolderMode()) {
+      renderBlamePoint({ error: '保存先がフォルダのときだけ使えます (設定 → 自動保存)' });
+      return;
+    }
+    if (headEl) headEl.textContent = '過去版を走査しています…';
+    var url = '/version-search?dir=' + encodeURIComponent(_wsFileDir())
+      + '&q=' + encodeURIComponent(terms.join(' '));
+    window.fetch(url).then(function(r) { return r.json(); }).then(function(data) {
+      renderBlamePoint(data);
+    }, function() {
+      renderBlamePoint({ error: '過去版を読めませんでした' });
+    });
+  }
+
+  btn.addEventListener('click', function() {
+    if (panel.classList.contains('open')) { closePanel(); return; }
+    var rect = btn.getBoundingClientRect();
+    panel.style.left = Math.max(4, rect.left - 60) + 'px';
+    panel.style.top = (rect.bottom + 2) + 'px';
+    panel.classList.add('open');
+    if (termEl) {
+      // 一括置換で打った組が分かっているなら、混在を見る 2 語を先に入れておく
+      // (不具合対応は「置換の前後の名前」から始まるので、打ち直させない)。
+      if (!termEl.value) {
+        var from = document.getElementById('rename-from');
+        var to = document.getElementById('rename-to');
+        var pre = [(from && from.value) || '', (to && to.value) || '']
+          .filter(function(x) { return x; }).join(' ');
+        if (pre) termEl.value = pre;
+      }
+      termEl.focus();
+      termEl.select();
+    }
+    if (termEl && termEl.value) run(); else renderBlamePoint(null);
+  });
+
+  if (termEl) termEl.addEventListener('keydown', function(ev) {
+    if (ev.key === 'Enter') { ev.preventDefault(); run(); }
+    if (ev.key === 'Escape') { ev.preventDefault(); closePanel(); }
+  });
+  if (runBtn) runBtn.addEventListener('click', run);
+  if (closeBtn) closeBtn.addEventListener('click', closePanel);
 }
 
 function setupSymptomSearch() {

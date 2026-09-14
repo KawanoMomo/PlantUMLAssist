@@ -82,10 +82,17 @@ curl -sS -X POST http://127.0.0.1:8766/verify-svg -H "Content-Type: application/
 | `DELETE /autosave` | `?dir=&type=` | 保存を消す |
 | `POST /autosave-svg` | `{type, dir, svg}` | 書き出した svg を保存する (印を刻む) |
 | `GET /autosave-versions` | `?dir=&type=` | 1 枚の図の版の一覧 |
+| `GET /version-search` | `?dir=&q=` | 保存フォルダの全図の版から部品名を探す (混入点の材料) |
 | `GET /peek-dirs` | — | 保存フォルダの候補を覗く |
 | `GET /peek-notes` | `?dir=` | 隣のフォルダに置かれた指摘 (`.md`) を読む |
 | `POST /file-roles` | `{dir, roles}` | `_roles.json` を丸ごと置き換える |
 | `POST /export-log` | — | 書き出しの控えを 1 件足す |
+
+`GET /version-search` の `q` は空白区切りの語 (最大 6 語)。返りは
+`{terms, dir, scanned, files:[{name, versions:[{stamp, current, counts, lines}]}]}` で、
+版は古い順・最後の 1 件が `current: true` (まだ控えになっていない今の中身)。
+`counts` は語ごとの出現数、`lines` は当たった行だけ (1 版 40 行まで)。本文は返さない。
+どの版で増えたか・混在がどこから始まったかの判定は GUI 側 (`src/core/blame-point.js`)。
 
 保存中の svg が今の puml から作られたかは、`GET /autosave` の `svgSource` (svg に刻まれた印) と
 `hash` (今の puml の sha1) を比べる。印が無い svg は `POST /verify-svg` が描き直して確かめる。

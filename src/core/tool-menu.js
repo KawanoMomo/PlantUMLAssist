@@ -27,6 +27,7 @@ window.MA.toolMenu = (function() {
     ] },
     { key: 'find', title: '探す・見比べる', items: [
       { id: 'btn-tab-symptom', label: '症状から関連図を探す' },
+      { id: 'btn-tab-blame',   label: '部品名の混入点を探す' },
       { id: 'btn-tab-xref',    label: '部品名で図をまたいで辿る' },
       { id: 'btn-tab-compare', label: '別の図を右に並べる' },
       { id: 'btn-tab-peek',    label: '他の保存フォルダを覗く' },

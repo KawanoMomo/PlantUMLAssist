@@ -351,3 +351,82 @@ test.describe('primary 手順 4: 社内略語の対応表を確定して顧客�
     expect(await page.locator('#editor').inputValue()).toContain('SpiDrv');
   });
 });
+
+// BLK-primary-20260915-0506-wish: 不具合対応で「この部品名がいつの版から入ったか」
+// を特定する場面。今までは 📂一覧の「履歴N」を 1 版ずつ開いて前の版と見比べるしか
+// なく、開く回数が図の枚数 × 版数で増えていた。◉ 混入点は保存フォルダの全図の版を
+// 1 回で走査し、増えた版・消えた版と、表記が混在し始めた版を時系列で出す。
+test.describe('primary 手順 4: 部品名の混入点を過去版から特定する', () => {
+  const CLEAN = '@startuml\ntitle SPI 初期化\nparticipant Spi_Driver\nSpi_Driver -> Hal : init\n@enduml';
+  const MIXED = '@startuml\ntitle SPI 初期化\nparticipant Spi_Driver\nparticipant SpiDrv\nSpi_Driver -> Hal : init\n@enduml';
+  const MIXED2 = '@startuml\ntitle SPI 初期化\nparticipant Spi_Driver\nparticipant SpiDrv\nSpi_Driver -> Hal : init\nSpiDrv -> Hal : reset\n@enduml';
+
+  test.beforeEach(async ({ page }) => {
+    await boot(page);
+    await clearDir(page);
+    // 版を 3 世代積む。server は上書きの手前で前の中身を _versions へ控えるので、
+    // 「混在の無い版 → 混在の入った版 → 増えた版」がそのまま時系列になる。
+    await putFile(page, 'spi_init_sequence', CLEAN);
+    await page.waitForTimeout(1100);
+    await putFile(page, 'spi_init_sequence', MIXED);
+    await page.waitForTimeout(1100);
+    await putFile(page, 'spi_init_sequence', MIXED2);
+    await putFile(page, 'adc_init_sequence', ADC);
+    await page.waitForTimeout(400);
+    await page.reload();
+    await page.waitForSelector('#preview-svg');
+  });
+
+  test.afterEach(async ({ page }) => {
+    await clearDir(page).catch(() => {});
+  });
+
+  async function search(page, q) {
+    await page.locator('#btn-tab-blame').click();
+    await page.waitForSelector('#blame-panel.open');
+    await page.fill('#blame-term', q);
+    await page.locator('#btn-blame-run').click();
+    await page.waitForSelector('#blame-head[data-bp-rows]');
+  }
+
+  test('2 語を 1 回入れるだけで、混在が始まった版が名指しされる', async ({ page }) => {
+    await search(page, 'SpiDrv Spi_Driver');
+    // 版を 1 つも開かずに、混在の始まりが見出しに出る。
+    await expect(page.locator('#blame-head')).toContainText('混在の始まり');
+    await expect(page.locator('#blame-head')).toContainText('spi_init_sequence');
+    const mix = page.locator('#blame-results .bp-row[data-bp-mix]');
+    await expect(mix).toHaveCount(1);
+    // 混入した行そのものが、開かずにその場に出る。
+    await expect(mix.locator('.bp-line.bp-add')).toContainText('participant SpiDrv');
+    await expect(mix.locator('.bp-delta')).toContainText('SpiDrv +1');
+  });
+
+  test('語ごとの出所が出る (旧称は途中から、新称は最古の版から)', async ({ page }) => {
+    await search(page, 'SpiDrv Spi_Driver');
+    const orig = page.locator('#blame-origin');
+    await expect(orig).toContainText('SpiDrv: ');
+    await expect(orig).toContainText('spi_init_sequence');
+    // 最古の控えに既に居た語は「その版から」と言い切らない (増えた瞬間は見ていない)。
+    await expect(orig).toContainText('残っている最古の版');
+  });
+
+  test('当たらない語は黙らずに「どの版にも無い」と言う', async ({ page }) => {
+    await search(page, 'NoSuchPart');
+    await expect(page.locator('#blame-head')).toContainText('どの版にも出てきません');
+    await expect(page.locator('#blame-head')).toHaveAttribute('data-bp-rows', '0');
+  });
+
+  test('混入した版は 1 クリックで別タブに開ける (今の図は変わらない)', async ({ page }) => {
+    await search(page, 'SpiDrv Spi_Driver');
+    const mix = page.locator('#blame-results .bp-row[data-bp-mix]');
+    const stamp = await mix.getAttribute('data-bp-stamp');
+    expect(stamp).toBeTruthy();
+    await mix.locator('button.bp-open').click();
+    // 刻印つきの名前で開くので、開いたまま自動保存が走っても今の図を塗り潰さない。
+    await page.waitForFunction((s) => {
+      const a = window.MA.workspace.getActive();
+      return !!a && a.name === 'spi_init_sequence@' + s;
+    }, stamp);
+    expect(await page.locator('#editor').inputValue()).toContain('participant SpiDrv');
+  });
+});
