@@ -623,3 +623,91 @@ test.describe('junior 手順 1: 開き直すだけの回は錠に止められな
     await expect(page.locator('#source-lock-body')).toContainText('古い控えの中身が図に入ることはありません');
   });
 });
+
+// BLK-junior-20260914-1006-wish: 手順 1 の「先輩の該当図を開いて先輩側の詳細を見る」で、
+// 先輩は GPIO 単独のクラス図を持たず driver_common_class.puml (共通基底 + 6 ドライバ) に
+// まとめている。並べて見る機能はファイル名で対をなすため、名前の違うこの組は自動で並ばず、
+// 複合図を開いて Gpio_Driver を目で探すしかなかった (部品が増えるほど探索も増える)。
+// 部品名を 1 つ押せば、その所だけが切り出されて自分の図の隣に出ることを到達条件にする。
+const SLICE_ROOT = DIR + '-slice';
+const SLICE_MINE = SLICE_ROOT + '/junior';
+const SLICE_SENIOR = SLICE_ROOT + '/primary';
+
+const SENIOR_COMPOSITE = [
+  '@startuml', 'title Driver_Common_Class',
+  'class Driver_Common {', '  + Init() : void', '  + DeInit() : void', '}',
+  'class Spi_Driver {', '  + Spi_Init() : void', '  + Spi_TransmitDma() : void', '}',
+  'class Can_Driver {', '  + Can_Init() : void', '}',
+  'class Gpio_Driver {', '  + Gpio_Init() : void', '  + Gpio_Reset() : StatusType',
+  '  + Gpio_SetHigh() : void', '  + Gpio_SetLow() : void', '}',
+  'class Uart_Driver {', '  + Uart_Init() : void', '}',
+  'class IRQCtrl {', '  + EnableIrq() : void', '  + Irq_Init() : void',
+  '  + Spi_Ack() : void', '}',
+  'Spi_Driver --|> Driver_Common', 'Can_Driver --|> Driver_Common',
+  'Gpio_Driver --|> Driver_Common', 'Uart_Driver --|> Driver_Common',
+  'Spi_Driver --> IRQCtrl', 'Gpio_Driver --> IRQCtrl', '@enduml',
+].join('\n');
+
+// junior 側は GPIO 単独。ファイル名は先輩と対をなさない。
+const MINE_CLASS = [
+  '@startuml', 'title GpioDrv派生クラス図(資料用)',
+  'class Driver_Common {', '  + Init() : void', '  + DeInit() : void', '}',
+  'class Gpio {', '  + Gpio_Init() : void', '  + Gpio_Reset() : StatusType', '}',
+  'Gpio --|> Driver_Common', '@enduml',
+].join('\n');
+
+const SENIOR_SEQ2 = ['@startuml', 'participant Gpio_Driver', 'participant Hw_Ctrl',
+  'Gpio_Driver -> Hw_Ctrl : Gpio_Init', '@enduml'].join('\n');
+
+test.describe('junior 手順 1: 先輩の複合図から部品を切り出して自分の図と並べる', () => {
+  test.beforeEach(async ({ page }) => {
+    await S1.bootWithSaveDir(page, SLICE_MINE);
+    await S1.clearDir(page, SLICE_MINE);
+    await S1.clearDir(page, SLICE_SENIOR);
+    await S1.putDoc(page, SLICE_MINE, 'GpioDrv派生クラス図(資料用)', MINE_CLASS);
+    await S1.putDoc(page, SLICE_SENIOR, 'driver_common_class', SENIOR_COMPOSITE);
+    await S1.putDoc(page, SLICE_SENIOR, 'gpio_init_sequence', SENIOR_SEQ2);
+    await page.reload();
+    await page.waitForSelector('#btn-tab-peek');
+  });
+
+  test('複合図を開くと部品が並び、押した部品の所だけが自分の図と並ぶ', async ({ page }) => {
+    await page.locator('#btn-tab-peek').click();
+    await page.waitForSelector('#peek-modal');
+    await page.locator('#peek-files .peek-file[data-file-name="driver_common_class"]').click();
+
+    // 到達条件その1: 開いた図が複合図であることと、中の部品が押す前に並ぶ。
+    await page.waitForSelector('#peek-parts .peek-part-chip');
+    await expect(page.locator('#peek-parts-head')).toContainText('4 部品の複合図');
+    await expect(page.locator('#peek-parts .peek-part-chip[data-part="Gpio_Driver"]')).toContainText('4');
+
+    // 到達条件その2: 部品を 1 回押すだけで、切り出しが自分の図の隣に出る
+    // (ファイル名が対をなしていなくても並ぶ)。
+    await page.locator('#peek-parts .peek-part-chip[data-part="Gpio_Driver"]').click();
+    await page.waitForSelector('#sbs-grid');
+    await expect(page.locator('#sbs-head')).toContainText('Gpio_Driver');
+    await expect(page.locator('#sbs-head')).toContainText('junior');
+    await expect(page.locator('#sbs-head')).toContainText('primary');
+    await expect(page.locator('#sbs-summary')).toContainText('GpioDrv派生クラス図(資料用)');
+    await expect(page.locator('#sbs-summary')).toContainText('3 クラス');
+
+    // 到達条件その3: 他の部品は切り出しに出ない (目で探す所が残らない)。
+    const grid = await page.locator('#sbs-grid').innerText();
+    expect(grid).toContain('Gpio_SetHigh');
+    expect(grid).toContain('Gpio_Driver --|> Driver_Common');
+    expect(grid).not.toContain('Spi_Driver');
+    expect(grid).not.toContain('Can_Driver');
+    expect(grid).not.toContain('Spi_Ack');
+
+    // 到達条件その4: 粒度の違い (junior の Gpio / 先輩の Gpio_Driver) がその場で光る。
+    expect(await page.locator('#sbs-grid .sbs-mark').count()).toBeGreaterThan(0);
+  });
+
+  test('複合図でない図では部品の帯を出さない (押す所を増やさない)', async ({ page }) => {
+    await page.locator('#btn-tab-peek').click();
+    await page.waitForSelector('#peek-modal');
+    await page.locator('#peek-files .peek-file[data-file-name="gpio_init_sequence"]').click();
+    await page.waitForTimeout(600);
+    await expect(page.locator('#peek-parts')).toBeHidden();
+  });
+});

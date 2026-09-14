@@ -1835,6 +1835,14 @@ html, body {
 }
 #peek-sbs .sbs-align-btn:hover { border-color: var(--accent); color: var(--accent); }
 #peek-sbs-toggle.on { border-color: var(--accent); color: var(--accent); }
+#peek-parts { padding-bottom: 8px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+#peek-parts .peek-parts-head { font-size: 11px; color: var(--text-secondary); padding-bottom: 4px; }
+#peek-parts .peek-part-chip {
+  font-size: 11px; padding: 2px 8px; margin: 2px 4px 2px 0; border-radius: 10px;
+  border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer;
+}
+#peek-parts .peek-part-chip:hover { border-color: var(--accent); color: var(--accent); }
+#peek-parts .peek-part-chip.selected { border-color: var(--accent); color: var(--accent); font-weight: 600; }
 #at-modal-content {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
@@ -5795,6 +5803,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/blank-doc.js"></script>
 <script src="src/core/domain-cohort.js"></script>
 <script src="src/core/side-by-side.js"></script>
+<script src="src/core/part-slice.js"></script>
 <script src="src/core/review-note.js"></script>
 <script src="src/core/finding-actions.js"></script>
 <script src="src/core/domain-verdict.js"></script>
@@ -6316,6 +6325,9 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <div id="peek-note" style="display:none;"></div>
         <div id="peek-cohort" style="display:none;"></div>
         <div id="peek-sbs" style="display:none;"></div>
+        <!-- BLK-junior-20260914-1006-wish: 開いた図が複合図 (共通基底 + 各ドライバ) なら、
+             部品を並べる。押すとその部品の所だけを切り出し、自分の同じ部品の図と並べる。 -->
+        <div id="peek-parts" style="display:none;"></div>
         <div id="peek-title"></div>
         <div id="peek-svg"></div>
         <pre id="peek-dsl"></pre>

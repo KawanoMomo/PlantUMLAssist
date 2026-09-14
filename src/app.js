@@ -6098,6 +6098,114 @@ function renderSbsFiles() {
   });
 }
 
+// ── 複合図から部品を切り出して並べる ──
+// BLK-junior-20260914-1006-wish: 先輩の該当図が GPIO 単独ではなく複合図
+// (driver_common_class.puml = 共通基底 + 6 ドライバ) にしかないとき、並べて見る
+// 機能はファイル名で対をなすためこの組は自動で並ばず、複合図を開いて
+// Gpio_Driver を目で探すことになっていた。開いた図が複合図なら部品を並べ、
+// 押した部品の所だけを切り出して、自分の同じ部品の図と左右に並べる。
+var _partSel = '';
+
+function _peekFolderName(dir) {
+  var PF = window.MA.peekFolder;
+  for (var i = 0; i < _peekDirs.length; i++) {
+    if (PF && PF.samePath(_peekDirs[i].path, dir)) return _peekDirs[i].name;
+  }
+  return PF ? PF.baseName(dir) : '';
+}
+
+function renderPartChips() {
+  var host = document.getElementById('peek-parts');
+  var PS = window.MA.partSlice;
+  if (!host) return;
+  host.textContent = '';
+  var list = (PS && _peekDsl && PS.isComposite(_peekDsl)) ? PS.parts(_peekDsl) : [];
+  if (!list.length) { host.style.display = 'none'; _partSel = ''; return; }
+  host.style.display = 'block';
+  var head = document.createElement('div');
+  head.className = 'peek-parts-head';
+  head.id = 'peek-parts-head';
+  head.textContent = 'この図は ' + list.length + ' 部品の複合図です。部品を押すと、その所だけを切り出して自分の図と並べます';
+  host.appendChild(head);
+  list.forEach(function(p) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'peek-part-chip' + (p.name === _partSel ? ' selected' : '');
+    b.setAttribute('data-part', p.name);
+    b.textContent = p.name + ' (' + p.methods + ')';
+    b.addEventListener('click', function() { selectPartPair(p.name); });
+    host.appendChild(b);
+  });
+}
+
+// 押した部品の切り出しと、自分のフォルダの同じ部品の図を並べる。
+// 読むのは候補 (名前に部品名を含む数枚) だけ。
+function selectPartPair(partName) {
+  var PS = window.MA.partSlice;
+  var WS = window.MA.workspace;
+  var SBS = window.MA.sideBySide;
+  var el = _peekEls();
+  if (!PS || !WS || !SBS || !_peekDsl) return Promise.resolve(false);
+  var res = PS.slice(_peekDsl, partName);
+  if (!res) return Promise.resolve(false);
+
+  var key = 'part:' + _peekName + '|' + res.part.name;
+  _partSel = res.part.name;
+  if (_cohortOn) setCohortMode(false);
+  _sbsOn = true;
+  _sbsPairs = [];
+  _sbsKey = key;
+  _sbsView = null;
+  _sbsMsg = '';
+  if (el.sbsToggle) {
+    el.sbsToggle.setAttribute('aria-pressed', 'true');
+    el.sbsToggle.classList.add('on');
+  }
+  renderPartChips();
+  renderSbs();
+
+  var theirDir = _peekDir;
+  var theirFile = _peekName;
+  var myDir = _myPeekDir();
+  var sliced = {
+    name: _peekFolderName(theirDir) + '/' + theirFile,
+    dsl: res.dsl, _dir: theirDir, _file: theirFile,
+  };
+  return WS.listFiles(myDir).then(function(names) {
+    var cands = PS.candidates(names || [], res.part.name);
+    return Promise.all(cands.map(function(n) {
+      return WS.loadFile(n, myDir)
+        .then(function(t) { return { name: n, dsl: typeof t === 'string' ? t : '', _dir: myDir, _file: n }; })
+        .catch(function() { return null; });
+    }));
+  }).catch(function() { return []; }).then(function(docs) {
+    if (_sbsKey !== key) return false;       // 途中で別の部品を押された
+    var mine = PS.pickOwn((docs || []).filter(function(d) { return d; }), res.part.name);
+    if (!mine) {
+      mine = { name: '(該当図なし)', dsl: '', _dir: myDir, _file: '' };
+      _sbsMsg = PS.sliceLabel(res) + ' / 自分の保存フォルダに ' + res.part.name
+        + ' のクラス図が見つかりませんでした (切り出しだけ出しています)';
+    } else {
+      _sbsMsg = PS.sliceLabel(res) + ' / 自分の ' + mine._file + ' と並べています。'
+        + window.MA.sideBySide.summaryLine(mine, sliced);
+    }
+    var pair = {
+      base: res.part.name,
+      a: { doc: mine, name: mine.name, base: mine._file || '(該当図なし)', folder: _peekFolderName(myDir) },
+      b: { doc: sliced, name: sliced.name, base: theirFile + ' の ' + res.part.name + ' 切り出し',
+           folder: _peekFolderName(theirDir) },
+    };
+    _sbsView = {
+      pair: pair, a: mine, b: sliced,
+      rows: SBS.rows(mine, sliced),
+      marks: SBS.marks(mine, sliced),
+      summary: SBS.summaryLine(mine, sliced),
+    };
+    renderSbs();
+    return true;
+  });
+}
+
 function _sbsSegmentSpans(host, segs, side) {
   (segs || []).forEach(function(s) {
     if (!s.mark) { host.appendChild(document.createTextNode(s.text)); return; }
@@ -6924,6 +7032,8 @@ function showPeekFile(name) {
   if (!WS || !el.svg) return Promise.resolve(false);
   _peekName = name;
   _peekDsl = '';
+  _partSel = '';
+  renderPartChips();
   renderPeekFiles();
   renderPeekTemplateBtn();
   if (el.title) el.title.textContent = name + '（読むだけ・編集も保存もしません）';
@@ -6940,6 +7050,9 @@ function showPeekFile(name) {
     if (el.dsl) el.dsl.textContent = text;
     _peekDsl = text;
     renderPeekTemplateBtn();
+    // 開いた図が複合図なら、部品で切り出す入口をその場に出す。
+    _partSel = '';
+    renderPartChips();
     return renderDslToSvg(text).then(function(svg) {
       if (name !== _peekName) return false;
       el.svg.innerHTML = svg;
