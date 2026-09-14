@@ -1787,6 +1787,19 @@ html, body {
 #peek-note .note-finding:hover { border-color: var(--accent); }
 #peek-note .note-finding.selected { border-color: var(--accent); color: var(--accent); }
 #peek-note .note-finding[data-note-ready="0"] { opacity: 0.62; cursor: default; }
+/* 提案アクションと [適用] (BLK-primary-20260914-1006-wish)。
+   指摘の行のすぐ下に置き、当てる操作と対象図を読んでから押せるようにする。 */
+#peek-note .note-action-row {
+  display: flex; align-items: center; gap: 6px; margin: -2px 0 8px 0; padding: 0 7px 0 9px;
+  font-size: 11px; line-height: 1.5; color: var(--text-secondary);
+}
+#peek-note .note-action-text { flex: 1 1 auto; }
+#peek-note .note-action-row[data-note-action-ready="0"] .note-action-text { opacity: 0.7; }
+#peek-note .note-apply {
+  flex: 0 0 auto; padding: 2px 9px; font-size: 11px; border-radius: 3px; cursor: pointer;
+  background: var(--bg-secondary); border: 1px solid var(--accent); color: var(--accent);
+}
+#peek-note .note-apply:disabled { border-color: var(--border); color: var(--text-secondary); cursor: default; opacity: 0.6; }
 #peek-note .note-mark {
   display: inline-block; margin-right: 4px; padding: 0 4px; border-radius: 2px;
   font-size: 10px; background: rgba(235, 203, 139, 0.22); color: #ebcb8b;
@@ -5783,6 +5796,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/domain-cohort.js"></script>
 <script src="src/core/side-by-side.js"></script>
 <script src="src/core/review-note.js"></script>
+<script src="src/core/finding-actions.js"></script>
 <script src="src/core/domain-verdict.js"></script>
 <script src="src/core/version-history.js"></script>
 <script src="src/core/diagram-kind.js"></script>

@@ -297,3 +297,99 @@ test('手順5.5 塗り潰された図を、打ち直さずに直前の版へ 1 �
 
   await S.clearDir(page, DIR);
 });
+
+// BLK-primary-20260914-1006-wish: 同じ手順5.5 で、指摘.md の 1 件を読んでから
+// 「これは ⇄一括置換 か、再出力か、別ドメイン宣言か」を毎回自分で決め、対応する
+// 画面を探して開いていた。手段は指摘文に書いてあるので、指摘ごとに対象図と提案
+// アクションが並び、[適用] を押すだけで当たることを到達条件にする。
+const fs = require('fs');
+const nodePath = require('path');
+
+const ACT_ROOT = DIR + '-actions';
+const ACT_MINE = ACT_ROOT + '/primary';
+const ACT_REVIEWER = ACT_ROOT + '/reviewer';
+
+function absOf(rel) {
+  return nodePath.join(__dirname, '..', '..', '..', rel.replace(/^\.\//, ''));
+}
+
+// reviewer が実際に書いている形 (自由文、見出しに【】、手段は本文に混ざる)。
+const ACT_NOTE = [
+  '# primary への指摘',
+  '',
+  '## 【最優先】gpio_state.svg が実データと食い違ったまま',
+  'render 結果と保存済みが非ヘッダ部で不一致。再エクスポートが必要。',
+  '',
+  '## 【継続】spi_init_sequence の部品名が不統一',
+  '`SpiDrv` を `Spi_Driver` に統一すること。',
+  '',
+  '## 【継続】インフラ系クラスがクラス図に不在',
+  '`ClockCtrl` / `NVIC` が 1 つも定義されていない。',
+].join('\n');
+
+const SPI_SEQ = ['@startuml', 'title SPI 初期化シーケンス',
+  'participant SpiDrv', 'participant Hw_Ctrl',
+  'SpiDrv -> Hw_Ctrl : Spi_Init', '@enduml'].join('\n');
+
+test.describe('手順5.5 指摘.md を貼る → 提案一覧 → [適用]', () => {
+  test.beforeEach(async ({ page }) => {
+    await S.bootWithSaveDir(page, ACT_MINE);
+    await S.clearDir(page, ACT_MINE);
+    await S.putDoc(page, ACT_MINE, 'spi_init_sequence', SPI_SEQ);
+    await S.putDoc(page, ACT_MINE, 'gpio_state', S.GPIO_STATE);
+    // 指摘.md は図ではないので GUI からは置けない (reviewer が置くファイル)。
+    fs.mkdirSync(absOf(ACT_REVIEWER), { recursive: true });
+    fs.writeFileSync(nodePath.join(absOf(ACT_REVIEWER), '指摘.md'), ACT_NOTE, 'utf-8');
+    await page.reload();
+    await page.waitForSelector('#btn-tab-peek');
+    await page.locator('#btn-tab-peek').click();
+    await page.waitForSelector('#peek-modal');
+    await page.locator('#peek-note-toggle').click();
+    await page.waitForSelector('#peek-note .note-action-row');
+  });
+
+  test('指摘ごとに対象図と提案アクションが出て、当てられない件は理由が出る', async ({ page }) => {
+    // 到達条件その1: 指摘文を読まなくても、件ごとに手段と対象図が並ぶ。
+    const rows = page.locator('#peek-note .note-action-row');
+    await expect(rows.nth(0)).toHaveAttribute('data-note-action', 'reexport');
+    await expect(rows.nth(0)).toContainText('再出力: gpio_state');
+    await expect(rows.nth(1)).toHaveAttribute('data-note-action', 'rename');
+    await expect(rows.nth(1)).toContainText('SpiDrv → Spi_Driver');
+    await expect(rows.nth(1)).toContainText('spi_init_sequence');
+
+    // 到達条件その2: 手段が書かれていない指摘は当てず、押せない理由がその場に出る。
+    await expect(rows.nth(2)).toHaveAttribute('data-note-action', 'manual');
+    await expect(rows.nth(2)).toHaveAttribute('data-note-action-ready', '0');
+    await expect(rows.nth(2).locator('.note-apply')).toBeDisabled();
+
+    // 到達条件その3: 今日 [適用] だけで済む件数が、読む前に分かる。
+    await expect(page.locator('#note-apply-summary')).toContainText('2 件は [適用]');
+  });
+
+  test('部品名の指摘は [適用] だけで、対象図のファイルに当たる', async ({ page }) => {
+    const row = page.locator('#peek-note .note-action-row[data-note-action="rename"]');
+    await row.locator('.note-apply').click();
+    // 到達条件その1: 当てた結果が 1 行で読める (どこを見に行くかを考えずに済む)。
+    await expect(page.locator('#note-summary'))
+      .toContainText('SpiDrv → Spi_Driver', { timeout: 15000 });
+    await expect(page.locator('#note-summary')).toContainText('spi_init_sequence');
+
+    // 到達条件その2: 画面だけでなく保存フォルダの実体が直っている。
+    const saved = (await S.readDoc(page, ACT_MINE, 'spi_init_sequence')) || '';
+    expect(saved).toContain('participant Spi_Driver');
+    expect(saved).not.toContain('SpiDrv');
+    // 到達条件その3: 指摘が名指ししていない図は動かない (全図適用にしない)。
+    expect(await S.readDoc(page, ACT_MINE, 'gpio_state')).toBe(S.GPIO_STATE);
+  });
+
+  test('再出力の指摘は [適用] だけで、保存フォルダの SVG が出し直される', async ({ page }) => {
+    const row = page.locator('#peek-note .note-action-row[data-note-action="reexport"]');
+    await row.locator('.note-apply').click();
+    await expect(page.locator('#note-summary'))
+      .toContainText('gpio_state の SVG を出し直しました', { timeout: 60000 });
+    // 保存フォルダに実体が出来ている (画面上の報告だけにしない)。
+    const svg = nodePath.join(absOf(ACT_MINE), 'gpio_state.svg');
+    expect(fs.existsSync(svg)).toBe(true);
+    expect(fs.readFileSync(svg, 'utf-8')).toContain('<svg');
+  });
+});
