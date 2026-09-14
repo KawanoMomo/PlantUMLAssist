@@ -13047,6 +13047,8 @@ function _dgImpactHtml(impact) {
     + ' / 連鎖 ' + far + ')</span>'
     + (list.length ? '<button type="button" id="dg-walk" title="この一覧を 1 枚目から順に開き、'
       + '下端のバーで次の図へ送りながら直す">順に手当てする</button>' : '')
+    + (list.length ? '<button type="button" id="dg-note" title="同じ note 文面を、この一覧の図すべてへ'
+      + '1 回で書き込む (1 枚ずつ開いて打ち直さない)">この note を影響先全部に打つ</button>' : '')
     + '</div>';
   if (list.length === 0) {
     return html + '<div class="cb-empty">部品名を選ぶと、その名前から辿れる図が並びます。</div>';
@@ -13061,6 +13063,136 @@ function _dgImpactHtml(impact) {
       + '<td><button type="button" class="dg-open">この図を開く</button></td></tr>';
   });
   return html + '</tbody></table>';
+}
+
+// ── 影響先へまとめて note (BLK-primary-20260915-0007) ───────────────────────
+// 「意図的な省略を note で明記する」対応は、依存グラフが挙げた影響先の枚数だけ
+// 同じ文言を打ち直す作業になっていた (1 図ずつ📂一覧から開き、DSL 欄の末尾へ
+// カーソルを合わせ、同じ 1 行をタイプする)。文面は 1 つなのに手数が枚数に比例する。
+// 一覧のすぐ下で文面を 1 度打ち、打つ先を選んで 1 回で書き込む。
+// 書き方 (シーケンスなら note over、それ以外は浮いた note) は core/bulk-note。
+var _dgNoteImpact = [];     // 今の一覧 (影響が届く図)
+var _dgNotePick = {};       // 図名 → 打つかどうか
+
+function _dgNoteDocNames() {
+  return (_dgNoteImpact || []).map(function(r) { return r.doc; });
+}
+
+// 一覧の図の本文。開いているタブは編集中の本文、それ以外は保存フォルダの本文。
+function _dgNoteDocs() {
+  var want = {};
+  _dgNoteDocNames().forEach(function(n) { want[n] = true; });
+  return _dgDocs().filter(function(d) { return want[d.name]; });
+}
+
+function renderDgNote() {
+  var BN = window.MA.bulkNote;
+  var box = document.getElementById('dg-note-box');
+  var listEl = document.getElementById('dg-note-targets');
+  var sumEl = document.getElementById('dg-note-summary');
+  var runBtn = document.getElementById('dg-note-run');
+  var textEl = document.getElementById('dg-note-text');
+  if (!BN || !box || !listEl || !sumEl || !runBtn || !textEl) return;
+  var docs = _dgNoteDocs();
+  var picked = docs.filter(function(d) { return _dgNotePick[d.name]; })
+    .map(function(d) { return d.name; });
+  var rows = BN.preview(docs, picked, textEl.value);
+  var stateOf = {};
+  rows.forEach(function(r) { stateOf[r.name] = r.status; });
+
+  listEl.textContent = '';
+  docs.forEach(function(d) {
+    var label = document.createElement('label');
+    label.setAttribute('data-doc', d.name);
+    label.className = stateOf[d.name] === 'skip' ? 'skip' : '';
+    var cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.className = 'dg-note-check';
+    cb.checked = !!_dgNotePick[d.name];
+    cb.addEventListener('change', function() {
+      _dgNotePick[d.name] = cb.checked;
+      renderDgNote();
+    });
+    var n = document.createElement('span');
+    n.textContent = d.name + (stateOf[d.name] === 'skip' ? ' (既にあり)' : '');
+    label.appendChild(cb);
+    label.appendChild(n);
+    listEl.appendChild(label);
+  });
+
+  var add = rows.filter(function(r) { return r.status === 'add'; }).length;
+  sumEl.textContent = BN.summaryText(rows);
+  sumEl.setAttribute('data-add', String(add));
+  sumEl.setAttribute('data-picked', String(picked.length));
+  runBtn.disabled = !(add > 0);
+  var all = document.getElementById('dg-note-all');
+  if (all) all.checked = docs.length > 0 && picked.length === docs.length;
+}
+
+function toggleDgNote(open) {
+  var box = document.getElementById('dg-note-box');
+  if (!box) return;
+  var want = (open == null) ? !!box.hidden : !!open;
+  box.hidden = !want;
+  if (!want) return;
+  // 既定は「影響先すべて」。一覧を見た直後に打つのだから、選び直させない。
+  _dgNotePick = {};
+  _dgNoteDocNames().forEach(function(n) { _dgNotePick[n] = true; });
+  renderDgNote();
+  var textEl = document.getElementById('dg-note-text');
+  if (textEl) textEl.focus();
+}
+
+// 打つ。開いているタブは編集中の本文ごと進め、開いていない図は保存フォルダへ
+// 直接書き戻す (開いてから直すのでは、枚数ぶんのタブを開く手順が残る)。
+function applyDgNote(names, text) {
+  var BN = window.MA.bulkNote;
+  var WS = window.MA.workspace;
+  var res = { changed: [], added: 0, skipped: 0, failed: 0 };
+  if (!BN || !WS) return Promise.resolve(res);
+  var out = BN.apply(_dgNoteDocs(), names, text);
+  res.changed = out.changed; res.added = out.added; res.skipped = out.skipped;
+  if (!out.changed.length) return Promise.resolve(res);
+
+  var openIds = {};
+  WS.list().forEach(function(d) { openIds[d.id] = true; });
+  var activeId = WS.getActiveId();
+  var opened = [], folderOnly = [];
+  out.changed.forEach(function(c) {
+    if (c.id != null && openIds[c.id]) opened.push(c); else folderOnly.push(c);
+  });
+  if (opened.length) {
+    if (window.MA.history) window.MA.history.pushHistory();
+    opened.forEach(function(c) {
+      if (c.id === activeId) {
+        mmdText = c.dsl;
+        suppressSync = true;
+        editorEl.value = mmdText;
+        suppressSync = false;
+      }
+      WS.updateDoc(c.id, { dsl: c.dsl });
+    });
+    updateLineNumbers();
+    scheduleRefresh();
+    renderTabs();
+    writeChangedToFolder(opened);
+  }
+  var dir = _wsFileDir();
+  var writes = _fiFolderMode() ? folderOnly : [];
+  return Promise.all(writes.map(function(c) {
+    return Promise.resolve(WS.saveToFile({ name: c.name, dsl: c.dsl }, dir)).then(function(ok) {
+      if (!ok) { res.failed++; return; }
+      // 読み込み済みの控えも進める。次のプレビューが古い本文を数えないように。
+      _fiFileDocs.forEach(function(d) { if (d.name === c.name) d.dsl = c.dsl; });
+      // 基準がまだ無い図は書く **前** を基準にする (この note がそのまま + 差分になる)。
+      if (window.MA.saveDiff) { try { window.MA.saveDiff.markIfAbsent(c.name, c.before); } catch (e) {} }
+    }, function() { res.failed++; });
+  })).then(function() {
+    _recordWrite('bulk-note', { note: _dgName }, out.changed.map(function(c) {
+      return { name: c.name, before: c.before, after: c.dsl };
+    }));
+    return res;
+  });
 }
 
 function renderDepGraph() {
@@ -13128,6 +13260,12 @@ function renderDepGraph() {
   if (walkBtn) walkBtn.addEventListener('click', function() {
     startFixWalk(_dgName, impact, { hops: _dgHops });
   });
+  // 打つ先は「今出ている一覧」。名前・連鎖段数を変えたら選び直す。
+  _dgNoteImpact = impact;
+  var noteBtn = document.getElementById('dg-note');
+  if (noteBtn) noteBtn.addEventListener('click', function() { toggleDgNote(); });
+  var noteBox = document.getElementById('dg-note-box');
+  if (noteBox && !noteBox.hidden) renderDgNote();
   return { graph: graph, view: view, impact: impact };
 }
 
@@ -13135,6 +13273,9 @@ function toggleDepGraph(open) {
   var modal = document.getElementById('dg-modal');
   if (!modal) return;
   var want = (open == null) ? (modal.style.display === 'none' || !modal.style.display) : !!open;
+  // note 欄は開け閉めのたびに畳む (前に打った文面が次の名前に混ざらない)。
+  var noteBox = document.getElementById('dg-note-box');
+  if (noteBox) noteBox.hidden = true;
   if (!want) { modal.style.display = 'none'; return; }
   // 置換前に打った名前をそのまま起点にする (打ち直させない)。
   var from = (document.getElementById('rename-from') || {}).value || '';
@@ -13185,6 +13326,38 @@ function setupDepGraph() {
       if (!t) return;
       toggleDepGraph(false);
       toggleTicketBoard(true);
+    });
+  });
+
+  // 影響先へまとめて note。文面は 1 度だけ打つ。
+  var noteText = document.getElementById('dg-note-text');
+  if (noteText) noteText.addEventListener('input', renderDgNote);
+  var noteAll = document.getElementById('dg-note-all');
+  if (noteAll) noteAll.addEventListener('change', function() {
+    _dgNotePick = {};
+    if (noteAll.checked) _dgNoteDocNames().forEach(function(n) { _dgNotePick[n] = true; });
+    renderDgNote();
+  });
+  var noteCancel = document.getElementById('dg-note-cancel');
+  if (noteCancel) noteCancel.addEventListener('click', function() { toggleDgNote(false); });
+  var noteRun = document.getElementById('dg-note-run');
+  if (noteRun) noteRun.addEventListener('click', function() {
+    var sumEl = document.getElementById('dg-note-summary');
+    var text = (noteText || {}).value || '';
+    var names = _dgNoteDocNames().filter(function(n) { return _dgNotePick[n]; });
+    noteRun.disabled = true;
+    applyDgNote(names, text).then(function(res) {
+      var msg = res.added + ' 図に note を打ちました';
+      if (res.skipped) msg += ' (' + res.skipped + ' 図は既にあり)';
+      if (res.failed) msg += ' / ' + res.failed + ' 図は書き込めませんでした';
+      if (sumEl) {
+        sumEl.textContent = msg;
+        sumEl.setAttribute('data-applied', String(res.added));
+      }
+      setSaveStatus(msg);
+      renderDepGraph();
+      renderDgNote();
+      if (sumEl) sumEl.textContent = msg;   // 打った結果を残す (再描画で消さない)
     });
   });
 

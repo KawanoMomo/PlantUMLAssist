@@ -24,6 +24,7 @@ window.MA.writeHistory = (function() {
     'glossary': '略語辞書の確定',
     'note-rename': '🔖 指摘から選ぶ (ラベル統一)',
     'note-verdict': '🔖 指摘から選ぶ (別ドメイン宣言)',
+    'bulk-note': '◈ 依存グラフ (影響先へまとめて note)',
   };
 
   function _s(v) { return v == null ? '' : String(v); }
