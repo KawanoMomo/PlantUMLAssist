@@ -161,7 +161,16 @@ function summarize(audits) {
   const n = audits.name;
   if (n && n.status === 'ok') s.name = { variants: n.result.variants.length, undeclared: n.result.undeclared.length, clean: !!n.result.clean };
   const m = audits.method;
-  if (m && m.status === 'ok') s.method = { issues: (m.result.issues || []).length };
+  // BLK-reviewer-20260914-1406: 指摘の総数だけでは「クラスを足したら減った」が
+  // 正しい修正なのか、メソッド名をクラスとして宣言した誤り・写しにだけ入れた
+  // 修正なのかを読み分けられない。宣言の付け方を疑う 2 種を別に数えて出す。
+  if (m && m.status === 'ok') {
+    const mi = m.result.issues || [];
+    s.method = {
+      issues: mi.length,
+      suspect: mi.filter((it) => it.kind === 'method-as-class' || it.kind === 'draft-only').length,
+    };
+  }
   const c = audits.consistency;
   if (c && c.status === 'ok') {
     s.consistency = {
@@ -302,7 +311,7 @@ function summarize(audits) {
 // 取り違えない)。フィールドの既定はここ 1 か所に書く。
 const SUMMARY_FIELDS = {
   name: ['variants', 'undeclared', 'clean'],
-  method: ['issues'],
+  method: ['issues', 'suspect'],
   consistency: ['naming', 'unused', 'methods', 'methodReplies', 'granularity', 'events', 'count'],
   family: ['families', 'mismatched', 'skippedPairs'],
   trace: ['families', 'transitions', 'missing', 'partial', 'unmatchable', 'noSequence', 'grainSkipped', 'outOfScope'],
@@ -386,7 +395,8 @@ function formatSummary(report, prev, options) {
   const lines = [`図 ${report.docs.length} 枚 (${report.targets.join(', ')})`];
   const s = report.summary;
   if (s.name) lines.push(`名前突合: 表記揺れ ${s.name.variants} 組 / 宣言なし ${s.name.undeclared} 件`);
-  if (s.method) lines.push(`メソッド突合: 指摘 ${s.method.issues} 件`);
+  if (s.method) lines.push(`メソッド突合: 指摘 ${s.method.issues} 件`
+    + (s.method.suspect ? ` (うち宣言の付け方の疑い ${s.method.suspect} 件)` : ''));
   if (s.consistency) lines.push(`整合: 命名 ${s.consistency.naming} / 未使用 ${s.consistency.unused} / メソッド ${s.consistency.methods}`
     + (s.consistency.methodReplies ? ` (応答として除外 ${s.consistency.methodReplies} 件)` : '')
     + ` / 粒度 ${s.consistency.granularity} / イベント ${s.consistency.events}`);

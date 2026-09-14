@@ -14288,7 +14288,10 @@ function openNameAudit() {
   // 「クラスはあるがメソッドが無い」「引数の個数が違う」を、grep 目視の前にここで出す。
   var MAUD = window.MA.methodAudit;
   var mres = MAUD ? MAUD.audit(docs) : { issues: [], calls: [] };
-  var KIND_LABEL = { 'no-class': 'クラス無し', 'no-method': 'メソッド無し', arity: '引数違い' };
+  var KIND_LABEL = { 'no-class': 'クラス無し', 'no-method': 'メソッド無し', arity: '引数違い',
+    // BLK-reviewer-20260914-1406: 「クラスを足せば消える」だけを見ていると、
+    // メソッド名をクラスとして宣言した誤りや、写しにだけ入れた修正でも件数が減る。
+    'method-as-class': 'クラス宣言の誤り', 'draft-only': '写しにだけ宣言' };
   html += '<div style="' + SECTION + '">メソッド突合 (呼び出しとクラス宣言)</div>';
   html += '<div id="na-method-summary" style="font-size:11px;color:var(--text-secondary);" ' +
     'data-calls="' + mres.calls.length + '" data-issues="' + mres.issues.length + '">' +
