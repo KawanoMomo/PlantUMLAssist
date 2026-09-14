@@ -118,6 +118,35 @@ describe('part-slice — 複合図から部品を切り出す', function() {
     expect(c).not.toContain('plantuml-class.puml');
   });
 
+  // BLK-junior-20260914-1006 (friction): 自分の図の部品名で相手のフォルダを引く。
+  test('自分の図の部品を載せた相手の図を、ファイル名が違っても名指しできる', function() {
+    var docs = [
+      { name: 'gpio_init_sequence', dsl: '@startuml\nparticipant Gpio_Driver\n@enduml' },
+      { name: 'driver_common_class', dsl: COMPOSITE },
+      { name: 'timer_class', dsl: '@startuml\nclass Timer_Driver\n@enduml' },
+    ];
+    var hits = PS.findInFolder(docs, ['Gpio']);
+    expect(hits.length).toBe(1);
+    expect(hits[0].name).toBe('driver_common_class');
+    expect(hits[0].part).toBe('Gpio_Driver');
+    expect(hits[0].composite).toBe(true);
+    expect(PS.foundLabel(hits[0])).toBe('Gpio_Driver は driver_common_class (複合図・5 クラス) にあります');
+  });
+
+  test('載っている図が無ければ 0 件と言い切る (探し直させない)', function() {
+    expect(PS.findInFolder([{ name: 'x', dsl: COMPOSITE }], ['Adc'])).toEqual([]);
+    expect(PS.findInFolder([{ name: 'x', dsl: COMPOSITE }], [])).toEqual([]);
+  });
+
+  test('複合図を先に出す (どちらを見るかを読む側に決めさせない)', function() {
+    var single = '@startuml\nclass Gpio_Driver\nclass Driver_Common\nGpio_Driver --|> Driver_Common\n@enduml';
+    var hits = PS.findInFolder([
+      { name: 'a_single', dsl: single },
+      { name: 'z_composite', dsl: COMPOSITE },
+    ], ['Gpio']);
+    expect(hits.map(function(h) { return h.name; })).toEqual(['z_composite', 'a_single']);
+  });
+
   test('候補のうち、本文にその部品のクラスがある 1 枚を採る', function() {
     var docs = [
       { name: 'a.puml', dsl: '@startuml\nclass Timer_Driver\n@enduml' },

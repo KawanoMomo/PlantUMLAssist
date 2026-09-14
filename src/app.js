@@ -6138,6 +6138,66 @@ function renderPartChips() {
   });
 }
 
+// BLK-junior-20260914-1006: 自分の図と先輩の図はファイル名が対をなさないので、
+// 「先輩のどの図を見ればいいのか」を覗き一覧から目で当てていた (複合図を開いて
+// 中に Gpio_Driver があるかを確かめる)。今開いている自分の図の部品名で
+// 覗いているフォルダの本文を引き、載っている図を名指しして、押せばそのまま
+// 切り出しと並ぶ所まで行く。
+function findPeekPartHome() {
+  var PS = window.MA.partSlice;
+  var WS = window.MA.workspace;
+  var host = document.getElementById('peek-parts');
+  if (!PS || !WS || !host) return Promise.resolve(false);
+  var mine = WS.getActive ? WS.getActive() : null;
+  var myDsl = mine ? (window.MA.dslUtils ? window.MA.dslUtils.docDsl(mine) : mine.dsl) : '';
+  var myParts = myDsl ? PS.parts(myDsl).map(function(p) { return p.name; }) : [];
+  var dir = _peekDir;
+  host.style.display = 'block';
+  host.textContent = '';
+  var head = document.createElement('div');
+  head.className = 'peek-parts-head';
+  head.id = 'peek-find-head';
+  host.appendChild(head);
+  if (!myParts.length || !dir) {
+    head.textContent = '今開いている図に部品 (クラス) がありません';
+    return Promise.resolve(false);
+  }
+  head.textContent = myParts.join('・') + ' を ' + _peekFolderName(dir) + ' の中から探しています…';
+  return WS.listFiles(dir).then(function(names) {
+    return Promise.all((names || []).map(function(n) {
+      return WS.loadFile(n, dir)
+        .then(function(t) { return { name: n, dsl: typeof t === 'string' ? t : '' }; })
+        .catch(function() { return { name: n, dsl: '' }; });
+    }));
+  }).then(function(docs) {
+    var hits = PS.findInFolder(docs, myParts);
+    if (!hits.length) {
+      head.textContent = myParts.join('・') + ' を載せた図は ' + _peekFolderName(dir) + ' にありません';
+      head.setAttribute('data-find-hits', '0');
+      return false;
+    }
+    head.textContent = myParts.join('・') + ' を載せた先輩の図が ' + hits.length + ' 枚見つかりました';
+    head.setAttribute('data-find-hits', String(hits.length));
+    hits.forEach(function(h) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'peek-part-chip';
+      b.setAttribute('data-find-file', h.name);
+      b.setAttribute('data-find-part', h.part);
+      b.textContent = PS.foundLabel(h);
+      b.addEventListener('click', function() {
+        // 押した先で切り出しまで進む (開き直してから部品を押し直させない)。
+        showPeekFile(h.name).then(function() { return selectPartPair(h.part); });
+      });
+      host.appendChild(b);
+    });
+    return true;
+  }).catch(function() {
+    head.textContent = '探せませんでした';
+    return false;
+  });
+}
+
 // 押した部品の切り出しと、自分のフォルダの同じ部品の図を並べる。
 // 読むのは候補 (名前に部品名を含む数枚) だけ。
 function selectPartPair(partName) {
@@ -7111,6 +7171,8 @@ function setupPeekFolder() {
   if (el.sbsToggle) {
     el.sbsToggle.addEventListener('click', function() { setSbsMode(!_sbsOn); });
   }
+  var findPart = document.getElementById('peek-find-part');
+  if (findPart) findPart.addEventListener('click', function() { findPeekPartHome(); });
   var noteToggle = document.getElementById('peek-note-toggle');
   if (noteToggle) noteToggle.addEventListener('click', function() { setNoteMode(!_noteOn); });
   if (el.cohortTemplates) {

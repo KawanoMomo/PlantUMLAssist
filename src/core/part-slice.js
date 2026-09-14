@@ -206,6 +206,47 @@ window.MA.partSlice = (function() {
     return scored.slice(0, lim).map(function(x) { return x.name; });
   }
 
+  // ── 相手のフォルダから「その部品が載っている図」を探す ────────────────
+  // BLK-junior-20260914-1006: 自分の図と先輩の図はファイル名が対をなさないので
+  // (`GpioDrv派生クラス図(資料用)` ⇔ `driver_common_class`)、「本当に見るべき
+  // 先輩の図はこれで合っているか」を複合図を開いて目で確かめるしかなかった。
+  // 自分の図の部品名で相手のフォルダの本文を引き、載っている図を名指しする。
+  function findInFolder(docs, parts_) {
+    var want = (Array.isArray(parts_) ? parts_ : [parts_]).map(function(p) {
+      return { name: _s(p), key: partKey(p) };
+    }).filter(function(p) { return p.key; });
+    if (!want.length) return [];
+    var out = [];
+    (docs || []).forEach(function(d) {
+      if (!d || !_s(d.dsl)) return;
+      var cls = classesOf(d.dsl);
+      if (!cls.length) return;
+      want.forEach(function(p) {
+        var hit = null;
+        cls.forEach(function(c) { if (!hit && partKey(c.name) === p.key) hit = c.name; });
+        if (!hit) return;
+        out.push({
+          name: _s(d.name), mine: p.name, part: hit,
+          composite: isComposite(d.dsl), classes: cls.length,
+        });
+      });
+    });
+    // 複合図を先に出す (単独図が既にあるならそれが先、という並べ方では
+    // 「どちらを見るか」がまた読む側の判断になる。件数の多い方を先に置かない)。
+    out.sort(function(a, b) {
+      if (a.mine !== b.mine) return a.mine < b.mine ? -1 : 1;
+      if (a.composite !== b.composite) return a.composite ? -1 : 1;
+      return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
+    });
+    return out;
+  }
+
+  function foundLabel(hit) {
+    if (!hit) return '';
+    return hit.part + ' は ' + hit.name
+      + (hit.composite ? ' (複合図・' + hit.classes + ' クラス) にあります' : ' (単独図) にあります');
+  }
+
   // 読んだ候補のうち、その部品のクラスを本文に持つ 1 枚。
   function pickOwn(docs, part) {
     var key = partKey(part);
@@ -228,5 +269,7 @@ window.MA.partSlice = (function() {
     sliceLabel: sliceLabel,
     candidates: candidates,
     pickOwn: pickOwn,
+    findInFolder: findInFolder,
+    foundLabel: foundLabel,
   };
 })();

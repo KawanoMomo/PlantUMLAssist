@@ -703,6 +703,43 @@ test.describe('junior 手順 1: 先輩の複合図から部品を切り出して
     expect(await page.locator('#sbs-grid .sbs-mark').count()).toBeGreaterThan(0);
   });
 
+  // BLK-junior-20260914-1006 (friction): 見るべき先輩の図がどれかは、覗き一覧の
+  // ファイル名からは決まらない (名前が対をなさない)。複合図を開いて中に
+  // Gpio_Driver があるかを目で確かめていた。自分の図の部品名で引けることを
+  // 到達条件にし、そこまでのクリック数を実測する。
+  test('自分の図の部品名で、先輩のどの図に載っているかを名指しできる', async ({ page }) => {
+    let clicks = 0;
+    const click = async (sel) => { clicks++; await page.locator(sel).click(); };
+
+    // 自分の図を開いてから覗く (junior の実際の順)。
+    await click('#btn-tab-folder');
+    await page.waitForSelector('#folder-panel.open');
+    await click('#folder-panel .folder-item[data-file-name="GpioDrv派生クラス図(資料用)"]');
+    await page.waitForTimeout(800);
+
+    await click('#btn-tab-peek');
+    await page.waitForSelector('#peek-modal');
+    await click('#peek-find-part');
+
+    // 到達条件その1: 載っている図が名指しされる (複合図であることも読める)。
+    await page.waitForSelector('#peek-find-head[data-find-hits]');
+    await expect(page.locator('#peek-find-head')).toContainText('1 枚');
+    const hit = page.locator('#peek-parts [data-find-file="driver_common_class"]');
+    await expect(hit).toContainText('複合図');
+    await expect(hit).toHaveAttribute('data-find-part', 'Gpio_Driver');
+
+    // 到達条件その2: 押せばその部品の切り出しまで一気に出る。
+    await click('#peek-parts [data-find-file="driver_common_class"]');
+    await page.waitForSelector('#sbs-grid');
+    await expect(page.locator('#sbs-head')).toContainText('Gpio_Driver');
+    const grid = await page.locator('#sbs-grid').innerText();
+    expect(grid).toContain('Gpio_SetHigh');
+    expect(grid).not.toContain('Spi_Driver');
+
+    // 到達条件その3: ここまでキー入力 0、クリックは 10 以下。
+    expect(clicks).toBeLessThanOrEqual(10);
+  });
+
   test('複合図でない図では部品の帯を出さない (押す所を増やさない)', async ({ page }) => {
     await page.locator('#btn-tab-peek').click();
     await page.waitForSelector('#peek-modal');
