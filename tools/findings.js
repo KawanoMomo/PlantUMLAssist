@@ -50,6 +50,8 @@ const USAGE = [
   '  --set ID=状態  指摘 1 行の判断を貼り替える (状態: partial / resolved / wontfix / open)',
   '  --note 文言    --set に添える覚え書き (「svg 再エクスポートのみ継続」等)',
   '  --all          解消・対象外の行も出す (既定は未解消のみ)',
+  '  --undeclared   図に意図の明記が無い指摘だけ出す (まだ答えが返っていないもの)',
+  '  --declared     意図明記済み (@omit-method タグ / note) の指摘だけ出す',
   '  --json         JSON を出す',
   '  --md [FILE]    指摘.md に貼れる表を出す (FILE を書けばそこへ書き出す)',
   '  --state FILE   控えの置き場所を変える (既定は対象フォルダの中の ' + STATE_NAME + ')',
@@ -63,17 +65,25 @@ const USAGE = [
   '  部分解消 — 人が貼った判断。監査から消えても解消にはせず、この行のまま持ち越す',
   '  解消     — 今回の監査に出ていない (または解消の判断を貼った)',
   '',
+  '意図の意味 (図の側に「意図して省略する」と書いてあるか):',
+  '  意図明記済み(タグ) — `\'@omit-method Cls.Method 理由` が図にある',
+  '  意図明記済み(note) — note の自由文が意図的な省略/割愛としてその名前を挙げている',
+  '  未対応             — 図に何も書かれていない',
+  '',
   '判断を貼った行 (部分解消 / 解消 / 対象外) は、以後の監査の出欠で上書きしない。',
   '監査がカテゴリを移しただけの回に「再発」へ戻るのを防ぐため。--set ID=open で剥がす。',
 ].join('\n');
 
 function parseArgs(argv) {
   const opts = { targets: [], tick: null, set: null, note: null, all: false, json: false,
-                 md: false, mdFile: null, state: null, useState: true, help: false };
+                 md: false, mdFile: null, state: null, useState: true, help: false,
+                 intent: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--help' || a === '-h') opts.help = true;
     else if (a === '--all') opts.all = true;
+    else if (a === '--undeclared') opts.intent = 'undeclared';
+    else if (a === '--declared') opts.intent = 'declared';
     else if (a === '--json') opts.json = true;
     else if (a === '--no-state') opts.useState = false;
     else if (a === '--tick') opts.tick = argv[++i];
@@ -119,12 +129,24 @@ function auditsFrom(targets) {
     if (json.length !== targets.length) throw new Error('監査JSON と図は混ぜて指定できません');
     const v = JSON.parse(fs.readFileSync(path.resolve(json[0]), 'utf-8'));
     // audit.js --out は全体の報告書を書く。監査そのものは中の audits。
-    return (v && v.audits) || v;
+    // JSON からは図の本文が読めないので、意図の仕分けは付かない (印は空のまま)。
+    return { audits: (v && v.audits) || v, docs: [] };
   }
   const rt = loadMA();
   const docs = report.collectDocs(targets, { skipped: skippedDirs });
   if (docs.length === 0) throw new Error('対象の .puml が 1 枚もありません: ' + targets.join(', '));
-  return report.buildReport(rt.MA, docs, { targets: targets }).audits;
+  return { audits: report.buildReport(rt.MA, docs, { targets: targets }).audits, docs: docs, MA: rt.MA };
+}
+
+// BLK-reviewer-20260915-0307-wish: 同じ「宣言の無い呼び出し」でも、図の側に
+// 「意図して省略する」と書いてあるものと、まだ何も答えていないものがある。
+// その区別は監査のカテゴリには出ず、reviewer は puml の note を人力で読み直して
+// 指摘.md に手書きの表を作っていた。ここで図から意図の宣言 (`@omit-method`
+// タグと note の自由文) を読み、指摘 1 件ずつに印を付ける。
+function markIntent(audits, docs, MA) {
+  const OM = (MA && MA.omitMethod) || null;
+  if (!OM || !docs.length) return audits;
+  return OM.annotateAudits(audits, OM.collect(docs, { notes: true }));
 }
 
 // `F-03=partial` / `F-03:partial` / `F-03 partial` のどれでも受ける。
@@ -134,22 +156,36 @@ function parseSet(text) {
   return { id: m[1], state: m[2].toLowerCase() };
 }
 
+// 意図の明記で絞る。--all と違い、これは「未解消のうち、どちらを見るか」。
+function filterIntent(list, intent) {
+  if (intent === 'declared') return list.filter((r) => r.declared);
+  if (intent === 'undeclared') return list.filter((r) => !r.declared);
+  return list;
+}
+
 function formatSummary(list, ctx) {
   const lines = [];
   lines.push('指摘トラッカー: ' + ctx.stateFile);
   lines.push('  ' + tracker.summaryText(list));
+  const isum = tracker.intentSummaryText(list);
+  if (isum) lines.push('  ' + isum);
   if (ctx.tick) lines.push('  この回: ' + ctx.tick);
   if (ctx.ticks) lines.push('  記録した tick: ' + ctx.ticks);
   lines.push('');
-  const shown = ctx.all ? list : list.filter((r) => r.open);
+  const base = ctx.all ? list : list.filter((r) => r.open);
+  const shown = filterIntent(base, ctx.intent);
   if (shown.length === 0) {
     lines.push('  出ている指摘はありません。');
   } else {
     shown.forEach((r) => lines.push('  ' + tracker.rowText(r)));
   }
-  if (!ctx.all && list.length !== shown.length) {
+  if (base.length !== shown.length) {
     lines.push('');
-    lines.push('  （解消・対象外 ' + (list.length - shown.length) + ' 件は --all で出ます）');
+    lines.push('  （意図の明記で ' + (base.length - shown.length) + ' 件を伏せています）');
+  }
+  if (!ctx.all && list.length !== base.length) {
+    lines.push('');
+    lines.push('  （解消・対象外 ' + (list.length - base.length) + ' 件は --all で出ます）');
   }
   return lines.join('\n');
 }
@@ -201,15 +237,16 @@ function main(argv, io) {
   }
 
   if (opts.targets.length) {
-    let audits;
+    let built;
     try {
-      audits = auditsFrom(opts.targets);
+      built = auditsFrom(opts.targets);
     } catch (e) {
       err('対象が読めません: ' + opts.targets.join(', ') + ' — ' + e.message);
       return 1;
     }
     store = tracker.update(store, {
-      audits: audits, label: opts.tick, at: new Date().toISOString(),
+      audits: markIntent(built.audits, built.docs, built.MA),
+      label: opts.tick, at: new Date().toISOString(),
     });
     // 読み飛ばした残骸は名指しで言う (黙って落とすと「図が減った」と読める)。
     if (skippedDirs.length) {
@@ -240,16 +277,18 @@ function main(argv, io) {
       state: statePath,
       ticks: store.ticks,
       summary: tracker.summaryText(list),
-      findings: list,
+      intentSummary: tracker.intentSummaryText(list),
+      findings: filterIntent(list, opts.intent),
     }, null, 2));
     return 0;
   }
   out(formatSummary(list, {
-    stateFile: statePath, all: opts.all, tick: opts.tick,
+    stateFile: statePath, all: opts.all, tick: opts.tick, intent: opts.intent,
     ticks: store.ticks.map((t) => t.label).join(' → '),
   }));
   return 0;
 }
 
 if (require.main === module) process.exit(main(process.argv.slice(2)));
-module.exports = { main, parseArgs, parseSet, USAGE, STATE_FILE, STATE_NAME, defaultStateFile, formatSummary };
+module.exports = { main, parseArgs, parseSet, USAGE, STATE_FILE, STATE_NAME, defaultStateFile,
+                   formatSummary, filterIntent, markIntent };

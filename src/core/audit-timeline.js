@@ -217,6 +217,11 @@
           // 除外先へ移った指摘は「解消」ではないので、そう読める印と理由を持たせる。
           excluded: !!EXCLUDED[kind],
           reason: (it && it.reason) || null,
+          // 「意図して省略する」と図の側で述べてあるか (omit-method が貼る印)。
+          // 指摘そのものは残したまま、意図明記済みと未対応を分けて読むための札。
+          intent: (it && it.intent) || '',
+          intentReason: (it && it.intentReason) || '',
+          intentDoc: (it && it.intentDoc) || '',
         });
       });
     }

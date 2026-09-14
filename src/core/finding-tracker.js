@@ -49,6 +49,16 @@
     excluded: '除外',
   };
 
+  // BLK-reviewer-20260915-0307-wish: 「意図して省略する」と図の側で述べてあるか。
+  // 監査は述べてあるものもいないものも同じカテゴリで出すので、この区別は
+  // reviewer が puml の note を人力で読んで指摘.md に手書きするしかなかった。
+  // 値は omit-method が貼る印 ('tag' / 'note' / 空) とそのまま対応する。
+  var INTENT_LABEL = {
+    tag: '意図明記済み(タグ)',
+    note: '意図明記済み(note)',
+    '': '未対応',
+  };
+
   function _s(v) { return v === null || v === undefined ? '' : String(v); }
 
   function emptyState() {
@@ -84,11 +94,18 @@
       if (!cur) {
         cur = by[it.entity] = {
           entity: it.entity, title: it.title, cats: [], docs: [], excluded: true,
+          intent: '', intentReason: '', intentDoc: '',
         };
         out.push(cur);
       }
       if (cur.cats.indexOf(it.category) < 0) cur.cats.push(it.category);
       (it.docs || []).forEach(function(d) { if (cur.docs.indexOf(d) < 0) cur.docs.push(d); });
+      // 意図の明記はカテゴリを跨いで 1 件に付く。タグが note より強い。
+      if (it.intent && (!cur.intent || (cur.intent !== 'tag' && it.intent === 'tag'))) {
+        cur.intent = it.intent;
+        cur.intentReason = _s(it.intentReason);
+        cur.intentDoc = _s(it.intentDoc);
+      }
       // 全部が除外バケツのときだけ除外扱い。1 つでも生きていれば指摘。
       if (!it.excluded) cur.excluded = false;
     });
@@ -131,6 +148,11 @@
       f.title = it.title || f.title;
       f.cats = it.cats.slice();
       f.excluded = !!it.excluded;
+      // 意図の明記は「今回の図にそう書いてあるか」なので、毎回上書きする
+      // (note を消せば未対応に戻る。人が貼った verdict とは別物)。
+      f.intent = _s(it.intent);
+      f.intentReason = _s(it.intentReason);
+      f.intentDoc = _s(it.intentDoc);
       it.docs.forEach(function(d) { if (f.docs.indexOf(d) < 0) f.docs.push(d); });
       f.marks[idx] = 1;
       f.lastIndex = idx;
@@ -196,6 +218,9 @@
         open: state2 !== 'resolved' && state2 !== 'wontfix' && state2 !== 'excluded',
         excluded: !!f.excluded,
         cats: (f.cats || []).slice(), docs: (f.docs || []).slice(),
+        intent: _s(f.intent), intentLabel: INTENT_LABEL[_s(f.intent)] || INTENT_LABEL[''],
+        intentReason: _s(f.intentReason), intentDoc: _s(f.intentDoc),
+        declared: !!f.intent,
         verdict: v ? v.state : null,
         note: v ? _s(v.note) : '',
         verdictAt: v ? _s(v.tick) : '',
@@ -245,20 +270,34 @@
     return STATE[r.state] || r.state;
   }
 
+  // 意図の札。未対応の行では何も言わない (未解消の一覧に「未対応」が並んでも
+  // 情報が増えないため。仕分けは summary と表の列で読む)。
+  function intentText(r) {
+    if (!r || !r.intent) return '';
+    var s = INTENT_LABEL[r.intent] || INTENT_LABEL[''];
+    if (r.intentDoc) s += ' — ' + r.intentDoc;
+    return s;
+  }
+
   function rowText(r) {
     var s = r.id + ' [' + statusText(r) + '] ' + r.title;
     s += '｜初出 ' + r.since;
     if (r.cats.length) s += '｜' + r.cats.join('+');
     if (r.docs.length) s += '｜' + r.docs.join(', ');
+    var it = intentText(r);
+    if (it) s += '｜' + it;
     if (r.note) s += '｜' + r.note;
     return s;
   }
 
   function counts(list) {
-    var c = { total: list.length, fresh: 0, carried: 0, regressed: 0, partial: 0, resolved: 0, wontfix: 0, excluded: 0, open: 0 };
+    var c = { total: list.length, fresh: 0, carried: 0, regressed: 0, partial: 0, resolved: 0,
+              wontfix: 0, excluded: 0, open: 0, declared: 0, undeclared: 0 };
     list.forEach(function(r) {
       c[r.state] = (c[r.state] || 0) + 1;
       if (r.open) c.open++;
+      if (!r.open) return;
+      if (r.declared) c.declared++; else c.undeclared++;
     });
     return c;
   }
@@ -270,24 +309,45 @@
       + ' 件 / 除外 ' + c.excluded + ' 件';
   }
 
+  // 未解消の中の仕分け。0 件のときは何も言わない (行を増やさない)。
+  function intentSummaryText(list) {
+    var c = counts(list);
+    if (!c.declared && !c.undeclared) return '';
+    return '未解消の内訳: 意図明記済み ' + c.declared + ' 件 / 未対応 ' + c.undeclared + ' 件';
+  }
+
   // 指摘.md にそのまま貼れる表。全文の書き直しではなく、この表を貼り替える。
   function markdown(state, title) {
     var st = readState(state);
     var list = rows(st);
-    var lines = ['# ' + (title || '指摘トラッカー'), '', summaryText(list), ''];
+    var lines = ['# ' + (title || '指摘トラッカー'), '', summaryText(list)];
+    var isum = intentSummaryText(list);
+    if (isum) lines.push('', isum);
+    lines.push('');
     if (!st.ticks.length) {
       lines.push('記録がありません（監査を 1 回記録すると台帳が立ち上がります）');
       return lines.join('\n');
     }
     lines.push('記録した tick: ' + st.ticks.map(function(t) { return t.label; }).join(' → '));
     lines.push('');
-    lines.push('| id | 状態 | 初出 | 対象 | 分類 | 備考 |');
-    lines.push('| --- | --- | --- | --- | --- | --- |');
+    // 「意図」の列が、reviewer が手で書いていた 対応済み / 未対応 の表そのもの。
+    lines.push('| id | 状態 | 意図 | 初出 | 対象 | 分類 | 備考 |');
+    lines.push('| --- | --- | --- | --- | --- | --- | --- |');
     list.forEach(function(r) {
-      lines.push('| ' + r.id + ' | ' + statusText(r) + ' | ' + r.since + ' | '
+      lines.push('| ' + r.id + ' | ' + statusText(r) + ' | '
+        + (INTENT_LABEL[r.intent] || INTENT_LABEL['']) + ' | ' + r.since + ' | '
         + (r.docs.join(', ') || '—') + ' | ' + (r.cats.join('+') || '—') + ' | '
         + (r.note || '') + ' |');
     });
+    var declared = list.filter(function(r) { return r.open && r.declared; });
+    if (declared.length) {
+      lines.push('');
+      lines.push('意図明記済みの理由（図に書かれている文言）');
+      declared.forEach(function(r) {
+        lines.push('- ' + r.id + ' ' + r.title + ' — ' + (r.intentReason || '理由の記載なし')
+          + (r.intentDoc ? '（' + r.intentDoc + '）' : ''));
+      });
+    }
     lines.push('');
     lines.push('出欠（' + st.ticks.map(function(t) { return t.label; }).join(' / ') + '）');
     list.forEach(function(r) { lines.push('- ' + r.spark + ' ' + r.id + ' ' + r.title); });
@@ -343,7 +403,8 @@
   }
 
   var api = {
-    VERSION: VERSION, VERDICT: VERDICT, STATE: STATE,
+    VERSION: VERSION, VERDICT: VERDICT, STATE: STATE, INTENT_LABEL: INTENT_LABEL,
+    intentText: intentText, intentSummaryText: intentSummaryText,
     emptyState: emptyState, readState: readState, makeId: makeId,
     isJunkPath: isJunkPath, pruneBroken: pruneBroken,
     itemsOf: itemsOf, update: update, rows: rows, setVerdict: setVerdict,
