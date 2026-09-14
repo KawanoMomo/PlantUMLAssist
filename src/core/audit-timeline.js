@@ -158,6 +158,46 @@
     return label || subj || itemId(kind, it);
   }
 
+  // ---- 対象ファイル --------------------------------------------------------
+
+  // BLK-reviewer-20260914-1306-wish: 指摘 1 件が「どの図の話か」は、カテゴリごとに
+  // doc / docs / onlyIn / name と別々の項目に入っている。ここで 1 つの形に均す。
+  // 行番号は監査結果が持っていないので、ここでは出さない (本文を持つ側で引く)。
+  function docsOf(kind, item) {
+    var it = item || {};
+    var out = [];
+    function add(v) {
+      if (!v) return;
+      if (Array.isArray(v)) { v.forEach(add); return; }
+      var s = _s(v);
+      if (s && out.indexOf(s) < 0) out.push(s);
+    }
+    switch (kind) {
+      case 'name.variants': (it.members || []).forEach(function(m) { add(m.docs || m.doc); }); break;
+      case 'consistency.granularity': add(it.onlyIn); break;
+      case 'svg.missing':
+      case 'svg.stale': add(it.name); break;
+      default: add(it.docs); add(it.doc); break;
+    }
+    return out;
+  }
+
+  // 本文でその指摘に当たる綴り。表記揺れは「揺れている綴り」そのものを探したいので、
+  // 正規化した見出しだけでなく、実際に書かれている綴りも並べる。
+  function termsOf(kind, item) {
+    var it = item || {};
+    var out = [];
+    function add(v) {
+      var s = _s(v);
+      if (s && out.indexOf(s) < 0) out.push(s);
+    }
+    if (kind === 'name.variants') {
+      (it.members || []).forEach(function(m) { add(m && (m.name || m.label)); });
+    }
+    add(entityLabel(kind, it));
+    return out;
+  }
+
   function _ok(a) { return a && a.status === 'ok' && a.result; }
 
   // 監査結果 → [{ kind, category, id, entity, title }]。カテゴリが結果に
@@ -171,6 +211,9 @@
         out.push({
           kind: kind, category: CATEGORY[kind] || kind, id: itemId(kind, it),
           entity: entityId(kind, it), title: entityTitle(kind, it),
+          // 指摘 1 件を図まで辿るための 2 つ。docs は対象ファイル、terms は本文中で
+          // その指摘に当たる綴り (行番号はこれで引く)。
+          docs: docsOf(kind, it), terms: termsOf(kind, it),
           // 除外先へ移った指摘は「解消」ではないので、そう読める印と理由を持たせる。
           excluded: !!EXCLUDED[kind],
           reason: (it && it.reason) || null,
@@ -283,9 +326,11 @@
     var m = {};
     (snap && snap.items ? snap.items : []).forEach(function(it) {
       var e = m[it.entity];
-      if (!e) { e = m[it.entity] = { cats: [], title: it.title, ids: [] }; }
+      if (!e) { e = m[it.entity] = { cats: [], title: it.title, ids: [], docs: [], terms: [] }; }
       if (e.cats.indexOf(it.category) < 0) e.cats.push(it.category);
       if (e.ids.indexOf(it.id) < 0) e.ids.push(it.id);
+      (it.docs || []).forEach(function(d) { if (e.docs.indexOf(d) < 0) e.docs.push(d); });
+      (it.terms || []).forEach(function(t) { if (e.terms.indexOf(t) < 0) e.terms.push(t); });
     });
     Object.keys(m).forEach(function(k) { m[k].cats.sort(); });
     return m;
@@ -316,9 +361,15 @@
       Object.keys(m).sort(function(a, b) { return (rename[a] ? 1 : 0) - (rename[b] ? 1 : 0); }).forEach(function(k) {
         var to = rename[k] || k;
         var e = out[to];
-        if (!e) { out[to] = { cats: m[k].cats.slice(), title: m[k].title, ids: m[k].ids.slice() }; return; }
+        if (!e) {
+          out[to] = { cats: m[k].cats.slice(), title: m[k].title, ids: m[k].ids.slice(),
+            docs: (m[k].docs || []).slice(), terms: (m[k].terms || []).slice() };
+          return;
+        }
         m[k].cats.forEach(function(c) { if (e.cats.indexOf(c) < 0) e.cats.push(c); });
         m[k].ids.forEach(function(i) { if (e.ids.indexOf(i) < 0) e.ids.push(i); });
+        (m[k].docs || []).forEach(function(d) { if (e.docs.indexOf(d) < 0) e.docs.push(d); });
+        (m[k].terms || []).forEach(function(t) { if (e.terms.indexOf(t) < 0) e.terms.push(t); });
         e.cats.sort();
       });
       return out;
@@ -369,7 +420,10 @@
       });
       return {
         entity: key, title: title, moves: moves,
-        cells: cells.map(function(c) { return c ? { cats: c.cats.slice(), text: _catText(c), ids: c.ids.slice() } : null; }),
+        cells: cells.map(function(c) {
+          return c ? { cats: c.cats.slice(), text: _catText(c), ids: c.ids.slice(),
+            docs: (c.docs || []).slice(), terms: (c.terms || []).slice() } : null;
+        }),
         status: statusOf(cells),
       };
     });
@@ -445,6 +499,7 @@
     STORE_KEY: STORE_KEY, MAX_SNAPSHOTS: MAX_SNAPSHOTS,
     itemId: itemId, itemsOf: itemsOf, categoriesOf: categoriesOf,
     entityId: entityId, entityTitle: entityTitle, norm: norm,
+    docsOf: docsOf, termsOf: termsOf,
     snapshot: snapshot, build: build, statusOf: statusOf, summaryLine: summaryLine,
     load: load, save: save, push: push, clear: clear,
   };

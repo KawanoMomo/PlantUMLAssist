@@ -4797,6 +4797,65 @@ function _atRunAudits() {
   return { audits: out, docs: docs.length };
 }
 
+// ── 指摘の台帳 (BLK-reviewer-20260914-1306-wish) ────────────────────────
+// 帯が答えるのは「いまどのカテゴリか」だけで、指摘 1 件が「いつから出ていて
+// どのファイルの何行目か、いつ消えたか」は持たない。そのため反映確認は毎回
+// audit.js --summary-json を叩き直し、run ログを遡って突き合わせる作業だった。
+// ここは同じ記録から台帳を組み、帯の上に置く。判断は finding-ledger が持つ。
+var _flLast = null;
+
+function _flView() {
+  var FL = window.MA.findingLedger;
+  var TL = window.MA.auditTimeline;
+  if (!FL || !TL) return null;
+  var docs = [];
+  try { docs = _atDocs(); } catch (e) { docs = []; }
+  _flLast = FL.build({ snapshots: TL.load(), docs: docs });
+  return _flLast;
+}
+
+function _flHtml(view) {
+  var FL = window.MA.findingLedger;
+  var esc = window.MA.htmlUtils.escHtml;
+  if (!FL || !view) return '';
+  var html = '<div class="fl-head">指摘の台帳<span class="fl-sum" id="at-ledger-summary">'
+    + esc(FL.summaryLine(view)) + '</span></div>';
+  if (!view.rows.length) {
+    return html + '<div class="fl-empty">記録した run に、クラス / メソッド / イベントの指摘はありません。</div>';
+  }
+  html += '<table class="fl-table"><thead><tr><th>指摘</th><th>対象ファイル:行</th>'
+    + '<th>初出</th><th>解消</th><th>継続</th><th title="tick ごとの出欠 (● 出た / ○ 出ない)">出欠</th>'
+    + '</tr></thead><tbody>';
+  view.rows.forEach(function(r) {
+    html += '<tr data-fl-open="' + (r.open ? '1' : '0') + '" data-fl-entity="' + esc(r.entity) + '">'
+      + '<td class="fl-title">' + esc(r.title) + '</td>'
+      + '<td class="fl-where">' + esc(FL.whereText(r)) + '</td>'
+      + '<td>' + esc(r.since) + '</td>'
+      + '<td class="fl-state">' + (r.open ? '未解消' : esc(r.resolvedAt || '')) + '</td>'
+      + '<td>' + r.ticks + ' tick</td>'
+      + '<td class="fl-spark">' + esc(r.spark) + '</td></tr>';
+  });
+  return html + '</tbody></table>';
+}
+
+function copyFindingLedger() {
+  var FL = window.MA.findingLedger;
+  var st = document.getElementById('at-summary');
+  if (!FL) return null;
+  var view = _flLast || _flView();
+  var text = FL.markdown(view, '指摘の台帳');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(function() {
+      if (st) st.textContent = '台帳を指摘.md 用にコピーしました (' + view.rows.length + ' 件)';
+    }, function() {
+      if (st) st.textContent = 'コピーできません';
+    });
+  } else if (st) {
+    st.textContent = 'コピーできません';
+  }
+  return text;
+}
+
 function renderAuditTimeline() {
   var body = document.getElementById('at-body');
   var sumEl = document.getElementById('at-summary');
@@ -4821,6 +4880,10 @@ function renderAuditTimeline() {
   if (t.goneCategories.length) {
     html += '<div class="at-note">監査カテゴリが減った → ' + esc(t.goneCategories.join('・')) + '</div>';
   }
+
+  // 台帳を先に出す。反映確認はここだけ見れば終わる。
+  html += '<div id="at-ledger">' + _flHtml(_flView()) + '</div>';
+  html += '<div id="at-band-head">カテゴリの帯 (同じ欠陥が run ごとにどこへ分類されたか)</div>';
 
   html += '<table class="at-table"><thead><tr><th class="at-th-item">欠陥</th>';
   t.runs.forEach(function(r) {
@@ -5493,6 +5556,9 @@ function setupAuditTimeline() {
       renderAuditTimeline();
     });
   }
+  var cp = document.getElementById('at-copy');
+  if (cp) cp.addEventListener('click', function() { copyFindingLedger(); });
+
   var clr = document.getElementById('at-clear');
   if (clr) {
     clr.addEventListener('click', function() {

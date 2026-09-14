@@ -3,6 +3,8 @@
 // 監査ツールが育つと、DSL が 1 行も変わっていなくても同じ欠陥が別カテゴリへ移り、
 // 件数だけを見ていると解消したように読めてしまう。監査を回すたびに記録を積み、
 // 欠陥ごとに「どの run でどのカテゴリだったか」を並べて、解消と再分類を分けて出す。
+// BLK-reviewer-20260914-1306-wish: 同じモーダルに「指摘の台帳」の表が増えたので、
+// 帯の列を数える選択子を #at-body th から table.at-table th へ絞る (数える対象は不変)。
 const { test, expect } = require('@playwright/test');
 const { gotoApp } = require('../helpers');
 
@@ -66,8 +68,8 @@ test('1 回目の記録では、解消と再分類を区別できないとはっ
   await page.locator('#btn-tab-audit-timeline').click();
   await record(page, 'run1');
   await expect(page.locator('#at-summary')).toContainText('2 回目から');
-  await expect(page.locator('#at-table, #at-body table')).toBeVisible();
-  await expect(page.locator('#at-body th').nth(1)).toContainText('run1');
+  await expect(page.locator('#at-body table.at-table')).toBeVisible();
+  await expect(page.locator('#at-body table.at-table th').nth(1)).toContainText('run1');
 });
 
 test('2 回目を記録すると run が列で並び、解消・再分類・継続・新規の件数が出る', async ({ page }) => {
@@ -86,8 +88,8 @@ test('2 回目を記録すると run が列で並び、解消・再分類・継�
   await expect(summary).toContainText('継続');
   await expect(summary).toContainText('新規');
   // run 列 = 2 本 (欠陥列と扱い列を除く)。
-  await expect(page.locator('#at-body th')).toHaveCount(4);
-  await expect(page.locator('#at-body th').nth(2)).toContainText('run2');
+  await expect(page.locator('#at-body table.at-table th')).toHaveCount(4);
+  await expect(page.locator('#at-body table.at-table th').nth(2)).toContainText('run2');
 });
 
 test('同じ run 名で 2 回記録しても列は増えない (行が 2 本に割れない)', async ({ page }) => {
@@ -95,7 +97,7 @@ test('同じ run 名で 2 回記録しても列は増えない (行が 2 本に�
   await page.locator('#btn-tab-audit-timeline').click();
   await record(page, 'run1');
   await record(page, 'run1');
-  await expect(page.locator('#at-body th')).toHaveCount(3);
+  await expect(page.locator('#at-body table.at-table th')).toHaveCount(3);
 });
 
 test('記録を消すと最初の案内に戻る', async ({ page }) => {

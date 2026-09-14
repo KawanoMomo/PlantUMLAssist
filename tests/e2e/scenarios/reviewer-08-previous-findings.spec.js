@@ -5,10 +5,17 @@
 // 前回控えとの diff の 3 つを手で突き合わせ、1 件ずつ「反映済み / 継続」を頭の中で
 // 振り分け、継続の回数も自分で憶えていた。いまは前回の 指摘.md をそのまま渡せば、
 // 振り分けと継続 tick 数まで 1 枚の画面が出す。
+//
+// BLK-reviewer-20260914-1306-wish: それでも「前回の指摘文書」を持って来る必要は残っていた。
+// 指摘.md が手元に無い tick や、2 tick より前から続いている指摘の初出を知りたいときは、
+// audit.js --summary-json を叩き直して run ログを遡るしかなかった。いまは監査を記録して
+// おけば、台帳が指摘 1 件ごとに 対象ファイル:行 / 初出 tick / 解消 tick を並べる。
 const { test, expect } = require('@playwright/test');
 const R = require('./_reviewer-docs');
 const auditBoard = require('../../../src/core/audit-board');
 const reviewBoard = require('../../../src/core/review-board');
+const timeline = require('../../../src/core/audit-timeline');
+const ledger = require('../../../src/core/finding-ledger');
 
 // 前回 primary に返した指摘文書そのもの (reviewer が 指摘.md に上書き保存した形)。
 const 指摘 = [
@@ -87,4 +94,59 @@ test('手順8 前回の指摘それぞれに、反映済みか継続かを画面
   expect(md).toContain('## 前回の指摘 — 解消（1 件）');
   expect(md).toContain('## 今回の新規（1 件）');
   expect(md).toContain('## 前回控えから変わった図（1 枚）');
+});
+
+// 監査を回すたびに記録しておいた 3 tick 分。gpio の名前不一致は 3 tick 目で直り、
+// spi の名前不一致は最後まで残る (台本の「継続 / 反映済み」がそのまま出る形)。
+function ok(result) { return { status: 'ok', result: result }; }
+function nameRun(variants) {
+  return { name: ok({ variants: variants, undeclared: [] }) };
+}
+const GPIO_VAR = {
+  key: 'Gpio_Driver', suggested: 'Gpio_Driver',
+  members: [{ name: 'GpioDrv', docs: ['gpio_init_sequence.puml'] }, { name: 'Gpio_Driver', docs: ['gpio_state.puml'] }],
+};
+const SPI_VAR = {
+  key: 'Spi_Driver', suggested: 'Spi_Driver',
+  members: [{ name: 'SpiDrv', docs: ['spi_init_sequence.puml'] }, { name: 'Spi_Driver', docs: ['spi_state.puml'] }],
+};
+
+test('手順8 指摘.md を持って来なくても、台帳が初出 tick と解消 tick を言う', () => {
+  const snaps = [
+    timeline.snapshot(nameRun([GPIO_VAR, SPI_VAR]), { label: 'runs/20260913-0206' }),
+    timeline.snapshot(nameRun([GPIO_VAR, SPI_VAR]), { label: 'runs/20260914-1206' }),
+    timeline.snapshot(nameRun([SPI_VAR]), { label: 'runs/20260914-1306' }),
+  ];
+  const view = ledger.build({
+    snapshots: snaps,
+    docs: Object.entries(R.DOCS).map(([name, dsl]) => ({ name: name + '.puml', dsl: dsl })),
+  });
+
+  const byTitle = {};
+  view.rows.forEach((r) => { byTitle[r.title] = r; });
+
+  // GpioDrv は 3 tick 目で消えた = 反映済み。いつ直ったかまで 1 行で出る。
+  const gpio = byTitle.Gpio_Driver;
+  expect(gpio.open).toBe(false);
+  expect(gpio.since).toBe('runs/20260913-0206');
+  expect(gpio.resolvedAt).toBe('runs/20260914-1306');
+  // 対象ファイルと、その綴りが出ている行。puml を開き直して数えなくてよい。
+  expect(ledger.whereText(gpio)).toContain('gpio_init_sequence.puml:3');
+
+  // SpiDrv は最後の tick にも出ている = 継続。継続 tick 数も台帳が数える。
+  const spi = byTitle.Spi_Driver;
+  expect(spi.open).toBe(true);
+  expect(spi.resolvedAt).toBe(null);
+  expect(spi.ticks).toBe(3);
+  expect(spi.spark).toBe('●●●');
+
+  // 手順1 (前回の BLK をもう一度出すか) は、この一覧がそのまま答えになる。
+  expect(ledger.carriedOver(view).map((r) => r.title)).toEqual(['Spi_Driver']);
+
+  // 到達条件: audit.js を叩き直さずに、継続と解消が 1 枚の文面で読める。
+  const md = ledger.markdown(view, '前回の指摘の反映状況');
+  expect(md).toContain('## 継続（1 件）');
+  expect(md).toContain('## 解消（1 件）');
+  expect(md).toContain('解消 runs/20260914-1306');
+  expect(md).toContain('初出 runs/20260913-0206');
 });
