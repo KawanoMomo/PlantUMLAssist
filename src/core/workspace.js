@@ -343,15 +343,20 @@ window.MA.workspace = (function() {
   // 「保存先の綴りを間違えた」と「まだ 1 枚も無い」が呼び出し側で区別できず、
   // 保存先の書式を誤ると 📂一覧が黙って空になっていた。
   // 返り値: { entries, exists, dir }。exists が null なら server に尋ねられなかった。
-  function listFolder(fileDir) {
+  // opts.prev — 1 図ごとの「直前の退避版」の刻印と本文も一緒に受け取る
+  // (BLK-junior-20260914-1306-wish)。前回保存からの差分を行に出す画面だけが頼む。
+  // 既定で頼まないのは、控えの本文は一覧を開くたびに全図ぶん運ぶには重いため。
+  function listFolder(fileDir, opts) {
     var asked = _dir(fileDir);
+    var wantPrev = !!(opts && opts.prev);
     var miss = { entries: [], exists: null, dir: asked, roles: {}, verified: {}, now: null,
                  gone: [], kinds: {} };
     try {
       // BLK-reviewer-20260914-1106-wish: 一覧と同時に本文も受け取る。部品ごとの
       // 突合 (遷移ラベル / メッセージ名がクラスに在るか) は本文が無いと判定できず、
       // 図を 1 枚ずつ取りに行くと 📂一覧が開いてから印が付くまで遅れて出る。
-      return window.fetch('/autosave?dir=' + encodeURIComponent(asked) + '&texts=1')
+      return window.fetch('/autosave?dir=' + encodeURIComponent(asked) + '&texts=1'
+          + (wantPrev ? '&prev=1' : ''))
         .then(function(r) { return r.ok ? r.json() : null; })
         .then(function(data) {
           if (!data) return miss;

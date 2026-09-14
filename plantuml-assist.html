@@ -1814,6 +1814,32 @@ html, body {
   margin: 0 0 6px;
 }
 #peek-files button.peek-svg-verify:disabled { color: var(--text-secondary); cursor: default; }
+#peek-files .peek-change-badge {
+  font-size: 10px; border: 1px solid var(--border); border-radius: 3px;
+  padding: 0 3px; color: var(--text-secondary); flex: none;
+}
+#peek-files .peek-change-badge.changed {
+  border-color: var(--accent); color: var(--accent); font-weight: bold;
+}
+#peek-files .peek-change-summary {
+  font-size: 10px; color: var(--text-secondary); padding: 0 6px 4px; line-height: 1.5;
+}
+#peek-files .peek-change-summary.has-changes { color: var(--accent); }
+#peek-files button.peek-change-filter {
+  display: block; width: 100%; text-align: left;
+  border: 1px solid var(--border); border-radius: 3px; background: var(--bg-tertiary);
+  color: var(--text-primary); font-size: 10px; padding: 2px 6px; cursor: pointer;
+  margin: 0 0 6px;
+}
+#peek-files button.peek-change-filter.on { border-color: var(--accent); color: var(--accent); }
+#peek-files button.peek-change-filter:disabled { color: var(--text-secondary); cursor: default; }
+#peek-changes {
+  font-size: 11px; color: var(--text-secondary); padding-bottom: 6px; line-height: 1.6;
+}
+#peek-changes .peek-change-notice { color: var(--text-primary); }
+#peek-changes .peek-change-line { font-family: var(--font-mono); white-space: pre-wrap; }
+#peek-changes .peek-change-line.add { color: var(--accent); }
+#peek-changes .peek-change-line.del { color: var(--accent-red); }
 #peek-view { flex: 1 1 0; min-width: 0; overflow: auto; padding: 10px 14px; }
 #peek-title { font-size: 12px; color: var(--text-primary); padding-bottom: 6px; }
 #peek-svg { background: #fff; border-radius: 4px; padding: 8px; overflow: auto; }
@@ -5981,6 +6007,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/folder-filter.js"></script>
 <script src="src/core/peek-folder.js"></script>
 <script src="src/core/peek-freshness.js"></script>
+<script src="src/core/peek-changes.js"></script>
 <script src="src/core/audit-scope.js"></script>
 <script src="src/core/blank-doc.js"></script>
 <script src="src/core/domain-cohort.js"></script>
@@ -6522,6 +6549,9 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
              部品を並べる。押すとその部品の所だけを切り出し、自分の同じ部品の図と並べる。 -->
         <div id="peek-parts" style="display:none;"></div>
         <div id="peek-title"></div>
+        <!-- BLK-junior-20260914-1306-wish: 開いた 1 枚が前回保存から何を足され何を消されたか。
+             取り込む側は本文ではなく「＋部品 −関係」を読むので、図の上に出す。 -->
+        <div id="peek-changes" style="display:none;"></div>
         <div id="peek-svg"></div>
         <pre id="peek-dsl"></pre>
       </div>

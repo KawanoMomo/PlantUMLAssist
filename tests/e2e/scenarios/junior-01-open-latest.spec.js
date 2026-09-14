@@ -938,3 +938,126 @@ test.describe('junior 手順 1: 指摘が指す版が名指しで開く', () => 
       .toHaveAttribute('data-note-hit', 'family');
   });
 });
+
+// BLK-junior-20260914-1306-wish: 9 周目の場面は「先輩の図の変更を自分の図に取り込む」。
+// 手順 1〜2 で要るのは「先輩のどの 1 枚が前回保存から変わったか」だが、👀他フォルダは
+// 名前・図種・SVG の印しか出さないので、複合図 (driver_common_class) を丸ごと開いて
+// 目で差分を探し、変わっていない図まで開いて見比べていた。
+// 一覧の行が ＋部品 −関係 を言い、変更のある図だけに絞れることを到達条件にする。
+const CHG_ROOT = DIR + '-changes';
+const CHG_MINE = CHG_ROOT + '/junior';
+const CHG_SENIOR = CHG_ROOT + '/primary';
+
+const COMP_V1 = [
+  '@startuml', 'title Driver_Common_Class',
+  'class Driver_Common {', '  + Init() : void', '}',
+  'class Gpio_Driver {', '  + Gpio_Init() : void', '}',
+  'class IRQCtrl {', '  + EnableIrq() : void', '}',
+  'Gpio_Driver --|> Driver_Common', '@enduml',
+].join('\n');
+// 先輩が足したもの: 部品 Port_Drv 1 つと、関係 1 本。
+const COMP_V2 = [
+  '@startuml', 'title Driver_Common_Class',
+  'class Driver_Common {', '  + Init() : void', '}',
+  'class Gpio_Driver {', '  + Gpio_Init() : void', '}',
+  'class IRQCtrl {', '  + EnableIrq() : void', '}',
+  'class Port_Drv {', '  + Port_SetMode() : void', '}',
+  'Gpio_Driver --|> Driver_Common', 'Gpio_Driver --> Port_Drv', '@enduml',
+].join('\n');
+
+const SEQ_V1 = ['@startuml', 'title gpio init',
+  'participant Gpio_Driver', 'participant Hw_Ctrl',
+  'Gpio_Driver -> Hw_Ctrl : Gpio_Init', '@enduml'].join('\n');
+// 題を直しただけ。取り込む中身は無いので「変更あり」と名指ししてはいけない。
+const SEQ_V2 = SEQ_V1.replace('title gpio init', 'title GPIO 初期化シーケンス');
+
+// 一度しか保存されていない図。比べる前回が無い。
+const STATE_ONLY = ['@startuml', 'title can state', '[*] --> Uninit',
+  'Uninit --> Ready : Can_Init', '@enduml'].join('\n');
+
+test.describe('junior 手順 1: 先輩の図が前回保存からどこを変えたかを開く前に知る', () => {
+  test.beforeEach(async ({ page }) => {
+    await S1.bootWithSaveDir(page, CHG_MINE);
+    await S1.clearDir(page, CHG_MINE);
+    await S1.clearDir(page, CHG_SENIOR);
+    await S1.putDoc(page, CHG_MINE, 'GpioDrv派生クラス図', COMP_V1);
+    // 先輩のフォルダ: 2 枚は上書きされている (= 前回保存の控えがある)。
+    await S1.putDoc(page, CHG_SENIOR, 'driver_common_class', COMP_V1);
+    await S1.putDoc(page, CHG_SENIOR, 'gpio_init_sequence', SEQ_V1);
+    await page.waitForTimeout(1100);   // 刻印は秒まで。同じ秒に重ねない
+    await S1.putDoc(page, CHG_SENIOR, 'driver_common_class', COMP_V2);
+    await S1.putDoc(page, CHG_SENIOR, 'gpio_init_sequence', SEQ_V2);
+    await S1.putDoc(page, CHG_SENIOR, 'can_state', STATE_ONLY);
+    await page.reload();
+    await page.waitForSelector('#btn-tab-peek');
+  });
+
+  test.afterEach(async ({ page }) => {
+    await S1.clearDir(page, CHG_SENIOR).catch(() => {});
+    await S1.clearDir(page, CHG_MINE).catch(() => {});
+  });
+
+  async function openPeek(page) {
+    await page.locator('#btn-tab-peek').click();
+    await page.waitForSelector('#peek-modal');
+    await page.waitForSelector('#peek-change-summary');
+  }
+
+  test('一覧の見出しが「何枚開けば済むか」を言う', async ({ page }) => {
+    await openPeek(page);
+    const sum = page.locator('#peek-change-summary');
+    await expect(sum).toContainText('3 枚中 1 枚が前回保存から変わっています');
+    await expect(sum).toContainText('変更なし 1');
+    await expect(sum).toContainText('前回保存なし 1');
+  });
+
+  test('行の印が ＋部品 −関係 の数まで言う (「差分あり」で終わらせない)', async ({ page }) => {
+    await openPeek(page);
+    const changed = page.locator('#peek-files [data-change-of="driver_common_class"]');
+    await expect(changed).toHaveAttribute('data-change', 'changed');
+    await expect(changed).toHaveText('＋2');
+    await expect(changed).toHaveAttribute('title', /部品 ＋1/);
+    await expect(changed).toHaveAttribute('title', /関係 ＋1/);
+
+    // 題だけ直した図は「変更なし」。開く必要が無い。
+    await expect(page.locator('#peek-files [data-change-of="gpio_init_sequence"]'))
+      .toHaveAttribute('data-change', 'same');
+    // 控えが無い図を「変更なし」と言わない。
+    await expect(page.locator('#peek-files [data-change-of="can_state"]'))
+      .toHaveAttribute('data-change', 'no-prev');
+  });
+
+  test('変更のある図が一覧の先頭に来て、そのまま開いている', async ({ page }) => {
+    await openPeek(page);
+    await expect(page.locator('#peek-files .peek-file').first())
+      .toHaveAttribute('data-file-name', 'driver_common_class');
+    await expect(page.locator('#peek-title')).toContainText('driver_common_class');
+  });
+
+  test('開いた 1 枚の内訳が、本文を読まずに ＋ − の行で出る', async ({ page }) => {
+    await openPeek(page);
+    await page.locator('#peek-files .peek-file[data-file-name="driver_common_class"]').click();
+    await page.waitForSelector('#peek-change-notice');
+    await expect(page.locator('#peek-change-notice')).toContainText('部品 ＋1');
+    const adds = page.locator('#peek-changes .peek-change-line[data-change-sign="+"]');
+    await expect(adds).toHaveCount(2);
+    await expect(adds.filter({ hasText: 'class Port_Drv' })).toHaveCount(1);
+    await expect(adds.filter({ hasText: 'Gpio_Driver --> Port_Drv' })).toHaveCount(1);
+  });
+
+  test('絞り込むと変更のある図だけが残り、解くと全部戻る (手順 1〜2 の往復が消える)', async ({ page }) => {
+    await openPeek(page);
+    await expect(page.locator('#peek-files .peek-file')).toHaveCount(3);
+
+    // クリック 1 回で、開くべき 1 枚だけの一覧になる。
+    await page.locator('#peek-change-filter').click();
+    await expect(page.locator('#peek-files .peek-file')).toHaveCount(1);
+    await expect(page.locator('#peek-files .peek-file').first())
+      .toHaveAttribute('data-file-name', 'driver_common_class');
+    await expect(page.locator('#peek-change-filter')).toHaveText('全部の図を出す（3 枚）');
+
+    await page.locator('#peek-change-filter').click();
+    await expect(page.locator('#peek-files .peek-file')).toHaveCount(3);
+    await expect(page.locator('#peek-change-filter')).toHaveText('変更のある図だけ（1 枚）');
+  });
+});
