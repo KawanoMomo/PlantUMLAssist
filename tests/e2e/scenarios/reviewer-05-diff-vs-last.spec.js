@@ -90,3 +90,50 @@ test('手順5 中身が別名の図と入れ替わった保存を、その場で
   // 直前の保存も残っている (事故の直前に何を保存したかが欠けない)。
   expect(await log.locator('li').count()).toBeGreaterThan(1);
 });
+
+// BLK-reviewer-20260914-1506-wish: 手順5 の突合には、前回 run の控えとのバイト比較とは別に
+// 「同じ図の対になる成果物のうち片方だけを直した」向きの事故がある。
+// (1) 直した内容が `{name}-編集中.puml` にしか入っていない、
+// (2) 本体は直ったが `{name}.svg` が旧内容のまま。
+// どちらも手で diff を取るまで気付けなかったので、📂 一覧が向きまで言い、
+// 差分はその場 (1 操作) で開けるようにした。
+const BASE_CLASS = ['@startuml', 'title driver_common_class',
+  'class AdcRegs {\n  +WriteConfig()\n}', 'class SpiRegs', '@enduml'].join('\n');
+// 下書きにだけ入った修正 (EnableDmaReq のメソッド化)。
+const DRAFT_CLASS = BASE_CLASS.replace('class SpiRegs', 'class SpiRegs {\n  +EnableDmaReq()\n}');
+
+test('手順5 直した内容が編集中の下書きにしか入っていない図を、一覧が向きごと名指しする', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  await S.putDoc(page, DIR, 'driver_common_class', BASE_CLASS);
+  // 下書きは本体より後に保存される (直したのは下書きの方)。
+  await page.waitForTimeout(1100);
+  await S.putDoc(page, DIR, 'driver_common_class-編集中', DRAFT_CLASS);
+  // 中身も時刻も同じ図は反映漏れに数えない (片付けは ⧉ 重複の節の職掌)。
+  await S.putDoc(page, DIR, 'timer_init_sequence', BASE_CLASS);
+
+  await S.openFolder(page);
+  const sum = page.locator('#folder-sync-summary');
+  await expect(sum).toBeVisible();
+  await expect(sum).toContainText('反映待ち 1 枚');
+  await expect(sum).toContainText('本体に未反映の下書き 1 枚');
+
+  const row = page.locator('.folder-sync-row[data-sync-name="driver_common_class"]');
+  await expect(row).toHaveAttribute('data-sync-issue', 'draft-ahead');
+  // 到達条件その1: 3 つの成果物のどれが最新でどれが古いかを、時刻を読み比べずに言う。
+  await expect(row.locator('.folder-sync-art[data-sync-role="base"]')).toContainText('本体 古い');
+  await expect(row.locator('.folder-sync-art[data-sync-role="draft"]')).toContainText('編集中 最新');
+
+  // 到達条件その2: 本体⇔編集中の差分が、一覧を離れずに 1 操作で開く。
+  await row.locator('.folder-sync-diff').click();
+  const box = page.locator('#folder-sync-diff-box');
+  await expect(box).toBeVisible();
+  await expect(box.locator('.folder-sync-diff-add').filter({ hasText: 'EnableDmaReq' })).toHaveCount(1);
+  await expect(box.locator('.folder-sync-diff-note')).toContainText('driver_common_class-編集中');
+
+  // 到達条件その3: 下書きの行だけを見ている人にも「本体に入っていない」が届く。
+  await expect(page.locator('.folder-sync-badge[data-sync-badge-of="driver_common_class-編集中"]'))
+    .toContainText('未反映');
+  // 揃っている図は名指ししない (全行に印が付くと印でなくなる)。
+  expect(await page.locator('.folder-sync-row[data-sync-name="timer_init_sequence"]').count()).toBe(0);
+});
