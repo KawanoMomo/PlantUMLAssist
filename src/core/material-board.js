@@ -235,16 +235,34 @@ window.MA.materialBoard = (function() {
         stale: n.stale,
         fresh: n.fresh,
         pending: n.none + n.stale,
+        // BLK-junior-20260914-2206: 部品名の先頭が似ていると (TIMERドライバ /
+        // TimerDrv派生クラス図)、部品欄では区別が付かず、図種欄を開いて
+        // 目当ての図種が無いと分かってから選び直していた。その部品がどの図種を
+        // 持つかは図種欄と同じ並びでここに持たせる (選ぶ前に読めるようにする)。
+        kinds: rs.map(function(r) { return r.kind; }),
+        pendingKinds: rs.filter(function(r) { return r.needsWork; })
+          .map(function(r) { return r.kind; }),
       };
     }).filter(function(r) { return r.total > 0; });
   }
 
   // progressLabel(p) — 部品欄に出す 1 行。残りが 0 でも黙らない
   // (「済んでいる」と言い切られないと、結局開いて確かめることになる)。
+  // 図種の並びは図種欄と同じ (kindOrder = 手当ての要るものが先)。部品欄で読んだ
+  // 順がそのまま図種欄の順になるので、選び直しても目が迷わない。
+  function kindsLabel(p) {
+    if (!p || !p.kinds || !p.kinds.length) return '';
+    var pend = p.pendingKinds || [];
+    var rest = p.kinds.filter(function(k) { return pend.indexOf(k) < 0; });
+    return pend.concat(rest).join('・');
+  }
+
   function progressLabel(p) {
     if (!p) return '';
-    if (p.pending === 0) return p.component + '（' + p.total + ' 図種すべて最新）';
-    return p.component + '（資料化が要る ' + p.pending + ' / ' + p.total + ' 図種）';
+    var kinds = kindsLabel(p);
+    var tail = kinds ? '：' + kinds : '';
+    if (p.pending === 0) return p.component + '（' + p.total + ' 図種すべて最新' + tail + '）';
+    return p.component + '（資料化が要る ' + p.pending + ' / ' + p.total + ' 図種' + tail + '）';
   }
 
   // 開いた時点で選んでおく部品。残りの多い部品を先に出す
@@ -289,6 +307,7 @@ window.MA.materialBoard = (function() {
     doneMessage: doneMessage,
     componentProgress: componentProgress,
     progressLabel: progressLabel,
+    kindsLabel: kindsLabel,
     pendingComponents: pendingComponents,
     firstPending: firstPending,
     progressSummary: progressSummary,
