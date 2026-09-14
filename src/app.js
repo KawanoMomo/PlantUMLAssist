@@ -6452,6 +6452,11 @@ var _noteKey = null;       // 選んでいる指摘の id
 var _noteMsg = '';         // 押した結果 (組が無かったときの理由など)
 var _notePlans = [];       // findingActions.plans の戻り (指摘 1 件 = 当てる操作 1 つ)
 var _noteBusy = '';        // 当てている最中の指摘 id
+// BLK-junior-20260914-1106-wish: 指摘 1 件 = 対象の図種・版 1 つ。
+var _noteNames = [];       // 覗ける全フォルダにある図名 (版ぞろいを引くため)
+var _noteIndex = null;     // reviewNote.index の戻り (図名 → それを持つフォルダ)
+var _noteTargets = {};     // { 指摘 id: findingVariant.choose の戻り }
+var _noteHit = null;       // 選んだ指摘の対象 ({id, name, family, kind}) — 📂一覧を光らせる
 
 function _noteEls() {
   return { note: document.getElementById('peek-note'),
@@ -6484,14 +6489,21 @@ function _noteLoad(force) {
     _peekIndexDocs(),
   ]).then(function(both) {
     var data = both[0] || {};
+    var idx = RN.index(both[1]);
     _noteFile = RN.pickNote(data.notes);
-    _noteRows = _noteFile ? RN.rows(RN.parse(_noteFile.text), RN.index(both[1])) : [];
+    _noteIndex = idx;
+    _noteNames = idx.names.slice();
+    _noteRows = _noteFile ? RN.rows(RN.parse(_noteFile.text), idx) : [];
     _notePlans = _notePlansFor(_noteRows);
+    _noteTargets = _noteTargetsFor(_noteRows);
     _noteLoading = null;
     return true;
   }).catch(function() {
     _noteRows = [];
     _notePlans = [];
+    _noteTargets = {};
+    _noteNames = [];
+    _noteIndex = null;
     _noteLoading = null;
     return false;
   });
@@ -6526,6 +6538,8 @@ function setNoteMode(on) {
   }
   _noteRows = [];
   _notePlans = [];
+  _noteTargets = {};
+  _noteHit = null;
   _noteFile = null;
   renderNotePanel();
   return _noteLoad(true).then(function(ok) {
@@ -6535,11 +6549,64 @@ function setNoteMode(on) {
   });
 }
 
+// ── 指摘が指す図種・版 (BLK-junior-20260914-1106-wish) ──
+// 指摘.md は「対象は本番用か資料用か」まで書くのに、開く側は図種単位でしか
+// 見分けず、同じ枠に並ぶ (資料用) を目で読み比べて選んでいた。指摘文に書いて
+// あるものを読み、対象の 1 枚を決めて、📂一覧のその行を光らせる。
+function _noteTargetsFor(rows) {
+  var FV = window.MA.findingVariant;
+  var out = {};
+  if (!FV) return out;
+  (rows || []).forEach(function(r) {
+    out[r.id] = FV.choose({
+      bases: (r.docs || []).map(function(d) { return d.name; }),
+      names: _noteNames,
+      text: r.text || (r.title + '\n' + r.body),
+    });
+  });
+  return out;
+}
+
+function _noteTargetOf(id) { return _noteTargets[id] || null; }
+
+// 選んだ指摘の対象。📂一覧はこれを見て行を光らせる (覗く画面を閉じても残す —
+// 手順 1 は覗いて終わりではなく、続けて自分の一覧から同じ版を開く)。
+function noteHitOf(name) {
+  if (!_noteHit || !name) return '';
+  if (_noteHit.name === name) return 'target';
+  return (_noteHit.family || []).indexOf(name) >= 0 ? 'family' : '';
+}
+
+// 組 (並べて見る左右) を、対象に選んだ版で取り直す。その版の組が無ければ
+// 今までどおり先頭の組 (指摘が名指しした図) にする。
+function _notePairFor(row, pick) {
+  var pairs = (row && row.pairs) || [];
+  if (pick && pick.name) {
+    for (var i = 0; i < pairs.length; i++) {
+      if (pairs[i].base === pick.name) return pairs[i];
+    }
+    // 指摘文は版を言葉で指すので (「対象は資料用です」)、その版のファイル名は
+    // 本文に綴られておらず、指摘が名指しした図の組には入ってこない。
+    // 両方のフォルダがその版を持っているなら、組はここで作れる。
+    var e = _noteIndex && _noteIndex.map ? _noteIndex.map[pick.name] : null;
+    if (e && e.folders.length >= 2) {
+      var fs = e.folders.slice().sort();
+      return { base: pick.name, a: fs[0], b: fs[1] };
+    }
+  }
+  return pairs.length ? pairs[0] : null;
+}
+
 // 指摘 1 件を押したときの中身。図の組が取れていれば、その組を並べて見る画面で開く。
 function selectNoteFinding(id) {
   var row = _noteRowOf(id);
+  var pick = _noteTargetOf(id);
   _noteKey = id;
   _noteMsg = '';
+  _noteHit = (pick && pick.name)
+    ? { id: id, name: pick.name, family: (pick.family || []).slice(), kind: pick.kind }
+    : null;
+  try { refreshFolderPanelNow(); } catch (e) {}
   if (!row) { renderNotePanel(); return Promise.resolve(false); }
   if (!row.pairs.length) {
     _noteMsg = row.docs.length
@@ -6549,7 +6616,7 @@ function selectNoteFinding(id) {
     renderNotePanel();
     return Promise.resolve(false);
   }
-  var p = row.pairs[0];
+  var p = _notePairFor(row, pick);
   var key = p.base + '|' + p.a + '|' + p.b;
   renderNotePanel();
   // 並べて見る画面は同名ファイルで組む。組の索引はそこが持っているので、
@@ -6561,6 +6628,12 @@ function selectNoteFinding(id) {
     _noteMsg = ok
       ? p.base + ' を ' + p.a + ' ⇔ ' + p.b + ' で並べました'
       : p.base + ' の本文を読めませんでした';
+    // 指摘が指した版が片方のフォルダにしか無いと、並べられるのは別の版になる。
+    // 黙って別の版を並べると、その版を今回の対象だと読んでしまう。
+    if (ok && pick && pick.name && pick.name !== p.base) {
+      _noteMsg += '（指摘が指す ' + pick.name + ' は片方のフォルダにしかないので、'
+        + '📂一覧で光らせています）';
+    }
     renderNotePanel();
     return ok;
   });
@@ -6879,6 +6952,32 @@ function renderNotePanel() {
     b.addEventListener('click', function() { selectNoteFinding(r.id); });
     el.note.appendChild(b);
 
+    // 対象の図種・版 1 行 (BLK-junior-20260914-1106-wish)。押す前に「どの版が
+    // 開くのか」が読める。同じ図の版が複数あるのに指摘が版を書いていなければ、
+    // 本番用を選んだことと、ほかの版があることをその場で言う。
+    var FV = window.MA.findingVariant;
+    var pick = _noteTargetOf(r.id);
+    if (FV && pick) {
+      var tr = document.createElement('div');
+      tr.className = 'note-target-row';
+      tr.setAttribute('data-note-target-for', r.id);
+      tr.setAttribute('data-note-target-name', pick.name || '');
+      tr.setAttribute('data-note-target-variant', pick.variant || '');
+      tr.setAttribute('data-note-target-kind', pick.kind || '');
+      tr.setAttribute('data-note-target-by', pick.byText ? 'text' : 'default');
+      tr.textContent = FV.targetText(pick);
+      var amb = FV.ambiguousText(pick);
+      if (amb) tr.title = amb;
+      el.note.appendChild(tr);
+      if (amb) {
+        var ar = document.createElement('div');
+        ar.className = 'note-target-alt';
+        ar.setAttribute('data-note-target-alt-for', r.id);
+        ar.textContent = amb;
+        el.note.appendChild(ar);
+      }
+    }
+
     // 提案アクション 1 行と [適用]。押す前に「何を、どの図に」が読める。
     var plan = _notePlanOf(r.id);
     if (!plan) return;
@@ -6980,6 +7079,9 @@ function closePeekFolder() {
   _noteFile = null;
   _noteRows = [];
   _notePlans = [];
+  _noteTargets = {};
+  // 対象の印 (_noteHit) は残す。手順 1 は覗いて終わりではなく、続けて自分の
+  // 📂一覧から同じ版を開く。閉じた瞬間に印が消えると、また読み比べに戻る。
   renderPeekTemplateBtn();
   setCohortMode(false);
   setSbsMode(false);
@@ -8657,6 +8759,16 @@ function setupTabs() {
     if (status === 'changed' || status === 'new') row.appendChild(folderDiffButton(name, status));
     if (window.MA.targetSet) row.appendChild(folderTargetButton(name));
     row.appendChild(folderDraftButton(name));
+    // BLK-junior-20260914-1106-wish: 同じ図種の枠に版が並ぶようになったので、
+    // 版は行の上で 1 文字で分かるようにする (名前の末尾を読み比べない)。
+    var vr = folderVariantBadge(name);
+    if (vr) row.appendChild(vr);
+    var hit = noteHitOf(name);
+    if (hit) {
+      row.classList.add('folder-note-hit');
+      row.setAttribute('data-note-hit', hit);
+      if (hit === 'target') row.classList.add('folder-note-target');
+    }
     var kb = folderKindBadge(name);
     if (kb) row.appendChild(kb);
     var vb = folderVersionButton(name);
@@ -8676,6 +8788,21 @@ function setupTabs() {
     line.textContent = DK.summaryLine(kindEntries);
     line.title = '図種は保存された本文から判定しています。0 の図種はこの保存先に 1 枚もありません';
     host.appendChild(line);
+  }
+
+  // 行に付く版のバッジ。本番用 (無印) には付けない — 全行に印が付くと印でなくなる。
+  function folderVariantBadge(name) {
+    var FV = window.MA.findingVariant;
+    if (!FV) return null;
+    var b = FV.badge(name);
+    if (!b) return null;
+    var el = document.createElement('span');
+    el.className = 'folder-variant' + (b.key ? ' folder-variant-' + b.key : '');
+    el.setAttribute('data-variant-of', name);
+    el.setAttribute('data-variant', b.key || '');
+    el.textContent = b.mark;
+    el.title = b.title;
+    return el;
   }
 
   // 行に付く図種のバッジ。名前が diagram1 でも何の図かがその場で分かる。
@@ -9145,13 +9272,24 @@ function setupTabs() {
         b.setAttribute('data-inv-variant', CI.variantLabel(f));
         // 版が並ぶ行では、共通部分の長いファイル名ではなく版そのものを出す。
         b.textContent = CI.fileLabel(r, f);
-        b.title = f + ' を開く';
+        // BLK-junior-20260914-1106-wish: そのうち今回の指摘が指す 1 枚を光らせる
+        // (版が読めても、今日の対象がどれかは指摘を読まないと決まらない)。
+        var hit = noteHitOf(f);
+        if (hit) {
+          b.classList.add('folder-note-hit');
+          b.setAttribute('data-note-hit', hit);
+          if (hit === 'target') b.classList.add('folder-note-target');
+        }
+        b.title = hit === 'target'
+          ? '選んでいる指摘が指す版です。押すと開きます: ' + f
+          : f + ' を開く';
         b.addEventListener('click', function(ev) {
           ev.stopPropagation();
           openFromFolder(f);
         });
         row.appendChild(b);
       });
+      if (_noteHit && _noteHit.kind === r.kind) row.setAttribute('data-note-kind-hit', '1');
       rowsHost.appendChild(row);
     });
 

@@ -781,3 +781,113 @@ test.describe('junior 手順 1: 先輩の複合図から部品を切り出して
     await expect(page.locator('#peek-parts')).toBeHidden();
   });
 });
+
+// BLK-junior-20260914-1106-wish: 指摘.md には「対象は本番用か資料用か」まで書いて
+// あるのに、開く側は図種単位でしか見分けず、同じ図種の枠に並ぶ (資料用) を
+// ボタンの文字で読み比べて選んでいた。読み比べは図種数 × 同居ファイル数で増える。
+// 指摘 1 件を選べば、その指摘が指す図種・版が名指しされ、📂一覧のその行が光り、
+// 並べて見る画面もその版で開くことを到達条件にする。
+const VAR_ROOT = DIR + '-variant';
+const VAR_MINE = VAR_ROOT + '/junior';
+const VAR_SENIOR = VAR_ROOT + '/primary';
+const VAR_REVIEWER = VAR_ROOT + '/reviewer';
+
+const VAR_PLAIN = 'GPIOドライバ初期化アクティビティ';
+const VAR_MATERIAL = 'GPIOドライバ初期化アクティビティ(資料用)';
+
+const VAR_NOTE = [
+  '# junior への指摘',
+  '',
+  '## 【最重要】GPIOドライバ初期化アクティビティ の分岐が足りません',
+  '対象は資料用です。本番用の方は直さなくて構いません。',
+  'エラー時の分岐が 1 本も書かれていません。',
+].join('\n');
+
+const ACT_PLAIN = ['@startuml', 'start', ':GPIO を初期化する;', 'stop', '@enduml'].join('\n');
+const ACT_MATERIAL = ['@startuml', 'start', ':GPIO を初期化する（資料用）;', 'stop', '@enduml'].join('\n');
+
+test.describe('junior 手順 1: 指摘が指す版が名指しで開く', () => {
+  test.beforeEach(async ({ page }) => {
+    await S1.bootWithSaveDir(page, VAR_MINE);
+    await S1.clearDir(page, VAR_MINE);
+    await S1.clearDir(page, VAR_SENIOR);
+    await S1.putDoc(page, VAR_MINE, VAR_PLAIN, ACT_PLAIN);
+    await S1.putDoc(page, VAR_MINE, VAR_MATERIAL, ACT_MATERIAL);
+    await S1.putDoc(page, VAR_SENIOR, VAR_PLAIN, ACT_PLAIN);
+    await S1.putDoc(page, VAR_SENIOR, VAR_MATERIAL, ACT_MATERIAL);
+    fs.mkdirSync(absOf(VAR_REVIEWER), { recursive: true });
+    fs.writeFileSync(nodePath.join(absOf(VAR_REVIEWER), '指摘.md'), VAR_NOTE, 'utf-8');
+    await page.reload();
+    await page.waitForSelector('#btn-tab-peek');
+  });
+
+  test('指摘 1 件が指す図種・版が、押す前に 1 行で読める', async ({ page }) => {
+    await page.locator('#btn-tab-peek').click();
+    await page.waitForSelector('#peek-modal');
+    await page.locator('#peek-note-toggle').click();
+    await page.waitForSelector('#peek-note .note-finding');
+
+    // 到達条件その1: 対象の図種・版・図名が、指摘の行のすぐ下に出る。
+    const target = page.locator('#peek-note .note-target-row').first();
+    await expect(target).toHaveAttribute('data-note-target-name', VAR_MATERIAL);
+    await expect(target).toHaveAttribute('data-note-target-variant', 'material');
+    await expect(target).toHaveAttribute('data-note-target-kind', 'アクティビティ図');
+    // 指摘文から読んだ版であることが読める (既定で本番用にしたのではない)。
+    await expect(target).toHaveAttribute('data-note-target-by', 'text');
+    await expect(target).toContainText('資料用');
+  });
+
+  test('押すと、その版が自分 ⇔ 先輩で並ぶ (本番用の方ではない)', async ({ page }) => {
+    await page.locator('#btn-tab-peek').click();
+    await page.waitForSelector('#peek-modal');
+    await page.locator('#peek-note-toggle').click();
+    await page.waitForSelector('#peek-note .note-finding');
+    await page.locator('#peek-note .note-finding').first().click();
+
+    await expect(page.locator('#note-summary')).toContainText(VAR_MATERIAL);
+    await page.waitForSelector('#sbs-grid');
+    const grid = await page.locator('#sbs-grid').innerText();
+    expect(grid).toContain('資料用');
+  });
+
+  test('📂 一覧は版を 1 文字で言い、指摘が指す版の行を光らせる', async ({ page }) => {
+    await page.locator('#btn-tab-peek').click();
+    await page.waitForSelector('#peek-modal');
+    await page.locator('#peek-note-toggle').click();
+    await page.waitForSelector('#peek-note .note-finding');
+    await page.locator('#peek-note .note-finding').first().click();
+    await page.waitForTimeout(400);
+    await page.locator('#peek-close').click();
+
+    await S1.openFolder(page);
+    // 到達条件その2: 版は名前の末尾を読まなくても行の印で分かる。
+    await expect(page.locator('#folder-panel [data-variant-of="' + VAR_MATERIAL + '"]'))
+      .toHaveText('資');
+    await expect(page.locator('#folder-panel [data-variant-of="' + VAR_PLAIN + '"]')).toHaveCount(0);
+    // 到達条件その3: 今回の対象の行だけが光り、同じ図の別の版は「同じ図の版」止まり。
+    const rows = page.locator('#folder-panel .folder-row[data-note-hit]');
+    await expect(rows.filter({ has: page.locator('[data-file-name="' + VAR_MATERIAL + '"]') }))
+      .toHaveAttribute('data-note-hit', 'target');
+    await expect(rows.filter({ has: page.locator('[data-file-name="' + VAR_PLAIN + '"]') }))
+      .toHaveAttribute('data-note-hit', 'family');
+  });
+
+  test('図種の枠に版が 2 つ並んでも、開くべき 1 枚が光っている', async ({ page }) => {
+    await page.locator('#btn-tab-peek').click();
+    await page.waitForSelector('#peek-modal');
+    await page.locator('#peek-note-toggle').click();
+    await page.waitForSelector('#peek-note .note-finding');
+    await page.locator('#peek-note .note-finding').first().click();
+    await page.waitForTimeout(400);
+    await page.locator('#peek-close').click();
+
+    await S1.openFolder(page);
+    await page.selectOption('#folder-inv-pick', { index: 1 });
+    const row = page.locator('#folder-panel .folder-inv-row[data-inv-kind="アクティビティ図"]');
+    await expect(row).toHaveAttribute('data-note-kind-hit', '1');
+    await expect(row.locator('[data-inv-file="' + VAR_MATERIAL + '"]'))
+      .toHaveAttribute('data-note-hit', 'target');
+    await expect(row.locator('[data-inv-file="' + VAR_PLAIN + '"]'))
+      .toHaveAttribute('data-note-hit', 'family');
+  });
+});
