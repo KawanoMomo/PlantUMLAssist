@@ -3737,9 +3737,19 @@ function renderTabs() {
       if (window.MA.lineage) {
         try { window.MA.lineage.rename(doc.name, window.MA.workspace.sanitizeName(next)); } catch (e) {}
       }
-      window.MA.workspace.rename(doc.id, next);
+      var before = doc.name;
+      var renamed = window.MA.workspace.rename(doc.id, next);
       // 図名欄で名前を変え終えたら、開いた元ファイルの錠は用済み (BLK-junior-20260908-1803-wish)。
       if (window.MA.sourceLock) { try { window.MA.sourceLock.release(doc.id); } catch (e) {} }
+      // 前の名前のファイルは残さず付け替える (BLK-junior-20260915-0307)。
+      // 開いているタブの本文は、active なら editor の内容が正 (まだ保存前の編集が入る)。
+      if (renamed && renamed.name && renamed.name !== before) {
+        var isActive = doc.id === window.MA.workspace.getActiveId();
+        var body = isActive ? mmdText : String(renamed.dsl == null ? '' : renamed.dsl);
+        _sweepRenamedFile(before, renamed.name, body).then(function(text) {
+          if (text) setSaveStatus(text);
+        });
+      }
       renderTabs();
       try { updateTopSourceLock(); } catch (e) {}
       try { renderLineageBadge(); } catch (e) {}
@@ -24849,6 +24859,34 @@ function _dsShowRenameNotice(el) {
   el.appendChild(btn);
 }
 
+// ── 改名の後始末 (BLK-junior-20260915-0307) ────────────────────────────────
+// 前の名前のファイルが今の図そのものなら、それは改名であって複製ではない。
+// 新しい名前で書いてから前の名前を消す。中身が違うなら別物なので残し、
+// rename-guard の知らせ (戻す口) に任せる。
+// 返り値は Promise<文字列 or ''> で、呼び出し側が知らせに出す。
+function _sweepRenamedFile(from, to, dsl) {
+  var ws = window.MA.workspace;
+  var RS = window.MA.renameSweep;
+  if (!ws || !RS) return Promise.resolve('');
+  var cfg = null;
+  try { cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null; } catch (e) { cfg = null; }
+  var saved = !!(cfg && cfg.backend === 'file');
+  if (!saved) return Promise.resolve('');
+  var dir = _wsFileDir();
+  var body = String(dsl == null ? '' : dsl);
+  return Promise.resolve(ws.loadFile(from, dir)).then(function(oldDsl) {
+    var p = RS.plan({ from: from, to: to, saved: true, oldDsl: oldDsl, currentDsl: body });
+    if (!p || p.action === 'none') return '';
+    if (p.action === 'keep') return p.text;
+    return Promise.resolve(ws.saveToFile({ name: to, dsl: body }, dir)).then(function(ok) {
+      if (!ok) return RS.resultText(p, { saved: false });
+      return Promise.resolve(ws.deleteFile(from, dir)).then(function(r) {
+        return RS.resultText(p, { saved: true, deleted: !!(r && r.ok), error: (r && r.error) || '' });
+      });
+    });
+  }).catch(function() { return ''; });
+}
+
 // 図の設定から名前を変える。保存はしない (保存すると前の名前のファイルに
 // 今の内容が入ってしまう。事故の元がまさにそれ)。
 function _dsRenameActive(next) {
@@ -24887,6 +24925,13 @@ function _dsRenameActive(next) {
     : null;
   renderTabs();
   renderDiagramSettings(true);
+  // 前の名前のファイルが今の図そのものなら付け替える (残して二重にしない)。
+  _sweepRenamedFile(from, name, mmdText).then(function(text) {
+    if (!text) return;
+    _dsRenameNotice = { text: text, canRestore: false, from: from, dsl: '' };
+    setSaveStatus(text);
+    renderDiagramSettings(true);
+  });
   return name;
 }
 

@@ -44,3 +44,32 @@ test('手順3 設定で保存先を変えると、上部バーの表示がその
   const names = await S.listDir(page, DIR);
   expect(names.length).toBeGreaterThanOrEqual(1);
 });
+
+// BLK-junior-20260915-0307: 下書き spi_sequence の図名を変えて上書き保存したら、
+// 新しい名前と元の下書き名が内容同一のまま 2 枚残り、資料化は古い名前を拾った。
+test('手順3 図名を変えて保存すると、古い名前のファイルは残らない', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+
+  // 前提: 下書き spi_sequence が保存フォルダにあり、同じ内容を開いている。
+  const dsl = ['@startuml', 'title SPI初期化', 'participant Spi_Driver', 'participant Hw_Ctrl',
+    'Spi_Driver -> Hw_Ctrl : Spi_Init', '@enduml'].join('\n');
+  await S.putDoc(page, DIR, 'spi_sequence', dsl);
+  await S.renameActive(page, 'spi_sequence');
+  await S.typeDsl(page, dsl);
+  await page.waitForTimeout(600);
+
+  // 図の設定の「図名 / File name」で名前を変える (台本の図名変更)。
+  await page.locator('#props-tab-settings').click();
+  const nameIn = page.locator('#ds-docname');
+  await nameIn.fill('SPIドライバ初期化シーケンス');
+  await nameIn.dispatchEvent('change');
+  await page.waitForTimeout(1500);
+
+  // 到達条件: 保存フォルダに残るのは新しい名前だけ。
+  const names = await S.listDir(page, DIR);
+  expect(names).toContain('SPIドライバ初期化シーケンス');
+  expect(names).not.toContain('spi_sequence');
+  // 何が起きたかは画面に出る (黙って消さない)。
+  await expect(page.locator('#ds-name-notice')).toContainText('spi_sequence.puml');
+});
