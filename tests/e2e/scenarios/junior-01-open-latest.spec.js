@@ -1256,3 +1256,61 @@ test.describe('junior 手順 1: 同名の先輩の図を継承元にする', () 
     expect(opts).not.toContain(SAME);
   });
 });
+
+// BLK-junior-20260914-1306: 手順 1 で、図名も図種も書かれていない指摘だけは
+// 一覧が件数しか言わず、自分宛かどうかを確かめるのに GUI の外で指摘.md の全文を
+// 読む用が毎回残っていた。宛先を言い、本文をその場で開けるようにした。
+const UA_ROOT = DIR + '-unaddr';
+const UA_MINE = UA_ROOT + '/junior';
+const UA_SENIOR = UA_ROOT + '/primary';
+const UA_REVIEWER = UA_ROOT + '/reviewer';
+
+const UA_NOTE = [
+  '# 指摘',
+  '',
+  '## 【継続】gpio_init_sequence の部品名不一致',
+  'junior 側 `Gpio` / primary 側 `Gpio_Driver`。',
+  '',
+  '## 命名の略語の大文字化が揃っていない',
+  'junior は IRQCtrl、他は Irq_Ctrl。どちらかに寄せてください。',
+  '',
+  '## 編集中ファイルの整理',
+  'primary の保存先に `-編集中` が 3 つ残っています。',
+  '',
+  '## 粒度の目安について',
+  '1 操作 1 メッセージを基本にしたいという話です。',
+].join('\n');
+
+test.describe('junior 手順 1: 宛先の書かれていない指摘を GUI の中で片付ける', () => {
+  test('一覧が宛先まで言い、自分宛の本文をその場で読める', async ({ page }) => {
+    await S1.bootWithSaveDir(page, UA_MINE);
+    await S1.clearDir(page, UA_MINE);
+    await S1.clearDir(page, UA_SENIOR);
+    await S1.putDoc(page, UA_MINE, 'gpio_init_sequence', MINE_SEQ);
+    await S1.putDoc(page, UA_SENIOR, 'gpio_init_sequence', SENIOR_SEQ);
+    fs.mkdirSync(absOf(UA_REVIEWER), { recursive: true });
+    fs.writeFileSync(nodePath.join(absOf(UA_REVIEWER), '指摘.md'), UA_NOTE, 'utf-8');
+    await page.reload();
+    await page.waitForSelector('#btn-tab-folder');
+
+    await S1.openFolder(page);
+    await page.waitForTimeout(1500);
+
+    // 到達条件その1: 見出しが、割り当てられない件の宛先の内訳まで言う。
+    await expect(page.locator('#folder-note-summary')).toContainText('自分宛 1 件');
+
+    // 到達条件その2: その 3 件が行として並び、自分宛が見分けられる。
+    const sec = page.locator('#folder-unaddr');
+    await expect(sec).toHaveAttribute('data-unaddr-count', '3');
+    const mine = sec.locator('.folder-unaddr-row[data-unaddr-to="mine"]');
+    await expect(mine).toHaveCount(1);
+    await expect(mine).toContainText('略語の大文字化');
+    await expect(sec.locator('.folder-unaddr-row[data-unaddr-to="other"]')).toHaveCount(1);
+    await expect(sec.locator('.folder-unaddr-row[data-unaddr-to="unknown"]')).toHaveCount(1);
+
+    // 到達条件その3: 押せば本文がその場に出る (指摘.md をテキストエディタで開かない)。
+    await mine.locator('.folder-unaddr-head').click();
+    await page.waitForTimeout(500);
+    await expect(page.locator('#folder-unaddr-body')).toContainText('IRQCtrl');
+  });
+});

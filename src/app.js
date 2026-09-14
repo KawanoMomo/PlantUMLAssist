@@ -8005,6 +8005,8 @@ function setupTabs() {
   var swapQueue = null;
   // キューのまとめ (手順7 で primary に渡す文面) を開いているか。
   var swapReportOpen = false;
+  // BLK-junior-20260914-1306: 本文を開いている「宛先の書かれていない指摘」の id。
+  var unaddrOpen = '';
   // 行の 🗑 を 1 回押した名前 (2 回目で消す)。描き直すと白紙に戻る。
   var deleteArmed = '';
 
@@ -10501,11 +10503,74 @@ function setupTabs() {
     line.setAttribute('data-note-ready', noteBoardReady ? '1' : '0');
     line.textContent = noteBoardReady
       ? NB.summaryText({ board: noteBoard, names: folderNoteNames(),
-                         statusByName: noteBoardStatus, hasNote: noteBoardHasFile })
+                         statusByName: noteBoardStatus, hasNote: noteBoardHasFile,
+                         mineFolder: _noteMineFolder(), otherFolders: _noteOtherFolders() })
       : '指摘.md を読み込んでいます…';
     line.title = '指摘.md（隣の reviewer フォルダ）を、図 1 枚ずつに割り当てた結果です';
     host.appendChild(line);
+    appendUnaddressedSection(host);
     noteBoardScan(dir);
+  }
+
+  // BLK-junior-20260914-1306: 図名も図種も書かれていない指摘は、どの図にも割り当てられない。
+  // 件数だけを言われても「自分宛か」は指摘.md を GUI の外で開いて全文を読むまで分からず、
+  // 一覧のバッジで手順 1 が終わる周でも、この数件だけテキストファイルを読む用が残っていた。
+  // 宛先を機械で言えるところまで言い、本文はその場で開けるようにする。
+  function appendUnaddressedSection(host) {
+    var NB = window.MA.noteBoard;
+    if (!NB || !noteBoardReady || !noteBoardHasFile || !noteBoard) return;
+    var rows = NB.unaddressedRows(noteBoard,
+      { mineFolder: _noteMineFolder(), otherFolders: _noteOtherFolders() });
+    if (!rows.length) return;
+
+    var sec = document.createElement('div');
+    sec.className = 'folder-unaddr';
+    sec.id = 'folder-unaddr';
+    sec.setAttribute('data-unaddr-count', String(rows.length));
+
+    rows.forEach(function(r) {
+      var row = document.createElement('div');
+      row.className = 'folder-unaddr-row folder-unaddr-' + r.to;
+      row.setAttribute('data-unaddr-id', r.id);
+      row.setAttribute('data-unaddr-to', r.to);
+
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'folder-unaddr-head';
+      b.setAttribute('data-unaddr-open', r.id);
+      b.textContent = r.toMark + ' · ' + r.head;
+      b.title = r.why + '（押すと本文をここに出します）';
+      b.addEventListener('click', function(ev) {
+        ev.stopPropagation();
+        unaddrOpen = (unaddrOpen === r.id) ? '' : r.id;
+        renderFolderPanel();
+      });
+      row.appendChild(b);
+
+      if (unaddrOpen === r.id) {
+        var body = document.createElement('div');
+        body.className = 'folder-unaddr-body';
+        body.id = 'folder-unaddr-body';
+        body.textContent = r.body || '(本文がありません)';
+        row.appendChild(body);
+      }
+      sec.appendChild(row);
+    });
+    host.appendChild(sec);
+  }
+
+  // 指摘.md を書いた人以外の覗ける先 = 指摘に出てきうる相手の名前。
+  function _noteOtherFolders() {
+    var PF = window.MA.peekFolder;
+    var mine = String(_noteMineFolder() || '').toLowerCase();
+    var out = [];
+    (_peekDirs || []).forEach(function(d) {
+      var n = (d && d.name) || (PF && d && d.path ? PF.baseName(d.path) : '');
+      if (!n || String(n).toLowerCase() === mine) return;
+      if (/review/i.test(n)) return;   // 指摘を書いた人は宛先ではない
+      if (out.indexOf(n) < 0) out.push(n);
+    });
+    return out;
   }
 
   function folderNoteNames() { return (folderNames || []).slice(); }
