@@ -2186,12 +2186,16 @@ tr.mboard-row[data-status="fresh"] td.mboard-status { color: #98c379; }
 .board-head {
   display: flex;
   align-items: center;
+  /* 道具が増えると 1 行に収まらず、見出しの文字が 1 文字ずつ縦に潰れていた。
+     入り切らない分は次の行に送る (BLK-primary-20260913-0306-wish)。 */
+  flex-wrap: wrap;
   gap: 12px;
   padding: 10px 14px;
   border-bottom: 1px solid var(--border);
   font-size: 12px;
   color: var(--text-primary);
 }
+.board-head > * { flex: none; }   /* 幅が足りなくても縮めず、次の行に送る */
 #cb-summary, #ri-summary, #dg-summary, #vault-summary, #ct-summary { color: var(--accent); }
 /* 変更チケット (BLK-primary-20260909-0603-wish)。
    残りが一目で分かることだけが要件なので、済んだ行は沈めて未チェックを前に出す。 */
@@ -2273,7 +2277,8 @@ table.vault-table button.vault-open:hover { border-color: var(--accent); }
 #dg-impact td.dg-via { color: var(--text-secondary); word-break: break-all; }
 #dg-impact tr.dg-doc[data-hop="0"] td.dg-hop { color: var(--accent); }
 #dg-impact tr.dg-doc[data-hop] td.dg-hop { white-space: nowrap; }
-.board-tools { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.board-tools { margin-left: auto; display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.board-tools > * { flex: none; }   /* 文字が 1 文字ずつ縦に潰れないようにする */
 .board-tools label { display: flex; align-items: center; gap: 4px; color: var(--text-secondary); cursor: pointer; }
 .board-tools button {
   border: 1px solid var(--border);

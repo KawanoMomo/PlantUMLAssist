@@ -120,6 +120,16 @@ test('手順4 置換の前後を並べて見せられ、その画面を控えら
 
 });
 
+// 開いたままのファイルへ自動保存が走ると上書きの確認が出る。顧客に見せる前に
+// 「元ファイルは変更前のまま保つ」で片付ける (保存フォルダの直した版を残す)。
+async function keepSourceFile(page) {
+  const lock = page.locator('#source-lock-modal');
+  if (await lock.isVisible().catch(() => false)) {
+    await page.locator('#source-lock-keep').click();
+    await page.waitForTimeout(600);
+  }
+}
+
 // BLK-primary-20260913-0306-wish: 顧客に画面を見せながら説明する場では、▤変更サマリが
 // 出す DSL の before/after は見せる代物ではない。これまでは「変更前の SVG を別途探して
 // 並べる」を手作業でやり、顧客の前で納品 zip を開き直していた。
@@ -134,12 +144,15 @@ test('手順4 顧客の前で変更前後を図のまま切り替えて見せら
   await page.locator('#btn-tab-diff').click();
   await page.locator('#diff-mark-all').click();
   await page.locator('body').click({ position: { x: 5, y: 5 } });
+  await keepSourceFile(page);
   await page.locator('#tab-bar .tab, #doc-tabs .tab').last().locator('.tab-close').click();
   await page.waitForTimeout(400);
+  await keepSourceFile(page);
   // 直した版を保存フォルダに置く (基準からの変更がボードに並ぶ)。
   await S.putDoc(page, DIR2, 'adc_state',
     ['@startuml', 'class Adc_Driver', 'class Adc_Channel', '@enduml'].join('\n'));
   await page.waitForTimeout(800);
+  await keepSourceFile(page);
 
   await page.locator('#btn-tab-board').click();
   await expect(page.locator('#cb-modal')).toBeVisible();
@@ -147,6 +160,7 @@ test('手順4 顧客の前で変更前後を図のまま切り替えて見せら
   await expect(entry).toHaveCount(1, { timeout: 10000 });
 
   // 到達条件その1: 1 操作で、DSL の行差分が描いた図の変更前後に変わる。
+  await keepSourceFile(page);
   await page.locator('#cb-svg').click();
   const panes = entry.locator('.cb-show .cb-pane');
   await expect(panes).toHaveCount(2);
@@ -161,6 +175,7 @@ test('手順4 顧客の前で変更前後を図のまま切り替えて見せら
 
   // 到達条件その2: 「直す前はこう → 直したらこう」を 1 ボタンで切り替えられる。
   const flip = entry.locator('.cb-flip');
+  await keepSourceFile(page);
   await flip.click();                                    // 変更前だけ
   await expect(panes.nth(0)).toBeVisible();
   await expect(panes.nth(1)).toBeHidden();
