@@ -5029,6 +5029,9 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 #senior-head button { border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer; }
 #senior-notice { padding: 4px 8px; font-size: 11px; color: var(--text-secondary); }
 #senior-slice { padding: 0 8px 4px 8px; display: flex; align-items: center; gap: 4px; font-size: 11px; }
+/* display 指定は hidden 属性より強い。共通図の抜き出し以外 (見本・1:1 の相手) では
+   効かない欄なので、隠すと言った時は隠す (押せない欄が残ると何の欄か読めない)。 */
+#senior-slice[hidden] { display: none; }
 #senior-slice label { color: var(--text-secondary); }
 #senior-slice input { flex: 1; min-width: 0; font-size: 11px; padding: 1px 4px; }
 #senior-slice button {

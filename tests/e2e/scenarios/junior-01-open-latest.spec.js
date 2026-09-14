@@ -1717,6 +1717,13 @@ test.describe('junior 手順 1: 先輩が持たない図種では自分の他部
     await expect(page.locator('#status-senior')).toContainText('見本');
   });
 
+  test('見本では、共通図用の「部品」欄を出さない (押しても効かない欄になる)', async ({ page }) => {
+    await openMine(page, MINE_ACT);
+    await openSenior(page);
+    await page.waitForTimeout(600);
+    await expect(page.locator('#senior-slice')).toBeHidden();
+  });
+
   test('先輩に相手がいる図種では、見本ではなく先輩の図を出す', async ({ page }) => {
     await openMine(page, 'gpio_state');
     await openSenior(page);
