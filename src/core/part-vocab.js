@@ -83,6 +83,17 @@ window.MA.partVocab = (function() {
     return id.length >= 2 && baseName(name).toLowerCase().indexOf(id) >= 0;
   }
 
+  // 相乗り図の中にこの部品が居れば、その部品ぶんの DSL を返す (居なければ null)。
+  // 「この部品の図か」の判定をもう 1 つ増やさないため、切り出しは part-slice に任せる。
+  function _sliceFor(subject, dsl) {
+    var PS = window.MA.partSlice;
+    if (!PS || !PS.isComposite || !PS.slice) return null;
+    if (!PS.isComposite(dsl)) return null;
+    if (!PS.findPart(dsl, subject)) return null;
+    var out = PS.slice(dsl, subject);
+    return (out && _s(out.dsl).trim()) ? out.dsl : null;
+  }
+
   // 接頭辞 (`Spi_`) を持つ名前はメソッド、持たない名前はきっかけ。
   // 見分けは methodAudit.isApiEvent と同じ規則にする。
   function roleOfEvent(name) {
@@ -182,9 +193,19 @@ window.MA.partVocab = (function() {
     (Array.isArray(docs) ? docs : []).forEach(function(d) {
       if (!d) return;
       var name = _s(d.name);
-      if (id && !belongs(id, name)) return;
       var dsl = _s(d.text != null ? d.text : d.dsl);
       if (!dsl.trim()) return;
+      // BLK-junior-20260915-0606: 名前を持っているのがファイル名に部品名の無い
+      // 相乗り図 (`driver_common_class.puml` に 8 部品) のことがある。ファイル名だけで
+      // 弾くと、活動図に打つ実在メソッド (Spi_Init / Spi_Reset / …) が名前帳に
+      // 1 語も入らず、junior はその図を別タブで開いて絞って控えるしかなくなる。
+      // 相乗り図はその部品ぶんを切り出して (part-slice と同じ規則) 読む —
+      // 他部品のメソッドは切り出しが落とすので、名前帳に混ざらない。
+      if (id && !belongs(id, name)) {
+        var sliced = _sliceFor(id, dsl);
+        if (!sliced) return;
+        dsl = sliced;
+      }
       var kind = _s(d.kind);
       if (!kind) {
         var PR = window.MA.partReference;

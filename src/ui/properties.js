@@ -606,10 +606,24 @@ window.MA.properties = (function() {
       + '</div>';
   }
 
+  // BLK-junior-20260915-0606: 自由文の欄 (活動図のアクション本文) では、チップで
+  // 欄ごと置き換えると打ちかけの文が消える。カーソル位置に差し込み、続けて打てるようにする。
+  // 複数行をまとめて打つ欄では、選んだ名前が既に書いた行を巻き込まないのが要件。
+  function insertAtCaret(el, text) {
+    var v = String(el.value || '');
+    var s = el.selectionStart, e = el.selectionEnd;
+    if (typeof s !== 'number' || typeof e !== 'number') { el.value = v + text; return; }
+    el.value = v.slice(0, s) + text + v.slice(e);
+    var at = s + text.length;
+    try { el.setSelectionRange(at, at); } catch (err) {}
+    if (el.focus) el.focus();
+  }
+
   // bindVocabPicker: チップを押したら targetId の欄を埋める。
   // 欄に手で打った名前が名前帳と揺れていれば、その場で 1 行出す。
   // target は id でも要素でもよい (rich-label-editor の textarea は id を持たない)。
-  function bindVocabPicker(id, target, onPick) {
+  // opts.insert === 'caret' なら置き換えずにカーソル位置へ差し込む。
+  function bindVocabPicker(id, target, onPick, opts) {
     var box = document.getElementById(id);
     if (typeof target === 'string') target = document.getElementById(target);
     if (!box) return;
@@ -627,7 +641,16 @@ window.MA.properties = (function() {
 
     function review() {
       if (!warn) return;
-      var v = target ? String(target.value || '').trim().replace(/\(.*$/, '').trim() : '';
+      var raw = target ? String(target.value || '') : '';
+      // 自由文の欄は複数行になる。欄ごと読むと「行の集まり」を 1 つの名前として
+      // 突き合わせてしまうので、いまカーソルが居る行だけを見る。
+      if (opts && opts.insert === 'caret' && raw.indexOf('\n') >= 0) {
+        var at = typeof target.selectionStart === 'number' ? target.selectionStart : raw.length;
+        var from = raw.lastIndexOf('\n', at - 1) + 1;
+        var to = raw.indexOf('\n', at);
+        raw = raw.slice(from, to < 0 ? raw.length : to);
+      }
+      var v = raw.trim().replace(/\(.*$/, '').trim();
       // 登録簿は「人が決めた揃える先」なので、名前帳の推定より先に言う
       // (両方が出ると、どちらに揃えるのかを読む側がまた決め直すことになる)。
       var msg = NR ? NR.checkName(NR.current(), v) : '';
@@ -643,7 +666,12 @@ window.MA.properties = (function() {
           + 'cursor:pointer;font-family:var(--font-mono);' + (btn.style.cssText || '');
         btn.addEventListener('click', function() {
           var name = btn.getAttribute('data-name');
-          if (target) { target.value = btn.getAttribute('data-insert') || name; fire(target); }
+          var text = btn.getAttribute('data-insert') || name;
+          if (target) {
+            if (opts && opts.insert === 'caret') insertAtCaret(target, text);
+            else target.value = text;
+            fire(target);
+          }
           if (onPick) onPick(name, btn.getAttribute('data-role'));
           review();
         });
