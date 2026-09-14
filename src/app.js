@@ -14575,14 +14575,50 @@ function setupTemplateNew() {
   // やり直し、部品名を図種ごとに打ち直していた。ここは部品名 1 語で 6 図種ぶんの
   // 下書きをまとめて開く。打つのは 1 回なので、図種を跨いだ綴りが割れない。
   var PS = window.MA.partStarter;
+  // BLK-junior-20260915-0307-wish: 隣のフォルダにある同じ部品名の実図。
+  // ダイアログを開いた時に 1 回だけ読み、部品名を打つたびに照合する。
+  var partFolders = [];
 
   function partSubject() {
     var el = document.getElementById('part-subject');
     return el ? el.value : '';
   }
 
+  function partRefs() {
+    var PR = window.MA.partReference;
+    if (!PR || !partFolders.length) return null;
+    var id = PS ? PS.normalizeSubject(partSubject()) : '';
+    if (!id) return null;
+    return PR.collect(id, partFolders);
+  }
+
   function partPlan() {
-    return PS ? PS.plan(partSubject(), docs) : null;
+    return PS ? PS.plan(partSubject(), docs, partRefs()) : null;
+  }
+
+  // 隣のフォルダ (先輩の保存フォルダ) の図を本文ごと読む。読むだけで、
+  // 保存先には触らない (peek と同じ約束)。読めなければひな形のまま進む。
+  function loadPartFolders() {
+    var PR = window.MA.partReference;
+    var WS = window.MA.workspace;
+    if (!PR || !WS || !WS.listFolder) return;
+    var mine = _wsFileDir();
+    fetch('/peek-dirs?dir=' + encodeURIComponent(mine))
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(data) {
+        var dirs = (data && Array.isArray(data.dirs)) ? data.dirs : [];
+        var others = dirs.filter(function(d) { return d && !d.current && (d.files | 0) > 0; });
+        return Promise.all(others.map(function(d) {
+          return WS.listFolder(d.path).then(function(info) {
+            return { folder: d.name, dir: d.path, entries: (info && info.entries) || [] };
+          }).catch(function() { return null; });
+        }));
+      })
+      .then(function(list) {
+        partFolders = (list || []).filter(function(f) { return f && f.entries.length; });
+        if (modal.style.display !== 'none') updatePart();
+      })
+      .catch(function() {});
   }
 
   // どの図種を開くか。既にある図種は既定で外す (書きかけを二重に持たない)。
@@ -14593,6 +14629,13 @@ function setupTemplateNew() {
       if (boxes[i].checked) out.push(boxes[i].getAttribute('data-part-kind'));
     }
     return out;
+  }
+
+  // その行の下書きが「先輩の実図を写したもの」か「汎用ひな形」か。
+  function partSrcText(sheet) {
+    var PR = window.MA.partReference;
+    if (!PR || !sheet || sheet.source !== 'reference') return '';
+    return PR.noteText(sheet.ref);
   }
 
   function updatePart() {
@@ -14623,6 +14666,8 @@ function setupTemplateNew() {
           + esc(s.name) + '</span>'
           + '<span data-part-had="' + esc(s.key) + '" style="color:var(--accent-orange);">'
           + (s.existing.length ? '既にあります (' + esc(s.existing[0]) + ')' : '') + '</span>'
+          + '<span data-part-src="' + esc(s.key) + '" style="color:var(--accent-green);">'
+          + esc(partSrcText(s)) + '</span>'
           + '</label>';
       }).join('');
       var boxes = list.querySelectorAll('input[data-part-kind]');
@@ -14634,6 +14679,8 @@ function setupTemplateNew() {
         if (n) n.textContent = s.name;
         var h = list.querySelector('[data-part-had="' + s.key + '"]');
         if (h) h.textContent = s.existing.length ? '既にあります (' + s.existing[0] + ')' : '';
+        var r = list.querySelector('[data-part-src="' + s.key + '"]');
+        if (r) r.textContent = partSrcText(s);
       });
     }
     var keys = partKeys();
@@ -14657,8 +14704,10 @@ function setupTemplateNew() {
     });
     close();
     if (window.MA.toast) {
+      var copied = sheets.filter(function(s) { return s.source === 'reference'; }).length;
       window.MA.toast.show(p.body + ' の下書きを ' + opened.length
-        + ' 図種ぶん、別タブで開きました');
+        + ' 図種ぶん、別タブで開きました'
+        + (copied ? ' (' + copied + ' 図種は先輩の実図を写しました)' : ''));
     }
     return opened;
   }
@@ -14666,8 +14715,10 @@ function setupTemplateNew() {
   function partSectionHtml() {
     return '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">部品を起こす (6 図種まとめて)</h3>'
       + '<div style="font-size:11px;color:var(--text-secondary);">'
-      + '手本の無い部品を起こすときに使います。部品名を 1 回打つと、シーケンス・状態遷移・クラス・'
-      + 'アクティビティ・コンポーネント・ユースケースの下書きが、同じ名前で揃って別タブに開きます。</div>'
+      + '部品名を 1 回打つと、シーケンス・状態遷移・クラス・'
+      + 'アクティビティ・コンポーネント・ユースケースの下書きが、同じ名前で揃って別タブに開きます。'
+      + '隣のフォルダ (先輩の保存フォルダ) に同じ部品名の実図があれば、その図種は汎用ひな形ではなく'
+      + 'その実図を写します。</div>'
       + '<div style="display:flex;gap:8px;align-items:flex-end;margin-top:6px;">'
       + '<div style="flex:1;"><label style="' + LABEL + '" for="part-subject">部品名</label>'
       + '<input id="part-subject" autocomplete="off" spellcheck="false" placeholder="TIMER" style="'
@@ -14749,6 +14800,7 @@ function setupTemplateNew() {
     seedTpl = seed || null;
     nameTouched = false;
     render();
+    if (PS) loadPartFolders();
     modal.style.display = 'flex';
     if (focusSkeleton === 'part') {
       var psub = document.getElementById('part-subject');
