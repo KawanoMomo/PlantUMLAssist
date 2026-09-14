@@ -45,6 +45,54 @@ test('手順7 指摘 3 件が図名・行・内容の揃った形でまとまる
   expect(findings.map((f) => f.doc)).toEqual(['gpio_init_sequence', 'gpio_init_sequence', 'gpio_state']);
 });
 
+// BLK-reviewer-20260915-0206-wish: まとめの「行」は reviewer が数えて書き、primary が
+// puml を開いて探し直していた。指摘を図そのものに貼れば、書く側は対象の名前だけを言えばよく、
+// 読む側は図を開いた時点で該当の箱に印が刺さっている。
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { loadMA } = require('../../../tools/audit-runtime');
+const pinsCli = require('../../../tools/pins');
+
+test('手順7 指摘 3 件を、行番号を書かずに対象の名前だけで図に貼れる', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pua-reviewer-07-'));
+  const files = {};
+  ['gpio_init_sequence', 'gpio_state'].forEach((name) => {
+    files[name] = path.join(dir, name + '.puml');
+    fs.writeFileSync(files[name], R.DOCS[name], 'utf-8');
+  });
+
+  // reviewer が打つのは「どの図の・何に・何を」だけ。行は 1 つも書かない。
+  const findings = [
+    { doc: 'gpio_init_sequence', on: 'GpioDrv', text: 'GpioDrv は他図の Gpio_Driver と揃っていない' },
+    { doc: 'gpio_init_sequence', on: 'Dbg_Trace', text: 'Dbg_Trace は宣言だけで使われていない' },
+    { doc: 'gpio_state', on: 'Gpio_Reset', text: 'Gpio_Reset はシーケンスに実在しない' },
+  ];
+  for (const f of findings) {
+    const code = pinsCli.main([files[f.doc], '--add', f.text, '--on', f.on, '--at', '2026-09-15T02:06'],
+      { out: () => {}, err: () => {} });
+    expect(code).toBe(0);
+  }
+
+  // 到達条件: 3 件とも図に残り、どれも「図・対象の行・内容」が図の中で揃っている。
+  const MA = loadMA().MA;
+  const placed = [];
+  for (const name of Object.keys(files)) {
+    const dsl = fs.readFileSync(files[name], 'utf-8');
+    MA.reviewPins.list(dsl).forEach((p) => placed.push({ doc: name, line: p.line, anchor: p.anchor, text: p.text, stale: p.stale }));
+  }
+  expect(placed.length).toBe(3);
+  for (const p of placed) {
+    expect(p.stale).toBe(false);
+    expect(p.line).toBeGreaterThan(0);
+    expect(p.text.length).toBeGreaterThan(0);
+  }
+  // 貼り先は「その名前が書かれている行」そのもの。primary は探し直さずに済む。
+  expect(placed.find((p) => p.text.includes('Gpio_Driver')).anchor).toBe('participant GpioDrv');
+  expect(placed.find((p) => p.text.includes('使われていない')).anchor).toBe('participant Dbg_Trace');
+  expect(placed.find((p) => p.text.includes('実在しない')).anchor).toBe('Ready --> Uninit : Gpio_Reset');
+});
+
 // BLK-reviewer-20260914-1806-wish: 依頼のまとめには「前回の依頼が下書きとして
 // 着手済みで、本体への差し替えを待っている」が毎回混ざる。これまでは `-編集中` を
 // ls して目で拾い、本体と diff を取って初めてそう言えた。
