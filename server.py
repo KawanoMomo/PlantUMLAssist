@@ -464,6 +464,54 @@ def resolve_render_request(data):
     return value, mode, warning, None
 
 
+# BLK-reviewer-20260913-0306: reviewer は保存フォルダの .puml / .svg を GUI の外から
+# 直に読む。write_text は「開いて 0 バイトに切り詰めてから書く」ので、書いている
+# 数百 ms の間に読んだ側は空・または途中までのファイルを見る (reviewer は 1298 →
+# 78 バイトの揺れを実測した)。読んだ側にはそれが「中身が消えた」としか見えず、
+# 本当の消失と区別できない。同じフォルダに一時ファイルを書いてから os.replace で
+# 差し替えれば、読む側からは必ず「前の全文」か「次の全文」のどちらかになる
+# (os.replace は同一ボリュームなら Windows でも原子的)。
+#
+# Windows の os.replace は、置き換える先を誰かが開いている一瞬の間だけ
+# PermissionError を返す。読まれていることを理由に保存を落とすわけにはいかないので、
+# 数ミリ秒おきに少しだけ粘り、それでも駄目なら従来どおりその場に書く
+# (途中を見せる可能性は残るが、保存は必ず通る)。
+REPLACE_RETRY_SECONDS = 2.0
+REPLACE_RETRY_INTERVAL = 0.005
+
+
+def _atomic_write_text(path, text, encoding='utf-8', newline=None):
+    """`path` を、読んでいる側に途中経過を見せずに置き換える。"""
+    tmp = path.with_name(path.name + '.tmp-' + str(os.getpid()) + '-' + str(threading.get_ident()))
+    try:
+        with open(tmp, 'w', encoding=encoding, newline=newline) as f:
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
+        deadline = time.monotonic() + REPLACE_RETRY_SECONDS
+        while True:
+            try:
+                os.replace(tmp, path)
+                return
+            except PermissionError:
+                if time.monotonic() >= deadline:
+                    break
+                time.sleep(REPLACE_RETRY_INTERVAL)
+        # 粘っても開かれっぱなしだった。保存を落とさないことを優先する。
+        with open(path, 'w', encoding=encoding, newline=newline) as f:
+            f.write(text)
+    except BaseException:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        raise
+    try:
+        tmp.unlink()
+    except OSError:
+        pass
+
+
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path.split('?')[0] == '/autosave-versions':
@@ -1095,7 +1143,7 @@ class Handler(BaseHTTPRequestHandler):
             while target.exists():
                 target = self._version_path(save_dir, dt, '%s.%d' % (stamp, n))
                 n += 1
-            target.write_text(old, encoding='utf-8')
+            _atomic_write_text(target, old)
         except OSError:
             return
         # 上限を超えた分は古い方から捨てる。
@@ -1254,7 +1302,7 @@ class Handler(BaseHTTPRequestHandler):
             'lines': len(dsl.splitlines()),
         }
         try:
-            puml.write_text(dsl, encoding='utf-8')
+            _atomic_write_text(puml, dsl)
             meta_path.write_text(json.dumps(meta, ensure_ascii=False), encoding='utf-8')
         except OSError as e:
             self._send_json(500, {'error': f'write failed: {e}'})
@@ -1387,7 +1435,7 @@ class Handler(BaseHTTPRequestHandler):
         # 同じ図種の中での上書きは今までどおり。消える中身は先に控える。
         self._stash_version(save_dir, target, dsl)
         try:
-            file_path.write_text(dsl, encoding='utf-8')
+            _atomic_write_text(file_path, dsl)
         except OSError as e:
             self._send_json(500, {'error': f'write failed: {e}'})
             return
@@ -1476,7 +1524,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             # newline='' — 改行を CRLF に変換させない。変換すると、描き直した
             # 結果とはバイトで必ず食い違い、/verify-svg が全件 differ と答える。
-            svg_path.write_text(svg + self._svg_stamp(puml_path), encoding='utf-8', newline='')
+            _atomic_write_text(svg_path, svg + self._svg_stamp(puml_path), newline='')
         except OSError as e:
             self._send_json(500, {'error': f'write failed: {e}'})
             return
