@@ -1,5 +1,5 @@
 'use strict';
-window.MA = window.MA || {};
+if (typeof window !== 'undefined') window.MA = window.MA || {};
 
 // sync-state — 1 つの図が持つ 3 つの成果物 (本体 .puml / 編集中の下書き / 書き出した .svg) の
 // うち、どれが最新でどれが取り残されているかを一覧の時点で言う。
@@ -15,7 +15,7 @@ window.MA = window.MA || {};
 // 同じ中身なら反映漏れではないので、ここは何も言わない (片付けは dupe-merge の職掌)。
 //
 // DOM にも fetch にも触らない純関数だけ。描画と本文の取り寄せは app.js。
-window.MA.syncState = (function() {
+var _syncStateApi = (function() {
 
   // 下書きを示す接尾辞。source-lock が「元を保つ」で作る `-編集中` が本命で、
   // 手で付けられる同義の語を併せて見る。末尾の連番 (-編集中2) も下書き。
@@ -66,7 +66,7 @@ window.MA.syncState = (function() {
   }
 
   function _svgMap(entries, verified) {
-    var SF = window.MA.svgFreshness;
+    var SF = (typeof window !== 'undefined' && window.MA) ? window.MA.svgFreshness : null;
     if (!SF || !SF.scan || !SF.contentMap) return {};
     return SF.contentMap(SF.scan(entries || [], verified || {}));
   }
@@ -274,3 +274,5 @@ window.MA.syncState = (function() {
     diffTitle: diffTitle,
   };
 })();
+if (typeof window !== 'undefined') window.MA.syncState = _syncStateApi;
+if (typeof module !== 'undefined' && module.exports) module.exports = _syncStateApi;
