@@ -3468,6 +3468,14 @@ function writeChangedToFolder(changed) {
 }
 
 // アクティブなタブの現在の編集内容を workspace に書き戻す。
+// BLK-primary-20260914-1406-wish: 保存を試すたびに「何を・どの道で書いたか」を控える。
+// 引き継ぐ前に、ここの控えとディスクを突き合わせて効いた図と効かなかった図を名指しする。
+function _noteSaveVerify(doc, outcome) {
+  var SV = window.MA.saveVerify;
+  if (!SV || !doc || !doc.name) return;
+  try { SV.note(doc.name, doc.dsl, outcome); } catch (e) {}
+}
+
 function saveActiveDoc() {
   if (!window.MA.workspace) return null;
   var doc = window.MA.workspace.updateActive({ dsl: mmdText, diagramType: currentDiagramType });
@@ -3480,9 +3488,13 @@ function saveActiveDoc() {
       if (window.MA.autoSave && window.MA.autoSave.noteFileBlocked) {
         window.MA.autoSave.noteFileBlocked(doc.name, blocked);
       }
+      // BLK-primary-20260914-1406-wish: 書かなかった道もここで控える。
+      // 控えないと、画面には「保存した」しか残らない。
+      _noteSaveVerify(doc, 'blocked');
       renderDiffBadge();
       return doc;
     }
+    if (doc && cfg && cfg.backend !== 'file') _noteSaveVerify(doc, 'download');
     if (doc && cfg && cfg.backend === 'file') {
       // BLK-junior-20260908-1803-wish: 開いたままのファイルへ最初に書き戻す前に
       // 一度だけ聞く。答えるまでは書かない (見比べ中の元ファイルを守る)。
@@ -3490,6 +3502,7 @@ function saveActiveDoc() {
       var d = SL ? SL.decide(doc.id, doc.name, _openDocNames(), doc.dsl) : { action: 'write', name: doc.name };
       if (d.action === 'ask') {
         try { askSourceLock(doc); } catch (e) {}
+        _noteSaveVerify(doc, 'asked');
         renderDiffBadge();
         return doc;
       }
@@ -3497,6 +3510,7 @@ function saveActiveDoc() {
       // ままなので、元ファイルは既にこの内容で、書く必要も守るものも無い。聞かない。
       if (d.action === 'skip') {
         try { updateTopSourceLock(); } catch (e) {}
+        _noteSaveVerify(doc, 'skipped');
         renderDiffBadge();
         return doc;
       }
@@ -3504,6 +3518,9 @@ function saveActiveDoc() {
       try { updateTopSourceLock(); } catch (e) {}
       if (d.name !== doc.name) doc = { id: doc.id, name: d.name, diagramType: doc.diagramType, dsl: doc.dsl };
       window.MA.workspace.saveToFile(doc, cfg.fileDir);
+      // 書きに行った。効いたかどうかはディスクと突き合わせるまで分からないので、
+      // 「何を書くつもりだったか」だけを控える (BLK-primary-20260914-1406-wish)。
+      _noteSaveVerify(doc, 'written');
       // 保存した時点を差分の基準にする (BLK-reviewer-20260907-0803)。
       if (window.MA.saveDiff) window.MA.saveDiff.mark(doc.name, doc.dsl);
       // 保存のたびに版を積む (BLK-reviewer-20260908-0723-wish)。基準 1 点だけでは
@@ -8055,6 +8072,7 @@ function setupTabs() {
         appendSvgSection(panel, dir);
       appendPartCrossSection(panel);
         appendWriteSection(panel, dir);
+        appendSaveVerifySection(panel, dir);
         appendDupeSection(panel, dir);
         appendKindSummary(panel);
         plain.items.forEach(function(e) { panel.appendChild(folderRow(e.name || e, null, null)); });
@@ -8088,6 +8106,7 @@ function setupTabs() {
       appendSvgSection(panel, dir);
       appendPartCrossSection(panel);
       appendWriteSection(panel, dir);
+      appendSaveVerifySection(panel, dir);
       appendDupeSection(panel, dir);
 
       folderStatus = {};
@@ -8215,6 +8234,136 @@ function setupTabs() {
   // BLK-reviewer-20260914-1106-wish: 状態遷移図の遷移ラベルとクラス図のメソッドの
   // 対応は、これまで tools/audit.js を実行して JSON を読み解くしかなかった。
   // 部品ごとに 3 枚を束ねた行を一覧の頭に置き、宣言の無い名前を赤字で名指しする。
+  // ── この周の保存が効いたか (BLK-primary-20260914-1406-wish) ──────────────
+  // 今の画面は「保存操作をした」ことしか言わず、錠の問いに答えていない・テンプレ
+  // 宣言で止めている・保存先がダウンロードのまま、のどれかで黙って書かれない道が
+  // いくつもある。新人に引き継ぐ前に、保存先ファイルの中身と突き合わせて
+  // 「効いた図 / 効かなかった図」を名指しする。
+
+  // 書きに行った図だけディスクを読み直して突き合わせる。読めなければ「無い」。
+  function verifySaves(dir) {
+    var SV = window.MA.saveVerify;
+    var WS = window.MA.workspace;
+    if (!SV || !WS) return Promise.resolve([]);
+    var todo = SV.pending();
+    var chain = Promise.resolve();
+    todo.forEach(function(n) {
+      chain = chain.then(function() {
+        return Promise.resolve(WS.loadFile(n, dir)).then(function(text) {
+          SV.applyDisk(n, text);
+        }, function() { SV.applyDisk(n, null); });
+      });
+    });
+    return chain.then(function() { return SV.rows(); });
+  }
+
+  // 効かなかった図を、控えてある「書くつもりだった本文」で書き直す。
+  // 錠の問いを待たずに書く (名指しして押した 1 枚なので、守るものは無い)。
+  function resaveVerified(name, dir) {
+    var SV = window.MA.saveVerify;
+    var WS = window.MA.workspace;
+    var r = SV && SV.record(name);
+    if (!r || !WS) return Promise.resolve(null);
+    return Promise.resolve(WS.saveToFile({ name: name, dsl: r.dsl }, dir)).then(function() {
+      SV.note(name, r.dsl, 'written');
+      return Promise.resolve(WS.loadFile(name, dir)).then(function(text) {
+        var st = SV.applyDisk(name, text);
+        if (window.MA.toast) {
+          window.MA.toast.show(st === 'ok' ? name + ' を保存し直しました（ディスクの中身が一致しました）'
+                                           : name + ' は書き直してもディスクが変わりません: ' + SV.reasonText(st));
+        }
+        renderFolderPanel();
+        return st;
+      });
+    });
+  }
+
+  function appendSaveVerifySection(host, dir) {
+    var SV = window.MA.saveVerify;
+    if (!SV) return;
+    var rows = SV.rows();
+    if (!rows.length) return;
+    var bad = rows.filter(function(r) { return r.bad; });
+    var sum = document.createElement('div');
+    sum.className = 'folder-save-verify' + (bad.length ? ' has-stale' : '');
+    sum.id = 'folder-save-verify';
+    sum.textContent = SV.summary(rows);
+    sum.title = '「保存操作をした」ではなく「保存先ファイルの中身が編集後になっているか」です。'
+      + '引き継ぐ前にここが 0 枚であることを確かめます';
+    host.appendChild(sum);
+
+    var bar = document.createElement('div');
+    bar.className = 'folder-save-verify-bar';
+    var check = document.createElement('button');
+    check.type = 'button';
+    check.className = 'folder-save-verify-check';
+    check.id = 'btn-save-verify';
+    check.textContent = '保存を確かめる（' + rows.length + ' 枚）';
+    check.title = 'この周に保存を試した図のファイルを読み直し、編集後の中身と突き合わせます';
+    check.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      check.disabled = true;
+      check.textContent = '確かめています…';
+      verifySaves(dir).then(function() { renderFolderPanel(); },
+                            function() { renderFolderPanel(); });
+    });
+    bar.appendChild(check);
+    // 引き継ぎ資料にそのまま貼れる形で写す (受け取った側が 14 枚を開き直さずに済む)。
+    var copy = document.createElement('button');
+    copy.type = 'button';
+    copy.className = 'folder-save-verify-check';
+    copy.id = 'btn-save-verify-copy';
+    copy.textContent = '引き継ぎ用に写す';
+    copy.title = '効いた図 / 効かなかった図の一覧を、引き継ぎ資料に貼れる形でクリップボードへ写します';
+    copy.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      var text = SV.handoffText(SV.rows());
+      var done = function() { if (window.MA.toast) window.MA.toast.show('引き継ぎ用の一覧を写しました'); };
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(done, done);
+        } else { done(); }
+      } catch (e) { done(); }
+    });
+    bar.appendChild(copy);
+    host.appendChild(bar);
+
+    rows.forEach(function(r) {
+      if (!r.bad && r.status !== 'unknown') return;   // 効いた図は 1 行の要約で足りる
+      var row = document.createElement('div');
+      row.className = 'folder-save-verify-row';
+      row.setAttribute('data-save-verify', r.name);
+      row.setAttribute('data-save-status', r.status);
+      var txt = document.createElement('span');
+      txt.className = 'folder-save-verify-name' + (r.bad ? ' is-bad' : '');
+      txt.textContent = SV.rowLabel(r) + '（' + r.reason + '）';
+      row.appendChild(txt);
+      // 開いて直すのか、控えてある本文で書き直すのかを、その場で選べるようにする。
+      var open = document.createElement('button');
+      open.type = 'button';
+      open.className = 'folder-save-verify-act';
+      open.setAttribute('data-save-open', r.name);
+      open.textContent = '開く';
+      open.addEventListener('click', function(ev) { ev.stopPropagation(); openFromFolder(r.name); });
+      row.appendChild(open);
+      if (r.status === 'stale' || r.status === 'missing' || r.status === 'asked') {
+        var again = document.createElement('button');
+        again.type = 'button';
+        again.className = 'folder-save-verify-act';
+        again.setAttribute('data-save-resave', r.name);
+        again.textContent = '保存し直す';
+        again.title = '編集後の本文をこのファイルへ書き直します（錠の問いは待ちません）';
+        again.addEventListener('click', function(ev) {
+          ev.stopPropagation();
+          again.disabled = true;
+          resaveVerified(r.name, dir);
+        });
+        row.appendChild(again);
+      }
+      host.appendChild(row);
+    });
+  }
+
   // ── 中身が同じ図の統合と、1 枚だけの削除 (BLK-primary-20260914-1306-wish) ──
   // 指摘.md は毎回「can_init_sequence-編集中 が本体と byte 単位で同一のまま」の
   // 整理を求めるのに、📂一覧には開く・名前を変えるしか無く、実現するには保存
