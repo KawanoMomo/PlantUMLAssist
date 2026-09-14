@@ -21485,6 +21485,9 @@ function _mexpRenderPlan() {
   if (run) run.disabled = !p;
   _mexpMarkPicked();
   _mexpRenderAnchor();
+  // 開いているサマリカードは、選んだ部品・出し直した資料に付いていく
+  // (開いたときの絵のまま取り残されると、揃ったかを見誤る)。
+  try { _mexpRenderSummary(); } catch (e) {}
 }
 
 function _mexpRenderComponents() {
@@ -21774,6 +21777,94 @@ function runMaterialRow(component) {
       return results;
     });
   });
+}
+
+// ── 部品サマリカード (BLK-junior-20260915-0206-wish) ────────────────────────
+// 一括資料化で出し終えたあと、「6 図種とも揃っているか」を見返す手立てが
+// どこにも無く、📂一覧を部品名でフィルタして 1 枚ずつ開き、題名の (資料用) と
+// 保存日時を目で追っていた。部品の図種を、資料用の絵と保存日時ごと 1 枚に並べる。
+// 何を並べるか・何と書くかは core/material-summary が持つ。ここは描くだけ。
+var _mexpSummaryOpen = false;
+var _mexpSummarySeq = 0;      // 描き直しの世代。古い絵が後から届いて上書きしないため
+
+function _mexpSummaryCards() {
+  var MS = window.MA.materialSummary;
+  if (!MS) return [];
+  var comp = _mexpSel('mexp-component');
+  return MS.cards(_mexpEntries.length ? _mexpEntries : _mexpFiles, comp ? comp.value : '');
+}
+
+// 絵は 1 枚ずつ順に描く (6 図種を一度に投げると描画が詰まり、どれも出ないまま
+// 待たされる)。資料用があればその版を、無ければ元の図を薄く出す。
+function _mexpDrawThumbs(cards, seq) {
+  var WS = window.MA.workspace;
+  var dir = _wsFileDir();
+  var chain = Promise.resolve();
+  (cards || []).forEach(function(c, i) {
+    chain = chain.then(function() {
+      if (seq !== _mexpSummarySeq) return null;
+      var box = document.querySelector('#mexp-summary-cards .mexp-thumb[data-at="' + i + '"]');
+      if (!box || !WS || !WS.loadFile || !c.preview) return null;
+      return Promise.resolve(WS.loadFile(c.preview, dir))
+        .then(function(text) {
+          if (!text || String(text).trim() === '') throw new Error('図が空です');
+          return renderDslToSvg(text);
+        })
+        .then(function(svg) {
+          if (seq !== _mexpSummarySeq) return;
+          box.innerHTML = svg;
+          box.setAttribute('data-drawn', '1');
+        })
+        .catch(function() {
+          if (seq !== _mexpSummarySeq) return;
+          box.textContent = '絵を出せませんでした';
+          box.setAttribute('data-drawn', '0');
+        });
+    });
+  });
+  return chain.then(function() { return cards; });
+}
+
+function _mexpRenderSummary() {
+  var MS = window.MA.materialSummary;
+  var box = _mexpSel('mexp-summary');
+  var wrap = _mexpSel('mexp-summary-cards');
+  if (!MS || !box || !wrap) return Promise.resolve([]);
+  box.hidden = !_mexpSummaryOpen;
+  var seq = ++_mexpSummarySeq;
+  if (!_mexpSummaryOpen) return Promise.resolve([]);
+  var comp = _mexpSel('mexp-component');
+  var component = comp ? comp.value : '';
+  var cards = _mexpSummaryCards();
+  var t = _mexpSel('mexp-summary-title');
+  var txt = _mexpSel('mexp-summary-text');
+  var miss = _mexpSel('mexp-summary-missing');
+  var span = _mexpSel('mexp-summary-span');
+  if (t) t.textContent = MS.title(component);
+  if (txt) txt.textContent = MS.summaryText(component, cards);
+  if (miss) miss.textContent = MS.missingText(cards);
+  if (span) span.textContent = MS.spanText(cards);
+  box.setAttribute('data-component', component);
+  box.setAttribute('data-cards', String(cards.length));
+  box.setAttribute('data-missing', String(MS.missingKinds(cards).length));
+  wrap.innerHTML = cards.map(function(c, i) {
+    return '<figure class="mexp-card" data-kind="' + _mexpEsc(c.kind) + '"'
+      + ' data-status="' + _mexpEsc(c.status) + '"'
+      + ' title="' + _mexpEsc(MS.cardText(component, c)) + '">'
+      + '<div class="mexp-thumb" data-at="' + i + '">描いています…</div>'
+      + '<figcaption><span class="mexp-card-kind">' + _mexpEsc(c.mark) + ' ' + _mexpEsc(c.kind)
+      + '</span><span class="mexp-card-saved">' + _mexpEsc(c.savedText) + '</span></figcaption>'
+      + '</figure>';
+  }).join('');
+  // マスを押して部品が変わったときも、カードはその部品のものに付いていく。
+  return _mexpDrawThumbs(cards, seq);
+}
+
+function _mexpToggleSummary() {
+  _mexpSummaryOpen = !_mexpSummaryOpen;
+  var btn = _mexpSel('mexp-summary-toggle');
+  if (btn) btn.textContent = _mexpSummaryOpen ? '📋 部品サマリカードを閉じる' : '📋 部品サマリカード…';
+  return _mexpRenderSummary();
 }
 
 function openMaterialExport() {
@@ -22076,6 +22167,9 @@ function setupMaterialExport() {
     toggle.textContent = open ? '見出しから逆引き…' : '逆引きを閉じる';
     if (!open) _mexpRenderLookup();
   });
+  // 部品サマリカード (BLK-junior-20260915-0206-wish)
+  var sumBtn = document.getElementById('mexp-summary-toggle');
+  if (sumBtn) sumBtn.addEventListener('click', function() { _mexpToggleSummary(); });
   if (modal) modal.addEventListener('click', function(e) { if (e.target === modal) closeMaterialExport(); });
 }
 
