@@ -5140,6 +5140,18 @@ function copyAuditBoard() {
   var AB = window.MA.auditBoard;
   var st = document.getElementById('ab-summary');
   if (!AB) return null;
+  // 「図ごと」で開いているなら、貼るのは目の前の表の方 (画面と写しを食い違わせない)。
+  if (_abView === 'docs' && window.MA.statusDashboard) {
+    var SD = window.MA.statusDashboard;
+    var sd = _sdBuild();
+    var sdText = SD.markdown(sd, '整合ダッシュボード');
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(sdText).then(function() {
+        if (st) st.textContent = '指摘.md 用にコピーしました (' + sd.rows.length + ' 枚)';
+      }, function() { if (st) st.textContent = 'コピーできません'; });
+    } else if (st) st.textContent = 'コピーできません';
+    return sdText;
+  }
   var b = _abBoard || _abBuild();
   var text = AB.markdown(b, '突合ダッシュボード');
   if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -5157,7 +5169,7 @@ function copyAuditBoard() {
 function toggleAuditBoard(open) {
   var modal = document.getElementById('ab-modal');
   if (!modal) return;
-  if (open) renderAuditBoard();
+  if (open) setAuditBoardView(_abView);
   modal.style.display = open ? 'flex' : 'none';
 }
 
@@ -5170,6 +5182,8 @@ function setupAuditBoard() {
   if (close) close.addEventListener('click', function() { toggleAuditBoard(false); });
   var copy = document.getElementById('ab-copy');
   if (copy) copy.addEventListener('click', function() { copyAuditBoard(); });
+  var view = document.getElementById('ab-view');
+  if (view) view.addEventListener('change', function() { setAuditBoardView(this.value); });
   var kind = document.getElementById('ab-kind');
   if (kind) kind.addEventListener('change', function() { _abKind = this.value; renderAuditBoard(); });
   var doc = document.getElementById('ab-doc');
@@ -5177,6 +5191,96 @@ function setupAuditBoard() {
   modal.addEventListener('click', function(ev) {
     if (ev.target === modal) toggleAuditBoard(false);
   });
+}
+
+// ── 整合ダッシュボード: 図ごと (BLK-reviewer-20260915-0606-wish) ───────────
+// 上の突合ダッシュボードは「指摘 1 件 = 1 行」なので、「この図はいま全体として
+// どうなっているか」(指摘・📌・SVG・表記の要決定・前回控えとの差分) は、
+// 📥 指摘箱・📂 一覧・突合ダッシュボードを開き直して頭の中で突き合わせるしかない。
+// CLI も同じで、6 本のコマンドの出力を目で見比べていた (node tools/dashboard.js)。
+// ここは同じ束ね方 (src/core/status-dashboard.js) で「図 1 枚 = 1 行」に組み替える。
+
+var _abView = 'issues';   // 'issues' = 指摘ごと / 'docs' = 図ごと
+
+// 表記揺れの要決定。登録簿が読めていなければ渡さない (0 組と「見ていない」を分ける)。
+function _sdRegistry(audits) {
+  var NR = window.MA.nameRegistry;
+  var reg = NR && NR.current ? NR.current() : null;
+  if (!NR || !reg) return null;
+  var name = audits && audits.name;
+  if (!name || name.status !== 'ok' || !name.result) return null;
+  try {
+    return { pending: NR.pending(reg, name.result.variants || []) };
+  } catch (e) { return null; }
+}
+
+function _sdBuild() {
+  var SD = window.MA.statusDashboard;
+  if (!SD) return null;
+  var run = _atRunAudits();
+  var findings = null;
+  try { findings = _mfRows(); } catch (e) { findings = null; }
+  var docs = [];
+  try {
+    window.MA.workspace.list().forEach(function(d) { if (d.name) docs.push(d.name); });
+  } catch (e) { /* 開いていないだけ。他の出口が挙げた図は下で入る */ }
+  var pins = _progressEntries();
+  return SD.build({
+    docs: docs,
+    findings: findings,
+    // 着手状況は 📥 指摘箱を開いた回にしか無い。無い回は「見ていない」と出す。
+    pins: pins.length ? pins : null,
+    svg: _abSvgScan,
+    registry: _sdRegistry(run.audits),
+  });
+}
+
+function renderStatusDashboard() {
+  var body = document.getElementById('ab-body');
+  var sumEl = document.getElementById('ab-summary');
+  var SD = window.MA.statusDashboard;
+  if (!body || !SD) return;
+  var esc = window.MA.htmlUtils.escHtml;
+  var b = _sdBuild();
+  if (sumEl) sumEl.textContent = SD.summaryLine(b);
+  if (!b || !b.rows.length) {
+    body.innerHTML = '<div class="ab-empty">表に出す図がありません。</div>';
+    return;
+  }
+  var html = '<table class="ab-table" id="sd-table"><thead><tr>'
+    + b.columns.map(function(c) { return '<th>' + esc(c.label) + '</th>'; }).join('')
+    + '</tr></thead><tbody>';
+  b.rows.forEach(function(r) {
+    html += '<tr class="ab-row sd-row" data-sd-doc="' + esc(r.doc) + '"'
+      + ' data-sd-svg="' + esc(r.svg.content) + '" data-sd-findings="' + r.findings.open + '"'
+      + ' data-sd-pins="' + r.pins.open + '" data-sd-registry="' + r.registry.pending + '"'
+      + ' data-sd-note="' + r.notes.length + '">'
+      + b.columns.map(function(c) {
+        return '<td class="sd-' + c.key + '">' + esc(SD.cell(r, c.key)) + '</td>';
+      }).join('')
+      + '</tr>';
+  });
+  html += '</tbody></table>';
+  body.innerHTML = html;
+  Array.prototype.forEach.call(body.querySelectorAll('.sd-row'), function(tr) {
+    tr.addEventListener('click', function() { _abJump(tr.getAttribute('data-sd-doc'), 1); });
+  });
+}
+
+function setAuditBoardView(view) {
+  _abView = view === 'docs' ? 'docs' : 'issues';
+  var sel = document.getElementById('ab-view');
+  if (sel && sel.value !== _abView) sel.value = _abView;
+  var title = document.getElementById('ab-title');
+  if (title) title.textContent = _abView === 'docs' ? '整合ダッシュボード' : '突合ダッシュボード';
+  // 絞り込みは「指摘ごと」の道具。図ごとの表では効かないので隠す
+  // (押しても何も起きない箱を画面に残さない)。
+  ['ab-kind', 'ab-doc'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.style.display = _abView === 'docs' ? 'none' : '';
+  });
+  if (_abView === 'docs') renderStatusDashboard();
+  else renderAuditBoard();
 }
 
 // ── 変遷履歴 (BLK-reviewer-20260908-0723-wish) ─────────────────────────────

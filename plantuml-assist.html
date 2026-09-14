@@ -6957,6 +6957,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/audit-timeline.js"></script>
 <script src="src/core/finding-ledger.js"></script>
 <script src="src/core/audit-board.js"></script>
+<script src="src/core/status-dashboard.js"></script>
 <script src="src/core/save-guard.js"></script>
 <script src="src/core/save-check.js"></script>
 <script src="src/core/save-swap.js"></script>
@@ -7399,9 +7400,13 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <div id="ab-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="ab-modal-content">
     <div id="ab-head">
-      <strong>突合ダッシュボード</strong>
+      <strong id="ab-title">突合ダッシュボード</strong>
       <span id="ab-summary"></span>
       <span id="ab-tools">
+        <select id="ab-view" aria-label="表の見方">
+          <option value="issues">指摘ごと</option>
+          <option value="docs">図ごと (整合)</option>
+        </select>
         <select id="ab-kind" aria-label="カテゴリで絞る"></select>
         <select id="ab-doc" aria-label="図で絞る"></select>
         <button type="button" id="ab-copy">指摘.md 用にコピー</button>
