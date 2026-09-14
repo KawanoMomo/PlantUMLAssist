@@ -40,6 +40,7 @@ const sourceFiles = [
   'src/core/svg-cross.js',
   'src/core/part-cross.js',
   'src/core/finding-actions.js',
+  'src/core/finding-variant.js',
   'src/core/review-state.js',
   'src/core/file-role.js',
   'src/core/audit-scope.js',
