@@ -1376,6 +1376,33 @@ test.describe('junior 手順 1: 宛先の書かれていない指摘を GUI の�
 // 書く間は閉じることになり、保存先設定を行き来して開き直していた。
 // ⇔ 先輩の図 は据え置きの 2 枠目で、図を切り替えると相手も自動で入れ替わる。
 const SENIOR_DIR = DIR + '-senior';
+// 先輩のクラス図は部品ごとに分かれておらず、全ドライバが 1 枚に載る
+// (persona-data/primary/driver_common_class.puml と同じ形)。
+const COMMON_CLASS = [
+  '@startuml',
+  'title Driver_Common_Class',
+  'class Driver_Common {',
+  '  + Init() : void',
+  '}',
+  'class Spi_Driver {',
+  '  + Spi_Init() : void',
+  '}',
+  'class Timer_Driver {',
+  '  + Timer_Init() : void',
+  '  + Timer_Start() : void',
+  '}',
+  'class Uart_Driver {',
+  '  + Uart_Init() : void',
+  '}',
+  'class IRQCtrl {',
+  '  + EnableIrq() : void',
+  '}',
+  'Spi_Driver --|> Driver_Common',
+  'Timer_Driver --|> Driver_Common',
+  'Uart_Driver --|> Driver_Common',
+  'Timer_Driver --> IRQCtrl',
+  '@enduml',
+].join(String.fromCharCode(10));
 const SENIOR_BASE = SENIOR_DIR.slice(SENIOR_DIR.lastIndexOf('/') + 1).toLowerCase();
 
 // 自分の図を開く。復元で同名のタブが既にあるならそれへ切り替える
@@ -1540,5 +1567,55 @@ test.describe('junior 手順 1〜2: 先輩の図を横に置いたまま自分�
     await expect(page.locator('#senior-pane')).toHaveAttribute('hidden', '');
     await openMine(page, 'gpio_init_sequence');
     await expect(status).toHaveText(/gpio_init_sequence/, { timeout: 10000 });
+  });
+
+  // BLK-junior-20260914-2206-wish: 手順1 で先輩の粒度に合わせたいのはクラス図も同じだが、
+  // 先輩のクラス図は全ドライバ共通の 1 枚 (driver_common_class) で、部品名で 1:1 に
+  // 引けないため「👀 先輩」は常に「−」だった。共通図から自分の部品の所だけを抜き出す。
+  test('先輩の共通クラス図から、自分の部品の所だけが横に出る', async ({ page }) => {
+    await page.evaluate(async (a) => {
+      await fetch('/autosave', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'driver_common_class', dir: a.dir, dsl: a.dsl }),
+      });
+    }, { dir: SENIOR_DIR, dsl: COMMON_CLASS });
+    await page.waitForTimeout(300);
+
+    await openMine(page, 'TimerDrv派生クラス図');
+    await openSenior(page);
+
+    // 到達条件その1: 「−」ではなく、共通図のどの部分が出るかが読める。
+    await expect(page.locator('#senior-notice')).toContainText('driver_common_class');
+    await expect(page.locator('#senior-notice')).toContainText('timer');
+
+    // 到達条件その2: 自分の部品と、その継承元・繋がる相手だけが出ている。
+    const dsl = page.locator('#senior-dsl');
+    await expect(dsl).toContainText('Timer_Driver');
+    await expect(dsl).toContainText('Driver_Common');
+    await expect(dsl).not.toContainText('Spi_Driver');
+    await expect(dsl).not.toContainText('Uart_Driver');
+    // 先輩のメソッドはそのまま残る (粒度・命名を合わせるのが手順1 の的)。
+    await expect(dsl).toContainText('Timer_Start');
+
+    // 到達条件その3: 部品名を打ち替えれば、その部品の所が浮かぶ。
+    await page.fill('#senior-slice-key', 'spi');
+    await page.waitForTimeout(800);
+    await expect(dsl).toContainText('Spi_Driver');
+    await expect(dsl).not.toContainText('Timer_Driver');
+
+    // 到達条件その4: 共通図の全体にも戻せる (抜き出しで隠れた所を確かめられる)。
+    await page.locator('#senior-slice-mode').click();
+    await page.waitForTimeout(800);
+    await expect(dsl).toContainText('Timer_Driver');
+    await expect(dsl).toContainText('Uart_Driver');
+
+    // 先輩のファイルは読むだけ (抜き出しても元は変わらない)。
+    const raw = await page.evaluate(async (a) => {
+      const r = await fetch('/autosave?dir=' + encodeURIComponent(a.dir)
+        + '&type=' + encodeURIComponent('driver_common_class'));
+      return await r.text();
+    }, { dir: SENIOR_DIR });
+    expect(raw).toContain('Uart_Driver');
   });
 });

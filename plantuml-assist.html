@@ -5006,6 +5006,14 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 #senior-head select { flex: 1; min-width: 0; font-size: 11px; }
 #senior-head button { border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer; }
 #senior-notice { padding: 4px 8px; font-size: 11px; color: var(--text-secondary); }
+#senior-slice { padding: 0 8px 4px 8px; display: flex; align-items: center; gap: 4px; font-size: 11px; }
+#senior-slice label { color: var(--text-secondary); }
+#senior-slice input { flex: 1; min-width: 0; font-size: 11px; padding: 1px 4px; }
+#senior-slice button {
+  font-size: 11px; padding: 1px 8px; border-radius: 10px;
+  border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer;
+}
+#senior-slice button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
 #senior-candidates { padding: 0 8px 4px 8px; display: flex; flex-wrap: wrap; gap: 4px; }
 #senior-candidates .senior-cand {
   font-size: 11px; padding: 1px 8px; border-radius: 10px;
@@ -6158,6 +6166,15 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button type="button" id="senior-close" title="この枠を閉じる">×</button>
       </div>
       <div id="senior-notice"></div>
+      <!-- BLK-junior-20260914-2206-wish: 先輩のクラス図は全ドライバ共通の 1 枚なので
+           部品名で 1:1 に引けない。共通図が相手のときだけ、部品名で抜き出す欄を出す。 -->
+      <div id="senior-slice" hidden>
+        <label for="senior-slice-key">部品</label>
+        <input type="text" id="senior-slice-key" placeholder="Timer"
+               aria-label="共通図から抜き出す部品名">
+        <button type="button" id="senior-slice-mode" aria-pressed="true"
+                title="共通図の全体と、部品の所だけを切り替えます">部品だけ</button>
+      </div>
       <div id="senior-candidates"></div>
       <div id="senior-view">
         <div id="senior-svg"></div>
@@ -6463,6 +6480,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/peek-verdict.js"></script>
 <script src="src/core/kind-matrix.js"></script>
 <script src="src/core/senior-pane.js"></script>
+<script src="src/core/senior-slice.js"></script>
 <script src="src/core/peek-freshness.js"></script>
 <script src="src/core/peek-changes.js"></script>
 <script src="src/core/audit-scope.js"></script>
