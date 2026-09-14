@@ -7610,6 +7610,35 @@ function setupTabs() {
     });
   }
 
+  // ── 自動保存の書き先を「図の名前」にする (BLK-primary-20260913-0306) ─────
+  // 自動保存は図種 (plantuml-sequence 等) を鍵にディスクへ写していたため、
+  // driver_common_class を打てば plantuml-class.puml が、diagram1 を打てば
+  // plantuml-sequence.puml が、開いてもいないのに同じ中身へ書き換わっていた。
+  // Ctrl+S (saveTarget) は既に図の名前で書いているので、自動保存の書き先も
+  // そちらに揃える。名前が付いていない・ファイル名にできないタブは書かない。
+  (function setupAutosaveFileName() {
+    var AS = window.MA.autoSave;
+    if (!AS || !AS.setFileNameResolver) return;
+    AS.setFileNameResolver(function() {
+      var WS = window.MA.workspace;
+      if (!WS || !WS.getActive) return '';
+      var doc = WS.getActive();
+      var name = (doc && doc.name) || '';
+      if (!name) return '';
+      if (WS.isValidName && !WS.isValidName(name)) return '';
+      // 見比べのために開いた元ファイルの錠も、Ctrl+S と同じように効かせる。
+      // ここを素通しすると「元のまま保つ」と答えた図へ自動保存だけが書き続ける。
+      var SL = window.MA.sourceLock;
+      if (SL && doc) {
+        var d;
+        try { d = SL.decide(doc.id, doc.name, _openDocNames()); } catch (e) { return ''; }
+        if (!d || d.action === 'ask') return '';   // 返事を待つ間は書かない
+        if (d.name) return d.name;                 // 控えの名前へ逃がす
+      }
+      return name;
+    });
+  })();
+
   // ── テンプレへの自動保存を止める (BLK-junior-20260908-1803) ──────────────
   // 見比べのために Open で開いたテンプレ (前周の完了物) へ、図名を変えるまでの間に
   // 自動保存が書き込み、編集途中の内容でテンプレが壊れる事故があった。

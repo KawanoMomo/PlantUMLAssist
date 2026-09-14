@@ -239,6 +239,87 @@ describe('autoSave file backend', function() {
   });
 });
 
+// BLK-primary-20260913-0306 — 自動保存の書き先は図種ではなく図の名前。
+// 図種を鍵にしたまま写すと、diagram1 を打つだけで plantuml-sequence.puml が
+// diagram1 の中身に入れ替わる (開いてもいない図が別の図になる)。
+describe('autoSave file name resolver', function() {
+  var savedFetch;
+  var posts;
+  function postBodies() {
+    return posts.map(function(b) { return JSON.parse(b); });
+  }
+  beforeEach(function() {
+    global.window.localStorage.__reset();
+    posts = [];
+    as.setFileNameResolver(null);
+    savedFetch = global.window.fetch;
+    global.window.fetch = function(url, opts) {
+      if (opts && opts.method === 'POST' && url === '/autosave') posts.push(opts.body);
+      return Promise.resolve({
+        ok: true,
+        text: function() { return Promise.resolve(''); },
+        json: function() { return Promise.resolve({}); },
+      });
+    };
+  });
+  function restore() {
+    as.setFileNameResolver(null);
+    if (savedFetch !== undefined) global.window.fetch = savedFetch;
+    else delete global.window.fetch;
+  }
+
+  test('書き先は解決器が返した図の名前になる (図種ではない)', function() {
+    as.setConfig({ backend: 'file', fileDir: '/test' });
+    as.setFileNameResolver(function() { return 'driver_common_class'; });
+    as.scheduleSave('plantuml-class', '@startuml\nclass Driver_Common\n@enduml');
+    as.flush();
+    var bodies = postBodies();
+    expect(bodies.length).toBe(1);
+    expect(bodies[0].type).toBe('driver_common_class');
+    // 図種の名前のファイルには一切触らない。
+    expect(bodies.some(function(b) { return b.type === 'plantuml-class'; })).toBe(false);
+    restore();
+  });
+
+  test('localStorage 側の鍵は図種のまま (図種ごとの復元を壊さない)', function() {
+    as.setConfig({ backend: 'file', fileDir: '/test' });
+    as.setFileNameResolver(function() { return 'diagram1'; });
+    as.scheduleSave('plantuml-sequence', 'SEQ-BODY');
+    as.flush();
+    expect(as.restoreFor('plantuml-sequence')).toBe('SEQ-BODY');
+    restore();
+  });
+
+  test('名前を持たないタブはディスクへ写さない (別の図を潰すより書かない)', function() {
+    as.setConfig({ backend: 'file', fileDir: '/test' });
+    as.setFileNameResolver(function() { return ''; });
+    as.scheduleSave('plantuml-sequence', 'X');
+    as.flush();
+    expect(posts.length).toBe(0);
+    expect(as.restoreFor('plantuml-sequence')).toBe('X');
+    restore();
+  });
+
+  test('書き先は打った時点で決まる (debounce 中にタブを替えても流れ込まない)', function() {
+    as.setConfig({ backend: 'file', fileDir: '/test' });
+    var active = 'diagram1';
+    as.setFileNameResolver(function() { return active; });
+    as.scheduleSave('plantuml-sequence', 'DIAGRAM1-BODY');
+    active = 'plantuml-sequence';   // 1 秒の間にタブを切り替えた
+    as.flush();
+    expect(postBodies()[0].type).toBe('diagram1');
+    restore();
+  });
+
+  test('解決器が無ければ従来どおり図種で書く', function() {
+    as.setConfig({ backend: 'file', fileDir: '/test' });
+    as.scheduleSave('plantuml-state', 'S');
+    as.flush();
+    expect(postBodies()[0].type).toBe('plantuml-state');
+    restore();
+  });
+});
+
 // jsdom window を run-tests.js が用意した sandbox window に戻す。
 // これをしないと後続 test ファイル (class-*, component-*, regex-parts 等) が
 // window.MA.* を見失って失敗する。

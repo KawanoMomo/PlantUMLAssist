@@ -224,3 +224,31 @@ test('手順5.5 中身が入れ替わった図は、一致した組を全部挙�
   expect(saved).toContain('class Timer_Driver');
   expect(saved).not.toBe(TEMPLATE_CLASS);
 });
+
+// BLK-primary-20260913-0306: 一括置換も改名も使わず、📂一覧→打ち直し→Ctrl+S を
+// 続けただけで、一度も開いていない plantuml-class.puml / plantuml-sequence.puml が
+// 打ち直した図と同じ中身に入れ替わった。自動保存がディスクへ写す先を「図の名前」では
+// なく「図種 (plantuml-class 等)」にしていたため、打鍵のたびに図種名のファイルが
+// 目の前の図で上書きされていた。普通の保存だけで入れ替わらない、を到達条件にする。
+const TYPE_DIR = DIR + '-typekey';
+
+test('手順5.5 打ち直して保存しても、開いていない図種名のファイルは作られない', async ({ page }) => {
+  await S.bootWithSaveDir(page, TYPE_DIR);
+  await S.clearDir(page, TYPE_DIR);
+  await S.putDoc(page, TYPE_DIR, 'driver_common_class', S.docFor('driver_common_class'));
+  await page.reload();
+  await page.waitForTimeout(800);
+
+  await S.openFolderItem(page, 'driver_common_class');
+  await S.overwriteOpenedFile(page);
+  await S.typeDsl(page, S.docFor('driver_common_class', 'Spi_Ctrl'));
+  await page.waitForTimeout(2000);
+
+  // 到達条件その1: 打ち直した中身は、その図の名前のファイルに入っている。
+  expect(await S.readDoc(page, TYPE_DIR, 'driver_common_class')).toContain('Spi_Ctrl');
+
+  // 到達条件その2: 開いてもいない図種名のファイルは、保存フォルダに現れない。
+  const files = await S.listDir(page, TYPE_DIR);
+  expect(files).not.toContain('plantuml-class');
+  expect(files).not.toContain('plantuml-sequence');
+});

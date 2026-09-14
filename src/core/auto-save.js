@@ -13,7 +13,7 @@ window.MA.autoSave = (function() {
     fileDir: './autosave',
   };
 
-  var _pending = null;       // { diagramType, dsl }
+  var _pending = null;       // { diagramType, dsl, fileName }
   var _timerId = null;
   var _saveListeners = [];
 
@@ -230,22 +230,52 @@ window.MA.autoSave = (function() {
     else delete _blockedSeen[diagramType];
   }
 
-  function _doWrite(diagramType, dsl) {
+  // ── ディスクへ書く名前を決める門 (BLK-primary-20260913-0306) ─────────────
+  // localStorage の鍵は図種 (plantuml-sequence 等) でよいが、保存フォルダの
+  // ファイル名は「図の名前」でなければならない。図種を鍵にしたまま写すと、
+  // diagram1 を打つたびに plantuml-sequence.puml が diagram1 の中身で
+  // 上書きされ、一度も開いていない図の中身が入れ替わる (primary が実測)。
+  // 名前を知っているのは workspace を持つ app.js なので、ここは聞くだけにする。
+  // 解決器が無い間は従来どおり図種で書く (単体では localStorage 運用と同じ)。
+  var _fileNameResolver = null;   // function(diagramType) -> 名前 / '' (書かない)
+
+  function setFileNameResolver(fn) {
+    _fileNameResolver = (typeof fn === 'function') ? fn : null;
+  }
+
+  // 返り値: 書くべきファイル名、または null (= ディスクへは書かない)
+  function _fileNameFor(diagramType) {
+    if (!_fileNameResolver) return diagramType;
+    var n;
+    try {
+      n = _fileNameResolver(diagramType);
+    } catch (e) {
+      return null;   // 名前が分からないなら書かない (取り違えより無書き込み)
+    }
+    n = (n == null) ? '' : String(n);
+    return n ? n : null;
+  }
+
+  function _doWrite(diagramType, dsl, fileName) {
     var ok = _writeRaw(DSL_PREFIX + diagramType, dsl);
     if (!ok) return null;
     var meta = { lastSavedAt: new Date().toISOString(), lastSavedType: diagramType };
     _writeJson(KEY_META, meta);
     // If file backend selected, mirror the write to disk via the server.
     var cfg = getConfig();
-    if (cfg.backend === 'file') {
+    if (fileName === undefined) fileName = _fileNameFor(diagramType);
+    // fileName が null なら、名前が決まらないタブ (未命名・記号入り) なので
+    // ディスクへは写さない。localStorage には残るので編集内容は消えず、
+    // Ctrl+S で名前を付ければそのまま書ける。取り違えて別の図を潰すより良い。
+    if (cfg.backend === 'file' && fileName != null) {
       // BLK-junior-20260908-1803: 書いてはいけないファイル (テンプレ宣言済み) には
       // ディスクへ写さない。localStorage 側は残すので、編集内容は失われず、
       // 図名を変えればそのまま新しいファイルに保存される。
-      var block = _blockedBy(diagramType);
+      var block = _blockedBy(fileName);
       if (block) {
-        _notifyBlocked(diagramType, block);
+        _notifyBlocked(fileName, block);
       } else {
-        _fileBackendWrite(diagramType, dsl, cfg.fileDir);
+        _fileBackendWrite(fileName, dsl, cfg.fileDir);
       }
     }
     for (var i = 0; i < _saveListeners.length; i++) {
@@ -264,14 +294,21 @@ window.MA.autoSave = (function() {
     _pending = null;
     var cfg = getConfig();
     if (!cfg.enabled) return;
-    _doWrite(p.diagramType, p.dsl);
+    _doWrite(p.diagramType, p.dsl, p.fileName);
   }
 
   function scheduleSave(diagramType, dsl) {
     if (!diagramType) return;
     var cfg = getConfig();
     if (!cfg.enabled) return;
-    _pending = { diagramType: diagramType, dsl: String(dsl == null ? '' : dsl) };
+    // 書き先の名前は「打った時点」で決める。debounce の 1 秒の間にタブを
+    // 切り替えられると、あとで聞き直した名前は次のタブのものになり、
+    // 前のタブの中身が次のタブのファイルへ流れ込む (これも入れ替わりの形)。
+    _pending = {
+      diagramType: diagramType,
+      dsl: String(dsl == null ? '' : dsl),
+      fileName: _fileNameFor(diagramType),
+    };
     if (_timerId != null) {
       try { clearTimeout(_timerId); } catch (e) {}
     }
@@ -365,6 +402,7 @@ window.MA.autoSave = (function() {
     isAvailable: isAvailable,
     onSave: onSave,
     setFileGuard: setFileGuard,
+    setFileNameResolver: setFileNameResolver,
     onFileBlocked: onFileBlocked,
     onFileRenamed: onFileRenamed,
     noteFileRenamed: noteFileRenamed,
