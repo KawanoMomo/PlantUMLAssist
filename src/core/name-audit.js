@@ -44,8 +44,10 @@ window.MA.nameAudit = (function() {
     return null;
   }
 
-  // docs: [{ id, name, dsl }] → [{ name, kind, key, docs: [図名], declared, refs }]
+  // docs: [{ id, name, dsl }] → [{ name, kind, key, docs: [図名], declared, refs, at }]
   // name の昇順。declared=false は矢印にだけ出てきた名前。
+  // BLK-reviewer-20260914-1706: at は出現の実位置 [{ doc, line, text, declared }]。
+  // 「どの図のどの行の綴りか」を持たないと、表記揺れを見た側は毎回 grep し直すことになる。
   function collect(docs) {
     var byName = {};
     var order = [];
@@ -53,31 +55,35 @@ window.MA.nameAudit = (function() {
       if (!byName[name]) {
         byName[name] = {
           name: name, kind: '', key: normalizeKey(name),
-          docs: [], declared: false, refs: 0,
+          docs: [], declared: false, refs: 0, at: [],
         };
         order.push(name);
       }
       return byName[name];
     }
-    function touch(name, docName, kind) {
+    function touch(name, docName, kind, lineNo, text) {
       var s = slot(name);
       s.refs++;
       if (kind) { s.declared = true; if (!s.kind) s.kind = kind; }
       if (s.docs.indexOf(docName) === -1) s.docs.push(docName);
+      s.at.push({
+        doc: docName, line: lineNo, text: String(text == null ? '' : text).trim(),
+        declared: !!kind,
+      });
     }
 
     (Array.isArray(docs) ? docs : []).forEach(function(d) {
       var docName = (d && d.name) || '';
-      window.MA.dslUtils.splitLines(window.MA.dslUtils.docDsl(d)).forEach(function(line) {
+      window.MA.dslUtils.splitLines(window.MA.dslUtils.docDsl(d)).forEach(function(line, i) {
         if (/^\s*(?:'|@)/.test(line)) return;                 // コメント・@startuml
         var decl = _declaredIn(line);
-        if (decl) { touch(decl.name, docName, decl.kind); return; }
+        if (decl) { touch(decl.name, docName, decl.kind, i + 1, line); return; }
         var a = line.match(ARROW_RE);
         if (!a) return;
         var left = a[1] || a[2];
         var right = a[3] || a[4];
-        if (_isName(left)) touch(left, docName, null);
-        if (_isName(right)) touch(right, docName, null);
+        if (_isName(left)) touch(left, docName, null, i + 1, line);
+        if (_isName(right)) touch(right, docName, null, i + 1, line);
       });
     });
 
@@ -115,6 +121,41 @@ window.MA.nameAudit = (function() {
     return out;
   }
 
+  // BLK-reviewer-20260914-1706: 「表記揺れ N 組」と正規化キーだけでは、どの綴りが
+  // どの綴りと対応するのか・それがどのファイルの何行目なのかが出ず、読む側は毎回
+  // ソースを grep し直していた。出現位置を 1 行にする文面はここが持つ
+  // (画面と CLI で同じ言葉にする)。宣言行を優先して出す — 直す先は宣言だから。
+  function occurrences(row, max) {
+    var at = (row && row.at) || [];
+    var decl = at.filter(function(o) { return o.declared; });
+    var rest = at.filter(function(o) { return !o.declared; });
+    var pick = decl.concat(rest);
+    var n = (max === 0 || max) ? max : 3;
+    if (n > 0) pick = pick.slice(0, n);
+    return pick.map(function(o) {
+      return o.doc + ':' + o.line + ' ' + (o.declared ? '宣言' : '参照') + '  ' + o.text;
+    });
+  }
+
+  // 表記揺れ 1 組を「綴り ⇔ 綴り」と、その出現位置の行に開く。
+  // 返すのは字下げ済みの行の配列で、CLI も画面もそのまま並べられる。
+  function variantLines(docs, options) {
+    var opts = options || {};
+    var groups = Array.isArray(docs) && docs.length && docs[0] && docs[0].members
+      ? docs : variants(docs);
+    var out = [];
+    groups.forEach(function(g) {
+      var names = g.members.map(function(m) { return m.name; });
+      out.push(names.join(' ⇔ ') + ' — 揃える先: ' + g.suggested);
+      g.members.forEach(function(m) {
+        occurrences(m, opts.max).forEach(function(w) {
+          out.push('  ' + m.name + '  ' + w);
+        });
+      });
+    });
+    return out;
+  }
+
   // どの図でも宣言されず、矢印にだけ現れる名前。クラス図の書き漏らし検出用。
   function undeclared(docs) {
     return collect(docs).filter(function(r) { return !r.declared; });
@@ -142,6 +183,7 @@ window.MA.nameAudit = (function() {
     return {
       names: rows,
       variants: v,
+      variantLines: variantLines(v),
       undeclared: rows.filter(function(r) { return !r.declared; }),
       matrix: matrix(docs),
       clean: v.length === 0 && rows.every(function(r) { return r.declared; }),
@@ -152,6 +194,8 @@ window.MA.nameAudit = (function() {
     normalizeKey: normalizeKey,
     collect: collect,
     variants: variants,
+    occurrences: occurrences,
+    variantLines: variantLines,
     undeclared: undeclared,
     matrix: matrix,
     audit: audit,

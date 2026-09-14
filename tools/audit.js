@@ -39,6 +39,8 @@ const USAGE = [
   '  --only a,b    回す監査を絞る (' + report.auditNames().join(', ') + ')',
   '  --cohort      ドメイン突合だけを要約で出す (= --only cohort --summary)。',
   '                フォルダを 2 つ以上渡すと、名前の先頭 1 段がそのフォルダ名になる',
+  '  --names       名前突合だけを要約で出す (= --only name --summary)。表記揺れの組を',
+  '                「綴り ⇔ 綴り」と、その宣言行 (ファイル:行) まで開いて並べる',
   '  --summary     JSON ではなく人が読む要約を出す',
   '  --summary-json  要約だけを、どの run でも同じ形・同じ順の JSON で出す',
   '                (別名 --summary-only)。totalIssues が先頭付近に固定で出て、',
@@ -207,6 +209,9 @@ function parseArgs(argv) {
     // BLK-reviewer-20260909-0703: 手順 4.7 は毎 tick これだけを打つ。
     // `--only cohort --summary` の 24 打鍵を 8 打鍵にする。
     else if (a === '--cohort') { opts.only = ['cohort']; opts.summary = true; }
+    // BLK-reviewer-20260914-1706: 手順 2 は毎 tick これだけを打つ。
+    // `--only name --summary` の 23 打鍵を 7 打鍵にする (--cohort と同じ理由)。
+    else if (a === '--names') { opts.only = ['name']; opts.summary = true; }
     else if (a === '--only') opts.only = String(argv[++i] || '').split(',').map((s) => s.trim()).filter(Boolean);
     else if (a.indexOf('--only=') === 0) opts.only = a.slice(7).split(',').map((s) => s.trim()).filter(Boolean);
     else if (a === '--since') opts.since = argv[++i];
