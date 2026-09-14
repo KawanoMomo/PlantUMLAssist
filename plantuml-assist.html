@@ -4871,8 +4871,18 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 #sgd-list li .sgd-decl {
   display: block; margin-top: 1px; color: #d8b6b6; font-family: monospace; font-size: 11px;
 }
-#save-guard-overlay .sgd-actions { margin-top: 6px; display: flex; gap: 8px; }
+#save-guard-overlay .sgd-actions { margin-top: 6px; display: flex; gap: 8px; flex-wrap: wrap; }
 #save-guard-overlay button { font-size: 11px; padding: 2px 8px; cursor: pointer; }
+/* BLK-reviewer-20260915-0106-wish: 第 3 選択肢の理由欄。押してから開く
+   (常時出していると、帯が保存のたびに縦へ伸びて図を隠す)。 */
+#sgd-omit-row { margin-top: 6px; padding-right: 150px; }
+#sgd-omit-row label { display: block; font-size: 11px; color: #d8b6b6; margin-bottom: 2px; }
+#sgd-omit-row .sgd-omit-input { display: flex; gap: 6px; }
+#sgd-omit-reason { flex: 1; font-size: 11px; padding: 2px 6px; min-width: 0; }
+#sgd-omit-preview {
+  margin-top: 3px; color: #d8b6b6; font-family: monospace; font-size: 11px;
+  white-space: pre-wrap; max-height: 70px; overflow-y: auto;
+}
 #save-check-overlay {
   position: sticky;
   top: 0;
@@ -6096,6 +6106,18 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
           <div class="sgd-actions">
             <button type="button" id="btn-sgd-fix" title="保存をやめて、このまま図を直す">✎ やめて直す</button>
             <button type="button" id="btn-sgd-save" title="宣言の食い違いを承知のうえで保存する">⚠ このまま保存</button>
+            <!-- BLK-reviewer-20260915-0106-wish: 「宣言しないと決めた」を自由文の
+                 note ではなく、監査ツールが読める 1 行 (`'@omit-method`) で図に残す。
+                 突合は次の tick から この行を見て指摘から外す。 -->
+            <button type="button" id="btn-sgd-omit" title="宣言しないと決めた理由を図に記し、以後の突合から外す">🚫 意図的に省略（理由を記す）</button>
+          </div>
+          <div class="sgd-omit" id="sgd-omit-row" hidden>
+            <label for="sgd-omit-reason">省略する理由（図に残り、監査はこの行を読んで指摘から外します）</label>
+            <div class="sgd-omit-input">
+              <input type="text" id="sgd-omit-reason" placeholder="例: 呼び先は BSW 提供。本設計では宣言しない">
+              <button type="button" id="btn-sgd-omit-go" title="この理由で省略を記録して保存する">記録して保存</button>
+            </div>
+            <div class="sgd-omit-preview" id="sgd-omit-preview"></div>
           </div>
         </div>
         <!-- BLK-reviewer-20260908-1503-wish: 保存したその場で突合を掛け、
@@ -6652,6 +6674,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/semantic-refs.js"></script>
 <script src="src/core/xref-graph.js"></script>
 <script src="src/core/method-audit.js"></script>
+<script src="src/core/omit-method.js"></script>
 <script src="src/core/template-new.js"></script>
 <script src="src/core/part-starter.js"></script>
 <script src="src/core/skeleton-new.js"></script>

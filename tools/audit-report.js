@@ -231,9 +231,16 @@ function summarize(audits) {
   // 修正なのかを読み分けられない。宣言の付け方を疑う 2 種を別に数えて出す。
   if (m && m.status === 'ok') {
     const mi = m.result.issues || [];
+    // BLK-reviewer-20260915-0106-wish: `'@omit-method` で意図的に省略と宣言された
+    // 指摘は issues から外れている。0 件が「見ていない」でないと分かるよう、
+    // 外した件数と対象を別に出す (reviewer はここを読めば puml を開かずに済む)。
+    const om = m.result.omitted || [];
     s.method = {
       issues: mi.length,
       suspect: mi.filter((it) => it.kind === 'method-as-class' || it.kind === 'draft-only').length,
+      omitted: om.length,
+      omittedLines: om.map((it) => `${it.cls || it.owner || '?'}.${it.method} — ${it.reason || '理由の記載なし'}`
+        + (it.omitDoc ? ` (${it.omitDoc})` : '')),
     };
   }
   const c = audits.consistency;
@@ -385,7 +392,7 @@ function summarize(audits) {
 // 取り違えない)。フィールドの既定はここ 1 か所に書く。
 const SUMMARY_FIELDS = {
   name: ['variants', 'undeclared', 'clean', 'variantLines', 'undeclaredLines'],
-  method: ['issues', 'suspect'],
+  method: ['issues', 'suspect', 'omitted', 'omittedLines'],
   consistency: ['naming', 'unused', 'methods', 'methodReplies', 'granularity', 'events', 'count'],
   family: ['families', 'mismatched', 'skippedPairs'],
   trace: ['families', 'transitions', 'missing', 'partial', 'unmatchable', 'noSequence', 'grainSkipped', 'outOfScope'],
@@ -475,8 +482,12 @@ function formatSummary(report, prev, options) {
     for (const l of (s.name.variantLines || [])) lines.push('  ' + l);
     for (const l of (s.name.undeclaredLines || [])) lines.push('  宣言なし: ' + l);
   }
-  if (s.method) lines.push(`メソッド突合: 指摘 ${s.method.issues} 件`
-    + (s.method.suspect ? ` (うち宣言の付け方の疑い ${s.method.suspect} 件)` : ''));
+  if (s.method) {
+    lines.push(`メソッド突合: 指摘 ${s.method.issues} 件`
+      + (s.method.suspect ? ` (うち宣言の付け方の疑い ${s.method.suspect} 件)` : '')
+      + (s.method.omitted ? ` / 意図省略で除外 ${s.method.omitted} 件` : ''));
+    for (const l of (s.method.omittedLines || [])) lines.push('  意図省略: ' + l);
+  }
   if (s.consistency) lines.push(`整合: 命名 ${s.consistency.naming} / 未使用 ${s.consistency.unused} / メソッド ${s.consistency.methods}`
     + (s.consistency.methodReplies ? ` (応答として除外 ${s.consistency.methodReplies} 件)` : '')
     + ` / 粒度 ${s.consistency.granularity} / イベント ${s.consistency.events}`);
