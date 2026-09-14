@@ -1085,6 +1085,44 @@ html, body {
 #folder-panel button.folder-delete.folder-delete-armed {
   border-color: var(--accent-red); color: var(--accent-red); font-weight: bold;
 }
+/* 本体 / 編集中 / SVG の反映状況 (BLK-reviewer-20260914-1506-wish)。
+   反映漏れが 0 枚でも見出しの 1 行は出す (節が無いことを「揃っている」と読ませない)。 */
+#folder-panel .folder-sync-summary {
+  font-size: 10px; color: var(--text-secondary); padding: 2px 6px;
+}
+#folder-panel .folder-sync-summary.has-stale { color: var(--accent-red); font-weight: bold; }
+#folder-panel .folder-sync-row { padding: 0 6px 4px; }
+#folder-panel .folder-sync-label { font-size: 10px; color: var(--text-primary); }
+#folder-panel .folder-sync-arts {
+  display: flex; flex-wrap: wrap; gap: 4px; padding: 2px 0;
+}
+#folder-panel .folder-sync-art {
+  font-size: 9px; border: 1px solid var(--border); border-radius: 3px; padding: 1px 5px;
+  color: var(--text-secondary); white-space: nowrap;
+}
+#folder-panel .folder-sync-art.folder-sync-latest { border-color: var(--accent); color: var(--accent); }
+#folder-panel .folder-sync-art.folder-sync-old { border-color: var(--accent-red); color: var(--accent-red); }
+#folder-panel .folder-sync-acts { display: flex; flex-wrap: wrap; gap: 4px; }
+#folder-panel button.folder-sync-diff, #folder-panel button.folder-sync-open {
+  flex: 0 0 auto; width: auto; font-size: 9px; white-space: nowrap;
+  border: 1px solid var(--accent); border-radius: 3px; padding: 1px 6px;
+  background: transparent; color: var(--accent); cursor: pointer;
+}
+#folder-panel button.folder-sync-open { border-color: var(--border); color: var(--text-secondary); }
+#folder-panel .folder-sync-diff-box {
+  margin-top: 3px; max-height: 180px; overflow: auto;
+  border: 1px solid var(--border); border-radius: 3px; padding: 3px 5px;
+  font-family: var(--font-mono, monospace); font-size: 10px;
+}
+#folder-panel .folder-sync-diff-line { white-space: pre-wrap; }
+#folder-panel .folder-sync-diff-add { color: var(--accent); }
+#folder-panel .folder-sync-diff-del { color: var(--accent-red); }
+#folder-panel .folder-sync-diff-ctx { color: var(--text-secondary); }
+#folder-panel .folder-sync-diff-note { font-size: 9px; color: var(--text-secondary); padding-top: 2px; }
+#folder-panel .folder-sync-badge { font-size: 9px; margin-left: 3px; white-space: nowrap; color: var(--accent-red); }
+#folder-panel .folder-sync-badge-base-ahead, #folder-panel .folder-sync-badge-unknown {
+  color: var(--text-secondary);
+}
 /* 部品ごとの突合 (BLK-reviewer-20260914-1106-wish)。audit.js の JSON を読む代わりに
    一覧の頭で読む行なので、欠落は赤字で、束ねた図はその場で開けるボタンにする。 */
 #folder-panel .folder-part-cross-summary {
@@ -6064,6 +6102,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/target-set.js"></script>
 <script src="src/core/folder-reopen.js"></script>
 <script src="src/core/dupe-merge.js"></script>
+<script src="src/core/sync-state.js"></script>
 <script src="src/core/bulk-rename.js"></script>
 <script src="src/core/impact-scan.js"></script>
 <script src="src/core/folder-impact.js"></script>

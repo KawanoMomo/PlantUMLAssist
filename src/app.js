@@ -7806,6 +7806,13 @@ function setupTabs() {
   // 「-編集中」が本体と同一のまま積み上がっても、一覧には開く・名前を変えるしか
   // 無かったので、片付けるには保存フォルダを直接触るしかなかった。
   var dupeGroups = [];
+  // BLK-reviewer-20260914-1506-wish: 本体 / 編集中の下書き / 書き出した SVG のうち
+  // どれが取り残されているか。dupe-merge が「同じ中身」を扱うのに対し、こちらは
+  // 中身が違うときの向き (直したのに本体へ入っていない / 本体だけ直した) を出す。
+  var syncScan = null;
+  // 反映状況の節で差分を開いている図の名前 (もう一度押すと畳む)。
+  var syncOpen = '';
+  var syncDiffCache = {};
   // 行の 🗑 を 1 回押した名前 (2 回目で消す)。描き直すと白紙に戻る。
   var deleteArmed = '';
 
@@ -8104,6 +8111,12 @@ function setupTabs() {
       var DPM = window.MA.dupeMerge;
       dupeGroups = DPM ? DPM.scan(entries) : [];
 
+      // BLK-reviewer-20260914-1506-wish: 対になる成果物の反映漏れ。判定に要るのは
+      // 一覧が既に持っている mtime・hash・svg の刻印だけなので、本文を取り直さない
+      // (取り寄せるのは [差分] を押した 1 枚ぶんだけ)。
+      var SS = window.MA.syncState;
+      syncScan = SS ? SS.scan(entries, (res && res.verified) || {}) : null;
+
       // 「今読んでいる版が、読み始めた瞬間のものか」は中身では分からない。
       // server が返した「今」と各図の更新時刻の差だけで判定する。
       // BLK-junior-20260908-2003: 上書きで消えた中身の控え。一覧の時点で
@@ -8167,6 +8180,7 @@ function setupTabs() {
         appendWriteSection(panel, dir);
         appendSaveVerifySection(panel, dir);
         appendDupeSection(panel, dir);
+      appendSyncSection(panel, dir);
         appendKindSummary(panel);
         plain.items.forEach(function(e) { panel.appendChild(folderRow(e.name || e, null, null)); });
         appendDraftSection(plain.drafts, function(e) { return folderRow(e.name || e, null, null); });
@@ -8201,6 +8215,7 @@ function setupTabs() {
       appendWriteSection(panel, dir);
       appendSaveVerifySection(panel, dir);
       appendDupeSection(panel, dir);
+      appendSyncSection(panel, dir);
 
       folderStatus = {};
       rows.forEach(function(r) { folderStatus[r.name] = r.status; });
@@ -8546,6 +8561,157 @@ function setupTabs() {
       all.appendChild(ab);
       host.appendChild(all);
     }
+  }
+
+  // BLK-reviewer-20260914-1506-wish: 「本体 / 編集中 / SVG」の反映状況。
+  // 直した内容が下書きにしか入っていない事故は、手で diff を取るまで誰も気付けなかった。
+  // 一覧の時点で向きまで言い、差分はその場で開く (1 操作で突合が終わる)。
+  function appendSyncSection(host, dir) {
+    var SS = window.MA.syncState;
+    if (!SS || !syncScan || !syncScan.counts.total) return;
+    var bad = SS.hasIssue(syncScan);
+    var sum = document.createElement('div');
+    sum.className = 'folder-sync-summary' + (bad ? ' has-stale' : '');
+    sum.id = 'folder-sync-summary';
+    sum.textContent = SS.summary(syncScan);
+    sum.title = '同じ図の「本体 .puml」「編集中の下書き」「書き出した .svg」を突き合わせた結果です。'
+      + '中身が同じ下書きは反映漏れに数えません（片付けは ⧉ 重複の節）';
+    host.appendChild(sum);
+    if (!bad) return;
+
+    syncScan.issues.forEach(function(r) {
+      var row = document.createElement('div');
+      row.className = 'folder-sync-row';
+      row.setAttribute('data-sync-name', r.name);
+      row.setAttribute('data-sync-issue', r.issue);
+
+      var head = document.createElement('div');
+      head.className = 'folder-sync-head';
+      var txt = document.createElement('span');
+      txt.className = 'folder-sync-label';
+      txt.textContent = r.name + ' — ' + SS.issueText(r);
+      head.appendChild(txt);
+      row.appendChild(head);
+
+      // 3 つの成果物を、どれが最新かが読める並びで出す。
+      var arts = document.createElement('div');
+      arts.className = 'folder-sync-arts';
+      SS.lines(r).forEach(function(l) {
+        var a = document.createElement('span');
+        a.className = 'folder-sync-art folder-sync-' + l.state;
+        a.setAttribute('data-sync-role', l.role);
+        a.textContent = l.label + ' ' + SS.stateMark(l.state)
+          + (l.at ? '（' + l.at + '）' : '');
+        a.title = l.name + ': ' + SS.stateMark(l.state);
+        arts.appendChild(a);
+      });
+      row.appendChild(arts);
+
+      var acts = document.createElement('div');
+      acts.className = 'folder-sync-acts';
+      if (r.draft) {
+        var d = document.createElement('button');
+        d.type = 'button';
+        d.className = 'folder-sync-diff';
+        d.setAttribute('data-sync-diff', r.name);
+        d.textContent = syncOpen === r.name ? '差分を閉じる' : SS.diffLabel(r);
+        d.title = SS.diffTitle(r);
+        d.addEventListener('click', function(ev) {
+          ev.stopPropagation();
+          if (syncOpen === r.name) { syncOpen = ''; renderFolderPanel(); return; }
+          syncOpen = r.name;
+          loadSyncDiff(r, dir);
+        });
+        acts.appendChild(d);
+      }
+      // 直す先をその場で開く。名指しの後に一覧から目で探し直すなら手間は残る。
+      [r.baseMissing ? null : r.name, r.draftName].forEach(function(n) {
+        if (!n) return;
+        var o = document.createElement('button');
+        o.type = 'button';
+        o.className = 'folder-sync-open';
+        o.setAttribute('data-sync-open', n);
+        o.textContent = '開く: ' + n;
+        o.title = n + '.puml を開きます';
+        o.addEventListener('click', function(ev) {
+          ev.stopPropagation();
+          openFromFolder(n);
+        });
+        acts.appendChild(o);
+      });
+      row.appendChild(acts);
+
+      if (syncOpen === r.name) {
+        var box = document.createElement('div');
+        box.className = 'folder-sync-diff-box';
+        box.id = 'folder-sync-diff-box';
+        var cached = syncDiffCache[_syncSig(r)];
+        if (!cached) box.textContent = '本文を読んでいます…';
+        else if (cached.error) box.textContent = cached.error;
+        else if (!cached.lines.length) box.textContent = '本文の違いはありません（改行・行末の空白だけの差）';
+        else {
+          cached.lines.forEach(function(l) {
+            var li = document.createElement('div');
+            li.className = 'folder-sync-diff-line folder-sync-diff-'
+              + (l.mark === '+' ? 'add' : l.mark === '-' ? 'del' : 'ctx');
+            li.textContent = l.mark + ' ' + l.text;
+            box.appendChild(li);
+          });
+          var note = document.createElement('div');
+          note.className = 'folder-sync-diff-note';
+          note.textContent = '− ' + r.name + ' / ＋ ' + r.draftName;
+          box.appendChild(note);
+        }
+        row.appendChild(box);
+      }
+      host.appendChild(row);
+    });
+  }
+
+  // 差分の控えは本文が書き換わったら捨てる (古い diff を今の中身として見せない)。
+  function _syncSig(row) {
+    return row.name + '@' + ((row.base && row.base.mtime) || '')
+      + '/' + ((row.draft && row.draft.mtime) || '');
+  }
+
+  // 差分に要る本文は、押された 1 枚ぶんだけ取り寄せる。
+  function loadSyncDiff(row, dir) {
+    var SD = window.MA.saveDiff;
+    function read(name) {
+      var url = '/autosave?dir=' + encodeURIComponent(dir || _wsFileDir())
+        + '&type=' + encodeURIComponent(name);
+      return window.fetch(url).then(function(r) { return r.ok ? r.text() : null; });
+    }
+    renderFolderPanel();
+    Promise.all([row.baseMissing ? Promise.resolve('') : read(row.name), read(row.draftName)])
+      .then(function(texts) {
+        if (texts[1] == null || texts[0] == null) {
+          syncDiffCache[_syncSig(row)] = { error: '本文を読めませんでした' };
+        } else {
+          syncDiffCache[_syncSig(row)] = {
+            lines: SD ? SD.diffBetween(texts[0], texts[1], 1) : [],
+          };
+        }
+        renderFolderPanel();
+      }, function() {
+        syncDiffCache[_syncSig(row)] = { error: '本文を読めませんでした' };
+        renderFolderPanel();
+      });
+  }
+
+  // 行に付く反映漏れの印。本体の行にも下書きの行にも同じ印を出す。
+  function folderSyncBadge(name) {
+    var SS = window.MA.syncState;
+    if (!SS || !syncScan) return null;
+    var b = SS.badge(syncScan, name);
+    if (!b) return null;
+    var el = document.createElement('span');
+    el.className = 'folder-sync-badge folder-sync-badge-' + b.kind;
+    el.setAttribute('data-sync-badge-of', name);
+    el.setAttribute('data-sync-badge', b.kind);
+    el.textContent = b.mark;
+    el.title = b.title;
+    return el;
   }
 
   // 行に付く「本体 / 写し」の印。重複のある図にしか出ない。
@@ -9375,6 +9541,9 @@ function setupTabs() {
     // BLK-primary-20260914-1306-wish: 中身が同じ図の印と、1 枚だけ消すボタン。
     var db = folderDupeBadge(name);
     if (db) row.appendChild(db);
+    // BLK-reviewer-20260914-1506-wish: 本体に入っていない下書きの印。
+    var sb = folderSyncBadge(name);
+    if (sb) row.appendChild(sb);
     var xb = folderDeleteButton(name);
     if (xb) row.appendChild(xb);
     return row;
