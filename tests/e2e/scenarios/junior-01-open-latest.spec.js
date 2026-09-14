@@ -126,6 +126,39 @@ test.describe('junior 手順 1: 前周までの最新版を開く', () => {
     expect(name).toContain('GPIOドライバ初期化シーケンス');
   });
 
+  // BLK-junior-20260914-1106: 同じ図種に「本番用 / 資料用」が同居すると、行の見出しの
+  // 「あり」だけではどちらが今回の対象か分からず、ボタンの文字を読み比べていた。
+  test('同じ図種に版が並ぶと、行の見出しが版を名指しする', async ({ page }) => {
+    await putFile(page, 'GPIOドライバ初期化アクティビティ(資料用)');
+    await page.waitForTimeout(300);
+    await openFolder(page);
+    await pickComponent(page, 'GPIOドライバ');
+
+    const act = page.locator('.folder-inv-row[data-inv-kind="アクティビティ図"]');
+    await expect(act).toHaveAttribute('data-inv-files', '2');
+    await expect(act.locator('.folder-inv-mark')).toHaveText('あり: 本番用 / 資料用');
+
+    // 版が並ぶ行のボタンは版そのもの。長い共通部分を読み比べない。
+    const btns = act.locator('button.folder-inv-file');
+    await expect(btns).toHaveCount(2);
+    await expect(btns.nth(0)).toHaveText('本番用');
+    await expect(btns.nth(1)).toHaveText('資料用');
+
+    // 版が 1 つだけの行は今までどおり (「あり」+ ファイル名)。
+    const seq = page.locator('.folder-inv-row[data-inv-kind="シーケンス図"]');
+    await expect(seq.locator('.folder-inv-mark')).toHaveText('あり');
+    await expect(seq.locator('button.folder-inv-file')).toHaveText('GPIOドライバ初期化シーケンス');
+
+    // 到達条件: 資料用の版をその場で開ける (手順 1 が完了する)。
+    await btns.nth(1).click();
+    await page.waitForTimeout(600);
+    const name = await page.evaluate(() => {
+      const doc = window.MA.workspace.getActive();
+      return doc ? doc.name : '';
+    });
+    expect(name).toContain('(資料用)');
+  });
+
   test('欠けを埋めたら棚卸しが「欠けはありません」に変わる', async ({ page }) => {
     await putFile(page, 'GPIOドライバ状態遷移');
     await putFile(page, 'GPIOドライバ配置');

@@ -91,12 +91,23 @@ window.MA.componentInventory = (function() {
       vaultByKind[k].push(r);
     });
     var rows = KINDS.map(function(k) {
+      // 但し書きの無いもの (本番用) を先頭に置く。名前順のままだと「(資料用)」が
+      // 括弧の分だけ前に来て、版の並びが「資料用 / 本番用」と読めてしまう。
       var fs = (byKind[k] || []).slice().sort();
+      fs = fs.filter(function(f) { return variantLabel(f) === '本番用'; })
+             .concat(fs.filter(function(f) { return variantLabel(f) !== '本番用'; }));
       var vs = (vaultByKind[k] || []).slice();
       // 「どちらにあるか」を分けて持つ。作業ファイルが消えていても提出済みなら
       // あり、という判定の根拠が行から読めないと、棚卸しを信じて次に進めない。
       var source = fs.length && vs.length ? 'both' : (fs.length ? 'file' : (vs.length ? 'vault' : ''));
-      return { kind: k, files: fs, vault: vs, present: fs.length > 0 || vs.length > 0, source: source };
+      return {
+        kind: k, files: fs, vault: vs,
+        present: fs.length > 0 || vs.length > 0, source: source,
+        // BLK-junior-20260914-1106: 同じ図種に複数の版 (本番用 / 資料用 / 編集中) が
+        // 並ぶようになった。どれが今回の対象かを「あり」の一語から読み取ることは
+        // できないので、版を行の側で名指しできるようにここで持たせる。
+        variants: fs.map(function(f) { return { file: f, variant: variantLabel(f) }; }),
+      };
     });
     var missing = rows.filter(function(r) { return !r.present; }).map(function(r) { return r.kind; });
     return {
@@ -148,6 +159,41 @@ window.MA.componentInventory = (function() {
     return null;
   }
 
+  // 版の名前。括弧付きの但し書き (「(資料用)」「(編集中)」) がそのまま版になる。
+  // 但し書きが無いものは「本番用」— 無印を無印のまま出すと、並んだときに
+  // 「まだ版が付いていないもの」と「本番用」が同じ空白で並んでしまう。
+  function variantLabel(name) {
+    var CP = _cp();
+    var v = CP && CP.variantOf ? _s(CP.variantOf(name)) : '';
+    return v || '本番用';
+  }
+
+  // variantsOf(row) — その図種に並んでいる版 (重複は 1 つに畳む)。
+  function variantsOf(row) {
+    var out = [];
+    ((row && row.variants) || []).forEach(function(v) {
+      if (v && v.variant && out.indexOf(v.variant) < 0) out.push(v.variant);
+    });
+    return out;
+  }
+
+  // markText(row) — 行の「あり / なし」。版が 2 つ以上あるときは、その場で版を
+  // 名指しする。ボタンの文字を全部読んで (資料用) の有無を見比べる手間が、
+  // 図種数 × 同居ファイル数で増えていくのを止めるのがここ。
+  function markText(row) {
+    if (!row || !row.present) return 'なし';
+    var vs = variantsOf(row);
+    if (vs.length < 2) return 'あり';
+    return 'あり: ' + vs.join(' / ');
+  }
+
+  // fileLabel(row, name) — 行に並ぶボタンの文字。版が 2 つ以上ある行では、
+  // 共通部分が同じ長いファイル名ではなく版そのものを出す (読み比べを無くす)。
+  function fileLabel(row, name) {
+    var vs = variantsOf(row);
+    return vs.length >= 2 ? variantLabel(name) : _s(name);
+  }
+
   // summary(rec) — 見出しの 1 行。欠けている図種はここで名指しする
   // (「3 種なし」だけでは、どれを作り直すかがまだ分からない)。
   function summary(rec) {
@@ -172,7 +218,7 @@ window.MA.componentInventory = (function() {
       // 「あり」とだけ書くと、開こうとして一覧に無く、また詰まる。
       var where = r.files.length ? r.files.join(' / ')
         : (r.vault && r.vault.length ? '提出物庫 ' + r.vault.length + ' 件（最新 ' + r.vault[0].label + '）' : '—');
-      lines.push('| ' + r.kind + ' | ' + (r.present ? 'あり' : 'なし') + ' | ' + where + ' |');
+      lines.push('| ' + r.kind + ' | ' + markText(r) + ' | ' + where + ' |');
     });
     if (rec.unknown.length) {
       lines.push('');
@@ -189,6 +235,10 @@ window.MA.componentInventory = (function() {
     pickFor: pickFor,
     summary: summary,
     summaryClass: summaryClass,
+    variantLabel: variantLabel,
+    variantsOf: variantsOf,
+    markText: markText,
+    fileLabel: fileLabel,
     text: text,
   };
 })();

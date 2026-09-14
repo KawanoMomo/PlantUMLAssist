@@ -112,3 +112,57 @@ describe('componentInventory.text', function() {
     expect(t.indexOf('| シーケンス図 | あり | GPIOドライバ初期化シーケンス.puml |') >= 0).toBe(true);
   });
 });
+
+// BLK-junior-20260914-1106: 同じ図種に「本番用 / 資料用 / 編集中」が同居するように
+// なると、行の見出しが「あり」だけではどれが今回の対象か分からず、ボタンの文字を
+// 全部読み比べることになる。行の側が版を名指しすることを守る。
+describe('componentInventory: 同じ図種に並ぶ版', function() {
+  var FILES2 = [
+    'GPIOドライバ初期化アクティビティ.puml',
+    'GPIOドライバ初期化アクティビティ(資料用).puml',
+    'GPIOドライバ初期化シーケンス.puml',
+    'GPIOドライバ派生クラス(編集中).puml',
+  ];
+  var rec = CI.build(FILES2)[0];
+  function rowOf(kind) {
+    return rec.rows.filter(function(r) { return r.kind === kind; })[0];
+  }
+
+  test('版が 2 つ以上ある行は「あり」ではなく版を名指しする', function() {
+    expect(CI.markText(rowOf('アクティビティ図'))).toBe('あり: 本番用 / 資料用');
+  });
+
+  test('版が 1 つだけの行は今までどおり「あり」のまま', function() {
+    expect(CI.markText(rowOf('シーケンス図'))).toBe('あり');
+    expect(CI.markText(rowOf('クラス図'))).toBe('あり');
+  });
+
+  test('無い図種は「なし」のまま（版の話に巻き込まない）', function() {
+    expect(CI.markText(rowOf('状態遷移図'))).toBe('なし');
+    expect(CI.markText(null)).toBe('なし');
+  });
+
+  test('但し書きの無いファイルの版は「本番用」', function() {
+    expect(CI.variantLabel('GPIOドライバ初期化アクティビティ.puml')).toBe('本番用');
+    expect(CI.variantLabel('GPIOドライバ初期化アクティビティ(資料用).puml')).toBe('資料用');
+    expect(CI.variantLabel('GPIOドライバ派生クラス(編集中).puml')).toBe('編集中');
+  });
+
+  test('行は並んでいる版を並び順どおりに持つ', function() {
+    expect(CI.variantsOf(rowOf('アクティビティ図'))).toEqual(['本番用', '資料用']);
+    expect(CI.variantsOf(rowOf('シーケンス図'))).toEqual(['本番用']);
+    expect(CI.variantsOf(null)).toEqual([]);
+  });
+
+  test('版が並ぶ行のボタンは版そのもの、1 枚だけの行はファイル名のまま', function() {
+    var act = rowOf('アクティビティ図');
+    expect(CI.fileLabel(act, 'GPIOドライバ初期化アクティビティ(資料用).puml')).toBe('資料用');
+    expect(CI.fileLabel(act, 'GPIOドライバ初期化アクティビティ.puml')).toBe('本番用');
+    var seq = rowOf('シーケンス図');
+    expect(CI.fileLabel(seq, 'GPIOドライバ初期化シーケンス.puml')).toBe('GPIOドライバ初期化シーケンス.puml');
+  });
+
+  test('控える表にも版が出る（周の頭のメモで取り違えない）', function() {
+    expect(CI.text(rec).indexOf('| アクティビティ図 | あり: 本番用 / 資料用 |') >= 0).toBe(true);
+  });
+});

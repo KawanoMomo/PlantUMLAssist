@@ -9110,8 +9110,12 @@ function setupTabs() {
       row.appendChild(kind);
       var mark = document.createElement('span');
       mark.className = 'folder-inv-mark';
-      mark.textContent = r.present ? 'あり' : 'なし';
+      // BLK-junior-20260914-1106: 同じ図種に版が 2 つ以上並ぶ行は、「あり」ではなく
+      // 並んでいる版を名指しする (どれが今回の対象かをボタンの文字から読み比べない)。
+      mark.textContent = CI.markText(r);
       row.appendChild(mark);
+      row.setAttribute('data-inv-variants', CI.variantsOf(r).join('/'));
+      row.setAttribute('data-inv-files', String(r.files.length));
       row.setAttribute('data-inv-source', r.source || '');
       // 作業ファイルがもう無く、庫にしか残っていない図種。押せばその提出物を開く。
       // ここでファイル名のボタンだけを出すと、「あり」なのに開けない行になる。
@@ -9138,7 +9142,9 @@ function setupTabs() {
         b.type = 'button';
         b.className = 'folder-inv-file';
         b.setAttribute('data-inv-file', f);
-        b.textContent = f;
+        b.setAttribute('data-inv-variant', CI.variantLabel(f));
+        // 版が並ぶ行では、共通部分の長いファイル名ではなく版そのものを出す。
+        b.textContent = CI.fileLabel(r, f);
         b.title = f + ' を開く';
         b.addEventListener('click', function(ev) {
           ev.stopPropagation();
