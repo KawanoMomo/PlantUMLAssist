@@ -56,7 +56,7 @@ describe('findingActions.planFor — 手段の読み取り', () => {
   });
 
   test('「A を B に統一」と書かれていれば、その綴りをそのまま使う', () => {
-    var r = row('note-4', '命名', '`SpiDrv` を `Spi_Driver` に統一すること。',
+    var r = row('note-4', '命名', 'spi_init_sequence の `SpiDrv` を `Spi_Driver` に統一すること。',
       [doc('spi_init_sequence', ['primary'])]);
     var p = FA.planFor(r, { mineFolder: 'primary' });
     expect(p.kind).toBe('rename');
@@ -66,7 +66,7 @@ describe('findingActions.planFor — 手段の読み取り', () => {
   });
 
   test('すり合わせ / 別ドメインの指摘は、印を書く提案になる', () => {
-    var r = row('note-5', '【新規】gpio の sequence 図でも junior/primary 不一致',
+    var r = row('note-5', '【新規】gpio_init_sequence で junior/primary 不一致',
       'すり合わせるか、state 図と同様に「別ドメイン」を明示する。',
       [doc('gpio_init_sequence', ['junior', 'primary'])]);
     var p = FA.planFor(r, { mineFolder: 'primary' });
@@ -95,11 +95,61 @@ describe('findingActions.planFor — 手段の読み取り', () => {
   });
 });
 
+// BLK-primary-20260914-1006-friction: 実物の指摘.md で測ったら 2 つ外していた。
+describe('findingActions — 実物の指摘.md で外していたところ', () => {
+  test('短い名前の図は、本文の別の語に含まれるだけでは対象にしない', () => {
+    // 本文に出るのは Can_Driver / spi_dma_sequence で、`can` / `spi` の図の話ではない。
+    var r = row('note-8', '【最優先】driver_common_class.svg のクロス',
+      '保存済み svg のラベルは Can_Driver / spi_dma_sequence の内容そのもの。再エクスポートが必要。',
+      [doc('driver_common_class', ['primary']), doc('can', ['primary']), doc('spi', ['primary'])]);
+    var p = FA.planFor(r, { mineFolder: 'primary' });
+    expect(p.kind).toBe('reexport');
+    expect(p.docs).toEqual(['driver_common_class']);
+  });
+
+  test('text を持たない行 (reviewNote.rows の形) でも、title + body で絞り込む', () => {
+    var r = row('note-8b', '【最優先】driver_common_class.svg のクロス',
+      '保存済み svg のラベルは Can_Driver の内容そのもの。再エクスポートが必要。',
+      [doc('driver_common_class', ['primary']), doc('can', ['primary'])]);
+    delete r.text;
+    expect(FA.planFor(r, { mineFolder: 'primary' }).docs).toEqual(['driver_common_class']);
+  });
+
+  test('名指しされていれば短い名前でも対象にする', () => {
+    var r = row('note-9', '再出力', '`can.svg` を出し直してください。', [doc('can', ['primary'])]);
+    expect(FA.planFor(r, { mineFolder: 'primary' }).docs).toEqual(['can']);
+  });
+
+  test('再出力を頼まれた件は、本文が印の話に触れていても再出力のまま', () => {
+    var r = row('note-10', '【継続】gpio_state.svg が実データと食い違ったまま',
+      'render 結果と保存済みが非ヘッダ部で不一致。`domain-verdict` タイトルが未反映。再出力が必要。',
+      [doc('gpio_state', ['junior', 'primary'])]);
+    var p = FA.planFor(r, { mineFolder: 'primary' });
+    expect(p.kind).toBe('reexport');
+    expect(p.ready).toBe(true);
+  });
+
+  test('svg の話でない「不一致」は再出力にしない (部品名のすり合わせ依頼)', () => {
+    var r = row('note-12', '【新規】gpio_init_sequence で junior/primary 不一致',
+      'sequence 図側で新たな部品名不一致を検出。gpio 全体としては sequence 図側は未宣言・未解消。',
+      [doc('gpio_init_sequence', ['junior', 'primary'])]);
+    var p = FA.planFor(r, { mineFolder: 'primary' });
+    expect(p.kind).toBe('verdict');
+    expect(p.otherFolder).toBe('junior');
+  });
+
+  test('「別ドメインを明示」と書かれていれば、今までどおり印を書く提案になる', () => {
+    var r = row('note-11', 'gpio の不一致', '「別ドメイン」を明示する。',
+      [doc('gpio_init_sequence', ['junior', 'primary'])]);
+    expect(FA.planFor(r, { mineFolder: 'primary' }).kind).toBe('verdict');
+  });
+});
+
 describe('findingActions — 一覧の見出しと結果の 1 行', () => {
   var rows = [
-    row('a', '再出力', '再エクスポートが必要。', [doc('x', ['primary'])]),
-    row('b', '命名', '`SpiDrv` を `Spi_Driver` に統一。', [doc('y', ['primary'])]),
-    row('c', '不在', 'クラスが足りない。', [doc('z', ['primary'])]),
+    row('a', '再出力', 'x.svg の再エクスポートが必要。', [doc('x', ['primary'])]),
+    row('b', '命名', 'y の `SpiDrv` を `Spi_Driver` に統一。', [doc('y', ['primary'])]),
+    row('c', '不在', 'z のクラスが足りない。', [doc('z', ['primary'])]),
   ];
 
   test('見出しは、適用だけで済む件数と内訳を先に言う', () => {
