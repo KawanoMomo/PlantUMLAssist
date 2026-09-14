@@ -2351,6 +2351,8 @@ function init() {
   document.getElementById('exp-clipboard').addEventListener('click', function() { exportMenu.classList.remove('open'); exportClipboard(); });
   // BLK-primary-20260907-0443: 開いている全タブを 2 クリックで SVG 保存する。
   document.getElementById('exp-svg-all').addEventListener('click', function() { exportMenu.classList.remove('open'); exportAllSVG(); });
+  // BLK-primary-20260914-2006-wish: 対象をタブから切り離して名前で選ぶ入口。
+  document.getElementById('exp-docset').addEventListener('click', function() { exportMenu.classList.remove('open'); openDocSetModal(); });
 
   // FEAT-117 (resolves HFR-046 前半): Ctrl+E でエクスポートメニューを開き、先頭項目へ
   // フォーカスを移してキーボードだけで形式を選べるようにする。
@@ -2632,6 +2634,7 @@ function init() {
 
   setupTabs();
   setupBulkRename();
+  setupDocSets();
   setupRenameImpact();
   setupDepGraph();
   setupTicketBoard();
@@ -2860,6 +2863,7 @@ function initCommandPalette() {
       { id: 'export-png-t', title: 'PNG（透過背景）/ Export PNG transparent', hint: 'Export', keywords: ['export', 'png', 'transparent'], run: function() { clickById('exp-png-transparent'); } },
       { id: 'export-clip', title: 'クリップボードにコピー / Copy image', hint: 'Export', keywords: ['export', 'clipboard', 'copy'], run: function() { clickById('exp-clipboard'); } },
       { id: 'export-all', title: '全図を SVG で保存（zip）', hint: 'Export', keywords: ['export', 'svg', 'zip', 'all'], run: function() { clickById('exp-svg-all'); } },
+      { id: 'export-docset', title: '資料セットで SVG で保存（zip）', hint: 'Export', keywords: ['export', 'svg', 'zip', 'set', 'docset', '資料', 'セット'], run: function() { clickById('exp-docset'); } },
       { id: 'export-pick', title: '図を選んで SVG で保存（zip）', hint: 'Export', keywords: ['export', 'svg', 'zip', 'pick', 'select', 'changed', 'fix'], run: function() { clickById('exp-svg-pick'); } },
       { id: 'export-fix', title: '要修正のみを SVG で保存（zip）', hint: 'Export', keywords: ['export', 'svg', 'zip', 'fix', 'review'], run: function() { clickById('exp-svg-fix'); } },
       { id: 'export-material', title: '1 枚を資料化（形式は図種で自動）/ Make material', hint: 'Export', keywords: ['material', 'export', 'しりょう', '資料', 'png', 'svg'], run: function() { clickById('exp-material'); } },
@@ -11209,6 +11213,15 @@ function setupTabs() {
     }
   }
 
+  // 資料セット (BLK-primary-20260914-2006-wish) が「今の対象」を読む口。
+  // 印が付いていればその図、付いていなければ一覧の全部 (= 保存フォルダの全図)。
+  // 一覧を開いていなくても登録できるように、名前だけを返す。
+  _dsFolderTarget = function() {
+    var FE = window.MA.folderExport;
+    var picked = FE ? FE.toExport(folderPicked, folderNames) : [];
+    return { picked: picked, all: (folderNames || []).slice() };
+  };
+
   function folderButton(name, bdg, mtime, status) {
     var b = document.createElement('button');
     b.className = 'folder-item';
@@ -13023,6 +13036,8 @@ function applyBulkRename() {
 // 覗いた図など、外から渡されたテンプレートで新規作成の画面を開くための入口。
 // setupTemplateNew の中の open をここに預ける。
 var _openTemplateNew = null;
+// 📂 一覧の「今の対象」を資料セットに渡す口 (一覧の setup が差し込む)。
+var _dsFolderTarget = null;
 
 function setupTemplateNew() {
   var btn = document.getElementById('btn-tab-template');
@@ -19686,6 +19701,227 @@ function downloadBlob(filename, blob) {
   };
   fr.onerror = function() { browserDownload(filename, blob); };
   fr.readAsDataURL(blob);
+}
+
+// -- 資料セット (BLK-primary-20260914-2006-wish) -----------------------------
+// 「全図を SVG で保存 (zip)」の対象は今開いているタブだけで、保存フォルダに
+// 25 枚あってもタブが 1 枚なら 1 枚しか入らない。しかも入らなかったことは zip を
+// 開くまで分からないので、書き出すたびに「今何枚開いているか」を数え直すはめに
+// なっていた。資料に入れる図の組は利用者の決めごとなので、名前を付けて保存
+// フォルダ側に登録し、名前を選ぶだけで常にその枚数が入るようにする。
+// タブは一切見ない (開き直す手順ごと消す)。
+
+var _dsSets = [];
+var _dsDir = null;
+var _dsNames = [];
+
+function _dsModal() { return document.getElementById('docset-modal'); }
+
+function loadDocSets(force) {
+  var dir = _wsFileDir();
+  if (!force && _dsDir === dir) return Promise.resolve(_dsSets);
+  return window.fetch('/doc-sets?dir=' + encodeURIComponent(dir))
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(data) {
+      var DS = window.MA.docSet;
+      _dsSets = DS ? DS.normalize(data && data.sets) : [];
+      _dsDir = dir;
+      return _dsSets;
+    }, function() { _dsDir = dir; return _dsSets; });
+}
+
+// 保存フォルダに今ある図の名前。欠けている図を名指しするための突き合わせ先。
+function loadDocSetNames() {
+  var WS = window.MA.workspace;
+  if (!WS || !WS.listFolder) return Promise.resolve([]);
+  return WS.listFolder(_wsFileDir()).then(function(info) {
+    _dsNames = ((info && info.entries) || []).map(function(e) {
+      return e && typeof e === 'object' ? e.name : e;
+    }).filter(function(n) { return n; });
+    return _dsNames;
+  }, function() { return _dsNames; });
+}
+
+function _dsStatus(msg) {
+  var el = document.getElementById('docset-status');
+  if (el) el.textContent = msg || '';
+}
+
+function renderDocSets() {
+  var box = document.getElementById('docset-rows');
+  var DS = window.MA.docSet;
+  if (!box || !DS) return;
+  box.textContent = '';
+
+  var dirEl = document.getElementById('docset-dir');
+  if (dirEl) dirEl.textContent = _wsFileDir() + '（' + _dsNames.length + ' 枚）';
+
+  // 「今の対象」の枚数は、押す前に出す。押してから枚数を知る作りが今回の事故。
+  var t = _dsFolderTarget ? _dsFolderTarget() : { picked: [], all: [] };
+  var target = t.picked.length ? t.picked : (t.all.length ? t.all : _dsNames);
+  var cnt = document.getElementById('docset-pick-count');
+  if (cnt) {
+    cnt.textContent = target.length + ' 枚'
+      + (t.picked.length ? '（📂 一覧で印を付けた図）' : '（保存フォルダの全図）');
+  }
+
+  if (!_dsSets.length) {
+    var empty = document.createElement('div');
+    empty.id = 'docset-empty';
+    empty.textContent = '資料セットはまだありません。上の欄に名前を入れて「今の対象を登録する」を押すと、'
+      + 'いま保存フォルダにある図（📂 一覧で印を付けていればその図だけ）がこの名前で登録されます。';
+    box.appendChild(empty);
+    return;
+  }
+
+  _dsSets.forEach(function(set) {
+    var res = DS.resolve(set, _dsNames);
+    var row = document.createElement('div');
+    row.className = 'ds-row';
+    row.setAttribute('data-set-name', set.name);
+
+    var name = document.createElement('span');
+    name.className = 'ds-name';
+    name.textContent = set.name;
+    row.appendChild(name);
+
+    var sum = document.createElement('span');
+    sum.className = 'ds-sum ' + DS.summaryClass(res);
+    sum.setAttribute('data-expected', String(res.expected));
+    sum.setAttribute('data-present', String(res.present.length));
+    sum.textContent = DS.summary(res);
+    row.appendChild(sum);
+
+    var go = document.createElement('button');
+    go.type = 'button';
+    go.className = 'ds-export';
+    go.textContent = 'SVG で書き出す（' + res.present.length + ' 枚）';
+    go.title = 'タブを開き直さずに、保存フォルダからこのセットの図を zip にします';
+    go.disabled = res.present.length === 0;
+    go.addEventListener('click', function() { exportDocSet(set.name); });
+    row.appendChild(go);
+
+    var del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'ds-delete';
+    del.textContent = '消す';
+    del.addEventListener('click', function() { deleteDocSet(set.name); });
+    row.appendChild(del);
+
+    box.appendChild(row);
+  });
+}
+
+function saveDocSet(name, docs) {
+  var DS = window.MA.docSet;
+  if (!DS) return Promise.resolve(null);
+  var rows = DS.normalizeDocs(docs);
+  if (!String(name || '').trim() || !rows.length) {
+    _dsStatus('名前と、登録する図が要ります（保存フォルダに図が 0 枚のままでは登録できません）');
+    return Promise.resolve(null);
+  }
+  return window.fetch('/doc-sets', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dir: _wsFileDir(), name: String(name).trim(), docs: rows }),
+  }).then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(data) {
+      if (!data) { _dsStatus('登録できませんでした'); return null; }
+      _dsSets = DS.normalize(data.sets);
+      _dsDir = _wsFileDir();
+      renderDocSets();
+      _dsStatus('「' + String(name).trim() + '」を ' + rows.length + ' 枚で登録しました');
+      return _dsSets;
+    }, function() { _dsStatus('登録できませんでした'); return null; });
+}
+
+function deleteDocSet(name) {
+  var DS = window.MA.docSet;
+  return window.fetch('/doc-sets?dir=' + encodeURIComponent(_wsFileDir())
+      + '&name=' + encodeURIComponent(name), { method: 'DELETE' })
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(data) {
+      if (!data) return null;
+      _dsSets = DS ? DS.normalize(data.sets) : [];
+      renderDocSets();
+      _dsStatus('「' + name + '」を消しました');
+      return _dsSets;
+    }, function() { return null; });
+}
+
+// セットの図を保存フォルダから読んで zip にする。タブは見ない。
+// 欠けている図は書き出す前に名指しして、zip を開いてから気付く形にしない。
+function exportDocSet(name) {
+  var DS = window.MA.docSet;
+  var FE = window.MA.folderExport;
+  var WS = window.MA.workspace;
+  if (!DS || !FE || !WS) return Promise.resolve(null);
+  var set = DS.find(_dsSets, name);
+  if (!set) { _dsStatus('その資料セットはありません'); return Promise.resolve(null); }
+  var res = DS.resolve(set, _dsNames);
+  if (!res.present.length) {
+    _dsStatus('「' + name + '」の図が保存フォルダに 1 枚もありません');
+    return Promise.resolve(null);
+  }
+  // 開いているタブの編集中の内容は、読む前にフォルダへ書き戻す
+  // (書き戻す前に読むと、開いている 1 枚だけが古い本文で出る)。
+  saveActiveDoc();
+  _dsStatus(DS.summary(res) + ' — 書き出しています…');
+  var dir = _wsFileDir();
+  var texts = {};
+  return Promise.all(res.present.map(function(n) {
+    return WS.loadFile(n, dir).then(function(t) {
+      if (typeof t === 'string') texts[n] = t;
+    }, function() {});
+  })).then(function() {
+    var built = FE.docsFrom(res.present, texts);
+    if (!built.docs.length) { _dsStatus('図の本文を読めませんでした'); return null; }
+    return exportAllSVG(built.docs, document.getElementById('docset-status'))
+      .then(function(summary) {
+        var note = FE.missingNote(built.missing.concat(res.missing));
+        _dsStatus(summary.message + '（' + res.expected + ' 枚の資料セット「' + name + '」）' + note);
+        return summary;
+      });
+  });
+}
+
+function openDocSetModal() {
+  var modal = _dsModal();
+  if (!modal) return;
+  modal.style.display = 'flex';
+  _dsStatus('');
+  var nameEl = document.getElementById('docset-name');
+  renderDocSets();
+  return Promise.all([loadDocSetNames(), loadDocSets(true)]).then(function() {
+    renderDocSets();
+    // 名前を考えさせない。空なら既定の名前を入れておく (打鍵ゼロで 1 つ作れる)。
+    if (nameEl && !nameEl.value) {
+      nameEl.value = window.MA.docSet ? window.MA.docSet.defaultName(_dsSets) : '資料セット';
+    }
+  });
+}
+
+function closeDocSetModal() {
+  var modal = _dsModal();
+  if (modal) modal.style.display = 'none';
+}
+
+function setupDocSets() {
+  var modal = _dsModal();
+  if (!modal) return;
+  var close = document.getElementById('docset-close');
+  if (close) close.addEventListener('click', closeDocSetModal);
+  modal.addEventListener('click', function(ev) { if (ev.target === modal) closeDocSetModal(); });
+  document.addEventListener('keydown', function(ev) {
+    if (ev.key === 'Escape' && modal.style.display === 'flex') closeDocSetModal();
+  });
+  var create = document.getElementById('docset-create');
+  if (create) create.addEventListener('click', function() {
+    var nameEl = document.getElementById('docset-name');
+    var t = _dsFolderTarget ? _dsFolderTarget() : { picked: [], all: [] };
+    var docs = t.picked.length ? t.picked : (t.all.length ? t.all : _dsNames);
+    saveDocSet(nameEl ? nameEl.value : '', docs);
+  });
 }
 
 function exportAllSVG(pickedDocs, statusEl) {

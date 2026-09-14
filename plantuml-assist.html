@@ -2380,6 +2380,50 @@ html, body {
 #at-ledger .fl-empty { color: var(--text-secondary); font-size: 12px; padding: 8px 2px; }
 #at-band-head { font-size: 12px; color: var(--text-primary); padding: 10px 0 4px 0; border-top: 1px solid var(--border); }
 /* 提出用 zip の図選び (BLK-primary-20260908-1203-wish) */
+/* BLK-primary-20260914-2006-wish: 資料セット */
+#docset-modal-content {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  width: 64vw;
+  max-width: 780px;
+  max-height: 84vh;
+  display: flex;
+  flex-direction: column;
+}
+#docset-head {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px; border-bottom: 1px solid var(--border);
+  font-size: 12px; color: var(--text-primary);
+}
+#docset-dir { color: var(--text-secondary); }
+#docset-tools { margin-left: auto; }
+#docset-tools button, #docset-create, .ds-row button {
+  border: 1px solid var(--border); background: var(--bg-tertiary);
+  color: var(--text-primary); border-radius: 4px; padding: 3px 10px;
+  font-size: 12px; cursor: pointer;
+}
+#docset-new {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 12px;
+}
+#docset-new label { color: var(--text-secondary); }
+#docset-name {
+  flex: 1; min-width: 180px; background: var(--bg-primary); color: var(--text-primary);
+  border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; font-size: 12px;
+}
+#docset-pick-count { color: var(--accent); white-space: nowrap; }
+#docset-rows { overflow: auto; padding: 6px 0; }
+.ds-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 14px; border-bottom: 1px solid var(--border); font-size: 12px;
+}
+.ds-row .ds-name { font-weight: 600; color: var(--text-primary); }
+.ds-row .ds-sum { color: var(--text-secondary); flex: 1; }
+.ds-row .ds-sum.ds-short { color: var(--warning, #d08a30); }
+.ds-row .ds-sum.ds-ready { color: var(--accent); }
+#docset-empty { padding: 14px; font-size: 12px; color: var(--text-secondary); }
+#docset-status { padding: 8px 14px; font-size: 12px; color: var(--text-secondary); min-height: 18px; }
 #expick-modal-content {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
@@ -5522,6 +5566,10 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button id="exp-png-transparent">PNG（透過背景）</button>
         <button id="exp-clipboard">クリップボードにコピー</button>
         <button id="exp-svg-all">全図をSVGで保存（zip）</button>
+        <!-- BLK-primary-20260914-2006-wish: 上の「全図」は今開いているタブだけが対象で、
+             保存フォルダに 25 枚あってもタブが 1 枚なら 1 枚しか入らない。資料に入れる
+             図の組に名前を付けて登録し、名前を選ぶだけで常にその枚数を出す -->
+        <button id="exp-docset" title="登録した資料セット（名前を付けた図の組）を選ぶと、タブを開き直さずに保存フォルダからその枚数ぶんを zip にする">資料セットでSVGで保存（zip）…</button>
         <!-- BLK-primary-20260908-1203-wish: 提出用 zip に詰める図を、変更サマリボードと
              同じ「変更図のみ / 要修正のみ」でその場で絞り込んで選ぶ -->
         <!-- BLK-primary-20260908-1903-friction: 指摘で名指しされた数枚だけを出すのに、
@@ -6351,6 +6399,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/rename-history.js"></script>
 <script src="src/core/rename-redo.js"></script>
 <script src="src/core/rename-pairs.js"></script>
+<script src="src/core/doc-set.js"></script>
 <script src="src/core/vault.js"></script>
 <script src="src/core/component-inventory.js"></script>
 <script src="src/core/export-target.js"></script>
@@ -6641,6 +6690,27 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 </div>
 <!-- BLK-primary-20260908-1203-wish: 提出用 zip に詰める図を選ぶ。
      絞り込みは変更サマリボードと同じ「変更図のみ / 要修正のみ」 -->
+<!-- BLK-primary-20260914-2006-wish: 資料セット。書き出す対象を「今開いているタブ」から
+     切り離し、名前で選べるようにする -->
+<div id="docset-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+  <div id="docset-modal-content">
+    <div id="docset-head">
+      <strong>資料セットで書き出す</strong>
+      <span id="docset-dir" role="status"></span>
+      <span id="docset-tools">
+        <button type="button" id="docset-close">閉じる</button>
+      </span>
+    </div>
+    <div id="docset-new">
+      <label>新しい資料セット</label>
+      <input id="docset-name" type="text" placeholder="資料セットの名前" />
+      <span id="docset-pick-count" role="status"></span>
+      <button type="button" id="docset-create" title="保存フォルダにある図（📂 一覧で印を付けていればその図だけ）を、この名前の資料セットとして登録する">今の対象を登録する</button>
+    </div>
+    <div id="docset-rows"></div>
+    <div id="docset-status" role="status"></div>
+  </div>
+</div>
 <div id="expick-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="expick-modal-content">
     <div id="expick-head">
