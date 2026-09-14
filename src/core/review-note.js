@@ -179,13 +179,76 @@ window.MA.reviewNote = (function() {
     return head + ' — 図の名前が書かれていません';
   }
 
+  // ── 前置き ──────────────────────────────────────────────────────────────
+  // BLK-primary-20260914-1706-wish: 指摘.md の `##` 見出しには、直す対象のある指摘に
+  // 混じって「前提: DSL 無変化」「突合サマリ」「primary への依頼(優先順)」のような
+  // 前置きが並ぶ。どれも特定の図を直す件ではないので [適用] も出ないが、一覧には
+  // 同じ形で並ぶため、1 件ずつ開いて「これは本物の指摘か、ただの前置きか」を
+  // 読んで決める一手間が毎回残っていた (今回は 9 件中 3 件が前置き)。
+  //
+  // 前置きと決めるのは見出しの語だけ (サマリ・前提・依頼・凡例…)。
+  // 「図名を 1 つも挙げていない件」も前置きに入れると、図名を綴らずに書かれた
+  // 実物の指摘 (「can の『編集中』ファイルの整理」など) まで一覧から消え、
+  // 指摘が落ちる — 前置きを 1 件読む手間とは釣り合わない誤り方なので、そちらは残す。
+  // 消しはしない (reviewer が書いた文章は残す)。既定で一覧の外に出し、件数を言い、
+  // 出し直せるようにする — 前置きにしか書かれていない話を落とさないため。
+  var PREAMBLE_WORDS = ['サマリ', '前提', '依頼', '凡例', '概要', 'はじめに', 'まとめ', '総括'];
+
+  function headingIsPreamble(title) {
+    var head = _s(title).replace(MARK_RE, '').trim();
+    if (!head) return false;
+    for (var i = 0; i < PREAMBLE_WORDS.length; i++) {
+      if (head.indexOf(PREAMBLE_WORDS[i]) >= 0) return true;
+    }
+    return false;
+  }
+
+  function isPreamble(row) {
+    return !!row && headingIsPreamble(row.title);
+  }
+
+  // 実物の指摘だけ / 前置きだけ。画面はこの 2 つを別々に並べる。
+  function realRows(rows_) {
+    return (rows_ || []).filter(function(r) { return !isPreamble(r); });
+  }
+
+  function preambleRows(rows_) {
+    return (rows_ || []).filter(function(r) { return isPreamble(r); });
+  }
+
+  // 一覧に並べる行。既定は実物の指摘だけ。前置きが 1 件も無いフォルダでは
+  // 絞っても絞らなくても同じものが出る (押す所を無駄に増やさない)。
+  function visibleRows(rows_, showPreamble) {
+    var list = rows_ || [];
+    if (showPreamble) return list.slice();
+    var real = realRows(list);
+    // 全部が前置きなら、隠すと一覧が空になって読む手がかりが消える。そのまま出す。
+    return real.length ? real : list.slice();
+  }
+
+  // 前置きの出し入れボタンの文字。押す前に何件動くかを言う。
+  function preambleLabel(rows_, showPreamble) {
+    var n = preambleRows(rows_).length;
+    if (!n) return '';
+    return showPreamble
+      ? '前置き ' + n + ' 件を隠す'
+      : '前置き ' + n + ' 件も出す';
+  }
+
   // 一覧の見出し。今日 1 クリックで開ける件数を先に言う。
-  function summaryText(rows_) {
+  function summaryText(rows_, showPreamble) {
     var list = rows_ || [];
     if (!list.length) return '指摘.md がありません';
-    var ready = list.filter(function(r) { return r.ready; }).length;
-    if (!ready) return '指摘 ' + list.length + ' 件 (並べて見られる図の組はありません)';
-    return '指摘 ' + list.length + ' 件 / うち ' + ready + ' 件はクリック 1 回で並べて見られます';
+    var pre = preambleRows(list).length;
+    var real = list.length - pre;
+    // 前置きが混ざっているなら、まず「実物が何件か」を言う (毎回数え直させない)。
+    var head = (pre && real && !showPreamble)
+      ? '指摘 ' + real + ' 件 (前置き ' + pre + ' 件は一覧の外)'
+      : '指摘 ' + list.length + ' 件';
+    var target = (pre && real && !showPreamble) ? realRows(list) : list;
+    var ready = target.filter(function(r) { return r.ready; }).length;
+    if (!ready) return head + ' (並べて見られる図の組はありません)';
+    return head + ' / うち ' + ready + ' 件はクリック 1 回で並べて見られます';
   }
 
   // ── 指摘の無い図 ────────────────────────────────────────────────────────
@@ -261,6 +324,13 @@ window.MA.reviewNote = (function() {
     docStatus: docStatus,
     summaryText: summaryText,
     pickNote: pickNote,
+    PREAMBLE_WORDS: PREAMBLE_WORDS,
+    headingIsPreamble: headingIsPreamble,
+    isPreamble: isPreamble,
+    realRows: realRows,
+    preambleRows: preambleRows,
+    visibleRows: visibleRows,
+    preambleLabel: preambleLabel,
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

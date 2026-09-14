@@ -503,3 +503,82 @@ test('手順5.5 本体と中身が同じ「-編集中」を、📂一覧から 1
 
   await S.clearDir(page, DIR);
 });
+
+// BLK-primary-20260914-1706-wish: reviewer の 指摘.md は、直す図のある指摘に混じって
+// 「前提: …」「突合サマリ」「primary への依頼(優先順)」を `##` 見出しで並べる。
+// どれも [適用] が出ない前置きなのに一覧には同じ形で並ぶので、手順 5.5 は毎回
+// 「これは本物の指摘か、ただの前置きか」を 1 件ずつ読んで決めることから始まっていた
+// (今回は 9 件中 3 件が前置き)。実物だけが最初から並び、前置きは件数だけ言って
+// 出し直せることを到達条件にする。
+const PRE_ROOT = DIR + '-preamble';
+const PRE_MINE = PRE_ROOT + '/primary';
+const PRE_REVIEWER = PRE_ROOT + '/reviewer';
+
+const PRE_NOTE = [
+  '# primary への指摘',
+  '',
+  '## 前提: DSL 無変化',
+  '前回控えから DSL に差はありません。',
+  '',
+  '## 突合サマリ',
+  '9 件中 6 件が要対応です。',
+  '',
+  '## 【継続】spi_init_sequence の部品名が不統一',
+  '`SpiDrv` を `Spi_Driver` に統一すること。',
+  '',
+  '## 【新規】timer_state.puml の遷移ラベルに対応するクラスメソッドが無い',
+  '`driver_common_class.puml` の `Timer_Driver` は `Timer_Init()` しか宣言していないが、',
+  '`timer_state.puml` は `Timer_Start`/`Timer_Stop` の遷移ラベルを使っている。',
+  '',
+  '## primary への依頼(優先順)',
+  '上から順にお願いします。',
+].join('\n');
+
+test.describe('手順5.5 指摘.md の前置きを一覧の外に出す', () => {
+  test.beforeEach(async ({ page }) => {
+    await S.bootWithSaveDir(page, PRE_MINE);
+    await S.clearDir(page, PRE_MINE);
+    await S.putDoc(page, PRE_MINE, 'spi_init_sequence', SPI_SEQ);
+    await S.putDoc(page, PRE_MINE, 'driver_common_class', ACT_CLASS);
+    await S.putDoc(page, PRE_MINE, 'timer_state', ACT_TIMER_STATE);
+    fs.mkdirSync(absOf(PRE_REVIEWER), { recursive: true });
+    fs.writeFileSync(nodePath.join(absOf(PRE_REVIEWER), '指摘.md'), PRE_NOTE, 'utf-8');
+    await page.reload();
+    await page.waitForSelector('#btn-tab-peek');
+    await page.locator('#btn-tab-peek').click();
+    await page.waitForSelector('#peek-modal');
+    await page.locator('#peek-note-toggle').click();
+    await page.waitForSelector('#peek-note .note-finding');
+  });
+
+  test('並ぶのは実物の指摘だけで、見出しが「前置きは一覧の外」と言う', async ({ page }) => {
+    // 到達条件その1: 5 見出しのうち、押す対象は 2 件だけ。
+    await expect(page.locator('#peek-note .note-finding')).toHaveCount(2);
+    await expect(page.locator('#note-summary'))
+      .toContainText('指摘 2 件 (前置き 3 件は一覧の外)');
+    // 到達条件その2: 何件が前置きかを、指摘.md を数え直さずに読める。
+    await expect(page.locator('#note-preamble-toggle')).toHaveText('前置き 3 件も出す');
+  });
+
+  test('前置きは消えていない (1 クリックで書いた順のまま出し直せる)', async ({ page }) => {
+    await page.locator('#note-preamble-toggle').click();
+    await expect(page.locator('#peek-note .note-finding')).toHaveCount(5);
+    await expect(page.locator('#peek-note .note-finding').first()).toContainText('前提');
+    await expect(page.locator('#note-summary')).toContainText('指摘 5 件');
+    await expect(page.locator('#note-summary')).not.toContainText('一覧の外');
+
+    await page.locator('#note-preamble-toggle').click();
+    await expect(page.locator('#peek-note .note-finding')).toHaveCount(2);
+  });
+
+  test('残った 2 件はどちらも [適用] まで届く (前置きを読まずに手が動く)', async ({ page }) => {
+    await expect(page.locator('#peek-note .note-action-row')).toHaveCount(2);
+    await expect(page.locator('#note-apply-summary')).toContainText('[適用]');
+    const row = page.locator('#peek-note .note-action-row[data-note-action="addmethod"]');
+    await row.locator('.note-apply').click();
+    await expect(page.locator('#note-summary'))
+      .toContainText('driver_common_class に足しました', { timeout: 20000 });
+    const saved = (await S.readDoc(page, PRE_MINE, 'driver_common_class')) || '';
+    expect(saved).toContain('+Timer_Start()');
+  });
+});

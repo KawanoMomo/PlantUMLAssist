@@ -6541,6 +6541,10 @@ var _noteKey = null;       // 選んでいる指摘の id
 var _noteMsg = '';         // 押した結果 (組が無かったときの理由など)
 var _notePlans = [];       // findingActions.plans の戻り (指摘 1 件 = 当てる操作 1 つ)
 var _noteBusy = '';        // 当てている最中の指摘 id
+// BLK-primary-20260914-1706-wish: 「前提」「突合サマリ」「◯◯への依頼」は直す図を持たない
+// 前置きで、一覧に混ざると 1 件ずつ「本物か前置きか」を読んで決めることになる。
+// 既定では一覧の外に出し、件数を言って、押せば出し直せるようにする (消しはしない)。
+var _noteShowPreamble = false;
 // BLK-junior-20260914-1106-wish: 指摘 1 件 = 対象の図種・版 1 つ。
 var _noteNames = [];       // 覗ける全フォルダにある図名 (版ぞろいを引くため)
 var _noteIndex = null;     // reviewNote.index の戻り (図名 → それを持つフォルダ)
@@ -7011,8 +7015,25 @@ function renderNotePanel() {
   var sum = document.createElement('div');
   sum.className = 'note-summary';
   sum.id = 'note-summary';
-  sum.textContent = _noteMsg || (RN ? RN.summaryText(_noteRows) : '');
+  sum.textContent = _noteMsg || (RN ? RN.summaryText(_noteRows, _noteShowPreamble) : '');
   el.note.appendChild(sum);
+
+  // 前置きの出し入れ。前置きが 1 件も無いフォルダでは出さない (押す所を増やさない)。
+  var preLabel = RN ? RN.preambleLabel(_noteRows, _noteShowPreamble) : '';
+  if (preLabel) {
+    var pre = document.createElement('button');
+    pre.type = 'button';
+    pre.className = 'note-preamble-toggle' + (_noteShowPreamble ? ' on' : '');
+    pre.id = 'note-preamble-toggle';
+    pre.textContent = preLabel;
+    pre.title = '「前提」「サマリ」「依頼」など、直す図を持たない見出しの出し入れ';
+    pre.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      _noteShowPreamble = !_noteShowPreamble;
+      renderNotePanel();
+    });
+    el.note.appendChild(pre);
+  }
 
   // 「今日 [適用] だけで済む件数」は、並べて見られる件数とは別の数なので別行にする。
   var FA = window.MA.findingActions;
@@ -7035,7 +7056,8 @@ function renderNotePanel() {
     return;
   }
 
-  _noteRows.forEach(function(r) {
+  var shown = RN ? RN.visibleRows(_noteRows, _noteShowPreamble) : _noteRows;
+  shown.forEach(function(r) {
     var b = document.createElement('button');
     b.type = 'button';
     b.className = 'note-finding' + (r.id === _noteKey ? ' selected' : '');
