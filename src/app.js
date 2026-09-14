@@ -2691,6 +2691,7 @@ function init() {
   setupHandoverBanner();
   setupAuditTimeline();
   setupAuditBoard();
+  setupSaveGuard();
   setupSaveCheck();
   setupSaveSwap();
   setupVersionTimeline();
@@ -20314,6 +20315,11 @@ function saveFile() {
       doc = { id: doc.id, name: dm.name, diagramType: doc.diagramType, dsl: doc.dsl };
     }
   }
+  // BLK-reviewer-20260915-0007-wish: 書き込む前に、同じ保存フォルダのクラス図と
+  // 突き合わせる。宣言の無い呼び出しがあれば、ここで止めて一覧を出す
+  // (保存後に言う save-check では、書けたと思って次の図へ移った後になる)。
+  if (runSaveGuard(doc)) return;
+
   var ST = window.MA.saveTarget;
   var target = ST ? ST.decide(cfg, doc, title) : { mode: 'download', name: title };
 
@@ -20615,6 +20621,72 @@ function setupSaveSwap() {
     _sswLogOpen = !_sswLogOpen;
     if (el) el.hidden = false;
     renderSaveSwapLog();
+  });
+}
+
+// ── 保存前のメソッド突合 (BLK-reviewer-20260915-0007-wish) ──────────────────
+// 保存を書き込む前に、いま保存する図の呼び出しを**同じ保存フォルダのクラス図**と
+// 突き合わせ、宣言が無ければ帯で止めて一覧を出す。判定は src/core/save-guard.js。
+// save-check (保存後) と違い、相手はタブではなく📂 一覧が読んだフォルダの中身。
+
+var _sgdAck = {};        // 図の名前 → 「このまま保存」を選んだときの顔ぶれ
+var _sgdPending = null;  // 帯を出したあと「このまま保存」で再実行する保存
+
+function hideSaveGuard() {
+  var el = document.getElementById('save-guard-overlay');
+  if (el) el.hidden = true;
+  _sgdPending = null;
+}
+
+function renderSaveGuard(res) {
+  var SG = window.MA.saveGuard;
+  var el = document.getElementById('save-guard-overlay');
+  if (!SG || !el) return;
+  var esc = window.MA.htmlUtils.escHtml;
+  var sum = document.getElementById('sgd-summary');
+  if (sum) sum.textContent = SG.summaryLine(res);
+  var list = document.getElementById('sgd-list');
+  if (list) {
+    var html = '';
+    SG.lines(res).forEach(function(l) {
+      html += '<li>' + esc(l.text)
+        + (l.decl ? '<span class="sgd-decl">クラス図に足すなら: ' + esc(l.decl) + '</span>' : '')
+        + '</li>';
+    });
+    list.innerHTML = html;
+  }
+  el.hidden = false;
+}
+
+// 保存前に呼ぶ。止めるなら true。止めないときは帯を隠して保存を続けさせる。
+function runSaveGuard(doc) {
+  var SG = window.MA.saveGuard;
+  if (!SG || !doc || !doc.name) return false;
+  var res = null;
+  try {
+    // 相手は📂 一覧が読んだ保存フォルダの中身だけ。タブで代用しない —— 開いて
+    // いないだけのクラス図を「無い」と読んで no-class を量産するのを避ける。
+    res = SG.check({ doc: doc, folderDocs: _fiFileDocs });
+  } catch (e) { return false; }
+  if (!SG.shouldBlock(res)) { hideSaveGuard(); return false; }
+  // 同じ顔ぶれを一度「承知」しているなら、二度は止めない。
+  if (_sgdAck[doc.name] === SG.signature(res)) { hideSaveGuard(); return false; }
+  _sgdPending = { name: doc.name, sig: SG.signature(res) };
+  try { renderSaveGuard(res); } catch (e) { return false; }
+  return true;
+}
+
+function setupSaveGuard() {
+  var el = document.getElementById('save-guard-overlay');
+  if (el) el.addEventListener('click', function(ev) { ev.stopPropagation(); });
+  var fix = document.getElementById('btn-sgd-fix');
+  if (fix) fix.addEventListener('click', function() { hideSaveGuard(); });
+  var go = document.getElementById('btn-sgd-save');
+  if (go) go.addEventListener('click', function() {
+    var p = _sgdPending;
+    hideSaveGuard();
+    if (p) _sgdAck[p.name] = p.sig;
+    saveFile();
   });
 }
 

@@ -4809,6 +4809,28 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 
 /* BLK-reviewer-20260908-1503-wish: 保存時チェックの帯。エラー帯と同じ位置に
    重ねるが、色は警告 (図は読める) で分ける。 */
+/* BLK-reviewer-20260915-0007-wish: 保存を止める帯。済んだことを知らせる
+   save-check より強い色 (これから書くかどうかを聞いているため)。 */
+#save-guard-overlay {
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 30;
+  margin: -16px -16px 12px -16px;
+  padding: 6px 12px;
+  background: rgba(70, 24, 24, 0.97);
+  color: #ff9a8a;
+  border-bottom: 1px solid #a33;
+  font-size: 12px;
+}
+#save-guard-overlay .sgd-head { padding-right: 150px; }
+#sgd-list { margin: 4px 0 0; padding-left: 18px; padding-right: 150px; max-height: 140px; overflow-y: auto; }
+#sgd-list li { margin: 2px 0; line-height: 1.4; }
+#sgd-list li .sgd-decl {
+  display: block; margin-top: 1px; color: #d8b6b6; font-family: monospace; font-size: 11px;
+}
+#save-guard-overlay .sgd-actions { margin-top: 6px; display: flex; gap: 8px; }
+#save-guard-overlay button { font-size: 11px; padding: 2px 8px; cursor: pointer; }
 #save-check-overlay {
   position: sticky;
   top: 0;
@@ -6021,6 +6043,19 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <div id="preview-container">
         <!-- design 5a: 描画エラーを図の上に重ねる帯。直前の図はそのまま残す -->
         <div id="render-error-overlay" role="alert" hidden></div>
+        <!-- BLK-reviewer-20260915-0007-wish: 保存を書き込む**前**に、同じ保存
+             フォルダのクラス図と突き合わせ、宣言の無い呼び出しを並べて止める帯。
+             中身は save-guard.js -->
+        <div id="save-guard-overlay" role="alert" hidden>
+          <div class="sgd-head">
+            <span id="sgd-summary"></span>
+          </div>
+          <ul id="sgd-list"></ul>
+          <div class="sgd-actions">
+            <button type="button" id="btn-sgd-fix" title="保存をやめて、このまま図を直す">✎ やめて直す</button>
+            <button type="button" id="btn-sgd-save" title="宣言の食い違いを承知のうえで保存する">⚠ このまま保存</button>
+          </div>
+        </div>
         <!-- BLK-reviewer-20260908-1503-wish: 保存したその場で突合を掛け、
              この図に新しく生えた不一致を図の上に出す。中身は save-check.js -->
         <div id="save-check-overlay" role="status" hidden>
@@ -6641,6 +6676,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/audit-timeline.js"></script>
 <script src="src/core/finding-ledger.js"></script>
 <script src="src/core/audit-board.js"></script>
+<script src="src/core/save-guard.js"></script>
 <script src="src/core/save-check.js"></script>
 <script src="src/core/save-swap.js"></script>
 <script src="src/core/twin-restore.js"></script>
