@@ -226,3 +226,72 @@ test('手順7 mtime だけが古い SVG が、裏取りなしで作り直し要�
     { out: (s) => t2.push(s), err: () => {} })).toBe(0);
   expect(t2.join('\n')).toMatch(/spi_class\.puml[^\n]*出力物\/SVG 古/);
 });
+
+// BLK-reviewer-20260915-0606-wish: まとめを書く前に `audit.js --board` / `findings.js` /
+// `pins.js --all` / `audit.js --names` / `audit.js --registry` / `POST /verify-svg` の
+// 6 つを別々に叩き、結果を頭の中で突き合わせていた (--board の「SVG 内容ずれ」が
+// verify-svg では体裁差に過ぎない、といった食い違いも目で見比べて初めて気づけた)。
+// 図 1 枚 = 1 行の表に畳めば、突き合わせは表の列を読むだけで済む。
+const dashboardCli = require('../../../tools/dashboard');
+
+test('手順7 整合状態が 1 枚の表に並び、CLI 同士の食い違いも同じ行に出る', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pua-reviewer-07-dash-'));
+  // 中身は追いついていて mtime だけ古い図 (体裁差のみ) と、本当に古い図。
+  const settled = ['@startuml', 'class Spi_Driver', '@enduml'].join('\n');
+  const oldDsl = ['@startuml', 'class Can_Driver', '@enduml'].join('\n');
+  const newDsl = ['@startuml', 'class Can_Driver', 'class Can_Regs', '@enduml'].join('\n');
+  fs.writeFileSync(path.join(dir, 'spi_class.puml'), settled + "\n' 保存し直しただけ\n", 'utf-8');
+  fs.writeFileSync(path.join(dir, 'spi_class.svg'), foldSrc(settled), 'utf-8');
+  fs.writeFileSync(path.join(dir, 'can_class.puml'), newDsl, 'utf-8');
+  fs.writeFileSync(path.join(dir, 'can_class.svg'), foldSrc(oldDsl), 'utf-8');
+  const past = new Date(Date.now() - 60 * 60 * 1000);
+  fs.utimesSync(path.join(dir, 'spi_class.svg'), past, past);
+  fs.utimesSync(path.join(dir, 'can_class.svg'), past, past);
+
+  const out = [];
+  const code = dashboardCli.main([dir, '--state', path.join(dir, 'st.json'),
+    '--pins-state', path.join(dir, 'pins.json'), '--audit-state', path.join(dir, 'audit.json'),
+    '--registry', path.join(dir, '_names.json')], { out: (s) => out.push(s), err: () => {} });
+  expect(code).toBe(0);
+  const text = out.join('\n');
+
+  // 到達条件 1: 図・指摘・📌・SVG・表記・前回控えが 1 行に並ぶ (6 本を叩き直さない)。
+  expect(text).toContain('指摘(未解消)');
+  expect(text).toContain('表記(要決定)');
+  // 印は無いが svg に畳まれた DSL で中身が言える図は「体裁差のみ」に落ちる
+  // (/verify-svg を 1 枚ずつ叩き直さない)。
+  expect(text).toMatch(/spi_class[^\n]*体裁差のみ/);
+
+  // 到達条件 2: 作り直しが要る図だけが「手を入れる図」に残る
+  // (体裁差・mtime だけの古さで指摘.md の枠を書き始めない)。
+  expect(text).toMatch(/can_class[^\n]*内容ずれ/);
+  expect(text).toMatch(/手を入れる図: [^\n]*can_class/);
+  expect(text).not.toMatch(/手を入れる図: [^\n]*spi_class/);
+
+  // 到達条件 3: 同じ表がそのまま指摘.md に貼れる。
+  const md = [];
+  expect(dashboardCli.main([dir, '--md', '--state', path.join(dir, 'st.json'),
+    '--pins-state', path.join(dir, 'pins.json'), '--audit-state', path.join(dir, 'audit.json')],
+    { out: (s) => md.push(s), err: () => {} })).toBe(0);
+  expect(md.join('\n')).toContain('| 図 | 指摘(未解消) |');
+});
+
+// 出口同士が食い違う行は、どちらかに寄せずに「気づき」列に両方残す
+// (今回 reviewer が --board と verify-svg を手で見比べて気づいた食い違い)。
+const SDB = require('../../../src/core/status-dashboard.js');
+
+test('手順7 --board と verify-svg の食い違いが、同じ行の気づき列に出る', () => {
+  const board = SDB.build({
+    docs: ['adc_init_sequence'],
+    // --board は「出力物/SVG 内容ずれ」として挙げている
+    findings: [{ id: 'F-09', open: true, docs: ['adc_init_sequence.puml'], cats: ['出力物/SVG 内容ずれ'] }],
+    // verify-svg は体裁差だけ (contentMatch: true) と答えている
+    svg: { rows: [{ name: 'adc_init_sequence', content: 'format', status: 'stale', basis: 'rerender' }] },
+  });
+  const row = board.rows[0];
+  expect(row.notes.length).toBe(1);
+  expect(row.notes[0]).toContain('体裁差のみ・作り直し不要');
+  // 食い違いを潰して片方に寄せない (作り直し要の枚数には数えない)。
+  expect(board.totals.needsRender).toBe(0);
+  expect(SDB.text(board, 'x')).toContain('気づき');
+});

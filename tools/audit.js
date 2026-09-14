@@ -96,6 +96,9 @@ const USAGE = [
   '  --versions    監査は回さず、保存フォルダの各図を `_versions/` の直前版と',
   '                突き合わせて差分を出す。上書きで中身が失われた図を名指しする',
   '  --versions-max N  --versions が 1 枚あたりに出す差分行を N 行まで (既定 6、0 で全部)',
+  '  --dashboard   図 1 枚を 1 行にして、指摘・📌・SVG 検証・表記の要決定・前回控えとの',
+  '                差分を 1 枚の表に並べる (node tools/dashboard.js と同じ)。',
+  '                出口ごとの言い分が食い違う行は「気づき」列に両方を残す',
   '  --board [MD]  突合結果・前回の指摘文書 (MD、既定は保存フォルダの 指摘.md)・',
   '                前回控えとの差分を 1 枚に束ねて出す。前回の指摘 1 件ごとに',
   '                解消/継続/新規を振り分け、継続には tick 数を数えて付ける',
@@ -388,7 +391,7 @@ function runBoard(result, opts, prev, fmtOpts, prevNote) {
 }
 
 function parseArgs(argv) {
-  const opts = { targets: [], only: null, summary: false, summaryJson: false, out: null, help: false, since: null, sinceFiles: null, state: true, pairsMax: 0, personas: null, versions: false, versionsMax: 6, board: false, boardFile: null, drafts: false, registry: false, registryFile: null, register: false, by: '' };
+  const opts = { targets: [], only: null, summary: false, summaryJson: false, out: null, help: false, since: null, sinceFiles: null, state: true, pairsMax: 0, personas: null, versions: false, versionsMax: 6, dashboard: false, board: false, boardFile: null, drafts: false, registry: false, registryFile: null, register: false, by: '' };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--help' || a === '-h') opts.help = true;
@@ -414,6 +417,7 @@ function parseArgs(argv) {
     else if (a === '--pairs-max') opts.pairsMax = _num(argv[++i], a);
     else if (a.indexOf('--pairs-max=') === 0) opts.pairsMax = _num(a.slice(12), '--pairs-max');
     else if (a === '--drafts') opts.drafts = true;
+    else if (a === '--dashboard') opts.dashboard = true;
     else if (a === '--versions') opts.versions = true;
     else if (a === '--versions-max') opts.versionsMax = _vnum(argv[++i], a);
     else if (a.indexOf('--versions-max=') === 0) opts.versionsMax = _vnum(a.slice(15), '--versions-max');
@@ -476,6 +480,12 @@ function main(argv) {
       console.error(e.message);
       return 1;
     }
+  }
+
+  // --dashboard は「6 つの出口を 1 枚に畳んだ表」。畳み方は tools/dashboard.js が持つ
+  // (GUI と共通の src/core/status-dashboard.js を呼ぶ口はここと CLI の 2 つだけ)。
+  if (opts.dashboard) {
+    return require('./dashboard').main(opts.targets, null);
   }
 
   // --versions は監査ではなく「保存フォルダの版の突き合わせ」なので、
