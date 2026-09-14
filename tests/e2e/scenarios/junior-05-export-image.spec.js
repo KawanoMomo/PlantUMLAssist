@@ -410,3 +410,39 @@ test('手順4 資料化: 開いた時点で部品ごとの残りが読め、手�
   const plan = await page.locator('#mexp-plan').textContent();
   expect(plan).toContain('TIMERドライバ');
 });
+
+// BLK-junior-20260914-2106: 図種欄に［未］／［済］の印は付いたが、並びは図番号順の
+// ままだった。欲しい図種 (状態遷移図) を上から目で探して印を読み比べる必要が残る。
+// 手当ての要る図種を先頭にまとめ、済んだ図種は最後尾に送る。
+test('手順5 資料化: 図種欄は［未］の図種が先頭にまとまり、［済］が最後に来る', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  // シーケンス図だけ資料化済み (資料用を後に書くので元より新しい = ［済］)。
+  await S.putDoc(page, DIR, 'GPIOドライバ初期化シーケンス', S.GPIO_SEQ);
+  await S.putDoc(page, DIR, 'GPIOドライバ状態遷移', S.GPIO_STATE);
+  await S.putDoc(page, DIR, 'GPIOドライバ初期化シーケンス(資料用)', S.GPIO_SEQ);
+  await page.reload();
+  await page.waitForTimeout(800);
+
+  await page.locator('#btn-export').click();
+  await page.waitForSelector('#export-menu', { state: 'visible' });
+  await page.locator('#exp-material').click();
+  await page.waitForSelector('#mexp-modal', { state: 'visible' });
+  await page.waitForTimeout(900);
+
+  await page.locator('#mexp-component').selectOption('GPIOドライバ');
+  await page.waitForTimeout(500);
+
+  // 到達条件その1: 図番号順ならシーケンス図が先だが、［未］の状態遷移図が先頭に来る。
+  const opts = page.locator('#mexp-kind option');
+  await expect(opts.first()).toHaveAttribute('data-status', 'none');
+  await expect(opts.first()).toHaveText(/状態遷移図/);
+  // 到達条件その2: ［済］は最後尾にまとまる (上から読んで最初に当たるのが手当て先)。
+  await expect(opts.last()).toHaveAttribute('data-status', 'fresh');
+  await expect(opts.last()).toHaveText(/シーケンス図/);
+
+  // 到達条件その3: 並べ替えても選択と計画は崩れない (先頭の未着手が選ばれている)。
+  await expect(page.locator('#mexp-kind')).toHaveValue('状態遷移図');
+  await expect(page.locator('#mexp-plan')).toContainText('SVG');
+  await expect(page.locator('#mexp-run')).toBeEnabled();
+});

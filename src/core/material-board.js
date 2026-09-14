@@ -138,6 +138,22 @@ window.MA.materialBoard = (function() {
       .map(function(r) { return r.kind; });
   }
 
+  // kindOrder(rows) — 図種欄 (プルダウン) に出す並び。BLK-junior-20260914-2106:
+  // 印 (［未］［古］［済］) を付けても並びが図番号順のままだと、欲しい図種を
+  // 上から目で探して印を読み比べることになる。手当ての要るものを上にまとめ、
+  // 同じ状態の中は図番号順 (rows の並び) を保つ — 資料を作る順はそのまま設計書の順。
+  //
+  // 表 (資料一式ボード) の並びは変えない。あちらは設計書に貼る順で読むものなので、
+  // 状態で並べ替えると図番号との対応が崩れる。
+  function kindOrder(list) {
+    var rs = (Array.isArray(list) ? list : []).filter(function(r) { return r && r.kind; });
+    return rs.map(function(r, i) { return { r: r, i: i }; }).sort(function(a, b) {
+      var ra = (STATUS[a.r.status] || STATUS.fresh).rank;
+      var rb = (STATUS[b.r.status] || STATUS.fresh).rank;
+      return ra !== rb ? ra - rb : a.i - b.i;
+    }).map(function(x) { return x.r.kind; });
+  }
+
   // summaryText(rows) — 見出しの 1 行。数えるのは人ではなくここ。
   function summaryText(list) {
     var rs = Array.isArray(list) ? list : [];
@@ -264,6 +280,7 @@ window.MA.materialBoard = (function() {
     components: components,
     rows: rows,
     pendingKinds: pendingKinds,
+    kindOrder: kindOrder,
     summaryText: summaryText,
     rowText: rowText,
     plans: plans,
