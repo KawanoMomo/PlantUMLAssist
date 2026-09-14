@@ -6,6 +6,10 @@ npm-debug.log
 __pycache__/
 *.pyc
 
+# 指摘トラッカーの控え (対象フォルダの中に置くが、古い既定の置き場所も無視する)
+.assist-findings-state.json
+.findings-state.json
+
 # Tests
 tests/results/
 test-results/

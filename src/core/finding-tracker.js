@@ -294,9 +294,58 @@
     return lines.join('\n');
   }
 
+  // isJunkPath(p) — シェルの事故で出来た名前かどうか。
+  //
+  // BLK-reviewer-20260915-0007: 監査の対象フォルダに
+  // `prev"cp -r E:01_Looppersona-dataprimary. …"` のような、コマンド文字列が
+  // そのままフォルダ名になった残骸が出来ていた。中身は元フォルダの写しなので、
+  // 同じ図が二重に数えられ、控えにも入って毎回「新規」で出続ける。
+  // 図の名前として有り得ない字 (引用符・パイプ・`<>*?`) と、コマンドの形
+  // (` -r ` / ` cp `) を持つものを事故と見なす。普通の日本語名は当たらない。
+  function isJunkPath(p) {
+    var s = _s(p);
+    if (!s) return false;
+    if (/["|<>*?\r\n\t]/.test(s)) return true;
+    if (/(^|[\\/\s])(cp|mv|rm|xcopy|robocopy)\s/i.test(s)) return true;
+    if (/\s-[a-z]{1,2}(\s|$)/i.test(s)) return true;
+    if (/\$[A-Za-z_]/.test(s)) return true;          // `prev$f` のような展開し損ね
+    return false;
+  }
+
+  // pruneBroken(state) — 事故で出来た名前の図だけを対象にしている控えを落とす。
+  //
+  // 控えは「同じ指摘に同じ id を持ち越す」ためにあるので、消してよいのは
+  // もう指し先が無い行だけ。残骸のフォルダを読み飛ばすようにしても、既に
+  // 入ってしまった行は残り続けるため、読むときに一度だけ落とす。
+  // 人が付けた判断 (verdict) のある行は落とさない (判断は取り消さない)。
+  function pruneBroken(state) {
+    var st = readState(state);
+    var keep = {};
+    var dropped = [];
+    Object.keys(st.findings).forEach(function(k) {
+      var f = st.findings[k] || {};
+      var docs = Array.isArray(f.docs) ? f.docs : [];
+      var bad = docs.length > 0 && docs.every(isJunkPath);
+      if (bad && !f.verdict) {
+        dropped.push({ id: f.id || '', title: f.title || k, docs: docs.slice() });
+        return;
+      }
+      if (docs.length && docs.some(isJunkPath)) {
+        // 一部だけ残骸なら、行は残して指し先だけ掃除する
+        // (同じ図が正しいフォルダにもあるので、id は持ち越したい)。
+        f = JSON.parse(JSON.stringify(f));
+        f.docs = docs.filter(function(d) { return !isJunkPath(d); });
+      }
+      keep[k] = f;
+    });
+    st.findings = keep;
+    return { state: st, dropped: dropped };
+  }
+
   var api = {
     VERSION: VERSION, VERDICT: VERDICT, STATE: STATE,
     emptyState: emptyState, readState: readState, makeId: makeId,
+    isJunkPath: isJunkPath, pruneBroken: pruneBroken,
     itemsOf: itemsOf, update: update, rows: rows, setVerdict: setVerdict,
     statusText: statusText, rowText: rowText, counts: counts,
     summaryText: summaryText, markdown: markdown,
