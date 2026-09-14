@@ -193,3 +193,48 @@ test('手順8 本体ではなく写しにだけ入った修正を、sha1 を手�
   expect(MA.methodAudit.describe(r.issues[0]))
     .toContain('写しの driver_common_class-編集中.puml にしかない');
 });
+
+// BLK-reviewer-20260914-2206-wish: 台帳は「出た・出ない」の 2 値なので、reviewer が
+// 下した複合の判断 (「puml 側は解消。svg の再エクスポートだけ継続」) を憶える場所が
+// 無い。指摘.md は毎 tick 全文を書き直す 1 枚なので、その判断は次の tick に残らず、
+// 監査が同じ論点を別カテゴリで拾い直すと「再発」に見えていた。指摘トラッカーは
+// 指摘 1 件に id を与え、貼った判断を持ち越す (全文の書き直しを 1 行の更新に替える)。
+const tracker = require('../../../src/core/finding-tracker');
+
+test('手順8 前回の判断が次の tick に残り、書き直さず 1 行だけ更新できる', () => {
+  const svg = (rows) => ({ svg: { status: 'ok', result: { rows: rows } } });
+  const STALE = [{ name: 'spi_init_sequence.puml', status: 'stale' }];
+
+  // 1 tick 目。監査が「SVG が古い」を出し、reviewer が中身を見て判断を貼る。
+  let s = tracker.update(tracker.emptyState(), { audits: svg(STALE), label: 'runs/20260914-2106', at: 'runs/20260914-2106' });
+  const row = tracker.rows(s)[0];
+  expect(row.id).toBe('F-01');
+  expect(row.since).toBe('runs/20260914-2106');
+  expect(tracker.statusText(row)).toBe('新規');
+
+  const set = tracker.setVerdict(s, 'F-01', 'partial', 'puml 側は解消。svg 再エクスポートのみ継続', 'runs/20260914-2106');
+  expect(set.ok).toBe(true);
+  s = set.state;
+
+  // 2 tick 目。監査はこの論点を落とす (別カテゴリへ移した回でも同じ)。
+  s = tracker.update(s, { audits: svg([]), label: 'runs/20260914-2206', at: 'runs/20260914-2206' });
+  expect(tracker.rows(s)[0].state).toBe('partial');
+
+  // 3 tick 目。また出ても「再発」にはならない — ここが手順8 の往復を作っていた。
+  s = tracker.update(s, { audits: svg(STALE), label: 'runs/20260914-2306', at: 'runs/20260914-2306' });
+  const back = tracker.rows(s)[0];
+  expect(back.state).toBe('partial');
+  expect(back.note).toBe('puml 側は解消。svg 再エクスポートのみ継続');
+
+  // 到達条件: 指摘.md の全文を書き直さず、該当行の状態を 1 つ更新するだけで済む。
+  s = tracker.setVerdict(s, 'F-01', 'resolved', '再エクスポート確認', 'runs/20260914-2306').state;
+  const done = tracker.rows(s)[0];
+  expect(done.state).toBe('resolved');
+  expect(done.open).toBe(false);
+
+  // 表はそのまま 指摘.md に貼れる (id・状態・初出・対象が 1 行に並ぶ)。
+  const md = tracker.markdown(s, '指摘トラッカー');
+  expect(md).toContain('| id | 状態 | 初出 | 対象 | 分類 | 備考 |');
+  expect(md).toContain('| F-01 | 解消（判断） | runs/20260914-2106 |');
+  expect(md).toContain('記録した tick: runs/20260914-2106 → runs/20260914-2206 → runs/20260914-2306');
+});

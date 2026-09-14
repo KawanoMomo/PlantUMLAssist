@@ -9,6 +9,7 @@
     "audit": "node tools/audit.js",
     "pins": "node tools/pins.js",
     "requests": "node tools/requests.js",
+    "findings": "node tools/findings.js",
     "test:e2e:all": "playwright test"
   },
   "devDependencies": {
