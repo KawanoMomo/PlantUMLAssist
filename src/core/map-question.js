@@ -46,6 +46,8 @@ window.MA.mapQuestion = (function() {
     transition: '遷移',
     'class': 'クラス',
     relation: '関係',
+    // BLK-junior-20260914-1606: クラスの中のメソッド・属性も対応表の行になる。
+    member: 'メンバー',
   };
 
   function _s(v) { return v == null ? '' : String(v); }

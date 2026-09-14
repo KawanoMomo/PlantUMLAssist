@@ -226,11 +226,85 @@ window.MA.classMap = (function() {
     return rows;
   }
 
-  // 対応表 1 回分。要素 → 関係の順 (関係は要素の対応に依存する)。
+  // ── メンバー (BLK-junior-20260914-1606) ──────────────────────────────
+  // クラスと関係が揃っていても、先輩が同じクラスにメソッドを足した回は行が 1 つも
+  // 出ず、「IRQCtrl が 2 メソッド多い」と分かった後は先輩の画面を見ながら
+  // `+ TransferComplete() : void` を手で打ち直すしかなかった。記法を憶えていない
+  // 身には 1 文字違いで壊れる行で、クラス・関係と同じ「＋この図にも足す」が要る。
+  // 並べるのは差のある行だけ (揃っているメンバーまで並べると表が読めなくなる)。
+
+  function _members(el) {
+    return ((el && el.members) || []).filter(function(m) {
+      return m && _s(m.name) !== '' && (m.kind === 'method' || m.kind === 'attribute');
+    });
+  }
+
+  // メンバー 1 つの見せ方。PlantUML の記法そのままではなく、可視性・引数・型が
+  // 読める形に組み直す (打ち直しの元にしないので、記法は画面に出さなくてよい)。
+  function memberName(m) {
+    if (!m) return '';
+    var vis = _s(m.visibility);
+    var tail = m.kind === 'method' ? '(' + _s(m.params) + ')' : '';
+    var type = _s(m.type) ? ' : ' + _s(m.type) : '';
+    return (vis ? vis + ' ' : '') + _s(m.name) + tail + type;
+  }
+
+  function _memberSpec(m) {
+    return {
+      kind: m.kind, visibility: m.visibility || null, name: _s(m.name),
+      params: _s(m.params), type: _s(m.type),
+      static: !!m.static, abstract: !!m.abstract,
+    };
+  }
+
+  function _memberRow(m, side, match, cls) {
+    var row = {
+      type: 'member', match: match, score: 0,
+      ref: '', refId: null, refLine: null,
+      mine: '', mineId: null, mineLine: null,
+      cls: cls.name, mineClassId: cls.mineId, mineClassLine: cls.mineLine,
+    };
+    var text = cls.name + ' . ' + memberName(m);
+    if (side === 'ref') {
+      row.ref = text; row.refLine = m.line; row.refMember = _memberSpec(m);
+    } else {
+      row.mine = text; row.mineLine = m.line;
+    }
+    return row;
+  }
+
+  // 対応の付いたクラスの組ごとに、片方にしかないメンバーを並べる。
+  function mapMembers(refParsed, mineParsed, classRows) {
+    var refEls = {}, mineEls = {};
+    _elements(refParsed).forEach(function(el) { refEls[el.id] = el; });
+    _elements(mineParsed).forEach(function(el) { mineEls[el.id] = el; });
+    var rows = [];
+    (classRows || []).forEach(function(row) {
+      if (!row.refId || !row.mineId) return;
+      var r = refEls[row.refId], m = mineEls[row.mineId];
+      if (!r || !m) return;
+      var cls = { name: row.mine || row.ref, mineId: m.id, mineLine: m.line };
+      var mineKeys = {}, refKeys = {};
+      _members(m).forEach(function(x) { mineKeys[normalize(x.name)] = true; });
+      _members(r).forEach(function(x) { refKeys[normalize(x.name)] = true; });
+      _members(r).forEach(function(x) {
+        if (mineKeys[normalize(x.name)]) return;
+        rows.push(_memberRow(x, 'ref', 'ref-only', cls));
+      });
+      _members(m).forEach(function(x) {
+        if (refKeys[normalize(x.name)]) return;
+        rows.push(_memberRow(x, 'mine', 'mine-only', cls));
+      });
+    });
+    return rows;
+  }
+
+  // 対応表 1 回分。要素 → 関係 → メンバーの順 (どちらも要素の対応に依存する)。
   function build(refParsed, mineParsed) {
     var classes = mapClasses(refParsed, mineParsed);
     var relations = mapRelations(refParsed, mineParsed, classes);
-    return { states: classes, transitions: relations, kind: 'class' };
+    var members = mapMembers(refParsed, mineParsed, classes);
+    return { states: classes, transitions: relations, members: members, kind: 'class' };
   }
 
   // ── 参照図だけの行を自分の図にも足す ──────────────────────────────
@@ -295,6 +369,18 @@ window.MA.classMap = (function() {
     if (!row || row.match !== 'ref-only') {
       return { adoptable: false, reason: '参照図だけの行しか足せません' };
     }
+    if (row.type === 'member') {
+      var mem = row.refMember;
+      if (!mem || row.mineClassLine == null) {
+        return { adoptable: false, reason: '足し先のクラスが自分の図にありません' };
+      }
+      return {
+        adoptable: true, kind: 'member', ready: true, needs: [],
+        member: mem, classLine: row.mineClassLine, className: row.cls,
+        describe: (mem.kind === 'method' ? 'メソッド' : '属性') + '「' + memberName(mem)
+          + '」を ' + row.cls + ' に足します',
+      };
+    }
     if (row.type === 'class') {
       var made = _newClass(row.ref, mineParsed, []);
       var kindLabel = KIND_LABEL[row.refKind] || KIND_LABEL['class'];
@@ -357,6 +443,24 @@ window.MA.classMap = (function() {
     if (!plan.adoptable) return null;
     var out = _s(text), res, added = [];
 
+    if (plan.kind === 'member') {
+      var mem = plan.member;
+      var line = mem.kind === 'method'
+        ? classMod.fmtMethod(mem.visibility, mem.name, mem.params, mem.type, mem.static, mem.abstract)
+        : classMod.fmtAttribute(mem.visibility, mem.name, mem.type, mem.static);
+      var next = mem.kind === 'method'
+        ? classMod.addMethod(out, plan.classLine, mem.visibility, mem.name, mem.params,
+          mem.type, mem.static, mem.abstract)
+        : classMod.addAttribute(out, plan.classLine, mem.visibility, mem.name, mem.type, mem.static);
+      if (next === out) return null;              // 足し先が読めなければ何も書かない
+      var ls = next.split('\n');
+      var at = plan.classLine;
+      for (var i = plan.classLine; i < ls.length; i++) {
+        if (_s(ls[i]) === _s(line)) { at = i + 1; break; }
+      }
+      return { text: next, line: at, added: [memberName(mem)], plan: plan };
+    }
+
     if (plan.kind === 'class') {
       res = _append(out, _fmtElement(classMod, plan.element));
       added.push(plan.element.label || plan.element.id);
@@ -382,6 +486,13 @@ window.MA.classMap = (function() {
     return (rows || []).filter(function(r) { return r.match === match; }).length;
   }
 
+  // メンバーの差は「参照図だけ / 自分だけ」しか並べないので、行数がそのまま差の数。
+  function memberDiffText(map) {
+    var mem = (map && map.members) || [];
+    if (mem.length === 0) return '';
+    return ' / メンバー差 ' + mem.length;
+  }
+
   function summary(map) {
     var rows = ((map && map.states) || []).concat((map && map.transitions) || []);
     if (rows.length === 0) return 'クラスが読めません';
@@ -390,10 +501,10 @@ window.MA.classMap = (function() {
     var exact = _count(rows, 'exact');
     var partial = _count(rows, 'partial');
     if (refOnly === 0 && mineOnly === 0) {
-      return '片方だけ 0 件 (一致 ' + exact + ' / 部分一致 ' + partial + ')';
+      return '片方だけ 0 件 (一致 ' + exact + ' / 部分一致 ' + partial + ')' + memberDiffText(map);
     }
     return '参照図だけ ' + refOnly + ' / 自分だけ ' + mineOnly
-      + ' (一致 ' + exact + ' / 部分一致 ' + partial + ')';
+      + ' (一致 ' + exact + ' / 部分一致 ' + partial + ')' + memberDiffText(map);
   }
 
   function abstractionWarning(map) {
@@ -412,6 +523,8 @@ window.MA.classMap = (function() {
     relationName: relationName,
     mapClasses: mapClasses,
     mapRelations: mapRelations,
+    mapMembers: mapMembers,
+    memberName: memberName,
     build: build,
     summary: summary,
     abstractionWarning: abstractionWarning,
@@ -422,7 +535,11 @@ window.MA.classMap = (function() {
     mineOptions: mineOptions,
     adoptPlan: adoptPlan,
     applyAdopt: applyAdopt,
-    sectionTitles: { states: 'クラス (参照図 / 自分の図)', transitions: '関係 (参照図 / 自分の図)' },
+    sectionTitles: {
+      states: 'クラス (参照図 / 自分の図)',
+      transitions: '関係 (参照図 / 自分の図)',
+      members: 'メンバー (片方にしかないもの)',
+    },
     emptyMessage: 'クラスが読めません。どちらもクラス図にしてください。',
   };
 })();

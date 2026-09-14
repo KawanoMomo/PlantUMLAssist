@@ -70,7 +70,7 @@ function build(refDsl, mineDsl) {
 }
 
 function rowOf(map, type, name) {
-  var rows = (type === 'class' ? map.states : map.transitions);
+  var rows = (type === 'class' ? map.states : (type === 'member' ? map.members : map.transitions));
   for (var i = 0; i < rows.length; i++) {
     if (rows[i].match === 'ref-only' && rows[i].ref.indexOf(name) >= 0) return rows[i];
   }
@@ -193,5 +193,94 @@ describe('クラス図の対応表 (BLK-junior-20260908-1203-wish)', function() 
     var added = clMod.parse(out.text).elements.filter(function(e) { return e.label === '共通ドライバ基底'; });
     expect(added.length).toBe(1);
     expect(/^[A-Za-z_][A-Za-z0-9_]*$/.test(added[0].id)).toBe(true);
+  });
+});
+
+// BLK-junior-20260914-1606: クラスと関係が揃っていて、中のメソッドだけが増えた回。
+// 先輩の IRQCtrl に TransferComplete / Fault が足されている。
+const SENIOR_MEMBERS = [
+  '@startuml',
+  'class IRQCtrl {',
+  '  +Enable() : void',
+  '  +TransferComplete() : void',
+  '  +Fault(code) : void',
+  '}',
+  '@enduml',
+].join('\n');
+
+const MINE_MEMBERS = [
+  '@startuml',
+  'class IRQCtrl {',
+  '  +Enable() : void',
+  '  -state : uint8',
+  '}',
+  '@enduml',
+].join('\n');
+
+describe('クラスの中のメンバーの差 (BLK-junior-20260914-1606)', function() {
+  test('先輩にしか無いメソッドが「参照図だけ」の行になる', function() {
+    var b = build(SENIOR_MEMBERS, MINE_MEMBERS);
+    var refOnly = b.map.members.filter(function(r) { return r.match === 'ref-only'; });
+    expect(refOnly.map(function(r) { return r.ref; })).toEqual([
+      'IRQCtrl . + TransferComplete() : void',
+      'IRQCtrl . + Fault(code) : void',
+    ]);
+    // 揃っているメンバー (Enable) は行にしない。表は差だけを見せる。
+    expect(b.map.members.filter(function(r) { return r.ref.indexOf('Enable') >= 0; })).toEqual([]);
+  });
+
+  test('自分にしか無いメンバーも同じ表に出て、その行から自分の図へ飛べる', function() {
+    var b = build(SENIOR_MEMBERS, MINE_MEMBERS);
+    var mineOnly = b.map.members.filter(function(r) { return r.match === 'mine-only'; });
+    expect(mineOnly.length).toBe(1);
+    expect(mineOnly[0].mine).toBe('IRQCtrl . - state : uint8');
+    expect(mineOnly[0].mineLine).toBe(4);
+  });
+
+  test('行を押すだけで自分の IRQCtrl の中に同じ 1 行が入る (聞き返さない)', function() {
+    var b = build(SENIOR_MEMBERS, MINE_MEMBERS);
+    var row = rowOf(b.map, 'member', 'TransferComplete');
+    expect(cm.adoptPlan(row, b.map, b.mine).ready).toBe(true);
+    var out = cm.applyAdopt(MINE_MEMBERS, row, b.map, b.mine, null);
+    var cls = clMod.parse(out.text).elements[0];
+    expect(cls.members.map(function(m) { return m.name; }))
+      .toEqual(['Enable', 'state', 'TransferComplete']);
+    var added = cls.members[2];
+    expect(added.kind).toBe('method');
+    expect(added.visibility).toBe('+');
+    expect(added.type).toBe('void');
+    // 足した行へ飛べる (打ち直した行と見比べる手が残らない)。
+    expect(out.line).toBe(added.line);
+    expect(out.added).toEqual(['+ TransferComplete() : void']);
+  });
+
+  test('引数のあるメソッドも引数ごと写る', function() {
+    var b = build(SENIOR_MEMBERS, MINE_MEMBERS);
+    var out = cm.applyAdopt(MINE_MEMBERS, rowOf(b.map, 'member', 'Fault'), b.map, b.mine, null);
+    var m = clMod.parse(out.text).elements[0].members.filter(function(x) { return x.name === 'Fault'; })[0];
+    expect(m.params).toBe('code');
+  });
+
+  test('足したあと組み直すと、その行が消える', function() {
+    var b = build(SENIOR_MEMBERS, MINE_MEMBERS);
+    var out = cm.applyAdopt(MINE_MEMBERS, rowOf(b.map, 'member', 'TransferComplete'), b.map, b.mine, null);
+    var b2 = build(SENIOR_MEMBERS, out.text);
+    expect(rowOf(b2.map, 'member', 'TransferComplete')).toBeNull();
+    expect(b2.map.members.filter(function(r) { return r.match === 'ref-only'; }).length).toBe(1);
+  });
+
+  test('対応の付かないクラスのメンバーは並べない (クラスごと足す行が先)', function() {
+    var senior = ['@startuml', 'class DmaCtrl {', '  +Start() : void', '}', '@enduml'].join('\n');
+    var mine = ['@startuml', 'class IRQCtrl', '@enduml'].join('\n');
+    expect(build(senior, mine).map.members).toEqual([]);
+  });
+
+  test('見出しがメンバーの差の件数も言う', function() {
+    var b = build(SENIOR_MEMBERS, MINE_MEMBERS);
+    expect(cm.summary(b.map)).toContain('メンバー差 3');
+  });
+
+  test('状態遷移図の対応表にはメンバーの節が無い (規則ごと分かれている)', function() {
+    expect(global.window.MA.stateMap.sectionTitles.members == null).toBe(true);
   });
 });

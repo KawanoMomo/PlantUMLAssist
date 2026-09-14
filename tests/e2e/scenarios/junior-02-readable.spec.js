@@ -595,3 +595,70 @@ for (const c of HOVER_CASES) {
     expect(checked).toBeGreaterThan(1);
   });
 }
+
+// BLK-junior-20260914-1606: 9 周目「先輩の変更を取り込む」クラス図の回。
+// クラスも関係も揃っていて、先輩の IRQCtrl にメソッドが 2 つ増えただけのとき、
+// 対応表には行が 1 つも出ず、先輩の画面を見ながら `+ TransferComplete() : void` を
+// 手で打ち直すしかなかった。1 文字違いで壊れる行を写す手を無くす。
+const SENIOR_IRQ = [
+  '@startuml',
+  'title ドライバ共通クラス図',
+  'class IRQCtrl {',
+  '  +Enable() : void',
+  '  +TransferComplete() : void',
+  '  +Fault(code) : void',
+  '}',
+  '@enduml',
+].join('\n');
+
+const MINE_IRQ = [
+  '@startuml',
+  'title GPIOドライバクラス図',
+  'class IRQCtrl {',
+  '  +Enable() : void',
+  '}',
+  '@enduml',
+].join('\n');
+
+test('手順2 先輩が足したメソッドを、記法を打ち直さずに自分の図へ写せる', async ({ page }) => {
+  await S.bootWithSaveDir(page, MINE_DIR);
+  await S.clearDir(page, MINE_DIR);
+  await S.clearDir(page, SENIOR_DIR);
+  await S.putDoc(page, SENIOR_DIR, 'driver_common_class', SENIOR_IRQ);
+  await page.reload();
+  await page.waitForSelector('#btn-tab-peek');
+  await page.locator('#diagram-type').selectOption('plantuml-class');
+  await page.waitForTimeout(400);
+  await S.typeDsl(page, MINE_IRQ);
+
+  // 手本を右に据える (ここまでは手順 2 のいつもの流れ)。
+  await page.locator('#btn-tab-peek').click();
+  await page.waitForSelector('#peek-modal');
+  await page.locator('.peek-file[data-file-name="driver_common_class"]').click();
+  await page.locator('#peek-compare').click();
+  await expect(page.locator('#compare-pane')).toBeVisible();
+
+  // 到達条件その1: クラスも関係も揃っているのに、増えたメソッドが行として出る。
+  const rows = page.locator('#map-list .map-row[data-map-type="member"]');
+  await expect(rows.filter({ hasText: 'TransferComplete' })).toHaveCount(1);
+  await expect(rows.filter({ hasText: 'Fault' })).toHaveCount(1);
+  // 揃っているメソッドは並ばない (差だけを読む)。
+  await expect(rows.filter({ hasText: 'Enable' })).toHaveCount(0);
+  await expect(page.locator('#map-summary')).toContainText('メンバー差 2');
+
+  // 到達条件その2: その行の「＋この図にも足す」を押すだけで、記法どおりの 1 行が
+  // 自分の IRQCtrl の中に入る (打ち直さない)。
+  await rows.filter({ hasText: 'TransferComplete' }).locator('.map-take').click();
+  await page.waitForTimeout(400);
+  await rows.filter({ hasText: 'Fault' }).locator('.map-take').click();
+  await page.waitForTimeout(400);
+
+  const text = await getEditorText(page);
+  expect(text).toContain('+ TransferComplete() : void');
+  expect(text).toContain('+ Fault(code) : void');
+
+  // 到達条件その3: 写し終われば行は消え、残りが 0 件だと画面が言う。
+  await expect(page.locator('#map-list .map-row[data-map-type="member"]')).toHaveCount(0);
+  // 先輩のファイルは読むだけ (書き換えない)。
+  expect(await S.readDoc(page, SENIOR_DIR, 'driver_common_class')).toBe(SENIOR_IRQ);
+});
