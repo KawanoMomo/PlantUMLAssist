@@ -276,6 +276,60 @@ function summarize(audits) {
   return s;
 }
 
+// BLK-reviewer-20260906-2043: summarize() は回った監査のキーだけを生やすので、
+// `--only` や監査モジュールの欠落で summary の形が run ごとに変わる。reviewer は
+// そのたびに巨大な JSON を grep -n して summary の位置とキー名を探し直していた。
+// ここは「どの run でも同じ形・同じ順・同じキー」を返す口にする。回らなかった
+// 監査は status で名指しし、数字は 0 ではなく null にする (0 件と「見ていない」を
+// 取り違えない)。フィールドの既定はここ 1 か所に書く。
+const SUMMARY_FIELDS = {
+  name: ['variants', 'undeclared', 'clean'],
+  method: ['issues'],
+  consistency: ['naming', 'unused', 'methods', 'methodReplies', 'granularity', 'events', 'count'],
+  family: ['families', 'mismatched', 'skippedPairs'],
+  trace: ['families', 'transitions', 'missing', 'partial', 'unmatchable', 'noSequence', 'grainSkipped', 'outOfScope'],
+  svg: ['files', 'missing', 'stale', 'unknown', 'missingNames', 'staleNames'],
+  density: ['families', 'counted', 'skippedNames', 'median', 'outliers', 'outlierNames'],
+  label: ['families', 'known', 'common', 'commonLabel', 'odd', 'oddNames', 'mixedNames'],
+  cohort: ['domains', 'crossFolder', 'mismatched', 'mismatchedNames', 'unpairedNames',
+    'excludedTemplateDomains', 'templateFiles', 'declared', 'conflicts', 'conflictNames',
+    'diffLines', 'sameBasePairs'],
+};
+
+// 監査 1 つ分の枠。status は 'ok' / 'skipped' (--only で外した) /
+// 'error' (読み込みや実行に失敗した) の 3 つだけ。
+function summarySlot(key, audit, counts) {
+  const slot = { status: 'skipped', message: null };
+  if (audit) {
+    slot.status = audit.status === 'ok' ? 'ok' : 'error';
+    if (audit.status !== 'ok') slot.message = audit.message || null;
+  }
+  const got = (slot.status === 'ok' && counts) ? counts : null;
+  for (const f of SUMMARY_FIELDS[key]) {
+    slot[f] = (got && got[f] !== undefined) ? got[f] : null;
+  }
+  return slot;
+}
+
+// buildReport() の結果から、位置もキーも固定の要約だけを取り出す。
+// 先頭に totalIssues を置くので、どの run でも JSON の 3 行目を読めば合計が出る。
+function summaryView(result) {
+  const r = result || {};
+  const audits = r.audits || {};
+  const summary = r.summary || {};
+  const view = {
+    generatedAt: r.generatedAt || null,
+    totalIssues: (typeof r.totalIssues === 'number') ? r.totalIssues : totalIssues(summary),
+    targets: r.targets || [],
+    docs: (r.docs || []).length,
+    audits: {},
+  };
+  for (const key of auditNames()) {
+    view.audits[key] = summarySlot(key, audits[key], summary[key]);
+  }
+  return view;
+}
+
 function totalIssues(summary) {
   let t = 0;
   if (summary.name) t += summary.name.variants + summary.name.undeclared;
@@ -441,4 +495,4 @@ function buildReport(MA, docs, options) {
   };
 }
 
-module.exports = { collectDocs, runAudits, summarize, totalIssues, buildReport, formatSummary, auditNames, baselineFiles };
+module.exports = { collectDocs, runAudits, summarize, totalIssues, buildReport, formatSummary, auditNames, baselineFiles, summaryView, SUMMARY_FIELDS };
