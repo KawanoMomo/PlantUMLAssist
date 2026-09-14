@@ -25294,8 +25294,82 @@ function updatePropsTabLabel(sel) {
   btn.title = PTL.titleFor(n);
 }
 
+// ── 名前帳 (BLK-junior-20260915-0406-wish) ──────────────────────────────────
+// 先輩の図を手本に打ち直す場面では、同じ部品の 6 図種に同じ名前が出る。
+// 図ごとに独立した GUI だと名前の対応がどこにも出ないので、開いているタブと
+// 隣のフォルダ (先輩の保存フォルダ) を 1 つの名前帳にまとめ、入力欄の下に出す。
+// 組むのは右ペインを描くたび。読み込み (fetch) は 1 回だけで、結果を使い回す。
+var _vocabFolders = [];        // 隣のフォルダの図 (読み取り専用)
+var _vocabFoldersLoaded = false;
+var _vocabSig = '';            // 組み直す必要があるかの判定キー
+
+// workspace の diagramType (`plantuml-state`) を part-vocab の図種語にする。
+function _vocabKind(diagramType) {
+  var t = String(diagramType || '');
+  var i = t.lastIndexOf('-');
+  return i >= 0 ? t.slice(i + 1) : t;
+}
+
+function _loadVocabFolders() {
+  if (_vocabFoldersLoaded) return;
+  _vocabFoldersLoaded = true;
+  var WS = window.MA.workspace;
+  if (!WS || !WS.listFolder) return;
+  fetch('/peek-dirs?dir=' + encodeURIComponent(_wsFileDir()))
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(data) {
+      var dirs = (data && Array.isArray(data.dirs)) ? data.dirs : [];
+      return Promise.all(dirs.filter(function(d) { return d && !d.current && (d.files | 0) > 0; })
+        .map(function(d) {
+          return WS.listFolder(d.path).then(function(info) {
+            return { folder: d.name, entries: (info && info.entries) || [] };
+          }).catch(function() { return null; });
+        }));
+    })
+    .then(function(list) {
+      _vocabFolders = [];
+      (list || []).forEach(function(f) {
+        if (!f) return;
+        f.entries.forEach(function(e) {
+          if (!e || !String(e.text || '').trim()) return;
+          _vocabFolders.push({ name: e.name, kind: e.kind || '', text: e.text, folder: f.folder });
+        });
+      });
+      _vocabSig = '';          // 読めたので次の描画で組み直す
+      try { renderProps(); } catch (err) { /* 描けなければ次の描画で出る */ }
+    })
+    .catch(function() {});
+}
+
+function refreshPartVocab() {
+  var PV = window.MA.partVocab;
+  var WS = window.MA.workspace;
+  if (!PV || !WS) return;
+  _loadVocabFolders();
+  var active = WS.getActive ? WS.getActive() : null;
+  var subject = PV.subjectOf(active ? active.name : '');
+  if (!subject) { PV.setCurrent(null); _vocabSig = ''; return; }
+
+  var open = (WS.list ? WS.list() : []).map(function(d) {
+    return { name: d.name, kind: _vocabKind(d.diagramType), text: d.dsl, folder: '' };
+  });
+  // 今編集中の本文はタブの保存値より新しいことがあるので、こちらを優先する。
+  open.forEach(function(d) { if (active && d.name === active.name) d.text = mmdText; });
+
+  // 同じ名前のファイルが隣のフォルダにもあれば、両方を読む
+  // (先輩の綴りを消さずに「揺れている」と言うため)。
+  var all = open.concat(_vocabFolders);
+  var sig = subject + '|' + all.map(function(d) {
+    return d.folder + '/' + d.name + ':' + String(d.text || '').length;
+  }).join(',');
+  if (sig === _vocabSig) return;
+  _vocabSig = sig;
+  PV.setCurrent(PV.collect(subject, all));
+}
+
 function renderProps(parsed) {
   if (!parsed) parsed = currentParsed;
+  refreshPartVocab();
   var sel = window.MA.selection.getSelected();
   updatePropsTabLabel(sel);
   currentModule.renderProps(sel, parsed, propsEl, {

@@ -517,6 +517,108 @@ window.MA.properties = (function() {
     return '<button id="' + id + '" style="width:100%;background:var(--accent-red);color:#fff;border:none;padding:5px 8px;border-radius:4px;cursor:pointer;font-size:12px;margin-top:8px;">' + escHtml(label) + '</button>';
   }
 
+  // ── 名前帳 (BLK-junior-20260915-0406-wish) ───────────────────────────────
+  // 同じ部品の 6 図種に出てくる名前を、入力欄のすぐ下にチップで並べる。
+  // 押せばその欄が埋まるので、手順が「先輩の図を開いて名前を探して手で打つ」から
+  // 「一覧から選ぶ」に変わる。名前帳そのものは partVocab が 1 箇所で持つ。
+  //
+  // opts: { roles, limit, placeholder, vocab }
+  //   roles … 'method' か ['method','event']。その欄に入れてよい役割だけを出す
+  //   limit … 先に出す件数 (既定 10)。残りは「＋残り N」で開く
+  function vocabPickerHtml(id, opts) {
+    var o = opts || {};
+    var PV = window.MA.partVocab;
+    if (!PV) return '';
+    var vocab = o.vocab !== undefined ? o.vocab : PV.current();
+    if (!vocab || !vocab.items.length) return '';
+    var items = PV.suggest(vocab, o.roles, {});
+    if (!items.length) return '';
+    var limit = o.limit == null ? 10 : (o.limit | 0);
+
+    // 欄に入る形。シーケンスの本文は呼び出しなので `Spi_Init()` まで入れる
+    // (チップを押した後に括弧だけ手で足す 1 手を残さない)。
+    function insertText(it) {
+      return (o.callSuffix && it.role === 'method') ? it.name + '()' : it.name;
+    }
+
+    function chip(it, hidden) {
+      return '<button type="button" class="vocab-chip" data-name="' + escHtml(it.name) + '"'
+        + ' data-role="' + escHtml(it.role) + '"'
+        + ' data-insert="' + escHtml(insertText(it)) + '"'
+        + (hidden ? ' data-rest="1" style="display:none;"' : '')
+        + ' title="' + escHtml(PV.roleLabel(it.role) + ' / ' + PV.sourceText(it)) + '">'
+        + escHtml(it.name) + '</button>';
+    }
+
+    var head = PV.summary(vocab);
+    var rest = items.length - limit;
+    return '<div id="' + escHtml(id) + '" class="vocab-picker" data-count="' + items.length + '"'
+      + ' style="margin:-4px 0 8px 0;">'
+      + '<div class="vocab-head" style="font-size:10px;color:var(--text-secondary);margin-bottom:3px;">'
+      + escHtml(head) + '</div>'
+      + '<div class="vocab-chips" style="display:flex;flex-wrap:wrap;gap:3px;">'
+      + items.map(function(it, i) { return chip(it, i >= limit); }).join('')
+      + (rest > 0
+        ? '<button type="button" class="vocab-more" style="font-size:11px;padding:1px 6px;'
+          + 'background:transparent;border:1px dashed var(--border);color:var(--text-secondary);'
+          + 'border-radius:3px;cursor:pointer;">＋残り ' + rest + '</button>'
+        : '')
+      + '</div>'
+      + '<div class="vocab-warn" style="font-size:10px;color:var(--accent-orange);margin-top:3px;"></div>'
+      + '</div>';
+  }
+
+  // bindVocabPicker: チップを押したら targetId の欄を埋める。
+  // 欄に手で打った名前が名前帳と揺れていれば、その場で 1 行出す。
+  // target は id でも要素でもよい (rich-label-editor の textarea は id を持たない)。
+  function bindVocabPicker(id, target, onPick) {
+    var box = document.getElementById(id);
+    if (typeof target === 'string') target = document.getElementById(target);
+    if (!box) return;
+    var warn = box.querySelector('.vocab-warn');
+    var PV = window.MA.partVocab;
+
+    function fire(el) {
+      if (!el) return;
+      var Evt = window.Event;
+      el.dispatchEvent(new Evt('input', { bubbles: true }));
+      el.dispatchEvent(new Evt('change', { bubbles: true }));
+    }
+
+    function review() {
+      if (!warn || !PV) return;
+      var v = target ? String(target.value || '').trim().replace(/\(.*$/, '').trim() : '';
+      warn.textContent = PV.checkName(PV.current(), v);
+    }
+
+    var chips = box.querySelectorAll('.vocab-chip');
+    for (var i = 0; i < chips.length; i++) {
+      (function(btn) {
+        btn.style.cssText = 'font-size:11px;padding:1px 6px;background:var(--bg-tertiary);'
+          + 'border:1px solid var(--border);color:var(--text-primary);border-radius:3px;'
+          + 'cursor:pointer;font-family:var(--font-mono);' + (btn.style.cssText || '');
+        btn.addEventListener('click', function() {
+          var name = btn.getAttribute('data-name');
+          if (target) { target.value = btn.getAttribute('data-insert') || name; fire(target); }
+          if (onPick) onPick(name, btn.getAttribute('data-role'));
+          review();
+        });
+      })(chips[i]);
+    }
+
+    var more = box.querySelector('.vocab-more');
+    if (more) {
+      more.addEventListener('click', function() {
+        var hidden = box.querySelectorAll('.vocab-chip[data-rest="1"]');
+        for (var j = 0; j < hidden.length; j++) hidden[j].style.display = '';
+        more.style.display = 'none';
+      });
+    }
+
+    if (target) target.addEventListener('input', review);
+    review();
+  }
+
   // ── Event binding helpers ────────────────────────────────────────────────
 
   // bindEvent: simple event binding by element ID
@@ -599,6 +701,8 @@ window.MA.properties = (function() {
     emptyListHtml: emptyListHtml,
     primaryButtonHtml: primaryButtonHtml,
     dangerButtonHtml: dangerButtonHtml,
+    vocabPickerHtml: vocabPickerHtml,
+    bindVocabPicker: bindVocabPicker,
     // Event helpers
     bindEvent: bindEvent,
     bindAllByClass: bindAllByClass,
