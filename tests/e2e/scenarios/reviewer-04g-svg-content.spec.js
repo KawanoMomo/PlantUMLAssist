@@ -71,6 +71,18 @@ async function putRawSvg(page, name, dsl) {
   fs.writeFileSync(path.join(ABS, name + '.svg'), svg, 'utf-8');
 }
 
+// 畳まれた元の DSL がコメントに包まれている svg。svg を DOM に通して書き出し直した
+// 経路ではこの形で残り、reviewer が実際に詰まった driver_common_class.svg /
+// plantuml-class.svg はどちらもこれだった。`<?…?>` しか読めないと、まさに
+// 確かめたかった 2 枚が黙って未刻印に落ちる。
+async function putCommentWrappedSvg(page, name, dsl) {
+  const svg = await render(page, dsl);
+  expect(svg).not.toBeNull();
+  const wrapped = svg.replace(/<\?(plantuml-src\s+[0-9A-Za-z_-]+\s*)\?>/g, '<!--?$1?-->');
+  expect(wrapped).toContain('<!--?plantuml-src');
+  fs.writeFileSync(path.join(ABS, name + '.svg'), wrapped, 'utf-8');
+}
+
 // 同じものを任意のフォルダに置く (覗き先の図を用意するため)。
 async function putRawSvgIn(page, dir, name, dsl) {
   const svg = await render(page, dsl);
@@ -101,7 +113,8 @@ test('手順4.10 印の無い SVG も、一覧の上で「今の puml の絵か 
   await putStampedSvg(page, 'R04g_stamped', NOW);
   await putRawSvg(page, 'R04g_raw', RAW_DSL);
   // 出力先がクロスした図: R04g_cross.svg の中身は R04g_raw の絵 (印は無い)。
-  await putRawSvg(page, 'R04g_cross', RAW_DSL);
+  // 畳まれた DSL はコメントに包まれた形 — 実物のクロスがこの形だった。
+  await putCommentWrappedSvg(page, 'R04g_cross', RAW_DSL);
   // 畳まれた元の DSL すら持たない svg (他のツールが書いたもの)。ここだけは
   // 一覧では言えないので「未刻印」のまま残り、確かめに入れる道が要る。
   fs.writeFileSync(path.join(ABS, 'R04g_blind.svg'), '<svg xmlns="http://www.w3.org/2000/svg"></svg>', 'utf-8');
