@@ -5651,6 +5651,8 @@ var _peekChangedOnly = false;  // 変更のある図だけに絞っているか
 // 自分のフォルダの一覧 (控えを読むので本文つき) と、覗いているフォルダの一覧で作る。
 var _kmMine = [];
 var _kmSubject = '';
+// BLK-junior-20260914-1906-wish: 題材の選択肢に混ざらない値。部品をまたいだ表の合図。
+var KM_ALL = '*';
 
 function _peekEls() {
   return {
@@ -7636,20 +7638,28 @@ function renderKindMatrix() {
   var subs = KM.subjects(_kmMine, _peekEntries);
   if (!subs.length) { el.host.hidden = true; return; }
   // 既定の題材は「いま開いている自分の図」の題材。今読んでいるものの続きから出す。
-  if (!_kmSubject || subs.indexOf(_kmSubject) < 0) {
+  // BLK-junior-20260914-1906-wish: ALL_SUBJECTS を選ぶと部品をまたいだ表になる。
+  if (_kmSubject !== KM_ALL && (!_kmSubject || subs.indexOf(_kmSubject) < 0)) {
     var doc = null;
     try { doc = window.MA.workspace ? window.MA.workspace.getActive() : null; } catch (e) {}
     var mine = doc ? KM.subjectOf(doc.name) : '';
     _kmSubject = (mine && subs.indexOf(mine) >= 0) ? mine : subs[0];
   }
   var who = window.MA.peekFolder ? window.MA.peekFolder.baseName(_peekDir) : _peekDir;
-  var sc = KM.scan(_kmSubject, _kmMine, _peekEntries, who);
+  var all = _kmSubject === KM_ALL ? KM.scanAll(_kmMine, _peekEntries, who) : null;
+  var sc = all ? null : KM.scan(_kmSubject, _kmMine, _peekEntries, who);
 
   var head = document.createElement('div');
   head.className = 'pkm-head';
   var sel = document.createElement('select');
   sel.id = 'peek-subject';
-  sel.title = '題材を選ぶと、その題材の 6 図種すべての対応要否がこの場に出る';
+  sel.title = '題材を選ぶと、その題材の 6 図種すべての対応要否がこの場に出る'
+    + '（すべての部品: 部品 × 図種を 1 枚の表で出す）';
+  var allOpt = document.createElement('option');
+  allOpt.value = KM_ALL;
+  allOpt.textContent = 'すべての部品';
+  if (_kmSubject === KM_ALL) allOpt.selected = true;
+  sel.appendChild(allOpt);
   subs.forEach(function(name) {
     var o = document.createElement('option');
     o.value = name;
@@ -7664,11 +7674,14 @@ function renderKindMatrix() {
   head.appendChild(sel);
   var sum = document.createElement('span');
   sum.id = 'peek-matrix-summary';
-  sum.className = sc.todo ? 'has-todo' : '';
-  sum.textContent = KM.summary(sc);
-  sum.title = who + ' と自分の保存フォルダを、題材ごとに 6 図種ぶんまとめて突き合わせた結果です';
+  sum.className = (all ? all.todo : sc.todo) ? 'has-todo' : '';
+  sum.textContent = all ? KM.summaryAll(all) : KM.summary(sc);
+  sum.title = who + ' と自分の保存フォルダを、'
+    + (all ? '部品ごとに 6 図種ぶん' : '題材ごとに 6 図種ぶん') + 'まとめて突き合わせた結果です';
   head.appendChild(sum);
   el.host.appendChild(head);
+
+  if (all) { _kmRenderGrid(el.host, all, who); return; }
 
   sc.rows.forEach(function(r) {
     var row = document.createElement('div');
@@ -7704,6 +7717,79 @@ function renderKindMatrix() {
     }
     el.host.appendChild(row);
   });
+}
+
+// 部品 × 図種の表 (BLK-junior-20260914-1906-wish)。縦が部品、横が 6 図種で、
+// セルの印がその組の対応要否。部品を選び直す往復をここで 1 回にする。
+function _kmRenderGrid(host, all, who) {
+  var KM = window.MA.kindMatrix;
+  var tbl = document.createElement('table');
+  tbl.id = 'peek-matrix-grid';
+  tbl.className = 'pkm-grid';
+
+  var hr = document.createElement('tr');
+  var corner = document.createElement('th');
+  corner.textContent = '部品';
+  hr.appendChild(corner);
+  all.kinds.forEach(function(k) {
+    var th = document.createElement('th');
+    th.setAttribute('data-kind', k.kind);
+    th.textContent = k.label;
+    hr.appendChild(th);
+  });
+  tbl.appendChild(hr);
+
+  all.rows.forEach(function(sc) {
+    var tr = document.createElement('tr');
+    tr.className = 'pkm-grow';
+    tr.setAttribute('data-subject', sc.subject);
+    tr.setAttribute('data-todo', String(sc.todo));
+    var name = document.createElement('th');
+    name.className = 'pkm-gname';
+    name.textContent = sc.subject.toUpperCase();
+    name.title = KM.summary(sc);
+    // 部品名を押すと、その部品だけの 6 行 (今までの画面) に切り替わる。
+    name.addEventListener('click', function() {
+      _kmSubject = sc.subject;
+      renderKindMatrix();
+    });
+    tr.appendChild(name);
+    sc.rows.forEach(function(r) {
+      var td = document.createElement('td');
+      td.className = 'pkm-cell';
+      td.setAttribute('data-kind', r.kind);
+      td.setAttribute('data-state', r.state);
+      td.textContent = KM.cellMark(r);
+      td.title = sc.subject.toUpperCase() + ' / ' + r.label + ' — ' + KM.rowTitle(r, who);
+      var target = KM.openTarget(r);
+      if (target) {
+        td.classList.add('pkm-can-open');
+        td.setAttribute('data-open', target);
+        td.addEventListener('click', function(ev) {
+          ev.stopPropagation();
+          showPeekFile(target);
+        });
+      }
+      tr.appendChild(td);
+    });
+    tbl.appendChild(tr);
+  });
+  host.appendChild(tbl);
+
+  var next = KM.nextCell(all);
+  var foot = document.createElement('div');
+  foot.id = 'peek-matrix-next';
+  foot.className = 'pkm-foot';
+  foot.textContent = next
+    ? '次に見るのは ' + next.subject.toUpperCase() + ' の ' + KM.kindLabel(next.kind) + '図です'
+    : '残っている組はありません';
+  host.appendChild(foot);
+
+  var leg = document.createElement('div');
+  leg.id = 'peek-matrix-legend';
+  leg.className = 'pkm-foot';
+  leg.textContent = KM.legend();
+  host.appendChild(leg);
 }
 
 function selectPeekDir(dir) {

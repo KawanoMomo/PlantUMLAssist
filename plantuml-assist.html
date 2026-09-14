@@ -4753,6 +4753,24 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 #peek-matrix .pkm-row[data-state="noted"] .pkm-mark,
 #peek-matrix .pkm-row[data-state="no-model"] .pkm-mark { color: var(--text-secondary); }
 #peek-matrix .pkm-count { color: var(--text-secondary); }
+/* 部品 × 図種の表 (BLK-junior-20260914-1906-wish)。縦が部品・横が図種で、
+   セルは 1〜2 文字の印。意味は下の凡例と各セルの title が持つ。 */
+#peek-matrix .pkm-grid { border-collapse: collapse; width: 100%; font-size: 10px; margin-top: 3px; }
+#peek-matrix .pkm-grid th, #peek-matrix .pkm-grid td {
+  border: 1px solid var(--border); padding: 1px 2px; text-align: center;
+  color: var(--text-secondary); font-weight: normal; white-space: nowrap;
+}
+#peek-matrix .pkm-grid .pkm-gname {
+  text-align: left; color: var(--text-primary); cursor: pointer; font-family: var(--font-mono);
+}
+#peek-matrix .pkm-grid .pkm-gname:hover { background: var(--bg-tertiary); }
+#peek-matrix .pkm-grid .pkm-cell[data-state="recheck"],
+#peek-matrix .pkm-grid .pkm-cell[data-state="mine-missing"] { color: var(--accent-red); }
+#peek-matrix .pkm-grid .pkm-cell[data-state="check"] { color: var(--accent); }
+#peek-matrix .pkm-grid .pkm-cell.pkm-can-open { cursor: pointer; }
+#peek-matrix .pkm-grid .pkm-cell.pkm-can-open:hover { background: var(--bg-tertiary); }
+#peek-matrix .pkm-foot { font-size: 10px; color: var(--text-secondary); padding: 1px 0; }
+#peek-matrix #peek-matrix-next { color: var(--accent); }
 #peek-matrix button.pkm-open {
   width: auto; font-size: 9px; padding: 0 5px; cursor: pointer;
   border: 1px solid var(--border); border-radius: 3px;
