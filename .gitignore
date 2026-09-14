@@ -47,6 +47,9 @@ autosave/
 # 指摘の着手状況 CLI の控え (BLK-reviewer-20260908-1803-wish)
 .assist-pins-state.json
 
+# 依頼の台帳 CLI の控え (BLK-reviewer-20260914-1906-wish)
+.assist-requests-state.json
+
 # builder がループの手順で残す run ログ (成果物ではない)
 runs/
 

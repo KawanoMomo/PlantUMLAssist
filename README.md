@@ -525,6 +525,37 @@ node tools/pins.js E:\path\to\diagrams --author reviewer  # 自分が書いた�
 終了コードは、走れば未解消の有無に関わらず 0 (件数は要約か JSON で読む)。
 引数不正・対象の `.puml` が 0 枚だけが 1。
 
+## 依頼の台帳 CLI (`npm run requests`)
+
+`指摘.md` に書いた **primary への依頼** が、いつ初めて出て・何 tick 続いていて・手が付いたかを読む。
+1 回叩くごとに 1 tick を控えに足すので、`runs/` の過去ログを遡って数え直す必要がない。
+指摘ピン (`npm run pins`) が追うのは図の行に貼った指摘、こちらが追うのは文書に書いた依頼。
+
+```bash
+npm run requests -- <指摘.md> [オプション]
+
+node tools/requests.js E:\path	o\指摘.md                              # 未解消の依頼を人が読む形で
+node tools/requests.js E:\path	o\指摘.md --docs E:\path	o\diagrams  # 着手したかも見る
+node tools/requests.js E:\path	o\指摘.md --tick 20260914-1906 --json   # run を名前で控えて JSON で
+node tools/requests.js E:\path	o\指摘.md --all                         # 解消した依頼も並べる
+```
+
+| 状況 | 意味 |
+|---|---|
+| 新規 | この tick で初めて出た依頼 |
+| 未着手 | 依頼は残っていて、名指しされた図も前回 tick から動いていない |
+| 着手 | 依頼は残っているが、名指しされた図は前回 tick から書き換わっている |
+| 再発 | 一度 `指摘.md` から消えたのに、また書かれた (退行) |
+| 解消 | 今回の `指摘.md` にはもう無い |
+
+依頼は「依頼」と書かれた見出しの下の番号つき箇条書きから 1 件ずつ切り出す (その節が無い回は
+`## 【未解消】依頼1: …` の見出しそのものを読む)。`(最優先・継続)` のような**その回の扱いを表す括弧は
+指紋から外す**ので、扱いを書き換えただけで別の依頼になることはない。名指しされた `*.puml` は
+着手を見る先として憶える。控えは `.assist-requests-state.json` に `指摘.md` ごとに分けて残り、
+`--tick` を同じラベルで 2 度渡しても tick は増えない (数え直しで継続日数が伸びない)。
+
+終了コードは、走れば依頼の有無に関わらず 0。引数不正・`指摘.md` が読めないときだけ 1。
+
 ## 設計ドキュメント
 
 - **Tier1 master spec**: `docs/superpowers/specs/2026-04-24-plantuml-tier1-complete-master.md`

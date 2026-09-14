@@ -1,4 +1,5 @@
 ﻿- BLK-reviewer-20260914-1706: 🔤`node tools/audit.js -p primary,junior --names` の 1 本で、表記揺れが「IRQCtrl ⇔ Irq_Ctrl — 揃える先: IRQCtrl」と、その宣言行 (図名:行 宣言/参照 本文) まで開いて出る(件数と正規化キーだけを見てソースを grep し直さない)
+﻿- BLK-reviewer-20260914-1906: `npm run requests` で 指摘.md の依頼ごとに「初出 tick・連続 tick 数・継続日数・新規/未着手/着手/再発/解消」が出る(1 回叩くごとに 1 tick を控えに積むので、runs/ の過去ログを遡って数え直さなくてよい)
 - BLK-primary-20260914-1906-wish: 📦引き継ぎ zip の index.html の先頭に「今回の変更と、その理由」が入り、今回変更した図だけが先に並ぶ(1 枚ごとに ±行数・反映した reviewer 指摘の文言(修正前→修正後)・未対応の指摘・図が同じ塊に出るので、口頭説明なしで新人が読める)
 - BLK-junior-20260914-1606: 🔀対応表に「メンバー (片方にしかないもの)」の節が出る。先輩が同じクラスに足したメソッド・属性が行として並び、「＋この図にも足す」で自分の図の同じクラスの中へ記法どおりに入る(手で打ち直さない)
 ﻿- BLK-reviewer-20260914-1606: POST /verify-svg の 400 が、日本語の説明と並べて ASCII だけの言い直し (errorAscii / fieldsAscii) を必ず返すので、cp932 の端末で日本語が化けても types / dir / mode の形がその応答だけで分かる。応答の文字コード自体も ?charset=ascii と Accept-Charset: shift_jis で選べる
