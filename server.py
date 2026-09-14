@@ -18,6 +18,7 @@ import time
 import urllib.parse
 import urllib.request
 import urllib.error
+import zlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -478,6 +479,53 @@ def resolve_render_request(data):
 # (途中を見せる可能性は残るが、保存は必ず通る)。
 REPLACE_RETRY_SECONDS = 2.0
 REPLACE_RETRY_INTERVAL = 0.005
+
+
+# BLK-reviewer-20260914-0906: 印 (@pua-source-sha1) の付いていない svg では、
+# 「この絵がどの図のものか」を言う手掛かりが svg 自身の中にしかない。PlantUML は
+# 書き出した svg の末尾に元の DSL を `<?plantuml-src …?>` として畳んで埋めるので、
+# それを開けば印が無くても相手を名指しできる。reviewer はこの展開を 1 枚ずつ
+# 手で書いていた (図の枚数だけ render API を叩き直していた)。
+_PLANTUML_SRC_RE = re.compile(rb'<\?plantuml-src\s+([0-9A-Za-z_-]+)\s*\?>')
+_PLANTUML_B64 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_'
+_STD_B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+_PLANTUML_B64_MAP = str.maketrans(_PLANTUML_B64, _STD_B64)
+
+
+def decode_svg_plantuml_src(svg_bytes):
+    """svg に畳まれている元の DSL を返す。埋まっていなければ None。
+
+    埋め込みは `@startuml` / `@enduml` を含まない (PlantUML がそう畳む)。
+    """
+    m = None
+    for m in _PLANTUML_SRC_RE.finditer(svg_bytes or b''):
+        pass          # 最後の 1 つが図全体の元 DSL
+    if m is None:
+        return None
+    token = m.group(1).decode('ascii').translate(_PLANTUML_B64_MAP)
+    token += '=' * (-len(token) % 4)
+    try:
+        return zlib.decompress(base64.b64decode(token), -15).decode('utf-8', 'replace')
+    except (binascii.Error, zlib.error, ValueError):
+        return None
+
+
+def normalize_dsl(text):
+    """畳まれた DSL と保存中の .puml を突き合わせるための形にそろえる。
+
+    埋め込みには `@startuml` / `@enduml` が無く、行末の空白も落ちている。
+    ここを揃えないと、同じ図でも「別物」と言ってしまう。
+    """
+    out = []
+    for line in (text or '').replace('\r\n', '\n').replace('\r', '\n').split('\n'):
+        line = line.rstrip()
+        if not line:
+            continue
+        low = line.strip().lower()
+        if low.startswith('@startuml') or low.startswith('@enduml'):
+            continue
+        out.append(line)
+    return '\n'.join(out)
 
 
 def _atomic_write_text(path, text, encoding='utf-8', newline=None):
@@ -1834,10 +1882,55 @@ class Handler(BaseHTTPRequestHandler):
         saved_kinds = self._read_saved_kinds(save_dir) if exists else {}
         for entry in entries:
             entry['savedKind'] = saved_kinds.get(entry['name'], '')
+        self._resolve_unstamped_svg_sources(save_dir, entries)
         self._send_json(200, {'files': files, 'entries': entries, 'meta': meta,
                               'dir': str(save_dir), 'exists': exists, 'roles': roles,
                               'verified': verified, 'now': now, 'gone': gone,
                               'exportLog': export_log, 'kinds': saved_kinds})
+
+    def _resolve_unstamped_svg_sources(self, save_dir, entries):
+        """印の無い svg の持ち主を、svg に畳まれた DSL から名指しする。
+
+        BLK-reviewer-20260914-0906: 印 (@pua-source-sha1) が付いていない svg は
+        「今の puml の絵ではない」までしか言えず、無関係な絵への入れ替わりは
+        印の有無では検出できない。reviewer は 1 枚ずつ render API を叩き、
+        返った svg の plantuml-src 埋め込みをデコードして相手を突き止めていた
+        (図の枚数だけ手順が線形に増える)。
+
+        埋め込みを開いて、同じフォルダの他の図の本文とそろえて突き合わせ、
+        一致したら `svgSource` にその図の sha1 を入れる。以後は印が付いていた
+        場合と同じ扱いになり、一覧の「他図の絵 / 絵が入れ替わり」がそのまま出る。
+        `svgSourceFrom` に 'stamp' / 'embedded' のどちらで分かったかを添える。
+        """
+        need = [e for e in entries if e.get('svgMtime') and not e.get('svgSource')]
+        for e in entries:
+            if e.get('svgSource'):
+                e['svgSourceFrom'] = 'stamp'
+        if not need:
+            return
+        by_norm = {}
+        for e in entries:
+            if not e.get('hash'):
+                continue
+            try:
+                raw = self._autosave_file_path(save_dir, e['name']).read_bytes()
+            except OSError:
+                continue
+            by_norm.setdefault(normalize_dsl(raw.decode('utf-8', 'replace')), e['hash'])
+        for e in need:
+            svg_path = self._autosave_file_path(save_dir, e['name']).with_suffix('.svg')
+            try:
+                src = decode_svg_plantuml_src(svg_path.read_bytes())
+            except OSError:
+                continue
+            if src is None:
+                continue
+            norm = normalize_dsl(src)
+            # 相手がこのフォルダに居なくても、「この図の絵ではない」とは言い切れる。
+            # 言わずに黙ると「未刻印 (確かめようが無い)」に落ち、reviewer は
+            # 結局その 1 枚を render API で確かめ直すことになる。
+            e['svgSource'] = by_norm.get(norm) or ('embedded:' + hashlib.sha1(norm.encode('utf-8')).hexdigest())
+            e['svgSourceFrom'] = 'embedded'
 
     def _autosave_entry(self, path):
         """1 図分の {name, mtime, size, hash, svgMtime}。読めない図でも名前だけは返す。

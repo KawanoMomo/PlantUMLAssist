@@ -50,9 +50,13 @@ test('手順5 意図した差分と、整形だけの差分を分けて言える
 test('手順5 中身が別名の図と入れ替わった保存を、その場で名指しできる', async ({ page }) => {
   await S.bootWithSaveDir(page, DIR);
   await S.clearDir(page, DIR);
-  // 保存フォルダの前提: 中身の詰まった図と、別名の雛形が並んでいる。
+  // 保存フォルダの前提: 中身の詰まった図と、その中身が入り込んでしまった別名の図。
+  // BLK-primary-20260913-0306 までは、この「別名にも同じ中身が入る」状態を
+  // 自動保存の図種キーが勝手に作っていたので、下ごしらえでは雛形を置くだけで
+  // 事故の形が出来ていた。書き先を図の名前にした今は勝手には起きないので、
+  // reviewer が見つけた事故の形 (中身が別名の図と一致している) をここで用意する。
   await S.putDoc(page, DIR, 'driver_common_class', FULL_CLASS);
-  await S.putDoc(page, DIR, 'plantuml-class', TEMPLATE_CLASS);
+  await S.putDoc(page, DIR, 'plantuml-class', FULL_CLASS);
   await S.openFolderItem(page, 'driver_common_class');
   await S.overwriteOpenedFile(page);
 

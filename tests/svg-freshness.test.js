@@ -383,3 +383,27 @@ describe('svgFreshness.scan.needsDiff — 中身を調べる対象', function() 
     expect(SF.diffLabel(['a', 'b'])).toBe('食い違いの中身を調べる（2 枚）');
   });
 });
+
+// BLK-reviewer-20260914-0906: 印が無い svg でも、畳まれた元の DSL から
+// 「今の puml の絵か」まで言える。印の突合と同じ言葉で出すと「印があった」と
+// 読めてしまうので、根拠は別の名前で持つ。
+describe('svgFreshness — 畳まれた DSL を根拠にした判定', () => {
+  var EMB_MATCH = { name: 'a', hash: 'aaa', mtime: '2026-09-14T00:00:00Z',
+    svgMtime: '2026-09-13T00:00:00Z', svgHash: 'sss', svgSource: 'aaa', svgSourceFrom: 'embedded' };
+  var EMB_DIFFER = { name: 'b', hash: 'bbb', mtime: '2026-09-14T00:00:00Z',
+    svgMtime: '2026-09-13T00:00:00Z', svgHash: 'ttt', svgSource: 'aaa', svgSourceFrom: 'embedded' };
+
+  test('畳まれた DSL が今の puml と同じなら「内容一致」と言える (未刻印にしない)', () => {
+    expect(SF.contentOf(EMB_MATCH, {})).toBe('match');
+    expect(SF.contentBasisOf(EMB_MATCH, {})).toBe('embedded');
+    expect(SF.basisText('embedded')).toBe('SVG に畳まれた元の DSL の突合');
+  });
+
+  test('畳まれた DSL でのずれは、体裁差の逃げ道を作らず作り直しを言い切る', () => {
+    expect(SF.contentOf(EMB_DIFFER, {})).toBe('differ');
+    var b = SF.contentBadge('differ', SF.contentBasisOf(EMB_DIFFER, {}));
+    expect(b.mark).toBe('内容ずれ');
+    expect(b.title).toContain('畳まれている元の DSL が、今の puml と違います');
+    expect(b.title).toContain('根拠: SVG に畳まれた元の DSL の突合');
+  });
+});
