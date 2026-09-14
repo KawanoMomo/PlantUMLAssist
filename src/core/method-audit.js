@@ -71,12 +71,23 @@ window.MA.methodAudit = (function() {
   }
 
   // クラス図の 1 図からメソッド宣言を取り出す。
-  // 返り値: { classes: [クラス名], methods: [{ cls, method, args, ret }] }
+  // 返り値: { classes: [クラス名], methods: [{ cls, method, args, ret }],
+  //           members: { クラス名: 本体に書かれた行数 } }
+  // members は「中身を 1 行も持たないクラス宣言」を見分けるために数える。
+  // メソッドだけでなく属性 (括弧の無い行) も 1 行として数える —— 数えたいのは
+  // 「宣言だけ置かれた空のクラス」であって、メソッドの有無ではない。
   function parseClassDoc(dsl) {
     var lines = _lines(dsl);
     var classes = [];
     var methods = [];
+    var members = {};
     var open = null;   // 波括弧の中にいるときの、そのクラス名
+
+    function countMember(cls, text) {
+      if (!cls) return;
+      if (String(text).trim() === '') return;
+      members[cls] = (members[cls] || 0) + 1;
+    }
 
     function addMethod(cls, text) {
       var t = String(text).replace(/^\s*[+\-#~]\s*/, '').trim();
@@ -92,6 +103,7 @@ window.MA.methodAudit = (function() {
       if (/^\s*'/.test(line)) continue;                 // コメント
       if (open !== null) {
         if (/^\s*\}/.test(line)) { open = null; continue; }
+        countMember(open, line);
         addMethod(open, line);
         continue;
       }
@@ -99,13 +111,14 @@ window.MA.methodAudit = (function() {
       if (co) {
         var cname = co[2] || co[3] || co[1];
         if (cname && classes.indexOf(cname) === -1) classes.push(cname);
+        if (cname && !(cname in members)) members[cname] = 0;
         if (/\{\s*$/.test(line)) open = cname;
         continue;
       }
       var mo = line.match(MEMBER_OUTSIDE_RE);
-      if (mo && classes.indexOf(mo[1]) !== -1) addMethod(mo[1], mo[2]);
+      if (mo && classes.indexOf(mo[1]) !== -1) { countMember(mo[1], mo[2]); addMethod(mo[1], mo[2]); }
     }
-    return { classes: classes, methods: methods };
+    return { classes: classes, methods: methods, members: members };
   }
 
   // `Spi_Init` の持ち主は `Spi`。接頭辞の無い名前 (`Init`) は持ち主なしとする。
@@ -164,6 +177,23 @@ window.MA.methodAudit = (function() {
     return ownerPrefix(event) !== '';
   }
 
+  // 「作業用の写し」を示す名前の印。📂 一覧の重複整理 (src/core/dupe-merge.js) と
+  // 同じ印を使う。読み込み順に依存しないよう、取れなければ同じ既定を自前で持つ。
+  var COPY_MARKS = ['-編集中', '-編集用', '-copy', '-コピー', '-作業中', '-bak', '-old'];
+  function _copyMarks() {
+    var dm = window.MA.dupeMerge;
+    var m = dm && dm.COPY_MARKS;
+    return (m && m.length) ? m : COPY_MARKS;
+  }
+
+  // BLK-reviewer-20260914-1406 (追記): 宣言を本体ではなく `-編集中` の写しにだけ
+  // 足しても、監査は保存フォルダを丸ごと読むので指摘は消える。本体は未修正のまま
+  // 件数が「改善」するので、控えとの sha1 比較でしか気付けなかった。
+  function isCopyDoc(name) {
+    var n = String(name == null ? '' : name);
+    return _copyMarks().some(function(mk) { return n.indexOf(mk) >= 0; });
+  }
+
   // state の図から遷移イベントを集める。
   function stateEvents(docs) {
     var out = [];
@@ -191,12 +221,19 @@ window.MA.methodAudit = (function() {
     var classes = [];
     var methods = [];
     var calls = [];
+    var classDecl = {};      // クラス名 → { docs, members }
+    var classOrder = [];
 
     list.forEach(function(d) {
       var docName = (d && d.name) || '';
       var dsl = window.MA.dslUtils.docDsl(d);
       var parsedCls = parseClassDoc(dsl);
-      parsedCls.classes.forEach(function(c) { if (classes.indexOf(c) === -1) classes.push(c); });
+      parsedCls.classes.forEach(function(c) {
+        if (classes.indexOf(c) === -1) classes.push(c);
+        if (!classDecl[c]) { classDecl[c] = { docs: [], members: 0 }; classOrder.push(c); }
+        if (classDecl[c].docs.indexOf(docName) === -1) classDecl[c].docs.push(docName);
+        classDecl[c].members += (parsedCls.members && parsedCls.members[c]) || 0;
+      });
       parsedCls.methods.forEach(function(m) {
         methods.push({ cls: m.cls, method: m.method, args: m.args, ret: m.ret, doc: docName });
       });
@@ -210,6 +247,8 @@ window.MA.methodAudit = (function() {
     // 同じ呼び出しが複数の図に出るので、メソッド名 + 引数個数でまとめる。
     var seen = {};
     var issues = [];
+    var seenDraft = {};
+    var draftOnly = [];
     calls.forEach(function(c) {
       var sig = c.method + '/' + c.args;
       if (seen[sig]) { seen[sig].docs.push(c.doc); return; }
@@ -221,6 +260,18 @@ window.MA.methodAudit = (function() {
       var cls = findClass(classes, prefix);
       var decls = methods.filter(function(m) { return _key(m.method) === _key(c.method); });
       var issue = null;
+
+      // 宣言が写し (`-編集中`) にしかないなら、本体は未修正のまま指摘だけが消える。
+      if (decls.length > 0 && !isCopyDoc(c.doc) && !seenDraft[_key(c.method)]
+          && decls.every(function(m) { return isCopyDoc(m.doc); })) {
+        var ddocs = [];
+        decls.forEach(function(m) { if (ddocs.indexOf(m.doc) === -1) ddocs.push(m.doc); });
+        seenDraft[_key(c.method)] = true;
+        draftOnly.push({
+          kind: 'draft-only', method: c.method, args: c.args, owner: prefix,
+          cls: decls[0].cls, docs: [c.doc], declDocs: ddocs,
+        });
+      }
 
       if (!cls && decls.length === 0) {
         issue = { kind: 'no-class', method: c.method, args: c.args, owner: prefix, cls: '', docs: [c.doc] };
@@ -269,7 +320,25 @@ window.MA.methodAudit = (function() {
       issues.push(issue);
     });
 
-    var ORDER = { 'no-class': 0, 'no-method': 1, arity: 2 };
+    // BLK-reviewer-20260914-1406: 「クラスを足せば指摘が消える」だけを見ていると、
+    // メソッド名をそのままクラスとして宣言した行 (`class WriteConfig`) でも件数が
+    // 減り、数値からは誤りに気付けない。中身を 1 行も持たないクラス宣言が
+    // 呼び出し・遷移イベントと同じ名前なら、宣言の付け方の誤りとして名指しする。
+    var callNames = {};
+    calls.forEach(function(c) { callNames[_key(c.method)] = true; });
+    events.forEach(function(e) { if (isApiEvent(e.event)) callNames[_key(e.event)] = true; });
+    classOrder.forEach(function(cname) {
+      var d = classDecl[cname];
+      if (!d || d.members > 0) return;
+      if (!callNames[_key(cname)]) return;
+      issues.push({
+        kind: 'method-as-class', method: cname, args: null,
+        owner: ownerPrefix(cname), cls: cname, docs: d.docs.slice(),
+      });
+    });
+    draftOnly.forEach(function(it) { issues.push(it); });
+
+    var ORDER = { 'no-class': 0, 'no-method': 1, arity: 2, 'method-as-class': 3, 'draft-only': 4 };
     issues.sort(function(a, b) {
       if (ORDER[a.kind] !== ORDER[b.kind]) return ORDER[a.kind] - ORDER[b.kind];
       return a.method < b.method ? -1 : (a.method > b.method ? 1 : 0);
@@ -297,6 +366,14 @@ window.MA.methodAudit = (function() {
       }
       return issue.method + ' (state の遷移) の宣言が ' + issue.cls + ' に無い';
     }
+    if (issue.kind === 'method-as-class') {
+      return issue.method + ' は同名の呼び出しがあるのに中身が 1 行も無いクラス宣言 ('
+        + issue.docs.join(', ') + ')。メソッド宣言を独立したクラスとして書いた誤りの疑い';
+    }
+    if (issue.kind === 'draft-only') {
+      return issue.method + '() の宣言が写しの ' + (issue.declDocs || []).join(', ')
+        + ' にしかない (本体は未修正のまま)';
+    }
     if (issue.kind === 'no-class') {
       return issue.method + '() を呼んでいるが、' + (issue.owner || '対応する型') + ' のクラスがどの図にも無い';
     }
@@ -323,6 +400,7 @@ window.MA.methodAudit = (function() {
     parseCall: parseCall,
     parseStateEvent: parseStateEvent,
     isApiEvent: isApiEvent,
+    isCopyDoc: isCopyDoc,
     excludedLine: excludedLine,
     isStateDoc: isStateDoc,
     stateEvents: stateEvents,

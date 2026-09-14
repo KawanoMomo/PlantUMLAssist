@@ -148,6 +148,68 @@ describe('method-audit — 呼び出しと宣言の突合 (BLK-reviewer-20260907
     expect(MA_.audit(docs).issues.map(i => i.kind)).toEqual(['no-class', 'no-method', 'arity']);
   });
 
+  // BLK-reviewer-20260914-1406: 指摘が減ったことを「直った」と読めるのは、
+  // 減り方が正しいときだけ。宣言の付け方の誤りは件数を増やす側に出す。
+  test('audit: メソッド名をクラスとして宣言した空のクラスを名指しする', () => {
+    var cls = { name: 'driver_common_class', dsl: [
+      '@startuml', 'class AdcRegs', 'class WriteConfig',
+      'class Adc_Driver {', '  +Adc_Init()', '}', '@enduml'].join('\n') };
+    var seq = { name: 'adc_sequence', dsl: '@startuml\nAdc_Driver -> AdcRegs : WriteConfig()\n@enduml' };
+    var r = MA_.audit([cls, seq]);
+    var mac = r.issues.filter(i => i.kind === 'method-as-class');
+    expect(mac.length).toBe(1);
+    expect(mac[0].method).toBe('WriteConfig');
+    expect(mac[0].docs).toEqual(['driver_common_class']);
+    expect(MA_.describe(mac[0])).toBe(
+      'WriteConfig は同名の呼び出しがあるのに中身が 1 行も無いクラス宣言 (driver_common_class)。'
+      + 'メソッド宣言を独立したクラスとして書いた誤りの疑い');
+    // 受け手のクラスを足しただけでは no-method は消えない (数だけ見て直ったと読めない)
+    expect(r.issues.filter(i => i.kind === 'no-method').length).toBe(1);
+  });
+
+  test('audit: 中身を持つクラスは呼び出しと同名でも疑わない', () => {
+    var cls = { name: 'c', dsl: '@startuml\nclass WriteConfig {\n  +apply()\n}\n@enduml' };
+    var seq = { name: 's', dsl: '@startuml\nA -> WriteConfig : WriteConfig()\n@enduml' };
+    expect(MA_.audit([cls, seq]).issues.filter(i => i.kind === 'method-as-class')).toEqual([]);
+  });
+
+  test('audit: 呼び出しの無い空のクラス宣言は疑わない', () => {
+    var cls = { name: 'c', dsl: '@startuml\nclass AdcRegs\nclass Adc_Driver {\n  +Adc_Init()\n}\n@enduml' };
+    var seq = { name: 's', dsl: '@startuml\nApp -> Adc_Driver : Adc_Init()\n@enduml' };
+    expect(MA_.audit([cls, seq]).issues).toEqual([]);
+  });
+
+  test('audit: 宣言が写し (-編集中) にしかなければ本体未修正として出す', () => {
+    var draft = { name: 'driver_common_class-編集中', dsl: [
+      '@startuml', 'class Timer_Driver {', '  +Timer_Init(cfg)', '}', '@enduml'].join('\n') };
+    var seq = { name: 'timer_sequence', dsl: '@startuml\nApp -> Timer_Driver : Timer_Init(cfg)\n@enduml' };
+    var r = MA_.audit([draft, seq]);
+    expect(r.issues.map(i => i.kind)).toEqual(['draft-only']);
+    expect(r.issues[0].declDocs).toEqual(['driver_common_class-編集中']);
+    expect(MA_.describe(r.issues[0])).toBe(
+      'Timer_Init() の宣言が写しの driver_common_class-編集中 にしかない (本体は未修正のまま)');
+  });
+
+  test('audit: 本体にも宣言があれば写しがあっても出さない', () => {
+    var body = { name: 'driver_common_class', dsl: [
+      '@startuml', 'class Timer_Driver {', '  +Timer_Init(cfg)', '}', '@enduml'].join('\n') };
+    var draft = { name: 'driver_common_class-編集中', dsl: body.dsl };
+    var seq = { name: 'timer_sequence', dsl: '@startuml\nApp -> Timer_Driver : Timer_Init(cfg)\n@enduml' };
+    expect(MA_.audit([body, draft, seq]).issues).toEqual([]);
+  });
+
+  test('isCopyDoc: 写しの印を持つ名前だけを写しと見る', () => {
+    expect(MA_.isCopyDoc('driver_common_class-編集中')).toBe(true);
+    expect(MA_.isCopyDoc('spi-old.puml')).toBe(true);
+    expect(MA_.isCopyDoc('driver_common_class')).toBe(false);
+  });
+
+  test('parseClassDoc: クラスごとの本体の行数を数える', () => {
+    var r = MA_.parseClassDoc('@startuml\nclass A\nclass B {\n  -x: int\n}\n@enduml');
+    expect(r.members.A).toBe(0);
+    expect(r.members.B).toBe(1);
+  });
+
   test('audit: 図が 0 枚でも落ちない', () => {
     expect(MA_.audit([]).clean).toBe(true);
     expect(MA_.audit(null).issues).toEqual([]);
