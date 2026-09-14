@@ -99,6 +99,8 @@ curl -sS -X POST http://127.0.0.1:8766/verify-svg -H "Content-Type: application/
 | `GET /tickets` | `?dir=` | 変更チケットの一覧 |
 | `POST /tickets` | `{dir, ticket}` | 変更チケットを 1 枚書く (id ごと置き換え) |
 | `DELETE /tickets` | `?dir=&id=` | 変更チケットを 1 枚消す |
+| `GET /rename-pairs` | `?dir=` | そのフォルダで打たれた置換の組 (新しい順) |
+| `POST /rename-pairs` | `{dir, from, to, hits}` | 置換の組を 1 つ覚える (同じ組は 1 行) |
 | `GET /prefs` | — | この機械に保存した設定 |
 | `POST /prefs` | — | 設定を書く |
 | `GET /env` | — | Java / jar の有無、`app` (アプリ版か)、`javaUrl` (Java が無いときの案内先) |
