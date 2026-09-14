@@ -847,3 +847,88 @@ test.describe('junior 手順2: 部品を選ぶと 6 図種が 2 列で並び、�
     await expect(page.locator('#peek-board-summary')).toContainText('自分に無し');
   });
 });
+
+// BLK-junior-20260915-0606: SPI の活動図 (手順2) を打ち直すのに、実在メソッド名
+// (Spi_Init / Spi_Reset / Spi_Transmit / Notify) を知る手段が先輩の相乗りクラス図
+// (driver_common_class、8 部品が 1 枚) しか無かった。名前帳はクラス図タブ・状態遷移図・
+// シーケンスの欄にしか出ておらず、しかも名前帳は「ファイル名に部品名がある図」しか
+// 読まないので、この 1 枚は名前帳の外に居た。結果、活動図タブを離れて別タブで
+// クラス図を開き、絞り込み、名前を控えて戻る往復が図種をまたぐたびに要った。
+const SENIOR_COMMON_CLASS = [
+  '@startuml',
+  'title ドライバ共通クラス図',
+  'class Driver_Base {',
+  '  +Init() : void',
+  '}',
+  'class Spi_Driver {',
+  '  +Spi_Init() : void',
+  '  +Spi_Reset() : void',
+  '  +Spi_Transmit(buf, len) : void',
+  '  +Notify() : void',
+  '}',
+  'class Uart_Driver {',
+  '  +Uart_Send() : void',
+  '}',
+  'Spi_Driver --|> Driver_Base',
+  'Uart_Driver --|> Driver_Base',
+  '@enduml',
+].join('\n');
+
+const MY_SPI_ACT = [
+  '@startuml',
+  'title SPIドライバ初期化',
+  'start',
+  'stop',
+  '@enduml',
+].join('\n');
+
+test('手順2 活動図の本文を、先輩のクラス図タブに行かずに名前帳から打てる', async ({ page }) => {
+  await S.bootWithSaveDir(page, MINE_DIR);
+  await S.clearDir(page, MINE_DIR);
+  await S.clearDir(page, SENIOR_DIR);
+  await S.putDoc(page, SENIOR_DIR, 'driver_common_class', SENIOR_COMMON_CLASS);
+  await page.reload();
+  await page.waitForSelector('#btn-tab-peek');
+  await page.locator('#diagram-type').selectOption('plantuml-activity');
+  await page.waitForTimeout(400);
+  await S.renameActive(page, 'spi_activity');
+  await S.typeDsl(page, MY_SPI_ACT);
+  await page.waitForTimeout(1200);
+
+  // 活動図タブを開いたまま。右ペインの「末尾に追加 / Action」の本文欄に名前帳が出る。
+  await page.locator('#ac-tail-kind').selectOption('action');
+  await page.waitForSelector('#ac-tail-text');
+
+  // 到達条件その1: ファイル名に部品名の無い相乗り図の中からでも、
+  // SPI のメソッドだけが候補に並ぶ (他部品の Uart_Send は混ざらない)。
+  const picker = page.locator('#ac-tail-text-vocab');
+  await expect(picker).toBeVisible();
+  await expect(picker.locator('.vocab-head')).toContainText('SPI の名前帳');
+  for (const m of ['Spi_Init', 'Spi_Reset', 'Spi_Transmit', 'Notify']) {
+    await expect(picker.locator('.vocab-chip[data-name="' + m + '"]')).toHaveCount(1);
+  }
+  await expect(picker.locator('.vocab-chip[data-name="Uart_Send"]')).toHaveCount(0);
+
+  // 到達条件その2: 押せば括弧まで入り、そのままアクションとして足せる。
+  await picker.locator('.vocab-chip[data-name="Spi_Init"]').click();
+  await expect(page.locator('#ac-tail-text')).toHaveValue('Spi_Init()');
+  await page.locator('#ac-tail-add').click();
+  await page.waitForTimeout(400);
+  expect(await getEditorText(page)).toContain(':Spi_Init();');
+
+  // 到達条件その3: 打ちかけの本文は消えない (カーソル位置に差し込む)。
+  await page.locator('#ac-tail-kind').selectOption('action');
+  await page.waitForSelector('#ac-tail-text');
+  await page.locator('#ac-tail-text').fill('Spi_Reset()\n');
+  await page.locator('#ac-tail-text').press('End');
+  await page.locator('#ac-tail-text-vocab .vocab-chip[data-name="Spi_Transmit"]').click();
+  await expect(page.locator('#ac-tail-text')).toHaveValue('Spi_Reset()\nSpi_Transmit()');
+
+  // 到達条件その4: 揺れた綴りは、その行だけを見てその場で相手の綴りが出る。
+  await page.locator('#ac-tail-text').fill('SpiTransmit');
+  await page.waitForTimeout(200);
+  await expect(page.locator('#ac-tail-text-vocab .vocab-warn')).toContainText('Spi_Transmit');
+
+  // 先輩のファイルは読むだけ (書き換えない)。
+  expect(await S.readDoc(page, SENIOR_DIR, 'driver_common_class')).toBe(SENIOR_COMMON_CLASS);
+});
