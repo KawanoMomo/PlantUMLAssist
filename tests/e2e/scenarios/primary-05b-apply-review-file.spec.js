@@ -252,3 +252,48 @@ test('手順5.5 打ち直して保存しても、開いていない図種名の�
   expect(files).not.toContain('plantuml-class');
   expect(files).not.toContain('plantuml-sequence');
 });
+
+// BLK-primary-20260913-0306-friction: 指摘を反映した図の中身が別の図で塗り潰される
+// 事故が続いており、復元は「壊れた図を全文選択して打ち直す」しかなかった
+// (driver_common_class は 59 行・約 1000 字を 1 手順で打ち直している)。
+// server は上書きの手前で前の中身を `_versions/` へ控えているので、その版を
+// 打鍵ではなく 1 クリックで今の図に流し込めることを到達条件にする。
+test('手順5.5 塗り潰された図を、打ち直さずに直前の版へ 1 クリックで戻せる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+
+  const FULL = ['@startuml', 'title Driver_Common_Class',
+    'class Driver_Common {', '  + Init() : void', '  + DeInit() : void', '}',
+    'class Spi_Driver', 'class Can_Driver', 'class Gpio_Driver', '@enduml'].join('\n');
+  const STUB = ['@startuml', 'title Sample Class', 'class Foo', '@enduml'].join('\n');
+
+  // 正しい中身を保存したあと、別の図の中身で塗り潰される (事故)。
+  await S.putDoc(page, DIR, 'driver_common_class', FULL);
+  await S.putDoc(page, DIR, 'driver_common_class', STUB);
+  expect(await S.readDoc(page, DIR, 'driver_common_class')).toContain('class Foo');
+
+  await page.locator('#btn-tab-folder').click();
+  await page.waitForSelector('#folder-panel.open');
+  // 到達条件 1: 壊れた図の行から、控えてある版に辿り着ける。
+  await page.locator('[data-versions-name="driver_common_class"]').click();
+  const restore = page.locator('[data-version-restore][data-version-of="driver_common_class"]').first();
+  await restore.waitFor({ timeout: 10000 });
+
+  // 到達条件 2: 1 クリックで、打ち直し無しに中身が戻る。
+  await restore.click();
+  await page.waitForTimeout(1200);
+  const lock = page.locator('#source-lock-modal');
+  if (await lock.isVisible().catch(() => false)) {
+    await page.locator('#source-lock-overwrite').click();
+    await page.waitForTimeout(800);
+  }
+  const editor = await page.locator('#editor').inputValue();
+  expect(editor).toContain('class Driver_Common {');
+  expect(editor).not.toContain('class Foo');
+
+  // 到達条件 3: 保存フォルダの実体も戻っている (画面だけが直った状態にしない)。
+  await page.waitForTimeout(1200);
+  expect(await S.readDoc(page, DIR, 'driver_common_class')).toContain('class Driver_Common {');
+
+  await S.clearDir(page, DIR);
+});

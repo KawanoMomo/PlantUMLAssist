@@ -8184,6 +8184,7 @@ function setupTabs() {
   // 版の一覧を、押した行のすぐ下に開く / 閉じる。パネルを閉じないので、
   // 「どの版がその図だったか」を見比べてから 1 回で開ける。
   function toggleVersionList(name, btn) {
+    var VH = window.MA.versionHistory;
     var host = btn.parentNode || panel;
     var open = panel.querySelector('[data-version-list="' + name + '"]');
     if (open) { open.parentNode.removeChild(open); return; }
@@ -8212,7 +8213,25 @@ function setupTabs() {
           ev.stopPropagation();
           openVersion(name, r.stamp);
         });
-        box.appendChild(b);
+        // 版と「戻す」は 1 行に並べる (どの版に戻すのかを押す前に確かめられるように)。
+        var line = document.createElement('div');
+        line.className = 'folder-version-row';
+        line.appendChild(b);
+        // BLK-primary-20260913-0306-friction: 別タブで開いても、壊れた図を直すには
+        // 開いた版を全文選択して打ち直すしかなかった。その 1 手順を 1 クリックにする。
+        var rb = document.createElement('button');
+        rb.type = 'button';
+        rb.className = 'folder-version-restore';
+        rb.setAttribute('data-version-restore', r.stamp);
+        rb.setAttribute('data-version-of', name);
+        rb.textContent = VH.restoreLabel();
+        rb.title = VH.restoreTitle(name, r.stamp);
+        rb.addEventListener('click', function(ev) {
+          ev.stopPropagation();
+          restoreVersionInto(name, r.stamp);
+        });
+        line.appendChild(rb);
+        box.appendChild(line);
       });
     }, function() { box.textContent = '版の一覧を読めませんでした'; });
   }
@@ -8250,6 +8269,50 @@ function setupTabs() {
         window.MA.toast.show(name + ' の ' + (VH ? VH.label(stamp) : stamp)
           + ' の版を別タブで開きました（今の図はそのままです）');
       }
+    });
+  }
+
+  // 版を今の図に流し込む (BLK-primary-20260913-0306-friction)。
+  // 開いていない図なら先に開いてから当てる — 当てる先がタブとして見えていないと、
+  // 「戻した」のがどの図なのかが画面のどこにも出ない。
+  // 当てるのは _applyLineEditText なので、undo 1 手で戻せて保存フォルダにも書かれる
+  // (server は上書きの手前で今の中身を控えるので、戻し自体も失われない)。
+  function restoreVersionInto(name, stamp) {
+    var VH = window.MA.versionHistory;
+    var dir = _wsFileDir();
+    var url = '/autosave-versions?dir=' + encodeURIComponent(dir)
+      + '&type=' + encodeURIComponent(name) + '&stamp=' + encodeURIComponent(stamp);
+
+    function finish(text) {
+      if (!_applyLineEditText(text)) {
+        if (window.MA.toast) window.MA.toast.show(VH.unchangedLine(name, stamp));
+        return;
+      }
+      if (window.MA.toast) window.MA.toast.show(VH.restoredLine(name, stamp));
+      appendSaveStatus(VH.restoredLine(name, stamp));
+    }
+
+    window.fetch(url).then(function(r) { return r.ok ? r.text() : null; }).then(function(text) {
+      if (text == null) {
+        if (window.MA.toast) window.MA.toast.show('この版を読めませんでした');
+        return;
+      }
+      var active = window.MA.workspace.getActive();
+      if (active && active.name === name) {
+        closePanel();
+        finish(text);
+        return;
+      }
+      saveActiveDoc();
+      _ensureSavedKinds(dir).then(function() {
+        window.MA.workspace.loadFile(name, dir).then(function(cur) {
+          closePanel();
+          var base = cur == null ? text : cur;
+          openExistingFile({ name: name, dsl: base, diagramType: _folderOpenType(name, base) });
+          applyActiveDoc();
+          finish(text);
+        }, function() { closePanel(); });
+      }, function() { closePanel(); });
     });
   }
 
