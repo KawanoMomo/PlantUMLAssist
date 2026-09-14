@@ -6725,16 +6725,24 @@ function _noteApplyRename(plan) {
     if (!files.length) return { ok: false, message: '当てる図がありません' };
     var done = [];
     var hits = 0;
+    var pairs = [];
     return files.reduce(function(chain, f) {
       return chain.then(function() {
         return WS.loadFile(f.file, f.dir).then(function(dsl) {
           var n = dsl == null ? 0 : BR.countIn(dsl, plan.from);
           if (!n) return null;
-          return WS.saveToFile({ name: f.name, dsl: BR.replaceIn(dsl, plan.from, plan.to) }, f.dir)
-            .then(function(ok) { if (ok) { hits += n; done.push(f.name); } });
+          var next = BR.replaceIn(dsl, plan.from, plan.to);
+          return WS.saveToFile({ name: f.name, dsl: next }, f.dir)
+            .then(function(ok) {
+              if (!ok) return;
+              hits += n; done.push(f.name);
+              pairs.push({ name: f.name, before: dsl, after: next });
+            });
         }).catch(function() { return null; });
       });
     }, Promise.resolve()).then(function() {
+      // [適用] は保存フォルダへ直接書くので、ここで前後を控えないと後から出せない。
+      _recordWrite('note-rename', { from: plan.from, to: plan.to }, pairs);
       return done.length
         ? { ok: true, done: done, hits: hits }
         : { ok: false, message: '「' + plan.from + '」は保存フォルダの図に見当たりません' };
@@ -6750,6 +6758,7 @@ function _noteApplyVerdict(plan) {
   var files = _noteMineFiles(plan);
   if (!WS || !DV || !files.length) return Promise.resolve({ ok: false, message: '印を書ける図がありません' });
   var done = [];
+  var pairs = [];
   return files.reduce(function(chain, f) {
     return chain.then(function() {
       return WS.loadFile(f.file, f.dir).then(function(dsl) {
@@ -6759,11 +6768,14 @@ function _noteApplyVerdict(plan) {
         var next = DV.applyMark(dsl, 'separate', domain, plan.otherFolder);
         if (next === dsl) { done.push(f.name); return null; }
         return WS.saveToFile({ name: f.name, dsl: next }, f.dir).then(function(ok) {
-          if (ok) done.push(f.name);
+          if (!ok) return;
+          done.push(f.name);
+          pairs.push({ name: f.name, before: dsl, after: next });
         });
       }).catch(function() { return null; });
     });
   }, Promise.resolve()).then(function() {
+    _recordWrite('note-verdict', { note: plan.otherFolder ? plan.otherFolder + ' とは別物' : '' }, pairs);
     return done.length ? { ok: true, done: done } : { ok: false, message: '書き戻せませんでした' };
   });
 }
@@ -10258,6 +10270,23 @@ function _captureBeforeRename(from, to, docs, changed) {
   } catch (e) { /* 控えが残せなくても置換自体は通す */ }
 }
 
+// ── 保存フォルダへの書き込み履歴 (BLK-primary-20260914-1206-wish) ───────────
+// ⇄ 一括置換・🔖 指摘から選ぶの [適用] はタブを開かずに保存フォルダへ書き戻すので、
+// 「その図を開いていたセッション」の中でしか残らない変更前の控え (before-snapshot)
+// では後から前後を出せない。書き込み操作 1 回ぶんを、当たった図の前後の本文ごと
+// 控える。ブラウザを開き直しても、その図を一度も開いていなくても並べられる。
+function _recordWrite(kind, meta, pairs) {
+  var WH = window.MA.writeHistory;
+  if (!WH) return null;
+  try {
+    var entry = WH.makeEntry(kind, meta, pairs, new Date().toISOString());
+    if (!entry) return null;
+    WH.record(_reviewStore(), _wsFileDir(), entry);
+    if (typeof renderWriteHistory === 'function') renderWriteHistory();
+    return entry;
+  } catch (e) { return null; }   // 控えが残せなくても書き込み自体は通す
+}
+
 // ── 過去の置換の組 (BLK-primary-20260914-1106-friction) ─────────────────────
 // ヒット件数は置換前・置換後を打ち終えてからしか出ないので、同じ組を当て直す
 // 運用では「もう残っていないこと」を確かめるためだけに毎回打ち直していた。
@@ -11050,7 +11079,7 @@ function applyRenameToUnopenedFiles(from, to) {
       if (!ok) { res.failed++; return; }
       res.docs++;
       res.total += n;
-      res.rows.push({ name: r.name, count: n });
+      res.rows.push({ name: r.name, count: n, before: r.dsl, after: next });
       // 読み込み済みの控えも進めておく。次のプレビューが古い本文を数えないように。
       _fiFileDocs.forEach(function(d) { if (d.name === r.name) d.dsl = next; });
       if (window.MA.saveDiff) { try { window.MA.saveDiff.mark(r.name, next); } catch (e) {} }
@@ -11142,6 +11171,14 @@ function renameAcrossDocs(from, to, docs) {
   // する (Ctrl+Z で戻すと変更後が消えるので、往復では見せられない)。
   _captureBeforeRename(from, to, docs, res.changed);
 
+  // 前後の組を res に添える。保存フォルダへ書いた回として控えるのは呼び出し側
+  // (開いている図とフォルダ直書きを 1 回の置換として 1 件にまとめるため)。
+  var _before = {};
+  (docs || []).forEach(function(d) { if (d && d.id != null) _before[d.id] = String(d.dsl == null ? '' : d.dsl); });
+  res.pairs = res.changed.map(function(c) {
+    return { name: c.name, before: _before[c.id] || '', after: String(c.dsl == null ? '' : c.dsl) };
+  });
+
   // アクティブな図はエディタごと差し替える。undo は 1 手で戻せるようにする。
   if (window.MA.history) window.MA.history.pushHistory();
   res.changed.forEach(function(c) {
@@ -11189,6 +11226,15 @@ function renameGlossaryPairs(pairs) {
     if (n > 0) { next.push({ id: d.id, dsl: dsl }); total += n; }
   });
   if (!next.length) return { total: 0, docs: 0 };
+
+  // 確定も保存フォルダへ書き戻す操作なので、前後を 1 件として控える。
+  var _gBefore = {};
+  _renameDocs().forEach(function(d) { if (d && d.id != null) _gBefore[d.id] = String(d.dsl == null ? '' : d.dsl); });
+  _recordWrite('glossary', { note: pairs.length + ' 組' }, next.map(function(c) {
+    var d = null;
+    WS.list().forEach(function(x) { if (x.id === c.id) d = x; });
+    return { name: d ? d.name : '', before: _gBefore[c.id] || '', after: c.dsl };
+  }));
 
   if (window.MA.history) window.MA.history.pushHistory();
   next.forEach(function(c) {
@@ -12065,6 +12111,11 @@ function setupBulkRename() {
       _recordRename(from, to, ((res && res.changed) || []).map(function(c) {
         return { name: c.name, count: c.count };
       }).concat(f.rows || []));
+      // 前後の本文も 1 件として控える。会議で「今日のこの回」を選んで並べられる。
+      _recordWrite('rename', { from: from, to: to },
+        ((res && res.pairs) || []).concat((f.rows || []).map(function(r) {
+          return { name: r.name, before: r.before, after: r.after };
+        })));
       fromEl.value = '';
       toEl.value = '';
       fillCandidates();
@@ -13512,6 +13563,114 @@ function renderCompareDiffView() {
   }
 }
 
+// ── 書き込み履歴から並べる (BLK-primary-20260914-1206-wish) ─────────────────
+// 保存フォルダへ直接書いた操作は、その図を開いていなくても前後が残っている。
+// 編集中の図に当たる回を、参照ペインの候補として出す。
+function _activeWriteHistory(docs, activeId) {
+  var WH = window.MA.writeHistory;
+  if (!WH || activeId == null) return [];
+  var active = null;
+  (docs || []).forEach(function(d) { if (d && d.id === activeId) active = d; });
+  if (!active) return [];
+  try {
+    return WH.forDoc(_reviewStore(), _wsFileDir(), active.name).map(function(e) {
+      var pair = WH.pairOf(e, active.name) || {};
+      return {
+        id: e.id,
+        name: active.name,
+        dsl: pair.before || '',
+        label: WH.optionLabel(e, active.name),
+      };
+    }).filter(function(h) { return h.dsl; });
+  } catch (e) { return []; }
+}
+
+// 一覧: そのフォルダで行った書き込み操作を新しい順に並べる。行を押すと
+// その図を開き、その回の変更前を並べた状態にする (会議の「見せたい回を選ぶ」)。
+function renderWriteHistory() {
+  var WH = window.MA.writeHistory;
+  var listEl = document.getElementById('compare-hist-list');
+  var sum = document.getElementById('compare-hist-summary');
+  if (!WH || !listEl) return;
+  var entries = [];
+  try { entries = WH.list(_reviewStore(), _wsFileDir()); } catch (e) { entries = []; }
+  if (sum) sum.textContent = entries.length ? entries.length + ' 回' : '記録なし';
+  listEl.textContent = '';
+  if (!entries.length) {
+    var empty = document.createElement('div');
+    empty.id = 'compare-hist-empty';
+    empty.style.cssText = 'font-size:10px;color:var(--text-secondary);padding:4px 8px;';
+    empty.textContent = '⇄ 一括置換・🔖 [適用] で保存フォルダへ書くと、'
+      + 'その回の前後がここに残ります (ブラウザを開き直しても残ります)。';
+    listEl.appendChild(empty);
+    return;
+  }
+  entries.forEach(function(e) {
+    var row = document.createElement('div');
+    row.className = 'wh-entry';
+    row.setAttribute('data-hist-id', e.id);
+    var head = document.createElement('div');
+    head.className = 'wh-head';
+    head.textContent = WH.label(e);
+    row.appendChild(head);
+    (e.files || []).forEach(function(f) {
+      var fr = document.createElement('button');
+      fr.type = 'button';
+      fr.className = 'wh-file';
+      fr.setAttribute('data-doc-name', f.name);
+      fr.textContent = f.name;
+      fr.title = f.name + ' のこの回の変更前を並べて見る';
+      fr.addEventListener('click', function() { showWriteHistoryPair(e.id, f.name); });
+      row.appendChild(fr);
+    });
+    var drop = document.createElement('button');
+    drop.type = 'button';
+    drop.className = 'wh-drop';
+    drop.textContent = '捨てる';
+    drop.title = 'この回の控えを捨てる';
+    drop.addEventListener('click', function() {
+      try { WH.drop(_reviewStore(), _wsFileDir(), e.id); } catch (err) {}
+      if (_compareRefId === (window.MA.compareView.HIST_PREFIX + e.id)) {
+        _compareRefId = null;
+        _compareShownDsl = null;
+      }
+      renderWriteHistory();
+      renderCompareView();
+    });
+    row.appendChild(drop);
+    listEl.appendChild(row);
+  });
+}
+
+// その回・その図を並べた状態にする。開いていない図はフォルダから開く
+// (開いてからでないと「今」の側が出せない)。
+function showWriteHistoryPair(entryId, name) {
+  var WS = window.MA.workspace;
+  var CV = window.MA.compareView;
+  if (!CV) return;
+  var target = null;
+  ((WS && WS.list()) || []).forEach(function(d) { if (d.name === name) target = d; });
+  var go = function() {
+    _compareRefId = CV.HIST_PREFIX + entryId;
+    _compareShownDsl = null;
+    toggleCompareView(true, 'ref');
+    renderCompareView();
+  };
+  if (target) { switchToDoc(target.id); go(); return; }
+  openFromFolderByName(name);
+  window.setTimeout(go, 400);
+}
+
+function toggleWriteHistory(open) {
+  var listEl = document.getElementById('compare-hist-list');
+  var btn = document.getElementById('btn-compare-hist');
+  if (!listEl) return;
+  var show = (open == null) ? listEl.hidden : !!open;
+  listEl.hidden = !show;
+  if (btn) btn.setAttribute('aria-expanded', show ? 'true' : 'false');
+  if (show) renderWriteHistory();
+}
+
 // 編集中の図の「変更前スナップショット」(BLK-primary-20260908-2203-wish)。
 // 一括置換を当てたときにだけ控えられる。今の本文と同じなら null を返す
 // (並べても何も見えない候補を選択肢に出さない)。
@@ -13535,7 +13694,7 @@ function _renderCompareBeforeNote(snap, ref) {
   var sel = document.getElementById('compare-select');
   if (!pane || !sel) return;
   var note = document.getElementById('compare-before-note');
-  var showing = !!(snap && ref && ref.isBefore);
+  var showing = !!(snap && ref && ref.isBefore && !ref.isHistory);
   if (!showing) { if (note) note.remove(); return; }
   if (!note) {
     note = document.createElement('div');
@@ -13586,8 +13745,10 @@ function renderCompareView() {
   var docs = _compareDocs();
   var activeId = window.MA.workspace ? window.MA.workspace.getActiveId() : null;
   var snap = _activeBeforeSnapshot(docs, activeId);
-  var ref = cv.pick(docs, activeId, _compareRefId, snap);
-  var opts = cv.options(docs, activeId, snap);
+  var hist = _activeWriteHistory(docs, activeId);
+  var ref = cv.pick(docs, activeId, _compareRefId, snap, hist);
+  var opts = cv.options(docs, activeId, snap, hist);
+  renderWriteHistory();
 
   sel.textContent = '';
   opts.forEach(function(o) {
@@ -13599,7 +13760,8 @@ function renderCompareView() {
     // どこの図かは名前だけで読める)。
     op.textContent = (o.isBefore || o.isPeek) ? o.name
       : o.name + ' (' + String(o.diagramType || '').replace('plantuml-', '') + ')';
-    if (o.isBefore) op.setAttribute('data-before', '1');
+    if (o.isBefore && !o.isHistory) op.setAttribute('data-before', '1');
+    if (o.isHistory) op.setAttribute('data-hist', '1');
     if (o.isPeek) op.setAttribute('data-peek', '1');
     if (ref && o.id === ref.id) op.selected = true;
     sel.appendChild(op);
@@ -13621,7 +13783,7 @@ function renderCompareView() {
   }
 
   _compareRefId = ref.id;
-  var full = cv.doc(docs, ref.id, activeId, snap) || {};
+  var full = cv.doc(docs, ref.id, activeId, snap, hist) || {};
   var dsl = full.dsl || '';
   if (dsl === _compareShownDsl) return;   // 中身が変わっていなければ描き直さない
   _compareShownDsl = dsl;
@@ -14841,6 +15003,8 @@ function setupCompareView() {
   var close = document.getElementById('btn-compare-close');
   if (btn) btn.addEventListener('click', function() { toggleCompareView(null, 'ref'); });
   if (close) close.addEventListener('click', function() { toggleCompareView(false); });
+  var histBtn = document.getElementById('btn-compare-hist');
+  if (histBtn) histBtn.addEventListener('click', function() { toggleWriteHistory(); });
   var mRef = document.getElementById('compare-mode-ref');
   var mDiff = document.getElementById('compare-mode-diff');
   if (mRef) mRef.addEventListener('click', function() { setCompareMode('ref'); });
