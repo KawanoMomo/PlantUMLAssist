@@ -15,6 +15,7 @@ const path = require('path');
 const { loadMA } = require('./audit-runtime');
 const report = require('./audit-report');
 const auditScope = require('../src/core/audit-scope');
+const versionDiff = require('../src/core/version-diff');
 
 // 前回比較用の控え。CLI を打つ場所 (リポジトリ直下) に置く。
 const STATE_FILE = '.assist-audit-last.json';
@@ -43,6 +44,9 @@ const USAGE = [
   '  --personas a,b (-p) ペルソナ名だけで保存フォルダを対象にする (長いパスを打たない)。',
   '                 根は PUA_PERSONA_DATA、既定はリポジトリの隣の persona-data',
   '  --pairs-max N 突合の差分行を N 組まで出す (既定 10、0 で全部)。',
+  '  --versions    監査は回さず、保存フォルダの各図を `_versions/` の直前版と',
+  '                突き合わせて差分を出す。上書きで中身が失われた図を名指しする',
+  '  --versions-max N  --versions が 1 枚あたりに出す差分行を N 行まで (既定 6、0 で全部)',
   '  --no-state    前回比較用の控え (.assist-audit-last.json) を読み書きしない',
   '  --help        この説明',
 ].join('\n');
@@ -82,8 +86,54 @@ function _num(v, flag) {
   return n === 0 ? Infinity : n;
 }
 
+// --versions の行数上限。こちらは 0 を「全部」の合図としてそのまま下へ渡す
+// (formatSummary が 0 を全部と読む)。
+function _vnum(v, flag) {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n < 0) throw new Error(flag + ' には 0 以上の数を渡します: ' + v);
+  return n;
+}
+
+// 保存フォルダ 1 つ分の「いまの中身」と「直前の退避版」を読む。
+// `_versions/` に降りるのはここだけで、判定は src/core/version-diff.js が持つ。
+// 読めないファイルは「控えなし」と同じ扱いにする (1 枚のせいで全部を落とさない)。
+function versionEntries(dir) {
+  const vdir = path.join(dir, versionDiff.DIRNAME);
+  let vfiles = [];
+  try { vfiles = fs.readdirSync(vdir); } catch (e) { vfiles = []; }
+  const latest = versionDiff.latestByName(vfiles);
+  let names = [];
+  try {
+    names = fs.readdirSync(dir).filter((f) => /\.puml$/i.test(f));
+  } catch (e) {
+    throw new Error('保存フォルダが読めません: ' + dir + ' — ' + e.message);
+  }
+  return names.sort().map((f) => {
+    const stem = f.slice(0, -5);
+    const pick = latest[stem] || null;
+    let current = '';
+    try { current = fs.readFileSync(path.join(dir, f), 'utf-8'); } catch (e) { current = ''; }
+    let previous = null;
+    if (pick) {
+      try { previous = fs.readFileSync(path.join(vdir, pick.file), 'utf-8'); } catch (e) { previous = null; }
+    }
+    return { name: f, current, previous, stamp: pick ? pick.stamp : '' };
+  });
+}
+
+// --versions の本体。監査モジュールを 1 つも読まないので、GUI が壊れていても
+// 保存フォルダさえ読めれば動く (事故の直後に打つのはこの口)。
+function runVersions(targets, max) {
+  for (const dir of targets) {
+    const rep = versionDiff.report(versionEntries(dir));
+    console.log(path.resolve(dir));
+    console.log(versionDiff.formatSummary(rep, max));
+  }
+  return 0;
+}
+
 function parseArgs(argv) {
-  const opts = { targets: [], only: null, summary: false, out: null, help: false, since: null, sinceFiles: null, state: true, pairsMax: 0, personas: null };
+  const opts = { targets: [], only: null, summary: false, out: null, help: false, since: null, sinceFiles: null, state: true, pairsMax: 0, personas: null, versions: false, versionsMax: 6 };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--help' || a === '-h') opts.help = true;
@@ -102,6 +152,9 @@ function parseArgs(argv) {
     else if (a.indexOf('--personas=') === 0) opts.personas = a.slice(11).split(',').map((s) => s.trim()).filter(Boolean);
     else if (a === '--pairs-max') opts.pairsMax = _num(argv[++i], a);
     else if (a.indexOf('--pairs-max=') === 0) opts.pairsMax = _num(a.slice(12), '--pairs-max');
+    else if (a === '--versions') opts.versions = true;
+    else if (a === '--versions-max') opts.versionsMax = _vnum(argv[++i], a);
+    else if (a.indexOf('--versions-max=') === 0) opts.versionsMax = _vnum(a.slice(15), '--versions-max');
     else if (a === '--no-state') opts.state = false;
     else if (a === '--out') opts.out = argv[++i];
     else if (a.indexOf('--out=') === 0) opts.out = a.slice(6);
@@ -132,6 +185,17 @@ function main(argv) {
   if (opts.help || opts.targets.length === 0) {
     console.log(USAGE);
     return opts.help ? 0 : 1;
+  }
+
+  // --versions は監査ではなく「保存フォルダの版の突き合わせ」なので、
+  // 監査モジュールの読み込みより前にここで終える。
+  if (opts.versions) {
+    try {
+      return runVersions(opts.targets, opts.versionsMax);
+    } catch (e) {
+      console.error(e.message);
+      return 1;
+    }
   }
 
   const rt = loadMA();
