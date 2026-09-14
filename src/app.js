@@ -20691,11 +20691,15 @@ function setupSaveSwap() {
 
 var _sgdAck = {};        // 図の名前 → 「このまま保存」を選んだときの顔ぶれ
 var _sgdPending = null;  // 帯を出したあと「このまま保存」で再実行する保存
+var _sgdRes = null;      // いま帯に出している突合の結果 (第 3 選択肢が書く対象)
 
 function hideSaveGuard() {
   var el = document.getElementById('save-guard-overlay');
   if (el) el.hidden = true;
   _sgdPending = null;
+  _sgdRes = null;
+  var row = document.getElementById('sgd-omit-row');
+  if (row) row.hidden = true;
 }
 
 function renderSaveGuard(res) {
@@ -20715,7 +20719,74 @@ function renderSaveGuard(res) {
     });
     list.innerHTML = html;
   }
+  // 第 3 選択肢 (意図的に省略) の理由欄は、押されるまで閉じておく。
+  _sgdRes = res;
+  var row = document.getElementById('sgd-omit-row');
+  if (row) row.hidden = true;
+  var rin = document.getElementById('sgd-omit-reason');
+  if (rin) rin.value = '';
+  renderOmitPreview();
   el.hidden = false;
+}
+
+// ── 意図的な省略 (BLK-reviewer-20260915-0106-wish) ─────────────────────────
+// 帯に出ている指摘を「宣言しないと決めた」として片づけるとき、note の自由文では
+// なく `'@omit-method Cls.Method 理由` の 1 行を図に足す。次の突合 (GUI・CLI とも
+// src/core/method-audit.js) はこの行を読んで指摘から外すので、reviewer は puml を
+// 開いて日本語の意図を読み取らなくても「意図省略で解消」と書ける。
+
+// 書き込む行を、書く前にそのまま見せる。何が図に残るかを押す前に読ませる。
+function renderOmitPreview() {
+  var pv = document.getElementById('sgd-omit-preview');
+  var OM = window.MA.omitMethod;
+  if (!pv) return;
+  if (!OM || !_sgdRes) { pv.textContent = ''; return; }
+  var rin = document.getElementById('sgd-omit-reason');
+  var reason = rin ? rin.value : '';
+  pv.textContent = omitTagLines(reason).join('\n');
+}
+
+// いま帯に出ている指摘のうち、まだ宣言が無いものぶんの行。
+function omitTagLines(reason) {
+  var OM = window.MA.omitMethod;
+  if (!OM || !_sgdRes) return [];
+  var cur = mmdText;
+  var out = [];
+  (_sgdRes.issues || []).forEach(function(i) {
+    if (OM.has(cur, i)) return;
+    out.push(OM.tagLine(i, reason));
+  });
+  return out;
+}
+
+// 理由を図に書き込んでから保存へ進む。理由が空なら書かない —— 理由の無い
+// 省略宣言は、note の自由文を機械可読にした意味が無くなる。
+function applyOmitAndSave() {
+  var OM = window.MA.omitMethod;
+  var rin = document.getElementById('sgd-omit-reason');
+  var reason = rin ? String(rin.value || '').trim() : '';
+  if (!OM || !_sgdRes) return;
+  if (!reason) {
+    var pv = document.getElementById('sgd-omit-preview');
+    if (pv) pv.textContent = '理由を書いてください（この行は図に残り、監査はここを読みます）';
+    if (rin) rin.focus();
+    return;
+  }
+  var add = omitTagLines(reason);
+  if (add.length) {
+    if (window.MA.history) { try { window.MA.history.pushHistory(); } catch (e) {} }
+    mmdText = OM.apply(mmdText, add);
+    suppressSync = true;
+    editorEl.value = mmdText;
+    suppressSync = false;
+    try { window.MA.workspace.updateActive({ dsl: mmdText }); } catch (e) {}
+    updateLineNumbers();
+    scheduleRefresh();
+    try { renderTabs(); } catch (e) {}
+  }
+  hideSaveGuard();
+  // 書き足したので、次の突合ではこの指摘は外れる (帯はもう出ない)。
+  saveFile();
 }
 
 // 保存前に呼ぶ。止めるなら true。止めないときは帯を隠して保存を続けさせる。
@@ -20748,6 +20819,24 @@ function setupSaveGuard() {
     if (p) _sgdAck[p.name] = p.sig;
     saveFile();
   });
+  var omit = document.getElementById('btn-sgd-omit');
+  if (omit) omit.addEventListener('click', function() {
+    var row = document.getElementById('sgd-omit-row');
+    if (!row) return;
+    row.hidden = false;
+    renderOmitPreview();
+    var rin = document.getElementById('sgd-omit-reason');
+    if (rin) rin.focus();
+  });
+  var omitReason = document.getElementById('sgd-omit-reason');
+  if (omitReason) {
+    omitReason.addEventListener('input', renderOmitPreview);
+    omitReason.addEventListener('keydown', function(ev) {
+      if (ev.key === 'Enter') { ev.preventDefault(); applyOmitAndSave(); }
+    });
+  }
+  var omitGo = document.getElementById('btn-sgd-omit-go');
+  if (omitGo) omitGo.addEventListener('click', applyOmitAndSave);
 }
 
 function setupSaveCheck() {

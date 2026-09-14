@@ -344,6 +344,18 @@ window.MA.methodAudit = (function() {
       return a.method < b.method ? -1 : (a.method > b.method ? 1 : 0);
     });
 
+    // BLK-reviewer-20260915-0106-wish: 「意図して宣言しない」と決めたメソッドは、
+    // note の自由文ではなく `'@omit-method Cls.Method 理由` の 1 行で宣言する。
+    // ここで突合から外し、外した分は omitted に理由ごと残す —— 黙って件数だけ
+    // 減らすと、宣言を書いた図を開かないかぎり何を外したか分からなくなる。
+    var OM = window.MA.omitMethod;
+    var omitted = [];
+    if (OM) {
+      var part = OM.partition(issues, OM.collect(list));
+      issues = part.issues;
+      omitted = part.omitted;
+    }
+
     return {
       calls: calls,
       events: events,
@@ -352,6 +364,8 @@ window.MA.methodAudit = (function() {
       classes: classes,
       methods: methods,
       issues: issues,
+      // 意図的な省略の宣言で外した指摘 (理由・宣言した図つき)。
+      omitted: omitted,
       clean: issues.length === 0,
     };
   }

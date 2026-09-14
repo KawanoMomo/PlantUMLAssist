@@ -123,6 +123,44 @@ test('手順4.9 宣言の無い呼び出しは、保存を書き込む前に GUI
   expect(await S.readDoc(page, DIR, 'spi_init_sequence')).toContain('EnableClock');
 });
 
+// BLK-reviewer-20260915-0106-wish: 「宣言しないと決めた」を note の自由文ではなく、
+// 監査ツールが読める 1 行として図に残す第 3 選択肢。reviewer は次の tick で puml を
+// 開いて意図を読み取らなくても、突合の結果だけで「意図省略で解消」と書ける。
+test('手順4.9 意図的に省略すると決めた呼び出しは、理由つきの宣言として図に残り以後止めない', async ({ page }) => {
+  await bootManualSave(page, DIR);
+  await S.clearDir(page, DIR);
+  await S.putDoc(page, DIR, 'driver_common_class', CLASS_DOC);
+  await S.putDoc(page, DIR, 'spi_init_sequence', SEQ_OK);
+
+  await S.openFolderItem(page, 'spi_init_sequence');
+  await S.typeDsl(page, SEQ_GAP);
+  await pressSave(page);
+
+  const guard = page.locator('#save-guard-overlay');
+  await expect(guard).toBeVisible();
+
+  // 第 3 選択肢。押すと理由欄が開き、図に書き込む行がそのまま見える。
+  await page.locator('#btn-sgd-omit').click();
+  await expect(page.locator('#sgd-omit-row')).toBeVisible();
+  await page.locator('#sgd-omit-reason').fill('呼び先は BSW 提供。本設計では宣言しない');
+  await expect(page.locator('#sgd-omit-preview')).toContainText("'@omit-method ClockCtrl.EnableClock");
+
+  await page.locator('#btn-sgd-omit-go').click();
+  await page.waitForTimeout(1500);
+  await expect(guard).toBeHidden();
+
+  // 保存された puml に、理由つきの宣言が 1 行残っている。
+  const saved = await S.readDoc(page, DIR, 'spi_init_sequence');
+  expect(saved).toContain("'@omit-method ClockCtrl.EnableClock 呼び先は BSW 提供。本設計では宣言しない");
+  expect(saved).toContain('EnableClock(id)');
+
+  // 突合はその行を読んで指摘から外すので、次の保存はもう止まらない。
+  await S.typeDsl(page, saved + "\n' 続き");
+  await pressSave(page);
+  await page.waitForTimeout(900);
+  await expect(guard).toBeHidden();
+});
+
 // 宣言が揃っている保存は、これまでどおり黙って通る。
 test('手順4.9 宣言が揃っていれば保存は止まらない', async ({ page }) => {
   await bootManualSave(page, DIR);
