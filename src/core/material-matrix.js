@@ -144,7 +144,51 @@ window.MA.materialMatrix = (function() {
     return ['未 資料用なし', '古 元が新しい', '済 最新'].join(' / ');
   }
 
+  // ── 部品まるごとの一括資料化 (BLK-junior-20260915-0106-wish) ───────────────
+  // 表で「TIMER に 6 図種残っている」と読めても、資料化そのものは 1 マスずつ
+  // (マスを押す → 資料化する) しかできないので、6 図種ぶん同じ往復を繰り返す
+  // ことになる。設計書に添付するのは部品の資料一式なので、手当ての要るマスは
+  // 行ごとにまとめて出せるようにする。どの図種を出すかは表の状態 (未/古) が
+  // そのまま決める —— 選び直させると、表で読んだ残りと出る枚数がずれる。
+
+  // todoKinds(row) — その部品で資料化が要る図種。並びは表の列 = 図番号順。
+  function todoKinds(row) {
+    return (((row && row.cells) || [])
+      .filter(function(c) { return c && c.todo; })
+      .map(function(c) { return c.kind; }));
+  }
+
+  // 行のボタンに出す言葉。押す前に何枚出るかを言う (数えるのは人ではない)。
+  function rowRunLabel(row) {
+    var n = todoKinds(row).length;
+    return n ? ('残り ' + n + ' 図種をまとめて資料化') : 'すべて最新';
+  }
+
+  // 流し終わったあとの 1 行。どの部品の何図種が出て、何が落ちたか。
+  function rowDoneText(component, results) {
+    var rs = Array.isArray(results) ? results : [];
+    var ng = rs.filter(function(r) { return !r || !r.ok; });
+    var ok = rs.length - ng.length;
+    if (!rs.length) return _s(component) + ' に資料化の要る図種はありません';
+    if (!ng.length) {
+      return '📚 ' + _s(component) + ' の ' + ok
+        + ' 図種をまとめて資料化しました（保存フォルダと提出物庫にも入れました）';
+    }
+    return '📚 ' + _s(component) + ' の ' + ok + ' 図種を資料化しましたが、'
+      + ng.length + ' 図種が失敗しました：'
+      + ng.map(function(r) { return (r && r.kind) ? r.kind : '不明'; }).join('・');
+  }
+
+  // 流している最中の 1 行。止まって見えないよう、今どれを出しているかを言う。
+  function rowProgressText(component, kind, at, total) {
+    return '(' + at + '/' + total + ') ' + _s(component) + ' の ' + _s(kind) + ' を資料化しています…';
+  }
+
   return {
+    todoKinds: todoKinds,
+    rowRunLabel: rowRunLabel,
+    rowDoneText: rowDoneText,
+    rowProgressText: rowProgressText,
     CELL_MARKS: CELL_MARKS,
     cellMark: cellMark,
     kinds: kinds,

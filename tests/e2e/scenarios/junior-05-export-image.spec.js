@@ -557,3 +557,51 @@ test('手順5 資料化: 実行後もモーダルが閉じず、保存先に置�
   await expect(page.locator('#folder-filter'))
     .toHaveValue('TIMERドライバ初期化アクティビティ(資料用)');
 });
+
+// 部品単位の一括資料化 (BLK-junior-20260915-0106-wish)。表で「TIMER に 3 図種
+// 残っている」と読めても、資料化は 1 マスずつ (マスを押す → 資料化する) しか
+// できず、図種の数だけ同じ往復を繰り返していた。設計書に貼るのは部品の資料一式
+// なので、行の一括ボタン 1 押しで、その部品の未/古の図種を全部まとめて出す。
+test('手順4 資料化: 部品の行を 1 押しで、未/古の図種をまとめて資料化できる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  // TIMER は 3 図種 (うち状態遷移は資料用が既にあり最新)、GPIO は 1 図種。
+  await S.putDoc(page, DIR, 'TIMERドライバ初期化シーケンス', S.GPIO_SEQ.replace(/Gpio/g, 'Timer'));
+  await S.putDoc(page, DIR, 'TIMERドライバ初期化アクティビティ', TIMER_ACTIVITY);
+  await S.putDoc(page, DIR, 'TIMERドライバ状態遷移', S.GPIO_STATE.replace(/Gpio/g, 'Timer'));
+  await S.putDoc(page, DIR, 'TIMERドライバ状態遷移(資料用)', S.GPIO_STATE.replace(/Gpio/g, 'Timer'));
+  await S.putDoc(page, DIR, 'GPIOドライバ状態遷移', S.GPIO_STATE);
+  await page.reload();
+  await page.waitForTimeout(800);
+
+  await page.locator('#btn-export').click();
+  await page.waitForSelector('#export-menu', { state: 'visible' });
+  await page.locator('#exp-material').click();
+  await page.waitForSelector('#mexp-modal', { state: 'visible' });
+  await page.waitForTimeout(900);
+
+  // 到達条件その1: 押す前に、その行で何図種出るかがボタンから読める
+  // (図種欄を開いて数え直さなくてよい)。
+  const timerRun = page.locator('tr[data-component="TIMERドライバ"] button.mexp-row-run');
+  await expect(timerRun).toHaveText('残り 2 図種をまとめて資料化');
+  await expect(timerRun).toBeEnabled();
+
+  // 到達条件その2: 1 押しで 2 図種ぶんが出る (図種を選び直さない)。
+  await timerRun.click();
+  await expect(page.locator('#mexp-state'))
+    .toContainText('2 図種をまとめて資料化しました', { timeout: 60000 });
+  await expect(page.locator('#mexp-state')).toContainText('TIMERドライバ');
+
+  // 到達条件その3: 出たのは未/古の図種だけで、形式は図種の決まりどおり。
+  await page.waitForTimeout(1200);
+  expect(await S.readDoc(page, DIR, 'TIMERドライバ初期化シーケンス(資料用)')).not.toBeNull();
+  expect(await S.readDoc(page, DIR, 'TIMERドライバ初期化アクティビティ(資料用)')).not.toBeNull();
+  // 最新だった状態遷移は出し直さない (GPIO も巻き込まない)。
+  expect(await S.readDoc(page, DIR, 'GPIOドライバ状態遷移(資料用)')).toBeNull();
+
+  // 到達条件その4: 表はその場で描き直され、TIMER の行に残りが無くなる
+  // (📂一覧へ確かめに戻らなくてよい)。
+  await expect(page.locator('tr[data-component="TIMERドライバ"] button.mexp-row-run'))
+    .toHaveText('すべて最新', { timeout: 20000 });
+  await expect(page.locator('tr[data-component="TIMERドライバ"] button.mexp-row-run')).toBeDisabled();
+});
