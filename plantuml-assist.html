@@ -5454,7 +5454,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 }
 #status-consistency:hover, #status-eventsync:hover { background: var(--bg-tertiary); }
 /* BLK-builder-20260908-0858-2 (design 7a/7b): 下端に寄せた件数表示。整合と同じ見た目に揃える */
-#status-diff, #status-pins, #status-inbox, #status-requests, #status-rename {
+#status-diff, #status-pins, #status-inbox, #status-requests, #status-rename, #status-senior {
   background: transparent;
   border: 1px solid var(--border);
   border-radius: 3px;
@@ -5465,7 +5465,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   cursor: pointer;
 }
 #status-diff:hover, #status-pins:hover, #status-inbox:hover, #status-requests:hover,
-#status-rename:hover { background: var(--bg-tertiary); }
+#status-rename:hover, #status-senior:hover { background: var(--bg-tertiary); }
+#status-senior.on { color: var(--accent); border-color: var(--accent); }
 #status-diff.has-open, #status-pins.has-open, #status-inbox.has-open, #status-requests.has-open,
 #status-rename.has-open {
   color: var(--accent-orange);
@@ -6166,6 +6167,10 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
          置換の組に旧称が残っていないかを常時数え、済んでいるなら ⇄ 一括置換を
          開いて空打ちする手順そのものを要らなくする -->
     <button type="button" id="status-rename" title="過去に当てた置換の組はまだ数えていません">統一 −</button>
+    <!-- BLK-junior-20260908-1103 (design 7b): 先輩の図を見る入口は 🧰 ツールの折りたたみの
+         奥にあり、図種ごとの初回は毎回そこを通っていた。常に見えている下端に置き、
+         押せば 1 クリックで先輩の枠が開く -->
+    <button type="button" id="status-senior" title="先輩の図を読むだけで横に出します (押すと開きます)">👀 先輩 −</button>
     <!-- BLK-reviewer-20260907-0843: 整合性チェックの警告件数を常時出す -->
     <button type="button" id="status-consistency" title="命名規約・未使用 participant・メソッド不一致・粒度不一致の一覧">整合 —</button>
     <!-- BLK-primary-20260907-1803-wish: state の遷移イベントと class のメソッドの突合表 -->

@@ -8298,17 +8298,63 @@ function showSeniorFile(name) {
 }
 
 // いま開いている図に当たる先輩の図へ入れ替える。図を切り替えるたびに呼ぶ。
+// 下端の「👀 先輩」。枠を開いていなくても、いま横に出る図が読める。
+// design 7b: 件数を持つものはタブ列に置かず下端に寄せ、押せばそのパネルが開く。
+function renderSeniorStatus() {
+  var SP = window.MA.seniorPane;
+  var btn = document.getElementById('status-senior');
+  if (!btn || !SP) return;
+  var open = !(_seniorEls().pane || {}).hidden;
+  var txt = SP.statusText(_seniorPick, { ready: !!(_seniorPick && _seniorNames.length) });
+  btn.textContent = txt.label;
+  btn.title = txt.title;
+  btn.setAttribute('data-count', String(txt.count));
+  btn.setAttribute('aria-pressed', open ? 'true' : 'false');
+  btn.className = open ? 'on' : '';
+}
+
+// 枠を閉じていても相手は決めておく (下端に出すのがこの BLK の的なので、
+// 開いてからでないと分からない、では入口が 1 クリックにならない)。
+// フォルダをまだ 1 度も決めていないときは何も読まない (行き先一覧をここで
+// 取ると、まだ出来ていないフォルダの並びを掴んだまま覚えることになる)。
+function _seniorPrime() {
+  var SP = window.MA.seniorPane;
+  var WS = window.MA.workspace;
+  var dir = SP ? _seniorState().dir : '';
+  if (!SP || !WS || !dir) { renderSeniorStatus(); return Promise.resolve(false); }
+  if (_seniorNames.length) { _seniorRefreshPick(); return Promise.resolve(true); }
+  return WS.listFolder(dir).then(function(info) {
+    _seniorNames = ((info && info.entries) || [])
+      .filter(function(e) { return e && e.name; })
+      .map(function(e) { return e.name; });
+    _seniorRefreshPick();
+    return true;
+  }).catch(function() { renderSeniorStatus(); return false; });
+}
+
+// 相手を選び直して下端だけ描き直す (枠が閉じているときはここで止まる)。
+function _seniorRefreshPick() {
+  var SP = window.MA.seniorPane;
+  var WS = window.MA.workspace;
+  if (!SP || !WS) return;
+  var active = WS.getActive();
+  _seniorPick = SP.pickCounterpart(
+    { name: active ? active.name : '', dir: _wsFileDir() }, _seniorNames, _seniorState().dir);
+  renderSeniorStatus();
+}
+
 function syncSeniorCounterpart() {
   var el = _seniorEls();
   var SP = window.MA.seniorPane;
   var WS = window.MA.workspace;
   var st = _seniorState();
-  if (!el.pane || el.pane.hidden || !SP || !WS) return;
+  if (!el.pane || el.pane.hidden || !SP || !WS) { _seniorRefreshPick(); return; }
   var active = WS.getActive();
   var pick = SP.pickCounterpart(
     { name: active ? active.name : '', dir: _wsFileDir() }, _seniorNames, st.dir);
   _seniorPick = pick;
   if (el.notice) el.notice.textContent = SP.noticeText(pick, _seniorLabel());
+  renderSeniorStatus();
   renderSeniorCandidates();
   if (!pick.name) {
     _seniorName = '';
@@ -8350,6 +8396,7 @@ function toggleSeniorPane(open) {
     el.btn.className = 'tab-tool' + (open ? ' on' : '');
   }
   _seniorSave({ open: !!open });
+  renderSeniorStatus();
   if (!open) return Promise.resolve(true);
   return _ensurePeekDirs().then(function() {
     renderSeniorDirs();
@@ -8370,7 +8417,7 @@ function toggleSeniorPane(open) {
 // 図を切り替えたとき、開いていれば相手も入れ替える (renderTabs から)。
 function syncSeniorPane() {
   var el = _seniorEls();
-  if (!el.pane || el.pane.hidden) return;
+  if (!el.pane || el.pane.hidden) { _seniorRefreshPick(); return; }
   syncSeniorCounterpart();
 }
 
@@ -8381,8 +8428,12 @@ function setupSeniorPane() {
   var close = document.getElementById('senior-close');
   if (close) close.addEventListener('click', function() { toggleSeniorPane(false); });
   if (el.dir) el.dir.addEventListener('change', function() { selectSeniorDir(this.value); });
+  // 下端の入口。折りたたみを通らずに 1 クリックで先輩の図の枠へ着く。
+  var status = document.getElementById('status-senior');
+  if (status) status.addEventListener('click', function() { toggleSeniorPane(el.pane.hidden); });
   // 前回開いたままなら、次に開いたときも開いたままにする (据え置きが値打ちなので)。
   if (_seniorState().open) toggleSeniorPane(true);
+  else _seniorPrime();
 }
 
 function setupPeekFolder() {
