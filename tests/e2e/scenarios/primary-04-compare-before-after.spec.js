@@ -299,3 +299,57 @@ test('手順4 保存フォルダへ直接書いた回を、後から履歴で選
   await expect(page2.locator('#compare-hist-empty')).toBeVisible();
   await page2.close();
 });
+
+// BLK-primary-20260914-1406-wish: 手順5.5・2 の反映後に保存したつもりで、実際には
+// ファイルへ反映されていない回が 2 周続いた (BLK-primary-20260914-1406)。今の画面は
+// 「保存操作をした」ことしか言わないので、引き継ぎ資料に古いままの図が混ざりかねない。
+// 新人に渡す前に「この周で保存が効いた図 / 効かなかった図」が一覧で出ることを到達条件にする。
+test('手順4 引き継ぐ前に、この周で保存が効かなかった図を名指しできる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+
+  const BEFORE = ['@startuml', 'title Fig1', 'participant Fig1Drv', 'Fig1Drv -> Mcu : Init()', '@enduml'].join('\n');
+  const AFTER = BEFORE.replace(/Fig1Drv/g, 'Fig1_Driver');
+  await S.putDoc(page, DIR, 'Fig1', BEFORE);
+
+  // 一覧から開いて直す (錠の問いが出る道)。問いに答えないまま先へ進むのが、
+  // 「保存したのにディスクが変わらない」が起きている実際の並びかた。
+  await S.openFolderItem(page, 'Fig1');
+  await S.typeDsl(page, AFTER);
+  await page.waitForTimeout(900);
+
+  // 到達条件 1: 保存先ファイルはまだ編集前のまま (症状そのもの)。
+  expect(await S.readDoc(page, DIR, 'Fig1')).toContain('Fig1Drv');
+
+  // 問いが画面を塞いでいるなら閉じる。答えないので保存は効いていないまま。
+  const lock = page.locator('#source-lock-modal');
+  if (await lock.isVisible().catch(() => false)) {
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(400);
+  }
+
+  // 到達条件 2: 一覧が「この周の保存」を数え、確かめる操作を持っている。
+  await S.openFolder(page);
+  const sum = page.locator('#folder-save-verify');
+  await sum.waitFor({ timeout: 10000 });
+  await page.locator('#btn-save-verify').click();
+  await page.waitForTimeout(1500);
+
+  // 到達条件 3: 効かなかった図を名指しし、理由まで言う。
+  const row = page.locator('[data-save-verify="Fig1"]');
+  await row.waitFor({ timeout: 10000 });
+  expect((await page.locator('#folder-save-verify').textContent()) || '').toContain('効かなかった 1 枚');
+  expect((await row.textContent()) || '').toContain('Fig1');
+
+  // 到達条件 4: その場で保存し直せ、ディスクの中身が編集後になる。
+  await page.locator('[data-save-resave="Fig1"]').click();
+  await page.waitForTimeout(2000);
+  expect(await S.readDoc(page, DIR, 'Fig1')).toContain('Fig1_Driver');
+
+  // 到達条件 5: 直した後は「効かなかった」が消える (引き継いでよい状態を言い切る)。
+  await S.openFolder(page);
+  await page.waitForTimeout(1200);
+  expect((await page.locator('#folder-save-verify').textContent()) || '').not.toContain('効かなかった');
+
+  await S.clearDir(page, DIR);
+});
