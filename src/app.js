@@ -2816,6 +2816,12 @@ function initCommandPalette() {
       { id: 'tab-versions', title: 'この図の変遷を見る / Version timeline', hint: 'Tabs', keywords: ['version', 'timeline', 'へんせん', 'りれき'], button: 'btn-tab-versions', run: function() { clickById('btn-tab-versions'); } },
       { id: 'tab-lineage', title: 'この図の継承元を見る / Lineage', hint: 'Tabs', keywords: ['lineage', 'parent', 'けいしょう', 'もと', 'とりこみ'], button: 'btn-tab-lineage', run: function() { clickById('btn-tab-lineage'); } },
       { id: 'tab-board', title: '変更サマリを開く / Change board', hint: 'Tabs', keywords: ['board', 'summary', 'へんこう', 'さまり'], button: 'btn-tab-board', run: function() { clickById('btn-tab-board'); } },
+      // 顧客の前で開く画面 (BLK-primary-20260913-0306-wish)。ボードを開いていなければ開いてから切り替える。
+      { id: 'board-svg', title: '変更前後を図で見せる / Show before-after as SVG', hint: 'Tabs', keywords: ['svg', 'customer', 'こきゃく', 'みせる', 'ずでみる'], button: 'cb-svg', run: function() {
+        var modal = document.getElementById('cb-modal');
+        if (!modal || modal.style.display !== 'flex') clickById('btn-tab-board');
+        clickById('cb-svg');
+      } },
       { id: 'settings', title: '設定を開く / Settings', hint: 'Ctrl', keywords: ['settings', 'config', 'せってい'], run: function() { clickById('btn-config'); } },
       { id: 'undo', title: '元に戻す / Undo', hint: 'Ctrl+Z', keywords: ['undo', 'もどす'], run: function() { clickById('btn-undo'); } },
       { id: 'redo', title: 'やり直す / Redo', hint: 'Ctrl+Y', keywords: ['redo', 'やりなおす'], run: function() { clickById('btn-redo'); } },
@@ -3903,6 +3909,12 @@ var _cbFull = false;    // 全文を出すか (既定は差分行とその前後
 var _cbSame = false;    // 変わっていない図も並べるか
 var _cbFixOnly = false; // 「要修正」の印が付いた行だけに絞るか (BLK-primary-20260908-1103-wish)
 var _cbMapPending = false; // 対応表を未対応の指摘だけに絞るか (BLK-primary-20260908-1703-wish)
+// BLK-primary-20260913-0306-wish: 顧客に見せる画面。DSL を出さず、描いた図の
+// 変更前後を並べる。描いた結果は鍵 (図・側・中身) で憶えておく — 顧客の前で
+// 切り替えるたびに描き直すと、そのたびに数秒の空白が出る。
+var _cbSvg = false;
+var _cbSvgCache = {};
+var _cbSvgSeq = 0;      // 描いている最中にボードが描き直されたら古い結果を捨てる
 
 // ── 指摘と変更の対応表 (BLK-primary-20260908-1703-wish) ──────────────────
 // ボードは「今回どの図が変わったか」を出すが、「この差分はどの指摘への対応か」は
@@ -4109,6 +4121,103 @@ function _wireChangeBoardLinks(body) {
   }
 }
 
+// BLK-primary-20260913-0306-wish: 顧客に見せる 1 枚ぶん。描く前は「描いています」を
+// 置いておき、描けた順に差し替える (先に枠を出しておかないと、顧客の前で画面が飛ぶ)。
+function _cbShowPanesHtml(entry) {
+  var SBA = window.MA.showBeforeAfter;
+  var esc = window.MA.htmlUtils.escHtml;
+  if (!SBA) return '';
+  var html = '<div class="cb-show" data-side="both">';
+  SBA.panes(entry).forEach(function(p) {
+    var key = SBA.cacheKey(entry.name, p.side, p.dsl);
+    var cached = p.empty ? null : _cbSvgCache[key];
+    var cls = p.empty ? ' cb-pane-empty' : (cached ? '' : ' cb-pane-wait');
+    var inner = p.empty ? esc(p.emptyText) : (cached || '描いています…');
+    // 差し替え先は名前と側で引く。鍵そのものは DSL を含むので属性には置かない
+    // (改行を含む値はセレクタに書けない)。
+    html += '<div class="cb-pane" data-side="' + esc(p.side) + '">'
+      + '<div class="cb-pane-label">' + esc(p.label) + '</div>'
+      + '<div class="cb-pane-body' + cls + '" data-doc="' + esc(entry.name) + '"'
+      + ' data-side="' + esc(p.side) + '">' + inner + '</div>'
+      + '</div>';
+  });
+  return html + '</div>';
+}
+
+// 「切替」を押すと 並べる → 変更前だけ → 変更後だけ と回る。顧客の前で押す
+// ボタンは 1 つだけにする (どれを押すか迷わせない)。
+function _wireChangeBoardFlip(body) {
+  var SBA = window.MA.showBeforeAfter;
+  if (!SBA) return;
+  var btns = body.querySelectorAll('.cb-flip');
+  for (var i = 0; i < btns.length; i++) {
+    (function(btn) {
+      btn.addEventListener('click', function() {
+        var side = SBA.nextSide(btn.getAttribute('data-side'));
+        btn.setAttribute('data-side', side);
+        btn.textContent = '切替: ' + SBA.sideLabel(side);
+        var show = btn.parentNode.parentNode.querySelector('.cb-show');
+        if (!show) return;
+        show.setAttribute('data-side', side);
+        var panes = show.querySelectorAll('.cb-pane');
+        for (var j = 0; j < panes.length; j++) {
+          panes[j].hidden = !SBA.shows(side, panes[j].getAttribute('data-side'));
+        }
+      });
+    })(btns[i]);
+  }
+}
+
+// 並んでいる図を上から順に描く。同時に何本も /render へ投げると PlantUML 側が
+// 詰まって最初の 1 枚まで遅くなるので、1 枚ずつ直列に描いて出た順に差し替える。
+function _cbDrawShowPanes(board) {
+  var SBA = window.MA.showBeforeAfter;
+  var stateEl = document.getElementById('cb-svg-state');
+  if (!SBA) return Promise.resolve();
+  var plan = SBA.renderPlan(board);
+  var seq = ++_cbSvgSeq;
+  var done = 0;
+  if (stateEl) stateEl.textContent = SBA.statusText(SBA.SVG, board, 0);
+
+  function put(item, html) {
+    var body = document.getElementById('cb-body');
+    if (!body) return;
+    var slots = body.querySelectorAll('.cb-pane-body');
+    for (var i = 0; i < slots.length; i++) {
+      if (slots[i].getAttribute('data-doc') !== item.name) continue;
+      if (slots[i].getAttribute('data-side') !== item.side) continue;
+      slots[i].innerHTML = html;
+      slots[i].classList.remove('cb-pane-wait');
+    }
+  }
+
+  function step(i) {
+    if (seq !== _cbSvgSeq) return Promise.resolve();   // 描いている間にボードが変わった
+    if (i >= plan.length) {
+      if (stateEl) stateEl.textContent = SBA.statusText(SBA.SVG, board, plan.length);
+      return Promise.resolve();
+    }
+    var item = plan[i];
+    var cached = _cbSvgCache[item.key];
+    var p = cached ? Promise.resolve(cached) : renderDslToSvg(item.dsl).then(function(svg) {
+      _cbSvgCache[item.key] = svg;
+      return svg;
+    }, function(err) {
+      // 描けない図があっても他の図は見せられる。顧客の前なので原因は短く。
+      return '<span class="cb-pane-note">この図は描けませんでした ('
+        + window.MA.htmlUtils.escHtml(String((err && err.message) || err)) + ')</span>';
+    });
+    return p.then(function(html) {
+      if (seq !== _cbSvgSeq) return;
+      put(item, html);
+      done++;
+      if (stateEl) stateEl.textContent = SBA.statusText(SBA.SVG, board, done);
+      return step(i + 1);
+    });
+  }
+  return step(0);
+}
+
 function renderChangeBoard() {
   var CB = window.MA.changeBoard;
   var body = document.getElementById('cb-body');
@@ -4121,10 +4230,16 @@ function renderChangeBoard() {
 
   if (sumEl) sumEl.textContent = _cbSummaryText(board);
 
+  // 顧客に見せる画面では申し送りの入力欄も畳む (社内の書き込み欄を客先で出さない)。
+  var hoBar = document.getElementById('cb-handover-bar');
+  if (hoBar) hoBar.style.display = _cbSvg ? 'none' : '';
+
   // 対応表は絞り込みの前の board で作る。「要修正のみ」で行を減らしても、
   // その指摘に対応した図が変わった事実は変わらない。
   var mapTable = _cbFindingTable(board);
-  var mapHtml = _cbMapHtml(mapTable);
+  // 顧客に見せる画面では、社内の対応表・印・申し送りは出さない
+  // (BLK-primary-20260913-0306-wish)。出すのは描いた図だけ。
+  var mapHtml = _cbSvg ? '' : _cbMapHtml(mapTable);
 
   // 引き継ぎでは「今すぐ手を付ける行」だけを渡したいので、印の付いた行だけに
   // 絞れる (BLK-primary-20260908-1103-wish)。絞り込み中は差分の前後行・省略行は出さない。
@@ -4172,8 +4287,15 @@ function renderChangeBoard() {
       + '<div class="cb-entry-head"><span>' + esc(e.name) + (t ? ' (' + esc(t) + ')' : '') + '</span>'
       + org
       + '<span class="cb-count">' + esc(_cbCountText(e)) + '</span>'
-      + '<button type="button" class="cb-goto">この図を開く</button></div>'
-      + '<div class="cb-cols"><span>変更前' + (e.markedAt ? ' (' + esc(e.markedAt.replace('T', ' ').slice(0, 16)) + ')' : ' (基準なし)') + '</span>'
+      + (_cbSvg ? '<button type="button" class="cb-flip" data-side="both"'
+          + ' title="この図の見せ方を 並べる → 変更前だけ → 変更後だけ と回す">切替: 並べる</button>' : '')
+      + '<button type="button" class="cb-goto">この図を開く</button></div>';
+    // 顧客に見せる画面は、描いた図だけを変更前後で出す (行差分も印も出さない)。
+    if (_cbSvg) {
+      html += _cbShowPanesHtml(e) + '</div>';
+      return;
+    }
+    html += '<div class="cb-cols"><span>変更前' + (e.markedAt ? ' (' + esc(e.markedAt.replace('T', ' ').slice(0, 16)) + ')' : ' (基準なし)') + '</span>'
       + '<span>変更後 (今)</span></div>'
       + '<table class="cb-diff"><tbody>';
     e.rows.forEach(function(r) {
@@ -4206,10 +4328,15 @@ function renderChangeBoard() {
     html += '</div>';
   });
   // 絞り込み中は印の付いた行だけを見せる (ボードに出ていない図の申し送りは出さない)。
-  body.innerHTML = html + (filtered ? '' : _cbNotesOnlyHtml(board));
-  _wireChangeBoardNotes(body);
-  _wireChangeBoardVerdicts(body);
-  _wireChangeBoardLinks(body);
+  body.innerHTML = html + ((filtered || _cbSvg) ? '' : _cbNotesOnlyHtml(board));
+  if (_cbSvg) {
+    _wireChangeBoardFlip(body);
+    _cbDrawShowPanes(board);
+  } else {
+    _wireChangeBoardNotes(body);
+    _wireChangeBoardVerdicts(body);
+    _wireChangeBoardLinks(body);
+  }
 
   var gotos = body.querySelectorAll('.cb-goto');
   for (var i = 0; i < gotos.length; i++) {
@@ -4484,6 +4611,18 @@ function setupChangeBoard() {
   });
   document.addEventListener('keydown', function(ev) {
     if (ev.key === 'Escape' && modal.style.display === 'flex') toggleChangeBoard(false);
+  });
+
+  // 顧客に見せる画面への切替 (BLK-primary-20260913-0306-wish)。
+  // ボードを開いたまま 1 回押すだけで、DSL の行差分が描いた図の変更前後に変わる。
+  var svgBtn = document.getElementById('cb-svg');
+  if (svgBtn) svgBtn.addEventListener('click', function() {
+    _cbSvg = !_cbSvg;
+    svgBtn.setAttribute('aria-pressed', _cbSvg ? 'true' : 'false');
+    svgBtn.textContent = _cbSvg ? '▤ DSLに戻す' : '🖼 SVGで見る';
+    var st = document.getElementById('cb-svg-state');
+    if (st && !_cbSvg) st.textContent = '';
+    renderChangeBoard();
   });
 
   var full = document.getElementById('cb-full');

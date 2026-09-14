@@ -14,6 +14,8 @@ const { shotOut } = require('../helpers');
 const S = require('./_scenario');
 
 const DIR = S.dirFor(__filename);
+// 顧客に見せる場面は別の保存フォルダで回す (会議の一覧の中身と混ざらない)。
+const DIR2 = S.dirFor(__filename) + '-show';
 
 // 手順2 と同じ一括置換を当てる。手順4 が見せるのはその前後なので、
 // ここを踏まないと「変更前」がそもそも存在しない。
@@ -115,4 +117,65 @@ test('手順4 置換の前後を並べて見せられ、その画面を控えら
   await page.locator('#cb-scan-folder').uncheck();
   await page.waitForTimeout(600);
   await expect(page.locator('#cb-body .cb-entry[data-doc-name="review_scratch"]')).toHaveCount(0);
+
+});
+
+// BLK-primary-20260913-0306-wish: 顧客に画面を見せながら説明する場では、▤変更サマリが
+// 出す DSL の before/after は見せる代物ではない。これまでは「変更前の SVG を別途探して
+// 並べる」を手作業でやり、顧客の前で納品 zip を開き直していた。
+// ボードを開いたまま「🖼 SVGで見る」を 1 回押すだけで、描いた図の変更前後になる。
+test('手順4 顧客の前で変更前後を図のまま切り替えて見せられる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR2);
+  await S.clearDir(page, DIR2);
+
+  // 顧客に見せるのは「この版から この版へ直した」なので、まず基準を取る。
+  await S.putDoc(page, DIR2, 'adc_state', ['@startuml', 'class Adc_Driver', '@enduml'].join('\n'));
+  await S.openFolderItem(page, 'adc_state');
+  await page.locator('#btn-tab-diff').click();
+  await page.locator('#diff-mark-all').click();
+  await page.locator('body').click({ position: { x: 5, y: 5 } });
+  await page.locator('#tab-bar .tab, #doc-tabs .tab').last().locator('.tab-close').click();
+  await page.waitForTimeout(400);
+  // 直した版を保存フォルダに置く (基準からの変更がボードに並ぶ)。
+  await S.putDoc(page, DIR2, 'adc_state',
+    ['@startuml', 'class Adc_Driver', 'class Adc_Channel', '@enduml'].join('\n'));
+  await page.waitForTimeout(800);
+
+  await page.locator('#btn-tab-board').click();
+  await expect(page.locator('#cb-modal')).toBeVisible();
+  const entry = page.locator('#cb-body .cb-entry[data-doc-name="adc_state"]');
+  await expect(entry).toHaveCount(1, { timeout: 10000 });
+
+  // 到達条件その1: 1 操作で、DSL の行差分が描いた図の変更前後に変わる。
+  await page.locator('#cb-svg').click();
+  const panes = entry.locator('.cb-show .cb-pane');
+  await expect(panes).toHaveCount(2);
+  await expect(panes.nth(0).locator('.cb-pane-body svg')).toBeVisible({ timeout: 25000 });
+  await expect(panes.nth(1).locator('.cb-pane-body svg')).toBeVisible({ timeout: 25000 });
+  await expect(panes.nth(1).locator('.cb-pane-body')).toContainText('Adc_Channel');
+  await expect(panes.nth(0).locator('.cb-pane-body')).not.toContainText('Adc_Channel');
+  await expect(panes.nth(0).locator('.cb-pane-label')).toContainText('変更前');
+  await expect(panes.nth(1).locator('.cb-pane-label')).toContainText('変更後');
+  // 顧客に見せる画面なので DSL の行差分は出ない。
+  await expect(entry.locator('table.cb-diff')).toHaveCount(0);
+
+  // 到達条件その2: 「直す前はこう → 直したらこう」を 1 ボタンで切り替えられる。
+  const flip = entry.locator('.cb-flip');
+  await flip.click();                                    // 変更前だけ
+  await expect(panes.nth(0)).toBeVisible();
+  await expect(panes.nth(1)).toBeHidden();
+  await flip.click();                                    // 変更後だけ
+  await expect(panes.nth(0)).toBeHidden();
+  await expect(panes.nth(1)).toBeVisible();
+  await flip.click();                                    // 並べる に戻る
+  await expect(panes.nth(0)).toBeVisible();
+  await expect(panes.nth(1)).toBeVisible();
+
+  // 顧客の前で見せた画面をそのまま資料に控えられる。
+  await page.screenshot({ path: shotOut('primary-04-show-before-after.png'), fullPage: true });
+
+  // 到達条件その3: 同じボタンで社内向けの DSL 表示に戻せる (会議の続きができる)。
+  await page.locator('#cb-svg').click();
+  await expect(entry.locator('table.cb-diff')).toHaveCount(1);
+  await expect(entry.locator('.cb-show')).toHaveCount(0);
 });
