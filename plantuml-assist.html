@@ -2348,6 +2348,29 @@ table.vault-table button.vault-open:hover { border-color: var(--accent); }
 .diff-board table.cb-diff td.cb-verdict button[aria-pressed="true"] {
   color: var(--text-primary); border-color: var(--accent); background: var(--bg-tertiary); font-weight: bold;
 }
+/* 顧客に見せる画面 (BLK-primary-20260913-0306-wish)。
+   DSL を出さず、描いた図だけを変更前後で並べる / 片側だけ大きく出す。 */
+.diff-board .cb-show { display: flex; gap: 10px; padding: 8px 10px 12px 10px; align-items: flex-start; }
+.diff-board .cb-show .cb-pane { flex: 1; min-width: 0; }
+.diff-board .cb-show .cb-pane[hidden] { display: none; }
+.diff-board .cb-show .cb-pane-label {
+  font-size: 11px; color: var(--text-secondary); padding: 0 0 4px 2px;
+}
+.diff-board .cb-show .cb-pane-body {
+  background: #fff; border: 1px solid var(--border); border-radius: 3px;
+  padding: 6px; overflow: auto; max-height: 46vh; min-height: 60px;
+}
+.diff-board .cb-show .cb-pane-body svg { max-width: 100%; height: auto; }
+.diff-board .cb-show .cb-pane-body.cb-pane-empty,
+.diff-board .cb-show .cb-pane-body.cb-pane-wait {
+  background: var(--bg-tertiary); color: var(--text-secondary); font-size: 11px;
+  display: flex; align-items: center; justify-content: center; min-height: 80px;
+}
+.diff-board .cb-entry-head .cb-flip {
+  border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);
+  border-radius: 3px; cursor: pointer; font-size: 11px; padding: 1px 8px;
+}
+.diff-board .cb-entry-head .cb-flip:hover { border-color: var(--accent); }
 .diff-board table.cb-diff tr[data-verdict="要修正"] td { background: rgba(220, 80, 80, 0.28); }
 .diff-board table.cb-diff tr[data-verdict="済"] td { opacity: 0.55; }
 /* 指摘と変更の対応表 (BLK-primary-20260908-1703-wish) */
@@ -5788,6 +5811,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/cross-ref-diff.js"></script>
 <script src="src/core/count-compare.js"></script>
 <script src="src/core/change-board.js"></script>
+<script src="src/core/show-before-after.js"></script>
 <script src="src/core/export-select.js"></script>
 <script src="src/core/handover-notes.js"></script>
 <script src="src/core/handover-checklist.js"></script>
@@ -5881,6 +5905,10 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <strong>変更サマリボード</strong>
       <span id="cb-summary"></span>
       <span class="board-tools">
+        <!-- BLK-primary-20260913-0306-wish: 顧客の前では DSL を見せられない。
+             ここを押すと、並んでいる図が描いた絵の変更前後に切り替わる。 -->
+        <button type="button" id="cb-svg" aria-pressed="false" title="顧客に見せる画面に切り替える (DSL を出さず、描いた図の変更前後を並べる)">🖼 SVGで見る</button>
+        <span id="cb-svg-state"></span>
         <label><input type="checkbox" id="cb-full"> 全文</label>
         <label><input type="checkbox" id="cb-same"> 変更なしも出す</label>
         <!-- BLK-primary-20260912-2103-wish: 14 枚のドメイン図に限らず、保存フォルダで更新されたファイルを全部拾う -->
