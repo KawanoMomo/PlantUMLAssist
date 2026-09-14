@@ -40,10 +40,17 @@ window.MA.findingActions = (function() {
   // 接頭辞の有無で書かれた形。直すのは接頭辞が無い側なので from/to は逆に取る。
   var PREFIX_RE = /`([A-Za-z_][\w]*)`[^\n]{0,16}[(（]接頭辞あり[)）][^\n]{0,24}vs[^\n]{0,24}`([A-Za-z_][\w]*)`[^\n]{0,16}[(（]接頭辞なし[)）]/;
 
-  var VERDICT_RE = /別ドメイン|別のドメイン|別物|domain-verdict|すり合わせ/;
+  // `domain-verdict` は「印が未反映」という状況説明としても書かれるので合図にしない
+  // (BLK-primary-20260914-1006-friction: 再出力を頼まれた件が印の話に化けた)。
+  var VERDICT_RE = /別ドメイン|別のドメイン|別物|すり合わせ|未宣言/;
   var REEXPORT_RE = /再エクスポート|再出力|出し直|書き出し直/;
   // 「再出力」と書かれていなくても、svg の中身が違うと言っていれば出し直すしかない。
+  // ただし svg の話だと分かるときだけにする (BLK-primary-20260914-1006-friction:
+  // 「部品名不一致」= すり合わせの依頼まで再出力に化けた)。
+  var SVG_RE = /svg/i;
   var SVG_BAD_RE = /入れ替わ|クロス|残存|不一致|食い違/;
+
+  function svgIsBad(text) { return SVG_RE.test(text) && SVG_BAD_RE.test(text); }
 
   function renamePair(text) {
     var s = _s(text);
@@ -54,11 +61,34 @@ window.MA.findingActions = (function() {
     return null;
   }
 
-  // 自分のフォルダにある図だけ。指摘は他人の図の話も書くが、当てられるのは自分の図。
-  function mineDocs(row, mineFolder) {
+  // 指摘文がその図を名指ししているか。語の切れ目で見る。
+  // BLK-primary-20260914-1006-friction: 実物の指摘.md で `spi` / `can` という短い名前の
+  // 図が、本文の `Can_Driver` / `spi_dma` に含まれるというだけで対象に挙がり、
+  // 指摘が触れていない図まで [適用] が書き換えていた。読むだけなら余計な行が 1 本
+  // 増えるだけだが、当てる側では黙って別の図を書き替える。
+  function mentions(text, name) {
+    var s = _s(text).toLowerCase();
+    var w = _s(name).toLowerCase();
+    if (!s || !w) return false;
+    var at = s.indexOf(w);
+    while (at >= 0) {
+      var before = at > 0 ? s.charAt(at - 1) : '';
+      var after = s.charAt(at + w.length);
+      if (!/[\w]/.test(before) && !/[\w]/.test(after)) return true;
+      at = s.indexOf(w, at + 1);
+    }
+    return false;
+  }
+
+  // 自分のフォルダにあり、かつ指摘文が名指ししている図だけ。
+  // 指摘は他人の図の話も書くが、当てられるのは自分の図。
+  // text は呼び手が渡す (reviewNote.rows の行は text を持たず、title + body で組む)。
+  function mineDocs(row, mineFolder, findingText) {
     var mine = _s(mineFolder);
+    var text = _s(findingText == null ? (row && row.text) : findingText);
     return ((row && row.docs) || []).filter(function(d) {
-      return !mine || (d.folders || []).indexOf(mine) >= 0;
+      if (mine && (d.folders || []).indexOf(mine) < 0) return false;
+      return !text || mentions(text, d.name);
     });
   }
 
@@ -77,12 +107,17 @@ window.MA.findingActions = (function() {
     var o = opts || {};
     var mineFolder = _s(o.mineFolder);
     var text = _s(row && row.text) || (_s(row && row.title) + '\n' + _s(row && row.body));
-    var docs = mineDocs(row, mineFolder);
+    var docs = mineDocs(row, mineFolder, text);
     var names = docs.map(function(d) { return d.name; });
     var base = {
       id: _s(row && row.id), heading: _s(row && row.heading) || _s(row && row.title),
       docs: names, from: '', to: '', otherFolder: '', scope: 'docs',
     };
+
+    // 「再エクスポートが必要」のように手段が名指しされている件は、本文が
+    // 別ドメインの話にも触れていても、頼まれた通り再出力にする
+    // (BLK-primary-20260914-1006-friction: gpio_state の再出力依頼が印の話に化けた)。
+    if (REEXPORT_RE.test(text)) return _finish(_reexport(base, names));
 
     var pair = renamePair(text);
     if (pair) {
@@ -107,17 +142,19 @@ window.MA.findingActions = (function() {
       return _finish(base);
     }
 
-    if (REEXPORT_RE.test(text) || SVG_BAD_RE.test(text)) {
-      base.kind = 'reexport';
-      base.ready = names.length > 0;
-      base.reason = base.ready ? '' : 'この指摘には自分の保存フォルダにある図の名前がありません';
-      return _finish(base);
-    }
+    if (svgIsBad(text)) return _finish(_reexport(base, names));
 
     base.kind = 'manual';
     base.ready = false;
     base.reason = '指摘文に当てる操作が書かれていません (読んで決めてください)';
     return _finish(base);
+  }
+
+  function _reexport(base, names) {
+    base.kind = 'reexport';
+    base.ready = names.length > 0;
+    base.reason = base.ready ? '' : 'この指摘には自分の保存フォルダにある図の名前がありません';
+    return base;
   }
 
   function _finish(p) {
@@ -191,6 +228,7 @@ window.MA.findingActions = (function() {
     KINDS: KINDS,
     kindLabel: kindLabel,
     renamePair: renamePair,
+    mentions: mentions,
     mineDocs: mineDocs,
     otherFolderOf: otherFolderOf,
     planFor: planFor,
