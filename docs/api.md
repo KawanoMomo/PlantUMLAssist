@@ -83,6 +83,7 @@ curl -sS -X POST http://127.0.0.1:8766/verify-svg -H "Content-Type: application/
 | `POST /autosave-svg` | `{type, dir, svg}` | 書き出した svg を保存する (印を刻む) |
 | `GET /autosave-versions` | `?dir=&type=` | 1 枚の図の版の一覧 |
 | `GET /version-search` | `?dir=&q=` | 保存フォルダの全図の版から部品名を探す (混入点の材料) |
+| `GET /version-diff` | `?dir=&type=[&stamp=]` | 1 枚の図の「その版」と「直前の版」の本文を組で返す (全文差分の材料) |
 | `GET /peek-dirs` | — | 保存フォルダの候補を覗く |
 | `GET /peek-notes` | `?dir=` | 隣のフォルダに置かれた指摘 (`.md`) を読む |
 | `GET /name-registry` | `?dir=` | 保存フォルダの**親**にある正式表記の登録簿 (`_names.json`。3 人で共有) |
@@ -95,6 +96,12 @@ curl -sS -X POST http://127.0.0.1:8766/verify-svg -H "Content-Type: application/
 版は古い順・最後の 1 件が `current: true` (まだ控えになっていない今の中身)。
 `counts` は語ごとの出現数、`lines` は当たった行だけ (1 版 40 行まで)。本文は返さない。
 どの版で増えたか・混在がどこから始まったかの判定は GUI 側 (`src/core/blame-point.js`)。
+
+`GET /version-diff` は混入点の行から 1 クリックで開く全文差分の材料。返りは
+`{name, dir, stamp, current, prev, first, before, after}` で、`before` が直前の版・
+`after` がその版の本文 (全文)。`stamp` を省くと「いまの中身」と最新の控えを比べる。
+最古の控えを指したときは直前が無いので `prev: null` / `first: true` / `before: ""`。
+行の突き合わせと畳みは GUI 側 (`src/core/version-fulldiff.js`、LCS は `version-diff.js`)。
 
 保存中の svg が今の puml から作られたかは、`GET /autosave` の `svgSource` (svg に刻まれた印) と
 `hash` (今の puml の sha1) を比べる。印が無い svg は `POST /verify-svg` が描き直して確かめる。

@@ -412,6 +412,8 @@ API_INDEX = {
         {'endpoint': 'GET /autosave-versions', 'summary': '1 枚の図の版の一覧', 'request': '?dir=&type='},
         {'endpoint': 'GET /version-search', 'summary': '保存フォルダの全図の版から部品名を探す (混入点の材料)',
          'request': '?dir=&q='},
+        {'endpoint': 'GET /version-diff', 'summary': '1 枚の図の「その版」と「直前の版」の本文を組で返す (全文差分の材料)',
+         'request': '?dir=&type=[&stamp=]'},
         {'endpoint': 'GET /peek-dirs', 'summary': '保存フォルダの候補を覗く'},
         {'endpoint': 'GET /peek-notes', 'summary': '隣のフォルダに置かれた指摘 (.md) を読む',
          'request': '?dir='},
@@ -625,6 +627,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.split('?')[0] == '/version-search':
             with _fs_lock:
                 return self._handle_version_search()
+        if self.path.split('?')[0] == '/version-diff':
+            with _fs_lock:
+                return self._handle_version_diff()
         if self.path.split('?')[0] == '/vault':
             with _fs_lock:
                 return self._handle_vault_get()
@@ -1448,6 +1453,68 @@ class Handler(BaseHTTPRequestHandler):
             files.append({'name': name, 'versions': versions})
         self._send_json(200, {'terms': terms, 'dir': str(save_dir),
                               'files': files, 'scanned': scanned})
+
+    # --- 版と版の全文 (BLK-primary-20260915-0606-wish) ------------------------
+    #
+    # 混入点は「語が当たった行」しか返さないので、原因を直すのに要る前後の文脈が
+    # 出ない。今まではその版を開き、直前の版も開いて目で照合する 2 手が要り、
+    # 部品数 × 該当版数ぶん積み上がっていた。ここは 1 回の要求で「その版」と
+    # 「直前の版」の本文を組で返す。突き合わせ自体は GUI 側 (version-diff.js)。
+
+    def _handle_version_diff(self):
+        """GET /version-diff?dir=&type=[&stamp=] — その版と直前の版の本文。
+
+        `stamp` を省くと「いまの中身」と最新の控えを比べる。最古の控えを指した
+        ときは直前が無いので prev を null、before を空にして first を立てる。
+        """
+        parsed = urllib.parse.urlparse(self.path)
+        params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
+        save_dir = self._autosave_resolve_dir(params.get('dir'))
+        dt = params.get('type', '')
+        if not self._autosave_validate_type(dt):
+            self._send_json(400, {'error': 'invalid type — パス区切り・制御文字・Windows の禁止文字は使えません'})
+            return
+        stamp = params.get('stamp', '')
+        if stamp and not is_safe_autosave_name(stamp):
+            self._send_json(400, {'error': 'invalid stamp'})
+            return
+        stamps = sorted(self._version_stamps(save_dir, dt))
+
+        def read(path):
+            try:
+                return path.read_text(encoding='utf-8')
+            except OSError:
+                return None
+
+        if stamp:
+            if stamp not in stamps:
+                self._send_json(404, {'error': 'version not found — その版は残っていません'})
+                return
+            after = read(self._version_path(save_dir, dt, stamp))
+            if after is None:
+                self._send_json(500, {'error': 'read failed'})
+                return
+            idx = stamps.index(stamp)
+            prev = stamps[idx - 1] if idx > 0 else None
+        else:
+            after = read(save_dir / (dt + '.puml'))
+            if after is None:
+                self._send_json(404, {'error': 'diagram not found — その図は保存フォルダにありません'})
+                return
+            prev = stamps[-1] if stamps else None
+        before = ''
+        if prev is not None:
+            got = read(self._version_path(save_dir, dt, prev))
+            if got is None:
+                prev = None
+            else:
+                before = got
+        self._send_json(200, {
+            'name': dt, 'dir': str(save_dir),
+            'stamp': stamp, 'current': not stamp,
+            'prev': prev, 'first': prev is None,
+            'before': before, 'after': after,
+        })
 
     # --- 提出物庫 (BLK-junior-20260908-2203-wish) -----------------------------
     #
