@@ -5454,7 +5454,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 }
 #status-consistency:hover, #status-eventsync:hover { background: var(--bg-tertiary); }
 /* BLK-builder-20260908-0858-2 (design 7a/7b): 下端に寄せた件数表示。整合と同じ見た目に揃える */
-#status-diff, #status-pins, #status-inbox, #status-requests {
+#status-diff, #status-pins, #status-inbox, #status-requests, #status-rename {
   background: transparent;
   border: 1px solid var(--border);
   border-radius: 3px;
@@ -5464,13 +5464,17 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   padding: 0 6px;
   cursor: pointer;
 }
-#status-diff:hover, #status-pins:hover, #status-inbox:hover, #status-requests:hover { background: var(--bg-tertiary); }
-#status-diff.has-open, #status-pins.has-open, #status-inbox.has-open, #status-requests.has-open {
+#status-diff:hover, #status-pins:hover, #status-inbox:hover, #status-requests:hover,
+#status-rename:hover { background: var(--bg-tertiary); }
+#status-diff.has-open, #status-pins.has-open, #status-inbox.has-open, #status-requests.has-open,
+#status-rename.has-open {
   color: var(--accent-orange);
   border-color: var(--accent-orange);
 }
 /* 依頼バッジ (BLK-reviewer-20260914-2006)。未着手・再発が混ざる回は赤まで上げる
    (直す側が「今日はまず何を見るか」を、画面を開く前に決められるようにする)。 */
+/* 統一が済んでいることは緑で言い切る。「開かなくてよい」と読める色が要る */
+#status-rename[data-tone="done"] { color: var(--accent-green); border-color: var(--accent-green); }
 #status-requests[data-tone="stalled"] {
   color: var(--accent-red);
   border-color: var(--accent-red);
@@ -6158,6 +6162,10 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <!-- BLK-reviewer-20260914-2006: 指摘.md に書かれた依頼が何件・最長何 tick 継続しているか。
          直す側が業務を始める前に指摘.md を GUI の外で開く動作を要らなくする -->
     <button type="button" id="status-requests" title="指摘.md の依頼はまだ読めていません (隣の reviewer フォルダを見ます)">継続依頼 −</button>
+    <!-- BLK-primary-20260914-1006-friction: 部品名の統一が済んでいるか。過去に当てた
+         置換の組に旧称が残っていないかを常時数え、済んでいるなら ⇄ 一括置換を
+         開いて空打ちする手順そのものを要らなくする -->
+    <button type="button" id="status-rename" title="過去に当てた置換の組はまだ数えていません">統一 −</button>
     <!-- BLK-reviewer-20260907-0843: 整合性チェックの警告件数を常時出す -->
     <button type="button" id="status-consistency" title="命名規約・未使用 participant・メソッド不一致・粒度不一致の一覧">整合 —</button>
     <!-- BLK-primary-20260907-1803-wish: state の遷移イベントと class のメソッドの突合表 -->
@@ -6448,6 +6456,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/rename-history.js"></script>
 <script src="src/core/rename-redo.js"></script>
 <script src="src/core/rename-pairs.js"></script>
+<script src="src/core/rename-badge.js"></script>
 <script src="src/core/doc-set.js"></script>
 <script src="src/core/vault.js"></script>
 <script src="src/core/component-inventory.js"></script>
