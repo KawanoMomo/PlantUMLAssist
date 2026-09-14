@@ -164,3 +164,65 @@ test('手順7 意図明記済みと未対応が、note を読み直さずに分�
   expect(only.join('\n')).toContain('SpiRegs.WriteConfig');
   expect(only.join('\n')).not.toContain('意図明記済み(note) — drv_class.puml');
 });
+
+// BLK-reviewer-20260915-0406-wish: 「SVG 古」は mtime だけを見た答えなので、保存し直した
+// だけで中身は今の puml と一致している図も同じ箱に入っていた。指摘.md に「作り直し要」の
+// 枠を書く前に、reviewer は 9 枚を render API で 1 枚ずつ描き直してバイト比較する裏取りを
+// 毎回やり直していた (実データでは 9 枚とも中身は一致し、ずれていたのは mtime だけ)。
+// findings.js が読む継続追跡が内容判定まで使い、作り直しが要る図だけを未解消に残す。
+const zlib = require('zlib');
+
+// PlantUML が svg に畳む形 (`<?plantuml-src …?>`) を作る。tools/svg-embedded-src の逆。
+function foldSrc(dsl) {
+  const PL = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_';
+  const ST = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  const b64 = zlib.deflateRawSync(Buffer.from(dsl, 'utf-8')).toString('base64').replace(/=+$/, '');
+  let tok = '';
+  for (const ch of b64) { const i = ST.indexOf(ch); tok += i < 0 ? ch : PL[i]; }
+  return '<svg xmlns="http://www.w3.org/2000/svg"></svg><?plantuml-src ' + tok + '?>';
+}
+
+test('手順7 mtime だけが古い SVG が、裏取りなしで作り直し要と分かれる', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pua-reviewer-07-stale-'));
+  // 中身は追いついている図 — puml を保存し直しただけで、コメント 1 行しか違わない。
+  const settled = ['@startuml', 'class Spi_Driver', '@enduml'].join('\n');
+  // 中身まで古い図 — 書き出した後にクラスが 1 つ増えている。
+  const oldDsl = ['@startuml', 'class Can_Driver', '@enduml'].join('\n');
+  const newDsl = ['@startuml', 'class Can_Driver', 'class Can_Regs', '@enduml'].join('\n');
+
+  fs.writeFileSync(path.join(dir, 'spi_class.puml'), settled + "\n' 保存し直しただけ\n", 'utf-8');
+  fs.writeFileSync(path.join(dir, 'spi_class.svg'), foldSrc(settled), 'utf-8');
+  fs.writeFileSync(path.join(dir, 'can_class.puml'), newDsl, 'utf-8');
+  fs.writeFileSync(path.join(dir, 'can_class.svg'), foldSrc(oldDsl), 'utf-8');
+  // どちらも svg の方が古い。mtime だけ見れば 2 枚とも「SVG 古」。
+  const past = new Date(Date.now() - 60 * 60 * 1000);
+  fs.utimesSync(path.join(dir, 'spi_class.svg'), past, past);
+  fs.utimesSync(path.join(dir, 'can_class.svg'), past, past);
+
+  const state = path.join(dir, 'st.json');
+  const out = [];
+  expect(findingsCli.main([dir, '--tick', 't1', '--state', state],
+    { out: (s) => out.push(s), err: () => {} })).toBe(0);
+  const text = out.join('\n');
+
+  // 到達条件 1: 未解消に残るのは作り直しが要る 1 枚だけ。
+  // (裏取りの render + バイト比較をしなくても、指摘.md に写す枠がそのまま決まる)
+  expect(text).toContain('can_class.puml');
+  expect(text).toMatch(/\[新規\][^\n]*can_class\.puml[^\n]*出力物\/SVG 古/);
+
+  // 到達条件 2: mtime だけが古い図は「古い」の枠から外れ、理由が箱の名前に出る。
+  expect(text).not.toMatch(/\[新規\][^\n]*spi_class\.puml/);
+  const all = [];
+  expect(findingsCli.main([dir, '--tick', 't1', '--state', state, '--all'],
+    { out: (s) => all.push(s), err: () => {} })).toBe(0);
+  expect(all.join('\n')).toMatch(/\[除外\][^\n]*spi_class\.puml[^\n]*出力物\/SVG 古\(内容一致\)/);
+
+  // 到達条件 3: 行は消えないので、次の tick で中身が変わっても「再発」ではなく
+  // 同じ id の続きとして出る (指摘.md を書き直さずに 1 行を追える)。
+  fs.writeFileSync(path.join(dir, 'spi_class.puml'), newDsl, 'utf-8');
+  fs.utimesSync(path.join(dir, 'spi_class.svg'), past, past);
+  const t2 = [];
+  expect(findingsCli.main([dir, '--tick', 't2', '--state', state],
+    { out: (s) => t2.push(s), err: () => {} })).toBe(0);
+  expect(t2.join('\n')).toMatch(/spi_class\.puml[^\n]*出力物\/SVG 古/);
+});

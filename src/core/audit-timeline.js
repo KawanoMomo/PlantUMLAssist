@@ -38,19 +38,36 @@
     // 「図を直す」ではなく「書き出す」なので、指摘とは別カテゴリで数える。
     'svg.missing': '出力物/SVG 無',
     'svg.stale': '出力物/SVG 古',
+    // BLK-reviewer-20260915-0406-wish: 「SVG 古」は mtime だけを見た答えなので、
+    // 保存し直しただけで中身は今の puml と一致している図も同じ箱に入る。
+    // 実データでは 9 枚がこれで、reviewer は 1 枚ずつ render API で描き直して
+    // バイト比較し「作り直し不要」を自分で確かめ直していた。中身まで見て
+    // 「読める」と言い切れた図は別の箱で数える (作り直しの対象ではない)。
+    'svg.staleSettled': '出力物/SVG 古(内容一致)',
   };
 
   // 除外バケツ。ここへ移った指摘は「消えた」ではなく「見ないことにした」。
   var EXCLUDED = {
     'consistency.methodReplies': true,
     'trace.outOfScope': true,
+    // mtime だけが古く、中身は今の puml と一致している図。直す物ではないので
+    // 既定の一覧からは外すが、行は残す (消すと次の tick で「再発」に見える)。
+    'svg.staleSettled': true,
   };
 
   // 除外の理由を人の言葉に。trace の outOfScope だけが reason を持つ。
   var REASON = {
     grain: '粒度違い',
     declared: '宣言により対象外',
+    // BLK-reviewer-20260915-0406-wish: 「SVG 古」から内容一致の箱へ移った理由。
+    // 箱が移った回に「なぜ外れたか」が差分の行に出る。
+    same: '中身は今の puml と一致',
   };
+
+  // svg-freshness の内容判定のうち「作り直さなくても読める」もの。
+  // svg-freshness は window にしか居ない (node からは見えない) ので、
+  // 答えの綴りだけをここに持つ。増えたら svg-freshness.isSettled と揃える。
+  function _settledContent(content) { return content === 'match' || content === 'format'; }
 
   function _s(v) {
     if (v === null || v === undefined) return '';
@@ -82,7 +99,8 @@
       case 'trace.missing':
       case 'trace.outOfScope': return _s(it.family) + ':' + _s(it.from) + '→' + _s(it.to) + ':' + _s(it.label || it.event);
       case 'svg.missing':
-      case 'svg.stale': return _s(it.name);
+      case 'svg.stale':
+      case 'svg.staleSettled': return _s(it.name);
       default: return JSON.stringify(it);
     }
   }
@@ -115,7 +133,8 @@
       case 'consistency.unused': return it.doc;
       case 'name.undeclared': return it.doc || it.docs;
       case 'svg.missing':
-      case 'svg.stale': return it.name;
+      case 'svg.stale':
+      case 'svg.staleSettled': return it.name;
       default: return '';
     }
   }
@@ -135,7 +154,10 @@
       case 'name.variants': return it.key || it.suggested;
       case 'name.undeclared': return it.name;
       case 'svg.missing': return 'SVG 無';
-      case 'svg.stale': return 'SVG 古';
+      // 内容一致で落ちた図も見出しは同じ「SVG 古」にする。実体 id が変わらないので、
+      // 箱が移った回は「解消 + 新規」ではなく「再分類」として 1 行に並ぶ。
+      case 'svg.stale':
+      case 'svg.staleSettled': return 'SVG 古';
       default: return '';
     }
   }
@@ -176,7 +198,8 @@
       case 'name.variants': (it.members || []).forEach(function(m) { add(m.docs || m.doc); }); break;
       case 'consistency.granularity': add(it.onlyIn); break;
       case 'svg.missing':
-      case 'svg.stale': add(it.name); break;
+      case 'svg.stale':
+      case 'svg.staleSettled': add(it.name); break;
       default: add(it.docs); add(it.doc); break;
     }
     return out;
@@ -268,9 +291,19 @@
     }
     // 出力物の欠落。図を開かずに「どの図を書き出し忘れたか」が run 間で追える。
     if (_ok(a.svg)) {
+      var reasons = a.svg.result.staleReasons || {};
       (a.svg.result.rows || []).forEach(function(r) {
         if (r.status === 'missing') push('svg.missing', [{ name: r.name }]);
-        else if (r.status === 'stale') push('svg.stale', [{ name: r.name }]);
+        else if (r.status === 'stale') {
+          // BLK-reviewer-20260915-0406-wish: mtime が古いだけの図と、中身まで
+          // 古い図を分ける。根拠は 2 つあり、どちらも「描き直さずに言える」もの:
+          //   staleReasons[name] === 'same' — svg に畳まれた元の DSL と可視行が一致
+          //   isSettled(row.content)        — 印 (@pua-source-sha1) か控えで一致
+          // どちらでもない (differ / unknown / 根拠なし) 図は従来どおり作り直しの箱。
+          var settled = reasons[r.name] === 'same' || _settledContent(r.content);
+          push(settled ? 'svg.staleSettled' : 'svg.stale',
+            [{ name: r.name, reason: reasons[r.name] || '', content: r.content || '' }]);
+        }
       });
     }
     return out;
@@ -303,6 +336,7 @@
     if (_ok(a.svg)) {
       add('svg.missing', true);
       add('svg.stale', true);
+      add('svg.staleSettled', true);
     }
     return out;
   }

@@ -134,7 +134,9 @@ describe('監査履歴での出力物の追跡', () => {
 
   test('見た run では 0 件でもカテゴリとして載る (見ていないと区別する)', () => {
     expect(timeline.categoriesOf(auditsWith([])))
-      .toEqual(['出力物/SVG 無', '出力物/SVG 古']);
+      // BLK-reviewer-20260915-0406-wish: 「古い」は mtime だけの答えなので、
+      // 中身まで一致した図を分けた第三の箱が増えた。
+      .toEqual(['出力物/SVG 無', '出力物/SVG 古', '出力物/SVG 古(内容一致)']);
     expect(timeline.categoriesOf({})).toEqual([]);
   });
 });

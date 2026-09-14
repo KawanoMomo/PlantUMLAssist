@@ -11845,6 +11845,19 @@ function setupTabs() {
       contentBadge.title = cb.title;
       b.appendChild(contentBadge);
     }
+    // BLK-reviewer-20260915-0406-wish: 内容で一致が取れた図からは印が全部消えるので、
+    // 「mtime も新しい図」と「mtime は古いが中身は追いついている図」が同じ無印になる。
+    // reviewer は指摘.md を書く前にその区別を付けるため、9 枚を render API で
+    // 描き直してバイト比較していた。第三の印として行に出す (作り直しの催促ではない)。
+    if (SF && SF.isStaleSettled && SF.isStaleSettled(svgStatus[name], content)) {
+      var ssb = SF.staleSettledBadge(svgBasis[name]);
+      var settledBadge = document.createElement('span');
+      settledBadge.className = 'folder-svg-badge svg-stale-settled';
+      settledBadge.setAttribute('data-svg-status', 'stale-settled');
+      settledBadge.textContent = ssb.mark;
+      settledBadge.title = ssb.title;
+      b.appendChild(settledBadge);
+    }
     if (SF && !SF.isSettled(content) && svgStatus[name] && svgStatus[name] !== 'fresh') {
       var sb = SF.badge(svgStatus[name]);
       var svgBadge = document.createElement('span');
