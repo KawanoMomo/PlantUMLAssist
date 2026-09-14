@@ -737,3 +737,113 @@ test('手順2 遷移ラベルを、先輩の図を開かずに部品の名前帳
   // 先輩のファイルは読むだけ (書き換えない)。
   expect(await S.readDoc(page, SENIOR_DIR, 'spi_init_sequence')).toBe(SENIOR_SPI_SEQ);
 });
+
+// BLK-junior-20260915-0606-wish: 図 (ファイル) ごとにタブを開く作りなので、1 部品の
+// 6 図種を見比べるには毎回タブを行き来する。先輩のクラス図でメソッド名を確かめてから
+// 自分の活動図に打ち直す手順は「タブ切替 2 + フィルタ 4 + 控え書き」に広がっていた
+// (BLK-junior-20260915-0606)。部品を 1 つ選べば 6 図種が先輩・自分の 2 列で同時に出て、
+// 手本の名前を押せば自分の欄に入り、その場で保存できることを確かめる。
+const BOARD_ROOT = DIR + '-board';
+const BOARD_MINE = BOARD_ROOT + '/junior';
+const BOARD_SENIOR = BOARD_ROOT + '/primary';
+
+// 先輩のクラス図は 3 部品相乗りの 1 枚 (spi_class という名前では無い)。
+const BOARD_SENIOR_CLASS = [
+  '@startuml', 'title ドライバ共通クラス図',
+  'class Driver_Common',
+  'class Spi_Driver {', '  + Spi_Init() : void', '  + Spi_Transmit() : void', '  + Spi_Reset() : void', '}',
+  'class Can_Driver {', '  + Can_Init() : void', '}',
+  'Driver_Common <|-- Spi_Driver',
+  '@enduml',
+].join('\n');
+const BOARD_SENIOR_ACT = [
+  '@startuml', 'title SPI 初期化アクティビティ',
+  'start', ':Spi_Init();', ':Spi_Transmit();', 'stop', '@enduml',
+].join('\n');
+const BOARD_SENIOR_SEQ = [
+  '@startuml', 'participant Spi_Driver', 'Spi_Driver -> IRQCtrl : Spi_Init()', '@enduml',
+].join('\n');
+// 自分の活動図は汎用ひな形のままで、メソッド名がまだ先輩と揃っていない。
+const BOARD_MINE_ACT = [
+  '@startuml', 'title SPI 初期化アクティビティ',
+  'start', ':SPI_Init();', 'stop', '@enduml',
+].join('\n');
+
+test.describe('junior 手順2: 部品を選ぶと 6 図種が 2 列で並び、手本を見ながら打ち直せる', () => {
+  test.beforeEach(async ({ page }) => {
+    await S.bootWithSaveDir(page, BOARD_MINE);
+    await S.clearDir(page, BOARD_MINE);
+    await S.clearDir(page, BOARD_SENIOR);
+    await S.putDoc(page, BOARD_MINE, 'spi_init_sequence', BOARD_SENIOR_SEQ);
+    await S.putDoc(page, BOARD_MINE, 'spi_activity', BOARD_MINE_ACT);
+    await S.putDoc(page, BOARD_SENIOR, 'spi_init_sequence', BOARD_SENIOR_SEQ);
+    await S.putDoc(page, BOARD_SENIOR, 'spi_activity', BOARD_SENIOR_ACT);
+    await S.putDoc(page, BOARD_SENIOR, 'driver_common_class', BOARD_SENIOR_CLASS);
+    await page.reload();
+    await page.waitForSelector('#btn-tab-peek');
+  });
+
+  test('部品ビューで活動図を打ち直し、同じ画面で保存できる', async ({ page }) => {
+    await page.locator('#btn-tab-peek').click();
+    await page.waitForSelector('#peek-modal');
+    await page.waitForSelector('#peek-files');
+
+    // 部品ビューを開く (台本の「SPI を選ぶと」に当たる操作)。
+    await page.locator('#peek-board-toggle').click();
+    await page.waitForSelector('#peek-board .pb-row');
+    await page.locator('#peek-board-part').selectOption('spi');
+    await page.waitForTimeout(800);
+
+    // 到達条件その1: 6 図種ぶんの行が同じ画面に並ぶ (タブを行き来しない)。
+    expect(await page.locator('#peek-board .pb-row').count()).toBe(6);
+    await expect(page.locator('#peek-board-summary')).toContainText('SPI: 6 図種のうち');
+
+    // 到達条件その2: 部品名のファイルが無いクラス図も、相乗り図が手本として出る。
+    const classRow = page.locator('#peek-board .pb-row[data-board-kind="class"]');
+    await expect(classRow).toContainText('driver_common_class');
+    await expect(classRow).toContainText('相乗り図');
+    await expect(classRow.locator('[data-board-ref="class"]')).toContainText('Spi_Transmit');
+
+    // 到達条件その3: 活動図の欄に、先輩のクラス図から拾った名前を押して入れられる
+    // (クラス図タブへ切り替えて名前を控える往復が要らない)。
+    const act = page.locator('#peek-board [data-board-edit="activity"]');
+    await act.fill(['@startuml', 'title SPI 初期化アクティビティ', 'start', ':', 'stop', '@enduml'].join('\n'));
+    // カーソルを ':' の直後へ置いてから、手本のメソッド名を押す。
+    await page.evaluate(() => {
+      const ta = document.querySelector('#peek-board [data-board-edit="activity"]');
+      const at = ta.value.indexOf('\n:') + 2;
+      ta.focus();
+      ta.setSelectionRange(at, at);
+    });
+    await classRow.locator('.pb-name[data-board-name="Spi_Init"]').click();
+    await expect(act).toHaveValue(/:Spi_Init/);
+
+    // 到達条件その4: そのまま同じ画面で保存でき、保存先は自分のフォルダ。
+    await page.locator('#peek-board [data-board-save="activity"]').click();
+    await page.waitForTimeout(800);
+    await expect(page.locator('#peek-board [data-board-msg="activity"]')).toContainText('保存しました');
+    const saved = await S.readDoc(page, BOARD_MINE, 'spi_activity');
+    expect(saved).toContain(':Spi_Init');
+
+    // 先輩のファイルは読むだけ (書き換えない)。
+    expect(await S.readDoc(page, BOARD_SENIOR, 'spi_activity')).toBe(BOARD_SENIOR_ACT);
+    expect(await S.readDoc(page, BOARD_SENIOR, 'driver_common_class')).toBe(BOARD_SENIOR_CLASS);
+  });
+
+  test('まだ起こしていない図種も行として残り、手本の有無が分かる', async ({ page }) => {
+    await page.locator('#btn-tab-peek').click();
+    await page.waitForSelector('#peek-modal');
+    await page.locator('#peek-board-toggle').click();
+    await page.waitForSelector('#peek-board .pb-row');
+    await page.locator('#peek-board-part').selectOption('spi');
+    await page.waitForTimeout(800);
+
+    // クラス図は先輩の相乗り図があるが自分にはまだ無い。
+    await expect(page.locator('#peek-board .pb-row[data-board-kind="class"]'))
+      .toHaveAttribute('data-state', 'mine-missing');
+    // 状態遷移図はどちらにも無い (行は消えない)。
+    await expect(page.locator('#peek-board .pb-row[data-board-kind="state"]'))
+      .toHaveAttribute('data-state', 'none');
+    await expect(page.locator('#peek-board-summary')).toContainText('自分に無し');
+  });
+});
