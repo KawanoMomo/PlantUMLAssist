@@ -8903,6 +8903,14 @@ function setupTabs() {
 
   openFromFolderByName = function(name) { openFromFolder(name); };
   refreshFolderPanelNow = function() { if (panel.classList.contains('open')) renderFolderPanel(); };
+  // BLK-junior-20260915-0007: 資料化の根拠から一覧へ渡るとき、名前を打ち直させない。
+  // 一覧は開くたびに絞り込みを白紙に戻すので、外から入れる口をここに置く。
+  filterFolderPanelNow = function(q) {
+    folderQuery = String(q == null ? '' : q);
+    var input = panel.querySelector('.folder-filter');
+    if (input) input.value = folderQuery;
+    applyFolderFilter();
+  };
 
   // BLK-junior-20260907-1803: 開いているタブと同じ名前を一覧から押したときに
   // 画面が何も動かないと、「保存できている」のか「一覧が効いていない」のかが
@@ -11942,6 +11950,7 @@ var openFromFolderByName = function() {};
 // 資料化のように、パネルの外で保存フォルダを書き換える操作から一覧を描き直すための口
 // (BLK-junior-20260908-2303-wish)。パネルを開いていなければ何もしない。
 var refreshFolderPanelNow = function() {};
+var filterFolderPanelNow = function() {};
 
 function _rdModal() { return document.getElementById('rd-modal'); }
 
@@ -21615,6 +21624,8 @@ function openMaterialExport() {
   if (!modal || !window.MA.materialExport || !window.MA.workspace) return Promise.resolve();
   var state = _mexpSel('mexp-state');
   if (state) state.textContent = '';
+  // 前の資料化の根拠は畳む (別の図の確認が残っていると読み違える)。
+  _mexpShowVerify(null);
   _mexpFiles = [];
   _mexpEntries = [];
   _mexpPicked = '';
@@ -21683,6 +21694,45 @@ function runMaterialPlan(p, opts) {
     .then(function() { return p; });
 }
 
+// ── 資料化の根拠を残す (BLK-junior-20260915-0007) ───────────────────────────
+// 資料化は押した直後にモーダルが閉じ、根拠は一瞬のトーストだけだった。見落とせば
+// 「保存先に置けたか」を確かめる手段がモーダルに残らず、📂一覧を開き直して名前で
+// 探すまで確信が持てない (資料化 1 枚ごとに フォルダタブ → フィルタ入力 → クリック)。
+// 保存先の一覧を読み直し、置けたことを名前・時刻・大きさで言い切ってその場に残す。
+// 判定の言葉は core/material-verify (画面と切り離して単体で守る)。
+var _mexpLastVerify = null;
+
+function _mexpShowVerify(v) {
+  var box = document.getElementById('mexp-result');
+  var txt = document.getElementById('mexp-result-text');
+  var open = document.getElementById('mexp-result-open');
+  if (!box || !txt) return;
+  _mexpLastVerify = v;
+  box.hidden = !v;
+  if (!v) return;
+  txt.textContent = v.text;
+  box.setAttribute('data-verified', v.status === 'ok' ? '1' : '0');
+  box.setAttribute('data-status', v.status);
+  box.setAttribute('data-doc', v.docName || '');
+  // 一覧で見たいときの 1 手は残す (要るのは確かめた後に開くときだけ)。
+  if (open) open.hidden = (v.status !== 'ok');
+}
+
+function _mexpVerify(p) {
+  var MV = window.MA.materialVerify;
+  var WS = window.MA.workspace;
+  if (!MV || !WS || !WS.listFolder || !p) return Promise.resolve(null);
+  return Promise.resolve(WS.listFolder(_wsFileDir())).then(function(info) {
+    var v = MV.verdict(info, p);
+    _mexpShowVerify(v);
+    return v;
+  }, function() {
+    var v = MV.verdict(null, p);
+    _mexpShowVerify(v);
+    return v;
+  });
+}
+
 function runMaterialExport() {
   var ME = window.MA.materialExport;
   var WS = window.MA.workspace;
@@ -21736,8 +21786,9 @@ function runMaterialExport() {
       if (window.MA.toast) window.MA.toast.show(msg);
       if (run) run.disabled = false;
       try { refreshFolderPanelNow(); } catch (e) {}
-      closeMaterialExport();
-      return p;
+      // BLK-junior-20260915-0007: 保存先の一覧を読み直して「本当に置けたか」を
+      // このモーダルに残す。閉じないので、トーストを見落としても📂一覧へ戻らずに済む。
+      return _mexpVerify(p).then(function() { return p; });
     })
     .catch(function(e) {
       var msg = ME.failMessage(p, e);
@@ -21763,6 +21814,22 @@ function setupMaterialExport() {
   if (close) close.addEventListener('click', closeMaterialExport);
   var run = document.getElementById('mexp-run');
   if (run) run.addEventListener('click', function() { runMaterialExport(); });
+  // 確かめた図を 📂一覧で開く (BLK-junior-20260915-0007)。確かめは modal に残るので、
+  // このボタンは「確かめた後に開きたいとき」の 1 手にすぎない。
+  var resOpen = document.getElementById('mexp-result-open');
+  if (resOpen) resOpen.addEventListener('click', function() {
+    var v = _mexpLastVerify;
+    if (!v || v.status !== 'ok') return;
+    closeMaterialExport();
+    // 一覧を開くのはモーダルを閉じた後の別の手番にする (閉じた瞬間の document
+    // クリックが、開いたばかりのパネルをそのまま畳んでしまう)。
+    setTimeout(function() {
+      var panel = document.getElementById('folder-panel');
+      var tab = document.getElementById('btn-tab-folder');
+      if (panel && !panel.classList.contains('open') && tab) tab.click();
+      try { filterFolderPanelNow(v.docName); } catch (e) {}
+    }, 0);
+  });
   var comp = document.getElementById('mexp-component');
   if (comp) comp.addEventListener('change', function() { _mexpPicked = comp.value; _mexpRenderKinds(); });
   var kind = document.getElementById('mexp-kind');
