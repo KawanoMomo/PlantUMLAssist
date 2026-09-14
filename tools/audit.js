@@ -19,6 +19,10 @@ const versionDiff = require('../src/core/version-diff');
 // BLK-reviewer-20260914-1206-wish: 突合結果・前回の指摘文書・前回控えとの差分を
 // 1 枚に束ねる。束ね方は GUI と共通 (src/core/review-board.js)。
 const auditBoard = require('../src/core/audit-board');
+// BLK-reviewer-20260914-1806: 下書き (`{name}-編集中.puml`) が本体に反映されたかは
+// GUI の 📂 一覧にしか出ず、GUI を開かない reviewer は ls と byte 比較で判断していた。
+// 台帳そのもの (src/core/swap-queue.js) は DOM に触らないので CLI からも引ける。
+const swapQueue = require('../src/core/swap-queue');
 const reviewBoard = require('../src/core/review-board');
 
 // 前回比較用の控え。CLI を打つ場所 (リポジトリ直下) に置く。
@@ -54,6 +58,8 @@ const USAGE = [
   '  --personas a,b (-p) ペルソナ名だけで保存フォルダを対象にする (長いパスを打たない)。',
   '                 根は PUA_PERSONA_DATA、既定はリポジトリの隣の persona-data',
   '  --pairs-max N 突合の差分行を N 組まで出す (既定 10、0 で全部)。',
+  '  --drafts      監査は回さず、下書き (`{name}-編集中.puml`) の差し替え待ちキューを出す。',
+  '                本体へ差し替え待ち / 本体が無い / 前後不明 / 削除予定 に振り分けて名指しする',
   '  --versions    監査は回さず、保存フォルダの各図を `_versions/` の直前版と',
   '                突き合わせて差分を出す。上書きで中身が失われた図を名指しする',
   '  --versions-max N  --versions が 1 枚あたりに出す差分行を N 行まで (既定 6、0 で全部)',
@@ -134,6 +140,35 @@ function versionEntries(dir) {
   });
 }
 
+// 下書き台帳の材料。📂 一覧が持っているのと同じ [{ name, mtime, hash }] を
+// 保存フォルダから直に採る (name は拡張子なし。swap-queue はこの形だけを見る)。
+function draftEntries(dir) {
+  let names;
+  try {
+    names = fs.readdirSync(dir).filter((f) => /\.puml$/i.test(f));
+  } catch (e) {
+    throw new Error('保存フォルダが読めません: ' + dir + ' — ' + e.message);
+  }
+  return names.sort().map((f) => {
+    const p = path.join(dir, f);
+    let text = '';
+    try { text = fs.readFileSync(p, 'utf-8'); } catch (e) { text = ''; }
+    let mtime = '';
+    try { mtime = fs.statSync(p).mtime.toISOString(); } catch (e) { mtime = ''; }
+    return { name: f.slice(0, -5), mtime: mtime, hash: auditScope.fingerprint(text) };
+  });
+}
+
+// --drafts の本体。監査モジュールを読まないので、GUI を開かずに
+// 「下書きが何枚あって、そのうち何枚が本体へ差し替え待ちか」だけを 1 本で出す。
+function runDrafts(targets) {
+  for (const dir of targets) {
+    console.log(path.resolve(dir));
+    console.log(swapQueue.reportText(swapQueue.build(draftEntries(dir), {})));
+  }
+  return 0;
+}
+
 // --versions の本体。監査モジュールを 1 つも読まないので、GUI が壊れていても
 // 保存フォルダさえ読めれば動く (事故の直後に打つのはこの口)。
 function runVersions(targets, max) {
@@ -198,7 +233,7 @@ function runBoard(result, opts, prev, fmtOpts) {
 }
 
 function parseArgs(argv) {
-  const opts = { targets: [], only: null, summary: false, summaryJson: false, out: null, help: false, since: null, sinceFiles: null, state: true, pairsMax: 0, personas: null, versions: false, versionsMax: 6, board: false, boardFile: null };
+  const opts = { targets: [], only: null, summary: false, summaryJson: false, out: null, help: false, since: null, sinceFiles: null, state: true, pairsMax: 0, personas: null, versions: false, versionsMax: 6, board: false, boardFile: null, drafts: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--help' || a === '-h') opts.help = true;
@@ -223,6 +258,7 @@ function parseArgs(argv) {
     else if (a.indexOf('--personas=') === 0) opts.personas = a.slice(11).split(',').map((s) => s.trim()).filter(Boolean);
     else if (a === '--pairs-max') opts.pairsMax = _num(argv[++i], a);
     else if (a.indexOf('--pairs-max=') === 0) opts.pairsMax = _num(a.slice(12), '--pairs-max');
+    else if (a === '--drafts') opts.drafts = true;
     else if (a === '--versions') opts.versions = true;
     else if (a === '--versions-max') opts.versionsMax = _vnum(argv[++i], a);
     else if (a.indexOf('--versions-max=') === 0) opts.versionsMax = _vnum(a.slice(15), '--versions-max');
@@ -264,6 +300,17 @@ function main(argv) {
   if (opts.help || opts.targets.length === 0) {
     console.log(USAGE);
     return opts.help ? 0 : 1;
+  }
+
+  // --drafts も監査ではなく「保存フォルダの下書き台帳」。GUI を開かずに
+  // 「本体へ差し替え待ちの下書き」を名指しするのがここ。
+  if (opts.drafts) {
+    try {
+      return runDrafts(opts.targets);
+    } catch (e) {
+      console.error(e.message);
+      return 1;
+    }
   }
 
   // --versions は監査ではなく「保存フォルダの版の突き合わせ」なので、

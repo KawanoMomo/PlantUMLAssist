@@ -79,6 +79,27 @@
     });
   }
 
+  // BLK-reviewer-20260914-1806: 「32 枚 → 25 枚」の内訳を、消えた・増えたの 2 列
+  // だけで出すと、整理による削除なのか・改名なのか・新しく起こした下書きなのかを
+  // 読む側が ls と diff で判断し直すことになる。下書きの見分けは sync-state が
+  // 持っている接尾辞 (`-編集中` ほか) をそのまま使う (語を 2 か所に書かない)。
+  function _sync() {
+    if (typeof window !== 'undefined' && window.MA && window.MA.syncState) return window.MA.syncState;
+    if (typeof require === 'function') { try { return require('./sync-state.js'); } catch (e) { /* ブラウザ専用 */ } }
+    return null;
+  }
+
+  // 下書きなら本体の名前、そうでなければ null。拡張子とフォルダは落として見る。
+  function draftBaseOf(name) {
+    var SS = _sync();
+    if (!SS) return null;
+    var dir = String(name || '').split('\\').join('/');
+    var i = dir.lastIndexOf('/');
+    var head = i >= 0 ? dir.slice(0, i + 1) : '';
+    var base = SS.baseNameOf(baseName(name));
+    return base === null ? null : head + base;
+  }
+
   // 前回 → 今回のファイル差分。前回に files も docs も無ければ null を返す
   // (「変化なし」と「追えない」は読む側にとって別物なので混ぜない)。
   // 前回が名前だけなら contentComparable: false を立て、内容の変化は言わない。
@@ -108,14 +129,44 @@
     });
     prevFiles.forEach(function(f) { if (!ci[f.name]) removed.push(f); });
 
+    // 消えた 1 枚と増えた 1 枚が同じ指紋なら、それは削除でも新規でもなく改名。
+    // 分けずに並べると、reviewer は「何が消えたか」を ls と diff で確かめ直す。
+    var renamed = [];
+    if (comparable) {
+      var byHash = {};
+      removed.forEach(function(f) {
+        if (!f.hash) return;
+        (byHash[f.hash] = byHash[f.hash] || []).push(f);
+      });
+      var stillAdded = [];
+      added.forEach(function(f) {
+        var pool = f.hash ? byHash[f.hash] : null;
+        if (pool && pool.length) {
+          var from = pool.shift();
+          renamed.push({ from: from.name, to: f.name, kind: f.kind, reason: f.reason });
+          return;
+        }
+        stillAdded.push(f);
+      });
+      if (renamed.length) {
+        added = stillAdded;
+        var taken = {};
+        renamed.forEach(function(r) { taken[r.from] = true; });
+        removed = removed.filter(function(f) { return !taken[f.name]; });
+      }
+    }
+    // 新しく起こした下書き (`{本体}-編集中.puml`) は「増えた図」ではなく作業中の控え。
+    var addedDrafts = added.filter(function(f) { return draftBaseOf(f.name) !== null; });
+
     function byKind(list, kind) { return list.filter(function(f) { return f.kind === kind; }); }
     return {
       contentComparable: comparable,
       changed: changed, added: added, removed: removed,
+      renamed: renamed, addedDrafts: addedDrafts,
       dataChanged: byKind(changed, 'data'), templateChanged: byKind(changed, 'template'),
       dataAdded: byKind(added, 'data'), templateAdded: byKind(added, 'template'),
       dataRemoved: byKind(removed, 'data'), templateRemoved: byKind(removed, 'template'),
-      touched: changed.length + added.length + removed.length,
+      touched: changed.length + added.length + removed.length + renamed.length,
     };
   }
 
@@ -162,13 +213,23 @@
     lines.push('ファイル内容: ' + parts.join(' / '));
     if (fd.dataChanged.length) lines.push('  実データ変化: ' + _names(fd.dataChanged));
     if (fd.templateChanged.length) lines.push('  テンプレ変化: ' + _names(fd.templateChanged));
+    // 改名は「消えた + 増えた」ではなく改名として出す (中身は動いていない)。
+    if ((fd.renamed || []).length) {
+      lines.push('  改名: ' + fd.renamed.slice(0, 5).map(function(r) {
+        return r.from + ' → ' + r.to;
+      }).join(', ') + (fd.renamed.length > 5 ? ', ほか ' + (fd.renamed.length - 5) + ' 枚' : '')
+        + ' (中身は同じ。消失にも追加にも数えない)');
+    }
     if (fd.added.length) {
+      var drafts = (fd.addedDrafts || []).length;
       lines.push('  追加: ' + _names(fd.added)
-        + ' (実データ ' + fd.dataAdded.length + ' / テンプレ ' + fd.templateAdded.length + ')');
+        + ' (実データ ' + fd.dataAdded.length + ' / テンプレ ' + fd.templateAdded.length
+        + (drafts ? ' / うち新しい下書き ' + drafts + ' 枚' : '') + ')');
     }
     if (fd.removed.length) {
       lines.push('  消失: ' + _names(fd.removed)
-        + ' (実データ ' + fd.dataRemoved.length + ' / テンプレ ' + fd.templateRemoved.length + ')');
+        + ' (実データ ' + fd.dataRemoved.length + ' / テンプレ ' + fd.templateRemoved.length
+        + '。改名は上の行に分けてあるので、ここは本当に無くなった図)');
     }
     // いちばん効くのはここ。新規指摘が出たときに実データが 1 枚も動いて
     // いなければ、図を 22 枚 diff する前に原因をテンプレ側へ寄せられる。
@@ -182,7 +243,7 @@
 
   var api = {
     RULES: RULES, KIND_LABEL: KIND_LABEL,
-    baseName: baseName, classify: classify, fingerprint: fingerprint,
+    baseName: baseName, classify: classify, fingerprint: fingerprint, draftBaseOf: draftBaseOf,
     fileEntries: fileEntries, entriesFromNames: entriesFromNames,
     diffFiles: diffFiles, formatFileDiff: formatFileDiff,
   };
