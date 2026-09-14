@@ -16,6 +16,10 @@ const { loadMA } = require('./audit-runtime');
 const report = require('./audit-report');
 const auditScope = require('../src/core/audit-scope');
 const versionDiff = require('../src/core/version-diff');
+// BLK-reviewer-20260914-1206-wish: 突合結果・前回の指摘文書・前回控えとの差分を
+// 1 枚に束ねる。束ね方は GUI と共通 (src/core/review-board.js)。
+const auditBoard = require('../src/core/audit-board');
+const reviewBoard = require('../src/core/review-board');
 
 // 前回比較用の控え。CLI を打つ場所 (リポジトリ直下) に置く。
 const STATE_FILE = '.assist-audit-last.json';
@@ -51,6 +55,9 @@ const USAGE = [
   '  --versions    監査は回さず、保存フォルダの各図を `_versions/` の直前版と',
   '                突き合わせて差分を出す。上書きで中身が失われた図を名指しする',
   '  --versions-max N  --versions が 1 枚あたりに出す差分行を N 行まで (既定 6、0 で全部)',
+  '  --board [MD]  突合結果・前回の指摘文書 (MD、既定は保存フォルダの 指摘.md)・',
+  '                前回控えとの差分を 1 枚に束ねて出す。前回の指摘 1 件ごとに',
+  '                解消/継続/新規を振り分け、継続には tick 数を数えて付ける',
   '  --no-state    前回比較用の控え (.assist-audit-last.json) を読み書きしない',
   '  --help        この説明',
 ].join('\n');
@@ -136,8 +143,60 @@ function runVersions(targets, max) {
   return 0;
 }
 
+// --board の指摘文書。名指しが無ければ最初の対象フォルダの `指摘.md` を見る
+// (reviewer はそこに上書き保存しているので、既定で当たる)。
+function findingsPath(opts) {
+  if (opts.boardFile) return path.resolve(opts.boardFile);
+  for (const t of opts.targets) {
+    try {
+      if (!fs.statSync(t).isDirectory()) continue;
+    } catch (e) { continue; }
+    const p = path.join(t, '指摘.md');
+    if (fs.existsSync(p)) return p;
+  }
+  // 指摘文書を書くのは reviewer なので、見られる側 (primary / junior) の
+  // フォルダには無い。書いた側のフォルダを既定の置き場として最後に見る。
+  try {
+    const p = path.join(personaRoot(), 'reviewer', '指摘.md');
+    if (fs.existsSync(p)) return p;
+  } catch (e) {}
+  return null;
+}
+
+// 突合結果・前回の指摘文書・前回控えとの差分を 1 枚にする。
+// 指摘文書が無ければ「前回の指摘なし」として今回の突合だけを出す
+// (初回の run でも同じ 1 本のコマンドで済むようにする)。
+function runBoard(result, opts, prev, fmtOpts) {
+  const audits = result.audits || {};
+  const b = auditBoard.build({
+    audits: audits,
+    svg: audits.svg && audits.svg.status === 'ok' ? audits.svg.result : null,
+  });
+  const fpath = findingsPath(opts);
+  let md = '';
+  if (fpath) {
+    try { md = fs.readFileSync(fpath, 'utf-8'); } catch (e) { md = ''; }
+  }
+  const base = fmtOpts.prevFiles && fmtOpts.prevFiles.length
+    ? fmtOpts.prevFiles
+    : (prev && prev.files && prev.files.length ? prev.files : null);
+  const fd = base ? auditScope.diffFiles(base, result.files) : null;
+  const changed = fd && fd.contentComparable
+    ? fd.changed.map((f) => f.name).concat(fd.added.map((f) => f.name))
+    : [];
+
+  const view = reviewBoard.build({ board: b, findings: md, changedFiles: changed });
+  const lines = [reviewBoard.markdown(view, 'レビュー結果 — ' + opts.targets.join(' / '))];
+  lines.push('前回の指摘文書: ' + (fpath || '(無し。今回の突合だけを出しています)'));
+  lines.push('前回控えとの比較: ' + (base
+    ? (fd && fd.contentComparable ? '内容まで比較' : '名前だけ比較 (前回に指紋が無い)')
+    : '(控えが無いため比較なし)'));
+  lines.push('今回の突合: ' + auditBoard.summaryLine(b));
+  return lines.join('\n');
+}
+
 function parseArgs(argv) {
-  const opts = { targets: [], only: null, summary: false, summaryJson: false, out: null, help: false, since: null, sinceFiles: null, state: true, pairsMax: 0, personas: null, versions: false, versionsMax: 6 };
+  const opts = { targets: [], only: null, summary: false, summaryJson: false, out: null, help: false, since: null, sinceFiles: null, state: true, pairsMax: 0, personas: null, versions: false, versionsMax: 6, board: false, boardFile: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--help' || a === '-h') opts.help = true;
@@ -162,6 +221,14 @@ function parseArgs(argv) {
     else if (a === '--versions') opts.versions = true;
     else if (a === '--versions-max') opts.versionsMax = _vnum(argv[++i], a);
     else if (a.indexOf('--versions-max=') === 0) opts.versionsMax = _vnum(a.slice(15), '--versions-max');
+    // --board は引数を任意で取る。次が別のオプションか対象パスのときは
+    // 「既定の 指摘.md」の合図として食べない (ここで食べると対象が 1 つ消える)。
+    else if (a === '--board') {
+      opts.board = true;
+      const next = argv[i + 1];
+      if (next && next.indexOf('--') !== 0 && /\.(md|markdown)$/i.test(next)) opts.boardFile = argv[++i];
+    }
+    else if (a.indexOf('--board=') === 0) { opts.board = true; opts.boardFile = a.slice(8); }
     else if (a === '--no-state') opts.state = false;
     else if (a === '--out') opts.out = argv[++i];
     else if (a.indexOf('--out=') === 0) opts.out = a.slice(6);
@@ -226,7 +293,8 @@ function main(argv) {
   // 「追えない」で終わり、その 1 回だけは 22 枚の手 diff に戻っていた。前回の図が
   // フォルダで残っているなら、そこから指紋を採り直して同じ 1 回で内容変化を出す。
   const fmtOpts = {};
-  if (opts.summary) {
+  // --board も前回との比較を使う (前回控えから変わった図を同じ画面に並べる)。
+  if (opts.summary || opts.board) {
     const from = opts.since ? path.resolve(opts.since) : (opts.state ? statePath : null);
     if (from) prev = readReport(from);
     if (opts.since && !prev) {
@@ -250,7 +318,7 @@ function main(argv) {
       fmtOpts.prevFilesFrom = path.resolve(opts.sinceFiles);
     }
   } else if (opts.sinceFiles) {
-    console.error('--since-files は --summary と一緒に使います');
+    console.error('--since-files は --summary か --board と一緒に使います');
     return 1;
   }
 
@@ -259,6 +327,26 @@ function main(argv) {
   // 標準出力へ出すのは要約に差し替える。--out は今までどおり全部の JSON を
   // 書く (控えとして残すのも、次回の --since で読むのも全部の JSON)。
   const viewJson = opts.summaryJson ? JSON.stringify(report.summaryView(result), null, 2) : null;
+  // --board は「読む画面」なので、JSON の代わりに出す (--summary と併記は可)。
+  if (opts.board) {
+    if (opts.out) {
+      fs.mkdirSync(path.dirname(path.resolve(opts.out)), { recursive: true });
+      fs.writeFileSync(opts.out, json, 'utf-8');
+      console.log(path.resolve(opts.out));
+    }
+    console.log(runBoard(result, opts, prev, fmtOpts));
+    if (opts.summary) console.log('\n' + report.formatSummary(result, prev, fmtOpts));
+    // --summary-json と併記されたら、画面の後ろに要約 JSON も出す
+    // (読む口と機械で読む口を 1 回の実行で両方取れるようにする)。
+    if (viewJson) console.log('\n' + viewJson);
+    if (opts.state) {
+      try { fs.writeFileSync(statePath, json, 'utf-8'); } catch (e) {}
+    }
+    if (rt.errors.length) {
+      for (const e of rt.errors) console.error('読み込み失敗: ' + e.file + ' — ' + e.message);
+    }
+    return 0;
+  }
   if (opts.out) {
     fs.mkdirSync(path.dirname(path.resolve(opts.out)), { recursive: true });
     fs.writeFileSync(opts.out, json, 'utf-8');
