@@ -3942,6 +3942,16 @@ table.vault-table button.vault-open:hover { border-color: var(--accent); }
   text-overflow: clip;
   word-break: break-word;
 }
+/* メンバーの行は `+ TransferComplete() : void` が丸ごと読めないと写す判断が
+   できない (BLK-junior-20260914-1606)。関係の行と同じく折り返して全部出す。 */
+.map-row[data-map-type="member"] { align-items: flex-start; }
+.map-row[data-map-type="member"] .map-ref,
+.map-row[data-map-type="member"] .map-mine {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  word-break: break-word;
+}
 .map-row .map-mine { color: var(--text-secondary); }
 #map-empty { padding: 6px 8px; font-size: 11px; color: var(--text-secondary); }
 /* 雛形との差分 (BLK-junior-20260908-1303-wish)。対応表と同じ並びにする。 */

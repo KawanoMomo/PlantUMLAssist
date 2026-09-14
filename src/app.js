@@ -15460,7 +15460,9 @@ function _mapRow(listEl, row) {
     take.type = 'button';
     take.className = 'map-take';
     take.textContent = '＋この図にも足す';
-    take.title = 'この要素を自分の図の末尾に足す';
+    take.title = row.type === 'member'
+      ? 'このメンバーを自分の図の ' + (row.cls || 'クラス') + ' に足す'
+      : 'この要素を自分の図の末尾に足す';
     take.addEventListener('click', function(e) {
       e.stopPropagation();
       adoptMapRow(row, el);
@@ -15715,9 +15717,11 @@ function renderStateMap() {
   listEl.hidden = false;
   sumEl.textContent = sm.summary(_mapResult);
   sumEl.classList.remove('clean', 'dirty');
-  var onlyCount = _mapResult.states.concat(_mapResult.transitions).filter(function(r) {
-    return r.match === 'ref-only' || r.match === 'mine-only';
-  }).length;
+  // BLK-junior-20260914-1606: メンバーの差も「片方にしかない」なので同じ数に入れる。
+  var onlyCount = _mapResult.states.concat(_mapResult.transitions)
+    .concat(_mapResult.members || []).filter(function(r) {
+      return r.match === 'ref-only' || r.match === 'mine-only';
+    }).length;
   sumEl.classList.add(onlyCount === 0 ? 'clean' : 'dirty');
 
   renderMapAsked();
@@ -15742,6 +15746,11 @@ function renderStateMap() {
   if (_mapResult.transitions.length > 0) {
     _mapSection(listEl, sm.sectionTitles.transitions);
     _mapResult.transitions.forEach(function(r) { _mapRow(listEl, r); });
+  }
+  // クラス図だけが持つ節。対応の付いたクラスの中で、片方にしかないメンバーを並べる。
+  if ((_mapResult.members || []).length > 0 && sm.sectionTitles.members) {
+    _mapSection(listEl, sm.sectionTitles.members);
+    _mapResult.members.forEach(function(r) { _mapRow(listEl, r); });
   }
 }
 
