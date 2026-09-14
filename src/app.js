@@ -6695,6 +6695,99 @@ function _noteApplyVerdict(plan) {
   });
 }
 
+// 保存フォルダの図を全部読む。突合 (eventSync / methodAudit) は「状態遷移図と
+// クラス図の両方」を見て初めて足す先を決められるので、指摘が名指しした図だけでは
+// 足りない (指摘は「メソッドが無い」としか書かず、どのクラス図に足すかは書かない)。
+function _noteFolderDocs() {
+  var WS = window.MA.workspace;
+  if (!WS) return Promise.resolve([]);
+  var dir = _wsFileDir();
+  return WS.listFiles(dir).then(function(names) {
+    return (names || []).reduce(function(chain, n) {
+      return chain.then(function(acc) {
+        return WS.loadFile(n, dir).then(function(dsl) {
+          if (dsl != null) acc.push({ id: n, name: n, dsl: dsl, _dir: dir, _file: n });
+          return acc;
+        }).catch(function() { return acc; });
+      });
+    }, Promise.resolve([]));
+  }).catch(function() { return []; });
+}
+
+function _noteSaveDocs(changed) {
+  var WS = window.MA.workspace;
+  var done = [];
+  return (changed || []).reduce(function(chain, c) {
+    return chain.then(function() {
+      return WS.saveToFile({ name: c.name, dsl: c.dsl }, _wsFileDir()).then(function(ok) {
+        if (ok) done.push(c.name);
+      }).catch(function() { return null; });
+    });
+  }, Promise.resolve()).then(function() { return done; });
+}
+
+// メソッド追加: 「遷移ラベルに対応するメソッドが無い」指摘を、⇄突合の画面を
+// 開かずにその場で当てる (BLK-primary-20260914-1106-wish)。足す先のクラスと
+// メソッド名は eventSync の突合が出すので、ここは読む → 当てる → 保存だけ。
+function _noteApplyAddMethod(plan) {
+  var ES = window.MA.eventSync;
+  if (!ES || !window.MA.workspace) return Promise.resolve({ ok: false, message: '突合が使えません' });
+  return _noteFolderDocs().then(function(docs) {
+    if (!docs.length) return { ok: false, message: '保存フォルダに図がありません' };
+    var built = ES.build(docs);
+    // 指摘が状態遷移図を名指ししていれば、その図の遷移だけを足す。保存フォルダ全体の
+    // 欠落を当てると、指摘が触れていない図の分まで黙って増える (ラベル統一と同じ約束)。
+    var only = {};
+    (plan.docs || []).forEach(function(n) { only[n] = true; });
+    var want = built.missing.filter(function(r) {
+      if (!plan.docs || !plan.docs.length) return true;
+      return (r.stateDocs || []).some(function(n) { return only[n]; });
+    });
+    if (!want.length) {
+      return { ok: false, message: '足りないメソッドはありません (突合では欠落 0 件)' };
+    }
+    var res = ES.apply(docs, want, 'void');
+    if (!res.changed.length) return { ok: false, message: '足す先のクラスが見つかりません' };
+    return _noteSaveDocs(res.changed).then(function(done) {
+      return done.length
+        ? { ok: true, done: done, added: res.added, hits: res.added.length }
+        : { ok: false, message: '書き戻せませんでした' };
+    });
+  });
+}
+
+// クラス追加: 「このクラスがクラス図に不在」を、宣言だけ足して埋める。
+// メンバは書かない (指摘はクラスの不在しか言っていない。想像で操作を足すと
+// 実在しないメソッドが突合の「あり」側に回る)。
+function _noteApplyAddClass(plan) {
+  var CS = window.MA.classScaffold;
+  var MAUD = window.MA.methodAudit;
+  if (!CS || !MAUD || !window.MA.workspace) {
+    return Promise.resolve({ ok: false, message: 'クラス図の組み立てが使えません' });
+  }
+  return _noteFolderDocs().then(function(docs) {
+    // 足す先はクラス宣言を持つ図。複数あれば宣言の多い方 (本体のクラス図)。
+    var target = null;
+    var best = -1;
+    docs.forEach(function(d) {
+      var n = MAUD.parseClassDoc(d.dsl).classes.length;
+      if (n > best) { best = n; target = d; }
+    });
+    if (!target || best <= 0) return { ok: false, message: '保存フォルダにクラス図がありません' };
+    var declared = CS.existingIds(target.dsl);
+    var want = (plan.classes || []).filter(function(c) { return !declared[c]; });
+    if (!want.length) {
+      return { ok: false, message: '指摘のクラスは ' + target.name + ' に宣言済みです' };
+    }
+    var dsl = CS.insertBeforeEnd(target.dsl, want.map(function(c) { return 'class ' + c; }));
+    return _noteSaveDocs([{ name: target.name, dsl: dsl }]).then(function(done) {
+      return done.length
+        ? { ok: true, done: done, added: want, hits: want.length }
+        : { ok: false, message: '書き戻せませんでした' };
+    });
+  });
+}
+
 function applyNoteFinding(id) {
   var FA = window.MA.findingActions;
   var plan = _notePlanOf(id);
@@ -6709,6 +6802,8 @@ function applyNoteFinding(id) {
   renderNotePanel();
   var run = plan.kind === 'rename' ? _noteApplyRename(plan)
           : plan.kind === 'verdict' ? _noteApplyVerdict(plan)
+          : plan.kind === 'addmethod' ? _noteApplyAddMethod(plan)
+          : plan.kind === 'addclass' ? _noteApplyAddClass(plan)
           : _noteApplyReexport(plan);
   return run.catch(function() {
     return { ok: false, message: '当てられませんでした' };

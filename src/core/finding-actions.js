@@ -23,6 +23,8 @@ window.MA.findingActions = (function() {
     reexport: { label: '再出力', verb: 'SVG を出し直す' },
     rename: { label: 'ラベル統一', verb: '部品名を揃える' },
     verdict: { label: '別ドメイン明示', verb: '別物と決めて印を残す' },
+    addmethod: { label: 'メソッド追加', verb: '遷移ラベルに対応するメソッドをクラス図に足す' },
+    addclass: { label: 'クラス追加', verb: 'クラス図に宣言を足す' },
     manual: { label: '手で判断', verb: '' },
   };
 
@@ -51,6 +53,33 @@ window.MA.findingActions = (function() {
   var SVG_BAD_RE = /入れ替わ|クロス|残存|不一致|食い違/;
 
   function svgIsBad(text) { return SVG_RE.test(text) && SVG_BAD_RE.test(text); }
+
+  // 「このクラスにこのメソッドを追加する」型 (BLK-primary-20260914-1106-wish)。
+  // 遷移ラベル / メッセージに対応するメソッドがクラス図に無い、という指摘は
+  // 突合 (eventSync) がそのまま「足す先のクラスと足すメソッド名」まで出せるので、
+  // primary が ⇄突合の画面を自分で開き直す理由が無い。
+  // 「メソッド」を含むだけでは取らない (突合サマリの見出しに毎回出る語)。
+  var ADDMETHOD_RE = /(?:クラス(?:図)?に[^\n]{0,12})?メソッド[^\n]{0,8}を(?:足す|追加)|(?:クラス)?メソッド[^\n]{0,8}が(?:1つも|一つも)?(?:無い|ない|存在しない|不足)/;
+  // 「クラス図にこのクラスが無い」型。足すのは宣言だけ (メンバは後で足せる)。
+  var ADDCLASS_RE = /クラス[^\n]{0,16}(?:クラス図に)?(?:不在|定義されていない|定義されてない|存在しない)|クラス図に[^\n]{0,24}を(?:追加|足す)/;
+
+  // 指摘文が `バッククォート` で名指ししている識別子。クラス名の候補。
+  // `*Regs` のようなワイルドカードと `foo.puml` のようなファイル名は取らない
+  // (そのままの綴りでクラスを宣言すると、実在しない名前の箱が図に増える)。
+  function classNames(text) {
+    var out = [];
+    var seen = {};
+    var re = /`([^`\n]+)`/g;
+    var m;
+    while ((m = re.exec(_s(text)))) {
+      var w = m[1].trim();
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(w)) continue;
+      if (seen[w]) continue;
+      seen[w] = true;
+      out.push(w);
+    }
+    return out;
+  }
 
   function renamePair(text) {
     var s = _s(text);
@@ -111,7 +140,7 @@ window.MA.findingActions = (function() {
     var names = docs.map(function(d) { return d.name; });
     var base = {
       id: _s(row && row.id), heading: _s(row && row.heading) || _s(row && row.title),
-      docs: names, from: '', to: '', otherFolder: '', scope: 'docs',
+      docs: names, from: '', to: '', otherFolder: '', scope: 'docs', classes: [],
     };
 
     // 「再エクスポートが必要」のように手段が名指しされている件は、本文が
@@ -143,6 +172,25 @@ window.MA.findingActions = (function() {
     }
 
     if (svgIsBad(text)) return _finish(_reexport(base, names));
+
+    // メソッド追加は突合が足す先を決めるので、指摘文が図を名指ししていなくてよい
+    // (「遷移ラベルに対応するメソッドが無い」だけで、当てる先は保存フォルダ全体)。
+    if (ADDMETHOD_RE.test(text)) {
+      base.kind = 'addmethod';
+      base.scope = 'folder';
+      base.ready = true;
+      base.reason = '';
+      return _finish(base);
+    }
+
+    if (ADDCLASS_RE.test(text)) {
+      base.kind = 'addclass';
+      base.scope = 'folder';
+      base.classes = classNames(text);
+      base.ready = base.classes.length > 0;
+      base.reason = base.ready ? '' : '指摘文が足すクラスの名前を名指ししていません';
+      return _finish(base);
+    }
 
     base.kind = 'manual';
     base.ready = false;
@@ -180,6 +228,14 @@ window.MA.findingActions = (function() {
       return p.ready ? '再出力: ' + docs + ' の SVG を出し直す'
                      : '再出力: ' + (p.reason || '当てられません');
     }
+    if (p.kind === 'addmethod') {
+      return 'メソッド追加: 遷移ラベルに対応するメソッドを保存フォルダのクラス図に足す';
+    }
+    if (p.kind === 'addclass') {
+      return p.ready
+        ? 'クラス追加: ' + (p.classes || []).join('・') + ' を保存フォルダのクラス図に足す'
+        : 'クラス追加: ' + (p.reason || '当てられません');
+    }
     return '手で判断: ' + (p.reason || '');
   }
 
@@ -203,7 +259,7 @@ window.MA.findingActions = (function() {
     var by = {};
     list.forEach(function(p) { if (p.ready) by[p.kind] = (by[p.kind] || 0) + 1; });
     var parts = [];
-    ['reexport', 'rename', 'verdict'].forEach(function(k) {
+    ['reexport', 'rename', 'verdict', 'addmethod', 'addclass'].forEach(function(k) {
       if (by[k]) parts.push(kindLabel(k) + ' ' + by[k] + ' 件');
     });
     if (!ready) return '指摘 ' + list.length + ' 件 (適用できるものはありません)';
@@ -221,6 +277,12 @@ window.MA.findingActions = (function() {
     }
     if (plan && plan.kind === 'verdict') return done + ' に「別のドメイン」の印を書きました';
     if (plan && plan.kind === 'reexport') return done + ' の SVG を出し直しました';
+    if (plan && plan.kind === 'addmethod') {
+      return (r.added || []).join('・') + ' を ' + done + ' に足しました';
+    }
+    if (plan && plan.kind === 'addclass') {
+      return (r.added || []).join('・') + ' を ' + done + ' に宣言しました';
+    }
     return r.message || '当てました';
   }
 
@@ -229,6 +291,7 @@ window.MA.findingActions = (function() {
     kindLabel: kindLabel,
     renamePair: renamePair,
     mentions: mentions,
+    classNames: classNames,
     mineDocs: mineDocs,
     otherFolderOf: otherFolderOf,
     planFor: planFor,

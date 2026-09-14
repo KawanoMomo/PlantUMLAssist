@@ -323,13 +323,29 @@ const ACT_NOTE = [
   '## 【継続】spi_init_sequence の部品名が不統一',
   '`SpiDrv` を `Spi_Driver` に統一すること。',
   '',
+  '## 【新規】timer_state.puml の遷移ラベルに対応するクラスメソッドが無い',
+  '`driver_common_class.puml` の `Timer_Driver` は `Timer_Init()` しか宣言していないが、',
+  '`timer_state.puml` は `Timer_Start`/`Timer_Stop` の遷移ラベルを使っている。',
+  'クラス図にメソッドを足すか、遷移ラベルを実在する操作名に揃える必要がある。',
+  '',
   '## 【継続】インフラ系クラスがクラス図に不在',
   '`ClockCtrl` / `NVIC` が 1 つも定義されていない。',
+  '',
+  '## 【任意】can の「編集中」ファイルの整理',
+  '編集中のまま残っている図があります。残すか消すかを決めてください。',
 ].join('\n');
 
 const SPI_SEQ = ['@startuml', 'title SPI 初期化シーケンス',
   'participant SpiDrv', 'participant Hw_Ctrl',
   'SpiDrv -> Hw_Ctrl : Spi_Init', '@enduml'].join('\n');
+
+// 指摘が名指しする 2 枚。クラス図は Timer_Init だけを宣言している。
+const ACT_CLASS = ['@startuml', 'title ドライバ共通クラス図',
+  'class Timer_Driver {', '  + Timer_Init() : void', '}',
+  'class Gpio_Driver', '@enduml'].join('\n');
+const ACT_TIMER_STATE = ['@startuml', 'title TIMER 状態遷移',
+  '[*] --> Uninit', 'Uninit --> Ready : Timer_Init',
+  'Ready --> Busy : Timer_Start', 'Busy --> Ready : Timer_Stop', '@enduml'].join('\n');
 
 test.describe('手順5.5 指摘.md を貼る → 提案一覧 → [適用]', () => {
   test.beforeEach(async ({ page }) => {
@@ -337,6 +353,8 @@ test.describe('手順5.5 指摘.md を貼る → 提案一覧 → [適用]', () 
     await S.clearDir(page, ACT_MINE);
     await S.putDoc(page, ACT_MINE, 'spi_init_sequence', SPI_SEQ);
     await S.putDoc(page, ACT_MINE, 'gpio_state', S.GPIO_STATE);
+    await S.putDoc(page, ACT_MINE, 'driver_common_class', ACT_CLASS);
+    await S.putDoc(page, ACT_MINE, 'timer_state', ACT_TIMER_STATE);
     // 指摘.md は図ではないので GUI からは置けない (reviewer が置くファイル)。
     fs.mkdirSync(absOf(ACT_REVIEWER), { recursive: true });
     fs.writeFileSync(nodePath.join(absOf(ACT_REVIEWER), '指摘.md'), ACT_NOTE, 'utf-8');
@@ -357,13 +375,47 @@ test.describe('手順5.5 指摘.md を貼る → 提案一覧 → [適用]', () 
     await expect(rows.nth(1)).toContainText('SpiDrv → Spi_Driver');
     await expect(rows.nth(1)).toContainText('spi_init_sequence');
 
+    // BLK-primary-20260914-1106-wish: 「このクラスにこのメソッドを足す」「このクラスが
+    // クラス図に無い」も定型なので、読んで決める側から [適用] 側へ移る。
+    await expect(rows.nth(2)).toHaveAttribute('data-note-action', 'addmethod');
+    await expect(rows.nth(2)).toContainText('メソッド追加');
+    await expect(rows.nth(3)).toHaveAttribute('data-note-action', 'addclass');
+    await expect(rows.nth(3)).toContainText('ClockCtrl');
+
     // 到達条件その2: 手段が書かれていない指摘は当てず、押せない理由がその場に出る。
-    await expect(rows.nth(2)).toHaveAttribute('data-note-action', 'manual');
-    await expect(rows.nth(2)).toHaveAttribute('data-note-action-ready', '0');
-    await expect(rows.nth(2).locator('.note-apply')).toBeDisabled();
+    await expect(rows.nth(4)).toHaveAttribute('data-note-action', 'manual');
+    await expect(rows.nth(4)).toHaveAttribute('data-note-action-ready', '0');
+    await expect(rows.nth(4).locator('.note-apply')).toBeDisabled();
 
     // 到達条件その3: 今日 [適用] だけで済む件数が、読む前に分かる。
-    await expect(page.locator('#note-apply-summary')).toContainText('2 件は [適用]');
+    await expect(page.locator('#note-apply-summary')).toContainText('4 件は [適用]');
+  });
+
+  test('メソッド不在の指摘は [適用] だけで、クラス図に遷移ラベルの操作が足される', async ({ page }) => {
+    const row = page.locator('#peek-note .note-action-row[data-note-action="addmethod"]');
+    await row.locator('.note-apply').click();
+    // 到達条件その1: 何を何処に足したかが 1 行で読める。
+    await expect(page.locator('#note-summary'))
+      .toContainText('driver_common_class に足しました', { timeout: 20000 });
+
+    // 到達条件その2: ⇄突合の画面を開かなくても、保存フォルダのクラス図が直っている。
+    const saved = (await S.readDoc(page, ACT_MINE, 'driver_common_class')) || '';
+    expect(saved).toContain('+Timer_Start()');
+    expect(saved).toContain('+Timer_Stop()');
+    // 到達条件その3: 指摘が名指ししていない図の欠落までは足さない。
+    expect(saved).not.toContain('Gpio_Write');
+  });
+
+  test('クラス不在の指摘は [適用] だけで、クラス図に宣言が足される', async ({ page }) => {
+    const row = page.locator('#peek-note .note-action-row[data-note-action="addclass"]');
+    await row.locator('.note-apply').click();
+    await expect(page.locator('#note-summary'))
+      .toContainText('宣言しました', { timeout: 20000 });
+    const saved = (await S.readDoc(page, ACT_MINE, 'driver_common_class')) || '';
+    expect(saved).toContain('class ClockCtrl');
+    expect(saved).toContain('class NVIC');
+    // 想像でメンバまで足さない (指摘はクラスの不在しか言っていない)。
+    expect(saved).not.toContain('class ClockCtrl {');
   });
 
   test('部品名の指摘は [適用] だけで、対象図のファイルに当たる', async ({ page }) => {
