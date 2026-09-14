@@ -2557,6 +2557,15 @@ html, body {
 #mexp-matrix tr.mexp-mrow[data-picked="1"] td { background: var(--bg-tertiary); }
 #mexp-matrix td.mexp-mcomp { cursor: pointer; }
 #mexp-matrix-legend { padding: 3px 14px 6px; font-size: 10px; color: var(--text-secondary); }
+/* 行まるごとの一括資料化 (BLK-junior-20260915-0106-wish) */
+#mexp-matrix td.mexp-mrun { padding: 1px 4px; }
+#mexp-matrix button.mexp-row-run {
+  background: var(--bg-tertiary); border: 1px solid var(--accent); color: var(--accent);
+  border-radius: 4px; padding: 1px 8px; font-size: 10px; cursor: pointer; white-space: nowrap;
+}
+#mexp-matrix button.mexp-row-run[disabled] {
+  border-color: var(--border); color: var(--text-secondary); opacity: 0.6; cursor: default;
+}
 /* 貼付先の見出し (BLK-junior-20260914-2106-wish) */
 #mexp-matrix td.mexp-cell[data-anchored="1"] { text-decoration: underline; text-underline-offset: 2px; }
 #mexp-anchor-bar { display: flex; align-items: center; gap: 10px; padding: 0 14px 6px; font-size: 11px; color: var(--text-secondary); }

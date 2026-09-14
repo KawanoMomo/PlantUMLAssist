@@ -21581,6 +21581,7 @@ function _mexpRenderMatrix() {
 
   var h = '<th>部品</th><th>残り</th>';
   sc.kinds.forEach(function(k) { h += '<th>' + _mexpEsc(k) + '</th>'; });
+  h += '<th>一括</th>';
   head.innerHTML = h;
 
   var html = '';
@@ -21601,9 +21602,24 @@ function _mexpRenderMatrix() {
                 ? window.MA.materialAnchor.cellText(row.component, c.kind, c.heading) : ''))) + '">'
         + _mexpEsc(c.absent ? '−' : c.mark) + '</td>';
     });
+    // 行まるごとの一括資料化 (BLK-junior-20260915-0106-wish)。図種を 1 つずつ
+    // 選び直さずに、その部品の未/古のマスを 1 押しで全部出す。
+    html += '<td class="mexp-mrun"><button type="button" class="mexp-row-run"'
+      + ' data-component="' + _mexpEsc(row.component) + '"'
+      + (row.todo ? '' : ' disabled')
+      + ' title="' + _mexpEsc(MM.rowRunLabel(row)) + '">'
+      + _mexpEsc(MM.rowRunLabel(row)) + '</button></td>';
     html += '</tr>';
   });
   body.innerHTML = html;
+
+  var runs = body.querySelectorAll('button.mexp-row-run');
+  for (var b = 0; b < runs.length; b++) {
+    runs[b].addEventListener('click', function(ev) {
+      ev.stopPropagation();   // 行クリック (部品の選択) と二重に動かさない
+      runMaterialRow(ev.currentTarget.getAttribute('data-component'));
+    });
+  }
 
   var cells = body.querySelectorAll('td.mexp-cell, td.mexp-mcomp');
   for (var i = 0; i < cells.length; i++) {
@@ -21617,6 +21633,58 @@ function _mexpRenderMatrix() {
   }
   _mexpMarkPicked();
   _mexpRenderAnchor(sc);
+}
+
+// runMaterialRow(component) — 表の 1 行 (= 1 部品) の未/古の図種をまとめて流す。
+// 計画の作りかたは資料一式ボードと同じ materialBoard.plans、1 件の流しかたは
+// 1 枚の資料化と同じ runMaterialPlan を通す (3 通りの道を持つと、まとめて
+// 出したときだけ庫に入らない・題名が違う、が起きる)。
+// 1 件失敗しても残りは続ける — 1 枚のしくじりで資料一式の作り直しにしない。
+function runMaterialRow(component) {
+  var MM = window.MA.materialMatrix;
+  var MB = window.MA.materialBoard;
+  var state = _mexpSel('mexp-state');
+  var sc = _mexpScan();
+  if (!MM || !MB || !sc) return Promise.resolve([]);
+  var row = null;
+  sc.rows.forEach(function(r) { if (r.component === component) row = r; });
+  var kinds = MM.todoKinds(row);
+  if (!kinds.length) {
+    if (state) state.textContent = MM.rowDoneText(component, []);
+    return Promise.resolve([]);
+  }
+  // 出した先を確かめたくなったときのために、部品欄もこの行に合わせておく。
+  _mexpPicked = component;
+  _mexpPickCell(component, kinds[0]);
+
+  var plans = MB.plans(_mexpEntries.length ? _mexpEntries : _mexpFiles, component, kinds);
+  var results = [];
+  var chain = Promise.resolve();
+  plans.forEach(function(p, i) {
+    chain = chain.then(function() {
+      if (state) state.textContent = MM.rowProgressText(component, p.kind, i + 1, plans.length);
+      return runMaterialPlan(p, { open: false })
+        .then(function() { results.push({ ok: true, kind: p.kind, filename: p.filename }); })
+        .catch(function() { results.push({ ok: false, kind: p.kind, filename: p.filename }); });
+    });
+  });
+  return chain.then(function() {
+    var msg = MM.rowDoneText(component, results);
+    if (window.MA.toast) window.MA.toast.show(msg);
+    try { refreshFolderPanelNow(); } catch (e) {}
+    // 出したあとの一覧を読み直して表を描き直す (出した図種がその場で「済」になる)。
+    var WS = window.MA.workspace;
+    var next = WS.listFileEntries ? WS.listFileEntries(_wsFileDir()) : WS.listFiles(_wsFileDir());
+    return Promise.resolve(next).then(function(list) {
+      _mexpEntries = list || [];
+      _mexpFiles = _mexpEntries.map(function(e) {
+        return (e && typeof e === 'object') ? String(e.name || '') : String(e == null ? '' : e);
+      }).filter(function(n) { return n !== ''; });
+      _mexpRenderComponents();
+      if (state) state.textContent = msg;
+      return results;
+    });
+  });
 }
 
 function openMaterialExport() {
