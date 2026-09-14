@@ -3674,6 +3674,9 @@ function renderTabs() {
   // 書き替えるので、タブを組み立て直す機会に読み直す (控えは版で数えるので、
   // 同じ版を何度読んでも継続 tick 数は伸びない)。
   try { renderRequestBadge(); refreshRequestBadge(); } catch (e) {}
+  // 統一バッジ (BLK-primary-20260914-1006-friction)。旧称が残っているかは図の中身で
+  // 決まるので、タブを組み立て直す機会に数え直す。
+  try { renderRenameBadge(); refreshRenameBadge(); } catch (e) {}
 }
 
 // ── 前回保存時点との差分 ──────────────────────────────
@@ -6774,6 +6777,108 @@ function renderRequestBadge() {
     try {
       openPeekFolder();
       setNoteMode(true);
+    } catch (e) {}
+  });
+}
+
+// ── 部品名の統一バッジ (BLK-primary-20260914-1006-friction) ────────────────
+// 「今日の統一は済んでいるか」を確かめるだけの回でも、⇄ 一括置換を開き、置換前・
+// 置換後を打ち、ヒット 0 件を見る空打ちが要っていた (clicks=4 / keys=16)。
+// 過去に当てた組の残存件数を下端で常時数え、残り 0 なら「統一 済」と言い切る。
+// 残っているときだけ押せば、その組が入った状態でパネルが開く (打鍵ゼロ)。
+var _rbSum = null;
+var _rbWired = false;
+var _rbBusy = false;
+
+// バッジは自前でフォルダを読む。⇄ 一括置換の読み込み (_fiFileDocs / _fiSeq) は
+// 「パネルを開いている間の的」で、置換の書き戻し先でもある。常時動くバッジが
+// その世代を横から進めると、開いた側が読み終える前に的が入れ替わる。
+var _rbFiles = [];
+var _rbDir = null;
+var _rbSeq = 0;
+
+function _rbLoadFiles() {
+  var WS = window.MA.workspace;
+  if (!WS || !WS.listFolder) return Promise.resolve(false);
+  var dir = _wsFileDir();
+  var seq = ++_rbSeq;
+  return WS.listFolder(dir).then(function(info) {
+    var names = ((info && info.entries) || []).map(function(e) {
+      return e && typeof e === 'object' ? e.name : e;
+    }).filter(function(n) { return n; });
+    return Promise.all(names.map(function(n) {
+      return WS.loadFile(n, dir).then(function(text) {
+        return typeof text === 'string' ? { name: n, dsl: text } : null;
+      }, function() { return null; });
+    })).then(function(docs) {
+      if (seq !== _rbSeq) return false;
+      _rbFiles = docs.filter(function(d) { return d; });
+      _rbDir = dir;
+      return true;
+    });
+  }).catch(function() { return false; });
+}
+
+// 数える的。保存フォルダ運用なら未オープンの図も含める (開いている図だけで
+// 「済」と言うと、開いていない図に旧称が残っていても済に見える)。
+// パネル側が既に同じフォルダを読んでいればそれを使う (二重に数えない)。
+function _renameBadgeDocs() {
+  var FI = window.MA.folderImpact;
+  var WS = window.MA.workspace;
+  if (!_fiFolderMode() || !FI || !WS) return _renameDocs();
+  if (_fiDir === _wsFileDir() && !_fiLoading) return _fiRows();
+  var activeId = WS.getActiveId();
+  var open = WS.list().map(function(d) {
+    return d.id === activeId ? { id: d.id, name: d.name, dsl: mmdText } : d;
+  });
+  return FI.merge(open, _rbDir === _wsFileDir() ? _rbFiles : [], _fiRoles);
+}
+
+function refreshRenameBadge(force) {
+  var RB = window.MA.renameBadge;
+  var RR = window.MA.renameRedo;
+  if (!RB || !RR) return Promise.resolve(false);
+  if (_rbBusy) return Promise.resolve(false);
+  _rbBusy = true;
+  var folder = _fiFolderMode();
+  return Promise.all([
+    folder ? loadRenamePairs(force) : Promise.resolve([]),
+    folder ? _rbLoadFiles() : Promise.resolve(false),
+  ]).then(function() {
+    _rbSum = RB.summarize(RR.pairs(_renameRedoPairs(), _renameBadgeDocs()));
+    renderRenameBadge();
+    return true;
+  }).catch(function() { return false; }).then(function(v) { _rbBusy = false; return v; });
+}
+
+function renderRenameBadge() {
+  var RB = window.MA.renameBadge;
+  var btn = document.getElementById('status-rename');
+  if (!RB || !btn) return;
+  btn.textContent = RB.badgeText(_rbSum);
+  btn.classList.toggle('has-open', RB.isActive(_rbSum));
+  btn.setAttribute('data-tone', RB.tone(_rbSum));
+  btn.setAttribute('data-pairs', _rbSum ? String(_rbSum.pairs) : '');
+  btn.setAttribute('data-pending', _rbSum ? String(_rbSum.pending) : '');
+  btn.setAttribute('data-remaining', _rbSum ? String(_rbSum.remaining) : '');
+  btn.title = RB.titleText(null, _rbSum);
+  if (_rbWired) return;
+  _rbWired = true;
+  // 押したら ⇄ 一括置換を開く。残っている組があればその組を入れておく
+  // (バッジから置換に進む間に打つものを無くす)。
+  btn.addEventListener('click', function() {
+    try {
+      var panel = document.getElementById('rename-panel');
+      var tab = document.getElementById('btn-tab-rename');
+      if (panel && !panel.classList.contains('open') && tab) tab.click();
+      var next = _rbSum && _rbSum.next;
+      if (next) {
+        var f = document.getElementById('rename-from');
+        var t = document.getElementById('rename-to');
+        if (f) f.value = next.from;
+        if (t) t.value = next.to;
+        updateRenamePreview();
+      }
     } catch (e) {}
   });
 }
@@ -12114,6 +12219,9 @@ function rememberRenamePair(from, to, hits) {
   var row = { from: String(from).trim(), to: String(to).trim(), at: new Date().toISOString() };
   _rpRows = RP.merge([row], _rpRows);
   if (typeof renderRenameRedo === 'function') renderRenameRedo();
+  // 組が増えた・当たった直後は下端の統一バッジも数え直す (次に開くまで
+  // 「統一 −」のままだと、済んだことをパネルでしか確かめられない)。
+  if (typeof refreshRenameBadge === 'function') refreshRenameBadge(true);
   if (!_fiFolderMode()) return Promise.resolve(null);
   return window.fetch('/rename-pairs', {
     method: 'POST',
@@ -13999,6 +14107,9 @@ function setupBulkRename() {
   document.addEventListener('click', function(ev) {
     if (!panel.classList.contains('open')) return;
     if (panel.contains(ev.target) || ev.target === btn) return;
+    // 下端の統一バッジもこのパネルを開く側 (BLK-primary-20260914-1006-friction)。
+    // 外側クリック扱いにすると、開いた同じクリックでそのまま閉じてしまう。
+    if (ev.target && ev.target.id === 'status-rename') return;
     // 影響ボードはこのパネルの続きなので、外側クリック扱いにしない
     // (閉じてしまうと、見た後に置換前後を直す手が消える)。
     var ri = document.getElementById('ri-modal');

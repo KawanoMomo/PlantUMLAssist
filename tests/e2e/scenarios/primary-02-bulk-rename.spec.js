@@ -260,3 +260,51 @@ test('手順2 欄から離れずに閉じても、打った組は保存フォル
   await expect(page.locator('#rename-from')).toHaveValue('SpiDrv');
   await expect(page.locator('#rename-to')).toHaveValue('Spi_Driver');
 });
+
+// BLK-primary-20260914-1006-friction: 統一が済んでいる回でも、⇄ 一括置換を開き
+// 置換前・置換後を打ち、ヒット 0 件を見る空打ちが要っていた (clicks=4 / keys=16)。
+// 下端の「統一」バッジが残存件数を常時数え、済んでいるならパネルを開かせない。
+test('手順2 下端の統一バッジが、置換の残りを開かずに言う', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  for (const n of S.PRIMARY_DOCS) await S.putDoc(page, DIR, n, S.docFor(n, 'SpiDrv'));
+  await page.reload();
+  await page.waitForSelector('#preview-svg');
+
+  // 1 回だけ普通に置換する (ここで「SpiDrv → Spi_Driver」の組が残る)。
+  await page.keyboard.press('Control+h');
+  await page.waitForSelector('#rename-panel.open', { timeout: 5000 });
+  await page.locator('#rename-from').fill('SpiDrv');
+  await page.locator('#rename-to').fill('Spi_Driver');
+  await page.waitForTimeout(900);
+  await page.locator('#btn-rename-apply').click();
+  await page.waitForTimeout(1500);
+  await page.locator('#btn-rename-cancel').click();
+
+  // 到達条件その1: 次に開いたとき、パネルを開かずに「済」と分かる (打鍵ゼロ)。
+  await page.reload();
+  await page.waitForSelector('#preview-svg');
+  const badge = page.locator('#status-rename');
+  await expect(badge).toHaveAttribute('data-tone', 'done', { timeout: 15000 });
+  await expect(badge).toHaveText('統一 済');
+  await expect(badge).toHaveAttribute('data-pending', '0');
+  await expect(page.locator('#rename-panel.open')).toHaveCount(0);
+
+  // 到達条件その2: 旧名が残っている回は、図を 1 枚も開かないうちに残件数が出る。
+  // (組はフォルダ側に残るので、タブを持たない次の run でもそのまま数えられる)
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  for (const n of S.PRIMARY_DOCS) await S.putDoc(page, DIR, n, S.docFor(n, 'SpiDrv'));
+  await page.reload();
+  await page.waitForSelector('#preview-svg');
+  await expect(badge).toHaveAttribute('data-tone', 'open', { timeout: 15000 });
+  expect(Number(await badge.getAttribute('data-remaining'))).toBeGreaterThan(0);
+
+  // 到達条件その3: バッジを押すだけで、その組が入った状態で置換に進める。
+  await badge.click();
+  await page.waitForSelector('#rename-panel.open', { timeout: 5000 });
+  await page.waitForTimeout(1200);
+  await expect(page.locator('#rename-from')).toHaveValue('SpiDrv');
+  await expect(page.locator('#rename-to')).toHaveValue('Spi_Driver');
+  await expect(page.locator('#btn-rename-apply')).toBeEnabled();
+});
