@@ -29,12 +29,20 @@ const svgEmbeddedSrc = require('./svg-embedded-src');
 // (b) `_versions` がペルソナのフォルダ名として突合に出る。
 // 名指しで渡されたとき (その中を意図して見に行った場合) だけ辿る。
 const BOOKKEEPING_DIRS = ['_versions', '_vault'];
+// BLK-reviewer-20260915-0007: 保存フォルダの中に `prev"cp -r E:01_Loop… "` の
+// ような、シェルの事故でコマンド文字列がそのままフォルダ名になった残骸が出来る。
+// 中身は元フォルダの写しなので、辿ると同じ図が二重に数えられ、指摘が毎回
+// 「新規」で増え続ける。名指しで渡されたときだけ辿り、再帰では読み飛ばす
+// (黙って落とすと「図が減った」と読めるので、読み飛ばした名前は呼ぶ側へ返す)。
+const tracker = require('../src/core/finding-tracker');
 
 function collectDocs(targets, options) {
   const opts = options || {};
   const exts = opts.extensions || ['.puml', '.pu', '.plantuml'];
   const docs = [];
   const seen = {};
+  // 読み飛ばした残骸のフォルダ名。呼ぶ側 (CLI) が「読み飛ばした」と言うために使う。
+  const skipped = Array.isArray(opts.skipped) ? opts.skipped : [];
 
   function pushFile(filePath, name) {
     const key = path.resolve(filePath);
@@ -49,6 +57,10 @@ function collectDocs(targets, options) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
         if (BOOKKEEPING_DIRS.indexOf(entry.name) >= 0) continue;
+        if (tracker.isJunkPath(entry.name)) {
+          if (skipped.indexOf(entry.name) < 0) skipped.push(entry.name);
+          continue;
+        }
         walk(full, base, prefix);
       } else if (exts.indexOf(path.extname(entry.name).toLowerCase()) >= 0) {
         pushFile(full, path.join(prefix, path.relative(base, full)));

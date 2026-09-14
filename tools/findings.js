@@ -25,8 +25,23 @@ const report = require('./audit-report');
 const tracker = require('../src/core/finding-tracker');
 const { loadMA } = require('./audit-runtime');
 
-// 控え。CLI を打つ場所 (リポジトリ直下) に置く。
-const STATE_FILE = '.assist-findings-state.json';
+// 控えの名前。置き場所は既定では「監査した対象フォルダの中」。
+//
+// BLK-reviewer-20260915-0007: 控えを CLI を打つ場所 (リポジトリ直下) に置くと、
+// (a) 対象フォルダが違っても同じ 1 枚を読み書きするので、別のペルソナを見た回の
+// 指摘が混ざる。(b) 成果物リポジトリの直下に作業データが残る。
+// 対象がフォルダ 1 つなら、その中に置く (見ている物と控えが 1 対 1 になる)。
+const STATE_NAME = '.findings-state.json';
+const STATE_FILE = '.assist-findings-state.json';   // フォルダを特定できないときの置き場
+
+// 既定の控えの場所。フォルダ 1 つを見ているならその中、それ以外は打った場所。
+function defaultStateFile(targets) {
+  const dirs = (targets || []).filter((t) => {
+    try { return fs.statSync(t).isDirectory(); } catch (e) { return false; }
+  });
+  if (dirs.length === 1) return path.join(dirs[0], STATE_NAME);
+  return STATE_FILE;
+}
 
 const USAGE = [
   '使い方: node tools/findings.js <フォルダ|.puml|監査JSON> ... [オプション]',
@@ -37,7 +52,7 @@ const USAGE = [
   '  --all          解消・対象外の行も出す (既定は未解消のみ)',
   '  --json         JSON を出す',
   '  --md [FILE]    指摘.md に貼れる表を出す (FILE を書けばそこへ書き出す)',
-  '  --state FILE   控えの置き場所を変える (既定 ' + STATE_FILE + ')',
+  '  --state FILE   控えの置き場所を変える (既定は対象フォルダの中の ' + STATE_NAME + ')',
   '  --no-state     控えを読み書きしない',
   '  --help         この説明',
   '',
@@ -54,7 +69,7 @@ const USAGE = [
 
 function parseArgs(argv) {
   const opts = { targets: [], tick: null, set: null, note: null, all: false, json: false,
-                 md: false, mdFile: null, state: STATE_FILE, useState: true, help: false };
+                 md: false, mdFile: null, state: null, useState: true, help: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--help' || a === '-h') opts.help = true;
@@ -95,6 +110,9 @@ function writeState(file, state) {
 }
 
 // 対象が監査 JSON なら読むだけ。図なら監査を回す (reviewer が 2 回叩かなくて済む)。
+// 読み飛ばした残骸のフォルダ名 (auditsFrom が埋め、main が読み上げる)。
+const skippedDirs = [];
+
 function auditsFrom(targets) {
   const json = targets.filter((t) => /\.json$/i.test(t));
   if (json.length) {
@@ -104,7 +122,7 @@ function auditsFrom(targets) {
     return (v && v.audits) || v;
   }
   const rt = loadMA();
-  const docs = report.collectDocs(targets);
+  const docs = report.collectDocs(targets, { skipped: skippedDirs });
   if (docs.length === 0) throw new Error('対象の .puml が 1 枚もありません: ' + targets.join(', '));
   return report.buildReport(rt.MA, docs, { targets: targets }).audits;
 }
@@ -151,8 +169,17 @@ function main(argv, io) {
     return opts.help ? 0 : 1;
   }
 
-  const statePath = path.resolve(opts.state);
+  const statePath = path.resolve(opts.state || defaultStateFile(opts.targets));
   let store = opts.useState ? readState(statePath) : tracker.emptyState();
+  // 控えに残っている「事故で出来た名前の図」だけの行を、読んだ時点で一度落とす
+  // (読み飛ばすようにしても、既に入った行は黙って残り続けるため)。
+  const pruned = tracker.pruneBroken(store);
+  store = pruned.state;
+  if (pruned.dropped.length) {
+    out('壊れた控えを ' + pruned.dropped.length + ' 件落としました'
+      + ' (シェルの事故で出来たフォルダ名だけを指していた行): '
+      + pruned.dropped.map((d) => d.id + ' ' + d.title).join(', '));
+  }
 
   // --set だけなら監査は回さない。「該当行の状態を更新するだけ」がこの口。
   if (opts.set) {
@@ -184,6 +211,12 @@ function main(argv, io) {
     store = tracker.update(store, {
       audits: audits, label: opts.tick, at: new Date().toISOString(),
     });
+    // 読み飛ばした残骸は名指しで言う (黙って落とすと「図が減った」と読める)。
+    if (skippedDirs.length) {
+      out('読み飛ばしたフォルダ ' + skippedDirs.length + ' 件'
+        + ' (シェルの事故で出来た名前。中身は写しなので消してよい): '
+        + skippedDirs.join(' / '));
+    }
   }
 
   if (opts.useState) writeState(statePath, store);
@@ -219,4 +252,4 @@ function main(argv, io) {
 }
 
 if (require.main === module) process.exit(main(process.argv.slice(2)));
-module.exports = { main, parseArgs, parseSet, USAGE, STATE_FILE, formatSummary };
+module.exports = { main, parseArgs, parseSet, USAGE, STATE_FILE, STATE_NAME, defaultStateFile, formatSummary };
