@@ -1061,3 +1061,63 @@ test.describe('junior 手順 1: 先輩の図が前回保存からどこを変え
     await expect(page.locator('#peek-change-filter')).toHaveText('変更のある図だけ（1 枚）');
   });
 });
+
+// BLK-junior-20260914-1706-wish: 「先輩の変更を取り込む」場面で、先輩にその図種が
+// 1 枚も無ければ取り込む変更は存在しない。ところが「この図種は先輩に実体が無いので
+// 今回は対応不要だった」という結論は自分の記憶と run ログにしか残らず、次に同じ図を
+// 担当するたびに 👀他フォルダ → 図種バッジの確認をゼロからやり直していた。
+// 確認した時点の結論を自分の図に控えられ、次に開いたときそのまま見えることを到達条件にする。
+test.describe('junior 手順 1〜2: 先輩に実体が無い図種の結論を控える', () => {
+  test.beforeEach(async ({ page }) => {
+    await S1.bootWithSaveDir(page, NOTE_MINE);
+    await S1.clearDir(page, NOTE_MINE);
+    await S1.clearDir(page, NOTE_SENIOR);
+    await S1.putDoc(page, NOTE_MINE, 'gpio_state', S1.GPIO_STATE);
+    // 先輩にはシーケンス図しか無い (アクティビティ図は 1 枚も無い)。
+    await S1.putDoc(page, NOTE_SENIOR, 'gpio_init_sequence', SENIOR_SEQ);
+    await page.reload();
+    await page.waitForSelector('#btn-tab-peek');
+  });
+
+  test('先輩に 0 枚の図種は「対応不要」を自分の図に控えられ、次に開いても見える', async ({ page }) => {
+    await S1.openFolderItem(page, 'gpio_state');
+    const lock = page.locator('#source-lock-modal');
+    if (await lock.isVisible().catch(() => false)) {
+      await page.locator('#source-lock-overwrite').click();
+      await page.waitForTimeout(600);
+    }
+    await page.locator('#btn-tab-peek').click();
+    await page.waitForSelector('#peek-modal');
+    await page.locator('#peek-dirs .peek-dir[data-dir-name="primary"]').click();
+    await page.waitForTimeout(1200);
+
+    // 到達条件 1: 先輩に 0 枚の図種が名指しされ、控えるかどうかを聞かれる。
+    const row = page.locator('[data-peek-verdict="アクティビティ"]');
+    await row.waitFor({ timeout: 10000 });
+    await expect(row).toContainText('0 枚です');
+    // 先輩に実体のある図種は聞かれない (取り込む変更があるので対応不要にならない)。
+    expect(await page.locator('[data-peek-verdict="シーケンス"]').count()).toBe(0);
+
+    // 到達条件 2: 1 押しで、確認の結論が自分の図の中に残る。
+    await page.locator('[data-peek-verdict-keep="アクティビティ"]').click();
+    await page.waitForTimeout(1200);
+    const text = await page.locator('#editor').inputValue();
+    expect(text).toContain("' @peek アクティビティ|primary|0");
+
+    // 到達条件 3: 控えた後は「👀手本なし」として見え、確認をやり直さずに済む。
+    await expect(page.locator('[data-peek-verdict="アクティビティ"]')).toContainText('👀手本なし');
+
+    // 到達条件 4: 控えは図の本文なので、保存すれば保存フォルダのファイルにも残る。
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(500);
+    await page.locator('#top-save').click();
+    await page.waitForTimeout(1200);
+    const lock2 = page.locator('#source-lock-modal');
+    if (await lock2.isVisible().catch(() => false)) {
+      await page.locator('#source-lock-overwrite').click();
+      await page.waitForTimeout(900);
+    }
+    await page.waitForTimeout(1200);
+    expect(await S1.readDoc(page, NOTE_MINE, 'gpio_state') || '').toContain("' @peek アクティビティ");
+  });
+});
