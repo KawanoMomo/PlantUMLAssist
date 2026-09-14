@@ -2110,6 +2110,9 @@ html, body {
   background: var(--bg-secondary); border: 1px solid var(--accent); color: var(--accent);
 }
 #peek-note .note-apply:disabled { border-color: var(--border); color: var(--text-secondary); cursor: default; opacity: 0.6; }
+/* 二択の指摘のもう一方 (BLK-primary-20260915-0007-friction)。本手と並べるが、
+   どちらが既定かは決めない — 枠だけ控えめにして 2 つ目だと分かるようにする。 */
+#peek-note .note-apply-alt { margin-left: 4px; border-color: var(--border); color: var(--text-secondary); }
 #peek-note .note-mark {
   display: inline-block; margin-right: 4px; padding: 0 4px; border-radius: 2px;
   font-size: 10px; background: rgba(235, 203, 139, 0.22); color: #ebcb8b;
@@ -6742,6 +6745,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/pin-verify.js"></script>
 <script src="src/core/claim-check.js"></script>
 <script src="src/core/note-block.js"></script>
+<script src="src/core/note-intent.js"></script>
 <script src="src/core/family-clone.js"></script>
 <script src="src/core/subject-preset.js"></script>
 <script src="src/ui/properties.js"></script>

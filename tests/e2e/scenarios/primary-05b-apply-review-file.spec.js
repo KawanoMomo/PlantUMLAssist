@@ -754,3 +754,75 @@ test('手順5.5 保存フォルダの diagram1 は、起動しただけでは見
   await page.waitForTimeout(1500);
   expect(await S.readDoc(page, DIR, 'diagram1')).toContain('domain-verdict');
 });
+
+// BLK-primary-20260915-0007-friction: 依頼2 は「クラス図への追加、または意図的省略
+// である旨の明記」という二択で来る。前者だけが [適用] だったため、後者を選んだ
+// primary は driver_common_class を開き、#editor の末尾へ
+// `note top of ClockCtrl : ...(reviewer依頼2への回答)` を全文タイプしていた
+// (実測 keys=124、1 手順でキー入力 50 超)。二択のもう一方も押すだけで当たることを
+// 到達条件にする。
+const INT_ROOT = './test-results/primary-05b-intent';
+const INT_MINE = INT_ROOT + '/primary';
+const INT_REVIEWER = INT_ROOT + '/reviewer';
+
+const INT_NOTE = [
+  '# primary への指摘',
+  '',
+  '## 【継続・3 tick目】依頼2: メソッド呼び出し先のクラス図欠落',
+  '- `ClockCtrl.EnableClock()`(各 init_sequence)',
+  '- `NVIC.EnableVector()` `NVIC.SetPriority()`(irq_init_sequence)',
+  '- `DmaCtrl.Can_Write()`(can.puml)',
+  '対応するクラス図にメソッド宣言がない。クラス図への追加、または',
+  '`irq_init_sequence.puml` の note のように意図的省略である旨を明記してほしい。',
+].join('\n');
+
+// ClockCtrl / NVIC は宣言済み (note を向けられる)。DmaCtrl は未宣言。
+const INT_CLASS = ['@startuml', 'title ドライバ共通クラス図',
+  'class ClockCtrl', 'class NVIC',
+  'class Timer_Driver {', '  + Timer_Init() : void', '}', '@enduml'].join('\n');
+
+test.describe('手順5.5 二択の指摘は、明記する側も [適用] で当たる', () => {
+  test.beforeEach(async ({ page }) => {
+    await S.bootWithSaveDir(page, INT_MINE);
+    await S.clearDir(page, INT_MINE);
+    await S.putDoc(page, INT_MINE, 'driver_common_class', INT_CLASS);
+    fs.mkdirSync(absOf(INT_REVIEWER), { recursive: true });
+    fs.writeFileSync(nodePath.join(absOf(INT_REVIEWER), '指摘.md'), INT_NOTE, 'utf-8');
+    await page.reload();
+    await page.waitForSelector('#btn-tab-peek');
+    await page.locator('#btn-tab-peek').click();
+    await page.waitForSelector('#peek-modal');
+    await page.locator('#peek-note-toggle').click();
+    await page.waitForSelector('#peek-note .note-action-row');
+  });
+
+  test('二択の指摘の行に、本手と並んで [意図を明記] が出る', async ({ page }) => {
+    const row = page.locator('#peek-note .note-action-row[data-note-alt="noteintent"]');
+    // 到達条件その1: 二択だと分かる 2 つ目の押し所が、本手を隠さずに並ぶ。
+    await expect(row).toHaveAttribute('data-note-alt-ready', '1');
+    await expect(row.locator('.note-apply').first()).toBeEnabled();
+    const alt = row.locator('.note-apply-alt');
+    await expect(alt).toHaveText('意図を明記');
+    // 到達条件その2: 押す前に、どのクラスに何が書かれるかが読める。
+    await expect(alt).toHaveAttribute('title', /意図を明記: ClockCtrl・NVIC/);
+  });
+
+  test('[意図を明記] 1 押しで、note が自分のクラス図のファイルに入る', async ({ page }) => {
+    const alt = page.locator('#peek-note .note-action-row[data-note-alt="noteintent"] .note-apply-alt');
+    await alt.click();
+    // 到達条件その1: 何をどこに書いたかが 1 行で読める。
+    await expect(page.locator('#note-summary'))
+      .toContainText('意図的省略の note を driver_common_class へ書きました', { timeout: 20000 });
+
+    // 到達条件その2: 画面だけでなく保存フォルダの実体に入っている。
+    await expect.poll(async () => (await S.readDoc(page, INT_MINE, 'driver_common_class')) || '',
+      { timeout: 15000 }).toContain('note top of ClockCtrl');
+    const saved = (await S.readDoc(page, INT_MINE, 'driver_common_class')) || '';
+    expect(saved).toContain('EnableClock() の呼び先はクラス図に置かず、意図して省略しています');
+    expect(saved).toContain('note top of NVIC : EnableVector()・SetPriority()');
+    // 到達条件その3: 宣言の無いクラスには向けない (向けると描画ごと落ちる)。
+    expect(saved).not.toContain('note top of DmaCtrl');
+    // @enduml の後ろやクラス本体の内側に落ちない。
+    expect(saved.trim().endsWith('@enduml')).toBe(true);
+  });
+});

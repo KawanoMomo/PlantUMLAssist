@@ -7335,9 +7335,40 @@ function _noteApplyAddClass(plan) {
   });
 }
 
-function applyNoteFinding(id) {
+// 意図を明記: 「クラス図に足すか、意図的省略を明記するか」の後者を当てる
+// (BLK-primary-20260915-0007-friction)。足す先は addclass と同じ「宣言の一番多い
+// クラス図」。note の宛先が宣言されていなければ書かず、先に [クラス追加] を当てる
+// よう理由を返す (宣言の無い相手に note を向けると描画ごと落ちる)。
+function _noteApplyNoteIntent(plan) {
+  var NI = window.MA.noteIntent;
+  var MAUD = window.MA.methodAudit;
+  if (!NI || !MAUD || !window.MA.workspace) {
+    return Promise.resolve({ ok: false, message: '注釈の組み立てが使えません' });
+  }
+  return _noteFolderDocs().then(function(docs) {
+    var target = null;
+    var best = -1;
+    docs.forEach(function(d) {
+      var n = MAUD.parseClassDoc(d.dsl).classes.length;
+      if (n > best) { best = n; target = d; }
+    });
+    if (!target || best <= 0) return { ok: false, message: '保存フォルダにクラス図がありません' };
+    var res = NI.apply(target.dsl, plan.targets, { heading: plan.heading });
+    if (!res.added.length) {
+      return { ok: false, message: NI.blockReason({ skipped: res.skipped }) };
+    }
+    return _noteSaveDocs([{ name: target.name, dsl: res.dsl }]).then(function(done) {
+      return done.length
+        ? { ok: true, done: done, added: res.added, hits: res.added.length }
+        : { ok: false, message: '書き戻せませんでした' };
+    });
+  });
+}
+
+function applyNoteFinding(id, useAlt) {
   var FA = window.MA.findingActions;
-  var plan = _notePlanOf(id);
+  var main = _notePlanOf(id);
+  var plan = useAlt ? (main && main.alt) : main;
   _noteKey = id;
   if (!FA || !plan || !plan.ready) {
     _noteMsg = plan ? (plan.reason || '当てられません') : '指摘が見つかりません';
@@ -7351,6 +7382,7 @@ function applyNoteFinding(id) {
           : plan.kind === 'verdict' ? _noteApplyVerdict(plan)
           : plan.kind === 'addmethod' ? _noteApplyAddMethod(plan)
           : plan.kind === 'addclass' ? _noteApplyAddClass(plan)
+          : plan.kind === 'noteintent' ? _noteApplyNoteIntent(plan)
           : _noteApplyReexport(plan);
   return run.catch(function() {
     return { ok: false, message: '当てられませんでした' };
@@ -7494,6 +7526,25 @@ function renderNotePanel() {
       applyNoteFinding(r.id);
     });
     row.appendChild(apply);
+
+    // 二択で来た指摘の、もう一方の手を隣に置く (BLK-primary-20260915-0007-friction)。
+    // どちらを選ぶかは図を書いている側の判断なので、本手を置き換えず並べる。
+    if (plan.alt) {
+      row.setAttribute('data-note-alt', plan.alt.kind);
+      row.setAttribute('data-note-alt-ready', plan.alt.ready ? '1' : '0');
+      var alt = document.createElement('button');
+      alt.type = 'button';
+      alt.className = 'note-apply note-apply-alt';
+      alt.setAttribute('data-note-apply-alt', r.id);
+      alt.textContent = _noteBusy === r.id ? '…' : plan.alt.label;
+      alt.disabled = !plan.alt.ready || !!_noteBusy;
+      alt.title = plan.alt.ready ? plan.alt.text : (plan.alt.reason || '当てられません');
+      alt.addEventListener('click', function(ev) {
+        ev.stopPropagation();
+        applyNoteFinding(r.id, true);
+      });
+      row.appendChild(alt);
+    }
     el.note.appendChild(row);
   });
 }
