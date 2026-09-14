@@ -130,6 +130,57 @@ const ORPHAN = [
   '                  "isOwn": entries[0]["svgSource"] == entries[0]["hash"]}))',
 ];
 
+// 畳み方は 2 通りある。svg を DOM に通して書き出し直した経路では、
+// processing instruction がコメントに包まれて `<!--?plantuml-src …?-->` で残る。
+// reviewer が実際に詰まった driver_common_class.svg / plantuml-class.svg はこの形で、
+// 片方しか読めないと、まさに確かめたかった 2 枚が黙って未刻印に落ちる。
+const COMMENT_FORM = [
+  'from pathlib import Path',
+  'd = Path(tempfile.mkdtemp())',
+  'A = "@startuml\\ntitle Driver_Common_Class\\nclass Driver_Common\\n@enduml\\n"',
+  'B = "@startuml\\nclass Spi_Driver\\n@enduml\\n"',
+  '(d / "driver_common_class.puml").write_text(A, encoding="utf-8")',
+  '(d / "plantuml-class.puml").write_text(B, encoding="utf-8")',
+  // どちらもコメントに包まれた形。driver_common_class.svg の中身は相手の絵。
+  '(d / "driver_common_class.svg").write_text(',
+  '    "<svg><g></g><!--?plantuml-src " + fold("class Spi_Driver") + "?--></svg>",',
+  '    encoding="utf-8")',
+  '(d / "plantuml-class.svg").write_text(',
+  '    "<svg><g></g><!--?plantuml-src " + fold("class Spi_Driver") + "?--></svg>",',
+  '    encoding="utf-8")',
+  'H = srv.Handler.__new__(srv.Handler)',
+  'entries = [H._autosave_entry(p) for p in sorted(d.glob("*.puml"))]',
+  'H._resolve_unstamped_svg_sources(d, entries)',
+  'by = {e["name"]: e for e in entries}',
+  'print(json.dumps({',
+  '  "decoded": srv.decode_svg_plantuml_src(',
+  '      ("<svg><!--?plantuml-src " + fold("class Spi_Driver") + "?--></svg>").encode("utf-8")),',
+  // 包まれていても、最後の 1 つが図全体の元 DSL という読み方は変わらない
+  '  "last": srv.decode_svg_plantuml_src(',
+  '      ("<svg><!--?plantuml-src " + fold("class Part") + "?-->"',
+  '       "<!--?plantuml-src " + fold("class Whole") + "?--></svg>").encode("utf-8")),',
+  '  "crossFrom": by["driver_common_class"].get("svgSourceFrom"),',
+  '  "crossSource": by["driver_common_class"]["svgSource"],',
+  '  "ownHash": by["plantuml-class"]["hash"],',
+  '  "selfIsOwn": by["plantuml-class"]["svgSource"] == by["plantuml-class"]["hash"],',
+  '}))',
+];
+
+describe('コメントに包まれた埋め込みも読める (BLK-reviewer-20260914-0906)', () => {
+  test('`<!--?plantuml-src …?-->` 形式をデコードできる', () => {
+    const out = JSON.parse(runPython(COMMENT_FORM));
+    expect(out.decoded).toBe('class Spi_Driver');
+    expect(out.last).toBe('class Whole');
+  });
+
+  test('この形式でも、絵が入れ替わった svg の持ち主が一覧で分かる', () => {
+    const out = JSON.parse(runPython(COMMENT_FORM));
+    expect(out.crossFrom).toBe('embedded');
+    expect(out.crossSource).toBe(out.ownHash);
+    expect(out.selfIsOwn).toBe(true);
+  });
+});
+
 describe('畳まれた DSL の相手がフォルダに居ないとき (BLK-reviewer-20260914-0906)', () => {
   test('相手は名指しできなくても「この図の絵ではない」とは言う', () => {
     const out = JSON.parse(runPython(ORPHAN));

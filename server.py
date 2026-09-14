@@ -486,7 +486,15 @@ REPLACE_RETRY_INTERVAL = 0.005
 # 書き出した svg の末尾に元の DSL を `<?plantuml-src …?>` として畳んで埋めるので、
 # それを開けば印が無くても相手を名指しできる。reviewer はこの展開を 1 枚ずつ
 # 手で書いていた (図の枚数だけ render API を叩き直していた)。
-_PLANTUML_SRC_RE = re.compile(rb'<\?plantuml-src\s+([0-9A-Za-z_-]+)\s*\?>')
+#
+# 畳み方は 2 通りある。PlantUML がそのまま書くと XML の processing instruction
+# `<?plantuml-src …?>` になるが、svg を DOM に入れて取り出し直した経路では
+# `<!--?plantuml-src …?-->` (HTML コメントに包まれた形) で残る。ブラウザが
+# 未知の PI をコメントとして読み直すためで、どちらも中身は同じ token。
+# 片方しか読めないと、まさに入れ替わった図が黙って未刻印に落ちる。
+_PLANTUML_SRC_RE = re.compile(
+    rb'<\?plantuml-src\s+([0-9A-Za-z_-]+)\s*\?>'
+    rb'|<!--\?plantuml-src\s+([0-9A-Za-z_-]+)\s*\?-->')
 _PLANTUML_B64 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_'
 _STD_B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
 _PLANTUML_B64_MAP = str.maketrans(_PLANTUML_B64, _STD_B64)
@@ -502,7 +510,7 @@ def decode_svg_plantuml_src(svg_bytes):
         pass          # 最後の 1 つが図全体の元 DSL
     if m is None:
         return None
-    token = m.group(1).decode('ascii').translate(_PLANTUML_B64_MAP)
+    token = (m.group(1) or m.group(2)).decode('ascii').translate(_PLANTUML_B64_MAP)
     token += '=' * (-len(token) % 4)
     try:
         return zlib.decompress(base64.b64decode(token), -15).decode('utf-8', 'replace')
