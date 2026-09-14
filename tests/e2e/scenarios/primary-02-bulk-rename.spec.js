@@ -129,6 +129,68 @@ test('手順2 洗った影響一覧を変更チケットにすると、run を�
   await expect(page.locator('#ct-body tr.ct-item[data-done="1"]')).toContainText('spi_init_sequence');
 });
 
+// BLK-primary-20260914-2206-wish: 依存グラフの行から図は開けるが、開いた瞬間に
+// モーダルが閉じて一覧が消えるので、6 図あれば「◈依存グラフ → 行を探す → 開く」を
+// 6 回繰り返していた (確認は依存グラフ・反映は📂一覧、と経路が分断されていた)。
+// 洗った一覧を下端のバーに残し、直しながら「次へ」で送れるようにした。
+test('手順4 洗った影響が下端に残り、一覧を開き直さずに次の図へ送れる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  for (const n of S.PRIMARY_DOCS) await S.putDoc(page, DIR, n, S.docFor(n, 'SpiDrv'));
+  await page.reload();
+  await page.waitForSelector('#preview-svg');
+
+  await S.runCommand(page, '一括置換');
+  await page.locator('#rename-from').fill('SpiDrv');
+  await page.waitForTimeout(900);
+  await page.locator('#btn-rename-depgraph').click();
+  await page.waitForSelector('#dg-modal', { state: 'visible' });
+  await page.waitForTimeout(600);
+
+  const rows = page.locator('#dg-impact tr.dg-doc');
+  const total = await rows.count();
+  expect(total).toBeGreaterThan(2);
+  const docs = await rows.evaluateAll((els) => els.map((e) => e.getAttribute('data-doc')));
+
+  // 到達条件その1: 一覧を「順に手当てする」で列にすると、1 枚目が開き、
+  // 下端に何枚目 / 残り何枚が出たまま残る (モーダルは閉じてよい)。
+  await page.locator('#dg-walk').click();
+  await expect(page.locator('#dg-modal')).toBeHidden();
+  const bar = page.locator('#fw-bar');
+  await expect(bar).toBeVisible();
+  await expect(page.locator('#fw-label')).toContainText('1 / ' + total + ' 図');
+  await expect(page.locator('#fw-label')).toContainText('残り ' + total);
+  await page.waitForTimeout(800);
+  await expect(page.locator('#tab-bar .tab.active')).toHaveAttribute('data-doc-name', docs[0]);
+
+  // 到達条件その2: 直した印を立てると、一覧を開き直さずに次の図がそのまま開く。
+  await page.locator('#fw-done').click();
+  await page.waitForTimeout(800);
+  await expect(page.locator('#tab-bar .tab.active')).toHaveAttribute('data-doc-name', docs[1]);
+  await expect(page.locator('#fw-label')).toContainText('2 / ' + total + ' 図');
+  await expect(page.locator('#fw-label')).toContainText('残り ' + (total - 1));
+
+  // 印を付けずに送ることもできる (先に全部読んでから直す回)。
+  await page.locator('#fw-next').click();
+  await page.waitForTimeout(800);
+  await expect(page.locator('#tab-bar .tab.active')).toHaveAttribute('data-doc-name', docs[2]);
+  await expect(page.locator('#fw-label')).toContainText('残り ' + (total - 1));
+  await page.locator('#fw-prev').click();
+  await page.waitForTimeout(800);
+  await expect(page.locator('#tab-bar .tab.active')).toHaveAttribute('data-doc-name', docs[1]);
+
+  // 到達条件その3: 一覧に戻ると、どこまで手当てしたかが行に出ている
+  // (同じ図を二度開かない)。列はバーに残ったまま。
+  await page.locator('#fw-list').click();
+  await page.waitForSelector('#dg-modal', { state: 'visible' });
+  await page.waitForTimeout(600);
+  await expect(page.locator('#dg-impact tr.dg-doc[data-fixed="1"]')).toHaveCount(1);
+  await expect(page.locator('#dg-impact tr.dg-doc[data-fixed="1"]')).toContainText(docs[0]);
+  await expect(page.locator('#dg-impact tr.dg-doc[data-current="1"]')).toContainText(docs[1]);
+  await page.locator('#dg-close').click();
+  await expect(bar).toBeVisible();
+});
+
 // BLK-primary-20260914-1106-friction: 同じ組を当て直す運用では、旧称がもう残って
 // いないことを確かめるためだけに SpiDrv / Spi_Driver を毎回打ち直していた
 // (ヒット 0 件は打ち終えてからしか出ない)。パネルを開いた時点で過去の組と
