@@ -37,6 +37,7 @@ const sourceFiles = [
   'src/core/version-timeline.js',
   'src/core/svg-freshness.js',
   'src/core/svg-compare-row.js',
+  'src/core/svg-cross.js',
   'src/core/review-state.js',
   'src/core/file-role.js',
   'src/core/audit-scope.js',

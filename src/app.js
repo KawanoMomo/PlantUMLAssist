@@ -6862,6 +6862,9 @@ function setupTabs() {
   var svgBasis = {};
   // 図名 → 行に並べる 3 つの値 (puml 変更 / SVG 書き出し / labels 一致) と印の有無。
   var svgCompare = {};
+  // BLK-reviewer-20260914-0906-wish: {name}.svg に刻まれた元 puml の sha1 が、
+  // 同じフォルダの別の図のものだったとき、その相手を名指しするための判定。
+  var svgCross = null;
   // 図名 → SVG の書き出し時刻 (ISO8601)。puml の保存時刻と並べて行に出す。
   var svgMtimes = {};
   var svgScan = null;
@@ -7158,6 +7161,11 @@ function setupTabs() {
       // 並べ、印を持たない図に「未刻印」を出すための 1 行ぶんの値。
       var SCR = window.MA.svgCompareRow;
       svgCompare = SCR ? SCR.map(entries, (res && res.verified) || {}) : {};
+      // BLK-reviewer-20260914-0906-wish: 「今の puml の絵ではない」の先の
+      // 「では どの図の絵なのか」。印を同じフォルダの他の図の sha1 と突き合わせる。
+      var SX = window.MA.svgCross;
+      svgCross = SX ? SX.scan(entries) : null;
+      _svgCrossLatest = svgCross;
       // BLK-reviewer-20260908-2003-wish: puml の保存時刻と SVG の書き出し時刻を
       // 同じ行に並べる。片方しか出ていない間は「いつ書き出した SVG か」を
       // ls -l で見に行くことになっていた。
@@ -7483,6 +7491,19 @@ function setupTabs() {
       lsum.title = '各図の行に「puml の保存時刻 / SVG の書き出し時刻 / labels 一致」が並んでいます。'
         + '未確認の図は「未刻印」の行から確かめられます';
       panel.appendChild(lsum);
+    }
+
+    // BLK-reviewer-20260914-0906-wish: 出力先がクロスした図は、上の 3 行では
+    // どれも「内容ずれ」にしか見えない。相手を名指しした 1 行をその下に出す。
+    var SX2 = window.MA.svgCross;
+    if (SX2 && svgCross && svgCross.rows.length) {
+      var xsum = document.createElement('div');
+      xsum.className = 'folder-svg-cross-summary has-stale';
+      xsum.id = 'folder-svg-cross-summary';
+      xsum.textContent = SX2.summaryLine(svgCross);
+      xsum.title = '印 (@pua-source-sha1) が、同じフォルダの別の図の puml のものになっています。'
+        + '行の「他図の絵 / 絵が入れ替わり」で相手が分かります';
+      panel.appendChild(xsum);
     }
 
     if (SF.basisNote) {
@@ -8826,6 +8847,20 @@ function setupTabs() {
       var SCR2 = window.MA.svgCompareRow;
       lb.title = SCR2 && SCR2.rowTitle ? SCR2.rowTitle(cmp) : cmp.title;
       b.appendChild(lb);
+    }
+    // BLK-reviewer-20260914-0906-wish: その svg が「どの図の絵か」。
+    // 相手が分かる図にだけ出す (分からない図は上の「内容ずれ」のまま)。
+    var SX3 = window.MA.svgCross;
+    var xrow = SX3 ? SX3.nameOf(svgCross, name) : null;
+    if (xrow) {
+      var xb = document.createElement('span');
+      xb.className = 'folder-svg-cross';
+      xb.setAttribute('data-svg-cross', xrow.kind);
+      xb.setAttribute('data-svg-cross-of', xrow.of);
+      var xbd = SX3.badge(xrow);
+      xb.textContent = xbd.mark;
+      xb.title = xbd.title;
+      b.appendChild(xb);
     }
     if (bdg && bdg.title) b.title = bdg.title + (mtime ? '（最終保存 ' + mtime + '）' : '');
     b.addEventListener('click', function() { openFromFolder(name); });
@@ -16439,6 +16474,10 @@ function runSaveCheck(docName) {
 //
 // 直前の中身は、この画面がその図を最後に保存したときのものを覚えておく
 // (server 側の _versions/ は中身は残るが「どの操作で」が残らない)。
+// BLK-reviewer-20260914-0906-wish: 一覧を読んだときのクロス判定の控え。
+// 保存の直後に「この図の SVG は別の図の絵だ」とその場で言うために使う。
+var _svgCrossLatest = null;
+
 var _sswPrev = {};       // 図の名前 → この画面が最後に保存した中身
 var _sswLogOpen = false;
 
@@ -16600,6 +16639,14 @@ function runSaveSwapCheck(docName, dsl) {
           new Date().toISOString(), SS.lineCount(dsl)));
     } catch (e) {}
     try { renderSaveSwap(res); } catch (e) {}
+    // BLK-reviewer-20260914-0906-wish: 出力先がクロスしていることに、保存した本人が
+    // その場で気付けるようにする (reviewer の突合を待たない)。一覧を読んでいない
+    // 間は控えが無いので何も言わない。
+    try {
+      var SX = window.MA.svgCross;
+      var line = SX ? SX.saveLine(_svgCrossLatest, docName) : '';
+      if (line) appendSaveStatus(line);
+    } catch (e) {}
     return res;
   }
 
