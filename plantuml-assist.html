@@ -2602,6 +2602,24 @@ html, body {
   margin-left: auto; flex: none; background: var(--bg-tertiary); border: 1px solid var(--border);
   color: var(--text-primary); border-radius: 4px; padding: 2px 8px; font-size: 11px; cursor: pointer;
 }
+/* 保存先から読み直した本文 (BLK-junior-20260915-0106)。開き直さずに中身を読む。 */
+#mexp-readback { border-top: 1px solid var(--border); padding: 6px 14px 10px; }
+#mexp-readback[hidden] { display: none; }
+#mexp-readback-head {
+  display: flex; align-items: center; gap: 8px; font-size: 11px;
+  color: var(--text-secondary); padding-bottom: 4px;
+}
+#mexp-readback-find {
+  margin-left: auto; flex: none; width: 150px; background: var(--bg-tertiary);
+  border: 1px solid var(--border); color: var(--text-primary);
+  border-radius: 4px; padding: 2px 6px; font-size: 11px;
+}
+#mexp-readback-body {
+  margin: 0; max-height: 22vh; overflow: auto; white-space: pre;
+  background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 4px;
+  padding: 6px 8px; font-family: monospace; font-size: 11px; color: var(--text-primary);
+}
+#mexp-readback-body .mexp-rb-hit { background: rgba(217, 138, 42, 0.25); }
 /* 要求ID対応 (BLK-junior-20260909-0103-wish) */
 #req-modal-content {
   background: var(--bg-secondary);
@@ -6603,6 +6621,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/component-pack.js"></script>
 <script src="src/core/material-export.js"></script>
 <script src="src/core/material-verify.js"></script>
+<script src="src/core/material-readback.js"></script>
 <script src="src/core/material-board.js"></script>
 <script src="src/core/material-matrix.js"></script>
 <script src="src/core/material-anchor.js"></script>
@@ -7042,6 +7061,16 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <div id="mexp-result" hidden>
       <span id="mexp-result-text" role="status"></span>
       <button type="button" id="mexp-result-open" title="この図を保存フォルダの一覧で開く">📂 一覧で見る</button>
+    </div>
+    <!-- BLK-junior-20260915-0106: 手順7 が求めるのは「指摘の内容が反映されているか」で、
+         置けたことだけでは足りない。保存先から本文を読み直してここに出し、
+         一覧を開き直して同じ確認をもう一度たどらずに済ませる。 -->
+    <div id="mexp-readback" hidden>
+      <div id="mexp-readback-head">
+        <span id="mexp-readback-text" role="status"></span>
+        <input type="text" id="mexp-readback-find" placeholder="本文を検索 (例: note)">
+      </div>
+      <pre id="mexp-readback-body"></pre>
     </div>
   </div>
 </div>

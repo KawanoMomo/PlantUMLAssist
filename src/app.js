@@ -21694,6 +21694,7 @@ function openMaterialExport() {
   if (state) state.textContent = '';
   // 前の資料化の根拠は畳む (別の図の確認が残っていると読み違える)。
   _mexpShowVerify(null);
+  _mexpShowReadback(null);
   _mexpFiles = [];
   _mexpEntries = [];
   _mexpPicked = '';
@@ -21786,18 +21787,80 @@ function _mexpShowVerify(v) {
   if (open) open.hidden = (v.status !== 'ok');
 }
 
-function _mexpVerify(p) {
+// ── 保存された本文をその場で読む (BLK-junior-20260915-0106) ─────────────────
+// 「置けた」だけでは手順7 の「指摘の内容が反映されているか」は確かめられず、
+// モーダルを閉じて📂一覧 → フィルタ入力 → 行クリック、と同じ確認をもう一度たどる
+// ことになっていた。保存先から本文を読み直してここに出す (画面を閉じさせない)。
+var _mexpReadbackBody = '';
+
+function _mexpRenderReadbackLines() {
+  var pre = document.getElementById('mexp-readback-body');
+  var MR = window.MA.materialReadback;
+  var H = window.MA.htmlUtils;
+  if (!pre || !MR || !H) return;
+  var find = document.getElementById('mexp-readback-find');
+  var needle = find ? String(find.value || '').trim() : '';
+  var lines = MR.toLines(_mexpReadbackBody);
+  var out = [];
+  for (var i = 0; i < lines.length; i++) {
+    var esc = H.escHtml(lines[i]);
+    var hit = needle !== '' && lines[i].indexOf(needle) >= 0;
+    out.push(hit ? '<span class="mexp-rb-hit">' + esc + '</span>' : esc);
+  }
+  pre.innerHTML = out.join('\n');
+  if (needle !== '') {
+    var first = pre.querySelector('.mexp-rb-hit');
+    if (first && first.scrollIntoView) first.scrollIntoView({ block: 'nearest' });
+  }
+}
+
+function _mexpShowReadback(r) {
+  var box = document.getElementById('mexp-readback');
+  var txt = document.getElementById('mexp-readback-text');
+  var find = document.getElementById('mexp-readback-find');
+  if (!box) return;
+  _mexpReadbackBody = (r && r.body) || '';
+  box.hidden = !r;
+  if (!r) {
+    if (find) find.value = '';
+    var pre0 = document.getElementById('mexp-readback-body');
+    if (pre0) pre0.textContent = '';
+    return;
+  }
+  if (txt) txt.textContent = r.text;
+  box.setAttribute('data-status', r.status);
+  box.setAttribute('data-lines', String(r.lineCount || 0));
+  if (find) find.hidden = (r.status === 'unreadable');
+  _mexpRenderReadbackLines();
+}
+
+function _mexpReadback(p, dsl) {
+  var MR = window.MA.materialReadback;
+  var WS = window.MA.workspace;
+  if (!MR || !WS || !WS.loadFile || !p) return Promise.resolve(null);
+  return Promise.resolve(WS.loadFile(p.docName, _wsFileDir())).then(function(text) {
+    var r = MR.report(text, dsl, p);
+    _mexpShowReadback(r);
+    return r;
+  }, function() {
+    var r = MR.report(null, dsl, p);
+    _mexpShowReadback(r);
+    return r;
+  });
+}
+
+function _mexpVerify(p, dsl) {
   var MV = window.MA.materialVerify;
   var WS = window.MA.workspace;
   if (!MV || !WS || !WS.listFolder || !p) return Promise.resolve(null);
   return Promise.resolve(WS.listFolder(_wsFileDir())).then(function(info) {
     var v = MV.verdict(info, p);
     _mexpShowVerify(v);
-    return v;
+    return _mexpReadback(p, dsl).then(function() { return v; });
   }, function() {
     var v = MV.verdict(null, p);
     _mexpShowVerify(v);
-    return v;
+    return _mexpReadback(p, dsl).then(function() { return v; });
   });
 }
 
@@ -21856,7 +21919,7 @@ function runMaterialExport() {
       try { refreshFolderPanelNow(); } catch (e) {}
       // BLK-junior-20260915-0007: 保存先の一覧を読み直して「本当に置けたか」を
       // このモーダルに残す。閉じないので、トーストを見落としても📂一覧へ戻らずに済む。
-      return _mexpVerify(p).then(function() { return p; });
+      return _mexpVerify(p, dsl).then(function() { return p; });
     })
     .catch(function(e) {
       var msg = ME.failMessage(p, e);
@@ -21884,6 +21947,8 @@ function setupMaterialExport() {
   if (run) run.addEventListener('click', function() { runMaterialExport(); });
   // 確かめた図を 📂一覧で開く (BLK-junior-20260915-0007)。確かめは modal に残るので、
   // このボタンは「確かめた後に開きたいとき」の 1 手にすぎない。
+  var rbFind = document.getElementById('mexp-readback-find');
+  if (rbFind) rbFind.addEventListener('input', _mexpRenderReadbackLines);
   var resOpen = document.getElementById('mexp-result-open');
   if (resOpen) resOpen.addEventListener('click', function() {
     var v = _mexpLastVerify;
