@@ -10,12 +10,14 @@
 // 「± 差分」の 2 画面があり、外れた方を開いて閉じ直す往復が毎回出ていた。
 // 参照ペインの中のタブにして、開いたまま行き来できるようにした。
 const { test, expect } = require('@playwright/test');
-const { shotOut } = require('../helpers');
+const { shotOut, gotoApp } = require('../helpers');
 const S = require('./_scenario');
 
 const DIR = S.dirFor(__filename);
 // 顧客に見せる場面は別の保存フォルダで回す (会議の一覧の中身と混ざらない)。
 const DIR2 = S.dirFor(__filename) + '-show';
+// 保存フォルダへ直接書いた回を後から見返す場面 (BLK-primary-20260914-1206-wish)。
+const DIR3 = S.dirFor(__filename) + '-hist';
 
 // 手順2 と同じ一括置換を当てる。手順4 が見せるのはその前後なので、
 // ここを踏まないと「変更前」がそもそも存在しない。
@@ -193,4 +195,78 @@ test('手順4 顧客の前で変更前後を図のまま切り替えて見せら
   await page.locator('#cb-svg').click();
   await expect(entry.locator('table.cb-diff')).toHaveCount(1);
   await expect(entry.locator('.cb-show')).toHaveCount(0);
+});
+
+
+// BLK-primary-20260914-1206-wish: 「± 差分」「⇔ 並べて見る」はその図をエディタで
+// 開いていたセッションの中でしか前後を憶えない。⇄ 一括置換 (未オープンのファイル分) と
+// 🔖 指摘から選ぶの [適用] は保存フォルダへ直接書くので、後から開き直すと基準ごと
+// 今の状態になり、会議で「今日どこを直したか」が出せなかった。
+// 書き込み操作 1 回ぶんの前後を控え、🕘 書き込み履歴 から回を選んで並べられるようにした。
+test('手順4 保存フォルダへ直接書いた回を、後から履歴で選んで並べられる', async ({ page, context }) => {
+  await S.bootWithSaveDir(page, DIR3);
+  await S.clearDir(page, DIR3);
+  await S.putDoc(page, DIR3, 'spi_init_sequence', S.docFor('spi_init_sequence', 'SpiDrv'));
+  // この図は一度も開かない。開かずに直せるのが未オープン置換の値打ちで、
+  // 開いていない図こそ前後が残らなかった。
+  await S.putDoc(page, DIR3, 'driver_common_class', S.docFor('driver_common_class', 'SpiDrv'));
+  await S.openFolderItem(page, 'spi_init_sequence');
+
+  await S.runCommand(page, '一括置換');
+  const allDocs = page.locator('#rename-all-docs');
+  if (!(await allDocs.isChecked())) await allDocs.check();
+  const scan = page.locator('#rename-scan-folder');
+  if (!(await scan.isChecked())) await scan.check();
+  await page.waitForTimeout(1200);
+  await page.locator('#rename-from').fill('SpiDrv');
+  await page.locator('#rename-to').fill('Spi_Driver');
+  await page.waitForTimeout(1200);
+  await expect(page.locator('#rename-summary')).toHaveAttribute('data-unopened-docs', '1');
+  await page.locator('#btn-rename-apply').click();
+  await page.waitForTimeout(2000);
+  const lock = page.locator('#source-lock-modal');
+  if (await lock.isVisible().catch(() => false)) {
+    await page.locator('#source-lock-overwrite').click();
+    await page.waitForTimeout(1200);
+  }
+
+  // 到達条件その1: 1 回の置換が 1 件として残り、当たった図が並ぶ
+  // (開いていた図も、開かずに書き戻した図も同じ 1 回)。
+  await page.locator('#btn-tab-compare').click();
+  await page.locator('#btn-compare-hist').click();
+  const entry = page.locator('#compare-hist-list .wh-entry').first();
+  await expect(entry).toBeVisible();
+  await expect(entry.locator('.wh-head')).toContainText('SpiDrv → Spi_Driver');
+  await expect(entry.locator('.wh-file[data-doc-name="driver_common_class"]')).toHaveCount(1);
+
+  // 到達条件その2: 一度も開いていない図でも、履歴の行を押すだけで
+  // 「その回の変更前」と「今」が並ぶ (会議で見せたい回を選ぶ、が 1 クリック)。
+  await entry.locator('.wh-file[data-doc-name="driver_common_class"]').click();
+  await page.waitForTimeout(1500);
+  await expect(page.locator('#editor')).toHaveValue(/Spi_Driver/);
+  await expect(page.locator('#compare-select option[data-hist="1"]')).toHaveCount(1);
+  await expect(page.locator('#compare-svg')).toContainText('SpiDrv', { timeout: 25000 });
+  await expect(page.locator('#compare-status')).toHaveText('変更前 (読むだけ)', { timeout: 25000 });
+
+  await page.screenshot({ path: shotOut('primary-04-write-history.png'), fullPage: true });
+
+  // 到達条件その3: ブラウザを開き直しても同じ回を出せる (会議の準備を、直した
+  // 直後にその場でやらなくてよい)。
+  const page2 = await context.newPage();
+  await gotoApp(page2);
+  await page2.waitForTimeout(1200);
+  await page2.locator('#btn-tab-compare').click();
+  await page2.locator('#btn-compare-hist').click();
+  const entry2 = page2.locator('#compare-hist-list .wh-entry').first();
+  await expect(entry2.locator('.wh-head')).toContainText('SpiDrv → Spi_Driver');
+  await entry2.locator('.wh-file[data-doc-name="driver_common_class"]').click();
+  await page2.waitForTimeout(1500);
+  await expect(page2.locator('#compare-svg')).toContainText('SpiDrv', { timeout: 25000 });
+
+  // 到達条件その4: 会議が終われば回ごとに捨てられる (古い回が出続けない)。
+  await page2.locator('#compare-hist-list .wh-entry').first().locator('.wh-drop').click();
+  await page2.waitForTimeout(600);
+  await expect(page2.locator('#compare-hist-list .wh-entry')).toHaveCount(0);
+  await expect(page2.locator('#compare-hist-empty')).toBeVisible();
+  await page2.close();
 });

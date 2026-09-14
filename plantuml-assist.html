@@ -3509,6 +3509,22 @@ table.vault-table button.vault-open:hover { border-color: var(--accent); }
   cursor: pointer;
 }
 #compare-status { white-space: nowrap; }
+#compare-hist-bar {
+  display: flex; align-items: center; gap: 6px;
+  padding: 3px 8px; flex-shrink: 0; font-size: 10px;
+  border-bottom: 1px solid var(--border);
+}
+#compare-hist-bar button { font-size: 10px; padding: 1px 6px; cursor: pointer; }
+#compare-hist-summary { color: var(--text-secondary); }
+#compare-hist-list {
+  max-height: 140px; overflow-y: auto; flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+}
+#compare-hist-list[hidden] { display: none; }
+.wh-entry { padding: 4px 8px; border-bottom: 1px solid var(--border); }
+.wh-head { font-size: 10px; color: var(--text-secondary); margin-bottom: 2px; }
+.wh-file, .wh-drop { font-size: 10px; padding: 1px 5px; margin: 1px 3px 1px 0; cursor: pointer; }
+.wh-drop { float: right; }
 #btn-compare-close {
   border: 1px solid var(--border);
   background: var(--bg-primary);
@@ -5530,6 +5546,15 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <span id="compare-status"></span>
         <button type="button" id="btn-compare-close" title="並べて見るのをやめる">✕</button>
       </div>
+      <!-- BLK-primary-20260914-1206-wish: ⇄一括置換・🔖[適用] は保存フォルダへ直接書くので、
+           開き直すと前後が出せなかった。書き込み 1 回ぶんの前後をここに並べ、会議で
+           見せたい回を選べるようにする。 -->
+      <div id="compare-hist-bar">
+        <button type="button" id="btn-compare-hist" aria-expanded="false"
+                title="保存フォルダへ書いた操作の前後を、後から呼び出して並べる">🕘 書き込み履歴</button>
+        <span id="compare-hist-summary"></span>
+      </div>
+      <div id="compare-hist-list" hidden></div>
       <!-- BLK-junior-20260907-0843-wish: 参照図と編集中の図の食い違いを保存前に挙げる -->
       <div id="check-bar">
         <button type="button" id="btn-check-run" title="参照図と突き合わせて食い違いを探す">⚖ 整合チェック</button>
@@ -5978,6 +6003,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/select-at-line.js"></script>
 <script src="src/core/tail-kind-chips.js"></script>
 <script src="src/core/before-snapshot.js"></script>
+<script src="src/core/write-history.js"></script>
 <script src="src/core/compare-view.js"></script>
 <script src="src/core/cross-ref-diff.js"></script>
 <script src="src/core/count-compare.js"></script>
