@@ -21,6 +21,8 @@ var depPaths = [
   '../src/core/family-audit.js',
   '../src/core/change-board.js',
   '../src/core/bulk-export.js',
+  '../src/core/review-pins.js',
+  '../src/core/handoff-summary.js',
   '../src/core/handoff-package.js',
 ];
 depPaths.forEach(function(p) {
@@ -193,15 +195,18 @@ describe('スナップショット', function() {
 
 describe('index.html', function() {
   // 申し送りチェックリストが 4 番目に入り、図一式は 5 番目になった
-  // (BLK-primary-20260908-1803-wish)。
-  test('5 つの節がこの順で並ぶ', function() {
+  // (BLK-primary-20260908-1803-wish)。さらに「今回の変更と、その理由」が先頭に入り、
+  // 材料の 5 節はそれぞれ 1 つ後ろへ動いた (BLK-primary-20260914-1906-wish)。
+  test('6 つの節がこの順で並ぶ', function() {
     var html = HP.renderIndexHtml(snapshotOf(true));
-    var i1 = html.indexOf('1. 系統チェック結果');
-    var i2 = html.indexOf('2. 名前突合結果');
-    var i3 = html.indexOf('3. 直近の変更サマリ');
-    var i4 = html.indexOf('4. 申し送りチェックリスト');
-    var i5 = html.indexOf('5. 図一式');
-    expect(i1).toBeGreaterThan(-1);
+    var i0 = html.indexOf('1. 今回の変更と、その理由');
+    var i1 = html.indexOf('2. 系統チェック結果');
+    var i2 = html.indexOf('3. 名前突合結果');
+    var i3 = html.indexOf('4. 直近の変更サマリ');
+    var i4 = html.indexOf('5. 申し送りチェックリスト');
+    var i5 = html.indexOf('6. 図一式');
+    expect(i0).toBeGreaterThan(-1);
+    expect(i1).toBeGreaterThan(i0);
     expect(i2).toBeGreaterThan(i1);
     expect(i3).toBeGreaterThan(i2);
     expect(i4).toBeGreaterThan(i3);

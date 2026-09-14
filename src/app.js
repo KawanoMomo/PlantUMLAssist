@@ -17659,11 +17659,19 @@ function buildHandoffPackage(targetDocs) {
   return renderNext(0).then(function() {
     var FA = window.MA.familyAudit;
     var NA = window.MA.nameAudit;
+    // BLK-primary-20260914-1906-wish: 引き継ぎサマリに「要修正の印が残っている行数」を
+    // 出すため、図ごとのレビュー結果も渡す (印の持ち主は review-verdicts)。
+    var RV = window.MA.reviewVerdicts;
+    var verdicts = {};
+    if (RV && RV.listFor) {
+      docs.forEach(function(d) { verdicts[d.name] = RV.listFor(d.name) || []; });
+    }
     var snapshot = HP.buildSnapshot({
       docs: docs,
       families: FA ? FA.audit(docs) : [],
       names: NA ? NA.audit(docs) : null,
       board: _changeBoardModel(),
+      verdicts: verdicts,
       svgs: svgs,
       notes: window.MA.handoverNotes ? window.MA.handoverNotes.list() : [],
     });

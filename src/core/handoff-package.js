@@ -120,11 +120,15 @@ window.MA.handoffPackage = (function() {
     var HC = window.MA.handoverChecklist;
     var checklist = HC ? HC.build(o.notes, o.checklistAt) : { createdAt: '', items: [] };
     var failed = diagrams.filter(function(d) { return !d.rendered; }).length;
+    // BLK-primary-20260914-1906-wish: 材料の前に「今日どの図の何を・なぜ直したか」を置く。
+    var HS = window.MA.handoffSummary;
+    var summary = HS ? HS.build({ diagrams: diagrams, board: o.board, verdicts: o.verdicts }) : null;
     return {
       createdAt: stamp(o.now),
       total: diagrams.length,
       renderedCount: diagrams.length - failed,
       diagrams: diagrams,
+      summary: summary,
       family: family,
       names: name,
       change: change,
@@ -219,6 +223,66 @@ window.MA.handoffPackage = (function() {
     return out || '<p class="muted">図がありません。</p>';
   }
 
+  // BLK-primary-20260914-1906-wish: 材料の前に置く「今日どの図の何を・なぜ直したか」。
+  // 1 枚につき 変更点 → なぜ (反映した指摘) → 図 の順で、同じ塊に並べる。
+  // 新人はここを上から読むだけで済み、渡す側の口頭説明が要らなくなる。
+  function _summaryHtml(sum) {
+    var s = sum || {};
+    var changed = s.changed || [];
+    var out = '';
+    if (changed.length === 0) {
+      out += '<p class="muted">今回変更した図はありません。下の「図一式」をそのまま見てください。</p>';
+    }
+    changed.forEach(function(d) {
+      out += '<div class="sum">';
+      out += '<h3>' + esc(d.name) + ' <small>' + esc(d.diagramType) + ' · ' + esc(d.changeLine) + '</small></h3>';
+      if (d.reasons.length > 0) {
+        out += '<p class="why-head">なぜ直したか (反映した指摘 ' + d.reasons.length + ' 件)</p><ul class="why">';
+        d.reasons.forEach(function(r) { out += '<li>' + esc(r) + '</li>'; });
+        out += '</ul>';
+      } else {
+        out += '<p class="muted">この図に紐づく指摘はありません (指摘によらない変更)。</p>';
+      }
+      if (d.openPins.length > 0) {
+        out += '<p class="why-head">まだ直していない指摘 ' + d.openPins.length + ' 件 (引き継ぐ宿題)</p><ul class="todo">';
+        d.openPins.forEach(function(t) { out += '<li>' + esc(t) + '</li>'; });
+        out += '</ul>';
+      }
+      if (d.fixCount) {
+        out += '<p class="muted">変更サマリで「要修正」の印が ' + d.fixCount + ' 行に残っています。</p>';
+      }
+      out += '<pre class="diff">';
+      (d.diffRows || []).forEach(function(r) {
+        if (r.kind === 'gap') { out += '<span class="gap">  … ' + r.count + ' 行省略 …</span>\n'; return; }
+        var sign = r.kind === 'add' ? '+' : (r.kind === 'del' ? '-' : ' ');
+        var text = r.kind === 'del' ? r.before : r.after;
+        out += '<span class="' + esc(r.kind) + '">' + sign + ' ' + esc(text == null ? '' : text) + '</span>\n';
+      });
+      out += '</pre>';
+      out += d.rendered
+        ? '<div class="fig">' + d.svg + '</div>'
+        : '<p class="muted">この図は書き出せませんでした。</p>';
+      out += '</div>';
+    });
+    // 未対応の指摘は、変えていない図に残っていることもある。宿題を落とさない。
+    var restTodo = (s.rest || []).filter(function(d) { return d.openPins.length > 0; });
+    if (restTodo.length > 0) {
+      out += '<h3>今回は変えていないが、指摘が残っている図</h3><ul class="todo">';
+      restTodo.forEach(function(d) {
+        d.openPins.forEach(function(t) { out += '<li>' + esc(d.name) + ': ' + esc(t) + '</li>'; });
+      });
+      out += '</ul>';
+    }
+    return out;
+  }
+
+  function _summaryLine(snapshot) {
+    var HS = window.MA.handoffSummary;
+    var s = snapshot && snapshot.summary;
+    if (!HS || !s) return '';
+    return HS.summaryLine(s);
+  }
+
   function _checklistHtml(snapshot) {
     var HC = window.MA.handoverChecklist;
     if (!HC) return '<p class="muted">申し送りはありません。</p>';
@@ -246,6 +310,12 @@ window.MA.handoffPackage = (function() {
     '.fig{background:#fff;border:1px solid #d5d5da;border-radius:4px;padding:10px;overflow-x:auto;margin-bottom:12px;}',
     '.fig svg{max-width:100%;height:auto;}',
     '.muted{color:#6a6a72;font-size:12px;}',
+    '.sum{background:#fff;border:1px solid #d5d5da;border-radius:6px;padding:10px 14px;margin:10px 0 16px;}',
+    '.sum h3{margin-top:4px;}',
+    '.why-head{font-size:12px;font-weight:600;margin:10px 0 2px;}',
+    'ul.why,ul.todo{margin:2px 0 10px;padding-left:20px;font-size:12px;}',
+    'ul.why li{margin:2px 0;}',
+    'ul.todo li{margin:2px 0;color:#8a4b06;}',
     'footer{margin-top:32px;font-size:11px;color:#6a6a72;}',
   ].join('\n');
 
@@ -280,23 +350,27 @@ window.MA.handoffPackage = (function() {
         + '</small></header>',
       '<p class="verdict"><strong>' + esc(s.verdict) + '</strong></p>',
 
-      '<h2>1. 系統チェック結果' + _badge(s.family && s.family.ok) + '</h2>',
+      '<h2>1. 今回の変更と、その理由</h2>',
+      '<p>' + esc(_summaryLine(s)) + '</p>',
+      _summaryHtml(s.summary),
+
+      '<h2>2. 系統チェック結果' + _badge(s.family && s.family.ok) + '</h2>',
       '<p>' + esc(s.family ? s.family.line : '') + '</p>',
       _familyHtml(s.family || {}),
 
-      '<h2>2. 名前突合結果' + _badge(s.names && s.names.ok) + '</h2>',
+      '<h2>3. 名前突合結果' + _badge(s.names && s.names.ok) + '</h2>',
       '<p>' + esc(s.names ? s.names.line : '') + '</p>',
       _namesHtml(s.names || {}),
 
-      '<h2>3. 直近の変更サマリ</h2>',
+      '<h2>4. 直近の変更サマリ</h2>',
       '<p>' + esc(s.change ? s.change.line : '') + '</p>',
       _changeHtml(s.change || {}),
 
-      '<h2>4. 申し送りチェックリスト</h2>',
+      '<h2>5. 申し送りチェックリスト</h2>',
       '<p>' + esc(_checklistLine(s)) + '</p>',
       _checklistHtml(s),
 
-      '<h2>5. 図一式</h2>',
+      '<h2>6. 図一式</h2>',
       _diagramsHtml(s),
 
       '<footer>PlantUMLAssist の「引き継ぎパッケージ」が作成。この HTML 1 枚で、作成時点の'
@@ -333,6 +407,7 @@ window.MA.handoffPackage = (function() {
     buildSnapshot: buildSnapshot,
     renderIndexHtml: renderIndexHtml,
     checklistLine: _checklistLine,
+    summaryLine: _summaryLine,
     files: files,
   };
 })();
