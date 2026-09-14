@@ -146,6 +146,50 @@ test('手順8 内容据え置きの継続と、本当の出戻りを --board が
   expect(md).toContain('（SVG 再エクスポート待ち）');
 });
 
+test('手順8 絞って回した回は、見ていない監査の指摘を解消と言わない', () => {
+  // BLK-reviewer-20260914-2206 (3 件目): `--board --only svg` のように監査を絞ると、
+  // 回していない監査の指摘まで「今回の突合に出ていない = 解消」と出ていた。
+  // reviewer はそのたびに図の中身を読み直して人力で判定していた。
+  const 前回 = [
+    '# primary への指摘(前回)',
+    '',
+    '## 【継続・2回目】依頼2 `ClockCtrl.EnableClock` の呼び先',
+    'driver_common_class.puml のクラス図に `ClockCtrl.EnableClock` のメソッドがありません。継続 2 tick 目。',
+    '',
+    '## 【継続】1回目 driver_common_class.svg が未再エクスポート',
+    'driver_common_class.puml を直した後の svg の書き出しが追いついていません。',
+  ].join('\n');
+  // --only svg で回した回の突合行。svg の行しか来ない。
+  const rows = [
+    { doc: 'driver_common_class', docs: ['driver_common_class'], kind: 'svg.stale',
+      category: '出力物/SVG 古', title: 'driver_common_class.puml', detail: 'SVG が図より古いままです' },
+  ];
+  const view = reviewBoard.build({ board: { rows: rows }, findings: 前回,
+    changedFiles: [], scope: ['svg'] });
+  const by = {};
+  view.carried.forEach((c) => { by[c.verdict] = (by[c.verdict] || []).concat([c]); });
+
+  // 到達条件その1: 回していない監査の指摘は解消に落ちない。
+  expect(view.counts.resolved).toBe(0);
+  expect(view.counts.outOfScope).toBe(1);
+  expect(by.outOfScope[0].finding.title).toContain('ClockCtrl.EnableClock');
+  expect(by.outOfScope[0].note).toContain('見ていません');
+
+  // 到達条件その2: 据え置きなので tick を数え直さない
+  // (絞った回を挟んだだけで継続 N がぶれない)。
+  expect(by.outOfScope[0].tick).toBe(2);
+
+  // 到達条件その3: スコープ内の指摘は今までどおり継続として数える。
+  expect(view.counts.carried).toBe(1);
+  expect(by.carried[0].finding.title).toContain('driver_common_class.svg');
+
+  // 到達条件その4: 絞って回したことが画面の頭と要約で分かる。
+  expect(reviewBoard.summaryLine(view)).toContain('今回は見ていない 1 件');
+  const md = reviewBoard.markdown(view, '前回の指摘の反映状況');
+  expect(md).toContain('--only svg');
+  expect(md).toContain('据え置き');
+});
+
 // 監査を回すたびに記録しておいた 3 tick 分。gpio の名前不一致は 3 tick 目で直り、
 // spi の名前不一致は最後まで残る (台本の「継続 / 反映済み」がそのまま出る形)。
 function ok(result) { return { status: 'ok', result: result }; }

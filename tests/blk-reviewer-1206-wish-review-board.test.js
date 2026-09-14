@@ -111,8 +111,11 @@ describe('review-board.build — 4 つの情報源を 1 枚に束ねる', functi
   test('どの前回指摘にも当たらない行が新規として残る', function() {
     expect(view.fresh.map((r) => r.doc)).toEqual(['adc_state.puml']);
     // regressed は BLK-reviewer-20260914-2206 で足した内数 (継続のうち本当の出戻り)。
+    // outOfScope は同 3 件目で足した枠 (--only で回していない監査の指摘)。
+    // ここは全部回した回なので常に 0。
     expect(view.counts).toEqual({
-      carried: 3, regressed: 0, resolved: 1, sameDoc: 0, unmatched: 0, fresh: 1, changed: 2,
+      carried: 3, regressed: 0, resolved: 1, outOfScope: 0, sameDoc: 0, unmatched: 0,
+      fresh: 1, changed: 2,
     });
   });
 

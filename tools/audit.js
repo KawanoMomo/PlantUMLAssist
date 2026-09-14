@@ -222,13 +222,20 @@ function runBoard(result, opts, prev, fmtOpts) {
     ? fd.changed.map((f) => f.name).concat(fd.added.map((f) => f.name))
     : [];
 
-  const view = reviewBoard.build({ board: b, findings: md, changedFiles: changed });
+  // BLK-reviewer-20260914-2206 (3 件目): --only で絞った回は、回していない監査の
+  // 指摘まで「今回の突合に出ていない = 解消」と出ていた。何を回したかを渡して、
+  // 見ていない物は「今回は見ていない」と言わせる。
+  const view = reviewBoard.build({ board: b, findings: md, changedFiles: changed,
+    scope: opts.only && opts.only.length ? opts.only : null });
   const lines = [reviewBoard.markdown(view, 'レビュー結果 — ' + opts.targets.join(' / '))];
   lines.push('前回の指摘文書: ' + (fpath || '(無し。今回の突合だけを出しています)'));
   lines.push('前回控えとの比較: ' + (base
     ? (fd && fd.contentComparable ? '内容まで比較' : '名前だけ比較 (前回に指紋が無い)')
     : '(控えが無いため比較なし)'));
   lines.push('今回の突合: ' + auditBoard.summaryLine(b));
+  if (opts.only && opts.only.length) {
+    lines.push('前回控えの更新: 絞った回なので更新していません (次の素の回が前回のまま比べます)');
+  }
   return lines.join('\n');
 }
 
@@ -340,6 +347,11 @@ function main(argv) {
   // ことも、監査側にカテゴリが新設されたことも読めない。前回の控えを既定で
   // 読み書きし、--summary に差分を足す。--since で控え以外の JSON とも比べられる。
   const statePath = path.resolve(STATE_FILE);
+  // BLK-reviewer-20260914-2206 (3 件目): --only / --cohort / --names で絞った回の
+  // 結果で控えを上書きすると、次の素の回が「回さなかった監査の指摘は前回 0 件だった」
+  // と読み、同じ指摘を新規として出し直す。呼び出しの順序だけで新規/継続がぶれる
+  // のはここが根。絞った回は読むだけで、控えは全部回した回だけが書き替える。
+  const partial = !!(opts.only && opts.only.length);
   let prev = null;
   // BLK-reviewer-20260908-0203 (0723 追記): 指紋を載せる前に採った JSON と比べる run は
   // 「追えない」で終わり、その 1 回だけは 22 枚の手 diff に戻っていた。前回の図が
@@ -391,7 +403,7 @@ function main(argv) {
     // --summary-json と併記されたら、画面の後ろに要約 JSON も出す
     // (読む口と機械で読む口を 1 回の実行で両方取れるようにする)。
     if (viewJson) console.log('\n' + viewJson);
-    if (opts.state) {
+    if (opts.state && !partial) {
       try { fs.writeFileSync(statePath, json, 'utf-8'); } catch (e) {}
     }
     if (rt.errors.length) {
@@ -414,7 +426,7 @@ function main(argv) {
     console.log(json);
   }
   // 次回の比較のために控えを置く。書けない場所でも監査自体は成功させる。
-  if (opts.state) {
+  if (opts.state && !partial) {
     try { fs.writeFileSync(statePath, json, 'utf-8'); } catch (e) {}
   }
   if (rt.errors.length) {
