@@ -4864,12 +4864,15 @@ function renderChecklistState() {
   var el = document.getElementById('cb-checklist-state');
   if (!HC || !el) return null;
   var cur = HC.current();
+  // BLK-primary-20260915-2346-wish: 「渡した」で終わらせない。新人が index.html の
+  // 見る順をどこまで辿ったかが返ってきていれば、申し送りの件数より先に出す。
+  var route = HC.routeLine(cur.route);
   if (!cur.summary.total) {
-    el.textContent = 'まだ引き継ぎパッケージを渡していません';
+    el.textContent = route || 'まだ引き継ぎパッケージを渡していません';
     el.title = '';
     return cur;
   }
-  el.textContent = cur.summary.line;
+  el.textContent = route ? (route + ' ・ ' + cur.summary.line) : cur.summary.line;
   var fu = HC.followUps(cur.items).map(function(it) { return it.name; });
   el.title = fu.length ? ('分からなかった: ' + fu.join(', ')) : '';
   return cur;
@@ -4924,7 +4927,10 @@ function receiveHandoverReply(text) {
   var cur = renderChecklistState();
   var sumEl = document.getElementById('cb-summary');
   if (sumEl) sumEl.textContent = _cbSummaryText(_changeBoardModel());
-  if (window.MA.toast && cur) window.MA.toast.show('返信を読み込みました ・ ' + cur.summary.line);
+  if (window.MA.toast && cur) {
+    var line = cur.summary.total ? cur.summary.line : HC.routeLine(cur.route);
+    window.MA.toast.show('返信を読み込みました ・ ' + line);
+  }
   return r;
 }
 

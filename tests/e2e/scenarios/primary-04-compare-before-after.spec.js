@@ -421,3 +421,84 @@ test('手順4 前回渡した版と今を、納品履歴の行から図ごとに
   await page.locator('#dp-close').click();
   await S.clearDir(page, DIR4);
 });
+
+// BLK-primary-20260915-2346-wish: 手順4 は zip を書き出して終わっていた。渡した zip は
+// 図・SVG・突合結果を詰めただけで、新人が「今日どの図から見ればよいか」を辿る順序が
+// 無く、展開してファイル名から中身を推測するしかなかった。index.html の先頭に
+// 「見る順」を置き、どこまで辿ったかが渡した側に返るところまでを 1 本で確かめる。
+test('手順4 渡す zip の先頭に、新人が辿る順が付いている', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+
+  const model = await page.evaluate(() => {
+    const HP = window.MA.handoffPackage;
+    const HR = window.MA.handoffRoute;
+    // 手順2 で直した図 (指摘が残っているもの・済んだもの) と、触っていない図。
+    const snap = {
+      createdAt: '2026-09-15 23:51',
+      diagrams: [
+        { id: 'a', name: 'GPIO 初期化シーケンス', diagramType: 'sequence', filename: 'svg/a.svg', rendered: true, svg: '<svg/>' },
+        { id: 'b', name: 'GPIO 状態遷移', diagramType: 'state', filename: 'svg/b.svg', rendered: true, svg: '<svg/>' },
+        { id: 'c', name: 'CAN クラス', diagramType: 'class', filename: 'svg/c.svg', rendered: true, svg: '<svg/>' },
+      ],
+      summary: {
+        changed: [
+          { name: 'GPIO 初期化シーケンス', diagramType: 'sequence', changed: true, changeLine: '+2 −1 行', reasons: ['名前をそろえた'], openPins: ['粒度が粗い'], fixCount: 0, diffRows: [] },
+          { name: 'GPIO 状態遷移', diagramType: 'state', changed: true, changeLine: '+1 −0 行', reasons: [], openPins: [], fixCount: 0, diffRows: [] },
+        ],
+        rest: [{ name: 'CAN クラス', diagramType: 'class', changed: false, changeLine: '', reasons: [], openPins: [], fixCount: 0, diffRows: [] }],
+        changedCount: 2, total: 3,
+      },
+      family: { ok: true, line: '', families: [] },
+      names: { ok: true, line: '', variants: [], undeclared: [] },
+      change: { line: '', board: null },
+      checklist: { createdAt: '', items: [] },
+      verdict: '3 枚',
+      total: 3, renderedCount: 3,
+    };
+    const route = HR.build(snap);
+    return {
+      html: HP.renderIndexHtml(snap),
+      names: route.stops.map((s) => s.name),
+      steps: route.stops.map((s) => s.step),
+      next0: route.stops[0].next,
+      anchor0: route.stops[0].anchor,
+      rest: route.rest.map((s) => s.name),
+      line: route.line,
+    };
+  });
+
+  // 到達条件その1: 材料の節より前に「見る順」が出る。
+  expect(model.html.indexOf('1. 見る順')).toBeGreaterThan(-1);
+  expect(model.html.indexOf('2. 今回の変更と、その理由')).toBeGreaterThan(model.html.indexOf('1. 見る順'));
+
+  // 到達条件その2: ①は「今回変わっていて、直す手が残っている」図。
+  expect(model.names[0]).toBe('GPIO 初期化シーケンス');
+  expect(model.steps[0]).toBe('手順2');
+  // 触っていない図は順番を付けず参考に落ちる (24 枚を上から眺めさせない)。
+  expect(model.rest).toEqual(['CAN クラス']);
+
+  // 到達条件その3: ①→②がつながっていて、押せば図の本体へ飛ぶ。
+  expect(model.next0).toBe('GPIO 状態遷移');
+  expect(model.html).toContain('href="#' + model.anchor0 + '"');
+  expect(model.html).toContain('id="' + model.anchor0 + '"');
+
+  // 到達条件その4: 「何枚を順に見るのか」が 1 行で読める。
+  expect(model.line).toContain('2 枚');
+
+  // 到達条件その5: 新人が返した記録で「どこまで辿れたか」が渡した側に出る。
+  const shown = await page.evaluate(() => {
+    const HC = window.MA.handoverChecklist;
+    HC.clear();
+    HC.receive(JSON.stringify({
+      kind: 'handover-reply', createdAt: '2026-09-15 23:51',
+      replies: {}, route: { total: 2, seen: 2, at: 'now' },
+    }));
+    const line = HC.routeLine(HC.current().route);
+    HC.clear();
+    return line;
+  });
+  expect(shown).toBe('新人の順路 2 枚すべてを辿りました');
+
+  await S.clearDir(page, DIR);
+});
