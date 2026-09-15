@@ -825,6 +825,13 @@ html, body {
   gap: 2px;
   font-size: 10px;
   color: var(--text-secondary);
+  /* BLK-primary-20260916-0100 (差し戻し 1 回目): 一覧の行は横に長く、パネルは
+     横にもスクロールする (実測 scrollWidth 896 / clientWidth 608)。[履歴] は行の右端に
+     あるので、押すとパネルが右へ 288px スクロールし、左端から始まるこの一覧は
+     画面の外 (x=-62) へ出る。戻す先を名指しする 1 行もろとも読めなくなっていた。
+     スクロール位置によらずパネルの左端に留める。 */
+  position: sticky;
+  left: 0;
 }
 /* 中身が減ったまま保存された図に出す、戻す先の名指し (BLK-primary-20260916-0100)。
    20 行ぜんぶ同じ見た目の一覧から「どれに戻せば直るか」を当てさせない。 */
@@ -862,6 +869,17 @@ html, body {
   text-align: left;
   overflow-wrap: anywhere;
   font-weight: 600;
+}
+/* 減っていないときに出す 1 行 (BLK-primary-20260916-0100)。名指しの警告ではないので
+   枠も色も付けず、行数だけを静かに言う。 */
+#folder-panel .folder-version-status {
+  font-size: 10px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin-bottom: 3px;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 #folder-panel button.folder-version[data-version-best="1"] { border-color: var(--accent); }
 /* 版 1 本ぶんの行。「開く」と「戻す」を横に並べる (BLK-primary-20260913-0306-friction) */
