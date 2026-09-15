@@ -17,7 +17,7 @@ var depPaths = [
   '../src/core/props-renderer.js',
   '../src/core/overlay-builder.js',
   '../src/core/sequence-marks.js',
-  '../src/modules/sequence.js',
+  '../src/core/sequence-participant-zone.js', '../src/modules/sequence.js',
 ];
 depPaths.forEach(function(p) {
   try { delete require.cache[require.resolve(p)]; } catch (e) {}

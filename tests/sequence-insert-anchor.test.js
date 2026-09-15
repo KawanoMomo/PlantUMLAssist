@@ -21,7 +21,7 @@ var SRC = [
   '../src/core/parser-utils.js',
   '../src/ui/properties.js',
   '../src/core/sequence-marks.js',
-  '../src/modules/sequence.js',
+  '../src/core/sequence-participant-zone.js', '../src/modules/sequence.js',
 ];
 // 後続テスト (sequence-overlay.test.js 等) が自前の window へ再登録できるよう、
 // require キャッシュを前後で落とす。

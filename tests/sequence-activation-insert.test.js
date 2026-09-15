@@ -22,6 +22,7 @@ var SRC = [
   '../src/ui/properties.js',
   '../src/core/sequence-marks.js',
   '../src/core/sequence-activation-insert.js',
+  '../src/core/sequence-participant-zone.js',
   '../src/modules/sequence.js',
 ];
 SRC.forEach(function(p) { try { delete require.cache[require.resolve(p)]; } catch (e) {} require(p); });

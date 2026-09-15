@@ -7,7 +7,7 @@ if (!global.window) {
 }
 
 ['../src/core/dsl-utils.js', '../src/core/parser-utils.js',
-  '../src/modules/component.js', '../src/modules/sequence.js', '../src/modules/state.js',
+  '../src/modules/component.js', '../src/core/sequence-participant-zone.js', '../src/modules/sequence.js', '../src/modules/state.js',
   '../src/core/component-deps.js', '../src/core/component-starter.js'].forEach(function(p) {
   try { delete require.cache[require.resolve(p)]; } catch (e) {}
   try { require(p); } catch (e) { /* 依存が無い環境でも starter 単体は読める */ }

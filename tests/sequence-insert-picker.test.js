@@ -19,7 +19,7 @@ var SRC = [
   '../src/core/parser-utils.js',
   '../src/ui/properties.js',
   '../src/core/sequence-marks.js',
-  '../src/modules/sequence.js',
+  '../src/core/sequence-participant-zone.js', '../src/modules/sequence.js',
 ];
 SRC.forEach(function(p) { try { delete require.cache[require.resolve(p)]; } catch (e) {} require(p); });
 

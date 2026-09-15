@@ -27,6 +27,7 @@ require('../src/core/parser-utils.js');
 require('../src/core/line-resolver.js');
 require('../src/core/overlay-builder.js');
 require('../src/core/selection-router.js');
+require('../src/core/sequence-participant-zone.js');
 require('../src/modules/sequence.js');
 require('../src/ui/sequence-overlay.js');
 

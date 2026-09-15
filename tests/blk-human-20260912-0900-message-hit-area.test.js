@@ -28,7 +28,7 @@ var MODS = [
   '../src/core/line-resolver.js',
   '../src/core/overlay-builder.js',
   '../src/core/selection-router.js',
-  '../src/modules/sequence.js',
+  '../src/core/sequence-participant-zone.js', '../src/modules/sequence.js',
   '../src/ui/sequence-overlay.js'
 ];
 // 先行する test ファイルが別の jsdom window でこれらを require 済みだと、
