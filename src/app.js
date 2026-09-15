@@ -10031,6 +10031,11 @@ function setupTabs() {
   // 印はパネルを開いている間だけ持つ (次に開いたときは白紙から選ぶ)。
   var folderPicked = [];
   var folderNames = [];
+  // BLK-reviewer-20260916-0326-wish: 他 persona との部品名突合の結果。
+  // 押されるまで null (照合していないことと、照合して 0 件を読み分ける)。
+  var nameClashRes = null;
+  var nameClashMine = {};
+  var nameClashBusy = false;
   // BLK-junior-20260908-1103: 名前での絞り込み。一覧は 20 枚超の行が縦に並び、
   // 行ごとに印・役割・差分のボタンが付くので、目的の 1 枚を一発で押し分けにくい。
   var folderQuery = '';
@@ -10559,6 +10564,7 @@ function setupTabs() {
         appendSwapQueueSection(panel, dir);
         appendKindSummary(panel);
         appendKindMismatchSummary(panel);
+        appendNameClashSummary(panel);
         plain.items.forEach(function(e) { panel.appendChild(folderRow(e.name || e, null, null)); });
         appendDraftSection(plain.drafts, function(e) { return folderRow(e.name || e, null, null); });
         appendGoneVersionsSection(panel);
@@ -10604,6 +10610,7 @@ function setupTabs() {
       }
       appendKindSummary(panel);
       appendKindMismatchSummary(panel);
+      appendNameClashSummary(panel);
       sp.items.forEach(function(r) { panel.appendChild(rowOf(r)); });
       appendDraftSection(sp.drafts, rowOf);
       appendGoneVersionsSection(panel);
@@ -12039,6 +12046,13 @@ function setupTabs() {
       row.setAttribute('data-note-hit', hit);
       if (hit === 'target') row.classList.add('folder-note-target');
     }
+    // BLK-reviewer-20260916-0326-wish: 他 persona の図と部品名が割れている印。
+    var cb = folderClashBadge(name);
+    if (cb) {
+      row.appendChild(cb);
+      row.classList.add('folder-clash-row');
+      row.setAttribute('data-clash-verdict', cb.getAttribute('data-clash-severity'));
+    }
     var kb = folderKindBadge(name);
     if (kb) row.appendChild(kb);
     var vb = folderVersionButton(name);
@@ -13034,7 +13048,117 @@ function setupTabs() {
     // 「開く」の隣に置く —— どちらも「印を付けた図をどうするか」のボタンで、
     // 資料を作る場面では開かずに出せることがここで分かる必要がある。
     bar.appendChild(folderExportButton());
+    // BLK-reviewer-20260916-0326-wish: 他 persona の図と部品名を突き合わせる。
+    // 「印を付けた図をどうするか」の隣ではなく最後に置く —— 対象は印ではなく
+    // フォルダ全体で、押すと一覧の各行に「誰と衝突しているか」の印が付く。
+    bar.appendChild(folderClashButton());
     return bar;
+  }
+
+  // ── 他 persona との部品名衝突 (BLK-reviewer-20260916-0326-wish) ──────────
+  // 表記揺れはグループ単位でしか出ないので、Clock_Ctrl ⇔ ClockCtrl が自分の中
+  // だけの揺れなのか相手の図とぶつかっているのかは、グループの図を 1 枚ずつ
+  // 開いて誰のフォルダかを見るまで分からなかった (前回の run はそれを取り違えた)。
+  // 一覧の行に「誰と衝突しているか」を出し、突合対象をコマンドで組み立てて
+  // 全文を読み直す手順ごと無くす。
+
+  function folderClashButton() {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'folder-clash-run';
+    b.id = 'folder-clash-run';
+    b.textContent = '他personaと突合';
+    b.title = '隣の persona のフォルダの図まで読んで、部品名の表記が割れている図に印を付けます';
+    b.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      runNameClash();
+    });
+    return b;
+  }
+
+  // 全 persona のフォルダの本文を読んで突き合わせる。押されるまで読まない
+  // (フォルダ数 × 枚数の読み込みを、見る気になっていない段階で走らせない)。
+  function runNameClash() {
+    var NC = window.MA.nameClash;
+    var WS = window.MA.workspace;
+    if (!NC || !WS || nameClashBusy) return Promise.resolve(null);
+    nameClashBusy = true;
+    renderFolderPanel();
+    var dirs = _peekDirs.slice();
+    if (!dirs.length) dirs = [{ path: _wsFileDir(), name: _noteMineFolder() || '自分', current: true }];
+    return Promise.all(dirs.map(function(d) {
+      return WS.listFiles(d.path).then(function(names) {
+        return Promise.all((names || []).filter(function(n) { return n; }).map(function(n) {
+          return WS.loadFile(n, d.path).then(function(text) {
+            return { name: d.name + '/' + n, persona: d.name, _file: n, _dir: d.path,
+                     _current: !!d.current, dsl: typeof text === 'string' ? text : '' };
+          }).catch(function() { return null; });
+        }));
+      }).catch(function() { return []; });
+    })).then(function(sets) {
+      var docs = [];
+      sets.forEach(function(rows) {
+        (rows || []).forEach(function(r) { if (r) docs.push(r); });
+      });
+      nameClashRes = NC.audit(docs);
+      // 一覧の行はこのフォルダのファイル名なので、自分の図だけ名前で引けるようにする。
+      nameClashMine = {};
+      docs.forEach(function(d) {
+        if (d._current) nameClashMine[d._file] = nameClashRes.byDoc[d.name];
+      });
+      nameClashBusy = false;
+      renderFolderPanel();
+      return nameClashRes;
+    }, function() {
+      nameClashBusy = false;
+      nameClashRes = null;
+      renderFolderPanel();
+      return null;
+    });
+  }
+
+  function folderClashBadge(name) {
+    var NC = window.MA.nameClash;
+    if (!NC || !nameClashRes) return null;
+    var b = NC.badge(nameClashMine[name]);
+    if (!b) return null;
+    var el = document.createElement('span');
+    el.className = 'folder-clash folder-clash-' + b.severity;
+    el.setAttribute('data-clash', name);
+    el.setAttribute('data-clash-severity', b.severity);
+    el.textContent = b.mark + ' ' + b.label;
+    el.title = b.title;
+    return el;
+  }
+
+  // 一覧の下の 1 行。何枚を照合しての結果かを必ず書く (照合していないだけの
+  // 0 件と読み分けられないと、結局 audit を回し直すことになる)。
+  function appendNameClashSummary(host) {
+    var NC = window.MA.nameClash;
+    if (!NC) return;
+    var line = document.createElement('div');
+    line.id = 'folder-name-clash';
+    line.className = 'folder-name-clash ' + NC.summaryClass(nameClashRes);
+    line.textContent = nameClashBusy
+      ? '他の persona のフォルダを読んでいます…'
+      : NC.summaryLine(nameClashRes);
+    line.title = '「他personaと突合」を押すと、隣のフォルダの図まで読んで部品名を突き合わせます';
+    host.appendChild(line);
+
+    // 衝突している組は、相手側の綴りと図の名前まで出す。ここで名指ししないと
+    // 「どの図が相手側か」を確かめるために結局 1 枚ずつ開くことになる。
+    var lines = NC.crossLines(nameClashRes);
+    if (!lines.length) return;
+    var box = document.createElement('div');
+    box.id = 'folder-clash-lines';
+    box.className = 'folder-clash-lines';
+    lines.forEach(function(t) {
+      var row = document.createElement('div');
+      row.className = t.charAt(0) === ' ' ? 'fc-line fc-where' : 'fc-line fc-group';
+      row.textContent = t.trim();
+      box.appendChild(row);
+    });
+    host.appendChild(box);
   }
 
   function folderExportButton() {

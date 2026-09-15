@@ -369,3 +369,62 @@ test('手順2 揃える先を 1 度登録すると、次の tick は決め直す
 
   fs.rmSync(root, { recursive: true, force: true });
 });
+
+// BLK-reviewer-20260916-0326-wish: 表記揺れはグループ単位でしか出ないので、
+// Clock_Ctrl ⇔ ClockCtrl が junior の中だけの揺れなのか primary の図とぶつかって
+// いるのかは、グループの図を 1 枚ずつ開いて誰のフォルダかを見るまで分からなかった
+// (前回の run はそれを取り違えて「junior 内部だけの揺れ」と書いた)。手順2 を
+// 「突合対象をコマンドで組み立てて全文を読み直す」から「印が付いた図だけ開く」に変える。
+const S2 = require('./_scenario');
+
+test('手順2 他 persona と部品名が衝突している図が、一覧の印で分かる', async ({ page }) => {
+  test.setTimeout(120 * 1000);
+  // 隣り合う 2 つの persona フォルダ (peek の行き先は保存先の隣)。
+  const ROOT = S2.dirFor(__filename) + '/personas';
+  const MINE = ROOT + '/primary';
+  const THEIRS = ROOT + '/junior';
+
+  const cls = (names) => ['@startuml', ...names.map((n) => 'class ' + n),
+    names[0] + ' --> ' + names[0], '@enduml'].join('\n');
+  const seq = (names) => ['@startuml', ...names.map((n) => 'participant ' + n),
+    names[0] + ' -> ' + names[0] + ' : Init()', '@enduml'].join('\n');
+
+  await S2.bootWithSaveDir(page, THEIRS);
+  await S2.clearDir(page, THEIRS);
+  // junior 側: Clock_Ctrl / Irq_Ctrl。
+  await S2.putDoc(page, THEIRS, 'clock_state', seq(['Clock_Ctrl']));
+  await S2.putDoc(page, THEIRS, 'irq_sequence', seq(['Irq_Ctrl']));
+
+  await S2.bootWithSaveDir(page, MINE);
+  await S2.clearDir(page, MINE);
+  // primary 側: ClockCtrl は junior と綴りが割れている (= 衝突)。
+  await S2.putDoc(page, MINE, 'driver_common_class', cls(['ClockCtrl', 'SpiDrv']));
+  // IrqCtrl も割れているが、こちらは自分の中でも割れている図を作らないので
+  // 「相手と衝突」だけが出る。SpiDrv は誰とも割れていない (印が付かない)。
+  await S2.putDoc(page, MINE, 'spi_state', seq(['SpiDrv']));
+  await S2.bootWithSaveDir(page, MINE);
+  await page.waitForSelector('#preview-svg');
+
+  await S2.openFolder(page);
+  // 到達条件 1: 押す前は「照合していない」と言い切る (0 件と読み違えさせない)。
+  await expect(page.locator('#folder-name-clash')).toContainText('照合していません');
+
+  await page.locator('#folder-clash-run').click();
+  await expect(page.locator('#folder-name-clash')).toContainText('枚を照合', { timeout: 60000 });
+
+  // 到達条件 2: 衝突している図の行にだけ印が付き、相手の persona を名指しする。
+  const bad = page.locator('.folder-row[data-clash-verdict="cross"]');
+  await expect(bad).toHaveCount(1);
+  await expect(bad.locator('.folder-clash')).toContainText('juniorと衝突');
+  // 誰とも割れていない図には印が付かない。
+  await expect(page.locator('[data-clash="spi_state"]')).toHaveCount(0);
+
+  // 到達条件 3: どの図が相手側かが、1 枚ずつ開かずにその場で読める。
+  const lines = page.locator('#folder-clash-lines');
+  await expect(lines).toContainText('ClockCtrl');
+  await expect(lines).toContainText('Clock_Ctrl');
+  await expect(lines).toContainText('junior/clock_state');
+  // 数え上げは両側の図を数える (相手側が何枚巻き込まれているかまで見えないと、
+  // 「相手に断る」ときにこちらの 1 枚だけを見て話すことになる)。
+  await expect(page.locator('#folder-name-clash')).toContainText('他 persona と衝突 2 図');
+});
