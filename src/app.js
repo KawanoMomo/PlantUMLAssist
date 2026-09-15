@@ -13419,7 +13419,8 @@ function setupTabs() {
       var stampBadge = document.createElement('span');
       stampBadge.className = 'folder-stamp';
       stampBadge.setAttribute('data-change-stamp', String(sm.runs));
-      stampBadge.textContent = sm.mark + ' ' + sm.text;
+      stampBadge.textContent = sm.short;
+      stampBadge.setAttribute('data-stamp-text', sm.text);
       stampBadge.title = sm.title;
       b.appendChild(stampBadge);
       b.setAttribute('data-change-stamp', String(sm.runs));

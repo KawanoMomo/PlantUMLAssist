@@ -53,6 +53,7 @@ describe('changeStamp.stamp', function() {
     var st = CS.stamp(store, row);
     expect(st.mark).toBe('＝');
     expect(st.text).toBe('変化なし ×3');
+    expect(st.short).toBe('＝3');
     expect(st.runs).toBe(3);
     expect(st.title).toContain('1 バイトも変わっていません');
     expect(st.title).toContain('3 回連続');
@@ -61,6 +62,7 @@ describe('changeStamp.stamp', function() {
     var st = CS.stamp({ a: { hash: 'h1', runs: 1, since: '' } },
                       RW.diff({ a: 'h1' }, [entry('a', 'h1')])[0]);
     expect(st.text).toBe('変化なし');
+    expect(st.short).toBe('＝');
   });
   test('変わった図・新しい図には出さない', function() {
     expect(CS.stamp(store, RW.diff({ a: 'h0' }, [entry('a', 'h1')])[0])).toBe(null);

@@ -82,8 +82,11 @@ window.MA.changeStamp = (function() {
       + 'から 1 バイトも変わっていません'
       + (runs > 1 ? '（' + runs + ' 回連続）' : '')
       + '。前回の指摘をそのまま転記できます';
+    // 行は名前・SVG の印・時刻が並んで既に詰まっているので、行に置くのは
+    // 「＝」と連続回数だけ (short)。言葉は説明 (title) と一覧の頭の要約に出す。
     return {
       mark: MARK,
+      short: runs > 1 ? MARK + runs : MARK,
       text: runs > 1 ? TEXT + ' ×' + runs : TEXT,
       label: TEXT,
       runs: runs,

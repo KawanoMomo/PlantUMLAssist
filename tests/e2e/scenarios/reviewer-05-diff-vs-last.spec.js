@@ -316,10 +316,10 @@ test('手順5 前回控えから変わっていない図に「変化なし」の
   await page.locator('.folder-mark-seen').click();
   await page.waitForTimeout(1200);
   const alpha = page.locator('#folder-panel .folder-item[data-file-name="alpha_state"]');
-  await expect(alpha.locator('.folder-stamp')).toContainText('変化なし');
   await expect(alpha.locator('.folder-stamp')).toHaveAttribute('data-change-stamp', '2');
   // 何回続けて変わっていないかも行の上で読める (2 tick 分か、今回だけかが分かる)。
-  await expect(alpha.locator('.folder-stamp')).toContainText('×2');
+  await expect(alpha.locator('.folder-stamp')).toHaveText('＝2');
+  await expect(alpha.locator('.folder-stamp')).toHaveAttribute('data-stamp-text', '変化なし ×2');
 
   // 到達条件その2: 読む枚数が一覧の頭に出る (audit をフルで打ち直さずに決まる)。
   await expect(page.locator('#folder-stamp-summary')).toContainText('変化なし 2 枚');
@@ -333,7 +333,7 @@ test('手順5 前回控えから変わっていない図に「変化なし」の
   expect(await page.locator('#folder-panel .folder-item[data-file-name="beta_state"] .folder-stamp')
     .count()).toBe(0);
   await expect(page.locator('#folder-panel .folder-item[data-file-name="alpha_state"] .folder-stamp'))
-    .toContainText('変化なし');
+    .toHaveAttribute('data-stamp-text', '変化なし ×2');
   await expect(page.locator('#folder-stamp-summary')).toContainText('読むのは 1 枚');
 
   // 到達条件その3: 印の付いた図を 1 操作で畳み、読む図だけを残せる。
