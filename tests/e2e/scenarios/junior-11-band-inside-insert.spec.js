@@ -1,7 +1,7 @@
 // @ts-check
 // junior 台本 シーケンス図 手順 4.5 (前半): 実行中の帯 (activate) の**中**を押して
 // メッセージを 1 本足すと、今までどおり帯の中に入る。
-// BLK-human-20260915-1204。後半 (帯の下) は junior-10-band-outside-insert.spec.js。
+// BLK-human-20260915-1204。後半 (帯の下) は junior-12-band-outside-insert.spec.js。
 const { test, expect } = require('@playwright/test');
 const { getEditorText } = require('../helpers');
 const { bootPlain, typeDsl } = require('./_scenario');
