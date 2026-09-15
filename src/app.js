@@ -12341,6 +12341,18 @@ function setupTabs() {
         });
         nb.appendChild(nbtn);
         box.appendChild(nb);
+      } else {
+        // 減っていないなら減っていないと言う (BLK-primary-20260916-0100 差し戻し 1 回目)。
+        // 何も出さないと「減っていない」と「機能が動いていない」が同じ見た目になる。
+        var st = VH.statusNotice ? VH.statusNotice(name, rows, nowLines) : null;
+        if (st) {
+          var sb = document.createElement('div');
+          sb.className = 'folder-version-status';
+          sb.setAttribute('data-version-status', name);
+          sb.textContent = st.text;
+          sb.title = st.detail;
+          box.appendChild(sb);
+        }
       }
       rows.forEach(function(r) {
         var b = document.createElement('button');

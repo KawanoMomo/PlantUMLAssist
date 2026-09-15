@@ -69,3 +69,27 @@ describe('BLK-primary-20260916-0100 空洞化から戻す先', function() {
     assert.strictEqual(VH.shrinkNotice('x', null, null), null);
   });
 });
+
+// 差し戻し 1 回目: 既に戻した後の図で [履歴] を開き、名指しが出ないのを見て
+// 「機能が動いていない」と判断された。減っていないなら減っていないと言う。
+describe('BLK-primary-20260916-0100 減っていないときも行数を言う', function() {
+  test('いまが 78 行なら、一番大きい版も 79 行だと言う', function() {
+    const st = VH.statusNotice('driver_common_class', ROWS, 78);
+    assert.ok(st, '減っていないときの 1 行が出ていない');
+    assert.ok(/いま 78 行/.test(st.text), st.text);
+    assert.ok(/79 行/.test(st.text), st.text);
+    assert.ok(/減っていません/.test(st.text), st.text);
+  });
+
+  test('空洞化しているときは名指しに譲って出さない', function() {
+    assert.ok(VH.shrinkNotice('driver_common_class', ROWS, 4), '前提: 名指しが出る');
+    assert.strictEqual(VH.statusNotice('driver_common_class', ROWS, 4), null);
+  });
+
+  test('行数が読めない・控えが無いときは黙る', function() {
+    assert.strictEqual(VH.statusNotice('x', ROWS, null), null);
+    assert.strictEqual(VH.statusNotice('x', [], 78), null);
+    assert.strictEqual(VH.statusNotice('x', null, 78), null);
+    assert.strictEqual(VH.statusNotice('x', [{ stamp: 'a', label: 'a', lines: null }], 78), null);
+  });
+});

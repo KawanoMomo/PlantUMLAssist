@@ -859,6 +859,22 @@ test.describe('手順5.5 空洞化した図を、戻す先を探さずに戻す'
     await expect(notice).toContainText('3 行');   // いまの中身
     await expect(notice).toContainText('11 行');  // 戻す先の版
 
+    // 到達条件その1b (差し戻し 1 回目): その 1 行が画面の中にある。
+    // 一覧の行は横に長く、パネルは横にもスクロールする。[履歴] は行の右端にあるので
+    // 押すとパネルが右へスクロールし、左端から始まる一覧は画面の外 (実測 x=-62) に出て
+    // いた。「名指しが出ない」と差し戻された正体がこれなので、位置で押さえる。
+    const where = await page.evaluate((n) => {
+      const panel = document.querySelector('#folder-panel');
+      const el = document.querySelector('.folder-version-shrink[data-version-shrink="' + n + '"]');
+      if (!panel || !el) return null;
+      const p = panel.getBoundingClientRect();
+      const e = el.getBoundingClientRect();
+      return { panelLeft: p.left, left: e.left, right: e.right, panelRight: p.right };
+    }, NAME);
+    expect(where).not.toBeNull();
+    expect(where.left).toBeGreaterThanOrEqual(where.panelLeft - 1);
+    expect(where.right).toBeLessThanOrEqual(where.panelRight + 1);
+
     // 到達条件その2: その 1 クリックで、保存フォルダの実体が充実した版に戻る。
     await notice.locator('.folder-version-shrink-restore').click();
     await page.waitForTimeout(1200);
@@ -891,6 +907,13 @@ test.describe('手順5.5 空洞化した図を、戻す先を探さずに戻す'
     await vbtn.click();
     await page.waitForSelector('.folder-version-list[data-version-list="' + OK + '"] .folder-version');
     await expect(page.locator('.folder-version-shrink[data-version-shrink="' + OK + '"]')).toHaveCount(0);
+
+    // 差し戻し 1 回目: 名指しが無いだけだと「減っていない」と「機能が動いていない」が
+    // 同じ見た目になる (既に戻した後の図で開いて、動いていないと判断された)。
+    // 減っていないなら減っていないと言う。
+    const status = page.locator('.folder-version-status[data-version-status="' + OK + '"]');
+    await expect(status).toBeVisible({ timeout: 10000 });
+    await expect(status).toContainText('減っていません');
   });
 });
 

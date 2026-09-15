@@ -108,6 +108,30 @@ window.MA.versionHistory = (function() {
     };
   }
 
+  // 一覧の先頭に必ず出す 1 行 (BLK-primary-20260916-0100 差し戻し 1 回目)。
+  //
+  // 空洞化していない図では shrinkNotice が null なので、一覧は行数について何も
+  // 言わなかった。直す側から見ると「減っていないので出ていない」と「機能が動いて
+  // いない」が同じ見た目になり、直ったかどうかを画面から判断できない
+  // (実際に、既に戻した後の図で [履歴] を開いて「バナーが出ない」と差し戻された)。
+  // 減っていないなら減っていないと言う。
+  function statusNotice(name, rows, nowLines) {
+    var list = rows || [];
+    if (!list.length || typeof nowLines !== 'number') return null;
+    if (bestRestore(list, nowLines)) return null;  // 名指しを出す方が優先
+    var max = null;
+    for (var i = 0; i < list.length; i++) {
+      if (typeof list[i].lines === 'number' && (max === null || list[i].lines > max)) max = list[i].lines;
+    }
+    if (max === null) return null;
+    return {
+      text: _s(name) + ' はいま ' + nowLines + ' 行。控えの中で一番大きい版も '
+        + max + ' 行で、中身は減っていません',
+      detail: '戻す先を名指しするのは、いまの中身が控えより目立って小さいときだけです'
+        + '（1.5 倍以上かつ 5 行以上）。下の一覧からはどの版でも開けます',
+    };
+  }
+
   // 版を開いたときのタブ名。元の名前を上書きしないよう刻印を付ける
   // (開いてそのまま保存しても、今の図を消さない)。
   function openName(name, stamp) {
@@ -167,5 +191,6 @@ window.MA.versionHistory = (function() {
     isFuller: isFuller,
     bestRestore: bestRestore,
     shrinkNotice: shrinkNotice,
+    statusNotice: statusNotice,
   };
 })();
