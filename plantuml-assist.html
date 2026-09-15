@@ -1414,6 +1414,18 @@ html, body {
 #folder-panel .folder-clash-run { flex: 0 0 auto; }
 #folder-panel .folder-badge-changed { color: var(--accent); }
 #folder-panel .folder-badge-new { color: var(--accent); font-weight: 700; }
+/* BLK-reviewer-20260916-0426-wish: 前回控えから変わっていない図の印。
+   読み飛ばしてよい行なので、変更の ● より弱い色で置く。 */
+#folder-panel .folder-stamp {
+  flex: 0 0 auto; font-size: 9px; line-height: 1; padding: 1px 4px;
+  border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text-secondary); white-space: nowrap;
+}
+#folder-panel .folder-stamp-summary { color: var(--text-secondary); }
+#folder-panel .folder-stamp-hide {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 11px; color: var(--text-secondary); white-space: nowrap;
+}
 #folder-panel .folder-mtime { flex: 0 0 auto; font-size: 9px; color: var(--text-secondary); }
 #folder-panel button[data-review-status="unchanged"] .folder-name { color: var(--text-secondary); }
 #folder-panel .folder-gone { color: var(--text-secondary); font-style: italic; }
@@ -7191,6 +7203,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/autosave-status.js"></script>
 <script src="src/core/workspace.js"></script>
 <script src="src/core/review-watch.js"></script>
+<script src="src/core/change-stamp.js"></script>
 <script src="src/core/review-diff.js"></script>
 <script src="src/core/selected-endpoints.js"></script>
 <script src="src/core/review-carry.js"></script>
