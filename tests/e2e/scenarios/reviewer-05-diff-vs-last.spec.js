@@ -248,3 +248,46 @@ test('手順5 前回保存版から何行消えるかが、保存を押す前に
   // 消えていた 10 クラスが本文に戻っている (再入力していない)。
   expect(await page.locator('#editor').inputValue()).toContain('Wdg_Regs');
 });
+
+// BLK-reviewer-20260916-0046: 手順5 で `audit.js --since-files <控え>` は
+// 「可視内容の食い違い」として図名を並べるが、何が消えたかは出さない。
+// 指摘.md に「クラス定義が全消え」と具体を書くには、控えのフォルダと現物を
+// diff コマンドで突き合わせ直すしかなく、食い違う図が増えるほどその手 diff が増える。
+// 同じ 1 コマンドの中で、消えた行数と代表行まで読めることを到達条件にする。
+test('手順5 控えと変わった図を、消えた行まで同じ 1 コマンドで読める', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const { execFileSync } = require('child_process');
+  const REPO = path.join(__dirname, '..', '..', '..');
+
+  const root = path.join(REPO, 'test-results', 'reviewer-05-since-detail');
+  fs.rmSync(root, { recursive: true, force: true });
+  const prev = path.join(root, 'prev');
+  const cur = path.join(root, 'cur');
+  for (const d of [prev, cur]) fs.mkdirSync(d, { recursive: true });
+
+  // 事故の実物: クラス定義がまるごと消えて title だけが残った。
+  fs.writeFileSync(path.join(prev, 'driver_common_class.puml'), FULL_CLASS, 'utf-8');
+  fs.writeFileSync(path.join(cur, 'driver_common_class.puml'),
+    ['@startuml', 'title driver_common_class', '@enduml'].join('\n'), 'utf-8');
+  // コメントだけ戻した図は「変わった」と出るが、描かれる行は同じ。
+  const state = ['@startuml', '[*] --> Idle', 'Idle --> Busy : go', '@enduml'].join('\n');
+  fs.writeFileSync(path.join(prev, 'spi_state.puml'), state, 'utf-8');
+  fs.writeFileSync(path.join(cur, 'spi_state.puml'),
+    ['@startuml', "' domain-verdict: separate", '[*] --> Idle', 'Idle --> Busy : go', '@enduml'].join('\n'),
+    'utf-8');
+
+  const out = execFileSync(process.execPath,
+    [path.join(REPO, 'tools', 'audit.js'), cur, '--summary', '--since-files', prev, '--no-state'],
+    { cwd: REPO, encoding: 'utf-8' });
+
+  // 到達条件 1: 変わった図の名指しは今までどおり出る。
+  expect(out).toContain('実データ変化: driver_common_class.puml, spi_state.puml');
+  // 到達条件 2: 何行消えたかと、指摘にそのまま写せる代表行が同じ出力に出る。
+  expect(out).toMatch(/変化の中身: driver_common_class\.puml\s+−\d+ 行 \/ \+0 行/);
+  expect(out).toContain('消えた行: class Spi_Driver {');
+  // 到達条件 3: 描かれる行が動いていない図は、手 diff に戻らず 1 行で片付く。
+  expect(out).toContain('spi_state.puml  描かれる行に差なし');
+
+  fs.rmSync(root, { recursive: true, force: true });
+});

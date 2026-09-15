@@ -92,6 +92,7 @@ const USAGE = [
   '  --since FILE  前回の監査 JSON と突き合わせ、増えた指摘・消えた指摘と、',
   '                実データ/テンプレ別のファイル内容の変化を要約に足す',
   '  --since-files DIR  前回の図フォルダ (控え) から指紋を採り直して内容変化を比べる。',
+  '                     変わった図は消えた行数と代表行まで出す (--pairs-max で枚数を伸ばす)。',
   '                     指紋を持たない古い JSON と比べる run でも 1 回で切り分けられる',
   '  --personas a,b (-p) ペルソナ名だけで保存フォルダを対象にする (長いパスを打たない)。',
   '                 根は PUA_PERSONA_DATA、既定はリポジトリの隣の persona-data',
@@ -618,6 +619,12 @@ function main(argv) {
       }
       fmtOpts.prevFiles = auditScope.fileEntries(prevDocs);
       fmtOpts.prevFilesFrom = path.resolve(opts.sinceFiles);
+      // BLK-reviewer-20260916-0046: 控えの本文はここで既に読んでいる。
+      // 現物と一緒に渡して、変わった図の「消えた行」まで同じ出力に添える
+      // (添えないと、指摘を書くために控えと現物を手 diff し直すことになる)。
+      fmtOpts.prevDocs = prevDocs;
+      fmtOpts.curDocs = docs;
+      fmtOpts.MA = rt.MA;
     }
   } else if (opts.sinceFiles) {
     console.error('--since-files は --summary か --board と一緒に使います');
