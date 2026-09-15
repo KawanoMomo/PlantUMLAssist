@@ -40,6 +40,7 @@ window.MA.toolMenu = (function() {
       { id: 'btn-tab-pattern',        label: '1 つの観点で全図を棚卸し' },
       { id: 'btn-tab-submit',         label: '提出前チェック' },
       { id: 'btn-tab-cross',          label: '突合ボード (1 画面で全部)' },
+      { id: 'btn-tab-design',         label: '仕様 (design) と現在値の突合' },
       { id: 'btn-tab-audit-timeline', label: '監査履歴' },
     ] },
     { key: 'review', title: 'レビュー', items: [

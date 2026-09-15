@@ -23,7 +23,10 @@ async function reopenApp(page) {
 }
 
 // 保存先を設定済みにして開く (junior 手順 3・primary が毎回している状態)。
-async function bootWithSaveDir(page, dir) {
+// opts はそのまま gotoApp へ渡す。`{ foldedTools: true }` を渡すと helper が
+// 畳み方の設定に触らないので、アプリ自身の既定 (design 7a/7b) がそのまま出る
+// (仕様と現在値を突き合わせる手順 11 は、helper の都合を既定と読み違えてはいけない)。
+async function bootWithSaveDir(page, dir, opts) {
   await page.addInitScript((d) => {
     try {
       if (window.localStorage.getItem('pua.e2e.keep')) return;
@@ -33,7 +36,7 @@ async function bootWithSaveDir(page, dir) {
       }));
     } catch (e) {}
   }, dir);
-  await gotoApp(page);
+  await gotoApp(page, opts);
 }
 
 // 保存先を未設定 (ダウンロード) のまま開く。
