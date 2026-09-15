@@ -110,6 +110,57 @@ test('手順3 上書き確認は「書き換える」が既定だと分かり、
   expect(saved).toContain('IRQCtrl');
 });
 
+// BLK-junior-20260916-0046: 指摘反映で 10 ファイルを 1 枚ずつ開いて直して保存すると、
+// 保存のたびに上書き確認へ答えることになる。答えは「他のファイルも同じ扱い」で 1 回に
+// 畳まれているが、1 枚ずつ開いて直す手順そのものは残る (10 枚で 20 クリック)。
+// 保存フォルダをまたぐ ⇄ 一括置換なら 1 回で済むので、詰まったその場から入れる。
+test('手順3 上書き確認から、同じ直しを保存フォルダの図へまとめて当てられる', async ({ page }) => {
+  const NAMES = ['一括-gpio_init_sequence', '一括-spi_sequence', '一括-TIMER初期化'];
+  const before = (n) => ['@startuml', 'title ' + n, 'participant SPI_Driver',
+    'participant Hal', 'SPI_Driver -> Hal : Init()', '@enduml'].join('\n');
+
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  for (const n of NAMES) await S.putDoc(page, DIR, n, before(n));
+
+  // 1 枚目を一覧から開いて表記を直す (junior の指摘反映の 1 枚目)。
+  await S.openFolder(page);
+  await S.openFolderItem(page, NAMES[0]);
+  await S.typeDsl(page, before(NAMES[0]).replace(/SPI_Driver/g, 'Spi_Driver'));
+  await page.waitForSelector('#source-lock-modal');
+
+  // 到達条件その1: 二択の下に「まとめて当てる」道があり、何が省けるかが読める。
+  const bulk = page.locator('#source-lock-bulk');
+  await expect(bulk).toBeVisible();
+  await expect(bulk).toContainText('まとめて');
+  await expect(bulk).toContainText('1 枚ずつ開き直さずに済みます');
+
+  // 到達条件その2: 1 クリックで確認は閉じ (この図は書き換える側に倒る)、
+  // ⇄ 一括置換が「全図に適用」で開く。
+  await bulk.click();
+  await expect(page.locator('#source-lock-modal')).toHaveCount(0);
+  await page.waitForSelector('#rename-panel.open', { timeout: 5000 });
+  await expect(page.locator('#rename-all-docs')).toBeChecked();
+
+  // 到達条件その3: いま直した組が欄に入っている (打ち直させない)。
+  await expect(page.locator('#rename-from')).toHaveValue('SPI_Driver');
+  await expect(page.locator('#rename-to')).toHaveValue('Spi_Driver');
+
+  // 到達条件その4: そのまま適用すると、開いていない残りの図まで直る
+  // (1 枚ずつ開き直さない)。
+  await page.waitForTimeout(1000);
+  const apply = page.locator('#btn-rename-apply');
+  await expect(apply).toBeEnabled();
+  await apply.click();
+  await page.waitForTimeout(2500);
+
+  for (const n of NAMES) {
+    const saved = await S.readDoc(page, DIR, n);
+    expect(saved, n + ' が直っていない').toContain('Spi_Driver');
+    expect(saved, n + ' に旧表記が残っている').not.toMatch(/SPI_Driver/);
+  }
+});
+
 test('手順3 「保つ」を選んでも、元ファイルが変わらないことが出て 1 クリックで戻せる', async ({ page }) => {
   const NAME = 'SPIドライバ構成2';
   const BEFORE = ['@startuml', 'title SPIドライバ構成2', '[SPI_Driver] --> [IrqCtrl]', '@enduml'].join('\n');

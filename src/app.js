@@ -165,11 +165,18 @@ function promptComponentDraft() {
   return makeComponentDraft(s);
 }
 
+// 一覧から開いたときの本文 (docId → dsl)。BLK-junior-20260916-0046。
+var _openedDslById = {};
+
 function markOpenedSource(doc) {
   if (!doc || !window.MA.sourceLock) return;
   // 開いたときの本文も憶える。読むだけの回で確認が割り込まないための材料
   // (BLK-junior-20260914-0906)。
   try { window.MA.sourceLock.mark(doc.id, doc.name, doc.dsl); } catch (e) {}
+  // BLK-junior-20260916-0046: 開いたときの本文そのもの。確認から一括置換へ渡すとき、
+  // 「この 1 枚で何を何に直したか」を差分から読むために要る (錠は指紋しか憶えない)。
+  // localStorage には置かない (枚数ぶんの本文で膨らむ)。開き直したら諦めて空で出す。
+  try { _openedDslById[doc.id] = String(doc.dsl == null ? '' : doc.dsl); } catch (e) {}
   try { updateTopSourceLock(); } catch (e) {}
 }
 
@@ -226,6 +233,11 @@ function askSourceLock(doc) {
     + '<span class="source-lock-note">' + (t.overwriteNote || '') + '</span></button>'
     + '<button type="button" id="source-lock-keep">' + t.keep
     + '<span class="source-lock-note">' + (t.keepNote || '') + '</span></button>'
+    // BLK-junior-20260916-0046: 表記統一の反映は同じ直しが何枚にも及ぶ。1 枚ずつ
+    // 開いて答える道しか見えていないと、枚数だけ同じ操作を繰り返すことになる。
+    // 詰まったその場に、保存フォルダをまたぐ一括置換への入口を置く。
+    + '<button type="button" id="source-lock-bulk">' + (t.bulk || '')
+    + '<span class="source-lock-note">' + (t.bulkNote || '') + '</span></button>'
     + '</div>'
     // BLK-primary-20260909-0403: 開いたファイルの数だけ聞かれると、タブを切り替える
     // たびに割り込まれる。既定で「他のファイルも同じ扱い」にして 1 回で済ませる。
@@ -268,6 +280,48 @@ function askSourceLock(doc) {
   }
   wrap.querySelector('#source-lock-keep').addEventListener('click', function() { answer('keep'); });
   wrap.querySelector('#source-lock-overwrite').addEventListener('click', function() { answer('overwrite'); });
+  // まとめて当てる道: このファイルは書き換えると答えたうえで、⇄ 一括置換を開く。
+  // ここで答えておかないと、一括置換の最中に同じ確認がまた割り込む。
+  var bulkBtn = wrap.querySelector('#source-lock-bulk');
+  if (bulkBtn) {
+    bulkBtn.addEventListener('click', function() {
+      // 先に答えておく (一括置換の最中に同じ確認が割り込まないように)。
+      // 書き戻しの途中で転んでも一括置換の入口までは必ず開く: 答えたのに
+      // 何も起きない画面にしない。
+      try { answer('overwrite'); } catch (e) {}
+      // 答えた直後は書き戻しとタブ列の描き直しが走る。その場で開くと描き直しに
+      // 畳み返されるので、1 拍置いてから開く。
+      setTimeout(function() {
+        var rb = document.getElementById('btn-tab-rename');
+        var panel = document.getElementById('rename-panel');
+        if (rb && panel && !panel.classList.contains('open')) rb.click();
+        var allEl = document.getElementById('rename-all-docs');
+        if (allEl && !allEl.checked) {
+          allEl.checked = true;
+          allEl.dispatchEvent(new Event('change'));
+        }
+        // この 1 枚で直した組をそのまま欄に入れる。打ち直させない
+        // (読み取れないときだけ空のまま出す)。
+        var fromEl = document.getElementById('rename-from');
+        var toEl = document.getElementById('rename-to');
+        var BR = window.MA.bulkRename;
+        var pair = null;
+        try {
+          var live = window.MA.workspace ? window.MA.workspace.getActive() : null;
+          if (BR && BR.detectRename && live) {
+            pair = BR.detectRename(_openedDslById[doc.id], live.dsl);
+          }
+        } catch (e) { pair = null; }
+        if (pair && fromEl && toEl) {
+          fromEl.value = pair.from;
+          toEl.value = pair.to;
+          fromEl.dispatchEvent(new Event('input'));
+          toEl.dispatchEvent(new Event('input'));
+        }
+        if (fromEl) { try { fromEl.focus(); } catch (e) {} }
+      }, 0);
+    });
+  }
 }
 
 // updateTopRenderStatus: レンダリングの相と所要時間を上部バーに映す。

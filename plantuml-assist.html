@@ -323,6 +323,14 @@ html, body {
 }
 #source-lock-overwrite:hover { filter: brightness(1.1); color: var(--bg-primary) !important; }
 #source-lock-keep { color: var(--text-secondary); }
+/* BLK-junior-20260916-0046: まとめて当てる道は二択の「どちらか」ではなく、
+   同じ直しが何枚も続く回の逃がし道。二択と並べず、区切ってから下に置く。 */
+#source-lock-bulk {
+  color: var(--text-secondary);
+  border-style: dashed !important;
+  margin-top: 4px;
+  padding-top: 8px;
+}
 .source-lock-note { display: block; font-size: 11px; font-weight: normal; opacity: 0.85; margin-top: 2px; }
 #top-source-lock.undoable { cursor: pointer; }
 #top-source-lock.undoable:hover { border-color: var(--accent); }
