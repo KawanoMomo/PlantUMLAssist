@@ -291,3 +291,54 @@ test('手順5 控えと変わった図を、消えた行まで同じ 1 コマン
 
   fs.rmSync(root, { recursive: true, force: true });
 });
+
+// BLK-reviewer-20260916-0426-wish: 手順5 は「前回控えとの比較」だが、変わっていない図には
+// 一覧が何も出さないので、印が無い状態は「変わっていない」と「まだ確かめていない」の
+// どちらにも読めた。確かめるには毎 tick `audit.js --since-files` をフルで打ち直すしかなく、
+// 図が増えるほど時間が延びる。変わっていないと言い切れる図に印を出し、
+// 印の付いていない図だけを読めばよいようにした。
+const STAMP_A = ['@startuml', 'title alpha_state', '[*] --> Idle', 'Idle --> Busy : start', '@enduml'].join('\n');
+const STAMP_B = ['@startuml', 'title beta_state', '[*] --> Off', 'Off --> On : power', '@enduml'].join('\n');
+
+test('手順5 前回控えから変わっていない図に「変化なし」の印が常時出る', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  await S.putDoc(page, DIR, 'alpha_state', STAMP_A);
+  await S.putDoc(page, DIR, 'beta_state', STAMP_B);
+
+  await S.openFolder(page);
+  // 控えを取る前は印を出さない (「今回の控えと同じ」までしか言えない)。
+  expect(await page.locator('#folder-panel .folder-stamp').count()).toBe(0);
+  await page.locator('.folder-mark-seen').click();
+  await page.waitForTimeout(1200);
+
+  // 到達条件その1: 控えを取り直すと、中身の変わっていない図に印が出る。
+  await page.locator('.folder-mark-seen').click();
+  await page.waitForTimeout(1200);
+  const alpha = page.locator('#folder-panel .folder-item[data-file-name="alpha_state"]');
+  await expect(alpha.locator('.folder-stamp')).toHaveAttribute('data-change-stamp', '2');
+  // 何回続けて変わっていないかも行の上で読める (2 tick 分か、今回だけかが分かる)。
+  await expect(alpha.locator('.folder-stamp')).toHaveText('＝2');
+  await expect(alpha.locator('.folder-stamp')).toHaveAttribute('data-stamp-text', '変化なし ×2');
+
+  // 到達条件その2: 読む枚数が一覧の頭に出る (audit をフルで打ち直さずに決まる)。
+  await expect(page.locator('#folder-stamp-summary')).toContainText('変化なし 2 枚');
+  await expect(page.locator('#folder-stamp-summary')).toContainText('読むのは 0 枚');
+
+  // 1 枚だけ中身を直すと、その図からは印が消え、もう 1 枚は印を保つ。
+  await S.putDoc(page, DIR, 'beta_state', STAMP_B.replace('power', 'power_on'));
+  await page.locator('#btn-tab-folder').click();          // 畳んで
+  await S.openFolder(page);                                // 開き直す
+  await page.waitForTimeout(600);
+  expect(await page.locator('#folder-panel .folder-item[data-file-name="beta_state"] .folder-stamp')
+    .count()).toBe(0);
+  await expect(page.locator('#folder-panel .folder-item[data-file-name="alpha_state"] .folder-stamp'))
+    .toHaveAttribute('data-stamp-text', '変化なし ×2');
+  await expect(page.locator('#folder-stamp-summary')).toContainText('読むのは 1 枚');
+
+  // 到達条件その3: 印の付いた図を 1 操作で畳み、読む図だけを残せる。
+  await page.locator('#folder-stamp-hide').check();
+  await page.waitForTimeout(300);
+  await expect(page.locator('#folder-panel .folder-item[data-file-name="alpha_state"]')).toBeHidden();
+  await expect(page.locator('#folder-panel .folder-item[data-file-name="beta_state"]')).toBeVisible();
+});

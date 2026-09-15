@@ -10048,6 +10048,13 @@ function setupTabs() {
   // BLK-reviewer-20260907-1803-wish: 図名 → new/changed/unchanged。
   // 「変更のある図だけ選ぶ」と行ごとの [差分] がここを見る。
   var folderStatus = {};
+  // BLK-reviewer-20260916-0426-wish: 図名 → {hash, runs, since}。前回控えから
+  // 1 バイトも変わっていない図に「変化なし」の印を出すための控え。
+  var stampStore = {};
+  // 図名 → 行に出す印 (印の付かない図は入らない)。
+  var stampMarks = {};
+  // 「変化なし」の付いた図を畳んで、読む図だけを残す絞り込み。
+  var stampHide = false;
   // BLK-junior-20260907-2009-wish: 一時控えの印が付いた図名。畳んでいる間は
   // folderNames に入れない (「全部選ぶ」や「変更図だけ選ぶ」が控えを掴まない)。
   var draftNames = [];
@@ -10612,6 +10619,18 @@ function setupTabs() {
       var seen = RW.load(store, dir);
       var first = !RW.hasSeen(store, dir);
       var rows = RW.diff(seen, entries);
+      // BLK-reviewer-20260916-0426-wish: 「前回控えから 1 バイトも変わっていない」図に
+      // 印を付ける。印が無い状態は「変わっていない」と「まだ確かめていない」の
+      // どちらにも読めるので、言い切れる方にだけ印を出す。
+      var CS = window.MA.changeStamp;
+      stampStore = CS ? CS.load(store, dir) : {};
+      stampMarks = {};
+      if (CS) {
+        rows.forEach(function(r) {
+          var st = CS.stamp(stampStore, r, RW.formatMtime);
+          if (st) stampMarks[r.name] = st;
+        });
+      }
       // 一時控えは成果物とは別扱い。読む枚数の要約も成果物だけで数える
       // (畳んだ控えの「変更 3 枚」を出すと、読むものが増えたように見える)。
       var sp = DM ? DM.split(rows, draftNames) : { items: rows, drafts: [] };
@@ -10621,6 +10640,15 @@ function setupTabs() {
       head.className = 'folder-summary';
       head.textContent = first ? '前回見た版の控えがありません（全部を新規として出しています）' : RW.summary(sp.items);
       panel.appendChild(head);
+      // 読む枚数は「印の付いていない図」の枚数。audit をフルで打ち直さずに
+      // 今日どれだけ読むかがここで決まる (BLK-reviewer-20260916-0426-wish)。
+      if (CS && !first) {
+        var stampHead = document.createElement('div');
+        stampHead.className = 'folder-summary folder-stamp-summary';
+        stampHead.id = 'folder-stamp-summary';
+        stampHead.textContent = CS.summary(stampStore, sp.items);
+        panel.appendChild(stampHead);
+      }
       appendRecentSection(panel, entries);
       panel.appendChild(folderFilterBar());
       panel.appendChild(folderPickBar());
@@ -10667,6 +10695,9 @@ function setupTabs() {
       mark.addEventListener('click', function(ev) {
         ev.stopPropagation();
         RW.save(store, dir, RW.snapshot(entries));
+        // 控えを取り直した回を 1 回と数える。次に開いたときの「変化なし ×N」は
+        // 「N 回続けて控えを取って中身が同じだった」を指す。
+        if (CS) CS.save(store, dir, CS.advance(stampStore, rows, new Date().toISOString()));
         // 指紋だけでなく本文も控える。次に開いたとき、変更図の旧DSL を
         // 取り直さずに並べて出せる (BLK-reviewer-20260907-1803-wish)。
         mark.disabled = true;
@@ -13064,6 +13095,25 @@ function setupTabs() {
       if (only) openFromFolder(only);
     });
     bar.appendChild(input);
+    // BLK-reviewer-20260916-0426-wish: 「変化なし」の付いた図を畳む。
+    // 印が付いた図は前回の指摘をそのまま転記するので、読む図だけが残る。
+    var hide = document.createElement('label');
+    hide.className = 'folder-stamp-hide';
+    var hbox = document.createElement('input');
+    hbox.type = 'checkbox';
+    hbox.id = 'folder-stamp-hide';
+    hbox.checked = stampHide;
+    hbox.title = '前回控えから変わっていない図を畳む。残った行だけを詳しく読めばよい';
+    hbox.addEventListener('click', function(ev) { ev.stopPropagation(); });
+    hbox.addEventListener('change', function() {
+      stampHide = hbox.checked;
+      applyFolderFilter();
+    });
+    hide.appendChild(hbox);
+    var htext = document.createElement('span');
+    htext.textContent = '変化なしを隠す';
+    hide.appendChild(htext);
+    bar.appendChild(hide);
     var state = document.createElement('span');
     state.className = 'folder-filter-state';
     state.id = 'folder-filter-state';
@@ -13083,6 +13133,8 @@ function setupTabs() {
       var name = el.getAttribute('data-file-name');
       var host = (el.parentNode && el.parentNode.className === 'folder-row') ? el.parentNode : el;
       var on = FF.match(name, folderQuery);
+      // 「変化なしを隠す」は名前の絞り込みと重ねて効く (どちらも行を減らすだけ)。
+      if (on && stampHide && stampMarks[name]) on = false;
       host.style.display = on ? '' : 'none';
       if (on) shown++;
     }
@@ -13359,6 +13411,19 @@ function setupTabs() {
       badge.textContent = bdg.mark;
       badge.title = bdg.title;
       b.appendChild(badge);
+    }
+    // BLK-reviewer-20260916-0426-wish: 前回控えから 1 バイトも変わっていない図の印。
+    // ＋ / ● と同じ位置に置く —— 行を上から舐めるとき、印の有無が 1 列で読める。
+    var sm = stampMarks[name];
+    if (sm) {
+      var stampBadge = document.createElement('span');
+      stampBadge.className = 'folder-stamp';
+      stampBadge.setAttribute('data-change-stamp', String(sm.runs));
+      stampBadge.textContent = sm.short;
+      stampBadge.setAttribute('data-stamp-text', sm.text);
+      stampBadge.title = sm.title;
+      b.appendChild(stampBadge);
+      b.setAttribute('data-change-stamp', String(sm.runs));
     }
     var label = document.createElement('span');
     label.className = 'folder-name';
