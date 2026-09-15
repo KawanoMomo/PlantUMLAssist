@@ -96,6 +96,10 @@ const USAGE = [
   '                     指紋を持たない古い JSON と比べる run でも 1 回で切り分けられる',
   '  --personas a,b (-p) ペルソナ名だけで保存フォルダを対象にする (長いパスを打たない)。',
   '                 根は PUA_PERSONA_DATA、既定はリポジトリの隣の persona-data',
+  '  --full-diff [NAME,..]  変わった図の全文 diff を、その場で (要約の中に) 開く。',
+  '                 既定でも 20 行以上動いた図は全文まで開く (促しだけにするなら --no-full-diff)。',
+  '                 all で変わった図を全部、図名を並べればその図を大きさに関わらず開く',
+  '  --full-diff-threshold N  全文を自動で開く行数のしきい値 (既定 20)',
   '  --pairs-max N 突合の差分行を N 組まで出す (既定 10、0 で全部)。',
   '  --drafts      監査は回さず、下書き (`{name}-編集中.puml`) の差し替え待ちキューを出す。',
   '                本体へ差し替え待ち / 本体が無い / 前後不明 / 削除予定 に振り分けて名指しする',
@@ -146,6 +150,15 @@ function personaTargets(names) {
   }
   if (out.length === 0) throw new Error('--personas にペルソナ名を渡します (例: --personas junior,primary)');
   return out;
+}
+
+// --full-diff の引数。all / none はそのまま、それ以外は図名の並び
+// (拡張子は付けても付けなくてもよい。控えの名前で打てるようにする)。
+function _fullDiffSel(v) {
+  const t = String(v == null ? '' : v).trim();
+  if (t === 'all' || t === 'none') return t;
+  const names = t.split(',').map((x) => x.trim()).filter(Boolean);
+  return names.length ? names : 'all';
 }
 
 // 0 は「全部出す」。数でない値は黙って既定に落とさず、打ち直せるように落とす。
@@ -439,7 +452,7 @@ function runBoard(result, opts, prev, fmtOpts, prevNote) {
 }
 
 function parseArgs(argv) {
-  const opts = { targets: [], only: null, summary: false, summaryJson: false, out: null, help: false, since: null, sinceFiles: null, state: true, pairsMax: 0, personas: null, versions: false, versionsMax: 6, dashboard: false, board: false, boardFile: null, drafts: false, registry: false, registryFile: null, register: false, by: '' };
+  const opts = { targets: [], only: null, summary: false, summaryJson: false, out: null, help: false, since: null, sinceFiles: null, state: true, pairsMax: 0, personas: null, versions: false, versionsMax: 6, dashboard: false, board: false, boardFile: null, drafts: false, registry: false, registryFile: null, register: false, by: '', fullDiff: null, fullDiffThreshold: 0 };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--help' || a === '-h') opts.help = true;
@@ -462,6 +475,17 @@ function parseArgs(argv) {
     // 手順 4 の突合は毎 tick これを打つので 1 文字の別名を持たせる (--cohort と同じ理由)。
     else if (a === '--personas' || a === '-p') opts.personas = String(argv[++i] || '').split(',').map((s) => s.trim()).filter(Boolean);
     else if (a.indexOf('--personas=') === 0) opts.personas = a.slice(11).split(',').map((s) => s.trim()).filter(Boolean);
+    // BLK-reviewer-20260916-0526-wish: 既定は「大きく動いた図だけ全文」。
+    // 名前を並べればその図を大きさに関わらず開き、all で全部、none で促しだけにする。
+    else if (a === '--full-diff') {
+      const nx = argv[i + 1];
+      if (nx && nx.indexOf('-') !== 0) { opts.fullDiff = _fullDiffSel(nx); i++; }
+      else opts.fullDiff = 'all';
+    }
+    else if (a.indexOf('--full-diff=') === 0) opts.fullDiff = _fullDiffSel(a.slice(12));
+    else if (a === '--no-full-diff') opts.fullDiff = 'none';
+    else if (a === '--full-diff-threshold') opts.fullDiffThreshold = _vnum(argv[++i], a);
+    else if (a.indexOf('--full-diff-threshold=') === 0) opts.fullDiffThreshold = _vnum(a.slice(22), '--full-diff-threshold');
     else if (a === '--pairs-max') opts.pairsMax = _num(argv[++i], a);
     else if (a.indexOf('--pairs-max=') === 0) opts.pairsMax = _num(a.slice(12), '--pairs-max');
     else if (a === '--drafts') opts.drafts = true;
@@ -605,6 +629,8 @@ function main(argv) {
       prevNote = '前回控え: ' + auditState.describe(entry);
     }
     if (opts.pairsMax) fmtOpts.pairsMax = opts.pairsMax;
+    if (opts.fullDiff) fmtOpts.fullDiff = opts.fullDiff;
+    if (opts.fullDiffThreshold) fmtOpts.fullDiffThreshold = opts.fullDiffThreshold;
     if (opts.sinceFiles) {
       let prevDocs;
       try {
