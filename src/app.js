@@ -522,6 +522,9 @@ function init() {
     }
     // 前回保存時点との差分バッジを追従させる。
     try { renderDiffBadge(); } catch (e) {}
+    // 前回保存版との ＋a −b は、保存を押す前に気付けることが値打ちなので
+    // 打つたびに引き直す (BLK-reviewer-20260915-2346-wish)。
+    try { renderLiveDiffChip(); } catch (e) {}
     try { renderVersionBadge(); } catch (e) {}
     // BLK-junior-20260907-1403-wish: 「見てもらいながらその場で直す」ので、
     // 指摘は打つたびに引き直す。
@@ -2756,6 +2759,7 @@ function init() {
   setupBulkApply();
   setupTemplateNew();
   setupDiffPanel();
+  setupLiveDiff();
   setupReviewPanel();
   setupChangeBoard();
   setupExportPick();
@@ -3711,6 +3715,7 @@ function saveActiveDoc() {
       // 控えないと、画面には「保存した」しか残らない。
       _noteSaveVerify(doc, 'blocked');
       renderDiffBadge();
+      try { renderLiveDiffChip(); } catch (e) {}
       return doc;
     }
     if (doc && cfg && cfg.backend !== 'file') _noteSaveVerify(doc, 'download');
@@ -3719,6 +3724,7 @@ function saveActiveDoc() {
     if (doc && cfg && cfg.backend === 'file' && _isUntouchedDoc(doc)) {
       _noteSaveVerify(doc, 'untouched');
       renderDiffBadge();
+      try { renderLiveDiffChip(); } catch (e) {}
       return doc;
     }
     if (doc && cfg && cfg.backend === 'file') {
@@ -3730,6 +3736,7 @@ function saveActiveDoc() {
         try { askSourceLock(doc); } catch (e) {}
         _noteSaveVerify(doc, 'asked');
         renderDiffBadge();
+        try { renderLiveDiffChip(); } catch (e) {}
         return doc;
       }
       // BLK-junior-20260914-0906: 一覧から開いて眺めるだけの回。本文は開いたときの
@@ -3738,6 +3745,7 @@ function saveActiveDoc() {
         try { updateTopSourceLock(); } catch (e) {}
         _noteSaveVerify(doc, 'skipped');
         renderDiffBadge();
+        try { renderLiveDiffChip(); } catch (e) {}
         return doc;
       }
       // 既定が当たって書き先が変わることがあるので、上部バーの錠表示も合わせ直す。
@@ -3759,6 +3767,7 @@ function saveActiveDoc() {
     }
   } catch (e) { /* 保存フォルダへの書き出しは best-effort */ }
   renderDiffBadge();
+  try { renderLiveDiffChip(); } catch (e) {}
   renderVersionBadge();
   try { renderLineageBadge(); } catch (e) {}
   return doc;
@@ -3898,6 +3907,7 @@ function renderTabs() {
     bar.insertBefore(el, firstTool);
   });
   renderDiffBadge();
+  try { renderLiveDiffChip(); } catch (e) {}
   try { updateTopSourceLock(); } catch (e) {}
   try { renderConsistencyBadge(); } catch (e) {}
   try { renderEventSyncBadge(); } catch (e) {}
@@ -3975,6 +3985,75 @@ function renderDiffBadge() {
     ? ('前回保存時点から変わった図: ' + sum.changed.concat(sum.added).join(', '))
     : '前回保存時点から変わった図はない';
   return sum;
+}
+
+// ── 前回保存版といまの中身 (BLK-reviewer-20260915-2346-wish) ────────────────
+// ± 差分 は「どの図が変わったか」までで、開いている図の中身がどう変わるかは
+// 出ていない。reviewer が 77 行 → 4 行の内容消失を掘り起こせたのは手で diff を
+// 打ったからで、書いた本人の画面には保存を押すまで何の数字も出ていなかった。
+// 状態バーに常時 ＋a −b を出し、押せば前回保存版と現在を全文で並べる。
+function _liveDiffPair() {
+  var SD = window.MA.saveDiff;
+  var name = _activeDocName();
+  if (!SD || !name) return null;
+  // baselineOf は { dsl, at }。dsl は save-diff の規約で正規化済みなので、
+  // ここで整形し直さない (同じ図を 2 つの規約で比べない)。
+  var b = SD.baselineOf(name);
+  return { name: name, before: (b && typeof b.dsl === 'string') ? b.dsl : '',
+           now: mmdText, has: !!(b && typeof b.dsl === 'string') };
+}
+
+function renderLiveDiffChip() {
+  var el = document.getElementById('status-livediff');
+  var LD = window.MA.liveDiff;
+  if (!el || !LD) return null;
+  var p = _liveDiffPair();
+  if (!p) {
+    el.textContent = '前回保存版 —';
+    el.setAttribute('data-livediff', 'none');
+    el.title = '開いている図がありません';
+    return null;
+  }
+  var v = LD.verdict(p.before, p.now, p.has);
+  el.textContent = LD.chipText(p.before, p.now, p.has);
+  el.setAttribute('data-livediff', v);
+  el.classList.toggle('has-open', v === 'changed' || v === 'shrink');
+  el.classList.toggle('livediff-warn', v === 'shrink');
+  el.title = v === 'shrink'
+    ? LD.warnText(p.name, p.before, p.now)
+    : (v === 'none' ? 'この図はまだ保存していないので、比べる相手がありません'
+                    : '前回保存版といまの中身を並べて見る (押すと開きます)');
+  return v;
+}
+
+function openLiveDiff() {
+  var panel = document.getElementById('vdiff-panel');
+  var LD = window.MA.liveDiff;
+  var p = _liveDiffPair();
+  if (!panel || !LD) return;
+  if (!p || !p.has) {
+    _vdiffLast = { file: p ? p.name : '',
+                   error: 'この図はまだ保存していないので、比べる相手がありません' };
+  } else {
+    _vdiffLast = { file: p.name, stamp: '', label: '', prevLabel: '', terms: [],
+                   titleText: LD.title(p.name), warn: LD.warnText(p.name, p.before, p.now),
+                   rows: LD.rows(p.before, p.now), expanded: false };
+  }
+  var bar = document.getElementById('statusbar');
+  if (bar) {
+    var rect = bar.getBoundingClientRect();
+    panel.style.left = Math.max(4, rect.left + 8) + 'px';
+    panel.style.top = Math.max(4, rect.top - 380) + 'px';
+  }
+  panel.classList.add('open');
+  renderVersionDiff();
+}
+
+function setupLiveDiff() {
+  var el = document.getElementById('status-livediff');
+  if (!el) return;
+  el.addEventListener('click', function() { openLiveDiff(); });
+  renderLiveDiffChip();
 }
 
 function setupDiffPanel() {
@@ -4057,6 +4136,7 @@ function setupDiffPanel() {
   });
 
   renderDiffBadge();
+  try { renderLiveDiffChip(); } catch (e) {}
 }
 
 // ── レビュー机 (BLK-junior-20260907-1403-wish) ──────────────────────────
@@ -10036,6 +10116,10 @@ function setupTabs() {
       var name = queue.shift();
       window.MA.workspace.loadFile(name, dir).then(function(text) {
         if (text != null) {
+          // ディスクにある中身が、その図の「前回保存版」そのもの。ここで基準を
+          // 置かないと一覧から開いた図は比べる相手を持たず、前回保存版との増減を
+          // 出せない (BLK-reviewer-20260915-2346-wish)。
+          if (window.MA.saveDiff) { try { window.MA.saveDiff.mark(name, text); } catch (e) {} }
           openExistingFile({
             name: name,
             dsl: text,
@@ -10078,12 +10162,16 @@ function setupTabs() {
         ? FR.describe(name, text, before, sameTab)
         : { kind: text == null ? 'missing' : 'opened', changed: text != null, message: '' };
       if (text != null) {
+        // ディスクにある中身が、その図の「前回保存版」そのもの
+        // (BLK-reviewer-20260915-2346-wish)。
+        if (window.MA.saveDiff) { try { window.MA.saveDiff.mark(name, text); } catch (e) {} }
         openExistingFile({
           name: name,
           dsl: text,
           diagramType: _folderOpenType(name, text),
         });
         applyActiveDoc();
+        try { renderLiveDiffChip(); } catch (e) {}
       }
       if (window.MA.toast && info.message) {
         if (info.kind === 'replaced') {
@@ -16583,8 +16671,11 @@ function renderVersionDiff() {
     headEl.textContent = st.error;
     return;
   }
-  titleEl.textContent = VD.title(st.file, st.label, st.prevLabel);
+  // 前回保存版との比較から開いたときは、版の刻印ではなく「いまの中身」を名乗る。
+  titleEl.textContent = st.titleText || VD.title(st.file, st.label, st.prevLabel);
   headEl.textContent = VD.summaryText(st.rows);
+  if (st.warn) headEl.textContent = st.warn + ' / ' + headEl.textContent;
+  headEl.setAttribute('data-vd-warn', st.warn ? '1' : '0');
   headEl.setAttribute('data-vd-added', String(VD.counts(st.rows).added));
   headEl.setAttribute('data-vd-removed', String(VD.counts(st.rows).removed));
 
