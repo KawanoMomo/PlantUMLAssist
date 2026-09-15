@@ -73,3 +73,66 @@ test('手順3 図名を変えて保存すると、古い名前のファイルは
   // 何が起きたかは画面に出る (黙って消さない)。
   await expect(page.locator('#ds-name-notice')).toContainText('spi_sequence.puml');
 });
+
+// BLK-junior-20260915-2240: 部品名を統一したあと上書き保存すると出る確認が二択とも
+// 同格に見え、強調はむしろ「元ファイルを保つ」側に付いていた。選び間違えると直した
+// 表記が元ファイルに入らないまま、エラーも出ずに進んでしまう。
+test('手順3 上書き確認は「書き換える」が既定だと分かり、1 クリックで直した表記が入る', async ({ page }) => {
+  const NAME = 'SPIドライバ構成';
+  const BEFORE = ['@startuml', 'title SPIドライバ構成', '[SPI_Driver] --> [IrqCtrl]', '@enduml'].join('\n');
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  await S.putDoc(page, DIR, NAME, BEFORE);
+  await S.openFolder(page);
+  await S.openFolderItem(page, NAME);
+  await page.waitForTimeout(800);
+
+  // 部品名を統一した (「要素名をまとめて付け替え」の結果と同じ本文) 状態にする。
+  await S.typeDsl(page, BEFORE.replace('SPI_Driver', 'Spi_Driver').replace('IrqCtrl', 'IRQCtrl'));
+  await page.waitForSelector('#source-lock-modal');
+
+  // 到達条件その1: 既定は「書き換える」側で、印と文言でそれが分かる。
+  const main = page.locator('#source-lock-overwrite');
+  await expect(main).toContainText('おすすめ');
+  await expect(main).toHaveAttribute('data-default', '1');
+  // 到達条件その2: 「保つ」側には、元ファイルが今の表記に変わらないことが添えてある。
+  await expect(page.locator('#source-lock-keep')).toContainText('変わりません');
+  // 確認が出ている間も本文は打てる (焦点は奪わない)。
+  expect(await page.evaluate(() => document.activeElement && document.activeElement.id))
+    .not.toBe('source-lock-overwrite');
+
+  // 到達条件その3: 主ボタン 1 クリックで、直した表記が元ファイルに入る。
+  await main.click();
+  await expect(page.locator('#source-lock-modal')).toHaveCount(0);
+  await page.waitForTimeout(1200);
+  const saved = await S.readDoc(page, DIR, NAME);
+  expect(saved).toContain('Spi_Driver');
+  expect(saved).toContain('IRQCtrl');
+});
+
+test('手順3 「保つ」を選んでも、元ファイルが変わらないことが出て 1 クリックで戻せる', async ({ page }) => {
+  const NAME = 'SPIドライバ構成2';
+  const BEFORE = ['@startuml', 'title SPIドライバ構成2', '[SPI_Driver] --> [IrqCtrl]', '@enduml'].join('\n');
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  await S.putDoc(page, DIR, NAME, BEFORE);
+  await S.openFolder(page);
+  await S.openFolderItem(page, NAME);
+  await page.waitForTimeout(800);
+  await S.typeDsl(page, BEFORE.replace('SPI_Driver', 'Spi_Driver'));
+  await page.waitForSelector('#source-lock-modal');
+
+  await page.locator('#source-lock-keep').click();
+  await page.waitForTimeout(1000);
+  // 到達条件その1: 何が起きたかを言い切る (黙って元の表記のままにしない)。
+  await expect(page.locator('#status-save-result')).toContainText('変更前のまま');
+  // 到達条件その2: 元ファイルはまだ古い表記のまま (これが junior の詰まった状態)。
+  expect(await S.readDoc(page, DIR, NAME)).toContain('SPI_Driver');
+
+  // 到達条件その3: 上部の 🔒 札を 1 クリックすると、元ファイルを書き換える方に戻る。
+  const lock = page.locator('#top-source-lock');
+  await expect(lock).toBeVisible();
+  await lock.click();
+  await page.waitForTimeout(1500);
+  expect(await S.readDoc(page, DIR, NAME)).toContain('Spi_Driver');
+});

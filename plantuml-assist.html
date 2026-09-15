@@ -312,7 +312,20 @@ html, body {
   text-align: left;
 }
 #source-lock-panel button:hover { border-color: var(--accent); color: var(--accent); }
-#source-lock-keep { border-color: var(--accent) !important; }
+/* BLK-junior-20260915-2240: 二択が同格に見えると、直した本文を元ファイルへ入れる
+   つもりの人が「保つ」を押して、直した表記が元ファイルに入らないまま進んでしまう。
+   主 (書き換える) と副 (保つ) を見た目で分ける。強調は主の側にだけ付ける。 */
+#source-lock-overwrite {
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
+  color: var(--bg-primary) !important;
+  font-weight: 600;
+}
+#source-lock-overwrite:hover { filter: brightness(1.1); color: var(--bg-primary) !important; }
+#source-lock-keep { color: var(--text-secondary); }
+.source-lock-note { display: block; font-size: 11px; font-weight: normal; opacity: 0.85; margin-top: 2px; }
+#top-source-lock.undoable { cursor: pointer; }
+#top-source-lock.undoable:hover { border-color: var(--accent); }
 #top-source-lock {
   background: none;
   border: 1px solid var(--border);

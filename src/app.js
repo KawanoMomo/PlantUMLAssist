@@ -183,6 +183,20 @@ function updateTopSourceLock() {
   el.hidden = false;
   el.textContent = info.text;
   el.title = info.title;
+  // 「元ファイル保護」を選び間違えた人は、ここから 1 クリックで書き換える方へ戻す。
+  el.classList.toggle('undoable', !!info.undoable);
+  if (info.undoable && !el._slUndo) {
+    el._slUndo = true;
+    el.addEventListener('click', function() {
+      var SL2 = window.MA.sourceLock;
+      var d = window.MA.workspace ? window.MA.workspace.getActive() : null;
+      if (!SL2 || !d || !el.classList.contains('undoable')) return;
+      var r = SL2.answer(d.id, 'overwrite', _openDocNames(), false);
+      setSaveStatus('✎ ' + r.name + '.puml を書き換えます（元ファイル保護をやめました）');
+      updateTopSourceLock();
+      saveActiveDoc();
+    });
+  }
 }
 
 // 開いているタブの名前一覧 (控えの名前が既存タブと衝突しないように渡す)。
@@ -205,9 +219,13 @@ function askSourceLock(doc) {
   wrap.innerHTML = '<div id="source-lock-panel" role="dialog" aria-modal="true" aria-label="' + t.title + '">'
     + '<h3 style="margin:0 0 8px;">' + t.title + '</h3>'
     + '<p id="source-lock-body" style="margin:0 0 12px;line-height:1.6;">' + t.body + '</p>'
+    // BLK-junior-20260915-2240: 主 (書き換える) を上に、強調して置く。副 (保つ) は
+    // 下に地味に置き、選んだ先がどうなるかを小さく添える。同格に並べない。
     + '<div style="display:flex;flex-direction:column;gap:6px;">'
-    + '<button type="button" id="source-lock-keep">' + t.keep + '</button>'
-    + '<button type="button" id="source-lock-overwrite">' + t.overwrite + '</button>'
+    + '<button type="button" id="source-lock-overwrite">' + t.overwrite
+    + '<span class="source-lock-note">' + (t.overwriteNote || '') + '</span></button>'
+    + '<button type="button" id="source-lock-keep">' + t.keep
+    + '<span class="source-lock-note">' + (t.keepNote || '') + '</span></button>'
     + '</div>'
     // BLK-primary-20260909-0403: 開いたファイルの数だけ聞かれると、タブを切り替える
     // たびに割り込まれる。既定で「他のファイルも同じ扱い」にして 1 回で済ませる。
@@ -215,6 +233,20 @@ function askSourceLock(doc) {
     + '<input type="checkbox" id="source-lock-all" checked>' + t.all + '</label>'
     + '</div>';
   document.body.appendChild(wrap);
+  // 既定はおすすめの方。ただし焦点は奪わない: この確認が出ている間も本文は打てて
+  // いなければならず (答えるまで書かないだけ)、焦点を奪うと打った字がどこにも入らない。
+  // 「どちらが既定か」は見た目と印で見せ、モーダルに焦点を移した人には Enter も効く。
+  var mainBtn = wrap.querySelector('#source-lock-overwrite');
+  if (mainBtn) {
+    mainBtn.setAttribute('data-default', '1');
+    mainBtn.setAttribute('aria-keyshortcuts', 'Enter');
+  }
+  wrap.addEventListener('keydown', function(ev) {
+    if (ev.key === 'Enter' && document.activeElement !== wrap.querySelector('#source-lock-keep')) {
+      ev.preventDefault();
+      answer(t.recommended === 'keep' ? 'keep' : 'overwrite');
+    }
+  });
   function close() {
     _sourceAskOpenFor = null;
     if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
@@ -225,12 +257,12 @@ function askSourceLock(doc) {
     var res = SL.answer(doc.id, choice, used, all);
     close();
     var also = all ? '（開いている他のファイルも同じ扱いにします）' : '';
-    if (choice === 'keep' && window.MA.workspace) {
-      // 控えの名前でしか書かないので、書き先が無い状態は作らない。
-      setSaveStatus('🔒 ' + doc.name + '.puml は変更前のまま保ちます（' + res.name + '.puml に書きます）' + also);
-    } else {
-      setSaveStatus('✎ ' + res.name + '.puml を書き換えます' + also);
-    }
+    // 選んだ結果を必ず言い切る。keep のときは「元ファイルは変わらない」ことと
+    // 戻せる入口まで言う (BLK-junior-20260915-2240: 静かに元の表記に戻ったように見える)。
+    var said = SL.answeredText
+      ? SL.answeredText(choice, doc.name, res.name)
+      : { text: '✎ ' + res.name + '.puml を書き換えます', undo: '' };
+    setSaveStatus(said.text + also + (said.undo ? '　' + said.undo + '（🔒 の札を押す）' : ''));
     updateTopSourceLock();
     saveActiveDoc();
   }
