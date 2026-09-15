@@ -342,3 +342,62 @@ test('手順5 前回控えから変わっていない図に「変化なし」の
   await expect(page.locator('#folder-panel .folder-item[data-file-name="alpha_state"]')).toBeHidden();
   await expect(page.locator('#folder-panel .folder-item[data-file-name="beta_state"]')).toBeVisible();
 });
+
+// BLK-reviewer-20260916-0526-wish: 変化の中身は代表行 + 件数までしか出ないので、
+// −3 行/+76 行のような大きな復元が「以前より充実しているか (継承・note が揃っているか)」は
+// 決められず、結局 cat でファイル全体を読み直していた。閾値を超えた図は同じ 1 コマンドの
+// 中で全文まで開き、小さい図は代表行のままにする ＝ 手順5 のコマンド往復を 0 にする。
+test('手順5 大きく変わった図は、同じ 1 コマンドの中で全文diffまで読める', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const { execFileSync } = require('child_process');
+  const REPO = path.join(__dirname, '..', '..', '..');
+
+  const root = path.join(REPO, 'test-results', 'reviewer-05-full-diff');
+  fs.rmSync(root, { recursive: true, force: true });
+  const prev = path.join(root, 'prev');
+  const cur = path.join(root, 'cur');
+  for (const d of [prev, cur]) fs.mkdirSync(d, { recursive: true });
+
+  // 事故の実物: 4 tick 空洞化していた図が、note 付きで以前より充実して復元された。
+  const GUTTED = ['@startuml', 'title driver_common_class', 'class Driver_Common', '@enduml'].join('\n');
+  const RESTORED = ['@startuml', 'title driver_common_class', 'class Driver_Common {']
+    .concat(Array.from({ length: 30 }, (_, i) => `  +Op${i}() : void`))
+    .concat(['}', 'class Spi_Driver', 'Driver_Common <|-- Spi_Driver',
+             'note right of Spi_Driver : SPI 系はここに集める', '@enduml']).join('\n');
+  fs.writeFileSync(path.join(prev, 'driver_common_class.puml'), GUTTED, 'utf-8');
+  fs.writeFileSync(path.join(cur, 'driver_common_class.puml'), RESTORED, 'utf-8');
+  // 代表行で足りる小さい変化は、全文を出さずに今までどおり 1 行で片付く。
+  const SMALL = ['@startuml', '[*] --> Idle', 'Idle --> Busy : go', '@enduml'].join('\n');
+  fs.writeFileSync(path.join(prev, 'diagram1.puml'), SMALL, 'utf-8');
+  fs.writeFileSync(path.join(cur, 'diagram1.puml'), SMALL.replace('go', 'start'), 'utf-8');
+
+  const run = (extra) => execFileSync(process.execPath,
+    [path.join(REPO, 'tools', 'audit.js'), cur, '--summary', '--since-files', prev, '--no-state']
+      .concat(extra || []), { cwd: REPO, encoding: 'utf-8' });
+
+  const out = run();
+  // 到達条件 1: 要約 (代表行) は今までどおり出る。
+  expect(out).toContain('変化の中身: driver_common_class.puml');
+  // 到達条件 2: 閾値を超えた図は、同じ出力の中に全文 diff が開く
+  // (cat で読み直さないと分からなかった継承・note がその場に出る)。
+  expect(out).toContain('全文diff driver_common_class.puml');
+  expect(out).toContain('+ Driver_Common <|-- Spi_Driver');
+  expect(out).toContain('+ note right of Spi_Driver : SPI 系はここに集める');
+  // 動いていない行も残る (全文なので、出ない行があってはならない)。
+  expect(out).toContain('title driver_common_class');
+  // 到達条件 3: 小さい変化の図は全文を出さない (要約が全文で押し流されない)。
+  expect(out).not.toContain('全文diff diagram1.puml');
+
+  // 到達条件 4: 小さい図も見たいときは名指しで開ける (閾値を見ない)。
+  const named = run(['--full-diff', 'diagram1']);
+  expect(named).toContain('全文diff diagram1.puml');
+  expect(named).toContain('+ Idle --> Busy : start');
+
+  // 到達条件 5: 全文が邪魔な run では促しだけに戻せる (見落としは防いだまま)。
+  const off = run(['--no-full-diff']);
+  expect(off).not.toContain('全文diff driver_common_class.puml');
+  expect(off).toContain('全文diffで確認: driver_common_class.puml');
+
+  fs.rmSync(root, { recursive: true, force: true });
+});

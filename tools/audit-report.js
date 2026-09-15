@@ -526,7 +526,28 @@ function changedDetailLines(fd, options) {
   const rows = FCD.sort(FCD.rows(changed, opts.prevDocs, opts.curDocs));
   const cap = opts.pairsMax > 0 ? opts.pairsMax : 10;
   const out = [];
-  for (const l of FCD.lines(rows.slice(0, cap))) out.push('  変化の中身: ' + l);
+  // BLK-reviewer-20260916-0526-wish: 代表行で足りる図はそのまま、大きく動いた図は
+  // その場で全文を開く。開かないときも閾値を超えた図には促しを 1 行添えるので、
+  // 「ほか N 行」の中身を読むために cat へ戻る run が無くなる。
+  const FD = MA && MA.fullDiff;
+  const th = opts.fullDiffThreshold > 0 ? opts.fullDiffThreshold
+    : (FD ? FD.DEFAULT_THRESHOLD : 20);
+  const prevText = {}, curText = {};
+  if (FD) {
+    for (const d of opts.prevDocs) if (d && d.name != null) prevText[String(d.name)] = d.dsl;
+    for (const d of opts.curDocs) if (d && d.name != null) curText[String(d.name)] = d.dsl;
+  }
+  for (const r of rows.slice(0, cap)) {
+    out.push('  変化の中身: ' + FCD.line(r));
+    if (!FD || !r.comparable) continue;
+    const full = FD.row(r.name, prevText[r.name], curText[r.name]);
+    if (FD.shouldOpen(full, opts.fullDiff, th)) {
+      for (const l of FD.render(full)) out.push('  ' + l);
+    } else {
+      const h = FD.hint(full, th);
+      if (h) out.push('  ' + h);
+    }
+  }
   if (rows.length > cap) {
     out.push(`  変化の中身: ほか ${rows.length - cap} 枚 (--pairs-max で全部出す)`);
   }
