@@ -295,3 +295,79 @@ test('手順7 --board と verify-svg の食い違いが、同じ行の気づき�
   expect(board.totals.needsRender).toBe(0);
   expect(SDB.text(board, 'x')).toContain('気づき');
 });
+
+// BLK-reviewer-20260915-2240-wish: 図ごとの表ができても、手順 2・7・8 の突合は
+// 「この行とあの行は同じ指摘の別表現か、本当に別物か」を頭の中でやっていた
+// (F-01 の別図再掲を【新規】と誤読しかけた)。指摘 ID を鍵に 1 行へ畳み、
+// その 1 行に出典 (どの出口の、どの根拠から来たか) を並べれば、
+// 裏取りは「新しい行が増えたか」の 1 点確認で済む。
+const FOM = require('../../../src/core/finding-origins.js');
+
+test('手順2/7/8 指摘が出典ごとに畳まれ、別図の再掲と食い違いがその行で分かる', () => {
+  const b = FOM.build({
+    // audit --board が挙げた 2 件。F-01 は 2 枚に出ている (別図の再掲)。
+    findings: [
+      { id: 'F-01', title: 'ClockCtrl.EnableClock', open: true, label: '継続',
+        cats: ['メソッド'], docs: ['adc_init_sequence.puml', 'can_init_sequence.puml'] },
+      { id: 'F-09', title: 'adc の SVG が古い', open: true, label: '継続',
+        cats: ['出力物/SVG 内容ずれ'], docs: ['adc_init_sequence.puml'] },
+    ],
+    // 📌 は本文に指摘 ID を書いてある (reviewer 自身の紐づけ)。
+    pins: [{ doc: 'adc_init_sequence.puml', line: 6, status: 'untouched', label: '未着手',
+             text: 'ClockCtrl.EnableClock がクラス図に無い(F-01継続3tick目)' }],
+    // verify-svg は体裁差だけだと言っている。
+    svg: { rows: [{ name: 'adc_init_sequence.puml', status: 'stale' }],
+           staleReasons: { 'adc_init_sequence.puml': 'same' } },
+    pinOpenStatuses: { untouched: true, started: true },
+  });
+
+  // 到達条件 1: 図の枚数で行が割れず、指摘 1 件が 1 行。
+  expect(b.rows.length).toBe(2);
+
+  // 到達条件 2: 別図の再掲が「新しい指摘ではない」とその行に書いてある。
+  const f1 = b.rows.filter((r) => r.id === 'F-01')[0];
+  expect(f1.restated).toBe(true);
+  expect(f1.note).toContain('別図の再掲');
+
+  // 到達条件 3: どの出口のどの根拠から来たかが 1 行に並ぶ (出口を叩き直さない)。
+  expect(f1.origins.map((o) => o.tool).sort()).toEqual(['audit', 'pins']);
+  expect(f1.origins.filter((o) => o.tool === 'pins')[0].basis).toContain('adc_init_sequence L6');
+
+  // 到達条件 4: --board と verify-svg の食い違いは、寄せずにその行に残る。
+  const f9 = b.rows.filter((r) => r.id === 'F-09')[0];
+  expect(f9.conflicts.length).toBe(1);
+  expect(f9.conflicts[0]).toContain('体裁差のみ');
+
+  // 到達条件 5: 裏取りは「出典の組み合わせごとの件数」の 1 点確認で済む。
+  expect(FOM.summaryLine(b)).toContain('出典の組み合わせ 2 通り');
+  expect(FOM.summaryLine(b)).toContain('別図の再掲 1');
+  expect(FOM.summaryLine(b)).toContain('食い違い 1');
+});
+
+test('手順7 --by-finding が同じ畳み方を CLI からも出し、指摘.md に貼れる', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pua-reviewer-07-origin-'));
+  const dsl = ['@startuml', 'class Spi_Driver', 'Spi_Driver : Spi_Init()', '@enduml'].join('\n');
+  fs.writeFileSync(path.join(dir, 'spi_class.puml'), dsl, 'utf-8');
+  fs.writeFileSync(path.join(dir, 'spi_seq.puml'),
+    ['@startuml', 'participant Spi_Driver', 'Spi_Driver -> Spi_Driver : Spi_Reset', '@enduml'].join('\n'), 'utf-8');
+
+  const out = [];
+  const args = [dir, '--by-finding', '--state', path.join(dir, 'st.json'),
+    '--pins-state', path.join(dir, 'pins.json'), '--audit-state', path.join(dir, 'audit.json'),
+    '--registry', path.join(dir, '_names.json')];
+  expect(dashboardCli.main(args, { out: (s) => out.push(s), err: () => {} })).toBe(0);
+  const text = out.join('\n');
+  expect(text).toContain('出典');
+  expect(text).toMatch(/指摘 \d+ 件/);
+  expect(text).toContain('audit --board');
+
+  const md = [];
+  expect(dashboardCli.main(args.concat(['--md']), { out: (s) => md.push(s), err: () => {} })).toBe(0);
+  expect(md.join('\n')).toContain('| 指摘 | 見出し | 状態 | 図 | 出典 (何を比較して出たか) | 気づき |');
+
+  // --by-finding は図ごとの表を置き換えない (どちらの見方も残る)。
+  const board = [];
+  expect(dashboardCli.main(args.filter((a) => a !== '--by-finding'),
+    { out: (s) => board.push(s), err: () => {} })).toBe(0);
+  expect(board.join('\n')).toContain('指摘(未解消)');
+});

@@ -5245,6 +5245,17 @@ function copyAuditBoard() {
   var st = document.getElementById('ab-summary');
   if (!AB) return null;
   // 「図ごと」で開いているなら、貼るのは目の前の表の方 (画面と写しを食い違わせない)。
+  if (_abView === 'origins' && window.MA.findingOrigins) {
+    var FO = window.MA.findingOrigins;
+    var fo = _foBuild();
+    var foText = FO.markdown(fo, '指摘を出典ごとに畳む');
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(foText).then(function() {
+        if (st) st.textContent = '指摘.md 用にコピーしました (' + fo.rows.length + ' 件)';
+      }, function() { if (st) st.textContent = 'コピーできません'; });
+    } else if (st) st.textContent = 'コピーできません';
+    return foText;
+  }
   if (_abView === 'docs' && window.MA.statusDashboard) {
     var SD = window.MA.statusDashboard;
     var sd = _sdBuild();
@@ -5371,19 +5382,93 @@ function renderStatusDashboard() {
   });
 }
 
+// ── 指摘を出典ごとに畳む (BLK-reviewer-20260915-2240-wish) ─────────────────
+// 「指摘ごと」は audit の突合結果だけ、「図ごと」は図の今の状態だけを見せる。
+// reviewer が毎 tick やっていた残りの仕事は、その 2 つに 📌 と /verify-svg を
+// 並べて「この行とあの行は同じ指摘の別表現か、本当に別物か」を決めることだった。
+// ここは指摘 ID を鍵に 1 行へ畳み、その 1 行に「どの出口の、どの根拠から来たか」を
+// 並べる (畳み方は CLI と共通の src/core/finding-origins.js)。
+function _foBuild() {
+  var FO = window.MA.findingOrigins;
+  if (!FO) return null;
+  var run = _atRunAudits();
+  var findings = null;
+  try { findings = _mfRows(); } catch (e) { findings = null; }
+  var pins = _progressEntries();
+  return FO.build({
+    findings: findings,
+    pins: pins,
+    svg: _abSvgScan,
+    registry: _sdRegistry(run.audits),
+  });
+}
+
+function renderFindingOrigins() {
+  var body = document.getElementById('ab-body');
+  var sumEl = document.getElementById('ab-summary');
+  var FO = window.MA.findingOrigins;
+  if (!body || !FO) return;
+  var esc = window.MA.htmlUtils.escHtml;
+  var b = _foBuild();
+  if (sumEl) sumEl.textContent = b ? FO.summaryLine(b) : '';
+  if (!b || !b.rows.length) {
+    body.innerHTML = '<div class="ab-empty">畳む指摘がありません。</div>';
+    return;
+  }
+  var html = '';
+  b.groups.forEach(function(g) {
+    html += '<div class="fo-group" data-fo-key="' + esc(g.key) + '">'
+      + '<div class="fo-group-head">出典: ' + esc(g.label)
+      + ' <span class="fo-count">' + g.rows.length + ' 件 (未解消 ' + g.open + ')</span></div>'
+      + '<table class="ab-table"><thead><tr>'
+      + '<th>指摘</th><th>見出し</th><th>状態</th><th>図</th>'
+      + '<th>出典 (何を比較して出たか)</th><th>気づき</th></tr></thead><tbody>';
+    g.rows.forEach(function(r) {
+      var notes = [].concat(r.note ? [r.note] : [], r.conflicts);
+      html += '<tr class="ab-row fo-row" data-fo-id="' + esc(r.id) + '"'
+        + ' data-fo-restated="' + (r.restated ? '1' : '0') + '"'
+        + ' data-fo-conflicts="' + r.conflicts.length + '"'
+        + ' data-ab-doc="' + esc(r.docs[0] || '') + '" data-ab-line="1">'
+        + '<td class="fo-id">' + esc(r.id) + '</td>'
+        + '<td class="ab-title">' + esc(r.title) + '</td>'
+        + '<td class="fo-state">' + esc(r.label || (r.open ? '未解消' : '解消')) + '</td>'
+        + '<td class="ab-doc">' + r.docs.map(function(d) { return esc(FO.docKey(d)); }).join('<br>') + '</td>'
+        + '<td class="fo-origins">' + r.origins.map(function(o) {
+            return '<span class="fo-origin" data-fo-tool="' + esc(o.tool) + '">'
+              + esc(o.label) + '</span> ' + esc(o.basis);
+          }).join('<br>') + '</td>'
+        + '<td class="fo-note">' + notes.map(esc).join('<br>') + '</td></tr>';
+    });
+    html += '</tbody></table></div>';
+  });
+  body.innerHTML = html;
+  Array.prototype.forEach.call(body.querySelectorAll('.fo-row'), function(tr) {
+    tr.addEventListener('click', function() {
+      _abJump(tr.getAttribute('data-ab-doc'), Number(tr.getAttribute('data-ab-line')) || 1);
+    });
+  });
+}
+
+var AB_VIEW_TITLE = {
+  issues: '突合ダッシュボード',
+  docs: '整合ダッシュボード',
+  origins: '指摘を出典ごとに畳む',
+};
+
 function setAuditBoardView(view) {
-  _abView = view === 'docs' ? 'docs' : 'issues';
+  _abView = AB_VIEW_TITLE[view] ? view : 'issues';
   var sel = document.getElementById('ab-view');
   if (sel && sel.value !== _abView) sel.value = _abView;
   var title = document.getElementById('ab-title');
-  if (title) title.textContent = _abView === 'docs' ? '整合ダッシュボード' : '突合ダッシュボード';
-  // 絞り込みは「指摘ごと」の道具。図ごとの表では効かないので隠す
+  if (title) title.textContent = AB_VIEW_TITLE[_abView];
+  // 絞り込みは「指摘ごと」の道具。他の見方では効かないので隠す
   // (押しても何も起きない箱を画面に残さない)。
-  ['ab-kind', 'ab-doc'].forEach(function(id) {
-    var el = document.getElementById(id);
-    if (el) el.style.display = _abView === 'docs' ? 'none' : '';
+  ['ab-kind', 'ab-doc'].forEach(function(el2) {
+    var el = document.getElementById(el2);
+    if (el) el.style.display = _abView === 'issues' ? '' : 'none';
   });
   if (_abView === 'docs') renderStatusDashboard();
+  else if (_abView === 'origins') renderFindingOrigins();
   else renderAuditBoard();
 }
 

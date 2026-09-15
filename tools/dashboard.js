@@ -33,12 +33,14 @@ const nameRegistry = require('../src/core/name-registry');
 const auditScope = require('../src/core/audit-scope');
 const auditState = require('../src/core/audit-state');
 const dashboard = require('../src/core/status-dashboard');
+const origins = require('../src/core/finding-origins');
 
 const AUDIT_STATE_FILE = '.assist-audit-last.json';
 
 const USAGE = [
   '使い方: node tools/dashboard.js <フォルダ|.puml> ... [オプション]',
   '',
+  '  --by-finding  図ごとではなく「指摘 1 件 = 1 行」で、出典 (何を比較して出たか) ごとに畳む',
   '  --md [FILE]   指摘.md に貼れる表を出す (FILE を書けばそこへ書き出す)',
   '  --json        JSON を出す',
   '  --all         手を入れる必要が無い図も表に残す (既定でも表には出るが、',
@@ -57,16 +59,22 @@ const USAGE = [
   '  表記(要決定) — 登録簿に揃える先が無い表記揺れの組',
   '  前回控え     — 前回の監査控えから変わったか',
   '  気づき       — 出口同士が食い違っている箇所 (どちらかに寄せずに両方出す)',
+  '',
+  '--by-finding の列:',
+  '  出典         — その指摘がどの出口の、どの根拠から来たか',
+  '                 (audit --board の分類 / pins の本文に書かれた ID / verify-svg の判定 / 登録簿の要決定)',
+  '  気づき       — 同じ指摘が複数の図に出ている (別図の再掲。新しい指摘ではない) / 出口同士の食い違い',
 ].join('\n');
 
 function parseArgs(argv) {
-  const opts = { targets: [], md: false, mdFile: null, json: false, all: false,
+  const opts = { targets: [], md: false, mdFile: null, json: false, all: false, byFinding: false,
                  state: null, pinsState: null, auditState: null, registry: null, help: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--help' || a === '-h') opts.help = true;
     else if (a === '--json') opts.json = true;
     else if (a === '--all') opts.all = true;
+    else if (a === '--by-finding') opts.byFinding = true;
     else if (a === '--md') {
       opts.md = true;
       const next = argv[i + 1];
@@ -182,7 +190,16 @@ function build(targets, opts) {
     fileDiff: fileDiff(targets, result.files, auditStateFile),
     pinOpenStatuses: openPinStatuses(rt.MA),
   });
-  return { board: board, sources: {
+  // BLK-reviewer-20260915-2240-wish: 同じ 1 回の収集から、指摘 1 件 = 1 行の
+  // 畳み方も作る (出口をもう一度叩かない)。
+  const byFinding = origins.build({
+    findings: findingRows(audits, docs, rt.MA, stateFile),
+    pins: pinRows(rt.MA, docs, targets, pinsState),
+    svg: svg,
+    registry: reg,
+    pinOpenStatuses: openPinStatuses(rt.MA),
+  });
+  return { board: board, byFinding: byFinding, sources: {
     findings: stateFile, pins: pinsState, audit: auditStateFile,
     registry: reg ? reg.file : null,
   } };
@@ -211,6 +228,38 @@ function main(argv, io) {
     return 1;
   }
   const board = built.board;
+
+  if (opts.byFinding) {
+    const title = '指摘を出典ごとに畳む — ' + opts.targets.join(' / ');
+    if (opts.md) {
+      const md = origins.markdown(built.byFinding, title);
+      if (opts.mdFile) {
+        const p = path.resolve(opts.mdFile);
+        fs.mkdirSync(path.dirname(p), { recursive: true });
+        fs.writeFileSync(p, md, 'utf-8');
+        out(p);
+      } else out(md);
+      return 0;
+    }
+    if (opts.json) {
+      out(JSON.stringify({
+        generatedAt: new Date().toISOString(),
+        sources: built.sources,
+        totals: built.byFinding.totals,
+        groups: built.byFinding.groups.map((g) => ({
+          key: g.key, label: g.label, open: g.open,
+          ids: g.rows.map((r) => r.id),
+        })),
+        rows: built.byFinding.rows,
+      }, null, 2));
+      return 0;
+    }
+    out(origins.text(built.byFinding, title));
+    out('');
+    out('控え: 指摘 ' + built.sources.findings + ' / 📌 ' + built.sources.pins
+      + (built.sources.registry ? ' / 登録簿 ' + built.sources.registry : ''));
+    return 0;
+  }
 
   if (opts.md) {
     const md = dashboard.markdown(board, '整合ダッシュボード — ' + opts.targets.join(' / '));
