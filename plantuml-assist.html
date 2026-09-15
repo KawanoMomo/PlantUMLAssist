@@ -2707,6 +2707,51 @@ html, body {
 #dl-sheet .dl-fig-note { color: var(--text-secondary); }
 #dl-sheet .dl-fig-file { color: var(--text-secondary); font-size: 11px; }
 #dl-sheet .dl-gone { color: var(--warning, #d08a30); }
+/* BLK-primary-20260916-0426-wish: 書き出した資料を客先の体裁で見返す (納品プレビュー) */
+#docset-proof { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+#dp-head {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 14px; border-bottom: 1px solid var(--border);
+  font-size: 12px; color: var(--text-primary);
+}
+#dp-verdict { flex: 1; color: var(--text-secondary); }
+#dp-verdict.dp-bad { color: var(--danger, #d05050); }
+#dp-verdict.dp-warn { color: var(--warning, #d08a30); }
+#dp-verdict.dp-ok { color: var(--accent); }
+#dp-verdict.dp-empty { color: var(--warning, #d08a30); }
+#dp-tools { margin-left: auto; display: flex; gap: 6px; }
+#dp-tools button, #dp-pages button {
+  border: 1px solid var(--border); background: var(--bg-tertiary);
+  color: var(--text-primary); border-radius: 4px; padding: 3px 10px;
+  font-size: 12px; cursor: pointer;
+}
+#dp-pages { overflow: auto; flex: 1; background: var(--bg-primary); padding: 12px; }
+#dp-pages .dp-page {
+  background: #fff; color: #222; border: 1px solid var(--border);
+  border-radius: 3px; margin: 0 auto 14px auto; padding: 18px 22px; max-width: 720px;
+}
+#dp-pages .dp-cover { text-align: center; padding: 34px 22px; }
+#dp-pages .dp-cover-title { font-size: 20px; font-weight: 700; margin-bottom: 10px; }
+#dp-pages .dp-cover-line { font-size: 12px; color: #555; padding: 2px 0; }
+#dp-pages .dp-toc-title, #dp-pages .dp-fig-head { font-size: 14px; font-weight: 700; margin-bottom: 8px; }
+#dp-pages .dp-toc { margin: 0; padding: 0; list-style: none; }
+#dp-pages .dp-toc-line { font-size: 12px; padding: 3px 0; border-bottom: 1px dotted #ddd; }
+#dp-pages .dp-fig-note { font-size: 12px; color: #555; margin-bottom: 10px; }
+#dp-pages .dp-fig-body { text-align: center; overflow: auto; }
+#dp-pages .dp-fig-body svg { max-width: 100%; height: auto; }
+#dp-pages .dp-fig-gone {
+  font-size: 12px; color: #b04040; border: 1px dashed #b04040;
+  padding: 18px; text-align: center;
+}
+#dp-pages .dp-foot {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 10px; padding-top: 8px; border-top: 1px solid #eee;
+  font-size: 11px; color: #777;
+}
+#dp-pages .dp-foot .dp-edit { margin-left: auto; color: #222; }
+#dp-pages .dp-issues { margin: 0; padding-left: 18px; font-size: 12px; }
+#dp-pages .dp-issues .dp-bad { color: #b04040; }
+#dp-pages .dp-issues .dp-warn { color: #a06a20; }
 .dl-row {
   display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
   padding: 6px 12px; border-bottom: 1px solid var(--border); font-size: 12px;
@@ -7274,6 +7319,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/rename-badge.js"></script>
 <script src="src/core/doc-set.js"></script>
 <script src="src/core/doc-layout.js"></script>
+<script src="src/core/doc-proof.js"></script>
 <script src="src/core/vault.js"></script>
 <script src="src/core/component-inventory.js"></script>
 <script src="src/core/export-target.js"></script>
@@ -7641,6 +7687,19 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
           <div id="dl-sheet"></div>
         </div>
       </div>
+    </div>
+    <!-- BLK-primary-20260916-0426-wish: 書き出した後に「客先に見せてよい状態か」を
+         資料の完成物 (表紙・目次・図番号・注記 + 図の本体) で見返す。差し戻しは
+         そのページから編集に戻る (zip を解いて 1 枚ずつ開き直さない) -->
+    <div id="docset-proof" style="display:none;">
+      <div id="dp-head">
+        <strong id="dp-title"></strong>
+        <span id="dp-verdict" role="status"></span>
+        <span id="dp-tools">
+          <button type="button" id="dp-back">一覧へ戻る</button>
+        </span>
+      </div>
+      <div id="dp-pages"></div>
     </div>
     <div id="docset-status" role="status"></div>
   </div>
