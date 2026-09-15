@@ -826,3 +826,70 @@ test.describe('手順5.5 二択の指摘は、明記する側も [適用] で当
     expect(saved.trim().endsWith('@enduml')).toBe(true);
   });
 });
+
+// BLK-primary-20260916-0100: 指摘の反映で driver_common_class / diagram1 が空洞化し、
+// 📂一覧の[版]→[この版に戻す]で直そうとしたが、一覧の版は 20 行とも同じ見た目で並び、
+// 新しい方はもう空洞化した後の中身だった。「戻しても直らない」で反映が手詰まりになる。
+// どの版に戻せば直るかは行数で分かるので、一覧が戻す先を名指しする。
+test.describe('手順5.5 空洞化した図を、戻す先を探さずに戻す', () => {
+  const VDIR = S.dirFor(__filename) + '-shrink';
+  const NAME = 'driver_common_class';
+  const FULL = ['@startuml', 'class Spi_Driver', 'class Can_Driver', 'class DmaCtrl',
+    'class ClockCtrl', 'class NVIC', 'Spi_Driver --> DmaCtrl', 'Can_Driver --> DmaCtrl',
+    'Spi_Driver --> ClockCtrl', 'Can_Driver --> NVIC', '@enduml'].join('\n');
+  const HOLLOW = ['@startuml', 'class Spi_Driver', '@enduml'].join('\n');
+
+  test('[版] の先頭が、いまの行数と戻す先の版を名指しして 1 クリックで戻せる', async ({ page }) => {
+    await S.bootWithSaveDir(page, VDIR);
+    await S.clearDir(page, VDIR);
+    // 充実した版 → 空洞化、の順に保存する (server が上書きの手前で控えを取る)。
+    await S.putDoc(page, VDIR, NAME, FULL);
+    await S.putDoc(page, VDIR, NAME, HOLLOW);
+    await page.reload();
+    await page.waitForSelector('#preview-svg');
+
+    await S.openFolder(page);
+    const vbtn = page.locator('.folder-versions[data-versions-name="' + NAME + '"]');
+    await expect(vbtn).toHaveCount(1);
+    await vbtn.click();
+
+    // 到達条件その1: 戻す先が名指しで先頭に出る (20 行の中から当てさせない)。
+    const notice = page.locator('.folder-version-shrink[data-version-shrink="' + NAME + '"]');
+    await expect(notice).toBeVisible({ timeout: 10000 });
+    await expect(notice).toContainText('3 行');   // いまの中身
+    await expect(notice).toContainText('11 行');  // 戻す先の版
+
+    // 到達条件その2: その 1 クリックで、保存フォルダの実体が充実した版に戻る。
+    await notice.locator('.folder-version-shrink-restore').click();
+    await page.waitForTimeout(1200);
+    // 開いた図への書き戻しなので、一覧から開いたファイルの錠が一度だけ聞く。
+    const lock = page.locator('#source-lock-modal');
+    if (await lock.isVisible().catch(() => false)) {
+      await page.locator('#source-lock-overwrite').click();
+      await page.waitForTimeout(800);
+    }
+    await expect.poll(async () => (await S.readDoc(page, VDIR, NAME)) || '',
+      { timeout: 15000 }).toContain('class NVIC');
+    const saved = (await S.readDoc(page, VDIR, NAME)) || '';
+    expect(saved).toContain('Can_Driver --> DmaCtrl');
+    expect(saved).toContain('class ClockCtrl');
+  });
+
+  test('空洞化していない図には、戻す先の名指しを出さない', async ({ page }) => {
+    const OK = 'adc_ok_class';
+    await S.bootWithSaveDir(page, VDIR);
+    await S.clearDir(page, VDIR);
+    // 1 行だけ足した保存。編集の揺れであって空洞化ではない。
+    await S.putDoc(page, VDIR, OK, FULL);
+    await S.putDoc(page, VDIR, OK, FULL + '\n');
+    await page.reload();
+    await page.waitForSelector('#preview-svg');
+
+    await S.openFolder(page);
+    const vbtn = page.locator('.folder-versions[data-versions-name="' + OK + '"]');
+    await expect(vbtn).toHaveCount(1);
+    await vbtn.click();
+    await page.waitForSelector('.folder-version-list[data-version-list="' + OK + '"] .folder-version');
+    await expect(page.locator('.folder-version-shrink[data-version-shrink="' + OK + '"]')).toHaveCount(0);
+  });
+});
