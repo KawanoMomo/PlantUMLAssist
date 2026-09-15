@@ -787,13 +787,22 @@ window.MA.modules.plantumlSequence = (function() {
 
   // BLK-human-20260912-0901: 挿入の確定で使う関数を、帯を見て決める。
   // 帯が絡まないときは従来の insertBefore / insertAfter と同じ行に入る。
-  function _activationAwareInsertFn(text, line, position, kind) {
+  function _activationAwareInsertFn(text, line, position, kind, hint) {
     var plain = position === 'before' ? insertBefore : insertAfter;
     if (kind === 'activation' || kind === 'participant') return plain;
-    var res = _resolveInsert(text, line, position);
+    var res = _resolveInsert(text, line, position, hint);
     if (!res) return plain;
     var target = res.target;
-    return function(t, _line, k, props) { return insertBefore(t, target, k, props); };
+    // BLK-human-20260915-1204: 閉じ忘れの帯 (deactivate が無い) の外側に足すときは、
+    // 帯が新しい矢印まで伸びないよう `deactivate {part}` を先に 1 行入れて閉じる。
+    var closeWith = res.needsClose && res.part ? 'deactivate ' + res.part : null;
+    return function(t, _line, k, props) {
+      if (closeWith) {
+        t = window.MA.textUpdater.insertAtLine(t, target, closeWith);
+        return insertBefore(t, target + 1, k, props);
+      }
+      return insertBefore(t, target, k, props);
+    };
   }
 
   // FEAT-076 (HFR-003): lineNum の message 行を、同一の from / to / arrow / label で
@@ -1035,46 +1044,49 @@ window.MA.modules.plantumlSequence = (function() {
 
   // BLK-human-20260912-0901: activate / deactivate の帯を見て挿入行を決める。
   // text を渡せなかった (= 帯が分からない) ときだけ、従来の素朴な前/後に落ちる。
-  function _resolveInsert(text, line, position) {
+  // hint はプレビューの当たり判定が決めた帯の内外 { zone, bandLine } (BLK-human-20260915-1204)。
+  // DSL の行番号だけでは「帯の最後の行の後」と「帯を抜けた先」が同じ行に見えるので、
+  // 押した点が帯の矩形の中だったか下だったかはこれでしか伝わらない。
+  function _resolveInsert(text, line, position, hint) {
     var ai = window.MA.sequenceActivationInsert;
     if (!ai || typeof text !== 'string') return null;
-    return ai.resolve(text, line, position);
+    return ai.resolve(text, line, position, hint);
   }
 
   // 挿入結果が DSL の何行目になるか。text があれば帯を避けた行、無ければ
   // before は line そのもの、after は line の次。
-  function insertTargetLine(line, position, text) {
+  function insertTargetLine(line, position, text, hint) {
     var n = parseInt(line, 10);
     if (isNaN(n)) return null;
-    var res = _resolveInsert(text, n, position);
+    var res = _resolveInsert(text, n, position, hint);
     if (res) return res.target;
     return position === 'before' ? n : n + 1;
   }
 
   // ピッカー / フォームの見出しに出す「どこに入るか」の 1 行説明。
   // 帯の内側 / 外側が決まっているときは、それも添える。
-  function describeInsertTarget(line, position, text) {
-    var target = insertTargetLine(line, position, text);
+  function describeInsertTarget(line, position, text, hint) {
+    var target = insertTargetLine(line, position, text, hint);
     if (target === null) return '';
     var base = 'DSL ' + target + ' 行目に挿入（' + line + ' 行目の' + (position === 'before' ? '前' : '後') + '）';
-    var res = _resolveInsert(text, line, position);
+    var res = _resolveInsert(text, line, position, hint);
     var zone = res ? window.MA.sequenceActivationInsert.zoneLabel(res) : '';
     return zone ? base + ' · ' + zone : base;
   }
 
   // ガイド線に出す 1 行。帯の内側 / 外側まで見せて、クリック前に行き先が分かるようにする。
-  function describeInsertGuide(line, position, text) {
-    var target = insertTargetLine(line, position, text);
+  function describeInsertGuide(line, position, text, hint) {
+    var target = insertTargetLine(line, position, text, hint);
     if (target === null) return null;
-    var res = _resolveInsert(text, line, position);
+    var res = _resolveInsert(text, line, position, hint);
     var zone = res ? window.MA.sequenceActivationInsert.zoneLabel(res) : '';
     return '+ DSL ' + target + ' 行目に挿入' + (zone ? '（' + zone + '）' : '');
   }
 
   // design 5c: 挿入メニューを開いている間、DSL の入る行に印を出す / 消す。
-  function _markerShow(line, position, text) {
+  function _markerShow(line, position, text, hint) {
     if (!window.MA.insertMarker) return;
-    window.MA.insertMarker.show(line, position, insertTargetLine(line, position, text));
+    window.MA.insertMarker.show(line, position, insertTargetLine(line, position, text, hint));
   }
   function _markerHide() {
     if (window.MA.insertMarker) window.MA.insertMarker.hide();
@@ -1091,12 +1103,12 @@ window.MA.modules.plantumlSequence = (function() {
   }
 
   // _showInsertPicker は kinds を差し替えて 2 段目 (その他) にも使う。
-  function _showOtherPicker(ctx, line, position) {
-    _renderPicker(ctx, line, position, otherInsertKinds(), 'その他', true);
+  function _showOtherPicker(ctx, line, position, hint) {
+    _renderPicker(ctx, line, position, otherInsertKinds(), 'その他', true, hint);
   }
 
-  function _showInsertPicker(ctx, line, position) {
-    _renderPicker(ctx, line, position, INSERT_KINDS, 'ここに挿入', false);
+  function _showInsertPicker(ctx, line, position, hint) {
+    _renderPicker(ctx, line, position, INSERT_KINDS, 'ここに挿入', false, hint);
   }
 
   // ボタンの id。kind には `block:par` のように CSS の id セレクタで拾えない
@@ -1105,17 +1117,17 @@ window.MA.modules.plantumlSequence = (function() {
     return 'seq-pick-' + String(kind).replace(/[^A-Za-z0-9_-]+/g, '-');
   }
 
-  function _renderPicker(ctx, line, position, kinds, title, isOther) {
+  function _renderPicker(ctx, line, position, kinds, title, isOther, hint) {
     var modal = document.getElementById('seq-modal');
     var content = document.getElementById('seq-modal-content');
     if (!modal || !content) return;
     // 挿入先の行が決まらないうちは開かない (見出しが空のピッカーを出さない)。
     var pickText = ctx && ctx.getMmdText ? ctx.getMmdText() : null;
-    if (insertTargetLine(line, position, pickText) === null) return;
+    if (insertTargetLine(line, position, pickText, hint) === null) return;
     var esc = window.MA.htmlUtils.escHtml;
     var html = '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">' + esc(title) + '</h3>' +
       '<div id="seq-pick-target" style="font-size:11px;color:var(--text-secondary);margin-bottom:12px;">' +
-        esc(describeInsertTarget(line, position, pickText)) + '</div>' +
+        esc(describeInsertTarget(line, position, pickText, hint)) + '</div>' +
       '<div style="display:flex;flex-direction:column;gap:6px;">';
     kinds.forEach(function(k) {
       html += '<button id="' + pickBtnId(k.value) + '" data-kind="' + k.value + '" class="seq-pick-btn" ' +
@@ -1135,22 +1147,23 @@ window.MA.modules.plantumlSequence = (function() {
       'border:1px solid var(--border);color:var(--text-primary);padding:8px;border-radius:4px;cursor:pointer;">キャンセル</button>';
     content.innerHTML = html;
     modal.style.display = 'flex';
-    _markerShow(line, position, pickText);
+    _markerShow(line, position, pickText, hint);
 
     Array.prototype.forEach.call(content.querySelectorAll('.seq-pick-btn'), function(btn) {
       btn.addEventListener('click', function() {
         var kindAttr = btn.getAttribute('data-kind');
         // design 5c: 「その他」は form ではなく 2 段目のメニューを開く。
-        if (kindAttr === 'other') { _showOtherPicker(ctx, line, position); return; }
+        if (kindAttr === 'other') { _showOtherPicker(ctx, line, position, hint); return; }
         var picked = _resolvePickedKind(kindAttr);
         picked.opts.fromPicker = true;
+        picked.opts.zoneHint = hint;
         if (isOther) picked.opts.fromOther = true;
         _showInsertForm(ctx, line, position, picked.kind, picked.opts);
       });
     });
     if (isOther) {
       document.getElementById('seq-pick-back').addEventListener('click', function() {
-        _showInsertPicker(ctx, line, position);
+        _showInsertPicker(ctx, line, position, hint);
       });
     }
     document.getElementById('seq-pick-cancel').addEventListener('click', function() {
@@ -1288,8 +1301,8 @@ window.MA.modules.plantumlSequence = (function() {
 
     if (opts.fromPicker) {
       document.getElementById('seq-mod-back').addEventListener('click', function() {
-        if (opts.fromOther) _showOtherPicker(ctx, line, position);
-        else _showInsertPicker(ctx, line, position);
+        if (opts.fromOther) _showOtherPicker(ctx, line, position, opts.zoneHint);
+        else _showInsertPicker(ctx, line, position, opts.zoneHint);
       });
     }
     document.getElementById('seq-mod-cancel').addEventListener('click', function() {
@@ -1305,7 +1318,7 @@ window.MA.modules.plantumlSequence = (function() {
       var t = ctx.getMmdText();
       // BLK-human-20260912-0901: 帯 (activate/deactivate) を見て行を決め直す。
       // activation / participant 自体の挿入は帯の内外という概念を持たないので素通し。
-      var insertFn = _activationAwareInsertFn(t, line, position, kind);
+      var insertFn = _activationAwareInsertFn(t, line, position, kind, opts.zoneHint);
       if (kind === 'message') {
         var fr = document.getElementById('seq-mod-from').value;
         var to = document.getElementById('seq-mod-to').value;
@@ -1881,8 +1894,8 @@ window.MA.modules.plantumlSequence = (function() {
     showInsertForm: function(ctx, line, position, kind) {
       _showInsertForm(ctx, line, position, kind);
     },
-    showInsertPicker: function(ctx, line, position) {
-      _showInsertPicker(ctx, line, position);
+    showInsertPicker: function(ctx, line, position, hint) {
+      _showInsertPicker(ctx, line, position, hint);
     },
     insertKindOptions: insertKindOptions,
     pickBtnId: pickBtnId,
@@ -1921,10 +1934,12 @@ window.MA.modules.plantumlSequence = (function() {
       deleteSelectedLine: true,
       multiSelectConnect: false,
     },
-    buildOverlay: function(svgEl, parsedData, overlayEl) {
+    buildOverlay: function(svgEl, parsedData, overlayEl, dslText) {
       if (!overlayEl) return;
       if (window.MA.sequenceOverlay && window.MA.sequenceOverlay.buildSequenceOverlay) {
-        return window.MA.sequenceOverlay.buildSequenceOverlay(svgEl, parsedData, overlayEl);
+        // dslText は帯 (activate/deactivate) の矩形を DSL の行に結び付けるために要る
+        // (PlantUML の SVG は帯に data-source-line を付けない)。BLK-human-20260915-1204。
+        return window.MA.sequenceOverlay.buildSequenceOverlay(svgEl, parsedData, overlayEl, dslText);
       }
     },
     renderProps: function(selData, parsedData, propsEl, ctx) {

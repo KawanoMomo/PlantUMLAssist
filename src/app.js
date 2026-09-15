@@ -561,16 +561,22 @@ function init() {
 
   // ガイド線のラベル。挿入先の DSL 行番号を module に計算させる (module が
   // insertTargetLine を持たない場合は汎用文言に落ちる)。
+  // BLK-human-20260915-1204: プレビューの当たり判定が決めた「帯の内側 / 外側」。
+  // 押した点が帯の矩形の中か、その下のライフライン線かは DSL の行番号には現れない。
+  function _zoneHintOf(res) {
+    return (res && res.zone) ? { zone: res.zone, bandLine: res.bandLine } : null;
+  }
+
   function _insertGuideLabel(res) {
     if (!res || !currentModule) return null;
     // BLK-human-20260912-0901: 帯 (activate/deactivate) の内側 / 外側までガイドに出す。
     // module に describeInsertGuide があれば、現在の DSL を渡してそちらに任せる。
     if (typeof currentModule.describeInsertGuide === 'function') {
-      var label = currentModule.describeInsertGuide(res.line, res.position, mmdText);
+      var label = currentModule.describeInsertGuide(res.line, res.position, mmdText, _zoneHintOf(res));
       if (label) return label;
     }
     if (typeof currentModule.insertTargetLine !== 'function') return null;
-    var target = currentModule.insertTargetLine(res.line, res.position, mmdText);
+    var target = currentModule.insertTargetLine(res.line, res.position, mmdText, _zoneHintOf(res));
     if (target === null || typeof target === 'undefined') return null;
     return '+ DSL ' + target + ' 行目に挿入';
   }
@@ -747,7 +753,7 @@ function init() {
       // (メッセージ/note/alt/loop/activate/その他) のメニューを出す。
       // 持たない module は従来どおり単一種別のフォームを直接開く。
       if (moduleHas('insertPicker') && typeof currentModule.showInsertPicker === 'function') {
-        currentModule.showInsertPicker(insertCtx, res.line, res.position);
+        currentModule.showInsertPicker(insertCtx, res.line, res.position, _zoneHintOf(res));
         clearHoverGuide();
         return;
       }
@@ -26517,7 +26523,7 @@ function renderSvg() {
     }
     if (warnEl) { warnEl.style.display = 'none'; warnEl.textContent = ''; }
     if (svgEl && currentModule && currentModule.buildOverlay) {
-      var report = currentModule.buildOverlay(svgEl, currentParsed, overlayEl);
+      var report = currentModule.buildOverlay(svgEl, currentParsed, overlayEl, mmdText);
       if (report && warnEl) {
         var u = report.unmatched || {};
         var totalUnmatched = (u.participant || 0) + (u.message || 0) + (u.note || 0) + (u.activation || 0);

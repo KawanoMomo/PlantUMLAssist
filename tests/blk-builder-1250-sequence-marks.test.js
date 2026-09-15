@@ -181,7 +181,9 @@ describe('右パネル側の配線', function() {
   });
 
   test('「その他」を押すと 2 段目のメニューが開く', function() {
-    expect(src).toContain("if (kindAttr === 'other') { _showOtherPicker(ctx, line, position); return; }");
+    // BLK-human-20260915-1204: 帯の内外 hint を通すため第 4 引数が増えた。
+    // 見ているのは「その他を押したら 2 段目を開く」ことなので、引数の増減で赤くしない。
+    expect(src).toContain("if (kindAttr === 'other') { _showOtherPicker(ctx, line, position, hint); return; }");
   });
 
   test('本体 HTML が core モジュールを読み込む', function() {
