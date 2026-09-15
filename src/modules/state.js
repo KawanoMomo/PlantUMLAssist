@@ -881,6 +881,7 @@ window.MA.modules.plantumlState = (function() {
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">追加 / Add</label>' +
         P.selectFieldHtml('種類', 'st-tail-kind', [
           { value: 'state', label: 'State', selected: true },
+          { value: 'child', label: '子状態 (選んだ状態の中に入れる)' },
           { value: 'composite', label: 'Composite State' },
           { value: 'transition', label: 'Transition' },
           { value: 'note', label: 'Note' },
@@ -974,6 +975,23 @@ window.MA.modules.plantumlState = (function() {
           ]) +
           placeHtml('state') +
           P.primaryButtonHtml('st-tail-add', '+ State 追加');
+      } else if (kind === 'child') {
+        // BLK-human-20260915-1206: 「どの状態の中に入れるか」を先に選ばせる。
+        // 親が中身を持たなければその場で `{ }` に開くので、変換の手は要らない。
+        var SC = window.MA.stateChild;
+        var parentOpts = SC.parentOptions(parsedData);
+        html2 = parentOpts.length === 0
+          ? '<div style="font-size:11px;color:var(--text-secondary);">親にできる状態がまだありません。先に状態を 1 つ追加してください。</div>'
+          : P.selectFieldHtml('親にする状態', 'st-tail-where-target', parentOpts) +
+            P.fieldHtml('子状態の名前', 'st-tail-id', '', '例: Warmup (空なら Sub)') +
+            '<input type="hidden" id="st-tail-where" value="inside">' +
+            P.primaryButtonHtml('st-tail-add', '＋ 子状態を追加') +
+            '<div id="st-tail-child-hint" style="font-size:10px;color:var(--text-secondary);margin-top:4px;line-height:1.5;">' +
+              '選んだ状態の中に入れます (DSL は <code>state 親 { state 子 }</code>)。' +
+              '中身をまだ持たない状態でも、その場で中を開くので変換は要りません。' +
+              '子状態を選び直せば孫も同じ手で足せます。' +
+              '図の中の状態を押して選んでからでも、右パネルの「＋ 子状態を追加」で足せます。' +
+            '</div>';
       } else if (kind === 'composite') {
         html2 =
           P.fieldHtml('ID', 'st-tail-id', '', '例: Outer') +
@@ -1082,11 +1100,17 @@ window.MA.modules.plantumlState = (function() {
         var where = whereEl ? whereEl.value : 'end';
         var tgtEl = document.getElementById('st-tail-where-target');
         var whereTarget = tgtEl ? tgtEl.value : '';
-        if (k === 'state') {
+        if (k === 'state' || k === 'child') {
           var rawId = document.getElementById('st-tail-id').value;
           var normSt = normalizeIdInput(rawId, parsedData);
+          // BLK-human-20260915-1206: 子状態は名前を思いつかないまま押せる方が
+          // 早い。空なら空いている名前 (Sub / Sub2 …) を当てる。
+          if (!normSt.valid && k === 'child') {
+            normSt = { valid: true, id: window.MA.stateChild.uniqueChildId(parsedData, 'Sub'), label: '' };
+          }
           if (!normSt.valid) { alert('ID 必須'); return; }
-          var st = document.getElementById('st-tail-stereo').value || null;
+          var stereoEl = document.getElementById('st-tail-stereo');
+          var st = (stereoEl && stereoEl.value) || null;
           if (where === 'transition') {
             out = SI.splitTransition(t, parsedData, whereTarget, normSt.id, st, normSt.label);
             if (out === t) { alert('挟む遷移を選んでください'); return; }
@@ -1538,7 +1562,25 @@ window.MA.modules.plantumlState = (function() {
         { value: 'entryPoint', label: 'entryPoint', selected: st.stereotype === 'entrypoint' },
         { value: 'exitPoint', label: 'exitPoint', selected: st.stereotype === 'exitpoint' }
       ]) +
-      '<div style="font-size:11px;margin:4px 0;color:var(--text-secondary);">Parent: ' + (st.parentId || '(root)') + '</div>' +
+      // BLK-human-20260915-1206: 入れ子の中の状態を選んだとき、どの親の中に
+      // 居るかが「Parent: Outer」だけでは孫の代で読み取れない。根から並べる。
+      '<div style="font-size:11px;margin:4px 0;color:var(--text-secondary);">居場所: ' +
+        window.MA.htmlUtils.escHtml(window.MA.stateChild.placeText(parsedData, st.id)) +
+        ' <span style="opacity:.7;">(' +
+        window.MA.htmlUtils.escHtml(window.MA.stateChild.breadcrumbText(parsedData, st.id)) +
+        ')</span></div>' +
+      // BLK-human-20260915-1206: 子状態を足す入口。中身を持たない状態でも
+      // その場で `{ }` に開くので、「まず composite に変換」を知らなくてよい。
+      (window.MA.stateChild.canHaveChild(st)
+        ? '<div style="border-top:1px solid var(--border);padding-top:6px;margin-top:6px;">' +
+            '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">子状態 / 中に入れる状態</div>' +
+            '<div style="display:flex;gap:4px;align-items:center;">' +
+              '<input id="st-child-id" placeholder="子状態の名前 (例: Warmup)" style="flex:1;box-sizing:border-box;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-size:11px;">' +
+              '<button id="st-add-child" style="font-size:11px;padding:4px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;white-space:nowrap;">＋ 子状態を追加</button>' +
+            '</div>' +
+            '<button id="st-add-child-pair" style="font-size:11px;padding:4px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;margin-top:4px;display:block;">＋ 子状態を 2 つ足して遷移でつなぐ</button>' +
+          '</div>'
+        : '') +
       // Behaviors section (StableState style: entry/exit single-line, do multi-line)
       '<div style="border-top:1px solid var(--border);padding-top:6px;margin-top:6px;">' +
         '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">Behaviors</div>' +
@@ -1641,6 +1683,31 @@ window.MA.modules.plantumlState = (function() {
       if (!confirm('この state と紐付く transition / note も削除します。続行しますか？')) return;
       window.MA.history.pushHistory();
       ctx.setMmdText(deleteStateWithRefs(ctx.getMmdText(), st.id));
+      window.MA.selection.clearSelection();
+      ctx.onUpdate();
+    });
+    // BLK-human-20260915-1206: 親を選んで子を足す 1 手。名前を空で押しても
+    // 迷わないように、その場で空いている名前 (Sub / Sub2 …) を当てる。
+    P.bindEvent('st-add-child', 'click', function() {
+      var el = document.getElementById('st-child-id');
+      var fresh = parse(ctx.getMmdText());
+      var norm = normalizeIdInput(el ? el.value : '', fresh);
+      var id = window.MA.stateChild.uniqueChildId(fresh, norm.id || 'Sub');
+      window.MA.history.pushHistory();
+      ctx.setMmdText(window.MA.stateChild.addChild(
+        ctx.getMmdText(), fresh, st.id, id, norm.label));
+      if (el) el.value = '';
+      window.MA.selection.clearSelection();
+      ctx.onUpdate();
+    });
+    P.bindEvent('st-add-child-pair', 'click', function() {
+      var fresh = parse(ctx.getMmdText());
+      var a = window.MA.stateChild.uniqueChildId(fresh, 'Sub');
+      var b = window.MA.stateChild.uniqueChildId(
+        { states: (fresh.states || []).concat([{ id: a }]) }, 'Sub');
+      window.MA.history.pushHistory();
+      ctx.setMmdText(window.MA.stateChild.addChildPair(
+        ctx.getMmdText(), fresh, st.id, a, b));
       window.MA.selection.clearSelection();
       ctx.onUpdate();
     });

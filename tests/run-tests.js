@@ -23,6 +23,7 @@ const sourceFiles = [
   'src/core/state-branch.js',
   'src/core/state-transition.js',
   'src/core/state-insert.js',
+  'src/core/state-child.js',
   'src/core/class-scaffold.js',
   'src/core/sequence-scaffold.js',
   'src/core/name-audit.js',
