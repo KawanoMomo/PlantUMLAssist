@@ -111,3 +111,53 @@ describe('liveDiff.title', () => {
     expect(ld.title('spi_state')).toBe('spi_state — 前回保存版 → いまの中身 (未保存)');
   });
 });
+
+// BLK-reviewer-20260916-0046-wish: 差は見えるようになったが、気付いた後に戻す手段が
+// 比較画面に無く、消えた分は手順をやり直して書き直すしかなかった。
+// 比較の左側 (前回保存版) へ 1 クリックで戻せるようにするための判定と文言。
+describe('liveDiff.canRestore', () => {
+  test('戻せば差が 0 になるとき (changed / shrink) だけ押せる', () => {
+    var doc = bigDoc();
+    expect(ld.canRestore(doc, doc.replace('+Init()', '+Start()'), true)).toBe(true);
+    // reviewer が見つけた事故の形 (77 行 → 4 行)。ここで出ないと意味が無い。
+    expect(ld.canRestore(doc, TEMPLATE, true)).toBe(true);
+  });
+
+  test('比べる相手が無い / 既に同じなら出さない (押しても何も起きないボタンは読まれなくなる)', () => {
+    var doc = bigDoc();
+    expect(ld.canRestore('', doc, false)).toBe(false);
+    expect(ld.canRestore(doc, doc, true)).toBe(false);
+    // 行末の空白だけの整形差は「同じ」。戻すボタンは出さない。
+    var cosmetic = doc.split('\n').map(function(l) { return l + '  '; }).join('\n');
+    expect(ld.canRestore(doc, cosmetic, true)).toBe(false);
+  });
+});
+
+describe('liveDiff の戻しの文言', () => {
+  test('押す前に、戻る行と引き換えに外れる行を両方向で言う', () => {
+    var t = ld.restoreTitle('driver_common_class', bigDoc(), TEMPLATE);
+    expect(t).toContain('driver_common_class');
+    expect(t).toContain('前回保存版に戻します');
+    // 事故の形なので、戻る行が大きく、外れる行は小さい。数字は実際の差分と一致する。
+    var c = ld.counts(ld.rows(bigDoc(), TEMPLATE));
+    expect(c.removed > 20).toBe(true);
+    expect(t).toContain('消えた ' + c.removed + ' 行が戻り');
+    expect(t).toContain('保存していない ' + c.added + ' 行は外れます');
+    expect(t).toContain('Ctrl+Z');
+  });
+
+  test('戻した後は、差が 0 になったことを数字で言い切る', () => {
+    var line = ld.restoredLine('driver_common_class', bigDoc(), TEMPLATE);
+    expect(line).toContain('前回保存版に戻しました');
+    expect(line).toContain('＋0 −0 になりました');
+    expect(line).toContain('Ctrl+Z');
+  });
+
+  test('既に同じ中身なら、戻したように見せない', () => {
+    expect(ld.unchangedLine('spi_state')).toBe('spi_state は既に前回保存版と同じ中身です');
+  });
+
+  test('ボタンの札は版の刻印を持たない (並べている左側に戻すので選ぶものが無い)', () => {
+    expect(ld.restoreLabel()).toBe('前回保存版に戻す');
+  });
+});

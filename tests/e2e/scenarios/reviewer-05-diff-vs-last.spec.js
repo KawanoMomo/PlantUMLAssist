@@ -227,4 +227,24 @@ test('手順5 前回保存版から何行消えるかが、保存を押す前に
   await page.locator('#btn-vdiff-all').click();
   await expect(page.locator('#vdiff-body .vd-del').filter({ hasText: 'Spi_Regs' })).toHaveCount(1);
   expect(Number(await page.locator('#vdiff-head').getAttribute('data-vd-removed'))).toBeGreaterThan(20);
+
+  // BLK-reviewer-20260916-0046-wish: 差分は見えるようになったが、気付いた後に戻す手段が
+  // 比較画面に無く、消えた分は手順をやり直して書き直すしかなかった (それ自体が今日の
+  // 手順のやり直しになる)。並べている左側へ 1 クリックで戻し、reviewer は差が 0 に
+  // なったことだけ確認すればよいようにする。
+  // 到達条件その4: 比較画面に「前回保存版に戻す」があり、1 クリックで中身が戻る。
+  const restore = page.locator('#btn-vdiff-restore');
+  await expect(restore).toBeVisible();
+  await expect(restore).toHaveAttribute('title', /消えた \d+ 行が戻り/);
+  await restore.click();
+  await page.waitForTimeout(400);
+  // 到達条件その5: 戻した直後の画面が、差が 0 になったことをそのまま映す
+  // (確かめ直しのために別の画面を開かせない)。
+  await expect(chip).toHaveAttribute('data-livediff', 'same');
+  await expect(page.locator('#vdiff-head')).toHaveAttribute('data-vd-removed', '0');
+  await expect(page.locator('#vdiff-head')).toHaveAttribute('data-vd-added', '0');
+  // 戻せば何も戻すものが無いので、ボタン自体が引っ込む。
+  await expect(restore).toBeHidden();
+  // 消えていた 10 クラスが本文に戻っている (再入力していない)。
+  expect(await page.locator('#editor').inputValue()).toContain('Wdg_Regs');
 });
