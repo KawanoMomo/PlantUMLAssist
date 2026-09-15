@@ -182,3 +182,49 @@ test('手順5 下書きの反映待ちと、前回控えとの増減の内訳を
 
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+// BLK-reviewer-20260915-2346-wish: 手順5 の突合のうち「前回保存版から中身が大きく
+// 消えた」向きは、reviewer が手元の複製と diff を手で打って初めて分かった。
+// 書いた本人 (primary) の画面には、保存を押すまで何行消えるかがどこにも出ていない。
+// 状態バーに常時 ＋a −b を出し、押せば前回保存版と現在を全文で並べる。
+const BIG_CLASS = ['@startuml', 'title driver_common_class'].concat(
+  ['Spi', 'Can', 'Gpio', 'Irq', 'Uart', 'Adc', 'Timer', 'Dma', 'Pwm', 'Wdg']
+    .map((c) => `class ${c}_Regs {\n  +Init()\n  +DeInit()\n  +Read()\n}`)
+).concat(['@enduml']).join('\n');
+
+test('手順5 前回保存版から何行消えるかが、保存を押す前に状態バーに出ている', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  await S.putDoc(page, DIR, 'driver_common_class', BIG_CLASS);
+  await S.openFolderItem(page, 'driver_common_class');
+
+  const chip = page.locator('#status-livediff');
+  // 到達条件その1: 開いた直後は「前回保存版と同じ」と言い切る (常時出ている)。
+  await expect(chip).toBeVisible();
+  await expect(chip).toHaveAttribute('data-livediff', 'same');
+
+  // 1 行だけ直した状態。保存はまだしていない。
+  await S.typeDsl(page, BIG_CLASS.replace('+Init()', '+Start()'));
+  await page.waitForTimeout(400);
+  await expect(chip).toHaveAttribute('data-livediff', 'changed');
+  await expect(chip).toContainText('＋1');
+  await expect(chip).toContainText('−1');
+
+  // 事故の形: 中身が雛形に戻ってしまった (77 行 → 4 行と同じ向き)。
+  await S.typeDsl(page, TEMPLATE_CLASS);
+  await page.waitForTimeout(400);
+  // 到達条件その2: 保存を押す前に、消える側だと分かる印が出る。
+  await expect(chip).toHaveAttribute('data-livediff', 'shrink');
+  await expect(chip).toContainText('⚠');
+  await expect(chip).toHaveAttribute('title', /いま保存すると .* 行に減ります/);
+
+  // 到達条件その3: 押すと前回保存版と現在が並び、消える行が名指しされる (1 操作)。
+  await chip.click();
+  const panel = page.locator('#vdiff-panel');
+  await expect(panel).toHaveClass(/open/);
+  await expect(page.locator('#vdiff-title')).toContainText('前回保存版 → いまの中身 (未保存)');
+  await expect(page.locator('#vdiff-head')).toHaveAttribute('data-vd-warn', '1');
+  await page.locator('#btn-vdiff-all').click();
+  await expect(page.locator('#vdiff-body .vd-del').filter({ hasText: 'Spi_Regs' })).toHaveCount(1);
+  expect(Number(await page.locator('#vdiff-head').getAttribute('data-vd-removed'))).toBeGreaterThan(20);
+});

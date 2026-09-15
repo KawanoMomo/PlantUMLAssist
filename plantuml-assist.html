@@ -5893,6 +5893,11 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 #dg-impact tr.dg-doc[data-fixed="1"] td.dg-doc-name { text-decoration: line-through; }
 #dg-impact tr.dg-doc[data-current="1"] td { background: var(--bg-tertiary); }
 
+#status-livediff.livediff-warn {
+  color: #b00020;
+  border-color: #b00020;
+  font-weight: 600;
+}
 #statusbar {
   display: flex;
   align-items: center;
@@ -5923,7 +5928,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 }
 #status-consistency:hover, #status-eventsync:hover { background: var(--bg-tertiary); }
 /* BLK-builder-20260908-0858-2 (design 7a/7b): 下端に寄せた件数表示。整合と同じ見た目に揃える */
-#status-diff, #status-pins, #status-inbox, #status-requests, #status-rename, #status-senior {
+#status-livediff, #status-diff, #status-pins, #status-inbox, #status-requests, #status-rename, #status-senior {
   background: transparent;
   border: 1px solid var(--border);
   border-radius: 3px;
@@ -5933,10 +5938,10 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   padding: 0 6px;
   cursor: pointer;
 }
-#status-diff:hover, #status-pins:hover, #status-inbox:hover, #status-requests:hover,
+#status-livediff:hover, #status-diff:hover, #status-pins:hover, #status-inbox:hover, #status-requests:hover,
 #status-rename:hover, #status-senior:hover { background: var(--bg-tertiary); }
 #status-senior.on { color: var(--accent); border-color: var(--accent); }
-#status-diff.has-open, #status-pins.has-open, #status-inbox.has-open, #status-requests.has-open,
+#status-livediff.has-open, #status-diff.has-open, #status-pins.has-open, #status-inbox.has-open, #status-requests.has-open,
 #status-rename.has-open {
   color: var(--accent-orange);
   border-color: var(--accent-orange);
@@ -6716,6 +6721,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <span id="status-info"></span>
     <!-- BLK-builder-20260908-0858-2 (design 7a/7b): 件数を持つものを下端に寄せ、押せばそのパネルが開く -->
     <button type="button" id="status-diff" title="前回保存した時点から変わった図の一覧">± 差分 −</button>
+    <!-- BLK-reviewer-20260915-2346-wish: 開いている図が前回保存版から何行増えて何行消えるかを、保存を押す前に常時出す -->
+    <button type="button" id="status-livediff" data-livediff="none" title="前回保存版といまの中身を並べて見る (押すと開きます)">前回保存版 —</button>
     <button type="button" id="status-pins" title="この図に付いたレビュー指摘の一覧">指摘 −</button>
     <button type="button" id="status-inbox" title="保存フォルダの図をまたいだ未対応のレビュー指摘">指摘箱 −</button>
     <!-- BLK-reviewer-20260914-2006: 指摘.md に書かれた依頼が何件・最長何 tick 継続しているか。
@@ -7140,6 +7147,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/save-guard.js"></script>
 <script src="src/core/save-check.js"></script>
 <script src="src/core/save-swap.js"></script>
+<script src="src/core/live-diff.js"></script>
 <script src="src/core/twin-restore.js"></script>
 <script src="src/core/consistency-check.js"></script>
 <script src="src/core/manual-findings.js"></script>
