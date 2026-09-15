@@ -638,6 +638,29 @@ html, body {
 #folder-panel button:hover { background: var(--bg-secondary); }
 /* 前回見た版からの差 (BLK-reviewer-20260907-1403) */
 #folder-panel { min-width: 260px; }
+/* 最近開いた図 (BLK-junior-20260915-2346)。同じ図への出戻りは一覧を目で探さず
+   上端のこの行から 1 クリックで戻る。履歴が空なら行ごと出ないので、普段の一覧は今までのまま。 */
+#folder-panel .folder-recent-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px 6px 2px;
+  font-size: 11px;
+}
+#folder-panel .folder-recent-label { color: var(--text-secondary); white-space: nowrap; }
+#folder-panel button.folder-recent-item {
+  border: 1px solid var(--accent);
+  background: var(--bg-secondary);
+  color: var(--accent);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 1px 7px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+#folder-panel button.folder-recent-item:hover { background: var(--bg-tertiary); }
 /* 名前での絞り込み (BLK-junior-20260908-1103) */
 #folder-panel .folder-filterbar {
   display: flex;
@@ -7019,6 +7042,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/draft-mark.js"></script>
 <script src="src/core/target-set.js"></script>
 <script src="src/core/folder-reopen.js"></script>
+<script src="src/core/recent-files.js"></script>
 <script src="src/core/dupe-merge.js"></script>
 <script src="src/core/sync-state.js"></script>
 <script src="src/core/swap-queue.js"></script>

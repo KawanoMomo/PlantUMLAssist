@@ -3012,6 +3012,20 @@ function initCommandPalette() {
         run: function() { selectValue('diagram-type', d.value); },
       });
     });
+    // BLK-junior-20260915-2346: 直前に開いた図は、📂 一覧を開いて名前を目で探さなくても
+    // ここから直接戻れる。新しい順に並べるので、出戻り先はたいてい先頭にいる。
+    var RFC = window.MA.recentFiles;
+    if (RFC) {
+      recentOpenedNames().forEach(function(name) {
+        list.push({
+          id: 'recent:' + name,
+          title: RFC.paletteTitle(name),
+          hint: 'File',
+          keywords: ['recent', 'reopen', name, RFC.label(name), 'さいきん', 'もどる', 'ひらきなおす'],
+          run: function() { openFromFolderByName(name); },
+        });
+      });
+    }
     return list;
   }
 
@@ -10138,6 +10152,27 @@ function setupTabs() {
     if (FS) step();
   }
 
+  // BLK-junior-20260915-2346: 開いた図を憶えておく置き場。localStorage が使えない
+  // 環境でも一覧は今までどおり出る (履歴だけが空になる)。
+  var RECENT_KEY = 'plantuml-recent-files';
+  function recentList() {
+    var raw = null;
+    try { raw = localStorage.getItem(RECENT_KEY); } catch (e) { return []; }
+    if (!raw) return [];
+    var v = null;
+    try { v = JSON.parse(raw); } catch (e) { return []; }
+    return (v && v.length) ? v : [];
+  }
+  function recentSave(list) {
+    try { localStorage.setItem(RECENT_KEY, JSON.stringify(list || [])); } catch (e) {}
+  }
+  function recentPush(name) {
+    var RF = window.MA.recentFiles;
+    if (!RF || !name) return;
+    recentSave(RF.push(recentList(), name));
+  }
+  recentOpenedNames = function() { return recentList(); };
+
   openFromFolderByName = function(name) { openFromFolder(name); };
   refreshFolderPanelNow = function() { if (panel.classList.contains('open')) renderFolderPanel(); };
   // BLK-junior-20260915-0007: 資料化の根拠から一覧へ渡るとき、名前を打ち直させない。
@@ -10178,6 +10213,8 @@ function setupTabs() {
         });
         applyActiveDoc();
         try { renderLiveDiffChip(); } catch (e) {}
+        // 読めた図だけを履歴に積む (読めなかった名前を「最近」に出さない)。
+        recentPush(name);
       }
       if (window.MA.toast && info.message) {
         if (info.kind === 'replaced') {
@@ -10450,6 +10487,7 @@ function setupTabs() {
         var plain = DM ? DM.split(entries, draftNames) : { items: entries, drafts: [] };
         setFolderNames(plain);
         folderStatus = {};
+        appendRecentSection(panel, entries);
         panel.appendChild(folderFilterBar());
         panel.appendChild(folderPickBar());
         appendTargetSection(panel, dir);
@@ -10487,6 +10525,7 @@ function setupTabs() {
       head.className = 'folder-summary';
       head.textContent = first ? '前回見た版の控えがありません（全部を新規として出しています）' : RW.summary(sp.items);
       panel.appendChild(head);
+      appendRecentSection(panel, entries);
       panel.appendChild(folderFilterBar());
       panel.appendChild(folderPickBar());
       appendTargetSection(panel, dir);
@@ -12832,6 +12871,42 @@ function setupTabs() {
   }
 
   // 名前で絞り込む欄。数文字打てば候補がその 1 枚になり、Enter でそのまま開ける。
+  // BLK-junior-20260915-2346: 一覧の上端に「最近開いた図」を置く。同じ図への出戻りは
+  // 20 枚超の行から名前を目で探すのではなく、ここを 1 回押せば済む。
+  // 履歴が空のとき (その run で初めて一覧を開いたとき) は行ごと出さないので、
+  // 普段の一覧は今までのまま。
+  function appendRecentSection(host, entries) {
+    var RF = window.MA.recentFiles;
+    if (!RF) return;
+    var names = RF.visible(recentList(), entries);
+    // 保存フォルダから消えた図は履歴からも落とす (押せない行を残さない)。
+    var all = recentList();
+    if (names.length !== all.length) recentSave(RF.prune(all, entries));
+    if (!names.length) return;
+    var bar = document.createElement('div');
+    bar.className = 'folder-recent-bar';
+    bar.id = 'folder-recent';
+    var label = document.createElement('span');
+    label.className = 'folder-recent-label';
+    label.textContent = '🕘 最近開いた図';
+    label.title = 'この画面で開いた図を新しい順に ' + RF.LIMIT + ' 件まで。同じ図に戻るのに名前を探し直さなくて済みます';
+    bar.appendChild(label);
+    names.forEach(function(name) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'folder-recent-item';
+      b.setAttribute('data-recent-name', name);
+      b.textContent = RF.label(name);
+      b.title = name + ' を開く';
+      b.addEventListener('click', function(ev) {
+        ev.stopPropagation();
+        openFromFolder(name);
+      });
+      bar.appendChild(b);
+    });
+    host.appendChild(bar);
+  }
+
   function folderFilterBar() {
     var bar = document.createElement('div');
     bar.className = 'folder-filterbar';
@@ -13205,6 +13280,9 @@ var openFromFolderByName = function() {};
 // (BLK-junior-20260908-2303-wish)。パネルを開いていなければ何もしない。
 var refreshFolderPanelNow = function() {};
 var filterFolderPanelNow = function() {};
+// BLK-junior-20260915-2346: 直前に開いた図の名前 (新しい順)。Ctrl+K からも
+// 一覧を開かずに同じ図へ戻れるように、パネルの外へ読み口だけ出す。
+var recentOpenedNames = function() { return []; };
 
 function _rdModal() { return document.getElementById('rd-modal'); }
 
