@@ -294,3 +294,78 @@ test('手順9 資料セットの図が保存フォルダから減ると、書き
   await expect(sum).toContainText('can_state');
   await expect(sum).toHaveClass(/ds-short/);
 });
+
+// BLK-primary-20260916-0426-wish: docset から 24 枚の SVG を zip に書き出した後、
+// 「客先に見せてよい状態か」を資料の完成物 (表紙・目次・図番号・注記込み) で見返す
+// 画面が無かった。あるのは編集用のプレビュー (1 枚ずつ・DSL 入力欄と並び) だけで、
+// 差し戻しがあれば zip を解凍して 1 枚ずつ開き直すことになる。
+// 「書き出す → そのまま資料として見る → 直すページだけ編集に戻る」が 1 画面で
+// 閉じることを到達条件にする。
+test('手順9 書き出した資料を客先の体裁のまま見返し、直すページから編集に戻れる', async ({ page }) => {
+  test.setTimeout(180 * 1000);
+  const NAMES = ['spi_init_sequence', 'spi_state', 'can_state'];
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  for (const n of NAMES) await S.putDoc(page, DIR, n, S.docFor(n));
+  await page.reload();
+  await page.waitForSelector('#preview-svg');
+
+  await page.locator('#btn-export').click();
+  await page.waitForSelector('#export-menu', { state: 'visible' });
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-modal', { state: 'visible' });
+  await page.locator('#docset-name').fill('顧客資料');
+  await page.locator('#docset-create').click();
+
+  const row = page.locator('.ds-row[data-set-name="顧客資料"]');
+  await expect(row).toHaveCount(1);
+
+  // 体裁 (見出し・注記) を 1 枚だけ埋めて、残りは空のままにする。
+  await row.locator('.ds-layout').click();
+  await expect(page.locator('#docset-layout')).toBeVisible();
+  const first = page.locator('#dl-rows .dl-row').first();
+  const firstName = await first.getAttribute('data-doc-name');
+  await first.locator('.dl-heading').fill('SPI 初期化シーケンス');
+  await first.locator('.dl-note').fill('起動直後の初期化手順を示す');
+  await page.locator('#dl-save').click();
+  await expect(page.locator('#docset-status')).toContainText('体裁');
+  await page.locator('#dl-back').click();
+
+  // 到達条件その1: 書き出す前でも、資料セットの行から客先資料そのものの体裁で通しで見られる。
+  await row.locator('.ds-proof').click();
+  await expect(page.locator('#docset-proof')).toBeVisible({ timeout: 150000 });
+  await expect(page.locator('#dp-cover .dp-cover-title')).toHaveText('顧客資料');
+  await expect(page.locator('#dp-cover')).toContainText('全 ' + (await page.locator('#dp-pages .dp-fig').count()) + ' 図');
+
+  // 到達条件その2: 目次・図番号・注記が資料の形で並ぶ。
+  await expect(page.locator('#dp-toc .dp-toc-line[data-no="1"]'))
+    .toHaveText('図1 SPI 初期化シーケンス — 起動直後の初期化手順を示す');
+  const p1 = page.locator('#dp-pages .dp-fig[data-no="1"]');
+  await expect(p1.locator('.dp-fig-head')).toHaveText('図1 SPI 初期化シーケンス');
+  await expect(p1.locator('.dp-fig-note')).toHaveText('起動直後の初期化手順を示す');
+
+  // 到達条件その3: 編集用プレビューではなく、図そのものが資料のページに入っている。
+  await expect(p1.locator('.dp-fig-body svg')).toHaveCount(1);
+
+  // 到達条件その4: 客先に出してよいかを 1 文で判定し、直す所を名指しする。
+  await expect(page.locator('#dp-verdict')).toContainText('直すなら');
+  await expect(page.locator('#dp-issues li[data-key="blank"]')).toContainText('注記が空のページ');
+
+  // 到達条件その5: 差し戻しは、そのページから編集に戻れる (zip を解かない)。
+  await p1.locator('.dp-edit').click();
+  await expect(page.locator('#docset-modal')).toBeHidden();
+  await expect(page.locator('#tab-bar .tab.active')).toContainText(firstName);
+
+  // 到達条件その6: 書き出した直後は、zip に入った中身がそのまま資料として出る。
+  await page.locator('#btn-export').click();
+  await page.waitForSelector('#export-menu', { state: 'visible' });
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-modal', { state: 'visible' });
+  const dl = page.waitForEvent('download', { timeout: 150000 }).catch(() => null);
+  await page.locator('.ds-row[data-set-name="顧客資料"] .ds-export').click();
+  expect(await dl).not.toBeNull();
+  await expect(page.locator('#docset-proof')).toBeVisible({ timeout: 150000 });
+  await expect(page.locator('#dp-cover')).toContainText('.zip');
+  await expect(page.locator('#dp-pages .dp-fig[data-no="1"] .dp-fig-body svg')).toHaveCount(1);
+  await expect(page.locator('#dp-pages .dp-fig[data-no="1"] .dp-file')).toHaveText('01_' + firstName + '.svg');
+});

@@ -23346,6 +23346,17 @@ function renderDocSets() {
     lay.addEventListener('click', function() { openDocLayout(set.name); });
     row.appendChild(lay);
 
+    // 書き出した後に、客先に見せる形のまま見返す口 (BLK-primary-20260916-0426-wish)。
+    // 書き出し直後でなくても入れる。差し戻しは zip を解かずにここから直す。
+    var proof = document.createElement('button');
+    proof.type = 'button';
+    proof.className = 'ds-proof';
+    proof.textContent = '資料として見る';
+    proof.title = '表紙・目次・図番号・注記を付けた客先資料そのものの体裁で、書き出す中身を通しで見る';
+    proof.disabled = res.present.length === 0;
+    proof.addEventListener('click', function() { openDocProof(set.name); });
+    row.appendChild(proof);
+
     var del = document.createElement('button');
     del.type = 'button';
     del.className = 'ds-delete';
@@ -23577,6 +23588,256 @@ function renderDocSheet() {
   });
 }
 
+// ── 納品プレビュー (BLK-primary-20260916-0426-wish) ───────────────────────
+// 書き出した後に「客先に見せてよい状態か」を確かめる場が無かった。編集用の
+// プレビューは 1 枚ずつ DSL 入力欄と並ぶ画面で、体裁プレビュー (doc-layout) は
+// 文字だけの 1 枚物なので、資料として組んだ後の見た目 (表紙・目次・図番号・
+// 注記 + 図そのもの) を通しで見る所が無い。差し戻しがあれば zip を解凍して
+// 1 枚ずつ開き直すことになる。ここは zip に入った紙をそのまま資料の体裁で並べ、
+// 直すページからそのまま編集に戻れるようにする。
+
+var _dpName = '';
+var _dpProof = null;
+
+function closeDocProof() {
+  var panel = document.getElementById('docset-proof');
+  if (panel) panel.style.display = 'none';
+  var rows = document.getElementById('docset-rows');
+  if (rows) rows.style.display = '';
+  var neu = document.getElementById('docset-new');
+  if (neu) neu.style.display = '';
+  _dpName = '';
+  _dpProof = null;
+}
+
+function _dpNow() {
+  try {
+    var d = new Date();
+    var z = function(n) { return ('0' + n).slice(-2); };
+    return d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate())
+      + ' ' + z(d.getHours()) + ':' + z(d.getMinutes());
+  } catch (e) { return ''; }
+}
+
+function _dpShow(name, files, meta) {
+  var DP = window.MA.docProof;
+  var DL = window.MA.docLayout;
+  var DS = window.MA.docSet;
+  if (!DP || !DL || !DS) return null;
+  var set = DS.find(_dsSets, name);
+  if (!set) { _dsStatus('その資料セットはありません'); return null; }
+  closeDocLayout();
+  _dpName = set.name;
+  _dpProof = DP.build(DL.sheet(set, _dsNames), files, meta || {});
+  var panel = document.getElementById('docset-proof');
+  if (panel) panel.style.display = 'flex';
+  var rows = document.getElementById('docset-rows');
+  if (rows) rows.style.display = 'none';
+  var neu = document.getElementById('docset-new');
+  if (neu) neu.style.display = 'none';
+  renderDocProof();
+  return _dpProof;
+}
+
+// 書き出さずに中身だけを作る (見返すたびに zip を落とさせない)。
+// 図は書き出しと同じ経路で描くので、ここで見た物がそのまま zip に入る。
+function openDocProof(name) {
+  var DS = window.MA.docSet;
+  var FE = window.MA.folderExport;
+  var WS = window.MA.workspace;
+  var DL = window.MA.docLayout;
+  if (!DS || !FE || !WS || !DL) return Promise.resolve(null);
+  var set = DS.find(_dsSets, name);
+  if (!set) { _dsStatus('その資料セットはありません'); return Promise.resolve(null); }
+  var res = DS.resolve(set, _dsNames);
+  if (!res.present.length) {
+    _dsStatus('「' + name + '」の図が保存フォルダに 1 枚もありません');
+    return Promise.resolve(null);
+  }
+  saveActiveDoc();
+  _dsStatus('「' + name + '」を資料の形に組んでいます…');
+  var dir = _wsFileDir();
+  var texts = {};
+  return Promise.all(res.present.map(function(n) {
+    return WS.loadFile(n, dir).then(function(t) {
+      if (typeof t === 'string') texts[n] = t;
+    }, function() {});
+  })).then(function() {
+    var built = FE.docsFrom(res.present, texts);
+    var sh = DL.sheet(set, _dsNames);
+    var byName = {};
+    built.docs.forEach(function(d) { byName[d.name] = d; });
+    var files = [];
+    var queue = sh.entries.slice();
+    function step() {
+      if (!queue.length) return Promise.resolve();
+      var e = queue.shift();
+      var d = byName[e.name];
+      if (!d) return step();
+      _dsStatus('図を描いています… 図' + e.no + ' ' + e.name);
+      return Promise.resolve(renderDslToSvg(d.dsl)).then(function(svg) {
+        files.push({ name: DL.fileNameOf(e) + '.svg', content: svg });
+      }, function() {}).then(step);
+    }
+    return step().then(function() {
+      files.push({ name: '資料の体裁.md', content: DL.sheetText(sh) });
+      var proof = _dpShow(name, files, { at: _dpNow() });
+      if (proof) _dsStatus(window.MA.docProof.verdict(proof).text);
+      return proof;
+    });
+  });
+}
+
+// 差し戻しの直し先。その図を編集タブで開いて、資料セットの画面を閉じる
+// (zip を解いて名前を探し直す手作業をここで終わらせる)。
+function _dpEditPage(name) {
+  var WS = window.MA.workspace;
+  if (!WS) return Promise.resolve(null);
+  saveActiveDoc();
+  var dir = _wsFileDir();
+  return WS.loadFile(name, dir).then(function(text) {
+    if (text == null) {
+      _dsStatus('「' + name + '」を保存フォルダから読めませんでした');
+      return null;
+    }
+    if (window.MA.saveDiff) { try { window.MA.saveDiff.mark(name, text); } catch (e) {} }
+    var d0 = WS.detectType(text);
+    openExistingFile({ name: name, dsl: text,
+                       diagramType: (d0 && modules[d0]) ? d0 : currentDiagramType });
+    applyActiveDoc();
+    closeDocSetModal();
+    if (window.MA.toast) {
+      window.MA.toast.show('「' + name + '」を開きました（直したら資料セットから見直せます）');
+    }
+    return name;
+  }, function() { return null; });
+}
+
+function _dpPage(cls) {
+  var d = document.createElement('div');
+  d.className = 'dp-page ' + cls;
+  return d;
+}
+
+function renderDocProof() {
+  var DP = window.MA.docProof;
+  var box = document.getElementById('dp-pages');
+  if (!DP || !box || !_dpProof) return;
+  var proof = _dpProof;
+
+  var title = document.getElementById('dp-title');
+  if (title) title.textContent = proof.title;
+  var v = DP.verdict(proof);
+  var vEl = document.getElementById('dp-verdict');
+  if (vEl) { vEl.className = v.cls; vEl.textContent = v.text; }
+
+  box.textContent = '';
+
+  // 表紙。客先が最初に見る紙なので、資料名と枚数をここで言い切る。
+  var cover = _dpPage('dp-cover');
+  cover.id = 'dp-cover';
+  var ct = document.createElement('div');
+  ct.className = 'dp-cover-title';
+  ct.textContent = proof.title;
+  cover.appendChild(ct);
+  DP.coverLines(proof).slice(1).forEach(function(line) {
+    var l = document.createElement('div');
+    l.className = 'dp-cover-line';
+    l.textContent = line;
+    cover.appendChild(l);
+  });
+  box.appendChild(cover);
+
+  // 出す前に直す所。判定の内訳を表紙の次に置く (めくる前に読ませる)。
+  var list = DP.checks(proof);
+  if (list.length) {
+    var iss = _dpPage('dp-issue');
+    iss.id = 'dp-issues';
+    var ih = document.createElement('div');
+    ih.className = 'dp-toc-title';
+    ih.textContent = '客先に出す前に直す所';
+    iss.appendChild(ih);
+    var ul = document.createElement('ul');
+    ul.className = 'dp-issues';
+    list.forEach(function(c) {
+      var li = document.createElement('li');
+      li.className = 'dp-' + c.level;
+      li.setAttribute('data-key', c.key);
+      li.textContent = c.text;
+      ul.appendChild(li);
+    });
+    iss.appendChild(ul);
+    box.appendChild(iss);
+  }
+
+  // 目次。
+  var toc = _dpPage('dp-toc-page');
+  var th = document.createElement('div');
+  th.className = 'dp-toc-title';
+  th.textContent = '目次';
+  toc.appendChild(th);
+  var ul2 = document.createElement('ul');
+  ul2.className = 'dp-toc';
+  ul2.id = 'dp-toc';
+  proof.pages.forEach(function(pg) {
+    var li = document.createElement('li');
+    li.className = 'dp-toc-line';
+    li.setAttribute('data-no', String(pg.no));
+    li.textContent = DP.tocLine(pg);
+    ul2.appendChild(li);
+  });
+  toc.appendChild(ul2);
+  box.appendChild(toc);
+
+  // 図のページ。図番号・見出し・注記・図の本体を、資料に貼った形のまま出す。
+  proof.pages.forEach(function(pg) {
+    var page = _dpPage('dp-fig');
+    page.setAttribute('data-no', String(pg.no));
+    page.setAttribute('data-doc-name', pg.name);
+
+    var h = document.createElement('div');
+    h.className = 'dp-fig-head';
+    h.textContent = '図' + pg.no + ' ' + (pg.heading || pg.name);
+    page.appendChild(h);
+
+    if (pg.note) {
+      var n = document.createElement('div');
+      n.className = 'dp-fig-note';
+      n.textContent = pg.note;
+      page.appendChild(n);
+    }
+
+    var body = document.createElement('div');
+    body.className = 'dp-fig-body';
+    if (pg.inZip) {
+      body.innerHTML = pg.svg;
+    } else {
+      var g = document.createElement('div');
+      g.className = 'dp-fig-gone';
+      g.textContent = 'この図は資料に入っていません（' + pg.file + ' が書き出せていません）';
+      body.appendChild(g);
+    }
+    page.appendChild(body);
+
+    var foot = document.createElement('div');
+    foot.className = 'dp-foot';
+    var f = document.createElement('span');
+    f.className = 'dp-file';
+    f.textContent = pg.file;
+    foot.appendChild(f);
+    var edit = document.createElement('button');
+    edit.type = 'button';
+    edit.className = 'dp-edit';
+    edit.textContent = 'この図を編集に戻る';
+    edit.title = 'このページの図を編集タブで開きます（zip を解いて探し直さない）';
+    edit.addEventListener('click', function() { _dpEditPage(pg.name); });
+    foot.appendChild(edit);
+    page.appendChild(foot);
+
+    box.appendChild(page);
+  });
+}
+
 function saveDocLayout() {
   var DL = window.MA.docLayout;
   if (!DL || !_dlName) return Promise.resolve(null);
@@ -23655,8 +23916,14 @@ function exportDocSet(name) {
     return exportAllSVG(docs, document.getElementById('docset-status'), extra)
       .then(function(summary) {
         var note = FE.missingNote(built.missing.concat(res.missing));
+        // 書き出した中身を、そのまま客先資料の体裁で見返せるようにする
+        // (zip を解凍して 1 枚ずつ開き直さない。BLK-primary-20260916-0426-wish)。
+        var proof = _dpShow(name, summary.files || [],
+          { zipFile: summary.zipFile, at: _dpNow() });
+        var verdict = proof ? window.MA.docProof.verdict(proof).text : '';
         _dsStatus(summary.message + '（' + res.expected + ' 枚の資料セット「' + name
-          + '」。図番号順の SVG と、目次付きの「資料の体裁.md」が入っています）' + note);
+          + '」。図番号順の SVG と、目次付きの「資料の体裁.md」が入っています）' + note
+          + (verdict ? ' — ' + verdict : ''));
         return summary;
       });
   });
@@ -23668,6 +23935,7 @@ function openDocSetModal() {
   modal.style.display = 'flex';
   _dsStatus('');
   closeDocLayout();
+  closeDocProof();
   var nameEl = document.getElementById('docset-name');
   renderDocSets();
   return Promise.all([loadDocSetNames(), loadDocSets(true)]).then(function() {
@@ -23695,6 +23963,8 @@ function setupDocSets() {
   });
   var back = document.getElementById('dl-back');
   if (back) back.addEventListener('click', function() { closeDocLayout(); renderDocSets(); });
+  var dpBack = document.getElementById('dp-back');
+  if (dpBack) dpBack.addEventListener('click', function() { closeDocProof(); renderDocSets(); });
   var dlSave = document.getElementById('dl-save');
   if (dlSave) dlSave.addEventListener('click', function() { saveDocLayout(); });
   var create = document.getElementById('docset-create');
@@ -23737,6 +24007,9 @@ function exportAllSVG(pickedDocs, statusEl, extraFiles) {
       downloadBlob(name, new Blob([window.MA.bulkExport.buildZip(files)], { type: 'application/zip' }));
       msg = msg + '（' + name + '）';
       summary.zipFile = name;
+      // 何を zip に入れたかは、書き出した後に資料として見返す側が要る
+      // (BLK-primary-20260916-0426-wish)。
+      summary.files = files;
     }
     if (status) status.textContent = msg;
     if (window.MA.toast) window.MA.toast.show(msg);
