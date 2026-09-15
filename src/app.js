@@ -9251,8 +9251,69 @@ function _seniorEls() {
     slice: document.getElementById('senior-slice'),
     sliceKey: document.getElementById('senior-slice-key'),
     sliceMode: document.getElementById('senior-slice-mode'),
+    draftRow: document.getElementById('senior-draft-row'),
+    draft: document.getElementById('senior-draft'),
+    draftNote: document.getElementById('senior-draft-note'),
     btn: document.getElementById('btn-tab-senior'),
   };
+}
+
+// BLK-junior-20260915-2240-wish: 先輩がこの図種を 1 枚も持っていないとき、
+// 手順1「手本を見て直す」が成立せず、junior は要素構成と依存の粒度を決め打ちする
+// しかなかった。先輩の他図種に実際に書かれている名前だけから仮の手本を組む口を、
+// 相手が見つからなかったときにだけ出す (見つかったときは本物の手本がある)。
+function renderSeniorDraftRow(pick) {
+  var el = _seniorEls();
+  var SD = window.MA.seniorDraft;
+  var WS = window.MA.workspace;
+  if (!el.draftRow || !SD || !WS) return;
+  var active = WS.getActive();
+  var key = (pick && pick.key) || _seniorPartKeys()[0] || '';
+  var show = !!(active && key && (!pick || !pick.name));
+  el.draftRow.hidden = !show;
+  if (!show) return;
+  var kind = SD.kindLabel(String(active.diagramType || '').replace(/^plantuml-/, ''));
+  if (el.draft) el.draft.textContent = '🧪 ' + kind + 'の仮の手本を作る';
+  if (el.draftNote) {
+    el.draftNote.textContent = '先輩に ' + key + ' の' + kind
+      + ' がありません。先輩の他の図種に書かれている名前から下書きを組めます。';
+  }
+}
+
+// 先輩のフォルダを丸ごと読み、仮の手本を新しいタブに開く。
+function makeSeniorDraft() {
+  var el = _seniorEls();
+  var SD = window.MA.seniorDraft;
+  var WS = window.MA.workspace;
+  var st = _seniorState();
+  if (!SD || !WS || !st.dir) return Promise.resolve(false);
+  var active = WS.getActive();
+  if (!active) return Promise.resolve(false);
+  var kind = String(active.diagramType || '').replace(/^plantuml-/, '');
+  var subject = (_seniorPick && _seniorPick.key) || _seniorPartKeys()[0] || '';
+  if (el.draftNote) el.draftNote.textContent = '先輩の図を読み込み中…';
+  return Promise.all(_seniorNames.map(function(name) {
+    return WS.loadFile(name, st.dir).then(function(text) {
+      return typeof text === 'string' ? { name: name, text: text } : null;
+    }).catch(function() { return null; });
+  })).then(function(loaded) {
+    var docs = loaded.filter(function(d) { return d && d.text; });
+    var res = SD.draft(subject, docs, kind);
+    if (el.draftNote) el.draftNote.textContent = SD.noticeText(res);
+    if (!res.ok) return false;
+    saveActiveDoc();
+    WS.open({
+      name: SD.docName(subject, kind),
+      dsl: res.dsl,
+      diagramType: 'plantuml-' + res.kind,
+    });
+    applyActiveDoc();
+    saveActiveDoc();
+    if (window.MA.toast) {
+      window.MA.toast.show(SD.noticeText(res));
+    }
+    return true;
+  });
 }
 
 function _seniorState() {
@@ -9530,6 +9591,7 @@ function syncSeniorCounterpart() {
   renderSeniorStatus();
   renderSeniorCandidates();
   renderSeniorSliceRow();
+  renderSeniorDraftRow(pick);
   if (!pick.name) {
     _seniorName = '';
     _seniorText = '';
@@ -9642,6 +9704,7 @@ function setupSeniorPane() {
       renderSeniorBody();
     });
   }
+  if (el.draft) el.draft.addEventListener('click', function() { makeSeniorDraft(); });
   // 下端の入口。折りたたみを通らずに 1 クリックで先輩の図の枠へ着く。
   var status = document.getElementById('status-senior');
   if (status) status.addEventListener('click', function() { toggleSeniorPane(el.pane.hidden); });

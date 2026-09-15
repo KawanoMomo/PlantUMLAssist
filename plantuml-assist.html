@@ -5381,6 +5381,18 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   background: var(--bg-tertiary);
 }
 #senior-first-note[hidden] { display: none; }
+/* BLK-junior-20260915-2240-wish: 先輩がこの図種を持っていないときだけ出る行。 */
+#senior-draft-row {
+  padding: 6px 8px; font-size: 11px; line-height: 1.5;
+  border-bottom: 1px solid var(--border); background: var(--bg-tertiary);
+}
+#senior-draft-row[hidden] { display: none; }
+#senior-draft {
+  font-size: 11px; padding: 3px 8px; cursor: pointer;
+  background: var(--bg-primary); border: 1px solid var(--border);
+  color: var(--text-primary); border-radius: 3px;
+}
+#senior-draft-note { display: block; margin-top: 4px; color: var(--text-secondary); }
 #senior-first-note button {
   margin-left: 6px; font-size: 11px; padding: 0 6px; cursor: pointer;
   border: 1px solid var(--border); background: transparent; color: var(--text);
@@ -6619,6 +6631,14 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <!-- 初めて開いたときだけ「この枠は何か」を 1 行出す (BLK-human-20260915-1203) -->
       <div id="senior-first-note" hidden></div>
       <div id="senior-notice"></div>
+      <!-- BLK-junior-20260915-2240-wish: 先輩がこの図種を 1 枚も持っていないとき、
+           手順1「手本を見て直す」が成立しない。先輩の他図種に実際に書かれている
+           名前だけから仮の手本を組んで出す (決め打ちの当てずっぽうを減らす)。 -->
+      <div id="senior-draft-row" hidden>
+        <button type="button" id="senior-draft"
+                title="先輩の他の図種 (クラス図・シーケンス図など) に書かれている名前から、この図種の下書きを組む">🧪 仮の手本を作る</button>
+        <span id="senior-draft-note"></span>
+      </div>
       <!-- BLK-junior-20260914-2206-wish: 先輩のクラス図は全ドライバ共通の 1 枚なので
            部品名で 1:1 に引けない。共通図が相手のときだけ、部品名で抜き出す欄を出す。 -->
       <div id="senior-slice" hidden>
@@ -7021,6 +7041,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/template-new.js"></script>
 <script src="src/core/part-reference.js"></script>
 <script src="src/core/part-vocab.js"></script>
+<script src="src/core/senior-draft.js"></script>
 <script src="src/core/part-starter.js"></script>
 <script src="src/core/skeleton-new.js"></script>
 <script src="src/core/driver-usecase-starter.js"></script>
