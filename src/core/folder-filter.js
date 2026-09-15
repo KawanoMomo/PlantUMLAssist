@@ -52,10 +52,38 @@ window.MA.folderFilter = (function() {
     return q + ' に当たる図 ' + shown + ' / ' + total + ' 枚';
   }
 
+  // BLK-junior-20260916-0546: この一覧は「保存先フォルダ」だけを見せている。
+  // 先輩の図を探している人には「無い」としか見えず、見るには保存先ごと切り替えるしか
+  // 無いと思って諦めていた (切り替えると次の保存先も先輩のフォルダになる)。
+  // 読むだけの入口が別にあることを、探しているその場で言うための 1 行。
+  function peekHintText(shown, query) {
+    var q = String(query == null ? '' : query).trim();
+    if (!q) return 'この一覧は保存先フォルダだけです。他の人の図は「他フォルダ」から読むだけ見られます';
+    if (shown > 0) return '';
+    return '「' + q + '」は保存先にありません。他の人のフォルダを読むだけ探せます (保存先は変わりません)';
+  }
+
+  // 読むだけの入口を強く出すべき場面か (探していて 0 枚のとき)。
+  function peekUrged(shown, query) {
+    return String(query == null ? '' : query).trim() !== '' && !shown;
+  }
+
+  // 覚きの一覧を同じ規則で絞る。一覧で打った名前をそのまま持ち越せるので、
+  // 向こうで打ち直さなくて済む。
+  function peekSummaryText(shown, total, query) {
+    var q = String(query == null ? '' : query).trim();
+    if (!q) return '';
+    if (!shown) return '「' + q + '」に当たる図はこのフォルダにもありません (' + total + ' 枚中)';
+    return '「' + q + '」で絞り込み中 ' + shown + ' / ' + total + ' 枚';
+  }
+
   return {
     match: match,
     filter: filter,
     soleMatch: soleMatch,
     summaryText: summaryText,
+    peekHintText: peekHintText,
+    peekUrged: peekUrged,
+    peekSummaryText: peekSummaryText,
   };
 })();

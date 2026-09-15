@@ -714,6 +714,29 @@ html, body {
 }
 #folder-panel input.folder-filter:focus { outline: none; border-color: var(--accent); }
 #folder-panel .folder-filter-state { color: var(--accent); font-size: 10px; white-space: nowrap; }
+/* BLK-junior-20260916-0546: 読むだけの他フォルダの入口。探して 0 枚のときだけ urged で強く出る。 */
+#folder-panel .folder-peek-open {
+  font-size: 10px;
+  padding: 2px 8px;
+  white-space: nowrap;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+}
+#folder-panel .folder-peek-open:hover { border-color: var(--accent); }
+#folder-panel .folder-peek-open.urged { border-color: var(--accent); color: var(--accent); }
+#folder-panel .folder-peek-hint { font-size: 10px; color: var(--text-secondary); }
+#folder-panel .folder-peek-hint.urged { color: var(--accent); }
+#peek-query {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 10px;
+  color: var(--accent);
+}
 #folder-panel .folder-summary {
   font-size: 10px;
   color: var(--text-secondary);

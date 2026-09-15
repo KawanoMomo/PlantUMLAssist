@@ -1845,3 +1845,114 @@ test.describe('junior 手順 2: 先輩の実図を手本に新部品を起こす
     expect(opened.some((d) => d.name === 'spiref_init_sequence')).toBe(false);
   });
 });
+
+// BLK-junior-20260916-0546 (friction): 手順 1 で先輩の driver_common_class を
+// 📂 一覧で探したが出てこない。一覧は保存先フォルダだけを見せるので「無い」としか
+// 読めず、見るには「保存先」チップから保存先ごと先輩のフォルダに切り替えるしかない。
+// だが保存先を動かすと次の「保存」が先輩のフォルダに書き込まれるので、上書き事故を
+// 恐れて見るのを諦めていた。到達条件は「保存先を動かさずに、探しているその場から
+// 先輩の 1 枚に届く」こと。
+const PEEK_ROOT = DIR + '-peekentry';
+const PEEK_MINE = PEEK_ROOT + '/junior';
+const PEEK_SENIOR = PEEK_ROOT + '/primary';
+
+const PE_MINE_CLASS = ['@startuml', 'class TimerDrv', '@enduml'].join('\n');
+const PE_SENIOR_CLASS = [
+  '@startuml', 'class Driver_Common', 'class Timer_Driver',
+  'Timer_Driver --|> Driver_Common', '@enduml',
+].join('\n');
+
+test.describe('junior 手順 1: 保存先を動かさずに先輩の図を読むだけで開く', () => {
+  test.beforeEach(async ({ page }) => {
+    await S1.bootWithSaveDir(page, PEEK_MINE);
+    await S1.clearDir(page, PEEK_MINE);
+    await S1.clearDir(page, PEEK_SENIOR);
+    await S1.putDoc(page, PEEK_MINE, 'TimerDrv派生クラス図', PE_MINE_CLASS);
+    await S1.putDoc(page, PEEK_SENIOR, 'driver_common_class', PE_SENIOR_CLASS);
+    await page.reload();
+    await page.waitForSelector('#btn-tab-folder');
+  });
+
+  test('一覧で見つからないとき、その場が「読むだけの入口」を名指しする', async ({ page }) => {
+    await page.locator('#btn-tab-folder').click();
+    await page.waitForSelector('#folder-filter');
+    // 一覧は開いた後に描き直して絞り込みを白紙に戻すので、行が出揃うのを待つ。
+    await page.waitForSelector('#folder-panel [data-file-name]');
+    await page.waitForTimeout(800);
+
+    // 何も打っていないうちから、この一覧が何を見せているかが読める。
+    await expect(page.locator('#folder-peek-hint')).toContainText('保存先フォルダだけ');
+    await expect(page.locator('#folder-peek-open')).toBeVisible();
+
+    await page.locator('#folder-filter').fill('driver_common');
+    await page.waitForTimeout(300);
+    // 到達条件その1: 「無い」で終わらせず、保存先を動かさずに探せると言う。
+    await expect(page.locator('#folder-filter-state')).toContainText('当たる図はありません');
+    await expect(page.locator('#folder-peek-hint')).toContainText('driver_common');
+    await expect(page.locator('#folder-peek-hint')).toContainText('保存先は変わりません');
+    await expect(page.locator('#folder-peek-open')).toHaveClass(/urged/);
+  });
+
+  test('打った名前を持ち越して先輩の 1 枚が開く。保存先は動かない', async ({ page }) => {
+    const targetBefore = await page.locator('#top-save-target').innerText();
+
+    await page.locator('#btn-tab-folder').click();
+    await page.waitForSelector('#folder-filter');
+    // 一覧は開いた後に描き直して絞り込みを白紙に戻すので、行が出揃うのを待つ。
+    await page.waitForSelector('#folder-panel [data-file-name]');
+    await page.waitForTimeout(800);
+    await page.locator('#folder-filter').fill('driver_common');
+    await page.waitForTimeout(300);
+    await page.locator('#folder-peek-open').click();
+    await page.waitForSelector('#peek-modal');
+    await page.waitForTimeout(800);
+
+    // 到達条件その2: 向こうで打ち直さない。持ち越した名前で絞れていると言う。
+    await expect(page.locator('#peek-query-text')).toContainText('driver_common');
+    await expect(page.locator('#peek-files .peek-file')).toHaveCount(1);
+
+    await page.locator('#peek-files .peek-file[data-file-name="driver_common_class"]').click();
+    await page.waitForTimeout(1200);
+    await expect(page.locator('#peek-title')).toContainText('driver_common_class');
+
+    // 到達条件その3: 保存先チップは 1 文字も動かない (これを恐れて諦めた手順)。
+    expect(await page.locator('#top-save-target').innerText()).toBe(targetBefore);
+    const dir = await page.evaluate(() => {
+      const cfg = JSON.parse(window.localStorage.getItem('plantuml-autosave-config') || '{}');
+      return cfg.fileDir;
+    });
+    expect(dir).toBe(PEEK_MINE);
+
+    // 絞り込みは外せる (先輩のフォルダの全枚も見られる)。
+    await page.locator('#peek-query-clear').click();
+    await page.waitForTimeout(300);
+    await expect(page.locator('#peek-query')).toHaveCount(0);
+  });
+
+  test('探し始めから先輩の図が出るまで、クリック 10 以下・キー入力 50 以下', async ({ page }) => {
+    let clicks = 0;
+    let keys = 0;
+    const click = async (sel) => { clicks++; await page.locator(sel).click(); };
+    const type = async (sel, text) => { keys += text.length; await page.locator(sel).fill(text); };
+
+    await click('#btn-tab-folder');
+    await page.waitForSelector('#folder-filter');
+    // 一覧は開いた後に描き直して絞り込みを白紙に戻すので、行が出揃うのを待つ。
+    await page.waitForSelector('#folder-panel [data-file-name]');
+    await page.waitForTimeout(800);
+    await type('#folder-filter', 'driver_common');
+    await page.waitForTimeout(300);
+    await click('#folder-peek-open');
+    await page.waitForSelector('#peek-modal');
+    await page.waitForTimeout(800);
+    await click('#peek-files .peek-file[data-file-name="driver_common_class"]');
+    await page.waitForTimeout(1200);
+
+    await expect(page.locator('#peek-title')).toContainText('driver_common_class');
+    expect(clicks).toBeLessThanOrEqual(10);
+    expect(keys).toBeLessThanOrEqual(50);
+    // 実測: クリック 3 / キー入力 13。
+    expect(clicks).toBe(3);
+    expect(keys).toBe(13);
+  });
+});
