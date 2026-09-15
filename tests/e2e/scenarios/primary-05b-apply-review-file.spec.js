@@ -893,3 +893,78 @@ test.describe('手順5.5 空洞化した図を、戻す先を探さずに戻す'
     await expect(page.locator('.folder-version-shrink[data-version-shrink="' + OK + '"]')).toHaveCount(0);
   });
 });
+
+// BLK-primary-20260916-0526-wish: 指摘.md 2番の ClockCtrl ⇔ Clock_Ctrl のような
+// 「隣の persona との表記違い」は、reviewer が audit を通しで走らせて指摘.md に
+// 書くまで分からなかった (継続 3 tick 目)。📂一覧の「他personaと突合」は押さないと
+// 動かないので日常の保存に乗らない。保存したその場で言い切れれば、5.5 は
+// 「保存する → 衝突が無いと分かって次へ進む」の 1 画面で閉じる。
+test.describe('手順5.5 保存したその場で、隣の persona との部品名衝突が分かる', () => {
+  const ROOT = S.dirFor(__filename) + '/clash';
+  const MINE = ROOT + '/primary';
+  const THEIRS = ROOT + '/junior';
+
+  const seq = (names) => ['@startuml', ...names.map((n) => 'participant ' + n),
+    names[0] + ' -> ' + names[0] + ' : Init()', '@enduml'].join('\n');
+
+  // junior 側は Clock_Ctrl を 2 枚で使う (多数派 = 揃える先が相手の綴りになる)。
+  async function setup(page, mineDsl) {
+    await S.bootWithSaveDir(page, THEIRS);
+    await S.clearDir(page, THEIRS);
+    await S.putDoc(page, THEIRS, 'clock_state', seq(['Clock_Ctrl']));
+    await S.putDoc(page, THEIRS, 'clock_sequence', seq(['Clock_Ctrl']));
+
+    await S.bootWithSaveDir(page, MINE);
+    await S.clearDir(page, MINE);
+    await S.putDoc(page, MINE, 'spi_init_sequence', mineDsl);
+    await S.bootWithSaveDir(page, MINE);
+    await page.waitForSelector('#preview-svg');
+    await S.openFolderItem(page, 'spi_init_sequence');
+    const lock = page.locator('#source-lock-modal');
+    if (await lock.isVisible().catch(() => false)) {
+      await page.locator('#source-lock-overwrite').click();
+      await page.waitForTimeout(800);
+    }
+  }
+
+  test('保存すると、突合を押さなくても相手と相手の図を名指しする', async ({ page }) => {
+    test.setTimeout(120 * 1000);
+    await setup(page, seq(['ClockCtrl', 'SpiDrv']));
+
+    // 到達条件その1: 保存しただけで帯が出る (📂一覧の突合ボタンは押していない)。
+    await page.locator('#btn-save').dispatchEvent('click');
+    const band = page.locator('#save-clash-overlay');
+    await expect(band).toBeVisible({ timeout: 60000 });
+    await expect(page.locator('#scl-summary')).toContainText('junior');
+    await expect(page.locator('#scl-summary')).toContainText('ClockCtrl');
+
+    // 到達条件その2: 相手側の図まで名指しするので、1 枚ずつ開かずに誰に断るかが決まる。
+    await expect(page.locator('#scl-list')).toContainText('Clock_Ctrl');
+    await expect(page.locator('#scl-list')).toContainText('junior/clock_state');
+
+    // 到達条件その3: その場で揃えられる。対象は開いている図だけ (台本 5.5 の絞り込み)。
+    const fix = page.locator('#btn-scl-fix');
+    await expect(fix).toBeVisible();
+    await expect(fix).toContainText('Clock_Ctrl');
+    await fix.click();
+    await page.waitForTimeout(800);
+    expect(await page.locator('#editor').inputValue()).toContain('Clock_Ctrl');
+    expect(await page.locator('#editor').inputValue()).not.toContain('participant ClockCtrl');
+    // 相手の図は書き換えない (断りのない変更を作らない)。
+    expect(await S.readDoc(page, THEIRS, 'clock_state')).toContain('Clock_Ctrl');
+
+    // 到達条件その4: 揃えて保存し直せば帯が消え、次へ進んでよいと分かる。
+    await page.locator('#btn-save').dispatchEvent('click');
+    await expect(band).toBeHidden({ timeout: 60000 });
+  });
+
+  test('衝突が無ければ帯を出さず、何枚と照合したかを保存の後ろに出す', async ({ page }) => {
+    test.setTimeout(120 * 1000);
+    await setup(page, seq(['Clock_Ctrl', 'SpiDrv']));
+
+    await page.locator('#btn-save').dispatchEvent('click');
+    await expect(page.locator('#status-save-result')).toContainText('照合', { timeout: 60000 });
+    await expect(page.locator('#status-save-result')).toContainText('衝突なし');
+    await expect(page.locator('#save-clash-overlay')).toBeHidden();
+  });
+});

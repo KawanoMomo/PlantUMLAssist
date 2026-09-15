@@ -2829,6 +2829,7 @@ function init() {
   setupDesignCheck();
   setupSaveGuard();
   setupSaveCheck();
+  setupSaveClash();
   setupSaveSwap();
   setupVersionTimeline();
   setupLineage();
@@ -22687,6 +22688,9 @@ function saveFile() {
         // 状態バーの 1 行だけでは「保存した」と「本体が変わった」の食い違いが読めない。
         showSaveRedirect(redirected, target.dir);
         runSaveCheck(doc && doc.name);
+        // 隣の persona と部品名がぶつかっていないか (BLK-primary-20260916-0526-wish)。
+        // 読み込みを待つので保存の表示は止めない。
+        runSaveClash(doc && doc.name);
         // この保存で中身が別名の図と入れ替わっていないか (BLK-reviewer-20260912-2103-wish)
         runSaveSwapCheck(doc && doc.name, doc && doc.dsl);
       }
@@ -22697,6 +22701,7 @@ function saveFile() {
   downloadBlob(target.name + '.puml', new Blob([mmdText], { type: 'text/plain' }));
   if (ST) setSaveStatus(ST.messageFor(target, true));
   runSaveCheck(doc && doc.name);
+  runSaveClash(doc && doc.name);
   runSaveSwapCheck(doc && doc.name, doc && doc.dsl);
 }
 
@@ -22764,6 +22769,166 @@ function runSaveCheck(docName) {
   try { renderSaveCheck(res); } catch (e) { /* 表示できなくても控えは進める */ }
   try { SC.save(_reviewStore(), _wsFileDir(), SC.advance(_svckState(), res)); } catch (e) {}
   return res;
+}
+
+// ── 保存時の他 persona 衝突 (BLK-primary-20260916-0526-wish) ────────────────
+// 隣の persona と部品名が表記違いでぶつかっていることは、これまで reviewer が
+// audit を通しで走らせて指摘.md に書くまで分からなかった (ClockCtrl ⇔ Clock_Ctrl の
+// 継続 3 tick 目)。📂一覧の「他personaと突合」は押さないと動かないので、日常の
+// 保存には乗らない。ここで保存のたびに同じ突合を掛け、ぶつかっていれば相手と
+// 相手の図を名指しする。判定は src/core/save-clash.js。ここは結線だけ。
+
+// 隣のフォルダは保存のたびには読み直さない (フォルダ数 × 枚数の読み込みが
+// 保存の速さを食う)。自分のフォルダだけは必ず読み直す — いま保存した本文が
+// 控えのままだと、直した綴りでまた警告が出る。
+var _sclOthers = null;      // 隣のフォルダを読んだ控え
+var _sclOthersAt = 0;
+var _sclOthersMs = 60000;
+var _sclBusy = false;
+var _sclPlan = null;        // 帯の「揃える」が押されたときに実行する置換
+
+// 1 つのフォルダの図を、突合に掛けられる形 ({ name, persona, dsl }) で読む。
+function _sclReadDir(d) {
+  var WS = window.MA.workspace;
+  return WS.listFiles(d.path).then(function(names) {
+    return Promise.all((names || []).filter(function(n) { return n; }).map(function(n) {
+      return WS.loadFile(n, d.path).then(function(text) {
+        return { name: d.name + '/' + n, persona: d.name, _file: n,
+                 dsl: typeof text === 'string' ? text : '' };
+      }).catch(function() { return null; });
+    })).then(function(rows) {
+      return (rows || []).filter(function(r) { return r; });
+    });
+  }).catch(function() { return []; });
+}
+
+function _sclDirs() {
+  var dirs = _peekDirs.slice();
+  if (!dirs.length) dirs = [{ path: _wsFileDir(), name: _noteMineFolder() || '自分', current: true }];
+  return dirs;
+}
+
+// 突合に掛ける図をそろえる。隣は控えでよいが、自分は読み直す。
+function _sclCollect() {
+  var dirs = _sclDirs();
+  var mineDir = null, others = [];
+  dirs.forEach(function(d) { if (d.current) mineDir = d; else others.push(d); });
+  if (!mineDir) mineDir = dirs[0];
+  var fresh = (_sclOthers && (Date.now() - _sclOthersAt) < _sclOthersMs)
+    ? Promise.resolve(_sclOthers)
+    : Promise.all(others.map(_sclReadDir)).then(function(sets) {
+        var out = [];
+        sets.forEach(function(rows) { (rows || []).forEach(function(r) { out.push(r); }); });
+        _sclOthers = out;
+        _sclOthersAt = Date.now();
+        return out;
+      });
+  return fresh.then(function(theirs) {
+    return _sclReadDir(mineDir).then(function(mine) {
+      return { mine: mine, docs: window.MA.saveClash.merge(theirs, mine) };
+    });
+  });
+}
+
+// 保存した図が、突合の中で何という名前になっているか。
+// 見つからないまま「衝突なし」と言わないために、名前で引けないときは null を返す。
+function _sclDocName(mine, docName) {
+  var want = _s2(docName);
+  if (!want) return null;
+  for (var i = 0; i < mine.length; i++) {
+    var f = _s2(mine[i]._file);
+    if (f === want || f.replace(/\.[^.]+$/, '') === want) return mine[i].name;
+  }
+  return null;
+}
+
+function _s2(v) { return v == null ? '' : String(v); }
+
+function hideSaveClash() {
+  var el = document.getElementById('save-clash-overlay');
+  if (el) el.hidden = true;
+  _sclPlan = null;
+}
+
+function renderSaveClash(ev) {
+  var SL = window.MA.saveClash;
+  var el = document.getElementById('save-clash-overlay');
+  if (!SL || !el) return;
+  var esc = window.MA.htmlUtils.escHtml;
+  // ぶつかっていないときは帯を出さず、照合したことだけを保存先の後ろに足す
+  // (保存のたびに図が隠れる方が邪魔になる)。
+  if (!SL.shouldWarn(ev)) { hideSaveClash(); appendSaveStatus(SL.statusLine(ev)); return; }
+
+  var sum = document.getElementById('scl-summary');
+  if (sum) sum.textContent = SL.summaryLine(ev);
+  var list = document.getElementById('scl-list');
+  if (list) {
+    var html = '';
+    SL.lines(ev).forEach(function(l) {
+      html += '<li>' + esc(l.mine + ' ⇔ ' + l.theirs + ' — 揃える先: ' + l.suggested)
+        + ' <span class="scl-where">'
+        + esc('（' + (l.personas.length ? l.personas.join('・') + ' の ' : '')
+              + l.docs.join('、') + '）')
+        + '</span></li>';
+    });
+    list.innerHTML = html;
+  }
+  // 揃える先が相手の綴りなら、この図をその場で揃えられる。揃える先が自分の綴りの
+  // ときはボタンを出さない (相手の図を断りなく書き換えることになる)。
+  var plans = SL.fixPlan(ev);
+  _sclPlan = plans.length === 1 ? plans[0] : null;
+  var fix = document.getElementById('btn-scl-fix');
+  if (fix) {
+    fix.hidden = !_sclPlan;
+    if (_sclPlan) {
+      fix.textContent = SL.fixLabel(_sclPlan);
+      fix.title = 'この図の ' + _sclPlan.from + ' を ' + _sclPlan.to
+        + ' に置き換えます（開いている他の図は触りません）';
+    }
+  }
+  el.hidden = false;
+}
+
+// 保存のたびに呼ぶ。突合が落ちても保存そのものは成立させる。
+function runSaveClash(docName) {
+  var SL = window.MA.saveClash;
+  var NC = window.MA.nameClash;
+  if (!SL || !NC || !window.MA.workspace || _sclBusy || !docName) return Promise.resolve(null);
+  _sclBusy = true;
+  return _sclCollect().then(function(got) {
+    var res = NC.audit(got.docs);
+    var ev = SL.evaluate(res, { doc: _sclDocName(got.mine, docName) });
+    _sclBusy = false;
+    try { renderSaveClash(ev); } catch (e) {}
+    return ev;
+  }, function() {
+    _sclBusy = false;
+    hideSaveClash();
+    return null;
+  });
+}
+
+function setupSaveClash() {
+  // 帯は #preview-container の中にある。キャンバスのクリック (挿入ピッカー) へ
+  // 抜けさせない。
+  var el = document.getElementById('save-clash-overlay');
+  if (el) el.addEventListener('click', function(ev) { ev.stopPropagation(); });
+  var close = document.getElementById('btn-scl-close');
+  if (close) close.addEventListener('click', hideSaveClash);
+  var folder = document.getElementById('btn-scl-folder');
+  if (folder) folder.addEventListener('click', function() { clickById('btn-tab-folder'); });
+  var fix = document.getElementById('btn-scl-fix');
+  if (fix) {
+    fix.addEventListener('click', function() {
+      if (!_sclPlan) return;
+      // 台本 5.5 のとおり、参加者名だけの変更は対象図だけに絞る。
+      var activeId = window.MA.workspace.getActiveId();
+      var docs = _renameDocs().filter(function(d) { return d.id === activeId; });
+      renameAcrossDocs(_sclPlan.from, _sclPlan.to, docs);
+      setSaveStatus(_sclPlan.from + ' を ' + _sclPlan.to + ' に揃えました。保存すると相手と揃います');
+      hideSaveClash();
+    });
+  }
 }
 
 // ── 保存の入れ替わり検知 (BLK-reviewer-20260912-2103-wish) ──────────────────
