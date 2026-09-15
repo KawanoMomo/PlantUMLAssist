@@ -2302,6 +2302,10 @@ html, body {
 #dc-tools { margin-left: auto; display: flex; align-items: center; gap: 6px; }
 #dc-body { flex: 1; overflow: auto; padding: 10px 14px; }
 #dc-note { padding: 0 14px 8px 14px; font-size: 11px; color: var(--text-secondary); }
+#dc-coverage { padding: 0 14px 8px 14px; font-size: 11px; color: var(--text-secondary); }
+#dc-coverage.dc-has-hole { color: var(--accent-orange); }
+#dc-spec { font-size: 11px; max-width: 200px; }
+.dc-scope { color: var(--text-secondary); font-size: 10px; }
 .dc-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .dc-table th {
   text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--border);
@@ -7547,6 +7551,9 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <label style="font-size:11px;color:var(--text-secondary);">
           <input type="checkbox" id="dc-only-diff"> 不一致だけ
         </label>
+        <!-- BLK-primary-20260915-2240-friction: design/README.md の「対象の仕様」は
+             6 ファイルある。1 ファイルずつ確かめるときに他の出典が混ざらないよう絞る -->
+        <select id="dc-spec" title="出典の .dc.html で絞り込む"></select>
         <button type="button" id="dc-recheck">測り直す</button>
         <button type="button" id="dc-copy">仕様後退を BLK 用にコピー</button>
         <button type="button" id="dc-close">閉じる</button>
@@ -7556,6 +7563,9 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       出典は <code>design/README.md</code> の「対象の仕様」。不一致は「設定差」(この環境の設定が既定と違うだけ)
       と「仕様後退」(設定は既定なのに満たしていない) に分かれる。BLK にする値打ちがあるのは仕様後退だけ。
     </div>
+    <!-- BLK-primary-20260915-2240-friction: 突合項目の無い仕様ファイルは、この画面を
+         開いても分からないまま残る。どこまで機械で見ているかをここに出す -->
+    <div id="dc-coverage"></div>
     <div id="dc-body"></div>
   </div>
 </div>
