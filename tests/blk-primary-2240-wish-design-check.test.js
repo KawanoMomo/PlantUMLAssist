@@ -26,12 +26,29 @@ const QUIET_BAR = [
   '</div>',
 ].join('');
 
+// BLK-primary-20260915-2240-friction で突合項目が 6 項目から 15 項目に増えた
+// (design/README.md の「対象の仕様」6 ファイル全部を見るようにしたため)。
+// 「仕様どおりの画面」の見本なので、増えた項目のぶんもここに揃える。
+const CONTEXT_PARTS = [
+  '<div id="cp-foot">↑↓ 選択 · Enter 実行 · Tab 種別で絞り込み · Esc 閉じる</div>',
+  '<div id="export-menu">' + [1, 2, 3, 4].map(() => '<button></button>').join('') + '</div>',
+  '<button id="props-tab-settings">図の設定</button><div id="diagram-settings-content" hidden></div>',
+  '<div id="state-table-panel" hidden><button id="btn-state-table-toggle"></button>'
+    + '<button id="btn-state-table-csv"></button></div>',
+  '<div id="cfg-render-modes"></div><input id="cfg-render-debounce"><input id="cfg-render-error-overlay">',
+  '<input id="cfg-editor-indent"><input id="cfg-editor-font"><input id="cfg-editor-click-to-line">',
+  '<div id="cfg-shortcuts-list"></div><input id="cfg-sc-search"><button id="cfg-sc-reset"></button>',
+  '<div id="line-numbers">1</div><div id="insert-marker" hidden></div><div id="props-insert-hint" hidden></div>',
+  '<div id="cfg-cv-list"></div><input id="cfg-cv-search"><div id="cfg-cv-legend"></div>',
+].join('');
+
 const FULL_APP = QUIET_BAR
   + '<div id="editor-pane"></div><div id="preview-pane"></div><div id="props-pane"></div>'
   + '<div id="cp-modal"></div>'
   + '<div id="rail-types">'
   + [1, 2, 3, 4, 5, 6].map(() => '<button class="rail-btn"></button>').join('')
-  + '</div>';
+  + '</div>'
+  + CONTEXT_PARTS;
 
 describe('BLK-primary-2240 仕様突合の判定', function() {
   test('仕様どおりなら一致と言い切る', function() {

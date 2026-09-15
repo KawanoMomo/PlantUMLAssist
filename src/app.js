@@ -5317,6 +5317,8 @@ function setupAuditBoard() {
 // 判定は design-check.js が持ち、ここは測って描くだけ。
 var _dcRows = [];
 var _dcOnlyDiff = false;
+// BLK-primary-20260915-2240-friction: 出典 (.dc.html) での絞り込み。'' はすべて。
+var _dcSpec = '';
 
 function _dcReadSetting(key) {
   try { return localStorage.getItem(key); } catch (e) { return null; }
@@ -5337,17 +5339,29 @@ function renderDesignCheck() {
   var sum = document.getElementById('dc-summary');
   if (!DC || !body) return;
   var esc = window.MA.htmlUtils.escHtml;
-  var rows = _dcOnlyDiff
-    ? _dcRows.filter(function(r) { return r.verdict !== 'ok'; })
-    : _dcRows;
+  var rows = _dcRows.filter(function(r) {
+    if (_dcOnlyDiff && r.verdict === 'ok') return false;
+    if (_dcSpec && r.spec !== _dcSpec) return false;
+    return true;
+  });
   if (sum) {
     sum.textContent = DC.summaryText(_dcRows);
     sum.classList.toggle('dc-has-gap', DC.summary(_dcRows).gap > 0);
   }
+  // 突合項目の無い仕様ファイルは、この画面では何も分からないファイル。
+  // 手で grep する手が残っているのはそこだけ、と読めるように出す。
+  var cov = document.getElementById('dc-coverage');
+  if (cov && DC.coverageText) {
+    cov.textContent = DC.coverageText(_dcRows);
+    var hole = (DC.coverage(_dcRows) || []).some(function(c) { return !c.total; });
+    cov.classList.toggle('dc-has-hole', hole);
+  }
   if (!rows.length) {
-    body.innerHTML = '<div class="ab-empty">'
-      + (_dcOnlyDiff ? '不一致はありません (すべて仕様どおり)' : '突き合わせる仕様項目がありません')
-      + '</div>';
+    var empty = '突き合わせる仕様項目がありません';
+    if (_dcSpec && _dcOnlyDiff) empty = 'この出典に不一致はありません (すべて仕様どおり)';
+    else if (_dcSpec) empty = 'この出典には突合項目がありません (まだ .dc.html を手で読む必要があります)';
+    else if (_dcOnlyDiff) empty = '不一致はありません (すべて仕様どおり)';
+    body.innerHTML = '<div class="ab-empty">' + empty + '</div>';
     return;
   }
   var html = '<table class="dc-table"><thead><tr>'
@@ -5365,7 +5379,9 @@ function renderDesignCheck() {
     }
     html += '<tr class="dc-row" data-verdict="' + esc(r.verdict) + '">'
       + '<td class="dc-plan">' + esc(r.plan) + '</td>'
-      + '<td>' + esc(r.title) + '<div class="dc-reason">出典: ' + esc(r.spec) + '</div></td>'
+      + '<td>' + esc(r.title)
+      + '<div class="dc-reason">出典: ' + esc(r.spec) + '</div>'
+      + '<div class="dc-scope">' + esc(r.scopeText || '') + '</div></td>'
       + '<td>' + esc(r.expect) + '</td>'
       + '<td class="dc-actual">' + esc(r.actual) + '</td>'
       + '<td class="dc-verdict">' + esc(DC_VERDICT_LABEL[r.verdict] || r.verdict) + '</td>'
@@ -5375,10 +5391,25 @@ function renderDesignCheck() {
   body.innerHTML = html + '</tbody></table>';
 }
 
+// 出典 (.dc.html) の絞り込み。並びは design/README.md の「対象の仕様」の順のまま。
+// 件数を添えるので、開いた時点で「項目 0 件のファイル = まだ手で読む必要がある」が分かる。
+function renderDesignCheckSpecFilter() {
+  var DC = window.MA.designCheck;
+  var sel = document.getElementById('dc-spec');
+  if (!sel || !DC || !DC.coverage) return;
+  var esc = window.MA.htmlUtils.escHtml;
+  var html = '<option value="">すべての出典 (' + _dcRows.length + ' 項目)</option>';
+  DC.coverage(_dcRows).forEach(function(c) {
+    html += '<option value="' + esc(c.spec) + '">' + esc(c.spec) + ' (' + c.total + ')</option>';
+  });
+  sel.innerHTML = html;
+  sel.value = _dcSpec;
+}
+
 function toggleDesignCheck(open) {
   var modal = document.getElementById('dc-modal');
   if (!modal) return;
-  if (open) { runDesignCheck(); renderDesignCheck(); }
+  if (open) { runDesignCheck(); renderDesignCheckSpecFilter(); renderDesignCheck(); }
   modal.style.display = open ? 'flex' : 'none';
 }
 
@@ -5400,9 +5431,15 @@ function setupDesignCheck() {
   var close = document.getElementById('dc-close');
   if (close) close.addEventListener('click', function() { toggleDesignCheck(false); });
   var recheck = document.getElementById('dc-recheck');
-  if (recheck) recheck.addEventListener('click', function() { runDesignCheck(); renderDesignCheck(); });
+  if (recheck) {
+    recheck.addEventListener('click', function() {
+      runDesignCheck(); renderDesignCheckSpecFilter(); renderDesignCheck();
+    });
+  }
   var only = document.getElementById('dc-only-diff');
   if (only) only.addEventListener('change', function() { _dcOnlyDiff = this.checked; renderDesignCheck(); });
+  var spec = document.getElementById('dc-spec');
+  if (spec) spec.addEventListener('change', function() { _dcSpec = this.value; renderDesignCheck(); });
   var copy = document.getElementById('dc-copy');
   if (copy) copy.addEventListener('click', function() { copyDesignCheckDraft(''); });
   var body = document.getElementById('dc-body');

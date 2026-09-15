@@ -70,6 +70,36 @@ test('手順11 📐 仕様突合 が、仕様と現在値を並べて不一致�
   expect(verdicts.every((v) => ['ok', 'setting', 'gap'].includes(v))).toBe(true);
 });
 
+// BLK-primary-20260915-2240-friction: 突合項目が 2 ファイルぶんしか無いと、残りの
+// 仕様ファイルは結局 .dc.html を grep して読むことになり、手順 11 の手作業が半分残る。
+// 「対象の仕様」6 ファイル全部を機械で見ていること、出典ごとに読めることを守る。
+test('手順11 突合は design の「対象の仕様」6 ファイル全部を見ていて、出典で絞って読める', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR, { foldedTools: true });
+  await openDesignCheck(page);
+
+  // 到達条件その1: 手で grep する必要のあるファイルが残っていないと言い切る。
+  await expect(page.locator('#dc-coverage')).toContainText('6 ファイル中 6 ファイル');
+  await expect(page.locator('#dc-coverage')).toContainText('grep で読む必要のあるファイルは無い');
+
+  // 到達条件その2: 出典の選択肢が 6 ファイルぶんあり、どれも項目を持つ (0 件が無い)。
+  const opts = page.locator('#dc-spec option');
+  expect(await opts.count()).toBe(7); // すべての出典 + 6 ファイル
+  const labels = await opts.evaluateAll((els) => els.map((e) => e.textContent || ''));
+  expect(labels.slice(1).some((t) => / \(0\)$/.test(t))).toBe(false);
+
+  // 到達条件その3: 1 ファイルに絞ると、その出典の行だけが残る。
+  const target = 'PlantUMLAssist - 1a 設定と網羅.dc.html';
+  await page.locator('#dc-spec').selectOption(target);
+  const specs = await page.locator('#dc-modal .dc-row').evaluateAll(
+    (els) => els.map((e) => (e.textContent || '')));
+  expect(specs.length).toBeGreaterThan(0);
+  expect(specs.every((t) => t.includes(target))).toBe(true);
+
+  // 到達条件その4: その場面でだけ出る項目は「組み込まれているかを見る」と断ってある
+  // (設定モーダルを開いていないだけの状態を仕様後退と読まないため)。
+  await expect(page.locator('#dc-modal .dc-scope').first()).toContainText('その場面でだけ出る');
+});
+
 test('手順11 設定を既定から変えた環境の不一致は「設定差」と名指しされ、その場で戻せる', async ({ page }) => {
   await S.bootWithSaveDir(page, DIR, { foldedTools: true });
   // 「機能ボタンを畳む」を自分で解いた人と同じ状態にする (7a/7b の既定は畳む)。
