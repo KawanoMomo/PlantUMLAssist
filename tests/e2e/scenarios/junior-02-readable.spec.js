@@ -846,6 +846,49 @@ test.describe('junior 手順2: 部品を選ぶと 6 図種が 2 列で並び、�
       .toHaveAttribute('data-state', 'none');
     await expect(page.locator('#peek-board-summary')).toContainText('自分に無し');
   });
+
+  // BLK-junior-20260915-2346-wish: 6 図種は 2 列で並ぶようになったが、並ぶのは本文
+  // そのものなので「6 枚のうち何枚済んだか」「どの図がまだ先輩に合っていないか」は
+  // 6 行を目で読み比べないと言えなかった。部品を選んだ時点でそれが 1 行に出て、
+  // 直したあとはその場で数字が動くこと (手順7 の見返しが開き直しにならないこと) を見る。
+  test('部品カードが 6 枚中の進捗と、先輩に合っていない図種を 1 行で出す', async ({ page }) => {
+    await page.locator('#btn-tab-peek').click();
+    await page.waitForSelector('#peek-modal');
+    await page.locator('#peek-board-toggle').click();
+    await page.waitForSelector('#peek-board .pb-row');
+    await page.locator('#peek-board-part').selectOption('spi');
+    await page.waitForTimeout(800);
+
+    // 到達条件その1: 6 枚を母数にした進捗が出る (自分はシーケンスと活動図の 2 枚)。
+    await expect(page.locator('#peek-card-progress')).toHaveText('6 図種中 2 枚');
+    expect(await page.locator('#peek-card .pc-pip.on').count()).toBe(2);
+
+    // 到達条件その2: 先輩に合っていない図種が名指しで出る。自分の活動図は
+    // `SPI_Init` 1 つだけで、先輩の `Spi_Init` `Spi_Transmit` に届いていない。
+    const gaps = page.locator('#peek-card-gaps');
+    await expect(gaps).toContainText('要直し');
+    await expect(gaps).toContainText('アクティビティ');
+    // 打ち直した所が無いシーケンス図は一致として出る (要直しには出ない)。
+    await expect(page.locator('#peek-board .pb-row[data-board-kind="sequence"]'))
+      .toHaveAttribute('data-verdict', 'agree');
+    await expect(page.locator('#peek-board .pb-row[data-board-kind="activity"]'))
+      .toHaveAttribute('data-verdict', 'differ');
+
+    // 到達条件その3: 要直しの図種を押すと、その図の自分の欄に入る (探し直さない)。
+    await page.locator('#peek-card [data-card-gap="activity"]').click();
+    await expect(page.locator('#peek-board [data-board-edit="activity"]')).toBeFocused();
+
+    // 到達条件その4: 綴りを先輩に合わせて保存すると、その場で要直しが消える。
+    await page.locator('#peek-board [data-board-edit="activity"]')
+      .fill(['@startuml', 'title SPI 初期化アクティビティ', 'start', ':Spi_Init();', ':Spi_Transmit();', 'stop', '@enduml'].join('\n'));
+    await page.locator('#peek-board [data-board-save="activity"]').click();
+    await page.waitForTimeout(1200);
+    await expect(page.locator('#peek-board .pb-row[data-board-kind="activity"]'))
+      .toHaveAttribute('data-verdict', 'agree');
+    await expect(page.locator('#peek-card-gaps')).not.toContainText('要直し');
+    // 進捗の母数は動かない (まだ 4 図種を起こしていないことが画面から消えない)。
+    await expect(page.locator('#peek-card-progress')).toHaveText('6 図種中 2 枚');
+  });
 });
 
 // BLK-junior-20260915-0606: SPI の活動図 (手順2) を打ち直すのに、実在メソッド名

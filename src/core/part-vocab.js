@@ -171,6 +171,12 @@ window.MA.partVocab = (function() {
       // コンポーネント。`[Spi_Driver]`
       var co = line.match(/^\s*\[([^\]]+)\]\s*(?:as\s+([A-Za-z0-9_][A-Za-z0-9_.-]*))?\s*$/);
       if (co) push(co[2] || co[1], 'type');
+
+      // 宣言語つきのコンポーネント・ユースケース。`component Spi_Driver`
+      // `usecase "転送する" as UC_Transfer`。`[...]` 形と同じ役割 (型) に寄せる
+      // — 同じ絵の要素が図種によって別の役割になると、名前の突合が割れる。
+      var de = line.match(/^\s*(?:component|usecase|node|rectangle|folder|frame|cloud|storage)\s+(?:"([^"]+)"\s+as\s+([A-Za-z0-9_][A-Za-z0-9_.-]*)|\[([^\]]+)\]\s+as\s+([A-Za-z0-9_][A-Za-z0-9_.-]*)|([A-Za-z0-9_][A-Za-z0-9_.-]*))/);
+      if (de) push(de[2] || de[4] || de[5] || de[1] || de[3], 'type');
     });
 
     return out;

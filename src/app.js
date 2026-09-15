@@ -8965,8 +8965,93 @@ function renderPartBoard() {
     return;
   }
 
+  // 部品カード (BLK-junior-20260915-2346-wish)。6 図種を 1 まとまりとして、
+  // 「6 枚中何枚済んだか」と「どの図がまだ先輩に合っていないか」を先に出す。
+  // 本文 6 行を読み比べないと言えなかったことを、部品を選んだ時点で 1 行にする。
+  var card = _pcCard();
+  host.appendChild(_pcStrip(card));
+
   var who = window.MA.peekFolder ? window.MA.peekFolder.baseName(_peekDir) : '相手';
-  bd.rows.forEach(function(r) { host.appendChild(_pbRow(r, who)); });
+  var verdicts = {};
+  ((card && card.rows) || []).forEach(function(r) { verdicts[r.kind] = r; });
+  bd.rows.forEach(function(r) {
+    var el = _pbRow(r, who);
+    var cr = verdicts[r.kind];
+    if (cr) {
+      el.setAttribute('data-verdict', cr.verdict);
+      var kindEl = el.querySelector('.pb-kind');
+      if (kindEl) kindEl.title = window.MA.partCard.rowLine(cr);
+    }
+    host.appendChild(el);
+  });
+}
+
+function _pcCard() {
+  var PC = window.MA.partCard;
+  if (!PC || !_pbPart) return null;
+  return PC.card(_pbPart, _kmMine, _pbRefDocs);
+}
+
+// カードの帯。進捗を左、要直しの図種を右に出す。図種名は押せて、その行へ飛ぶ
+// (「合っていない」と分かった次にすることは、その行を直すことなので)。
+function _pcStrip(card) {
+  var PC = window.MA.partCard;
+  var box = document.createElement('div');
+  box.className = 'pc-strip';
+  box.id = 'peek-card';
+  if (!PC || !card) return box;
+
+  var pr = PC.progress(card);
+  var prog = document.createElement('span');
+  prog.id = 'peek-card-progress';
+  prog.className = 'pc-progress' + (pr.done === PC.TOTAL ? ' full' : '');
+  prog.textContent = pr.text;
+  prog.title = pr.missing.length ? 'まだ無い図種: ' + pr.missing.join('・') : '6 図種そろっています';
+  box.appendChild(prog);
+
+  var bar = document.createElement('span');
+  bar.className = 'pc-bar';
+  bar.setAttribute('aria-hidden', 'true');
+  for (var i = 0; i < PC.TOTAL; i++) {
+    var pip = document.createElement('i');
+    pip.className = 'pc-pip' + (i < pr.done ? ' on' : '');
+    bar.appendChild(pip);
+  }
+  box.appendChild(bar);
+
+  var gaps = PC.gaps(card);
+  var note = document.createElement('span');
+  note.id = 'peek-card-gaps';
+  note.className = 'pc-gaps' + (gaps.length ? ' has-todo' : '');
+  if (!gaps.length) {
+    note.textContent = pr.done === PC.TOTAL ? '先輩と一致' : '合っていない図種はありません';
+  } else {
+    note.appendChild(document.createTextNode('要直し ' + gaps.length + ' 図種: '));
+    gaps.forEach(function(r, n) {
+      if (n) note.appendChild(document.createTextNode('・'));
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'pc-gap';
+      b.setAttribute('data-card-gap', r.kind);
+      b.setAttribute('data-verdict', r.verdict);
+      b.textContent = r.label;
+      b.title = PC.rowLine(r);
+      b.addEventListener('click', function() { _pcJump(r.kind); });
+      note.appendChild(b);
+    });
+  }
+  box.appendChild(note);
+  return box;
+}
+
+// 要直しの図種を押したら、その行の自分の欄に入る (探し直さずに直し始める)。
+function _pcJump(kind) {
+  var host = _pbEls().host;
+  if (!host) return;
+  var row = host.querySelector('.pb-row[data-board-kind="' + kind + '"]');
+  if (row && row.scrollIntoView) row.scrollIntoView({ block: 'center' });
+  var ta = host.querySelector('[data-board-edit="' + kind + '"]');
+  if (ta && ta.focus) { ta.focus(); _pbFocus = kind; renderPartBoardFocusMark(); }
 }
 
 function _pbRow(r, who) {
