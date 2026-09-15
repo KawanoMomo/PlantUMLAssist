@@ -134,7 +134,22 @@
       plan: '7b',
       title: '静かなタブ列でも、畳んだ機能への 1 クリックの入口が残る',
       expect: '「他 N 件」の札が出ている',
-      settings: [],
+      // 畳みを解いた人には「ツール ▾」そのものが入口なので札は出ない。
+      // 畳みと静かさの両方を見ないと、その環境を仕様後退と読み違える。
+      settings: [
+        {
+          key: 'plantuml-tools-folded',
+          label: '機能ボタンを畳む',
+          defaultText: '畳む (既定)',
+          isDefault: function(v) { return v == null || v === '' || v === '1'; },
+        },
+        {
+          key: 'plantuml-tools-quiet',
+          label: 'ツール ▾ をタブ列に出す',
+          defaultText: '静か (既定)',
+          isDefault: function(v) { return v == null || v === '' || v !== '0'; },
+        },
+      ],
       probe: function(doc) {
         var mini = doc && doc.getElementById && doc.getElementById('btn-tab-tools-mini');
         var bar = doc && doc.getElementById && doc.getElementById('tab-bar');
