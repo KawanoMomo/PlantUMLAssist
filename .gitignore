@@ -60,3 +60,6 @@ runs/
 # PyInstaller / Inno Setup の出力 (リポジトリにバイナリは入れない)
 build/
 dist/
+
+# PyInstaller の版情報ファイル (packaging/version_info.py が毎回書き出す生成物)
+packaging/version_info.txt

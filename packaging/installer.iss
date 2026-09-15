@@ -16,6 +16,8 @@ AppPublisher=PlantUMLAssist
 DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}
 UninstallDisplayIcon={app}\{#AppName}.exe
+; アイコンは packaging/icon.ico が正本 (BLK-human-20260915-1202)
+SetupIconFile=icon.ico
 OutputDir=..\dist
 OutputBaseFilename={#AppName}-{#AppVersion}-setup
 Compression=lzma2
@@ -32,8 +34,8 @@ Name: "en"; MessagesFile: "compiler:Default.isl"
 Source: "..\dist\{#AppName}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 
 [Icons]
-Name: "{group}\{#AppName}"; Filename: "{app}\{#AppName}.exe"
-Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppName}.exe"; Tasks: desktopicon
+Name: "{group}\{#AppName}"; Filename: "{app}\{#AppName}.exe"; IconFilename: "{app}\packaging\icon.ico"
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppName}.exe"; IconFilename: "{app}\packaging\icon.ico"; Tasks: desktopicon
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
