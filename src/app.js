@@ -4105,7 +4105,10 @@ function openLiveDiff() {
   } else {
     _vdiffLast = { file: p.name, stamp: '', label: '', prevLabel: '', terms: [],
                    titleText: LD.title(p.name), warn: LD.warnText(p.name, p.before, p.now),
-                   rows: LD.rows(p.before, p.now), expanded: false };
+                   rows: LD.rows(p.before, p.now), expanded: false,
+                   // 戻し先は比較の左側そのもの。版を選び直す画面を挟まない。
+                   restore: LD.canRestore(p.before, p.now, p.has)
+                     ? { text: p.before, name: p.name, before: p.before, now: p.now } : null };
   }
   var bar = document.getElementById('statusbar');
   if (bar) {
@@ -16927,6 +16930,17 @@ function renderVersionDiff() {
   bodyEl.textContent = '';
   jumpEl.textContent = '';
   var st = _vdiffLast;
+  // 「戻す」は前回保存版との比較から開いたときだけ、かつ戻せば差が 0 になるときだけ出す。
+  var resBtn = document.getElementById('btn-vdiff-restore');
+  var LDm = window.MA.liveDiff;
+  if (resBtn) {
+    var r = st && !st.error ? st.restore : null;
+    resBtn.hidden = !r;
+    if (r && LDm) {
+      resBtn.textContent = LDm.restoreLabel();
+      resBtn.title = LDm.restoreTitle(r.name, r.before, r.now);
+    }
+  }
   if (!st) { headEl.textContent = ''; titleEl.textContent = ''; return; }
   if (st.error) {
     titleEl.textContent = st.file || '';
@@ -17005,6 +17019,26 @@ function setupVersionDiff() {
   if (openBtn) openBtn.addEventListener('click', function() {
     if (!_vdiffLast || _vdiffLast.error) return;
     _blameOpenVersion(_vdiffLast.file, _vdiffLast.stamp);
+  });
+  // BLK-reviewer-20260916-0046-wish: 差分を見て事故だと分かった人が、そのまま 1 クリックで
+  // 前回保存版に戻せるようにする。当てるのは版一覧の「戻す」と同じ _applyLineEditText なので、
+  // undo 1 手で取り消せて、戻した結果も次の保存で控えが取られる。
+  var resBtn = document.getElementById('btn-vdiff-restore');
+  if (resBtn) resBtn.addEventListener('click', function() {
+    var LD = window.MA.liveDiff;
+    var st = _vdiffLast;
+    if (!st || st.error || !st.restore || !LD) return;
+    var r = st.restore;
+    if (!_applyLineEditText(r.text)) {
+      if (window.MA.toast) window.MA.toast.show(LD.unchangedLine(r.name));
+      return;
+    }
+    var line = LD.restoredLine(r.name, r.before, r.now);
+    if (window.MA.toast) window.MA.toast.show(line);
+    appendSaveStatus(line);
+    // 戻した直後の画面は「差が 0」を映していなければならない (確かめ直させない)。
+    renderLiveDiffChip();
+    openLiveDiff();
   });
   panel.addEventListener('keydown', function(ev) {
     if (ev.key === 'Escape') { ev.preventDefault(); panel.classList.remove('open'); }

@@ -78,7 +78,46 @@ window.MA.liveDiff = (function() {
     return _s(name) + ' — 前回保存版 → いまの中身 (未保存)';
   }
 
+  // ── 前回保存版へ戻す (BLK-reviewer-20260916-0046-wish) ────────────────────
+  // 差は「見える」ようになったが、気付いた後に戻す手段が比較画面に無く、消えた分は
+  // 手順をやり直して書き直すしかなかった。一覧の「履歴 N → 戻す」は刻印を選ぶ画面で、
+  // 差分を見ている人がいま欲しいのは「並べているその左側に戻す」1 クリックだけ。
+  // 戻し先は比較の左側そのものなので、ここが持つのは押してよいかの判定と文言だけ。
+
+  // 押せるのは「戻せば差が 0 になる」ときだけ。相手が無い (none) と、既に同じ
+  // (same) では出さない (押しても何も起きないボタンは、次からは読まれなくなる)。
+  function canRestore(before, now, hasBaseline) {
+    var v = verdict(before, now, hasBaseline);
+    return v === 'changed' || v === 'shrink';
+  }
+
+  function restoreLabel() { return '前回保存版に戻す'; }
+
+  // 押す前に、戻すと何が起きるかを両方向で言う (戻る行と、引き換えに消える行)。
+  function restoreTitle(name, before, now) {
+    var c = counts(rows(before, now));
+    return _s(name) + ' の中身を前回保存版に戻します'
+      + '（消えた ' + c.removed + ' 行が戻り、保存していない ' + c.added + ' 行は外れます。'
+      + 'Ctrl+Z で取り消せます）';
+  }
+
+  // 戻した後。差が 0 になったことを数字で言い切る (reviewer はこの 1 行だけ見ればよい)。
+  function restoredLine(name, before, now) {
+    var c = counts(rows(before, now));
+    return _s(name) + ' を前回保存版に戻しました（＋' + c.added + ' −' + c.removed
+      + ' が ＋0 −0 になりました。Ctrl+Z で取り消せます）';
+  }
+
+  function unchangedLine(name) {
+    return _s(name) + ' は既に前回保存版と同じ中身です';
+  }
+
   return {
+    canRestore: canRestore,
+    restoreLabel: restoreLabel,
+    restoreTitle: restoreTitle,
+    restoredLine: restoredLine,
+    unchangedLine: unchangedLine,
     rows: rows,
     counts: counts,
     shrink: shrink,
