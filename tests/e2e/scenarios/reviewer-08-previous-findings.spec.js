@@ -435,3 +435,64 @@ test('手順8 前回も出ていた指摘は、指摘.md に書き落として�
     try { fs.rmSync(root, { recursive: true, force: true }); } catch (e) {}
   }
 });
+
+// BLK-reviewer-20260916-0426: 前回の指摘の反映を見るのと同じ tick で、直前に done に
+// なった BLK が効いているかも確かめる。これまではその 1 件ずつについて 100 行前後の
+// 実装ログを全文読み、本文のどこかに書かれたコマンドを目で拾って打ち直していた。
+// DSL に変化が無い tick でも確認自体は省けないので、同じ数件を毎 tick 読み直していた。
+test('手順8 直前に done になった BLK は、本文を読まずに 1 本で確かめられる', () => {
+  const fs = require('fs');
+  const os = require('os');
+  const path = require('path');
+  const cp = require('child_process');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pua-r08b-'));
+  const tool = path.join(__dirname, '..', '..', '..', 'tools', 'blk-check.js');
+  const body = (id, extra) => ['---', 'id: ' + id, 'persona: reviewer', 'depth: friction',
+    'status: done / merge: abc1234', 'builder: builder-1 run=20260916-0326',
+    'task: ' + id + ' の穴', '---',
+    // 実装ログは長い。読ませないのがこの手順の目的なので、長さも実物に寄せる。
+    ...new Array(80).fill('実装の経緯。ここを毎 tick 読み直していた。'),
+    '手順で打つコマンドは `node -e "console.log(process.argv[1])" <保存フォルダ>` のまま。',
+    '',
+    'できるようになったこと:',
+    '出力に「' + extra + '」が出ます。',
+  ].join('\n');
+  fs.writeFileSync(path.join(root, 'BLK-reviewer-20260916-0046.md'), body('BLK-reviewer-20260916-0046', '効き目A'), 'utf8');
+  fs.writeFileSync(path.join(root, 'BLK-reviewer-20260916-0326-wish.md'), body('BLK-reviewer-20260916-0326-wish', '効き目B'), 'utf8');
+  const run = (args) => {
+    const r = cp.spawnSync(process.execPath, [tool, root, ...args], { cwd: root, encoding: 'utf-8' });
+    expect(r.status, r.stderr).toBe(0);
+    return r.stdout;
+  };
+  try {
+    // 1 本打てば、2 件が数行ずつのカードで出る。本文 (80 行超/件) は開かない。
+    const first = run(['--no-state', '--all']);
+    expect(first).toContain('BLK-reviewer-20260916-0046  done  merge abc1234');
+    expect(first).toContain('確認コマンド: node -e');
+    expect(first).toContain('出力に出るはず: 効き目A');
+    expect(first).toContain('2 件を確認');
+    // カードは本文よりはるかに短い (読み直しの置き換えになっている)。
+    expect(first.split('\n').length).toBeLessThan(30);
+
+    // --run を付ければ、本文のコマンドをこちらで打ち直さずに走り、
+    // 「できるようになったこと」の語が出力に出たかまで言う。
+    const ran = run(['--no-state', '--all', '--run', '--folder', '効き目A']);
+    expect(ran).toContain('→ 実行: node -e');
+    expect(ran).toContain('出た  : 「効き目A」');
+    expect(ran).toContain('効いている (語 1/1)');
+    // 語が出ない方は「消えた」と決めつけず、確認できずと言う。
+    expect(ran).toContain('この出力では確認できず');
+
+    // 控えを書けば、次の tick は新しく done になった分だけになる。
+    run(['--all'].slice(1));            // 1 回目: 2 件を確認して控えに残す
+    expect(run([])).toContain('新しく done になった BLK は無い');
+    fs.writeFileSync(path.join(root, 'BLK-reviewer-20260916-0446.md'),
+      body('BLK-reviewer-20260916-0446', '効き目C'), 'utf8');
+    const next = run(['--no-state']);
+    expect(next).toContain('BLK-reviewer-20260916-0446');
+    expect(next).not.toContain('BLK-reviewer-20260916-0046  done');
+    expect(next).toContain('1 件を確認');
+  } finally {
+    try { fs.rmSync(root, { recursive: true, force: true }); } catch (e) {}
+  }
+});
