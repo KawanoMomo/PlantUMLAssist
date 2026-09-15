@@ -1360,6 +1360,20 @@ html, body {
 }
 #folder-panel .folder-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; }
 #folder-panel .folder-badge { flex: 0 0 auto; font-size: 9px; line-height: 1; }
+/* BLK-reviewer-20260916-0326-wish: 他 persona との部品名衝突 */
+#folder-panel .folder-clash { flex: 0 0 auto; font-size: 9px; line-height: 1; white-space: nowrap; }
+#folder-panel .folder-clash-cross { color: var(--warning, #d08a30); font-weight: 700; }
+#folder-panel .folder-clash-internal { color: var(--text-secondary); }
+#folder-panel .folder-name-clash {
+  font-size: 11px; color: var(--text-secondary); padding: 4px 6px;
+  border-top: 1px solid var(--border);
+}
+#folder-panel .folder-name-clash.nc-cross { color: var(--warning, #d08a30); }
+#folder-panel .folder-name-clash.nc-clean { color: var(--accent); }
+#folder-panel .folder-clash-lines { font-size: 11px; padding: 0 6px 6px 6px; }
+#folder-panel .folder-clash-lines .fc-group { color: var(--text-primary); padding-top: 3px; }
+#folder-panel .folder-clash-lines .fc-where { color: var(--text-secondary); padding-left: 10px; }
+#folder-panel .folder-clash-run { flex: 0 0 auto; }
 #folder-panel .folder-badge-changed { color: var(--accent); }
 #folder-panel .folder-badge-new { color: var(--accent); font-weight: 700; }
 #folder-panel .folder-mtime { flex: 0 0 auto; font-size: 9px; color: var(--text-secondary); }
@@ -7155,6 +7169,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/export-shortcuts.js"></script>
 <script src="src/core/diagram-settings.js"></script>
 <script src="src/core/name-audit.js"></script>
+<script src="src/core/name-clash.js"></script>
 <script src="src/core/name-registry.js"></script>
 <script src="src/core/save-dir-handoff.js"></script>
 <script src="src/core/semantic-refs.js"></script>
