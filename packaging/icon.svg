@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="PlantUMLAssist">
+  <!-- PlantUMLAssist のアプリアイコン (BLK-human-20260915-1202)。
+       ここが正本。packaging/icon.ico は tools/make-icon.js がこの SVG から起こす
+       (node tools/make-icon.js)。16px でも潰れないよう、部品はノード 2 個と矢印 1 本だけ。 -->
+  <rect x="0" y="0" width="256" height="256" rx="56" ry="56" fill="#17223C"/>
+  <path d="M82 98 V190 H102" fill="none" stroke="#FFC857" stroke-width="20"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M130 190 L98 172 L98 208 Z" fill="#FFC857"/>
+  <rect x="34" y="34" width="96" height="64" rx="14" ry="14" fill="#F2F5FA"/>
+  <rect x="126" y="158" width="96" height="64" rx="14" ry="14" fill="#52A8FF"/>
+</svg>

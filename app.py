@@ -17,6 +17,7 @@ import os
 import socket
 import sys
 import threading
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(getattr(sys, '_MEIPASS', Path(__file__).parent))))
@@ -24,6 +25,59 @@ sys.path.insert(0, str(Path(getattr(sys, '_MEIPASS', Path(__file__).parent))))
 import server  # noqa: E402  (sys.path を通してから読む)
 
 WINDOW_TITLE = 'PlantUMLAssist'
+APP_ID = 'PlantUMLAssist.App'
+
+
+def icon_path():
+    """アプリアイコン (packaging/icon.ico) の在り処。exe 化後は _MEIPASS の下。"""
+    base = Path(getattr(sys, '_MEIPASS', Path(__file__).parent))
+    return base / 'packaging' / 'icon.ico'
+
+
+def apply_window_icon(title=WINDOW_TITLE):
+    """窓 (タイトルバー・タスクバー) に packaging/icon.ico を貼る。
+
+    pywebview は窓のアイコンを exe のリソースから取るので、`python app.py` で
+    起動したときは Python の既定アイコンのままになる。Windows API で直接貼れば
+    exe でもソースでも同じ絵になる。貼れない環境 (Windows 以外・窓がまだ無い)
+    では黙って諦める — アイコンのために起動を落とさない。
+    """
+    ico = icon_path()
+    if os.name != 'nt' or not ico.exists():
+        return False
+    try:
+        import ctypes
+        user32 = ctypes.windll.user32
+        # タスクバーが exe ではなくこのアプリとしてまとめるための識別子。
+        try:
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_ID)
+        except (AttributeError, OSError):
+            pass
+        hwnd = 0
+        for _ in range(20):  # 窓ができきる前に呼ばれることがあるので少し待つ
+            hwnd = user32.FindWindowW(None, title)
+            if hwnd:
+                break
+            time.sleep(0.1)
+        if not hwnd:
+            return False
+        IMAGE_ICON, LR_LOADFROMFILE, WM_SETICON = 1, 0x0010, 0x0080
+        SM_CXICON, SM_CYICON, SM_CXSMICON, SM_CYSMICON = 11, 12, 49, 50
+        ICON_BIG, ICON_SMALL = 1, 0
+        applied = False
+        for wparam, cx_metric, cy_metric in (
+                (ICON_BIG, SM_CXICON, SM_CYICON),       # タスクバー・Alt+Tab
+                (ICON_SMALL, SM_CXSMICON, SM_CYSMICON)):  # タイトルバー
+            handle = user32.LoadImageW(
+                None, str(ico), IMAGE_ICON,
+                user32.GetSystemMetrics(cx_metric), user32.GetSystemMetrics(cy_metric),
+                LR_LOADFROMFILE)
+            if handle:
+                user32.SendMessageW(hwnd, WM_SETICON, wparam, handle)
+                applied = True
+        return applied
+    except (OSError, AttributeError):
+        return False
 
 
 def free_port():
@@ -83,6 +137,7 @@ def main():
     # (/env の app:true、ネイティブ保存の可否はこの 1 個で決まる)。
     def on_start():
         server.NATIVE_DIALOG = NativeDialog(window, webview)
+        apply_window_icon()
 
     try:
         webview.start(on_start)
