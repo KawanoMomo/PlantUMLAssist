@@ -646,6 +646,26 @@ html, body {
 #folder-panel button:hover { background: var(--bg-secondary); }
 /* 前回見た版からの差 (BLK-reviewer-20260907-1403) */
 #folder-panel { min-width: 260px; }
+/* 参照専用フォルダのタブ (BLK-junior-20260916-0546-wish)。
+   保存先タブと参照タブを一目で分けるため、参照側は枠線を破線にする。 */
+#folder-panel .folder-tabbar {
+  display: flex; flex-wrap: wrap; gap: 4px; align-items: center;
+  padding: 4px 6px; border-bottom: 1px solid var(--border);
+}
+#folder-panel button.folder-tab {
+  padding: 2px 8px; font-size: 11px; border-radius: 3px;
+  border: 1px solid var(--border); background: var(--bg-secondary);
+}
+#folder-panel button.folder-tab[data-folder-tab="ref"] { border-style: dashed; }
+#folder-panel button.folder-tab.folder-tab-on {
+  border-color: var(--accent); color: var(--accent); font-weight: bold;
+}
+#folder-panel button.folder-tab-drop { padding: 2px 5px; font-size: 11px; }
+#folder-panel select.folder-tab-add { font-size: 11px; margin-left: auto; }
+#folder-panel .folder-ref-note {
+  padding: 4px 6px; font-size: 11px; color: var(--accent);
+}
+#folder-panel button.folder-ref-item { border-style: dashed; }
 /* 最近開いた図 (BLK-junior-20260915-2346)。同じ図への出戻りは一覧を目で探さず
    上端のこの行から 1 クリックで戻る。履歴が空なら行ごと出ないので、普段の一覧は今までのまま。 */
 #folder-panel .folder-recent-bar {
@@ -7411,6 +7431,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/folder-export.js"></script>
 <script src="src/core/folder-filter.js"></script>
 <script src="src/core/peek-folder.js"></script>
+<script src="src/core/ref-folders.js"></script>
 <script src="src/core/peek-verdict.js"></script>
 <script src="src/core/kind-matrix.js"></script>
 <script src="src/core/design-check.js"></script>
