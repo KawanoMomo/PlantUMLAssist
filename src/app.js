@@ -10162,6 +10162,183 @@ function setupTabs() {
 
   function closePanel() { panel.classList.remove('open'); }
 
+  // -- 参照専用フォルダ (BLK-junior-20260916-0546-wish) ------------------------
+  // 26 一覧は保存先の中身しか出せず、先輩の図を見るには保存先を切り替えるしか
+  // なかった。切り替えたまま保存する事故と隣り合わせで、junior は手順 1 のたびに
+  // 「戻し忘れていないか」を確かめていた。参照先を保存先とは別に登録して
+  // タブで並べれば、その確認そのものが要らなくなる。
+  // 参照タブから保存先を書き換える道は 1 本も作らない (作ると元の事故に戻る)。
+  var refActiveDir = '';          // '' = 保存先タブ
+  var refDirs = (function() {
+    var RF = window.MA.refFolders;
+    return RF ? RF.load(window.localStorage) : [];
+  })();
+  var refEntries = null;          // 参照タブに出す一覧 (null = 読み込み中)
+  var refBusyDir = '';
+
+  function refSave() {
+    var RF = window.MA.refFolders;
+    if (RF) RF.save(window.localStorage, refDirs);
+  }
+
+  function refSelectTab(dir) {
+    var RF = window.MA.refFolders;
+    refActiveDir = (!dir || (RF && RF.samePath(dir, _wsFileDir()))) ? '' : dir;
+    refEntries = null;
+    renderFolderPanel();
+  }
+
+  function refAdd(dir) {
+    var RF = window.MA.refFolders;
+    if (!RF || !dir) return;
+    refDirs = RF.add(refDirs, dir, _wsFileDir());
+    refSave();
+    refSelectTab(dir);
+  }
+
+  function refRemove(dir) {
+    var RF = window.MA.refFolders;
+    if (!RF) return;
+    refDirs = RF.remove(refDirs, dir);
+    refSave();
+    if (RF.samePath(dir, refActiveDir)) refSelectTab('');
+    else renderFolderPanel();
+  }
+
+  // タブ列。先頭は必ず保存先で、参照は登録順に続く。
+  function appendRefTabs(host) {
+    var RF = window.MA.refFolders;
+    if (!RF) return;
+    var bar = document.createElement('div');
+    bar.className = 'folder-tabbar';
+    bar.id = 'folder-tabbar';
+    RF.tabs(_wsFileDir(), refDirs, refActiveDir).forEach(function(t) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'folder-tab' + (t.active ? ' folder-tab-on' : '');
+      b.setAttribute('data-folder-tab', t.kind);
+      b.setAttribute('data-tab-name', t.name);
+      b.setAttribute('aria-pressed', t.active ? 'true' : 'false');
+      b.textContent = t.label;
+      b.title = t.kind === 'save'
+        ? '自分の保存先。ここで開いた図は今までどおり編集・保存できます'
+        : t.dir + ' を読むだけで開きます (保存先は変わりません)';
+      b.addEventListener('click', function() { refSelectTab(t.kind === 'save' ? '' : t.dir); });
+      bar.appendChild(b);
+      if (t.kind === 'ref' && t.active) {
+        var x = document.createElement('button');
+        x.type = 'button';
+        x.className = 'folder-tab-drop';
+        x.id = 'folder-tab-drop';
+        x.textContent = '×';
+        x.title = t.name + ' を参照フォルダから外します';
+        x.addEventListener('click', function(e) { e.stopPropagation(); refRemove(t.dir); });
+        bar.appendChild(x);
+      }
+    });
+    var add = document.createElement('select');
+    add.className = 'folder-tab-add';
+    add.id = 'folder-tab-add';
+    add.title = '参照だけするフォルダを足します (保存先は変わりません)';
+    var head = document.createElement('option');
+    head.value = '';
+    head.textContent = '＋参照';
+    add.appendChild(head);
+    RF.candidates(_peekDirs, _wsFileDir(), refDirs).forEach(function(c) {
+      var o = document.createElement('option');
+      o.value = c.path;
+      o.textContent = c.name;
+      add.appendChild(o);
+    });
+    add.addEventListener('change', function() { if (add.value) refAdd(add.value); });
+    bar.appendChild(add);
+    host.appendChild(bar);
+    // 行き先の一覧をまだ持っていなければ取りに行き、取れたら選べる形で出し直す。
+    if (!_peekDirs || !_peekDirs.length) {
+      _ensurePeekDirs().then(function(ok) {
+        if (ok && panel.classList.contains('open')) renderFolderPanel();
+      });
+    }
+  }
+
+  // 参照タブの中身。読む以外の操作 (印・役割・削除・一括) は一切出さない。
+  // 出すと「参照のつもりで触った」が起こり、保存先を分けた意味が消える。
+  function renderRefFolder(dir) {
+    var RF = window.MA.refFolders;
+    var note = document.createElement('div');
+    note.className = 'folder-ref-note';
+    note.id = 'folder-ref-note';
+    note.textContent = RF ? RF.notice(_wsFileDir(), dir) : '';
+    panel.appendChild(note);
+
+    if (refEntries === null) {
+      if (refBusyDir !== dir) {
+        refBusyDir = dir;
+        window.MA.workspace.listFolder(dir).then(function(res) {
+          if (!RF || !RF.samePath(dir, refActiveDir)) return;
+          refEntries = ((res && res.entries) || []).filter(function(e) { return e && e.name; });
+          refBusyDir = '';
+          if (panel.classList.contains('open')) renderFolderPanel();
+        }, function() {
+          if (!RF || !RF.samePath(dir, refActiveDir)) return;
+          refEntries = [];
+          refBusyDir = '';
+          if (panel.classList.contains('open')) renderFolderPanel();
+        });
+      }
+      var wait = document.createElement('div');
+      wait.className = 'folder-empty';
+      wait.id = 'folder-ref-loading';
+      wait.textContent = '読み込み中…';
+      panel.appendChild(wait);
+      return;
+    }
+
+    var sum = document.createElement('div');
+    sum.className = 'folder-summary';
+    sum.id = 'folder-ref-summary';
+    sum.textContent = (RF ? RF.baseName(dir) : dir) + ' の図 ' + refEntries.length + ' 枚 (参照)';
+    panel.appendChild(sum);
+
+    if (!refEntries.length) {
+      var empty = document.createElement('div');
+      empty.className = 'folder-empty';
+      empty.id = 'folder-ref-empty';
+      empty.textContent = 'このフォルダに図がありません';
+      panel.appendChild(empty);
+      return;
+    }
+    refEntries.forEach(function(e) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'folder-item folder-ref-item';
+      b.setAttribute('data-ref-name', e.name);
+      b.textContent = e.name;
+      b.title = e.name + ' を手本として右に並べます (自分の図も保存先もそのまま)';
+      b.addEventListener('click', function() { openRefDoc(dir, e.name); });
+      panel.appendChild(b);
+    });
+  }
+
+  // 参照の図を、読み専用の参照枠 (見比べ) に据える。自分の書きかけも
+  // 保存先も動かさないので、並べたまま自分の図を直せる。
+  function openRefDoc(dir, name) {
+    var RF = window.MA.refFolders;
+    var cv = window.MA.compareView;
+    if (!cv || !RF) return Promise.resolve(false);
+    return window.MA.workspace.loadFile(name, dir).then(function(text) {
+      if (typeof text !== 'string') return false;
+      if (!cv.setPeek(RF.baseName(dir), name, text, '')) return false;
+      _compareRefId = cv.PEEK_ID;
+      _compareShownDsl = null;
+      _clearCheckList();
+      _clearStateMap();
+      toggleCompareView(true, 'ref');
+      renderCompareView();
+      return true;
+    }, function() { return false; });
+  }
+
   // BLK-primary-20260907-1703: 一覧に印を付けて、まとめてタブで開く。
   // 印はパネルを開いている間だけ持つ (次に開いたときは白紙から選ぶ)。
   var folderPicked = [];
@@ -10547,6 +10724,15 @@ function setupTabs() {
 
   function renderFolderPanel() {
     var dir = _wsFileDir();
+    // 参照タブを見ている間は、保存先の一覧 (印・役割・一括操作つき) を出さない。
+    // 同じ見た目で読むだけの一覧を出すと、どちらを触っているかが読めなくなる。
+    var RFm = window.MA.refFolders;
+    if (RFm && RFm.isRef(dir, refActiveDir)) {
+      panel.textContent = '';
+      appendRefTabs(panel);
+      renderRefFolder(refActiveDir);
+      return;
+    }
     // 庫をまだ読んでいなければ読んでから描き直す。棚卸しの「あり / なし」が
     // 庫を見ずに出ると、提出済みの図種が一瞬「なし」で出る。
     if (_fiFolderMode() && _vaultDir !== dir && !_vaultLoading) {
@@ -10561,6 +10747,7 @@ function setupTabs() {
     window.MA.workspace.listFolder(dir).then(function(res) {
       var entries = (res && res.entries) || [];
       panel.textContent = '';
+      appendRefTabs(panel);
       // BLK-primary-20260908-0103: 保存先の綴りを 1 文字誤っただけでも一覧は
       // 「図がありません」としか言わず、間違いに気づけないまま作業が止まっていた。
       // 実在しない保存先は「無い」と名指しで言い、直す場所まで書く。
