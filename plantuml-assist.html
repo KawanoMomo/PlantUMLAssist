@@ -5456,6 +5456,29 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   display: inline-block; margin-right: 6px; padding: 0 4px;
   border: 1px solid currentColor; border-radius: 3px; font-size: 10px;
 }
+/* BLK-primary-20260916-0526-wish: 隣の persona との部品名衝突は、相手に断らないと
+   揃えられない (自分の中の揺れより重い)。保存の帯の中で一番上に、相手色で出す。 */
+#save-clash-overlay {
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 30;
+  margin: -16px -16px 12px -16px;
+  padding: 6px 12px;
+  background: rgba(58, 30, 10, 0.96);
+  color: #ffb38a;
+  border-bottom: 1px solid #8a5a2a;
+  font-size: 12px;
+}
+/* 右端はズーム帯 (#zoom-hud) の下になる。ボタンが 2 つあるので save-check より広く空ける
+   (足りないと「揃える」が帯の下に隠れて押せない)。 */
+#save-clash-overlay .scl-head { display: flex; align-items: center; gap: 8px; padding-right: 260px; flex-wrap: wrap; }
+#save-clash-overlay .scl-head span { flex: 1; min-width: 12em; }
+#save-clash-overlay button { font-size: 11px; padding: 1px 6px; cursor: pointer; }
+#scl-list { margin: 4px 0 0; padding-left: 18px; padding-right: 260px; max-height: 120px; overflow-y: auto; }
+#scl-list li { margin: 2px 0; line-height: 1.4; }
+/* 相手側の図の名前。ここを読めば 1 枚ずつ開かずに誰に断ればよいかが決まる。 */
+#scl-list li .scl-where { color: #d8c0a8; }
 /* BLK-reviewer-20260912-2103-wish: 中身の入れ替わりは「読めるが間違っている」
    状態なので、突合の警告より強い色 (エラー寄り) で出す。 */
 #peek-matrix { padding: 4px 6px; border-bottom: 1px solid var(--border); }
@@ -6752,6 +6775,19 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
             <div class="sgd-omit-preview" id="sgd-omit-preview"></div>
           </div>
         </div>
+        <!-- BLK-primary-20260916-0526-wish: 保存したその場で隣の persona の保存
+             フォルダまで読み、部品名が表記違いでぶつかっていれば相手と相手の図を
+             名指しする帯。押さないと動かない 📂一覧の突合を待たない。
+             中身は save-clash.js -->
+        <div id="save-clash-overlay" role="alert" hidden>
+          <div class="scl-head">
+            <button type="button" id="btn-scl-close" title="この警告を閉じる（次の保存でまた出ます）">✕</button>
+            <span id="scl-summary"></span>
+            <button type="button" id="btn-scl-fix" hidden></button>
+            <button type="button" id="btn-scl-folder" title="📂一覧を開いて、衝突している図を全部見る">📂 一覧で見る</button>
+          </div>
+          <ul id="scl-list"></ul>
+        </div>
         <!-- BLK-reviewer-20260908-1503-wish: 保存したその場で突合を掛け、
              この図に新しく生えた不一致を図の上に出す。中身は save-check.js -->
         <div id="save-check-overlay" role="status" hidden>
@@ -7422,6 +7458,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/finding-origins.js"></script>
 <script src="src/core/save-guard.js"></script>
 <script src="src/core/save-check.js"></script>
+<script src="src/core/save-clash.js"></script>
 <script src="src/core/save-swap.js"></script>
 <script src="src/core/live-diff.js"></script>
 <script src="src/core/twin-restore.js"></script>
