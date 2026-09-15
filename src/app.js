@@ -5388,16 +5388,40 @@ function renderStatusDashboard() {
 // 並べて「この行とあの行は同じ指摘の別表現か、本当に別物か」を決めることだった。
 // ここは指摘 ID を鍵に 1 行へ畳み、その 1 行に「どの出口の、どの根拠から来たか」を
 // 並べる (畳み方は CLI と共通の src/core/finding-origins.js)。
+// 畳む相手は「道具が挙げた指摘」= 突合ダッシュボードの行。画面で手書きした
+// 指摘 (_mfRows) は reviewer 自身の控えで、出典のある指摘ではないのでここでは
+// 数えない (混ぜると「出典なし」の行で表が埋まる)。
+// 突合の行には CLI のような F-nn が無いので、同じ対象・同じカテゴリの行を
+// 1 件に畳んで鍵にする。これがそのまま「別図の再掲」の判定になる。
+function _foFindings(board) {
+  var map = {};
+  var order = [];
+  ((board && board.rows) || []).forEach(function(r) {
+    var title = String(r.title || '');
+    var cat = String(r.category || '');
+    var key = cat + '|' + title;
+    if (!map[key]) {
+      map[key] = { id: key, title: title, entity: title, label: r.keep ? '維持' : '未解消',
+                   open: !r.keep, cats: cat ? [cat] : [], docs: [] };
+      order.push(key);
+    }
+    var doc = String(r.doc || '');
+    if (doc && map[key].docs.indexOf(doc) < 0) map[key].docs.push(doc);
+    if (!r.keep) map[key].open = true;
+  });
+  return order.map(function(k) { return map[k]; });
+}
+
 function _foBuild() {
   var FO = window.MA.findingOrigins;
   if (!FO) return null;
   var run = _atRunAudits();
-  var findings = null;
-  try { findings = _mfRows(); } catch (e) { findings = null; }
   var pins = _progressEntries();
   return FO.build({
-    findings: findings,
+    findings: _foFindings(_abBuild()),
     pins: pins,
+    // 画面の指摘には F-nn が無いので、📌 は図で結ぶ。
+    matchPinsByDoc: true,
     svg: _abSvgScan,
     registry: _sdRegistry(run.audits),
   });
@@ -5429,7 +5453,9 @@ function renderFindingOrigins() {
         + ' data-fo-restated="' + (r.restated ? '1' : '0') + '"'
         + ' data-fo-conflicts="' + r.conflicts.length + '"'
         + ' data-ab-doc="' + esc(r.docs[0] || '') + '" data-ab-line="1">'
-        + '<td class="fo-id">' + esc(r.id) + '</td>'
+        // CLI には F-nn があるが、画面の突合には無い。鍵をそのまま出しても読めないので
+        // 「何の突合で出たか」を出す (鍵は data-fo-id に残す)。
+        + '<td class="fo-id">' + esc(r.id.indexOf('|') >= 0 ? (r.cats[0] || '指摘') : r.id) + '</td>'
         + '<td class="ab-title">' + esc(r.title) + '</td>'
         + '<td class="fo-state">' + esc(r.label || (r.open ? '未解消' : '解消')) + '</td>'
         + '<td class="ab-doc">' + r.docs.map(function(d) { return esc(FO.docKey(d)); }).join('<br>') + '</td>'

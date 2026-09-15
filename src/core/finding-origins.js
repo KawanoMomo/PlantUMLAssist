@@ -139,9 +139,16 @@
     });
 
     // 出典 4: 📌。本文に書かれた指摘 ID で結ぶ (reviewer が自分で書いた紐づけ)。
+    // 画面側の指摘には ID が無いので、そのときは図で結ぶ (matchPinsByDoc)。
     _list(inp.pins).forEach(function(e) {
       var doc = _s(e && (e.doc || (e.item && e.item.doc)));
-      idsInText(e && e.text).forEach(function(id) {
+      var hits = idsInText(e && e.text).filter(function(id) { return byId[id]; });
+      if (!hits.length && inp.matchPinsByDoc) {
+        hits = rows.filter(function(r) {
+          return r.docs.some(function(d) { return docKey(d) === docKey(doc); });
+        }).map(function(r) { return r.id; });
+      }
+      hits.forEach(function(id) {
         var row = byId[id];
         if (!row) return;
         var status = _s(e.status);
