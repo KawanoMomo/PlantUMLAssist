@@ -2735,6 +2735,7 @@ function init() {
   setupHandoverBanner();
   setupAuditTimeline();
   setupAuditBoard();
+  setupDesignCheck();
   setupSaveGuard();
   setupSaveCheck();
   setupSaveSwap();
@@ -2931,6 +2932,7 @@ function initCommandPalette() {
       { id: 'tab-apply', title: '複数クラスに一括適用 / Bulk apply', hint: 'Tabs', keywords: ['apply', 'bulk', 'いっかつ', 'てきよう'], button: 'btn-tab-apply', run: function() { clickById('btn-tab-apply'); } },
       { id: 'tab-peek', title: '他の保存フォルダを覗く / Peek folder', hint: 'Tabs', keywords: ['peek', 'folder', 'ほかの', 'ふぉるだ'], button: 'btn-tab-peek', run: function() { clickById('btn-tab-peek'); } },
       { id: 'tab-drivermap', title: '系統マップを開く / Driver map', hint: 'Tabs', keywords: ['driver', 'map', 'けいとう', 'まっぷ'], button: 'btn-tab-drivermap', run: function() { clickById('btn-tab-drivermap'); } },
+      { id: 'tab-design', title: '仕様突合 (design) / Design spec check', hint: 'Tabs', keywords: ['design', 'spec', 'gap', 'しよう', 'とつごう', 'せっけい'], button: 'btn-tab-design', run: function() { clickById('btn-tab-design'); } },
       { id: 'tab-cross', title: '突合ボード / Cross-check board', hint: 'Tabs', keywords: ['cross', 'board', 'audit', 'とつごう', 'ぼーど'], button: 'btn-tab-cross', run: function() { clickById('btn-tab-cross'); } },
       { id: 'tab-audit-timeline', title: '監査履歴を開く / Audit timeline', hint: 'Tabs', keywords: ['audit', 'timeline', 'かんさ', 'りれき'], button: 'btn-tab-audit-timeline', run: function() { clickById('btn-tab-audit-timeline'); } },
       { id: 'tab-review', title: '基準の図と突き合わせる / Review desk', hint: 'Tabs', keywords: ['review', 'desk', 'きじゅん', 'つきあわせ'], button: 'btn-tab-review', run: function() { clickById('btn-tab-review'); } },
@@ -5306,6 +5308,139 @@ function setupAuditBoard() {
   modal.addEventListener('click', function(ev) {
     if (ev.target === modal) toggleAuditBoard(false);
   });
+}
+
+// ── 仕様突合 (BLK-primary-20260915-2240-wish) ─────────────────────────────
+// design/ の仕様項目と、いま開いている GUI の現在値を並べる。primary の手順 11 は
+// 「.dc.html を grep → タブを目で数える → 自分で比べて言語化」の 3 手だったが、
+// 不一致を「設定差」と「仕様後退」に機械で振り分けるのでここを開くだけで済む。
+// 判定は design-check.js が持ち、ここは測って描くだけ。
+var _dcRows = [];
+var _dcOnlyDiff = false;
+
+function _dcReadSetting(key) {
+  try { return localStorage.getItem(key); } catch (e) { return null; }
+}
+
+function runDesignCheck() {
+  var DC = window.MA.designCheck;
+  if (!DC) { _dcRows = []; return _dcRows; }
+  _dcRows = DC.sortRows(DC.run(document, _dcReadSetting));
+  return _dcRows;
+}
+
+var DC_VERDICT_LABEL = { ok: '一致', setting: '設定差', gap: '仕様後退' };
+
+function renderDesignCheck() {
+  var DC = window.MA.designCheck;
+  var body = document.getElementById('dc-body');
+  var sum = document.getElementById('dc-summary');
+  if (!DC || !body) return;
+  var esc = window.MA.htmlUtils.escHtml;
+  var rows = _dcOnlyDiff
+    ? _dcRows.filter(function(r) { return r.verdict !== 'ok'; })
+    : _dcRows;
+  if (sum) {
+    sum.textContent = DC.summaryText(_dcRows);
+    sum.classList.toggle('dc-has-gap', DC.summary(_dcRows).gap > 0);
+  }
+  if (!rows.length) {
+    body.innerHTML = '<div class="ab-empty">'
+      + (_dcOnlyDiff ? '不一致はありません (すべて仕様どおり)' : '突き合わせる仕様項目がありません')
+      + '</div>';
+    return;
+  }
+  var html = '<table class="dc-table"><thead><tr>'
+    + '<th>案</th><th>仕様項目</th><th>期待</th><th>現在値</th><th>判定</th><th>理由</th>'
+    + '</tr></thead><tbody>';
+  rows.forEach(function(r) {
+    // 設定差は「既定に戻す」で、仕様後退は「BLK 用にコピー」で次の 1 手に繋がる。
+    var act = '';
+    if (r.verdict === 'setting' && (r.settingKeys || []).length) {
+      act = '<div class="dc-act"><button type="button" class="dc-reset" data-key="'
+        + esc(r.settingKeys.join(',')) + '">この設定を既定に戻す</button></div>';
+    } else if (r.verdict === 'gap') {
+      act = '<div class="dc-act"><button type="button" class="dc-draft" data-id="'
+        + esc(r.id) + '">BLK 用にコピー</button></div>';
+    }
+    html += '<tr class="dc-row" data-verdict="' + esc(r.verdict) + '">'
+      + '<td class="dc-plan">' + esc(r.plan) + '</td>'
+      + '<td>' + esc(r.title) + '<div class="dc-reason">出典: ' + esc(r.spec) + '</div></td>'
+      + '<td>' + esc(r.expect) + '</td>'
+      + '<td class="dc-actual">' + esc(r.actual) + '</td>'
+      + '<td class="dc-verdict">' + esc(DC_VERDICT_LABEL[r.verdict] || r.verdict) + '</td>'
+      + '<td class="dc-reason">' + esc(r.reason) + act + '</td>'
+      + '</tr>';
+  });
+  body.innerHTML = html + '</tbody></table>';
+}
+
+function toggleDesignCheck(open) {
+  var modal = document.getElementById('dc-modal');
+  if (!modal) return;
+  if (open) { runDesignCheck(); renderDesignCheck(); }
+  modal.style.display = open ? 'flex' : 'none';
+}
+
+// 仕様後退だけを BLK 本文の形にまとめる (手順 11 の成果物は BLK なので)。
+function designCheckDraft(id) {
+  var DC = window.MA.designCheck;
+  if (!DC) return '';
+  var rows = _dcRows.filter(function(r) {
+    return r.verdict === 'gap' && (!id || r.id === id);
+  });
+  return rows.map(DC.blockerDraft).join('\n\n');
+}
+
+function setupDesignCheck() {
+  var btn = document.getElementById('btn-tab-design');
+  var modal = document.getElementById('dc-modal');
+  if (!btn || !modal || !window.MA.designCheck) return;
+  btn.addEventListener('click', function() { toggleDesignCheck(true); });
+  var close = document.getElementById('dc-close');
+  if (close) close.addEventListener('click', function() { toggleDesignCheck(false); });
+  var recheck = document.getElementById('dc-recheck');
+  if (recheck) recheck.addEventListener('click', function() { runDesignCheck(); renderDesignCheck(); });
+  var only = document.getElementById('dc-only-diff');
+  if (only) only.addEventListener('change', function() { _dcOnlyDiff = this.checked; renderDesignCheck(); });
+  var copy = document.getElementById('dc-copy');
+  if (copy) copy.addEventListener('click', function() { copyDesignCheckDraft(''); });
+  var body = document.getElementById('dc-body');
+  if (body) {
+    body.addEventListener('click', function(ev) {
+      var t = ev.target;
+      if (!t || !t.classList) return;
+      if (t.classList.contains('dc-draft')) { copyDesignCheckDraft(t.getAttribute('data-id')); return; }
+      if (t.classList.contains('dc-reset')) { resetDesignSetting(t.getAttribute('data-key')); }
+    });
+  }
+  modal.addEventListener('click', function(ev) {
+    if (ev.target === modal) toggleDesignCheck(false);
+  });
+}
+
+function copyDesignCheckDraft(id) {
+  var text = designCheckDraft(id || '');
+  var btn = document.getElementById('dc-copy');
+  if (!text) { if (btn) btn.textContent = '仕様後退はありません'; return; }
+  try {
+    navigator.clipboard.writeText(text);
+    if (btn) {
+      btn.textContent = 'コピーしました';
+      setTimeout(function() { btn.textContent = '仕様後退を BLK 用にコピー'; }, 1800);
+    }
+  } catch (e) { /* コピーできなくても表は読める */ }
+}
+
+// 設定差の行から、その設定だけを既定に戻す。戻したら測り直して同じ画面で結果を見せる
+// (戻したのに直らなければ、それは設定差ではなく仕様後退だと分かる)。
+function resetDesignSetting(key) {
+  if (!key) return;
+  try {
+    String(key).split(',').forEach(function(k) { if (k) localStorage.removeItem(k); });
+  } catch (e) { return; }
+  // 既定に戻した設定を画面へ反映するには読み直しが要る (設定は起動時に 1 回読む)。
+  location.reload();
 }
 
 // ── 整合ダッシュボード: 図ごと (BLK-reviewer-20260915-0606-wish) ───────────

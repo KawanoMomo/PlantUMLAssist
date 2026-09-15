@@ -2280,6 +2280,47 @@ html, body {
 .ab-title { font-family: var(--font-mono); }
 .ab-detail { color: var(--text-secondary); }
 
+/* ── 仕様突合 (BLK-primary-20260915-2240-wish) ─────────────────────────────
+   design/ の仕様項目と GUI の現在値を並べ、不一致を「設定差」と「仕様後退」に分ける。 */
+#dc-modal-content {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  width: 88vw;
+  max-width: 1100px;
+  height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+#dc-head {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px; border-bottom: 1px solid var(--border);
+  font-size: 12px; color: var(--text-primary);
+}
+#dc-summary { color: var(--accent); font-family: var(--font-mono); }
+#dc-summary.dc-has-gap { color: var(--accent-orange); }
+#dc-tools { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+#dc-body { flex: 1; overflow: auto; padding: 10px 14px; }
+#dc-note { padding: 0 14px 8px 14px; font-size: 11px; color: var(--text-secondary); }
+.dc-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.dc-table th {
+  text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--border);
+  color: var(--text-secondary); font-weight: normal; position: sticky; top: 0;
+  background: var(--bg-secondary);
+}
+.dc-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.dc-plan { white-space: nowrap; font-family: var(--font-mono); color: var(--text-secondary); }
+.dc-verdict { white-space: nowrap; font-family: var(--font-mono); }
+.dc-row[data-verdict="gap"] .dc-verdict { color: var(--accent-orange); }
+.dc-row[data-verdict="setting"] .dc-verdict { color: var(--accent); }
+.dc-row[data-verdict="ok"] { opacity: 0.65; }
+.dc-actual { font-family: var(--font-mono); }
+.dc-reason { color: var(--text-secondary); }
+.dc-act { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
+.dc-act button { font-size: 11px; padding: 1px 8px; cursor: pointer;
+  border: 1px solid var(--border); background: transparent; color: var(--text); border-radius: 10px; }
+.dc-act button:hover { border-color: var(--accent); color: var(--accent); }
+
 /* ── 継承元 (BLK-junior-20260908-1603-wish) ─────────────────────────────────
    この図がどの図の後継かを 1 回登録し、継承元の更新を差分の行数で見せる。 */
 #lg-modal-content {
@@ -6118,6 +6159,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <!-- BLK-reviewer-20260908-0003-wish: 監査ツールが拾えない手動の指摘を実体 id で追う -->
         <button class="tab-tool" id="btn-tab-findings" title="reviewer が図を読んで気づいた指摘を「対象ファイル+行+行の指紋」で憶え、次に開いたとき『未変更のため前回判定を維持』と『要再確認』に仕分ける">🔖 手動指摘 −</button>
         <!-- BLK-reviewer-20260907-2303-wish: 監査ツールが育つと、同じ欠陥が別カテゴリへ移る -->
+        <!-- BLK-primary-20260915-2240-wish: design の仕様と GUI の現在値を突き合わせる -->
+        <button class="tab-tool" id="btn-tab-design" title="design/ の仕様項目と、いま開いている GUI の現在値を並べて、一致/設定差/仕様後退に振り分ける">📐 仕様突合</button>
         <button class="tab-tool" id="btn-tab-cross" title="名前の不一致・未使用 participant・粒度のばらつき・SVG 実体不一致・手動指摘を、保存フォルダ 1 つ分の 1 画面にまとめて出す。行を押すとその図へ飛ぶ">▦ 突合ボード</button>
         <button class="tab-tool" id="btn-tab-audit-timeline" title="監査を回すたびに記録し、同じ欠陥が run ごとにどのカテゴリへ分類されたかを 1 本の帯で並べる。解消と再分類を分けて出す">◷ 監査履歴</button>
         <!-- BLK-junior-20260907-1403-wish: 型の基準にした図と突き合わせて、書いている間ずっと見てもらう -->
@@ -6877,6 +6920,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/peek-folder.js"></script>
 <script src="src/core/peek-verdict.js"></script>
 <script src="src/core/kind-matrix.js"></script>
+<script src="src/core/design-check.js"></script>
 <script src="src/core/side-pane.js"></script>
 <script src="src/core/senior-pane.js"></script>
 <script src="src/core/senior-slice.js"></script>
@@ -7489,6 +7533,30 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       </span>
     </div>
     <div id="ab-body"></div>
+  </div>
+</div>
+
+<!-- BLK-primary-20260915-2240-wish: design/ の仕様と GUI の現在値を突き合わせ、
+     不一致を「設定差」と「仕様後退」に機械的に振り分ける (手順 11 の 3 手を 1 手にする) -->
+<div id="dc-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+  <div id="dc-modal-content">
+    <div id="dc-head">
+      <strong>仕様突合 (design)</strong>
+      <span id="dc-summary"></span>
+      <span id="dc-tools">
+        <label style="font-size:11px;color:var(--text-secondary);">
+          <input type="checkbox" id="dc-only-diff"> 不一致だけ
+        </label>
+        <button type="button" id="dc-recheck">測り直す</button>
+        <button type="button" id="dc-copy">仕様後退を BLK 用にコピー</button>
+        <button type="button" id="dc-close">閉じる</button>
+      </span>
+    </div>
+    <div id="dc-note">
+      出典は <code>design/README.md</code> の「対象の仕様」。不一致は「設定差」(この環境の設定が既定と違うだけ)
+      と「仕様後退」(設定は既定なのに満たしていない) に分かれる。BLK にする値打ちがあるのは仕様後退だけ。
+    </div>
+    <div id="dc-body"></div>
   </div>
 </div>
 
