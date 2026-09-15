@@ -3355,6 +3355,67 @@ function initPaneResizers() {
 
   attach(document.getElementById('resizer-left'), editorPane, 'left');
   attach(document.getElementById('resizer-right'), propsPane, 'right');
+
+  // BLK-human-20260915-1203: 右に並ぶ読み専用の枠 (参照ペイン・先輩の図) も、
+  // 境目をドラッグして幅を変えられ、その幅を覚える。丸めは side-pane が持つ。
+  attachSidePaneResizer('resizer-compare', 'compare-pane', COMPARE_PANE_KEY);
+  attachSidePaneResizer('resizer-senior', 'senior-pane', window.MA.seniorPane
+    && window.MA.seniorPane.STORE_KEY);
+}
+
+// 右側の枠 1 つ分の「幅を変える取っ手」。key に幅を書き戻す (state の他の項目は残す)。
+function attachSidePaneResizer(handleId, paneId, key) {
+  var handle = document.getElementById(handleId);
+  var pane = document.getElementById(paneId);
+  var main = document.getElementById('main');
+  var SD = window.MA.sidePane;
+  if (!handle || !pane || !SD) return;
+  handle.addEventListener('mousedown', function(e) {
+    e.preventDefault();
+    handle.classList.add('dragging');
+    var rect = main ? main.getBoundingClientRect() : { right: window.innerWidth, width: window.innerWidth };
+    function onMove(ev) {
+      var w = SD.clampWidth(rect.right - ev.clientX, rect.width);
+      pane.style.width = w + 'px';
+    }
+    function onUp() {
+      handle.classList.remove('dragging');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      saveSidePaneWidth(key, parseInt(pane.style.width, 10));
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+
+// 覚えている幅を枠に当て、取っ手を枠と一緒に出し入れする。
+function applySidePaneWidth(paneId, handleId, key) {
+  var pane = document.getElementById(paneId);
+  var handle = document.getElementById(handleId);
+  var SD = window.MA.sidePane;
+  if (!pane) return;
+  if (handle) handle.hidden = !!pane.hidden;
+  if (!SD || !key) return;
+  var main = document.getElementById('main');
+  var avail = main ? main.getBoundingClientRect().width : NaN;
+  var st = _sidePaneRaw(key);
+  // 一度も動かしていない枠は CSS の既定幅のままにする (参照ペインは 34%)。
+  if (st.width === undefined || st.width === null || st.width === '') return;
+  pane.style.width = SD.clampWidth(st.width, avail) + 'px';
+}
+
+// 幅だけを書き戻す (先輩の枠は dir/name も同じ鍵に入っているので消さない)。
+function _sidePaneRaw(key) {
+  try { return JSON.parse(localStorage.getItem(key) || '{}') || {}; } catch (e) { return {}; }
+}
+
+function saveSidePaneWidth(key, width) {
+  var SD = window.MA.sidePane;
+  if (!SD || !key || !width) return;
+  var raw = _sidePaneRaw(key);
+  raw.width = SD.clampWidth(width);
+  try { localStorage.setItem(key, JSON.stringify(raw)); } catch (e) { /* 保存できなくても画面は動く */ }
 }
 
 // ── Zoom ───────────────────────────────────────────────────────────────────
@@ -8885,6 +8946,8 @@ function _seniorSave(over) {
     open: over && over.open !== undefined ? over.open : cur.open,
     dir: over && over.dir !== undefined ? over.dir : cur.dir,
     name: over && over.name !== undefined ? over.name : cur.name,
+    width: over && over.width !== undefined ? over.width : cur.width,
+    seen: over && over.seen !== undefined ? over.seen : cur.seen,
   });
 }
 
@@ -9182,6 +9245,10 @@ function toggleSeniorPane(open) {
   var el = _seniorEls();
   if (!el.pane) return Promise.resolve(false);
   el.pane.hidden = !open;
+  // 幅と取っ手は枠の出し入れと一緒に動かす (BLK-human-20260915-1203)。
+  applySidePaneWidth('senior-pane', 'resizer-senior',
+    window.MA.seniorPane && window.MA.seniorPane.STORE_KEY);
+  if (open) showSeniorFirstNote();
   if (el.btn) {
     el.btn.setAttribute('aria-pressed', open ? 'true' : 'false');
     el.btn.className = 'tab-tool' + (open ? ' on' : '');
@@ -9203,6 +9270,26 @@ function toggleSeniorPane(open) {
     syncSeniorCounterpart();
     return true;
   });
+}
+
+// 初めて開いたときだけ「この枠は何か」を 1 行出す。読んだら二度と出さない。
+function showSeniorFirstNote() {
+  var SP = window.MA.seniorPane;
+  var note = document.getElementById('senior-first-note');
+  if (!SP || !note) return;
+  var text = SP.firstOpenNote(_seniorState());
+  if (!text) { note.hidden = true; return; }
+  note.textContent = text;
+  var ok = document.createElement('button');
+  ok.type = 'button';
+  ok.textContent = '分かった';
+  ok.addEventListener('click', function() {
+    _seniorSave({ seen: true });
+    note.hidden = true;
+  });
+  note.appendChild(ok);
+  note.hidden = false;
+  _seniorSave({ seen: true });
 }
 
 // 図を切り替えたとき、開いていれば相手も入れ替える (renderTabs から)。
@@ -17250,6 +17337,8 @@ function gotoOutlineLine(line) {
 // 参照側は読むだけ (選択・編集はしない)。スクロールは主プレビューと独立。
 
 var _compareOpen = false;
+// 参照ペインの幅も覚える (先輩の枠と同じ規則。BLK-human-20260915-1203)。
+var COMPARE_PANE_KEY = 'pua.compare.pane';
 var _compareRefId = null;    // 選んでいる参照図の doc id
 var _compareShownDsl = null; // 直近に描いた DSL (同じなら描き直さない)
 
@@ -17272,6 +17361,7 @@ function toggleCompareView(open, mode) {
   if (mode && _compareOpen && open !== false) { setCompareMode(mode); return; }
   _compareOpen = (open == null) ? !_compareOpen : !!open;
   pane.hidden = !_compareOpen;
+  applySidePaneWidth('compare-pane', 'resizer-compare', COMPARE_PANE_KEY);
   if (_compareOpen) {
     _compareShownDsl = null;   // 開き直したら必ず描く
     // 登録した雛形は 2 枚目のタブが無くても選べる (参照図が要らないのが登録の値打ち)。

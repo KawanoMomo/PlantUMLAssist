@@ -101,13 +101,16 @@ describe('据え置きの記憶', function() {
     const st = store();
     SP.save({ open: true, dir: './primary', name: 'gpio_state.puml' }, st);
     const got = SP.load(st);
-    assert.deepStrictEqual(got, { open: true, dir: './primary', name: 'gpio_state.puml' });
+    // BLK-human-20260915-1203 で幅と初回説明も同じ鍵に入った。
+    assert.deepStrictEqual(got,
+      { open: true, dir: './primary', name: 'gpio_state.puml', width: SP.DEFAULT_WIDTH, seen: false });
   });
 
   test('壊れた記憶でも画面は開ける (閉じた状態に落とす)', function() {
     const st = store();
     st.setItem(SP.STORE_KEY, '{壊れている');
-    assert.deepStrictEqual(SP.load(st), { open: false, dir: '', name: '' });
+    assert.deepStrictEqual(SP.load(st),
+      { open: false, dir: '', name: '', width: SP.DEFAULT_WIDTH, seen: false });
   });
 });
 
