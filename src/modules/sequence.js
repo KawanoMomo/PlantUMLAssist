@@ -325,8 +325,18 @@ window.MA.modules.plantumlSequence = (function() {
 
   var insertBeforeEnd = window.MA.dslUpdater.insertBeforeEnd;
 
+  // BLK-human-20260915-1205: 宣言は「参加者の欄」(最初のメッセージより前、既存の
+  // 宣言の後ろ) に入れる。末尾に足すと DSL 上で宣言がメッセージの後ろに散り、
+  // 読めないうえ左右の並びも意図どおりにならない。範囲の判定は
+  // src/core/sequence-participant-zone.js の 1 本に寄せ、途中挿入・一括追加・
+  // プレビューからの追加が全部そこを通る。
   function addParticipant(text, ptype, alias, label) {
-    return insertBeforeEnd(text, fmtParticipant(ptype, alias, label));
+    var line = fmtParticipant(ptype, alias, label);
+    var PZ = window.MA.seqParticipantZone;
+    // `@startuml`/`@enduml` の無い断片は、枠の補完ごと従来の insertBeforeEnd に任せる
+    // (枠を足すのは dsl-updater の職掌で、ここは「どこに入れるか」だけを決める)。
+    if (!PZ || !PZ.hasFrame(text)) return insertBeforeEnd(text, line);
+    return PZ.insert(text, line);
   }
 
   function addMessage(text, from, to, arrow, label) {
@@ -982,6 +992,9 @@ window.MA.modules.plantumlSequence = (function() {
       window.MA.history.pushHistory();
       var text = ctx.getMmdText();
       var opt = { ptype: ptype || 'participant', alias: alias };
+      // BLK-human-20260915-1205: 「左に参加者追加 / 右に参加者追加」は選んだ参加者の
+      // 隣 (= 参加者の欄の中) に入れるので、左右の順を指定するこの経路は従来どおり
+      // insertBefore / insertAfter を使う。欄の外に出る心配は無い。
       ctx.setMmdText(position === 'before'
         ? insertBefore(text, line, 'participant', opt)
         : insertAfter(text, line, 'participant', opt));
@@ -1808,6 +1821,10 @@ window.MA.modules.plantumlSequence = (function() {
     parse: parseSequence,
     parseSequence: parseSequence,
     addParticipant: addParticipant,
+    participantZone: function(text) {
+      var PZ = window.MA.seqParticipantZone;
+      return PZ ? PZ.find(text) : null;
+    },
     normalizeIdInput: normalizeIdInput,
     addMessage: addMessage,
     parseBulkLines: parseBulkLines,

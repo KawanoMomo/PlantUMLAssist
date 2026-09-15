@@ -91,6 +91,7 @@ const sourceFiles = [
   'src/core/group-notation.js',
   'src/core/sequence-marks.js',
   'src/core/sequence-autonumber.js',
+  'src/core/sequence-participant-zone.js',
   'src/core/insert-marker.js',
   'src/core/label-colors.js',
   'src/core/submit-check.js',
