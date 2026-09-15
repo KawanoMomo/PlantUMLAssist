@@ -219,9 +219,45 @@
 
   // ---- 覚えておくもの -------------------------------------------------------
   // 「開いたままにする」が値打ちなので、開閉と選んだフォルダは覚える。
+  //
+  // BLK-human-20260915-1203: 閉じた状態と幅も覚える。既定は閉じ (open: false)。
+  // 幅と初回説明の扱いは参照ペインと揃えたいので side-pane に寄せる
+  // (side-pane を読み込んでいない場での単体使用に備えて、無ければ自前で丸める)。
+  var DEFAULT_WIDTH = 360;
+  var MIN_WIDTH = 220;
+
+  function _sidePane() {
+    if (typeof module !== 'undefined' && module.exports) {
+      try { return require('./side-pane.js'); } catch (e) { /* 単体で読まれたとき */ }
+    }
+    return (typeof window !== 'undefined' && window.MA && window.MA.sidePane) || null;
+  }
+
+  function _width(v) {
+    var SD = _sidePane();
+    if (SD) return SD.clampWidth(v === undefined || v === null || v === '' ? DEFAULT_WIDTH : v);
+    var n = Number(v);
+    return isFinite(n) ? Math.round(Math.max(MIN_WIDTH, n)) : DEFAULT_WIDTH;
+  }
+
   function normalize(state) {
     var s = state || {};
-    return { open: !!s.open, dir: _s(s.dir), name: _s(s.name) };
+    return {
+      open: !!s.open,
+      dir: _s(s.dir),
+      name: _s(s.name),
+      width: _width(s.width),
+      seen: !!s.seen,
+    };
+  }
+
+  // 初めて開いたときだけ出す 1 行。この枠が何かを言い切る (読むだけだと分かること)。
+  var FIRST_NOTE = 'この枠は、別のフォルダの図を手本として横に出すものです（読むだけ・書き換えません）。'
+    + '× で閉じられます。';
+
+  // firstOpenNote(state) — まだ説明を出していなければ文言を返す。出したなら ''。
+  function firstOpenNote(state) {
+    return normalize(state).seen ? '' : FIRST_NOTE;
   }
 
   function load(store) {
@@ -246,6 +282,8 @@
     samePath: samePath, isSelf: isSelf, isCommonSheet: isCommonSheet,
     pickCounterpart: pickCounterpart, noticeText: noticeText, statusText: statusText,
     normalize: normalize, load: load, save: save,
+    FIRST_NOTE: FIRST_NOTE, firstOpenNote: firstOpenNote,
+    DEFAULT_WIDTH: DEFAULT_WIDTH, MIN_WIDTH: MIN_WIDTH,
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

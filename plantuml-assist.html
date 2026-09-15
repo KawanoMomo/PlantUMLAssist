@@ -5304,6 +5304,21 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   flex-shrink: 0;
   overflow: hidden;
 }
+/* BLK-human-20260915-1203: `display: flex` は `hidden` 属性より強いので、
+   これが無いと × を押しても枠が消えず、既定でも出たままになる。 */
+#senior-pane[hidden] { display: none; }
+#senior-first-note {
+  padding: 6px 8px; font-size: 11px; line-height: 1.5;
+  color: var(--text-secondary); border-bottom: 1px solid var(--border);
+  background: var(--bg-tertiary);
+}
+#senior-first-note[hidden] { display: none; }
+#senior-first-note button {
+  margin-left: 6px; font-size: 11px; padding: 0 6px; cursor: pointer;
+  border: 1px solid var(--border); background: transparent; color: var(--text);
+}
+/* 枠の境目 (幅を変える取っ手)。枠が閉じている間は取っ手も消す。 */
+.pane-resizer[hidden] { display: none; }
 #senior-head {
   display: flex; align-items: center; gap: 6px;
   padding: 6px 8px; border-bottom: 1px solid var(--border);
@@ -6417,6 +6432,9 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 
     <!-- 参照ペイン: 別のタブの図を並べて出す (先輩の図を見ながら書く)。
          スクロールは主ペインと独立。既定では畳んでいる。 -->
+    <!-- BLK-human-20260915-1203: 参照ペイン・先輩の枠のどちらも境目をドラッグして幅を変える -->
+    <div class="pane-resizer" id="resizer-compare" hidden
+         role="separator" aria-orientation="vertical" aria-label="参照ペインの幅"></div>
     <div id="compare-pane" hidden>
       <!-- BLK-primary-20260909-0303-wish: 「変更前後を見せる」1 つの業務のために
            「⇔ 並べて見る」と「± 差分」の 2 画面を選び分けていた。同じペインの中の
@@ -6520,12 +6538,16 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 
     <!-- BLK-junior-20260914-1406-wish: 先輩の図を読み専用の 2 枠目として据え置く。
          フォルダを 1 回選べば、図を切り替えても相手が自動で入れ替わる。 -->
+    <div class="pane-resizer" id="resizer-senior" hidden
+         role="separator" aria-orientation="vertical" aria-label="先輩の図の枠の幅"></div>
     <div id="senior-pane" hidden>
       <div id="senior-head">
         <strong>先輩の図</strong>
         <select id="senior-dir" aria-label="先輩の保存フォルダ"></select>
         <button type="button" id="senior-close" title="この枠を閉じる">×</button>
       </div>
+      <!-- 初めて開いたときだけ「この枠は何か」を 1 行出す (BLK-human-20260915-1203) -->
+      <div id="senior-first-note" hidden></div>
       <div id="senior-notice"></div>
       <!-- BLK-junior-20260914-2206-wish: 先輩のクラス図は全ドライバ共通の 1 枚なので
            部品名で 1:1 に引けない。共通図が相手のときだけ、部品名で抜き出す欄を出す。 -->
@@ -6845,6 +6867,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/peek-folder.js"></script>
 <script src="src/core/peek-verdict.js"></script>
 <script src="src/core/kind-matrix.js"></script>
+<script src="src/core/side-pane.js"></script>
 <script src="src/core/senior-pane.js"></script>
 <script src="src/core/senior-slice.js"></script>
 <script src="src/core/peer-sample.js"></script>
