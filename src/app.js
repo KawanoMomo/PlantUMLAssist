@@ -2799,6 +2799,7 @@ function init() {
 
   setupTabs();
   setupBulkRename();
+  setupNameUnify();
   setupDocSets();
   setupRenameImpact();
   setupDepGraph();
@@ -2999,6 +3000,7 @@ function initCommandPalette() {
       { id: 'change-ticket', title: '変更チケットを開く / Change tickets', hint: 'Tabs', keywords: ['ticket', 'change', 'impact', 'ちけっと', 'へんこう', 'つづき', 'しようへんこう'], run: function() { toggleTicketBoard(true); } },
       { id: 'vault', title: '提出物庫を開く / Deliverable vault', hint: 'Tabs', keywords: ['vault', 'export', 'ていしゅつ', 'こ', 'かこ', 'ぜんかい'], run: function() { toggleVault(true); } },
       { id: 'tab-rename', title: '部品名を一括置換 / Bulk rename', hint: 'Tabs', keywords: ['rename', 'replace', 'いっかつ', 'ちかん'], button: 'btn-tab-rename', run: function() { clickById('btn-tab-rename'); } },
+      { id: 'tab-unify', title: '表記を登録簿に揃える (揺れの残る図をまとめて直す) / Unify names', hint: 'Tabs', keywords: ['unify', 'registry', 'ひょうき', 'とういつ', 'ゆれ', 'とうろくぼ'], button: 'btn-tab-unify', run: function() { clickById('btn-tab-unify'); } },
       { id: 'tab-symptom', title: '症状から関連図を探す / Symptom search', hint: 'Tabs', keywords: ['symptom', 'search', 'しょうじょう', 'けんさく', 'ふぐあい'], button: 'btn-tab-symptom', run: function() { clickById('btn-tab-symptom'); } },
       { id: 'tab-blame', title: '部品名の混入点を探す / Blame point', hint: 'Tabs', keywords: ['blame', 'origin', 'version', 'こんにゅう', 'いつから', 'かこばん', 'ふぐあい'], button: 'btn-tab-blame', run: function() { clickById('btn-tab-blame'); } },
       { id: 'tab-pattern', title: '同じ観点で全図を棚卸し / Pattern check', hint: 'Tabs', keywords: ['pattern', 'check', 'かんてん', 'いっかつ', 'してき', 'たなおろし'], button: 'btn-tab-pattern', run: function() { clickById('btn-tab-pattern'); } },
@@ -16355,6 +16357,222 @@ function setupTemplateNew() {
   modal.addEventListener('click', function(ev) { if (ev.target === modal) close(); });
   document.addEventListener('keydown', function(ev) {
     if (ev.key === 'Escape' && modal.style.display !== 'none') close();
+  });
+}
+
+// ── 表記統一の一括反映 (BLK-junior-20260916-0046-wish) ─────────────────────
+// 指摘の「表記揺れを canonical に揃える」は、揃える先が既に登録簿 (_names.json)
+// にある。それでも「どのファイルにその揺れが残っているか」は GUI に無いので、
+// junior は登録簿と 📂 一覧を見比べ、該当しそうな図を 1 枚ずつ開いて本文を読み、
+// 直して保存する、を枚数ぶん繰り返していた。探す工程がまるごと手作業だった。
+//
+// ⇄ 一括置換との違いは入口。あちらは「置換前・置換後」を人が打つ道具で、打つ前に
+// 何を打つべきかを知っている必要がある。ここは組を登録簿から選ぶだけで、残って
+// いる在処と件数が機械から出る。当てる先は保存フォルダの図そのもの (開いていない
+// 図も含む) なので、手順 2〜3 の「開く → 直す → 保存する」が 1 回で済む。
+function setupNameUnify() {
+  var panel = document.getElementById('unify-panel');
+  var btn = document.getElementById('btn-tab-unify');
+  var NU = window.MA.nameUnify;
+  var WS = window.MA.workspace;
+  if (!panel || !btn || !NU || !WS) return;
+  var sel = document.getElementById('unify-entry');
+  var filesEl = document.getElementById('unify-files');
+  var sumEl = document.getElementById('unify-summary');
+  var resultEl = document.getElementById('unify-result');
+  var applyBtn = document.getElementById('btn-unify-apply');
+  var allBtn = document.getElementById('btn-unify-all');
+  var cancel = document.getElementById('btn-unify-cancel');
+  var esc = window.MA.htmlUtils.escHtml;
+
+  var _groups = null;          // null = まだ読めていない (0 組と区別する)
+  var _texts = {};             // name → 今の本文
+
+  // 当てる材料を集める。開いているタブと保存フォルダの図を混ぜ、同じ名前は
+  // タブ側を勝たせる (編集中の本文の方が新しい)。
+  function collect() {
+    var docs = [];
+    _texts = {};
+    var activeId = WS.getActiveId ? WS.getActiveId() : null;
+    (WS.list ? WS.list() : []).forEach(function(d) {
+      if (!d || !d.name) return;
+      var text = (d.id === activeId) ? mmdText : d.dsl;
+      docs.push({ name: d.name, dsl: text });
+      _texts[d.name] = String(text == null ? '' : text);
+    });
+    if (!_fiFolderMode || !_fiFolderMode()) return Promise.resolve(docs);
+    return WS.listFolder(_wsFileDir()).then(function(info) {
+      ((info && info.entries) || []).forEach(function(e) {
+        if (!e || !e.name || _texts[e.name] != null) return;
+        var text = String(e.text == null ? '' : e.text);
+        if (!text.trim()) return;
+        docs.push({ name: e.name, dsl: text });
+        _texts[e.name] = text;
+      });
+      return docs;
+    // フォルダが読めなくても、開いているタブには当てられる (何もしないより良い)。
+    }).catch(function() { return docs; });
+  }
+
+  function currentGroup() {
+    if (!_groups || !sel) return null;
+    for (var i = 0; i < _groups.length; i++) if (_groups[i].key === sel.value) return _groups[i];
+    return _groups[0] || null;
+  }
+
+  function renderFiles() {
+    var g = currentGroup();
+    filesEl.textContent = '';
+    if (!g) {
+      filesEl.innerHTML = '<div class="unify-empty">当てる図はありません。</div>';
+      applyBtn.disabled = true;
+      return;
+    }
+    var html = '';
+    g.files.forEach(function(f) {
+      var detail = (f.hits || []).map(function(h) { return h.from + ' ' + h.count; }).join(' / ');
+      html += '<label class="unify-file"><input type="checkbox" class="uf-pick" value="'
+        + esc(f.name) + '" checked>'
+        + '<span class="uf-name">' + esc(f.name) + '</span>'
+        + '<span class="uf-hits" title="' + esc(detail) + '">' + f.count + ' 件</span></label>';
+    });
+    filesEl.innerHTML = html;
+    Array.prototype.forEach.call(filesEl.querySelectorAll('.uf-pick'), function(cb) {
+      cb.addEventListener('change', updateApply);
+    });
+    updateApply();
+  }
+
+  function picked() {
+    return Array.prototype.filter.call(filesEl.querySelectorAll('.uf-pick'), function(cb) {
+      return cb.checked;
+    }).map(function(cb) { return cb.value; });
+  }
+
+  function updateApply() {
+    var g = currentGroup();
+    var n = picked().length;
+    applyBtn.disabled = !g || n === 0;
+    applyBtn.textContent = n > 0 ? ('まとめて適用 (' + n + ' 枚)') : 'まとめて適用';
+  }
+
+  function render() {
+    sumEl.textContent = NU.summaryLine(_groups);
+    sel.textContent = '';
+    (_groups || []).forEach(function(g) {
+      var o = document.createElement('option');
+      o.value = g.key;
+      o.textContent = NU.label(g);
+      sel.appendChild(o);
+    });
+    sel.disabled = !(_groups && _groups.length);
+    renderFiles();
+  }
+
+  // 登録簿はここで読み直す。画面の他の場所 (名前欄の注記) が持っている控えは
+  // 起動時の 1 回ぶんで、reviewer がこの run で足した組が入っていないことがある。
+  // 「揃える先が決まっているのに一覧に出ない」は、探し直す手順がそのまま戻る。
+  function loadRegistry() {
+    var NR = window.MA.nameRegistry;
+    if (!NR || !window.fetch) return Promise.resolve(null);
+    return window.fetch('/name-registry?dir=' + encodeURIComponent(_wsFileDir()))
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(data) {
+        if (!data) return null;
+        var reg = NR.parse({ entries: (data && data.entries) || [] });
+        // 読めた登録簿は画面全体の控えにも渡す (2 冊を持たない)。
+        if (NR.setCurrent) NR.setCurrent(reg);
+        return reg;
+      })
+      // 登録簿が読めないことは「揃っている」と別の意味なので null のまま返す。
+      .catch(function() { return null; });
+  }
+
+  function reload() {
+    return loadRegistry().then(function(reg) {
+      if (!reg) { _groups = null; render(); return; }
+      return collect().then(function(docs) {
+        _groups = NU.scan(reg, docs);
+        render();
+      });
+    });
+  }
+
+  function doApply() {
+    var g = currentGroup();
+    if (!g) return;
+    var rows = NU.plan(g, _texts, picked());
+    if (!rows.length) return;
+    var dir = _wsFileDir();
+    var openByName = {};
+    (WS.list ? WS.list() : []).forEach(function(d) { if (d && d.name) openByName[d.name] = d; });
+    var activeId = WS.getActiveId ? WS.getActiveId() : null;
+    // 開いている図はエディタごと差し替える。undo は 1 手で戻せるようにする。
+    if (window.MA.history) window.MA.history.pushHistory();
+    var written = 0, failed = 0, total = 0;
+    return Promise.all(rows.map(function(r) {
+      var doc = openByName[r.name];
+      if (doc) {
+        WS.updateDoc(doc.id, { dsl: r.after });
+        if (doc.id === activeId) {
+          mmdText = r.after;
+          suppressSync = true;
+          editorEl.value = mmdText;
+          suppressSync = false;
+        }
+      }
+      // 開いていてもいなくても保存フォルダへ書く。手順 3 の「上書き保存」まで
+      // ここで終わらせる (書かずに閉じると、直したのに保存されていない図が残る)。
+      return WS.saveToFile({ name: r.name, dsl: r.after }, dir).then(function(ok) {
+        if (!ok) { failed++; return; }
+        written++;
+        total += r.count;
+        _texts[r.name] = r.after;
+        // 基準がまだ無い図は書く前を基準にする (この統一がそのまま ± 差分で読める)。
+        if (window.MA.saveDiff) { try { window.MA.saveDiff.markIfAbsent(r.name, r.before); } catch (e) {} }
+      });
+    })).then(function() {
+      // 前後の本文を 1 回の書き込みとして控える (🕘 書き込み履歴から並べられる)。
+      try {
+        _recordWrite('unify', { from: (g.variants || []).join(' / '), to: g.canonical },
+          rows.map(function(r) { return { name: r.name, before: r.before, after: r.after }; }));
+      } catch (e) { /* 控えが取れなくても統一そのものは済んでいる */ }
+      if (window.MA.selection) window.MA.selection.clearSelection();
+      updateLineNumbers();
+      scheduleRefresh();
+      renderTabs();
+      var msg = g.canonical + ' に ' + total + ' 件 / ' + written + ' 枚を揃えました';
+      if (failed > 0) msg += ' / ' + failed + ' 枚は書き込めませんでした';
+      resultEl.textContent = msg;
+      resultEl.setAttribute('data-applied', String(total));
+      resultEl.setAttribute('data-applied-docs', String(written));
+      // 当て終わった組は残り 0 件になるので一覧から消える。次の組がすぐ選べる。
+      return reload();
+    });
+  }
+
+  btn.addEventListener('click', function() {
+    if (panel.classList.contains('open')) { panel.classList.remove('open'); return; }
+    var rect = btn.getBoundingClientRect();
+    panel.style.left = Math.max(4, rect.left - 60) + 'px';
+    panel.style.top = (rect.bottom + 2) + 'px';
+    panel.classList.add('open');
+    resultEl.textContent = '';
+    sumEl.textContent = '数えています…';
+    reload();
+  });
+
+  if (sel) sel.addEventListener('change', renderFiles);
+  if (allBtn) allBtn.addEventListener('click', function() {
+    var boxes = filesEl.querySelectorAll('.uf-pick');
+    var allOn = Array.prototype.every.call(boxes, function(cb) { return cb.checked; });
+    Array.prototype.forEach.call(boxes, function(cb) { cb.checked = !allOn; });
+    updateApply();
+  });
+  if (applyBtn) applyBtn.addEventListener('click', doApply);
+  if (cancel) cancel.addEventListener('click', function() { panel.classList.remove('open'); });
+  document.addEventListener('keydown', function(ev) {
+    if (ev.key === 'Escape' && panel.classList.contains('open')) panel.classList.remove('open');
   });
 }
 

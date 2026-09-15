@@ -3744,6 +3744,57 @@ table.vault-table button.vault-open:hover { border-color: var(--accent); }
   word-break: break-all;
   line-height: 1.5;
 }
+/* 表記統一パネル (BLK-junior-20260916-0046-wish)。見た目は一括置換と同じ枠に
+   揃える — 同じ「図をまたいで名前を直す」道具が 2 通りに見えないようにする。 */
+#unify-panel {
+  display: none;
+  position: absolute;
+  z-index: 41;
+  width: 300px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px;
+  font-size: 11px;
+  color: var(--text-primary);
+}
+#unify-panel.open { display: block; }
+#unify-panel label {
+  display: block;
+  font-size: 10px;
+  color: var(--text-secondary);
+  margin: 4px 0 2px;
+}
+#unify-panel select {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 3px 4px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+#unify-panel .unify-summary { font-size: 10px; color: var(--accent); margin-bottom: 4px; }
+#unify-panel .unify-files {
+  max-height: 180px;
+  overflow-y: auto;
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+#unify-panel .unify-file {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 1px 0;
+}
+#unify-panel .unify-file input { width: auto; flex: 0 0 auto; }
+#unify-panel .unify-file .uf-name { flex: 1 1 auto; overflow-wrap: anywhere; }
+#unify-panel .unify-file .uf-hits { flex: 0 0 auto; color: var(--text-secondary); }
+#unify-panel .unify-empty { color: var(--text-secondary); padding: 6px 0; }
+#unify-panel .unify-result { font-size: 10px; color: var(--text-secondary); margin-top: 6px; }
 /* 一括置換パネル (複数の図をまたいで部品名を置換する) */
 #rename-panel {
   display: none;
@@ -6280,6 +6331,9 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <!-- BLK-junior-20260907-2009-wish: やり直し途中の控えに印を付け、📂 一覧で畳む -->
         <button class="tab-tool" id="btn-tab-draft" aria-pressed="false" title="この図に一時控え(下書き / やり直し途中)の印を付けて、📂 一覧から畳む">🗂 一時控え</button>
         <button class="tab-tool" id="btn-tab-rename" title="開いている図をまたいで部品名を一括置換">⇄ 一括置換</button>
+        <!-- BLK-junior-20260916-0046-wish: 揃える先は登録簿が知っている。組を選ぶだけで
+             揺れの残るファイルが出て、チェックした分をまとめて当てる -->
+        <button class="tab-tool" id="btn-tab-unify" title="登録簿で決めた正式表記に揃っていない図を挙げ、選んだ分にまとめて当てる (どの図に残っているかを探さなくてよい)">🔤 表記統一</button>
         <!-- BLK-primary-20260907-2203-wish: 症状文を貼るだけで関連しそうな図を出す -->
         <button class="tab-tool" id="btn-tab-symptom" title="不具合の症状文を貼ると、部品名を思い付かなくても関連しそうな図を関連度順に出す">⇄ 症状検索</button>
         <!-- BLK-primary-20260915-0506-wish: 部品名がどの版から入ったか (混入点) を全図の版から 1 回で出す -->
@@ -6388,6 +6442,22 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
           <button id="btn-rename-apply" disabled>置換</button>
           <button id="btn-rename-cancel">閉じる</button>
         </div>
+      </div>
+      <!-- BLK-junior-20260916-0046-wish: 表記統一の一括反映。⇄ 一括置換は「何を打つか」を
+           人が知っている前提の道具だが、揃える先は登録簿 (_names.json) に既にある。
+           ここは組を選ぶだけで、揺れの残るファイルと件数が出て、チェックした分を
+           保存まで 1 回で当てる (ファイルを 1 枚ずつ開いて探す工程が要らない)。 -->
+      <div id="unify-panel">
+        <div id="unify-summary" class="unify-summary"></div>
+        <label for="unify-entry">揃える組 (登録簿)</label>
+        <select id="unify-entry"></select>
+        <div id="unify-files" class="unify-files"></div>
+        <div class="rename-actions">
+          <button id="btn-unify-all" title="出ている図を全部選ぶ / 全部外す">全選択</button>
+          <button id="btn-unify-apply" disabled title="チェックした図の揺れを正式表記に直して保存フォルダへ書く">まとめて適用</button>
+          <button id="btn-unify-cancel">閉じる</button>
+        </div>
+        <div id="unify-result" class="unify-result"></div>
       </div>
       <!-- 部品名がどの版から入ったか (混入点) を、全図の版を 1 回走査して時系列に並べる -->
       <div id="blame-panel">
@@ -7173,6 +7243,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/name-audit.js"></script>
 <script src="src/core/name-clash.js"></script>
 <script src="src/core/name-registry.js"></script>
+<script src="src/core/name-unify.js"></script>
 <script src="src/core/save-dir-handoff.js"></script>
 <script src="src/core/semantic-refs.js"></script>
 <script src="src/core/xref-graph.js"></script>

@@ -23,6 +23,7 @@ window.MA.toolMenu = (function() {
     { key: 'edit', title: '書き換える', items: [
       { id: 'btn-tab-lines',  label: '行を書き換える' },
       { id: 'btn-tab-rename', label: '部品名を一括置換する' },
+      { id: 'btn-tab-unify',  label: '表記を登録簿に揃える' },
       { id: 'btn-tab-apply',  label: '複数クラスに一括適用する' },
     ] },
     { key: 'find', title: '探す・見比べる', items: [
