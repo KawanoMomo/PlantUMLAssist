@@ -1573,12 +1573,12 @@ window.MA.modules.plantumlState = (function() {
       // その場で `{ }` に開くので、「まず composite に変換」を知らなくてよい。
       (window.MA.stateChild.canHaveChild(st)
         ? '<div style="border-top:1px solid var(--border);padding-top:6px;margin-top:6px;">' +
-            '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">子状態 / 中に入れる状態</div>' +
+            '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">子状態 — この状態の中に状態を入れる（入れ子）</div>' +
             '<div style="display:flex;gap:4px;align-items:center;">' +
               '<input id="st-child-id" placeholder="子状態の名前 (例: Warmup)" style="flex:1;box-sizing:border-box;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-size:11px;">' +
-              '<button id="st-add-child" style="font-size:11px;padding:4px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;white-space:nowrap;">＋ 子状態を追加</button>' +
+              '<button id="st-add-child" title="選んだ状態の中に、もう 1 つ状態を入れます（入れ子にする）" style="font-size:11px;padding:4px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;white-space:nowrap;">＋ 子状態を追加</button>' +
             '</div>' +
-            '<button id="st-add-child-pair" style="font-size:11px;padding:4px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;margin-top:4px;display:block;">＋ 子状態を 2 つ足して遷移でつなぐ</button>' +
+            '<button id="st-add-child-pair" title="選んだ状態の中に状態を 2 つ入れて、その間を矢印でつなぎます（入れ子）" style="font-size:11px;padding:4px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;margin-top:4px;display:block;">＋ 子状態を 2 つ足して遷移でつなぐ</button>' +
           '</div>'
         : '') +
       // Behaviors section (StableState style: entry/exit single-line, do multi-line)

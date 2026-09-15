@@ -239,3 +239,34 @@ test('手順9 木のその場から、どの階層にも子状態を足せる', 
   // 足した子はその場で木にも出る (図を探しに行かなくてよい)。
   await expect(page.locator('#state-tree-body .stree-row')).toHaveCount(6);
 });
+
+// BLK-junior-20260916-0526: 入口 (チップ・パネルのボタン) は出ていたのに見つけ
+// られなかった。置き場所ではなく言葉の問題で、研修で PlantUML を見た程度の人は
+// 「子状態」「複合状態」を知らない。知らない語は目に入っても「状態の中に状態を
+// 入れる」と結びつかず、コマンド検索に打つ語も当てられない。
+test('手順9 用語を知らなくても、自分の言葉 (入れ子・中に入れる) で入口に届く', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.typeDsl(page, TIMER_STATE);
+
+  for (const word of ['入れ子', 'ネスト', '中に入れる']) {
+    await page.keyboard.press('Control+k');
+    await expect(page.locator('#cp-modal')).toBeVisible();
+    await page.locator('#cp-input').fill(word);
+    await page.waitForTimeout(400);
+    // 到達条件: 正しい用語を知らない語でも、子状態の入口が候補に出る。
+    await expect(page.locator('#cp-list')).toContainText('子状態');
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(200);
+  }
+});
+
+test('手順9 選んだ状態のボタンが、用語抜きで何が起きるかを言う', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.typeDsl(page, TIMER_STATE);
+  await selectState(page, 'Busy');
+
+  // 到達条件: 「子状態」の語を知らなくても、押す前に何が起きるかが読める。
+  await expect(page.locator('#st-add-child-pair')).toHaveAttribute('title', /中に状態を 2 つ入れて/);
+  await expect(page.locator('#st-add-child')).toHaveAttribute('title', /中に、もう 1 つ状態を入れます/);
+  await expect(page.locator('#props-content')).toContainText('入れ子');
+});
