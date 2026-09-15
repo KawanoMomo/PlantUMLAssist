@@ -163,9 +163,40 @@ window.MA.bulkRename = (function() {
     return out;
   }
 
+  // detectRename(before, after) — 1 枚の図に起きた「識別子の綴りの直し」を読み取る。
+  //
+  // BLK-junior-20260916-0046: 表記統一の反映は、同じ直しが保存フォルダの何枚にも
+  // 及ぶ。1 枚目を直したその場から一括置換へ渡すために、直した本人に組を打ち直させず
+  // 「消えた識別子 1 つ / 増えた識別子 1 つ」を組として拾う。
+  // 確実に言えるときだけ答える (消えた・増えたが 1 つずつで、その置換だけで
+  // before が after に一致するとき)。曖昧なら null を返し、画面は今までどおり
+  // 空の欄を出す (当て推量で別の名前を書き換えさせない)。
+  function detectRename(before, after) {
+    var b = String(before == null ? '' : before);
+    var a = String(after == null ? '' : after);
+    if (!b || !a || b === a) return null;
+    var bi = identifiers([{ dsl: b }]);
+    var ai = identifiers([{ dsl: a }]);
+    var inA = {};
+    ai.forEach(function(n) { inA[n] = true; });
+    var inB = {};
+    bi.forEach(function(n) { inB[n] = true; });
+    var gone = bi.filter(function(n) { return !inA[n]; });
+    var came = ai.filter(function(n) { return !inB[n]; });
+    if (gone.length !== 1 || came.length !== 1) return null;
+    var from = gone[0];
+    var to = came[0];
+    if (!isValidTarget(to)) return null;
+    // その 1 組を当てるだけで before が after になるか。ならないなら綴り直し
+    // 以外の編集も混ざっているので、組として言い切らない。
+    if (replaceIn(b, from, to) !== a) return null;
+    return { from: from, to: to };
+  }
+
   return {
     countIn: countIn,
     replaceIn: replaceIn,
+    detectRename: detectRename,
     isValidTarget: isValidTarget,
     preview: preview,
     totalCount: totalCount,
