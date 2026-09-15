@@ -214,8 +214,12 @@ window.MA.handoffPackage = (function() {
 
   function _diagramsHtml(snapshot) {
     var out = '';
-    snapshot.diagrams.forEach(function(d) {
-      out += '<h3>' + esc(d.name) + ' <small>' + esc(d.diagramType) + ' · ' + esc(d.filename) + '</small></h3>';
+    var HR = window.MA.handoffRoute;
+    snapshot.diagrams.forEach(function(d, i) {
+      // 見る順の ① ② ③ から飛べるよう、図ごとに錨を打つ。
+      var anchor = HR ? HR.anchorId(d.name, i) : '';
+      out += '<h3' + (anchor ? ' id="' + esc(anchor) + '"' : '') + '>'
+        + esc(d.name) + ' <small>' + esc(d.diagramType) + ' · ' + esc(d.filename) + '</small></h3>';
       out += d.rendered
         ? '<div class="fig">' + d.svg + '</div>'
         : '<p class="muted">この図は書き出せませんでした。</p>';
@@ -286,7 +290,41 @@ window.MA.handoffPackage = (function() {
   function _checklistHtml(snapshot) {
     var HC = window.MA.handoverChecklist;
     if (!HC) return '<p class="muted">申し送りはありません。</p>';
-    return HC.renderHtml(snapshot && snapshot.checklist);
+    var html = HC.renderHtml(snapshot && snapshot.checklist);
+    // 申し送りが 0 件でも「どこまで辿ったか」は返せる必要がある (見る順の記録)。
+    // 返す口はこの 1 つだけにする (保存ボタンを 2 つ置かない)。
+    if (html.indexOf('id="hc-save"') === -1) {
+      html += '<p><button type="button" id="hc-save">返信を保存</button>'
+        + '<span id="hc-state"></span></p>';
+    }
+    return html;
+  }
+
+  // BLK-primary-20260915-2346-wish: 受け取る側が辿る順。材料の節より前に置く。
+  function _routeHtml(snapshot) {
+    var HR = window.MA.handoffRoute;
+    if (!HR) return '<p class="muted">辿る順を組めませんでした。</p>';
+    return HR.renderHtml(_route(snapshot));
+  }
+
+  function _route(snapshot) {
+    var HR = window.MA.handoffRoute;
+    return HR ? HR.build(snapshot) : null;
+  }
+
+  function _routeLine(snapshot) {
+    var r = _route(snapshot);
+    return r ? r.line : '';
+  }
+
+  function _routeCss() {
+    var HR = window.MA.handoffRoute;
+    return HR ? HR.styleCss() : '';
+  }
+
+  function _routeScript() {
+    var HR = window.MA.handoffRoute;
+    return HR ? HR.scriptHtml() : '';
   }
 
   var CSS = [
@@ -342,7 +380,7 @@ window.MA.handoffPackage = (function() {
       '<!DOCTYPE html>',
       '<html lang="ja"><head><meta charset="utf-8">',
       '<title>引き継ぎパッケージ ' + esc(s.createdAt) + '</title>',
-      '<style>' + CSS + '\n' + _checklistCss() + '</style>',
+      '<style>' + CSS + '\n' + _routeCss() + '\n' + _checklistCss() + '</style>',
       '</head><body><main>',
       '<header><h1>引き継ぎパッケージ</h1>',
       '<small>作成 ' + esc(s.createdAt) + ' ・ 図 ' + esc(String(s.total)) + ' 枚'
@@ -350,31 +388,36 @@ window.MA.handoffPackage = (function() {
         + '</small></header>',
       '<p class="verdict"><strong>' + esc(s.verdict) + '</strong></p>',
 
-      '<h2>1. 今回の変更と、その理由</h2>',
+      '<h2>1. 見る順 <small>ここから始めてください</small></h2>',
+      '<p>' + esc(_routeLine(s)) + '</p>',
+      _routeHtml(s),
+
+      '<h2>2. 今回の変更と、その理由</h2>',
       '<p>' + esc(_summaryLine(s)) + '</p>',
       _summaryHtml(s.summary),
 
-      '<h2>2. 系統チェック結果' + _badge(s.family && s.family.ok) + '</h2>',
+      '<h2>3. 系統チェック結果' + _badge(s.family && s.family.ok) + '</h2>',
       '<p>' + esc(s.family ? s.family.line : '') + '</p>',
       _familyHtml(s.family || {}),
 
-      '<h2>3. 名前突合結果' + _badge(s.names && s.names.ok) + '</h2>',
+      '<h2>4. 名前突合結果' + _badge(s.names && s.names.ok) + '</h2>',
       '<p>' + esc(s.names ? s.names.line : '') + '</p>',
       _namesHtml(s.names || {}),
 
-      '<h2>4. 直近の変更サマリ</h2>',
+      '<h2>5. 直近の変更サマリ</h2>',
       '<p>' + esc(s.change ? s.change.line : '') + '</p>',
       _changeHtml(s.change || {}),
 
-      '<h2>5. 申し送りチェックリスト</h2>',
+      '<h2>6. 申し送りチェックリスト</h2>',
       '<p>' + esc(_checklistLine(s)) + '</p>',
       _checklistHtml(s),
 
-      '<h2>6. 図一式</h2>',
+      '<h2>7. 図一式</h2>',
       _diagramsHtml(s),
 
       '<footer>PlantUMLAssist の「引き継ぎパッケージ」が作成。この HTML 1 枚で、作成時点の'
         + '確認結果と図をそのまま見られます。個々の SVG は同じ zip の svg/ にあります。</footer>',
+      _routeScript(),
       _checklistScript(),
       '</main></body></html>',
     ].join('\n');
@@ -406,6 +449,8 @@ window.MA.handoffPackage = (function() {
     changeSection: changeSection,
     buildSnapshot: buildSnapshot,
     renderIndexHtml: renderIndexHtml,
+    route: _route,
+    routeLine: _routeLine,
     checklistLine: _checklistLine,
     summaryLine: _summaryLine,
     files: files,

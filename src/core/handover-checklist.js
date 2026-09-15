@@ -119,16 +119,25 @@ window.MA.handoverChecklist = (function() {
     var v = null;
     if (raw == null || raw === '') return null;
     try { v = (typeof raw === 'string') ? JSON.parse(raw) : raw; } catch (e) { return null; }
-    if (!v || typeof v !== 'object' || !v.replies || typeof v.replies !== 'object') return null;
+    if (!v || typeof v !== 'object') return null;
+    var hasReplies = !!v.replies && typeof v.replies === 'object';
+    // BLK-primary-20260915-2346-wish: 申し送りが 0 件でも「見る順をどこまで辿ったか」
+    // だけを返せる。返信として読めるのは、どちらか一方が入っていれば足りる。
+    var HR = window.MA.handoffRoute;
+    var route = HR ? HR.parseRoute(v.route) : null;
+    if (!hasReplies && !route) return null;
     var out = {};
-    for (var k in v.replies) {
-      if (!Object.prototype.hasOwnProperty.call(v.replies, k)) continue;
-      if (STATUS.indexOf(v.replies[k]) !== -1) out[String(k)] = v.replies[k];
+    if (hasReplies) {
+      for (var k in v.replies) {
+        if (!Object.prototype.hasOwnProperty.call(v.replies, k)) continue;
+        if (STATUS.indexOf(v.replies[k]) !== -1) out[String(k)] = v.replies[k];
+      }
     }
     return {
       createdAt: typeof v.createdAt === 'string' ? v.createdAt : '',
       at: typeof v.at === 'string' ? v.at : '',
       replies: out,
+      route: route,
     };
   }
 
@@ -216,10 +225,20 @@ window.MA.handoverChecklist = (function() {
   // 控えと返信から、いまの状態を出す。控えが無ければ空。
   function current() {
     var s = _load();
-    if (!s.checklist) return { items: [], summary: summary([]) };
+    var route = (s.reply && s.reply.route) || null;
+    if (!s.checklist) return { items: [], summary: summary([]), route: route };
     var m = merge(s.checklist, s.reply);
     return { items: m, summary: summary(m), createdAt: s.checklist.createdAt,
-      repliedAt: s.reply ? s.reply.at : '' };
+      repliedAt: s.reply ? s.reply.at : '', route: route };
+  }
+
+  // routeLine — 新人が順路をどこまで辿ったか。渡した側の画面に出す 1 行。
+  // 「渡した」で終わらせず「辿れたか」まで見えるようにするための文。
+  function routeLine(route) {
+    var HR = window.MA.handoffRoute;
+    var r = route || null;
+    if (!r || !HR) return '';
+    return '新人の' + HR.progressLine(r.total, r.seen);
   }
 
   function clear() { _state = { checklist: null, reply: null }; _persist(); }
@@ -230,16 +249,19 @@ window.MA.handoverChecklist = (function() {
 
   var REPLY_SCRIPT = [
     '(function(){',
-    '  var box = document.getElementById("hc-list"); if (!box) return;',
+    '  var box = document.getElementById("hc-list");',
+    '  var save = document.getElementById("hc-save");',
+    '  if (!box && !save) return;',
     '  var state = {};',
-    '  var createdAt = box.getAttribute("data-created-at") || "";',
+    '  var createdAt = box ? (box.getAttribute("data-created-at") || "") : "";',
     '  function refresh(){',
+    '    if (!box) return;',
     '    var total = box.querySelectorAll("li[data-item-id]").length, answered = 0, unclear = 0;',
     '    for (var k in state) { if (state[k]) { answered++; if (state[k] === "unclear") unclear++; } }',
     '    var s = document.getElementById("hc-state");',
     '    if (s) s.textContent = "回答 " + answered + " / " + total + " 件 ・ 分からなかった " + unclear + " 件";',
     '  }',
-    '  box.addEventListener("click", function(ev){',
+    '  if (box) box.addEventListener("click", function(ev){',
     '    var b = ev.target && ev.target.closest ? ev.target.closest("button[data-status]") : null;',
     '    if (!b) return;',
     '    var li = b.closest("li"); var id = li && li.getAttribute("data-item-id"); if (!id) return;',
@@ -251,12 +273,18 @@ window.MA.handoverChecklist = (function() {
     '    }',
     '    refresh();',
     '  });',
-    '  var save = document.getElementById("hc-save");',
     '  if (save) save.addEventListener("click", function(){',
     '    var replies = {};',
     '    for (var k in state) { if (state[k]) replies[k] = state[k]; }',
+    // 見る順をどこまで辿ったかを同じ 1 ファイルに入れる (返す手を増やさない)。
+    '    var hr = document.getElementById("hr-state");',
+    '    var list = document.getElementById("hr-list");',
+    '    var route = hr && list ? {',
+    '      total: parseInt(list.getAttribute("data-total"), 10) || 0,',
+    '      seen: parseInt(hr.getAttribute("data-seen"), 10) || 0,',
+    '      at: new Date().toISOString() } : null;',
     '    var text = JSON.stringify({ kind: "handover-reply", createdAt: createdAt,',
-    '      at: new Date().toISOString(), replies: replies }, null, 2);',
+    '      at: new Date().toISOString(), replies: replies, route: route }, null, 2);',
     '    var a = document.createElement("a");',
     '    a.href = URL.createObjectURL(new Blob([text], { type: "application/json" }));',
     '    a.download = "handover-reply.json"; a.click();',
@@ -330,6 +358,7 @@ window.MA.handoverChecklist = (function() {
     receive: receive,
     reply: reply,
     current: current,
+    routeLine: routeLine,
     clear: clear,
     renderHtml: renderHtml,
     styleCss: styleCss,
