@@ -253,9 +253,9 @@ window.MA.handoffRoute = (function() {
 
   var CSS = [
     'ol.hr{list-style:none;padding:0;margin:8px 0 4px;counter-reset:none;}',
-    'ol.hr li{display:flex;gap:8px;background:#fff;border:1px solid #d5d5da;border-radius:4px;',
+    'ol.hr > li{display:flex;gap:8px;background:#fff;border:1px solid #d5d5da;border-radius:4px;',
     'padding:8px 10px;margin-bottom:6px;}',
-    'ol.hr li[data-seen="1"]{background:#f1f7f2;border-color:#9ac9ad;}',
+    'ol.hr > li[data-seen="1"]{background:#f1f7f2;border-color:#9ac9ad;}',
     'ol.hr .hr-seen{flex:0 0 auto;align-self:flex-start;font-size:13px;line-height:1;',
     'width:24px;height:24px;border:1px solid #b5b5bd;background:#f3f3f6;border-radius:4px;cursor:pointer;}',
     'ol.hr .hr-seen[aria-pressed="true"]{background:#d6f5e0;border-color:#4a9a6a;}',
