@@ -514,6 +514,25 @@ function baselineFiles(prev, options) {
   return null;
 }
 
+// 内容が変わった図ごとの増減。控えの本文が手元にある run (--since-files) でだけ出す。
+// 既定は 10 枚まで。打ち切ったら残りを必ず言う (「これで全部」と読ませない)。
+function changedDetailLines(fd, options) {
+  const opts = options || {};
+  const MA = opts.MA;
+  const FCD = MA && MA.fileChangeDetail;
+  if (!FCD || !fd || !opts.prevDocs || !opts.curDocs) return [];
+  const changed = (fd.dataChanged || []).concat(fd.templateChanged || []);
+  if (!changed.length) return [];
+  const rows = FCD.sort(FCD.rows(changed, opts.prevDocs, opts.curDocs));
+  const cap = opts.pairsMax > 0 ? opts.pairsMax : 10;
+  const out = [];
+  for (const l of FCD.lines(rows.slice(0, cap))) out.push('  変化の中身: ' + l);
+  if (rows.length > cap) {
+    out.push(`  変化の中身: ほか ${rows.length - cap} 枚 (--pairs-max で全部出す)`);
+  }
+  return out;
+}
+
 // 人が読む 1 行ずつの要約。--summary のときだけ使う。
 function formatSummary(report, prev, options) {
   const opts = options || {};
@@ -663,7 +682,12 @@ function formatSummary(report, prev, options) {
     const base = baselineFiles(prev, opts);
     if (prev || base) {
       if (opts.prevFilesFrom) lines.push(`ファイル内容の比較元: ${opts.prevFilesFrom} (控えのフォルダから指紋を採り直した)`);
-      for (const l of auditScope.formatFileDiff(auditScope.diffFiles(base, report.files), report.files)) lines.push(l);
+      const fd = auditScope.diffFiles(base, report.files);
+      for (const l of auditScope.formatFileDiff(fd, report.files)) lines.push(l);
+      // BLK-reviewer-20260916-0046: 変わった図は名前だけでなく、何行消えたかと
+      // 代表行まで出す。ここで出さないと、指摘に具体を書くために控えのフォルダと
+      // 現物を diff コマンドで突き合わせ直すことになり、その手間が枚数ぶん増える。
+      for (const l of changedDetailLines(fd, opts)) lines.push(l);
     }
   }
   return lines.join('\n');
