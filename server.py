@@ -1244,6 +1244,23 @@ class Handler(BaseHTTPRequestHandler):
     def _version_path(self, save_dir, dt, stamp):
         return self._versions_dir(save_dir) / (dt + self.VERSION_SEP + stamp + '.puml')
 
+    @staticmethod
+    def _stamp_key(stamp):
+        """刻印を並べ替えの鍵にする。
+
+        BLK-primary-20260916-0100: 同じ秒の 2 本目以降は `20260914-001159.2` の
+        ように連番が付く。文字列のまま並べると `.2` が `.18` より新しいことに
+        なり、一覧の「新しい順」が嘘になるうえ、上限を超えた分を捨てるときに
+        **どれが古いのかを取り違えて、まだ中身のある版を先に捨てる**。
+        連番は数として読む。
+        """
+        base, sep, suffix = str(stamp).partition('.')
+        try:
+            n = int(suffix) if sep else 0
+        except ValueError:
+            n = 0
+        return (base, n)
+
     def _version_stamps(self, save_dir, dt):
         """`dt` の過去版の刻印を新しい順に返す。無ければ空リスト。"""
         vdir = self._versions_dir(save_dir)
@@ -1255,7 +1272,7 @@ class Handler(BaseHTTPRequestHandler):
                     stamps.append(p.stem[len(prefix):])
         except OSError:
             return []
-        stamps.sort(reverse=True)
+        stamps.sort(key=self._stamp_key, reverse=True)
         return stamps
 
     def _version_counts(self, save_dir):

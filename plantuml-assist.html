@@ -826,6 +826,44 @@ html, body {
   font-size: 10px;
   color: var(--text-secondary);
 }
+/* 中身が減ったまま保存された図に出す、戻す先の名指し (BLK-primary-20260916-0100)。
+   20 行ぜんぶ同じ見た目の一覧から「どれに戻せば直るか」を当てさせない。 */
+#folder-panel .folder-version-shrink {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 4px;
+  padding: 4px 5px;
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  background: rgba(127, 127, 127, 0.08);
+  max-width: 100%;
+  box-sizing: border-box;
+}
+#folder-panel .folder-version-shrink-text {
+  font-size: 10px;
+  color: var(--text-primary);
+  line-height: 1.4;
+  /* 図名が長いと 1 行に収まらない。パネルからはみ出させずに折り返す。 */
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+#folder-panel button.folder-version-shrink-restore {
+  align-self: flex-start;
+  max-width: 100%;
+  font-size: 10px;
+  padding: 1px 6px;
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  background: var(--accent);
+  color: var(--bg-primary);
+  /* 刻印つきの文言はパネル幅を超える。折り返して幅を広げない。 */
+  white-space: normal;
+  text-align: left;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+#folder-panel button.folder-version[data-version-best="1"] { border-color: var(--accent); }
 /* 版 1 本ぶんの行。「開く」と「戻す」を横に並べる (BLK-primary-20260913-0306-friction) */
 #folder-panel .folder-version-row { display: flex; gap: 2px; align-items: stretch; }
 #folder-panel button.folder-version-restore {

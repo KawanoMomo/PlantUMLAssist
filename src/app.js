@@ -10062,6 +10062,33 @@ function setupTabs() {
   // BLK-junior-20260908-2003: 図名 → 上書き前に控えてある版の数と、本体がもう
   // 無いのに版だけ残っている図。server が一覧と同じ呼び出しで返す。
   var versionCounts = {};
+  // 図名 → いまの本文の行数 (BLK-primary-20260916-0100)。
+  var versionNowLines = {};
+
+  // いま保存されている中身の行数。開いているタブがあればそちらを優先する
+  // (一覧を出したあとに直した分まで数に入れる)。無ければ保存フォルダから読む。
+  // 読めなければ null (空洞化の判定をやめる。当てずっぽうで戻す先を勧めない)。
+  function _folderLineCount(name) {
+    try {
+      var WS = window.MA.workspace;
+      var list = (WS && WS.list) ? WS.list() : [];
+      for (var i = 0; i < list.length; i++) {
+        if (list[i] && list[i].name === name && typeof list[i].dsl === 'string') {
+          return Promise.resolve(list[i].dsl.split('\n').length);
+        }
+      }
+    } catch (e) {}
+    if (typeof versionNowLines[name] === 'number') {
+      return Promise.resolve(versionNowLines[name]);
+    }
+    // 版の一覧を開いたときだけ読む (一覧の応答に全図の本文を積まない)。
+    return Promise.resolve(window.MA.workspace.loadFile(name, _wsFileDir()))
+      .then(function(text) {
+        if (typeof text !== 'string') return null;
+        versionNowLines[name] = text.split('\n').length;
+        return versionNowLines[name];
+      }, function() { return null; });
+  }
   var goneVersions = [];
   // BLK-junior-20260908-2003: 図名 → 図種。「自分の状態遷移図が無い」を、
   // 22 枚を 1 枚ずつ開いて確かめるのではなく一覧の時点で言うため。
@@ -10501,8 +10528,12 @@ function setupTabs() {
       // BLK-junior-20260908-2003: 上書きで消えた中身の控え。一覧の時点で
       // 「この図には前の版がある」「本体は消えたが版は残っている」を出す。
       versionCounts = {};
+      versionNowLines = {};
       entries.forEach(function(e) {
         if (e && e.name && typeof e.versions === 'number') versionCounts[e.name] = e.versions;
+        // BLK-primary-20260916-0100: 「いま何行か」は空洞化を見分ける物差し。
+        // 版の一覧を開くたびに本文を読み直さずに済むよう、一覧の時点で控える。
+        if (e && e.name && typeof e.lines === 'number') versionNowLines[e.name] = e.lines;
       });
       goneVersions = window.MA.versionHistory
         ? window.MA.versionHistory.goneRows(res) : [];
@@ -12245,16 +12276,45 @@ function setupTabs() {
     box.textContent = '読み込み中…';
     if (host.nextSibling) host.parentNode.insertBefore(box, host.nextSibling);
     else host.parentNode.appendChild(box);
-    loadVersions(name).then(function(rows) {
+    Promise.all([loadVersions(name), _folderLineCount(name)]).then(function(got) {
+      var rows = got[0];
+      var nowLines = got[1];
       box.textContent = '';
       if (!rows.length) {
         box.textContent = '控えてある版がありません';
         return;
       }
+      // BLK-primary-20260916-0100: 空洞化を直す側は、20 行ぜんぶ同じ見た目の
+      // 一覧から「どれに戻せば直るか」を当てられない (新しい方はもう空洞化の後)。
+      // 行数で機械的に分かるので、戻す先を名指しして先頭に出す。
+      var notice = VH.shrinkNotice ? VH.shrinkNotice(name, rows, nowLines) : null;
+      if (notice) {
+        var nb = document.createElement('div');
+        nb.className = 'folder-version-shrink';
+        nb.setAttribute('data-version-shrink', name);
+        var nt = document.createElement('div');
+        nt.className = 'folder-version-shrink-text';
+        nt.textContent = notice.text;
+        nt.title = notice.detail;
+        nb.appendChild(nt);
+        var nbtn = document.createElement('button');
+        nbtn.type = 'button';
+        nbtn.className = 'folder-version-shrink-restore';
+        nbtn.setAttribute('data-version-shrink-restore', notice.stamp);
+        nbtn.textContent = notice.restoreLabel;
+        nbtn.title = notice.detail;
+        nbtn.addEventListener('click', function(ev) {
+          ev.stopPropagation();
+          restoreVersionInto(name, notice.stamp);
+        });
+        nb.appendChild(nbtn);
+        box.appendChild(nb);
+      }
       rows.forEach(function(r) {
         var b = document.createElement('button');
         b.type = 'button';
         b.className = 'folder-version';
+        if (notice && r.stamp === notice.stamp) b.setAttribute('data-version-best', '1');
         b.setAttribute('data-version-stamp', r.stamp);
         b.setAttribute('data-version-of', name);
         b.textContent = r.label + (r.kind ? '  ' + r.kind : '')
