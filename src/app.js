@@ -3289,13 +3289,19 @@ function initCommandPalette() {
     var typeEl = document.getElementById('diagram-type');
     var spec = ADD_KINDS[typeEl ? typeEl.value : ''];
     if (!spec) return [];
+    // BLK-junior-20260916-0526: 用語 (子状態・複合状態) を知らない人は、
+    // 正しい語を打てないので入口に届かない。「入れ子」「中に入れる」のような
+    // 知っている言葉からも同じ入口に来られるようにする。
+    var AKV = window.MA.addKindVocab;
+    var dtype = typeEl ? typeEl.value : '';
     return spec.kinds.map(function(k) {
+      var plain = AKV ? AKV.words(dtype, k.value) : [];
       return {
         id: 'add-' + spec.prefix + '-' + k.value,
         group: 'add',
         title: k.label,
         hint: '末尾に追加',
-        keywords: ['add', 'ついか', k.value, k.label],
+        keywords: ['add', 'ついか', k.value, k.label].concat(plain),
         run: function() { openTailForm(spec.prefix, k.value); },
       };
     });
