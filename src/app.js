@@ -6544,6 +6544,8 @@ function setupAuditTimeline() {
 // 隣のフォルダを一覧から選び、その場で図を出す。設定には一切書かない。
 var _peekDirs = [];
 var _peekDir = null;
+// BLK-junior-20260916-0546: 📂 一覧から持ち越した絞り込みの名前。
+var _peekQuery = '';
 var _peekNames = [];
 var _peekName = null;
 var _peekDsl = '';        // 今出している 1 枚の本文 (テンプレートの材料)
@@ -8617,6 +8619,26 @@ function renderPeekFiles() {
   head.id = 'peek-files-head';
   head.textContent = _peekDir ? (_peekNames.length + ' 枚') : 'フォルダを選んでください';
   el.files.appendChild(head);
+  // 持ち越した名前で絞っているなら、そう言って外せるようにする
+  // (絞られていることに気付かず「フォルダに 1 枚しか無い」と読ませない)。
+  if (_peekQuery && _peekDir) {
+    var FF0 = window.MA.folderFilter;
+    var qbar = document.createElement('div');
+    qbar.className = 'peek-query';
+    qbar.id = 'peek-query';
+    var qtext = document.createElement('span');
+    qtext.id = 'peek-query-text';
+    qtext.textContent = FF0 && FF0.peekSummaryText
+      ? FF0.peekSummaryText(peekVisibleNames().length, _peekNames.length, _peekQuery) : '';
+    qbar.appendChild(qtext);
+    var qclear = document.createElement('button');
+    qclear.type = 'button';
+    qclear.id = 'peek-query-clear';
+    qclear.textContent = '絞り込みを外す';
+    qclear.addEventListener('click', function() { _peekQuery = ''; renderPeekFiles(); });
+    qbar.appendChild(qclear);
+    el.files.appendChild(qbar);
+  }
   appendPeekKindSummary(el.files);
   appendPeekVerdictOffer(el.files);
   appendPeekSvgSection(el.files);
@@ -8799,7 +8821,14 @@ function appendPeekSvgSection(host) {
 function peekVisibleNames() {
   var PC = window.MA.peekChanges;
   var names = PC ? PC.visibleNames(_peekChanges, _peekChangedOnly) : null;
-  return names || _peekNames;
+  names = names || _peekNames;
+  // 一覧から持ち越した名前で絞る (同じ規則。外せば全枚に戻る)。
+  var FF = window.MA.folderFilter;
+  if (_peekQuery && FF) {
+    var hits = FF.filter(names, _peekQuery);
+    if (hits.length) return hits;
+  }
+  return names;
 }
 
 // 行の印。「＋2」だけでなく内訳を title に置く (部品が増えたのか、つなぎ方が
@@ -9575,10 +9604,13 @@ function _ensurePeekDirs() {
     }).catch(function() { return false; });
 }
 
-function openPeekFolder() {
+function openPeekFolder(opts) {
   var el = _peekEls();
   var PF = window.MA.peekFolder;
   if (!el.modal || !PF) return Promise.resolve(false);
+  // BLK-junior-20260916-0546: 📂 一覧で打っていた名前を引き継ぐ。
+  // 探している図の名前をもう一度打たせない。
+  _peekQuery = (opts && opts.query != null) ? String(opts.query) : '';
   el.modal.style.display = 'flex';
   var dir = _wsFileDir();
   return fetch('/peek-dirs?dir=' + encodeURIComponent(dir))
@@ -13453,6 +13485,26 @@ function setupTabs() {
     state.className = 'folder-filter-state';
     state.id = 'folder-filter-state';
     bar.appendChild(state);
+    // BLK-junior-20260916-0546: 一覧は保存先フォルダだけを見せている。
+    // 先輩の図をここで探していた人は「無い」で止まるか、保存先ごと切り替えて
+    // 上書き事故の危险を背負うしかなかった。読むだけの入口をこの場に置き、
+    // 打った名前をそのまま持ち越す (保存先は動かない)。
+    var peek = document.createElement('button');
+    peek.type = 'button';
+    peek.className = 'folder-peek-open';
+    peek.id = 'folder-peek-open';
+    peek.textContent = '👀 他フォルダを読むだけ見る';
+    peek.title = '保存先を変えずに、他の人のフォルダの図を読むだけ見る。'
+      + '絞り込んでいる名前はあちらへそのまま渡る';
+    peek.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      openPeekFolder({ query: folderQuery });
+    });
+    bar.appendChild(peek);
+    var hint = document.createElement('span');
+    hint.className = 'folder-peek-hint';
+    hint.id = 'folder-peek-hint';
+    bar.appendChild(hint);
     return bar;
   }
 
@@ -13475,6 +13527,15 @@ function setupTabs() {
     }
     var state = panel.querySelector('.folder-filter-state');
     if (state) state.textContent = FF.summaryText(shown, rows.length, folderQuery);
+    // 探していて 0 枚のときだけ、読むだけの入口を強く出す。
+    var hint = panel.querySelector('.folder-peek-hint');
+    if (hint && FF.peekHintText) {
+      hint.textContent = FF.peekHintText(shown, folderQuery);
+      var urged = FF.peekUrged(shown, folderQuery);
+      hint.className = 'folder-peek-hint' + (urged ? ' urged' : '');
+      var pk = panel.querySelector('.folder-peek-open');
+      if (pk) pk.className = 'folder-peek-open' + (urged ? ' urged' : '');
+    }
   }
 
   function folderPickBar() {
