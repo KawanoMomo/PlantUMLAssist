@@ -113,9 +113,13 @@ describe('review-board.build — 4 つの情報源を 1 枚に束ねる', functi
     // regressed は BLK-reviewer-20260914-2206 で足した内数 (継続のうち本当の出戻り)。
     // outOfScope は同 3 件目で足した枠 (--only で回していない監査の指摘)。
     // ここは全部回した回なので常に 0。
+    // ledger は BLK-reviewer-20260914-2206 (差し戻し 1 回目) で足した内数
+    // (findings.js の台帳で当たった継続)。台帳を渡していないこの回は 0。
+    // seen / gone も同 (差し戻し 1 回目) で足した枠 (前回の突合結果と実体 id で
+    // 比べた内数)。前回の突合行を渡していないこの回は 0。
     expect(view.counts).toEqual({
-      carried: 3, regressed: 0, resolved: 1, outOfScope: 0, sameDoc: 0, unmatched: 0,
-      fresh: 1, changed: 2,
+      carried: 3, ledger: 0, regressed: 0, resolved: 1, outOfScope: 0, sameDoc: 0, unmatched: 0,
+      fresh: 1, seen: 0, gone: 0, changed: 2,
     });
   });
 

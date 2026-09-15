@@ -382,3 +382,56 @@ test('手順8 対象を切り替えて打っても、変わった図の数が打
     try { fs.rmSync(root, { recursive: true, force: true }); } catch (e) {}
   }
 });
+
+// BLK-reviewer-20260914-2206 (差し戻し 1 回目): 素の `--board` 1 本で済ませたいのに、
+// 「今回の新規 24 件」が毎 tick 出続けていた。中身は前 tick と同じ整合/イベントの行で、
+// 指摘.md に書き落としているだけ。--board は「前回の指摘.md に書かれているか」で
+// 新規を決めていたので、書き落とした指摘は永久に新規に出る。reviewer はそのたびに
+// findings.js と prev/ で裏取りしていた。新規は前回の突合結果と実体 id
+// (findings.js が継続を数えるのと同じ id) だけで決める。
+test('手順8 前回も出ていた指摘は、指摘.md に書き落としていても新規に出ない', () => {
+  const fs = require('fs');
+  const os = require('os');
+  const path = require('path');
+  const cp = require('child_process');
+  const audit = path.resolve(__dirname, '..', '..', '..', 'tools', 'audit.js');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pua-r08e-'));
+  const primary = path.join(root, 'primary');
+  const write = (name, body) => {
+    fs.mkdirSync(primary, { recursive: true });
+    fs.writeFileSync(path.join(primary, name), '@startuml\n' + body + '\n@enduml\n', 'utf-8');
+  };
+  write('driver_class.puml', 'class Timer {\n  +Timer_Init()\n}');
+  write('timer_state.puml', '[*] --> Idle\nIdle --> Running : Timer_Start()\nRunning --> Idle : Timer_Stop()');
+  const board = () => {
+    const r = cp.spawnSync(process.execPath, [audit, primary, '--board'], { cwd: root, encoding: 'utf-8' });
+    expect(r.status, r.stderr).toBe(0);
+    return r.stdout;
+  };
+  const fresh = (out) => {
+    const m = out.match(/新規 (\d+) 件/);
+    expect(m, out).toBeTruthy();
+    return Number(m[1]);
+  };
+  try {
+    // 1 回目は控えが無いので全部が新規 (初回はそう言い切る)。
+    const first = board();
+    expect(fresh(first)).toBeGreaterThan(0);
+    expect(first).toContain('この対象の控えはありません');
+    // 図を 1 バイトも触らずにもう 1 本。指摘.md は無い = 何も書き留めていない。
+    const second = board();
+    expect(fresh(second)).toBe(0);
+    expect(second).toContain('前回の突合にもあった');
+    expect(second).toContain('新規ではありません');
+    // 何を根拠に新規を決めたかが画面に出るので、findings.js との手作業の突き合わせが要らない。
+    expect(second).toContain('前回控えの突合結果と実体 id で比較');
+    // 本当に新しい欠陥が出れば、ちゃんと新規に出る (黙って 0 件にしているのではない)。
+    write('timer_state.puml',
+      '[*] --> Idle\nIdle --> Running : Timer_Start()\nRunning --> Idle : Timer_Stop()\nRunning --> Fault : Timer_Fault()');
+    const third = board();
+    expect(fresh(third)).toBeGreaterThan(0);
+    expect(third).toContain('Fault');
+  } finally {
+    try { fs.rmSync(root, { recursive: true, force: true }); } catch (e) {}
+  }
+});
