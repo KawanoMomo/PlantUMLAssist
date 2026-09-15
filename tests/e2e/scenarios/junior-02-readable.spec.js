@@ -975,3 +975,92 @@ test('手順2 活動図の本文を、先輩のクラス図タブに行かずに
   // 先輩のファイルは読むだけ (書き換えない)。
   expect(await S.readDoc(page, SENIOR_DIR, 'driver_common_class')).toBe(SENIOR_COMMON_CLASS);
 });
+
+// BLK-junior-20260916-0046-wish: 17 周目の手順 2 は「指摘の表記揺れ 4 組を canonical に
+// 揃える」。揃える先は reviewer が決めて登録簿 (_names.json) に置いてあるのに、GUI には
+// 「どのファイルにその揺れが残っているか」が無いので、junior は 📂 一覧と登録簿を
+// 見比べ、該当しそうな図を 1 枚ずつ開いて本文を読み、直して保存する、を 10 回繰り返した。
+// 組を選べば在処が出て、チェックした分が保存まで 1 回で終わることを確かめる。
+const UNIFY_ROOT = DIR + '-unify';
+const UNIFY_DIR = UNIFY_ROOT + '/junior';
+
+const U_GPIO = [
+  '@startuml', 'title GPIOドライバ初期化シーケンス',
+  'participant Gpio_Driver', 'participant IrqCtrl',
+  'Gpio_Driver -> IrqCtrl : Gpio_Init()',
+  '@enduml',
+].join('\n');
+const U_SPI = [
+  '@startuml', 'title SPIドライバ初期化シーケンス',
+  'participant Spi_Driver', 'participant Irq_Ctrl', 'participant ClockCtrl',
+  'Spi_Driver -> Irq_Ctrl : Spi_Init()',
+  'Spi_Driver -> ClockCtrl : 分周設定',
+  '@enduml',
+].join('\n');
+// 既に揃っている図。対象に挙がってはいけない (直す必要が無い図を触らない)。
+const U_OK = [
+  '@startuml', 'title TIMERドライバ初期化シーケンス',
+  'participant Timer_Driver', 'participant IRQCtrl',
+  'Timer_Driver -> IRQCtrl : Timer_Init()',
+  '@enduml',
+].join('\n');
+
+async function putRegistry(page, dir, entries) {
+  return page.evaluate(async (a) => {
+    const r = await fetch('/name-registry', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dir: a.dir, entries: a.entries }),
+    });
+    return r.ok;
+  }, { dir, entries });
+}
+
+test('手順2 登録簿の組を選ぶだけで、揺れの残る図がまとめて正式表記に揃う', async ({ page }) => {
+  await S.bootWithSaveDir(page, UNIFY_DIR);
+  await S.clearDir(page, UNIFY_DIR);
+  await S.putDoc(page, UNIFY_DIR, 'gpio_init_sequence', U_GPIO);
+  await S.putDoc(page, UNIFY_DIR, 'spi_sequence', U_SPI);
+  await S.putDoc(page, UNIFY_DIR, 'timer_init_sequence', U_OK);
+  // 揃える先は reviewer が決めて置いた 1 冊 (保存フォルダの親)。
+  await putRegistry(page, UNIFY_DIR, [
+    { canonical: 'IRQCtrl', variants: ['IrqCtrl', 'Irq_Ctrl'] },
+    { canonical: 'Clock_Ctrl', variants: ['ClockCtrl'] },
+  ]);
+  await page.reload();
+  await page.waitForSelector('#btn-tab-unify');
+
+  await page.locator('#btn-tab-unify').click();
+  await expect(page.locator('#unify-panel')).toHaveClass(/open/);
+
+  // 到達条件その1: 何組が揃っていないかが、ファイルを 1 枚も開かずに出る。
+  await expect(page.locator('#unify-summary')).toHaveText('2 組 / 6 件が揃っていません', { timeout: 15000 });
+
+  // 到達条件その2: 組を選ぶと、揺れの残る図だけが在処として並ぶ
+  // (既に揃っている timer_init_sequence は出ない)。
+  await page.locator('#unify-entry').selectOption('irqctrl');
+  const files = page.locator('#unify-panel .unify-file');
+  await expect(files).toHaveCount(2);
+  await expect(files.filter({ hasText: 'gpio_init_sequence' })).toHaveCount(1);
+  await expect(files.filter({ hasText: 'spi_sequence' })).toHaveCount(1);
+  await expect(files.filter({ hasText: 'timer_init_sequence' })).toHaveCount(0);
+
+  // 到達条件その3: チェックした分をまとめて当てると、保存まで終わっている
+  // (開いて直して保存する往復が無い)。
+  await page.locator('#btn-unify-apply').click();
+  await expect(page.locator('#unify-result')).toHaveAttribute('data-applied-docs', '2', { timeout: 15000 });
+  await expect(page.locator('#unify-result')).toContainText('IRQCtrl に 4 件 / 2 枚を揃えました');
+
+  const gpio = await S.readDoc(page, UNIFY_DIR, 'gpio_init_sequence');
+  expect(gpio).toContain('participant IRQCtrl');
+  expect(gpio).not.toContain('IrqCtrl');
+  const spi = await S.readDoc(page, UNIFY_DIR, 'spi_sequence');
+  expect(spi).toContain('Spi_Driver -> IRQCtrl : Spi_Init()');
+  expect(spi).not.toContain('Irq_Ctrl');
+  // 揃っていた図は触られない。
+  expect(await S.readDoc(page, UNIFY_DIR, 'timer_init_sequence')).toBe(U_OK);
+
+  // 到達条件その4: 当て終わった組は一覧から消え、残りの組がそのまま次に選べる。
+  await expect(page.locator('#unify-summary')).toHaveText('1 組 / 2 件が揃っていません', { timeout: 15000 });
+  await expect(page.locator('#unify-entry option')).toHaveCount(1);
+  await expect(page.locator('#unify-entry option').first()).toHaveText(/^Clock_Ctrl ← ClockCtrl/);
+});
