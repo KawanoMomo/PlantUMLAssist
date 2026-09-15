@@ -431,7 +431,7 @@ API_INDEX = {
          'request': "{dir, from, to, hits}"},
         {'endpoint': 'GET /doc-sets', 'summary': 'そのフォルダに登録した資料セット', 'request': '?dir='},
         {'endpoint': 'POST /doc-sets', 'summary': '資料セットを 1 つ登録する (同じ名前は置き換え)',
-         'request': "{dir, name, docs}"},
+         'request': "{dir, name, docs, items}"},
         {'endpoint': 'DELETE /doc-sets', 'summary': '資料セットを 1 つ消す', 'request': '?dir=&name='},
         {'endpoint': 'POST /file-roles', 'summary': '保存フォルダの _roles.json を置き換える',
          'request': "{dir, roles}"},
@@ -1810,7 +1810,33 @@ class Handler(BaseHTTPRequestHandler):
                 continue
             out.append({'name': name,
                         'docs': [d for d in docs if isinstance(d, str) and d],
+                        'items': self._sanitize_set_items(s.get('items')),
                         'at': s.get('at') if isinstance(s.get('at'), str) else ''})
+        return out
+
+    # BLK-primary-20260916-0100-wish: 資料に貼るときの体裁 (見出し・1 行説明) は
+    # 図の中身ではなく資料セットの持ち物なので、DSL ではなくここに置く。
+    # 見出しと説明は資料の 1 行に載る文なので、改行は畳んで 1 行に保つ。
+    @staticmethod
+    def _sanitize_set_items(items):
+        out = []
+        seen = set()
+        if not isinstance(items, list):
+            return out
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            name = it.get('name')
+            if not isinstance(name, str) or not name.strip() or name in seen:
+                continue
+            seen.add(name)
+
+            def _line(v):
+                return ' '.join(str(v).split()) if isinstance(v, str) else ''
+
+            out.append({'name': name,
+                        'heading': _line(it.get('heading')),
+                        'note': _line(it.get('note'))})
         return out
 
     def _write_doc_sets(self, save_dir, sets):
@@ -1953,7 +1979,13 @@ class Handler(BaseHTTPRequestHandler):
             return
         name = name.strip()
         save_dir = self._autosave_resolve_dir(data.get('dir'))
+        prev = [s for s in self._read_doc_sets(save_dir) if s.get('name') == name]
+        # items を渡さない登録 (図の組だけ入れ替える) では、前に書いた体裁を残す。
+        # 図を足し直しただけで見出しと説明が消えると、貼る前の手戻りが戻ってくる。
+        raw_items = data.get('items') if 'items' in data else (prev[0].get('items') if prev else [])
         entry = {'name': name, 'docs': names,
+                 'items': [it for it in self._sanitize_set_items(raw_items)
+                           if it['name'] in names],
                  'at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}
         sets = [s for s in self._read_doc_sets(save_dir) if s.get('name') != name]
         sets.insert(0, entry)
