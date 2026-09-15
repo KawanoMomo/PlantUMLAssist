@@ -650,6 +650,11 @@ html, body {
 }
 #folder-panel .folder-recent-label { color: var(--text-secondary); white-space: nowrap; }
 #folder-panel button.folder-recent-item {
+  /* 一覧の行は横幅いっぱいに伸びる。履歴は 1 行に並ぶ札にしたいので、
+     伸び縮みを止めて中身の幅に畳む。 */
+  width: auto;
+  flex: 0 0 auto;
+  text-align: left;
   border: 1px solid var(--accent);
   background: var(--bg-secondary);
   color: var(--accent);
