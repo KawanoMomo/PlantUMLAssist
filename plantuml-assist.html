@@ -2255,6 +2255,16 @@ html, body {
 #ab-tools { margin-left: auto; display: flex; align-items: center; gap: 6px; }
 #ab-body { flex: 1; overflow: auto; padding: 10px 14px; }
 .ab-empty { color: var(--text-secondary); font-size: 12px; padding: 12px 0; }
+/* BLK-reviewer-20260915-2240-wish: 出典ごとに畳んだ表。出典の組み合わせが
+   1 つの塊で、その中に指摘が並ぶ。出口の名前は本文と見分けが付く印にする。 */
+.fo-group { margin-bottom: 14px; }
+.fo-group-head { font-size: 11px; font-weight: bold; color: var(--accent); padding: 4px 0; border-bottom: 1px solid var(--border); }
+.fo-count { color: var(--text-secondary); font-weight: normal; }
+.fo-id { font-family: var(--font-mono); white-space: nowrap; }
+.fo-state { white-space: nowrap; }
+.fo-origins { color: var(--text-secondary); }
+.fo-origin { display: inline-block; font-size: 10px; padding: 0 4px; margin-right: 4px; border: 1px solid var(--border); border-radius: 3px; color: var(--text-primary); }
+.fo-note { color: var(--accent-red); }
 .ab-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .ab-table th {
   text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--border);
@@ -7019,6 +7029,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/finding-ledger.js"></script>
 <script src="src/core/audit-board.js"></script>
 <script src="src/core/status-dashboard.js"></script>
+<script src="src/core/finding-origins.js"></script>
 <script src="src/core/save-guard.js"></script>
 <script src="src/core/save-check.js"></script>
 <script src="src/core/save-swap.js"></script>
@@ -7469,6 +7480,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <select id="ab-view" aria-label="表の見方">
           <option value="issues">指摘ごと</option>
           <option value="docs">図ごと (整合)</option>
+          <option value="origins">出典ごと (畳む)</option>
         </select>
         <select id="ab-kind" aria-label="カテゴリで絞る"></select>
         <select id="ab-doc" aria-label="図で絞る"></select>
