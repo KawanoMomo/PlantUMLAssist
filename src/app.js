@@ -360,6 +360,10 @@ function currentIndentId() {
 // design 5a: 描画に失敗したとき、直前の図を残してエラーを重ねるか。
 var currentErrorOverlay = true;
 var syncStateTable = function() {};
+// BLK-junior-20260916-0526-wish: 入れ子ツリー。どの階層を大きく見ているかを
+// ここで持ち、焦点がある間は /render にその階層だけの DSL を送る。
+var syncStateTree = function() {};
+var stateTreeFocusId = '';
 var renderTimer = null;
 var RENDER_DEBOUNCE_MS = 150;
 // design 5a: 設定「レンダリング」に出す材料。
@@ -2493,6 +2497,130 @@ function init() {
     syncStateTable();
   })();
 
+  // 入れ子ツリー (BLK-junior-20260916-0526-wish)
+  // 子状態を足した後、入れ子の中身を確かめるのに 1 枚の図を拡大するしか
+  // なかった。ここは木で階層を出し、行を押すとその階層だけを図に描く。
+  // 木の組み立てと焦点の DSL は state-tree.js の純関数。
+  (function setupStateTree() {
+    var panel = document.getElementById('state-tree-panel');
+    var body = document.getElementById('state-tree-body');
+    var toggle = document.getElementById('btn-state-tree-toggle');
+    var bar = document.getElementById('state-tree-focus-bar');
+    var barLabel = document.getElementById('state-tree-focus-label');
+    var clearBtn = document.getElementById('btn-state-tree-focus-clear');
+    var STree = window.MA.stateTree;
+    if (!panel || !body || !toggle || !STree) return;
+
+    var open = false;
+
+    function esc(v) { return window.MA.htmlUtils.escHtml(v); }
+
+    function rowsHtml() {
+      var rows = STree.rows(currentParsed);
+      if (!rows.length) {
+        return '<div id="state-tree-summary">状態がまだありません。</div>';
+      }
+      var selIds = {};
+      (window.MA.selection.getSelected() || []).forEach(function(x) { selIds[x.id] = true; });
+      var html = '';
+      rows.forEach(function(r) {
+        var cls = 'stree-row' + (selIds[r.id] ? ' stree-selected' : '') +
+          (stateTreeFocusId === r.id ? ' stree-focused' : '');
+        html += '<div class="' + cls + '" data-tree-id="' + esc(r.id) + '"' +
+          ' data-tree-depth="' + r.depth + '" data-line="' + r.line + '"' +
+          ' style="margin-left:' + (r.depth * 16) + 'px">' +
+          '<span class="stree-twisty">' + (r.hasChildren ? '▾' : '·') + '</span>' +
+          '<span class="stree-label">' + esc(r.label) + '</span>' +
+          '<span class="stree-count">' +
+            (r.hasChildren ? '子 ' + r.childCount + ' ・ 子孫 ' + r.descendantCount : '') +
+          '</span>' +
+          '<button type="button" class="tb-btn stree-btn" data-tree-focus="' + esc(r.id) + '">' +
+            (stateTreeFocusId === r.id ? '表示中' : 'この階層だけ表示') +
+          '</button>' +
+          '<button type="button" class="tb-btn stree-btn" data-tree-add-child="' + esc(r.id) + '">' +
+            '＋ 子状態</button>' +
+          '</div>';
+      });
+      html += '<div id="state-tree-summary">' + esc(STree.summaryText(currentParsed)) +
+        ' — 行を押すとその状態を選びます。' +
+        '「この階層だけ表示」で中身を大きく見ながら編集できます。</div>';
+      return html;
+    }
+
+    syncStateTree = function() {
+      var isState = currentDiagramType === 'plantuml-state';
+      panel.hidden = !isState;
+      if (!isState) {
+        body.hidden = true;
+        if (bar) bar.hidden = true;
+        // 図種を変えたら焦点は消す (他の図にその階層は無い)。
+        stateTreeFocusId = '';
+        return;
+      }
+      // 焦点にしていた状態が DSL から消えたら全体に戻す。
+      if (stateTreeFocusId && !STree.byId(currentParsed, stateTreeFocusId)) stateTreeFocusId = '';
+      if (bar) {
+        bar.hidden = !stateTreeFocusId;
+        if (stateTreeFocusId && barLabel) {
+          barLabel.textContent = STree.focusLabel(currentParsed, stateTreeFocusId);
+        }
+      }
+      body.hidden = !open;
+      if (open) body.innerHTML = rowsHtml();
+    };
+
+    function setFocus(id) {
+      stateTreeFocusId = (stateTreeFocusId === id) ? '' : id;
+      syncStateTree();
+      renderSvg();
+    }
+
+    toggle.addEventListener('click', function() {
+      open = !open;
+      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      toggle.textContent = '入れ子ツリー / Hierarchy ' + (open ? '⌃' : '⌄');
+      syncStateTree();
+    });
+
+    if (clearBtn) {
+      clearBtn.addEventListener('click', function() {
+        stateTreeFocusId = '';
+        syncStateTree();
+        renderSvg();
+      });
+    }
+
+    body.addEventListener('click', function(e) {
+      var t = e.target;
+      var focusBtn = t && t.closest ? t.closest('[data-tree-focus]') : null;
+      if (focusBtn) { setFocus(focusBtn.getAttribute('data-tree-focus')); return; }
+
+      var addBtn = t && t.closest ? t.closest('[data-tree-add-child]') : null;
+      if (addBtn) {
+        // 木のその場から子を足す。右ペインへ戻らずに深い階層を伸ばせる。
+        var pid = addBtn.getAttribute('data-tree-add-child');
+        var SC = window.MA.stateChild;
+        if (!SC || !SC.canHaveChild(STree.byId(currentParsed, pid))) return;
+        var childId = SC.uniqueChildId(currentParsed, 'Sub');
+        var next = SC.addChild(mmdText, currentParsed, pid, childId, '');
+        if (next === mmdText) return;
+        mmdText = next;
+        suppressSync = true; editorEl.value = next; suppressSync = false;
+        scheduleRefresh();
+        return;
+      }
+
+      var row = t && t.closest ? t.closest('.stree-row') : null;
+      if (!row) return;
+      window.MA.selection.setSelected([{
+        type: 'state', id: row.getAttribute('data-tree-id'),
+        line: Number(row.getAttribute('data-line')),
+      }]);
+    });
+
+    syncStateTree();
+  })();
+
   // BLK-primary-20260907-0703: 右パネルの「Properties / 図の設定」タブ。
   var tabProps = document.getElementById('props-tab-props');
   var tabSettings = document.getElementById('props-tab-settings');
@@ -2795,6 +2923,7 @@ function init() {
     renderProps();
     // 表の選択枠を図・右パネルと同じ選択に合わせる。
     syncStateTable();
+    syncStateTree();
   });
 
   setupTabs();
@@ -27600,6 +27729,7 @@ function refresh() {
 
   renderProps(currentParsed);
   syncStateTable();
+  syncStateTree();
   renderSvg();
 }
 
@@ -28355,6 +28485,16 @@ function clearRenderError() {
   if (banner) { banner.hidden = true; banner.textContent = ''; }
 }
 
+// BLK-junior-20260916-0526-wish: 焦点中の階層だけの DSL。焦点が無ければ空で、
+// 呼ぶ側はこれまで通り図全体を描く。
+function stateTreeFocusText() {
+  if (!stateTreeFocusId) return '';
+  var STree = window.MA.stateTree;
+  if (!STree || currentDiagramType !== 'plantuml-state') return '';
+  try { return STree.focusDsl(mmdText, currentParsed, stateTreeFocusId) || ''; }
+  catch (e) { return ''; }
+}
+
 function renderSvg() {
   var mode = document.getElementById('render-mode').value || 'local';
   renderStatusEl.textContent = 'Rendering\u2026';
@@ -28368,10 +28508,15 @@ function renderSvg() {
     return now - startedAt;
   };
   var myGen = ++renderGen;
+  // BLK-junior-20260916-0526-wish: 入れ子ツリーで階層を選んでいる間は、
+  // その階層だけの DSL を描く (図の中で小さく潰れずに済む)。
+  // 図と DSL の行番号がずれるので、焦点中は overlay を作らない。
+  var focusDsl = stateTreeFocusText();
+  var renderText = focusDsl || mmdText;
   fetch('/render', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text: mmdText, mode: mode }),
+    body: JSON.stringify({ text: renderText, mode: mode }),
   }).then(function(resp) {
     var contentType = resp.headers.get('Content-Type') || '';
     if (!resp.ok) {
@@ -28415,7 +28560,7 @@ function renderSvg() {
       while (overlayEl.firstChild) overlayEl.removeChild(overlayEl.firstChild);
     }
     if (warnEl) { warnEl.style.display = 'none'; warnEl.textContent = ''; }
-    if (svgEl && currentModule && currentModule.buildOverlay) {
+    if (svgEl && !focusDsl && currentModule && currentModule.buildOverlay) {
       var report = currentModule.buildOverlay(svgEl, currentParsed, overlayEl, mmdText);
       if (report && warnEl) {
         var u = report.unmatched || {};

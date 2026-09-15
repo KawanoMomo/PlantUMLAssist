@@ -127,3 +127,115 @@ test('手順9 追加フォームからも、どの状態の中に入れるかを
   expect(await dsl(page)).toContain('state Uninit {');
   expect(await dsl(page)).toContain('state Boot');
 });
+
+// BLK-junior-20260916-0526-wish: 子状態を足した後の「中を見る」手立て。
+// 足す口 (上のテスト) はあっても、入れ子が深くなると元の 1 枚のズーム図の中でしか
+// 中身を確かめられず、どの階層に何があるか追えなかった。到達条件は
+// 「木で階層を辿れること」と「選んだ階層だけを図に大きく出して、全体に戻れること」。
+
+// 台本の手順 9 を進めた後の図 (親 Configured の中に子 2 つ、片方が孫を持つ)。
+const TIMER_NESTED = [
+  '@startuml',
+  'title TIMERドライバ状態遷移',
+  'state Uninit',
+  'state Configured {',
+  '  state Counting {',
+  '    state Tick',
+  '  }',
+  '  state Paused',
+  '  Counting --> Paused : Timer_Pause',
+  '  Paused --> Counting : Timer_Resume',
+  '}',
+  '[*] --> Uninit',
+  'Uninit --> Configured : Timer_Init',
+  'Configured --> Uninit : Timer_Stop',
+  '@enduml',
+].join('\n');
+
+async function openTree(page) {
+  await page.locator('#btn-state-tree-toggle').click();
+  await expect(page.locator('#state-tree-body')).toBeVisible();
+}
+
+test('手順9 入れ子ツリーで親→子→孫を辿れる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.typeDsl(page, TIMER_NESTED);
+
+  await openTree(page);
+  const rows = page.locator('#state-tree-body .stree-row');
+  // 木は図と同じ並び。親のすぐ下に子、その下に孫。
+  await expect(rows).toHaveCount(5);
+  const ids = await rows.evaluateAll((els) => els.map((e) => e.getAttribute('data-tree-id')));
+  expect(ids).toEqual([
+    'Uninit', 'Configured', 'Configured.Counting', 'Configured.Counting.Tick', 'Configured.Paused',
+  ]);
+  // 深さは字下げで見える (孫は親より深い)。
+  const depths = await rows.evaluateAll((els) => els.map((e) => e.getAttribute('data-tree-depth')));
+  expect(depths).toEqual(['0', '0', '1', '2', '1']);
+  // どの親が何を抱えているかが数で読める。
+  await expect(rows.nth(1)).toContainText('子 2');
+  await expect(rows.nth(1)).toContainText('子孫 3');
+  await expect(page.locator('#state-tree-summary')).toContainText('3 段');
+
+  // 行を押すとその状態が選ばれ、右ペインが同じ階層を指す。
+  await rows.nth(3).click();
+  await page.waitForTimeout(400);
+  await expect(page.locator('#props-content')).toContainText('Configured › Counting › Tick');
+});
+
+test('手順9 選んだ階層だけを図に大きく出し、全体に戻れる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.typeDsl(page, TIMER_NESTED);
+  await openTree(page);
+
+  await page.locator('[data-tree-focus="Configured"]').click();
+  await page.waitForTimeout(1500);
+
+  // 今どの階層を見ているかと、この図に出ない外とのつながりの本数を言う。
+  await expect(page.locator('#state-tree-focus-bar')).toBeVisible();
+  await expect(page.locator('#state-tree-focus-label')).toContainText('Configured の中だけを表示中');
+  await expect(page.locator('#state-tree-focus-label')).toContainText('子状態 2');
+  await expect(page.locator('#state-tree-focus-label')).toContainText('外と 2 本');
+
+  // 図はその階層だけ。外の状態は描かれない。
+  const svgText = await page.locator('#preview-svg').innerText();
+  expect(svgText).toContain('Paused');
+  expect(svgText).toContain('Timer_Pause');
+  expect(svgText).not.toContain('Uninit');
+
+  // 焦点にしても DSL は 1 文字も変わらない (見え方だけの操作)。
+  expect(await dsl(page)).toBe(TIMER_NESTED);
+
+  // 孫の階層へ掘り下げられる。
+  await page.locator('[data-tree-focus="Configured.Counting"]').click();
+  await page.waitForTimeout(1500);
+  const innerText = await page.locator('#preview-svg').innerText();
+  expect(innerText).toContain('Tick');
+  expect(innerText).not.toContain('Paused');
+
+  // 全体に戻る。
+  await page.locator('#btn-state-tree-focus-clear').click();
+  await page.waitForTimeout(1500);
+  await expect(page.locator('#state-tree-focus-bar')).toBeHidden();
+  const wholeText = await page.locator('#preview-svg').innerText();
+  expect(wholeText).toContain('Uninit');
+  expect(wholeText).toContain('Paused');
+});
+
+test('手順9 木のその場から、どの階層にも子状態を足せる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.typeDsl(page, TIMER_NESTED);
+  await openTree(page);
+
+  // 孫の下にさらに足す — 右ペインへ戻らずに深い階層を伸ばせる。
+  await page.locator('[data-tree-add-child="Configured.Counting.Tick"]').click();
+  await page.waitForTimeout(600);
+  const deep = await page.evaluate(() => {
+    const p = window.MA.modules.plantumlState.parse(
+      document.getElementById('editor').value);
+    return p.states.filter((s) => s.parentId === 'Configured.Counting.Tick').length;
+  });
+  expect(deep).toBe(1);
+  // 足した子はその場で木にも出る (図を探しに行かなくてよい)。
+  await expect(page.locator('#state-tree-body .stree-row')).toHaveCount(6);
+});

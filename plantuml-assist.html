@@ -5318,6 +5318,93 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   padding: 4px 0 0 0;
 }
 
+/* ── State hierarchy tree (BLK-junior-20260916-0526-wish) ───────────── */
+/* 状態遷移表と同じくキャンバスの上に畳んで置く。入れ子は図を見ながら
+   辿るものなので、右ペインではなく図の真上に置く。 */
+#state-tree-panel {
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+  flex-shrink: 0;
+}
+
+#state-tree-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  /* 右上に浮くズーム帯の下に隠れないよう幅を空ける。 */
+  padding-right: 275px;
+}
+
+/* display を持たせると hidden 属性が効かなくなるので、畳む側も書く。 */
+#state-tree-focus-bar[hidden] { display: none; }
+
+#state-tree-focus-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px 6px 10px;
+  font-size: 11px;
+  color: var(--accent);
+}
+
+#state-tree-body {
+  max-height: 220px;
+  overflow: auto;
+  padding: 0 10px 8px 10px;
+}
+
+#state-tree-body .stree-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+  font-size: 11px;
+  color: var(--text-primary);
+  cursor: pointer;
+  border: 1px solid transparent;
+  border-radius: 3px;
+}
+
+#state-tree-body .stree-row:hover {
+  background: var(--bg-tertiary);
+}
+
+#state-tree-body .stree-row.stree-selected {
+  border-color: var(--accent);
+}
+
+#state-tree-body .stree-row.stree-focused {
+  background: var(--bg-tertiary);
+  border-color: var(--accent);
+}
+
+#state-tree-body .stree-twisty {
+  width: 12px;
+  color: var(--text-secondary);
+}
+
+#state-tree-body .stree-label {
+  font-weight: 600;
+}
+
+#state-tree-body .stree-count {
+  color: var(--text-secondary);
+  font-size: 10px;
+  flex: 1;
+}
+
+#state-tree-body .stree-btn {
+  font-size: 10px;
+  padding: 1px 6px;
+}
+
+#state-tree-summary {
+  font-size: 10px;
+  color: var(--text-secondary);
+  padding: 4px 0 0 0;
+}
+
 /* ── Floating zoom HUD (design 1a) ────────────────────────────────────────── */
 /* #preview-container ではなく #preview-pane を基準にするので、図をスクロール
    しても帯はキャンバスの右上に留まる。 */
@@ -6764,6 +6851,20 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         </div>
         <div id="state-table-body" hidden></div>
       </div>
+      <!-- 入れ子ツリー (BLK-junior-20260916-0526-wish)。状態遷移図のときだけ出す。
+           木の組み立ては state-tree.js。ここは開閉と焦点の帯だけ -->
+      <div id="state-tree-panel" hidden>
+        <div id="state-tree-head">
+          <button type="button" class="tb-btn" id="btn-state-tree-toggle"
+                  title="入れ子ツリーを開く / 閉じる" aria-expanded="false">入れ子ツリー / Hierarchy ⌄</button>
+          <span class="stt-sub">親→子→孫を木で見て、選んだ階層だけを図に出します</span>
+        </div>
+        <div id="state-tree-focus-bar" hidden>
+          <span id="state-tree-focus-label"></span>
+          <button type="button" class="tb-btn" id="btn-state-tree-focus-clear">図全体に戻る</button>
+        </div>
+        <div id="state-tree-body" hidden></div>
+      </div>
       <div id="overlay-warning" style="display:none;background:#3a2e0a;color:#ffa657;padding:6px 10px;font-size:11px;border-bottom:1px solid var(--border);"></div>
       <div id="preview-container">
         <!-- design 5a: 描画エラーを図の上に重ねる帯。直前の図はそのまま残す -->
@@ -7496,6 +7597,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/state-child.js"></script>
 <script src="src/core/state-collapse.js"></script>
 <script src="src/core/state-table.js"></script>
+<script src="src/core/state-tree.js"></script>
 <script src="src/core/relation-roles.js"></script>
 <script src="src/core/state-map.js"></script>
 <script src="src/core/template-diff.js"></script>
