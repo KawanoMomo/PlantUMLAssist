@@ -379,17 +379,34 @@ function runBoard(result, opts, prev, fmtOpts, prevNote) {
   // findings.js が使っている控えと同じ物を、同じ決め方の場所から読む。
   const ledger = readLedger(opts.targets);
 
+  // BLK-reviewer-20260914-2206 (差し戻し 1 回目の芯): 新規かどうかは、前回の
+  // 突合結果そのものと実体 id で比べて決める。指摘.md に書かれているかどうかで
+  // 決めていた間は、reviewer が書き落とした指摘 (実データの整合/イベント 24 件) が
+  // 毎 run 「新規」に出続け、その裏取りが毎 run 手作業で残っていた。
+  // 控えは対象の組ごとに分かれている (audit-state) ので、比べるのは同じ対象の前回だけ。
+  const prevBoard = prev && prev.audits
+    ? auditBoard.build({
+      audits: prev.audits,
+      svg: prev.audits.svg && prev.audits.svg.status === 'ok' ? prev.audits.svg.result : null,
+    })
+    : null;
+
   // BLK-reviewer-20260914-2206 (3 件目): --only で絞った回は、回していない監査の
   // 指摘まで「今回の突合に出ていない = 解消」と出ていた。何を回したかを渡して、
   // 見ていない物は「今回は見ていない」と言わせる。
   const view = reviewBoard.build({ board: b, findings: md, changedFiles: changed,
     ledger: ledger.rows,
+    prevRows: prevBoard ? prevBoard.rows : null,
     scope: opts.only && opts.only.length ? opts.only : null });
   const lines = [reviewBoard.markdown(view, 'レビュー結果 — ' + opts.targets.join(' / '))];
   lines.push('前回の指摘文書: ' + (fpath || '(無し。今回の突合だけを出しています)'));
   lines.push('findings.js の台帳: ' + (ledger.file
     ? ledger.file + '（追跡中 ' + ledger.rows.length + ' 件。新規の判定はこの台帳と同じ同一性で行います）'
     : '(無し。指摘文書だけで突き合わせています)'));
+  lines.push('新規の判定: ' + (prevBoard
+    ? '前回控えの突合結果と実体 id で比較（' + prevBoard.rows.length + ' 行）。'
+      + '指摘.md に書かれていない行でも、前回も出ていれば新規に数えません'
+    : '(この対象の控えが無いため、今回の行は全部が新規に出ます。次の素の回から比較します)'));
   if (prevNote) lines.push(prevNote);
   lines.push('前回控えとの比較: ' + (base
     ? (fd && fd.contentComparable ? '内容まで比較' : '名前だけ比較 (前回に指紋が無い)')

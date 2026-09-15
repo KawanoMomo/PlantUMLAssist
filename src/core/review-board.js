@@ -100,6 +100,15 @@
     return true;
   }
 
+  // 突合行の kind ("consistency.events") がどの監査の物か。--only で絞った回に、
+  // 回していない監査の行を「前回の突合から消えた」と読ませないために使う。
+  function _outOfScopeKind(kind, scope) {
+    if (!scope || !scope.length) return false;
+    var audit = _s(kind).split('.')[0];
+    if (!audit) return true;
+    return scope.indexOf(audit) < 0;
+  }
+
   // 図名の正規化。拡張子とフォルダを落とす。
   function docKey(name) {
     var s = _s(name).split(/[\\/]/).pop();
@@ -290,6 +299,9 @@
   //   findings     — parseFindings() の結果 (前回の指摘文書)、または指摘.md の本文
   //   changedFiles — 前回控えとの diff で「変わった」と出たファイル名の配列
   //   scope        — 今回回した監査名の配列 (--only の中身)。空 / 未指定は全部回した
+  //   ledger       — findings.js の台帳の行 ({ id, title, docs, tick, ... })
+  //   prevRows     — 前回の突合結果の行 (audit-board.build().rows)。渡されたときは
+  //                  新規かどうかを行の実体 id だけで決める (指摘.md の書きぶりに依らない)
   function build(input) {
     var inp = input || {};
     var scope = _list(inp.scope).map(_s).filter(function(s) { return s !== ''; });
@@ -402,8 +414,44 @@
       });
     });
 
-    // どの前回指摘にも当たらなかった行。
-    var fresh = rows.filter(function(r, i) { return !covered[i]; });
+    // BLK-reviewer-20260914-2206 (差し戻し 1 回目の芯): ここまでの突き合わせは、
+    // 前回の指摘.md に「書かれている」ことを新規でない条件にしている。reviewer が
+    // 書き落とした指摘 (実データでは整合/イベント 24 件) は、前回も今回も同じように
+    // 突合に出ているのに毎回「今回の新規」に落ち、毎 run 手で裏取りする羽目になる。
+    // 経路を 1 つずつ塞いでも次の run で別経路に出ていたのはここが根で、
+    // 自然文から同一性を組み立て直している限り止まらない。
+    //
+    // 前回の突合結果そのもの (同じ対象で採った控えから組み直した行) を渡されたら、
+    // 新規かどうかは実体 id — findings.js が継続を数えるのと同じ id — だけで決める。
+    // 前回にも同じ実体があった行は、指摘.md に書かれていなくても新規ではない。
+    var prevRows = _list(inp.prevRows);
+    var prevByEntity = {};
+    prevRows.forEach(function(r) {
+      var e = _s(r && r.entity);
+      if (e && !prevByEntity[e]) prevByEntity[e] = r;
+    });
+    var hasPrev = Object.keys(prevByEntity).length > 0;
+
+    var uncovered = rows.filter(function(r, i) { return !covered[i]; });
+    // 前回の突合にも同じ実体があった行。指摘文書に書かれていないだけで、新規ではない。
+    var seen = hasPrev ? uncovered.filter(function(r) {
+      return _s(r.entity) && prevByEntity[_s(r.entity)];
+    }) : [];
+    var seenSet = {};
+    seen.forEach(function(r) { seenSet[rows.indexOf(r)] = true; });
+    var fresh = uncovered.filter(function(r) { return !seenSet[rows.indexOf(r)]; });
+
+    // 前回の突合にあって今回は出ていない実体。指摘.md に書いていないものも
+    // ここで見えるので、「解消したのか、見ていないだけなのか」を手で確かめ直さずに済む。
+    var nowEntities = {};
+    rows.forEach(function(r) { if (_s(r.entity)) nowEntities[_s(r.entity)] = true; });
+    var gone = hasPrev ? Object.keys(prevByEntity).filter(function(e) {
+      return !nowEntities[e] && !_outOfScopeKind(_s(prevByEntity[e].kind), scope);
+    }).map(function(e) { return prevByEntity[e]; }) : [];
+    gone.sort(function(x, y) {
+      var a = _s(x.doc) + _s(x.title), b = _s(y.doc) + _s(y.title);
+      return a < b ? -1 : (a > b ? 1 : 0);
+    });
 
     // 指摘のある図のうち、前回控えから実際に中身が変わったもの。
     // 「継続なのに触られている」= 直そうとして直り切っていない、
@@ -417,6 +465,10 @@
     return {
       carried: carried,
       fresh: fresh,
+      // 指摘.md には書かれていないが、前回の突合にも同じ実体があった行 / 前回だけにあった実体。
+      seen: seen,
+      gone: gone,
+      hasPrevRows: hasPrev,
       changedFiles: changed,
       scope: scope,
       counts: {
@@ -432,6 +484,10 @@
         sameDoc: carried.filter(function(c) { return c.verdict === 'sameDoc'; }).length,
         unmatched: carried.filter(function(c) { return c.verdict === 'unmatched'; }).length,
         fresh: fresh.length,
+        // 前回の突合にもあった行 (実体 id で一致)。新規には数えない。
+        seen: seen.length,
+        // 前回の突合にあって今回は出ていない実体。
+        gone: gone.length,
         changed: changed.length,
       },
     };
@@ -449,7 +505,7 @@
   function summaryLine(view) {
     var c = (view && view.counts)
       || { carried: 0, ledger: 0, resolved: 0, fresh: 0, sameDoc: 0, unmatched: 0, changed: 0,
-           regressed: 0, outOfScope: 0 };
+           regressed: 0, outOfScope: 0, seen: 0, gone: 0 };
     // 台帳で当たった継続も継続に数える。ここを分けて出すと、findings.js が
     // 「継続 6 / 新規 0」と言っている回に --board だけが「新規 2」と言う。
     var s = '継続 ' + (c.carried + (c.ledger || 0));
@@ -457,6 +513,9 @@
     if (c.regressed) s += '（うち出戻り ' + c.regressed + '）';
     s += ' / 解消 ' + c.resolved + ' / 新規 ' + c.fresh + ' 件';
     var re = [];
+    // 前回の突合にもあった行。「指摘.md に書き落としただけ」を新規と呼ばないための 1 語。
+    if (c.seen) re.push('前回の突合にもあり ' + c.seen + ' 件');
+    if (c.gone) re.push('前回の突合から消えた ' + c.gone + ' 件');
     if (c.sameDoc) re.push('同じ図に別の指摘 ' + c.sameDoc + ' 件');
     if (c.unmatched) re.push('要読み直し ' + c.unmatched + ' 件');
     if (c.outOfScope) re.push('今回は見ていない ' + c.outOfScope + ' 件');
@@ -513,8 +572,31 @@
 
     if (_list(v.fresh).length) {
       out.push('## 今回の新規（' + v.fresh.length + ' 件）');
+      if (v.hasPrevRows) {
+        out.push('  - 前回の突合結果に同じ実体が無かった行だけです'
+          + '（findings.js と同じ実体 id で判定。指摘.md の書きぶりでは決めていません）');
+      }
       v.fresh.forEach(function(r) {
         out.push('- [' + _s(r.doc) + '] ' + _s(r.category) + ' ' + _s(r.title) + ' — ' + _s(r.detail));
+      });
+      out.push('');
+    }
+
+    // 前回も今回も出ている行。指摘.md に書き落としていても新規ではない、と
+    // 名指しで言い切る (書き落としに気付く場でもある)。
+    if (_list(v.seen).length) {
+      out.push('## 前回の突合にもあった（指摘.md には書かれていません。新規ではありません）（'
+        + v.seen.length + ' 件）');
+      v.seen.forEach(function(r) {
+        out.push('- [' + _s(r.doc) + '] ' + _s(r.category) + ' ' + _s(r.title));
+      });
+      out.push('');
+    }
+
+    if (_list(v.gone).length) {
+      out.push('## 前回の突合から消えた（' + v.gone.length + ' 件）');
+      v.gone.forEach(function(r) {
+        out.push('- [' + _s(r.doc) + '] ' + _s(r.category) + ' ' + _s(r.title));
       });
       out.push('');
     }
