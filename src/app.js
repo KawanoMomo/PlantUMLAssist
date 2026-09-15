@@ -1931,38 +1931,67 @@ function init() {
       if (pickBtn) pickBtn.textContent = AB.isApp(env) ? 'jar を選ぶ' : 'このパスを使う';
     }
 
-    function setEngineNote(msg, bad) {
+    // BLK-human-20260915-1201: 取得中 / 完了 / 失敗を同じ 1 行で言い、失敗のときだけ
+    // 「もう一度取得」を出す。文言と出し分けは appBridge.engineProgress が決める。
+    function setEngineProgress(prog) {
       var el = document.getElementById('cfg-engine-note');
-      if (!el) return;
-      el.textContent = msg || '';
-      el.style.color = bad ? 'var(--accent-red)' : 'var(--text-secondary)';
+      var retry = document.getElementById('cfg-jar-retry');
+      if (el) {
+        el.textContent = prog.text || '';
+        el.style.color = prog.bad ? 'var(--accent-red)' : 'var(--text-secondary)';
+        el.setAttribute('data-engine-phase', prog.phase || '');
+      }
+      if (retry) retry.hidden = !prog.retry;
+      var fetchBtn = document.getElementById('cfg-jar-fetch');
+      var pickBtn = document.getElementById('cfg-jar-pick');
+      if (fetchBtn) fetchBtn.disabled = !!prog.busy || !(window.MA.appBridge
+        && window.MA.appBridge.jarStatus(_renderEnv || {}).canFetch);
+      if (pickBtn) pickBtn.disabled = !!prog.busy;
+    }
+
+    // BLK-human-20260915-1201: jar が入った瞬間に、警告を出したままの図を描き直す。
+    // ここを呼ばないと「設定は済んでいるのに画面は jar が無いと言い続ける」状態が
+    // 残り、利用者はアプリを起動し直すしかなくなる。
+    function refreshPreviewAfterEngineReady() {
+      try { clearRenderError(); } catch (e) {}
+      try { renderSvg(); } catch (e) {}
     }
 
     function afterEngineChange(res) {
-      if (!res) return;
-      if (res.canceled) { setEngineNote('選ばれませんでした'); return; }
-      if (res.error) { setEngineNote(res.error, true); return; }
-      _renderEnv = res.env || _renderEnv;
-      setEngineNote('plantuml.jar: ' + (res.jarPath || ''));
+      var AB = window.MA.appBridge;
+      if (!AB) return;
+      var before = _renderEnv;
+      var phase = AB.phaseOf(res);
+      if (phase === 'done') _renderEnv = (res && res.env) || _renderEnv;
+      setEngineProgress(AB.engineProgress(phase, res));
       renderModeCards();
       refreshRenderNote();
       refreshEngineSection();
+      if (AB.jarTurnedReady(before, _renderEnv)) refreshPreviewAfterEngineReady();
     }
 
     (function wireEngineButtons() {
       var AB = window.MA.appBridge;
       if (!AB) return;
-      var pickBtn = document.getElementById('cfg-jar-pick');
-      if (pickBtn) pickBtn.addEventListener('click', function() {
+      var doPick = function() {
         var pathEl = document.getElementById('cfg-jar-path');
-        setEngineNote('選んでいます…');
+        setEngineProgress(AB.engineProgress('picking'));
         if (AB.isApp(_renderEnv)) AB.pickJar().then(afterEngineChange);
         else AB.setJarPath(pathEl ? pathEl.value : '').then(afterEngineChange);
-      });
-      var fetchBtn = document.getElementById('cfg-jar-fetch');
-      if (fetchBtn) fetchBtn.addEventListener('click', function() {
-        setEngineNote('公式から取得しています… (数十 MB あります)');
+      };
+      var doFetch = function() {
+        setEngineProgress(AB.engineProgress('fetching'));
         AB.fetchJar().then(afterEngineChange);
+      };
+      var pickBtn = document.getElementById('cfg-jar-pick');
+      if (pickBtn) pickBtn.addEventListener('click', doPick);
+      var fetchBtn = document.getElementById('cfg-jar-fetch');
+      if (fetchBtn) fetchBtn.addEventListener('click', doFetch);
+      // 失敗したときの再試行の入口。取得が使えない機械ではパス指定に落ちる。
+      var retryBtn = document.getElementById('cfg-jar-retry');
+      if (retryBtn) retryBtn.addEventListener('click', function() {
+        if (AB.jarStatus(_renderEnv || {}).canFetch) doFetch();
+        else doPick();
       });
     })();
 
@@ -2203,6 +2232,13 @@ function init() {
         try { localStorage.setItem(EDITOR_PREFS_KEY, JSON.stringify(prefs2)); } catch (e) {}
         applyEditorPrefs(prefs2);
       }
+      // BLK-human-20260915-1201: 初回起動で jar を入れた回は、まだ「jar がない」と
+      // 言ったままの図が残っている。保存した時点で描き直し、再起動を要らなくする。
+      var AB2 = window.MA.appBridge;
+      var banner = document.getElementById('render-error-overlay');
+      var showingError = !!(banner && !banner.hidden)
+        || (renderStatusEl && renderStatusEl.textContent === 'ERROR');
+      if (AB2 && AB2.jarReady(_renderEnv) && showingError) refreshPreviewAfterEngineReady();
       close();
     });
     document.getElementById('cfg-clear-all').addEventListener('click', function() {
