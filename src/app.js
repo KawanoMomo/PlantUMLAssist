@@ -3022,6 +3022,7 @@ function initCommandPalette() {
     ] },
     'plantuml-state': { prefix: 'st', kinds: [
       { value: 'state', label: '状態' },
+      { value: 'child', label: '子状態 (状態の中に入れる)' },
       { value: 'composite', label: '複合状態' },
       { value: 'transition', label: '遷移' },
       { value: 'note', label: '注釈' },

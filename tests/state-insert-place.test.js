@@ -9,8 +9,12 @@ if (!global.window) {
   global.document = dom.window.document;
 }
 
-try { delete require.cache[require.resolve('../src/core/state-insert.js')]; } catch (e) {}
-require('../src/core/state-insert.js');
+// BLK-human-20260915-1206 以降、「の中」の相手は state-child が決める
+// (中身をまだ持たない状態もその場で開いて相手にする)。本番と同じ組で確かめる。
+['../src/core/state-child.js', '../src/core/state-insert.js'].forEach(function(dep) {
+  try { delete require.cache[require.resolve(dep)]; } catch (e) {}
+  require(dep);
+});
 var SI = global.window.MA.stateInsert;
 
 // design 4c のサンプルと同じ図。
@@ -60,9 +64,11 @@ describe('positions — 選べる位置は図の中身で決まる', function() 
     expect(ps.map(function(p) { return p.value; })).toEqual(['end']);
   });
 
+  // BLK-human-20260915-1206: 以前は複合状態がある図でしか「の中」を出さず、
+  // 最初の 1 つを GUI から作る道がどこにも無かった。状態が 1 つでもあれば出す。
   test('遷移があれば「この遷移の途中」が増える', function() {
     var ps = SI.positions(SAMPLE_PARSED);
-    expect(ps.map(function(p) { return p.value; })).toEqual(['end', 'transition']);
+    expect(ps.map(function(p) { return p.value; })).toEqual(['end', 'transition', 'inside']);
   });
 
   test('複合状態があれば「（状態）の中」が増える', function() {
@@ -70,9 +76,14 @@ describe('positions — 選べる位置は図の中身で決まる', function() 
     expect(ps.map(function(p) { return p.value; })).toEqual(['end', 'transition', 'inside']);
   });
 
-  test('単純 state だけでは「の中」は出ない (置き場所が無いので)', function() {
+  test('単純 state でも「の中」は出る (その場で { } に開いて子にする)', function() {
     var ps = SI.positions({ states: [{ id: 'A', line: 3, endLine: 3 }], transitions: [] });
-    expect(ps.map(function(p) { return p.value; })).toEqual(['end']);
+    expect(ps.map(function(p) { return p.value; })).toEqual(['end', 'inside']);
+  });
+
+  test('状態が 1 つも無ければ「の中」は出ない', function() {
+    var ps = SI.positions({ states: [], transitions: [{ id: '__t_0', line: 3 }] });
+    expect(ps.map(function(p) { return p.value; })).toEqual(['end', 'transition']);
   });
 });
 
@@ -87,8 +98,9 @@ describe('transitionOptions / compositeOptions — 位置を決める相手', fu
     expect(SI.transitionOptions(SAMPLE_PARSED)[0].label).toBe('[*] → Idle');
   });
 
-  test('複合状態だけが「の中」の相手になる', function() {
-    expect(SI.compositeOptions(COMPOSITE_PARSED)).toEqual([{ value: 'Outer', label: 'Outer' }]);
+  test('「の中」の相手は複合状態に限らない (単純 state も並ぶ)', function() {
+    expect(SI.compositeOptions(COMPOSITE_PARSED).map(function(o) { return o.value; }))
+      .toContain('Outer');
   });
 });
 
