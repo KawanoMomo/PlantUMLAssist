@@ -6735,7 +6735,11 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
           <button type="button" id="cfg-jar-fetch" title="PlantUML の公式リリースから jar を取得する (この操作で初めて外部へ接続します)">公式から取得</button>
         </div>
         <div id="cfg-java-status" style="font-size:11px;"></div>
-        <div id="cfg-engine-note" style="font-size:11px;color:var(--text-secondary);margin-top:4px;"></div>
+        <!-- BLK-human-20260915-1201: 取得中 / 完了 / 失敗をこの 1 行で言う。
+             失敗したときだけ、同じ場所に再試行の入口を出す。 -->
+        <div id="cfg-engine-note" role="status" data-engine-phase="" style="font-size:11px;color:var(--text-secondary);margin-top:4px;"></div>
+        <button type="button" id="cfg-jar-retry" hidden style="margin-top:4px;font-size:11px;"
+                title="もう一度 plantuml.jar を取りに行く">もう一度試す</button>
       </div>
 
       <div style="border-top:1px solid var(--border);padding-top:10px;">
