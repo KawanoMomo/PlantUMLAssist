@@ -166,6 +166,94 @@ test('手順9 資料セットを登録すると、タブを開き直さずに保
   expect(svgs).toBeGreaterThanOrEqual(picked);
 });
 
+// BLK-primary-20260916-0100-wish: 資料セットは登録して zip を出すところまでしか GUI で
+// 完結せず、実際に提案書へ貼るときの「どの順で並べるか」「各図にどんな見出し・1 行説明を
+// 添えるか」は zip を開いた後に資料側の道具で手作業だった。順序を入れ替えたい・説明を
+// 足したいと気付くのが貼り込んだ後なので、毎回そこで手戻りが出る。貼る前に GUI 上で
+// 資料の体裁まで確かめてから書き出せることを到達条件にする。
+test('手順9 貼る前に、資料セットの順序・見出し・1 行説明を組んで 1 枚物で確かめられる', async ({ page }) => {
+  test.setTimeout(180 * 1000);
+  const NAMES = ['spi_init_sequence', 'spi_state', 'can_state'];
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  for (const n of NAMES) await S.putDoc(page, DIR, n, S.docFor(n));
+  await page.reload();
+  await page.waitForSelector('#preview-svg');
+
+  await page.locator('#btn-export').click();
+  await page.waitForSelector('#export-menu', { state: 'visible' });
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-modal', { state: 'visible' });
+  await page.locator('#docset-name').fill('顧客資料');
+  await page.locator('#docset-create').click();
+
+  const row = page.locator('.ds-row[data-set-name="顧客資料"]');
+  await expect(row).toHaveCount(1);
+
+  // 到達条件その1: 資料セットの行から、貼る前の体裁を組む画面に入れる。
+  await row.locator('.ds-layout').click();
+  await expect(page.locator('#docset-layout')).toBeVisible();
+  const rows = page.locator('#dl-rows .dl-row');
+  const total = await rows.count();
+  expect(total).toBeGreaterThanOrEqual(NAMES.length);
+  // 到達条件その2: 書き出す前に「1 行説明が空の図」を名指しする。
+  await expect(page.locator('#dl-sum')).toContainText('1 行説明が空の図');
+
+  // 到達条件その3: 見出しと 1 行説明を書くと、貼り込みプレビューにそのまま出る。
+  const first = rows.first();
+  const firstName = await first.getAttribute('data-doc-name');
+  await first.locator('.dl-heading').fill('SPI 初期化シーケンス');
+  await first.locator('.dl-note').fill('起動直後の初期化手順を示す');
+  await expect(page.locator('#dl-toc .dl-toc-line[data-no="1"]'))
+    .toHaveText('図1 SPI 初期化シーケンス — 起動直後の初期化手順を示す');
+  await expect(page.locator('#dl-sheet .dl-fig[data-no="1"] .dl-fig-head'))
+    .toHaveText('図1 SPI 初期化シーケンス');
+
+  // 到達条件その4: 並び順を GUI で変えられ、図番号と目次が振り直される。
+  await first.locator('.dl-down').click();
+  await expect(page.locator('#dl-rows .dl-row').nth(1))
+    .toHaveAttribute('data-doc-name', firstName);
+  await expect(page.locator('#dl-toc .dl-toc-line[data-no="2"]'))
+    .toHaveText('図2 SPI 初期化シーケンス — 起動直後の初期化手順を示す');
+
+  // 到達条件その5: 体裁は保存フォルダの持ち物なので、開き直しても残る。
+  await page.locator('#dl-save').click();
+  await expect(page.locator('#docset-status')).toContainText('体裁');
+  await S.bootWithSaveDir(page, DIR);
+  await page.waitForSelector('#preview-svg');
+  await page.locator('#btn-export').click();
+  await page.waitForSelector('#export-menu', { state: 'visible' });
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-modal', { state: 'visible' });
+  await page.locator('.ds-row[data-set-name="顧客資料"] .ds-layout').click();
+  await expect(page.locator('#dl-rows .dl-row').nth(1))
+    .toHaveAttribute('data-doc-name', firstName);
+  await expect(page.locator('#dl-rows .dl-row').nth(1).locator('.dl-heading'))
+    .toHaveValue('SPI 初期化シーケンス');
+
+  // 到達条件その6: 書き出した zip に、組んだ順の図番号付き SVG と目次付きの 1 枚物が入る。
+  await page.locator('#dl-back').click();
+  const dl = page.waitForEvent('download', { timeout: 150000 }).catch(() => null);
+  await page.locator('.ds-row[data-set-name="顧客資料"] .ds-export').click();
+  const download = await dl;
+  expect(download).not.toBeNull();
+  const zipPath = test.info().outputPath('docset-layout.zip');
+  await download.saveAs(zipPath);
+  const buf = require('fs').readFileSync(zipPath);
+  const entries = [];
+  const re = /\x50\x4b\x03\x04/g;
+  let m;
+  const latin = buf.toString('latin1');
+  while ((m = re.exec(latin)) !== null) {
+    const at = m.index;
+    const len = buf.readUInt16LE(at + 26);
+    entries.push(buf.toString('utf-8', at + 30, at + 30 + len));
+  }
+  expect(entries).toContain('資料の体裁.md');
+  expect(entries).toContain('02_' + firstName + '.svg');
+  await expect(page.locator('#docset-status')).toContainText('資料の体裁.md', { timeout: 150000 });
+});
+
 // 登録したあとで図が減ったら、書き出す前に名指しで言う (zip を開いてから気付かせない)。
 test('手順9 資料セットの図が保存フォルダから減ると、書き出す前に欠けた図を名指しする', async ({ page }) => {
   test.setTimeout(120 * 1000);

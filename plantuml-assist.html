@@ -2599,6 +2599,58 @@ html, body {
 .ds-row .ds-sum.ds-short { color: var(--warning, #d08a30); }
 .ds-row .ds-sum.ds-ready { color: var(--accent); }
 #docset-empty { padding: 14px; font-size: 12px; color: var(--text-secondary); }
+/* BLK-primary-20260916-0100-wish: 資料の体裁と貼り込みプレビュー */
+#docset-layout { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+#dl-head {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 14px; border-bottom: 1px solid var(--border);
+  font-size: 12px; color: var(--text-primary);
+}
+#dl-sum { color: var(--text-secondary); }
+#dl-sum.dl-short { color: var(--warning, #d08a30); }
+#dl-sum.dl-blank { color: var(--warning, #d08a30); }
+#dl-sum.dl-ready { color: var(--accent); }
+#dl-tools { margin-left: auto; display: flex; gap: 6px; }
+#dl-tools button {
+  border: 1px solid var(--border); background: var(--bg-tertiary);
+  color: var(--text-primary); border-radius: 4px; padding: 3px 10px;
+  font-size: 12px; cursor: pointer;
+}
+#dl-body { display: flex; gap: 0; min-height: 0; flex: 1; }
+#dl-rows { flex: 1; overflow: auto; padding: 6px 0; min-width: 0; }
+#dl-preview {
+  flex: 1; overflow: auto; border-left: 1px solid var(--border);
+  background: var(--bg-primary); min-width: 0;
+}
+#dl-preview-head {
+  font-size: 11px; color: var(--text-secondary);
+  padding: 6px 12px; border-bottom: 1px solid var(--border);
+}
+#dl-sheet { padding: 10px 12px; font-size: 12px; color: var(--text-primary); }
+#dl-sheet .dl-sheet-title { font-weight: 600; margin-bottom: 6px; }
+#dl-sheet .dl-toc { margin: 0 0 10px 0; padding: 0; list-style: none; }
+#dl-sheet .dl-toc li { padding: 2px 0; color: var(--text-secondary); }
+#dl-sheet .dl-fig { border-top: 1px solid var(--border); padding: 6px 0; }
+#dl-sheet .dl-fig-head { font-weight: 600; }
+#dl-sheet .dl-fig-note { color: var(--text-secondary); }
+#dl-sheet .dl-fig-file { color: var(--text-secondary); font-size: 11px; }
+#dl-sheet .dl-gone { color: var(--warning, #d08a30); }
+.dl-row {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  padding: 6px 12px; border-bottom: 1px solid var(--border); font-size: 12px;
+}
+.dl-row .dl-no { color: var(--accent); white-space: nowrap; }
+.dl-row .dl-name { color: var(--text-secondary); flex-basis: 100%; font-size: 11px; }
+.dl-row .dl-name.dl-gone { color: var(--warning, #d08a30); }
+.dl-row input {
+  flex: 1; min-width: 120px; background: var(--bg-primary); color: var(--text-primary);
+  border: 1px solid var(--border); border-radius: 4px; padding: 3px 6px; font-size: 12px;
+}
+.dl-row button {
+  border: 1px solid var(--border); background: var(--bg-tertiary);
+  color: var(--text-primary); border-radius: 4px; padding: 2px 7px;
+  font-size: 12px; cursor: pointer;
+}
 #docset-status { padding: 8px 14px; font-size: 12px; color: var(--text-secondary); min-height: 18px; }
 #expick-modal-content {
   background: var(--bg-secondary);
@@ -7076,6 +7128,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/rename-pairs.js"></script>
 <script src="src/core/rename-badge.js"></script>
 <script src="src/core/doc-set.js"></script>
+<script src="src/core/doc-layout.js"></script>
 <script src="src/core/vault.js"></script>
 <script src="src/core/component-inventory.js"></script>
 <script src="src/core/export-target.js"></script>
@@ -7423,6 +7476,25 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <button type="button" id="docset-create" title="保存フォルダにある図（📂 一覧で印を付けていればその図だけ）を、この名前の資料セットとして登録する">今の対象を登録する</button>
     </div>
     <div id="docset-rows"></div>
+    <!-- BLK-primary-20260916-0100-wish: 貼る前に資料の体裁 (順序・見出し・1 行説明) を
+         組んで、1 枚物のプレビューで確かめる。zip を開いてから並べ直さずに済ませる -->
+    <div id="docset-layout" style="display:none;">
+      <div id="dl-head">
+        <strong id="dl-title"></strong>
+        <span id="dl-sum" role="status"></span>
+        <span id="dl-tools">
+          <button type="button" id="dl-save" title="見出し・1 行説明・並び順をこの資料セットに保存する">体裁を保存する</button>
+          <button type="button" id="dl-back">一覧へ戻る</button>
+        </span>
+      </div>
+      <div id="dl-body">
+        <div id="dl-rows"></div>
+        <div id="dl-preview">
+          <div id="dl-preview-head">貼り込みプレビュー（1 枚物）</div>
+          <div id="dl-sheet"></div>
+        </div>
+      </div>
+    </div>
     <div id="docset-status" role="status"></div>
   </div>
 </div>

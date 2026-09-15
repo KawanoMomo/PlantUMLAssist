@@ -22782,6 +22782,15 @@ function renderDocSets() {
     go.addEventListener('click', function() { exportDocSet(set.name); });
     row.appendChild(go);
 
+    // 貼る前に体裁を組む口。zip を開いた後に資料側で並べ直していた分がここに来る。
+    var lay = document.createElement('button');
+    lay.type = 'button';
+    lay.className = 'ds-layout';
+    lay.textContent = '資料の体裁…';
+    lay.title = '見出し・1 行説明・並び順を付けて、貼り込み前の 1 枚物プレビューで確かめる';
+    lay.addEventListener('click', function() { openDocLayout(set.name); });
+    row.appendChild(lay);
+
     var del = document.createElement('button');
     del.type = 'button';
     del.className = 'ds-delete';
@@ -22793,7 +22802,7 @@ function renderDocSets() {
   });
 }
 
-function saveDocSet(name, docs) {
+function saveDocSet(name, docs, items) {
   var DS = window.MA.docSet;
   if (!DS) return Promise.resolve(null);
   var rows = DS.normalizeDocs(docs);
@@ -22804,7 +22813,11 @@ function saveDocSet(name, docs) {
   return window.fetch('/doc-sets', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ dir: _wsFileDir(), name: String(name).trim(), docs: rows }),
+    // 体裁 (見出し・1 行説明) を渡さないときは、server にある既存の体裁をそのまま残す
+    // (図を登録し直しただけで書いた文が消えると、貼る前の手戻りが戻ってくる)。
+    body: JSON.stringify(items === undefined
+      ? { dir: _wsFileDir(), name: String(name).trim(), docs: rows }
+      : { dir: _wsFileDir(), name: String(name).trim(), docs: rows, items: items }),
   }).then(function(r) { return r.ok ? r.json() : null; })
     .then(function(data) {
       if (!data) { _dsStatus('登録できませんでした'); return null; }
@@ -22814,6 +22827,215 @@ function saveDocSet(name, docs) {
       _dsStatus('「' + String(name).trim() + '」を ' + rows.length + ' 枚で登録しました');
       return _dsSets;
     }, function() { _dsStatus('登録できませんでした'); return null; });
+}
+
+// ── 資料の体裁と貼り込みプレビュー (BLK-primary-20260916-0100-wish) ──────────
+// 資料セットは登録して zip にするところまでは GUI で完結していたが、実際に
+// 提案書やレビュー資料へ貼るときの「どの順で並べるか」「どんな見出し・1 行説明を
+// 添えるか」は zip を開いた後に資料側で手作業だった。順序を入れ替えたい・説明を
+// 足したいと気付くのが貼り込んだ後なので、毎回そこで手戻りが出る。
+// 体裁は図の中身ではなく資料セットの持ち物なので、DSL を書き換えずにここで組み、
+// 貼る前に 1 枚物 (目次付き) で確かめてから書き出す。
+
+var _dlName = '';
+var _dlRows = [];
+
+function _dlSet() {
+  var DS = window.MA.docSet;
+  return DS ? DS.find(_dsSets, _dlName) : null;
+}
+
+function openDocLayout(name) {
+  var DL = window.MA.docLayout;
+  var DS = window.MA.docSet;
+  if (!DL || !DS) return;
+  var set = DS.find(_dsSets, name);
+  if (!set) { _dsStatus('その資料セットはありません'); return; }
+  _dlName = set.name;
+  _dlRows = DL.items(set);
+  var panel = document.getElementById('docset-layout');
+  if (panel) panel.style.display = 'flex';
+  var rows = document.getElementById('docset-rows');
+  if (rows) rows.style.display = 'none';
+  var neu = document.getElementById('docset-new');
+  if (neu) neu.style.display = 'none';
+  renderDocLayout();
+  _dsStatus('「' + set.name + '」の体裁を組んでいます。貼る前にここで順序と説明を確かめられます');
+}
+
+function closeDocLayout() {
+  var panel = document.getElementById('docset-layout');
+  if (panel) panel.style.display = 'none';
+  var rows = document.getElementById('docset-rows');
+  if (rows) rows.style.display = '';
+  var neu = document.getElementById('docset-new');
+  if (neu) neu.style.display = '';
+  _dlName = '';
+  _dlRows = [];
+}
+
+// 今の画面の行から 1 枚物を組む (保存前でもプレビューは今書いた文で出す。
+// 保存しないと確かめられない作りだと、結局貼ってから直すのに戻る)。
+function _dlSheet() {
+  var DL = window.MA.docLayout;
+  var saved = DL.toSaved(_dlRows);
+  return DL.sheet({ name: _dlName, docs: saved.docs, items: saved.items }, _dsNames);
+}
+
+function renderDocLayout() {
+  var DL = window.MA.docLayout;
+  var box = document.getElementById('dl-rows');
+  if (!DL || !box) return;
+  var sh = _dlSheet();
+
+  var title = document.getElementById('dl-title');
+  if (title) title.textContent = _dlName;
+  var sum = document.getElementById('dl-sum');
+  if (sum) {
+    sum.className = DL.sheetClass(sh);
+    sum.textContent = DL.sheetSummary(sh);
+  }
+
+  box.textContent = '';
+  sh.entries.forEach(function(e, i) {
+    var row = document.createElement('div');
+    row.className = 'dl-row';
+    row.setAttribute('data-doc-name', e.name);
+    row.setAttribute('data-no', String(e.no));
+
+    var no = document.createElement('span');
+    no.className = 'dl-no';
+    no.textContent = '図' + e.no;
+    row.appendChild(no);
+
+    var head = document.createElement('input');
+    head.type = 'text';
+    head.className = 'dl-heading';
+    head.placeholder = '見出し（空なら図の名前を使います）';
+    head.value = _dlRows[i] ? _dlRows[i].heading : '';
+    head.addEventListener('input', function() {
+      _dlRows = DL.setField(_dlRows, i, 'heading', head.value);
+      renderDocSheet();
+    });
+    row.appendChild(head);
+
+    var note = document.createElement('input');
+    note.type = 'text';
+    note.className = 'dl-note';
+    note.placeholder = '1 行説明（資料の目次に出ます）';
+    note.value = _dlRows[i] ? _dlRows[i].note : '';
+    note.addEventListener('input', function() {
+      _dlRows = DL.setField(_dlRows, i, 'note', note.value);
+      renderDocSheet();
+    });
+    row.appendChild(note);
+
+    var up = document.createElement('button');
+    up.type = 'button';
+    up.className = 'dl-up';
+    up.textContent = '↑';
+    up.title = '1 つ前に出す';
+    up.disabled = i === 0;
+    up.addEventListener('click', function() {
+      _dlRows = DL.move(_dlRows, i, -1);
+      renderDocLayout();
+    });
+    row.appendChild(up);
+
+    var down = document.createElement('button');
+    down.type = 'button';
+    down.className = 'dl-down';
+    down.textContent = '↓';
+    down.title = '1 つ後ろに回す';
+    down.disabled = i === sh.entries.length - 1;
+    down.addEventListener('click', function() {
+      _dlRows = DL.move(_dlRows, i, 1);
+      renderDocLayout();
+    });
+    row.appendChild(down);
+
+    var nm = document.createElement('span');
+    nm.className = 'dl-name' + (e.present ? '' : ' dl-gone');
+    nm.textContent = e.name + (e.present ? '' : '（保存フォルダに無い）');
+    row.appendChild(nm);
+
+    box.appendChild(row);
+  });
+
+  renderDocSheet();
+}
+
+// 貼り込みプレビュー。資料に貼ったときの見え方 (目次 → 図の見出しと説明) をそのまま出す。
+function renderDocSheet() {
+  var DL = window.MA.docLayout;
+  var box = document.getElementById('dl-sheet');
+  if (!DL || !box) return;
+  var sh = _dlSheet();
+
+  var sum = document.getElementById('dl-sum');
+  if (sum) {
+    sum.className = DL.sheetClass(sh);
+    sum.textContent = DL.sheetSummary(sh);
+  }
+
+  box.textContent = '';
+  var t = document.createElement('div');
+  t.className = 'dl-sheet-title';
+  t.textContent = sh.title || '資料セット';
+  box.appendChild(t);
+
+  var toc = document.createElement('ul');
+  toc.className = 'dl-toc';
+  toc.id = 'dl-toc';
+  sh.entries.forEach(function(e) {
+    var li = document.createElement('li');
+    li.className = 'dl-toc-line';
+    li.setAttribute('data-no', String(e.no));
+    li.textContent = DL.tocLine(e);
+    toc.appendChild(li);
+  });
+  box.appendChild(toc);
+
+  sh.entries.forEach(function(e) {
+    var fig = document.createElement('div');
+    fig.className = 'dl-fig';
+    fig.setAttribute('data-no', String(e.no));
+
+    var h = document.createElement('div');
+    h.className = 'dl-fig-head';
+    h.textContent = '図' + e.no + ' ' + e.heading;
+    fig.appendChild(h);
+
+    if (e.note) {
+      var n = document.createElement('div');
+      n.className = 'dl-fig-note';
+      n.textContent = e.note;
+      fig.appendChild(n);
+    }
+
+    var f = document.createElement('div');
+    f.className = 'dl-fig-file' + (e.present ? '' : ' dl-gone');
+    f.textContent = DL.fileNameOf(e) + '.svg' + (e.present ? '' : '（保存フォルダに無い）');
+    fig.appendChild(f);
+
+    box.appendChild(fig);
+  });
+}
+
+function saveDocLayout() {
+  var DL = window.MA.docLayout;
+  if (!DL || !_dlName) return Promise.resolve(null);
+  var saved = DL.toSaved(_dlRows);
+  var name = _dlName;
+  return saveDocSet(name, saved.docs, saved.items).then(function(res) {
+    if (!res) return res;
+    // 保存しても画面は体裁のまま残す (続けて並べ替えられる)。
+    var DS = window.MA.docSet;
+    var set = DS ? DS.find(_dsSets, name) : null;
+    if (set) { _dlName = set.name; _dlRows = DL.items(set); renderDocLayout(); }
+    _dsStatus('「' + name + '」の体裁（順序・見出し・1 行説明）を保存しました');
+    return res;
+  });
 }
 
 function deleteDocSet(name) {
@@ -22857,10 +23079,29 @@ function exportDocSet(name) {
   })).then(function() {
     var built = FE.docsFrom(res.present, texts);
     if (!built.docs.length) { _dsStatus('図の本文を読めませんでした'); return null; }
-    return exportAllSVG(built.docs, document.getElementById('docset-status'))
+    // BLK-primary-20260916-0100-wish: 組んだ体裁のまま出す。図番号を名前の先頭に
+    // 付けて貼る順にフォルダで並べ、目次付きの 1 枚物を同じ zip に入れる
+    // (zip を開いた後に並べ直す・目次を打ち直す手作業をここで終わらせる)。
+    var DL = window.MA.docLayout;
+    var extra = [];
+    var docs = built.docs;
+    if (DL) {
+      var sh = DL.sheet(set, _dsNames);
+      var byName = {};
+      built.docs.forEach(function(d) { byName[d.name] = d; });
+      var ordered = [];
+      sh.entries.forEach(function(e) {
+        var d = byName[e.name];
+        if (d) ordered.push({ name: DL.fileNameOf(e), dsl: d.dsl });
+      });
+      if (ordered.length) docs = ordered;
+      extra.push({ name: '資料の体裁.md', content: DL.sheetText(sh) });
+    }
+    return exportAllSVG(docs, document.getElementById('docset-status'), extra)
       .then(function(summary) {
         var note = FE.missingNote(built.missing.concat(res.missing));
-        _dsStatus(summary.message + '（' + res.expected + ' 枚の資料セット「' + name + '」）' + note);
+        _dsStatus(summary.message + '（' + res.expected + ' 枚の資料セット「' + name
+          + '」。図番号順の SVG と、目次付きの「資料の体裁.md」が入っています）' + note);
         return summary;
       });
   });
@@ -22871,6 +23112,7 @@ function openDocSetModal() {
   if (!modal) return;
   modal.style.display = 'flex';
   _dsStatus('');
+  closeDocLayout();
   var nameEl = document.getElementById('docset-name');
   renderDocSets();
   return Promise.all([loadDocSetNames(), loadDocSets(true)]).then(function() {
@@ -22896,6 +23138,10 @@ function setupDocSets() {
   document.addEventListener('keydown', function(ev) {
     if (ev.key === 'Escape' && modal.style.display === 'flex') closeDocSetModal();
   });
+  var back = document.getElementById('dl-back');
+  if (back) back.addEventListener('click', function() { closeDocLayout(); renderDocSets(); });
+  var dlSave = document.getElementById('dl-save');
+  if (dlSave) dlSave.addEventListener('click', function() { saveDocLayout(); });
   var create = document.getElementById('docset-create');
   if (create) create.addEventListener('click', function() {
     var nameEl = document.getElementById('docset-name');
@@ -22905,7 +23151,8 @@ function setupDocSets() {
   });
 }
 
-function exportAllSVG(pickedDocs, statusEl) {
+// extraFiles は zip に同梱する図以外の紙 (資料の体裁の 1 枚物など)。
+function exportAllSVG(pickedDocs, statusEl, extraFiles) {
   if (!window.MA.bulkExport || !window.MA.workspace) return;
   // 編集中の内容が workspace に載っていないと 1 枚だけ古い DSL で書き出される。
   saveActiveDoc();
@@ -22928,6 +23175,9 @@ function exportAllSVG(pickedDocs, statusEl) {
       if (map && map.table && map.table.total > 0) {
         files.push({ name: '指摘対応表.md', content: map.text });
       }
+      (extraFiles || []).forEach(function(f) {
+        if (f && f.name) files.push({ name: f.name, content: String(f.content == null ? '' : f.content) });
+      });
       var name = window.MA.bulkExport.zipName();
       downloadBlob(name, new Blob([window.MA.bulkExport.buildZip(files)], { type: 'application/zip' }));
       msg = msg + '（' + name + '）';
