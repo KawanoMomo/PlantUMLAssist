@@ -2172,6 +2172,30 @@ html, body {
 #peek-board .pb-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-bottom: 6px; }
 #peek-board-summary { color: var(--text-secondary); }
 #peek-board-summary.has-todo { color: var(--accent-red); font-weight: bold; }
+/* BLK-junior-20260915-2346-wish: 部品カードの帯。6 図種を 1 まとまりとして
+   「何枚済んだか」と「どの図がまだ先輩に合っていないか」を本文より先に出す。 */
+#peek-card {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 4px 0 6px; border-bottom: 1px solid var(--border);
+}
+#peek-card-progress { font-weight: 600; }
+#peek-card-progress.full { color: var(--accent); }
+#peek-card .pc-bar { display: inline-flex; gap: 3px; }
+#peek-card .pc-pip {
+  width: 10px; height: 6px; border-radius: 2px;
+  background: var(--border); border: 1px solid var(--border);
+}
+#peek-card .pc-pip.on { background: var(--accent); border-color: var(--accent); }
+#peek-card .pc-gaps { color: var(--text-secondary); }
+#peek-card .pc-gaps.has-todo { color: var(--accent-red); }
+#peek-card .pc-gap {
+  background: none; border: 1px solid currentColor; color: inherit;
+  border-radius: 3px; padding: 0 4px; font: inherit; cursor: pointer;
+}
+#peek-card .pc-gap[data-verdict="variant"] { opacity: 0.8; }
+#peek-board .pb-row[data-verdict="differ"] .pb-kind::after { content: ' ●'; color: var(--accent-red); }
+#peek-board .pb-row[data-verdict="variant"] .pb-kind::after { content: ' ○'; color: var(--accent-red); }
+#peek-board .pb-row[data-verdict="agree"] .pb-kind::after { content: ' ✓'; color: var(--accent); }
 #peek-board .pb-row {
   display: grid; grid-template-columns: 6.5em 1fr 1fr; gap: 6px;
   border-top: 1px solid var(--border); padding: 6px 0; align-items: start;
@@ -6972,6 +6996,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/part-slice.js"></script>
 <script src="src/core/part-focus.js"></script>
 <script src="src/core/part-board.js"></script>
+<script src="src/core/part-card.js"></script>
 <script src="src/core/review-note.js"></script>
 <script src="src/core/finding-actions.js"></script>
 <script src="src/core/finding-variant.js"></script>
