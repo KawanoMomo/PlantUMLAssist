@@ -24,6 +24,11 @@ const auditBoard = require('../src/core/audit-board');
 // 台帳そのもの (src/core/swap-queue.js) は DOM に触らないので CLI からも引ける。
 const swapQueue = require('../src/core/swap-queue');
 const reviewBoard = require('../src/core/review-board');
+// BLK-reviewer-20260914-2206 (差し戻し 1 回目): --board の「新規」は findings.js と
+// 同じ同一性で数える。台帳 (finding-tracker の控え) を読んで、追跡中の指摘に
+// 当たる行を新規から外す。台帳が無い場所では今までどおり指摘.md だけで突き合わせる。
+const findingTracker = require('../src/core/finding-tracker');
+const findingsCli = require('./findings');
 // BLK-reviewer-20260914-2206: 控えは対象の組ごとに分けて持つ (src/core/audit-state.js)。
 const auditState = require('../src/core/audit-state');
 // BLK-reviewer-20260915-0506-wish: 表記揺れの「揃える先」を毎 tick 推定し直さず、
@@ -304,6 +309,24 @@ function runRegistry(opts) {
   return 0;
 }
 
+// findings.js の台帳 (追跡中の指摘) を、findings.js と同じ場所の決め方で読む。
+// 読めなければ空で返す (台帳が無いことは異常ではない)。
+function readLedger(targets) {
+  try {
+    const file = findingsCli.defaultStateFile(targets || []);
+    if (!fs.existsSync(file)) return { file: null, rows: [] };
+    const st = findingTracker.readState(JSON.parse(fs.readFileSync(file, 'utf-8')));
+    const rows = findingTracker.rows(st)
+      // 今回も出ている未解消のものだけ。解消済みを混ぜると、出戻りが継続に見える。
+      .filter((r) => r.open && r.present)
+      .map((r) => ({ id: r.id, title: r.title, docs: r.docs, since: r.since,
+                     tick: r.streak, status: r.state }));
+    return { file: file, rows: rows };
+  } catch (e) {
+    return { file: null, rows: [] };
+  }
+}
+
 // --board の指摘文書。名指しが無ければ最初の対象フォルダの `指摘.md` を見る
 // (reviewer はそこに上書き保存しているので、既定で当たる)。
 function findingsPath(opts) {
@@ -353,13 +376,20 @@ function runBoard(result, opts, prev, fmtOpts, prevNote) {
       .concat(fd.added.filter((f) => !draftNames[f.name]).map((f) => f.name))
     : [];
 
+  // findings.js が使っている控えと同じ物を、同じ決め方の場所から読む。
+  const ledger = readLedger(opts.targets);
+
   // BLK-reviewer-20260914-2206 (3 件目): --only で絞った回は、回していない監査の
   // 指摘まで「今回の突合に出ていない = 解消」と出ていた。何を回したかを渡して、
   // 見ていない物は「今回は見ていない」と言わせる。
   const view = reviewBoard.build({ board: b, findings: md, changedFiles: changed,
+    ledger: ledger.rows,
     scope: opts.only && opts.only.length ? opts.only : null });
   const lines = [reviewBoard.markdown(view, 'レビュー結果 — ' + opts.targets.join(' / '))];
   lines.push('前回の指摘文書: ' + (fpath || '(無し。今回の突合だけを出しています)'));
+  lines.push('findings.js の台帳: ' + (ledger.file
+    ? ledger.file + '（追跡中 ' + ledger.rows.length + ' 件。新規の判定はこの台帳と同じ同一性で行います）'
+    : '(無し。指摘文書だけで突き合わせています)'));
   if (prevNote) lines.push(prevNote);
   lines.push('前回控えとの比較: ' + (base
     ? (fd && fd.contentComparable ? '内容まで比較' : '名前だけ比較 (前回に指紋が無い)')

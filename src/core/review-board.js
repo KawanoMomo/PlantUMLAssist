@@ -363,6 +363,45 @@
       }
     });
 
+    // BLK-reviewer-20260914-2206 (差し戻し 1 回目): ここまでの突き合わせは
+    // 指摘.md の自然文 (図名とバッククォートで囲った語) しか手がかりに出来ない。
+    // 同じ欠陥が別の図に広がっただけの行は、図名で当たらず名指しの語もバッククォートで
+    // 囲まれていなければ「今回の新規」に落ちる (実データの F-01 ClockCtrl.EnableClock が
+    // adc / can_init_sequence.puml に出た回がこれ)。
+    // findings.js (finding-tracker) は同じ欠陥を図に依らない実体 id 1 つで追っていて、
+    // そちらが同一性の正。台帳を渡されたときは、まずその実体で当ててから新規を数える。
+    _list(inp.ledger).forEach(function(L) {
+      var parts = _s(L.title).split('.').map(function(p) { return _s(p).trim(); })
+        .filter(function(p) { return p.length >= 2; });
+      if (!parts.length) return;
+      var wantDocs = _list(L.docs).map(docKey).filter(function(d) { return d !== ''; });
+      var hit = rows.filter(function(r, i) {
+        if (covered[i]) return false;
+        var text = (_s(r.title) + ' ' + _s(r.detail)).toLowerCase();
+        var all = parts.every(function(p) { return text.indexOf(p.toLowerCase()) >= 0; });
+        if (!all) return false;
+        // 主語と目的語が揃っている台帳行 (ClockCtrl.EnableClock) は語だけで当ててよい。
+        // 1 語しか無い台帳行は当たりが緩すぎるので、図名まで一致したときだけ当てる。
+        if (parts.length >= 2) return true;
+        var rd = _rowDocs(r);
+        return rd.some(function(d) { return wantDocs.indexOf(d) >= 0; });
+      });
+      if (!hit.length) return;
+      hit.forEach(function(r) { covered[rows.indexOf(r)] = true; });
+      var spread = hit.filter(function(r) {
+        return _rowDocs(r).some(function(d) { return wantDocs.indexOf(d) < 0; });
+      });
+      carried.push({
+        finding: { title: (L.id ? L.id + ' ' : '') + _s(L.title), docs: wantDocs,
+                   since: _s(L.since), status: 'carried', keys: parts },
+        verdict: 'ledger', tick: L.tick || 0, atLeast: !!L.atLeast, rows: hit,
+        ledgerId: _s(L.id), ledgerStatus: _s(L.status),
+        note: 'findings.js の台帳が追っている同じ指摘です'
+          + (spread.length ? '。うち ' + spread.length + ' 件は台帳に載っていない図への再掲で、'
+             + '新規の問題ではありません' : ''),
+      });
+    });
+
     // どの前回指摘にも当たらなかった行。
     var fresh = rows.filter(function(r, i) { return !covered[i]; });
 
@@ -382,6 +421,9 @@
       scope: scope,
       counts: {
         carried: carried.filter(function(c) { return c.verdict === 'carried'; }).length,
+        // findings.js の台帳で当たった継続。継続の内数として数える
+        // (--board と findings.js で「新規」の数が食い違わないための 1 行)。
+        ledger: carried.filter(function(c) { return c.verdict === 'ledger'; }).length,
         // 本当の出戻り。読み直しが要るのはここだけ (継続との区別が付かないと全件読む羽目になる)。
         regressed: carried.filter(function(c) { return c.regressed; }).length,
         resolved: carried.filter(function(c) { return c.verdict === 'resolved'; }).length,
@@ -399,16 +441,18 @@
   function longestCarry(view) {
     var max = 0, item = null;
     _list(view && view.carried).forEach(function(c) {
-      if (c.verdict === 'carried' && c.tick > max) { max = c.tick; item = c; }
+      if ((c.verdict === 'carried' || c.verdict === 'ledger') && c.tick > max) { max = c.tick; item = c; }
     });
     return item ? { tick: max, title: item.finding.title } : null;
   }
 
   function summaryLine(view) {
     var c = (view && view.counts)
-      || { carried: 0, resolved: 0, fresh: 0, sameDoc: 0, unmatched: 0, changed: 0, regressed: 0,
-           outOfScope: 0 };
-    var s = '継続 ' + c.carried;
+      || { carried: 0, ledger: 0, resolved: 0, fresh: 0, sameDoc: 0, unmatched: 0, changed: 0,
+           regressed: 0, outOfScope: 0 };
+    // 台帳で当たった継続も継続に数える。ここを分けて出すと、findings.js が
+    // 「継続 6 / 新規 0」と言っている回に --board だけが「新規 2」と言う。
+    var s = '継続 ' + (c.carried + (c.ledger || 0));
     // 出戻りは継続の内数。0 件なら書かない (毎回出る数字は読み飛ばされる)。
     if (c.regressed) s += '（うち出戻り ' + c.regressed + '）';
     s += ' / 解消 ' + c.resolved + ' / 新規 ' + c.fresh + ' 件';
@@ -418,12 +462,14 @@
     if (c.outOfScope) re.push('今回は見ていない ' + c.outOfScope + ' 件');
     if (re.length) s += '（' + re.join('・') + '）';
     s += '、前回控えから変わった図 ' + c.changed + ' 枚';
+    if (c.ledger) s += '（うち findings.js の台帳で追跡中 ' + c.ledger + '）';
     var l = longestCarry(view);
     if (l) s += '。最長の継続は「' + l.title + '」' + l.tick + ' tick 目';
     return s;
   }
 
-  var VERDICT = { carried: '継続', resolved: '解消', sameDoc: '同じ図に別の指摘', unmatched: '要読み直し',
+  var VERDICT = { carried: '継続', ledger: '継続（findings.js の台帳で追跡中）',
+                  resolved: '解消', sameDoc: '同じ図に別の指摘', unmatched: '要読み直し',
                   outOfScope: '今回は見ていない (スコープ外)' };
 
   // 1 枚の常設ビュー。そのまま次の指摘.md の下敷きになる形で出す。
@@ -436,7 +482,7 @@
         + 'ここに出ていない監査の指摘は「今回は見ていない」として前回の状態のまま据え置きです。', '');
     }
 
-    var order = ['carried', 'sameDoc', 'unmatched', 'outOfScope', 'resolved'];
+    var order = ['carried', 'ledger', 'sameDoc', 'unmatched', 'outOfScope', 'resolved'];
     order.forEach(function(kind) {
       var items = _list(v.carried).filter(function(c) { return c.verdict === kind; });
       if (!items.length) return;
@@ -444,6 +490,7 @@
       items.forEach(function(c) {
         var head = '- ' + c.finding.title;
         if (kind === 'outOfScope' && c.tick) head += '（前回のまま ' + c.tick + ' tick 目）';
+        if (kind === 'ledger' && c.tick) head += '（' + c.tick + ' tick 目' + (c.atLeast ? '以上' : '') + '）';
         if (kind === 'carried') {
           head += '（' + c.tick + ' tick 目' + (c.atLeast ? '以上' : '') + '）';
           // 読み直しが要る 1 件を、行の頭で見分けられるようにする。
