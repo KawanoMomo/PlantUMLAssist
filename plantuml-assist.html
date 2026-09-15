@@ -5470,10 +5470,12 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   border-bottom: 1px solid #8a5a2a;
   font-size: 12px;
 }
-#save-clash-overlay .scl-head { display: flex; align-items: center; gap: 8px; padding-right: 150px; flex-wrap: wrap; }
+/* 右端はズーム帯 (#zoom-hud) の下になる。ボタンが 2 つあるので save-check より広く空ける
+   (足りないと「揃える」が帯の下に隠れて押せない)。 */
+#save-clash-overlay .scl-head { display: flex; align-items: center; gap: 8px; padding-right: 260px; flex-wrap: wrap; }
 #save-clash-overlay .scl-head span { flex: 1; min-width: 12em; }
 #save-clash-overlay button { font-size: 11px; padding: 1px 6px; cursor: pointer; }
-#scl-list { margin: 4px 0 0; padding-left: 18px; padding-right: 150px; max-height: 120px; overflow-y: auto; }
+#scl-list { margin: 4px 0 0; padding-left: 18px; padding-right: 260px; max-height: 120px; overflow-y: auto; }
 #scl-list li { margin: 2px 0; line-height: 1.4; }
 /* 相手側の図の名前。ここを読めば 1 枚ずつ開かずに誰に断ればよいかが決まる。 */
 #scl-list li .scl-where { color: #d8c0a8; }
