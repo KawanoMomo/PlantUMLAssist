@@ -144,9 +144,16 @@ window.MA.crossRefDiff = (function() {
 
   // 種別・名前・文言をつなぐ区切り。outline の節は 1 行から作るので改行は入らない。
   var KEY_SEP = '\n';
-  // 同じ要素と見なす鍵。種別 + 名前 + 文言。空白の詰め方と大文字小文字は無視する。
+  // 入れ子の道筋の区切り (outline が付ける parent と同じ形)。
+  var PARENT_SEP = ' / ';
+
+  // 同じ要素と見なす鍵。種別 + 入れ子の道筋 + 名前 + 文言。
+  // 空白の詰め方と大文字小文字は無視する。
+  // BLK-junior-20260917-0323-wish: 親の中の `Idle` とトップレベルの `Idle` は
+  // 別の状態なので、道筋を鍵に入れないと「親の中に増えた子」が共通に落ちる。
   function keyOf(node) {
-    return [_s(node && node.kind), _norm(node && node.label), _norm(node && node.detail)].join(KEY_SEP);
+    return [_s(node && node.kind), _norm(node && node.parent),
+            _norm(node && node.label), _norm(node && node.detail)].join(KEY_SEP);
   }
 
   function _norm(v) { return _s(v).replace(/\s+/g, ' ').trim().toLowerCase(); }
@@ -159,6 +166,7 @@ window.MA.crossRefDiff = (function() {
       kind: node.kind,
       label: _s(node.label),
       detail: _s(node.detail),
+      parent: applyRename(_s(node.parent), map),
       line: (node.line || 0) + 1,
       text: applyRename(_s(raw).trim(), map),
     };
@@ -231,6 +239,8 @@ window.MA.crossRefDiff = (function() {
     if (a > 0) parts.push('相手にしかない ' + a + ' 件');
     if (b > 0) parts.push('自分にしかない ' + b + ' 件');
     var s = parts.join(' · ') + ' (共通 ' + (r.common || 0) + ' 件)';
+    var nested = nestedCount(r.onlyRef);
+    if (nested > 0) s += '。うち ' + nested + ' 件は親の中 (入れ子) の増分です';
     if (c.level === 'partial') s += ' — 共通が少なく、名前の付け方が揃っていない可能性があります';
     return s;
   }
@@ -247,6 +257,20 @@ window.MA.crossRefDiff = (function() {
 
   function kindLabel(kind) {
     return KIND_LABELS[_s(kind)] || _s(kind);
+  }
+
+  // 一覧の 1 行に出す名前。親の中の要素は道筋ごと出す。
+  // BLK-junior-20260917-0323-wish: 「状態 Idle」とだけ出ると、それが
+  // トップレベルに増えたのか親の中に増えたのかが行から読めない。
+  function entryLabel(entry) {
+    var e = entry || {};
+    var name = _s(e.label);
+    return _s(e.parent) ? (_s(e.parent) + PARENT_SEP + name) : name;
+  }
+
+  // 入れ子の中に増えた要素だけを数える。見出しで「親の中に N 件」と言い切るため。
+  function nestedCount(list) {
+    return (list || []).filter(function(e) { return _s(e && e.parent) !== ''; }).length;
   }
 
   // 図の形。種別ごとの件数と、状態遷移図の擬似状態 ([*] / choice / fork) の件数。
@@ -374,17 +398,91 @@ window.MA.crossRefDiff = (function() {
   // それ以外 (関係・注釈) は @enduml の直前。@enduml が無ければ末尾。
   var DECL_RE = /^\s*(participant|actor|boundary|control|entity|database|collections|queue|class|abstract\s+class|interface|enum|state|component|node|package|folder|rectangle|cloud|storage|usecase)\b/i;
 
+  // 入れ子の道筋を持つ要素 (`state Configured {` の中の `Idle`) は、親の中へ入れる。
+  // BLK-junior-20260917-0323-wish: 親の外へ足すと、子状態がトップレベルの兄弟に
+  // なって図の意味が変わる。取り込んだ側は形が崩れてから気付くことになる。
+  function _parents(entry) {
+    return _s(entry && entry.parent).split(PARENT_SEP)
+      .map(function(t) { return t.trim(); })
+      .filter(function(t) { return t !== ''; });
+  }
+
+  // 宣言行が name を宣言しているか。`state Idle`・`state "待機" as Idle {` の両方。
+  function _declares(line, name) {
+    var t = _s(line).trim();
+    if (!DECL_RE.test(t)) return false;
+    var n = _norm(name);
+    if (n === '') return false;
+    var body = t.replace(/^\s*[A-Za-z]+(\s+class)?\s+/i, '').replace(/\s*\{\s*$/, '');
+    var as = body.match(/^(.*?)\s+as\s+([A-Za-z0-9_][A-Za-z0-9_.-]*)\s*$/i);
+    var cands = as ? [as[1], as[2]] : [body];
+    for (var i = 0; i < cands.length; i++) {
+      var c = _norm(cands[i]).replace(/\s*<<[^>]*>>\s*$/, '').replace(/^"|"$/g, '').trim();
+      if (c === n) return true;
+    }
+    return false;
+  }
+
+  // name の本体 { … } を [from, to) の中から探す。
+  //   { open, close } … 本体がある
+  //   { declOnly }    … 宣言はあるが本体が無い (`state Configured`)
+  //   null            … 宣言そのものが無い
+  function _findBlock(lines, name, from, to) {
+    for (var i = from; i < to; i++) {
+      if (!_declares(lines[i], name)) continue;
+      if (!/\{\s*$/.test(_s(lines[i]))) return { declOnly: i };
+      var depth = 1;
+      for (var j = i + 1; j < lines.length; j++) {
+        var t = _s(lines[j]).trim();
+        if (/\{\s*$/.test(t)) depth++;
+        else if (/^\}/.test(t)) { depth--; if (depth === 0) return { open: i, close: j }; }
+      }
+      return { open: i, close: lines.length };
+    }
+    return null;
+  }
+
+  // [from, to) の中での置き場所。宣言は宣言の並びの末尾、それ以外は範囲の末尾。
+  function _placeIn(lines, text, from, to) {
+    if (!DECL_RE.test(text)) return to;
+    for (var i = to - 1; i >= from; i--) {
+      if (DECL_RE.test(_s(lines[i]).trim())) return i + 1;
+    }
+    return from;
+  }
+
   function insertPlan(selfDsl, entry) {
     var lines = _s(selfDsl).split('\n');
     var text = _s(entry && entry.text).trim();
     if (text === '') return null;
-    var at = _endIndex(lines);
-    if (DECL_RE.test(text)) {
-      for (var i = at - 1; i >= 0; i--) {
-        if (DECL_RE.test(lines[i])) { at = i + 1; break; }
+    var parents = _parents(entry);
+    var from = 0, to = _endIndex(lines), expand = null, level = 0;
+    for (var p = 0; p < parents.length; p++) {
+      var b = _findBlock(lines, parents[p], from, to);
+      // 親が自分の図にまだ無いなら、道筋は辿れない。トップレベルの置き場所に戻す
+      // (親そのものも「相手にしかない」に出ているので、先にそれを取り込む)。
+      if (!b) { level = 0; from = 0; to = _endIndex(lines); expand = null; break; }
+      level++;
+      if (b.declOnly != null) {
+        // 自分の側では親がまだ 1 行の宣言。本体を開いてその中へ入れる。
+        expand = { at: b.declOnly, name: parents[p] };
+        from = b.declOnly + 1; to = b.declOnly + 1;
+        break;
       }
+      from = b.open + 1; to = b.close;
     }
-    return { index: at, line: at + 1, text: text };
+    var at = expand ? from : _placeIn(lines, text, from, to);
+    var plan = { index: at, line: at + 1, text: _indent(text, level),
+                 parent: parents.join(PARENT_SEP), from: from, to: to };
+    if (expand) plan.expand = expand;
+    return plan;
+  }
+
+  function _indent(text, level) {
+    var body = _s(text).trim();
+    var pad = '';
+    for (var i = 0; i < level; i++) pad += '  ';
+    return pad + body;
   }
 
   function _endIndex(lines) {
@@ -399,7 +497,15 @@ window.MA.crossRefDiff = (function() {
     var plan = insertPlan(selfDsl, entry);
     if (!plan) return null;
     var lines = _s(selfDsl).split('\n');
-    lines.splice(plan.index, 0, plan.text);
+    var level = _parents(entry).length;
+    var add = [plan.text];
+    // 相手側で本体を開いている宣言 (`state Configured {`) は閉じ括弧まで入れる。
+    if (/\{\s*$/.test(plan.text)) add.push(_indent('}', level));
+    if (plan.expand) {
+      lines[plan.expand.at] = _s(lines[plan.expand.at]).replace(/\s*$/, '') + ' {';
+      add.push(_indent('}', Math.max(0, level - 1)));
+    }
+    lines.splice.apply(lines, [plan.index, 0].concat(add));
     return { dsl: lines.join('\n'), line: plan.line };
   }
 
@@ -416,13 +522,20 @@ window.MA.crossRefDiff = (function() {
       var t = _s(lines[i]).trim();
       if (t !== '') { anchor = t; break; }
     }
+    if (plan.expand) {
+      return plan.line + ' 行目 (「' + plan.expand.name + '」に { } を開いて) に入ります';
+    }
     if (anchor === '') return plan.line + ' 行目 (先頭) に入ります';
     return plan.line + ' 行目、「' + anchor + '」の後に入ります';
   }
 
   // 既に自分の図にある行は入れない (二重に足すと同じ手順が 2 本になる)。
-  function _has(lines, text) {
-    for (var i = 0; i < lines.length; i++) {
+  // 見るのは入る先の範囲だけ。トップレベルの `state Idle` があっても、
+  // 親の中に `Idle` が無いなら、それは入れるべき子状態。
+  function _has(lines, text, from, to) {
+    var a = from == null ? 0 : from;
+    var b = to == null ? lines.length : to;
+    for (var i = a; i < b; i++) {
       if (_s(lines[i]).trim() === text) return true;
     }
     return false;
@@ -439,7 +552,9 @@ window.MA.crossRefDiff = (function() {
       var text = _s(entry && entry.text).trim();
       if (text === '') { return; }
       var lines = dsl.split('\n');
-      if (_has(lines, text)) {
+      var plan = insertPlan(dsl, entry);
+      if (!plan) { skipped.push({ text: text, reason: 'noplan' }); return; }
+      if (_has(lines, text, plan.from, plan.to)) {
         skipped.push({ text: text, reason: 'already' });
         return;
       }
@@ -483,6 +598,8 @@ window.MA.crossRefDiff = (function() {
     summary: summary,
     comparability: comparability,
     kindLabel: kindLabel,
+    entryLabel: entryLabel,
+    nestedCount: nestedCount,
     shape: shape,
     shapeRows: shapeRows,
     shapeSummary: shapeSummary,

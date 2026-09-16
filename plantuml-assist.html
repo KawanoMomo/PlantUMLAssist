@@ -5221,9 +5221,23 @@ mark.ri-hit { background: var(--accent); color: var(--bg-primary); padding: 0 1p
 /* 相手にしかない = 取り込める。自分にしかない = 相手に無い。色で役割を分ける */
 .xf-row.only-ref .xf-side { color: var(--accent-orange); }
 .xf-row.only-self .xf-side { color: var(--text-secondary); }
+/* BLK-junior-20260917-0323-wish: 親の中 (入れ子) に増えた要素はその親を行に出す */
+.xf-row .xf-nest {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 4px;
+  white-space: nowrap;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .xf-row .xf-text {
-  flex: 1;
-  min-width: 0;
+  flex: 1 1 40%;
+  /* 入る位置の 1 行が長くても、行の DSL が読めなくならない幅を残す */
+  min-width: 140px;
   font-family: var(--font-mono);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -5247,8 +5261,11 @@ mark.ri-hit { background: var(--accent); color: var(--bg-primary); padding: 0 1p
 .xf-row .xf-where {
   color: var(--text-secondary);
   font-size: 10px;
-  flex-shrink: 0;
+  flex: 0 1 auto;
+  min-width: 0;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 #xf-take-bar {
   display: flex;

@@ -83,6 +83,15 @@ window.MA.outline = (function() {
     return t;
   }
 
+  // 入れ子の道筋。`Configured` の中の `Sub` の中なら 'Configured / Sub'。
+  // トップレベルは '' (今まで通り親を持たない)。
+  var PARENT_SEP = ' / ';
+
+  function _parentOf(stack) {
+    if (!stack || stack.length === 0) return '';
+    return stack.map(function(s) { return s.label; }).join(PARENT_SEP);
+  }
+
   function _isComment(line) {
     var du = window.MA && window.MA.dslUtils;
     if (du && typeof du.isPlantumlComment === 'function') return du.isPlantumlComment(line);
@@ -100,6 +109,9 @@ window.MA.outline = (function() {
     var errors = [];
     var depth = 0;
     var open = [];   // [{ kind, line }] 閉じられていないブロック
+    // 本体を開いている宣言 (`state Configured {` など) の積み。中の節に
+    // 「どの親の中か」を付けるために持つ。alt/loop のような括りは親に数えない。
+    var declStack = [];
     var sawStart = false, sawEnd = false;
 
     for (var i = 0; i < lines.length; i++) {
@@ -125,6 +137,7 @@ window.MA.outline = (function() {
         } else {
           open.pop();
           depth = open.length;
+          while (declStack.length && declStack[declStack.length - 1].depth >= depth) declStack.pop();
         }
         continue;
       }
@@ -158,7 +171,7 @@ window.MA.outline = (function() {
         var colon = body.match(/:\s*(.+)$/);
         nodes.push({
           line: i, kind: 'note', label: 'note',
-          detail: colon ? colon[1].trim() : body, depth: depth,
+          detail: colon ? colon[1].trim() : body, depth: depth, parent: _parentOf(declStack),
         });
         // note left of X ... end note の複数行形式は end note で閉じる
         if (!colon) { open.push({ kind: 'note', line: i }); depth = open.length; }
@@ -179,8 +192,16 @@ window.MA.outline = (function() {
         nodes.push({
           line: i, kind: decl.kind, label: decl.parts.label,
           detail: decl.parts.note || (decl.parts.name !== decl.parts.label ? decl.parts.name : ''),
-          depth: depth,
+          depth: depth, parent: _parentOf(declStack),
         });
+        // `state Configured {` のように本体を開く宣言は、そこから `}` までが
+        // 子の居場所。開き札を積まないと `}` が「対応する開始がない」になり、
+        // 中の子状態・子の遷移が親と同じ深さ (= トップレベル) に見えてしまう。
+        if (/\{\s*$/.test(line)) {
+          open.push({ kind: decl.kind, line: i });
+          declStack.push({ label: decl.parts.label, depth: depth });
+          depth = open.length;
+        }
         continue;
       }
 
@@ -189,7 +210,7 @@ window.MA.outline = (function() {
           line: i, kind: 'relation',
           label: _unquote(m[1]) + ' ' + m[2] + ' ' + _unquote(m[3]),
           from: _unquote(m[1]), to: _unquote(m[3]),
-          detail: String(m[4] || '').trim(), depth: depth,
+          detail: String(m[4] || '').trim(), depth: depth, parent: _parentOf(declStack),
         });
         continue;
       }
@@ -206,11 +227,11 @@ window.MA.outline = (function() {
       // `:処理;` はアクティビティ図のアクション。状態と同じ札にすると、構造タブの
       // 種別バッジも下部の数え方も「state」になってしまう (design 4b は actions と数える)。
       if (/^:.*;$/.test(line)) {
-        nodes.push({ line: i, kind: 'action', label: line.replace(/^:/, '').replace(/;$/, '').trim(), detail: '', depth: depth });
+        nodes.push({ line: i, kind: 'action', label: line.replace(/^:/, '').replace(/;$/, '').trim(), detail: '', depth: depth, parent: _parentOf(declStack) });
         continue;
       }
       if (/^[A-Za-z0-9_][A-Za-z0-9_.-]*$/.test(line)) {
-        nodes.push({ line: i, kind: 'state', label: line, detail: '', depth: depth });
+        nodes.push({ line: i, kind: 'state', label: line, detail: '', depth: depth, parent: _parentOf(declStack) });
         continue;
       }
     }

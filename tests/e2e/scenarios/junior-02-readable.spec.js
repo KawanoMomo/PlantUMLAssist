@@ -1138,3 +1138,85 @@ test('手順1-2 先輩側の増分が入る位置つきで並び、チェック�
   // 先輩のファイルは読むだけ (書き換えない)。
   expect(await S.readDoc(page, SENIOR_DIR, 'timer_init_sequence')).toBe(TAKE_SENIOR);
 });
+
+// BLK-junior-20260917-0323-wish: 同じ手順1〜2 の、状態遷移図 (TIMER) で
+// 先輩が親状態の中に子状態を増やした回。子の増分がトップレベルの状態と
+// 見分けられず、取り込むと親の外へ出て図の意味が変わっていた。
+const NEST_SELF = [
+  '@startuml',
+  'title TIMERドライバ状態遷移',
+  '[*] --> Uninit',
+  'state Uninit',
+  'state Configured',
+  'Uninit --> Configured : Timer_Init()',
+  'Configured --> Uninit : Timer_DeInit()',
+  '@enduml',
+].join('\n');
+
+// 先輩側で Configured の中に子状態 2 つと、子の間の遷移 2 本が増えた回。
+const NEST_SENIOR = [
+  '@startuml',
+  'title TIMERドライバ状態遷移',
+  '[*] --> Uninit',
+  'state Uninit',
+  'state Configured {',
+  '  state Idle',
+  '  state Running',
+  '  Idle --> Running : Timer_Start()',
+  '  Running --> Idle : Timer_Stop()',
+  '}',
+  'Uninit --> Configured : Timer_Init()',
+  'Configured --> Uninit : Timer_DeInit()',
+  '@enduml',
+].join('\n');
+
+test('手順1-2 親状態の中に増えた子状態が入れ子のまま並び、入れ子のまま入る', async ({ page }) => {
+  await S.bootWithSaveDir(page, MINE_DIR);
+  await S.clearDir(page, MINE_DIR);
+  await S.clearDir(page, SENIOR_DIR);
+  await S.putDoc(page, SENIOR_DIR, 'timer_state', NEST_SENIOR);
+  await page.reload();
+  await page.waitForSelector('#btn-tab-compare');
+  await S.typeDsl(page, NEST_SELF);
+  await S.renameActive(page, 'timer_state');
+
+  await page.locator('#btn-tab-compare').click();
+  await page.locator('#xf-dir').fill(SENIOR_DIR);
+  await page.locator('#btn-xf-load').click();
+  await expect(page.locator('#xf-summary')).toBeVisible();
+
+  // 到達条件その1: 子状態 2 つと子の遷移 2 本が、親の中の増分として並ぶ。
+  // 親を手で開いて中を見比べる操作が要らない。
+  const rows = page.locator('#xf-list .xf-row.only-ref');
+  await expect(rows).toHaveCount(4);
+  await expect(rows.filter({ hasText: 'state Idle' }).locator('.xf-nest'))
+    .toHaveText('Configured の中');
+  await expect(rows.filter({ hasText: 'Timer_Start()' }).locator('.xf-nest'))
+    .toHaveText('Configured の中');
+  await expect(page.locator('#xf-summary')).toContainText('4 件は親の中');
+
+  // 到達条件その2: 入る位置も親の中だと先に分かる。
+  await expect(rows.filter({ hasText: 'state Idle' }).locator('.xf-where'))
+    .toContainText('「Configured」に { } を開いて');
+
+  // 到達条件その3: まとめて取り込むと、子は親の { } の中に入る。
+  await page.locator('#xf-take-all').check();
+  await page.locator('#btn-xf-take-checked').click();
+  await page.waitForTimeout(400);
+  const text = await getEditorText(page);
+  const lines = text.split('\n');
+  const open = lines.indexOf('state Configured {');
+  const close = lines.indexOf('}');
+  expect(open).toBeGreaterThan(-1);
+  expect(close).toBeGreaterThan(open);
+  ['state Idle', 'state Running', 'Idle --> Running : Timer_Start()'].forEach((want) => {
+    const at = lines.findIndex((l) => l.trim() === want);
+    expect(at).toBeGreaterThan(open);
+    expect(at).toBeLessThan(close);
+  });
+
+  // 到達条件その4: 取り込む対象が無くなり、先輩の図と同じ形になる。
+  await expect(page.locator('#xf-list .xf-row.only-ref')).toHaveCount(0);
+  await expect(page.locator('#xf-list .xf-row.only-self')).toHaveCount(0);
+  expect(await S.readDoc(page, SENIOR_DIR, 'timer_state')).toBe(NEST_SENIOR);
+});
