@@ -22115,6 +22115,19 @@ var _elDir = null;        // その控えを読んだフォルダ
 var _dpHistPick = null;
 var _dpHistResult = null; // 開いている回の突き合わせ結果 (対象の選び直しに使う)
 
+// BLK-primary-20260916-2314-friction: 毎回 24 枚全部チェック済みから「全部外す → 14 枚を 1 枚ずつ」
+// 選び直していた。既定は前回出した図 (控えの最新、無ければフォルダの最新の納品 zip) にする。
+var _dpZips = [];          // 保存フォルダの delivery-*.zip ({file, at, names})
+var _dpRecall = null;      // 既定に使った「前回と同じ図」の出どころ
+
+function _dpLastSource() {
+  var DP = window.MA.deliveryPackage;
+  var EL = window.MA.exportLog;
+  if (!DP || !DP.lastPickSource) return { names: [], file: '', at: '', from: '' };
+  var latest = (EL && _elHas('delivery')) ? EL.latest(_elLog, 'delivery') : null;
+  return DP.lastPickSource(latest, _dpZips);
+}
+
 function _elHas(channel) {
   var EL = window.MA.exportLog;
   return !!(EL && _elLog && EL.latest(_elLog, channel).at);
@@ -22162,6 +22175,10 @@ function _dpLastDelivery() {
   }
   var l = DP ? DP.lastDelivery() : { title: '', revision: '', at: '', count: 0 };
   l.file = '';
+  if (!l.at && _dpZips.length) {
+    var z = _dpZips[0];
+    return { title: '', revision: '', at: z.at, count: (z.names || []).length, file: z.file };
+  }
   return l;
 }
 
@@ -22209,6 +22226,7 @@ function _dpLoadFolder() {
         _elLog = window.MA.exportLog.parse((info && info.exportLog) || null);
         _elDir = dir;
       }
+      _dpZips = (info && Array.isArray(info.deliveryZips)) ? info.deliveryZips : [];
       _dpFileDocs = docs.filter(function(d) { return d; });
       _dpRoles = roles;
       _dpFolderDir = dir;
@@ -22247,7 +22265,7 @@ function _dpHistoryHtml(esc) {
     + '" style="margin-top:8px;font-size:11px;color:var(--text-secondary);'
     + 'border:1px solid var(--border);border-radius:3px;padding:6px;">'
     + '<div style="font-size:10px;color:var(--accent);font-weight:bold;">納品履歴（このフォルダ）</div>';
-  if (list.length === 0) {
+  if (list.length === 0 && !_dpZips.length) {
     html += '<div class="dp-hist-row">このフォルダからの提出はまだ記録されていません</div>';
   } else {
     list.slice(0, 5).forEach(function(e, i) {
@@ -22267,6 +22285,20 @@ function _dpHistoryHtml(esc) {
     if (list.length > 5) {
       html += '<div class="dp-hist-row">ほか ' + esc(String(list.length - 5)) + ' 件</div>';
     }
+  }
+  var DPz = window.MA.deliveryPackage;
+  var extra = (DPz && DPz.unloggedZips) ? DPz.unloggedZips(_dpZips, list) : [];
+  if (extra.length) {
+    html += '<div id="dp-hist-zips" data-count="' + extra.length + '" style="margin-top:4px;">';
+    extra.slice(0, 5).forEach(function(z) {
+      html += '<button type="button" class="dp-hist-zip" data-file="' + esc(z.file) + '"'
+        + ' title="控えより前に作った zip です。出した図の一覧だけ読めます (版の比較はできません)"'
+        + ' style="display:block;width:100%;text-align:left;font-size:11px;padding:2px 3px;border:1px solid transparent;'
+        + 'background:transparent;color:var(--text-secondary);cursor:pointer;">'
+        + esc(z.at.replace('T', ' ') + ' ・ ' + z.names.length + ' 枚 ・ ' + z.file + '（控えなし）')
+        + ' <span style="color:var(--accent);">▸ この回と同じ図を対象にする</span></button>';
+    });
+    html += '</div>';
   }
   return html + '</div>';
 }
@@ -22307,7 +22339,12 @@ function renderDeliveryPanel() {
   if (!DP || !content) return null;
   var esc = window.MA.htmlUtils.escHtml;
   var all = _dpCandidates();
-  if (!_dpDocs) _dpDocs = DP.defaultPicks(all);
+  if (!_dpDocs) {
+    var src = _dpLastSource();
+    var again = (src.names.length && DP.recallPicks) ? DP.recallPicks(all, src.names) : [];
+    if (again.length) { _dpDocs = again; _dpRecall = src; }
+    else { _dpDocs = DP.defaultPicks(all); _dpRecall = null; }
+  }
   var picked = _dpSelectedDocs();
   var cover = DP.coverage(all, _dpDocs);
   var last = _dpLastDelivery();
@@ -22353,7 +22390,28 @@ function renderDeliveryPanel() {
     // 「前回提出以降に変わった図」だけを対象に絞れるようにする。
     + ' <button type="button" id="dp-changed" style="' + BTN + 'padding:1px 8px;"'
     + (_elHas('delivery') ? '' : ' disabled title="まだ 1 度も提出していません"')
-    + '>前回提出から変わった図だけ</button></div>';
+    + '>前回提出から変わった図だけ</button>'
+    + ' <button type="button" id="dp-same" style="' + BTN + 'padding:1px 8px;"'
+    + (_dpLastSource().names.length ? '' : ' disabled title="前回出した図の記録がありません"')
+    + '>前回と同じ図</button></div>';
+  // 既定をどこから取ったか。黙って減らすと「勝手に減った」になるので理由を出す。
+  if (_dpRecall) {
+    html += '<div id="dp-recall" data-from="' + esc(_dpRecall.from) + '" style="margin-top:4px;font-size:11px;color:var(--text-secondary);">'
+      + esc('前回提出と同じ ' + _dpDocs.length + ' 枚を選んでいます（' + (_dpRecall.file || '控え')
+        + (_dpRecall.at ? ' ・ ' + _dpRecall.at.replace('T', ' ').slice(0, 16) : '') + '）') + '</div>';
+  }
+  // 図セット (📚) と対象を行き来する。手順 9 の「顧客資料」と同じ 14 枚を二重に選ばせない。
+  var sets = (window.MA.docSet && _dsDir === _wsFileDir()) ? _dsSets : [];
+  html += '<div id="dp-sets" style="margin-top:4px;font-size:11px;color:var(--text-secondary);display:flex;gap:6px;align-items:center;">'
+    + '図セット <select id="dp-set" style="' + IN + 'font-size:11px;padding:1px 4px;">'
+    + '<option value="">（選ぶ）</option>'
+    + sets.map(function(s) {
+        return '<option value="' + esc(s.name) + '">' + esc(s.name + '（' + (s.docs || []).length + ' 枚）') + '</option>';
+      }).join('')
+    + '</select>'
+    + ' <button type="button" id="dp-set-apply" style="' + BTN + 'padding:1px 8px;">このセットを対象にする</button>'
+    + ' <button type="button" id="dp-set-save" style="' + BTN + 'padding:1px 8px;">今の対象でセットを更新</button>'
+    + '</div>';
   // 欠落の警告。枚数を数えなくても「9 枚落ちる」と読めるようにする。
   html += '<div id="dp-coverage" data-warn="' + (cover.warn ? '1' : '0')
     + '" data-total="' + cover.total + '" data-picked="' + cover.picked + '"'
@@ -22415,6 +22473,7 @@ function renderDeliveryPanel() {
         if (x.checked) names.push(x.getAttribute('data-name'));
       });
       _dpDocs = names;
+      _dpRecall = null;
       renderDeliveryPanel();
     });
   });
@@ -22433,20 +22492,69 @@ function renderDeliveryPanel() {
     var names = DH.pickNames(_dpHistResult);
     if (!names.length) return;
     _dpDocs = names;
+    _dpRecall = null;
     renderDeliveryPanel();
   });
   var allBtn = document.getElementById('dp-all');
   if (allBtn) allBtn.addEventListener('click', function() {
     _dpDocs = all.map(function(d) { return d.name; });
+    _dpRecall = null;
     renderDeliveryPanel();
   });
+  var sameBtn = document.getElementById('dp-same');
+  if (sameBtn) sameBtn.addEventListener('click', function() {
+    var src = _dpLastSource();
+    if (!src.names.length) return;
+    _dpDocs = DP.recallPicks(all, src.names);
+    _dpRecall = src;
+    renderDeliveryPanel();
+  });
+  Array.prototype.forEach.call(content.querySelectorAll('.dp-hist-zip'), function(b) {
+    b.addEventListener('click', function() {
+      var f = b.getAttribute('data-file');
+      var z = _dpZips.filter(function(x) { return x.file === f; })[0];
+      if (!z) return;
+      _dpDocs = DP.recallPicks(all, z.names);
+      _dpRecall = { names: z.names, file: z.file, at: z.at, from: 'zip' };
+      renderDeliveryPanel();
+    });
+  });
+  function _dpSetName() { var s = document.getElementById('dp-set'); return s ? s.value : ''; }
+  var setApply = document.getElementById('dp-set-apply');
+  if (setApply) setApply.addEventListener('click', function() {
+    var DS = window.MA.docSet;
+    var set = DS ? DS.find(_dsSets, _dpSetName()) : null;
+    var st = document.getElementById('dp-status');
+    if (!set) { if (st) st.textContent = '図セットを選んでください'; return; }
+    _dpDocs = DP.recallPicks(all, DS.normalizeDocs(set.docs));
+    _dpRecall = null;
+    renderDeliveryPanel();
+    var st2 = document.getElementById('dp-status');
+    if (st2) st2.textContent = '図セット「' + set.name + '」の ' + _dpDocs.length + ' 枚を対象にしました';
+  });
+  var setSave = document.getElementById('dp-set-save');
+  if (setSave) setSave.addEventListener('click', function() {
+    var name = _dpSetName();
+    var st = document.getElementById('dp-status');
+    if (!name) { if (st) st.textContent = '更新する図セットを選んでください'; return; }
+    var names = _dpDocs.slice();
+    saveDocSet(name, names).then(function(res) {
+      renderDeliveryPanel();
+      var sel = document.getElementById('dp-set');
+      if (sel) sel.value = name;
+      var st2 = document.getElementById('dp-status');
+      if (st2) st2.textContent = res ? '図セット「' + name + '」を今の対象 ' + names.length + ' 枚で更新しました'
+                                     : '図セットを更新できませんでした';
+    });
+  });
   var noneBtn = document.getElementById('dp-none');
-  if (noneBtn) noneBtn.addEventListener('click', function() { _dpDocs = []; renderDeliveryPanel(); });
+  if (noneBtn) noneBtn.addEventListener('click', function() { _dpDocs = []; _dpRecall = null; renderDeliveryPanel(); });
   var changedBtn = document.getElementById('dp-changed');
   if (changedBtn) changedBtn.addEventListener('click', function() {
     var EL = window.MA.exportLog;
     if (!EL || !_elHas('delivery')) return;
     _dpDocs = EL.changedNames(_elLog, 'delivery', all);
+    _dpRecall = null;
     renderDeliveryPanel();
   });
   var buildBtn = document.getElementById('dp-build');
@@ -22466,6 +22574,19 @@ function openDeliveryPanel() {
   _dpMetaTouched = false;
   _dpHistPick = null;
   _dpHistResult = null;
+  _dpRecall = null;
+  // 図セットの一覧も取り直す (📚 で登録・更新した後に開いたとき古い枚数を出さない)。
+  if (typeof loadDocSets === 'function') {
+    loadDocSets(true).then(function() {
+      if (document.getElementById('dp-modal-content')) {
+        var keep = document.getElementById('dp-set');
+        var v = keep ? keep.value : '';
+        renderDeliveryPanel();
+        var sel = document.getElementById('dp-set');
+        if (sel && v) sel.value = v;
+      }
+    });
+  }
   // 見比べ用に描いた SVG も捨てる (前に開いたときの絵を今の puml として見せない)。
   _drCache = {};
   _drName = null;
