@@ -5195,6 +5195,34 @@ mark.ri-hit { background: var(--accent); color: var(--bg-primary); padding: 0 1p
   flex-shrink: 0;
 }
 .xf-row .xf-take:hover { background: var(--bg-tertiary); }
+/* BLK-junior-20260917-0223-wish: 取り込む分のチェックと、入る位置の提案 */
+.xf-row .xf-pick-row { flex-shrink: 0; margin: 0; cursor: pointer; }
+.xf-row .xf-where {
+  color: var(--text-secondary);
+  font-size: 10px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+#xf-take-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  font-size: 11px;
+  border-bottom: 1px solid var(--bg-tertiary);
+}
+#xf-take-bar #xf-take-all-label { cursor: pointer; flex-shrink: 0; }
+#xf-take-bar #btn-xf-take-checked {
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 10px;
+  padding: 2px 8px;
+}
+#xf-take-bar #btn-xf-take-checked:disabled { opacity: 0.5; cursor: default; }
+#xf-take-bar #xf-take-result { color: var(--text-secondary); font-size: 10px; }
 .check-row {
   display: flex;
   align-items: baseline;
@@ -7221,6 +7249,15 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <div id="xf-shape" hidden></div>
       <!-- BLK-junior-20260908-1303: 骨格が同じで語だけ違う 2 枚の対応表 -->
       <div id="xf-parallel" hidden></div>
+      <!-- BLK-junior-20260917-0223-wish: 先輩側の増分をチェックしてまとめて取り込む -->
+      <div id="xf-take-bar" hidden>
+        <label id="xf-take-all-label">
+          <input type="checkbox" id="xf-take-all" title="相手にしかない行をすべて選ぶ"> すべて選択
+        </label>
+        <button type="button" id="btn-xf-take-checked"
+                title="チェックした行を、提案された位置へまとめて自分の図に入れる">チェックした 0 件を取り込む</button>
+        <span id="xf-take-result"></span>
+      </div>
       <div id="xf-list" hidden></div>
       <div id="compare-container">
         <div id="compare-svg"></div>

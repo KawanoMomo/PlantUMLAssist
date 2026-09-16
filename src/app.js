@@ -21002,6 +21002,8 @@ var _xfNames = [];      // そのフォルダのファイル名
 var _xfFile = null;     // 相手にしている図の名前
 var _xfRefDsl = '';     // その中身
 var _xfResult = null;   // 直近の突き合わせ結果
+// 取り込む分に入れた行 (本文をそのまま鍵にする。一覧を出し直しても選びが残る)
+var _xfChecked = Object.create(null);
 
 var XF_DIR_KEY = 'pua.crossRef.dir';
 
@@ -21139,6 +21141,14 @@ function renderCrossRefDiff() {
   // 骨格が同じ 2 枚では「相手だけ」の行は言い換えであって足された要素ではない。
   // 「取り込む」を出すと、同じ手順を別の語でもう 1 本足すことになる。
   list.hidden = isParallel || (_xfResult.onlyRef.length + _xfResult.onlySelf.length) === 0;
+
+  // 言い換えの 2 枚に取り込む対象は無いので、まとめ取り込みも出さない。
+  if (isParallel) {
+    var bar = _xfEl('xf-take-bar');
+    if (bar) bar.hidden = true;
+  } else {
+    _xfRenderTakeBar();
+  }
 }
 
 // 語の対応表。par が null なら畳む (骨格が違う 2 枚には出さない)。
@@ -21252,6 +21262,22 @@ function _xfRow(entry, side) {
   row.setAttribute('data-side', side);
   row.setAttribute('data-kind', entry.kind || '');
 
+  // BLK-junior-20260917-0223-wish: 増分が何本もある回は 1 行ずつ押していられない。
+  // 相手にしかない行にチェックを付け、まとめて取り込めるようにする。
+  if (side === 'ref') {
+    var pick = document.createElement('input');
+    pick.type = 'checkbox';
+    pick.className = 'xf-pick-row';
+    pick.title = 'この行を取り込む分に入れる';
+    pick.checked = _xfChecked[entry.text] === true;
+    pick.addEventListener('change', function() {
+      if (pick.checked) _xfChecked[entry.text] = true;
+      else delete _xfChecked[entry.text];
+      _xfRenderTakeBar();
+    });
+    row.appendChild(pick);
+  }
+
   var tag = document.createElement('span');
   tag.className = 'xf-side';
   tag.textContent = side === 'ref' ? '相手だけ' : '自分だけ';
@@ -21270,6 +21296,14 @@ function _xfRow(entry, side) {
   row.appendChild(text);
 
   if (side === 'ref') {
+    // 押す前に入る場所が分かるようにする (押してから探し直さない)。
+    var where = document.createElement('span');
+    where.className = 'xf-where';
+    var CRD = window.MA.crossRefDiff;
+    where.textContent = (CRD && editorEl) ? CRD.planText(editorEl.value, entry) : '';
+    where.title = '取り込んだときに入る位置';
+    row.appendChild(where);
+
     var take = document.createElement('button');
     take.type = 'button';
     take.className = 'xf-take';
@@ -21279,6 +21313,45 @@ function _xfRow(entry, side) {
     row.appendChild(take);
   }
   return row;
+}
+
+// チェックされた行 (今の一覧に出ているものだけ)。
+function _xfCheckedEntries() {
+  if (!_xfResult) return [];
+  return _xfResult.onlyRef.filter(function(e) { return _xfChecked[e.text] === true; });
+}
+
+// 取り込みバー。件数はボタンの文字に出す (押す前に何件入るかが分かるように)。
+function _xfRenderTakeBar() {
+  var bar = _xfEl('xf-take-bar');
+  var btn = _xfEl('btn-xf-take-checked');
+  var all = _xfEl('xf-take-all');
+  if (!bar) return;
+  var rows = _xfResult ? _xfResult.onlyRef : [];
+  bar.hidden = rows.length === 0;
+  var picked = _xfCheckedEntries();
+  if (btn) {
+    btn.textContent = 'チェックした ' + picked.length + ' 件を取り込む';
+    btn.disabled = picked.length === 0;
+  }
+  if (all) all.checked = rows.length > 0 && picked.length === rows.length;
+}
+
+// チェックした分をまとめて入れ、入った行数と位置を言う。
+function takeCheckedCrossRefEntries() {
+  var CRD = window.MA.crossRefDiff;
+  var picked = _xfCheckedEntries();
+  if (!CRD || !editorEl || picked.length === 0) return;
+  var res = CRD.applyInserts(editorEl.value, picked);
+  editorEl.value = res.dsl;
+  editorEl.dispatchEvent(new Event('input'));
+  _xfChecked = Object.create(null);
+  var result = _xfEl('xf-take-result');
+  if (result) result.textContent = CRD.insertsSummary(res);
+  if (res.firstLine) jumpToLine(res.firstLine);
+  renderCrossRefDiff();
+  // 取り込んだ結果は出し直しで消えるので、書き戻してから残す。
+  if (result) result.textContent = CRD.insertsSummary(res);
 }
 
 // 相手にしかない 1 行を自分の DSL へ入れ、その行へ飛んで、一覧を出し直す。
@@ -21305,8 +21378,26 @@ function setupCrossRefDiff() {
     });
   }
   if (file) {
-    file.addEventListener('change', function() { _xfSelectFile(file.value); });
+    file.addEventListener('change', function() {
+      // 相手の図を替えたら、前の図で付けたチェックは持ち越さない。
+      _xfChecked = Object.create(null);
+      var result = _xfEl('xf-take-result');
+      if (result) result.textContent = '';
+      _xfSelectFile(file.value);
+    });
   }
+  var takeAll = _xfEl('xf-take-all');
+  if (takeAll) {
+    takeAll.addEventListener('change', function() {
+      _xfChecked = Object.create(null);
+      if (takeAll.checked && _xfResult) {
+        _xfResult.onlyRef.forEach(function(e) { _xfChecked[e.text] = true; });
+      }
+      renderCrossRefDiff();
+    });
+  }
+  var takeBtn = _xfEl('btn-xf-take-checked');
+  if (takeBtn) takeBtn.addEventListener('click', takeCheckedCrossRefEntries);
 }
 
 function setupCompareView() {

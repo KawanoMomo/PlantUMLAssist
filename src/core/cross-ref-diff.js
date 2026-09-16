@@ -403,6 +403,74 @@ window.MA.crossRefDiff = (function() {
     return { dsl: lines.join('\n'), line: plan.line };
   }
 
+  // ── 入れる前に「どこへ入るか」を見せる ───────────────────────────────
+  // BLK-junior-20260917-0223-wish: 取り込みは 1 行ずつで、押すまで入る場所が
+  // 分からなかった。押すと一覧が出し直されカーソルも飛ぶので、次の 1 行を
+  // 探し直すことになる。入る場所を先に 1 行で見せ、まとめて入れられるようにする。
+  function planText(selfDsl, entry) {
+    var plan = insertPlan(selfDsl, entry);
+    if (!plan) return '';
+    var lines = _s(selfDsl).split('\n');
+    var anchor = '';
+    for (var i = plan.index - 1; i >= 0; i--) {
+      var t = _s(lines[i]).trim();
+      if (t !== '') { anchor = t; break; }
+    }
+    if (anchor === '') return plan.line + ' 行目 (先頭) に入ります';
+    return plan.line + ' 行目、「' + anchor + '」の後に入ります';
+  }
+
+  // 既に自分の図にある行は入れない (二重に足すと同じ手順が 2 本になる)。
+  function _has(lines, text) {
+    for (var i = 0; i < lines.length; i++) {
+      if (_s(lines[i]).trim() === text) return true;
+    }
+    return false;
+  }
+
+  // チェックした分をまとめて入れる。1 件ずつ入れ直すのと同じ置き場所になるよう、
+  // 入れるたびに次の行の位置を計算し直す (宣言は宣言の並びの末尾へ伸びていく)。
+  function applyInserts(selfDsl, entries) {
+    var dsl = _s(selfDsl);
+    var list = Array.isArray(entries) ? entries : [];
+    var applied = [];
+    var skipped = [];
+    list.forEach(function(entry) {
+      var text = _s(entry && entry.text).trim();
+      if (text === '') { return; }
+      var lines = dsl.split('\n');
+      if (_has(lines, text)) {
+        skipped.push({ text: text, reason: 'already' });
+        return;
+      }
+      var out = applyInsert(dsl, entry);
+      if (!out) { skipped.push({ text: text, reason: 'noplan' }); return; }
+      dsl = out.dsl;
+      applied.push({ text: text, line: out.line });
+    });
+    return {
+      dsl: dsl,
+      applied: applied,
+      skipped: skipped,
+      count: applied.length,
+      lines: applied.map(function(a) { return a.line; }),
+      firstLine: applied.length ? applied[0].line : 0,
+    };
+  }
+
+  // 取り込んだ後に出す 1 行。何件入って、何件が既にあったかまで言い切る
+  // (件数だけだと「押したのに増えない」が不具合に見える)。
+  function insertsSummary(res) {
+    var r = res || {};
+    var n = r.count || 0;
+    var already = (r.skipped || []).filter(function(s) { return s.reason === 'already'; }).length;
+    if (n === 0 && already === 0) return '取り込む行を選んでください';
+    var head = n === 0 ? '取り込んだ行はありません' : (n + ' 件を取り込みました');
+    if (n > 0) head += ' (' + (r.lines || []).join(', ') + ' 行目)';
+    if (already > 0) head += '。' + already + ' 件は既に自分の図にあったので入れていません';
+    return head;
+  }
+
   return {
     baseName: baseName,
     nameDistance: nameDistance,
@@ -424,5 +492,8 @@ window.MA.crossRefDiff = (function() {
     parallelText: parallelText,
     insertPlan: insertPlan,
     applyInsert: applyInsert,
+    planText: planText,
+    applyInserts: applyInserts,
+    insertsSummary: insertsSummary,
   };
 })();
