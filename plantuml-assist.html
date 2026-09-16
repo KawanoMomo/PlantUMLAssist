@@ -5906,6 +5906,26 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 .props-tab:hover { color: var(--text-primary); }
 .props-tab.active { color: var(--text-primary); border-bottom-color: var(--accent); }
 
+/* BLK-human-20260916-0903: 設定ダイアログはタブを切り替えても大きさを変えない。
+   幅と高さを固定し (小さい画面では画面に合わせて縮む)、はみ出す中身は #cfg-panes だけが縦に流す。 */
+#cfg-modal-content {
+  box-sizing: border-box;
+  width: 680px;
+  max-width: calc(100vw - 32px);
+  height: 640px;
+  max-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+#cfg-modal-content > * { flex-shrink: 0; }
+#cfg-modal-content > #cfg-panes {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
 /* 設定モーダルの 5 タブ (design 1a) */
 #cfg-tabs {
   display: flex;
@@ -7288,7 +7308,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   <div id="tc-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:660px;max-width:940px;max-height:80vh;overflow-y:auto;"></div>
 </div>
 <div id="cfg-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
-  <div id="cfg-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:600px;max-width:680px;max-height:84vh;overflow-y:auto;">
+  <div id="cfg-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin:0 0 10px 0;">
       <h3 style="margin:0;">設定 / Settings</h3>
       <button type="button" id="cfg-close" title="閉じる" aria-label="閉じる">✕</button>
@@ -7297,6 +7317,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <!-- design 1a: 自動保存 / レンダリング / エディタ / ショートカット / データ -->
     <div id="cfg-tabs" role="tablist"></div>
 
+    <!-- BLK-human-20260916-0903: 中身だけが縦に流れる。ダイアログの大きさ・タブ列・下のボタンはタブに依らず動かない -->
+    <div id="cfg-panes">
     <div id="cfg-pane-autosave" class="cfg-pane">
     <label style="display:flex;align-items:center;gap:6px;font-size:12px;">
       <input type="checkbox" id="cfg-enabled"> DSL を自動保存する
@@ -7436,7 +7458,9 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <div style="font-size:10px;color:var(--text-secondary);margin-top:6px;">不具合を報告するときは、この 1 行を一緒に貼ってください。</div>
     </div>
 
-    <div style="display:flex;gap:8px;margin-top:14px;">
+    </div><!-- /#cfg-panes -->
+
+    <div id="cfg-actions" style="display:flex;gap:8px;margin-top:14px;">
       <button id="cfg-cancel" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:8px;border-radius:4px;cursor:pointer;">キャンセル</button>
       <button id="cfg-ok" style="flex:1;background:var(--accent);border:none;color:#fff;padding:8px;border-radius:4px;cursor:pointer;" title="設定を保存して閉じる" aria-label="設定を保存">設定を保存</button>
     </div>
