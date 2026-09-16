@@ -11,6 +11,7 @@
     "pins": "node tools/pins.js",
     "requests": "node tools/requests.js",
     "findings": "node tools/findings.js",
+    "replies": "node tools/replies.js",
     "test:e2e:all": "playwright test"
   },
   "devDependencies": {

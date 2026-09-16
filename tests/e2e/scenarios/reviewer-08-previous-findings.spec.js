@@ -496,3 +496,42 @@ test('手順8 直前に done になった BLK は、本文を読まずに 1 本�
     try { fs.rmSync(root, { recursive: true, force: true }); } catch (e) {}
   }
 });
+
+// BLK-reviewer-20260916-0629-wish: 指摘.md の確認依頼が primary に回答されたかを、
+// --board (突合に出ない = 解消) に頼らず run ログから項目ごとに判定する。
+// 「回答待ちリストを見る」だけで手順8が終わり、無回答の依頼が埋もれないことを到達条件にする。
+test('手順8 指摘.md の各項目を primary の run ログと突き合わせ、未回答 N tick 目 / 回答済み / 判定できない を出す', () => {
+  const fs2 = require('fs');
+  const path2 = require('path');
+  const { execFileSync } = require('child_process');
+  const root = path2.join(__dirname, '..', '..', '..', 'test-results', 'reviewer-08-replies');
+  fs2.rmSync(root, { recursive: true, force: true });
+  const rev = path2.join(root, 'persona-data', 'reviewer');
+  fs2.mkdirSync(rev, { recursive: true });
+  fs2.writeFileSync(path2.join(rev, '指摘.md'), [
+    '# reviewer 指摘',
+    '## 最優先: diagram1.puml の domain-verdict 切替、意図確認は継続保留(3tick目)',
+    '`domain-verdict: separate` の意図を primary に確認。`audit.js --board` は解消と出すが未回答。',
+    '## メソッド不一致 F-01〜F-02 (継続)',
+    'spi.puml',
+    '## SVG',
+    '古い 8 枚',
+  ].join('\n'), 'utf8');
+  const put = (ts, who, text) => {
+    const d = path2.join(root, 'loop', 'runs', ts);
+    fs2.mkdirSync(d, { recursive: true });
+    fs2.writeFileSync(path2.join(d, who + '.md'), text, 'utf8');
+  };
+  put('20260916-0526', 'reviewer', 'diagram1.puml の domain-verdict 確認依頼。F-01〜F-02 継続');
+  put('20260916-0626', 'reviewer', 'diagram1.puml の domain-verdict 未回答。F-01〜F-02 継続');
+  put('20260916-0626', 'primary', '手順5.5: F-01〜F-02 は note で意図明記済み');
+  put('20260916-2314', 'reviewer', 'diagram1.puml の\ndomain-verdict 未回答 3tick目');
+  const tool = path2.join(__dirname, '..', '..', '..', 'tools', 'replies.js');
+  const out = execFileSync(process.execPath, [tool, path2.join(rev, '指摘.md')], { encoding: 'utf8' });
+  expect(out).toContain('回答待ち 1 件 / 回答済み 1 件 / 判定できない 1 件');
+  expect(out).toMatch(/domain-verdict 切替、意図確認は継続保留 — まだ回答なし（3 tick 目、初出 runs\/20260916-0526）/);
+  expect(out).toContain('runs/20260916-0626/primary.md で回答');
+  expect(out).toContain('判定できない（解消ではない');
+  // 初出は控えに持ち越す (次回 run ログが掃除されても tick 数が戻らない)。
+  expect(fs2.existsSync(path2.join(rev, '.replies-state.json'))).toBe(true);
+});
