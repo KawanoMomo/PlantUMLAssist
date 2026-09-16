@@ -36,7 +36,7 @@ describe('rename-badge: 部品名の統一バッジ', function() {
     expect(sum.pending).toBe(0);
     expect(sum.remaining).toBe(0);
     expect(sum.next).toBe(null);
-    expect(RB.badgeText(sum)).toBe('統一 済');
+    expect(RB.badgeText(sum)).toBe('統一 済 SpiDrv→Spi_Driver');
     expect(RB.tone(sum)).toBe('done');
     expect(RB.isActive(sum)).toBe(false);
     expect(RB.titleText(null, sum)).toContain('開く必要はありません');
@@ -81,7 +81,23 @@ describe('rename-badge: 部品名の統一バッジ', function() {
     var sum = RB.summarize(rows);
     expect(sum.pairs).toBe(1);
     expect(sum.pending).toBe(0);
-    expect(RB.badgeText(sum)).toBe('統一 済');
+    expect(RB.badgeText(sum)).toBe('統一 済 SpiDrv→Spi_Driver');
+  });
+
+  // BLK-primary-20260917-0123-friction: 「済」だけでは確かめたい組が済んだ組の
+  // 中にあるかが分からず、組を読むためだけにパネルを開いていた (clicks=2)。
+  test('済んだ組を開かずに名指しする (組ごとの状態を text / title / data で出す)', function() {
+    var one = RB.summarize(RR.pairs([hist('SpiDrv', 'Spi_Driver')], DONE_DOCS));
+    expect(RB.pairStates(one)).toBe('SpiDrv→Spi_Driver=done');
+    expect(RB.titleText(null, one)).toContain('SpiDrv → Spi_Driver : 適用済み');
+    var two = RB.summarize(RR.pairs([hist('SpiDrv', 'Spi_Driver'), hist('Spi_Driver', 'SPI_DRV')], DONE_DOCS));
+    expect(two.pending).toBe(1);
+    expect(RB.titleText(null, two)).toContain('SpiDrv → Spi_Driver : 適用済み');
+    expect(RB.pairStates(two)).toContain('Spi_Driver→SPI_DRV=pending');
+    var many = RB.summarize(RR.pairs([hist('SpiDrv', 'Spi_Driver'), hist('HwCtl', 'Hw_Ctrl')], DONE_DOCS));
+    expect(many.pending).toBe(0);
+    expect(RB.badgeText(many)).toBe('統一 済 2組');
+    expect(RB.pairStates(null)).toBe('');
   });
 
   test('引数が無くても壊れない (数える前の描画でも呼ばれる)', function() {

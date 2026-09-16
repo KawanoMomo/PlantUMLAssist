@@ -348,7 +348,10 @@ test('手順2 下端の統一バッジが、置換の残りを開かずに言う
   await page.waitForSelector('#preview-svg');
   const badge = page.locator('#status-rename');
   await expect(badge).toHaveAttribute('data-tone', 'done', { timeout: 15000 });
-  await expect(badge).toHaveText('統一 済');
+  await expect(badge).toHaveText('統一 済 SpiDrv→Spi_Driver');
+  // BLK-primary-20260917-0123-friction: どの組が済んだかも開かずに読める (clicks=0)。
+  await expect(badge).toHaveAttribute('data-pair-states', 'SpiDrv→Spi_Driver=done');
+  expect(await badge.getAttribute('title')).toContain('SpiDrv → Spi_Driver : 適用済み');
   await expect(badge).toHaveAttribute('data-pending', '0');
   await expect(page.locator('#rename-panel.open')).toHaveCount(0);
 

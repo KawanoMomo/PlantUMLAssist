@@ -8009,6 +8009,7 @@ function renderRenameBadge() {
   btn.setAttribute('data-pairs', _rbSum ? String(_rbSum.pairs) : '');
   btn.setAttribute('data-pending', _rbSum ? String(_rbSum.pending) : '');
   btn.setAttribute('data-remaining', _rbSum ? String(_rbSum.remaining) : '');
+  btn.setAttribute('data-pair-states', RB.pairStates ? RB.pairStates(_rbSum) : '');
   btn.title = RB.titleText(null, _rbSum);
   if (_rbWired) return;
   _rbWired = true;

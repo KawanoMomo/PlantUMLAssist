@@ -6459,6 +6459,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 /* 依頼バッジ (BLK-reviewer-20260914-2006)。未着手・再発が混ざる回は赤まで上げる
    (直す側が「今日はまず何を見るか」を、画面を開く前に決められるようにする)。 */
 /* 統一が済んでいることは緑で言い切る。「開かなくてよい」と読める色が要る */
+#status-rename { max-width: 24em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #status-rename[data-tone="done"] { color: var(--accent-green); border-color: var(--accent-green); }
 #status-requests[data-tone="stalled"] {
   color: var(--accent-red);
