@@ -755,3 +755,104 @@ test.describe('primary 手順 4: 14 枚を新人に渡してよいかを 1 画�
     await expect(warn).toContainText('spi_state');
   });
 });
+
+// BLK-primary-20260917-0523-wish: 仕様変更「SPI 初期化にクロック確認手順を追加する」の
+// 影響範囲を洗うとき、メソッド名/部品名から「その名前を使っている図の一覧」を引く画面が
+// 無く、指摘.md で対象名を絞ってから該当しそうな図を 1 枚ずつタブで開いて本文を読む、
+// という手順になっていた。名前を 1 回打てば一覧が出て、行からその図のその行へ運ばれる。
+const NS_SPI = '@startuml\ntitle SPI 初期化\nparticipant Spi_Driver\nparticipant ClockCtrl\nSpi_Driver -> ClockCtrl : EnableClock()\n@enduml';
+const NS_CAN = '@startuml\ntitle CAN 初期化\nparticipant Can_Driver\nparticipant ClockCtrl\nCan_Driver -> ClockCtrl : EnableClock()\n@enduml';
+const NS_GPIO = '@startuml\ntitle GPIO 初期化\nparticipant Gpio_Driver\nparticipant ClockCtrl\nGpio_Driver -> ClockCtrl : EnableClock()\n@enduml';
+const NS_UART = '@startuml\ntitle UART 初期化\nparticipant Uart_Driver\nparticipant Hal\nUart_Driver -> Hal : init()\n@enduml';
+const NS_CLASS = '@startuml\nclass ClockCtrl {\n  +EnableClock() : void\n}\nclass Spi_Driver\n@enduml';
+const NS_STATE = '@startuml\n[*] --> Idle\nIdle --> Ready : ClockCtrl.EnableClock\n@enduml';
+
+test.describe('primary 手順 4: 名前から影響する図を 1 回で引く', () => {
+  test.beforeEach(async ({ page }) => {
+    await boot(page);
+    await clearDir(page);
+    await putFile(page, 'spi_init_sequence', NS_SPI);
+    await putFile(page, 'can_init_sequence', NS_CAN);
+    await putFile(page, 'gpio_init_sequence', NS_GPIO);
+    await putFile(page, 'uart_init_sequence', NS_UART);
+    await putFile(page, 'driver_common_class', NS_CLASS);
+    await putFile(page, 'spi_state', NS_STATE);
+    await page.waitForTimeout(500);
+    await page.reload();
+    await page.waitForSelector('#preview-svg');
+  });
+
+  test.afterEach(async ({ page }) => {
+    await clearDir(page).catch(() => {});
+  });
+
+  async function openNameSearch(page, q) {
+    await runCmd(page, '名前で図を探す');
+    await page.waitForSelector('#ns-modal', { state: 'visible' });
+    if (q != null) {
+      await page.fill('#ns-q', q);
+      await page.waitForTimeout(300);
+    }
+  }
+
+  test('メソッド名 1 回で、使っている図が一覧で出る（1 枚ずつ開かない）', async ({ page }) => {
+    await openNameSearch(page, 'EnableClock');
+    // 到達条件: 6 枚のうち当たった 5 枚が名前で並ぶ。開かなかった図は出ない。
+    await expect(page.locator('#ns-rows')).toHaveAttribute('data-hit-docs', '5');
+    for (const n of ['spi_init_sequence', 'can_init_sequence', 'gpio_init_sequence',
+                     'driver_common_class', 'spi_state']) {
+      await expect(page.locator(`#ns-rows .ns-row[data-name="${n}"]`)).toHaveCount(1);
+    }
+    await expect(page.locator('#ns-rows .ns-row[data-name="uart_init_sequence"]')).toHaveCount(0);
+  });
+
+  test('一覧の 1 行で「何枚開く必要があるか」まで読める', async ({ page }) => {
+    await openNameSearch(page, 'EnableClock');
+    const sum = page.locator('#ns-summary');
+    // 枚数は「保存フォルダ + 開いているタブ」なので、下書きのタブがある分だけ動く。
+    // 読めることが要るのは「当たった枚数」と「開かないと読めない枚数」。
+    await expect(sum).toContainText('枚に 5 件');
+    await expect(sum).toContainText('開いていない図');
+    await expect(sum).toHaveAttribute('data-hit-docs', '5');
+  });
+
+  test('部品名でも引ける / 宣言している図が先頭に来る', async ({ page }) => {
+    await openNameSearch(page, 'ClockCtrl');
+    await expect(page.locator('#ns-rows')).toHaveAttribute('data-hit-docs', '5');
+    const first = page.locator('#ns-rows .ns-row').first();
+    await expect(first).toHaveAttribute('data-declared', '1');
+  });
+
+  test('修飾を付けるとその書き方の行だけに絞れる', async ({ page }) => {
+    await openNameSearch(page, 'ClockCtrl.EnableClock');
+    await expect(page.locator('#ns-rows')).toHaveAttribute('data-hit-docs', '1');
+    await expect(page.locator('#ns-rows .ns-row[data-name="spi_state"]')).toHaveCount(1);
+  });
+
+  test('出現行を押すと、その図のその行へ運ばれる（開き直さない）', async ({ page }) => {
+    await openNameSearch(page, 'EnableClock');
+    await page.locator('#ns-rows .ns-row[data-name="can_init_sequence"] button.ns-at').first().click();
+    await expect(page.locator('#ns-modal')).toBeHidden();
+    await page.waitForTimeout(1200);
+    const name = await page.evaluate(() => {
+      const doc = window.MA.workspace.getActive();
+      return doc ? doc.name : '';
+    });
+    expect(name).toContain('can_init_sequence');
+    await expect(page.locator('#editor')).toHaveValue(/CAN 初期化/);
+  });
+
+  test('使われていない名前は「ありません」と言い切る（黙らない）', async ({ page }) => {
+    await openNameSearch(page, 'NoSuchName');
+    await expect(page.locator('#ns-rows')).toHaveAttribute('data-hit-docs', '0');
+    await expect(page.locator('#ns-summary')).toContainText('どれにも出てきません');
+  });
+
+  test('引いた名前をそのまま一括置換の「置換前」に渡せる', async ({ page }) => {
+    await openNameSearch(page, 'ClockCtrl');
+    await page.locator('#ns-use').click();
+    await expect(page.locator('#ns-modal')).toBeHidden();
+    await page.waitForSelector('#rename-panel.open');
+    await expect(page.locator('#rename-from')).toHaveValue('ClockCtrl');
+  });
+});

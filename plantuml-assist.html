@@ -3363,6 +3363,29 @@ table.vault-table button.vault-open:hover { border-color: var(--accent); }
   border: 1px solid var(--accent); background: var(--bg-secondary); color: var(--accent);
   border-radius: 3px; font-size: 10px; padding: 0 6px; cursor: pointer; white-space: nowrap;
 }
+/* 名前で図を探す (BLK-primary-20260917-0523-wish)。
+   1 行 = 1 図。押せばその図のその行へ運ぶので、一覧から開き直す手順が要らない。 */
+#ns-body { flex: 1; overflow-y: auto; padding: 6px 14px 14px 14px; }
+#ns-q { min-width: 220px; font-family: var(--font-mono); }
+#ns-rows .ns-row {
+  border: 1px solid var(--border); border-radius: 4px; background: var(--bg-primary);
+  padding: 6px 8px; margin-bottom: 6px;
+}
+#ns-rows .ns-row[data-declared="1"] { border-color: var(--accent); }
+#ns-rows .ns-doc { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+#ns-rows .ns-name { font-weight: 600; }
+#ns-rows .ns-kind, #ns-rows .ns-count, #ns-rows .ns-where {
+  color: var(--text-secondary); font-size: 11px;
+}
+#ns-rows .ns-at {
+  display: block; width: 100%; text-align: left; margin-top: 4px; cursor: pointer;
+  border: none; background: none; color: var(--text-primary);
+  font-family: var(--font-mono); font-size: 11px; padding: 2px 4px; border-radius: 3px;
+}
+#ns-rows .ns-at:hover { background: var(--bg-tertiary); }
+#ns-rows .ns-at .ns-line { color: var(--text-secondary); margin-right: 6px; }
+#ns-rows .ns-empty, #ns-hint { color: var(--text-secondary); font-size: 11px; padding: 6px 2px; }
+#ns-hint .ns-top-name { cursor: pointer; text-decoration: underline; margin-right: 8px; }
 /* 部品名の依存グラフ (BLK-primary-20260908-2003-wish)。
    上が矢印の絵、下が影響の届く図の一覧。絵だけでは「開いて直す図」を数えられない。 */
 #dg-body { flex: 1; overflow-y: auto; padding: 6px 14px 14px 14px; }
@@ -7857,6 +7880,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/impact-scan.js"></script>
 <script src="src/core/impact-thumbs.js"></script>
 <script src="src/core/folder-impact.js"></script>
+<script src="src/core/name-search.js"></script>
 <script src="src/core/signature-change.js"></script>
 <script src="src/core/symptom-search.js"></script>
 <script src="src/core/symptom-systems.js"></script>
@@ -8150,6 +8174,29 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
      ヒット行を図ごとにテキストで並べるだけなので、どの図がどの図を参照して連鎖しているかは
      各図を開いて目視で推測するしかなかった。名前を 1 つ選ぶと参照元 (左) → 名前 (中央) →
      参照先 (右) が矢印で並び、隣の名前を経由して影響が届く図まで一覧に出る。 -->
+<!-- BLK-primary-20260917-0523-wish: 部品名 / メソッド名から「その名前を使っている図の一覧」を引く。
+     仕様変更の影響範囲を洗うのに、指摘.md で対象名を絞ってから図を 1 枚ずつ開く手順を無くす。 -->
+<div id="ns-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+  <div class="board-modal">
+    <div class="board-head">
+      <strong>名前で図を探す</strong>
+      <span id="ns-summary" role="status"></span>
+      <span class="board-tools">
+        <label for="ns-q">名前</label>
+        <input id="ns-q" type="text" list="ns-index" autocomplete="off" placeholder="部品名 / メソッド名"
+               title="部品名でもメソッド名でも引ける。ClockCtrl.EnableClock のように修飾を付ければその書き方の行だけに当たる" />
+        <datalist id="ns-index"></datalist>
+        <button type="button" id="ns-use" title="この名前を一括置換の「置換前」に入れる">この名前を置換前に入れる</button>
+        <button type="button" id="ns-close">閉じる</button>
+      </span>
+    </div>
+    <div id="ns-body">
+      <div id="ns-rows"></div>
+      <div id="ns-hint">よく出る名前: <span id="ns-top"></span></div>
+    </div>
+  </div>
+</div>
+
 <div id="dg-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div class="board-modal">
     <div class="board-head">
