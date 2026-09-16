@@ -15817,6 +15817,159 @@ function applyDgNote(names, text) {
   });
 }
 
+// ── 影響先の版履歴を症状の語で探す (BLK-primary-20260917-0123-wish) ─────────
+// 依存グラフは「今どの図が絡むか」までは出すが、「いつこの記述に変わったか」は
+// 各図を 1 枚ずつ開いて中身を目で追うしかなかった (📂一覧・図の設定のどちらにも
+// 版ごとの中身を並べる場所が無い)。影響一覧の版履歴を 1 本の時系列に混ぜ、
+// 症状の語に当たった版だけを新しい順に並べて「ここで書き換わった」を名指しする。
+// 混ぜ方・絞り方は core/dep-version-search、ここは描画と開く操作だけ。
+var _dgVerImpact = [];
+var _dgVerKw = null;      // null = まだ触っていない (部品名を既定にする)
+var _dgVerRows = [];
+var _dgVerLastName = null;
+
+// 語の既定。名前を選んだ直後は、その部品名がそのまま症状の語になる
+// (打ち直させない = 依存グラフで名前を選ぶ + 一覧を読む の 2 手で終わらせる)。
+function _dgVerKeyword() {
+  var el = document.getElementById('dg-ver-kw');
+  if (_dgVerKw == null) return _dgName || '';
+  return el ? el.value : _dgVerKw;
+}
+
+function _dgVerHistoryOf(name) {
+  var VT = window.MA.versionTimeline;
+  if (!VT) return [];
+  try { return VT.rows(name); } catch (e) { return []; }
+}
+
+// 当たり行の語を光らせる。どこが当たったかが行の中で読めないと、
+// 結局その図を開いて探し直すことになる。
+function _dgVerHitHtml(hit, kw) {
+  var esc = window.MA.htmlUtils.escHtml;
+  var text = hit.text;
+  var key = (kw || '').trim();
+  if (!key) return esc(text);
+  var at = text.toLowerCase().indexOf(key.toLowerCase());
+  if (at < 0) return esc(text);
+  return esc(text.slice(0, at)) + '<mark>' + esc(text.slice(at, at + key.length))
+    + '</mark>' + esc(text.slice(at + key.length));
+}
+
+function _dgVerListHtml(rows, kw) {
+  var DVS = window.MA.depVersionSearch;
+  var esc = window.MA.htmlUtils.escHtml;
+  var list = rows || [];
+  if (!list.length) {
+    return '<div class="dgv-empty">当たった版はありません。'
+      + '語を短くするか、「書き換わった版だけ」を外すと読める版が増えます。</div>';
+  }
+  var html = '<table><thead><tr><th>いつ</th><th>図</th><th>届き方</th>'
+    + '<th>何が起きたか</th><th>当たった行</th><th></th></tr></thead><tbody>';
+  list.forEach(function(r) {
+    var what = r.appeared ? 'ここで現れた'
+      : r.vanished ? 'ここで消えた'
+      : r.changed ? 'ここで書き換わった' : '変化なし';
+    var hits = r.hits.slice(0, 3).map(function(h) {
+      return '<div class="dgv-hit">' + h.line + ': ' + _dgVerHitHtml(h, kw) + '</div>';
+    }).join('');
+    if (r.hits.length > 3) {
+      hits += '<div class="dgv-hit">…ほか ' + (r.hits.length - 3) + ' 行</div>';
+    }
+    if (!hits) hits = '<div class="dgv-hit">（この版にこの語は無い）</div>';
+    html += '<tr class="dgv-row" data-doc="' + esc(r.doc) + '" data-rev="' + r.rev + '" '
+      + 'data-changed="' + (r.changed ? 1 : 0) + '" '
+      + 'data-current="' + (r.becameCurrent ? 1 : 0) + '">'
+      + '<td class="dgv-at">' + esc(DVS.atLabel(r.at)) + '</td>'
+      + '<td class="dgv-doc">' + esc(r.doc) + ' 版' + r.rev + '</td>'
+      + '<td class="dgv-hop">' + (r.hop === 0 ? '直接' : '連鎖 ' + r.hop + ' 段') + '</td>'
+      + '<td class="dgv-what">' + what + (r.becameCurrent ? '（今の形）' : '') + '</td>'
+      + '<td class="dgv-hits">' + hits + '</td>'
+      + '<td><button type="button" class="dgv-open">この版を開く</button></td></tr>';
+  });
+  return html + '</tbody></table>';
+}
+
+// 版を別タブで開く。中身は版履歴が持っているので読み直さない。
+// タブ名に版番号を付けて、開いたまま自動保存が走っても今の図を塗り潰さない。
+function openDgVersion(doc, rev) {
+  var rows = _dgVerRows.filter(function(r) {
+    return r.doc === doc && String(r.rev) === String(rev);
+  });
+  var row = rows[0];
+  if (!row) return null;
+  var detected = window.MA.workspace.detectType(row.dsl);
+  saveActiveDoc();
+  openExistingFile({
+    name: doc + '@版' + row.rev,
+    dsl: row.dsl,
+    diagramType: (detected && modules[detected]) ? detected : currentDiagramType,
+  });
+  applyActiveDoc();
+  toggleDepGraph(false);
+  if (window.MA.toast) {
+    var DVS = window.MA.depVersionSearch;
+    window.MA.toast.show(doc + ' の ' + DVS.atLabel(row.at)
+      + ' の版を別タブで開きました（今の図はそのままです）');
+  }
+  return row;
+}
+
+function renderDgVer() {
+  var DVS = window.MA.depVersionSearch;
+  var listEl = document.getElementById('dg-ver-list');
+  var sumEl = document.getElementById('dg-ver-summary');
+  var kwEl = document.getElementById('dg-ver-kw');
+  var openBtn = document.getElementById('dg-ver-open');
+  if (!DVS || !listEl || !sumEl) return null;
+
+  var kw = _dgVerKeyword();
+  if (kwEl && kwEl.value !== kw) kwEl.value = kw;
+  var changedOnly = !!(document.getElementById('dg-ver-changed') || {}).checked;
+  var rows = DVS.search(_dgVerImpact, _dgVerHistoryOf, kw, { changedOnly: changedOnly });
+  _dgVerRows = rows;
+
+  sumEl.textContent = DVS.summaryText(rows, kw, _dgVerImpact.length);
+  sumEl.setAttribute('data-rows', String(rows.length));
+  sumEl.setAttribute('data-docs', String(DVS.byDoc(rows).length));
+  listEl.innerHTML = _dgVerListHtml(rows, kw);
+
+  var first = DVS.firstToOpen(rows);
+  if (openBtn) {
+    openBtn.disabled = !first;
+    openBtn.title = first
+      ? ('いちばん最近「' + kw + '」が書き換わった ' + first.doc + ' 版' + first.rev + ' を開く')
+      : 'この語に当たった版がありません';
+  }
+
+  var opens = listEl.querySelectorAll('button.dgv-open');
+  for (var i = 0; i < opens.length; i++) {
+    (function(btn) {
+      btn.addEventListener('click', function() {
+        var row = btn.parentNode.parentNode;
+        openDgVersion(row.getAttribute('data-doc'), row.getAttribute('data-rev'));
+      });
+    })(opens[i]);
+  }
+  return { rows: rows, first: first };
+}
+
+function setupDgVer() {
+  var kwEl = document.getElementById('dg-ver-kw');
+  var changedEl = document.getElementById('dg-ver-changed');
+  var openBtn = document.getElementById('dg-ver-open');
+  if (kwEl) {
+    kwEl.addEventListener('input', function() { _dgVerKw = kwEl.value; renderDgVer(); });
+  }
+  if (changedEl) changedEl.addEventListener('change', function() { renderDgVer(); });
+  if (openBtn) {
+    openBtn.addEventListener('click', function() {
+      var DVS = window.MA.depVersionSearch;
+      var first = DVS ? DVS.firstToOpen(_dgVerRows) : null;
+      if (first) openDgVersion(first.doc, first.rev);
+    });
+  }
+}
+
 function renderDepGraph() {
   var DG = window.MA.depGraph;
   var canvas = document.getElementById('dg-canvas');
@@ -15836,10 +15989,15 @@ function renderDepGraph() {
       + '関係を 1 本でも書くと、ここに依存が出ます。</div>';
     impactEl.innerHTML = _dgImpactHtml([]);
     if (sumEl) sumEl.textContent = DG.summaryText(null, []);
+    _dgVerImpact = [];
+    renderDgVer();
     return null;
   }
 
   if (!_dgName || !graph.nodes[_dgName]) _dgName = names[0].name;
+  // 名前を選び直したら、症状の語もその名前に戻す (前の名前で打った語が残ると、
+  // 一覧が新しい名前と関係ない版を出したまま「当たり無し」になる)。
+  if (_dgVerLastName !== _dgName) { _dgVerLastName = _dgName; _dgVerKw = null; }
   var opts = '';
   names.forEach(function(n) {
     opts += '<option value="' + esc(n.name) + '"' + (n.name === _dgName ? ' selected' : '') + '>'
@@ -15884,6 +16042,9 @@ function renderDepGraph() {
   });
   // 打つ先は「今出ている一覧」。名前・連鎖段数を変えたら選び直す。
   _dgNoteImpact = impact;
+  // 版履歴の的も「今出ている一覧」。名前・連鎖段数を変えたら追従する。
+  _dgVerImpact = impact;
+  renderDgVer();
   var noteBtn = document.getElementById('dg-note');
   if (noteBtn) noteBtn.addEventListener('click', function() { toggleDgNote(); });
   var noteBox = document.getElementById('dg-note-box');
@@ -15902,6 +16063,9 @@ function toggleDepGraph(open) {
   // 置換前に打った名前をそのまま起点にする (打ち直させない)。
   var from = (document.getElementById('rename-from') || {}).value || '';
   if (from) _dgName = from;
+  // 症状の語は開くたびに選んだ部品名へ戻す (前回の語を持ち越さない)。
+  _dgVerKw = null;
+  _dgVerLastName = null;
   modal.style.display = 'flex';
   renderDepGraph();
   var body = document.getElementById('dg-body');
@@ -15931,6 +16095,7 @@ function setupDepGraph() {
 
   var sel = document.getElementById('dg-name');
   if (sel) sel.addEventListener('change', function() { _dgName = sel.value; renderDepGraph(); });
+  setupDgVer();
   var hops = document.getElementById('dg-hops');
   if (hops) hops.addEventListener('change', function() {
     _dgHops = parseInt(hops.value, 10);
