@@ -1,5 +1,5 @@
 // @ts-check
-// BLK-human-20260916-0900 — 人間の台本 手順 3「置いた注釈の場所を変える」。
+// BLK-human-20260916-0900 — 人間の台本 手順 5「置いた注釈の場所を変える」。
 //
 // note を足したあと、プレビューで選んでも文章しか直せず、位置 (left of / right of / over) と
 // 対象の参加者を変えられなかった (当たり判定が参加者の頭の下の推定位置にあり、note 本体を押しても
@@ -58,7 +58,7 @@ async function clickNote(page) {
   await expect(page.locator('#seq-edit-npos')).toBeVisible();
 }
 
-test.describe('人間 手順 3 — 置いた注釈の位置と対象を GUI で変える', () => {
+test.describe('人間 手順 5 — 置いた注釈の位置と対象を GUI で変える', () => {
   test('over A で足す → right of B → over A,B で DSL と SVG の位置が変わる', async ({ page }) => {
     await gotoApp(page);
     await setDsl(page, DSL);
