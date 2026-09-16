@@ -32,6 +32,8 @@ test.describe('FEAT-114: ブロックで囲む — 1 枚のフォーム', () => 
     expect(await selectMessageByLine(page, 8)).toBeTruthy();
 
     await page.locator('.seq-wrap-block').first().click();
+    // BLK-human-20260916-0901: ⌗ は終点を図で押す段に入る。1 本だけ囲むときは帯のボタンで決める。
+    await page.locator('#seq-wrap-pick-one').click();
     await page.waitForSelector('#seq-wrap-kind');
 
     // 1 枚のフォームであること: 種類とラベルが同時に存在する。
@@ -60,6 +62,8 @@ test.describe('FEAT-114: ブロックで囲む — 1 枚のフォーム', () => 
     expect(await selectMessageByLine(page, 8)).toBeTruthy();
 
     await page.locator('.seq-wrap-block').first().click();
+    // BLK-human-20260916-0901: ⌗ は終点を図で押す段に入る。1 本だけ囲むときは帯のボタンで決める。
+    await page.locator('#seq-wrap-pick-one').click();
     await page.waitForSelector('#seq-wrap-kind');
     await page.selectOption('#seq-wrap-kind', 'alt');
     await page.fill('#seq-wrap-label', 'ok');
@@ -72,7 +76,12 @@ test.describe('FEAT-114: ブロックで囲む — 1 枚のフォーム', () => 
 
     // 🔴 「操作の直後に何もしない」以外のシナリオ: 確定後にフォームを開いて
     // キャンセルし、選択も動かしてから undo する (履歴エントリが増えないこと)。
+    // BLK-human-20260916-0901: 囲んだ直後はそのブロックが選ばれる (続けて範囲を伸縮できる) ので、
+    // 囲んだメッセージ (alt 行が入って 9 行目) を選び直してから開く。
+    expect(await selectMessageByLine(page, 9)).toBeTruthy();
     await page.locator('.seq-wrap-block').first().click();
+    // BLK-human-20260916-0901: ⌗ は終点を図で押す段に入る。1 本だけ囲むときは帯のボタンで決める。
+    await page.locator('#seq-wrap-pick-one').click();
     await page.waitForSelector('#seq-wrap-kind');
     await page.locator('#seq-wrap-cancel').click();
     await page.waitForTimeout(200);

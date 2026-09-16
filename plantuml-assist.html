@@ -5746,6 +5746,18 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 #overlay-layer > * {
   pointer-events: auto;
 }
+/* BLK-human-20260916-0901: 「⌗ 囲む…」の終点待ち。選べるメッセージは点線、始点は実線 */
+#overlay-layer rect.selectable.seq-wrap-pickable {
+  fill: rgba(124, 140, 248, 0.10) !important;
+  stroke: var(--accent) !important;
+  stroke-width: 1.5px !important;
+  stroke-dasharray: 4 3;
+}
+#overlay-layer rect.selectable.seq-wrap-anchor {
+  fill: rgba(124, 140, 248, 0.25) !important;
+  stroke: var(--accent) !important;
+  stroke-width: 2px !important;
+}
 #overlay-layer rect.selectable {
   fill: transparent;
   stroke: none;
@@ -7699,6 +7711,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/sequence-marks.js"></script>
 <script src="src/core/insert-marker.js"></script>
 <script src="src/core/sequence-activation-insert.js"></script>
+<script src="src/core/sequence-group-range.js"></script>
 <script src="src/core/sequence-participant-zone.js"></script>
 <script src="src/core/line-peek.js"></script>
 <script src="src/core/lineage-mark.js"></script>

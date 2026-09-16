@@ -44,6 +44,9 @@ window.MA.selectionRouter = (function() {
       var current = window.MA.selection.getSelected() || [];
 
       if (e.shiftKey) {
+        // BLK-human-20260916-0901: 図種ごとの範囲選択 (シーケンス図は 1 本目〜2 本目の間を全部選ぶ)。
+        var expanded = (opts && typeof opts.expandShift === 'function') ? opts.expandShift(current, item) : null;
+        if (expanded) { window.MA.selection.setSelected(expanded); return; }
         var existing = current.filter(function(s) { return _isSameItem(s, item); });
         var nextSelection;
         if (existing.length > 0) {

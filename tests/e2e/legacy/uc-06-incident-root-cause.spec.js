@@ -31,6 +31,8 @@ test.describe('UC-6: 本番障害 root cause 反映', () => {
     }
     // FEAT-114: 2 連 prompt() ではなく seq-modal の 1 枚フォーム。
     await page.locator('.seq-wrap-block').first().click();
+    // BLK-human-20260916-0901: ⌗ は終点を図で押す段に入る。1 本だけ囲むときは帯のボタンで決める。
+    await page.locator('#seq-wrap-pick-one').click();
     await page.waitForSelector('#seq-wrap-kind');
     await page.selectOption('#seq-wrap-kind', 'alt');
     await page.fill('#seq-wrap-label', 'on-timeout');

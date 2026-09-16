@@ -37,6 +37,7 @@ const sourceFiles = [
   'src/core/subject-preset.js',
   'src/core/driver-usecase-starter.js',
   'src/core/activity-insert.js',
+  'src/core/sequence-group-range.js',
   'src/core/app-bridge.js',
   'src/core/blank-doc.js',
   'src/core/save-diff.js',
