@@ -5221,6 +5221,19 @@ mark.ri-hit { background: var(--accent); color: var(--bg-primary); padding: 0 1p
 /* 相手にしかない = 取り込める。自分にしかない = 相手に無い。色で役割を分ける */
 .xf-row.only-ref .xf-side { color: var(--accent-orange); }
 .xf-row.only-self .xf-side { color: var(--text-secondary); }
+/* BLK-junior-20260917-0323-wish: 親の中 (入れ子) に増えた要素はその親を行に出す */
+.xf-row .xf-nest {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 4px;
+  white-space: nowrap;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .xf-row .xf-text {
   flex: 1;
   min-width: 0;

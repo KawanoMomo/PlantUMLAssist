@@ -21262,6 +21262,11 @@ function _xfRenderShape(rows, headline) {
   host.appendChild(table);
 }
 
+// 行の鍵。`Idle --> Running` は親が違えば別の遷移なので、道筋ごと鍵にする。
+function _xfKey(entry) {
+  return String((entry && entry.parent) || '') + '\u0000' + String((entry && entry.text) || '');
+}
+
 // 1 行。相手にしかない行には「取り込む」を付ける (自分にしかない行は取り込めない)。
 function _xfRow(entry, side) {
   var row = document.createElement('div');
@@ -21276,10 +21281,10 @@ function _xfRow(entry, side) {
     pick.type = 'checkbox';
     pick.className = 'xf-pick-row';
     pick.title = 'この行を取り込む分に入れる';
-    pick.checked = _xfChecked[entry.text] === true;
+    pick.checked = _xfChecked[_xfKey(entry)] === true;
     pick.addEventListener('change', function() {
-      if (pick.checked) _xfChecked[entry.text] = true;
-      else delete _xfChecked[entry.text];
+      if (pick.checked) _xfChecked[_xfKey(entry)] = true;
+      else delete _xfChecked[_xfKey(entry)];
       _xfRenderTakeBar();
     });
     row.appendChild(pick);
@@ -21289,6 +21294,15 @@ function _xfRow(entry, side) {
   tag.className = 'xf-side';
   tag.textContent = side === 'ref' ? '相手だけ' : '自分だけ';
   row.appendChild(tag);
+
+  if (entry.parent) {
+    var nest = document.createElement('span');
+    nest.className = 'xf-nest';
+    nest.textContent = entry.parent + ' の中';
+    nest.title = '親「' + entry.parent + '」の中の要素';
+    row.appendChild(nest);
+    row.setAttribute('data-parent', entry.parent);
+  }
 
   var text = document.createElement('span');
   text.className = 'xf-text';
@@ -21325,7 +21339,7 @@ function _xfRow(entry, side) {
 // チェックされた行 (今の一覧に出ているものだけ)。
 function _xfCheckedEntries() {
   if (!_xfResult) return [];
-  return _xfResult.onlyRef.filter(function(e) { return _xfChecked[e.text] === true; });
+  return _xfResult.onlyRef.filter(function(e) { return _xfChecked[_xfKey(e)] === true; });
 }
 
 // 取り込みバー。件数はボタンの文字に出す (押す前に何件入るかが分かるように)。
@@ -21398,7 +21412,7 @@ function setupCrossRefDiff() {
     takeAll.addEventListener('change', function() {
       _xfChecked = Object.create(null);
       if (takeAll.checked && _xfResult) {
-        _xfResult.onlyRef.forEach(function(e) { _xfChecked[e.text] = true; });
+        _xfResult.onlyRef.forEach(function(e) { _xfChecked[_xfKey(e)] = true; });
       }
       renderCrossRefDiff();
     });
