@@ -828,6 +828,10 @@ window.MA.modules.plantumlSequence = (function() {
     });
     P.bindAllByClass(propsEl, 'seq-insert-msg-after', function(btn) {
       var ln = parseInt(btn.getAttribute('data-line'), 10);
+      // BLK-human-20260915-1204 差し戻し: 帯の最後の要素の後ろに足すときは、
+      // 「帯を閉じてその下 (既定)」「帯の中」を選ばせる。黙って帯の中に入れると帯が伸びる。
+      var band = bandEndAfter(ctx.getMmdText(), ln);
+      if (band) { _showBandChoice(ctx, ln, band); return; }
       _showInsertForm(ctx, ln, 'after', 'message');
     });
     P.bindAllByClass(propsEl, 'seq-insert-note-after', function(btn) {
@@ -1105,6 +1109,43 @@ window.MA.modules.plantumlSequence = (function() {
   // _showInsertPicker は kinds を差し替えて 2 段目 (その他) にも使う。
   function _showOtherPicker(ctx, line, position, hint) {
     _renderPicker(ctx, line, position, otherInsertKinds(), 'その他', true, hint);
+  }
+
+  // line の「後」に足すと帯の末尾 (deactivate の直前) に落ちる帯。そうでなければ null。
+  function bandEndAfter(text, line) {
+    var ai = window.MA.sequenceActivationInsert;
+    if (!ai || typeof text !== 'string') return null;
+    var res = ai.resolve(text, line, 'after');
+    if (!res || res.zone !== 'inside' || !res.band) return null;
+    return res.target === res.band.deactivateLine ? res.band : null;
+  }
+
+  function _showBandChoice(ctx, line, band) {
+    var modal = document.getElementById('seq-modal');
+    var content = document.getElementById('seq-modal-content');
+    if (!modal || !content) { _showInsertForm(ctx, line, 'after', 'message'); return; }
+    var esc = window.MA.htmlUtils.escHtml;
+    var btn = 'style="text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);' +
+      'padding:8px 10px;border-radius:4px;cursor:pointer;font-size:12px;"';
+    content.innerHTML =
+      '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">帯の末尾に追加</h3>' +
+      '<div id="seq-band-choice-note" style="font-size:11px;color:var(--text-secondary);margin-bottom:12px;">' +
+        esc(band.target) + ' の実行中の帯 (activate) の最後です。どちらに入れますか？</div>' +
+      '<div style="display:flex;flex-direction:column;gap:6px;">' +
+        '<button id="seq-band-choice-outside" ' + btn + '>帯を閉じてその下に入れる（既定）</button>' +
+        '<button id="seq-band-choice-inside" ' + btn + '>帯の中に入れる（帯を伸ばす）</button>' +
+      '</div>' +
+      '<button id="seq-band-choice-cancel" style="width:100%;margin-top:8px;background:var(--bg-tertiary);' +
+        'border:1px solid var(--border);color:var(--text-primary);padding:8px;border-radius:4px;cursor:pointer;">キャンセル</button>';
+    modal.style.display = 'flex';
+    function go(zone) {
+      _showInsertForm(ctx, line, 'after', 'message', { zoneHint: { zone: zone, bandLine: band.activateLine } });
+    }
+    document.getElementById('seq-band-choice-outside').addEventListener('click', function() { go('outside'); });
+    document.getElementById('seq-band-choice-inside').addEventListener('click', function() { go('inside'); });
+    document.getElementById('seq-band-choice-cancel').addEventListener('click', function() { modal.style.display = 'none'; });
+    var def = document.getElementById('seq-band-choice-outside');
+    if (def && def.focus) def.focus();
   }
 
   function _showInsertPicker(ctx, line, position, hint) {
@@ -1898,6 +1939,7 @@ window.MA.modules.plantumlSequence = (function() {
       _showInsertPicker(ctx, line, position, hint);
     },
     insertKindOptions: insertKindOptions,
+    bandEndAfter: bandEndAfter,
     pickBtnId: pickBtnId,
     otherInsertKinds: otherInsertKinds,
     insertTargetLine: insertTargetLine,

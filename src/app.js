@@ -674,6 +674,39 @@ function init() {
     return '+ DSL ' + target + ' 行目に挿入';
   }
 
+  // BLK-human-20260915-1204 差し戻し: 実マウスでは帯の周りを押すと overlay の
+  // ライフラインの当たり矩形 (data-type="lifeline") に当たり、ライフライン選択に吸われて
+  // 挿入ピッカーが開かなかった。帯の矩形の中 / 帯より下のライフライン線を押したときは、
+  // ライフライン選択より先に「帯の内側 / 外側」の挿入として解決する。
+  // 帯の上端より上 (参加者との間) と Ctrl/Shift/Meta 付きクリックはこれまでどおり選択。
+  function _bandInsertAt(e) {
+    if (!e || e.ctrlKey || e.metaKey || e.shiftKey) return null;
+    var t = e.target;
+    var tType = t && t.getAttribute ? t.getAttribute('data-type') : null;
+    if (tType !== 'lifeline' && tType !== 'message') return null;
+    if (!moduleHas('insertPicker') || !currentModule || typeof currentModule.showInsertPicker !== 'function') return null;
+    var SO = window.MA.sequenceOverlay;
+    if (!SO || typeof SO.resolveBandZone !== 'function' || typeof SO.resolveInsertLine !== 'function') return null;
+    var ov = document.getElementById('overlay-layer');
+    if (!ov) return null;
+    var rect = ov.getBoundingClientRect();
+    var z = zoom || 1;
+    var x = (e.clientX - rect.left) / z;
+    var y = (e.clientY - rect.top) / z;
+    if (!SO.resolveBandZone(ov, x, y)) return null;
+    // 帯のすぐ下に次のメッセージがあると、その当たり矩形 (矢印の上のラベル分の高さ) が
+    // ライフライン線を覆う。矢印の線より上を帯の列で押したときだけ挿入として扱い、
+    // 矢印そのもの (中心線付近) を押したときはこれまでどおりメッセージを選ぶ。
+    if (tType === 'message') {
+      var my = parseFloat(t.getAttribute('y')) + parseFloat(t.getAttribute('height')) / 2;
+      if (isNaN(my) || y >= my - 3) return null;
+    }
+    var res = SO.resolveInsertLine(ov, x, y);
+    if (!res || !res.zone) return null;
+    res.clickY = y;
+    return res;
+  }
+
   // ── 矢印に乗せたときの相手表示 ──
   // BLK-junior-20260908-1703: 同じ部品から出る点線が 2 本あると色も太さも同じで、
   // 1 本クリックしては右パネルの From/To を読み、違えばもう 1 本、という当て物に
@@ -775,6 +808,12 @@ function init() {
         return;
       }
       var target = e.target;
+      // BLK-human-20260915-1204: 帯の中 / 帯の下のライフライン線は挿入先として枠を出す。
+      var bandRes = _bandInsertAt(e);
+      if (bandRes) {
+        drawHoverGuide(bandRes.clickY, bandRes.rectX, bandRes.rectWidth, _insertGuideLabel(bandRes));
+        return;
+      }
       // overlay rect 上にマウス → guide 非表示 (既存選択を優先)
       if (target.getAttribute && target.getAttribute('data-type')) {
         clearHoverGuide();
@@ -1048,6 +1087,23 @@ function init() {
       if (Date.now() - justDraggedAt < DRAG_CLICK_SUPPRESS_MS) {
         e.stopImmediatePropagation();
       }
+    }, true);
+    // BLK-human-20260915-1204 差し戻し: 帯の中 / 帯の下のライフライン線を実マウスで押したら、
+    // ライフライン選択ではなく「帯の内側 / 外側」で挿入ピッカーを開く (capture で router より先に取る)。
+    overlayEl.addEventListener('click', function(e) {
+      if (Date.now() - justDraggedAt < DRAG_CLICK_SUPPRESS_MS) return;
+      var res = _bandInsertAt(e);
+      if (!res) return;
+      e.stopImmediatePropagation();
+      e.preventDefault();
+      if (window.MA.selection && window.MA.selection.clearSelection) window.MA.selection.clearSelection();
+      var insertCtx = {
+        getMmdText: function() { return mmdText; },
+        setMmdText: function(s) { mmdText = s; suppressSync = true; editorEl.value = s; suppressSync = false; },
+        onUpdate: function() { scheduleRefresh(); },
+      };
+      currentModule.showInsertPicker(insertCtx, res.line, res.position, _zoneHintOf(res));
+      if (typeof clearHoverGuide === 'function') clearHoverGuide();
     }, true);
     window.MA.selectionRouter.bind(overlayEl);
   }

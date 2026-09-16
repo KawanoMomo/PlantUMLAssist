@@ -101,6 +101,11 @@ window.MA.sequenceActivationInsert = (function() {
         });
         continue;
       }
+      // `return msg` は直近に起こした帯を閉じる (PlantUML の return と同じ)。
+      if (/^return(?:\s|$)/.test(s)) {
+        closeBand(null, ln, 'return');
+        continue;
+      }
       var dm = s.match(DEACTIVATE_RE);
       if (dm) {
         closeBand(dm[1] || null, ln, /^destroy/.test(s) ? 'destroy' : 'deactivate');
