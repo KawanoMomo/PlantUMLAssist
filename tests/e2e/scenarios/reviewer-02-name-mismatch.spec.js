@@ -428,3 +428,74 @@ test('手順2 他 persona と部品名が衝突している図が、一覧の印
   // 「相手に断る」ときにこちらの 1 枚だけを見て話すことになる)。
   await expect(page.locator('#folder-name-clash')).toContainText('他 persona と衝突 2 図');
 });
+
+// BLK-reviewer-20260917-0323-wish: 突合の答えは ClockCtrl.EnableClock のような
+// メソッド 1 個に付いているのに、手掛かりはファイル単位 (24 枚) でしか返らず、
+// 「どの上位ドメインから呼ばれているか」は毎回シーケンス図 5〜6 枚を開いて
+// 頭の中で組み直していた。手順2 を「ファイル単位の羅列を読む」から
+// 「呼び出しグラフを 1 回走査する」に変えることを到達条件にする。
+test('手順2 あるメソッドを呼んでいる全図を、1 回の探索でドメインごとに辿れる', async ({ page }) => {
+  test.setTimeout(120 * 1000);
+  const DIR = S2.dirFor(__filename) + '/callgraph';
+
+  // 実物と同じ形。6 ドメインの初期化シーケンスが同じ ClockCtrl.EnableClock を呼び、
+  // クラス図にはその宣言が無い (F-01)。
+  const seq = (drv) => ['@startuml', 'title ' + drv,
+    'actor App', 'participant ' + drv, 'participant ClockCtrl',
+    'App -> ' + drv + ' : ' + drv.split('_')[0] + '_Init()',
+    drv + ' -> ClockCtrl : EnableClock()',
+    drv + ' --> App : InitDone', '@enduml'].join('\n');
+
+  await S2.bootWithSaveDir(page, DIR);
+  await S2.clearDir(page, DIR);
+  await S2.putDoc(page, DIR, 'adc_init_sequence', seq('Adc_Driver'));
+  await S2.putDoc(page, DIR, 'can_init_sequence', seq('Can_Driver'));
+  await S2.putDoc(page, DIR, 'spi_init_sequence', seq('Spi_Driver'));
+  await S2.putDoc(page, DIR, 'spi_state', ['@startuml', 'title Spi_State',
+    '[*] --> Uninit', 'state Uninit', 'state Ready',
+    'Uninit --> Ready : Spi_Init', '@enduml'].join('\n'));
+  await S2.putDoc(page, DIR, 'driver_common_class', ['@startuml', 'title Driver_Common_Class',
+    'class Spi_Driver {', '  + Spi_Init() : void', '}', '@enduml'].join('\n'));
+
+  await S2.bootWithSaveDir(page, DIR);
+  await page.waitForSelector('#preview-svg');
+  await S2.openFolder(page);
+  await page.locator('#folder-callgraph-open').click();
+
+  // 到達条件 1: 開いた時点で「先に見るメソッド」が選ばれている
+  // (24 枚の一覧から目で探す手順がここで消える)。
+  await expect(page.locator('#cg-title')).toHaveText('ClockCtrl.EnableClock', { timeout: 60000 });
+  await expect(page.locator('#cg-sum')).toContainText('最も散っているのは ClockCtrl.EnableClock');
+  await expect(page.locator('.cg-node').first()).toHaveAttribute('data-undeclared', '1');
+
+  // 到達条件 2: そのメソッドがどの上位ドメインから呼ばれているかが、
+  // シーケンス図を 1 枚も開かずにグラフのまま読める。
+  await expect(page.locator('#cg-verdict')).toContainText('クラス図に宣言なし');
+  await expect(page.locator('#cg-verdict')).toContainText('3 枚 / 3 領域');
+  await expect(page.locator('#cg-verdict')).toContainText('adc、can、spi');
+  const domains = page.locator('#cg-refs .cg-domain');
+  await expect(domains).toHaveCount(3);
+  await expect(domains.first()).toHaveText('adc（1）');
+  // 指摘に写す「図名 + 行 + 内容」が同じ画面に並ぶ。
+  await expect(page.locator('.cg-ref[data-doc="adc_init_sequence.puml"]'))
+    .toContainText('adc_init_sequence.puml:7');
+  await expect(page.locator('.cg-ref[data-doc="adc_init_sequence.puml"]'))
+    .toContainText('Adc_Driver -> ClockCtrl : EnableClock()');
+
+  // 到達条件 3: 宣言のあるメソッドは、シーケンスの呼び出しと状態遷移の遷移ラベルが
+  // 同じ 1 つの節点に並ぶ (手順 4.11 の突合がここで済む)。
+  await page.locator('#cg-find').fill('Spi_Init');
+  await page.locator('.cg-node[data-key="Spi_Driver.Spi_Init"]').click();
+  await expect(page.locator('#cg-verdict')).toContainText('宣言 1 件（driver_common_class.puml:4）');
+  await expect(page.locator('.cg-ref[data-kind="transition"]')).toContainText('spi_state.puml:6 遷移');
+  await expect(page.locator('.cg-ref[data-kind="message"]')).toContainText('spi_init_sequence.puml:6');
+
+  // 到達条件 4: 呼び出し元の行を押せば、その図のその行が開く
+  // (「どの図の何行目か」を控えて自分で開き直す手順を残さない)。
+  await page.locator('.cg-ref[data-kind="transition"]').click();
+  await expect(page.locator('#cg-modal')).toBeHidden();
+  await expect.poll(async () => page.evaluate(() => {
+    const ed = document.getElementById('editor');
+    return ed.value.slice(ed.selectionStart, ed.selectionEnd);
+  }), { timeout: 30000 }).toBe('Uninit --> Ready : Spi_Init');
+});
