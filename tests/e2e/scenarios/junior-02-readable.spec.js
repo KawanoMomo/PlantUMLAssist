@@ -1064,3 +1064,77 @@ test('手順2 登録簿の組を選ぶだけで、揺れの残る図がまとめ
   await expect(page.locator('#unify-entry option')).toHaveCount(1);
   await expect(page.locator('#unify-entry option').first()).toHaveText(/^Clock_Ctrl ← ClockCtrl/);
 });
+
+// BLK-junior-20260917-0223-wish: 場面3 (先輩の図の変更を自分の図に取り込む) の手順1〜2。
+// 先輩側の増分は「相手だけ」の行として既に並ぶが、取り込みは 1 行ずつで、押すまで
+// どこへ入るかが分からない。押すと一覧が出し直されカーソルも飛ぶので、増分が
+// 何本もある回は次の 1 行を毎回探し直すことになる。入る位置を先に見せ、
+// チェックした分をまとめて入れられることを確かめる。
+const TAKE_SELF = [
+  '@startuml',
+  'title TIMERドライバ初期化シーケンス',
+  'actor App',
+  'participant Timer_Driver',
+  'App -> Timer_Driver : Timer_Init()',
+  '@enduml',
+].join('\n');
+
+// 先輩側で participant 1 つとメッセージ 2 本が増えた回。
+const TAKE_SENIOR = [
+  '@startuml',
+  'title TIMERドライバ初期化シーケンス',
+  'actor App',
+  'participant Timer_Driver',
+  'participant Driver_Common',
+  'App -> Timer_Driver : Timer_Init()',
+  'Timer_Driver -> Driver_Common : Common_Init()',
+  'Timer_Driver -> Driver_Common : Common_Start()',
+  '@enduml',
+].join('\n');
+
+test('手順1-2 先輩側の増分が入る位置つきで並び、チェックした分がまとめて入る', async ({ page }) => {
+  await S.bootWithSaveDir(page, MINE_DIR);
+  await S.clearDir(page, MINE_DIR);
+  await S.clearDir(page, SENIOR_DIR);
+  await S.putDoc(page, SENIOR_DIR, 'timer_init_sequence', TAKE_SENIOR);
+  await page.reload();
+  await page.waitForSelector('#btn-tab-compare');
+  await S.typeDsl(page, TAKE_SELF);
+  await S.renameActive(page, 'timer_init_sequence');
+
+  // 手順1: 先輩のフォルダを相手にする (自分の保存先は変えない)。
+  await page.locator('#btn-tab-compare').click();
+  await page.locator('#xf-dir').fill(SENIOR_DIR);
+  await page.locator('#btn-xf-load').click();
+  await expect(page.locator('#xf-summary')).toBeVisible();
+
+  // 到達条件その1: 増えた 3 要素が、それぞれ「どこへ入るか」つきで並ぶ。
+  const rows = page.locator('#xf-list .xf-row.only-ref');
+  await expect(rows).toHaveCount(3);
+  await expect(rows.filter({ hasText: 'participant Driver_Common' }).locator('.xf-where'))
+    .toContainText('participant Timer_Driver');
+  await expect(rows.filter({ hasText: 'Common_Init()' }).locator('.xf-where'))
+    .toContainText('行目');
+
+  // 到達条件その2: チェックした件数が押す前にボタンに出る。
+  await page.locator('#xf-take-all').check();
+  await expect(page.locator('#btn-xf-take-checked')).toHaveText('チェックした 3 件を取り込む');
+
+  // 到達条件その3: 1 回押すだけで 3 件が自分の図に入る (1 行ずつ押さない)。
+  await page.locator('#btn-xf-take-checked').click();
+  await page.waitForTimeout(400);
+  const text = await getEditorText(page);
+  expect(text).toContain('participant Driver_Common');
+  expect(text).toContain('Timer_Driver -> Driver_Common : Common_Init()');
+  expect(text).toContain('Timer_Driver -> Driver_Common : Common_Start()');
+  // 宣言は宣言の並びに、メッセージは @enduml の手前に入る。
+  const lines = text.split('\n');
+  expect(lines.indexOf('participant Driver_Common'))
+    .toBeLessThan(lines.findIndex((l) => /Common_Init\(\)/.test(l)));
+  await expect(page.locator('#xf-take-result')).toContainText('3 件を取り込みました');
+
+  // 到達条件その4: 取り込んだ行は一覧から消え、取り込む対象が無くなる。
+  await expect(page.locator('#xf-list .xf-row.only-ref')).toHaveCount(0);
+  // 先輩のファイルは読むだけ (書き換えない)。
+  expect(await S.readDoc(page, SENIOR_DIR, 'timer_init_sequence')).toBe(TAKE_SENIOR);
+});
