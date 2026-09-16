@@ -8456,6 +8456,86 @@ function applyNoteFinding(id, useAlt) {
   });
 }
 
+// ── 指摘の表記揺れ語を、開いている図に自動で突き合わせる ──
+// BLK-junior-20260917-0023-wish: junior は指摘.md の「表記揺れ」欄の組 (IRQCtrl⇔Irq_Ctrl 等) を
+// 目で覚え、開いた図の全行を上から読んで該当語を探していた。行数の多い図ほどその
+// スキャンが長く、組が増えるたびに図全体を読み直すことになる。突合そのものは
+// vocabMatch が持つ (ここは描画と行送りだけ)。
+var VOCAB_MAX_LINES = 12;   // 該当行が多いときは頭だけ出す (band が画面を埋めない)
+
+function _vocabScan() {
+  var VM = window.MA.vocabMatch;
+  if (!VM || !_noteFile || !editorEl) return null;
+  return VM.scan(_noteFile.text, editorEl.value);
+}
+
+function renderVocabBand(host) {
+  var VM = window.MA.vocabMatch;
+  var res = _vocabScan();
+  if (!host || !VM || !res) return;
+
+  var band = document.createElement('div');
+  band.className = 'vocab-band';
+  band.id = 'vocab-band';
+  band.setAttribute('data-vocab-state', res.total > 0 ? 'hit' : 'none');
+  band.setAttribute('data-vocab-pairs', String(res.pairs.length));
+  band.setAttribute('data-vocab-lines', String(res.lines.length));
+  band.setAttribute('data-vocab-total', String(res.total));
+
+  var sum = document.createElement('div');
+  sum.className = 'vocab-sum';
+  sum.id = 'vocab-sum';
+  sum.textContent = '表記揺れ突合: ' + VM.summaryText(res);
+  band.appendChild(sum);
+
+  // 該当した組を、綴りごとの件数付きで 1 行に。どちらの綴りが残っているかが
+  // 見えないと、直す前に本文を開いて確かめ直すことになる。
+  var hits = VM.hitPairs(res);
+  if (hits.length) {
+    var ps = document.createElement('div');
+    ps.className = 'vocab-pairs';
+    ps.id = 'vocab-pairs';
+    ps.textContent = hits.map(function(p) {
+      return p.label + ' (' + p.terms.map(function(t) {
+        return t.term + ' ' + t.count + '件';
+      }).join('、') + ')';
+    }).join(' / ');
+    band.appendChild(ps);
+  }
+
+  // 該当行。押せばエディタのその行へ飛ぶ (見つけた所から直しに入れる)。
+  res.lines.slice(0, VOCAB_MAX_LINES).forEach(function(row) {
+    var div = document.createElement('div');
+    div.className = 'vocab-line';
+    div.setAttribute('data-vocab-line', String(row.line));
+    var no = document.createElement('span');
+    no.className = 'vocab-no';
+    no.textContent = String(row.line) + ':';
+    div.appendChild(no);
+    VM.segments(row).forEach(function(seg) {
+      var sp = document.createElement('span');
+      if (seg.hit) {
+        sp.className = 'vocab-hit';
+        sp.setAttribute('data-vocab-term', seg.term || '');
+      }
+      sp.textContent = seg.text;
+      div.appendChild(sp);
+    });
+    div.title = '行 ' + row.line + ' へ移動';
+    div.addEventListener('click', function() { jumpToLine(row.line); });
+    band.appendChild(div);
+  });
+  if (res.lines.length > VOCAB_MAX_LINES) {
+    var more = document.createElement('div');
+    more.className = 'vocab-more';
+    more.id = 'vocab-more';
+    more.textContent = 'ほか ' + (res.lines.length - VOCAB_MAX_LINES) + ' 行';
+    band.appendChild(more);
+  }
+
+  host.appendChild(band);
+}
+
 function renderNotePanel() {
   var el = _noteEls();
   var RN = window.MA.reviewNote;
@@ -8477,6 +8557,11 @@ function renderNotePanel() {
   sum.id = 'note-summary';
   sum.textContent = _noteMsg || (RN ? RN.summaryText(_noteRows, _noteShowPreamble) : '');
   el.note.appendChild(sum);
+
+  // 表記揺れの自動突合 (BLK-junior-20260917-0023-wish)。指摘の語彙は既に読んで
+  // あるので、開いている図に効いているかどうかは機械が言える。該当が無いときも
+  // 「該当なし」と出す (無いことを確かめるために全行を目で追わせない)。
+  renderVocabBand(el.note);
 
   // 前置きの出し入れ。前置きが 1 件も無いフォルダでは出さない (押す所を増やさない)。
   var preLabel = RN ? RN.preambleLabel(_noteRows, _noteShowPreamble) : '';
