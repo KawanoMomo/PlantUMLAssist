@@ -2075,3 +2075,95 @@ test.describe('junior 手順 1: フルネームで絞ると本体が資料用よ
     await expect(page.locator('#folder-panel [data-exact="1"]')).toHaveCount(0);
   });
 });
+
+// BLK-junior-20260917-0023-wish: 手順 1〜2 は「指摘.md を読む → 自分の図を開いて直す」。
+// 指摘の「表記揺れ」欄にある組 (IRQCtrl⇔Irq_Ctrl 等) は、どの図に効いているかが
+// 書かれていないので、junior は組を目で覚えて図の全行を上から読んで探していた。
+// 行数の多い図 (シーケンス図・状態遷移図) ほどそのスキャンが長い。
+// 指摘を開いた時点で「該当有無・該当行・該当位置」が出ることを到達条件にする。
+const VOC_ROOT = DIR + '-vocab';
+const VOC_MINE = VOC_ROOT + '/junior';
+const VOC_REVIEWER = VOC_ROOT + '/reviewer';
+
+const VOC_NOTE = [
+  '# junior への指摘',
+  '',
+  '## 表記揺れ(primary×junior: 2組、継続)',
+  '- 通し: IRQCtrl⇔Irq_Ctrl、Clock_Ctrl⇔ClockCtrl の 2 組。',
+  '',
+  '## SVG',
+  'Foo⇔Bar は SVG の話 (表記揺れ欄ではない)。',
+].join('\n');
+
+// 該当語が本文の途中に混ざる図。Irq_CtrlTest は別の語なので数えない。
+const VOC_HIT = ['@startuml', 'title TIMER 初期化シーケンス',
+  'participant Irq_Ctrl', 'participant ClockCtrl',
+  'Irq_Ctrl -> ClockCtrl : enable()',
+  'note right: Irq_CtrlTest は別の語', '@enduml'].join('\n');
+const VOC_CLEAN = ['@startuml', 'title GPIO 初期化シーケンス',
+  'participant Gpio', 'Gpio -> Gpio : init()', '@enduml'].join('\n');
+
+test.describe('junior 手順 1〜2: 指摘の表記揺れ語が自分の図に効いているかが開いた瞬間に分かる', () => {
+  test.beforeEach(async ({ page }) => {
+    await S1.bootWithSaveDir(page, VOC_MINE);
+    await S1.clearDir(page, VOC_MINE);
+    await S1.putDoc(page, VOC_MINE, 'timer_init_sequence', VOC_HIT);
+    fs.mkdirSync(absOf(VOC_REVIEWER), { recursive: true });
+    fs.writeFileSync(nodePath.join(absOf(VOC_REVIEWER), '指摘.md'), VOC_NOTE, 'utf-8');
+    await page.reload();
+    await page.waitForSelector('#btn-tab-peek');
+  });
+
+  test('該当行と該当位置が指摘の欄に出て、押せばその行へ飛ぶ', async ({ page }) => {
+    await page.locator('#editor').fill(VOC_HIT);
+    await page.waitForTimeout(300);
+    await page.locator('#btn-tab-peek').click();
+    await page.waitForSelector('#peek-modal');
+    await page.locator('#peek-note-toggle').click();
+    await page.waitForSelector('#vocab-band');
+
+    // 到達条件その1: 該当有無が 1 行で読める (全行を目で追わない)。
+    await expect(page.locator('#vocab-band')).toHaveAttribute('data-vocab-state', 'hit');
+    await expect(page.locator('#vocab-sum')).toContainText('表記揺れ突合');
+    await expect(page.locator('#vocab-sum')).toContainText('行');
+
+    // 到達条件その2: どちらの綴りが何件残っているかまで出る。
+    await expect(page.locator('#vocab-pairs')).toContainText('IRQCtrl⇔Irq_Ctrl');
+    await expect(page.locator('#vocab-pairs')).toContainText('Irq_Ctrl');
+    await expect(page.locator('#vocab-pairs')).toContainText('ClockCtrl');
+    // 欄の外の ⇔ は拾わない。
+    await expect(page.locator('#vocab-band')).not.toContainText('Foo⇔Bar');
+
+    // 到達条件その3: 該当行が行番号つきで並び、該当語だけが光る。
+    const lines = page.locator('#peek-note .vocab-line');
+    expect(await lines.count()).toBeGreaterThan(0);
+    const marks = page.locator('#peek-note .vocab-hit');
+    expect(await marks.count()).toBeGreaterThan(0);
+    await expect(marks.first()).toHaveAttribute('data-vocab-term', /Irq_Ctrl|ClockCtrl/);
+    // 識別子単位なので Irq_CtrlTest の行は該当にしない。
+    await expect(page.locator('#peek-note .vocab-line[data-vocab-line="6"]')).toHaveCount(0);
+
+    // 到達条件その4: 押せばエディタのその行へ移り、直しにそのまま入れる。
+    const target = Number(await lines.first().getAttribute('data-vocab-line'));
+    await lines.first().click();
+    const at = await page.evaluate(() => {
+      const el = document.getElementById('editor');
+      return el.value.slice(0, el.selectionStart).split('\n').length;
+    });
+    expect(at).toBe(target);
+  });
+
+  test('該当が無ければ「該当なし」と突合した組数つきで言い切る', async ({ page }) => {
+    await page.locator('#editor').fill(VOC_CLEAN);
+    await page.waitForTimeout(300);
+    await page.locator('#btn-tab-peek').click();
+    await page.waitForSelector('#peek-modal');
+    await page.locator('#peek-note-toggle').click();
+    await page.waitForSelector('#vocab-band');
+
+    await expect(page.locator('#vocab-band')).toHaveAttribute('data-vocab-state', 'none');
+    await expect(page.locator('#vocab-sum')).toContainText('該当なし');
+    await expect(page.locator('#vocab-sum')).toContainText('2組');
+    await expect(page.locator('#peek-note .vocab-line')).toHaveCount(0);
+  });
+});

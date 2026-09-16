@@ -2253,6 +2253,16 @@ html, body {
 #peek-note { padding-bottom: 10px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
 #peek-note .note-head { font-size: 12px; font-weight: 600; padding-bottom: 2px; }
 #peek-note .note-summary { font-size: 11px; color: var(--text-secondary); padding-bottom: 6px; }
+/* 表記揺れの自動突合 (BLK-junior-20260917-0023-wish) */
+#peek-note .vocab-band { border: 1px solid var(--border); border-radius: 4px; padding: 5px 6px; margin-bottom: 8px; }
+#peek-note .vocab-band[data-vocab-state="hit"] { border-color: var(--accent); }
+#peek-note .vocab-sum { font-size: 11px; font-weight: 600; padding-bottom: 3px; }
+#peek-note .vocab-pairs { font-size: 11px; color: var(--text-secondary); padding-bottom: 3px; }
+#peek-note .vocab-line { font-size: 11px; font-family: var(--mono, monospace); white-space: pre-wrap; word-break: break-all; cursor: pointer; padding: 1px 0; }
+#peek-note .vocab-line:hover { background: var(--hover-bg, rgba(127,127,127,0.12)); }
+#peek-note .vocab-no { color: var(--text-secondary); padding-right: 6px; }
+#peek-note .vocab-hit { background: #ffe08a; color: #3a2c00; border-radius: 2px; }
+#peek-note .vocab-more { font-size: 11px; color: var(--text-secondary); padding-top: 2px; }
 #peek-note .note-hint { font-size: 11px; color: var(--text-secondary); padding: 4px 0; }
 #peek-note .note-preamble-toggle {
   border: 1px solid var(--border); border-radius: 3px; background: var(--bg-tertiary);
@@ -7598,6 +7608,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/add-kind-vocab.js"></script>
 <script src="src/core/name-registry.js"></script>
 <script src="src/core/name-unify.js"></script>
+<script src="src/core/vocab-match.js"></script>
 <script src="src/core/save-dir-handoff.js"></script>
 <script src="src/core/semantic-refs.js"></script>
 <script src="src/core/xref-graph.js"></script>
