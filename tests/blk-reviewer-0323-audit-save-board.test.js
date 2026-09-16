@@ -46,7 +46,18 @@ describe('audit --save-board: --board の画面を指摘文書へ書き戻す', 
 
     const saved = fs.readFileSync(board, 'utf-8');
     // 画面に出したものがそのまま控えになる (見た内容と控えが食い違わない)。
-    expect(saved.replace(/\n*$/, '')).toBe(r.out.replace(/\n*$/, ''));
+    // BLK-reviewer-20260917-0423-friction: 書き先を丸ごと上書きすると reviewer が
+    // 手で書いた指摘が消えるので、自動生成の塊を印で囲んで差し替える形に変えた。
+    // 「画面と控えが食い違わない」は、画面の本文が印の中にそのまま入ることで守る。
+    const rb = require('../src/core/review-board.js');
+    expect(saved).toContain(rb.GEN_BEGIN);
+    expect(saved).toContain(rb.GEN_END);
+    expect(rb.stripGenerated(saved)).not.toContain('前回控えから変わった図');
+    const gen = saved.slice(saved.indexOf(rb.GEN_BEGIN) + rb.GEN_BEGIN.length,
+      saved.indexOf(rb.GEN_END));
+    expect(gen.trim()).toBe(r.out.replace(/\n*$/, '').trim());
+    // 手で書いた前回の指摘は消えない。
+    expect(saved).toContain('前回の指摘 1 件');
     expect(r.err).toContain('指摘文書を更新しました');
     expect(r.err).toContain(board);
   });

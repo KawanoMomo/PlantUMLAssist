@@ -712,8 +712,16 @@ function main(argv) {
       }
       try {
         fs.mkdirSync(path.dirname(dest), { recursive: true });
-        fs.writeFileSync(dest, boardText.replace(/\n*$/, '\n'), 'utf-8');
-        console.error('指摘文書を更新しました: ' + dest);
+        // BLK-reviewer-20260917-0423-friction: 画面をそのまま上書きすると、reviewer が
+        // 手で書いた指摘 (と、そこにしか無い継続 tick 数) が消え、次の run はその
+        // 自動生成を指摘として読み直して見出しが箇条書きに入れ子で潰れる。
+        // 手で書いた部分は残し、自動生成の塊だけを差し替える。
+        let before = '';
+        try { before = fs.readFileSync(dest, 'utf-8'); } catch (e) { before = ''; }
+        fs.writeFileSync(dest, reviewBoard.mergeIntoDoc(before, boardText), 'utf-8');
+        const keptFindings = reviewBoard.parseFindings(before).length;
+        console.error('指摘文書を更新しました: ' + dest
+          + '（手で書いた ' + keptFindings + ' 件はそのまま残し、自動生成の節だけ差し替えました）');
       } catch (e) {
         console.error('指摘文書に書けません: ' + dest + ' — ' + e.message);
         return 1;

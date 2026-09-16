@@ -191,17 +191,67 @@
     return out;
   }
 
+  // ---- 自分が書いた節を読み返さない ----------------------------------------
+  //
+  // BLK-reviewer-20260917-0423-friction: --save-board は markdown() の本文をそのまま
+  // 指摘.md へ書く。次の run はその指摘.md を「reviewer が手で書いた指摘」として
+  // 読むので、`## 前回の指摘 — 継続（1 件）` という自分の見出しが 1 件の指摘の題名に、
+  // その下の箇条書きが本文になる。出力は入れ子に潰れ (継続の箇条書きに別の見出し文言が
+  // 並ぶ)、reviewer が手で書いた指摘と継続 tick 数 (13 tick 目) は消える。
+  //
+  // 直し方は 2 つとも要る。
+  //   ・書くとき … 自動生成の塊を印で囲み、次の save はその塊だけを差し替える
+  //                 (手で書いた指摘を消さない)
+  //   ・読むとき … 印の中と、自分の見出しに当たる節を指摘として数えない
+  //                 (印の無い、すでに壊れた指摘.md も同じ規則で読み直せる)
+  var GEN_BEGIN = '<!-- review-board:auto ここから下は audit.js --board が書いた自動生成です。'
+    + '手で書いた指摘はこの印より上に置いてください -->';
+  var GEN_END = '<!-- /review-board:auto -->';
+
+  // markdown() が出す節の見出し。手書きの指摘がこの言い回しになることはない
+  // (「前回の指摘 — 継続（2 件）」のように件数の括弧まで揃って初めて当たる)。
+  var GEN_HEADING_RE = new RegExp(
+    '^(?:前回の指摘\\s*—\\s*.*|今回の新規|前回の突合にもあった.*|前回の突合から消えた|'
+    + '前回控えから変わった図)（\\d+\\s*(?:件|枚)）$');
+
+  function isGeneratedHeading(heading) {
+    return GEN_HEADING_RE.test(_s(heading).trim());
+  }
+
+  // 自動生成の塊を落とす。印が閉じていなければ、印から後ろを全部落とす
+  // (途中で書き込みが切れた指摘.md を、半分だけ指摘として読まない)。
+  function stripGenerated(md) {
+    var text = _s(md);
+    var at = text.indexOf(GEN_BEGIN);
+    while (at >= 0) {
+      var end = text.indexOf(GEN_END, at);
+      text = end < 0 ? text.slice(0, at)
+        : text.slice(0, at) + text.slice(end + GEN_END.length);
+      at = text.indexOf(GEN_BEGIN);
+    }
+    return text;
+  }
+
+  // 手で書いた部分 + 今回の自動生成。save のたびに塊だけが入れ替わる。
+  function mergeIntoDoc(md, generated) {
+    var kept = stripGenerated(md).replace(/\s*$/, '');
+    var block = GEN_BEGIN + '\n\n' + _s(generated).replace(/\s*$/, '') + '\n\n' + GEN_END;
+    return (kept ? kept + '\n\n' : '') + block + '\n';
+  }
+
   // 指摘.md を `##` の見出し単位で 1 件ずつに割る。
   // サマリ・依頼のような「指摘ではない節」も落とさず持つ (状態は 'other')。
+  // 自動生成の節は、印の中にあっても印が無くても指摘として数えない。
   function parseFindings(md) {
-    var lines = _s(md).split(/\r?\n/);
+    var lines = stripGenerated(md).split(/\r?\n/);
     var out = [];
     var cur = null;
     for (var i = 0; i < lines.length; i++) {
       var h = /^##\s+(.*)$/.exec(lines[i]);
       if (h) {
         if (cur) out.push(cur);
-        cur = { heading: h[1].trim(), body: [] };
+        // 自分が書いた節は、その本文ごと読み飛ばす (次の見出しまで捨てる)。
+        cur = isGeneratedHeading(h[1].trim()) ? null : { heading: h[1].trim(), body: [] };
         continue;
       }
       if (cur) cur.body.push(lines[i]);
@@ -629,6 +679,9 @@
     MARKS: MARKS, VERDICT: VERDICT,
     docKey: docKey, parseFindings: parseFindings, build: build,
     longestCarry: longestCarry, summaryLine: summaryLine, markdown: markdown,
+    GEN_BEGIN: GEN_BEGIN, GEN_END: GEN_END,
+    isGeneratedHeading: isGeneratedHeading,
+    stripGenerated: stripGenerated, mergeIntoDoc: mergeIntoDoc,
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
