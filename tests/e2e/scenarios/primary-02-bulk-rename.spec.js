@@ -427,3 +427,54 @@ test('手順4 依存グラフの影響先すべてに、同じ note を 1 回で
   const again = await S.readDoc(page, DIR, docs[0]);
   expect(again.split(NOTE).length - 1).toBe(1);
 });
+
+// BLK-primary-20260917-0023: ⇄ 一括置換のヒット件数は「何枚に当たったか」までで、
+// 「どの図の何行目か」「残りの図は触らなくてよいか」は 3 枚を 1 枚ずつ開いて
+// 確かめ直していた。件数の横から影響範囲へ入り、14 枚を変更あり / なしで仕分けた
+// 一覧を、当たった箇所がハイライトされた状態で 1 画面で読む。
+test('手順4 件数の横から、14 枚が変更あり / なしに仕分けられた影響範囲が開く', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  for (const n of S.PRIMARY_DOCS) await S.putDoc(page, DIR, n, S.docFor(n, 'SpiDrv'));
+  await page.reload();
+  await page.waitForSelector('#preview-svg');
+
+  await page.keyboard.press('Control+h');
+  await page.waitForSelector('#rename-panel.open', { timeout: 5000 });
+  await page.locator('#rename-from').fill('SpiDrv');
+  await page.locator('#rename-to').fill('Spi_Driver');
+  await page.waitForTimeout(1200);
+
+  // 到達条件その1: 件数を読んだその場に影響範囲への入口がある。
+  const gate = page.locator('#btn-rename-hits-impact');
+  await expect(gate).toBeEnabled();
+  await expect(page.locator('#rename-hits-label')).toContainText('枚');
+  await gate.click();
+  await page.waitForSelector('#ri-modal', { state: 'visible' });
+  await page.waitForTimeout(600);
+
+  // 到達条件その2: 走査した枚数・変更あり・変更なしが 1 行で出て、
+  // 変更なしの図も名前で並ぶ (残りを 1 枚ずつ開いて確かめ直さない)。
+  const roster = page.locator('#ri-roster');
+  const scanned = Number(await roster.getAttribute('data-scanned'));
+  const changed = Number(await roster.getAttribute('data-changed'));
+  const none = Number(await roster.getAttribute('data-none'));
+  // 保存フォルダの 14 枚 (開いている無題のタブが 1 枚加わる回がある)。
+  expect(scanned).toBeGreaterThanOrEqual(S.PRIMARY_DOCS.length);
+  // 識別子として当たるのは spi_init_sequence と driver_common_class の 2 枚
+  // (spi_state の SpiDrv_Init は別の識別子なので置換の的にならない)。
+  expect(changed).toBe(2);
+  expect(none).toBe(scanned - changed);
+  await expect(roster).toContainText('変更なし');
+  await expect(page.locator('#ri-none .ri-none-doc')).toHaveCount(none);
+  await expect(page.locator('#ri-none')).toContainText('can_state');
+  await expect(page.locator('#ri-none')).not.toContainText('spi_init_sequence');
+
+  // 到達条件その3: 変更ありの図はヒット箇所がハイライトされて並ぶ
+  // (行の中のどこが当たったかを目で探さない)。
+  const entries = page.locator('#ri-body .cb-entry');
+  await expect(entries).toHaveCount(changed);
+  const marks = page.locator('#ri-body mark.ri-hit');
+  expect(await marks.count()).toBeGreaterThan(changed);
+  await expect(marks.first()).toHaveText(/SpiDrv|Spi_Driver/);
+});

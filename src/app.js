@@ -15344,13 +15344,34 @@ function _renameImpactDocs(from) {
   if (FI && _fiEnabled() && from) {
     var openNames = {};
     docs.forEach(function(d) { openNames[d.name] = true; });
-    FI.applyTargets(FI.merge([], _fiFileDocs, _fiRoles).filter(function(r) {
-      return !openNames[r.name];
-    }), from).forEach(function(r) {
+    // BLK-primary-20260917-0023: 当たった図だけを渡すと「残りは触らなくてよい」が
+    // board から言えない。的になる図 (テンプレ以外) は当たらなかったものも渡し、
+    // 変更あり / なしの仕分けは impact() に任せる。
+    FI.merge([], _fiFileDocs, _fiRoles).filter(function(r) {
+      return !openNames[r.name] && FI.isTarget(r);
+    }).forEach(function(r) {
       docs.push({ id: '', name: r.name, dsl: r.dsl, unopened: true });
     });
   }
   return docs;
+}
+
+// BLK-primary-20260917-0023: 行のどこが当たっているかを色で示す。全文を出したとき
+// (ri-full) は当たっていない行も並ぶので、目で探す工程が残らないようにする。
+function _riMark(text, needle, esc) {
+  var s = text == null ? '' : String(text);
+  var br = window.MA.bulkRename;
+  if (!s || !needle || !br || !br.hitRanges) return esc(s);
+  var ranges = br.hitRanges(s, needle);
+  if (!ranges.length) return esc(s);
+  var out = '';
+  var last = 0;
+  ranges.forEach(function(r) {
+    out += esc(s.slice(last, r.start))
+      + '<mark class="ri-hit">' + esc(s.slice(r.start, r.end)) + '</mark>';
+    last = r.end;
+  });
+  return out + esc(s.slice(last));
 }
 
 function renderRenameImpactBoard() {
@@ -15365,14 +15386,33 @@ function renderRenameImpactBoard() {
   var res = br.impact(_renameImpactDocs(from), from, to);
 
   if (sumEl) sumEl.textContent = br.impactText(res, from, to);
+  // BLK-primary-20260917-0023: 仕分けの 1 行 (何枚中何枚に変更あり)。
+  var rosterEl = document.getElementById('ri-roster');
+  if (rosterEl) {
+    rosterEl.textContent = br.rosterText(res);
+    rosterEl.setAttribute('data-scanned', String(res.scanned));
+    rosterEl.setAttribute('data-changed', String(res.docs));
+    rosterEl.setAttribute('data-none', String(res.none.length));
+  }
   var applyBtn = document.getElementById('ri-apply');
   var srcApply = document.getElementById('btn-rename-apply');
   if (applyBtn) applyBtn.disabled = !res.valid || res.docs === 0 || !srcApply || srcApply.disabled;
 
+  // BLK-primary-20260917-0023: 当たらなかった図も「変更なし」として並べる。
+  // 影響範囲の確認は、触らなくてよい図を言い切れてはじめて終わる。
+  var noneHtml = '<div class="ri-none" id="ri-none" data-none="' + res.none.length + '">'
+    + '<div class="ri-none-head">' + esc('変更なし ' + res.none.length + ' 枚') + '</div>'
+    + '<div class="ri-none-rows">'
+    + res.none.map(function(d) {
+      return '<span class="ri-none-doc" data-doc-name="' + esc(d.name) + '">'
+        + esc(d.name) + (d.unopened ? ' (未オープン)' : '') + '</span>';
+    }).join('')
+    + '</div></div>';
+
   if (res.docs === 0) {
     body.innerHTML = '<div class="cb-empty">'
       + esc('「' + from + '」に当たる行はありません。置換前の部品名を確かめてください。')
-      + '</div>';
+      + '</div>' + noneHtml;
     return res;
   }
 
@@ -15393,13 +15433,13 @@ function renderRenameImpactBoard() {
       }
       html += '<tr class="cb-' + r.kind + '">'
         + '<td class="cb-no">' + (r.beforeNo || '') + '</td>'
-        + '<td class="cb-before">' + esc(r.before == null ? '' : r.before) + '</td>'
+        + '<td class="cb-before">' + _riMark(r.before, from, esc) + '</td>'
         + '<td class="cb-no cb-after">' + (r.afterNo || '') + '</td>'
-        + '<td>' + esc(r.after == null ? '' : r.after) + '</td></tr>';
+        + '<td>' + _riMark(r.after, res.valid ? to : from, esc) + '</td></tr>';
     });
     html += '</tbody></table></div>';
   });
-  body.innerHTML = html;
+  body.innerHTML = html + noneHtml;
   return res;
 }
 
@@ -15419,6 +15459,13 @@ function setupRenameImpact() {
   var modal = document.getElementById('ri-modal');
   if (!btn || !modal) return;
   btn.addEventListener('click', function(ev) {
+    ev.stopPropagation();
+    toggleRenameImpact(true);
+  });
+
+  // 件数の横からも同じ画面へ (経路を 2 つ持つが、開くのは同じボード)。
+  var hitsBtn = document.getElementById('btn-rename-hits-impact');
+  if (hitsBtn) hitsBtn.addEventListener('click', function(ev) {
     ev.stopPropagation();
     toggleRenameImpact(true);
   });
@@ -16264,6 +16311,16 @@ function updateRenamePreview() {
   // 先に確かめてから置換後を決める、という順序を塞がないため。
   var prevBtn = document.getElementById('btn-rename-preview');
   if (prevBtn) prevBtn.disabled = !from || grand === 0;
+  // BLK-primary-20260917-0023: 件数のすぐ横の入口。件数が 0 でも from さえ
+  // 打ってあれば押せる (「どの図も変わらない」を一覧で確かめる回がある)。
+  var hitsBtn = document.getElementById('btn-rename-hits-impact');
+  if (hitsBtn) hitsBtn.disabled = !from;
+  var hitsLabel = document.getElementById('rename-hits-label');
+  if (hitsLabel) {
+    hitsLabel.textContent = from ? ('ヒット ' + grand + ' 件 / ' + grandDocs + ' 枚') : 'ヒット';
+    hitsLabel.setAttribute('data-grand-total', String(grand));
+    hitsLabel.setAttribute('data-docs', String(grandDocs));
+  }
 }
 
 // 置換前・置換後を決めたあとの共通処理。一括置換パネルと名前突合の
