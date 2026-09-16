@@ -8533,7 +8533,121 @@ function renderVocabBand(host) {
     band.appendChild(more);
   }
 
+  renderVocabVerdicts(band, res);
   host.appendChild(band);
+}
+
+// ── 表記揺れの「統一先」を先輩フォルダの実績から言い切る ──
+// BLK-junior-20260917-0123-wish: 突合は該当語の位置までは出すが、組の左右どちらが
+// 正式表記かは出さない。指摘.md 本文にも書かれていないので、junior は先輩フォルダの
+// 複数ファイルを grep して先輩の実際の綴りを探していた。組が複数図種にまたがると、
+// その grep を図種ごとにやり直すことになる。判定そのものは vocabCanon が持つ
+// (ここは読み込みと描画だけ)。
+var VOCAB_MAX_FILES = 3;    // 裏取り先は頭 3 枚 (それ以上は「ほか N 枚」)
+var _canonDocs = null;      // 先輩フォルダの本文 [{folder, name, text, mtime}]
+var _canonKey = '';         // 読んだフォルダの並び (変われば読み直す)
+var _canonLoading = null;
+
+// 根拠にするフォルダ。先輩の枠でフォルダを決めてあればそこだけを見る
+// (決めてあるのに他のフォルダの綴りを数に混ぜると、判定が黙って変わる)。
+// 決めていなければ、自分の保存先以外の覗けるフォルダ全部。
+function _canonDirs() {
+  var PF = window.MA.peekFolder;
+  var st = _seniorState();
+  if (st && st.dir) return [{ name: _seniorLabel(), path: st.dir }];
+  return PF ? PF.others(_peekDirs).map(function(d) {
+    return { name: d.name, path: d.path };
+  }) : [];
+}
+
+// フォルダごと 1 回の呼び出しで本文と刻印を受け取る (図を 1 枚ずつ取りに行くと、
+// 指摘を開いてから統一先が出るまでが枚数ぶん遅れて出る)。
+function refreshVocabCanon() {
+  var WS = window.MA.workspace;
+  var dirs = _canonDirs();
+  var key = dirs.map(function(d) { return d.path; }).join('|');
+  if (!WS || !dirs.length) { _canonDocs = []; _canonKey = key; return Promise.resolve(false); }
+  if (_canonKey === key && _canonDocs) return Promise.resolve(false);
+  if (_canonLoading) return _canonLoading;
+  _canonLoading = Promise.all(dirs.map(function(d) {
+    return WS.listFolder(d.path).then(function(info) {
+      return ((info && info.entries) || []).filter(function(e) {
+        return e && e.name && typeof e.text === 'string';
+      }).map(function(e) {
+        return { folder: d.name, name: e.name, text: e.text, mtime: e.mtime || '' };
+      });
+    }).catch(function() { return []; });
+  })).then(function(sets) {
+    _canonDocs = sets.reduce(function(a, s) { return a.concat(s); }, []);
+    _canonKey = key;
+    _canonLoading = null;
+    return true;
+  }).catch(function() {
+    // 読めないだけで突合そのものは止めない (統一先だけが出ない)。
+    _canonDocs = [];
+    _canonKey = key;
+    _canonLoading = null;
+    return false;
+  });
+  return _canonLoading;
+}
+
+function renderVocabVerdicts(band, res) {
+  var VM = window.MA.vocabMatch;
+  var VC = window.MA.vocabCanon;
+  if (!band || !VM || !VC) return;
+  var hits = VM.hitPairs(res);
+  if (!hits.length) return;      // 自分の図に無い組の統一先は今は要らない
+
+  // まだ読んでいなければ読みに行き、届いたら描き直す (待たせない)。
+  if (!_canonDocs) {
+    var wait = document.createElement('div');
+    wait.className = 'vocab-canon-sum';
+    wait.id = 'vocab-canon-sum';
+    wait.textContent = '統一先: 先輩の図を読み込み中…';
+    band.appendChild(wait);
+    // 読めても読めなくても 1 度は描き直す (「読み込み中…」のまま残さない)。
+    refreshVocabCanon().then(function() { if (_canonDocs) renderNotePanel(); });
+    return;
+  }
+
+  var verdicts = VC.decideAll(hits, _canonDocs,
+    window.MA.nameRegistry ? window.MA.nameRegistry.current() : null);
+
+  var sum = document.createElement('div');
+  sum.className = 'vocab-canon-sum';
+  sum.id = 'vocab-canon-sum';
+  sum.textContent = VC.summaryText(verdicts, _canonDocs.length);
+  band.setAttribute('data-canon-decided', String(VC.decided(verdicts).length));
+  band.appendChild(sum);
+
+  verdicts.forEach(function(v) {
+    var row = document.createElement('div');
+    row.className = 'vocab-canon';
+    row.setAttribute('data-canon-pair', v.label);
+    row.setAttribute('data-canon-source', v.source);
+    row.setAttribute('data-canon-to', v.canonical || '');
+    var head = document.createElement('div');
+    head.className = 'vocab-canon-head';
+    head.textContent = VC.verdictText(v);
+    row.appendChild(head);
+
+    // 裏取り先。「先輩のどの図の何行目にその綴りがあるか」まで出しておくと、
+    // 疑ったときにフォルダを grep し直さずに済む。
+    v.files.slice(0, VOCAB_MAX_FILES).forEach(function(f) {
+      var src = document.createElement('div');
+      src.className = 'vocab-canon-src';
+      src.textContent = '· ' + VC.fileText(f);
+      row.appendChild(src);
+    });
+    if (v.files.length > VOCAB_MAX_FILES) {
+      var more = document.createElement('div');
+      more.className = 'vocab-canon-src';
+      more.textContent = '· ほか ' + (v.files.length - VOCAB_MAX_FILES) + ' 枚';
+      row.appendChild(more);
+    }
+    band.appendChild(row);
+  });
 }
 
 function renderNotePanel() {
