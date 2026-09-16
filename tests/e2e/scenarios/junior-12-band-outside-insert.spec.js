@@ -52,4 +52,33 @@ test.describe('junior シーケンス 4.5: 帯の下にメッセージを足す'
     // 新しい矢印の y が帯の矩形の下端より大きい = 帯の外に出ている。
     expect(arrowY).toBeGreaterThan(after.y + after.h);
   });
+
+  test('帯の最後のメッセージを選んで「この後に追加」→ 既定で帯を閉じてその下に入る', async ({ page }) => {
+    // 8 行目 B --> A : res が帯の最後のメッセージ。実マウスで矢印を押して選ぶ。
+    const r = await page.evaluate(() => {
+      const el = document.querySelector('#overlay-layer rect[data-type="message"][data-line="8"]');
+      const b = el.getBoundingClientRect();
+      return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+    });
+    await page.mouse.click(r.x, r.y);
+    await page.waitForTimeout(400);
+    await page.locator('.seq-insert-msg-after').first().click();
+    await expect(page.locator('#seq-band-choice-outside')).toBeVisible();
+    await expect(page.locator('#seq-band-choice-inside')).toBeVisible();
+    await expect(page.locator('#seq-band-choice-outside')).toBeFocused();
+    await page.locator('#seq-band-choice-outside').click();
+    await page.locator('#seq-mod-from').selectOption('B');
+    await page.locator('#seq-mod-to').selectOption('C');
+    await page.locator('#seq-mod-confirm').click();
+    await page.waitForTimeout(1500);
+
+    const lines = (await getEditorText(page)).split('\n').map((l) => l.trim());
+    const deactivateIdx = lines.indexOf('deactivate B');
+    const newIdx = lines.findIndex((l) => /^B -> C/.test(l) && !/work/.test(l));
+    expect(deactivateIdx).toBeGreaterThan(-1);
+    expect(newIdx).toBe(deactivateIdx + 1);
+    const box = await band.bandBox(page);
+    const arrowY = await band.messageYByLine(page, newIdx + 1);
+    expect(arrowY).toBeGreaterThan(box.y + box.h);
+  });
 });

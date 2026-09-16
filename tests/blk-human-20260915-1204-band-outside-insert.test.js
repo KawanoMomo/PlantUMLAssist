@@ -294,6 +294,42 @@ describe('実際に書き戻した DSL', function() {
   });
 });
 
+describe('BLK-human-20260915-1204 差し戻し: 帯の最後の要素の後に足すときの 2 択', function() {
+  var T = ['@startuml', 'A -> B : req', 'activate B', 'B -> C : work', 'B --> A : res', 'deactivate B', '@enduml'].join('\n');
+  test('帯の最後のメッセージの後ろは bandEndAfter が帯を返す', function() {
+    var b = seq.bandEndAfter(T, 5);
+    expect(b).not.toBe(null);
+    expect(b.activateLine).toBe(3);
+  });
+  test('帯の途中のメッセージの後ろは 2 択にしない', function() {
+    expect(seq.bandEndAfter(T, 4)).toBe(null);
+  });
+  test('既定 (outside) を選ぶと deactivate の後ろ、inside を選ぶと deactivate の前', function() {
+    expect(AI.resolve(T, 5, 'after', { zone: 'outside', bandLine: 3 }).target).toBe(7);
+    expect(AI.resolve(T, 5, 'after', { zone: 'inside', bandLine: 3 }).target).toBe(6);
+  });
+  test('帯が図の最後で deactivate が無いときも 2 択になり、外側は閉じてから置く', function() {
+    var t = ['@startuml', 'A -> B : req', 'activate B', 'B --> A : res', '@enduml'].join('\n');
+    var b = seq.bandEndAfter(t, 4);
+    expect(b).not.toBe(null);
+    expect(AI.resolve(t, 4, 'after', { zone: 'outside', bandLine: 3 }).needsClose).toBe(true);
+  });
+  test('++ の省略記法の帯も 2 択になる', function() {
+    var t = ['@startuml', 'A -> B ++ : req', 'B -> C : work', 'B --> A -- : res', '@enduml'].join('\n');
+    expect(seq.bandEndAfter(t, 3)).not.toBe(null);
+    expect(AI.resolve(t, 3, 'after', { zone: 'outside', bandLine: 2 }).target).toBe(5);
+  });
+  test('return は帯を閉じる', function() {
+    var t = ['@startuml', 'A -> B : req', 'activate B', 'B -> C : work', 'return done', 'A -> B : next', '@enduml'].join('\n');
+    var bands = AI.parseBands(t);
+    expect(bands.length).toBe(1);
+    expect(bands[0].deactivateLine).toBe(5);
+    expect(bands[0].closedBy).toBe('return');
+    expect(seq.bandEndAfter(t, 4)).not.toBe(null);
+    expect(AI.resolve(t, 4, 'after', { zone: 'outside', bandLine: 3 }).target).toBe(6);
+  });
+});
+
 // sequence-activation-insert.test.js と同じ後始末。require キャッシュを落としておかないと、
 // 後から走るテスト (sequence-overlay.test.js) が自分の jsdom window にモジュールを
 // 登録し直せない (IIFE が再実行されない)。

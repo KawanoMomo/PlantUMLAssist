@@ -30,12 +30,10 @@ async function bandBox(page) {
   });
 }
 
-// プレビューの座標を押す。overlay の rect を経由せず、隙間クリックと同じ経路を通す。
+// プレビューの座標を実マウスで押す。合成 dispatchEvent は overlay の当たり判定
+// (ライフラインの当たり矩形など) を素通りして不具合を隠すので、必ず page.mouse を使う。
 async function clickPreviewAt(page, clientX, clientY) {
-  await page.evaluate((p) => {
-    document.getElementById('preview-container').dispatchEvent(
-      new MouseEvent('click', { bubbles: true, clientX: p.x, clientY: p.y }));
-  }, { x: clientX, y: clientY });
+  await page.mouse.click(clientX, clientY);
   await page.waitForTimeout(400);
 }
 
