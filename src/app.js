@@ -9281,6 +9281,177 @@ function renderPeekChangeDetail(name) {
   });
 }
 
+// ── 前回保存版と今回保存版を 1 画面に並べる ──
+// BLK-reviewer-20260917-0123-wish: 手順 5 (意図しない変更の混入確認) と手順 6
+// (SVG のレイアウト崩れ確認) は、前回 run の控えを自分で複製し、テキスト差分と
+// audit.js --since-files を打つところから始まっていた。控えの本文は一覧の応答
+// (prev=1) で既に手元にあるので、要るのは並べて出すことだけ。判定は
+// reviewBeforeAfter が持つ (ここは描画と、SVG の描き直しだけ)。
+var _baOpen = false;        // 並びを開いているか (図を切り替えても保つ)
+var _baSvgName = '';        // SVG を描き終えている図
+var _baSvgBusy = false;
+
+function _baEls() { return { host: document.getElementById('peek-ba') }; }
+
+// 覗いているフォルダ全図の判定。一覧の応答だけで出るので追加の往復は無い。
+function _baVerdicts() {
+  var BA = window.MA.reviewBeforeAfter;
+  if (!BA) return [];
+  return _peekEntries.map(function(e) {
+    var v = BA.classify(e.prevText, e.text, { stamp: e.prevStamp });
+    v.name = e.name;
+    return v;
+  });
+}
+
+function _baEntry(name) {
+  for (var i = 0; i < _peekEntries.length; i++) {
+    if (_peekEntries[i] && _peekEntries[i].name === name) return _peekEntries[i];
+  }
+  return null;
+}
+
+function _baPane(row, side) {
+  // 左は前の版 (same/del)、右は今の版 (same/add)。片方にしか無い行は空欄にして
+  // 行の高さを合わせる (ずれると「消えた行」と「増えた行」が同じ高さに見えない)。
+  var mine = side === 'prev' ? (row.kind !== 'add') : (row.kind !== 'del');
+  var div = document.createElement('div');
+  // 片方にしか無い行の「空欄」側には印を付けない (消えた行が増えた行にも見える)。
+  div.className = 'ba-line ' + (mine ? 'ba-' + row.kind : 'ba-blank');
+  div.setAttribute('data-ba-kind', mine ? row.kind : 'blank');
+  if (!mine) { div.textContent = ' '; return div; }
+  var no = document.createElement('span');
+  no.className = 'ba-no';
+  no.textContent = String(side === 'prev' ? row.a : row.b);
+  div.appendChild(no);
+  var tx = document.createElement('span');
+  tx.textContent = row.text;
+  div.appendChild(tx);
+  return div;
+}
+
+function renderPeekBeforeAfter(name) {
+  var BA = window.MA.reviewBeforeAfter;
+  var el = _baEls();
+  if (!el.host || !BA) return;
+  el.host.textContent = '';
+  if (!_peekDir || !_peekEntries.length) { el.host.hidden = true; return; }
+  el.host.hidden = false;
+
+  // フォルダ全体の結論を先に。無変化の回は、1 枚も開かずにここで終われる。
+  var all = _baVerdicts();
+  var sum = document.createElement('div');
+  sum.className = 'ba-summary';
+  sum.id = 'peek-ba-summary';
+  sum.textContent = BA.folderSummary(all);
+  sum.setAttribute('data-ba-toread',
+    String(all.filter(function(v) { return BA.needsSvgCheck(v); }).length));
+  el.host.appendChild(sum);
+
+  var entry = _baEntry(name);
+  if (!entry) return;
+  var v = BA.classify(entry.prevText, entry.text, { stamp: entry.prevStamp });
+
+  var head = document.createElement('div');
+  head.className = 'ba-head';
+  var btn = document.createElement('button');
+  btn.id = 'peek-ba-toggle';
+  btn.className = 'ba-toggle';
+  btn.textContent = _baOpen ? '⏮ 前後の並びを閉じる' : '⏮ 前回保存版と並べる';
+  btn.title = 'この図の前回保存版と今回保存版を、ソースと SVG で並べます';
+  btn.addEventListener('click', function() {
+    _baOpen = !_baOpen;
+    _baSvgName = '';
+    renderPeekBeforeAfter(_peekName);
+  });
+  head.appendChild(btn);
+  var verdict = document.createElement('span');
+  verdict.id = 'peek-ba-verdict';
+  verdict.className = 'ba-verdict ba-verdict-' + v.verdict;
+  verdict.setAttribute('data-ba-verdict', v.verdict);
+  verdict.textContent = BA.verdictText(v);
+  head.appendChild(verdict);
+  el.host.appendChild(head);
+  if (!_baOpen) return;
+
+  var body = document.createElement('div');
+  body.className = 'ba-body';
+  body.id = 'peek-ba-body';
+
+  // ソースを左右に。全文を出す (代表行だけだと、結局 cat に戻る)。
+  var cols = document.createElement('div');
+  cols.className = 'ba-cols';
+  var left = document.createElement('div');
+  left.className = 'ba-col';
+  left.id = 'peek-ba-prev';
+  var right = document.createElement('div');
+  right.className = 'ba-col';
+  right.id = 'peek-ba-now';
+  var lh = document.createElement('div');
+  lh.className = 'ba-col-head';
+  lh.textContent = v.stamp ? '前回保存版 (' + v.stamp + ')' : '前回保存版';
+  left.appendChild(lh);
+  var rh = document.createElement('div');
+  rh.className = 'ba-col-head';
+  rh.textContent = '今回保存版';
+  right.appendChild(rh);
+  BA.panes(entry.prevText, entry.text).forEach(function(row) {
+    left.appendChild(_baPane(row, 'prev'));
+    right.appendChild(_baPane(row, 'now'));
+  });
+  cols.appendChild(left);
+  cols.appendChild(right);
+  body.appendChild(cols);
+
+  // SVG。描かれる内容が変わらないと言い切れる版では描き直さない
+  // (手順 6 が要るのは内容が動いた図だけ)。
+  var note = document.createElement('div');
+  note.className = 'ba-svg-note';
+  note.id = 'peek-ba-svg-note';
+  note.textContent = BA.svgNote(v);
+  body.appendChild(note);
+
+  if (BA.needsSvgCheck(v)) {
+    var svgs = document.createElement('div');
+    svgs.className = 'ba-cols ba-svgs';
+    svgs.id = 'peek-ba-svgs';
+    var sl = document.createElement('div');
+    sl.className = 'ba-col ba-svg';
+    sl.id = 'peek-ba-svg-prev';
+    var sr = document.createElement('div');
+    sr.className = 'ba-col ba-svg';
+    sr.id = 'peek-ba-svg-now';
+    sl.textContent = '描き直し中…';
+    sr.textContent = '描き直し中…';
+    svgs.appendChild(sl);
+    svgs.appendChild(sr);
+    body.appendChild(svgs);
+    el.host.appendChild(body);
+    if (_baSvgName !== name && !_baSvgBusy) _baRenderSvgs(name, entry);
+    return;
+  }
+  el.host.appendChild(body);
+}
+
+// 前の版と今の版をそれぞれ描き直して並べる。覗いているのは他人のフォルダなので、
+// 描いた結果は画面に出すだけで、どこにも書き戻さない。
+function _baRenderSvgs(name, entry) {
+  _baSvgBusy = true;
+  return Promise.all([
+    renderDslToSvg(entry.prevText).catch(function() { return ''; }),
+    renderDslToSvg(entry.text).catch(function() { return ''; }),
+  ]).then(function(both) {
+    _baSvgBusy = false;
+    if (name !== _peekName || !_baOpen) return false;
+    _baSvgName = name;
+    var l = document.getElementById('peek-ba-svg-prev');
+    var r = document.getElementById('peek-ba-svg-now');
+    if (l) { l.innerHTML = both[0] || ''; if (!both[0]) l.textContent = '前の版を描けませんでした'; }
+    if (r) { r.innerHTML = both[1] || ''; if (!both[1]) r.textContent = '今の版を描けませんでした'; }
+    return true;
+  }).catch(function() { _baSvgBusy = false; return false; });
+}
+
 // 覗いているフォルダの判定材料を読み直す。名前の一覧とは別の呼び出しにしない
 // (印の付く前の一覧が一瞬出ると、確かめてある図まで疑わせる)。
 function loadPeekScan(dir) {
@@ -9939,6 +10110,7 @@ function showPeekFile(name) {
   renderPeekFiles();
   renderPeekTemplateBtn();
   renderPeekChangeDetail(name);
+  renderPeekBeforeAfter(name);
   if (el.title) el.title.textContent = name + '（読むだけ・編集も保存もしません）';
   el.svg.style.display = '';
   el.svg.textContent = '';

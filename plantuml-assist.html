@@ -2269,6 +2269,23 @@ html, body {
 #peek-note .vocab-canon-head { color: var(--text-primary); }
 #peek-note .vocab-canon[data-canon-source="unknown"] .vocab-canon-head { color: var(--text-secondary); }
 #peek-note .vocab-canon-src { color: var(--text-secondary); padding-left: 8px; }
+/* 前回保存版と今回保存版を並べる (BLK-reviewer-20260917-0123-wish) */
+#peek-ba { border: 1px solid var(--border); border-radius: 4px; padding: 6px; margin-bottom: 8px; }
+#peek-ba .ba-summary { font-size: 12px; font-weight: 600; padding-bottom: 4px; }
+#peek-ba .ba-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+#peek-ba .ba-toggle { border: 1px solid var(--border); border-radius: 3px; background: var(--bg-tertiary); color: inherit; font-size: 11px; padding: 2px 6px; cursor: pointer; }
+#peek-ba .ba-verdict { font-size: 11px; color: var(--text-secondary); }
+#peek-ba .ba-verdict-content { color: var(--accent); font-weight: 600; }
+#peek-ba .ba-cols { display: flex; gap: 6px; padding-top: 6px; }
+#peek-ba .ba-col { flex: 1 1 50%; min-width: 0; border: 1px solid var(--border); border-radius: 3px; padding: 4px; overflow-x: auto; }
+#peek-ba .ba-col-head { font-size: 11px; font-weight: 600; padding-bottom: 3px; color: var(--text-secondary); }
+#peek-ba .ba-line { font-size: 11px; font-family: var(--mono, monospace); white-space: pre; }
+#peek-ba .ba-no { color: var(--text-secondary); padding-right: 6px; }
+#peek-ba .ba-add { background: rgba(60, 160, 90, 0.18); }
+#peek-ba .ba-del { background: rgba(200, 80, 80, 0.18); }
+#peek-ba .ba-blank { opacity: 0.35; }
+#peek-ba .ba-svg-note { font-size: 11px; color: var(--text-secondary); padding-top: 6px; }
+#peek-ba .ba-svg svg { max-width: 100%; height: auto; }
 #peek-note .note-hint { font-size: 11px; color: var(--text-secondary); padding: 4px 0; }
 #peek-note .note-preamble-toggle {
   border: 1px solid var(--border); border-radius: 3px; background: var(--bg-tertiary);
@@ -7657,6 +7674,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/name-unify.js"></script>
 <script src="src/core/vocab-match.js"></script>
 <script src="src/core/vocab-canon.js"></script>
+<script src="src/core/review-before-after.js"></script>
 <script src="src/core/save-dir-handoff.js"></script>
 <script src="src/core/semantic-refs.js"></script>
 <script src="src/core/xref-graph.js"></script>
@@ -8427,6 +8445,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <!-- BLK-junior-20260914-1306-wish: 開いた 1 枚が前回保存から何を足され何を消されたか。
              取り込む側は本文ではなく「＋部品 −関係」を読むので、図の上に出す。 -->
         <div id="peek-changes" style="display:none;"></div>
+        <div id="peek-ba" hidden></div>
         <div id="peek-svg"></div>
         <pre id="peek-dsl"></pre>
       </div>
