@@ -76,7 +76,9 @@ describe('folderFilter.soleMatch — Enter で開ける 1 枚', () => {
     // gpio_state.puml は gpio_state_ext.puml の一部でもある
     var names = ['gpio_state.puml', 'gpio_state_ext.puml'];
     expect(ff.soleMatch(names, 'gpio_state.puml')).toBe('gpio_state.puml');
-    expect(ff.soleMatch(names, 'gpio_state')).toBe('');
+    // BLK-junior-20260916-2314: 拡張子を省いたフルネームも完全一致 (打った名前の図を Enter で開ける)。
+    expect(ff.soleMatch(names, 'gpio_state')).toBe('gpio_state.puml');
+    expect(ff.soleMatch(names, 'gpio')).toBe('');
   });
 });
 
@@ -88,5 +90,26 @@ describe('folderFilter.summaryText', () => {
   test('当たらなければその旨 / 絞り込んでいなければ空', () => {
     expect(ff.summaryText(0, 22, 'zzz')).toBe('zzz に当たる図はありません (22 枚中)');
     expect(ff.summaryText(22, 22, '')).toBe('');
+  });
+});
+
+describe('BLK-junior-20260916-2314: フルネームを打ったら完全一致を先頭に出す', function() {
+  var NAMES = [
+    'TIMERドライバ初期化アクティビティ図(資料用).puml',
+    'TIMERドライバ初期化アクティビティ図.puml',
+    'gpio_state.puml',
+  ];
+  test('拡張子を除いて丸ごと同じなら完全一致', function() {
+    expect(ff.exactMatch('TIMERドライバ初期化アクティビティ図.puml', 'TIMERドライバ初期化アクティビティ図')).toBe(true);
+    expect(ff.exactMatch('TIMERドライバ初期化アクティビティ図(資料用).puml', 'TIMERドライバ初期化アクティビティ図')).toBe(false);
+    expect(ff.exactMatch('gpio_state.puml', ' GPIO_STATE.puml ')).toBe(true);
+    expect(ff.exactMatch('gpio_state.puml', '')).toBe(false);
+  });
+  test('rank は完全一致を先頭に、残りは元の順', function() {
+    expect(ff.rank(ff.filter(NAMES, 'TIMERドライバ初期化アクティビティ図'), 'TIMERドライバ初期化アクティビティ図'))
+      .toEqual(['TIMERドライバ初期化アクティビティ図.puml', 'TIMERドライバ初期化アクティビティ図(資料用).puml']);
+  });
+  test('Enter で開ける 1 枚は、部分一致が 2 枚残っても拡張子抜きの完全一致の方', function() {
+    expect(ff.soleMatch(NAMES, 'TIMERドライバ初期化アクティビティ図')).toBe('TIMERドライバ初期化アクティビティ図.puml');
   });
 });

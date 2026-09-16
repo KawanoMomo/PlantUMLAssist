@@ -13695,6 +13695,42 @@ function setupTabs() {
     return bar;
   }
 
+  // 行を元の順 (data-ff-order) に戻してから、完全一致の行を同じ親の中で先頭の行の前へ動かす。
+  // 見出しなど行以外の子は動かさない (行どうしの並びだけを入れ替える)。
+  function _folderExactFirst(rows) {
+    var byParent = [];
+    for (var i = 0; i < rows.length; i++) {
+      var el = rows[i];
+      var host = (el.parentNode && el.parentNode.className === 'folder-row') ? el.parentNode : el;
+      var p = host.parentNode;
+      if (!p) continue;
+      var g = null;
+      for (var k = 0; k < byParent.length; k++) if (byParent[k].p === p) { g = byParent[k]; break; }
+      if (!g) { g = { p: p, hosts: [] }; byParent.push(g); }
+      if (g.hosts.indexOf(host) < 0) g.hosts.push(host);
+    }
+    byParent.forEach(function(g) {
+      var slots = g.hosts.slice().sort(function(a, b) {
+        return Array.prototype.indexOf.call(g.p.childNodes, a) - Array.prototype.indexOf.call(g.p.childNodes, b);
+      });
+      var want = g.hosts.slice().sort(function(a, b) {
+        var ea = a.getAttribute('data-exact') ? 0 : 1, eb = b.getAttribute('data-exact') ? 0 : 1;
+        if (ea !== eb) return ea - eb;
+        return (+a.getAttribute('data-ff-order')) - (+b.getAttribute('data-ff-order'));
+      });
+      var same = true;
+      for (var s = 0; s < slots.length; s++) if (slots[s] !== want[s]) { same = false; break; }
+      if (same) return;
+      // 行が占めていた位置 (印) を残し、望む順で差し替える。
+      var marks = slots.map(function(h) {
+        var m = document.createComment('ff');
+        g.p.insertBefore(m, h);
+        return m;
+      });
+      marks.forEach(function(m, idx) { g.p.insertBefore(want[idx], m); g.p.removeChild(m); });
+    });
+  }
+
   // 絞り込みを今の行に当てる。一覧を作り直さずに表示を消すだけなので、
   // 印を付けた図・役割の印は絞り込んでも残る。
   function applyFolderFilter() {
@@ -13711,7 +13747,14 @@ function setupTabs() {
       if (on && stampHide && stampMarks[name]) on = false;
       host.style.display = on ? '' : 'none';
       if (on) shown++;
+      // BLK-junior-20260916-2314: 打った名前と丸ごと同じ図は「完全一致」の印を付けて先頭に出す
+      // (同じ接頭辞の「…(資料用)」より上。部分一致の行は消さずに下に残す)。
+      if (host.getAttribute('data-ff-order') == null) host.setAttribute('data-ff-order', String(i));
+      var ex = on && FF.exactMatch && FF.exactMatch(name, folderQuery);
+      if (ex) { host.setAttribute('data-exact', '1'); el.title = el.title || '打った名前と完全一致'; }
+      else host.removeAttribute('data-exact');
     }
+    _folderExactFirst(rows);
     var state = panel.querySelector('.folder-filter-state');
     if (state) state.textContent = FF.summaryText(shown, rows.length, folderQuery);
     // 探していて 0 枚のときだけ、読むだけの入口を強く出す。

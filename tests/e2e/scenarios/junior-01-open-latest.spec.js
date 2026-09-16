@@ -2022,3 +2022,56 @@ test.describe('junior 手順 1: 保存先を動かさずに先輩の図を読む
     expect(keys).toBe(13);
   });
 });
+
+// BLK-junior-20260916-2314: 📂 一覧の絞り込みは部分一致なので、フルネームを打っても同じ接頭辞の
+// 「…(資料用)」が一緒に残り、並び次第で資料用を開いてしまう。到達条件は「フルネームを打つと
+// 本体が完全一致の印付きで先頭に出て、そのまま押せば本体が開く」こと。
+const EXACT_DIR = PEEK_ROOT + '/exact';
+const EXACT_BODY = 'TIMERドライバ初期化アクティビティ図';
+const EXACT_DOC = EXACT_BODY + '(資料用)';
+
+test.describe('junior 手順 1: フルネームで絞ると本体が資料用より先に出る', () => {
+  test.beforeEach(async ({ page }) => {
+    await S1.bootWithSaveDir(page, EXACT_DIR);
+    await S1.clearDir(page, EXACT_DIR);
+    // 資料用を先に置く (名前順・更新順のどちらでも資料用が上に来うる状態)。
+    await S1.putDoc(page, EXACT_DIR, EXACT_DOC, '@startuml\nstart\n:資料用;\nstop\n@enduml');
+    await S1.putDoc(page, EXACT_DIR, EXACT_BODY, '@startuml\nstart\n:本体;\nstop\n@enduml');
+    await page.reload();
+    await page.waitForSelector('#btn-tab-folder');
+  });
+
+  test('フルネームを打つと完全一致の本体が先頭に印付きで出て、押すと本体が開く (クリック 10 以下・キー入力 50 以下)', async ({ page }) => {
+    let clicks = 0;
+    let keys = 0;
+    await page.locator('#btn-tab-folder').click(); clicks++;
+    await page.waitForSelector('#folder-filter');
+    await page.waitForSelector('#folder-panel [data-file-name]');
+    await page.waitForTimeout(800);
+    await page.locator('#folder-filter').fill(EXACT_BODY); keys += EXACT_BODY.length;
+    await page.waitForTimeout(300);
+
+    // 2 枚とも残る (部分一致の行は消さない) が、見えている先頭の行が本体で、完全一致の印が付く。
+    const visible = await page.evaluate(() => Array.prototype.filter.call(
+      document.querySelectorAll('#folder-panel .folder-item[data-file-name]'),
+      (b) => b.offsetParent !== null
+    ).map((b) => b.getAttribute('data-file-name')));
+    expect(visible.length).toBe(2);
+    expect(visible[0].replace(/\.puml$/, '')).toBe(EXACT_BODY);
+    expect(visible[1].replace(/\.puml$/, '')).toBe(EXACT_DOC);
+    await expect(page.locator('#folder-panel [data-exact="1"]')).toHaveCount(1);
+
+    // 先頭の行を押すと本体が開く。
+    await page.locator('#folder-panel [data-exact="1"] .folder-item, #folder-panel .folder-item[data-exact="1"]').first().click(); clicks++;
+    await expect.poll(() => getEditorText(page)).toContain(':本体;');
+    expect(clicks).toBeLessThanOrEqual(10);
+    expect(keys).toBeLessThanOrEqual(50);
+
+    // 絞り込みを外すと、元の並びに戻る (完全一致の印も消える)。
+    await page.locator('#btn-tab-folder').click();
+    await page.waitForSelector('#folder-filter');
+    await page.locator('#folder-filter').fill('');
+    await page.waitForTimeout(300);
+    await expect(page.locator('#folder-panel [data-exact="1"]')).toHaveCount(0);
+  });
+});
