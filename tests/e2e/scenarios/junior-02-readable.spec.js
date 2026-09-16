@@ -1220,3 +1220,59 @@ test('手順1-2 親状態の中に増えた子状態が入れ子のまま並び�
   await expect(page.locator('#xf-list .xf-row.only-self')).toHaveCount(0);
   expect(await S.readDoc(page, SENIOR_DIR, 'timer_state')).toBe(NEST_SENIOR);
 });
+
+// BLK-junior-20260917-0423: 場面3 のクラス図の周で、先輩のフォルダには TIMER の
+// シーケンス図と状態遷移図しか無く、TimerDrv のクラス図が無かった。相手選びは
+// 名前の近さだけを見て、近い名前が 1 つも無ければ黙って一覧の先頭を相手にしていたので、
+// クラス図に対してシーケンス図を突き合わせた結果が出る。全要素が「片方にしかない」に
+// なるため、junior はそれを「先輩が全部書き換えた」と区別できず、フォルダを目で
+// 走査して「無い」を確かめ直すところで手順 1 が止まった。
+// 相手にその図種が 1 枚も無いことは、手順 1 の答えとして画面が言う。
+const CLS_SELF = [
+  '@startuml', 'class TimerDrv', 'class DriverBase', 'DriverBase <|-- TimerDrv', '@enduml',
+].join('\n');
+const CLS_SENIOR_SEQ = [
+  '@startuml', 'participant TimerDrv', 'TimerDrv -> HW : Timer_Init()', '@enduml',
+].join('\n');
+const CLS_SENIOR_STATE = [
+  '@startuml', 'state Uninit', 'Uninit --> Ready : Timer_Init', '@enduml',
+].join('\n');
+
+test('手順1 先輩に同じ図種が無いことが、突き合わせの答えとして出る', async ({ page }) => {
+  await S.bootWithSaveDir(page, MINE_DIR);
+  await S.clearDir(page, MINE_DIR);
+  await S.clearDir(page, SENIOR_DIR);
+  // 先輩のフォルダは TIMER のシーケンス図と状態遷移図だけ (クラス図は無い)。
+  await S.putDoc(page, SENIOR_DIR, 'timer_init_sequence', CLS_SENIOR_SEQ);
+  await S.putDoc(page, SENIOR_DIR, 'timer_state', CLS_SENIOR_STATE);
+  await page.reload();
+  await page.waitForSelector('#btn-tab-compare');
+  await S.typeDsl(page, CLS_SELF);
+  await S.renameActive(page, 'TimerDrv派生クラス図');
+
+  await page.locator('#btn-tab-compare').click();
+  await page.locator('#xf-dir').fill(SENIOR_DIR);
+  await page.locator('#btn-xf-load').click();
+  const summary = page.locator('#xf-summary');
+  await expect(summary).toBeVisible();
+
+  // 到達条件その1: 「クラス図が 0 枚」と枚数で言い切る (目で走査しなくてよい)。
+  await expect(summary).toContainText('クラス図がありません');
+  await expect(summary).toContainText('2 枚中 0 枚');
+
+  // 到達条件その2: それは異常ではなく手順 1 の答えなので、先へ進めると言う。
+  await expect(summary).toContainText('先へ進めます');
+  await expect(summary).toHaveClass(/clean/);
+
+  // 到達条件その3: 図種の違う図を相手にした差分を出さない
+  // (出すと「先輩が全部書き換えた」と見分けが付かない)。
+  await expect(page.locator('#xf-list')).toBeHidden();
+
+  // 到達条件その4: それでも中身を見たいときのために、候補は図種つきで選べる。
+  const opts = page.locator('#xf-file option');
+  await expect(opts).toHaveCount(2);
+  await expect(opts.filter({ hasText: 'timer_init_sequence' }))
+    .toContainText('シーケンス図。図種が違います');
+  await expect(opts.filter({ hasText: 'timer_state' }))
+    .toContainText('状態遷移図。図種が違います');
+});
