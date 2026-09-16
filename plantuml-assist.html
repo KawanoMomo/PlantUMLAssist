@@ -4130,6 +4130,10 @@ table.vault-table button.vault-open:hover { border-color: var(--accent); }
   color: var(--text-primary);
 }
 #rename-panel.open { display: block; }
+#rename-seed-note {
+  font-size: 11px; color: var(--text-secondary); margin: 2px 0 6px; line-height: 1.4;
+}
+#rename-seed-note[data-seed-state="pending"] { color: var(--accent); }
 #rename-panel label {
   display: block;
   font-size: 10px;
@@ -6975,6 +6979,9 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <datalist id="rename-candidates"></datalist>
         <label for="rename-to">置換後</label>
         <input id="rename-to" autocomplete="off" spellcheck="false" placeholder="Spi_Driver">
+        <!-- BLK-primary-20260914-1106-friction: 開いた時点で前回の組を入れておく。
+             入っている理由をここで言う (自分が打ったのか前回の残りかを確かめさせない) -->
+        <div id="rename-seed-note" role="status" style="display:none;"></div>
         <div class="rename-row">
           <input type="checkbox" id="rename-all-docs" checked style="width:auto;">
           <label for="rename-all-docs">開いている図すべてに適用</label>
@@ -7854,6 +7861,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/req-trace.js"></script>
 <script src="src/core/rename-history.js"></script>
 <script src="src/core/rename-redo.js"></script>
+<script src="src/core/rename-seed.js"></script>
 <script src="src/core/rename-pairs.js"></script>
 <script src="src/core/rename-badge.js"></script>
 <script src="src/core/doc-set.js"></script>

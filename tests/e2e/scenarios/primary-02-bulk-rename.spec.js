@@ -222,8 +222,12 @@ test('手順2 過去に当てた置換の組が、打つ前に「適用済み / 
   await expect(row).toHaveAttribute('data-state', 'done');
   await expect(row).toHaveAttribute('data-remaining', '0');
   await expect(page.locator('#rename-redo-summary')).toContainText('適用済み');
-  // 打っていないので、置換前の欄はまだ空のまま。
-  await expect(page.locator('#rename-from')).toHaveValue('');
+  // 打っていないのに欄は埋まっている。打ち直す 17 打を開いた時点で消すのが
+  // BLK-primary-20260914-1106-friction の直しで、空欄に焦点が入ると利用者は
+  // 履歴の行を探すより先に打ち始めてしまっていた (旧: 置換前の欄は空のまま)。
+  await expect(page.locator('#rename-from')).toHaveValue('SpiDrv');
+  await expect(page.locator('#rename-to')).toHaveValue('Spi_Driver');
+  await expect(page.locator('#rename-seed-note')).toContainText('前回の組');
 
   // 旧称が戻った状態 (別の担当者が古い綴りで書いた図を足した等) を作る。
   await page.locator('#rename-from').fill('Spi_Driver');
