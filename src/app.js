@@ -24404,26 +24404,11 @@ function renderDocProof() {
   box.appendChild(cover);
 
   // 出す前に直す所。判定の内訳を表紙の次に置く (めくる前に読ませる)。
-  var list = DP.checks(proof);
-  if (list.length) {
-    var iss = _dpPage('dp-issue');
-    iss.id = 'dp-issues';
-    var ih = document.createElement('div');
-    ih.className = 'dp-toc-title';
-    ih.textContent = '客先に出す前に直す所';
-    iss.appendChild(ih);
-    var ul = document.createElement('ul');
-    ul.className = 'dp-issues';
-    list.forEach(function(c) {
-      var li = document.createElement('li');
-      li.className = 'dp-' + c.level;
-      li.setAttribute('data-key', c.key);
-      li.textContent = c.text;
-      ul.appendChild(li);
-    });
-    iss.appendChild(ul);
-    box.appendChild(iss);
-  }
+  // BLK-primary-20260916-0626-wish: 指摘を押すと、最初に埋めるページの入力欄へ飛ぶ。
+  var iss = _dpPage('dp-issue');
+  iss.id = 'dp-issues';
+  box.appendChild(iss);
+  _dpRenderIssues();
 
   // 目次。
   var toc = _dpPage('dp-toc-page');
@@ -24455,12 +24440,36 @@ function renderDocProof() {
     h.textContent = '図' + pg.no + ' ' + (pg.heading || pg.name);
     page.appendChild(h);
 
-    if (pg.note) {
-      var n = document.createElement('div');
-      n.className = 'dp-fig-note';
-      n.textContent = pg.note;
-      page.appendChild(n);
+    var n = document.createElement('div');
+    n.className = 'dp-fig-note';
+    n.textContent = pg.note;
+    if (!pg.note) n.style.display = 'none';
+    page.appendChild(n);
+
+    // BLK-primary-20260916-0626-wish: 書き出しの指摘 (見出しが図名のまま / 注記が空) を、
+    // 資料を開いたままこのページで埋める。編集画面に戻って 1 枚ずつ開き直さない。
+    var fix = document.createElement('div');
+    fix.className = 'dp-fix';
+    var hIn = document.createElement('input');
+    hIn.type = 'text';
+    hIn.className = 'dp-heading-input';
+    hIn.value = DP.rawHeading(pg);
+    hIn.placeholder = '見出し（空なら図の名前「' + pg.name + '」）';
+    var nIn = document.createElement('input');
+    nIn.type = 'text';
+    nIn.className = 'dp-note-input';
+    nIn.value = pg.note || '';
+    nIn.placeholder = '注記（1 行）';
+    function mark() {
+      hIn.classList.toggle('dp-empty-field', !hIn.value.trim());
+      nIn.classList.toggle('dp-empty-field', !nIn.value.trim());
     }
+    mark();
+    hIn.addEventListener('input', function() { _dpEditField(pg.name, 'heading', hIn.value); mark(); });
+    nIn.addEventListener('input', function() { _dpEditField(pg.name, 'note', nIn.value); mark(); });
+    fix.appendChild(hIn);
+    fix.appendChild(nIn);
+    page.appendChild(fix);
 
     var body = document.createElement('div');
     body.className = 'dp-fig-body';
@@ -24490,6 +24499,94 @@ function renderDocProof() {
     page.appendChild(foot);
 
     box.appendChild(page);
+  });
+}
+
+// ── 資料の画面で見出し・注記を埋める (BLK-primary-20260916-0626-wish) ──────
+var _dpDirty = false;
+
+function _dpRenderIssues() {
+  var DP = window.MA.docProof;
+  var iss = document.getElementById('dp-issues');
+  if (!DP || !iss || !_dpProof) return;
+  var list = DP.checks(_dpProof);
+  iss.textContent = '';
+  iss.style.display = list.length ? '' : 'none';
+  var ih = document.createElement('div');
+  ih.className = 'dp-toc-title';
+  ih.textContent = '客先に出す前に直す所（押すとそのページの入力欄へ）';
+  iss.appendChild(ih);
+  var ul = document.createElement('ul');
+  ul.className = 'dp-issues';
+  list.forEach(function(c) {
+    var li = document.createElement('li');
+    li.className = 'dp-' + c.level;
+    li.setAttribute('data-key', c.key);
+    li.textContent = c.text;
+    li.addEventListener('click', function() { _dpFocusIssue(c.key); });
+    ul.appendChild(li);
+  });
+  iss.appendChild(ul);
+}
+
+function _dpFocusIssue(key) {
+  var DP = window.MA.docProof;
+  if (!DP || !_dpProof) return;
+  var pg = DP.firstPageFor(_dpProof, key);
+  if (!pg) return;
+  var el = document.querySelector('#dp-pages .dp-fig[data-no="' + pg.no + '"]');
+  if (!el) return;
+  if (el.scrollIntoView) el.scrollIntoView({ block: 'center' });
+  var input = el.querySelector(key === 'blank' ? '.dp-note-input' : (key === 'untitled' ? '.dp-heading-input' : '.dp-edit'));
+  if (input && input.focus) input.focus();
+}
+
+// 1 文字打つたびに、ページの見出し・目次・判定を出し直す (保存前でも見た目で確かめられる)。
+function _dpEditField(name, field, value) {
+  var DP = window.MA.docProof;
+  if (!DP || !_dpProof) return;
+  _dpProof = DP.applyEdit(_dpProof, name, field, value);
+  _dpDirty = true;
+  _dpProof.pages.forEach(function(pg) {
+    if (pg.name !== name) return;
+    var el = document.querySelector('#dp-pages .dp-fig[data-no="' + pg.no + '"]');
+    if (el) {
+      var h = el.querySelector('.dp-fig-head');
+      if (h) h.textContent = '図' + pg.no + ' ' + (pg.heading || pg.name);
+      var n = el.querySelector('.dp-fig-note');
+      if (n) { n.textContent = pg.note; n.style.display = pg.note ? '' : 'none'; }
+    }
+    var toc = document.querySelector('#dp-toc .dp-toc-line[data-no="' + pg.no + '"]');
+    if (toc) toc.textContent = DP.tocLine(pg);
+  });
+  var v = DP.verdict(_dpProof);
+  var vEl = document.getElementById('dp-verdict');
+  if (vEl) { vEl.className = v.cls; vEl.textContent = v.text; }
+  _dpRenderIssues();
+  var sv = document.getElementById('dp-save');
+  if (sv) sv.textContent = '見出し・注記を保存（未保存）';
+}
+
+function saveDocProof() {
+  var DP = window.MA.docProof;
+  var DL = window.MA.docLayout;
+  var DS = window.MA.docSet;
+  if (!DP || !DL || !DS || !_dpProof || !_dpName) return Promise.resolve(null);
+  var set = DS.find(_dsSets, _dpName);
+  if (!set) { _dsStatus('その資料セットはありません'); return Promise.resolve(null); }
+  var name = _dpName;
+  var proof = _dpProof;
+  var saved = DL.toSaved(DP.rowsFor(set, proof));
+  return saveDocSet(name, saved.docs, saved.items).then(function(res) {
+    if (!res) return res;
+    // saveDocSet は一覧を描き直すが、画面は資料のまま残す (続けて埋められる)。
+    _dpName = name;
+    _dpProof = proof;
+    _dpDirty = false;
+    var sv = document.getElementById('dp-save');
+    if (sv) sv.textContent = '見出し・注記を保存';
+    _dsStatus('「' + name + '」の見出し・注記を保存しました — ' + DP.verdict(proof).text);
+    return res;
   });
 }
 
@@ -24620,6 +24717,13 @@ function setupDocSets() {
   if (back) back.addEventListener('click', function() { closeDocLayout(); renderDocSets(); });
   var dpBack = document.getElementById('dp-back');
   if (dpBack) dpBack.addEventListener('click', function() { closeDocProof(); renderDocSets(); });
+  var dpSave = document.getElementById('dp-save');
+  if (dpSave) dpSave.addEventListener('click', function() { saveDocProof(); });
+  var dpRe = document.getElementById('dp-reexport');
+  if (dpRe) dpRe.addEventListener('click', function() {
+    var name = _dpName;
+    saveDocProof().then(function(res) { if (res && name) exportDocSet(name); });
+  });
   var dlSave = document.getElementById('dl-save');
   if (dlSave) dlSave.addEventListener('click', function() { saveDocLayout(); });
   var create = document.getElementById('docset-create');
