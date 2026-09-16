@@ -20,6 +20,15 @@ window.MA.stateInsert = (function() {
     });
   }
 
+  // 子を置ける状態。中身を持つかどうかで分けない (持たなければ開く)。
+  // 疑似状態 (choice / fork / …) だけは中を描けないので外す。
+  function _childHosts(parsed) {
+    var SC = window.MA.stateChild;
+    return ((parsed && parsed.states) || []).filter(function(s) {
+      return SC ? SC.canHaveChild(s) : (s && s.endLine > s.line);
+    });
+  }
+
   // 選べる位置。図に無いものは出さない — 選んでから「置けません」と
   // 言われるより、最初から並ばない方が迷わない。
   function positions(parsed) {
@@ -27,7 +36,12 @@ window.MA.stateInsert = (function() {
     if (((parsed && parsed.transitions) || []).length > 0) {
       out.push({ value: 'transition', label: 'この遷移の途中' });
     }
-    if (_composites(parsed).length > 0) out.push({ value: 'inside', label: '選んだ状態の中' });
+    // BLK-human-20260915-1206: 以前は「既に中身を持つ状態」がある図でしか
+    // 出さなかったので、最初の 1 つを GUI から作る道がどこにも無かった。
+    // 中身を持たない状態もその場で `{ }` に開くので、状態が 1 つでもあれば出す。
+    if (_childHosts(parsed).length > 0) {
+      out.push({ value: 'inside', label: '選んだ状態の中 (子状態にする)' });
+    }
     return out;
   }
 
@@ -57,9 +71,16 @@ window.MA.stateInsert = (function() {
     });
   }
 
+  // 「の中」の相手。BLK-human-20260915-1206 以降は中身の有無で絞らない。
+  // 入れ子の中の状態は「Outer › Inner」と出す — 同じ名前の子が別の親に
+  // 居るとき、どちらを指しているかが名前だけでは分からない。
   function compositeOptions(parsed) {
-    return _composites(parsed).map(function(s) {
-      return { value: s.id, label: s.label || s.id };
+    var SC = window.MA.stateChild;
+    return _childHosts(parsed).map(function(s) {
+      return {
+        value: s.id,
+        label: (SC && SC.breadcrumbText(parsed, s.id)) || s.label || s.id,
+      };
     });
   }
 
@@ -109,12 +130,33 @@ window.MA.stateInsert = (function() {
     return lines.join('\n');
   }
 
+  // 中身を持たない状態を `{ }` に開き、その中へ入れる。
+  function _insertIntoSimple(text, parsed, stateId, newLines) {
+    var SC = window.MA.stateChild;
+    var host = null;
+    var hs = _childHosts(parsed);
+    for (var i = 0; i < hs.length; i++) if (hs[i].id === stateId) { host = hs[i]; break; }
+    if (!host || !SC) return text;
+    var lines = String(text).split('\n');
+    var declIdx = host.line - 1;
+    if (declIdx < 0 || declIdx >= lines.length) return text;
+    var indent = _indentOf(lines[declIdx]);
+    lines[declIdx] = lines[declIdx].replace(/\s*$/, '') + ' {';
+    var body = (Array.isArray(newLines) ? newLines : [newLines]).map(function(l) {
+      return indent + '  ' + String(l);
+    });
+    lines.splice.apply(lines, [declIdx + 1, 0].concat(body, [indent + '}']));
+    return lines.join('\n');
+  }
+
   // 複合状態の閉じ `}` の直前へ入れる。字下げは `}` の 1 段内側にそろえる。
   function insertInside(text, parsed, compositeId, newLines) {
     var target = null;
     var cs = _composites(parsed);
     for (var i = 0; i < cs.length; i++) if (cs[i].id === compositeId) { target = cs[i]; break; }
-    if (!target) return text;
+    // BLK-human-20260915-1206: まだ中身を持たない状態が相手なら、その場で
+    // `{ }` に開いてから入れる (「先に composite に変換」を利用者にさせない)。
+    if (!target) return _insertIntoSimple(text, parsed, compositeId, newLines);
     var lines = String(text).split('\n');
     var closeIdx = target.endLine - 1;
     if (closeIdx < 0 || closeIdx >= lines.length) return text;

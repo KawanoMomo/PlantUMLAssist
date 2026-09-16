@@ -161,6 +161,10 @@ IDLE_SHUTDOWN_SEC = 300
 # 図でない何かを掴んだときだけ。当たっても応答が肥らないようにするための蓋。
 MAX_DIFF_PUML_CHARS = 65536
 MAX_DIFF_LABELS = 2000
+# BLK-reviewer-20260914-2106-wish: 可視差分プレビューに渡す SVG 本体の上限。
+# 1 枚だけを確かめるときにしか添えない (withSvg) ので、実データの 1 枚ぶん
+# (数十〜数百 KB) が収まれば足りる。超える図は添えずに理由を返す。
+MAX_VISUAL_SVG_BYTES = 2 * 1024 * 1024
 
 _state_lock = threading.Lock()
 _last_heartbeat = time.time()
@@ -268,6 +272,9 @@ RENDER_API_DOC = {
         'fields': {
             'text': "必須。PlantUML の DSL 全文 (@startuml … @enduml)",
             'mode': "任意。'local' (既定、同梱 Java) または 'online' (plantuml.com へ送信)",
+            'withSvg': ("任意。true にすると、保存中の svg (印を外したもの) と描き直した svg の"
+                        "本文そのものを savedSvg / drawnSvg として返す。可視差分プレビュー用。"
+                        "応答が重いので types が 1 件のときだけ効く"),
         },
         'aliases': {
             'fields': list(DSL_FIELD_ALIASES),
@@ -383,12 +390,47 @@ JSON_CHARSETS = {
     'shift-jis': ('Shift_JIS', 'cp932'),
 }
 
+# BLK-human-20260916-0902: 設定 → 情報 に出す版。正本は git tag で、手で書かない。
+# exe (git が無い) はビルド時に packaging/version_info.py が書いた src/version.json を読む。
+_BUILD_INFO = None
+
+
+def _git_out(args):
+    try:
+        out = subprocess.run(['git'] + args, cwd=str(ROOT), capture_output=True,
+                             text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return ''
+    return out.stdout.strip() if out.returncode == 0 else ''
+
+
+def build_info():
+    global _BUILD_INFO
+    if _BUILD_INFO is not None:
+        return _BUILD_INFO
+    info = {'version': '', 'commit': '', 'date': ''}
+    baked = ROOT / 'src' / 'version.json'
+    if baked.is_file():
+        try:
+            data = json.loads(baked.read_text(encoding='utf-8'))
+            for k in info:
+                info[k] = str(data.get(k) or '')
+        except (OSError, ValueError):
+            pass
+    if not info['version']:
+        info['version'] = _git_out(['describe', '--tags', '--abbrev=0'])
+        info['commit'] = _git_out(['rev-parse', '--short', 'HEAD'])
+        info['date'] = _git_out(['log', '-1', '--format=%cs'])
+    _BUILD_INFO = info
+    return info
+
 # GET /api — 窓口の索引。docs/api.md と同じ並びで、1 行ずつ何をするかを言う。
 API_INDEX = {
     'name': 'PlantUMLAssist server API',
     'doc': 'docs/api.md (同じ内容。GET /api が正本)',
     'endpoints': [
         {'endpoint': 'GET /api', 'summary': 'この索引'},
+        {'endpoint': 'GET /version', 'summary': 'アプリの版・コミット・日付 (git tag が正本)'},
         {'endpoint': 'GET /render', 'summary': 'POST /render の仕様'},
         {'endpoint': 'POST /render', 'summary': 'DSL を描いて SVG を返す',
          'request': "{text, mode}"},
@@ -403,20 +445,36 @@ API_INDEX = {
         {'endpoint': 'POST /autosave-svg', 'summary': '書き出した svg を保存する (印を刻む)',
          'request': "{type, dir, svg}"},
         {'endpoint': 'GET /autosave-versions', 'summary': '1 枚の図の版の一覧', 'request': '?dir=&type='},
+        {'endpoint': 'GET /version-search', 'summary': '保存フォルダの全図の版から部品名を探す (混入点の材料)',
+         'request': '?dir=&q='},
+        {'endpoint': 'GET /version-diff', 'summary': '1 枚の図の「その版」と「直前の版」の本文を組で返す (全文差分の材料)',
+         'request': '?dir=&type=[&stamp=]'},
         {'endpoint': 'GET /peek-dirs', 'summary': '保存フォルダの候補を覗く'},
         {'endpoint': 'GET /peek-notes', 'summary': '隣のフォルダに置かれた指摘 (.md) を読む',
          'request': '?dir='},
+        {'endpoint': 'GET /name-registry', 'summary': '保存フォルダの親にある正式表記の登録簿 (3 人で共有)',
+         'request': '?dir='},
+        {'endpoint': 'POST /name-registry', 'summary': '正式表記の登録簿を置き換える',
+         'request': "{dir, entries: [{canonical, variants, note, by, at}]}"},
+        {'endpoint': 'GET /cohort-ack', 'summary': 'ドメイン突合で内部揺れと確認済みの組の台帳',
+         'request': '?dir='},
+        {'endpoint': 'POST /cohort-ack', 'summary': '確認済みの組の台帳を置き換える',
+         'request': "{dir, entries: [{key, domain, kind, left, right, fingerprint, note, by, at}]}"},
         {'endpoint': 'GET /vault', 'summary': '保管庫の中身', 'request': '?dir='},
         {'endpoint': 'POST /vault', 'summary': '保管庫へ入れる'},
         {'endpoint': 'GET /tickets', 'summary': '変更チケットの一覧', 'request': '?dir='},
         {'endpoint': 'POST /tickets', 'summary': '変更チケットを 1 枚書く', 'request': "{dir, ticket}"},
         {'endpoint': 'DELETE /tickets', 'summary': '変更チケットを 1 枚消す', 'request': '?dir=&id='},
+        {'endpoint': 'GET /peek-settled', 'summary': '「相手 × 図種は手本なしで確定」の一覧 (以後は聞かない)',
+         'request': '?dir='},
+        {'endpoint': 'POST /peek-settled', 'summary': '確定を 1 つ足す / 外す (clear で全部外す)',
+         'request': "{dir, peer, kind, settled} | {dir, clear: true}"},
         {'endpoint': 'GET /rename-pairs', 'summary': 'そのフォルダで打たれた置換の組', 'request': '?dir='},
         {'endpoint': 'POST /rename-pairs', 'summary': '置換の組を 1 つ覚える',
          'request': "{dir, from, to, hits}"},
         {'endpoint': 'GET /doc-sets', 'summary': 'そのフォルダに登録した資料セット', 'request': '?dir='},
         {'endpoint': 'POST /doc-sets', 'summary': '資料セットを 1 つ登録する (同じ名前は置き換え)',
-         'request': "{dir, name, docs}"},
+         'request': "{dir, name, docs, items}"},
         {'endpoint': 'DELETE /doc-sets', 'summary': '資料セットを 1 つ消す', 'request': '?dir=&name='},
         {'endpoint': 'POST /file-roles', 'summary': '保存フォルダの _roles.json を置き換える',
          'request': "{dir, roles}"},
@@ -609,12 +667,21 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.split('?')[0] == '/autosave-versions':
             with _fs_lock:
                 return self._handle_autosave_versions()
+        if self.path.split('?')[0] == '/version-search':
+            with _fs_lock:
+                return self._handle_version_search()
+        if self.path.split('?')[0] == '/version-diff':
+            with _fs_lock:
+                return self._handle_version_diff()
         if self.path.split('?')[0] == '/vault':
             with _fs_lock:
                 return self._handle_vault_get()
         if self.path.split('?')[0] == '/tickets':
             with _fs_lock:
                 return self._handle_tickets_get()
+        if self.path.split('?')[0] == '/peek-settled':
+            with _fs_lock:
+                return self._handle_peek_settled_get()
         if self.path.split('?')[0] == '/rename-pairs':
             with _fs_lock:
                 return self._handle_rename_pairs_get()
@@ -624,12 +691,20 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.startswith('/autosave'):
             with _fs_lock:
                 return self._handle_autosave_get()
+        if self.path.split('?')[0] == '/name-registry':
+            with _fs_lock:
+                return self._handle_name_registry_get()
+        if self.path.split('?')[0] == '/cohort-ack':
+            with _fs_lock:
+                return self._handle_cohort_ack_get()
         if self.path.split('?')[0] == '/peek-dirs':
             with _fs_lock:
                 return self._handle_peek_dirs()
         if self.path.split('?')[0] == '/peek-notes':
             with _fs_lock:
                 return self._handle_peek_notes()
+        if self.path.split('?')[0] == '/version':
+            return self._send_json(200, build_info())
         if self.path.split('?')[0] == '/render':
             return self._send_json(200, RENDER_API_DOC)
         if self.path.split('?')[0] == '/verify-svg':
@@ -682,9 +757,18 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == '/rename-pairs':
             with _fs_lock:
                 return self._handle_rename_pairs_post()
+        if self.path == '/peek-settled':
+            with _fs_lock:
+                return self._handle_peek_settled_post()
         if self.path == '/doc-sets':
             with _fs_lock:
                 return self._handle_doc_sets_post()
+        if self.path == '/name-registry':
+            with _fs_lock:
+                return self._handle_name_registry_post()
+        if self.path == '/cohort-ack':
+            with _fs_lock:
+                return self._handle_cohort_ack_post()
         if self.path == '/file-roles':
             with _fs_lock:
                 return self._handle_file_roles_post()
@@ -1217,6 +1301,23 @@ class Handler(BaseHTTPRequestHandler):
     def _version_path(self, save_dir, dt, stamp):
         return self._versions_dir(save_dir) / (dt + self.VERSION_SEP + stamp + '.puml')
 
+    @staticmethod
+    def _stamp_key(stamp):
+        """刻印を並べ替えの鍵にする。
+
+        BLK-primary-20260916-0100: 同じ秒の 2 本目以降は `20260914-001159.2` の
+        ように連番が付く。文字列のまま並べると `.2` が `.18` より新しいことに
+        なり、一覧の「新しい順」が嘘になるうえ、上限を超えた分を捨てるときに
+        **どれが古いのかを取り違えて、まだ中身のある版を先に捨てる**。
+        連番は数として読む。
+        """
+        base, sep, suffix = str(stamp).partition('.')
+        try:
+            n = int(suffix) if sep else 0
+        except ValueError:
+            n = 0
+        return (base, n)
+
     def _version_stamps(self, save_dir, dt):
         """`dt` の過去版の刻印を新しい順に返す。無ければ空リスト。"""
         vdir = self._versions_dir(save_dir)
@@ -1228,7 +1329,7 @@ class Handler(BaseHTTPRequestHandler):
                     stamps.append(p.stem[len(prefix):])
         except OSError:
             return []
-        stamps.sort(reverse=True)
+        stamps.sort(key=self._stamp_key, reverse=True)
         return stamps
 
     def _version_counts(self, save_dir):
@@ -1352,6 +1453,142 @@ class Handler(BaseHTTPRequestHandler):
             item['head'] = _version_head(text)
             versions.append(item)
         self._send_json(200, {'name': dt, 'dir': str(save_dir), 'versions': versions})
+
+    # --- 混入点の検索 (BLK-primary-20260915-0506-wish) ------------------------
+    #
+    # 不具合対応では「この部品名がいつの版から入ったか」を知りたい。今までは
+    # /autosave-versions を図ごとに引き、返ってきた版を 1 つずつ開いて中身を
+    # 読み比べるしかなく、開く回数が「図の枚数 × 版数」で増えていた。
+    # ここは保存フォルダの全図・全版を 1 回で走査し、**語が当たった行だけ**を返す。
+    # 版と版の突き合わせ (どこで増えたか) は GUI 側 (blame-point.js) の仕事なので、
+    # server は数えて抜き出すところまでしかやらない。本文全部は返さない
+    # (14 枚 × 20 版の本文を毎回運ぶと、それ自体が待ち時間になる)。
+    SEARCH_TERMS_MAX = 6        # 1 回に突き合わせる語の数 (混在は 2〜3 語で足りる)
+    SEARCH_LINES_PER_VERSION = 40   # 1 版から返す当たり行の上限
+
+    def _search_hits(self, text, terms):
+        """本文 → 語ごとの出現数と、当たった行 (行番号つき)。"""
+        counts = [0] * len(terms)
+        lines = []
+        for no, line in enumerate(str(text or '').splitlines(), 1):
+            hit = False
+            for i, t in enumerate(terms):
+                c = line.count(t)
+                if c:
+                    counts[i] += c
+                    hit = True
+            if hit and len(lines) < self.SEARCH_LINES_PER_VERSION:
+                lines.append({'no': no, 'text': line.rstrip()[:200]})
+        return counts, lines
+
+    def _handle_version_search(self):
+        """GET /version-search?dir=&q= — 保存フォルダの全図の版から語を探す。
+
+        `q` は空白区切りの語 (混在を見るので複数可)。返すのは図ごとの
+        「古い順の版 + いまの中身」で、各版に語ごとの出現数と当たり行が付く。
+        """
+        parsed = urllib.parse.urlparse(self.path)
+        params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
+        save_dir = self._autosave_resolve_dir(params.get('dir'))
+        raw = params.get('q', '')
+        terms = [t for t in str(raw).split() if t][:self.SEARCH_TERMS_MAX]
+        if not terms:
+            self._send_json(400, {'error': 'q is required — 探す部品名を 1 つ以上'})
+            return
+        names = []
+        try:
+            for p in sorted(save_dir.iterdir(), key=lambda x: x.name.lower()):
+                if p.is_file() and p.suffix.lower() == '.puml':
+                    names.append(p.stem)
+        except OSError:
+            names = []
+        files = []
+        scanned = 0
+        for name in names:
+            versions = []
+            # 古い順。刻印は昇順に並べれば時系列になる (server は同じ書式で打つ)。
+            for stamp in sorted(self._version_stamps(save_dir, name)):
+                try:
+                    text = self._version_path(save_dir, name, stamp).read_text(encoding='utf-8')
+                except OSError:
+                    continue
+                counts, lines = self._search_hits(text, terms)
+                versions.append({'stamp': stamp, 'current': False,
+                                 'counts': counts, 'lines': lines})
+                scanned += 1
+            try:
+                text = (save_dir / (name + '.puml')).read_text(encoding='utf-8')
+            except OSError:
+                text = ''
+            counts, lines = self._search_hits(text, terms)
+            versions.append({'stamp': '', 'current': True,
+                             'counts': counts, 'lines': lines})
+            scanned += 1
+            files.append({'name': name, 'versions': versions})
+        self._send_json(200, {'terms': terms, 'dir': str(save_dir),
+                              'files': files, 'scanned': scanned})
+
+    # --- 版と版の全文 (BLK-primary-20260915-0606-wish) ------------------------
+    #
+    # 混入点は「語が当たった行」しか返さないので、原因を直すのに要る前後の文脈が
+    # 出ない。今まではその版を開き、直前の版も開いて目で照合する 2 手が要り、
+    # 部品数 × 該当版数ぶん積み上がっていた。ここは 1 回の要求で「その版」と
+    # 「直前の版」の本文を組で返す。突き合わせ自体は GUI 側 (version-diff.js)。
+
+    def _handle_version_diff(self):
+        """GET /version-diff?dir=&type=[&stamp=] — その版と直前の版の本文。
+
+        `stamp` を省くと「いまの中身」と最新の控えを比べる。最古の控えを指した
+        ときは直前が無いので prev を null、before を空にして first を立てる。
+        """
+        parsed = urllib.parse.urlparse(self.path)
+        params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
+        save_dir = self._autosave_resolve_dir(params.get('dir'))
+        dt = params.get('type', '')
+        if not self._autosave_validate_type(dt):
+            self._send_json(400, {'error': 'invalid type — パス区切り・制御文字・Windows の禁止文字は使えません'})
+            return
+        stamp = params.get('stamp', '')
+        if stamp and not is_safe_autosave_name(stamp):
+            self._send_json(400, {'error': 'invalid stamp'})
+            return
+        stamps = sorted(self._version_stamps(save_dir, dt))
+
+        def read(path):
+            try:
+                return path.read_text(encoding='utf-8')
+            except OSError:
+                return None
+
+        if stamp:
+            if stamp not in stamps:
+                self._send_json(404, {'error': 'version not found — その版は残っていません'})
+                return
+            after = read(self._version_path(save_dir, dt, stamp))
+            if after is None:
+                self._send_json(500, {'error': 'read failed'})
+                return
+            idx = stamps.index(stamp)
+            prev = stamps[idx - 1] if idx > 0 else None
+        else:
+            after = read(save_dir / (dt + '.puml'))
+            if after is None:
+                self._send_json(404, {'error': 'diagram not found — その図は保存フォルダにありません'})
+                return
+            prev = stamps[-1] if stamps else None
+        before = ''
+        if prev is not None:
+            got = read(self._version_path(save_dir, dt, prev))
+            if got is None:
+                prev = None
+            else:
+                before = got
+        self._send_json(200, {
+            'name': dt, 'dir': str(save_dir),
+            'stamp': stamp, 'current': not stamp,
+            'prev': prev, 'first': prev is None,
+            'before': before, 'after': after,
+        })
 
     # --- 提出物庫 (BLK-junior-20260908-2203-wish) -----------------------------
     #
@@ -1548,6 +1785,72 @@ class Handler(BaseHTTPRequestHandler):
             pass
         self._send_json(200, {'ok': True})
 
+    # --- 手本なしの確定 (BLK-junior-20260916-2314-wish) -------------------------
+    #
+    # 👀他フォルダで「相手に ○○ 図は 0 枚。対応不要として控えますか」と聞かれる答えは、
+    # 開いている 1 枚の図の中にしか残らず、次の周に別の図を開くとまた同じ質問が出た。
+    # 「この相手のこの図種は手本なし」は図 1 枚ではなく保存フォルダの決めごとなので、
+    # フォルダ側に置き、ブラウザや図が替わっても聞き直さない。
+    PEEK_SETTLED_DIRNAME = '_peek'
+    PEEK_SETTLED_MAX = 200
+
+    def _peek_settled_path(self, save_dir):
+        return save_dir / self.PEEK_SETTLED_DIRNAME / 'settled.json'
+
+    def _read_peek_settled(self, save_dir):
+        try:
+            data = json.loads(self._peek_settled_path(save_dir).read_text(encoding='utf-8'))
+        except (ValueError, OSError):
+            return []
+        rows = data.get('entries') if isinstance(data, dict) else None
+        if not isinstance(rows, list):
+            return []
+        return [r for r in rows if isinstance(r, dict) and r.get('peer') and r.get('kind')]
+
+    def _handle_peek_settled_get(self):
+        """GET /peek-settled?dir= — 手本なしで確定した (相手, 図種) の一覧."""
+        parsed = urllib.parse.urlparse(self.path)
+        params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
+        save_dir = self._autosave_resolve_dir(params.get('dir'))
+        self._send_json(200, {'dir': str(save_dir), 'entries': self._read_peek_settled(save_dir)})
+
+    def _handle_peek_settled_post(self):
+        """POST /peek-settled {dir, peer, kind, settled} — 確定を足す / 外す."""
+        length = int(self.headers.get('Content-Length', 0))
+        try:
+            data = json.loads(self.rfile.read(length).decode('utf-8'))
+        except ValueError:
+            self._send_json(400, {'error': 'invalid JSON'})
+            return
+        if not isinstance(data, dict):
+            self._send_json(400, {'error': 'body must be an object'})
+            return
+        save_dir = self._autosave_resolve_dir(data.get('dir'))
+        if data.get('clear') is True:
+            rows = []
+        else:
+            peer = data.get('peer')
+            kind = data.get('kind')
+            if not isinstance(peer, str) or not isinstance(kind, str) or not peer or not kind:
+                self._send_json(400, {'error': 'peer and kind must be non-empty strings',
+                                      'expected': '{dir, peer, kind, settled} | {dir, clear: true}'})
+                return
+            rows = [r for r in self._read_peek_settled(save_dir)
+                    if not (r.get('peer') == peer and r.get('kind') == kind)]
+            if data.get('settled', True) is not False:
+                rows.insert(0, {'peer': peer, 'kind': kind,
+                                'count': int(data.get('count') or 0),
+                                'at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())})
+            rows = rows[:self.PEEK_SETTLED_MAX]
+        path = self._peek_settled_path(save_dir)
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            _atomic_write_text(path, json.dumps({'entries': rows}, ensure_ascii=False, indent=1))
+        except OSError as e:
+            self._send_json(500, {'error': f'write failed: {e}'})
+            return
+        self._send_json(200, {'dir': str(save_dir), 'entries': rows})
+
     # --- 置換の組 (BLK-primary-20260914-1306-friction) ------------------------
     #
     # 「過去に当てた置換の組」は localStorage にしか無かったので、ブラウザを
@@ -1647,13 +1950,216 @@ class Handler(BaseHTTPRequestHandler):
                 continue
             out.append({'name': name,
                         'docs': [d for d in docs if isinstance(d, str) and d],
+                        'items': self._sanitize_set_items(s.get('items')),
                         'at': s.get('at') if isinstance(s.get('at'), str) else ''})
+        return out
+
+    # BLK-primary-20260916-0100-wish: 資料に貼るときの体裁 (見出し・1 行説明) は
+    # 図の中身ではなく資料セットの持ち物なので、DSL ではなくここに置く。
+    # 見出しと説明は資料の 1 行に載る文なので、改行は畳んで 1 行に保つ。
+    @staticmethod
+    def _sanitize_set_items(items):
+        out = []
+        seen = set()
+        if not isinstance(items, list):
+            return out
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            name = it.get('name')
+            if not isinstance(name, str) or not name.strip() or name in seen:
+                continue
+            seen.add(name)
+
+            def _line(v):
+                return ' '.join(str(v).split()) if isinstance(v, str) else ''
+
+            out.append({'name': name,
+                        'heading': _line(it.get('heading')),
+                        'note': _line(it.get('note'))})
         return out
 
     def _write_doc_sets(self, save_dir, sets):
         path = self._sets_path(save_dir)
         path.parent.mkdir(parents=True, exist_ok=True)
         _atomic_write_text(path, json.dumps({'sets': sets}, ensure_ascii=False, indent=1))
+
+    # BLK-reviewer-20260915-0506-wish: 表記揺れの「揃える先」を 3 人が同じ 1 冊で
+    # 見るための口。保存フォルダはペルソナごとに別なので、共有できる場所は親
+    # (persona-data) だけ。ここが唯一の置き場所で、親より上は辿らない。
+    NAME_REGISTRY_FILE = '_names.json'
+    # 人が決めた語の一覧。これを超える大きさは登録簿ではない。
+    NAME_REGISTRY_MAX = 512 * 1024
+
+    def _name_registry_path(self, save_dir):
+        return Path(save_dir).parent / self.NAME_REGISTRY_FILE
+
+    def _read_name_registry(self, save_dir):
+        path = self._name_registry_path(save_dir)
+        try:
+            if not path.exists() or path.stat().st_size > self.NAME_REGISTRY_MAX:
+                return {'entries': []}
+            data = json.loads(path.read_text(encoding='utf-8-sig'))
+        except (OSError, ValueError):
+            return {'entries': []}
+        if isinstance(data, list):
+            data = {'entries': data}
+        if not isinstance(data, dict) or not isinstance(data.get('entries'), list):
+            return {'entries': []}
+        out = []
+        for e in data['entries']:
+            if not isinstance(e, dict):
+                continue
+            canonical = e.get('canonical')
+            if not isinstance(canonical, str) or not canonical.strip():
+                continue
+            variants = [v for v in (e.get('variants') or []) if isinstance(v, str) and v.strip()]
+            out.append({
+                'canonical': canonical.strip(),
+                'variants': variants,
+                'note': e.get('note') if isinstance(e.get('note'), str) else '',
+                'by': e.get('by') if isinstance(e.get('by'), str) else '',
+                'at': e.get('at') if isinstance(e.get('at'), str) else '',
+            })
+        return {'entries': out}
+
+    COHORT_ACK_FILE = '_cohort-ack.json'
+    # 確認済みの組の台帳。これを超える大きさは台帳ではない。
+    COHORT_ACK_MAX = 512 * 1024
+
+    def _cohort_ack_path(self, save_dir):
+        return Path(save_dir).parent / self.COHORT_ACK_FILE
+
+    @staticmethod
+    def _cohort_ack_payload(entries):
+        """台帳の 1 行を素通しで受ける形に整える.
+
+        どの組を確認済みとするかの判定 (組の鍵・差分の指紋) は
+        src/core/cohort-ack.js にしか無い (同じ規則を 2 つ持たない)。
+        ここでやるのは型と重複の掃除だけ。
+        """
+        out = []
+        seen = set()
+        for e in entries:
+            if not isinstance(e, dict):
+                continue
+            key = e.get('key')
+            if not isinstance(key, str) or not key.strip():
+                continue
+            key = key.strip()
+            if key in seen:
+                continue
+            seen.add(key)
+            row = {'key': key}
+            for f in ('domain', 'kind', 'left', 'right', 'fingerprint', 'note', 'by', 'at'):
+                v = e.get(f)
+                row[f] = v.strip() if isinstance(v, str) else ''
+            out.append(row)
+        out.sort(key=lambda r: r['key'])
+        return out
+
+    def _read_cohort_ack(self, save_dir):
+        path = self._cohort_ack_path(save_dir)
+        try:
+            if not path.exists() or path.stat().st_size > self.COHORT_ACK_MAX:
+                return {'entries': []}
+            data = json.loads(path.read_text(encoding='utf-8-sig'))
+        except (OSError, ValueError):
+            return {'entries': []}
+        if isinstance(data, list):
+            data = {'entries': data}
+        if not isinstance(data, dict) or not isinstance(data.get('entries'), list):
+            return {'entries': []}
+        return {'entries': self._cohort_ack_payload(data['entries'])}
+
+    def _handle_cohort_ack_get(self):
+        """GET /cohort-ack?dir= — 保存フォルダの親にある確認済みの組の台帳."""
+        parsed = urllib.parse.urlparse(self.path)
+        params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
+        save_dir = self._autosave_resolve_dir(params.get('dir'))
+        led = self._read_cohort_ack(save_dir)
+        self._send_json(200, {'dir': str(save_dir), 'path': str(self._cohort_ack_path(save_dir)),
+                              'entries': led['entries']})
+
+    def _handle_cohort_ack_post(self):
+        """POST /cohort-ack {dir, entries} — 台帳を丸ごと置き換える."""
+        data = self._read_json_object()
+        if data is None:
+            return
+        entries = data.get('entries')
+        if not isinstance(entries, list):
+            self._send_json(400, {'error': 'entries must be a list'})
+            return
+        save_dir = self._autosave_resolve_dir(data.get('dir'))
+        path = self._cohort_ack_path(save_dir)
+        clean = self._cohort_ack_payload(entries)
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            _atomic_write_text(path, json.dumps({'entries': clean}, ensure_ascii=False, indent=2) + '\n')
+        except OSError as e:
+            self._send_json(500, {'error': f'書き込めません: {e}'})
+            return
+        self._send_json(200, {'dir': str(save_dir), 'path': str(path), 'entries': clean})
+
+    def _handle_name_registry_get(self):
+        """GET /name-registry?dir= — 保存フォルダの親にある正式表記の登録簿."""
+        parsed = urllib.parse.urlparse(self.path)
+        params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
+        save_dir = self._autosave_resolve_dir(params.get('dir'))
+        reg = self._read_name_registry(save_dir)
+        self._send_json(200, {'dir': str(save_dir), 'path': str(self._name_registry_path(save_dir)),
+                              'entries': reg['entries']})
+
+    def _handle_name_registry_post(self):
+        """POST /name-registry {dir, entries} — 登録簿を丸ごと置き換える.
+
+        1 語ずつの差分ではなく全体を受けるのは、揃える先の決定が
+        src/core/name-registry.js にしか無いため (同じ規則を 2 つ持たない)。
+        """
+        data = self._read_json_object()
+        if data is None:
+            return
+        entries = data.get('entries')
+        if not isinstance(entries, list):
+            self._send_json(400, {'error': 'entries must be a list'})
+            return
+        save_dir = self._autosave_resolve_dir(data.get('dir'))
+        path = self._name_registry_path(save_dir)
+        clean = self._read_name_registry_payload(entries)
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            _atomic_write_text(path, json.dumps({'entries': clean}, ensure_ascii=False, indent=2) + '\n')
+        except OSError as e:
+            self._send_json(500, {'error': f'書き込めません: {e}'})
+            return
+        self._send_json(200, {'dir': str(save_dir), 'path': str(path), 'entries': clean})
+
+    @staticmethod
+    def _read_name_registry_payload(entries):
+        out = []
+        seen = set()
+        for e in entries:
+            if not isinstance(e, dict):
+                continue
+            canonical = e.get('canonical')
+            if not isinstance(canonical, str) or not canonical.strip():
+                continue
+            canonical = canonical.strip()
+            key = re.sub(r'[^a-z0-9]', '', canonical.lower())
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            variants = sorted({v.strip() for v in (e.get('variants') or [])
+                               if isinstance(v, str) and v.strip() and v.strip() != canonical})
+            out.append({
+                'canonical': canonical,
+                'variants': variants,
+                'note': (e.get('note') or '') if isinstance(e.get('note'), str) else '',
+                'by': (e.get('by') or '') if isinstance(e.get('by'), str) else '',
+                'at': (e.get('at') or '') if isinstance(e.get('at'), str) else '',
+            })
+        out.sort(key=lambda x: x['canonical'])
+        return out
 
     def _handle_doc_sets_get(self):
         """GET /doc-sets?dir= — そのフォルダに登録した資料セット."""
@@ -1691,7 +2197,13 @@ class Handler(BaseHTTPRequestHandler):
             return
         name = name.strip()
         save_dir = self._autosave_resolve_dir(data.get('dir'))
+        prev = [s for s in self._read_doc_sets(save_dir) if s.get('name') == name]
+        # items を渡さない登録 (図の組だけ入れ替える) では、前に書いた体裁を残す。
+        # 図を足し直しただけで見出しと説明が消えると、貼る前の手戻りが戻ってくる。
+        raw_items = data.get('items') if 'items' in data else (prev[0].get('items') if prev else [])
         entry = {'name': name, 'docs': names,
+                 'items': [it for it in self._sanitize_set_items(raw_items)
+                           if it['name'] in names],
                  'at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}
         sets = [s for s in self._read_doc_sets(save_dir) if s.get('name') != name]
         sets.insert(0, entry)
@@ -1942,6 +2454,12 @@ class Handler(BaseHTTPRequestHandler):
                 'expected': VERIFY_SVG_EXPECTED,
             })
             return
+        # BLK-reviewer-20260914-2106-wish: stale と出た 1 枚について、旧 SVG と
+        # 描き直した SVG を並べて可視差分を見る画面のための材料。server は
+        # 既に両方を手元に持っているので、ここで返せば GUI は /render を
+        # 別に叩き直さずに済む (reviewer が使い捨てスクリプトを書いていた所)。
+        # 一覧ぶん (最大 200 枚) を毎回返すと応答が肥るので 1 枚のときだけ。
+        with_svg = bool(data.get('withSvg')) and len(names) == 1
         results = {}
         recs = self._read_svg_verify(save_dir)
         for name in names:
@@ -2014,6 +2532,16 @@ class Handler(BaseHTTPRequestHandler):
                 results[name]['svgShape'] = self._svg_shape_counts(
                     self._strip_svg_stamp(svg_bytes))
                 results[name]['drawnShape'] = self._svg_shape_counts(drawn)
+            if with_svg:
+                # 印は描画の結果ではないので、外した形で渡す (印が付いたままだと
+                # 「差がある」と見えるのは印のせいなのか中身なのかが濁る)。
+                if len(stripped) > MAX_VISUAL_SVG_BYTES or len(drawn) > MAX_VISUAL_SVG_BYTES:
+                    results[name]['svgOmitted'] = (
+                        'SVG が大きすぎるため本文は添えていません (上限 %d bytes)'
+                        % MAX_VISUAL_SVG_BYTES)
+                else:
+                    results[name]['savedSvg'] = stripped.decode('utf-8', errors='replace')
+                    results[name]['drawnSvg'] = drawn.decode('utf-8', errors='replace')
         self._write_svg_verify(save_dir, recs)
         self._send_json(200, {'ok': True, 'results': results, 'verified': recs})
 
@@ -2171,6 +2699,10 @@ class Handler(BaseHTTPRequestHandler):
         # 別呼び出しにすると「未確認 22 枚」の一覧が一瞬出て、確かめた図まで疑わせる。
         verified = self._read_svg_verify(save_dir) if exists else {}
         export_log = self._read_export_log(save_dir) if exists else None
+        # BLK-primary-20260916-2314-friction: 控え (_export-log.json) より前に作った納品 zip が
+        # フォルダに残っていても「まだ 1 度も提出していません」と出ていた。zip の中の svg/ から
+        # 何を出したかは読めるので、一覧と同時に返す (版の比較はできないが、対象の選び直しには足りる)。
+        delivery_zips = self._delivery_zips(save_dir) if exists else []
         # BLK-junior-20260912-2103-wish: 保存したときの図種の控え。一覧と同時に返す
         # (別呼び出しにすると、図種の印が付く前の一覧が一瞬出る)。
         saved_kinds = self._read_saved_kinds(save_dir) if exists else {}
@@ -2180,7 +2712,35 @@ class Handler(BaseHTTPRequestHandler):
         self._send_json(200, {'files': files, 'entries': entries, 'meta': meta,
                               'dir': str(save_dir), 'exists': exists, 'roles': roles,
                               'verified': verified, 'now': now, 'gone': gone,
-                              'exportLog': export_log, 'kinds': saved_kinds})
+                              'exportLog': export_log, 'kinds': saved_kinds,
+                              'deliveryZips': delivery_zips})
+
+    DELIVERY_ZIP_RE = re.compile(r'^delivery-(\d{8})-(\d{4})([a-z]?)\.zip$')
+
+    def _delivery_zips(self, save_dir, limit=20):
+        """保存フォルダの納品 zip (delivery-YYYYMMDD-HHMM.zip) を新しい順に返す。
+
+        各 zip の svg/{name}.svg から、その回に出した図の名前を読む。壊れた zip は飛ばす。
+        """
+        import zipfile
+        out = []
+        try:
+            paths = [p for p in save_dir.glob('delivery-*.zip') if self.DELIVERY_ZIP_RE.match(p.name)]
+        except OSError:
+            return out
+        paths.sort(key=lambda p: p.name, reverse=True)
+        for p in paths[:limit]:
+            m = self.DELIVERY_ZIP_RE.match(p.name)
+            try:
+                with zipfile.ZipFile(str(p)) as z:
+                    names = [n[4:-4] for n in z.namelist()
+                             if n.startswith('svg/') and n.endswith('.svg') and '/' not in n[4:]]
+            except (OSError, zipfile.BadZipFile, ValueError):
+                continue
+            d, t = m.group(1), m.group(2)
+            out.append({'file': p.name, 'names': names,
+                        'at': '%s-%s-%sT%s:%s' % (d[:4], d[4:6], d[6:], t[:2], t[2:])})
+        return out
 
     def _resolve_unstamped_svg_sources(self, save_dir, entries):
         """印の無い svg の持ち主を、svg に畳まれた DSL から名指しする。

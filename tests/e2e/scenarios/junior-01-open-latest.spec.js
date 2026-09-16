@@ -826,6 +826,53 @@ test.describe('junior 手順 1: 先輩の複合図から部品を切り出して
     await page.locator('#peek-files .peek-file[data-file-name="gpio_init_sequence"]').click();
     await page.waitForTimeout(600);
     await expect(page.locator('#peek-parts')).toBeHidden();
+    await expect(page.locator('#peek-focus')).toBeHidden();
+  });
+
+  // BLK-junior-20260915-0506-wish: 切り出しは「その部品だけの別の 1 枚」を作るので、
+  // 相乗り図のどこに自分の部品が居て何と線でつながっているかという元の絵は失われる。
+  // 手順 1 でしたいのは新しい図を作ることではなく、先輩の 1 枚を絞って眺めること。
+  // 部品を 1 回押せば、1 枚のまま自部品の所だけが浮き、他が淡色 (または非表示) に
+  // なることを到達条件にする。
+  test('相乗り図を 1 枚のまま部品で絞ると、自部品のクラス・関連だけが浮かぶ', async ({ page }) => {
+    await page.locator('#btn-tab-peek').click();
+    await page.waitForSelector('#peek-modal');
+    await page.locator('#peek-files .peek-file[data-file-name="driver_common_class"]').click();
+
+    // 到達条件その1: 押す前に「何部品の相乗りか」が読める。
+    await page.waitForSelector('#peek-focus .peek-focus-chip');
+    await expect(page.locator('#peek-focus-head')).toContainText('4 部品の相乗り');
+
+    // 到達条件その2: 1 回押すと、残る所と落ちる所が数で言われる。
+    await page.locator('#peek-focus .peek-focus-chip[data-focus-part="Spi_Driver"]').click();
+    await expect(page.locator('#peek-focus-label')).toContainText('Spi_Driver');
+    await expect(page.locator('#peek-focus-label')).toContainText('3 クラス');
+    await expect(page.locator('#peek-focus-label')).toContainText('淡色');
+
+    // 到達条件その3: 図は 1 枚のまま。関係しない部品も絵に残り (位置が分かる)、
+    // 淡色が実際に描画まで届いている。
+    await page.waitForSelector('#peek-svg[data-focus="Spi_Driver:dim"] svg');
+    const svg = await page.locator('#peek-svg').innerHTML();
+    expect(svg).toContain('Can_Driver');
+    expect(svg).toContain('Gpio_Driver');
+    expect(svg.toUpperCase()).toContain('#DDDDDD');
+
+    // 到達条件その4: 本文も同じ絞りで読める (打ち写す側で行が見分けられる)。
+    const kept = await page.locator('#peek-dsl .peek-dsl-keep').allInnerTexts();
+    expect(kept.join('\n')).toContain('Spi_Init');
+    const dimmed = await page.locator('#peek-dsl .peek-dsl-dim').allInnerTexts();
+    expect(dimmed.join('\n')).toContain('Can_Init');
+
+    // 到達条件その5: 非表示に切り替えると、関係しない所は本文からも消える。
+    await page.locator('#peek-focus .peek-focus-mode[data-focus-mode="hide"]').click();
+    await expect(page.locator('#peek-focus-label')).toContainText('非表示');
+    await expect(page.locator('#peek-dsl')).not.toContainText('Can_Init');
+    await expect(page.locator('#peek-dsl')).toContainText('Spi_Init');
+
+    // 到達条件その6: 解除すれば元の 1 枚に戻る (先輩の本文は書き換わっていない)。
+    await page.locator('#peek-focus-clear').click();
+    await expect(page.locator('#peek-dsl')).toContainText('Can_Init');
+    await expect(page.locator('#peek-focus-label')).toHaveText('');
   });
 });
 
@@ -1075,6 +1122,8 @@ test.describe('junior 手順 1〜2: 先輩に実体が無い図種の結論を�
     await S1.putDoc(page, NOTE_MINE, 'gpio_state', S1.GPIO_STATE);
     // 先輩にはシーケンス図しか無い (アクティビティ図は 1 枚も無い)。
     await S1.putDoc(page, NOTE_SENIOR, 'gpio_init_sequence', SENIOR_SEQ);
+    // 「手本なしで確定」はフォルダの持ち物で clearDir では消えない。下ごしらえで外す。
+    await clearPeekSettled(page, NOTE_MINE);
     await page.reload();
     await page.waitForSelector('#btn-tab-peek');
   });
@@ -1119,6 +1168,70 @@ test.describe('junior 手順 1〜2: 先輩に実体が無い図種の結論を�
     }
     await page.waitForTimeout(1200);
     expect(await S1.readDoc(page, NOTE_MINE, 'gpio_state') || '').toContain("' @peek アクティビティ");
+  });
+});
+
+async function clearPeekSettled(page, dir) {
+  await page.evaluate(async (d) => {
+    await fetch('/peek-settled', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dir: d, clear: true }) });
+  }, dir);
+}
+
+async function openPeekPrimary(page, name) {
+  await S1.openFolderItem(page, name);
+  const lock = page.locator('#source-lock-modal');
+  if (await lock.isVisible().catch(() => false)) {
+    await page.locator('#source-lock-overwrite').click();
+    await page.waitForTimeout(600);
+  }
+  await page.locator('#btn-tab-peek').click();
+  await page.waitForSelector('#peek-modal');
+  await page.locator('#peek-dirs .peek-dir[data-dir-name="primary"]').click();
+  await page.waitForTimeout(1200);
+}
+
+// BLK-junior-20260916-2314-wish: 控えは開いていた 1 枚の図の中にしか残らず、次の周に別の図を開くと
+// 「primary に ○○ は 0 枚です」を図種の数だけ聞き直していた。一度確定した (相手 × 図種) は
+// 保存フォルダに残り、どの図を開いても・再読み込みしても聞かれず、確定リストから外せば また聞かれる。
+test.describe('junior 手順 1: 手本なしで確定した図種は二度と聞かれない', () => {
+  test.beforeEach(async ({ page }) => {
+    await S1.bootWithSaveDir(page, NOTE_MINE);
+    await S1.clearDir(page, NOTE_MINE);
+    await S1.clearDir(page, NOTE_SENIOR);
+    await S1.putDoc(page, NOTE_MINE, 'gpio_state', S1.GPIO_STATE);
+    await S1.putDoc(page, NOTE_MINE, 'timer_state', S1.GPIO_STATE.replace(/Gpio/g, 'Timer'));
+    await S1.putDoc(page, NOTE_SENIOR, 'gpio_init_sequence', SENIOR_SEQ);
+    await clearPeekSettled(page, NOTE_MINE);
+    await page.reload();
+    await page.waitForSelector('#btn-tab-peek');
+  });
+
+  test('1 回確定すると別の図・次の周でも聞かれず、✕ で外すとまた聞かれる', async ({ page }) => {
+    await openPeekPrimary(page, 'gpio_state');
+    await expect(page.locator('[data-peek-verdict="アクティビティ"]')).toContainText('0 枚です');
+    await page.locator('[data-peek-verdict-keep="アクティビティ"]').click();
+    await page.waitForTimeout(1200);
+
+    // 次の周: 再読み込み (ブラウザの記憶は消える) して、控えを書いていない別の図を開く。
+    // localStorage は起動時に消える (init script)。残るのは保存フォルダ側だけ。
+    await page.reload();
+    await page.waitForSelector('#btn-tab-peek');
+    await openPeekPrimary(page, 'timer_state');
+
+    // 確定した図種は聞かれない (質問の行も「控える」ボタンも出ない)。
+    await expect(page.locator('#peek-settled-text')).toContainText('primary は手本なしで確定: アクティビティ');
+    await expect(page.locator('[data-peek-verdict="アクティビティ"]')).toHaveCount(0);
+    await expect(page.locator('[data-peek-verdict-keep="アクティビティ"]')).toHaveCount(0);
+    // 確定していない図種はこれまでどおり聞かれる。
+    await expect(page.locator('[data-peek-verdict-keep="ユースケース"]')).toHaveCount(1);
+
+    // 答えを変えたくなったら確定リストから外す → また聞かれる。
+    await page.locator('[data-peek-settled-clear="アクティビティ"]').click();
+    await expect(page.locator('[data-peek-verdict-keep="アクティビティ"]')).toHaveCount(1);
+    await expect(page.locator('#peek-settled')).toHaveCount(0);
+    const left = await page.evaluate(async (d) => (await (await fetch('/peek-settled?dir=' + encodeURIComponent(d))).json()).entries, NOTE_MINE);
+    expect(left.length).toBe(0);
   });
 });
 
@@ -1376,6 +1489,33 @@ test.describe('junior 手順 1: 宛先の書かれていない指摘を GUI の�
 // 書く間は閉じることになり、保存先設定を行き来して開き直していた。
 // ⇔ 先輩の図 は据え置きの 2 枠目で、図を切り替えると相手も自動で入れ替わる。
 const SENIOR_DIR = DIR + '-senior';
+// 先輩のクラス図は部品ごとに分かれておらず、全ドライバが 1 枚に載る
+// (persona-data/primary/driver_common_class.puml と同じ形)。
+const COMMON_CLASS = [
+  '@startuml',
+  'title Driver_Common_Class',
+  'class Driver_Common {',
+  '  + Init() : void',
+  '}',
+  'class Spi_Driver {',
+  '  + Spi_Init() : void',
+  '}',
+  'class Timer_Driver {',
+  '  + Timer_Init() : void',
+  '  + Timer_Start() : void',
+  '}',
+  'class Uart_Driver {',
+  '  + Uart_Init() : void',
+  '}',
+  'class IRQCtrl {',
+  '  + EnableIrq() : void',
+  '}',
+  'Spi_Driver --|> Driver_Common',
+  'Timer_Driver --|> Driver_Common',
+  'Uart_Driver --|> Driver_Common',
+  'Timer_Driver --> IRQCtrl',
+  '@enduml',
+].join(String.fromCharCode(10));
 const SENIOR_BASE = SENIOR_DIR.slice(SENIOR_DIR.lastIndexOf('/') + 1).toLowerCase();
 
 // 自分の図を開く。復元で同名のタブが既にあるならそれへ切り替える
@@ -1506,5 +1646,619 @@ test.describe('junior 手順 1〜2: 先輩の図を横に置いたまま自分�
     await page.waitForTimeout(800);
     await expect(page.locator('#senior-dir')).toHaveValue(chosen);
     await expect(page.locator('#senior-notice')).toContainText('gpio_init_sequence');
+  });
+
+  // BLK-junior-20260908-1103: 先輩の図を見る入口が 🧰 ツールの折りたたみの奥にあり、
+  // 図種ごとの初回は毎回そこを通っていた (1 つの確認に 5 クリック)。常に見えている
+  // 下端の「👀 先輩」から 1 クリックで着けることを到達条件にする。
+  test('下端の「👀 先輩」から、折りたたみを通らずに 1 クリックで先輩の図に着く', async ({ page }) => {
+    // まず 1 回だけフォルダを決める (以後この回答は覚えている)。
+    await openSenior(page);
+    await openMine(page, 'gpio_state');
+    await page.waitForTimeout(800);
+    await page.locator('#senior-close').click();
+    await expect(page.locator('#senior-pane')).toHaveAttribute('hidden', '');
+
+    // 到達条件その1: 枠を閉じていても、下端に「いま横に出る先輩の図」が出ている
+    // (押す前に、目当ての図かどうかが読める)。
+    const status = page.locator('#status-senior');
+    await expect(status).toBeVisible();
+    await expect(status).toHaveText(/gpio_state/, { timeout: 10000 });
+    await expect(status).toHaveAttribute('data-count', '1');
+
+    // 到達条件その2: その 1 クリックだけで先輩の図が横に出る
+    // (🧰 ツール → 一覧 → 他の保存フォルダを覗く、を通らない)。
+    await status.click();
+    await page.waitForSelector('#senior-pane:not([hidden])');
+    await expect(page.locator('#senior-notice')).toContainText('gpio_state');
+    await expect(page.locator('#senior-dsl')).not.toHaveText('');
+    await expect(status).toHaveAttribute('aria-pressed', 'true');
+
+    // 到達条件その3: 図を切り替えれば下端の相手も入れ替わる
+    // (閉じていても、次に押したときに出る図が下端で分かる)。
+    await status.click();
+    await expect(page.locator('#senior-pane')).toHaveAttribute('hidden', '');
+    await openMine(page, 'gpio_init_sequence');
+    await expect(status).toHaveText(/gpio_init_sequence/, { timeout: 10000 });
+  });
+
+  // BLK-junior-20260914-2206-wish: 手順1 で先輩の粒度に合わせたいのはクラス図も同じだが、
+  // 先輩のクラス図は全ドライバ共通の 1 枚 (driver_common_class) で、部品名で 1:1 に
+  // 引けないため「👀 先輩」は常に「−」だった。共通図から自分の部品の所だけを抜き出す。
+  test('先輩の共通クラス図から、自分の部品の所だけが横に出る', async ({ page }) => {
+    await page.evaluate(async (a) => {
+      await fetch('/autosave', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'driver_common_class', dir: a.dir, dsl: a.dsl }),
+      });
+    }, { dir: SENIOR_DIR, dsl: COMMON_CLASS });
+    await page.waitForTimeout(300);
+
+    await openMine(page, 'TimerDrv派生クラス図');
+    await openSenior(page);
+
+    // 到達条件その1: 「−」ではなく、共通図のどの部分が出るかが読める。
+    await expect(page.locator('#senior-notice')).toContainText('driver_common_class');
+    await expect(page.locator('#senior-notice')).toContainText('timer');
+
+    // 到達条件その2: 自分の部品と、その継承元・繋がる相手だけが出ている。
+    const dsl = page.locator('#senior-dsl');
+    await expect(dsl).toContainText('Timer_Driver');
+    await expect(dsl).toContainText('Driver_Common');
+    await expect(dsl).not.toContainText('Spi_Driver');
+    await expect(dsl).not.toContainText('Uart_Driver');
+    // 先輩のメソッドはそのまま残る (粒度・命名を合わせるのが手順1 の的)。
+    await expect(dsl).toContainText('Timer_Start');
+
+    // 到達条件その3: 部品名を打ち替えれば、その部品の所が浮かぶ。
+    await page.fill('#senior-slice-key', 'spi');
+    await page.waitForTimeout(800);
+    await expect(dsl).toContainText('Spi_Driver');
+    await expect(dsl).not.toContainText('Timer_Driver');
+
+    // 到達条件その4: 共通図の全体にも戻せる (抜き出しで隠れた所を確かめられる)。
+    await page.locator('#senior-slice-mode').click();
+    await page.waitForTimeout(800);
+    await expect(dsl).toContainText('Timer_Driver');
+    await expect(dsl).toContainText('Uart_Driver');
+
+    // 先輩のファイルは読むだけ (抜き出しても元は変わらない)。
+    const raw = await page.evaluate(async (a) => {
+      const r = await fetch('/autosave?dir=' + encodeURIComponent(a.dir)
+        + '&type=' + encodeURIComponent('driver_common_class'));
+      return await r.text();
+    }, { dir: SENIOR_DIR });
+    expect(raw).toContain('Uart_Driver');
+  });
+});
+
+
+// BLK-junior-20260915-0007-wish: 先輩 (primary) が 1 枚も持たない図種がある
+// (アクティビティ図)。先輩の枠は 4 段のどれにも当たらず「当たる先輩の図は
+// ありません」で止まり、手順 1 の「粒度と命名の手本を見る」相手が絶えていた。
+// junior 自身は GPIO/UART/CAN で同じ図種を作り終えているので、その 1 枚を
+// 見本として代わりに横に出す。
+test.describe('junior 手順 1: 先輩が持たない図種では自分の他部品を見本にする', () => {
+  // 自分の保存フォルダ。他部品の完成形 (GPIO/CAN のアクティビティ図) が並ぶ。
+  const MINE_ACT = 'TIMERドライバ初期化アクティビティ図';
+  const PEERS = ['GPIOドライバ初期化アクティビティ図', 'CANドライバ初期化アクティビティ図'];
+  // 写し (資料用) は見本に出さない。同じ図が 2 枚並ぶだけになる。
+  const COPY = 'GPIOドライバ初期化アクティビティ図(資料用)';
+
+  test.beforeEach(async ({ page }) => {
+    await bootWithDir(page);
+    await clearDir(page);
+    await clearSenior(page);
+    // 先輩はシーケンスと状態遷移しか持たない (アクティビティ図が無い)。
+    await putIn(page, SENIOR_DIR, 'gpio_init_sequence');
+    await putIn(page, SENIOR_DIR, 'gpio_state');
+    for (const n of PEERS) await putIn(page, DIR, n);
+    await putIn(page, DIR, COPY);
+    // 自分のフォルダの並びは開いた時点の物を使うので、置いてから開き直す。
+    await page.reload();
+    await page.waitForTimeout(600);
+  });
+
+  test.afterEach(async ({ page }) => {
+    await clearDir(page).catch(() => {});
+    await clearSenior(page).catch(() => {});
+  });
+
+  // 先輩の枠を開いて先輩フォルダを選ぶ (上の describe と同じ手順)。
+  async function pickSeniorValue(page) {
+    return page.evaluate((base) => {
+      const sel = document.getElementById('senior-dir');
+      const hit = Array.prototype.slice.call(sel.options).filter(function(o) {
+        var v = o.value.toLowerCase().split(String.fromCharCode(92)).join('/');
+        return v.indexOf(base) >= 0;
+      })[0];
+      return hit ? hit.value : '';
+    }, SENIOR_BASE);
+  }
+
+  async function openSenior(page) {
+    await page.locator('#btn-tab-senior').click();
+    await page.waitForSelector('#senior-pane:not([hidden])');
+    await page.waitForFunction((base) => {
+      const sel = document.getElementById('senior-dir');
+      return !!sel && Array.prototype.slice.call(sel.options).some(function(o) {
+        return o.value.toLowerCase().split(String.fromCharCode(92)).join('/').indexOf(base) >= 0;
+      });
+    }, SENIOR_BASE);
+    await page.selectOption('#senior-dir', await pickSeniorValue(page));
+    await page.waitForTimeout(800);
+  }
+
+  test('先輩にその図種が無ければ、自分の他部品の同じ図種が見本として横に出る', async ({ page }) => {
+    await openMine(page, MINE_ACT);
+    await openSenior(page);
+    await page.waitForTimeout(600);
+
+    const notice = page.locator('#senior-notice');
+    // 先輩がいないことを隠さない (横の図を先輩の図と読み違えない)。
+    await expect(notice).toContainText('当たる先輩の図はありません');
+    await expect(notice).toContainText('見本');
+    await expect(notice).toContainText('読むだけ');
+    // 出るのは自分の他部品 (TIMER ではない) の同じ図種。
+    // 前半には自分の図の名前が出る (先輩がいない理由) ので、後半だけを見る。
+    const shown = (await notice.textContent()).split('代わりに自分の')[1] || '';
+    expect(shown).toContain('ドライバ初期化アクティビティ図');
+    expect(shown).not.toContain('TIMER');
+    // 本文が空のまま「見本」と言わない (読める中身が横に出ている)。
+    await expect(page.locator('#senior-dsl')).not.toHaveText('');
+    await expect(page.locator('#senior-dsl')).toContainText('@startuml');
+  });
+
+  test('写し (資料用) は見本にしない。部品ごとに 1 枚だけ候補に並ぶ', async ({ page }) => {
+    await openMine(page, MINE_ACT);
+    await openSenior(page);
+    await page.waitForTimeout(600);
+
+    const names = await page.evaluate(() => {
+      return Array.prototype.slice.call(document.querySelectorAll('#senior-candidates button'))
+        .map((b) => b.textContent);
+    });
+    expect(names.length).toBe(2);           // GPIO と CAN の 2 部品
+    expect(names.join('|')).not.toContain('資料用');
+  });
+
+  test('下端の「👀」は、開く前から見本が出ることを言う', async ({ page }) => {
+    await openMine(page, MINE_ACT);
+    await openSenior(page);
+    await page.waitForTimeout(600);
+    await expect(page.locator('#status-senior')).toContainText('見本');
+  });
+
+  test('見本では、共通図用の「部品」欄を出さない (押しても効かない欄になる)', async ({ page }) => {
+    await openMine(page, MINE_ACT);
+    await openSenior(page);
+    await page.waitForTimeout(600);
+    await expect(page.locator('#senior-slice')).toBeHidden();
+  });
+
+  test('先輩に相手がいる図種では、見本ではなく先輩の図を出す', async ({ page }) => {
+    await openMine(page, 'gpio_state');
+    await openSenior(page);
+    await page.waitForTimeout(600);
+    const notice = page.locator('#senior-notice');
+    await expect(notice).toContainText('gpio_state');
+    await expect(notice).not.toContainText('見本');
+  });
+});
+
+// ── BLK-junior-20260915-0307-wish ───────────────────────────────────────
+// 16 周目の手順 2 は「下書きは汎用ひな形なので、中身を消して先輩の対応図を手本に
+// 打ち直す」。SPI を起こすと 6 図種とも決まった汎用 DSL で埋まるが、先輩 (primary) は
+// SPI のシーケンス図を既に持っていて、参加者も並びも汎用ひな形とは違う。
+// 手本のある図種は、開いた時点で先輩の実図が入っていることを到達条件にする
+// (手順 2 が「打ち直す」から「差分だけ直す」に変わる)。
+const REF_ROOT = DIR + '-ref';
+const REF_MINE = REF_ROOT + '/junior';
+const REF_SENIOR = REF_ROOT + '/primary';
+
+const SENIOR_SPI_SEQ = ['@startuml', 'title SPIREF ドライバ 初期化シーケンス',
+  'participant "SPIREF_Driver" as Spi', 'participant "ClockCtrl" as Clk',
+  'participant "IRQCtrl" as Irq',
+  'Spi -> Clk : EnableClock()', 'Clk --> Spi : Ack',
+  'Spi -> Irq : Register()', 'Irq --> Spi : Ack', '@enduml'].join('\n');
+
+test.describe('junior 手順 2: 先輩の実図を手本に新部品を起こす', () => {
+  test.beforeEach(async ({ page }) => {
+    await S1.bootWithSaveDir(page, REF_MINE);
+    await S1.clearDir(page, REF_MINE);
+    await S1.clearDir(page, REF_SENIOR);
+    await S1.putDoc(page, REF_SENIOR, 'spiref_init_sequence', SENIOR_SPI_SEQ);
+    await page.reload();
+    await page.waitForSelector('#btn-tab-part');
+  });
+
+  test.afterEach(async ({ page }) => {
+    await S1.clearDir(page, REF_MINE).catch(() => {});
+    await S1.clearDir(page, REF_SENIOR).catch(() => {});
+  });
+
+  test('先輩に同じ部品名の実図がある図種は、下書きがその実図で開く', async ({ page }) => {
+    await page.locator('#btn-tab-part').click();
+    await page.waitForSelector('#part-subject');
+    await page.fill('#part-subject', 'SPIREF');
+
+    // 到達条件 1: 押す前に「どの図種が先輩の実図で、どれがひな形か」が読める。
+    const srcSeq = page.locator('#part-sheets [data-part-src="sequence"]');
+    await expect(srcSeq).toContainText('primary / spiref_init_sequence');
+    await expect(page.locator('#part-summary')).toContainText('1 図種は先輩の実図を写します');
+    await expect(page.locator('#part-sheets [data-part-src="state"]')).toHaveText('');
+
+    // 到達条件 2: 開いた下書きの中身が先輩の実図そのもの (打ち直しが要らない)。
+    await page.locator('#btn-part-create').click();
+    await page.waitForTimeout(900);
+    const opened = await page.evaluate(() => window.MA.workspace.list()
+      .map((d) => ({ name: d.name, dsl: d.dsl })));
+    const seq = opened.find((d) => d.name === 'spiref_sequence');
+    expect(seq).toBeTruthy();
+    expect(seq.dsl).toContain('ClockCtrl');
+    expect(seq.dsl).toContain('IRQCtrl');
+    expect(seq.dsl).toContain('Ack');
+    // 汎用ひな形の並びは入っていない (消してから打ち直す工程が消える)。
+    expect(seq.dsl).not.toContain('SPIREF_IrqNotify');
+
+    // 到達条件 3: 手本の無い図種は今までどおりひな形で開く (欠けない)。
+    const state = opened.find((d) => d.name === 'spiref_state');
+    expect(state).toBeTruthy();
+    expect(state.dsl).toContain('SPIREF_Init');
+
+    // 名前は自分の名前のまま。先輩のファイル名にはならない。
+    expect(opened.some((d) => d.name === 'spiref_init_sequence')).toBe(false);
+  });
+});
+
+// BLK-junior-20260916-0546 (friction): 手順 1 で先輩の driver_common_class を
+// 📂 一覧で探したが出てこない。一覧は保存先フォルダだけを見せるので「無い」としか
+// 読めず、見るには「保存先」チップから保存先ごと先輩のフォルダに切り替えるしかない。
+// だが保存先を動かすと次の「保存」が先輩のフォルダに書き込まれるので、上書き事故を
+// 恐れて見るのを諦めていた。到達条件は「保存先を動かさずに、探しているその場から
+// 先輩の 1 枚に届く」こと。
+const PEEK_ROOT = DIR + '-peekentry';
+const PEEK_MINE = PEEK_ROOT + '/junior';
+const PEEK_SENIOR = PEEK_ROOT + '/primary';
+
+const PE_MINE_CLASS = ['@startuml', 'class TimerDrv', '@enduml'].join('\n');
+const PE_SENIOR_CLASS = [
+  '@startuml', 'class Driver_Common', 'class Timer_Driver',
+  'Timer_Driver --|> Driver_Common', '@enduml',
+].join('\n');
+
+test.describe('junior 手順 1: 保存先を動かさずに先輩の図を読むだけで開く', () => {
+  test.beforeEach(async ({ page }) => {
+    await S1.bootWithSaveDir(page, PEEK_MINE);
+    await S1.clearDir(page, PEEK_MINE);
+    await S1.clearDir(page, PEEK_SENIOR);
+    await S1.putDoc(page, PEEK_MINE, 'TimerDrv派生クラス図', PE_MINE_CLASS);
+    await S1.putDoc(page, PEEK_SENIOR, 'driver_common_class', PE_SENIOR_CLASS);
+    await page.reload();
+    await page.waitForSelector('#btn-tab-folder');
+  });
+
+  test('一覧で見つからないとき、その場が「読むだけの入口」を名指しする', async ({ page }) => {
+    await page.locator('#btn-tab-folder').click();
+    await page.waitForSelector('#folder-filter');
+    // 一覧は開いた後に描き直して絞り込みを白紙に戻すので、行が出揃うのを待つ。
+    await page.waitForSelector('#folder-panel [data-file-name]');
+    await page.waitForTimeout(800);
+
+    // 何も打っていないうちから、この一覧が何を見せているかが読める。
+    await expect(page.locator('#folder-peek-hint')).toContainText('保存先フォルダだけ');
+    await expect(page.locator('#folder-peek-open')).toBeVisible();
+
+    await page.locator('#folder-filter').fill('driver_common');
+    await page.waitForTimeout(300);
+    // 到達条件その1: 「無い」で終わらせず、保存先を動かさずに探せると言う。
+    await expect(page.locator('#folder-filter-state')).toContainText('当たる図はありません');
+    await expect(page.locator('#folder-peek-hint')).toContainText('driver_common');
+    await expect(page.locator('#folder-peek-hint')).toContainText('保存先は変わりません');
+    await expect(page.locator('#folder-peek-open')).toHaveClass(/urged/);
+  });
+
+  test('打った名前を持ち越して先輩の 1 枚が開く。保存先は動かない', async ({ page }) => {
+    const targetBefore = await page.locator('#top-save-target').innerText();
+
+    await page.locator('#btn-tab-folder').click();
+    await page.waitForSelector('#folder-filter');
+    // 一覧は開いた後に描き直して絞り込みを白紙に戻すので、行が出揃うのを待つ。
+    await page.waitForSelector('#folder-panel [data-file-name]');
+    await page.waitForTimeout(800);
+    await page.locator('#folder-filter').fill('driver_common');
+    await page.waitForTimeout(300);
+    await page.locator('#folder-peek-open').click();
+    await page.waitForSelector('#peek-modal');
+    await page.waitForTimeout(800);
+
+    // 到達条件その2: 向こうで打ち直さない。持ち越した名前で絞れていると言う。
+    await expect(page.locator('#peek-query-text')).toContainText('driver_common');
+    await expect(page.locator('#peek-files .peek-file')).toHaveCount(1);
+
+    await page.locator('#peek-files .peek-file[data-file-name="driver_common_class"]').click();
+    await page.waitForTimeout(1200);
+    await expect(page.locator('#peek-title')).toContainText('driver_common_class');
+
+    // 到達条件その3: 保存先チップは 1 文字も動かない (これを恐れて諦めた手順)。
+    expect(await page.locator('#top-save-target').innerText()).toBe(targetBefore);
+    const dir = await page.evaluate(() => {
+      const cfg = JSON.parse(window.localStorage.getItem('plantuml-autosave-config') || '{}');
+      return cfg.fileDir;
+    });
+    expect(dir).toBe(PEEK_MINE);
+
+    // 絞り込みは外せる (先輩のフォルダの全枚も見られる)。
+    await page.locator('#peek-query-clear').click();
+    await page.waitForTimeout(300);
+    await expect(page.locator('#peek-query')).toHaveCount(0);
+  });
+
+  test('探し始めから先輩の図が出るまで、クリック 10 以下・キー入力 50 以下', async ({ page }) => {
+    let clicks = 0;
+    let keys = 0;
+    const click = async (sel) => { clicks++; await page.locator(sel).click(); };
+    const type = async (sel, text) => { keys += text.length; await page.locator(sel).fill(text); };
+
+    await click('#btn-tab-folder');
+    await page.waitForSelector('#folder-filter');
+    // 一覧は開いた後に描き直して絞り込みを白紙に戻すので、行が出揃うのを待つ。
+    await page.waitForSelector('#folder-panel [data-file-name]');
+    await page.waitForTimeout(800);
+    await type('#folder-filter', 'driver_common');
+    await page.waitForTimeout(300);
+    await click('#folder-peek-open');
+    await page.waitForSelector('#peek-modal');
+    await page.waitForTimeout(800);
+    await click('#peek-files .peek-file[data-file-name="driver_common_class"]');
+    await page.waitForTimeout(1200);
+
+    await expect(page.locator('#peek-title')).toContainText('driver_common_class');
+    expect(clicks).toBeLessThanOrEqual(10);
+    expect(keys).toBeLessThanOrEqual(50);
+    // 実測: クリック 3 / キー入力 13。
+    expect(clicks).toBe(3);
+    expect(keys).toBe(13);
+  });
+});
+
+// BLK-junior-20260916-2314: 📂 一覧の絞り込みは部分一致なので、フルネームを打っても同じ接頭辞の
+// 「…(資料用)」が一緒に残り、並び次第で資料用を開いてしまう。到達条件は「フルネームを打つと
+// 本体が完全一致の印付きで先頭に出て、そのまま押せば本体が開く」こと。
+const EXACT_DIR = PEEK_ROOT + '/exact';
+const EXACT_BODY = 'TIMERドライバ初期化アクティビティ図';
+const EXACT_DOC = EXACT_BODY + '(資料用)';
+
+test.describe('junior 手順 1: フルネームで絞ると本体が資料用より先に出る', () => {
+  test.beforeEach(async ({ page }) => {
+    await S1.bootWithSaveDir(page, EXACT_DIR);
+    await S1.clearDir(page, EXACT_DIR);
+    // 資料用を先に置く (名前順・更新順のどちらでも資料用が上に来うる状態)。
+    await S1.putDoc(page, EXACT_DIR, EXACT_DOC, '@startuml\nstart\n:資料用;\nstop\n@enduml');
+    await S1.putDoc(page, EXACT_DIR, EXACT_BODY, '@startuml\nstart\n:本体;\nstop\n@enduml');
+    await page.reload();
+    await page.waitForSelector('#btn-tab-folder');
+  });
+
+  test('フルネームを打つと完全一致の本体が先頭に印付きで出て、押すと本体が開く (クリック 10 以下・キー入力 50 以下)', async ({ page }) => {
+    let clicks = 0;
+    let keys = 0;
+    await page.locator('#btn-tab-folder').click(); clicks++;
+    await page.waitForSelector('#folder-filter');
+    await page.waitForSelector('#folder-panel [data-file-name]');
+    await page.waitForTimeout(800);
+    await page.locator('#folder-filter').fill(EXACT_BODY); keys += EXACT_BODY.length;
+    await page.waitForTimeout(300);
+
+    // 2 枚とも残る (部分一致の行は消さない) が、見えている先頭の行が本体で、完全一致の印が付く。
+    const visible = await page.evaluate(() => Array.prototype.filter.call(
+      document.querySelectorAll('#folder-panel .folder-item[data-file-name]'),
+      (b) => b.offsetParent !== null
+    ).map((b) => b.getAttribute('data-file-name')));
+    expect(visible.length).toBe(2);
+    expect(visible[0].replace(/\.puml$/, '')).toBe(EXACT_BODY);
+    expect(visible[1].replace(/\.puml$/, '')).toBe(EXACT_DOC);
+    await expect(page.locator('#folder-panel [data-exact="1"]')).toHaveCount(1);
+
+    // 先頭の行を押すと本体が開く。
+    await page.locator('#folder-panel [data-exact="1"] .folder-item, #folder-panel .folder-item[data-exact="1"]').first().click(); clicks++;
+    await expect.poll(() => getEditorText(page)).toContain(':本体;');
+    expect(clicks).toBeLessThanOrEqual(10);
+    expect(keys).toBeLessThanOrEqual(50);
+
+    // 絞り込みを外すと、元の並びに戻る (完全一致の印も消える)。
+    await page.locator('#btn-tab-folder').click();
+    await page.waitForSelector('#folder-filter');
+    await page.locator('#folder-filter').fill('');
+    await page.waitForTimeout(300);
+    await expect(page.locator('#folder-panel [data-exact="1"]')).toHaveCount(0);
+  });
+});
+
+// BLK-junior-20260917-0023-wish: 手順 1〜2 は「指摘.md を読む → 自分の図を開いて直す」。
+// 指摘の「表記揺れ」欄にある組 (IRQCtrl⇔Irq_Ctrl 等) は、どの図に効いているかが
+// 書かれていないので、junior は組を目で覚えて図の全行を上から読んで探していた。
+// 行数の多い図 (シーケンス図・状態遷移図) ほどそのスキャンが長い。
+// 指摘を開いた時点で「該当有無・該当行・該当位置」が出ることを到達条件にする。
+const VOC_ROOT = DIR + '-vocab';
+const VOC_MINE = VOC_ROOT + '/junior';
+const VOC_REVIEWER = VOC_ROOT + '/reviewer';
+
+const VOC_NOTE = [
+  '# junior への指摘',
+  '',
+  '## 表記揺れ(primary×junior: 2組、継続)',
+  '- 通し: IRQCtrl⇔Irq_Ctrl、Clock_Ctrl⇔ClockCtrl の 2 組。',
+  '',
+  '## SVG',
+  'Foo⇔Bar は SVG の話 (表記揺れ欄ではない)。',
+].join('\n');
+
+// 該当語が本文の途中に混ざる図。Irq_CtrlTest は別の語なので数えない。
+const VOC_HIT = ['@startuml', 'title TIMER 初期化シーケンス',
+  'participant Irq_Ctrl', 'participant ClockCtrl',
+  'Irq_Ctrl -> ClockCtrl : enable()',
+  'note right: Irq_CtrlTest は別の語', '@enduml'].join('\n');
+const VOC_CLEAN = ['@startuml', 'title GPIO 初期化シーケンス',
+  'participant Gpio', 'Gpio -> Gpio : init()', '@enduml'].join('\n');
+
+test.describe('junior 手順 1〜2: 指摘の表記揺れ語が自分の図に効いているかが開いた瞬間に分かる', () => {
+  test.beforeEach(async ({ page }) => {
+    await S1.bootWithSaveDir(page, VOC_MINE);
+    await S1.clearDir(page, VOC_MINE);
+    await S1.putDoc(page, VOC_MINE, 'timer_init_sequence', VOC_HIT);
+    fs.mkdirSync(absOf(VOC_REVIEWER), { recursive: true });
+    fs.writeFileSync(nodePath.join(absOf(VOC_REVIEWER), '指摘.md'), VOC_NOTE, 'utf-8');
+    await page.reload();
+    await page.waitForSelector('#btn-tab-peek');
+  });
+
+  test('該当行と該当位置が指摘の欄に出て、押せばその行へ飛ぶ', async ({ page }) => {
+    await page.locator('#editor').fill(VOC_HIT);
+    await page.waitForTimeout(300);
+    await page.locator('#btn-tab-peek').click();
+    await page.waitForSelector('#peek-modal');
+    await page.locator('#peek-note-toggle').click();
+    await page.waitForSelector('#vocab-band');
+
+    // 到達条件その1: 該当有無が 1 行で読める (全行を目で追わない)。
+    await expect(page.locator('#vocab-band')).toHaveAttribute('data-vocab-state', 'hit');
+    await expect(page.locator('#vocab-sum')).toContainText('表記揺れ突合');
+    await expect(page.locator('#vocab-sum')).toContainText('行');
+
+    // 到達条件その2: どちらの綴りが何件残っているかまで出る。
+    await expect(page.locator('#vocab-pairs')).toContainText('IRQCtrl⇔Irq_Ctrl');
+    await expect(page.locator('#vocab-pairs')).toContainText('Irq_Ctrl');
+    await expect(page.locator('#vocab-pairs')).toContainText('ClockCtrl');
+    // 欄の外の ⇔ は拾わない。
+    await expect(page.locator('#vocab-band')).not.toContainText('Foo⇔Bar');
+
+    // 到達条件その3: 該当行が行番号つきで並び、該当語だけが光る。
+    const lines = page.locator('#peek-note .vocab-line');
+    expect(await lines.count()).toBeGreaterThan(0);
+    const marks = page.locator('#peek-note .vocab-hit');
+    expect(await marks.count()).toBeGreaterThan(0);
+    await expect(marks.first()).toHaveAttribute('data-vocab-term', /Irq_Ctrl|ClockCtrl/);
+    // 識別子単位なので Irq_CtrlTest の行は該当にしない。
+    await expect(page.locator('#peek-note .vocab-line[data-vocab-line="6"]')).toHaveCount(0);
+
+    // 到達条件その4: 押せばエディタのその行へ移り、直しにそのまま入れる。
+    const target = Number(await lines.first().getAttribute('data-vocab-line'));
+    await lines.first().click();
+    const at = await page.evaluate(() => {
+      const el = document.getElementById('editor');
+      return el.value.slice(0, el.selectionStart).split('\n').length;
+    });
+    expect(at).toBe(target);
+  });
+
+  test('該当が無ければ「該当なし」と突合した組数つきで言い切る', async ({ page }) => {
+    await page.locator('#editor').fill(VOC_CLEAN);
+    await page.waitForTimeout(300);
+    await page.locator('#btn-tab-peek').click();
+    await page.waitForSelector('#peek-modal');
+    await page.locator('#peek-note-toggle').click();
+    await page.waitForSelector('#vocab-band');
+
+    await expect(page.locator('#vocab-band')).toHaveAttribute('data-vocab-state', 'none');
+    await expect(page.locator('#vocab-sum')).toContainText('該当なし');
+    await expect(page.locator('#vocab-sum')).toContainText('2組');
+    await expect(page.locator('#peek-note .vocab-line')).toHaveCount(0);
+  });
+});
+
+// BLK-junior-20260917-0123-wish: 突合は該当語の位置までは出すが、組のどちらへ揃えるか
+// (統一先) は出さない。指摘.md 本文にも書かれていないので、junior は先輩フォルダを
+// grep して「先輩は実際どちらで書いているか」を探していた。組が複数図種にまたがると
+// その grep を図種ごとにやり直す。指摘を開いた時点で「直す先」まで出ることを到達条件にする。
+const CAN_ROOT = DIR + '-canon';
+const CAN_MINE = CAN_ROOT + '/junior';
+const CAN_SENIOR = CAN_ROOT + '/primary';
+const CAN_REVIEWER = CAN_ROOT + '/reviewer';
+
+const CAN_NOTE = [
+  '# junior への指摘',
+  '',
+  '## 表記揺れ(primary×junior: 2組)',
+  '- 通し: Timer_Driver⇔TIMER Driver、IRQCtrl⇔Irq_Ctrl の 2 組。',
+].join('\n');
+
+// 自分の図。組の片方 (TIMER Driver / Irq_Ctrl) で書いてしまっている。
+const CAN_MY_DOC = ['@startuml', 'title TIMER 初期化シーケンス',
+  'participant "TIMER Driver" as T', 'participant Irq_Ctrl',
+  'T -> Irq_Ctrl : enable()', '@enduml'].join('\n');
+
+// 先輩の図。Timer_Driver が多数派、IRQCtrl は 1 枚だけ。
+const CAN_SENIOR_CLASS = ['@startuml', 'class Timer_Driver',
+  'class Spi_Driver', 'Timer_Driver --> Spi_Driver', '@enduml'].join('\n');
+const CAN_SENIOR_SEQ = ['@startuml', 'participant Timer_Driver',
+  'participant IRQCtrl', 'Timer_Driver -> IRQCtrl : ack()', '@enduml'].join('\n');
+
+test.describe('junior 手順 1〜2: 表記揺れの統一先(正式表記)まで突合が言い切る', () => {
+  test.beforeEach(async ({ page }) => {
+    await S1.bootWithSaveDir(page, CAN_MINE);
+    await S1.clearDir(page, CAN_MINE);
+    await S1.clearDir(page, CAN_SENIOR);
+    await S1.putDoc(page, CAN_MINE, 'timer_init_sequence', CAN_MY_DOC);
+    await S1.putDoc(page, CAN_SENIOR, 'driver_common_class', CAN_SENIOR_CLASS);
+    await S1.putDoc(page, CAN_SENIOR, 'timer_ack_sequence', CAN_SENIOR_SEQ);
+    fs.mkdirSync(absOf(CAN_REVIEWER), { recursive: true });
+    fs.writeFileSync(nodePath.join(absOf(CAN_REVIEWER), '指摘.md'), CAN_NOTE, 'utf-8');
+    await page.reload();
+    await page.waitForSelector('#btn-tab-peek');
+  });
+
+  test('組ごとに統一先と、その根拠になった先輩の図が出る', async ({ page }) => {
+    await page.locator('#editor').fill(CAN_MY_DOC);
+    await page.waitForTimeout(300);
+    await page.locator('#btn-tab-peek').click();
+    await page.waitForSelector('#peek-modal');
+    await page.locator('#peek-note-toggle').click();
+    await page.waitForSelector('#vocab-band');
+    // 先輩の図を読み終えるまで待つ (読み込み中の文言のまま残らない)。
+    await expect(page.locator('#vocab-canon-sum')).not.toContainText('読み込み中', { timeout: 15000 });
+
+    // 到達条件その1: 組の左右どちらへ揃えるかが出る (先輩フォルダを grep しない)。
+    const timer = page.locator('.vocab-canon[data-canon-pair="Timer_Driver⇔TIMER Driver"]');
+    await expect(timer).toHaveAttribute('data-canon-to', 'Timer_Driver');
+    await expect(timer).toContainText('統一先: Timer_Driver');
+
+    // 到達条件その2: なぜそう言えるか (出現数) が同じ行に出る。
+    await expect(timer).toHaveAttribute('data-canon-source', 'count');
+    await expect(timer).toContainText('TIMER Driver 0件');
+
+    // 到達条件その3: 裏を取る先が図の名前と行番号で出る。
+    await expect(timer.locator('.vocab-canon-src').first()).toContainText('driver_common_class');
+    await expect(timer.locator('.vocab-canon-src').first()).toContainText('行目');
+
+    // 到達条件その4: 組が複数あっても 1 画面で全部分かる (図種ごとに探し直さない)。
+    const irq = page.locator('.vocab-canon[data-canon-pair="IRQCtrl⇔Irq_Ctrl"]');
+    await expect(irq).toHaveAttribute('data-canon-to', 'IRQCtrl');
+    await expect(page.locator('#vocab-canon-sum')).toContainText('2組中 2組');
+    await expect(page.locator('#vocab-band')).toHaveAttribute('data-canon-decided', '2');
+  });
+
+  test('先輩がどちらの綴りも使っていない組は言い切らず、理由を出す', async ({ page }) => {
+    const note = CAN_NOTE.replace('の 2 組。', '、Gpio_Drv⇔GpioDrv の 3 組。');
+    fs.writeFileSync(nodePath.join(absOf(CAN_REVIEWER), '指摘.md'), note, 'utf-8');
+    const mine = CAN_MY_DOC.replace('@enduml', 'participant GpioDrv\n@enduml');
+    await page.reload();
+    await page.waitForSelector('#btn-tab-peek');
+    await page.locator('#editor').fill(mine);
+    await page.waitForTimeout(300);
+    await page.locator('#btn-tab-peek').click();
+    await page.waitForSelector('#peek-modal');
+    await page.locator('#peek-note-toggle').click();
+    await page.waitForSelector('#vocab-band');
+    await expect(page.locator('#vocab-canon-sum')).not.toContainText('読み込み中', { timeout: 15000 });
+
+    const gpio = page.locator('.vocab-canon[data-canon-pair="Gpio_Drv⇔GpioDrv"]');
+    await expect(gpio).toHaveAttribute('data-canon-source', 'unknown');
+    await expect(gpio).toHaveAttribute('data-canon-to', '');
+    await expect(gpio).toContainText('決められません');
+    await expect(gpio).toContainText('どちらの綴りもありません');
+    // 決まる組はそのまま決まる (1 組決まらないだけで全部が黙らない)。
+    await expect(page.locator('#vocab-band')).toHaveAttribute('data-canon-decided', '2');
   });
 });

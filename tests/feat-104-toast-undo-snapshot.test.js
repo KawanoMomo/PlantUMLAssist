@@ -15,12 +15,12 @@ var dom = new jsdom.JSDOM('<!DOCTYPE html><html><body><div id="props"></div></bo
 var W = dom.window;
 var loadErrors = [];
 [
-  'src/core/html-utils.js', 'src/core/dsl-utils.js', 'src/core/regex-parts.js',
+  'src/core/html-utils.js', 'src/core/dsl-utils.js', 'src/core/note-edit.js', 'src/core/regex-parts.js',
   'src/core/id-normalizer.js', 'src/core/line-resolver.js', 'src/core/formatter-interface.js',
   'src/core/dsl-updater.js', 'src/core/props-renderer.js', 'src/core/text-updater.js',
   'src/core/parser-utils.js', 'src/core/history.js', 'src/core/selection.js',
   'src/core/label-colors.js',
-  'src/ui/properties.js', 'src/ui/rich-label-editor.js', 'src/modules/sequence.js',
+  'src/ui/properties.js', 'src/ui/rich-label-editor.js', 'src/core/sequence-participant-zone.js', 'src/modules/sequence.js',
 ].forEach(function(rel) {
   var code = fs.readFileSync(path.join(ROOT, rel), 'utf-8');
   try {

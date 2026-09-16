@@ -23,10 +23,12 @@ window.MA.toolMenu = (function() {
     { key: 'edit', title: '書き換える', items: [
       { id: 'btn-tab-lines',  label: '行を書き換える' },
       { id: 'btn-tab-rename', label: '部品名を一括置換する' },
+      { id: 'btn-tab-unify',  label: '表記を登録簿に揃える' },
       { id: 'btn-tab-apply',  label: '複数クラスに一括適用する' },
     ] },
     { key: 'find', title: '探す・見比べる', items: [
       { id: 'btn-tab-symptom', label: '症状から関連図を探す' },
+      { id: 'btn-tab-blame',   label: '部品名の混入点を探す' },
       { id: 'btn-tab-xref',    label: '部品名で図をまたいで辿る' },
       { id: 'btn-tab-compare', label: '別の図を右に並べる' },
       { id: 'btn-tab-peek',    label: '他の保存フォルダを覗く' },
@@ -39,6 +41,7 @@ window.MA.toolMenu = (function() {
       { id: 'btn-tab-pattern',        label: '1 つの観点で全図を棚卸し' },
       { id: 'btn-tab-submit',         label: '提出前チェック' },
       { id: 'btn-tab-cross',          label: '突合ボード (1 画面で全部)' },
+      { id: 'btn-tab-design',         label: '仕様 (design) と現在値の突合' },
       { id: 'btn-tab-audit-timeline', label: '監査履歴' },
     ] },
     { key: 'review', title: 'レビュー', items: [

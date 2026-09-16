@@ -64,6 +64,74 @@ window.MA.versionHistory = (function() {
     return out;
   }
 
+  // ── 空洞化した図を、どの版に戻せばいいか ────────────────────────────────
+  //
+  // BLK-primary-20260916-0100: 指摘の反映で空洞化 (中身がほとんど消えた状態) を
+  // 直そうとすると、一覧の版は 20 行ぜんぶが同じ見た目で並ぶ。新しい方はもう
+  // 空洞化した後の中身なので、「戻しても直らない」で手が止まる。どれに戻せば
+  // いいかは行数で機械的に分かるので、画面が数えて名指しする。
+  //
+  // 「充実している」の判定: いま出ている中身の行数より目立って大きい版。
+  // 目立って = 1.5 倍以上かつ 5 行以上多い (1〜2 行の増減は編集の揺れなので
+  // 空洞化とは呼ばない)。該当する版のうち **一番新しいもの** を勧める
+  // (一番大きい版ではない。空洞化の直前まで進めた作業を捨てないため)。
+  var SHRINK_RATIO = 1.5;
+  var SHRINK_MIN_LINES = 5;
+
+  function isFuller(rowLines, nowLines) {
+    if (typeof rowLines !== 'number' || typeof nowLines !== 'number') return false;
+    return rowLines >= nowLines * SHRINK_RATIO && rowLines - nowLines >= SHRINK_MIN_LINES;
+  }
+
+  // bestRestore(rows, nowLines) — 勧める版 (rows は rows() の並び = 新しい順)。
+  // 戻す先が無ければ null。
+  function bestRestore(rows, nowLines) {
+    var list = rows || [];
+    for (var i = 0; i < list.length; i++) {
+      if (isFuller(list[i].lines, nowLines)) return list[i];
+    }
+    return null;
+  }
+
+  // 一覧の先頭に出す 1 行。空洞化していなければ何も言わない (null)。
+  function shrinkNotice(name, rows, nowLines) {
+    var best = bestRestore(rows, nowLines);
+    if (!best) return null;
+    return {
+      stamp: best.stamp,
+      text: _s(name) + ' はいま ' + nowLines + ' 行。'
+        + best.label + ' の版は ' + best.lines + ' 行あります',
+      detail: '中身が減ったまま保存された可能性があります。'
+        + 'この行の［戻す］で ' + best.label + ' の版の中身に戻せます'
+        + '（今の中身は控えに残り、Ctrl+Z でも取り消せます）',
+      restoreLabel: best.label + ' の版に戻す',
+    };
+  }
+
+  // 一覧の先頭に必ず出す 1 行 (BLK-primary-20260916-0100 差し戻し 1 回目)。
+  //
+  // 空洞化していない図では shrinkNotice が null なので、一覧は行数について何も
+  // 言わなかった。直す側から見ると「減っていないので出ていない」と「機能が動いて
+  // いない」が同じ見た目になり、直ったかどうかを画面から判断できない
+  // (実際に、既に戻した後の図で [履歴] を開いて「バナーが出ない」と差し戻された)。
+  // 減っていないなら減っていないと言う。
+  function statusNotice(name, rows, nowLines) {
+    var list = rows || [];
+    if (!list.length || typeof nowLines !== 'number') return null;
+    if (bestRestore(list, nowLines)) return null;  // 名指しを出す方が優先
+    var max = null;
+    for (var i = 0; i < list.length; i++) {
+      if (typeof list[i].lines === 'number' && (max === null || list[i].lines > max)) max = list[i].lines;
+    }
+    if (max === null) return null;
+    return {
+      text: _s(name) + ' はいま ' + nowLines + ' 行。控えの中で一番大きい版も '
+        + max + ' 行で、中身は減っていません',
+      detail: '戻す先を名指しするのは、いまの中身が控えより目立って小さいときだけです'
+        + '（1.5 倍以上かつ 5 行以上）。下の一覧からはどの版でも開けます',
+    };
+  }
+
   // 版を開いたときのタブ名。元の名前を上書きしないよう刻印を付ける
   // (開いてそのまま保存しても、今の図を消さない)。
   function openName(name, stamp) {
@@ -120,5 +188,9 @@ window.MA.versionHistory = (function() {
     restoredLine: restoredLine, unchangedLine: unchangedLine,
     countLabel: countLabel,
     goneRows: goneRows,
+    isFuller: isFuller,
+    bestRestore: bestRestore,
+    shrinkNotice: shrinkNotice,
+    statusNotice: statusNotice,
   };
 })();

@@ -86,7 +86,9 @@ describe('資料化 — 部品をまたいだ残り (BLK-junior-20260914-2006)',
 
   test('progressLabel は部品欄の行に残りを書く', function() {
     var m = byName(MB.componentProgress(ENTRIES));
-    expect(MB.progressLabel(m['TIMERドライバ'])).toBe('TIMERドライバ（資料化が要る 2 / 2 図種）');
+    // BLK-junior-20260914-2206 で図種名が行に付いた (部品名だけでは区別が付かないため)。
+    expect(MB.progressLabel(m['TIMERドライバ']))
+      .toBe('TIMERドライバ（資料化が要る 2 / 2 図種：シーケンス図・状態遷移図）');
   });
 
   test('progressLabel は残り 0 でも黙らない (済んでいると言い切る)', function() {
@@ -94,7 +96,7 @@ describe('資料化 — 部品をまたいだ残り (BLK-junior-20260914-2006)',
       { name: 'UARTドライバ状態遷移.puml', mtime: at('2026-09-14T08:00:00Z') },
       { name: 'UARTドライバ状態遷移(資料用).puml', mtime: at('2026-09-14T09:00:00Z') },
     ]));
-    expect(MB.progressLabel(m['UARTドライバ'])).toBe('UARTドライバ（1 図種すべて最新）');
+    expect(MB.progressLabel(m['UARTドライバ'])).toBe('UARTドライバ（1 図種すべて最新：状態遷移図）');
   });
 
   test('progressSummary は全部品を見渡した残りを 1 行で言う', function() {

@@ -63,6 +63,18 @@ window.MA.svgFreshness = (function() {
     return _fromResult(r.result) === 'unverified' ? null : r;
   }
 
+  // BLK-reviewer-20260915-0606: 印 (と、印の代わりに畳まれた DSL から取った指紋) は
+  // どちらも「どのバイト列から書き出したか」しか言わないので、コメントや体裁だけを
+  // 書き換えて保存し直した図も食い違う。server の /verify-svg はそれを描き直して
+  // differ-format (描かれる中身は一致) と答えるが、指紋の突合だけで出す側は同じ図を
+  // differ (作り直しが要る) と名指ししていた。畳まれた DSL と今の puml を
+  // 「描かれる行だけ」で比べた結果 (entry.visibleMatch = 'same' / 'differ') があれば、
+  // それは描き直さずに取れる differ-format と同じ強さの根拠なので指紋より先に採る。
+  function _visible(entry) {
+    var v = entry.visibleMatch;
+    return (v === 'same' || v === 'differ') ? v : null;
+  }
+
   function contentOf(entry, records) {
     if (!entry) return 'unverified';
     if (_time(entry.svgMtime) === null) return 'missing';
@@ -71,8 +83,12 @@ window.MA.svgFreshness = (function() {
     var r = _validRecord(entry, records);
     if (r) return _fromResult(r.result);
     var stamp = entry.svgSource;
-    if (typeof stamp === 'string' && stamp !== '') return stamp === hash ? 'match' : 'differ';
-    return 'unverified';
+    var stamped = typeof stamp === 'string' && stamp !== '';
+    // バイトまで一致していれば、それ以上強い答えは無い。
+    if (stamped && stamp === hash) return 'match';
+    var vis = _visible(entry);
+    if (vis) return vis === 'same' ? 'format' : 'differ';
+    return stamped ? 'differ' : 'unverified';
   }
 
   // BLK-reviewer-20260908-0103 (1903 追記): server の突合結果は 3 通りになった。
@@ -109,19 +125,22 @@ window.MA.svgFreshness = (function() {
     // contentOf と同じ順序で見る (答えと根拠が食い違わないように)。
     if (_validRecord(entry, records)) return 'rerender';
     var stamp = entry.svgSource;
-    if (typeof stamp === 'string' && stamp !== '') {
-      // BLK-reviewer-20260914-0906: 印が無い svg でも、PlantUML が svg に畳んだ
-      // 元の DSL から持ち主が分かる。印の突合と混ぜて出すと「印があった」と
-      // 読めてしまうので、根拠は別の名前で言う。
-      return entry.svgSourceFrom === 'embedded' ? 'embedded' : 'stamp';
-    }
-    return '';
+    var stamped = typeof stamp === 'string' && stamp !== '';
+    // BLK-reviewer-20260914-0906: 印が無い svg でも、PlantUML が svg に畳んだ
+    // 元の DSL から持ち主が分かる。印の突合と混ぜて出すと「印があった」と
+    // 読めてしまうので、根拠は別の名前で言う。
+    var stampBasis = entry.svgSourceFrom === 'embedded' ? 'embedded' : 'stamp';
+    if (stamped && stamp === hash) return stampBasis;
+    if (_visible(entry)) return 'visible';
+    return stamped ? stampBasis : '';
   }
 
   var BASIS_TEXT = {
     stamp: '印 (@pua-source-sha1) の突合',
     embedded: 'SVG に畳まれた元の DSL の突合',
     rerender: '描き直してのバイト比較',
+    // BLK-reviewer-20260915-0606: 指紋ではなく「描かれる行」で比べた結果。
+    visible: 'SVG に畳まれた元の DSL と今の puml の、描かれる行の突合',
   };
 
   function basisText(basis) { return BASIS_TEXT[basis] || ''; }
@@ -149,10 +168,15 @@ window.MA.svgFreshness = (function() {
   var EMBEDDED_DIFFER_TITLE = 'この SVG に畳まれている元の DSL が、今の puml と違います。'
     + '描かれているのは別の内容なので、作り直しが要ります';
 
+  // 描かれる行どうしの突合で出た「ずれ」。指紋と違い体裁差では食い違わない。
+  var VISIBLE_DIFFER_TITLE = 'この SVG に畳まれている元の DSL と今の puml とで、'
+    + '描かれる行が違います。絵が別物なので、作り直しが要ります';
+
   function contentBadge(content, basis) {
     var b = CONTENT_BADGES[content] || CONTENT_BADGES.unverified;
     if (content === 'differ' && basis === 'stamp') b = { mark: b.mark, title: STAMP_DIFFER_TITLE };
     if (content === 'differ' && basis === 'embedded') b = { mark: b.mark, title: EMBEDDED_DIFFER_TITLE };
+    if (content === 'differ' && basis === 'visible') b = { mark: b.mark, title: VISIBLE_DIFFER_TITLE };
     var t = basisText(basis);
     if (!t) return b;
     // 何を見て出した答えかを印そのものに持たせる。実装を読まずに分かるようにする。
@@ -170,6 +194,29 @@ window.MA.svgFreshness = (function() {
     return BADGES[status] || BADGES.unknown;
   }
 
+  // BLK-reviewer-20260915-0406-wish: mtime では古いが、中身は今の puml と一致した図。
+  // ここまでは行から印が全部消えていたので、「確かめた結果 追いついていた」のか
+  // 「そもそも古くなかった」のかが画面から読めず、reviewer は指摘.md を書く前に
+  // 9 枚ぶん render API で描き直してバイト比較する裏取りを毎回やり直していた。
+  // 「古い」と「作り直しが要る」を分けた第三の印として、行に出す。
+  var STALE_SETTLED = {
+    mark: 'SVG 古(内容一致)',
+    title: '書き出しの時刻は puml より古いままですが、中身は今の puml と一致しています。'
+      + '保存し直しただけで絵は変わっていないので、作り直しは要りません',
+  };
+
+  // その図が第三の状態か。mtime は古く、内容では追いついている。
+  function isStaleSettled(status, content) {
+    return status === 'stale' && isSettled(content);
+  }
+
+  // 何を見て「内容は一致」と言ったかを印に添える (contentBadge と同じ作法)。
+  function staleSettledBadge(basis) {
+    var t = basisText(basis);
+    if (!t) return STALE_SETTLED;
+    return { mark: STALE_SETTLED.mark, title: STALE_SETTLED.title + ' — 根拠: ' + t };
+  }
+
   // 一覧ぶんの判定。作り直しが要るものを needsRender にまとめる。
   function scan(entries, records) {
     var rows = (Array.isArray(entries) ? entries : []).map(function(e) {
@@ -181,7 +228,7 @@ window.MA.svgFreshness = (function() {
     }).filter(function(r) { return typeof r.name === 'string' && r.name !== ''; });
     var counts = { fresh: 0, stale: 0, missing: 0, unknown: 0 };
     var contentCounts = { match: 0, format: 0, differ: 0, missing: 0, unverified: 0 };
-    var basisCounts = { stamp: 0, embedded: 0, rerender: 0 };
+    var basisCounts = { stamp: 0, embedded: 0, rerender: 0, visible: 0 };
     rows.forEach(function(r) {
       counts[r.status]++;
       contentCounts[r.content]++;
@@ -342,8 +389,10 @@ window.MA.svgFreshness = (function() {
 
   function basisNote(scanned) {
     if (!scanned || !scanned.rows.length) return '';
-    var b = scanned.basisCounts || { stamp: 0, embedded: 0, rerender: 0 };
+    var b = scanned.basisCounts || { stamp: 0, embedded: 0, rerender: 0, visible: 0 };
     var parts = [];
+    // BLK-reviewer-20260915-0606: 指紋ではなく描かれる行で比べた枚数。
+    if (b.visible) parts.push(basisText('visible') + ' ' + b.visible + ' 枚');
     if (b.stamp) parts.push('印 (@pua-source-sha1) の突合 ' + b.stamp + ' 枚');
     // BLK-reviewer-20260914-0906: 印の無い svg は、PlantUML が畳んだ元の DSL で判定する。
     if (b.embedded) parts.push('SVG に畳まれた元の DSL の突合 ' + b.embedded + ' 枚');
@@ -419,6 +468,8 @@ window.MA.svgFreshness = (function() {
     STAMP_NOTE: STAMP_NOTE,
     badge: badge,
     contentBadge: contentBadge,
+    isStaleSettled: isStaleSettled,
+    staleSettledBadge: staleSettledBadge,
     scan: scan,
     statusMap: statusMap,
     contentMap: contentMap,

@@ -96,15 +96,29 @@ window.MA.bulkRename = (function() {
   // 適用してから巻き戻すやり直しが要る。ここは置換後の DSL まで作って返すだけで、
   // 行の突き合わせ (before/after) は changeBoard.diffRows に任せる。
   // docs: [{ id, name, dsl, unopened? }] → 当たった図だけを before/after で返す。
+  // 1 本の DSL 中の出現位置 [{start, end}]。行のハイライト用。
+  function hitRanges(dsl, from) {
+    var out = [];
+    _scan(dsl, from, function(hit, s) { out.push({ start: s, end: s + hit.length }); return hit; });
+    return out;
+  }
+
   function impact(docs, from, to) {
-    var out = { entries: [], total: 0, docs: 0, unopened: 0, valid: false };
+    var out = { entries: [], none: [], total: 0, docs: 0, scanned: 0, unopened: 0, valid: false };
     var rep = String(to == null ? '' : to);
     out.valid = !!from && isValidTarget(rep) && from !== rep;
     (Array.isArray(docs) ? docs : []).forEach(function(d) {
       if (!d) return;
       var before = String(d.dsl == null ? '' : d.dsl);
       var n = countIn(before, from);
-      if (n === 0) return;
+      out.scanned++;
+      // BLK-primary-20260917-0023: 当たらなかった図も一覧に載せる。影響範囲の
+      // 確認は「何枚が変わるか」だけでなく「残りは触らなくてよい」と言い切れて
+      // はじめて終わる。落ちた図が見えないと、結局 1 枚ずつ開いて確かめ直す。
+      if (n === 0) {
+        out.none.push({ id: d.id, name: d.name, unopened: !!d.unopened });
+        return;
+      }
       out.entries.push({
         id: d.id, name: d.name, count: n,
         unopened: !!d.unopened,
@@ -127,6 +141,14 @@ window.MA.bulkRename = (function() {
       + (res.unopened > 0 ? ' (うち未オープン ' + res.unopened + ' 枚)' : '');
     if (!res.valid) return head + ' に当たっています (置換後の名前を入れると変更後が出ます)';
     return head + ' を「' + from + '」→「' + to + '」に置換します';
+  }
+
+  // 仕分けの 1 行。「14 枚中 3 枚に変更あり / 11 枚は変更なし」。
+  function rosterText(res) {
+    if (!res) return '';
+    var n = res.scanned || 0;
+    return n + ' 枚中 ' + (res.docs || 0) + ' 枚に変更あり / '
+      + ((res.none && res.none.length) || 0) + ' 枚は変更なし';
   }
 
   // 図に出てくる識別子の候補を集める。置換前の語をプルダウンから選べるようにして
@@ -163,15 +185,56 @@ window.MA.bulkRename = (function() {
     return out;
   }
 
+  // detectRename(before, after) — 1 枚の図に起きた「識別子の綴りの直し」を読み取る。
+  //
+  // BLK-junior-20260916-0046: 表記統一の反映は、同じ直しが保存フォルダの何枚にも
+  // 及ぶ。1 枚目を直したその場から一括置換へ渡すために、直した本人に組を打ち直させず
+  // 「消えた識別子 1 つ / 増えた識別子 1 つ」を組として拾う。
+  // 確実に言えるときだけ答える (消えた・増えたが 1 つずつで、その置換だけで
+  // before が after に一致するとき)。曖昧なら null を返し、画面は今までどおり
+  // 空の欄を出す (当て推量で別の名前を書き換えさせない)。
+  function detectRename(before, after) {
+    var b = String(before == null ? '' : before);
+    var a = String(after == null ? '' : after);
+    if (!b || !a || b === a) return null;
+    var bi = identifiers([{ dsl: b }]);
+    var ai = identifiers([{ dsl: a }]);
+    var inA = {};
+    ai.forEach(function(n) { inA[n] = true; });
+    var inB = {};
+    bi.forEach(function(n) { inB[n] = true; });
+    var gone = bi.filter(function(n) { return !inA[n]; });
+    var came = ai.filter(function(n) { return !inB[n]; });
+    if (gone.length !== 1 || came.length !== 1) return null;
+    var from = gone[0];
+    var to = came[0];
+    if (!isValidTarget(to)) return null;
+    // その 1 組を当てるだけで before が after になるか。ならないなら綴り直し
+    // 以外の編集も混ざっているので、組として言い切らない。
+    if (replaceIn(b, from, to) !== a) return null;
+    return { from: from, to: to };
+  }
+
+  // エディタで選んでいる文字列を「置換前」の初期値にする。部品名として置換できる
+  // 1 語のときだけ使い、行や空白をまたぐ選択は捨てる (BLK-primary-20260917-0223-friction)。
+  function seedFromSelection(text) {
+    var s = typeof text === 'string' ? text.trim() : '';
+    return isValidTarget(s) ? s : '';
+  }
+
   return {
+    seedFromSelection: seedFromSelection,
     countIn: countIn,
     replaceIn: replaceIn,
+    detectRename: detectRename,
     isValidTarget: isValidTarget,
     preview: preview,
     totalCount: totalCount,
     apply: apply,
     impact: impact,
     impactText: impactText,
+    rosterText: rosterText,
+    hitRanges: hitRanges,
     identifiers: identifiers,
   };
 })();

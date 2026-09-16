@@ -250,3 +250,135 @@ test('手順4.10 他人のフォルダを覗いた一覧にも SVG の鮮度が�
   await expect(page.locator('#peek-svg-summary'))
     .toHaveText('内容: 一致 2 枚 / ずれ 1 枚');
 });
+
+// BLK-reviewer-20260914-2106-wish: 同じ手順4.10 でも、印が食い違った 1 枚について
+// 「コメント行を足しただけの見かけ上の stale」なのか「実質的な内容変更」なのかは、
+// 一覧の札 (内容ずれ) からは言えなかった。reviewer は毎回 /render を叩き、
+// `<?plantuml-src …?>` を取り除いた文字列 diff を書く使い捨てスクリプトで裏取りしていた。
+// 行の [可視差分] から旧 SVG と描き直した SVG を並べ、追加・削除・移動だけが
+// 光る画面が開けば、その裏取りがこの 1 画面で終わる。
+const VD_DIR = DIR + '-visual';
+
+test('手順4.10 印が食い違った図の「見かけ上の stale」と「内容変更」を 1 画面で分ける', async ({ page }) => {
+  test.setTimeout(180000);
+  await page.addInitScript((d) => {
+    try {
+      window.localStorage.clear();
+      window.localStorage.setItem('plantuml-autosave-config',
+        JSON.stringify({ enabled: true, debounceMs: 200, restoreMode: 'auto', backend: 'file', fileDir: d }));
+    } catch (e) {}
+  }, VD_DIR);
+  await gotoApp(page);
+  await page.evaluate(async (d) => {
+    await fetch('/autosave?dir=' + encodeURIComponent(d), { method: 'DELETE' });
+  }, VD_DIR);
+
+  // 1 枚目: コメント行を足しただけ。描かれるものは何も変わらない。
+  await putFileIn(page, VD_DIR, 'R04g_comment', NOW);
+  await putStampedSvgIn(page, VD_DIR, 'R04g_comment', NOW);
+  await putFileIn(page, VD_DIR, 'R04g_comment', "'domain-verdict: ok\n" + NOW);
+  // 2 枚目: participant 名を変えた。描かれるものが変わる。
+  await putFileIn(page, VD_DIR, 'R04g_renamed', NOW);
+  await putStampedSvgIn(page, VD_DIR, 'R04g_renamed', NOW);
+  await putFileIn(page, VD_DIR, 'R04g_renamed', NOW.replace(/Spi_Driver/g, 'Spi_Drv'));
+
+  await openFolder(page);
+  const comment = page.locator('#folder-panel .folder-item[data-file-name="R04g_comment"]');
+  const renamed = page.locator('#folder-panel .folder-item[data-file-name="R04g_renamed"]');
+  // 印だけでは 2 枚とも同じ「内容ずれ」に見える — ここが切り分けの起点。
+  await expect(comment.locator('[data-svg-content="differ"]')).toHaveText('内容ずれ');
+  await expect(renamed.locator('[data-svg-content="differ"]')).toHaveText('内容ずれ');
+
+  // 到達条件その1: コメントだけの差は「可視内容は同一」と言い切られる。
+  // (使い捨ての文字列 diff スクリプトを書いていたところ)
+  await page.locator('#folder-panel .folder-svg-visual[data-visual-name="R04g_comment"]').click();
+  const verdict = page.locator('#svg-visual-verdict');
+  await expect(verdict).toHaveAttribute('data-verdict', 'same', { timeout: 120000 });
+  await expect(verdict).toContainText('可視内容は同一');
+  await expect(page.locator('#svg-visual-counts')).toContainText('差分なし');
+  // 旧 SVG と新 SVG が左右に並ぶ (レイアウト崩れは目で見るしかないので、画面に出す)。
+  await expect(page.locator('#svg-visual-old svg')).toHaveCount(1);
+  await expect(page.locator('#svg-visual-new svg')).toHaveCount(1);
+  await expect(page.locator('#svg-visual-names .svg-visual-name')).toHaveCount(0);
+  await page.locator('#svg-visual-close').click();
+  await expect(page.locator('#svg-visual-modal')).toBeHidden();
+
+  // 到達条件その2: 実質的な内容変更は、消えた名前と増えた名前を名指しされる。
+  await page.locator('#folder-panel .folder-svg-visual[data-visual-name="R04g_renamed"]').click();
+  await expect(verdict).toHaveAttribute('data-verdict', 'changed', { timeout: 120000 });
+  await expect(verdict).toContainText('可視内容がずれています');
+  // participant 名は図の上下 2 か所に描かれるので、2 件とも名指しされる
+  // (描かれている数をそのまま出す。まとめると「どこが変わったか」が欠ける)。
+  const removed = page.locator('#svg-visual-names [data-visual-name-mark="removed"]');
+  const added = page.locator('#svg-visual-names [data-visual-name-mark="added"]');
+  await expect(removed).toHaveCount(2);
+  await expect(removed.first()).toContainText('Spi_Driver');
+  await expect(added.first()).toContainText('Spi_Drv');
+  // 到達条件その3: 光っているのは増減したものだけ。旧の側に消えた名前、新の側に増えた名前。
+  await expect(page.locator('#svg-visual-old [data-visual-mark="removed"]').first())
+    .toHaveText('Spi_Driver');
+  await expect(page.locator('#svg-visual-new [data-visual-mark="added"]').first())
+    .toHaveText('Spi_Drv');
+  // 変わっていないものに印は付かない (全部が光ると見分ける作業が戻る)。
+  await expect(page.locator('#svg-visual-old [data-visual-mark="added"]')).toHaveCount(0);
+  // 到達条件その4: この判定はそのまま指摘文として持ち出せる。
+  await expect(page.locator('#svg-visual-report')).toHaveValue(/R04g_renamed/);
+  await expect(page.locator('#svg-visual-report')).toHaveValue(/- Spi_Driver/);
+});
+
+// BLK-reviewer-20260915-0606: 手順4.10 は GUI の一覧だけでなく
+// `node tools/audit.js <フォルダ> --board` からも通る。その CLI 側は判定材料が
+// 指紋 (印 / 畳まれた DSL の sha1) しか無く、コメントや体裁だけを書き換えて
+// 保存し直した図まで「出力物/SVG 内容ずれ」= 作り直し要 として名指ししていた。
+// reviewer は --board を打つたびに、名指しされた枚数ぶん /verify-svg へ curl して
+// differ-format (体裁差のみ) と裏取りし、指摘.md への誤報告を防いでいた。
+// 畳まれた元の DSL と今の puml を「描かれる行だけ」で比べれば、その裏取りは要らない。
+const auditReport = require('../../../tools/audit-report');
+const cliBoard = require('../../../src/core/audit-board');
+const { loadMA: loadCliMA } = require('../../../tools/audit-runtime');
+
+const CLI_DIR = DIR + '-cli';
+const CLI_ABS = path.join(__dirname, '..', '..', '..', CLI_DIR.replace(/^\.\//, ''));
+
+test('手順4.10 --board が体裁だけの差を「内容ずれ」と言わない (verify-svg への裏取り不要)', async ({ page }) => {
+  test.setTimeout(180000);
+  await page.addInitScript((d) => {
+    try {
+      window.localStorage.clear();
+      window.localStorage.setItem('plantuml-autosave-config',
+        JSON.stringify({ enabled: true, debounceMs: 200, restoreMode: 'auto', backend: 'file', fileDir: d }));
+    } catch (e) {}
+  }, CLI_DIR);
+  await gotoApp(page);
+  await page.evaluate(async (d) => {
+    await fetch('/autosave?dir=' + encodeURIComponent(d), { method: 'DELETE' });
+  }, CLI_DIR);
+
+  // 1 枚目: 書き出したあとコメント行を足しただけ。絵は 1 ドットも変わらない。
+  await putFileIn(page, CLI_DIR, 'R04g_cli_comment', NOW);
+  await putStampedSvgIn(page, CLI_DIR, 'R04g_cli_comment', NOW);
+  await putFileIn(page, CLI_DIR, 'R04g_cli_comment', "'domain-verdict: ok\n" + NOW);
+  // 2 枚目: participant 名を変えた。絵が変わるので作り直しが要る。
+  await putFileIn(page, CLI_DIR, 'R04g_cli_renamed', NOW);
+  await putStampedSvgIn(page, CLI_DIR, 'R04g_cli_renamed', NOW);
+  await putFileIn(page, CLI_DIR, 'R04g_cli_renamed', NOW.replace(/Spi_Driver/g, 'Spi_Drv'));
+
+  // CLI と同じ入口で同じフォルダを監査する (audit.js が呼ぶ 2 本をそのまま呼ぶ)。
+  const rt = loadCliMA();
+  const docs = auditReport.collectDocs([CLI_ABS]);
+  const scan = auditReport.runAudits(rt.MA, docs, ['svg']).svg.result;
+  const rowOf = (n) => scan.rows.filter((r) => r.name === n + '.puml')[0];
+
+  // 到達条件その1: コメントだけの差は「体裁差のみ」。根拠も画面に出る言葉で言う。
+  expect(rowOf('R04g_cli_comment').content).toBe('format');
+  expect(rowOf('R04g_cli_comment').basis).toBe('visible');
+  // 到達条件その2: 絵が変わった図は今までどおり「内容ずれ」。
+  expect(rowOf('R04g_cli_renamed').content).toBe('differ');
+
+  // 到達条件その3: --board の指摘一覧に出るのは作り直しが要る 1 枚だけ。
+  const rows = cliBoard.build({ audits: {}, svg: scan }).rows;
+  expect(rows.map((r) => r.kind + ' ' + r.doc))
+    .toEqual(['svg.differ R04g_cli_renamed.puml']);
+  // 到達条件その4: 作り直す対象にも入らない (裏取りの curl が 0 回になる)。
+  expect(scan.needsRender).toEqual(['R04g_cli_renamed.puml']);
+});

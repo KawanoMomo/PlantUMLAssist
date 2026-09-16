@@ -391,6 +391,8 @@ window.MA.workspace = (function() {
             // 一覧の行に印として出し、開くときの図種にも使う。
             // 古い server は返さない (その場合は今までどおり本文から当てる)。
             kinds: (data.kinds && typeof data.kinds === 'object') ? data.kinds : {},
+            // BLK-primary-20260916-2314-friction: 控えより前に作った納品 zip (出した図の名前つき)。
+            deliveryZips: Array.isArray(data.deliveryZips) ? data.deliveryZips : [],
           };
         })
         .catch(function() { return miss; });

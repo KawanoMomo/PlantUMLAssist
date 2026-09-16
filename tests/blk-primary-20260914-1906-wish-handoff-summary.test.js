@@ -23,6 +23,7 @@ global.document = dom.window.document;
   '../src/core/change-board.js',
   '../src/core/review-pins.js',
   '../src/core/handoff-summary.js',
+  '../src/core/handoff-route.js',
   '../src/core/handoff-package.js',
 ].forEach(function(p) {
   try { delete require.cache[require.resolve(p)]; } catch (e) {}
@@ -134,17 +135,17 @@ describe('handoffSummary.build — 今回変更した図が先頭に来る', fun
 
 describe('index.html の先頭節', function() {
 
-  test('1 節目が「今回の変更と、その理由」で、材料より前に出る', function() {
+  test('材料の節より前に「今回の変更と、その理由」が出る (見る順の次)', function() {
     var html = HP.renderIndexHtml(snapshot());
-    var head = html.indexOf('1. 今回の変更と、その理由');
+    var head = html.indexOf('2. 今回の変更と、その理由');
     expect(head).toBeGreaterThan(-1);
-    expect(html.indexOf('2. 系統チェック結果')).toBeGreaterThan(head);
-    expect(html.indexOf('6. 図一式')).toBeGreaterThan(head);
+    expect(html.indexOf('3. 系統チェック結果')).toBeGreaterThan(head);
+    expect(html.indexOf('7. 図一式')).toBeGreaterThan(head);
   });
 
   test('変更点・理由・図が同じ塊に並ぶ (新人はここだけ読めばよい)', function() {
     var html = HP.renderIndexHtml(snapshot());
-    var block = html.slice(html.indexOf('1. 今回の変更と、その理由'), html.indexOf('2. 系統チェック結果'));
+    var block = html.slice(html.indexOf('2. 今回の変更と、その理由'), html.indexOf('3. 系統チェック結果'));
     expect(block).toContain('adc_seq');
     expect(block).toContain('+1 −1 行');
     expect(block).toContain('Adc_Strt は綴りが違う');
@@ -166,7 +167,7 @@ describe('index.html の先頭節', function() {
     });
     var snap = HP.buildSnapshot({ docs: docs, families: [], names: null, board: board, svgs: {} });
     var html = HP.renderIndexHtml(snap);
-    var block = html.slice(html.indexOf('1. 今回の変更と、その理由'), html.indexOf('2. 系統チェック結果'));
+    var block = html.slice(html.indexOf('2. 今回の変更と、その理由'), html.indexOf('3. 系統チェック結果'));
     expect(block).toContain('今回は変えていないが、指摘が残っている図');
     expect(block).toContain('old_state: 遷移の契機が書かれていない');
   });

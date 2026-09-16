@@ -181,3 +181,137 @@ test('手本が無いユースケース図を、題材名 1 語のひな形か�
   // 図として描けている (パースが通り、要素が出そろっている)
   await expect(page.locator('#status-parse')).toContainText('パース OK');
 });
+
+// BLK-junior-20260916-0546-wish: 手順 1 で先輩 (primary) の図を見るには、📂 一覧が
+// 「今の保存先の中身」しか出せないので保存先そのものを切り替えるしかなく、切り替えた
+// まま保存すれば自分の図が他人のフォルダに紛れ込む。junior は毎回「戻し忘れていないか」
+// を確かめていた。参照専用フォルダを保存先とは別に登録してタブで並べ、その確認を無くす。
+const SENIOR_DIR = './test-results/autosave/junior-1-senior-ref';
+const SENIOR_CLASS = ['@startuml', 'class Timer_Driver {', '  +Init()', '  +DeInit()',
+  '  +Start()', '  +Stop()', '  +GetTick()', '  +SetPeriod()', '}', '@enduml'].join('\n');
+
+async function putIn(page, dir, name, text) {
+  return await page.evaluate(async (a) => {
+    const r = await fetch('/autosave', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: a.name, dir: a.dir, dsl: a.dsl }),
+    });
+    return r.ok ? await r.json() : null;
+  }, { name, dsl: text, dir });
+}
+
+test('手順1 先輩の図を、保存先を動かさずタブで並べて読める', async ({ page }) => {
+  // 自分の図と、先輩のフォルダ (隣のフォルダ) を用意する。
+  await putFile(page, 'diagram1', CLS);
+  await putIn(page, SENIOR_DIR, 'driver_common_class', SENIOR_CLASS);
+  await openFolder(page);
+
+  // 到達条件その1: 一覧の頭に、いまの保存先が「(保存先)」と名乗るタブで出ている。
+  const bar = page.locator('#folder-tabbar');
+  await expect(bar).toBeVisible();
+  const mine = bar.locator('.folder-tab[data-folder-tab="save"]');
+  await expect(mine).toContainText('(保存先)');
+  await expect(mine).toHaveAttribute('aria-pressed', 'true');
+
+  // 到達条件その2: 隣のフォルダを「参照」として足せる (保存先の設定は触らない)。
+  const add = page.locator('#folder-tab-add');
+  await expect(add).toBeVisible();
+  await add.selectOption({ label: 'junior-1-senior-ref' });
+  const ref = bar.locator('.folder-tab[data-folder-tab="ref"]');
+  await expect(ref).toContainText('junior-1-senior-ref(参照)');
+  await expect(ref).toHaveAttribute('aria-pressed', 'true');
+  // 保存先タブは先頭に残っている (書き込む先がどれかを見失わない)。
+  await expect(mine).toHaveAttribute('aria-pressed', 'false');
+
+  // 到達条件その3: 参照タブは「保存先は変わらない」と自分で言う
+  // (手順 1 のたびに戻し忘れを確かめる手間が、ここで無くなる)。
+  await expect(page.locator('#folder-ref-note')).toContainText('保存先は');
+  await expect(page.locator('#folder-ref-note')).toContainText('のまま変わりません');
+
+  // 先輩の図が一覧に出て、押せば読み専用の参照枠に並ぶ。
+  const row = page.locator('.folder-ref-item[data-ref-name="driver_common_class"]');
+  await expect(row).toBeVisible();
+  await row.click();
+  await page.waitForTimeout(600);
+  // 到達条件その4: 粒度差 (先輩は Timer_Driver にメソッド 6 つ) を並べたまま読める。
+  await expect(page.locator('#compare-pane')).toBeVisible();
+  const shown = await page.evaluate(() => {
+    const cv = window.MA.compareView;
+    const d = cv && cv.peek && cv.peek();
+    return d ? (d.dsl || '') : '';
+  });
+  expect(shown).toContain('+GetTick()');
+
+  // 到達条件その5: ここまでで保存先は 1 度も動いていない。
+  const cfg = await page.evaluate(() => {
+    try { return JSON.parse(window.localStorage.getItem('plantuml-autosave-config') || '{}'); }
+    catch (e) { return {}; }
+  });
+  expect(cfg.fileDir).toBe(DIR);
+
+  // 保存先タブに戻れば、今までどおり自分の一覧 (印・役割つき) が出る。
+  await mine.click();
+  await page.waitForTimeout(600);
+  await expect(page.locator('#folder-panel .folder-item[data-file-name="diagram1"]')).toBeVisible();
+  expect(await page.locator('#folder-ref-note').count()).toBe(0);
+});
+
+// BLK-junior-20260917-0423-wish: 取り込む場面の手順 1 は「先輩の該当図を開く」から
+// 始まるが、先輩がその部品のその図種をまだ作っていないことがある。TIMER のクラス図で
+// 実際に空振りし、一覧のファイル名を目で読み比べて初めて「まだ無い」と分かった。
+// 参照タブに部品 × 図種の 済/未 を出し、開く前にその周の相手があるかを読めるようにする。
+const PROG_DIR = './test-results/autosave/junior-1-senior-progress';
+const P_SEQ = ['@startuml', 'participant Timer', 'Timer -> HW: Timer_Init()', '@enduml'].join('\n');
+const P_STATE = ['@startuml', 'state IDLE', 'IDLE --> RUNNING : start', '@enduml'].join('\n');
+
+test('手順1 参照タブの部品×図種で、先輩がまだ作っていない図種が開く前に分かる', async ({ page }) => {
+  // 自分は TIMER のクラス図を持っている。先輩はシーケンスと状態遷移までで、クラス図は無い。
+  await putFile(page, 'timer_class', CLS);
+  await page.evaluate(async (d) => {
+    await fetch('/autosave?dir=' + encodeURIComponent(d), { method: 'DELETE' });
+  }, PROG_DIR);
+  await putIn(page, PROG_DIR, 'timer_init_sequence', P_SEQ);
+  await putIn(page, PROG_DIR, 'timer_state', P_STATE);
+
+  await openFolder(page);
+  await page.locator('#folder-tab-add').selectOption({ label: 'junior-1-senior-progress' });
+  await expect(page.locator('.folder-tab[data-folder-tab="ref"]')).toHaveAttribute('aria-pressed', 'true');
+
+  // 到達条件その1: 参照タブに部品 × 図種の表が出る (ファイル名の並びを読み比べない)。
+  const grid = page.locator('#folder-ref-grid');
+  await expect(grid).toBeVisible();
+  const row = grid.locator('tr.pkm-grow[data-subject="timer"]');
+  await expect(row).toBeVisible();
+
+  // 到達条件その2: 先輩にある図種は「済」、まだ無い図種は「未」と出る。
+  await expect(row.locator('td.pkm-cell[data-kind="sequence"]')).toHaveText('済');
+  await expect(row.locator('td.pkm-cell[data-kind="state"]')).toHaveText('済');
+  const cls = row.locator('td.pkm-cell[data-kind="class"]');
+  await expect(cls).toHaveText('未');
+  await expect(cls).toHaveAttribute('data-made', 'none');
+  // 押す前に、何が無いのかがその場で読める。
+  await expect(cls).toHaveAttribute('title', /クラス図はまだありません/);
+
+  // 到達条件その3: 今週の相手 (TIMER クラス図) が無いことを表が名指しする。
+  await expect(page.locator('#folder-ref-matrix-missing')).toContainText('TIMER');
+  await expect(page.locator('#folder-ref-matrix-missing')).toContainText('クラス');
+  await expect(page.locator('#folder-ref-matrix-summary')).toContainText('済 2');
+
+  // 到達条件その4: 「済」のマスは押せば読むだけで開く (見つけた図にそのまま入れる)。
+  await row.locator('td.pkm-cell[data-kind="sequence"]').click();
+  await page.waitForTimeout(600);
+  await expect(page.locator('#compare-pane')).toBeVisible();
+  const shown = await page.evaluate(() => {
+    const cv = window.MA.compareView;
+    const d = cv && cv.peek && cv.peek();
+    return d ? (d.dsl || '') : '';
+  });
+  expect(shown).toContain('Timer_Init()');
+
+  // 到達条件その5: ここまでで保存先は 1 度も動いていない。
+  const cfg = await page.evaluate(() => {
+    try { return JSON.parse(window.localStorage.getItem('plantuml-autosave-config') || '{}'); }
+    catch (e) { return {}; }
+  });
+  expect(cfg.fileDir).toBe(DIR);
+});

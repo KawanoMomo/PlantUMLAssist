@@ -82,10 +82,28 @@ curl -sS -X POST http://127.0.0.1:8766/verify-svg -H "Content-Type: application/
 | `DELETE /autosave` | `?dir=&type=` | 保存を消す |
 | `POST /autosave-svg` | `{type, dir, svg}` | 書き出した svg を保存する (印を刻む) |
 | `GET /autosave-versions` | `?dir=&type=` | 1 枚の図の版の一覧 |
+| `GET /version-search` | `?dir=&q=` | 保存フォルダの全図の版から部品名を探す (混入点の材料) |
+| `GET /version-diff` | `?dir=&type=[&stamp=]` | 1 枚の図の「その版」と「直前の版」の本文を組で返す (全文差分の材料) |
 | `GET /peek-dirs` | — | 保存フォルダの候補を覗く |
 | `GET /peek-notes` | `?dir=` | 隣のフォルダに置かれた指摘 (`.md`) を読む |
+| `GET /name-registry` | `?dir=` | 保存フォルダの**親**にある正式表記の登録簿 (`_names.json`。3 人で共有) |
+| `POST /name-registry` | `{dir, entries}` | 正式表記の登録簿を丸ごと置き換える |
+| `GET /cohort-ack` | `?dir=` | 保存フォルダの**親**にある確認済みの組の台帳 (`_cohort-ack.json`。ドメイン突合で内部揺れと確かめた組) |
+| `POST /cohort-ack` | `{dir, entries}` | 確認済みの組の台帳を丸ごと置き換える |
 | `POST /file-roles` | `{dir, roles}` | `_roles.json` を丸ごと置き換える |
 | `POST /export-log` | — | 書き出しの控えを 1 件足す |
+
+`GET /version-search` の `q` は空白区切りの語 (最大 6 語)。返りは
+`{terms, dir, scanned, files:[{name, versions:[{stamp, current, counts, lines}]}]}` で、
+版は古い順・最後の 1 件が `current: true` (まだ控えになっていない今の中身)。
+`counts` は語ごとの出現数、`lines` は当たった行だけ (1 版 40 行まで)。本文は返さない。
+どの版で増えたか・混在がどこから始まったかの判定は GUI 側 (`src/core/blame-point.js`)。
+
+`GET /version-diff` は混入点の行から 1 クリックで開く全文差分の材料。返りは
+`{name, dir, stamp, current, prev, first, before, after}` で、`before` が直前の版・
+`after` がその版の本文 (全文)。`stamp` を省くと「いまの中身」と最新の控えを比べる。
+最古の控えを指したときは直前が無いので `prev: null` / `first: true` / `before: ""`。
+行の突き合わせと畳みは GUI 側 (`src/core/version-fulldiff.js`、LCS は `version-diff.js`)。
 
 保存中の svg が今の puml から作られたかは、`GET /autosave` の `svgSource` (svg に刻まれた印) と
 `hash` (今の puml の sha1) を比べる。印が無い svg は `POST /verify-svg` が描き直して確かめる。
@@ -99,11 +117,14 @@ curl -sS -X POST http://127.0.0.1:8766/verify-svg -H "Content-Type: application/
 | `GET /tickets` | `?dir=` | 変更チケットの一覧 |
 | `POST /tickets` | `{dir, ticket}` | 変更チケットを 1 枚書く (id ごと置き換え) |
 | `DELETE /tickets` | `?dir=&id=` | 変更チケットを 1 枚消す |
+| `GET /peek-settled` | `?dir=` | 手本なしで確定した (相手, 図種) の一覧。確定した組は 👀他フォルダで聞き直さない |
+| `POST /peek-settled` | `{dir, peer, kind, settled}` / `{dir, clear: true}` | 確定を 1 つ足す (`settled: false` で外す) / 全部外す |
 | `GET /rename-pairs` | `?dir=` | そのフォルダで打たれた置換の組 (新しい順) |
 | `POST /rename-pairs` | `{dir, from, to, hits}` | 置換の組を 1 つ覚える (同じ組は 1 行) |
 | `GET /doc-sets` | `?dir=` | そのフォルダに登録した資料セット (名前を付けた図の組) |
 | `POST /doc-sets` | `{dir, name, docs}` | 資料セットを 1 つ登録する (同じ名前は置き換え) |
 | `DELETE /doc-sets` | `?dir=&name=` | 資料セットを 1 つ消す |
+| `GET /version` | — | アプリの版・コミット・日付 (`{version, commit, date}`。git tag が正本) |
 | `GET /prefs` | — | この機械に保存した設定 |
 | `POST /prefs` | — | 設定を書く |
 | `GET /env` | — | Java / jar の有無、`app` (アプリ版か)、`javaUrl` (Java が無いときの案内先) |

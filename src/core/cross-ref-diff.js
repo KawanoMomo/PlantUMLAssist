@@ -74,30 +74,87 @@ window.MA.crossRefDiff = (function() {
 
   // 相手フォルダの名前一覧を、今の図に近い順に並べる。近さが付かない名前も
   // 末尾に残す (対応が機械には見えなくても、人には分かることがある)。
-  function counterparts(names, selfName) {
+  // BLK-junior-20260917-0423: 相手の一覧は {name, kind} でも文字列でもよい。
+  // 図種が分かっている相手は、自分と違う図種なら「対応する図」ではない。
+  // クラス図の相手にシーケンス図を当てると、全要素が「片方にしか無い」に
+  // なって「先輩が全部書き換えた」と見分けが付かなくなる。
+  function _cpName(e) { return (e && typeof e === 'object') ? _s(e.name) : _s(e); }
+  function _cpKind(e) {
+    if (!e || typeof e !== 'object') return '';
+    return _s(e.savedKind) || _s(e.kind);
+  }
+
+  function counterparts(names, selfName, selfKind) {
+    var want = _s(selfKind);
     var out = [];
     (names || []).forEach(function(n, i) {
-      var name = _s(n);
+      var name = _cpName(n);
       if (name === '') return;
-      var d = nameDistance(name, selfName);
-      out.push({ name: name, distance: d, order: i });
+      var kind = _cpKind(n);
+      // 図種が両方分かっていて食い違うときだけ外す。分からない相手は今までどおり。
+      var mismatch = want !== '' && kind !== '' && kind !== want;
+      var d = mismatch ? null : nameDistance(name, selfName);
+      out.push({ name: name, kind: kind, distance: d, kindMismatch: mismatch, order: i });
     });
     out.sort(function(a, b) {
       var ad = a.distance == null ? Infinity : a.distance;
       var bd = b.distance == null ? Infinity : b.distance;
-      return ad - bd || a.order - b.order;
+      if (ad !== bd) return ad - bd;
+      // 近さが付かないものどうしは、同じ図種を先に出す (人が選ぶときの手掛かり)。
+      if (a.kindMismatch !== b.kindMismatch) return a.kindMismatch ? 1 : -1;
+      return a.order - b.order;
     });
     return out;
   }
 
   // 開いた瞬間に出す 1 件。近さの付いた候補があればその先頭。
   // 何も近くなければ null (勝手に無関係な図を並べない)。
-  function pickCounterpart(names, selfName) {
-    var list = counterparts(names, selfName);
+  function pickCounterpart(names, selfName, selfKind) {
+    var list = counterparts(names, selfName, selfKind);
     for (var i = 0; i < list.length; i++) {
       if (list[i].distance != null) return list[i].name;
     }
     return null;
+  }
+
+  // 相手のフォルダを読んだ結果を 1 つの答えにする (BLK-junior-20260917-0423)。
+  // 「先輩の図を開いて見比べる」手順は、相手に対応する図が無いときも答えが要る。
+  // 無いことが画面に出ないと、フォルダを人が目で走査して「無い」を確かめ直す
+  // ことになり、手順そのものが止まる。
+  //   picked   … 相手が決まった
+  //   no-kind  … 相手にその図種が 1 枚も無い (比較元なし。増分なしとして進めてよい)
+  //   no-match … その図種はあるが、名前が離れていて機械には対応が付かない
+  //   empty    … 相手のフォルダに図が無い
+  function _kindWord(slug) {
+    var DK = window.MA && window.MA.diagramKind;
+    var lab = (DK && DK.label) ? DK.label(slug) : '';
+    return lab ? lab + '図' : 'この図種';
+  }
+
+  function counterpartVerdict(names, selfName, selfKind) {
+    var list = counterparts(names, selfName, selfKind);
+    var pick = pickCounterpart(names, selfName, selfKind);
+    var sameKind = list.filter(function(c) { return !c.kindMismatch; }).length;
+    var word = _kindWord(selfKind);
+    if (list.length === 0) {
+      return { state: 'empty', name: null, total: 0, sameKind: 0,
+        message: '相手のフォルダに図がありません' };
+    }
+    if (pick) {
+      return { state: 'picked', name: pick, total: list.length, sameKind: sameKind, message: '' };
+    }
+    if (_s(selfKind) !== '' && sameKind === 0) {
+      return {
+        state: 'no-kind', name: null, total: list.length, sameKind: 0,
+        message: '相手のフォルダに' + word + 'がありません (' + list.length + ' 枚中 0 枚)。'
+          + '比較元が無いので、先輩側の増分は無しとして先へ進めます',
+      };
+    }
+    return {
+      state: 'no-match', name: null, total: list.length, sameKind: sameKind,
+      message: word + 'は ' + sameKind + ' 枚ありますが、名前が離れていて対応が付きません。'
+        + '下の一覧から相手を選んでください',
+    };
   }
 
   // ── 部品名をそろえる ─────────────────────────────────────────────────
@@ -144,9 +201,16 @@ window.MA.crossRefDiff = (function() {
 
   // 種別・名前・文言をつなぐ区切り。outline の節は 1 行から作るので改行は入らない。
   var KEY_SEP = '\n';
-  // 同じ要素と見なす鍵。種別 + 名前 + 文言。空白の詰め方と大文字小文字は無視する。
+  // 入れ子の道筋の区切り (outline が付ける parent と同じ形)。
+  var PARENT_SEP = ' / ';
+
+  // 同じ要素と見なす鍵。種別 + 入れ子の道筋 + 名前 + 文言。
+  // 空白の詰め方と大文字小文字は無視する。
+  // BLK-junior-20260917-0323-wish: 親の中の `Idle` とトップレベルの `Idle` は
+  // 別の状態なので、道筋を鍵に入れないと「親の中に増えた子」が共通に落ちる。
   function keyOf(node) {
-    return [_s(node && node.kind), _norm(node && node.label), _norm(node && node.detail)].join(KEY_SEP);
+    return [_s(node && node.kind), _norm(node && node.parent),
+            _norm(node && node.label), _norm(node && node.detail)].join(KEY_SEP);
   }
 
   function _norm(v) { return _s(v).replace(/\s+/g, ' ').trim().toLowerCase(); }
@@ -159,6 +223,7 @@ window.MA.crossRefDiff = (function() {
       kind: node.kind,
       label: _s(node.label),
       detail: _s(node.detail),
+      parent: applyRename(_s(node.parent), map),
       line: (node.line || 0) + 1,
       text: applyRename(_s(raw).trim(), map),
     };
@@ -231,6 +296,8 @@ window.MA.crossRefDiff = (function() {
     if (a > 0) parts.push('相手にしかない ' + a + ' 件');
     if (b > 0) parts.push('自分にしかない ' + b + ' 件');
     var s = parts.join(' · ') + ' (共通 ' + (r.common || 0) + ' 件)';
+    var nested = nestedCount(r.onlyRef);
+    if (nested > 0) s += '。うち ' + nested + ' 件は親の中 (入れ子) の増分です';
     if (c.level === 'partial') s += ' — 共通が少なく、名前の付け方が揃っていない可能性があります';
     return s;
   }
@@ -247,6 +314,20 @@ window.MA.crossRefDiff = (function() {
 
   function kindLabel(kind) {
     return KIND_LABELS[_s(kind)] || _s(kind);
+  }
+
+  // 一覧の 1 行に出す名前。親の中の要素は道筋ごと出す。
+  // BLK-junior-20260917-0323-wish: 「状態 Idle」とだけ出ると、それが
+  // トップレベルに増えたのか親の中に増えたのかが行から読めない。
+  function entryLabel(entry) {
+    var e = entry || {};
+    var name = _s(e.label);
+    return _s(e.parent) ? (_s(e.parent) + PARENT_SEP + name) : name;
+  }
+
+  // 入れ子の中に増えた要素だけを数える。見出しで「親の中に N 件」と言い切るため。
+  function nestedCount(list) {
+    return (list || []).filter(function(e) { return _s(e && e.parent) !== ''; }).length;
   }
 
   // 図の形。種別ごとの件数と、状態遷移図の擬似状態 ([*] / choice / fork) の件数。
@@ -374,17 +455,91 @@ window.MA.crossRefDiff = (function() {
   // それ以外 (関係・注釈) は @enduml の直前。@enduml が無ければ末尾。
   var DECL_RE = /^\s*(participant|actor|boundary|control|entity|database|collections|queue|class|abstract\s+class|interface|enum|state|component|node|package|folder|rectangle|cloud|storage|usecase)\b/i;
 
+  // 入れ子の道筋を持つ要素 (`state Configured {` の中の `Idle`) は、親の中へ入れる。
+  // BLK-junior-20260917-0323-wish: 親の外へ足すと、子状態がトップレベルの兄弟に
+  // なって図の意味が変わる。取り込んだ側は形が崩れてから気付くことになる。
+  function _parents(entry) {
+    return _s(entry && entry.parent).split(PARENT_SEP)
+      .map(function(t) { return t.trim(); })
+      .filter(function(t) { return t !== ''; });
+  }
+
+  // 宣言行が name を宣言しているか。`state Idle`・`state "待機" as Idle {` の両方。
+  function _declares(line, name) {
+    var t = _s(line).trim();
+    if (!DECL_RE.test(t)) return false;
+    var n = _norm(name);
+    if (n === '') return false;
+    var body = t.replace(/^\s*[A-Za-z]+(\s+class)?\s+/i, '').replace(/\s*\{\s*$/, '');
+    var as = body.match(/^(.*?)\s+as\s+([A-Za-z0-9_][A-Za-z0-9_.-]*)\s*$/i);
+    var cands = as ? [as[1], as[2]] : [body];
+    for (var i = 0; i < cands.length; i++) {
+      var c = _norm(cands[i]).replace(/\s*<<[^>]*>>\s*$/, '').replace(/^"|"$/g, '').trim();
+      if (c === n) return true;
+    }
+    return false;
+  }
+
+  // name の本体 { … } を [from, to) の中から探す。
+  //   { open, close } … 本体がある
+  //   { declOnly }    … 宣言はあるが本体が無い (`state Configured`)
+  //   null            … 宣言そのものが無い
+  function _findBlock(lines, name, from, to) {
+    for (var i = from; i < to; i++) {
+      if (!_declares(lines[i], name)) continue;
+      if (!/\{\s*$/.test(_s(lines[i]))) return { declOnly: i };
+      var depth = 1;
+      for (var j = i + 1; j < lines.length; j++) {
+        var t = _s(lines[j]).trim();
+        if (/\{\s*$/.test(t)) depth++;
+        else if (/^\}/.test(t)) { depth--; if (depth === 0) return { open: i, close: j }; }
+      }
+      return { open: i, close: lines.length };
+    }
+    return null;
+  }
+
+  // [from, to) の中での置き場所。宣言は宣言の並びの末尾、それ以外は範囲の末尾。
+  function _placeIn(lines, text, from, to) {
+    if (!DECL_RE.test(text)) return to;
+    for (var i = to - 1; i >= from; i--) {
+      if (DECL_RE.test(_s(lines[i]).trim())) return i + 1;
+    }
+    return from;
+  }
+
   function insertPlan(selfDsl, entry) {
     var lines = _s(selfDsl).split('\n');
     var text = _s(entry && entry.text).trim();
     if (text === '') return null;
-    var at = _endIndex(lines);
-    if (DECL_RE.test(text)) {
-      for (var i = at - 1; i >= 0; i--) {
-        if (DECL_RE.test(lines[i])) { at = i + 1; break; }
+    var parents = _parents(entry);
+    var from = 0, to = _endIndex(lines), expand = null, level = 0;
+    for (var p = 0; p < parents.length; p++) {
+      var b = _findBlock(lines, parents[p], from, to);
+      // 親が自分の図にまだ無いなら、道筋は辿れない。トップレベルの置き場所に戻す
+      // (親そのものも「相手にしかない」に出ているので、先にそれを取り込む)。
+      if (!b) { level = 0; from = 0; to = _endIndex(lines); expand = null; break; }
+      level++;
+      if (b.declOnly != null) {
+        // 自分の側では親がまだ 1 行の宣言。本体を開いてその中へ入れる。
+        expand = { at: b.declOnly, name: parents[p] };
+        from = b.declOnly + 1; to = b.declOnly + 1;
+        break;
       }
+      from = b.open + 1; to = b.close;
     }
-    return { index: at, line: at + 1, text: text };
+    var at = expand ? from : _placeIn(lines, text, from, to);
+    var plan = { index: at, line: at + 1, text: _indent(text, level),
+                 parent: parents.join(PARENT_SEP), from: from, to: to };
+    if (expand) plan.expand = expand;
+    return plan;
+  }
+
+  function _indent(text, level) {
+    var body = _s(text).trim();
+    var pad = '';
+    for (var i = 0; i < level; i++) pad += '  ';
+    return pad + body;
   }
 
   function _endIndex(lines) {
@@ -399,8 +554,93 @@ window.MA.crossRefDiff = (function() {
     var plan = insertPlan(selfDsl, entry);
     if (!plan) return null;
     var lines = _s(selfDsl).split('\n');
-    lines.splice(plan.index, 0, plan.text);
+    var level = _parents(entry).length;
+    var add = [plan.text];
+    // 相手側で本体を開いている宣言 (`state Configured {`) は閉じ括弧まで入れる。
+    if (/\{\s*$/.test(plan.text)) add.push(_indent('}', level));
+    if (plan.expand) {
+      lines[plan.expand.at] = _s(lines[plan.expand.at]).replace(/\s*$/, '') + ' {';
+      add.push(_indent('}', Math.max(0, level - 1)));
+    }
+    lines.splice.apply(lines, [plan.index, 0].concat(add));
     return { dsl: lines.join('\n'), line: plan.line };
+  }
+
+  // ── 入れる前に「どこへ入るか」を見せる ───────────────────────────────
+  // BLK-junior-20260917-0223-wish: 取り込みは 1 行ずつで、押すまで入る場所が
+  // 分からなかった。押すと一覧が出し直されカーソルも飛ぶので、次の 1 行を
+  // 探し直すことになる。入る場所を先に 1 行で見せ、まとめて入れられるようにする。
+  function planText(selfDsl, entry) {
+    var plan = insertPlan(selfDsl, entry);
+    if (!plan) return '';
+    var lines = _s(selfDsl).split('\n');
+    var anchor = '';
+    for (var i = plan.index - 1; i >= 0; i--) {
+      var t = _s(lines[i]).trim();
+      if (t !== '') { anchor = t; break; }
+    }
+    if (plan.expand) {
+      return plan.line + ' 行目 (「' + plan.expand.name + '」に { } を開いて) に入ります';
+    }
+    if (anchor === '') return plan.line + ' 行目 (先頭) に入ります';
+    return plan.line + ' 行目、「' + anchor + '」の後に入ります';
+  }
+
+  // 既に自分の図にある行は入れない (二重に足すと同じ手順が 2 本になる)。
+  // 見るのは入る先の範囲だけ。トップレベルの `state Idle` があっても、
+  // 親の中に `Idle` が無いなら、それは入れるべき子状態。
+  function _has(lines, text, from, to) {
+    var a = from == null ? 0 : from;
+    var b = to == null ? lines.length : to;
+    for (var i = a; i < b; i++) {
+      if (_s(lines[i]).trim() === text) return true;
+    }
+    return false;
+  }
+
+  // チェックした分をまとめて入れる。1 件ずつ入れ直すのと同じ置き場所になるよう、
+  // 入れるたびに次の行の位置を計算し直す (宣言は宣言の並びの末尾へ伸びていく)。
+  function applyInserts(selfDsl, entries) {
+    var dsl = _s(selfDsl);
+    var list = Array.isArray(entries) ? entries : [];
+    var applied = [];
+    var skipped = [];
+    list.forEach(function(entry) {
+      var text = _s(entry && entry.text).trim();
+      if (text === '') { return; }
+      var lines = dsl.split('\n');
+      var plan = insertPlan(dsl, entry);
+      if (!plan) { skipped.push({ text: text, reason: 'noplan' }); return; }
+      if (_has(lines, text, plan.from, plan.to)) {
+        skipped.push({ text: text, reason: 'already' });
+        return;
+      }
+      var out = applyInsert(dsl, entry);
+      if (!out) { skipped.push({ text: text, reason: 'noplan' }); return; }
+      dsl = out.dsl;
+      applied.push({ text: text, line: out.line });
+    });
+    return {
+      dsl: dsl,
+      applied: applied,
+      skipped: skipped,
+      count: applied.length,
+      lines: applied.map(function(a) { return a.line; }),
+      firstLine: applied.length ? applied[0].line : 0,
+    };
+  }
+
+  // 取り込んだ後に出す 1 行。何件入って、何件が既にあったかまで言い切る
+  // (件数だけだと「押したのに増えない」が不具合に見える)。
+  function insertsSummary(res) {
+    var r = res || {};
+    var n = r.count || 0;
+    var already = (r.skipped || []).filter(function(s) { return s.reason === 'already'; }).length;
+    if (n === 0 && already === 0) return '取り込む行を選んでください';
+    var head = n === 0 ? '取り込んだ行はありません' : (n + ' 件を取り込みました');
+    if (n > 0) head += ' (' + (r.lines || []).join(', ') + ' 行目)';
+    if (already > 0) head += '。' + already + ' 件は既に自分の図にあったので入れていません';
+    return head;
   }
 
   return {
@@ -408,6 +648,7 @@ window.MA.crossRefDiff = (function() {
     nameDistance: nameDistance,
     counterparts: counterparts,
     pickCounterpart: pickCounterpart,
+    counterpartVerdict: counterpartVerdict,
     renameMap: renameMap,
     applyRename: applyRename,
     keyOf: keyOf,
@@ -415,6 +656,8 @@ window.MA.crossRefDiff = (function() {
     summary: summary,
     comparability: comparability,
     kindLabel: kindLabel,
+    entryLabel: entryLabel,
+    nestedCount: nestedCount,
     shape: shape,
     shapeRows: shapeRows,
     shapeSummary: shapeSummary,
@@ -424,5 +667,8 @@ window.MA.crossRefDiff = (function() {
     parallelText: parallelText,
     insertPlan: insertPlan,
     applyInsert: applyInsert,
+    planText: planText,
+    applyInserts: applyInserts,
+    insertsSummary: insertsSummary,
   };
 })();

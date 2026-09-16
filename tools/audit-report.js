@@ -8,6 +8,7 @@
 // その項目を skipped にするだけで、残りの監査は結果を返す。
 
 const fs = require('fs');
+const crypto = require('crypto');
 const path = require('path');
 // BLK-reviewer-20260907-2203: 件数表だけでは「同じ 5 件」の中身が入れ替わった
 // ことも、カテゴリが新設されたことも読めない。前回の JSON との差分を要約に足す。
@@ -16,6 +17,10 @@ const auditDiff = require('./audit-diff');
 // 対象外扱いのテンプレの汚染かを区別できない。ファイルの分類と内容の指紋を
 // レポートに載せ、次回の --since / 控えとの比較で「どちらが動いたか」を出す。
 const auditScope = require('../src/core/audit-scope');
+// BLK-reviewer-20260914-2106: stale と出た図が「コメントを足しただけ」なのか
+// 「中身が変わった」のかを、描き直さずに言うための材料。svg に畳まれている
+// 元の DSL を開き、今の .puml と「描かれる行」だけで突き合わせる。
+const svgEmbeddedSrc = require('./svg-embedded-src');
 
 // ディレクトリなら再帰して .puml を集める。ファイルならそれ 1 枚。
 // name は入力ルートからの相対パスにする (同名 basename が別フォルダにあっても
@@ -25,12 +30,20 @@ const auditScope = require('../src/core/audit-scope');
 // (b) `_versions` がペルソナのフォルダ名として突合に出る。
 // 名指しで渡されたとき (その中を意図して見に行った場合) だけ辿る。
 const BOOKKEEPING_DIRS = ['_versions', '_vault'];
+// BLK-reviewer-20260915-0007: 保存フォルダの中に `prev"cp -r E:01_Loop… "` の
+// ような、シェルの事故でコマンド文字列がそのままフォルダ名になった残骸が出来る。
+// 中身は元フォルダの写しなので、辿ると同じ図が二重に数えられ、指摘が毎回
+// 「新規」で増え続ける。名指しで渡されたときだけ辿り、再帰では読み飛ばす
+// (黙って落とすと「図が減った」と読めるので、読み飛ばした名前は呼ぶ側へ返す)。
+const tracker = require('../src/core/finding-tracker');
 
 function collectDocs(targets, options) {
   const opts = options || {};
   const exts = opts.extensions || ['.puml', '.pu', '.plantuml'];
   const docs = [];
   const seen = {};
+  // 読み飛ばした残骸のフォルダ名。呼ぶ側 (CLI) が「読み飛ばした」と言うために使う。
+  const skipped = Array.isArray(opts.skipped) ? opts.skipped : [];
 
   function pushFile(filePath, name) {
     const key = path.resolve(filePath);
@@ -45,6 +58,10 @@ function collectDocs(targets, options) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
         if (BOOKKEEPING_DIRS.indexOf(entry.name) >= 0) continue;
+        if (tracker.isJunkPath(entry.name)) {
+          if (skipped.indexOf(entry.name) < 0) skipped.push(entry.name);
+          continue;
+        }
         walk(full, base, prefix);
       } else if (exts.indexOf(path.extname(entry.name).toLowerCase()) >= 0) {
         pushFile(full, path.join(prefix, path.relative(base, full)));
@@ -100,7 +117,8 @@ const AUDITS = {
   // 「.puml はあるが .svg が書き出されていない」は 1 枚も検知できなかった。
   // timer_state.puml だけ SVG が無いことに気付いたのは 17 枚の目視突合の産物で、
   // 仕組みとしては存在しなかった。出力物の有無は DSL ではなくフォルダに書いてある。
-  svg: (MA, docs) => (MA.svgFreshness ? MA.svgFreshness.scan(svgEntries(docs)) : undefined),
+  svg: (MA, docs) => (MA.svgFreshness
+    ? withStaleReasons(MA, MA.svgFreshness.scan(svgEntries(docs, MA)), docs) : undefined),
   // BLK-primary-20260908-1403-wish: 「dma_state だけ 1 メッセージが 4 遷移」は
   // 名前の食い違いではないので family / trace のどこにも出ず、出力テキストを
   // 目で読んで気付くしかなかった。系統ごとの遷移密度を並べ、中央値から外れた
@@ -128,18 +146,96 @@ const AUDITS = {
 // 判定 (無い / 古い / 追いついている) は GUI と同じモジュールに任せる。
 // path を持たない docs (テストが手で組んだもの) は unknown ではなく対象外にする
 // — 「ファイルとして存在しない図」に出力漏れを問うても直しようがない。
-function svgEntries(docs) {
+// BLK-reviewer-20260915-0406: ここが載せていたのは mtime 2 つだけで、GUI の一覧
+// (server の /autosave) が持つ hash (今の puml の sha1) と svgSource (svg 末尾の印)
+// が入っていなかった。svg-freshness.contentOf は印と hash の突合で内容一致を言うので、
+// 入っていなければ答えは常に 'unverified' — isSettled を一度も通らず、mtime だけで
+// 「SVG 古」になっていた (findings.js の継続追跡もその誤検知をそのまま持ち越す)。
+// server と同じ 3 つを、同じ読み方でここでも載せる。
+function svgEntries(docs, MA) {
   const out = [];
+  const stamp = MA && MA.svgStamp;
   for (const d of (Array.isArray(docs) ? docs : [])) {
     if (!d || !d.path) continue;
-    const svgPath = d.path.replace(/\.[^.\\/]+$/, '') + '.svg';
+    const svgPath = d.path.replace(/\.[^.\/]+$/, '') + '.svg';
     let mtime = null;
     let svgMtime = null;
     try { mtime = fs.statSync(d.path).mtime.toISOString(); } catch (e) { mtime = null; }
     try { svgMtime = fs.statSync(svgPath).mtime.toISOString(); } catch (e) { svgMtime = null; }
-    out.push({ name: d.name, mtime: mtime, svgMtime: svgMtime });
+    const entry = { name: d.name, mtime: mtime, svgMtime: svgMtime,
+      hash: null, svgSource: null, svgHash: null, visibleMatch: null };
+    // 読めなかったものは null のまま = 従来どおり「言えない」に落とす (嘘を足さない)。
+    try { entry.hash = _sha1(fs.readFileSync(d.path)); } catch (e) { entry.hash = null; }
+    if (svgMtime !== null) {
+      try {
+        const raw = fs.readFileSync(svgPath);
+        entry.svgHash = _sha1(raw);
+        const n = stamp ? stamp.tailBytes() : 200;
+        const tail = raw.slice(Math.max(0, raw.length - n)).toString('utf-8');
+        entry.svgSource = (stamp ? stamp.readStamp(tail) : '') || null;
+      } catch (e) { /* 読めない svg は印なし扱い */ }
+      // BLK-reviewer-20260915-0606: 指紋 (印 / 畳まれた DSL の sha1) はコメントや
+      // 体裁だけの書き換えでも食い違うので、それだけで出す答えは「内容ずれ」に倒れる。
+      // server の /verify-svg は描き直して differ-format (描かれる中身は一致) と答えるが、
+      // audit.js は server を持たないため、reviewer は --board 1 回ごとに枚数ぶん
+      // curl で裏取りしていた。畳まれた DSL と今の puml を描かれる行だけで比べれば、
+      // 同じ答えが Java も server も無しにここで出る。
+      entry.visibleMatch = visibleMatchOf(MA, d, svgPath);
+    }
+    out.push(entry);
   }
   return out;
+}
+
+// svg に畳まれた元の DSL と今の .puml を、描かれる行だけで比べる。
+// 'same' / 'differ' / null (畳まれた DSL が無い = 描かれる行では言えない)。
+function visibleMatchOf(MA, doc, svgPath) {
+  const VD = MA && MA.dslVisibleDiff;
+  if (!VD || !doc || typeof doc.dsl !== 'string') return null;
+  let svgText = null;
+  try { svgText = fs.readFileSync(svgPath, 'utf-8'); } catch (e) { return null; }
+  const folded = svgEmbeddedSrc.decode(svgText);
+  if (folded === null) return null;
+  const v = VD.compare(folded, doc.dsl).verdict;
+  return (v === 'same' || v === 'differ') ? v : null;
+}
+
+function _sha1(buf) { return crypto.createHash('sha1').update(buf).digest('hex'); }
+
+// BLK-reviewer-20260914-2106: 「SVG が古い」の中身を割る。
+// svg に畳まれている書き出し当時の DSL と、今の .puml を、描かれる行だけで比べる。
+//   same    — コメント・空行の差だけ。絵は同じ (見かけ上の stale)
+//   differ  — 描かれる行が違う。作り直しが要る
+//   unknown — 畳まれた DSL が無く、中身では言えない (従来どおり手で確かめる 1 枚)
+// render も server も要らないので、audit.js を打つだけでその場で答えが出る。
+function withStaleReasons(MA, scan, docs) {
+  const VD = MA.dslVisibleDiff;
+  if (!scan || !VD) return scan;
+  const dslByName = {};
+  for (const d of (Array.isArray(docs) ? docs : [])) {
+    if (d && d.name) dslByName[d.name] = { dsl: d.dsl, path: d.path };
+  }
+  const reasons = {};
+  const detail = {};
+  for (const row of (scan.rows || [])) {
+    if (row.status !== 'stale') continue;
+    const doc = dslByName[row.name];
+    if (!doc || !doc.path) { reasons[row.name] = 'unknown'; continue; }
+    let svgText = null;
+    try {
+      svgText = fs.readFileSync(doc.path.replace(/\.[^.\\/]+$/, '') + '.svg', 'utf-8');
+    } catch (e) { svgText = null; }
+    const folded = svgEmbeddedSrc.decode(svgText);
+    if (folded === null) { reasons[row.name] = 'unknown'; continue; }
+    const r = VD.compare(folded, doc.dsl);
+    reasons[row.name] = r.verdict;
+    if (r.verdict === 'differ') {
+      detail[row.name] = { added: r.added.slice(0, 10), removed: r.removed.slice(0, 10) };
+    }
+  }
+  scan.staleReasons = reasons;
+  scan.staleDetail = detail;
+  return scan;
 }
 
 function auditNames() { return Object.keys(AUDITS); }
@@ -178,9 +274,16 @@ function summarize(audits) {
   // 修正なのかを読み分けられない。宣言の付け方を疑う 2 種を別に数えて出す。
   if (m && m.status === 'ok') {
     const mi = m.result.issues || [];
+    // BLK-reviewer-20260915-0106-wish: `'@omit-method` で意図的に省略と宣言された
+    // 指摘は issues から外れている。0 件が「見ていない」でないと分かるよう、
+    // 外した件数と対象を別に出す (reviewer はここを読めば puml を開かずに済む)。
+    const om = m.result.omitted || [];
     s.method = {
       issues: mi.length,
       suspect: mi.filter((it) => it.kind === 'method-as-class' || it.kind === 'draft-only').length,
+      omitted: om.length,
+      omittedLines: om.map((it) => `${it.cls || it.owner || '?'}.${it.method} — ${it.reason || '理由の記載なし'}`
+        + (it.omitDoc ? ` (${it.omitDoc})` : '')),
     };
   }
   const c = audits.consistency;
@@ -230,6 +333,15 @@ function summarize(audits) {
       missingNames: sv.result.rows.filter((r) => r.status === 'missing').map((r) => r.name),
       staleNames: sv.result.rows.filter((r) => r.status === 'stale').map((r) => r.name),
     };
+    // BLK-reviewer-20260914-2106: 「SVG が古い」を 3 つに割る。割らないと
+    // reviewer は 1 枚ずつ render API を叩いて文字列 diff を取る使い捨ての
+    // スクリプトを書くことになり、図が増えるほど手作業が線形に増える。
+    const reasons = sv.result.staleReasons || {};
+    const pick = (v) => s.svg.staleNames.filter((n) => reasons[n] === v);
+    // 件数は名前の数なので持たない (要約の行数はそのまま grep のしやすさになる)。
+    s.svg.staleCommentOnlyNames = pick('same');
+    s.svg.staleContentNames = pick('differ');
+    s.svg.staleUnknownNames = pick('unknown');
   }
   const dn = audits.density;
   if (dn && dn.status === 'ok') {
@@ -323,11 +435,12 @@ function summarize(audits) {
 // 取り違えない)。フィールドの既定はここ 1 か所に書く。
 const SUMMARY_FIELDS = {
   name: ['variants', 'undeclared', 'clean', 'variantLines', 'undeclaredLines'],
-  method: ['issues', 'suspect'],
+  method: ['issues', 'suspect', 'omitted', 'omittedLines'],
   consistency: ['naming', 'unused', 'methods', 'methodReplies', 'granularity', 'events', 'count'],
   family: ['families', 'mismatched', 'skippedPairs'],
   trace: ['families', 'transitions', 'missing', 'partial', 'unmatchable', 'noSequence', 'grainSkipped', 'outOfScope'],
-  svg: ['files', 'missing', 'stale', 'unknown', 'missingNames', 'staleNames'],
+  svg: ['files', 'missing', 'stale', 'unknown', 'missingNames', 'staleNames',
+    'staleCommentOnlyNames', 'staleContentNames', 'staleUnknownNames'],
   density: ['families', 'counted', 'skippedNames', 'median', 'outliers', 'outlierNames'],
   label: ['families', 'known', 'common', 'commonLabel', 'odd', 'oddNames', 'mixedNames'],
   cohort: ['domains', 'crossFolder', 'mismatched', 'mismatchedNames', 'unpairedNames',
@@ -401,6 +514,49 @@ function baselineFiles(prev, options) {
   return null;
 }
 
+// 内容が変わった図ごとの増減。控えの本文が手元にある run (--since-files) でだけ出す。
+// 既定は 10 枚まで。打ち切ったら残りを必ず言う (「これで全部」と読ませない)。
+function changedDetailLines(fd, options) {
+  const opts = options || {};
+  const MA = opts.MA;
+  const FCD = MA && MA.fileChangeDetail;
+  if (!FCD || !fd || !opts.prevDocs || !opts.curDocs) return [];
+  const changed = (fd.dataChanged || []).concat(fd.templateChanged || []);
+  // BLK-reviewer-20260916-0629-friction: 変わった図が 0 枚の回は何も出さなかったので、
+  // 「機能が効いていない」と「比べる変化が無かった」が出力から見分けられなかった。
+  // 監査ツール共通の語「対象なし」で言い切る (blk-check.js はこの語で無変化の回と判定する)。
+  if (!changed.length) return ['  内容の変化: 対象なし (前回の控えから内容が変わった図は 0 枚)'];
+  const rows = FCD.sort(FCD.rows(changed, opts.prevDocs, opts.curDocs));
+  const cap = opts.pairsMax > 0 ? opts.pairsMax : 10;
+  const out = [];
+  // BLK-reviewer-20260916-0526-wish: 代表行で足りる図はそのまま、大きく動いた図は
+  // その場で全文を開く。開かないときも閾値を超えた図には促しを 1 行添えるので、
+  // 「ほか N 行」の中身を読むために cat へ戻る run が無くなる。
+  const FD = MA && MA.fullDiff;
+  const th = opts.fullDiffThreshold > 0 ? opts.fullDiffThreshold
+    : (FD ? FD.DEFAULT_THRESHOLD : 20);
+  const prevText = {}, curText = {};
+  if (FD) {
+    for (const d of opts.prevDocs) if (d && d.name != null) prevText[String(d.name)] = d.dsl;
+    for (const d of opts.curDocs) if (d && d.name != null) curText[String(d.name)] = d.dsl;
+  }
+  for (const r of rows.slice(0, cap)) {
+    out.push('  変化の中身: ' + FCD.line(r));
+    if (!FD || !r.comparable) continue;
+    const full = FD.row(r.name, prevText[r.name], curText[r.name]);
+    if (FD.shouldOpen(full, opts.fullDiff, th)) {
+      for (const l of FD.render(full)) out.push('  ' + l);
+    } else {
+      const h = FD.hint(full, th);
+      if (h) out.push('  ' + h);
+    }
+  }
+  if (rows.length > cap) {
+    out.push(`  変化の中身: ほか ${rows.length - cap} 枚 (--pairs-max で全部出す)`);
+  }
+  return out;
+}
+
 // 人が読む 1 行ずつの要約。--summary のときだけ使う。
 function formatSummary(report, prev, options) {
   const opts = options || {};
@@ -412,8 +568,12 @@ function formatSummary(report, prev, options) {
     for (const l of (s.name.variantLines || [])) lines.push('  ' + l);
     for (const l of (s.name.undeclaredLines || [])) lines.push('  宣言なし: ' + l);
   }
-  if (s.method) lines.push(`メソッド突合: 指摘 ${s.method.issues} 件`
-    + (s.method.suspect ? ` (うち宣言の付け方の疑い ${s.method.suspect} 件)` : ''));
+  if (s.method) {
+    lines.push(`メソッド突合: 指摘 ${s.method.issues} 件`
+      + (s.method.suspect ? ` (うち宣言の付け方の疑い ${s.method.suspect} 件)` : '')
+      + (s.method.omitted ? ` / 意図省略で除外 ${s.method.omitted} 件` : ''));
+    for (const l of (s.method.omittedLines || [])) lines.push('  意図省略: ' + l);
+  }
   if (s.consistency) lines.push(`整合: 命名 ${s.consistency.naming} / 未使用 ${s.consistency.unused} / メソッド ${s.consistency.methods}`
     + (s.consistency.methodReplies ? ` (応答として除外 ${s.consistency.methodReplies} 件)` : '')
     + ` / 粒度 ${s.consistency.granularity} / イベント ${s.consistency.events}`);
@@ -477,7 +637,24 @@ function formatSummary(report, prev, options) {
     } else {
       const parts = [];
       if (s.svg.missing) parts.push(`SVG が無い ${s.svg.missing} 枚 (${s.svg.missingNames.join(', ')})`);
-      if (s.svg.stale) parts.push(`SVG が古い ${s.svg.stale} 枚 (${s.svg.staleNames.join(', ')})`);
+      if (s.svg.stale) {
+        // 「古い」だけでは作り直しの要否が決まらない。中身で割った内訳を同じ行に出す。
+        const why = [];
+        const content = s.svg.staleContentNames || [];
+        const commentOnly = s.svg.staleCommentOnlyNames || [];
+        const noSrc = s.svg.staleUnknownNames || [];
+        if (content.length) {
+          why.push(`可視内容の食い違い ${content.length} 枚 (${content.join(', ')})`);
+        }
+        if (commentOnly.length) {
+          why.push(`コメント等ソース変化のみ ${commentOnly.length} 枚 (${commentOnly.join(', ')})`);
+        }
+        if (noSrc.length) {
+          why.push(`畳まれた DSL が無く中身では言えない ${noSrc.length} 枚 (${noSrc.join(', ')})`);
+        }
+        parts.push(`SVG が古い ${s.svg.stale} 枚 (${s.svg.staleNames.join(', ')})`
+          + (why.length ? ` — ${why.join(' / ')}` : ''));
+      }
       if (s.svg.unknown) parts.push(`時刻が取れず不明 ${s.svg.unknown} 枚`);
       lines.push(`出力物: ${parts.join(' / ')}`);
     }
@@ -529,7 +706,12 @@ function formatSummary(report, prev, options) {
     const base = baselineFiles(prev, opts);
     if (prev || base) {
       if (opts.prevFilesFrom) lines.push(`ファイル内容の比較元: ${opts.prevFilesFrom} (控えのフォルダから指紋を採り直した)`);
-      for (const l of auditScope.formatFileDiff(auditScope.diffFiles(base, report.files), report.files)) lines.push(l);
+      const fd = auditScope.diffFiles(base, report.files);
+      for (const l of auditScope.formatFileDiff(fd, report.files)) lines.push(l);
+      // BLK-reviewer-20260916-0046: 変わった図は名前だけでなく、何行消えたかと
+      // 代表行まで出す。ここで出さないと、指摘に具体を書くために控えのフォルダと
+      // 現物を diff コマンドで突き合わせ直すことになり、その手間が枚数ぶん増える。
+      for (const l of changedDetailLines(fd, opts)) lines.push(l);
     }
   }
   return lines.join('\n');
@@ -553,4 +735,4 @@ function buildReport(MA, docs, options) {
   };
 }
 
-module.exports = { collectDocs, runAudits, summarize, totalIssues, buildReport, formatSummary, auditNames, baselineFiles, summaryView, SUMMARY_FIELDS };
+module.exports = { collectDocs, runAudits, summarize, totalIssues, buildReport, formatSummary, auditNames, baselineFiles, summaryView, SUMMARY_FIELDS, changedDetailLines };

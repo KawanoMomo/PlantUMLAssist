@@ -48,6 +48,28 @@
 
   function _list(v) { return Array.isArray(v) ? v : []; }
 
+  // BLK-reviewer-20260914-2206 (差し戻し 1 回目): 行 1 件の「実体 id」。
+  // 同じ欠陥が別の図に出ても、カテゴリの箱が移っても同じ文字列になる id は
+  // audit-timeline が既に持っており (findings.js の継続追跡もこれで数える)、
+  // 同一性の正はそちら。ここで行に貼っておくと、前回の突合結果と今回を
+  // 突き合わせる側 (review-board) が指摘.md の自然文を読まずに新規を決められる。
+  function _timeline() {
+    if (typeof window !== 'undefined' && window.MA && window.MA.auditTimeline) return window.MA.auditTimeline;
+    if (typeof require === 'function') { try { return require('./audit-timeline.js'); } catch (e) {} }
+    return null;
+  }
+
+  // 出力物の行は「その図の出力物」が実体。無・古・内容ずれは同じ図の同じ話が
+  // 箱を移っているだけなので、3 つとも同じ実体 id にする
+  // (箱が移った回を「解消 + 新規」と読ませない)。
+  var ENTITY_KIND = { 'svg.differ': 'svg.stale', 'svg.missing': 'svg.stale' };
+
+  function _entity(kind, item) {
+    var tl = _timeline();
+    if (!tl || !item) return '';
+    try { return _s(tl.entityId(ENTITY_KIND[kind] || kind, item)); } catch (e) { return ''; }
+  }
+
   function _docsOf(v) {
     return _list(v).map(_s).filter(function(s) { return s !== ''; });
   }
@@ -64,6 +86,10 @@
       doc: _s(doc) || CROSS, title: _s(title), detail: _s(detail),
       docs: _docsOf(docs && docs.length ? docs : (_s(doc) && _s(doc) !== CROSS ? [doc] : [])),
       line: ref && ref.line ? ref.line : 0,
+      // 実体 id (findings.js と同じ同一性)。突合結果が元の項目を渡していない
+      // 呼び出し (古いテスト・手で組んだ board) では空文字になり、
+      // 受け取る側は「id で突き合わせられない行」として扱う。
+      entity: _entity(kind, ref && ref.item),
       // 「読み直さなくてよい」と分かっている手動指摘。件数からは外して数える
       // (0 件になったのか、見ないことにしただけなのかを潰さない)。
       keep: !!(ref && ref.keep),
@@ -82,12 +108,13 @@
         _docsOf(m.docs).forEach(function(d) { if (docs.indexOf(d) < 0) docs.push(d); });
       });
       out.push(_row('name.variants', _oneDoc(docs), _s(v.suggested),
-        names.join(' / ') + ' が同じ物を指しています。多数派は ' + _s(v.suggested), docs));
+        names.join(' / ') + ' が同じ物を指しています。多数派は ' + _s(v.suggested), docs,
+        { item: v }));
     });
     _list(res.undeclared).forEach(function(u) {
       var docs = _docsOf(u.docs);
       out.push(_row('name.undeclared', _oneDoc(docs), _s(u.name),
-        '矢印にだけ現れ、宣言がありません', docs));
+        '矢印にだけ現れ、宣言がありません', docs, { item: u }));
     });
   }
 
@@ -95,24 +122,25 @@
     _list(res.naming).forEach(function(n) {
       var docs = _docsOf(n.docs);
       out.push(_row('consistency.naming', _oneDoc(docs), _s(n.name),
-        '語尾 ' + _s(n.suffix) + ' は少数派です。多数派は ' + _s(n.expected), docs));
+        '語尾 ' + _s(n.suffix) + ' は少数派です。多数派は ' + _s(n.expected), docs, { item: n }));
     });
     _list(res.unused).forEach(function(u) {
       out.push(_row('consistency.unused', _s(u.doc), _s(u.name),
-        'participant として宣言されていますが、どの矢印にも出てきません'));
+        'participant として宣言されていますが、どの矢印にも出てきません', null, { item: u }));
     });
     _list(res.methods).forEach(function(m) {
       out.push(_row('consistency.methods', _s(m.doc), _s(m.target) + '.' + _s(m.method),
-        'シーケンスで呼んでいますが、クラス図の ' + _s(m.target) + ' にこのメソッドがありません'));
+        'シーケンスで呼んでいますが、クラス図の ' + _s(m.target) + ' にこのメソッドがありません',
+        null, { item: m }));
     });
     _list(res.events).forEach(function(e) {
       out.push(_row('consistency.events', _oneDoc(e.docs), _s(e.event),
         '状態遷移のイベントに対応するメソッドが ' + (_s(e.cls) || _s(e.owner) || 'クラス図') + ' にありません',
-        e.docs));
+        e.docs, { item: e }));
     });
     _list(res.granularity).forEach(function(g) {
       out.push(_row('consistency.granularity', _s(g.onlyIn), _s(g.label),
-        '系統 ' + _s(g.family) + ' のうち ' + _s(g.onlyIn) + ' にしかありません'));
+        '系統 ' + _s(g.family) + ' のうち ' + _s(g.onlyIn) + ' にしかありません', null, { item: g }));
     });
   }
 
@@ -121,7 +149,8 @@
       if (!f.comparable) return;
       _list(f.mismatches).forEach(function(m) {
         out.push(_row('family.mismatches', _s(m.onlyIn), _s(m.label || m.key),
-          '系統 ' + _s(f.key) + ' の片方 (' + _s(m.onlyIn) + ') にしかありません'));
+          '系統 ' + _s(f.key) + ' の片方 (' + _s(m.onlyIn) + ') にしかありません', null,
+          { item: { family: f.family || f.key || f.name, key: m.key, label: m.label } }));
       });
     });
   }
@@ -131,7 +160,8 @@
       _list(g.missing).forEach(function(m) {
         out.push(_row('trace.missing', _s(m.docName), _s(m.from) + ' → ' + _s(m.to),
           '系統 ' + _s(g.key) + ' の遷移 ' + (_s(m.label) || '(名前なし)')
-          + ' がシーケンス図に現れません', [m.docName], { line: m.line }));
+          + ' がシーケンス図に現れません', [m.docName],
+          { line: m.line, item: { family: g.family || g.key || g.name, from: m.from, to: m.to, label: m.label || m.event } }));
       });
     });
   }
@@ -141,9 +171,14 @@
       out.push(_row('method.issues', _oneDoc(i.docs), _s(i.owner || i.cls) + '.' + _s(i.method),
         _s(i.kind) === 'no-method'
           ? 'クラス図に定義がありません'
-          : 'メソッド突合で ' + _s(i.kind) + ' として挙がっています', i.docs));
+          : 'メソッド突合で ' + _s(i.kind) + ' として挙がっています', i.docs, { item: i }));
     });
   }
+
+  // BLK-reviewer-20260915-0606: 内容で追いついていると分かった図 (一致 / 体裁差) は
+  // 作り直しが要らないので、mtime が古くても指摘にしない (svg-freshness.isSettled と
+  // 同じ線。ここは MA に依存しないモジュールなので、判定の言葉だけを写す)。
+  function _settled(content) { return content === 'match' || content === 'format'; }
 
   // svg-freshness.scan() の結果。内容ずれ (differ) は mtime の新旧に関わらず出す
   // (中身が食い違う図は、印が新しくても読める図ではない)。
@@ -152,13 +187,16 @@
       var name = _s(r.name);
       if (!name) return;
       if (r.content === 'differ') {
-        out.push(_row('svg.differ', name, name, '保存中の SVG の中身が今の図と食い違います'));
+        out.push(_row('svg.differ', name, name, '保存中の SVG の中身が今の図と食い違います',
+          null, { item: { name: name } }));
         return;
       }
       if (r.status === 'missing') {
-        out.push(_row('svg.missing', name, name, 'SVG が書き出されていません'));
-      } else if (r.status === 'stale') {
-        out.push(_row('svg.stale', name, name, 'SVG が図より古いままです'));
+        out.push(_row('svg.missing', name, name, 'SVG が書き出されていません',
+          null, { item: { name: name } }));
+      } else if (r.status === 'stale' && !_settled(r.content)) {
+        out.push(_row('svg.stale', name, name, 'SVG が図より古いままです',
+          null, { item: { name: name } }));
       }
     });
   }
@@ -168,7 +206,7 @@
     _list(rows).forEach(function(r) {
       out.push(_row('manual', _s(r.doc), _s(r.text),
         _s(r.label) + (r.line ? '（' + r.line + ' 行目）' : ''), [r.doc],
-        { line: r.line, keep: r.keep }));
+        { line: r.line, keep: r.keep, item: { doc: _s(r.doc), text: _s(r.text) } }));
     });
   }
 

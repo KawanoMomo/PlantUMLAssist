@@ -6,6 +6,7 @@
 // 「資料化」で部品と図種を選ぶだけで、形式・題名の (資料用)・保存・庫までを 1 回で行う。
 const { test, expect } = require('@playwright/test');
 const S = require('./_scenario');
+const path = require('path');
 
 const DIR = S.dirFor(__filename);
 
@@ -18,6 +19,9 @@ test('手順5(状態遷移図) SVG として書き出せる', async ({ page }) =
   // 到達条件: SVG が 1 本書き出される。
   expect(download).not.toBeNull();
   expect(download.suggestedFilename()).toMatch(/\.svg$/);
+  // BLK-junior-20260915-0406: 書き出し名は title (title GPIOドライバ状態遷移) ではなく
+  // .puml の保存名 (図の名前) に揃うので、保存フォルダで .puml と対になる。
+  expect(download.suggestedFilename()).toBe('gpio_state_doc.svg');
 });
 
 test('手順5(他の図種) PNG(透過背景)も同じメニューから選べる', async ({ page }) => {
@@ -28,6 +32,7 @@ test('手順5(他の図種) PNG(透過背景)も同じメニューから選べ�
   const download = await (await S.exportVia(page, 'exp-png-transparent'));
   expect(download).not.toBeNull();
   expect(download.suggestedFilename()).toMatch(/\.png$/);
+  expect(download.suggestedFilename()).toBe('gpio_seq_doc.png');
 });
 
 // 「資料化」— 部品と図種を選ぶだけで、正しい形式が自動で決まる。
@@ -409,4 +414,198 @@ test('手順4 資料化: 開いた時点で部品ごとの残りが読め、手�
   await expect(page.locator('#mexp-kind option').first()).toHaveAttribute('data-status', 'none');
   const plan = await page.locator('#mexp-plan').textContent();
   expect(plan).toContain('TIMERドライバ');
+});
+
+// BLK-junior-20260914-2106: 図種欄に［未］／［済］の印は付いたが、並びは図番号順の
+// ままだった。欲しい図種 (状態遷移図) を上から目で探して印を読み比べる必要が残る。
+// 手当ての要る図種を先頭にまとめ、済んだ図種は最後尾に送る。
+test('手順5 資料化: 図種欄は［未］の図種が先頭にまとまり、［済］が最後に来る', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  // シーケンス図だけ資料化済み (資料用を後に書くので元より新しい = ［済］)。
+  await S.putDoc(page, DIR, 'GPIOドライバ初期化シーケンス', S.GPIO_SEQ);
+  await S.putDoc(page, DIR, 'GPIOドライバ状態遷移', S.GPIO_STATE);
+  await S.putDoc(page, DIR, 'GPIOドライバ初期化シーケンス(資料用)', S.GPIO_SEQ);
+  await page.reload();
+  await page.waitForTimeout(800);
+
+  await page.locator('#btn-export').click();
+  await page.waitForSelector('#export-menu', { state: 'visible' });
+  await page.locator('#exp-material').click();
+  await page.waitForSelector('#mexp-modal', { state: 'visible' });
+  await page.waitForTimeout(900);
+
+  await page.locator('#mexp-component').selectOption('GPIOドライバ');
+  await page.waitForTimeout(500);
+
+  // 到達条件その1: 図番号順ならシーケンス図が先だが、［未］の状態遷移図が先頭に来る。
+  const opts = page.locator('#mexp-kind option');
+  await expect(opts.first()).toHaveAttribute('data-status', 'none');
+  await expect(opts.first()).toHaveText(/状態遷移図/);
+  // 到達条件その2: ［済］は最後尾にまとまる (上から読んで最初に当たるのが手当て先)。
+  await expect(opts.last()).toHaveAttribute('data-status', 'fresh');
+  await expect(opts.last()).toHaveText(/シーケンス図/);
+
+  // 到達条件その3: 並べ替えても選択と計画は崩れない (先頭の未着手が選ばれている)。
+  await expect(page.locator('#mexp-kind')).toHaveValue('状態遷移図');
+  await expect(page.locator('#mexp-plan')).toContainText('SVG');
+  await expect(page.locator('#mexp-run')).toBeEnabled();
+});
+
+// BLK-junior-20260914-2206: 部品欄に「TIMERドライバ（資料化が要る 2/5 図種）」と
+// 「TimerDrv派生クラス（資料化が要る 1/1 図種）」が並ぶと、先頭が似ている
+// (ローマ字表記かカナ表記かの差しかない) ので上を選んでしまう。図種欄を開いて
+// 目当ての「クラス図」が無いと分かってから選び直す — そのまま押していれば
+// 無関係な画像を上書き書き出しするところだった。部品欄の行に図種名を並べる。
+test('手順4 資料化: 部品欄の行で、その部品がどの図種を持つかが読める', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  // 起票時の形。TIMERドライバ はシーケンスと状態遷移だけで、クラス図を持たない。
+  await S.putDoc(page, DIR, 'TIMERドライバ初期化シーケンス', S.GPIO_SEQ.replace(/Gpio/g, 'Timer'));
+  await S.putDoc(page, DIR, 'TIMERドライバ状態遷移', S.GPIO_STATE.replace(/Gpio/g, 'Timer'));
+  await S.putDoc(page, DIR, 'TimerDrv派生クラス', S.GPIO_CLASS
+    ? S.GPIO_CLASS.replace(/Gpio/g, 'Timer')
+    : ['@startuml', 'class Timer_Driver {', '  +Timer_Init()', '}', '@enduml'].join('\n'));
+  await page.reload();
+  await page.waitForTimeout(800);
+
+  await page.locator('#btn-export').click();
+  await page.waitForSelector('#export-menu', { state: 'visible' });
+  await page.locator('#exp-material').click();
+  await page.waitForSelector('#mexp-modal', { state: 'visible' });
+  await page.waitForTimeout(900);
+
+  const comp = page.locator('#mexp-component');
+  const timer = comp.locator('option[value="TIMERドライバ"]');
+  const drv = comp.locator('option[value="TimerDrv"]');
+
+  // 到達条件その1: どちらの行にも図種名が並ぶ。
+  await expect(timer).toHaveText(/シーケンス図/);
+  await expect(timer).toHaveText(/状態遷移図/);
+  await expect(drv).toHaveText(/クラス図/);
+
+  // 到達条件その2: 「クラス図」を持つのはどちらか が、選ぶ前に読んで分かる。
+  expect(await timer.textContent()).not.toContain('クラス図');
+  expect(await drv.textContent()).toContain('クラス図');
+
+  // 到達条件その3: 部品欄で読んだ図種の並びが、選んだ先の図種欄の並びと同じ。
+  await comp.selectOption('TIMERドライバ');
+  await page.waitForTimeout(500);
+  const label = await timer.textContent();
+  const listed = label.slice(label.indexOf('：') + 1).replace(/）$/, '').split('・');
+  const kinds = await page.locator('#mexp-kind option').allTextContents();
+  // 図種欄は印と形式 (［未］シーケンス図（PNG（透過背景））) を添えるので、図種名だけに揃える。
+  expect(kinds.map((t) => t.replace(/^［.］\s*/, '').replace(/（.*$/, '').trim())).toEqual(listed);
+});
+
+// BLK-junior-20260915-0007: 資料化は押した直後にモーダルが閉じ、根拠は一瞬出る
+// トーストだけだった。見落とすと「保存先に置けたか」を確かめる手段がモーダルに
+// 残らず、📂一覧を開き直して名前で探すまで確信が持てない (資料化 1 枚ごとに
+// フォルダタブ → フィルタ入力 → クリック が付く)。実行してもモーダルは閉じず、
+// 保存先の一覧を読み直した結果がその場に残る。
+const TIMER_ACTIVITY = [
+  '@startuml',
+  'title TIMERドライバ初期化アクティビティ',
+  'start',
+  ':クロックを有効化;',
+  ':プリスケーラを設定;',
+  ':割り込みを許可;',
+  'stop',
+  '@enduml',
+].join('\n');
+
+test('手順5 資料化: 実行後もモーダルが閉じず、保存先に置けたことがその場に残る', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  await S.putDoc(page, DIR, 'TIMERドライバ初期化アクティビティ', TIMER_ACTIVITY);
+  await page.reload();
+  await page.waitForTimeout(800);
+
+  await page.locator('#btn-export').click();
+  await page.waitForSelector('#export-menu', { state: 'visible' });
+  await page.locator('#exp-material').click();
+  await page.waitForSelector('#mexp-modal', { state: 'visible' });
+  await page.waitForTimeout(600);
+
+  // 押す前に根拠欄は出ていない (前の回の確認が残っていると読み違える)。
+  await expect(page.locator('#mexp-result')).toBeHidden();
+
+  // 残りの表のマスを押して選ぶ (部品欄の名は図名の括りで決まるので、表から選ぶ)。
+  await page.locator('#mexp-matrix-rows td.mexp-cell[data-kind="アクティビティ図"]').first().click();
+  await page.waitForTimeout(300);
+  await expect(page.locator('#mexp-kind')).toHaveValue('アクティビティ図');
+  await expect(page.locator('#mexp-run')).toBeEnabled();
+
+  const dl = page.waitForEvent('download', { timeout: 30000 }).catch(() => null);
+  await page.locator('#mexp-run').click();
+  await dl;
+
+  // 到達条件その1: モーダルは閉じず、保存先に置けたことが名前つきで残る。
+  const result = page.locator('#mexp-result');
+  await expect(result).toBeVisible({ timeout: 20000 });
+  await expect(result).toHaveAttribute('data-verified', '1', { timeout: 20000 });
+  await expect(page.locator('#mexp-modal')).toBeVisible();
+  await expect(page.locator('#mexp-result-text'))
+    .toContainText('TIMERドライバ初期化アクティビティ(資料用).puml を置けました');
+  // 保存先フォルダも名指しされる (どこに置けたかを覚えていなくてよい)。
+  await expect(page.locator('#mexp-result-text')).toContainText(path.basename(S.dirFor(__filename)));
+
+  // 根拠は実物と合っている (一覧を開き直さずに済むのは、これが実測だから)。
+  const saved = await S.readDoc(page, DIR, 'TIMERドライバ初期化アクティビティ(資料用)');
+  expect(saved).toContain('(資料用)');
+
+  // 到達条件その2: そのまま次の 1 枚を続けられ、根拠は新しい図に入れ替わる。
+  await page.locator('#mexp-result-open').click();
+  await expect(page.locator('#mexp-modal')).toBeHidden();
+  await expect(page.locator('#folder-panel')).toHaveClass(/open/);
+  await expect(page.locator('#folder-filter'))
+    .toHaveValue('TIMERドライバ初期化アクティビティ(資料用)');
+});
+
+// 部品単位の一括資料化 (BLK-junior-20260915-0106-wish)。表で「TIMER に 3 図種
+// 残っている」と読めても、資料化は 1 マスずつ (マスを押す → 資料化する) しか
+// できず、図種の数だけ同じ往復を繰り返していた。設計書に貼るのは部品の資料一式
+// なので、行の一括ボタン 1 押しで、その部品の未/古の図種を全部まとめて出す。
+test('手順4 資料化: 部品の行を 1 押しで、未/古の図種をまとめて資料化できる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  // TIMER は 3 図種 (うち状態遷移は資料用が既にあり最新)、GPIO は 1 図種。
+  await S.putDoc(page, DIR, 'TIMERドライバ初期化シーケンス', S.GPIO_SEQ.replace(/Gpio/g, 'Timer'));
+  await S.putDoc(page, DIR, 'TIMERドライバ初期化アクティビティ', TIMER_ACTIVITY);
+  await S.putDoc(page, DIR, 'TIMERドライバ状態遷移', S.GPIO_STATE.replace(/Gpio/g, 'Timer'));
+  await S.putDoc(page, DIR, 'TIMERドライバ状態遷移(資料用)', S.GPIO_STATE.replace(/Gpio/g, 'Timer'));
+  await S.putDoc(page, DIR, 'GPIOドライバ状態遷移', S.GPIO_STATE);
+  await page.reload();
+  await page.waitForTimeout(800);
+
+  await page.locator('#btn-export').click();
+  await page.waitForSelector('#export-menu', { state: 'visible' });
+  await page.locator('#exp-material').click();
+  await page.waitForSelector('#mexp-modal', { state: 'visible' });
+  await page.waitForTimeout(900);
+
+  // 到達条件その1: 押す前に、その行で何図種出るかがボタンから読める
+  // (図種欄を開いて数え直さなくてよい)。
+  const timerRun = page.locator('tr[data-component="TIMERドライバ"] button.mexp-row-run');
+  await expect(timerRun).toHaveText('残り 2 図種をまとめて資料化');
+  await expect(timerRun).toBeEnabled();
+
+  // 到達条件その2: 1 押しで 2 図種ぶんが出る (図種を選び直さない)。
+  await timerRun.click();
+  await expect(page.locator('#mexp-state'))
+    .toContainText('2 図種をまとめて資料化しました', { timeout: 60000 });
+  await expect(page.locator('#mexp-state')).toContainText('TIMERドライバ');
+
+  // 到達条件その3: 出たのは未/古の図種だけで、形式は図種の決まりどおり。
+  await page.waitForTimeout(1200);
+  expect(await S.readDoc(page, DIR, 'TIMERドライバ初期化シーケンス(資料用)')).not.toBeNull();
+  expect(await S.readDoc(page, DIR, 'TIMERドライバ初期化アクティビティ(資料用)')).not.toBeNull();
+  // 最新だった状態遷移は出し直さない (GPIO も巻き込まない)。
+  expect(await S.readDoc(page, DIR, 'GPIOドライバ状態遷移(資料用)')).toBeNull();
+
+  // 到達条件その4: 表はその場で描き直され、TIMER の行に残りが無くなる
+  // (📂一覧へ確かめに戻らなくてよい)。
+  await expect(page.locator('tr[data-component="TIMERドライバ"] button.mexp-row-run'))
+    .toHaveText('すべて最新', { timeout: 20000 });
+  await expect(page.locator('tr[data-component="TIMERドライバ"] button.mexp-row-run')).toBeDisabled();
 });

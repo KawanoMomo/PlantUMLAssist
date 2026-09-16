@@ -264,6 +264,86 @@ window.MA.kindMatrix = (function() {
     return ['👀! 要確認', '👀 未確認', '△ 自分に無し', '✓ 控え済み', '· 手本なし'].join(' / ');
   }
 
+  // ── 相手の作成進捗 (BLK-junior-20260917-0423-wish) ────────────────────
+  // 上の印は「自分が確かめたか」を言うもので、「相手がその図を作ってあるか」は
+  // 言わない。取り込む場面の手順 1 は相手の図を開くところから始まるので、
+  // 先に要るのは「相手にその 1 枚があるか」の 1 文字。無い組を目で探して初めて
+  // 「まだ無い」と分かる、をここで無くす (判定は scanAll の theirCount だけ)。
+  var MADE_MARKS = { made: '済', none: '未' };
+
+  function madeState(row) {
+    return (row && row.theirCount > 0) ? 'made' : 'none';
+  }
+
+  function madeMark(row) {
+    return MADE_MARKS[madeState(row)];
+  }
+
+  // 1 マスの説明。押す前に「何が何枚あるか / 無いのか」を読ませる。
+  function madeTitle(row, subject, dir) {
+    if (!row) return '';
+    var who = _s(dir) || '相手';
+    var sub = _s(subject).toUpperCase();
+    var head = who + ' の ' + sub + ' ' + row.label + '図';
+    if (row.theirCount > 0) {
+      return head + ' は ' + row.theirCount + ' 枚あります（' + row.theirs.join('・') + '）';
+    }
+    return head + 'はまだありません（自分は ' + row.mineCount + ' 枚）';
+  }
+
+  // 表ぜんぶの 済/未 の数。
+  function madeCounts(all) {
+    var made = 0, none = 0;
+    ((all && all.rows) || []).forEach(function(sc) {
+      sc.rows.forEach(function(r) {
+        if (madeState(r) === 'made') made++; else none++;
+      });
+    });
+    return { made: made, none: none, total: made + none };
+  }
+
+  // 見出しの 1 行。「相手がどこまで作ってあるか」を先に言い切る。
+  function madeSummary(all, dir) {
+    if (!all || !all.rows.length) return '';
+    var c = madeCounts(all);
+    return (_s(dir) || '相手') + ' の作りかけ: ' + all.rows.length + ' 部品 × '
+      + all.kinds.length + ' 図種のうち 済 ' + c.made + ' / 未 ' + c.none;
+  }
+
+  // まだ無い 1 マス。表の上から、図種の並び順に探す
+  // (「次に取り込めるものが無い」と分かれば、その場で起票に回れる)。
+  function firstMissing(all) {
+    var rows = (all && all.rows) || [];
+    for (var r = 0; r < rows.length; r++) {
+      for (var k = 0; k < rows[r].rows.length; k++) {
+        if (madeState(rows[r].rows[k]) === 'none') {
+          return {
+            subject: rows[r].subject,
+            kind: rows[r].rows[k].kind,
+            label: rows[r].rows[k].label,
+            row: rows[r].rows[k],
+          };
+        }
+      }
+    }
+    return null;
+  }
+
+  // 未のマスを全部。起票の下書きに、どの組が無いかを並べて書ける。
+  function missingCells(all) {
+    var out = [];
+    ((all && all.rows) || []).forEach(function(sc) {
+      sc.rows.forEach(function(r) {
+        if (madeState(r) === 'none') out.push({ subject: sc.subject, kind: r.kind, label: r.label });
+      });
+    });
+    return out;
+  }
+
+  function madeLegend() {
+    return '済 = 相手にその図がある / 未 = まだ無い（押せば読むだけで開きます）';
+  }
+
   return {
     order: order,
     kindLabel: kindLabel,
@@ -278,6 +358,15 @@ window.MA.kindMatrix = (function() {
     cellMark: cellMark,
     nextCell: nextCell,
     legend: legend,
+    MADE_MARKS: MADE_MARKS,
+    madeState: madeState,
+    madeMark: madeMark,
+    madeTitle: madeTitle,
+    madeCounts: madeCounts,
+    madeSummary: madeSummary,
+    firstMissing: firstMissing,
+    missingCells: missingCells,
+    madeLegend: madeLegend,
     MARKS: MARKS,
     CELL_MARKS: CELL_MARKS,
   };

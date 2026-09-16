@@ -35,7 +35,21 @@ window.MA.docSet = (function() {
     return out;
   }
 
-  // normalize(sets) — server から来たセットを {name, docs, at} に揃える。
+  function _items(items) {
+    var out = [];
+    var seen = {};
+    (Array.isArray(items) ? items : []).forEach(function(it) {
+      var name = _s(it && it.name).trim();
+      if (name === '' || seen[name]) return;
+      seen[name] = true;
+      out.push({ name: name,
+                 heading: _s(it && it.heading).replace(/[\r\n]+/g, ' ').trim(),
+                 note: _s(it && it.note).replace(/[\r\n]+/g, ' ').trim() });
+    });
+    return out;
+  }
+
+  // normalize(sets) — server から来たセットを {name, docs, items, at} に揃える。
   // 名前の無いもの・図が 1 枚も無いものはセットではないので落とす
   // (空のセットを選べてしまうと、また 0 枚の zip が出る)。
   function normalize(sets) {
@@ -46,7 +60,9 @@ window.MA.docSet = (function() {
       var docs = normalizeDocs(s && s.docs);
       if (name === '' || docs.length === 0 || seen[name]) return;
       seen[name] = true;
-      out.push({ name: name, docs: docs, at: _s(s && s.at) });
+      // items は資料に貼るときの体裁 (見出し・1 行説明)。並びの正本は docs なので
+      // ここでは素通しし、突き合わせは doc-layout の職掌にする。
+      out.push({ name: name, docs: docs, items: _items(s && s.items), at: _s(s && s.at) });
     });
     out.sort(function(a, b) { return _time(b.at) - _time(a.at); });
     return out;
@@ -95,12 +111,22 @@ window.MA.docSet = (function() {
   }
 
   // upsert(sets, name, docs) — 同じ名前は 1 つ。上書きすると先頭に上がる。
-  function upsert(sets, name, docs, at) {
+  // 体裁 (items) は渡されなければ、その名前の既存の体裁を引き継ぐ
+  // (図を足し直しただけで見出しと説明が消えると、書き直す手戻りが戻ってくる)。
+  function upsert(sets, name, docs, at, items) {
     var want = _s(name).trim();
     var rows = normalizeDocs(docs);
     if (want === '' || rows.length === 0) return normalize(sets);
-    var kept = normalize(sets).filter(function(s) { return s.name !== want; });
-    kept.unshift({ name: want, docs: rows, at: _s(at) || new Date().toISOString() });
+    var all = normalize(sets);
+    var prev = null;
+    var kept = all.filter(function(s) {
+      if (s.name === want) { prev = s; return false; }
+      return true;
+    });
+    var its = items === undefined ? (prev ? prev.items : []) : _items(items);
+    kept.unshift({ name: want, docs: rows,
+                   items: its.filter(function(it) { return rows.indexOf(it.name) >= 0; }),
+                   at: _s(at) || new Date().toISOString() });
     return kept;
   }
 

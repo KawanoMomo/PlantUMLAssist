@@ -705,3 +705,289 @@ test.describe('primary 手順5.5: 未着手の依頼が何件・何 tick 続い�
     await expect(page.locator('#peek-note')).toContainText('primary への依頼');
   });
 });
+
+// BLK-primary-20260914-2106: 起動すると既定のタブ (diagram1) が図種の見本で作られる。
+// 画面のバッジは数を出すために saveActiveDoc() を通るので、利用者が 1 文字も
+// 打っていないのに見本が diagram1.puml としてディスクへ書かれ、同じ名前で保存して
+// あった本物の図 (domain-verdict 宣言行つき) が見本で潰れていた。開き直すたびに
+// 再発するので、GUI 経由での SVG 再生成 (stale 解消) ができなくなる。
+const VERDICT_DOC = [
+  '@startuml',
+  "' domain-verdict: reviewed 2026-09-14",
+  'title diagram1',
+  'participant App',
+  'participant Drv',
+  'App -> Drv : Init()',
+  '@enduml',
+].join('\n');
+
+test('手順5.5 保存フォルダの diagram1 は、起動しただけでは見本で潰れない', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  await S.putDoc(page, DIR, 'diagram1', VERDICT_DOC);
+
+  // 開き直す = 既定のタブ名 diagram1 でこの画面が立ち上がる場面そのもの。
+  await page.reload();
+  await page.waitForTimeout(1800);
+
+  // 到達条件その1: 同じ名前の図が保存フォルダにあるなら、タブの中身はその図。
+  const shown = await page.locator('#editor').inputValue();
+  expect(shown).toContain('domain-verdict');
+
+  // 到達条件その2: 起動しただけで保存フォルダの本体が書き換わらない。
+  const onDisk = await S.readDoc(page, DIR, 'diagram1');
+  expect(onDisk).toContain('domain-verdict');
+  expect(onDisk).not.toContain('Sample Sequence');
+
+  // 到達条件その3: 一覧から開き直しても同じで、そのまま保存しても宣言行は残る
+  // (= GUI から SVG を作り直せる)。
+  await S.openFolderItem(page, 'diagram1');
+  await page.waitForTimeout(600);
+  const lock = page.locator('#source-lock-modal');
+  if (await lock.isVisible().catch(() => false)) {
+    await page.locator('#source-lock-overwrite').click();
+    await page.waitForTimeout(600);
+  }
+  expect(await page.locator('#editor').inputValue()).toContain('domain-verdict');
+  // 画面に出ている保存は上部バーの [💾 保存] (#btn-save はツールを畳むと隠れる)。
+  await page.locator('#top-save').click();
+  await page.waitForTimeout(1500);
+  expect(await S.readDoc(page, DIR, 'diagram1')).toContain('domain-verdict');
+});
+
+// BLK-primary-20260915-0007-friction: 依頼2 は「クラス図への追加、または意図的省略
+// である旨の明記」という二択で来る。前者だけが [適用] だったため、後者を選んだ
+// primary は driver_common_class を開き、#editor の末尾へ
+// `note top of ClockCtrl : ...(reviewer依頼2への回答)` を全文タイプしていた
+// (実測 keys=124、1 手順でキー入力 50 超)。二択のもう一方も押すだけで当たることを
+// 到達条件にする。
+const INT_ROOT = './test-results/primary-05b-intent';
+const INT_MINE = INT_ROOT + '/primary';
+const INT_REVIEWER = INT_ROOT + '/reviewer';
+
+const INT_NOTE = [
+  '# primary への指摘',
+  '',
+  '## 【継続・3 tick目】依頼2: メソッド呼び出し先のクラス図欠落',
+  '- `ClockCtrl.EnableClock()`(各 init_sequence)',
+  '- `NVIC.EnableVector()` `NVIC.SetPriority()`(irq_init_sequence)',
+  '- `DmaCtrl.Can_Write()`(can.puml)',
+  '対応するクラス図にメソッド宣言がない。クラス図への追加、または',
+  '`irq_init_sequence.puml` の note のように意図的省略である旨を明記してほしい。',
+].join('\n');
+
+// ClockCtrl / NVIC は宣言済み (note を向けられる)。DmaCtrl は未宣言。
+const INT_CLASS = ['@startuml', 'title ドライバ共通クラス図',
+  'class ClockCtrl', 'class NVIC',
+  'class Timer_Driver {', '  + Timer_Init() : void', '}', '@enduml'].join('\n');
+
+test.describe('手順5.5 二択の指摘は、明記する側も [適用] で当たる', () => {
+  test.beforeEach(async ({ page }) => {
+    await S.bootWithSaveDir(page, INT_MINE);
+    await S.clearDir(page, INT_MINE);
+    await S.putDoc(page, INT_MINE, 'driver_common_class', INT_CLASS);
+    fs.mkdirSync(absOf(INT_REVIEWER), { recursive: true });
+    fs.writeFileSync(nodePath.join(absOf(INT_REVIEWER), '指摘.md'), INT_NOTE, 'utf-8');
+    await page.reload();
+    await page.waitForSelector('#btn-tab-peek');
+    await page.locator('#btn-tab-peek').click();
+    await page.waitForSelector('#peek-modal');
+    await page.locator('#peek-note-toggle').click();
+    await page.waitForSelector('#peek-note .note-action-row');
+  });
+
+  test('二択の指摘の行に、本手と並んで [意図を明記] が出る', async ({ page }) => {
+    const row = page.locator('#peek-note .note-action-row[data-note-alt="noteintent"]');
+    // 到達条件その1: 二択だと分かる 2 つ目の押し所が、本手を隠さずに並ぶ。
+    await expect(row).toHaveAttribute('data-note-alt-ready', '1');
+    await expect(row.locator('.note-apply').first()).toBeEnabled();
+    const alt = row.locator('.note-apply-alt');
+    await expect(alt).toHaveText('意図を明記');
+    // 到達条件その2: 押す前に、どのクラスに何が書かれるかが読める。
+    await expect(alt).toHaveAttribute('title', /意図を明記: ClockCtrl・NVIC/);
+  });
+
+  test('[意図を明記] 1 押しで、note が自分のクラス図のファイルに入る', async ({ page }) => {
+    const alt = page.locator('#peek-note .note-action-row[data-note-alt="noteintent"] .note-apply-alt');
+    await alt.click();
+    // 到達条件その1: 何をどこに書いたかが 1 行で読める。
+    await expect(page.locator('#note-summary'))
+      .toContainText('意図的省略の note を driver_common_class へ書きました', { timeout: 20000 });
+
+    // 到達条件その2: 画面だけでなく保存フォルダの実体に入っている。
+    await expect.poll(async () => (await S.readDoc(page, INT_MINE, 'driver_common_class')) || '',
+      { timeout: 15000 }).toContain('note top of ClockCtrl');
+    const saved = (await S.readDoc(page, INT_MINE, 'driver_common_class')) || '';
+    expect(saved).toContain('EnableClock() の呼び先はクラス図に置かず、意図して省略しています');
+    expect(saved).toContain('note top of NVIC : EnableVector()・SetPriority()');
+    // 到達条件その3: 宣言の無いクラスには向けない (向けると描画ごと落ちる)。
+    expect(saved).not.toContain('note top of DmaCtrl');
+    // @enduml の後ろやクラス本体の内側に落ちない。
+    expect(saved.trim().endsWith('@enduml')).toBe(true);
+  });
+});
+
+// BLK-primary-20260916-0100: 指摘の反映で driver_common_class / diagram1 が空洞化し、
+// 📂一覧の[版]→[この版に戻す]で直そうとしたが、一覧の版は 20 行とも同じ見た目で並び、
+// 新しい方はもう空洞化した後の中身だった。「戻しても直らない」で反映が手詰まりになる。
+// どの版に戻せば直るかは行数で分かるので、一覧が戻す先を名指しする。
+test.describe('手順5.5 空洞化した図を、戻す先を探さずに戻す', () => {
+  const VDIR = S.dirFor(__filename) + '-shrink';
+  const NAME = 'driver_common_class';
+  const FULL = ['@startuml', 'class Spi_Driver', 'class Can_Driver', 'class DmaCtrl',
+    'class ClockCtrl', 'class NVIC', 'Spi_Driver --> DmaCtrl', 'Can_Driver --> DmaCtrl',
+    'Spi_Driver --> ClockCtrl', 'Can_Driver --> NVIC', '@enduml'].join('\n');
+  const HOLLOW = ['@startuml', 'class Spi_Driver', '@enduml'].join('\n');
+
+  test('[版] の先頭が、いまの行数と戻す先の版を名指しして 1 クリックで戻せる', async ({ page }) => {
+    await S.bootWithSaveDir(page, VDIR);
+    await S.clearDir(page, VDIR);
+    // 充実した版 → 空洞化、の順に保存する (server が上書きの手前で控えを取る)。
+    await S.putDoc(page, VDIR, NAME, FULL);
+    await S.putDoc(page, VDIR, NAME, HOLLOW);
+    await page.reload();
+    await page.waitForSelector('#preview-svg');
+
+    await S.openFolder(page);
+    const vbtn = page.locator('.folder-versions[data-versions-name="' + NAME + '"]');
+    await expect(vbtn).toHaveCount(1);
+    await vbtn.click();
+
+    // 到達条件その1: 戻す先が名指しで先頭に出る (20 行の中から当てさせない)。
+    const notice = page.locator('.folder-version-shrink[data-version-shrink="' + NAME + '"]');
+    await expect(notice).toBeVisible({ timeout: 10000 });
+    await expect(notice).toContainText('3 行');   // いまの中身
+    await expect(notice).toContainText('11 行');  // 戻す先の版
+
+    // 到達条件その1b (差し戻し 1 回目): その 1 行が画面の中にある。
+    // 一覧の行は横に長く、パネルは横にもスクロールする。[履歴] は行の右端にあるので
+    // 押すとパネルが右へスクロールし、左端から始まる一覧は画面の外 (実測 x=-62) に出て
+    // いた。「名指しが出ない」と差し戻された正体がこれなので、位置で押さえる。
+    const where = await page.evaluate((n) => {
+      const panel = document.querySelector('#folder-panel');
+      const el = document.querySelector('.folder-version-shrink[data-version-shrink="' + n + '"]');
+      if (!panel || !el) return null;
+      const p = panel.getBoundingClientRect();
+      const e = el.getBoundingClientRect();
+      return { panelLeft: p.left, left: e.left, right: e.right, panelRight: p.right };
+    }, NAME);
+    expect(where).not.toBeNull();
+    expect(where.left).toBeGreaterThanOrEqual(where.panelLeft - 1);
+    expect(where.right).toBeLessThanOrEqual(where.panelRight + 1);
+
+    // 到達条件その2: その 1 クリックで、保存フォルダの実体が充実した版に戻る。
+    await notice.locator('.folder-version-shrink-restore').click();
+    await page.waitForTimeout(1200);
+    // 開いた図への書き戻しなので、一覧から開いたファイルの錠が一度だけ聞く。
+    const lock = page.locator('#source-lock-modal');
+    if (await lock.isVisible().catch(() => false)) {
+      await page.locator('#source-lock-overwrite').click();
+      await page.waitForTimeout(800);
+    }
+    await expect.poll(async () => (await S.readDoc(page, VDIR, NAME)) || '',
+      { timeout: 15000 }).toContain('class NVIC');
+    const saved = (await S.readDoc(page, VDIR, NAME)) || '';
+    expect(saved).toContain('Can_Driver --> DmaCtrl');
+    expect(saved).toContain('class ClockCtrl');
+  });
+
+  test('空洞化していない図には、戻す先の名指しを出さない', async ({ page }) => {
+    const OK = 'adc_ok_class';
+    await S.bootWithSaveDir(page, VDIR);
+    await S.clearDir(page, VDIR);
+    // 1 行だけ足した保存。編集の揺れであって空洞化ではない。
+    await S.putDoc(page, VDIR, OK, FULL);
+    await S.putDoc(page, VDIR, OK, FULL + '\n');
+    await page.reload();
+    await page.waitForSelector('#preview-svg');
+
+    await S.openFolder(page);
+    const vbtn = page.locator('.folder-versions[data-versions-name="' + OK + '"]');
+    await expect(vbtn).toHaveCount(1);
+    await vbtn.click();
+    await page.waitForSelector('.folder-version-list[data-version-list="' + OK + '"] .folder-version');
+    await expect(page.locator('.folder-version-shrink[data-version-shrink="' + OK + '"]')).toHaveCount(0);
+
+    // 差し戻し 1 回目: 名指しが無いだけだと「減っていない」と「機能が動いていない」が
+    // 同じ見た目になる (既に戻した後の図で開いて、動いていないと判断された)。
+    // 減っていないなら減っていないと言う。
+    const status = page.locator('.folder-version-status[data-version-status="' + OK + '"]');
+    await expect(status).toBeVisible({ timeout: 10000 });
+    await expect(status).toContainText('減っていません');
+  });
+});
+
+// BLK-primary-20260916-0526-wish: 指摘.md 2番の ClockCtrl ⇔ Clock_Ctrl のような
+// 「隣の persona との表記違い」は、reviewer が audit を通しで走らせて指摘.md に
+// 書くまで分からなかった (継続 3 tick 目)。📂一覧の「他personaと突合」は押さないと
+// 動かないので日常の保存に乗らない。保存したその場で言い切れれば、5.5 は
+// 「保存する → 衝突が無いと分かって次へ進む」の 1 画面で閉じる。
+test.describe('手順5.5 保存したその場で、隣の persona との部品名衝突が分かる', () => {
+  const ROOT = S.dirFor(__filename) + '/clash';
+  const MINE = ROOT + '/primary';
+  const THEIRS = ROOT + '/junior';
+
+  const seq = (names) => ['@startuml', ...names.map((n) => 'participant ' + n),
+    names[0] + ' -> ' + names[0] + ' : Init()', '@enduml'].join('\n');
+
+  // junior 側は Clock_Ctrl を 2 枚で使う (多数派 = 揃える先が相手の綴りになる)。
+  async function setup(page, mineDsl) {
+    await S.bootWithSaveDir(page, THEIRS);
+    await S.clearDir(page, THEIRS);
+    await S.putDoc(page, THEIRS, 'clock_state', seq(['Clock_Ctrl']));
+    await S.putDoc(page, THEIRS, 'clock_sequence', seq(['Clock_Ctrl']));
+
+    await S.bootWithSaveDir(page, MINE);
+    await S.clearDir(page, MINE);
+    await S.putDoc(page, MINE, 'spi_init_sequence', mineDsl);
+    await S.bootWithSaveDir(page, MINE);
+    await page.waitForSelector('#preview-svg');
+    await S.openFolderItem(page, 'spi_init_sequence');
+    const lock = page.locator('#source-lock-modal');
+    if (await lock.isVisible().catch(() => false)) {
+      await page.locator('#source-lock-overwrite').click();
+      await page.waitForTimeout(800);
+    }
+  }
+
+  test('保存すると、突合を押さなくても相手と相手の図を名指しする', async ({ page }) => {
+    test.setTimeout(120 * 1000);
+    await setup(page, seq(['ClockCtrl', 'SpiDrv']));
+
+    // 到達条件その1: 保存しただけで帯が出る (📂一覧の突合ボタンは押していない)。
+    await page.locator('#btn-save').dispatchEvent('click');
+    const band = page.locator('#save-clash-overlay');
+    await expect(band).toBeVisible({ timeout: 60000 });
+    await expect(page.locator('#scl-summary')).toContainText('junior');
+    await expect(page.locator('#scl-summary')).toContainText('ClockCtrl');
+
+    // 到達条件その2: 相手側の図まで名指しするので、1 枚ずつ開かずに誰に断るかが決まる。
+    await expect(page.locator('#scl-list')).toContainText('Clock_Ctrl');
+    await expect(page.locator('#scl-list')).toContainText('junior/clock_state');
+
+    // 到達条件その3: その場で揃えられる。対象は開いている図だけ (台本 5.5 の絞り込み)。
+    const fix = page.locator('#btn-scl-fix');
+    await expect(fix).toBeVisible();
+    await expect(fix).toContainText('Clock_Ctrl');
+    await fix.click();
+    await page.waitForTimeout(800);
+    expect(await page.locator('#editor').inputValue()).toContain('Clock_Ctrl');
+    expect(await page.locator('#editor').inputValue()).not.toContain('participant ClockCtrl');
+    // 相手の図は書き換えない (断りのない変更を作らない)。
+    expect(await S.readDoc(page, THEIRS, 'clock_state')).toContain('Clock_Ctrl');
+
+    // 到達条件その4: 揃えて保存し直せば帯が消え、次へ進んでよいと分かる。
+    await page.locator('#btn-save').dispatchEvent('click');
+    await expect(band).toBeHidden({ timeout: 60000 });
+  });
+
+  test('衝突が無ければ帯を出さず、何枚と照合したかを保存の後ろに出す', async ({ page }) => {
+    test.setTimeout(120 * 1000);
+    await setup(page, seq(['Clock_Ctrl', 'SpiDrv']));
+
+    await page.locator('#btn-save').dispatchEvent('click');
+    await expect(page.locator('#status-save-result')).toContainText('照合', { timeout: 60000 });
+    await expect(page.locator('#status-save-result')).toContainText('衝突なし');
+    await expect(page.locator('#save-clash-overlay')).toBeHidden();
+  });
+});

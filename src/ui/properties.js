@@ -517,6 +517,180 @@ window.MA.properties = (function() {
     return '<button id="' + id + '" style="width:100%;background:var(--accent-red);color:#fff;border:none;padding:5px 8px;border-radius:4px;cursor:pointer;font-size:12px;margin-top:8px;">' + escHtml(label) + '</button>';
   }
 
+  // ── 名前帳 (BLK-junior-20260915-0406-wish) ───────────────────────────────
+  // 同じ部品の 6 図種に出てくる名前を、入力欄のすぐ下にチップで並べる。
+  // 押せばその欄が埋まるので、手順が「先輩の図を開いて名前を探して手で打つ」から
+  // 「一覧から選ぶ」に変わる。名前帳そのものは partVocab が 1 箇所で持つ。
+  //
+  // opts: { roles, limit, placeholder, vocab }
+  //   roles … 'method' か ['method','event']。その欄に入れてよい役割だけを出す
+  //   limit … 先に出す件数 (既定 10)。残りは「＋残り N」で開く
+  // ── 正式表記の登録簿 (BLK-reviewer-20260915-0506-wish) ─────────────────
+  // reviewer が 1 度決めた「揃える先」を、junior/primary が名前を打つ場所で出す。
+  // 型 (participant / class) の欄にだけ出す — 登録簿が持つのは部品名なので、
+  // メソッド名・状態名の欄に混ぜると、揃える先でないものを揃える先に見せる。
+  var REGISTRY_ROLES = ['type'];
+
+  function registryEntries(opts) {
+    var o = opts || {};
+    var NR = window.MA.nameRegistry;
+    if (!NR) return [];
+    if (o.registry === false) return [];
+    var want = Array.isArray(o.roles) ? o.roles : (o.roles ? [o.roles] : null);
+    // 役割の指定が無い欄 (名前そのものを打つ欄) にも出す。
+    if (want && !want.some(function(r) { return REGISTRY_ROLES.indexOf(r) >= 0; })) return [];
+    var reg = o.registry !== undefined && o.registry !== true ? o.registry : NR.current();
+    return NR.suggest(reg, '', 0);
+  }
+
+  function registryChips(opts) { return registryEntries(opts); }
+
+  function registryChip(e) {
+    var NR = window.MA.nameRegistry;
+    var title = NR ? NR.entryLine(e) : e.canonical;
+    return '<button type="button" class="vocab-chip registry-chip" data-name="' + escHtml(e.canonical) + '"'
+      + ' data-role="registry" data-insert="' + escHtml(e.canonical) + '"'
+      + ' title="' + escHtml('正式表記 / ' + title) + '">'
+      + '◎' + escHtml(e.canonical) + '</button>';
+  }
+
+  function vocabPickerHtml(id, opts) {
+    var o = opts || {};
+    var PV = window.MA.partVocab;
+    if (!PV) return '';
+    var vocab = o.vocab !== undefined ? o.vocab : PV.current();
+    var items = (vocab && vocab.items.length) ? PV.suggest(vocab, o.roles, {}) : [];
+    // BLK-reviewer-20260915-0506-wish: 登録簿の正式表記も同じ並びに出す。
+    // 名前帳はこの部品の図に「今ある」綴りなので、揃える先が決まっていても
+    // 図がまだ揺れたままなら揺れた綴りしか出ない。決まっている綴りは先に出す。
+    var regChips = registryChips(o);
+    if (!items.length && !regChips.length) return '';
+    var limit = o.limit == null ? 10 : (o.limit | 0);
+
+    // 欄に入る形。シーケンスの本文は呼び出しなので `Spi_Init()` まで入れる
+    // (チップを押した後に括弧だけ手で足す 1 手を残さない)。
+    function insertText(it) {
+      return (o.callSuffix && it.role === 'method') ? it.name + '()' : it.name;
+    }
+
+    function chip(it, hidden) {
+      return '<button type="button" class="vocab-chip" data-name="' + escHtml(it.name) + '"'
+        + ' data-role="' + escHtml(it.role) + '"'
+        + ' data-insert="' + escHtml(insertText(it)) + '"'
+        + (hidden ? ' data-rest="1" style="display:none;"' : '')
+        + ' title="' + escHtml(PV.roleLabel(it.role) + ' / ' + PV.sourceText(it)) + '">'
+        + escHtml(it.name) + '</button>';
+    }
+
+    var head = PV.summary(vocab);
+    var NR = window.MA.nameRegistry;
+    if (regChips.length && NR) {
+      head = (head ? head + ' / ' : '') + '正式表記 ' + regChips.length + ' 語';
+    }
+    var rest = items.length - limit;
+    return '<div id="' + escHtml(id) + '" class="vocab-picker" data-count="' + items.length + '"'
+      + ' data-registry="' + regChips.length + '"'
+      + ' style="margin:-4px 0 8px 0;">'
+      + '<div class="vocab-head" style="font-size:10px;color:var(--text-secondary);margin-bottom:3px;">'
+      + escHtml(head) + '</div>'
+      + '<div class="vocab-chips" style="display:flex;flex-wrap:wrap;gap:3px;">'
+      + regChips.map(function(e) { return registryChip(e); }).join('')
+      + items.map(function(it, i) { return chip(it, i >= limit); }).join('')
+      + (rest > 0
+        ? '<button type="button" class="vocab-more" style="font-size:11px;padding:1px 6px;'
+          + 'background:transparent;border:1px dashed var(--border);color:var(--text-secondary);'
+          + 'border-radius:3px;cursor:pointer;">＋残り ' + rest + '</button>'
+        : '')
+      + '</div>'
+      + '<div class="vocab-warn" style="font-size:10px;color:var(--accent-orange);margin-top:3px;"></div>'
+      + '</div>';
+  }
+
+  // BLK-junior-20260915-0606: 自由文の欄 (活動図のアクション本文) では、チップで
+  // 欄ごと置き換えると打ちかけの文が消える。カーソル位置に差し込み、続けて打てるようにする。
+  // 複数行をまとめて打つ欄では、選んだ名前が既に書いた行を巻き込まないのが要件。
+  function insertAtCaret(el, text) {
+    var v = String(el.value || '');
+    var s = el.selectionStart, e = el.selectionEnd;
+    if (typeof s !== 'number' || typeof e !== 'number') { el.value = v + text; return; }
+    el.value = v.slice(0, s) + text + v.slice(e);
+    var at = s + text.length;
+    try { el.setSelectionRange(at, at); } catch (err) {}
+    if (el.focus) el.focus();
+  }
+
+  // bindVocabPicker: チップを押したら targetId の欄を埋める。
+  // 欄に手で打った名前が名前帳と揺れていれば、その場で 1 行出す。
+  // target は id でも要素でもよい (rich-label-editor の textarea は id を持たない)。
+  // opts.insert === 'caret' なら置き換えずにカーソル位置へ差し込む。
+  function bindVocabPicker(id, target, onPick, opts) {
+    var box = document.getElementById(id);
+    if (typeof target === 'string') target = document.getElementById(target);
+    if (!box) return;
+    var warn = box.querySelector('.vocab-warn');
+    var PV = window.MA.partVocab;
+
+    function fire(el) {
+      if (!el) return;
+      var Evt = window.Event;
+      el.dispatchEvent(new Evt('input', { bubbles: true }));
+      el.dispatchEvent(new Evt('change', { bubbles: true }));
+    }
+
+    var NR = window.MA.nameRegistry;
+
+    function review() {
+      if (!warn) return;
+      var raw = target ? String(target.value || '') : '';
+      // 自由文の欄は複数行になる。欄ごと読むと「行の集まり」を 1 つの名前として
+      // 突き合わせてしまうので、いまカーソルが居る行だけを見る。
+      if (opts && opts.insert === 'caret' && raw.indexOf('\n') >= 0) {
+        var at = typeof target.selectionStart === 'number' ? target.selectionStart : raw.length;
+        var from = raw.lastIndexOf('\n', at - 1) + 1;
+        var to = raw.indexOf('\n', at);
+        raw = raw.slice(from, to < 0 ? raw.length : to);
+      }
+      var v = raw.trim().replace(/\(.*$/, '').trim();
+      // 登録簿は「人が決めた揃える先」なので、名前帳の推定より先に言う
+      // (両方が出ると、どちらに揃えるのかを読む側がまた決め直すことになる)。
+      var msg = NR ? NR.checkName(NR.current(), v) : '';
+      if (!msg && PV) msg = PV.checkName(PV.current(), v);
+      warn.textContent = msg;
+    }
+
+    var chips = box.querySelectorAll('.vocab-chip');
+    for (var i = 0; i < chips.length; i++) {
+      (function(btn) {
+        btn.style.cssText = 'font-size:11px;padding:1px 6px;background:var(--bg-tertiary);'
+          + 'border:1px solid var(--border);color:var(--text-primary);border-radius:3px;'
+          + 'cursor:pointer;font-family:var(--font-mono);' + (btn.style.cssText || '');
+        btn.addEventListener('click', function() {
+          var name = btn.getAttribute('data-name');
+          var text = btn.getAttribute('data-insert') || name;
+          if (target) {
+            if (opts && opts.insert === 'caret') insertAtCaret(target, text);
+            else target.value = text;
+            fire(target);
+          }
+          if (onPick) onPick(name, btn.getAttribute('data-role'));
+          review();
+        });
+      })(chips[i]);
+    }
+
+    var more = box.querySelector('.vocab-more');
+    if (more) {
+      more.addEventListener('click', function() {
+        var hidden = box.querySelectorAll('.vocab-chip[data-rest="1"]');
+        for (var j = 0; j < hidden.length; j++) hidden[j].style.display = '';
+        more.style.display = 'none';
+      });
+    }
+
+    if (target) target.addEventListener('input', review);
+    review();
+  }
+
   // ── Event binding helpers ────────────────────────────────────────────────
 
   // bindEvent: simple event binding by element ID
@@ -599,6 +773,8 @@ window.MA.properties = (function() {
     emptyListHtml: emptyListHtml,
     primaryButtonHtml: primaryButtonHtml,
     dangerButtonHtml: dangerButtonHtml,
+    vocabPickerHtml: vocabPickerHtml,
+    bindVocabPicker: bindVocabPicker,
     // Event helpers
     bindEvent: bindEvent,
     bindAllByClass: bindAllByClass,

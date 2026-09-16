@@ -1241,7 +1241,9 @@ window.MA.modules.plantumlActivity = (function() {
       var html = '';
       if (k === 'action') {
         html = '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">アクション本文 (改行可)</label>' +
-               '<textarea id="act-mod-text" style="width:100%;min-height:60px;font-family:inherit;font-size:12px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:3px;"></textarea>';
+               '<textarea id="act-mod-text" style="width:100%;min-height:60px;font-family:inherit;font-size:12px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:3px;"></textarea>' +
+               // BLK-junior-20260915-0606: 途中に挿し込むときも同じ名前帳から引ける。
+               P.vocabPickerHtml('act-mod-text-vocab', { roles: ['method'], callSuffix: true });
       } else if (k === 'if') {
         html = P.fieldHtml('Condition', 'act-mod-cond', '', '例: 認証成功?') +
                P.fieldHtml('Then label', 'act-mod-thenlbl', 'yes') +
@@ -1265,6 +1267,7 @@ window.MA.modules.plantumlActivity = (function() {
         '<textarea id="act-mod-text" style="width:100%;min-height:50px;font-family:inherit;font-size:12px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:3px;"></textarea>';
       }
       fEl.innerHTML = html;
+      P.bindVocabPicker('act-mod-text-vocab', 'act-mod-text', null, { insert: 'caret' });
     }
     renderFields();
     P.bindEvent('act-mod-kind', 'change', renderFields);
@@ -1738,6 +1741,10 @@ window.MA.modules.plantumlActivity = (function() {
           '<label style="display:block;font-size:10px;color:var(--text-secondary);">Text (改行可)</label>' +
           window.MA.reuseModal.buttonHtml('ac-tail-reuse') +
           '<textarea id="ac-tail-text" style="width:100%;min-height:50px;font-family:inherit;font-size:12px;"></textarea>' +
+          // BLK-junior-20260915-0606: アクション本文に打つのは先輩のクラス図にある
+          // 実在メソッド名。名前帳を欄の下に出さないと、クラス図タブを別に開いて
+          // 絞り込み、名前を控えてから戻るという往復が図種ごとに要る。
+          P.vocabPickerHtml('ac-tail-text-vocab', { roles: ['method'], callSuffix: true }) +
           P.primaryButtonHtml('ac-tail-add', '+ Action 追加') +
           P.primaryButtonHtml('ac-tail-add-lines', '+ 各行を Action として一括追加') +
           '<div id="ac-tail-lines-hint" style="font-size:10px;color:var(--text-secondary);margin-top:4px;">' +
@@ -1772,6 +1779,8 @@ window.MA.modules.plantumlActivity = (function() {
       detailEl.innerHTML = html2;
       // 一括欄は「既に他の図にある行」を打ち直させないためのボタンを持つ。
       window.MA.reuseModal.bindButton('ac-tail-reuse', 'plantuml-activity', 'ac-tail-text');
+      // 一括追加の欄でもあるので、チップは欄を置き換えずカーソル位置に差し込む。
+      P.bindVocabPicker('ac-tail-text-vocab', 'ac-tail-text', null, { insert: 'caret' });
 
       P.bindEvent('ac-tail-add-lines', 'click', function() {
         var t0 = ctx.getMmdText();
@@ -2137,6 +2146,9 @@ window.MA.modules.plantumlActivity = (function() {
         '<label style="display:block;font-size:10px;color:var(--text-secondary);">Text</label>' +
         '<textarea id="ac-action-text" style="width:100%;min-height:60px;">' + window.MA.htmlUtils.escHtml(node.text || '') + '</textarea>' +
       '</div>' +
+      // BLK-junior-20260915-0606: 打ち直すときも同じ名前帳から引ける (綴りを揃える先が
+      // 欄の下にあるので、クラス図タブへ確かめに戻らない)。
+      P.vocabPickerHtml('ac-action-text-vocab', { roles: ['method'], callSuffix: true }) +
       P.primaryButtonHtml('ac-action-update', '更新') +
       _actionColorHtml(node.color || '') +
       '<div style="border-top:1px solid var(--border);padding-top:8px;margin-top:8px;">' +
@@ -2171,6 +2183,7 @@ window.MA.modules.plantumlActivity = (function() {
             P.primaryButtonHtml('ac-action-delete', '✕ 削除') +
           '</div>';
     propsEl.innerHTML = html;
+    P.bindVocabPicker('ac-action-text-vocab', 'ac-action-text', null, { insert: 'caret' });
 
     // design 4b:「↑ ↓」— 同じ親の中の兄弟と入れ替える。行が動くので、
     // 選択は id ではなく移動先の行番号から引き直す (id は文書順の連番で振り直される)。

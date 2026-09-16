@@ -90,3 +90,43 @@ test('手順5.5 保存が控えへ逸れたらその場で名指しされ、1 �
   await expect(band).toBeHidden();
   expect(await S.readDoc(page, DIR2, 'plantuml-usecase')).toContain('EnableDmaReq');
 });
+
+// BLK-primary-20260914-2206: 手順5.5 (指摘反映の保存)。一覧から開いた図の DSL 欄に
+// note を打っても、保存フォルダの .puml が何分待っても変わらない。自動保存は錠の
+// 返事を待って 1 度もディスクへ写しておらず、それでも状態バーの 💾 は「たった今」と
+// 出続けていた —— 「保存した」と「ファイルが変わった」が同じ 1 語だったのが詰まりの本体。
+// ここで守るのは「書けていない回はそう言うこと」と「その場で返事を求めて先へ進めること」。
+test('手順5.5 ディスクに書けていない保存は 💾 がそう言い、その場で答えれば本体に入る', async ({ page }) => {
+  const DIR3 = DIR + '-pending';
+  await S.bootWithSaveDir(page, DIR3);
+  await S.clearDir(page, DIR3);
+  const BASE = ['@startuml', 'class ClockCtrl', 'class NVIC', '@enduml'].join('\n');
+  await S.putDoc(page, DIR3, 'driver_common_class', BASE);
+
+  await S.openFolderItem(page, 'driver_common_class');
+  // 依頼2 への回答を DSL 欄の末尾に打つ (ペルソナと同じ経路)。
+  await S.typeDsl(page, BASE + '\nnote top of ClockCtrl : 呼び先は意図的に省略');
+  await page.waitForTimeout(1500);
+
+  // 到達条件その1: 打った内容はまだディスクに無い。状態バーはそれを「たった今保存」と
+  // 言わず、どのファイルに書けていないのかを名指しする。
+  expect(await S.readDoc(page, DIR3, 'driver_common_class')).not.toContain('note top of ClockCtrl');
+  const badge = page.locator('#status-autosave');
+  await expect(badge).toContainText('未保存');
+  await expect(badge).toContainText('driver_common_class.puml');
+
+  // 到達条件その2: 止まっている理由 (錠の返事待ち) がその場に出ていて、答えられる。
+  await expect(page.locator('#source-lock-modal')).toBeVisible();
+  await page.locator('#source-lock-overwrite').click();
+  await page.waitForTimeout(1500);
+
+  // 到達条件その3: 答えた分がディスクの本体に入り、💾 は書けた先を名乗る。
+  expect(await S.readDoc(page, DIR3, 'driver_common_class')).toContain('note top of ClockCtrl');
+  await expect(badge).not.toContainText('未保存');
+  await expect(badge).toContainText('driver_common_class.puml');
+
+  // 到達条件その4: 以後の追記は黙って本体へ入る (毎回止まらない)。
+  await S.typeDsl(page, BASE + '\nnote top of ClockCtrl : 呼び先は意図的に省略\nnote top of NVIC : 割り込み設定');
+  await page.waitForTimeout(1500);
+  expect(await S.readDoc(page, DIR3, 'driver_common_class')).toContain('note top of NVIC');
+});

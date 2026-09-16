@@ -243,44 +243,105 @@ window.MA.autoSave = (function() {
     _fileNameResolver = (typeof fn === 'function') ? fn : null;
   }
 
-  // 返り値: 書くべきファイル名、または null (= ディスクへは書かない)
+  // 返り値: { name: 書くべきファイル名 / null (= ディスクへは書かない), reason: 書かない訳 / null }
+  // 解決器は名前の文字列だけを返してもよい (従来どおり)。書かない訳まで知らせたいときは
+  // { name: '', reason: 'ask' } の形で返す —— 訳が分かると、画面は「まだディスクに
+  // 書いていない」と「書く必要が無い」を言い分けられる (BLK-primary-20260914-2206)。
   function _fileNameFor(diagramType) {
-    if (!_fileNameResolver) return diagramType;
-    var n;
+    if (!_fileNameResolver) return { name: diagramType, reason: null };
+    var r;
     try {
-      n = _fileNameResolver(diagramType);
+      r = _fileNameResolver(diagramType);
     } catch (e) {
-      return null;   // 名前が分からないなら書かない (取り違えより無書き込み)
+      return { name: null, reason: 'error' };   // 名前が分からないなら書かない (取り違えより無書き込み)
     }
+    var n, why = null;
+    if (r && typeof r === 'object') { n = r.name; why = r.reason || null; }
+    else n = r;
     n = (n == null) ? '' : String(n);
-    return n ? n : null;
+    return { name: n ? n : null, reason: n ? null : (why || 'no-name') };
   }
 
-  function _doWrite(diagramType, dsl, fileName) {
+  // 直近の 1 回の保存が「どこまで届いたか」。画面の 💾 表示はここを読む。
+  //   where: 'file'      … 保存フォルダのファイルに書きに行った
+  //          'local'     … ブラウザの中だけ (保存先がダウンロードのとき)
+  //          'deferred'  … 保存フォルダ指定だが書かなかった (reason に訳)
+  //          'blocked'   … 書き込みを止めてあるファイル
+  var _lastWrite = null;
+
+  // 別の経路 (手で押す 💾 保存 = app.js の saveActiveDoc) がディスクへ書いたときも、
+  // 届いた先の記録はここに揃える。揃えないと、返事をして本体に書けた後も
+  // 状態バーが「確認中」のまま居座る。
+  function noteFileWritten(fileName, diagramType) {
+    _lastWrite = {
+      at: new Date().toISOString(),
+      diagramType: diagramType || (_lastWrite && _lastWrite.diagramType) || null,
+      fileName: fileName ? String(fileName) : null,
+      where: 'file', reason: null,
+    };
+    var meta = getMeta() || {};
+    for (var i = 0; i < _saveListeners.length; i++) {
+      try { _saveListeners[i](meta); } catch (e) {}
+    }
+  }
+
+  function getLastWrite() {
+    return _lastWrite ? {
+      at: _lastWrite.at, diagramType: _lastWrite.diagramType,
+      fileName: _lastWrite.fileName, where: _lastWrite.where, reason: _lastWrite.reason,
+    } : null;
+  }
+
+  // 書かずに済ませた回を app.js へ知らせる。返事待ち (reason 'ask') をここで
+  // 拾えないと、打っても何も起きない状態が黙って続く。
+  var _deferredListeners = [];
+  function onFileDeferred(listener) {
+    if (typeof listener === 'function') _deferredListeners.push(listener);
+  }
+  function _notifyDeferred(info) {
+    for (var i = 0; i < _deferredListeners.length; i++) {
+      try { _deferredListeners[i](info); } catch (e) {}
+    }
+  }
+
+  function _doWrite(diagramType, dsl, fileInfo) {
     var ok = _writeRaw(DSL_PREFIX + diagramType, dsl);
     if (!ok) return null;
     var meta = { lastSavedAt: new Date().toISOString(), lastSavedType: diagramType };
     _writeJson(KEY_META, meta);
     // If file backend selected, mirror the write to disk via the server.
     var cfg = getConfig();
-    if (fileName === undefined) fileName = _fileNameFor(diagramType);
+    if (fileInfo === undefined) fileInfo = _fileNameFor(diagramType);
+    var fileName = fileInfo ? fileInfo.name : null;
+    var where = 'local', reason = null;
     // fileName が null なら、名前が決まらないタブ (未命名・記号入り) なので
     // ディスクへは写さない。localStorage には残るので編集内容は消えず、
     // Ctrl+S で名前を付ければそのまま書ける。取り違えて別の図を潰すより良い。
-    if (cfg.backend === 'file' && fileName != null) {
-      // BLK-junior-20260908-1803: 書いてはいけないファイル (テンプレ宣言済み) には
-      // ディスクへ写さない。localStorage 側は残すので、編集内容は失われず、
-      // 図名を変えればそのまま新しいファイルに保存される。
-      var block = _blockedBy(fileName);
-      if (block) {
-        _notifyBlocked(fileName, block);
+    if (cfg.backend === 'file') {
+      if (fileName == null) {
+        where = 'deferred';
+        reason = (fileInfo && fileInfo.reason) || 'no-name';
       } else {
-        _fileBackendWrite(fileName, dsl, cfg.fileDir);
+        // BLK-junior-20260908-1803: 書いてはいけないファイル (テンプレ宣言済み) には
+        // ディスクへ写さない。localStorage 側は残すので、編集内容は失われず、
+        // 図名を変えればそのまま新しいファイルに保存される。
+        var block = _blockedBy(fileName);
+        if (block) {
+          where = 'blocked';
+          reason = block;
+          _notifyBlocked(fileName, block);
+        } else {
+          where = 'file';
+          _fileBackendWrite(fileName, dsl, cfg.fileDir);
+        }
       }
     }
+    _lastWrite = { at: meta.lastSavedAt, diagramType: diagramType,
+                   fileName: fileName, where: where, reason: reason };
     for (var i = 0; i < _saveListeners.length; i++) {
       try { _saveListeners[i](meta); } catch (e) { /* listener errors must not block */ }
     }
+    if (where === 'deferred') _notifyDeferred({ diagramType: diagramType, reason: reason });
     return meta;
   }
 
@@ -294,7 +355,7 @@ window.MA.autoSave = (function() {
     _pending = null;
     var cfg = getConfig();
     if (!cfg.enabled) return;
-    _doWrite(p.diagramType, p.dsl, p.fileName);
+    _doWrite(p.diagramType, p.dsl, p.fileInfo);
   }
 
   function scheduleSave(diagramType, dsl) {
@@ -307,7 +368,7 @@ window.MA.autoSave = (function() {
     _pending = {
       diagramType: diagramType,
       dsl: String(dsl == null ? '' : dsl),
-      fileName: _fileNameFor(diagramType),
+      fileInfo: _fileNameFor(diagramType),
     };
     if (_timerId != null) {
       try { clearTimeout(_timerId); } catch (e) {}
@@ -404,6 +465,9 @@ window.MA.autoSave = (function() {
     setFileGuard: setFileGuard,
     setFileNameResolver: setFileNameResolver,
     onFileBlocked: onFileBlocked,
+    onFileDeferred: onFileDeferred,
+    getLastWrite: getLastWrite,
+    noteFileWritten: noteFileWritten,
     onFileRenamed: onFileRenamed,
     noteFileRenamed: noteFileRenamed,
     noteFileBlocked: noteFileBlocked,

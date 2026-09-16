@@ -11,7 +11,7 @@ global.document = dom.window.document;
 
 var SRC = [
   '../src/core/html-utils.js',
-  '../src/core/dsl-utils.js',
+  '../src/core/dsl-utils.js', '../src/core/note-edit.js',
   '../src/core/regex-parts.js',
   '../src/core/id-normalizer.js',
   '../src/core/dsl-updater.js',
@@ -19,7 +19,7 @@ var SRC = [
   '../src/core/parser-utils.js',
   '../src/ui/properties.js',
   '../src/core/sequence-marks.js',
-  '../src/modules/sequence.js',
+  '../src/core/sequence-participant-zone.js', '../src/modules/sequence.js',
 ];
 SRC.forEach(function(p) { try { delete require.cache[require.resolve(p)]; } catch (e) {} require(p); });
 

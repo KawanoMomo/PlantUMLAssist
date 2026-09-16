@@ -19,7 +19,44 @@ window.MA.sequenceOverlay = (function() {
     while (el.firstChild) el.removeChild(el.firstChild);
   }
 
-  function buildSequenceOverlay(svgEl, parsedData, overlayEl) {
+  function _bbox(el) {
+    if (!el || typeof el.getBBox !== 'function') return null;
+    try {
+      var b = el.getBBox();
+      return (b && (b.width || b.height)) ? { x: b.x, y: b.y, width: b.width, height: b.height } : null;
+    } catch (e) { return null; }
+  }
+
+  // 注釈本文の 1 行目を持つ <text> (未使用のもの) を探し、それを囲む塗りのある最小の図形を返す。
+  // 群の枠 (alt 等) は fill="none" なので候補にならない。見つからなければ null。
+  function _findNoteShape(svgEl, note, usedTexts) {
+    var first = String(note.text || '').split('\n')[0].replace(/<[^>]*>|\*\*|\/\/|__|""/g, '').trim();
+    if (!first || !svgEl.querySelectorAll) return null;
+    var texts = svgEl.querySelectorAll('text');
+    var shapes = null;
+    for (var i = 0; i < texts.length; i++) {
+      var t = texts[i];
+      if (usedTexts.indexOf(t) >= 0) continue;
+      if ((t.textContent || '').trim() !== first) continue;
+      var tb = _bbox(t);
+      if (!tb) continue;
+      if (!shapes) shapes = svgEl.querySelectorAll('path, polygon, rect');
+      var best = null, bestArea = Infinity;
+      for (var k = 0; k < shapes.length; k++) {
+        var fill = (shapes[k].getAttribute('fill') || '').toLowerCase();
+        if (!fill || fill === 'none' || fill === 'transparent') continue;
+        var sb = _bbox(shapes[k]);
+        if (!sb) continue;
+        if (sb.x > tb.x + 2 || sb.y > tb.y + 2 || sb.x + sb.width < tb.x + tb.width - 2 || sb.y + sb.height < tb.y + tb.height - 2) continue;
+        var area = sb.width * sb.height;
+        if (area < bestArea) { best = sb; bestArea = area; }
+      }
+      if (best) { usedTexts.push(t); return best; }
+    }
+    return null;
+  }
+
+  function buildSequenceOverlay(svgEl, parsedData, overlayEl, dslText) {
     _clearChildren(overlayEl);
     if (!svgEl || !parsedData) return;
 
@@ -173,7 +210,19 @@ window.MA.sequenceOverlay = (function() {
       // Bug B4 fix: 1×1 placeholder (pointer-events:none) ではクリック不可。
       // note の target participant の既存 overlay rect の位置を参照し、その近傍に
       // クリック可能な approximate box を置く (正確座標抽出は別 sprint)。
+      var usedTexts = [];
       notes.forEach(function(n) {
+        // BLK-human-20260916-0900: 描かれた注釈の形 (note=path / hnote=polygon / rnote=rect) を
+        // 本文の 1 行目から探し、その矩形全体を当たり判定にする (どこを押しても選べる)。
+        var shapeBox = _findNoteShape(svgEl, n, usedTexts);
+        if (shapeBox) {
+          OB.addRect(overlayEl, shapeBox.x - 2, shapeBox.y - 2, shapeBox.width + 4, shapeBox.height + 4, {
+            'data-type': 'note',
+            'data-id': n.id,
+            'data-line': n.line,
+          });
+          return;
+        }
         var targets = n.targets || [];
         var targetPart = targets[0];
         var partRect = targetPart
@@ -228,6 +277,20 @@ window.MA.sequenceOverlay = (function() {
     }
     OB.warnIfMismatch('activation', activations.length, overlayEl.querySelectorAll('rect[data-type="activation"]').length);
 
+    // BLK-human-20260915-1204: 帯の矩形を「押した場所が帯の内か外か」を決める材料として置く。
+    // 選択の当たり判定には混ぜない (pointer-events を切る) ので、帯の中を押しても
+    // これまでどおり挿入メニューが開く。resolveInsertLine だけがこれを読む。
+    bandZones(svgEl, dslText).forEach(function(z) {
+      var r = OB.addRect(overlayEl, z.bar.x, z.bar.y, z.bar.w, z.bar.h, {
+        'data-type': 'band-zone',
+        'data-part': z.band.target,
+        'data-line': z.band.activateLine,
+        'data-band-end': z.band.deactivateLine,
+      });
+      r.style.pointerEvents = 'none';
+      r.classList.remove('selectable');
+    });
+
     var noteRectCount = overlayEl.querySelectorAll('rect[data-type="note"]').length;
     var actRectCount = overlayEl.querySelectorAll('rect[data-type="activation"]').length;
     var groupRectCount = overlayEl.querySelectorAll('rect[data-type="group"]').length;
@@ -251,9 +314,108 @@ window.MA.sequenceOverlay = (function() {
     };
   }
 
+  // BLK-human-20260915-1204: 実行中の帯 (activation バー) の矩形を SVG から拾う。
+  // PlantUML は帯を <g><title>{participant}</title><rect fill="#FFFFFF" width="10" …/></g>
+  // として描き、class も data-source-line も付けない (同じ矩形を 2 回出す)。
+  // lifeline の当たり矩形は fill-opacity:0 なので、塗りと stroke で見分ける。
+  function collectActivationBars(svgEl) {
+    if (!svgEl || !svgEl.querySelectorAll) return [];
+    var seen = {};
+    var bars = [];
+    var rects = svgEl.querySelectorAll('rect');
+    Array.prototype.forEach.call(rects, function(r) {
+      var fill = (r.getAttribute('fill') || '').toUpperCase();
+      var style = (r.getAttribute('style') || '') + '';
+      if (fill === 'NONE' || fill === '#000000') return;          // group 枠 / lifeline の当たり矩形
+      if (style.indexOf('stroke:') === -1) return;                // 枠線の無い矩形は帯ではない
+      if (parseFloat(r.getAttribute('fill-opacity')) === 0) return;
+      var g = r.parentNode;
+      var titleEl = g && g.querySelector ? g.querySelector('title') : null;
+      if (!titleEl) return;                                       // 帯の <g> は必ず participant 名を持つ
+      if (g.getAttribute && g.getAttribute('class')) return;      // head / tail は class 付きの <g> の中
+      var x = parseFloat(r.getAttribute('x'));
+      var y = parseFloat(r.getAttribute('y'));
+      var w = parseFloat(r.getAttribute('width'));
+      var h = parseFloat(r.getAttribute('height'));
+      if (isNaN(x) || isNaN(y) || isNaN(w) || isNaN(h)) return;
+      var key = titleEl.textContent + '|' + x + ',' + y + ',' + w + ',' + h;
+      if (seen[key]) return;                                      // 同じ帯が 2 回描かれる
+      seen[key] = true;
+      bars.push({ part: titleEl.textContent, x: x, y: y, w: w, h: h });
+    });
+    bars.sort(function(a, b) { return a.y - b.y; });
+    return bars;
+  }
+
+  // 拾った帯の矩形を DSL の帯 (parseBands) に突き合わせる。data-source-line が無いので、
+  // participant ごとに「上から n 番目の矩形 = n 番目の帯」で対応させる。
+  function bandZones(svgEl, dslText) {
+    var AI = window.MA.sequenceActivationInsert;
+    if (!AI || typeof dslText !== 'string') return [];
+    var bands = AI.parseBands(dslText);
+    var bars = collectActivationBars(svgEl);
+    var byPart = {};
+    bands.forEach(function(b) {
+      (byPart[b.target] = byPart[b.target] || []).push(b);
+    });
+    Object.keys(byPart).forEach(function(k) {
+      byPart[k].sort(function(a, b) { return a.activateLine - b.activateLine; });
+    });
+    var used = {};
+    var out = [];
+    bars.forEach(function(bar) {
+      var list = byPart[bar.part];
+      if (!list) return;
+      var i = used[bar.part] || 0;
+      if (i >= list.length) return;
+      used[bar.part] = i + 1;
+      out.push({ bar: bar, band: list[i] });
+    });
+    return out;
+  }
+
+  // 押した点が帯の矩形の中か、その下のライフライン線かを決める
+  // (BLK-human-20260915-1204)。返すのは resolve に渡す hint と同じ形。
+  //   { zone: 'inside' | 'outside', bandLine }  … 帯が絡む
+  //   null                                      … 帯から離れた所。DSL だけで決めさせる
+  var BAND_X_TOLERANCE = 16;   // 帯は幅 10px ほど。ライフライン線を押しても同じ列と見なす
+
+  function resolveBandZone(overlayEl, x, y) {
+    if (!overlayEl || isNaN(x) || isNaN(y)) return null;
+    var zones = Array.prototype.map.call(
+      overlayEl.querySelectorAll('rect[data-type="band-zone"]'), function(r) {
+        return {
+          line: parseInt(r.getAttribute('data-line'), 10),
+          x: parseFloat(r.getAttribute('x')),
+          y: parseFloat(r.getAttribute('y')),
+          w: parseFloat(r.getAttribute('width')),
+          h: parseFloat(r.getAttribute('height')),
+        };
+      }).filter(function(z) { return !isNaN(z.line) && !isNaN(z.y) && !isNaN(z.h); });
+    if (zones.length === 0) return null;
+    function sameColumn(z) {
+      return x >= z.x - BAND_X_TOLERANCE && x <= z.x + z.w + BAND_X_TOLERANCE;
+    }
+    // 1. 帯の矩形の中 → 内側。入れ子なら後に始まった帯 (内側) を採る。
+    var inside = null;
+    zones.forEach(function(z) {
+      if (!sameColumn(z) || y < z.y || y > z.y + z.h) return;
+      if (!inside || z.line > inside.line) inside = z;
+    });
+    if (inside) return { zone: 'inside', bandLine: inside.line };
+    // 2. 同じ列で自分より上に終わっている帯があれば、その帯を抜けた先 → 外側。
+    var above = null;
+    zones.forEach(function(z) {
+      if (!sameColumn(z) || y <= z.y + z.h) return;
+      if (!above || z.y + z.h > above.y + above.h) above = z;
+    });
+    if (above) return { zone: 'outside', bandLine: above.line };
+    return null;
+  }
+
   function resolveInsertLine(overlayEl, x, y) {
-    // x is accepted for signature parity with activity module; sequence's
-    // single-column lifeline layout does not need horizontal disambiguation.
+    // x は activity モジュールとの signature 合わせだけでなく、帯の内外の判定
+    // (resolveBandZone) にも使う。行の決定そのものは 1 列のライフラインなので y だけで足りる。
     if (!overlayEl) return null;
     var msgRects = overlayEl.querySelectorAll('rect[data-type="message"]');
     if (msgRects.length === 0) return null;
@@ -271,16 +433,18 @@ window.MA.sequenceOverlay = (function() {
       return !isNaN(it.line);
     }).sort(function(a, b) { return a.y - b.y; });
     if (items.length === 0) return null;
+    var zoneHint = resolveBandZone(overlayEl, x, y);
     // y がどの rect の y より下か判定: 下端から遡って最初に「rect.y < y」なら after その rect
     for (var i = items.length - 1; i >= 0; i--) {
-      if (y > items[i].y) return _hit(items[i], 'after');
+      if (y > items[i].y) return _hit(items[i], 'after', zoneHint);
     }
     // 全 rect より上 → 最上位 rect の before
-    return _hit(items[0], 'before');
+    return _hit(items[0], 'before', zoneHint);
   }
 
-  function _hit(item, position) {
+  function _hit(item, position, zoneHint) {
     var res = { line: item.line, position: position };
+    if (zoneHint) { res.zone = zoneHint.zone; res.bandLine = zoneHint.bandLine; }
     if (!isNaN(item.rectX) && !isNaN(item.rectWidth)) {
       res.rectX = item.rectX;
       res.rectWidth = item.rectWidth;
@@ -290,6 +454,9 @@ window.MA.sequenceOverlay = (function() {
 
   return {
     buildSequenceOverlay: buildSequenceOverlay,
+    collectActivationBars: collectActivationBars,
+    bandZones: bandZones,
+    resolveBandZone: resolveBandZone,
     resolveInsertLine: resolveInsertLine,
   };
 })();

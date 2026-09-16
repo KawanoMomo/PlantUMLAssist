@@ -26,6 +26,9 @@ jobs:
         run: python -m pip install --upgrade pip pywebview pyinstaller
 
       - name: Build exe
+        env:
+          # 版の正本は git tag (BLK-human-20260916-0902)。タグ以外の起動では git describe に任せる。
+          APP_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
         run: pyinstaller packaging/PlantUMLAssist.spec --noconfirm
 
       - name: Build installer
@@ -35,9 +38,48 @@ jobs:
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" packaging\installer.iss
           if ($LASTEXITCODE -ne 0) { throw "ISCC failed with $LASTEXITCODE" }
 
+      # BLK-human-20260915-1200: zip 版だけが起動直後に落ちた。
+      # 以前は `dist\PlantUMLAssist\*` を詰めていたので、zip の直下に
+      # PlantUMLAssist.exe が裸で並び、展開せずにその exe を叩くと _internal が
+      # 付いてこず PyInstaller のブートローダが落ちる。フォルダごと詰めて、
+      # 展開してから起動する手順の README を同じ階層に入れる。
       - name: Zip the portable build
         shell: pwsh
-        run: Compress-Archive -Path dist\PlantUMLAssist\* -DestinationPath dist\PlantUMLAssist-portable.zip
+        run: |
+          Copy-Item packaging\PORTABLE-README.txt dist\PlantUMLAssist\はじめにお読みください.txt
+          Compress-Archive -Path dist\PlantUMLAssist -DestinationPath dist\PlantUMLAssist-portable.zip -Force
+
+      # 展開 → 起動のスモークテスト。zip の取りこぼし (_internal・静的ファイル・
+      # サブフォルダ) と、起動直後に落ちる不具合をここで止める。
+      - name: Smoke-test the portable zip
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $work = Join-Path $env:RUNNER_TEMP 'smoke'
+          Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
+          Expand-Archive dist\PlantUMLAssist-portable.zip -DestinationPath $work
+          $app = Join-Path $work 'PlantUMLAssist'
+          $exe = Join-Path $app 'PlantUMLAssist.exe'
+          if (-not (Test-Path $exe)) { throw "zip に PlantUMLAssist\PlantUMLAssist.exe が無い" }
+          foreach ($rel in @('_internal\plantuml-assist.html', '_internal\server.py',
+                             '_internal\src\app.js', '_internal\lib\PlantUMLDaemon.java',
+                             '_internal\docs\api.md', '_internal\python311.dll')) {
+            if (-not (Test-Path (Join-Path $app $rel))) { throw "zip から $rel が落ちている" }
+          }
+          $zipCount = (Get-ChildItem $app -Recurse -File).Count
+          $distCount = (Get-ChildItem dist\PlantUMLAssist -Recurse -File).Count
+          if ($zipCount -ne $distCount) { throw "zip $zipCount 件 / dist $distCount 件 で食い違う" }
+          # 起動して数秒生きていることを確かめる。落ちたら crash.log を出す。
+          $crash = Join-Path $env:LOCALAPPDATA 'PlantUMLAssist\crash.log'
+          Remove-Item $crash -Force -ErrorAction SilentlyContinue
+          $p = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 20
+          if ($p.HasExited) {
+            if (Test-Path $crash) { Get-Content $crash | Write-Host }
+            throw "portable 版が起動直後に終了した (exit $($p.ExitCode))"
+          }
+          Stop-Process -Id $p.Id -Force
+          Write-Host "portable smoke ok ($zipCount files)"
 
       - uses: actions/upload-artifact@v4
         with:

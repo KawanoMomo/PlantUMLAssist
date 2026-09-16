@@ -18,6 +18,10 @@ const DIR = S.dirFor(__filename);
 const DIR2 = S.dirFor(__filename) + '-show';
 // 保存フォルダへ直接書いた回を後から見返す場面 (BLK-primary-20260914-1206-wish)。
 const DIR3 = S.dirFor(__filename) + '-hist';
+// 納品履歴から前回渡した版と見比べる場面 (BLK-primary-20260914-2106-wish)。
+const DIR4 = S.dirFor(__filename) + '-deliv';
+// 置換を当てる前に、影響範囲の一覧で変更前後の図を見せる場面 (BLK-primary-20260917-0223)。
+const DIR6 = S.dirFor(__filename) + '-impact';
 
 // 手順2 と同じ一括置換を当てる。手順4 が見せるのはその前後なので、
 // ここを踏まないと「変更前」がそもそも存在しない。
@@ -352,4 +356,299 @@ test('手順4 引き継ぐ前に、この周で保存が効かなかった図を
   expect((await page.locator('#folder-save-verify').textContent()) || '').not.toContain('効かなかった');
 
   await S.clearDir(page, DIR);
+});
+
+// BLK-primary-20260914-2106-wish: 手順3 (見比べ) と手順4 (顧客向け資料まとめ) で、
+// 同じ「前回どの版を渡したか」を 2 回別々に調べていた。納品履歴の行は日時と枚数しか
+// 言わないので、「前回渡した版と比べてどの図が変わったか」は zip を開くしかない。
+// 履歴の行を押すだけで、その回と今が図ごとに並ぶことを到達条件にする。
+test('手順4 前回渡した版と今を、納品履歴の行から図ごとに見比べられる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR4);
+  await S.clearDir(page, DIR4);
+  await S.putDoc(page, DIR4, 'spi_init_sequence', S.docFor('spi_init_sequence', 'SpiDrv'));
+  await S.putDoc(page, DIR4, 'can_init_sequence', S.docFor('can_init_sequence'));
+  await S.openFolderItem(page, 'spi_init_sequence');
+  await page.waitForTimeout(800);
+
+  // 1 回目の提出。ここが「前回顧客に渡した版」になる。
+  await S.runCommand(page, '納品パッケージ');
+  await expect(page.locator('#dp-modal')).toBeVisible();
+  await page.waitForTimeout(2500);
+  const dl = page.waitForEvent('download', { timeout: 60000 });
+  await page.locator('#dp-build').click();
+  await dl;
+  await expect(page.locator('#dp-status')).toContainText('書き出しました', { timeout: 60000 });
+  await page.locator('#dp-close').click();
+
+  // 提出後に 1 枚だけ直す (顧客に渡した版との差はこの 1 枚だけ)。
+  await S.typeDsl(page, S.docFor('spi_init_sequence', 'Spi_Driver'));
+  await page.waitForTimeout(1200);
+  const lock = page.locator('#source-lock-modal');
+  if (await lock.isVisible().catch(() => false)) {
+    await page.locator('#source-lock-overwrite').click();
+    await page.waitForTimeout(1200);
+  }
+  // 提出後に増えた図も 1 枚置く (「新規」が出るかを見る)。
+  await S.putDoc(page, DIR4, 'adc_state', S.docFor('adc_state'));
+
+  await S.runCommand(page, '納品パッケージ');
+  await page.waitForTimeout(3000);
+
+  // 到達条件その1: 履歴の行そのものが「今と比べる」入口になっている。
+  const row = page.locator('#dp-history .dp-hist-row[data-latest="1"]');
+  await expect(row).toBeVisible();
+  await row.click();
+  await page.waitForTimeout(600);
+
+  // 到達条件その2: その回と今が、図ごとに 1 画面で並ぶ。
+  const cmp = page.locator('#dp-hist-compare');
+  await expect(cmp).toBeVisible();
+  await expect(cmp).toHaveAttribute('data-exact', '1');
+  await expect(cmp.locator('.dp-hist-doc[data-name="spi_init_sequence"]')).toHaveAttribute('data-status', 'changed');
+  await expect(cmp.locator('.dp-hist-doc[data-name="can_init_sequence"]')).toHaveAttribute('data-status', 'same');
+  await expect(cmp.locator('.dp-hist-doc[data-name="adc_state"]')).toHaveAttribute('data-status', 'new');
+  await expect(page.locator('#dp-hist-line')).toContainText('変更 1 枚');
+
+  // 到達条件その3: 見比べた流れのまま、その差分だけを次の納品の対象にできる
+  // (履歴を見る画面と対象を選ぶ画面を行き来しない)。
+  await page.locator('#dp-hist-pick').click();
+  await page.waitForTimeout(600);
+  // 直した 1 枚と増えた 1 枚だけが残る (開いているタブの下書きが候補に混ざるので総枚数は見ない)。
+  await expect(page.locator('#dp-count')).toContainText('2 / ');
+  await expect(page.locator('.dp-pick[data-name="spi_init_sequence"]')).toBeChecked();
+  await expect(page.locator('.dp-pick[data-name="adc_state"]')).toBeChecked();
+  await expect(page.locator('.dp-pick[data-name="can_init_sequence"]')).not.toBeChecked();
+
+  await page.screenshot({ path: shotOut('primary-04-delivery-history.png'), fullPage: true });
+  await page.locator('#dp-close').click();
+  await S.clearDir(page, DIR4);
+});
+
+// BLK-primary-20260915-2346-wish: 手順4 は zip を書き出して終わっていた。渡した zip は
+// 図・SVG・突合結果を詰めただけで、新人が「今日どの図から見ればよいか」を辿る順序が
+// 無く、展開してファイル名から中身を推測するしかなかった。index.html の先頭に
+// 「見る順」を置き、どこまで辿ったかが渡した側に返るところまでを 1 本で確かめる。
+test('手順4 渡す zip の先頭に、新人が辿る順が付いている', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+
+  const model = await page.evaluate(() => {
+    const HP = window.MA.handoffPackage;
+    const HR = window.MA.handoffRoute;
+    // 手順2 で直した図 (指摘が残っているもの・済んだもの) と、触っていない図。
+    const snap = {
+      createdAt: '2026-09-15 23:51',
+      diagrams: [
+        { id: 'a', name: 'GPIO 初期化シーケンス', diagramType: 'sequence', filename: 'svg/a.svg', rendered: true, svg: '<svg/>' },
+        { id: 'b', name: 'GPIO 状態遷移', diagramType: 'state', filename: 'svg/b.svg', rendered: true, svg: '<svg/>' },
+        { id: 'c', name: 'CAN クラス', diagramType: 'class', filename: 'svg/c.svg', rendered: true, svg: '<svg/>' },
+      ],
+      summary: {
+        changed: [
+          { name: 'GPIO 初期化シーケンス', diagramType: 'sequence', changed: true, changeLine: '+2 −1 行', reasons: ['名前をそろえた'], openPins: ['粒度が粗い'], fixCount: 0, diffRows: [] },
+          { name: 'GPIO 状態遷移', diagramType: 'state', changed: true, changeLine: '+1 −0 行', reasons: [], openPins: [], fixCount: 0, diffRows: [] },
+        ],
+        rest: [{ name: 'CAN クラス', diagramType: 'class', changed: false, changeLine: '', reasons: [], openPins: [], fixCount: 0, diffRows: [] }],
+        changedCount: 2, total: 3,
+      },
+      family: { ok: true, line: '', families: [] },
+      names: { ok: true, line: '', variants: [], undeclared: [] },
+      change: { line: '', board: null },
+      checklist: { createdAt: '', items: [] },
+      verdict: '3 枚',
+      total: 3, renderedCount: 3,
+    };
+    const route = HR.build(snap);
+    return {
+      html: HP.renderIndexHtml(snap),
+      names: route.stops.map((s) => s.name),
+      steps: route.stops.map((s) => s.step),
+      next0: route.stops[0].next,
+      anchor0: route.stops[0].anchor,
+      rest: route.rest.map((s) => s.name),
+      line: route.line,
+    };
+  });
+
+  // 到達条件その1: 材料の節より前に「見る順」が出る。
+  expect(model.html.indexOf('1. 見る順')).toBeGreaterThan(-1);
+  expect(model.html.indexOf('2. 今回の変更と、その理由')).toBeGreaterThan(model.html.indexOf('1. 見る順'));
+
+  // 到達条件その2: ①は「今回変わっていて、直す手が残っている」図。
+  expect(model.names[0]).toBe('GPIO 初期化シーケンス');
+  expect(model.steps[0]).toBe('手順2');
+  // 触っていない図は順番を付けず参考に落ちる (24 枚を上から眺めさせない)。
+  expect(model.rest).toEqual(['CAN クラス']);
+
+  // 到達条件その3: ①→②がつながっていて、押せば図の本体へ飛ぶ。
+  expect(model.next0).toBe('GPIO 状態遷移');
+  expect(model.html).toContain('href="#' + model.anchor0 + '"');
+  expect(model.html).toContain('id="' + model.anchor0 + '"');
+
+  // 到達条件その4: 「何枚を順に見るのか」が 1 行で読める。
+  expect(model.line).toContain('2 枚');
+
+  // 到達条件その5: 新人が返した記録で「どこまで辿れたか」が渡した側に出る。
+  const shown = await page.evaluate(() => {
+    const HC = window.MA.handoverChecklist;
+    HC.clear();
+    HC.receive(JSON.stringify({
+      kind: 'handover-reply', createdAt: '2026-09-15 23:51',
+      replies: {}, route: { total: 2, seen: 2, at: 'now' },
+    }));
+    const line = HC.routeLine(HC.current().route);
+    HC.clear();
+    return line;
+  });
+  expect(shown).toBe('新人の順路 2 枚すべてを辿りました');
+
+  await S.clearDir(page, DIR);
+});
+
+// BLK-primary-20260916-2314-friction: 顧客向けの 14 枚を毎回「全部外す → 1 枚ずつチェック」で選び直していた
+// (クリック 17)。前回出した図が既定で選ばれていること、控えより前の納品 zip があれば「初回提出」と
+// 言わないこと、選んだ対象を図セット (手順 9 の「顧客資料」) に書き戻せることを確かめる。
+const DIR5 = S.dirFor(__filename) + '-recall';
+
+test('手順4 前回出した図が既定で選ばれ、試作図は外れたまま zip を作れ、図セットにも共有できる', async ({ page }) => {
+  const { execFileSync } = require('child_process');
+  const pathMod = require('path');
+  await S.bootWithSaveDir(page, DIR5);
+  await S.clearDir(page, DIR5);
+  await S.putDoc(page, DIR5, 'spi_init_sequence', S.docFor('spi_init_sequence', 'Spi_Driver'));
+  await S.putDoc(page, DIR5, 'can_init_sequence', S.docFor('can_init_sequence'));
+  await S.putDoc(page, DIR5, 'diagram1', '@startuml\nA -> B : 試作\n@enduml\n');
+  // 控え (_export-log.json) より前に作った納品 zip。中身は 2 枚 (試作図は入っていない)。
+  const abs = S.absDirFor(__filename) + '-recall';
+  execFileSync('python', ['-c', [
+    'import zipfile, os, sys',
+    'p = os.path.join(sys.argv[1], "delivery-20260908-1903.zip")',
+    'z = zipfile.ZipFile(p, "w")',
+    'z.writestr("index.html", "x")',
+    'z.writestr("svg/spi_init_sequence.svg", "<svg/>")',
+    'z.writestr("svg/can_init_sequence.svg", "<svg/>")',
+    'z.close()',
+  ].join('\n'), abs]);
+  // 手順 9 の図セット「顧客資料」はフォルダの全部 (3 枚) で登録されている。
+  await page.evaluate((dir) => fetch('/doc-sets', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dir: dir, name: '顧客資料', docs: ['can_init_sequence', 'diagram1', 'spi_init_sequence'] }),
+  }), DIR5);
+  await S.openFolderItem(page, 'spi_init_sequence');
+  await page.waitForTimeout(800);
+
+  await S.runCommand(page, '納品パッケージ');
+  await expect(page.locator('#dp-modal')).toBeVisible();
+  await page.waitForTimeout(2500);
+
+  // 到達条件その1: 控えが無くても、フォルダの納品 zip から前回が分かる (「初回提出」と言わない)。
+  await expect(page.locator('#dp-last')).not.toContainText('まだ 1 度も');
+  await expect(page.locator('#dp-last')).toContainText('delivery-20260908-1903.zip');
+  await expect(page.locator('#dp-hist-zips')).toHaveAttribute('data-count', '1');
+  // 到達条件その2: 前回と同じ 2 枚が既定で選ばれ、試作図は外れている (全部外す・1 枚ずつが要らない)。
+  await expect(page.locator('#dp-recall')).toHaveAttribute('data-from', 'zip');
+  await expect(page.locator('.dp-pick[data-name="spi_init_sequence"]')).toBeChecked();
+  await expect(page.locator('.dp-pick[data-name="can_init_sequence"]')).toBeChecked();
+  await expect(page.locator('.dp-pick[data-name="diagram1"]')).not.toBeChecked();
+
+  // 到達条件その3: 今の対象で図セット「顧客資料」を更新できる (手順 9 と同じ 2 枚を共有する)。
+  await page.locator('#dp-set').selectOption('顧客資料');
+  await page.locator('#dp-set-save').click();
+  await expect(page.locator('#dp-status')).toContainText('2 枚で更新しました');
+  const setDocs = await page.evaluate((dir) => fetch('/doc-sets?dir=' + encodeURIComponent(dir))
+    .then((r) => r.json()).then((d) => (d.sets || []).filter((s) => s.name === '顧客資料')[0]), DIR5);
+  expect(setDocs.docs.map((d) => (typeof d === 'string' ? d : d.name)).sort()).toEqual(['can_init_sequence', 'spi_init_sequence']);
+
+  // zip を作る。題は既定のまま (クリック 1)。
+  const dl = page.waitForEvent('download', { timeout: 60000 });
+  await page.locator('#dp-build').click();
+  await dl;
+  await expect(page.locator('#dp-status')).toContainText('2 / ', { timeout: 60000 });
+  await page.locator('#dp-close').click();
+
+  // 到達条件その4: 次に開いたときは控え (今出した回) から同じ 2 枚が既定になる。
+  await S.runCommand(page, '納品パッケージ');
+  await page.waitForTimeout(2500);
+  await expect(page.locator('#dp-recall')).toHaveAttribute('data-from', 'log');
+  await expect(page.locator('#dp-count')).toContainText('2 / ');
+  await expect(page.locator('.dp-pick[data-name="diagram1"]')).not.toBeChecked();
+  await page.screenshot({ path: shotOut('primary-04-delivery-recall.png'), fullPage: true });
+  await page.locator('#dp-close').click();
+  await S.clearDir(page, DIR5);
+  try { require('fs').rmSync(pathMod.join(abs, 'delivery-20260908-1903.zip'), { force: true }); } catch (e) {}
+});
+
+// BLK-primary-20260917-0223: 手順4 で「影響範囲を見る」を押すと、出現図・内訳・
+// 該当行テキストは出るが、会議の画面共有で見せたいのは「置換前の図」と
+// 「置換後 (仮適用) の図」。これまでは各図をエディタで開いて描き直さないと
+// 見た目の前後が分からず、3 図分をその場で開き直していた。
+// 影響ボードの各図に変更前後の図を並べ、質問の出た図だけ押して原寸にする。
+test('手順4 影響範囲の一覧に変更前後の図が並び、押した図だけ原寸で見せられる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR6);
+  await S.clearDir(page, DIR6);
+  // 会議で見せるのは 1 枚ではない。複数図に散った置換をまとめて見せる。
+  await S.putDoc(page, DIR6, 'spi_init_sequence', S.docFor('spi_init_sequence', 'SpiDrv'));
+  await S.putDoc(page, DIR6, 'driver_common_class', S.docFor('driver_common_class', 'SpiDrv'));
+  await page.reload();
+  await page.waitForSelector('#preview-svg');
+
+  // 置換はまだ当てない。会議で見せるのは「当てたらこうなる」なので、
+  // 影響範囲の画面だけで前後が分かることがこの手順の到達点。
+  await page.keyboard.press('Control+h');
+  await page.waitForSelector('#rename-panel.open', { timeout: 5000 });
+  await page.locator('#rename-from').fill('SpiDrv');
+  await page.locator('#rename-to').fill('Spi_Driver');
+  await page.waitForTimeout(1200);
+
+  const gate = page.locator('#btn-rename-hits-impact');
+  await expect(gate).toBeEnabled();
+  await gate.click();
+  await page.waitForSelector('#ri-modal', { state: 'visible' });
+
+  // 到達条件その1: 図を開き直さなくても、各図に「今」と「置換後」の図が並ぶ。
+  await expect(page.locator('#ri-svg')).toBeChecked();
+  const entry = page.locator('#ri-body .cb-entry[data-doc-name="spi_init_sequence"]');
+  await expect(entry).toHaveCount(1, { timeout: 10000 });
+  const thumbs = entry.locator('.ri-thumbs .ri-thumb');
+  await expect(thumbs).toHaveCount(2);
+  await expect(thumbs.nth(0).locator('.ri-thumb-head')).toContainText('今');
+  await expect(thumbs.nth(1).locator('.ri-thumb-head')).toContainText('置換後');
+  await expect(thumbs.nth(0).locator('.ri-thumb-body svg')).toBeVisible({ timeout: 30000 });
+  await expect(thumbs.nth(1).locator('.ri-thumb-body svg')).toBeVisible({ timeout: 30000 });
+
+  // 到達条件その2: 並んだ図が「置換前」と「置換後」を実際に描き分けている。
+  await expect(thumbs.nth(0).locator('.ri-thumb-body')).toContainText('SpiDrv');
+  await expect(thumbs.nth(1).locator('.ri-thumb-body')).toContainText('Spi_Driver');
+  // 「変更前」に置換後の名前がまだ無いことで、2 枚が前後であることが決まる
+  // (SpiDrv_Init のような別の語は一括置換の対象外なので、置換後の図にも残る。
+  //  ここで「SpiDrv を 1 つも含まない」と見るのは置換の仕様のほうを誤っている)。
+  await expect(thumbs.nth(0).locator('.ri-thumb-body')).not.toContainText('Spi_Driver');
+
+  // 到達条件その3: テキストの該当行も同じ画面に残る (当たりの確認は今までどおり)。
+  await expect(entry.locator('table.cb-diff')).toHaveCount(1);
+
+  // 描き終わりが 1 行で分かる (会議中に止まって見えない)。
+  await expect(page.locator('#ri-svg-state')).toContainText('図 ', { timeout: 30000 });
+
+  // 会議ではこの一覧をそのまま映す。
+  await page.screenshot({ path: shotOut('primary-04-impact-thumbs.png'), fullPage: true });
+
+  // 到達条件その4: 質問の出た図だけを押して原寸にし、閉じれば一覧に戻る。
+  await thumbs.nth(1).click();
+  const zoom = page.locator('#ri-zoom');
+  await expect(zoom).toBeVisible();
+  await expect(zoom.locator('#ri-zoom-body svg')).toBeVisible();
+  await expect(zoom.locator('#ri-zoom-head')).toContainText('spi_init_sequence');
+  await page.keyboard.press('Escape');
+  await expect(zoom).not.toBeVisible();
+  // 原寸を閉じても一覧は開いたまま (会議の流れが切れない)。
+  await expect(page.locator('#ri-modal')).toBeVisible();
+
+  // 到達条件その5: 図が要らない場面では消せ、テキスト差分だけに戻る。
+  await page.locator('#ri-svg').uncheck();
+  await expect(entry.locator('.ri-thumbs')).toHaveCount(0);
+  await expect(entry.locator('table.cb-diff')).toHaveCount(1);
+
+  await page.locator('#ri-close').click();
+  await S.clearDir(page, DIR6);
 });

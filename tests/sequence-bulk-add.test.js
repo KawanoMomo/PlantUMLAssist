@@ -7,7 +7,7 @@ global.window = dom.window;
 global.document = dom.window.document;
 
 var depPaths = [
-  '../src/core/dsl-utils.js',
+  '../src/core/dsl-utils.js', '../src/core/note-edit.js',
   '../src/core/regex-parts.js',
   '../src/core/line-resolver.js',
   '../src/core/text-updater.js',
@@ -17,7 +17,7 @@ var depPaths = [
   '../src/core/props-renderer.js',
   '../src/core/overlay-builder.js',
   '../src/core/sequence-marks.js',
-  '../src/modules/sequence.js',
+  '../src/core/sequence-participant-zone.js', '../src/modules/sequence.js',
 ];
 depPaths.forEach(function(p) {
   try { delete require.cache[require.resolve(p)]; } catch (e) {}

@@ -268,14 +268,15 @@ window.MA.modules.plantumlSequence = (function() {
       }
 
       // note
-      var nm = trimmed.match(NOTE_RE);
+      // BLK-human-20260916-0900: 複数行 (`note over A` … `end note`)・hnote/rnote・色付きも拾う。
+      var nm = window.MA.noteEdit.readSeqNote(lines, i);
       if (nm) {
-        var targets = nm[2].split(',').map(function(s) { return s.trim(); });
         result.elements.push({
           kind: 'note', id: '__n_' + (noteCounter++),
-          position: nm[1].toLowerCase(), targets: targets,
-          text: (nm[3] || '').trim(), line: lineNum,
+          position: nm.position, targets: nm.targets, shape: nm.shape, color: nm.color,
+          text: nm.text, line: lineNum, endLine: nm.endIdx + 1,
         });
+        i = nm.endIdx;
         continue;
       }
 
@@ -325,8 +326,18 @@ window.MA.modules.plantumlSequence = (function() {
 
   var insertBeforeEnd = window.MA.dslUpdater.insertBeforeEnd;
 
+  // BLK-human-20260915-1205: 宣言は「参加者の欄」(最初のメッセージより前、既存の
+  // 宣言の後ろ) に入れる。末尾に足すと DSL 上で宣言がメッセージの後ろに散り、
+  // 読めないうえ左右の並びも意図どおりにならない。範囲の判定は
+  // src/core/sequence-participant-zone.js の 1 本に寄せ、途中挿入・一括追加・
+  // プレビューからの追加が全部そこを通る。
   function addParticipant(text, ptype, alias, label) {
-    return insertBeforeEnd(text, fmtParticipant(ptype, alias, label));
+    var line = fmtParticipant(ptype, alias, label);
+    var PZ = window.MA.seqParticipantZone;
+    // `@startuml`/`@enduml` の無い断片は、枠の補完ごと従来の insertBeforeEnd に任せる
+    // (枠を足すのは dsl-updater の職掌で、ここは「どこに入れるか」だけを決める)。
+    if (!PZ || !PZ.hasFrame(text)) return insertBeforeEnd(text, line);
+    return PZ.insert(text, line);
   }
 
   function addMessage(text, from, to, arrow, label) {
@@ -426,9 +437,20 @@ window.MA.modules.plantumlSequence = (function() {
   // 担当中であり、その差分と衝突させないため本 run では書き換えない (「ついでに直さない」)。
   // undo はアプリ共通の単一スタック (window.MA.history) に載る。取り消し対象は常に
   // 「直前の 1 操作」であり、キー操作の UI 上もそれ以上の約束をしない (UI-011 の教訓)。
+  // BLK-human-20260916-0900: 複数行の注釈は `end note` まで塊で消す (頭だけ消して本文を残さない)。
+  function deleteLineOrNote(text, lineNum) {
+    var lines = text.split('\n');
+    var n = window.MA.noteEdit.readSeqNote(lines, lineNum - 1);
+    if (n && n.endIdx > n.startIdx) {
+      lines.splice(n.startIdx, n.endIdx - n.startIdx + 1);
+      return lines.join('\n');
+    }
+    return deleteLine(text, lineNum);
+  }
+
   function deleteSelectedLine(ctx, lineNum) {
     window.MA.history.pushHistory();
-    ctx.setMmdText(deleteLine(ctx.getMmdText(), lineNum));
+    ctx.setMmdText(deleteLineOrNote(ctx.getMmdText(), lineNum));
     window.MA.selection.clearSelection();
     ctx.onUpdate();
   }
@@ -777,13 +799,22 @@ window.MA.modules.plantumlSequence = (function() {
 
   // BLK-human-20260912-0901: 挿入の確定で使う関数を、帯を見て決める。
   // 帯が絡まないときは従来の insertBefore / insertAfter と同じ行に入る。
-  function _activationAwareInsertFn(text, line, position, kind) {
+  function _activationAwareInsertFn(text, line, position, kind, hint) {
     var plain = position === 'before' ? insertBefore : insertAfter;
     if (kind === 'activation' || kind === 'participant') return plain;
-    var res = _resolveInsert(text, line, position);
+    var res = _resolveInsert(text, line, position, hint);
     if (!res) return plain;
     var target = res.target;
-    return function(t, _line, k, props) { return insertBefore(t, target, k, props); };
+    // BLK-human-20260915-1204: 閉じ忘れの帯 (deactivate が無い) の外側に足すときは、
+    // 帯が新しい矢印まで伸びないよう `deactivate {part}` を先に 1 行入れて閉じる。
+    var closeWith = res.needsClose && res.part ? 'deactivate ' + res.part : null;
+    return function(t, _line, k, props) {
+      if (closeWith) {
+        t = window.MA.textUpdater.insertAtLine(t, target, closeWith);
+        return insertBefore(t, target + 1, k, props);
+      }
+      return insertBefore(t, target, k, props);
+    };
   }
 
   // FEAT-076 (HFR-003): lineNum の message 行を、同一の from / to / arrow / label で
@@ -809,6 +840,10 @@ window.MA.modules.plantumlSequence = (function() {
     });
     P.bindAllByClass(propsEl, 'seq-insert-msg-after', function(btn) {
       var ln = parseInt(btn.getAttribute('data-line'), 10);
+      // BLK-human-20260915-1204 差し戻し: 帯の最後の要素の後ろに足すときは、
+      // 「帯を閉じてその下 (既定)」「帯の中」を選ばせる。黙って帯の中に入れると帯が伸びる。
+      var band = bandEndAfter(ctx.getMmdText(), ln);
+      if (band) { _showBandChoice(ctx, ln, band); return; }
       _showInsertForm(ctx, ln, 'after', 'message');
     });
     P.bindAllByClass(propsEl, 'seq-insert-note-after', function(btn) {
@@ -816,12 +851,27 @@ window.MA.modules.plantumlSequence = (function() {
       _showInsertForm(ctx, ln, 'after', 'note');
     });
     // FEAT-114 / HFR-060: 2 連 prompt() を seq-modal の 1 枚フォームへ置き換える。
+    // BLK-human-20260916-0901: 「⌗ 囲む…」は押したあとプレビューで終点のメッセージを押す。
+    // 押すまでの間は選べるメッセージを点線でハイライトし、上部の帯に「この 1 本だけ」も置く。
     P.bindAllByClass(propsEl, 'seq-wrap-block', function(btn) {
       var ln = parseInt(btn.getAttribute('data-line'), 10);
-      _showWrapForm(ctx, ln, ln);
+      _startWrapPick(ctx, ln);
     });
     function _moveAndReselect(ln, direction) {
       var oldText = ctx.getMmdText();
+      // BLK-human-20260916-0900: 注釈は複数行の塊ごと前後の文と入れ替える (上下の順を変える)。
+      var movedNote = moveNote(oldText, ln, direction);
+      if (movedNote || window.MA.noteEdit.readSeqNote(oldText.split('\n'), ln - 1)) {
+        if (!movedNote) return;
+        window.MA.history.pushHistory();
+        ctx.setMmdText(movedNote.text);
+        try {
+          var np = parseSequence(movedNote.text).elements.filter(function(e) { return e.kind === 'note' && e.line === movedNote.line; })[0];
+          if (np) window.MA.selection.setSelected([{ type: 'note', id: np.id, line: np.line }]);
+        } catch (e) { /* keep prior selection */ }
+        ctx.onUpdate();
+        return;
+      }
       var newLine = _findMessageSwapTargetLine(oldText, ln, direction);
       if (newLine < 0) return;
       var newText = moveMessage(oldText, ln, direction);
@@ -852,7 +902,8 @@ window.MA.modules.plantumlSequence = (function() {
       // FEAT-104: 削除直前のテキストを捕捉し、トーストの復元先として渡す。
       var _snap = ctx.getMmdText();
       window.MA.history.pushHistory();
-      ctx.setMmdText(deleteLine(ctx.getMmdText(), ln));
+      // BLK-human-20260916-0900: 複数行の注釈は `end note` まで塊で消す (頭だけ消して本文を残さない)。
+      ctx.setMmdText(deleteLineOrNote(_snap, ln));
       window.MA.selection.clearSelection();
       ctx.onUpdate();
       _toastUndo('1 件削除しました', _snap, ctx);
@@ -874,6 +925,59 @@ window.MA.modules.plantumlSequence = (function() {
       ctx.setMmdText(inferActivations(ctx.getMmdText(), ln));
       ctx.onUpdate();
     });
+  }
+
+  // BLK-human-20260916-0901: ブロックの範囲 (始点/終点のメッセージ) と 1 本ずつの伸縮。
+  var lastRangeNote = '';
+  function _groupRangeHtml(text, gg, escHtml) {
+    var GR = window.MA.sequenceGroupRange;
+    if (!GR || !gg.endLine) return '';
+    var lines = String(text).split('\n');
+    var first = '', last = '', count = 0;
+    for (var i = gg.line; i < gg.endLine - 1; i++) {
+      var c = GR.classify(lines[i]);
+      if (c.kind !== 'msg') continue;
+      count++;
+      var d = c.from + '→' + c.to + ' (L' + (i + 1) + ')';
+      if (!first) first = d;
+      last = d;
+    }
+    var btn = function(id, label) {
+      return '<button id="' + id + '" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:5px 4px;border-radius:4px;font-size:11px;cursor:pointer;">' + label + '</button>';
+    };
+    var note = lastRangeNote;
+    lastRangeNote = '';
+    return '<div id="seq-group-range" style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
+      '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">囲んでいる範囲 · ' + count + ' 本</label>' +
+      '<div style="font-size:11px;color:var(--text-primary);margin-bottom:2px;">開始: <span id="seq-group-range-start">' + escHtml(first || '(なし)') + '</span></div>' +
+      '<div style="display:flex;gap:4px;margin-bottom:6px;">' + btn('seq-group-start-up', '↑ 開始を 1 本広げる') + btn('seq-group-start-down', '↓ 開始を 1 本縮める') + '</div>' +
+      '<div style="font-size:11px;color:var(--text-primary);margin-bottom:2px;">終了: <span id="seq-group-range-end">' + escHtml(last || '(なし)') + '</span></div>' +
+      '<div style="display:flex;gap:4px;">' + btn('seq-group-end-up', '↑ 終了を 1 本縮める') + btn('seq-group-end-down', '↓ 終了を 1 本伸ばす') + '</div>' +
+      (note ? '<div id="seq-group-range-note" style="margin-top:6px;font-size:11px;color:var(--accent-yellow, #d7a300);">' + escHtml(note) + '</div>' : '') +
+    '</div>';
+  }
+
+  function _bindGroupRange(propsEl, ctx, gLine, gEnd) {
+    var GR = window.MA.sequenceGroupRange;
+    if (!GR || !gEnd) return;
+    function bind(id, edge, dir) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('click', function() {
+        var r = GR.moveEdge(ctx.getMmdText(), gLine, gEnd, edge, dir);
+        if (!r.ok) { _toastInfo(r.error); return; }
+        window.MA.history.pushHistory();
+        ctx.setMmdText(r.text);
+        lastRangeNote = r.note || '';
+        if (r.note) _toastInfo(r.note);
+        _selectGroupAtLine(r.text, r.openLine);
+        ctx.onUpdate();
+      });
+    }
+    bind('seq-group-start-up', 'start', -1);
+    bind('seq-group-start-down', 'start', 1);
+    bind('seq-group-end-up', 'end', -1);
+    bind('seq-group-end-down', 'end', 1);
   }
 
   // FEAT-001: 挿入位置のアンカー行 (line が指す message relation) を返す。
@@ -899,13 +1003,22 @@ window.MA.modules.plantumlSequence = (function() {
   // 種類は 4 択のドロップダウンに限定し、任意文字列が DSL に入る経路を塞ぐ ([AC-4])。
   var WRAP_KINDS = ['alt', 'opt', 'loop', 'par'];
 
-  function wrapFormHtml(selectedKind) {
+  function wrapFormHtml(selectedKind, rangeInfo) {
     var P = window.MA.properties;
     var kind = selectedKind || WRAP_KINDS[0];
-    var opts = WRAP_KINDS.map(function(k) {
+    var kinds = WRAP_KINDS.indexOf(kind) >= 0 ? WRAP_KINDS : WRAP_KINDS.concat([kind]);
+    var opts = kinds.map(function(k) {
       return { value: k, label: k, selected: k === kind };
     });
+    var esc = window.MA.htmlUtils.escHtml;
+    var rangeHtml = rangeInfo
+      ? '<div id="seq-wrap-range" style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:10px;font-size:12px;color:var(--text-primary);">' +
+          '囲む範囲: ' + esc(rangeInfo.text) + ' <span style="color:var(--text-secondary);">(L' + rangeInfo.start + '–L' + rangeInfo.end + ')</span>' +
+          (rangeInfo.note ? '<div id="seq-wrap-range-note" style="margin-top:4px;color:var(--accent-yellow, #d7a300);font-size:11px;">' + esc(rangeInfo.note) + '</div>' : '') +
+        '</div>'
+      : '';
     return '<h3 style="margin:0 0 12px 0;color:var(--text-primary);">ブロックで囲む</h3>' +
+      rangeHtml +
       P.selectFieldHtml('ブロック種類', 'seq-wrap-kind', opts) +
       '<div style="margin-bottom:8px;">' +
         '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Label/Condition</label>' +
@@ -917,10 +1030,19 @@ window.MA.modules.plantumlSequence = (function() {
       '</div>';
   }
 
-  function _showWrapForm(ctx, startLine, endLine) {
+  function _showWrapForm(ctx, startLine, endLine, kind) {
     var modal = document.getElementById('seq-modal');
     var content = document.getElementById('seq-modal-content');
-    content.innerHTML = wrapFormHtml(WRAP_KINDS[0]);
+    var GR = window.MA.sequenceGroupRange;
+    var rangeInfo = null;
+    if (GR) {
+      var R = GR.wrapRange(ctx.getMmdText(), startLine, endLine);
+      if (!R.ok) { _toastInfo(R.error); return; }
+      startLine = R.start; endLine = R.end;
+      rangeInfo = { start: R.start, end: R.end, note: R.rounded ? R.note : '',
+        text: GR.describe(ctx.getMmdText(), R.start, R.end) };
+    }
+    content.innerHTML = wrapFormHtml(kind || WRAP_KINDS[0], rangeInfo);
     modal.style.display = 'flex';
     var labelEl = document.getElementById('seq-wrap-label');
     if (labelEl && labelEl.focus) labelEl.focus();
@@ -936,8 +1058,129 @@ window.MA.modules.plantumlSequence = (function() {
       window.MA.history.pushHistory();
       ctx.setMmdText(wrapWith(ctx.getMmdText(), startLine, endLine, kind, label || ''));
       modal.style.display = 'none';
+      _selectGroupAtLine(ctx.getMmdText(), startLine);
       ctx.onUpdate();
     });
+  }
+
+  // BLK-human-20260916-0901: 囲んだ直後・範囲を動かした直後は、そのブロックを選んだままにする
+  // (続けて伸縮・else 追加ができる)。
+  function _selectGroupAtLine(text, line) {
+    try {
+      var p = parseSequence(text);
+      for (var i = 0; i < p.groups.length; i++) {
+        if (p.groups[i].line === line) {
+          window.MA.selection.setSelected([{ type: 'group', id: p.groups[i].id, line: line }]);
+          return;
+        }
+      }
+    } catch (e) { /* keep */ }
+    window.MA.selection.clearSelection();
+  }
+
+  function _toastInfo(msg) {
+    var el = document.getElementById('seq-range-toast');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'seq-range-toast';
+      el.setAttribute('role', 'status');
+      el.style.cssText = 'position:fixed;left:50%;bottom:48px;transform:translateX(-50%);background:var(--bg-secondary);border:1px solid var(--accent);color:var(--text-primary);padding:8px 14px;border-radius:6px;font-size:12px;z-index:1200;max-width:560px;';
+      document.body.appendChild(el);
+    }
+    el.textContent = msg;
+    el.style.display = 'block';
+    clearTimeout(el._t);
+    el._t = setTimeout(function() { el.style.display = 'none'; }, 4000);
+  }
+
+  // ── 終点を図で押して囲む (BLK-human-20260916-0901 の操作 2) ──
+  var wrapPick = null;
+
+  function _pickHighlight(on) {
+    var ov = document.getElementById('overlay-layer');
+    if (!ov) return;
+    var rects = ov.querySelectorAll('rect[data-type="message"]');
+    Array.prototype.forEach.call(rects, function(r) {
+      r.classList.remove('seq-wrap-pickable');
+      r.classList.remove('seq-wrap-anchor');
+      if (!on) return;
+      var ln = parseInt(r.getAttribute('data-line'), 10);
+      r.classList.add(ln === wrapPick.start ? 'seq-wrap-anchor' : 'seq-wrap-pickable');
+    });
+  }
+
+  function _endWrapPick() {
+    if (!wrapPick) return;
+    _pickHighlight(false);
+    var bar = document.getElementById('seq-wrap-pick-banner');
+    if (bar) bar.parentNode.removeChild(bar);
+    document.removeEventListener('keydown', wrapPick.onKey, true);
+    wrapPick = null;
+  }
+
+  function _startWrapPick(ctx, line) {
+    _endWrapPick();
+    var GR = window.MA.sequenceGroupRange;
+    var text = ctx.getMmdText();
+    var desc = GR ? GR.describe(text, line, line) : ('L' + line);
+    wrapPick = { start: line, ctx: ctx };
+    wrapPick.onKey = function(e) {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); _endWrapPick(); }
+    };
+    document.addEventListener('keydown', wrapPick.onKey, true);
+    var bar = document.createElement('div');
+    bar.id = 'seq-wrap-pick-banner';
+    bar.setAttribute('role', 'status');
+    bar.style.cssText = 'position:fixed;left:50%;top:56px;transform:translateX(-50%);z-index:1100;background:var(--bg-secondary);border:1px solid var(--accent);color:var(--text-primary);padding:8px 12px;border-radius:6px;font-size:12px;display:flex;gap:8px;align-items:center;box-shadow:0 2px 10px rgba(0,0,0,0.3);';
+    var esc = window.MA.htmlUtils.escHtml;
+    bar.innerHTML = '<span>⌗ 囲む範囲の<strong>終点のメッセージ</strong>を図で押してください (始点: ' + esc(desc.replace(/^1 本のメッセージ \((.*)\)$/, '$1')) + ' · L' + line + ')</span>' +
+      '<button id="seq-wrap-pick-one" style="background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;">この 1 本だけ囲む</button>' +
+      '<button id="seq-wrap-pick-cancel" style="background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;">やめる (Esc)</button>';
+    document.body.appendChild(bar);
+    document.getElementById('seq-wrap-pick-one').addEventListener('click', function() {
+      var c = wrapPick.ctx, s = wrapPick.start;
+      _endWrapPick();
+      _showWrapForm(c, s, s);
+    });
+    document.getElementById('seq-wrap-pick-cancel').addEventListener('click', _endWrapPick);
+    _pickHighlight(true);
+  }
+
+  // app.js が overlay のクリックを選択に回す前に呼ぶ。消費したら true。
+  function handleOverlayPick(target) {
+    if (!wrapPick || !target || !target.getAttribute) return false;
+    if (target.getAttribute('data-type') !== 'message') return true;  // 終点を待つ間は他を選ばない
+    var ln = parseInt(target.getAttribute('data-line'), 10);
+    if (isNaN(ln)) return true;
+    var c = wrapPick.ctx, s = wrapPick.start;
+    _endWrapPick();
+    _showWrapForm(c, Math.min(s, ln), Math.max(s, ln));
+    return true;
+  }
+
+  // overlay を描き直したらハイライトも付け直す。
+  function refreshOverlayPick() { if (wrapPick) _pickHighlight(true); }
+
+  // 1 本目を押してから Shift+クリックで 2 本目 → 間のメッセージを全部選ぶ。
+  function expandShiftSelection(text, current, item) {
+    if (!item || item.type !== 'message' || typeof item.line !== 'number') return null;
+    var msgs = (current || []).filter(function(s) { return s.type === 'message' && typeof s.line === 'number'; });
+    if (!msgs.length || msgs.length !== current.length) return null;
+    var GR = window.MA.sequenceGroupRange;
+    if (!GR) return null;
+    var anchor = msgs[0].line;
+    var lines = GR.messageLinesBetween(text, anchor, item.line);
+    var p = parseSequence(text);
+    var out = [];
+    lines.forEach(function(l) {
+      for (var i = 0; i < p.relations.length; i++) {
+        var r = p.relations[i];
+        if (r.kind === 'message' && r.line === l) { out.push({ type: 'message', id: r.id, line: l }); break; }
+      }
+    });
+    // 始点を先頭に保つ (次の Shift+クリックも同じ始点から測る)。
+    out.sort(function(a, b) { return a.line === anchor ? -1 : b.line === anchor ? 1 : a.line - b.line; });
+    return out.length ? out : null;
   }
 
   // FEAT-142 / HFR-075: participant 左右挿入の 2 連 prompt() を 1 枚のフォームにまとめる。
@@ -982,6 +1225,9 @@ window.MA.modules.plantumlSequence = (function() {
       window.MA.history.pushHistory();
       var text = ctx.getMmdText();
       var opt = { ptype: ptype || 'participant', alias: alias };
+      // BLK-human-20260915-1205: 「左に参加者追加 / 右に参加者追加」は選んだ参加者の
+      // 隣 (= 参加者の欄の中) に入れるので、左右の順を指定するこの経路は従来どおり
+      // insertBefore / insertAfter を使う。欄の外に出る心配は無い。
       ctx.setMmdText(position === 'before'
         ? insertBefore(text, line, 'participant', opt)
         : insertAfter(text, line, 'participant', opt));
@@ -1022,46 +1268,49 @@ window.MA.modules.plantumlSequence = (function() {
 
   // BLK-human-20260912-0901: activate / deactivate の帯を見て挿入行を決める。
   // text を渡せなかった (= 帯が分からない) ときだけ、従来の素朴な前/後に落ちる。
-  function _resolveInsert(text, line, position) {
+  // hint はプレビューの当たり判定が決めた帯の内外 { zone, bandLine } (BLK-human-20260915-1204)。
+  // DSL の行番号だけでは「帯の最後の行の後」と「帯を抜けた先」が同じ行に見えるので、
+  // 押した点が帯の矩形の中だったか下だったかはこれでしか伝わらない。
+  function _resolveInsert(text, line, position, hint) {
     var ai = window.MA.sequenceActivationInsert;
     if (!ai || typeof text !== 'string') return null;
-    return ai.resolve(text, line, position);
+    return ai.resolve(text, line, position, hint);
   }
 
   // 挿入結果が DSL の何行目になるか。text があれば帯を避けた行、無ければ
   // before は line そのもの、after は line の次。
-  function insertTargetLine(line, position, text) {
+  function insertTargetLine(line, position, text, hint) {
     var n = parseInt(line, 10);
     if (isNaN(n)) return null;
-    var res = _resolveInsert(text, n, position);
+    var res = _resolveInsert(text, n, position, hint);
     if (res) return res.target;
     return position === 'before' ? n : n + 1;
   }
 
   // ピッカー / フォームの見出しに出す「どこに入るか」の 1 行説明。
   // 帯の内側 / 外側が決まっているときは、それも添える。
-  function describeInsertTarget(line, position, text) {
-    var target = insertTargetLine(line, position, text);
+  function describeInsertTarget(line, position, text, hint) {
+    var target = insertTargetLine(line, position, text, hint);
     if (target === null) return '';
     var base = 'DSL ' + target + ' 行目に挿入（' + line + ' 行目の' + (position === 'before' ? '前' : '後') + '）';
-    var res = _resolveInsert(text, line, position);
+    var res = _resolveInsert(text, line, position, hint);
     var zone = res ? window.MA.sequenceActivationInsert.zoneLabel(res) : '';
     return zone ? base + ' · ' + zone : base;
   }
 
   // ガイド線に出す 1 行。帯の内側 / 外側まで見せて、クリック前に行き先が分かるようにする。
-  function describeInsertGuide(line, position, text) {
-    var target = insertTargetLine(line, position, text);
+  function describeInsertGuide(line, position, text, hint) {
+    var target = insertTargetLine(line, position, text, hint);
     if (target === null) return null;
-    var res = _resolveInsert(text, line, position);
+    var res = _resolveInsert(text, line, position, hint);
     var zone = res ? window.MA.sequenceActivationInsert.zoneLabel(res) : '';
     return '+ DSL ' + target + ' 行目に挿入' + (zone ? '（' + zone + '）' : '');
   }
 
   // design 5c: 挿入メニューを開いている間、DSL の入る行に印を出す / 消す。
-  function _markerShow(line, position, text) {
+  function _markerShow(line, position, text, hint) {
     if (!window.MA.insertMarker) return;
-    window.MA.insertMarker.show(line, position, insertTargetLine(line, position, text));
+    window.MA.insertMarker.show(line, position, insertTargetLine(line, position, text, hint));
   }
   function _markerHide() {
     if (window.MA.insertMarker) window.MA.insertMarker.hide();
@@ -1078,12 +1327,49 @@ window.MA.modules.plantumlSequence = (function() {
   }
 
   // _showInsertPicker は kinds を差し替えて 2 段目 (その他) にも使う。
-  function _showOtherPicker(ctx, line, position) {
-    _renderPicker(ctx, line, position, otherInsertKinds(), 'その他', true);
+  function _showOtherPicker(ctx, line, position, hint) {
+    _renderPicker(ctx, line, position, otherInsertKinds(), 'その他', true, hint);
   }
 
-  function _showInsertPicker(ctx, line, position) {
-    _renderPicker(ctx, line, position, INSERT_KINDS, 'ここに挿入', false);
+  // line の「後」に足すと帯の末尾 (deactivate の直前) に落ちる帯。そうでなければ null。
+  function bandEndAfter(text, line) {
+    var ai = window.MA.sequenceActivationInsert;
+    if (!ai || typeof text !== 'string') return null;
+    var res = ai.resolve(text, line, 'after');
+    if (!res || res.zone !== 'inside' || !res.band) return null;
+    return res.target === res.band.deactivateLine ? res.band : null;
+  }
+
+  function _showBandChoice(ctx, line, band) {
+    var modal = document.getElementById('seq-modal');
+    var content = document.getElementById('seq-modal-content');
+    if (!modal || !content) { _showInsertForm(ctx, line, 'after', 'message'); return; }
+    var esc = window.MA.htmlUtils.escHtml;
+    var btn = 'style="text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);' +
+      'padding:8px 10px;border-radius:4px;cursor:pointer;font-size:12px;"';
+    content.innerHTML =
+      '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">帯の末尾に追加</h3>' +
+      '<div id="seq-band-choice-note" style="font-size:11px;color:var(--text-secondary);margin-bottom:12px;">' +
+        esc(band.target) + ' の実行中の帯 (activate) の最後です。どちらに入れますか？</div>' +
+      '<div style="display:flex;flex-direction:column;gap:6px;">' +
+        '<button id="seq-band-choice-outside" ' + btn + '>帯を閉じてその下に入れる（既定）</button>' +
+        '<button id="seq-band-choice-inside" ' + btn + '>帯の中に入れる（帯を伸ばす）</button>' +
+      '</div>' +
+      '<button id="seq-band-choice-cancel" style="width:100%;margin-top:8px;background:var(--bg-tertiary);' +
+        'border:1px solid var(--border);color:var(--text-primary);padding:8px;border-radius:4px;cursor:pointer;">キャンセル</button>';
+    modal.style.display = 'flex';
+    function go(zone) {
+      _showInsertForm(ctx, line, 'after', 'message', { zoneHint: { zone: zone, bandLine: band.activateLine } });
+    }
+    document.getElementById('seq-band-choice-outside').addEventListener('click', function() { go('outside'); });
+    document.getElementById('seq-band-choice-inside').addEventListener('click', function() { go('inside'); });
+    document.getElementById('seq-band-choice-cancel').addEventListener('click', function() { modal.style.display = 'none'; });
+    var def = document.getElementById('seq-band-choice-outside');
+    if (def && def.focus) def.focus();
+  }
+
+  function _showInsertPicker(ctx, line, position, hint) {
+    _renderPicker(ctx, line, position, INSERT_KINDS, 'ここに挿入', false, hint);
   }
 
   // ボタンの id。kind には `block:par` のように CSS の id セレクタで拾えない
@@ -1092,17 +1378,17 @@ window.MA.modules.plantumlSequence = (function() {
     return 'seq-pick-' + String(kind).replace(/[^A-Za-z0-9_-]+/g, '-');
   }
 
-  function _renderPicker(ctx, line, position, kinds, title, isOther) {
+  function _renderPicker(ctx, line, position, kinds, title, isOther, hint) {
     var modal = document.getElementById('seq-modal');
     var content = document.getElementById('seq-modal-content');
     if (!modal || !content) return;
     // 挿入先の行が決まらないうちは開かない (見出しが空のピッカーを出さない)。
     var pickText = ctx && ctx.getMmdText ? ctx.getMmdText() : null;
-    if (insertTargetLine(line, position, pickText) === null) return;
+    if (insertTargetLine(line, position, pickText, hint) === null) return;
     var esc = window.MA.htmlUtils.escHtml;
     var html = '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">' + esc(title) + '</h3>' +
       '<div id="seq-pick-target" style="font-size:11px;color:var(--text-secondary);margin-bottom:12px;">' +
-        esc(describeInsertTarget(line, position, pickText)) + '</div>' +
+        esc(describeInsertTarget(line, position, pickText, hint)) + '</div>' +
       '<div style="display:flex;flex-direction:column;gap:6px;">';
     kinds.forEach(function(k) {
       html += '<button id="' + pickBtnId(k.value) + '" data-kind="' + k.value + '" class="seq-pick-btn" ' +
@@ -1122,22 +1408,23 @@ window.MA.modules.plantumlSequence = (function() {
       'border:1px solid var(--border);color:var(--text-primary);padding:8px;border-radius:4px;cursor:pointer;">キャンセル</button>';
     content.innerHTML = html;
     modal.style.display = 'flex';
-    _markerShow(line, position, pickText);
+    _markerShow(line, position, pickText, hint);
 
     Array.prototype.forEach.call(content.querySelectorAll('.seq-pick-btn'), function(btn) {
       btn.addEventListener('click', function() {
         var kindAttr = btn.getAttribute('data-kind');
         // design 5c: 「その他」は form ではなく 2 段目のメニューを開く。
-        if (kindAttr === 'other') { _showOtherPicker(ctx, line, position); return; }
+        if (kindAttr === 'other') { _showOtherPicker(ctx, line, position, hint); return; }
         var picked = _resolvePickedKind(kindAttr);
         picked.opts.fromPicker = true;
+        picked.opts.zoneHint = hint;
         if (isOther) picked.opts.fromOther = true;
         _showInsertForm(ctx, line, position, picked.kind, picked.opts);
       });
     });
     if (isOther) {
       document.getElementById('seq-pick-back').addEventListener('click', function() {
-        _showInsertPicker(ctx, line, position);
+        _showInsertPicker(ctx, line, position, hint);
       });
     }
     document.getElementById('seq-pick-cancel').addEventListener('click', function() {
@@ -1203,6 +1490,7 @@ window.MA.modules.plantumlSequence = (function() {
       html +=
         P.selectFieldHtml('Position', 'seq-mod-npos', posOpts) +
         P.selectFieldHtml('Target', 'seq-mod-ntarget', partOpts) +
+        _noteExtraHtml('seq-mod-nextra', participants) +
         '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">本文</label><div id="seq-mod-ntext-rle"></div></div>';
     } else if (kind === 'block') {
       // alt / loop / opt / par / break / critical / group。空ブロック (opener + end) を
@@ -1254,7 +1542,10 @@ window.MA.modules.plantumlSequence = (function() {
 
     var rleObj = null;
     if (kind === 'message') rleObj = window.MA.richLabelEditor.mount(document.getElementById('seq-mod-label-rle'), '');
-    else if (kind === 'note') rleObj = window.MA.richLabelEditor.mount(document.getElementById('seq-mod-ntext-rle'), '');
+    else if (kind === 'note') {
+      rleObj = window.MA.richLabelEditor.mount(document.getElementById('seq-mod-ntext-rle'), '');
+      _bindNoteExtra('seq-mod-npos', 'seq-mod-nextra');
+    }
     // FEAT-004: message 種別に限り、modal 表示直後に本文 textarea へフォーカスする。
     if (kind === 'message' && rleObj && rleObj.element) rleObj.element.focus();
 
@@ -1275,8 +1566,8 @@ window.MA.modules.plantumlSequence = (function() {
 
     if (opts.fromPicker) {
       document.getElementById('seq-mod-back').addEventListener('click', function() {
-        if (opts.fromOther) _showOtherPicker(ctx, line, position);
-        else _showInsertPicker(ctx, line, position);
+        if (opts.fromOther) _showOtherPicker(ctx, line, position, opts.zoneHint);
+        else _showInsertPicker(ctx, line, position, opts.zoneHint);
       });
     }
     document.getElementById('seq-mod-cancel').addEventListener('click', function() {
@@ -1292,7 +1583,7 @@ window.MA.modules.plantumlSequence = (function() {
       var t = ctx.getMmdText();
       // BLK-human-20260912-0901: 帯 (activate/deactivate) を見て行を決め直す。
       // activation / participant 自体の挿入は帯の内外という概念を持たないので素通し。
-      var insertFn = _activationAwareInsertFn(t, line, position, kind);
+      var insertFn = _activationAwareInsertFn(t, line, position, kind, opts.zoneHint);
       if (kind === 'message') {
         var fr = document.getElementById('seq-mod-from').value;
         var to = document.getElementById('seq-mod-to').value;
@@ -1321,7 +1612,7 @@ window.MA.modules.plantumlSequence = (function() {
         window.MA.history.pushHistory();
         t = insertFn(t, line, 'note', {
           position: document.getElementById('seq-mod-npos').value,
-          targets: [document.getElementById('seq-mod-ntarget').value],
+          targets: _noteTargetsFromForm('seq-mod-npos', 'seq-mod-ntarget', 'seq-mod-nextra'),
           text: rleObj ? rleObj.getValue() : '',
         });
       } else if (kind === 'block') {
@@ -1359,19 +1650,68 @@ window.MA.modules.plantumlSequence = (function() {
 
   var renameWithRefs = window.MA.dslUpdater.renameWithRefs;
 
+  // BLK-human-20260916-0900: 複数行・hnote/rnote・色付きの注釈も同じ入口で書き換える。
+  // position を left of / right of にすると対象は先頭 1 参加者に寄る。
   function updateNote(text, lineNum, field, value) {
+    return window.MA.noteEdit.updateSeqNote(text, lineNum, field, value);
+  }
+  // 注釈 (lineNum から始まる塊) を上 (-1) / 下 (+1) の文と入れ替える。動かせなければ null。
+  function moveNote(text, lineNum, dir) {
     var lines = text.split('\n');
-    var idx = lineNum - 1;
-    if (idx < 0 || idx >= lines.length) return text;
-    var indent = lines[idx].match(/^(\s*)/)[1];
-    var m = lines[idx].trim().match(NOTE_RE);
-    if (!m) return text;
-    var position = m[1], targets = m[2], body = m[3] || '';
-    if (field === 'position') position = value;
-    else if (field === 'targets') targets = value;
-    else if (field === 'text') body = value;
-    lines[idx] = indent + 'note ' + position + ' ' + targets + (body ? ' : ' + body : '');
-    return lines.join('\n');
+    var n = window.MA.noteEdit.readSeqNote(lines, lineNum - 1);
+    if (!n) return null;
+    return window.MA.noteEdit.moveBlock(text, lineNum, n.endIdx + 1, dir);
+  }
+
+  // 注釈の対象参加者のチェック欄。over は複数選べ (`note over A, B`)、left of / right of は 1 つ。
+  function _noteTargetsHtml(prefix, participants, selected, position) {
+    var sel = selected || [];
+    var esc = window.MA.htmlUtils.escHtml;
+    var boxes = participants.map(function(p, i) {
+      var on = sel.indexOf(p.id) >= 0 || (!sel.length && i === 0);
+      return '<label style="display:inline-flex;align-items:center;gap:2px;margin:0 8px 2px 0;font-size:11px;cursor:pointer;">' +
+        '<input type="checkbox" class="' + prefix + '" data-pid="' + esc(p.id) + '"' + (on ? ' checked' : '') + '>' + esc(p.label || p.id) + '</label>';
+    }).join('');
+    return '<div id="' + prefix + '" style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">対象の参加者 <span style="font-weight:normal;">(over は複数選べる)</span></label>' +
+      (boxes || '<span style="font-size:11px;color:var(--text-secondary);">(参加者なし)</span>') + '</div>';
+  }
+  // 足すときのフォーム: Target (1 つ目) に加え、over のときだけ一緒に重ねる参加者を選べる。
+  function _noteExtraHtml(prefix, participants) {
+    var esc = window.MA.htmlUtils.escHtml;
+    var boxes = participants.map(function(p) {
+      return '<label style="display:inline-flex;align-items:center;gap:2px;margin:0 8px 2px 0;font-size:11px;cursor:pointer;">' +
+        '<input type="checkbox" class="' + prefix + '" data-pid="' + esc(p.id) + '">' + esc(p.label || p.id) + '</label>';
+    }).join('');
+    return '<div id="' + prefix + '" style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">over で一緒に重ねる参加者 (任意)</label>' + boxes + '</div>';
+  }
+  function _bindNoteExtra(posId, prefix) {
+    var posEl = document.getElementById(posId), wrap = document.getElementById(prefix);
+    if (!posEl || !wrap) return;
+    var sync = function() { wrap.style.display = posEl.value === 'over' ? '' : 'none'; };
+    posEl.addEventListener('change', sync);
+    sync();
+  }
+  function _noteTargetsFromForm(posId, selId, prefix) {
+    var pos = document.getElementById(posId).value;
+    var first = document.getElementById(selId).value;
+    var list = [first];
+    if (pos === 'over') list = list.concat(_readNoteTargets(prefix));
+    return window.MA.noteEdit.normalizeTargets(pos, list);
+  }
+  function _readNoteTargets(prefix) {
+    return Array.prototype.slice.call(document.querySelectorAll('input.' + prefix))
+      .filter(function(b) { return b.checked; }).map(function(b) { return b.getAttribute('data-pid'); });
+  }
+  // getPos() が over 以外なら、押した 1 つだけを残す。全部外すことはできない。onChange(list) は省略可。
+  function _bindNoteTargets(prefix, getPos, onChange) {
+    var boxes = Array.prototype.slice.call(document.querySelectorAll('input.' + prefix));
+    boxes.forEach(function(b) {
+      b.addEventListener('change', function() {
+        if (getPos() !== 'over' && b.checked) boxes.forEach(function(o) { if (o !== b) o.checked = false; });
+        if (!_readNoteTargets(prefix).length) { b.checked = true; return; }
+        if (onChange) onChange(_readNoteTargets(prefix));
+      });
+    });
   }
 
   // _isMessageLineForMove: a line is "another message" if it contains an
@@ -1808,6 +2148,10 @@ window.MA.modules.plantumlSequence = (function() {
     parse: parseSequence,
     parseSequence: parseSequence,
     addParticipant: addParticipant,
+    participantZone: function(text) {
+      var PZ = window.MA.seqParticipantZone;
+      return PZ ? PZ.find(text) : null;
+    },
     normalizeIdInput: normalizeIdInput,
     addMessage: addMessage,
     parseBulkLines: parseBulkLines,
@@ -1846,6 +2190,8 @@ window.MA.modules.plantumlSequence = (function() {
     unwrap: unwrap,
     addNote: addNote,
     updateNote: updateNote,
+    moveNote: moveNote,
+    deleteLineOrNote: deleteLineOrNote,
     moveMessage: moveMessage,
     addActivation: addActivation,
     deleteActivationsFor: deleteActivationsFor,
@@ -1864,10 +2210,11 @@ window.MA.modules.plantumlSequence = (function() {
     showInsertForm: function(ctx, line, position, kind) {
       _showInsertForm(ctx, line, position, kind);
     },
-    showInsertPicker: function(ctx, line, position) {
-      _showInsertPicker(ctx, line, position);
+    showInsertPicker: function(ctx, line, position, hint) {
+      _showInsertPicker(ctx, line, position, hint);
     },
     insertKindOptions: insertKindOptions,
+    bandEndAfter: bandEndAfter,
     pickBtnId: pickBtnId,
     otherInsertKinds: otherInsertKinds,
     insertTargetLine: insertTargetLine,
@@ -1904,10 +2251,15 @@ window.MA.modules.plantumlSequence = (function() {
       deleteSelectedLine: true,
       multiSelectConnect: false,
     },
-    buildOverlay: function(svgEl, parsedData, overlayEl) {
+    handleOverlayPick: handleOverlayPick,
+    expandShiftSelection: expandShiftSelection,
+    buildOverlay: function(svgEl, parsedData, overlayEl, dslText) {
       if (!overlayEl) return;
+      setTimeout(refreshOverlayPick, 0);
       if (window.MA.sequenceOverlay && window.MA.sequenceOverlay.buildSequenceOverlay) {
-        return window.MA.sequenceOverlay.buildSequenceOverlay(svgEl, parsedData, overlayEl);
+        // dslText は帯 (activate/deactivate) の矩形を DSL の行に結び付けるために要る
+        // (PlantUML の SVG は帯に data-source-line を付けない)。BLK-human-20260915-1204。
+        return window.MA.sequenceOverlay.buildSequenceOverlay(svgEl, parsedData, overlayEl, dslText);
       }
     },
     renderProps: function(selData, parsedData, propsEl, ctx) {
@@ -2029,6 +2381,7 @@ window.MA.modules.plantumlSequence = (function() {
             html =
               P.selectFieldHtml('Position', 'seq-tail-npos', posOpts) +
               P.selectFieldHtml('Target', 'seq-tail-ntarget', partOpts) +
+              _noteExtraHtml('seq-tail-nextra', participants) +
               '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Text</label><div id="seq-tail-ntext-rle"></div></div>' +
               P.primaryButtonHtml('seq-tail-add', '+ 末尾に追加');
           } else if (kind === 'block') {
@@ -2062,7 +2415,10 @@ window.MA.modules.plantumlSequence = (function() {
           window.MA.reuseModal.bindButton('seq-tail-reuse', 'plantuml-sequence', 'seq-tail-bulk');
           var rleObj = null;
           if (kind === 'message') rleObj = window.MA.richLabelEditor.mount(document.getElementById('seq-tail-label-rle'), '');
-          else if (kind === 'note') rleObj = window.MA.richLabelEditor.mount(document.getElementById('seq-tail-ntext-rle'), '');
+          else if (kind === 'note') {
+            rleObj = window.MA.richLabelEditor.mount(document.getElementById('seq-tail-ntext-rle'), '');
+            _bindNoteExtra('seq-tail-npos', 'seq-tail-nextra');
+          }
           if (kind === 'message') {
             // design 5d: 末尾追加の色見本。選んだ色は hidden #seq-tail-color が持つ。
             var tColorBtns = detailEl.querySelectorAll('.seq-tail-color-swatch');
@@ -2147,7 +2503,7 @@ window.MA.modules.plantumlSequence = (function() {
               var ntg = document.getElementById('seq-tail-ntarget').value;
               if (!ntg) { alert('Target 必須'); return; }
               window.MA.history.pushHistory();
-              out = addNote(t, document.getElementById('seq-tail-npos').value, [ntg], (rleObj ? rleObj.getValue() : '').trim());
+              out = addNote(t, document.getElementById('seq-tail-npos').value, _noteTargetsFromForm('seq-tail-npos', 'seq-tail-ntarget', 'seq-tail-nextra'), (rleObj ? rleObj.getValue() : '').trim());
             } else if (kind === 'block') {
               window.MA.history.pushHistory();
               out = addGroup(t, document.getElementById('seq-tail-bkind').value, document.getElementById('seq-tail-blabel').value.trim());
@@ -2246,6 +2602,9 @@ window.MA.modules.plantumlSequence = (function() {
               '<input id="seq-edit-stereotype" type="text" value="' + escHtml(msgParts.stereotype) + '" placeholder="例: async / sync / important" style="width:100%;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-size:12px;box-sizing:border-box;">' +
             '</div>' +
             '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">本文</label><div id="seq-edit-msg-label-rle"></div></div>' +
+            // BLK-junior-20260915-0406-wish: メッセージ名は同じ部品の状態遷移図・
+            // クラス図と同じ綴りでなければならない。名前帳から選べば最初から揃う。
+            P.vocabPickerHtml('seq-edit-msg-vocab', { roles: ['method', 'event'], callSuffix: true }) +
             actionBarHtml(mm.line, 'message');
           var mln = mm.line;
           var swapBtn = document.getElementById('seq-edit-swap');
@@ -2291,6 +2650,9 @@ window.MA.modules.plantumlSequence = (function() {
             ctx.setMmdText(updateMessage(ctx.getMmdText(), mln, 'label', combined));
             ctx.onUpdate();
           });
+          P.bindVocabPicker('seq-edit-msg-vocab',
+            document.querySelector('#seq-edit-msg-label-rle .rle-textarea'));
+
           var _stereoPushed = false;
           document.getElementById('seq-edit-stereotype').addEventListener('change', function() {
             if (!_stereoPushed) { window.MA.history.pushHistory(); _stereoPushed = true; }
@@ -2343,6 +2705,9 @@ window.MA.modules.plantumlSequence = (function() {
             '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>' + escHtml(pp.label) + '</strong><br><span style="color:var(--text-secondary);">' + pp.ptype + ' · L' + pp.line + '</span></div>' +
             P.selectFieldHtml('Type', 'seq-edit-ptype', pOpts2) +
             P.fieldHtml('Alias', 'seq-edit-alias', pp.id) +
+            // BLK-reviewer-20260915-0506-wish: 部品名を打つのはここ。登録簿の
+            // 正式表記を欄の下に出し、揺れた綴りならその場で揃える先を言う。
+            P.vocabPickerHtml('seq-edit-alias-vocab', { roles: ['type'] }) +
             '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Label</label><div id="seq-edit-label-rle"></div></div>' +
             '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-primary);margin:8px 0;"><input id="seq-edit-rename-refs" type="checkbox" checked> Alias 変更時に他要素の参照も追従</label>' +
             paletteHtml +
@@ -2376,6 +2741,7 @@ window.MA.modules.plantumlSequence = (function() {
             ctx.setMmdText(t);
             ctx.onUpdate();
           });
+          P.bindVocabPicker('seq-edit-alias-vocab', 'seq-edit-alias');
           // C20: 同上 (participant label edit)
           var _partLabelPushed = false;
           window.MA.richLabelEditor.mount(document.getElementById('seq-edit-label-rle'), pp.label, function(v) {
@@ -2454,17 +2820,21 @@ window.MA.modules.plantumlSequence = (function() {
           var posOpts2 = NOTE_POSITIONS.map(function(p) { return { value: p, label: p, selected: p === nn2.position }; });
           propsEl.innerHTML =
             '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>' + escHtml(nn2.text || '(empty)') + '</strong><br><span style="color:var(--text-secondary);">Note · ' + nn2.position + ' · L' + nn2.line + '</span></div>' +
-            P.selectFieldHtml('Position', 'seq-edit-npos', posOpts2) +
-            P.fieldHtml('Targets', 'seq-edit-ntargets', nn2.targets.join(', ')) +
+            // BLK-human-20260916-0900: 置いた後でも位置・対象参加者・上下の順を変えられる。
+            P.selectFieldHtml('位置 (Position)', 'seq-edit-npos', posOpts2) +
+            _noteTargetsHtml('seq-edit-ntgt', participants, nn2.targets, nn2.position) +
             '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Text</label><div id="seq-edit-ntext-rle"></div></div>' +
             actionBarHtml(nn2.line, 'note');
           var nln = nn2.line;
-          [['npos', 'position'], ['ntargets', 'targets']].forEach(function(pair) {
-            document.getElementById('seq-edit-' + pair[0]).addEventListener('change', function() {
-              window.MA.history.pushHistory();
-              ctx.setMmdText(updateNote(ctx.getMmdText(), nln, pair[1], this.value));
-              ctx.onUpdate();
-            });
+          document.getElementById('seq-edit-npos').addEventListener('change', function() {
+            window.MA.history.pushHistory();
+            ctx.setMmdText(updateNote(ctx.getMmdText(), nln, 'position', this.value));
+            ctx.onUpdate();
+          });
+          _bindNoteTargets('seq-edit-ntgt', function() { return document.getElementById('seq-edit-npos').value; }, function(list) {
+            window.MA.history.pushHistory();
+            ctx.setMmdText(updateNote(ctx.getMmdText(), nln, 'targets', list));
+            ctx.onUpdate();
           });
           // C20: 同上 (note text edit)
           var _noteTextPushed = false;
@@ -2492,6 +2862,7 @@ window.MA.modules.plantumlSequence = (function() {
             '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>' + escHtml(gg.gtype + (gg.label ? ' ' + gg.label : '')) + '</strong><br><span style="color:var(--text-secondary);">Block · L' + gg.line + (gg.endLine ? '–L' + gg.endLine : '') + '</span></div>' +
             P.selectFieldHtml('Type', 'seq-edit-gtype', gtypeOpts) +
             P.fieldHtml('Label/Condition', 'seq-edit-glabel', gg.label || '') +
+            _groupRangeHtml(ctx.getMmdText(), gg, escHtml) +
             '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
               '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">else 追加 (alt/critical)</label>' +
               '<input id="seq-edit-else-cond" type="text" placeholder="else の条件 (省略可)" style="width:100%;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-size:12px;margin-bottom:4px;box-sizing:border-box;">' +
@@ -2502,6 +2873,7 @@ window.MA.modules.plantumlSequence = (function() {
             '</div>';
           var gLine = gg.line;
           var gEnd = gg.endLine;
+          _bindGroupRange(propsEl, ctx, gLine, gEnd);
           document.getElementById('seq-edit-gtype').addEventListener('change', function() {
             window.MA.history.pushHistory();
             ctx.setMmdText(updateGroup(ctx.getMmdText(), gLine, 'gtype', this.value));
@@ -2542,6 +2914,9 @@ window.MA.modules.plantumlSequence = (function() {
         propsEl.innerHTML =
           '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;">' +
             '<strong>' + selData.length + ' 件選択中</strong><br>' +
+            (window.MA.sequenceGroupRange
+              ? '<span id="seq-multi-range" style="color:var(--text-primary);">' + escHtml(window.MA.sequenceGroupRange.describe(ctx.getMmdText(), range.start, range.end)) + '</span><br>'
+              : '') +
             '<span style="color:var(--text-secondary);">L' + range.start + ' 〜 L' + range.end + '</span>' +
           '</div>' +
           '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
@@ -2558,11 +2933,8 @@ window.MA.modules.plantumlSequence = (function() {
           var k = btn.getAttribute('data-kind');
           var s = parseInt(btn.getAttribute('data-start'), 10);
           var e = parseInt(btn.getAttribute('data-end'), 10);
-          var label = prompt(k + ' のラベル', '');
-          window.MA.history.pushHistory();
-          ctx.setMmdText(wrapWith(ctx.getMmdText(), s, e, k, label || ''));
-          window.MA.selection.clearSelection();
-          ctx.onUpdate();
+          // BLK-human-20260916-0901: prompt() ではなく範囲が文字で見える 1 枚のフォームで囲む。
+          _showWrapForm(ctx, s, e, k);
         });
         P.bindAllByClass(propsEl, 'seq-bulk-duplicate', function(btn) {
           var s = parseInt(btn.getAttribute('data-start'), 10);

@@ -22,12 +22,15 @@ window.MA.saveVerify = (function() {
   //   blocked  — テンプレ宣言のあるファイルなので書かない
   //   skipped  — 開いたときのまま。書く必要が無い (ディスクは既にこの内容)
   //   download — 保存先がファイルではないので、そもそもディスクに書かれない
-  var OUTCOMES = ['written', 'asked', 'blocked', 'skipped', 'download'];
+  //   untouched — タブがまだ見本・白紙のまま。書く中身が無いので書かない
+  //               (BLK-primary-20260914-2106: 見本で既存の図を潰さない)
+  var OUTCOMES = ['written', 'asked', 'blocked', 'skipped', 'download', 'untouched'];
 
   var REASON = {
     asked: '「このファイルを書き換えるか」の問いに答えていないので書いていません',
     blocked: 'テンプレ宣言のあるファイルなので書き込みを止めています',
     skipped: '開いたときのままなので書いていません（ディスクは既にこの内容です）',
+    untouched: 'まだ見本のままなので書いていません（既にある同じ名前の図を見本で潰さないため）',
     download: '保存先がファイルではありません（⚙設定 → 自動保存 → ファイル）',
     stale: '保存操作は通ったのに、ディスクの中身が編集前のままです',
     missing: '保存操作は通ったのに、保存フォルダにファイルがありません',
@@ -51,7 +54,7 @@ window.MA.saveVerify = (function() {
       at: at || new Date().toISOString(),
       outcome: o,
       // 書きに行っていない道は、その場で答えが決まっている。
-      status: o === 'written' ? 'unknown' : (o === 'skipped' ? 'ok' : o),
+      status: o === 'written' ? 'unknown' : ((o === 'skipped' || o === 'untouched') ? 'ok' : o),
       disk: null,
     };
     return _notes[name];
@@ -98,8 +101,10 @@ window.MA.saveVerify = (function() {
   function rows() {
     var list = names().map(function(n) {
       var r = _notes[n];
+      // 書きに行っていない道は、その道自身の理由を出す (status は 'ok' に倒れるので、
+      // status の文だけだと「ディスクと一致」と読めてしまう)。
       return { name: n, status: r.status, at: r.at, outcome: r.outcome,
-               reason: reasonText(r.status), bad: isBad(r.status) };
+               reason: reasonText(r.outcome) || reasonText(r.status), bad: isBad(r.status) };
     });
     list.sort(function(a, b) {
       if (a.bad !== b.bad) return a.bad ? -1 : 1;

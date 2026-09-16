@@ -185,7 +185,30 @@ window.MA.sourceLock = (function() {
       overwrite: 'このファイルを書き換える',
       keep: '元ファイルは変更前のまま保つ（いまの本文は ' + origin + COPY_SUFFIX + ' に書く）',
       all: '開いている他のファイルも同じ扱いにする（毎回聞かない）',
+      // BLK-junior-20260915-2240: 二択が同格に見え、しかも強調が付いていたのは
+      // 「元ファイルを保つ」側だった。直した本文を元ファイルに入れたくて上書き保存を
+      // 押した人にとって、選ぶべきはほぼ必ず「書き換える」なので、こちらを主にする。
+      recommended: 'overwrite',
+      overwriteNote: 'おすすめ（直した本文がこのファイルに入ります）',
+      keepNote: '元ファイルはいま見えている表記に変わりません',
+      // BLK-junior-20260916-0046: 同じ表記直しを何枚も続ける回は、1 枚ずつ開いて
+      // 直して答える手順そのものが重い (10 枚で 20 クリック)。保存フォルダを
+      // またぐ ⇄ 一括置換なら 1 回で済むので、詰まったその場から入れるようにする。
+      bulk: '⇄ 同じ直しを保存フォルダの図にまとめて当てる',
+      bulkNote: '1 枚ずつ開き直さずに済みます（このファイルは書き換えます）',
     };
+  }
+
+  // 答えたあとに状態バーへ出す 1 行。「静かに元の表記へ戻った」ように見えるのは
+  // keep を選んだときなので、そのときだけ取り消しの入口があることまで言う。
+  function answeredText(choice, origin, alias) {
+    if (choice === 'keep') {
+      return {
+        text: '🔒 ' + origin + '.puml は変更前のまま（いまの本文は ' + alias + '.puml に入りました）',
+        undo: '↩ やっぱり ' + origin + '.puml を書き換える',
+      };
+    }
+    return { text: '✎ ' + origin + '.puml を書き換えます', undo: '' };
   }
 
   // 上部バーに常時出す 1 語。錠がかかっていることを見えるようにする
@@ -194,7 +217,13 @@ window.MA.sourceLock = (function() {
     var e = docId ? _read()[docId] : null;
     if (!e || String(docName) !== e.origin) return null;
     if (e.mode === 'copy' && e.alias) {
-      return { text: '🔒 元ファイル保護', title: e.origin + '.puml は変更前のまま保ちます。書き先は ' + e.alias + '.puml です' };
+      // BLK-junior-20260915-2240: 押し間違えても、押した本人がここから 1 クリックで戻せる。
+      return {
+        text: '🔒 元ファイル保護',
+        title: e.origin + '.puml は変更前のまま保ちます。書き先は ' + e.alias
+          + '.puml です（押すと ' + e.origin + '.puml を書き換える方に戻せます）',
+        undoable: true,
+      };
     }
     if (e.mode === 'overwrite') {
       return { text: '✎ ' + e.origin, title: '開いた ' + e.origin + '.puml をそのまま書き換えます' };
@@ -213,6 +242,7 @@ window.MA.sourceLock = (function() {
     copyName: copyName,
     decide: decide,
     answer: answer,
+    answeredText: answeredText,
     askText: askText,
     label: label,
     defaultChoice: defaultChoice,

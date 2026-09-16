@@ -216,18 +216,26 @@ window.MA.partStarter = (function() {
     return out;
   }
 
-  // plan(subject, docs) — 何が作られるかを、開く前の形で返す。
-  function plan(subject, docs) {
+  // plan(subject, docs, refs) — 何が作られるかを、開く前の形で返す。
+  //
+  // refs は part-reference.collect() の結果 (隣のフォルダにある同じ部品名の実図)。
+  // BLK-junior-20260915-0307-wish: 手本がある図種は汎用ひな形ではなくその実図を写す。
+  // 名前は自分の名前 (spi_sequence) のままで、写すのは中身だけ。
+  function plan(subject, docs, refs) {
     var n = identifiers(subject);
     if (!n) return null;
+    var PR = window.MA.partReference;
     var sheets = KINDS.map(function(k) {
       var had = _existing(k, n, docs);
+      var ref = (PR && refs) ? PR.pick(refs, k.key) : null;
       return {
         key: k.key,
         type: k.type,
         label: k.label,
         name: docName(subject, k.key),
-        dsl: _dslFor(k.key, n, subject, docs),
+        dsl: ref ? ref.dsl : _dslFor(k.key, n, subject, docs),
+        source: ref ? 'reference' : 'template',
+        ref: ref,
         existing: had,
       };
     });
@@ -239,6 +247,7 @@ window.MA.partStarter = (function() {
       sheets: sheets,
       newCount: sheets.filter(function(s) { return !s.existing.length; }).length,
       existingCount: sheets.filter(function(s) { return s.existing.length; }).length,
+      refCount: sheets.filter(function(s) { return s.source === 'reference'; }).length,
     };
   }
 
@@ -246,8 +255,11 @@ window.MA.partStarter = (function() {
   function summary(p) {
     if (!p) return '部品名を入れてください (例: TIMER)';
     var head = p.body + ' の名前で ' + p.newCount + ' 図種の下書きを開きます';
-    if (!p.existingCount) return head;
-    return head + ' (' + p.existingCount + ' 図種は既にあるので開きません)';
+    var tail = [];
+    if (p.refCount) tail.push(p.refCount + ' 図種は先輩の実図を写します');
+    if (p.existingCount) tail.push(p.existingCount + ' 図種は既にあるので開きません');
+    if (!tail.length) return head;
+    return head + ' (' + tail.join('、') + ')';
   }
 
   // 選んだ図種だけを作る、を画面から決められるようにする。

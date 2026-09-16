@@ -302,3 +302,249 @@ test('手順2 名乗っている図種と本文の図種の食い違いを、全
 
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+// BLK-reviewer-20260915-0506-wish: 表記揺れは機械で見つかるようになったが、「揃える先」は
+// 出現数からの推定で毎回作り直されるだけで、junior/primary のどちらにも共有されない。
+// reviewer は毎 tick 同じ組を見つけ→指摘.md に揃える先を書き→次の run で読ませる、という
+// 最短 2 tick の伝言を続けていた (IRQCtrl 系は継続 4 tick 以上)。手順2 を
+// 「毎回決め直す」から「登録簿に無い組だけを 1 回決める」に変える。
+test('手順2 揃える先を 1 度登録すると、次の tick は決め直す組が残らない', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const { execFileSync } = require('child_process');
+  const REPO = path.join(__dirname, '..', '..', '..');
+
+  // 事故の実物と同じ形 (primary は IRQCtrl / ClockCtrl、junior は Irq_Ctrl / Clock_Ctrl)。
+  const root = path.join(REPO, 'test-results', 'reviewer-02-registry');
+  fs.rmSync(root, { recursive: true, force: true });
+  for (const p of ['primary', 'junior']) fs.mkdirSync(path.join(root, p), { recursive: true });
+  fs.writeFileSync(path.join(root, 'primary', 'driver_common_class.puml'),
+    ['@startuml', 'class IRQCtrl {', '  + Init() : void', '}', 'class ClockCtrl',
+      'IRQCtrl --> ClockCtrl', '@enduml'].join('\n'), 'utf-8');
+  fs.writeFileSync(path.join(root, 'junior', 'diagram1.puml'),
+    ['@startuml', 'participant Irq_Ctrl', 'participant Clock_Ctrl',
+      'Irq_Ctrl -> Clock_Ctrl : Init()', '@enduml'].join('\n'), 'utf-8');
+
+  const run = (...extra) => execFileSync(process.execPath,
+    [path.join(REPO, 'tools', 'audit.js'), path.join(root, 'primary'), path.join(root, 'junior'),
+      '--no-state', ...extra],
+    { cwd: REPO, encoding: 'utf-8' });
+
+  // 1 tick 目: 揃える先がまだ決まっていない組が名指しで出る。
+  const before = run('--registry');
+  expect(before).toContain('表記揺れ 2 組 / 登録済み 0 組 / 要決定 2 組');
+  expect(before).toMatch(/要決定\s+IRQCtrl ⇔ Irq_Ctrl/);
+  // 決めるための材料 (どの図のどの宣言行か) が同じ画面に出る。
+  expect(before).toContain('primary/driver_common_class.puml:2 宣言  class IRQCtrl {');
+  expect(before).toContain('→ 揃える先を登録する: 同じコマンドに --register を足す');
+
+  // 登録は 1 回。置き場は 2 つのフォルダの親なので、3 人が同じ 1 冊を見る。
+  const wrote = run('--register', '--by', 'reviewer');
+  expect(wrote).toContain('登録しました: 2 語');
+  const file = path.join(root, '_names.json');
+  expect(fs.existsSync(file)).toBe(true);
+
+  // 2 tick 目: 図は 1 文字も直っていないのに、決め直す組はもう無い。
+  const after = run('--registry');
+  expect(after).toContain('表記揺れ 2 組 / 登録済み 2 組 / 要決定 0 組');
+  expect(after).toContain('→ 決め直す組はありません');
+  expect(after).toContain('IRQCtrl ← Irq_Ctrl');
+  expect(after).toContain('登録: reviewer');
+
+  // 新しい略語が出た回だけ、その 1 組が要決定に戻る (登録済みは蒸し返さない)。
+  fs.writeFileSync(path.join(root, 'junior', 'dma_sequence.puml'),
+    ['@startuml', 'participant Dma_Driver', 'participant Irq_Ctrl',
+      'Dma_Driver -> Irq_Ctrl : Dma_Start', '@enduml'].join('\n'), 'utf-8');
+  fs.writeFileSync(path.join(root, 'primary', 'dma_class.puml'),
+    ['@startuml', 'class DmaDriver', '@enduml'].join('\n'), 'utf-8');
+  const next = run('--registry');
+  expect(next).toContain('要決定 1 組');
+  expect(next).toMatch(/要決定\s+.*Dma/);
+
+  // 揃える先は junior / primary の GUI が読む 1 冊なので、機械が読める形で残る。
+  const saved = JSON.parse(fs.readFileSync(file, 'utf-8'));
+  const irq = saved.entries.find((e) => e.canonical === 'IRQCtrl');
+  expect(irq.variants).toEqual(['Irq_Ctrl']);
+  expect(irq.by).toBe('reviewer');
+
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+// BLK-reviewer-20260916-0326-wish: 表記揺れはグループ単位でしか出ないので、
+// Clock_Ctrl ⇔ ClockCtrl が junior の中だけの揺れなのか primary の図とぶつかって
+// いるのかは、グループの図を 1 枚ずつ開いて誰のフォルダかを見るまで分からなかった
+// (前回の run はそれを取り違えて「junior 内部だけの揺れ」と書いた)。手順2 を
+// 「突合対象をコマンドで組み立てて全文を読み直す」から「印が付いた図だけ開く」に変える。
+const S2 = require('./_scenario');
+
+test('手順2 他 persona と部品名が衝突している図が、一覧の印で分かる', async ({ page }) => {
+  test.setTimeout(120 * 1000);
+  // 隣り合う 2 つの persona フォルダ (peek の行き先は保存先の隣)。
+  const ROOT = S2.dirFor(__filename) + '/personas';
+  const MINE = ROOT + '/primary';
+  const THEIRS = ROOT + '/junior';
+
+  const cls = (names) => ['@startuml', ...names.map((n) => 'class ' + n),
+    names[0] + ' --> ' + names[0], '@enduml'].join('\n');
+  const seq = (names) => ['@startuml', ...names.map((n) => 'participant ' + n),
+    names[0] + ' -> ' + names[0] + ' : Init()', '@enduml'].join('\n');
+
+  await S2.bootWithSaveDir(page, THEIRS);
+  await S2.clearDir(page, THEIRS);
+  // junior 側: Clock_Ctrl / Irq_Ctrl。
+  await S2.putDoc(page, THEIRS, 'clock_state', seq(['Clock_Ctrl']));
+  await S2.putDoc(page, THEIRS, 'irq_sequence', seq(['Irq_Ctrl']));
+
+  await S2.bootWithSaveDir(page, MINE);
+  await S2.clearDir(page, MINE);
+  // primary 側: ClockCtrl は junior と綴りが割れている (= 衝突)。
+  await S2.putDoc(page, MINE, 'driver_common_class', cls(['ClockCtrl', 'SpiDrv']));
+  // IrqCtrl も割れているが、こちらは自分の中でも割れている図を作らないので
+  // 「相手と衝突」だけが出る。SpiDrv は誰とも割れていない (印が付かない)。
+  await S2.putDoc(page, MINE, 'spi_state', seq(['SpiDrv']));
+  await S2.bootWithSaveDir(page, MINE);
+  await page.waitForSelector('#preview-svg');
+
+  await S2.openFolder(page);
+  // 到達条件 1: 押す前は「照合していない」と言い切る (0 件と読み違えさせない)。
+  await expect(page.locator('#folder-name-clash')).toContainText('照合していません');
+
+  await page.locator('#folder-clash-run').click();
+  await expect(page.locator('#folder-name-clash')).toContainText('枚を照合', { timeout: 60000 });
+
+  // 到達条件 2: 衝突している図の行にだけ印が付き、相手の persona を名指しする。
+  const bad = page.locator('.folder-row[data-clash-verdict="cross"]');
+  await expect(bad).toHaveCount(1);
+  await expect(bad.locator('.folder-clash')).toContainText('juniorと衝突');
+  // 誰とも割れていない図には印が付かない。
+  await expect(page.locator('[data-clash="spi_state"]')).toHaveCount(0);
+
+  // 到達条件 3: どの図が相手側かが、1 枚ずつ開かずにその場で読める。
+  const lines = page.locator('#folder-clash-lines');
+  await expect(lines).toContainText('ClockCtrl');
+  await expect(lines).toContainText('Clock_Ctrl');
+  await expect(lines).toContainText('junior/clock_state');
+  // 数え上げは両側の図を数える (相手側が何枚巻き込まれているかまで見えないと、
+  // 「相手に断る」ときにこちらの 1 枚だけを見て話すことになる)。
+  await expect(page.locator('#folder-name-clash')).toContainText('他 persona と衝突 2 図');
+});
+
+// BLK-reviewer-20260917-0323-wish: 突合の答えは ClockCtrl.EnableClock のような
+// メソッド 1 個に付いているのに、手掛かりはファイル単位 (24 枚) でしか返らず、
+// 「どの上位ドメインから呼ばれているか」は毎回シーケンス図 5〜6 枚を開いて
+// 頭の中で組み直していた。手順2 を「ファイル単位の羅列を読む」から
+// 「呼び出しグラフを 1 回走査する」に変えることを到達条件にする。
+test('手順2 あるメソッドを呼んでいる全図を、1 回の探索でドメインごとに辿れる', async ({ page }) => {
+  test.setTimeout(120 * 1000);
+  const DIR = S2.dirFor(__filename) + '/callgraph';
+
+  // 実物と同じ形。6 ドメインの初期化シーケンスが同じ ClockCtrl.EnableClock を呼び、
+  // クラス図にはその宣言が無い (F-01)。
+  const seq = (drv) => ['@startuml', 'title ' + drv,
+    'actor App', 'participant ' + drv, 'participant ClockCtrl',
+    'App -> ' + drv + ' : ' + drv.split('_')[0] + '_Init()',
+    drv + ' -> ClockCtrl : EnableClock()',
+    drv + ' --> App : InitDone', '@enduml'].join('\n');
+
+  await S2.bootWithSaveDir(page, DIR);
+  await S2.clearDir(page, DIR);
+  await S2.putDoc(page, DIR, 'adc_init_sequence', seq('Adc_Driver'));
+  await S2.putDoc(page, DIR, 'can_init_sequence', seq('Can_Driver'));
+  await S2.putDoc(page, DIR, 'spi_init_sequence', seq('Spi_Driver'));
+  await S2.putDoc(page, DIR, 'spi_state', ['@startuml', 'title Spi_State',
+    '[*] --> Uninit', 'state Uninit', 'state Ready',
+    'Uninit --> Ready : Spi_Init', '@enduml'].join('\n'));
+  await S2.putDoc(page, DIR, 'driver_common_class', ['@startuml', 'title Driver_Common_Class',
+    'class Spi_Driver {', '  + Spi_Init() : void', '}', '@enduml'].join('\n'));
+
+  await S2.bootWithSaveDir(page, DIR);
+  await page.waitForSelector('#preview-svg');
+  await S2.openFolder(page);
+  await page.locator('#folder-callgraph-open').click();
+
+  // 到達条件 1: 開いた時点で「先に見るメソッド」が選ばれている
+  // (24 枚の一覧から目で探す手順がここで消える)。
+  await expect(page.locator('#cg-title')).toHaveText('ClockCtrl.EnableClock', { timeout: 60000 });
+  await expect(page.locator('#cg-sum')).toContainText('最も散っているのは ClockCtrl.EnableClock');
+  await expect(page.locator('.cg-node').first()).toHaveAttribute('data-undeclared', '1');
+
+  // 到達条件 2: そのメソッドがどの上位ドメインから呼ばれているかが、
+  // シーケンス図を 1 枚も開かずにグラフのまま読める。
+  await expect(page.locator('#cg-verdict')).toContainText('クラス図に宣言なし');
+  await expect(page.locator('#cg-verdict')).toContainText('3 枚 / 3 領域');
+  await expect(page.locator('#cg-verdict')).toContainText('adc、can、spi');
+  const domains = page.locator('#cg-refs .cg-domain');
+  await expect(domains).toHaveCount(3);
+  await expect(domains.first()).toHaveText('adc（1）');
+  // 指摘に写す「図名 + 行 + 内容」が同じ画面に並ぶ。
+  await expect(page.locator('.cg-ref[data-doc="adc_init_sequence.puml"]'))
+    .toContainText('adc_init_sequence.puml:7');
+  await expect(page.locator('.cg-ref[data-doc="adc_init_sequence.puml"]'))
+    .toContainText('Adc_Driver -> ClockCtrl : EnableClock()');
+
+  // 到達条件 3: 宣言のあるメソッドは、シーケンスの呼び出しと状態遷移の遷移ラベルが
+  // 同じ 1 つの節点に並ぶ (手順 4.11 の突合がここで済む)。
+  await page.locator('#cg-find').fill('Spi_Init');
+  await page.locator('.cg-node[data-key="Spi_Driver.Spi_Init"]').click();
+  await expect(page.locator('#cg-verdict')).toContainText('宣言 1 件（driver_common_class.puml:4）');
+  await expect(page.locator('.cg-ref[data-kind="transition"]')).toContainText('spi_state.puml:6 遷移');
+  await expect(page.locator('.cg-ref[data-kind="message"]')).toContainText('spi_init_sequence.puml:6');
+
+  // 到達条件 4: 呼び出し元の行を押せば、その図のその行が開く
+  // (「どの図の何行目か」を控えて自分で開き直す手順を残さない)。
+  await page.locator('.cg-ref[data-kind="transition"]').click();
+  await expect(page.locator('#cg-modal')).toBeHidden();
+  await expect.poll(async () => page.evaluate(() => {
+    const ed = document.getElementById('editor');
+    return ed.value.slice(ed.selectionStart, ed.selectionEnd);
+  }), { timeout: 30000 }).toBe('Uninit --> Ready : Spi_Init');
+});
+
+// BLK-reviewer-20260917-0423-wish: junior×primary の 4 組は毎 tick 同じ「部品名/ラベルが
+// 違うだけの内部揺れ」を出し続け、reviewer は毎回同じ diff を最初から読んで同じ結論を
+// 出し直していた。domain-verdict の宣言は図の持ち主が自分の図に書く印で、どちらの図も
+// 持たない reviewer には置き場が無い。手順2 を「未確認の新しい差分だけを見る」に
+// 変えることを到達条件にする。
+test('手順2 内部揺れと確認した組は台帳に残り、次の突合は未確認の差分だけになる', () => {
+  const { MA } = loadMA();
+  const CA = MA.cohortAck;
+  expect(CA).toBeTruthy();
+
+  const docs = () => [
+    { name: 'junior/spi_init_sequence.puml', diagramType: 'plantuml-sequence',
+      dsl: ['@startuml', 'participant SpiDrv', 'participant Clock',
+        'SpiDrv -> Clock : Init()', '@enduml'].join('\n') },
+    { name: 'primary/spi_init_sequence.puml', diagramType: 'plantuml-sequence',
+      dsl: ['@startuml', 'participant Spi_Driver', 'participant Clock',
+        'Spi_Driver -> Clock : Init()', '@enduml'].join('\n') },
+  ];
+  const rows = () => MA.domainCohort.diffRows(MA.domainCohort.audit(docs()));
+
+  // 今日の突合。内部揺れ 1 組が未確認として出る (これまではここで毎回終わっていた)。
+  expect(rows().length).toBe(1);
+  expect(CA.statusOf(CA.empty(), rows()[0]).status).toBe('new');
+
+  // 「内部揺れ・非衝突」と確かめて台帳に入れる。
+  const ledger = CA.ack(CA.empty(), rows()[0],
+    { by: 'reviewer', at: '2026-09-17', note: '内部揺れ・非衝突' }).ledger;
+
+  // 次の tick — 図は同じなので同じ組が出るが、読み直す対象からは外れている。
+  expect(CA.pending(rows(), ledger).length).toBe(0);
+  expect(CA.settled(rows(), ledger).length).toBe(1);
+  // 畳んだことは 1 行に残る (件数が減っただけを「直った」と読ませない)。
+  expect(CA.summaryLine(rows(), ledger)).toContain('1 組を除外');
+
+  // 台帳はファイルに落として読み直しても同じ判定になる (tick をまたいで残る)。
+  const reread = CA.parse(CA.format(ledger));
+  expect(CA.statusOf(reread, rows()[0]).status).toBe('acked');
+
+  // 差分が変わった組は台帳があっても戻ってくる (確認済みが新しい食い違いを隠さない)。
+  const grown = MA.domainCohort.diffRows(MA.domainCohort.audit([
+    docs()[0],
+    { name: 'primary/spi_init_sequence.puml', diagramType: 'plantuml-sequence',
+      dsl: ['@startuml', 'participant Spi_Driver', 'participant Clock', 'participant Dma',
+        'Spi_Driver -> Clock : Init()', 'Spi_Driver -> Dma : Start()', '@enduml'].join('\n') },
+  ]));
+  expect(CA.statusOf(ledger, grown[0]).status).toBe('changed');
+  expect(CA.pending(grown, ledger).length).toBe(1);
+});

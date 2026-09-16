@@ -6,6 +6,10 @@ npm-debug.log
 __pycache__/
 *.pyc
 
+# 指摘トラッカーの控え (対象フォルダの中に置くが、古い既定の置き場所も無視する)
+.assist-findings-state.json
+.findings-state.json
+
 # Tests
 tests/results/
 test-results/
@@ -56,3 +60,9 @@ runs/
 # PyInstaller / Inno Setup の出力 (リポジトリにバイナリは入れない)
 build/
 dist/
+
+# PyInstaller の版情報ファイル (packaging/version_info.py が毎回書き出す生成物)
+packaging/version_info.txt
+
+# exe ビルドが焼き込む版 (packaging/version_info.py の生成物。正本は git tag)
+src/version.json

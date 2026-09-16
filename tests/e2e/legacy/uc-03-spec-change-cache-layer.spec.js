@@ -15,8 +15,19 @@ test.describe('UC-3: 仕様変更 (Cache 層)', () => {
     await page.locator('#seq-tail-add').click();
     await page.waitForTimeout(300);
 
-    // 2. 既存 query1 message (line 6) をクリックして to を Cache に変更
-    await clickOverlayByLine(page, 6);
+    // 2. 既存 query1 message をクリックして to を Cache に変更
+    // BLK-human-20260915-1205: 参加者の宣言は末尾ではなく「参加者の欄」に入るように
+    // なったので、追加した Cache の宣言のぶんメッセージの行番号が下にずれる。
+    // 固定の行番号 (以前の 6) ではなく、本文から今の行番号を引く。
+    const query1Line = await page.evaluate(() => {
+      var lines = document.getElementById('editor').value.split('\n');
+      for (var i = 0; i < lines.length; i++) {
+        if (lines[i].indexOf('query1') >= 0) return i + 1;
+      }
+      return -1;
+    });
+    expect(query1Line).toBeGreaterThan(0);
+    await clickOverlayByLine(page, query1Line);
     await page.waitForTimeout(300);
     await page.locator('#seq-edit-to').selectOption('Cache');
     await page.waitForTimeout(500);

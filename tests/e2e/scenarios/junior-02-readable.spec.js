@@ -662,3 +662,617 @@ test('手順2 先輩が足したメソッドを、記法を打ち直さずに自
   // 先輩のファイルは読むだけ (書き換えない)。
   expect(await S.readDoc(page, SENIOR_DIR, 'driver_common_class')).toBe(SENIOR_IRQ);
 });
+
+// BLK-junior-20260915-0406-wish: 先輩の図を手本に SPI の状態遷移図を打ち直すとき、
+// 遷移ラベル (Spi_Init / Spi_Transmit / TransferComplete …) は先輩のシーケンス図に
+// も出てくるはずだが、GUI は図ごとに独立していて名前の対応を教えてくれない。
+// 合っているかは先輩の図を別に開いて目で見比べるしかなかった。
+// 同じ部品名の図を 1 冊の名前帳にまとめ、遷移ラベルの欄から選べることを確かめる。
+const SENIOR_SPI_SEQ = [
+  '@startuml',
+  'title SPIドライバ初期化シーケンス',
+  'participant Dev',
+  'participant Spi_Driver',
+  'Dev -> Spi_Driver : Spi_Init()',
+  'Dev -> Spi_Driver : Spi_Transmit(buf, len)',
+  'Spi_Driver --> Dev : TransferComplete',
+  'Spi_Driver --> Dev : Fault',
+  '@enduml',
+].join('\n');
+
+const MY_SPI_STATE = [
+  '@startuml',
+  'title SPIドライバ状態遷移',
+  'state Uninit',
+  'state Idle',
+  'state Busy',
+  '[*] --> Uninit',
+  'Uninit --> Idle : Spi_Init',
+  '@enduml',
+].join('\n');
+
+test('手順2 遷移ラベルを、先輩の図を開かずに部品の名前帳から選べる', async ({ page }) => {
+  await S.bootWithSaveDir(page, MINE_DIR);
+  await S.clearDir(page, MINE_DIR);
+  await S.clearDir(page, SENIOR_DIR);
+  await S.putDoc(page, SENIOR_DIR, 'spi_init_sequence', SENIOR_SPI_SEQ);
+  await page.reload();
+  await page.waitForSelector('#btn-tab-peek');
+  await page.locator('#diagram-type').selectOption('plantuml-state');
+  await page.waitForTimeout(400);
+  // 名前帳は「同じ部品名の図」で引くので、自分の図も部品名で名乗る。
+  await S.renameActive(page, 'spi_state');
+  await S.typeDsl(page, MY_SPI_STATE);
+  await page.waitForTimeout(1200);
+
+  await page.locator('#st-tail-kind').selectOption('transition');
+  await page.waitForSelector('#st-tail-trig');
+
+  // 到達条件その1: 先輩のシーケンスにしか出ていない名前が、遷移ラベルの欄の
+  // 下に候補として並ぶ (先輩の図を開かない)。
+  const picker = page.locator('#st-tail-trig-vocab');
+  await expect(picker).toBeVisible();
+  await expect(picker.locator('.vocab-head')).toContainText('SPI の名前帳');
+  await expect(picker.locator('.vocab-chip[data-name="Spi_Transmit"]')).toHaveCount(1);
+  await expect(picker.locator('.vocab-chip[data-name="TransferComplete"]')).toHaveCount(1);
+  // 型 (participant) は遷移ラベルにならないので候補に出ない。
+  await expect(picker.locator('.vocab-chip[data-name="Spi_Driver"]')).toHaveCount(0);
+
+  // 到達条件その2: 押すだけで欄が埋まり、そのまま遷移を足せる (打ち直さない)。
+  await picker.locator('.vocab-chip[data-name="Spi_Transmit"]').click();
+  await expect(page.locator('#st-tail-trig')).toHaveValue('Spi_Transmit');
+  await page.locator('#st-tail-from').selectOption('Idle');
+  await page.locator('#st-tail-to').selectOption('Busy');
+  await page.locator('#st-tail-add').click();
+  await page.waitForTimeout(400);
+  expect(await getEditorText(page)).toContain('Idle --> Busy : Spi_Transmit');
+
+  // 到達条件その3: 手で打った綴りが先輩と揺れていれば、その場で相手の綴りが出る。
+  await page.locator('#st-tail-kind').selectOption('transition');
+  await page.waitForSelector('#st-tail-trig');
+  await page.locator('#st-tail-trig').fill('SpiInit');
+  await page.waitForTimeout(200);
+  await expect(page.locator('#st-tail-trig-vocab .vocab-warn')).toContainText('Spi_Init');
+
+  // 先輩のファイルは読むだけ (書き換えない)。
+  expect(await S.readDoc(page, SENIOR_DIR, 'spi_init_sequence')).toBe(SENIOR_SPI_SEQ);
+});
+
+// BLK-junior-20260915-0606-wish: 図 (ファイル) ごとにタブを開く作りなので、1 部品の
+// 6 図種を見比べるには毎回タブを行き来する。先輩のクラス図でメソッド名を確かめてから
+// 自分の活動図に打ち直す手順は「タブ切替 2 + フィルタ 4 + 控え書き」に広がっていた
+// (BLK-junior-20260915-0606)。部品を 1 つ選べば 6 図種が先輩・自分の 2 列で同時に出て、
+// 手本の名前を押せば自分の欄に入り、その場で保存できることを確かめる。
+const BOARD_ROOT = DIR + '-board';
+const BOARD_MINE = BOARD_ROOT + '/junior';
+const BOARD_SENIOR = BOARD_ROOT + '/primary';
+
+// 先輩のクラス図は 3 部品相乗りの 1 枚 (spi_class という名前では無い)。
+const BOARD_SENIOR_CLASS = [
+  '@startuml', 'title ドライバ共通クラス図',
+  'class Driver_Common',
+  'class Spi_Driver {', '  + Spi_Init() : void', '  + Spi_Transmit() : void', '  + Spi_Reset() : void', '}',
+  'class Can_Driver {', '  + Can_Init() : void', '}',
+  'Driver_Common <|-- Spi_Driver',
+  '@enduml',
+].join('\n');
+const BOARD_SENIOR_ACT = [
+  '@startuml', 'title SPI 初期化アクティビティ',
+  'start', ':Spi_Init();', ':Spi_Transmit();', 'stop', '@enduml',
+].join('\n');
+const BOARD_SENIOR_SEQ = [
+  '@startuml', 'participant Spi_Driver', 'Spi_Driver -> IRQCtrl : Spi_Init()', '@enduml',
+].join('\n');
+// 自分の活動図は汎用ひな形のままで、メソッド名がまだ先輩と揃っていない。
+const BOARD_MINE_ACT = [
+  '@startuml', 'title SPI 初期化アクティビティ',
+  'start', ':SPI_Init();', 'stop', '@enduml',
+].join('\n');
+
+test.describe('junior 手順2: 部品を選ぶと 6 図種が 2 列で並び、手本を見ながら打ち直せる', () => {
+  test.beforeEach(async ({ page }) => {
+    await S.bootWithSaveDir(page, BOARD_MINE);
+    await S.clearDir(page, BOARD_MINE);
+    await S.clearDir(page, BOARD_SENIOR);
+    await S.putDoc(page, BOARD_MINE, 'spi_init_sequence', BOARD_SENIOR_SEQ);
+    await S.putDoc(page, BOARD_MINE, 'spi_activity', BOARD_MINE_ACT);
+    await S.putDoc(page, BOARD_SENIOR, 'spi_init_sequence', BOARD_SENIOR_SEQ);
+    await S.putDoc(page, BOARD_SENIOR, 'spi_activity', BOARD_SENIOR_ACT);
+    await S.putDoc(page, BOARD_SENIOR, 'driver_common_class', BOARD_SENIOR_CLASS);
+    await page.reload();
+    await page.waitForSelector('#btn-tab-peek');
+  });
+
+  test('部品ビューで活動図を打ち直し、同じ画面で保存できる', async ({ page }) => {
+    await page.locator('#btn-tab-peek').click();
+    await page.waitForSelector('#peek-modal');
+    await page.waitForSelector('#peek-files');
+
+    // 部品ビューを開く (台本の「SPI を選ぶと」に当たる操作)。
+    await page.locator('#peek-board-toggle').click();
+    await page.waitForSelector('#peek-board .pb-row');
+    await page.locator('#peek-board-part').selectOption('spi');
+    await page.waitForTimeout(800);
+
+    // 到達条件その1: 6 図種ぶんの行が同じ画面に並ぶ (タブを行き来しない)。
+    expect(await page.locator('#peek-board .pb-row').count()).toBe(6);
+    await expect(page.locator('#peek-board-summary')).toContainText('SPI: 6 図種のうち');
+
+    // 到達条件その2: 部品名のファイルが無いクラス図も、相乗り図が手本として出る。
+    const classRow = page.locator('#peek-board .pb-row[data-board-kind="class"]');
+    await expect(classRow).toContainText('driver_common_class');
+    await expect(classRow).toContainText('相乗り図');
+    await expect(classRow.locator('[data-board-ref="class"]')).toContainText('Spi_Transmit');
+
+    // 到達条件その3: 活動図の欄に、先輩のクラス図から拾った名前を押して入れられる
+    // (クラス図タブへ切り替えて名前を控える往復が要らない)。
+    const act = page.locator('#peek-board [data-board-edit="activity"]');
+    await act.fill(['@startuml', 'title SPI 初期化アクティビティ', 'start', ':', 'stop', '@enduml'].join('\n'));
+    // カーソルを ':' の直後へ置いてから、手本のメソッド名を押す。
+    await page.evaluate(() => {
+      const ta = document.querySelector('#peek-board [data-board-edit="activity"]');
+      const at = ta.value.indexOf('\n:') + 2;
+      ta.focus();
+      ta.setSelectionRange(at, at);
+    });
+    await classRow.locator('.pb-name[data-board-name="Spi_Init"]').click();
+    await expect(act).toHaveValue(/:Spi_Init/);
+
+    // 到達条件その4: そのまま同じ画面で保存でき、保存先は自分のフォルダ。
+    await page.locator('#peek-board [data-board-save="activity"]').click();
+    await page.waitForTimeout(800);
+    await expect(page.locator('#peek-board [data-board-msg="activity"]')).toContainText('保存しました');
+    const saved = await S.readDoc(page, BOARD_MINE, 'spi_activity');
+    expect(saved).toContain(':Spi_Init');
+
+    // 先輩のファイルは読むだけ (書き換えない)。
+    expect(await S.readDoc(page, BOARD_SENIOR, 'spi_activity')).toBe(BOARD_SENIOR_ACT);
+    expect(await S.readDoc(page, BOARD_SENIOR, 'driver_common_class')).toBe(BOARD_SENIOR_CLASS);
+  });
+
+  test('まだ起こしていない図種も行として残り、手本の有無が分かる', async ({ page }) => {
+    await page.locator('#btn-tab-peek').click();
+    await page.waitForSelector('#peek-modal');
+    await page.locator('#peek-board-toggle').click();
+    await page.waitForSelector('#peek-board .pb-row');
+    await page.locator('#peek-board-part').selectOption('spi');
+    await page.waitForTimeout(800);
+
+    // クラス図は先輩の相乗り図があるが自分にはまだ無い。
+    await expect(page.locator('#peek-board .pb-row[data-board-kind="class"]'))
+      .toHaveAttribute('data-state', 'mine-missing');
+    // 状態遷移図はどちらにも無い (行は消えない)。
+    await expect(page.locator('#peek-board .pb-row[data-board-kind="state"]'))
+      .toHaveAttribute('data-state', 'none');
+    await expect(page.locator('#peek-board-summary')).toContainText('自分に無し');
+  });
+
+  // BLK-junior-20260915-2346-wish: 6 図種は 2 列で並ぶようになったが、並ぶのは本文
+  // そのものなので「6 枚のうち何枚済んだか」「どの図がまだ先輩に合っていないか」は
+  // 6 行を目で読み比べないと言えなかった。部品を選んだ時点でそれが 1 行に出て、
+  // 直したあとはその場で数字が動くこと (手順7 の見返しが開き直しにならないこと) を見る。
+  test('部品カードが 6 枚中の進捗と、先輩に合っていない図種を 1 行で出す', async ({ page }) => {
+    await page.locator('#btn-tab-peek').click();
+    await page.waitForSelector('#peek-modal');
+    await page.locator('#peek-board-toggle').click();
+    await page.waitForSelector('#peek-board .pb-row');
+    await page.locator('#peek-board-part').selectOption('spi');
+    await page.waitForTimeout(800);
+
+    // 到達条件その1: 6 枚を母数にした進捗が出る (自分はシーケンスと活動図の 2 枚)。
+    await expect(page.locator('#peek-card-progress')).toHaveText('6 図種中 2 枚');
+    expect(await page.locator('#peek-card .pc-pip.on').count()).toBe(2);
+
+    // 到達条件その2: 先輩に合っていない図種が名指しで出る。自分の活動図は
+    // `SPI_Init` 1 つだけで、先輩の `Spi_Init` `Spi_Transmit` に届いていない。
+    const gaps = page.locator('#peek-card-gaps');
+    await expect(gaps).toContainText('要直し');
+    await expect(gaps).toContainText('アクティビティ');
+    // 打ち直した所が無いシーケンス図は一致として出る (要直しには出ない)。
+    await expect(page.locator('#peek-board .pb-row[data-board-kind="sequence"]'))
+      .toHaveAttribute('data-verdict', 'agree');
+    await expect(page.locator('#peek-board .pb-row[data-board-kind="activity"]'))
+      .toHaveAttribute('data-verdict', 'differ');
+
+    // 到達条件その3: 要直しの図種を押すと、その図の自分の欄に入る (探し直さない)。
+    await page.locator('#peek-card [data-card-gap="activity"]').click();
+    await expect(page.locator('#peek-board [data-board-edit="activity"]')).toBeFocused();
+
+    // 到達条件その4: 綴りを先輩に合わせて保存すると、その場で要直しが消える。
+    await page.locator('#peek-board [data-board-edit="activity"]')
+      .fill(['@startuml', 'title SPI 初期化アクティビティ', 'start', ':Spi_Init();', ':Spi_Transmit();', 'stop', '@enduml'].join('\n'));
+    await page.locator('#peek-board [data-board-save="activity"]').click();
+    await page.waitForTimeout(1200);
+    await expect(page.locator('#peek-board .pb-row[data-board-kind="activity"]'))
+      .toHaveAttribute('data-verdict', 'agree');
+    await expect(page.locator('#peek-card-gaps')).not.toContainText('要直し');
+    // 進捗の母数は動かない (まだ 4 図種を起こしていないことが画面から消えない)。
+    await expect(page.locator('#peek-card-progress')).toHaveText('6 図種中 2 枚');
+  });
+});
+
+// BLK-junior-20260915-0606: SPI の活動図 (手順2) を打ち直すのに、実在メソッド名
+// (Spi_Init / Spi_Reset / Spi_Transmit / Notify) を知る手段が先輩の相乗りクラス図
+// (driver_common_class、8 部品が 1 枚) しか無かった。名前帳はクラス図タブ・状態遷移図・
+// シーケンスの欄にしか出ておらず、しかも名前帳は「ファイル名に部品名がある図」しか
+// 読まないので、この 1 枚は名前帳の外に居た。結果、活動図タブを離れて別タブで
+// クラス図を開き、絞り込み、名前を控えて戻る往復が図種をまたぐたびに要った。
+const SENIOR_COMMON_CLASS = [
+  '@startuml',
+  'title ドライバ共通クラス図',
+  'class Driver_Base {',
+  '  +Init() : void',
+  '}',
+  'class Spi_Driver {',
+  '  +Spi_Init() : void',
+  '  +Spi_Reset() : void',
+  '  +Spi_Transmit(buf, len) : void',
+  '  +Notify() : void',
+  '}',
+  'class Uart_Driver {',
+  '  +Uart_Send() : void',
+  '}',
+  'Spi_Driver --|> Driver_Base',
+  'Uart_Driver --|> Driver_Base',
+  '@enduml',
+].join('\n');
+
+const MY_SPI_ACT = [
+  '@startuml',
+  'title SPIドライバ初期化',
+  'start',
+  'stop',
+  '@enduml',
+].join('\n');
+
+test('手順2 活動図の本文を、先輩のクラス図タブに行かずに名前帳から打てる', async ({ page }) => {
+  await S.bootWithSaveDir(page, MINE_DIR);
+  await S.clearDir(page, MINE_DIR);
+  await S.clearDir(page, SENIOR_DIR);
+  await S.putDoc(page, SENIOR_DIR, 'driver_common_class', SENIOR_COMMON_CLASS);
+  await page.reload();
+  await page.waitForSelector('#btn-tab-peek');
+  await page.locator('#diagram-type').selectOption('plantuml-activity');
+  await page.waitForTimeout(400);
+  await S.renameActive(page, 'spi_activity');
+  await S.typeDsl(page, MY_SPI_ACT);
+  await page.waitForTimeout(1200);
+
+  // 活動図タブを開いたまま。右ペインの「末尾に追加 / Action」の本文欄に名前帳が出る。
+  await page.locator('#ac-tail-kind').selectOption('action');
+  await page.waitForSelector('#ac-tail-text');
+
+  // 到達条件その1: ファイル名に部品名の無い相乗り図の中からでも、
+  // SPI のメソッドだけが候補に並ぶ (他部品の Uart_Send は混ざらない)。
+  const picker = page.locator('#ac-tail-text-vocab');
+  await expect(picker).toBeVisible();
+  await expect(picker.locator('.vocab-head')).toContainText('SPI の名前帳');
+  for (const m of ['Spi_Init', 'Spi_Reset', 'Spi_Transmit', 'Notify']) {
+    await expect(picker.locator('.vocab-chip[data-name="' + m + '"]')).toHaveCount(1);
+  }
+  await expect(picker.locator('.vocab-chip[data-name="Uart_Send"]')).toHaveCount(0);
+
+  // 到達条件その2: 押せば括弧まで入り、そのままアクションとして足せる。
+  await picker.locator('.vocab-chip[data-name="Spi_Init"]').click();
+  await expect(page.locator('#ac-tail-text')).toHaveValue('Spi_Init()');
+  await page.locator('#ac-tail-add').click();
+  await page.waitForTimeout(400);
+  expect(await getEditorText(page)).toContain(':Spi_Init();');
+
+  // 到達条件その3: 打ちかけの本文は消えない (カーソル位置に差し込む)。
+  await page.locator('#ac-tail-kind').selectOption('action');
+  await page.waitForSelector('#ac-tail-text');
+  await page.locator('#ac-tail-text').fill('Spi_Reset()\n');
+  await page.locator('#ac-tail-text').press('End');
+  await page.locator('#ac-tail-text-vocab .vocab-chip[data-name="Spi_Transmit"]').click();
+  await expect(page.locator('#ac-tail-text')).toHaveValue('Spi_Reset()\nSpi_Transmit()');
+
+  // 到達条件その4: 揺れた綴りは、その行だけを見てその場で相手の綴りが出る。
+  await page.locator('#ac-tail-text').fill('SpiTransmit');
+  await page.waitForTimeout(200);
+  await expect(page.locator('#ac-tail-text-vocab .vocab-warn')).toContainText('Spi_Transmit');
+
+  // 先輩のファイルは読むだけ (書き換えない)。
+  expect(await S.readDoc(page, SENIOR_DIR, 'driver_common_class')).toBe(SENIOR_COMMON_CLASS);
+});
+
+// BLK-junior-20260916-0046-wish: 17 周目の手順 2 は「指摘の表記揺れ 4 組を canonical に
+// 揃える」。揃える先は reviewer が決めて登録簿 (_names.json) に置いてあるのに、GUI には
+// 「どのファイルにその揺れが残っているか」が無いので、junior は 📂 一覧と登録簿を
+// 見比べ、該当しそうな図を 1 枚ずつ開いて本文を読み、直して保存する、を 10 回繰り返した。
+// 組を選べば在処が出て、チェックした分が保存まで 1 回で終わることを確かめる。
+const UNIFY_ROOT = DIR + '-unify';
+const UNIFY_DIR = UNIFY_ROOT + '/junior';
+
+const U_GPIO = [
+  '@startuml', 'title GPIOドライバ初期化シーケンス',
+  'participant Gpio_Driver', 'participant IrqCtrl',
+  'Gpio_Driver -> IrqCtrl : Gpio_Init()',
+  '@enduml',
+].join('\n');
+const U_SPI = [
+  '@startuml', 'title SPIドライバ初期化シーケンス',
+  'participant Spi_Driver', 'participant Irq_Ctrl', 'participant ClockCtrl',
+  'Spi_Driver -> Irq_Ctrl : Spi_Init()',
+  'Spi_Driver -> ClockCtrl : 分周設定',
+  '@enduml',
+].join('\n');
+// 既に揃っている図。対象に挙がってはいけない (直す必要が無い図を触らない)。
+const U_OK = [
+  '@startuml', 'title TIMERドライバ初期化シーケンス',
+  'participant Timer_Driver', 'participant IRQCtrl',
+  'Timer_Driver -> IRQCtrl : Timer_Init()',
+  '@enduml',
+].join('\n');
+
+async function putRegistry(page, dir, entries) {
+  return page.evaluate(async (a) => {
+    const r = await fetch('/name-registry', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dir: a.dir, entries: a.entries }),
+    });
+    return r.ok;
+  }, { dir, entries });
+}
+
+test('手順2 登録簿の組を選ぶだけで、揺れの残る図がまとめて正式表記に揃う', async ({ page }) => {
+  await S.bootWithSaveDir(page, UNIFY_DIR);
+  await S.clearDir(page, UNIFY_DIR);
+  await S.putDoc(page, UNIFY_DIR, 'gpio_init_sequence', U_GPIO);
+  await S.putDoc(page, UNIFY_DIR, 'spi_sequence', U_SPI);
+  await S.putDoc(page, UNIFY_DIR, 'timer_init_sequence', U_OK);
+  // 揃える先は reviewer が決めて置いた 1 冊 (保存フォルダの親)。
+  await putRegistry(page, UNIFY_DIR, [
+    { canonical: 'IRQCtrl', variants: ['IrqCtrl', 'Irq_Ctrl'] },
+    { canonical: 'Clock_Ctrl', variants: ['ClockCtrl'] },
+  ]);
+  await page.reload();
+  await page.waitForSelector('#btn-tab-unify');
+
+  await page.locator('#btn-tab-unify').click();
+  await expect(page.locator('#unify-panel')).toHaveClass(/open/);
+
+  // 到達条件その1: 何組が揃っていないかが、ファイルを 1 枚も開かずに出る。
+  await expect(page.locator('#unify-summary')).toHaveText('2 組 / 6 件が揃っていません', { timeout: 15000 });
+
+  // 到達条件その2: 組を選ぶと、揺れの残る図だけが在処として並ぶ
+  // (既に揃っている timer_init_sequence は出ない)。
+  await page.locator('#unify-entry').selectOption('irqctrl');
+  const files = page.locator('#unify-panel .unify-file');
+  await expect(files).toHaveCount(2);
+  await expect(files.filter({ hasText: 'gpio_init_sequence' })).toHaveCount(1);
+  await expect(files.filter({ hasText: 'spi_sequence' })).toHaveCount(1);
+  await expect(files.filter({ hasText: 'timer_init_sequence' })).toHaveCount(0);
+
+  // 到達条件その3: チェックした分をまとめて当てると、保存まで終わっている
+  // (開いて直して保存する往復が無い)。
+  await page.locator('#btn-unify-apply').click();
+  await expect(page.locator('#unify-result')).toHaveAttribute('data-applied-docs', '2', { timeout: 15000 });
+  await expect(page.locator('#unify-result')).toContainText('IRQCtrl に 4 件 / 2 枚を揃えました');
+
+  const gpio = await S.readDoc(page, UNIFY_DIR, 'gpio_init_sequence');
+  expect(gpio).toContain('participant IRQCtrl');
+  expect(gpio).not.toContain('IrqCtrl');
+  const spi = await S.readDoc(page, UNIFY_DIR, 'spi_sequence');
+  expect(spi).toContain('Spi_Driver -> IRQCtrl : Spi_Init()');
+  expect(spi).not.toContain('Irq_Ctrl');
+  // 揃っていた図は触られない。
+  expect(await S.readDoc(page, UNIFY_DIR, 'timer_init_sequence')).toBe(U_OK);
+
+  // 到達条件その4: 当て終わった組は一覧から消え、残りの組がそのまま次に選べる。
+  await expect(page.locator('#unify-summary')).toHaveText('1 組 / 2 件が揃っていません', { timeout: 15000 });
+  await expect(page.locator('#unify-entry option')).toHaveCount(1);
+  await expect(page.locator('#unify-entry option').first()).toHaveText(/^Clock_Ctrl ← ClockCtrl/);
+});
+
+// BLK-junior-20260917-0223-wish: 場面3 (先輩の図の変更を自分の図に取り込む) の手順1〜2。
+// 先輩側の増分は「相手だけ」の行として既に並ぶが、取り込みは 1 行ずつで、押すまで
+// どこへ入るかが分からない。押すと一覧が出し直されカーソルも飛ぶので、増分が
+// 何本もある回は次の 1 行を毎回探し直すことになる。入る位置を先に見せ、
+// チェックした分をまとめて入れられることを確かめる。
+const TAKE_SELF = [
+  '@startuml',
+  'title TIMERドライバ初期化シーケンス',
+  'actor App',
+  'participant Timer_Driver',
+  'App -> Timer_Driver : Timer_Init()',
+  '@enduml',
+].join('\n');
+
+// 先輩側で participant 1 つとメッセージ 2 本が増えた回。
+const TAKE_SENIOR = [
+  '@startuml',
+  'title TIMERドライバ初期化シーケンス',
+  'actor App',
+  'participant Timer_Driver',
+  'participant Driver_Common',
+  'App -> Timer_Driver : Timer_Init()',
+  'Timer_Driver -> Driver_Common : Common_Init()',
+  'Timer_Driver -> Driver_Common : Common_Start()',
+  '@enduml',
+].join('\n');
+
+test('手順1-2 先輩側の増分が入る位置つきで並び、チェックした分がまとめて入る', async ({ page }) => {
+  await S.bootWithSaveDir(page, MINE_DIR);
+  await S.clearDir(page, MINE_DIR);
+  await S.clearDir(page, SENIOR_DIR);
+  await S.putDoc(page, SENIOR_DIR, 'timer_init_sequence', TAKE_SENIOR);
+  await page.reload();
+  await page.waitForSelector('#btn-tab-compare');
+  await S.typeDsl(page, TAKE_SELF);
+  await S.renameActive(page, 'timer_init_sequence');
+
+  // 手順1: 先輩のフォルダを相手にする (自分の保存先は変えない)。
+  await page.locator('#btn-tab-compare').click();
+  await page.locator('#xf-dir').fill(SENIOR_DIR);
+  await page.locator('#btn-xf-load').click();
+  await expect(page.locator('#xf-summary')).toBeVisible();
+
+  // 到達条件その1: 増えた 3 要素が、それぞれ「どこへ入るか」つきで並ぶ。
+  const rows = page.locator('#xf-list .xf-row.only-ref');
+  await expect(rows).toHaveCount(3);
+  await expect(rows.filter({ hasText: 'participant Driver_Common' }).locator('.xf-where'))
+    .toContainText('participant Timer_Driver');
+  await expect(rows.filter({ hasText: 'Common_Init()' }).locator('.xf-where'))
+    .toContainText('行目');
+
+  // 到達条件その2: チェックした件数が押す前にボタンに出る。
+  await page.locator('#xf-take-all').check();
+  await expect(page.locator('#btn-xf-take-checked')).toHaveText('チェックした 3 件を取り込む');
+
+  // 到達条件その3: 1 回押すだけで 3 件が自分の図に入る (1 行ずつ押さない)。
+  await page.locator('#btn-xf-take-checked').click();
+  await page.waitForTimeout(400);
+  const text = await getEditorText(page);
+  expect(text).toContain('participant Driver_Common');
+  expect(text).toContain('Timer_Driver -> Driver_Common : Common_Init()');
+  expect(text).toContain('Timer_Driver -> Driver_Common : Common_Start()');
+  // 宣言は宣言の並びに、メッセージは @enduml の手前に入る。
+  const lines = text.split('\n');
+  expect(lines.indexOf('participant Driver_Common'))
+    .toBeLessThan(lines.findIndex((l) => /Common_Init\(\)/.test(l)));
+  await expect(page.locator('#xf-take-result')).toContainText('3 件を取り込みました');
+
+  // 到達条件その4: 取り込んだ行は一覧から消え、取り込む対象が無くなる。
+  await expect(page.locator('#xf-list .xf-row.only-ref')).toHaveCount(0);
+  // 先輩のファイルは読むだけ (書き換えない)。
+  expect(await S.readDoc(page, SENIOR_DIR, 'timer_init_sequence')).toBe(TAKE_SENIOR);
+});
+
+// BLK-junior-20260917-0323-wish: 同じ手順1〜2 の、状態遷移図 (TIMER) で
+// 先輩が親状態の中に子状態を増やした回。子の増分がトップレベルの状態と
+// 見分けられず、取り込むと親の外へ出て図の意味が変わっていた。
+const NEST_SELF = [
+  '@startuml',
+  'title TIMERドライバ状態遷移',
+  '[*] --> Uninit',
+  'state Uninit',
+  'state Configured',
+  'Uninit --> Configured : Timer_Init()',
+  'Configured --> Uninit : Timer_DeInit()',
+  '@enduml',
+].join('\n');
+
+// 先輩側で Configured の中に子状態 2 つと、子の間の遷移 2 本が増えた回。
+const NEST_SENIOR = [
+  '@startuml',
+  'title TIMERドライバ状態遷移',
+  '[*] --> Uninit',
+  'state Uninit',
+  'state Configured {',
+  '  state Idle',
+  '  state Running',
+  '  Idle --> Running : Timer_Start()',
+  '  Running --> Idle : Timer_Stop()',
+  '}',
+  'Uninit --> Configured : Timer_Init()',
+  'Configured --> Uninit : Timer_DeInit()',
+  '@enduml',
+].join('\n');
+
+test('手順1-2 親状態の中に増えた子状態が入れ子のまま並び、入れ子のまま入る', async ({ page }) => {
+  await S.bootWithSaveDir(page, MINE_DIR);
+  await S.clearDir(page, MINE_DIR);
+  await S.clearDir(page, SENIOR_DIR);
+  await S.putDoc(page, SENIOR_DIR, 'timer_state', NEST_SENIOR);
+  await page.reload();
+  await page.waitForSelector('#btn-tab-compare');
+  await S.typeDsl(page, NEST_SELF);
+  await S.renameActive(page, 'timer_state');
+
+  await page.locator('#btn-tab-compare').click();
+  await page.locator('#xf-dir').fill(SENIOR_DIR);
+  await page.locator('#btn-xf-load').click();
+  await expect(page.locator('#xf-summary')).toBeVisible();
+
+  // 到達条件その1: 子状態 2 つと子の遷移 2 本が、親の中の増分として並ぶ。
+  // 親を手で開いて中を見比べる操作が要らない。
+  const rows = page.locator('#xf-list .xf-row.only-ref');
+  await expect(rows).toHaveCount(4);
+  await expect(rows.filter({ hasText: 'state Idle' }).locator('.xf-nest'))
+    .toHaveText('Configured の中');
+  await expect(rows.filter({ hasText: 'Timer_Start()' }).locator('.xf-nest'))
+    .toHaveText('Configured の中');
+  await expect(page.locator('#xf-summary')).toContainText('4 件は親の中');
+
+  // 到達条件その2: 入る位置も親の中だと先に分かる。
+  await expect(rows.filter({ hasText: 'state Idle' }).locator('.xf-where'))
+    .toContainText('「Configured」に { } を開いて');
+
+  // 到達条件その3: まとめて取り込むと、子は親の { } の中に入る。
+  await page.locator('#xf-take-all').check();
+  await page.locator('#btn-xf-take-checked').click();
+  await page.waitForTimeout(400);
+  const text = await getEditorText(page);
+  const lines = text.split('\n');
+  const open = lines.indexOf('state Configured {');
+  const close = lines.indexOf('}');
+  expect(open).toBeGreaterThan(-1);
+  expect(close).toBeGreaterThan(open);
+  ['state Idle', 'state Running', 'Idle --> Running : Timer_Start()'].forEach((want) => {
+    const at = lines.findIndex((l) => l.trim() === want);
+    expect(at).toBeGreaterThan(open);
+    expect(at).toBeLessThan(close);
+  });
+
+  // 到達条件その4: 取り込む対象が無くなり、先輩の図と同じ形になる。
+  await expect(page.locator('#xf-list .xf-row.only-ref')).toHaveCount(0);
+  await expect(page.locator('#xf-list .xf-row.only-self')).toHaveCount(0);
+  expect(await S.readDoc(page, SENIOR_DIR, 'timer_state')).toBe(NEST_SENIOR);
+});
+
+// BLK-junior-20260917-0423: 場面3 のクラス図の周で、先輩のフォルダには TIMER の
+// シーケンス図と状態遷移図しか無く、TimerDrv のクラス図が無かった。相手選びは
+// 名前の近さだけを見て、近い名前が 1 つも無ければ黙って一覧の先頭を相手にしていたので、
+// クラス図に対してシーケンス図を突き合わせた結果が出る。全要素が「片方にしかない」に
+// なるため、junior はそれを「先輩が全部書き換えた」と区別できず、フォルダを目で
+// 走査して「無い」を確かめ直すところで手順 1 が止まった。
+// 相手にその図種が 1 枚も無いことは、手順 1 の答えとして画面が言う。
+const CLS_SELF = [
+  '@startuml', 'class TimerDrv', 'class DriverBase', 'DriverBase <|-- TimerDrv', '@enduml',
+].join('\n');
+const CLS_SENIOR_SEQ = [
+  '@startuml', 'participant TimerDrv', 'TimerDrv -> HW : Timer_Init()', '@enduml',
+].join('\n');
+const CLS_SENIOR_STATE = [
+  '@startuml', 'state Uninit', 'Uninit --> Ready : Timer_Init', '@enduml',
+].join('\n');
+
+test('手順1 先輩に同じ図種が無いことが、突き合わせの答えとして出る', async ({ page }) => {
+  await S.bootWithSaveDir(page, MINE_DIR);
+  await S.clearDir(page, MINE_DIR);
+  await S.clearDir(page, SENIOR_DIR);
+  // 先輩のフォルダは TIMER のシーケンス図と状態遷移図だけ (クラス図は無い)。
+  await S.putDoc(page, SENIOR_DIR, 'timer_init_sequence', CLS_SENIOR_SEQ);
+  await S.putDoc(page, SENIOR_DIR, 'timer_state', CLS_SENIOR_STATE);
+  await page.reload();
+  await page.waitForSelector('#btn-tab-compare');
+  await S.typeDsl(page, CLS_SELF);
+  await S.renameActive(page, 'TimerDrv派生クラス図');
+
+  await page.locator('#btn-tab-compare').click();
+  await page.locator('#xf-dir').fill(SENIOR_DIR);
+  await page.locator('#btn-xf-load').click();
+  const summary = page.locator('#xf-summary');
+  await expect(summary).toBeVisible();
+
+  // 到達条件その1: 「クラス図が 0 枚」と枚数で言い切る (目で走査しなくてよい)。
+  await expect(summary).toContainText('クラス図がありません');
+  await expect(summary).toContainText('2 枚中 0 枚');
+
+  // 到達条件その2: それは異常ではなく手順 1 の答えなので、先へ進めると言う。
+  await expect(summary).toContainText('先へ進めます');
+  await expect(summary).toHaveClass(/clean/);
+
+  // 到達条件その3: 図種の違う図を相手にした差分を出さない
+  // (出すと「先輩が全部書き換えた」と見分けが付かない)。
+  await expect(page.locator('#xf-list')).toBeHidden();
+
+  // 到達条件その4: それでも中身を見たいときのために、候補は図種つきで選べる。
+  const opts = page.locator('#xf-file option');
+  await expect(opts).toHaveCount(2);
+  await expect(opts.filter({ hasText: 'timer_init_sequence' }))
+    .toContainText('シーケンス図。図種が違います');
+  await expect(opts.filter({ hasText: 'timer_state' }))
+    .toContainText('状態遷移図。図種が違います');
+});

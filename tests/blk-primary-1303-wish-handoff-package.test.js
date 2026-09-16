@@ -23,6 +23,7 @@ var depPaths = [
   '../src/core/bulk-export.js',
   '../src/core/review-pins.js',
   '../src/core/handoff-summary.js',
+  '../src/core/handoff-route.js',
   '../src/core/handoff-package.js',
 ];
 depPaths.forEach(function(p) {
@@ -197,14 +198,18 @@ describe('index.html', function() {
   // 申し送りチェックリストが 4 番目に入り、図一式は 5 番目になった
   // (BLK-primary-20260908-1803-wish)。さらに「今回の変更と、その理由」が先頭に入り、
   // 材料の 5 節はそれぞれ 1 つ後ろへ動いた (BLK-primary-20260914-1906-wish)。
-  test('6 つの節がこの順で並ぶ', function() {
+  test('7 つの節がこの順で並ぶ (先頭は見る順)', function() {
     var html = HP.renderIndexHtml(snapshotOf(true));
-    var i0 = html.indexOf('1. 今回の変更と、その理由');
-    var i1 = html.indexOf('2. 系統チェック結果');
-    var i2 = html.indexOf('3. 名前突合結果');
-    var i3 = html.indexOf('4. 直近の変更サマリ');
-    var i4 = html.indexOf('5. 申し送りチェックリスト');
-    var i5 = html.indexOf('6. 図一式');
+    // BLK-primary-20260915-2346-wish: 受け取る側が最初に見るのは「どの図から見るか」。
+    var route = html.indexOf('1. 見る順');
+    expect(route).toBeGreaterThan(-1);
+    expect(html.indexOf('2. 今回の変更と、その理由')).toBeGreaterThan(route);
+    var i0 = html.indexOf('2. 今回の変更と、その理由');
+    var i1 = html.indexOf('3. 系統チェック結果');
+    var i2 = html.indexOf('4. 名前突合結果');
+    var i3 = html.indexOf('5. 直近の変更サマリ');
+    var i4 = html.indexOf('6. 申し送りチェックリスト');
+    var i5 = html.indexOf('7. 図一式');
     expect(i0).toBeGreaterThan(-1);
     expect(i1).toBeGreaterThan(i0);
     expect(i2).toBeGreaterThan(i1);
@@ -227,9 +232,14 @@ describe('index.html', function() {
 
   test('外部ファイルも外部スクリプトも参照しない (渡した先で開ける)', function() {
     var html = HP.renderIndexHtml(snapshotOf(true));
-    expect(html).not.toContain('<script');
+    // BLK-primary-20260915-2346-wish: 「見る順」の印付けが入ったので script は出る。
+    // ここで守りたいのは自己完結 (渡した先でファイルを追加で読まない) なので、
+    // 外部参照が無いことを見る。埋め込みの script は zip の外を読まない。
     expect(html).toContain('<style>');
     expect(html).not.toContain('<link');
+    expect(html).not.toContain('<script src');
+    expect(html).not.toContain('http://');
+    expect(html).not.toContain('https://');
   });
 
   test('図の名前は HTML として解釈されない', function() {

@@ -89,7 +89,7 @@ test.describe('BLK-primary-1303-wish 引き継ぎパッケージ', () => {
   });
 
   // 節は 6 つになった (1 = 今回の変更と、その理由。BLK-primary-20260914-1906-wish)。
-  test('書き出した中身に 6 つの節と判定が入る', async ({ page }) => {
+  test('書き出した中身に 7 つの節と判定が入る', async ({ page }) => {
     await openTwoDiagrams(page);
     // zip を解かずに中身を確かめるため、同じ材料からモデルを組み立てて見る。
     const model = await page.evaluate(() => {
@@ -106,12 +106,14 @@ test.describe('BLK-primary-1303-wish 引き継ぎパッケージ', () => {
       return { verdict: snap.verdict, html: HP.renderIndexHtml(snap), total: snap.total };
     });
     expect(model.total).toBe(2);
-    expect(model.html).toContain('1. 今回の変更と、その理由');
-    expect(model.html).toContain('2. 系統チェック結果');
-    expect(model.html).toContain('3. 名前突合結果');
-    expect(model.html).toContain('4. 直近の変更サマリ');
-    expect(model.html).toContain('5. 申し送りチェックリスト');
-    expect(model.html).toContain('6. 図一式');
+    // BLK-primary-20260915-2346-wish: 先頭に「見る順」が入り、材料の節は 1 つ後ろへ。
+    expect(model.html).toContain('1. 見る順');
+    expect(model.html).toContain('2. 今回の変更と、その理由');
+    expect(model.html).toContain('3. 系統チェック結果');
+    expect(model.html).toContain('4. 名前突合結果');
+    expect(model.html).toContain('5. 直近の変更サマリ');
+    expect(model.html).toContain('6. 申し送りチェックリスト');
+    expect(model.html).toContain('7. 図一式');
     // 2 枚は同じ動作名で揃えてあるので「問題なし」で渡せる。
     expect(model.verdict).toContain('問題なし');
   });

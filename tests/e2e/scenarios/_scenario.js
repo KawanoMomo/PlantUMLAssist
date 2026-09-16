@@ -10,17 +10,33 @@ function absDirFor(file) {
   return path.join(__dirname, '..', '..', '..', dirFor(file).replace(/^\.\//, ''));
 }
 
+// 「覚えているか」を見る手順のための逃がし鍵。これが立っている間は開き直しても記憶を消さない
+// (addInitScript は再読み込みのたびに走るので、素の reload では毎回まっさらになる)。
+const KEEP_KEY = 'pua.e2e.keep';
+
+// アプリを開き直す (利用者がアプリを閉じてまた開いたのと同じ)。記憶は消さない。
+async function reopenApp(page) {
+  await page.evaluate((k) => { try { window.localStorage.setItem(k, '1'); } catch (e) {} }, KEEP_KEY);
+  await page.reload();
+  await page.waitForSelector('#editor');
+  await page.evaluate((k) => { try { window.localStorage.removeItem(k); } catch (e) {} }, KEEP_KEY);
+}
+
 // 保存先を設定済みにして開く (junior 手順 3・primary が毎回している状態)。
-async function bootWithSaveDir(page, dir) {
+// opts はそのまま gotoApp へ渡す。`{ foldedTools: true }` を渡すと helper が
+// 畳み方の設定に触らないので、アプリ自身の既定 (design 7a/7b) がそのまま出る
+// (仕様と現在値を突き合わせる手順 11 は、helper の都合を既定と読み違えてはいけない)。
+async function bootWithSaveDir(page, dir, opts) {
   await page.addInitScript((d) => {
     try {
+      if (window.localStorage.getItem('pua.e2e.keep')) return;
       window.localStorage.clear();
       window.localStorage.setItem('plantuml-autosave-config', JSON.stringify({
         enabled: true, debounceMs: 200, restoreMode: 'auto', backend: 'file', fileDir: d,
       }));
     } catch (e) {}
   }, dir);
-  await gotoApp(page);
+  await gotoApp(page, opts);
 }
 
 // 保存先を未設定 (ダウンロード) のまま開く。
@@ -259,7 +275,7 @@ async function expectMessageHitUniform(page, expectFn, dsl, msgIndex) {
 
 module.exports = {
   PRIMARY_DOCS, docFor,
-  dirFor, absDirFor, bootWithSaveDir, bootPlain, bootDownloadMode,
+  dirFor, absDirFor, bootWithSaveDir, bootPlain, bootDownloadMode, reopenApp,
   putDoc, readDoc, listDir, clearDir, clearTickets,
   openFolder, openFolderItem, overwriteOpenedFile, typeDsl, renameActive, runCommand, exportVia,
   GPIO_STATE, GPIO_SEQ,

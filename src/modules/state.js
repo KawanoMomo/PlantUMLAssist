@@ -479,7 +479,8 @@ window.MA.modules.plantumlState = (function() {
     if (!current) return text;
     var newPos = fields.position != null ? fields.position : current.position;
     var newText = fields.text != null ? fields.text : current.text;
-    var formatted = fmtNote(newPos, current.targetId, newText);
+    var newTarget = fields.targetId ? fields.targetId : current.targetId;
+    var formatted = fmtNote(newPos, newTarget, newText);
     var newLines = Array.isArray(formatted) ? formatted : [formatted];
     var before = lines.slice(0, idx);
     var after = lines.slice(endLine);
@@ -881,6 +882,7 @@ window.MA.modules.plantumlState = (function() {
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">追加 / Add</label>' +
         P.selectFieldHtml('種類', 'st-tail-kind', [
           { value: 'state', label: 'State', selected: true },
+          { value: 'child', label: '子状態 (選んだ状態の中に入れる)' },
           { value: 'composite', label: 'Composite State' },
           { value: 'transition', label: 'Transition' },
           { value: 'note', label: 'Note' },
@@ -974,6 +976,23 @@ window.MA.modules.plantumlState = (function() {
           ]) +
           placeHtml('state') +
           P.primaryButtonHtml('st-tail-add', '+ State 追加');
+      } else if (kind === 'child') {
+        // BLK-human-20260915-1206: 「どの状態の中に入れるか」を先に選ばせる。
+        // 親が中身を持たなければその場で `{ }` に開くので、変換の手は要らない。
+        var SC = window.MA.stateChild;
+        var parentOpts = SC.parentOptions(parsedData);
+        html2 = parentOpts.length === 0
+          ? '<div style="font-size:11px;color:var(--text-secondary);">親にできる状態がまだありません。先に状態を 1 つ追加してください。</div>'
+          : P.selectFieldHtml('親にする状態', 'st-tail-where-target', parentOpts) +
+            P.fieldHtml('子状態の名前', 'st-tail-id', '', '例: Warmup (空なら Sub)') +
+            '<input type="hidden" id="st-tail-where" value="inside">' +
+            P.primaryButtonHtml('st-tail-add', '＋ 子状態を追加') +
+            '<div id="st-tail-child-hint" style="font-size:10px;color:var(--text-secondary);margin-top:4px;line-height:1.5;">' +
+              '選んだ状態の中に入れます (DSL は <code>state 親 { state 子 }</code>)。' +
+              '中身をまだ持たない状態でも、その場で中を開くので変換は要りません。' +
+              '子状態を選び直せば孫も同じ手で足せます。' +
+              '図の中の状態を押して選んでからでも、右パネルの「＋ 子状態を追加」で足せます。' +
+            '</div>';
       } else if (kind === 'composite') {
         html2 =
           P.fieldHtml('ID', 'st-tail-id', '', '例: Outer') +
@@ -984,8 +1003,10 @@ window.MA.modules.plantumlState = (function() {
           P.selectFieldHtml('From', 'st-tail-from', stateOptsWithPseudo) +
           P.selectFieldHtml('To', 'st-tail-to', stateOptsWithPseudo) +
           P.fieldHtml('きっかけ / trigger', 'st-tail-trig', '', '例: start') +
+          P.vocabPickerHtml('st-tail-trig-vocab', { roles: ['method', 'event'] }) +
           P.fieldHtml('条件 / guard', 'st-tail-guard', '', '例: retry > 3') +
           P.fieldHtml('実行する処理 / action', 'st-tail-act', '', '例: log()') +
+          P.vocabPickerHtml('st-tail-act-vocab', { roles: ['method'] }) +
           _previewBoxHtml('st-tail-preview') +
           P.primaryButtonHtml('st-tail-add', '+ Transition 追加');
       } else if (kind === 'note') {
@@ -1063,10 +1084,12 @@ window.MA.modules.plantumlState = (function() {
       }
 
       if (kind === 'transition') {
-        _bindPreview({
+        var tailPreview = _bindPreview({
           preview: 'st-tail-preview', from: 'st-tail-from', to: 'st-tail-to',
           trigger: 'st-tail-trig', guard: 'st-tail-guard', action: 'st-tail-act',
         });
+        P.bindVocabPicker('st-tail-trig-vocab', 'st-tail-trig', tailPreview);
+        P.bindVocabPicker('st-tail-act-vocab', 'st-tail-act', tailPreview);
       }
 
       P.bindEvent('st-tail-add', 'click', function() {
@@ -1078,11 +1101,17 @@ window.MA.modules.plantumlState = (function() {
         var where = whereEl ? whereEl.value : 'end';
         var tgtEl = document.getElementById('st-tail-where-target');
         var whereTarget = tgtEl ? tgtEl.value : '';
-        if (k === 'state') {
+        if (k === 'state' || k === 'child') {
           var rawId = document.getElementById('st-tail-id').value;
           var normSt = normalizeIdInput(rawId, parsedData);
+          // BLK-human-20260915-1206: 子状態は名前を思いつかないまま押せる方が
+          // 早い。空なら空いている名前 (Sub / Sub2 …) を当てる。
+          if (!normSt.valid && k === 'child') {
+            normSt = { valid: true, id: window.MA.stateChild.uniqueChildId(parsedData, 'Sub'), label: '' };
+          }
           if (!normSt.valid) { alert('ID 必須'); return; }
-          var st = document.getElementById('st-tail-stereo').value || null;
+          var stereoEl = document.getElementById('st-tail-stereo');
+          var st = (stereoEl && stereoEl.value) || null;
           if (where === 'transition') {
             out = SI.splitTransition(t, parsedData, whereTarget, normSt.id, st, normSt.label);
             if (out === t) { alert('挟む遷移を選んでください'); return; }
@@ -1520,6 +1549,8 @@ window.MA.modules.plantumlState = (function() {
       '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' +
       (st.stereotype ? st.stereotype + ' ' : '') + 'State (L' + st.line + ')</div>' +
       P.fieldHtml('ID', 'st-id', st.id) +
+      // BLK-junior-20260915-0406-wish: 状態名も同じ部品の他の図と揃える。
+      P.vocabPickerHtml('st-id-vocab', { roles: ['state'] }) +
       P.fieldHtml('Label', 'st-label', st.label || '') +
       P.selectFieldHtml('Stereotype', 'st-stereo', [
         { value: '', label: '(none)', selected: !st.stereotype },
@@ -1532,7 +1563,25 @@ window.MA.modules.plantumlState = (function() {
         { value: 'entryPoint', label: 'entryPoint', selected: st.stereotype === 'entrypoint' },
         { value: 'exitPoint', label: 'exitPoint', selected: st.stereotype === 'exitpoint' }
       ]) +
-      '<div style="font-size:11px;margin:4px 0;color:var(--text-secondary);">Parent: ' + (st.parentId || '(root)') + '</div>' +
+      // BLK-human-20260915-1206: 入れ子の中の状態を選んだとき、どの親の中に
+      // 居るかが「Parent: Outer」だけでは孫の代で読み取れない。根から並べる。
+      '<div style="font-size:11px;margin:4px 0;color:var(--text-secondary);">居場所: ' +
+        window.MA.htmlUtils.escHtml(window.MA.stateChild.placeText(parsedData, st.id)) +
+        ' <span style="opacity:.7;">(' +
+        window.MA.htmlUtils.escHtml(window.MA.stateChild.breadcrumbText(parsedData, st.id)) +
+        ')</span></div>' +
+      // BLK-human-20260915-1206: 子状態を足す入口。中身を持たない状態でも
+      // その場で `{ }` に開くので、「まず composite に変換」を知らなくてよい。
+      (window.MA.stateChild.canHaveChild(st)
+        ? '<div style="border-top:1px solid var(--border);padding-top:6px;margin-top:6px;">' +
+            '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">子状態 — この状態の中に状態を入れる（入れ子）</div>' +
+            '<div style="display:flex;gap:4px;align-items:center;">' +
+              '<input id="st-child-id" placeholder="子状態の名前 (例: Warmup)" style="flex:1;box-sizing:border-box;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-size:11px;">' +
+              '<button id="st-add-child" title="選んだ状態の中に、もう 1 つ状態を入れます（入れ子にする）" style="font-size:11px;padding:4px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;white-space:nowrap;">＋ 子状態を追加</button>' +
+            '</div>' +
+            '<button id="st-add-child-pair" title="選んだ状態の中に状態を 2 つ入れて、その間を矢印でつなぎます（入れ子）" style="font-size:11px;padding:4px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;margin-top:4px;display:block;">＋ 子状態を 2 つ足して遷移でつなぐ</button>' +
+          '</div>'
+        : '') +
       // Behaviors section (StableState style: entry/exit single-line, do multi-line)
       '<div style="border-top:1px solid var(--border);padding-top:6px;margin-top:6px;">' +
         '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">Behaviors</div>' +
@@ -1587,6 +1636,8 @@ window.MA.modules.plantumlState = (function() {
       '</div>';
     propsEl.innerHTML = html;
 
+    P.bindVocabPicker('st-id-vocab', 'st-id');
+
     P.bindEvent('st-update', 'click', function() {
       window.MA.history.pushHistory();
       var rawId = document.getElementById('st-id').value;
@@ -1633,6 +1684,31 @@ window.MA.modules.plantumlState = (function() {
       if (!confirm('この state と紐付く transition / note も削除します。続行しますか？')) return;
       window.MA.history.pushHistory();
       ctx.setMmdText(deleteStateWithRefs(ctx.getMmdText(), st.id));
+      window.MA.selection.clearSelection();
+      ctx.onUpdate();
+    });
+    // BLK-human-20260915-1206: 親を選んで子を足す 1 手。名前を空で押しても
+    // 迷わないように、その場で空いている名前 (Sub / Sub2 …) を当てる。
+    P.bindEvent('st-add-child', 'click', function() {
+      var el = document.getElementById('st-child-id');
+      var fresh = parse(ctx.getMmdText());
+      var norm = normalizeIdInput(el ? el.value : '', fresh);
+      var id = window.MA.stateChild.uniqueChildId(fresh, norm.id || 'Sub');
+      window.MA.history.pushHistory();
+      ctx.setMmdText(window.MA.stateChild.addChild(
+        ctx.getMmdText(), fresh, st.id, id, norm.label));
+      if (el) el.value = '';
+      window.MA.selection.clearSelection();
+      ctx.onUpdate();
+    });
+    P.bindEvent('st-add-child-pair', 'click', function() {
+      var fresh = parse(ctx.getMmdText());
+      var a = window.MA.stateChild.uniqueChildId(fresh, 'Sub');
+      var b = window.MA.stateChild.uniqueChildId(
+        { states: (fresh.states || []).concat([{ id: a }]) }, 'Sub');
+      window.MA.history.pushHistory();
+      ctx.setMmdText(window.MA.stateChild.addChildPair(
+        ctx.getMmdText(), fresh, st.id, a, b));
       window.MA.selection.clearSelection();
       ctx.onUpdate();
     });
@@ -1703,8 +1779,12 @@ window.MA.modules.plantumlState = (function() {
       '<button id="st-tr-swap" title="From と To を入れ替える" style="width:100%;font-size:11px;padding:3px 8px;margin-bottom:8px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">⇄ 向きを入れ替え</button>' +
       P.selectFieldHtml('To', 'st-tr-to', toOpts) +
       P.fieldHtml('きっかけ / trigger', 'st-tr-trig', tr.trigger || '', '例: start') +
+      // BLK-junior-20260915-0406-wish: きっかけの綴りは同じ部品のシーケンス図と
+      // 揃っていなければならない。名前帳から選べば、先輩の図を別に開かずに揃う。
+      P.vocabPickerHtml('st-tr-trig-vocab', { roles: ['method', 'event'] }) +
       P.fieldHtml('条件 / guard', 'st-tr-guard', tr.guard || '', '例: retry > 3') +
       P.fieldHtml('実行する処理 / action', 'st-tr-act', tr.action || '', '例: log()') +
+      P.vocabPickerHtml('st-tr-act-vocab', { roles: ['method'] }) +
       _previewBoxHtml('st-tr-preview') +
       // BLK-builder-20260907-1306-2 (design 5d): 線の色も「その他… ▾」に畳む。
       P.colorPaletteHtml('st-tr-more', {
@@ -1736,6 +1816,9 @@ window.MA.modules.plantumlState = (function() {
       preview: 'st-tr-preview', from: 'st-tr-from', to: 'st-tr-to',
       trigger: 'st-tr-trig', guard: 'st-tr-guard', action: 'st-tr-act',
     });
+
+    P.bindVocabPicker('st-tr-trig-vocab', 'st-tr-trig', refreshPreview);
+    P.bindVocabPicker('st-tr-act-vocab', 'st-tr-act', refreshPreview);
 
     P.bindEvent('st-tr-swap', 'click', function() {
       var fromEl = document.getElementById('st-tr-from');
@@ -1789,18 +1872,41 @@ window.MA.modules.plantumlState = (function() {
         { value: 'right', label: 'Right', selected: note.position === 'right' },
         { value: 'left', label: 'Left', selected: note.position === 'left' }
       ]) +
+      // BLK-human-20260916-0900: 置いた後でも対象と上下の順を変えられる (シーケンス図と揃える)。
+      (note.targetId ? P.selectFieldHtml('対象 (Target)', 'st-note-target', (parsedData.states || []).map(function(s) {
+        return { value: s.id, label: s.id, selected: s.id === note.targetId };
+      })) : '') +
+      '<div style="margin-bottom:8px;display:flex;gap:4px;align-items:center;"><span style="font-size:10px;color:var(--text-secondary);">上下の順</span>' +
+        '<button id="st-note-up" type="button" style="font-size:11px;padding:2px 8px;cursor:pointer;">↑ 上へ</button>' +
+        '<button id="st-note-down" type="button" style="font-size:11px;padding:2px 8px;cursor:pointer;">↓ 下へ</button></div>' +
       '<div style="margin-bottom:6px;"><label style="display:block;font-size:10px;color:var(--text-secondary);">Text</label><textarea id="st-note-text" style="width:100%;min-height:80px;">' + H.escHtml(note.text || '') + '</textarea></div>' +
       P.primaryButtonHtml('st-note-update', '更新') +
       P.primaryButtonHtml('st-note-delete', '✕ 削除');
     propsEl.innerHTML = html;
 
-    P.bindEvent('st-note-update', 'click', function() {
+    var _stApply = function() {
+      var tgEl = document.getElementById('st-note-target');
       window.MA.history.pushHistory();
       ctx.setMmdText(updateNote(ctx.getMmdText(), note.line, note.endLine, {
         position: document.getElementById('st-note-pos').value,
+        targetId: tgEl ? tgEl.value : null,
         text: document.getElementById('st-note-text').value
       }));
       ctx.onUpdate();
+    };
+    P.bindEvent('st-note-update', 'click', _stApply);
+    P.bindEvent('st-note-pos', 'change', _stApply);
+    P.bindEvent('st-note-target', 'change', _stApply);
+    [['st-note-up', -1], ['st-note-down', 1]].forEach(function(pair) {
+      P.bindEvent(pair[0], 'click', function() {
+        var moved = window.MA.noteEdit.moveBlock(ctx.getMmdText(), note.line, note.endLine, pair[1]);
+        if (!moved) return;
+        window.MA.history.pushHistory();
+        ctx.setMmdText(moved.text);
+        var np = (parse(moved.text).notes || []).filter(function(n) { return n.line === moved.line; })[0];
+        if (np) window.MA.selection.setSelected([{ type: 'note', id: np.id, line: np.line }]);
+        ctx.onUpdate();
+      });
     });
     P.bindEvent('st-note-delete', 'click', function() {
       window.MA.history.pushHistory();

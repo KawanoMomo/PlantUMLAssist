@@ -25,6 +25,9 @@ window.MA.findingActions = (function() {
     verdict: { label: '別ドメイン明示', verb: '別物と決めて印を残す' },
     addmethod: { label: 'メソッド追加', verb: '遷移ラベルに対応するメソッドをクラス図に足す' },
     addclass: { label: 'クラス追加', verb: 'クラス図に宣言を足す' },
+    // BLK-primary-20260915-0007-friction: 依頼2 は「クラス図に足す」「意図的省略を明記する」の
+    // 二択で来る。前者だけが [適用] だと、後者を選んだ primary は note を全文手打ちする。
+    noteintent: { label: '意図を明記', verb: 'クラス図に note で意図的省略を書く' },
     manual: { label: '手で判断', verb: '' },
   };
 
@@ -180,6 +183,7 @@ window.MA.findingActions = (function() {
       base.scope = 'folder';
       base.ready = true;
       base.reason = '';
+      base.alt = altFor(base, text);
       return _finish(base);
     }
 
@@ -189,6 +193,7 @@ window.MA.findingActions = (function() {
       base.classes = classNames(text);
       base.ready = base.classes.length > 0;
       base.reason = base.ready ? '' : '指摘文が足すクラスの名前を名指ししていません';
+      base.alt = altFor(base, text);
       return _finish(base);
     }
 
@@ -203,6 +208,24 @@ window.MA.findingActions = (function() {
     base.ready = names.length > 0;
     base.reason = base.ready ? '' : 'この指摘には自分の保存フォルダにある図の名前がありません';
     return base;
+  }
+
+  // 指摘が二択で来たときの、もう一方の手 (今のところ「意図的省略を明記する」だけ)。
+  // 本手 (クラス追加 / メソッド追加) を置き換えず、隣に並べる — どちらを選ぶかは
+  // 図を書いている primary の判断で、機械が決めてよい所ではない。
+  function altFor(base, text) {
+    var NI = (typeof window !== 'undefined' && window.MA) ? window.MA.noteIntent : null;
+    if (!NI || !NI.offered(text)) return null;
+    var targets = NI.targets(text);
+    var alt = {
+      id: base.id, heading: base.heading, kind: 'noteintent', docs: base.docs,
+      from: '', to: '', otherFolder: '', scope: 'folder', classes: [],
+      targets: targets,
+      ready: targets.length > 0,
+      reason: targets.length ? '' : '指摘文が「クラス.メソッド」の形で呼び先を名指ししていません',
+    };
+    alt.classes = targets.map(function(t) { return t.cls; });
+    return _finish(alt);
   }
 
   function _finish(p) {
@@ -230,6 +253,12 @@ window.MA.findingActions = (function() {
     }
     if (p.kind === 'addmethod') {
       return 'メソッド追加: 遷移ラベルに対応するメソッドを保存フォルダのクラス図に足す';
+    }
+    if (p.kind === 'noteintent') {
+      return p.ready
+        ? '意図を明記: ' + (p.classes || []).join('・')
+          + ' に「意図して省略している」note をクラス図へ書く'
+        : '意図を明記: ' + (p.reason || '当てられません');
     }
     if (p.kind === 'addclass') {
       return p.ready
@@ -283,6 +312,9 @@ window.MA.findingActions = (function() {
     if (plan && plan.kind === 'addclass') {
       return (r.added || []).join('・') + ' を ' + done + ' に宣言しました';
     }
+    if (plan && plan.kind === 'noteintent') {
+      return (r.added || []).join('・') + ' に意図的省略の note を ' + done + ' へ書きました';
+    }
     return r.message || '当てました';
   }
 
@@ -294,6 +326,7 @@ window.MA.findingActions = (function() {
     classNames: classNames,
     mineDocs: mineDocs,
     otherFolderOf: otherFolderOf,
+    altFor: altFor,
     planFor: planFor,
     planText: planText,
     plans: plans,

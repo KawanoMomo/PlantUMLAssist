@@ -6,9 +6,13 @@
     "test:unit": "node tests/run-tests.js",
     "test:e2e": "playwright test --project=scenarios --pass-with-no-tests",
     "test:all": "npm run test:unit && npm run test:e2e",
+    "icon": "node tools/make-icon.js",
     "audit": "node tools/audit.js",
     "pins": "node tools/pins.js",
     "requests": "node tools/requests.js",
+    "findings": "node tools/findings.js",
+    "replies": "node tools/replies.js",
+    "blk-triage": "node tools/blk-triage.js",
     "test:e2e:all": "playwright test"
   },
   "devDependencies": {

@@ -50,6 +50,60 @@ window.MA.appBridge = (function() {
     };
   }
 
+  // jar が描画に使える状態か。/env の答えが無い間は「まだ分からない」= false。
+  function jarReady(env) {
+    var e = env === undefined ? _env : env;
+    return !!(e && e.jar);
+  }
+
+  // BLK-human-20260915-1201: jar を入れる操作は「押した → 数十秒 → 結果」の
+  // 3 拍あるのに、画面は押す前と押した後しか持っていなかった。取得中・完了・
+  // 失敗を 1 つの純関数にまとめ、失敗のときは理由と「再試行の入口が要る」を
+  // 呼び出し側へ渡す (文言と再試行ボタンの出し分けを 2 箇所で書かないため)。
+  //   phase: 'fetching' | 'picking' | 'done' | 'canceled' | 'error'
+  function engineProgress(phase, res) {
+    var r = res || {};
+    if (phase === 'fetching') {
+      return { phase: 'fetching', text: '公式から取得しています… (数十 MB あります)', bad: false, retry: false, busy: true };
+    }
+    if (phase === 'picking') {
+      return { phase: 'picking', text: '選んでいます…', bad: false, retry: false, busy: true };
+    }
+    if (phase === 'canceled') {
+      return { phase: 'canceled', text: '選ばれませんでした', bad: false, retry: true, busy: false };
+    }
+    if (phase === 'error') {
+      return {
+        phase: 'error',
+        text: '取得できませんでした: ' + (r.error || '理由が分かりません') + ' — もう一度試すか、jar のパスを直接入れてください',
+        bad: true,
+        retry: true,
+        busy: false,
+      };
+    }
+    return {
+      phase: 'done',
+      text: '完了しました。plantuml.jar: ' + (r.jarPath || '') + ' — 再起動せずにこのまま描画できます',
+      bad: false,
+      retry: false,
+      busy: false,
+    };
+  }
+
+  // 1 回の操作で jar が「無い」から「ある」に変わったか。変わったときだけ
+  // 図を描き直せばよい (毎回描き直すと設定を開くたびに再描画が走る)。
+  function jarTurnedReady(before, after) {
+    return !jarReady(before) && jarReady(after);
+  }
+
+  // 応答から次の phase を決める。取れなかった理由は post() が error に入れる。
+  function phaseOf(res) {
+    if (!res) return 'error';
+    if (res.canceled) return 'canceled';
+    if (res.error) return 'error';
+    return 'done';
+  }
+
   // 保存要求の中身。文字列はそのまま、バイナリは base64 で渡す
   // (server 側は base64 があればそちらを優先して書く)。
   function saveBody(fileName, payload) {
@@ -112,6 +166,10 @@ window.MA.appBridge = (function() {
   return {
     isApp: isApp,
     jarStatus: jarStatus,
+    jarReady: jarReady,
+    jarTurnedReady: jarTurnedReady,
+    engineProgress: engineProgress,
+    phaseOf: phaseOf,
     javaStatus: javaStatus,
     saveBody: saveBody,
     loadEnv: loadEnv,
