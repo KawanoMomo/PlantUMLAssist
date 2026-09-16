@@ -4046,6 +4046,19 @@ table.vault-table button.vault-open:hover { border-color: var(--accent); }
   font-size: 10px;
   color: var(--text-secondary);
 }
+.rename-hits-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 6px; font-size: 10px; margin-top: 6px;
+}
+.rename-hits-head #rename-hits-label { color: var(--text-secondary); }
+mark.ri-hit { background: var(--accent); color: var(--bg-primary); padding: 0 1px; border-radius: 2px; }
+.ri-none { margin-top: 8px; font-size: 11px; }
+.ri-none .ri-none-head { color: var(--text-secondary); padding-bottom: 3px; }
+.ri-none .ri-none-rows { display: flex; flex-wrap: wrap; gap: 4px; }
+.ri-none .ri-none-doc {
+  border: 1px solid var(--bg-tertiary); border-radius: 3px;
+  padding: 1px 5px; color: var(--text-secondary); font-family: var(--font-mono);
+}
 #rename-hits .hit { display: flex; justify-content: space-between; padding: 1px 0; }
 #rename-hits .hit.zero { opacity: 0.45; }
 /* 改名履歴タイムライン (BLK-primary-20260908-2103-wish) */
@@ -6736,6 +6749,12 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
           <input type="checkbox" id="rename-scan-folder" checked style="width:auto;">
           <label for="rename-scan-folder">保存フォルダの全ファイルも数える</label>
         </div>
+        <!-- BLK-primary-20260917-0023: ヒット件数のすぐ横から影響範囲の一覧へ入る
+             (件数を読んでから「どの図のどの行か」を見るまでに画面を探させない) -->
+        <div class="rename-hits-head">
+          <span id="rename-hits-label"></span>
+          <button type="button" id="btn-rename-hits-impact" disabled title="当たった図の該当行と、変更なしの図の仕分けを 1 画面で見る (まだ置換はしません)">影響範囲を見る</button>
+        </div>
         <div id="rename-hits"></div>
         <!-- 開いていない図も含めた影響範囲 (ヒットした図 / しなかった図) -->
         <div id="rename-folder"></div>
@@ -7828,6 +7847,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <div class="board-head">
       <strong>置換の影響</strong>
       <span id="ri-summary"></span>
+      <!-- BLK-primary-20260917-0023: 何枚中何枚に変更ありか (残りは触らなくてよい) -->
+      <span id="ri-roster"></span>
       <span class="board-tools">
         <label title="ヒット行の前後だけでなく図の全文を出す"><input type="checkbox" id="ri-full"> 全文</label>
         <button type="button" id="ri-apply">この内容で置換する</button>

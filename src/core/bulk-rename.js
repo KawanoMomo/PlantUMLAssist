@@ -96,15 +96,29 @@ window.MA.bulkRename = (function() {
   // 適用してから巻き戻すやり直しが要る。ここは置換後の DSL まで作って返すだけで、
   // 行の突き合わせ (before/after) は changeBoard.diffRows に任せる。
   // docs: [{ id, name, dsl, unopened? }] → 当たった図だけを before/after で返す。
+  // 1 本の DSL 中の出現位置 [{start, end}]。行のハイライト用。
+  function hitRanges(dsl, from) {
+    var out = [];
+    _scan(dsl, from, function(hit, s) { out.push({ start: s, end: s + hit.length }); return hit; });
+    return out;
+  }
+
   function impact(docs, from, to) {
-    var out = { entries: [], total: 0, docs: 0, unopened: 0, valid: false };
+    var out = { entries: [], none: [], total: 0, docs: 0, scanned: 0, unopened: 0, valid: false };
     var rep = String(to == null ? '' : to);
     out.valid = !!from && isValidTarget(rep) && from !== rep;
     (Array.isArray(docs) ? docs : []).forEach(function(d) {
       if (!d) return;
       var before = String(d.dsl == null ? '' : d.dsl);
       var n = countIn(before, from);
-      if (n === 0) return;
+      out.scanned++;
+      // BLK-primary-20260917-0023: 当たらなかった図も一覧に載せる。影響範囲の
+      // 確認は「何枚が変わるか」だけでなく「残りは触らなくてよい」と言い切れて
+      // はじめて終わる。落ちた図が見えないと、結局 1 枚ずつ開いて確かめ直す。
+      if (n === 0) {
+        out.none.push({ id: d.id, name: d.name, unopened: !!d.unopened });
+        return;
+      }
       out.entries.push({
         id: d.id, name: d.name, count: n,
         unopened: !!d.unopened,
@@ -127,6 +141,14 @@ window.MA.bulkRename = (function() {
       + (res.unopened > 0 ? ' (うち未オープン ' + res.unopened + ' 枚)' : '');
     if (!res.valid) return head + ' に当たっています (置換後の名前を入れると変更後が出ます)';
     return head + ' を「' + from + '」→「' + to + '」に置換します';
+  }
+
+  // 仕分けの 1 行。「14 枚中 3 枚に変更あり / 11 枚は変更なし」。
+  function rosterText(res) {
+    if (!res) return '';
+    var n = res.scanned || 0;
+    return n + ' 枚中 ' + (res.docs || 0) + ' 枚に変更あり / '
+      + ((res.none && res.none.length) || 0) + ' 枚は変更なし';
   }
 
   // 図に出てくる識別子の候補を集める。置換前の語をプルダウンから選べるようにして
@@ -203,6 +225,8 @@ window.MA.bulkRename = (function() {
     apply: apply,
     impact: impact,
     impactText: impactText,
+    rosterText: rosterText,
+    hitRanges: hitRanges,
     identifiers: identifiers,
   };
 })();
