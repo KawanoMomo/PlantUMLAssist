@@ -63,3 +63,6 @@ dist/
 
 # PyInstaller の版情報ファイル (packaging/version_info.py が毎回書き出す生成物)
 packaging/version_info.txt
+
+# exe ビルドが焼き込む版 (packaging/version_info.py の生成物。正本は git tag)
+src/version.json

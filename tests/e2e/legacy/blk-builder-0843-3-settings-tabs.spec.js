@@ -18,7 +18,7 @@ test.describe('設定モーダルの 5 タブ (design 1a)', () => {
 
   // design 5d で「UML 要素の網羅一覧」が加わり 6 タブになった。
   test('タブが並び、既定は自動保存のペインだけが出る', async ({ page }) => {
-    await expect(page.locator('#cfg-tabs .cfg-tab')).toHaveCount(6);
+    await expect(page.locator('#cfg-tabs .cfg-tab')).toHaveCount(7); // 情報タブ (BLK-human-20260916-0902) で 7
     await expect(page.locator('#cfg-tab-autosave')).toHaveClass(/active/);
     await expect(page.locator('#cfg-pane-autosave')).toBeVisible();
     await expect(page.locator('#cfg-pane-render')).toBeHidden();

@@ -26,6 +26,9 @@ jobs:
         run: python -m pip install --upgrade pip pywebview pyinstaller
 
       - name: Build exe
+        env:
+          # 版の正本は git tag (BLK-human-20260916-0902)。タグ以外の起動では git describe に任せる。
+          APP_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
         run: pyinstaller packaging/PlantUMLAssist.spec --noconfirm
 
       - name: Build installer

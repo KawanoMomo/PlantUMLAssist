@@ -120,6 +120,7 @@ curl -sS -X POST http://127.0.0.1:8766/verify-svg -H "Content-Type: application/
 | `GET /doc-sets` | `?dir=` | そのフォルダに登録した資料セット (名前を付けた図の組) |
 | `POST /doc-sets` | `{dir, name, docs}` | 資料セットを 1 つ登録する (同じ名前は置き換え) |
 | `DELETE /doc-sets` | `?dir=&name=` | 資料セットを 1 つ消す |
+| `GET /version` | — | アプリの版・コミット・日付 (`{version, commit, date}`。git tag が正本) |
 | `GET /prefs` | — | この機械に保存した設定 |
 | `POST /prefs` | — | 設定を書く |
 | `GET /env` | — | Java / jar の有無、`app` (アプリ版か)、`javaUrl` (Java が無いときの案内先) |

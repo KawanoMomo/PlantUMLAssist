@@ -17,7 +17,7 @@ var ST = global.window.MA.settingsTabs;
 describe('settings-tabs — 設定モーダルのタブ (design 1a / 5d)', () => {
   // design 1a の 5 タブに、design 5d の「UML 要素の網羅一覧」が末尾に加わって 6 タブ。
   test('タブがこの順で並ぶ', () => {
-    expect(ST.tabIds()).toEqual(['autosave', 'render', 'editor', 'shortcuts', 'data', 'coverage']);
+    expect(ST.tabIds()).toEqual(['autosave', 'render', 'editor', 'shortcuts', 'data', 'coverage', 'about']);
   });
 
   test('tabLabel: 和英併記のタブは「和 / 英」、ショートカットは和のみ', () => {

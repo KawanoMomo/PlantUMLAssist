@@ -95,5 +95,32 @@ def write_version_file(dest=None):
     return dest
 
 
+# BLK-human-20260916-0902: 画面 (設定 → 情報) に出す版・コミット・日付。
+# exe には git が無いので、ビルド時にここで src/version.json を書いて同梱する。
+# ブラウザ起動 (server.py) は同じ形を git から直接作る。
+def _git(args):
+    try:
+        out = subprocess.run(['git'] + args, cwd=ROOT, capture_output=True,
+                             text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return ''
+    return out.stdout.strip() if out.returncode == 0 else ''
+
+
+def build_info():
+    """{'version': 'v2.8', 'commit': 'efe1cbf', 'date': '2026-09-16'}"""
+    sha = os.environ.get('GITHUB_SHA', '')[:7] or _git(['rev-parse', '--short', 'HEAD'])
+    return {
+        'version': 'v' + resolve_version(),
+        'commit': sha,
+        'date': _git(['log', '-1', '--format=%cs']),
+    }
+
+
+def write_build_info_json(dest):
+    with open(dest, 'w', encoding='utf-8') as f:
+        json.dump(build_info(), f, ensure_ascii=False)
+    return dest
+
 if __name__ == '__main__':
     print(write_version_file())

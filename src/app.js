@@ -2234,6 +2234,7 @@ function init() {
         // 開くたびに引き直す (図種を替えた後も「編集中」が正しい行に付く)
         if (drawCoverage) drawCoverage();
       }
+      loadVersion();
       modal.style.display = 'flex';
     }
     function close() { modal.style.display = 'none'; }
@@ -2242,6 +2243,44 @@ function init() {
     // BLK-builder-20260907-2237-2 (design 1a): 上部バーからモードの select を外した
     // 代わりに、状態表示から設定の「レンダリング」タブへ直接開ける口を出す。
     // タブ指定で開けるようにしておくと、他の入口も同じ経路を使える。
+    // BLK-human-20260916-0902: 設定 → 情報 に版を出す。server が git tag から返す。
+    var _versionLine = '';
+    function loadVersion() {
+      var el = document.getElementById('cfg-version');
+      var AV = window.MA.appVersion;
+      if (!el || !AV || _versionLine) return;
+      fetch('/version').then(function(r) { return r.ok ? r.json() : {}; })
+        .catch(function() { return {}; })
+        .then(function(info) {
+          _versionLine = AV.formatLine(info);
+          el.textContent = _versionLine;
+        });
+    }
+    (function wireVersionCopy() {
+      var b = document.getElementById('cfg-version-copy');
+      if (!b) return;
+      b.addEventListener('click', function() {
+        var el = document.getElementById('cfg-version');
+        var text = (el && el.textContent) || '';
+        var st = document.getElementById('cfg-version-status');
+        function done(ok) { if (st) st.textContent = ok ? '複製しました' : '複製できませんでした (文字列を選んでコピーしてください)'; }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function() { done(true); }, function() { done(fallbackCopy(text)); });
+        } else {
+          done(fallbackCopy(text));
+        }
+      });
+      function fallbackCopy(text) {
+        try {
+          var ta = document.createElement('textarea');
+          ta.value = text; document.body.appendChild(ta); ta.select();
+          var ok = document.execCommand('copy');
+          document.body.removeChild(ta);
+          return ok;
+        } catch (e) { return false; }
+      }
+    })();
+
     window.MA.openSettingsTab = function(tabId) {
       open();
       if (tabId && ST) {
