@@ -105,6 +105,7 @@ const sourceFiles = [
   'src/core/component-deps.js',
   'src/core/usecase-source.js',
   'src/core/dep-graph.js',
+  'src/core/dep-version-search.js',
   'src/core/change-ticket.js',
   'src/core/material-verify.js',
   'src/core/material-readback.js',

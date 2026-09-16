@@ -494,3 +494,146 @@ test.describe('primary 手順 4: 部品名の混入点を過去版から特定�
     await expect(page.locator('#vdiff-body .vd-gap')).toHaveCount(0);
   });
 });
+
+// BLK-primary-20260917-0123-wish: 不具合対応の場面の手順 4。◈依存グラフは
+// 「今どの図が絡むか」までは出すが、「いつこの記述に変わったか」は答えなかった。
+// 影響が届く図の版履歴を 1 本の時系列に混ぜ、症状の語で絞って
+// 「ここで書き換わった版」を名指しし、その版をそのまま開けることを見る。
+const DV_SPI_1 = '@startuml\nparticipant Spi_Driver\nparticipant Hal\nSpi_Driver -> Hal : init\n@enduml';
+const DV_SPI_2 = DV_SPI_1.replace('@enduml', 'note over Hal : 見出し\n@enduml');
+const DV_SPI_3 = DV_SPI_2.replace('Spi_Driver -> Hal : init', 'Spi_Driver -> PowerCtrl : init');
+const DV_DMA_1 = '@startuml\nclass DmaCtrl\nDmaCtrl --> Spi_Driver : notify\n@enduml';
+// 影響一覧に載るが Spi_Driver を一度も持たない図 (絞り込みで落ちるべき)。
+const DV_ADC = '@startuml\nparticipant AdcDrv\nparticipant Hal\nAdcDrv -> Hal : init\n@enduml';
+
+// version-timeline の控え (localStorage)。保存のたびに積まれる形をそのまま置く。
+const DV_TIMELINE = {
+  files: {
+    spi_init_sequence: [
+      { dsl: DV_SPI_1, at: '2026-09-14T10:00:00.000Z', label: '' },
+      { dsl: DV_SPI_2, at: '2026-09-15T10:00:00.000Z', label: '' },
+      { dsl: DV_SPI_3, at: '2026-09-16T10:00:00.000Z', label: '' },
+    ],
+    dma_class: [
+      { dsl: DV_DMA_1, at: '2026-09-13T08:00:00.000Z', label: '' },
+    ],
+    adc_init_sequence: [
+      { dsl: DV_ADC, at: '2026-09-15T12:00:00.000Z', label: '' },
+    ],
+  },
+};
+
+async function dvBoot(page) {
+  await page.addInitScript((a) => {
+    try {
+      window.localStorage.clear();
+      window.localStorage.setItem('plantuml-tools-folded', '0');
+      window.localStorage.setItem('plantuml-autosave-config',
+        JSON.stringify({ enabled: true, debounceMs: 200, restoreMode: 'auto', backend: 'file', fileDir: a.dir }));
+      window.localStorage.setItem('plantuml-version-timeline', JSON.stringify(a.timeline));
+    } catch (e) {}
+  }, { dir: DIR, timeline: DV_TIMELINE });
+  await gotoApp(page);
+}
+
+// ⇄一括置換 → ◈依存グラフ。不具合対応で primary が実際に通る道。
+async function openDepGraph(page) {
+  await openRename(page);
+  await page.locator('#btn-rename-depgraph').click();
+  await page.waitForSelector('#dg-modal #dg-ver-summary[data-rows]');
+}
+
+async function pickPart(page, name) {
+  await page.selectOption('#dg-name', name);
+  await page.waitForFunction((n) => {
+    const el = document.getElementById('dg-ver-kw');
+    return !!el && el.value === n;
+  }, name);
+}
+
+test.describe('primary 手順 4: 症状に関わる部品がいつの版から今の形になったかを探す', () => {
+  test.beforeEach(async ({ page }) => {
+    await dvBoot(page);
+    await clearDir(page);
+    await putFile(page, 'spi_init_sequence', DV_SPI_3);
+    await putFile(page, 'dma_class', DV_DMA_1);
+    await putFile(page, 'adc_init_sequence', DV_ADC);
+    await page.waitForTimeout(500);
+    await page.reload();
+    await page.waitForSelector('#preview-svg');
+  });
+
+  test.afterEach(async ({ page }) => {
+    await clearDir(page).catch(() => {});
+  });
+
+  test('依存グラフで部品名を選ぶと、症状の語が既定で入り版履歴が並ぶ', async ({ page }) => {
+    await openDepGraph(page);
+    await pickPart(page, 'Spi_Driver');
+    // 名前を選んだだけで語が入る = 打ち直さない。
+    await expect(page.locator('#dg-ver-kw')).toHaveValue('Spi_Driver');
+    const sum = page.locator('#dg-ver-summary');
+    await expect(sum).toContainText('Spi_Driver');
+    // 当たるのは spi_init_sequence と dma_class の 2 図。adc は落ちる。
+    await expect(sum).toHaveAttribute('data-docs', '2');
+    await expect(page.locator('#dg-ver-list .dgv-row[data-doc="adc_init_sequence"]')).toHaveCount(0);
+    await expect(page.locator('#dg-ver-list .dgv-row[data-doc="spi_init_sequence"]').first())
+      .toBeVisible();
+  });
+
+  test('「今の形になった版」が図ごとに 1 つ名指しされる', async ({ page }) => {
+    await openDepGraph(page);
+    await pickPart(page, 'Spi_Driver');
+    // 名指しは図ごとに 1 つ。どの図も「その図が今の形になった版」を 1 つ持つ
+    // (2 図が当たっているので 2 行。1 図あたり 2 行にはならない)。
+    const current = page.locator('#dg-ver-list .dgv-row[data-current="1"]');
+    await expect(current).toHaveCount(2);
+    const spi = page.locator(
+      '#dg-ver-list .dgv-row[data-current="1"][data-doc="spi_init_sequence"]');
+    await expect(spi).toHaveCount(1);
+    await expect(spi).toHaveAttribute('data-rev', '3');
+    await expect(spi.locator('td.dgv-what')).toContainText('今の形');
+    // 当たった行がその場に出る (図を開いて探し直さない)。
+    await expect(spi.locator('td.dgv-hits mark').first()).toContainText('Spi_Driver');
+  });
+
+  test('既定は「書き換わった版だけ」。外すと読むだけの版も出る', async ({ page }) => {
+    await openDepGraph(page);
+    await pickPart(page, 'Spi_Driver');
+    const sum = page.locator('#dg-ver-summary');
+    const folded = Number(await sum.getAttribute('data-rows'));
+    await page.locator('#dg-ver-changed').uncheck();
+    await page.waitForFunction((n) => {
+      const el = document.getElementById('dg-ver-summary');
+      return !!el && Number(el.getAttribute('data-rows')) > n;
+    }, folded);
+    const all = Number(await sum.getAttribute('data-rows'));
+    expect(all).toBeGreaterThan(folded);
+    // 畳んで外れていたのは「変化なし」の版。
+    await expect(page.locator('#dg-ver-list .dgv-row[data-changed="0"]').first()).toBeVisible();
+  });
+
+  test('当たらない語では黙らず、次の手を言う', async ({ page }) => {
+    await openDepGraph(page);
+    await pickPart(page, 'Spi_Driver');
+    await page.fill('#dg-ver-kw', 'NoSuchSymptom');
+    await page.waitForFunction(() => {
+      const el = document.getElementById('dg-ver-summary');
+      return !!el && el.getAttribute('data-rows') === '0';
+    });
+    await expect(page.locator('#dg-ver-summary')).toContainText('ありません');
+    await expect(page.locator('#dg-ver-open')).toBeDisabled();
+  });
+
+  test('「最初の 1 枚を開く」で、その版の中身が別タブで開く', async ({ page }) => {
+    await openDepGraph(page);
+    await pickPart(page, 'Spi_Driver');
+    await page.locator('#dg-ver-open').click();
+    // 版番号つきのタブ名で開く = 今の図を上書きしない。
+    await page.waitForSelector('#dg-modal', { state: 'hidden' });
+    await expect(page.locator('.tab .tab-label', { hasText: 'spi_init_sequence@版3' }))
+      .toHaveCount(1);
+    // 開いた中身はその版のもの。
+    await expect(page.locator('#editor')).toHaveValue(/Spi_Driver -> PowerCtrl/);
+  });
+});

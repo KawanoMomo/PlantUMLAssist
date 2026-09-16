@@ -3257,6 +3257,27 @@ table.vault-table button.vault-open:hover { border-color: var(--accent); }
 #dg-impact tr.dg-doc[data-hop] td.dg-hop { white-space: nowrap; }
 /* 影響先へのまとめ note (BLK-primary-20260915-0007)。一覧のすぐ下に出す
    (見た一覧と打つ先が同じ画面にないと、結局 1 枚ずつ開き直すことになる)。 */
+/* BLK-primary-20260917-0123-wish: 影響先の版履歴を症状の語で探す欄。 */
+#dg-ver { margin-top: 12px; border: 1px solid var(--border); border-radius: 4px; }
+#dg-ver .dg-ver-head {
+  display: flex; align-items: center; gap: 10px; font-size: 12px;
+  padding: 4px 8px; background: var(--bg-tertiary); border-bottom: 1px solid var(--border);
+}
+#dg-ver .dg-ver-head input[type="text"] { flex: 1; min-width: 120px; font-size: 11px; padding: 2px 4px; }
+#dg-ver #dg-ver-summary { font-size: 11px; color: var(--text-secondary); padding: 4px 8px; }
+#dg-ver table { width: 100%; border-collapse: collapse; font-size: 11px; }
+#dg-ver th {
+  text-align: left; padding: 2px 8px; font-weight: normal;
+  color: var(--text-secondary); border-bottom: 1px solid var(--border);
+}
+#dg-ver td { padding: 2px 8px; vertical-align: top; }
+#dg-ver td.dgv-doc { font-family: var(--font-mono); white-space: nowrap; }
+#dg-ver td.dgv-at { white-space: nowrap; color: var(--text-secondary); }
+#dg-ver td.dgv-hits { font-family: var(--font-mono); color: var(--text-secondary); word-break: break-all; }
+#dg-ver td.dgv-hits mark { background: var(--accent); color: var(--bg-primary); }
+#dg-ver tr.dgv-row[data-changed="1"] td.dgv-what { color: var(--accent); white-space: nowrap; }
+#dg-ver tr.dgv-row[data-current="1"] td { background: var(--bg-tertiary); }
+#dg-ver .dgv-empty { color: var(--text-secondary); font-size: 11px; padding: 10px 8px; }
 #dg-note-box { margin-top: 10px; border: 1px solid var(--accent); border-radius: 4px; padding: 8px 10px; }
 #dg-note-box .dg-note-head { display: flex; align-items: center; gap: 10px; font-size: 12px; margin-bottom: 6px; }
 #dg-note-box #dg-note-summary { color: var(--text-secondary); }
@@ -7727,6 +7748,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/component-starter.js"></script>
 <script src="src/core/usecase-source.js"></script>
 <script src="src/core/dep-graph.js"></script>
+<script src="src/core/dep-version-search.js"></script>
 <script src="src/core/bulk-note.js"></script>
 <script src="src/core/change-ticket.js"></script>
 <script src="src/core/fix-walk.js"></script>
@@ -7892,6 +7914,26 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <div id="dg-body">
       <div id="dg-canvas"></div>
       <div id="dg-impact"></div>
+      <!-- BLK-primary-20260917-0123-wish: 不具合対応の入口。影響が届く図まで出ても
+           「いつこの記述に変わったか」は各図を開いて目で追うしかなかった。
+           影響一覧の版履歴を 1 本の時系列に混ぜ、症状の語で絞って
+           「ここで書き換わった」版を名指しする。 -->
+      <div id="dg-ver">
+        <div class="dg-ver-head">
+          <strong>版履歴を症状の語で探す</strong>
+          <label for="dg-ver-kw">語</label>
+          <input type="text" id="dg-ver-kw"
+            placeholder="症状や部品名（既定は選んだ部品名）"
+            title="影響が届く図の版履歴から、この語を含む版だけを新しい順に並べる">
+          <label title="当たり行が書き換わった版だけに畳む（読むだけの版を外す）">
+            <input type="checkbox" id="dg-ver-changed" checked> 書き換わった版だけ
+          </label>
+          <button type="button" id="dg-ver-open" disabled
+            title="いちばん最近この語が書き換わった図を、その版の中身で開く">最初の 1 枚を開く</button>
+        </div>
+        <div id="dg-ver-summary" role="status"></div>
+        <div id="dg-ver-list"></div>
+      </div>
       <!-- BLK-primary-20260915-0007: 影響先すべてに同じ note を 1 回で打つ。
            「意図的な省略を note で明記する」対応は、影響が届く図の枚数だけ
            同じ文言を打ち直す作業になっていた (1 図ずつ📂一覧から開き直す)。 -->
