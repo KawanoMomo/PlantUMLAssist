@@ -19,6 +19,43 @@ window.MA.sequenceOverlay = (function() {
     while (el.firstChild) el.removeChild(el.firstChild);
   }
 
+  function _bbox(el) {
+    if (!el || typeof el.getBBox !== 'function') return null;
+    try {
+      var b = el.getBBox();
+      return (b && (b.width || b.height)) ? { x: b.x, y: b.y, width: b.width, height: b.height } : null;
+    } catch (e) { return null; }
+  }
+
+  // 注釈本文の 1 行目を持つ <text> (未使用のもの) を探し、それを囲む塗りのある最小の図形を返す。
+  // 群の枠 (alt 等) は fill="none" なので候補にならない。見つからなければ null。
+  function _findNoteShape(svgEl, note, usedTexts) {
+    var first = String(note.text || '').split('\n')[0].replace(/<[^>]*>|\*\*|\/\/|__|""/g, '').trim();
+    if (!first || !svgEl.querySelectorAll) return null;
+    var texts = svgEl.querySelectorAll('text');
+    var shapes = null;
+    for (var i = 0; i < texts.length; i++) {
+      var t = texts[i];
+      if (usedTexts.indexOf(t) >= 0) continue;
+      if ((t.textContent || '').trim() !== first) continue;
+      var tb = _bbox(t);
+      if (!tb) continue;
+      if (!shapes) shapes = svgEl.querySelectorAll('path, polygon, rect');
+      var best = null, bestArea = Infinity;
+      for (var k = 0; k < shapes.length; k++) {
+        var fill = (shapes[k].getAttribute('fill') || '').toLowerCase();
+        if (!fill || fill === 'none' || fill === 'transparent') continue;
+        var sb = _bbox(shapes[k]);
+        if (!sb) continue;
+        if (sb.x > tb.x + 2 || sb.y > tb.y + 2 || sb.x + sb.width < tb.x + tb.width - 2 || sb.y + sb.height < tb.y + tb.height - 2) continue;
+        var area = sb.width * sb.height;
+        if (area < bestArea) { best = sb; bestArea = area; }
+      }
+      if (best) { usedTexts.push(t); return best; }
+    }
+    return null;
+  }
+
   function buildSequenceOverlay(svgEl, parsedData, overlayEl, dslText) {
     _clearChildren(overlayEl);
     if (!svgEl || !parsedData) return;
@@ -173,7 +210,19 @@ window.MA.sequenceOverlay = (function() {
       // Bug B4 fix: 1×1 placeholder (pointer-events:none) ではクリック不可。
       // note の target participant の既存 overlay rect の位置を参照し、その近傍に
       // クリック可能な approximate box を置く (正確座標抽出は別 sprint)。
+      var usedTexts = [];
       notes.forEach(function(n) {
+        // BLK-human-20260916-0900: 描かれた注釈の形 (note=path / hnote=polygon / rnote=rect) を
+        // 本文の 1 行目から探し、その矩形全体を当たり判定にする (どこを押しても選べる)。
+        var shapeBox = _findNoteShape(svgEl, n, usedTexts);
+        if (shapeBox) {
+          OB.addRect(overlayEl, shapeBox.x - 2, shapeBox.y - 2, shapeBox.width + 4, shapeBox.height + 4, {
+            'data-type': 'note',
+            'data-id': n.id,
+            'data-line': n.line,
+          });
+          return;
+        }
         var targets = n.targets || [];
         var targetPart = targets[0];
         var partRect = targetPart

@@ -268,14 +268,15 @@ window.MA.modules.plantumlSequence = (function() {
       }
 
       // note
-      var nm = trimmed.match(NOTE_RE);
+      // BLK-human-20260916-0900: 複数行 (`note over A` … `end note`)・hnote/rnote・色付きも拾う。
+      var nm = window.MA.noteEdit.readSeqNote(lines, i);
       if (nm) {
-        var targets = nm[2].split(',').map(function(s) { return s.trim(); });
         result.elements.push({
           kind: 'note', id: '__n_' + (noteCounter++),
-          position: nm[1].toLowerCase(), targets: targets,
-          text: (nm[3] || '').trim(), line: lineNum,
+          position: nm.position, targets: nm.targets, shape: nm.shape, color: nm.color,
+          text: nm.text, line: lineNum, endLine: nm.endIdx + 1,
         });
+        i = nm.endIdx;
         continue;
       }
 
@@ -436,9 +437,20 @@ window.MA.modules.plantumlSequence = (function() {
   // 担当中であり、その差分と衝突させないため本 run では書き換えない (「ついでに直さない」)。
   // undo はアプリ共通の単一スタック (window.MA.history) に載る。取り消し対象は常に
   // 「直前の 1 操作」であり、キー操作の UI 上もそれ以上の約束をしない (UI-011 の教訓)。
+  // BLK-human-20260916-0900: 複数行の注釈は `end note` まで塊で消す (頭だけ消して本文を残さない)。
+  function deleteLineOrNote(text, lineNum) {
+    var lines = text.split('\n');
+    var n = window.MA.noteEdit.readSeqNote(lines, lineNum - 1);
+    if (n && n.endIdx > n.startIdx) {
+      lines.splice(n.startIdx, n.endIdx - n.startIdx + 1);
+      return lines.join('\n');
+    }
+    return deleteLine(text, lineNum);
+  }
+
   function deleteSelectedLine(ctx, lineNum) {
     window.MA.history.pushHistory();
-    ctx.setMmdText(deleteLine(ctx.getMmdText(), lineNum));
+    ctx.setMmdText(deleteLineOrNote(ctx.getMmdText(), lineNum));
     window.MA.selection.clearSelection();
     ctx.onUpdate();
   }
@@ -847,6 +859,19 @@ window.MA.modules.plantumlSequence = (function() {
     });
     function _moveAndReselect(ln, direction) {
       var oldText = ctx.getMmdText();
+      // BLK-human-20260916-0900: 注釈は複数行の塊ごと前後の文と入れ替える (上下の順を変える)。
+      var movedNote = moveNote(oldText, ln, direction);
+      if (movedNote || window.MA.noteEdit.readSeqNote(oldText.split('\n'), ln - 1)) {
+        if (!movedNote) return;
+        window.MA.history.pushHistory();
+        ctx.setMmdText(movedNote.text);
+        try {
+          var np = parseSequence(movedNote.text).elements.filter(function(e) { return e.kind === 'note' && e.line === movedNote.line; })[0];
+          if (np) window.MA.selection.setSelected([{ type: 'note', id: np.id, line: np.line }]);
+        } catch (e) { /* keep prior selection */ }
+        ctx.onUpdate();
+        return;
+      }
       var newLine = _findMessageSwapTargetLine(oldText, ln, direction);
       if (newLine < 0) return;
       var newText = moveMessage(oldText, ln, direction);
@@ -877,7 +902,8 @@ window.MA.modules.plantumlSequence = (function() {
       // FEAT-104: 削除直前のテキストを捕捉し、トーストの復元先として渡す。
       var _snap = ctx.getMmdText();
       window.MA.history.pushHistory();
-      ctx.setMmdText(deleteLine(ctx.getMmdText(), ln));
+      // BLK-human-20260916-0900: 複数行の注釈は `end note` まで塊で消す (頭だけ消して本文を残さない)。
+      ctx.setMmdText(deleteLineOrNote(_snap, ln));
       window.MA.selection.clearSelection();
       ctx.onUpdate();
       _toastUndo('1 件削除しました', _snap, ctx);
@@ -1464,6 +1490,7 @@ window.MA.modules.plantumlSequence = (function() {
       html +=
         P.selectFieldHtml('Position', 'seq-mod-npos', posOpts) +
         P.selectFieldHtml('Target', 'seq-mod-ntarget', partOpts) +
+        _noteExtraHtml('seq-mod-nextra', participants) +
         '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">本文</label><div id="seq-mod-ntext-rle"></div></div>';
     } else if (kind === 'block') {
       // alt / loop / opt / par / break / critical / group。空ブロック (opener + end) を
@@ -1515,7 +1542,10 @@ window.MA.modules.plantumlSequence = (function() {
 
     var rleObj = null;
     if (kind === 'message') rleObj = window.MA.richLabelEditor.mount(document.getElementById('seq-mod-label-rle'), '');
-    else if (kind === 'note') rleObj = window.MA.richLabelEditor.mount(document.getElementById('seq-mod-ntext-rle'), '');
+    else if (kind === 'note') {
+      rleObj = window.MA.richLabelEditor.mount(document.getElementById('seq-mod-ntext-rle'), '');
+      _bindNoteExtra('seq-mod-npos', 'seq-mod-nextra');
+    }
     // FEAT-004: message 種別に限り、modal 表示直後に本文 textarea へフォーカスする。
     if (kind === 'message' && rleObj && rleObj.element) rleObj.element.focus();
 
@@ -1582,7 +1612,7 @@ window.MA.modules.plantumlSequence = (function() {
         window.MA.history.pushHistory();
         t = insertFn(t, line, 'note', {
           position: document.getElementById('seq-mod-npos').value,
-          targets: [document.getElementById('seq-mod-ntarget').value],
+          targets: _noteTargetsFromForm('seq-mod-npos', 'seq-mod-ntarget', 'seq-mod-nextra'),
           text: rleObj ? rleObj.getValue() : '',
         });
       } else if (kind === 'block') {
@@ -1620,19 +1650,68 @@ window.MA.modules.plantumlSequence = (function() {
 
   var renameWithRefs = window.MA.dslUpdater.renameWithRefs;
 
+  // BLK-human-20260916-0900: 複数行・hnote/rnote・色付きの注釈も同じ入口で書き換える。
+  // position を left of / right of にすると対象は先頭 1 参加者に寄る。
   function updateNote(text, lineNum, field, value) {
+    return window.MA.noteEdit.updateSeqNote(text, lineNum, field, value);
+  }
+  // 注釈 (lineNum から始まる塊) を上 (-1) / 下 (+1) の文と入れ替える。動かせなければ null。
+  function moveNote(text, lineNum, dir) {
     var lines = text.split('\n');
-    var idx = lineNum - 1;
-    if (idx < 0 || idx >= lines.length) return text;
-    var indent = lines[idx].match(/^(\s*)/)[1];
-    var m = lines[idx].trim().match(NOTE_RE);
-    if (!m) return text;
-    var position = m[1], targets = m[2], body = m[3] || '';
-    if (field === 'position') position = value;
-    else if (field === 'targets') targets = value;
-    else if (field === 'text') body = value;
-    lines[idx] = indent + 'note ' + position + ' ' + targets + (body ? ' : ' + body : '');
-    return lines.join('\n');
+    var n = window.MA.noteEdit.readSeqNote(lines, lineNum - 1);
+    if (!n) return null;
+    return window.MA.noteEdit.moveBlock(text, lineNum, n.endIdx + 1, dir);
+  }
+
+  // 注釈の対象参加者のチェック欄。over は複数選べ (`note over A, B`)、left of / right of は 1 つ。
+  function _noteTargetsHtml(prefix, participants, selected, position) {
+    var sel = selected || [];
+    var esc = window.MA.htmlUtils.escHtml;
+    var boxes = participants.map(function(p, i) {
+      var on = sel.indexOf(p.id) >= 0 || (!sel.length && i === 0);
+      return '<label style="display:inline-flex;align-items:center;gap:2px;margin:0 8px 2px 0;font-size:11px;cursor:pointer;">' +
+        '<input type="checkbox" class="' + prefix + '" data-pid="' + esc(p.id) + '"' + (on ? ' checked' : '') + '>' + esc(p.label || p.id) + '</label>';
+    }).join('');
+    return '<div id="' + prefix + '" style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">対象の参加者 <span style="font-weight:normal;">(over は複数選べる)</span></label>' +
+      (boxes || '<span style="font-size:11px;color:var(--text-secondary);">(参加者なし)</span>') + '</div>';
+  }
+  // 足すときのフォーム: Target (1 つ目) に加え、over のときだけ一緒に重ねる参加者を選べる。
+  function _noteExtraHtml(prefix, participants) {
+    var esc = window.MA.htmlUtils.escHtml;
+    var boxes = participants.map(function(p) {
+      return '<label style="display:inline-flex;align-items:center;gap:2px;margin:0 8px 2px 0;font-size:11px;cursor:pointer;">' +
+        '<input type="checkbox" class="' + prefix + '" data-pid="' + esc(p.id) + '">' + esc(p.label || p.id) + '</label>';
+    }).join('');
+    return '<div id="' + prefix + '" style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">over で一緒に重ねる参加者 (任意)</label>' + boxes + '</div>';
+  }
+  function _bindNoteExtra(posId, prefix) {
+    var posEl = document.getElementById(posId), wrap = document.getElementById(prefix);
+    if (!posEl || !wrap) return;
+    var sync = function() { wrap.style.display = posEl.value === 'over' ? '' : 'none'; };
+    posEl.addEventListener('change', sync);
+    sync();
+  }
+  function _noteTargetsFromForm(posId, selId, prefix) {
+    var pos = document.getElementById(posId).value;
+    var first = document.getElementById(selId).value;
+    var list = [first];
+    if (pos === 'over') list = list.concat(_readNoteTargets(prefix));
+    return window.MA.noteEdit.normalizeTargets(pos, list);
+  }
+  function _readNoteTargets(prefix) {
+    return Array.prototype.slice.call(document.querySelectorAll('input.' + prefix))
+      .filter(function(b) { return b.checked; }).map(function(b) { return b.getAttribute('data-pid'); });
+  }
+  // getPos() が over 以外なら、押した 1 つだけを残す。全部外すことはできない。onChange(list) は省略可。
+  function _bindNoteTargets(prefix, getPos, onChange) {
+    var boxes = Array.prototype.slice.call(document.querySelectorAll('input.' + prefix));
+    boxes.forEach(function(b) {
+      b.addEventListener('change', function() {
+        if (getPos() !== 'over' && b.checked) boxes.forEach(function(o) { if (o !== b) o.checked = false; });
+        if (!_readNoteTargets(prefix).length) { b.checked = true; return; }
+        if (onChange) onChange(_readNoteTargets(prefix));
+      });
+    });
   }
 
   // _isMessageLineForMove: a line is "another message" if it contains an
@@ -2111,6 +2190,8 @@ window.MA.modules.plantumlSequence = (function() {
     unwrap: unwrap,
     addNote: addNote,
     updateNote: updateNote,
+    moveNote: moveNote,
+    deleteLineOrNote: deleteLineOrNote,
     moveMessage: moveMessage,
     addActivation: addActivation,
     deleteActivationsFor: deleteActivationsFor,
@@ -2300,6 +2381,7 @@ window.MA.modules.plantumlSequence = (function() {
             html =
               P.selectFieldHtml('Position', 'seq-tail-npos', posOpts) +
               P.selectFieldHtml('Target', 'seq-tail-ntarget', partOpts) +
+              _noteExtraHtml('seq-tail-nextra', participants) +
               '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Text</label><div id="seq-tail-ntext-rle"></div></div>' +
               P.primaryButtonHtml('seq-tail-add', '+ 末尾に追加');
           } else if (kind === 'block') {
@@ -2333,7 +2415,10 @@ window.MA.modules.plantumlSequence = (function() {
           window.MA.reuseModal.bindButton('seq-tail-reuse', 'plantuml-sequence', 'seq-tail-bulk');
           var rleObj = null;
           if (kind === 'message') rleObj = window.MA.richLabelEditor.mount(document.getElementById('seq-tail-label-rle'), '');
-          else if (kind === 'note') rleObj = window.MA.richLabelEditor.mount(document.getElementById('seq-tail-ntext-rle'), '');
+          else if (kind === 'note') {
+            rleObj = window.MA.richLabelEditor.mount(document.getElementById('seq-tail-ntext-rle'), '');
+            _bindNoteExtra('seq-tail-npos', 'seq-tail-nextra');
+          }
           if (kind === 'message') {
             // design 5d: 末尾追加の色見本。選んだ色は hidden #seq-tail-color が持つ。
             var tColorBtns = detailEl.querySelectorAll('.seq-tail-color-swatch');
@@ -2418,7 +2503,7 @@ window.MA.modules.plantumlSequence = (function() {
               var ntg = document.getElementById('seq-tail-ntarget').value;
               if (!ntg) { alert('Target 必須'); return; }
               window.MA.history.pushHistory();
-              out = addNote(t, document.getElementById('seq-tail-npos').value, [ntg], (rleObj ? rleObj.getValue() : '').trim());
+              out = addNote(t, document.getElementById('seq-tail-npos').value, _noteTargetsFromForm('seq-tail-npos', 'seq-tail-ntarget', 'seq-tail-nextra'), (rleObj ? rleObj.getValue() : '').trim());
             } else if (kind === 'block') {
               window.MA.history.pushHistory();
               out = addGroup(t, document.getElementById('seq-tail-bkind').value, document.getElementById('seq-tail-blabel').value.trim());
@@ -2735,17 +2820,21 @@ window.MA.modules.plantumlSequence = (function() {
           var posOpts2 = NOTE_POSITIONS.map(function(p) { return { value: p, label: p, selected: p === nn2.position }; });
           propsEl.innerHTML =
             '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>' + escHtml(nn2.text || '(empty)') + '</strong><br><span style="color:var(--text-secondary);">Note · ' + nn2.position + ' · L' + nn2.line + '</span></div>' +
-            P.selectFieldHtml('Position', 'seq-edit-npos', posOpts2) +
-            P.fieldHtml('Targets', 'seq-edit-ntargets', nn2.targets.join(', ')) +
+            // BLK-human-20260916-0900: 置いた後でも位置・対象参加者・上下の順を変えられる。
+            P.selectFieldHtml('位置 (Position)', 'seq-edit-npos', posOpts2) +
+            _noteTargetsHtml('seq-edit-ntgt', participants, nn2.targets, nn2.position) +
             '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Text</label><div id="seq-edit-ntext-rle"></div></div>' +
             actionBarHtml(nn2.line, 'note');
           var nln = nn2.line;
-          [['npos', 'position'], ['ntargets', 'targets']].forEach(function(pair) {
-            document.getElementById('seq-edit-' + pair[0]).addEventListener('change', function() {
-              window.MA.history.pushHistory();
-              ctx.setMmdText(updateNote(ctx.getMmdText(), nln, pair[1], this.value));
-              ctx.onUpdate();
-            });
+          document.getElementById('seq-edit-npos').addEventListener('change', function() {
+            window.MA.history.pushHistory();
+            ctx.setMmdText(updateNote(ctx.getMmdText(), nln, 'position', this.value));
+            ctx.onUpdate();
+          });
+          _bindNoteTargets('seq-edit-ntgt', function() { return document.getElementById('seq-edit-npos').value; }, function(list) {
+            window.MA.history.pushHistory();
+            ctx.setMmdText(updateNote(ctx.getMmdText(), nln, 'targets', list));
+            ctx.onUpdate();
           });
           // C20: 同上 (note text edit)
           var _noteTextPushed = false;

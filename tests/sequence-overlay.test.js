@@ -19,6 +19,7 @@ delete require.cache[require.resolve('../src/core/selection-router.js')];
 
 require('../src/core/html-utils.js');
 require('../src/core/dsl-utils.js');
+require('../src/core/note-edit.js');
 require('../src/core/regex-parts.js');
 require('../src/core/id-normalizer.js');
 require('../src/core/dsl-updater.js');
