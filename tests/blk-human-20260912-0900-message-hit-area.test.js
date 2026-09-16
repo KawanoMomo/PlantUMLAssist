@@ -19,7 +19,7 @@ global.DOMParser = dom.window.DOMParser;
 
 var MODS = [
   '../src/core/html-utils.js',
-  '../src/core/dsl-utils.js',
+  '../src/core/dsl-utils.js', '../src/core/note-edit.js',
   '../src/core/regex-parts.js',
   '../src/core/id-normalizer.js',
   '../src/core/dsl-updater.js',

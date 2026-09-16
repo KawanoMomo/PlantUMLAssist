@@ -6,7 +6,7 @@ if (!global.window) {
   global.document = dom.window.document;
 }
 
-['../src/core/dsl-utils.js', '../src/core/parser-utils.js',
+['../src/core/dsl-utils.js', '../src/core/note-edit.js', '../src/core/parser-utils.js',
   '../src/modules/component.js', '../src/core/sequence-participant-zone.js', '../src/modules/sequence.js', '../src/modules/state.js',
   '../src/core/component-deps.js', '../src/core/component-starter.js'].forEach(function(p) {
   try { delete require.cache[require.resolve(p)]; } catch (e) {}

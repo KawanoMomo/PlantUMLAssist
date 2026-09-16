@@ -32,6 +32,7 @@ const sourceFiles = [
   'src/core/family-audit.js',
   'src/core/driver-map.js',
   'src/core/note-block.js',
+  'src/core/note-edit.js',
   'src/core/note-intent.js',
   'src/core/family-clone.js',
   'src/core/subject-preset.js',

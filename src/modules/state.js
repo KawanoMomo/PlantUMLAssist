@@ -479,7 +479,8 @@ window.MA.modules.plantumlState = (function() {
     if (!current) return text;
     var newPos = fields.position != null ? fields.position : current.position;
     var newText = fields.text != null ? fields.text : current.text;
-    var formatted = fmtNote(newPos, current.targetId, newText);
+    var newTarget = fields.targetId ? fields.targetId : current.targetId;
+    var formatted = fmtNote(newPos, newTarget, newText);
     var newLines = Array.isArray(formatted) ? formatted : [formatted];
     var before = lines.slice(0, idx);
     var after = lines.slice(endLine);
@@ -1871,18 +1872,41 @@ window.MA.modules.plantumlState = (function() {
         { value: 'right', label: 'Right', selected: note.position === 'right' },
         { value: 'left', label: 'Left', selected: note.position === 'left' }
       ]) +
+      // BLK-human-20260916-0900: 置いた後でも対象と上下の順を変えられる (シーケンス図と揃える)。
+      (note.targetId ? P.selectFieldHtml('対象 (Target)', 'st-note-target', (parsedData.states || []).map(function(s) {
+        return { value: s.id, label: s.id, selected: s.id === note.targetId };
+      })) : '') +
+      '<div style="margin-bottom:8px;display:flex;gap:4px;align-items:center;"><span style="font-size:10px;color:var(--text-secondary);">上下の順</span>' +
+        '<button id="st-note-up" type="button" style="font-size:11px;padding:2px 8px;cursor:pointer;">↑ 上へ</button>' +
+        '<button id="st-note-down" type="button" style="font-size:11px;padding:2px 8px;cursor:pointer;">↓ 下へ</button></div>' +
       '<div style="margin-bottom:6px;"><label style="display:block;font-size:10px;color:var(--text-secondary);">Text</label><textarea id="st-note-text" style="width:100%;min-height:80px;">' + H.escHtml(note.text || '') + '</textarea></div>' +
       P.primaryButtonHtml('st-note-update', '更新') +
       P.primaryButtonHtml('st-note-delete', '✕ 削除');
     propsEl.innerHTML = html;
 
-    P.bindEvent('st-note-update', 'click', function() {
+    var _stApply = function() {
+      var tgEl = document.getElementById('st-note-target');
       window.MA.history.pushHistory();
       ctx.setMmdText(updateNote(ctx.getMmdText(), note.line, note.endLine, {
         position: document.getElementById('st-note-pos').value,
+        targetId: tgEl ? tgEl.value : null,
         text: document.getElementById('st-note-text').value
       }));
       ctx.onUpdate();
+    };
+    P.bindEvent('st-note-update', 'click', _stApply);
+    P.bindEvent('st-note-pos', 'change', _stApply);
+    P.bindEvent('st-note-target', 'change', _stApply);
+    [['st-note-up', -1], ['st-note-down', 1]].forEach(function(pair) {
+      P.bindEvent(pair[0], 'click', function() {
+        var moved = window.MA.noteEdit.moveBlock(ctx.getMmdText(), note.line, note.endLine, pair[1]);
+        if (!moved) return;
+        window.MA.history.pushHistory();
+        ctx.setMmdText(moved.text);
+        var np = (parse(moved.text).notes || []).filter(function(n) { return n.line === moved.line; })[0];
+        if (np) window.MA.selection.setSelected([{ type: 'note', id: np.id, line: np.line }]);
+        ctx.onUpdate();
+      });
     });
     P.bindEvent('st-note-delete', 'click', function() {
       window.MA.history.pushHistory();

@@ -820,7 +820,8 @@ window.MA.modules.plantumlClass = (function() {
     var newPos = fields.position != null ? fields.position : current.position;
     var newText = fields.text != null ? fields.text : current.text;
 
-    var formatted = fmtNote(newPos, current.targetId, newText);
+    var newTarget = fields.targetId ? fields.targetId : current.targetId;
+    var formatted = fmtNote(newPos, newTarget, newText);
     var newLines;
     if (Array.isArray(formatted)) {
       newLines = formatted;
@@ -2113,7 +2114,13 @@ window.MA.modules.plantumlClass = (function() {
     var P = window.MA.properties;
     var html =
       '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">Note (target: ' + note.targetId + ', L' + note.line + ')</div>' +
-      '<div style="margin-bottom:6px;font-size:11px;"><b>Target:</b> ' + note.targetId + ' <span style="color:var(--text-secondary);">(read-only)</span></div>' +
+      // BLK-human-20260916-0900: 置いた後でも対象と上下の順を変えられる (シーケンス図と揃える)。
+      P.selectFieldHtml('対象 (Target)', 'cl-note-target', (parsedData.elements || []).filter(function(e) { return e.id; }).map(function(e) {
+        return { value: e.id, label: e.id, selected: e.id === note.targetId };
+      })) +
+      '<div style="margin-bottom:8px;display:flex;gap:4px;align-items:center;"><span style="font-size:10px;color:var(--text-secondary);">上下の順</span>' +
+        '<button id="cl-note-up" type="button" style="font-size:11px;padding:2px 8px;cursor:pointer;">↑ 上へ</button>' +
+        '<button id="cl-note-down" type="button" style="font-size:11px;padding:2px 8px;cursor:pointer;">↓ 下へ</button></div>' +
       P.selectFieldHtml('Position', 'cl-note-pos', [
         { value: 'left', label: 'Left', selected: note.position === 'left' },
         { value: 'right', label: 'Right', selected: note.position === 'right' },
@@ -2128,12 +2135,27 @@ window.MA.modules.plantumlClass = (function() {
       P.primaryButtonHtml('cl-note-delete', '✕ 削除');
     propsEl.innerHTML = html;
 
-    P.bindEvent('cl-note-update', 'click', function() {
+    var _clApply = function() {
       var pos = document.getElementById('cl-note-pos').value;
       var txt = document.getElementById('cl-note-text').value;
+      var tgEl = document.getElementById('cl-note-target');
       window.MA.history.pushHistory();
-      ctx.setMmdText(updateNote(ctx.getMmdText(), note.line, note.endLine, { position: pos, text: txt }));
+      ctx.setMmdText(updateNote(ctx.getMmdText(), note.line, note.endLine, { position: pos, targetId: tgEl ? tgEl.value : null, text: txt }));
       ctx.onUpdate();
+    };
+    P.bindEvent('cl-note-update', 'click', _clApply);
+    P.bindEvent('cl-note-pos', 'change', _clApply);
+    P.bindEvent('cl-note-target', 'change', _clApply);
+    [['cl-note-up', -1], ['cl-note-down', 1]].forEach(function(pair) {
+      P.bindEvent(pair[0], 'click', function() {
+        var moved = window.MA.noteEdit.moveBlock(ctx.getMmdText(), note.line, note.endLine, pair[1]);
+        if (!moved) return;
+        window.MA.history.pushHistory();
+        ctx.setMmdText(moved.text);
+        var np = (parse(moved.text).notes || []).filter(function(n) { return n.line === moved.line; })[0];
+        if (np) window.MA.selection.setSelected([{ type: 'note', id: np.id, line: np.line }]);
+        ctx.onUpdate();
+      });
     });
     P.bindEvent('cl-note-delete', 'click', function() {
       window.MA.history.pushHistory();

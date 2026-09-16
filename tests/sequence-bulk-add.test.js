@@ -7,7 +7,7 @@ global.window = dom.window;
 global.document = dom.window.document;
 
 var depPaths = [
-  '../src/core/dsl-utils.js',
+  '../src/core/dsl-utils.js', '../src/core/note-edit.js',
   '../src/core/regex-parts.js',
   '../src/core/line-resolver.js',
   '../src/core/text-updater.js',
