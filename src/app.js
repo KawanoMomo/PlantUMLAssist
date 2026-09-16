@@ -25739,6 +25739,8 @@ function saveDocSet(name, docs, items) {
 
 var _dlName = '';
 var _dlRows = [];
+// 「空欄だけ」に絞っているか (BLK-primary-20260917-0423-wish)
+var _dlBlankOnly = false;
 
 function _dlSet() {
   var DS = window.MA.docSet;
@@ -25796,17 +25798,51 @@ function renderDocLayout() {
     sum.textContent = DL.sheetSummary(sh);
   }
 
+  // 空欄の残る行だけに絞る切り替え。何枚が空かはボタン自身が言う。
+  var only = document.getElementById('dl-blank-only');
+  if (only) {
+    var blanks = DL.blankRows(sh).length;
+    only.textContent = _dlBlankOnly ? ('空欄だけ表示中（' + blanks + ' 枚）')
+                                    : ('空欄だけ表示（' + blanks + ' 枚）');
+    only.setAttribute('aria-pressed', _dlBlankOnly ? 'true' : 'false');
+    only.disabled = blanks === 0 && !_dlBlankOnly;
+  }
+
   box.textContent = '';
+  // BLK-primary-20260917-0423-wish: 14 枚ぶんの欄が縦に並ぶだけでは、どれが
+  // 埋まっていてどれが空かを読み取るのに 1 行ずつ目で追うことになる。
+  // 行の頭に ○× を置き、「空欄だけ」で絞れるようにして、手順を
+  // 「一覧を見る → × の行だけ直す」の 2 手にする。
+  var marks = DL.sheetMarks(sh);
   sh.entries.forEach(function(e, i) {
+    var mark = marks[i] || {};
     var row = document.createElement('div');
-    row.className = 'dl-row';
+    row.className = 'dl-row' + (mark.ok ? '' : ' dl-row-blank');
     row.setAttribute('data-doc-name', e.name);
     row.setAttribute('data-no', String(e.no));
+    row.setAttribute('data-ready', mark.ok ? '1' : '0');
+    if (_dlBlankOnly && mark.ok) row.hidden = true;
 
     var no = document.createElement('span');
     no.className = 'dl-no';
     no.textContent = '図' + e.no;
     row.appendChild(no);
+
+    var marker = document.createElement('span');
+    marker.className = 'dl-mark';
+    if (!mark.present) {
+      marker.classList.add('dl-mark-gone');
+      marker.textContent = '― 図が無い';
+      marker.title = 'この図が保存フォルダに無いので、見出し・注記は見ていません';
+    } else {
+      marker.textContent = '見出し ' + (mark.heading ? '○' : '×')
+        + ' / 注記 ' + (mark.note ? '○' : '×');
+      marker.title = mark.ok ? 'この図はこのまま出せます'
+        : '× の欄が空です。この行で埋めれば書き出しに出ません';
+    }
+    marker.setAttribute('data-heading', mark.heading ? '1' : '0');
+    marker.setAttribute('data-note', mark.note ? '1' : '0');
+    row.appendChild(marker);
 
     var head = document.createElement('input');
     head.type = 'text';
@@ -25828,6 +25864,9 @@ function renderDocLayout() {
       _dlRows = DL.setField(_dlRows, i, 'note', note.value);
       renderDocSheet();
     });
+    // 欄から離れたら、埋まった行は絞り込みから外す。
+    note.addEventListener('blur', function() { _dlRefreshMarks(); });
+    head.addEventListener('blur', function() { _dlRefreshMarks(); });
     row.appendChild(note);
 
     var up = document.createElement('button');
@@ -25865,8 +25904,48 @@ function renderDocLayout() {
   renderDocSheet();
 }
 
+// 行の ○× と絞り込みを、打っている最中でも合わせ直す (BLK-primary-20260917-0423-wish)。
+// 行を組み直すと打っている欄から focus が飛ぶので、印と表示/非表示だけを差し替える。
+// いま打っている行は、○ になっても欄から離れるまで残す (打ち終える前に消えない)。
+function _dlRefreshMarks() {
+  var DL = window.MA.docLayout;
+  var box = document.getElementById('dl-rows');
+  if (!DL || !box) return;
+  var sh = _dlSheet();
+  var marks = DL.sheetMarks(sh);
+  var rows = box.querySelectorAll('.dl-row');
+  for (var i = 0; i < rows.length; i++) {
+    var row = rows[i], m = marks[i];
+    if (!m) continue;
+    var el = row.querySelector('.dl-mark');
+    if (el && m.present) {
+      el.textContent = '見出し ' + (m.heading ? '○' : '×') + ' / 注記 ' + (m.note ? '○' : '×');
+      el.setAttribute('data-heading', m.heading ? '1' : '0');
+      el.setAttribute('data-note', m.note ? '1' : '0');
+    }
+    row.className = 'dl-row' + (m.ok ? '' : ' dl-row-blank');
+    row.setAttribute('data-ready', m.ok ? '1' : '0');
+    var editing = row.contains(document.activeElement);
+    row.hidden = !!(_dlBlankOnly && m.ok && !editing);
+  }
+  var only = document.getElementById('dl-blank-only');
+  if (only) {
+    var blanks = DL.blankRows(sh).length;
+    only.textContent = _dlBlankOnly ? ('空欄だけ表示中（' + blanks + ' 枚）')
+                                    : ('空欄だけ表示（' + blanks + ' 枚）');
+    only.setAttribute('aria-pressed', _dlBlankOnly ? 'true' : 'false');
+    only.disabled = blanks === 0 && !_dlBlankOnly;
+  }
+  var sum = document.getElementById('dl-sum');
+  if (sum) {
+    sum.className = DL.sheetClass(sh);
+    sum.textContent = DL.sheetSummary(sh);
+  }
+}
+
 // 貼り込みプレビュー。資料に貼ったときの見え方 (目次 → 図の見出しと説明) をそのまま出す。
 function renderDocSheet() {
+  _dlRefreshMarks();
   var DL = window.MA.docLayout;
   var box = document.getElementById('dl-sheet');
   if (!DL || !box) return;
@@ -26407,6 +26486,11 @@ function setupDocSets() {
   });
   var dlSave = document.getElementById('dl-save');
   if (dlSave) dlSave.addEventListener('click', function() { saveDocLayout(); });
+  var dlOnly = document.getElementById('dl-blank-only');
+  if (dlOnly) dlOnly.addEventListener('click', function() {
+    _dlBlankOnly = !_dlBlankOnly;
+    renderDocLayout();
+  });
   var create = document.getElementById('docset-create');
   if (create) create.addEventListener('click', function() {
     var nameEl = document.getElementById('docset-name');

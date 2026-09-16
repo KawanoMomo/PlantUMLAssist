@@ -394,3 +394,63 @@ test('手順9 書き出した資料を客先の体裁のまま見返し、直す
   await expect(page.locator('#dp-pages .dp-fig[data-no="1"] .dp-fig-body svg')).toHaveCount(1);
   await expect(page.locator('#dp-pages .dp-fig[data-no="1"] .dp-file')).toHaveText('01_' + firstName + '.svg');
 });
+
+// BLK-primary-20260917-0423-wish: 手順4「顧客に見せる形で SVG を選び、docset 出力に
+// 渡す前に見出し・注記が揃っているかを確認する」は、14 枚を 1 枚ずつフォルダから
+// 開き直してエディタの中身を目で追うしかなかった。体裁の画面に欄は並ぶが、
+// 埋まっているかは 1 行ずつ読まないと分からず、「見出しが図名のまま」に至っては
+// 書き出した後のトースト (doc-proof) しか言わないので、気付くのは zip を出した後。
+// 行の頭に ○× を置き、空欄の行だけに絞れれば、手順は 2 手で終わる。
+test('手順4 書き出す前に、見出し・注記の有無が図ごとに ○× で並び、空欄だけに絞れる', async ({ page }) => {
+  test.setTimeout(180 * 1000);
+  const NAMES = ['spi_init_sequence', 'spi_state', 'can_state'];
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  for (const n of NAMES) await S.putDoc(page, DIR, n, S.docFor(n));
+  await page.reload();
+  await page.waitForSelector('#preview-svg');
+
+  await page.locator('#btn-export').click();
+  await page.waitForSelector('#export-menu', { state: 'visible' });
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-modal', { state: 'visible' });
+  await page.locator('#docset-name').fill('顧客資料-手順4');
+  await page.locator('#docset-create').click();
+  await page.locator('.ds-row[data-set-name="顧客資料-手順4"] .ds-layout').click();
+  await expect(page.locator('#docset-layout')).toBeVisible();
+
+  const rows = page.locator('#dl-rows .dl-row');
+  const total = await rows.count();
+  expect(total).toBeGreaterThanOrEqual(NAMES.length);
+
+  // 到達条件その1: どの行も、見出しと注記の有無を ○× で自分から言う。
+  // (欄の中身を 1 行ずつ読まなくても、埋まっていない図が目で拾える)
+  const first = rows.first();
+  await expect(first.locator('.dl-mark')).toContainText('見出し ×');
+  await expect(first.locator('.dl-mark')).toContainText('注記 ×');
+  await expect(first).toHaveAttribute('data-ready', '0');
+
+  // 到達条件その2: 「見出しが図名のまま」も、書き出す前の要約が枚数で言う。
+  await expect(page.locator('#dl-sum')).toContainText('見出しが図名のままの図');
+
+  // 到達条件その3: 空欄の残る枚数はボタンに出ていて、押せばその行だけになる。
+  const only = page.locator('#dl-blank-only');
+  await expect(only).toContainText('空欄だけ表示（' + total + ' 枚）');
+  await only.click();
+  await expect(only).toHaveAttribute('aria-pressed', 'true');
+  await expect(rows).toHaveCount(total);          // 行は消えず、
+  await expect(page.locator('#dl-rows .dl-row:visible')).toHaveCount(total);
+
+  // 到達条件その4: 埋めた行はその場で ○ になる。打っている間は消えず、
+  // 欄から離れたところで絞り込みから外れる。
+  await first.locator('.dl-heading').fill('SPI 初期化シーケンス');
+  await first.locator('.dl-note').fill('起動直後の初期化手順を示す');
+  const firstAgain = page.locator('#dl-rows .dl-row').first();
+  await expect(firstAgain.locator('.dl-mark')).toContainText('見出し ○');
+  await expect(firstAgain.locator('.dl-mark')).toContainText('注記 ○');
+  await expect(firstAgain).toBeVisible();
+  await expect(page.locator('#dl-blank-only')).toContainText('（' + (total - 1) + ' 枚）');
+  await first.locator('.dl-note').blur();
+  await expect(firstAgain).toBeHidden();
+  await expect(page.locator('#dl-rows .dl-row:visible')).toHaveCount(total - 1);
+});
