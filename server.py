@@ -456,6 +456,10 @@ API_INDEX = {
          'request': '?dir='},
         {'endpoint': 'POST /name-registry', 'summary': '正式表記の登録簿を置き換える',
          'request': "{dir, entries: [{canonical, variants, note, by, at}]}"},
+        {'endpoint': 'GET /cohort-ack', 'summary': 'ドメイン突合で内部揺れと確認済みの組の台帳',
+         'request': '?dir='},
+        {'endpoint': 'POST /cohort-ack', 'summary': '確認済みの組の台帳を置き換える',
+         'request': "{dir, entries: [{key, domain, kind, left, right, fingerprint, note, by, at}]}"},
         {'endpoint': 'GET /vault', 'summary': '保管庫の中身', 'request': '?dir='},
         {'endpoint': 'POST /vault', 'summary': '保管庫へ入れる'},
         {'endpoint': 'GET /tickets', 'summary': '変更チケットの一覧', 'request': '?dir='},
@@ -690,6 +694,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.split('?')[0] == '/name-registry':
             with _fs_lock:
                 return self._handle_name_registry_get()
+        if self.path.split('?')[0] == '/cohort-ack':
+            with _fs_lock:
+                return self._handle_cohort_ack_get()
         if self.path.split('?')[0] == '/peek-dirs':
             with _fs_lock:
                 return self._handle_peek_dirs()
@@ -759,6 +766,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == '/name-registry':
             with _fs_lock:
                 return self._handle_name_registry_post()
+        if self.path == '/cohort-ack':
+            with _fs_lock:
+                return self._handle_cohort_ack_post()
         if self.path == '/file-roles':
             with _fs_lock:
                 return self._handle_file_roles_post()
@@ -2012,6 +2022,84 @@ class Handler(BaseHTTPRequestHandler):
                 'at': e.get('at') if isinstance(e.get('at'), str) else '',
             })
         return {'entries': out}
+
+    COHORT_ACK_FILE = '_cohort-ack.json'
+    # 確認済みの組の台帳。これを超える大きさは台帳ではない。
+    COHORT_ACK_MAX = 512 * 1024
+
+    def _cohort_ack_path(self, save_dir):
+        return Path(save_dir).parent / self.COHORT_ACK_FILE
+
+    @staticmethod
+    def _cohort_ack_payload(entries):
+        """台帳の 1 行を素通しで受ける形に整える.
+
+        どの組を確認済みとするかの判定 (組の鍵・差分の指紋) は
+        src/core/cohort-ack.js にしか無い (同じ規則を 2 つ持たない)。
+        ここでやるのは型と重複の掃除だけ。
+        """
+        out = []
+        seen = set()
+        for e in entries:
+            if not isinstance(e, dict):
+                continue
+            key = e.get('key')
+            if not isinstance(key, str) or not key.strip():
+                continue
+            key = key.strip()
+            if key in seen:
+                continue
+            seen.add(key)
+            row = {'key': key}
+            for f in ('domain', 'kind', 'left', 'right', 'fingerprint', 'note', 'by', 'at'):
+                v = e.get(f)
+                row[f] = v.strip() if isinstance(v, str) else ''
+            out.append(row)
+        out.sort(key=lambda r: r['key'])
+        return out
+
+    def _read_cohort_ack(self, save_dir):
+        path = self._cohort_ack_path(save_dir)
+        try:
+            if not path.exists() or path.stat().st_size > self.COHORT_ACK_MAX:
+                return {'entries': []}
+            data = json.loads(path.read_text(encoding='utf-8-sig'))
+        except (OSError, ValueError):
+            return {'entries': []}
+        if isinstance(data, list):
+            data = {'entries': data}
+        if not isinstance(data, dict) or not isinstance(data.get('entries'), list):
+            return {'entries': []}
+        return {'entries': self._cohort_ack_payload(data['entries'])}
+
+    def _handle_cohort_ack_get(self):
+        """GET /cohort-ack?dir= — 保存フォルダの親にある確認済みの組の台帳."""
+        parsed = urllib.parse.urlparse(self.path)
+        params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
+        save_dir = self._autosave_resolve_dir(params.get('dir'))
+        led = self._read_cohort_ack(save_dir)
+        self._send_json(200, {'dir': str(save_dir), 'path': str(self._cohort_ack_path(save_dir)),
+                              'entries': led['entries']})
+
+    def _handle_cohort_ack_post(self):
+        """POST /cohort-ack {dir, entries} — 台帳を丸ごと置き換える."""
+        data = self._read_json_object()
+        if data is None:
+            return
+        entries = data.get('entries')
+        if not isinstance(entries, list):
+            self._send_json(400, {'error': 'entries must be a list'})
+            return
+        save_dir = self._autosave_resolve_dir(data.get('dir'))
+        path = self._cohort_ack_path(save_dir)
+        clean = self._cohort_ack_payload(entries)
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            _atomic_write_text(path, json.dumps({'entries': clean}, ensure_ascii=False, indent=2) + '\n')
+        except OSError as e:
+            self._send_json(500, {'error': f'書き込めません: {e}'})
+            return
+        self._send_json(200, {'dir': str(save_dir), 'path': str(path), 'entries': clean})
 
     def _handle_name_registry_get(self):
         """GET /name-registry?dir= — 保存フォルダの親にある正式表記の登録簿."""

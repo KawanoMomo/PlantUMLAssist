@@ -2199,6 +2199,10 @@ html, body {
   margin-bottom: 6px;
 }
 #peek-cohort .cohort-pair.mismatched { border-color: var(--accent); }
+#peek-cohort .cohort-pair.acked {
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline;
+  opacity: 0.75; border-style: dashed;
+}
 #peek-cohort .cohort-pair-title { font-size: 11px; padding-bottom: 4px; }
 #peek-cohort .cohort-line { display: flex; flex-wrap: wrap; gap: 4px; align-items: baseline; padding: 2px 0; }
 #peek-cohort .cohort-line-title { font-size: 10px; color: var(--text-secondary); min-width: 5.5em; }
@@ -7801,6 +7805,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/audit-scope.js"></script>
 <script src="src/core/blank-doc.js"></script>
 <script src="src/core/domain-cohort.js"></script>
+<script src="src/core/cohort-ack.js"></script>
 <script src="src/core/name-pairing.js"></script>
 <script src="src/core/side-by-side.js"></script>
 <script src="src/core/part-slice.js"></script>

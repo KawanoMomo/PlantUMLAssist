@@ -499,3 +499,52 @@ test('手順2 あるメソッドを呼んでいる全図を、1 回の探索で�
     return ed.value.slice(ed.selectionStart, ed.selectionEnd);
   }), { timeout: 30000 }).toBe('Uninit --> Ready : Spi_Init');
 });
+
+// BLK-reviewer-20260917-0423-wish: junior×primary の 4 組は毎 tick 同じ「部品名/ラベルが
+// 違うだけの内部揺れ」を出し続け、reviewer は毎回同じ diff を最初から読んで同じ結論を
+// 出し直していた。domain-verdict の宣言は図の持ち主が自分の図に書く印で、どちらの図も
+// 持たない reviewer には置き場が無い。手順2 を「未確認の新しい差分だけを見る」に
+// 変えることを到達条件にする。
+test('手順2 内部揺れと確認した組は台帳に残り、次の突合は未確認の差分だけになる', () => {
+  const { MA } = loadMA();
+  const CA = MA.cohortAck;
+  expect(CA).toBeTruthy();
+
+  const docs = () => [
+    { name: 'junior/spi_init_sequence.puml', diagramType: 'plantuml-sequence',
+      dsl: ['@startuml', 'participant SpiDrv', 'participant Clock',
+        'SpiDrv -> Clock : Init()', '@enduml'].join('\n') },
+    { name: 'primary/spi_init_sequence.puml', diagramType: 'plantuml-sequence',
+      dsl: ['@startuml', 'participant Spi_Driver', 'participant Clock',
+        'Spi_Driver -> Clock : Init()', '@enduml'].join('\n') },
+  ];
+  const rows = () => MA.domainCohort.diffRows(MA.domainCohort.audit(docs()));
+
+  // 今日の突合。内部揺れ 1 組が未確認として出る (これまではここで毎回終わっていた)。
+  expect(rows().length).toBe(1);
+  expect(CA.statusOf(CA.empty(), rows()[0]).status).toBe('new');
+
+  // 「内部揺れ・非衝突」と確かめて台帳に入れる。
+  const ledger = CA.ack(CA.empty(), rows()[0],
+    { by: 'reviewer', at: '2026-09-17', note: '内部揺れ・非衝突' }).ledger;
+
+  // 次の tick — 図は同じなので同じ組が出るが、読み直す対象からは外れている。
+  expect(CA.pending(rows(), ledger).length).toBe(0);
+  expect(CA.settled(rows(), ledger).length).toBe(1);
+  // 畳んだことは 1 行に残る (件数が減っただけを「直った」と読ませない)。
+  expect(CA.summaryLine(rows(), ledger)).toContain('1 組を除外');
+
+  // 台帳はファイルに落として読み直しても同じ判定になる (tick をまたいで残る)。
+  const reread = CA.parse(CA.format(ledger));
+  expect(CA.statusOf(reread, rows()[0]).status).toBe('acked');
+
+  // 差分が変わった組は台帳があっても戻ってくる (確認済みが新しい食い違いを隠さない)。
+  const grown = MA.domainCohort.diffRows(MA.domainCohort.audit([
+    docs()[0],
+    { name: 'primary/spi_init_sequence.puml', diagramType: 'plantuml-sequence',
+      dsl: ['@startuml', 'participant Spi_Driver', 'participant Clock', 'participant Dma',
+        'Spi_Driver -> Clock : Init()', 'Spi_Driver -> Dma : Start()', '@enduml'].join('\n') },
+  ]));
+  expect(CA.statusOf(ledger, grown[0]).status).toBe('changed');
+  expect(CA.pending(grown, ledger).length).toBe(1);
+});
