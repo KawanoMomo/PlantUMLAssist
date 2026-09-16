@@ -74,30 +74,87 @@ window.MA.crossRefDiff = (function() {
 
   // 相手フォルダの名前一覧を、今の図に近い順に並べる。近さが付かない名前も
   // 末尾に残す (対応が機械には見えなくても、人には分かることがある)。
-  function counterparts(names, selfName) {
+  // BLK-junior-20260917-0423: 相手の一覧は {name, kind} でも文字列でもよい。
+  // 図種が分かっている相手は、自分と違う図種なら「対応する図」ではない。
+  // クラス図の相手にシーケンス図を当てると、全要素が「片方にしか無い」に
+  // なって「先輩が全部書き換えた」と見分けが付かなくなる。
+  function _cpName(e) { return (e && typeof e === 'object') ? _s(e.name) : _s(e); }
+  function _cpKind(e) {
+    if (!e || typeof e !== 'object') return '';
+    return _s(e.savedKind) || _s(e.kind);
+  }
+
+  function counterparts(names, selfName, selfKind) {
+    var want = _s(selfKind);
     var out = [];
     (names || []).forEach(function(n, i) {
-      var name = _s(n);
+      var name = _cpName(n);
       if (name === '') return;
-      var d = nameDistance(name, selfName);
-      out.push({ name: name, distance: d, order: i });
+      var kind = _cpKind(n);
+      // 図種が両方分かっていて食い違うときだけ外す。分からない相手は今までどおり。
+      var mismatch = want !== '' && kind !== '' && kind !== want;
+      var d = mismatch ? null : nameDistance(name, selfName);
+      out.push({ name: name, kind: kind, distance: d, kindMismatch: mismatch, order: i });
     });
     out.sort(function(a, b) {
       var ad = a.distance == null ? Infinity : a.distance;
       var bd = b.distance == null ? Infinity : b.distance;
-      return ad - bd || a.order - b.order;
+      if (ad !== bd) return ad - bd;
+      // 近さが付かないものどうしは、同じ図種を先に出す (人が選ぶときの手掛かり)。
+      if (a.kindMismatch !== b.kindMismatch) return a.kindMismatch ? 1 : -1;
+      return a.order - b.order;
     });
     return out;
   }
 
   // 開いた瞬間に出す 1 件。近さの付いた候補があればその先頭。
   // 何も近くなければ null (勝手に無関係な図を並べない)。
-  function pickCounterpart(names, selfName) {
-    var list = counterparts(names, selfName);
+  function pickCounterpart(names, selfName, selfKind) {
+    var list = counterparts(names, selfName, selfKind);
     for (var i = 0; i < list.length; i++) {
       if (list[i].distance != null) return list[i].name;
     }
     return null;
+  }
+
+  // 相手のフォルダを読んだ結果を 1 つの答えにする (BLK-junior-20260917-0423)。
+  // 「先輩の図を開いて見比べる」手順は、相手に対応する図が無いときも答えが要る。
+  // 無いことが画面に出ないと、フォルダを人が目で走査して「無い」を確かめ直す
+  // ことになり、手順そのものが止まる。
+  //   picked   … 相手が決まった
+  //   no-kind  … 相手にその図種が 1 枚も無い (比較元なし。増分なしとして進めてよい)
+  //   no-match … その図種はあるが、名前が離れていて機械には対応が付かない
+  //   empty    … 相手のフォルダに図が無い
+  function _kindWord(slug) {
+    var DK = window.MA && window.MA.diagramKind;
+    var lab = (DK && DK.label) ? DK.label(slug) : '';
+    return lab ? lab + '図' : 'この図種';
+  }
+
+  function counterpartVerdict(names, selfName, selfKind) {
+    var list = counterparts(names, selfName, selfKind);
+    var pick = pickCounterpart(names, selfName, selfKind);
+    var sameKind = list.filter(function(c) { return !c.kindMismatch; }).length;
+    var word = _kindWord(selfKind);
+    if (list.length === 0) {
+      return { state: 'empty', name: null, total: 0, sameKind: 0,
+        message: '相手のフォルダに図がありません' };
+    }
+    if (pick) {
+      return { state: 'picked', name: pick, total: list.length, sameKind: sameKind, message: '' };
+    }
+    if (_s(selfKind) !== '' && sameKind === 0) {
+      return {
+        state: 'no-kind', name: null, total: list.length, sameKind: 0,
+        message: '相手のフォルダに' + word + 'がありません (' + list.length + ' 枚中 0 枚)。'
+          + '比較元が無いので、先輩側の増分は無しとして先へ進めます',
+      };
+    }
+    return {
+      state: 'no-match', name: null, total: list.length, sameKind: sameKind,
+      message: word + 'は ' + sameKind + ' 枚ありますが、名前が離れていて対応が付きません。'
+        + '下の一覧から相手を選んでください',
+    };
   }
 
   // ── 部品名をそろえる ─────────────────────────────────────────────────
@@ -591,6 +648,7 @@ window.MA.crossRefDiff = (function() {
     nameDistance: nameDistance,
     counterparts: counterparts,
     pickCounterpart: pickCounterpart,
+    counterpartVerdict: counterpartVerdict,
     renameMap: renameMap,
     applyRename: applyRename,
     keyOf: keyOf,

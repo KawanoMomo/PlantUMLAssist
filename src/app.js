@@ -21155,6 +21155,7 @@ function runTemplateCohort() {
 // 自分の保存先設定 (autoSave の fileDir) には一切触らない。
 var _xfDir = '';        // 相手のフォルダ
 var _xfNames = [];      // そのフォルダのファイル名
+var _xfEntries = [];    // 同じ順の {name, kind} (相手選びは図種も見る)
 var _xfFile = null;     // 相手にしている図の名前
 var _xfRefDsl = '';     // その中身
 var _xfResult = null;   // 直近の突き合わせ結果
@@ -21188,8 +21189,10 @@ function loadCrossRefFolder() {
   if (!window.MA.workspace) return Promise.resolve();
   return window.MA.workspace.listFolder(dir).then(function(res) {
     var entries = (res && res.entries) || [];
-    _xfNames = entries.map(function(e) { return (e && e.name) || ''; })
-      .filter(function(n) { return n !== ''; });
+    // 名前だけでなく図種も控える (相手選びは図種を見る)。
+    _xfEntries = entries.filter(function(e) { return e && e.name; })
+      .map(function(e) { return { name: e.name, kind: e.savedKind || e.kind || '' }; });
+    _xfNames = _xfEntries.map(function(e) { return e.name; });
     if (res && res.exists === false) {
       _xfShowMessage('そのフォルダが見つかりません: ' + dir, 'dirty');
       _xfClearPick();
@@ -21202,10 +21205,32 @@ function loadCrossRefFolder() {
     }
     var CRD = window.MA.crossRefDiff;
     var selfName = _xfSelfName();
-    var pick = CRD ? CRD.pickCounterpart(_xfNames, selfName) : null;
-    _xfRenderPick(pick || _xfNames[0]);
-    return _xfSelectFile(pick || _xfNames[0]);
+    // BLK-junior-20260917-0423: 近い名前が無いときに先頭のファイルを黙って
+    // 相手にすると、図種違いの図と突き合わせた結果が「先輩が全部書き換えた」
+    // に見える。相手が決まらないことは、それ自体が手順 1 の答えなので言う。
+    var verdict = CRD ? CRD.counterpartVerdict(_xfEntries, selfName, _xfSelfKind()) : null;
+    _xfRenderPick(verdict && verdict.name ? verdict.name : '');
+    if (!verdict || verdict.state !== 'picked') {
+      _xfShowMessage(verdict ? verdict.message : '相手が決まりません',
+        (verdict && verdict.state === 'no-kind') ? 'clean' : 'dirty');
+      _xfFile = null;
+      _xfResult = null;
+      var xl = _xfEl('xf-list');
+      if (xl) { xl.hidden = true; xl.textContent = ''; }
+      return Promise.resolve();
+    }
+    return _xfSelectFile(verdict.name);
   });
+}
+
+// いま開いている図の図種。本文から見る (保存前の図にも答えが要る)。
+function _xfSelfKind() {
+  try {
+    var IS = window.MA.impactScan;
+    if (!IS || !IS.detectKind) return '';
+    var k = IS.detectKind(editorEl ? editorEl.value : '');
+    return k === 'other' ? '' : k;
+  } catch (e) { return ''; }
 }
 
 function _xfSelfName() {
@@ -21236,13 +21261,22 @@ function _xfRenderPick(selected) {
   var pick = _xfEl('xf-pick'), sel = _xfEl('xf-file');
   if (!pick || !sel) return;
   var CRD = window.MA.crossRefDiff;
-  var ranked = CRD ? CRD.counterparts(_xfNames, _xfSelfName())
+  var ranked = CRD ? CRD.counterparts(_xfEntries, _xfSelfName(), _xfSelfKind())
                    : _xfNames.map(function(n) { return { name: n, distance: null }; });
+  var DK = window.MA.diagramKind;
   sel.textContent = '';
   ranked.forEach(function(c) {
     var op = document.createElement('option');
     op.value = c.name;
-    op.textContent = c.name + (c.distance === 0 ? ' (同じ名前)' : c.distance == null ? ' (名前が離れています)' : '');
+    var tail;
+    if (c.kindMismatch) {
+      var lab = (DK && DK.label) ? DK.label(c.kind) : '';
+      tail = ' (' + (lab ? lab + '図' : '別の図種') + '。図種が違います)';
+    } else if (c.distance === 0) tail = ' (同じ名前)';
+    else if (c.distance == null) tail = ' (名前が離れています)';
+    else tail = '';
+    op.textContent = c.name + tail;
+    if (c.kindMismatch) op.setAttribute('data-kind-mismatch', '1');
     if (c.name === selected) op.selected = true;
     sel.appendChild(op);
   });
