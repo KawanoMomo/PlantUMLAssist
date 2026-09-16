@@ -92,8 +92,8 @@ describe('finding-tracker: カテゴリごとの ID 台帳', function() {
     var ids = idsByTitle(st);
     expect(ids['ClockCtrl.EnableClock']).toBe('F-01');   // 既存の id は温存
     expect(ids['Irq_Ctrl']).toBe('N-01');                // 新しい指摘は接頭辞つき
-    // 既に F-01/F-02 が居るので、新しい F はぶつからない番号から始まる。
-    expect(ids['diagram1.SVG 無']).toBe('F-02');
+    // BLK-reviewer-20260917-0123: 既存行もカテゴリが分かった時点で頭文字へ振り直す。
+    expect(ids['diagram1.SVG 無']).toBe('S-01');
   });
 
   test('setVerdict は接頭辞つきの id でも引ける', function() {
