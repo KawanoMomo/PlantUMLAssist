@@ -7425,6 +7425,17 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       </div>
     </div>
 
+    <!-- BLK-human-20260916-0902: 不具合報告に貼る版・コミット・日付 (git tag が正本) -->
+    <div id="cfg-pane-about" class="cfg-pane" hidden>
+      <div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:6px;">バージョン / Version</div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <code id="cfg-version" style="font-size:13px;user-select:all;">読み込み中…</code>
+        <button type="button" id="cfg-version-copy" title="版の文字列をクリップボードに複製する (不具合報告に貼る)">📋 複製</button>
+        <span id="cfg-version-status" style="font-size:11px;color:var(--text-secondary);"></span>
+      </div>
+      <div style="font-size:10px;color:var(--text-secondary);margin-top:6px;">不具合を報告するときは、この 1 行を一緒に貼ってください。</div>
+    </div>
+
     <div style="display:flex;gap:8px;margin-top:14px;">
       <button id="cfg-cancel" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:8px;border-radius:4px;cursor:pointer;">キャンセル</button>
       <button id="cfg-ok" style="flex:1;background:var(--accent);border:none;color:#fff;padding:8px;border-radius:4px;cursor:pointer;" title="設定を保存して閉じる" aria-label="設定を保存">設定を保存</button>
@@ -7581,6 +7592,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/zoom-hud.js"></script>
 <script src="src/core/relation-add.js"></script>
 <script src="src/core/settings-tabs.js"></script>
+<script src="src/core/app-version.js"></script>
 <script src="src/core/key-bindings.js"></script>
 <script src="src/core/editor-jump.js"></script>
 <script src="src/core/render-modes.js"></script>

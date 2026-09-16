@@ -390,12 +390,47 @@ JSON_CHARSETS = {
     'shift-jis': ('Shift_JIS', 'cp932'),
 }
 
+# BLK-human-20260916-0902: 設定 → 情報 に出す版。正本は git tag で、手で書かない。
+# exe (git が無い) はビルド時に packaging/version_info.py が書いた src/version.json を読む。
+_BUILD_INFO = None
+
+
+def _git_out(args):
+    try:
+        out = subprocess.run(['git'] + args, cwd=str(ROOT), capture_output=True,
+                             text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return ''
+    return out.stdout.strip() if out.returncode == 0 else ''
+
+
+def build_info():
+    global _BUILD_INFO
+    if _BUILD_INFO is not None:
+        return _BUILD_INFO
+    info = {'version': '', 'commit': '', 'date': ''}
+    baked = ROOT / 'src' / 'version.json'
+    if baked.is_file():
+        try:
+            data = json.loads(baked.read_text(encoding='utf-8'))
+            for k in info:
+                info[k] = str(data.get(k) or '')
+        except (OSError, ValueError):
+            pass
+    if not info['version']:
+        info['version'] = _git_out(['describe', '--tags', '--abbrev=0'])
+        info['commit'] = _git_out(['rev-parse', '--short', 'HEAD'])
+        info['date'] = _git_out(['log', '-1', '--format=%cs'])
+    _BUILD_INFO = info
+    return info
+
 # GET /api — 窓口の索引。docs/api.md と同じ並びで、1 行ずつ何をするかを言う。
 API_INDEX = {
     'name': 'PlantUMLAssist server API',
     'doc': 'docs/api.md (同じ内容。GET /api が正本)',
     'endpoints': [
         {'endpoint': 'GET /api', 'summary': 'この索引'},
+        {'endpoint': 'GET /version', 'summary': 'アプリの版・コミット・日付 (git tag が正本)'},
         {'endpoint': 'GET /render', 'summary': 'POST /render の仕様'},
         {'endpoint': 'POST /render', 'summary': 'DSL を描いて SVG を返す',
          'request': "{text, mode}"},
@@ -654,6 +689,8 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.split('?')[0] == '/peek-notes':
             with _fs_lock:
                 return self._handle_peek_notes()
+        if self.path.split('?')[0] == '/version':
+            return self._send_json(200, build_info())
         if self.path.split('?')[0] == '/render':
             return self._send_json(200, RENDER_API_DOC)
         if self.path.split('?')[0] == '/verify-svg':

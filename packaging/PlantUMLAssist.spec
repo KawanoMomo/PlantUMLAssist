@@ -26,11 +26,14 @@ import version_info  # noqa: E402
 ICON = at('packaging/icon.ico')
 VERSION_FILE = version_info.write_version_file(
     os.path.join(workpath, 'version_info.txt'))
+# 設定 → 情報 に出す版 (BLK-human-20260916-0902)。exe には git が無いので焼き込む。
+BUILD_INFO = version_info.write_build_info_json(os.path.join(workpath, 'version.json'))
 
 datas = [
     (at('plantuml-assist.html'), '.'),
     (at('server.py'), '.'),
     (at('src'), 'src'),
+    (BUILD_INFO, 'src'),
     (at('lib/PlantUMLDaemon.java'), 'lib'),
     (at('lib/fetch-plantuml.ps1'), 'lib'),
     (at('docs'), 'docs'),

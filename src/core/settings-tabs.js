@@ -16,6 +16,8 @@ window.MA.settingsTabs = (function() {
     { id: 'data',      label: 'データ',         en: 'Data' },
     // design 5d: 図種ごとの「常時表示 / その他パレット」の配分そのものをレビューする
     { id: 'coverage',  label: 'UML 要素の網羅一覧', en: '' },
+    // BLK-human-20260916-0902: 不具合報告に貼る版 (git tag が正本)
+    { id: 'about',     label: '情報',           en: 'About' },
   ];
 
   // design 5d: 「常時表示」は右パネルに出しっぱなしにするもの、「その他」はパレットに
