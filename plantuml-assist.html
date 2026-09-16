@@ -5235,8 +5235,9 @@ mark.ri-hit { background: var(--accent); color: var(--bg-primary); padding: 0 1p
   text-overflow: ellipsis;
 }
 .xf-row .xf-text {
-  flex: 1;
-  min-width: 0;
+  flex: 1 1 40%;
+  /* 入る位置の 1 行が長くても、行の DSL が読めなくならない幅を残す */
+  min-width: 140px;
   font-family: var(--font-mono);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -5260,8 +5261,11 @@ mark.ri-hit { background: var(--accent); color: var(--bg-primary); padding: 0 1p
 .xf-row .xf-where {
   color: var(--text-secondary);
   font-size: 10px;
-  flex-shrink: 0;
+  flex: 0 1 auto;
+  min-width: 0;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 #xf-take-bar {
   display: flex;

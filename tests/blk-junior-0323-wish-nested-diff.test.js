@@ -119,7 +119,7 @@ describe('BLK-junior-20260917-0323-wish 入れ子状態の増分', () => {
 
     test('入る場所の 1 行が親の中だと言う', () => {
       const where = CRD().planText(SELF, { text: 'state Idle', parent: 'Configured' });
-      expect(where.indexOf('「Configured」の中') >= 0).toBe(true);
+      expect(where.indexOf('「Configured」に { } を開いて') >= 0).toBe(true);
     });
 
     test('1 行の取り込みで親に本体 { } が開く', () => {

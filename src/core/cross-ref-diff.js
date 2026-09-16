@@ -522,12 +522,11 @@ window.MA.crossRefDiff = (function() {
       var t = _s(lines[i]).trim();
       if (t !== '') { anchor = t; break; }
     }
-    var into = plan.parent ? ('「' + plan.parent + '」の中の ') : '';
     if (plan.expand) {
-      return into + plan.line + ' 行目 (「' + plan.expand.name + '」に本体 { } を開いて) に入ります';
+      return plan.line + ' 行目 (「' + plan.expand.name + '」に { } を開いて) に入ります';
     }
-    if (anchor === '') return into + plan.line + ' 行目 (先頭) に入ります';
-    return into + plan.line + ' 行目、「' + anchor + '」の後に入ります';
+    if (anchor === '') return plan.line + ' 行目 (先頭) に入ります';
+    return plan.line + ' 行目、「' + anchor + '」の後に入ります';
   }
 
   // 既に自分の図にある行は入れない (二重に足すと同じ手順が 2 本になる)。

@@ -1197,7 +1197,7 @@ test('手順1-2 親状態の中に増えた子状態が入れ子のまま並び�
 
   // 到達条件その2: 入る位置も親の中だと先に分かる。
   await expect(rows.filter({ hasText: 'state Idle' }).locator('.xf-where'))
-    .toContainText('「Configured」の中');
+    .toContainText('「Configured」に { } を開いて');
 
   // 到達条件その3: まとめて取り込むと、子は親の { } の中に入る。
   await page.locator('#xf-take-all').check();
