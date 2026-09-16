@@ -4104,7 +4104,8 @@ table.vault-table button.vault-open:hover { border-color: var(--accent); }
   white-space: nowrap;
 }
 /* 過去の置換の組 (BLK-primary-20260914-1106-friction) */
-#rename-redo { font-size: 10px; margin-bottom: 6px; }
+#rename-redo { font-size: 10px; margin-top: 6px; }
+#rename-redo:not(:empty) { border-top: 1px solid var(--border); padding-top: 4px; }
 #rename-redo .rr-summary { padding: 3px 0; color: var(--text-secondary); }
 #rename-redo .rr-summary.rr-pending { color: var(--accent); }
 #rename-redo .rr-rows { max-height: 88px; overflow-y: auto; font-family: var(--font-mono); }
@@ -4241,6 +4242,34 @@ mark.ri-hit { background: var(--accent); color: var(--bg-primary); padding: 0 1p
 #rename-impact .impact-line:hover { background: var(--bg-hover, rgba(127,127,127,0.15)); color: var(--text-primary); }
 #rename-impact .impact-line-no { min-width: 2.5em; text-align: right; opacity: 0.7; }
 #rename-impact .impact-line-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* BLK-primary-20260917-0223: 置換の影響ボードに並べる 変更前 / 変更後 (仮適用) の図。
+   会議ではこの一覧をそのまま映し、質問の出た図だけを押して原寸にする。 */
+#ri-svg-state { color: var(--text-secondary); font-size: 11px; }
+.ri-thumbs { display: flex; gap: 8px; margin: 4px 0 6px; }
+.ri-thumb {
+  flex: 1 1 0; min-width: 0; border: 1px solid var(--border);
+  border-radius: 3px; background: var(--bg-primary, #fff); padding: 2px;
+  cursor: zoom-in; text-align: center;
+}
+.ri-thumb:hover { border-color: var(--accent, #4a90d9); }
+.ri-thumb-head { font-size: 10px; color: var(--text-secondary); padding: 1px 0; }
+.ri-thumb-body { max-height: 160px; overflow: hidden; }
+.ri-thumb-body svg { max-width: 100%; height: auto; }
+.ri-thumb-wait { color: var(--text-secondary); font-size: 10px; padding: 12px 0; }
+.ri-thumb-note { color: var(--text-secondary); font-size: 10px; padding: 8px 4px; display: block; }
+.ri-thumb-same { color: var(--text-secondary); font-size: 10px; padding-left: 4px; }
+/* 原寸。ボードの中に重ねるので、会議中に別窓へ移らずに戻れる。 */
+#ri-zoom {
+  position: fixed; inset: 0; z-index: 1100; background: rgba(0,0,0,0.75);
+  display: none; align-items: center; justify-content: center; cursor: zoom-out;
+}
+#ri-zoom.open { display: flex; }
+#ri-zoom-inner {
+  background: var(--bg-primary, #fff); padding: 8px; border-radius: 4px;
+  max-width: 92vw; max-height: 88vh; overflow: auto;
+}
+#ri-zoom-head { font-size: 12px; margin-bottom: 4px; color: var(--text-secondary); }
 /* 意味的な参照 (役割ごとに参照元の図を並べる) */
 #rename-semantic { margin-top: 6px; font-size: 10px; }
 #rename-semantic .sr-head {
@@ -6869,10 +6898,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <div id="findings-panel"></div>
       <!-- 開いている図をまたいで部品名を一括置換する -->
       <div id="rename-panel">
-        <!-- BLK-primary-20260914-1106-friction: 過去に当てた置換の組と、その組が
-             今どうなっているか (残り / 適用済み) を打つ前に出す。残っている組だけ
-             押せば置換前・置換後が埋まる -->
-        <div id="rename-redo"></div>
         <label for="rename-from">置換前 (部品名)</label>
         <input id="rename-from" list="rename-candidates" autocomplete="off" spellcheck="false" placeholder="SpiDrv">
         <datalist id="rename-candidates"></datalist>
@@ -6915,6 +6940,15 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
           <button id="btn-rename-apply" disabled>置換</button>
           <button id="btn-rename-cancel">閉じる</button>
         </div>
+        <!-- BLK-primary-20260914-1106-friction: 過去に当てた置換の組と、その組が
+             今どうなっているか (残り / 適用済み) を出す。残っている組だけ
+             押せば置換前・置換後が埋まる。
+             BLK-primary-20260917-0223: この箱はフォルダ側の組を非同期に読んでから
+             行が増える。入力欄と操作ボタンより上に置くと、その 1 行が届いた瞬間に
+             パネル全体が 20px 下がり、ちょうど押していたボタンが指の下から逃げる
+             (mousedown と mouseup が別の要素になり click が起きない)。
+             あとから伸びるものは、動かされて困るものより下に置く -->
+        <div id="rename-redo"></div>
       </div>
       <!-- BLK-junior-20260916-0046-wish: 表記統一の一括反映。⇄ 一括置換は「何を打つか」を
            人が知っている前提の道具だが、揃える先は登録簿 (_names.json) に既にある。
@@ -7726,6 +7760,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/swap-queue.js"></script>
 <script src="src/core/bulk-rename.js"></script>
 <script src="src/core/impact-scan.js"></script>
+<script src="src/core/impact-thumbs.js"></script>
 <script src="src/core/folder-impact.js"></script>
 <script src="src/core/signature-change.js"></script>
 <script src="src/core/symptom-search.js"></script>
@@ -8001,12 +8036,18 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <span id="ri-roster"></span>
       <span class="board-tools">
         <label title="ヒット行の前後だけでなく図の全文を出す"><input type="checkbox" id="ri-full"> 全文</label>
+        <!-- BLK-primary-20260917-0223: 会議の画面共有では、テキスト差分ではなく
+             「置換前の図」と「置換後 (仮適用) の図」を並べて見せたい -->
+        <label title="図ごとに 変更前 / 変更後 (仮適用) の図を並べて出す (押すと原寸)"><input type="checkbox" id="ri-svg" checked> 図で見る</label>
+        <span id="ri-svg-state" role="status"></span>
         <button type="button" id="ri-apply">この内容で置換する</button>
         <button type="button" id="ri-close">閉じる</button>
       </span>
     </div>
     <div id="ri-body" class="diff-board"></div>
   </div>
+  <!-- 質問の出た図だけを原寸で見せる (押した図をボードの上に重ねる) -->
+  <div id="ri-zoom"><div id="ri-zoom-inner"><div id="ri-zoom-head"></div><div id="ri-zoom-body"></div></div></div>
 </div>
 <!-- BLK-primary-20260908-2003-wish: 部品名の依存グラフ。⇄ 一括置換の「▤ 影響を見る」は
      ヒット行を図ごとにテキストで並べるだけなので、どの図がどの図を参照して連鎖しているかは

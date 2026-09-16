@@ -20,6 +20,8 @@ const DIR2 = S.dirFor(__filename) + '-show';
 const DIR3 = S.dirFor(__filename) + '-hist';
 // 納品履歴から前回渡した版と見比べる場面 (BLK-primary-20260914-2106-wish)。
 const DIR4 = S.dirFor(__filename) + '-deliv';
+// 置換を当てる前に、影響範囲の一覧で変更前後の図を見せる場面 (BLK-primary-20260917-0223)。
+const DIR6 = S.dirFor(__filename) + '-impact';
 
 // 手順2 と同じ一括置換を当てる。手順4 が見せるのはその前後なので、
 // ここを踏まないと「変更前」がそもそも存在しない。
@@ -574,4 +576,79 @@ test('手順4 前回出した図が既定で選ばれ、試作図は外れたま
   await page.locator('#dp-close').click();
   await S.clearDir(page, DIR5);
   try { require('fs').rmSync(pathMod.join(abs, 'delivery-20260908-1903.zip'), { force: true }); } catch (e) {}
+});
+
+// BLK-primary-20260917-0223: 手順4 で「影響範囲を見る」を押すと、出現図・内訳・
+// 該当行テキストは出るが、会議の画面共有で見せたいのは「置換前の図」と
+// 「置換後 (仮適用) の図」。これまでは各図をエディタで開いて描き直さないと
+// 見た目の前後が分からず、3 図分をその場で開き直していた。
+// 影響ボードの各図に変更前後の図を並べ、質問の出た図だけ押して原寸にする。
+test('手順4 影響範囲の一覧に変更前後の図が並び、押した図だけ原寸で見せられる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR6);
+  await S.clearDir(page, DIR6);
+  // 会議で見せるのは 1 枚ではない。複数図に散った置換をまとめて見せる。
+  await S.putDoc(page, DIR6, 'spi_init_sequence', S.docFor('spi_init_sequence', 'SpiDrv'));
+  await S.putDoc(page, DIR6, 'driver_common_class', S.docFor('driver_common_class', 'SpiDrv'));
+  await page.reload();
+  await page.waitForSelector('#preview-svg');
+
+  // 置換はまだ当てない。会議で見せるのは「当てたらこうなる」なので、
+  // 影響範囲の画面だけで前後が分かることがこの手順の到達点。
+  await page.keyboard.press('Control+h');
+  await page.waitForSelector('#rename-panel.open', { timeout: 5000 });
+  await page.locator('#rename-from').fill('SpiDrv');
+  await page.locator('#rename-to').fill('Spi_Driver');
+  await page.waitForTimeout(1200);
+
+  const gate = page.locator('#btn-rename-hits-impact');
+  await expect(gate).toBeEnabled();
+  await gate.click();
+  await page.waitForSelector('#ri-modal', { state: 'visible' });
+
+  // 到達条件その1: 図を開き直さなくても、各図に「今」と「置換後」の図が並ぶ。
+  await expect(page.locator('#ri-svg')).toBeChecked();
+  const entry = page.locator('#ri-body .cb-entry[data-doc-name="spi_init_sequence"]');
+  await expect(entry).toHaveCount(1, { timeout: 10000 });
+  const thumbs = entry.locator('.ri-thumbs .ri-thumb');
+  await expect(thumbs).toHaveCount(2);
+  await expect(thumbs.nth(0).locator('.ri-thumb-head')).toContainText('今');
+  await expect(thumbs.nth(1).locator('.ri-thumb-head')).toContainText('置換後');
+  await expect(thumbs.nth(0).locator('.ri-thumb-body svg')).toBeVisible({ timeout: 30000 });
+  await expect(thumbs.nth(1).locator('.ri-thumb-body svg')).toBeVisible({ timeout: 30000 });
+
+  // 到達条件その2: 並んだ図が「置換前」と「置換後」を実際に描き分けている。
+  await expect(thumbs.nth(0).locator('.ri-thumb-body')).toContainText('SpiDrv');
+  await expect(thumbs.nth(1).locator('.ri-thumb-body')).toContainText('Spi_Driver');
+  // 「変更前」に置換後の名前がまだ無いことで、2 枚が前後であることが決まる
+  // (SpiDrv_Init のような別の語は一括置換の対象外なので、置換後の図にも残る。
+  //  ここで「SpiDrv を 1 つも含まない」と見るのは置換の仕様のほうを誤っている)。
+  await expect(thumbs.nth(0).locator('.ri-thumb-body')).not.toContainText('Spi_Driver');
+
+  // 到達条件その3: テキストの該当行も同じ画面に残る (当たりの確認は今までどおり)。
+  await expect(entry.locator('table.cb-diff')).toHaveCount(1);
+
+  // 描き終わりが 1 行で分かる (会議中に止まって見えない)。
+  await expect(page.locator('#ri-svg-state')).toContainText('図 ', { timeout: 30000 });
+
+  // 会議ではこの一覧をそのまま映す。
+  await page.screenshot({ path: shotOut('primary-04-impact-thumbs.png'), fullPage: true });
+
+  // 到達条件その4: 質問の出た図だけを押して原寸にし、閉じれば一覧に戻る。
+  await thumbs.nth(1).click();
+  const zoom = page.locator('#ri-zoom');
+  await expect(zoom).toBeVisible();
+  await expect(zoom.locator('#ri-zoom-body svg')).toBeVisible();
+  await expect(zoom.locator('#ri-zoom-head')).toContainText('spi_init_sequence');
+  await page.keyboard.press('Escape');
+  await expect(zoom).not.toBeVisible();
+  // 原寸を閉じても一覧は開いたまま (会議の流れが切れない)。
+  await expect(page.locator('#ri-modal')).toBeVisible();
+
+  // 到達条件その5: 図が要らない場面では消せ、テキスト差分だけに戻る。
+  await page.locator('#ri-svg').uncheck();
+  await expect(entry.locator('.ri-thumbs')).toHaveCount(0);
+  await expect(entry.locator('table.cb-diff')).toHaveCount(1);
+
+  await page.locator('#ri-close').click();
+  await S.clearDir(page, DIR6);
 });

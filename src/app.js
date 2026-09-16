@@ -15615,6 +15615,10 @@ function _fiFolderApply(from) {
 // 適用する前に、ヒットした図の該当行が置換でどう変わるかを ▤ 変更サマリボードと
 // 同じ見た目 (行番号 + 変更前 / 変更後) で並べる。ここでは何も書き換えない。
 var _riFull = false;
+// BLK-primary-20260917-0223: 影響ボードに並べる 変更前 / 変更後 (仮適用) の図。
+// 同じ本文は 1 度しか描かない (会議中に同じ図を描き直して待たせない)。
+var _riSvgCache = {};
+var _riSvgSeq = 0;
 
 // ボードに載せる図。開いているタブ (未保存の編集を含む) と、保存フォルダにしか
 // 無い図。パネルの「開いている図すべて」を外していれば今の図だけにする。
@@ -15713,6 +15717,7 @@ function renderRenameImpactBoard() {
       + '<div class="cb-entry-head"><span>' + esc(e.name)
       + (e.unopened ? ' (未オープン)' : '') + '</span>'
       + '<span class="cb-count">' + esc(e.count + ' 件') + '</span></div>'
+      + _riThumbsHtml(e, esc)
       + '<div class="cb-cols"><span>今</span><span>置換後</span></div>'
       + '<table class="cb-diff"><tbody>';
     rows.forEach(function(r) {
@@ -15729,14 +15734,111 @@ function renderRenameImpactBoard() {
     html += '</tbody></table></div>';
   });
   body.innerHTML = html + noneHtml;
+  _riDrawThumbs(res);
   return res;
+}
+
+// 図を出すか。会議でそのまま映せるよう既定は出す。
+function _riSvgOn() {
+  var el = document.getElementById('ri-svg');
+  return !el || el.checked;
+}
+
+// 図ごとの 変更前 / 変更後 の枠。中身は後から差し込む (描くのは 1 枚ずつ)。
+function _riThumbsHtml(e, esc) {
+  var IT = window.MA.impactThumbs;
+  if (!IT || !_riSvgOn()) return '';
+  var same = IT.key(e.before) === IT.key(e.after);
+  var html = '<div class="ri-thumbs" data-doc-name="' + esc(e.name) + '"'
+    + ' data-same="' + (same ? '1' : '0') + '">';
+  IT.SIDES.forEach(function(sd) {
+    var dsl = sd.side === 'before' ? e.before : e.after;
+    html += '<div class="ri-thumb" data-doc-name="' + esc(e.name) + '"'
+      + ' data-side="' + sd.side + '" data-key="' + esc(IT.key(dsl)) + '"'
+      + ' title="' + esc(e.name + ' の' + sd.label + 'の図。押すと原寸') + '">'
+      + '<div class="ri-thumb-head">' + esc(sd.label)
+      + (same && sd.side === 'after' ? '<span class="ri-thumb-same">見た目は変わりません</span>' : '')
+      + '</div>'
+      + '<div class="ri-thumb-body ri-thumb-wait" data-key="' + esc(IT.key(dsl)) + '">描画待ち</div>'
+      + '</div>';
+  });
+  return html + '</div>';
+}
+
+// 1 枚ずつ直列に描く。同時に何本も /render へ投げると PlantUML 側が詰まって
+// 最初の 1 枚まで遅くなる (変更前後の板と同じ約束)。
+function _riDrawThumbs(res) {
+  var IT = window.MA.impactThumbs;
+  var stateEl = document.getElementById('ri-svg-state');
+  if (!IT || !_riSvgOn() || !res || !res.entries || !res.entries.length) {
+    if (stateEl) stateEl.textContent = '';
+    return Promise.resolve();
+  }
+  var plan = IT.uniquePlan(res.entries);
+  var seq = ++_riSvgSeq;
+  var done = 0;
+  if (stateEl) stateEl.textContent = IT.statusText(0, plan.length);
+
+  function put(key, html) {
+    var body = document.getElementById('ri-body');
+    if (!body) return;
+    var slots = body.querySelectorAll('.ri-thumb-body');
+    for (var i = 0; i < slots.length; i++) {
+      if (slots[i].getAttribute('data-key') !== key) continue;
+      slots[i].innerHTML = html;
+      slots[i].classList.remove('ri-thumb-wait');
+    }
+  }
+
+  function step(i) {
+    if (seq !== _riSvgSeq) return Promise.resolve();   // 描いている間に条件が変わった
+    if (i >= plan.length) {
+      if (stateEl) stateEl.textContent = IT.statusText(plan.length, plan.length);
+      return Promise.resolve();
+    }
+    var item = plan[i];
+    var cached = _riSvgCache[item.key];
+    var p = cached ? Promise.resolve(cached) : renderDslToSvg(item.dsl).then(function(svg) {
+      _riSvgCache[item.key] = svg;
+      return svg;
+    }, function(err) {
+      // 描けない図があっても他の図は見せられる。顧客の前なので原因は短く。
+      return '<span class="ri-thumb-note">この図は描けませんでした ('
+        + window.MA.htmlUtils.escHtml(String((err && err.message) || err)) + ')</span>';
+    });
+    return p.then(function(html) {
+      if (seq !== _riSvgSeq) return;
+      put(item.key, html);
+      done++;
+      if (stateEl) stateEl.textContent = IT.statusText(done, plan.length);
+      return step(i + 1);
+    });
+  }
+  return step(0);
+}
+
+// 質問が出た図だけを原寸で。ボードの上に重ねるので、閉じれば一覧に戻る。
+function _riZoom(name, label, html) {
+  var z = document.getElementById('ri-zoom');
+  var head = document.getElementById('ri-zoom-head');
+  var body = document.getElementById('ri-zoom-body');
+  if (!z || !body) return;
+  if (head) head.textContent = name + ' — ' + label;
+  body.innerHTML = html;
+  z.classList.add('open');
+}
+
+function _riZoomClose() {
+  var z = document.getElementById('ri-zoom');
+  if (z) z.classList.remove('open');
 }
 
 function toggleRenameImpact(open) {
   var modal = document.getElementById('ri-modal');
   if (!modal) return;
   var want = (open == null) ? (modal.style.display === 'none' || !modal.style.display) : !!open;
-  if (!want) { modal.style.display = 'none'; return; }
+  // 閉じるときは描きかけも原寸も畳む (次に開いた画面に前回の図が残らない)。
+  if (!want) { modal.style.display = 'none'; _riSvgSeq++; _riZoomClose(); return; }
   modal.style.display = 'flex';
   renderRenameImpactBoard();
   var body = document.getElementById('ri-body');
@@ -15765,7 +15867,11 @@ function setupRenameImpact() {
     if (ev.target === modal) toggleRenameImpact(false);
   });
   document.addEventListener('keydown', function(ev) {
-    if (ev.key === 'Escape' && modal.style.display === 'flex') toggleRenameImpact(false);
+    if (ev.key !== 'Escape' || modal.style.display !== 'flex') return;
+    // 原寸を開いているなら、まずそれを閉じる (一覧まで一気に畳まない)。
+    var z = document.getElementById('ri-zoom');
+    if (z && z.classList.contains('open')) { _riZoomClose(); return; }
+    toggleRenameImpact(false);
   });
 
   var full = document.getElementById('ri-full');
@@ -15773,6 +15879,29 @@ function setupRenameImpact() {
     _riFull = full.checked;
     renderRenameImpactBoard();
   });
+
+  // BLK-primary-20260917-0223: 図の出し入れ。消すときは描きかけも止める
+  // (会議の途中で切っても、あとから遅れて図が現れない)。
+  var svg = document.getElementById('ri-svg');
+  if (svg) svg.addEventListener('change', function() {
+    _riSvgSeq++;
+    renderRenameImpactBoard();
+  });
+
+  // サムネイルを押したら原寸。描けていない枠は開かない。
+  var riBody = document.getElementById('ri-body');
+  if (riBody) riBody.addEventListener('click', function(ev) {
+    var t = ev.target;
+    while (t && t !== riBody && !(t.classList && t.classList.contains('ri-thumb'))) t = t.parentNode;
+    if (!t || t === riBody) return;
+    var slot = t.querySelector('.ri-thumb-body');
+    if (!slot || slot.classList.contains('ri-thumb-wait')) return;
+    var headEl = t.querySelector('.ri-thumb-head');
+    _riZoom(t.getAttribute('data-doc-name') || '', (headEl && headEl.textContent) || '', slot.innerHTML);
+  });
+
+  var zoom = document.getElementById('ri-zoom');
+  if (zoom) zoom.addEventListener('click', function() { _riZoomClose(); });
 
   // 見て納得したらそのまま適用する。置換そのものは一括置換パネルの経路を通す
   // (適用の手順を 2 か所に持たない)。
