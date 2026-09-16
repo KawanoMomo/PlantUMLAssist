@@ -2799,6 +2799,12 @@ html, body {
 #dp-pages .dp-toc-line { font-size: 12px; padding: 3px 0; border-bottom: 1px dotted #ddd; }
 #dp-pages .dp-fig-note { font-size: 12px; color: #555; margin-bottom: 10px; }
 #dp-pages .dp-fig-body { text-align: center; overflow: auto; }
+#dp-pages .dp-fix { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+#dp-pages .dp-fix input {
+  font-size: 12px; padding: 3px 6px; border: 1px solid #ccc; border-radius: 3px; color: #222; background: #fffdf4;
+}
+#dp-pages .dp-fix input.dp-empty-field { border-color: #d08a30; }
+#dp-pages #dp-issues li { cursor: pointer; text-decoration: underline dotted; }
 #dp-pages .dp-fig-body svg { max-width: 100%; height: auto; }
 #dp-pages .dp-fig-gone {
   font-size: 12px; color: #b04040; border: 1px dashed #b04040;
@@ -7934,6 +7940,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <strong id="dp-title"></strong>
         <span id="dp-verdict" role="status"></span>
         <span id="dp-tools">
+          <button type="button" id="dp-save" title="このページで書いた見出し・注記を資料セットに保存します">見出し・注記を保存</button>
+          <button type="button" id="dp-reexport" title="保存してから、この体裁で SVG の zip を書き出し直します">保存して書き出し直す</button>
           <button type="button" id="dp-back">一覧へ戻る</button>
         </span>
       </div>

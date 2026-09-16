@@ -139,7 +139,64 @@ window.MA.docProof = (function() {
     return null;
   }
 
+  // BLK-primary-20260916-0626-wish: 書き出しの指摘 (見出しが図名のまま / 注記が空) を、
+  // 資料を開いたままその場で埋める。見出しと注記は資料セットの持ち物 (doc-layout) なので、
+  // 図を描き直さずにページの文字だけを差し替え、判定もその場で出し直せるようにする。
+  // applyEdit(proof, name, field, value) — その図のページの見出し / 注記を書き換えた新しい proof。
+  function applyEdit(proof, name, field, value) {
+    var p = proof || { pages: [] };
+    var want = _line(name);
+    var v = _line(value);
+    var pages = (p.pages || []).map(function(pg) {
+      if (pg.name !== want) return pg;
+      var cp = {};
+      Object.keys(pg).forEach(function(k) { cp[k] = pg[k]; });
+      if (field === 'heading') { cp.titled = !!v; cp.heading = v || pg.name; }
+      else if (field === 'note') { cp.note = v; }
+      return cp;
+    });
+    var out = {};
+    Object.keys(p).forEach(function(k) { out[k] = p[k]; });
+    out.pages = pages;
+    return out;
+  }
+
+  // 入力欄に出す素の見出し (図名で代用している間は空)。
+  function rawHeading(page) {
+    return page && page.titled ? _line(page.heading) : '';
+  }
+
+  // rowsFor(set, proof) — 資料セットに保存する行 (doc-layout.toSaved に渡す形)。
+  // 並びはセットの docs のまま、見出し・注記だけを資料の画面で書いた値にする。
+  function rowsFor(set, proof) {
+    var DL = window.MA.docLayout;
+    var base = DL ? DL.items(set) : [];
+    var by = {};
+    ((proof && proof.pages) || []).forEach(function(pg) { by[pg.name] = pg; });
+    return base.map(function(it) {
+      var pg = by[it.name];
+      if (!pg) return it;
+      return { name: it.name, heading: rawHeading(pg), note: _line(pg.note) };
+    });
+  }
+
+  // 指摘 (checks の key) を押したときに最初に埋めるページ。無ければ null。
+  function firstPageFor(proof, key) {
+    var pages = (proof && proof.pages) || [];
+    for (var i = 0; i < pages.length; i++) {
+      var g = pages[i];
+      if (key === 'missing' && !g.inZip) return g;
+      if (key === 'untitled' && g.inZip && !g.titled) return g;
+      if (key === 'blank' && g.inZip && !g.note) return g;
+    }
+    return null;
+  }
+
   return {
+    applyEdit: applyEdit,
+    rawHeading: rawHeading,
+    rowsFor: rowsFor,
+    firstPageFor: firstPageFor,
     build: build,
     coverLines: coverLines,
     tocLine: tocLine,

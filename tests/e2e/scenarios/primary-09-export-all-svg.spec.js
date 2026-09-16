@@ -351,6 +351,31 @@ test('手順9 書き出した資料を客先の体裁のまま見返し、直す
   await expect(page.locator('#dp-verdict')).toContainText('直すなら');
   await expect(page.locator('#dp-issues li[data-key="blank"]')).toContainText('注記が空のページ');
 
+  // BLK-primary-20260916-0626-wish: 指摘を、資料を開いたままその場で埋める。
+  // 指摘を押すと最初に埋めるページの注記欄へ飛び、打つと判定・目次がその場で変わる。
+  await page.locator('#dp-issues li[data-key="blank"]').click();
+  const p2 = page.locator('#dp-pages .dp-fig[data-no="2"]');
+  await expect(p2.locator('.dp-note-input')).toBeFocused();
+  const figs = await page.locator('#dp-pages .dp-fig').count();
+  for (let i = 2; i <= figs; i++) {
+    const pg = page.locator('#dp-pages .dp-fig[data-no="' + i + '"]');
+    await pg.locator('.dp-heading-input').fill('見出し' + i);
+    await pg.locator('.dp-note-input').fill('注記' + i);
+  }
+  await expect(page.locator('#dp-verdict')).toContainText('このまま客先に出せます');
+  await expect(page.locator('#dp-issues')).toBeHidden();
+  await expect(p2.locator('.dp-fig-head')).toHaveText('図2 見出し2');
+  await expect(page.locator('#dp-toc .dp-toc-line[data-no="2"]')).toHaveText('図2 見出し2 — 注記2');
+  await page.locator('#dp-save').click();
+  await expect(page.locator('#docset-status')).toContainText('見出し・注記を保存しました');
+  // 保存はフォルダ側の資料セットに入る (開き直しても残る)。
+  const sets = await page.evaluate(async (d) => {
+    const r = await fetch('/doc-sets?dir=' + encodeURIComponent(d));
+    return r.ok ? r.json() : null;
+  }, DIR);
+  const saved = sets.sets.find((x) => x.name === '顧客資料');
+  expect(saved.items.find((it) => it.note === '注記2')).toBeTruthy();
+
   // 到達条件その5: 差し戻しは、そのページから編集に戻れる (zip を解かない)。
   await p1.locator('.dp-edit').click();
   await expect(page.locator('#docset-modal')).toBeHidden();

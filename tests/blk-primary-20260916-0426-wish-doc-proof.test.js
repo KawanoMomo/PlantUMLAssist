@@ -133,3 +133,51 @@ describe('doc-proof: 書き出した資料を客先の体裁で見返す', funct
     expect(DP.verdict(proof).text).toContain('空');
   });
 });
+
+// BLK-primary-20260916-0626-wish: 書き出しの指摘を、資料を開いたままその場で埋める。
+describe('doc-proof: 指摘をその場で埋める', function() {
+  var BARE = { name: '顧客資料', docs: ['spi_init_sequence', 'spi_state'], items: [] };
+  var NAMES = ['spi_init_sequence', 'spi_state'];
+  function bare() {
+    var sh = DL.sheet(BARE, NAMES);
+    var files = sh.entries.map(function(e) { return { name: DL.fileNameOf(e) + '.svg', content: SVG }; });
+    return DP.build(sh, files, {});
+  }
+
+  test('空の資料は見出し・注記の指摘が全ページに出て、最初に埋めるページが引ける', function() {
+    var p = bare();
+    var keys = DP.checks(p).map(function(c) { return c.key; });
+    expect(keys).toEqual(['untitled', 'blank']);
+    expect(DP.firstPageFor(p, 'blank').no).toBe(1);
+    expect(DP.rawHeading(p.pages[0])).toBe('');
+  });
+
+  test('applyEdit で見出し・注記を埋めると、判定がその場で「このまま出せる」に変わる', function() {
+    var p = bare();
+    NAMES.forEach(function(n, i) {
+      p = DP.applyEdit(p, n, 'heading', '見出し' + i);
+      p = DP.applyEdit(p, n, 'note', '注記' + i);
+    });
+    expect(DP.checks(p)).toEqual([]);
+    expect(DP.verdict(p).cls).toBe('dp-ok');
+    expect(DP.tocLine(p.pages[1])).toBe('図2 見出し1 — 注記1');
+    expect(DP.firstPageFor(p, 'blank')).toBe(null);
+  });
+
+  test('見出しを空に戻すと図名で代用され、指摘に戻る。元の proof は書き換えない', function() {
+    var p0 = bare();
+    var p1 = DP.applyEdit(p0, 'spi_state', 'heading', 'SPI 状態');
+    var p2 = DP.applyEdit(p1, 'spi_state', 'heading', '  ');
+    expect(p0.pages[1].titled).toBe(false);
+    expect(p1.pages[1].heading).toBe('SPI 状態');
+    expect(p2.pages[1].heading).toBe('spi_state');
+    expect(p2.pages[1].titled).toBe(false);
+  });
+
+  test('rowsFor は並び順をセットのまま、書いた見出し・注記で保存行を作る', function() {
+    var p = DP.applyEdit(bare(), 'spi_state', 'note', '受信待ちからの復帰');
+    var saved = DL.toSaved(DP.rowsFor(BARE, p));
+    expect(saved.docs).toEqual(NAMES);
+    expect(saved.items).toEqual([{ name: 'spi_state', heading: '', note: '受信待ちからの復帰' }]);
+  });
+});
