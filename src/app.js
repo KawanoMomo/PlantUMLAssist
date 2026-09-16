@@ -3288,6 +3288,7 @@ function initCommandPalette() {
       { id: 'export-png-t', title: 'PNG（透過背景）/ Export PNG transparent', hint: 'Export', keywords: ['export', 'png', 'transparent'], run: function() { clickById('exp-png-transparent'); } },
       { id: 'export-clip', title: 'クリップボードにコピー / Copy image', hint: 'Export', keywords: ['export', 'clipboard', 'copy'], run: function() { clickById('exp-clipboard'); } },
       { id: 'export-all', title: '全図を SVG で保存（zip）', hint: 'Export', keywords: ['export', 'svg', 'zip', 'all'], run: function() { clickById('exp-svg-all'); } },
+      { id: 'handover-board', title: '引き継ぎチェックリスト（渡してよい図を数える）', hint: 'Handover', keywords: ['handover', '引き継ぎ', 'ひきつぎ', 'checklist', 'チェックリスト', '新人', '置換済み', 'note', 'svg'], run: function() { openHandoverBoard(); } },
       { id: 'export-docset', title: '資料セットで SVG で保存（zip）', hint: 'Export', keywords: ['export', 'svg', 'zip', 'set', 'docset', '資料', 'セット'], run: function() { clickById('exp-docset'); } },
       { id: 'export-pick', title: '図を選んで SVG で保存（zip）', hint: 'Export', keywords: ['export', 'svg', 'zip', 'pick', 'select', 'changed', 'fix'], run: function() { clickById('exp-svg-pick'); } },
       { id: 'export-fix', title: '要修正のみを SVG で保存（zip）', hint: 'Export', keywords: ['export', 'svg', 'zip', 'fix', 'review'], run: function() { clickById('exp-svg-fix'); } },
@@ -5361,6 +5362,7 @@ function setupChangeBoard() {
   if (mapExport) mapExport.addEventListener('click', function() { writeFindingMap(); });
 
   setupHandoverChecklist();
+  setupHandoverBoard();
 }
 
 // いまの対応表を 1 枚の Markdown にして書き出す。会議で「この差分はどの指摘か」を
@@ -24852,6 +24854,226 @@ var _dsSets = [];
 var _dsDir = null;
 var _dsNames = [];
 
+// ── 引き継ぎチェックリスト (BLK-primary-20260917-0323-wish) ────────────────
+// 統一を終えた図を新人に渡してよいかを、1 画面で読み切る。置換の残りは
+// ⇄ 一括置換の履歴、note の鮮度は図を 1 枚ずつ開いて目で、SVG の追いつきは
+// 📂 一覧 —— と 3 つの画面に散っていた答えを 1 行に並べる。
+// 判定は handover-board の職掌。ここは材料を集めて描くだけ。
+var _hbBoard = null;
+var _hbBusy = null;
+
+function _hbModal() { return document.getElementById('hb-modal'); }
+
+// 統一前の名前。⇄ 一括置換で打った組の from をそのまま使う
+// (「何から何へ直したか」の正本はそこにしか無い)。
+function _hbFroms() {
+  var RR = window.MA.renameRedo;
+  var RB = window.MA.renameBadge;
+  if (!RR || !RB) return [];
+  var sum = RB.summarize(RR.pairs(_renameRedoPairs(), _renameRedoDocs()));
+  var out = [];
+  (sum.list || []).forEach(function(r) {
+    if (r && r.from && out.indexOf(r.from) < 0) out.push(r.from);
+  });
+  return out;
+}
+
+// 表の材料を集める。保存フォルダの図・その本文・SVG の内容判定・指摘.md。
+function loadHandoverBoard() {
+  var HB = window.MA.handoverBoard;
+  var WS = window.MA.workspace;
+  var SF = window.MA.svgFreshness;
+  if (!HB || !WS || !WS.listFolder) return Promise.resolve(null);
+  if (_hbBusy) return _hbBusy;
+  var dir = _wsFileDir();
+  saveActiveDoc();
+  _hbBusy = Promise.all([
+    WS.listFolder(dir),
+    _noteLoad(true).catch(function() { return false; }),
+  ]).then(function(both) {
+    var info = both[0] || {};
+    var entries = (info && Array.isArray(info.entries)) ? info.entries : [];
+    var names = entries.map(function(e) {
+      return e && typeof e === 'object' ? e.name : e;
+    }).filter(function(n) { return n; });
+    var svg = {};
+    if (SF && SF.scan && SF.contentMap) {
+      svg = SF.contentMap(SF.scan(entries, (info && info.verified) || {}));
+    }
+    var texts = {};
+    return Promise.all(names.map(function(n) {
+      return WS.loadFile(n, dir).then(function(t) {
+        if (typeof t === 'string') texts[n] = t;
+      }, function() {});
+    })).then(function() {
+      _hbBoard = HB.build({
+        names: names, texts: texts, froms: _hbFroms(), svg: svg,
+        findings: _hbFindings(),
+      });
+      _hbBusy = null;
+      return _hbBoard;
+    });
+  }).catch(function() {
+    _hbBusy = null;
+    return _hbBoard;
+  });
+  return _hbBusy;
+}
+
+// 指摘.md の行。前置き (サマリ・依頼) は印を付けて渡し、数えさせない。
+function _hbFindings() {
+  var RN = window.MA.reviewNote;
+  return (_noteRows || []).map(function(r) {
+    return {
+      id: r.id, index: r.index, title: r.title, heading: r.heading, docs: r.docs || [],
+      preamble: (RN && RN.isPreamble) ? !!RN.isPreamble(r) : false,
+    };
+  });
+}
+
+function _hbCell(tr, cell) {
+  var td = document.createElement('td');
+  td.className = 'hb-cell';
+  td.setAttribute('data-state', cell.state);
+  td.setAttribute('data-tone',
+    (cell.state === 'done' || cell.state === 'fresh' || cell.state === 'ok'
+      || cell.state === 'clear' || cell.state === 'none') ? 'ok'
+      : (cell.state === 'unknown' ? 'unknown' : 'ng'));
+  td.textContent = cell.label;
+  if (cell.titles && cell.titles.length) td.title = cell.titles.join(' / ');
+  tr.appendChild(td);
+  return td;
+}
+
+function renderHandoverBoard() {
+  var HB = window.MA.handoverBoard;
+  var box = document.getElementById('hb-rows');
+  if (!HB || !box) return;
+  var board = _hbBoard || { rows: [], summary: HB.summary([]) };
+  box.textContent = '';
+
+  var sum = document.getElementById('hb-sum');
+  if (sum) {
+    sum.textContent = board.summary.line;
+    sum.setAttribute('data-tone', board.summary.tone);
+    sum.setAttribute('data-total', String(board.summary.total));
+    sum.setAttribute('data-ready', String(board.summary.ready));
+    sum.setAttribute('data-blocked', String(board.summary.blocked));
+  }
+
+  var empty = document.getElementById('hb-empty');
+  if (empty) {
+    var none = board.rows.length === 0;
+    empty.style.display = none ? '' : 'none';
+    empty.textContent = none
+      ? '保存フォルダに図がありません。先に図を保存してから開いてください。' : '';
+  }
+
+  board.rows.forEach(function(r) {
+    var tr = document.createElement('tr');
+    tr.setAttribute('data-doc-name', r.name);
+    tr.setAttribute('data-ready', r.ready ? '1' : '0');
+    if (r.blockers.length) tr.setAttribute('data-blockers', r.blockers.join('、'));
+
+    var name = document.createElement('td');
+    name.className = 'hb-name';
+    name.textContent = r.name;
+    if (r.blockers.length) name.title = '渡す前に見る: ' + r.blockers.join('、');
+    tr.appendChild(name);
+
+    _hbCell(tr, r.rename);
+    _hbCell(tr, r.note);
+    _hbCell(tr, r.svg);
+    _hbCell(tr, r.gap);
+
+    var act = document.createElement('td');
+    var go = document.createElement('button');
+    go.type = 'button';
+    go.className = 'hb-open';
+    go.textContent = '開く';
+    go.title = r.name + ' を開いて直す';
+    go.addEventListener('click', function() { _hbOpenDoc(r.name); });
+    act.appendChild(go);
+    tr.appendChild(act);
+
+    box.appendChild(tr);
+  });
+}
+
+// 赤い行からその図へ。📂 一覧と同じ経路で開く (開き方を 2 つに増やさない)。
+function _hbOpenDoc(name) {
+  closeHandoverBoard();
+  var panel = document.getElementById('folder-panel');
+  if (panel && !/\bopen\b/.test(panel.className || '')) {
+    var tab = document.getElementById('btn-tab-folder');
+    if (tab) tab.click();
+  }
+  // 一覧は開いた後に描かれるので、行が出るまで少しだけ待って押す
+  // (押せなかったときに黙って何も起きない画面にしない)。
+  var tries = 0;
+  (function click() {
+    var item = document.querySelector('#folder-panel .folder-item[data-file-name="' + name + '"]');
+    if (item) { item.click(); return; }
+    if (tries++ < 40) window.setTimeout(click, 50);
+  })();
+}
+
+function openHandoverBoard() {
+  var modal = _hbModal();
+  if (!modal) return Promise.resolve(null);
+  modal.style.display = 'flex';
+  renderHandoverBoard();
+  return loadHandoverBoard().then(function(b) {
+    renderHandoverBoard();
+    return b;
+  });
+}
+
+function closeHandoverBoard() {
+  var modal = _hbModal();
+  if (modal) modal.style.display = 'none';
+}
+
+function setupHandoverBoard() {
+  var close = document.getElementById('hb-close');
+  if (close) close.addEventListener('click', function() { closeHandoverBoard(); });
+  var reload = document.getElementById('hb-reload');
+  if (reload) reload.addEventListener('click', function() {
+    _hbBoard = null;
+    renderHandoverBoard();
+    loadHandoverBoard().then(function() { renderHandoverBoard(); });
+  });
+  var copy = document.getElementById('hb-copy');
+  if (copy) copy.addEventListener('click', function() {
+    var HB = window.MA.handoverBoard;
+    if (!HB || !_hbBoard) return;
+    var text = HB.copyText(_hbBoard);
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text);
+    } catch (e) {}
+    var sum = document.getElementById('hb-sum');
+    if (sum) sum.textContent = '表を写しました（' + _hbBoard.rows.length + ' 行）';
+  });
+  var modal = _hbModal();
+  if (modal) modal.addEventListener('click', function(ev) {
+    if (ev.target === modal) closeHandoverBoard();
+  });
+}
+
+// 資料セットの画面に出す「未確認のまま渡そうとしている」1 行。
+// 書き出す前に名指しする (押してから zip を開いて気付く作りにしない)。
+function renderDocSetHandover() {
+  var HB = window.MA.handoverBoard;
+  var el = document.getElementById('docset-handover');
+  if (!HB || !el) return;
+  if (!_hbBoard) { el.textContent = ''; el.setAttribute('data-blocked', '0'); return; }
+  var t = _dsFolderTarget ? _dsFolderTarget() : { picked: [], all: [] };
+  var target = t.picked.length ? t.picked : (t.all.length ? t.all : _dsNames);
+  var warn = HB.exportWarning(_hbBoard, target);
+  el.textContent = warn;
+  el.setAttribute('data-blocked', warn ? String(HB.blockedNames(_hbBoard).length) : '0');
+}
+
 function _dsModal() { return document.getElementById('docset-modal'); }
 
 function loadDocSets(force) {
@@ -25638,6 +25860,8 @@ function openDocSetModal() {
   renderDocSets();
   return Promise.all([loadDocSetNames(), loadDocSets(true)]).then(function() {
     renderDocSets();
+    // 渡す前に見る図が残っていれば、書き出すボタンを押す前にここで名指しする。
+    loadHandoverBoard().then(function() { renderDocSetHandover(); }, function() {});
     // 名前を考えさせない。空なら既定の名前を入れておく (打鍵ゼロで 1 つ作れる)。
     if (nameEl && !nameEl.value) {
       nameEl.value = window.MA.docSet ? window.MA.docSet.defaultName(_dsSets) : '資料セット';

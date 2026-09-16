@@ -2725,6 +2725,53 @@ html, body {
 #at-ledger .fl-empty { color: var(--text-secondary); font-size: 12px; padding: 8px 2px; }
 #at-band-head { font-size: 12px; color: var(--text-primary); padding: 10px 0 4px 0; border-top: 1px solid var(--border); }
 /* 提出用 zip の図選び (BLK-primary-20260908-1203-wish) */
+/* BLK-primary-20260917-0323-wish: 引き継ぎチェックリスト */
+#hb-modal-content {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  width: 72vw;
+  max-width: 900px;
+  max-height: 84vh;
+  display: flex;
+  flex-direction: column;
+}
+#hb-head {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px; border-bottom: 1px solid var(--border);
+  font-size: 12px; color: var(--text-primary);
+}
+#hb-sum { color: var(--text-secondary); }
+#hb-sum[data-tone="ng"] { color: var(--danger, #d05050); font-weight: 600; }
+#hb-sum[data-tone="ok"] { color: var(--accent); font-weight: 600; }
+#hb-tools { margin-left: auto; display: flex; gap: 6px; }
+#hb-tools button {
+  border: 1px solid var(--border); background: var(--bg-tertiary);
+  color: var(--text-primary); border-radius: 4px; padding: 3px 10px;
+  font-size: 12px; cursor: pointer;
+}
+#hb-body { overflow: auto; padding: 8px 14px 14px; }
+#hb-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+#hb-table th, #hb-table td {
+  border-bottom: 1px solid var(--border); padding: 5px 8px; text-align: left;
+  white-space: nowrap;
+}
+#hb-table th { color: var(--text-secondary); font-weight: 600; position: sticky; top: 0;
+  background: var(--bg-secondary); }
+#hb-table td.hb-name { white-space: normal; }
+#hb-table tr[data-ready="0"] td { background: rgba(208, 80, 80, 0.10); }
+#hb-table tr[data-ready="0"] td.hb-name { color: var(--danger, #d05050); font-weight: 600; }
+#hb-table td[data-tone="ng"], #hb-table td[data-tone="unknown"] { color: var(--danger, #d05050); }
+#hb-table td[data-tone="ok"] { color: var(--text-secondary); }
+#hb-table button.hb-open {
+  border: 1px solid var(--border); background: var(--bg-tertiary); color: var(--text-primary);
+  border-radius: 4px; padding: 2px 8px; font-size: 11px; cursor: pointer;
+}
+#hb-empty { color: var(--text-secondary); font-size: 12px; padding: 10px 2px; }
+#docset-handover {
+  font-size: 12px; padding: 6px 14px; color: var(--danger, #d05050);
+}
+#docset-handover[data-blocked="0"] { display: none; }
 /* BLK-primary-20260914-2006-wish: 資料セット */
 #docset-modal-content {
   background: var(--bg-secondary);
@@ -7785,6 +7832,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/export-select.js"></script>
 <script src="src/core/handover-notes.js"></script>
 <script src="src/core/handover-checklist.js"></script>
+<script src="src/core/handover-board.js"></script>
 <script src="src/core/review-verdicts.js"></script>
 <script src="src/core/meeting-notes.js"></script>
 <script src="src/core/audit-timeline.js"></script>
@@ -8052,6 +8100,30 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
      絞り込みは変更サマリボードと同じ「変更図のみ / 要修正のみ」 -->
 <!-- BLK-primary-20260914-2006-wish: 資料セット。書き出す対象を「今開いているタブ」から
      切り離し、名前で選べるようにする -->
+<!-- BLK-primary-20260917-0323-wish: 引き継ぎチェックリスト。渡す 14 枚の
+     置換済み / note最新 / SVG最新 / 指摘 を 1 画面で読み、赤い行だけを見る -->
+<div id="hb-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+  <div id="hb-modal-content">
+    <div id="hb-head">
+      <strong>引き継ぎチェックリスト</strong>
+      <span id="hb-sum" role="status"></span>
+      <span id="hb-tools">
+        <button type="button" id="hb-reload" title="保存フォルダ・指摘.md を読み直して数え直す">数え直す</button>
+        <button type="button" id="hb-copy" title="この表をタブ区切りで写す（run ログ・引き継ぎメールへ）">表を写す</button>
+        <button type="button" id="hb-close">閉じる</button>
+      </span>
+    </div>
+    <div id="hb-body">
+      <table id="hb-table">
+        <thead>
+          <tr><th>図</th><th>置換済み</th><th>note最新</th><th>SVG最新</th><th>指摘と符合する欠落</th><th></th></tr>
+        </thead>
+        <tbody id="hb-rows"></tbody>
+      </table>
+      <div id="hb-empty" style="display:none;"></div>
+    </div>
+  </div>
+</div>
 <div id="docset-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="docset-modal-content">
     <div id="docset-head">
@@ -8067,6 +8139,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <span id="docset-pick-count" role="status"></span>
       <button type="button" id="docset-create" title="保存フォルダにある図（📂 一覧で印を付けていればその図だけ）を、この名前の資料セットとして登録する">今の対象を登録する</button>
     </div>
+    <!-- BLK-primary-20260917-0323-wish: 未確認のまま渡そうとしている図を、押す前に名指しする -->
+    <div id="docset-handover" data-blocked="0" role="status"></div>
     <div id="docset-rows"></div>
     <!-- BLK-primary-20260916-0100-wish: 貼る前に資料の体裁 (順序・見出し・1 行説明) を
          組んで、1 枚物のプレビューで確かめる。zip を開いてから並べ直さずに済ませる -->
