@@ -4104,7 +4104,8 @@ table.vault-table button.vault-open:hover { border-color: var(--accent); }
   white-space: nowrap;
 }
 /* 過去の置換の組 (BLK-primary-20260914-1106-friction) */
-#rename-redo { font-size: 10px; margin-bottom: 6px; }
+#rename-redo { font-size: 10px; margin-top: 6px; }
+#rename-redo:not(:empty) { border-top: 1px solid var(--border); padding-top: 4px; }
 #rename-redo .rr-summary { padding: 3px 0; color: var(--text-secondary); }
 #rename-redo .rr-summary.rr-pending { color: var(--accent); }
 #rename-redo .rr-rows { max-height: 88px; overflow-y: auto; font-family: var(--font-mono); }
@@ -6897,10 +6898,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <div id="findings-panel"></div>
       <!-- 開いている図をまたいで部品名を一括置換する -->
       <div id="rename-panel">
-        <!-- BLK-primary-20260914-1106-friction: 過去に当てた置換の組と、その組が
-             今どうなっているか (残り / 適用済み) を打つ前に出す。残っている組だけ
-             押せば置換前・置換後が埋まる -->
-        <div id="rename-redo"></div>
         <label for="rename-from">置換前 (部品名)</label>
         <input id="rename-from" list="rename-candidates" autocomplete="off" spellcheck="false" placeholder="SpiDrv">
         <datalist id="rename-candidates"></datalist>
@@ -6943,6 +6940,15 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
           <button id="btn-rename-apply" disabled>置換</button>
           <button id="btn-rename-cancel">閉じる</button>
         </div>
+        <!-- BLK-primary-20260914-1106-friction: 過去に当てた置換の組と、その組が
+             今どうなっているか (残り / 適用済み) を出す。残っている組だけ
+             押せば置換前・置換後が埋まる。
+             BLK-primary-20260917-0223: この箱はフォルダ側の組を非同期に読んでから
+             行が増える。入力欄と操作ボタンより上に置くと、その 1 行が届いた瞬間に
+             パネル全体が 20px 下がり、ちょうど押していたボタンが指の下から逃げる
+             (mousedown と mouseup が別の要素になり click が起きない)。
+             あとから伸びるものは、動かされて困るものより下に置く -->
+        <div id="rename-redo"></div>
       </div>
       <!-- BLK-junior-20260916-0046-wish: 表記統一の一括反映。⇄ 一括置換は「何を打つか」を
            人が知っている前提の道具だが、揃える先は登録簿 (_names.json) に既にある。

@@ -619,7 +619,10 @@ test('手順4 影響範囲の一覧に変更前後の図が並び、押した図
   // 到達条件その2: 並んだ図が「置換前」と「置換後」を実際に描き分けている。
   await expect(thumbs.nth(0).locator('.ri-thumb-body')).toContainText('SpiDrv');
   await expect(thumbs.nth(1).locator('.ri-thumb-body')).toContainText('Spi_Driver');
-  await expect(thumbs.nth(1).locator('.ri-thumb-body')).not.toContainText('SpiDrv');
+  // 「変更前」に置換後の名前がまだ無いことで、2 枚が前後であることが決まる
+  // (SpiDrv_Init のような別の語は一括置換の対象外なので、置換後の図にも残る。
+  //  ここで「SpiDrv を 1 つも含まない」と見るのは置換の仕様のほうを誤っている)。
+  await expect(thumbs.nth(0).locator('.ri-thumb-body')).not.toContainText('Spi_Driver');
 
   // 到達条件その3: テキストの該当行も同じ画面に残る (当たりの確認は今までどおり)。
   await expect(entry.locator('table.cb-diff')).toHaveCount(1);
