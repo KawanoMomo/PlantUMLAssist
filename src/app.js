@@ -15602,6 +15602,10 @@ var _rpLoading = false;
 // 残りなのかを確かめるために結局履歴を開くことになる。
 var _seedRenamePairAgain = null;
 var _seededPair = null;   // 入れた組。打ち替えられたら案内を消すために覚える
+// 入れただけでまだ触られていない間は true。履歴・意味的参照は「利用者が尋ねた名前」
+// を答える欄なので、こちらが入れておいただけの組でそれを絞り込まない
+// (絞り込むと、開いただけの回に履歴が 1 件しか無いように見える)。
+var _seedUntouched = false;
 
 function renderRenameSeedNote(pair) {
   var RS = window.MA.renameSeed;
@@ -17130,10 +17134,12 @@ function updateRenamePreview() {
   });
 
   renderRenameImpact(docs, from);
-  renderRenameSemantic(docs, from);
+  // 入れておいただけの組は「尋ねた名前」ではない。履歴と意味的参照はそれで絞らない。
+  var asked = _seedUntouched ? '' : from;
+  renderRenameSemantic(docs, asked);
   renderSignatureApply(docs, from);
   renderRenameFolder();
-  renderRenameHistory(from);
+  renderRenameHistory(asked);
   renderRenameRedo();
 
   // 開いていない図しか当たらない語でも置換できるようにする。フォルダを数えて
@@ -18367,6 +18373,9 @@ function setupBulkRename() {
     // 打ち始めてしまう —— 打ち直す 17 打を開いた時点で消す
     // (BLK-primary-20260914-1106-friction)。
     if (!fromEl.value && !toEl.value) { _seededPair = null; renderRenameSeedNote(null); }
+    // 利用者が選んで入った値 (図の選択・エディタの選択) は「尋ねた名前」なので、
+    // 入れ直しの印はここで必ず落としてから seed に判断させる。
+    _seedUntouched = false;
     seedRenamePair();
     var rect = btn.getBoundingClientRect();
     // ツール列が畳まれているとこのボタンは幅 0・座標 0 になる。そのときはタブ列の
@@ -18409,6 +18418,7 @@ function setupBulkRename() {
     fromEl.value = pair.from;
     toEl.value = pair.to;
     _seededPair = pair;
+    _seedUntouched = true;
     renderRenameSeedNote(pair);
     updateRenamePreview();
     return pair;
@@ -18422,15 +18432,22 @@ function setupBulkRename() {
 
   [fromEl, toEl].forEach(function(el) {
     if (!el) return;
-    el.addEventListener('input', updateRenamePreview);
-    // 打ち替えたらその案内はもう自分の組の話ではない。
+    // 打ち替えたらその案内はもう自分の組の話ではない。描き直しより先に印を落とす
+    // (後に回すと、その回の描き直しだけが「入れただけ」の扱いのまま残る)。
     el.addEventListener('input', function() {
+      _seedUntouched = false;
       if (!_seededPair) return;
-      if (fromEl.value !== _seededPair.from || toEl.value !== _seededPair.to) {
-        _seededPair = null;
-        renderRenameSeedNote(null);
-      }
+      if (fromEl.value === _seededPair.from && toEl.value === _seededPair.to) return;
+      // 片側だけ打ち替えられたら、もう片側に残った前回の値は捨てる。
+      // 「SpiDrv → Spi_Driver」を入れた欄で置換前だけ CanDrv に打ち替えた回に
+      // Spi_Driver が残っていると、押した瞬間に別物へ改名してしまう。
+      var other = (el === fromEl) ? toEl : fromEl;
+      var seededOther = (el === fromEl) ? _seededPair.to : _seededPair.from;
+      if (other.value === seededOther) other.value = '';
+      _seededPair = null;
+      renderRenameSeedNote(null);
     });
+    el.addEventListener('input', updateRenamePreview);
     // 組は「打ち終わった時点」で覚える。ヒット 0 件だと [適用] は押せないまま
     // なので、適用のときだけ覚えていては、空打ちの組が永久に残らない
     // (BLK-primary-20260914-1306-friction)。打ち終わり = 欄から離れたとき。
