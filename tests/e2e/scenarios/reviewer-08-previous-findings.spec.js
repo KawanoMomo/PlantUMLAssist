@@ -296,14 +296,16 @@ test('手順8 前回の判断が次の tick に残り、書き直さず 1 行だ
   const svg = (rows) => ({ svg: { status: 'ok', result: { rows: rows } } });
   const STALE = [{ name: 'spi_init_sequence.puml', status: 'stale' }];
 
+  // BLK-reviewer-20260917-0023-wish: id はカテゴリの頭文字を持つようになった
+  // (SVG は S-)。持ち越しの筋はそのまま、id の綴りだけを合わせる。
   // 1 tick 目。監査が「SVG が古い」を出し、reviewer が中身を見て判断を貼る。
   let s = tracker.update(tracker.emptyState(), { audits: svg(STALE), label: 'runs/20260914-2106', at: 'runs/20260914-2106' });
   const row = tracker.rows(s)[0];
-  expect(row.id).toBe('F-01');
+  expect(row.id).toBe('S-01');
   expect(row.since).toBe('runs/20260914-2106');
   expect(tracker.statusText(row)).toBe('新規');
 
-  const set = tracker.setVerdict(s, 'F-01', 'partial', 'puml 側は解消。svg 再エクスポートのみ継続', 'runs/20260914-2106');
+  const set = tracker.setVerdict(s, 'S-01', 'partial', 'puml 側は解消。svg 再エクスポートのみ継続', 'runs/20260914-2106');
   expect(set.ok).toBe(true);
   s = set.state;
 
@@ -318,7 +320,7 @@ test('手順8 前回の判断が次の tick に残り、書き直さず 1 行だ
   expect(back.note).toBe('puml 側は解消。svg 再エクスポートのみ継続');
 
   // 到達条件: 指摘.md の全文を書き直さず、該当行の状態を 1 つ更新するだけで済む。
-  s = tracker.setVerdict(s, 'F-01', 'resolved', '再エクスポート確認', 'runs/20260914-2306').state;
+  s = tracker.setVerdict(s, 'S-01', 'resolved', '再エクスポート確認', 'runs/20260914-2306').state;
   const done = tracker.rows(s)[0];
   expect(done.state).toBe('resolved');
   expect(done.open).toBe(false);
@@ -328,7 +330,7 @@ test('手順8 前回の判断が次の tick に残り、書き直さず 1 行だ
   // 書いてあるかで、手書きしていた 対応済み / 未対応 の区別がそのまま出る。
   const md = tracker.markdown(s, '指摘トラッカー');
   expect(md).toContain('| id | 状態 | 意図 | 初出 | 対象 | 分類 | 備考 |');
-  expect(md).toContain('| F-01 | 解消（判断） | 未対応 | runs/20260914-2106 |');
+  expect(md).toContain('| S-01 | 解消（判断） | 未対応 | runs/20260914-2106 |');
   expect(md).toContain('記録した tick: runs/20260914-2106 → runs/20260914-2206 → runs/20260914-2306');
 });
 

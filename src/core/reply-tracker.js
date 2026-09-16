@@ -45,6 +45,31 @@
     return out;
   }
 
+  // BLK-reviewer-20260917-0023-wish: 台帳の id はカテゴリの頭文字を持つ
+  // (F メソッド / N 表記揺れ・命名規約 / U 未使用participant / S SVG /
+  //  T 章立て対応 / C 粒度ほか整合)。本文に書かれた id も項目の手掛かりにする。
+  // 本文は自由文なので、頭文字は台帳が使う 6 つだけに絞る (`A-1` 等を拾わない)。
+  var LEDGER_PREFIX = 'FNUSTC';
+
+  function _expandLedgerIds(text) {
+    var out = [];
+    var re = new RegExp('\\b([' + LEDGER_PREFIX + '])-(\\d+)(?:\\s*[〜~～-]\\s*(?:['
+      + LEDGER_PREFIX + ']-)?(\\d+))?', 'g');
+    var m;
+    while ((m = re.exec(text))) {
+      var a = parseInt(m[2], 10);
+      var b = m[3] ? parseInt(m[3], 10) : a;
+      var w = m[2].length;
+      if (b < a || b - a > 50) b = a;
+      for (var i = a; i <= b; i++) {
+        var n = String(i);
+        while (n.length < w) n = '0' + n;
+        out.push(m[1] + '-' + n);
+      }
+    }
+    return out;
+  }
+
   function _uniq(list) {
     var seen = {};
     return list.filter(function(x) {
@@ -90,7 +115,9 @@
         var head = tok.split(/[:：\s]/)[0];
         keywords.push(head.length >= 3 ? head : tok);
       }
-      keywords = keywords.concat(_expandIds(it.title));
+      // 見出しの id は従来どおり (頭文字を問わない)。本文の id は台帳の頭文字だけ。
+      keywords = keywords.concat(_expandIds(it.title))
+                         .concat(_expandLedgerIds(it.body.join('\n')));
       return {
         key: keyOf(it.title),
         title: it.title,
