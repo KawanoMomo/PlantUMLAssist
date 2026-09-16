@@ -43,6 +43,43 @@ function defaultStateFile(targets) {
   return STATE_FILE;
 }
 
+// 対象のうちフォルダだけを絶対パスで。控えの「どこを見た記録か」はこれで残す。
+function targetDirs(targets) {
+  return (targets || []).filter((t) => {
+    try { return fs.statSync(t).isDirectory(); } catch (e) { return false; }
+  }).map((t) => path.resolve(t));
+}
+
+// BLK-reviewer-20260917-0223: `.findings-state.json` は persona ごとに同じ名前で
+// 存在するので、`--state` に別の persona の控えを渡しても文法エラーにならず、
+// 「その persona の分だけが出る」結果が黙って返る。控えが記録している対象と
+// 今回の対象を突き合わせ、食い違えば名指しで言う。対象を出さない読み出し
+// (--sections など) でも、控えがどこを見た記録かを必ず 1 行で見せる。
+function stateNotes(statePath, store, targets) {
+  const notes = [];
+  const dirs = targetDirs(targets);
+  const chk = tracker.originCheck(store, dirs);
+  if (!chk.ok) {
+    notes.push('警告: 控えと今回の対象が違います。控えの置き場所 (--state) を確かめてください。');
+    notes.push('  控えが見た対象: ' + chk.origin.join(' / '));
+    notes.push('  今回の対象    : ' + chk.targets.join(' / '));
+  }
+  if (dirs.length === 1) {
+    const def = path.resolve(defaultStateFile(targets));
+    if (path.resolve(statePath) !== def) {
+      notes.push('注意: 対象フォルダの中の控えではなく ' + statePath + ' を読み書きしています'
+        + ' (既定は ' + def + ')。');
+    }
+  }
+  return notes;
+}
+
+// 控えが「どの対象を見た記録か」。対象を渡さない読み出しでも取り違えに気付けるようにする。
+function originLine(store) {
+  const org = tracker.originOf(store);
+  return org.length ? '  この控えが見た対象: ' + org.join(' / ') : '';
+}
+
 const USAGE = [
   '使い方: node tools/findings.js <フォルダ|.puml|監査JSON> ... [オプション]',
   '',
@@ -55,7 +92,8 @@ const USAGE = [
   '  --json         JSON を出す',
   '  --md [FILE]    指摘.md に貼れる表を出す (FILE を書けばそこへ書き出す)',
   '  --sections     指摘.md に貼れる `## ID 見出し` を 1 件 1 節で出す',
-  '  --state FILE   控えの置き場所を変える (既定は対象フォルダの中の ' + STATE_NAME + ')',
+  '  --state FILE   控えの置き場所を変える (既定は対象フォルダの中の ' + STATE_NAME + '。',
+  '                 persona ごとに同名の控えがあるので、渡した控えが別の対象の記録なら警告を出す)',
   '  --no-state     控えを読み書きしない',
   '  --help         この説明',
   '',
@@ -168,6 +206,7 @@ function filterIntent(list, intent) {
 function formatSummary(list, ctx) {
   const lines = [];
   lines.push('指摘トラッカー: ' + ctx.stateFile);
+  if (ctx.origin) lines.push(ctx.origin);
   lines.push('  ' + tracker.summaryText(list));
   const isum = tracker.intentSummaryText(list);
   if (isum) lines.push('  ' + isum);
@@ -221,6 +260,21 @@ function main(argv, io) {
       + pruned.dropped.map((d) => d.id + ' ' + d.title).join(', '));
   }
 
+  // 控えの取り違えは黙って「薄い結果」に化けるので、仕分けの前に言う。
+  stateNotes(statePath, store, opts.targets).forEach((n) => err(n));
+  // 食い違ったまま書き込むと控えの出所が今回の対象で塗り潰され、次の回から
+  // 警告が出なくなる。取り違えた回は出所の記録に触らない (警告は残り続ける)。
+  const originOk = tracker.originCheck(store, targetDirs(opts.targets)).ok;
+  // 対象を渡さない読み出し (--sections / --md / --set) は控えの中身しか出ないので、
+  // どの控えを見ているかを stdout の貼り付け内容を汚さずに添える。
+  // (古い控えには見た対象の記録が無いので、置き場所そのものは必ず言う。
+  //  persona 名はパスに出るため、それだけでも取り違えに気付ける。)
+  if (!opts.targets.length) {
+    err('指摘トラッカー: ' + statePath);
+    const ol = originLine(store);
+    if (ol) err(ol);
+  }
+
   // --set だけなら監査は回さない。「該当行の状態を更新するだけ」がこの口。
   if (opts.set) {
     const parsed = parseSet(opts.set);
@@ -251,6 +305,7 @@ function main(argv, io) {
     store = tracker.update(store, {
       audits: markIntent(built.audits, built.docs, built.MA),
       label: opts.tick, at: new Date().toISOString(),
+      origin: originOk ? targetDirs(opts.targets) : [],
     });
     // 読み飛ばした残骸は名指しで言う (黙って落とすと「図が減った」と読める)。
     if (skippedDirs.length) {
@@ -285,6 +340,7 @@ function main(argv, io) {
     out(JSON.stringify({
       generatedAt: new Date().toISOString(),
       state: statePath,
+      origin: tracker.originOf(store),
       ticks: store.ticks,
       summary: tracker.summaryText(list),
       intentSummary: tracker.intentSummaryText(list),
@@ -293,7 +349,7 @@ function main(argv, io) {
     return 0;
   }
   out(formatSummary(list, {
-    stateFile: statePath, all: opts.all, tick: opts.tick, intent: opts.intent,
+    stateFile: statePath, origin: originLine(store), all: opts.all, tick: opts.tick, intent: opts.intent,
     ticks: store.ticks.map((t) => t.label).join(' → '),
   }));
   return 0;
@@ -301,4 +357,4 @@ function main(argv, io) {
 
 if (require.main === module) process.exit(main(process.argv.slice(2)));
 module.exports = { main, parseArgs, parseSet, USAGE, STATE_FILE, STATE_NAME, defaultStateFile,
-                   formatSummary, filterIntent, markIntent };
+                   formatSummary, filterIntent, markIntent, targetDirs, stateNotes, originLine };

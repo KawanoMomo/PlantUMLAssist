@@ -100,7 +100,16 @@
   function _s(v) { return v === null || v === undefined ? '' : String(v); }
 
   function emptyState() {
-    return { version: VERSION, seq: 0, ticks: [], findings: {} };
+    return { version: VERSION, seq: 0, ticks: [], findings: {}, origin: [] };
+  }
+
+  // BLK-reviewer-20260917-0223: 控えは persona ごとに同じ名前 (.findings-state.json) で
+  // 存在するので、`--state` にどれを渡したかを人が取り違えても文法は通り、
+  // 「中身が薄い」結果が黙って返る。控え自身に「どの対象を見た記録か」を持たせ、
+  // 読み手が渡した対象と突き合わせられるようにする。
+  function originOf(state) {
+    var st = (state && typeof state === 'object') ? state : {};
+    return Array.isArray(st.origin) ? st.origin.map(_s).filter(Boolean) : [];
   }
 
   function readState(v) {
@@ -114,6 +123,8 @@
       seqs: (v.seqs && typeof v.seqs === 'object') ? v.seqs : {},
       ticks: Array.isArray(v.ticks) ? v.ticks.slice() : [],
       findings: (v.findings && typeof v.findings === 'object') ? v.findings : {},
+      // どの対象を見た控えか。古い控えには無いので空のまま (突き合わせは黙って省かれる)。
+      origin: originOf(v),
     });
   }
 
@@ -257,7 +268,27 @@
       f.marks.length = idx + 1;
     });
 
+    // 今回どこを見たかを控えに焼き付ける (渡されたときだけ。JSON 監査からの更新など
+    // 対象フォルダが決まらない回は前回の記録をそのまま残す)。
+    var org = (o.origin || []).map(_s).filter(Boolean);
+    if (org.length) st.origin = org;
+
     return st;
+  }
+
+  // 控えの記録と今回の対象が食い違っていないか。食い違っていれば
+  // { ok:false, origin:[...], targets:[...] } を返す。
+  // 片方が空 (古い控え / 対象なしの読み出し) なら判定できないので ok:true。
+  function _key(p) { return _s(p).replace(/[\\/]+$/, '').replace(/\\/g, '/').toLowerCase(); }
+
+  function originCheck(state, targets) {
+    var org = originOf(readState(state));
+    var tgt = (targets || []).map(_s).filter(Boolean);
+    if (!org.length || !tgt.length) return { ok: true, origin: org, targets: tgt };
+    var have = {};
+    org.forEach(function(p) { have[_key(p)] = true; });
+    var hit = tgt.filter(function(p) { return have[_key(p)]; });
+    return { ok: hit.length > 0, origin: org, targets: tgt };
   }
 
   // ---- 行 -------------------------------------------------------------------
@@ -531,6 +562,7 @@
     emptyState: emptyState, readState: readState, makeId: makeId,
     isJunkPath: isJunkPath, pruneBroken: pruneBroken,
     itemsOf: itemsOf, update: update, rows: rows, setVerdict: setVerdict,
+    originOf: originOf, originCheck: originCheck,
     statusText: statusText, rowText: rowText, counts: counts,
     summaryText: summaryText, markdown: markdown,
   };
