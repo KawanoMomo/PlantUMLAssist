@@ -502,3 +502,76 @@ test('手順4 渡す zip の先頭に、新人が辿る順が付いている', a
 
   await S.clearDir(page, DIR);
 });
+
+// BLK-primary-20260916-2314-friction: 顧客向けの 14 枚を毎回「全部外す → 1 枚ずつチェック」で選び直していた
+// (クリック 17)。前回出した図が既定で選ばれていること、控えより前の納品 zip があれば「初回提出」と
+// 言わないこと、選んだ対象を図セット (手順 9 の「顧客資料」) に書き戻せることを確かめる。
+const DIR5 = S.dirFor(__filename) + '-recall';
+
+test('手順4 前回出した図が既定で選ばれ、試作図は外れたまま zip を作れ、図セットにも共有できる', async ({ page }) => {
+  const { execFileSync } = require('child_process');
+  const pathMod = require('path');
+  await S.bootWithSaveDir(page, DIR5);
+  await S.clearDir(page, DIR5);
+  await S.putDoc(page, DIR5, 'spi_init_sequence', S.docFor('spi_init_sequence', 'Spi_Driver'));
+  await S.putDoc(page, DIR5, 'can_init_sequence', S.docFor('can_init_sequence'));
+  await S.putDoc(page, DIR5, 'diagram1', '@startuml\nA -> B : 試作\n@enduml\n');
+  // 控え (_export-log.json) より前に作った納品 zip。中身は 2 枚 (試作図は入っていない)。
+  const abs = S.absDirFor(__filename) + '-recall';
+  execFileSync('python', ['-c', [
+    'import zipfile, os, sys',
+    'p = os.path.join(sys.argv[1], "delivery-20260908-1903.zip")',
+    'z = zipfile.ZipFile(p, "w")',
+    'z.writestr("index.html", "x")',
+    'z.writestr("svg/spi_init_sequence.svg", "<svg/>")',
+    'z.writestr("svg/can_init_sequence.svg", "<svg/>")',
+    'z.close()',
+  ].join('\n'), abs]);
+  // 手順 9 の図セット「顧客資料」はフォルダの全部 (3 枚) で登録されている。
+  await page.evaluate((dir) => fetch('/doc-sets', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dir: dir, name: '顧客資料', docs: ['can_init_sequence', 'diagram1', 'spi_init_sequence'] }),
+  }), DIR5);
+  await S.openFolderItem(page, 'spi_init_sequence');
+  await page.waitForTimeout(800);
+
+  await S.runCommand(page, '納品パッケージ');
+  await expect(page.locator('#dp-modal')).toBeVisible();
+  await page.waitForTimeout(2500);
+
+  // 到達条件その1: 控えが無くても、フォルダの納品 zip から前回が分かる (「初回提出」と言わない)。
+  await expect(page.locator('#dp-last')).not.toContainText('まだ 1 度も');
+  await expect(page.locator('#dp-last')).toContainText('delivery-20260908-1903.zip');
+  await expect(page.locator('#dp-hist-zips')).toHaveAttribute('data-count', '1');
+  // 到達条件その2: 前回と同じ 2 枚が既定で選ばれ、試作図は外れている (全部外す・1 枚ずつが要らない)。
+  await expect(page.locator('#dp-recall')).toHaveAttribute('data-from', 'zip');
+  await expect(page.locator('.dp-pick[data-name="spi_init_sequence"]')).toBeChecked();
+  await expect(page.locator('.dp-pick[data-name="can_init_sequence"]')).toBeChecked();
+  await expect(page.locator('.dp-pick[data-name="diagram1"]')).not.toBeChecked();
+
+  // 到達条件その3: 今の対象で図セット「顧客資料」を更新できる (手順 9 と同じ 2 枚を共有する)。
+  await page.locator('#dp-set').selectOption('顧客資料');
+  await page.locator('#dp-set-save').click();
+  await expect(page.locator('#dp-status')).toContainText('2 枚で更新しました');
+  const setDocs = await page.evaluate((dir) => fetch('/doc-sets?dir=' + encodeURIComponent(dir))
+    .then((r) => r.json()).then((d) => (d.sets || []).filter((s) => s.name === '顧客資料')[0]), DIR5);
+  expect(setDocs.docs.map((d) => (typeof d === 'string' ? d : d.name)).sort()).toEqual(['can_init_sequence', 'spi_init_sequence']);
+
+  // zip を作る。題は既定のまま (クリック 1)。
+  const dl = page.waitForEvent('download', { timeout: 60000 });
+  await page.locator('#dp-build').click();
+  await dl;
+  await expect(page.locator('#dp-status')).toContainText('2 / ', { timeout: 60000 });
+  await page.locator('#dp-close').click();
+
+  // 到達条件その4: 次に開いたときは控え (今出した回) から同じ 2 枚が既定になる。
+  await S.runCommand(page, '納品パッケージ');
+  await page.waitForTimeout(2500);
+  await expect(page.locator('#dp-recall')).toHaveAttribute('data-from', 'log');
+  await expect(page.locator('#dp-count')).toContainText('2 / ');
+  await expect(page.locator('.dp-pick[data-name="diagram1"]')).not.toBeChecked();
+  await page.screenshot({ path: shotOut('primary-04-delivery-recall.png'), fullPage: true });
+  await page.locator('#dp-close').click();
+  await S.clearDir(page, DIR5);
+  try { require('fs').rmSync(pathMod.join(abs, 'delivery-20260908-1903.zip'), { force: true }); } catch (e) {}
+});

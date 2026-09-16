@@ -2611,6 +2611,10 @@ class Handler(BaseHTTPRequestHandler):
         # 別呼び出しにすると「未確認 22 枚」の一覧が一瞬出て、確かめた図まで疑わせる。
         verified = self._read_svg_verify(save_dir) if exists else {}
         export_log = self._read_export_log(save_dir) if exists else None
+        # BLK-primary-20260916-2314-friction: 控え (_export-log.json) より前に作った納品 zip が
+        # フォルダに残っていても「まだ 1 度も提出していません」と出ていた。zip の中の svg/ から
+        # 何を出したかは読めるので、一覧と同時に返す (版の比較はできないが、対象の選び直しには足りる)。
+        delivery_zips = self._delivery_zips(save_dir) if exists else []
         # BLK-junior-20260912-2103-wish: 保存したときの図種の控え。一覧と同時に返す
         # (別呼び出しにすると、図種の印が付く前の一覧が一瞬出る)。
         saved_kinds = self._read_saved_kinds(save_dir) if exists else {}
@@ -2620,7 +2624,35 @@ class Handler(BaseHTTPRequestHandler):
         self._send_json(200, {'files': files, 'entries': entries, 'meta': meta,
                               'dir': str(save_dir), 'exists': exists, 'roles': roles,
                               'verified': verified, 'now': now, 'gone': gone,
-                              'exportLog': export_log, 'kinds': saved_kinds})
+                              'exportLog': export_log, 'kinds': saved_kinds,
+                              'deliveryZips': delivery_zips})
+
+    DELIVERY_ZIP_RE = re.compile(r'^delivery-(\d{8})-(\d{4})([a-z]?)\.zip$')
+
+    def _delivery_zips(self, save_dir, limit=20):
+        """保存フォルダの納品 zip (delivery-YYYYMMDD-HHMM.zip) を新しい順に返す。
+
+        各 zip の svg/{name}.svg から、その回に出した図の名前を読む。壊れた zip は飛ばす。
+        """
+        import zipfile
+        out = []
+        try:
+            paths = [p for p in save_dir.glob('delivery-*.zip') if self.DELIVERY_ZIP_RE.match(p.name)]
+        except OSError:
+            return out
+        paths.sort(key=lambda p: p.name, reverse=True)
+        for p in paths[:limit]:
+            m = self.DELIVERY_ZIP_RE.match(p.name)
+            try:
+                with zipfile.ZipFile(str(p)) as z:
+                    names = [n[4:-4] for n in z.namelist()
+                             if n.startswith('svg/') and n.endswith('.svg') and '/' not in n[4:]]
+            except (OSError, zipfile.BadZipFile, ValueError):
+                continue
+            d, t = m.group(1), m.group(2)
+            out.append({'file': p.name, 'names': names,
+                        'at': '%s-%s-%sT%s:%s' % (d[:4], d[4:6], d[6:], t[:2], t[2:])})
+        return out
 
     def _resolve_unstamped_svg_sources(self, save_dir, entries):
         """印の無い svg の持ち主を、svg に畳まれた DSL から名指しする。

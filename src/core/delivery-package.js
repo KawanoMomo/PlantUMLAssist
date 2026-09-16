@@ -224,6 +224,35 @@ window.MA.deliveryPackage = (function() {
   }
 
   // 既定で対象にする図の名前。テンプレ以外の全部 — フォルダ全体が的になる。
+  // BLK-primary-20260916-2314-friction: 前回出した図の名前を、今の候補に在るものだけに絞る。
+  // 候補の並び順を保つ (一覧のチェックと同じ順)。
+  function recallPicks(cands, lastNames) {
+    var want = {};
+    (Array.isArray(lastNames) ? lastNames : []).forEach(function(n) { want[String(n)] = true; });
+    return (Array.isArray(cands) ? cands : [])
+      .filter(function(c) { return c && want[c.name]; })
+      .map(function(c) { return c.name; });
+  }
+
+  // 控え (_export-log.json) に載っていない納品 zip。file 名で突き合わせる。
+  function unloggedZips(zips, entries) {
+    var logged = {};
+    (Array.isArray(entries) ? entries : []).forEach(function(e) { if (e && e.file) logged[e.file] = true; });
+    return (Array.isArray(zips) ? zips : []).filter(function(z) {
+      return z && z.file && !logged[z.file] && Array.isArray(z.names);
+    });
+  }
+
+  // 「前回と同じ図」の出どころ。控えの最新 → 無ければフォルダの最新の納品 zip。
+  function lastPickSource(latestEntry, zips) {
+    if (latestEntry && Array.isArray(latestEntry.names) && latestEntry.names.length) {
+      return { names: latestEntry.names.slice(), file: latestEntry.file || '', at: latestEntry.at || '', from: 'log' };
+    }
+    var z = (Array.isArray(zips) ? zips : []).filter(function(x) { return x && Array.isArray(x.names) && x.names.length; })[0];
+    if (z) return { names: z.names.slice(), file: z.file, at: z.at || '', from: 'zip' };
+    return { names: [], file: '', at: '', from: '' };
+  }
+
   function defaultPicks(cands) {
     return (Array.isArray(cands) ? cands : [])
       .filter(function(c) { return c && c.deliverable; })
@@ -455,6 +484,9 @@ window.MA.deliveryPackage = (function() {
     reset: reset,
     candidates: candidates,
     defaultPicks: defaultPicks,
+    recallPicks: recallPicks,
+    unloggedZips: unloggedZips,
+    lastPickSource: lastPickSource,
     coverage: coverage,
     svgFileNames: svgFileNames,
     submitSection: submitSection,
