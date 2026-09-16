@@ -102,9 +102,36 @@ window.MA.docLayout = (function() {
     });
     var missing = entries.filter(function(e) { return !e.present; });
     var blank = entries.filter(function(e) { return e.present && !e.note; });
+    // BLK-primary-20260917-0423-wish: 「見出しが図名のまま」は 1 枚ずつ開いて
+    // 見比べる以外に分からなかった。書き出しの後 (doc-proof) だけが言うのでは
+    // 出し直しになるので、貼る前の一覧でも同じことを言う。
+    var untitled = entries.filter(function(e) { return e.present && !e.titled; });
     return { title: _line(set && set.name), entries: entries,
              total: entries.length, present: entries.length - missing.length,
-             missing: missing, blank: blank };
+             missing: missing, blank: blank, untitled: untitled,
+             ready: entries.length > 0 && missing.length === 0
+                    && blank.length === 0 && untitled.length === 0 };
+  }
+
+  // 1 枚ぶんの ○×。14 枚を横に並べて「どの欄が空か」だけを見るための形。
+  // 欠けている図は見出しも注記も判定しない (直す先が図そのものなので分けて出す)。
+  function sheetMark(e) {
+    var row = e || {};
+    return {
+      no: row.no, name: _line(row.name), present: !!row.present,
+      heading: !!row.present && !!row.titled,
+      note: !!row.present && !!row.note,
+      ok: !!row.present && !!row.titled && !!row.note,
+    };
+  }
+
+  function sheetMarks(sh) {
+    return ((sh && sh.entries) || []).map(sheetMark);
+  }
+
+  // 空欄の残る行だけ。手順は「一覧を見る → この行だけ直す」で終わる。
+  function blankRows(sh) {
+    return sheetMarks(sh).filter(function(m) { return !m.ok; });
   }
 
   // 書き出す前に読ませる 1 文。欠けと、説明が空の図を先に名指しする
@@ -118,6 +145,9 @@ window.MA.docLayout = (function() {
       parts.push('保存フォルダに無い図 ' + s.missing.length + ' 枚（'
         + s.missing.map(function(e) { return e.name; }).join('、') + '）');
     }
+    if (s.untitled && s.untitled.length) {
+      parts.push('見出しが図名のままの図 ' + s.untitled.length + ' 枚');
+    }
     if (s.blank && s.blank.length) {
       parts.push('1 行説明が空の図 ' + s.blank.length + ' 枚');
     }
@@ -129,7 +159,7 @@ window.MA.docLayout = (function() {
     var s = sh || {};
     if (!s.total) return 'dl-empty';
     if (s.missing && s.missing.length) return 'dl-short';
-    if (s.blank && s.blank.length) return 'dl-blank';
+    if ((s.blank && s.blank.length) || (s.untitled && s.untitled.length)) return 'dl-blank';
     return 'dl-ready';
   }
 
@@ -173,6 +203,9 @@ window.MA.docLayout = (function() {
     headingOf: headingOf,
     sheet: sheet,
     sheetSummary: sheetSummary,
+    sheetMark: sheetMark,
+    sheetMarks: sheetMarks,
+    blankRows: blankRows,
     sheetClass: sheetClass,
     tocLine: tocLine,
     sheetText: sheetText,
