@@ -208,6 +208,22 @@ function pending(blks, opts) {
     .sort(function (a, b) { return a.id < b.id ? -1 : a.id > b.id ? 1 : 0; });
 }
 
+// 本文の「…」は実パスを省いた記法であって引数ではない。文字通り渡すと
+// 「BLK フォルダが無い: …」で失敗し、直っているものが毎回「コマンドが失敗した
+// ため確認できず」に化ける。<保存フォルダ> と同じ「埋まっていない穴」として扱う。
+// 半角 3 点は語として独立しているときだけ (a...b のような実在の名前は壊さない)。
+const ELLIPSIS_RE = /…+/g;
+
+function findElided(cmd) {
+  const text = String(cmd);
+  const found = text.match(ELLIPSIS_RE) || [];
+  // 半角 3 点は空白で区切られた 1 語のときだけ省略と見なす。
+  text.split(/\s+/).forEach(function (word) {
+    if (/^\.{3,}$/.test(word)) found.push(word);
+  });
+  return found;
+}
+
 // `<保存フォルダ>` / `<控え>` を実際のパスに埋める。埋められない穴は missing に残す。
 function resolveCommand(cmd, vars) {
   const v = vars || {};
@@ -219,7 +235,9 @@ function resolveCommand(cmd, vars) {
     missing.push(token);
     return token;
   });
-  return { command: filled, missing: missing, runnable: missing.length === 0 };
+  const elided = findElided(filled);
+  return { command: filled, missing: missing, elided: elided,
+    runnable: missing.length === 0 && elided.length === 0 };
 }
 
 // unit/E2E を回し直すのは builder の検算であって、reviewer の解消確認ではない。
