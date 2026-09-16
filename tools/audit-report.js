@@ -522,7 +522,10 @@ function changedDetailLines(fd, options) {
   const FCD = MA && MA.fileChangeDetail;
   if (!FCD || !fd || !opts.prevDocs || !opts.curDocs) return [];
   const changed = (fd.dataChanged || []).concat(fd.templateChanged || []);
-  if (!changed.length) return [];
+  // BLK-reviewer-20260916-0629-friction: 変わった図が 0 枚の回は何も出さなかったので、
+  // 「機能が効いていない」と「比べる変化が無かった」が出力から見分けられなかった。
+  // 監査ツール共通の語「対象なし」で言い切る (blk-check.js はこの語で無変化の回と判定する)。
+  if (!changed.length) return ['  内容の変化: 対象なし (前回の控えから内容が変わった図は 0 枚)'];
   const rows = FCD.sort(FCD.rows(changed, opts.prevDocs, opts.curDocs));
   const cap = opts.pairsMax > 0 ? opts.pairsMax : 10;
   const out = [];
@@ -732,4 +735,4 @@ function buildReport(MA, docs, options) {
   };
 }
 
-module.exports = { collectDocs, runAudits, summarize, totalIssues, buildReport, formatSummary, auditNames, baselineFiles, summaryView, SUMMARY_FIELDS };
+module.exports = { collectDocs, runAudits, summarize, totalIssues, buildReport, formatSummary, auditNames, baselineFiles, summaryView, SUMMARY_FIELDS, changedDetailLines };

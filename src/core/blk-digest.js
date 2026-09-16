@@ -233,17 +233,43 @@ function isTestCommand(cmd) {
 // 出力に、効き目として書かれた語が出ているか。判定はここだけが持つ。
 // 語は複数のコマンドの出力を合わせて 1 回だけ照合する (コマンドごとに照合すると、
 // 片方にしか出ない語が毎回「出ていない」に見え、直っているものを消えたと誤る)。
-function checkOutput(blk, output) {
+// BLK-reviewer-20260916-0629-friction: 監査ツール共通の「比べる対象が無かった」の語。
+// 語が出ないとき、この語が出力にあれば機能不良ではなく無変化の回と判定する。
+const NO_DATA_RE = /対象なし|対象がありません|対象が無い|差分はありません|変わった図は 0 枚/;
+
+function _noDataLine(text) {
+  const lines = String(text || '').split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) if (NO_DATA_RE.test(lines[i])) return lines[i].trim();
+  return '';
+}
+
+// opts.failed: 回したコマンドのどれかが失敗した (語が出ないのはその所為かもしれない)。
+function checkOutput(blk, output, opts) {
+  const o = opts || {};
   const text = String(output == null ? '' : output);
   const squeezed = text.replace(/\s+/g, '');
   const hits = blk.markers.map(function (marker) {
     const ok = text.indexOf(marker) >= 0 || squeezed.indexOf(marker.replace(/\s+/g, '')) >= 0;
     return { marker: marker, ok: ok };
   });
+  const matched = hits.filter(function (h) { return h.ok; }).length;
+  if (hits.length && matched === 0) {
+    // 1 語も出ないときは、理由を 3 つに分けて言う (再検証の打ち直しを要るものだけに絞る)。
+    if (o.failed) {
+      return { hits: hits, checked: hits.length, matched: 0, verdict: 'failed', evidence: '',
+        line: 'コマンドが失敗したため確認できず (機能不良の疑い。理由は上の「理由:」行)' };
+    }
+    const idle = _noDataLine(text);
+    if (idle) {
+      return { hits: hits, checked: hits.length, matched: 0, verdict: 'idle', evidence: idle,
+        line: '今回は比べる対象が無いので確認できず (機能不良ではない。出力: 「' + idle +
+          '」)。変化のある回に確かめ直す' };
+    }
+  }
   return {
     hits: hits,
     checked: hits.length,
-    matched: hits.filter(function (h) { return h.ok; }).length,
+    matched: matched,
     verdict: !hits.length ? 'unknown' : hits.every(function (h) { return h.ok; }) ? 'effective'
       : hits.some(function (h) { return h.ok; }) ? 'partial' : 'gone',
     // CLI の出力に 1 つも出ない語は、画面側の語かもしれない。断定はしない。
@@ -252,7 +278,7 @@ function checkOutput(blk, output) {
       : hits.some(function (h) { return h.ok; })
         ? '効いている (語 ' + hits.filter(function (h) { return h.ok; }).length + '/' + hits.length +
           '。残りは画面側の語かもしれない)'
-        : 'この出力では確認できず (画面側の変更なら GUI で見る)',
+        : 'この出力では確認できず (対象はあるのに語が出ない: 機能不良か、画面側の語なら GUI で見る)',
   };
 }
 

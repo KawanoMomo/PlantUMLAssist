@@ -117,8 +117,9 @@ describe('review-board.build — 4 つの情報源を 1 枚に束ねる', functi
     // (findings.js の台帳で当たった継続)。台帳を渡していないこの回は 0。
     // seen / gone も同 (差し戻し 1 回目) で足した枠 (前回の突合結果と実体 id で
     // 比べた内数)。前回の突合行を渡していないこの回は 0。
+    // notAudited は BLK-reviewer-20260916-0629-friction で足した枠 (確認依頼など突合の対象外)。この回は 0。
     expect(view.counts).toEqual({
-      carried: 3, ledger: 0, regressed: 0, resolved: 1, outOfScope: 0, sameDoc: 0, unmatched: 0,
+      carried: 3, ledger: 0, regressed: 0, resolved: 1, outOfScope: 0, notAudited: 0, sameDoc: 0, unmatched: 0,
       fresh: 1, seen: 0, gone: 0, changed: 2,
     });
   });

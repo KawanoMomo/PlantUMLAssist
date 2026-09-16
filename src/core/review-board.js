@@ -120,6 +120,10 @@
   // 指摘ではない節の見出し。reviewer は指摘.md の末尾に件数表と依頼一覧を置く。
   // これらの本文には「継続」「未着手」がふつうに現れるので、本文の言い回しで
   // 状態を決める前に弾かないと、件数表そのものが 1 件の指摘として振り分けられる。
+  // BLK-reviewer-20260916-0629-friction: 相手の回答を待つ確認依頼の言い回し。監査の突合は
+  // 図の中身しか見ないので、この種の指摘が突合に出ないことは解消を意味しない。
+  var REQUEST_RE = /意図(?:の)?確認|確認依頼|確認を依頼|回答(?:待ち|が無|がな|を依頼|を求)|返答(?:待ち|が無|がな)/;
+
   var NOT_A_FINDING = /サマリ|まとめ|依頼|一覧|凡例|補足/;
 
   // 見出しの `【継続・最優先・2回目】` のような印から状態を決める。
@@ -152,6 +156,9 @@
     var m = /継続\s*(\d+)\s*tick/.exec(all);
     if (m) return Number(m[1]);
     m = /(\d+)\s*回目/.exec(all);
+    if (m) return Number(m[1]);
+    // BLK-reviewer-20260916-0629-friction: 実物の指摘.md は「継続保留(4tick目)」とも書く。
+    m = /(\d+)\s*tick\s*目/.exec(all);
     if (m) return Number(m[1]);
     return 0;
   }
@@ -369,6 +376,13 @@
         }
         carried.push({ finding: f, verdict: 'carried', tick: tick, atLeast: f.atLeast, rows: hit,
           regressed: regressed, svgOnly: svgOnly, note: note });
+      } else if (REQUEST_RE.test(_s(f.heading) + ' ' + _s(f.body))) {
+        // BLK-reviewer-20260916-0629-friction: 本文中の確認依頼 (意図の確認など) は、監査の
+        // どの種類 (名前・メソッド・整合・SVG…) の突合にも出ない。出ないことは解消を意味しない。
+        carried.push({ finding: f, verdict: 'notAudited', tick: f.tick, rows: [],
+          note: '監査の突合が扱う種類の指摘ではないため、突合に出ないことは解消を意味しません。'
+            + '前回の状態 (' + (VERDICT_OF_STATUS[f.status] || f.status) + (f.tick ? ' ' + f.tick + ' tick 目' : '')
+            + ') のまま据え置きます。回答の有無は `node tools/replies.js` で見られます' });
       } else {
         carried.push({ finding: f, verdict: 'resolved', tick: f.tick, rows: [],
           note: '今回の突合に出ていません' });
@@ -481,6 +495,8 @@
         resolved: carried.filter(function(c) { return c.verdict === 'resolved'; }).length,
         // 今回回していない監査の指摘。解消にも継続にも数えない。
         outOfScope: carried.filter(function(c) { return c.verdict === 'outOfScope'; }).length,
+        // 突合の対象外 (確認依頼など)。解消にも継続にも数えない。
+        notAudited: carried.filter(function(c) { return c.verdict === 'notAudited'; }).length,
         sameDoc: carried.filter(function(c) { return c.verdict === 'sameDoc'; }).length,
         unmatched: carried.filter(function(c) { return c.verdict === 'unmatched'; }).length,
         fresh: fresh.length,
@@ -519,6 +535,7 @@
     if (c.sameDoc) re.push('同じ図に別の指摘 ' + c.sameDoc + ' 件');
     if (c.unmatched) re.push('要読み直し ' + c.unmatched + ' 件');
     if (c.outOfScope) re.push('今回は見ていない ' + c.outOfScope + ' 件');
+    if (c.notAudited) re.push('突合の対象外で判定できない ' + c.notAudited + ' 件');
     if (re.length) s += '（' + re.join('・') + '）';
     s += '、前回控えから変わった図 ' + c.changed + ' 枚';
     if (c.ledger) s += '（うち findings.js の台帳で追跡中 ' + c.ledger + '）';
@@ -529,7 +546,8 @@
 
   var VERDICT = { carried: '継続', ledger: '継続（findings.js の台帳で追跡中）',
                   resolved: '解消', sameDoc: '同じ図に別の指摘', unmatched: '要読み直し',
-                  outOfScope: '今回は見ていない (スコープ外)' };
+                  outOfScope: '今回は見ていない (スコープ外)',
+                  notAudited: '突合の対象外で判定できない (本文を読む)' };
 
   // 1 枚の常設ビュー。そのまま次の指摘.md の下敷きになる形で出す。
   function markdown(view, title) {
@@ -541,14 +559,14 @@
         + 'ここに出ていない監査の指摘は「今回は見ていない」として前回の状態のまま据え置きです。', '');
     }
 
-    var order = ['carried', 'ledger', 'sameDoc', 'unmatched', 'outOfScope', 'resolved'];
+    var order = ['carried', 'ledger', 'sameDoc', 'unmatched', 'outOfScope', 'notAudited', 'resolved'];
     order.forEach(function(kind) {
       var items = _list(v.carried).filter(function(c) { return c.verdict === kind; });
       if (!items.length) return;
       out.push('## 前回の指摘 — ' + VERDICT[kind] + '（' + items.length + ' 件）');
       items.forEach(function(c) {
         var head = '- ' + c.finding.title;
-        if (kind === 'outOfScope' && c.tick) head += '（前回のまま ' + c.tick + ' tick 目）';
+        if ((kind === 'outOfScope' || kind === 'notAudited') && c.tick) head += '（前回のまま ' + c.tick + ' tick 目）';
         if (kind === 'ledger' && c.tick) head += '（' + c.tick + ' tick 目' + (c.atLeast ? '以上' : '') + '）';
         if (kind === 'carried') {
           head += '（' + c.tick + ' tick 目' + (c.atLeast ? '以上' : '') + '）';
