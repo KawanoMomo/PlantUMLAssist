@@ -492,3 +492,60 @@ test.describe('reviewer 手順 5〜6: primary の前回保存版と今回保存�
     await expect(page.locator('#peek-ba-svg-note')).toContainText('描き直して並べます');
   });
 });
+
+// BLK-reviewer-20260917-0523-wish: 手順5 の入口。前回控えと比べて「変わっていない」と
+// 分かるのは監査を全部回し切った後で、しかも「何 tick 連続で無変化か」はどこにも出ず、
+// reviewer は persona.md に手で書いた過去の文章を遡って数え直していた。
+// 無変化の tick 数を控えが持ち、無変化の間は監査を回さずに降りられることを到達条件にする。
+test('手順5 何 tick 連続で無変化かが入口に出て、無変化なら監査を回さずに降りられる', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const os = require('os');
+  const { execFileSync } = require('child_process');
+  const REPO = path.join(__dirname, '..', '..', '..');
+
+  const root = path.join(REPO, 'test-results', 'reviewer-05-unchanged-streak');
+  fs.rmSync(root, { recursive: true, force: true });
+  const docs = path.join(root, 'docs');
+  fs.mkdirSync(docs, { recursive: true });
+  fs.writeFileSync(path.join(docs, 'spi_state.puml'), R.DOCS.spi_state, 'utf-8');
+
+  // 控え (.assist-audit-last.json) は CLI を打つ場所に出来るので、リポジトリ直下を
+  // 汚さないよう作業用の cwd で打つ (配布物に控えを残さない)。
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'pua-streak-'));
+  const run = (extra) => execFileSync(process.execPath,
+    [path.join(REPO, 'tools', 'audit.js'), docs, '--summary'].concat(extra),
+    { cwd, encoding: 'utf-8' });
+
+  // 1 回目: まだ比べる相手がいない。ここを「変化あり」と言わない。
+  const first = run(['--tick', 't1']);
+  expect(first).toContain('今回が最初の控えです');
+  expect(first).not.toContain('変化あり');
+  // 監査そのものは今までどおり回っている。
+  expect(first).toContain('図 1 枚');
+
+  // 2 回目: 中身は同じ。入口に連続数と最終変更が出る。
+  const second = run(['--tick', 't2']);
+  expect(second).toContain('変化なし: 1 tick 連続');
+  expect(second).toContain('最終変更');
+
+  // 同じ tick で打ち直しても数字は動かない (1 tick に何度も打つ手順で数字が膨らまない)。
+  expect(run(['--tick', 't2'])).toContain('変化なし: 1 tick 連続');
+
+  // 3 回目: --if-changed を付けると、無変化の tick は監査を回さずに降りる。
+  const skipped = run(['--tick', 't3', '--if-changed']);
+  expect(skipped).toContain('変化なし: 2 tick 連続');
+  expect(skipped).toContain('前回の指摘:');
+  // 到達条件: 全 11 項目の突合は回っていない (回していれば件数表が出る)。
+  expect(skipped).not.toContain('名前突合');
+
+  // 図を 1 枚書き替えたら、同じ印のまま監査が全部回る。
+  fs.writeFileSync(path.join(docs, 'spi_state.puml'),
+    R.DOCS.spi_state.replace('@enduml', 'Busy --> Idle : done\n@enduml'), 'utf-8');
+  const changed = run(['--tick', 't4', '--if-changed']);
+  expect(changed).toContain('変化あり');
+  expect(changed).toContain('名前突合');
+
+  fs.rmSync(cwd, { recursive: true, force: true });
+  fs.rmSync(root, { recursive: true, force: true });
+});

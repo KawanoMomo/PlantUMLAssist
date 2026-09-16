@@ -63,12 +63,18 @@
 
   // 控えを差し替える。古いものから落として MAX_SCOPES 件までに保つ
   // (対象の組は reviewer の手順の数だけで、無限には増えない)。
-  function put(store, targets, report, now, max) {
+  function put(store, targets, report, now, max, mark) {
     var st = (store && store.scopes) ? { scopes: store.scopes } : { scopes: {} };
-    st.scopes[scopeKey(targets)] = {
+    var key = scopeKey(targets);
+    // BLK-reviewer-20260917-0523: 無変化 tick の印は控えを差し替えても引き継ぐ。
+    // 名指しが無ければ前回の印をそのまま残す (報告を書き替えただけで連続数が
+    // 0 に戻ると、数えるのをやめるための数字がまた当てにならなくなる)。
+    var keep = (mark === undefined && st.scopes[key]) ? st.scopes[key].mark : mark;
+    st.scopes[key] = {
       targets: (targets || []).slice(),
       savedAt: now || new Date().toISOString(),
       report: report,
+      mark: keep || null,
     };
     var keys = Object.keys(st.scopes);
     var cap = max || MAX_SCOPES;
@@ -77,6 +83,26 @@
         return String(st.scopes[a].savedAt || '').localeCompare(String(st.scopes[b].savedAt || ''));
       });
       for (var i = 0; i < keys.length - cap; i++) delete st.scopes[keys[i]];
+    }
+    return st;
+  }
+
+  // 無変化 tick の印だけを読む。控えの本文 (report) が古い形でも印は読める。
+  function pickMark(store, targets) {
+    var e = store && store.scopes ? store.scopes[scopeKey(targets)] : null;
+    return (e && e.mark) ? e.mark : null;
+  }
+
+  // 印だけを差し替える。監査を回さずに降りた回 (入口で無変化と分かった回) は
+  // 控えの本文を書き替えないので、印を進める口がここだけ要る。
+  function putMark(store, targets, mark) {
+    var st = (store && store.scopes) ? { scopes: store.scopes } : { scopes: {} };
+    var key = scopeKey(targets);
+    var e = st.scopes[key];
+    if (!e) {
+      st.scopes[key] = { targets: (targets || []).slice(), savedAt: null, report: null, mark: mark || null };
+    } else {
+      e.mark = mark || null;
     }
     return st;
   }
@@ -97,6 +123,7 @@
   var api = {
     MAX_SCOPES: MAX_SCOPES,
     scopeKey: scopeKey, readStore: readStore, pick: pick, put: put,
+    pickMark: pickMark, putMark: putMark,
     serialize: serialize, describe: describe,
   };
 

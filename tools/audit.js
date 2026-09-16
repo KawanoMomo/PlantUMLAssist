@@ -31,6 +31,9 @@ const findingTracker = require('../src/core/finding-tracker');
 const findingsCli = require('./findings');
 // BLK-reviewer-20260914-2206: 控えは対象の組ごとに分けて持つ (src/core/audit-state.js)。
 const auditState = require('../src/core/audit-state');
+// BLK-reviewer-20260917-0523-wish: 対象の DSL が「いつから変わっていないか」。
+// 無変化の tick を数え直さず、無変化の間は監査の入口で降りるための印。
+const unchangedStreak = require('../src/core/unchanged-streak');
 // BLK-reviewer-20260915-0506-wish: 表記揺れの「揃える先」を毎 tick 推定し直さず、
 // 1 度決めて 3 人で共有する登録簿。判定も書式も 1 箇所 (GUI と同じ規則)。
 const nameRegistry = require('../src/core/name-registry');
@@ -60,10 +63,18 @@ function readReport(file) {
 
 // 控えを書き戻す。他の対象の控えは消さずに残す (対象を切り替えて打っても、
 // それぞれが自分の前回と比べ続けられるようにする)。書けない場所でも監査は成功させる。
-function saveState(file, targets, result) {
+function saveState(file, targets, result, mark) {
   try {
     fs.writeFileSync(file, auditState.serialize(
-      auditState.put(readStore(file), targets, result, result.generatedAt)), 'utf-8');
+      auditState.put(readStore(file), targets, result, result.generatedAt, null, mark)), 'utf-8');
+  } catch (e) {}
+}
+
+// 印だけを書き戻す (監査を回さずに降りた回)。書けない場所でも降り方は変えない。
+function saveMark(file, targets, mark) {
+  try {
+    fs.writeFileSync(file, auditState.serialize(
+      auditState.putMark(readStore(file), targets, mark)), 'utf-8');
   } catch (e) {}
 }
 
@@ -118,6 +129,13 @@ const USAGE = [
   '                (`> 指摘.md` の手リダイレクトは読む前に空にしてしまう)。',
   '                --save-board を付けずに --board を打った run は、最後に',
   '                「控えは更新していません」と言うので、保存忘れに気づける',
+  '  --tick ID     この run の tick 名 (既定は環境変数 PUA_TICK)。同じ tick で何度',
+  '                打っても無変化の数字は 1 つしか進まない。名乗らない run は',
+  '                「N 回連続」と数え方のまま出す',
+  '  --if-changed  対象の DSL が前回の控えから変わっていなければ、監査を回さずに',
+  '                「変化なし・N tick 連続」と前回の指摘の件数だけを出して終える',
+  '                (別名 --stop-if-unchanged)。変わっていれば今までどおり全部回す。',
+  '                無変化の tick 数は、この印を付けずに打った回でも要約の先頭に出る',
   '  --no-state    前回比較用の控え (.assist-audit-last.json) を読み書きしない。',
   '                控えは渡した対象の組ごとに分けて持つので、-p primary と',
   '                -p junior,primary を交互に打っても、それぞれが自分の前回と比べる',
@@ -367,6 +385,25 @@ function findingsPath(opts) {
   return null;
 }
 
+// 入口で降りた回に出す 1 行。突合を回していないので、前回の指摘文書に何件
+// 残ったままかだけを言う (件数が動かないこと自体が「継続 N 件」の答えになる)。
+function carriedFindingsLine(opts) {
+  let p = null;
+  try { p = findingsPath(opts); } catch (e) { p = null; }
+  if (!p) return '前回の指摘: 指摘文書が見つかりません (継続件数は数えていません)';
+  try {
+    const md = fs.readFileSync(p, 'utf-8');
+    const tally = unchangedStreak.tallyFromDoc(md);
+    const hand = reviewBoard.parseFindings(md).length;
+    const head = tally
+      ? '前回の指摘: 継続 ' + tally.carried + ' / 解消 ' + tally.resolved + ' / 新規 ' + tally.fresh + ' 件'
+      : '前回の指摘: 継続件数の行が見つかりません';
+    return head + '（手で書いた節 ' + hand + ' 件）— ' + p + ' (無変化なので突合は回していません)';
+  } catch (e) {
+    return '前回の指摘: ' + p + ' が読めません — ' + e.message;
+  }
+}
+
 // --save-board の書き先。読む側 (findingsPath) と違い、まだ 1 度も書いていない
 // run でも決まらないと初回が保存できないので、file が無くても置き場を返す。
 function boardSavePath(opts) {
@@ -469,7 +506,7 @@ function runBoard(result, opts, prev, fmtOpts, prevNote) {
 }
 
 function parseArgs(argv) {
-  const opts = { targets: [], only: null, summary: false, summaryJson: false, out: null, help: false, since: null, sinceFiles: null, state: true, pairsMax: 0, personas: null, versions: false, versionsMax: 6, dashboard: false, board: false, boardFile: null, drafts: false, registry: false, registryFile: null, register: false, by: '', fullDiff: null, fullDiffThreshold: 0 };
+  const opts = { targets: [], only: null, ifChanged: false, tick: null, summary: false, summaryJson: false, out: null, help: false, since: null, sinceFiles: null, state: true, pairsMax: 0, personas: null, versions: false, versionsMax: 6, dashboard: false, board: false, boardFile: null, drafts: false, registry: false, registryFile: null, register: false, by: '', fullDiff: null, fullDiffThreshold: 0 };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--help' || a === '-h') opts.help = true;
@@ -537,6 +574,10 @@ function parseArgs(argv) {
     else if (a === '--by') opts.by = String(argv[++i] || '').trim();
     else if (a.indexOf('--by=') === 0) opts.by = a.slice(5).trim();
     else if (a === '--no-state') opts.state = false;
+    // BLK-reviewer-20260917-0523: 無変化の tick は入口で降りる。
+    else if (a === '--if-changed' || a === '--stop-if-unchanged') opts.ifChanged = true;
+    else if (a === '--tick') opts.tick = argv[++i];
+    else if (a.indexOf('--tick=') === 0) opts.tick = a.slice(7);
     else if (a === '--out') opts.out = argv[++i];
     else if (a.indexOf('--out=') === 0) opts.out = a.slice(6);
     else if (a.indexOf('--') === 0) throw new Error('未知のオプション: ' + a);
@@ -611,6 +652,23 @@ function main(argv) {
   if (docs.length === 0) {
     console.error('対象の .puml が 1 枚もありません: ' + opts.targets.join(', '));
     return 1;
+  }
+
+  // BLK-reviewer-20260917-0523-wish: 監査を回す前に「前回の控えから中身が変わったか」を
+  // 決める。無変化の tick 数はここでしか分からず、ここで分かれば全部回さずに降りられる。
+  const markPath = path.resolve(STATE_FILE);
+  const markStore = opts.state ? readStore(markPath) : { scopes: {} };
+  const mark = unchangedStreak.advance(
+    opts.state ? auditState.pickMark(markStore, opts.targets) : null,
+    unchangedStreak.folderFingerprint(auditScope.fileEntries(docs)),
+    new Date().toISOString(),
+    opts.tick || process.env.PUA_TICK || null);
+  const markLine = unchangedStreak.describe(mark);
+  if (opts.ifChanged && unchangedStreak.isUnchanged(mark)) {
+    console.log(markLine);
+    console.log(carriedFindingsLine(opts));
+    if (opts.state) saveMark(markPath, opts.targets, mark);
+    return 0;
   }
 
   const result = report.buildReport(rt.MA, docs, { targets: opts.targets, only: opts.only });
@@ -701,7 +759,7 @@ function main(argv) {
     }
     // 画面と控えは同じ本文にする。標準出力に出したものがそのまま指摘文書に
     // 残るので、「画面では見たのに控えには無い」がそもそも起こらない。
-    let boardText = runBoard(result, opts, prev, fmtOpts, prevNote);
+    let boardText = markLine + '\n' + runBoard(result, opts, prev, fmtOpts, prevNote);
     if (opts.summary) boardText += '\n' + report.formatSummary(result, prev, fmtOpts);
     console.log(boardText);
     if (opts.saveBoard) {
@@ -735,7 +793,7 @@ function main(argv) {
     // (読む口と機械で読む口を 1 回の実行で両方取れるようにする)。
     if (viewJson) console.log('\n' + viewJson);
     if (opts.state && !partial) {
-      saveState(statePath, opts.targets, result);
+      saveState(statePath, opts.targets, result, mark);
     }
     if (rt.errors.length) {
       for (const e of rt.errors) console.error('読み込み失敗: ' + e.file + ' — ' + e.message);
@@ -747,11 +805,12 @@ function main(argv) {
     fs.writeFileSync(opts.out, json, 'utf-8');
     console.log(path.resolve(opts.out));
     if (viewJson) console.log(viewJson);
-    if (opts.summary) console.log(report.formatSummary(result, prev, fmtOpts));
+    if (opts.summary) console.log(markLine + '\n' + report.formatSummary(result, prev, fmtOpts));
   } else if (viewJson) {
     console.log(viewJson);
-    if (opts.summary) console.log(report.formatSummary(result, prev, fmtOpts));
+    if (opts.summary) console.log(markLine + '\n' + report.formatSummary(result, prev, fmtOpts));
   } else if (opts.summary) {
+    console.log(markLine);
     console.log(report.formatSummary(result, prev, fmtOpts));
     if (prevNote) console.log(prevNote);
   } else {
@@ -759,7 +818,7 @@ function main(argv) {
   }
   // 次回の比較のために控えを置く。書けない場所でも監査自体は成功させる。
   if (opts.state && !partial) {
-    saveState(statePath, opts.targets, result);
+    saveState(statePath, opts.targets, result, mark);
   }
   if (rt.errors.length) {
     for (const e of rt.errors) console.error('読み込み失敗: ' + e.file + ' — ' + e.message);
