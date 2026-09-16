@@ -112,6 +112,12 @@ const USAGE = [
   '  --board [MD]  突合結果・前回の指摘文書 (MD、既定は保存フォルダの 指摘.md)・',
   '                前回控えとの差分を 1 枚に束ねて出す。前回の指摘 1 件ごとに',
   '                解消/継続/新規を振り分け、継続には tick 数を数えて付ける',
+  '  --save-board [MD]  --board が出した画面を、そのまま指摘文書 (MD) へ書き戻す',
+  '                (別名 --save)。省略時の書き先は --board が読んだ MD と同じ。',
+  '                読んでから書くので、前回の指摘との突合は書き戻しの前に終わる',
+  '                (`> 指摘.md` の手リダイレクトは読む前に空にしてしまう)。',
+  '                --save-board を付けずに --board を打った run は、最後に',
+  '                「控えは更新していません」と言うので、保存忘れに気づける',
   '  --no-state    前回比較用の控え (.assist-audit-last.json) を読み書きしない。',
   '                控えは渡した対象の組ごとに分けて持つので、-p primary と',
   '                -p junior,primary を交互に打っても、それぞれが自分の前回と比べる',
@@ -361,6 +367,17 @@ function findingsPath(opts) {
   return null;
 }
 
+// --save-board の書き先。読む側 (findingsPath) と違い、まだ 1 度も書いていない
+// run でも決まらないと初回が保存できないので、file が無くても置き場を返す。
+function boardSavePath(opts) {
+  if (opts.saveBoardFile) return path.resolve(opts.saveBoardFile);
+  if (opts.boardFile) return path.resolve(opts.boardFile);
+  const found = findingsPath(opts);
+  if (found) return found;
+  // 指摘文書を書くのは reviewer なので、見られる側のフォルダには置かない。
+  try { return path.join(personaRoot(), 'reviewer', '指摘.md'); } catch (e) { return null; }
+}
+
 // 突合結果・前回の指摘文書・前回控えとの差分を 1 枚にする。
 // 指摘文書が無ければ「前回の指摘なし」として今回の突合だけを出す
 // (初回の run でも同じ 1 本のコマンドで済むようにする)。
@@ -501,6 +518,14 @@ function parseArgs(argv) {
       if (next && next.indexOf('--') !== 0 && /\.(md|markdown)$/i.test(next)) opts.boardFile = argv[++i];
     }
     else if (a.indexOf('--board=') === 0) { opts.board = true; opts.boardFile = a.slice(8); }
+    // BLK-reviewer-20260917-0323: --board の結果を指摘文書へ書き戻す。--board と
+    // 同じく引数は任意 (省けば --board が読んだ MD と同じ場所へ書く)。
+    else if (a === '--save-board' || a === '--save') {
+      opts.saveBoard = true;
+      const next = argv[i + 1];
+      if (next && next.indexOf('--') !== 0 && /\.(md|markdown)$/i.test(next)) opts.saveBoardFile = argv[++i];
+    }
+    else if (a.indexOf('--save-board=') === 0) { opts.saveBoard = true; opts.saveBoardFile = a.slice(13); }
     // --registry も引数を任意で取る。次が対象パスのときは食べない (--board と同じ)。
     else if (a === '--registry') {
       opts.registry = true;
@@ -656,6 +681,11 @@ function main(argv) {
     console.error('--since-files は --summary か --board と一緒に使います');
     return 1;
   }
+  // 書き戻すのは --board が作る画面なので、--board が無ければ書くものが無い。
+  if (opts.saveBoard && !opts.board) {
+    console.error('--save-board は --board と一緒に使います (書き戻すのは --board の画面です)');
+    return 1;
+  }
 
   const json = JSON.stringify(result, null, 2);
   // BLK-reviewer-20260906-2043: --summary-json は「要約だけ」を返す口なので、
@@ -669,8 +699,30 @@ function main(argv) {
       fs.writeFileSync(opts.out, json, 'utf-8');
       console.log(path.resolve(opts.out));
     }
-    console.log(runBoard(result, opts, prev, fmtOpts, prevNote));
-    if (opts.summary) console.log('\n' + report.formatSummary(result, prev, fmtOpts));
+    // 画面と控えは同じ本文にする。標準出力に出したものがそのまま指摘文書に
+    // 残るので、「画面では見たのに控えには無い」がそもそも起こらない。
+    let boardText = runBoard(result, opts, prev, fmtOpts, prevNote);
+    if (opts.summary) boardText += '\n' + report.formatSummary(result, prev, fmtOpts);
+    console.log(boardText);
+    if (opts.saveBoard) {
+      const dest = boardSavePath(opts);
+      if (!dest) {
+        console.error('書き戻し先の指摘文書が決まりません。--save-board 指摘.md のように名指ししてください');
+        return 1;
+      }
+      try {
+        fs.mkdirSync(path.dirname(dest), { recursive: true });
+        fs.writeFileSync(dest, boardText.replace(/\n*$/, '\n'), 'utf-8');
+        console.error('指摘文書を更新しました: ' + dest);
+      } catch (e) {
+        console.error('指摘文書に書けません: ' + dest + ' — ' + e.message);
+        return 1;
+      }
+    } else {
+      // 保存忘れは「次回の突合が古い指摘文書のまま進む」形で後から効くので、
+      // 黙って終わらない (BLK-reviewer-20260917-0323)。
+      console.error('控えは更新していません (--save-board で ' + (boardSavePath(opts) || '指摘.md') + ' に書き戻せます)');
+    }
     // --summary-json と併記されたら、画面の後ろに要約 JSON も出す
     // (読む口と機械で読む口を 1 回の実行で両方取れるようにする)。
     if (viewJson) console.log('\n' + viewJson);
