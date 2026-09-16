@@ -8807,11 +8807,31 @@ function appendPeekVerdictOffer(host) {
   if (!doc) return;
   var counts = DK.counts(_peekEntries);
   var dirName = PF ? PF.baseName(_peekDir) : _peekDir;
+  var PS = window.MA.peekSettled;
+  loadPeekSettled();
+  var settledKinds = [];
   DK.ORDER.forEach(function(slug) {
     var n = counts[slug] || 0;
     var kind = DK.label(slug);
     var had = PV.find(doc.dsl, kind, dirName);
-    if (n > 0 && !had) return;      // 取り込む変更があるうちは聞かない
+    var settled = PS ? PS.find(_peekSettled, dirName, kind) : null;
+    if (settled && n === 0) settledKinds.push(kind);
+    if (n > 0 && !had && !settled) return;      // 取り込む変更があるうちは聞かない
+    // BLK-junior-20260916-2314-wish: フォルダで確定済みの組は、どの図を開いていても聞き直さない
+    // (下の 1 行にまとめる)。相手に図が増えたときだけ、要確認として出す。
+    if (settled && !had && n === 0) return;
+    if (settled && !had && n > 0) {
+      var srow = document.createElement('div');
+      srow.className = 'peek-verdict-row';
+      srow.setAttribute('data-peek-verdict', kind);
+      var stxt = document.createElement('span');
+      stxt.className = 'peek-verdict-text is-stale';
+      stxt.textContent = PS.staleText(dirName, kind, n);
+      srow.appendChild(stxt);
+      srow.appendChild(_peekSettledClearButton(dirName, kind, '確定を外す'));
+      host.appendChild(srow);
+      return;
+    }
     var row = document.createElement('div');
     row.className = 'peek-verdict-row';
     row.setAttribute('data-peek-verdict', kind);
@@ -8845,6 +8865,7 @@ function appendPeekVerdictOffer(host) {
       on.title = doc.name + ' に「' + dirName + ' に ' + kind + ' は 0 枚」と書き残します';
       on.addEventListener('click', function(ev) {
         ev.stopPropagation();
+        rememberPeekSettled(dirName, kind, n, true);
         _writePeekVerdict(PV.write(doc.dsl, {
           kind: kind, dir: dirName, count: n, at: new Date().toISOString().slice(0, 16),
         }));
@@ -8853,6 +8874,65 @@ function appendPeekVerdictOffer(host) {
     }
     host.appendChild(row);
   });
+  if (settledKinds.length && PS) {
+    var box = document.createElement('div');
+    box.className = 'peek-verdict-row peek-settled-row';
+    box.id = 'peek-settled';
+    var st = document.createElement('span');
+    st.className = 'peek-verdict-text';
+    st.id = 'peek-settled-text';
+    st.textContent = PS.summaryText(dirName, settledKinds);
+    st.title = '保存フォルダに確定として残しています。答えを変えるときは図種の ✕ で外すと、次からまた聞きます';
+    box.appendChild(st);
+    settledKinds.forEach(function(k) { box.appendChild(_peekSettledClearButton(dirName, k, '✕ ' + k)); });
+    host.appendChild(box);
+  }
+}
+
+// BLK-junior-20260916-2314-wish: 「手本なしで確定」の一覧は保存フォルダの持ち物 (GET/POST /peek-settled)。
+// 図 1 枚の @peek 行と違い、周が替わって別の図を開いても残る。
+var _peekSettled = [];
+var _peekSettledDir = null;
+function loadPeekSettled(force) {
+  var dir = _wsFileDir();
+  if (!force && _peekSettledDir === dir) return;
+  _peekSettledDir = dir;
+  window.fetch('/peek-settled?dir=' + encodeURIComponent(dir))
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(data) {
+      var PS = window.MA.peekSettled;
+      _peekSettled = PS ? PS.normalize(data && data.entries) : [];
+      try { renderPeekFiles(); } catch (e) {}
+    }, function() {});
+}
+
+function rememberPeekSettled(peer, kind, count, settled) {
+  var PS = window.MA.peekSettled;
+  if (PS) {
+    _peekSettled = settled
+      ? PS.add(_peekSettled, { peer: peer, kind: kind, count: count, at: new Date().toISOString() })
+      : PS.remove(_peekSettled, peer, kind);
+  }
+  return window.fetch('/peek-settled', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dir: _wsFileDir(), peer: peer, kind: kind, count: Number(count || 0), settled: !!settled }),
+  }).then(function(r) { return r.ok ? r.json() : null; }, function() { return null; });
+}
+
+function _peekSettledClearButton(peer, kind, label) {
+  var b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'peek-verdict-act';
+  b.setAttribute('data-peek-settled-clear', kind);
+  b.textContent = label;
+  b.title = '「' + peer + ' の ' + kind + ' は手本なし」の確定を外します。次からまた聞きます';
+  b.addEventListener('click', function(ev) {
+    ev.stopPropagation();
+    rememberPeekSettled(peer, kind, 0, false);
+    try { renderPeekFiles(); } catch (e) {}
+  });
+  return b;
 }
 
 // 控えは自分の図の本文なので、書いたらそのまま保存の道に乗せる。

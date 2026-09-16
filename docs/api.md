@@ -115,6 +115,8 @@ curl -sS -X POST http://127.0.0.1:8766/verify-svg -H "Content-Type: application/
 | `GET /tickets` | `?dir=` | 変更チケットの一覧 |
 | `POST /tickets` | `{dir, ticket}` | 変更チケットを 1 枚書く (id ごと置き換え) |
 | `DELETE /tickets` | `?dir=&id=` | 変更チケットを 1 枚消す |
+| `GET /peek-settled` | `?dir=` | 手本なしで確定した (相手, 図種) の一覧。確定した組は 👀他フォルダで聞き直さない |
+| `POST /peek-settled` | `{dir, peer, kind, settled}` / `{dir, clear: true}` | 確定を 1 つ足す (`settled: false` で外す) / 全部外す |
 | `GET /rename-pairs` | `?dir=` | そのフォルダで打たれた置換の組 (新しい順) |
 | `POST /rename-pairs` | `{dir, from, to, hits}` | 置換の組を 1 つ覚える (同じ組は 1 行) |
 | `GET /doc-sets` | `?dir=` | そのフォルダに登録した資料セット (名前を付けた図の組) |

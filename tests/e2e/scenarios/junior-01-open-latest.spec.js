@@ -1122,6 +1122,8 @@ test.describe('junior 手順 1〜2: 先輩に実体が無い図種の結論を�
     await S1.putDoc(page, NOTE_MINE, 'gpio_state', S1.GPIO_STATE);
     // 先輩にはシーケンス図しか無い (アクティビティ図は 1 枚も無い)。
     await S1.putDoc(page, NOTE_SENIOR, 'gpio_init_sequence', SENIOR_SEQ);
+    // 「手本なしで確定」はフォルダの持ち物で clearDir では消えない。下ごしらえで外す。
+    await clearPeekSettled(page, NOTE_MINE);
     await page.reload();
     await page.waitForSelector('#btn-tab-peek');
   });
@@ -1166,6 +1168,70 @@ test.describe('junior 手順 1〜2: 先輩に実体が無い図種の結論を�
     }
     await page.waitForTimeout(1200);
     expect(await S1.readDoc(page, NOTE_MINE, 'gpio_state') || '').toContain("' @peek アクティビティ");
+  });
+});
+
+async function clearPeekSettled(page, dir) {
+  await page.evaluate(async (d) => {
+    await fetch('/peek-settled', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dir: d, clear: true }) });
+  }, dir);
+}
+
+async function openPeekPrimary(page, name) {
+  await S1.openFolderItem(page, name);
+  const lock = page.locator('#source-lock-modal');
+  if (await lock.isVisible().catch(() => false)) {
+    await page.locator('#source-lock-overwrite').click();
+    await page.waitForTimeout(600);
+  }
+  await page.locator('#btn-tab-peek').click();
+  await page.waitForSelector('#peek-modal');
+  await page.locator('#peek-dirs .peek-dir[data-dir-name="primary"]').click();
+  await page.waitForTimeout(1200);
+}
+
+// BLK-junior-20260916-2314-wish: 控えは開いていた 1 枚の図の中にしか残らず、次の周に別の図を開くと
+// 「primary に ○○ は 0 枚です」を図種の数だけ聞き直していた。一度確定した (相手 × 図種) は
+// 保存フォルダに残り、どの図を開いても・再読み込みしても聞かれず、確定リストから外せば また聞かれる。
+test.describe('junior 手順 1: 手本なしで確定した図種は二度と聞かれない', () => {
+  test.beforeEach(async ({ page }) => {
+    await S1.bootWithSaveDir(page, NOTE_MINE);
+    await S1.clearDir(page, NOTE_MINE);
+    await S1.clearDir(page, NOTE_SENIOR);
+    await S1.putDoc(page, NOTE_MINE, 'gpio_state', S1.GPIO_STATE);
+    await S1.putDoc(page, NOTE_MINE, 'timer_state', S1.GPIO_STATE.replace(/Gpio/g, 'Timer'));
+    await S1.putDoc(page, NOTE_SENIOR, 'gpio_init_sequence', SENIOR_SEQ);
+    await clearPeekSettled(page, NOTE_MINE);
+    await page.reload();
+    await page.waitForSelector('#btn-tab-peek');
+  });
+
+  test('1 回確定すると別の図・次の周でも聞かれず、✕ で外すとまた聞かれる', async ({ page }) => {
+    await openPeekPrimary(page, 'gpio_state');
+    await expect(page.locator('[data-peek-verdict="アクティビティ"]')).toContainText('0 枚です');
+    await page.locator('[data-peek-verdict-keep="アクティビティ"]').click();
+    await page.waitForTimeout(1200);
+
+    // 次の周: 再読み込み (ブラウザの記憶は消える) して、控えを書いていない別の図を開く。
+    // localStorage は起動時に消える (init script)。残るのは保存フォルダ側だけ。
+    await page.reload();
+    await page.waitForSelector('#btn-tab-peek');
+    await openPeekPrimary(page, 'timer_state');
+
+    // 確定した図種は聞かれない (質問の行も「控える」ボタンも出ない)。
+    await expect(page.locator('#peek-settled-text')).toContainText('primary は手本なしで確定: アクティビティ');
+    await expect(page.locator('[data-peek-verdict="アクティビティ"]')).toHaveCount(0);
+    await expect(page.locator('[data-peek-verdict-keep="アクティビティ"]')).toHaveCount(0);
+    // 確定していない図種はこれまでどおり聞かれる。
+    await expect(page.locator('[data-peek-verdict-keep="ユースケース"]')).toHaveCount(1);
+
+    // 答えを変えたくなったら確定リストから外す → また聞かれる。
+    await page.locator('[data-peek-settled-clear="アクティビティ"]').click();
+    await expect(page.locator('[data-peek-verdict-keep="アクティビティ"]')).toHaveCount(1);
+    await expect(page.locator('#peek-settled')).toHaveCount(0);
+    const left = await page.evaluate(async (d) => (await (await fetch('/peek-settled?dir=' + encodeURIComponent(d))).json()).entries, NOTE_MINE);
+    expect(left.length).toBe(0);
   });
 });
 

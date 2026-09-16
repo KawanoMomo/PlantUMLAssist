@@ -461,6 +461,10 @@ API_INDEX = {
         {'endpoint': 'GET /tickets', 'summary': '変更チケットの一覧', 'request': '?dir='},
         {'endpoint': 'POST /tickets', 'summary': '変更チケットを 1 枚書く', 'request': "{dir, ticket}"},
         {'endpoint': 'DELETE /tickets', 'summary': '変更チケットを 1 枚消す', 'request': '?dir=&id='},
+        {'endpoint': 'GET /peek-settled', 'summary': '「相手 × 図種は手本なしで確定」の一覧 (以後は聞かない)',
+         'request': '?dir='},
+        {'endpoint': 'POST /peek-settled', 'summary': '確定を 1 つ足す / 外す (clear で全部外す)',
+         'request': "{dir, peer, kind, settled} | {dir, clear: true}"},
         {'endpoint': 'GET /rename-pairs', 'summary': 'そのフォルダで打たれた置換の組', 'request': '?dir='},
         {'endpoint': 'POST /rename-pairs', 'summary': '置換の組を 1 つ覚える',
          'request': "{dir, from, to, hits}"},
@@ -671,6 +675,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.split('?')[0] == '/tickets':
             with _fs_lock:
                 return self._handle_tickets_get()
+        if self.path.split('?')[0] == '/peek-settled':
+            with _fs_lock:
+                return self._handle_peek_settled_get()
         if self.path.split('?')[0] == '/rename-pairs':
             with _fs_lock:
                 return self._handle_rename_pairs_get()
@@ -743,6 +750,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == '/rename-pairs':
             with _fs_lock:
                 return self._handle_rename_pairs_post()
+        if self.path == '/peek-settled':
+            with _fs_lock:
+                return self._handle_peek_settled_post()
         if self.path == '/doc-sets':
             with _fs_lock:
                 return self._handle_doc_sets_post()
@@ -1764,6 +1774,72 @@ class Handler(BaseHTTPRequestHandler):
         except OSError:
             pass
         self._send_json(200, {'ok': True})
+
+    # --- 手本なしの確定 (BLK-junior-20260916-2314-wish) -------------------------
+    #
+    # 👀他フォルダで「相手に ○○ 図は 0 枚。対応不要として控えますか」と聞かれる答えは、
+    # 開いている 1 枚の図の中にしか残らず、次の周に別の図を開くとまた同じ質問が出た。
+    # 「この相手のこの図種は手本なし」は図 1 枚ではなく保存フォルダの決めごとなので、
+    # フォルダ側に置き、ブラウザや図が替わっても聞き直さない。
+    PEEK_SETTLED_DIRNAME = '_peek'
+    PEEK_SETTLED_MAX = 200
+
+    def _peek_settled_path(self, save_dir):
+        return save_dir / self.PEEK_SETTLED_DIRNAME / 'settled.json'
+
+    def _read_peek_settled(self, save_dir):
+        try:
+            data = json.loads(self._peek_settled_path(save_dir).read_text(encoding='utf-8'))
+        except (ValueError, OSError):
+            return []
+        rows = data.get('entries') if isinstance(data, dict) else None
+        if not isinstance(rows, list):
+            return []
+        return [r for r in rows if isinstance(r, dict) and r.get('peer') and r.get('kind')]
+
+    def _handle_peek_settled_get(self):
+        """GET /peek-settled?dir= — 手本なしで確定した (相手, 図種) の一覧."""
+        parsed = urllib.parse.urlparse(self.path)
+        params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
+        save_dir = self._autosave_resolve_dir(params.get('dir'))
+        self._send_json(200, {'dir': str(save_dir), 'entries': self._read_peek_settled(save_dir)})
+
+    def _handle_peek_settled_post(self):
+        """POST /peek-settled {dir, peer, kind, settled} — 確定を足す / 外す."""
+        length = int(self.headers.get('Content-Length', 0))
+        try:
+            data = json.loads(self.rfile.read(length).decode('utf-8'))
+        except ValueError:
+            self._send_json(400, {'error': 'invalid JSON'})
+            return
+        if not isinstance(data, dict):
+            self._send_json(400, {'error': 'body must be an object'})
+            return
+        save_dir = self._autosave_resolve_dir(data.get('dir'))
+        if data.get('clear') is True:
+            rows = []
+        else:
+            peer = data.get('peer')
+            kind = data.get('kind')
+            if not isinstance(peer, str) or not isinstance(kind, str) or not peer or not kind:
+                self._send_json(400, {'error': 'peer and kind must be non-empty strings',
+                                      'expected': '{dir, peer, kind, settled} | {dir, clear: true}'})
+                return
+            rows = [r for r in self._read_peek_settled(save_dir)
+                    if not (r.get('peer') == peer and r.get('kind') == kind)]
+            if data.get('settled', True) is not False:
+                rows.insert(0, {'peer': peer, 'kind': kind,
+                                'count': int(data.get('count') or 0),
+                                'at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())})
+            rows = rows[:self.PEEK_SETTLED_MAX]
+        path = self._peek_settled_path(save_dir)
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            _atomic_write_text(path, json.dumps({'entries': rows}, ensure_ascii=False, indent=1))
+        except OSError as e:
+            self._send_json(500, {'error': f'write failed: {e}'})
+            return
+        self._send_json(200, {'dir': str(save_dir), 'entries': rows})
 
     # --- 置換の組 (BLK-primary-20260914-1306-friction) ------------------------
     #
