@@ -3288,6 +3288,7 @@ function initCommandPalette() {
       { id: 'export-png-t', title: 'PNG（透過背景）/ Export PNG transparent', hint: 'Export', keywords: ['export', 'png', 'transparent'], run: function() { clickById('exp-png-transparent'); } },
       { id: 'export-clip', title: 'クリップボードにコピー / Copy image', hint: 'Export', keywords: ['export', 'clipboard', 'copy'], run: function() { clickById('exp-clipboard'); } },
       { id: 'export-all', title: '全図を SVG で保存（zip）', hint: 'Export', keywords: ['export', 'svg', 'zip', 'all'], run: function() { clickById('exp-svg-all'); } },
+      { id: 'call-graph', title: '呼び出しグラフ（このメソッドを呼んでいる図を辿る）', hint: 'Review', keywords: ['call', 'graph', 'callers', '呼び出し', 'よびだし', 'グラフ', '突合', 'method', 'メソッド'], run: function() { openCallGraph(); } },
       { id: 'handover-board', title: '引き継ぎチェックリスト（渡してよい図を数える）', hint: 'Handover', keywords: ['handover', '引き継ぎ', 'ひきつぎ', 'checklist', 'チェックリスト', '新人', '置換済み', 'note', 'svg'], run: function() { openHandoverBoard(); } },
       { id: 'export-docset', title: '資料セットで SVG で保存（zip）', hint: 'Export', keywords: ['export', 'svg', 'zip', 'set', 'docset', '資料', 'セット'], run: function() { clickById('exp-docset'); } },
       { id: 'export-pick', title: '図を選んで SVG で保存（zip）', hint: 'Export', keywords: ['export', 'svg', 'zip', 'pick', 'select', 'changed', 'fix'], run: function() { clickById('exp-svg-pick'); } },
@@ -5363,6 +5364,7 @@ function setupChangeBoard() {
 
   setupHandoverChecklist();
   setupHandoverBoard();
+  setupCallGraph();
 }
 
 // いまの対応表を 1 枚の Markdown にして書き出す。会議で「この差分はどの指摘か」を
@@ -14169,6 +14171,9 @@ function setupTabs() {
     // 「印を付けた図をどうするか」の隣ではなく最後に置く —— 対象は印ではなく
     // フォルダ全体で、押すと一覧の各行に「誰と衝突しているか」の印が付く。
     bar.appendChild(folderClashButton());
+    // BLK-reviewer-20260917-0323-wish: 突合の入口をもう 1 つ。突合対象が
+    // 「フォルダの 24 枚」ではなく「メソッド 1 個」のときはここから入る。
+    bar.appendChild(folderCallGraphButton());
     return bar;
   }
 
@@ -14178,6 +14183,21 @@ function setupTabs() {
   // 開いて誰のフォルダかを見るまで分からなかった (前回の run はそれを取り違えた)。
   // 一覧の行に「誰と衝突しているか」を出し、突合対象をコマンドで組み立てて
   // 全文を読み直す手順ごと無くす。
+
+  // 呼び出し関係を辿る画面へ。印にも枚数にも紐づかない「メソッド 1 個から引く」入口。
+  function folderCallGraphButton() {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'folder-clash-run';
+    b.id = 'folder-callgraph-open';
+    b.textContent = '呼び出しグラフ';
+    b.title = 'クラス / メソッドを選ぶと、それを呼んでいる全シーケンス図・状態遷移図が辿れます';
+    b.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      openCallGraph();
+    });
+    return b;
+  }
 
   function folderClashButton() {
     var b = document.createElement('button');
@@ -30387,4 +30407,268 @@ if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', bootWithSavedPrefs);
 } else {
   bootWithSavedPrefs();
+}
+
+// ── 呼び出しグラフ (BLK-reviewer-20260917-0323-wish) ────────────────────────
+// 突合の答えは ClockCtrl.EnableClock のようなメソッド 1 個に付いているのに、
+// 手掛かりはファイル単位 (24 枚) でしか返らないため、読む側は毎回
+// シーケンス図 5〜6 枚を開いて「どの上位ドメインから呼ばれているか」を
+// 頭の中で組み直していた。ここはその組み直しを画面にする。左でメソッドを
+// 1 つ選ぶと、右にそれを呼んでいる全図がドメインごとに並び、行を押せばその図の
+// その行へ飛ぶ。同じ指摘が複数図に散っているケースは、節点 1 個がその散り具合。
+// 数え方は call-graph の職掌。ここは材料を集めて描くだけ。
+var _cgGraph = null;
+var _cgBusy = null;
+var _cgKey = '';
+var _cgQuery = '';
+var _cgFiles = {};
+
+function _cgModal() { return document.getElementById('cg-modal'); }
+
+// 読む対象は自分のフォルダと、隣の persona のフォルダ (他 persona との突合と同じ範囲)。
+// 押されるまで読まない (見る気になっていない段階で枚数 × フォルダ数を読まない)。
+function loadCallGraph() {
+  var CG = window.MA.callGraph;
+  var WS = window.MA.workspace;
+  if (!CG || !WS || !WS.listFiles) return Promise.resolve(null);
+  if (_cgBusy) return _cgBusy;
+  saveActiveDoc();
+  var dirs = (typeof _peekDirs !== 'undefined' && _peekDirs && _peekDirs.length)
+    ? _peekDirs.slice()
+    : [{ path: _wsFileDir(), name: _noteMineFolder() || '', current: true }];
+  _cgBusy = Promise.all(dirs.map(function(d) {
+    return WS.listFiles(d.path).then(function(names) {
+      return Promise.all((names || []).filter(function(n) { return n; }).map(function(n) {
+        return WS.loadFile(n, d.path).then(function(text) {
+          // 名前は「フォルダ/ファイル名」。1 フォルダしか見ていないときは素の名前
+          // (同じ図が persona 違いで 2 行に出るときだけ、どちらのものかを言う)。
+          // 一覧は拡張子を落とした名前を返すので、表示は `.puml` を付けた形に揃える
+          // (reviewer が CLI と指摘.md で見ている名前と同じにする)。
+          var file = /\.puml$/i.test(n) ? n : n + '.puml';
+          return {
+            name: (dirs.length > 1 && d.name) ? (d.name + '/' + file) : file,
+            text: typeof text === 'string' ? text : '',
+            _file: n, _dir: d.path,
+          };
+        }).catch(function() { return null; });
+      }));
+    }).catch(function() { return []; });
+  })).then(function(sets) {
+    var docs = [];
+    sets.forEach(function(set) {
+      (set || []).forEach(function(d) { if (d && d.text) docs.push(d); });
+    });
+    _cgFiles = {};
+    docs.forEach(function(d) { _cgFiles[d.name] = d; });
+    _cgGraph = CG.build(docs);
+    _cgBusy = null;
+    return _cgGraph;
+  }).catch(function() { _cgBusy = null; return _cgGraph; });
+  return _cgBusy;
+}
+
+function renderCallGraph() {
+  var CG = window.MA.callGraph;
+  var list = document.getElementById('cg-list');
+  var sum = document.getElementById('cg-sum');
+  if (!list || !CG) return;
+  if (!_cgGraph) {
+    list.innerHTML = '';
+    if (sum) sum.textContent = _cgBusy ? '図を読んでいます…' : '';
+    renderCallGraphDetail();
+    return;
+  }
+  var s = CG.summary(_cgGraph);
+  if (sum) {
+    sum.textContent = s.files + ' 枚 / メソッド ' + s.symbols + ' 個 / クラス図に宣言なし '
+      + s.undeclared + ' 個' + (s.worst ? '（最も散っているのは ' + s.worst + '）' : '');
+  }
+  // 並びは「先に見るもの」順。宣言なし → 散っている枚数の多い順。
+  var hot = CG.hotspots(_cgGraph);
+  var rest = _cgGraph.nodes.filter(function(n) { return hot.indexOf(n) < 0; });
+  var rows = hot.concat(rest);
+  if (_cgQuery) {
+    var q = _cgQuery.toLowerCase();
+    rows = rows.filter(function(n) { return n.key.toLowerCase().indexOf(q) >= 0; });
+  }
+  list.innerHTML = '';
+  rows.forEach(function(n) {
+    var el = document.createElement('div');
+    el.className = 'cg-node';
+    el.setAttribute('role', 'option');
+    el.setAttribute('data-key', n.key);
+    el.setAttribute('data-undeclared', n.undeclared ? '1' : '0');
+    el.setAttribute('data-docs', String(n.docCount));
+    el.setAttribute('aria-selected', n.key === _cgKey ? 'true' : 'false');
+    var k = document.createElement('span');
+    k.className = 'cg-key';
+    k.textContent = n.key;
+    el.appendChild(k);
+    var sp = document.createElement('span');
+    sp.className = 'cg-spread';
+    sp.textContent = n.docCount + ' 図' + (n.domains.length > 1 ? ' / ' + n.domains.length + ' 領域' : '');
+    el.appendChild(sp);
+    if (n.undeclared) el.title = 'クラス図に宣言が無いまま ' + n.docCount + ' 枚から呼ばれています';
+    el.addEventListener('click', function() { selectCallGraphNode(n.key); });
+    list.appendChild(el);
+  });
+  renderCallGraphDetail();
+}
+
+function renderCallGraphDetail() {
+  var CG = window.MA.callGraph;
+  var title = document.getElementById('cg-title');
+  var verdict = document.getElementById('cg-verdict');
+  var refs = document.getElementById('cg-refs');
+  var empty = document.getElementById('cg-empty');
+  if (!title || !verdict || !refs || !empty || !CG) return;
+  var w = _cgGraph ? CG.walk(_cgGraph, _cgKey) : null;
+  refs.innerHTML = '';
+  if (!w) {
+    title.textContent = '';
+    verdict.textContent = '';
+    verdict.removeAttribute('data-tone');
+    empty.style.display = '';
+    empty.textContent = _cgGraph
+      ? '左からクラス / メソッドを選ぶと、呼んでいる図が並びます。'
+      : '図を読んでいます…';
+    return;
+  }
+  empty.style.display = 'none';
+  title.textContent = w.key;
+  if (w.undeclared) {
+    verdict.setAttribute('data-tone', 'ng');
+    verdict.textContent = 'クラス図に宣言なし。' + w.spread + ' 枚 / '
+      + w.domains.length + ' 領域（' + w.domains.join('、') + '）から呼ばれています'
+      + (w.callers.length ? ' — 呼び元: ' + w.callers.join('、') : '');
+  } else {
+    verdict.setAttribute('data-tone', 'ok');
+    verdict.textContent = '宣言 ' + w.declared.length + ' 件（'
+      + w.declared.map(function(d) { return d.doc + ':' + d.line; }).join('、') + '）／'
+      + w.spread + ' 枚から参照';
+  }
+  if (w.ambiguous) {
+    verdict.textContent += '（同名のメソッドを持つクラスが複数: ' + w.ambiguous.join('、') + '）';
+  }
+  w.declared.forEach(function(d) { refs.appendChild(_cgRefRow(d, '宣言', 'declared')); });
+  w.byDomain.forEach(function(g) {
+    var head = document.createElement('div');
+    head.className = 'cg-domain';
+    head.setAttribute('data-domain', g.domain);
+    head.textContent = g.domain + '（' + g.refs.length + '）';
+    refs.appendChild(head);
+    g.refs.forEach(function(r) {
+      var label = r.kind === 'transition' ? '遷移' : (r.kind === 'reply' ? '返信' : r.from + ' →');
+      refs.appendChild(_cgRefRow(r, label, r.kind));
+    });
+  });
+}
+
+function _cgRefRow(r, label, kind) {
+  var el = document.createElement('div');
+  el.className = 'cg-ref';
+  el.setAttribute('data-kind', kind);
+  el.setAttribute('data-doc', r.doc);
+  el.setAttribute('data-line', String(r.line));
+  var where = document.createElement('span');
+  where.className = 'cg-where';
+  where.textContent = r.doc + ':' + r.line + ' ' + label;
+  el.appendChild(where);
+  var text = document.createElement('span');
+  text.className = 'cg-text';
+  text.textContent = r.text;
+  el.appendChild(text);
+  el.title = 'この図のこの行を開く';
+  el.addEventListener('click', function() { _cgOpenAt(r.doc, r.line); });
+  return el;
+}
+
+function selectCallGraphNode(key) {
+  _cgKey = key || '';
+  var list = document.getElementById('cg-list');
+  if (list) {
+    var all = list.querySelectorAll('.cg-node');
+    for (var i = 0; i < all.length; i++) {
+      all[i].setAttribute('aria-selected',
+        all[i].getAttribute('data-key') === _cgKey ? 'true' : 'false');
+    }
+  }
+  renderCallGraphDetail();
+}
+
+// 参照の行から、その図のその行へ。開き方は 📂 一覧と同じ経路 (2 つに増やさない)。
+function _cgOpenAt(doc, line) {
+  var f = _cgFiles[doc];
+  var name = (f && f._file) || doc;
+  closeCallGraph();
+  var panel = document.getElementById('folder-panel');
+  if (panel && !/\bopen\b/.test(panel.className || '')) {
+    var tab = document.getElementById('btn-tab-folder');
+    if (tab) tab.click();
+  }
+  var tries = 0;
+  (function click() {
+    var item = document.querySelector('#folder-panel .folder-item[data-file-name="' + name + '"]');
+    if (item) { item.click(); window.setTimeout(function() { _cgGotoLine(line); }, 200); return; }
+    if (tries++ < 40) window.setTimeout(click, 50);
+  })();
+}
+
+function _cgGotoLine(line) {
+  var ed = document.getElementById('editor');
+  if (!ed) return;
+  var lines = ed.value.split('\n');
+  var offset = 0;
+  for (var i = 0; i < line - 1 && i < lines.length; i++) offset += lines[i].length + 1;
+  ed.focus();
+  ed.setSelectionRange(offset, offset + (lines[line - 1] || '').length);
+  var lh = ed.scrollHeight / Math.max(1, lines.length);
+  ed.scrollTop = Math.max(0, (line - 3) * lh);
+}
+
+function openCallGraph() {
+  var modal = _cgModal();
+  if (!modal) return Promise.resolve(null);
+  modal.style.display = 'flex';
+  renderCallGraph();
+  return loadCallGraph().then(function(g) {
+    // 開いた直後に見るのは「先に見るもの」の先頭。選び直す手間を 1 回減らす。
+    if (!_cgKey) {
+      var CG = window.MA.callGraph;
+      var hot = (CG && g) ? CG.hotspots(g, 1) : [];
+      if (hot.length) _cgKey = hot[0].key;
+    }
+    renderCallGraph();
+    return g;
+  });
+}
+
+function closeCallGraph() {
+  var modal = _cgModal();
+  if (modal) modal.style.display = 'none';
+}
+
+function setupCallGraph() {
+  var close = document.getElementById('cg-close');
+  if (close) close.addEventListener('click', function() { closeCallGraph(); });
+  var find = document.getElementById('cg-find');
+  if (find) find.addEventListener('input', function() {
+    _cgQuery = find.value || '';
+    renderCallGraph();
+  });
+  var copy = document.getElementById('cg-copy');
+  if (copy) copy.addEventListener('click', function() {
+    var CG = window.MA.callGraph;
+    if (!CG || !_cgGraph || !_cgKey) return;
+    var text = CG.refText(_cgGraph, _cgKey);
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text);
+    } catch (e) {}
+    var sum = document.getElementById('cg-sum');
+    if (sum) sum.textContent = _cgKey + ' の呼び出し元を写しました';
+  });
+  var modal = _cgModal();
+  if (modal) modal.addEventListener('click', function(ev) {
+    if (ev.target === modal) closeCallGraph();
+  });
 }

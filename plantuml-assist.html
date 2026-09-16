@@ -2725,6 +2725,57 @@ html, body {
 #at-ledger .fl-empty { color: var(--text-secondary); font-size: 12px; padding: 8px 2px; }
 #at-band-head { font-size: 12px; color: var(--text-primary); padding: 10px 0 4px 0; border-top: 1px solid var(--border); }
 /* 提出用 zip の図選び (BLK-primary-20260908-1203-wish) */
+/* BLK-reviewer-20260917-0323-wish: 呼び出しグラフ */
+#cg-modal-content {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  width: 80vw;
+  max-width: 1040px;
+  height: 78vh;
+  display: flex;
+  flex-direction: column;
+}
+#cg-head {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px; border-bottom: 1px solid var(--border);
+  font-size: 12px; color: var(--text-primary);
+}
+#cg-sum { color: var(--text-secondary); }
+#cg-tools { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+#cg-tools button, #cg-tools input {
+  border: 1px solid var(--border); background: var(--bg-tertiary);
+  color: var(--text-primary); border-radius: 4px; padding: 3px 10px;
+  font-size: 12px; cursor: pointer;
+}
+#cg-find { cursor: text; min-width: 160px; }
+#cg-cols { display: flex; flex: 1 1 auto; min-height: 0; }
+#cg-list { flex: 0 0 300px; overflow: auto; border-right: 1px solid var(--border); padding: 6px 0; }
+#cg-detail { flex: 1 1 auto; overflow: auto; padding: 10px 14px; font-size: 12px; }
+.cg-node {
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 4px 12px; cursor: pointer; color: var(--text-primary);
+  border-left: 3px solid transparent;
+}
+.cg-node:hover { background: var(--bg-tertiary); }
+.cg-node[aria-selected="true"] { background: var(--bg-tertiary); border-left-color: var(--accent); }
+.cg-node[data-undeclared="1"] .cg-key { color: var(--danger, #d05050); font-weight: 600; }
+.cg-key { flex: 1 1 auto; word-break: break-all; }
+.cg-spread { flex: 0 0 auto; color: var(--text-secondary); font-size: 11px; }
+#cg-title { font-size: 13px; font-weight: 600; margin-bottom: 2px; word-break: break-all; }
+#cg-verdict { margin-bottom: 8px; color: var(--text-secondary); }
+#cg-verdict[data-tone="ng"] { color: var(--danger, #d05050); font-weight: 600; }
+#cg-verdict[data-tone="ok"] { color: var(--accent); }
+.cg-domain { margin-top: 8px; color: var(--text-secondary); font-weight: 600; }
+.cg-ref {
+  display: flex; align-items: baseline; gap: 8px; padding: 3px 0 3px 10px;
+  border-bottom: 1px solid var(--border); cursor: pointer;
+}
+.cg-ref:hover { background: var(--bg-tertiary); }
+.cg-ref .cg-where { flex: 0 0 auto; color: var(--text-secondary); }
+.cg-ref .cg-text { flex: 1 1 auto; word-break: break-all; }
+.cg-ref[data-kind="transition"] .cg-where { color: var(--accent); }
+#cg-empty { color: var(--text-secondary); padding: 10px 2px; }
 /* BLK-primary-20260917-0323-wish: 引き継ぎチェックリスト */
 #hb-modal-content {
   background: var(--bg-secondary);
@@ -7885,6 +7936,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/handover-notes.js"></script>
 <script src="src/core/handover-checklist.js"></script>
 <script src="src/core/handover-board.js"></script>
+<script src="src/core/call-graph.js"></script>
 <script src="src/core/review-verdicts.js"></script>
 <script src="src/core/meeting-notes.js"></script>
 <script src="src/core/audit-timeline.js"></script>
@@ -8160,6 +8212,30 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
      切り離し、名前で選べるようにする -->
 <!-- BLK-primary-20260917-0323-wish: 引き継ぎチェックリスト。渡す 14 枚の
      置換済み / note最新 / SVG最新 / 指摘 を 1 画面で読み、赤い行だけを見る -->
+<!-- BLK-reviewer-20260917-0323-wish: 呼び出しグラフ。クラス/メソッドを 1 つ選ぶと、
+     それを呼んでいる全シーケンス図・状態遷移図がドメインごとに並び、行まで辿れる -->
+<div id="cg-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+  <div id="cg-modal-content">
+    <div id="cg-head">
+      <strong>呼び出しグラフ</strong>
+      <span id="cg-sum" role="status"></span>
+      <span id="cg-tools">
+        <input type="search" id="cg-find" placeholder="クラス / メソッドで絞る" />
+        <button type="button" id="cg-copy" title="選んでいるメソッドの呼び出し元を指摘.md へ写す">指摘に写す</button>
+        <button type="button" id="cg-close">閉じる</button>
+      </span>
+    </div>
+    <div id="cg-cols">
+      <div id="cg-list" role="listbox" aria-label="クラス・メソッド"></div>
+      <div id="cg-detail">
+        <div id="cg-title"></div>
+        <div id="cg-verdict"></div>
+        <div id="cg-refs"></div>
+        <div id="cg-empty" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
+</div>
 <div id="hb-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="hb-modal-content">
     <div id="hb-head">
