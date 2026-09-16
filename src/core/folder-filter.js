@@ -39,9 +39,26 @@ window.MA.folderFilter = (function() {
     if (terms.length === 0) return '';
     var hits = filter(names, query);
     if (hits.length === 1) return hits[0];
-    var q = String(query).trim().toLowerCase();
-    var exact = hits.filter(function(n) { return String(n).toLowerCase() === q; });
+    var exact = hits.filter(function(n) { return exactMatch(n, query); });
     return exact.length === 1 ? exact[0] : '';
+  }
+
+  // BLK-junior-20260916-2314: 部分一致なので、フルネームを打っても同じ接頭辞の
+  // 「…(資料用)」が一緒に残り、並び順次第で資料用を開いてしまう。打った名前と
+  // 拡張子を除いて丸ごと同じ図は「完全一致」として先頭に出す。
+  function _base(s) {
+    return String(s == null ? '' : s).trim().replace(/\.(puml|pu|plantuml|txt)$/i, '').toLowerCase();
+  }
+  function exactMatch(name, query) {
+    var q = _base(query);
+    return q !== '' && _base(name) === q;
+  }
+  // 完全一致を先頭に、残りは元の順のまま。
+  function rank(names, query) {
+    if (!Array.isArray(names)) return [];
+    var head = [], rest = [];
+    names.forEach(function(n) { (exactMatch(n, query) ? head : rest).push(n); });
+    return head.concat(rest);
   }
 
   // 絞り込み中の 1 行。何枚に絞れたかが分かればよい。
@@ -81,6 +98,8 @@ window.MA.folderFilter = (function() {
     match: match,
     filter: filter,
     soleMatch: soleMatch,
+    exactMatch: exactMatch,
+    rank: rank,
     summaryText: summaryText,
     peekHintText: peekHintText,
     peekUrged: peekUrged,

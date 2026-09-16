@@ -1689,6 +1689,8 @@ html, body {
 /* まとめて開く (BLK-primary-20260907-1703): 印の欄と名前を 1 行に並べる */
 #folder-panel .folder-row { display: flex; align-items: center; gap: 6px; }
 #folder-panel .folder-row .folder-item { flex: 1 1 auto; min-width: 0; }
+#folder-panel [data-exact="1"] { outline: 1px solid var(--accent); border-radius: 4px; }
+#folder-panel [data-exact="1"] button.folder-item::after, #folder-panel button.folder-item[data-exact="1"]::after { content: "完全一致"; margin-left: 6px; font-size: 10px; padding: 0 4px; border-radius: 3px; background: var(--accent); color: var(--bg-primary); }
 #folder-panel .folder-pick { flex: 0 0 auto; margin: 0; cursor: pointer; }
 /* 一覧は縦にスクロールするので、印の操作は上端に貼り付けて常に見えるようにする */
 #folder-panel .folder-pickbar {
