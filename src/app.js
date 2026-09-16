@@ -1088,6 +1088,13 @@ function init() {
         e.stopImmediatePropagation();
       }
     }, true);
+    // BLK-human-20260916-0901: 「⌗ 囲む…」の終点待ちの間は、押したメッセージを選択ではなく終点に使う。
+    overlayEl.addEventListener('click', function(e) {
+      if (currentModule && typeof currentModule.handleOverlayPick === 'function'
+        && currentModule.handleOverlayPick(e.target)) {
+        e.stopImmediatePropagation();
+      }
+    }, true);
     // BLK-human-20260915-1204 差し戻し: 帯の中 / 帯の下のライフライン線を実マウスで押したら、
     // ライフライン選択ではなく「帯の内側 / 外側」で挿入ピッカーを開く (capture で router より先に取る)。
     overlayEl.addEventListener('click', function(e) {
@@ -1105,7 +1112,12 @@ function init() {
       currentModule.showInsertPicker(insertCtx, res.line, res.position, _zoneHintOf(res));
       if (typeof clearHoverGuide === 'function') clearHoverGuide();
     }, true);
-    window.MA.selectionRouter.bind(overlayEl);
+    window.MA.selectionRouter.bind(overlayEl, {
+      expandShift: function(current, item) {
+        if (!currentModule || typeof currentModule.expandShiftSelection !== 'function') return null;
+        try { return currentModule.expandShiftSelection(mmdText, current, item); } catch (err) { return null; }
+      },
+    });
   }
 
   // FEAT-080: Ctrl+/ (Cmd+/) で選択行の PlantUML 行コメント ' をトグルする。

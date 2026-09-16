@@ -18,6 +18,8 @@ async function wrapLine(page, line, kind, label) {
   await clickOverlayByLine(page, line);
   await page.waitForTimeout(300);
   await page.locator('.seq-wrap-block').first().click();
+  // BLK-human-20260916-0901: ⌗ は終点を図で押す段に入る。1 本だけ囲むときは帯のボタンで決める。
+  await page.locator('#seq-wrap-pick-one').click();
   await page.waitForSelector('#seq-wrap-kind');
   await page.selectOption('#seq-wrap-kind', kind);
   await page.fill('#seq-wrap-label', label);

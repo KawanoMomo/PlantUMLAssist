@@ -839,9 +839,11 @@ window.MA.modules.plantumlSequence = (function() {
       _showInsertForm(ctx, ln, 'after', 'note');
     });
     // FEAT-114 / HFR-060: 2 連 prompt() を seq-modal の 1 枚フォームへ置き換える。
+    // BLK-human-20260916-0901: 「⌗ 囲む…」は押したあとプレビューで終点のメッセージを押す。
+    // 押すまでの間は選べるメッセージを点線でハイライトし、上部の帯に「この 1 本だけ」も置く。
     P.bindAllByClass(propsEl, 'seq-wrap-block', function(btn) {
       var ln = parseInt(btn.getAttribute('data-line'), 10);
-      _showWrapForm(ctx, ln, ln);
+      _startWrapPick(ctx, ln);
     });
     function _moveAndReselect(ln, direction) {
       var oldText = ctx.getMmdText();
@@ -899,6 +901,59 @@ window.MA.modules.plantumlSequence = (function() {
     });
   }
 
+  // BLK-human-20260916-0901: ブロックの範囲 (始点/終点のメッセージ) と 1 本ずつの伸縮。
+  var lastRangeNote = '';
+  function _groupRangeHtml(text, gg, escHtml) {
+    var GR = window.MA.sequenceGroupRange;
+    if (!GR || !gg.endLine) return '';
+    var lines = String(text).split('\n');
+    var first = '', last = '', count = 0;
+    for (var i = gg.line; i < gg.endLine - 1; i++) {
+      var c = GR.classify(lines[i]);
+      if (c.kind !== 'msg') continue;
+      count++;
+      var d = c.from + '→' + c.to + ' (L' + (i + 1) + ')';
+      if (!first) first = d;
+      last = d;
+    }
+    var btn = function(id, label) {
+      return '<button id="' + id + '" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:5px 4px;border-radius:4px;font-size:11px;cursor:pointer;">' + label + '</button>';
+    };
+    var note = lastRangeNote;
+    lastRangeNote = '';
+    return '<div id="seq-group-range" style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
+      '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">囲んでいる範囲 · ' + count + ' 本</label>' +
+      '<div style="font-size:11px;color:var(--text-primary);margin-bottom:2px;">開始: <span id="seq-group-range-start">' + escHtml(first || '(なし)') + '</span></div>' +
+      '<div style="display:flex;gap:4px;margin-bottom:6px;">' + btn('seq-group-start-up', '↑ 開始を 1 本広げる') + btn('seq-group-start-down', '↓ 開始を 1 本縮める') + '</div>' +
+      '<div style="font-size:11px;color:var(--text-primary);margin-bottom:2px;">終了: <span id="seq-group-range-end">' + escHtml(last || '(なし)') + '</span></div>' +
+      '<div style="display:flex;gap:4px;">' + btn('seq-group-end-up', '↑ 終了を 1 本縮める') + btn('seq-group-end-down', '↓ 終了を 1 本伸ばす') + '</div>' +
+      (note ? '<div id="seq-group-range-note" style="margin-top:6px;font-size:11px;color:var(--accent-yellow, #d7a300);">' + escHtml(note) + '</div>' : '') +
+    '</div>';
+  }
+
+  function _bindGroupRange(propsEl, ctx, gLine, gEnd) {
+    var GR = window.MA.sequenceGroupRange;
+    if (!GR || !gEnd) return;
+    function bind(id, edge, dir) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('click', function() {
+        var r = GR.moveEdge(ctx.getMmdText(), gLine, gEnd, edge, dir);
+        if (!r.ok) { _toastInfo(r.error); return; }
+        window.MA.history.pushHistory();
+        ctx.setMmdText(r.text);
+        lastRangeNote = r.note || '';
+        if (r.note) _toastInfo(r.note);
+        _selectGroupAtLine(r.text, r.openLine);
+        ctx.onUpdate();
+      });
+    }
+    bind('seq-group-start-up', 'start', -1);
+    bind('seq-group-start-down', 'start', 1);
+    bind('seq-group-end-up', 'end', -1);
+    bind('seq-group-end-down', 'end', 1);
+  }
+
   // FEAT-001: 挿入位置のアンカー行 (line が指す message relation) を返す。
   // 該当する message が無い場合 (先頭挿入・participant 行など) は null。
   function resolveAnchor(parsed, line) {
@@ -922,13 +977,22 @@ window.MA.modules.plantumlSequence = (function() {
   // 種類は 4 択のドロップダウンに限定し、任意文字列が DSL に入る経路を塞ぐ ([AC-4])。
   var WRAP_KINDS = ['alt', 'opt', 'loop', 'par'];
 
-  function wrapFormHtml(selectedKind) {
+  function wrapFormHtml(selectedKind, rangeInfo) {
     var P = window.MA.properties;
     var kind = selectedKind || WRAP_KINDS[0];
-    var opts = WRAP_KINDS.map(function(k) {
+    var kinds = WRAP_KINDS.indexOf(kind) >= 0 ? WRAP_KINDS : WRAP_KINDS.concat([kind]);
+    var opts = kinds.map(function(k) {
       return { value: k, label: k, selected: k === kind };
     });
+    var esc = window.MA.htmlUtils.escHtml;
+    var rangeHtml = rangeInfo
+      ? '<div id="seq-wrap-range" style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:10px;font-size:12px;color:var(--text-primary);">' +
+          '囲む範囲: ' + esc(rangeInfo.text) + ' <span style="color:var(--text-secondary);">(L' + rangeInfo.start + '–L' + rangeInfo.end + ')</span>' +
+          (rangeInfo.note ? '<div id="seq-wrap-range-note" style="margin-top:4px;color:var(--accent-yellow, #d7a300);font-size:11px;">' + esc(rangeInfo.note) + '</div>' : '') +
+        '</div>'
+      : '';
     return '<h3 style="margin:0 0 12px 0;color:var(--text-primary);">ブロックで囲む</h3>' +
+      rangeHtml +
       P.selectFieldHtml('ブロック種類', 'seq-wrap-kind', opts) +
       '<div style="margin-bottom:8px;">' +
         '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Label/Condition</label>' +
@@ -940,10 +1004,19 @@ window.MA.modules.plantumlSequence = (function() {
       '</div>';
   }
 
-  function _showWrapForm(ctx, startLine, endLine) {
+  function _showWrapForm(ctx, startLine, endLine, kind) {
     var modal = document.getElementById('seq-modal');
     var content = document.getElementById('seq-modal-content');
-    content.innerHTML = wrapFormHtml(WRAP_KINDS[0]);
+    var GR = window.MA.sequenceGroupRange;
+    var rangeInfo = null;
+    if (GR) {
+      var R = GR.wrapRange(ctx.getMmdText(), startLine, endLine);
+      if (!R.ok) { _toastInfo(R.error); return; }
+      startLine = R.start; endLine = R.end;
+      rangeInfo = { start: R.start, end: R.end, note: R.rounded ? R.note : '',
+        text: GR.describe(ctx.getMmdText(), R.start, R.end) };
+    }
+    content.innerHTML = wrapFormHtml(kind || WRAP_KINDS[0], rangeInfo);
     modal.style.display = 'flex';
     var labelEl = document.getElementById('seq-wrap-label');
     if (labelEl && labelEl.focus) labelEl.focus();
@@ -959,8 +1032,129 @@ window.MA.modules.plantumlSequence = (function() {
       window.MA.history.pushHistory();
       ctx.setMmdText(wrapWith(ctx.getMmdText(), startLine, endLine, kind, label || ''));
       modal.style.display = 'none';
+      _selectGroupAtLine(ctx.getMmdText(), startLine);
       ctx.onUpdate();
     });
+  }
+
+  // BLK-human-20260916-0901: 囲んだ直後・範囲を動かした直後は、そのブロックを選んだままにする
+  // (続けて伸縮・else 追加ができる)。
+  function _selectGroupAtLine(text, line) {
+    try {
+      var p = parseSequence(text);
+      for (var i = 0; i < p.groups.length; i++) {
+        if (p.groups[i].line === line) {
+          window.MA.selection.setSelected([{ type: 'group', id: p.groups[i].id, line: line }]);
+          return;
+        }
+      }
+    } catch (e) { /* keep */ }
+    window.MA.selection.clearSelection();
+  }
+
+  function _toastInfo(msg) {
+    var el = document.getElementById('seq-range-toast');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'seq-range-toast';
+      el.setAttribute('role', 'status');
+      el.style.cssText = 'position:fixed;left:50%;bottom:48px;transform:translateX(-50%);background:var(--bg-secondary);border:1px solid var(--accent);color:var(--text-primary);padding:8px 14px;border-radius:6px;font-size:12px;z-index:1200;max-width:560px;';
+      document.body.appendChild(el);
+    }
+    el.textContent = msg;
+    el.style.display = 'block';
+    clearTimeout(el._t);
+    el._t = setTimeout(function() { el.style.display = 'none'; }, 4000);
+  }
+
+  // ── 終点を図で押して囲む (BLK-human-20260916-0901 の操作 2) ──
+  var wrapPick = null;
+
+  function _pickHighlight(on) {
+    var ov = document.getElementById('overlay-layer');
+    if (!ov) return;
+    var rects = ov.querySelectorAll('rect[data-type="message"]');
+    Array.prototype.forEach.call(rects, function(r) {
+      r.classList.remove('seq-wrap-pickable');
+      r.classList.remove('seq-wrap-anchor');
+      if (!on) return;
+      var ln = parseInt(r.getAttribute('data-line'), 10);
+      r.classList.add(ln === wrapPick.start ? 'seq-wrap-anchor' : 'seq-wrap-pickable');
+    });
+  }
+
+  function _endWrapPick() {
+    if (!wrapPick) return;
+    _pickHighlight(false);
+    var bar = document.getElementById('seq-wrap-pick-banner');
+    if (bar) bar.parentNode.removeChild(bar);
+    document.removeEventListener('keydown', wrapPick.onKey, true);
+    wrapPick = null;
+  }
+
+  function _startWrapPick(ctx, line) {
+    _endWrapPick();
+    var GR = window.MA.sequenceGroupRange;
+    var text = ctx.getMmdText();
+    var desc = GR ? GR.describe(text, line, line) : ('L' + line);
+    wrapPick = { start: line, ctx: ctx };
+    wrapPick.onKey = function(e) {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); _endWrapPick(); }
+    };
+    document.addEventListener('keydown', wrapPick.onKey, true);
+    var bar = document.createElement('div');
+    bar.id = 'seq-wrap-pick-banner';
+    bar.setAttribute('role', 'status');
+    bar.style.cssText = 'position:fixed;left:50%;top:56px;transform:translateX(-50%);z-index:1100;background:var(--bg-secondary);border:1px solid var(--accent);color:var(--text-primary);padding:8px 12px;border-radius:6px;font-size:12px;display:flex;gap:8px;align-items:center;box-shadow:0 2px 10px rgba(0,0,0,0.3);';
+    var esc = window.MA.htmlUtils.escHtml;
+    bar.innerHTML = '<span>⌗ 囲む範囲の<strong>終点のメッセージ</strong>を図で押してください (始点: ' + esc(desc.replace(/^1 本のメッセージ \((.*)\)$/, '$1')) + ' · L' + line + ')</span>' +
+      '<button id="seq-wrap-pick-one" style="background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;">この 1 本だけ囲む</button>' +
+      '<button id="seq-wrap-pick-cancel" style="background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;">やめる (Esc)</button>';
+    document.body.appendChild(bar);
+    document.getElementById('seq-wrap-pick-one').addEventListener('click', function() {
+      var c = wrapPick.ctx, s = wrapPick.start;
+      _endWrapPick();
+      _showWrapForm(c, s, s);
+    });
+    document.getElementById('seq-wrap-pick-cancel').addEventListener('click', _endWrapPick);
+    _pickHighlight(true);
+  }
+
+  // app.js が overlay のクリックを選択に回す前に呼ぶ。消費したら true。
+  function handleOverlayPick(target) {
+    if (!wrapPick || !target || !target.getAttribute) return false;
+    if (target.getAttribute('data-type') !== 'message') return true;  // 終点を待つ間は他を選ばない
+    var ln = parseInt(target.getAttribute('data-line'), 10);
+    if (isNaN(ln)) return true;
+    var c = wrapPick.ctx, s = wrapPick.start;
+    _endWrapPick();
+    _showWrapForm(c, Math.min(s, ln), Math.max(s, ln));
+    return true;
+  }
+
+  // overlay を描き直したらハイライトも付け直す。
+  function refreshOverlayPick() { if (wrapPick) _pickHighlight(true); }
+
+  // 1 本目を押してから Shift+クリックで 2 本目 → 間のメッセージを全部選ぶ。
+  function expandShiftSelection(text, current, item) {
+    if (!item || item.type !== 'message' || typeof item.line !== 'number') return null;
+    var msgs = (current || []).filter(function(s) { return s.type === 'message' && typeof s.line === 'number'; });
+    if (!msgs.length || msgs.length !== current.length) return null;
+    var GR = window.MA.sequenceGroupRange;
+    if (!GR) return null;
+    var anchor = msgs[0].line;
+    var lines = GR.messageLinesBetween(text, anchor, item.line);
+    var p = parseSequence(text);
+    var out = [];
+    lines.forEach(function(l) {
+      for (var i = 0; i < p.relations.length; i++) {
+        var r = p.relations[i];
+        if (r.kind === 'message' && r.line === l) { out.push({ type: 'message', id: r.id, line: l }); break; }
+      }
+    });
+    // 始点を先頭に保つ (次の Shift+クリックも同じ始点から測る)。
+    out.sort(function(a, b) { return a.line === anchor ? -1 : b.line === anchor ? 1 : a.line - b.line; });
+    return out.length ? out : null;
   }
 
   // FEAT-142 / HFR-075: participant 左右挿入の 2 連 prompt() を 1 枚のフォームにまとめる。
@@ -1976,8 +2170,11 @@ window.MA.modules.plantumlSequence = (function() {
       deleteSelectedLine: true,
       multiSelectConnect: false,
     },
+    handleOverlayPick: handleOverlayPick,
+    expandShiftSelection: expandShiftSelection,
     buildOverlay: function(svgEl, parsedData, overlayEl, dslText) {
       if (!overlayEl) return;
+      setTimeout(refreshOverlayPick, 0);
       if (window.MA.sequenceOverlay && window.MA.sequenceOverlay.buildSequenceOverlay) {
         // dslText は帯 (activate/deactivate) の矩形を DSL の行に結び付けるために要る
         // (PlantUML の SVG は帯に data-source-line を付けない)。BLK-human-20260915-1204。
@@ -2576,6 +2773,7 @@ window.MA.modules.plantumlSequence = (function() {
             '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>' + escHtml(gg.gtype + (gg.label ? ' ' + gg.label : '')) + '</strong><br><span style="color:var(--text-secondary);">Block · L' + gg.line + (gg.endLine ? '–L' + gg.endLine : '') + '</span></div>' +
             P.selectFieldHtml('Type', 'seq-edit-gtype', gtypeOpts) +
             P.fieldHtml('Label/Condition', 'seq-edit-glabel', gg.label || '') +
+            _groupRangeHtml(ctx.getMmdText(), gg, escHtml) +
             '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
               '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">else 追加 (alt/critical)</label>' +
               '<input id="seq-edit-else-cond" type="text" placeholder="else の条件 (省略可)" style="width:100%;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-size:12px;margin-bottom:4px;box-sizing:border-box;">' +
@@ -2586,6 +2784,7 @@ window.MA.modules.plantumlSequence = (function() {
             '</div>';
           var gLine = gg.line;
           var gEnd = gg.endLine;
+          _bindGroupRange(propsEl, ctx, gLine, gEnd);
           document.getElementById('seq-edit-gtype').addEventListener('change', function() {
             window.MA.history.pushHistory();
             ctx.setMmdText(updateGroup(ctx.getMmdText(), gLine, 'gtype', this.value));
@@ -2626,6 +2825,9 @@ window.MA.modules.plantumlSequence = (function() {
         propsEl.innerHTML =
           '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;">' +
             '<strong>' + selData.length + ' 件選択中</strong><br>' +
+            (window.MA.sequenceGroupRange
+              ? '<span id="seq-multi-range" style="color:var(--text-primary);">' + escHtml(window.MA.sequenceGroupRange.describe(ctx.getMmdText(), range.start, range.end)) + '</span><br>'
+              : '') +
             '<span style="color:var(--text-secondary);">L' + range.start + ' 〜 L' + range.end + '</span>' +
           '</div>' +
           '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
@@ -2642,11 +2844,8 @@ window.MA.modules.plantumlSequence = (function() {
           var k = btn.getAttribute('data-kind');
           var s = parseInt(btn.getAttribute('data-start'), 10);
           var e = parseInt(btn.getAttribute('data-end'), 10);
-          var label = prompt(k + ' のラベル', '');
-          window.MA.history.pushHistory();
-          ctx.setMmdText(wrapWith(ctx.getMmdText(), s, e, k, label || ''));
-          window.MA.selection.clearSelection();
-          ctx.onUpdate();
+          // BLK-human-20260916-0901: prompt() ではなく範囲が文字で見える 1 枚のフォームで囲む。
+          _showWrapForm(ctx, s, e, k);
         });
         P.bindAllByClass(propsEl, 'seq-bulk-duplicate', function(btn) {
           var s = parseInt(btn.getAttribute('data-start'), 10);
