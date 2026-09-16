@@ -637,3 +637,121 @@ test.describe('primary 手順 4: 症状に関わる部品がいつの版から�
     await expect(page.locator('#editor')).toHaveValue(/Spi_Driver -> PowerCtrl/);
   });
 });
+
+// BLK-primary-20260917-0323-wish: 新人に引き継ぐ場面の手順 4。統一を終えた図を
+// junior に渡してよいかの確認が、⇄一括置換の履歴・図を 1 枚ずつ開いての note 読み・
+// 📂一覧の SVG 印、と 3 つの画面に散っていた。1 画面の表 (置換済み / note最新 /
+// SVG最新 / 指摘と符合する欠落) だけで合否が読め、揃わない行が赤く残ることを見る。
+const HB_CLEAN = '@startuml\ntitle SPI 初期化\nparticipant Spi_Driver\nparticipant Hal\n'
+  + 'Spi_Driver -> Hal : init\nnote over Spi_Driver : Spi_Driver に統一済み\n@enduml';
+// 宣言も呼び出しも直っているのに、note の文だけ統一前の名前が残っている図。
+// 前回はこれを見つけるために driver_common_class を個別に開いて本文を読んでいた。
+const HB_STALE_NOTE = '@startuml\nclass Spi_Driver {\n  +Start() : void\n}\n'
+  + 'note top of Spi_Driver : SpiDrv の初期化は Start() から\n@enduml';
+// 置換そのものが届いていない図。
+const HB_LEFT = '@startuml\n[*] --> Idle\nIdle --> Busy : SpiDrv.start\n@enduml';
+
+const HB_HISTORY = {
+  from: 'SpiDrv', to: 'Spi_Driver', at: '2026-09-17T02:00:00.000Z',
+  docs: [{ name: 'spi_init_sequence', count: 2 }], total: 2,
+};
+
+async function hbBoot(page) {
+  await page.addInitScript((a) => {
+    try {
+      window.localStorage.clear();
+      window.localStorage.setItem('plantuml-tools-folded', '0');
+      window.localStorage.setItem('plantuml-autosave-config',
+        JSON.stringify({ enabled: true, debounceMs: 200, restoreMode: 'auto', backend: 'file', fileDir: a.dir }));
+      // 手順 2 で打った組。「何から何へ直したか」はここが正本で、表の列 2 つはこれを基準に数える。
+      const hist = {}; hist[a.dir] = [a.entry];
+      window.localStorage.setItem('plantuml-rename-history', JSON.stringify(hist));
+    } catch (e) {}
+  }, { dir: DIR, entry: HB_HISTORY });
+  await gotoApp(page);
+}
+
+// Ctrl+K から 1 件走らせる (_scenario.runCommand と同じ経路)。
+async function runCmd(page, query) {
+  await page.keyboard.press('Control+k');
+  await page.waitForSelector('#cp-modal');
+  await page.locator('#cp-input').fill(query);
+  await page.waitForTimeout(250);
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(500);
+}
+
+async function openHandoverBoard(page) {
+  await runCmd(page, '引き継ぎ');
+  await page.waitForSelector('#hb-modal #hb-sum[data-total]');
+  // 材料 (本文・SVG 印・指摘.md) を読み終えるまで待つ。
+  await page.waitForFunction(() => {
+    const el = document.querySelector('#hb-sum');
+    return !!el && Number(el.getAttribute('data-total')) > 0;
+  });
+}
+
+test.describe('primary 手順 4: 14 枚を新人に渡してよいかを 1 画面で確かめる', () => {
+  test.beforeEach(async ({ page }) => {
+    await hbBoot(page);
+    await clearDir(page);
+    await putFile(page, 'spi_init_sequence', HB_CLEAN);
+    await putFile(page, 'driver_common_class', HB_STALE_NOTE);
+    await putFile(page, 'spi_state', HB_LEFT);
+    await page.reload();
+    await page.waitForSelector('#preview-svg');
+  });
+
+  test('引き継ぎチェックリストが 1 画面で開き、図ごとに 4 列の答えが並ぶ', async ({ page }) => {
+    await openHandoverBoard(page);
+
+    // 到達条件その1: 図を 1 枚も開かずに、渡した 3 枚が行として並ぶ。
+    const rows = page.locator('#hb-rows tr[data-doc-name]');
+    await expect(rows).toHaveCount(3);
+
+    // 到達条件その2: 置換が届いていない図は、置換列で名指しされる。
+    const left = page.locator('#hb-rows tr[data-doc-name="spi_state"]');
+    await expect(left.locator('td').nth(1)).toHaveAttribute('data-state', 'left');
+    await expect(left.locator('td').nth(1)).toContainText('旧称');
+
+    // 到達条件その3: 置換は済んだが note だけ統一前のまま、が別の列で分かれて出る
+    // (前回はこれを見るために図を個別に開いて本文を読んでいた)。
+    const stale = page.locator('#hb-rows tr[data-doc-name="driver_common_class"]');
+    await expect(stale.locator('td').nth(1)).toHaveAttribute('data-state', 'done');
+    await expect(stale.locator('td').nth(2)).toHaveAttribute('data-state', 'stale');
+    await expect(stale.locator('td').nth(2)).toContainText('note');
+  });
+
+  test('渡す前に見る図だけが赤く残り、その行から図を開いて直せる', async ({ page }) => {
+    await openHandoverBoard(page);
+
+    // 到達条件その1: 合否はこの 1 画面の色だけで決まる。揃わない行が赤 (ready=0)。
+    await expect(page.locator('#hb-rows tr[data-ready="0"]')).toHaveCount(3);
+    const sum = page.locator('#hb-sum');
+    await expect(sum).toHaveAttribute('data-tone', 'ng');
+    await expect(sum).toContainText('渡す前に見る図');
+
+    // 到達条件その2: 赤い行は「なぜ渡せないか」を列の名前で持つ。
+    await expect(page.locator('#hb-rows tr[data-doc-name="driver_common_class"]'))
+      .toHaveAttribute('data-blockers', /note が統一前のまま/);
+
+    // 到達条件その3: その行からそのまま直しに行ける (一覧を開き直さない)。
+    await page.locator('#hb-rows tr[data-doc-name="driver_common_class"] button.hb-open').click();
+    await expect(page.locator('#hb-modal')).toBeHidden();
+    await page.waitForTimeout(1500);
+    await expect(page.locator('#editor')).toHaveValue(/SpiDrv の初期化/);
+  });
+
+  test('docset 出力の前に、未確認のまま渡そうとしている図が名指しされる', async ({ page }) => {
+    await openHandoverBoard(page);
+    await page.locator('#hb-close').click();
+
+    await runCmd(page, 'docset');
+    await page.waitForSelector('#docset-modal', { state: 'visible' });
+
+    // 到達条件: 書き出すボタンを押す前に、渡せない図がその場で出る。
+    const warn = page.locator('#docset-handover');
+    await expect(warn).toContainText('未確認のまま渡そうとしています');
+    await expect(warn).toContainText('spi_state');
+  });
+});
