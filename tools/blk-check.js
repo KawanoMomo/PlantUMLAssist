@@ -121,6 +121,7 @@ function main(argv) {
     if (!opts.json) { digest.card(blk).forEach(function (l) { console.log(l); }); }
     if (opts.run) {
       let combined = '';
+      let failed = false;
       blk.commands.forEach(function (cmd) {
         if (digest.isTestCommand(cmd) && !opts.withTests) {
           if (!opts.json) console.log('  → 検算のコマンドなので回さない: ' + cmd + ' (--with-tests で回す)');
@@ -135,6 +136,7 @@ function main(argv) {
         }
         const run = runCommand(r.command);
         combined += '\n' + run.output;
+        if (!run.ok) failed = true;
         rec.runs.push({ command: r.command, ok: run.ok });
         if (!opts.json) {
           console.log('  → 実行: ' + r.command + ' (' + (run.ok ? 'exit 0' : '失敗') + ')');
@@ -143,7 +145,7 @@ function main(argv) {
           if (!run.ok && first) console.log('     理由: ' + first.trim());
         }
       });
-      const check = digest.checkOutput(blk, combined);
+      const check = digest.checkOutput(blk, combined, { failed: failed });
       rec.verdict = check.verdict;
       rec.hits = check.hits;
       if (!blk.commands.length) {

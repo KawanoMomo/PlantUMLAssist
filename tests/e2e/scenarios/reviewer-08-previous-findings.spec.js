@@ -535,3 +535,51 @@ test('手順8 指摘.md の各項目を primary の run ログと突き合わせ
   // 初出は控えに持ち越す (次回 run ログが掃除されても tick 数が戻らない)。
   expect(fs2.existsSync(path2.join(rev, '.replies-state.json'))).toBe(true);
 });
+
+// BLK-reviewer-20260916-0629-friction: blk-check の「出ない / 確認できず」が、機能不良と
+// 「今回は比べる変化が無かった」を区別しなかった。--board も確認依頼を「突合に出ない = 解消」と出していた。
+// 無変化の回と失敗した回を出力だけで見分けられ、確認依頼は解消に数えないことを到達条件にする。
+test('手順8 確認できなかった理由 (対象なし / コマンド失敗) を分けて言い、確認依頼は解消にしない', () => {
+  const fs = require('fs');
+  const os = require('os');
+  const path = require('path');
+  const cp = require('child_process');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pua-r08n-'));
+  const tool = path.join(__dirname, '..', '..', '..', 'tools', 'blk-check.js');
+  const body = (id, cmd) => ['---', 'id: ' + id, 'persona: reviewer', 'depth: blocked',
+    'status: done / merge: abc1234', 'builder: builder-2 run=20260916-0546', 'task: ' + id, '---',
+    '手順で打つコマンドは `' + cmd + '` のまま。', '',
+    'できるようになったこと:', '出力に「変化の中身」の下に全文 diff が出ます。'].join('\n');
+  // 無変化の回: audit.js --since-files が変わった図 0 枚のときに出す行と同じ語を出す。
+  fs.writeFileSync(path.join(root, 'BLK-reviewer-20260916-0526-wish.md'),
+    body('BLK-reviewer-20260916-0526-wish', 'node -e "console.log(String.fromCharCode(0x5bfe,0x8c61,0x306a,0x3057))" <保存フォルダ>'), 'utf8');
+  // 失敗した回。
+  fs.writeFileSync(path.join(root, 'BLK-reviewer-20260916-0527-wish.md'),
+    body('BLK-reviewer-20260916-0527-wish', 'node -e "process.exit(3)" <保存フォルダ>'), 'utf8');
+  try {
+    const r = cp.spawnSync(process.execPath, [tool, root, '--no-state', '--all', '--run', '--folder', 'x'],
+      { cwd: root, encoding: 'utf-8' });
+    expect(r.status, r.stderr).toBe(0);
+    const cut = r.stdout.indexOf('BLK-reviewer-20260916-0527-wish');
+    const idle = r.stdout.slice(0, cut);
+    const failed = r.stdout.slice(cut);
+    expect(idle).toContain('今回は比べる対象が無いので確認できず (機能不良ではない');
+    expect(failed).toContain('コマンドが失敗したため確認できず');
+    expect(r.stdout).not.toContain('対象はあるのに語が出ない');
+  } finally {
+    try { fs.rmSync(root, { recursive: true, force: true }); } catch (e) {}
+  }
+
+  // --board: 本文中の確認依頼は、監査の突合に出なくても「解消」にしない。
+  const 指摘2 = [
+    '# reviewer 指摘',
+    '',
+    '## 最優先: diagram1.puml の domain-verdict 切替、意図確認は継続保留(4tick目)',
+    '冒頭の `domain-verdict: separate` コメントは今回も内容変化なし。primary の回答待ち。',
+  ].join('\n');
+  const view = reviewBoard.build({ board: auditBoard.build({ findings: [] }), findings: 指摘2 });
+  const md = reviewBoard.markdown(view, 'レビュー結果');
+  expect(view.counts.resolved).toBe(0);
+  expect(md).toContain('突合の対象外で判定できない (本文を読む)（1 件）');
+  expect(md).toContain('（前回のまま 4 tick 目）');
+});
