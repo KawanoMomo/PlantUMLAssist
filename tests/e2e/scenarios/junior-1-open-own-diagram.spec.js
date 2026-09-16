@@ -255,3 +255,63 @@ test('手順1 先輩の図を、保存先を動かさずタブで並べて読め
   await expect(page.locator('#folder-panel .folder-item[data-file-name="diagram1"]')).toBeVisible();
   expect(await page.locator('#folder-ref-note').count()).toBe(0);
 });
+
+// BLK-junior-20260917-0423-wish: 取り込む場面の手順 1 は「先輩の該当図を開く」から
+// 始まるが、先輩がその部品のその図種をまだ作っていないことがある。TIMER のクラス図で
+// 実際に空振りし、一覧のファイル名を目で読み比べて初めて「まだ無い」と分かった。
+// 参照タブに部品 × 図種の 済/未 を出し、開く前にその周の相手があるかを読めるようにする。
+const PROG_DIR = './test-results/autosave/junior-1-senior-progress';
+const P_SEQ = ['@startuml', 'participant Timer', 'Timer -> HW: Timer_Init()', '@enduml'].join('\n');
+const P_STATE = ['@startuml', 'state IDLE', 'IDLE --> RUNNING : start', '@enduml'].join('\n');
+
+test('手順1 参照タブの部品×図種で、先輩がまだ作っていない図種が開く前に分かる', async ({ page }) => {
+  // 自分は TIMER のクラス図を持っている。先輩はシーケンスと状態遷移までで、クラス図は無い。
+  await putFile(page, 'timer_class', CLS);
+  await page.evaluate(async (d) => {
+    await fetch('/autosave?dir=' + encodeURIComponent(d), { method: 'DELETE' });
+  }, PROG_DIR);
+  await putIn(page, PROG_DIR, 'timer_init_sequence', P_SEQ);
+  await putIn(page, PROG_DIR, 'timer_state', P_STATE);
+
+  await openFolder(page);
+  await page.locator('#folder-tab-add').selectOption({ label: 'junior-1-senior-progress' });
+  await expect(page.locator('.folder-tab[data-folder-tab="ref"]')).toHaveAttribute('aria-pressed', 'true');
+
+  // 到達条件その1: 参照タブに部品 × 図種の表が出る (ファイル名の並びを読み比べない)。
+  const grid = page.locator('#folder-ref-grid');
+  await expect(grid).toBeVisible();
+  const row = grid.locator('tr.pkm-grow[data-subject="timer"]');
+  await expect(row).toBeVisible();
+
+  // 到達条件その2: 先輩にある図種は「済」、まだ無い図種は「未」と出る。
+  await expect(row.locator('td.pkm-cell[data-kind="sequence"]')).toHaveText('済');
+  await expect(row.locator('td.pkm-cell[data-kind="state"]')).toHaveText('済');
+  const cls = row.locator('td.pkm-cell[data-kind="class"]');
+  await expect(cls).toHaveText('未');
+  await expect(cls).toHaveAttribute('data-made', 'none');
+  // 押す前に、何が無いのかがその場で読める。
+  await expect(cls).toHaveAttribute('title', /クラス図はまだありません/);
+
+  // 到達条件その3: 今週の相手 (TIMER クラス図) が無いことを表が名指しする。
+  await expect(page.locator('#folder-ref-matrix-missing')).toContainText('TIMER');
+  await expect(page.locator('#folder-ref-matrix-missing')).toContainText('クラス');
+  await expect(page.locator('#folder-ref-matrix-summary')).toContainText('済 2');
+
+  // 到達条件その4: 「済」のマスは押せば読むだけで開く (見つけた図にそのまま入れる)。
+  await row.locator('td.pkm-cell[data-kind="sequence"]').click();
+  await page.waitForTimeout(600);
+  await expect(page.locator('#compare-pane')).toBeVisible();
+  const shown = await page.evaluate(() => {
+    const cv = window.MA.compareView;
+    const d = cv && cv.peek && cv.peek();
+    return d ? (d.dsl || '') : '';
+  });
+  expect(shown).toContain('Timer_Init()');
+
+  // 到達条件その5: ここまでで保存先は 1 度も動いていない。
+  const cfg = await page.evaluate(() => {
+    try { return JSON.parse(window.localStorage.getItem('plantuml-autosave-config') || '{}'); }
+    catch (e) { return {}; }
+  });
+  expect(cfg.fileDir).toBe(DIR);
+});

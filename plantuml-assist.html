@@ -5910,6 +5910,23 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 #peek-matrix .pkm-grid .pkm-cell.pkm-can-open { cursor: pointer; }
 #peek-matrix .pkm-grid .pkm-cell.pkm-can-open:hover { background: var(--bg-tertiary); }
 #peek-matrix .pkm-foot { font-size: 10px; color: var(--text-secondary); padding: 1px 0; }
+/* 参照タブの「相手はどこまで作ってあるか」の表 (BLK-junior-20260917-0423-wish)。
+   印は 済/未 の 1 文字で、未だけ色を付ける (探すのは無い方なので)。 */
+#folder-ref-matrix { padding: 3px 6px; border-bottom: 1px solid var(--border); }
+#folder-ref-matrix .pkm-sum { font-size: 10px; color: var(--text-secondary); }
+#folder-ref-matrix .pkm-grid { border-collapse: collapse; width: 100%; font-size: 10px; margin-top: 3px; }
+#folder-ref-matrix .pkm-grid th, #folder-ref-matrix .pkm-grid td {
+  border: 1px solid var(--border); padding: 1px 2px; text-align: center;
+  color: var(--text-secondary); font-weight: normal; white-space: nowrap;
+}
+#folder-ref-matrix .pkm-grid .pkm-gname {
+  text-align: left; color: var(--text-primary); font-family: var(--font-mono);
+}
+#folder-ref-matrix .pkm-grid .pkm-cell[data-made="none"] { color: var(--accent-red); }
+#folder-ref-matrix .pkm-grid .pkm-cell.pkm-can-open { cursor: pointer; }
+#folder-ref-matrix .pkm-grid .pkm-cell.pkm-can-open:hover { background: var(--bg-tertiary); }
+#folder-ref-matrix .pkm-foot { font-size: 10px; color: var(--text-secondary); padding: 1px 0; }
+#folder-ref-matrix .pkm-foot.has-todo { color: var(--accent-red); }
 #peek-matrix #peek-matrix-next { color: var(--accent); }
 #peek-matrix button.pkm-open {
   width: auto; font-size: 9px; padding: 0 5px; cursor: pointer;
