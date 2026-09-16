@@ -1,4 +1,5 @@
 - BLK-junior-20260917-0223-wish: 先輩フォルダとの要素差分に、入る位置の提案とチェックによるまとめ取り込みが付いた (⇔ 並べて見る)
+- BLK-primary-20260917-0223-friction: Ctrl+K の一括置換の行に単独キー Ctrl+H を出し、DSL エディタで選んだ部品名を置換前の欄に入れて開く
 - BLK-reviewer-20260917-0223: 指摘トラッカーの控えが「どの対象を見た記録か」を持ち、別 persona の .findings-state.json を --state に渡すと警告が出る
 - BLK-reviewer-20260917-0223-wish: BLK を起票する前に、同カテゴリの件数・しきい値 3 への到達・類似の過去 BLK を 1 コマンドで突き合わせられるようになった (tools/blk-triage.js)
 - BLK-reviewer-20260917-0123: findings.js の既存の控え(旧 F-nn)も表記揺れ/SVG/章立て対応などカテゴリ頭文字の ID(N-/S-/T-…)に遡って振り直し、--sections が対象外でも今回出ている行を旧 ID つきで出す

@@ -3497,7 +3497,7 @@ function initCommandPalette() {
       title.textContent = item.title;
       var hint = document.createElement('span');
       hint.className = 'cp-hint';
-      hint.textContent = item.hint || '';
+      hint.textContent = CP.shortcutHint(item, window.MA.keyBindings && window.MA.keyBindings.keysFor);
       row.appendChild(kind); row.appendChild(title); row.appendChild(hint);
       row.addEventListener('click', function() { active = i; execute(); });
       listEl.appendChild(row);
@@ -17958,6 +17958,11 @@ function setupBulkRename() {
     var sel = (window.MA.selection && window.MA.selection.getSelected()) || [];
     if (sel.length === 1 && sel[0] && typeof sel[0].id === 'string' && !fromEl.value) {
       fromEl.value = sel[0].id;
+    }
+    // DSL エディタで部品名を選んでから開いた (Ctrl+H) なら、それを置換前に入れる。
+    if (!fromEl.value && editorEl && typeof editorEl.selectionStart === 'number') {
+      fromEl.value = window.MA.bulkRename.seedFromSelection(
+        editorEl.value.slice(editorEl.selectionStart, editorEl.selectionEnd));
     }
     var rect = btn.getBoundingClientRect();
     panel.style.left = Math.max(4, rect.left - 60) + 'px';

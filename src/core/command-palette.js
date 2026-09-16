@@ -399,7 +399,22 @@ window.MA.commandPalette = (function() {
     return next;
   }
 
+  // パレットの行に「単独キー」を出す (BLK-primary-20260917-0223-friction)。
+  // 畳まれたツールを Ctrl+K で名前を打って開いた人が、次から 1 打で開けると気付けるように。
+  // 値は key-bindings の id。キーは差し替えられるので、ここには持たず keysFor に聞く。
+  var SHORTCUT_OF = { 'tab-rename': 'bulk-rename', 'render': 'render', 'save': 'save' };
+  function shortcutHint(item, keysFor) {
+    if (!item) return '';
+    var base = String(item.id || '').replace(/^[^:]*:/, '');
+    var kb = SHORTCUT_OF[base];
+    var keys = kb && typeof keysFor === 'function' ? keysFor(kb) : '';
+    var hint = item.hint || '';
+    if (!keys) return hint;
+    return hint ? hint + ' · ' + keys : keys;
+  }
+
   return {
+    shortcutHint: shortcutHint,
     GROUPS: GROUPS.slice(),
     buildItems: buildItems,
     elementItems: elementItems,
