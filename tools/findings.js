@@ -54,6 +54,7 @@ const USAGE = [
   '  --declared     意図明記済み (@omit-method タグ / note) の指摘だけ出す',
   '  --json         JSON を出す',
   '  --md [FILE]    指摘.md に貼れる表を出す (FILE を書けばそこへ書き出す)',
+  '  --sections     指摘.md に貼れる `## ID 見出し` を 1 件 1 節で出す',
   '  --state FILE   控えの置き場所を変える (既定は対象フォルダの中の ' + STATE_NAME + ')',
   '  --no-state     控えを読み書きしない',
   '  --help         この説明',
@@ -76,7 +77,7 @@ const USAGE = [
 
 function parseArgs(argv) {
   const opts = { targets: [], tick: null, set: null, note: null, all: false, json: false,
-                 md: false, mdFile: null, state: null, useState: true, help: false,
+                 md: false, mdFile: null, sections: false, state: null, useState: true, help: false,
                  intent: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -85,6 +86,7 @@ function parseArgs(argv) {
     else if (a === '--undeclared') opts.intent = 'undeclared';
     else if (a === '--declared') opts.intent = 'declared';
     else if (a === '--json') opts.json = true;
+    else if (a === '--sections') opts.sections = true;
     else if (a === '--no-state') opts.useState = false;
     else if (a === '--tick') opts.tick = argv[++i];
     else if (a.indexOf('--tick=') === 0) opts.tick = a.slice(7);
@@ -200,7 +202,9 @@ function main(argv, io) {
     err(e.message + '\n\n' + USAGE);
     return 1;
   }
-  if (opts.help || (!opts.targets.length && !opts.set)) {
+  // --sections は控えを読むだけの口。監査を回さずに ID 台帳を貼り出せる
+  // (reviewer は手順7で「今の台帳を 指摘.md に写す」だけのことが多い)。
+  if (opts.help || (!opts.targets.length && !opts.set && !opts.sections)) {
     (opts.help ? out : err)(USAGE);
     return opts.help ? 0 : 1;
   }
@@ -269,6 +273,12 @@ function main(argv, io) {
     } else {
       out(md);
     }
+    return 0;
+  }
+  // 指摘.md の見出しに ID を載せる口。replies.js は `## ` 見出し 1 つを 1 項目として
+  // 読むので、表 (--md) ではなくこちらを貼ると全カテゴリが回答の突合に乗る。
+  if (opts.sections) {
+    out(tracker.sections(store, { all: opts.all }));
     return 0;
   }
   if (opts.json) {

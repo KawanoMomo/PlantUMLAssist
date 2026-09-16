@@ -59,6 +59,44 @@
     '': '未対応',
   };
 
+  // BLK-reviewer-20260917-0023-wish: id はこれまで全カテゴリ通しの `F-nn` だったので、
+  // 指摘.md に ID を書き写していたのは「メソッド不一致 F-01〜F-06」だけで、
+  // 表記揺れ・SVG・命名規約・未使用participant・章立て対応は自由文のまま残った。
+  // replies.js は語の照合しかできず、primary が答えていても「判定できない」に落ちる。
+  // id にカテゴリの頭文字を付け、カテゴリごとに採番すると、指摘.md の全項目が
+  // 最初から ID 付きになり、返却も解消判定も ID に対して機械的に行える。
+  var PREFIX = {
+    'method.issues': 'F',
+    'consistency.methods': 'F',
+    'consistency.methodReplies': 'F',
+    'name.variants': 'N',
+    'name.undeclared': 'N',
+    'consistency.naming': 'N',
+    'consistency.unused': 'U',
+    'svg.missing': 'S',
+    'svg.stale': 'S',
+    'svg.staleSettled': 'S',
+    'trace.missing': 'T',
+    'trace.outOfScope': 'T',
+    'consistency.granularity': 'C',
+    'consistency.events': 'C',
+    'family.mismatches': 'C',
+  };
+
+  // 1 件が複数カテゴリに跨るとき、どの頭文字で呼ぶか。先に出た方を採る。
+  // (メソッドは突合と整合の 2 カテゴリに同時に出るのが普通なので、F を先頭に置く)
+  var PREFIX_ORDER = ['F', 'N', 'U', 'S', 'T', 'C'];
+  var DEFAULT_PREFIX = 'F';
+
+  function prefixOf(kinds) {
+    var have = {};
+    (kinds || []).forEach(function(k) { var p = PREFIX[k]; if (p) have[p] = true; });
+    for (var i = 0; i < PREFIX_ORDER.length; i++) {
+      if (have[PREFIX_ORDER[i]]) return PREFIX_ORDER[i];
+    }
+    return DEFAULT_PREFIX;
+  }
+
   function _s(v) { return v === null || v === undefined ? '' : String(v); }
 
   function emptyState() {
@@ -71,16 +109,30 @@
     return {
       version: VERSION,
       seq: typeof v.seq === 'number' ? v.seq : 0,
+      // カテゴリ頭文字ごとの採番。旧版の控えには無いので、読んだ時点で空から始める
+      // (既に振った id は findings 側に残っているので、採番は衝突を避けて進む)。
+      seqs: (v.seqs && typeof v.seqs === 'object') ? v.seqs : {},
       ticks: Array.isArray(v.ticks) ? v.ticks.slice() : [],
       findings: (v.findings && typeof v.findings === 'object') ? v.findings : {},
     };
   }
 
-  // F-01, F-02, ... 連番。控えが消えない限り同じ指摘は同じ id のまま。
-  function makeId(n) {
+  // F-01, N-02, S-03, ... カテゴリの頭文字 + 連番。
+  // 控えが消えない限り同じ指摘は同じ id のまま。
+  function makeId(n, prefix) {
     var s = String(n);
     while (s.length < 2) s = '0' + s;
-    return 'F-' + s;
+    return (prefix || DEFAULT_PREFIX) + '-' + s;
+  }
+
+  // その頭文字の次に空いている番号。旧版が振った id (全部 F-nn) とぶつからないよう、
+  // 控えに既に居る id を避けて進む。
+  function nextId(st, prefix, used) {
+    var p = prefix || DEFAULT_PREFIX;
+    var n = (typeof st.seqs[p] === 'number' ? st.seqs[p] : 0) + 1;
+    while (used[makeId(n, p)]) n++;
+    st.seqs[p] = n;
+    return makeId(n, p);
   }
 
   // 監査結果 (audit.js の JSON) → 実体ごとに 1 件へ畳んだ今回の指摘。
@@ -93,12 +145,15 @@
       var cur = by[it.entity];
       if (!cur) {
         cur = by[it.entity] = {
-          entity: it.entity, title: it.title, cats: [], docs: [], excluded: true,
+          entity: it.entity, title: it.title, cats: [], kinds: [], docs: [], excluded: true,
           intent: '', intentReason: '', intentDoc: '',
         };
         out.push(cur);
       }
       if (cur.cats.indexOf(it.category) < 0) cur.cats.push(it.category);
+      // kind は監査側の機械的なカテゴリ名。id の頭文字はこちらで決める
+      // (cats は人が読む和名なので、表示の都合で変わりうる)。
+      if (it.kind && cur.kinds.indexOf(it.kind) < 0) cur.kinds.push(it.kind);
       (it.docs || []).forEach(function(d) { if (cur.docs.indexOf(d) < 0) cur.docs.push(d); });
       // 意図の明記はカテゴリを跨いで 1 件に付く。タグが note より強い。
       if (it.intent && (!cur.intent || (cur.intent !== 'tag' && it.intent === 'tag'))) {
@@ -133,20 +188,30 @@
       st.ticks.push({ label: label, at: _s(o.at) || new Date().toISOString() });
     }
 
+    // 既に使われている id。旧版の控え (全部 F-nn) と番号がぶつからないようにする。
+    var used = {};
+    Object.keys(st.findings).forEach(function(k) {
+      var id = st.findings[k] && st.findings[k].id;
+      if (id) used[_s(id).toUpperCase()] = true;
+    });
+
     var seen = {};
     items.forEach(function(it) {
       seen[it.entity] = true;
       var f = st.findings[it.entity];
       if (!f) {
         st.seq += 1;
+        var id = nextId(st, prefixOf(it.kinds), used);
+        used[id.toUpperCase()] = true;
         f = st.findings[it.entity] = {
-          id: makeId(st.seq), entity: it.entity, title: it.title,
+          id: id, entity: it.entity, title: it.title,
           since: label, sinceIndex: idx, marks: [], verdict: null,
-          cats: [], docs: [],
+          cats: [], kinds: [], docs: [],
         };
       }
       f.title = it.title || f.title;
       f.cats = it.cats.slice();
+      f.kinds = (it.kinds || []).slice();
       f.excluded = !!it.excluded;
       // 意図の明記は「今回の図にそう書いてあるか」なので、毎回上書きする
       // (note を消せば未対応に戻る。人が貼った verdict とは別物)。
@@ -354,6 +419,34 @@
     return lines.join('\n');
   }
 
+  // sections(state, opts) — 指摘.md にそのまま貼れる `## ID 見出し` の並び。
+  //
+  // BLK-reviewer-20260917-0023-wish: markdown() は 1 枚の表なので、指摘.md の
+  // 見出し (`## `) にはならない。replies.js は `## ` 見出し 1 つを 1 項目として
+  // 読むので、表を貼っただけでは全カテゴリの項目が replies の突合に乗らない。
+  // ここは 1 件 = 1 節で出し、節の中に ID をバッククォートで置く
+  // (replies.js が「応答を探す語」として拾う形そのもの)。
+  // opts.all で解消・対象外も出す。
+  function sections(state, opts) {
+    var o = opts || {};
+    var list = rows(state);
+    var shown = o.all ? list : list.filter(function(r) { return r.open; });
+    if (!shown.length) return '出ている指摘はありません。';
+    var lines = [];
+    shown.forEach(function(r) {
+      lines.push('## ' + r.id + ' ' + r.title);
+      var head = '`' + r.id + '` ' + statusText(r) + '｜初出 ' + r.since;
+      if (r.cats.length) head += '｜' + r.cats.join('+');
+      lines.push(head);
+      if (r.docs.length) lines.push('対象: ' + r.docs.join(', '));
+      var it = intentText(r);
+      if (it) lines.push('意図: ' + it + (r.intentReason ? ' — ' + r.intentReason : ''));
+      if (r.note) lines.push('備考: ' + r.note);
+      lines.push('');
+    });
+    return lines.join('\n').replace(/\n+$/, '');
+  }
+
   // isJunkPath(p) — シェルの事故で出来た名前かどうか。
   //
   // BLK-reviewer-20260915-0007: 監査の対象フォルダに
@@ -405,6 +498,7 @@
   var api = {
     VERSION: VERSION, VERDICT: VERDICT, STATE: STATE, INTENT_LABEL: INTENT_LABEL,
     intentText: intentText, intentSummaryText: intentSummaryText,
+    PREFIX: PREFIX, PREFIX_ORDER: PREFIX_ORDER, prefixOf: prefixOf, sections: sections,
     emptyState: emptyState, readState: readState, makeId: makeId,
     isJunkPath: isJunkPath, pruneBroken: pruneBroken,
     itemsOf: itemsOf, update: update, rows: rows, setVerdict: setVerdict,
