@@ -122,6 +122,8 @@ function main(argv) {
     if (opts.run) {
       let combined = '';
       let failed = false;
+      let ran = 0;
+      let elidedAll = [];
       blk.commands.forEach(function (cmd) {
         if (digest.isTestCommand(cmd) && !opts.withTests) {
           if (!opts.json) console.log('  → 検算のコマンドなので回さない: ' + cmd + ' (--with-tests で回す)');
@@ -129,12 +131,23 @@ function main(argv) {
         }
         const r = digest.resolveCommand(cmd, { folder: opts.folder, prev: opts.prev });
         if (!r.runnable) {
-          rec.runs.push({ command: cmd, skipped: r.missing });
-          if (!opts.json) console.log('  → 未指定のため実行せず: ' + r.missing.join(' ') +
-            ' (--folder / --prev で埋まる)');
+          const elided = r.elided || [];
+          elidedAll = elidedAll.concat(elided);
+          rec.runs.push({ command: cmd, skipped: r.missing, elided: elided });
+          if (!opts.json && elided.length) {
+            // 「…」は引数ではなく省略記法。実行すれば必ず失敗し、直っているものが
+            // 「コマンドが失敗」に化けるので、実行せず書式の問題として言う。
+            console.log('  → 本文の確認コマンドが省略記法のため実行せず: ' + elided.join(' ') +
+              ' (確認コマンドは「…」を使わず実行できる形で書く)');
+          }
+          if (!opts.json && r.missing.length) {
+            console.log('  → 未指定のため実行せず: ' + r.missing.join(' ') +
+              ' (--folder / --prev で埋まる)');
+          }
           return;
         }
         const run = runCommand(r.command);
+        ran += 1;
         combined += '\n' + run.output;
         if (!run.ok) failed = true;
         rec.runs.push({ command: r.command, ok: run.ok });
@@ -151,6 +164,14 @@ function main(argv) {
       if (!blk.commands.length) {
         rec.verdict = 'no-command';
         if (!opts.json) console.log('  → 本文にコマンドの記載が無い (画面の変更なら GUI で見る)');
+      } else if (!ran && elidedAll.length) {
+        // 1 つも走らなかったのは機能の所為ではない。書式を直せば確かめられる。
+        rec.verdict = 'elided';
+        rec.elided = elidedAll;
+        if (!opts.json) {
+          console.log('  ⇒ 確認コマンドが省略記法のため確認できず (機能不良ではない。' +
+            'BLK の「確認コマンド:」を実行できる形に直せば確かめられる)');
+        }
       } else if (!opts.json) {
         check.hits.forEach(function (h) {
           console.log('     ' + (h.ok ? '出た  ' : '出ない') + ': 「' + h.marker + '」');
