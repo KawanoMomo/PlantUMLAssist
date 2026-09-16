@@ -15598,6 +15598,21 @@ var _rpRows = [];
 var _rpDir = null;
 var _rpLoading = false;
 
+// 入れた組の理由を出す 1 行。黙って欄が埋まっていると、自分が打ったのか前回の
+// 残りなのかを確かめるために結局履歴を開くことになる。
+var _seedRenamePairAgain = null;
+var _seededPair = null;   // 入れた組。打ち替えられたら案内を消すために覚える
+
+function renderRenameSeedNote(pair) {
+  var RS = window.MA.renameSeed;
+  var el = document.getElementById('rename-seed-note');
+  if (!el || !RS) return;
+  el.textContent = RS.noteText(pair);
+  el.setAttribute('data-seed', pair ? (pair.from + '→' + pair.to) : '');
+  el.setAttribute('data-seed-state', RS.noteTone(pair));
+  el.style.display = pair ? '' : 'none';
+}
+
 function loadRenamePairs(force) {
   if (!_fiFolderMode()) { _rpRows = []; _rpDir = null; return Promise.resolve([]); }
   var dir = _wsFileDir();
@@ -15614,6 +15629,9 @@ function loadRenamePairs(force) {
       _rpDir = dir;
       _rpLoading = false;
       if (typeof renderRenameRedo === 'function') renderRenameRedo();
+      // フォルダ側の組はここで初めて届く。開いた時点で欄が空のままだったなら、
+      // 届いた組で入れ直す (前の run が別のブラウザでも打ち直させない)。
+      if (typeof _seedRenamePairAgain === 'function') _seedRenamePairAgain();
       return _rpRows;
     }, function() {
       // 読めなくても「読んだ」ことにする (毎描画で往復し続けるのを避ける)。
@@ -18345,9 +18363,19 @@ function setupBulkRename() {
       fromEl.value = window.MA.bulkRename.seedFromSelection(
         editorEl.value.slice(editorEl.selectionStart, editorEl.selectionEnd));
     }
+    // 前回の組を入れておく。履歴の行は在るのに、焦点が空欄に入るので利用者は
+    // 打ち始めてしまう —— 打ち直す 17 打を開いた時点で消す
+    // (BLK-primary-20260914-1106-friction)。
+    if (!fromEl.value && !toEl.value) { _seededPair = null; renderRenameSeedNote(null); }
+    seedRenamePair();
     var rect = btn.getBoundingClientRect();
-    panel.style.left = Math.max(4, rect.left - 60) + 'px';
-    panel.style.top = (rect.bottom + 2) + 'px';
+    // ツール列が畳まれているとこのボタンは幅 0・座標 0 になる。そのときはタブ列の
+    // 下へ出す (何にも紐付かないまま画面の隅に貼り付いた板にしない)。
+    var tabs = document.getElementById('tab-bar');
+    var anchor = (rect.width > 0 || rect.height > 0) ? rect
+      : (tabs ? tabs.getBoundingClientRect() : rect);
+    panel.style.left = Math.max(4, anchor.left + (rect.width > 0 ? -60 : 8)) + 'px';
+    panel.style.top = (anchor.bottom + 2) + 'px';
     panel.classList.add('open');
     // 保存フォルダ運用でなければ、その的が無いのでチェック欄ごと出さない。
     var scanRow = document.getElementById('rename-scan-folder');
@@ -18362,15 +18390,54 @@ function setupBulkRename() {
     // 「まず全ファイルを数えさせる」ための 1 手が増えるだけになる。
     if (_fiEnabled()) loadFolderImpact(true).then(updateRenamePreview);
     fromEl.focus();
+    // 入れた組は選んだ状態で渡す。そのまま置換に進めるし、別の組を打つ回は
+    // 1 文字目でまるごと置き換わる (入れておくことが打ち直しの邪魔にならない)。
+    if (fromEl.value) { try { fromEl.select(); } catch (e) {} }
   });
+
+  // 前回の組を欄に入れる。フォルダ側の組は非同期に届くので、届いた後にもう一度試す
+  // (開いた瞬間は localStorage の履歴だけで決まる)。
+  function seedRenamePair() {
+    var RS = window.MA.renameSeed;
+    var RR = window.MA.renameRedo;
+    if (!RS || !RR || !fromEl || !toEl) return null;
+    var pair = RS.seed(RR.pairs(_renameRedoPairs(), _renameRedoDocs()),
+      { from: fromEl.value, to: toEl.value });
+    // 入れられなかった回 (既に何か入っている) は、前に入れた案内を消さない。
+    // 消すのは利用者が組を打ち替えたときだけ (下の input)。
+    if (!pair) return null;
+    fromEl.value = pair.from;
+    toEl.value = pair.to;
+    _seededPair = pair;
+    renderRenameSeedNote(pair);
+    updateRenamePreview();
+    return pair;
+  }
+
+  _seedRenamePairAgain = function() {
+    if (!panel.classList.contains('open')) return;
+    var p = seedRenamePair();
+    if (p && document.activeElement === fromEl) { try { fromEl.select(); } catch (e) {} }
+  };
 
   [fromEl, toEl].forEach(function(el) {
     if (!el) return;
     el.addEventListener('input', updateRenamePreview);
+    // 打ち替えたらその案内はもう自分の組の話ではない。
+    el.addEventListener('input', function() {
+      if (!_seededPair) return;
+      if (fromEl.value !== _seededPair.from || toEl.value !== _seededPair.to) {
+        _seededPair = null;
+        renderRenameSeedNote(null);
+      }
+    });
     // 組は「打ち終わった時点」で覚える。ヒット 0 件だと [適用] は押せないまま
     // なので、適用のときだけ覚えていては、空打ちの組が永久に残らない
     // (BLK-primary-20260914-1306-friction)。打ち終わり = 欄から離れたとき。
     el.addEventListener('blur', function() {
+      // こちらが入れておいた組は「打った組」ではない。覚え直すと、確かめただけの
+      // 回が新しい置換として履歴の先頭に積まれる。
+      if (_seededPair && fromEl.value === _seededPair.from && toEl.value === _seededPair.to) return;
       rememberRenamePair(fromEl.value, toEl.value, _renameGrandTotal());
     });
     el.addEventListener('keydown', function(ev) {
