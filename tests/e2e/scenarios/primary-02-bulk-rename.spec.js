@@ -481,3 +481,34 @@ test('手順4 件数の横から、14 枚が変更あり / なしに仕分けら
   expect(await marks.count()).toBeGreaterThan(changed);
   await expect(marks.first()).toHaveText(/SpiDrv|Spi_Driver/);
 });
+
+// BLK-primary-20260917-0223-friction: 畳まれた ⇄ 一括置換を Ctrl+K で名前を打って開く迂回が
+// 毎回乗っていた。パレットの行に単独キー Ctrl+H を出し、エディタで選んだ部品名を
+// 置換前に入れて開く (from 欄を打たない)。
+test('手順2 パレットの一括置換に Ctrl+H が出て、エディタで選んだ部品名が置換前に入る', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  for (const n of S.PRIMARY_DOCS) await S.putDoc(page, DIR, n, S.docFor(n, 'SpiDrv'));
+  await page.reload();
+  await page.waitForSelector('#preview-svg');
+
+  await page.keyboard.press('Control+k');
+  await page.waitForSelector('#cp-modal');
+  await page.locator('#cp-input').fill('一括置換');
+  await page.waitForTimeout(250);
+  await expect(page.locator('.cp-item[data-cp-id$=":tab-rename"] .cp-hint')).toContainText('Ctrl+H');
+  await page.keyboard.press('Escape');
+  await S.typeDsl(page, S.docFor(S.PRIMARY_DOCS[0], 'SpiDrv'));
+
+  const selected = await page.evaluate(() => {
+    const ed = document.getElementById('editor');
+    const at = ed.value.indexOf('SpiDrv');
+    ed.focus();
+    ed.setSelectionRange(at, at + 'SpiDrv'.length);
+    return at;
+  });
+  expect(selected).toBeGreaterThanOrEqual(0);
+  await page.keyboard.press('Control+h');
+  await page.waitForSelector('#rename-panel.open', { timeout: 5000 });
+  await expect(page.locator('#rename-from')).toHaveValue('SpiDrv');
+});

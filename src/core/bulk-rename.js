@@ -215,7 +215,15 @@ window.MA.bulkRename = (function() {
     return { from: from, to: to };
   }
 
+  // エディタで選んでいる文字列を「置換前」の初期値にする。部品名として置換できる
+  // 1 語のときだけ使い、行や空白をまたぐ選択は捨てる (BLK-primary-20260917-0223-friction)。
+  function seedFromSelection(text) {
+    var s = typeof text === 'string' ? text.trim() : '';
+    return isValidTarget(s) ? s : '';
+  }
+
   return {
+    seedFromSelection: seedFromSelection,
     countIn: countIn,
     replaceIn: replaceIn,
     detectRename: detectRename,
