@@ -10775,6 +10775,7 @@ function setupTabs() {
     return RF ? RF.load(window.localStorage) : [];
   })();
   var refEntries = null;          // 参照タブに出す一覧 (null = 読み込み中)
+  var refMineBusy = false;        // 表に要る「自分の一覧」を取りに行っている間 (二重に取らない)
   var refBusyDir = '';
 
   function refSave() {
@@ -10909,6 +10910,7 @@ function setupTabs() {
       panel.appendChild(empty);
       return;
     }
+    renderRefMatrix(dir);
     refEntries.forEach(function(e) {
       var b = document.createElement('button');
       b.type = 'button';
@@ -10919,6 +10921,102 @@ function setupTabs() {
       b.addEventListener('click', function() { openRefDoc(dir, e.name); });
       panel.appendChild(b);
     });
+  }
+
+  // 参照フォルダの「部品 × 図種」の表 (BLK-junior-20260917-0423-wish)。
+  //
+  // 取り込む場面の手順 1 は「先輩の該当図を開く」から始まるが、先輩がその部品の
+  // その図種をまだ作っていないことがあり、一覧のファイル名を目で読み比べて初めて
+  // 「まだ無い」と分かっていた (TIMER のクラス図で実際に空振りした)。ここに 済/未 を
+  // 出せば、開く前にその周の相手があるかどうかが読める。
+  // 判定は kind-matrix が持つ (👀 他フォルダの表と同じ材料・同じ規則)。
+  function renderRefMatrix(dir) {
+    var KM = window.MA.kindMatrix;
+    var RF = window.MA.refFolders;
+    if (!KM || !refEntries || !refEntries.length) return;
+    // 自分の一覧をまだ持っていなければ取りに行き、取れたら出し直す
+    // (相手にしか無い部品も出すので、無くても表は出せる)。
+    if (!_kmMine.length && !refMineBusy) {
+      refMineBusy = true;
+      loadKindMatrixMine().then(function() {
+        refMineBusy = false;
+        if (panel.classList.contains('open')) renderFolderPanel();
+      }, function() { refMineBusy = false; });
+    }
+    var who = RF ? RF.baseName(dir) : dir;
+    var all = KM.scanAll(_kmMine, refEntries, who);
+    if (!all.rows.length) return;
+
+    var host = document.createElement('div');
+    host.id = 'folder-ref-matrix';
+    panel.appendChild(host);
+
+    var sum = document.createElement('div');
+    sum.id = 'folder-ref-matrix-summary';
+    sum.className = 'pkm-sum';
+    sum.textContent = KM.madeSummary(all, who);
+    host.appendChild(sum);
+
+    var tbl = document.createElement('table');
+    tbl.id = 'folder-ref-grid';
+    tbl.className = 'pkm-grid';
+    var hr = document.createElement('tr');
+    var corner = document.createElement('th');
+    corner.textContent = '部品';
+    hr.appendChild(corner);
+    all.kinds.forEach(function(k) {
+      var th = document.createElement('th');
+      th.setAttribute('data-kind', k.kind);
+      th.textContent = k.label;
+      hr.appendChild(th);
+    });
+    tbl.appendChild(hr);
+
+    all.rows.forEach(function(sc) {
+      var tr = document.createElement('tr');
+      tr.className = 'pkm-grow';
+      tr.setAttribute('data-subject', sc.subject);
+      var name = document.createElement('th');
+      name.className = 'pkm-gname';
+      name.textContent = sc.subject.toUpperCase();
+      tr.appendChild(name);
+      sc.rows.forEach(function(r) {
+        var td = document.createElement('td');
+        td.className = 'pkm-cell';
+        td.setAttribute('data-kind', r.kind);
+        td.setAttribute('data-made', KM.madeState(r));
+        td.textContent = KM.madeMark(r);
+        td.title = KM.madeTitle(r, sc.subject, who);
+        var target = KM.openTarget(r);
+        if (target) {
+          td.classList.add('pkm-can-open');
+          td.setAttribute('data-open', target);
+          td.addEventListener('click', function(ev) {
+            ev.stopPropagation();
+            openRefDoc(dir, target);
+          });
+        }
+        tr.appendChild(td);
+      });
+      tbl.appendChild(tr);
+    });
+    host.appendChild(tbl);
+
+    var miss = KM.firstMissing(all);
+    var foot = document.createElement('div');
+    foot.id = 'folder-ref-matrix-missing';
+    foot.className = 'pkm-foot' + (miss ? ' has-todo' : '');
+    foot.textContent = miss
+      ? who + ' にまだ無いのは ' + miss.subject.toUpperCase() + ' の ' + miss.label
+        + '図です（他 ' + (KM.missingCells(all).length - 1) + ' 組）'
+      : who + ' は ' + all.rows.length + ' 部品ぶん全図種そろっています';
+    host.appendChild(foot);
+
+    var leg = document.createElement('div');
+    leg.id = 'folder-ref-matrix-legend';
+    leg.className = 'pkm-foot';
+    leg.textContent = KM.madeLegend();
+    host.appendChild(leg);
   }
 
   // 参照の図を、読み専用の参照枠 (見比べ) に据える。自分の書きかけも
