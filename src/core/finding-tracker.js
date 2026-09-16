@@ -106,7 +106,7 @@
   function readState(v) {
     if (!v || typeof v !== 'object') return emptyState();
     if (v.version !== VERSION) return emptyState();
-    return {
+    return migrateIds({
       version: VERSION,
       seq: typeof v.seq === 'number' ? v.seq : 0,
       // カテゴリ頭文字ごとの採番。旧版の控えには無いので、読んだ時点で空から始める
@@ -114,7 +114,33 @@
       seqs: (v.seqs && typeof v.seqs === 'object') ? v.seqs : {},
       ticks: Array.isArray(v.ticks) ? v.ticks.slice() : [],
       findings: (v.findings && typeof v.findings === 'object') ? v.findings : {},
-    };
+    });
+  }
+
+  // BLK-reviewer-20260917-0123: 0023 より前の控えは全カテゴリが通しの F-nn なので、
+  // 表記揺れ・SVG・章立て対応の既存行は新規に出直さない限り F のまま残り、
+  // 指摘.md に ID を書けなかった。読んだ時点でカテゴリ (kinds) の頭文字に振り直す。
+  // 旧 id は formerIds に残し、--set や本文の旧表記でも引けるようにする。
+  // kinds を持たない行 (さらに古い控え) は判定できないので触らない。何度読んでも同じ結果。
+  function migrateIds(st) {
+    var keys = Object.keys(st.findings);
+    var used = {};
+    keys.forEach(function(k) { var f = st.findings[k]; if (f && f.id) used[_s(f.id).toUpperCase()] = true; });
+    var num = function(id) { var m = /-(\d+)$/.exec(_s(id)); return m ? +m[1] : 0; };
+    keys.filter(function(k) {
+      var f = st.findings[k];
+      if (!f || !f.id || !Array.isArray(f.kinds) || !f.kinds.length) return false;
+      var cur = _s(f.id).charAt(0).toUpperCase();
+      return cur === DEFAULT_PREFIX && prefixOf(f.kinds) !== DEFAULT_PREFIX;
+    }).sort(function(a, b) { return num(st.findings[a].id) - num(st.findings[b].id); })
+      .forEach(function(k) {
+        var f = st.findings[k];
+        var id = nextId(st, prefixOf(f.kinds), used);
+        used[id] = true;
+        f.formerIds = (f.formerIds || []).concat([f.id]);
+        f.id = id;
+      });
+    return st;
   }
 
   // F-01, N-02, S-03, ... カテゴリの頭文字 + 連番。
@@ -275,7 +301,7 @@
       else state2 = 'fresh';
 
       out.push({
-        id: f.id, entity: f.entity, title: f.title,
+        id: f.id, formerIds: (f.formerIds || []).slice(), entity: f.entity, title: f.title,
         state: state2, label: STATE[state2],
         since: f.since, sinceIndex: f.sinceIndex,
         lastSeen: st.ticks[f.lastIndex] ? st.ticks[f.lastIndex].label : f.since,
@@ -314,7 +340,8 @@
     Object.keys(st.findings).forEach(function(k) {
       var f = st.findings[k];
       if (key) return;
-      if (_s(f.id).toUpperCase() === want || k === _s(id)) key = k;
+      if (_s(f.id).toUpperCase() === want || k === _s(id)
+        || (f.formerIds || []).some(function(x) { return _s(x).toUpperCase() === want; })) key = k;
     });
     if (!key) return { ok: false, reason: 'no-such-finding', state: st };
     if (!VERDICT[verdict]) return { ok: false, reason: 'no-such-verdict', state: st };
@@ -430,12 +457,14 @@
   function sections(state, opts) {
     var o = opts || {};
     var list = rows(state);
-    var shown = o.all ? list : list.filter(function(r) { return r.open; });
+    // 対象外でも今回の監査に出ている行は 指摘.md に「変化なし」として書かれるので既定で出す。
+    var shown = o.all ? list : list.filter(function(r) { return r.open || (r.excluded && r.present); });
     if (!shown.length) return '出ている指摘はありません。';
     var lines = [];
     shown.forEach(function(r) {
       lines.push('## ' + r.id + ' ' + r.title);
       var head = '`' + r.id + '` ' + statusText(r) + '｜初出 ' + r.since;
+      if (r.formerIds && r.formerIds.length) head += '｜旧 ' + r.formerIds.join(', ');
       if (r.cats.length) head += '｜' + r.cats.join('+');
       lines.push(head);
       if (r.docs.length) lines.push('対象: ' + r.docs.join(', '));
