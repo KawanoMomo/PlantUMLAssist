@@ -6676,6 +6676,57 @@ var _cohortResult = null;    // 選んだドメインの compare 結果
 // 毎回 puml の中身を読んで選り分けることになる。既定で外し、押せば戻せる。
 var _cohortShowTemplates = false;
 
+// BLK-reviewer-20260917-0423-wish: 同じ組の同じ差分 (部品名/ラベルが違うだけの内部揺れ) が
+// 毎 tick そのまま出続け、reviewer は同じ diff を最初から読み直して同じ結論を出し直していた。
+// domain-verdict の宣言は図の中に書く印なので、自分の図にしか書けない。reviewer は
+// junior×primary のどちらの図も持たないので、その組については置き場が無かった。
+// 確認済みの組は台帳 (persona-data/_cohort-ack.json) に置き、突合の画面からは畳む。
+// 差分が変わった組は台帳があっても畳まない (確認済みの印が新しい食い違いを隠さない)。
+var _cohortAckDir = null;
+var _cohortAckMsg = '';
+
+function refreshCohortAck(force) {
+  var CA = window.MA.cohortAck;
+  if (!CA || !window.fetch) return Promise.resolve(false);
+  var dir = _wsFileDir();
+  if (!force && _cohortAckDir === dir) return Promise.resolve(false);
+  _cohortAckDir = dir;
+  return window.fetch('/cohort-ack?dir=' + encodeURIComponent(dir))
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(data) {
+      CA.setCurrent(data ? { entries: (data && data.entries) || [] } : null);
+      return true;
+    })
+    // 台帳が読めないだけで突合を止めない (1 組も確認していないのと同じ扱い)。
+    .catch(function() { CA.setCurrent(null); return false; });
+}
+
+function _saveCohortAck(ledger) {
+  var CA = window.MA.cohortAck;
+  if (!CA) return Promise.resolve(false);
+  CA.setCurrent(ledger);
+  if (!window.fetch) return Promise.resolve(false);
+  return window.fetch('/cohort-ack', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dir: _wsFileDir(), entries: CA.current().entries }),
+  }).then(function(r) { return !!(r && r.ok); }).catch(function() { return false; });
+}
+
+// 突合の組 1 つを、台帳が引ける形にする (domain-cohort.diffRows の行と同じ形)。
+function _cohortAckRow(domain, p) {
+  return {
+    domain: domain,
+    kind: p.kind,
+    leftName: p.a.name,
+    rightName: p.b.name,
+    left: p.a.folder + ' / ' + p.a.base,
+    right: p.b.folder + ' / ' + p.b.base,
+    names: p.diff.names,
+    labels: p.diff.labels,
+  };
+}
+
 // BLK-reviewer-20260909-0603-wish: 覗いたフォルダの一覧はファイル名しか出しておらず、
 // 「その図の SVG が今の puml から作られたものか」は GUI からは分からなかった
 // (毎回 CLI で /verify-svg を叩いて確かめていた)。一覧と同じ呼び出しで判定の材料も
@@ -6828,6 +6879,19 @@ function renderCohortCompare() {
   head.textContent = r.domain + ' — ' + r.folders.join(' × ')
     + ' (' + r.pairs.length + ' 組を突合、食い違い ' + r.mismatched + ' 組)';
   el.cohort.appendChild(head);
+  var CA = window.MA.cohortAck;
+  // 確認済みの組を畳む。畳んだ数は必ず出す (黙って減らすと「直った」と読める)。
+  var ackRows = CA ? r.pairs.map(function(p) { return _cohortAckRow(r.domain, p); }) : [];
+  var ackOf = {};
+  if (CA) {
+    var led = CA.current();
+    r.pairs.forEach(function(p, i) { ackOf[i] = CA.statusOf(led, ackRows[i]); });
+    var note = document.createElement('div');
+    note.className = 'cohort-hint';
+    note.id = 'cohort-ack-summary';
+    note.textContent = _cohortAckMsg || CA.summaryLine(ackRows, led);
+    el.cohort.appendChild(note);
+  }
   if (!r.pairs.length) {
     var un = document.createElement('div');
     un.className = 'cohort-hint';
@@ -6836,9 +6900,37 @@ function renderCohortCompare() {
     el.cohort.appendChild(un);
     return;
   }
-  r.pairs.forEach(function(p) {
+  r.pairs.forEach(function(p, i) {
+    var ack = ackOf[i] || { status: 'new', text: '' };
+    if (ack.status === 'acked') {
+      // 確認済みで差分も当時のまま。1 行だけ残して中身は出さない。
+      var done = document.createElement('div');
+      done.className = 'cohort-pair acked';
+      done.setAttribute('data-cohort-ack', 'acked');
+      done.setAttribute('data-cohort-kind', p.kind);
+      var dt = document.createElement('span');
+      dt.className = 'cohort-verdict-note';
+      dt.textContent = '✓ ' + p.a.folder + ' / ' + p.a.base + ' × ' + p.b.folder + ' / ' + p.b.base
+        + ' — ' + ack.text;
+      done.appendChild(dt);
+      var undo = document.createElement('button');
+      undo.type = 'button';
+      undo.className = 'cohort-verdict-btn';
+      undo.setAttribute('data-cohort-unack', '1');
+      undo.textContent = '確認を取り消す';
+      undo.addEventListener('click', function() {
+        var next = window.MA.cohortAck.unack(window.MA.cohortAck.current(), ackRows[i]);
+        _cohortAckMsg = '確認を取り消しました (次の突合からまた出ます)';
+        _saveCohortAck(next).then(function() { _cohortAckMsg = ''; renderCohortCompare(); });
+        renderCohortCompare();
+      });
+      done.appendChild(undo);
+      el.cohort.appendChild(done);
+      return;
+    }
     var box = document.createElement('div');
     box.className = 'cohort-pair' + (p.diff.matched ? ' matched' : ' mismatched');
+    box.setAttribute('data-cohort-ack', ack.status);
     box.setAttribute('data-cohort-kind', p.kind);
     box.setAttribute('data-cohort-matched', p.diff.matched ? '1' : '0');
     var t = document.createElement('div');
@@ -6854,6 +6946,7 @@ function renderCohortCompare() {
     _cohortPairTable(box, p.diff.names, p.a.folder, p.b.folder);
     _cohortChips(box, '矢印ラベル', p.diff.labels, p.a.folder, p.b.folder);
     _cohortVerdictRow(box, r.domain, p);
+    _cohortAckRowUi(box, ackRows[i], ack);
     el.cohort.appendChild(box);
   });
 }
@@ -6931,6 +7024,43 @@ function _cohortSides(p) {
   if (PF.samePath(a, dir)) return { mine: p.a, other: p.b };
   if (PF.samePath(b, dir)) return { mine: p.b, other: p.a };
   return null;   // どちらも他人の図。読むだけ (勝手に直さない)
+}
+
+// 組 1 つの「内部揺れとして確認済みにする」行。domain-verdict の宣言 (図の持ち主が
+// 自分の図に書く印) とは別で、こちらは第三者が組について確かめた記録を台帳に残す。
+function _cohortAckRowUi(box, row, ack) {
+  var CA = window.MA.cohortAck;
+  if (!CA || !row) return;
+  var line = document.createElement('div');
+  line.className = 'cohort-verdict';
+  var note = document.createElement('span');
+  note.className = 'cohort-verdict-note';
+  note.id = 'cohort-ack-note';
+  note.textContent = ack.status === 'changed'
+    ? ack.text
+    : '内部揺れで実害が無いと確かめたら、この組を台帳に入れて次から畳みます';
+  line.appendChild(note);
+  var b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'cohort-verdict-btn';
+  b.setAttribute('data-cohort-ack-btn', '1');
+  b.textContent = ack.status === 'changed' ? '新しい差分も確認済みにする' : '内部揺れとして確認済みにする';
+  b.addEventListener('click', function() {
+    // note は空のまま (「内部揺れ・非衝突」は確認済みの文面がもう言っている。
+    // 同じ言葉を 2 度並べない)。
+    var res = CA.ack(CA.current(), row, { by: 'reviewer', at: _todayStamp() });
+    _cohortAckMsg = '確認済みにしました: ' + row.left + ' × ' + row.right;
+    _saveCohortAck(res.ledger).then(function() { _cohortAckMsg = ''; renderCohortCompare(); });
+    renderCohortCompare();
+  });
+  line.appendChild(b);
+  box.appendChild(line);
+}
+
+function _todayStamp() {
+  var d = new Date();
+  function p2(n) { return (n < 10 ? '0' : '') + n; }
+  return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate());
 }
 
 function _cohortVerdictRow(box, domain, p) {
@@ -7125,6 +7255,8 @@ function setCohortMode(on) {
   if (el.svg) { el.svg.textContent = ''; el.svg.style.display = 'none'; }
   if (el.dsl) el.dsl.textContent = '';
   renderCohortCompare();
+  // 確認済みの台帳は突合に入るときに 1 回読む (読めなくても突合は動く)。
+  refreshCohortAck().then(function(ok) { if (ok && _cohortOn) renderCohortCompare(); });
   return _cohortLoadIndex().then(function(groups) {
     if (!_cohortOn) return false;
     _cohortAllGroups = groups;
