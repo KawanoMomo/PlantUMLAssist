@@ -2167,3 +2167,98 @@ test.describe('junior 手順 1〜2: 指摘の表記揺れ語が自分の図に�
     await expect(page.locator('#peek-note .vocab-line')).toHaveCount(0);
   });
 });
+
+// BLK-junior-20260917-0123-wish: 突合は該当語の位置までは出すが、組のどちらへ揃えるか
+// (統一先) は出さない。指摘.md 本文にも書かれていないので、junior は先輩フォルダを
+// grep して「先輩は実際どちらで書いているか」を探していた。組が複数図種にまたがると
+// その grep を図種ごとにやり直す。指摘を開いた時点で「直す先」まで出ることを到達条件にする。
+const CAN_ROOT = DIR + '-canon';
+const CAN_MINE = CAN_ROOT + '/junior';
+const CAN_SENIOR = CAN_ROOT + '/primary';
+const CAN_REVIEWER = CAN_ROOT + '/reviewer';
+
+const CAN_NOTE = [
+  '# junior への指摘',
+  '',
+  '## 表記揺れ(primary×junior: 2組)',
+  '- 通し: Timer_Driver⇔TIMER Driver、IRQCtrl⇔Irq_Ctrl の 2 組。',
+].join('\n');
+
+// 自分の図。組の片方 (TIMER Driver / Irq_Ctrl) で書いてしまっている。
+const CAN_MY_DOC = ['@startuml', 'title TIMER 初期化シーケンス',
+  'participant "TIMER Driver" as T', 'participant Irq_Ctrl',
+  'T -> Irq_Ctrl : enable()', '@enduml'].join('\n');
+
+// 先輩の図。Timer_Driver が多数派、IRQCtrl は 1 枚だけ。
+const CAN_SENIOR_CLASS = ['@startuml', 'class Timer_Driver',
+  'class Spi_Driver', 'Timer_Driver --> Spi_Driver', '@enduml'].join('\n');
+const CAN_SENIOR_SEQ = ['@startuml', 'participant Timer_Driver',
+  'participant IRQCtrl', 'Timer_Driver -> IRQCtrl : ack()', '@enduml'].join('\n');
+
+test.describe('junior 手順 1〜2: 表記揺れの統一先(正式表記)まで突合が言い切る', () => {
+  test.beforeEach(async ({ page }) => {
+    await S1.bootWithSaveDir(page, CAN_MINE);
+    await S1.clearDir(page, CAN_MINE);
+    await S1.clearDir(page, CAN_SENIOR);
+    await S1.putDoc(page, CAN_MINE, 'timer_init_sequence', CAN_MY_DOC);
+    await S1.putDoc(page, CAN_SENIOR, 'driver_common_class', CAN_SENIOR_CLASS);
+    await S1.putDoc(page, CAN_SENIOR, 'timer_ack_sequence', CAN_SENIOR_SEQ);
+    fs.mkdirSync(absOf(CAN_REVIEWER), { recursive: true });
+    fs.writeFileSync(nodePath.join(absOf(CAN_REVIEWER), '指摘.md'), CAN_NOTE, 'utf-8');
+    await page.reload();
+    await page.waitForSelector('#btn-tab-peek');
+  });
+
+  test('組ごとに統一先と、その根拠になった先輩の図が出る', async ({ page }) => {
+    await page.locator('#editor').fill(CAN_MY_DOC);
+    await page.waitForTimeout(300);
+    await page.locator('#btn-tab-peek').click();
+    await page.waitForSelector('#peek-modal');
+    await page.locator('#peek-note-toggle').click();
+    await page.waitForSelector('#vocab-band');
+    // 先輩の図を読み終えるまで待つ (読み込み中の文言のまま残らない)。
+    await expect(page.locator('#vocab-canon-sum')).not.toContainText('読み込み中', { timeout: 15000 });
+
+    // 到達条件その1: 組の左右どちらへ揃えるかが出る (先輩フォルダを grep しない)。
+    const timer = page.locator('.vocab-canon[data-canon-pair="Timer_Driver⇔TIMER Driver"]');
+    await expect(timer).toHaveAttribute('data-canon-to', 'Timer_Driver');
+    await expect(timer).toContainText('統一先: Timer_Driver');
+
+    // 到達条件その2: なぜそう言えるか (出現数) が同じ行に出る。
+    await expect(timer).toHaveAttribute('data-canon-source', 'count');
+    await expect(timer).toContainText('TIMER Driver 0件');
+
+    // 到達条件その3: 裏を取る先が図の名前と行番号で出る。
+    await expect(timer.locator('.vocab-canon-src').first()).toContainText('driver_common_class');
+    await expect(timer.locator('.vocab-canon-src').first()).toContainText('行目');
+
+    // 到達条件その4: 組が複数あっても 1 画面で全部分かる (図種ごとに探し直さない)。
+    const irq = page.locator('.vocab-canon[data-canon-pair="IRQCtrl⇔Irq_Ctrl"]');
+    await expect(irq).toHaveAttribute('data-canon-to', 'IRQCtrl');
+    await expect(page.locator('#vocab-canon-sum')).toContainText('2組中 2組');
+    await expect(page.locator('#vocab-band')).toHaveAttribute('data-canon-decided', '2');
+  });
+
+  test('先輩がどちらの綴りも使っていない組は言い切らず、理由を出す', async ({ page }) => {
+    const note = CAN_NOTE.replace('の 2 組。', '、Gpio_Drv⇔GpioDrv の 3 組。');
+    fs.writeFileSync(nodePath.join(absOf(CAN_REVIEWER), '指摘.md'), note, 'utf-8');
+    const mine = CAN_MY_DOC.replace('@enduml', 'participant GpioDrv\n@enduml');
+    await page.reload();
+    await page.waitForSelector('#btn-tab-peek');
+    await page.locator('#editor').fill(mine);
+    await page.waitForTimeout(300);
+    await page.locator('#btn-tab-peek').click();
+    await page.waitForSelector('#peek-modal');
+    await page.locator('#peek-note-toggle').click();
+    await page.waitForSelector('#vocab-band');
+    await expect(page.locator('#vocab-canon-sum')).not.toContainText('読み込み中', { timeout: 15000 });
+
+    const gpio = page.locator('.vocab-canon[data-canon-pair="Gpio_Drv⇔GpioDrv"]');
+    await expect(gpio).toHaveAttribute('data-canon-source', 'unknown');
+    await expect(gpio).toHaveAttribute('data-canon-to', '');
+    await expect(gpio).toContainText('決められません');
+    await expect(gpio).toContainText('どちらの綴りもありません');
+    // 決まる組はそのまま決まる (1 組決まらないだけで全部が黙らない)。
+    await expect(page.locator('#vocab-band')).toHaveAttribute('data-canon-decided', '2');
+  });
+});
