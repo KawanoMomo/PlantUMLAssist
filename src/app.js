@@ -3039,6 +3039,7 @@ function init() {
   setupDocSets();
   setupRenameImpact();
   setupDepGraph();
+  setupNameSearch();
   setupTicketBoard();
   setupFixWalk();
   setupVault();
@@ -3290,6 +3291,10 @@ function initCommandPalette() {
       { id: 'export-all', title: '全図を SVG で保存（zip）', hint: 'Export', keywords: ['export', 'svg', 'zip', 'all'], run: function() { clickById('exp-svg-all'); } },
       { id: 'call-graph', title: '呼び出しグラフ（このメソッドを呼んでいる図を辿る）', hint: 'Review', keywords: ['call', 'graph', 'callers', '呼び出し', 'よびだし', 'グラフ', '突合', 'method', 'メソッド'], run: function() { openCallGraph(); } },
       { id: 'handover-board', title: '引き継ぎチェックリスト（渡してよい図を数える）', hint: 'Handover', keywords: ['handover', '引き継ぎ', 'ひきつぎ', 'checklist', 'チェックリスト', '新人', '置換済み', 'note', 'svg'], run: function() { openHandoverBoard(); } },
+      // BLK-primary-20260917-0523-wish: 仕様変更の影響範囲は「名前 → 使っている図」で引く。
+      { id: 'name-search', title: '名前で図を探す（部品名 / メソッド名）', hint: 'Search',
+        keywords: ['search', 'name', 'method', 'xref', 'impact', '名前', '部品', 'メソッド', '検索', '影響', 'どの図'],
+        run: function() { openNameSearch((document.getElementById('rename-from') || {}).value || ''); } },
       { id: 'export-docset', title: '資料セットで SVG で保存（zip）', hint: 'Export', keywords: ['export', 'svg', 'zip', 'set', 'docset', '資料', 'セット'], run: function() { clickById('exp-docset'); } },
       { id: 'export-pick', title: '図を選んで SVG で保存（zip）', hint: 'Export', keywords: ['export', 'svg', 'zip', 'pick', 'select', 'changed', 'fix'], run: function() { clickById('exp-svg-pick'); } },
       { id: 'export-fix', title: '要修正のみを SVG で保存（zip）', hint: 'Export', keywords: ['export', 'svg', 'zip', 'fix', 'review'], run: function() { clickById('exp-svg-fix'); } },
@@ -16646,6 +16651,208 @@ function toggleDepGraph(open) {
   renderDepGraph();
   var body = document.getElementById('dg-body');
   if (body) body.scrollTop = 0;
+}
+
+// ── 名前で図を探す (BLK-primary-20260917-0523-wish) ──────────────────────────
+// 仕様変更の影響範囲を洗うとき、指摘.md で対象名を絞ってから保存フォルダの図を
+// 1 枚ずつタブで開いて本文を読む、という手順しか無かった。名前を 1 回打てば
+// 「その名前を使っている図」が出て、行を押せばその図のその行まで運ばれる。
+var _nsIndex = [];
+
+function _nsModal() { return document.getElementById('ns-modal'); }
+
+// 的は開いているタブ + 保存フォルダ。_fiRows は一括置換の読み込みを使い回す
+// (同じフォルダを 2 通りに数えない)。
+function _nsRows() { return _fiRows(); }
+
+// 索引 (打つ語の候補) を作り直す。datalist と「よく出る名前」の両方で使う。
+function _nsBuildIndex() {
+  var NS = window.MA.nameSearch;
+  _nsIndex = NS ? NS.index(_nsRows()) : [];
+  var dl = document.getElementById('ns-index');
+  if (dl) {
+    dl.textContent = '';
+    _nsIndex.slice(0, 200).forEach(function(e) {
+      var o = document.createElement('option');
+      o.value = e.name;
+      o.label = (e.kind === 'method' ? 'メソッド' : '部品') + ' / ' + e.docs.length + ' 枚';
+      dl.appendChild(o);
+    });
+  }
+  var top = document.getElementById('ns-top');
+  if (top) {
+    top.textContent = '';
+    _nsIndex.slice(0, 8).forEach(function(e) {
+      var b = document.createElement('span');
+      b.className = 'ns-top-name';
+      b.textContent = e.name + '(' + e.docs.length + ')';
+      b.setAttribute('data-name', e.name);
+      b.addEventListener('click', function() {
+        var q = document.getElementById('ns-q');
+        if (q) { q.value = e.name; renderNameSearch(); }
+      });
+      top.appendChild(b);
+    });
+  }
+}
+
+// 当たった図のその行へ運ぶ。開いていない図は保存フォルダから開く
+// (一覧を見てから自分でタブを開き直すのでは、元の手順がそのまま残る)。
+function openNameSearchHit(docName, line) {
+  var WS = window.MA.workspace;
+  if (!WS || !docName) return;
+  toggleNameSearch(false);
+  var active = WS.getActive();
+  if (!(active && active.name === docName)) saveActiveDoc();
+  function show() {
+    applyActiveDoc();
+    renderTabs();
+    if (line) jumpToLine(line);
+  }
+  var already = WS.findByName ? WS.findByName(docName) : null;
+  if (already) { WS.setActive(already.id); show(); return; }
+  WS.loadFile(docName, _wsFileDir()).then(function(text) {
+    if (text == null) return;
+    var detected = WS.detectType(text);
+    WS.openOrActivate({
+      name: docName, dsl: text,
+      diagramType: (detected && modules[detected]) ? detected : currentDiagramType,
+    });
+    show();
+  }, function() { /* 読めない図は開かない */ });
+}
+
+var _NS_KIND_LABEL = { sequence: 'シーケンス', state: '状態遷移', class: 'クラス' };
+var _NS_ROLE_LABEL = { decl: '宣言', call: '呼び出し', ref: '本文' };
+
+function renderNameSearch() {
+  var NS = window.MA.nameSearch;
+  var box = document.getElementById('ns-rows');
+  var head = document.getElementById('ns-summary');
+  if (!NS || !box) return;
+  var q = (document.getElementById('ns-q') || {}).value || '';
+  var res = NS.search(_nsRows(), q);
+  if (head) {
+    head.textContent = NS.summaryText(res);
+    head.setAttribute('data-hit-docs', String(res.hitDocs));
+    head.setAttribute('data-files', String(res.files));
+    head.setAttribute('data-total', String(res.total));
+  }
+  box.textContent = '';
+  box.setAttribute('data-hit-docs', String(res.hitDocs));
+  if (!res.query || !res.hitDocs) {
+    var empty = document.createElement('div');
+    empty.className = 'ns-empty';
+    empty.textContent = res.query
+      ? 'この名前を使っている図はありません（綴りが違うか、まだどこにも出ていません）'
+      : '部品名かメソッド名を入れてください';
+    box.appendChild(empty);
+    return;
+  }
+  res.hits.forEach(function(h) {
+    var row = document.createElement('div');
+    row.className = 'ns-row';
+    row.setAttribute('data-name', h.name);
+    row.setAttribute('data-count', String(h.count));
+    row.setAttribute('data-declared', h.declared ? '1' : '0');
+    row.setAttribute('data-open', h.open ? '1' : '0');
+
+    var line1 = document.createElement('div');
+    line1.className = 'ns-doc';
+    var nm = document.createElement('span');
+    nm.className = 'ns-name';
+    nm.textContent = h.name;
+    line1.appendChild(nm);
+    var kind = document.createElement('span');
+    kind.className = 'ns-kind';
+    kind.textContent = _NS_KIND_LABEL[h.kind] || 'その他';
+    line1.appendChild(kind);
+    var cnt = document.createElement('span');
+    cnt.className = 'ns-count';
+    cnt.textContent = h.count + ' 件';
+    line1.appendChild(cnt);
+    var where = document.createElement('span');
+    where.className = 'ns-where';
+    where.textContent = (h.declared ? 'ここで宣言' : '参照のみ') + (h.open ? ' / 開いている' : ' / 未オープン');
+    line1.appendChild(where);
+    row.appendChild(line1);
+
+    h.at.forEach(function(a) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'ns-at';
+      btn.setAttribute('data-line', String(a.line));
+      var ln = document.createElement('span');
+      ln.className = 'ns-line';
+      ln.textContent = a.line + ':' + (_NS_ROLE_LABEL[a.role] || a.role);
+      btn.appendChild(ln);
+      btn.appendChild(document.createTextNode(a.text));
+      btn.addEventListener('click', function() { openNameSearchHit(h.name, a.line); });
+      row.appendChild(btn);
+    });
+    box.appendChild(row);
+  });
+}
+
+function toggleNameSearch(on) {
+  var modal = _nsModal();
+  if (!modal) return;
+  if (!on) { modal.style.display = 'none'; return; }
+  modal.style.display = 'flex';
+  _nsBuildIndex();
+  renderNameSearch();
+  var q = document.getElementById('ns-q');
+  if (q) { q.focus(); q.select(); }
+}
+
+// 開く前に保存フォルダを読む。開いているタブだけを見ると、
+// 「開いていないから出てこない」図を「使っていない図」と読み違える。
+function openNameSearch(seed) {
+  var q = document.getElementById('ns-q');
+  if (q && seed != null && seed !== '') q.value = seed;
+  var WS = window.MA.workspace;
+  if (WS && WS.listFolder && _fiFolderMode()) {
+    return loadFolderImpact().then(function() { toggleNameSearch(true); },
+                                   function() { toggleNameSearch(true); });
+  }
+  toggleNameSearch(true);
+  return Promise.resolve(true);
+}
+
+function setupNameSearch() {
+  var modal = _nsModal();
+  if (!modal) return;
+  var q = document.getElementById('ns-q');
+  if (q) q.addEventListener('input', renderNameSearch);
+  var close = document.getElementById('ns-close');
+  if (close) close.addEventListener('click', function() { toggleNameSearch(false); });
+  modal.addEventListener('click', function(ev) {
+    if (ev.target === modal) toggleNameSearch(false);
+  });
+  document.addEventListener('keydown', function(ev) {
+    if (ev.key === 'Escape' && modal.style.display === 'flex') toggleNameSearch(false);
+  });
+  // 見た名前をそのまま置換の的にする (読んで覚えて打ち直す手順を残さない)。
+  var use = document.getElementById('ns-use');
+  if (use) use.addEventListener('click', function() {
+    var val = (document.getElementById('ns-q') || {}).value || '';
+    if (!val) return;
+    // 先に一覧を閉じ、置換パネルを開いてから入れる。値だけ入れて閉じると、
+    // 利用者は「渡したはずの名前」を探して自分でパネルを開き直すことになる。
+    toggleNameSearch(false);
+    // 置換パネルは「外側のクリック」で閉じる。今まさに押しているこのボタンの
+    // クリックが document まで上がってくるので、その後に開く
+    // (同じクリックで開いて閉じると、名前を渡したのに空のまま出てくる)。
+    window.setTimeout(function() {
+      var panel = document.getElementById('rename-panel');
+      var tab = document.getElementById('btn-tab-rename');
+      if (tab && !(panel && panel.classList.contains('open'))) tab.click();
+      var from = document.getElementById('rename-from');
+      if (!from) return;
+      from.value = window.MA.nameSearch.normalizeQuery(val);
+      from.dispatchEvent(new window.Event('input', { bubbles: true }));
+    }, 0);
+  });
 }
 
 function setupDepGraph() {
