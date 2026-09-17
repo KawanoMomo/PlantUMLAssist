@@ -3231,6 +3231,32 @@ tr.mboard-row[data-status="none"] td.mboard-status { color: #e06c75; }
 tr.mboard-row[data-status="stale"] td.mboard-status { color: #d19a66; }
 tr.mboard-row[data-status="fresh"] td.mboard-status { color: #98c379; }
 #mboard-state { padding: 8px 14px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-secondary); min-height: 16px; }
+/* 会議セット (BLK-primary-20260918-0249-wish)。選んだ図だけを選んだ順に並べ、
+   1 枚ずつ 変更前 / 変更後 / 差分 をタブで切り替えて見せる。 */
+#cb-meeting[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+#cb-meeting-state { color: var(--accent); }
+.cb-entry button.cb-pick {
+  border: 1px solid var(--border); background: var(--bg-tertiary); color: var(--text-primary);
+  border-radius: 3px; font-size: 10px; padding: 1px 8px; cursor: pointer; white-space: nowrap;
+}
+.cb-entry button.cb-pick[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.cb-sides { display: flex; gap: 6px; padding: 4px 0 6px 0; }
+.cb-sides button.cb-side {
+  border: 1px solid var(--border); background: var(--bg-tertiary); color: var(--text-secondary);
+  border-radius: 3px 3px 0 0; font-size: 11px; padding: 2px 12px; cursor: pointer;
+}
+.cb-sides button.cb-side[aria-pressed="true"] {
+  border-color: var(--accent); color: var(--accent); background: var(--bg-secondary);
+}
+pre.cb-side-dsl {
+  margin: 0; padding: 6px 8px; font-size: 11px; line-height: 1.5;
+  background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 0 3px 3px 3px;
+  max-height: 46vh; overflow: auto; white-space: pre-wrap; word-break: break-all;
+  color: var(--text-primary);
+}
+pre.cb-side-dsl .cb-line-add { color: var(--accent); }
+pre.cb-side-dsl .cb-line-del { color: var(--text-secondary); text-decoration: line-through; }
+.cb-side-empty { color: var(--text-secondary); font-size: 11px; padding: 6px 8px; }
 /* 変更サマリボード (BLK-primary-20260907-0923-wish) */
 .board-modal {
   background: var(--bg-secondary);
@@ -7946,6 +7972,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/call-graph.js"></script>
 <script src="src/core/review-verdicts.js"></script>
 <script src="src/core/meeting-notes.js"></script>
+<script src="src/core/meeting-set.js"></script>
 <script src="src/core/audit-timeline.js"></script>
 <script src="src/core/finding-ledger.js"></script>
 <script src="src/core/audit-board.js"></script>
@@ -8072,6 +8099,13 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
          ここで図を選んで直接書けば、直し終えて基準に取り込んだ後でも残せる。
          引き継ぎ後は、新人が返した JSON を読み込んで未読・要フォローを見る。 -->
     <div class="board-head" id="cb-handover-bar">
+      <!-- BLK-primary-20260918-0249-wish: 会議で見せる図はその場で 3〜5 枚選ぶ。
+           選んだ図だけを選んだ順に並べ、各図は 変更前 / 変更後 のタブで切り替える。 -->
+      <button type="button" id="cb-meeting" aria-pressed="false" title="選んだ図だけを選んだ順に並べる (各図の見出しの [会議に入れる] で 3〜5 枚選ぶ)">🎦 会議セット</button>
+      <select id="cb-meeting-doc" title="会議で見せる図を名前で選ぶ (変わっていない図も選べる)"></select>
+      <button type="button" id="cb-meeting-add" title="選んだ図を会議セットに足す">＋追加</button>
+      <button type="button" id="cb-meeting-clear" title="会議セットを空にする">空に</button>
+      <span id="cb-meeting-state" role="status"></span>
       <label for="cb-note-doc">申し送りを足す</label>
       <select id="cb-note-doc" title="申し送りを添える図 (差分が無い図にも書ける)"></select>
       <input type="text" id="cb-note-text" placeholder="なぜ直したか" maxlength="200">
