@@ -67,6 +67,14 @@ window.MA.modules.plantumlClass = (function() {
   );
   var ENUM_VALUE_RE = /^([A-Z_][A-Z0-9_]*)\s*;?\s*$/;
 
+  // BLK-migrator-20260918-0049: 実物の class 図にある struct / annotation も要素として読む
+  // (読まないと図には描かれるのに選択枠が 1 つも出ない)。
+  var STRUCT_ANNOT_KW_RE = new RegExp(
+    '^(struct|annotation)\\s+(?:"([^"]+)"\\s+as\\s+(' + ID_WITH_GENERICS + ')|(' + ID_WITH_GENERICS + ')(?:\\s+as\\s+"([^"]+)")?)\\s*(?:<<([^>]+)>>)?\\s*\\{?\\s*$'
+  );
+  // クラス本体の区切り線。`..private..` のように文字を挟んだものは SVG に 1 行の text として描かれる。
+  var SEPARATOR_RE = /^(--|\.\.|==|__)(.*?)(--|\.\.|==|__)?$/;
+
   var PACKAGE_OPEN_RE = new RegExp(
     '^package\\s+(?:"([^"]+)"|(' + ID + '))\\s*\\{\\s*$'
   );
@@ -155,6 +163,15 @@ window.MA.modules.plantumlClass = (function() {
       // member parsing: only inside an open class block
       if (openClassStack.length > 0) {
         var parent = openClassStack[openClassStack.length - 1].element;
+        var sep = trimmed.match(SEPARATOR_RE);
+        if (sep && (sep[2] === '' ? !sep[3] : sep[3] === sep[1])) {
+          // 文字を挟んだ区切りは描画上 1 行を取るので、次のメンバーの前に 1 行あると控える。
+          if (sep[2].trim()) {
+            if (!parent.labelledSeparators) parent.labelledSeparators = [];
+            parent.labelledSeparators.push(parent.members.length);
+          }
+          continue;
+        }
         if (parent.kind === 'enum') {
           var ev = trimmed.match(ENUM_VALUE_RE);
           if (ev) {
@@ -325,6 +342,23 @@ window.MA.modules.plantumlClass = (function() {
         };
         result.elements.push(iEl);
         if (iHasBlock) openClassStack.push({ element: iEl });
+        continue;
+      }
+
+      var sam = trimmed.match(STRUCT_ANNOT_KW_RE);
+      if (sam) {
+        var sRawId = sam[3] !== undefined ? sam[3] : sam[4];
+        var sLabel = sam[3] !== undefined ? sam[2] : (sam[5] !== undefined ? sam[5] : sam[4]);
+        var sSplit = _splitIdGenerics(sRawId);
+        var sEl = {
+          kind: sam[1], id: sSplit.id,
+          label: sSplit.generics ? sSplit.id : sLabel,
+          stereotype: sam[6] || null, generics: sSplit.generics, members: [],
+          line: lineNum, endLine: lineNum,
+          parentPackageId: packageStack.length > 0 ? packageStack[packageStack.length - 1].id : null,
+        };
+        result.elements.push(sEl);
+        if (/\{\s*$/.test(trimmed)) openClassStack.push({ element: sEl });
         continue;
       }
 
@@ -2381,10 +2415,19 @@ window.MA.modules.plantumlClass = (function() {
         return { x: pminX, y: pminY, width: pmaxX - pminX, height: pmaxY - pminY };
       }
 
-      var matched = { class: 0, interface: 0, abstract: 0, enum: 0, relation: 0, package: 0 };
+      var matched = { class: 0, interface: 0, abstract: 0, enum: 0, struct: 0, annotation: 0, relation: 0, package: 0 };
 
       (parsedData.elements || []).forEach(function(el) {
         var g = svgEl.querySelector('g.entity[data-qualified-name="' + el.id + '"]');
+        // BLK-migrator-20260918-0049: package / namespace の中の要素は `BSW..GpioDriver` /
+        // `App.MainTask` のように修飾名で描かれる。末尾が `.{id}` のものがちょうど 1 つならそれ。
+        if (!g && el.parentPackageId) {
+          var qs = Array.prototype.filter.call(svgEl.querySelectorAll('g.entity[data-qualified-name]'), function(ge) {
+            var qn = ge.getAttribute('data-qualified-name');
+            return qn.length > el.id.length && qn.slice(-(el.id.length + 1)) === '.' + el.id;
+          });
+          if (qs.length === 1) g = qs[0];
+        }
         if (!g) return;
         var bb = _entityBBox(g);
         if (!bb) return;
@@ -2398,14 +2441,26 @@ window.MA.modules.plantumlClass = (function() {
         // Member rects: one per class member, mapped to <text> lines after header
         if (el.members && el.members.length > 0) {
           var lines = OB.extractMultiLineTextBBoxes(g);
+          // 区切り線の文字は、その下のメンバーより後に SVG へ書かれる。上から見た順に並べ直す。
+          lines = lines.map(function(l, k) { return { l: l, k: k }; }).sort(function(p, q) {
+            return (p.l.bbox.y - q.l.bbox.y) || (p.k - q.k);
+          }).map(function(o) { return o.l; });
           // Header skip count: 1 (label) + (stereotype ? 1 : 0) + (generics ? 1 : 0)
           var headerSkip = 1;
           if (el.stereotype) headerSkip++;
           if (el.generics && el.generics.length > 0) headerSkip++;
           var memberLines = lines.slice(headerSkip);
-          var matchCount = Math.min(el.members.length, memberLines.length);
+          // 文字を挟んだ区切り線 (`..private..`) の行は飛ばしてメンバーに当てる。
+          var seps = el.labelledSeparators || [];
+          var slotOf = function(k) {
+            var n = 0;
+            for (var si = 0; si < seps.length; si++) if (seps[si] <= k) n++;
+            return k + n;
+          };
+          var matchCount = 0;
+          while (matchCount < el.members.length && slotOf(matchCount) < memberLines.length) matchCount++;
           for (var mi = 0; mi < matchCount; mi++) {
-            var ml = memberLines[mi];
+            var ml = memberLines[slotOf(mi)];
             var mem = el.members[mi];
             var mbb = ml.bbox;
             var rectW = mbb.width || 80;
@@ -2433,7 +2488,19 @@ window.MA.modules.plantumlClass = (function() {
       for (var pi = 0; pi < pkgN; pi++) {
         var pg = pkgGroups[pi];
         var pkgRect = pg.querySelector('rect');
-        if (!pkgRect) continue;
+        if (!pkgRect) {
+          // 枠が rect でなく path / polygon で描かれる package (タブ付き) は外接矩形で囲う。
+          var pbb = _entityBBox(pg);
+          if (!pbb) {
+            try { pbb = pg.getBBox(); } catch (e) { pbb = null; }
+          }
+          if (!pbb || !(pbb.width > 0)) continue;
+          OB.addRect(overlayEl, pbb.x - 2, pbb.y - 2, pbb.width + 4, pbb.height + 4, {
+            'data-type': 'package', 'data-id': packages[pi].id, 'data-line': packages[pi].startLine,
+          });
+          matched.package++;
+          continue;
+        }
         OB.addRect(overlayEl,
           (parseFloat(pkgRect.getAttribute('x')) || 0) - 2,
           (parseFloat(pkgRect.getAttribute('y')) || 0) - 2,
