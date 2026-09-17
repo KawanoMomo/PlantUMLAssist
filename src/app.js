@@ -3441,7 +3441,9 @@ function initCommandPalette() {
       { id: 'export-clip', title: 'クリップボードにコピー / Copy image', hint: 'Export', keywords: ['export', 'clipboard', 'copy'], run: function() { clickById('exp-clipboard'); } },
       { id: 'export-all', title: '全図を SVG で保存（zip）', hint: 'Export', keywords: ['export', 'svg', 'zip', 'all'], run: function() { clickById('exp-svg-all'); } },
       { id: 'call-graph', title: '呼び出しグラフ（このメソッドを呼んでいる図を辿る）', hint: 'Review', keywords: ['call', 'graph', 'callers', '呼び出し', 'よびだし', 'グラフ', '突合', 'method', 'メソッド'], run: function() { openCallGraph(); } },
-      { id: 'handover-board', title: '引き継ぎチェックリスト（渡してよい図を数える）', hint: 'Handover', keywords: ['handover', '引き継ぎ', 'ひきつぎ', 'checklist', 'チェックリスト', '新人', '置換済み', 'note', 'svg'], run: function() { openHandoverBoard(); } },
+      // BLK-owner-20260918-0429-prune: ツール ▾ →「確かめる」にも載せたので button を持つ。
+      // パレット側の分類・言い換えはメニューに合わせて自動で揃う。
+      { id: 'handover-board', title: '引き継ぎチェックリスト（渡してよい図を数える）', hint: 'Handover', keywords: ['handover', '引き継ぎ', 'ひきつぎ', 'checklist', 'チェックリスト', '新人', '置換済み', 'note', 'svg'], button: 'btn-tab-handover', run: function() { openHandoverBoard(); } },
       // BLK-primary-20260917-0523-wish: 仕様変更の影響範囲は「名前 → 使っている図」で引く。
       { id: 'name-search', title: '名前で図を探す（部品名 / メソッド名）', hint: 'Search',
         keywords: ['search', 'name', 'method', 'xref', 'impact', '名前', '部品', 'メソッド', '検索', '影響', 'どの図'],
@@ -26200,6 +26202,9 @@ function closeHandoverBoard() {
 }
 
 function setupHandoverBoard() {
+  // BLK-owner-20260918-0429-prune: ツール ▾ →「確かめる」の項目はこのボタンを押す。
+  var open = document.getElementById('btn-tab-handover');
+  if (open) open.addEventListener('click', function() { openHandoverBoard(); });
   var close = document.getElementById('hb-close');
   if (close) close.addEventListener('click', function() { closeHandoverBoard(); });
   var reload = document.getElementById('hb-reload');

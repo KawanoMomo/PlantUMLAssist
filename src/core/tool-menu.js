@@ -40,6 +40,9 @@ window.MA.toolMenu = (function() {
       { id: 'btn-tab-trace',          label: '状態遷移のトレース漏れ' },
       { id: 'btn-tab-pattern',        label: '1 つの観点で全図を棚卸し' },
       { id: 'btn-tab-submit',         label: '提出前チェック' },
+      // BLK-owner-20260918-0429-prune: 「渡してよいか」を数える突合。ここに載るまでは
+      // Ctrl+K でしか辿り着けず、同じ目的の 6 つで 1 つだけ入口が違っていた。
+      { id: 'btn-tab-handover',       label: '引き継ぎチェックリスト' },
       { id: 'btn-tab-cross',          label: '突合ボード (1 画面で全部)' },
       { id: 'btn-tab-design',         label: '仕様 (design) と現在値の突合' },
       { id: 'btn-tab-audit-timeline', label: '監査履歴' },
