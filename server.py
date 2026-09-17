@@ -731,6 +731,20 @@ def normalize_dsl(text):
     return '\n'.join(out)
 
 
+def _eol_newline(eol):
+    """開いたファイルの改行 ('lf' / 'crlf') を open() の newline に直す。
+
+    分からないものは None (これまでどおり platform の既定) にする。開いた元が
+    無い図の保存の仕方までは変えない (BLK-migrator-20260918-0349)。
+    """
+    s = str(eol or '').strip().lower()
+    if s == 'lf':
+        return '\n'
+    if s == 'crlf':
+        return '\r\n'
+    return None
+
+
 def _atomic_write_text(path, text, encoding='utf-8', newline=None):
     """`path` を、読んでいる側に途中経過を見せずに置き換える。"""
     tmp = path.with_name(path.name + '.tmp-' + str(os.getpid()) + '-' + str(threading.get_ident()))
@@ -2439,6 +2453,11 @@ class Handler(BaseHTTPRequestHandler):
         dt = data.get('type')
         dsl = data.get('dsl', '')
         dir_raw = data.get('dir')
+        # BLK-migrator-20260918-0349: 元が LF のファイルを開いて保存すると、
+        # テキストモードの既定 (Windows では os.linesep) が \n を \r\n に書き換え、
+        # 無変更保存でもバイト単位で一致しなくなっていた。本文は常に LF で受け、
+        # 書くときの改行だけをここで決める (控え・版・hash の比較は LF のまま)。
+        newline = _eol_newline(data.get('eol'))
         if not self._autosave_validate_type(dt):
             self._send_json(400, {'error': 'invalid type — パス区切り・制御文字・Windows の禁止文字は使えません'})
             return
@@ -2457,7 +2476,11 @@ class Handler(BaseHTTPRequestHandler):
         # 同じ図種の中での上書きは今までどおり。消える中身は先に控える。
         self._stash_version(save_dir, target, dsl)
         try:
-            _atomic_write_text(file_path, dsl)
+            # 改行を指定されたときは、本文をいったん LF に揃えてから書く
+            # (\r\n のまま newline='\r\n' で書くと \r\r\n になる)。
+            _atomic_write_text(file_path,
+                               dsl.replace('\r\n', '\n') if newline else dsl,
+                               newline=newline)
         except OSError as e:
             self._send_json(500, {'error': f'write failed: {e}'})
             return
