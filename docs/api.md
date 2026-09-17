@@ -134,5 +134,7 @@ curl -sS -X POST http://127.0.0.1:8766/verify-svg -H "Content-Type: application/
 | `POST /pick-jar` | — | アプリ版: ファイルダイアログで jar を選ぶ。Web 版は 409 |
 | `POST /fetch-jar` | — | アプリ版/Windows: `lib/fetch-plantuml.ps1` で公式から jar を取る。使えない環境は 409 |
 | `POST /native-save` | `{fileName, text` または `base64}` | アプリ版: 保存ダイアログを出して書き、`{path}`。やめたら `{canceled:true}`。Web 版は 409 |
+| `POST /native-open` | — | アプリ版: 開くダイアログ (複数選択) で .puml を読み、`{files:[{path, name, text, encoding, bom, eol}]}`。Web 版は 409 |
+| `POST /native-write` | `{path, text, encoding, bom}` | 開いた元の .puml / .plantuml / .uml / .txt へ書き戻す。Shift_JIS は cp932 で書き、書けない字があれば 400。無いファイルには書かない |
 | `POST /heartbeat` | — | 204。無音 300 秒で server は自分で落ちる |
 | `POST /shutdown` | — | 204。停止を予約する (Java は残るので別に止める) |
