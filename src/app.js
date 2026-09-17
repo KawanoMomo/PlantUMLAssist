@@ -4157,6 +4157,9 @@ function applyActiveDoc() {
   if (!window.MA.workspace) return;
   var doc = window.MA.workspace.getActive();
   if (!doc) return;
+  // BLK-migrator-20260917-2349-b: 保存時チェックの帯は保存した図のもの。別の図に移っても残ると
+  // 図の上端を覆い、そこにある要素へホバー・クリックが届かない。
+  hideSaveCheckIfOtherDoc(doc.id);
   var mod = modules[doc.diagramType] || modules[currentDiagramType];
   if (mod) {
     currentModule = mod;
@@ -24975,6 +24978,11 @@ function _svckEvaluate(docName) {
   return SC.evaluate(board, { doc: docName, state: _svckState() });
 }
 
+function hideSaveCheckIfOtherDoc(activeId) {
+  var el = document.getElementById('save-check-overlay');
+  if (el && !el.hidden && el.getAttribute('data-doc-id') !== String(activeId)) el.hidden = true;
+}
+
 function hideSaveCheck() {
   var el = document.getElementById('save-check-overlay');
   if (el) el.hidden = true;
@@ -25004,6 +25012,8 @@ function renderSaveCheck(res) {
   // 指摘が無いときは帯を出さず、突合の結果はステータスバーの保存先の後ろに足す。
   // ここで setSaveStatus に置き換えると「どこに書いたか」が消える。
   if (!SC.shouldWarn(res)) { el.hidden = true; appendSaveStatus(SC.checkLine(res)); return; }
+  var ws = window.MA.workspace;
+  el.setAttribute('data-doc-id', ws ? String(ws.getActiveId()) : '');
   el.hidden = false;
 }
 

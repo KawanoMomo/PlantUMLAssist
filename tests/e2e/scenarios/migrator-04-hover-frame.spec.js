@@ -2,7 +2,9 @@
 // migrator 台本 手順 4「選択枠」— 実物の .puml の要素に順にホバーし、出る枠がその要素を指す。
 // BLK-migrator-20260917-2349-b: 可視性 -/#/~ 付きの C 風メンバー (`- uint8 pinState`) に枠が出なかった。
 const { test, expect } = require('@playwright/test');
-const { bootPlain, typeDsl } = require('./_scenario');
+const fs = require('fs');
+const path = require('path');
+const { bootPlain, typeDsl, dirFor, absDirFor } = require('./_scenario');
 
 const DSL = [
   '@startuml',
@@ -44,5 +46,44 @@ test('migrator 手順 4 — 可視性記号の混ざったクラスで、クラ�
       return r ? { type: r.getAttribute('data-type'), line: r.getAttribute('data-line') } : null;
     }, box);
     expect(hit, label + ' にホバーして枠が出る').toEqual({ type, line });
+  }
+});
+
+// 差し戻し 1 回目: 前に保存した図の「保存時チェック」の帯が、次のファイルを開いた後も
+// プレビュー上端に残り、上の方のメンバー行 (-/#/~) を覆ってホバーが届かなかった。
+test('migrator 手順 4 — 前の図の保存で出た警告帯は、次のファイルを開くと消え、上端のメンバーにも枠が出る', async ({ page }) => {
+  await bootPlain(page);
+  await page.evaluate((dir) => {
+    try { Object.keys(localStorage).forEach((k) => { if (k.indexOf('pua.savecheck:') === 0) localStorage.removeItem(k); }); } catch (e) {}
+    window.MA.autoSave.setConfig({ enabled: true, debounceMs: 500, restoreMode: 'none', backend: 'file', fileDir: dir });
+    window.MA.workspace.rename(window.MA.workspace.getActiveId(), 'Gpio_Seq');
+  }, dirFor(__filename));
+  await page.locator('#editor').fill(['@startuml', 'participant Gpio_Driver', 'participant Gpio_Hw', 'participant Unused',
+    'Gpio_Driver -> Gpio_Hw : Gpio_Init', '@enduml'].join(String.fromCharCode(10)));
+  await page.waitForTimeout(800);
+  await page.locator('#btn-save').dispatchEvent('click');
+  await expect(page.locator('#save-check-overlay')).toBeVisible();
+
+  const dir = absDirFor(__filename);
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, 'class-01-basic-visibility.puml');
+  fs.writeFileSync(file, DSL);
+  await page.click('#btn-command-palette');
+  await page.fill('#cp-input', 'ファイルを開く');
+  await page.waitForTimeout(300);
+  const [chooser] = await Promise.all([
+    page.waitForEvent('filechooser'),
+    page.locator('#cp-list [role="option"], #cp-list li, #cp-list .cp-item').filter({ hasText: 'ファイルを開く' }).first().click(),
+  ]);
+  await chooser.setFiles(file);
+  await expect(page.locator('#overlay-layer rect[data-type="member"]')).toHaveCount(4, { timeout: 20000 });
+  await expect(page.locator('#save-check-overlay')).toBeHidden();
+
+  const ids = await page.locator('#overlay-layer rect.selectable[data-type="member"]').evaluateAll((rs) => rs.map((r) => r.getAttribute('data-id')));
+  for (const id of ids) {
+    const r = page.locator('#overlay-layer rect.selectable[data-type="member"][data-id="' + id + '"]');
+    const b = await r.boundingBox();
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+    await expect(r, id + ' にホバーして枠が出る').toHaveClass(/hit-hover/);
   }
 });
