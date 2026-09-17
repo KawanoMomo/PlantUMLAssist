@@ -3407,6 +3407,8 @@ function initCommandPalette() {
       { id: 'tab-versions', title: 'この図の変遷を見る / Version timeline', hint: 'Tabs', keywords: ['version', 'timeline', 'へんせん', 'りれき'], button: 'btn-tab-versions', run: function() { clickById('btn-tab-versions'); } },
       { id: 'tab-lineage', title: 'この図の継承元を見る / Lineage', hint: 'Tabs', keywords: ['lineage', 'parent', 'けいしょう', 'もと', 'とりこみ'], button: 'btn-tab-lineage', run: function() { clickById('btn-tab-lineage'); } },
       { id: 'tab-board', title: '変更サマリを開く / Change board', hint: 'Tabs', keywords: ['board', 'summary', 'へんこう', 'さまり'], button: 'btn-tab-board', run: function() { clickById('btn-tab-board'); } },
+      // BLK-primary-20260918-0249-wish: 会議で見せる 3〜5 枚を選んで並べる
+      { id: 'meeting-set', title: '会議セットで並べる / Meeting set', hint: 'Board', keywords: ['meeting', 'kaigi', 'かいぎ', 'せっと', 'set'], button: 'cb-meeting', run: function() { toggleChangeBoard(true); clickById('cb-meeting'); } },
       // 顧客の前で開く画面 (BLK-primary-20260913-0306-wish)。ボードを開いていなければ開いてから切り替える。
       { id: 'board-svg', title: '変更前後を図で見せる / Show before-after as SVG', hint: 'Tabs', keywords: ['svg', 'customer', 'こきゃく', 'みせる', 'ずでみる'], button: 'cb-svg', run: function() {
         var modal = document.getElementById('cb-modal');
@@ -4766,6 +4768,10 @@ var _cbMapPending = false; // 対応表を未対応の指摘だけに絞るか (
 // 変更前後を並べる。描いた結果は鍵 (図・側・中身) で憶えておく — 顧客の前で
 // 切り替えるたびに描き直すと、そのたびに数秒の空白が出る。
 var _cbSvg = false;
+// BLK-primary-20260918-0249-wish: 会議で見せる図はその場で 3〜5 枚選ぶ。選んだ図だけを
+// 選んだ順に並べ (変わっていない図も並べる)、1 枚ずつ 変更前 / 変更後 / 差分 をタブで切り替える。
+var _msOn = false;
+var _msSide = {};       // 図ごとに今どのタブを出しているか ('before' / 'after' / 'diff')
 var _cbSvgCache = {};
 var _cbSvgSeq = 0;      // 描いている最中にボードが描き直されたら古い結果を捨てる
 
@@ -4821,11 +4827,28 @@ function _changeBoardModel() {
   if (_cbFolderOn()) {
     docs = docs.concat(CB.folderExtras(_fiFileDocs, docs, { since: _cbFolderSince() }));
   }
+  // 会議セット中は、選んだ図だけを選んだ順に、変わっていなくても並べる
+  // (会議で「この図は今回触っていません」と見せる場面がそのまま手順になる)。
+  if (_msActive()) {
+    var MS = window.MA.meetingSet;
+    return CB.build(MS.pickDocs(docs), SD.baselineOf, {
+      includeSame: true,
+      collapse: !_cbFull,
+      context: 2,
+    });
+  }
   return CB.build(docs, SD.baselineOf, {
     includeSame: _cbSame,
     collapse: !_cbFull,
     context: 2,
   });
+}
+
+// 会議セットで並べている最中か。空の会議セットで押しても、ボードが真っ白になるだけなので
+// 「押してある」だけでは切り替えない (選んでから効く)。
+function _msActive() {
+  var MS = window.MA.meetingSet;
+  return !!(_msOn && MS && MS.count() > 0);
 }
 
 // 見出しの 1 行。差分・基準・申し送り・レビュー結果を 1 か所で組み立てる
@@ -5071,6 +5094,203 @@ function _cbDrawShowPanes(board) {
   return step(0);
 }
 
+// 1 枚ぶんの行差分 (行の印・指摘との対応・申し送りを含む)。ボードの既定の見せ方であり、
+// 会議セットの「差分」タブの中身でもあるので 1 か所に置く。
+function _cbDiffBodyHtml(e, mapTable) {
+  var esc = window.MA.htmlUtils.escHtml;
+  var RV = window.MA.reviewVerdicts;
+  var html = '<div class="cb-cols"><span>変更前'
+    + (e.markedAt ? ' (' + esc(e.markedAt.replace('T', ' ').slice(0, 16)) + ')' : ' (基準なし)') + '</span>'
+    + '<span>変更後 (今)</span></div>'
+    + '<table class="cb-diff"><tbody>';
+  e.rows.forEach(function(r) {
+    if (r.kind === 'gap') {
+      html += '<tr class="cb-gap"><td colspan="5">⋯ 同じ行 ' + r.count + ' 行 ⋯</td></tr>';
+      return;
+    }
+    // 会議で出た「この行は OK」「ここは直して」をその行に付ける (BLK-primary-20260908-0823-wish)。
+    var vKey = RV ? RV.rowKey(r) : '';
+    var v = vKey ? RV.verdictOf(e.name, vKey) : '';
+    html += '<tr class="cb-' + r.kind + '"' + (v ? ' data-verdict="' + esc(v) + '"' : '') + '>'
+      + '<td class="cb-no">' + (r.beforeNo || '') + '</td>'
+      + '<td class="cb-before">' + esc(r.before == null ? '' : r.before) + '</td>'
+      + '<td class="cb-no cb-after">' + (r.afterNo || '') + '</td>'
+      + '<td>' + esc(r.after == null ? '' : r.after) + '</td>'
+      + '<td class="cb-verdict">' + _cbVerdictButtonsHtml(e.name, vKey, v) + '</td></tr>';
+  });
+  html += '</tbody></table>';
+  // この差分がどの指摘への対応かをその場で結ぶ (BLK-primary-20260908-1703-wish)。
+  html += _cbLinkRowHtml(e.name, mapTable);
+  // なぜ直したかを 1 行だけ添える。次にこの図を開いた人に帯で出る。
+  var note = window.MA.handoverNotes ? window.MA.handoverNotes.get(e.name) : null;
+  html += '<div class="cb-note-row" data-doc-name="' + esc(e.name) + '">'
+    + '<span>申し送り</span>'
+    + '<input type="text" class="cb-note" maxlength="' + (window.MA.handoverNotes ? window.MA.handoverNotes.MAX : 200) + '"'
+    + ' placeholder="なぜ直したか (例: adc_state の Done→Configured に対応するメソッドが無かった)"'
+    + ' value="' + esc(note ? note.text : '') + '">'
+    + '<span class="cb-note-state">' + esc(note ? '保存済み' : '') + '</span>'
+    + '</div>';
+  return html;
+}
+
+// ── 会議セット (BLK-primary-20260918-0249-wish) ──────────────────────────
+// 見出しの [会議に入れる] で、今その場で見せたい図を選ぶ。選んだ図は 🎦 会議セットを
+// 押した時点でボードの中身になる (変わっていない図も、選べば並ぶ)。
+function _cbPickButtonHtml(name) {
+  var MS = window.MA.meetingSet;
+  if (!MS) return '';
+  var esc = window.MA.htmlUtils.escHtml;
+  var on = MS.has(name);
+  return '<button type="button" class="cb-pick" data-doc-name="' + esc(name) + '"'
+    + ' aria-pressed="' + (on ? 'true' : 'false') + '"'
+    + ' title="' + (on ? 'この図を会議セットから外す' : 'この図を会議セットに入れる (会議で見せる ' + MS.MIN + '〜' + MS.MAX + ' 枚)') + '">'
+    + (on ? '会議から外す' : '会議に入れる') + '</button>';
+}
+
+// 会議セット中の 1 枚。変更前 / 変更後 / 差分 をタブで切り替える。
+// 既定は「変更前」— 会議は「前はこうでした」から話し始める。
+function _msSideOf(name) {
+  var s = _msSide[name];
+  return (s === 'after' || s === 'diff') ? s : 'before';
+}
+
+function _cbSideTabsHtml(e, mapTable) {
+  var esc = window.MA.htmlUtils.escHtml;
+  var side = _msSideOf(e.name);
+  var tabs = [
+    { key: 'before', label: '変更前' + (e.markedAt ? ' (' + e.markedAt.replace('T', ' ').slice(0, 16) + ')' : ' (基準なし)') },
+    { key: 'after', label: '変更後 (今)' },
+    { key: 'diff', label: '差分' },
+  ];
+  var html = '<div class="cb-sides">';
+  tabs.forEach(function(t) {
+    html += '<button type="button" class="cb-side" data-doc-name="' + esc(e.name) + '"'
+      + ' data-side="' + t.key + '" aria-pressed="' + (side === t.key ? 'true' : 'false') + '">'
+      + esc(t.label) + '</button>';
+  });
+  html += '</div>';
+  if (side === 'diff') return html + _cbDiffBodyHtml(e, mapTable);
+  var dsl = (side === 'before') ? e.before : e.after;
+  if (!String(dsl == null ? '' : dsl)) {
+    return html + '<div class="cb-side-empty">'
+      + (side === 'before' ? 'この図には変更前 (基準) がありません。新しく作った図です。'
+                           : 'この図の中身が空です。')
+      + '</div>';
+  }
+  // 変わった行だけ色を付ける。会議では「どこが違うか」を指し示しながら読む。
+  var mark = {};
+  (Array.isArray(e.allRows) ? e.allRows : []).forEach(function(r) {
+    if (side === 'before' && r.kind === 'del' && r.beforeNo) mark[r.beforeNo] = 'del';
+    if (side === 'after' && r.kind === 'add' && r.afterNo) mark[r.afterNo] = 'add';
+  });
+  var out = '';
+  String(dsl).replace(/\r\n?/g, '\n').split('\n').forEach(function(line, i) {
+    var m = mark[i + 1];
+    var text = esc(line) + '\n';
+    out += m ? '<span class="cb-line-' + m + '">' + text + '</span>' : text;
+  });
+  return html + '<pre class="cb-side-dsl" data-doc-name="' + esc(e.name) + '"'
+    + ' data-side="' + esc(side) + '">' + out + '</pre>';
+}
+
+// 会議セットの見出し 1 行と、選ぶための一覧。
+function _renderMeetingState(board) {
+  var MS = window.MA.meetingSet;
+  var el = document.getElementById('cb-meeting-state');
+  var btn = document.getElementById('cb-meeting');
+  if (!MS) return null;
+  if (btn) btn.setAttribute('aria-pressed', _msOn ? 'true' : 'false');
+  if (el) {
+    var miss = board ? MS.missing(board.entries || []) : [];
+    el.textContent = MS.summaryText(_msOn ? miss : []);
+  }
+  return MS.list();
+}
+
+// 会議で見せる図を名前で選ぶ一覧。変わっていない図も選べる (「触っていません」を見せる)。
+function renderMeetingDocOptions() {
+  var sel = document.getElementById('cb-meeting-doc');
+  if (!sel) return null;
+  var esc = window.MA.htmlUtils.escHtml;
+  var docs = _renameDocs();
+  var keep = sel.value;
+  var html = '';
+  docs.forEach(function(d) {
+    html += '<option value="' + esc(d.name) + '">' + esc(d.name) + '</option>';
+  });
+  sel.innerHTML = html;
+  if (keep) sel.value = keep;
+  if (!sel.value) {
+    var doc = window.MA.workspace ? window.MA.workspace.getActive() : null;
+    if (doc) sel.value = doc.name;
+  }
+  return docs;
+}
+
+// 会議セットに 1 枚足す / 外す。上限に当たったらその場で言う (黙って落とさない)。
+function toggleMeetingDoc(name) {
+  var MS = window.MA.meetingSet;
+  if (!MS || !name) return null;
+  var was = MS.has(name);
+  var now = MS.toggle(name);
+  if (!was && !now) {
+    if (window.MA.toast) window.MA.toast.show(MS.fullText());
+    var el = document.getElementById('cb-meeting-state');
+    if (el) el.textContent = MS.fullText();
+    return false;
+  }
+  renderChangeBoard();
+  return now;
+}
+
+function setupMeetingSet() {
+  var MS = window.MA.meetingSet;
+  if (!MS) return;
+  var btn = document.getElementById('cb-meeting');
+  if (btn) btn.addEventListener('click', function() {
+    _msOn = !_msOn;
+    renderChangeBoard();
+    var body = document.getElementById('cb-body');
+    if (body) body.scrollTop = 0;
+  });
+  var add = document.getElementById('cb-meeting-add');
+  if (add) add.addEventListener('click', function() {
+    var sel = document.getElementById('cb-meeting-doc');
+    if (sel && sel.value) toggleMeetingDoc(sel.value);
+  });
+  var clr = document.getElementById('cb-meeting-clear');
+  if (clr) clr.addEventListener('click', function() {
+    MS.clear();
+    renderChangeBoard();
+  });
+}
+
+// 見出しの [会議に入れる] と、変更前 / 変更後 / 差分 のタブ。
+function _wireMeetingSet(body) {
+  if (!body) return;
+  var picks = body.querySelectorAll('button.cb-pick');
+  var i;
+  for (i = 0; i < picks.length; i++) {
+    (function(b) {
+      b.addEventListener('click', function() {
+        toggleMeetingDoc(b.getAttribute('data-doc-name'));
+      });
+    })(picks[i]);
+  }
+  var sides = body.querySelectorAll('button.cb-side');
+  for (i = 0; i < sides.length; i++) {
+    (function(b) {
+      b.addEventListener('click', function() {
+        _msSide[b.getAttribute('data-doc-name')] = b.getAttribute('data-side');
+        var scroll = body.scrollTop;
+        renderChangeBoard();
+        var again = document.getElementById('cb-body');
+        if (again) again.scrollTop = scroll;
+      });
+    })(sides[i]);
+  }
+}
+
 function renderChangeBoard() {
   var CB = window.MA.changeBoard;
   var body = document.getElementById('cb-body');
@@ -5080,6 +5300,8 @@ function renderChangeBoard() {
   var RV = window.MA.reviewVerdicts;
   var board = _changeBoardModel();
   if (!board) return null;
+  var _cbMeeting = _msActive();
+  _renderMeetingState(board);
 
   if (sumEl) sumEl.textContent = _cbSummaryText(board);
 
@@ -5117,6 +5339,13 @@ function renderChangeBoard() {
   }
   if (filtered) board = filtered;
 
+  if (board.entries.length === 0 && _cbMeeting) {
+    // 会議セットの図が 1 枚も見つからない (名前が変わった / フォルダから消えた)。
+    body.innerHTML = '<div class="cb-empty">会議セットに選んだ図が見つかりません ('
+      + esc(window.MA.meetingSet.list().join(', ')) + ')。'
+      + '[会議セットを空に] を押して選び直してください。</div>';
+    return board;
+  }
   if (board.entries.length === 0) {
     // 差分が消えても申し送りは残る (引き継ぎで読むのはこちら)。
     body.innerHTML = mapHtml + '<div class="cb-empty">前回保存した時点から変わった図はありません。'
@@ -5142,42 +5371,19 @@ function renderChangeBoard() {
       + '<span class="cb-count">' + esc(_cbCountText(e)) + '</span>'
       + (_cbSvg ? '<button type="button" class="cb-flip" data-side="both"'
           + ' title="この図の見せ方を 並べる → 変更前だけ → 変更後だけ と回す">切替: 並べる</button>' : '')
+      + _cbPickButtonHtml(e.name)
       + '<button type="button" class="cb-goto">この図を開く</button></div>';
     // 顧客に見せる画面は、描いた図だけを変更前後で出す (行差分も印も出さない)。
     if (_cbSvg) {
       html += _cbShowPanesHtml(e) + '</div>';
       return;
     }
-    html += '<div class="cb-cols"><span>変更前' + (e.markedAt ? ' (' + esc(e.markedAt.replace('T', ' ').slice(0, 16)) + ')' : ' (基準なし)') + '</span>'
-      + '<span>変更後 (今)</span></div>'
-      + '<table class="cb-diff"><tbody>';
-    e.rows.forEach(function(r) {
-      if (r.kind === 'gap') {
-        html += '<tr class="cb-gap"><td colspan="5">⋯ 同じ行 ' + r.count + ' 行 ⋯</td></tr>';
-        return;
-      }
-      // 会議で出た「この行は OK」「ここは直して」をその行に付ける (BLK-primary-20260908-0823-wish)。
-      var vKey = RV ? RV.rowKey(r) : '';
-      var v = vKey ? RV.verdictOf(e.name, vKey) : '';
-      html += '<tr class="cb-' + r.kind + '"' + (v ? ' data-verdict="' + esc(v) + '"' : '') + '>'
-        + '<td class="cb-no">' + (r.beforeNo || '') + '</td>'
-        + '<td class="cb-before">' + esc(r.before == null ? '' : r.before) + '</td>'
-        + '<td class="cb-no cb-after">' + (r.afterNo || '') + '</td>'
-        + '<td>' + esc(r.after == null ? '' : r.after) + '</td>'
-        + '<td class="cb-verdict">' + _cbVerdictButtonsHtml(e.name, vKey, v) + '</td></tr>';
-    });
-    html += '</tbody></table>';
-    // この差分がどの指摘への対応かをその場で結ぶ (BLK-primary-20260908-1703-wish)。
-    html += _cbLinkRowHtml(e.name, mapTable);
-    // なぜ直したかを 1 行だけ添える。次にこの図を開いた人に帯で出る。
-    var note = window.MA.handoverNotes ? window.MA.handoverNotes.get(e.name) : null;
-    html += '<div class="cb-note-row" data-doc-name="' + esc(e.name) + '">'
-      + '<span>申し送り</span>'
-      + '<input type="text" class="cb-note" maxlength="' + (window.MA.handoverNotes ? window.MA.handoverNotes.MAX : 200) + '"'
-      + ' placeholder="なぜ直したか (例: adc_state の Done→Configured に対応するメソッドが無かった)"'
-      + ' value="' + esc(note ? note.text : '') + '">'
-      + '<span class="cb-note-state">' + esc(note ? '保存済み' : '') + '</span>'
-      + '</div>';
+    // 会議セット中は 変更前 / 変更後 / 差分 をタブで切り替える (1 枚ずつ開き直さない)。
+    if (_cbMeeting) {
+      html += _cbSideTabsHtml(e, mapTable) + '</div>';
+      return;
+    }
+    html += _cbDiffBodyHtml(e, mapTable);
     html += '</div>';
   });
   // 絞り込み中は印の付いた行だけを見せる (ボードに出ていない図の申し送りは出さない)。
@@ -5190,6 +5396,7 @@ function renderChangeBoard() {
     _wireChangeBoardVerdicts(body);
     _wireChangeBoardLinks(body);
   }
+  _wireMeetingSet(body);
 
   var gotos = body.querySelectorAll('.cb-goto');
   for (var i = 0; i < gotos.length; i++) {
@@ -5452,6 +5659,7 @@ function toggleChangeBoard(open) {
   if (_cbFolderOn()) loadFolderImpact(true).then(function() { renderChangeBoard(); }, function() {});
   renderChangeBoard();
   renderChecklistDocOptions();
+  renderMeetingDocOptions();
   renderChecklistState();
   var body = document.getElementById('cb-body');
   if (body) body.scrollTop = 0;
@@ -5517,6 +5725,7 @@ function setupChangeBoard() {
   if (mapExport) mapExport.addEventListener('click', function() { writeFindingMap(); });
 
   setupHandoverChecklist();
+  setupMeetingSet();
   setupHandoverBoard();
   setupCallGraph();
 }

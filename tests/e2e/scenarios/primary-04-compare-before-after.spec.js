@@ -22,6 +22,8 @@ const DIR3 = S.dirFor(__filename) + '-hist';
 const DIR4 = S.dirFor(__filename) + '-deliv';
 // 置換を当てる前に、影響範囲の一覧で変更前後の図を見せる場面 (BLK-primary-20260917-0223)。
 const DIR6 = S.dirFor(__filename) + '-impact';
+// 会議で見せる 3〜5 枚をその場で選んで並べる場面 (BLK-primary-20260918-0249-wish)。
+const DIR7 = S.dirFor(__filename) + '-meeting';
 
 // 手順2 と同じ一括置換を当てる。手順4 が見せるのはその前後なので、
 // ここを踏まないと「変更前」がそもそも存在しない。
@@ -651,4 +653,87 @@ test('手順4 影響範囲の一覧に変更前後の図が並び、押した図
 
   await page.locator('#ri-close').click();
   await S.clearDir(page, DIR6);
+});
+
+// BLK-primary-20260918-0249-wish: 会議で見せる図はその場で 3〜5 枚選ぶ。変更サマリボードは
+// 「変わった図」を全部並べるので、見せない図が混ざり、見せたい 3 枚はタブを 1 枚ずつ開き直して
+// ⇔見比べ・±差分・▤ を往復するしかなかった。選んだ 3 枚だけを選んだ順に並べ、
+// 各図の変更前 / 変更後をその場のタブで切り替えられることを確かめる。
+test('手順4 会議で見せる 3 枚を選んで並べ、各図の変更前後をタブで切り替えられる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR7);
+  await S.clearDir(page, DIR7);
+  // 会議で見せる 3 枚と、今日変わったが会議では見せない 1 枚 (混ざる側)。
+  for (const name of ['spi_init_sequence', 'spi_state', 'driver_common_class', 'can_init_sequence']) {
+    await S.putDoc(page, DIR7, name, S.docFor(name, 'SpiDrv'));
+    await S.openFolderItem(page, name);
+  }
+
+  await bulkRename(page, 'SpiDrv', 'Spi_Driver');
+
+  await page.locator('#btn-tab-board').click();
+  await expect(page.locator('#cb-modal')).toBeVisible();
+
+  // 到達条件その1: ボードの各図の見出しから、その場で会議セットに入れられる。
+  const pickOrder = ['spi_init_sequence', 'spi_state', 'driver_common_class'];
+  async function pickFromEntry(name) {
+    const pick = page.locator('#cb-body .cb-entry[data-doc-name="' + name + '"] button.cb-pick');
+    await expect(pick).toHaveText('会議に入れる');
+    await pick.click();
+    await expect(page.locator('#cb-body .cb-entry[data-doc-name="' + name + '"] button.cb-pick'))
+      .toHaveText('会議から外す');
+  }
+  await pickFromEntry('spi_init_sequence');
+
+  // 到達条件その2: 会議で見せたい図が「今回変わっていない」ことはふつうにある
+  // (spi_state は SpiDrv_Init のような修飾名だけなので一括置換で変わらない)。
+  // 変わっていない図はボードに並ばないので、名前で選んで会議セットに入れる。
+  await expect(page.locator('#cb-body .cb-entry[data-doc-name="spi_state"]')).toHaveCount(0);
+  await page.locator('#cb-meeting-doc').selectOption('spi_state');
+  await page.locator('#cb-meeting-add').click();
+
+  await pickFromEntry('driver_common_class');
+  await expect(page.locator('#cb-meeting-state')).toContainText('会議セット 3 枚');
+
+  // 到達条件その3: 🎦 会議セットを押すと、選んだ 3 枚だけが選んだ順に並ぶ。
+  // 変わっていない spi_state も並び、会議で見せない図 (diagram1) は落ちる。
+  await page.locator('#cb-meeting').click();
+  const entries = page.locator('#cb-body .cb-entry');
+  await expect(entries).toHaveCount(3);
+  for (let i = 0; i < pickOrder.length; i++) {
+    await expect(entries.nth(i)).toHaveAttribute('data-doc-name', pickOrder[i]);
+  }
+  await expect(page.locator('#cb-body .cb-entry[data-doc-name="diagram1"]')).toHaveCount(0);
+
+  // 到達条件その4: 1 枚ごとに 変更前 / 変更後 をタブで切り替えられる。開いた時点は
+  // 「変更前」— 会議は「前はこうでした」から話し始める。
+  const first = page.locator('#cb-body .cb-entry[data-doc-name="spi_init_sequence"]');
+  await expect(first.locator('button.cb-side[data-side="before"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(first.locator('pre.cb-side-dsl')).toContainText('SpiDrv');
+  await expect(first.locator('pre.cb-side-dsl')).not.toContainText('Spi_Driver');
+
+  await first.locator('button.cb-side[data-side="after"]').click();
+  const after = page.locator('#cb-body .cb-entry[data-doc-name="spi_init_sequence"]');
+  await expect(after.locator('button.cb-side[data-side="after"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(after.locator('pre.cb-side-dsl')).toContainText('Spi_Driver');
+
+  // 切り替えは図ごとに独立する (1 枚を変更後にしても、次の図は変更前のまま話し始められる)。
+  await expect(page.locator('#cb-body .cb-entry[data-doc-name="spi_state"] button.cb-side[data-side="before"]'))
+    .toHaveAttribute('aria-pressed', 'true');
+
+  // 到達条件その5: 同じ画面のまま差分にも移れる (「どこが変わったの?」にその場で答える)。
+  await page.locator('#cb-body .cb-entry[data-doc-name="spi_state"] button.cb-side[data-side="diff"]').click();
+  await expect(page.locator('#cb-body .cb-entry[data-doc-name="spi_state"] table.cb-diff')).toHaveCount(1);
+
+  // 会議ではこの画面をそのまま映す。
+  await page.screenshot({ path: shotOut('primary-04-meeting-set.png'), fullPage: true });
+
+  // 到達条件その6: 会議セットを解くと、いつもの「変わった図を全部」に戻る
+  // (会議の後も同じボードで作業を続けられる)。
+  await page.locator('#cb-meeting').click();
+  await expect(page.locator('#cb-body .cb-entry[data-doc-name="diagram1"]')).toHaveCount(1);
+
+  await page.locator('#cb-meeting-clear').click();
+  await expect(page.locator('#cb-meeting-state')).toContainText('会議セットは空です');
+  await page.locator('#cb-close').click();
+  await S.clearDir(page, DIR7);
 });
