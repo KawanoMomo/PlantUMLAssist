@@ -47,4 +47,24 @@ test.describe('junior シーケンス 4.5: 帯の中にメッセージを足す'
     expect(arrowY).toBeLessThan(after.y + after.h);
     expect(arrowY).toBeGreaterThan(after.y);
   });
+
+  // BLK-junior-20260918-0149: 押した場所が効いたことが図の上でも分かる
+  // (選択は外れるので、跡が無いと「押しても何も起きない」に見えていた)。
+  test('押した帯の内側が図の上に残り、ピッカーはそれを隠さない', async ({ page }) => {
+    const box = await band.bandBox(page);
+    await band.clickPreviewAt(page, box.cx, box.y + box.h / 2);
+    await expect(page.locator('#seq-modal')).toBeVisible();
+    const mark = page.locator('#overlay-layer rect[data-type="band-pick"]');
+    await expect(mark).toHaveCount(1);
+    expect(await mark.getAttribute('data-zone')).toBe('inside');
+    expect(await page.locator('#overlay-layer text[data-type="band-pick"]').textContent()).toContain('帯の内側');
+    // ピッカーは押した帯を覆わない (帯と跡を見ながら選べる)。
+    const modalBox = await page.locator('#seq-modal-content').boundingBox();
+    const markBox = await mark.boundingBox();
+    expect(markBox.x + markBox.width < modalBox.x || markBox.x > modalBox.x + modalBox.width).toBe(true);
+    // 閉じれば跡も消える。
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+    await expect(mark).toHaveCount(0);
+  });
 });

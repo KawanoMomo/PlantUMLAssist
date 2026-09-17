@@ -6651,6 +6651,23 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   cursor: move;
 }
 
+/* ── 帯を押して決まった挿入先の跡 (BLK-junior-20260918-0149) ────────────────── */
+/* 帯・帯下のライフラインを押すと選択は外れるので、押した場所と「内側 / 外側」の
+   どちらに入るかを図の上に残す。ピッカーを閉じるまで出したままにする。 */
+#overlay-layer rect.band-pick {
+  fill: rgba(124, 140, 248, 0.28);
+  stroke: #7c8cf8;
+  stroke-width: 1.5;
+  pointer-events: none;
+}
+#overlay-layer text.band-pick-label {
+  fill: #7c8cf8;
+  font-size: 11px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: bold;
+  pointer-events: none;
+}
+
 /* ── Hover-to-insert guide (Sprint 9 C15) ──────────────────────────────────── */
 #hover-layer .hover-guide {
   stroke: #7c8cf8;
