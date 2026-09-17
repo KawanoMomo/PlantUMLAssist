@@ -1702,6 +1702,14 @@ function init() {
   document.getElementById('btn-open').addEventListener('click', openFile);
   document.getElementById('btn-save').addEventListener('click', saveFile);
   document.getElementById('file-input').addEventListener('change', onFilePicked);
+  var btnOpenFile = document.getElementById('btn-open-file');
+  if (btnOpenFile) btnOpenFile.addEventListener('click', openFile);
+  setupFileDrop();
+  try { renderOpenEmptyHint(); } catch (e) {}
+  editorEl.addEventListener('input', function() {
+    var h = document.getElementById('open-empty-hint');
+    if (h) h.hidden = true;
+  });
 
   // ── Settings modal (auto-save config) ────────────────────────────────
   (function setupConfigModal() {
@@ -4016,6 +4024,7 @@ function _isUntouchedDoc(doc) {
 // 戻り値は書いたかどうか。
 function writeDocToFolder(doc, fileDir) {
   if (!doc || !window.MA.workspace) return false;
+  if (_sourcePathOf(doc.id)) return false;  // 手元から開いたファイルは元の場所にだけ書く (BLK-human-20260917-0901)
   // まだ見本のままのタブは書かない (BLK-primary-20260914-2106)。
   if (_isUntouchedDoc(doc)) { _noteSaveVerify(doc, 'untouched'); return false; }
   if (_blockedFileWrite(doc.name)) {
@@ -4066,6 +4075,12 @@ function _noteSaveVerify(doc, outcome) {
 function saveActiveDoc() {
   if (!window.MA.workspace) return null;
   var doc = window.MA.workspace.updateActive({ dsl: mmdText, diagramType: currentDiagramType });
+  // BLK-human-20260917-0901: 手元から開いたファイルは保存先フォルダへ複製しない
+  // (書き戻しは手で押す保存が元のファイルへ行う)。
+  if (doc && _sourcePathOf(doc.id)) {
+    try { renderDiffBadge(); } catch (e) {}
+    return doc;
+  }
   try {
     var cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null;
     // テンプレ宣言のあるファイルには書かない (見比べのために開いた前周の完了物が、
@@ -4168,6 +4183,9 @@ function applyActiveDoc() {
   try { renderLineageBadge(); } catch (e) {}
   // 保存が届いた先も図ごとに違う (BLK-primary-20260914-2206)。
   try { renderAutoSaveStatus(); } catch (e) {}
+  // 開いたファイルの未対応記法と、起動直後の入口 (BLK-human-20260917-0901)。
+  try { renderUnsupportedPanel(); } catch (e) {}
+  try { renderOpenEmptyHint(); } catch (e) {}
 }
 
 function switchToDoc(id) {
@@ -11627,6 +11645,15 @@ function setupTabs() {
     window.MA.workspace.listFolder(dir).then(function(res) {
       var entries = (res && res.entries) || [];
       panel.textContent = '';
+      // BLK-human-20260917-0901: 保存フォルダの外にある手元の .puml を開く入口を一覧の頭に置く。
+      var openHead = document.createElement('button');
+      openHead.type = 'button';
+      openHead.className = 'folder-open-file';
+      openHead.id = 'folder-open-file';
+      openHead.textContent = '📄 ファイルを開く(.puml)';
+      openHead.title = '保存フォルダの外にある .puml を開きます (複数可・ドラッグ&ドロップでも開けます)';
+      openHead.addEventListener('click', function() { closePanel(); openFile(); });
+      panel.appendChild(openHead);
       appendRefTabs(panel);
       // BLK-primary-20260908-0103: 保存先の綴りを 1 文字誤っただけでも一覧は
       // 「図がありません」としか言わず、間違いに気づけないまま作業が止まっていた。
@@ -24735,39 +24762,257 @@ function setupNameAudit() {
   });
 }
 
+// ── 手元の .puml を開く (BLK-human-20260917-0901) ──────────────────────────
+// 入口は「📄 ファイルを開く(.puml)」(タブ列・📂 一覧の頭・起動直後の空の画面) と
+// エディタ/プレビューへのドラッグ&ドロップ。複数枚はタブで全部開く。
+// 開いたファイルの場所・文字コード・改行は doc id ごとに覚え、上書き保存は元のファイルへ
+// 同じ文字コード・改行で戻す (保存先フォルダへ複製しない。複製は別名保存で)。
+var _openedSources = {};
+
+function _openedSourceOf(docId) {
+  return (docId && _openedSources[docId]) || null;
+}
+
+function _sourcePathOf(docId) {
+  var m = _openedSourceOf(docId);
+  return (m && m.path) || '';
+}
+
 function openFile() {
-  document.getElementById('file-input').click();
+  var AB = window.MA.appBridge;
+  var input = document.getElementById('file-input');
+  if (AB && AB.isApp && AB.isApp() && window.fetch) {
+    window.fetch('/native-open', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(j) {
+        if (!j) { if (input) input.click(); return; }
+        if (j.canceled) return;
+        openSourceFiles((j.files || []).map(function(f) {
+          return { name: f.name, text: f.text, error: f.error,
+                   meta: { path: f.path, encoding: f.encoding, bom: !!f.bom, eol: f.eol } };
+        }), []);
+      })
+      .catch(function() { if (input) input.click(); });
+    return;
+  }
+  if (input) input.click();
+}
+
+// File (ブラウザの File) の並びを読んで {name, text, meta} にする。
+// pywebview のドロップは File に実際のパスを持たせてくる (pywebviewFullPath)。
+function readLocalFiles(files) {
+  var FO = window.MA.fileOpen;
+  var part = FO ? FO.partition(files) : { ok: files, skipped: [] };
+  var reads = part.ok.map(function(f) {
+    var path = String(f.pywebviewFullPath || f.path || '');
+    var viaBuf = (typeof f.arrayBuffer === 'function')
+      ? f.arrayBuffer()
+      : new Promise(function(res, rej) {
+        var fr = new FileReader();
+        fr.onload = function() { res(fr.result); };
+        fr.onerror = rej;
+        fr.readAsArrayBuffer(f);
+      });
+    return viaBuf.then(function(buf) {
+      var d = FO ? FO.decode(new Uint8Array(buf)) : { text: '', encoding: 'utf-8', bom: false, eol: 'lf' };
+      return { name: f.name, text: d.text, meta: { path: path, encoding: d.encoding, bom: d.bom, eol: d.eol } };
+    }).catch(function(e) { return { name: f.name, error: String((e && e.message) || e) }; });
+  });
+  return Promise.all(reads).then(function(items) { return { items: items, skipped: part.skipped }; });
 }
 
 function onFilePicked(e) {
-  var file = e.target.files && e.target.files[0];
-  if (!file) return;
-  var reader = new FileReader();
-  reader.onload = function(ev) {
-    window.MA.history.pushHistory();
-    var text = ev.target.result;
-    // 開いたファイルは新しいタブになる。今のタブの編集内容は残る。
-    if (window.MA.workspace) {
-      saveActiveDoc();
-      var detected = window.MA.workspace.detectType(text);
-      openExistingFile({
-        name: window.MA.workspace.sanitizeName(file.name),
-        dsl: text,
-        diagramType: (detected && modules[detected]) ? detected : currentDiagramType,
-      });
-      applyActiveDoc();
-      return;
-    }
-    mmdText = text;
+  var files = Array.prototype.slice.call((e.target && e.target.files) || []);
+  if (e.target) e.target.value = '';
+  if (!files.length) return;
+  readLocalFiles(files).then(function(r) { openSourceFiles(r.items, r.skipped); });
+}
+
+// 読んだファイルをタブで開く。最後に開いた 1 枚を前に出す。
+function openSourceFiles(items, skipped) {
+  var WS = window.MA.workspace;
+  var FO = window.MA.fileOpen;
+  var ok = (items || []).filter(function(it) { return it && !it.error; });
+  var bad = (items || []).filter(function(it) { return it && it.error; });
+  if (!ok.length) {
+    var why = bad.map(function(b) { return b.name + ': ' + b.error; })
+      .concat((skipped || []).map(function(n) { return n + ': .puml / .plantuml / .uml / .txt ではありません'; }));
+    if (why.length && window.MA.toast) window.MA.toast.show('開けませんでした — ' + why.join(' / '));
+    return [];
+  }
+  window.MA.history.pushHistory();
+  if (!WS) {
+    mmdText = ok[ok.length - 1].text;
     suppressSync = true;
     editorEl.value = mmdText;
     suppressSync = false;
     updateLineNumbers();
     isFirstRender = true;
     scheduleRefresh();
-  };
-  reader.readAsText(file);
-  e.target.value = '';
+    return [];
+  }
+  saveActiveDoc();
+  var opened = [];
+  ok.forEach(function(it) {
+    var detected = WS.detectType(it.text);
+    var type = (detected && modules[detected]) ? detected : currentDiagramType;
+    var name = WS.sanitizeName(FO ? FO.baseName(it.name) : it.name);
+    var same = WS.findByName ? WS.findByName(name) : null;
+    var samePath = same && it.meta && it.meta.path && _sourcePathOf(same.id) === it.meta.path;
+    var doc;
+    if (same && _openedSourceOf(same.id) && !samePath) {
+      // 別の場所の同名ファイルは、前に開いた方を潰さず別タブにする。
+      doc = WS.open({ name: name, dsl: it.text, diagramType: type });
+    } else {
+      doc = openExistingFile({ name: name, dsl: it.text, diagramType: type });
+    }
+    _openedSources[doc.id] = it.meta || { path: '', encoding: 'utf-8', bom: false, eol: 'lf' };
+    opened.push(doc);
+  });
+  WS.setActive(opened[opened.length - 1].id);
+  applyActiveDoc();
+  if (window.MA.toast) {
+    var msg = opened.length + ' 枚を開きました';
+    if (skipped && skipped.length) msg += ' (開かなかったもの: ' + skipped.join(', ') + ')';
+    if (bad.length) msg += ' (読めなかったもの: ' + bad.map(function(b) { return b.name; }).join(', ') + ')';
+    window.MA.toast.show(msg);
+  }
+  return opened;
+}
+
+// 未対応記法の一覧。開いたファイルのタブでだけ出す (自分で書いた図に口を出さない)。
+function renderUnsupportedPanel() {
+  var FO = window.MA.fileOpen;
+  var pane = document.getElementById('preview-pane');
+  if (!FO || !pane || !window.MA.workspace) return;
+  var panel = document.getElementById('unsupported-panel');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'unsupported-panel';
+    panel.hidden = true;
+    var header = document.getElementById('preview-pane-header');
+    if (header && header.nextSibling) pane.insertBefore(panel, header.nextSibling);
+    else pane.appendChild(panel);
+  }
+  var doc = window.MA.workspace.getActive();
+  if (!doc || !_openedSourceOf(doc.id)) { panel.hidden = true; panel.setAttribute('data-count', '0'); return; }
+  var rows = FO.unsupported(doc.dsl, doc.diagramType);
+  panel.setAttribute('data-count', String(rows.length));
+  panel.textContent = '';
+  if (!rows.length) { panel.hidden = true; return; }
+  panel.hidden = false;
+  var head = document.createElement('div');
+  head.id = 'unsupported-summary';
+  head.textContent = '⚠ ' + FO.kindLabel(doc.diagramType) + 'として読めない行が ' + rows.length
+    + ' 行あります。本文の編集とプレビューはそのまま使えます';
+  var copy = document.createElement('button');
+  copy.type = 'button';
+  copy.id = 'btn-unsupported-copy';
+  copy.textContent = '報告用に複製';
+  copy.title = '識別子・ラベル・本文・ファイル名を伏せた記法の骨格と行数だけをクリップボードに入れます (外部へは送りません)';
+  copy.addEventListener('click', function() {
+    var live = window.MA.workspace.getActive();
+    var text = FO.report(live ? (live.id === doc.id ? mmdText : live.dsl) : '', live ? live.diagramType : null);
+    var done = function() { copy.textContent = '複製しました'; copy.setAttribute('data-copied', '1'); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function() { _copyByTextarea(text); done(); });
+    } else { _copyByTextarea(text); done(); }
+  });
+  // 右上にはズームの HUD が重なるので、押す所は左端に置く。
+  head.insertBefore(copy, head.firstChild);
+  panel.appendChild(head);
+  var ul = document.createElement('ul');
+  ul.id = 'unsupported-list';
+  rows.slice(0, 100).forEach(function(r) {
+    var li = document.createElement('li');
+    li.className = 'unsupported-row';
+    li.setAttribute('data-line', String(r.line));
+    li.textContent = r.line + ' 行目: ' + String(r.text).trim().slice(0, 120);
+    ul.appendChild(li);
+  });
+  panel.appendChild(ul);
+}
+
+function _copyByTextarea(text) {
+  var ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.left = '-9999px';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); } catch (e) {}
+  document.body.removeChild(ta);
+}
+
+// 起動直後の空の画面 (見本・白紙のタブが 1 枚だけ) に入口を出す。
+function renderOpenEmptyHint() {
+  var host = document.getElementById('preview-container');
+  var WS = window.MA.workspace;
+  if (!host || !WS) return;
+  var hint = document.getElementById('open-empty-hint');
+  if (!hint) {
+    hint = document.createElement('div');
+    hint.id = 'open-empty-hint';
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.id = 'btn-open-file-empty';
+    b.textContent = '📄 ファイルを開く(.puml)';
+    b.addEventListener('click', function() { openFile(); });
+    var p = document.createElement('div');
+    p.textContent = 'またはここへ .puml をドラッグ&ドロップ (複数枚はタブで開きます)';
+    hint.appendChild(b);
+    hint.appendChild(p);
+    host.appendChild(hint);
+  }
+  var docs = WS.list ? WS.list() : [];
+  var active = WS.getActive();
+  var empty = docs.length <= 1 && !!active && !_openedSourceOf(active.id) && _isUntouchedDoc(active);
+  hint.hidden = !empty;
+}
+
+function setupFileDrop() {
+  var depth = 0;
+  function hasFiles(ev) {
+    var t = ev.dataTransfer && ev.dataTransfer.types;
+    return !!t && Array.prototype.indexOf.call(t, 'Files') >= 0;
+  }
+  document.addEventListener('dragenter', function(ev) {
+    if (!hasFiles(ev)) return;
+    depth++;
+    document.body.classList.add('file-dragging');
+  });
+  document.addEventListener('dragleave', function(ev) {
+    if (!hasFiles(ev)) return;
+    depth = Math.max(0, depth - 1);
+    if (!depth) document.body.classList.remove('file-dragging');
+  });
+  document.addEventListener('dragover', function(ev) {
+    if (!hasFiles(ev)) return;
+    ev.preventDefault();
+    if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'copy';
+  });
+  document.addEventListener('drop', function(ev) {
+    depth = 0;
+    document.body.classList.remove('file-dragging');
+    var files = Array.prototype.slice.call((ev.dataTransfer && ev.dataTransfer.files) || []);
+    if (!files.length) return;
+    ev.preventDefault();  // テキストエリアにファイル名が挿入されないように
+    readLocalFiles(files).then(function(r) { openSourceFiles(r.items, r.skipped); });
+  });
+}
+
+// 開いた元のファイルへ書き戻す。戻り値は Promise<{ok, path, error}>。
+function writeBackToSource(doc) {
+  var FO = window.MA.fileOpen;
+  var meta = _openedSourceOf(doc && doc.id);
+  if (!FO || !meta || !meta.path || !window.fetch) return Promise.resolve({ ok: false, error: '元のファイルの場所が分かりません' });
+  return window.fetch('/native-write', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(FO.writeBody(meta.path, doc.dsl, meta)),
+  }).then(function(r) {
+    return r.json().then(function(j) { return r.ok ? { ok: true, path: j.path } : { ok: false, error: j.error || ('HTTP ' + r.status) }; });
+  }).catch(function(e) { return { ok: false, error: String((e && e.message) || e) }; });
 }
 
 // BLK-primary-20260907-0823: 保存先ディレクトリを設定していても「保存」は
@@ -24850,6 +25095,21 @@ function saveFile() {
   } catch (e) {}
   if (doc && openName && doc.name !== openName) {
     doc = { id: doc.id, name: openName, diagramType: doc.diagramType, dsl: doc.dsl };
+  }
+  // BLK-human-20260917-0901: 手元から開いたファイルの上書き保存は、元のファイルへ戻す。
+  if (doc && _sourcePathOf(doc.id)) {
+    writeBackToSource(doc).then(function(res) {
+      var st = document.getElementById('status-save-result');
+      if (st) st.setAttribute('data-source-write', res.ok ? 'ok' : 'error');
+      if (res.ok) {
+        setSaveStatus('上書き保存しました: ' + res.path);
+        if (window.MA.saveDiff) window.MA.saveDiff.mark(doc.name, doc.dsl);
+      } else {
+        setSaveStatus('⚠ 元のファイルに書けませんでした: ' + res.error);
+        if (window.MA.toast) window.MA.toast.show('⚠ 元のファイルに書けませんでした: ' + res.error);
+      }
+    });
+    return;
   }
   var cfg = null;
   try { cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null; } catch (e) { cfg = null; }

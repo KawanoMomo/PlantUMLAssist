@@ -1591,6 +1591,18 @@ html, body {
 /* BLK-primary-20260908-0823-design (7a): 機能ボタンを「ツール」1 か所に畳む。
    畳んだ状態では機能ボタンがタブ列から消え、6 分類のメニューから選ぶ。 */
 #tab-bar.tools-folded .tab-tool.tool-folded { display: none; }
+/* BLK-human-20260917-0901: 手元の .puml を開く入口・ドロップ・未対応記法の一覧 */
+.folder-open-file { display: block; width: 100%; margin: 0 0 6px; padding: 6px 8px; text-align: left; font-size: 12px; cursor: pointer;
+  background: var(--bg-tertiary, #2d333b); color: var(--text-primary, #e6edf3); border: 1px solid var(--accent, #58a6ff); border-radius: 4px; }
+#open-empty-hint { position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%); z-index: 5; text-align: center;
+  padding: 16px 20px; border: 1px dashed var(--border, #444); border-radius: 8px; background: var(--bg-secondary, #1c2128); font-size: 13px; }
+#open-empty-hint[hidden] { display: none; }
+#open-empty-hint button { font-size: 14px; padding: 6px 14px; margin-bottom: 6px; cursor: pointer; }
+body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px dashed var(--accent, #58a6ff); outline-offset: -4px; }
+#unsupported-panel { font-size: 11px; padding: 6px 10px; border-bottom: 1px solid var(--border, #444); background: #2a2410; color: #e3b341; max-height: 160px; overflow: auto; }
+#unsupported-panel[hidden] { display: none; }
+#unsupported-panel ul { margin: 4px 0 0 16px; padding: 0; }
+#unsupported-panel button { font-size: 11px; margin-right: 6px; }
 /* BLK-primary-20260908-0923-design (7b): タブ列にはボタンを 1 つも置かない。
    「ツール ▾」も消し、機能の入口は Ctrl+K だけにする。 */
 #tab-bar.tools-hide-tool-btn #btn-tab-tools { display: none; }
@@ -6927,6 +6939,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <div id="tab-bar">
         <button class="tab-tool" id="btn-tab-new" title="新しい図を開く">＋</button>
         <button class="tab-tool" id="btn-tab-folder" title="保存フォルダの図を一覧">📂 一覧</button>
+        <!-- BLK-human-20260917-0901: 手元の .puml を開く入口。畳まない (tool-menu の KEEP_IN_TAB_BAR) -->
+        <button class="tab-tool" id="btn-open-file" title="手元の .puml / .plantuml / .uml / .txt を開きます (複数可)。エディタやプレビューへドラッグ&ドロップでも開けます" aria-label="ファイルを開く(.puml)">📄 開く</button>
         <!-- BLK-primary-20260908-0823-design (7a): 機能ボタンを 6 分類のメニューに畳む -->
         <button class="tab-tool" id="btn-tab-tools" aria-expanded="false" aria-controls="tool-menu"
                 title="ツールを分類から選ぶ (Ctrl+K でも同じ操作が引ける)">🧰 ツール ▾</button>
@@ -7828,7 +7842,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 </div><!-- /#app -->
 
 <!-- Hidden file input -->
-<input type="file" id="file-input" accept=".puml,.plantuml,.uml,.txt" style="display:none">
+<input type="file" id="file-input" accept=".puml,.plantuml,.uml,.txt" multiple style="display:none">
 
 <script src="src/core/html-utils.js"></script>
 <script src="src/core/dsl-utils.js"></script>
@@ -7929,6 +7943,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/delivery-review.js"></script>
 <script src="src/core/delivery-history.js"></script>
 <script src="src/core/app-bridge.js"></script>
+<script src="src/core/file-open.js"></script>
 <script src="src/core/save-prefs.js"></script>
 <script src="src/core/save-target.js"></script>
 <script src="src/core/save-redirect.js"></script>

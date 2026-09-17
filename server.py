@@ -73,6 +73,61 @@ AUTOSAVE_RESERVED = ({'con', 'prn', 'aux', 'nul'}
                      | {'lpt%d' % i for i in range(1, 10)})
 
 
+# BLK-human-20260917-0901: 手元の .puml を開いて、元のファイルへ書き戻す。
+# 文字コード (UTF-8 BOM / UTF-8 / Shift_JIS) と改行は開いたときのまま保つ
+# (改行は呼ぶ側が戻した text をそのまま書く。ここでは translate しない)。
+OPEN_FILE_EXTS = ('.puml', '.plantuml', '.uml', '.txt')
+OPEN_FILE_TYPES = ('PlantUML (*.puml;*.plantuml;*.uml;*.txt)', 'All files (*.*)')
+
+
+def decode_source_bytes(blob):
+    """バイト列を (text, encoding, bom, eol) に読む。text の改行は LF に揃える。"""
+    bom = blob.startswith(b'\xef\xbb\xbf')
+    if bom:
+        raw, enc = blob[3:].decode('utf-8', 'replace'), 'utf-8'
+    else:
+        try:
+            raw, enc = blob.decode('utf-8'), 'utf-8'
+        except UnicodeDecodeError:
+            raw, enc = blob.decode('cp932', 'replace'), 'shift_jis'
+    crlf = raw.count('\r\n')
+    lf = raw.count('\n') - crlf
+    eol = 'crlf' if crlf and crlf >= lf else 'lf'
+    return raw.replace('\r\n', '\n'), enc, bom, eol
+
+
+def read_source_file(path):
+    p = Path(str(path))
+    if p.suffix.lower() not in OPEN_FILE_EXTS:
+        raise ValueError('開けるのは .puml / .plantuml / .uml / .txt です')
+    text, enc, bom, eol = decode_source_bytes(p.read_bytes())
+    return {'path': str(p), 'name': p.name, 'text': text, 'encoding': enc, 'bom': bom, 'eol': eol}
+
+
+def write_source_file(path, text, encoding, bom):
+    """(ok, path or error)。既にある .puml 類にだけ書く (新しい場所へ複製しない)。"""
+    if not isinstance(path, str) or not path.strip():
+        return False, 'path が必要です'
+    p = Path(path)
+    if p.suffix.lower() not in OPEN_FILE_EXTS:
+        return False, '書き戻せるのは .puml / .plantuml / .uml / .txt です'
+    if not p.is_file():
+        return False, f'元のファイルが見つかりません: {p}'
+    text = '' if text is None else str(text)
+    codec = 'cp932' if str(encoding or '').lower() in ('shift_jis', 'sjis', 'cp932') else 'utf-8'
+    try:
+        blob = text.encode(codec)
+    except UnicodeEncodeError as exc:
+        return False, f'Shift_JIS で書けない文字があります: {text[exc.start:exc.end]!r}'
+    if codec == 'utf-8' and bom:
+        blob = b'\xef\xbb\xbf' + blob
+    try:
+        p.write_bytes(blob)
+    except OSError as exc:
+        return False, f'書けません: {exc}'
+    return True, str(p)
+
+
 def _version_head(text):
     """版の中身から「何の図だったか」を 1 行で言う。
 
@@ -527,6 +582,8 @@ API_INDEX = {
         {'endpoint': 'POST /pick-jar', 'summary': 'アプリ版: jar をファイルダイアログで選ぶ'},
         {'endpoint': 'POST /fetch-jar', 'summary': 'アプリ版/Windows: 公式から jar を取得する'},
         {'endpoint': 'POST /native-save', 'summary': 'アプリ版: 保存ダイアログで書き出す {fileName, text|base64}'},
+        {'endpoint': 'POST /native-open', 'summary': 'アプリ版: 開くダイアログ (複数選択) で .puml を読む → {files: [{path, name, text, encoding, bom, eol}]}'},
+        {'endpoint': 'POST /native-write', 'summary': '開いた元の .puml へ文字コードを保って書き戻す', 'request': '{path, text, encoding, bom}'},
         {'endpoint': 'GET /env', 'summary': 'Java / jar の有無など実行環境'},
         {'endpoint': 'POST /heartbeat', 'summary': '生存通知 (無音 300 秒で server は落ちる)'},
         {'endpoint': 'POST /shutdown', 'summary': '停止を予約する'},
@@ -844,6 +901,13 @@ class Handler(BaseHTTPRequestHandler):
         # アプリ版の保存はブラウザのダウンロードではなくネイティブのダイアログ。
         if self.path == '/native-save':
             return self._handle_native_save_post()
+        # BLK-human-20260917-0901: 手元の .puml を開く (アプリ版はネイティブの複数選択)
+        # と、開いた元のファイルへ文字コード・改行を保ったまま書き戻す。
+        if self.path == '/native-open':
+            return self._handle_native_open_post()
+        if self.path == '/native-write':
+            with _fs_lock:
+                return self._handle_native_write_post()
         if self.path == '/heartbeat':
             with _state_lock:
                 _last_heartbeat = time.time()
@@ -1004,6 +1068,39 @@ class Handler(BaseHTTPRequestHandler):
         except OSError as exc:
             return self._send_json(500, {'error': f'保存できません: {exc}'})
         self._send_json(200, {'path': str(target)})
+
+    # --- open local .puml (BLK-human-20260917-0901) -------------------------
+
+    def _handle_native_open_post(self):
+        """アプリ版: 開くダイアログ (複数選択) で選んだ .puml を読んで返す。Web 版は 409。"""
+        if NATIVE_DIALOG is None:
+            return self._send_json(409, {'error': 'ファイルダイアログはアプリ版だけで使えます'})
+        picker = getattr(NATIVE_DIALOG, 'open_files', None)
+        if picker is None:
+            one = NATIVE_DIALOG.open_file('.puml を開く', OPEN_FILE_TYPES)
+            picked = [one] if one else []
+        else:
+            picked = picker('.puml を開く', OPEN_FILE_TYPES)
+        if not picked:
+            return self._send_json(200, {'canceled': True, 'files': []})
+        files = []
+        for path in picked:
+            try:
+                files.append(read_source_file(path))
+            except (OSError, ValueError) as exc:
+                files.append({'path': str(path), 'name': Path(path).name, 'error': str(exc)})
+        self._send_json(200, {'files': files})
+
+    def _handle_native_write_post(self):
+        """開いた元のファイルへ書き戻す。{path, text, encoding, bom}。"""
+        data = self._read_json_object()
+        if data is None:
+            return
+        ok, result = write_source_file(data.get('path'), data.get('text'),
+                                       data.get('encoding'), data.get('bom'))
+        if not ok:
+            return self._send_json(400, {'error': result})
+        self._send_json(200, {'path': result})
 
     def _json_charset(self):
         """応答本文の文字コードを呼ぶ側の希望から決める (BLK-reviewer-20260914-1606)。
