@@ -59,12 +59,7 @@ async function clearVault(page) {
 
 async function openFolder(page) {
   await page.locator('#btn-tab-folder').click();
-  await page.waitForSelector('#folder-panel.open #folder-inv-summary');
-}
-
-async function pickComponent(page, name) {
-  await page.selectOption('#folder-inv-pick', name);
-  await page.waitForSelector('#folder-panel.open #folder-inv-summary[data-inv-component="' + name + '"]');
+  await page.waitForSelector('#folder-panel.open #folder-board-link');
 }
 
 test.describe('junior 手順 1: 前周までの最新版を開く', () => {
@@ -80,102 +75,18 @@ test.describe('junior 手順 1: 前周までの最新版を開く', () => {
     await clearDir(page).catch(() => {});
   });
 
-  test('一覧を開くと、部品ごとの図種の棚卸しが出る', async ({ page }) => {
+  // BLK-owner-20260918-0049-prune: 部品 × 6 図種の済/未は 🧩 部品ビューに寄せた。
+  // 📂 一覧には表を出さず、部品ビューへの導線だけを置く (同じ表を 3 か所で読ませない)。
+  test('📂 一覧は棚卸しの表を持たず、🧩 部品ビューへの導線だけを出す', async ({ page }) => {
     await openFolder(page);
-    const opts = await page.locator('#folder-inv-pick option').allTextContents();
-    expect(opts.some((t) => t.indexOf('GPIOドライバ') >= 0)).toBe(true);
+    await expect(page.locator('#folder-inv-pick')).toHaveCount(0);
+    await expect(page.locator('.folder-inv-row')).toHaveCount(0);
+    await expect(page.locator('#folder-board-link')).toContainText('部品ビュー');
   });
 
-  test('GPIO を選ぶと「状態遷移図が無い」が見出しで名指しされる', async ({ page }) => {
-    await openFolder(page);
-    await pickComponent(page, 'GPIOドライバ');
-    const line = page.locator('#folder-inv-summary');
-    await expect(line).toHaveClass(/inv-short/);
-    const text = await line.textContent();
-    expect(text).toContain('8 図種中 6 種あり');
-    expect(text).toContain('状態遷移図');
-    expect(text).toContain('配置図');
-  });
-
-  test('図種ごとの行に「あり / なし」が並び、なしの行にはファイル名が無い', async ({ page }) => {
-    await openFolder(page);
-    await pickComponent(page, 'GPIOドライバ');
-    const rows = page.locator('#folder-panel .folder-inv-row');
-    await expect(rows).toHaveCount(8);
-
-    const state = page.locator('.folder-inv-row[data-inv-kind="状態遷移図"]');
-    await expect(state).toHaveAttribute('data-inv-present', '0');
-    await expect(state.locator('.folder-inv-mark')).toHaveText('なし');
-    await expect(state.locator('button.folder-inv-file')).toHaveCount(0);
-
-    const seq = page.locator('.folder-inv-row[data-inv-kind="シーケンス図"]');
-    await expect(seq).toHaveAttribute('data-inv-present', '1');
-    await expect(seq.locator('button.folder-inv-file'))
-      .toHaveText('GPIOドライバ初期化シーケンス');
-  });
-
-  test('「あり」の行のファイル名を押すとその図が開く（手順 1 が完了する）', async ({ page }) => {
-    await openFolder(page);
-    await pickComponent(page, 'GPIOドライバ');
-    await page.locator('.folder-inv-row[data-inv-kind="シーケンス図"] button.folder-inv-file').click();
-    await page.waitForTimeout(600);
-    const name = await page.evaluate(() => {
-      const doc = window.MA.workspace.getActive();
-      return doc ? doc.name : '';
-    });
-    expect(name).toContain('GPIOドライバ初期化シーケンス');
-  });
-
-  // BLK-junior-20260914-1106: 同じ図種に「本番用 / 資料用」が同居すると、行の見出しの
-  // 「あり」だけではどちらが今回の対象か分からず、ボタンの文字を読み比べていた。
-  test('同じ図種に版が並ぶと、行の見出しが版を名指しする', async ({ page }) => {
-    await putFile(page, 'GPIOドライバ初期化アクティビティ(資料用)');
-    await page.waitForTimeout(300);
-    await openFolder(page);
-    await pickComponent(page, 'GPIOドライバ');
-
-    const act = page.locator('.folder-inv-row[data-inv-kind="アクティビティ図"]');
-    await expect(act).toHaveAttribute('data-inv-files', '2');
-    await expect(act.locator('.folder-inv-mark')).toHaveText('あり: 本番用 / 資料用');
-
-    // 版が並ぶ行のボタンは版そのもの。長い共通部分を読み比べない。
-    const btns = act.locator('button.folder-inv-file');
-    await expect(btns).toHaveCount(2);
-    await expect(btns.nth(0)).toHaveText('本番用');
-    await expect(btns.nth(1)).toHaveText('資料用');
-
-    // 版が 1 つだけの行は今までどおり (「あり」+ ファイル名)。
-    const seq = page.locator('.folder-inv-row[data-inv-kind="シーケンス図"]');
-    await expect(seq.locator('.folder-inv-mark')).toHaveText('あり');
-    await expect(seq.locator('button.folder-inv-file')).toHaveText('GPIOドライバ初期化シーケンス');
-
-    // 到達条件: 資料用の版をその場で開ける (手順 1 が完了する)。
-    await btns.nth(1).click();
-    await page.waitForTimeout(600);
-    const name = await page.evaluate(() => {
-      const doc = window.MA.workspace.getActive();
-      return doc ? doc.name : '';
-    });
-    expect(name).toContain('(資料用)');
-  });
-
-  test('欠けを埋めたら棚卸しが「欠けはありません」に変わる', async ({ page }) => {
-    await putFile(page, 'GPIOドライバ状態遷移');
-    await putFile(page, 'GPIOドライバ配置');
-    await page.waitForTimeout(300);
-    await openFolder(page);
-    await pickComponent(page, 'GPIOドライバ');
-    const line = page.locator('#folder-inv-summary');
-    await expect(line).toHaveClass(/inv-ok/);
-    await expect(line).toContainText('欠けはありません');
-    await expect(page.locator('.folder-inv-row[data-inv-kind="状態遷移図"]'))
-      .toHaveAttribute('data-inv-present', '1');
-  });
-
-  // BLK-junior-20260908-2203-wish: 前の周に完走して画像を出した図は、次の周が
   // 同じファイル名で保存すれば作業ファイルからは消える。庫に積んであれば
-  // 棚卸しは「あり」のままで、手順 1 はそこから前回分を開くだけで済む。
-  test('画像を書き出すと提出物庫に積まれ、作業ファイルが無くても棚卸しが「あり」になる', async ({ page }) => {
+  // 手順 1 はそこから前回分を開くだけで済む。
+  test('画像を書き出すと提出物庫に積まれ、作業ファイルが無くても庫から開ける', async ({ page }) => {
     // 前の周: GPIO 状態遷移図を書いて SVG で書き出す (= 完走の区切り)。
     await page.evaluate(() => {
       const ed = /** @type {HTMLTextAreaElement} */ (document.getElementById('editor'));
@@ -199,23 +110,16 @@ test.describe('junior 手順 1: 前周までの最新版を開く', () => {
     expect(entries[0].kind).toBe('状態遷移図');
     expect(entries[0].subject).toBe('GPIOドライバ');
 
-    // 到達条件その2: 保存フォルダに GPIO の状態遷移図は 1 枚も無いのに、
-    // 棚卸しは「あり」で、その行から庫を開ける。
+    // 到達条件その2: 保存フォルダに GPIO の状態遷移図は 1 枚も無いのに、📂 一覧から庫を開ける。
     await openFolder(page);
-    await pickComponent(page, 'GPIOドライバ');
-    const state = page.locator('.folder-inv-row[data-inv-kind="状態遷移図"]');
-    await expect(state).toHaveAttribute('data-inv-present', '1');
-    await expect(state).toHaveAttribute('data-inv-source', 'vault');
-    await expect(state.locator('button.folder-inv-file')).toHaveCount(0);
-    await state.locator('button.folder-inv-vault').click();
+    await page.locator('#btn-vault').click();
 
-    // 到達条件その3: 部品 × 図種で絞られた庫が開き、その版を開ける (手順 1 の完了)。
+    // 到達条件その3: 庫が開き、その版を開ける (手順 1 の完了)。
     await page.waitForSelector('#vault-modal', { state: 'visible' });
     await page.waitForTimeout(500);
     const rows = page.locator('#vault-body tr.vault-row');
     await expect(rows).toHaveCount(1);
     await expect(rows.first()).toHaveAttribute('data-kind', '状態遷移図');
-    await expect(page.locator('#vault-body tr.vault-row td.vault-back').first()).toHaveText('最新');
     await rows.first().locator('button.vault-open').click();
     await page.waitForTimeout(900);
     const opened = await page.evaluate(() => {
@@ -248,14 +152,6 @@ test.describe('junior 手順 1: 前周までの最新版を開く', () => {
     expect(entries.length).toBe(1);
   });
 
-  test('図種が名前から分からない図は「なし」に数えず別に出す', async ({ page }) => {
-    await openFolder(page);
-    await pickComponent(page, 'GPIOドライバ');
-    // diagram1 は GPIO の欠けとして数えられていない (GPIO は 6/8 のまま)。
-    await expect(page.locator('#folder-inv-summary')).toHaveAttribute('data-inv-have', '6');
-    await page.selectOption('#folder-inv-pick', { index: 0 });
-    await expect(page.locator('#folder-inv-summary')).toContainText('部品を選ぶ');
-  });
 });
 
 // BLK-junior-20260909-0303: 開こうとした図が実データにも先輩側にも無いときは、
@@ -966,24 +862,6 @@ test.describe('junior 手順 1: 指摘が指す版が名指しで開く', () => 
       .toHaveAttribute('data-note-hit', 'family');
   });
 
-  test('図種の枠に版が 2 つ並んでも、開くべき 1 枚が光っている', async ({ page }) => {
-    await page.locator('#btn-tab-peek').click();
-    await page.waitForSelector('#peek-modal');
-    await page.locator('#peek-note-toggle').click();
-    await page.waitForSelector('#peek-note .note-finding');
-    await page.locator('#peek-note .note-finding').first().click();
-    await page.waitForTimeout(400);
-    await page.locator('#peek-close').click();
-
-    await S1.openFolder(page);
-    await page.selectOption('#folder-inv-pick', { index: 1 });
-    const row = page.locator('#folder-panel .folder-inv-row[data-inv-kind="アクティビティ図"]');
-    await expect(row).toHaveAttribute('data-note-kind-hit', '1');
-    await expect(row.locator('[data-inv-file="' + VAR_MATERIAL + '"]'))
-      .toHaveAttribute('data-note-hit', 'target');
-    await expect(row.locator('[data-inv-file="' + VAR_PLAIN + '"]'))
-      .toHaveAttribute('data-note-hit', 'family');
-  });
 });
 
 // BLK-junior-20260914-1306-wish: 9 周目の場面は「先輩の図の変更を自分の図に取り込む」。
@@ -1248,7 +1126,7 @@ const MTX_STATE = ['@startuml', '[*] --> Ready', 'Ready --> Busy : Gpio_Init', '
 const MTX_CLASS = ['@startuml', 'class Gpio_Driver {', '  + Gpio_Init() : void', '}', '@enduml'].join('\n');
 const MTX_COMPONENT = ['@startuml', 'component Gpio_Driver', 'component Hw_Ctrl', '@enduml'].join('\n');
 
-test.describe('junior 手順 1〜2: 題材ごとに 6 図種の対応要否を 1 画面で見る', () => {
+test.describe('junior 手順 1〜2: 部品ビューの進捗帯で 6 図種の着手先を見る', () => {
   test.beforeEach(async ({ page }) => {
     await S1.bootWithSaveDir(page, MTX_MINE);
     await S1.clearDir(page, MTX_MINE);
@@ -1265,91 +1143,45 @@ test.describe('junior 手順 1〜2: 題材ごとに 6 図種の対応要否を 1
     await page.waitForSelector('#btn-tab-peek');
   });
 
-  test('題材を選ぶと 6 図種すべての対応要否がその場で並ぶ', async ({ page }) => {
-    await page.locator('#btn-tab-peek').click();
+  // BLK-owner-20260918-0049-prune: 👀 他フォルダの対応要否の表と 📂 一覧の棚卸しを、
+  // 🧩 部品ビューの進捗帯に統合した。着手先の特定 (junior 手順 1) はここで済む。
+  test('📂 一覧の導線から部品ビューが開き、帯がまだ無い図種と対応不要の図種を名指しする', async ({ page }) => {
+    await page.locator('#btn-tab-folder').click();
+    await page.waitForSelector('#folder-panel.open #folder-board-link');
+    await page.locator('#folder-board-link').click();
     await page.waitForSelector('#peek-modal');
-    await page.waitForSelector('#peek-matrix .pkm-row');
+    await page.waitForSelector('#peek-board #peek-card-todo');
+    await page.locator('#peek-board-part').selectOption('gpio');
+    await page.waitForTimeout(800);
 
-    // 題材を選ぶ (台本の「GPIO を選ぶと」に当たる 1 操作)。
-    await page.locator('#peek-subject').selectOption('gpio');
-    await page.waitForTimeout(300);
+    // 👀 他フォルダに表は残っていない (同じ判定を 2 か所で読ませない)。
+    await expect(page.locator('#peek-matrix')).toHaveCount(0);
 
-    // 到達条件その1: 6 図種ぶんの行が必ず出る (自分にも先輩にも無い図種を落とさない)。
-    expect(await page.locator('#peek-matrix .pkm-row').count()).toBe(6);
-    await expect(page.locator('#peek-subject')).toHaveValue('gpio');
-
-    // 到達条件その2: 図種ごとに、この周ですることが向きごとに分かる。
-    await expect(page.locator('#peek-matrix .pkm-row[data-kind="state"]'))
-      .toHaveAttribute('data-state', 'check');
-    await expect(page.locator('#peek-matrix .pkm-row[data-kind="component"]'))
-      .toHaveAttribute('data-state', 'mine-missing');
-    await expect(page.locator('#peek-matrix .pkm-row[data-kind="usecase"]'))
-      .toHaveAttribute('data-state', 'no-model');
-
-    // 到達条件その3: 残りが何図種あるかを見出しが先に言う (周が来るまで待たない)。
-    await expect(page.locator('#peek-matrix-summary')).toContainText('GPIO: 6 図種のうち');
-    await expect(page.locator('#peek-matrix-summary')).toContainText('未確認 2');
-    await expect(page.locator('#peek-matrix-summary')).toContainText('自分に無し 1');
-
-    // 到達条件その4: その行から先輩の 1 枚をそのまま開ける (一覧を目で探し直さない)。
-    await page.locator('#peek-matrix .pkm-row[data-kind="component"] .pkm-open').click();
-    await page.waitForTimeout(1200);
-    await expect(page.locator('#peek-title')).toContainText('gpio_component');
+    const todo = page.locator('#peek-card-todo');
+    // 先輩にあって自分に無い図種は「未」として名指しされる。
+    await expect(todo).toHaveAttribute('data-missing', '1');
+    await expect(todo.locator('.has-todo [data-todo-kind="component"]')).toHaveCount(1);
+    // 先輩にも無い図種は着手先に混ぜず、対応不要 (手本なし) に分ける。
+    await expect(todo).toHaveAttribute('data-not-needed', '2');
+    await expect(todo.locator('.not-needed [data-todo-kind="usecase"]')).toHaveCount(1);
+    await expect(todo.locator('.not-needed [data-todo-kind="activity"]')).toHaveCount(1);
+    await expect(todo).toContainText('対応不要（手本なし）');
+    // 自分にある図種は名指ししない。
+    await expect(todo.locator('[data-todo-kind="state"]')).toHaveCount(0);
   });
 
-  // BLK-junior-20260914-1906-wish: 担当は GPIO だけではない (UART / CAN / TIMER)。
-  // 題材を選び直して 6 図種ずつ確かめる周回をやめ、部品 × 図種を 1 枚の表で出す。
-  test('すべての部品を選ぶと、部品 × 図種の表が 1 枚で出る', async ({ page }) => {
-    // UART は自分に 1 枚も無く、先輩に 2 枚ある (GPIO より残りが多い部品)。
-    await S1.putDoc(page, MTX_SENIOR, 'uart_state', MTX_STATE);
-    await S1.putDoc(page, MTX_SENIOR, 'uart_class', MTX_CLASS);
-    await S1.putDoc(page, MTX_MINE, 'uart_init_sequence', MTX_SEQ);
-    await page.reload();
-    await page.waitForSelector('#btn-tab-peek');
+  test('自分の欄で図種を作ると、その図種は帯の「未」から消える', async ({ page }) => {
+    await S1.putDoc(page, MTX_MINE, 'gpio_component', MTX_COMPONENT);
     await page.locator('#btn-tab-peek').click();
     await page.waitForSelector('#peek-modal');
-    await page.waitForSelector('#peek-matrix .pkm-head');
-
-    // 選ぶのは 1 回だけ (部品ごとに選び直さない)。
-    await page.locator('#peek-subject').selectOption('*');
-    await page.waitForSelector('#peek-matrix-grid');
-
-    // 到達条件その1: 担当している部品が全部行になり、横に 6 図種が並ぶ。
-    const rows = page.locator('#peek-matrix-grid .pkm-grow');
-    await expect(page.locator('.pkm-grow[data-subject="gpio"]')).toHaveCount(1);
-    await expect(page.locator('.pkm-grow[data-subject="uart"]')).toHaveCount(1);
-    await expect(page.locator('#peek-matrix-grid th[data-kind]')).toHaveCount(6);
-    await expect(page.locator('.pkm-grow[data-subject="gpio"] .pkm-cell')).toHaveCount(6);
-
-    // 到達条件その2: 残りの多い部品が上に来る (次に着手する順に並ぶ)。
-    await expect(rows.first()).toHaveAttribute('data-subject', 'gpio');
-    await expect(rows.first()).toHaveAttribute('data-todo', '3');
-
-    // 到達条件その3: セルがその組の対応要否を言う。
-    await expect(page.locator('.pkm-grow[data-subject="gpio"] .pkm-cell[data-kind="component"]'))
-      .toHaveAttribute('data-state', 'mine-missing');
-    await expect(page.locator('.pkm-grow[data-subject="uart"] .pkm-cell[data-kind="state"]'))
-      .toHaveAttribute('data-state', 'mine-missing');
-    await expect(page.locator('#peek-matrix-summary')).toContainText('図種: 残り');
-    await expect(page.locator('#peek-matrix-next')).toContainText('GPIO');
-    await expect(page.locator('#peek-matrix-legend')).toContainText('自分に無し');
-
-    // 到達条件その4: 表のセルから先輩の 1 枚をそのまま開ける (部品を選び直さない)。
-    await page.locator('.pkm-grow[data-subject="uart"] .pkm-cell[data-kind="class"]').click();
-    await page.waitForTimeout(1200);
-    await expect(page.locator('#peek-title')).toContainText('uart_class');
-  });
-
-  test('部品名を押せば、その部品だけの 6 行に戻れる', async ({ page }) => {
-    await page.locator('#btn-tab-peek').click();
-    await page.waitForSelector('#peek-modal');
-    await page.waitForSelector('#peek-matrix .pkm-head');
-    await page.locator('#peek-subject').selectOption('*');
-    await page.waitForSelector('#peek-matrix-grid');
-    await page.locator('.pkm-grow[data-subject="gpio"] .pkm-gname').click();
-    await page.waitForTimeout(300);
-    await expect(page.locator('#peek-subject')).toHaveValue('gpio');
-    expect(await page.locator('#peek-matrix .pkm-row').count()).toBe(6);
+    await page.waitForSelector('#peek-files');
+    await page.locator('#peek-board-toggle').click();
+    await page.waitForSelector('#peek-board #peek-card-todo');
+    await page.locator('#peek-board-part').selectOption('gpio');
+    await page.waitForTimeout(800);
+    const todo = page.locator('#peek-card-todo');
+    await expect(todo).toHaveAttribute('data-missing', '0');
+    await expect(todo.locator('.has-todo')).toHaveCount(0);
   });
 });
 

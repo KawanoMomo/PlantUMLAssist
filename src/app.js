@@ -9689,13 +9689,8 @@ function verifyPeekSvg() {
     });
 }
 
-// ── 題材 × 図種のマトリクス (BLK-junior-20260914-1806-wish) ────────────────
-// 図種を 1 つずつ担当する進め方だと、👀 他フォルダでの対応要否の確認が
-// 6 周にまたがって 1 枚ずつになる。題材を選べば 6 図種ぶんの結論がここに出る。
-function _kmEls() {
-  return { host: document.getElementById('peek-matrix') };
-}
-
+// BLK-owner-20260918-0049-prune: 題材 × 図種の表は 🧩 部品ビューの進捗帯に寄せた。
+// 自分の一覧 (_kmMine) は部品ビューと参照タブが使う。
 // 自分のフォルダの一覧。控え (@peek 行) を読むので本文も一緒に取る。
 function loadKindMatrixMine() {
   var dir = _wsFileDir();
@@ -9705,171 +9700,6 @@ function loadKindMatrixMine() {
       _kmMine = (data && Array.isArray(data.entries)) ? data.entries : [];
       return _kmMine;
     }).catch(function() { _kmMine = []; return _kmMine; });
-}
-
-function renderKindMatrix() {
-  var KM = window.MA.kindMatrix;
-  var el = _kmEls();
-  if (!KM || !el.host) return;
-  el.host.textContent = '';
-  if (!_peekDir || !_peekEntries.length) { el.host.hidden = true; return; }
-  el.host.hidden = false;
-
-  var subs = KM.subjects(_kmMine, _peekEntries);
-  if (!subs.length) { el.host.hidden = true; return; }
-  // 既定の題材は「いま開いている自分の図」の題材。今読んでいるものの続きから出す。
-  // BLK-junior-20260914-1906-wish: ALL_SUBJECTS を選ぶと部品をまたいだ表になる。
-  if (_kmSubject !== KM_ALL && (!_kmSubject || subs.indexOf(_kmSubject) < 0)) {
-    var doc = null;
-    try { doc = window.MA.workspace ? window.MA.workspace.getActive() : null; } catch (e) {}
-    var mine = doc ? KM.subjectOf(doc.name) : '';
-    _kmSubject = (mine && subs.indexOf(mine) >= 0) ? mine : subs[0];
-  }
-  var who = window.MA.peekFolder ? window.MA.peekFolder.baseName(_peekDir) : _peekDir;
-  var all = _kmSubject === KM_ALL ? KM.scanAll(_kmMine, _peekEntries, who) : null;
-  var sc = all ? null : KM.scan(_kmSubject, _kmMine, _peekEntries, who);
-
-  var head = document.createElement('div');
-  head.className = 'pkm-head';
-  var sel = document.createElement('select');
-  sel.id = 'peek-subject';
-  sel.title = '題材を選ぶと、その題材の 6 図種すべての対応要否がこの場に出る'
-    + '（すべての部品: 部品 × 図種を 1 枚の表で出す）';
-  var allOpt = document.createElement('option');
-  allOpt.value = KM_ALL;
-  allOpt.textContent = 'すべての部品';
-  if (_kmSubject === KM_ALL) allOpt.selected = true;
-  sel.appendChild(allOpt);
-  subs.forEach(function(name) {
-    var o = document.createElement('option');
-    o.value = name;
-    o.textContent = name.toUpperCase();
-    if (name === _kmSubject) o.selected = true;
-    sel.appendChild(o);
-  });
-  sel.addEventListener('change', function() {
-    _kmSubject = sel.value;
-    renderKindMatrix();
-  });
-  head.appendChild(sel);
-  var sum = document.createElement('span');
-  sum.id = 'peek-matrix-summary';
-  sum.className = (all ? all.todo : sc.todo) ? 'has-todo' : '';
-  sum.textContent = all ? KM.summaryAll(all) : KM.summary(sc);
-  sum.title = who + ' と自分の保存フォルダを、'
-    + (all ? '部品ごとに 6 図種ぶん' : '題材ごとに 6 図種ぶん') + 'まとめて突き合わせた結果です';
-  head.appendChild(sum);
-  el.host.appendChild(head);
-
-  if (all) { _kmRenderGrid(el.host, all, who); return; }
-
-  sc.rows.forEach(function(r) {
-    var row = document.createElement('div');
-    row.className = 'pkm-row';
-    row.setAttribute('data-kind', r.kind);
-    row.setAttribute('data-state', r.state);
-    var k = document.createElement('span');
-    k.className = 'pkm-kind';
-    k.textContent = r.label;
-    row.appendChild(k);
-    var mark = document.createElement('span');
-    mark.className = 'pkm-mark';
-    mark.textContent = r.mark;
-    mark.title = KM.rowTitle(r, who);
-    row.appendChild(mark);
-    var cnt = document.createElement('span');
-    cnt.className = 'pkm-count';
-    cnt.textContent = '相手 ' + r.theirCount + ' / 自分 ' + r.mineCount;
-    row.appendChild(cnt);
-    var target = KM.openTarget(r);
-    if (target) {
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'pkm-open';
-      b.setAttribute('data-open', target);
-      b.textContent = '開く';
-      b.title = target + ' を読むだけで開く';
-      b.addEventListener('click', function(ev) {
-        ev.stopPropagation();
-        showPeekFile(target);
-      });
-      row.appendChild(b);
-    }
-    el.host.appendChild(row);
-  });
-}
-
-// 部品 × 図種の表 (BLK-junior-20260914-1906-wish)。縦が部品、横が 6 図種で、
-// セルの印がその組の対応要否。部品を選び直す往復をここで 1 回にする。
-function _kmRenderGrid(host, all, who) {
-  var KM = window.MA.kindMatrix;
-  var tbl = document.createElement('table');
-  tbl.id = 'peek-matrix-grid';
-  tbl.className = 'pkm-grid';
-
-  var hr = document.createElement('tr');
-  var corner = document.createElement('th');
-  corner.textContent = '部品';
-  hr.appendChild(corner);
-  all.kinds.forEach(function(k) {
-    var th = document.createElement('th');
-    th.setAttribute('data-kind', k.kind);
-    th.textContent = k.label;
-    hr.appendChild(th);
-  });
-  tbl.appendChild(hr);
-
-  all.rows.forEach(function(sc) {
-    var tr = document.createElement('tr');
-    tr.className = 'pkm-grow';
-    tr.setAttribute('data-subject', sc.subject);
-    tr.setAttribute('data-todo', String(sc.todo));
-    var name = document.createElement('th');
-    name.className = 'pkm-gname';
-    name.textContent = sc.subject.toUpperCase();
-    name.title = KM.summary(sc);
-    // 部品名を押すと、その部品だけの 6 行 (今までの画面) に切り替わる。
-    name.addEventListener('click', function() {
-      _kmSubject = sc.subject;
-      renderKindMatrix();
-    });
-    tr.appendChild(name);
-    sc.rows.forEach(function(r) {
-      var td = document.createElement('td');
-      td.className = 'pkm-cell';
-      td.setAttribute('data-kind', r.kind);
-      td.setAttribute('data-state', r.state);
-      td.textContent = KM.cellMark(r);
-      td.title = sc.subject.toUpperCase() + ' / ' + r.label + ' — ' + KM.rowTitle(r, who);
-      var target = KM.openTarget(r);
-      if (target) {
-        td.classList.add('pkm-can-open');
-        td.setAttribute('data-open', target);
-        td.addEventListener('click', function(ev) {
-          ev.stopPropagation();
-          showPeekFile(target);
-        });
-      }
-      tr.appendChild(td);
-    });
-    tbl.appendChild(tr);
-  });
-  host.appendChild(tbl);
-
-  var next = KM.nextCell(all);
-  var foot = document.createElement('div');
-  foot.id = 'peek-matrix-next';
-  foot.className = 'pkm-foot';
-  foot.textContent = next
-    ? '次に見るのは ' + next.subject.toUpperCase() + ' の ' + KM.kindLabel(next.kind) + '図です'
-    : '残っている組はありません';
-  host.appendChild(foot);
-
-  var leg = document.createElement('div');
-  leg.id = 'peek-matrix-legend';
-  leg.className = 'pkm-foot';
-  leg.textContent = KM.legend();
-  host.appendChild(leg);
 }
 
 // ── 部品ビュー (BLK-junior-20260915-0606-wish) ─────────────────────────────
@@ -10126,7 +9956,55 @@ function _pcStrip(card) {
     });
   }
   box.appendChild(note);
+  box.appendChild(_pcTodo());
   return box;
+}
+
+// BLK-owner-20260918-0049-prune: 📂 一覧の棚卸しと 👀 他フォルダの対応要否の表をここに統合。
+// まだ無い図種を名指しし、先輩にも無い図種は「対応不要（手本なし）」として分けて出す
+// (無いものを全部赤くすると、作らなくてよい図まで着手先に見える)。
+function _pcTodo() {
+  var KM = window.MA.kindMatrix;
+  var line = document.createElement('div');
+  line.id = 'peek-card-todo';
+  line.className = 'pc-todo';
+  if (!KM || !_pbPart) return line;
+  var who = window.MA.peekFolder ? window.MA.peekFolder.baseName(_peekDir) : '相手';
+  var sc = KM.scan(_pbPart, _kmMine, _peekEntries, who);
+  var miss = [];
+  var skip = [];
+  sc.rows.forEach(function(r) {
+    if (r.mineCount) return;
+    if (r.state === 'no-model' || r.state === 'noted') skip.push(r);
+    else miss.push(r);
+  });
+  line.setAttribute('data-missing', String(miss.length));
+  line.setAttribute('data-not-needed', String(skip.length));
+  function group(label, rows, cls) {
+    var g = document.createElement('span');
+    g.className = 'pc-todo-group ' + cls;
+    g.appendChild(document.createTextNode(label + ' ' + rows.length + ' 図種: '));
+    rows.forEach(function(r, n) {
+      if (n) g.appendChild(document.createTextNode('・'));
+      var k = document.createElement('span');
+      k.className = 'pc-todo-kind';
+      k.setAttribute('data-todo-kind', r.kind);
+      k.setAttribute('data-state', r.state);
+      k.textContent = r.label;
+      k.title = KM.rowTitle(r, who);
+      g.appendChild(k);
+    });
+    line.appendChild(g);
+  }
+  if (miss.length) group('未', miss, 'has-todo');
+  if (skip.length) group('対応不要（手本なし）', skip, 'not-needed');
+  if (!miss.length && !skip.length) line.textContent = '6 図種そろっています';
+  return line;
+}
+
+// 📂 一覧の導線から来たとき: 👀 他フォルダを開き、部品ビューに切り替える。
+function openPartBoard() {
+  return openPeekFolder().then(function() { return setPartBoardMode(true); });
 }
 
 // 要直しの図種を押したら、その行の自分の欄に入る (探し直さずに直し始める)。
@@ -10268,7 +10146,6 @@ function selectPeekDir(dir) {
   _peekScan = null;
   _peekChanges = null;
   _peekChangedOnly = false;
-  renderKindMatrix();
   renderPeekDirs();
   renderPeekFiles();
   // 名前と判定を同時に取る。判定を後追いにすると、印の無い一覧が先に出て
@@ -10287,8 +10164,7 @@ function selectPeekDir(dir) {
     renderPeekFiles();
     // 6 図種ぶんの対応要否は、フォルダを選んだ時点で出す (図を 1 枚開くまで待たせない)。
     loadKindMatrixMine().then(function() {
-      renderKindMatrix();
-      // 部品ビューを出したままフォルダを選び直したら、その相手で組み直す。
+          // 部品ビューを出したままフォルダを選び直したら、その相手で組み直す。
       if (_pbOn) selectPartBoardPart(_pbPart);
     });
     // 1 枚目をそのまま出す。選んだ後に「どれか押す」を挟むと、読むだけの用でも
@@ -11270,7 +11146,6 @@ function setupTabs() {
   // BLK-junior-20260908-2003-wish: 棚卸しで見ている部品。null は「まだ選んでいない」で、
   // このときだけ今開いている図の部品を自動で選ぶ。'' は「選択を外した」であり、
   // 自動選択で埋め直さない (外したのに別の部品が出ると、見ている棚卸しを取り違える)。
-  var _invPick = null;
   // BLK-junior-20260908-2003: 図名 → 上書き前に控えてある版の数と、本体がもう
   // 無いのに版だけ残っている図。server が一覧と同じ呼び出しで返す。
   var versionCounts = {};
@@ -13862,167 +13737,22 @@ function setupTabs() {
     host.appendChild(bar);
   }
 
-  // BLK-junior-20260908-2003-wish: 部品の図種の棚卸し。
-  // 資料化の周は「前周までに作った状態遷移図を開く」から始まるのに、その図が
-  // 実データに残っていないことがある。今は一覧のファイル名を読み比べて初めて
-  // 「無い」に気付くので、部品を選ぶと図種ごとに「あり (ファイル名) / なし」を
-  // 並べ、欠けを周の頭で言い切る。「なし」の行は開くものが無いのだから、
-  // ファイル名のボタンも出さない (押せないボタンで探させない)。
+  // BLK-owner-20260918-0049-prune: 部品 × 6 図種の済/未は 🧩 部品ビューに寄せた
+  // (📂 一覧・👀 他フォルダ・🧩 部品ビューの 3 か所で同じ表を読ませない)。
+  // ここに残すのは、そこへ 1 押しで行く導線だけ。
   function appendInventorySection(host) {
-    var CI = window.MA.componentInventory;
-    if (!CI) return;
-    // BLK-junior-20260908-2203-wish: 作業ファイルが上書きで消えていても、
-    // 提出物庫に積んであれば「あり」に数える (提出済みの図種を赤くしない)。
-    var records = CI.build(folderNames, _vaultRows);
-
-    var bar = document.createElement('div');
-    bar.className = 'folder-inv-bar';
-    var pick = document.createElement('select');
-    pick.className = 'folder-inv-pick';
-    pick.id = 'folder-inv-pick';
-    pick.title = '部品を選ぶと、その部品の図種ごとの有無が出ます';
-    var none = document.createElement('option');
-    none.value = '';
-    none.textContent = records.length ? '部品を選ぶ…' : '部品を判別できる図がありません';
-    pick.appendChild(none);
-    records.forEach(function(r) {
-      var o = document.createElement('option');
-      o.value = r.component;
-      o.textContent = r.component + '（' + r.have + '/' + r.total + '）';
-      pick.appendChild(o);
-    });
-    // 選び直させない: まだ一度も選んでいなければ、今開いている図の部品を出す。
-    if (_invPick === null) {
-      var doc = window.MA.workspace ? window.MA.workspace.getActive() : null;
-      var auto = CI.pickFor(records, doc ? doc.name : '');
-      _invPick = auto ? auto.component : '';
-    }
-    var rec = _invPick ? CI.pick(records, _invPick) : null;
-    if (!rec) _invPick = '';
-    pick.value = _invPick;
-    pick.addEventListener('change', function(ev) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'folder-board-link';
+    b.id = 'folder-board-link';
+    b.textContent = '🧩 部品ビューで開く（部品ごとの 6 図種の済/未）';
+    b.title = '部品を選ぶと、6 図種のうちまだ無い図種と対応不要の図種が進捗の帯に出ます';
+    b.addEventListener('click', function(ev) {
       ev.stopPropagation();
-      _invPick = pick.value;
-      renderFolderPanel();
+      closePanel();
+      openPartBoard();
     });
-    bar.appendChild(pick);
-
-    var copy = document.createElement('button');
-    copy.type = 'button';
-    copy.className = 'folder-inv-copy';
-    copy.id = 'folder-inv-copy';
-    copy.textContent = '棚卸しを控える';
-    copy.title = '図種ごとの有無の表をクリップボードに写す。周の頭のメモにそのまま貼れます';
-    copy.disabled = !rec;
-    copy.addEventListener('click', function(ev) {
-      ev.stopPropagation();
-      if (!rec) return;
-      var text = CI.text(rec);
-      var done = function() { if (window.MA.toast) window.MA.toast.show(rec.component + ' の棚卸しを控えました'); };
-      try {
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(text).then(done, done);
-          return;
-        }
-      } catch (e) {}
-      done();
-    });
-    bar.appendChild(copy);
-    host.appendChild(bar);
-
-    var line = document.createElement('div');
-    line.className = 'folder-inv-summary ' + CI.summaryClass(rec);
-    line.id = 'folder-inv-summary';
-    if (rec) {
-      line.setAttribute('data-inv-component', rec.component);
-      line.setAttribute('data-inv-have', String(rec.have));
-      line.setAttribute('data-inv-total', String(rec.total));
-      line.setAttribute('data-inv-missing', String(rec.missing.length));
-    }
-    line.textContent = CI.summary(rec);
-    host.appendChild(line);
-    if (!rec) return;
-
-    // 8 行は 📂 一覧 (max-height 240px) を食い尽くすので、棚卸しは自前で
-    // スクロールする。図の一覧まで下ろすのに 8 行ぶん送らせない。
-    var rowsHost = document.createElement('div');
-    rowsHost.className = 'folder-inv-rows';
-    host.appendChild(rowsHost);
-
-    rec.rows.forEach(function(r) {
-      var row = document.createElement('div');
-      row.className = 'folder-inv-row ' + (r.present ? 'inv-have' : 'inv-miss');
-      row.setAttribute('data-inv-kind', r.kind);
-      row.setAttribute('data-inv-present', r.present ? '1' : '0');
-      var kind = document.createElement('span');
-      kind.className = 'folder-inv-kind';
-      kind.textContent = r.kind;
-      row.appendChild(kind);
-      var mark = document.createElement('span');
-      mark.className = 'folder-inv-mark';
-      // BLK-junior-20260914-1106: 同じ図種に版が 2 つ以上並ぶ行は、「あり」ではなく
-      // 並んでいる版を名指しする (どれが今回の対象かをボタンの文字から読み比べない)。
-      mark.textContent = CI.markText(r);
-      row.appendChild(mark);
-      row.setAttribute('data-inv-variants', CI.variantsOf(r).join('/'));
-      row.setAttribute('data-inv-files', String(r.files.length));
-      row.setAttribute('data-inv-source', r.source || '');
-      // 作業ファイルがもう無く、庫にしか残っていない図種。押せばその提出物を開く。
-      // ここでファイル名のボタンだけを出すと、「あり」なのに開けない行になる。
-      if (r.vault && r.vault.length) {
-        var vb = document.createElement('button');
-        vb.type = 'button';
-        vb.className = 'folder-inv-vault';
-        vb.setAttribute('data-inv-vault-kind', r.kind);
-        vb.textContent = '提出物庫 ' + r.vault.length + ' 件';
-        vb.title = r.kind + ' の提出物（最新 ' + r.vault[0].label + '）を開く';
-        vb.addEventListener('click', function(ev) {
-          ev.stopPropagation();
-          // 庫の行が持っている綴りをそのまま渡す (棚卸しの部品名は
-          // ファイル名から切った形なので、庫の絞り込みに一致しないことがある)。
-          _vaultSubject = r.vault[0].subject;
-          _vaultKind = r.kind;
-          closePanel();
-          toggleVault(true);
-        });
-        row.appendChild(vb);
-      }
-      r.files.forEach(function(f) {
-        var b = document.createElement('button');
-        b.type = 'button';
-        b.className = 'folder-inv-file';
-        b.setAttribute('data-inv-file', f);
-        b.setAttribute('data-inv-variant', CI.variantLabel(f));
-        // 版が並ぶ行では、共通部分の長いファイル名ではなく版そのものを出す。
-        b.textContent = CI.fileLabel(r, f);
-        // BLK-junior-20260914-1106-wish: そのうち今回の指摘が指す 1 枚を光らせる
-        // (版が読めても、今日の対象がどれかは指摘を読まないと決まらない)。
-        var hit = noteHitOf(f);
-        if (hit) {
-          b.classList.add('folder-note-hit');
-          b.setAttribute('data-note-hit', hit);
-          if (hit === 'target') b.classList.add('folder-note-target');
-        }
-        b.title = hit === 'target'
-          ? '選んでいる指摘が指す版です。押すと開きます: ' + f
-          : f + ' を開く';
-        b.addEventListener('click', function(ev) {
-          ev.stopPropagation();
-          openFromFolder(f);
-        });
-        row.appendChild(b);
-      });
-      if (_noteHit && _noteHit.kind === r.kind) row.setAttribute('data-note-kind-hit', '1');
-      rowsHost.appendChild(row);
-    });
-
-    if (rec.unknown.length) {
-      var un = document.createElement('div');
-      un.className = 'folder-inv-unknown';
-      un.id = 'folder-inv-unknown';
-      un.textContent = '図種が名前から分からない図: ' + rec.unknown.join(' / ');
-      host.appendChild(un);
-    }
+    host.appendChild(b);
   }
 
   // 行ごとの「対象 / 対象にする」。取り直しをせずに 1 枚だけ足す / 外せる。
