@@ -34,9 +34,38 @@ window.MA.modules.plantumlComponent = (function() {
     '^port\\s+(?:"([^"]+)"\\s+as\\s+(' + ID + ')|(' + ID + ')(?:\\s+as\\s+"([^"]+)")?)\\s*$'
   );
 
+  // BLK-migrator-20260918-0249: 関係行の両端は `[X]` の角括弧でも書ける
+  // (component-04 のように `[X]` 単独の宣言が 1 行も無く、関係行だけで図が成り立つ)。
+  // 矢印には置き方の指示 (-up-> / -right->) と双方向 (<-->) も入る。
+  // どちらも読めないと行が関係として拾えず、その行にしか出てこない部品が
+  // 要素の一覧から丸ごと落ちて、ホバーの選択枠が 1 つも出なくなる。
+  var ENDPOINT = '(?:' + ID + '|"[^"]+"|\\[[^\\]]+\\])';
+  var _LINE = '(?:-{1,2}|\\.{1,2})';
+  var _BODY = _LINE + '(?:' + RP.ARROW_DIRECTION + _LINE + ')?';
+  var ARROW = '(?:-\\(\\)|\\(\\)-|\\)-|-\\('
+    + '|<' + _BODY + '>|' + _BODY + '>|<' + _BODY + '|' + _BODY + ')';
   var RELATION_RE = new RegExp(
-    '^(' + ID + '|"[^"]+")\\s+(-\\(\\)|\\(\\)-|\\)-|-\\(|\\.\\.>|<\\.\\.|-->|<--|--|<-|->)\\s+(' + ID + '|"[^"]+")(?:\\s*:\\s*(.+))?$'
+    '^(' + ENDPOINT + ')\\s+(' + ARROW + ')\\s+(' + ENDPOINT + ')(?:\\s*:\\s*(.+))?$'
   );
+
+  // `[X]` の角括弧を外して部品の id にする。引用名は DU.unquote と同じ扱い。
+  function endpointId(raw) {
+    var s = DU.unquote(String(raw == null ? '' : raw).trim());
+    var m = s.match(/^\[([^\]]+)\]$/);
+    return m ? m[1].trim() : s;
+  }
+  function isBracketEndpoint(raw) {
+    return /^\[[^\]]+\]$/.test(String(raw == null ? '' : raw).trim());
+  }
+
+  // 矢印の種別。方向語 (-up->) や色は線の意味を変えないので、
+  // 点線かどうかと lollipop の形だけで決める。
+  function relationKindOf(arrow) {
+    if (arrow === '-()' || arrow === '()-') return 'provides';
+    if (arrow === ')-' || arrow === '-(') return 'requires';
+    if (arrow.indexOf('.') >= 0) return 'dependency';
+    return 'association';
+  }
 
   var insertBeforeEnd = window.MA.dslUpdater.insertBeforeEnd;
 
@@ -309,11 +338,8 @@ window.MA.modules.plantumlComponent = (function() {
     var m = window.MA.relationOptions.plainLine(trimmed).match(RELATION_RE);
     if (!m) return text;
     var fromRaw = m[1], arrow = m[2], toRaw = m[3], lbl = (m[4] || '').trim();
-    var from = DU.unquote(fromRaw), to = DU.unquote(toRaw);
-    var kind = 'association';
-    if (arrow === '-()' || arrow === '()-') kind = 'provides';
-    else if (arrow === ')-' || arrow === '-(') kind = 'requires';
-    else if (arrow === '..>' || arrow === '<..' || arrow === '.>') kind = 'dependency';
+    var from = endpointId(fromRaw), to = endpointId(toRaw);
+    var kind = relationKindOf(arrow);
 
     if (field === 'kind') kind = value;
     else if (field === 'from') from = value;
@@ -383,6 +409,7 @@ window.MA.modules.plantumlComponent = (function() {
     var packageStack = [];
     var packageCounter = 0;
     var lastComponentId = null;
+    var implicit = [];
 
     for (var i = 0; i < lines.length; i++) {
       var lineNum = i + 1;
@@ -477,25 +504,21 @@ window.MA.modules.plantumlComponent = (function() {
       m = window.MA.relationOptions.plainLine(trimmed).match(RELATION_RE);
       if (m) {
         var fromRaw = m[1], arrow = m[2], toRaw = m[3], lbl = (m[4] || '').trim();
-        var from = DU.unquote(fromRaw);
-        var to = DU.unquote(toRaw);
-        var kind = 'association';
+        var from = endpointId(fromRaw);
+        var to = endpointId(toRaw);
+        // 角括弧で書かれた両端は、宣言行が無くても PlantUML が部品を描く。
+        // 後で「まだ宣言されていないもの」だけを要素に足す (順序に依らない)。
+        if (isBracketEndpoint(fromRaw)) implicit.push({ id: from, line: lineNum, pkg: currentPackageId });
+        if (isBracketEndpoint(toRaw)) implicit.push({ id: to, line: lineNum, pkg: currentPackageId });
+        var kind = relationKindOf(arrow);
 
-        if (arrow === '-()') {
-          kind = 'provides';
-        } else if (arrow === '()-') {
-          kind = 'provides';
+        if (arrow === '()-') {
           var tmp = from; from = to; to = tmp; arrow = '-()';
-        } else if (arrow === ')-') {
-          kind = 'requires';
         } else if (arrow === '-(') {
-          kind = 'requires';
           var tmp2 = from; from = to; to = tmp2; arrow = ')-';
-        } else if (arrow === '..>' || arrow === '.>') {
-          kind = 'dependency';
-        } else if (arrow === '<..') {
-          kind = 'dependency';
-          var tmp3 = from; from = to; to = tmp3; arrow = '..>';
+        } else if (kind === 'dependency' && arrow.charAt(0) === '<' && arrow.slice(-1) !== '>') {
+          // `<..` / `<.up.` は向きだけ逆。始点と終点を入れ替えて `..>` 側に揃える。
+          var tmp3 = from; from = to; to = tmp3; arrow = arrow.slice(1) + '>';
         }
 
         result.relations.push({
@@ -505,6 +528,19 @@ window.MA.modules.plantumlComponent = (function() {
         continue;
       }
     }
+
+    // 宣言行が無いまま関係行の `[X]` にだけ出てくる部品を足す。
+    // 宣言が後ろの行にあっても重複させない (走査後にまとめて判定する)。
+    var known = {};
+    result.elements.forEach(function(e) { if (e.id) known[e.id] = true; });
+    implicit.forEach(function(c) {
+      if (!c.id || known[c.id]) return;
+      known[c.id] = true;
+      result.elements.push({
+        kind: 'component', id: c.id, label: c.id, stereotype: null,
+        line: c.line, parentPackageId: c.pkg, implicit: true,
+      });
+    });
     return result;
   }
 
