@@ -287,6 +287,10 @@ window.MA.workspace = (function() {
         body: JSON.stringify({
           type: doc.name, dsl: doc.dsl, dir: _dir(fileDir),
           kind: (window.MA.savedKind ? window.MA.savedKind.slugOf(doc.diagramType) : '') || undefined,
+          // BLK-migrator-20260918-0349: 手元から開いた図は、開いたときの改行で
+          // 書き戻す。付けないと server は platform の既定 (Windows は CRLF) で
+          // 書き、元が LF のファイルが保存するだけで全行書き換わる。
+          eol: (doc.eol === 'lf' || doc.eol === 'crlf') ? doc.eol : undefined,
         }),
         keepalive: true,
       }).then(function(r) {

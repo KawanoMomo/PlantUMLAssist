@@ -4141,7 +4141,7 @@ function writeDocToFolder(doc, fileDir) {
   if (d.action === 'skip') return false;
   var out = (d.name === doc.name) ? doc
     : { id: doc.id, name: d.name, diagramType: doc.diagramType, dsl: doc.dsl };
-  window.MA.workspace.saveToFile(out, fileDir);
+  window.MA.workspace.saveToFile(_withSourceEol(out), fileDir);
   if (window.MA.autoSave && window.MA.autoSave.noteFileWritten) {
     window.MA.autoSave.noteFileWritten(out.name, out.diagramType);
   }
@@ -4231,7 +4231,7 @@ function saveActiveDoc() {
       // 既定が当たって書き先が変わることがあるので、上部バーの錠表示も合わせ直す。
       try { updateTopSourceLock(); } catch (e) {}
       if (d.name !== doc.name) doc = { id: doc.id, name: d.name, diagramType: doc.diagramType, dsl: doc.dsl };
-      window.MA.workspace.saveToFile(doc, cfg.fileDir);
+      window.MA.workspace.saveToFile(_withSourceEol(doc), cfg.fileDir);
       // 届いた先を状態バーにも揃える (BLK-primary-20260914-2206)。
       if (window.MA.autoSave && window.MA.autoSave.noteFileWritten) {
         window.MA.autoSave.noteFileWritten(doc.name, doc.diagramType);
@@ -24877,6 +24877,16 @@ function _sourcePathOf(docId) {
   return (m && m.path) || '';
 }
 
+// BLK-migrator-20260918-0349: 保存フォルダへ書く経路 (別名保存・自動保存) にも、
+// 開いたときの改行を持たせる。元が LF のファイルが、開いて保存するだけで
+// 全行 CRLF に書き換わっていた (server は付いていなければ既定のまま書く)。
+function _withSourceEol(doc) {
+  var m = _openedSourceOf(doc && doc.id);
+  var eol = m && m.eol;
+  if (!doc || (eol !== 'lf' && eol !== 'crlf')) return doc;
+  return { id: doc.id, name: doc.name, diagramType: doc.diagramType, dsl: doc.dsl, eol: eol };
+}
+
 function openFile() {
   var AB = window.MA.appBridge;
   var input = document.getElementById('file-input');
@@ -25239,7 +25249,7 @@ function saveFile() {
 
   if (target.mode === 'file') {
     // saveActiveDoc() が既に書き出しているが、ここでは結果を待って利用者に伝える。
-    window.MA.workspace.saveToFile(doc, target.dir).then(function(ok) {
+    window.MA.workspace.saveToFile(_withSourceEol(doc), target.dir).then(function(ok) {
       setSaveStatus(ST.messageFor(target, ok));
       // 保存できた図にだけ、その場で突合を掛ける (BLK-reviewer-20260908-1503-wish)。
       if (ok) {
