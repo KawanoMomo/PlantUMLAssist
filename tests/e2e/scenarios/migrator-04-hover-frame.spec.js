@@ -195,3 +195,30 @@ test('migrator 手順 4 — hide・together・note のある図でも、ホバ�
     expect(hit, label + ' にホバーしてその行の枠が出る').toEqual({ type, line });
   }
 });
+
+// BLK-migrator-20260918-0249: component 図で方向指定の矢印 (-right->/-left->/-up->/-down->) を
+// 含むと、枠が 1 つも出なかった。角括弧だけで書かれた部品 (宣言行が 1 つも無い) と
+// 方向語入りの矢印の両方が関係行として読めていなかった。
+test('migrator 手順 4 — 方向指定の矢印だけで書かれた component 図でも、ホバーした部品に枠が出る', async ({ page }) => {
+  await bootPlain(page);
+  await typeDsl(page, [
+    '@startuml',                               // 1
+    '[SensorMgr] --> [FilterMgr]',             // 2
+    '[FilterMgr] ..> [ActuatorMgr] : depends', // 3
+    '[ActuatorMgr] <--> [SafetyMonitor]',      // 4
+    '[SafetyMonitor] -up-> [Logger]',          // 5
+    '[Logger] -down-> [DiagPort]',             // 6
+    '[SensorMgr] -right-> [SafetyMonitor] : 監視',   // 7
+    '[DiagPort] -left-> [SensorMgr] : フィードバック', // 8
+    '@enduml',                                 // 9
+  ].join(String.fromCharCode(10)));
+  await expect(page.locator('#overlay-layer rect.selectable[data-type="component"]')).toHaveCount(6, { timeout: 20000 });
+
+  for (const id of ['SensorMgr', 'FilterMgr', 'ActuatorMgr', 'SafetyMonitor', 'Logger', 'DiagPort']) {
+    const r = page.locator('#overlay-layer rect.selectable[data-type="component"][data-id="' + id + '"]');
+    await expect(r, id + ' の枠がある').toHaveCount(1);
+    const b = await r.boundingBox();
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+    await expect(r, id + ' にホバーして枠が出る').toHaveClass(/hit-hover/);
+  }
+});

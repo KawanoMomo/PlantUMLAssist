@@ -10,7 +10,14 @@ window.MA.relationOptions = (function() {
 
   // 矢印トークン: 先頭の飾り + 線 (- または .、途中に [#色]) + 末尾の飾り。
   // 例: --> / <|-- / ..> / *-- / o--> / -[#red]> / <|.. / --
-  var ARROW_RE = /^([<>|*o+^]{0,2})((?:-|\.){1,2}(?:\[#[^\]\s]+\])?(?:-|\.){0,2})([<>|*o+^]{0,2})$/;
+  // BLK-migrator-20260918-0249: 線の途中には置き方の指示 (up/down/left/right、
+  // 1 文字の u/d/l/r) も書ける (`-up->` `-[#red]right->`)。これを読めないと
+  // 方向を付けた行がまるごと関係行でなくなり、選択枠も出なくなる。
+  var _DIR = (window.MA.regexParts && window.MA.regexParts.ARROW_DIRECTION)
+    || '(?:up|down|left|right|u|d|l|r)';
+  var ARROW_RE = new RegExp(
+    '^([<>|*o+^]{0,2})((?:-|\\.){1,2}(?:\\[#[^\\]\\s]+\\])?' + _DIR + '?(?:\\[#[^\\]\\s]+\\])?(?:-|\\.){0,2})([<>|*o+^]{0,2})$'
+  );
   var MULT_RE = /^"[^"]*"$/;
 
   function isArrow(tok) {
