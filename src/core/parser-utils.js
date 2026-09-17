@@ -53,6 +53,11 @@ window.MA.parserUtils = (function() {
       if (!hasClassKw && !hasComponentKw) return 'plantuml-activity';
     }
 
+    // BLK-migrator-20260917-2349: 旧記法 activity (`(*) --> "x"` / `if "c" then` / `-->[label]`)。
+    // `(*)` は usecase の短縮形 `(name)` にも当たるので、usecase 判定より前に拾う。
+    var hasLegacyActivity = /\(\*(top)?\)\s*-+>|-+>\s*\(\*\)|^\s*if\s+"[^"]*"\s+then/m.test(text);
+    if (hasLegacyActivity && !hasClassKw && !hasComponentKw && !hasParticipantSeqOnly) return 'plantuml-activity';
+
     // State: 'state X' keyword OR '[*] -->' pseudo-state
     var hasStateKwExplicit = /^\s*state\s+\w/m.test(text);
     var hasInitialPseudo = /^\s*\[\*\]\s*-->/m.test(text);
