@@ -25725,6 +25725,45 @@ function browserDownload(filename, blob) {
   setTimeout(function() { URL.revokeObjectURL(url); }, 10000);
 }
 
+// BLK-primary-20260918-0249: a[download] はどこへ落ちたか (落ちたのか) を
+// 呼び出し側に返さないので、届いていない zip にも「保存しました」と出ていた。
+// zip は保存フォルダに書いて、書けたバイト数を確かめてから成功を名乗る。
+// ブラウザのダウンロードは今まで通り併せて出す (落とし先を選びたい人のため)。
+function _zipToBase64(bytes) {
+  var CHUNK = 0x8000;
+  var parts = [];
+  for (var i = 0; i < bytes.length; i += CHUNK) {
+    parts.push(String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK)));
+  }
+  return btoa(parts.join(''));
+}
+
+function deliverZip(filename, bytes) {
+  downloadBlob(filename, new Blob([bytes], { type: 'application/zip' }));
+  var payload;
+  try {
+    payload = { name: filename, dir: _wsFileDir(), base64: _zipToBase64(bytes) };
+  } catch (e) {
+    return Promise.resolve({ ok: false, error: 'zip を読めませんでした' });
+  }
+  return fetch('/export-zip', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  }).then(function(resp) {
+    return resp.json().then(function(j) {
+      if (!resp.ok || !j || !j.ok) {
+        return { ok: false, error: (j && j.error) || ('HTTP ' + resp.status) };
+      }
+      // 書いたバイト数が作った zip と違えば届いていない。
+      if (j.bytes !== bytes.length) return { ok: false, error: '書き込みが途中で切れました' };
+      return { ok: true, path: j.path, bytes: j.bytes };
+    }, function() { return { ok: false, error: '保存先からの応答を読めませんでした' }; });
+  }, function() {
+    return { ok: false, error: '保存先に届きませんでした' };
+  });
+}
+
 // BLK-human-20260909-2200: アプリ版 (pywebview) にはブラウザのダウンロード先が無く、
 // a[download] を押しても何も起きない。アプリ版のときだけネイティブの保存ダイアログに
 // 回し、断られた・使えないときは従来どおりダウンロードに落ちる (Web 版は素通り)。
@@ -26818,6 +26857,12 @@ function exportDocSet(name) {
     }
     return exportAllSVG(docs, document.getElementById('docset-status'), extra)
       .then(function(summary) {
+        // BLK-primary-20260918-0249: zip が届いていないなら、資料セットの成功文も
+        // 見返す画面も出さない (届いていないことに画面で気付けるようにする)。
+        if (summary && summary.delivered === false) {
+          _dsStatus(summary.message);
+          return summary;
+        }
         var note = FE.missingNote(built.missing.concat(res.missing));
         // 書き出した中身を、そのまま客先資料の体裁で見返せるようにする
         // (zip を解凍して 1 枚ずつ開き直さない。BLK-primary-20260916-0426-wish)。
@@ -26910,37 +26955,55 @@ function exportAllSVG(pickedDocs, statusEl, extraFiles) {
     },
   }).then(function(summary) {
     var msg = summary.message;
-    if (files.length > 0) {
-      // 会議資料は「図 + どの指摘への対応か」で 1 組。指摘を 1 件でも結んでいれば
-      // 対応表を同じ zip に入れる (BLK-primary-20260908-1703-wish)。
-      var map = buildFindingMap();
-      if (map && map.table && map.table.total > 0) {
-        files.push({ name: '指摘対応表.md', content: map.text });
+    if (files.length === 0) {
+      if (status) status.textContent = msg;
+      if (window.MA.toast) window.MA.toast.show(msg);
+      return summary;
+    }
+    // 会議資料は「図 + どの指摘への対応か」で 1 組。指摘を 1 件でも結んでいれば
+    // 対応表を同じ zip に入れる (BLK-primary-20260908-1703-wish)。
+    var map = buildFindingMap();
+    if (map && map.table && map.table.total > 0) {
+      files.push({ name: '指摘対応表.md', content: map.text });
+    }
+    (extraFiles || []).forEach(function(f) {
+      if (f && f.name) files.push({ name: f.name, content: String(f.content == null ? '' : f.content) });
+    });
+    // 何を zip に入れたかは、書き出した後に資料として見返す側が要る
+    // (BLK-primary-20260916-0426-wish)。
+    summary.files = files;
+    var name = window.MA.bulkExport.zipName();
+    var bytes = window.MA.bulkExport.buildZip(files);
+    // BLK-primary-20260918-0249: 届いたことを確かめる前に「保存しました」と言わない。
+    return deliverZip(name, bytes).then(function(res) {
+      if (!res.ok) {
+        var bad = 'zip を保存できませんでした（' + name + '）— ' + res.error;
+        summary.delivered = false;
+        summary.deliverError = res.error;
+        summary.message = bad;
+        if (status) status.textContent = bad;
+        if (window.MA.toast) window.MA.toast.show(bad);
+        return summary;
       }
-      (extraFiles || []).forEach(function(f) {
-        if (f && f.name) files.push({ name: f.name, content: String(f.content == null ? '' : f.content) });
-      });
-      var name = window.MA.bulkExport.zipName();
-      downloadBlob(name, new Blob([window.MA.bulkExport.buildZip(files)], { type: 'application/zip' }));
       msg = msg + '（' + name + '）';
       summary.zipFile = name;
-      // 何を zip に入れたかは、書き出した後に資料として見返す側が要る
-      // (BLK-primary-20260916-0426-wish)。
-      summary.files = files;
-    }
-    if (status) status.textContent = msg;
-    if (window.MA.toast) window.MA.toast.show(msg);
-    // BLK-primary-20260909-0003-wish: 出した時点を保存フォルダに控える。
-    // 次に書き出すときの「前回書き出しから変わった図」の基準になる。
-    if (!summary.zipFile) return summary;
-    return _elRecord('svg', { file: summary.zipFile, docs: docs }).then(function() {
-      if (document.getElementById('expick-modal') &&
-          document.getElementById('expick-modal').style.display === 'flex') {
-        _expickList = _expickBuild();
-        renderExportPick();
-        if (status) status.textContent = msg;
-      }
-      return summary;
+      summary.delivered = true;
+      summary.savedTo = res.path;
+      summary.zipBytes = res.bytes;
+      summary.message = msg;
+      if (status) status.textContent = msg;
+      if (window.MA.toast) window.MA.toast.show(msg);
+      // BLK-primary-20260909-0003-wish: 出した時点を保存フォルダに控える。
+      // 次に書き出すときの「前回書き出しから変わった図」の基準になる。
+      return _elRecord('svg', { file: summary.zipFile, docs: docs }).then(function() {
+        if (document.getElementById('expick-modal') &&
+            document.getElementById('expick-modal').style.display === 'flex') {
+          _expickList = _expickBuild();
+          renderExportPick();
+          if (status) status.textContent = msg;
+        }
+        return summary;
+      });
     });
   });
 }

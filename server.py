@@ -575,6 +575,8 @@ API_INDEX = {
         {'endpoint': 'DELETE /doc-sets', 'summary': '資料セットを 1 つ消す', 'request': '?dir=&name='},
         {'endpoint': 'POST /file-roles', 'summary': '保存フォルダの _roles.json を置き換える',
          'request': "{dir, roles}"},
+        {'endpoint': 'POST /export-zip', 'summary': '書き出した zip を保存フォルダに置き、書けたバイト数を返す',
+         'request': "{dir, name, base64}"},
         {'endpoint': 'POST /export-log', 'summary': '書き出しの控えを 1 件足す'},
         {'endpoint': 'GET /prefs', 'summary': 'この機械に保存した設定'},
         {'endpoint': 'POST /prefs', 'summary': '設定を書く'},
@@ -761,6 +763,38 @@ def _atomic_write_text(path, text, encoding='utf-8', newline=None):
         pass
 
 
+def _atomic_write_bytes(path, data):
+    """`path` をバイト列で置き換える。zip は 1 バイトでも欠けると開けないので
+    書き途中を見せない (BLK-primary-20260918-0249)。"""
+    tmp = path.with_name(path.name + '.tmp-' + str(os.getpid()) + '-' + str(threading.get_ident()))
+    try:
+        with open(tmp, 'wb') as f:
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        deadline = time.monotonic() + REPLACE_RETRY_SECONDS
+        while True:
+            try:
+                os.replace(tmp, path)
+                return
+            except PermissionError:
+                if time.monotonic() >= deadline:
+                    break
+                time.sleep(REPLACE_RETRY_INTERVAL)
+        with open(path, 'wb') as f:
+            f.write(data)
+    except BaseException:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        raise
+    try:
+        tmp.unlink()
+    except OSError:
+        pass
+
+
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path.split('?')[0] == '/autosave-versions':
@@ -873,6 +907,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == '/file-roles':
             with _fs_lock:
                 return self._handle_file_roles_post()
+        if self.path == '/export-zip':
+            with _fs_lock:
+                return self._handle_export_zip_post()
         if self.path == '/export-log':
             with _fs_lock:
                 return self._handle_export_log_post()
@@ -2478,6 +2515,60 @@ class Handler(BaseHTTPRequestHandler):
         # 行き先が決められないときは、消さない方を採って刻印付きの名前にする。
         stamp = time.strftime('%Y%m%d-%H%M%S', time.gmtime())
         return base + '-' + stamp, prev_kind, new_kind
+
+    def _handle_export_zip_post(self):
+        """書き出した zip を保存フォルダに置き、置けたバイト数を答える。
+
+        BLK-primary-20260918-0249: zip の受け渡しがブラウザの a[download] だけだと、
+        どこへ落ちたか (落ちたのか) をアプリ側が知る術が無く、届いていなくても
+        「保存しました」と出てしまう。ここで実際に書いた結果を返し、画面は
+        この答えを見てから成功を名乗る。
+        """
+        length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(length).decode('utf-8')
+        try:
+            data = json.loads(body)
+        except ValueError:
+            self._send_json(400, {'error': 'invalid JSON'})
+            return
+        name = data.get('name')
+        if not isinstance(name, str) or not name.lower().endswith('.zip'):
+            self._send_json(400, {'error': 'name must end with .zip'})
+            return
+        # パス区切り・上位への脱出・Windows の禁止文字を弾く (保存フォルダの外に書かない)。
+        if not self._autosave_validate_type(name[:-4]):
+            self._send_json(400, {'error': 'invalid name — パス区切り・制御文字・Windows の禁止文字は使えません'})
+            return
+        b64 = data.get('base64')
+        if not isinstance(b64, str) or b64 == '':
+            self._send_json(400, {'error': 'base64 must be a non-empty string'})
+            return
+        try:
+            raw = base64.b64decode(b64, validate=True)
+        except (binascii.Error, ValueError):
+            self._send_json(400, {'error': 'base64 decode failed'})
+            return
+        # zip の先頭 (PK\x03\x04) が無いものは受け取らない。空の zip を「届いた」と言わない。
+        if len(raw) < 4 or raw[:2] != b'PK':
+            self._send_json(400, {'error': 'not a zip'})
+            return
+        save_dir = self._autosave_resolve_dir(data.get('dir'))
+        try:
+            save_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            self._send_json(500, {'error': f'mkdir failed: {e}'})
+            return
+        target = save_dir / name
+        try:
+            _atomic_write_bytes(target, raw)
+            written = target.stat().st_size
+        except OSError as e:
+            self._send_json(500, {'error': f'write failed: {e}'})
+            return
+        if written != len(raw):
+            self._send_json(500, {'error': 'short write'})
+            return
+        self._send_json(200, {'ok': True, 'path': str(target), 'bytes': written})
 
     def _handle_autosave_svg_post(self):
         """保存フォルダの {type}.svg だけを書き直す。
