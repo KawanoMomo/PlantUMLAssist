@@ -60,6 +60,64 @@ describe('BLK-migrator-20260918-0049 class nested / special notation frames', fu
     ]);
   });
 
+  // 差し戻し 1 回目: 描かれているメンバーや見出しに、別のメンバー・別の宣言の枠が返る。
+  test('hide ... fields: 隠したメンバーを数えず、描かれている行に正しい番号と行が付く', function() {
+    var dsl = ['@startuml', 'class Actuator {', '  - float target', '  + Write(v: float) : void', '}',
+      'hide Actuator fields', '@enduml'].join('\n');
+    var el = clMod.parse(dsl).elements[0];
+    expect(el.members.map(function(m) { return [m.name, !!m.hidden]; })).toEqual([['target', true], ['Write', false]]);
+    var ids = overlay(dsl,
+      '<g class="entity" data-qualified-name="Actuator">' +
+      '<rect x="10" y="10" width="200" height="60"/>' +
+      '<text x="20" y="30" textLength="60">Actuator</text>' +
+      '<text x="20" y="57" textLength="90">Write(v: float) : void</text></g>');
+    // 描かれている 1 行は 2 番目のメンバー (L4)。隠れた target (L3) の枠は作らない。
+    expect(ids.filter(function(s) { return s.indexOf('member:') === 0; })).toEqual(['member:Actuator::__m_1@4/y57']);
+  });
+
+  test('show ... methods は hide を打ち消し、対象を書かない hide は全要素に効く', function() {
+    var p = clMod.parse(['@startuml', 'class S {', '  - int v', '  + Read() : int', '}',
+      'hide members', 'show S methods', '@enduml'].join('\n'));
+    expect(p.elements[0].members.map(function(m) { return [m.name, !!m.hidden]; })).toEqual([['v', true], ['Read', false]]);
+  });
+
+  test('together で 2 度宣言したクラスは 1 件にまとめ、本体を持つ宣言の行を正とする', function() {
+    var p = clMod.parse(['@startuml', 'together {', '  class TaskA', '  class TaskB', '}',
+      'class TaskA {', '  + Run()', '}', '@enduml'].join('\n'));
+    expect(p.elements.map(function(e) { return [e.id, e.line, e.members.length]; })).toEqual([
+      ['TaskA', 6, 1], ['TaskB', 4, 0],
+    ]);
+    var ids = overlay(['@startuml', 'together {', '  class TaskA', '}', 'class TaskA {', '  + Run()', '}', '@enduml'].join('\n'),
+      '<g class="entity" data-qualified-name="TaskA">' +
+      '<rect x="10" y="10" width="120" height="50"/>' +
+      '<text x="20" y="30" textLength="40">TaskA</text>' +
+      '<text x="20" y="52" textLength="40">Run()</text></g>');
+    // 同じ図形へ枠が二重に出ない。
+    expect(ids.filter(function(s) { return s.indexOf('class:') === 0; })).toEqual(['class:TaskA@5']);
+  });
+
+  test('note は折り返し角の path で描かれても枠が出る (5 点 polygon ではない)', function() {
+    var ids = overlay(['@startuml', 'class A', 'note top of A : 補足', '@enduml'].join('\n'),
+      '<g class="entity" data-qualified-name="A">' +
+      '<rect x="10" y="60" width="80" height="30"/><text x="20" y="80" textLength="20">A</text></g>' +
+      '<g class="entity" data-qualified-name="GMN13">' +
+      '<path d="M6,6 L6,32 L196,32 L196,16 L186,6 L6,6"/>' +
+      '<text x="12" y="24" textLength="40">補足</text></g>');
+    expect(ids.filter(function(s) { return s.indexOf('note:') === 0; })).toEqual(['note:__n_0@3']);
+  });
+
+  test('引き当てられなかったクラス (ロリポップ表記) を note と取り違えない', function() {
+    var ids = overlay(['@startuml', 'class A', 'note top of A : 補足', '@enduml'].join('\n'),
+      '<g class="entity" data-qualified-name="A">' +
+      '<rect x="10" y="60" width="80" height="30"/><text x="20" y="80" textLength="20">A</text></g>' +
+      '<g class="entity" data-qualified-name="IPort"><ellipse cx="50" cy="150" rx="8" ry="8"/>' +
+      '<text x="40" y="170" textLength="30">IPort</text></g>' +
+      '<g class="entity" data-qualified-name="GMN13">' +
+      '<path d="M6,6 L6,32 L196,32 L196,16 L186,6 L6,6"/>' +
+      '<text x="12" y="24" textLength="40">補足</text></g>');
+    expect(ids.filter(function(s) { return s.indexOf('note:') === 0; })).toEqual(['note:__n_0@3']);
+  });
+
   test('unlabelled separators and plain members are unchanged', function() {
     var el = clMod.parse('@startuml\nclass A {\n  - a : int\n  --\n  + b()\n}\n@enduml').elements[0];
     expect(el.members.map(function(m) { return m.name; })).toEqual(['a', 'b']);

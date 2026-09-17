@@ -143,3 +143,55 @@ test('migrator 手順 4 — struct・package 配下・区切り線のあるク�
       .toBe(type + '@' + line);
   }
 });
+
+// BLK-migrator-20260918-0049 差し戻し 1 回目: hide で隠れたメンバーを数えたまま行を当てたため、
+// 描かれているメンバーに 1 つ前の (隠れた) メンバーの行が付いた。together の二重宣言は同じ図形へ
+// 枠を二重に出し、note は今の PlantUML が path で描くので枠が 1 つも出なかった。
+test('migrator 手順 4 — hide・together・note のある図でも、ホバーした要素そのものの行が枠に出る', async ({ page }) => {
+  await bootPlain(page);
+  await typeDsl(page, [
+    '@startuml',              // 1
+    'together {',             // 2
+    '  class TaskB',          // 3
+    '}',                      // 4
+    'class Sensor {',         // 5
+    '  - float value',        // 6
+    '  + Read() : float',     // 7
+    '}',                      // 8
+    'class Actuator {',       // 9
+    '  - float target',       // 10
+    '  + Write() : void',     // 11
+    '}',                      // 12
+    'note top of Sensor : 校正が要る',  // 13
+    'hide Actuator fields',   // 14
+    '@enduml',                // 15
+  ].join(String.fromCharCode(10)));
+  await expect(page.locator('#overlay-layer rect[data-type="note"]')).toHaveCount(1, { timeout: 20000 });
+  // 二重宣言しても TaskB の枠は 1 つ。
+  await expect(page.locator('#overlay-layer rect[data-type="class"][data-id="TaskB"]')).toHaveCount(1);
+
+  const targets = [
+    ['float value', 'member', '6'],
+    ['Read() : float', 'member', '7'],
+    // hide Actuator fields で target(L10) は描かれない。描かれている行は Write(L11)。
+    ['Write() : void', 'member', '11'],
+    ['校正が要る', 'note', '13'],
+  ];
+  for (const [label, type, line] of targets) {
+    const box = await page.evaluate((l) => {
+      const t = Array.prototype.find.call(document.querySelectorAll('svg g.entity text'),
+        (n) => (n.textContent || '').trim() === l);
+      if (!t) return null;
+      const r = t.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    }, label);
+    expect(box, label + ' が描かれている').not.toBeNull();
+    await page.mouse.move(box.x, box.y);
+    const hit = await page.evaluate((p) => {
+      const els = document.elementsFromPoint(p.x, p.y);
+      const r = els.find((e) => e.tagName.toLowerCase() === 'rect' && e.closest('#overlay-layer'));
+      return r ? { type: r.getAttribute('data-type'), line: r.getAttribute('data-line') } : null;
+    }, box);
+    expect(hit, label + ' にホバーしてその行の枠が出る').toEqual({ type, line });
+  }
+});

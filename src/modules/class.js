@@ -94,6 +94,13 @@ window.MA.modules.plantumlClass = (function() {
   );
   var END_NOTE_RE = /^end\s+note\s*$/i;
 
+  // BLK-migrator-20260918-0049: `hide Actuator fields` で隠れたメンバーは SVG に描かれない。
+  // 隠れた分を数えずに行を当てると、描かれているメンバーに 1 つ前のメンバーの行番号が付く。
+  var HIDE_SHOW_RE = new RegExp(
+    '^(hide|show)\\s+(?:(' + ID + ')\\s+)?(fields|attributes|methods|members)$',
+    'i'
+  );
+
   // Relation arrow tokens, longest first to avoid prefix matches
   var RELATION_RE = new RegExp(
     '^(' + ID_WITH_GENERICS + '|"[^"]+")\\s+' +
@@ -106,7 +113,7 @@ window.MA.modules.plantumlClass = (function() {
   );
 
   function parse(text) {
-    var result = { meta: { title: '', startUmlLine: null }, elements: [], relations: [], groups: [], notes: [] };
+    var result = { meta: { title: '', startUmlLine: null }, elements: [], relations: [], groups: [], notes: [], hideShow: [] };
     if (!text || !text.trim()) return result;
     var lines = text.split('\n');
     var openClassStack = [];
@@ -147,6 +154,19 @@ window.MA.modules.plantumlClass = (function() {
 
       var tm = trimmed.match(/^title\s+(.+)$/);
       if (tm) { result.meta.title = tm[1].trim(); continue; }
+
+      if (openClassStack.length === 0) {
+        var hs = trimmed.match(HIDE_SHOW_RE);
+        if (hs) {
+          result.hideShow.push({
+            hide: hs[1].toLowerCase() === 'hide',
+            targetId: hs[2] || null,
+            what: hs[3].toLowerCase(),
+            line: lineNum,
+          });
+          continue;
+        }
+      }
 
       // closing brace for class block
       if (trimmed === '}' && openClassStack.length > 0) {
@@ -302,7 +322,7 @@ window.MA.modules.plantumlClass = (function() {
           stereotype: em[5] || null, generics: null, members: [],
           line: lineNum, endLine: lineNum, parentPackageId: eCurrentPackageId,
         };
-        result.elements.push(eEl);
+        eEl = _pushElement(result, eEl);
         if (eHasBlock) openClassStack.push({ element: eEl });
         continue;
       }
@@ -321,7 +341,7 @@ window.MA.modules.plantumlClass = (function() {
           stereotype: abm[5] || null, generics: aSplit.generics, members: [],
           line: lineNum, endLine: lineNum, parentPackageId: aCurrentPackageId,
         };
-        result.elements.push(aEl);
+        aEl = _pushElement(result, aEl);
         if (aHasBlock) openClassStack.push({ element: aEl });
         continue;
       }
@@ -340,7 +360,7 @@ window.MA.modules.plantumlClass = (function() {
           stereotype: im[5] || null, generics: iSplit.generics, members: [],
           line: lineNum, endLine: lineNum, parentPackageId: iCurrentPackageId,
         };
-        result.elements.push(iEl);
+        iEl = _pushElement(result, iEl);
         if (iHasBlock) openClassStack.push({ element: iEl });
         continue;
       }
@@ -357,7 +377,7 @@ window.MA.modules.plantumlClass = (function() {
           line: lineNum, endLine: lineNum,
           parentPackageId: packageStack.length > 0 ? packageStack[packageStack.length - 1].id : null,
         };
-        result.elements.push(sEl);
+        sEl = _pushElement(result, sEl);
         if (/\{\s*$/.test(trimmed)) openClassStack.push({ element: sEl });
         continue;
       }
@@ -376,12 +396,54 @@ window.MA.modules.plantumlClass = (function() {
           stereotype: m[5] || null, generics: split.generics, members: [],
           line: lineNum, endLine: lineNum, parentPackageId: currentPackageId,
         };
-        result.elements.push(el);
+        el = _pushElement(result, el);
         if (hasBlock) openClassStack.push({ element: el });
         continue;
       }
     }
+    _applyHideShow(result);
     return result;
+  }
+
+  // BLK-migrator-20260918-0049: `together { class TaskA }` のように同じクラスを 2 回宣言しても
+  // 図には 1 つしか描かれない。2 件の要素にすると同じ図形へ枠が二重に出て、
+  // 押したとき本体 (メンバーを持つ方) ではなく先の空宣言が開く。同じ id は 1 件にまとめ、
+  // 本体を持つ宣言の行を正とする。
+  function _pushElement(result, el) {
+    for (var i = 0; i < result.elements.length; i++) {
+      var ex = result.elements[i];
+      if (ex.id !== el.id) continue;
+      // 後から来た宣言の方が情報を持つなら、そちらを正とする。
+      if (el.stereotype) ex.stereotype = el.stereotype;
+      if (el.generics && el.generics.length > 0) ex.generics = el.generics;
+      if (el.label && el.label !== el.id) ex.label = el.label;
+      if (el.parentPackageId) ex.parentPackageId = el.parentPackageId;
+      if (ex.kind === 'class' && el.kind !== 'class') ex.kind = el.kind;
+      ex.line = el.line;
+      ex.endLine = el.endLine;
+      return ex;
+    }
+    result.elements.push(el);
+    return el;
+  }
+
+  // BLK-migrator-20260918-0049: `hide`/`show` を後から順に当てる。target 無しは全要素。
+  // `fields`/`attributes` は属性、`methods` はメソッド、`members` は両方。
+  function _applyHideShow(result) {
+    var dirs = result.hideShow || [];
+    if (dirs.length === 0) return;
+    dirs.forEach(function(d) {
+      result.elements.forEach(function(el) {
+        if (d.targetId && el.id !== d.targetId) return;
+        (el.members || []).forEach(function(m) {
+          var isAttr = m.kind === 'attribute' || m.kind === 'enum-value';
+          var hit = d.what === 'members' ||
+            ((d.what === 'fields' || d.what === 'attributes') && isAttr) ||
+            (d.what === 'methods' && m.kind === 'method');
+          if (hit) m.hidden = d.hide;
+        });
+      });
+    });
   }
 
   function _fmtIdGenerics(id, generics) {
@@ -2417,6 +2479,7 @@ window.MA.modules.plantumlClass = (function() {
 
       var matched = { class: 0, interface: 0, abstract: 0, enum: 0, struct: 0, annotation: 0, relation: 0, package: 0 };
 
+      var usedG = [];
       (parsedData.elements || []).forEach(function(el) {
         var g = svgEl.querySelector('g.entity[data-qualified-name="' + el.id + '"]');
         // BLK-migrator-20260918-0049: package / namespace の中の要素は `BSW..GpioDriver` /
@@ -2429,6 +2492,7 @@ window.MA.modules.plantumlClass = (function() {
           if (qs.length === 1) g = qs[0];
         }
         if (!g) return;
+        usedG.push(g);
         var bb = _entityBBox(g);
         if (!bb) return;
         OB.addRect(overlayEl, bb.x - 6, bb.y - 6, bb.width + 12, bb.height + 12, {
@@ -2457,11 +2521,16 @@ window.MA.modules.plantumlClass = (function() {
             for (var si = 0; si < seps.length; si++) if (seps[si] <= k) n++;
             return k + n;
           };
+          // BLK-migrator-20260918-0049: `hide ... fields` で隠したメンバーは描かれない。
+          // 描かれているものだけを順に当て、data-id / data-line は元の並びの番号を保つ。
+          var shown = [];
+          el.members.forEach(function(m, k) { if (!m.hidden) shown.push({ m: m, i: k }); });
           var matchCount = 0;
-          while (matchCount < el.members.length && slotOf(matchCount) < memberLines.length) matchCount++;
-          for (var mi = 0; mi < matchCount; mi++) {
-            var ml = memberLines[slotOf(mi)];
-            var mem = el.members[mi];
+          while (matchCount < shown.length && slotOf(matchCount) < memberLines.length) matchCount++;
+          for (var si2 = 0; si2 < matchCount; si2++) {
+            var ml = memberLines[slotOf(si2)];
+            var mem = shown[si2].m;
+            var mi = shown[si2].i;
             var mbb = ml.bbox;
             var rectW = mbb.width || 80;
             OB.addRect(overlayEl, mbb.x, mbb.y, rectW, mbb.height || 14, {
@@ -2474,9 +2543,9 @@ window.MA.modules.plantumlClass = (function() {
               'data-line': String(mem.line),
             });
           }
-          if (matchCount !== el.members.length && typeof console !== 'undefined' && console.warn) {
+          if (matchCount !== shown.length && typeof console !== 'undefined' && console.warn) {
             console.warn('[class.buildOverlay] member line mismatch for ' + el.id +
-              ': model=' + el.members.length + ' svg=' + memberLines.length);
+              ': model=' + shown.length + ' svg=' + memberLines.length);
           }
         }
       });
@@ -2537,19 +2606,35 @@ window.MA.modules.plantumlClass = (function() {
         matched.relation++;
       }
 
-      // Notes: match 5-point polygons in document order against parsed notes
+      // Notes: BLK-migrator-20260918-0049 — note は今の PlantUML では折り返し角を持つ
+      // `<path>` を含む `g.entity` として描かれる (5 点 `<polygon>` ではない)。
+      // polygon だけを探していたので、どの図でも note に枠が 1 つも出なかった。
+      // どの要素にも取られなかった `g.entity` を文書順に note へ当て、
+      // それで数が合わないときだけ旧来の 5 点 polygon を見る。
       var notes = parsedData.notes || [];
       if (notes.length > 0) {
-        var allPolys = svgEl.querySelectorAll('polygon');
-        var notePolys = [];
-        Array.prototype.forEach.call(allPolys, function(p) {
-          var pts = (p.getAttribute('points') || '').trim().split(/\s+/);
-          if (pts.length === 5) notePolys.push(p);
-        });
+        // どの要素にも取られず、かつ note の形 (箱でも丸でもなく折り返し角の path) のものだけ。
+        // 引き当てられなかったクラス (ロリポップ表記の interface など) を note と取り違えない。
+        var noteGroups = Array.prototype.filter.call(
+          svgEl.querySelectorAll('g.entity'), function(ge) {
+            if (usedG.indexOf(ge) >= 0) return false;
+            return !!ge.querySelector('path') &&
+              !ge.querySelector('rect') && !ge.querySelector('ellipse');
+          });
+        var notePolys = noteGroups;
+        var bboxOf = _entityBBox;
+        if (notePolys.length !== notes.length) {
+          notePolys = [];
+          Array.prototype.forEach.call(svgEl.querySelectorAll('polygon'), function(p) {
+            var pts = (p.getAttribute('points') || '').trim().split(/\s+/);
+            if (pts.length === 5) notePolys.push(p);
+          });
+          bboxOf = _polygonBBox;
+        }
         if (notePolys.length === notes.length) {
           notes.forEach(function(n, idx) {
             var p = notePolys[idx];
-            var bb = _polygonBBox(p);
+            var bb = bboxOf(p);
             if (!bb) return;
             OB.addRect(overlayEl, bb.x, bb.y, bb.width, bb.height, {
               'data-type': 'note',
@@ -2559,7 +2644,7 @@ window.MA.modules.plantumlClass = (function() {
             });
           });
         } else if (typeof console !== 'undefined' && console.warn) {
-          console.warn('[class.buildOverlay] note polygon count mismatch: model=' + notes.length + ' svg=' + notePolys.length);
+          console.warn('[class.buildOverlay] note shape count mismatch: model=' + notes.length + ' svg=' + notePolys.length);
         }
       }
 
