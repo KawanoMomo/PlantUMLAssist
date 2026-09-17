@@ -23,7 +23,9 @@ const ST = [
 // BLK-primary-20260908-2303-wish: 📦引き継ぎ は押すとまず「対象確認」を出す。
 // 書き出しはそのパネルの「この N 枚で書き出す」から始まる。
 async function clickHandoff(page) {
-  await page.locator('#btn-tab-handoff').click();
+  // BLK-owner-20260918-0329-prune: 入口は Export ▾ の「渡す」
+  await page.locator('#btn-export').click();
+  await page.locator('#exp-handoff').click();
   await expect(page.locator('#et-modal')).toBeVisible();
   await page.locator('#et-build').click();
 }
@@ -61,9 +63,10 @@ test.describe('BLK-primary-1303-wish 引き継ぎパッケージ', () => {
     await page.addInitScript(() => { try { window.localStorage.clear(); } catch (e) {} });
   });
 
-  test('タブバーに「引き継ぎ」の道具が出る', async ({ page }) => {
+  test('Export ▾ の「渡す」に「引き継ぎ」が出る', async ({ page }) => {
     await gotoApp(page);
-    await expect(page.locator('#btn-tab-handoff')).toBeVisible();
+    await page.locator('#btn-export').click();
+    await expect(page.locator('#exp-handoff')).toBeVisible();
   });
 
   test('対象確認から zip が 1 つ落ちてくる (3 つのタブを開かずに済む)', async ({ page }) => {
@@ -184,7 +187,9 @@ test.describe('BLK-primary-2303-wish 書き出す前の対象確認', () => {
 
   test('📦引き継ぎ を押すと、書き出す前に対象確認が出る', async ({ page }) => {
     await openTwoDiagrams(page);
-    await page.locator('#btn-tab-handoff').click();
+    // BLK-owner-20260918-0329-prune: 入口は Export ▾ の「渡す」
+    await page.locator('#btn-export').click();
+    await page.locator('#exp-handoff').click();
     await expect(page.locator('#et-modal')).toBeVisible();
     await expect(page.locator('#et-modal-content')).toContainText('対象確認');
     // 保存先フォルダが無い運用では、タブが対象のすべてだと言い切る (偽の警告を出さない)。
@@ -194,7 +199,9 @@ test.describe('BLK-primary-2303-wish 書き出す前の対象確認', () => {
 
   test('タブ 1 枚でも既定はフォルダ全体の 6 枚で、対象一覧に未オープンの図が並ぶ', async ({ page }) => {
     await openWithFolder(page);
-    await page.locator('#btn-tab-handoff').click();
+    // BLK-owner-20260918-0329-prune: 入口は Export ▾ の「渡す」
+    await page.locator('#btn-export').click();
+    await page.locator('#exp-handoff').click();
     await expect(page.locator('#et-line')).toHaveAttribute('data-folder', '6');
     await expect(page.locator('#et-line')).toHaveAttribute('data-count', '6');
     await expect(page.locator('#et-line')).toHaveAttribute('data-warn', '0');
@@ -204,7 +211,9 @@ test.describe('BLK-primary-2303-wish 書き出す前の対象確認', () => {
 
   test('「開いているタブだけ」に切り替えると、何枚が落ちるかを書き出す前に警告する', async ({ page }) => {
     await openWithFolder(page);
-    await page.locator('#btn-tab-handoff').click();
+    // BLK-owner-20260918-0329-prune: 入口は Export ▾ の「渡す」
+    await page.locator('#btn-export').click();
+    await page.locator('#exp-handoff').click();
     await expect(page.locator('#et-line')).toHaveAttribute('data-folder', '6');
     await page.locator('#et-mode-open').check();
     await expect(page.locator('#et-line')).toHaveAttribute('data-count', '1');
@@ -220,7 +229,9 @@ test.describe('BLK-primary-2303-wish 書き出す前の対象確認', () => {
   test('フォルダ全体で書き出すと、開いていない図も zip に入り、結果に枚数が残る', async ({ page }) => {
     await openWithFolder(page);
     const dl = page.waitForEvent('download', { timeout: 90000 });
-    await page.locator('#btn-tab-handoff').click();
+    // BLK-owner-20260918-0329-prune: 入口は Export ▾ の「渡す」
+    await page.locator('#btn-export').click();
+    await page.locator('#exp-handoff').click();
     await expect(page.locator('#et-line')).toHaveAttribute('data-count', '6');
     await page.locator('#et-build').click();
     const file = await dl;
@@ -232,7 +243,9 @@ test.describe('BLK-primary-2303-wish 書き出す前の対象確認', () => {
 
   test('キャンセルすれば何も書き出さずに閉じる', async ({ page }) => {
     await openTwoDiagrams(page);
-    await page.locator('#btn-tab-handoff').click();
+    // BLK-owner-20260918-0329-prune: 入口は Export ▾ の「渡す」
+    await page.locator('#btn-export').click();
+    await page.locator('#exp-handoff').click();
     await expect(page.locator('#et-modal')).toBeVisible();
     await page.locator('#et-cancel').click();
     await expect(page.locator('#et-modal')).toBeHidden();
@@ -264,7 +277,9 @@ test.describe('BLK-primary-0403-wish 未確定は既定で渡さない', () => {
 
   test('対象一覧で未確定に印が付き、既定で対象から外れる', async ({ page }) => {
     await openWithScratchFolder(page);
-    await page.locator('#btn-tab-handoff').click();
+    // BLK-owner-20260918-0329-prune: 入口は Export ▾ の「渡す」
+    await page.locator('#btn-export').click();
+    await page.locator('#exp-handoff').click();
     await expect(page.locator('#et-line')).toHaveAttribute('data-scratch', '2');
     await expect(page.locator('#et-line')).toHaveAttribute('data-include-scratch', '0');
     // 正式な 6 枚だけが的に載る (スクラッチ 2 枚は数に入らない)。
@@ -280,7 +295,9 @@ test.describe('BLK-primary-0403-wish 未確定は既定で渡さない', () => {
 
   test('チェックを入れれば同梱でき、外せばまた外れる', async ({ page }) => {
     await openWithScratchFolder(page);
-    await page.locator('#btn-tab-handoff').click();
+    // BLK-owner-20260918-0329-prune: 入口は Export ▾ の「渡す」
+    await page.locator('#btn-export').click();
+    await page.locator('#exp-handoff').click();
     await page.locator('#et-include-scratch').check();
     await expect(page.locator('#et-line')).toHaveAttribute('data-count', '8');
     await expect(page.locator('#et-line')).toContainText('未確定 2 枚を入れています');
@@ -302,7 +319,9 @@ test.describe('BLK-primary-0403-wish 未確定は既定で渡さない', () => {
     }, SEQ);
     await page.waitForTimeout(700);
     const dl = page.waitForEvent('download', { timeout: 90000 });
-    await page.locator('#btn-tab-handoff').click();
+    // BLK-owner-20260918-0329-prune: 入口は Export ▾ の「渡す」
+    await page.locator('#btn-export').click();
+    await page.locator('#exp-handoff').click();
     await page.locator('#et-mode-open').check();
     await expect(page.locator('.et-item[data-name="spi_init_sequence-編集中"]'))
       .toHaveAttribute('data-in', '0');

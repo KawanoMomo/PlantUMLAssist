@@ -64,7 +64,9 @@ test.describe('BLK-primary-1903 納品パッケージの対象は保存フォル
 
   test('タブが 1 枚でも、対象の既定はフォルダの 6 枚になる', async ({ page }) => {
     await openWithFolder(page);
-    await page.locator('#btn-tab-delivery').click();
+    // BLK-owner-20260918-0329-prune: 入口は Export ▾ の「渡す」
+    await page.locator('#btn-export').click();
+    await page.locator('#exp-delivery').click();
     await expect(page.locator('#dp-modal')).toBeVisible();
     // フォルダを読み終えるまで待つ (読み終えたら描き直される)
     await expect(page.locator('#dp-count')).toHaveText('6 / 6 枚');
@@ -78,7 +80,9 @@ test.describe('BLK-primary-1903 納品パッケージの対象は保存フォル
 
   test('開いているタブは「未オープン」にならない (同名はタブが勝つ)', async ({ page }) => {
     await openWithFolder(page);
-    await page.locator('#btn-tab-delivery').click();
+    // BLK-owner-20260918-0329-prune: 入口は Export ▾ の「渡す」
+    await page.locator('#btn-export').click();
+    await page.locator('#exp-delivery').click();
     await expect(page.locator('#dp-count')).toHaveText('6 / 6 枚');
     await expect(page.locator('.dp-item[data-open="1"]')).toHaveCount(1);
     await expect(page.locator('.dp-item[data-open="0"]')).toHaveCount(5);
@@ -86,7 +90,9 @@ test.describe('BLK-primary-1903 納品パッケージの対象は保存フォル
 
   test('対象から外すと「何枚が落ちるか」を警告として出す', async ({ page }) => {
     await openWithFolder(page);
-    await page.locator('#btn-tab-delivery').click();
+    // BLK-owner-20260918-0329-prune: 入口は Export ▾ の「渡す」
+    await page.locator('#btn-export').click();
+    await page.locator('#exp-delivery').click();
     await expect(page.locator('#dp-count')).toHaveText('6 / 6 枚');
     await page.locator('#dp-none').click();
     await page.locator('.dp-pick[data-name="spi_init_sequence"]').check();
@@ -101,7 +107,9 @@ test.describe('BLK-primary-1903 納品パッケージの対象は保存フォル
 
   test('「全部」で戻せる', async ({ page }) => {
     await openWithFolder(page);
-    await page.locator('#btn-tab-delivery').click();
+    // BLK-owner-20260918-0329-prune: 入口は Export ▾ の「渡す」
+    await page.locator('#btn-export').click();
+    await page.locator('#exp-delivery').click();
     await expect(page.locator('#dp-count')).toHaveText('6 / 6 枚');
     await page.locator('#dp-none').click();
     await expect(page.locator('#dp-count')).toHaveText('0 / 6 枚');
@@ -112,7 +120,9 @@ test.describe('BLK-primary-1903 納品パッケージの対象は保存フォル
 
   test('作った zip は開いていない図も含む (書き出しの結果に枚数が出る)', async ({ page }) => {
     await openWithFolder(page);
-    await page.locator('#btn-tab-delivery').click();
+    // BLK-owner-20260918-0329-prune: 入口は Export ▾ の「渡す」
+    await page.locator('#btn-export').click();
+    await page.locator('#exp-delivery').click();
     await expect(page.locator('#dp-count')).toHaveText('6 / 6 枚');
     const dl = page.waitForEvent('download');
     await page.locator('#dp-build').click();

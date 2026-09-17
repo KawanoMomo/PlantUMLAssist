@@ -48,14 +48,17 @@ test.describe('BLK-primary-1703-wish 納品パッケージ', () => {
     await page.addInitScript(() => { try { window.localStorage.clear(); } catch (e) {} });
   });
 
-  test('タブバーに「納品パッケージ」の道具が出る', async ({ page }) => {
+  test('Export ▾ の「渡す」に「納品パッケージ」が出る', async ({ page }) => {
     await gotoApp(page);
-    await expect(page.locator('#btn-tab-delivery')).toBeVisible();
+    await page.locator('#btn-export').click();
+    await expect(page.locator('#exp-delivery')).toBeVisible();
   });
 
   test('開くと、題・版数・対象の図・チェック結果・差分が 1 画面に揃う', async ({ page }) => {
     await openTwoDiagrams(page);
-    await page.locator('#btn-tab-delivery').click();
+    // BLK-owner-20260918-0329-prune: 入口は Export ▾ の「渡す」
+    await page.locator('#btn-export').click();
+    await page.locator('#exp-delivery').click();
     await expect(page.locator('#dp-modal')).toBeVisible();
     // まだ 1 度も出していないので初回提出、版数の既定は 1.0
     await expect(page.locator('#dp-last')).toContainText('まだ 1 度も提出していません');
@@ -69,7 +72,9 @@ test.describe('BLK-primary-1703-wish 納品パッケージ', () => {
 
   test('対象から外した図はその場で枚数に反映される', async ({ page }) => {
     await openTwoDiagrams(page);
-    await page.locator('#btn-tab-delivery').click();
+    // BLK-owner-20260918-0329-prune: 入口は Export ▾ の「渡す」
+    await page.locator('#btn-export').click();
+    await page.locator('#exp-delivery').click();
     await page.locator('#dp-list .dp-pick[data-name="Adc_State"]').uncheck();
     await expect(page.locator('#dp-count')).toHaveText('1 / 2 枚');
     await page.locator('#dp-all').click();
@@ -78,7 +83,9 @@ test.describe('BLK-primary-1703-wish 納品パッケージ', () => {
 
   test('1 クリックで表紙入りの zip が落ちてくる', async ({ page }) => {
     await openTwoDiagrams(page);
-    await page.locator('#btn-tab-delivery').click();
+    // BLK-owner-20260918-0329-prune: 入口は Export ▾ の「渡す」
+    await page.locator('#btn-export').click();
+    await page.locator('#exp-delivery').click();
     await page.locator('#dp-title').fill('GpioDrv 設計書');
     const dl = page.waitForEvent('download', { timeout: 90000 });
     await page.locator('#dp-build').click();
@@ -94,14 +101,18 @@ test.describe('BLK-primary-1703-wish 納品パッケージ', () => {
 
   test('出したあとに開き直すと、前回提出が控えられ次の版数が入る', async ({ page }) => {
     await openTwoDiagrams(page);
-    await page.locator('#btn-tab-delivery').click();
+    // BLK-owner-20260918-0329-prune: 入口は Export ▾ の「渡す」
+    await page.locator('#btn-export').click();
+    await page.locator('#exp-delivery').click();
     await page.locator('#dp-title').fill('GpioDrv 設計書');
     const dl = page.waitForEvent('download', { timeout: 90000 });
     await page.locator('#dp-build').click();
     await dl;
     await page.locator('#dp-close').click();
 
-    await page.locator('#btn-tab-delivery').click();
+    // BLK-owner-20260918-0329-prune: 入口は Export ▾ の「渡す」
+    await page.locator('#btn-export').click();
+    await page.locator('#exp-delivery').click();
     await expect(page.locator('#dp-last')).toContainText('前回提出 1.0');
     await expect(page.locator('#dp-title')).toHaveValue('GpioDrv 設計書');
     await expect(page.locator('#dp-revision')).toHaveValue('1.1');
@@ -112,7 +123,9 @@ test.describe('BLK-primary-1703-wish 納品パッケージ', () => {
 
   test('前回提出のあとに直した図だけが「変更」と出る', async ({ page }) => {
     await openTwoDiagrams(page);
-    await page.locator('#btn-tab-delivery').click();
+    // BLK-owner-20260918-0329-prune: 入口は Export ▾ の「渡す」
+    await page.locator('#btn-export').click();
+    await page.locator('#exp-delivery').click();
     const dl = page.waitForEvent('download', { timeout: 90000 });
     await page.locator('#dp-build').click();
     await dl;
@@ -127,7 +140,9 @@ test.describe('BLK-primary-1703-wish 納品パッケージ', () => {
     await page.waitForTimeout(600);
     await setDsl(page, SEQ.replace('@enduml', 'App -> Adc : Start\n@enduml'));
 
-    await page.locator('#btn-tab-delivery').click();
+    // BLK-owner-20260918-0329-prune: 入口は Export ▾ の「渡す」
+    await page.locator('#btn-export').click();
+    await page.locator('#exp-delivery').click();
     await expect(page.locator('#dp-change-line')).toContainText('変更 1 枚');
     await expect(page.locator('#dp-list label:has-text("Adc_Seq")')).toContainText('変更');
     await expect(page.locator('#dp-list label:has-text("Adc_State")')).toContainText('変更なし');
@@ -190,7 +205,9 @@ test.describe('BLK-primary-1703-wish 納品パッケージ', () => {
     await put('Adc_Seq', SEQ);
     await put('Adc_State', ST);
 
-    await page.locator('#btn-tab-delivery').click();
+    // BLK-owner-20260918-0329-prune: 入口は Export ▾ の「渡す」
+    await page.locator('#btn-export').click();
+    await page.locator('#exp-delivery').click();
     await expect(page.locator('#dp-history')).toContainText('提出はまだ記録されていません');
     await expect(page.locator('#dp-count')).toContainText('枚');
     await page.locator('#dp-title').fill('GpioDrv 設計書');
@@ -203,7 +220,9 @@ test.describe('BLK-primary-1703-wish 納品パッケージ', () => {
     await boot();
     // Adc_Seq だけをフォルダ側で直す。
     await put('Adc_Seq', SEQ.replace('@enduml', ['App -> Adc : Start', '@enduml'].join('\n')));
-    await page.locator('#btn-tab-delivery').click();
+    // BLK-owner-20260918-0329-prune: 入口は Export ▾ の「渡す」
+    await page.locator('#btn-export').click();
+    await page.locator('#exp-delivery').click();
     await expect(page.locator('#dp-last')).toContainText('前回提出 1.0');
     await expect(page.locator('#dp-history')).toContainText('前回 ');
     await expect(page.locator('#dp-change-line')).not.toContainText('初回提出');

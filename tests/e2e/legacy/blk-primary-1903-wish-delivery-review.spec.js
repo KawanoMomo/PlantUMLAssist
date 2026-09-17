@@ -46,13 +46,17 @@ test.describe('BLK-primary-1903-wish 提出前レビュー', () => {
 
   test('納品パッケージに「変更前後を見比べる」が出る', async ({ page }) => {
     await gotoApp(page);
-    await page.locator('#btn-tab-delivery').click();
+    // BLK-owner-20260918-0329-prune: 入口は Export ▾ の「渡す」
+    await page.locator('#btn-export').click();
+    await page.locator('#exp-delivery').click();
     await expect(page.locator('#dp-review')).toBeVisible();
   });
 
   test('押すと前回提出と今回が並び、変わった文字を名指しする', async ({ page }) => {
     await submitThenEdit(page);
-    await page.locator('#btn-tab-delivery').click();
+    // BLK-owner-20260918-0329-prune: 入口は Export ▾ の「渡す」
+    await page.locator('#btn-export').click();
+    await page.locator('#exp-delivery').click();
     await page.locator('#dp-review').click();
     await expect(page.locator('#dr-modal')).toBeVisible();
     // 変更のある図が最初に開く
@@ -66,7 +70,9 @@ test.describe('BLK-primary-1903-wish 提出前レビュー', () => {
 
   test('「重ねて表示」に切り替えると 2 枚が重なる', async ({ page }) => {
     await submitThenEdit(page);
-    await page.locator('#btn-tab-delivery').click();
+    // BLK-owner-20260918-0329-prune: 入口は Export ▾ の「渡す」
+    await page.locator('#btn-export').click();
+    await page.locator('#exp-delivery').click();
     await page.locator('#dp-review').click();
     await expect(page.locator('#dr-summary')).toContainText('見た目が変わっています', { timeout: 20000 });
     await expect(page.locator('#dr-mode')).toContainText('並べて表示中');
@@ -83,14 +89,18 @@ test.describe('BLK-primary-1903-wish 提出前レビュー', () => {
       ws.rename(ws.getActiveId(), 'New_Seq');
     });
     await setDsl(page, SEQ_A);
-    await page.locator('#btn-tab-delivery').click();
+    // BLK-owner-20260918-0329-prune: 入口は Export ▾ の「渡す」
+    await page.locator('#btn-export').click();
+    await page.locator('#exp-delivery').click();
     await page.locator('#dp-review').click();
     await expect(page.locator('#dr-summary')).toContainText('新規の図です', { timeout: 20000 });
   });
 
   test('戻ると納品パッケージがそのまま残っている', async ({ page }) => {
     await submitThenEdit(page);
-    await page.locator('#btn-tab-delivery').click();
+    // BLK-owner-20260918-0329-prune: 入口は Export ▾ の「渡す」
+    await page.locator('#btn-export').click();
+    await page.locator('#exp-delivery').click();
     await page.locator('#dp-review').click();
     await expect(page.locator('#dr-modal')).toBeVisible();
     await page.locator('#dr-close').click();

@@ -27,14 +27,20 @@ test('札を 1 クリックで畳んだ一覧が開き、そこから引き継�
   await page.locator('#btn-tab-tools-mini').click();
   await expect(page.locator('#tool-menu')).toBeVisible();
   await expect(page.locator('#tool-menu .tool-menu-title')).toHaveText([
-    '図をつくる', '書き換える', '探す・見比べる', '確かめる', 'レビュー', '渡す',
+    '図をつくる', '書き換える', '探す・見比べる', '確かめる', 'レビュー',
   ]);
-  // 新人に渡す「引き継ぎ zip」がコマンド名を知らなくても目で見つかる。
-  const item = page.locator('.tool-menu-item[data-target="btn-tab-handoff"]');
+  // BLK-owner-20260918-0329-prune: 「引き継ぎ zip」の入口は Export ▾ の「渡す」へ移した。
+  // コマンド名を知らなくても目で見つかることは変わらない。
+  await page.keyboard.press('Escape');
+  await page.locator('#btn-export').click();
+  const item = page.locator('#exp-handoff');
   await expect(item).toBeVisible();
-  await expect(item).toHaveText(/引き継ぎ zip/);
-  const dl = page.waitForEvent('download', { timeout: 60000 });
+  await expect(item).toHaveText(/引き継ぎ/);
   await item.click();
+  // 引き継ぎは押すとまず「対象確認」を出し、書き出しはそこから始まる。
+  await expect(page.locator('#et-modal')).toBeVisible();
+  const dl = page.waitForEvent('download', { timeout: 60000 });
+  await page.locator('#et-build').click();
   const file = await dl;
   expect(file.suggestedFilename()).toMatch(/^handoff-\d{8}-\d{4}\.zip$/);
 });
@@ -47,10 +53,12 @@ test('引き継ぎに辿り着く手数を実測する (クリック 10 以下 /
   let keys = 0;
   const click = async (sel) => { clicks += 1; await page.locator(sel).click(); };
 
-  await click('#btn-tab-tools-mini');
-  await expect(page.locator('#tool-menu')).toBeVisible();
+  await click('#btn-export');
+  await expect(page.locator('#export-menu')).toBeVisible();
+  await click('#exp-handoff');
+  await expect(page.locator('#et-modal')).toBeVisible();
   const dl = page.waitForEvent('download', { timeout: 60000 });
-  await click('.tool-menu-item[data-target="btn-tab-handoff"]');
+  await click('#et-build');
   const file = await dl;
   expect(file.suggestedFilename()).toMatch(/^handoff-\d{8}-\d{4}\.zip$/);
 
@@ -82,6 +90,9 @@ test('「ツール ▾」を出す選択をすると札は引っ込む (入口�
   // 畳みを解いて機能ボタンを並べても、札は出ない。
   await page.locator('#btn-tab-tools').click();
   await page.locator('#tool-menu-fold').click();
-  await expect(page.locator('#btn-tab-handoff')).toBeVisible();
+  // BLK-owner-20260918-0329-prune: 引き継ぎはタブ列に戻らない (入口は Export ▾)。
+  // タブ列に戻るのは畳んでいた他の道具。
+  await expect(page.locator('#btn-tab-board')).toBeVisible();
+  await expect(page.locator('#btn-tab-handoff')).toBeHidden();
   await expect(page.locator('#btn-tab-tools-mini')).toBeHidden();
 });

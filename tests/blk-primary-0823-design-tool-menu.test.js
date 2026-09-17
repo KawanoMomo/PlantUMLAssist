@@ -13,9 +13,13 @@ var tm = W.MA.toolMenu;
 const html = fs.readFileSync(path.resolve(__dirname, '..', 'plantuml-assist.html'), 'utf8');
 
 describe('ツールメニューの分類', function() {
-  test('design 7a の 6 分類がこの順で並ぶ', function() {
+  // BLK-owner-20260918-0329-prune: 「渡す」はこのメニューから外し、Export ▾ の
+  // 「渡す」1 か所に集めた。分類自体は Ctrl+K のために残るので groupOf は 'give' を返す。
+  test('design 7a の分類がこの順で並ぶ (渡す は Export ▾ へ移した)', function() {
     expect(tm.groups().map(function(g) { return g.title; }))
-      .toEqual(['図をつくる', '書き換える', '探す・見比べる', '確かめる', 'レビュー', '渡す']);
+      .toEqual(['図をつくる', '書き換える', '探す・見比べる', '確かめる', 'レビュー']);
+    expect(tm.menuIds().indexOf('btn-tab-handoff')).toBe(-1);
+    expect(tm.menuIds().indexOf('btn-tab-delivery')).toBe(-1);
   });
 
   test('どの分類も 1 件以上を持ち、項目 id は重複しない', function() {
