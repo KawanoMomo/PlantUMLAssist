@@ -707,6 +707,88 @@ function init() {
     return res;
   }
 
+  // BLK-junior-20260918-0149: 帯・帯下のライフラインを押すと挿入ピッカーは開くが、
+  // 図の上には何の跡も残らない (選択は意図的に外す) ので、押した場所が効いたのか、
+  // どちらの側に入るのかが図を見ても分からなかった。押して決まった帯の内側 / 外側を
+  // そのまま図の上に塗り、ピッカーを閉じるまで残す。
+  function _clearBandPickMark() {
+    _resetPickerPlacement();
+    var ov = document.getElementById('overlay-layer');
+    if (!ov) return;
+    Array.prototype.slice.call(ov.querySelectorAll('[data-type="band-pick"]')).forEach(function(n) {
+      if (n.parentNode) n.parentNode.removeChild(n);
+    });
+  }
+
+  function _markBandPick(res) {
+    _clearBandPickMark();
+    if (!res || !res.zone) return;
+    var ov = document.getElementById('overlay-layer');
+    if (!ov) return;
+    var zone = ov.querySelector('rect[data-type="band-zone"][data-line="' + res.bandLine + '"]');
+    if (!zone) return;
+    var zx = parseFloat(zone.getAttribute('x'));
+    var zy = parseFloat(zone.getAttribute('y'));
+    var zw = parseFloat(zone.getAttribute('width'));
+    var zh = parseFloat(zone.getAttribute('height'));
+    if (isNaN(zx) || isNaN(zy) || isNaN(zw) || isNaN(zh)) return;
+    var PAD = 4;
+    var x = zx - PAD;
+    var w = zw + PAD * 2;
+    var y, h, label;
+    if (res.zone === 'inside') {
+      y = zy - PAD; h = zh + PAD * 2; label = '帯の内側に挿入';
+    } else {
+      // 帯を抜けた先。帯の下端から押した点までのライフラインを塗る。
+      y = zy + zh;
+      h = Math.max(12, (typeof res.clickY === 'number' ? res.clickY : y + 12) - y + PAD);
+      label = '帯の外側 (帯の下) に挿入';
+    }
+    var NS = 'http://www.w3.org/2000/svg';
+    var r = document.createElementNS(NS, 'rect');
+    r.setAttribute('x', x); r.setAttribute('y', y);
+    r.setAttribute('width', w); r.setAttribute('height', h);
+    r.setAttribute('data-type', 'band-pick');
+    r.setAttribute('data-zone', res.zone);
+    r.setAttribute('class', 'band-pick');
+    r.style.pointerEvents = 'none';
+    ov.appendChild(r);
+    var t = document.createElementNS(NS, 'text');
+    t.setAttribute('x', x + w + 6);
+    t.setAttribute('y', y + Math.min(h, 14));
+    t.setAttribute('data-type', 'band-pick');
+    t.setAttribute('class', 'band-pick-label');
+    t.style.pointerEvents = 'none';
+    t.textContent = label;
+    ov.appendChild(t);
+  }
+
+  // 中央に出るピッカーは、押した帯そのものを覆い隠す (跡を付けても見えない)。
+  // 押した点と反対側の半分に寄せ、帯と跡を見ながら選べるようにする。
+  function _placePickerAside(clientX) {
+    var m = document.getElementById('seq-modal');
+    if (!m) return;
+    m.style.justifyContent = (clientX < window.innerWidth / 2) ? 'flex-end' : 'flex-start';
+    m.style.padding = '0 24px';
+  }
+
+  function _resetPickerPlacement() {
+    var m = document.getElementById('seq-modal');
+    if (!m) return;
+    m.style.justifyContent = 'center';
+    m.style.padding = '';
+  }
+
+  // ピッカーを閉じたら跡も消す (確定した場合は描き直しで overlay ごと作り直される)。
+  document.addEventListener('click', function(e) {
+    var m = document.getElementById('seq-modal');
+    if (!m || m.style.display === 'none') return;
+    if (m.contains(e.target)) setTimeout(_clearBandPickMark, 0);
+  }, false);
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') _clearBandPickMark();
+  }, false);
+
   // ── 矢印に乗せたときの相手表示 ──
   // BLK-junior-20260908-1703: 同じ部品から出る点線が 2 本あると色も太さも同じで、
   // 1 本クリックしては右パネルの From/To を読み、違えばもう 1 本、という当て物に
@@ -1109,7 +1191,9 @@ function init() {
         setMmdText: function(s) { mmdText = s; suppressSync = true; editorEl.value = s; suppressSync = false; },
         onUpdate: function() { scheduleRefresh(); },
       };
+      _markBandPick(res);
       currentModule.showInsertPicker(insertCtx, res.line, res.position, _zoneHintOf(res));
+      _placePickerAside(e.clientX);
       if (typeof clearHoverGuide === 'function') clearHoverGuide();
     }, true);
     window.MA.selectionRouter.bind(overlayEl, {
