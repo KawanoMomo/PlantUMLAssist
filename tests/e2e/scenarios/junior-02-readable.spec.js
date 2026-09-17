@@ -1276,3 +1276,45 @@ test('手順1 先輩に同じ図種が無いことが、突き合わせの答え
   await expect(opts.filter({ hasText: 'timer_state' }))
     .toContainText('状態遷移図。図種が違います');
 });
+
+// BLK-junior-20260917-0523-wish: 図種は合っても部品名が違う相手 (TIMER を含まない
+// driver_common_class) が「対応が付きません。選んでください」に混じり、開いて読むまで
+// TIMER 用でないと分からなかった。部品名を含む同じ図種が 0 枚なら、選ばせずに言い切り、
+// その場で「対応不要（手本なし）」として控えられる。
+const CLS_SENIOR_COMMON = [
+  '@startuml', 'class Spi', 'class Can', 'class Gpio', 'class Uart', 'class Adc', '@enduml',
+].join('\n');
+
+test('手順1 同じ図種でも部品名が違う図しか無ければ、開かずに「無い」と分かり控えられる', async ({ page }) => {
+  await S.bootWithSaveDir(page, MINE_DIR);
+  await S.clearDir(page, MINE_DIR);
+  await S.clearDir(page, SENIOR_DIR);
+  await S.putDoc(page, SENIOR_DIR, 'timer_init_sequence', CLS_SENIOR_SEQ);
+  await S.putDoc(page, SENIOR_DIR, 'timer_state', CLS_SENIOR_STATE);
+  await S.putDoc(page, SENIOR_DIR, 'driver_common_class', CLS_SENIOR_COMMON);
+  await page.reload();
+  await page.waitForSelector('#btn-tab-compare');
+  await S.typeDsl(page, CLS_SELF);
+  await S.renameActive(page, 'TimerDrv派生クラス図');
+
+  await page.locator('#btn-tab-compare').click();
+  await page.locator('#xf-dir').fill(SENIOR_DIR);
+  await page.locator('#btn-xf-load').click();
+  const summary = page.locator('#xf-summary');
+  await expect(summary).toBeVisible();
+
+  // 到達条件その1: 部品名つきで「無い」と言い切る (候補を開いて読まなくてよい)。
+  await expect(summary).toContainText('TIMER のクラス図がありません');
+  await expect(summary).toContainText('3 枚中 0 枚');
+  await expect(summary).toContainText('先へ進めます');
+  await expect(summary).toHaveClass(/clean/);
+  await expect(page.locator('#xf-list')).toBeHidden();
+
+  // 到達条件その2: その場で「対応不要（手本なし）」として自分の図に控えられる。
+  const keep = page.locator('#xf-keep-verdict');
+  await expect(keep).toBeVisible();
+  await keep.click();
+  await expect(keep).toBeDisabled();
+  await expect.poll(() => getEditorText(page)).toContain("' @peek ");
+  await expect.poll(() => getEditorText(page)).toContain('TIMER の手本なし');
+});

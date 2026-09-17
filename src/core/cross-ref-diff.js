@@ -131,6 +131,25 @@ window.MA.crossRefDiff = (function() {
     return lab ? lab + '図' : 'この図種';
   }
 
+  // 名前から部品名を拾う。先頭の英字の塊から Drv/Driver を落とした形 (小文字)。
+  // 「TimerDrv派生クラス図」「TIMERドライバ状態遷移」「timer_state」→ timer。
+  // 部品を指さない語 (diagram1, driver_common_class) からは拾わない ('' を返す)。
+  var GENERIC_PART = { diagram: 1, driver: 1, drv: 1, plantuml: 1, common: 1, class: 1,
+    sequence: 1, state: 1, activity: 1, usecase: 1, component: 1, sample: 1, test: 1, new: 1 };
+  function partOf(name) {
+    var m = baseName(name).match(/^[A-Za-z][A-Za-z0-9]*/);
+    if (!m) return '';
+    var w = m[0];
+    // TimerDrv / Timer_Driver の接尾辞を落とす (大文字始まりの区切りも見る)
+    w = w.replace(/(?:_?(?:driver|drv))$/i, '').replace(/[0-9]+$/, '').toLowerCase();
+    if (w.length < 2 || GENERIC_PART[w]) return '';
+    return w;
+  }
+
+  function _cpHasPart(name, part) {
+    return _s(name).toLowerCase().indexOf(_s(part).toLowerCase()) >= 0;
+  }
+
   function counterpartVerdict(names, selfName, selfKind) {
     var list = counterparts(names, selfName, selfKind);
     var pick = pickCounterpart(names, selfName, selfKind);
@@ -149,6 +168,24 @@ window.MA.crossRefDiff = (function() {
         message: '相手のフォルダに' + word + 'がありません (' + list.length + ' 枚中 0 枚)。'
           + '比較元が無いので、先輩側の増分は無しとして先へ進めます',
       };
+    }
+    // BLK-junior-20260917-0523-wish: 図種は合っても部品名が違う図 (TIMER の図に対する
+    // driver_common_class) は相手ではない。同じ図種の中に部品名を含む候補が 1 枚も
+    // 無ければ、選ばせずに「その部品の図は無い」と言い切る。
+    var part = partOf(selfName);
+    if (part !== '') {
+      var samePart = list.filter(function(c) {
+        return !c.kindMismatch && _cpHasPart(c.name, part);
+      }).length;
+      if (samePart === 0) {
+        var P = part.toUpperCase();
+        return {
+          state: 'no-part', name: null, total: list.length, sameKind: sameKind, samePart: 0, part: P,
+          message: P + ' の' + word + 'がありません (' + list.length + ' 枚中 0 枚)。'
+            + word + 'は ' + sameKind + ' 枚ありますが、どれも ' + P + ' を含みません。'
+            + '比較元が無いので、先輩側の増分は無しとして先へ進めます',
+        };
+      }
     }
     return {
       state: 'no-match', name: null, total: list.length, sameKind: sameKind,
@@ -649,6 +686,7 @@ window.MA.crossRefDiff = (function() {
     counterparts: counterparts,
     pickCounterpart: pickCounterpart,
     counterpartVerdict: counterpartVerdict,
+    partOf: partOf,
     renameMap: renameMap,
     applyRename: applyRename,
     keyOf: keyOf,
