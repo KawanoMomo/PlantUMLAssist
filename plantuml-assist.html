@@ -1601,6 +1601,8 @@ html, body {
 body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px dashed var(--accent, #58a6ff); outline-offset: -4px; }
 #unsupported-panel { font-size: 11px; padding: 6px 10px; border-bottom: 1px solid var(--border, #444); background: #2a2410; color: #e3b341; max-height: 160px; overflow: auto; }
 #unsupported-panel[hidden] { display: none; }
+/* 右上に浮くズーム帯 (#zoom-hud) の幅ぶんを空け、一覧の見出しが帯の下に隠れないようにする */
+#unsupported-summary { padding-right: 275px; }
 #unsupported-panel ul { margin: 4px 0 0 16px; padding: 0; }
 #unsupported-panel button { font-size: 11px; margin-right: 6px; }
 /* BLK-primary-20260908-0923-design (7b): タブ列にはボタンを 1 つも置かない。
