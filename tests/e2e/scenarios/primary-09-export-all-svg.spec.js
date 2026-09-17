@@ -164,6 +164,45 @@ test('手順9 資料セットを登録すると、タブを開き直さずに保
     if (buf[i] === 0x50 && buf[i + 1] === 0x4b && buf[i + 2] === 0x03 && buf[i + 3] === 0x04) svgs++;
   }
   expect(svgs).toBeGreaterThanOrEqual(picked);
+
+  // BLK-primary-20260918-0249 到達条件その5: zip が保存フォルダに実際に届いている。
+  // 起票の事故は「トーストは成功、ファイルはどこにも無い」だったので、
+  // 画面の文言ではなくフォルダの中身で確かめる。
+  const landed = require('path').join(S.absDirFor(__filename), download.suggestedFilename());
+  expect(require('fs').existsSync(landed)).toBe(true);
+  expect(require('fs').statSync(landed).size).toBe(buf.length);
+});
+
+// BLK-primary-20260918-0249: 届かなかったときに「保存しました」と出ると、
+// ファイルが無いことに画面上で気付けない。保存が断られた回は成功を名乗らない。
+test('手順9 資料セットの zip が保存できなかった回は、成功と表示しない', async ({ page }) => {
+  test.setTimeout(180 * 1000);
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  for (const n of S.PRIMARY_DOCS) await S.putDoc(page, DIR, n, S.docFor(n));
+  await page.reload();
+  await page.waitForSelector('#preview-svg');
+
+  // 保存先が書けない状況を作る (ディスク不足・権限なしと同じ経路)。
+  await page.route('**/export-zip', (route) => route.fulfill({
+    status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'write failed' }),
+  }));
+
+  await page.locator('#btn-export').click();
+  await page.waitForSelector('#export-menu', { state: 'visible' });
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-modal', { state: 'visible' });
+  await page.locator('#docset-name').fill('顧客資料');
+  await page.locator('#docset-create').click();
+
+  const row = page.locator('.ds-row[data-set-name="顧客資料"]');
+  await expect(row).toHaveCount(1);
+  await row.locator('.ds-export').click();
+
+  // 到達条件: 保存できなかったことを言い、「保存しました」とは言わない。
+  await expect(page.locator('#docset-status'))
+    .toContainText('zip を保存できませんでした', { timeout: 150000 });
+  await expect(page.locator('#docset-status')).not.toContainText('枚を SVG で保存しました');
 });
 
 // BLK-primary-20260916-0100-wish: 資料セットは登録して zip を出すところまでしか GUI で

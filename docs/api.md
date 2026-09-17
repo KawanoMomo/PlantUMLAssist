@@ -91,6 +91,7 @@ curl -sS -X POST http://127.0.0.1:8766/verify-svg -H "Content-Type: application/
 | `GET /cohort-ack` | `?dir=` | 保存フォルダの**親**にある確認済みの組の台帳 (`_cohort-ack.json`。ドメイン突合で内部揺れと確かめた組) |
 | `POST /cohort-ack` | `{dir, entries}` | 確認済みの組の台帳を丸ごと置き換える |
 | `POST /file-roles` | `{dir, roles}` | `_roles.json` を丸ごと置き換える |
+| `POST /export-zip` | `{dir, name, base64}` | 書き出した zip を保存フォルダに置き、書けたバイト数を返す |
 | `POST /export-log` | — | 書き出しの控えを 1 件足す |
 
 `GET /version-search` の `q` は空白区切りの語 (最大 6 語)。返りは
