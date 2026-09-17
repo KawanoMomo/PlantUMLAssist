@@ -222,6 +222,9 @@ test('手順2 過去に当てた置換の組が、打つ前に「適用済み / 
   await expect(row).toHaveAttribute('data-state', 'done');
   await expect(row).toHaveAttribute('data-remaining', '0');
   await expect(page.locator('#rename-redo-summary')).toContainText('適用済み');
+  // BLK-primary-20260917-0523-friction: 開いた時点で行そのものが残件数を言う
+  // (下端の統一バッジを押して確かめに行かない)。
+  await expect(row.locator('.rr-state')).toHaveText(/^統一 済 · 残り 0 件 \(\d+ 枚に適用\)$/);
   // 打っていないのに欄は埋まっている。打ち直す 17 打を開いた時点で消すのが
   // BLK-primary-20260914-1106-friction の直しで、空欄に焦点が入ると利用者は
   // 履歴の行を探すより先に打ち始めてしまっていた (旧: 置換前の欄は空のまま)。

@@ -32,6 +32,13 @@ describe('rename-redo: 過去の置換の組', function() {
     expect(rows[0].appliedDocs).toBe(2);
   });
 
+  // BLK-primary-20260917-0523-friction: パネルを開いた時点で、適用済みの行にも
+  // 残件数を出す (下端のバッジを押して確かめに行かなくてよい)。
+  test('適用済みの行は開いた時点で「統一 済 · 残り 0 件」と残件数まで言う', function() {
+    var rows = RR.pairs([hist('SpiDrv', 'Spi_Driver')], DOCS);
+    expect(RR.stateText(rows[0])).toBe('統一 済 · 残り 0 件 (2 枚に適用)');
+  });
+
   test('旧称が残っている組は pending で、残りの件数と枚数を出す', function() {
     var rows = RR.pairs([hist('CanDrv', 'Can_Driver')], DOCS);
     expect(rows[0].state).toBe('pending');
