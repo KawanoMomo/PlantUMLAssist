@@ -21803,8 +21803,11 @@ function loadCrossRefFolder() {
     var verdict = CRD ? CRD.counterpartVerdict(_xfEntries, selfName, _xfSelfKind()) : null;
     _xfRenderPick(verdict && verdict.name ? verdict.name : '');
     if (!verdict || verdict.state !== 'picked') {
-      _xfShowMessage(verdict ? verdict.message : '相手が決まりません',
-        (verdict && verdict.state === 'no-kind') ? 'clean' : 'dirty');
+      var settledState = verdict && (verdict.state === 'no-kind' || verdict.state === 'no-part');
+      _xfShowMessage(verdict ? verdict.message : '相手が決まりません', settledState ? 'clean' : 'dirty');
+      // BLK-junior-20260917-0523-wish: 相手に実体が無いと言い切れたら、その場で
+      // 「対応不要（手本なし）」として自分の図に控えられるようにする (覗き一覧の控えと同じ行)。
+      if (settledState) _xfAppendKeepVerdict(dir, verdict);
       _xfFile = null;
       _xfResult = null;
       var xl = _xfEl('xf-list');
@@ -21813,6 +21816,40 @@ function loadCrossRefFolder() {
     }
     return _xfSelectFile(verdict.name);
   });
+}
+
+function _xfAppendKeepVerdict(dir, verdict) {
+  var summary = _xfEl('xf-summary');
+  var PV = window.MA.peekVerdict, DK = window.MA.diagramKind, PF = window.MA.peekFolder;
+  var doc = window.MA.workspace ? window.MA.workspace.getActive() : null;
+  var slug = _xfSelfKind();
+  if (!summary || !PV || !doc || !slug) return;
+  var kind = (DK && DK.label) ? DK.label(slug) : slug;
+  var dirName = PF ? PF.baseName(dir) : dir;
+  var had = PV.find(doc.dsl, kind, dirName);
+  var b = document.createElement('button');
+  b.type = 'button';
+  b.id = 'xf-keep-verdict';
+  b.className = 'peek-verdict-act';
+  if (had && !PV.isStale(had, 0)) {
+    b.textContent = '👀手本なし（控え済み）';
+    b.disabled = true;
+  } else {
+    b.textContent = '対応不要（手本なし）として控える';
+    b.title = doc.name + ' に「' + dirName + ' に ' + kind + ' の手本は無い」と書き残します';
+    b.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      _writePeekVerdict(PV.write(doc.dsl, {
+        kind: kind, dir: dirName, count: 0, at: new Date().toISOString().slice(0, 16),
+        note: verdict.state === 'no-part'
+          ? '対応不要（' + verdict.part + ' の手本なし）' : '対応不要（手本なし）',
+      }));
+      b.textContent = '👀手本なし（控え済み）';
+      b.disabled = true;
+    });
+  }
+  summary.appendChild(document.createTextNode(' '));
+  summary.appendChild(b);
 }
 
 // いま開いている図の図種。本文から見る (保存前の図にも答えが要る)。

@@ -74,7 +74,8 @@ describe('相手が決まらないことを答えにする', () => {
 
   test('その図種はあるが名前が離れているときは、選べと言う', () => {
     const v = CRD().counterpartVerdict(
-      [{ name: 'zzz_qqq', kind: 'class' }], 'TimerDrv派生クラス図', 'class');
+      // 部品名 (TIMER) を含まない候補は 0523-wish で no-part になるので、部品名の無い自分の図で見る。
+      [{ name: 'zzz_qqq', kind: 'class' }], 'クラス図下書き', 'class');
     expect(v.state).toBe('no-match');
     expect(v.sameKind).toBe(1);
     expect(v.message).toContain('選んでください');
