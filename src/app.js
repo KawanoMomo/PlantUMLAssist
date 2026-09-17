@@ -2889,6 +2889,19 @@ function init() {
   document.getElementById('exp-svg-all').addEventListener('click', function() { exportMenu.classList.remove('open'); exportAllSVG(); });
   // BLK-primary-20260914-2006-wish: 対象をタブから切り離して名前で選ぶ入口。
   document.getElementById('exp-docset').addEventListener('click', function() { exportMenu.classList.remove('open'); openDocSetModal(); });
+  // BLK-owner-20260918-0329-prune: 「zip にして渡す」入口を Export ▾ の「渡す」に集める。
+  // 処理はタブ列から外した実体のボタン側に残し、ここはその click を鳴らすだけ
+  // (Ctrl+K と同じ経路を通すので、名前も挙動も 1 つのまま)。
+  ['exp-delivery:btn-tab-delivery', 'exp-handoff:btn-tab-handoff'].forEach(function(pair) {
+    var p = pair.split(':');
+    var entry = document.getElementById(p[0]);
+    if (!entry) return;
+    entry.addEventListener('click', function() {
+      exportMenu.classList.remove('open');
+      var real = document.getElementById(p[1]);
+      if (real) real.click();
+    });
+  });
 
   // FEAT-117 (resolves HFR-046 前半): Ctrl+E でエクスポートメニューを開き、先頭項目へ
   // フォーカスを移してキーボードだけで形式を選べるようにする。

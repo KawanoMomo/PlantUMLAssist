@@ -54,11 +54,22 @@ window.MA.toolMenu = (function() {
       { id: 'btn-tab-lineage',  label: 'この図の継承元' },
       { id: 'btn-tab-board',    label: '変更サマリ' },
     ] },
+    // BLK-owner-20260918-0329-prune: 「渡す」(引き継ぎ zip / 納品パッケージ zip) はこのメニューに
+    // 出さない。zip にして渡す入口は Export ▾ の「渡す」1 か所に集めた。分類と言い換えは
+    // MOVED_TO_EXPORT に残すので、Ctrl+K では今まで通り「渡す」の分類・同じ名前で引ける。
+  ];
+
+  // メニューからは外したが、分類と言い換えは生きているもの (入口は Export ▾)。
+  var MOVED_TO_EXPORT = [
     { key: 'give', title: '渡す', items: [
       { id: 'btn-tab-handoff',  label: '引き継ぎ zip' },
       { id: 'btn-tab-delivery', label: '納品パッケージ zip' },
     ] },
   ];
+
+  function allGroups() {
+    return GROUPS.concat(MOVED_TO_EXPORT);
+  }
 
   // タブ列に残すもの。図そのものの出し入れ (＋ / 📂 一覧) はツールではないので畳まない。
   // ⇔ 先輩の図 (BLK-junior-20260914-1406-wish) も畳まない。開いて終わる道具ではなく
@@ -106,18 +117,20 @@ window.MA.toolMenu = (function() {
   }
 
   function groupOf(id) {
-    for (var i = 0; i < GROUPS.length; i++) {
-      for (var j = 0; j < GROUPS[i].items.length; j++) {
-        if (GROUPS[i].items[j].id === id) return GROUPS[i].key;
+    var GS = allGroups();
+    for (var i = 0; i < GS.length; i++) {
+      for (var j = 0; j < GS[i].items.length; j++) {
+        if (GS[i].items[j].id === id) return GS[i].key;
       }
     }
     return null;
   }
 
   function labelOf(id) {
-    for (var i = 0; i < GROUPS.length; i++) {
-      for (var j = 0; j < GROUPS[i].items.length; j++) {
-        if (GROUPS[i].items[j].id === id) return GROUPS[i].items[j].label;
+    var GS = allGroups();
+    for (var i = 0; i < GS.length; i++) {
+      for (var j = 0; j < GS[i].items.length; j++) {
+        if (GS[i].items[j].id === id) return GS[i].items[j].label;
       }
     }
     return null;

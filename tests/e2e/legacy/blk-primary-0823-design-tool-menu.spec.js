@@ -18,14 +18,14 @@ test.beforeEach(async ({ page }) => {
   await gotoApp(page);
 });
 
-test('ツールボタンで 6 分類のメニューが開き、Ctrl+K の注記が出る', async ({ page }) => {
+test('ツールボタンで分類のメニューが開き、Ctrl+K の注記が出る', async ({ page }) => {
   await expect(page.locator('#tool-menu')).toBeHidden();
   await page.locator('#btn-tab-tools').click();
 
   const menu = page.locator('#tool-menu');
   await expect(menu).toBeVisible();
   await expect(menu.locator('.tool-menu-title')).toHaveText([
-    '図をつくる', '書き換える', '探す・見比べる', '確かめる', 'レビュー', '渡す',
+    '図をつくる', '書き換える', '探す・見比べる', '確かめる', 'レビュー',
   ]);
   await expect(menu.locator('.tool-menu-note')).toHaveText('Ctrl+K でも同じ操作が引ける');
   await expect(page.locator('#btn-tab-tools')).toHaveAttribute('aria-expanded', 'true');
@@ -45,10 +45,18 @@ test('「レビュー」の分類から変更サマリを開ける', async ({ pa
   await expect(page.locator('#cb-modal')).toBeVisible();
 });
 
-test('「渡す」の分類から納品パッケージを引ける', async ({ page }) => {
+// BLK-owner-20260918-0329-prune: 「渡す」(zip にして渡す) の入口は Export ▾ に集めた。
+// ツールメニューにはもう出さず、Export ▾ の「渡す」から 3 つとも引ける。
+test('「渡す」は Export ▾ にまとまり、ツールメニューには出ない', async ({ page }) => {
   await page.locator('#btn-tab-tools').click();
-  const group = page.locator('.tool-menu-group[data-group="give"]');
-  await expect(group.locator('.tool-menu-label')).toHaveText(['引き継ぎ zip', '納品パッケージ zip']);
+  await expect(page.locator('.tool-menu-group[data-group="give"]')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+
+  await page.locator('#btn-export').click();
+  await expect(page.locator('#export-menu')).toBeVisible();
+  for (const id of ['#exp-docset', '#exp-delivery', '#exp-handoff']) {
+    await expect(page.locator(id)).toBeVisible();
+  }
 });
 
 test('Esc とメニュー外のクリックで閉じる', async ({ page }) => {
