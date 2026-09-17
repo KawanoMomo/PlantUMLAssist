@@ -1,7 +1,7 @@
 'use strict';
 window.MA = window.MA || {};
 
-// glossary — 社内略語 → 顧客向け正式名称の対応表。
+// glossary — 社内略語 → 顧客向け正式名称の組 (画面は 🔤 表記統一パネルの略語欄)。
 //
 // BLK-primary-20260913-0206-wish: 顧客向けに資料化する場面では、図に散っている
 // 社内略語 (SpiDrv / IRQCtrl / DmaCtrl …) を洗い出し、正式名称に置き換え、
@@ -174,7 +174,43 @@ window.MA.glossary = (function() {
     return '残存略語 0 件。顧客向けに出せます';
   }
 
+  // ── 🔤 表記統一の登録簿へ寄せる (BLK-owner-20260917-2329-prune) ────────
+  // 対応表は 📤 提出前チェックに別の表として持たず、登録簿 (_names.json) の組になる。
+  // unregistered — 洗い出した略語のうち、登録簿がまだ揃える先を知らないもの。
+  //   find: function(name) → 登録簿の該当 entry か null (name-registry.find を渡す)
+  function unregistered(rows, find) {
+    return (Array.isArray(rows) ? rows : []).filter(function(r) {
+      return !(r && typeof find === 'function' && find(r.term));
+    });
+  }
+
+  // toEntries — pairs() の組を登録簿の entry の形にする (略語は寄せる綴り)。
+  function toEntries(prs, opts) {
+    var o = opts || {};
+    return (Array.isArray(prs) ? prs : []).map(function(p) {
+      return { canonical: p.to, variants: [p.from], note: o.note || '社内略語', by: o.by || '', at: o.at || '' };
+    });
+  }
+
+  // applyPairs — 1 本の DSL に組を全部当てる。置換規則は bulkRename と同じ。
+  function applyPairs(dsl, prs) {
+    var br = window.MA && window.MA.bulkRename;
+    var text = _s(dsl);
+    var count = 0;
+    if (!br) return { dsl: text, count: 0 };
+    (Array.isArray(prs) ? prs : []).forEach(function(p) {
+      var c = br.countIn(text, p.from);
+      if (!c) return;
+      count += c;
+      text = br.replaceIn(text, p.from, p.to);
+    });
+    return { dsl: text, count: count };
+  }
+
   return {
+    unregistered: unregistered,
+    toEntries: toEntries,
+    applyPairs: applyPairs,
     SUFFIXES: SUFFIXES,
     isAbbrev: isAbbrev,
     abbrevOf: abbrevOf,

@@ -17506,63 +17506,6 @@ function renameAcrossDocs(from, to, docs) {
   return res;
 }
 
-// BLK-primary-20260913-0206-wish: 略語辞書の「表を確定」。複数の組を 1 回で当てる。
-// 1 組ずつ renameAcrossDocs を呼ぶと undo が組の数だけ積まれ、戻すのに略語の数だけ
-// Ctrl+Z を押すことになる (確定が 1 操作でなくなる)。
-function renameGlossaryPairs(pairs) {
-  var br = window.MA.bulkRename;
-  var WS = window.MA.workspace;
-  if (!br || !WS || !Array.isArray(pairs) || !pairs.length) return { total: 0, docs: 0 };
-  var activeId = WS.getActiveId();
-  var next = [];
-  var total = 0;
-  _renameDocs().forEach(function(d) {
-    var dsl = String(d.dsl == null ? '' : d.dsl);
-    var n = 0;
-    pairs.forEach(function(p) {
-      var c = br.countIn(dsl, p.from);
-      if (!c) return;
-      n += c;
-      dsl = br.replaceIn(dsl, p.from, p.to);
-    });
-    if (n > 0) { next.push({ id: d.id, dsl: dsl }); total += n; }
-  });
-  if (!next.length) return { total: 0, docs: 0 };
-
-  // 確定も保存フォルダへ書き戻す操作なので、前後を 1 件として控える。
-  var _gBefore = {};
-  _renameDocs().forEach(function(d) { if (d && d.id != null) _gBefore[d.id] = String(d.dsl == null ? '' : d.dsl); });
-  _recordWrite('glossary', { note: pairs.length + ' 組' }, next.map(function(c) {
-    var d = null;
-    WS.list().forEach(function(x) { if (x.id === c.id) d = x; });
-    return { name: d ? d.name : '', before: _gBefore[c.id] || '', after: c.dsl };
-  }));
-
-  if (window.MA.history) window.MA.history.pushHistory();
-  next.forEach(function(c) {
-    if (c.id === activeId) {
-      mmdText = c.dsl;
-      suppressSync = true;
-      editorEl.value = mmdText;
-      suppressSync = false;
-    }
-    WS.updateDoc(c.id, { dsl: c.dsl });
-  });
-  // タブ名自体が略語なら追随させる (SpiDrv.puml → Spi_Driver.puml)。
-  WS.list().forEach(function(d) {
-    pairs.forEach(function(p) {
-      if (d.name === p.from && br.isValidTarget(p.to)) WS.rename(d.id, p.to);
-    });
-  });
-  if (window.MA.selection) window.MA.selection.clearSelection();
-  updateLineNumbers();
-  scheduleRefresh();
-  renderTabs();
-  // 当てた図だけを書き戻す (BLK-primary-20260913-0206 と同じ後始末)。
-  writeChangedToFolder(next);
-  return { total: total, docs: next.length };
-}
-
 function applyBulkRename() {
   if (!window.MA.workspace) return null;
   var from = (document.getElementById('rename-from') || {}).value || '';
@@ -18516,12 +18459,122 @@ function setupNameUnify() {
       .catch(function() { return null; });
   }
 
+  var _reg = null;
+  var abbrevEl = document.getElementById('unify-abbrev');
+
+  // 登録簿にまだ無い略語の表 (BLK-owner-20260917-2329-prune)。登録簿が読めなくても
+  // 略語は図から拾えるので出す。
+  function renderAbbrev(docs) {
+    var G = window.MA.glossary;
+    var NR = window.MA.nameRegistry;
+    if (!abbrevEl || !G) return;
+    var reg = _reg;
+    var rows = G.unregistered(G.scan(docs), function(t) { return reg && NR ? NR.find(reg, t) : null; });
+    if (!rows.length) { abbrevEl.innerHTML = ''; return; }
+    var CELL = 'padding:2px 4px;border-bottom:1px solid var(--border);font-size:10px;color:var(--text-primary);';
+    var BTN = 'background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;padding:3px 10px;font-size:11px;';
+    abbrevEl.innerHTML = _glossaryHtml(docs, CELL, BTN);
+    // _glossaryHtml は scan 全件を出すので、登録済みの行を落とす。
+    var keep = {};
+    rows.forEach(function(r) { keep[r.term] = true; });
+    Array.prototype.forEach.call(abbrevEl.querySelectorAll('.gl-row'), function(tr) {
+      if (!keep[tr.getAttribute('data-term')]) tr.parentNode.removeChild(tr);
+    });
+    var v = document.getElementById('gl-verdict');
+    if (v) v.textContent = rows.length + ' 件の社内略語が全図に残っています';
+    document.getElementById('gl-apply').addEventListener('click', applyAbbrev);
+  }
+
+  function applyAbbrev() {
+    var G = window.MA.glossary;
+    var NR = window.MA.nameRegistry;
+    var entries = _glossaryEntries();
+    var prs = G.pairs(entries);
+    var dir = _wsFileDir();
+    var openByName = {};
+    (WS.list ? WS.list() : []).forEach(function(d) { if (d && d.name) openByName[d.name] = d; });
+    var activeId = WS.getActiveId ? WS.getActiveId() : null;
+    var rows = [];
+    Object.keys(_texts).forEach(function(name) {
+      var r = G.applyPairs(_texts[name], prs);
+      if (r.count > 0) rows.push({ name: name, before: _texts[name], after: r.dsl, count: r.count });
+    });
+    if (rows.length && window.MA.history) window.MA.history.pushHistory();
+    var total = 0;
+    rows.forEach(function(r) {
+      total += r.count;
+      _texts[r.name] = r.after;
+      var doc = openByName[r.name];
+      if (!doc) return;
+      WS.updateDoc(doc.id, { dsl: r.after });
+      if (doc.id === activeId) {
+        mmdText = r.after;
+        suppressSync = true;
+        editorEl.value = mmdText;
+        suppressSync = false;
+      }
+    });
+    // タブ名自体が略語なら追随させる (SpiDrv.puml → Spi_Driver.puml)。
+    var BR = window.MA.bulkRename;
+    (WS.list ? WS.list() : []).forEach(function(d) {
+      prs.forEach(function(p) {
+        if (d.name === p.from && BR && BR.isValidTarget(p.to)) WS.rename(d.id, p.to);
+      });
+    });
+    if (rows.length) {
+      try { _recordWrite('glossary', { note: prs.length + ' 組' }, rows.map(function(r) {
+        return { name: r.name, before: r.before, after: r.after };
+      })); } catch (e) { /* 控えが取れなくても適用は済んでいる */ }
+      if (window.MA.selection) window.MA.selection.clearSelection();
+      updateLineNumbers();
+      scheduleRefresh();
+      renderTabs();
+    }
+
+    // 当てたあとの本文で数え直す。表の数字が「今の図」を指していないと、
+    // 残存 0 が目視の代わりにならない。
+    var docs = Object.keys(_texts).map(function(n) { return { name: n, dsl: _texts[n] }; });
+    var left = G.remaining(docs, entries.map(function(e) { return e.term; }));
+    var leftBy = {};
+    left.forEach(function(x) { leftBy[x.term] = x.count; });
+    Array.prototype.forEach.call(abbrevEl.querySelectorAll('#gl-table .gl-left'), function(td) {
+      var n = leftBy[td.getAttribute('data-left-of')] || 0;
+      td.textContent = n + ' 件';
+      td.style.color = n ? 'var(--accent-red)' : 'var(--text-secondary)';
+    });
+    var v = document.getElementById('gl-verdict');
+    if (v) {
+      v.textContent = G.verdict({ remaining: left, unset: G.unset(entries) })
+        + '（' + total + ' 件 / ' + rows.length + ' 枚に適用。取り消しは Ctrl+Z 1 回）';
+      v.setAttribute('data-remaining', String(left.reduce(function(a, x) { return a + x.count; }, 0)));
+      v.setAttribute('data-applied', String(total));
+    }
+
+    // 保存フォルダへ書き、組を登録簿へ入れる (次からは 🔤 の組として揃う)。
+    var writes = rows.map(function(r) {
+      return WS.saveToFile({ name: r.name, dsl: r.after }, dir).then(function(ok) {
+        if (ok && window.MA.saveDiff) { try { window.MA.saveDiff.markIfAbsent(r.name, r.before); } catch (e) {} }
+      }).catch(function() {});
+    });
+    var regWrite = Promise.resolve();
+    if (NR && prs.length && window.fetch) {
+      var next = NR.registerAll(_reg || { entries: [] }, G.toEntries(prs, { at: new Date().toISOString() })).registry;
+      regWrite = window.fetch('/name-registry', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dir: dir, entries: next.entries }),
+      }).then(function(r) { if (r.ok) { _reg = next; if (NR.setCurrent) NR.setCurrent(next); } })
+        .catch(function() {});
+    }
+    return Promise.all(writes.concat([regWrite]));
+  }
+
   function reload() {
     return loadRegistry().then(function(reg) {
-      if (!reg) { _groups = null; render(); return; }
+      _reg = reg;
       return collect().then(function(docs) {
-        _groups = NU.scan(reg, docs);
+        _groups = reg ? NU.scan(reg, docs) : null;
         render();
+        renderAbbrev(docs);
       });
     });
   }
@@ -24645,14 +24698,11 @@ function openSubmitCheck() {
       '<button id="sc-recheck" style="' + BTN + 'width:100%;margin-top:6px;">辞書を保存して再チェック</button>' +
     '</div></div>';
 
-  html += _glossaryHtml(docs, CELL, BTN);
-
   html += '<div style="display:flex;gap:8px;margin-top:12px;">' +
     '<button id="sc-close" style="' + BTN + 'flex:1;">閉じる</button></div>';
 
   content.innerHTML = html;
   modal.style.display = 'flex';
-  _wireGlossary();
 
   var only = document.getElementById('sc-only-flagged');
   function applyFilter() {
@@ -24688,12 +24738,11 @@ function openSubmitCheck() {
   return result;
 }
 
-// ── 社内略語 → 正式名称の対応表 ────────────────────────────────────────────
-// BLK-primary-20260913-0206-wish: 提出前チェックは「どの行に社内略語が残っているか」を
-// 並べるところまでで、直すのは ⇄ 一括置換を略語ごとに開き直す作業だった
-// (洗い出し → 個別適用 → SVG を 1 枚ずつ目視、の 3 工程)。同じ画面に
-// 「略語 / 出現 / 正式名称」の表を置き、確定 1 回で全図に当て、当てた後の
-// 残存件数を表で言い切る (目視の代わりになる 1 行を出す)。
+// ── 社内略語 → 正式名称の組 (🔤 表記統一パネルの略語欄) ─────────────────────
+// BLK-primary-20260913-0206-wish で 📤 提出前チェックに置いた対応表は、
+// BLK-owner-20260917-2329-prune で 🔤 表記統一へ寄せた。「正式な名前の組を決めて全図に
+// 当てる」道具を 2 つ持たない。登録簿にまだ無い略語だけを表に出し、確定すると
+// 組を登録簿へ入れ、全図に 1 回で当て、当てた後の残存件数を表で言い切る。
 
 function _glossaryRows(docs) {
   var G = window.MA.glossary;
@@ -24705,9 +24754,9 @@ function _glossaryHtml(docs, CELL, BTN) {
   if (!G) return '';
   var esc = window.MA.htmlUtils.escHtml;
   var rows = _glossaryRows(docs);
-  var html = '<div style="margin-top:14px;">' +
+  var html = '<div style="margin-top:8px;max-height:220px;overflow-y:auto;">' +
     '<label style="display:block;font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">' +
-      '社内略語 → 顧客向け正式名称 (この表を確定すると全図に当たります)</label>' +
+      '社内略語 → 顧客向け正式名称 (登録簿に無い略語。確定すると登録簿に入り全図に当たります)</label>' +
     '<div id="gl-verdict" role="status" data-remaining="" data-applied="0" ' +
       'style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">' +
       esc(rows.length ? rows.length + ' 件の社内略語が全図に残っています' : '社内略語は見つかりません') +
@@ -24738,7 +24787,7 @@ function _glossaryHtml(docs, CELL, BTN) {
   html += '</table>';
   html += '<button id="gl-apply" style="' + BTN + 'width:100%;margin-top:6px;"' +
     (rows.length ? '' : ' disabled') +
-    ' title="表の正式名称を全図に一度で当てます (取り消しは Ctrl+Z 1 回)">表を確定して全図に適用</button>';
+    ' title="表の正式名称を登録簿に入れ、全図に一度で当てます (取り消しは Ctrl+Z 1 回)">表を確定して全図に適用</button>';
   html += '</div>';
   return html;
 }
@@ -24749,38 +24798,6 @@ function _glossaryEntries() {
     out.push({ term: inp.getAttribute('data-to'), to: inp.value });
   });
   return out;
-}
-
-function _wireGlossary() {
-  var btn = document.getElementById('gl-apply');
-  var G = window.MA.glossary;
-  if (!btn || !G) return;
-  btn.addEventListener('click', function() {
-    var entries = _glossaryEntries();
-    var res = renameGlossaryPairs(G.pairs(entries));
-
-    // 当てたあとの本文で数え直す。表の数字が「今の図」を指していないと、
-    // 残存 0 が目視の代わりにならない。
-    var docs = _renameDocs();
-    var terms = entries.map(function(e) { return e.term; });
-    var left = G.remaining(docs, terms);
-    var leftBy = {};
-    left.forEach(function(x) { leftBy[x.term] = x.count; });
-    Array.prototype.forEach.call(document.querySelectorAll('#gl-table .gl-left'), function(td) {
-      var n = leftBy[td.getAttribute('data-left-of')] || 0;
-      td.textContent = n + ' 件';
-      td.style.color = n ? 'var(--accent-red)' : 'var(--text-secondary)';
-    });
-
-    var v = document.getElementById('gl-verdict');
-    if (v) {
-      var applied = (res && res.total) || 0;
-      v.textContent = G.verdict({ remaining: left, unset: G.unset(entries) })
-        + '（' + applied + ' 件 / ' + ((res && res.docs) || 0) + ' 枚に適用。取り消しは Ctrl+Z 1 回）';
-      v.setAttribute('data-remaining', String(left.reduce(function(a, x) { return a + x.count; }, 0)));
-      v.setAttribute('data-applied', String(applied));
-    }
-  });
 }
 
 function setupSubmitCheck() {
