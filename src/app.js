@@ -2313,6 +2313,50 @@ function init() {
     // タブ指定で開けるようにしておくと、他の入口も同じ経路を使える。
     // BLK-human-20260916-0902: 設定 → 情報 に版を出す。server が git tag から返す。
     var _versionLine = '';
+    // BLK-human-20260917-0900: 「更新を確認」。押したとき (と、利用者が入れたときだけ起動時) に 1 回確かめる。
+    // 新版があれば版・変更点・インストーラへのリンクを出す。落とさない・実行しない。
+    (function wireUpdateCheck() {
+      var UC = window.MA.updateCheck;
+      var btnCheck = document.getElementById('cfg-update-check');
+      if (!UC || !btnCheck) return;
+      var st = document.getElementById('cfg-update-status');
+      var box = document.getElementById('cfg-update-result');
+      var auto = document.getElementById('cfg-update-auto');
+      var last = null;
+      function openUrl(url) {
+        if (!url || !UC.isRepoUrl(url)) return;
+        fetch('/open-url', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: url }) })
+          .then(function(r) { if (!r.ok) throw new Error(); })
+          .catch(function() { try { window.open(url, '_blank', 'noopener'); } catch (e) { /* 開けなくても画面は動く */ } });
+      }
+      function check(quiet) {
+        if (st && !quiet) st.textContent = '確認中…';
+        return fetch('/update-check').then(function(r) { return r.json(); })
+          .catch(function(e) { return { error: '通信できません' }; })
+          .then(function(resp) {
+            last = UC.evaluate(resp);
+            if (st && (!quiet || last.status === 'newer')) st.textContent = last.message;
+            if (box) box.style.display = last.status === 'newer' ? 'flex' : 'none';
+            var rail = document.getElementById('rail-config');
+            if (rail && last.status === 'newer') rail.setAttribute('title', '設定 — ' + last.message);
+            return last;
+          });
+      }
+      btnCheck.addEventListener('click', function() { check(false); });
+      var notes = document.getElementById('cfg-update-notes');
+      if (notes) notes.addEventListener('click', function() { if (last) openUrl(last.notesUrl); });
+      var get = document.getElementById('cfg-update-get');
+      if (get) get.addEventListener('click', function() { if (last) openUrl(last.installerUrl); });
+      var stored = null;
+      try { stored = window.localStorage.getItem(UC.AUTO_KEY); } catch (e) { /* 読めなければ既定の切 */ }
+      if (auto) {
+        auto.checked = UC.autoCheckEnabled(stored);
+        auto.addEventListener('change', function() {
+          try { window.localStorage.setItem(UC.AUTO_KEY, auto.checked ? '1' : '0'); } catch (e) { /* 保存できなくても画面は動く */ }
+        });
+      }
+      if (UC.autoCheckEnabled(stored)) check(true);
+    })();
     function loadVersion() {
       var el = document.getElementById('cfg-version');
       var AV = window.MA.appVersion;

@@ -7803,6 +7803,18 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <span id="cfg-version-status" style="font-size:11px;color:var(--text-secondary);"></span>
       </div>
       <div style="font-size:10px;color:var(--text-secondary);margin-top:6px;">不具合を報告するときは、この 1 行を一緒に貼ってください。</div>
+      <!-- BLK-human-20260917-0900: 新しい版に気付けるようにする。押したときだけ確かめ、落とさない・実行しない -->
+      <div style="display:flex;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap;">
+        <button type="button" id="cfg-update-check" title="GitHub Releases の最新版と比べる (押したときだけ通信。自動では落とさない)">🔄 更新を確認</button>
+        <span id="cfg-update-status" style="font-size:11px;color:var(--text-secondary);"></span>
+      </div>
+      <div id="cfg-update-result" style="display:none;gap:8px;margin-top:6px;flex-wrap:wrap;">
+        <button type="button" id="cfg-update-notes" title="変更点 (リリースノート) をブラウザで開く">📝 変更点を見る</button>
+        <button type="button" id="cfg-update-get" title="インストーラをブラウザで取得する (実行はしない)">⬇ インストーラを取得</button>
+      </div>
+      <label style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:11px;">
+        <input type="checkbox" id="cfg-update-auto"> 起動時に更新を確認する (既定は切。社内 PC では切のままにしてください)
+      </label>
     </div>
 
     </div><!-- /#cfg-panes -->
@@ -7972,6 +7984,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/relation-add.js"></script>
 <script src="src/core/settings-tabs.js"></script>
 <script src="src/core/app-version.js"></script>
+<script src="src/core/update-check.js"></script>
 <script src="src/core/key-bindings.js"></script>
 <script src="src/core/editor-jump.js"></script>
 <script src="src/core/render-modes.js"></script>

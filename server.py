@@ -424,6 +424,45 @@ def build_info():
     _BUILD_INFO = info
     return info
 
+
+# BLK-human-20260917-0900: 設定 → 情報 の「更新を確認」。押されたとき (または利用者が
+# 起動時確認を入れたとき) だけ GitHub Releases の latest を 1 回読む。図・DSL・ファイルは送らない。
+# 落とさない・実行しない。開けるのはこのリポジトリの GitHub の URL だけ。
+UPDATE_REPO_URL = 'https://github.com/KawanoMomo/PlantUMLAssist'
+UPDATE_LATEST_API = 'https://api.github.com/repos/KawanoMomo/PlantUMLAssist/releases/latest'
+
+
+def fetch_latest_release(opener=None):
+    """{current, release:{tag_name, html_url, assets:[{name, browser_download_url}]}} か {current, error}。"""
+    out = {'current': build_info()}
+    try:
+        req = urllib.request.Request(UPDATE_LATEST_API, headers={
+            'User-Agent': 'PlantUMLAssist-update-check',
+            'Accept': 'application/vnd.github+json',
+        })
+        with (opener or urllib.request.urlopen)(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+        out['release'] = {
+            'tag_name': str(data.get('tag_name') or ''),
+            'html_url': str(data.get('html_url') or ''),
+            'assets': [{'name': str(a.get('name') or ''),
+                        'browser_download_url': str(a.get('browser_download_url') or '')}
+                       for a in (data.get('assets') or []) if isinstance(a, dict)],
+        }
+    except urllib.error.HTTPError as e:
+        out['error'] = f'HTTP {e.code}'
+    except Exception as e:  # オフライン・プロキシ等。画面に理由を出す
+        out['error'] = str(getattr(e, 'reason', '') or e)[:120]
+    return out
+
+
+def open_repo_url(url):
+    """このリポジトリの GitHub URL だけを既定のブラウザで開く (アプリの窓を遷移させない)。"""
+    if not isinstance(url, str) or not url.startswith(UPDATE_REPO_URL + '/'):
+        return False
+    import webbrowser
+    return bool(webbrowser.open(url))
+
 # GET /api — 窓口の索引。docs/api.md と同じ並びで、1 行ずつ何をするかを言う。
 API_INDEX = {
     'name': 'PlantUMLAssist server API',
@@ -431,6 +470,9 @@ API_INDEX = {
     'endpoints': [
         {'endpoint': 'GET /api', 'summary': 'この索引'},
         {'endpoint': 'GET /version', 'summary': 'アプリの版・コミット・日付 (git tag が正本)'},
+        {'endpoint': 'GET /update-check', 'summary': 'GitHub Releases の最新版を 1 回読む (押したときだけ。落とさない)'},
+        {'endpoint': 'POST /open-url', 'summary': 'このリポジトリの GitHub の URL を既定のブラウザで開く',
+         'request': "{url}"},
         {'endpoint': 'GET /render', 'summary': 'POST /render の仕様'},
         {'endpoint': 'POST /render', 'summary': 'DSL を描いて SVG を返す',
          'request': "{text, mode}"},
@@ -705,6 +747,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._handle_peek_notes()
         if self.path.split('?')[0] == '/version':
             return self._send_json(200, build_info())
+        if self.path.split('?')[0] == '/update-check':
+            return self._send_json(200, fetch_latest_release())
         if self.path.split('?')[0] == '/render':
             return self._send_json(200, RENDER_API_DOC)
         if self.path.split('?')[0] == '/verify-svg':
@@ -790,6 +834,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self._handle_pick_jar_post()
         if self.path == '/fetch-jar':
             return self._handle_fetch_jar_post()
+        if self.path == '/open-url':
+            data = self._read_json_object()
+            if data is None:
+                return
+            if not open_repo_url(data.get('url')):
+                return self._send_json(400, {'error': 'このリポジトリの GitHub の URL だけ開けます'})
+            return self._send_json(200, {'ok': True})
         # アプリ版の保存はブラウザのダウンロードではなくネイティブのダイアログ。
         if self.path == '/native-save':
             return self._handle_native_save_post()
