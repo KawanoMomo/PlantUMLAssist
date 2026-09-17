@@ -29,6 +29,31 @@ window.MA.modules.plantumlClass = (function() {
     '^([+\\-#~])?\\s*(?:\\{(static|abstract)\\}\\s*)?(' + ID + ')\\s*\\(([^)]*)\\)\\s*(?::\\s*(.+))?\\s*$'
   );
 
+  // C 風の「型 名前」(`- uint8 pinState` / `+ void Init(uint8 pin)`)。既存の .puml に多い書き方。
+  // 型にコロンと括弧は含めない (`名前 : 型` は上の正規表現が先に取る)。
+  var TYPE_FIRST = '([A-Za-z_][^:()]*?[\\w>\\]*&])';
+  var ATTRIBUTE_TYPE_FIRST_RE = new RegExp(
+    '^([+\\-#~])?\\s*(?:\\{(static|abstract)\\}\\s*)?' + TYPE_FIRST + '\\s+(' + ID + ')\\s*$'
+  );
+  var METHOD_TYPE_FIRST_RE = new RegExp(
+    '^([+\\-#~])?\\s*(?:\\{(static|abstract)\\}\\s*)?' + TYPE_FIRST + '\\s+(' + ID + ')\\s*\\(([^)]*)\\)\\s*$'
+  );
+  // 型先頭の行を \`名前 : 型\` と同じ組 [全体, 可視性, 修飾, 名前, (引数,) 型] に揃える。typeFirst で書き方を覚える。
+  function _matchAttribute(trimmed) {
+    var am = trimmed.match(ATTRIBUTE_RE);
+    if (am) return am;
+    var tf = trimmed.match(ATTRIBUTE_TYPE_FIRST_RE);
+    if (!tf) return null;
+    var r = [tf[0], tf[1], tf[2], tf[4], tf[3]]; r.typeFirst = true; return r;
+  }
+  function _matchMethod(trimmed) {
+    var mm = trimmed.match(METHOD_RE);
+    if (mm) return mm;
+    var tf = trimmed.match(METHOD_TYPE_FIRST_RE);
+    if (!tf) return null;
+    var r = [tf[0], tf[1], tf[2], tf[4], tf[5], tf[3]]; r.typeFirst = true; return r;
+  }
+
   var INTERFACE_KW_RE = new RegExp(
     '^interface\\s+(?:"([^"]+)"\\s+as\\s+(' + ID_WITH_GENERICS + ')|(' + ID_WITH_GENERICS + ')(?:\\s+as\\s+"([^"]+)")?)\\s*(?:<<([^>]+)>>)?\\s*\\{?\\s*$'
   );
@@ -141,7 +166,7 @@ window.MA.modules.plantumlClass = (function() {
             continue;
           }
         }
-        var mm = trimmed.match(METHOD_RE);
+        var mm = _matchMethod(trimmed);
         if (mm) {
           parent.members.push({
             kind: 'method',
@@ -155,7 +180,7 @@ window.MA.modules.plantumlClass = (function() {
           });
           continue;
         }
-        var am = trimmed.match(ATTRIBUTE_RE);
+        var am = _matchAttribute(trimmed);
         if (am && trimmed.indexOf('(') < 0) {  // method は別 regex (params にカッコ)
           parent.members.push({
             kind: 'attribute',
@@ -616,7 +641,7 @@ window.MA.modules.plantumlClass = (function() {
     var idx = lineNum - 1;
     var indent = lines[idx].match(/^(\s*)/)[1];
     var trimmed = lines[idx].trim();
-    var am = trimmed.match(ATTRIBUTE_RE);
+    var am = _matchAttribute(trimmed);
     if (!am) return text;
     var visibility = am[1] || null;
     var isStatic = am[2] === 'static';
@@ -626,7 +651,9 @@ window.MA.modules.plantumlClass = (function() {
     else if (field === 'name') name = value;
     else if (field === 'type') type = value;
     else if (field === 'static') isStatic = !!value;
-    lines[idx] = indent + fmtAttribute(visibility, name, type, isStatic);
+    lines[idx] = indent + (am.typeFirst && type
+      ? (visibility ? visibility + ' ' : '') + (isStatic ? '{static} ' : '') + type + ' ' + name
+      : fmtAttribute(visibility, name, type, isStatic));
     return lines.join('\n');
   }
 
@@ -635,7 +662,7 @@ window.MA.modules.plantumlClass = (function() {
     var idx = lineNum - 1;
     var indent = lines[idx].match(/^(\s*)/)[1];
     var trimmed = lines[idx].trim();
-    var mm = trimmed.match(METHOD_RE);
+    var mm = _matchMethod(trimmed);
     if (!mm) return text;
     var visibility = mm[1] || null;
     var isStatic = mm[2] === 'static';
@@ -649,7 +676,10 @@ window.MA.modules.plantumlClass = (function() {
     else if (field === 'type') returnType = value;
     else if (field === 'static') { isStatic = !!value; if (isStatic) isAbstract = false; }
     else if (field === 'abstract') { isAbstract = !!value; if (isAbstract) isStatic = false; }
-    lines[idx] = indent + fmtMethod(visibility, name, params, returnType, isStatic, isAbstract);
+    lines[idx] = indent + (mm.typeFirst && returnType
+      ? (visibility ? visibility + ' ' : '') + (isStatic ? '{static} ' : (isAbstract ? '{abstract} ' : '')) +
+        returnType + ' ' + name + '(' + (params || '') + ')'
+      : fmtMethod(visibility, name, params, returnType, isStatic, isAbstract));
     return lines.join('\n');
   }
 
