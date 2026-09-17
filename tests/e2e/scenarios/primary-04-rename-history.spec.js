@@ -229,9 +229,19 @@ test.describe('primary 手順 4: 意味的な参照で確かめる図を絞る',
   });
 });
 
+async function resetRegistry(page) {
+  await page.evaluate(async (d) => {
+    await fetch('/name-registry', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dir: d, entries: [] }),
+    });
+  }, DIR);
+}
+
 // BLK-primary-20260913-0206-wish: 手順 4 の場面「顧客向け資料に図を組み込む」。
 // 社内略語 (SpiDrv / IRQCtrl / DmaCtrl) の洗い出し → 個別に一括置換 → SVG を
-// 1 枚ずつ目視、の 3 工程だったものを、📤 提出前チェックの中の対応表 1 枚に寄せる。
+// 1 枚ずつ目視、の 3 工程だったものを、対応表 1 枚に寄せる。BLK-owner-20260917-2329-prune で
+// 表は 📤 提出前チェックから 🔤 表記統一 (登録簿) へ移った。確定した組は登録簿に入る。
 // 表を確定すると全図に当たり、当てたあとの残存件数を表が言い切る。
 const GL_SPI = '@startuml\ntitle SPI 初期化\nparticipant SpiDrv\nparticipant IRQCtrl\nSpiDrv -> IRQCtrl : enable\n@enduml';
 const GL_DMA = '@startuml\ntitle DMA 初期化\nparticipant DmaCtrl\nparticipant SpiDrv\nDmaCtrl -> SpiDrv : ready\n@enduml';
@@ -246,6 +256,7 @@ const FILES = [
 test.describe('primary 手順 4: 社内略語の対応表を確定して顧客向けに出す', () => {
   test.beforeEach(async ({ page }) => {
     await boot(page);
+    await resetRegistry(page);
     await clearDir(page);
     await putFile(page, 'spi_init_sequence', GL_SPI);
     await putFile(page, 'dma_init_sequence', GL_DMA);
@@ -278,11 +289,29 @@ test.describe('primary 手順 4: 社内略語の対応表を確定して顧客�
   });
 
   test.afterEach(async ({ page }) => {
+    await resetRegistry(page).catch(() => {});
     await clearDir(page).catch(() => {});
   });
 
-  test('表は社内略語だけを挙げ、正式名称が既に入っている（打鍵ゼロで確定できる）', async ({ page }) => {
+  test('確定した組は登録簿に入り、次に開いた表からは消える', async ({ page }) => {
+    await page.locator('#btn-tab-unify').click();
+    await page.waitForSelector('#gl-table');
+    await page.locator('#gl-apply').click();
+    await expect(page.locator('#gl-verdict')).toHaveAttribute('data-remaining', '0');
+    await expect.poll(async () => page.evaluate(async (d) => {
+      const r = await fetch('/name-registry?dir=' + encodeURIComponent(d));
+      const j = await r.json();
+      return (j.entries || []).map((e) => e.canonical + '<' + (e.variants || []).join('|')).sort().join(',');
+    }, DIR)).toContain('Spi_Driver<SpiDrv');
+    // 提出前チェックには対応表を持たない (道具を 2 つ持たない)。
+    await page.locator('#btn-unify-cancel').click();
     await page.locator('#btn-tab-submit').click();
+    await expect(page.locator('#sc-modal-content')).toContainText('提出前チェック');
+    await expect(page.locator('#sc-modal-content #gl-table')).toHaveCount(0);
+  });
+
+  test('表は社内略語だけを挙げ、正式名称が既に入っている（打鍵ゼロで確定できる）', async ({ page }) => {
+    await page.locator('#btn-tab-unify').click();
     await page.waitForSelector('#gl-table');
 
     // 洗い出し: 略語だけが並ぶ。既に正式名称の Spi_Driver と略語でない Hal は挙げない。
@@ -299,7 +328,7 @@ test.describe('primary 手順 4: 社内略語の対応表を確定して顧客�
   });
 
   test('表を確定すると全図に当たり、残存略語ゼロを表が言い切る', async ({ page }) => {
-    await page.locator('#btn-tab-submit').click();
+    await page.locator('#btn-tab-unify').click();
     await page.waitForSelector('#gl-table');
     await page.locator('#gl-apply').click();
 
@@ -325,7 +354,7 @@ test.describe('primary 手順 4: 社内略語の対応表を確定して顧客�
   });
 
   test('正式名称を空にした略語は「未設定」と名指しされ、0 件に混ぜられない', async ({ page }) => {
-    await page.locator('#btn-tab-submit').click();
+    await page.locator('#btn-tab-unify').click();
     await page.waitForSelector('#gl-table');
     await page.locator('.gl-to[data-to="DmaCtrl"]').fill('');
     await page.locator('#gl-apply').click();
@@ -339,12 +368,12 @@ test.describe('primary 手順 4: 社内略語の対応表を確定して顧客�
   });
 
   test('確定は 1 操作。Ctrl+Z 1 回で表を当てる前に戻る', async ({ page }) => {
-    await page.locator('#btn-tab-submit').click();
+    await page.locator('#btn-tab-unify').click();
     await page.waitForSelector('#gl-table');
     await page.locator('#gl-apply').click();
     await expect(page.locator('#gl-verdict')).toHaveAttribute('data-remaining', '0');
 
-    await page.locator('#sc-close').click();
+    await page.locator('#btn-unify-cancel').click();
     await page.locator('#editor').press('Control+z');
     await page.waitForTimeout(800);
     // 表を当てたのは 1 手なので、Ctrl+Z 1 回で開いている図が元の綴りに戻る。
