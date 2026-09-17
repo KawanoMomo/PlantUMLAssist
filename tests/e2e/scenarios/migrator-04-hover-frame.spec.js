@@ -87,3 +87,59 @@ test('migrator 手順 4 — 前の図の保存で出た警告帯は、次のフ�
     await expect(r, id + ' にホバーして枠が出る').toHaveClass(/hit-hover/);
   }
 });
+
+// BLK-migrator-20260918-0049: struct / annotation、package・namespace の中のクラス、文字入り区切り線の後のメンバーに
+// ホバーしても枠が出ない / 別の行の枠が出た。
+test('migrator 手順 4 — struct・package 配下・区切り線のあるクラスでも、ホバーした要素そのものに枠が出る', async ({ page }) => {
+  await bootPlain(page);
+  await typeDsl(page, [
+    '@startuml',
+    'package "BSW層" {',
+    '  class GpioDriver',
+    '}',
+    'namespace App {',
+    '  class MainTask',
+    '}',
+    'annotation "@Safety(ASIL_D)" as SafetyTag',
+    'struct CanFrame {',
+    '  id: uint32',
+    '}',
+    'class TaskA {',
+    '  + Run()',
+    '  ..private..',
+    '  - secret : int',
+    '  ==公開定数==',
+    '  {static} MAX : int',
+    '}',
+    '@enduml',
+  ].join(String.fromCharCode(10)));
+  await expect(page.locator('#overlay-layer rect[data-type="struct"]')).toHaveCount(1, { timeout: 20000 });
+
+  const targets = [
+    ['BSW層', 'package', '2'],
+    ['GpioDriver', 'class', '3'],
+    ['MainTask', 'class', '6'],
+    ['@Safety(ASIL_D)', 'annotation', '8'],
+    ['CanFrame', 'struct', '9'],
+    ['id: uint32', 'member', '10'],
+    ['Run()', 'member', '13'],
+    ['secret : int', 'member', '15'],
+    ['MAX : int', 'member', '17'],
+  ];
+  for (const [label, type, line] of targets) {
+    const box = await page.evaluate(([l, ty]) => {
+      const t = Array.prototype.find.call(document.querySelectorAll('#preview-svg svg text'),
+        (n) => (n.textContent || '').trim() === l);
+      if (!t) return null;
+      // package の名前札は右上のズーム帯の下に隠れることがあるので、枠の左下の内側を指す。
+      const pk = ty === 'package' ? t.closest('g') && t.closest('g').querySelector('path, rect, polygon') : null;
+      const r = (pk || t).getBoundingClientRect();
+      return pk ? { x: r.left + 4, y: r.bottom - 4 } : { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    }, [label, type]);
+    expect(box, label + ' が描かれている').not.toBeNull();
+    await page.mouse.move(box.x, box.y);
+    await expect.poll(() => page.evaluate(() => Array.from(document.querySelectorAll('#overlay-layer rect.hit-hover'))
+      .map((r) => r.getAttribute('data-type') + '@' + r.getAttribute('data-line')).join(',')), label + ' にホバーして枠が出る')
+      .toBe(type + '@' + line);
+  }
+});
