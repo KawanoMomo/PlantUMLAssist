@@ -30,3 +30,38 @@ test('人間 手順 3 — 設定を開くと版の文字列が見え、複製で
   const clip = await page.evaluate(() => navigator.clipboard.readText()).catch(() => null);
   if (clip !== null) expect(clip).toBe(text);
 });
+
+// BLK-human-20260917-0900 — 新しい版に気付く。押したときだけ確かめ、落とさない・実行しない。
+// GitHub へは出ない: /update-check と /open-url を差し替えて画面の振る舞いだけを見る。
+test('人間 手順 3 — 更新を確認を押すと新しい版と変更点・インストーラ取得が出る (既定で自動確認は切)', async ({ page }) => {
+  let checks = 0;
+  const opened = [];
+  await page.route('**/update-check', async (route) => {
+    checks++;
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({
+      current: { version: 'v2.10' },
+      release: { tag_name: 'v99.0', html_url: 'https://github.com/KawanoMomo/PlantUMLAssist/releases/tag/v99.0',
+        assets: [{ name: 'PlantUMLAssist-99.0-setup.exe',
+          browser_download_url: 'https://github.com/KawanoMomo/PlantUMLAssist/releases/download/v99.0/PlantUMLAssist-99.0-setup.exe' }] } }) });
+  });
+  await page.route('**/open-url', async (route) => {
+    opened.push(JSON.parse(route.request().postData() || '{}').url);
+    await route.fulfill({ contentType: 'application/json', body: '{"ok":true}' });
+  });
+  await gotoApp(page);
+  await page.click('#rail-config');
+  await page.click('#cfg-tab-about');
+  expect(checks).toBe(0); // 起動しただけでは通信しない
+  await expect(page.locator('#cfg-update-auto')).not.toBeChecked();
+  await expect(page.locator('#cfg-update-result')).toBeHidden();
+
+  await page.click('#cfg-update-check');
+  await expect(page.locator('#cfg-update-status')).toContainText('v99.0');
+  await expect(page.locator('#cfg-update-result')).toBeVisible();
+  expect(checks).toBe(1);
+  await page.click('#cfg-update-notes');
+  await page.click('#cfg-update-get');
+  await expect.poll(() => opened.length).toBe(2);
+  expect(opened[0]).toContain('/releases/tag/v99.0');
+  expect(opened[1]).toMatch(/setup\.exe$/);
+});
