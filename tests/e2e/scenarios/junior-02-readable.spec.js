@@ -1309,6 +1309,9 @@ test('手順1 同じ図種でも部品名が違う図しか無ければ、開か
   await expect(summary).toContainText('先へ進めます');
   await expect(summary).toHaveClass(/clean/);
   await expect(page.locator('#xf-list')).toBeHidden();
+  // BLK-junior-20260917-0523-friction: 候補一覧の時点で、部品名を含まない図に印が出る。
+  await expect(page.locator('#xf-file option', { hasText: 'driver_common_class' }))
+    .toContainText('部品名なし。TIMER を含みません');
 
   // 到達条件その2: その場で「対応不要（手本なし）」として自分の図に控えられる。
   const keep = page.locator('#xf-keep-verdict');

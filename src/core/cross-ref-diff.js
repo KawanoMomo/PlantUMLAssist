@@ -94,7 +94,12 @@ window.MA.crossRefDiff = (function() {
       // 図種が両方分かっていて食い違うときだけ外す。分からない相手は今までどおり。
       var mismatch = want !== '' && kind !== '' && kind !== want;
       var d = mismatch ? null : nameDistance(name, selfName);
-      out.push({ name: name, kind: kind, distance: d, kindMismatch: mismatch, order: i });
+      // BLK-junior-20260917-0523-friction: 図種が合っても自分の部品名を含まない候補には印を付ける
+      // (一覧の時点で「TIMER 用ではない」と分かり、開いて読まなくてよい)。
+      var part = partOf(selfName);
+      var partMismatch = !mismatch && part !== '' && !_cpHasPart(name, part);
+      out.push({ name: name, kind: kind, distance: d, kindMismatch: mismatch,
+        partMismatch: partMismatch, part: part.toUpperCase(), order: i });
     });
     out.sort(function(a, b) {
       var ad = a.distance == null ? Infinity : a.distance;

@@ -21901,11 +21901,15 @@ function _xfRenderPick(selected) {
     if (c.kindMismatch) {
       var lab = (DK && DK.label) ? DK.label(c.kind) : '';
       tail = ' (' + (lab ? lab + '図' : '別の図種') + '。図種が違います)';
+    } else if (c.partMismatch && c.distance !== 0) {
+      // BLK-junior-20260917-0523-friction: 図種は合うが部品名を含まない候補
+      tail = ' (部品名なし。' + c.part + ' を含みません)';
     } else if (c.distance === 0) tail = ' (同じ名前)';
     else if (c.distance == null) tail = ' (名前が離れています)';
     else tail = '';
     op.textContent = c.name + tail;
     if (c.kindMismatch) op.setAttribute('data-kind-mismatch', '1');
+    if (c.partMismatch) op.setAttribute('data-part-mismatch', '1');
     if (c.name === selected) op.selected = true;
     sel.appendChild(op);
   });

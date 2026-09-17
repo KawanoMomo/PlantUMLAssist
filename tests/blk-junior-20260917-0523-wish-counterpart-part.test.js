@@ -51,3 +51,19 @@ describe('同じ図種でも部品名を含まない候補は相手にしない'
     expect(v.state).toBe('no-match');
   });
 });
+
+describe('BLK-junior-20260917-0523-friction: 候補一覧に部品名なしの印', () => {
+  test('同じ図種で部品名を含まない候補に partMismatch が付く', () => {
+    const r = CRD().counterparts(SENIOR.concat([{ name: 'timer_class', kind: 'class' }]), 'TimerDrv派生クラス図', 'class');
+    const common = r.find((c) => c.name === 'driver_common_class');
+    expect(common.partMismatch).toBe(true);
+    expect(common.part).toBe('TIMER');
+    expect(r.find((c) => c.name === 'timer_class').partMismatch).toBe(false);
+    // 図種違いには部品名の印を重ねない
+    expect(r.find((c) => c.name === 'timer_state').partMismatch).toBe(false);
+  });
+  test('部品名が拾えない図では印を付けない', () => {
+    const r = CRD().counterparts(SENIOR, 'クラス図下書き', 'class');
+    expect(r.every((c) => !c.partMismatch)).toBe(true);
+  });
+});
