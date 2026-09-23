@@ -2065,6 +2065,8 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
   color: var(--accent);
 }
 #tab-bar .tab.dirty .tab-label { font-weight: bold; }
+/* 仮のタブ (保存先ツリーの 1 回押し。次の 1 回押しで入れ替わる) は斜体で固定のタブと見分ける */
+#tab-bar .tab.preview .tab-label { font-style: italic; opacity: 0.85; }
 #btn-tab-diff.has-change { color: var(--accent); border-color: var(--accent); }
 #diff-panel {
   display: none;

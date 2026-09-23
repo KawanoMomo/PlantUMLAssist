@@ -367,3 +367,57 @@ describe('workspace deleteFile', function() {
     expect(typeof p.then).toBe('function');
   });
 });
+
+// BLK-primary-20260924-0805-design (design 10a): 保存先ツリーの 1 回押しは仮のタブ。
+describe('仮のタブ (openPreview / pin)', function() {
+  test('仮のタブは 1 枚だけで、別の図を仮に開くと同じ位置で入れ替わる', function() {
+    fresh();
+    ws.open({ name: 'fixed_b', dsl: 'B' });
+    var p1 = ws.openPreview({ name: 'look_1', dsl: '1' });
+    expect(p1.preview).toBe(true);
+    expect(ws.list().map(function(d) { return d.name; })).toEqual(['SPI_seq', 'fixed_b', 'look_1']);
+    ws.setActive(ws.findByName('SPI_seq').id);
+    var p2 = ws.openPreview({ name: 'look_2', dsl: '2' });
+    expect(ws.list().map(function(d) { return d.name; })).toEqual(['SPI_seq', 'fixed_b', 'look_2']);
+    expect(ws.getActive().name).toBe('look_2');
+    expect(p2.preview).toBe(true);
+  });
+
+  test('既にタブがある図は、仮に開いてもそのタブへ移るだけ (固定のまま)', function() {
+    fresh();
+    ws.open({ name: 'fixed_b', dsl: 'B' });
+    ws.openPreview({ name: 'look_1', dsl: '1' });
+    var d = ws.openPreview({ name: 'fixed_b', dsl: 'B' });
+    expect(d.preview).toBe(false);
+    expect(ws.count()).toBe(3);
+    expect(ws.findByName('look_1').preview).toBe(true);
+  });
+
+  test('pin で固定になり、次の仮開きでは入れ替わらない', function() {
+    fresh();
+    var p1 = ws.openPreview({ name: 'look_1', dsl: '1' });
+    ws.pin(p1.id);
+    ws.openPreview({ name: 'look_2', dsl: '2' });
+    expect(ws.list().map(function(d) { return d.name; })).toEqual(['SPI_seq', 'look_1', 'look_2']);
+  });
+
+  test('仮のタブの中身を変えると固定になる。同じ中身の書き戻しでは固定にならない', function() {
+    fresh();
+    ws.openPreview({ name: 'look_1', dsl: '1' });
+    ws.updateActive({ dsl: '1' });
+    expect(ws.getActive().preview).toBe(true);
+    ws.updateActive({ dsl: '1 edited' });
+    expect(ws.getActive().preview).toBe(false);
+  });
+
+  test('仮のタブの印は読み込み直しても残る', function() {
+    fresh();
+    ws.openPreview({ name: 'look_1', dsl: '1' });
+    var saved = global.window.localStorage.getItem('plantuml-workspace');
+    ws.reset();
+    global.window.localStorage.setItem('plantuml-workspace', saved);
+    ws.init({});
+    expect(ws.findByName('look_1').preview).toBe(true);
+    expect(ws.findByName('SPI_seq').preview).toBe(false);
+  });
+});

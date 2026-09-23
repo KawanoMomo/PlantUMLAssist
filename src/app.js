@@ -103,11 +103,12 @@ function updateTopSaveButton() {
 // 開いて作った / 読み直したタブに錠をかける。
 // 既に同じ名前のタブが開いていれば、それは「今この瞬間に開いたファイル」では
 // ないので錠はかけない (自分で作って保存した図に確認を出さない)。
-function openExistingFile(spec) {
+function openExistingFile(spec, opts) {
   var WS = window.MA.workspace;
   var already = false;
   try { already = !!(WS.findByName && WS.findByName(WS.sanitizeName(spec.name || ''))); } catch (e) {}
-  var doc = WS.openOrActivate(spec);
+  // BLK-primary-20260924-0805-design: 保存先ツリーの行の 1 回押しは仮のタブで開く (次の 1 回押しで入れ替わる)。
+  var doc = (opts && opts.preview && WS.openPreview) ? WS.openPreview(spec) : WS.openOrActivate(spec);
   if (!already) markOpenedSource(doc);
   return doc;
 }
@@ -4614,6 +4615,17 @@ function switchToDoc(id) {
   applyActiveDoc();
 }
 
+// 仮のタブ (保存先ツリーの 1 回押しで開いたタブ) を固定にする。まだ読み込み中なら読み終えてから固定にする。
+function pinDocByName(name, tries) {
+  var WS = window.MA.workspace;
+  var d = WS && WS.findByName ? WS.findByName(WS.sanitizeName(name)) : null;
+  if (!d) {
+    if ((tries || 0) < 20) window.setTimeout(function() { pinDocByName(name, (tries || 0) + 1); }, 100);
+    return;
+  }
+  if (d.preview && WS.pin) { WS.pin(d.id); renderTabs(); }
+}
+
 function renderTabs() {
   var bar = document.getElementById('tab-bar');
   if (!bar || !window.MA.workspace) return;
@@ -4628,8 +4640,9 @@ function renderTabs() {
   var firstTool = bar.querySelector('.tab-tool');
   docs.forEach(function(doc) {
     var el = document.createElement('div');
-    el.className = 'tab' + (doc.id === activeId ? ' active' : '');
+    el.className = 'tab' + (doc.id === activeId ? ' active' : '') + (doc.preview ? ' preview' : '');
     el.setAttribute('data-doc-id', doc.id);
+    if (doc.preview) el.setAttribute('data-preview', '1');
     el.setAttribute('data-doc-name', doc.name);
     el.title = doc.name + ' (' + doc.diagramType.replace('plantuml-', '')
       + ') — ダブルクリックで名前変更 / 右クリックで変更前後を見る';
@@ -4675,6 +4688,12 @@ function renderTabs() {
     el.addEventListener('click', function() { switchToDoc(doc.id); });
     el.addEventListener('dblclick', function(ev) {
       ev.preventDefault();
+      // 仮のタブのタブ名をダブルクリックすると固定のタブになる (名前の変更は固定のタブで)。
+      if (doc.preview && window.MA.workspace.pin) {
+        window.MA.workspace.pin(doc.id);
+        renderTabs();
+        return;
+      }
       var next = window.prompt(window.MA.workspace.nameRuleText(), doc.name);
       if (next == null) return;
       // 図の名前が変わってもレビューの基準は持ち越す。
@@ -12481,8 +12500,9 @@ function setupTabs() {
   // 分からない。同じ名前なら (1) 編集中の本文をそのファイルへ書き戻さずに読み、
   // (2) 読んだ結果を必ず言葉で返す。書き戻してから読むと、保存の確認そのものが
   // 成り立たない (いつ押しても必ず一致する)。
-  function openFromFolder(name) {
-    closePanel();
+  function openFromFolder(name, opts) {
+    // 1 回押しの仮開きはツリーを開いたままにする (次の図を続けて押せる・ダブルクリックで固定にできる)。
+    if (!(opts && opts.preview)) closePanel();
     var dir = _wsFileDir();
     var active = window.MA.workspace.getActive();
     var sameTab = !!(active && active.name === name);
@@ -12502,7 +12522,7 @@ function setupTabs() {
           name: name,
           dsl: text,
           diagramType: _folderOpenType(name, text),
-        });
+        }, opts);
         applyActiveDoc();
         try { renderLiveDiffChip(); } catch (e) {}
         // 読めた図だけを履歴に積む (読めなかった名前を「最近」に出さない)。
@@ -15734,7 +15754,10 @@ function setupTabs() {
       b.appendChild(xb);
     }
     if (bdg && bdg.title) b.title = bdg.title + (mtime ? '（最終保存 ' + mtime + '）' : '');
-    b.addEventListener('click', function() { openFromFolder(name); });
+    // BLK-primary-20260924-0805-design (design 10a): 1 回押しは仮のタブで開き (見て回るだけならタブが積もらない)、
+    // ダブルクリックで固定のタブにする。
+    b.addEventListener('click', function() { openFromFolder(name, { preview: true }); });
+    b.addEventListener('dblclick', function() { pinDocByName(name); });
     return b;
   }
 
@@ -31562,6 +31585,18 @@ function setupFamilyClone() {
 function scheduleRefresh() {
   if (renderTimer) clearTimeout(renderTimer);
   renderTimer = setTimeout(refresh, RENDER_DEBOUNCE_MS);
+  pinPreviewIfEdited();
+}
+
+// BLK-primary-20260924-0805-design: 仮のタブで本文や図を 1 か所でも直したら、その場で固定のタブにする
+// (次の 1 回押しで入れ替わって、直した中身がタブ列から消えない)。
+function pinPreviewIfEdited() {
+  var WS = window.MA.workspace;
+  if (!WS || !WS.pin) return;
+  var d = WS.getActive();
+  if (!d || !d.preview || String(mmdText) === String(d.dsl)) return;
+  WS.pin(d.id);
+  try { renderTabs(); } catch (e) {}
 }
 
 function refresh() {

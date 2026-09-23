@@ -95,6 +95,7 @@ window.MA.workspace = (function() {
           name: isValidName(d.name) ? d.name : sanitizeName(d.name),
           diagramType: typeof d.diagramType === 'string' ? d.diagramType : 'plantuml-sequence',
           dsl: typeof d.dsl === 'string' ? d.dsl : '',
+          preview: d.preview === true,
         });
       }
       if (docs.length === 0) return null;
@@ -139,7 +140,7 @@ window.MA.workspace = (function() {
   }
 
   function _copy(d) {
-    return d ? { id: d.id, name: d.name, diagramType: d.diagramType, dsl: d.dsl } : null;
+    return d ? { id: d.id, name: d.name, diagramType: d.diagramType, dsl: d.dsl, preview: !!d.preview } : null;
   }
 
   function list() {
@@ -179,6 +180,8 @@ window.MA.workspace = (function() {
   function updateActive(patch) {
     var d = _state ? _find(_state.activeId) : null;
     if (!d || !patch) return null;
+    // 仮のタブ (openPreview) は、中身を 1 か所でも変えた時点で固定のタブになる (次の仮開きで入れ替わらない)。
+    if (typeof patch.dsl === 'string' && d.preview && patch.dsl !== d.dsl) d.preview = false;
     if (typeof patch.dsl === 'string') d.dsl = patch.dsl;
     if (typeof patch.diagramType === 'string' && patch.diagramType) d.diagramType = patch.diagramType;
     persist();
@@ -235,6 +238,38 @@ window.MA.workspace = (function() {
       }
     }
     return open(spec);
+  }
+
+  // BLK-primary-20260924-0805-design (design 10a): 保存先ツリーの行を 1 回押したときの「仮のタブ」。
+  // 仮のタブは常に 1 枚だけで、別の図を仮に開くと同じ位置のタブの中身が入れ替わる
+  // (VS Code のプレビュータブと同じ)。既にタブがある図 (固定・仮) はそのタブへ移るだけ。
+  function openPreview(spec) {
+    spec = spec || {};
+    if (!_state) init({});
+    var name = sanitizeName(spec.name || '');
+    for (var i = 0; i < _state.docs.length; i++) {
+      if (_state.docs[i].name === name) return openOrActivate(spec);
+    }
+    var idx = -1;
+    for (var k = 0; k < _state.docs.length; k++) if (_state.docs[k].preview) { idx = k; break; }
+    var doc = open(spec);
+    var d = _find(doc.id);
+    d.preview = true;
+    if (idx >= 0) {
+      // 開いたタブを前の仮のタブの位置へ置き、前の仮のタブは閉じる。
+      _state.docs.pop();
+      _state.docs.splice(idx, 1, d);
+    }
+    persist();
+    return _copy(d);
+  }
+
+  // 仮のタブを固定にする (ダブルクリック・編集)。
+  function pin(id) {
+    var d = _find(id);
+    if (!d) return null;
+    if (d.preview) { d.preview = false; persist(); }
+    return _copy(d);
   }
 
   // 最後の 1 枚は閉じない (常に何か編集できる状態を保つ)。
@@ -494,6 +529,8 @@ window.MA.workspace = (function() {
     setActive: setActive,
     open: open,
     openOrActivate: openOrActivate,
+    openPreview: openPreview,
+    pin: pin,
     close: close,
     rename: rename,
     reset: reset,
