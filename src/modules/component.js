@@ -779,12 +779,12 @@ window.MA.modules.plantumlComponent = (function() {
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">末尾に追加</label>' +
         P.selectFieldHtml('種類', 'co-tail-kind', [
-          { value: 'component', label: 'Component', selected: true },
-          { value: 'interface', label: 'Interface' },
-          { value: 'port',      label: 'Port' },
+          { value: 'component', label: 'コンポーネント (component)', selected: true },
+          { value: 'interface', label: 'インターフェース (interface)' },
+          { value: 'port',      label: 'ポート (port)' },
           { value: 'package',   label: '境界 (package / folder / frame / node / rectangle)' },
-          { value: 'relation',  label: 'Relation (関係)' },
-          { value: 'bulk',      label: '一括 (複数行)' },
+          { value: 'relation',  label: '関係' },
+          { value: 'bulk',      label: 'まとめて (複数行)' },
         ]) +
         '<div id="co-tail-detail" style="margin-top:6px;"></div>' +
       '</div>' +

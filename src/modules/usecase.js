@@ -579,12 +579,12 @@ window.MA.modules.plantumlUsecase = (function() {
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">末尾に追加</label>' +
         P.selectFieldHtml('種類', 'uc-tail-kind', [
-          { value: 'actor',    label: 'Actor', selected: true },
-          { value: 'usecase',  label: 'Usecase' },
+          { value: 'actor',    label: 'アクター (actor)', selected: true },
+          { value: 'usecase',  label: 'ユースケース (usecase)' },
           { value: 'package',  label: '境界 (package / rectangle)' },
-          { value: 'relation', label: 'Relation (関係)' },
-          { value: 'note',     label: 'Note (注釈)' },
-          { value: 'bulk',     label: '一括 (複数行)' },
+          { value: 'relation', label: '関係' },
+          { value: 'note',     label: '注釈 (note)' },
+          { value: 'bulk',     label: 'まとめて (複数行)' },
         ]) +
         '<div id="uc-tail-detail" style="margin-top:6px;"></div>' +
       '</div>' +
@@ -822,7 +822,7 @@ window.MA.modules.plantumlUsecase = (function() {
         P.fieldHtml('Label', 'uc-edit-label', element.label) +
         P.primaryButtonHtml('uc-edit-apply', '変更を反映') +
         '<div style="margin-top:6px;">' +
-          P.primaryButtonHtml('uc-rename-refs', 'Alias 変更を関連 Relation にも追従 (renameWithRefs)') +
+          P.primaryButtonHtml('uc-rename-refs', '名前を変えたら関係の行も付け替える') +
         '</div>' +
         '<div style="margin-top:8px;display:flex;gap:6px;">' +
           '<button id="uc-move-up" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↑ 上へ</button>' +

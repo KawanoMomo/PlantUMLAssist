@@ -1202,14 +1202,14 @@ window.MA.modules.plantumlState = (function() {
         // design 4c: 置く場所を選べるようになったので、見出しは「末尾」を名乗らない。
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">追加 / Add</label>' +
         P.selectFieldHtml('種類', 'st-tail-kind', [
-          { value: 'state', label: 'State', selected: true },
+          { value: 'state', label: '状態 (state)', selected: true },
           { value: 'child', label: '子状態 (選んだ状態の中に入れる)' },
-          { value: 'composite', label: 'Composite State' },
-          { value: 'transition', label: 'Transition' },
+          { value: 'composite', label: '複合状態 (state … { })' },
+          { value: 'transition', label: '遷移 (-->)' },
           // BLK-human-20260923-2001: どこの開始・終了・履歴かを選んで足す
           { value: 'pseudo', label: '開始・終了・履歴 ([*] / [H])' },
-          { value: 'note', label: 'Note' },
-          { value: 'bulk', label: '一括 (複数行)' },
+          { value: 'note', label: '注釈 (note)' },
+          { value: 'bulk', label: 'まとめて (複数行)' },
           // design 5d: 常時は出さず、ここに畳む要素 (fork / join / 入口・出口ポイント / 並行領域)。
           { value: 'other', label: 'その他' }
         ]) +
@@ -1296,7 +1296,7 @@ window.MA.modules.plantumlState = (function() {
       if (kind === 'state') {
         html2 =
           P.fieldHtml('ID', 'st-tail-id', '', '例: Idle') +
-          P.selectFieldHtml('Stereotype', 'st-tail-stereo', [
+          P.selectFieldHtml('ステレオタイプ', 'st-tail-stereo', [
             { value: '', label: '(none)', selected: true },
             { value: 'choice', label: 'choice' },
             { value: 'history', label: 'history' },
@@ -2035,7 +2035,7 @@ window.MA.modules.plantumlState = (function() {
     }
     var moveOutHtml = '';
     if (st.parentId) {
-      moveOutHtml = '<button id="st-move-out" style="font-size:11px;padding:3px 8px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;margin-top:4px;display:block;">↑ Move out of ' + window.MA.htmlUtils.escHtml(st.parentId) + '</button>';
+      moveOutHtml = '<button id="st-move-out" style="font-size:11px;padding:3px 8px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;margin-top:4px;display:block;">↑ ' + window.MA.htmlUtils.escHtml(st.parentId) + ' の外へ出す</button>';
     }
 
     var doDisplay = (st.do || '').replace(/\\n/g, '\n');
@@ -2045,8 +2045,8 @@ window.MA.modules.plantumlState = (function() {
       P.fieldHtml('ID', 'st-id', st.id) +
       // BLK-junior-20260915-0406-wish: 状態名も同じ部品の他の図と揃える。
       P.vocabPickerHtml('st-id-vocab', { roles: ['state'] }) +
-      P.fieldHtml('Label', 'st-label', st.label || '') +
-      P.selectFieldHtml('Stereotype', 'st-stereo', [
+      P.fieldHtml('ラベル', 'st-label', st.label || '') +
+      P.selectFieldHtml('ステレオタイプ', 'st-stereo', [
         { value: '', label: '(none)', selected: !st.stereotype },
         { value: 'choice', label: 'choice', selected: st.stereotype === 'choice' },
         { value: 'history', label: 'history', selected: st.stereotype === 'history' },
@@ -2099,8 +2099,8 @@ window.MA.modules.plantumlState = (function() {
       }) +
       // Composite ops (kind-aware buttons)
       (st.endLine && st.endLine > st.line
-        ? '<button id="st-dissolve" style="font-size:11px;padding:4px 10px;background:var(--accent-red);border:none;color:#fff;border-radius:3px;cursor:pointer;margin-bottom:4px;">✕ Dissolve composite</button>'
-        : '<button id="st-convert" style="font-size:11px;padding:4px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;margin-bottom:4px;">+ Convert to composite</button>'
+        ? '<button id="st-dissolve" style="font-size:11px;padding:4px 10px;background:var(--accent-red);border:none;color:#fff;border-radius:3px;cursor:pointer;margin-bottom:4px;">✕ 複合状態をほどく</button>'
+        : '<button id="st-convert" style="font-size:11px;padding:4px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;margin-bottom:4px;">＋ 複合状態にする (中に子状態を入れる)</button>'
       ) +
       moveIntoHtml +
       moveOutHtml +
@@ -2126,7 +2126,7 @@ window.MA.modules.plantumlState = (function() {
     }
     html +=
       '<div style="margin-top:10px;display:flex;gap:6px;">' +
-      P.primaryButtonHtml('st-delete', '✕ 削除 (cascade)') +
+      P.primaryButtonHtml('st-delete', '✕ 削除 (出入りする遷移も消す)') +
       '</div>';
     propsEl.innerHTML = html;
 
@@ -2640,9 +2640,9 @@ window.MA.modules.plantumlState = (function() {
     var title = (position === 'before' ? '前に' : '後に') + '挿入 (L' + line + ')';
     content.innerHTML =
       '<h3 style="margin:0 0 12px 0;color:var(--text-primary);">' + title + '</h3>' +
-      P.selectFieldHtml('Kind', 'st-mod-kind', [
-        { value: 'state', label: 'State', selected: true },
-        { value: 'transition', label: 'Transition' }
+      P.selectFieldHtml('種類', 'st-mod-kind', [
+        { value: 'state', label: '状態', selected: true },
+        { value: 'transition', label: '遷移' }
       ]) +
       '<div id="st-mod-detail" style="margin-top:8px;"></div>' +
       '<div style="display:flex;gap:8px;margin-top:12px;">' +
@@ -2668,7 +2668,15 @@ window.MA.modules.plantumlState = (function() {
     renderDetail();
     P.bindEvent('st-mod-kind', 'change', renderDetail);
 
-    function close() { modal.style.display = 'none'; content.innerHTML = ''; }
+    // BLK-owner-20260923-2332-prune: シーケンス図の挿入メニューと同じく Esc で閉じる。
+    function onKey(ev) {
+      if (ev.key === 'Escape' && modal.style.display !== 'none') { ev.preventDefault(); close(); }
+    }
+    document.addEventListener('keydown', onKey, true);
+    function close() {
+      document.removeEventListener('keydown', onKey, true);
+      modal.style.display = 'none'; content.innerHTML = '';
+    }
     P.bindEvent('st-mod-cancel', 'click', close);
     P.bindEvent('st-mod-confirm', 'click', function() {
       var k = document.getElementById('st-mod-kind').value;
