@@ -3700,11 +3700,15 @@ function initCommandPalette() {
       // BLK-owner-20260923-1949-prune: 名前は残し、開くのは ⇄ 一括置換の ▤ 影響を見る 1 つ
       // (その名前が入った状態で開く)。
       { id: 'name-search', title: '名前で図を探す（部品名 / メソッド名）', hint: 'Search',
-        keywords: ['search', 'name', 'method', 'xref', 'impact', '名前', '部品', 'メソッド', '検索', '影響', 'どの図'],
-        run: function() { openImpactScreen(); } },
+        // BLK-primary-20260924-0021-wish: 「使っている図」「使われている」「参照」「どこで使う」でも引ける
+        // (IntelliJ の Find Usages に当たる語)。図やエディタで部品名を選んでいれば、その名前を入れて開く。
+        keywords: ['search', 'name', 'method', 'xref', 'impact', 'usages', 'find usages', 'references', 'where used',
+          '名前', '部品', 'メソッド', '検索', '影響', 'どの図', '使っている図', '使われている図', '参照', 'どこで使う',
+          'どこで使われている', 'つかっている', 'つかわれている', 'さんしょう', 'えいきょう'],
+        run: function() { openImpactScreen(_nameSearchSeed()); } },
       { id: 'dep-graph', title: '依存グラフ（部品名の参照元・参照先）', hint: 'Search',
         keywords: ['dependency', 'graph', 'refs', 'impact', 'いぞん', '依存', '参照', '連鎖', '影響'],
-        run: function() { openImpactScreen(); } },
+        run: function() { openImpactScreen(_nameSearchSeed()); } },
       // BLK-primary-20260918-0549-friction: 資料セットの行の中にしか無かった 2 つを
       // Ctrl+K からも引けるようにする (入口は増やさず、同じ操作を同じ名前で呼ぶ)。
       { id: 'docset-before-after', title: '資料セットの変更前後をまとめて見る / Doc set before-after', hint: 'Deliver', keywords: ['docset', 'set', 'before', 'after', 'review', 'しりょう', 'せっと', 'へんこうぜんご', 'まとめて', 'みくらべ'], run: function() { runDocSetCommand(openDocSetBeforeAfter); } },
@@ -17074,7 +17078,7 @@ function _riZoomClose() {
   if (z) z.classList.remove('open');
 }
 
-function toggleRenameImpact(open) {
+function toggleRenameImpact(open, seedName) {
   var modal = document.getElementById('ri-modal');
   if (!modal) return;
   var want = (open == null) ? (modal.style.display === 'none' || !modal.style.display) : !!open;
@@ -17085,7 +17089,8 @@ function toggleRenameImpact(open) {
   if (!want) { modal.style.display = 'none'; _riSvgSeq++; _riZoomClose(); return; }
   // BLK-owner-20260923-1949-prune: 上段は部品名の依存グラフ。置換前に打った名前を
   // そのまま起点にする (打ち直させない)。症状の語も開くたびに選んだ部品名へ戻す。
-  var from = (document.getElementById('rename-from') || {}).value || '';
+  // seedName: Ctrl+K「名前で図を探す」を開く前に選んでいた部品名 (BLK-primary-20260924-0021-wish)。
+  var from = (typeof seedName === 'string' && seedName) || (document.getElementById('rename-from') || {}).value || '';
   if (from) _dgName = from;
   _dgVerKw = null;
   _dgVerLastName = null;
@@ -17103,8 +17108,18 @@ function toggleRenameImpact(open) {
 
 // ▤ 影響を見る を開く唯一の道。保存フォルダぶんが未読なら読んでから出す
 // (開いているタブだけでは「開いていない図への連鎖」がそのまま抜け落ちる)。
-function openImpactScreen() {
-  var show = function() { toggleRenameImpact(true); };
+// BLK-primary-20260924-0021-wish: Ctrl+K「名前で図を探す」を開く前に選んでいた部品名 (Ctrl+H の一括置換と同じ拾い方)。
+function _nameSearchSeed() {
+  var BR = window.MA.bulkRename;
+  if (!BR || !BR.seedForSearch) return '';
+  var sel = (window.MA.selection && window.MA.selection.getSelected()) || [];
+  var text = (editorEl && typeof editorEl.selectionStart === 'number')
+    ? editorEl.value.slice(editorEl.selectionStart, editorEl.selectionEnd) : '';
+  return BR.seedForSearch(sel, text);
+}
+
+function openImpactScreen(seedName) {
+  var show = function() { toggleRenameImpact(true, seedName); };
   // 「開いていないから出てこない」図を「使っていない図」と読み違えないよう、フォルダを先に読む。
   if (_fiEnabled() || _fiFolderMode()) return loadFolderImpact().then(show, show);
   show();

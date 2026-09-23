@@ -222,8 +222,21 @@ window.MA.bulkRename = (function() {
     return isValidTarget(s) ? s : '';
   }
 
+  // BLK-primary-20260924-0021-wish: 「名前で図を探す」を開く前に選んでいた部品名。
+  // 図で 1 つ選んだ要素の名前 → エディタで選んだ文字の順 (Ctrl+H の一括置換と同じ)。
+  // メッセージ等の内部 id (`__r_0`)・名前として使えない選択は拾わない。
+  function seedForSearch(selected, editorSelText) {
+    var sel = Array.isArray(selected) ? selected : [];
+    if (sel.length === 1 && sel[0] && typeof sel[0].id === 'string' && sel[0].id.indexOf('__') !== 0 &&
+        isValidTarget(sel[0].id)) {
+      return sel[0].id;
+    }
+    return seedFromSelection(editorSelText);
+  }
+
   return {
     seedFromSelection: seedFromSelection,
+    seedForSearch: seedForSearch,
     countIn: countIn,
     replaceIn: replaceIn,
     detectRename: detectRename,
