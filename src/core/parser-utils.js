@@ -32,6 +32,16 @@ window.MA.parserUtils = (function() {
       if (/^(participant|boundary|control|entity|database|queue|collections)\b/.test(t)) hasParticipantSeqOnly = true;
       if (/^actor\b/.test(t)) hasActor = true;
       if (/^\(.+\)/.test(t)) hasUsecaseShort = true;
+      // BLK-migrator-20260924-0012: ユースケースの略記は行頭に来るとは限らない
+      // (`:User: --> (Use)` / `"Use the application" as (Use)` / `Admin --> (Admin the application)`)。
+      // 矢印の直後・`as` の直後の `(…)`、行頭の `:actor:`、`skinparam actorStyle` もユースケース図の印。
+      // シーケンスのメッセージ文 (`A -> B : call (x)`) は矢印の直後が `(` ではないので当たらない。
+      if (/(-+>|<-+|\.+>|<\.+|--|\.\.)\s*\([^()*][^()]*\)\s*(:.*)?$/.test(t) ||
+          /\bas\s+\([^()]+\)\s*$/.test(t) ||
+          /^:[^:;]+:\s*(-|\.|<|as\b|$)/.test(t) ||
+          /^skinparam\s+actorStyle\b/i.test(t)) {
+        hasUsecaseShort = true;
+      }
       if (/^usecase\b/.test(t)) hasUsecaseKw = true;
       if (/^(package|rectangle)\b.*\{/.test(t)) hasPackage = true;
       if (/^(class|interface|abstract|enum)\b/.test(t)) hasClassKw = true;

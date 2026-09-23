@@ -420,7 +420,7 @@ window.MA.overlayBuilder = (function() {
     return out;
   }
 
-  // どの要素にも取られなかった <g> (要素・入れ物・関係・題) にも、書かれた行を指す
+  // どの要素にも取られなかった <g> (要素・入れ物・関係・題・凡例) にも、書かれた行を指す
   // 当たり判定を置く。フォームで直せない記法でも、指せば本文のその行へ飛び、
   // 右欄で「フォーム未対応の記法」と分かる (黙って何も出さない、をやめる)。
   // claimed: モジュールが既に当てた <g> の配列。戻り値は置いた数。
@@ -429,7 +429,7 @@ window.MA.overlayBuilder = (function() {
     if (!svgEl || !overlayEl || !svgEl.querySelectorAll) return 0;
     var taken = claimed || [];
     var n = 0;
-    var nodes = svgEl.querySelectorAll(selector || 'g.entity, g.cluster, g.title, g.link, g[class*="link_"]');
+    var nodes = svgEl.querySelectorAll(selector || 'g.entity, g.cluster, g.title, g.legend, g.link, g[class*="link_"]');
     Array.prototype.forEach.call(nodes, function(g) {
       if (taken.indexOf(g) >= 0) return;
       var line = _srcLine(g);

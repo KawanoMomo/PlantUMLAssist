@@ -772,6 +772,45 @@ test('migrator 手順 4 — 長いメッセージが横切るライフライン�
     .toEqual(['title Diag - $THEME theme', '!else', 'title Diag v2']);
 });
 
+// BLK-migrator-20260924-0012: web の実物 (puml-themes の usecase-ex / ex2 / with-actorstyle-ex) で、ユースケース図の
+// 要素にホバーしても枠がほとんど出なかった。略記だけの図はシーケンス図と判定され、パッケージの中の要素は
+// 修飾名で描かれるので当たらず、フォームが読めない略記・題・凡例には枠が無かった。
+test('migrator 手順 4 — 略記・パッケージ・凡例の混ざったユースケース図でも、ホバーした要素の行に枠が出る', async ({ page }) => {
+  await bootPlain(page);
+  await typeDsl(page, [
+    '@startuml',                              // 1
+    'title Usecase Diagram',                  // 2
+    'skinparam actorStyle awesome',           // 3
+    ':User: --> (Use)',                       // 4
+    '"Use the application" as (Use)',         // 5
+    'package Professional {',                 // 6
+    '  actor "Food Critic" as fc',            // 7
+    '}',                                      // 8
+    'rectangle Restaurant {',                 // 9
+    '  usecase "Eat Food" as UC1',            // 10
+    '}',                                      // 11
+    'fc --> UC1',                             // 12
+    'legend',                                 // 13
+    'my legend',                              // 14
+    'endlegend',                              // 15
+    '@enduml',                                // 16
+  ].join(String.fromCharCode(10)));
+  await expect(page.locator('#overlay-layer rect[data-type="usecase"]')).toHaveCount(1, { timeout: 20000 });
+
+  for (const [label, type, line] of [
+    ['Usecase Diagram', 'source-line', '2'],
+    ['User', 'source-line', '4'],
+    ['Use the application', 'source-line', '4'],
+    ['Food Critic', 'actor', '7'],
+    ['Eat Food', 'usecase', '10'],
+    ['Restaurant', 'package', '9'],
+    ['my legend', 'source-line', '13'],
+  ]) {
+    const { hit } = await hoverHit(page, label);
+    expect(hit, label + ' にホバーして枠が出る').toEqual({ type, line, hover: true });
+  }
+});
+
 // BLK-migrator-20260923-2312: state 図は宣言の数と SVG の図形の数を突き合わせて当てていたので、
 // 宣言の無い状態・choice / fork / join・`->` / `--->` の遷移が 1 つ混ざるだけで枠がほぼ全滅した。
 // PlantUML が SVG に残す要素情報で当て、どの要素にホバーしても本人の枠が出る。
