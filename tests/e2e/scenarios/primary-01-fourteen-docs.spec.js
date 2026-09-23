@@ -57,3 +57,52 @@ test('手順1 中身が別の図で塗り潰された 1 枚を、全文を読ま
   await expect(page.locator('#folder-panel [data-kind-mismatch="driver_use_case"]')).toHaveCount(0);
   expect(await page.locator('#folder-panel [data-kind-mismatch]').count()).toBe(1);
 });
+
+// BLK-primary-20260924-0805-design (design 10a): 14 枚を次々見て回るとき、1 回押しただけの図がタブ列に積もっていた。
+// 保存先ツリーの行の 1 回押しは仮のタブ (斜体) で開き、次の 1 回押しで中身が入れ替わる。
+// ダブルクリック・本文を 1 か所直す で固定のタブになる (実マウスの click / dblclick)。
+test('手順1 14 枚を 1 回押しで見て回ってもタブは 1 枚だけ増え、ダブルクリックか編集で固定になる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  for (const n of S.PRIMARY_DOCS) await S.putDoc(page, DIR, n, S.docFor(n));
+  await S.openFolder(page);
+  const tabs = page.locator('#tab-bar .tab');
+  const before = await tabs.count();
+  const row = (n) => page.locator('#folder-panel .folder-item[data-file-name="' + n + '"]');
+  const [a, b, c, d] = S.PRIMARY_DOCS;
+
+  // 1 回押しを 3 枚続けても、増えるタブは仮の 1 枚だけ (中身が入れ替わる)。
+  for (const n of [a, b, c]) {
+    await row(n).click();
+    await expect(page.locator('#tab-bar .tab.active')).toHaveAttribute('data-doc-name', n);
+    await expect(tabs).toHaveCount(before + 1);
+    await expect(page.locator('#tab-bar .tab.active')).toHaveAttribute('data-preview', '1');
+  }
+  await expect(page.locator('#tab-bar .tab[data-doc-name="' + a + '"]')).toHaveCount(0);
+  // 仮のタブは斜体で固定のタブと見分けが付く。
+  await expect(page.locator('#tab-bar .tab.active .tab-label')).toHaveCSS('font-style', 'italic');
+
+  // ダブルクリックで固定。次の 1 回押しでは入れ替わらず、仮のタブが別に 1 枚増える。
+  await row(c).dblclick();
+  await expect(page.locator('#tab-bar .tab[data-doc-name="' + c + '"]')).not.toHaveAttribute('data-preview', '1');
+  await row(d).click();
+  await expect(page.locator('#tab-bar .tab.active')).toHaveAttribute('data-doc-name', d);
+  await expect(tabs).toHaveCount(before + 2);
+  await expect(page.locator('#tab-bar .tab[data-doc-name="' + c + '"]')).toHaveCount(1);
+
+  // 仮のタブで本文を 1 か所直すと、その場で固定のタブになる。
+  await page.locator('#editor').click();
+  await page.keyboard.press('Control+End');
+  await page.keyboard.type("\n' 見直し");
+  await expect(page.locator('#tab-bar .tab[data-doc-name="' + d + '"]')).not.toHaveAttribute('data-preview', '1');
+  // 本文を押すと一覧は畳まれる (今までどおり)。開き直して次の図へ。
+  await S.openFolder(page);
+  await row(a).click();
+  await expect(tabs).toHaveCount(before + 3);
+
+  // 既にタブのある図を 1 回押すと、そのタブへ移るだけ (増えない・仮にならない)。
+  await row(c).click();
+  await expect(page.locator('#tab-bar .tab.active')).toHaveAttribute('data-doc-name', c);
+  await expect(tabs).toHaveCount(before + 3);
+  await expect(page.locator('#tab-bar .tab.active')).not.toHaveAttribute('data-preview', '1');
+});
