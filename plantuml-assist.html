@@ -5794,8 +5794,13 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   gap: 8px;
   padding: 5px 10px;
   /* 右上に浮くズーム帯 (#zoom-hud) と重なる高さにあるので、その幅ぶんを空ける。
-     空けないと「CSV で書き出し」が帯の下に隠れて押せない。 */
-  padding-right: 275px;
+     空けないと「CSV で書き出し」が帯の下に隠れて押せない。
+     FILES ツリーでキャンバスが狭くなると 275px は幅の大半になるので上限を割合で切る。 */
+  padding-right: min(275px, 40%);
+  /* 狭い幅で見出しが何行にも折り返すと、この帯だけで 400px を超えて
+     キャンバスが潰れる。1 行に保ち、あふれる文字は省略する。 */
+  flex-wrap: nowrap;
+  overflow: hidden;
 }
 
 #state-table-head .stt-title {
@@ -5808,6 +5813,21 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   font-size: 10px;
   color: var(--text-secondary);
   flex: 1;
+}
+
+/* 見出しの中身は 1 行に保つ。折り返させると帯が縦に伸びてキャンバスを食う。 */
+#state-table-head .stt-sub,
+#state-tree-head .stt-sub {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#state-table-head .tb-btn,
+#state-tree-head .tb-btn {
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 #state-table-body {
@@ -5873,8 +5893,10 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   align-items: center;
   gap: 8px;
   padding: 5px 10px;
-  /* 右上に浮くズーム帯の下に隠れないよう幅を空ける。 */
-  padding-right: 275px;
+  /* 右上に浮くズーム帯の下に隠れないよう幅を空ける (狭い幅では割合で切る)。 */
+  padding-right: min(275px, 40%);
+  flex-wrap: nowrap;
+  overflow: hidden;
 }
 
 /* display を持たせると hidden 属性が効かなくなるので、畳む側も書く。 */
