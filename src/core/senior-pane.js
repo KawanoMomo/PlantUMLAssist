@@ -106,7 +106,7 @@
     var list = (names || []).map(_s).filter(function(n) { return !!n; });
     var out = { name: '', how: 'none', candidates: [], reason: '', key: '', keys: [] };
     if (!mine.name || !list.length) {
-      out.reason = list.length ? 'まだ図を開いていません' : '先輩のフォルダに図がありません';
+      out.reason = list.length ? 'まだ図を開いていません' : '比較相手のフォルダに図がありません';
       return out;
     }
 
@@ -165,13 +165,13 @@
       }
     }
 
-    out.reason = 'この図 (' + baseOf(mine.name) + ') に当たる先輩の図はありません';
+    out.reason = 'この図 (' + baseOf(mine.name) + ') に当たる相手の図はありません';
     return out;
   }
 
   // 枠の上に出す 1 行。押す前に「いま何が横にあるか」が読める。
   function noticeText(pick, seniorLabel) {
-    var who = _s(seniorLabel) || '先輩';
+    var who = _s(seniorLabel) || '比較相手';
     if (!pick) return who + ' のフォルダを選んでください';
     if (pick.how === 'none') return pick.reason;
     if (pick.name) {
@@ -211,7 +211,7 @@
     }
     var n = (pick.candidates || []).length;
     return {
-      label: '👀 先輩 ' + n + ' 候補',
+      label: '並べて比較 ' + n + ' 候補',
       title: pick.reason + ' が ' + n + ' 枚あります (押すと枠が開き、選べます)',
       count: n,
     };

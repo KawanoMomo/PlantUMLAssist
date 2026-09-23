@@ -1460,7 +1460,7 @@ test.describe('junior 手順 1〜2: 先輩の図を横に置いたまま自分�
   test('相手のいない図では、先頭の 1 枚を黙って出さずに「無い」と言う', async ({ page }) => {
     await openMine(page, 'adc_state');
     await openSenior(page);
-    await expect(page.locator('#senior-notice')).toContainText('当たる先輩の図はありません');
+    await expect(page.locator('#senior-notice')).toContainText('当たる相手の図はありません');
     await expect(page.locator('#senior-dsl')).toHaveText('');
   });
 
@@ -1629,7 +1629,7 @@ test.describe('junior 手順 1: 先輩が持たない図種では自分の他部
 
     const notice = page.locator('#senior-notice');
     // 先輩がいないことを隠さない (横の図を先輩の図と読み違えない)。
-    await expect(notice).toContainText('当たる先輩の図はありません');
+    await expect(notice).toContainText('当たる相手の図はありません');
     await expect(notice).toContainText('見本');
     await expect(notice).toContainText('読むだけ');
     // 出るのは自分の他部品 (TIMER ではない) の同じ図種。
