@@ -1551,10 +1551,95 @@ window.MA.modules.plantumlActivity = (function() {
     return added;
   }
 
+  function _normLabel(t) {
+    return String(t || '').split(/\r?\n|\\n/)[0].replace(/<[^>]+>/g, '').replace(/\*\*|\/\/|__|""|~~/g, '')
+      .replace(/\s+/g, '').toLowerCase();
+  }
+
+  // 動作ノードごとに、その名前の文字を中に描いた箱 (rect) を 1 つ探す。同じ名前が複数あれば並び順。
+  function _matchActionsByText(svgEl, flat) {
+    var boxes = [];
+    Array.prototype.forEach.call(svgEl.querySelectorAll('rect'), function(r) {
+      var h = parseFloat(r.getAttribute('height')) || 0;
+      var w = parseFloat(r.getAttribute('width')) || 0;
+      if (h < 16 || w < 10) return;
+      boxes.push({ el: r, x: parseFloat(r.getAttribute('x')) || 0, y: parseFloat(r.getAttribute('y')) || 0, w: w, h: h, label: null });
+    });
+    var texts = Array.prototype.map.call(svgEl.querySelectorAll('text'), function(t) {
+      return { x: parseFloat(t.getAttribute('x')) || 0, y: parseFloat(t.getAttribute('y')) || 0, s: t.textContent || '' };
+    });
+    boxes.forEach(function(b) {
+      for (var i = 0; i < texts.length; i++) {
+        var t = texts[i];
+        if (t.x >= b.x && t.x <= b.x + b.w && t.y >= b.y && t.y <= b.y + b.h) { b.label = _normLabel(t.s); break; }
+      }
+    });
+    var used = [];
+    var out = [];
+    flat.forEach(function(n) {
+      if (n.kind !== 'action') return;
+      var want = _normLabel(n.text);
+      if (!want) return;
+      for (var i = 0; i < boxes.length; i++) {
+        var b = boxes[i];
+        if (!b.label || used.indexOf(b) >= 0) continue;
+        if (b.label === want || (b.label.length >= 4 && want.indexOf(b.label) === 0)) {
+          used.push(b); out.push({ node: n, el: b.el }); return;
+        }
+      }
+    });
+    return out;
+  }
+
+  // BLK-migrator-20260924-0752: レーンの見出し (`|Swimlane1|`) は、描かれた見出しの文字で当てる。
+  // 押すとそのレーンを最初に書いた行が選ばれ、右欄でレーン名を直せる。
+  function _addSwimlaneHeaderRects(svgEl, parsedData, overlayEl) {
+    var sws = parsedData.swimlanes || [];
+    if (!sws.length) return;
+    var seen = {};
+    var texts = Array.prototype.slice.call(svgEl.querySelectorAll('text'));
+    sws.forEach(function(sw) {
+      var want = _normLabel(sw.label);
+      if (!want || seen[want]) return;
+      seen[want] = true;
+      for (var i = 0; i < texts.length; i++) {
+        if (_normLabel(texts[i].textContent) !== want) continue;
+        var bb = OB.nodeBBox(texts[i]);
+        if (!bb) return;
+        OB.addRect(overlayEl, bb.x - 4, bb.y - 4, bb.width + 8, bb.height + 8, {
+          'data-type': 'swimlane', 'data-id': sw.id, 'data-line': String(sw.line),
+        });
+        return;
+      }
+    });
+  }
+
+  function _hasLinkLines(svgEl) {
+    if (!OB.linkGroups) return false;
+    return Array.prototype.some.call(OB.linkGroups(svgEl), function(g) {
+      return g.getAttribute('data-source-line') != null;
+    });
+  }
+
   function buildOverlay(svgEl, parsedData, overlayEl) {
     if (!svgEl || !overlayEl) return;
     OB.syncDimensions(svgEl, overlayEl);
     while (overlayEl.firstChild) overlayEl.removeChild(overlayEl.firstChild);
+
+    // BLK-migrator-20260924-0752: 旧記法 (`(*) -->` / `if "..." then` / `===LABEL===`) の図は、
+    // PlantUML が関係 (<g class="link">) に書かれた行を残す。そのときは本文を読み直さず、
+    // 描いた側の情報 (関係の行・要素の名前・線のつながり) だけで当てる。
+    // 新記法 (`:Action;`) の図は SVG に行も <g> も無いので、今までどおり本文の並びで当てる。
+    if (_hasLinkLines(svgEl)) {
+      var claimed = [];
+      if (OB.addLooseShapes) OB.addLooseShapes(svgEl, overlayEl, claimed);
+      if (OB.addUnclaimed) {
+        OB.addUnclaimed(svgEl, overlayEl, claimed,
+          'g.entity, g[class$="_entity"], g.cluster, g.title, g.legend, g.link, g[class*="link_"]');
+      }
+      OB.raiseSmallestLast(overlayEl);
+      return;
+    }
 
     var flat = _flattenNodes(parsedData.nodes || [], []);
     if (flat.length === 0) return;
@@ -1578,11 +1663,27 @@ window.MA.modules.plantumlActivity = (function() {
       return null;
     };
 
+    // BLK-migrator-20260924-0752: 動作は箱の中に描かれた文字 (= 本文の動作の名前) で先に当てる。
+    // 並び順だけで当てると、レーン (`|Swimlane|`) をまたぐ図では SVG の並びがレーンごとになって
+    // 枠が隣の動作にずれ、テーマ (`!include` した skin) で角の丸みが変わると箱が動作と見なされず全滅していた。
+    var byText = _matchActionsByText(svgEl, flat);
+    byText.forEach(function(m) {
+      var bb = _shapeBBox(m.el);
+      if (!bb) return;
+      OB.addRect(overlayEl, bb.x, bb.y, bb.width, bb.height, {
+        'data-type': 'action', 'data-id': m.node.id, 'data-line': String(m.node.line),
+      });
+    });
+    var textNodes = byText.map(function(m) { return m.node; });
+    var textEls = byText.map(function(m) { return m.el; });
+    matched = matched.filter(function(sh) { return textEls.indexOf(sh.el) < 0; });
+
     // Greedy match: for each flat node, find next matching shape in document order
     var shapeIdx = 0;
     flat.forEach(function(n) {
       var ek = expectedKind(n);
       if (!ek) return;
+      if (textNodes.indexOf(n) >= 0) return;
       while (shapeIdx < matched.length && matched[shapeIdx].kind !== ek) shapeIdx++;
       if (shapeIdx >= matched.length) return;
       var sh = matched[shapeIdx];
@@ -1596,8 +1697,9 @@ window.MA.modules.plantumlActivity = (function() {
       });
     });
 
-    if (matched.length !== flat.filter(function(n) { return expectedKind(n); }).length) {
-      OB.warnIfMismatch('activity', flat.length, matched.length);
+    // 文字で当てた動作の箱は matched から外してあるので、数に戻して比べる。
+    if (matched.length + byText.length !== flat.filter(function(n) { return expectedKind(n); }).length) {
+      OB.warnIfMismatch('activity', flat.length, matched.length + byText.length);
     }
 
     // Notes: match 5-point polygons in document order, excluding closed-diamond merge markers (endif/endwhile).
@@ -1629,6 +1731,7 @@ window.MA.modules.plantumlActivity = (function() {
     }
 
     _addBranchLabelRects(svgEl, parsedData, overlayEl);
+    _addSwimlaneHeaderRects(svgEl, parsedData, overlayEl);
 
     // BLK-human-20260912-2130: 小さい当たり判定を手前に。共通実装 (src/core)
     OB.raiseSmallestLast(overlayEl);
