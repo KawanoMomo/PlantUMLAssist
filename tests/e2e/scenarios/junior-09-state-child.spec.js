@@ -320,9 +320,11 @@ test('手順9 状態遷移表に親 2 つ・子 3 つずつと各親の開始が
   // 子 (Recv) の行・sent 列の空欄から Done への遷移を足す → Busy の { } の中に入る
   const cell = page.locator('#state-table-body td.stt-empty[data-state-id="Busy.Recv"][data-trigger="sent"]');
   await cell.click();
-  await expect(page.locator('#st-tx-modal')).toBeVisible();
-  await page.locator('#st-tx-to').selectOption('Busy.Done');
-  await page.locator('#st-tx-confirm').click();
+  // BLK-human-20260923-2000: 空欄は右パネルの連続入力フォームを行・列入りで開く (モーダルは廃止)。
+  await expect(page.locator('#st-tail-from')).toHaveValue('Busy.Recv');
+  await expect(page.locator('#st-tail-trig')).toHaveValue('sent');
+  await page.locator('#st-tail-to').selectOption('Busy.Done');
+  await page.locator('#st-tail-add').click();
   await page.waitForTimeout(400);
   const lines = (await dsl(page)).split('\n').map((l) => l.trim());
   const at = lines.indexOf('Recv --> Done : sent');
@@ -403,4 +405,138 @@ test('手順9 開始・終了を「どこの」ものか選んで GUI だけで�
   if (!tb) throw new Error('no box: start@');
   await page.mouse.click(tb.x + tb.width / 2, tb.y + tb.height / 2);
   await expect(page.locator('#st-pseudo-scope')).toHaveText('最上位 (図全体)');
+});
+
+// BLK-human-20260923-2000: 遷移を続けて入れる。状態 5 つ・遷移 12 本 (同じトリガを 3 回使う) を
+// GUI のフォームと図のクリックだけで入れ、DSL を一度も直接編集しない。
+// 1 本あたりクリック 3 以下・打鍵はトリガ名の文字数 + 2 以下。
+const FIVE_STATES = [
+  '@startuml',
+  'title ADC 状態遷移',
+  'state Idle',
+  'state Init',
+  'state Ready',
+  'state Busy',
+  'state Error',
+  '[*] --> Idle',
+  '@enduml',
+].join('\n');
+
+test('手順9 遷移 12 本を、図で遷移先を押してトリガだけ打つ連続入力で入れる', async ({ page }) => {
+  test.setTimeout(120 * 1000);
+  await S.bootWithSaveDir(page, DIR);
+  await S.typeDsl(page, FIVE_STATES);
+  await page.waitForTimeout(1500);
+
+  let clicks = 0;
+  let keys = 0;
+  const perTr = [];
+  const stateRect = (id) => page.locator('#overlay-layer rect[data-type="state"][data-id="' + id + '"]').first();
+  async function click(loc) { await loc.click(); clicks++; }
+  async function waitTrigFocus() {
+    await expect(page.locator('#st-tail-trig')).toBeFocused();
+  }
+  // 候補から選ぶとき: 頭の数文字 → ↓ → Enter (候補を入れる) → Enter (確定)
+  async function typeTrig(full, prefix) {
+    await waitTrigFocus();
+    if (prefix) {
+      await page.keyboard.type(prefix); keys += prefix.length;
+      await expect(page.locator('#st-tail-trig-sugg .st-tx-sugg-item').first()).toHaveText(full);
+      await page.keyboard.press('ArrowDown'); keys++;
+      await page.keyboard.press('Enter'); keys++;
+      await expect(page.locator('#st-tail-trig')).toHaveValue(full);
+    } else {
+      await page.keyboard.type(full); keys += full.length;
+    }
+    await page.keyboard.press('Enter'); keys++;
+  }
+  let n = 0;
+  async function one(to, trig, prefix) {
+    const c0 = clicks, k0 = keys;
+    await expect(page.locator('#st-tx-hint')).toContainText('遷移先');
+    await click(stateRect(to));
+    await typeTrig(trig, prefix);
+    n++;
+    await expect(page.locator('#st-tx-count')).toHaveText('この回に入れた遷移: ' + n + ' 本');
+    await page.waitForTimeout(700);
+    perTr.push({ trig, clicks: clicks - c0, keys: keys - k0 });
+  }
+
+  // 1 本目: 図で Idle を選び「ここから遷移」→ 図で Init を押す → トリガ + Enter (クリック 3)
+  const c0 = clicks, k0 = keys;
+  await click(stateRect('Idle'));
+  await click(page.locator('#st-add-tx'));
+  await click(stateRect('Init'));
+  await typeTrig('power_on');
+  n++;
+  await expect(page.locator('#st-tx-count')).toHaveText('この回に入れた遷移: 1 本');
+  await page.waitForTimeout(700);
+  perTr.push({ trig: 'power_on', clicks: clicks - c0, keys: keys - k0 });
+
+  // 2 本目以降: from は直前の遷移先。遷移先を図で 1 回押し、トリガだけ打つ。
+  await one('Ready', 'init_done');
+  await one('Busy', 'start');
+  await one('Ready', 'done');
+  await one('Ready', 'poll');                 // 自己遷移: 同じ状態を押す
+  await one('Error', 'fault');
+  await one('Idle', 'reset');
+  await one('Busy', 'start', 'st');           // 2 回目の start は候補から
+  await one('Error', 'fault', 'fa');
+  await one('Init', 'reset', 're');
+  await one('Error', 'fault', 'fa');
+  await one('Ready', 'reset', 're');          // reset は 3 回目
+
+  // 到達条件その1: 1 本あたりクリック 3 以下・打鍵はトリガ名 + 2 以下。
+  perTr.forEach((p) => {
+    expect(p.clicks, JSON.stringify(p)).toBeLessThanOrEqual(3);
+    expect(p.keys, JSON.stringify(p)).toBeLessThanOrEqual(p.trig.length + 2);
+  });
+
+  // 到達条件その2: 12 本が `A --> B : trigger` の 1 行ずつで入り、同じ from の並びにまとまる。
+  const text = await dsl(page);
+  const trLines = text.split('\n').filter((l) => / --> /.test(l) && !/^\[\*\]/.test(l.trim()));
+  expect(trLines).toEqual([
+    'Idle --> Init : power_on',
+    'Idle --> Busy : start',
+    'Init --> Ready : init_done',
+    'Init --> Error : fault',
+    'Ready --> Busy : start',
+    'Ready --> Ready : poll',
+    'Ready --> Error : fault',
+    'Busy --> Ready : done',
+    'Busy --> Error : fault',
+    'Error --> Idle : reset',
+    'Error --> Init : reset',
+    'Error --> Ready : reset',
+  ]);
+  expect(text.trim().endsWith('@enduml')).toBe(true);
+
+  // 到達条件その3: Esc で回を閉じると、フォームは初期状態 (State) に戻る
+  // (候補が開いていれば 1 回目の Esc は候補を閉じる)。
+  await page.locator('#st-tail-trig').click();
+  await page.keyboard.press('Escape');
+  if (await page.locator('#st-tail-kind').inputValue() === 'transition') await page.keyboard.press('Escape');
+  await expect(page.locator('#st-tail-kind')).toHaveValue('state');
+});
+
+test('手順9 状態遷移表の空欄から、行と列が埋まった同じ連続入力フォームが開く', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.typeDsl(page, TIMER_STATE);
+  await page.waitForTimeout(1200);
+  if (!(await page.locator('#state-table-body').isVisible())) await page.locator('#btn-state-table-toggle').click();
+  await expect(page.locator('#state-table-body')).toBeVisible();
+  // Ready 行 × Timer_Init 列 は空欄
+  const cell = page.locator('#state-table-body td.stt-cell[data-state-id="Ready"][data-trigger="Timer_Init"]');
+  await cell.click();
+  await expect(page.locator('#st-tail-kind')).toHaveValue('transition');
+  await expect(page.locator('#st-tail-from')).toHaveValue('Ready');
+  await expect(page.locator('#st-tail-trig')).toHaveValue('Timer_Init');
+  await expect(page.locator('#st-tail-trig')).toBeFocused();
+  await page.locator('#st-tail-to').selectOption('Uninit');
+  await page.locator('#st-tail-trig').press('Enter');
+  await expect(page.locator('#st-tx-count')).toHaveText('この回に入れた遷移: 1 本');
+  const text = await dsl(page);
+  // Ready から出る遷移の並びの末尾 (Ready --> Busy の直後) に入る。
+  const lines = text.split('\n');
+  expect(lines[lines.indexOf('Ready --> Busy : Timer_Start') + 1]).toBe('Ready --> Uninit : Timer_Init');
 });

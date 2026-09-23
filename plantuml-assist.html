@@ -231,6 +231,11 @@ html, body {
 #files-ctx-menu .files-ctx-sep { height: 1px; margin: 4px 0; background: var(--border); }
 #files-panel.is-drop { outline: 2px dashed var(--accent); outline-offset: -3px; }
 #files-panel .files-part-head.is-drop { background: var(--bg-tertiary); outline: 1px solid var(--accent); }
+/* BLK-human-20260923-2000: 遷移フォームの候補 (打ち始めで絞り、上下キーと Enter で選ぶ) */
+.st-tx-sugg { margin: -4px 0 6px 0; border: 1px solid var(--border); border-radius: 3px; background: var(--bg-secondary); max-height: 160px; overflow-y: auto; }
+.st-tx-sugg[hidden] { display: none; }
+.st-tx-sugg-item { padding: 2px 6px; font-size: 11px; font-family: var(--font-mono), Consolas, monospace; cursor: pointer; color: var(--text-primary); }
+.st-tx-sugg-item:hover, .st-tx-sugg-item.on { background: var(--accent); color: #fff; }
 #files-panel #folder-panel {
   position: static; z-index: auto; max-height: none; min-width: 0;
   width: 100%; box-sizing: border-box;
@@ -8591,6 +8596,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/state-branch.js"></script>
 <script src="src/core/state-transition.js"></script>
 <script src="src/core/state-insert.js"></script>
+<script src="src/core/state-tx-entry.js"></script>
 <script src="src/core/state-child.js"></script>
 <script src="src/core/state-collapse.js"></script>
 <script src="src/core/state-table.js"></script>
