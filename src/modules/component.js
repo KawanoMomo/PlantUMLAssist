@@ -1249,9 +1249,12 @@ window.MA.modules.plantumlComponent = (function() {
 
       // PlantUML emits component/interface as <g class="entity" data-qualified-name="X">
       // (実機 SVG)。test fixture は g.component / g.interface の旧形式も受理する fallback。
+      // BLK-migrator-20260923-1909: package / node / cloud の中の部品は `My Package.First Component`
+      // の修飾名で描かれる。完全一致しか見ていなかったので、入れ物の中の部品に枠が出なかった。
+      var claimed = [];
       function _matchEntity(item) {
-        var g = svgEl.querySelector('g.entity[data-qualified-name="' + item.id + '"]');
-        if (g) return g;
+        var g = OB.findEntityByName(svgEl, item.id);
+        if (g) { claimed.push(g); return g; }
         return svgEl.querySelector('g.' + item.kind + '[data-source-line]');
       }
       function _entityBBox(g) {
@@ -1329,12 +1332,23 @@ window.MA.modules.plantumlComponent = (function() {
       _push(1);
 
       var packages = (parsedData.groups || []).filter(function(g) { return g.kind === 'package'; });
-      var pkgGroups = svgEl.querySelectorAll('g.cluster');
-      var pkgN = Math.min(packages.length, pkgGroups.length);
-      for (var pi = 0; pi < pkgN; pi++) {
+      // BLK-migrator-20260923-1909: 並び順で当てると、パーサが読めない入れ物 (cloud / database { })
+      // が 1 つあるだけで以後の入れ物の枠が隣へずれた。開始行・表示名で当てる。
+      var pkgGroups = OB.matchClusters(svgEl, packages);
+      var pkgN = 0;
+      for (var pi = 0; pi < packages.length; pi++) {
         var pg = pkgGroups[pi];
+        if (!pg) continue;
+        claimed.push(pg);
+        pkgN++;
         var pkgRect = pg.querySelector('rect');
-        if (!pkgRect) continue;
+        if (!pkgRect) {
+          var pbb = OB.extractUnionBBox(pg, 'text, line, polygon, polyline, path, rect, ellipse');
+          if (pbb) OB.addRect(overlayEl, pbb.x - 2, pbb.y - 2, pbb.width + 4, pbb.height + 4, {
+            'data-type': 'package', 'data-id': packages[pi].id, 'data-line': packages[pi].startLine,
+          });
+          continue;
+        }
         OB.addRect(overlayEl,
           (parseFloat(pkgRect.getAttribute('x')) || 0) - 2,
           (parseFloat(pkgRect.getAttribute('y')) || 0) - 2,
@@ -1353,6 +1367,7 @@ window.MA.modules.plantumlComponent = (function() {
         var g = svgEl.querySelector('g.entity[data-qualified-name="' + p.id + '"]')
              || svgEl.querySelector('g.port[data-source-line]');
         if (!g) return;
+        claimed.push(g);
         var bb = _entityBBox(g);
         if (!bb) return;
         OB.addRect(overlayEl, bb.x - 4, bb.y - 4, bb.width + 8, bb.height + 8, {
@@ -1364,10 +1379,14 @@ window.MA.modules.plantumlComponent = (function() {
       });
 
       var relations = parsedData.relations || [];
-      var linkGroups = svgEl.querySelectorAll('g.link, g[class*="link_"]');
-      var relN = Math.min(relations.length, linkGroups.length);
-      for (var ri = 0; ri < relN; ri++) {
+      // BLK-migrator-20260923-1909: 線は書かれた行で当てる (読めない線があっても以後がずれない)。
+      var linkGroups = OB.matchLinksByLine(svgEl, relations);
+      var relN = 0;
+      for (var ri = 0; ri < relations.length; ri++) {
         var lg = linkGroups[ri];
+        if (!lg) continue;
+        claimed.push(lg);
+        relN++;
         var lineEl = lg.querySelector('line, path');
         if (!lineEl) continue;
         var bb = null;
@@ -1392,6 +1411,9 @@ window.MA.modules.plantumlComponent = (function() {
           OB.addRect(overlayEl, bb.x, bb.y, bb.width, bb.height, relAttrs);
         }
       }
+
+      // BLK-migrator-20260923-1909: フォームが読めない記法 (artifact / cloud { } / 題 …) にも行を指す枠を置く
+      OB.addUnclaimed(svgEl, overlayEl, claimed);
 
       // BLK-human-20260912-2130: 小さい当たり判定を手前に。共通実装 (src/core)
       OB.raiseSmallestLast(overlayEl);

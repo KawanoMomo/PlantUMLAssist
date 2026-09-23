@@ -341,6 +341,117 @@ window.MA.overlayBuilder = (function() {
     return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
   }
 
+  // BLK-migrator-20260923-1909: PlantUML が SVG に残す要素情報 (data-qualified-name /
+  // data-source-line) を先に使って当てる。パーサが読めない記法 (`abstract X` / `circle` /
+  // `cloud { }` / `artifact` …) が 1 つあるだけで、並び順で当てていた枠が全部ずれたり、
+  // 名前が合わずに枠が出なかったりした。記法ごとに穴を塞がず、描いた側の情報で当てる。
+  function _srcLine(g) {
+    var n = parseInt(g && g.getAttribute ? g.getAttribute('data-source-line') : '', 10);
+    return isNaN(n) ? null : n + 1;
+  }
+
+  // 名前で要素の <g> を引く。修飾名 (`Pkg.Name`) の末尾が `.{id}` のものが 1 つだけならそれ。
+  function findEntityByName(svgEl, id, selector) {
+    if (!svgEl || !svgEl.querySelectorAll || id == null) return null;
+    var sid = String(id);
+    var all = svgEl.querySelectorAll(selector || 'g.entity[data-qualified-name]');
+    var suffix = [];
+    for (var i = 0; i < all.length; i++) {
+      var qn = all[i].getAttribute('data-qualified-name') || '';
+      if (qn === sid) return all[i];
+      if (qn.length > sid.length && qn.slice(-(sid.length + 1)) === '.' + sid) suffix.push(all[i]);
+    }
+    return suffix.length === 1 ? suffix[0] : null;
+  }
+
+  // 関係 (線) は書かれた行で当てる。行で当たらない関係は、行が 1 本も当たらなかった
+  // (= SVG に行の情報が無い) ときだけ並び順で残りに当てる。戻り値は relations と同じ長さ。
+  function matchLinksByLine(svgEl, relations) {
+    var groups = Array.prototype.slice.call(linkGroups(svgEl));
+    var out = (relations || []).map(function() { return null; });
+    var used = [];
+    var hits = 0;
+    (relations || []).forEach(function(r, i) {
+      for (var k = 0; k < groups.length; k++) {
+        if (used.indexOf(groups[k]) < 0 && _srcLine(groups[k]) === Number(r.line)) {
+          out[i] = groups[k]; used.push(groups[k]); hits++; return;
+        }
+      }
+    });
+    if (hits === 0) {
+      var rest = groups.filter(function(g) { return used.indexOf(g) < 0; });
+      out.forEach(function(g, i) { if (!g && rest.length) out[i] = rest.shift(); });
+    }
+    return out;
+  }
+
+  // 入れ物 (package / node / folder …) は開始行、次に表示名で当てる。どちらも当たらず、
+  // SVG に行の情報が無いときだけ並び順で当てる。戻り値は groups と同じ長さ。
+  function matchClusters(svgEl, groups) {
+    var cls = Array.prototype.slice.call(svgEl ? svgEl.querySelectorAll('g.cluster') : []);
+    var out = (groups || []).map(function() { return null; });
+    var used = [];
+    function take(i, g) { out[i] = g; used.push(g); }
+    (groups || []).forEach(function(gr, i) {
+      var line = Number(gr.startLine != null ? gr.startLine : gr.line);
+      for (var k = 0; k < cls.length; k++) {
+        if (used.indexOf(cls[k]) < 0 && _srcLine(cls[k]) === line) { take(i, cls[k]); return; }
+      }
+    });
+    (groups || []).forEach(function(gr, i) {
+      if (out[i]) return;
+      var label = String(gr.label || gr.id || '');
+      for (var k = 0; k < cls.length; k++) {
+        if (used.indexOf(cls[k]) >= 0) continue;
+        var qn = cls[k].getAttribute('data-qualified-name') || '';
+        if (qn === label || qn.slice(-(label.length + 1)) === '.' + label) { take(i, cls[k]); return; }
+      }
+    });
+    var anyLine = cls.some(function(g) { return _srcLine(g) !== null; });
+    if (!anyLine) {
+      var rest = cls.filter(function(g) { return used.indexOf(g) < 0; });
+      out.forEach(function(g, i) { if (!g && rest.length) take(i, rest.shift()); });
+    }
+    return out;
+  }
+
+  // どの要素にも取られなかった <g> (要素・入れ物・関係・題) にも、書かれた行を指す
+  // 当たり判定を置く。フォームで直せない記法でも、指せば本文のその行へ飛び、
+  // 右欄で「フォーム未対応の記法」と分かる (黙って何も出さない、をやめる)。
+  // claimed: モジュールが既に当てた <g> の配列。戻り値は置いた数。
+  function addUnclaimed(svgEl, overlayEl, claimed) {
+    if (!svgEl || !overlayEl || !svgEl.querySelectorAll) return 0;
+    var taken = claimed || [];
+    var n = 0;
+    var nodes = svgEl.querySelectorAll('g.entity, g.cluster, g.title, g.link, g[class*="link_"]');
+    Array.prototype.forEach.call(nodes, function(g) {
+      if (taken.indexOf(g) >= 0) return;
+      var line = _srcLine(g);
+      // 行を持たない要素 (PlantUML が `diamond` などに行を付けない) も、名前があれば枠は出す。
+      if (line === null && !g.getAttribute('data-qualified-name')) return;
+      var cls = (g.getAttribute('class') || '').split(/\s+/)[0];
+      var qn = g.getAttribute('data-qualified-name') || cls;
+      var attrs = {
+        'data-type': 'source-line',
+        'data-id': 'src:' + qn + '@' + (line === null ? '?' : line) + ':' + (g.getAttribute('id') || n),
+        'data-src-kind': cls,
+        'data-src-name': g.getAttribute('data-qualified-name') || '',
+      };
+      if (line !== null) attrs['data-line'] = String(line);
+      if (/link/.test(cls)) {
+        attrs['data-hit-kind'] = 'link';
+        if (addLinkRects(overlayEl, g, attrs, 8)) n++;
+        return;
+      }
+      var bb = extractUnionBBox(g, 'text, line, polygon, polyline, path, rect, ellipse');
+      if (!bb || !(bb.width > 0 || bb.height > 0)) return;
+      var pad = cls === 'cluster' ? 2 : 4;
+      addRect(overlayEl, bb.x - pad, bb.y - pad, bb.width + pad * 2, bb.height + pad * 2, attrs);
+      n++;
+    });
+    return n;
+  }
+
   function matchByDataSourceLine(svgEl, items, selector, offset) {
     var groups = svgEl.querySelectorAll(selector);
     var byLine = {};
@@ -464,6 +575,10 @@ window.MA.overlayBuilder = (function() {
   return {
     addBackground: addBackground,
     addLinkRects: addLinkRects,
+    addUnclaimed: addUnclaimed,
+    findEntityByName: findEntityByName,
+    matchClusters: matchClusters,
+    matchLinksByLine: matchLinksByLine,
     addRect: addRect,
     closestLinkGroup: closestLinkGroup,
     dedupById: dedupById,

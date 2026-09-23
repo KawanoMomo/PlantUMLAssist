@@ -468,3 +468,100 @@ test('migrator 手順 4 — 手続きで参加者を宣言した sequence 図で
   await expect(page.locator('#overlay-layer rect.hit-hover').first()).toHaveAttribute('data-type', 'lifeline');
   await expect(page.locator('#overlay-layer rect.hit-hover').first()).toHaveAttribute('data-id', 'api');
 });
+
+// BLK-migrator-20260923-1909: 継承線の先・`abstract X`・node / cloud など、フォームが読めない記法の要素に
+// ホバーしても枠が出なかった (class-ex 3/25、component-ex 13/25)。PlantUML が SVG に残す
+// 要素名と行で当て、フォームで直せない要素も「本文の何行目か」を指す枠にする。
+async function hoverHit(page, label) {
+  const box = await page.evaluate((l) => {
+    const t = Array.prototype.find.call(document.querySelectorAll('#preview-svg svg text, #preview svg text'),
+      (n) => (n.textContent || '').trim() === l);
+    if (!t) return null;
+    // 入れ物の名札は右上のズーム帯の下に隠れることがあるので、枠の左下の内側を指す。
+    const g = t.closest('g');
+    if (g && /cluster/.test(g.getAttribute('class') || '')) {
+      const f = g.getBoundingClientRect();
+      return { x: f.left + 6, y: f.bottom - 6 };
+    }
+    const r = t.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  }, label);
+  expect(box, label + ' が描かれている').not.toBeNull();
+  // 描き直しで当たり判定が作り直されると、乗せたままの枠は光らない (mousemove が来ない)。
+  // 実際の利用者と同じく、少し動かし直して確かめる。
+  let hit = null;
+  for (let i = 0; i < 6; i++) {
+    await page.mouse.move(3, 3);
+    await page.mouse.move(box.x + (i % 2), box.y);
+    await page.waitForTimeout(100 + i * 100);
+    hit = await page.evaluate((p) => {
+      const els = document.elementsFromPoint(p.x, p.y);
+      const r = els.find((e) => e.tagName.toLowerCase() === 'rect' && e.closest('#overlay-layer') &&
+        !/overlay-background/.test(e.getAttribute('class') || ''));
+      return r ? { type: r.getAttribute('data-type'), line: r.getAttribute('data-line'),
+        hover: /hit-hover/.test(r.getAttribute('class') || '') } : null;
+    }, { x: box.x + (i % 2), y: box.y });
+    if (hit && hit.hover) break;
+  }
+  return { box, hit };
+}
+
+test('migrator 手順 4 — 継承線の先・abstract・circle のある class 図でも、ホバーした要素の行に枠が出る', async ({ page }) => {
+  await bootPlain(page);
+  await typeDsl(page, [
+    '@startuml',                 // 1
+    'abstract class Animal',     // 2
+    'Animal <|-- Dog',           // 3
+    'abstract Plant',            // 4
+    'Plant <|- Tree',            // 5
+    'interface Living',          // 6
+    'Living <|-- Animal',        // 7
+    'circle Sun',                // 8
+    '@enduml',
+  ].join(String.fromCharCode(10)));
+  await expect(page.locator('#overlay-layer rect[data-type="abstract"]')).toHaveCount(1, { timeout: 20000 });
+  for (const [label, line] of [['Animal', '2'], ['Dog', '3'], ['Plant', '4'], ['Tree', '5'], ['Living', '6'], ['Sun', '8']]) {
+    const { hit } = await hoverHit(page, label);
+    expect(hit, label + ' にホバーして枠が出る').not.toBeNull();
+    expect(hit.line, label + ' の枠が指す行').toBe(line);
+    expect(hit.hover, label + ' の枠が光る').toBe(true);
+  }
+  // フォームが読めない記法 (`abstract X`) は、押すと本文の行とフォーム未対応であることが右欄に出る
+  const { box } = await hoverHit(page, 'Plant');
+  await page.mouse.click(box.x, box.y);
+  await expect(page.locator('#src-line-props')).toHaveAttribute('data-line', '4');
+  await expect(page.locator('#src-line-text')).toHaveText('abstract Plant');
+  await expect(page.locator('#src-line-props')).toContainText('フォームで直せません');
+});
+
+test('migrator 手順 4 — package / cloud / database / folder で入れ子にした component 図でも、部品と入れ物に枠が出る', async ({ page }) => {
+  await bootPlain(page);
+  await typeDsl(page, [
+    '@startuml',                         // 1
+    'package "My Package" {',            // 2
+    '  [First Component]',               // 3
+    '}',                                 // 4
+    'cloud "My Cloud" {',                // 5
+    '  [Example 1]',                     // 6
+    '}',                                 // 7
+    'database "My Database" {',          // 8
+    '  folder "My folder" {',            // 9
+    '    [Folder 3]',                    // 10
+    '  }',                               // 11
+    '}',                                 // 12
+    'artifact "My Artifact"',            // 13
+    'queue "My Queue"',                  // 14
+    '[First Component] --> [Example 1]', // 15
+    '[Example 1] --> [Folder 3]',        // 16
+    '@enduml',
+  ].join(String.fromCharCode(10)));
+  await expect(page.locator('#overlay-layer rect[data-type="component"]')).toHaveCount(3, { timeout: 20000 });
+  for (const [label, type, line] of [
+    ['First Component', 'component', '3'], ['Example 1', 'component', '6'], ['Folder 3', 'component', '10'],
+    ['My Package', 'package', '2'], ['My Cloud', 'source-line', '5'], ['My Database', 'source-line', '8'],
+    ['My folder', 'package', '9'], ['My Artifact', 'source-line', '13'], ['My Queue', 'source-line', '14'],
+  ]) {
+    const { hit } = await hoverHit(page, label);
+    expect(hit, label + ' にホバーして枠が出る').toEqual({ type, line, hover: true });
+  }
+});

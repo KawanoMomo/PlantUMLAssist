@@ -6112,7 +6112,11 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   box-shadow: 0 2px 10px rgba(0,0,0,0.35);
+  /* BLK-migrator-20260923-1909: 帯は図の上端に重なる。押せるのはボタンだけにし、帯の地
+     (図種名・倍率の文字) の下にある要素にはホバーの枠と選択が届くようにする。 */
+  pointer-events: none;
 }
+#zoom-hud button { pointer-events: auto; }
 
 #zoom-hud #hud-label {
   font-family: var(--font-mono);

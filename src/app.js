@@ -32058,6 +32058,26 @@ function renderProps(parsed) {
   refreshPartVocab();
   var sel = window.MA.selection.getSelected();
   updatePropsTabLabel(sel);
+  // BLK-migrator-20260923-1909: フォームが読めない記法の要素 (overlay-builder.addUnclaimed) は、
+  // 本文のどの行に書かれているかと、フォームでは直せないことを言う (黙って空欄にしない)。
+  if (sel && sel.length === 1 && sel[0].type === 'source-line' && propsEl) {
+    var esc = window.MA.htmlUtils.escHtml;
+    var srcLines = String(mmdText || '').split('\n');
+    var ln = Number(sel[0].line) || 0;
+    var raw = ln >= 1 && ln <= srcLines.length ? srcLines[ln - 1].replace(/\r$/, '') : '';
+    propsEl.innerHTML =
+      '<div id="src-line-props" data-line="' + ln + '" style="font-size:11px;line-height:1.6;">' +
+        '<div style="color:var(--text-secondary);margin-bottom:6px;">' + (ln
+          ? '本文 L' + ln + ' に書かれた要素です'
+          : 'PlantUML が本文の行を示していない要素です (' + esc(String(sel[0].id || '').replace(/^src:/, '').replace(/@.*$/, '')) + ')') + '</div>' +
+        (ln ? '<pre id="src-line-text" style="margin:0 0 8px 0;padding:6px;background:var(--bg-tertiary);border:1px solid var(--border);' +
+          'white-space:pre-wrap;word-break:break-all;font-size:11px;">' + esc(raw.trim()) + '</pre>' : '') +
+        '<div style="color:var(--text-secondary);">この記法はまだ右欄のフォームで直せません。' +
+        (ln ? '本文のこの行 (左で選択中) を直接直してください。' : '本文で直接直してください。') +
+        '図と本文はそのまま保たれ、保存しても書き換わりません。</div>' +
+      '</div>';
+    return;
+  }
   currentModule.renderProps(sel, parsed, propsEl, {
     getMmdText: function() { return mmdText; },
     setMmdText: function(s) {

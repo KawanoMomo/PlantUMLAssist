@@ -2483,16 +2483,9 @@ window.MA.modules.plantumlClass = (function() {
 
       var usedG = [];
       (parsedData.elements || []).forEach(function(el) {
-        var g = svgEl.querySelector('g.entity[data-qualified-name="' + el.id + '"]');
         // BLK-migrator-20260918-0049: package / namespace の中の要素は `BSW..GpioDriver` /
         // `App.MainTask` のように修飾名で描かれる。末尾が `.{id}` のものがちょうど 1 つならそれ。
-        if (!g && el.parentPackageId) {
-          var qs = Array.prototype.filter.call(svgEl.querySelectorAll('g.entity[data-qualified-name]'), function(ge) {
-            var qn = ge.getAttribute('data-qualified-name');
-            return qn.length > el.id.length && qn.slice(-(el.id.length + 1)) === '.' + el.id;
-          });
-          if (qs.length === 1) g = qs[0];
-        }
+        var g = OB.findEntityByName(svgEl, el.id);
         if (!g) return;
         usedG.push(g);
         var bb = _entityBBox(g);
@@ -2553,11 +2546,13 @@ window.MA.modules.plantumlClass = (function() {
       });
 
       // package + namespace
+      // BLK-migrator-20260923-1909: 並び順でなく開始行・表示名で当てる。
       var packages = (parsedData.groups || []);
-      var pkgGroups = svgEl.querySelectorAll('g.cluster');
-      var pkgN = Math.min(packages.length, pkgGroups.length);
-      for (var pi = 0; pi < pkgN; pi++) {
+      var pkgGroups = OB.matchClusters(svgEl, packages);
+      for (var pi = 0; pi < packages.length; pi++) {
         var pg = pkgGroups[pi];
+        if (!pg) continue;
+        usedG.push(pg);
         var pkgRect = pg.querySelector('rect');
         if (!pkgRect) {
           // 枠が rect でなく path / polygon で描かれる package (タブ付き) は外接矩形で囲う。
@@ -2586,10 +2581,13 @@ window.MA.modules.plantumlClass = (function() {
 
       // relations
       var relations = parsedData.relations || [];
-      var linkGroups = svgEl.querySelectorAll('g.link, g[class*="link_"]');
-      var relN = Math.min(relations.length, linkGroups.length);
-      for (var ri = 0; ri < relN; ri++) {
+      // BLK-migrator-20260923-1909: 線は書かれた行で当てる。並び順で当てていたので、パーサが
+      // 読めない線 (`<|-` など) が 1 本あるだけで以後の関係の枠が隣の線にずれた。
+      var linkGroups = OB.matchLinksByLine(svgEl, relations);
+      for (var ri = 0; ri < relations.length; ri++) {
         var lg = linkGroups[ri];
+        if (!lg) continue;
+        usedG.push(lg);
         var lineEl = lg.querySelector('line, path');
         if (!lineEl) continue;
         // BLK-human-20260912-2130: ラベル (contains) や多重度 (1 / 0..*) も
@@ -2636,6 +2634,9 @@ window.MA.modules.plantumlClass = (function() {
         if (notePolys.length === notes.length) {
           notes.forEach(function(n, idx) {
             var p = notePolys[idx];
+            var pg2 = p;
+            while (pg2 && pg2.tagName && pg2.tagName.toLowerCase() !== 'g') pg2 = pg2.parentNode;
+            if (pg2) usedG.push(pg2);
             var bb = bboxOf(p);
             if (!bb) return;
             OB.addRect(overlayEl, bb.x, bb.y, bb.width, bb.height, {
@@ -2649,6 +2650,10 @@ window.MA.modules.plantumlClass = (function() {
           console.warn('[class.buildOverlay] note shape count mismatch: model=' + notes.length + ' svg=' + notePolys.length);
         }
       }
+
+      // BLK-migrator-20260923-1909: フォームが読めない記法 (`abstract X` / circle / diamond / 題 …) にも
+      // 書かれた行を指す枠を置く。
+      OB.addUnclaimed(svgEl, overlayEl, usedG);
 
       // BLK-human-20260912-2130: 小さい当たり判定を手前に。共通実装 (src/core)
       OB.raiseSmallestLast(overlayEl);
