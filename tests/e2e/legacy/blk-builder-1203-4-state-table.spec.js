@@ -87,9 +87,10 @@ test.describe('BLK-builder-1203-4 状態遷移表', () => {
     await openTable(page);
     // Idle 行 × stop 列 (空欄)
     await page.locator('#state-table-body tbody tr').nth(1).locator('td').nth(2).click();
-    await expect(page.locator('#st-tx-trig')).toHaveValue('stop');
-    await page.locator('#st-tx-to').selectOption('Running');
-    await page.locator('#st-tx-confirm').click();
+    // BLK-human-20260923-2000: 空欄は右パネルの続けて入れるフォームを開く (モーダルは廃止)。
+    await expect(page.locator('#st-tail-trig')).toHaveValue('stop');
+    await page.locator('#st-tail-to').selectOption('Running');
+    await page.locator('#st-tail-add').click();
     await page.waitForTimeout(700);
     expect(await getEditorText(page)).toContain('Idle --> Running : stop');
     // 表も追随して空欄が埋まる

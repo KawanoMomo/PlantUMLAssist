@@ -163,9 +163,10 @@ test.describe('State v1.0.0', () => {
     if ((await btn.count()) === 0) test.skip();
     await btn.click();
     await page.waitForTimeout(300);
-    await page.locator('#st-tx-to').selectOption('B');
-    await page.locator('#st-tx-trig').fill('go');
-    await page.locator('#st-tx-confirm').click();
+    // BLK-human-20260923-2000: 「ここから遷移」は右パネルの続けて入れるフォームを開く (モーダルは廃止)。
+    await page.locator('#st-tail-to').selectOption('B');
+    await page.locator('#st-tail-trig').fill('go');
+    await page.locator('#st-tail-add').click();
     await page.waitForTimeout(300);
     var t = await getEditorText(page);
     expect(t).toContain('A --> B');

@@ -1022,6 +1022,9 @@ window.MA.modules.plantumlState = (function() {
 
   function renderProps(selData, parsedData, propsEl, ctx) {
     if (!propsEl) return;
+    _txLast = { parsedData: parsedData, propsEl: propsEl, ctx: ctx };
+    // 遷移や注記を選んだら、続けて入れる回は閉じる (図の状態を押すのは回の中で受ける)。
+    if (selData && selData.length > 0) _tx.open = false;
     if (!selData || selData.length === 0) {
       _renderNoSelection(parsedData, propsEl, ctx);
       return;
@@ -1034,6 +1037,160 @@ window.MA.modules.plantumlState = (function() {
       if (sel.type === 'pseudo') return _renderPseudoEdit(sel, parsedData, propsEl, ctx);
     }
     propsEl.innerHTML = '<div style="font-size:11px;color:var(--text-secondary);">複数選択は未対応 (State)</div>';
+  }
+
+  // ── 遷移を続けて入れる (BLK-human-20260923-2000) ─────────────────────────
+  // 状態機械の設計では遷移を 1 図に 10〜30 本入れる。1 本ごとにフォームが初期状態に戻り、
+  // トリガは毎回手打ち、遷移先は図から選べなかった。遷移フォームを「回」として開いたままにし、
+  // 確定後も from = 直前の to (切替で直前と同じ) で次へ進む。遷移先は図の状態を押して選ぶ
+  // (同じ状態を押せば自己遷移)。候補・次の from・書き込む位置の判断は state-tx-entry が持つ。
+  var _tx = { open: false, from: '', to: '', pick: '', count: 0, mode: 'to', trig: '', focus: false, note: '',
+              vals: { trig: '', guard: '', act: '' } };
+  var _txLast = null;
+  var _txCaptureBound = false;
+
+  function _txRerender() {
+    if (!_txLast) return;
+    _renderNoSelection(_txLast.parsedData, _txLast.propsEl, _txLast.ctx);
+  }
+
+  // 回を開く。from / trigger を入れた状態で始められる (表の空欄・「ここから遷移」)。
+  function openTxSession(from, prefill) {
+    _tx.open = true;
+    if (from != null) _tx.from = String(from);
+    _tx.to = '';
+    _tx.pick = 'to';
+    _tx.trig = (prefill && prefill.trigger) || '';
+    _tx.vals = { trig: '', guard: '', act: '' };
+    _tx.focus = true;
+    _tx.note = '';
+    _bindTxCapture();
+    var sel = window.MA.selection;
+    // 選択が残っていると右パネルがその要素の編集になるので外す (外すと描き直る)。
+    if (sel && sel.getSelected && sel.getSelected().length) sel.clearSelection();
+    else _txRerender();
+  }
+
+  function closeTxSession() {
+    if (!_tx.open) return;
+    _tx.open = false;
+    _tx.vals = { trig: '', guard: '', act: '' };
+    _tx.pick = '';
+    _tx.note = '';
+    var kind = document.getElementById('st-tail-kind');
+    if (kind) {
+      kind.value = 'state';
+      kind.dispatchEvent(new Event('change'));
+    }
+  }
+
+  // 図の状態を押したとき、回の中なら from / to に入れる (選択は動かさない)。
+  function _bindTxCapture() {
+    if (_txCaptureBound) return;
+    _txCaptureBound = true;
+    document.addEventListener('click', function(ev) {
+      if (!_tx.open || !_tx.pick) return;
+      if (!document.getElementById('st-tail-trig')) return;
+      var t = ev.target;
+      var hit = t && t.closest ? t.closest('#overlay-layer [data-type="state"][data-id]') : null;
+      if (!hit) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      var id = hit.getAttribute('data-id');
+      if (_tx.pick === 'from') {
+        _tx.from = id;
+        _tx.pick = 'to';
+      } else {
+        _tx.to = id;
+        _tx.pick = '';
+      }
+      _tx.focus = true;
+      _tx.note = '';
+      _txRerender();
+    }, true);
+  }
+
+  // 同じ部品のシーケンス図のメッセージ名 (開いているタブから)。
+  function _txSeqNames() {
+    var WS = window.MA.workspace;
+    var FT = window.MA.fileTree;
+    var TX = window.MA.stateTxEntry;
+    if (!WS || !WS.list || !TX) return [];
+    var active = WS.getActive ? WS.getActive() : null;
+    var part = FT && active ? FT.partOf(active.name) : '';
+    var out = [];
+    WS.list().forEach(function(d) {
+      if (!d || String(d.diagramType || '') !== 'plantuml-sequence') return;
+      if (part && FT && FT.partOf(d.name) !== part) return;
+      TX.messageNames(d.dsl).forEach(function(n) { out.push(n); });
+    });
+    return out;
+  }
+
+  // 候補の出る入力欄。打ち始めで絞り、↑↓ で選んで Enter で入れる。
+  // 候補を選んでいないときの Enter は確定 (次の 1 本へ)、Esc は候補を閉じる → 回を閉じる。
+  function _bindTxSuggest(inputId, listFn, onConfirm, onChange) {
+    var input = document.getElementById(inputId);
+    var TX = window.MA.stateTxEntry;
+    if (!input || !TX) return;
+    var box = document.createElement('div');
+    box.id = inputId + '-sugg';
+    box.className = 'st-tx-sugg';
+    box.setAttribute('role', 'listbox');
+    box.hidden = true;
+    input.parentNode.insertBefore(box, input.nextSibling);
+    input.setAttribute('autocomplete', 'off');
+    var items = [];
+    var hi = -1;
+    function render() {
+      items = TX.filter(listFn(), input.value, 8);
+      hi = -1;
+      box.textContent = '';
+      if (!items.length) { box.hidden = true; return; }
+      items.forEach(function(c, i) {
+        var b = document.createElement('div');
+        b.className = 'st-tx-sugg-item';
+        b.setAttribute('role', 'option');
+        b.setAttribute('data-value', c);
+        b.textContent = c;
+        b.addEventListener('mousedown', function(ev) { ev.preventDefault(); pick(i); });
+        box.appendChild(b);
+      });
+      box.hidden = false;
+    }
+    function paint() {
+      Array.prototype.forEach.call(box.children, function(el, i) {
+        el.classList.toggle('on', i === hi);
+        el.setAttribute('aria-selected', i === hi ? 'true' : 'false');
+      });
+    }
+    function pick(i) {
+      if (i < 0 || i >= items.length) return;
+      input.value = items[i];
+      box.hidden = true;
+      hi = -1;
+      if (onChange) onChange();
+    }
+    input.addEventListener('input', render);
+    input.addEventListener('focus', render);
+    input.addEventListener('blur', function() { window.setTimeout(function() { box.hidden = true; }, 150); });
+    input.addEventListener('keydown', function(ev) {
+      var open = !box.hidden && items.length > 0;
+      if (ev.key === 'ArrowDown' && open) { ev.preventDefault(); hi = (hi + 1) % items.length; paint(); return; }
+      if (ev.key === 'ArrowUp' && open) { ev.preventDefault(); hi = hi <= 0 ? items.length - 1 : hi - 1; paint(); return; }
+      if (ev.key === 'Enter' && !ev.isComposing) {
+        ev.preventDefault();
+        if (open && hi >= 0) { pick(hi); return; }
+        box.hidden = true;
+        onConfirm();
+        return;
+      }
+      if (ev.key === 'Escape') {
+        ev.preventDefault();
+        if (open) { box.hidden = true; return; }
+        closeTxSession();
+      }
+    });
   }
 
   // design 5d:「その他パレット」の 1 ボタン。1 クリックで 1 要素が入る形に揃える。
@@ -1092,6 +1249,11 @@ window.MA.modules.plantumlState = (function() {
         '<button id="st-branch-open" style="width:100%;font-size:11px;padding:5px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">⑂ 分岐 (choice) を追加</button>' +
       '</div>';
     propsEl.innerHTML = html;
+    // 続けて入れる回の途中なら、描き直しても遷移のフォームのまま (初期状態に戻さない)。
+    if (_tx.open) {
+      var kindSel = document.getElementById('st-tail-kind');
+      if (kindSel) kindSel.value = 'transition';
+    }
     _bindCollapse(parsedData, ctx);
 
     Array.prototype.forEach.call(propsEl.querySelectorAll('.st-tr-pick'), function(btn) {
@@ -1180,16 +1342,44 @@ window.MA.modules.plantumlState = (function() {
           placeHtml('composite') +
           P.primaryButtonHtml('st-tail-add', '+ Composite 追加');
       } else if (kind === 'transition') {
+        // BLK-human-20260923-2000: 開いたままの回。from は直前の to、to は図の状態を押して選ぶ。
+        if (!_tx.open) { _tx.open = true; _tx.pick = 'to'; _tx.to = ''; _bindTxCapture(); }
+        // 入れ子の子は `親 / 子` で出す。表の「親 / （開始）」の行から開いたときは、その開始を From に足す。
+        var STl = window.MA.stateTable;
+        var txOpts = [{ value: '[*]', label: '[*] (initial/final)' }].concat(allStates.map(function(s) {
+          return { value: s.id, label: STl ? STl.rowLabel(s.id, allStates) : (s.label || s.id) };
+        }));
+        var fromBase = txOpts.slice();
+        if (_tx.from && String(_tx.from).indexOf('[*]@') === 0) {
+          fromBase.unshift({ value: _tx.from, label: STl ? STl.rowLabel(_tx.from, allStates) : _tx.from });
+        }
+        var fromOpts = fromBase.map(function(o) { return _selectedOpt(o, _tx.from); });
+        var toOpts = [{ value: '', label: '（図で遷移先の状態を押す）' }].concat(txOpts)
+          .map(function(o) { return _selectedOpt(o, _tx.to); });
+        var TXm = window.MA.stateTxEntry;
         html2 =
-          P.selectFieldHtml('From', 'st-tail-from', stateOptsWithPseudo) +
-          P.selectFieldHtml('To', 'st-tail-to', stateOptsWithPseudo) +
+          '<div id="st-tx-session" style="font-size:10px;color:var(--text-secondary);margin-bottom:6px;line-height:1.5;">' +
+            '<span id="st-tx-count">' + (TXm ? TXm.countLabel(_tx.count) : '') + '</span>' +
+            ' · Enter で確定して次へ / Esc で閉じる</div>' +
+          '<div id="st-tx-hint" role="status" style="font-size:11px;color:var(--accent);margin-bottom:6px;line-height:1.5;">' +
+            (_tx.note ? window.MA.htmlUtils.escHtml(_tx.note)
+              : (_tx.pick === 'to' ? '図で遷移先の状態を押してください (同じ状態を押すと自己遷移)'
+                : (_tx.pick === 'from' ? '図で遷移元の状態を押してください' : ''))) + '</div>' +
+          P.selectFieldHtml('From', 'st-tail-from', fromOpts) +
+          '<button id="st-tx-pick-from" type="button" style="font-size:10px;padding:2px 8px;margin:-2px 0 6px 0;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">図で From を選び直す</button>' +
+          P.selectFieldHtml('To', 'st-tail-to', toOpts) +
           P.fieldHtml('きっかけ / trigger', 'st-tail-trig', '', '例: start') +
           P.vocabPickerHtml('st-tail-trig-vocab', { roles: ['method', 'event'] }) +
           P.fieldHtml('条件 / guard', 'st-tail-guard', '', '例: retry > 3') +
           P.fieldHtml('実行する処理 / action', 'st-tail-act', '', '例: log()') +
           P.vocabPickerHtml('st-tail-act-vocab', { roles: ['method'] }) +
           _previewBoxHtml('st-tail-preview') +
-          P.primaryButtonHtml('st-tail-add', '+ Transition 追加');
+          P.selectFieldHtml('次の 1 本の From', 'st-tx-next-mode', [
+            { value: 'to', label: '直前の遷移先から', selected: _tx.mode !== 'same' },
+            { value: 'same', label: '直前と同じ From', selected: _tx.mode === 'same' }
+          ]) +
+          P.primaryButtonHtml('st-tail-add', '+ Transition 追加 (Enter)') +
+          '<button id="st-tx-close" type="button" style="width:100%;font-size:11px;padding:4px 8px;margin-top:4px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">続けて入れるのを終える (Esc)</button>';
       } else if (kind === 'pseudo') {
         html2 =
           P.selectFieldHtml('足すもの', 'st-ps-kind', [
@@ -1310,6 +1500,46 @@ window.MA.modules.plantumlState = (function() {
         });
         P.bindVocabPicker('st-tail-trig-vocab', 'st-tail-trig', tailPreview);
         P.bindVocabPicker('st-tail-act-vocab', 'st-tail-act', tailPreview);
+        var TXc = window.MA.stateTxEntry;
+        var cands = TXc ? TXc.candidates(parsedData, _txSeqNames()) : { triggers: [], guards: [], actions: [] };
+        var confirm = function() {
+          var addBtn = document.getElementById('st-tail-add');
+          if (addBtn) addBtn.click();
+        };
+        _bindTxSuggest('st-tail-trig', function() { return cands.triggers; }, confirm, tailPreview);
+        _bindTxSuggest('st-tail-guard', function() { return cands.guards; }, confirm, tailPreview);
+        _bindTxSuggest('st-tail-act', function() { return cands.actions; }, confirm, tailPreview);
+        var trigEl = document.getElementById('st-tail-trig');
+        if (_tx.trig) { _tx.vals.trig = _tx.trig; _tx.trig = ''; }
+        // 描き直し (保存・図の更新) で打ちかけの欄を消さない。確定で空に戻す。
+        // 書き先はこの描画時点の vals。確定で vals を新しくした後に、外された古い欄が
+        // change を出しても (フォーカス中の欄を外すと出る) 次の 1 本へ持ち越さない。
+        var vals = _tx.vals;
+        [['st-tail-trig', 'trig'], ['st-tail-guard', 'guard'], ['st-tail-act', 'act']].forEach(function(pair) {
+          var el = document.getElementById(pair[0]);
+          if (!el) return;
+          if (vals[pair[1]]) el.value = vals[pair[1]];
+          el.addEventListener('input', function() { vals[pair[1]] = el.value; });
+          el.addEventListener('change', function() { vals[pair[1]] = el.value; });
+        });
+        tailPreview();
+        P.bindEvent('st-tail-from', 'change', function() { _tx.from = this.value; });
+        P.bindEvent('st-tail-to', 'change', function() {
+          _tx.to = this.value;
+          if (_tx.to) { _tx.pick = ''; var h = document.getElementById('st-tx-hint'); if (h) h.textContent = ''; }
+        });
+        P.bindEvent('st-tx-next-mode', 'change', function() { _tx.mode = this.value === 'same' ? 'same' : 'to'; });
+        P.bindEvent('st-tx-pick-from', 'click', function() {
+          _tx.pick = 'from';
+          _tx.note = '';
+          var h = document.getElementById('st-tx-hint');
+          if (h) h.textContent = '図で遷移元の状態を押してください';
+        });
+        P.bindEvent('st-tx-close', 'click', closeTxSession);
+        if (_tx.focus && trigEl) {
+          _tx.focus = false;
+          trigEl.focus();
+        }
       }
 
       P.bindEvent('st-tail-add', 'click', function() {
@@ -1358,10 +1588,29 @@ window.MA.modules.plantumlState = (function() {
         } else if (k === 'transition') {
           var fr = document.getElementById('st-tail-from').value;
           var to = document.getElementById('st-tail-to').value;
-          out = addTransition(t, fr, to,
+          if (!to) {
+            _tx.pick = 'to';
+            var hint = document.getElementById('st-tx-hint');
+            if (hint) hint.textContent = '遷移先を選んでください (図の状態を押すか、To で選ぶ)';
+            return;
+          }
+          // BLK-human-20260923-2000: 同じ from の遷移の並びの末尾に入れる (@enduml 直前に散らさない)。
+          var TXa = window.MA.stateTxEntry;
+          var txRes = TXa.insert(t, parsedData, fr, to,
             document.getElementById('st-tail-trig').value || null,
             document.getElementById('st-tail-guard').value || null,
             document.getElementById('st-tail-act').value || null);
+          out = txRes.text;
+          if (out !== t) {
+            _tx.open = true;
+            _tx.count++;
+            _tx.from = TXa.nextFrom(_tx.mode, fr, to);
+            _tx.to = '';
+            _tx.pick = 'to';
+            _tx.focus = true;
+            _tx.note = '';
+            _tx.vals = { trig: '', guard: '', act: '' };
+          }
         } else if (k === 'pseudo') {
           var psSel = document.getElementById('st-ps-state');
           if (!psSel || !psSel.value) { alert('状態を選んでください'); return; }
@@ -1391,7 +1640,12 @@ window.MA.modules.plantumlState = (function() {
         }
       });
     };
-    P.bindEvent('st-tail-kind', 'change', renderTailDetail);
+    P.bindEvent('st-tail-kind', 'change', function() {
+      var v = document.getElementById('st-tail-kind').value;
+      if (v !== 'transition') { _tx.open = false; _tx.pick = ''; _tx.vals = { trig: '', guard: '', act: '' }; }
+      else if (!_tx.open) { _tx.count = 0; _tx.focus = true; }
+      renderTailDetail();
+    });
     // design 2b: 種別はチップ 1 クリックで決める。値の持ち主は上の select のまま。
     window.MA.tailKindChips.mount('st-tail-kind');
     renderTailDetail();
@@ -1523,7 +1777,11 @@ window.MA.modules.plantumlState = (function() {
   // 表からも右パネルからも同じフォームが出るように、既存のモーダルへ prefill を
   // 足しただけにしてある。
   function showAddTransitionModal(ctx, parsedData, fromId, prefill) {
-    _showAddTransitionModal(fromId, parsedData, ctx, prefill);
+    // BLK-human-20260923-2000: 表の空欄からも、右パネルの同じ「続けて入れる」フォームを
+    // 行 (from) と列 (trigger) を入れた状態で開く。遷移先は図の状態を押すか To で選ぶ。
+    if (!_txLast) { _showAddTransitionModal(fromId, parsedData, ctx, prefill); return; }
+    _txLast = { parsedData: parsedData, propsEl: _txLast.propsEl, ctx: _txLast.ctx };
+    openTxSession(fromId, prefill);
   }
 
   function _showAddTransitionModal(fromId, parsedData, ctx, prefill) {
@@ -1848,7 +2106,7 @@ window.MA.modules.plantumlState = (function() {
       ) +
       moveIntoHtml +
       moveOutHtml +
-      '<button id="st-add-tx" style="font-size:11px;padding:4px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;margin-top:4px;display:block;">+ Outgoing transition</button>' +
+      '<button id="st-add-tx" style="font-size:11px;padding:4px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;margin-top:4px;display:block;" title="次に図で押した状態への遷移を入れます (同じ状態を押すと自己遷移)">→ ここから遷移</button>' +
       '<button id="st-add-branch" style="font-size:11px;padding:4px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;margin-top:4px;display:block;">⑂ 分岐 (choice) を追加</button>' +
       P.primaryButtonHtml('st-update', '更新');
     if (related.length > 0) {
@@ -1982,8 +2240,11 @@ window.MA.modules.plantumlState = (function() {
         ctx.onUpdate();
       });
     }
+    // BLK-human-20260923-2000: 「ここから遷移」。次に図で押した状態が遷移先になる (2 クリックで 1 本)。
     P.bindEvent('st-add-tx', 'click', function() {
-      _showAddTransitionModal(st.id, parsedData, ctx);
+      _txLast = { parsedData: parsedData, propsEl: propsEl, ctx: ctx };
+      _tx.count = 0;
+      openTxSession(st.id);
     });
     P.bindEvent('st-add-branch', 'click', function() {
       _showAddBranchModal(st.id, parsedData, ctx);
