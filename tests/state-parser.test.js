@@ -221,6 +221,69 @@ describe('state kbdSelectables (FEAT-109)', function() {
   });
 });
 
+// BLK-human-20260923-2001: 入れ子の中に書いた遷移は、どの親の中かを持つ。
+// 状態遷移表の空欄から足す遷移は、その親の { } の中に素の名前で入る。
+describe('state: 入れ子の遷移の scope と、表からの遷移追加', function() {
+  var T = ['@startuml', '[*] --> P', 'state P {', '  state A', '  state B', '  [*] --> A', '}', 'state Q', '@enduml'].join('\n');
+  test('複合状態の中の遷移は scope に親を持つ', function() {
+    var r = stMod.parse(T);
+    expect(r.transitions[0].scope).toBe(null);
+    expect(r.transitions[1].scope).toBe('P');
+  });
+  test('子どうしの遷移は親の閉じ } の直前に素の名前で入る', function() {
+    var out = stMod.addTransitionScoped(T, stMod.parse(T), 'P.A', 'P.B', 'go', null, null);
+    expect(out.split('\n').slice(5, 8)).toEqual(['  [*] --> A', '  A --> B : go', '}']);
+  });
+  test('親の中の開始・終了は親の中に入る', function() {
+    var out = stMod.addTransitionScoped(T, stMod.parse(T), 'P.B', '[*]', 'end', null, null);
+    expect(out.split('\n')[6]).toBe('  B --> [*] : end');
+    var out2 = stMod.addTransitionScoped(T, stMod.parse(T), '[*]@P', 'P.B', null, null, null);
+    expect(out2.split('\n')[6]).toBe('  [*] --> B');
+  });
+  test('親の外へ出る遷移は最上位に入る', function() {
+    var out = stMod.addTransitionScoped(T, stMod.parse(T), 'P.A', 'Q', 'x', null, null);
+    var ls = out.split('\n');
+    expect(ls[ls.length - 2]).toBe('A --> Q : x');
+    expect(ls[6]).toBe('}');
+  });
+});
+
+describe('state: 開始・終了・履歴を「どこの」ものか選んで足す', function() {
+  var T = ['@startuml', 'state P {', '  state A', '  state B', '}', 'state Q', 'P --> Q : x', '@enduml'].join('\n');
+  test('どこの の候補は 最上位 と 複合状態', function() {
+    expect(stMod.pseudoScopeOptions(stMod.parse(T)).map(function(o) { return o.value; })).toEqual(['', 'P']);
+    expect(stMod.statesInScope(stMod.parse(T), 'P').map(function(s) { return s.id; })).toEqual(['P.A', 'P.B']);
+  });
+  test('親の中の開始は { の直後に素の名前で入る', function() {
+    var r = stMod.addPseudoIn(T, stMod.parse(T), 'start', 'P', 'P.A');
+    expect(r.text.split('\n')[2]).toBe('  [*] --> A');
+    expect(stMod.parse(r.text).transitions[0].scope).toBe('P');
+  });
+  test('最上位の開始は最初の遷移の前に入る', function() {
+    var r = stMod.addPseudoIn(T, stMod.parse(T), 'start', '', 'P');
+    expect(r.text.split('\n')[6]).toBe('[*] --> P');
+    expect(r.text.split('\n')[7]).toBe('P --> Q : x');
+  });
+  test('既に開始がある所は差し替えを聞き (conflict)、replace で差し替える', function() {
+    var t1 = stMod.addPseudoIn(T, stMod.parse(T), 'start', 'P', 'P.A').text;
+    var r = stMod.addPseudoIn(t1, stMod.parse(t1), 'start', 'P', 'P.B');
+    expect(r.text).toBe(t1);
+    expect(r.conflict.to).toBe('A');
+    var r2 = stMod.addPseudoIn(t1, stMod.parse(t1), 'start', 'P', 'P.B', { replace: true });
+    expect(r2.text.split('\n')[2]).toBe('  [*] --> B');
+    expect(r2.text.split('\n').filter(function(l) { return l.indexOf('[*] -->') >= 0; }).length).toBe(1);
+  });
+  test('親の中の終了は } の直前、履歴は 親[H] を名指す', function() {
+    var r = stMod.addPseudoIn(T, stMod.parse(T), 'end', 'P', 'P.B');
+    expect(r.text.split('\n')[4]).toBe('  B --> [*]');
+    var h = stMod.addPseudoIn(T, stMod.parse(T), 'historyDeep', 'P', 'Q');
+    expect(h.text).toContain('Q --> P[H*]');
+    var tr = stMod.parse(h.text).transitions.filter(function(x) { return x.to === 'P[H*]'; });
+    expect(tr.length).toBe(1);
+    expect(stMod.addPseudoIn(T, stMod.parse(T), 'history', '', 'Q').text).toBe(T);
+  });
+});
+
 if (prevWindow !== undefined) global.window = prevWindow;
 if (prevDocument !== undefined) global.document = prevDocument;
 depPaths.forEach(function(p) { try { delete require.cache[require.resolve(p)]; } catch (e) {} });

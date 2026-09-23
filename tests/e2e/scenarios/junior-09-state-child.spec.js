@@ -270,3 +270,137 @@ test('手順9 選んだ状態のボタンが、用語抜きで何が起きるか
   await expect(page.locator('#st-add-child')).toHaveAttribute('title', /中に、もう 1 つ状態を入れます/);
   await expect(page.locator('#props-content')).toContainText('入れ子');
 });
+
+// BLK-human-20260923-2001: 入れ子の子状態が状態遷移表に出ず、子の遷移が見えない・入れられなかった。
+// 表は入れ子を含む全状態を「親 / 子」で字下げして出し、親の行を畳めば子が隠れ、
+// 空欄から足した子どうしの遷移は親の { } の中に入る。
+test('手順9 状態遷移表に親 2 つ・子 3 つずつと各親の開始が全部出て、空欄から子の遷移を足せる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.typeDsl(page, [
+    '@startuml',
+    '[*] --> Idle',
+    'state Idle {',
+    '  state Wait',
+    '  state Poll',
+    '  state Sleep',
+    '  [*] --> Wait',
+    '  Wait --> Poll : tick',
+    '}',
+    'state Busy {',
+    '  state Send',
+    '  state Recv',
+    '  state Done',
+    '  [*] --> Send',
+    '  Send --> Recv : sent',
+    '}',
+    'Idle --> Busy : start',
+    'Busy --> [*] : stop',
+    '@enduml',
+  ].join('\n'));
+
+  await page.locator('#btn-state-table-toggle').click();
+  const heads = page.locator('#state-table-body tbody th');
+  await expect(heads).toHaveCount(11);
+  const labels = (await heads.allInnerTexts()).map((s) => s.replace(/[▾▸]/g, '').trim());
+  expect(labels).toEqual([
+    '（開始）', 'Idle', 'Idle / （開始）', 'Idle / Wait', 'Idle / Poll', 'Idle / Sleep',
+    'Busy', 'Busy / （開始）', 'Busy / Send', 'Busy / Recv', 'Busy / Done',
+  ]);
+  // 子は親より字下げされる
+  const pad = async (id) => page.locator('#state-table-body tr[data-stt-row="' + id + '"] th')
+    .evaluate((el) => parseFloat(getComputedStyle(el).paddingLeft));
+  expect(await pad('Busy.Recv')).toBeGreaterThan(await pad('Busy'));
+
+  // 親の行を畳むと子が隠れ、開けば戻る
+  await page.locator('#state-table-body [data-stt-fold="Idle"]').click();
+  await expect(heads).toHaveCount(7);
+  await page.locator('#state-table-body [data-stt-fold="Idle"]').click();
+  await expect(heads).toHaveCount(11);
+
+  // 子 (Recv) の行・sent 列の空欄から Done への遷移を足す → Busy の { } の中に入る
+  const cell = page.locator('#state-table-body td.stt-empty[data-state-id="Busy.Recv"][data-trigger="sent"]');
+  await cell.click();
+  await expect(page.locator('#st-tx-modal')).toBeVisible();
+  await page.locator('#st-tx-to').selectOption('Busy.Done');
+  await page.locator('#st-tx-confirm').click();
+  await page.waitForTimeout(400);
+  const lines = (await dsl(page)).split('\n').map((l) => l.trim());
+  const at = lines.indexOf('Recv --> Done : sent');
+  expect(at).toBeGreaterThan(lines.indexOf('state Busy {'));
+  expect(at).toBeLessThan(lines.indexOf('Idle --> Busy : start'));
+  // 表にも子の遷移として出る
+  await expect(page.locator('#state-table-body td[data-state-id="Busy.Recv"][data-trigger="sent"]'))
+    .toHaveText('Busy / Done');
+});
+
+// BLK-human-20260923-2001: 開始 [*] を足すとき「最上位の開始か、どの親の中の開始か」を選べなかった。
+test('手順9 開始・終了を「どこの」ものか選んで GUI だけで足し、既にあれば差し替えを聞かれる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.typeDsl(page, [
+    '@startuml',
+    'state Idle {',
+    '  state Wait',
+    '  state Poll',
+    '}',
+    'state Busy {',
+    '  state Send',
+    '  state Recv',
+    '}',
+    'Idle --> Busy : start',
+    '@enduml',
+  ].join('\n'));
+  await page.evaluate(() => { if (window.MA.selection) window.MA.selection.clearSelection(); });
+  await page.waitForTimeout(300);
+
+  async function addPseudo(kind, scope, state) {
+    await page.locator('#st-tail-kind').selectOption('pseudo');
+    await page.locator('#st-ps-kind').selectOption(kind);
+    await page.locator('#st-ps-scope').selectOption(scope);
+    await page.locator('#st-ps-state').selectOption(state);
+    await page.locator('#st-tail-add').click();
+    await page.waitForTimeout(400);
+  }
+  await addPseudo('start', '', 'Idle');
+  await addPseudo('start', 'Idle', 'Idle.Wait');
+  await addPseudo('start', 'Busy', 'Busy.Send');
+  await addPseudo('end', '', 'Busy');
+  let lines = (await dsl(page)).split('\n');
+  expect(lines.indexOf('[*] --> Idle')).toBeLessThan(lines.indexOf('Idle --> Busy : start'));
+  expect(lines.indexOf('  [*] --> Wait')).toBe(lines.indexOf('state Idle {') + 1);
+  expect(lines.indexOf('  [*] --> Send')).toBe(lines.indexOf('state Busy {') + 1);
+  expect(lines).toContain('Busy --> [*]');
+
+  // 既に開始がある Idle の中に 2 つ目を足そうとすると、差し替えるかを聞かれる
+  await page.locator('#st-tail-kind').selectOption('pseudo');
+  await page.locator('#st-ps-scope').selectOption('Idle');
+  await expect(page.locator('#st-ps-hint')).toContainText('既に開始');
+  page.once('dialog', (d) => d.accept());
+  await page.locator('#st-ps-state').selectOption('Idle.Poll');
+  await page.locator('#st-tail-add').click();
+  await page.waitForTimeout(400);
+  lines = (await dsl(page)).split('\n');
+  expect(lines).toContain('  [*] --> Poll');
+  expect(lines).not.toContain('  [*] --> Wait');
+
+  // 表には最上位と各親の開始が別の行で出る
+  await page.locator('#btn-state-table-toggle').click();
+  const labels = (await page.locator('#state-table-body tbody th').allInnerTexts()).map((s) => s.replace(/[▾▸]/g, '').trim());
+  expect(labels).toContain('（開始）');
+  expect(labels).toContain('Idle / （開始）');
+  expect(labels).toContain('Busy / （開始）');
+
+  // プレビューの開始の丸も実マウスで選べ、どこの開始か (親名) が出る
+  const hit = page.locator('#overlay-layer rect[data-type="pseudo"][data-id="start@Idle"]');
+  await expect(hit).toHaveCount(1, { timeout: 10000 });
+  const b = await hit.boundingBox();
+  if (!b) throw new Error('no box: start@Idle');
+  await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
+  await expect(page.locator('#st-pseudo-info')).toHaveAttribute('data-scope', 'Idle');
+  await expect(page.locator('#st-pseudo-scope')).toHaveText('Idle の中');
+  await expect(page.locator('#st-pseudo-links')).toContainText('[*] --> Poll');
+  const top = page.locator('#overlay-layer rect[data-type="pseudo"][data-id="start@"]');
+  const tb = await top.boundingBox();
+  if (!tb) throw new Error('no box: start@');
+  await page.mouse.click(tb.x + tb.width / 2, tb.y + tb.height / 2);
+  await expect(page.locator('#st-pseudo-scope')).toHaveText('最上位 (図全体)');
+});

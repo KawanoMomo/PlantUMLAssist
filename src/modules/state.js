@@ -32,7 +32,8 @@ window.MA.modules.plantumlState = (function() {
   // BLK-builder-20260907-1306-2 (design 5d): 遷移行の線の色 (`A -[#red]-> B`) を読む。
   // 1 = from、2 = 色 (`#` を除いた中身)、3 = to、4 = ラベル。
   var TRANSITION_RE = new RegExp(
-    '^(\\[\\*\\]|' + ID + ')\\s*-(?:\\[#([A-Za-z0-9]+)\\])?->\\s*(\\[\\*\\]|' + ID + ')(?:\\s*:\\s*(.*))?\\s*$'
+    // BLK-human-20260923-2001: 履歴 `[H]` / `[H*]` と親を名指す `親[H]` も端に書ける。
+    '^(\\[\\*\\]|\\[H\\*?\\]|' + ID + '(?:\\[H\\*?\\])?)\\s*-(?:\\[#([A-Za-z0-9]+)\\])?->\\s*(\\[\\*\\]|\\[H\\*?\\]|' + ID + '(?:\\[H\\*?\\])?)(?:\\s*:\\s*(.*))?\\s*$'
   );
 
   // その他パレットに出す色。src/core/relation-options.js の COLORS と同じ並びにして、
@@ -187,6 +188,9 @@ window.MA.modules.plantumlState = (function() {
           guard: parts.guard,
           action: parts.action,
           line: lineNum,
+          // BLK-human-20260923-2001: どの複合状態の中に書かれた遷移か (最上位は null)。
+          // `[*]` はこの中の開始・終了を指し、子の名前はこの中で引く。
+          scope: openCompositeStack.length > 0 ? openCompositeStack[openCompositeStack.length - 1].id : null,
         });
         continue;
       }
@@ -299,6 +303,109 @@ window.MA.modules.plantumlState = (function() {
 
   function addTransition(text, from, to, trigger, guard, action) {
     return insertBeforeEnd(text, fmtTransition(from, to, trigger, guard, action));
+  }
+
+  // BLK-human-20260923-2001: 開始・終了・履歴を「どこの」ものかを選んで足す。
+  // scope は複合状態の id (最上位は '')。PlantUML は `[*]` を書かれた { } の中の開始・終了と読み、
+  // 履歴は `親[H]` / `親[H*]` で親を名指す。
+  function pseudoScopeOptions(parsed) {
+    var states = (parsed && parsed.states) || [];
+    var STb = window.MA.stateTable;
+    var out = [{ value: '', label: '最上位 (図全体)' }];
+    states.forEach(function(s) {
+      if (s.endLine > s.line) {
+        out.push({ value: s.id, label: (STb ? STb.rowLabel(s.id, states) : s.id) + ' の中' });
+      }
+    });
+    return out;
+  }
+
+  function statesInScope(parsed, scope) {
+    var sc = scope || null;
+    return ((parsed && parsed.states) || []).filter(function(s) { return (s.parentId || null) === sc; });
+  }
+
+  function findStartIn(parsed, scope) {
+    var sc = scope || null;
+    var trs = (parsed && parsed.transitions) || [];
+    for (var i = 0; i < trs.length; i++) {
+      if (trs[i].from === '[*]' && (trs[i].scope || null) === sc) return trs[i];
+    }
+    return null;
+  }
+
+  // kind: 'start' | 'end' | 'history' | 'historyDeep'。stateQid は開始の行き先 / 終了・履歴の出どころ。
+  // 開始が既にある scope に opts.replace 無しで足そうとすると { text: 元のまま, conflict: 既存の遷移 }。
+  function addPseudoIn(text, parsed, kind, scope, stateQid, opts) {
+    var states = (parsed && parsed.states) || [];
+    var sc = scope || '';
+    var host = null;
+    for (var i = 0; i < states.length; i++) if (states[i].id === sc) host = states[i];
+    var bare = String(stateQid || '').split('.').pop();
+    if (!bare) return { text: text };
+    var lines = String(text).split('\n');
+    function insideIndent() {
+      return host ? (lines[host.endLine - 1].match(/^\s*/) || [''])[0] + '  ' : '';
+    }
+    if (kind === 'history' || kind === 'historyDeep') {
+      if (!host) return { text: text };
+      var hLine = bare + ' --> ' + host.id.split('.').pop() + (kind === 'historyDeep' ? '[H*]' : '[H]');
+      return { text: insertBeforeEnd(text, hLine) };
+    }
+    if (kind === 'end') {
+      var eLine = bare + ' --> [*]';
+      if (!host) return { text: insertBeforeEnd(text, eLine) };
+      lines.splice(host.endLine - 1, 0, insideIndent() + eLine);
+      return { text: lines.join('\n') };
+    }
+    // start
+    var sLine = '[*] --> ' + bare;
+    var existing = findStartIn(parsed, sc || null);
+    if (existing) {
+      if (!(opts && opts.replace)) return { text: text, conflict: existing };
+      var idx = existing.line - 1;
+      var ind = (lines[idx].match(/^\s*/) || [''])[0];
+      lines[idx] = ind + sLine;
+      return { text: lines.join('\n') };
+    }
+    if (host) {
+      lines.splice(host.line, 0, insideIndent() + sLine);
+      return { text: lines.join('\n') };
+    }
+    // 最上位は最初の遷移の前 (最上位に遷移が無ければ末尾)
+    var trs = ((parsed && parsed.transitions) || []).filter(function(t) { return !t.scope; });
+    if (!trs.length) return { text: insertBeforeEnd(text, sLine) };
+    var first = trs.reduce(function(a, b) { return a.line < b.line ? a : b; });
+    lines.splice(first.line - 1, 0, sLine);
+    return { text: lines.join('\n') };
+  }
+
+  // BLK-human-20260923-2001: 状態遷移表の行 id (`P.A` / `[*]` / `[*]@P`) から遷移を足す。
+  // 入れ子の子どうし・親の中の開始は、その親の `{ … }` の中に素の名前で書く
+  // (最上位に `P.A --> P.B` と書くと PlantUML は別の状態を作る)。親の外へ出る遷移は最上位に書く。
+  function addTransitionScoped(text, parsed, fromRow, to, trigger, guard, action) {
+    var states = (parsed && parsed.states) || [];
+    function byId(id) { for (var i = 0; i < states.length; i++) if (states[i].id === id) return states[i]; return null; }
+    function bare(id) { var t = String(id || ''); return t.indexOf('.') >= 0 ? t.split('.').pop() : t; }
+    var fr = String(fromRow || '');
+    var fromScope = null, fromName, fromState = null;
+    if (fr === '[*]') { fromName = '[*]'; }
+    else if (fr.indexOf('[*]@') === 0) { fromName = '[*]'; fromScope = fr.slice(4); }
+    else { fromState = byId(fr); fromName = bare(fr); fromScope = fromState ? fromState.parentId || null : null; }
+    var toState = to === '[*]' ? null : byId(to);
+    var toName = to === '[*]' ? '[*]' : bare(to);
+    var scope = null;
+    if (fromName === '[*]' || to === '[*]') scope = fromScope;
+    else if (fromState && toState && (fromState.parentId || null) === (toState.parentId || null)) scope = fromState.parentId || null;
+    var line = fmtTransition(fromName, toName, trigger, guard, action);
+    var host = scope ? byId(scope) : null;
+    if (!host || !(host.endLine > host.line)) return insertBeforeEnd(text, line);
+    var lines = String(text).split('\n');
+    var closeIdx = host.endLine - 1;
+    if (closeIdx < 0 || closeIdx >= lines.length) return insertBeforeEnd(text, line);
+    var indent = (lines[closeIdx].match(/^\s*/) || [''])[0] + '  ';
+    lines.splice(closeIdx, 0, indent + line);
+    return lines.join('\n');
   }
   function addNote(text, targetId, position, noteText) {
     var formatted = fmtNote(position || 'right', targetId, noteText || '');
@@ -838,8 +945,79 @@ window.MA.modules.plantumlState = (function() {
       }
     }
 
+    // 5. BLK-human-20260923-2001: 開始・終了 `[*]` の丸も選べる。PlantUML は scope ごとに 1 つの
+    // <g class="start_entity|end_entity" data-qualified-name="Idle..start.Idle"> を描く (最上位は ".start.")。
+    var pseudoEnts = svgEl.querySelectorAll('g.start_entity, g.end_entity');
+    Array.prototype.forEach.call(pseudoEnts, function(g) {
+      var ps = pseudoFromQualifiedName(g.getAttribute('data-qualified-name'), g.getAttribute('class'));
+      if (!ps) return;
+      var ells = g.querySelectorAll('ellipse');
+      if (!ells.length) return;
+      var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      Array.prototype.forEach.call(ells, function(el) {
+        var cx = parseFloat(el.getAttribute('cx')) || 0, cy = parseFloat(el.getAttribute('cy')) || 0;
+        var rx = parseFloat(el.getAttribute('rx')) || 0, ry = parseFloat(el.getAttribute('ry')) || 0;
+        minX = Math.min(minX, cx - rx); minY = Math.min(minY, cy - ry);
+        maxX = Math.max(maxX, cx + rx); maxY = Math.max(maxY, cy + ry);
+      });
+      var srcLine = parseInt(g.getAttribute('data-source-line'), 10);
+      OB.addRect(overlayEl, minX - 3, minY - 3, (maxX - minX) + 6, (maxY - minY) + 6, {
+        'data-type': 'pseudo',
+        'data-id': ps.kind + '@' + ps.scope,
+        'data-line': isNaN(srcLine) ? '' : String(srcLine + 1),
+      });
+    });
+
     // BLK-human-20260912-2130: 小さい当たり判定を手前に。共通実装 (src/core)
     OB.raiseSmallestLast(overlayEl);
+  }
+
+  // BLK-human-20260923-2001: SVG の開始・終了の qualified-name から { kind, scope } を読む。
+  // ".start." → 最上位の開始、"Idle..end.Idle" → Idle の中の終了。読めなければ null。
+  function pseudoFromQualifiedName(qn, cls) {
+    var m = /\.(start|end)\.(.*)$/.exec(String(qn || ''));
+    var kind = m ? m[1] : (/start_entity/.test(cls || '') ? 'start' : (/end_entity/.test(cls || '') ? 'end' : null));
+    if (!kind) return null;
+    return { kind: kind, scope: m ? m[2] : '' };
+  }
+
+  // BLK-human-20260923-2001: 選んだ開始・終了の scope と、それに触れる遷移を出す。
+  function _renderPseudoEdit(sel, parsedData, propsEl, ctx) {
+    var H = window.MA.htmlUtils;
+    var P = window.MA.properties;
+    var STb = window.MA.stateTable;
+    var at = String(sel.id || '').indexOf('@');
+    var kind = at >= 0 ? sel.id.slice(0, at) : sel.id;
+    var scope = at >= 0 ? sel.id.slice(at + 1) : '';
+    var states = parsedData.states || [];
+    var where = scope ? (STb ? STb.rowLabel(scope, states) : scope) + ' の中' : '最上位 (図全体)';
+    var trs = (parsedData.transitions || []).filter(function(t) {
+      if ((t.scope || '') !== scope) return false;
+      return kind === 'start' ? t.from === '[*]' : t.to === '[*]';
+    });
+    var html =
+      '<div id="st-pseudo-info" data-kind="' + H.escHtml(kind) + '" data-scope="' + H.escHtml(scope) + '" style="font-size:12px;margin-bottom:8px;">' +
+        '<b>' + (kind === 'start' ? '開始 [*]' : '終了 [*]') + '</b> — <span id="st-pseudo-scope">' + H.escHtml(where) + '</span></div>' +
+      '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:6px;">' +
+        (kind === 'start' ? 'ここから始まる状態' : 'ここで終わる状態') + '</div>' +
+      '<ul id="st-pseudo-links" style="margin:0 0 8px 16px;padding:0;font-size:11px;">' +
+        trs.map(function(t) {
+          var other = kind === 'start' ? t.to : t.from;
+          return '<li>L' + t.line + ' ' + H.escHtml(kind === 'start' ? '[*] --> ' + other : other + ' --> [*]') + '</li>';
+        }).join('') + '</ul>' +
+      P.primaryButtonHtml('st-pseudo-add', (kind === 'start' ? '開始' : '終了') + 'を足す・差し替える (同じ場所)');
+    propsEl.innerHTML = html;
+    P.bindEvent('st-pseudo-add', 'click', function() {
+      window.MA.selection.clearSelection();
+      var kindSel = document.getElementById('st-tail-kind');
+      if (!kindSel) return;
+      kindSel.value = 'pseudo';
+      kindSel.dispatchEvent(new Event('change'));
+      var k = document.getElementById('st-ps-kind');
+      var s = document.getElementById('st-ps-scope');
+      if (k) { k.value = kind; k.dispatchEvent(new Event('change')); }
+      if (s) { s.value = scope; s.dispatchEvent(new Event('change')); }
+    });
   }
 
   function renderProps(selData, parsedData, propsEl, ctx) {
@@ -853,6 +1031,7 @@ window.MA.modules.plantumlState = (function() {
       if (sel.type === 'state') return _renderStateEdit(sel, parsedData, propsEl, ctx);
       if (sel.type === 'transition') return _renderTransitionEdit(sel, parsedData, propsEl, ctx);
       if (sel.type === 'note') return _renderNoteEdit(sel, parsedData, propsEl, ctx);
+      if (sel.type === 'pseudo') return _renderPseudoEdit(sel, parsedData, propsEl, ctx);
     }
     propsEl.innerHTML = '<div style="font-size:11px;color:var(--text-secondary);">複数選択は未対応 (State)</div>';
   }
@@ -885,6 +1064,8 @@ window.MA.modules.plantumlState = (function() {
           { value: 'child', label: '子状態 (選んだ状態の中に入れる)' },
           { value: 'composite', label: 'Composite State' },
           { value: 'transition', label: 'Transition' },
+          // BLK-human-20260923-2001: どこの開始・終了・履歴かを選んで足す
+          { value: 'pseudo', label: '開始・終了・履歴 ([*] / [H])' },
           { value: 'note', label: 'Note' },
           { value: 'bulk', label: '一括 (複数行)' },
           // design 5d: 常時は出さず、ここに畳む要素 (fork / join / 入口・出口ポイント / 並行領域)。
@@ -1009,6 +1190,20 @@ window.MA.modules.plantumlState = (function() {
           P.vocabPickerHtml('st-tail-act-vocab', { roles: ['method'] }) +
           _previewBoxHtml('st-tail-preview') +
           P.primaryButtonHtml('st-tail-add', '+ Transition 追加');
+      } else if (kind === 'pseudo') {
+        html2 =
+          P.selectFieldHtml('足すもの', 'st-ps-kind', [
+            { value: 'start', label: '開始 ([*] --> 状態)', selected: true },
+            { value: 'end', label: '終了 (状態 --> [*])' },
+            { value: 'history', label: '履歴 (状態 --> 親[H])' },
+            { value: 'historyDeep', label: '深い履歴 (状態 --> 親[H*])' },
+          ]) +
+          P.selectFieldHtml('どこの', 'st-ps-scope', pseudoScopeOptions(parsedData).map(function(o, i) {
+            return { value: o.value, label: o.label, selected: i === 0 };
+          })) +
+          '<div id="st-ps-state-box"></div>' +
+          '<div id="st-ps-hint" style="font-size:10px;color:var(--text-secondary);margin:4px 0;line-height:1.5;"></div>' +
+          P.primaryButtonHtml('st-tail-add', '＋ 追加');
       } else if (kind === 'note') {
         html2 =
           P.selectFieldHtml('Target', 'st-tail-target', stateOpts) +
@@ -1083,6 +1278,31 @@ window.MA.modules.plantumlState = (function() {
         });
       }
 
+      if (kind === 'pseudo') {
+        var psRender = function() {
+          var k2 = document.getElementById('st-ps-kind').value;
+          var sc2 = document.getElementById('st-ps-scope').value;
+          var box = document.getElementById('st-ps-state-box');
+          var hint = document.getElementById('st-ps-hint');
+          var STb = window.MA.stateTable;
+          var opts = statesInScope(parsedData, sc2).map(function(s) {
+            return { value: s.id, label: STb ? STb.rowLabel(s.id, parsedData.states) : s.id };
+          });
+          box.innerHTML = opts.length
+            ? P.selectFieldHtml(k2 === 'start' ? '始まる状態' : '出どころの状態', 'st-ps-state', opts)
+            : '<div style="font-size:11px;color:var(--text-secondary);">この中に状態がありません</div>';
+          var where = sc2 ? (STb ? STb.rowLabel(sc2, parsedData.states) : sc2) + ' の { } の中' : '最上位';
+          var ex = k2 === 'start' ? findStartIn(parsedData, sc2 || null) : null;
+          hint.textContent = (k2 === 'history' || k2 === 'historyDeep')
+            ? (sc2 ? '「' + where.replace(' の { } の中', '') + '」に戻ったとき、前にいた子から再開する遷移を足します'
+                   : '履歴は親 (複合状態) を選んでください')
+            : where + 'に入ります' + (ex ? '。この中には既に開始 (' + ex.to + ') があります — 足すと差し替えるか聞きます' : '');
+        };
+        P.bindEvent('st-ps-kind', 'change', psRender);
+        P.bindEvent('st-ps-scope', 'change', psRender);
+        psRender();
+      }
+
       if (kind === 'transition') {
         var tailPreview = _bindPreview({
           preview: 'st-tail-preview', from: 'st-tail-from', to: 'st-tail-to',
@@ -1142,6 +1362,18 @@ window.MA.modules.plantumlState = (function() {
             document.getElementById('st-tail-trig').value || null,
             document.getElementById('st-tail-guard').value || null,
             document.getElementById('st-tail-act').value || null);
+        } else if (k === 'pseudo') {
+          var psSel = document.getElementById('st-ps-state');
+          if (!psSel || !psSel.value) { alert('状態を選んでください'); return; }
+          var psKind = document.getElementById('st-ps-kind').value;
+          var psScope = document.getElementById('st-ps-scope').value;
+          var res = addPseudoIn(t, parsedData, psKind, psScope, psSel.value);
+          if (res.conflict) {
+            if (!window.confirm('この中には既に開始 ([*] --> ' + res.conflict.to + ') があります。差し替えますか?')) return;
+            res = addPseudoIn(t, parsedData, psKind, psScope, psSel.value, { replace: true });
+          }
+          if (res.text === t) { alert('足せませんでした (履歴は親を選んでください)'); return; }
+          out = res.text;
         } else if (k === 'note') {
           var tg = document.getElementById('st-tail-target').value;
           if (!tg) { alert('Target 必須'); return; }
@@ -1299,10 +1531,15 @@ window.MA.modules.plantumlState = (function() {
     var content = document.getElementById('st-tx-modal-content');
     if (!modal || !content) return;
     var P = window.MA.properties;
-    var stateOpts = (parsedData.states || []).map(function(s) { return { value: s.id, label: s.label || s.id }; });
-    var stateOptsWithPseudo = [{ value: '[*]', label: '[*]' }].concat(stateOpts);
+    var STb = window.MA.stateTable;
+    // 入れ子の子は `親 / 子` で出す (同じ名前の子が別の親にいても取り違えない)。
+    var stateOpts = (parsedData.states || []).map(function(s) {
+      return { value: s.id, label: STb ? STb.rowLabel(s.id, parsedData.states) : (s.label || s.id) };
+    });
+    var stateOptsWithPseudo = [{ value: '[*]', label: '[*] (終了)' }].concat(stateOpts);
+    var fromText = STb ? STb.rowLabel(fromId, parsedData.states || []) : fromId;
     content.innerHTML =
-      '<h3 style="margin:0 0 12px 0;color:var(--text-primary);">Outgoing transition from ' + window.MA.htmlUtils.escHtml(fromId) + '</h3>' +
+      '<h3 style="margin:0 0 12px 0;color:var(--text-primary);">Outgoing transition from ' + window.MA.htmlUtils.escHtml(fromText) + '</h3>' +
       P.selectFieldHtml('Target state', 'st-tx-to', stateOptsWithPseudo) +
       P.fieldHtml('Trigger', 'st-tx-trig', (prefill && prefill.trigger) || '') +
       P.fieldHtml('Guard', 'st-tx-guard', (prefill && prefill.guard) || '') +
@@ -1321,7 +1558,7 @@ window.MA.modules.plantumlState = (function() {
       var action = document.getElementById('st-tx-act').value || null;
       if (!to) { close(); return; }
       window.MA.history.pushHistory();
-      ctx.setMmdText(addTransition(ctx.getMmdText(), fromId, to, trig, guard, action));
+      ctx.setMmdText(addTransitionScoped(ctx.getMmdText(), parsedData, fromId, to, trig, guard, action));
       ctx.onUpdate();
       close();
     });
@@ -2048,6 +2285,12 @@ window.MA.modules.plantumlState = (function() {
     addCompositeState: addCompositeState,
     addRegionSeparator: addRegionSeparator,
     addTransition: addTransition,
+    addTransitionScoped: addTransitionScoped,
+    pseudoScopeOptions: pseudoScopeOptions,
+    statesInScope: statesInScope,
+    findStartIn: findStartIn,
+    addPseudoIn: addPseudoIn,
+    pseudoFromQualifiedName: pseudoFromQualifiedName,
     addNote: addNote,
     addStateAtLine: addStateAtLine,
     addTransitionAtLine: addTransitionAtLine,

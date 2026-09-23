@@ -2837,6 +2837,7 @@ function init() {
     if (!panel || !body || !toggle || !ST) return;
 
     var open = false;
+    var sttCollapsed = {};
 
     function currentTable() {
       try { return ST.build(currentParsed); } catch (e) { return { triggers: [], rows: [] }; }
@@ -2850,7 +2851,16 @@ function init() {
       table.triggers.forEach(function(t) { html += '<th>' + esc(t) + '</th>'; });
       html += '</tr></thead><tbody>';
       table.rows.forEach(function(row) {
-        html += '<tr><th>' + esc(row.label) + '</th>';
+        // BLK-human-20260923-2001: 入れ子の子は親の下に字下げして出し、親の行を畳めば隠れる。
+        var anc = ST.ancestorsOf(row.stateId, currentParsed);
+        for (var ai = 0; ai < anc.length; ai++) if (sttCollapsed[anc[ai]]) return;
+        var twisty = row.hasChildren
+          ? '<button type="button" class="stt-twisty" data-stt-fold="' + esc(row.stateId) + '" title="' +
+              (sttCollapsed[row.stateId] ? '中の状態を出す' : '中の状態を畳む') + '">' +
+              (sttCollapsed[row.stateId] ? '▸' : '▾') + '</button> '
+          : '';
+        html += '<tr data-stt-row="' + esc(row.stateId) + '" data-depth="' + (row.depth || 0) + '">' +
+          '<th style="padding-left:' + (6 + 14 * (row.depth || 0)) + 'px">' + twisty + esc(row.label) + '</th>';
         row.cells.forEach(function(cell, j) {
           var attrs = ' class="stt-cell' + (cell ? '' : ' stt-empty') +
             (cell && selIds[cell.transitionId] ? ' stt-selected' : '') + '"' +
@@ -2885,6 +2895,13 @@ function init() {
     });
 
     body.addEventListener('click', function(e) {
+      var fold = e.target && e.target.closest ? e.target.closest('[data-stt-fold]') : null;
+      if (fold) {
+        var fid = fold.getAttribute('data-stt-fold');
+        sttCollapsed[fid] = !sttCollapsed[fid];
+        syncStateTable();
+        return;
+      }
       var td = e.target && e.target.closest ? e.target.closest('td.stt-cell') : null;
       if (!td) return;
       var tid = td.getAttribute('data-transition-id');
