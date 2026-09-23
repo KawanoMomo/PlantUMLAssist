@@ -28,7 +28,9 @@ window.MA.commandPalette = (function() {
   // 分類の正本は tool-menu.js (メニューと同じ並び・同じ言葉)。ここでは写さない
   // — 2 か所に書くと、道具が増えたときにメニューにはあってパレットには無い、が起きる。
   var TOOL_GROUPS = ['make', 'edit', 'find', 'check', 'review', 'give'];
-  var GROUPS = ['add', 'jump', 'selected'].concat(TOOL_GROUPS).concat(['command']);
+  // BLK-human-20260923-1701 (design 10b): 'file' は Ctrl+P で開く「ファイル名から開く」の見出し。
+  // ファイル単位の操作 (一時控え・この図の変遷) もここに入る (入口は FILES ツリーの右クリック)。
+  var GROUPS = ['add', 'jump', 'selected'].concat(TOOL_GROUPS).concat(['file', 'command']);
   var GROUP_LABELS = {
     add: '図に足す / Add',
     jump: '図の要素へ移動 / Jump to element',
@@ -39,13 +41,14 @@ window.MA.commandPalette = (function() {
     check: '確かめる / Check',
     review: 'レビュー / Review',
     give: '渡す / Deliver',
+    file: 'ファイル / Files',
     command: 'コマンド / Command',
   };
   // 行の左に出す短い分類チップ。見出しの外へ絞り込んでも、その行が何の仲間かが
   // 1 語で分かるようにする (design 7b のパレットは行ごとに分類を出している)。
   var GROUP_CHIPS = {
     make: '図をつくる', edit: '書き換える', find: '探す',
-    check: '確かめる', review: 'レビュー', give: '渡す',
+    check: '確かめる', review: 'レビュー', give: '渡す', file: 'ファイル',
   };
   // 見出しの下に 1 行だけ出す補足。何が起きるか読まずに分かるようにする。
   var GROUP_NOTES = {
@@ -62,7 +65,7 @@ window.MA.commandPalette = (function() {
     var tm = _toolMenu();
     if (!tm || !buttonId) return null;
     var g = tm.groupOf(buttonId);
-    return (g && TOOL_GROUPS.indexOf(g) >= 0) ? g : null;
+    return (g && (TOOL_GROUPS.indexOf(g) >= 0 || g === 'file')) ? g : null;
   }
 
   // メニューに出ている「何をするか」の言い換え。パレットでも同じ言葉にする

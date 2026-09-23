@@ -63,6 +63,7 @@ const sourceFiles = [
   'src/core/status-badges.js',
   'src/core/file-tree.js',
   'src/core/git-panel.js',
+  'src/core/file-menu.js',
   'src/core/zoom-hud.js',
   'src/core/outline.js',
   'src/core/select-at-line.js',

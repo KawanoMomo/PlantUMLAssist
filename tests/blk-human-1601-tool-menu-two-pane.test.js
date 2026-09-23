@@ -111,7 +111,8 @@ describe('絞り込み', function() {
   });
 
   test('小見出し・分類名でも引ける', function() {
-    expect(tm.filterItems('変更の履歴').length).toBe(4);
+    // BLK-human-20260923-1701 (design 10b): 「この図の変遷」は FILES の右クリックへ移したので 4 → 3。
+    expect(tm.filterItems('変更の履歴').length).toBe(3);
     expect(tm.filterItems('探す').length >= 3).toBe(true);
   });
 

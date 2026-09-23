@@ -3892,14 +3892,27 @@ function initCommandPalette() {
     render();
   }
 
-  function open() {
+  // BLK-human-20260923-1701 (design 10b): Ctrl+P は同じ検索欄を「ファイル名」に絞って開く。
+  // opts.files は保存先の図の名前 (FILES ツリーの右クリックと同じ「開く」の道で開く)。
+  function fileCommands(files) {
+    return (files || []).map(function(name) {
+      return {
+        id: name, group: 'file', badge: 'ファイル', title: name, hint: '保存先',
+        keywords: [name, 'file', 'open', 'ふぁいる', 'ひらく'],
+        run: function() { openFromFolderByName(name); },
+      };
+    });
+  }
+
+  function open(opts) {
+    var o = (opts && typeof opts === 'object' && !opts.type) ? opts : {};
     returnFocusEl = document.activeElement;
     // add / selected は「今の図種」「今の選択」で中身が変わるので、開くたびに作り直す。
     items = CP.buildItems(
-      addCommands().concat(selectedCommands()).concat(commands()),
+      addCommands().concat(selectedCommands()).concat(commands()).concat(fileCommands(o.files)),
       editorEl ? editorEl.value : '');
     input.value = '';
-    groupFilter = null;
+    groupFilter = o.group || null;
     modal.classList.add('open');
     refilter();
     input.focus();
@@ -3920,7 +3933,8 @@ function initCommandPalette() {
     else if (typeof item.run === 'function') item.run();
   }
 
-  if (openBtn) openBtn.addEventListener('click', open);
+  if (openBtn) openBtn.addEventListener('click', function() { open(); });
+  window.MA.openCommandPalette = function(opts) { open(opts); };
 
   // キーの判定は key-bindings に聞く (design 5b で差し替えられる)。
   document.addEventListener('keydown', function(e) {
@@ -32190,6 +32204,7 @@ function bootWithSavedPrefs() {
   // 画面の骨格なので、遅れて現れると押そうとした所が動く)。
   try { if (window.MA.filesPanel) window.MA.filesPanel.init(); } catch (e) {}
   try { if (window.MA.gitUi) window.MA.gitUi.init(); } catch (e) {}
+  try { if (window.MA.fileMenuUi) window.MA.fileMenuUi.init(); } catch (e) {}
   var as = window.MA.autoSave;
   if (!as || !as.hydrateFromServer) { init(); return; }
   var started = false;
