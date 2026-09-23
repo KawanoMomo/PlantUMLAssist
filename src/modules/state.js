@@ -31,9 +31,13 @@ window.MA.modules.plantumlState = (function() {
 
   // BLK-builder-20260907-1306-2 (design 5d): 遷移行の線の色 (`A -[#red]-> B`) を読む。
   // 1 = from、2 = 色 (`#` を除いた中身)、3 = to、4 = ラベル。
+  // BLK-migrator-20260923-2312: 実物の図は `->` / `--->` / `-up->` / `-[#red,dashed]->` や、
+  // 行き先に `<<exitPoint>>` を添えた書き方も使う。どれも同じ 1 本の遷移として読む。
+  // 矢印 = 線 1 本以上 + 向き (up/down/left/right とその略) + 色・線種の [] + 矢じり。色だけを 2 番に取る。
+  var TR_ARROW = '-+(?:(?:up|down|left|right|u|d|l|r)(?=[-\\[]))?(?:\\[(?:#([A-Za-z0-9]+))?[^\\]]*\\])?-*>';
   var TRANSITION_RE = new RegExp(
     // BLK-human-20260923-2001: 履歴 `[H]` / `[H*]` と親を名指す `親[H]` も端に書ける。
-    '^(\\[\\*\\]|\\[H\\*?\\]|' + ID + '(?:\\[H\\*?\\])?)\\s*-(?:\\[#([A-Za-z0-9]+)\\])?->\\s*(\\[\\*\\]|\\[H\\*?\\]|' + ID + '(?:\\[H\\*?\\])?)(?:\\s*:\\s*(.*))?\\s*$'
+    '^(\\[\\*\\]|\\[H\\*?\\]|' + ID + '(?:\\[H\\*?\\])?)\\s*' + TR_ARROW + '\\s*(\\[\\*\\]|\\[H\\*?\\]|' + ID + '(?:\\[H\\*?\\])?)(?:\\s*<<[^>]+>>)?(?:\\s*:\\s*(.*))?\\s*$'
   );
 
   // その他パレットに出す色。src/core/relation-options.js の COLORS と同じ並びにして、
@@ -565,7 +569,19 @@ window.MA.modules.plantumlState = (function() {
     if (fields.trigger !== undefined) parts.trigger = fields.trigger;
     if (fields.guard !== undefined) parts.guard = fields.guard;
     if (fields.action !== undefined) parts.action = fields.action;
-    lines[idx] = indent + fmtTransition(from, to, parts.trigger, parts.guard, parts.action, color);
+    var outLine = fmtTransition(from, to, parts.trigger, parts.guard, parts.action, color);
+    // BLK-migrator-20260923-2312: 色を変えない書き換えでは、元の矢印 (`->` / `-up->` 等) と
+    // 行き先の `<<exitPoint>>` を残す (トリガを直しただけで線の向きや種類が変わらない)。
+    var am = /^\S+?\s*(-[^\s>]*>)/.exec(trimmed);
+    if (am && fields.color === undefined && am[1] !== '-->') {
+      outLine = outLine.replace(/ -(?:\[#[A-Za-z0-9]+\])?-> /, ' ' + am[1] + ' ');
+    }
+    var stm = /^[^:]*?-[^\s>]*>\s*\S+(\s*<<[^>]+>>)/.exec(trimmed);
+    if (stm && fields.to == null) {
+      var colon = outLine.indexOf(' : ');
+      outLine = colon >= 0 ? outLine.slice(0, colon) + stm[1] + outLine.slice(colon) : outLine + stm[1];
+    }
+    lines[idx] = indent + outLine;
     return lines.join('\n');
   }
 
@@ -828,36 +844,39 @@ window.MA.modules.plantumlState = (function() {
     OB.syncDimensions(svgEl, overlayEl);
     while (overlayEl.firstChild) overlayEl.removeChild(overlayEl.firstChild);
 
-    // 1. Match entity-wrapped states (simple states + child states inside composite)
+    // BLK-migrator-20260923-2312: 枠の置き場所は SVG の要素情報 (状態・複合状態・開始終了の
+    // data-qualified-name、遷移の data-source-line、fork/join・入口出口は遷移の端) から決める。
+    // DSL の宣言数と SVG の図形数を突き合わせないので、宣言の無い状態・並行領域・choice・
+    // `->` の遷移が混ざっても他の枠は落ちない。判断は src/core/state-svg-map.js。
+    var SM = window.MA.stateSvgMap;
+    var got = SM ? SM.collect(svgEl, parsedData) : { frames: [], linksReady: false };
+    var framedComposite = {};
+    got.frames.forEach(function(f) {
+      var attrs = { 'data-type': f.type, 'data-id': f.id, 'data-line': f.line == null ? '' : String(f.line) };
+      if (f.type === 'transition') {
+        if (!OB.addLinkRects(overlayEl, f.link, attrs, 8)) {
+          var lb = OB.extractLinkBBox(f.link, 8);
+          if (lb) OB.addRect(overlayEl, lb.x, lb.y, lb.width, lb.height, attrs);
+        }
+        return;
+      }
+      if (f.composite) { attrs['data-composite'] = '1'; attrs['data-hit-kind'] = 'container'; framedComposite[f.id] = true; }
+      OB.addRect(overlayEl, f.box.x, f.box.y, f.box.width, f.box.height, attrs);
+    });
+
+    // 複合状態の外枠が cluster の <g> に入っていない SVG (並行領域を持つ複合状態など) は、
+    // 名前の無い角丸の外枠 <rect fill="none" rx="12.5"> を宣言順に当てる。
     var ents = svgEl.querySelectorAll('g.entity');
-    var byName = {};
-    Array.prototype.forEach.call(ents, function(g) {
-      var qn = g.getAttribute('data-qualified-name');
-      if (qn) byName[qn] = g;
-    });
     var entArr = Array.prototype.slice.call(ents);
-
-    var simpleStates = (parsedData.states || []).filter(function(s) {
-      return s.endLine === s.line || s.endLine === undefined;
-    });
     var compositeStates = (parsedData.states || []).filter(function(s) {
-      return s.endLine && s.endLine > s.line;
+      return s.endLine && s.endLine > s.line && !framedComposite[s.id];
     });
-
-    simpleStates.forEach(function(st) {
-      var g = byName[st.id];
-      if (!g) return;
-      var bb = _entityBBox(g);
-      if (!bb) return;
-      OB.addRect(overlayEl, bb.x, bb.y, bb.width, bb.height, {
-        'data-type': 'state',
-        'data-id': st.id,
-        'data-line': String(st.line),
-      });
+    var compRects = _detectCompositeRects(svgEl, entArr).filter(function(r) {
+      for (var n = r.parentNode; n && n.getAttribute; n = n.parentNode) {
+        if ((n.tagName || '').toLowerCase() === 'g' && n.getAttribute('class')) return false;
+      }
+      return true;
     });
-
-    // 2. Composite container: standalone <rect fill="none" rx="12.5">
-    var compRects = _detectCompositeRects(svgEl, entArr);
     if (compositeStates.length > 0 && compRects.length === compositeStates.length) {
       compositeStates.forEach(function(st, idx) {
         var r = compRects[idx];
@@ -871,6 +890,7 @@ window.MA.modules.plantumlState = (function() {
             'data-id': st.id,
             'data-line': String(st.line),
             'data-composite': '1',
+            'data-hit-kind': 'container',
           }
         );
       });
@@ -878,48 +898,29 @@ window.MA.modules.plantumlState = (function() {
       console.warn('[state.buildOverlay] composite count mismatch: model=' + compositeStates.length + ' svg=' + compRects.length);
     }
 
-    // 3. Transitions: match arrow polygons in document order
+    // data-source-line を持たない SVG (古い PlantUML) だけ、遷移を矢じりの順で当てる。
     var transitions = parsedData.transitions || [];
-    if (transitions.length > 0) {
+    if (!got.linksReady && transitions.length > 0) {
       var allPolys = svgEl.querySelectorAll('polygon');
       var arrowHeads = [];
       Array.prototype.forEach.call(allPolys, function(p) {
         var pts = (p.getAttribute('points') || '').trim().split(/[\s,]+/).filter(function(s) { return s !== ''; });
-        if (pts.length >= 8 && pts.length <= 12) arrowHeads.push(p);
+        if (pts.length >= 8 && pts.length <= 12 && OB.closestLinkGroup(p)) arrowHeads.push(p);
       });
       if (arrowHeads.length === transitions.length) {
         transitions.forEach(function(tr, idx) {
           var p = arrowHeads[idx];
-          var ptsStr = (p.getAttribute('points') || '').trim().split(/[\s,]+/).filter(function(s) { return s !== ''; });
-          var xs = [], ys = [];
-          for (var i = 0; i + 1 < ptsStr.length; i += 2) {
-            xs.push(parseFloat(ptsStr[i])); ys.push(parseFloat(ptsStr[i + 1]));
-          }
-          if (xs.length === 0) return;
-          var minX = Math.min.apply(null, xs);
-          var minY = Math.min.apply(null, ys);
-          var maxX = Math.max.apply(null, xs);
-          var maxY = Math.max.apply(null, ys);
-          // BLK-human-20260912-2130: 矢じりだけだと当たり判定が 16px 角しかなく、
-          // 遷移ラベル (start [ready] / init) を押しても何も選べなかった。
-          // PlantUML は線・矢じり・ラベルを同じ <g class="link"> に入れるので、
-          // その和集合を当たり判定にして「線・矢じり・ラベル・ガードのどこでも選べる」に統一する。
-          var trAttrs = {
-            'data-type': 'transition',
-            'data-id': tr.id,
-            'data-line': String(tr.line),
-          };
+          var trAttrs = { 'data-type': 'transition', 'data-id': tr.id, 'data-line': String(tr.line) };
           var lg = OB.closestLinkGroup(p);
           if (!lg || !OB.addLinkRects(overlayEl, lg, trAttrs, 8)) {
-            OB.addRect(overlayEl, minX - 8, minY - 8,
-              (maxX - minX) + 16, (maxY - minY) + 16, trAttrs);
+            var bb = window.MA.stateSvgMap.shapeBox(p);
+            if (bb) OB.addRect(overlayEl, bb.x - 8, bb.y - 8, bb.width + 16, bb.height + 16, trAttrs);
           }
         });
       } else if (typeof console !== 'undefined' && console.warn) {
         console.warn('[state.buildOverlay] transition arrow mismatch: model=' + transitions.length + ' svg=' + arrowHeads.length);
       }
     }
-
     // 4. Notes: match by entity wrapper (note has its own g.entity[data-qualified-name=GMN_])
     var notes = parsedData.notes || [];
     if (notes.length > 0) {
@@ -944,29 +945,6 @@ window.MA.modules.plantumlState = (function() {
         });
       }
     }
-
-    // 5. BLK-human-20260923-2001: 開始・終了 `[*]` の丸も選べる。PlantUML は scope ごとに 1 つの
-    // <g class="start_entity|end_entity" data-qualified-name="Idle..start.Idle"> を描く (最上位は ".start.")。
-    var pseudoEnts = svgEl.querySelectorAll('g.start_entity, g.end_entity');
-    Array.prototype.forEach.call(pseudoEnts, function(g) {
-      var ps = pseudoFromQualifiedName(g.getAttribute('data-qualified-name'), g.getAttribute('class'));
-      if (!ps) return;
-      var ells = g.querySelectorAll('ellipse');
-      if (!ells.length) return;
-      var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-      Array.prototype.forEach.call(ells, function(el) {
-        var cx = parseFloat(el.getAttribute('cx')) || 0, cy = parseFloat(el.getAttribute('cy')) || 0;
-        var rx = parseFloat(el.getAttribute('rx')) || 0, ry = parseFloat(el.getAttribute('ry')) || 0;
-        minX = Math.min(minX, cx - rx); minY = Math.min(minY, cy - ry);
-        maxX = Math.max(maxX, cx + rx); maxY = Math.max(maxY, cy + ry);
-      });
-      var srcLine = parseInt(g.getAttribute('data-source-line'), 10);
-      OB.addRect(overlayEl, minX - 3, minY - 3, (maxX - minX) + 6, (maxY - minY) + 6, {
-        'data-type': 'pseudo',
-        'data-id': ps.kind + '@' + ps.scope,
-        'data-line': isNaN(srcLine) ? '' : String(srcLine + 1),
-      });
-    });
 
     // BLK-human-20260912-2130: 小さい当たり判定を手前に。共通実装 (src/core)
     OB.raiseSmallestLast(overlayEl);
@@ -2004,13 +1982,29 @@ window.MA.modules.plantumlState = (function() {
     if (first && first.focus) first.focus();
   }
 
+  // BLK-migrator-20260923-2312: `state X` の宣言が無く遷移の中にだけ書かれた状態 (実物の図に多い)。
+  // 枠は出るので、選んだら何も出ないのではなく、その状態に触れる遷移の行を出す。
+  function _renderUndeclaredState(sel, parsedData, propsEl) {
+    var H = window.MA.htmlUtils;
+    var short = String(sel.id || '').split('.').pop();
+    var bare = function(v) { return String(v || '').replace(/\[H\*?\]$/, '').split('.').pop(); };
+    var trs = (parsedData.transitions || []).filter(function(tr) { return bare(tr.from) === short || bare(tr.to) === short; });
+    propsEl.innerHTML =
+      '<div id="st-undeclared" data-id="' + H.escHtml(sel.id) + '" style="font-size:12px;margin-bottom:6px;"><b>' + H.escHtml(short) + '</b></div>' +
+      '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:6px;line-height:1.5;">この状態は <code>state</code> の宣言が無く、遷移の行にだけ書かれています。</div>' +
+      '<ul id="st-undeclared-links" style="margin:0 0 8px 16px;padding:0;font-size:11px;">' +
+      trs.map(function(tr) {
+        return '<li>L' + tr.line + ' ' + H.escHtml(tr.from + ' --> ' + tr.to + (tr.label ? ' : ' + tr.label : '')) + '</li>';
+      }).join('') + '</ul>';
+  }
+
   function _renderStateEdit(sel, parsedData, propsEl, ctx) {
     var P = window.MA.properties;
     var st = null;
     for (var i = 0; i < parsedData.states.length; i++) {
       if (parsedData.states[i].id === sel.id) { st = parsedData.states[i]; break; }
     }
-    if (!st) { propsEl.innerHTML = ''; return; }
+    if (!st) { _renderUndeclaredState(sel, parsedData, propsEl); return; }
     var related = (parsedData.transitions || []).filter(function(tr) { return tr.from === st.id || tr.to === st.id; });
     var notes = (parsedData.notes || []).filter(function(n) { return n.targetId === st.id; });
 

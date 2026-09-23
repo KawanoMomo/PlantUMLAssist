@@ -1,0 +1,20 @@
+@startuml
+[*] --> Active
+state Active {
+  [*] -> Off
+  Off --> On : press
+  On --> Off : press
+  --
+  [*] -> Low
+  Low --> High : tick
+}
+Active --> Idle : stop
+state Box {
+  state entryA <<entryPoint>>
+  state inner
+  entryA -> inner
+  inner --> exitB <<exitPoint>>
+}
+Idle -> entryA
+exitB --> [*]
+@enduml

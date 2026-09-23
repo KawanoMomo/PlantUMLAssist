@@ -16,6 +16,7 @@ var depPaths = [
   '../src/core/parser-utils.js',
   '../src/core/props-renderer.js',
   '../src/core/overlay-builder.js',
+  '../src/core/state-svg-map.js',
   '../src/modules/state.js',
 ];
 depPaths.forEach(function(p) {

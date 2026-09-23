@@ -233,7 +233,12 @@ window.MA.overlayBuilder = (function() {
     var area = function(r) {
       return (parseFloat(r.getAttribute('width')) || 0) * (parseFloat(r.getAttribute('height')) || 0);
     };
-    var isLink = function(r) { return r.getAttribute('data-hit-kind') === 'link' ? 0 : 1; };
+    // BLK-migrator-20260923-2312: 入れ物 (data-hit-kind="container"、複合状態など) は関係よりさらに後ろ。
+    // 入れ物の中を通る関係のラベルを押したら、入れ物ではなくその関係が選ばれる。
+    var isLink = function(r) {
+      var k = r.getAttribute('data-hit-kind');
+      return k === 'container' ? -1 : (k === 'link' ? 0 : 1);
+    };
     // 元の並び順を保つ安定ソート (面積が同じものの前後関係を変えない)
     rects.forEach(function(r, i) { r.__ovIdx = i; });
     rects.sort(function(a, b) {

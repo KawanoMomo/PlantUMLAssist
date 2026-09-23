@@ -633,3 +633,93 @@ test('migrator 手順 4 — actor〜queue で宣言した sequence 図でも、�
   await page.mouse.move(lb.x + lb.width / 2, svgLine.bottom - 10);
   await expect.poll(hovered).toBe('lifeline@2');
 });
+
+// BLK-migrator-20260923-2312: state 図は宣言の数と SVG の図形の数を突き合わせて当てていたので、
+// 宣言の無い状態・choice / fork / join・`->` / `--->` の遷移が 1 つ混ざるだけで枠がほぼ全滅した。
+// PlantUML が SVG に残す要素情報で当て、どの要素にホバーしても本人の枠が出る。
+test('migrator 手順 4 — 宣言の無い状態・choice / fork / join・`->` の混ざった state 図でも、全要素に本人の枠が出る', async ({ page }) => {
+  await bootPlain(page);
+  const fx = (n) => fs.readFileSync(path.join(__dirname, '..', '..', 'fixtures', 'dsl', 'state-svgmap-' + n + '.puml'), 'utf8')
+    .replace(/\r\n/g, '\n').replace(/\n+$/, '');
+  // 描画の後から枠が作り直されると、その前に付いたホバーの印は消える。印が無ければ置き直す。
+  const hoverAndRead = async (t) => {
+    const r = page.locator('#overlay-layer rect.hit-hover').first();
+    for (let k = 0; k < 3; k++) {
+      await hoverTarget(t);
+      try { await expect(r).toHaveCount(1, { timeout: 1500 }); break; } catch (e) {
+        if (k === 2) {
+          const dbg = await page.evaluate((a) => {
+            const el = document.querySelector('#preview-svg svg').querySelectorAll(a.sel)[a.i];
+            const b = el.getBoundingClientRect();
+            const x = b.left + b.width / 2, y = b.top + b.height / 2;
+            return JSON.stringify({ x, y, vw: innerWidth, vh: innerHeight, top: document.elementsFromPoint(x, y).slice(0, 4).map((n) => n.tagName + '#' + n.id + '.' + (n.getAttribute('class') || '') + ':' + (n.getAttribute('data-id') || '')) });
+          }, { sel: SEL, i: t.i });
+          throw new Error(t.what + ' にホバーして枠が出ない ' + dbg);
+        }
+      }
+    }
+    await expect(r, t.what + ' にホバーして枠が出る').toHaveCount(1);
+    return (await r.getAttribute('data-type')) + ':' + (await r.getAttribute('data-id'));
+  };
+  // SVG の要素 (状態の <g>・遷移のラベル・fork/join の棒)。図が縦に長いと下端はプレビューの外なので、
+  // 1 つずつ見える所まで送ってから、その中心にマウスを置く。
+  const SEL = 'g.entity[data-qualified-name] > rect, g.entity[data-qualified-name] > polygon, g.start_entity > ellipse, g.end_entity > ellipse, g.link text, rect[fill="#555555"]';
+  const targets = () => page.evaluate((sel) => {
+    const svg = document.querySelector('#preview-svg svg');
+    const seen = new Set();
+    const out = [];
+    svg.querySelectorAll(sel).forEach((el, i) => {
+      const g = el.closest('g.entity, g.start_entity, g.end_entity');
+      let what;
+      if (el.closest('g.link')) what = 'label:' + el.textContent.trim();
+      else if (g) what = g.getAttribute('data-qualified-name');
+      else what = 'bar' + out.filter((o) => o.what.indexOf('bar') === 0).length;
+      if (g && seen.has(g)) return;
+      if (g) seen.add(g);
+      out.push({ what, i });
+    });
+    return out;
+  }, SEL);
+  const hoverTarget = async (t) => {
+    const b = await page.evaluate((a) => {
+      const el = document.querySelector('#preview-svg svg').querySelectorAll(a.sel)[a.i];
+      el.scrollIntoView({ block: 'center', inline: 'center' });
+      const r = el.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    }, { sel: SEL, i: t.i });
+    await page.mouse.move(3, 3);
+    await page.mouse.move(b.x, b.y);
+  };
+
+  // BLK の最小再現: 宣言の無い状態と、複合状態の子
+  await typeDsl(page, fx('minimal'));
+  await expect(page.locator('#overlay-layer rect[data-type="transition"][data-id="__t_3"]').first()).toBeAttached({ timeout: 20000 });
+  const want1 = {
+    State1: 'state:State1', State2: 'state:State2', 'State3.Sub1': 'state:State3.Sub1', 'State3.Sub2': 'state:State3.Sub2',
+    '.start.': 'pseudo:start@', 'State3..start.State3': 'pseudo:start@State3', 'label:event1': 'transition:__t_1',
+  };
+  await expect(page.locator('#ma-toast')).toBeHidden({ timeout: 15000 });
+  for (const t of await targets()) {
+    if (!want1[t.what]) continue;
+    expect(await hoverAndRead(t), t.what).toBe(want1[t.what]);
+  }
+
+  // choice / fork / join / 名前付き終了、`--->` と `->`
+  await typeDsl(page, fx('pseudo'));
+  await expect(page.locator('#overlay-layer rect[data-type="state"][data-id="join2"]')).toHaveCount(1, { timeout: 20000 });
+  await expect(page.locator('#overlay-layer rect[data-type="transition"][data-id="__t_7"]').first()).toBeAttached();
+  // 図種の切替などで出る通知 (#ma-toast) は下端の要素を覆うので、消えてから指す。
+  await expect(page.locator('#ma-toast')).toBeHidden({ timeout: 15000 });
+  const got = {};
+  for (const t of await targets()) {
+    got[t.what] = await hoverAndRead(t);
+  }
+  expect(got.choice1).toBe('state:choice1');
+  expect(got.end3).toBe('state:end3');
+  expect(got.Worker1).toBe('state:Worker1');
+  expect(got.Worker2).toBe('state:Worker2');
+  expect([got.bar0, got.bar1].sort()).toEqual(['state:fork1', 'state:join2']);
+  expect(got['label:[ok]']).toBe('transition:__t_1');
+  expect(got['label:[ng]']).toBe('transition:__t_2');
+  await expect(page.locator('#overlay-warning')).toBeHidden();
+});
