@@ -3565,7 +3565,7 @@ function initCommandPalette() {
       { id: 'seq-to-activity', title: 'シーケンス図からアクティビティ図を起こす / Sequence to activity', hint: 'Tabs', keywords: ['activity', 'sequence', 'draft', 'あくてぃびてぃ', 'しーけんす', 'おこす', 'したがき'], run: function() { makeActivityFromSequence(); } },
       { id: 'component-draft', title: '定石構成からコンポーネント図を起こす / Component draft', hint: 'Tabs', keywords: ['component', 'draft', 'こんぽーねんと', 'じょうせき', 'おこす', 'したがき'], run: function() { promptComponentDraft(); } },
       { id: 'tab-new', title: '新しい図を開く / New diagram', hint: 'Tabs', keywords: ['new', 'tab', 'あたらしい', 'ず'], button: 'btn-tab-new', run: function() { clickById('btn-tab-new'); } },
-      { id: 'tab-folder', title: '保存フォルダの図を一覧 / Folder', hint: 'Tabs', keywords: ['folder', 'list', 'いちらん', 'ふぉるだ'], button: 'btn-tab-folder', run: function() { clickById('btn-tab-folder'); } },
+      { id: 'tab-folder', title: 'FILES: 保存先を開く / Files: save folder', hint: 'Files', keywords: ['folder', 'files', 'tree', 'list', 'いちらん', 'ふぉるだ', 'ほぞんさき'], button: 'btn-tab-folder', run: function() { clickById('btn-tab-folder'); } },
       { id: 'change-ticket', title: '変更チケットを開く / Change tickets', hint: 'Tabs', keywords: ['ticket', 'change', 'impact', 'ちけっと', 'へんこう', 'つづき', 'しようへんこう'], run: function() { toggleTicketBoard(true); } },
       { id: 'vault', title: '提出物庫を開く / Deliverable vault', hint: 'Tabs', keywords: ['vault', 'export', 'ていしゅつ', 'こ', 'かこ', 'ぜんかい'], run: function() { toggleVault(true); } },
       { id: 'tab-rename', title: '部品名を一括置換 / Bulk rename', hint: 'Tabs', keywords: ['rename', 'replace', 'いっかつ', 'ちかん'], button: 'btn-tab-rename', run: function() { clickById('btn-tab-rename'); } },
@@ -3596,10 +3596,12 @@ function initCommandPalette() {
       { id: 'tab-apply', title: '複数クラスに一括適用 / Bulk apply', hint: 'Tabs', keywords: ['apply', 'bulk', 'いっかつ', 'てきよう'], button: 'btn-tab-apply', run: function() { clickById('btn-tab-apply'); } },
       // BLK-human-20260923-1600 (design 9a): 「⇔ 先輩」を「並べて比較」に改名したので、
       // Ctrl+K も新しい名前で引ける。旧称 (先輩) でも当たるように語を残す。
-      { id: 'tab-senior', title: '並べて比較 (別のフォルダの図) / Side-by-side', hint: 'Compare', keywords: ['compare', 'senior', 'side', 'ならべて', 'ひかく', 'あいて', 'せんぱい', 'ふぉるだ'], button: 'btn-tab-senior', run: function() { openCompareTarget('folder'); } },
+      // 10a: 入口は FILES ツリーの「読むだけ」節にあるので題もそちらに読み替えるが、
+      // 走らせるのは master 側の openCompareTarget('folder') (相手を選ぶ所まで一息で開く)。
+      { id: 'tab-senior', title: 'FILES: 読むだけの図と並べて比較 / Files: compare', hint: 'Files', keywords: ['compare', 'files', 'readonly', 'senior', 'side', 'ならべて', 'ひかく', 'よむだけ', 'あいて', 'せんぱい', 'ふぉるだ'], button: 'btn-tab-senior', run: function() { openCompareTarget('folder'); } },
       // design 9a: 手元の .puml を開く入口は上部バーの Import ▾ へ移した。
       { id: 'import-clipboard', title: 'クリップボードの DSL から開く / Open from clipboard', hint: 'File', keywords: ['clipboard', 'paste', 'import', 'くりっぷ', 'はりつけ', 'ひらく'], run: function() { clickById('imp-clipboard'); } },
-      { id: 'tab-peek', title: '他の保存フォルダを覗く / Peek folder', hint: 'Tabs', keywords: ['peek', 'folder', 'ほかの', 'ふぉるだ'], button: 'btn-tab-peek', run: function() { clickById('btn-tab-peek'); } },
+      { id: 'tab-peek', title: 'FILES: 読むだけのフォルダを足す / Files: read-only folder', hint: 'Files', keywords: ['peek', 'files', 'readonly', 'folder', 'よむだけ', 'ほかの', 'ふぉるだ'], button: 'btn-tab-peek', run: function() { clickById('btn-tab-peek'); } },
       { id: 'tab-drivermap', title: '系統マップを開く / Driver map', hint: 'Tabs', keywords: ['driver', 'map', 'けいとう', 'まっぷ'], button: 'btn-tab-drivermap', run: function() { clickById('btn-tab-drivermap'); } },
       { id: 'tab-design', title: '仕様突合 (design) / Design spec check', hint: 'Tabs', keywords: ['design', 'spec', 'gap', 'しよう', 'とつごう', 'せっけい'], button: 'btn-tab-design', run: function() { clickById('btn-tab-design'); } },
       { id: 'tab-cross', title: '突合ボード / Cross-check board', hint: 'Tabs', keywords: ['cross', 'board', 'audit', 'とつごう', 'ぼーど'], button: 'btn-tab-cross', run: function() { clickById('btn-tab-cross'); } },
@@ -4620,6 +4622,8 @@ function renderTabs() {
   // 統一バッジ (BLK-primary-20260914-1006-friction)。旧称が残っているかは図の中身で
   // 決まるので、タブを組み立て直す機会に数え直す。
   try { renderRenameBadge(); refreshRenameBadge(); } catch (e) {}
+  // FILES ツリー (design 10a) の「開いている図」もタブと同じ機会に合わせる。
+  try { if (window.MA.filesPanel) window.MA.filesPanel.refresh(); } catch (e) {}
 }
 
 // ── 前回保存時点との差分 ──────────────────────────────
@@ -12105,9 +12109,12 @@ function setupTabs() {
     loading.textContent = '読み込み中…';
     panel.appendChild(loading);
     panel.classList.add('open');
-    var rect = btnFolder.getBoundingClientRect();
-    panel.style.left = rect.left + 'px';
-    panel.style.top = (rect.bottom + 2) + 'px';
+    // design 10a: ツリーの中では節の中身としてそのまま流れるので座標は置かない。
+    if (!panel.closest || !panel.closest('#files-panel')) {
+      var rect = btnFolder.getBoundingClientRect();
+      panel.style.left = rect.left + 'px';
+      panel.style.top = (rect.bottom + 2) + 'px';
+    }
     renderFolderPanel();
   });
 
@@ -15287,6 +15294,9 @@ function setupTabs() {
   document.addEventListener('click', function(ev) {
     if (!panel.classList.contains('open')) return;
     if (panel.contains(ev.target) || ev.target === btnFolder) return;
+    // design 10a: 一覧はレール右のツリーの中にある。ツリーの他の節を押した
+    // だけで畳むと、「開いている図」を 1 つ選ぶたびに保存先を開き直すことになる。
+    if (ev.target && ev.target.closest && ev.target.closest('#files-panel')) return;
     // BLK-reviewer-20260914-2106-wish: 可視差分は一覧の行から開く。ここで一覧まで
     // 閉じると、2 枚目を確かめるたびに一覧を開き直すことになる (確かめる図は複数ある)。
     var vm = document.getElementById('svg-visual-modal');
@@ -31947,6 +31957,9 @@ function renderSvg() {
 // ワークスペース復元・自動保存の宛先として既に使われるため、後から入れ替えると
 // 「最初の 1 枚だけ既定のフォルダに保存される」ずれを作る。
 function bootWithSavedPrefs() {
+  // FILES ツリー (design 10a) は server の応答を待たずに出す (畳んだ状態を含め
+  // 画面の骨格なので、遅れて現れると押そうとした所が動く)。
+  try { if (window.MA.filesPanel) window.MA.filesPanel.init(); } catch (e) {}
   var as = window.MA.autoSave;
   if (!as || !as.hydrateFromServer) { init(); return; }
   var started = false;
