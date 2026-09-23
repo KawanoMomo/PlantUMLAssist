@@ -26239,6 +26239,18 @@ function applyOmitAndSave() {
 }
 
 // 保存前に呼ぶ。止めるなら true。止めないときは帯を隠して保存を続けさせる。
+// BLK-migrator-20260923-1809: 開いたときから本文が 1 文字も変わっていないか。
+// 判定の正本は source-lock の指紋 (開いた瞬間に憶えている)。錠を持たない図
+// (自分で作ったタブ) は「開いたまま」ではないので false。
+function _isUnchangedSinceOpen(doc) {
+  var SL = window.MA.sourceLock;
+  if (!SL || !doc || !doc.id || typeof doc.dsl !== 'string') return false;
+  try {
+    var d = SL.decide(doc.id, doc.name, _openDocNames(), doc.dsl);
+    return !!(d && d.action === 'skip');
+  } catch (e) { return false; }
+}
+
 function runSaveGuard(doc) {
   var SG = window.MA.saveGuard;
   if (!SG || !doc || !doc.name) return false;
@@ -26246,13 +26258,16 @@ function runSaveGuard(doc) {
   try {
     // 相手は📂 一覧が読んだ保存フォルダの中身だけ。タブで代用しない —— 開いて
     // いないだけのクラス図を「無い」と読んで no-class を量産するのを避ける。
-    res = SG.check({ doc: doc, folderDocs: _fiFileDocs });
+    res = SG.check({ doc: doc, folderDocs: _fiFileDocs, unchanged: _isUnchangedSinceOpen(doc) });
   } catch (e) { return false; }
   if (!SG.shouldBlock(res)) { hideSaveGuard(); return false; }
   // 同じ顔ぶれを一度「承知」しているなら、二度は止めない。
   if (_sgdAck[doc.name] === SG.signature(res)) { hideSaveGuard(); return false; }
   _sgdPending = { name: doc.name, sig: SG.signature(res) };
   try { renderSaveGuard(res); } catch (e) { return false; }
+  // BLK-migrator-20260923-1809: 止めたことを状態バーにも言う。帯はプレビュー枠の
+  // 中に出るので、大きい図で下へ送られていると「押したのに何も起きない」に見える。
+  try { setSaveStatus('⛔ 保存を止めました: ' + SG.summaryLine(res)); } catch (e) {}
   return true;
 }
 

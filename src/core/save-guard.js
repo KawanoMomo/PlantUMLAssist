@@ -57,15 +57,25 @@
     }).sort().join(',');
   }
 
-  // opts: { doc: { name, dsl, diagramType }, folderDocs: [{ name, dsl }] }
-  // 返り値: { doc, issues, checked, count, clean, noPeers }
+  // opts: { doc: { name, dsl, diagramType }, folderDocs: [{ name, dsl }], unchanged: bool }
+  // 返り値: { doc, issues, checked, count, clean, noPeers, unchanged }
   //   noPeers … 突き合わせる相手 (クラス図) が 1 枚も無い。このときは止めない
   //             (フォルダをまだ読んでいないだけの保存を、全部堰き止めないため)。
+  //   unchanged … 開いたときから本文が 1 文字も変わっていない。このときも止めない。
+  //             BLK-migrator-20260923-1809: 他ツールの .puml を開いて何もせず保存する
+  //             手順が、他人の図のメッセージ文 (`edge -> edge: cache version mappings`)
+  //             を「宣言の無いメソッド呼び出し」と読まれて黙って止まっていた。
+  //             書こうとしているのは開いたままのバイト列なので、この保存で新しく
+  //             生まれる食い違いは無く、止めても直せるものが無い。
   function check(opts) {
     var o = opts || {};
     var doc = o.doc;
     var name = _s(doc && doc.name);
     var empty = { doc: name, issues: [], checked: [], count: 0, clean: true, noPeers: true };
+    if (o.unchanged) {
+      return { doc: name, issues: [], checked: [], count: 0, clean: true,
+               noPeers: false, unchanged: true };
+    }
     var MAa = _ma();
     if (!MAa || !name) return empty;
 
@@ -99,6 +109,7 @@
   function summaryLine(res) {
     var r = res || {};
     if (!shouldBlock(r)) {
+      if (r.unchanged) return '開いたときのままなので、メソッドの突合はしていません';
       if (r.noPeers) return '同じフォルダにクラス図が無いので、メソッドの突合はしていません';
       return _s(r.doc) + ' の呼び出しは、クラス図の宣言と食い違いません';
     }

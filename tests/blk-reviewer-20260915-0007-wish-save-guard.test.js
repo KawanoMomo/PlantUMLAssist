@@ -119,4 +119,23 @@ describe('save-guard — 保存前のメソッド突合', function() {
     const s = sg.summaryLine(sg.check({ doc: SEQ_DOC, folderDocs: [] }));
     expect(s).toContain('突合はしていません');
   });
+
+  // BLK-migrator-20260923-1809: 開いて何も変えずに保存する手順を止めない。
+  // 他人の .puml のメッセージ文はメソッド呼び出しに見えるので、止めると
+  // 「押したのに何も書かれない」になり、しかも直せるものが 1 つも無い。
+  test('開いたときのままの本文なら、指摘が出る図でも止めない', function() {
+    const blocked = sg.check({ doc: SEQ_DOC, folderDocs: [CLASS_DOC] });
+    expect(sg.shouldBlock(blocked)).toBe(true);
+    const res = sg.check({ doc: SEQ_DOC, folderDocs: [CLASS_DOC], unchanged: true });
+    expect(sg.shouldBlock(res)).toBe(false);
+    expect(res.count).toBe(0);
+    expect(res.unchanged).toBe(true);
+    expect(sg.signature(res)).toBe('');
+  });
+
+  test('止めなかった理由を「相手が無い」と取り違えない', function() {
+    const s = sg.summaryLine(sg.check({ doc: SEQ_DOC, folderDocs: [CLASS_DOC], unchanged: true }));
+    expect(s).toContain('開いたときのまま');
+    expect(s).not.toContain('クラス図が無い');
+  });
 });
