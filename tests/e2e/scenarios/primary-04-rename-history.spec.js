@@ -565,11 +565,11 @@ async function dvBoot(page) {
   await gotoApp(page);
 }
 
-// ⇄一括置換 → ◈依存グラフ。不具合対応で primary が実際に通る道。
+// Ctrl+K「依存グラフ」→ ▤ 影響を見る の上段。不具合対応で primary が実際に通る道
+// (BLK-owner-20260923-1949-prune: 依存グラフは ▤ 影響を見る に畳んだ。名前は Ctrl+K に残る)。
 async function openDepGraph(page) {
-  await openRename(page);
-  await page.locator('#btn-rename-depgraph').click();
-  await page.waitForSelector('#dg-modal #dg-ver-summary[data-rows]');
+  await runCmd(page, '依存グラフ');
+  await page.waitForSelector('#ri-modal #dg-ver-summary[data-rows]');
 }
 
 async function pickPart(page, name) {
@@ -659,7 +659,7 @@ test.describe('primary 手順 4: 症状に関わる部品がいつの版から�
     await pickPart(page, 'Spi_Driver');
     await page.locator('#dg-ver-open').click();
     // 版番号つきのタブ名で開く = 今の図を上書きしない。
-    await page.waitForSelector('#dg-modal', { state: 'hidden' });
+    await page.waitForSelector('#ri-modal', { state: 'hidden' });
     await expect(page.locator('.tab .tab-label', { hasText: 'spi_init_sequence@版3' }))
       .toHaveCount(1);
     // 開いた中身はその版のもの。
@@ -815,9 +815,10 @@ test.describe('primary 手順 4: 名前から影響する図を 1 回で引く',
     await clearDir(page).catch(() => {});
   });
 
+  // BLK-owner-20260923-1949-prune: 「名前で図を探す」は ▤ 影響を見る の下段 (置換後が空のときの出現箇所の一覧)。
   async function openNameSearch(page, q) {
     await runCmd(page, '名前で図を探す');
-    await page.waitForSelector('#ns-modal', { state: 'visible' });
+    await page.waitForSelector('#ri-modal', { state: 'visible' });
     if (q != null) {
       await page.fill('#ns-q', q);
       await page.waitForTimeout(300);
@@ -861,7 +862,7 @@ test.describe('primary 手順 4: 名前から影響する図を 1 回で引く',
   test('出現行を押すと、その図のその行へ運ばれる（開き直さない）', async ({ page }) => {
     await openNameSearch(page, 'EnableClock');
     await page.locator('#ns-rows .ns-row[data-name="can_init_sequence"] button.ns-at').first().click();
-    await expect(page.locator('#ns-modal')).toBeHidden();
+    await expect(page.locator('#ri-modal')).toBeHidden();
     await page.waitForTimeout(1200);
     const name = await page.evaluate(() => {
       const doc = window.MA.workspace.getActive();
@@ -879,8 +880,8 @@ test.describe('primary 手順 4: 名前から影響する図を 1 回で引く',
 
   test('引いた名前をそのまま一括置換の「置換前」に渡せる', async ({ page }) => {
     await openNameSearch(page, 'ClockCtrl');
-    await page.locator('#ns-use').click();
-    await expect(page.locator('#ns-modal')).toBeHidden();
+    await page.locator('#dg-use').click();
+    await expect(page.locator('#ri-modal')).toBeHidden();
     await page.waitForSelector('#rename-panel.open');
     await expect(page.locator('#rename-from')).toHaveValue('ClockCtrl');
   });

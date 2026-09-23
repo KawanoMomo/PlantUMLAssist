@@ -3402,7 +3402,6 @@ function init() {
   setupDocSets();
   setupRenameImpact();
   setupDepGraph();
-  setupNameSearch();
   setupTicketBoard();
   setupFixWalk();
   setupVault();
@@ -3693,9 +3692,14 @@ function initCommandPalette() {
       // パレット側の分類・言い換えはメニューに合わせて自動で揃う。
       { id: 'handover-board', title: '引き継ぎチェックリスト（渡してよい図を数える）', hint: 'Handover', keywords: ['handover', '引き継ぎ', 'ひきつぎ', 'checklist', 'チェックリスト', '新人', '置換済み', 'note', 'svg'], button: 'btn-tab-handover', run: function() { openHandoverBoard(); } },
       // BLK-primary-20260917-0523-wish: 仕様変更の影響範囲は「名前 → 使っている図」で引く。
+      // BLK-owner-20260923-1949-prune: 名前は残し、開くのは ⇄ 一括置換の ▤ 影響を見る 1 つ
+      // (その名前が入った状態で開く)。
       { id: 'name-search', title: '名前で図を探す（部品名 / メソッド名）', hint: 'Search',
         keywords: ['search', 'name', 'method', 'xref', 'impact', '名前', '部品', 'メソッド', '検索', '影響', 'どの図'],
-        run: function() { openNameSearch((document.getElementById('rename-from') || {}).value || ''); } },
+        run: function() { openImpactScreen(); } },
+      { id: 'dep-graph', title: '依存グラフ（部品名の参照元・参照先）', hint: 'Search',
+        keywords: ['dependency', 'graph', 'refs', 'impact', 'いぞん', '依存', '参照', '連鎖', '影響'],
+        run: function() { openImpactScreen(); } },
       // BLK-primary-20260918-0549-friction: 資料セットの行の中にしか無かった 2 つを
       // Ctrl+K からも引けるようにする (入口は増やさず、同じ操作を同じ名前で呼ぶ)。
       { id: 'docset-before-after', title: '資料セットの変更前後をまとめて見る / Doc set before-after', hint: 'Deliver', keywords: ['docset', 'set', 'before', 'after', 'review', 'しりょう', 'せっと', 'へんこうぜんご', 'まとめて', 'みくらべ'], run: function() { runDocSetCommand(openDocSetBeforeAfter); } },
@@ -16766,6 +16770,17 @@ function renderRenameImpactBoard() {
   var esc = window.MA.htmlUtils.escHtml;
   var from = (document.getElementById('rename-from') || {}).value || '';
   var to = (document.getElementById('rename-to') || {}).value || '';
+  // BLK-owner-20260923-1949-prune: 置換後が空なら下段は「出現箇所の一覧」(名前で図を探す)。
+  // 見ている名前は下段の名前欄 (開いたときは置換前、空なら上段の依存グラフで選んでいる名前)。
+  var occ = !to;
+  var occEl = document.getElementById('ri-occ');
+  if (occEl) occEl.hidden = !occ;
+  body.hidden = occ;
+  if (occ) {
+    var q = ((document.getElementById('ns-q') || {}).value || '').trim();
+    if (q) from = q;
+    else if (!from) from = _dgName || '';
+  }
   var res = br.impact(_renameImpactDocs(from), from, to);
 
   if (sumEl) sumEl.textContent = br.impactText(res, from, to);
@@ -16776,10 +16791,13 @@ function renderRenameImpactBoard() {
     rosterEl.setAttribute('data-scanned', String(res.scanned));
     rosterEl.setAttribute('data-changed', String(res.docs));
     rosterEl.setAttribute('data-none', String(res.none.length));
+    // 出現箇所の一覧 (置換後が空) では「変更あり / なし」はまだ無い。
+    if (occ) rosterEl.textContent = '';
   }
   var applyBtn = document.getElementById('ri-apply');
   var srcApply = document.getElementById('btn-rename-apply');
   if (applyBtn) applyBtn.disabled = !res.valid || res.docs === 0 || !srcApply || srcApply.disabled;
+  if (occ) { renderNameSearch(); return res; }
 
   // BLK-primary-20260917-0023: 当たらなかった図も「変更なし」として並べる。
   // 影響範囲の確認は、触らなくてよい図を言い切れてはじめて終わる。
@@ -16928,11 +16946,36 @@ function toggleRenameImpact(open) {
   if (!modal) return;
   var want = (open == null) ? (modal.style.display === 'none' || !modal.style.display) : !!open;
   // 閉じるときは描きかけも原寸も畳む (次に開いた画面に前回の図が残らない)。
+  // note 欄は開け閉めのたびに畳む (前に打った文面が次の名前に混ざらない)。
+  var noteBox = document.getElementById('dg-note-box');
+  if (noteBox) noteBox.hidden = true;
   if (!want) { modal.style.display = 'none'; _riSvgSeq++; _riZoomClose(); return; }
+  // BLK-owner-20260923-1949-prune: 上段は部品名の依存グラフ。置換前に打った名前を
+  // そのまま起点にする (打ち直させない)。症状の語も開くたびに選んだ部品名へ戻す。
+  var from = (document.getElementById('rename-from') || {}).value || '';
+  if (from) _dgName = from;
+  _dgVerKw = null;
+  _dgVerLastName = null;
   modal.style.display = 'flex';
+  renderDepGraph();
+  var q = document.getElementById('ns-q');
+  if (q) q.value = from || _dgName || '';
+  _nsBuildIndex();
   renderRenameImpactBoard();
-  var body = document.getElementById('ri-body');
-  if (body) body.scrollTop = 0;
+  var scroll = document.getElementById('ri-scroll');
+  if (scroll) scroll.scrollTop = 0;
+  // 置換前を打たずに開いた (Ctrl+K「名前で図を探す」) ときは、すぐ名前を打てるように。
+  if (!from && q) { q.focus(); q.select(); }
+}
+
+// ▤ 影響を見る を開く唯一の道。保存フォルダぶんが未読なら読んでから出す
+// (開いているタブだけでは「開いていない図への連鎖」がそのまま抜け落ちる)。
+function openImpactScreen() {
+  var show = function() { toggleRenameImpact(true); };
+  // 「開いていないから出てこない」図を「使っていない図」と読み違えないよう、フォルダを先に読む。
+  if (_fiEnabled() || _fiFolderMode()) return loadFolderImpact().then(show, show);
+  show();
+  return Promise.resolve();
 }
 
 function setupRenameImpact() {
@@ -16941,14 +16984,14 @@ function setupRenameImpact() {
   if (!btn || !modal) return;
   btn.addEventListener('click', function(ev) {
     ev.stopPropagation();
-    toggleRenameImpact(true);
+    openImpactScreen();
   });
 
   // 件数の横からも同じ画面へ (経路を 2 つ持つが、開くのは同じボード)。
   var hitsBtn = document.getElementById('btn-rename-hits-impact');
   if (hitsBtn) hitsBtn.addEventListener('click', function(ev) {
     ev.stopPropagation();
-    toggleRenameImpact(true);
+    openImpactScreen();
   });
 
   var closeBtn = document.getElementById('ri-close');
@@ -17446,33 +17489,18 @@ function renderDepGraph() {
   return { graph: graph, view: view, impact: impact };
 }
 
+// BLK-owner-20260923-1949-prune: 依存グラフは ▤ 影響を見る の上段になった。
+// 開け閉めは同じ画面の開け閉め (手当て列の「一覧」・版を開く・札にする から呼ばれる)。
 function toggleDepGraph(open) {
-  var modal = document.getElementById('dg-modal');
-  if (!modal) return;
-  var want = (open == null) ? (modal.style.display === 'none' || !modal.style.display) : !!open;
-  // note 欄は開け閉めのたびに畳む (前に打った文面が次の名前に混ざらない)。
-  var noteBox = document.getElementById('dg-note-box');
-  if (noteBox) noteBox.hidden = true;
-  if (!want) { modal.style.display = 'none'; return; }
-  // 置換前に打った名前をそのまま起点にする (打ち直させない)。
-  var from = (document.getElementById('rename-from') || {}).value || '';
-  if (from) _dgName = from;
-  // 症状の語は開くたびに選んだ部品名へ戻す (前回の語を持ち越さない)。
-  _dgVerKw = null;
-  _dgVerLastName = null;
-  modal.style.display = 'flex';
-  renderDepGraph();
-  var body = document.getElementById('dg-body');
-  if (body) body.scrollTop = 0;
+  toggleRenameImpact(open);
 }
 
 // ── 名前で図を探す (BLK-primary-20260917-0523-wish) ──────────────────────────
 // 仕様変更の影響範囲を洗うとき、指摘.md で対象名を絞ってから保存フォルダの図を
 // 1 枚ずつタブで開いて本文を読む、という手順しか無かった。名前を 1 回打てば
 // 「その名前を使っている図」が出て、行を押せばその図のその行まで運ばれる。
+// BLK-owner-20260923-1949-prune: 別の画面は畳み、▤ 影響を見る の下段 (置換後が空のとき) に出す。
 var _nsIndex = [];
-
-function _nsModal() { return document.getElementById('ns-modal'); }
 
 // 的は開いているタブ + 保存フォルダ。_fiRows は一括置換の読み込みを使い回す
 // (同じフォルダを 2 通りに数えない)。
@@ -17502,7 +17530,7 @@ function _nsBuildIndex() {
       b.setAttribute('data-name', e.name);
       b.addEventListener('click', function() {
         var q = document.getElementById('ns-q');
-        if (q) { q.value = e.name; renderNameSearch(); }
+        if (q) { q.value = e.name; _riSyncName(); }
       });
       top.appendChild(b);
     });
@@ -17514,7 +17542,7 @@ function _nsBuildIndex() {
 function openNameSearchHit(docName, line) {
   var WS = window.MA.workspace;
   if (!WS || !docName) return;
-  toggleNameSearch(false);
+  toggleRenameImpact(false);
   var active = WS.getActive();
   if (!(active && active.name === docName)) saveActiveDoc();
   function show() {
@@ -17607,90 +17635,31 @@ function renderNameSearch() {
   });
 }
 
-function toggleNameSearch(on) {
-  var modal = _nsModal();
-  if (!modal) return;
-  if (!on) { modal.style.display = 'none'; return; }
-  modal.style.display = 'flex';
-  _nsBuildIndex();
-  renderNameSearch();
-  var q = document.getElementById('ns-q');
-  if (q) { q.focus(); q.select(); }
-}
-
-// 開く前に保存フォルダを読む。開いているタブだけを見ると、
-// 「開いていないから出てこない」図を「使っていない図」と読み違える。
-function openNameSearch(seed) {
-  var q = document.getElementById('ns-q');
-  if (q && seed != null && seed !== '') q.value = seed;
-  var WS = window.MA.workspace;
-  if (WS && WS.listFolder && _fiFolderMode()) {
-    return loadFolderImpact().then(function() { toggleNameSearch(true); },
-                                   function() { toggleNameSearch(true); });
+// 下段の名前を打ち替えたら、上段の依存グラフもその名前が図の束にあれば追う。
+function _riSyncName() {
+  var q = ((document.getElementById('ns-q') || {}).value || '').trim();
+  var DG = window.MA.depGraph;
+  if (q && DG && q !== _dgName && DG.build(_dgDocs()).nodes[q]) {
+    _dgName = q;
+    renderDepGraph();
   }
-  toggleNameSearch(true);
-  return Promise.resolve(true);
-}
-
-function setupNameSearch() {
-  var modal = _nsModal();
-  if (!modal) return;
-  var q = document.getElementById('ns-q');
-  if (q) q.addEventListener('input', renderNameSearch);
-  var close = document.getElementById('ns-close');
-  if (close) close.addEventListener('click', function() { toggleNameSearch(false); });
-  modal.addEventListener('click', function(ev) {
-    if (ev.target === modal) toggleNameSearch(false);
-  });
-  document.addEventListener('keydown', function(ev) {
-    if (ev.key === 'Escape' && modal.style.display === 'flex') toggleNameSearch(false);
-  });
-  // 見た名前をそのまま置換の的にする (読んで覚えて打ち直す手順を残さない)。
-  var use = document.getElementById('ns-use');
-  if (use) use.addEventListener('click', function() {
-    var val = (document.getElementById('ns-q') || {}).value || '';
-    if (!val) return;
-    // 先に一覧を閉じ、置換パネルを開いてから入れる。値だけ入れて閉じると、
-    // 利用者は「渡したはずの名前」を探して自分でパネルを開き直すことになる。
-    toggleNameSearch(false);
-    // 置換パネルは「外側のクリック」で閉じる。今まさに押しているこのボタンの
-    // クリックが document まで上がってくるので、その後に開く
-    // (同じクリックで開いて閉じると、名前を渡したのに空のまま出てくる)。
-    window.setTimeout(function() {
-      var panel = document.getElementById('rename-panel');
-      var tab = document.getElementById('btn-tab-rename');
-      if (tab && !(panel && panel.classList.contains('open'))) tab.click();
-      var from = document.getElementById('rename-from');
-      if (!from) return;
-      from.value = window.MA.nameSearch.normalizeQuery(val);
-      from.dispatchEvent(new window.Event('input', { bubbles: true }));
-    }, 0);
-  });
+  renderRenameImpactBoard();
 }
 
 function setupDepGraph() {
-  var btn = document.getElementById('btn-rename-depgraph');
-  var modal = document.getElementById('dg-modal');
-  if (!btn || !modal) return;
-  btn.addEventListener('click', function(ev) {
-    ev.stopPropagation();
-    // 保存フォルダぶんが未読なら読んでから出す。開いているタブだけのグラフでは
-    // 「開いていない図への連鎖」がそのまま抜け落ちる。
-    if (_fiEnabled()) loadFolderImpact().then(function() { toggleDepGraph(true); });
-    else toggleDepGraph(true);
-  });
-
-  var closeBtn = document.getElementById('dg-close');
-  if (closeBtn) closeBtn.addEventListener('click', function() { toggleDepGraph(false); });
-  modal.addEventListener('click', function(ev) {
-    if (ev.target === modal) toggleDepGraph(false);
-  });
-  document.addEventListener('keydown', function(ev) {
-    if (ev.key === 'Escape' && modal.style.display === 'flex') toggleDepGraph(false);
-  });
-
+  // BLK-owner-20260923-1949-prune: 入口・閉じる・Esc は ▤ 影響を見る (setupRenameImpact) が持つ。
   var sel = document.getElementById('dg-name');
-  if (sel) sel.addEventListener('change', function() { _dgName = sel.value; renderDepGraph(); });
+  if (!sel) return;
+  sel.addEventListener('change', function() {
+    _dgName = sel.value;
+    renderDepGraph();
+    // 置換後が空 (出現箇所の一覧) なら、下段も選んだ名前に追従させる。
+    var q = document.getElementById('ns-q');
+    if (q && !((document.getElementById('rename-to') || {}).value)) q.value = _dgName;
+    renderRenameImpactBoard();
+  });
+  var nsQ = document.getElementById('ns-q');
+  if (nsQ) nsQ.addEventListener('input', _riSyncName);
   setupDgVer();
   var hops = document.getElementById('dg-hops');
   if (hops) hops.addEventListener('change', function() {
@@ -17744,14 +17713,25 @@ function setupDepGraph() {
     });
   });
 
+  // 見ている名前 (下段の名前欄。置換後を入れているときは上段で選んだ名前) を置換前に入れる。
   var use = document.getElementById('dg-use');
-  if (use) use.addEventListener('click', function() {
+  if (use) use.addEventListener('click', function(ev) {
+    ev.stopPropagation();
+    var occ = !((document.getElementById('rename-to') || {}).value);
+    var q = ((document.getElementById('ns-q') || {}).value || '').trim();
+    var NS = window.MA.nameSearch;
+    var val = (occ && q) ? (NS ? NS.normalizeQuery(q) : q) : _dgName;
+    toggleRenameImpact(false);
+    if (!val) return;
+    // Ctrl+K から開いた回は置換パネルが閉じている。値だけ入れて閉じると、渡したはずの
+    // 名前を探して自分でパネルを開き直すことになるので、閉じていれば開いてから入れる。
+    var panel = document.getElementById('rename-panel');
+    var tab = document.getElementById('btn-tab-rename');
+    if (tab && !(panel && panel.classList.contains('open'))) tab.click();
     var from = document.getElementById('rename-from');
-    if (from && _dgName) {
-      from.value = _dgName;
-      from.dispatchEvent(new Event('input'));
-    }
-    toggleDepGraph(false);
+    if (!from) return;
+    from.value = val;
+    from.dispatchEvent(new window.Event('input', { bubbles: true }));
   });
 }
 
@@ -17985,7 +17965,7 @@ function renderTicketBoard() {
   if (!_ctRows.length) {
     pick.innerHTML = '';
     body.innerHTML = '<div class="ct-empty">変更チケットはまだありません。'
-      + '⇄ 一括置換 の ◈ 依存グラフ で影響を出し、「この変更をチケットにする」で残せます。</div>';
+      + '⇄ 一括置換 の ▤ 影響を見る で影響を出し、「この変更をチケットにする」で残せます。</div>';
     if (sumEl) sumEl.textContent = CT.listText(_ctRows);
     return null;
   }
@@ -19589,11 +19569,9 @@ function setupBulkRename() {
     if (ev.target && ev.target.id === 'status-rename') return;
     // 影響ボードはこのパネルの続きなので、外側クリック扱いにしない
     // (閉じてしまうと、見た後に置換前後を直す手が消える)。
+    // 依存グラフもこのボードの上段 (見た名前を置換前に入れて戻る)。
     var ri = document.getElementById('ri-modal');
     if (ri && ri.contains(ev.target)) return;
-    // 依存グラフも同じ理由でパネルの続き (見た名前を置換前に入れて戻る)。
-    var dg = document.getElementById('dg-modal');
-    if (dg && dg.contains(ev.target)) return;
     closePanel();
   });
 }

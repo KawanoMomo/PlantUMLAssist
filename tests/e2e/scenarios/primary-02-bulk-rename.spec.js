@@ -41,8 +41,9 @@ test('手順2 一括置換の全図適用で、旧名 SpiDrv が全図から消�
 });
 
 // BLK-primary-20260908-2003-wish: 置換の前に「この名前はどの図から参照されているか」を
-// 各図を開いて目視で推測していた。◈ 依存グラフ で参照元・参照先と、連鎖で影響が
+// 各図を開いて目視で推測していた。依存グラフ で参照元・参照先と、連鎖で影響が
 // 届く図までを開かずに数える。
+// BLK-owner-20260923-1949-prune: 依存グラフは ▤ 影響を見る の上段 (◈ 依存グラフ ボタンは畳んだ)。
 test('手順2 依存グラフが、置換する部品名の参照元・参照先と影響の届く図を出す', async ({ page }) => {
   await S.bootWithSaveDir(page, DIR);
   await S.clearDir(page, DIR);
@@ -54,8 +55,8 @@ test('手順2 依存グラフが、置換する部品名の参照元・参照先
   await page.locator('#rename-from').fill('SpiDrv');
   await page.waitForTimeout(900);
 
-  await page.locator('#btn-rename-depgraph').click();
-  await page.waitForSelector('#dg-modal', { state: 'visible' });
+  await page.locator('#btn-rename-preview').click();
+  await page.waitForSelector('#ri-modal', { state: 'visible' });
   await page.waitForTimeout(600);
 
   // 到達条件その1: 打った名前が中央に立ち、参照元と参照先が矢印で分かれている。
@@ -77,7 +78,7 @@ test('手順2 依存グラフが、置換する部品名の参照元・参照先
   await page.locator('#dg-name').selectOption('Hw_Ctrl');
   await page.waitForTimeout(400);
   await page.locator('#dg-use').click();
-  await expect(page.locator('#dg-modal')).toBeHidden();
+  await expect(page.locator('#ri-modal')).toBeHidden();
   await expect(page.locator('#rename-from')).toHaveValue('Hw_Ctrl');
 });
 
@@ -95,8 +96,8 @@ test('手順2 洗った影響一覧を変更チケットにすると、run を�
   await S.runCommand(page, '一括置換');
   await page.locator('#rename-from').fill('SpiDrv');
   await page.waitForTimeout(900);
-  await page.locator('#btn-rename-depgraph').click();
-  await page.waitForSelector('#dg-modal', { state: 'visible' });
+  await page.locator('#btn-rename-preview').click();
+  await page.waitForSelector('#ri-modal', { state: 'visible' });
   await page.waitForTimeout(600);
 
   const impactCount = await page.locator('#dg-impact tr.dg-doc').count();
@@ -105,7 +106,7 @@ test('手順2 洗った影響一覧を変更チケットにすると、run を�
   // 到達条件その1: 見ているその場で札にできる (閉じて開き直させない)。
   await page.locator('#dg-ticket').click();
   await page.waitForSelector('#ct-modal', { state: 'visible' });
-  await expect(page.locator('#dg-modal')).toBeHidden();
+  await expect(page.locator('#ri-modal')).toBeHidden();
   const items = page.locator('#ct-body tr.ct-item');
   await expect(items).toHaveCount(impactCount);
   await expect(page.locator('#ct-summary')).toContainText('SpiDrv の仕様変更');
@@ -143,8 +144,8 @@ test('手順4 洗った影響が下端に残り、一覧を開き直さずに次
   await S.runCommand(page, '一括置換');
   await page.locator('#rename-from').fill('SpiDrv');
   await page.waitForTimeout(900);
-  await page.locator('#btn-rename-depgraph').click();
-  await page.waitForSelector('#dg-modal', { state: 'visible' });
+  await page.locator('#btn-rename-preview').click();
+  await page.waitForSelector('#ri-modal', { state: 'visible' });
   await page.waitForTimeout(600);
 
   const rows = page.locator('#dg-impact tr.dg-doc');
@@ -155,7 +156,7 @@ test('手順4 洗った影響が下端に残り、一覧を開き直さずに次
   // 到達条件その1: 一覧を「順に手当てする」で列にすると、1 枚目が開き、
   // 下端に何枚目 / 残り何枚が出たまま残る (モーダルは閉じてよい)。
   await page.locator('#dg-walk').click();
-  await expect(page.locator('#dg-modal')).toBeHidden();
+  await expect(page.locator('#ri-modal')).toBeHidden();
   const bar = page.locator('#fw-bar');
   await expect(bar).toBeVisible();
   await expect(page.locator('#fw-label')).toContainText('1 / ' + total + ' 図');
@@ -182,12 +183,12 @@ test('手順4 洗った影響が下端に残り、一覧を開き直さずに次
   // 到達条件その3: 一覧に戻ると、どこまで手当てしたかが行に出ている
   // (同じ図を二度開かない)。列はバーに残ったまま。
   await page.locator('#fw-list').click();
-  await page.waitForSelector('#dg-modal', { state: 'visible' });
+  await page.waitForSelector('#ri-modal', { state: 'visible' });
   await page.waitForTimeout(600);
   await expect(page.locator('#dg-impact tr.dg-doc[data-fixed="1"]')).toHaveCount(1);
   await expect(page.locator('#dg-impact tr.dg-doc[data-fixed="1"]')).toContainText(docs[0]);
   await expect(page.locator('#dg-impact tr.dg-doc[data-current="1"]')).toContainText(docs[1]);
-  await page.locator('#dg-close').click();
+  await page.locator('#ri-close').click();
   await expect(bar).toBeVisible();
 });
 
@@ -397,8 +398,8 @@ test('手順4 依存グラフの影響先すべてに、同じ note を 1 回で
   await S.runCommand(page, '一括置換');
   await page.locator('#rename-from').fill('SpiDrv');
   await page.waitForTimeout(900);
-  await page.locator('#btn-rename-depgraph').click();
-  await page.waitForSelector('#dg-modal', { state: 'visible' });
+  await page.locator('#btn-rename-preview').click();
+  await page.waitForSelector('#ri-modal', { state: 'visible' });
   await page.waitForTimeout(600);
 
   const rows = page.locator('#dg-impact tr.dg-doc');
