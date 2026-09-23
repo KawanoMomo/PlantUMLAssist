@@ -946,6 +946,10 @@ window.MA.modules.plantumlState = (function() {
       }
     }
 
+    // BLK-migrator-20260923-2312: 図の題 (title) にも本文の行を指す枠を置く (class / component と同じ)。
+    // 題にホバーしても何も出ない / 下の複合状態の枠が出る、をやめる。
+    if (OB.addUnclaimed) OB.addUnclaimed(svgEl, overlayEl, [], 'g.title');
+
     // BLK-human-20260912-2130: 小さい当たり判定を手前に。共通実装 (src/core)
     OB.raiseSmallestLast(overlayEl);
   }

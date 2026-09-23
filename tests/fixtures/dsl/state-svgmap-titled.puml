@@ -1,0 +1,11 @@
+@startuml
+title State Diagram
+[*] --> State1
+State1 --> Active
+state Active {
+  [*] -> NumLockOff
+  NumLockOff --> NumLockOn : EvNumLockPressed
+  --
+  [*] -> CapsLockOff
+}
+@enduml

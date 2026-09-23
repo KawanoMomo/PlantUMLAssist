@@ -571,8 +571,10 @@ test('migrator 手順 4 — package / cloud / database / folder で入れ子に�
 // BLK-migrator-20260923-1909 差し戻し 1 回目: 実物を開いて保存し終えた保存フォルダに中身の同じ図の組が
 // あると、保存のたびに「保存の記録」の帯が図の上に出て図を下へ押す。当たり判定の層は図が余白 16px の
 // 位置にあると決め打ちしていたので、帯の高さだけ上にずれ、次に開いた図で枠が出ない / 隣の枠が出た
-// (migrator の実測で class-ex2 2/23、component-ex 3/25)。帯が出たまま次の図を開いても本人の枠が出ること。
-test('migrator 手順 4 — 保存の帯が図の上に出たまま次の component 図を開いても、部品と入れ物に本人の枠が出る', async ({ page }) => {
+// (migrator の実測で class-ex2 2/23、component-ex 3/25)。帯が図を押していても本人の枠が出ること。
+// BLK-migrator-20260923-2312 差し戻し 1 回目: 前の図の帯が次の図を開いても出たままだと、縦に長い図の下の方が
+// 画面の外へ押し出されてホバーが届かない (state-ex2 11/25)。保存時チェックの帯と同じく、次の図を開いたら引っ込む。
+test('migrator 手順 4 — 前の図の保存の帯は次の図を開くと引っ込み、その図の保存で帯が出て図を押しても、部品と入れ物に本人の枠が出る', async ({ page }) => {
   const dir = dirFor(__filename) + '/band-shift';
   const abs = path.join(absDirFor(__filename), 'band-shift');
   fs.rmSync(abs, { recursive: true, force: true });
@@ -617,8 +619,14 @@ test('migrator 手順 4 — 保存の帯が図の上に出たまま次の compon
   ].join(String.fromCharCode(10)));
   await openVia(comp);
   await expect(page.locator('#overlay-layer rect[data-type="component"]')).toHaveCount(3, { timeout: 20000 });
-  // 帯は出たまま、図はその分だけ下にある (この状態で当たり判定が図に重なっていること)。
-  await expect(page.locator('#save-swap-overlay')).toBeVisible();
+  // 前の図の帯は引っ込み、図は余白どおりの位置に戻る。
+  await expect(page.locator('#save-swap-overlay')).toBeHidden();
+  expect(await page.evaluate(() => document.getElementById('preview-svg').offsetTop)).toBeLessThan(40);
+  // この図を保存すると帯がまた出て、図はその分だけ下へ押される (この状態で当たり判定が図に重なっていること)。
+  await page.locator('#editor').click();
+  await page.keyboard.press('Control+s');
+  await expect(page.locator('#save-swap-overlay')).toBeVisible({ timeout: 15000 });
+  await expect(page.locator('#overlay-layer rect[data-type="component"]')).toHaveCount(3, { timeout: 20000 });
   const shift = await page.evaluate(() => {
     const s = document.getElementById('preview-svg').getBoundingClientRect();
     const o = document.getElementById('overlay-layer').getBoundingClientRect();
@@ -852,4 +860,27 @@ test('migrator 手順 4 — 宣言の無い状態・choice / fork / join・`->` 
   expect(got['label:[ok]']).toBe('transition:__t_1');
   expect(got['label:[ng]']).toBe('transition:__t_2');
   await expect(page.locator('#overlay-warning')).toBeHidden();
+});
+
+// BLK-migrator-20260923-2312 差し戻し 1 回目: state 図の題 (title) にホバーしても枠が出ない / 下の枠が出た。
+// class / component と同じく、題にも本文の title 行を指す枠が出る。
+test('migrator 手順 4 — 題のある state 図で、題にホバーすると title 行を指す枠が出る', async ({ page }) => {
+  await bootPlain(page);
+  await typeDsl(page, [
+    '@startuml',
+    "'skinparam BackgroundColor transparent",
+    'title State Diagram',
+    '[*] --> State1',
+    'State1 --> Active',
+    'state Active {',
+    '  [*] -> NumLockOff',
+    '  NumLockOff --> NumLockOn : EvNumLockPressed',
+    '}',
+    '@enduml',
+  ].join(String.fromCharCode(10)));
+  await expect(page.locator('#overlay-layer rect[data-type="state"][data-id="State1"]')).toHaveCount(1, { timeout: 20000 });
+  const { hit } = await hoverHit(page, 'State Diagram');
+  expect(hit, '題にホバーして title 行の枠が出る').toEqual({ type: 'source-line', line: '3', hover: true });
+  const s1 = await hoverHit(page, 'State1');
+  expect(s1.hit, 'State1 は今までどおり本人の枠').toEqual({ type: 'state', line: '4', hover: true });
 });
