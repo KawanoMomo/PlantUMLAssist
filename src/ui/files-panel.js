@@ -242,6 +242,7 @@ window.MA.filesPanel = (function() {
     });
     var c = $('files-count-target');
     if (c) c.textContent = groups.length ? String(entries.length) : '';
+    _gitMarks();
   }
 
   // ── 件数 (畳んだままでも読める) ───────────────────────────────────────
@@ -280,6 +281,12 @@ window.MA.filesPanel = (function() {
     renderParts();
     refreshSummary();
     syncTargetCaret();
+    _gitMarks();
+  }
+
+  // 保存先が Git なら、行を描き直すたびにファイル名の右の M / A を付け直す (design 10c)。
+  function _gitMarks() {
+    try { if (window.MA.gitUi) window.MA.gitUi.applyMarks(); } catch (e) { /* 印が無くても一覧は動く */ }
   }
 
   // ── 初期化 ───────────────────────────────────────────────────────────

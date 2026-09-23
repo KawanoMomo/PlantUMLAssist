@@ -151,6 +151,59 @@ html, body {
   border: none; background: none; padding: 3px 6px 3px 16px; cursor: pointer;
 }
 /* ツリーに入れた #folder-panel は浮かせず、節の中身としてそのまま流す。 */
+/* BLK-human-20260923-1702 (design 10c): GIT 欄・この図の履歴・比較する相手を選ぶ */
+#files-panel [data-files-section="git"][hidden] { display: none; }
+#files-body-git { padding: 2px 8px 6px; font-size: 11px; }
+#files-body-git .git-head-row, #files-body-git .git-ops, #files-body-git .git-history-bar { display: flex; align-items: center; gap: 4px; margin: 2px 0; }
+#files-body-git #git-branch { flex: 1 1 auto; font-family: ui-monospace, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#files-body-git #git-branch-select { flex: 1 1 auto; min-width: 0; font-size: 11px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border); }
+#files-body-git button.git-mini { font-size: 10px; padding: 1px 5px; background: transparent; color: var(--text-secondary); border: 1px solid var(--border); border-radius: 3px; cursor: pointer; }
+#files-body-git button.git-mini:hover { color: var(--text-primary); background: var(--bg-tertiary); }
+#files-body-git .git-sub { color: var(--text-secondary); margin-top: 6px; }
+#files-body-git .git-history-bar span { flex: 1 1 auto; }
+#files-body-git .git-change { display: flex; gap: 6px; padding: 1px 0; min-width: 0; }
+#files-body-git .git-change-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#files-body-git .git-code { flex: 0 0 auto; font-weight: 600; width: 10px; }
+#files-body-git .git-code-M, #files-panel [data-git="M"]::after { color: #d29922; }
+#files-body-git .git-code-A, #files-panel [data-git="A"]::after { color: #3fb950; }
+#files-body-git .git-code-D, #files-panel [data-git="D"]::after { color: #f85149; }
+#files-panel [data-git]::after { content: attr(data-git); margin-left: 4px; font-size: 9px; font-weight: 600; flex: 0 0 auto; }
+#files-body-git #git-message { width: 100%; box-sizing: border-box; margin-top: 4px; font-size: 11px; resize: vertical; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 3px; }
+#files-body-git #git-commit { width: 100%; margin-top: 3px; font-size: 11px; background: var(--accent); color: #fff; border: 1px solid var(--accent); border-radius: 3px; cursor: pointer; }
+#files-body-git #git-commit:disabled { opacity: 0.45; cursor: default; }
+#files-body-git #git-result { color: var(--text-secondary); }
+#files-body-git #git-result.bad { color: #f85149; }
+#files-body-git .git-commit-row { display: flex; align-items: center; gap: 4px; padding: 2px 0; border-top: 1px solid var(--border); }
+#files-body-git .git-commit-row.is-compared .git-commit-msg { color: var(--accent); }
+#files-body-git .git-commit-body { flex: 1 1 auto; min-width: 0; }
+#files-body-git .git-commit-msg, #files-body-git .git-commit-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#files-body-git .git-commit-meta { color: var(--text-secondary); font-size: 9px; }
+#files-body-git .git-history-compare { flex: 0 0 auto; font-size: 10px; padding: 1px 6px; background: transparent; color: var(--accent); border: 1px solid var(--accent); border-radius: 3px; cursor: pointer; }
+#files-body-git .git-empty { color: var(--text-secondary); padding: 2px 0; }
+#files-body-git #git-scope { color: var(--text-secondary); font-size: 9px; margin-top: 6px; line-height: 1.4; }
+#git-pick-modal { position: fixed; z-index: 3000; width: 360px; max-height: 60vh; display: flex; flex-direction: column; gap: 4px; padding: 8px; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 6px 24px rgba(0,0,0,.35); font-size: 12px; }
+#git-pick-modal[hidden] { display: none; }
+#git-pick-modal .git-pick-head { display: flex; align-items: center; gap: 6px; }
+#git-pick-modal #git-pick-file { flex: 1 1 auto; color: var(--text-secondary); }
+#git-pick-modal #git-pick-close { background: transparent; color: var(--text-secondary); border: 0; cursor: pointer; }
+#git-pick-modal #git-pick-tabs { display: flex; gap: 4px; }
+#git-pick-modal .git-pick-tab { font-size: 11px; padding: 2px 8px; background: transparent; color: var(--text-secondary); border: 1px solid var(--border); border-radius: 10px; cursor: pointer; }
+#git-pick-modal .git-pick-tab[aria-pressed="true"] { color: var(--text-primary); border-color: var(--accent); }
+#git-pick-modal #git-pick-filter { font-size: 12px; padding: 3px 6px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 3px; }
+#git-pick-modal #git-pick-list { overflow-y: auto; }
+#git-pick-modal .git-pick-row { display: flex; width: 100%; text-align: left; gap: 6px; padding: 4px 6px; background: transparent; color: var(--text-primary); border: 0; border-bottom: 1px solid var(--border); cursor: pointer; }
+#git-pick-modal .git-pick-row:hover { background: var(--bg-tertiary); }
+#git-pick-modal .git-pick-body { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; }
+#git-pick-modal .git-pick-meta { color: var(--text-secondary); font-size: 10px; }
+#git-pick-modal .git-pick-stat { flex: 0 0 auto; color: var(--text-secondary); font-size: 10px; }
+#senior-git { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; min-width: 0; padding: 2px 6px; }
+#senior-git[hidden], #senior-mode[hidden], #senior-dir[hidden] { display: none; }
+#senior-git #senior-git-pick { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#senior-git #senior-git-sides { font-size: 10px; color: var(--text-secondary); white-space: nowrap; }
+#senior-git #senior-git-diffonly[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+#senior-dsl .sg-line { white-space: pre; }
+#senior-dsl .sg-del { background: rgba(248,81,73,.18); color: #f85149; }
+#senior-dsl .sg-add { background: rgba(63,185,80,.18); color: #3fb950; }
 #files-panel #folder-panel {
   position: static; z-index: auto; max-height: none; min-width: 0;
   width: 100%; box-sizing: border-box;
@@ -7180,11 +7233,42 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button type="button" class="files-sec-head" id="files-sec-git" aria-expanded="false"
                 aria-controls="files-body-git"><span class="files-caret" aria-hidden="true">▸</span><span
                 class="files-sec-label">GIT</span><span class="files-sec-count" id="files-count-git"></span></button>
-        <div class="files-sec-body" id="files-body-git"></div>
+        <!-- BLK-human-20260923-1702 (design 10c): 保存先が Git のときだけ出る。
+             ブランチ・変更・コミットと「この図の履歴」。取得・送信・ブランチ切替は押したときだけ動く。 -->
+        <div class="files-sec-body" id="files-body-git">
+          <div class="git-head-row">
+            <span id="git-branch"></span>
+            <button type="button" id="git-refresh" class="git-mini" title="Git の状態を読み直す (通信しません)">⟳</button>
+          </div>
+          <div class="git-ops">
+            <select id="git-branch-select" aria-label="ブランチ切り替え" title="ブランチ切り替え"></select>
+            <button type="button" id="git-pull" class="git-mini" title="取得 (pull --ff-only)。押したときだけ通信します">取得</button>
+            <button type="button" id="git-push" class="git-mini" title="送信 (push)。押したときだけ通信します">送信</button>
+          </div>
+          <div class="git-sub" id="git-changes-head">変更 0</div>
+          <div id="git-changes"></div>
+          <textarea id="git-message" rows="2" placeholder="コミットメッセージ" aria-label="コミットメッセージ"></textarea>
+          <button type="button" id="git-commit" disabled>コミット</button>
+          <div id="git-result" role="status"></div>
+          <div class="git-sub git-history-bar"><span id="git-history-head">この図の履歴</span>
+            <button type="button" id="git-pick-open" class="git-mini" title="比較する相手を選ぶ">相手を選ぶ…</button></div>
+          <div id="git-history"></div>
+          <div id="git-scope"></div>
+        </div>
       </section>
     </div>
     <!-- 下端に出していた「12 図 未反映 1 控え 1」はこの 1 行に -->
     <div class="files-summary" id="files-summary" role="status"></div>
+  </div>
+
+  <!-- BLK-human-20260923-1702 (design 10c): 比較する相手を選ぶ。先頭は作業中 (未コミット)。 -->
+  <div id="git-pick-modal" hidden role="dialog" aria-label="比較する相手を選ぶ">
+    <div class="git-pick-head"><strong>比較する相手を選ぶ</strong> <span id="git-pick-file"></span>
+      <button type="button" id="git-pick-close" title="閉じる">×</button></div>
+    <div id="git-pick-tabs" role="group" aria-label="相手の種類"></div>
+    <input id="git-pick-filter" type="search" autocomplete="off" spellcheck="false"
+           placeholder="⌕ メッセージ・作成者・ハッシュで絞り込む" aria-label="メッセージ・作成者・ハッシュで絞り込む">
+    <div id="git-pick-list"></div>
   </div>
 
   <div id="app-body">
@@ -7906,6 +7990,15 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         </span>
         <button type="button" id="senior-close" title="この枠を閉じる">×</button>
       </div>
+      <!-- BLK-human-20260923-1702 (design 10c): 相手が Git のコミットのときの見出し。
+           相手の名前を押すと相手選びがその場で開き、◀ ▶ で 1 コミットずつ送れる。 -->
+      <div id="senior-git" hidden>
+        <button type="button" id="senior-git-pick" title="比較する相手を選ぶ"></button>
+        <button type="button" id="senior-git-prev" title="1 つ古いコミット">◀</button>
+        <button type="button" id="senior-git-next" title="1 つ新しいコミット">▶</button>
+        <span id="senior-git-sides"></span>
+        <button type="button" id="senior-git-diffonly" aria-pressed="false" title="作業中と違う行だけを出す">差分だけ</button>
+      </div>
       <!-- 初めて開いたときだけ「この枠は何か」を 1 行出す (BLK-human-20260915-1203) -->
       <div id="senior-first-note" hidden></div>
       <div id="senior-notice"></div>
@@ -8538,6 +8631,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/file-tree.js"></script>
 <script src="src/app.js"></script>
 <script src="src/ui/files-panel.js"></script>
+<script src="src/core/git-panel.js"></script>
+<script src="src/ui/git-ui.js"></script>
 <!-- BLK-primary-20260907-0923-wish: 変更サマリボード。変わった図を全件、変更前後で並べる -->
 <div id="rd-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="rd-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:720px;max-width:1080px;max-height:88vh;overflow-y:auto;"></div>

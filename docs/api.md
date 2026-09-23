@@ -85,6 +85,14 @@ curl -sS -X POST http://127.0.0.1:8766/verify-svg -H "Content-Type: application/
 | `GET /version-search` | `?dir=&q=` | 保存フォルダの全図の版から部品名を探す (混入点の材料) |
 | `GET /version-diff` | `?dir=&type=[&stamp=]` | 1 枚の図の「その版」と「直前の版」の本文を組で返す (全文差分の材料) |
 | `GET /peek-dirs` | — | 保存フォルダの候補を覗く |
+| `GET /git-status` | `?dir=` | 保存先が Git 作業木なら `{repo, branch, ahead, behind, changes:[{code, file, name}]}`。作業木でなければ `{repo:false}`。読むだけで通信しない |
+| `GET /git-log` | `?dir=&file=` | その図 (file 省略で保存先全体) に関係するコミット `{commits:[{hash, short, author, date, message, tags, head, added, removed}]}` |
+| `GET /git-refs` | `?dir=` | ブランチとタグ `{current, branches, tags}` |
+| `GET /git-show` | `?dir=&file=&rev=` | rev 時点の `{file}.puml` の本文 `{text}`。無ければ 404 |
+| `POST /git-commit` | `{dir, message}` | 保存先の変更を全部載せてコミット `{ok, short}`。失敗は 409 `{error}` |
+| `POST /git-pull` | `{dir}` | 取得 (`pull --ff-only`)。画面で押したときだけ呼ぶ |
+| `POST /git-push` | `{dir}` | 送信 (`push`)。画面で押したときだけ呼ぶ。認証は OS の git |
+| `POST /git-checkout` | `{dir, branch}` | ブランチ切り替え |
 | `GET /peek-notes` | `?dir=` | 隣のフォルダに置かれた指摘 (`.md`) を読む |
 | `GET /name-registry` | `?dir=` | 保存フォルダの**親**にある正式表記の登録簿 (`_names.json`。3 人で共有) |
 | `POST /name-registry` | `{dir, entries}` | 正式表記の登録簿を丸ごと置き換える |

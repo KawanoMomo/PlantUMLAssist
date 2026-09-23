@@ -644,6 +644,8 @@ function init() {
     // 打つたびに引き直す (BLK-reviewer-20260915-2346-wish)。
     try { renderLiveDiffChip(); } catch (e) {}
     try { renderVersionBadge(); } catch (e) {}
+    // Git のコミットを並べている間は、作業中との色付けも打つたびに追う (design 10c)。
+    try { if (window.MA.appGit) window.MA.appGit.refreshDiff(); } catch (e) {}
     // BLK-junior-20260907-1403-wish: 「見てもらいながらその場で直す」ので、
     // 指摘は打つたびに引き直す。
     try { renderReviewBadge(); } catch (e) {}
@@ -3400,6 +3402,7 @@ function init() {
   setupLineage();
   setupPeekFolder();
   setupSeniorPane();
+  setupSeniorGit();
   setupPinPanel();
   setupPinInbox();
   setupNameAudit();
@@ -4445,6 +4448,8 @@ function saveActiveDoc() {
       try { updateTopSourceLock(); } catch (e) {}
       if (d.name !== doc.name) doc = { id: doc.id, name: d.name, diagramType: doc.diagramType, dsl: doc.dsl };
       window.MA.workspace.saveToFile(_withSourceEol(doc), cfg.fileDir);
+      // 保存先が Git なら、変更 (M / A) の数え直しを予約する (design 10c)。
+      try { if (window.MA.gitUi) window.MA.gitUi.refreshSoon(); } catch (e) {}
       // 届いた先を状態バーにも揃える (BLK-primary-20260914-2206)。
       if (window.MA.autoSave && window.MA.autoSave.noteFileWritten) {
         window.MA.autoSave.noteFileWritten(doc.name, doc.diagramType);
@@ -4625,6 +4630,8 @@ function renderTabs() {
   try { renderRenameBadge(); refreshRenameBadge(); } catch (e) {}
   // FILES ツリー (design 10a) の「開いている図」もタブと同じ機会に合わせる。
   try { if (window.MA.filesPanel) window.MA.filesPanel.refresh(); } catch (e) {}
+  // 「この図の履歴」は開いている図で変わる (design 10c)。
+  try { if (window.MA.gitUi) window.MA.gitUi.onActiveChanged(); } catch (e) {}
 }
 
 // ── 前回保存時点との差分 ──────────────────────────────
@@ -11017,6 +11024,7 @@ function openCompareTarget(id) {
   if (!CE) return Promise.resolve(false);
   var route = CE.routeOf(id);
   if (!route) return Promise.resolve(false);
+  clearSeniorGit();
   _compareTarget = route.target;
   renderCompareTargetRow();
   // 面は 1 つなので、相手を切り替えたらもう一方の枠は閉じる
@@ -11312,6 +11320,7 @@ function syncSeniorCounterpart() {
 function selectSeniorDir(dir) {
   var el = _seniorEls();
   var WS = window.MA.workspace;
+  clearSeniorGit();
   _seniorSave({ dir: dir });
   _seniorNames = [];
   _seniorName = '';
@@ -11347,7 +11356,8 @@ function toggleSeniorPane(open) {
   }
   _seniorSave({ open: !!open });
   renderSeniorStatus();
-  if (!open) return Promise.resolve(true);
+  if (!open) { clearSeniorGit(); return Promise.resolve(true); }
+  if (_seniorGit) return Promise.resolve(renderSeniorGit());
   return _ensurePeekDirs().then(function() {
     renderSeniorDirs();
     var st = _seniorState();
@@ -11389,6 +11399,8 @@ function showSeniorFirstNote() {
 function syncSeniorPane() {
   var el = _seniorEls();
   if (!el.pane || el.pane.hidden) { _seniorRefreshPick(); return; }
+  // Git のコミットを相手にしている間は、同じコミットの「今開いている図」へ入れ替える。
+  if (_seniorGit) { if (_seniorGit.name !== _activeDocName()) renderSeniorGit(); return; }
   if (_seniorState().mode === 'once' && _seniorName) { renderSeniorStatus(); return; }
   syncSeniorCounterpart();
 }
@@ -11432,6 +11444,192 @@ function setupSeniorPane() {
   // 前回開いたままなら、次に開いたときも開いたままにする (据え置きが値打ちなので)。
   if (_seniorState().open) toggleSeniorPane(true);
   else _seniorPrime();
+}
+
+// ── Git のコミットを比較相手にする (BLK-human-20260923-1702, design 10c) ─────
+// 保存先が Git のとき、FILES ツリーの「この図の履歴」の「比較」や「比較する相手を選ぶ」で
+// 選んだコミット時点の図を、読むだけのフォルダと同じ右の枠 (#senior-pane) に並べる。
+// 見出しの相手名を押すと相手選びがその場で開き、◀ ▶ で 1 コミットずつ送れる。
+// 送ると枠の中の差分の色付けもそのコミットとの差に変わる。
+var _seniorGit = null;  // { commits, hash, name, diffOnly, text }
+
+function _seniorGitEls() {
+  return {
+    box: document.getElementById('senior-git'),
+    pick: document.getElementById('senior-git-pick'),
+    prev: document.getElementById('senior-git-prev'),
+    next: document.getElementById('senior-git-next'),
+    sides: document.getElementById('senior-git-sides'),
+    diffOnly: document.getElementById('senior-git-diffonly'),
+  };
+}
+
+function _seniorGitCommit() {
+  var GP = window.MA.gitPanel;
+  if (!_seniorGit || !GP) return null;
+  if (!_seniorGit.hash) return { hash: '', short: '作業中', message: '今の編集内容' };
+  var i = GP.indexOf(_seniorGit.commits, _seniorGit.hash);
+  return i >= 0 ? _seniorGit.commits[i] : { hash: _seniorGit.hash, short: _seniorGit.hash.slice(0, 7), message: '' };
+}
+
+// 枠の見出しを Git の相手用に切り替える (フォルダ選びと追従の切替は Git では使わない)。
+function _seniorGitHead(on) {
+  var g = _seniorGitEls();
+  var el = _seniorEls();
+  if (g.box) g.box.hidden = !on;
+  if (el.dir) el.dir.hidden = !!on;
+  var mode = document.getElementById('senior-mode');
+  if (mode) mode.hidden = !!on;
+  if (el.pane) el.pane.setAttribute('data-compare', on ? 'git' : 'folder');
+}
+
+function clearSeniorGit() {
+  if (!_seniorGit) return;
+  _seniorGit = null;
+  _seniorGitHead(false);
+  var el = _seniorEls();
+  if (el.dsl) el.dsl.textContent = '';
+  if (el.svg) el.svg.textContent = '';
+  _seniorName = '';
+}
+
+// commit: 比べるコミット (hash が空なら作業中)。commits: ◀ ▶ で送る並び (この図の履歴)。
+function showSeniorGitRev(commit, commits) {
+  var el = _seniorEls();
+  if (!el.pane) return Promise.resolve(false);
+  _seniorGit = {
+    commits: Array.isArray(commits) ? commits : (_seniorGit ? _seniorGit.commits : []),
+    hash: (commit && commit.hash) || '',
+    name: '',
+    diffOnly: _seniorGit ? _seniorGit.diffOnly : false,
+    text: '',
+  };
+  if (el.pane.hidden) return toggleSeniorPane(true);
+  return Promise.resolve(renderSeniorGit());
+}
+
+function _seniorGitLines(commitText) {
+  var LD = window.MA.liveDiff;
+  var rows = LD ? LD.rows(commitText, mmdText) : [];
+  return rows;
+}
+
+function renderSeniorGit() {
+  var el = _seniorEls();
+  var g = _seniorGitEls();
+  var GP = window.MA.gitPanel;
+  if (!_seniorGit || !GP) return Promise.resolve(false);
+  _seniorGitHead(true);
+  var c = _seniorGitCommit();
+  var name = _activeDocName();
+  var stem = String(name || '').replace(/\.puml$/i, '');
+  _seniorGit.name = name;
+  _seniorName = '';
+  if (g.pick) {
+    g.pick.textContent = GP.paneTitle(c) + ' ▾';
+    g.pick.setAttribute('data-hash', c.hash || '');
+  }
+  if (g.sides) g.sides.textContent = GP.sidesLabel(c);
+  if (g.prev) g.prev.disabled = !c.hash || !GP.step(_seniorGit.commits, c.hash, -1);
+  if (g.next) g.next.disabled = !c.hash || !GP.step(_seniorGit.commits, c.hash, 1);
+  if (g.diffOnly) g.diffOnly.setAttribute('aria-pressed', _seniorGit.diffOnly ? 'true' : 'false');
+  var want = _seniorGit.hash;
+  if (el.notice) {
+    el.notice.textContent = c.hash
+      ? ('コミット ' + GP.paneTitle(c) + ' 時点の ' + (name || '図') + '（読むだけ）')
+      : ('作業中の ' + (name || '図') + '（未コミット）');
+  }
+  if (el.dsl) el.dsl.textContent = '読み込み中…';
+  var load = !c.hash
+    ? Promise.resolve(mmdText)
+    : window.fetch('/git-show?dir=' + encodeURIComponent(_wsFileDir()) + '&file=' + encodeURIComponent(stem)
+        + '&rev=' + encodeURIComponent(c.hash))
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(d) { return d && typeof d.text === 'string' ? d.text : null; })
+      .catch(function() { return null; });
+  return load.then(function(text) {
+    if (!_seniorGit || _seniorGit.hash !== want) return false;
+    if (typeof text !== 'string') {
+      _seniorGit.text = '';
+      if (el.dsl) el.dsl.textContent = 'このコミットには ' + (name || 'この図') + ' がありません';
+      if (el.svg) el.svg.textContent = '';
+      return false;
+    }
+    _seniorGit.text = text;
+    renderSeniorGitDsl();
+    if (!el.svg) return true;
+    return renderDslToSvg(text).then(function(svg) {
+      if (!_seniorGit || _seniorGit.hash !== want || !el.svg) return false;
+      el.svg.innerHTML = svg;
+      return true;
+    }).catch(function() {
+      if (el.svg) el.svg.textContent = '図の描画に失敗しました (本文は下に出ています)';
+      return false;
+    });
+  });
+}
+
+// 本文に作業中との差を色で付ける (このコミットにだけある行 = 赤、作業中にだけある行 = 緑)。
+// 「差分だけ」では変わった行だけを出す。
+function renderSeniorGitDsl() {
+  var el = _seniorEls();
+  if (!el.dsl || !_seniorGit) return;
+  var rows = _seniorGitLines(_seniorGit.text);
+  el.dsl.textContent = '';
+  var shown = 0;
+  rows.forEach(function(r) {
+    if (_seniorGit.diffOnly && r.kind === 'same') return;
+    if (!_seniorGit.diffOnly && r.kind === 'add') return;
+    var line = document.createElement('div');
+    line.className = 'sg-line sg-' + r.kind;
+    line.textContent = (r.kind === 'del' ? '− ' : (r.kind === 'add' ? '+ ' : '  ')) + r.text;
+    el.dsl.appendChild(line);
+    shown++;
+  });
+  if (!shown) el.dsl.textContent = _seniorGit.diffOnly ? '作業中と同じ本文です' : '';
+}
+
+function stepSeniorGit(dir) {
+  var GP = window.MA.gitPanel;
+  if (!_seniorGit || !GP) return Promise.resolve(false);
+  var n = GP.step(_seniorGit.commits, _seniorGit.hash, dir);
+  if (!n) return Promise.resolve(false);
+  _seniorGit.hash = n.hash;
+  return renderSeniorGit();
+}
+
+function setupSeniorGit() {
+  var g = _seniorGitEls();
+  if (g.prev) g.prev.addEventListener('click', function() { stepSeniorGit(-1); });
+  if (g.next) g.next.addEventListener('click', function() { stepSeniorGit(1); });
+  if (g.diffOnly) {
+    g.diffOnly.addEventListener('click', function() {
+      if (!_seniorGit) return;
+      _seniorGit.diffOnly = !_seniorGit.diffOnly;
+      g.diffOnly.setAttribute('aria-pressed', _seniorGit.diffOnly ? 'true' : 'false');
+      renderSeniorGitDsl();
+    });
+  }
+  // 相手の名前を押すと、相手選びがその場で開く (git-ui が持つ)。
+  if (g.pick) {
+    g.pick.addEventListener('click', function() {
+      if (window.MA.gitUi) window.MA.gitUi.openPicker(g.pick);
+    });
+  }
+  // 打つたびに色付けを追う (相手は動かない、こちらが動く)。
+  window.MA.appGit = {
+    compare: showSeniorGitRev,
+    clear: clearSeniorGit,
+    step: stepSeniorGit,
+    current: function() { return _seniorGit ? { hash: _seniorGit.hash, name: _seniorGit.name } : null; },
+    activeName: _activeDocName,
+    fileDir: _wsFileDir,
+    workingText: function() { return mmdText; },
+    openFolderCompare: function() { return openCompareTarget('folder'); },
+    refreshDiff: function() { if (_seniorGit && _seniorGit.text) renderSeniorGitDsl(); },
+  };
+  // 保存先が決まった後で GIT 欄を読む (FILES の骨格は init より先に出ている)。
+  try { if (window.MA.gitUi) window.MA.gitUi.refresh(); } catch (e) {}
 }
 
 function setupPeekFolder() {
@@ -31991,6 +32189,7 @@ function bootWithSavedPrefs() {
   // FILES ツリー (design 10a) は server の応答を待たずに出す (畳んだ状態を含め
   // 画面の骨格なので、遅れて現れると押そうとした所が動く)。
   try { if (window.MA.filesPanel) window.MA.filesPanel.init(); } catch (e) {}
+  try { if (window.MA.gitUi) window.MA.gitUi.init(); } catch (e) {}
   var as = window.MA.autoSave;
   if (!as || !as.hydrateFromServer) { init(); return; }
   var started = false;
