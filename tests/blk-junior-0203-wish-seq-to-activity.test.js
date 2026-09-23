@@ -105,6 +105,17 @@ run('起こした図の名前で元の図が辿れる', function() {
   assert.strictEqual(s2a.draftName('diagram1.puml', 'A'), 'diagram1_activity');
 });
 
+// 別の図種のタブ (前周の状態遷移図など) に先輩のシーケンス図を貼った場面。
+// タブの図種は state のままでも、プレビューはシーケンス図なので起こせる。
+run('タブの図種が古くても、本文がシーケンス図なら起こせる図と見る', function() {
+  var detect = function(t) { return /->/.test(t) && /participant/.test(t) ? 'plantuml-sequence' : 'plantuml-state'; };
+  assert.strictEqual(s2a.isSequence({ diagramType: 'plantuml-state', dsl: GPIO_SEQ }, detect), true);
+  assert.strictEqual(s2a.isSequence({ diagramType: 'plantuml-sequence', dsl: '' }, detect), true);
+  assert.strictEqual(s2a.isSequence({ diagramType: 'plantuml-state', dsl: '@startuml\n[*] --> A\n@enduml' }, detect), false);
+  assert.strictEqual(s2a.isSequence({ diagramType: 'plantuml-state', dsl: GPIO_SEQ }, null), false);
+  assert.strictEqual(s2a.isSequence(null, detect), false);
+});
+
 run('開いているシーケンス図から候補を作る (図 × 送り手)', function() {
   var docs = [
     { id: 'a1', name: 'act.puml', dsl: ACTIVITY_DOC, diagramType: 'plantuml-activity' },

@@ -106,6 +106,17 @@ window.MA.seqToActivity = (function() {
     return (base || _s(who) || 'activity') + '_activity';
   }
 
+  // 起こせる図か。タブが覚えている図種だけで見ると、別の図種のタブに先輩の
+  // シーケンス図を貼った場面 (プレビューはシーケンス図になっている) で
+  // 「シーケンス図を開いてから」と断っていた。本文がシーケンス図と読めればよい。
+  // detect: workspace.detectType の形 (dsl → 図種 | null)。無ければタブの図種だけで見る。
+  function isSequence(doc, detect) {
+    if (!doc) return false;
+    if (doc.diagramType === 'plantuml-sequence') return true;
+    if (typeof detect !== 'function') return false;
+    try { return detect(_s(doc.dsl)) === 'plantuml-sequence'; } catch (e) { return false; }
+  }
+
   // 一括欄に出す候補。開いているシーケンス図 × 送り手ごとに 1 組。
   // docs: workspace.list() の形 ([{ id, name, dsl, diagramType }])。
   function candidates(docs, exceptId) {
@@ -134,5 +145,6 @@ window.MA.seqToActivity = (function() {
     draft: draft,
     draftName: draftName,
     candidates: candidates,
+    isSequence: isSequence,
   };
 })();

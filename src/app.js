@@ -123,7 +123,7 @@ function makeActivityFromSequence() {
   saveActiveDoc();
   var doc = WS.getActive();
   var dsl = doc ? doc.dsl : '';
-  if (!doc || doc.diagramType !== 'plantuml-sequence') {
+  if (!S2A.isSequence(doc, WS.detectType)) {
     if (window.MA.toast) window.MA.toast.show('シーケンス図を開いてから使ってください');
     return null;
   }
