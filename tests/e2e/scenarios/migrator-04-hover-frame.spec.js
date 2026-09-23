@@ -979,3 +979,43 @@ test('migrator 手順 4 — レーンをまたぐ新記法のアクティビテ�
   }
   await expect(page.locator('#overlay-warning')).toBeHidden();
 });
+
+// BLK-migrator-20260924-0637: AWS アイコンの手続き (`WorkDocs(...)` など) で部品を宣言した図は、DSL に見えるのが
+// `actor` と `-->` だけなのでシーケンス図と読まれ、枠が 1 つも出なかった (「⚠ Overlay マッチング失敗」)。
+// 手続きの中身は読まず、PlantUML が SVG に残した図種で読み直す。行き先の部品に食い込む矢じりの上では関係が出る。
+test('migrator 手順 4 — 手続きで部品を宣言した図 (DSL は actor と --> だけ) でも、部品・関係・矢じりに本人の枠が出る', async ({ page }) => {
+  await bootPlain(page);
+  const dsl = fs.readFileSync(path.join(__dirname, '..', '..', 'fixtures', 'dsl', 'aws-procedure-parts.puml'), 'utf8')
+    .replace(/\r\n/g, '\n').replace(/\n+$/, '');
+  await typeDsl(page, dsl);
+  await expect(page.locator('#overlay-layer rect[data-type="relation"][data-hit-kind="link"]')).toHaveCount(2, { timeout: 20000 });
+  await expect(page.locator('#overlay-warning')).toBeHidden();
+
+  for (const [label, line] of [['Person', '16'], ['Desktop', '17'], ['Storage', '18'], ['[S3]', '18']]) {
+    const { hit } = await hoverHit(page, label);
+    expect(hit, label + ' にホバーして本人の行の枠が出る').toEqual(expect.objectContaining({ line, hover: true }));
+  }
+
+  // 矢じりの中心 → 行き先の部品ではなくその関係の行
+  const heads = await page.evaluate(() => Array.prototype.map.call(
+    document.querySelectorAll('#preview-svg svg g.link polygon'), (p) => {
+      const r = p.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    }));
+  expect(heads.length).toBe(2);
+  for (const [i, line] of [[0, '20'], [1, '21']]) {
+    await page.mouse.move(3, 3);
+    await page.mouse.move(heads[i].x, heads[i].y);
+    const hot = page.locator('#overlay-layer rect.hit-hover').first();
+    await expect(hot).toHaveAttribute('data-type', 'relation');
+    await expect(hot).toHaveAttribute('data-line', line);
+  }
+
+  // 押すと本文の行が選ばれる (部品は宣言した手続きの呼び出し行)
+  const { box } = await hoverHit(page, 'Storage');
+  await page.mouse.click(box.x, box.y);
+  await expect.poll(() => page.evaluate(() => {
+    const ed = document.getElementById('editor');
+    return ed.value.slice(0, ed.selectionStart).split('\n').length;
+  })).toBe(18);
+});

@@ -1,0 +1,22 @@
+@startuml Hello World
+sprite $Doc [8x8/16] {
+FFFFFFFF
+F000000F
+F0FFFF0F
+F000000F
+F0FFFF0F
+F000000F
+F000000F
+FFFFFFFF
+}
+!procedure AwsPart($alias, $label, $tech, $stereo)
+rectangle "<$Doc>\n$label\n[$tech]" <<$stereo>> as $alias
+!endprocedure
+
+actor "Person" as personAlias
+AwsPart(desktopAlias, "Desktop", "WorkDocs", "WorkDocs")
+AwsPart(storageAlias, "Storage", "S3", "SimpleStorageService")
+
+personAlias --> desktopAlias
+desktopAlias --> storageAlias
+@enduml

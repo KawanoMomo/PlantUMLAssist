@@ -195,6 +195,17 @@ window.MA.overlayBuilder = (function() {
         tb.x - labelPad, tb.y - labelPad,
         tb.width + 2 * labelPad, tb.height + 2 * labelPad, linkAttrs);
     });
+    // BLK-migrator-20260924-0637: 矢じりは行き先の図形の縁に接して描かれ、図形の枠 (余白付き) の内側に
+    // 食い込む。関係は要素より後ろなので、矢じりを指すと行き先の図形が選ばれていた。矢じり (<polygon>)
+    // そのものの範囲だけは関係を手前 (data-hit-kind="linkhead") に置く。余白は付けない。
+    var headAttrs = {};
+    Object.keys(attrs || {}).forEach(function(k) { headAttrs[k] = attrs[k]; });
+    headAttrs['data-hit-kind'] = 'linkhead';
+    Array.prototype.forEach.call(linkGroupEl.querySelectorAll('polygon'), function(pg) {
+      var hb = _nodeBBox(pg);
+      if (!hb || hb.width < 2 || hb.height < 2 || hb.width > 40 || hb.height > 40) return;
+      addRect(overlayEl, hb.x, hb.y, hb.width, hb.height, headAttrs);
+    });
     return main;
   }
 
@@ -237,7 +248,8 @@ window.MA.overlayBuilder = (function() {
     // 入れ物の中を通る関係のラベルを押したら、入れ物ではなくその関係が選ばれる。
     var isLink = function(r) {
       var k = r.getAttribute('data-hit-kind');
-      return k === 'container' ? -1 : (k === 'link' ? 0 : 1);
+      // 矢じり (linkhead) は要素より手前。矢じりの上だけは関係が選ばれる。
+      return k === 'container' ? -1 : (k === 'link' ? 0 : (k === 'linkhead' ? 2 : 1));
     };
     // 元の並び順を保つ安定ソート (面積が同じものの前後関係を変えない)
     rects.forEach(function(r, i) { r.__ovIdx = i; });

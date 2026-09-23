@@ -4572,6 +4572,7 @@ function applyActiveDoc() {
   hideSaveCheckIfOtherDoc(doc.id);
   hideSaveSwapIfOtherDoc(doc.id);
   hideSaveClashIfOtherDoc(doc.id);
+  _svgKindFix = null;  // SVG に合わせた図種は前の図のもの (BLK-migrator-20260924-0637)
   var mod = modules[doc.diagramType] || modules[currentDiagramType];
   if (mod) {
     currentModule = mod;
@@ -25852,14 +25853,16 @@ function renderUnsupportedPanel() {
   }
   var doc = window.MA.workspace.getActive();
   if (!doc || !_openedSourceOf(doc.id)) { panel.hidden = true; panel.setAttribute('data-count', '0'); return; }
-  var rows = FO.unsupported(doc.dsl, doc.diagramType);
+  // BLK-migrator-20260924-0637: 描いた図種に合わせて読み直した図は、その図種として読めない行を出す。
+  var kind = (_svgKindFix && currentModule && currentModule.type) ? currentModule.type : doc.diagramType;
+  var rows = FO.unsupported(doc.dsl, kind);
   panel.setAttribute('data-count', String(rows.length));
   panel.textContent = '';
   if (!rows.length) { panel.hidden = true; return; }
   panel.hidden = false;
   var head = document.createElement('div');
   head.id = 'unsupported-summary';
-  head.textContent = '⚠ ' + FO.kindLabel(doc.diagramType) + 'として読めない行が ' + rows.length
+  head.textContent = '⚠ ' + FO.kindLabel(kind) + 'として読めない行が ' + rows.length
     + ' 行あります。本文の編集とプレビューはそのまま使えます';
   var copy = document.createElement('button');
   copy.type = 'button';
@@ -31577,6 +31580,11 @@ function refresh() {
   if (window.MA.parserUtils.isAmbiguousType(mmdText) && modules[currentDiagramType]) {
     detectedType = currentDiagramType;
   }
+  // BLK-migrator-20260924-0637: 直前の描画で PlantUML が別の図種と言った DSL は、その図種で読む
+  // (手続きで宣言した部品の図を毎回シーケンスで読み直して、描画のたびに右パネルが入れ替わらないように)。
+  if (_svgKindFix && _svgKindFix.from === detectedType && modules[_svgKindFix.to]) {
+    detectedType = _svgKindFix.to;
+  }
   var mod = detectedType ? modules[detectedType] : null;
   if (mod) currentModule = mod;
 
@@ -32389,6 +32397,34 @@ function stateTreeFocusText() {
   catch (e) { return ''; }
 }
 
+// BLK-migrator-20260924-0637: `!include` した手続き (`WorkDocs(...)` など) で部品を宣言した図は、
+// DSL には `actor` と `-->` しか見えないのでシーケンス図と読まれ、選択枠が 1 つも出なかった。
+// 手続きの中身は展開して読まず、PlantUML が SVG に残した図種 (data-diagram-type) に合わせる。
+// 合わせた結果は _svgKindFix に憶え、同じ DSL の判定が出る間は refresh() もその図種で読む。
+var _svgKindFix = null;
+function _reconcileKindWithSvg(svgEl) {
+  var SK = window.MA.svgKind;
+  var PU = window.MA.parserUtils;
+  if (!SK || !PU || !currentModule) return;
+  // `actor A` だけの段階は図種を決めない (空のシーケンス図に参加者を足した直後に載せ替えない)。
+  if (PU.isAmbiguousType(mmdText)) return;
+  var svgType = SK.of(svgEl);
+  var cur = currentModule.type;
+  var want = SK.reconcile(cur, svgType);
+  var fromDsl = PU.detectDiagramType(mmdText);
+  if (!want || want === cur || !modules[want]) {
+    // DSL の判定だけで SVG と合うようになったら (手続きを書き換えた等)、憶えた図種は捨てる。
+    if (_svgKindFix && svgType && SK.reconcile(fromDsl, svgType) === fromDsl) _svgKindFix = null;
+    return;
+  }
+  _svgKindFix = { from: fromDsl, to: want };
+  currentModule = modules[want];
+  try { currentParsed = currentModule.parse(mmdText); }
+  catch (e) { currentParsed = { meta: {}, elements: [], relations: [], groups: [] }; }
+  try { renderProps(currentParsed); } catch (e) {}
+  try { renderUnsupportedPanel(); } catch (e) {}
+}
+
 function renderSvg() {
   var mode = document.getElementById('render-mode').value || 'local';
   renderStatusEl.textContent = 'Rendering\u2026';
@@ -32454,6 +32490,7 @@ function renderSvg() {
       while (overlayEl.firstChild) overlayEl.removeChild(overlayEl.firstChild);
     }
     if (warnEl) { warnEl.style.display = 'none'; warnEl.textContent = ''; }
+    if (svgEl && !focusDsl) _reconcileKindWithSvg(svgEl);
     if (svgEl && !focusDsl && currentModule && currentModule.buildOverlay) {
       syncOverlayOrigin();
       var report = currentModule.buildOverlay(svgEl, currentParsed, overlayEl, mmdText);
