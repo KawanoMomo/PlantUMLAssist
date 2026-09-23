@@ -3526,6 +3526,10 @@ function init() {
   try { _openFolderListAtBoot(); } catch (e) {}
 
   startHeartbeat();
+  // init は保存先の取り込み (/prefs の応答、最大 3 秒) を待ってから走る。それまでの画面は
+  // 骨格だけで、下端の札やボタンを押しても何も起きない。押せるようになった印を 1 つ立てる
+  // (読み込み直した直後に押す台本は、この印を待ってから押す)。
+  try { document.documentElement.setAttribute('data-app-ready', '1'); } catch (e) {}
 }
 
 // BLK-junior-20260907-2303: 行番号から要素を選ぶ。プレビュー上の座標は

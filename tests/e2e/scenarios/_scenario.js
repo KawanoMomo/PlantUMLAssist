@@ -18,7 +18,10 @@ const KEEP_KEY = 'pua.e2e.keep';
 async function reopenApp(page) {
   await page.evaluate((k) => { try { window.localStorage.setItem(k, '1'); } catch (e) {} }, KEEP_KEY);
   await page.reload();
-  await page.waitForSelector('#editor');
+  // #editor は HTML の骨格にあり、init (保存先の取り込みを待って走る) より先に現れる。
+  // それを待って押すと、ボタンに手が付く前のクリックになって何も起きない
+  // (全体実行で /prefs が遅い回に junior-09 の「開き直してから並べて比較」が落ちていた)。
+  await page.waitForSelector('html[data-app-ready="1"]');
   await page.evaluate((k) => { try { window.localStorage.removeItem(k); } catch (e) {} }, KEEP_KEY);
 }
 
