@@ -4570,6 +4570,7 @@ function applyActiveDoc() {
   // BLK-migrator-20260917-2349-b: 保存時チェックの帯は保存した図のもの。別の図に移っても残ると
   // 図の上端を覆い、そこにある要素へホバー・クリックが届かない。
   hideSaveCheckIfOtherDoc(doc.id);
+  hideSaveSwapIfOtherDoc(doc.id);
   var mod = modules[doc.diagramType] || modules[currentDiagramType];
   if (mod) {
     currentModule = mod;
@@ -26282,6 +26283,16 @@ function hideSaveSwap() {
   if (el) el.hidden = true;
 }
 
+// BLK-migrator-20260923-2312: 「保存の記録」の帯 (一致した組の一覧) は保存した図のもの。
+// 別の図に移っても出たままだと図を帯の高さだけ下へ押し、縦に長い図の下の方が画面の外へ
+// 出てホバーが届かない。保存時チェックの帯と同じく、次の図を開いたら引っ込める
+// (次の保存でまた出る)。記録を自分で開いているときは追跡の最中なので残す。
+function hideSaveSwapIfOtherDoc(activeId) {
+  var el = document.getElementById('save-swap-overlay');
+  if (!el || el.hidden || _sswLogOpen) return;
+  if (el.getAttribute('data-doc-id') !== String(activeId)) el.hidden = true;
+}
+
 function renderSaveSwapLog() {
   var SS = window.MA.saveSwap;
   var box = document.getElementById('ssw-log');
@@ -26317,6 +26328,10 @@ function renderSaveSwap(res) {
   }
   renderTwinRestore(res);
   el.setAttribute('data-warn', res && res.warn ? '1' : '0');
+  try {
+    var wsA = window.MA.workspace;
+    if (wsA) el.setAttribute('data-doc-id', String(wsA.getActiveId()));
+  } catch (e) {}
   // 警告が無いときは帯を出さない。ただし記録を開いているなら出したままにする
   // (事故を追っている最中に、次の保存で画面が消えないようにする)。
   el.hidden = !(res && res.warn) && !_sswLogOpen && !_trGroups.length;

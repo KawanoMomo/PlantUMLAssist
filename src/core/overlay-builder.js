@@ -424,11 +424,12 @@ window.MA.overlayBuilder = (function() {
   // 当たり判定を置く。フォームで直せない記法でも、指せば本文のその行へ飛び、
   // 右欄で「フォーム未対応の記法」と分かる (黙って何も出さない、をやめる)。
   // claimed: モジュールが既に当てた <g> の配列。戻り値は置いた数。
-  function addUnclaimed(svgEl, overlayEl, claimed) {
+  // selector: 見る <g> を絞るとき (state 図は要素を自前で当てるので題 `g.title` だけ)。
+  function addUnclaimed(svgEl, overlayEl, claimed, selector) {
     if (!svgEl || !overlayEl || !svgEl.querySelectorAll) return 0;
     var taken = claimed || [];
     var n = 0;
-    var nodes = svgEl.querySelectorAll('g.entity, g.cluster, g.title, g.link, g[class*="link_"]');
+    var nodes = svgEl.querySelectorAll(selector || 'g.entity, g.cluster, g.title, g.link, g[class*="link_"]');
     Array.prototype.forEach.call(nodes, function(g) {
       if (taken.indexOf(g) >= 0) return;
       var line = _srcLine(g);
