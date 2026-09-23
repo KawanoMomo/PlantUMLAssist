@@ -50,6 +50,88 @@ html, body {
   height: 100vh;
 }
 
+/* ── FILES ツリー (design 10a) ─────────────────────────────────────────────
+   レールの右に常設する 1 本のツリー。既定で開き、Ctrl+B / レールの FILES で畳む。 */
+#files-panel {
+  display: flex;
+  flex-direction: column;
+  width: 208px;
+  flex: 0 0 208px;
+  min-width: 0;
+  height: 100vh;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+  font-size: 11px;
+}
+#files-panel[hidden], #files-panel.collapsed { display: none; }
+#files-panel .files-head {
+  display: flex; align-items: center; gap: 4px;
+  padding: 6px 6px 4px; border-bottom: 1px solid var(--border);
+}
+#files-panel .files-title {
+  flex: 1 1 auto; font-size: 10px; letter-spacing: 0.08em;
+  color: var(--text-secondary); font-family: var(--font-mono);
+}
+#files-panel .files-head-acts { display: flex; gap: 2px; flex: 0 0 auto; }
+#files-panel button.files-act {
+  border: none; background: none; color: var(--text-secondary);
+  font-size: 12px; line-height: 1; padding: 2px 3px; cursor: pointer; border-radius: 3px;
+}
+#files-panel button.files-act:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+#files-panel button.files-act[aria-pressed="false"] { opacity: 0.45; }
+#files-panel .files-filterbar { padding: 4px 6px; }
+#files-panel input#files-filter {
+  width: 100%; box-sizing: border-box;
+  background: var(--bg-primary); color: var(--text-primary);
+  border: 1px solid var(--border); border-radius: 3px;
+  padding: 3px 6px; font-size: 11px;
+}
+#files-panel input#files-filter:focus { outline: none; border-color: var(--accent); }
+#files-panel .files-sections { flex: 1 1 auto; overflow-y: auto; }
+#files-panel .files-sec { border-bottom: 1px solid var(--border); }
+#files-panel button.files-sec-head {
+  display: flex; align-items: center; gap: 4px;
+  width: 100%; text-align: left; border: none; background: none; cursor: pointer;
+  color: var(--text-primary); font-size: 11px; padding: 4px 6px;
+}
+#files-panel button.files-sec-head:hover { background: var(--bg-tertiary); }
+#files-panel .files-caret { flex: 0 0 auto; color: var(--text-secondary); font-size: 9px; }
+#files-panel .files-sec-label { flex: 1 1 auto; }
+/* 畳んだままでも件数が読める (比較中 1 / main · M 2 ↑1) */
+#files-panel .files-sec-count { flex: 0 0 auto; font-size: 9px; color: var(--text-secondary); white-space: nowrap; }
+#files-panel .files-sec-body { padding: 0 0 4px; }
+#files-panel .files-sec-body[hidden] { display: none; }
+#files-panel button.files-row {
+  display: flex; align-items: center; gap: 4px;
+  width: 100%; text-align: left; border: none; background: none; cursor: pointer;
+  color: var(--text-primary); font-family: var(--font-mono); font-size: 11px; padding: 2px 6px 2px 16px;
+}
+#files-panel button.files-row:hover { background: var(--bg-tertiary); }
+#files-panel button.files-row.is-active { color: var(--accent); }
+#files-panel .files-row-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#files-panel .files-row-mark { flex: 0 0 auto; font-size: 9px; color: var(--accent); white-space: nowrap; }
+#files-panel .files-empty { padding: 3px 16px; color: var(--text-secondary); }
+#files-panel .files-summary {
+  flex: 0 0 auto; padding: 4px 6px; border-top: 1px solid var(--border);
+  color: var(--text-secondary); font-size: 10px; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+/* 保存先の一番上はフォルダそのもの。「保存先」の印を付ける。 */
+#files-panel #top-save-target::after {
+  content: '保存先'; margin-left: 6px; font-size: 9px; color: var(--text-secondary);
+}
+#files-panel #top-save-target {
+  display: flex; width: 100%; box-sizing: border-box; text-align: left;
+  border: none; background: none; padding: 3px 6px 3px 16px; cursor: pointer;
+}
+/* ツリーに入れた #folder-panel は浮かせず、節の中身としてそのまま流す。 */
+#files-panel #folder-panel {
+  position: static; z-index: auto; max-height: none; min-width: 0;
+  width: 100%; box-sizing: border-box;
+  border: none; border-radius: 0; background: none; padding: 0;
+}
+
 /* ── Diagram rail (design 1a「Quiet Rail」) ───────────────────────────────── */
 #rail {
   display: flex;
@@ -6967,8 +7049,76 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <div id="rail-types"></div>
     <div class="rail-spacer"></div>
     <div class="rail-divider"></div>
+    <!-- BLK-human-20260923-1700 (design 10a): レール右の FILES ツリーを畳む / 開く -->
+    <button type="button" class="rail-btn" id="rail-files" aria-pressed="true"
+            aria-controls="files-panel" title="ファイル (Ctrl+B)">
+      <span class="rail-glyph" aria-hidden="true">▤</span><span class="rail-code">FILES</span>
+    </button>
     <!-- 設定 (design 7a): 中身は diagram-rail.buildConfigHtml で差し替える -->
     <button type="button" class="rail-btn" id="rail-config" title="設定">⚙</button>
+  </div>
+
+  <!-- ── FILES ツリー (design 10a) ──────────────────────────────────────────
+       BLK-human-20260923-1700: 「保存先チップ」「📂 一覧」「📄 開く」「⇔ 先輩」の
+       4 つが別々の入口で、どこに何があるかを入口ごとに覚え直していた。
+       レールの右に常設する 1 本のツリーに畳む。節は上から
+       開いている図 / 保存先 / 読むだけ / GIT。古い入口の実体はこの中に引っ越す
+       (id は変えない。呼び出し側と台本がその id で同じ操作を指しているため)。 -->
+  <div id="files-panel" aria-label="ファイル">
+    <div class="files-head">
+      <span class="files-title">FILES</span>
+      <span class="files-head-acts">
+        <button type="button" class="files-act" id="files-new-doc" title="新しい図" aria-label="新しい図">＋</button>
+        <button type="button" class="files-act" id="files-new-folder" title="新しいフォルダ" aria-label="新しいフォルダ">🗀</button>
+        <button type="button" class="files-act" id="files-show-readonly" aria-pressed="true"
+                title="読むだけを表示 / 隠す" aria-label="読むだけを表示 / 隠す">◍</button>
+        <button type="button" class="files-act" id="files-collapse" title="畳む (Ctrl+B)" aria-label="畳む">‹</button>
+      </span>
+    </div>
+    <div class="files-filterbar">
+      <input id="files-filter" type="search" autocomplete="off" spellcheck="false"
+             placeholder="ファイル名・部品名で絞り込む" aria-label="ファイル名・部品名で絞り込む">
+    </div>
+    <div class="files-sections">
+      <section class="files-sec" data-files-section="open">
+        <button type="button" class="files-sec-head" id="files-sec-open" aria-expanded="true"
+                aria-controls="files-body-open"><span class="files-caret" aria-hidden="true">▾</span><span
+                class="files-sec-label">開いている図</span><span class="files-sec-count" id="files-count-open"></span></button>
+        <div class="files-sec-body" id="files-body-open"></div>
+      </section>
+      <section class="files-sec" data-files-section="target">
+        <!-- 節の見出しがそのまま「📂 一覧」の開閉を兼ねる (入口を 2 つにしない) -->
+        <button type="button" class="files-sec-head" id="btn-tab-folder" aria-expanded="false"
+                aria-controls="files-body-target" title="保存フォルダの図を一覧"><span class="files-caret"
+                aria-hidden="true">▸</span><span class="files-sec-label">保存先</span><span
+                class="files-sec-count" id="files-count-target"></span></button>
+        <div class="files-sec-body" id="files-body-target">
+          <!-- 保存先の一番上はフォルダそのもの。押すと保存先を変えられる (旧・保存先チップ) -->
+          <button id="top-save-target" type="button" title="保存先">ダウンロード</button>
+          <div id="folder-panel"></div>
+        </div>
+      </section>
+      <section class="files-sec" data-files-section="readonly">
+        <button type="button" class="files-sec-head" id="files-sec-readonly" aria-expanded="false"
+                aria-controls="files-body-readonly"><span class="files-caret" aria-hidden="true">▸</span><span
+                class="files-sec-label">読むだけ</span><span class="files-sec-count" id="files-count-readonly"></span></button>
+        <div class="files-sec-body" id="files-body-readonly">
+          <button class="tab-tool" id="btn-tab-peek" title="他の保存フォルダの図を読むだけで見る (保存先は変わりません)">👀 他フォルダ</button>
+          <!-- design 9a: 「先輩」は使う人の立場の名前で、機能の中身を表していない。
+               相手が先輩でも他チームでも過去の自分の版でも動きは同じなので、何をするかで名付ける。 -->
+          <button class="tab-tool tab-tool-plain" id="btn-tab-senior" aria-pressed="false"
+                  title="別の保存フォルダの図を右の枠に並べる。図を切り替えると相手も自動で入れ替わる (読むだけ)">並べて比較</button>
+        </div>
+      </section>
+      <section class="files-sec" data-files-section="git">
+        <button type="button" class="files-sec-head" id="files-sec-git" aria-expanded="false"
+                aria-controls="files-body-git"><span class="files-caret" aria-hidden="true">▸</span><span
+                class="files-sec-label">GIT</span><span class="files-sec-count" id="files-count-git"></span></button>
+        <div class="files-sec-body" id="files-body-git"></div>
+      </section>
+    </div>
+    <!-- 下端に出していた「12 図 未反映 1 控え 1」はこの 1 行に -->
+    <div class="files-summary" id="files-summary" role="status"></div>
   </div>
 
   <div id="app-body">
@@ -6981,8 +7131,10 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <!-- BLK-human-20260923-1600 (design 9a): 上部バー左は「{フォルダ} / {ファイル名}」の
          パンくず 1 本。ファイル名がアクティブタブと 2 か所に出るのをやめ、保存先チップは
          パンくずのフォルダ名に統合した (押すと保存先を変えられる)。 -->
-    <button id="top-save-target" type="button" title="保存先">ダウンロード</button>
-    <span id="top-crumb-sep" aria-hidden="true">/</span>
+    <!-- BLK-human-20260923-1700 (design 10a): 保存先チップは FILES ツリーの
+         「保存先」節の一番上 (保存先フォルダの行) へ引っ越した。上部バーに残すのは
+         編集中のファイル名だけ。 -->
+    <span id="top-crumb-sep" aria-hidden="true" hidden>/</span>
     <span id="top-file-name" title="編集中の図">(無題).puml</span>
     <!-- design 9a: 保存の状態をそのまま出す。未保存のときだけ ● とアクセント色、
          保存済みは淡色の「保存済み」に落とす (BLK-junior-20260913-0306 の入口は残す)。 -->
@@ -7107,8 +7259,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <!-- 開いている図のタブ。切り替えても各図の DSL は保持される -->
       <div id="tab-bar">
         <button class="tab-tool" id="btn-tab-new" title="新しい図を開く">＋</button>
-        <!-- design 9a: フォルダ操作は枠なしの文字で ＋ の右に置く -->
-        <button class="tab-tool tab-tool-plain" id="btn-tab-folder" title="保存フォルダの図を一覧">一覧</button>
+        <!-- BLK-human-20260923-1700 (design 10a): 「一覧」は FILES ツリーの「保存先」節の
+             見出しになった (id はそのまま。押すと保存先の図が開く) -->
         <!-- BLK-human-20260917-0901 / design 9a: 手元の .puml を開く入口は上部バーの
              Import ▾ へ移した。DOM には残す (ドラッグ&ドロップ・空の画面・Ctrl+K が叩く) -->
         <button class="tab-tool" id="btn-open-file" hidden title="手元の .puml / .plantuml / .uml / .txt を開きます (複数可)。エディタやプレビューへドラッグ&ドロップでも開けます" aria-label="ファイルを開く(.puml)">開く</button>
@@ -7118,14 +7270,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <!-- BLK-primary-20260908-1803: 静かなタブ列でも、畳んだ機能の入口を 1 クリック分残す -->
         <button class="tab-tool tab-tool-mini" id="btn-tab-tools-mini" aria-expanded="false" aria-controls="tool-menu"
                 title="畳んでいるツールの一覧を開く (Ctrl+K でも同じ操作が引ける)">他 0 件</button>
-        <button class="tab-tool" id="btn-tab-peek" title="他の保存フォルダの図を読むだけで見る (保存先は変わりません)">👀 他フォルダ</button>
-        <!-- BLK-junior-20260914-1406-wish: 先輩のフォルダを 1 回選べば、いま開いている図に
-             当たる先輩の図が右の枠に読み専用で出たままになる (保存先は切り替えない) -->
-        <!-- design 9a: 「先輩」は使う人の立場の名前で、機能の中身を表していない。
-             相手が先輩でも他チームでも過去の自分の版でも動きは同じなので、
-             何をするかで名付ける。枠なしの文字で「一覧」の隣に置く。 -->
-        <button class="tab-tool tab-tool-plain" id="btn-tab-senior" aria-pressed="false"
-                title="別の保存フォルダの図を右の枠に並べる。図を切り替えると相手も自動で入れ替わる (読むだけ)">並べて比較</button>
+        <!-- BLK-human-20260923-1700 (design 10a): 👀 他フォルダ と 並べて比較 は
+             FILES ツリーの「読むだけ」節へ引っ越した (id はそのまま) -->
         <!-- BLK-junior-20260907-2009-wish: やり直し途中の控えに印を付け、📂 一覧で畳む -->
         <button class="tab-tool" id="btn-tab-draft" aria-pressed="false" title="この図に一時控え(下書き / やり直し途中)の印を付けて、📂 一覧から畳む">🗂 一時控え</button>
         <button class="tab-tool" id="btn-tab-rename" title="開いている図をまたいで部品名を一括置換">⇄ 一括置換</button>
@@ -7193,7 +7339,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button type="button" id="hn-banner-edit" title="この図の申し送りを書き直す">書き直す</button>
         <button type="button" id="hn-banner-close" title="閉じる (申し送りは消えない)">×</button>
       </div>
-      <div id="folder-panel"></div>
       <div id="diff-panel"></div>
       <div id="review-panel"></div>
       <div id="pin-panel"></div>
@@ -8330,7 +8475,9 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/modules/class.js"></script>
 <script src="src/modules/activity.js"></script>
 <script src="src/modules/state.js"></script>
+<script src="src/core/file-tree.js"></script>
 <script src="src/app.js"></script>
+<script src="src/ui/files-panel.js"></script>
 <!-- BLK-primary-20260907-0923-wish: 変更サマリボード。変わった図を全件、変更前後で並べる -->
 <div id="rd-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="rd-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:720px;max-width:1080px;max-height:88vh;overflow-y:auto;"></div>
