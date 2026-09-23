@@ -110,3 +110,21 @@ describe('isAmbiguousType — actor だけの図は図種を決めない', funct
     expect(parserUtils.isAmbiguousType("@startuml\n' メモ\nactor User\n@enduml")).toBe(true);
   });
 });
+
+// BLK-migrator-20260923-1409: `agent` と矢印だけの component 図が、矢印を根拠に
+// sequence と読まれていた。図種を外すと選択枠のモジュールごと外れ、枠が 1 つも出ない。
+describe('detectDiagramType 波括弧の無い component 要素', function() {
+  test('agent 宣言 + 矢印だけの図は component', function() {
+    var t = ['@startuml', 'left to right direction', 'agent "Published Event" as event',
+             'node iotRule', 'event --> iotRule : JSON message', '@enduml'].join('\n');
+    expect(parserUtils.detectDiagramType(t)).toBe('plantuml-component');
+  });
+  test('参加者の宣言がある図は今までどおり sequence', function() {
+    var t = ['@startuml', 'participant A', 'database B', 'A -> B : read', '@enduml'].join('\n');
+    expect(parserUtils.detectDiagramType(t)).toBe('plantuml-sequence');
+  });
+  test('actor のある図は component に倒さない', function() {
+    var t = ['@startuml', 'actor User', 'node Server', 'User --> Server : use', '@enduml'].join('\n');
+    expect(parserUtils.detectDiagramType(t)).toBe('plantuml-sequence');
+  });
+});

@@ -25,6 +25,16 @@ window.MA.modules.plantumlComponent = (function() {
   // interface: () X / () X as I
   var INTERFACE_SHORT_RE = /^\(\)\s+([A-Za-z_][A-Za-z0-9_]*)(?:\s+as\s+([A-Za-z_][A-Za-z0-9_]*))?(?:\s+<<\s*([^>]+?)\s*>>)?\s*$/;
 
+  // BLK-migrator-20260923-1409: 波括弧を伴わない要素宣言 (`agent "Published Event" as event`)。
+  // PlantUML の component 図は component / [X] 以外にもこれらの語で部品を宣言できる。
+  // 読めないと部品が要素の一覧から落ち、ホバーの選択枠が 1 つも出なかった
+  // (aws-icons-for-plantuml の `examples__Basic Usage.puml`)。
+  // 波括弧つきの同じ語は上の PACKAGE_OPEN_RE が先に拾うので、ここは波括弧無しだけ。
+  var ELEM_KW = 'agent|node|artifact|cloud|storage|stack|card|file|hexagon|person|folder|frame|rectangle';
+  var COMPONENT_ELEM_RE = new RegExp(
+    '^(?:' + ELEM_KW + ')\\s+(?:"([^"]+)"\\s+as\\s+(' + ID + ')|(' + ID + ')(?:\\s+as\\s+"([^"]+)")?)' + STEREO_OPT + '\\s*$'
+  );
+
   var PACKAGE_OPEN_RE = new RegExp(
     '^(?:package|folder|frame|node|rectangle)\\s+(?:"([^"]+)"|(' + ID + '))\\s*\\{\\s*$'
   );
@@ -461,6 +471,16 @@ window.MA.modules.plantumlComponent = (function() {
         var id2 = m[2] || label2;
         result.elements.push({ kind: 'component', id: id2, label: label2, stereotype: m[3] || null, line: lineNum, parentPackageId: currentPackageId });
         lastComponentId = id2;  // track for port adjacency
+        continue;
+      }
+      // 波括弧を伴わない要素宣言 (agent / node / cloud / ...) も部品として読む。
+      m = trimmed.match(COMPONENT_ELEM_RE);
+      if (m) {
+        var idE, labelE;
+        if (m[2] !== undefined) { idE = m[2]; labelE = m[1]; }
+        else { idE = m[3]; labelE = m[4] !== undefined ? m[4] : m[3]; }
+        result.elements.push({ kind: 'component', id: idE, label: labelE, stereotype: m[5] || null, line: lineNum, parentPackageId: currentPackageId });
+        lastComponentId = idE;
         continue;
       }
       // interface keyword
