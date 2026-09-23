@@ -132,6 +132,105 @@ window.MA.sequenceOverlay = (function() {
     OB.warnIfMismatch('box', boxes.length, n);
   }
 
+  // BLK-migrator-20260923-2012: 図の題名 (title)。PlantUML は SVG の <title> に題名を入れ、
+  // 図の上端に class の無い <text> で描く。<title> に含まれる文字の <text> を、参加者・
+  // メッセージより前 (document 順) から拾い、その和集合を枠にする。`!if` の枝ごとに
+  // title 行があるときは、描かれた題名と同じ文字の行 (無ければ最後の行) に当てる。
+  function _addTitleRect(svgEl, parsedData, overlayEl) {
+    var tls = (parsedData.meta && parsedData.meta.titleLines) || [];
+    if (!tls.length || !svgEl || !svgEl.querySelector) return;
+    var tEl = svgEl.querySelector('title');
+    var drawn = tEl ? String(tEl.textContent || '').replace(/\s+/g, ' ').trim() : '';
+    if (!drawn) return;
+    var pick = tls[tls.length - 1];
+    for (var i = 0; i < tls.length; i++) {
+      if (tls[i].text.replace(/\s+/g, ' ').trim() === drawn) { pick = tls[i]; break; }
+    }
+    var texts = svgEl.querySelectorAll('text');
+    var minX = null, minY = null, maxX = null, maxY = null;
+    for (var k = 0; k < texts.length; k++) {
+      var t = texts[k];
+      var anc = t.parentNode, classed = false;
+      while (anc && anc !== svgEl && anc.getAttribute) {
+        if (anc.getAttribute('class')) { classed = true; break; }
+        anc = anc.parentNode;
+      }
+      // 参加者・メッセージ (class 付きの g) が出たら、そこから先は題名ではない
+      if (classed) break;
+      var s = String(t.textContent || '').replace(/\s+/g, ' ').trim();
+      if (!s || drawn.indexOf(s) === -1) continue;
+      var bb = OB.nodeBBox(t);
+      if (!bb) continue;
+      if (minX === null || bb.x < minX) minX = bb.x;
+      if (minY === null || bb.y < minY) minY = bb.y;
+      if (maxX === null || bb.x + bb.width > maxX) maxX = bb.x + bb.width;
+      if (maxY === null || bb.y + bb.height > maxY) maxY = bb.y + bb.height;
+    }
+    if (minX === null) return;
+    OB.addRect(overlayEl, minX - 4, minY - 3, (maxX - minX) + 8, (maxY - minY) + 6, {
+      'data-type': 'title',
+      'data-id': '__title',
+      'data-line': pick.line,
+    });
+  }
+
+  // BLK-migrator-20260923-2012 差し戻し: メッセージの当たり判定 (矢印とラベルの和集合の箱) の中で、
+  // ライフラインの線の上にメッセージの文字・矢じり・線が無い高さを、ライフラインの手前の
+  // 当たり判定にする。手前の分は .selectable を持たない (枠は元のライフラインの rect が
+  // hover の仲間として出す) ので、ライフラインの rect の数・選択の見た目は変わらない。
+  function _addLifelineFronts(overlayEl, msgMatches) {
+    if (!overlayEl || !msgMatches || !msgMatches.length) return;
+    var PAD = 2;
+    var msgs = [];
+    msgMatches.forEach(function(m) {
+      var bb = OB.extractUnionBBox(m.groupEl) || null;
+      if (!bb) return;
+      var parts = [];
+      Array.prototype.forEach.call(m.groupEl.querySelectorAll('text, polygon, polyline, line, path'), function(n) {
+        var nb = OB.nodeBBox(n);
+        if (nb) parts.push(nb);
+      });
+      // 当たり判定の箱は addRect と同じ余白 (4) を付けた範囲
+      msgs.push({ x: bb.x - 4, y: bb.y - 4, w: bb.width + 8, h: bb.height + 8, parts: parts });
+    });
+    var lifelines = overlayEl.querySelectorAll('rect.selectable[data-type="lifeline"]');
+    Array.prototype.forEach.call(lifelines, function(lr) {
+      var lx = parseFloat(lr.getAttribute('x')), ly = parseFloat(lr.getAttribute('y'));
+      var lw = parseFloat(lr.getAttribute('width')), lh = parseFloat(lr.getAttribute('height'));
+      if (isNaN(lx) || isNaN(ly) || isNaN(lw) || isNaN(lh)) return;
+      var cx = lx + lw / 2;
+      msgs.forEach(function(mg) {
+        if (mg.x > lx + lw || mg.x + mg.w < lx) return;
+        var top = Math.max(mg.y, ly), bottom = Math.min(mg.y + mg.h, ly + lh);
+        if (bottom - top < 2) return;
+        // メッセージが自分で持つ高さ (線の真上に文字・矢じり・線がある所)
+        var owned = [];
+        mg.parts.forEach(function(p) {
+          if (cx < p.x - PAD || cx > p.x + p.width + PAD) return;
+          owned.push([p.y - PAD, p.y + p.height + PAD]);
+        });
+        owned.sort(function(a, b) { return a[0] - b[0]; });
+        var cur = top;
+        var pieces = [];
+        owned.forEach(function(o) {
+          if (o[0] > cur) pieces.push([cur, Math.min(o[0], bottom)]);
+          if (o[1] > cur) cur = o[1];
+        });
+        if (cur < bottom) pieces.push([cur, bottom]);
+        pieces.forEach(function(pc) {
+          if (pc[1] - pc[0] < 2) return;
+          var r = OB.addRect(overlayEl, lx, pc[0], lw, pc[1] - pc[0], {
+            'data-type': 'lifeline',
+            'data-id': lr.getAttribute('data-id'),
+            'data-line': lr.getAttribute('data-line'),
+            'data-front': '1',
+          });
+          r.classList.remove('selectable');
+        });
+      });
+    });
+  }
+
   function buildSequenceOverlay(svgEl, parsedData, overlayEl, dslText) {
     _clearChildren(overlayEl);
     if (!svgEl || !parsedData) return;
@@ -157,6 +256,7 @@ window.MA.sequenceOverlay = (function() {
     // 余白を押しただけで囲みが選ばれてしまう。
     // 参加者より先に足すので、参加者・メッセージの枠が手前に重なる。
     _addBoxRects(svgEl, parsedData, overlayEl);
+    _addTitleRect(svgEl, parsedData, overlayEl);
 
     // BLK-migrator-20260923-1409: 参加者は PlantUML が <g> に残した名前
     // (data-qualified-name) で当てる。全員が名前で当たるときだけ採り、
@@ -345,6 +445,12 @@ window.MA.sequenceOverlay = (function() {
         'data-line': m.item.line,
       });
     });
+
+    // BLK-migrator-20260923-2012 差し戻し: メッセージの枠は矢印とラベルの和集合なので、
+    // 長いメッセージが横切るライフラインは、ラベルも矢印も無い高さでもメッセージに吸われていた
+    // (ライフラインを指すと別のメッセージの枠)。描いた側で決める: ライフラインの線の上で
+    // メッセージの文字・矢じり・線が無い所は、ライフラインを手前に出す。
+    _addLifelineFronts(overlayEl, msgMatches);
 
     // Warn on silent divergence — early signal when SVG structure changes
     // (PlantUML 新版 / カスタム skin) and our selector/offset assumptions break.

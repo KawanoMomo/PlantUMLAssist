@@ -455,7 +455,7 @@ test('migrator 手順 4 — 手続きで参加者を宣言した sequence 図で
   await expect(page.locator('#overlay-layer rect.hit-hover').first()).toHaveAttribute('data-line', '21');
 
   // alt の中で、メッセージの無い高さのライフラインを指すと alt ではなくそのライフライン
-  const ll = page.locator('#overlay-layer rect[data-type="lifeline"][data-id="api"]');
+  const ll = page.locator('#overlay-layer rect.selectable[data-type="lifeline"][data-id="api"]');
   const lb = await ll.boundingBox();
   const grp = await page.locator('#overlay-layer rect[data-type="group"]').boundingBox();
   const msgs = await page.locator('#overlay-layer rect[data-type="message"], #overlay-layer rect[data-type="note"]').evaluateAll(
@@ -688,7 +688,7 @@ test('migrator 手順 4 — actor〜queue で宣言した sequence 図でも、�
   }
 
   // 遅延 (...) より下の区間のライフラインにも、そのライフラインの枠が出る。
-  const ll = page.locator('#overlay-layer rect[data-type="lifeline"][data-id="User"]');
+  const ll = page.locator('#overlay-layer rect.selectable[data-type="lifeline"][data-id="User"]');
   const lb = await ll.boundingBox();
   const svgLine = await page.evaluate(() => {
     const ls = Array.from(document.querySelectorAll('#preview-svg svg g.participant-lifeline[data-qualified-name="User"] line'))
@@ -700,6 +700,68 @@ test('migrator 手順 4 — actor〜queue で宣言した sequence 図でも、�
   await page.mouse.move(3, 3);
   await page.mouse.move(lb.x + lb.width / 2, svgLine.bottom - 10);
   await expect.poll(hovered).toBe('lifeline@2');
+});
+
+// BLK-migrator-20260923-2012 差し戻し: web の実物 (puml-themes sequence-ex / ex2) で、長いメッセージが
+// 横切るライフラインを文字も矢印も無い高さで指すとメッセージの枠が出た。題名 (`!if` の枝ごとの title) にも
+// 枠が無かった。ライフラインの線の上はメッセージの文字・矢印の上だけをメッセージにし、題名は描かれた方の行を指す。
+test('migrator 手順 4 — 長いメッセージが横切るライフラインと、!if の枝で書き分けた題名にも本人の枠が出る', async ({ page }) => {
+  await bootPlain(page);
+  await typeDsl(page, [
+    '@startuml',                                  // 1
+    '!if %variable_exists("$THEME")',             // 2
+    'title Diag - $THEME theme',                  // 3
+    '!else',                                      // 4
+    'title Diag',                                 // 5
+    '!endif',                                     // 6
+    'actor A',                                    // 7
+    'participant B',                              // 8
+    'participant C',                              // 9
+    'database D',                                 // 10
+    'A -> D : go',                                // 11
+    'D --> A : ok',                               // 12
+    '@enduml',                                    // 13
+  ].join(String.fromCharCode(10)));
+  await expect(page.locator('#overlay-layer rect.selectable[data-type="lifeline"]')).toHaveCount(4, { timeout: 20000 });
+
+  const hovered = () => page.evaluate(() => Array.from(document.querySelectorAll('#overlay-layer rect.hit-hover'))
+    .map((r) => r.getAttribute('data-type') + '@' + r.getAttribute('data-line')).join(','));
+
+  // B のライフラインの線の上で、A → D の箱の中だが文字も矢印も無い高さ / 矢印の線の高さ
+  const pts = await page.evaluate(() => {
+    const ln = document.querySelector('#preview-svg svg g.participant-lifeline[data-qualified-name="B"] line').getBoundingClientRect();
+    const msg = document.querySelector('#overlay-layer rect[data-type="message"][data-line="11"]').getBoundingClientRect();
+    const arrow = document.querySelectorAll('#preview-svg svg g.message')[0].querySelector('line').getBoundingClientRect();
+    const x = ln.left + ln.width / 2;
+    let free = null;
+    for (let y = msg.top + 1; y < arrow.top - 3; y += 1) {
+      const e = document.elementFromPoint(x, y);
+      if (e && e.getAttribute('data-type') === 'lifeline') { free = { x, y }; break; }
+    }
+    return { free, onArrow: { x, y: arrow.top + arrow.height / 2 } };
+  });
+  expect(pts.free, 'A → D の箱の中でも、B の線の上の空いた高さはライフラインに当たる').not.toBeNull();
+  await page.mouse.move(3, 3);
+  await page.mouse.move(pts.free.x, pts.free.y);
+  await expect.poll(hovered).toBe('lifeline@8');
+  await page.mouse.move(3, 3);
+  await page.mouse.move(pts.onArrow.x, pts.onArrow.y);
+  await expect.poll(hovered, '矢印の線の上はメッセージのまま').toBe('message@11');
+
+  // 題名: 描かれている方 (!else の枝、5 行目) の枠が出て、押すとその行を直せる
+  const title = page.locator('#preview-svg svg text', { hasText: /^Diag$/ }).first();
+  const tb = await title.boundingBox();
+  await page.mouse.move(3, 3);
+  await page.mouse.move(tb.x + tb.width / 2, tb.y + tb.height / 2);
+  await expect.poll(hovered, '題名にホバーして枠が出る').toBe('title@5');
+  await page.mouse.click(tb.x + tb.width / 2, tb.y + tb.height / 2);
+  const field = page.locator('#seq-edit-title');
+  await expect(field).toHaveValue('Diag');
+  await field.fill('Diag v2');
+  await field.press('Enter');
+  await field.blur();
+  await expect.poll(() => page.locator('#editor').inputValue().then((v) => v.split('\n').slice(2, 5)))
+    .toEqual(['title Diag - $THEME theme', '!else', 'title Diag v2']);
 });
 
 // BLK-migrator-20260923-2312: state 図は宣言の数と SVG の図形の数を突き合わせて当てていたので、

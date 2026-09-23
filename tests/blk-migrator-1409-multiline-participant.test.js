@@ -63,7 +63,7 @@ function build(name) {
 }
 
 function rectsFor(overlayEl, type, id) {
-  var sel = 'rect[data-type="' + type + '"]' + (id ? '[data-id="' + id + '"]' : '');
+  var sel = 'rect[data-type="' + type + '"]' + (id ? '[data-id="' + id + '"]' : '') + ':not([data-front])';
   return Array.prototype.slice.call(overlayEl.querySelectorAll(sel));
 }
 

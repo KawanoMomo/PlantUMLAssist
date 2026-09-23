@@ -154,7 +154,7 @@ describe('書式指定つき autonumber の図でも選択枠が出る', functio
 
     // メッセージは 1 本につき 1 枠。書式つきの番号 ([010]) があっても取りこぼさない
     expect(out.querySelectorAll('[data-type="message"]').length).toBe(msgs);
-    expect(out.querySelectorAll('[data-type="lifeline"]').length).toBe(parts.length);
+    expect(out.querySelectorAll('[data-type="lifeline"]:not([data-front])').length).toBe(parts.length);
   });
 
   test('枠はどれも行番号を持ち、押せば DSL の行に戻れる', function() {

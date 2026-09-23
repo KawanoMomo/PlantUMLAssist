@@ -269,7 +269,13 @@ window.MA.modules.plantumlSequence = (function() {
       if (/^@enduml/.test(trimmed)) continue;
 
       var tm = trimmed.match(/^title\s+(.+)$/);
-      if (tm) { result.meta.title = tm[1].trim(); continue; }
+      if (tm) {
+        result.meta.title = tm[1].trim();
+        // BLK-migrator-20260923-2012: `!if` の両枝に title があると、どちらが描かれたかは SVG を
+        // 見るまで分からない。全部の行を憶えておき、プレビューの当て方が描かれた方を選ぶ。
+        (result.meta.titleLines = result.meta.titleLines || []).push({ line: lineNum, text: tm[1].trim() });
+        continue;
+      }
 
       // autonumber
       if (trimmed === 'autonumber') { result.meta.autonumber = true; continue; }
@@ -2032,8 +2038,17 @@ window.MA.modules.plantumlSequence = (function() {
     return lines.join('\n');
   }
 
-  function setTitle(text, newTitle) {
+  // BLK-migrator-20260923-2012: line を渡すと、その行の title だけを書き換える
+  // (`!if` の枝ごとに title がある図で、描かれている方をプレビューから直す)。
+  function setTitle(text, newTitle, line) {
     var lines = text.split('\n');
+    if (line && lines[line - 1] != null) {
+      var lm = lines[line - 1].match(/^(\s*title\s+)(.*?)(\r?)$/i);
+      if (lm) {
+        lines[line - 1] = lm[1] + newTitle + lm[3];
+        return lines.join('\n');
+      }
+    }
     for (var i = 0; i < lines.length; i++) {
       if (/^\s*title\s+/.test(lines[i])) {
         var indent = lines[i].match(/^(\s*)/)[1];
@@ -3098,6 +3113,21 @@ window.MA.modules.plantumlSequence = (function() {
           P.bindEvent('seq-edit-boxlabel', 'change', function() {
             window.MA.history.pushHistory();
             ctx.setMmdText(renameBox(ctx.getMmdText(), bx.line, this.value));
+            ctx.onUpdate();
+          });
+        }
+        else if (sel.type === 'title') {
+          // BLK-migrator-20260923-2012: プレビューの題名を押すと、その題名の行を直せる。
+          var tLine = sel.line;
+          var tRaw = (ctx.getMmdText().split('\n')[tLine - 1] || '');
+          var tMatch = tRaw.match(/^\s*title\s+(.*?)\r?$/i);
+          if (!tMatch) { propsEl.innerHTML = '<p style="color:var(--text-secondary);font-size:11px;">題名の行が見つかりません</p>'; return; }
+          propsEl.innerHTML =
+            '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>' + escHtml(tMatch[1]) + '</strong><br><span style="color:var(--text-secondary);">図の題名 (title) · L' + tLine + '</span></div>' +
+            P.fieldHtml('題名', 'seq-edit-title', tMatch[1]);
+          P.bindEvent('seq-edit-title', 'change', function() {
+            window.MA.history.pushHistory();
+            ctx.setMmdText(setTitle(ctx.getMmdText(), this.value, tLine));
             ctx.onUpdate();
           });
         }
