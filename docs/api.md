@@ -147,4 +147,4 @@ curl -sS -X POST http://127.0.0.1:8766/verify-svg -H "Content-Type: application/
 | `POST /native-open` | — | アプリ版: 開くダイアログ (複数選択) で .puml を読み、`{files:[{path, name, text, encoding, bom, eol}]}`。Web 版は 409 |
 | `POST /native-write` | `{path, text, encoding, bom}` | 開いた元の .puml / .plantuml / .uml / .txt へ書き戻す。Shift_JIS は cp932 で書き、書けない字があれば 400。無いファイルには書かない |
 | `POST /heartbeat` | — | 204。無音 300 秒で server は自分で落ちる |
-| `POST /shutdown` | — | 204。停止を予約する (Java は残るので別に止める) |
+| `POST /shutdown` | — | 204。停止を予約する (Java は残るので別に止める)。環境変数 `PUA_NO_IDLE_EXIT=1` で起こした server は何もしない (無音 3 時間で落ちる安全弁だけ残る) |

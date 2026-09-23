@@ -212,6 +212,13 @@ if sys.platform == 'win32':
 # Browser client POSTs /heartbeat every ~5s; if the tab is closed the
 # pings stop and the watchdog terminates the server automatically.
 IDLE_SHUTDOWN_SEC = 300
+# BLK-human-20260924-0900: ハーネスや E2E が起こした server は、ブラウザを閉じても落とさない。
+# ページを閉じるたびに届く POST /shutdown で約 2 秒後に落ち、空いたポートを別の server が
+# 取って他人の作業木を測る事故が起きていた。ただし起こした側が片付けずに死ぬと残り続けるので、
+# 無音で落ちる安全弁は 3 時間に延ばして残す (ループが .running を残骸とみなす時間と同じ)。
+# Windows アプリ (app.py) は設定しないので今までどおり止まる。
+NO_IDLE_EXIT = os.environ.get('PUA_NO_IDLE_EXIT') == '1'
+NO_IDLE_EXIT_SEC = 3 * 60 * 60
 # BLK-reviewer-20260908-1203-wish: 食い違いの中身を言うために /verify-svg に添える材料の上限。
 # puml は数 KB、text 要素は 1 枚の図で数十〜数百なので、この上限に当たるのは
 # 図でない何かを掴んだときだけ。当たっても応答が肥らないようにするための蓋。
@@ -1263,6 +1270,10 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             return
         if self.path == '/shutdown':
+            if NO_IDLE_EXIT:
+                self.send_response(204)
+                self.end_headers()
+                return
             # Don't kill immediately — F5 reload also fires pagehide/beforeunload.
             # Instead fast-forward the idle timer so the watchdog fires in ~2s,
             # which a fresh heartbeat from the new page will cancel.
@@ -3979,6 +3990,10 @@ def _encode_base64(data):
     return ''.join(out)
 
 
+def _idle_limit_sec():
+    return NO_IDLE_EXIT_SEC if NO_IDLE_EXIT else IDLE_SHUTDOWN_SEC
+
+
 def _idle_watchdog(server):
     """Shut the server down when the browser client stops sending heartbeats."""
     global _shutdown_started
@@ -3988,7 +4003,7 @@ def _idle_watchdog(server):
             if _shutdown_started:
                 return
             idle = time.time() - _last_heartbeat
-        if idle > IDLE_SHUTDOWN_SEC:
+        if idle > _idle_limit_sec():
             with _state_lock:
                 if _shutdown_started:
                     return
@@ -4003,7 +4018,10 @@ def main():
     print(f'  ROOT: {ROOT}')
     print(f'  DATA: {DATA_ROOT}')
     print(f'  JAR:  {jar_path()} (exists={jar_path().exists()})')
-    print(f'  IDLE_SHUTDOWN: {IDLE_SHUTDOWN_SEC}s (auto-stops if browser tab closes)')
+    if NO_IDLE_EXIT:
+        print(f'  IDLE_SHUTDOWN: {NO_IDLE_EXIT_SEC}s, browser close ignored (PUA_NO_IDLE_EXIT)')
+    else:
+        print(f'  IDLE_SHUTDOWN: {IDLE_SHUTDOWN_SEC}s (auto-stops if browser tab closes)')
     print('Press Ctrl+C to stop.')
     # Warm up the JVM daemon in a background thread so the first /render
     # call doesn't pay the ~1s startup cost.
