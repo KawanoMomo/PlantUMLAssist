@@ -3661,10 +3661,11 @@ function initCommandPalette() {
       { id: 'docset-before-after', title: '資料セットの変更前後をまとめて見る / Doc set before-after', hint: 'Deliver', keywords: ['docset', 'set', 'before', 'after', 'review', 'しりょう', 'せっと', 'へんこうぜんご', 'まとめて', 'みくらべ'], run: function() { runDocSetCommand(openDocSetBeforeAfter); } },
       { id: 'docset-layout', title: '資料の体裁… / Doc layout', hint: 'Deliver', keywords: ['docset', 'layout', 'sheet', 'しりょう', 'ていさい', 'みだし', 'ならび'], run: function() { runDocSetCommand(openDocLayout); } },
       { id: 'export-docset', title: '資料セットで SVG で保存（zip）', hint: 'Export', keywords: ['export', 'svg', 'zip', 'set', 'docset', '資料', 'セット'], run: function() { clickById('exp-docset'); } },
-      { id: 'export-pick', title: '図を選んで SVG で保存（zip）', hint: 'Export', keywords: ['export', 'svg', 'zip', 'pick', 'select', 'changed', 'fix'], run: function() { clickById('exp-svg-pick'); } },
-      { id: 'export-fix', title: '要修正のみを SVG で保存（zip）', hint: 'Export', keywords: ['export', 'svg', 'zip', 'fix', 'review'], run: function() { clickById('exp-svg-fix'); } },
-      { id: 'export-material', title: '1 枚を資料化（形式は図種で自動）/ Make material', hint: 'Export', keywords: ['material', 'export', 'しりょう', '資料', 'png', 'svg'], run: function() { clickById('exp-material'); } },
-      { id: 'export-pack', title: '部品の図をまとめて資料化（PNG）', hint: 'Export', keywords: ['export', 'png', 'pack', 'component', 'figure', 'zip'], run: function() { clickById('exp-png-pack'); } },
+      { id: 'export-pick', title: '図を選んで SVG で保存（zip）', hint: 'Export', keywords: ['export', 'svg', 'zip', 'pick', 'select', 'changed', 'fix'], run: function() { openDocSetModal('pick'); } },
+      { id: 'export-fix', title: '要修正のみを SVG で保存（zip）', hint: 'Export', keywords: ['export', 'svg', 'zip', 'fix', 'review'], run: function() { openDocSetModal('fix'); } },
+      { id: 'export-material', title: '1 枚を資料化（形式は図種で自動）/ Make material', hint: 'Export', keywords: ['material', 'export', 'しりょう', '資料', 'png', 'svg'], run: function() { openDocSetModal('one'); } },
+      { id: 'export-pack', title: '部品の図をまとめて資料化（PNG）', hint: 'Export', keywords: ['export', 'png', 'pack', 'component', 'figure', 'zip'], run: function() { openDocSetModal('parts'); } },
+      { id: 'export-board', title: '部品の資料一式を見る／まとめて資料化', hint: 'Export', keywords: ['material', 'board', 'export', '資料', 'いっしき', 'まとめて'], run: function() { openDocSetModal('board'); } },
       { id: 'mode-local', title: 'レンダリング: local (Java)', hint: 'Render', keywords: ['render', 'mode', 'local'], run: function() { selectValue('render-mode', 'local'); } },
       { id: 'mode-online', title: 'レンダリング: online (plantuml.com)', hint: 'Render', keywords: ['render', 'mode', 'online'], run: function() { selectValue('render-mode', 'online'); } },
     ];
@@ -27609,10 +27610,34 @@ function exportDocSet(name) {
   });
 }
 
-function openDocSetModal() {
+// BLK-owner-20260923-1829-prune: 「資料にする」出口は 📦 資料セット 1 つ。範囲は
+// メニューの項目数ではなくこの画面の「対象の選び方」で選ぶ。set 以外は畳んだ入口の
+// 実体 (#toolbar-actions の hidden なボタン) を押すので、処理も件数も今までどおり。
+var _dsScope = 'set';
+
+function setDocSetScope(scope) {
+  _dsScope = scope || 'set';
+  var bar = document.getElementById('docset-scope');
+  if (bar) Array.prototype.forEach.call(bar.querySelectorAll('button[data-scope]'), function(b) {
+    b.setAttribute('aria-pressed', b.getAttribute('data-scope') === _dsScope ? 'true' : 'false');
+  });
+  if (_dsScope === 'set') return;
+  closeDocSetModal();
+  var hit = { one: 'exp-material', parts: 'exp-png-pack', board: 'exp-material-board' }[_dsScope];
+  if (hit) { var el = document.getElementById(hit); if (el) el.click(); }
+  else if (_dsScope === 'fix') toggleExportPick(true, 'fix');
+  else if (_dsScope === 'pick') toggleExportPick(true, 'all');
+  _dsScope = 'set';
+  setDocSetScope('set');
+}
+
+function openDocSetModal(scope) {
   var modal = _dsModal();
   if (!modal) return;
   modal.style.display = 'flex';
+  if (scope && scope !== 'set') { setDocSetScope(scope); return Promise.resolve(); }
+  _dsScope = 'set';
+  setDocSetScope('set');
   _dsStatus('');
   closeDocLayout();
   closeDocProof();
@@ -27660,6 +27685,11 @@ function setupDocSets() {
   if (dlOnly) dlOnly.addEventListener('click', function() {
     _dlBlankOnly = !_dlBlankOnly;
     renderDocLayout();
+  });
+  var scopeBar = document.getElementById('docset-scope');
+  if (scopeBar) scopeBar.addEventListener('click', function(ev) {
+    var b = ev.target && ev.target.closest ? ev.target.closest('button[data-scope]') : null;
+    if (b) setDocSetScope(b.getAttribute('data-scope'));
   });
   var create = document.getElementById('docset-create');
   if (create) create.addEventListener('click', function() {
@@ -29169,13 +29199,14 @@ function renderExportPick() {
   if (save) save.disabled = (ES.counts(_expickList).selected === 0);
 }
 
-function toggleExportPick(open) {
+function toggleExportPick(open, mode) {
   var modal = document.getElementById('expick-modal');
   if (!modal) return;
   var want = (open == null) ? (modal.style.display === 'none' || !modal.style.display) : !!open;
   if (!want) { modal.style.display = 'none'; return; }
   _expickList = _expickBuild();
-  _expickMode = 'all';
+  _expickMode = mode || 'all';
+  if (_expickMode !== 'all') _expickList = window.MA.exportSelect.applyMode(_expickList, _expickMode);
   var state = document.getElementById('expick-state');
   if (state) state.textContent = '';
   modal.style.display = 'flex';

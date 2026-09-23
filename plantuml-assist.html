@@ -3058,6 +3058,16 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
   color: var(--text-primary); border-radius: 4px; padding: 3px 10px;
   font-size: 12px; cursor: pointer;
 }
+#docset-scope {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  padding: 6px 14px; border-bottom: 1px solid var(--border);
+}
+#docset-scope .ds-scope-label { color: var(--text-secondary); font-size: 12px; }
+#docset-scope button {
+  font-size: 12px; padding: 3px 8px; border: 1px solid var(--border);
+  background: var(--bg-secondary); color: var(--text-primary); border-radius: 4px; cursor: pointer;
+}
+#docset-scope button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
 #docset-new {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
   padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 12px;
@@ -7237,30 +7247,16 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
              この「渡す」1 か所に集める。タブ列には置かない (実体のボタンは
              #toolbar-actions に残すので Ctrl+K からは今まで通りの名前で引ける) -->
         <div class="exp-group-title">渡す</div>
-        <button id="exp-docset" title="登録した資料セット（名前を付けた図の組）を選ぶと、タブを開き直さずに保存フォルダからその枚数ぶんを zip にする">資料セットでSVGで保存（zip）…</button>
+        <button id="exp-docset" title="登録した資料セット（名前を付けた図の組）を選ぶと、タブを開き直さずに保存フォルダからその枚数ぶんを zip にする">📦 資料セット（SVG / PNG・1 枚 / 部品 / 組）…</button>
         <button id="exp-delivery" title="表紙 (図一覧・版数・提出前チェック結果)・前回提出からの差分・全図 SVG を 1 つの納品 zip にまとめる">納品パッケージ（zip）…</button>
         <button id="exp-handoff" title="系統チェック・名前突合・変更サマリ・SVG 一式を 1 つのパッケージ (zip) に書き出す">引き継ぎ（zip）…</button>
         <div class="exp-group-title">その他</div>
-        <!-- BLK-primary-20260908-1203-wish: 提出用 zip に詰める図を、変更サマリボードと
-             同じ「変更図のみ / 要修正のみ」でその場で絞り込んで選ぶ -->
-        <!-- BLK-primary-20260908-1903-friction: 指摘で名指しされた数枚だけを出すのに、
-             1 枚ずつ開いて Export するしかなかった。該当枚数を名前に出して 1 押しで出す -->
-        <button id="exp-svg-fix" title="▤ 変更サマリで [要修正] の印が付いた図だけを zip に詰める（絞り込み画面を開かずに保存する）">要修正のみをSVGで保存（zip）</button>
-        <button id="exp-svg-pick" title="変更図のみ・要修正のみで絞り込んで、選んだ図だけを zip に詰める">図を選んでSVGで保存（zip）…</button>
-        <!-- BLK-junior-20260908-1903-wish: 設計書に貼る資料は「同じ部品の全図種」で 1 組。
-             保存フォルダから部品ごとに図を集め、図番号を振った PNG セットにして 1 回で出す -->
-        <button id="exp-png-pack" title="保存フォルダから同じ部品の図を全図種まとめ、図番号を振った PNG セット（zip）にして書き出す">部品の図をまとめて資料化（PNG）…</button>
-        <!-- BLK-junior-20260908-2303-wish: 1 枚ぶんの資料化。図種ごとに決まっている
-             形式 (状態遷移図=SVG / 他=PNG透過) を利用者に覚えさせず、部品と図種を
-             選ぶだけで 題名の(資料用)・書き出し・保存・提出物庫への控えまでを 1 回で行う -->
-        <button id="exp-material" title="部品と図種を選ぶと、その図種に決まっている形式で書き出し、題名に（資料用）を付けて保存フォルダと提出物庫にも入れる">1 枚を資料化（形式は図種で自動）…</button>
         <!-- BLK-junior-20260909-0003-wish: 設計書に貼る資料は 1 部品の複数図種で 1 組。
              どの図種の資料用がまだ無いか・元の図が資料用より新しくないかを一覧で見せ、
              手当ての要る図種だけをまとめて 1 回で書き出す -->
         <!-- BLK-junior-20260909-0103-wish: 図の要素と設計書の要求 ID (SWReq-xxx) の対応を
              図の中に持ち、Export のときに対応表 (CSV) と画像の脚注を同時に確定させる -->
         <button id="exp-req-trace" title="クラス・メソッド・状態・遷移に要求ID（SWReq-xxx）を付け、対応表をCSVで書き出す（画像の脚注にも入れられる）">要求ID対応を付ける／対応表を書き出す…</button>
-        <button id="exp-material-board" title="部品の図種を全部並べ、資料用が無い図種・元が新しい図種を色分けで見せて、選んだ図種をまとめて資料化する">部品の資料一式を見る／まとめて資料化…</button>
       </div>
       <div id="bulk-export-status" role="status"></div>
     </div>
@@ -7296,6 +7292,14 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
          (と Ctrl+K)。画面には出さないが DOM には残すので、処理も件数表示もそのまま働く -->
     <button class="tab-tool" id="btn-tab-handoff" title="系統チェック・名前突合・変更サマリ・SVG 一式を 1 つのパッケージ (zip) に書き出す">📦 引き継ぎ</button>
     <button class="tab-tool" id="btn-tab-delivery" title="表紙 (図一覧・版数・提出前チェック結果)・前回提出からの差分・全図 SVG を 1 つの納品 zip にまとめる">📦 納品パッケージ</button>
+    <!-- BLK-owner-20260923-1829-prune: 「資料にする」出口は 📦 資料セット 1 つに畳んだ。
+         範囲 (1 枚 / 部品 / 名前を付けた組 / 資料一式) と形式は資料セット画面で選ぶ。
+         実体のボタンは画面から外してここに残すので、処理も件数表示も Ctrl+K も今までどおり働く -->
+    <button id="exp-svg-pick" title="全図・変更図のみ・要修正のみで絞り込んで、選んだ図だけを zip に詰める">図を選んでSVGで保存（zip）…</button>
+    <button id="exp-svg-fix" title="▤ 変更サマリで [要修正] の印が付いた図だけを zip に詰める">要修正のみをSVGで保存（zip）</button>
+    <button id="exp-png-pack" title="保存フォルダから同じ部品の図を全図種まとめ、図番号を振った PNG セット（zip）にして書き出す">部品の図をまとめて資料化（PNG）…</button>
+    <button id="exp-material" title="部品と図種を選ぶと、その図種に決まっている形式で書き出し、題名に（資料用）を付けて保存フォルダと提出物庫にも入れる">1 枚を資料化（形式は図種で自動）…</button>
+    <button id="exp-material-board" title="部品の図種を全部並べ、資料用が無い図種・元が新しい図種を色分けで見せて、選んだ図種をまとめて資料化する">部品の資料一式を見る／まとめて資料化…</button>
     <select id="render-mode" title="レンダリングモード">
       <option value="local">local (Java)</option>
       <option value="online">online (plantuml.com)</option>
@@ -8797,6 +8801,22 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <span id="docset-tools">
         <button type="button" id="docset-close">閉じる</button>
       </span>
+    </div>
+    <!-- BLK-owner-20260923-1829-prune: 範囲はメニューの項目数ではなくここで選ぶ -->
+    <div id="docset-scope" role="group" aria-label="対象の選び方">
+      <span class="ds-scope-label">対象の選び方</span>
+      <button type="button" id="dsc-set" data-scope="set" aria-pressed="true"
+              title="名前を付けた図の組をまとめて SVG の zip にする">名前を付けた組</button>
+      <button type="button" id="dsc-one" data-scope="one" aria-pressed="false"
+              title="1 枚だけを資料化する（形式は図種で自動）">1 枚だけ</button>
+      <button type="button" id="dsc-parts" data-scope="parts" aria-pressed="false"
+              title="同じ部品の図を全図種まとめて PNG セットにする">部品でまとめる</button>
+      <button type="button" id="dsc-board" data-scope="board" aria-pressed="false"
+              title="部品の図種を並べ、資料用なし・元が新しい・最新を色分けで見る">資料一式を見る</button>
+      <button type="button" id="dsc-pick" data-scope="pick" aria-pressed="false"
+              title="全図・変更図のみ・要修正のみで絞り込んで、選んだ図だけを zip にする">図を選ぶ</button>
+      <button type="button" id="dsc-fix" data-scope="fix" aria-pressed="false"
+              title="▤ 変更サマリで [要修正] の印が付いた図だけを zip にする">要修正のみ</button>
     </div>
     <div id="docset-new">
       <label>新しい資料セット</label>
