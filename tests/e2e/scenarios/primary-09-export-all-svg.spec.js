@@ -48,7 +48,9 @@ test('手順9 2 度目は前回書き出しからの差分が出て、変わっ�
 
   await page.locator('#btn-export').click();
   await page.waitForSelector('#export-menu', { state: 'visible' });
-  await page.locator('#exp-svg-pick').click();
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-scope', { state: 'visible' });
+  await page.locator('#dsc-pick').click();
   await expect(page.locator('#expick-modal')).toBeVisible();
   // 「初回」ではなく前回書き出しの時点が基準として出る。
   await expect(page.locator('#expick-since')).toContainText('前回SVG 一括出力');

@@ -69,7 +69,9 @@ async function openApp(page) {
 
 async function openPack(page) {
   await page.locator('#btn-export').click();
-  await page.locator('#exp-png-pack').click();
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-scope', { state: 'visible' });
+  await page.locator('#dsc-parts').click();
   await expect(page.locator('#cpack-modal')).toBeVisible();
   await expect(page.locator('#cpack-body label.cpack-row')).not.toHaveCount(0, { timeout: 15000 });
 }

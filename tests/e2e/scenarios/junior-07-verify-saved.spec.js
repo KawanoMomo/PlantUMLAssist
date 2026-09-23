@@ -50,7 +50,9 @@ test('手順7 資料化した本文を、モーダルを閉じずに保存先か
 
   await page.locator('#btn-export').click();
   await page.waitForSelector('#export-menu', { state: 'visible' });
-  await page.locator('#exp-material').click();
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-scope', { state: 'visible' });
+  await page.locator('#dsc-one').click();
   await page.waitForSelector('#mexp-modal', { state: 'visible' });
   await page.waitForTimeout(600);
 
@@ -104,7 +106,9 @@ test('手順6 部品サマリカードで、図種が揃っているかを 1 画
 
   await page.locator('#btn-export').click();
   await page.waitForSelector('#export-menu', { state: 'visible' });
-  await page.locator('#exp-material').click();
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-scope', { state: 'visible' });
+  await page.locator('#dsc-one').click();
   await page.waitForSelector('#mexp-modal', { state: 'visible' });
   await page.waitForTimeout(600);
   await page.locator('#mexp-component').selectOption('TIMERドライバ');

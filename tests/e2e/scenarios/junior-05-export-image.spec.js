@@ -46,7 +46,9 @@ test('手順5 資料化: 状態遷移図を選ぶと SVG で出て、(資料用)
 
   await page.locator('#btn-export').click();
   await page.waitForSelector('#export-menu', { state: 'visible' });
-  await page.locator('#exp-material').click();
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-scope', { state: 'visible' });
+  await page.locator('#dsc-one').click();
   await page.waitForSelector('#mexp-modal', { state: 'visible' });
   await page.waitForTimeout(600);
 
@@ -84,7 +86,9 @@ test('手順5 資料化: シーケンス図を選ぶと PNG(透過背景)に切�
 
   await page.locator('#btn-export').click();
   await page.waitForSelector('#export-menu', { state: 'visible' });
-  await page.locator('#exp-material').click();
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-scope', { state: 'visible' });
+  await page.locator('#dsc-one').click();
   await page.waitForSelector('#mexp-modal', { state: 'visible' });
   await page.waitForTimeout(600);
 
@@ -116,7 +120,9 @@ test('手順4 資料化: 開いた時点で部品をまたいだ残りが読め�
 
   await page.locator('#btn-export').click();
   await page.waitForSelector('#export-menu', { state: 'visible' });
-  await page.locator('#exp-material').click();
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-scope', { state: 'visible' });
+  await page.locator('#dsc-one').click();
   await page.waitForSelector('#mexp-modal', { state: 'visible' });
   await page.waitForTimeout(800);
 
@@ -155,7 +161,9 @@ test('手順5 資料化: マスに貼付先の見出しを登録すると、見�
 
   await page.locator('#btn-export').click();
   await page.waitForSelector('#export-menu', { state: 'visible' });
-  await page.locator('#exp-material').click();
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-scope', { state: 'visible' });
+  await page.locator('#dsc-one').click();
   await page.waitForSelector('#mexp-modal', { state: 'visible' });
   await page.waitForTimeout(900);
 
@@ -203,7 +211,9 @@ test('手順5 資料化: マスに貼付先の見出しを登録すると、見�
   await page.waitForTimeout(300);
   await page.locator('#btn-export').click();
   await page.waitForSelector('#export-menu', { state: 'visible' });
-  await page.locator('#exp-material').click();
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-scope', { state: 'visible' });
+  await page.locator('#dsc-one').click();
   await page.waitForSelector('#mexp-modal', { state: 'visible' });
   await page.waitForTimeout(900);
   await expect(page.locator('#mexp-anchor-summary')).toContainText('2 マスすべて登録済み');
@@ -228,7 +238,9 @@ const GPIO_CLASS = [
 async function openMaterialBoard(page) {
   await page.locator('#btn-export').click();
   await page.waitForSelector('#export-menu', { state: 'visible' });
-  await page.locator('#exp-material-board').click();
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-scope', { state: 'visible' });
+  await page.locator('#dsc-board').click();
   await page.waitForSelector('#mboard-modal', { state: 'visible' });
   await page.waitForTimeout(700);
   await page.locator('#mboard-component').selectOption('GPIOドライバ');
@@ -393,7 +405,9 @@ test('手順4 資料化: 開いた時点で部品ごとの残りが読め、手�
 
   await page.locator('#btn-export').click();
   await page.waitForSelector('#export-menu', { state: 'visible' });
-  await page.locator('#exp-material').click();
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-scope', { state: 'visible' });
+  await page.locator('#dsc-one').click();
   await page.waitForSelector('#mexp-modal', { state: 'visible' });
   await page.waitForTimeout(900);
 
@@ -431,7 +445,9 @@ test('手順5 資料化: 図種欄は［未］の図種が先頭にまとまり�
 
   await page.locator('#btn-export').click();
   await page.waitForSelector('#export-menu', { state: 'visible' });
-  await page.locator('#exp-material').click();
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-scope', { state: 'visible' });
+  await page.locator('#dsc-one').click();
   await page.waitForSelector('#mexp-modal', { state: 'visible' });
   await page.waitForTimeout(900);
 
@@ -471,7 +487,9 @@ test('手順4 資料化: 部品欄の行で、その部品がどの図種を持�
 
   await page.locator('#btn-export').click();
   await page.waitForSelector('#export-menu', { state: 'visible' });
-  await page.locator('#exp-material').click();
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-scope', { state: 'visible' });
+  await page.locator('#dsc-one').click();
   await page.waitForSelector('#mexp-modal', { state: 'visible' });
   await page.waitForTimeout(900);
 
@@ -523,7 +541,9 @@ test('手順5 資料化: 実行後もモーダルが閉じず、保存先に置�
 
   await page.locator('#btn-export').click();
   await page.waitForSelector('#export-menu', { state: 'visible' });
-  await page.locator('#exp-material').click();
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-scope', { state: 'visible' });
+  await page.locator('#dsc-one').click();
   await page.waitForSelector('#mexp-modal', { state: 'visible' });
   await page.waitForTimeout(600);
 
@@ -580,7 +600,9 @@ test('手順4 資料化: 部品の行を 1 押しで、未/古の図種をまと
 
   await page.locator('#btn-export').click();
   await page.waitForSelector('#export-menu', { state: 'visible' });
-  await page.locator('#exp-material').click();
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-scope', { state: 'visible' });
+  await page.locator('#dsc-one').click();
   await page.waitForSelector('#mexp-modal', { state: 'visible' });
   await page.waitForTimeout(900);
 
