@@ -1,3 +1,4 @@
+- BLK-builder-20260924-0012-b2-1-red: 📂 一覧から開いた図の最初の保存でも、宣言の無い呼び出しを書き込む前に止める (保存フォルダを読んでから判定)。止めた帯が直前の保存の「部品名の衝突」帯の下に入らず、「このまま保存」「意図的に省略」が押せる
 - BLK-builder-20260923-2312-2-red: migrator 手順 4 のホバー枠 E2E が緑に戻る (図の上端の要素はズーム帯の地を抜けて枠が出る、画面より広い図は右端の要素を見える所まで動かしてから指す)
 - BLK-migrator-20260923-1909: class / component / deployment 図で、継承線の先・`abstract X`・circle / diamond、package や cloud / database の中の部品、node / cloud / artifact / queue など非矩形の要素にもホバーの枠が出る (PlantUML が SVG に残す要素名と行で当てる)。フォームで直せない記法の要素は押すと本文の行と「フォーム未対応」が右欄に出る。ズーム帯の地の下の要素にも枠が届く
 - BLK-migrator-20260923-2012: actor / boundary / control / entity / database / collections / queue で参加者を宣言した sequence 図でも、見出し・下端の名前にホバーすると本人の枠が出る (名前が図形の外に出る形は図形と名前をまとめて囲む)。頭と足は指した側だけが光る。遅延 (...) で区切られたライフラインは全区間に枠が出て、ref over があっても alt / loop の枠がずれない

@@ -6207,7 +6207,10 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   position: sticky;
   top: 0;
   left: 0;
-  z-index: 30;
+  /* 保存を止めて返事を待っている帯なので、直前の保存が出した帯 (衝突・突合・入れ替わり。
+     いずれも sticky / z-index 30) の下に入らない。同じ高さだと DOM で後ろの帯が
+     「このまま保存」の上に被さって押せなかった。 */
+  z-index: 31;
   margin: -16px -16px 12px -16px;
   padding: 6px 12px;
   background: rgba(70, 24, 24, 0.97);
