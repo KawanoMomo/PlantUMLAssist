@@ -899,6 +899,15 @@ function init() {
   // 持つ rect を全部まとめて光らせ、枠 = 当たり判定の範囲、を図種によらず成り立たせる。
   if (overlayElForHover) {
     var _hoverPeerKey = null;
+    function _rectBox(r) {
+      var x = parseFloat(r.getAttribute('x')), y = parseFloat(r.getAttribute('y'));
+      var w = parseFloat(r.getAttribute('width')), h = parseFloat(r.getAttribute('height'));
+      return (isNaN(x) || isNaN(y) || isNaN(w) || isNaN(h)) ? null : { x: x, y: y, w: w, h: h };
+    }
+    function _boxesTouch(a, b) {
+      if (!a || !b) return true;
+      return a.x <= b.x + b.w && b.x <= a.x + a.w && a.y <= b.y + b.h && b.y <= a.y + a.h;
+    }
     function _clearHoverPeers() {
       if (!_hoverPeerKey) return;
       Array.prototype.forEach.call(
@@ -912,14 +921,20 @@ function init() {
       var id = type ? t.getAttribute('data-id') : null;
       if (!type || id == null) { _clearHoverPeers(); return; }
       var key = type + '\u0000' + id;
-      if (key === _hoverPeerKey) return;
+      // 同じ要素でも、光っていない rect (離れた所に描いた頭と足の片方) へ移ったら光らせ直す。
+      if (key === _hoverPeerKey && t.classList && t.classList.contains('hit-hover')) return;
       _clearHoverPeers();
       _hoverPeerKey = key;
       // data-id は利用者が付けた名前なので、セレクタに埋めず属性を直接見比べる。
+      // BLK-migrator-20260923-2012: まとめて光らせるのは、指した rect と重なる仲間だけ
+      // (関係の箱とその中のラベルの箱)。シーケンスの参加者の頭と足のように、同じ要素を
+      // 離れた所にもう一度描いた rect は別の当たり判定なので、指していない側は光らせない。
+      var hb = _rectBox(t);
       Array.prototype.forEach.call(
         overlayElForHover.querySelectorAll('rect.selectable[data-type]'),
         function(r) {
-          if (r.getAttribute('data-type') === type && r.getAttribute('data-id') === id) {
+          if (r.getAttribute('data-type') === type && r.getAttribute('data-id') === id &&
+              (r === t || !hb || _boxesTouch(hb, _rectBox(r)))) {
             r.classList.add('hit-hover');
           }
         });

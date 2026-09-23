@@ -452,6 +452,25 @@ window.MA.overlayBuilder = (function() {
     return n;
   }
 
+  // BLK-migrator-20260923-2012: シーケンスの参加者は宣言キーワードで形が変わる
+  // (actor = 棒人間の下に名前、boundary / control / entity = 円の下に名前、database = 円柱、
+  // queue = 横向きの筒 …)。名前が図形の外に出る形では、塗りのある図形だけを囲むと
+  // 名前の上に枠が出ない。描かれた図形と文字の和集合で囲む。キーワードごとの分岐は持たない
+  // (長方形の participant は文字が箱の内側なので、囲む範囲は今までと同じ)。
+  function extractFigureBBox(g) {
+    var drawn = extractDrawnBBox(g);
+    var texts = extractUnionBBox(g, 'text');
+    if (!drawn) return texts;
+    if (!texts) return drawn;
+    var x = Math.min(drawn.x, texts.x);
+    var y = Math.min(drawn.y, texts.y);
+    return {
+      x: x, y: y,
+      width: Math.max(drawn.x + drawn.width, texts.x + texts.width) - x,
+      height: Math.max(drawn.y + drawn.height, texts.y + texts.height) - y,
+    };
+  }
+
   function matchByDataSourceLine(svgEl, items, selector, offset) {
     var groups = svgEl.querySelectorAll(selector);
     var byLine = {};
@@ -590,6 +609,7 @@ window.MA.overlayBuilder = (function() {
     extractMultiLineTextBBoxes: extractMultiLineTextBBoxes,
     hitTestTopmost: hitTestTopmost,
     extractDrawnBBox: extractDrawnBBox,
+    extractFigureBBox: extractFigureBBox,
     matchByEntityName: matchByEntityName,
     matchByDataSourceLine: matchByDataSourceLine,
     matchByOrder: matchByOrder,
