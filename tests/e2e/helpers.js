@@ -90,7 +90,16 @@ async function setDiagramTitle(page, title) {
   await page.waitForTimeout(200);
 }
 
+
+// design 9b (BLK-human-20260923-1601): ツール ▾ は左 6 分類・右小見出しの 2 段パネル。
+// 目当ての項目はその分類を選ばないと右列に出ないので、分類を選んでから押す。
+async function pickTool(page, targetId) {
+  const key = await page.evaluate((id) => window.MA.toolMenu.groupOf(id), targetId);
+  await page.locator('.tool-menu-cat[data-group="' + key + '"]').click();
+  await page.locator('.tool-menu-item[data-target="' + targetId + '"]').click();
+}
+
 module.exports = {
   gotoApp, loadFixture, getEditorText, getEditorLine, clickOverlayByLine, setDiagramTitle,
-  saveDirFor, shotOut, E2E_SAVE_ROOT,
+  saveDirFor, shotOut, E2E_SAVE_ROOT, pickTool,
 };

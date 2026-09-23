@@ -1675,7 +1675,7 @@ function init() {
 
     function open() {
       menu.innerHTML = tm.buildMenuHtml(badges())
-        + '<div class="tool-menu-group"><button type="button" class="tool-menu-item" id="tool-menu-fold">'
+        + '<div class="tool-menu-foot"><button type="button" class="tool-menu-item" id="tool-menu-fold">'
         + '<span class="tool-menu-label">'
         + (isFolded() ? 'タブ列に戻す' : 'タブ列から畳む')
         + '</span></button>'
@@ -1686,7 +1686,109 @@ function init() {
         + '</span></button></div>';
       menu.hidden = false;
       setExpanded(true);
+      // design 9b: 開いたらそのまま打てる。分類は 1 つ目を選んだ状態で出す。
+      selectCat(menu.querySelector('.tool-menu-cat'));
+      var f = menu.querySelector('#tool-menu-filter');
+      if (f) f.focus();
     }
+
+    // ── design 9b: 2 段パネルの分類切り替え・絞り込み・キーボード ────────────
+    function catButtons() {
+      return Array.prototype.slice.call(menu.querySelectorAll('.tool-menu-cat'));
+    }
+
+    // いま見えている項目 (絞り込み中はその結果)。↑↓ と Enter はこれを辿る。
+    function visibleItems() {
+      return Array.prototype.filter.call(
+        menu.querySelectorAll('.tool-menu-items .tool-menu-item'),
+        function(b) { return b.offsetParent !== null || !b.closest('[hidden]'); });
+    }
+
+    function selectCat(btn) {
+      if (!btn) return;
+      var key = btn.getAttribute('data-group');
+      catButtons().forEach(function(b) {
+        b.setAttribute('aria-selected', b === btn ? 'true' : 'false');
+      });
+      Array.prototype.forEach.call(menu.querySelectorAll('.tool-menu-group'), function(g) {
+        g.hidden = g.getAttribute('data-group') !== key;
+      });
+      markCurrent(null);
+    }
+
+    function markCurrent(item) {
+      Array.prototype.forEach.call(menu.querySelectorAll('.tool-menu-item[aria-current]'),
+        function(b) { b.removeAttribute('aria-current'); });
+      if (item) item.setAttribute('aria-current', 'true');
+    }
+
+    function currentItem() {
+      return menu.querySelector('.tool-menu-items .tool-menu-item[aria-current="true"]');
+    }
+
+    function moveItem(step) {
+      var list = visibleItems();
+      if (!list.length) return;
+      var i = list.indexOf(currentItem());
+      i = (i < 0) ? (step > 0 ? 0 : list.length - 1) : (i + step + list.length) % list.length;
+      markCurrent(list[i]);
+    }
+
+    function moveCat(step) {
+      var cats = catButtons();
+      if (!cats.length) return;
+      var cur = menu.querySelector('.tool-menu-cat[aria-selected="true"]');
+      var i = cats.indexOf(cur);
+      i = (i < 0) ? 0 : (i + step + cats.length) % cats.length;
+      selectCat(cats[i]);
+    }
+
+    // 絞り込み: 全分類を横断して候補を出す。空に戻すと分類表示に帰る。
+    function applyFilter(q) {
+      var hits = menu.querySelector('.tool-menu-hits');
+      var cats = menu.querySelector('.tool-menu-cats');
+      if (!hits) return;
+      var on = String(q || '').trim() !== '';
+      Array.prototype.forEach.call(menu.querySelectorAll('.tool-menu-group'), function(g) {
+        if (on) g.hidden = true;
+      });
+      hits.hidden = !on;
+      if (cats) cats.classList.toggle('tool-menu-cats-dim', on);
+      if (on) {
+        hits.innerHTML = tm.buildHitsHtml(q, badges());
+        markCurrent(hits.querySelector('.tool-menu-item'));
+      } else {
+        hits.innerHTML = '';
+        selectCat(menu.querySelector('.tool-menu-cat[aria-selected="true"]')
+          || menu.querySelector('.tool-menu-cat'));
+      }
+    }
+
+    // ホバーで右列が切り替わる (design 9b)。絞り込み中は候補を出したままにする。
+    menu.addEventListener('mouseover', function(e) {
+      var cat = e.target && e.target.closest ? e.target.closest('.tool-menu-cat') : null;
+      if (!cat) return;
+      var f = menu.querySelector('#tool-menu-filter');
+      if (f && f.value.trim()) return;
+      selectCat(cat);
+    });
+
+    menu.addEventListener('input', function(e) {
+      if (!e.target || e.target.id !== 'tool-menu-filter') return;
+      applyFilter(e.target.value);
+    });
+
+    menu.addEventListener('keydown', function(e) {
+      if (menu.hidden) return;
+      if (e.key === 'ArrowDown') { e.preventDefault(); moveItem(1); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); moveItem(-1); return; }
+      if (e.key === 'ArrowRight') { e.preventDefault(); moveCat(1); return; }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); moveCat(-1); return; }
+      if (e.key === 'Enter') {
+        var cur = currentItem();
+        if (cur) { e.preventDefault(); cur.click(); }
+      }
+    });
 
     function toggle(e) {
       e.stopPropagation();
@@ -1697,6 +1799,8 @@ function init() {
     if (mini) mini.addEventListener('click', toggle);
 
     menu.addEventListener('click', function(e) {
+      var cat = e.target && e.target.closest ? e.target.closest('.tool-menu-cat') : null;
+      if (cat) { selectCat(cat); return; }
       var item = e.target && e.target.closest ? e.target.closest('.tool-menu-item') : null;
       if (!item) return;
       if (item.id === 'tool-menu-fold') {
