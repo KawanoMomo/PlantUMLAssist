@@ -27904,7 +27904,15 @@ function deleteDocSet(name) {
 
 // セットの図を保存フォルダから読んで zip にする。タブは見ない。
 // 欠けている図は書き出す前に名指しして、zip を開いてから気付く形にしない。
+// BLK-builder-20260924-0637-3-red: 書き出す直前に保存フォルダの一覧を読み直す。
+// 画面を開いた時点の一覧のまま突き合わせると、開き直した直後 (一覧の読み込みが
+// 済む前) に押したときに、ある図を「無い」と数えて zip から落としていた。
 function exportDocSet(name) {
+  return loadDocSetNames().then(function() { return _exportDocSetNow(name); },
+    function() { return _exportDocSetNow(name); });
+}
+
+function _exportDocSetNow(name) {
   var DS = window.MA.docSet;
   var FE = window.MA.folderExport;
   var WS = window.MA.workspace;
@@ -27922,11 +27930,18 @@ function exportDocSet(name) {
   _dsStatus(DS.summary(res) + ' — 書き出しています…');
   var dir = _wsFileDir();
   var texts = {};
-  return Promise.all(res.present.map(function(n) {
+  // 読めなかった図は 1 度だけ読み直す (保存フォルダが書き込み中・混んでいると 1 回目が空で返る)。
+  function _load(n, again) {
+    function retry() {
+      if (!again) return null;
+      return new Promise(function(ok) { setTimeout(ok, 300); }).then(function() { return _load(n, false); });
+    }
     return WS.loadFile(n, dir).then(function(t) {
-      if (typeof t === 'string') texts[n] = t;
-    }, function() {});
-  })).then(function() {
+      if (typeof t === 'string') { texts[n] = t; return null; }
+      return retry();
+    }, retry);
+  }
+  return Promise.all(res.present.map(function(n) { return _load(n, true); })).then(function() {
     var built = FE.docsFrom(res.present, texts);
     if (!built.docs.length) { _dsStatus('図の本文を読めませんでした'); return null; }
     // BLK-primary-20260916-0100-wish: 組んだ体裁のまま出す。図番号を名前の先頭に
