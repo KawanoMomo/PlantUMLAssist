@@ -24,6 +24,8 @@ const DIR4 = S.dirFor(__filename) + '-deliv';
 const DIR6 = S.dirFor(__filename) + '-impact';
 // 会議で見せる 3〜5 枚をその場で選んで並べる場面 (BLK-primary-20260918-0249-wish)。
 const DIR7 = S.dirFor(__filename) + '-meeting';
+// 顧客向け資料に組み込む前に、資料セットの複数枚をまとめて確かめる場面 (BLK-primary-20260918-0549-friction)。
+const DIR8 = S.dirFor(__filename) + '-docset';
 
 // 手順2 と同じ一括置換を当てる。手順4 が見せるのはその前後なので、
 // ここを踏まないと「変更前」がそもそも存在しない。
@@ -736,4 +738,55 @@ test('手順4 会議で見せる 3 枚を選んで並べ、各図の変更前後
   await expect(page.locator('#cb-meeting-state')).toContainText('会議セットは空です');
   await page.locator('#cb-close').click();
   await S.clearDir(page, DIR7);
+});
+
+// BLK-primary-20260918-0549-friction: 顧客向け資料に載せる前の確認で、
+// 図ごとに「保存フォルダの一覧を開く → クリックで開く → 変更前後を出す」を
+// 枚数分繰り返していた (クリック 12 / キー 87)。資料セットには「どの図を渡すか」が
+// 入っているので、その並びをそのまま既存の変更サマリボードに渡して 1 回で並べる。
+test('手順4 資料セットの 3 枚を、開き直さず 1 回の操作で変更前後に並べられる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR8);
+  await S.clearDir(page, DIR8);
+  const SET = ['spi_init_sequence', 'spi_state', 'driver_common_class'];
+  for (const name of SET) {
+    await S.putDoc(page, DIR8, name, S.docFor(name, 'SpiDrv'));
+    await S.openFolderItem(page, name);
+  }
+
+  // 下ごしらえ: 顧客に渡す 3 枚を資料セットに登録しておく (手順4 の前の状態)。
+  await page.locator('#btn-export').click();
+  await page.waitForSelector('#export-menu', { state: 'visible' });
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-modal', { state: 'visible' });
+  await page.locator('#docset-name').fill('SPI系統');
+  await page.locator('#docset-create').click();
+  await expect(page.locator('#docset-rows .ds-row')).toHaveCount(1);
+  await page.locator('#docset-close').click();
+
+  // 到達条件その1: Ctrl+K からも資料セットの入口を引ける
+  // (これまではセットの行の中にしか無かった)。
+  await S.runCommand(page, '資料セットの変更前後をまとめて見る');
+  await page.waitForTimeout(2000);
+
+  // 到達条件その2: その 1 回で変更サマリボードが開き、セットの 3 枚がその並びで並ぶ。
+  await expect(page.locator('#cb-modal')).toBeVisible();
+  const entries = page.locator('#cb-body .cb-entry');
+  await expect(entries).toHaveCount(SET.length);
+  // セットに入っている 3 枚がそろっている (並びはセット自身の順をそのまま使う)。
+  for (const name of SET) {
+    await expect(page.locator('#cb-body .cb-entry[data-doc-name="' + name + '"]')).toHaveCount(1);
+  }
+
+  // 到達条件その3: 顧客に見せるので図モードで開く (DSL を見せない)。
+  await expect(page.locator('#cb-svg')).toHaveAttribute('aria-pressed', 'true');
+
+  // 到達条件その4: 資料の体裁 も同じく Ctrl+K から辿れる。
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#cb-modal')).toBeHidden();
+  await S.runCommand(page, '資料の体裁');
+  await page.waitForTimeout(1500);
+  await expect(page.locator('#docset-layout')).toBeVisible();
+
+  await page.screenshot({ path: shotOut('primary-04-docset-before-after.png'), fullPage: true });
+  await S.clearDir(page, DIR8);
 });

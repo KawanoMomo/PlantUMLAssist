@@ -3470,6 +3470,10 @@ function initCommandPalette() {
       { id: 'name-search', title: '名前で図を探す（部品名 / メソッド名）', hint: 'Search',
         keywords: ['search', 'name', 'method', 'xref', 'impact', '名前', '部品', 'メソッド', '検索', '影響', 'どの図'],
         run: function() { openNameSearch((document.getElementById('rename-from') || {}).value || ''); } },
+      // BLK-primary-20260918-0549-friction: 資料セットの行の中にしか無かった 2 つを
+      // Ctrl+K からも引けるようにする (入口は増やさず、同じ操作を同じ名前で呼ぶ)。
+      { id: 'docset-before-after', title: '資料セットの変更前後をまとめて見る / Doc set before-after', hint: 'Deliver', keywords: ['docset', 'set', 'before', 'after', 'review', 'しりょう', 'せっと', 'へんこうぜんご', 'まとめて', 'みくらべ'], run: function() { runDocSetCommand(openDocSetBeforeAfter); } },
+      { id: 'docset-layout', title: '資料の体裁… / Doc layout', hint: 'Deliver', keywords: ['docset', 'layout', 'sheet', 'しりょう', 'ていさい', 'みだし', 'ならび'], run: function() { runDocSetCommand(openDocLayout); } },
       { id: 'export-docset', title: '資料セットで SVG で保存（zip）', hint: 'Export', keywords: ['export', 'svg', 'zip', 'set', 'docset', '資料', 'セット'], run: function() { clickById('exp-docset'); } },
       { id: 'export-pick', title: '図を選んで SVG で保存（zip）', hint: 'Export', keywords: ['export', 'svg', 'zip', 'pick', 'select', 'changed', 'fix'], run: function() { clickById('exp-svg-pick'); } },
       { id: 'export-fix', title: '要修正のみを SVG で保存（zip）', hint: 'Export', keywords: ['export', 'svg', 'zip', 'fix', 'review'], run: function() { clickById('exp-svg-fix'); } },
@@ -5684,6 +5688,20 @@ function setupHandoverChecklist() {
   }
 }
 
+// 図モードの切替を 1 か所にまとめる (BLK-primary-20260918-0549-friction)。
+// _cbSvg を直接書くと、ボタンの見た目だけが古いまま残る。
+function setChangeBoardSvg(on) {
+  _cbSvg = !!on;
+  var btn = document.getElementById('cb-svg');
+  if (btn) {
+    btn.setAttribute('aria-pressed', _cbSvg ? 'true' : 'false');
+    btn.textContent = _cbSvg ? '▤ DSLに戻す' : '🖼 SVGで見る';
+  }
+  var st = document.getElementById('cb-svg-state');
+  if (st && !_cbSvg) st.textContent = '';
+  renderChangeBoard();
+}
+
 function toggleChangeBoard(open) {
   var modal = document.getElementById('cb-modal');
   if (!modal) return;
@@ -5728,14 +5746,7 @@ function setupChangeBoard() {
   // 顧客に見せる画面への切替 (BLK-primary-20260913-0306-wish)。
   // ボードを開いたまま 1 回押すだけで、DSL の行差分が描いた図の変更前後に変わる。
   var svgBtn = document.getElementById('cb-svg');
-  if (svgBtn) svgBtn.addEventListener('click', function() {
-    _cbSvg = !_cbSvg;
-    svgBtn.setAttribute('aria-pressed', _cbSvg ? 'true' : 'false');
-    svgBtn.textContent = _cbSvg ? '▤ DSLに戻す' : '🖼 SVGで見る';
-    var st = document.getElementById('cb-svg-state');
-    if (st && !_cbSvg) st.textContent = '';
-    renderChangeBoard();
-  });
+  if (svgBtn) svgBtn.addEventListener('click', function() { setChangeBoardSvg(!_cbSvg); });
 
   var full = document.getElementById('cb-full');
   if (full) full.addEventListener('change', function() { _cbFull = full.checked; renderChangeBoard(); });
@@ -26404,6 +26415,16 @@ function renderDocSets() {
     go.addEventListener('click', function() { exportDocSet(set.name); });
     row.appendChild(go);
 
+    // 貼る前の確認を 1 クリックで済ませる口 (BLK-primary-20260918-0549-friction)。
+    var ba = document.createElement('button');
+    ba.type = 'button';
+    ba.className = 'ds-before-after';
+    ba.textContent = '変更前後をまとめて見る';
+    ba.title = 'このセットの図を 1 枚ずつ開き直さずに、変更サマリボードで変更前後を通しで見ます';
+    ba.disabled = res.present.length === 0;
+    ba.addEventListener('click', function() { openDocSetBeforeAfter(set.name); });
+    row.appendChild(ba);
+
     // 貼る前に体裁を組む口。zip を開いた後に資料側で並べ直していた分がここに来る。
     var lay = document.createElement('button');
     lay.type = 'button';
@@ -26783,6 +26804,47 @@ function _dpShow(name, files, meta) {
   if (neu) neu.style.display = 'none';
   renderDocProof();
   return _dpProof;
+}
+
+// ── 資料セットをまとめて変更前後で確かめる (BLK-primary-20260918-0549-friction) ──
+// 顧客向け資料に載せる前の確認で、図ごとに「一覧を開く → タブで開く → 変更前後を出す」を
+// 枚数分繰り返していた。セットには既に「どの図を渡すか」が入っているので、
+// その並びをそのまま会議セットに渡し、既存の変更サマリボードを図モードで開く。
+// 新しい画面は作らない (ボードの 1 枚ずつ 変更前 / 変更後 / 差分 のタブをそのまま使う)。
+// Ctrl+K から呼ばれたときの共通の受け口 (BLK-primary-20260918-0549-friction)。
+// セットが 1 つだけならその場でそれを開く (選ばせる意味が無い)。
+// 複数ある・まだ無いなら資料セットの画面を開いて、そこから選んでもらう。
+function runDocSetCommand(fn) {
+  return Promise.resolve(openDocSetModal()).then(function() {
+    var sets = _dsSets || [];
+    if (sets.length === 1) fn(sets[0].name);
+    return sets.length;
+  }, function() { return 0; });
+}
+
+function openDocSetBeforeAfter(name) {
+  var DS = window.MA.docSet;
+  var MS = window.MA.meetingSet;
+  if (!DS || !MS) return null;
+  var set = DS.find(_dsSets, name);
+  if (!set) { _dsStatus('その資料セットはありません'); return null; }
+  var res = DS.resolve(set, _dsNames);
+  if (!res.present.length) {
+    _dsStatus('「' + name + '」の図が保存フォルダに 1 枚もありません');
+    return null;
+  }
+  // セットの並びをそのまま会議セットにする (選び直しはボードの上でできる)。
+  MS.clear();
+  res.present.forEach(function(n) { MS.add(n); });
+  _msOn = true;
+  closeDocSetModal();
+  toggleChangeBoard(true);
+  // 顧客に見せる場面なので図モードで開く (DSL の行差分を見せない)。
+  setChangeBoardSvg(true);
+  var body = document.getElementById('cb-body');
+  if (body) body.scrollTop = 0;
+  window.MA.toast.show('「' + name + '」の ' + res.present.length + ' 枚を変更前後で並べました');
+  return res.present.slice();
 }
 
 // 書き出さずに中身だけを作る (見返すたびに zip を落とさせない)。
