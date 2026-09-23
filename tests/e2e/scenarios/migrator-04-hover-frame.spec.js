@@ -291,3 +291,82 @@ test('migrator 手順 4 — 書式指定つき autonumber の sequence 図でも
   }
 
 });
+
+// BLK-migrator-20260923-1307: 実物は `box "…" #色` / `end box` で参加者をグループ化する。
+// その囲みがあると図の全要素 (参加者見出し・メッセージ) で枠が 1 件も出ず、手順 4 が完了しない。
+// 0449 (特殊矢印)・0549 (書式つき autonumber) と同じ「読めない行があるとその図の枠が落ちる」系統。
+test('migrator 手順 4 — box で参加者をグループ化した sequence 図でも、全要素に枠が出る', async ({ page }) => {
+  await bootPlain(page);
+  await typeDsl(page, [
+    "' 狙い: box によるparticipantのグルーピング",  // 1
+    '@startuml',                                    // 2
+    'box "ECU本体" #LightYellow',                   // 3
+    '  participant App',                            // 4
+    '  participant Rte',                            // 5
+    'end box',                                      // 6
+    'box "外部装置"',                                // 7
+    '  participant Tester',                         // 8
+    'end box',                                      // 9
+    'Tester -> App : 診断リクエスト',                 // 10
+    'App -> Rte : データ取得',                       // 11
+    'Rte --> App : データ',                          // 12
+    'App --> Tester : 診断レスポンス',                // 13
+    '@enduml',                                      // 14
+  ].join(String.fromCharCode(10)));
+
+  // 参加者は 3 人 = 上下 (head/tail) で 6 枠。メッセージは 4 本。
+  await expect(page.locator('#overlay-layer rect[data-type="participant"]'))
+    .toHaveCount(6, { timeout: 20000 });
+  await expect(page.locator('#overlay-layer rect[data-type="message"]')).toHaveCount(4);
+
+  // box の囲みそのものは group (alt/loop 等) ではないので、group の枠は作らない。
+  await expect(page.locator('#overlay-layer rect[data-type="group"]')).toHaveCount(0);
+
+  // 囲みの見出し (「ECU本体」「外部装置」) にもそれぞれ枠がある。
+  // 以前はここにホバーしても、図全体を覆う背景しか下に無く、何も指していなかった。
+  const boxRects = page.locator('#overlay-layer rect[data-type="box"]');
+  await expect(boxRects).toHaveCount(2);
+  for (const [label, line] of [['ECU本体', '3'], ['外部装置', '7']]) {
+    const r = page.locator('#overlay-layer rect[data-type="box"][data-line="' + line + '"]');
+    await expect(r, label + ' の枠がある').toHaveCount(1);
+    const t = page.locator('#preview-svg svg text', { hasText: label }).first();
+    const tb = await t.boundingBox();
+    const under = await page.evaluate((q) => {
+      const els = document.elementsFromPoint(q.x, q.y);
+      const rr = els.find((e) => e.tagName && e.tagName.toLowerCase() === 'rect'
+        && e.closest('#overlay-layer') && e.getAttribute('data-type'));
+      return rr ? { type: rr.getAttribute('data-type'), line: rr.getAttribute('data-line') } : null;
+    }, { x: tb.x + tb.width / 2, y: tb.y + tb.height / 2 });
+    expect(under, label + ' の見出しの下に枠がある').toEqual({ type: 'box', line: line });
+    await page.mouse.move(tb.x + tb.width / 2, tb.y + tb.height / 2);
+    await expect(r, label + ' にホバーして枠が出る').toHaveClass(/hit-hover/);
+  }
+
+  // 見出しを押すと、何を囲んでいるかが出て、名前をその場で直せる。
+  await page.locator('#overlay-layer rect[data-type="box"][data-line="3"]').click();
+  await expect(page.locator('#seq-edit-boxlabel')).toHaveValue('ECU本体');
+  await page.locator('#seq-edit-boxlabel').fill('車体側');
+  await page.locator('#seq-edit-boxlabel').dispatchEvent('change');
+  await page.waitForTimeout(800);
+  // 色 (#LightYellow) は落とさない。開いただけの図の見た目を勝手に変えない。
+  expect(await page.locator('#editor').inputValue()).toContain('box "車体側" #LightYellow');
+
+  // 参加者の枠は、box の中に書かれていても宣言行を指す。
+  for (const [id, line] of [['App', '4'], ['Rte', '5'], ['Tester', '8']]) {
+    const r = page.locator('#overlay-layer rect[data-type="participant"][data-id="' + id + '"]');
+    await expect(r, id + ' の枠がある').toHaveCount(2);
+    await expect(r.first()).toHaveAttribute('data-line', line);
+    const b = await r.first().boundingBox();
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+    await expect(r.first(), id + ' にホバーして枠が出る').toHaveClass(/hit-hover/);
+  }
+
+  // メッセージ 4 本も、それぞれの行を指してホバーで反応する。
+  for (const line of ['10', '11', '12', '13']) {
+    const r = page.locator('#overlay-layer rect[data-type="message"][data-line="' + line + '"]');
+    await expect(r, line + ' 行目の枠がある').toHaveCount(1);
+    const b = await r.boundingBox();
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+    await expect(r, line + ' 行目にホバーして枠が出る').toHaveClass(/hit-hover/);
+  }
+});

@@ -56,6 +56,61 @@ window.MA.sequenceOverlay = (function() {
     return null;
   }
 
+  // 囲み (box) の rect を SVG から拾う。PlantUML は class を付けないので、
+  // 「最初の participant-head より前に出る、塗りと細い枠を持つ rect」で見分ける
+  // (ライフラインの帯は塗りだけで style を持たない)。描画順は DSL の box 順。
+  function _boxRectsInSvg(svgEl) {
+    if (!svgEl || !svgEl.querySelectorAll) return [];
+    var all = svgEl.querySelectorAll('rect');
+    var out = [];
+    for (var i = 0; i < all.length; i++) {
+      var r = all[i];
+      var p = r.parentNode;
+      var cls = (p && p.getAttribute && p.getAttribute('class')) || '';
+      // 参加者の頭・尻尾に入ったら、そこから先は囲みではない
+      if (cls.indexOf('participant') !== -1) break;
+      var style = r.getAttribute('style') || '';
+      if (style.indexOf('stroke:') === -1) continue;
+      var x = parseFloat(r.getAttribute('x'));
+      var y = parseFloat(r.getAttribute('y'));
+      var w = parseFloat(r.getAttribute('width'));
+      var h = parseFloat(r.getAttribute('height'));
+      if (isNaN(x) || isNaN(y) || isNaN(w) || isNaN(h)) continue;
+      out.push({ x: x, y: y, w: w, h: h });
+    }
+    return out;
+  }
+
+  // 参加者の頭の上端。囲みの見出しの帯は、囲みの上端からここまで。
+  function _firstHeadTop(svgEl) {
+    var heads = svgEl && svgEl.querySelectorAll ? svgEl.querySelectorAll('g.participant-head') : [];
+    var top = NaN;
+    Array.prototype.forEach.call(heads, function(g) {
+      var bb = _bbox(g);
+      if (!bb) return;
+      if (isNaN(top) || bb.y < top) top = bb.y;
+    });
+    return top;
+  }
+
+  function _addBoxRects(svgEl, parsedData, overlayEl) {
+    var boxes = (parsedData.boxes || []).slice();
+    if (!boxes.length) return;
+    var rects = _boxRectsInSvg(svgEl);
+    var headTop = _firstHeadTop(svgEl);
+    var n = Math.min(rects.length, boxes.length);
+    for (var i = 0; i < n; i++) {
+      var r = rects[i];
+      var bandH = (!isNaN(headTop) && headTop > r.y) ? (headTop - r.y) : 20;
+      OB.addRect(overlayEl, r.x, r.y, r.w, bandH, {
+        'data-type': 'box',
+        'data-id': boxes[i].id,
+        'data-line': boxes[i].line,
+      });
+    }
+    OB.warnIfMismatch('box', boxes.length, n);
+  }
+
   function buildSequenceOverlay(svgEl, parsedData, overlayEl, dslText) {
     _clearChildren(overlayEl);
     if (!svgEl || !parsedData) return;
@@ -73,6 +128,15 @@ window.MA.sequenceOverlay = (function() {
     _push(1);
 
     var participants = parsedData.elements.filter(function(e) { return e.kind === 'participant'; });
+
+    // BLK-migrator-20260923-1307: `box "…" #色` … `end box` の囲み。
+    // PlantUML は囲みを、参加者より先に描く「塗りと細い枠を持つ rect」で出す
+    // (class は付かない)。参加者の頭より上に出る見出しの帯だけを枠にして、
+    // 見出しにホバーするとその囲みを指すようにする。囲み全体を覆うと、図の中の
+    // 余白を押しただけで囲みが選ばれてしまう。
+    // 参加者より先に足すので、参加者・メッセージの枠が手前に重なる。
+    _addBoxRects(svgEl, parsedData, overlayEl);
+
     var partBest = OB.pickBestOffset(svgEl, participants, 'g.participant-head', candidates);
     var partMatches = partBest.matches;
     partMatches.forEach(function(m) {
