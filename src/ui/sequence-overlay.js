@@ -27,6 +27,27 @@ window.MA.sequenceOverlay = (function() {
     } catch (e) { return null; }
   }
 
+  // BLK-migrator-20260923-1409: 左寄せ (skinparam NoteTextAlignment left など) の注釈は
+  // 1 行を語ごとの <text> に分けて描く (`missing` ` ` `Accept-Version` …)。texts[i] から
+  // 同じ高さに続く <text> をつないだものが 1 行目と一致するかを見る (空白は比べない)。
+  function _lineStartsAt(texts, i, first) {
+    var want = String(first).replace(/\s+/g, '');
+    if (!want) return false;
+    var y = texts[i].getAttribute('y');
+    var got = '';
+    for (var k = i; k < texts.length && got.length < want.length; k++) {
+      if (texts[k].getAttribute('y') !== y) break;
+      got += (texts[k].textContent || '').replace(/\s+/g, '');
+      if (want.indexOf(got) !== 0) return false;
+    }
+    if (got !== want) return false;
+    // 描かれた行がまだ続くなら別の (長い) 行
+    for (; k < texts.length && texts[k].getAttribute('y') === y; k++) {
+      if ((texts[k].textContent || '').replace(/\s+/g, '')) return false;
+    }
+    return true;
+  }
+
   // 注釈本文の 1 行目を持つ <text> (未使用のもの) を探し、それを囲む塗りのある最小の図形を返す。
   // 群の枠 (alt 等) は fill="none" なので候補にならない。見つからなければ null。
   function _findNoteShape(svgEl, note, usedTexts) {
@@ -37,7 +58,7 @@ window.MA.sequenceOverlay = (function() {
     for (var i = 0; i < texts.length; i++) {
       var t = texts[i];
       if (usedTexts.indexOf(t) >= 0) continue;
-      if ((t.textContent || '').trim() !== first) continue;
+      if ((t.textContent || '').trim() !== first && !_lineStartsAt(texts, i, first)) continue;
       var tb = _bbox(t);
       if (!tb) continue;
       if (!shapes) shapes = svgEl.querySelectorAll('path, polygon, rect');
@@ -143,6 +164,10 @@ window.MA.sequenceOverlay = (function() {
     function _matchParts(selector) {
       var byName = OB.matchByEntityName(svgEl, participants, selector);
       if (byName.length === participants.length && participants.length > 0) return byName;
+      // 名前を持つ図で一部しか当たらないときも、当たった人は名前で当てる。
+      // 順番で当てると、パーサの知らない宣言が 1 つあるだけで以後の全員が 1 人ずつずれる
+      // (枠が出ないより、別人の枠が出るほうが直しにくい)。
+      if (byName.length > 0) return byName;
       return OB.pickBestOffset(svgEl, participants, selector, candidates).matches;
     }
     // 枠は描かれた箱 (塗りのある図形) に合わせる。複数行の表示名でも高さが合う。
@@ -234,8 +259,18 @@ window.MA.sequenceOverlay = (function() {
       var bboxes = [];
       Array.prototype.forEach.call(allRects, function(r) {
         var style = (r.getAttribute('style') || '') + '';
-        // group 境界 rect は黒 stroke。lifeline の hit-area rect (fill-opacity:0) は除外。
-        if (style.indexOf('stroke:#000000') === -1) return;
+        // group 境界 rect は枠線を持つ。lifeline の hit-area rect (fill-opacity:0) は除外。
+        // BLK-migrator-20260923-1409: 枠線の色はテーマ (skinparam / strictuml) で変わる
+        // (AWS の図では #7D8998)。黒に限ると枠が 1 つも拾えない。
+        if (!/stroke:\s*#/.test(style)) return;
+        if (r.getAttribute('fill-opacity') === '0' || parseFloat(r.getAttribute('fill-opacity')) === 0) return;
+        var anc = r.parentNode;
+        var inPart = false;
+        while (anc && anc !== svgEl && anc.getAttribute) {
+          if (/participant/.test(anc.getAttribute('class') || '')) { inPart = true; break; }
+          anc = anc.parentNode;
+        }
+        if (inPart) return;
         var x = parseFloat(r.getAttribute('x'));
         var y = parseFloat(r.getAttribute('y'));
         var w = parseFloat(r.getAttribute('width'));
@@ -260,9 +295,21 @@ window.MA.sequenceOverlay = (function() {
       }
       OB.warnIfMismatch('group', groups.length, n);
     }
+    // BLK-migrator-20260923-1409: 群の枠は内側全体を覆うので、先に置いたライフラインが
+    // その下に隠れ、alt の中のライフラインを指すと alt が選ばれていた。細いライフラインを
+    // 群の枠より手前に出す (メッセージ・注釈はこの後に足すので、さらに手前に来る)。
+    Array.prototype.forEach.call(overlayEl.querySelectorAll('rect[data-type="lifeline"]'), function(r) {
+      overlayEl.appendChild(r);
+    });
 
-    var msgBest = OB.pickBestOffset(svgEl, parsedData.relations, 'g.message', candidates);
-    var msgMatches = msgBest.matches;
+    // BLK-migrator-20260923-1409: `return` 行も PlantUML は矢印 (g.message) を 1 本描く。
+    // 順番で当てるとき return を数えないと、それ以後のメッセージの枠が 1 本ずつずれる。
+    // return は並びを合わせるためだけに入れ、枠は出さない (編集対象のメッセージではない)。
+    var msgItems = parsedData.relations.concat(parsedData.returns || []).sort(function(a, b) {
+      return (a.line || 0) - (b.line || 0);
+    });
+    var msgBest = OB.pickBestOffset(svgEl, msgItems, 'g.message', candidates);
+    var msgMatches = msgBest.matches.filter(function(m) { return m.item.kind !== 'return'; });
     msgMatches.forEach(function(m) {
       // BLK-human-20260912-0900: 矢印・ラベル・番号 (autonumber)・ステレオタイプの
       // どこを押しても同じメッセージが選ばれるよう、g.message の子要素全部を覆う。
@@ -545,6 +592,7 @@ window.MA.sequenceOverlay = (function() {
 
   return {
     buildSequenceOverlay: buildSequenceOverlay,
+    _lineStartsAt: _lineStartsAt,
     collectActivationBars: collectActivationBars,
     bandZones: bandZones,
     resolveBandZone: resolveBandZone,

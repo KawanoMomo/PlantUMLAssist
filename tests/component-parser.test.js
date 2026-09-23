@@ -163,3 +163,18 @@ describe('parseComponent 波括弧の無い要素宣言', function() {
     expect(r.elements.map(function(e) { return e.id; })).toEqual(['App']);
   });
 });
+
+// BLK-migrator-20260923-1409 差し戻し: ライブラリの手続きで宣言する部品
+// (`IoTRule(iotRule, "Action Error Rule", "...")`)。
+describe('parseComponent 手続きで宣言する部品', function() {
+  test('1 番目の引数を名前、2 番目の文字列を表示名として読む', function() {
+    var r = co.parse('@startuml\nIoTRule(iotRule, "Action Error Rule", "error if Kinesis fails")\nKinesisDataStreams(eventStream, "IoT Events", "2 shards")\n@enduml');
+    expect(r.elements.map(function(e) { return e.id; })).toEqual(['iotRule', 'eventStream']);
+    expect(r.elements[0].label).toBe('Action Error Rule');
+    expect(r.elements[0].kind).toBe('component');
+  });
+  test('関係・配置の手続きと手続きの本体は部品にしない', function() {
+    var r = co.parse('@startuml\n!procedure $X($a)\nIoTRule($a, "x")\n!endprocedure\nRel(a, b, "uses")\nLay_R(a, b)\nSHOW_LEGEND()\n@enduml');
+    expect(r.elements.length).toBe(0);
+  });
+});

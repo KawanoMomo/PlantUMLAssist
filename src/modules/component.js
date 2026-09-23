@@ -35,6 +35,15 @@ window.MA.modules.plantumlComponent = (function() {
     '^(?:' + ELEM_KW + ')\\s+(?:"([^"]+)"\\s+as\\s+(' + ID + ')|(' + ID + ')(?:\\s+as\\s+"([^"]+)")?)' + STEREO_OPT + '\\s*$'
   );
 
+  // BLK-migrator-20260923-1409: ライブラリの手続きで部品を宣言する行
+  // (`IoTRule(iotRule, "Action Error Rule", "error if Kinesis fails")`)。1 番目の引数が
+  // 部品の名前で、PlantUML はその名前を SVG に残す。読めないと枠が出ない。
+  // 関係・配置・表示切替の手続き (Rel / Lay / Show ...) は部品ではないので除く。
+  var MACRO_ELEM_RE = /^\$?([A-Za-z_][A-Za-z0-9_]*)\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*(?:,\s*"([^"]*)")?[^{}]*\)\s*$/;
+  var MACRO_NOT_ELEM_RE = /^(?:Bi)?Rel|^Lay|^Show|^Hide|^Update|^Add|^Set|^Skin|^Layout|^Legend|^Increment|^Include|^Boundary/i;
+  var PREPROC_BLOCK_OPEN_RE = /^!(?:unquoted\s+)?(?:procedure|function|definelong)\b/i;
+  var PREPROC_BLOCK_END_RE = /^!end(?:procedure|function|definelong)\b/i;
+
   var PACKAGE_OPEN_RE = new RegExp(
     '^(?:package|folder|frame|node|rectangle)\\s+(?:"([^"]+)"|(' + ID + '))\\s*\\{\\s*$'
   );
@@ -420,11 +429,15 @@ window.MA.modules.plantumlComponent = (function() {
     var packageCounter = 0;
     var lastComponentId = null;
     var implicit = [];
+    var inPreproc = false;
 
     for (var i = 0; i < lines.length; i++) {
       var lineNum = i + 1;
       var trimmed = lines[i].trim();
       if (!trimmed || DU.isPlantumlComment(trimmed)) continue;
+      // 手続き・関数の本体は展開前の型紙なので要素として読まない。
+      if (inPreproc) { if (PREPROC_BLOCK_END_RE.test(trimmed)) inPreproc = false; continue; }
+      if (PREPROC_BLOCK_OPEN_RE.test(trimmed)) { inPreproc = true; continue; }
       if (RP.isStartUml(trimmed)) {
         if (result.meta.startUmlLine === null) result.meta.startUmlLine = lineNum;
         continue;
@@ -481,6 +494,13 @@ window.MA.modules.plantumlComponent = (function() {
         else { idE = m[3]; labelE = m[4] !== undefined ? m[4] : m[3]; }
         result.elements.push({ kind: 'component', id: idE, label: labelE, stereotype: m[5] || null, line: lineNum, parentPackageId: currentPackageId });
         lastComponentId = idE;
+        continue;
+      }
+      // ライブラリの手続きによる部品宣言
+      m = trimmed.match(MACRO_ELEM_RE);
+      if (m && !MACRO_NOT_ELEM_RE.test(m[1])) {
+        result.elements.push({ kind: 'component', id: m[2], label: m[3] !== undefined ? m[3] : m[2], stereotype: m[1], line: lineNum, parentPackageId: currentPackageId, macro: true });
+        lastComponentId = m[2];
         continue;
       }
       // interface keyword

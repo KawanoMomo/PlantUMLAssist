@@ -136,6 +136,19 @@ window.MA.modules.plantumlSequence = (function() {
     .map(_arrowAlt)
     .join('|');
   var MSG_RE = new RegExp('^' + MSG_RE_FROM + '\\s*(' + MSG_ARROW_ALT + ')\\s*' + MSG_RE_FROM + '(?:\\s*:\\s*(.+))?$');
+  // BLK-migrator-20260923-1409: 実物は送り先の直後で帯を始め・終える略記
+  // (`cf->api2++ $AWSColor(Compute): GET` / `A -> B-- : ok`) を使う。読めないと
+  // そのメッセージが一覧から消え、順番で当てている枠が以後 1 つずつずれる。
+  // 群の番号は MSG_RE と同じ (1=送り元 2=矢印 3=送り先 4=本文)。本文は空でもよい。
+  var MSG_ACT_RE = new RegExp('^' + MSG_RE_FROM + '\\s*(' + MSG_ARROW_ALT + ')\\s*' + MSG_RE_FROM + '\\s*(?:\\+\\+|--|\\*\\*|!!)+(?:[ \\t]+[^:]*?)?(?:\\s*:\\s*(.*))?$');
+  // `return` は直前に呼ばれた側から呼んだ側へ戻る矢印を 1 本描く。
+  var RETURN_RE = /^return(?:\s+(.*))?$/;
+  // 手続き・関数の本体は展開前の型紙なので、図の要素として読まない
+  // (本体の `participant "$x"` を参加者と読むと、実物に無い人が 1 人増える)。
+  var PREPROC_BLOCK_OPEN_RE = /^!(?:unquoted\s+)?(?:procedure|function|definelong)\b/i;
+  var PREPROC_BLOCK_END_RE = /^!end(?:procedure|function|definelong)\b/i;
+  // 手続きで宣言する参加者 (`$AWSIcon(User, "x") as user <<stereo>>`)。別名で当てる。
+  var MACRO_PART_RE = /^\$?[A-Za-z_][A-Za-z0-9_]*\s*\(.*\)\s+as\s+("?)([A-Za-z_][A-Za-z0-9_.]*)\1(?:\s+<<.*>>)?(?:\s+#\S+)?\s*$/;
 
   var GROUP_KINDS = ['alt', 'opt', 'loop', 'par', 'break', 'critical', 'group'];
   // design 2d/5c:「各項目は『何が起きるか』を先に書き、記法は右に小さく置く」。
@@ -163,14 +176,16 @@ window.MA.modules.plantumlSequence = (function() {
   // 中の participant と以後のメッセージは今までどおりの要素として読む。
   // 囲みそのものも図に描かれているので、1 つの要素として枠を持たせる
   // (持たないと、その見出しにホバーしても何も指さない)。
-  var BOX_OPEN_RE = /^box(?:\s+(?:"([^"]*)"|([^\s#]+)))?(?:\s+(#\S+))?\s*$/i;
+  // 囲みの名前は引用符なしで空白を含んでもよい (`box API Version 1`)。
+  var BOX_OPEN_RE = /^box(?:\s+(?:"([^"]*)"|([^\s#"][^#"]*?)))?(?:\s+(#\S+))?\s*$/i;
   var BOX_END_RE = /^end\s*box$/i;
 
   var NOTE_POSITIONS = ['left of', 'right of', 'over'];
   var NOTE_RE = /^note\s+(left of|right of|over)\s+([^:]+?)(?:\s*:\s*(.*))?$/i;
 
   var ACTIVATION_ACTIONS = ['activate', 'deactivate', 'create', 'destroy'];
-  var ACTIVATION_RE = new RegExp('^(' + ACTIVATION_ACTIONS.join('|') + ')\\s+(\\S+)$');
+  // 帯の色 (`activate cf #white` / `activate user $AWS_COLOR` / `%lighten(C, 75)`) は後ろに付いてよい。
+  var ACTIVATION_RE = new RegExp('^(' + ACTIVATION_ACTIONS.join('|') + ')\\s+(\\S+)(?:\\s+(\\S.*))?$');
 
   var unquote = window.MA.dslUtils.unquote;
 
@@ -217,7 +232,7 @@ window.MA.modules.plantumlSequence = (function() {
   }
 
   function parseSequence(text) {
-    var result = { meta: { title: '', autonumber: null, startUmlLine: null }, elements: [], relations: [], groups: [], boxes: [] };
+    var result = { meta: { title: '', autonumber: null, startUmlLine: null }, elements: [], relations: [], groups: [], boxes: [], returns: [] };
     if (!text || !text.trim()) return result;
     var lines = text.split('\n');
     var msgCounter = 0;
@@ -239,11 +254,14 @@ window.MA.modules.plantumlSequence = (function() {
     var noteCounter = 0;
     var boxCounter = 0;
     var curBox = null;
+    var inPreproc = false;
 
     for (var i = 0; i < lines.length; i++) {
       var lineNum = i + 1;
       var trimmed = lines[i].trim();
       if (!trimmed || window.MA.dslUtils.isPlantumlComment(trimmed)) continue;
+      if (inPreproc) { if (PREPROC_BLOCK_END_RE.test(trimmed)) inPreproc = false; continue; }
+      if (PREPROC_BLOCK_OPEN_RE.test(trimmed)) { inPreproc = true; continue; }
       if (/^@startuml/.test(trimmed)) {
         if (result.meta.startUmlLine === null) result.meta.startUmlLine = lineNum;
         continue;
@@ -311,9 +329,9 @@ window.MA.modules.plantumlSequence = (function() {
       // activation / deactivation / create / destroy
       var am = trimmed.match(ACTIVATION_RE);
       if (am) {
-        result.elements.push({
-          kind: 'activation', action: am[1], target: unquote(am[2]), line: lineNum,
-        });
+        var act = { kind: 'activation', action: am[1], target: unquote(am[2]), line: lineNum };
+        if (am[3]) act.color = am[3].trim();
+        result.elements.push(act);
         continue;
       }
 
@@ -360,7 +378,32 @@ window.MA.modules.plantumlSequence = (function() {
         continue;
       }
 
-      var mm = trimmed.match(MSG_RE);
+      var mpm = trimmed.match(MACRO_PART_RE);
+      if (mpm) {
+        var malias = mpm[2];
+        if (!participantMap[malias]) {
+          participantMap[malias] = {
+            kind: 'participant', id: malias, label: malias, ptype: 'participant', line: lineNum, macro: true,
+          };
+          result.elements.push(participantMap[malias]);
+        } else {
+          participantMap[malias].line = lineNum;
+          participantMap[malias].macro = true;
+        }
+        if (curBox) {
+          participantMap[malias].boxId = curBox.id;
+          if (curBox.members.indexOf(malias) === -1) curBox.members.push(malias);
+        }
+        continue;
+      }
+
+      var rtm = trimmed.match(RETURN_RE);
+      if (rtm) {
+        result.returns.push({ kind: 'return', label: (rtm[1] || '').trim(), line: lineNum });
+        continue;
+      }
+
+      var mm = trimmed.match(MSG_RE) || trimmed.match(MSG_ACT_RE);
       if (mm) {
         // design 2d: `[` / `]` は「図の外」を表す疑似端点であり、参加者ではない。
         // 参加者一覧に混ぜると左レールや Outline に `[` が並んでしまう。
