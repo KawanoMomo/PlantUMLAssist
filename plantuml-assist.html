@@ -6696,6 +6696,26 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 #status-parse.error { color: var(--accent-red); }
 #status-info  { color: var(--text-secondary); margin-left: auto; }
 
+/* 下端の件数表示は 1 種類の形 (design 9c / BLK-human-20260923-1602)。
+   文字色は全部同じで、色を持つのは点だけ。枠は付けない。
+   0 件の項目は app.js が hidden にするので場所を取らない。 */
+#statusbar button[data-dot] {
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 0 6px;
+  cursor: pointer;
+}
+#statusbar button[data-dot]:hover { background: var(--bg-tertiary); }
+#statusbar button[hidden] { display: none; }
+#statusbar .sb-dot { font-size: 9px; vertical-align: 1px; }
+#statusbar button[data-dot="ok"]   .sb-dot { color: var(--accent-green); }
+#statusbar button[data-dot="warn"] .sb-dot { color: var(--accent-orange); }
+#statusbar button[data-dot="bad"]  .sb-dot { color: var(--accent-red); }
+
 /* 整合性チェックのバッジ (BLK-reviewer-20260907-0843)。常時見えている必要がある */
 #status-consistency {
   background: transparent;
@@ -8030,6 +8050,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/diagram-rail.js"></script>
 <script src="src/core/tool-menu.js"></script>
 <script src="src/core/status-counters.js"></script>
+<script src="src/core/status-badges.js"></script>
 <script src="src/core/request-ledger.js"></script>
 <script src="src/core/request-badge.js"></script>
 <script src="src/core/zoom-hud.js"></script>
