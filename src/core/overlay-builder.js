@@ -458,6 +458,80 @@ window.MA.overlayBuilder = (function() {
     return n;
   }
 
+  // BLK-migrator-20260924-0752: PlantUML は旧記法のアクティビティ図 (`(*) -->` / `if "..." then` /
+  // `===LABEL===`) を関係 (<g class="link">) には行つきで描くが、動作の箱・同期バーは <g> に入れず、
+  // 分岐の菱形は行の無い <g class="entity"> で描く。行の無い図形は、端が触れている関係の行で当てる
+  // (入ってくる関係のうち最も早く書かれた行 = その要素を初めて書いた行。無ければ出ていく関係の行)。
+  // 記法を読み直さず、描いた側の線のつながりだけを使う。関係に行の情報が無い図では何もしない。
+  function _pathEnds(g) {
+    var p = g.querySelector('path');
+    if (!p) return null;
+    var nums = (p.getAttribute('d') || '').match(/-?\d+(?:\.\d+)?(?:e-?\d+)?/gi);
+    if (!nums || nums.length < 4) return null;
+    var n = nums.map(Number);
+    return { sx: n[0], sy: n[1], ex: n[n.length - 2], ey: n[n.length - 1] };
+  }
+
+  function _inBox(bb, x, y, pad) {
+    return x >= bb.x - pad && x <= bb.x + bb.width + pad && y >= bb.y - pad && y <= bb.y + bb.height + pad;
+  }
+
+  function _isLooseShape(el) {
+    var n = el.parentNode;
+    while (n && n.tagName && n.tagName.toLowerCase() !== 'svg') {
+      if (n.tagName.toLowerCase() === 'g' && n.getAttribute('class')) return false;
+      n = n.parentNode;
+    }
+    return true;
+  }
+
+  function addLooseShapes(svgEl, overlayEl, claimed) {
+    if (!svgEl || !overlayEl || !svgEl.querySelectorAll) return 0;
+    var taken = claimed || [];
+    var links = [];
+    Array.prototype.forEach.call(linkGroups(svgEl), function(g) {
+      var line = _srcLine(g);
+      var ends = _pathEnds(g);
+      if (line !== null && ends) links.push({ line: line, ends: ends });
+    });
+    if (!links.length) return 0;
+    var targets = [];
+    Array.prototype.forEach.call(svgEl.querySelectorAll('rect, polygon, ellipse'), function(el) {
+      if (taken.indexOf(el) >= 0 || !_isLooseShape(el)) return;
+      var bb = _nodeBBox(el);
+      if (!bb || bb.width < 6 || bb.height < 4) return;
+      targets.push({ el: el, bb: bb, kind: 'shape', name: '' });
+    });
+    Array.prototype.forEach.call(svgEl.querySelectorAll('g[class$="entity"]'), function(g) {
+      if (taken.indexOf(g) >= 0 || _srcLine(g) !== null) return;
+      var bb = extractUnionBBox(g, 'rect, polygon, ellipse, path, text');
+      if (!bb || !(bb.width > 0)) return;
+      targets.push({ el: g, bb: bb, kind: (g.getAttribute('class') || '').split(/\s+/)[0],
+        name: g.getAttribute('data-qualified-name') || '' });
+    });
+    var n = 0;
+    targets.forEach(function(t, i) {
+      var inLine = null, outLine = null;
+      links.forEach(function(l) {
+        if (_inBox(t.bb, l.ends.ex, l.ends.ey, 8) && (inLine === null || l.line < inLine)) inLine = l.line;
+        if (_inBox(t.bb, l.ends.sx, l.ends.sy, 3) && (outLine === null || l.line < outLine)) outLine = l.line;
+      });
+      var line = inLine !== null ? inLine : outLine;
+      if (line === null) return;
+      var pad = 2;
+      addRect(overlayEl, t.bb.x - pad, t.bb.y - pad, t.bb.width + pad * 2, t.bb.height + pad * 2, {
+        'data-type': 'source-line',
+        'data-id': 'src:' + (t.name || t.kind) + '@' + line + ':' + i,
+        'data-src-kind': t.kind,
+        'data-src-name': t.name,
+        'data-line': String(line),
+      });
+      taken.push(t.el);
+      n++;
+    });
+    return n;
+  }
+
   // BLK-migrator-20260923-2012: シーケンスの参加者は宣言キーワードで形が変わる
   // (actor = 棒人間の下に名前、boundary / control / entity = 円の下に名前、database = 円柱、
   // queue = 横向きの筒 …)。名前が図形の外に出る形では、塗りのある図形だけを囲むと
@@ -601,6 +675,7 @@ window.MA.overlayBuilder = (function() {
     addBackground: addBackground,
     addLinkRects: addLinkRects,
     addUnclaimed: addUnclaimed,
+    addLooseShapes: addLooseShapes,
     findEntityByName: findEntityByName,
     matchClusters: matchClusters,
     matchLinksByLine: matchLinksByLine,

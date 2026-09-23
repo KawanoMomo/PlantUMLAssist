@@ -923,3 +923,59 @@ test('migrator 手順 4 — 題のある state 図で、題にホバーすると
   const s1 = await hoverHit(page, 'State1');
   expect(s1.hit, 'State1 は今までどおり本人の枠').toEqual({ type: 'state', line: '4', hover: true });
 });
+
+// BLK-migrator-20260924-0752: 旧記法 (`(*) -->` / `if "..." then` / `===LABEL===`) のアクティビティ図で枠が全滅していた。
+// PlantUML が関係に残す行と線のつながりで当て、押すと本文のその行が選ばれてフォーム未対応と出る。
+// 新記法でも、レーンをまたぐ動作は箱の中の文字で当て、レーンの見出しにも枠が出る。
+test('migrator 手順 4 — 旧記法のアクティビティ図でも、開始・動作・分岐・枝のラベル・同期バーに本人の枠が出る', async ({ page }) => {
+  await bootPlain(page);
+  await typeDsl(page, [
+    '@startuml',                  // 1
+    '(*) --> "Action1"',          // 2
+    'if "cond?" then',            // 3
+    '->[yes] "Action2"',          // 4
+    '--> ===LABEL===',            // 5
+    'else',                       // 6
+    '-->[no] ===LABEL===',        // 7
+    'endif',                      // 8
+    '--> (*)',                    // 9
+    '@enduml',
+  ].join(String.fromCharCode(10)));
+  await expect(page.locator('#overlay-layer rect[data-src-kind="shape"]')).toHaveCount(3, { timeout: 20000 });
+  for (const [label, line] of [['Action1', '2'], ['Action2', '4'], ['cond?', '3'], ['yes', '4'], ['no', '7']]) {
+    const { hit } = await hoverHit(page, label);
+    expect(hit, label + ' にホバーして枠が出る').not.toBeNull();
+    expect(hit.line, label + ' の枠が指す行').toBe(line);
+    expect(hit.hover, label + ' の枠が光る').toBe(true);
+  }
+  const { box } = await hoverHit(page, 'Action2');
+  await page.mouse.click(box.x, box.y);
+  await expect(page.locator('#src-line-props')).toHaveAttribute('data-line', '4');
+  await expect(page.locator('#src-line-text')).toHaveText('->[yes] "Action2"');
+  await expect(page.locator('#src-line-props')).toContainText('フォームで直せません');
+});
+
+test('migrator 手順 4 — レーンをまたぐ新記法のアクティビティ図でも、動作とレーンの見出しに本人の枠が出る', async ({ page }) => {
+  await bootPlain(page);
+  await typeDsl(page, [
+    '@startuml',          // 1
+    'skinparam roundcorner 0', // 2
+    '|Swimlane1|',        // 3
+    'start',              // 4
+    ':foo1;',             // 5
+    '|Swimlane2|',        // 6
+    ':foo2;',             // 7
+    ':foo3;',             // 8
+    '|Swimlane1|',        // 9
+    ':foo4;',             // 10
+    'stop',               // 11
+    '@enduml',
+  ].join(String.fromCharCode(10)));
+  await expect(page.locator('#overlay-layer rect[data-type="action"]')).toHaveCount(4, { timeout: 20000 });
+  for (const [label, type, line] of [['foo1', 'action', '5'], ['foo2', 'action', '7'], ['foo3', 'action', '8'],
+    ['foo4', 'action', '10'], ['Swimlane2', 'swimlane', '6']]) {
+    const { hit } = await hoverHit(page, label);
+    expect(hit, label + ' にホバーして本人の枠が出る').toEqual({ type, line, hover: true });
+  }
+  await expect(page.locator('#overlay-warning')).toBeHidden();
+});

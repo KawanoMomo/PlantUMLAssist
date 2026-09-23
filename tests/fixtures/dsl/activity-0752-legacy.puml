@@ -1,0 +1,10 @@
+@startuml
+(*) --> "Action1"
+if "cond?" then
+->[yes] "Action2"
+--> ===LABEL===
+else
+-->[no] ===LABEL===
+endif
+--> (*)
+@enduml
