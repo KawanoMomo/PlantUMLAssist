@@ -6,6 +6,14 @@ const S = require('./_scenario');
 
 const DIR = S.dirFor(__filename);
 
+// 読み込み直した直後の画面は init (保存先の取り込み /prefs を最大 3 秒待って走る) の前の骨格で、
+// ボタンは見えていても押しても何も起きない。全体実行 (--workers=4) で /prefs が遅い回に
+// 👀 を押しても #peek-modal が開かず落ちていたので、reload の後は押せるようになった印を待つ。
+async function reloadReady(page) {
+  await page.reload();
+  await page.waitForSelector('html[data-app-ready="1"]', { state: 'attached' });
+}
+
 test('手順5.5 参加者名だけの指摘は、対象図だけに絞って反映できる', async ({ page }) => {
   await S.bootWithSaveDir(page, DIR);
   await S.clearDir(page, DIR);
@@ -57,7 +65,7 @@ test('手順5.5 「元のまま保つ」と答えた図は、一括置換の後�
   await S.clearDir(page, LOCK_DIR);
   await S.putDoc(page, LOCK_DIR, 'driver_common_class', S.docFor('driver_common_class'));
   await S.putDoc(page, LOCK_DIR, 'can_init_sequence', S.docFor('can_init_sequence'));
-  await page.reload();
+  await reloadReady(page);
   await page.waitForSelector('#editor');
   await page.waitForTimeout(600);
 
@@ -132,7 +140,7 @@ test('手順5.5 ドメインの食い違いは、突合の場で「統一する�
   await S.clearDir(page, OTHER_DIR);
   await S.putDoc(page, MINE_DIR, 'gpio_init_sequence', GPIO_MINE);
   await S.putDoc(page, OTHER_DIR, 'gpio_init_sequence', GPIO_OTHER);
-  await page.reload();
+  await reloadReady(page);
   await page.waitForSelector('#btn-tab-peek');
 
   await openCohort(page);
@@ -158,7 +166,7 @@ test('手順5.5 「別物」と決めたときは title に明示され、部品
   await S.clearDir(page, OTHER_DIR);
   await S.putDoc(page, MINE_DIR, 'gpio_init_sequence', GPIO_MINE);
   await S.putDoc(page, OTHER_DIR, 'gpio_init_sequence', GPIO_OTHER);
-  await page.reload();
+  await reloadReady(page);
   await page.waitForSelector('#btn-tab-peek');
 
   await openCohort(page);
@@ -188,7 +196,7 @@ test('手順5.5 表記揺れの部品名が、どちらの綴りと対応する�
   await S.clearDir(page, OTHER_DIR);
   await S.putDoc(page, MINE_DIR, 'irq_init_sequence', IRQ_MINE);
   await S.putDoc(page, OTHER_DIR, 'irq_init_sequence', IRQ_OTHER);
-  await page.reload();
+  await reloadReady(page);
   await page.waitForSelector('#btn-tab-peek');
 
   await openCohort(page);
@@ -272,7 +280,7 @@ test('手順5.5 打ち直して保存しても、開いていない図種名の�
   await S.bootWithSaveDir(page, TYPE_DIR);
   await S.clearDir(page, TYPE_DIR);
   await S.putDoc(page, TYPE_DIR, 'driver_common_class', S.docFor('driver_common_class'));
-  await page.reload();
+  await reloadReady(page);
   await page.waitForTimeout(800);
 
   await S.openFolderItem(page, 'driver_common_class');
@@ -313,6 +321,13 @@ test('手順5.5 塗り潰された図を、打ち直さずに直前の版へ 1 �
   // 到達条件 1: 壊れた図の行から、控えてある版に辿り着ける。
   await page.locator('[data-versions-name="driver_common_class"]').click();
   const restore = page.locator('[data-version-restore][data-version-of="driver_common_class"]').first();
+  await restore.waitFor({ timeout: 10000 });
+  // 一覧は庫・札・保存の確かめが届くたびに描き直される (全体実行で遅い回は、押した後に届く)。
+  // 描き直しても開いた版の一覧は閉じない (閉じると、押したのに何も出ないように見える)。
+  // 保存したばかりの図なので「一覧を取り直す」が出ている。それで描き直させる。
+  const again = page.locator('#folder-panel .folder-write-refresh').first();
+  await again.click();
+  await page.waitForTimeout(800);
   await restore.waitFor({ timeout: 10000 });
 
   // 到達条件 2: 1 クリックで、打ち直し無しに中身が戻る。
@@ -402,7 +417,7 @@ test.describe('手順5.5 指摘.md を貼る → 提案一覧 → [適用]', () 
     // 指摘.md は図ではないので GUI からは置けない (reviewer が置くファイル)。
     fs.mkdirSync(absOf(ACT_REVIEWER), { recursive: true });
     fs.writeFileSync(nodePath.join(absOf(ACT_REVIEWER), '指摘.md'), ACT_NOTE, 'utf-8');
-    await page.reload();
+    await reloadReady(page);
     await page.waitForSelector('#btn-tab-peek');
     await page.locator('#btn-tab-peek').click();
     await page.waitForSelector('#peek-modal');
@@ -590,7 +605,7 @@ test.describe('手順5.5 指摘.md の前置きを一覧の外に出す', () => 
     await S.putDoc(page, PRE_MINE, 'timer_state', ACT_TIMER_STATE);
     fs.mkdirSync(absOf(PRE_REVIEWER), { recursive: true });
     fs.writeFileSync(nodePath.join(absOf(PRE_REVIEWER), '指摘.md'), PRE_NOTE, 'utf-8');
-    await page.reload();
+    await reloadReady(page);
     await page.waitForSelector('#btn-tab-peek');
     await page.locator('#btn-tab-peek').click();
     await page.waitForSelector('#peek-modal');
@@ -663,7 +678,7 @@ test.describe('primary 手順5.5: 未着手の依頼が何件・何 tick 続い�
     await S.clearDir(page, RQ_MINE);
     await S.putDoc(page, RQ_MINE, 'plantuml-usecase', S.docFor('can_init_sequence'));
     await S.putDoc(page, RQ_MINE, 'diagram1', S.docFor('can_state'));
-    await page.reload();
+    await reloadReady(page);
     await page.waitForSelector('#status-requests');
   });
 
@@ -742,7 +757,7 @@ test('手順5.5 保存フォルダの diagram1 は、起動しただけでは見
   await S.putDoc(page, DIR, 'diagram1', VERDICT_DOC);
 
   // 開き直す = 既定のタブ名 diagram1 でこの画面が立ち上がる場面そのもの。
-  await page.reload();
+  await reloadReady(page);
   await page.waitForTimeout(1800);
 
   // 到達条件その1: 同じ名前の図が保存フォルダにあるなら、タブの中身はその図。
@@ -803,7 +818,7 @@ test.describe('手順5.5 二択の指摘は、明記する側も [適用] で当
     await S.putDoc(page, INT_MINE, 'driver_common_class', INT_CLASS);
     fs.mkdirSync(absOf(INT_REVIEWER), { recursive: true });
     fs.writeFileSync(nodePath.join(absOf(INT_REVIEWER), '指摘.md'), INT_NOTE, 'utf-8');
-    await page.reload();
+    await reloadReady(page);
     await page.waitForSelector('#btn-tab-peek');
     await page.locator('#btn-tab-peek').click();
     await page.waitForSelector('#peek-modal');
@@ -860,7 +875,7 @@ test.describe('手順5.5 空洞化した図を、戻す先を探さずに戻す'
     // 充実した版 → 空洞化、の順に保存する (server が上書きの手前で控えを取る)。
     await S.putDoc(page, VDIR, NAME, FULL);
     await S.putDoc(page, VDIR, NAME, HOLLOW);
-    await page.reload();
+    await reloadReady(page);
     await page.waitForSelector('#preview-svg');
 
     await S.openFolder(page);
@@ -913,7 +928,7 @@ test.describe('手順5.5 空洞化した図を、戻す先を探さずに戻す'
     // 1 行だけ足した保存。編集の揺れであって空洞化ではない。
     await S.putDoc(page, VDIR, OK, FULL);
     await S.putDoc(page, VDIR, OK, FULL + '\n');
-    await page.reload();
+    await reloadReady(page);
     await page.waitForSelector('#preview-svg');
 
     await S.openFolder(page);
