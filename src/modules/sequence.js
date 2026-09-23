@@ -158,6 +158,14 @@ window.MA.modules.plantumlSequence = (function() {
   var GROUP_ELSE_RE = /^else(?:\s+(.*))?$/;
   var GROUP_END_RE = /^end$/;
 
+  // BLK-migrator-20260923-1307: 実物は `box "ECU本体" #LightYellow` … `end box` で
+  // 参加者を装置・ECU ごとに囲む。囲みは alt/loop のブロックではなく「参加者の枠」で、
+  // 中の participant と以後のメッセージは今までどおりの要素として読む。
+  // 囲みそのものも図に描かれているので、1 つの要素として枠を持たせる
+  // (持たないと、その見出しにホバーしても何も指さない)。
+  var BOX_OPEN_RE = /^box(?:\s+(?:"([^"]*)"|([^\s#]+)))?(?:\s+(#\S+))?\s*$/i;
+  var BOX_END_RE = /^end\s*box$/i;
+
   var NOTE_POSITIONS = ['left of', 'right of', 'over'];
   var NOTE_RE = /^note\s+(left of|right of|over)\s+([^:]+?)(?:\s*:\s*(.*))?$/i;
 
@@ -209,7 +217,7 @@ window.MA.modules.plantumlSequence = (function() {
   }
 
   function parseSequence(text) {
-    var result = { meta: { title: '', autonumber: null, startUmlLine: null }, elements: [], relations: [], groups: [] };
+    var result = { meta: { title: '', autonumber: null, startUmlLine: null }, elements: [], relations: [], groups: [], boxes: [] };
     if (!text || !text.trim()) return result;
     var lines = text.split('\n');
     var msgCounter = 0;
@@ -229,6 +237,8 @@ window.MA.modules.plantumlSequence = (function() {
     var groupStack = [];
     var groupCounter = 0;
     var noteCounter = 0;
+    var boxCounter = 0;
+    var curBox = null;
 
     for (var i = 0; i < lines.length; i++) {
       var lineNum = i + 1;
@@ -260,6 +270,22 @@ window.MA.modules.plantumlSequence = (function() {
       }
       // `autonumber resume` は止めた採番を再開する行なので、採番ありとして扱う。
       if (/^autonumber\s+resume\b/i.test(trimmed)) { result.meta.autonumber = true; continue; }
+
+      // box open / end box (参加者の囲み)。alt/loop の判定より先に見る。
+      if (BOX_END_RE.test(trimmed)) {
+        if (curBox) { curBox.endLine = lineNum; curBox = null; }
+        continue;
+      }
+      var bm = trimmed.match(BOX_OPEN_RE);
+      if (bm) {
+        curBox = {
+          kind: 'box', id: '__box_' + (boxCounter++),
+          label: bm[1] !== undefined ? bm[1] : (bm[2] || ''),
+          color: bm[3] || '', line: lineNum, endLine: 0, members: [],
+        };
+        result.boxes.push(curBox);
+        continue;
+      }
 
       // group open (alt/opt/loop/par/break/critical/group)
       var gm = trimmed.match(GROUP_OPEN_RE);
@@ -326,6 +352,11 @@ window.MA.modules.plantumlSequence = (function() {
           participantMap[alias].label = label;
           participantMap[alias].line = lineNum;
         }
+        // box の中で宣言された参加者は、その囲みの一員として憶えておく。
+        if (curBox) {
+          participantMap[alias].boxId = curBox.id;
+          if (curBox.members.indexOf(alias) === -1) curBox.members.push(alias);
+        }
         continue;
       }
 
@@ -346,6 +377,20 @@ window.MA.modules.plantumlSequence = (function() {
       }
     }
     return result;
+  }
+
+  // BLK-migrator-20260923-1307: 囲みの名前だけを書き換える。実物の行は
+  // `  box "ECU本体" #LightYellow` のように字下げと色を持つので、その両方を残す
+  // (色を落とすと、開いただけの図の見た目が勝手に変わる)。
+  function renameBox(text, line, label) {
+    var lines = String(text == null ? '' : text).split('\n');
+    var i = line - 1;
+    if (i < 0 || i >= lines.length) return text;
+    var m = lines[i].match(/^(\s*)box\b.*?(\s+#\S+)?\s*$/i);
+    if (!m) return text;
+    var name = String(label == null ? '' : label).trim();
+    lines[i] = m[1] + 'box' + (name ? ' "' + name.replace(/"/g, '') + '"' : '') + (m[2] || '');
+    return lines.join('\n');
   }
 
   var insertBeforeEnd = window.MA.dslUpdater.insertBeforeEnd;
@@ -2185,6 +2230,7 @@ window.MA.modules.plantumlSequence = (function() {
     deleteLine: deleteLine,
     deleteSelectedLine: deleteSelectedLine,
     updateParticipant: updateParticipant,
+    renameBox: renameBox,
     updateMessage: updateMessage,
     swapMessageEnds: swapMessageEnds,
     quickArrows: function() { return QUICK_ARROWS.slice(); },
@@ -2870,6 +2916,32 @@ window.MA.modules.plantumlSequence = (function() {
           window.MA.richLabelEditor.mount(document.getElementById('seq-edit-ntext-rle'), nn2.text, function(v) {
             if (!_noteTextPushed) { window.MA.history.pushHistory(); _noteTextPushed = true; }
             ctx.setMmdText(updateNote(ctx.getMmdText(), nln, 'text', v));
+            ctx.onUpdate();
+          });
+        }
+        else if (sel.type === 'box') {
+          // BLK-migrator-20260923-1307: 参加者の囲み (box)。見出しを押すと、何を囲んで
+          // いるかが出て、名前をその場で直せる。囲みの中身 (参加者) は今までどおり
+          // 個別に選べる (囲みの枠は見出しの帯だけを覆う)。
+          var boxes = parsedData.boxes || [];
+          var bx = null;
+          for (var bi = 0; bi < boxes.length; bi++) {
+            if (boxes[bi].id === sel.id || boxes[bi].line === sel.line) { bx = boxes[bi]; break; }
+          }
+          if (!bx) { propsEl.innerHTML = '<p style="color:var(--text-secondary);font-size:11px;">囲みが見つかりません</p>'; return; }
+          var memberNames = bx.members.map(function(id) {
+            var p = participants.filter(function(e) { return e.id === id; })[0];
+            return escHtml((p && p.label) || id);
+          });
+          propsEl.innerHTML =
+            '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>' + escHtml(bx.label || '(名前なし)') + '</strong><br><span style="color:var(--text-secondary);">参加者の囲み (box) · L' + bx.line + (bx.endLine ? '–L' + bx.endLine : '') + '</span></div>' +
+            P.fieldHtml('名前', 'seq-edit-boxlabel', bx.label || '') +
+            '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' +
+              '囲んでいる参加者: ' + (memberNames.length ? memberNames.join(' / ') : '(なし)') +
+            '</div>';
+          P.bindEvent('seq-edit-boxlabel', 'change', function() {
+            window.MA.history.pushHistory();
+            ctx.setMmdText(renameBox(ctx.getMmdText(), bx.line, this.value));
             ctx.onUpdate();
           });
         }
