@@ -55,8 +55,10 @@ window.MA.toolMenu = (function() {
     // そのまま残し、押すと ⇔ 並べて見る をその相手で開く。
     // opener は、その入口がモーダルの中にしか無いもの (先に開く画面) の id。
     { key: 'review', title: 'レビュー', items: [
-      { id: 'btn-tab-compare',  label: '⇔ 並べて見る', group: '見比べる' },
-      { id: 'dp-review',        label: '🔍 変更前後を見比べる', opener: 'btn-tab-delivery', group: '見比べる' },
+      // BLK-owner-20260923-1509-prune: 並べる面はタブ列の「並べて比較」1 つに統合した。
+      // ⇔ 並べて見る (別タブの図) と 🔍 変更前後を見比べる (前回保存版) は
+      // その枠の「相手」になったので、ここに別の入口としては並べない
+      // (🔍 は ▤ 変更サマリボードの中には残る。提出前に全件を見る文脈)。
       // 並べる画面ではない道具。覗く・指摘を出すのが目的で、並べるのは ⇔ 並べて見る に任せる。
       { id: 'btn-tab-peek',     label: '他の保存フォルダを覗く', group: '見比べる' },
       { id: 'btn-tab-review',   label: '基準の図との指摘', group: '指摘' },

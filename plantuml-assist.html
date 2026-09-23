@@ -6256,6 +6256,29 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 #senior-head select { flex: 1; min-width: 0; font-size: 11px; }
 /* design 9a: 据え置く / 1 回だけ。押している方だけを地色で示す 2 択 */
 #senior-mode { display: inline-flex; flex-shrink: 0; }
+/* BLK-owner-20260923-1509-prune: 相手を選ぶ列。据え置きの切替と同じ見た目で、
+   枠の中で 1 つの組として読めるようにする。 */
+#senior-target { display: inline-flex; flex-shrink: 0; }
+#compare-target-row { display: flex; align-items: center; gap: 6px; padding: 4px 8px 0 8px; font-size: 11px; }
+#compare-target { display: inline-flex; flex-shrink: 0; }
+#compare-target button {
+  font-size: 11px; padding: 1px 6px; border-radius: 0;
+  border: 1px solid var(--border); background: transparent;
+  color: var(--text-secondary); cursor: pointer; white-space: nowrap;
+}
+#compare-target button + button { border-left: none; }
+#compare-target button[aria-pressed="true"] {
+  background: var(--bg-primary); color: var(--text-primary);
+}
+#senior-target button {
+  font-size: 11px; padding: 1px 6px; border-radius: 0;
+  border: 1px solid var(--border); background: transparent;
+  color: var(--text-secondary); cursor: pointer; white-space: nowrap;
+}
+#senior-target button + button { border-left: none; }
+#senior-target button[aria-pressed="true"] {
+  background: var(--bg-primary); color: var(--text-primary);
+}
 #senior-mode button {
   font-size: 11px; padding: 1px 6px; border-radius: 0;
   border: 1px solid var(--border); background: transparent;
@@ -7127,7 +7150,9 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <!-- BLK-reviewer-20260907-1903-wish: 状態遷移がどのシーケンスにも現れない「トレース漏れ」を出す -->
         <button class="tab-tool" id="btn-tab-trace" title="状態遷移図の遷移が、同じ系統のシーケンス図のどれかに現れているかを見る">◎ トレース</button>
         <button class="tab-tool" id="btn-tab-lines" title="この図の 1 行だけを選んで書き換え・挿入・削除する">✎ 行編集</button>
-        <button class="tab-tool" id="btn-tab-compare" title="別のタブの図を右に並べて見ながら書く">⇔ 並べて見る</button>
+        <!-- BLK-owner-20260923-1509-prune: 「⇔ 並べて見る」は「並べて比較」とタブ列で隣り合い、
+             名前では違いが読めなかった。タブ列から外し、並べて比較の枠の
+             相手「別タブの図」にした (並べる面 compare-pane 自体はそのまま使う)。 -->
         <!-- BLK-junior-20260907-0803-wish: 既存の図をテンプレートに新しい図を作る -->
         <button class="tab-tool" id="btn-tab-template" title="既存の図をテンプレートにして、部品名を替えた新しい図を作る">⧉ テンプレート</button>
         <!-- BLK-junior-20260907-1903-wish: 同じ図種の図の骨格を土台に、題材名 1 語で新規作成 -->
@@ -7546,6 +7571,12 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button type="button" id="compare-mode-diff" class="compare-mode" role="tab"
                 aria-selected="false" title="この図の前回保存時点との差分を行で見る">± 差分</button>
       </div>
+      <!-- BLK-owner-20260923-1509-prune: 並べる面は 1 つ。どちらの枠が出ていても
+           同じ「相手」の列を持ち、押せば相手だけが入れ替わる。 -->
+      <div id="compare-target-row">
+        <strong>比較相手</strong>
+        <span id="compare-target" role="group" aria-label="比較する相手"></span>
+      </div>
       <div id="compare-pane-header">
         <select id="compare-select" title="並べて見る図を選ぶ"></select>
         <span id="compare-status"></span>
@@ -7655,6 +7686,10 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <!-- design 9a: 「先輩」は使う人の立場で、中身を表していない。相手が先輩でも
              他チームでも過去の版でも動きは同じなので「比較相手」と呼ぶ。 -->
         <strong>比較相手</strong>
+        <!-- BLK-owner-20260923-1509-prune: 「2 つを左右に置いて見比べる」入口が 5 つあり、
+             うち 2 つはタブ列で隣り合って名前で区別できなかった。面はこの枠 1 つにし、
+             「誰と並べるか」を枠の中で選ぶ (選択肢と旧称は compare-entry が持つ)。 -->
+        <span id="senior-target" role="group" aria-label="比較する相手"></span>
         <select id="senior-dir" aria-label="比較相手の保存フォルダ"></select>
         <!-- design 9a: 「並べて比較」を 1 つの入口にするため、据え置き (図を切り替えると
              相手も入れ替わる) と 1 回だけ (いま出している 1 枚に留める) を枠の中で切り替える -->
@@ -8030,6 +8065,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/design-check.js"></script>
 <script src="src/core/side-pane.js"></script>
 <script src="src/core/senior-pane.js"></script>
+<script src="src/core/compare-entry.js"></script>
 <script src="src/core/senior-slice.js"></script>
 <script src="src/core/peer-sample.js"></script>
 <script src="src/core/peek-freshness.js"></script>
