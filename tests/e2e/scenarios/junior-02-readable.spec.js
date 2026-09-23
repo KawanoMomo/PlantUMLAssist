@@ -5,6 +5,14 @@ const { test, expect } = require('@playwright/test');
 const { setDiagramTitle, getEditorText } = require('../helpers');
 const S = require('./_scenario');
 
+// 保存先の節は既定で開いている (design 10a)。開いていれば畳んでから開き直し、
+// 一覧を今の中身で描き直す (直に押すと、開いていたときに畳んでしまう)。
+async function openFolder(page) {
+  if (await page.locator('#folder-panel.open').count()) await page.locator('#btn-tab-folder').click();
+  await page.locator('#btn-tab-folder').click();
+  await page.waitForSelector('#folder-panel.open');
+}
+
 
 // BLK-owner-20260923-1509-prune: 「並べる」面はタブ列の「並べて比較」1 つになった。
 // 旧 ⇔ 並べて見る (#btn-tab-compare) はその枠の相手「別タブの図」になったので、
@@ -389,7 +397,7 @@ test('手順2 保存した図種の印が一覧に出て、押すとその図種
   await page.waitForTimeout(400);
 
   // 到達条件その1: 一覧の行に「前回保存した図種」の印が出る。
-  await page.locator('#btn-tab-folder').click();
+  await openFolder(page);
   await page.waitForTimeout(800);
   const badge = page.locator('#folder-panel .folder-kind[data-kind-of="timer_init_sequence"]');
   await expect(badge).toHaveAttribute('data-saved-kind', 'sequence');

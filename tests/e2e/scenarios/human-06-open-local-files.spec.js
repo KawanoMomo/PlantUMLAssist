@@ -8,7 +8,7 @@
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
-const { bootPlain, typeDsl } = require('./_scenario');
+const { bootPlain, typeDsl, openFolder } = require('./_scenario');
 
 const DIR = path.join(__dirname, '..', '..', '..', 'test-results', 'human-06-open-local-files');
 const A = path.join(DIR, '制御シーケンス.puml');   // UTF-8 BOM + CRLF
@@ -52,9 +52,9 @@ test('人間 手順 6 — 手元の .puml を 2 枚ドロップして 2 タブ�
   await expect(page.locator('#btn-open-file-empty')).toHaveText('ファイルを開く(.puml)');
   await expect(page.locator('#open-empty-hint')).toBeVisible();
   // 📂 一覧 の頭にも出る
-  await page.click('#btn-tab-folder');
+  await openFolder(page);
   await expect(page.locator('#folder-open-file')).toBeVisible();
-  await page.click('#btn-tab-folder');
+  await page.click('#btn-tab-folder');   // 閉じる
 
   // Shift_JIS のバイト列はブラウザの TextEncoder では作れないので、server の書き戻しで作る
   fs.writeFileSync(B, '');

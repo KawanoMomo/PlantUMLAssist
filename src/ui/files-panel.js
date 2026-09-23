@@ -49,6 +49,7 @@ window.MA.filesPanel = (function() {
   // ── 節の開閉 ─────────────────────────────────────────────────────────
   // 「保存先」だけは節の中身 (#folder-panel) が自前の open クラスを持つので、
   // 見出しの ▸▾ はそちらに合わせる (開閉の主は今までどおり #btn-tab-folder)。
+  // 既定で開くのは app.js (起動の最後に、復元した保存先を読んでから描く)。
   function secBody(id) { return $('files-body-' + id); }
 
   function setSec(id, on) {
@@ -313,12 +314,9 @@ window.MA.filesPanel = (function() {
 
     var FT = window.MA.fileTree;
     ['open', 'readonly', 'git'].forEach(function(id) {
+      // 10a どおり: 開いている図 = 開く、読むだけ・GIT = 畳む。
+      // 「読むだけ」の入口 (👀 / ⇔) は見出しの行に置いてあるので、畳んだままでも押せる。
       var def = FT ? FT.defaultOpen(id) : (id === 'open');
-      // 10a は「読むだけ」も既定で畳むが、畳むと中の入口 (👀 他フォルダ /
-      // 並べて比較) が押せなくなり、台本がその 2 つを手順の途中で押している。
-      // 台本を「節を開いてから押す」に直すまでは開いたまま出す
-      // (GIT は中に入口を持たないので 10a どおり畳む)。
-      if (id === 'readonly') def = true;
       setSec(id, _get(KEY_SEC + id, def ? '1' : '0') === '1');
       var head = $('files-sec-' + id);
       if (head) head.addEventListener('click', function() { setSec(id, !secOpen(id)); });
@@ -381,6 +379,10 @@ window.MA.filesPanel = (function() {
     if (fp && window.MutationObserver) {
       var mo = new window.MutationObserver(function() { renderParts(); });
       mo.observe(fp, { childList: true, subtree: true });
+      // 一覧は見出し以外 (図を開いた・外を押した・起動時の既定) でも開閉するので、
+      // ▸▾ は #folder-panel の open クラスそのものに合わせる。
+      var moOpen = new window.MutationObserver(function() { syncTargetCaret(); });
+      moOpen.observe(fp, { attributes: true, attributeFilter: ['class'] });
     }
 
     refresh();

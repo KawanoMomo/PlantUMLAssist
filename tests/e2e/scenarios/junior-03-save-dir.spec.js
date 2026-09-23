@@ -189,3 +189,41 @@ test('手順3 「保つ」を選んでも、元ファイルが変わらないこ
   await page.waitForTimeout(1500);
   expect(await S.readDoc(page, DIR, NAME)).toContain('Spi_Driver');
 });
+
+// BLK-builder-20260923-1849-1 (design 10a): FILES ツリーの節は「開いている図・保存先 = 開く、
+// 読むだけ・GIT = 畳む」で出る。保存先の一覧は起動した時点で見えていて、押さずに図を選べる。
+// 読むだけは畳んでいても件数と入口 (👀 / ⇔) が見出しの行に残る。
+test('手順3 起動すると保存先の一覧が開いていて、読むだけ・GIT は畳まれている', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  await S.putDoc(page, DIR, 'J03_tree_state', S.GPIO_STATE);
+  await S.reopenApp(page);
+
+  // 保存先: 押さずに開いている (見出しの ▾ と一覧の行)。
+  await expect(page.locator('#folder-panel')).toHaveClass(/\bopen\b/);
+  await expect(page.locator('#btn-tab-folder')).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#folder-panel .folder-item[data-file-name="J03_tree_state"]')).toBeVisible();
+  // 起動時に開いても、カーソルは絞り込み欄へ飛ばない (エディタに打った文字が吸われない)。
+  expect(await page.evaluate(() => document.activeElement && document.activeElement.id)).not.toBe('folder-filter');
+
+  // 読むだけ・GIT: 畳んでいる。
+  await expect(page.locator('#files-sec-readonly')).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('#files-body-readonly')).toBeHidden();
+  await expect(page.locator('#files-sec-git')).toHaveAttribute('aria-expanded', 'false');
+  // 畳んでいても入口は押せる位置にある。
+  await expect(page.locator('#btn-tab-peek')).toBeVisible();
+  await expect(page.locator('#btn-tab-senior')).toBeVisible();
+  // 見出しを実マウスで押すと開閉する。
+  await page.locator('#files-sec-readonly').click();
+  await expect(page.locator('#files-body-readonly')).toBeVisible();
+  await page.locator('#files-sec-readonly').click();
+  await expect(page.locator('#files-body-readonly')).toBeHidden();
+
+  // 保存先の見出しを押して畳むと、次に開いたときも畳んだまま (開閉は覚える)。
+  await page.locator('#btn-tab-folder').click();
+  await expect(page.locator('#folder-panel')).not.toHaveClass(/\bopen\b/);
+  await S.reopenApp(page);
+  await page.waitForTimeout(500);
+  await expect(page.locator('#folder-panel')).not.toHaveClass(/\bopen\b/);
+  await expect(page.locator('#btn-tab-folder')).toHaveAttribute('aria-expanded', 'false');
+});

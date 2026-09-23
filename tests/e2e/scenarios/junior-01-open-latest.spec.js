@@ -58,6 +58,8 @@ async function clearVault(page) {
 }
 
 async function openFolder(page) {
+  // 保存先は既定で開いている (design 10a)。開いていれば畳んでから開き直し、一覧を今の中身で描き直す。
+  if (await page.locator('#folder-panel.open').count()) await page.locator('#btn-tab-folder').click();
   await page.locator('#btn-tab-folder').click();
   await page.waitForSelector('#folder-panel.open #folder-board-link');
 }
@@ -505,7 +507,7 @@ test.describe('junior 手順 1: 指摘.md の 1 件から先輩の図と並べ�
     await page.reload();
     await page.waitForSelector('#btn-tab-folder');
 
-    await page.locator('#btn-tab-folder').click();
+    await openFolder(page);
     await page.waitForSelector('#folder-panel.open #folder-note-summary[data-note-ready="1"]');
 
     // 到達条件その1: 指摘.md に名前の挙がらない図は「対象外」。開かずに次へ進める。
@@ -532,7 +534,7 @@ test.describe('junior 手順 1: 指摘.md の 1 件から先輩の図と並べ�
     await page.reload();
     await page.waitForSelector('#btn-tab-folder');
 
-    await page.locator('#btn-tab-folder').click();
+    await openFolder(page);
     await page.waitForSelector('#folder-panel.open #folder-note-summary[data-note-ready="1"]');
 
     const done = page.locator('.folder-note-badge[data-note-of="gpio_init_sequence"]');
@@ -688,7 +690,7 @@ test.describe('junior 手順 1: 先輩の複合図から部品を切り出して
     const click = async (sel) => { clicks++; await page.locator(sel).click(); };
 
     // 自分の図を開いてから覗く (junior の実際の順)。
-    await click('#btn-tab-folder');
+    await openFolder(page); clicks++;
     await page.waitForSelector('#folder-panel.open');
     await click('#folder-panel .folder-item[data-file-name="GpioDrv派生クラス図(資料用)"]');
     await page.waitForTimeout(800);
@@ -1146,7 +1148,7 @@ test.describe('junior 手順 1〜2: 部品ビューの進捗帯で 6 図種の�
   // BLK-owner-20260918-0049-prune: 👀 他フォルダの対応要否の表と 📂 一覧の棚卸しを、
   // 🧩 部品ビューの進捗帯に統合した。着手先の特定 (junior 手順 1) はここで済む。
   test('📂 一覧の導線から部品ビューが開き、帯がまだ無い図種と対応不要の図種を名指しする', async ({ page }) => {
-    await page.locator('#btn-tab-folder').click();
+    await openFolder(page);
     await page.waitForSelector('#folder-panel.open #folder-board-link');
     await page.locator('#folder-board-link').click();
     await page.waitForSelector('#peek-modal');
@@ -1772,7 +1774,7 @@ test.describe('junior 手順 1: 保存先を動かさずに先輩の図を読む
   });
 
   test('一覧で見つからないとき、その場が「読むだけの入口」を名指しする', async ({ page }) => {
-    await page.locator('#btn-tab-folder').click();
+    await openFolder(page);
     await page.waitForSelector('#folder-filter');
     // 一覧は開いた後に描き直して絞り込みを白紙に戻すので、行が出揃うのを待つ。
     await page.waitForSelector('#folder-panel [data-file-name]');
@@ -1794,7 +1796,7 @@ test.describe('junior 手順 1: 保存先を動かさずに先輩の図を読む
   test('打った名前を持ち越して先輩の 1 枚が開く。保存先は動かない', async ({ page }) => {
     const targetBefore = await page.locator('#top-save-target').innerText();
 
-    await page.locator('#btn-tab-folder').click();
+    await openFolder(page);
     await page.waitForSelector('#folder-filter');
     // 一覧は開いた後に描き直して絞り込みを白紙に戻すので、行が出揃うのを待つ。
     await page.waitForSelector('#folder-panel [data-file-name]');
@@ -1833,7 +1835,7 @@ test.describe('junior 手順 1: 保存先を動かさずに先輩の図を読む
     const click = async (sel) => { clicks++; await page.locator(sel).click(); };
     const type = async (sel, text) => { keys += text.length; await page.locator(sel).fill(text); };
 
-    await click('#btn-tab-folder');
+    await openFolder(page); clicks++;
     await page.waitForSelector('#folder-filter');
     // 一覧は開いた後に描き直して絞り込みを白紙に戻すので、行が出揃うのを待つ。
     await page.waitForSelector('#folder-panel [data-file-name]');
@@ -1876,7 +1878,7 @@ test.describe('junior 手順 1: フルネームで絞ると本体が資料用よ
   test('フルネームを打つと完全一致の本体が先頭に印付きで出て、押すと本体が開く (クリック 10 以下・キー入力 50 以下)', async ({ page }) => {
     let clicks = 0;
     let keys = 0;
-    await page.locator('#btn-tab-folder').click(); clicks++;
+    await openFolder(page); clicks++;
     await page.waitForSelector('#folder-filter');
     await page.waitForSelector('#folder-panel [data-file-name]');
     await page.waitForTimeout(800);
@@ -1900,7 +1902,7 @@ test.describe('junior 手順 1: フルネームで絞ると本体が資料用よ
     expect(keys).toBeLessThanOrEqual(50);
 
     // 絞り込みを外すと、元の並びに戻る (完全一致の印も消える)。
-    await page.locator('#btn-tab-folder').click();
+    await openFolder(page);
     await page.waitForSelector('#folder-filter');
     await page.locator('#folder-filter').fill('');
     await page.waitForTimeout(300);

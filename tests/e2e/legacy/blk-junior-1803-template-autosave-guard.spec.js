@@ -46,6 +46,8 @@ async function fileText(page, name) {
 }
 
 async function openFolder(page) {
+  // 保存先は既定で開いている (design 10a)。開いていれば畳んでから開き直し、一覧を今の中身で描き直す。
+  if (await page.locator('#folder-panel.open').count()) await page.locator('#btn-tab-folder').click();
   await page.locator('#btn-tab-folder').click();
   await page.waitForSelector('#folder-panel.open .folder-item');
 }
@@ -108,7 +110,7 @@ test.describe('BLK-junior-20260908-1803: テンプレは自動保存で壊れな
     const click = async (loc) => { clicks += 1; await loc.click(); };
     const type = async (loc, text) => { keys += text.length; await loc.fill(text); };
 
-    await click(page.locator('#btn-tab-folder'));
+    await openFolder(page); clicks += 1;
     await page.waitForSelector('#folder-panel.open .folder-item');
     await click(roleBtn(page, 'J1803_tpl2'));
     await click(roleBtn(page, 'J1803_tpl2'));   // テンプレ宣言

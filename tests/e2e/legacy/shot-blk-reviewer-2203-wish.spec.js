@@ -1,6 +1,14 @@
 const { test } = require('@playwright/test');
 const { gotoApp, saveDirFor, shotOut } = require('../helpers');
 
+// 保存先の節は既定で開いている (design 10a)。開いていれば畳んでから開き直し、
+// 一覧を今の中身で描き直す (直に押すと、開いていたときに畳んでしまう)。
+async function openFolder(page) {
+  if (await page.locator('#folder-panel.open').count()) await page.locator('#btn-tab-folder').click();
+  await page.locator('#btn-tab-folder').click();
+  await page.waitForSelector('#folder-panel.open');
+}
+
 // BLK-reviewer-20260907-2203-wish の画面写真。保存フォルダ一覧の下端に
 // 「前回の指摘をそのまま今回の指摘にする」が出ているところを撮る。
 const DIR = saveDirFor(__filename);
@@ -39,16 +47,14 @@ test('shot: 無変更確定ボタン', async ({ page }) => {
     }, { name, dsl, dir: DIR });
   }
 
-  await page.locator('#btn-tab-folder').click();
+  await openFolder(page);
   await page.waitForSelector('#folder-panel.open .folder-item');
   const mark = page.locator('#folder-panel .folder-mark-seen');
   if (await mark.count()) {
     await mark.click();
     await page.waitForSelector('#folder-panel .folder-item[data-review-status="unchanged"]');
   }
-  await page.locator('#btn-tab-folder').click();
-  await page.waitForTimeout(150);
-  await page.locator('#btn-tab-folder').click();
+  await openFolder(page);
   await page.waitForSelector('#folder-panel.open .folder-item');
   await page.waitForTimeout(300);
   await page.locator('#folder-panel').screenshot({ path: OUT });

@@ -1,6 +1,14 @@
 const { test, expect } = require('@playwright/test');
 const { gotoApp, saveDirFor } = require('../helpers');
 
+// 保存先の節は既定で開いている (design 10a)。開いていれば畳んでから開き直し、
+// 一覧を今の中身で描き直す (直に押すと、開いていたときに畳んでしまう)。
+async function openFolder(page) {
+  if (await page.locator('#folder-panel.open').count()) await page.locator('#btn-tab-folder').click();
+  await page.locator('#btn-tab-folder').click();
+  await page.waitForSelector('#folder-panel.open');
+}
+
 // BLK-reviewer-20260908-1203: 「一致 / 不一致」までは自動で分かるが、不一致の中身
 // (旧 participant 名が残っている・状態や遷移が欠落している) を primary への指摘文に
 // 書くには、7 枚それぞれで puml と旧 svg を grep で突き合わせていた。
@@ -81,7 +89,7 @@ test.describe('BLK-reviewer-1203: 内容ずれの中身を grep せずに読む'
     let clicks = 0;
     let keys = 0;
 
-    await page.locator('#btn-tab-folder').click(); clicks++;
+    await openFolder(page); clicks++;
     await page.waitForSelector('#folder-panel.open .folder-item');
     // 印だけで「内容ずれ」と分かっている状態 (確かめ直してはいない)
     await expect(page.locator('#folder-svg-content')).toContainText('ずれ 1 枚');
@@ -115,7 +123,7 @@ test.describe('BLK-reviewer-1203: 内容ずれの中身を grep せずに読む'
     expect(await exportSvg(page, 'R1203_c', OLD)).toBe(200);
     await putFile(page, 'R1203_c', NOW);
 
-    await page.locator('#btn-tab-folder').click();
+    await openFolder(page);
     await page.waitForSelector('#folder-panel.open .folder-item');
     await page.locator('#folder-svg-diff-scan').click();
     await expect(page.locator('#folder-svg-diff-head')).toBeVisible({ timeout: 120000 });
@@ -130,7 +138,7 @@ test.describe('BLK-reviewer-1203: 内容ずれの中身を grep せずに読む'
     await putFile(page, 'R1203_d', NOW);
     expect(await exportSvg(page, 'R1203_d', NOW)).toBe(200);
 
-    await page.locator('#btn-tab-folder').click();
+    await openFolder(page);
     await page.waitForSelector('#folder-panel.open .folder-item');
     await expect(page.locator('#folder-svg-diff-scan')).toBeDisabled();
     await expect(page.locator('#folder-svg-diff-head')).toHaveCount(0);

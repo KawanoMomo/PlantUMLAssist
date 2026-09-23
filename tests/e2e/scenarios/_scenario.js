@@ -102,11 +102,14 @@ async function clearTickets(page, dir) {
 }
 
 // 📂 一覧 から名前で開く (junior 手順 1・8、primary の openFolderItem と同じ経路)。
-// 押すたびに開閉が入れ替わるので、開いていないときだけ押す。
+// 開いていれば畳んでから開き直す (起動時に描いた一覧を、台本が置いたファイルで描き直す)。
 async function openFolder(page) {
   const panel = page.locator('#folder-panel');
   const cls = (await panel.getAttribute('class')) || '';
-  if (!/\bopen\b/.test(cls)) await page.locator('#btn-tab-folder').click();
+  // 保存先の節は既定で開いている (design 10a)。起動時に描いた一覧は台本が
+  // 後から置いたファイルを知らないので、開いていれば畳んでから開き直して描き直す。
+  if (/\bopen\b/.test(cls)) await page.locator('#btn-tab-folder').click();
+  await page.locator('#btn-tab-folder').click();
   await page.waitForSelector('#folder-panel.open');
 }
 

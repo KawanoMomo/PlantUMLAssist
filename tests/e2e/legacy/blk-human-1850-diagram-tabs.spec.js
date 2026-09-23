@@ -5,6 +5,14 @@
 const { test, expect } = require('@playwright/test');
 const { gotoApp, getEditorText, saveDirFor } = require('../helpers');
 
+// 保存先の節は既定で開いている (design 10a)。開いていれば畳んでから開き直し、
+// 一覧を今の中身で描き直す (直に押すと、開いていたときに畳んでしまう)。
+async function openFolder(page) {
+  if (await page.locator('#folder-panel.open').count()) await page.locator('#btn-tab-folder').click();
+  await page.locator('#btn-tab-folder').click();
+  await page.waitForSelector('#folder-panel.open');
+}
+
 const SPI_SEQ = '@startuml\nparticipant SpiDrv\nparticipant SpiHw\nSpiDrv -> SpiHw: transfer\n@enduml';
 const CAN_SEQ = '@startuml\nparticipant CanDrv\nparticipant CanHw\nCanDrv -> CanHw: send\n@enduml';
 
@@ -123,7 +131,7 @@ test.describe('BLK-human-1850 保存フォルダ一覧', () => {
       });
     }, dir);
 
-    await page.locator('#btn-tab-folder').click();
+    await openFolder(page);
     await page.waitForSelector('#folder-panel.open .folder-item');
     await page.locator('#folder-panel .folder-item[data-file-name="CAN_state"]').click();
     await page.waitForTimeout(500);

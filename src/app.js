@@ -589,6 +589,7 @@ function init() {
       if (!item) return;
       item.addEventListener('click', function() {
         close();
+        if (p[1] === 'btn-tab-folder') { _ensureFolderListOpen(); return; }
         var target = document.getElementById(p[1]);
         if (target) target.click();
       });
@@ -3521,6 +3522,9 @@ function init() {
 
   initCommandPalette();
 
+  // design 10a: 保存先の節は既定で開いた状態で出す (復元した保存先を読んでから描く)。
+  try { _openFolderListAtBoot(); } catch (e) {}
+
   startHeartbeat();
 }
 
@@ -3600,7 +3604,7 @@ function initCommandPalette() {
       { id: 'seq-to-activity', title: 'シーケンス図からアクティビティ図を起こす / Sequence to activity', hint: 'Tabs', keywords: ['activity', 'sequence', 'draft', 'あくてぃびてぃ', 'しーけんす', 'おこす', 'したがき'], run: function() { makeActivityFromSequence(); } },
       { id: 'component-draft', title: '定石構成からコンポーネント図を起こす / Component draft', hint: 'Tabs', keywords: ['component', 'draft', 'こんぽーねんと', 'じょうせき', 'おこす', 'したがき'], run: function() { promptComponentDraft(); } },
       { id: 'tab-new', title: '新しい図を開く / New diagram', hint: 'Tabs', keywords: ['new', 'tab', 'あたらしい', 'ず'], button: 'btn-tab-new', run: function() { clickById('btn-tab-new'); } },
-      { id: 'tab-folder', title: 'FILES: 保存先を開く / Files: save folder', hint: 'Files', keywords: ['folder', 'files', 'tree', 'list', 'いちらん', 'ふぉるだ', 'ほぞんさき'], button: 'btn-tab-folder', run: function() { clickById('btn-tab-folder'); } },
+      { id: 'tab-folder', title: 'FILES: 保存先を開く / Files: save folder', hint: 'Files', keywords: ['folder', 'files', 'tree', 'list', 'いちらん', 'ふぉるだ', 'ほぞんさき'], button: 'btn-tab-folder', run: function() { _ensureFolderListOpen(); } },
       { id: 'change-ticket', title: '変更チケットを開く / Change tickets', hint: 'Tabs', keywords: ['ticket', 'change', 'impact', 'ちけっと', 'へんこう', 'つづき', 'しようへんこう'], run: function() { toggleTicketBoard(true); } },
       { id: 'vault', title: '提出物庫を開く / Deliverable vault', hint: 'Tabs', keywords: ['vault', 'export', 'ていしゅつ', 'こ', 'かこ', 'ぜんかい'], run: function() { toggleVault(true); } },
       { id: 'tab-rename', title: '部品名を一括置換 / Bulk rename', hint: 'Tabs', keywords: ['rename', 'replace', 'いっかつ', 'ちかん'], button: 'btn-tab-rename', run: function() { clickById('btn-tab-rename'); } },
@@ -10861,9 +10865,11 @@ function stepPeekFile(delta) {
 
 // 覗ける行き先の一覧。覗く画面を開かないまま指摘.md を読む画面 (📂一覧) のために、
 // 一度だけ取りに行く (BLK-junior-20260914-1206-wish)。
-function _ensurePeekDirs() {
+// force: 手元の控えがあっても取り直す。保存先の一覧は起動時に開いて (design 10a)
+// ここを先に呼ぶので、後から隣に増えたフォルダを「並べて比較」が知らないままになる。
+function _ensurePeekDirs(force) {
   var PF = window.MA.peekFolder;
-  if (_peekDirs && _peekDirs.length) return Promise.resolve(true);
+  if (!force && _peekDirs && _peekDirs.length) return Promise.resolve(true);
   if (!PF || !window.fetch) return Promise.resolve(false);
   return fetch('/peek-dirs?dir=' + encodeURIComponent(_wsFileDir()))
     .then(function(r) { return r.ok ? r.json() : null; })
@@ -11398,13 +11404,14 @@ function toggleSeniorPane(open) {
   renderCompareTargetRow();
   if (el.btn) {
     el.btn.setAttribute('aria-pressed', open ? 'true' : 'false');
-    el.btn.className = 'tab-tool' + (open ? ' on' : '');
+    // 入口は FILES ツリーの見出しの行にあり、その置き場所のクラスも持つので上書きしない。
+    el.btn.classList.toggle('on', !!open);
   }
   _seniorSave({ open: !!open });
   renderSeniorStatus();
   if (!open) { clearSeniorGit(); return Promise.resolve(true); }
   if (_seniorGit) return Promise.resolve(renderSeniorGit());
-  return _ensurePeekDirs().then(function() {
+  return _ensurePeekDirs(true).then(function() {
     renderSeniorDirs();
     var st = _seniorState();
     var PF = window.MA.peekFolder;
@@ -11722,6 +11729,10 @@ function setupPeekFolder() {
     if (ev.key === 'ArrowUp') { ev.preventDefault(); stepPeekFile(-1); }
   });
 }
+
+// setupTabs の中の一覧を外から開く口 (design 10a)。
+var _ensureFolderListOpen = function() {};
+var _openFolderListAtBoot = function() {};
 
 function setupTabs() {
   if (!window.MA.workspace) return;
@@ -12334,7 +12345,28 @@ function setupTabs() {
   }
 
   btnFolder.addEventListener('click', function() {
-    if (panel.classList.contains('open')) { closePanel(); return; }
+    if (panel.classList.contains('open')) {
+      closePanel();
+      _rememberTargetSec(false);
+      return;
+    }
+    _rememberTargetSec(true);
+    openFolderList(true);
+  });
+
+  // design 10a: 「保存先」節は既定で開いておく (FILES ツリーの節の既定)。
+  // 見出しを押して畳んだら次の起動でも畳んだまま出す (覚えるのは開閉だけ)。
+  function _rememberTargetSec(on) {
+    try { window.localStorage.setItem('pua.files.sec.target', on ? '1' : '0'); } catch (e) {}
+  }
+  // focus: 開いた直後に絞り込み欄へカーソルを置くか。起動時に既定で開くときは
+  // 置かない (エディタに打ち始めた文字が絞り込み欄へ吸われる)。
+  var _peekDirsFromBoot = false;
+  function openFolderList(focus) {
+    // 起動時に既定で開いた一覧は、隣のフォルダ (参照タブ・読むだけの行き先) を
+    // 起動した時点の姿で控えている。人が初めて押して開くときに 1 度だけ取り直す
+    // (既定で開く前は、この最初の 1 押しが取りに行く時点だった)。
+    if (focus && _peekDirsFromBoot) { _peekDirsFromBoot = false; _peekDirs = []; }
     // BLK-junior-20260907-1803: 一覧を開くだけでは保存フォルダへ書き出さない。
     // ここで書き出すと、保存できたかを一覧から確かめようとするたびに編集中の本文で
     // ファイルが上書きされ、「開き直したら必ず一致する」ので確認にならなかった。
@@ -12347,7 +12379,7 @@ function setupTabs() {
     svgVerifyDiffs = {};
     roleNote = '';
     folderQuery = '';           // 絞り込みは開き直すたびに白紙に戻す
-    folderFocusFilter = true;   // 開いたらそのまま名前を打ち始められる
+    folderFocusFilter = !!focus;   // 押して開いたらそのまま名前を打ち始められる
     panel.textContent = '';
     var loading = document.createElement('div');
     loading.className = 'folder-empty';
@@ -12361,7 +12393,21 @@ function setupTabs() {
       panel.style.top = (rect.bottom + 2) + 'px';
     }
     renderFolderPanel();
-  });
+  }
+  // 他の入口 (取り込み ▾ の「フォルダ」、名前の衝突の札、Ctrl+K) は「開く」だけ。
+  // 既定で開いている節を、開くつもりで押して畳んでしまわない。
+  _ensureFolderListOpen = function() {
+    if (panel.classList.contains('open')) return;
+    btnFolder.click();
+  };
+  _openFolderListAtBoot = function() {
+    if (panel.classList.contains('open')) return;
+    var FT = window.MA.fileTree;
+    var def = FT ? FT.defaultOpen('target') : true;
+    var saved = null;
+    try { saved = window.localStorage.getItem('pua.files.sec.target'); } catch (e) {}
+    if (saved === null ? def : saved === '1') { openFolderList(false); _peekDirsFromBoot = true; }
+  };
 
   // BLK-reviewer-20260907-1403: 図ごとに「前回見た版から変わったか」を出す。
   // 変更が無い日に 17 枚を全部読み直さなくても、バッジの付いた図だけ読めばよくなる。
@@ -12413,7 +12459,12 @@ function setupTabs() {
     host.appendChild(bar);
   }
 
+  // 一覧の描画は listFolder を待つので、先に頼んだ描画が後から届くことがある
+  // (起動時に既定で開いた描画の返事が、人が押して開き直した描画の後に着く)。
+  // 最後に頼んだ描画だけを画面に出す。
+  var _folderRenderGen = 0;
   function renderFolderPanel() {
+    var myGen = ++_folderRenderGen;
     var dir = _wsFileDir();
     // 参照タブを見ている間は、保存先の一覧 (印・役割・一括操作つき) を出さない。
     // 同じ見た目で読むだけの一覧を出すと、どちらを触っているかが読めなくなる。
@@ -12436,6 +12487,7 @@ function setupTabs() {
     var RW = window.MA.reviewWatch;
     var store = _reviewStore();
     window.MA.workspace.listFolder(dir).then(function(res) {
+      if (myGen !== _folderRenderGen) return;
       var entries = (res && res.entries) || [];
       panel.textContent = '';
       // BLK-human-20260917-0901: 保存フォルダの外にある手元の .puml を開く入口を一覧の頭に置く。
@@ -12732,8 +12784,14 @@ function setupTabs() {
 
   // 一覧を開いた直後だけ絞り込み欄にカーソルを置く。行のボタンを押しての
   // 再描画では奇うことをしない (押した場所から手が飛ばない)。
+  // 開いた直後に後追いの描き直し (庫・札の読み込み待ち) が来ると、置いたカーソルの
+  // 欄ごと入れ替わって行き場を失う。開いてすぐの間にカーソルがどこにも無ければ置き直す。
+  var _folderFocusUntil = 0;
   function focusFolderFilter() {
-    if (!folderFocusFilter) return;
+    var ae = document.activeElement;
+    var lost = !ae || ae === document.body;
+    if (!folderFocusFilter && !(lost && Date.now() < _folderFocusUntil)) return;
+    if (folderFocusFilter) _folderFocusUntil = Date.now() + 2000;
     folderFocusFilter = false;
     var input = panel.querySelector('.folder-filter');
     if (input && input.focus) { try { input.focus(); } catch (e) {} }
@@ -26169,7 +26227,7 @@ function setupSaveClash() {
   var close = document.getElementById('btn-scl-close');
   if (close) close.addEventListener('click', hideSaveClash);
   var folder = document.getElementById('btn-scl-folder');
-  if (folder) folder.addEventListener('click', function() { clickById('btn-tab-folder'); });
+  if (folder) folder.addEventListener('click', function() { _ensureFolderListOpen(); });
   var fix = document.getElementById('btn-scl-fix');
   if (fix) {
     fix.addEventListener('click', function() {

@@ -45,6 +45,8 @@ async function clearDir(page) {
 }
 
 async function openFolder(page) {
+  // 保存先は既定で開いている (design 10a)。開いていれば畳んでから開き直し、一覧を今の中身で描き直す。
+  if (await page.locator('#folder-panel.open').count()) await page.locator('#btn-tab-folder').click();
   await page.locator('#btn-tab-folder').click();
   await page.waitForSelector('#folder-panel.open .folder-item');
 }
@@ -66,7 +68,7 @@ test.describe('BLK-primary-1703: 一覧から複数の図をまとめて開く',
     page.on('console', () => {});
     const before = await page.locator('#tab-bar .tab').count();
 
-    await page.locator('#btn-tab-folder').click(); clicks++;
+    await openFolder(page); clicks++;
     await page.waitForSelector('#folder-panel.open .folder-item');
     // 一覧には編集中の図 (diagram1) も並ぶので、枚数は画面から数える。
     const listed = await page.locator('#folder-panel .folder-item').count();

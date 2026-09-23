@@ -55,6 +55,8 @@ async function clearDir(page) {
 }
 
 async function openFolder(page) {
+  // 保存先は既定で開いている (design 10a)。開いていれば畳んでから開き直し、一覧を今の中身で描き直す。
+  if (await page.locator('#folder-panel.open').count()) await page.locator('#btn-tab-folder').click();
   await page.locator('#btn-tab-folder').click();
   await page.waitForSelector('#folder-panel.open .folder-item');
 }
@@ -172,7 +174,7 @@ test.describe('BLK-reviewer-1303: friction の実測', () => {
     await putFile(page, 'R1303_m', NOW);
     await putRawSvg(page, 'R1303_m', OLD_ORDER);
 
-    await page.locator('#btn-tab-folder').click(); clicks++;
+    await openFolder(page); clicks++;
     await page.waitForSelector('#folder-panel.open .folder-item');
     await page.locator('#folder-svg-verify').click(); clicks++;
     await expect(page.locator('#folder-svg-content'))
