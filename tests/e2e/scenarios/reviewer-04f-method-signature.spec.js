@@ -109,11 +109,16 @@ test('手順4.9 宣言の無い呼び出しは、保存を書き込む前に GUI
 
   // 止まっている間、押した保存は進んでいない。状態バーを空にしてからもう一度
   // 押し、「どこに保存したか」の文言が出ないことで確かめる。
+  // BLK-migrator-20260923-1809: 止めたときは状態バーも「⛔ 保存を止めました」に変える
+  // (帯はプレビュー枠の中なので、大きい図では画面外に送られて何も起きなく見えた)。
+  // 「保存した」と言っていないことが、ここで見たかったこと。
   await page.evaluate(() => { document.getElementById('status-save-result').textContent = ''; });
   await page.locator('#top-save').click();
   await page.waitForTimeout(900);
   await expect(guard).toBeVisible();
-  expect((await page.locator('#status-save-result').textContent()) || '').toBe('');
+  const blockedLine = (await page.locator('#status-save-result').textContent()) || '';
+  expect(blockedLine).toContain('保存を止めました');
+  expect(blockedLine).not.toContain('に保存しました');
 
   // 承知のうえで押せば、そのまま保存できる (作業は止めない)。
   await page.locator('#btn-sgd-save').click();
