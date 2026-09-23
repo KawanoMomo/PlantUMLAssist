@@ -208,6 +208,11 @@ global.expect = function(actual) {
     toBeDefined() { if (actual === undefined) throw new Error('Expected defined'); },
     toBeGreaterThan(n) { if (!(actual > n)) throw new Error(`Expected ${actual} > ${n}`); },
     toBeLessThan(n) { if (!(actual < n)) throw new Error(`Expected ${actual} < ${n}`); },
+    // BLK-migrator-20260923-1409: 枠の寸法は「同じか、それ以上」で守りたいので境界込みを足す。
+    toBeGreaterThanOrEqual(n) { if (!(actual >= n)) throw new Error(`Expected ${actual} >= ${n}`); },
+    toBeLessThanOrEqual(n) { if (!(actual <= n)) throw new Error(`Expected ${actual} <= ${n}`); },
+    toBeTruthy() { if (!actual) throw new Error(`Expected truthy, got ${JSON.stringify(actual)}`); },
+    toBeFalsy() { if (actual) throw new Error(`Expected falsy, got ${JSON.stringify(actual)}`); },
     toContain(item) {
       if (Array.isArray(actual)) { if (!actual.includes(item)) throw new Error(`Array does not contain ${JSON.stringify(item)}`); }
       else if (typeof actual === 'string') { if (!actual.includes(item)) throw new Error(`String does not contain "${item}"`); }

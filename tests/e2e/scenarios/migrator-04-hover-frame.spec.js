@@ -370,3 +370,48 @@ test('migrator 手順 4 — box で参加者をグループ化した sequence �
     await expect(r, line + ' 行目にホバーして枠が出る').toHaveClass(/hit-hover/);
   }
 });
+
+// BLK-migrator-20260923-1409: 実物 (AWS アイコン構成図) は participant の表示名を
+// `"1行目\n<b>2行目</b>\n3行目"` と複数行で書く。その図では見出しにホバーしても枠が出ず、
+// 出ても隣の参加者の枠になっていた。0449・0549・1307 と同じ「読めない/描き方の違う行があると
+// その図の枠が落ちる」系統。見出しの 2 行目・3 行目を指しても本人の枠が出ることを守る。
+test('migrator 手順 4 — 表示名が複数行の participant でも、見出しのどの行を指しても本人の枠が出る', async ({ page }) => {
+  await bootPlain(page);
+  await typeDsl(page, [
+    '@startuml',                                          // 1
+    'participant "Amazon EC2\\n<b>App Server</b>\\nAZ-a" as EC2',  // 2
+    'participant "Amazon RDS" as RDS',                    // 3
+    'EC2 -> RDS : query',                                 // 4
+    'RDS --> EC2 : rows',                                 // 5
+    '@enduml',                                            // 6
+  ].join(String.fromCharCode(10)));
+
+  // 参加者 2 人 = 上下で 4 枠、メッセージ 2 本。表示名の中の改行は別の参加者にならない。
+  await expect(page.locator('#overlay-layer rect[data-type="participant"]'))
+    .toHaveCount(4, { timeout: 20000 });
+  await expect(page.locator('#overlay-layer rect[data-type="message"]')).toHaveCount(2);
+
+  // 見出しの 1 行目と 3 行目、どちらを指しても EC2 の宣言行 (2 行目) の枠が下にある。
+  // 以前は 1 行目の上しか当たり判定が無く、3 行目では何も指さなかった。
+  for (const label of ['Amazon EC2', 'AZ-a']) {
+    const t = page.locator('#preview-svg svg text', { hasText: label }).first();
+    const tb = await t.boundingBox();
+    const under = await page.evaluate((q) => {
+      const els = document.elementsFromPoint(q.x, q.y);
+      const rr = els.find((e) => e.tagName && e.tagName.toLowerCase() === 'rect'
+        && e.closest('#overlay-layer') && e.getAttribute('data-type'));
+      return rr ? { type: rr.getAttribute('data-type'), line: rr.getAttribute('data-line') } : null;
+    }, { x: tb.x + tb.width / 2, y: tb.y + tb.height / 2 });
+    expect(under, label + ' を指すと EC2 の宣言行の枠が下にある')
+      .toEqual({ type: 'participant', line: '2' });
+  }
+
+  // メッセージも今までどおりホバーで反応する (当事者を取り違えない)。
+  for (const line of ['4', '5']) {
+    const r = page.locator('#overlay-layer rect[data-type="message"][data-line="' + line + '"]');
+    await expect(r, line + ' 行目の枠がある').toHaveCount(1);
+    const b = await r.boundingBox();
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+    await expect(r, line + ' 行目にホバーして枠が出る').toHaveClass(/hit-hover/);
+  }
+});

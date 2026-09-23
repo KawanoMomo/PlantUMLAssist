@@ -167,6 +167,11 @@ describe('buildSequenceOverlay', function() {
     f.parsed.elements[0].label = '存在しないラベル_zzz';
     // line 番号も誤値に変えて offset 推定もズラす
     f.parsed.elements[0].line = 9999;
+    // BLK-migrator-20260923-1409: 参加者はまず PlantUML が SVG に残した名前
+    // (data-qualified-name = DSL の別名) で当てるようになった。label と line を壊しても
+    // 名前が合っていれば当たるので、それだけでは「当てられない」状態にならない。
+    // 当てられない状態を作るには、図に無い名前にする必要がある。
+    f.parsed.elements[0].id = '存在しない別名_zzz';
     var overlayEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     var report = overlay.buildSequenceOverlay(f.svgEl, f.parsed, overlayEl);
     expect(report).toBeDefined();
