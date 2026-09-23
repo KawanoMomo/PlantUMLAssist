@@ -128,3 +128,38 @@ describe('parseComponent package', function() {
     expect(r4.groups[0].kind).toBe('package');
   });
 });
+
+// BLK-migrator-20260923-1409: 波括弧を伴わない要素宣言 (agent / node / cloud / ...)。
+// aws-icons-for-plantuml の `examples__Basic Usage.puml` がこの形で、読めないと
+// 部品が要素の一覧から落ち、ホバーの選択枠が 1 つも出なかった。
+describe('parseComponent 波括弧の無い要素宣言', function() {
+  test('agent "ラベル" as 別名 を部品として読む', function() {
+    var r = co.parse('@startuml\nagent "Published Event" as event\n@enduml');
+    expect(r.elements.length).toBe(1);
+    expect(r.elements[0].kind).toBe('component');
+    expect(r.elements[0].id).toBe('event');
+    expect(r.elements[0].label).toBe('Published Event');
+  });
+  test('別名の無い node / cloud / artifact も読む', function() {
+    ['node', 'cloud', 'artifact', 'storage', 'card', 'person'].forEach(function(kw) {
+      var r = co.parse('@startuml\n' + kw + ' Server\n@enduml');
+      expect(r.elements.length).toBe(1);
+      expect(r.elements[0].kind).toBe('component');
+      expect(r.elements[0].id).toBe('Server');
+      expect(r.elements[0].label).toBe('Server');
+    });
+  });
+  test('ステレオタイプ付きも読む', function() {
+    var r = co.parse('@startuml\nnode Server <<physical>>\n@enduml');
+    expect(r.elements[0].id).toBe('Server');
+    expect(r.elements[0].stereotype).toBe('physical');
+  });
+  test('波括弧つきの同じ語は今までどおり境界のまま', function() {
+    var r = co.parse('@startuml\nnode Server {\ncomponent App\n}\n@enduml');
+    expect(r.groups.length).toBe(1);
+    expect(r.groups[0].kind).toBe('package');
+    expect(r.groups[0].label).toBe('Server');
+    // 中身の component は今までどおり部品として出る (境界を部品に格下げしない)。
+    expect(r.elements.map(function(e) { return e.id; })).toEqual(['App']);
+  });
+});

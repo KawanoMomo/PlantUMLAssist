@@ -17,6 +17,7 @@ window.MA.parserUtils = (function() {
     var hasStateKw = false;
     var hasActivityKw = false;
     var hasComponentKw = false;
+    var hasComponentElemKw = false;
     var hasComponentBracket = false;
     var hasMessageArrow = false;
 
@@ -39,6 +40,15 @@ window.MA.parserUtils = (function() {
       if (/^state\b|^\[\*\]/.test(t)) hasStateKw = true;
       if (/^(start|stop)\b|^:.+;|^if\s+\(|^fork\b/.test(t)) hasActivityKw = true;
       if (/^component\b/.test(t)) hasComponentKw = true;
+      // BLK-migrator-20260923-1409: component 図の要素は `component` だけではない。
+      // AWS のライブラリ図 (`agent "Published Event" as event` + `-->`) が
+      // 「矢印があるから」で sequence と読まれ、選択枠が 1 つも出なかった。
+      // ここに並べるのは sequence の参加者と綴りがぶつからない語だけ
+      // (database / queue / collections / boundary / control / entity は
+      //  参加者の宣言でもあるので入れない)。
+      if (/^(agent|node|artifact|cloud|folder|frame|storage|stack|card|file|hexagon|person)\b/.test(t)) {
+        hasComponentElemKw = true;
+      }
       if (/^\[[^\]*][^\]]*\]/.test(t)) hasComponentBracket = true;
       if (/\s(->|-->|->>|-->>|<-|<--|<<-|<<--)\s/.test(t)) hasMessageArrow = true;
     }
@@ -70,6 +80,8 @@ window.MA.parserUtils = (function() {
     // Component takes priority over Class because Component diagrams legally
     // contain `interface` (which would otherwise match hasClassKw).
     if (hasComponentKw) return 'plantuml-component';
+    // 参加者の宣言が 1 つも無い図で component 要素だけが並ぶなら component。
+    if (hasComponentElemKw && !hasParticipantSeqOnly && !hasActor) return 'plantuml-component';
     if (hasAbstractClassKw || hasEnumKw || hasClassRelation) return 'plantuml-class';
     if (hasClassKw) return 'plantuml-class';
     if (hasStateKw) return 'plantuml-state';
