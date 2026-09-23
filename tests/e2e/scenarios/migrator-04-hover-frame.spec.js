@@ -131,6 +131,8 @@ test('migrator 手順 4 — struct・package 配下・区切り線のあるク�
       const t = Array.prototype.find.call(document.querySelectorAll('#preview-svg svg text'),
         (n) => (n.textContent || '').trim() === l);
       if (!t) return null;
+      // 図が画面より広いと右端の要素 (MainTask) は右欄の下に入る。利用者と同じく見える所まで動かしてから指す。
+      t.scrollIntoView({ block: 'center', inline: 'center' });
       // package の名前札は右上のズーム帯の下に隠れることがあるので、枠の左下の内側を指す。
       const pk = ty === 'package' ? t.closest('g') && t.closest('g').querySelector('path, rect, polygon') : null;
       const r = (pk || t).getBoundingClientRect();
