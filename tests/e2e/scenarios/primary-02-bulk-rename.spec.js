@@ -518,6 +518,25 @@ test('手順2 パレットの一括置換に Ctrl+H が出て、エディタで�
     return at;
   });
   expect(selected).toBeGreaterThanOrEqual(0);
+  // BLK-primary-20260924-0021-wish: 置換の前段で、選んだ部品名を「使っている図」で引いて枚数を読む
+  // (Ctrl+K で「使っている図」と打つと「名前で図を探す」が出て、選んだ名前が入った状態で開く)。
+  await page.keyboard.press('Control+k');
+  await page.waitForSelector('#cp-modal');
+  await page.locator('#cp-input').fill('使っている図');
+  await page.waitForTimeout(250);
+  await expect(page.locator('.cp-item').first()).toHaveAttribute('data-cp-id', /:name-search$/);
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('#ri-modal', { state: 'visible' });
+  await expect(page.locator('#ns-q')).toHaveValue('SpiDrv');
+  await expect(page.locator('#ns-summary')).toHaveAttribute('data-hit-docs', '3');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#ri-modal')).toBeHidden();
+  await page.evaluate(() => {
+    const ed = document.getElementById('editor');
+    const at = ed.value.indexOf('SpiDrv');
+    ed.focus();
+    ed.setSelectionRange(at, at + 'SpiDrv'.length);
+  });
   await page.keyboard.press('Control+h');
   await page.waitForSelector('#rename-panel.open', { timeout: 5000 });
   await expect(page.locator('#rename-from')).toHaveValue('SpiDrv');
