@@ -11,7 +11,7 @@ test('下端に ± 差分 / 指摘 / 指摘箱 が並ぶ', async ({ page }) => {
   await expect(page.locator('#status-diff')).toBeVisible();
   await expect(page.locator('#status-pins')).toBeVisible();
   await expect(page.locator('#status-inbox')).toBeVisible();
-  await expect(page.locator('#status-pins')).toHaveText(/^指摘 (\d+|−)$/);
+  await expect(page.locator('#status-pins')).toHaveText(/^うち この図 (\d+|−)$/);
   await expect(page.locator('#status-inbox')).toHaveText(/^指摘箱 (\d+|−)$/);
 });
 

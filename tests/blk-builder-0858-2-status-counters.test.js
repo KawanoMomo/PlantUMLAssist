@@ -14,7 +14,17 @@ const html = fs.readFileSync(path.resolve(__dirname, '..', 'plantuml-assist.html
 
 describe('下端に寄せる件数', function() {
   test('design の並び (± 差分 / 指摘 / 指摘箱) で 3 つ持つ', function() {
-    expect(SC.items().map(function(it) { return it.prefix; })).toEqual(['± 差分', '指摘', '指摘箱']);
+    expect(SC.items().map(function(it) { return it.prefix; }))
+      .toEqual(['± 差分', 'うち この図', '指摘箱']);
+  });
+
+  // BLK-owner-20260923-1409-prune: 「指摘」と「指摘箱」は同じ 1 件を別々に数えていた。
+  // この図の指摘は指摘箱にも並ぶので、下端では内数と読める見出しにする。
+  test('この図の指摘は指摘箱の内数として出す (同じ 1 件を二重に数えない)', function() {
+    var pins = SC.items().filter(function(it) { return it.id === 'status-pins'; })[0];
+    expect(pins.subsetOf).toBe('status-inbox');
+    expect(pins.prefix).toBe('うち この図');
+    expect(pins.title).toContain('内数');
   });
 
   test('出どころのタブ列ボタンと下端のボタンがどちらも実在する', function() {
