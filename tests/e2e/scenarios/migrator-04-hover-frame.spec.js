@@ -4,7 +4,7 @@
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
-const { bootPlain, typeDsl, dirFor, absDirFor } = require('./_scenario');
+const { bootPlain, bootWithSaveDir, typeDsl, dirFor, absDirFor } = require('./_scenario');
 
 const DSL = [
   '@startuml',
@@ -565,6 +565,74 @@ test('migrator 手順 4 — package / cloud / database / folder で入れ子に�
   ]) {
     const { hit } = await hoverHit(page, label);
     expect(hit, label + ' にホバーして枠が出る').toEqual({ type, line, hover: true });
+  }
+});
+
+// BLK-migrator-20260923-1909 差し戻し 1 回目: 実物を開いて保存し終えた保存フォルダに中身の同じ図の組が
+// あると、保存のたびに「保存の記録」の帯が図の上に出て図を下へ押す。当たり判定の層は図が余白 16px の
+// 位置にあると決め打ちしていたので、帯の高さだけ上にずれ、次に開いた図で枠が出ない / 隣の枠が出た
+// (migrator の実測で class-ex2 2/23、component-ex 3/25)。帯が出たまま次の図を開いても本人の枠が出ること。
+test('migrator 手順 4 — 保存の帯が図の上に出たまま次の component 図を開いても、部品と入れ物に本人の枠が出る', async ({ page }) => {
+  const dir = dirFor(__filename) + '/band-shift';
+  const abs = path.join(absDirFor(__filename), 'band-shift');
+  fs.rmSync(abs, { recursive: true, force: true });
+  fs.mkdirSync(abs, { recursive: true });
+  // 前の周で「別名で保存」した結果、中身の同じ図が 2 枚ある保存フォルダ (migrator の out と同じ)。
+  const twin = ['@startuml', 'class Twin', '@enduml', ''].join(String.fromCharCode(10));
+  fs.writeFileSync(path.join(abs, 'twin-a.puml'), twin);
+  fs.writeFileSync(path.join(abs, 'twin-b.puml'), twin);
+  await bootWithSaveDir(page, dir);
+  const openVia = async (file) => {
+    await page.click('#btn-import');
+    const [fc] = await Promise.all([page.waitForEvent('filechooser'), page.click('#imp-file')]);
+    await fc.setFiles(file);
+  };
+  const first = path.join(abs, 'first.puml');
+  fs.writeFileSync(first, ['@startuml', 'class First', '@enduml', ''].join(String.fromCharCode(10)));
+  await openVia(first);
+  await expect(page.locator('#overlay-layer rect[data-type="class"]')).toHaveCount(1, { timeout: 20000 });
+  await page.locator('#editor').click();
+  await page.keyboard.press('Control+s');
+  await expect(page.locator('#save-swap-overlay')).toBeVisible({ timeout: 15000 });
+
+  const comp = path.join(abs, 'component-nested.puml');
+  fs.writeFileSync(comp, [
+    '@startuml',                         // 1
+    'package "My Package" {',            // 2
+    '  [First Component]',               // 3
+    '}',                                 // 4
+    'cloud "My Cloud" {',                // 5
+    '  [Example 1]',                     // 6
+    '}',                                 // 7
+    'database "My Database" {',          // 8
+    '  folder "My folder" {',            // 9
+    '    [Folder 3]',                    // 10
+    '  }',                               // 11
+    '}',                                 // 12
+    'artifact "My Artifact"',            // 13
+    'queue "My Queue"',                  // 14
+    '[First Component] --> [Example 1]', // 15
+    '[Example 1] --> [Folder 3]',        // 16
+    '@enduml', '',
+  ].join(String.fromCharCode(10)));
+  await openVia(comp);
+  await expect(page.locator('#overlay-layer rect[data-type="component"]')).toHaveCount(3, { timeout: 20000 });
+  // 帯は出たまま、図はその分だけ下にある (この状態で当たり判定が図に重なっていること)。
+  await expect(page.locator('#save-swap-overlay')).toBeVisible();
+  const shift = await page.evaluate(() => {
+    const s = document.getElementById('preview-svg').getBoundingClientRect();
+    const o = document.getElementById('overlay-layer').getBoundingClientRect();
+    return { svgTop: document.getElementById('preview-svg').offsetTop, dy: Math.round(o.top - s.top), dx: Math.round(o.left - s.left) };
+  });
+  expect(shift.svgTop, '帯が図を下へ押している').toBeGreaterThan(40);
+  expect({ dx: shift.dx, dy: shift.dy }, '当たり判定の層の原点が図の原点と一致する').toEqual({ dx: 0, dy: 0 });
+  for (const [label, type, line] of [
+    ['First Component', 'component', '3'], ['Example 1', 'component', '6'], ['Folder 3', 'component', '10'],
+    ['My Package', 'package', '2'], ['My Cloud', 'source-line', '5'], ['My Database', 'source-line', '8'],
+    ['My folder', 'package', '9'], ['My Artifact', 'source-line', '13'], ['My Queue', 'source-line', '14'],
+  ]) {
+    const { hit } = await hoverHit(page, label);
+    expect(hit, label + ' にホバーして本人の枠が出る').toEqual({ type, line, hover: true });
   }
 });
 

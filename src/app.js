@@ -3431,6 +3431,7 @@ function init() {
   setupSaveCheck();
   setupSaveClash();
   setupSaveSwap();
+  setupOverlayOriginSync();
   setupVersionTimeline();
   setupLineage();
   setupPeekFolder();
@@ -4217,6 +4218,38 @@ function setZoom(z) {
     overlayEl.style.transform = 'scale(' + zoom + ')';
     overlayEl.style.transformOrigin = '0 0';
   }
+  syncOverlayOrigin();
+}
+
+// BLK-migrator-20260923-1909: 当たり判定の層 (#overlay-layer / #hover-layer) は
+// #preview-container の中の絶対配置で、図 (#preview-svg) が余白 16px の位置に
+// あると決め打ちしていた。保存のたびに出る帯 (突合・衝突・入れ替わり・逸れ) は
+// 図の上に流れで入って図を下へ押すので、帯が出ている間は枠が帯の高さだけ上に
+// ずれ、ホバーしても本人の枠が出なかった (保存したあとに開いた図が全部そうなる)。
+// 層の原点を図の実際の位置に合わせ直す。
+function syncOverlayOrigin() {
+  var host = previewSvgEl || document.getElementById('preview-svg');
+  if (!host) return;
+  var top = host.offsetTop + 'px';
+  var left = host.offsetLeft + 'px';
+  ['overlay-layer', 'hover-layer'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    if (el.style.top !== top) el.style.top = top;
+    if (el.style.left !== left) el.style.left = left;
+  });
+}
+
+// 図より前にある帯が出る・消える・高さが変わるたびに合わせ直す。
+function setupOverlayOriginSync() {
+  syncOverlayOrigin();
+  var container = document.getElementById('preview-container');
+  if (!container || typeof ResizeObserver !== 'function') return;
+  var ro = new ResizeObserver(function() { syncOverlayOrigin(); });
+  Array.prototype.forEach.call(container.children, function(c) {
+    if (c.id === 'overlay-layer' || c.id === 'hover-layer') return;
+    ro.observe(c);
+  });
 }
 
 function zoomToFit() {
@@ -32292,6 +32325,7 @@ function renderSvg() {
     }
     if (warnEl) { warnEl.style.display = 'none'; warnEl.textContent = ''; }
     if (svgEl && !focusDsl && currentModule && currentModule.buildOverlay) {
+      syncOverlayOrigin();
       var report = currentModule.buildOverlay(svgEl, currentParsed, overlayEl, mmdText);
       if (report && warnEl) {
         var u = report.unmatched || {};
