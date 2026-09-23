@@ -1717,11 +1717,24 @@ function init() {
         close();
         return;
       }
-      var target = document.getElementById(item.getAttribute('data-target'));
+      var targetId = item.getAttribute('data-target');
+      // BLK-owner-20260918-0529-prune: 入口がモーダルの中にしか無いものは、先にその
+      // 画面を開いてからボタンを鳴らす (メニューを開いた時点ではまだ DOM に無い)。
+      var openerId = item.getAttribute('data-opener');
       close();
       // パネル類は「外側の click で閉じる」を document に付けているので、
       // 今の click を配り終えてから鳴らす (同期だと開いた直後に閉じる)。
-      if (target) setTimeout(function() { target.click(); }, 0);
+      setTimeout(function() {
+        if (openerId) {
+          var opener = document.getElementById(openerId);
+          if (opener) opener.click();
+        }
+        // 開いた画面が中身を描くのを待ってから目当てのボタンを押す。
+        setTimeout(function() {
+          var target = document.getElementById(targetId);
+          if (target) target.click();
+        }, openerId ? 60 : 0);
+      }, 0);
     });
 
     document.addEventListener('click', function(e) {
@@ -3420,6 +3433,15 @@ function initCommandPalette() {
       { id: 'tab-versions', title: 'この図の変遷を見る / Version timeline', hint: 'Tabs', keywords: ['version', 'timeline', 'へんせん', 'りれき'], button: 'btn-tab-versions', run: function() { clickById('btn-tab-versions'); } },
       { id: 'tab-lineage', title: 'この図の継承元を見る / Lineage', hint: 'Tabs', keywords: ['lineage', 'parent', 'けいしょう', 'もと', 'とりこみ'], button: 'btn-tab-lineage', run: function() { clickById('btn-tab-lineage'); } },
       { id: 'tab-board', title: '変更サマリを開く / Change board', hint: 'Tabs', keywords: ['board', 'summary', 'へんこう', 'さまり'], button: 'btn-tab-board', run: function() { clickById('btn-tab-board'); } },
+      // BLK-owner-20260918-0529-prune: 「見比べる」5 つのうち、下端ステータスと
+      // 納品パネルの中にしか入口が無かった 2 つ。今まで通りの呼び名 (比較 / 前回保存版 /
+      // 変更前後) でも、メニューの言い換え (…と見比べる) でも引けるようにする。
+      { id: 'livediff', title: '前回保存版との比較 / Compare with last save', hint: 'Status', keywords: ['diff', 'compare', 'last', 'save', 'ぜんかい', 'ほぞん', 'ひかく', 'みくらべ', 'ならべ'], button: 'status-livediff', run: function() { clickById('status-livediff'); } },
+      { id: 'delivery-review', title: '変更前後を見比べる (提出前レビュー) / Before-after review', hint: 'Deliver', keywords: ['review', 'before', 'after', 'へんこうぜんご', 'みくらべ', 'ひかく', 'ならべ', 'ていしゅつ'], button: 'dp-review', run: function() {
+        var modal = document.getElementById('dp-modal');
+        if (!modal || modal.style.display !== 'flex') clickById('btn-tab-delivery');
+        setTimeout(function() { clickById('dp-review'); }, 60);
+      } },
       // BLK-primary-20260918-0249-wish: 会議で見せる 3〜5 枚を選んで並べる
       { id: 'meeting-set', title: '会議セットで並べる / Meeting set', hint: 'Board', keywords: ['meeting', 'kaigi', 'かいぎ', 'せっと', 'set'], button: 'cb-meeting', run: function() { toggleChangeBoard(true); clickById('cb-meeting'); } },
       // 顧客の前で開く画面 (BLK-primary-20260913-0306-wish)。ボードを開いていなければ開いてから切り替える。

@@ -35,7 +35,7 @@ window.MA.commandPalette = (function() {
     selected: '選択中の要素に対して / Selected',
     make: '図をつくる / Make',
     edit: '書き換える / Edit',
-    find: '探す・見比べる / Find',
+    find: '探す / Find',
     check: '確かめる / Check',
     review: 'レビュー / Review',
     give: '渡す / Deliver',
@@ -44,7 +44,7 @@ window.MA.commandPalette = (function() {
   // 行の左に出す短い分類チップ。見出しの外へ絞り込んでも、その行が何の仲間かが
   // 1 語で分かるようにする (design 7b のパレットは行ごとに分類を出している)。
   var GROUP_CHIPS = {
-    make: '図をつくる', edit: '書き換える', find: '探す・見比べる',
+    make: '図をつくる', edit: '書き換える', find: '探す',
     check: '確かめる', review: 'レビュー', give: '渡す',
   };
   // 見出しの下に 1 行だけ出す補足。何が起きるか読まずに分かるようにする。

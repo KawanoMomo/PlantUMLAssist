@@ -25,7 +25,7 @@ test('ツールボタンで分類のメニューが開き、Ctrl+K の注記が�
   const menu = page.locator('#tool-menu');
   await expect(menu).toBeVisible();
   await expect(menu.locator('.tool-menu-title')).toHaveText([
-    '図をつくる', '書き換える', '探す・見比べる', '確かめる', 'レビュー',
+    '図をつくる', '書き換える', '探す', '確かめる', 'レビュー',
   ]);
   await expect(menu.locator('.tool-menu-note')).toHaveText('Ctrl+K でも同じ操作が引ける');
   await expect(page.locator('#btn-tab-tools')).toHaveAttribute('aria-expanded', 'true');

@@ -26,12 +26,10 @@ window.MA.toolMenu = (function() {
       { id: 'btn-tab-unify',  label: '表記を登録簿に揃える' },
       { id: 'btn-tab-apply',  label: '複数クラスに一括適用する' },
     ] },
-    { key: 'find', title: '探す・見比べる', items: [
+    { key: 'find', title: '探す', items: [
       { id: 'btn-tab-symptom', label: '症状から関連図を探す' },
       { id: 'btn-tab-blame',   label: '部品名の混入点を探す' },
       { id: 'btn-tab-xref',    label: '部品名で図をまたいで辿る' },
-      { id: 'btn-tab-compare', label: '別の図を右に並べる' },
-      { id: 'btn-tab-peek',    label: '他の保存フォルダを覗く' },
     ] },
     { key: 'check', title: '確かめる', items: [
       { id: 'btn-tab-audit',          label: '名前の表記揺れ' },
@@ -47,8 +45,18 @@ window.MA.toolMenu = (function() {
       { id: 'btn-tab-design',         label: '仕様 (design) と現在値の突合' },
       { id: 'btn-tab-audit-timeline', label: '監査履歴' },
     ] },
+    // BLK-owner-20260918-0529-prune: 「2 枚を左右に並べて食い違いを見る」機能が 5 つあり、
+    // 入口が 参照ペインのタブ / 下端ステータス / ツール ▾ / 変更サマリボードの中 に散って、
+    // 呼び名も「並べて見る」「比較」「差分」「見比べる」で割れていた。5 つともここから開け、
+    // 名前は「…と見比べる」で揃える。文脈内のショートカット (参照ペインのタブ・下端の
+    // 「前回保存版 ＋a −b」・🔍) はそのまま残すので、覚えている人の手は変わらない。
+    // opener は、その入口がモーダルの中にしか無いもの (先に開く画面) の id。
     { key: 'review', title: 'レビュー', items: [
-      { id: 'btn-tab-review',   label: '基準の図と突き合わせる' },
+      { id: 'btn-tab-compare',  label: '別の図と見比べる' },
+      { id: 'status-livediff',  label: '前回保存版と見比べる' },
+      { id: 'btn-tab-peek',     label: '他の保存フォルダの版と見比べる' },
+      { id: 'btn-tab-review',   label: '基準の図と見比べる' },
+      { id: 'dp-review',        label: '変更前後を見比べる', opener: 'btn-tab-delivery' },
       { id: 'btn-tab-pins',     label: 'この図の指摘' },
       { id: 'btn-tab-inbox',    label: '図をまたぐ指摘箱' },
       { id: 'btn-tab-findings', label: '手動指摘の台帳' },
@@ -80,6 +88,10 @@ window.MA.toolMenu = (function() {
   // 📄 ファイルを開く (BLK-human-20260917-0901) も図の出し入れなので畳まない。
   var KEEP_IN_TAB_BAR = ['btn-tab-new', 'btn-tab-folder', 'btn-open-file', 'btn-tab-senior'];
 
+  // メニューには載るが、タブ列のボタンではないもの (下端ステータスの札・モーダルの中の
+  // ボタン)。畳む対象に数えると「他 N 件」の N が実際に消えた数とずれるので外す。
+  var NOT_IN_TAB_BAR = ['status-livediff', 'dp-review'];
+
   var NOTE = 'Ctrl+K でも同じ操作が引ける';
 
   // 単独キーを持つツール。ボタン id → ショートカット表 (settings-tabs) の行 id。
@@ -102,15 +114,24 @@ window.MA.toolMenu = (function() {
       return {
         key: g.key,
         title: g.title,
-        items: g.items.map(function(it) { return { id: it.id, label: it.label }; }),
+        items: g.items.map(function(it) {
+          var o = { id: it.id, label: it.label };
+          if (it.opener) o.opener = it.opener;
+          return o;
+        }),
       };
     });
   }
 
+  // 畳む対象になるタブ列のボタン。下端ステータスの札・モーダルの中のボタンは
+  // タブ列に居ないので数えない (畳んでも画面から消えるものではない)。
   function menuIds() {
     var ids = [];
     GROUPS.forEach(function(g) {
-      g.items.forEach(function(it) { ids.push(it.id); });
+      g.items.forEach(function(it) {
+        if (NOT_IN_TAB_BAR.indexOf(it.id) >= 0) return;
+        ids.push(it.id);
+      });
     });
     return ids;
   }
@@ -143,7 +164,19 @@ window.MA.toolMenu = (function() {
   // (新しいボタンが増えたとき、メニューに載せ忘れたまま画面から消えるのを避ける)。
   function isFoldable(id) {
     if (KEEP_IN_TAB_BAR.indexOf(id) >= 0) return false;
+    if (NOT_IN_TAB_BAR.indexOf(id) >= 0) return false;
     return groupOf(id) !== null;
+  }
+
+  // その入口がモーダルの中にしか無いとき、先に開く画面のボタン id。無ければ ''。
+  function openerOf(id) {
+    var GS = allGroups();
+    for (var i = 0; i < GS.length; i++) {
+      for (var j = 0; j < GS[i].items.length; j++) {
+        if (GS[i].items[j].id === id) return GS[i].items[j].opener || '';
+      }
+    }
+    return '';
   }
 
   // 開いたときに畳むかどうか。design 7a/7b の既定は「畳む」。
@@ -194,7 +227,8 @@ window.MA.toolMenu = (function() {
       var items = g.items.map(function(it) {
         var badge = b[it.id];
         var key = keyHintOf(it.id);
-        return '<button type="button" class="tool-menu-item" data-target="' + esc(it.id) + '">'
+        return '<button type="button" class="tool-menu-item" data-target="' + esc(it.id) + '"'
+          + (it.opener ? ' data-opener="' + esc(it.opener) + '"' : '') + '>'
           + '<span class="tool-menu-label">' + esc(it.label) + '</span>'
           + (key ? '<span class="tool-menu-key">' + esc(key) + '</span>' : '')
           + (badge ? '<span class="tool-menu-badge">' + esc(badge) + '</span>' : '')
@@ -214,6 +248,7 @@ window.MA.toolMenu = (function() {
     groupOf: groupOf,
     labelOf: labelOf,
     isFoldable: isFoldable,
+    openerOf: openerOf,
     foldedAtStart: foldedAtStart,
     quietAtStart: quietAtStart,
     showsToolButton: showsToolButton,

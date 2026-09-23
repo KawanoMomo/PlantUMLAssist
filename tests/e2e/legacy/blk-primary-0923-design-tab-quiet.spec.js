@@ -44,7 +44,8 @@ test('機能は Ctrl+K から引ける (ツールの分類メニューも Ctrl+K
   await open7b(page);
   await openToolMenu(page);
   await expect(page.locator('#tool-menu .tool-menu-title')).toHaveText([
-    '図をつくる', '書き換える', '探す・見比べる', '確かめる', 'レビュー', '渡す',
+    // BLK-owner-20260918-0329-prune で「渡す」は Export ▾ へ移り、この見出しは出なくなった。
+    '図をつくる', '書き換える', '探す', '確かめる', 'レビュー',
   ]);
   await page.locator('.tool-menu-item[data-target="btn-tab-board"]').click();
   await expect(page.locator('#cb-modal')).toBeVisible();
