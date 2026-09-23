@@ -25853,14 +25853,16 @@ function renderUnsupportedPanel() {
   }
   var doc = window.MA.workspace.getActive();
   if (!doc || !_openedSourceOf(doc.id)) { panel.hidden = true; panel.setAttribute('data-count', '0'); return; }
-  var rows = FO.unsupported(doc.dsl, doc.diagramType);
+  // BLK-migrator-20260924-0637: 描いた図種に合わせて読み直した図は、その図種として読めない行を出す。
+  var kind = (_svgKindFix && currentModule && currentModule.type) ? currentModule.type : doc.diagramType;
+  var rows = FO.unsupported(doc.dsl, kind);
   panel.setAttribute('data-count', String(rows.length));
   panel.textContent = '';
   if (!rows.length) { panel.hidden = true; return; }
   panel.hidden = false;
   var head = document.createElement('div');
   head.id = 'unsupported-summary';
-  head.textContent = '⚠ ' + FO.kindLabel(doc.diagramType) + 'として読めない行が ' + rows.length
+  head.textContent = '⚠ ' + FO.kindLabel(kind) + 'として読めない行が ' + rows.length
     + ' 行あります。本文の編集とプレビューはそのまま使えます';
   var copy = document.createElement('button');
   copy.type = 'button';
@@ -32420,6 +32422,7 @@ function _reconcileKindWithSvg(svgEl) {
   try { currentParsed = currentModule.parse(mmdText); }
   catch (e) { currentParsed = { meta: {}, elements: [], relations: [], groups: [] }; }
   try { renderProps(currentParsed); } catch (e) {}
+  try { renderUnsupportedPanel(); } catch (e) {}
 }
 
 function renderSvg() {
