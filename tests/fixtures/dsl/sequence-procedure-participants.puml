@@ -1,0 +1,31 @@
+@startuml
+hide footbox
+skinparam style strictuml
+skinparam SequenceGroupBorderColor #7D8998
+skinparam NoteTextAlignment left
+
+!procedure $Icon($name, $line1, $line2="")
+participant "$name\n<b>$line1</b>\n$line2"
+!endprocedure
+
+$Icon(User, "Browser", "End User") as user
+$Icon(Edge, "Origin Request", "Lambda Edge") as edge <<nodejs>>
+
+box API Version 1
+$Icon(Api, "API V1", "Gateway") as api <<REST>>
+end box
+
+alt missing header
+    user -> edge: GET /hello
+    activate user #white
+    note right
+        missing Accept-Version header
+    end note
+    edge --> user: 400
+    deactivate user
+else ok
+    edge->api++ #lightblue: GET /v1
+    return
+    edge --> user: 200 OK
+end
+@enduml

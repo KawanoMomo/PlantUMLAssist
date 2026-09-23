@@ -172,3 +172,91 @@ describe('BLK-migrator-1409: 複数行 (\\n) の表示名を持つ participant',
 ].forEach(function(m) {
   try { delete require.cache[require.resolve(m)]; } catch (e) {}
 });
+
+// 差し戻し 1 回目: AWS の構成図 (Figure 5 系) は参加者を手続き (`$AWSIcon(...) as x`) で宣言し、
+// 帯の略記 (`a->b++ 色:`)・`return`・メッセージに付ける注釈 (`note right`)・
+// 引用符の無い囲み名 (`box API Version 1`)・テーマ色の群の枠を使う。
+// どれか 1 つ読めないと、順番で当てている枠が以後ずれる / 出ない。
+describe('BLK-migrator-1409 差し戻し: 手続きで宣言する参加者の図', function() {
+  test('手続きの本体は参加者にせず、手続きの呼び出しを別名つきの参加者として読む', function() {
+    var f = loadFixture('sequence-procedure-participants');
+    var parts = f.parsed.elements.filter(function(e) { return e.kind === 'participant'; });
+    expect(parts.map(function(p) { return p.id; })).toEqual(['user', 'edge', 'api']);
+    expect(parts[0].line).toBe(11);
+    expect(parts[2].boxId).toBe('__box_0');
+  });
+
+  test('引用符の無い空白入りの囲み名を読む', function() {
+    var f = loadFixture('sequence-procedure-participants');
+    expect(f.parsed.boxes.length).toBe(1);
+    expect(f.parsed.boxes[0].label).toBe('API Version 1');
+    expect(f.parsed.boxes[0].members).toEqual(['api']);
+  });
+
+  test('帯の略記つきメッセージを読み、return は並びを合わせるためだけに憶える', function() {
+    var r = seq.parseSequence('@startuml\nA->B++ #lightblue: GET\nB->C++ $AWSColor(Compute):\nreturn\nA -> B-- : ok\n@enduml');
+    expect(r.relations.map(function(m) { return m.from + m.arrow + m.to + '|' + m.label; }))
+      .toEqual(['A->B|GET', 'B->C|', 'A->B|ok']);
+    expect(r.returns.length).toBe(1);
+    expect(r.returns[0].line).toBe(4);
+  });
+
+  test('色つきの activate を帯として読む', function() {
+    var r = seq.parseSequence('@startuml\nA -> B : x\nactivate B %lighten(AWS_COLOR, 75)\ndeactivate B\n@enduml');
+    var acts = r.elements.filter(function(e) { return e.kind === 'activation'; });
+    expect(acts.length).toBe(2);
+    expect(acts[0].target).toBe('B');
+    expect(acts[0].color).toBe('%lighten(AWS_COLOR, 75)');
+  });
+
+  test('参加者・ライフラインは名前で当たり、return の後のメッセージも本人の矢印に当たる', function() {
+    var b = build('sequence-procedure-participants');
+    ['user', 'edge', 'api'].forEach(function(id) {
+      expect(rectsFor(b.overlayEl, 'participant', id).length).toBe(1);
+      expect(rectsFor(b.overlayEl, 'lifeline', id).length).toBe(1);
+    });
+    var msgs = rectsFor(b.overlayEl, 'message');
+    expect(msgs.length).toBe(4);
+    // 最後のメッセージ (200 OK) の枠は、SVG の最後の矢印 (return の次) を囲む
+    var gs = b.svgEl.querySelectorAll('g.message');
+    var lastG = gs[gs.length - 1];
+    var last = msgs.filter(function(r) { return r.getAttribute('data-line') === '29'; })[0];
+    expect(!!last).toBe(true);
+    var ln = lastG.querySelector('line');
+    var y = parseFloat(ln.getAttribute('y1'));
+    expect(num(last, 'y') <= y && y <= num(last, 'y') + num(last, 'height')).toBe(true);
+  });
+
+  test('テーマ色の群の枠も拾い、ライフラインは群の枠より手前に置く', function() {
+    var b = build('sequence-procedure-participants');
+    expect(rectsFor(b.overlayEl, 'group').length).toBe(1);
+    var kids = Array.prototype.slice.call(b.overlayEl.children);
+    var gi = kids.indexOf(rectsFor(b.overlayEl, 'group')[0]);
+    rectsFor(b.overlayEl, 'lifeline').forEach(function(r) {
+      expect(kids.indexOf(r)).toBeGreaterThan(gi);
+    });
+  });
+
+  test('メッセージに付けた注釈 (note right) に枠が出る。語ごとに分かれた本文でも当たる', function() {
+    var f = loadFixture('sequence-procedure-participants');
+    var notes = f.parsed.elements.filter(function(e) { return e.kind === 'note'; });
+    expect(notes.length).toBe(1);
+    expect(notes[0].position).toBe('right');
+    // 左寄せの注釈は 1 行を語ごとの <text> に分けて描かれる
+    var t = Array.prototype.filter.call(f.svgEl.querySelectorAll('text'), function(x) {
+      return x.textContent === 'missing Accept-Version header';
+    })[0];
+    t.textContent = 'missing';
+    var prev = t;
+    [' ', 'Accept-Version', ' ', 'header'].forEach(function(w) {
+      var n = t.cloneNode(false); n.textContent = w;
+      t.parentNode.insertBefore(n, prev.nextSibling);
+      prev = n;
+    });
+    var texts = f.svgEl.querySelectorAll('text');
+    var idx = Array.prototype.indexOf.call(texts, t);
+    expect(overlay._lineStartsAt(texts, idx, 'missing Accept-Version header')).toBe(true);
+    expect(overlay._lineStartsAt(texts, idx, 'missing Accept-Version')).toBe(false);
+    expect(overlay._lineStartsAt(texts, idx, 'missing header')).toBe(false);
+  });
+});

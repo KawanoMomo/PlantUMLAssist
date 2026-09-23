@@ -415,3 +415,56 @@ test('migrator 手順 4 — 表示名が複数行の participant でも、見出
     await expect(r, line + ' 行目にホバーして枠が出る').toHaveClass(/hit-hover/);
   }
 });
+
+// BLK-migrator-20260923-1409 差し戻し 1 回目: AWS の構成図 (Figure 5 系) は参加者を
+// 手続き (`$AWSIcon(...) as x`) で宣言し、`a->b++ 色:` の略記・`return`・`note right`・
+// 引用符の無い囲み名・テーマ色の群の枠を使う。1 つでも読めないと順番で当てた枠が
+// 以後ずれ、alt の中のライフラインを指すと alt が選ばれていた。
+test('migrator 手順 4 — 手続きで参加者を宣言した sequence 図でも、参加者・ライフライン・メッセージ・注釈に本人の枠が出る', async ({ page }) => {
+  await bootPlain(page);
+  const dsl = fs.readFileSync(path.join(__dirname, '..', '..', 'fixtures', 'dsl', 'sequence-procedure-participants.puml'), 'utf8')
+    .replace(/\r\n/g, '\n').replace(/\n+$/, '');
+  await typeDsl(page, dsl);
+
+  // hide footbox なので参加者は頭だけ 3 枠。メッセージ 4 本 (return は枠にしない)・注釈・群・囲み。
+  await expect(page.locator('#overlay-layer rect[data-type="participant"]')).toHaveCount(3, { timeout: 20000 });
+  await expect(page.locator('#overlay-layer rect[data-type="message"]')).toHaveCount(4);
+  await expect(page.locator('#overlay-layer rect[data-type="note"]')).toHaveCount(1);
+  await expect(page.locator('#overlay-layer rect[data-type="group"]')).toHaveCount(1);
+  await expect(page.locator('#overlay-layer rect[data-type="box"]')).toHaveCount(1);
+  await expect(page.locator('#overlay-warning')).toBeHidden();
+
+  async function hoverText(label) {
+    const t = page.locator('#preview-svg svg text', { hasText: label }).first();
+    const tb = await t.boundingBox();
+    await page.mouse.move(3, 3);
+    await page.mouse.move(tb.x + tb.width / 2, tb.y + tb.height / 2);
+  }
+  // 手続きで宣言した参加者の見出し 3 行目 → その呼び出し行 (15 行目) の枠
+  await hoverText('Gateway');
+  await expect(page.locator('#overlay-layer rect.hit-hover').first()).toHaveAttribute('data-line', '15');
+  await expect(page.locator('#overlay-layer rect.hit-hover').first()).toHaveAttribute('data-type', 'participant');
+  // return の後のメッセージ → その行 (29 行目)
+  await hoverText('200 OK');
+  await expect(page.locator('#overlay-layer rect.hit-hover').first()).toHaveAttribute('data-line', '29');
+  // メッセージに付けた注釈 → note right の行 (21 行目)
+  await hoverText('missing Accept-Version');
+  await expect(page.locator('#overlay-layer rect.hit-hover').first()).toHaveAttribute('data-type', 'note');
+  await expect(page.locator('#overlay-layer rect.hit-hover').first()).toHaveAttribute('data-line', '21');
+
+  // alt の中で、メッセージの無い高さのライフラインを指すと alt ではなくそのライフライン
+  const ll = page.locator('#overlay-layer rect[data-type="lifeline"][data-id="api"]');
+  const lb = await ll.boundingBox();
+  const grp = await page.locator('#overlay-layer rect[data-type="group"]').boundingBox();
+  const msgs = await page.locator('#overlay-layer rect[data-type="message"], #overlay-layer rect[data-type="note"]').evaluateAll(
+    (rs) => rs.map((r) => { const b = r.getBoundingClientRect(); return [b.top, b.bottom]; }));
+  let y = null;
+  for (let yy = Math.max(lb.y, grp.y) + 4; yy < Math.min(lb.y + lb.height, grp.y + grp.height) - 4; yy += 3) {
+    if (!msgs.some(([t, b]) => yy >= t - 2 && yy <= b + 2)) { y = yy; break; }
+  }
+  expect(y, 'alt の中にメッセージの無い高さがある').not.toBeNull();
+  await page.mouse.move(3, 3);
+  await page.mouse.move(lb.x + lb.width / 2, y);
+  await expect(page.locator('#overlay-layer rect.hit-hover').first()).toHaveAttribute('data-type', 'lifeline');
+  await expect(page.locator('#overlay-layer rect.hit-hover').first()).toHaveAttribute('data-id', 'api');
+});
