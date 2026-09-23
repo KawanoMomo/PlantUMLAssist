@@ -25,6 +25,7 @@ var MODS = [
   '../src/core/parser-utils.js',
   '../src/core/line-resolver.js',
   '../src/core/overlay-builder.js',
+  '../src/core/state-svg-map.js',
   '../src/core/selection-router.js',
   '../src/core/edge-hint.js',
   '../src/core/relation-options.js',

@@ -1,0 +1,15 @@
+@startuml
+title Pseudo states
+state choice1 <<choice>>
+state fork1 <<fork>>
+state join2 <<join>>
+state end3 <<end>>
+[*] --> choice1 : start
+choice1 --> fork1 : [ok]
+choice1 --> end3 : [ng]
+fork1 ---> Worker1
+fork1 --> Worker2
+Worker1 --> join2
+Worker2 --> join2
+join2 -> [*]
+@enduml

@@ -26,6 +26,7 @@ const sourceFiles = [
   'src/core/state-transition.js',
   'src/core/state-insert.js',
   'src/core/state-tx-entry.js',
+  'src/core/state-svg-map.js',
   'src/core/state-child.js',
   'src/core/class-scaffold.js',
   'src/core/sequence-scaffold.js',
