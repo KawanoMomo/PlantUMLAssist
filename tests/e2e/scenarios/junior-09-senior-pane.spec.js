@@ -32,6 +32,12 @@ test('手順9 比較相手の枠は既定で出ず、並べて比較で開き、
   await expect(pane).toBeHidden();
 
   // 到達条件その5: 読み込み直しても閉じたまま (既定に戻らない)。
+  // 全体実行では保存先の取り込み (/prefs) が遅れ、画面が押せるようになる前に押して
+  // 落ちていた (BLK-builder-20260924-0637-4b-red)。遅い回をここで再現しておく。
+  await page.route('**/prefs', async (route) => {
+    await new Promise((r) => setTimeout(r, 1500));
+    await route.continue();
+  });
   await S.reopenApp(page);
   await expect(page.locator('#senior-pane')).toBeHidden();
 
