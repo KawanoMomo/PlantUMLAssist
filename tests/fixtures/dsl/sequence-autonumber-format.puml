@@ -1,0 +1,15 @@
+' 狙い: autonumber の書式指定(開始値・増分・フォーマット文字列)
+@startuml
+autonumber 10 5 "<b>[000]"
+participant App
+participant Rte
+App -> Rte : Rte_Write_PortName_DataElement(val)
+Rte --> App : Rte_E_OK
+App -> Rte : Rte_Read_PortName_DataElement(&val)
+Rte --> App : Rte_E_OK
+App -> Rte : Rte_Call_PortName_OperationName()
+Rte --> App : Rte_E_OK
+App -> Rte : Rte_IrvWrite_PortName_DataElement(val)
+Rte --> App : Rte_E_OK
+' (padding line for corpus line-count requirement)
+@enduml

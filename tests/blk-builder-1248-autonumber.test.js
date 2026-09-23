@@ -37,7 +37,9 @@ describe('autonumber 行の書き方', function() {
 
 describe('今の DSL の状態を読む', function() {
   test('行が無ければ off・1 から 1 ずつ', function() {
-    expect(AN.read(BASE)).toEqual({ on: false, start: 1, step: 1, line: null });
+    // BLK-migrator-20260918-0549: read は書式指定 (`autonumber 10 5 "<b>[000]"`) も
+    // 返すようになったので format が増えた。行が無ければ空文字。
+    expect(AN.read(BASE)).toEqual({ on: false, start: 1, step: 1, format: '', line: null });
   });
 
   test('`autonumber` を読む', function() {

@@ -246,11 +246,20 @@ window.MA.modules.plantumlSequence = (function() {
       // autonumber
       if (trimmed === 'autonumber') { result.meta.autonumber = true; continue; }
       if (trimmed === 'autonumber stop' || trimmed === 'autonumber off') { result.meta.autonumber = false; continue; }
-      var anMatch = trimmed.match(/^autonumber\s+(\d+)(?:\s+(\d+))?$/);
-      if (anMatch) {
-        result.meta.autonumber = { start: parseInt(anMatch[1], 10), step: anMatch[2] ? parseInt(anMatch[2], 10) : 1 };
+      // BLK-migrator-20260918-0549: 書式指定つき (`autonumber 10 5 "<b>[000]"` /
+      // `autonumber "<b>[000]"`) も採番している図として読む。読めないと GUI が
+      // 「採番なし」と出し、そこを触ると実物の書式が消える。
+      var anMatch = trimmed.match(/^autonumber(?:\s+(\d+)(?:\s+(\d+))?)?(?:\s+"((?:[^"\\]|\\.)*)")?$/);
+      if (anMatch && (anMatch[1] || anMatch[3])) {
+        result.meta.autonumber = {
+          start: anMatch[1] ? parseInt(anMatch[1], 10) : 1,
+          step: anMatch[2] ? parseInt(anMatch[2], 10) : 1,
+          format: anMatch[3] || '',
+        };
         continue;
       }
+      // `autonumber resume` は止めた採番を再開する行なので、採番ありとして扱う。
+      if (/^autonumber\s+resume\b/i.test(trimmed)) { result.meta.autonumber = true; continue; }
 
       // group open (alt/opt/loop/par/break/critical/group)
       var gm = trimmed.match(GROUP_OPEN_RE);

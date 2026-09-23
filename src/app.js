@@ -31165,6 +31165,9 @@ function renderDiagramSettings(keepState) {
         on: onBox.checked,
         start: startEl.value,
         step: stepEl.value,
+        // 書式は触らせない。実物の図の `"<b>[000]"` を開始番号の変更で落とさない
+        // (BLK-migrator-20260918-0549)。undefined を渡すと今の行の書式を引き継ぐ。
+        format: undefined,
       });
       if (next === mmdText) { renderDiagramSettings(true); return; }
       if (window.MA.history) window.MA.history.pushHistory();
@@ -31184,7 +31187,7 @@ function renderDiagramSettings(keepState) {
     numHint.style.fontFamily = 'var(--font-mono)';
     numHint.style.fontSize = '11px';
     numHint.style.color = 'var(--text-secondary)';
-    numHint.textContent = an.on ? AN.fmtLine(an.start, an.step) : '(番号なし)';
+    numHint.textContent = an.on ? AN.fmtLine(an.start, an.step, an.format) : '(番号なし)';
     gNum.appendChild(numHint);
   }
 
