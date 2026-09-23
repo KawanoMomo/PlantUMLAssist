@@ -257,3 +257,37 @@ test('migrator 手順 4 — 特殊な矢印で書かれた sequence のメッセ
     await expect(r, line + ' 行目にホバーして枠が出る').toHaveClass(/hit-hover/);
   }
 });
+
+// BLK-migrator-20260918-0549: 実物は `autonumber 10 5 "<b>[000]"` のように書式を指定して
+// 採番する。書式つきの行を GUI が採番行として読めておらず、図の設定は「番号なし」と出て、
+// そこを触ると 2 本目の autonumber 行が入り実物の採番が勝手に変わっていた。
+// 枠が全要素に出ること (手順 4 の到達条件) と、採番の状態が正しく出ることを守る。
+test('migrator 手順 4 — 書式指定つき autonumber の sequence 図でも、全要素に枠が出る', async ({ page }) => {
+  await bootPlain(page);
+  await typeDsl(page, [
+    '@startuml',                                   // 1
+    'autonumber 10 5 "<b>[000]"',                  // 2
+    'participant App',                             // 3
+    'participant Rte',                             // 4
+    'App -> Rte : Rte_Write_PortName(val)',        // 5
+    'Rte --> App : Rte_E_OK',                      // 6
+    'App -> Rte : Rte_Read_PortName(&val)',        // 7
+    'Rte --> App : Rte_E_OK',                      // 8
+    '@enduml',                                     // 9
+  ].join(String.fromCharCode(10)));
+
+  const msgRects = page.locator('#overlay-layer rect[data-type="message"]');
+  await expect(msgRects).toHaveCount(4, { timeout: 20000 });
+  await expect(page.locator('#overlay-layer rect[data-type="participant"]')).toHaveCount(4, { timeout: 20000 });
+
+  // 番号 ([010] など) が前に付いていても、各行の枠が出てホバーで反応する。
+  // (書式を採番行として読めること自体は blk-migrator-0549-autonumber-format.test.js で守る)
+  for (const line of ['5', '6', '7', '8']) {
+    const r = page.locator('#overlay-layer rect[data-type="message"][data-line="' + line + '"]');
+    await expect(r, line + ' 行目の枠がある').toHaveCount(1);
+    const b = await r.boundingBox();
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+    await expect(r, line + ' 行目にホバーして枠が出る').toHaveClass(/hit-hover/);
+  }
+
+});
