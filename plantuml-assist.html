@@ -102,6 +102,31 @@ html, body {
 #files-panel .files-sec-count { flex: 0 0 auto; font-size: 9px; color: var(--text-secondary); white-space: nowrap; }
 #files-panel .files-sec-body { padding: 0 0 4px; }
 #files-panel .files-sec-body[hidden] { display: none; }
+/* design 10a: 保存先の下の部品ごとのフォルダ。`SPI 4 / 6` は揃い具合で、ファイル数ではない。 */
+#files-panel .files-part-head {
+  display: flex; align-items: center; gap: 4px; width: 100%;
+  background: none; border: 0; padding: 2px 8px 2px 10px;
+  font: inherit; font-size: 11px; color: var(--text-secondary);
+  text-align: left; cursor: pointer;
+}
+#files-panel .files-part-head:hover { background: var(--bg-tertiary); }
+#files-panel .files-part-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#files-panel .files-part-body[hidden] { display: none; }
+#files-panel .files-part-file {
+  display: block; width: 100%; background: none; border: 0;
+  padding: 2px 8px 2px 24px; font: inherit; font-size: 11px;
+  color: var(--text-primary); text-align: left; cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+#files-panel .files-part-file:hover { background: var(--bg-tertiary); }
+/* 未作成は薄い文字。押すと 🧩 部品ビュー (6 図種の済/未の持ち主) へ渡す。 */
+#files-panel .files-part-missing {
+  display: block; width: 100%; background: none; border: 0;
+  padding: 2px 8px 2px 24px; font: inherit; font-size: 11px;
+  color: var(--text-muted, var(--text-secondary)); opacity: .7;
+  text-align: left; cursor: pointer;
+}
+#files-panel .files-part-missing:hover { opacity: 1; background: var(--bg-tertiary); }
 #files-panel button.files-row {
   display: flex; align-items: center; gap: 4px;
   width: 100%; text-align: left; border: none; background: none; cursor: pointer;
@@ -7117,6 +7142,11 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <div class="files-sec-body" id="files-body-target">
           <!-- 保存先の一番上はフォルダそのもの。押すと保存先を変えられる (旧・保存先チップ) -->
           <button id="top-save-target" type="button" title="保存先">ダウンロード</button>
+          <!-- design 10a: 保存先の下は部品ごとのフォルダ (`SPI 4 / 6`)。
+               中身は #folder-panel の一覧をそのまま読んで組むので、数える所は 1 つのまま。
+               6 図種の済/未の表そのものは 🧩 部品ビューの職掌 (BLK-owner-20260918-0049-prune)
+               なので、ここは束ねて数えるところまでにして、未作成はそこへ渡す。 -->
+          <div id="files-parts"></div>
           <div id="folder-panel"></div>
         </div>
       </section>

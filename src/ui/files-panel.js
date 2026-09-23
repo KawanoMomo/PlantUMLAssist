@@ -155,6 +155,95 @@ window.MA.filesPanel = (function() {
     if (ws && ws.setActive) ws.setActive(id);
   }
 
+  // ── 保存先の下の「部品ごとのフォルダ」(design 10a) ───────────────────
+  // 一覧の実体は #folder-panel が持っているので、束ねるのもそこから読む
+  // (同じ図を 2 か所から数えると、片方だけが古くなる)。
+  // 6 図種の済/未の表そのものは 🧩 部品ビューの職掌なので
+  // (BLK-owner-20260918-0049-prune)、ここは `SPI 4 / 6` と未作成の件数まで。
+  var KEY_PART = 'pua.files.part.';
+
+  function _folderNames() {
+    var out = [];
+    var items = document.querySelectorAll('#folder-panel .folder-item[data-file-name]');
+    Array.prototype.forEach.call(items, function(el) {
+      var n = el.getAttribute('data-file-name');
+      if (n) out.push({ name: n });
+    });
+    return out;
+  }
+
+  function _clickFolderItem(name) {
+    var it = document.querySelector('#folder-panel .folder-item[data-file-name="' + name + '"]');
+    if (it) it.click();
+  }
+
+  function renderParts() {
+    var host = $('files-parts');
+    if (!host) return;
+    var FT = window.MA.fileTree;
+    var entries = _folderNames();
+    if (!FT || !entries.length) { host.textContent = ''; return; }
+    var groups = FT.groups(FT.filter(entries, _query()));
+    host.textContent = '';
+    groups.forEach(function(g) {
+      var open = _get(KEY_PART + g.part, '0') === '1';
+      var head = document.createElement('button');
+      head.type = 'button';
+      head.className = 'files-part-head';
+      head.setAttribute('data-part', g.part);
+      head.setAttribute('aria-expanded', open ? 'true' : 'false');
+      var caret = document.createElement('span');
+      caret.className = 'files-caret';
+      caret.setAttribute('aria-hidden', 'true');
+      caret.textContent = open ? '▾' : '▸';
+      head.appendChild(caret);
+      var lab = document.createElement('span');
+      lab.className = 'files-part-label';
+      lab.textContent = g.countLabel;
+      head.appendChild(lab);
+      host.appendChild(head);
+
+      var body = document.createElement('div');
+      body.className = 'files-part-body';
+      body.setAttribute('data-part-body', g.part);
+      body.hidden = !open;
+      g.files.forEach(function(f) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'files-part-file';
+        b.setAttribute('data-file-name', f.name);
+        b.textContent = f.name;
+        b.addEventListener('click', function() { _clickFolderItem(f.name); });
+        body.appendChild(b);
+      });
+      if (g.missingLabel) {
+        var m = document.createElement('button');
+        m.type = 'button';
+        m.className = 'files-part-missing';
+        m.setAttribute('data-part', g.part);
+        m.textContent = g.missingLabel;
+        m.title = '🧩 部品ビューで、まだ無い図種をその場で起こせます';
+        m.addEventListener('click', function(ev) {
+          ev.stopPropagation();
+          var link = $('folder-board-link');
+          if (link) link.click();
+        });
+        body.appendChild(m);
+      }
+      host.appendChild(body);
+
+      head.addEventListener('click', function() {
+        var on = head.getAttribute('aria-expanded') !== 'true';
+        head.setAttribute('aria-expanded', on ? 'true' : 'false');
+        caret.textContent = on ? '▾' : '▸';
+        body.hidden = !on;
+        _set(KEY_PART + g.part, on ? '1' : '0');
+      });
+    });
+    var c = $('files-count-target');
+    if (c) c.textContent = groups.length ? String(entries.length) : '';
+  }
+
   // ── 件数 (畳んだままでも読める) ───────────────────────────────────────
   function setReadonlyCount(comparing) {
     var FT = window.MA.fileTree;
@@ -188,6 +277,7 @@ window.MA.filesPanel = (function() {
   function refresh() {
     if (!panel) return;
     renderOpen();
+    renderParts();
     refreshSummary();
     syncTargetCaret();
   }
@@ -263,6 +353,7 @@ window.MA.filesPanel = (function() {
     if (filter) {
       filter.addEventListener('input', function() {
         renderOpen();
+        renderParts();
         // 保存先の絞り込みは #folder-panel 側の入力に渡す (数える所を 2 つにしない)。
         var ff = document.querySelector('#folder-panel input.folder-filter');
         if (ff) {
@@ -276,6 +367,13 @@ window.MA.filesPanel = (function() {
     var target = $('btn-tab-folder');
     if (target) {
       target.addEventListener('click', function() { window.setTimeout(syncTargetCaret, 0); });
+    }
+
+    // 一覧は非同期に描き直る (listFolder)。描き直るたびに部品の束ねも追う。
+    var fp = $('folder-panel');
+    if (fp && window.MutationObserver) {
+      var mo = new window.MutationObserver(function() { renderParts(); });
+      mo.observe(fp, { childList: true, subtree: true });
     }
 
     refresh();
@@ -292,5 +390,6 @@ window.MA.filesPanel = (function() {
     setReadonlyCount: setReadonlyCount,
     setGitCount: setGitCount,
     setSummary: setSummary,
+    renderParts: renderParts,
   };
 })();
