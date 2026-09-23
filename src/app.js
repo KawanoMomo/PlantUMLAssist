@@ -26261,8 +26261,13 @@ function exportSVG() {
   var svgEl = previewSvgEl.querySelector('svg');
   if (!svgEl) return;
   var clone = svgEl.cloneNode(true);
+  var svgOut = new XMLSerializer().serializeToString(clone);
+  // BLK-junior-20260923-1409: 画面に入れた時点で `<?plantuml-src …?>` はコメントに
+  // 化けており、畳んだ文字列に `--` があると保存した svg が XML として壊れる。
+  // 埋め込みは差分・突き合わせが読むので落とさず、元の処理命令に戻す。
+  if (window.MA.svgExport) svgOut = window.MA.svgExport.restoreEmbeddedSource(svgOut);
   downloadBlob(exportFileName('svg'),
-    new Blob([new XMLSerializer().serializeToString(clone)], { type: 'image/svg+xml' }));
+    new Blob([svgOut], { type: 'image/svg+xml' }));
   // 書き出した瞬間が「この周を完走した」区切り。ここで庫へロックする
   // (BLK-junior-20260908-2203-wish)。
   stashToVault('SVG');
@@ -27650,6 +27655,8 @@ var _cpackPick = '';
 // タブを切り替えずに何枚でも書き出せる。
 function svgTextToPngBlob(svgText, transparent) {
   return new Promise(function(resolve, reject) {
+    // BLK-junior-20260923-1409: 1 枚書き出しと同じ理由で、埋め込みの元 DSL を落としてから渡す。
+    if (window.MA.svgExport) svgText = window.MA.svgExport.stripEmbeddedSourceText(svgText);
     var m = /<svg[^>]*\bwidth="([\d.]+)/.exec(svgText);
     var m2 = /<svg[^>]*\bheight="([\d.]+)/.exec(svgText);
     var w = m ? parseFloat(m[1]) : 800;
@@ -27670,7 +27677,10 @@ function svgTextToPngBlob(svgText, transparent) {
         });
       } catch (e) { reject(e); }
     };
-    img.onerror = function() { reject(new Error('SVG 読み込みエラー')); };
+    img.onerror = function() {
+      var why = window.MA.svgExport ? window.MA.svgExport.reasonFor(svgText) : '';
+      reject(new Error(why || 'SVG 読み込みエラー'));
+    };
     img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgText);
   });
 }
@@ -29143,6 +29153,10 @@ function svgToCanvas(transparent, callback) {
   var svgEl = previewSvgEl.querySelector('svg');
   if (!svgEl) return;
   var clone = svgEl.cloneNode(true);
+  // BLK-junior-20260923-1409: PlantUML が末尾に埋める <?plantuml-src ...?> は
+  // innerHTML を通るとコメントに化け、中身に `--` があると XML として壊れる。
+  // 描画に関わらないので書き出す前に落とす。
+  if (window.MA.svgExport) window.MA.svgExport.stripNonRendered(clone);
   var w = parseFloat(clone.getAttribute('width')) || 800;
   var h = parseFloat(clone.getAttribute('height')) || 400;
   var svgData = new XMLSerializer().serializeToString(clone);
@@ -29159,7 +29173,11 @@ function svgToCanvas(transparent, callback) {
     ctx.drawImage(img, 0, 0, w, h);
     callback(canvas);
   };
-  img.onerror = function() { alert('PNG エクスポートに失敗しました (SVG 読み込みエラー)'); };
+  img.onerror = function() {
+    // 「SVG読み込みエラー」だけで終わらせず、何が読めなかったかを名指しする。
+    var why = window.MA.svgExport ? window.MA.svgExport.reasonFor(svgData) : '';
+    alert('PNG エクスポートに失敗しました' + (why ? '\n' + why : ' (SVG 読み込みエラー)'));
+  };
   img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgData);
 }
 

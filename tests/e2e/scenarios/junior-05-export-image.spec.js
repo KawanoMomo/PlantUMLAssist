@@ -609,3 +609,59 @@ test('手順4 資料化: 部品の行を 1 押しで、未/古の図種をまと
     .toHaveText('すべて最新', { timeout: 20000 });
   await expect(page.locator('tr[data-component="TIMERドライバ"] button.mexp-row-run')).toBeDisabled();
 });
+
+// BLK-junior-20260923-1409: junior の 1 枚 (IRQ 初期化シーケンス) だけが
+// 「PNGエクスポートに失敗しました (SVG読み込みエラー)」で止まり、download が始まらなかった。
+// PlantUML が svg 末尾に畳む元 DSL の処理命令は画面に入れた時点でコメントに化け、
+// 畳んだ文字列に `--` を含むこの図では書き戻した svg が XML として壊れていた。
+// 3 形式のどれでも書き出せることを、同じ 1 枚で押さえる。
+test('手順5(再現した 1 枚) PNG(透過背景)で書き出せる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.typeDsl(page, S.IRQ_SEQ_FOLDED_DASH);
+  await S.renameActive(page, 'irq_init_sequence');
+
+  // 失敗は alert で出ていたので、出たら握りつぶさず落とす。
+  const alerts = [];
+  page.on('dialog', async (d) => { alerts.push(d.message()); await d.dismiss(); });
+
+  const download = await (await S.exportVia(page, 'exp-png-transparent'));
+  expect(alerts).toEqual([]);
+  expect(download).not.toBeNull();
+  expect(download.suggestedFilename()).toBe('irq_init_sequence.png');
+});
+
+test('手順5(再現した 1 枚) PNGとして保存でも書き出せる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.typeDsl(page, S.IRQ_SEQ_FOLDED_DASH);
+  await S.renameActive(page, 'irq_init_sequence');
+
+  const alerts = [];
+  page.on('dialog', async (d) => { alerts.push(d.message()); await d.dismiss(); });
+
+  const download = await (await S.exportVia(page, 'exp-png'));
+  expect(alerts).toEqual([]);
+  expect(download).not.toBeNull();
+  expect(download.suggestedFilename()).toBe('irq_init_sequence.png');
+});
+
+test('手順5(再現した 1 枚) SVG は XML として読める形で保存され、埋め込みの元 DSL も残る', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.typeDsl(page, S.IRQ_SEQ_FOLDED_DASH);
+  await S.renameActive(page, 'irq_init_sequence');
+
+  const download = await (await S.exportVia(page, 'exp-svg'));
+  expect(download).not.toBeNull();
+  const saved = await download.path();
+  const text = require('fs').readFileSync(saved, 'utf8');
+
+  // 化けたコメントのまま保存されていると、この svg はどのビューアでも開けない。
+  expect(text).not.toContain('<!--?plantuml-src');
+  // 埋め込みは差分・突き合わせが読むので、落とさず処理命令の形で残す。
+  expect(text).toContain('<?plantuml-src');
+  // ブラウザに XML として読ませて、壊れていないことを確かめる。
+  const ok = await page.evaluate((svgText) => {
+    const doc = new DOMParser().parseFromString(svgText, 'image/svg+xml');
+    return !doc.querySelector('parsererror');
+  }, text);
+  expect(ok).toBe(true);
+});

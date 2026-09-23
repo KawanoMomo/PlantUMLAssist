@@ -182,6 +182,35 @@ const GPIO_STATE = [
   '@enduml',
 ].join('\n');
 
+// BLK-junior-20260923-1409: junior の手順4で書き出せなかった 1 枚 (IRQ 初期化シーケンス)。
+// PlantUML が svg 末尾に畳む元 DSL が、この図ではちょうど `--` を含む文字列になる。
+// 画面に入れた時点でその処理命令はコメントに化けるので、書き戻すと XML として壊れ、
+// PNG 変換の Image が onerror になっていた。**この DSL はそのままにしておくこと**
+// (1 行変えると畳んだ文字列が変わり、再現しなくなる)。
+const IRQ_SEQ_FOLDED_DASH = [
+  "@startuml",
+  "skinparam backgroundColor #FFFFFF",
+  "skinparam defaultFontSize 12",
+  "skinparam defaultFontColor #000000",
+  "skinparam ArrowColor #181818",
+  "skinparam sequenceParticipantBackgroundColor #E3E3F7",
+  "skinparam sequenceParticipantBorderColor #181818",
+  "title IRQドライバ初期化シーケンス",
+  "actor App",
+  "participant Spi_Driver",
+  "participant IRQCtrl",
+  "participant NVIC",
+  "note over IRQCtrl : IRQ系統はClockCtrl/Regsを持たない\\n(IRQCtrlがドライバ層と制御層を兼ねる意図的な構成。\\nreviewer指摘2への回答)",
+  "App -> IRQCtrl : Irq_Init()",
+  "IRQCtrl -> NVIC : SetPriority()",
+  "IRQCtrl -> NVIC : EnableVector()",
+  "NVIC --> IRQCtrl : Ack",
+  "IRQCtrl --> Spi_Driver : Ready",
+  "Spi_Driver --> App : InitDone",
+  "' @pin 1|open|reviewer|2026-09-14T18:09|participant NVIC|NVIC.EnableVector/SetPriority がクラス図に無い(F-02/F-03継続3tick目)",
+  "@enduml",
+].join('\n');
+
 const GPIO_SEQ = [
   '@startuml',
   'title GPIOドライバ初期化シーケンス',
@@ -278,6 +307,6 @@ module.exports = {
   dirFor, absDirFor, bootWithSaveDir, bootPlain, bootDownloadMode, reopenApp,
   putDoc, readDoc, listDir, clearDir, clearTickets,
   openFolder, openFolderItem, overwriteOpenedFile, typeDsl, renameActive, runCommand, exportVia,
-  GPIO_STATE, GPIO_SEQ,
+  GPIO_STATE, GPIO_SEQ, IRQ_SEQ_FOLDED_DASH,
   messageClickPoints, selectedMessageLine, expectMessageHitUniform,
 };
