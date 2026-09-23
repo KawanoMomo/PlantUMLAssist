@@ -4571,6 +4571,7 @@ function applyActiveDoc() {
   // 図の上端を覆い、そこにある要素へホバー・クリックが届かない。
   hideSaveCheckIfOtherDoc(doc.id);
   hideSaveSwapIfOtherDoc(doc.id);
+  hideSaveClashIfOtherDoc(doc.id);
   var mod = modules[doc.diagramType] || modules[currentDiagramType];
   if (mod) {
     currentModule = mod;
@@ -26213,6 +26214,9 @@ function renderSaveClash(ev) {
         + ' に置き換えます（開いている他の図は触りません）';
     }
   }
+  // BLK-migrator-20260923-1409: どの図の保存で出た帯かを憶え、別の図へ移ったら引っ込める
+  var wsCl = window.MA.workspace;
+  el.setAttribute('data-doc-id', wsCl ? String(wsCl.getActiveId()) : '');
   el.hidden = false;
 }
 
@@ -26287,6 +26291,15 @@ function hideSaveSwap() {
 // 別の図に移っても出たままだと図を帯の高さだけ下へ押し、縦に長い図の下の方が画面の外へ
 // 出てホバーが届かない。保存時チェックの帯と同じく、次の図を開いたら引っ込める
 // (次の保存でまた出る)。記録を自分で開いているときは追跡の最中なので残す。
+// BLK-migrator-20260923-1409: 「名前の衝突」の帯も保存した図のもの (相手の図と名前は保存した図の中身から
+// 出している)。別の図に移っても出たままだと、入れ替わりの帯と同じく図を帯の高さだけ下へ押し、縦に長い図
+// (AWS 構成図の Figure 5 など) の下端の参加者が画面の外へ出てホバーが届かない。次の保存でまた出る。
+function hideSaveClashIfOtherDoc(activeId) {
+  var el = document.getElementById('save-clash-overlay');
+  if (!el || el.hidden) return;
+  if (el.getAttribute('data-doc-id') !== String(activeId)) hideSaveClash();
+}
+
 function hideSaveSwapIfOtherDoc(activeId) {
   var el = document.getElementById('save-swap-overlay');
   if (!el || el.hidden || _sswLogOpen) return;
