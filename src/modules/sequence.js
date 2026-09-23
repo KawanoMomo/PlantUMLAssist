@@ -962,6 +962,11 @@ window.MA.modules.plantumlSequence = (function() {
       var ln = parseInt(btn.getAttribute('data-line'), 10);
       _showInsertForm(ctx, ln, 'after', 'note');
     });
+    // BLK-human-20260923-2002: 選んだ要素の後ろ (直前のまとめて追加の続きならその end の後ろ) に
+    // 参加者・メッセージ・枠をまとめて入れる。位置は選択から決まる。
+    P.bindAllByClass(propsEl, 'seq-scaffold-after', function() {
+      _showSeqScaffoldModal(parseSequence(ctx.getMmdText()), ctx, null);
+    });
     // FEAT-114 / HFR-060: 2 連 prompt() を seq-modal の 1 枚フォームへ置き換える。
     // BLK-human-20260916-0901: 「⌗ 囲む…」は押したあとプレビューで終点のメッセージを押す。
     // 押すまでの間は選べるメッセージを点線でハイライトし、上部の帯に「この 1 本だけ」も置く。
@@ -1511,6 +1516,12 @@ window.MA.modules.plantumlSequence = (function() {
         '</button>';
     });
     html += '</div>';
+    // BLK-human-20260923-2002: この位置に参加者・メッセージ・枠をまとめて入れる入口。
+    if (!isOther) {
+      html += '<button id="seq-pick-scaffold" style="width:100%;margin-top:8px;text-align:left;background:var(--bg-tertiary);' +
+        'border:1px dashed var(--border);color:var(--text-primary);padding:8px 10px;border-radius:4px;cursor:pointer;font-size:12px;">' +
+        '⌗ ここにまとめて追加…<span style="color:var(--text-secondary);font-size:10px;margin-left:8px;">参加者・メッセージ・alt を 1 枚で</span></button>';
+    }
     if (isOther) {
       html += '<button id="seq-pick-back" style="width:100%;margin-top:12px;background:var(--bg-tertiary);' +
         'border:1px solid var(--border);color:var(--text-secondary);padding:6px;border-radius:4px;cursor:pointer;font-size:11px;">' +
@@ -1534,6 +1545,14 @@ window.MA.modules.plantumlSequence = (function() {
         _showInsertForm(ctx, line, position, picked.kind, picked.opts);
       });
     });
+    var scBtn = document.getElementById('seq-pick-scaffold');
+    if (scBtn) {
+      scBtn.addEventListener('click', function() {
+        modal.style.display = 'none';
+        _markerHide();
+        _showSeqScaffoldModal(parseSequence(ctx.getMmdText()), ctx, { line: line, position: position, hint: hint });
+      });
+    }
     if (isOther) {
       document.getElementById('seq-pick-back').addEventListener('click', function() {
         _showInsertPicker(ctx, line, position, hint);
@@ -2035,13 +2054,43 @@ window.MA.modules.plantumlSequence = (function() {
   // 「末尾に追加」は 1 件ごとに種類 select を選び直し、逃げ道の「一括 (複数行)」は
   // 矢印構文ごと打たせるため、どちらも DSL エディタに直接打つのと手数が変わらない。
   // class-scaffold と同じく、名前・本文という短い値だけを受け取って構文は自動生成する。
-  function _showSeqScaffoldModal(parsedData, ctx) {
+  // BLK-human-20260923-2002: 直前の「まとめて追加」で入れた行。選択がその行のままなら、
+  // 次のまとめて追加はその続き (最後に入れた行の後) に入る (連続入力)。
+  var _seqScCont = null;
+
+  function _selectionKey(sel) {
+    return (sel || []).map(function(x) { return x.type + ':' + x.id; }).sort().join('|');
+  }
+
+  // 今の選択から、まとめて追加の起点 (その後ろに入れる行) を決める。何も選んでいなければ null (= 末尾)。
+  function _scaffoldAnchorFromSelection(text) {
+    var sel = (window.MA.selection && window.MA.selection.getSelected) ? window.MA.selection.getSelected() : [];
+    if (!sel.length) return null;
+    if (_seqScCont && _seqScCont.text === text && _seqScCont.key === _selectionKey(sel)) {
+      return { line: _seqScCont.line, position: 'after' };
+    }
+    var parsed = parseSequence(text);
+    var byId = {};
+    (parsed.relations || []).forEach(function(r) { byId['message:' + r.id] = r.line; });
+    (parsed.elements || []).forEach(function(e) { if (e.kind === 'note') byId['note:' + e.id] = e.line; });
+    var max = -1;
+    sel.forEach(function(x) {
+      var ln = typeof x.line === 'number' ? x.line : byId[x.type + ':' + x.id];
+      if ((x.type === 'message' || x.type === 'note') && typeof ln === 'number' && ln > max) max = ln;
+    });
+    return max > 0 ? { line: max, position: 'after' } : null;
+  }
+
+  // anchor: { line, position, hint } — 挿入ピッカーから開いたときの位置。省略時は今の選択の後ろ
+  // (何も選んでいなければ図の末尾)。
+  function _showSeqScaffoldModal(parsedData, ctx, anchor) {
     var modal = document.getElementById('seq-sc-modal');
     var content = document.getElementById('seq-sc-modal-content');
     if (!modal || !content) return;
     var SS = window.MA.sequenceScaffold;
     var esc = window.MA.htmlUtils.escHtml;
     var P = window.MA.properties;
+    if (!anchor) anchor = _scaffoldAnchorFromSelection(ctx.getMmdText());
 
     var existing = (parsedData.elements || [])
       .filter(function(e) { return e.kind === 'participant'; })
@@ -2087,6 +2136,9 @@ window.MA.modules.plantumlSequence = (function() {
         '</select>' +
         namePickHtml('seq-sc-mto-' + j) +
         '<input id="seq-sc-mtext-' + j + '" type="text" placeholder="本文 (例: Timer_Init())" style="flex:2;' + INPUT + '">' +
+        '<select id="seq-sc-mblock-' + j + '" class="seq-sc-mblock" title="枠 (alt / loop …) に入れるか" style="' + INPUT + '">' +
+          '<option value="">枠の外</option><option value="main">枠の中</option><option value="else">else の後</option>' +
+        '</select>' +
         '<button id="seq-sc-mdel-' + j + '" title="この行を削除" style="background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;padding:2px 7px;">✕</button>' +
       '</div>';
     }
@@ -2097,6 +2149,18 @@ window.MA.modules.plantumlSequence = (function() {
     for (ri = 0; ri < 4; ri++) mRows += msgRowHtml(ri);
     content.innerHTML = datalist +
       '<h3 style="margin:0 0 12px 0;color:var(--text-primary);">シーケンス構成をまとめて追加</h3>' +
+      '<div style="' + SECTION + '">挿入位置</div>' +
+      '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">' +
+        (anchor
+          ? '<select id="seq-sc-where-mode" style="' + INPUT + '">' +
+              '<option value="here" selected>選んだ位置</option><option value="end">図の末尾</option></select>' +
+            '<select id="seq-sc-band-zone" style="display:none;' + INPUT + '">' +
+              '<option value="outside" selected>帯を閉じてその下 (既定)</option>' +
+              '<option value="inside">帯の中 (帯を伸ばす)</option></select>'
+          : '') +
+        '<span id="seq-sc-where" style="font-size:11px;color:var(--text-primary);"></span>' +
+      '</div>' +
+      '<div style="font-size:10px;color:var(--text-secondary);margin-top:2px;">参加者の宣言は図の上の参加者の欄に入り、メッセージだけがこの位置に入ります</div>' +
       '<div style="' + SECTION + '">タイトル (省略可)</div>' +
       '<input id="seq-sc-title" type="text" placeholder="例: TIMER ドライバ初期化" style="width:100%;box-sizing:border-box;' + INPUT + '">' +
       '<div style="' + SECTION + '">参加者 (種類 / 名前)</div>' +
@@ -2105,6 +2169,14 @@ window.MA.modules.plantumlSequence = (function() {
       '<div style="' + SECTION + '">メッセージ (From / 矢印 / To / 本文)</div>' +
       '<div id="seq-sc-msg-rows">' + mRows + '</div>' +
       '<button id="seq-sc-add-msg" style="font-size:11px;padding:3px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">＋ メッセージを追加</button>' +
+      '<div style="' + SECTION + '">枠 (メッセージの「枠の中 / else の後」を選んだ行を囲む)</div>' +
+      '<div style="display:flex;gap:6px;align-items:center;">' +
+        '<select id="seq-sc-block-kind" style="' + INPUT + '">' +
+          SS.BLOCK_KINDS.map(function(k) { return '<option value="' + k + '">' + k + '</option>'; }).join('') +
+        '</select>' +
+        '<input id="seq-sc-block-label" type="text" placeholder="条件 (例: 成功)" style="flex:1;' + INPUT + '">' +
+        '<input id="seq-sc-else-label" type="text" placeholder="else の条件 (例: 失敗)" style="flex:1;' + INPUT + '">' +
+      '</div>' +
       '<div style="' + SECTION + '">追加される行</div>' +
       '<pre id="seq-sc-preview" style="margin:0;background:var(--bg-primary);border:1px solid var(--border);border-radius:3px;padding:6px;font-family:Consolas,monospace;font-size:11px;color:var(--text-primary);white-space:pre-wrap;min-height:34px;"></pre>' +
       '<div id="seq-sc-errors" style="font-size:11px;color:var(--accent-red);margin-top:6px;min-height:14px;"></div>' +
@@ -2132,9 +2204,28 @@ window.MA.modules.plantumlSequence = (function() {
           to: val('seq-sc-mto-' + jdx),
           arrow: val('seq-sc-marrow-' + jdx),
           text: val('seq-sc-mtext-' + jdx),
+          inBlock: val('seq-sc-mblock-' + jdx),
         });
       }
-      return { title: val('seq-sc-title'), participants: participants, messages: messages };
+      return {
+        title: val('seq-sc-title'), participants: participants, messages: messages,
+        block: { kind: val('seq-sc-block-kind'), label: val('seq-sc-block-label'), elseLabel: val('seq-sc-else-label') },
+      };
+    }
+
+    // 挿入先。「選んだ位置」なら単発の挿入と同じ判定 (帯の内 / 外) で行を決め、文字で見せる。
+    function currentWhere(text) {
+      if (!anchor || val('seq-sc-where-mode') === 'end') return null;
+      var base = SS.resolveWhere(text, anchor);
+      // 帯の最後の要素の後ろなら、単発の「この後にメッセージ追加」と同じく帯の外 / 中を選ばせる (既定は外)。
+      var zoneSel = document.getElementById('seq-sc-band-zone');
+      if (base && base.bandEnd && !(anchor.hint && anchor.hint.zone)) {
+        if (zoneSel) zoneSel.style.display = '';
+        return SS.resolveWhere(text, { line: anchor.line, position: anchor.position,
+          hint: { zone: val('seq-sc-band-zone') || 'outside', bandLine: base.band.activateLine } });
+      }
+      if (zoneSel) zoneSel.style.display = 'none';
+      return base;
     }
 
     // From / To の選択肢は「今この画面で打っている参加者名 + 図に既にある参加者」。
@@ -2169,6 +2260,8 @@ window.MA.modules.plantumlSequence = (function() {
       refreshPicks();
       var spec = collectSpec();
       var text = ctx.getMmdText();
+      var whereEl = document.getElementById('seq-sc-where');
+      if (whereEl) whereEl.textContent = SS.describeWhere(text, currentWhere(text));
       var pre = document.getElementById('seq-sc-preview');
       if (pre) pre.textContent = SS.preview(text, spec).join('\n');
       var res = SS.validate(spec, text);
@@ -2205,13 +2298,17 @@ window.MA.modules.plantumlSequence = (function() {
     }
     function bindMsgRow(j) {
       P.bindEvent('seq-sc-mtext-' + j, 'input', refresh);
-      ['seq-sc-mfrom-' + j, 'seq-sc-mto-' + j, 'seq-sc-marrow-' + j].forEach(function(id) {
+      ['seq-sc-mfrom-' + j, 'seq-sc-mto-' + j, 'seq-sc-marrow-' + j, 'seq-sc-mblock-' + j].forEach(function(id) {
         P.bindEvent(id, 'change', refresh);
       });
       bindRemovable('seq-sc-mdel-' + j, '.seq-sc-msg-row', 'data-j', j);
     }
     for (ri = 0; ri < 4; ri++) { bindPartRow(ri); bindMsgRow(ri); }
     P.bindEvent('seq-sc-title', 'input', refresh);
+    ['seq-sc-block-label', 'seq-sc-else-label'].forEach(function(id) { P.bindEvent(id, 'input', refresh); });
+    ['seq-sc-block-kind', 'seq-sc-where-mode', 'seq-sc-band-zone'].forEach(function(id) {
+      if (document.getElementById(id)) P.bindEvent(id, 'change', refresh);
+    });
 
     var nextPart = 4, nextMsg = 4;
     P.bindEvent('seq-sc-add-row', 'click', function() {
@@ -2242,9 +2339,22 @@ window.MA.modules.plantumlSequence = (function() {
       var text = ctx.getMmdText();
       if (!SS.validate(spec, text).ok) return;
       window.MA.history.pushHistory();
-      ctx.setMmdText(SS.apply(text, spec));
-      ctx.onUpdate();
+      var res = SS.applyAt(text, spec, currentWhere(text));
+      ctx.setMmdText(res.text);
       close();
+      // 追加したメッセージをプレビューで選んだ状態にする。選んだまま次の「まとめて追加」を開けば、
+      // 最後に入れた行 (枠なら end) の後ろに続けて入る。
+      _seqScCont = null;
+      if (res.bodyEnd > 0 && window.MA.selection) {
+        var added = (parseSequence(res.text).relations || []).filter(function(r) {
+          return r.kind === 'message' && r.line >= res.bodyStart && r.line <= res.bodyEnd;
+        }).map(function(r) { return { type: 'message', id: r.id, line: r.line }; });
+        if (added.length) {
+          _seqScCont = { text: res.text, line: res.bodyEnd, key: _selectionKey(added) };
+          window.MA.selection.setSelected(added);
+        }
+      }
+      ctx.onUpdate();
     });
 
     refresh();
@@ -2671,6 +2781,9 @@ window.MA.modules.plantumlSequence = (function() {
             '<button class="seq-insert-msg-after" data-line="' + line + '" style="width:100%;text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">↓ この後にメッセージ追加</button>' +
             '<button class="seq-insert-note-after" data-line="' + line + '" style="width:100%;text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">↓ この後に注釈追加</button>' +
             '<button class="seq-wrap-block" data-line="' + line + '" style="width:100%;text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">⌗ alt/loop で囲む…</button>' +
+            (kind !== 'participant'
+              ? '<button class="seq-scaffold-after" data-line="' + line + '" style="width:100%;text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">⌗ この後にまとめて追加…</button>'
+              : '') +
             msgOnlyButtons +
           '</div>' +
           '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;display:flex;gap:4px;">' +
@@ -3068,11 +3181,15 @@ window.MA.modules.plantumlSequence = (function() {
             GROUP_KINDS.map(function(k) {
               return '<button class="seq-bulk-wrap" data-kind="' + k + '" data-start="' + range.start + '" data-end="' + range.end + '" style="width:100%;text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">⌗ ' + groupLabel(k) + ' で囲む</button>';
             }).join('') +
+            '<button class="seq-scaffold-after" data-line="' + range.end + '" style="width:100%;text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">⌗ この後にまとめて追加…</button>' +
             '<button class="seq-bulk-duplicate" data-start="' + range.start + '" data-end="' + range.end + '" style="width:100%;text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">📋 範囲を複製</button>' +
             '<button class="seq-bulk-delete" data-start="' + range.start + '" data-end="' + range.end + '" style="width:100%;text-align:left;background:var(--accent-red);border:none;color:#fff;padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 範囲を一括削除</button>' +
           '</div>';
 
         var P = window.MA.properties;
+        P.bindAllByClass(propsEl, 'seq-scaffold-after', function() {
+          _showSeqScaffoldModal(parseSequence(ctx.getMmdText()), ctx, null);
+        });
         P.bindAllByClass(propsEl, 'seq-bulk-wrap', function(btn) {
           var k = btn.getAttribute('data-kind');
           var s = parseInt(btn.getAttribute('data-start'), 10);
