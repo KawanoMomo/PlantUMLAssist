@@ -28,6 +28,10 @@ async function openCompareTabs(p) {
 
 const DIR = S.dirFor(__filename);
 
+// 読み込み直した直後の画面は init (保存先の取り込み /prefs を最大 3 秒待って走る) の前の骨格で、
+// 札やボタンは見えていても押しても何も起きない。全体実行 (--workers=4) で /prefs が遅い回に
+// 部品ビュー・並べて比較の手順が落ちていたので、reload の後は押せるようになった印を待つ。
+
 // BLK-junior-20260909-0603-wish: 手本は `persona-data\primary` にあり、自分のタブに
 // 無い。覗く画面は全面のモーダルなので、開くと書きかけが見えず、閉じると手本が
 // 消える。手本と書きかけが同時に見えて、足りない状態・遷移が色で出ることを確かめる。
@@ -221,6 +225,7 @@ test('手順2 先輩の図を手本として右に据えたまま、自分に無
   await S.clearDir(page, SENIOR_DIR);
   await S.putDoc(page, SENIOR_DIR, 'timer_state', SENIOR_STATE);
   await page.reload();
+  await page.waitForSelector('html[data-app-ready="1"]');
   await page.waitForSelector('#btn-tab-peek');
 
   // 書きかけ (手順 2 の途中。手本の 5 遷移のうち 2 本しか打てていない)。
@@ -715,6 +720,7 @@ test('手順2 先輩が足したメソッドを、記法を打ち直さずに自
   await S.clearDir(page, SENIOR_DIR);
   await S.putDoc(page, SENIOR_DIR, 'driver_common_class', SENIOR_IRQ);
   await page.reload();
+  await page.waitForSelector('html[data-app-ready="1"]');
   await page.waitForSelector('#btn-tab-peek');
   await page.locator('#diagram-type').selectOption('plantuml-class');
   await page.waitForTimeout(400);
@@ -786,6 +792,7 @@ test('手順2 遷移ラベルを、先輩の図を開かずに部品の名前帳
   await S.clearDir(page, SENIOR_DIR);
   await S.putDoc(page, SENIOR_DIR, 'spi_init_sequence', SENIOR_SPI_SEQ);
   await page.reload();
+  await page.waitForSelector('html[data-app-ready="1"]');
   await page.waitForSelector('#btn-tab-peek');
   await page.locator('#diagram-type').selectOption('plantuml-state');
   await page.waitForTimeout(400);
@@ -869,6 +876,7 @@ test.describe('junior 手順2: 部品を選ぶと 6 図種が 2 列で並び、�
     await S.putDoc(page, BOARD_SENIOR, 'spi_activity', BOARD_SENIOR_ACT);
     await S.putDoc(page, BOARD_SENIOR, 'driver_common_class', BOARD_SENIOR_CLASS);
     await page.reload();
+    await page.waitForSelector('html[data-app-ready="1"]');
     await page.waitForSelector('#btn-tab-peek');
   });
 
@@ -1020,6 +1028,7 @@ test('手順2 活動図の本文を、先輩のクラス図タブに行かずに
   await S.clearDir(page, SENIOR_DIR);
   await S.putDoc(page, SENIOR_DIR, 'driver_common_class', SENIOR_COMMON_CLASS);
   await page.reload();
+  await page.waitForSelector('html[data-app-ready="1"]');
   await page.waitForSelector('#btn-tab-peek');
   await page.locator('#diagram-type').selectOption('plantuml-activity');
   await page.waitForTimeout(400);
@@ -1116,6 +1125,7 @@ test('手順2 登録簿の組を選ぶだけで、揺れの残る図がまとめ
     { canonical: 'Clock_Ctrl', variants: ['ClockCtrl'] },
   ]);
   await page.reload();
+  await page.waitForSelector('html[data-app-ready="1"]');
   await page.waitForSelector('#btn-tab-unify');
 
   await page.locator('#btn-tab-unify').click();
@@ -1187,6 +1197,7 @@ test('手順1-2 先輩側の増分が入る位置つきで並び、チェック�
   await S.clearDir(page, SENIOR_DIR);
   await S.putDoc(page, SENIOR_DIR, 'timer_init_sequence', TAKE_SENIOR);
   await page.reload();
+  await page.waitForSelector('html[data-app-ready="1"]');
   await page.waitForSelector('#btn-tab-senior');
   await S.typeDsl(page, TAKE_SELF);
   await S.renameActive(page, 'timer_init_sequence');
@@ -1265,6 +1276,7 @@ test('手順1-2 親状態の中に増えた子状態が入れ子のまま並び�
   await S.clearDir(page, SENIOR_DIR);
   await S.putDoc(page, SENIOR_DIR, 'timer_state', NEST_SENIOR);
   await page.reload();
+  await page.waitForSelector('html[data-app-ready="1"]');
   await page.waitForSelector('#btn-tab-senior');
   await S.typeDsl(page, NEST_SELF);
   await S.renameActive(page, 'timer_state');
@@ -1335,6 +1347,7 @@ test('手順1 先輩に同じ図種が無いことが、突き合わせの答え
   await S.putDoc(page, SENIOR_DIR, 'timer_init_sequence', CLS_SENIOR_SEQ);
   await S.putDoc(page, SENIOR_DIR, 'timer_state', CLS_SENIOR_STATE);
   await page.reload();
+  await page.waitForSelector('html[data-app-ready="1"]');
   await page.waitForSelector('#btn-tab-senior');
   await S.typeDsl(page, CLS_SELF);
   await S.renameActive(page, 'TimerDrv派生クラス図');
@@ -1382,6 +1395,7 @@ test('手順1 同じ図種でも部品名が違う図しか無ければ、開か
   await S.putDoc(page, SENIOR_DIR, 'timer_state', CLS_SENIOR_STATE);
   await S.putDoc(page, SENIOR_DIR, 'driver_common_class', CLS_SENIOR_COMMON);
   await page.reload();
+  await page.waitForSelector('html[data-app-ready="1"]');
   await page.waitForSelector('#btn-tab-senior');
   await S.typeDsl(page, CLS_SELF);
   await S.renameActive(page, 'TimerDrv派生クラス図');
