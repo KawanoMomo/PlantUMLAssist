@@ -1,6 +1,14 @@
 const { test } = require('@playwright/test');
 const { gotoApp, saveDirFor, shotOut } = require('../helpers');
 
+// 保存先の節は既定で開いている (design 10a)。開いていれば畳んでから開き直し、
+// 一覧を今の中身で描き直す (直に押すと、開いていたときに畳んでしまう)。
+async function openFolder(page) {
+  if (await page.locator('#folder-panel.open').count()) await page.locator('#btn-tab-folder').click();
+  await page.locator('#btn-tab-folder').click();
+  await page.waitForSelector('#folder-panel.open');
+}
+
 // BLK-reviewer-20260908-0923-wish の画面写真。📂一覧に「直近 5 分に更新された図」の
 // 印と名前が出て、「更新中を除いて選ぶ」が並んでいるところを撮る。
 const DIR = saveDirFor(__filename);
@@ -41,7 +49,7 @@ test('shot: 書き込み中かもしれない図の印', async ({ page }) => {
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
   });
 
-  await page.locator('#btn-tab-folder').click();
+  await openFolder(page);
   await page.waitForSelector('#folder-panel.open .folder-item');
   await page.waitForSelector('#folder-panel .folder-write-badge');
   await page.waitForTimeout(300);

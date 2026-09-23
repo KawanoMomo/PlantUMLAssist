@@ -308,7 +308,7 @@ test('手順5.5 塗り潰された図を、打ち直さずに直前の版へ 1 �
   await S.putDoc(page, DIR, 'driver_common_class', STUB);
   expect(await S.readDoc(page, DIR, 'driver_common_class')).toContain('class Foo');
 
-  await page.locator('#btn-tab-folder').click();
+  await openFolder(page);
   await page.waitForSelector('#folder-panel.open');
   // 到達条件 1: 壊れた図の行から、控えてある版に辿り着ける。
   await page.locator('[data-versions-name="driver_common_class"]').click();
@@ -340,6 +340,14 @@ test('手順5.5 塗り潰された図を、打ち直さずに直前の版へ 1 �
 // アクションが並び、[適用] を押すだけで当たることを到達条件にする。
 const fs = require('fs');
 const nodePath = require('path');
+
+// 保存先の節は既定で開いている (design 10a)。開いていれば畳んでから開き直し、
+// 一覧を今の中身で描き直す (直に押すと、開いていたときに畳んでしまう)。
+async function openFolder(page) {
+  if (await page.locator('#folder-panel.open').count()) await page.locator('#btn-tab-folder').click();
+  await page.locator('#btn-tab-folder').click();
+  await page.waitForSelector('#folder-panel.open');
+}
 
 const ACT_ROOT = DIR + '-actions';
 const ACT_MINE = ACT_ROOT + '/primary';

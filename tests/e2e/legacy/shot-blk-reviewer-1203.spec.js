@@ -1,6 +1,14 @@
 const { test } = require('@playwright/test');
 const { gotoApp, saveDirFor, shotOut } = require('../helpers');
 
+// 保存先の節は既定で開いている (design 10a)。開いていれば畳んでから開き直し、
+// 一覧を今の中身で描き直す (直に押すと、開いていたときに畳んでしまう)。
+async function openFolder(page) {
+  if (await page.locator('#folder-panel.open').count()) await page.locator('#btn-tab-folder').click();
+  await page.locator('#btn-tab-folder').click();
+  await page.waitForSelector('#folder-panel.open');
+}
+
 // BLK-reviewer-20260908-1203 の画面写真。印だけで「内容ずれ」と分かった図を
 // 「食い違いの中身を調べる」で開き、欠落と旧名、そして指摘文が出ているところを撮る。
 const DIR = saveDirFor(__filename);
@@ -52,7 +60,7 @@ test('shot: 内容ずれの中身を調べる', async ({ page }) => {
   await put(page, 'gpio_state', NOW);
   await exportSvg(page, 'gpio_state', NOW);
 
-  await page.locator('#btn-tab-folder').click();
+  await openFolder(page);
   await page.waitForSelector('#folder-panel.open .folder-item');
   const scan = page.locator('#folder-svg-diff-scan');
   if (await scan.count() && await scan.isEnabled()) {

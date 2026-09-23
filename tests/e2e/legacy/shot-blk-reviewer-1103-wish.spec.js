@@ -3,6 +3,14 @@ const path = require('path');
 const { test } = require('@playwright/test');
 const { gotoApp, saveDirFor, shotOut } = require('../helpers');
 
+// 保存先の節は既定で開いている (design 10a)。開いていれば畳んでから開き直し、
+// 一覧を今の中身で描き直す (直に押すと、開いていたときに畳んでしまう)。
+async function openFolder(page) {
+  if (await page.locator('#folder-panel.open').count()) await page.locator('#btn-tab-folder').click();
+  await page.locator('#btn-tab-folder').click();
+  await page.waitForSelector('#folder-panel.open');
+}
+
 // BLK-reviewer-20260908-1103-wish の画面写真。📂一覧で「SVG の中身を確かめる」を押した後、
 // 中身が食い違う図だけが名前で並んでいるところを撮る。
 const DIR = saveDirFor(__filename);
@@ -55,7 +63,7 @@ test('shot: SVG の中身が今の DSL の姿かを一覧で言う', async ({ pa
   await put(page, 'timer_state', NOW);
   await putSvgOf(page, 'timer_state', NOW);
 
-  await page.locator('#btn-tab-folder').click();
+  await openFolder(page);
   await page.waitForSelector('#folder-panel.open .folder-item');
   const btn = page.locator('#folder-svg-verify');
   if (await btn.count() && await btn.isEnabled()) {

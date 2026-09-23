@@ -54,6 +54,8 @@ async function openAsActiveTab(page, name) {
 }
 
 async function openFolder(page) {
+  // 保存先は既定で開いている (design 10a)。開いていれば畳んでから開き直し、一覧を今の中身で描き直す。
+  if (await page.locator('#folder-panel.open').count()) await page.locator('#btn-tab-folder').click();
   await page.locator('#btn-tab-folder').click();
   await page.waitForSelector('#folder-panel.open .folder-item');
 }
@@ -73,7 +75,7 @@ test.describe('BLK-junior-1803: 一覧から開き直して保存内容を確か
   test('同じ名前のタブを開いたままでも、読み直した結果が言葉で出る', async ({ page }) => {
     await openAsActiveTab(page, NAME);
     let clicks = 0;
-    await page.locator('#btn-tab-folder').click(); clicks++;
+    await openFolder(page); clicks++;
     await page.waitForSelector('#folder-panel.open .folder-item');
     await page.locator('#folder-panel .folder-item[data-file-name="' + NAME + '"]').click(); clicks++;
 

@@ -34,6 +34,14 @@ const fs = require('fs');
 const path = require('path');
 const { gotoApp, saveDirFor } = require('../helpers');
 
+// 保存先の節は既定で開いている (design 10a)。開いていれば畳んでから開き直し、
+// 一覧を今の中身で描き直す (直に押すと、開いていたときに畳んでしまう)。
+async function openFolder(page) {
+  if (await page.locator('#folder-panel.open').count()) await page.locator('#btn-tab-folder').click();
+  await page.locator('#btn-tab-folder').click();
+  await page.waitForSelector('#folder-panel.open');
+}
+
 const X_DIR = saveDirFor(__filename) + '-cross';
 const X_ABS = path.join(__dirname, '..', '..', '..', X_DIR.replace(/^\.\//, ''));
 
@@ -85,7 +93,7 @@ test('手順6 絵が入れ替わった SVG を、相手の図の名前まで名�
   fs.writeFileSync(path.join(X_ABS, 'plantuml-class.svg'), wrap(svgA), 'utf-8');
 
   // 手順6 の操作はこれだけ — 📂一覧を開く。
-  await page.locator('#btn-tab-folder').click();
+  await openFolder(page);
   await page.waitForSelector('#folder-panel.open .folder-item');
 
   const a = page.locator('#folder-panel .folder-item[data-file-name="driver_common_class"]');

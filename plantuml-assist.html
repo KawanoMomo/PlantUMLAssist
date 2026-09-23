@@ -101,6 +101,12 @@ html, body {
 /* 畳んだままでも件数が読める (比較中 1 / main · M 2 ↑1) */
 #files-panel .files-sec-count { flex: 0 0 auto; font-size: 9px; color: var(--text-secondary); white-space: nowrap; }
 #files-panel .files-sec-body { padding: 0 0 4px; }
+/* 見出しの行に入口を並べる節 (読むだけ)。見出しが幅を取り、入口は右端に寄る。 */
+#files-panel .files-sec-headrow { display: flex; align-items: center; }
+#files-panel .files-sec-headrow button.files-sec-head { flex: 1 1 auto; min-width: 0; width: auto; }
+#files-panel .files-sec-headrow button.files-sec-act {
+  flex: 0 0 auto; font-size: 11px; line-height: 1; padding: 2px 5px; margin-right: 3px;
+}
 #files-panel .files-sec-body[hidden] { display: none; }
 /* design 10a: 保存先の下の部品ごとのフォルダ。`SPI 4 / 6` は揃い具合で、ファイル数ではない。 */
 #files-panel .files-part-head {
@@ -7261,15 +7267,21 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         </div>
       </section>
       <section class="files-sec" data-files-section="readonly">
-        <button type="button" class="files-sec-head" id="files-sec-readonly" aria-expanded="false"
-                aria-controls="files-body-readonly"><span class="files-caret" aria-hidden="true">▸</span><span
-                class="files-sec-label">読むだけ</span><span class="files-sec-count" id="files-count-readonly"></span></button>
-        <div class="files-sec-body" id="files-body-readonly">
-          <button class="tab-tool" id="btn-tab-peek" title="他の保存フォルダの図を読むだけで見る (保存先は変わりません)">👀 他フォルダ</button>
+        <!-- design 10a: 「読むだけ」は既定で畳む。入口の 2 つ (👀 / ⇔) は見出しの行に置き、
+             畳んだままでも押せるようにする (節を開く手数を入口ごとに足さない)。 -->
+        <div class="files-sec-headrow">
+          <button type="button" class="files-sec-head" id="files-sec-readonly" aria-expanded="false"
+                  aria-controls="files-body-readonly"><span class="files-caret" aria-hidden="true">▸</span><span
+                  class="files-sec-label">読むだけ</span><span class="files-sec-count" id="files-count-readonly"></span></button>
+          <button class="tab-tool files-sec-act" id="btn-tab-peek" aria-label="👀 他フォルダ"
+                  title="他の保存フォルダの図を読むだけで見る (保存先は変わりません)">👀</button>
           <!-- design 9a: 「先輩」は使う人の立場の名前で、機能の中身を表していない。
                相手が先輩でも他チームでも過去の自分の版でも動きは同じなので、何をするかで名付ける。 -->
-          <button class="tab-tool tab-tool-plain" id="btn-tab-senior" aria-pressed="false"
-                  title="別の保存フォルダの図を右の枠に並べる。図を切り替えると相手も自動で入れ替わる (読むだけ)">並べて比較</button>
+          <button class="tab-tool tab-tool-plain files-sec-act" id="btn-tab-senior" aria-pressed="false" aria-label="並べて比較"
+                  title="並べて比較: 別の保存フォルダの図を右の枠に並べる。図を切り替えると相手も自動で入れ替わる (読むだけ)">⇔</button>
+        </div>
+        <div class="files-sec-body" id="files-body-readonly">
+          <div class="files-empty">👀 で他のフォルダを覗く / ⇔ で右の枠に並べる。どちらも保存先には書き込みません</div>
         </div>
       </section>
       <section class="files-sec" data-files-section="git">

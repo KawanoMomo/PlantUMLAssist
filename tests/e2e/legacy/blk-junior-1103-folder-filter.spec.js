@@ -41,6 +41,8 @@ async function boot(page) {
 }
 
 async function openFolder(page) {
+  // 保存先は既定で開いている (design 10a)。開いていれば畳んでから開き直し、一覧を今の中身で描き直す。
+  if (await page.locator('#folder-panel.open').count()) await page.locator('#btn-tab-folder').click();
   await page.locator('#btn-tab-folder').click();
   await expect(page.locator('#folder-panel')).toHaveClass(/open/);
   await expect(page.locator('#folder-filter')).toBeVisible();
@@ -131,7 +133,7 @@ test.describe('BLK-junior-1103 一覧を名前で絞り込む', () => {
     await boot(page);
     let clicks = 0;
     let keys = 0;
-    await page.locator('#btn-tab-folder').click(); clicks++;
+    await openFolder(page); clicks++;
     await expect(page.locator('#folder-filter')).toBeVisible();
     for (const ch of 'gpio_state') { await page.keyboard.type(ch); keys++; }
     await page.keyboard.press('Enter'); keys++;
