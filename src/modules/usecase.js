@@ -1176,9 +1176,33 @@ window.MA.modules.plantumlUsecase = (function() {
         return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
       }
 
+      // BLK-migrator-20260924-0012: 当て方は PlantUML が SVG に残す要素情報 (data-qualified-name /
+      // data-source-line) を先に使う (class / component / state と同じ部品)。パッケージの中の要素は
+      // `Restaurant.UC1` の修飾名で描かれ、`:User:` / `(Use)` / `"表示名" as (X)` の略記はパーサが
+      // 読めないことがある。名前 → 書かれた行 の順に当て、どれにも当たらない要素・線・題・凡例も
+      // addUnclaimed が書かれた行を指す枠にする (黙って枠を出さない、をやめる)。
+      var claimed = [];
+      function _entityByLine(line) {
+        var all = svgEl.querySelectorAll('g.entity[data-source-line]');
+        for (var i = 0; i < all.length; i++) {
+          if (claimed.indexOf(all[i]) >= 0) continue;
+          var n = parseInt(all[i].getAttribute('data-source-line'), 10);
+          if (!isNaN(n) && n + 1 === Number(line)) return all[i];
+        }
+        return null;
+      }
+      function _svgEntity(item) {
+        var g = OB.findEntityByName(svgEl, item.id);
+        if (g && claimed.indexOf(g) >= 0) g = null;
+        if (!g) g = _entityByLine(item.line);
+        if (!g) g = _matchEntity(item);
+        if (g) claimed.push(g);
+        return g;
+      }
+
       var actorMatched = 0;
       actors.forEach(function(actor) {
-        var g = _matchEntity(actor);
+        var g = _svgEntity(actor);
         if (!g) return;
         var bb = _entityBBox(g);
         if (!bb) return;
@@ -1192,7 +1216,7 @@ window.MA.modules.plantumlUsecase = (function() {
 
       var ucMatched = 0;
       usecases.forEach(function(uc) {
-        var g = _matchEntity(uc);
+        var g = _svgEntity(uc);
         if (!g) return;
         var bb = _entityBBox(g);
         if (!bb) return;
@@ -1204,33 +1228,41 @@ window.MA.modules.plantumlUsecase = (function() {
         ucMatched++;
       });
 
-      // package: <g class="cluster">
+      // package / rectangle: <g class="cluster">。開始行 → 表示名で当てる (並び順に頼らない)
       var packages = (parsedData.groups || []).filter(function(g) { return g.kind === 'package'; });
-      var pkgGroups = svgEl.querySelectorAll('g.cluster');
-      var pkgN = Math.min(packages.length, pkgGroups.length);
-      for (var pi = 0; pi < pkgN; pi++) {
+      var pkgGroups = OB.matchClusters(svgEl, packages);
+      var pkgN = 0;
+      for (var pi = 0; pi < packages.length; pi++) {
         var g = pkgGroups[pi];
+        if (!g) continue;
+        claimed.push(g);
+        pkgN++;
         var pkgRect = g.querySelector('rect');
-        if (!pkgRect) continue;
-        var px = parseFloat(pkgRect.getAttribute('x')) || 0;
-        var py = parseFloat(pkgRect.getAttribute('y')) || 0;
-        var pw = parseFloat(pkgRect.getAttribute('width')) || 0;
-        var ph = parseFloat(pkgRect.getAttribute('height')) || 0;
-        OB.addRect(overlayEl, px - 2, py - 2, pw + 4, ph + 4, {
+        var pbb = pkgRect ? {
+          x: parseFloat(pkgRect.getAttribute('x')) || 0,
+          y: parseFloat(pkgRect.getAttribute('y')) || 0,
+          width: parseFloat(pkgRect.getAttribute('width')) || 0,
+          height: parseFloat(pkgRect.getAttribute('height')) || 0,
+        } : OB.extractUnionBBox(g, 'text, line, polygon, polyline, path, rect, ellipse');
+        if (!pbb) continue;
+        OB.addRect(overlayEl, pbb.x - 2, pbb.y - 2, pbb.width + 4, pbb.height + 4, {
           'data-type': 'package',
           'data-id': packages[pi].id,
           'data-line': packages[pi].startLine,
         });
       }
 
-      // relation: <g class="link"> 内の line / path
+      // relation: <g class="link">。書かれた行で当てる (読めない線があっても以後がずれない)
       var relations = parsedData.relations || [];
-      var linkGroups = svgEl.querySelectorAll('g.link, g[class*="link_"]');
-      var relN = Math.min(relations.length, linkGroups.length);
-      for (var ri = 0; ri < relN; ri++) {
+      var linkGroups = OB.matchLinksByLine(svgEl, relations);
+      var relN = 0;
+      for (var ri = 0; ri < relations.length; ri++) {
         var lg = linkGroups[ri];
+        if (!lg) continue;
         var lineEl = lg.querySelector('line, path');
         if (!lineEl) continue;
+        claimed.push(lg);
+        relN++;
         // BLK-human-20260912-2130: 線・矢じり・ラベル (<<include>> 等) をまとめて
         // 1 つの当たり判定にする
         var ucRelAttrs = {
@@ -1245,6 +1277,9 @@ window.MA.modules.plantumlUsecase = (function() {
           OB.addRect(overlayEl, bb.x, bb.y, bb.width, bb.height, ucRelAttrs);
         }
       }
+
+      // フォームが読めない記法の要素・線・題・凡例にも、書かれた行を指す枠を置く
+      OB.addUnclaimed(svgEl, overlayEl, claimed);
 
       // BLK-human-20260912-2130: 小さい当たり判定を手前に。共通実装 (src/core)
       OB.raiseSmallestLast(overlayEl);
