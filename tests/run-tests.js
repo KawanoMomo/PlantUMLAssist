@@ -58,6 +58,7 @@ const sourceFiles = [
   'src/core/diagram-rail.js',
   'src/core/tool-menu.js',
   'src/core/status-counters.js',
+  'src/core/status-badges.js',
   'src/core/zoom-hud.js',
   'src/core/outline.js',
   'src/core/select-at-line.js',

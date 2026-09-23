@@ -199,23 +199,27 @@ test('手順5 前回保存版から何行消えるかが、保存を押す前に
   await S.openFolderItem(page, 'driver_common_class');
 
   const chip = page.locator('#status-livediff');
-  // 到達条件その1: 開いた直後は「前回保存版と同じ」と言い切る (常時出ている)。
-  await expect(chip).toBeVisible();
+  // 到達条件その1: 開いた直後は前回保存版と同じ。
+  // design 9c (BLK-human-20260923-1602): 0 件の項目は場所を取らないので出さない
+  // (出ていない = 差が無い)。状態自体は data-livediff に残る。
+  await expect(chip).toBeHidden();
   await expect(chip).toHaveAttribute('data-livediff', 'same');
 
   // 1 行だけ直した状態。保存はまだしていない。
   await S.typeDsl(page, BIG_CLASS.replace('+Init()', '+Start()'));
   await page.waitForTimeout(400);
   await expect(chip).toHaveAttribute('data-livediff', 'changed');
-  await expect(chip).toContainText('＋1');
-  await expect(chip).toContainText('−1');
+  // 変わった行数 (増 1 + 減 1) が件数として 1 種類の形で出る。
+  await expect(chip).toBeVisible();
+  await expect(chip).toHaveText('● 前回保存版 2');
 
   // 事故の形: 中身が雛形に戻ってしまった (77 行 → 4 行と同じ向き)。
   await S.typeDsl(page, TEMPLATE_CLASS);
   await page.waitForTimeout(400);
   // 到達条件その2: 保存を押す前に、消える側だと分かる印が出る。
   await expect(chip).toHaveAttribute('data-livediff', 'shrink');
-  await expect(chip).toContainText('⚠');
+  // 警告は文字ではなく点の色で出す (文字色・形は他の札と同じ)。
+  await expect(chip).toHaveAttribute('data-dot', 'bad');
   await expect(chip).toHaveAttribute('title', /いま保存すると .* 行に減ります/);
 
   // 到達条件その3: 押すと前回保存版と現在が並び、消える行が名指しされる (1 操作)。

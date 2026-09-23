@@ -1879,9 +1879,11 @@ function init() {
       if (!out || !src) return;
 
       function sync() {
-        out.textContent = SC.statusText(it.prefix, src.textContent);
+        var tok = SC.countToken(src.textContent);
+        var n = /^[0-9]+$/.test(tok) ? parseInt(tok, 10) : null;
         out.classList.toggle('has-open', SC.isActive(src.textContent));
         out.title = src.title || it.title;
+        applyStatusBadge(out, it.prefix, n, 'warn');
       }
       // パネル類は「外側の click で閉じる」を document に付けている。ここで同期に
       // src.click() を鳴らすと、開いた直後に今の click がそのまま document へ上がり、
@@ -3402,7 +3404,11 @@ function init() {
       if (!meta || !AST) { span.textContent = ''; return; }
       var doc = window.MA.workspace ? window.MA.workspace.getActive() : null;
       var last = window.MA.autoSave.getLastWrite ? window.MA.autoSave.getLastWrite() : null;
-      var d = AST.describe(meta, last, relTime(meta.lastSavedAt), doc && doc.name);
+      // design 9c: 時刻は HH:MM の 1 形で渡す (秒まで出す機械的な形にしない)。
+      var _sd = meta.lastSavedAt ? new Date(meta.lastSavedAt) : null;
+      var _clock = (_sd && !isNaN(_sd.getTime()))
+        ? (('0' + _sd.getHours()).slice(-2) + ':' + ('0' + _sd.getMinutes()).slice(-2)) : '';
+      var d = AST.describe(meta, last, relTime(meta.lastSavedAt), doc && doc.name, _clock);
       span.textContent = d.text;
       span.title = d.title;
       // 返事待ちは押せば進む。文字だけだと「出ているのに何もできない」になる。
@@ -4619,19 +4625,49 @@ function _liveDiffPair() {
            now: mmdText, has: !!(b && typeof b.dsl === 'string') };
 }
 
+// 下端の件数表示を 1 種類の形に揃える (design 9c / BLK-human-20260923-1602)。
+// 札ごとに文字色・枠を変える代わりに「● 名前 N」だけを出し、色を持つのは点だけにする。
+// 0 件 (と、まだ数えていない) 項目は出さない。title は呼ぶ側が従来どおり付ける。
+function applyStatusBadge(el, name, count, tone) {
+  var SB = window.MA.statusBadges;
+  if (!el || !SB) return;
+  var n = (typeof count === 'number' && isFinite(count)) ? count : null;
+  if (!SB.isVisible(n)) {
+    el.hidden = true;
+    el.textContent = '';
+    el.removeAttribute('data-dot');
+    return;
+  }
+  el.hidden = false;
+  el.setAttribute('data-dot', SB.toneOf(tone));
+  var dot = document.createElement('span');
+  dot.className = 'sb-dot';
+  dot.textContent = SB.DOT;
+  el.textContent = '';
+  el.appendChild(dot);
+  el.appendChild(document.createTextNode(' ' + SB.label(name) + ' ' + String(n)));
+}
+
 function renderLiveDiffChip() {
   var el = document.getElementById('status-livediff');
   var LD = window.MA.liveDiff;
   if (!el || !LD) return null;
   var p = _liveDiffPair();
   if (!p) {
-    el.textContent = '前回保存版 —';
     el.setAttribute('data-livediff', 'none');
     el.title = '開いている図がありません';
+    applyStatusBadge(el, '前回保存版', 0, 'ok');
     return null;
   }
   var v = LD.verdict(p.before, p.now, p.has);
-  el.textContent = LD.chipText(p.before, p.now, p.has);
+  // 変わった行数 (増 + 減) を件数として出す。同じなら 0 件なので出ない。
+  var _ldText = LD.chipText(p.before, p.now, p.has);
+  var _ldN = 0;
+  if (v !== 'none' && v !== 'same') {
+    var _m = _ldText.match(/[0-9]+/g) || [];
+    _ldN = _m.reduce(function(a, b) { return a + parseInt(b, 10); }, 0) || 1;
+  }
+  applyStatusBadge(el, '前回保存版', _ldN, v === 'shrink' ? 'bad' : 'warn');
   el.setAttribute('data-livediff', v);
   el.classList.toggle('has-open', v === 'changed' || v === 'shrink');
   el.classList.toggle('livediff-warn', v === 'shrink');
@@ -8570,9 +8606,10 @@ function renderRequestBadge() {
   var RB = window.MA.requestBadge;
   var btn = document.getElementById('status-requests');
   if (!RB || !btn) return;
-  btn.textContent = RB.badgeText(_rqSum);
   btn.classList.toggle('has-open', RB.isActive(_rqSum));
   btn.setAttribute('data-tone', RB.tone(_rqSum));
+  applyStatusBadge(btn, '継続依頼', _rqSum ? _rqSum.open : null,
+    RB.tone(_rqSum) === 'stalled' ? 'bad' : 'warn');
   btn.setAttribute('data-open', _rqSum ? String(_rqSum.open) : '');
   btn.setAttribute('data-worst', _rqSum ? String(_rqSum.worst) : '');
   btn.title = RB.titleText(_rqRows, _rqSum);
@@ -8662,9 +8699,10 @@ function renderRenameBadge() {
   var RB = window.MA.renameBadge;
   var btn = document.getElementById('status-rename');
   if (!RB || !btn) return;
-  btn.textContent = RB.badgeText(_rbSum);
   btn.classList.toggle('has-open', RB.isActive(_rbSum));
   btn.setAttribute('data-tone', RB.tone(_rbSum));
+  // 残りが無ければ (統一済み) 出さない。残っている組の数だけを出す。
+  applyStatusBadge(btn, '統一', _rbSum ? _rbSum.remaining : null, 'warn');
   btn.setAttribute('data-pairs', _rbSum ? String(_rbSum.pairs) : '');
   btn.setAttribute('data-pending', _rbSum ? String(_rbSum.pending) : '');
   btn.setAttribute('data-remaining', _rbSum ? String(_rbSum.remaining) : '');
@@ -23327,8 +23365,8 @@ function renderConsistencyBadge() {
   var result = ck.check(docs);
   result.labelPos = _labelOddRows(docs);
   var total = result.count + result.labelPos.length;
-  btn.textContent = ck.badgeLabel({ count: total });
   btn.className = total > 0 ? 'has-warning' : '';
+  applyStatusBadge(btn, '整合', total, 'warn');
   btn.setAttribute('data-label-pos', String(result.labelPos.length));
   btn.title = total > 0
     ? ('命名 ' + result.naming.length + ' / 未使用 ' + result.unused.length
@@ -23485,9 +23523,9 @@ function renderEventSyncBadge() {
   var es = window.MA.eventSync;
   if (!btn || !es) return null;
   var result = es.build(_consistencyDocs());
-  btn.textContent = es.badgeLabel(result);
   var n = result.counts.missing + result.counts.noClass;
   btn.className = n > 0 ? 'has-warning' : '';
+  applyStatusBadge(btn, 'イベント', n, 'warn');
   btn.title = n > 0
     ? ('state の遷移イベント ' + result.total + ' 種 — 欠落 ' + result.counts.missing
        + ' / クラス無し ' + result.counts.noClass)

@@ -16,18 +16,22 @@ window.MA.autosaveStatus = (function() {
   //   rel        … 'たった今' のような相対時刻の文字列
   //   activeName … いま開いている図の名前 (書けなかったときに名指しする)
   // 返り値 { text, title, pending } … pending は「返事を待っている」= 押せば進む
-  function describe(meta, last, rel, activeName) {
+  // clock … '13:31' のような時刻。design 9c: 保存状態は
+  // 「13:31 に自動保存 · 変更なし」のように 1 行に短くまとめる
+  // (「自動保存: 13:31:04」のような機械的な形にしない)。
+  function describe(meta, last, rel, activeName, clock) {
     if (!meta) return { text: '', title: '', pending: false };
     var name = activeName ? String(activeName) : '';
+    var saved = clock ? (String(clock) + ' に自動保存') : rel;
     var when = '最終保存: ' + meta.lastSavedAt
       + ' (' + String(meta.lastSavedType || '').replace('plantuml-', '') + ')';
 
     if (!last || last.where === 'local') {
-      return { text: '💾 ' + rel, title: when, pending: false };
+      return { text: '💾 ' + saved, title: when, pending: false };
     }
     if (last.where === 'file') {
       var f = last.fileName ? last.fileName + '.puml' : 'ファイル';
-      return { text: '💾 ' + rel + ' · ' + f, title: when + ' → ' + f + ' に書きました', pending: false };
+      return { text: '💾 ' + saved + ' · ' + f, title: when + ' → ' + f + ' に書きました', pending: false };
     }
     if (last.where === 'blocked') {
       var b = last.fileName ? last.fileName + '.puml' : 'ファイル';
@@ -41,7 +45,7 @@ window.MA.autosaveStatus = (function() {
     var target = name ? name + '.puml' : 'ファイル';
     if (last.reason === 'unchanged') {
       // 開いたときのまま。ディスクは既にその内容なので、書いていないのは正しい。
-      return { text: '💾 ' + target + ' は開いたときのまま', title: '本文を変えていないので書き直していません', pending: false };
+      return { text: '💾 ' + saved + ' · 変更なし', title: when + ' / ' + target + ' は開いたときのままです (本文を変えていないので書き直していません)', pending: false };
     }
     if (last.reason === 'ask') {
       return {

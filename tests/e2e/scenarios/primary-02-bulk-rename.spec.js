@@ -355,7 +355,9 @@ test('手順2 下端の統一バッジが、置換の残りを開かずに言う
   await page.waitForSelector('#preview-svg');
   const badge = page.locator('#status-rename');
   await expect(badge).toHaveAttribute('data-tone', 'done', { timeout: 15000 });
-  await expect(badge).toHaveText('統一 済 SpiDrv→Spi_Driver');
+  // design 9c (BLK-human-20260923-1602): 残り 0 件の項目は下端に出さない
+  // (出ていない = 済んでいる)。どの組が済んだかは data 属性と title に残る。
+  await expect(badge).toBeHidden();
   // BLK-primary-20260917-0123-friction: どの組が済んだかも開かずに読める (clicks=0)。
   await expect(badge).toHaveAttribute('data-pair-states', 'SpiDrv→Spi_Driver=done');
   expect(await badge.getAttribute('title')).toContain('SpiDrv → Spi_Driver : 適用済み');
