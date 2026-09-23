@@ -1,0 +1,5 @@
+# corpus-roundtrip.test.js が赤にせず数だけ数える枚 (BLK-human-20260923-1500)。
+# 1 行 1 ファイル、PUA_CORPUS_DIR からの相対パス (例: corpus/seq-05-autonumber-format.puml)。
+# 足せるのはこの一覧を作った回だけ。以後の builder は足してはならず、減らす方向のみ。
+# 足すときは対応する migrator の BLK 番号を # で添える。
+# 初回実装 (2026-09-23) の時点で往復に失敗する枚は無かったので、この一覧は空で始まる。
