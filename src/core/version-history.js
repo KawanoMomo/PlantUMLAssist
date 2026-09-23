@@ -59,6 +59,7 @@ window.MA.versionHistory = (function() {
         kind: kindOf(v.head),
         head: _s(v.head),
         lines: typeof v.lines === 'number' ? v.lines : null,
+        hash: _s(v.hash),
       });
     }
     return out;
@@ -178,41 +179,44 @@ window.MA.versionHistory = (function() {
     return out;
   }
 
-  // 保存先の一覧は、庫 (提出物) と札を読み終えた時点で丸ごと描き直す。その前に
-  // 「履歴 N」を押して開いた版の一覧が描き直しで黙って閉じないよう、描き直す直前に
-  // 開いていた図名を控え (openListNames)、描き直した一覧の同じ図の「履歴」で開き直す
-  // (reopenLists)。図名は引用符や括弧を含みうるので selector に埋めず属性で比べる。
-  function openListNames(root) {
+  // ── 往復 (BLK-owner-20260923-2312-prune) ─────────────────────────────────
+  // 「この図の履歴」は保存した版を新しい順に並べ、前の版と同じ中身に戻った版へ
+  // 「往復」の印を付ける (⟲ 変遷が持っていた印を、保存した版の一覧でも落とさない)。
+  // rows は新しい順。中身の一致は server が添える hash で見る (本文は運ばない)。
+  // すぐ前の版と同じ中身 (中身の変わらない保存) は往復と呼ばない — 間に別の中身を
+  // 挟んでから戻ったものだけに印を付ける。印の付いた行には、同じ中身だった版の
+  // 見出し (revisitOf) を持たせる。
+  function markRevisits(rows) {
+    var list = Array.isArray(rows) ? rows : [];
     var out = [];
-    if (!root || !root.querySelectorAll) return out;
-    var els = root.querySelectorAll('[data-version-list]');
-    for (var i = 0; i < els.length; i++) {
-      var n = els[i].getAttribute('data-version-list');
-      if (n && out.indexOf(n) < 0) out.push(n);
+    for (var i = 0; i < list.length; i++) {
+      var r = list[i] || {};
+      var o = {};
+      Object.keys(r).forEach(function(k) { o[k] = r[k]; });
+      o.revisit = false;
+      o.revisitOf = '';
+      if (r.hash) {
+        var between = false;
+        for (var j = i + 1; j < list.length; j++) {
+          var older = list[j] || {};
+          if (!older.hash) continue;
+          if (older.hash !== r.hash) { between = true; continue; }
+          if (between) { o.revisit = true; o.revisitOf = older.label || older.stamp || ''; }
+          break;
+        }
+      }
+      out.push(o);
     }
     return out;
   }
 
-  function reopenLists(root, names, toggle) {
-    if (!root || !root.querySelectorAll || !names || !names.length || typeof toggle !== 'function') return 0;
-    var already = openListNames(root);
-    var btns = root.querySelectorAll('[data-versions-name]');
-    var done = 0;
-    for (var i = 0; i < names.length; i++) {
-      if (already.indexOf(names[i]) >= 0) continue;
-      for (var j = 0; j < btns.length; j++) {
-        if (btns[j].getAttribute('data-versions-name') !== names[i]) continue;
-        toggle(names[i], btns[j]);
-        done++;
-        break;
-      }
-    }
-    return done;
+  function revisitCount(rows) {
+    return markRevisits(rows).filter(function(r) { return r.revisit; }).length;
   }
 
   return {
-    openListNames: openListNames,
-    reopenLists: reopenLists,
+    markRevisits: markRevisits,
+    revisitCount: revisitCount,
     stampToDate: stampToDate,
     label: label,
     kindOf: kindOf,

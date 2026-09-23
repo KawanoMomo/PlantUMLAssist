@@ -2964,6 +2964,15 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
   font-size: 11px;
 }
 .vt-row.vt-revisit { border-color: var(--accent-orange); }
+/* BLK-owner-20260923-2312-prune: 保存した版の行 (開く・比較・この版に戻す) も「この図の履歴」の見た目で並べる */
+#vt-body .folder-version-row { display: flex; align-items: center; gap: 8px; }
+#vt-body .folder-version-row button {
+  background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border);
+  border-radius: 4px; padding: 3px 10px; font-family: var(--font-sans); font-size: 12px; cursor: pointer;
+}
+#vt-body .folder-version-row button:hover { border-color: var(--accent); }
+#vt-body .folder-version { flex: 1; text-align: left; font-family: var(--font-mono); }
+#vt-body .folder-version-shrink, #vt-body .folder-version-status { font-size: 12px; margin: 0 0 8px; color: var(--text-secondary); }
 .vt-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .vt-rev { font-family: var(--font-mono); color: var(--accent); }
 .vt-at { color: var(--text-secondary); font-family: var(--font-mono); }
@@ -9271,7 +9280,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <div id="vt-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="vt-modal-content">
     <div id="vt-head">
-      <strong>変遷履歴</strong>
+      <strong>この図の履歴</strong>
       <select id="vt-file" aria-label="図を選ぶ"></select>
       <span id="vt-summary"></span>
       <span id="vt-tools">

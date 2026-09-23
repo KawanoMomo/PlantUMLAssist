@@ -119,6 +119,17 @@ test('図種が変わると図名も回された先に合わせ、どこへ保�
     .filter({ hasText: 'diagram1_state' })).toHaveCount(1);
 });
 
+// BLK-owner-20260923-2312-prune: 過去の版を見る画面は「この図の履歴」1 つ。保存先一覧の
+// [履歴 N] は一覧の中に版を広げず、同じ「この図の履歴」を開く (右クリック・⟲ 変遷と同じ画面)。
+async function openHistoryOf(page, name) {
+  await openFolder(page);
+  await expect(page.locator('#folder-panel [data-versions-name="' + name + '"]')).toHaveText(/履歴 \d/);
+  await page.locator('#folder-panel [data-versions-name="' + name + '"]').click();
+  await expect(page.locator('#vt-modal')).toBeVisible();
+  await expect(page.locator('#vt-modal-content strong')).toHaveText('この図の履歴');
+  return page.locator('#vt-body [data-version-list="' + name + '"] .folder-version');
+}
+
 test('同じ図種の上書きは今までどおり。前の中身は「履歴」に残る', async ({ page }) => {
   await putFile(page, 'gpio_state', STATE);
   await page.waitForTimeout(1100);   // server の刻印は秒。版が同じ秒に潰れないように
@@ -130,35 +141,23 @@ test('同じ図種の上書きは今までどおり。前の中身は「履歴�
   }, DIR);
   expect(files).toEqual(['gpio_state']);
 
-  // 全体実行で server が混んでいる回は、起動時の庫 (提出物)・札の読み込みが「履歴」を押した後に
-  // 届き、一覧がまるごと描き直される。その回を作ってから開き直す (BLK-builder-20260924-0752-2b-red)。
-  await page.route(/\/(vault|tickets)\?/, async (r) => {
-    await new Promise((res) => setTimeout(res, 2500));
-    await r.continue();
-  });
-  await page.reload();
-  await page.waitForSelector('html[data-app-ready="1"]');
-
   await openFolder(page);
   await expect(page.locator('#folder-panel [data-versions-name="gpio_state"]')).toHaveText('履歴 1');
-  await page.locator('#folder-panel [data-versions-name="gpio_state"]').click();
-  const list = page.locator('#folder-panel [data-version-list="gpio_state"] .folder-version');
+  const list = await openHistoryOf(page, 'gpio_state');
   await expect(list).toHaveCount(1);
   await expect(list.nth(0)).toContainText('状態遷移');
-
-  // 遅れて届いた読み込みで一覧が描き直されても、開いた履歴は閉じない。
-  await page.waitForTimeout(3500);
-  await expect(list).toHaveCount(1);
-  await expect(list.nth(0)).toContainText('状態遷移');
+  await expect(page.locator('#vt-summary')).toContainText('保存した版 1');
+  // 保存先一覧の中には版を広げない (過去の版を見る画面は 1 つ)。
+  await expect(page.locator('#folder-panel .folder-version')).toHaveCount(0);
 });
 
 test('版を開くと、今の図を上書きせずに別タブで開く', async ({ page }) => {
   await putFile(page, 'gpio_state', STATE);
   await page.waitForTimeout(1100);
   await putFile(page, 'gpio_state', STATE2);
-  await openFolder(page);
-  await page.locator('#folder-panel [data-versions-name="gpio_state"]').click();
-  await page.locator('#folder-panel [data-version-list="gpio_state"] .folder-version').nth(0).click();
+  const list = await openHistoryOf(page, 'gpio_state');
+  await list.nth(0).click();
+  await expect(page.locator('#vt-modal')).toBeHidden();
 
   await expect.poll(async () => {
     return await page.evaluate(() => {
@@ -172,6 +171,44 @@ test('版を開くと、今の図を上書きせずに別タブで開く', async
     return r.ok ? await r.text() : '';
   }, DIR);
   expect(now).toContain('IDLE --> ERROR');
+});
+
+test('この図の履歴の「比較」で、版を今の図の右に並べる (今の図はそのまま)', async ({ page }) => {
+  await putFile(page, 'gpio_state', STATE);
+  await page.waitForTimeout(1100);
+  await putFile(page, 'gpio_state', STATE2);
+  await openHistoryOf(page, 'gpio_state');
+  await page.locator('#vt-body [data-version-compare][data-version-of="gpio_state"]').first().click();
+  await expect(page.locator('#vt-modal')).toBeHidden();
+
+  // 編集しているのは今の図 (上書きされていない)。右には版が並ぶ。
+  await expect.poll(async () => page.evaluate(() => {
+    const d = window.MA.workspace.getActive();
+    return d ? d.name + '|' + d.dsl : '';
+  })).toContain('gpio_state|');
+  expect(await page.evaluate(() => window.MA.workspace.getActive().dsl)).toContain('IDLE --> ERROR');
+  await expect(page.locator('#compare-pane')).toBeVisible();
+  await expect(page.locator('#compare-select option:checked')).toContainText('gpio_state@');
+});
+
+test('前の版と同じ中身に戻った版には、この図の履歴で「往復」の印が付く', async ({ page }) => {
+  await putFile(page, 'gpio_state', STATE);
+  await page.waitForTimeout(1100);
+  await putFile(page, 'gpio_state', STATE2);
+  await page.waitForTimeout(1100);
+  await putFile(page, 'gpio_state', STATE);
+  await page.waitForTimeout(1100);
+  await putFile(page, 'gpio_state', STATE2);
+  // 控え (新しい順): STATE ← STATE2 ← STATE。いちばん新しい控えが往復。
+  const list = await openHistoryOf(page, 'gpio_state');
+  await expect(list).toHaveCount(3);
+  const rows = page.locator('#vt-body .vt-row');
+  await expect(rows.nth(0)).toHaveAttribute('data-vt-revisit', '1');
+  await expect(rows.nth(0).locator('.vt-badge')).toHaveText('往復');
+  await expect(page.locator('#vt-summary')).toContainText('往復 1');
+  await page.locator('#vt-only-revisit').check();
+  await expect(page.locator('#vt-body .vt-row')).toHaveCount(1);
+  await page.locator('#vt-only-revisit').uncheck();
 });
 
 // BLK-junior-20260909-0403: ユースケース図は自分にも先輩にも手本が 1 枚も無く、

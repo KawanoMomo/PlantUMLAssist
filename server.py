@@ -129,6 +129,13 @@ def write_source_file(path, text, encoding, bom):
     return True, str(p)
 
 
+def _version_hash(text):
+    """版の中身の一致を見るための sha1 (改行コード・行末の空白・末尾の空行は無視)。"""
+    t = str(text or '').replace('\r\n', '\n').replace('\r', '\n')
+    t = '\n'.join(line.rstrip(' \t') for line in t.split('\n')).rstrip('\n')
+    return hashlib.sha1(t.encode('utf-8')).hexdigest()
+
+
 def _version_head(text):
     """版の中身から「何の図だったか」を 1 行で言う。
 
@@ -1991,6 +1998,9 @@ class Handler(BaseHTTPRequestHandler):
             # 図種が変わって消えた版を見分けるのに要るのは最初の宣言行だけ。
             # 本文全部を一覧に載せると、20 版で数百 KB を毎回運ぶことになる。
             item['head'] = _version_head(text)
+            # BLK-owner-20260923-2312-prune: 「この図の履歴」は前の版に戻った「往復」に印を付ける。
+            # 本文を運ばずに中身の一致を言えるよう、改行・行末の空白・末尾の空行を無視した中身の sha1 を添える。
+            item['hash'] = _version_hash(text)
             versions.append(item)
         self._send_json(200, {'name': dt, 'dir': str(save_dir), 'versions': versions})
 

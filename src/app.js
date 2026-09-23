@@ -3659,7 +3659,7 @@ function initCommandPalette() {
         if (panel && panel.classList.contains('open')) { renderInboxPanel(); renderInboxBadge(); return; }
         clickById('btn-tab-inbox');
       } },
-      { id: 'tab-versions', title: 'この図の変遷を見る / Version timeline', hint: 'Tabs', keywords: ['version', 'timeline', 'へんせん', 'りれき'], button: 'btn-tab-versions', run: function() { clickById('btn-tab-versions'); } },
+      { id: 'tab-versions', title: 'この図の履歴を見る (保存した版・往復・戻す) / Version history', hint: 'Tabs', keywords: ['version', 'timeline', 'へんせん', 'りれき'], button: 'btn-tab-versions', run: function() { clickById('btn-tab-versions'); } },
       { id: 'tab-lineage', title: 'この図の継承元を見る / Lineage', hint: 'Tabs', keywords: ['lineage', 'parent', 'けいしょう', 'もと', 'とりこみ'], button: 'btn-tab-lineage', run: function() { clickById('btn-tab-lineage'); } },
       { id: 'tab-board', title: '変更サマリを開く / Change board', hint: 'Tabs', keywords: ['board', 'summary', 'へんこう', 'さまり'], button: 'btn-tab-board', run: function() { clickById('btn-tab-board'); } },
       // BLK-owner-20260918-0529-prune: 「見比べる」5 つのうち、下端ステータスと
@@ -6856,6 +6856,7 @@ function setAuditBoardView(view) {
 // 往復しても毎回「変わりました」としか出ず、往復そのものが見えなかった。
 // ここでは図ごとに積んだ版を新しい順に並べ、前の版に戻った版へ印を付ける。
 var _vtFile = '';
+var _vtSavedGen = 0;
 
 function _vtCurrentName() {
   try {
@@ -6890,6 +6891,148 @@ function renderVersionTimeline() {
 
   var onlyEl = document.getElementById('vt-only-revisit');
   var only = !!(onlyEl && onlyEl.checked);
+  // BLK-owner-20260923-2312-prune: 保存先がフォルダなら、行は保存した版 (server の控え)。
+  // 版がまだ 1 つも無い図と、フォルダに保存していないときは、このブラウザで積んだ変遷を出す。
+  var api = _versionsApi;
+  var gen = ++_vtSavedGen;
+  if (name && api && _fiFolderMode()) {
+    body.innerHTML = '<div class="vt-empty">読み込み中…</div>';
+    Promise.all([api.load(name), api.lineCount(name)]).then(function(got) {
+      if (gen !== _vtSavedGen) return;
+      var saved = got[0] || [];
+      if (!saved.length) { _renderVtTimelineRows(body, name, only); return; }
+      _renderVtSavedRows(body, sum, name, saved, got[1], only, api);
+    }, function() {
+      if (gen !== _vtSavedGen) return;
+      _renderVtTimelineRows(body, name, only);
+    });
+    return;
+  }
+  _renderVtTimelineRows(body, name, only);
+}
+
+// 保存した版の行。各行に「開く」(別タブ)・「比較」(今の図の右に並べる)・「この版に戻す」、
+// 前の版と同じ中身に戻った版には「往復」、中身が減った保存には戻す先を名指しする警告を出す
+// (⟲ 変遷と保存先一覧の [履歴 N] が別々に持っていたものを 1 つの一覧に寄せた)。
+function _renderVtSavedRows(body, sum, name, saved, nowLines, only, api) {
+  var VH = window.MA.versionHistory;
+  var rows = VH.markRevisits(saved);
+  var revisits = rows.filter(function(r) { return r.revisit; }).length;
+  if (sum) {
+    sum.textContent = name + ': 保存した版 ' + rows.length
+      + (revisits ? '（往復 ' + revisits + '）' : '');
+  }
+  // 「この図の履歴を消す」はこのブラウザで積んだ変遷だけを消す。保存した版は消さないので出さない。
+  var forget = document.getElementById('vt-forget');
+  if (forget) forget.hidden = true;
+  body.textContent = '';
+  var box = document.createElement('div');
+  box.className = 'folder-version-list vt-saved';
+  box.setAttribute('data-version-list', name);
+  function act(fn) {
+    return function(ev) {
+      ev.stopPropagation();
+      toggleVersionTimeline(false);
+      fn();
+    };
+  }
+  // BLK-primary-20260916-0100: 空洞化を直す側は、同じ見た目の一覧から「どれに戻せば直るか」を
+  // 当てられない。行数で分かるので、戻す先を名指しして先頭に出す。減っていなければそう言う。
+  var notice = VH.shrinkNotice ? VH.shrinkNotice(name, rows, nowLines) : null;
+  if (notice) {
+    var nb = document.createElement('div');
+    nb.className = 'folder-version-shrink';
+    nb.setAttribute('data-version-shrink', name);
+    var nt = document.createElement('div');
+    nt.className = 'folder-version-shrink-text';
+    nt.textContent = notice.text;
+    nt.title = notice.detail;
+    nb.appendChild(nt);
+    var nbtn = document.createElement('button');
+    nbtn.type = 'button';
+    nbtn.className = 'folder-version-shrink-restore';
+    nbtn.setAttribute('data-version-shrink-restore', notice.stamp);
+    nbtn.textContent = notice.restoreLabel;
+    nbtn.title = notice.detail;
+    nbtn.addEventListener('click', act(function() { api.restore(name, notice.stamp); }));
+    nb.appendChild(nbtn);
+    box.appendChild(nb);
+  } else {
+    var st = VH.statusNotice ? VH.statusNotice(name, rows, nowLines) : null;
+    if (st) {
+      var sb = document.createElement('div');
+      sb.className = 'folder-version-status';
+      sb.setAttribute('data-version-status', name);
+      sb.textContent = st.text;
+      sb.title = st.detail;
+      box.appendChild(sb);
+    }
+  }
+  var shown = only ? rows.filter(function(r) { return r.revisit; }) : rows;
+  if (!shown.length) {
+    var none = document.createElement('div');
+    none.className = 'vt-empty';
+    none.id = 'vt-empty';
+    none.textContent = '往復した版はありません';
+    box.appendChild(none);
+  }
+  shown.forEach(function(r) {
+    var line = document.createElement('div');
+    line.className = 'folder-version-row vt-row' + (r.revisit ? ' vt-revisit' : '');
+    line.setAttribute('data-vt-revisit', r.revisit ? '1' : '0');
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'folder-version';
+    if (notice && r.stamp === notice.stamp) b.setAttribute('data-version-best', '1');
+    b.setAttribute('data-version-stamp', r.stamp);
+    b.setAttribute('data-version-of', name);
+    b.textContent = r.label + (r.kind ? '  ' + r.kind : '')
+      + (r.lines != null ? '  ' + r.lines + ' 行' : '');
+    b.title = r.head || 'この版を別のタブで開く（今の図は上書きしません）';
+    b.addEventListener('click', act(function() { api.open(name, r.stamp); }));
+    line.appendChild(b);
+    if (r.revisit) {
+      var badge = document.createElement('span');
+      badge.className = 'vt-badge';
+      badge.textContent = '往復';
+      badge.title = r.revisitOf + ' の版と同じ中身に戻っています';
+      line.appendChild(badge);
+    }
+    var cb = document.createElement('button');
+    cb.type = 'button';
+    cb.className = 'folder-version-compare';
+    cb.setAttribute('data-version-compare', r.stamp);
+    cb.setAttribute('data-version-of', name);
+    cb.textContent = '比較';
+    cb.title = 'この版を今の図の右に並べる（今の図は上書きしません）';
+    cb.addEventListener('click', act(function() { api.compare(name, r.stamp); }));
+    line.appendChild(cb);
+    var rb = document.createElement('button');
+    rb.type = 'button';
+    rb.className = 'folder-version-restore';
+    rb.setAttribute('data-version-restore', r.stamp);
+    rb.setAttribute('data-version-of', name);
+    rb.textContent = VH.restoreLabel();
+    rb.title = VH.restoreTitle(name, r.stamp);
+    rb.addEventListener('click', act(function() { api.restore(name, r.stamp); }));
+    line.appendChild(rb);
+    box.appendChild(line);
+    if (r.revisit) {
+      var why = document.createElement('div');
+      why.className = 'vt-why';
+      why.textContent = r.revisitOf + ' の版と同じ中身に戻っています';
+      box.appendChild(why);
+    }
+  });
+  body.appendChild(box);
+}
+
+// このブラウザで保存のたびに積んだ変遷 (フォルダに保存していないとき・版がまだ無いとき)。
+function _renderVtTimelineRows(body, name, only) {
+  var VT = window.MA.versionTimeline;
+  var forget = document.getElementById('vt-forget');
+  if (forget) forget.hidden = false;
+  var esc = window.MA.htmlUtils.escHtml;
   var rows = name ? VT.rows(name) : [];
   if (only) rows = rows.filter(function(r) { return r.revisit; });
 
@@ -6941,11 +7084,12 @@ function renderVersionBadge() {
     : 'この図が保存のたびにどう変わったかを通しで並べる。前の版に戻った「往復」には印が付く';
 }
 
-function toggleVersionTimeline(open) {
+// name: 保存先一覧の [履歴 N] から開くときの図名 (開いている図でなくてもその図の履歴を出す)。
+function toggleVersionTimeline(open, name) {
   var modal = document.getElementById('vt-modal');
   if (!modal) return;
   if (open) {
-    _vtFile = _vtCurrentName() || _vtFile;
+    _vtFile = name || _vtCurrentName() || _vtFile;
     renderVersionTimeline();
   }
   modal.style.display = open ? 'flex' : 'none';
@@ -12532,17 +12676,6 @@ function setupTabs() {
     window.MA.workspace.listFolder(dir).then(function(res) {
       if (myGen !== _folderRenderGen) return;
       var entries = (res && res.entries) || [];
-      // BLK-builder-20260924-0752-2b-red: 庫・札を読み終えた描き直しは、その前に「履歴 N」を
-      // 押して開いた版の一覧を黙って閉じていた (読み込みが遅い回ほど押した後に来る)。
-      // 開いていた図の一覧は、描き直した行の下にもう一度開く。
-      var VHk = window.MA.versionHistory;
-      var keepLists = VHk && VHk.openListNames ? VHk.openListNames(panel) : [];
-      if (keepLists.length) {
-        Promise.resolve().then(function() {
-          if (myGen !== _folderRenderGen) return;
-          VHk.reopenLists(panel, keepLists, toggleVersionList);
-        });
-      }
       panel.textContent = '';
       // BLK-human-20260917-0901: 保存フォルダの外にある手元の .puml を開く入口を一覧の頭に置く。
       var openHead = document.createElement('button');
@@ -14415,108 +14548,13 @@ function setupTabs() {
     b.className = 'folder-versions';
     b.setAttribute('data-versions-name', name);
     b.textContent = label;
-    b.title = 'この名前で上書きされる前の中身。図種を変えて保存し直した前の図もここに残っています';
+    b.title = 'この図の履歴を開く (この名前で上書きされる前の中身。図種を変えて保存し直した前の図もここに残っています)';
     b.addEventListener('click', function(ev) {
       ev.stopPropagation();
-      toggleVersionList(name, b);
+      // BLK-owner-20260923-2312-prune: 版の一覧は一覧の中に開かず、「この図の履歴」1 つに寄せる。
+      toggleVersionTimeline(true, name);
     });
     return b;
-  }
-
-  // 版の一覧を、押した行のすぐ下に開く / 閉じる。パネルを閉じないので、
-  // 「どの版がその図だったか」を見比べてから 1 回で開ける。
-  function toggleVersionList(name, btn) {
-    var VH = window.MA.versionHistory;
-    var host = btn.parentNode || panel;
-    var open = panel.querySelector('[data-version-list="' + name + '"]');
-    if (open) { open.parentNode.removeChild(open); return; }
-    var box = document.createElement('div');
-    box.className = 'folder-version-list';
-    box.setAttribute('data-version-list', name);
-    box.textContent = '読み込み中…';
-    if (host.nextSibling) host.parentNode.insertBefore(box, host.nextSibling);
-    else host.parentNode.appendChild(box);
-    Promise.all([loadVersions(name), _folderLineCount(name)]).then(function(got) {
-      var rows = got[0];
-      var nowLines = got[1];
-      box.textContent = '';
-      if (!rows.length) {
-        box.textContent = '控えてある版がありません';
-        return;
-      }
-      // BLK-primary-20260916-0100: 空洞化を直す側は、20 行ぜんぶ同じ見た目の
-      // 一覧から「どれに戻せば直るか」を当てられない (新しい方はもう空洞化の後)。
-      // 行数で機械的に分かるので、戻す先を名指しして先頭に出す。
-      var notice = VH.shrinkNotice ? VH.shrinkNotice(name, rows, nowLines) : null;
-      if (notice) {
-        var nb = document.createElement('div');
-        nb.className = 'folder-version-shrink';
-        nb.setAttribute('data-version-shrink', name);
-        var nt = document.createElement('div');
-        nt.className = 'folder-version-shrink-text';
-        nt.textContent = notice.text;
-        nt.title = notice.detail;
-        nb.appendChild(nt);
-        var nbtn = document.createElement('button');
-        nbtn.type = 'button';
-        nbtn.className = 'folder-version-shrink-restore';
-        nbtn.setAttribute('data-version-shrink-restore', notice.stamp);
-        nbtn.textContent = notice.restoreLabel;
-        nbtn.title = notice.detail;
-        nbtn.addEventListener('click', function(ev) {
-          ev.stopPropagation();
-          restoreVersionInto(name, notice.stamp);
-        });
-        nb.appendChild(nbtn);
-        box.appendChild(nb);
-      } else {
-        // 減っていないなら減っていないと言う (BLK-primary-20260916-0100 差し戻し 1 回目)。
-        // 何も出さないと「減っていない」と「機能が動いていない」が同じ見た目になる。
-        var st = VH.statusNotice ? VH.statusNotice(name, rows, nowLines) : null;
-        if (st) {
-          var sb = document.createElement('div');
-          sb.className = 'folder-version-status';
-          sb.setAttribute('data-version-status', name);
-          sb.textContent = st.text;
-          sb.title = st.detail;
-          box.appendChild(sb);
-        }
-      }
-      rows.forEach(function(r) {
-        var b = document.createElement('button');
-        b.type = 'button';
-        b.className = 'folder-version';
-        if (notice && r.stamp === notice.stamp) b.setAttribute('data-version-best', '1');
-        b.setAttribute('data-version-stamp', r.stamp);
-        b.setAttribute('data-version-of', name);
-        b.textContent = r.label + (r.kind ? '  ' + r.kind : '')
-          + (r.lines != null ? '  ' + r.lines + ' 行' : '');
-        b.title = r.head || 'この版を別のタブで開く（今の図は上書きしません）';
-        b.addEventListener('click', function(ev) {
-          ev.stopPropagation();
-          openVersion(name, r.stamp);
-        });
-        // 版と「戻す」は 1 行に並べる (どの版に戻すのかを押す前に確かめられるように)。
-        var line = document.createElement('div');
-        line.className = 'folder-version-row';
-        line.appendChild(b);
-        // BLK-primary-20260913-0306-friction: 別タブで開いても、壊れた図を直すには
-        // 開いた版を全文選択して打ち直すしかなかった。その 1 手順を 1 クリックにする。
-        var rb = document.createElement('button');
-        rb.type = 'button';
-        rb.className = 'folder-version-restore';
-        rb.setAttribute('data-version-restore', r.stamp);
-        rb.setAttribute('data-version-of', name);
-        rb.textContent = VH.restoreLabel();
-        rb.title = VH.restoreTitle(name, r.stamp);
-        rb.addEventListener('click', function(ev) {
-          ev.stopPropagation();
-          restoreVersionInto(name, r.stamp);
-        });
-        line.appendChild(rb);
-        box.appendChild(line);
-      });
-    }, function() { box.textContent = '版の一覧を読めませんでした'; });
   }
 
   function loadVersions(name) {
@@ -14598,6 +14636,57 @@ function setupTabs() {
       }, function() { closePanel(); });
     });
   }
+
+  // 版を今の図の右に並べる (BLK-owner-20260923-2312-prune)。版は刻印付きの別タブとして
+  // 開き (今の図を過去の中身で塗り潰さない)、今の図に戻ってから並べて比較の参照に据える。
+  function compareVersion(name, stamp) {
+    var VH = window.MA.versionHistory;
+    var WS = window.MA.workspace;
+    var dir = _wsFileDir();
+    var url = '/autosave-versions?dir=' + encodeURIComponent(dir)
+      + '&type=' + encodeURIComponent(name) + '&stamp=' + encodeURIComponent(stamp);
+    return window.fetch(url).then(function(r) { return r.ok ? r.text() : null; }).then(function(text) {
+      if (text == null) {
+        if (window.MA.toast) window.MA.toast.show('この版を読めませんでした');
+        return false;
+      }
+      saveActiveDoc();
+      var active = WS.getActive();
+      var ready = (active && active.name === name) ? Promise.resolve(active)
+        : _ensureSavedKinds(dir).then(function() { return WS.loadFile(name, dir); }).then(function(cur) {
+          var base = cur == null ? text : cur;
+          openExistingFile({ name: name, dsl: base, diagramType: _folderOpenType(name, base) });
+          applyActiveDoc();
+          return WS.getActive();
+        });
+      return ready.then(function(baseDoc) {
+        if (!baseDoc) return false;
+        var ver = openExistingFile({
+          name: VH ? VH.openName(name, stamp) : (name + '@' + stamp),
+          dsl: text,
+          diagramType: baseDoc.diagramType,
+        });
+        WS.setActive(baseDoc.id);
+        applyActiveDoc();
+        _compareRefId = ver.id;
+        clearSeniorGit();
+        toggleSeniorPane(false);
+        toggleCompareView(true, 'ref');
+        if (window.MA.toast) {
+          window.MA.toast.show(name + ' の ' + (VH ? VH.label(stamp) : stamp)
+            + ' の版を右に並べました（今の図はそのままです）');
+        }
+        return true;
+      });
+    });
+  }
+  _versionsApi = {
+    load: loadVersions,
+    open: openVersion,
+    restore: restoreVersionInto,
+    compare: compareVersion,
+    lineCount: _folderLineCount,
+  };
 
   // 本体が消えて版だけ残っている図。junior の状態遷移図のように、
   // 同じ名前へ別の図を保存し続けて実体が無くなったものはここにだけ出る。
@@ -15676,6 +15765,9 @@ var openFromFolderByName = function() {};
 // 資料化のように、パネルの外で保存フォルダを書き換える操作から一覧を描き直すための口
 // (BLK-junior-20260908-2303-wish)。パネルを開いていなければ何もしない。
 var refreshFolderPanelNow = function() {};
+// 保存先の版 (server の _versions) を読む・開く・並べる・戻す道具。「この図の履歴」が使う
+// (BLK-owner-20260923-2312-prune)。保存先の一覧の結線 (setupTabs) で入る。
+var _versionsApi = null;
 var filterFolderPanelNow = function() {};
 // BLK-junior-20260915-2346: 直前に開いた図の名前 (新しい順)。Ctrl+K からも
 // 一覧を開かずに同じ図へ戻れるように、パネルの外へ読み口だけ出す。

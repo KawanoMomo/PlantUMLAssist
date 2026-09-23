@@ -893,8 +893,10 @@ test.describe('手順5.5 空洞化した図を、戻す先を探さずに戻す'
     // 一覧の行は横に長く、パネルは横にもスクロールする。[履歴] は行の右端にあるので
     // 押すとパネルが右へスクロールし、左端から始まる一覧は画面の外 (実測 x=-62) に出て
     // いた。「名指しが出ない」と差し戻された正体がこれなので、位置で押さえる。
+    // BLK-owner-20260923-2312-prune: 版の一覧は保存先一覧の中ではなく「この図の履歴」に出るので、
+    // その画面の枠の中にあることを見る。
     const where = await page.evaluate((n) => {
-      const panel = document.querySelector('#folder-panel');
+      const panel = document.querySelector('#vt-modal-content');
       const el = document.querySelector('.folder-version-shrink[data-version-shrink="' + n + '"]');
       if (!panel || !el) return null;
       const p = panel.getBoundingClientRect();
