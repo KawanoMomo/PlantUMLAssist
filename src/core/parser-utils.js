@@ -13,6 +13,7 @@ window.MA.parserUtils = (function() {
     var hasClassKw = false;
     var hasAbstractClassKw = false;
     var hasEnumKw = false;
+    var hasClassOnlyKw = false;
     var hasClassRelation = false;
     var hasStateKw = false;
     var hasActivityKw = false;
@@ -35,6 +36,7 @@ window.MA.parserUtils = (function() {
       if (/^(package|rectangle)\b.*\{/.test(t)) hasPackage = true;
       if (/^(class|interface|abstract|enum)\b/.test(t)) hasClassKw = true;
       if (/^abstract\s+class\s/.test(t)) hasAbstractClassKw = true;
+      if (/^(class|abstract|enum)\b/.test(t)) hasClassOnlyKw = true;
       if (/^enum\s/.test(t)) hasEnumKw = true;
       if (/\s(<\|--|--\|>|<\|\.\.|\.\.\|>|\*--|--\*|o--|--o)\s/.test(t)) hasClassRelation = true;
       if (/^state\b|^\[\*\]/.test(t)) hasStateKw = true;
@@ -82,6 +84,10 @@ window.MA.parserUtils = (function() {
     if (hasComponentKw) return 'plantuml-component';
     // 参加者の宣言が 1 つも無い図で component 要素だけが並ぶなら component。
     if (hasComponentElemKw && !hasParticipantSeqOnly && !hasActor) return 'plantuml-component';
+    // BLK-migrator-20260923-1909: `[部品]` 記法と component の要素語 (node / cloud / artifact …) があり、
+    // class にしか無い記法 (class / abstract / enum / 継承・集約線) が無ければ component。
+    // `interface` や `queue` / `collections` は component 図にも出るので、それだけで class / sequence にしない。
+    if (hasComponentBracket && hasComponentElemKw && !hasClassOnlyKw && !hasClassRelation) return 'plantuml-component';
     if (hasAbstractClassKw || hasEnumKw || hasClassRelation) return 'plantuml-class';
     if (hasClassKw) return 'plantuml-class';
     if (hasStateKw) return 'plantuml-state';
