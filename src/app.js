@@ -3402,7 +3402,6 @@ function init() {
   setupSeniorPane();
   setupPinPanel();
   setupPinInbox();
-  setupManualFindings();
   setupNameAudit();
   setupSubmitCheck();
   setupFamilyAudit();
@@ -3604,7 +3603,14 @@ function initCommandPalette() {
       { id: 'tab-audit-timeline', title: '監査履歴を開く / Audit timeline', hint: 'Tabs', keywords: ['audit', 'timeline', 'かんさ', 'りれき'], button: 'btn-tab-audit-timeline', run: function() { clickById('btn-tab-audit-timeline'); } },
       { id: 'tab-review', title: '基準の図と突き合わせる / Review desk', hint: 'Tabs', keywords: ['review', 'desk', 'きじゅん', 'つきあわせ'], button: 'btn-tab-review', run: function() { clickById('btn-tab-review'); } },
       { id: 'tab-inbox', title: '図をまたぐ指摘箱 / Pin inbox', hint: 'Tabs', keywords: ['inbox', 'pin', 'してきばこ'], button: 'btn-tab-inbox', run: function() { clickById('btn-tab-inbox'); } },
-      { id: 'tab-findings', title: '手動指摘の台帳 / Manual findings', hint: 'Tabs', keywords: ['findings', 'manual', 'してき', 'だいちょう'], button: 'btn-tab-findings', run: function() { clickById('btn-tab-findings'); } },
+      // 🔖 手動指摘のタブは 📥 指摘箱に畳んだ (BLK-owner-20260923-1409-prune)。
+      // 名前で引いた人を、出典「手で書いた」で絞った指摘箱へ連れていく。
+      { id: 'tab-findings', title: '手で書いた指摘 / Manual findings', hint: 'Tabs', keywords: ['findings', 'manual', 'してき', 'だいちょう'], button: 'btn-tab-inbox', run: function() {
+        _inboxSetSource('manual');
+        var panel = document.getElementById('inbox-panel');
+        if (panel && panel.classList.contains('open')) { renderInboxPanel(); renderInboxBadge(); return; }
+        clickById('btn-tab-inbox');
+      } },
       { id: 'tab-versions', title: 'この図の変遷を見る / Version timeline', hint: 'Tabs', keywords: ['version', 'timeline', 'へんせん', 'りれき'], button: 'btn-tab-versions', run: function() { clickById('btn-tab-versions'); } },
       { id: 'tab-lineage', title: 'この図の継承元を見る / Lineage', hint: 'Tabs', keywords: ['lineage', 'parent', 'けいしょう', 'もと', 'とりこみ'], button: 'btn-tab-lineage', run: function() { clickById('btn-tab-lineage'); } },
       { id: 'tab-board', title: '変更サマリを開く / Change board', hint: 'Tabs', keywords: ['board', 'summary', 'へんこう', 'さまり'], button: 'btn-tab-board', run: function() { clickById('btn-tab-board'); } },
@@ -29820,6 +29826,14 @@ function _inboxUnreadOnly() {
 function _inboxSetUnreadOnly(v) {
   try { window.localStorage.setItem('pua.pin-inbox.unread', v ? '1' : '0'); } catch (e) { /* 同上 */ }
 }
+// 出典の絞り込み (BLK-owner-20260923-1409-prune)。'' = 全部 / 'audit' = 監査が出した /
+// 'manual' = 手で書いた。🔖 手動指摘のタブをここに畳んだので、同じものはこの絞り込みで出す。
+function _inboxSource() {
+  try { return window.localStorage.getItem('pua.pin-inbox.source') || ''; } catch (e) { return ''; }
+}
+function _inboxSetSource(v) {
+  try { window.localStorage.setItem('pua.pin-inbox.source', String(v == null ? '' : v)); } catch (e) { /* 同上 */ }
+}
 
 // ── 着手状況の追跡 (BLK-reviewer-20260908-1603-wish) ───────────────────────
 // 受信箱は「まだ直っていない指摘」を並べるが、並ぶのは指摘であって着手状況ではない。
@@ -29856,7 +29870,10 @@ function _inboxTrackProgress() {
   var PP = window.MA.pinProgress;
   _inboxProgress = null;
   if (!PP || !_inboxItems) return null;
-  var res = PP.observe(_inboxItems, _inboxDocs || [], _progressMemo(), {
+  // 着手状況と SVG の反映判定は、監査が出した指摘 (図の行に印が付いているもの) の
+  // 観測。手で書いた指摘は指紋の持ち越しで仕分けるので、ここには渡さない。
+  var tracked = _inboxItems.filter(function(p) { return p && p.source !== 'manual'; });
+  var res = PP.observe(tracked, _inboxDocs || [], _progressMemo(), {
     now: new Date().toISOString(),
   });
   _progressSaveMemo(res.memo);
@@ -29983,8 +30000,11 @@ function _inboxShown() {
   if (!PI || !_inboxItems) return [];
   // 受信箱は「まだ直っていない指摘」の箱。対応済み (対応した修正を記録済み) は
   // 既定で落とす。追跡ビューとして「解消も出す」を選んだときだけ残す。
-  var list = PI.filter(_inboxItems, {
+  // 出典が違っても、同じ図の同じ行の同じ文面は 1 件に畳む。畳まないと
+  // 手で書いた指摘と監査が出した指摘が別々に数えられる (二重勘定の元)。
+  var list = PI.filter(PI.dedupe(_inboxItems), {
     unreadOnly: _inboxUnreadOnly(), pendingOnly: !_inboxShowResolved(), excludeAuthor: _inboxMe(),
+    source: _inboxSource(),
   });
   if (_inboxShowResolved() || !_inboxProgress) return list;
   // 観測して解消と分かったものも落とす。対応済みの印が押されていなくても、
@@ -30034,7 +30054,20 @@ function scanPinInbox() {
       docs.push({ name: n, dsl: openDocs[n] });
     });
     _inboxDocs = docs;
-    return window.MA.pinInbox.collect(docs);
+    // BLK-owner-20260923-1409-prune: 手で書いた指摘も同じ走査で仕分ける。
+    // 🔖 手動指摘が別に保存フォルダを読み直していた往復がここで 1 回になる。
+    var byName = {};
+    docs.forEach(function(d) { if (d && typeof d.dsl === 'string') byName[d.name] = d.dsl; });
+    _mfDocs = byName;
+    var MF = window.MA.manualFindings;
+    var items = window.MA.pinInbox.collect(docs);
+    if (MF) {
+      var rows = MF.review(_mfList(), byName);
+      // 行が動いただけの指摘は新しい行番号を憶える (次からは走査せずに当たる)。
+      _mfSave(MF.applyMoves(_mfList(), rows));
+      items = items.concat(window.MA.pinInbox.fromManual(rows));
+    }
+    return items;
   });
 }
 
@@ -30125,7 +30158,19 @@ function renderInboxPanel() {
     + '<label><input type="checkbox" id="ib-resolved"' + (_inboxShowResolved() ? ' checked' : '')
     + '> 解消も出す</label> '
     + '<label>自分 <input id="ib-me" placeholder="junior" value="' + esc(_inboxMe()) + '"></label>'
-    + ' <button type="button" id="ib-reload">読み直す</button></div>';
+    // BLK-owner-20260923-1409-prune: 🔖 手動指摘のタブを畳んだ代わりの絞り込み。
+    // 「手で書いた / 監査が出した」は札ではなく出典なので、ここで選ぶ。
+    + ' <label>出典 <select id="ib-source">'
+    + '<option value=""' + (_inboxSource() === '' ? ' selected' : '') + '>すべて</option>'
+    + '<option value="audit"' + (_inboxSource() === 'audit' ? ' selected' : '') + '>監査が出した</option>'
+    + '<option value="manual"' + (_inboxSource() === 'manual' ? ' selected' : '') + '>手で書いた</option>'
+    + '</select></label>'
+    + ' <button type="button" id="ib-reload">読み直す</button></div>'
+    // 手で書いた指摘を足す欄。台帳のタブが持っていた手順をそのまま箱に移す。
+    + '<div class="mf-bar">'
+    + '<input id="mf-text" placeholder="この行への指摘 (例: 対応するリセットフローが無い)">'
+    + ' <button type="button" id="mf-add">L' + _pinTargetLine() + ' に足す</button>'
+    + ' <button type="button" id="mf-copy">指摘.md へコピー</button></div>';
 
   // 着手状況の帯 (BLK-reviewer-20260908-1603-wish)。指摘そのものではなく
   // 「前回の依頼に手が付いたか」を先に出す。手順 1 はこの 1 行で足りる。
@@ -30186,12 +30231,29 @@ function renderInboxPanel() {
       var reply = _inboxReply(p);
       var prog = _progressOf(p);
       var jv = _inboxVerifyOf(p);
+      // BLK-owner-20260923-1409-prune: 手で書いた指摘にも同じ語彙の札を付ける。
+      // 監査が出した指摘は puml/SVG の判定 (jv) が札になり、手で書いた指摘は
+      // 仕分け (指紋の持ち越し) を同じ 4 つへ対応付けたものが札になる。
+      var FV = window.MA.findingVocab;
+      var mfKey = (p.source === 'manual' && FV) ? (p.verdictKey || 'unknown') : '';
       html += '<div class="ib-row' + (p.state === 'read' ? ' read' : '') + (p.stale ? ' stale' : '')
         + '" data-doc="' + esc(p.doc) + '" data-pin-id="' + esc(p.id) + '" data-line="' + p.line + '"'
+        + ' data-source="' + esc(p.source || 'audit') + '"'
+        + (p.mfId ? ' data-mf-id="' + esc(p.mfId) + '" data-mf-status="' + esc(p.mfRow ? p.mfRow.status : '')
+            + '" data-mf-keep="' + (p.mfRow && p.mfRow.keep ? '1' : '0') + '"' : '')
         + ' data-verdict="' + esc(reply ? reply.verdict : '') + '"'
         + (prog ? ' data-progress="' + esc(prog.status) + '" data-passes="' + prog.passes + '"' : '')
         + (jv ? ' data-reflect="' + esc(jv.key) + '" data-svg="' + esc(jv.svg.state) + '"' : '')
+        + (mfKey ? ' data-reflect="' + esc(mfKey) + '"' : '')
         + '>'
+        + '<span class="ib-source ' + esc(p.source || 'audit') + '" title="'
+          + esc(FV ? FV.source(p.source || 'audit').title : '') + '">'
+          + esc(PI.sourceLabel(p)) + '</span>'
+        + (mfKey
+          ? '<span class="ib-verify ' + esc(mfKey) + '" title="' + esc(FV.title(mfKey)) + '">'
+            + esc(FV.label(mfKey)) + '</span>'
+            + (p.verdictWhy ? '<span class="ib-verify-why">' + esc(p.verdictWhy) + '</span>' : '')
+          : '')
         + (jv
           ? '<span class="ib-verify ' + esc(jv.key) + '" title="' + esc(jv.title) + '">'
             + esc(jv.label) + '</span>'
@@ -30206,9 +30268,13 @@ function renderInboxPanel() {
         + '<span class="ib-where">' + (p.stale ? '行が見つかりません' : ('L' + p.line)) + '</span> '
         + '<span class="ib-who">' + esc(p.author || '?') + '</span>'
         + '<span class="ib-text">' + esc(p.text) + '</span>'
-        + (reply
-          ? '<span class="ib-reply">↩ ' + esc(_inboxReplyText(p)) + '</span>'
-          : '<span class="ib-reply none">↩ 応答なし</span>')
+        + (p.source === 'manual'
+          ? '<span class="mf-acts">'
+            + (p.mfRow && p.mfRow.keep ? '' : '<button type="button" data-mf-act="confirm">確認した (今の行で憶え直す)</button>')
+            + '<button type="button" data-mf-act="drop">消す</button></span>'
+          : (reply
+            ? '<span class="ib-reply">↩ ' + esc(_inboxReplyText(p)) + '</span>'
+            : '<span class="ib-reply none">↩ 応答なし</span>'))
         + '</div>';
     });
     html += '</div>';
@@ -30239,8 +30305,50 @@ function renderInboxPanel() {
       renderInboxBadge();
     });
   }
+  var srcSel = document.getElementById('ib-source');
+  if (srcSel) {
+    srcSel.addEventListener('change', function() {
+      _inboxSetSource(srcSel.value);
+      renderInboxPanel();
+      renderInboxBadge();
+    });
+  }
   var reload = document.getElementById('ib-reload');
   if (reload) reload.addEventListener('click', function() { loadInbox(); });
+
+  // 手で書いた指摘の足し込みと書き出し (旧 🔖 手動指摘のタブが持っていた手順)。
+  var MFa = window.MA.manualFindings;
+  var mfAdd = document.getElementById('mf-add');
+  if (mfAdd && MFa) {
+    mfAdd.addEventListener('click', function() {
+      var input = document.getElementById('mf-text');
+      var text = input ? input.value.trim() : '';
+      var doc = _activeDocName();
+      var line = _pinTargetLine();
+      if (!text || !doc || !line) return;
+      _mfSave(MFa.add(_mfList(), {
+        doc: doc, dsl: mmdText, line: line, text: text,
+        author: _inboxMe() || 'reviewer', at: new Date().toISOString().slice(0, 16),
+        verdict: '未解消',
+      }));
+      if (_mfDocs) _mfDocs[doc] = mmdText;
+      if (input) input.value = '';
+      _inboxRefreshManual();
+      renderInboxPanel();
+      renderInboxBadge();
+    });
+  }
+  var mfCopy = document.getElementById('mf-copy');
+  if (mfCopy && MFa) {
+    mfCopy.addEventListener('click', function() {
+      var text = MFa.toMarkdown(MFa.review(_mfList(), _mfDocs || _mfOpenDocs()));
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function() {
+          mfCopy.textContent = 'コピーしました';
+        }, function() { mfCopy.textContent = 'コピーできません'; });
+      }
+    });
+  }
 
   var claimRows = panel.querySelectorAll('.ib-claim-row');
   for (var ci = 0; ci < claimRows.length; ci++) {
@@ -30257,15 +30365,40 @@ function renderInboxPanel() {
   var rows = panel.querySelectorAll('.ib-row');
   for (var i = 0; i < rows.length; i++) {
     (function(el) {
-      el.addEventListener('click', function() {
+      el.addEventListener('click', function(ev) {
         var id = el.getAttribute('data-pin-id');
         var docName = el.getAttribute('data-doc');
         var hit = null;
         shown.forEach(function(p) { if (p.id === id && p.doc === docName) hit = p; });
+        // 手で書いた指摘の「確認した / 消す」はその場で効かせる (旧 🔖 と同じ手順)。
+        var act = ev.target && ev.target.getAttribute ? ev.target.getAttribute('data-mf-act') : null;
+        if (act && hit && hit.mfId && window.MA.manualFindings) {
+          var MFb = window.MA.manualFindings;
+          if (act === 'drop') _mfSave(MFb.remove(_mfList(), hit.mfId));
+          else if (act === 'confirm') {
+            var docs = _mfDocs || _mfOpenDocs();
+            _mfSave(MFb.confirm(_mfList(), hit.mfId, docs[hit.doc], hit.mfRow ? hit.mfRow.verdict : ''));
+          }
+          _inboxRefreshManual();
+          renderInboxPanel();
+          renderInboxBadge();
+          return;
+        }
         if (hit) openInboxItem(hit);
       });
     })(rows[i]);
   }
+}
+
+// 手で書いた指摘だけを走査せずに仕分け直す (控えを書き換えた直後に使う)。
+// 保存フォルダは読み直さない — 直前の走査で読んだ本文 (_mfDocs) で足りる。
+function _inboxRefreshManual() {
+  var MF = window.MA.manualFindings;
+  var PI = window.MA.pinInbox;
+  if (!MF || !PI || !_inboxItems) return;
+  var docs = _mfDocs || _mfOpenDocs();
+  var kept = _inboxItems.filter(function(p) { return !(p && p.source === 'manual'); });
+  _inboxItems = kept.concat(PI.fromManual(MF.review(_mfList(), docs)));
 }
 
 function loadInbox() {
@@ -30357,205 +30490,9 @@ function _mfOpenDocs() {
   return out;
 }
 
-// 保存フォルダの図を全部読む。指摘の対象は今開いていない図のことが多い。
-function scanManualFindings() {
-  var WS = window.MA.workspace;
-  if (!WS) return Promise.resolve({});
-  var dir = _wsFileDir();
-  var docs = _mfOpenDocs();
-  return WS.listFiles(dir).then(function(names) {
-    var list = (names || []).slice();
-    function step(i) {
-      if (i >= list.length) return Promise.resolve(docs);
-      var name = list[i];
-      if (typeof docs[name] === 'string') return step(i + 1);
-      return WS.loadFile(name, dir).then(function(text) {
-        if (typeof text === 'string') docs[name] = text;
-        return step(i + 1);
-      }, function() { return step(i + 1); });
-    }
-    return step(0);
-  }, function() { return docs; });
-}
-
-function renderFindingsBadge() {
-  var btn = document.getElementById('btn-tab-findings');
-  var MF = window.MA.manualFindings;
-  if (!btn || !MF) return null;
-  var rows = _mfRows();
-  var sum = MF.summary(rows);
-  btn.textContent = MF.badgeText(sum);
-  btn.classList.toggle('has-recheck', sum.recheck > 0);
-  btn.title = MF.headText(sum);
-  return sum;
-}
-
-// 指摘の図を開いて該当行へ飛ぶ。開いていない図は保存フォルダから読む。
-function openFindingRow(row) {
-  var WS = window.MA.workspace;
-  if (!WS || !row) return;
-  var active = WS.getActive();
-  if (!(active && active.name === row.doc)) saveActiveDoc();
-  function show() {
-    applyActiveDoc();
-    renderTabs();
-    renderPinBadge();
-    if (row.line) jumpToLine(row.line);
-  }
-  var already = WS.findByName ? WS.findByName(row.doc) : null;
-  if (already) { WS.setActive(already.id); show(); return; }
-  WS.loadFile(row.doc, _wsFileDir()).then(function(text) {
-    if (text == null) return;
-    var detected = WS.detectType(text);
-    WS.openOrActivate({
-      name: row.doc, dsl: text,
-      diagramType: (detected && modules[detected]) ? detected : currentDiagramType,
-    });
-    show();
-  }, function() { /* 読めない図は開かない。台帳はそのまま */ });
-}
-
-function renderFindingsPanel() {
-  var panel = document.getElementById('findings-panel');
-  var MF = window.MA.manualFindings;
-  if (!panel || !MF) return;
-  var esc = window.MA.htmlUtils.escHtml;
-
-  if (_mfLoading) {
-    panel.innerHTML = '<div class="mf-head">保存フォルダの図を読んでいます…</div>';
-    return;
-  }
-  var rows = _mfRows();
-  var sum = MF.summary(rows);
-  var target = _pinTargetLine();
-  var html = '<div class="mf-head" data-total="' + sum.total + '" data-recheck="' + sum.recheck
-    + '" data-keep="' + sum.keep + '">' + esc(MF.headText(sum)) + '</div>'
-    + '<div class="mf-bar">'
-    + '<input id="mf-text" placeholder="この行への指摘 (例: 対応するリセットフローが無い)">'
-    + ' <button type="button" id="mf-add">L' + target + ' に足す</button>'
-    + ' <button type="button" id="mf-reload">読み直す</button>'
-    + ' <button type="button" id="mf-copy">指摘.md へコピー</button></div>';
-
-  if (!rows.length) {
-    html += '<div class="mf-empty" id="mf-empty">'
-      + (_mfDocs ? '手動の指摘はまだありません。行を選んで上の欄に書くと台帳に載ります'
-                 : '手動の指摘はまだありません。「読み直す」で保存フォルダの図と突き合わせます')
-      + '</div>';
-  }
-  rows.forEach(function(r) {
-    html += '<div class="mf-row' + (r.keep ? '' : ' recheck') + '" data-mf-id="' + esc(r.id) + '"'
-      + ' data-mf-status="' + esc(r.status) + '" data-mf-keep="' + (r.keep ? '1' : '0') + '"'
-      + ' title="' + esc(r.title) + '">'
-      + '<span class="mf-mark">' + esc(r.label) + '</span>'
-      + '<span class="mf-where">' + esc(r.doc) + (r.line ? (':' + r.line) : ':—') + '</span>'
-      + '<span class="mf-id">' + esc(r.id) + '</span>'
-      + (r.verdict ? '<span class="mf-verdict">→ ' + esc(r.verdict) + '</span>' : '')
-      + '<span class="mf-text">' + esc(r.text) + '</span>'
-      + '<span class="mf-acts">'
-      + (r.keep ? '' : '<button type="button" data-mf-act="confirm">確認した (今の行で憶え直す)</button>')
-      + '<button type="button" data-mf-act="drop">消す</button></span>'
-      + '</div>';
-  });
-  panel.innerHTML = html;
-
-  var add = document.getElementById('mf-add');
-  if (add) {
-    add.addEventListener('click', function() {
-      var input = document.getElementById('mf-text');
-      var text = input ? input.value.trim() : '';
-      var doc = _activeDocName();
-      var line = _pinTargetLine();
-      if (!text || !doc || !line) return;
-      _mfSave(MF.add(_mfList(), {
-        doc: doc, dsl: mmdText, line: line, text: text,
-        author: _inboxMe() || 'reviewer', at: new Date().toISOString().slice(0, 16),
-        verdict: '未解消',
-      }));
-      if (_mfDocs) _mfDocs[doc] = mmdText;
-      renderFindingsPanel();
-      renderFindingsBadge();
-    });
-  }
-  var reload = document.getElementById('mf-reload');
-  if (reload) reload.addEventListener('click', function() { loadFindings(); });
-  var copy = document.getElementById('mf-copy');
-  if (copy) {
-    copy.addEventListener('click', function() {
-      var text = MF.toMarkdown(rows);
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(function() {
-          copy.textContent = 'コピーしました';
-        }, function() { copy.textContent = 'コピーできません'; });
-      }
-    });
-  }
-
-  var els = panel.querySelectorAll('.mf-row');
-  for (var i = 0; i < els.length; i++) {
-    (function(el) {
-      var id = el.getAttribute('data-mf-id');
-      var row = null;
-      rows.forEach(function(r) { if (r.id === id) row = r; });
-      el.addEventListener('click', function(ev) {
-        var act = ev.target && ev.target.getAttribute ? ev.target.getAttribute('data-mf-act') : null;
-        if (act === 'drop') {
-          _mfSave(MF.remove(_mfList(), id));
-          renderFindingsPanel(); renderFindingsBadge(); return;
-        }
-        if (act === 'confirm' && row) {
-          var docs = _mfDocs || _mfOpenDocs();
-          _mfSave(MF.confirm(_mfList(), id, docs[row.doc], row.verdict));
-          renderFindingsPanel(); renderFindingsBadge(); return;
-        }
-        if (row) openFindingRow(row);
-      });
-    })(els[i]);
-  }
-}
-
-function loadFindings() {
-  var MF = window.MA.manualFindings;
-  if (!MF) return Promise.resolve({});
-  _mfLoading = true;
-  renderFindingsPanel();
-  return scanManualFindings().then(function(docs) {
-    _mfDocs = docs;
-    _mfLoading = false;
-    // 行が動いただけの指摘は、ここで新しい行番号を憶える (次からは走査せずに当たる)。
-    _mfSave(MF.applyMoves(_mfList(), MF.review(_mfList(), docs)));
-    renderFindingsPanel();
-    renderFindingsBadge();
-    return docs;
-  }, function() {
-    _mfLoading = false;
-    renderFindingsPanel();
-    renderFindingsBadge();
-  });
-}
-
-function setupManualFindings() {
-  var btn = document.getElementById('btn-tab-findings');
-  var panel = document.getElementById('findings-panel');
-  if (!btn || !panel || !window.MA.manualFindings) return;
-  btn.addEventListener('click', function() {
-    if (panel.classList.contains('open')) { panel.classList.remove('open'); return; }
-    panel.classList.add('open');
-    var rect = btn.getBoundingClientRect();
-    panel.style.left = Math.max(4, rect.left) + 'px';
-    panel.style.top = (rect.bottom + 2) + 'px';
-    loadFindings();
-  });
-  panel.addEventListener('click', function(ev) { ev.stopPropagation(); });
-  document.addEventListener('keydown', function(ev) {
-    if (ev.key === 'Escape') panel.classList.remove('open');
-  });
-  document.addEventListener('click', function(ev) {
-    if (!panel.classList.contains('open')) return;
-    if (panel.contains(ev.target) || ev.target === btn) return;
-    panel.classList.remove('open');
-  });
-  renderFindingsBadge();
-}
+// 🔖 手動指摘のタブ (旧 findings-panel) は 📥 指摘箱に畳んだ
+// (BLK-owner-20260923-1409-prune)。走査は scanPinInbox が 1 回で行い、
+// 仕分けの規則は src/core/manual-findings.js のまま、出典の絞り込みで出す。
 
 // ── セット複製 (BLK-junior-20260907-1203-wish) ──────────────────────────────
 // 題材替え (GPIO → UART) は 6 図種ぶん、テンプレート作成を図種の数だけ

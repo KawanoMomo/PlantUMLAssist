@@ -497,8 +497,8 @@ test.describe('junior 手順 1: 指摘.md の 1 件から先輩の図と並べ�
   // 構造化されていないので、junior は指摘の無い図でも自分と先輩の両方を開いて
   // 突き合わせ、「対応不要」を自分で判定していた (8 周目は 5 図種のうち 4 図種が
   // 指摘なしで、その 4 回ぶんが丸ごと無駄だった)。📂一覧が開く前に
-  // 対象外 / ⚠未確認 / ✅対応済み を出すことを到達条件にする。
-  test('📂一覧が、開く前に「対象外 / ⚠未確認」を図ごとに出す', async ({ page }) => {
+  // 対象外 / ⚠確かめられず / ✅反映済み を出すことを到達条件にする。
+  test('📂一覧が、開く前に「対象外 / ⚠確かめられず」を図ごとに出す', async ({ page }) => {
     // 指摘.md に名前の出ない図を 1 枚足す (今回の GPIO コンポーネント図に当たる)。
     await S1.putDoc(page, NOTE_MINE, 'gpio_component',
       ['@startuml', 'component Gpio_Driver', '@enduml'].join('\n'));
@@ -513,17 +513,17 @@ test.describe('junior 手順 1: 指摘.md の 1 件から先輩の図と並べ�
     await expect(off).toHaveAttribute('data-note-status', 'off');
     await expect(off).toHaveText('対象外');
 
-    // 到達条件その2: 指摘があり、古い綴り (Gpio) が残っている図は ⚠未確認。
+    // 到達条件その2: 指摘があり、古い綴り (Gpio) が残っている図は ⚠確かめられず。
     const todo = page.locator('.folder-note-badge[data-note-of="gpio_init_sequence"]');
     await expect(todo).toHaveAttribute('data-note-status', 'todo');
-    await expect(todo).toHaveText('⚠未確認');
+    await expect(todo).toHaveText('⚠確かめられず');
     expect(await todo.getAttribute('title')).toContain('部品名不一致');
 
     // 到達条件その3: 見出しが、今日開かなくてよい枚数を先に言う。
     await expect(page.locator('#folder-note-summary')).toContainText('対象外');
   });
 
-  test('指摘どおり直すと、一覧のバッジが ✅対応済み に変わる', async ({ page }) => {
+  test('指摘どおり直すと、一覧のバッジが ✅反映済み に変わる', async ({ page }) => {
     // 指摘: junior 側の `Gpio` を先輩に合わせて `Gpio_Driver` に統一する。
     await S1.putDoc(page, NOTE_MINE, 'gpio_init_sequence',
       ['@startuml', 'title GPIO 初期化シーケンス',
@@ -537,7 +537,7 @@ test.describe('junior 手順 1: 指摘.md の 1 件から先輩の図と並べ�
 
     const done = page.locator('.folder-note-badge[data-note-of="gpio_init_sequence"]');
     await expect(done).toHaveAttribute('data-note-status', 'done');
-    await expect(done).toHaveText('✅対応済み');
+    await expect(done).toHaveText('✅反映済み');
   });
 
   test('並べる相手がいない指摘は、押しても理由が出るだけで済む', async ({ page }) => {

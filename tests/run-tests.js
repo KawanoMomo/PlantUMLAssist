@@ -50,6 +50,7 @@ const sourceFiles = [
   'src/core/part-cross.js',
   'src/core/finding-actions.js',
   'src/core/finding-variant.js',
+  'src/core/finding-vocab.js',
   'src/core/note-board.js',
   'src/core/review-state.js',
   'src/core/file-role.js',

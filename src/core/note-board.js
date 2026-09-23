@@ -31,17 +31,26 @@ window.MA = window.MA || {};
 // DOM にも fetch にも触らない。本文の取り寄せと描画は app.js の職掌。
 window.MA.noteBoard = (function() {
 
+  // BLK-owner-20260923-1409-prune: 札の語彙は 📥 指摘箱の 4 つ (finding-vocab) が正本。
+  // ここは「図 1 枚ずつ」という文脈のショートカットなので画面は残し、札の表示だけを
+  // 揃える。⚠未確認 → ⚠確かめられず、✅対応済み → ✅反映済み。
+  // 「対象外」は札ではなく絞り込み条件 (指摘の対象になっていない図) なのでそのまま。
+  function _mark(key, fallback) {
+    var FV = window.MA.findingVocab;
+    return FV ? FV.noteMark(key) : fallback;
+  }
+
   var BADGE = {
     off: {
-      key: 'off', mark: '対象外',
+      key: 'off', mark: _mark('off', '対象外'),
       title: '指摘.md にこの図の名前も図種も挙がっていません（開かずに次へ進めます）',
     },
     todo: {
-      key: 'todo', mark: '⚠未確認',
+      key: 'todo', mark: _mark('todo', '⚠確かめられず'),
       title: 'この図あての指摘があります（反映されているかはまだ確かめていません）',
     },
     done: {
-      key: 'done', mark: '✅対応済み',
+      key: 'done', mark: _mark('done', '✅反映済み'),
       title: 'この図あての指摘は、本文を見るかぎり反映済みです',
     },
   };
@@ -274,8 +283,9 @@ window.MA.noteBoard = (function() {
       else if (k === 'done') done++;
       else off++;
     });
-    var s = '指摘.md: ' + names.length + ' 枚のうち ⚠未確認 ' + todo + ' 枚 / ✅対応済み '
-      + done + ' 枚 / 対象外 ' + off + ' 枚（対象外は開かずに次へ進めます）';
+    var s = '指摘.md: ' + names.length + ' 枚のうち ' + BADGE.todo.mark + ' ' + todo + ' 枚 / '
+      + BADGE.done.mark + ' ' + done + ' 枚 / ' + BADGE.off.mark + ' ' + off
+      + ' 枚（対象外は開かずに次へ進めます）';
     var un = (board.unaddressed || []).length;
     if (un) {
       // 件数だけでは「自分宛か」を確かめに GUI の外へ出ることになる。
