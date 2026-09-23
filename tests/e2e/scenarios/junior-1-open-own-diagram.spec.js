@@ -130,10 +130,24 @@ test('同じ図種の上書きは今までどおり。前の中身は「履歴�
   }, DIR);
   expect(files).toEqual(['gpio_state']);
 
+  // 全体実行で server が混んでいる回は、起動時の庫 (提出物)・札の読み込みが「履歴」を押した後に
+  // 届き、一覧がまるごと描き直される。その回を作ってから開き直す (BLK-builder-20260924-0752-2b-red)。
+  await page.route(/\/(vault|tickets)\?/, async (r) => {
+    await new Promise((res) => setTimeout(res, 2500));
+    await r.continue();
+  });
+  await page.reload();
+  await page.waitForSelector('html[data-app-ready="1"]');
+
   await openFolder(page);
   await expect(page.locator('#folder-panel [data-versions-name="gpio_state"]')).toHaveText('履歴 1');
   await page.locator('#folder-panel [data-versions-name="gpio_state"]').click();
   const list = page.locator('#folder-panel [data-version-list="gpio_state"] .folder-version');
+  await expect(list).toHaveCount(1);
+  await expect(list.nth(0)).toContainText('状態遷移');
+
+  // 遅れて届いた読み込みで一覧が描き直されても、開いた履歴は閉じない。
+  await page.waitForTimeout(3500);
   await expect(list).toHaveCount(1);
   await expect(list.nth(0)).toContainText('状態遷移');
 });

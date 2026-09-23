@@ -178,7 +178,41 @@ window.MA.versionHistory = (function() {
     return out;
   }
 
+  // 保存先の一覧は、庫 (提出物) と札を読み終えた時点で丸ごと描き直す。その前に
+  // 「履歴 N」を押して開いた版の一覧が描き直しで黙って閉じないよう、描き直す直前に
+  // 開いていた図名を控え (openListNames)、描き直した一覧の同じ図の「履歴」で開き直す
+  // (reopenLists)。図名は引用符や括弧を含みうるので selector に埋めず属性で比べる。
+  function openListNames(root) {
+    var out = [];
+    if (!root || !root.querySelectorAll) return out;
+    var els = root.querySelectorAll('[data-version-list]');
+    for (var i = 0; i < els.length; i++) {
+      var n = els[i].getAttribute('data-version-list');
+      if (n && out.indexOf(n) < 0) out.push(n);
+    }
+    return out;
+  }
+
+  function reopenLists(root, names, toggle) {
+    if (!root || !root.querySelectorAll || !names || !names.length || typeof toggle !== 'function') return 0;
+    var already = openListNames(root);
+    var btns = root.querySelectorAll('[data-versions-name]');
+    var done = 0;
+    for (var i = 0; i < names.length; i++) {
+      if (already.indexOf(names[i]) >= 0) continue;
+      for (var j = 0; j < btns.length; j++) {
+        if (btns[j].getAttribute('data-versions-name') !== names[i]) continue;
+        toggle(names[i], btns[j]);
+        done++;
+        break;
+      }
+    }
+    return done;
+  }
+
   return {
+    openListNames: openListNames,
+    reopenLists: reopenLists,
     stampToDate: stampToDate,
     label: label,
     kindOf: kindOf,

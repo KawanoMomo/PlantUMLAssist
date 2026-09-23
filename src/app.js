@@ -12532,6 +12532,17 @@ function setupTabs() {
     window.MA.workspace.listFolder(dir).then(function(res) {
       if (myGen !== _folderRenderGen) return;
       var entries = (res && res.entries) || [];
+      // BLK-builder-20260924-0752-2b-red: 庫・札を読み終えた描き直しは、その前に「履歴 N」を
+      // 押して開いた版の一覧を黙って閉じていた (読み込みが遅い回ほど押した後に来る)。
+      // 開いていた図の一覧は、描き直した行の下にもう一度開く。
+      var VHk = window.MA.versionHistory;
+      var keepLists = VHk && VHk.openListNames ? VHk.openListNames(panel) : [];
+      if (keepLists.length) {
+        Promise.resolve().then(function() {
+          if (myGen !== _folderRenderGen) return;
+          VHk.reopenLists(panel, keepLists, toggleVersionList);
+        });
+      }
       panel.textContent = '';
       // BLK-human-20260917-0901: 保存フォルダの外にある手元の .puml を開く入口を一覧の頭に置く。
       var openHead = document.createElement('button');
