@@ -70,7 +70,8 @@ function spawnServer(port) {
   const python = process.env.PUA_PYTHON || (process.platform === 'win32' ? 'python' : 'python3');
   const child = spawn(python, ['server.py'], {
     cwd: REPO_ROOT,
-    env: Object.assign({}, process.env, { PUA_PORT: String(port) }),
+    // PUA_NO_IDLE_EXIT: spec ごとにブラウザを閉じても落ちない (BLK-human-20260924-0900)
+    env: Object.assign({}, process.env, { PUA_PORT: String(port), PUA_NO_IDLE_EXIT: '1' }),
     stdio: 'ignore',
     detached: process.platform !== 'win32',
     windowsHide: true,
