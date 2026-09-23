@@ -204,6 +204,33 @@ html, body {
 #senior-dsl .sg-line { white-space: pre; }
 #senior-dsl .sg-del { background: rgba(248,81,73,.18); color: #f85149; }
 #senior-dsl .sg-add { background: rgba(63,185,80,.18); color: #3fb950; }
+/* BLK-human-20260923-1701 (design 10b): ファイル・フォルダの右クリック */
+#files-ctx-menu {
+  position: fixed; z-index: 1200; min-width: 232px; max-width: 320px; padding: 4px 0;
+  background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35); font-size: 12px;
+}
+#files-ctx-menu[hidden] { display: none; }
+#files-ctx-menu .files-ctx-title {
+  padding: 3px 12px 5px; font-size: 10px; color: var(--text-secondary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+#files-ctx-menu .files-ctx-item {
+  display: flex; align-items: center; gap: 8px; width: 100%; padding: 4px 12px;
+  background: none; border: 0; color: var(--text-primary); text-align: left; cursor: pointer; font: inherit;
+}
+#files-ctx-menu .files-ctx-item.is-active, #files-ctx-menu .files-ctx-item:hover:not(:disabled) { background: var(--bg-tertiary); }
+#files-ctx-menu .files-ctx-item:disabled { opacity: 0.45; cursor: default; }
+#files-ctx-menu .files-ctx-item.is-danger { color: var(--error, #f87171); }
+#files-ctx-menu .files-ctx-label { flex: 1 1 auto; }
+#files-ctx-menu .files-ctx-key { flex: 0 0 auto; font-size: 10px; color: var(--text-secondary); }
+#files-ctx-menu .files-ctx-tag {
+  flex: 0 0 auto; font-size: 9px; padding: 0 5px; border: 1px solid var(--border); border-radius: 3px;
+  color: var(--text-secondary);
+}
+#files-ctx-menu .files-ctx-sep { height: 1px; margin: 4px 0; background: var(--border); }
+#files-panel.is-drop { outline: 2px dashed var(--accent); outline-offset: -3px; }
+#files-panel .files-part-head.is-drop { background: var(--bg-tertiary); outline: 1px solid var(--accent); }
 #files-panel #folder-panel {
   position: static; z-index: auto; max-height: none; min-width: 0;
   width: 100%; box-sizing: border-box;
@@ -1836,6 +1863,10 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
   padding: 3px 8px;
 }
 .tool-menu-filter:focus { outline: none; border-color: var(--accent); }
+/* BLK-human-20260923-1701 (design 10b): ファイル単位の操作は FILES の右クリックへ、の案内 */
+.tool-menu-files-note {
+  padding: 6px 10px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-secondary);
+}
 .tool-menu-note {
   color: var(--text-secondary);
   font-size: 10px;
@@ -8629,10 +8660,12 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/modules/activity.js"></script>
 <script src="src/modules/state.js"></script>
 <script src="src/core/file-tree.js"></script>
+<script src="src/core/file-menu.js"></script>
 <script src="src/app.js"></script>
 <script src="src/ui/files-panel.js"></script>
 <script src="src/core/git-panel.js"></script>
 <script src="src/ui/git-ui.js"></script>
+<script src="src/ui/file-menu.js"></script>
 <!-- BLK-primary-20260907-0923-wish: 変更サマリボード。変わった図を全件、変更前後で並べる -->
 <div id="rd-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="rd-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:720px;max-width:1080px;max-height:88vh;overflow-y:auto;"></div>

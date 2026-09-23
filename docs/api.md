@@ -136,6 +136,7 @@ curl -sS -X POST http://127.0.0.1:8766/verify-svg -H "Content-Type: application/
 | `GET /version` | — | アプリの版・コミット・日付 (`{version, commit, date}`。git tag が正本) |
 | `GET /update-check` | — | 押したときだけ GitHub Releases の latest を 1 回読み `{current, release:{tag_name, html_url, assets}}` か `{current, error}`。落とさない・実行しない |
 | `POST /open-url` | `{url}` | このリポジトリの GitHub の URL だけを既定のブラウザで開く。他の URL は 400 |
+| `POST /file-op` | `{op, dir, name, to?, toDir?}` | FILES ツリーの右クリック (design 10b)。`op` は `rename` / `copy` / `move` / `reveal`。行き先に同名があれば 409 (上書きしない)。過去版は動かさない |
 | `GET /prefs` | — | この機械に保存した設定 |
 | `POST /prefs` | — | 設定を書く |
 | `GET /env` | — | Java / jar の有無、`app` (アプリ版か)、`javaUrl` (Java が無いときの案内先) |

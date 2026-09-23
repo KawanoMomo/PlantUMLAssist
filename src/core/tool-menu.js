@@ -18,7 +18,6 @@ window.MA.toolMenu = (function() {
       { id: 'btn-tab-template', label: 'テンプレートから作る', group: '起こす' },
       { id: 'btn-tab-skeleton', label: '骨格から作る', group: '起こす' },
       { id: 'btn-tab-set',      label: '系統ごと複製する', group: '複製と控え' },
-      { id: 'btn-tab-draft',    label: '一時控えにする', group: '複製と控え' },
     ] },
     { key: 'edit', title: '書き換える', items: [
       { id: 'btn-tab-lines',  label: '行を書き換える', group: 'まとめて直す' },
@@ -65,7 +64,6 @@ window.MA.toolMenu = (function() {
       { id: 'btn-tab-pins',     label: 'この図の指摘', group: '指摘' },
       { id: 'btn-tab-inbox',    label: '図をまたぐ指摘箱 (手で書いた指摘も出典で絞れる)', group: '指摘' },
       { id: 'btn-tab-diff',     label: '前回保存からの差分', group: '変更の履歴' },
-      { id: 'btn-tab-versions', label: 'この図の変遷', group: '変更の履歴' },
       { id: 'btn-tab-lineage',  label: 'この図の継承元', group: '変更の履歴' },
       { id: 'btn-tab-board',    label: '変更サマリ', group: '変更の履歴' },
     ] },
@@ -82,7 +80,23 @@ window.MA.toolMenu = (function() {
     ] },
   ];
 
+  // BLK-human-20260923-1701 (design 10b): ファイル 1 枚に対する操作は FILES ツリーの
+  // 右クリックに集めた。メニューには並べず案内 1 行に落とす。分類と言い換えは残すので、
+  // Ctrl+K / Ctrl+P からは今まで通りの名前で引ける (ボタンの実体もそのまま)。
+  var MOVED_TO_FILES = [
+    { key: 'file', title: 'ファイル', items: [
+      { id: 'btn-tab-draft',    label: '一時控えにする', group: 'ファイルの右クリック' },
+      { id: 'btn-tab-versions', label: 'この図の変遷', group: 'ファイルの右クリック' },
+    ] },
+  ];
+  var FILES_NOTE = 'ファイル単位の操作（開く・並べて比較・前回保存版と比較・履歴・名前変更・一時控え・削除…）は FILES のファイルを右クリック';
+
   function allGroups() {
+    return GROUPS.concat(MOVED_TO_EXPORT).concat(MOVED_TO_FILES);
+  }
+
+  // メニューの 6 分類 (右クリックへ移したものは入れない)。
+  function menuGroups() {
     return GROUPS.concat(MOVED_TO_EXPORT);
   }
 
@@ -103,7 +117,7 @@ window.MA.toolMenu = (function() {
   // design 9b: パネルの左列に出す 6 分類。Export ▾ に入口を移した「渡す」も、
   // 「どこを見ればよいか」の地図としてはここに居る (押すと Export 側のボタンを鳴らす)。
   function panelGroups() {
-    return allGroups().map(function(g) {
+    return menuGroups().map(function(g) {
       return {
         key: g.key,
         title: g.title,
@@ -340,7 +354,8 @@ window.MA.toolMenu = (function() {
       + '<div class="tool-menu-panes">'
       + '<div class="tool-menu-cats" role="tablist">' + cats + '</div>'
       + '<div class="tool-menu-items">' + panes
-      + '<div class="tool-menu-hits" hidden></div></div></div>';
+      + '<div class="tool-menu-hits" hidden></div></div></div>'
+      + '<div class="tool-menu-files-note" id="tool-menu-files-note">' + esc(FILES_NOTE) + '</div>';
   }
 
   // 絞り込み中に右列へ出す一覧。どの分類のものかが分かるように分類名を添える。
@@ -381,6 +396,7 @@ window.MA.toolMenu = (function() {
     filterItems: filterItems,
     rowCount: rowCount,
     NOTE: NOTE,
+    FILES_NOTE: FILES_NOTE,
     FILTER_LABEL: FILTER_LABEL,
   };
 })();

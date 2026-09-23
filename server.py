@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import struct
 import subprocess
 import sys
@@ -588,6 +589,7 @@ API_INDEX = {
         {'endpoint': 'POST /export-zip', 'summary': '書き出した zip を保存フォルダに置き、書けたバイト数を返す',
          'request': "{dir, name, base64}"},
         {'endpoint': 'POST /export-log', 'summary': '書き出しの控えを 1 件足す'},
+        {'endpoint': 'POST /file-op', 'summary': 'FILES ツリーの右クリック: 図の名前変更 / 複製 / 別フォルダへ移動 / 場所を開く'},
         {'endpoint': 'GET /prefs', 'summary': 'この機械に保存した設定'},
         {'endpoint': 'POST /prefs', 'summary': '設定を書く'},
         {'endpoint': 'POST /jar-path', 'summary': 'plantuml.jar の場所を設定する {path}'},
@@ -1216,6 +1218,11 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == '/verify-svg':
             with _fs_lock:
                 return self._handle_verify_svg_post()
+        # BLK-human-20260923-1701 (design 10b): FILES ツリーの右クリック・ドラッグから
+        # ファイル単位の操作 (名前変更 / 複製 / 別フォルダへ移動 / 場所を開く) を受ける口。
+        if self.path == '/file-op':
+            with _fs_lock:
+                return self._handle_file_op_post()
         if self.path == '/prefs':
             with _fs_lock:
                 return self._handle_prefs_post()
@@ -3571,6 +3578,90 @@ class Handler(BaseHTTPRequestHandler):
             self._write_svg_verify(save_dir, verified)
         self._send_json(200, {'ok': True, 'deleted': dt,
                               'versions': self._version_counts(save_dir).get(dt, 0)})
+
+
+    def _handle_file_op_post(self):
+        """FILES ツリーのファイル単位の操作 (BLK-human-20260923-1701 / design 10b)。
+
+        body: {op, dir, name, to?, toDir?}
+          rename … {name}.puml を {to}.puml へ (隣の .svg と図種の控えも一緒に)
+          copy   … {name}.puml を {to}.puml へ複製 (.svg は複製しない。描き直せば揃う)
+          move   … {name}.puml と .svg を toDir へ (名前は変えない)
+          reveal … その図の場所をエクスプローラで開く (PUA_NO_REVEAL があれば開かず場所だけ返す)
+        行き先に同じ名前があれば 409 で断る (黙って上書きしない)。過去版は動かさない。
+        """
+        data = self._read_json_object()
+        if data is None:
+            return
+        op = str(data.get('op') or '')
+        name = str(data.get('name') or '')
+        if op not in ('rename', 'copy', 'move', 'reveal'):
+            return self._send_json(400, {'error': 'op は rename / copy / move / reveal のどれか'})
+        if not self._autosave_validate_type(name):
+            return self._send_json(400, {'error': '名前にパス区切り・制御文字・Windows の禁止文字は使えません'})
+        save_dir = self._autosave_resolve_dir(data.get('dir'))
+        src = self._autosave_file_path(save_dir, name)
+        if not src.exists():
+            return self._send_json(404, {'error': 'その名前の図が保存フォルダにありません'})
+        if op == 'reveal':
+            opened = False
+            if sys.platform == 'win32' and not os.environ.get('PUA_NO_REVEAL'):
+                try:
+                    subprocess.Popen(['explorer', '/select,', str(src)])
+                    opened = True
+                except OSError:
+                    opened = False
+            return self._send_json(200, {'ok': True, 'path': str(src), 'opened': opened})
+        if op == 'move':
+            to_raw = str(data.get('toDir') or '').strip()
+            if not to_raw:
+                return self._send_json(400, {'error': '移動先のフォルダを指定してください'})
+            to_dir = self._autosave_resolve_dir(to_raw)
+            if to_dir == save_dir:
+                return self._send_json(400, {'error': '移動先が今のフォルダと同じです'})
+            to_name = name
+        else:
+            to_dir = save_dir
+            to_name = str(data.get('to') or '').strip()
+            if to_name.lower().endswith('.puml'):
+                to_name = to_name[:-5]
+            if not self._autosave_validate_type(to_name):
+                return self._send_json(400, {'error': '新しい名前にパス区切り・制御文字・Windows の禁止文字は使えません'})
+            if to_name == name:
+                return self._send_json(400, {'error': '名前が変わっていません'})
+        dst = self._autosave_file_path(to_dir, to_name)
+        if dst.exists():
+            return self._send_json(409, {'error': '行き先に同じ名前の図があります: ' + to_name})
+        try:
+            to_dir.mkdir(parents=True, exist_ok=True)
+            if op == 'copy':
+                shutil.copyfile(str(src), str(dst))
+            else:
+                os.replace(str(src), str(dst))
+                svg = src.with_suffix('.svg')
+                if svg.exists():
+                    try:
+                        os.replace(str(svg), str(dst.with_suffix('.svg')))
+                    except OSError:
+                        pass
+        except OSError as e:
+            return self._send_json(500, {'error': '動かせませんでした: ' + str(e)})
+        # 図種の控えは名前に付いているので、行き先の名前へ写す (元は rename / move なら消す)。
+        try:
+            kinds = self._read_saved_kinds(save_dir)
+            if name in kinds:
+                kind = kinds[name]
+                if op != 'copy':
+                    del kinds[name]
+                    self._kinds_path(save_dir).write_text(
+                        json.dumps({'kinds': kinds}, ensure_ascii=False), encoding='utf-8')
+                dst_kinds = self._read_saved_kinds(to_dir) if to_dir != save_dir else kinds
+                dst_kinds[to_name] = kind
+                self._kinds_path(to_dir).write_text(
+                    json.dumps({'kinds': dst_kinds}, ensure_ascii=False), encoding='utf-8')
+        except OSError:
+            pass
+        return self._send_json(200, {'ok': True, 'op': op, 'name': to_name, 'dir': str(to_dir)})
 
 
 # --- Environment probe (GET /env) --------------------------------------------
