@@ -25911,6 +25911,14 @@ function saveFile() {
   // BLK-reviewer-20260915-0007-wish: 書き込む前に、同じ保存フォルダのクラス図と
   // 突き合わせる。宣言の無い呼び出しがあれば、ここで止めて一覧を出す
   // (保存後に言う save-check では、書けたと思って次の図へ移った後になる)。
+  // BLK-builder-20260924-0012-b2-1-red: 突き合わせる相手 (保存フォルダのクラス図) を
+  // まだ読んでいなければ、読んでから判定し直す。読む前に判定すると相手 0 枚で
+  // 素通りし、開いて最初の保存だけが宣言の無い呼び出しのまま書き込まれていた。
+  // 読んでいる最中にもう一度押されても、同じ読み込みを待つ (先に素通りさせない)。
+  if (_sgdNeedsFolder()) {
+    _sgdLoadFolder(_wsFileDir()).then(function() { saveFile(); });
+    return;
+  }
   if (runSaveGuard(doc)) return;
 
   var ST = window.MA.saveTarget;
@@ -26504,6 +26512,23 @@ function _isUnchangedSinceOpen(doc) {
     var d = SL.decide(doc.id, doc.name, _openDocNames(), doc.dsl);
     return !!(d && d.action === 'skip');
   } catch (e) { return false; }
+}
+
+// 保存前の突合の相手 (保存フォルダ) をまだ読んでいないか。読みに行って失敗した
+// フォルダでは待たない (保存そのものを止め続けない)。
+var _sgdFolderTried = null;
+var _sgdFolderLoad = null;
+function _sgdLoadFolder(dir) {
+  if (!_sgdFolderLoad) {
+    var done = function() { _sgdFolderTried = dir; _sgdFolderLoad = null; };
+    _sgdFolderLoad = loadFolderImpact(true).then(done, done);
+  }
+  return _sgdFolderLoad;
+}
+function _sgdNeedsFolder() {
+  if (!_fiFolderMode()) return false;
+  var dir = _wsFileDir();
+  return !!dir && _fiDir !== dir && _sgdFolderTried !== dir;
 }
 
 function runSaveGuard(doc) {

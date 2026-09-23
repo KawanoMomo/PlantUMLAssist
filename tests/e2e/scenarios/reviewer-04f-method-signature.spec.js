@@ -59,7 +59,8 @@ async function pressSave(page) {
   await page.waitForTimeout(700);
   await answerLock(page);
   if (await page.locator('#save-guard-overlay').isHidden().catch(() => true)) {
-    // 錠に答えた直後の押下は保存へ進まないので、もう一度押す。
+    // 帯が出ない (= 止める理由が無い) 保存は、錠に答えた直後の押下が錠の側で
+    // 終わることがあるので、もう一度押して保存まで進める。
     await page.locator('#top-save').click();
     await page.waitForTimeout(700);
   }
@@ -98,10 +99,16 @@ test('手順4.9 宣言の無い呼び出しは、保存を書き込む前に GUI
 
   // クラス図に宣言の無い呼び出しを 1 行足して保存する。
   await S.typeDsl(page, SEQ_GAP);
-  await pressSave(page);
 
+  // 開いて最初の 1 押しで止まる。押し直さない (BLK-builder-20260924-0012-b2-1-red:
+  // 突合の相手になる保存フォルダを読む前に判定して素通りし、最初の保存だけが
+  // 宣言の無い呼び出しのまま書き込まれていた。書けたあとに出る部品名の衝突の帯が
+  // 次の保存の帯に被さり、「このまま保存」が押せなくなっていた)。
+  await answerLock(page);
+  await page.locator('#top-save').click();
   const guard = page.locator('#save-guard-overlay');
   await expect(guard).toBeVisible();
+  await expect(page.locator('#save-clash-overlay')).toBeHidden();
   await expect(page.locator('#sgd-summary')).toContainText('宣言の無いメソッド呼び出し');
   await expect(page.locator('#sgd-list')).toContainText('EnableClock');
   // 足し先の 1 行がそのまま出る (何をすれば消えるかが帯の中で分かる)。
