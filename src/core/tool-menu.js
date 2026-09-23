@@ -45,18 +45,21 @@ window.MA.toolMenu = (function() {
       { id: 'btn-tab-design',         label: '仕様 (design) と現在値の突合' },
       { id: 'btn-tab-audit-timeline', label: '監査履歴' },
     ] },
-    // BLK-owner-20260918-0529-prune: 「2 枚を左右に並べて食い違いを見る」機能が 5 つあり、
-    // 入口が 参照ペインのタブ / 下端ステータス / ツール ▾ / 変更サマリボードの中 に散って、
-    // 呼び名も「並べて見る」「比較」「差分」「見比べる」で割れていた。5 つともここから開け、
-    // 名前は「…と見比べる」で揃える。文脈内のショートカット (参照ペインのタブ・下端の
-    // 「前回保存版 ＋a −b」・🔍) はそのまま残すので、覚えている人の手は変わらない。
+    // BLK-owner-20260923-1307-prune: 「2 つの版・2 枚の図を並べて違いを見る」入口を 2 つに絞る。
+    // 前の回 (BLK-owner-20260918-0529-prune) は 5 つの入口をここに並べて名前だけ揃えたが、
+    // 目的が同じ画面が 5 つ並ぶこと自体が「どれを開けばよいか」を選ばせていた。
+    // 残すのは ⇔ 並べて見る (版どうし・図どうしを並べる正面) と 🔍 変更前後を見比べる
+    // (資料・会議で見せる) の 2 つだけ。前回保存版 / 他フォルダの版 / 基準の図 は
+    // ⇔ 並べて見る の相手 (compare-select の候補) になったので、ここには並べない。
+    // 文脈内のショートカット (下端の「前回保存版 ＋a −b」・👀 他フォルダ・👁 レビュー) は
+    // そのまま残し、押すと ⇔ 並べて見る をその相手で開く。
     // opener は、その入口がモーダルの中にしか無いもの (先に開く画面) の id。
     { key: 'review', title: 'レビュー', items: [
-      { id: 'btn-tab-compare',  label: '別の図と見比べる' },
-      { id: 'status-livediff',  label: '前回保存版と見比べる' },
-      { id: 'btn-tab-peek',     label: '他の保存フォルダの版と見比べる' },
-      { id: 'btn-tab-review',   label: '基準の図と見比べる' },
-      { id: 'dp-review',        label: '変更前後を見比べる', opener: 'btn-tab-delivery' },
+      { id: 'btn-tab-compare',  label: '⇔ 並べて見る' },
+      { id: 'dp-review',        label: '🔍 変更前後を見比べる', opener: 'btn-tab-delivery' },
+      // 並べる画面ではない道具。覗く・指摘を出すのが目的で、並べるのは ⇔ 並べて見る に任せる。
+      { id: 'btn-tab-peek',     label: '他の保存フォルダを覗く' },
+      { id: 'btn-tab-review',   label: '基準の図との指摘' },
       { id: 'btn-tab-pins',     label: 'この図の指摘' },
       { id: 'btn-tab-inbox',    label: '図をまたぐ指摘箱' },
       { id: 'btn-tab-findings', label: '手動指摘の台帳' },

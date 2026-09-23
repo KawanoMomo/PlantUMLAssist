@@ -219,32 +219,44 @@ test('手順5 前回保存版から何行消えるかが、保存を押す前に
   await expect(chip).toHaveAttribute('title', /いま保存すると .* 行に減ります/);
 
   // 到達条件その3: 押すと前回保存版と現在が並び、消える行が名指しされる (1 操作)。
+  // BLK-owner-20260923-1307-prune: 並べる画面は ⇔ 並べて見る の ± 差分タブ 1 つに寄せた。
+  // 札はその画面を開く入口で、開いた先で見えるもの (警告・消える行・戻す) は変わらない。
   await chip.click();
-  const panel = page.locator('#vdiff-panel');
-  await expect(panel).toHaveClass(/open/);
-  await expect(page.locator('#vdiff-title')).toContainText('前回保存版 → いまの中身 (未保存)');
-  await expect(page.locator('#vdiff-head')).toHaveAttribute('data-vd-warn', '1');
-  await page.locator('#btn-vdiff-all').click();
-  await expect(page.locator('#vdiff-body .vd-del').filter({ hasText: 'Spi_Regs' })).toHaveCount(1);
-  expect(Number(await page.locator('#vdiff-head').getAttribute('data-vd-removed'))).toBeGreaterThan(20);
+  const panel = page.locator('#compare-pane');
+  await expect(panel).toBeVisible();
+  await expect(panel).toHaveClass(/mode-diff/);
+  const cdHead = page.locator('#compare-diff-head');
+  await expect(cdHead).toContainText('driver_common_class');
+  await expect(cdHead).toContainText('前回保存時点から');
+  await expect(cdHead).toHaveAttribute('data-vd-warn', '1');
+  await expect(page.locator('#compare-diff-view .cd-line.del').filter({ hasText: 'Spi_Regs' }))
+    .toHaveCount(1);
+  expect(Number(await cdHead.getAttribute('data-vd-removed'))).toBeGreaterThan(20);
 
   // BLK-reviewer-20260916-0046-wish: 差分は見えるようになったが、気付いた後に戻す手段が
   // 比較画面に無く、消えた分は手順をやり直して書き直すしかなかった (それ自体が今日の
   // 手順のやり直しになる)。並べている左側へ 1 クリックで戻し、reviewer は差が 0 に
   // なったことだけ確認すればよいようにする。
   // 到達条件その4: 比較画面に「前回保存版に戻す」があり、1 クリックで中身が戻る。
-  const restore = page.locator('#btn-vdiff-restore');
+  const restore = page.locator('#btn-compare-restore');
   await expect(restore).toBeVisible();
   await expect(restore).toHaveAttribute('title', /消えた \d+ 行が戻り/);
+  // 一覧から開いた図には錠がかかっていて、最初の書き戻しの直前に一度だけ問いが出る。
+  // 戻すのはエディタの中身なので、ファイルはそのままにして (書き換えない) 先へ進む。
+  const lock = page.locator('#source-lock-modal');
+  if (await lock.isVisible().catch(() => false)) {
+    await page.locator('#source-lock-keep').click();
+    await page.waitForTimeout(600);
+  }
   await restore.click();
   await page.waitForTimeout(400);
   // 到達条件その5: 戻した直後の画面が、差が 0 になったことをそのまま映す
   // (確かめ直しのために別の画面を開かせない)。
   await expect(chip).toHaveAttribute('data-livediff', 'same');
-  await expect(page.locator('#vdiff-head')).toHaveAttribute('data-vd-removed', '0');
-  await expect(page.locator('#vdiff-head')).toHaveAttribute('data-vd-added', '0');
+  await expect(cdHead).toHaveAttribute('data-vd-removed', '0');
+  await expect(cdHead).toHaveAttribute('data-vd-added', '0');
   // 戻せば何も戻すものが無いので、ボタン自体が引っ込む。
-  await expect(restore).toBeHidden();
+  await expect(restore).toHaveCount(0);
   // 消えていた 10 クラスが本文に戻っている (再入力していない)。
   expect(await page.locator('#editor').inputValue()).toContain('Wdg_Regs');
 });

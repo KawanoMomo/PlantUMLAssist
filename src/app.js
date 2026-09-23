@@ -4530,7 +4530,11 @@ function renderLiveDiffChip() {
   el.title = v === 'shrink'
     ? LD.warnText(p.name, p.before, p.now)
     : (v === 'none' ? 'この図はまだ保存していないので、比べる相手がありません'
-                    : '前回保存版といまの中身を並べて見る (押すと開きます)');
+                    : '⇔ 並べて見る の ± 差分で前回保存版と並べる (押すと開きます)');
+  // ⇔ 並べて見る の ± 差分を開いたままなら、打つたびにそちらも追従させる
+  // (札と並べた画面が違うことを言わない)。
+  var pane = document.getElementById('compare-pane');
+  if (pane && !pane.hidden && _compareMode === 'diff') renderCompareDiffView();
   return v;
 }
 
@@ -4560,10 +4564,14 @@ function openLiveDiff() {
   renderVersionDiff();
 }
 
+// BLK-owner-20260923-1307-prune: 下端の札は「前回保存版と今を並べる」ための入口で、
+// ⇔ 並べて見る の ± 差分タブと目的が同じだった。札は残し、押したときに開く画面を
+// ⇔ 並べて見る に寄せる (並べる画面の実体を増やさない)。全文で並べる・戻すは
+// そのタブの中でできる。
 function setupLiveDiff() {
   var el = document.getElementById('status-livediff');
   if (!el) return;
-  el.addEventListener('click', function() { openLiveDiff(); });
+  el.addEventListener('click', function() { toggleCompareView(true, 'diff'); });
   renderLiveDiffChip();
 }
 
@@ -20724,8 +20732,23 @@ function renderCompareDiffView() {
     // 「前回保存時点と比べてどうか」は言い切ったままにする (意味をすり替えない)。
     var fc = fb ? SD.countBetween(fb.dsl, active.dsl) : null;
     if (fb) head += ' ・ ' + esc(fb.label) + 'から +' + fc.added + ' −' + fc.removed;
+    // BLK-owner-20260923-1307-prune: 下端の札から寄せてきた分 (消える向きの警告と
+     // 「前回保存版に戻す」) は、この ± 差分タブが引き受ける。別の比較画面を開かせない。
+    var LDm = window.MA.liveDiff;
+    var pair = _liveDiffPair();
+    var warn = (LDm && pair && pair.has && LDm.verdict(pair.before, pair.now, pair.has) === 'shrink')
+      ? LDm.warnText(pair.name, pair.before, pair.now) : '';
     html += '<div class="cd-head" id="compare-diff-head"'
-      + (fb ? ' data-basis="write-history"' : '') + '>' + head + '</div>';
+      + (fb ? ' data-basis="write-history"' : '')
+      + ' data-vd-warn="' + (warn ? '1' : '0') + '"'
+      + ' data-vd-added="' + (fb ? fc.added : (st === 'changed' ? c.added : 0)) + '"'
+      + ' data-vd-removed="' + (fb ? fc.removed : (st === 'changed' ? c.removed : 0)) + '"'
+      + '>' + (warn ? esc(warn) + ' / ' : '') + head + '</div>';
+    if (LDm && pair && pair.has && LDm.canRestore(pair.before, pair.now, pair.has)) {
+      html += '<button type="button" id="btn-compare-restore" class="cd-restore" title="'
+        + esc(LDm.restoreTitle(pair.name, pair.before, pair.now)) + '">'
+        + esc(LDm.restoreLabel()) + '</button>';
+    }
     var rowsOut = fb
       ? SD.diffBetween(fb.dsl, active.dsl)
       : (st === 'changed' ? SD.diffLines(active.name, active.dsl) : []);
@@ -20747,6 +20770,25 @@ function renderCompareDiffView() {
   });
   html += '</div>';
   view.innerHTML = html;
+
+  // 「前回保存版に戻す」。当てるのは版一覧の「戻す」と同じ _applyLineEditText なので、
+  // undo 1 手で取り消せて、戻した結果も次の保存で控えが取られる。
+  var resBtn = document.getElementById('btn-compare-restore');
+  if (resBtn) resBtn.addEventListener('click', function() {
+    var LD = window.MA.liveDiff;
+    var p = _liveDiffPair();
+    if (!LD || !p || !p.has) return;
+    if (!_applyLineEditText(p.before)) {
+      if (window.MA.toast) window.MA.toast.show(LD.unchangedLine(p.name));
+      return;
+    }
+    var line = LD.restoredLine(p.name, p.before, p.now);
+    if (window.MA.toast) window.MA.toast.show(line);
+    appendSaveStatus(line);
+    // 戻した直後の画面が「差が 0」をそのまま映す (確かめ直しに別の画面を開かせない)。
+    renderLiveDiffChip();
+    renderCompareDiffView();
+  });
 
   var rows = view.querySelectorAll('.cd-other');
   for (var i = 0; i < rows.length; i++) {
