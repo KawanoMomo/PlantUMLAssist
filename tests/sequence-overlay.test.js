@@ -85,7 +85,7 @@ describe('buildSequenceOverlay', function() {
     overlay.buildSequenceOverlay(f.svgEl, f.parsed, overlayEl);
     var participants = f.parsed.elements.filter(function(e) { return e.kind === 'participant'; });
     participants.forEach(function(p) {
-      var lifelineRects = overlayEl.querySelectorAll('rect[data-type="lifeline"][data-id="' + p.id + '"]');
+      var lifelineRects = overlayEl.querySelectorAll('rect[data-type="lifeline"][data-id="' + p.id + '"]:not([data-front])');
       expect(lifelineRects.length).toBe(1);
       // 同一 id の participant rect (head/tail) はちょうど 2 件
       var partRects = overlayEl.querySelectorAll('rect[data-type="participant"][data-id="' + p.id + '"]');

@@ -40,7 +40,7 @@ test.describe('lifeline select-and-delete (userissue v1.2.3)', () => {
     await gotoApp(page);
     await setEditor(page, FIXTURE);
     var counts = await page.evaluate(() => {
-      var ll = document.querySelectorAll('#overlay-layer rect[data-type="lifeline"]').length;
+      var ll = document.querySelectorAll('#overlay-layer rect.selectable[data-type="lifeline"]').length;
       var pp = document.querySelectorAll('#overlay-layer rect[data-type="participant"]').length;
       return { lifeline: ll, participant: pp };
     });

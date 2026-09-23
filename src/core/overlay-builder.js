@@ -611,6 +611,7 @@ window.MA.overlayBuilder = (function() {
     extractLinkBBox: extractLinkBBox,
     linkGroups: linkGroups,
     extractUnionBBox: extractUnionBBox,
+    nodeBBox: _nodeBBox,
     extractMultiLineTextBBoxes: extractMultiLineTextBBoxes,
     hitTestTopmost: hitTestTopmost,
     extractDrawnBBox: extractDrawnBBox,
