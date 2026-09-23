@@ -285,3 +285,33 @@ test('手順8 外から .puml をツリーに落とすと保存先へ取り込�
   expect(msg).toContain('1 枚を保存先へ取り込みました');
   await expect(page.locator('#files-parts .files-part-head[data-part="timer"]')).toBeVisible();
 });
+
+// design 10c と組: 保存先が Git なら、右クリックの「過去のコミットと比較…」が押せて、比較する相手を選ぶ画面が開く。
+test('手順8 保存先が Git なら、右クリックの「過去のコミットと比較…」から比較相手を選べる', async ({ page }) => {
+  const fs = require('fs');
+  const path = require('path');
+  const { execFileSync } = require('child_process');
+  const rel = DIR + '-git';
+  const abs = path.join(__dirname, '..', '..', '..', rel.replace(/^\.\//, ''));
+  fs.rmSync(abs, { recursive: true, force: true });
+  fs.mkdirSync(abs, { recursive: true });
+  const git = (...a) => execFileSync('git', ['-C', abs, ...a], { stdio: 'pipe' }).toString();
+  git('init', '-q', '-b', 'main');
+  git('config', 'user.name', 'junior');
+  git('config', 'user.email', 'junior@example.invalid');
+  git('config', 'core.autocrlf', 'false');
+  fs.writeFileSync(path.join(abs, 'spi_state.puml'), S.docFor('spi_state') + '\n');
+  git('add', '-A');
+  git('commit', '-q', '-m', '初版');
+
+  await S.bootWithSaveDir(page, rel);
+  await expect(page.locator('#files-count-git')).toContainText('main');
+  await expandPart(page, 'spi');
+  await treeFile(page, 'spi_state').click({ button: 'right' });
+  const item = page.locator('#files-ctx-menu [data-action="cmp-commit"]');
+  await expect(item).toBeEnabled();
+  await item.click();
+  await expect(page.locator('#git-pick-modal')).toBeVisible();
+  await expect(page.locator('#git-pick-modal .git-pick-row').filter({ hasText: '初版' })).toHaveCount(1);
+  await expect.poll(() => page.locator('#editor').inputValue()).toContain('SPI 状態遷移');
+});

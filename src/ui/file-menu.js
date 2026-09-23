@@ -226,6 +226,13 @@ window.MA.fileMenuUi = (function() {
 
   function clickId(id) { var b = $(id); if (b) b.click(); }
 
+  // 保存先が Git のとき (10c の GIT 欄が出ているとき) だけ「過去のコミットと比較…」を押せる。
+  function _isGit() {
+    var g = window.MA.gitUi;
+    try { return !!(g && g.isRepo && g.isRepo()); } catch (e) { return false; }
+  }
+
+
   function runFile(action, name) {
     switch (action) {
       case 'open': return ensureOpen(name);
@@ -236,6 +243,11 @@ window.MA.fileMenuUi = (function() {
         return ensureOpen(name).then(function() { if (typeof window.openCompareTarget === 'function') window.openCompareTarget('before'); });
       case 'history':
         return ensureOpen(name).then(function() { clickId('btn-tab-versions'); });
+      case 'cmp-commit':
+        return ensureOpen(name).then(function() {
+          var g = window.MA.gitUi;
+          if (g && g.openPicker) g.openPicker(document.getElementById('files-sec-git'));
+        });
       case 'rename': return renameFile(name);
       case 'copy': return copyFile(name);
       case 'move': return moveFile(name);
@@ -298,7 +310,7 @@ window.MA.fileMenuUi = (function() {
       try { draft = !!window._draftHas(ctx.name); } catch (e) {}
     }
     menuItems = ctx.type === 'file'
-      ? FM().fileItems({ git: false, draft: draft })
+      ? FM().fileItems({ git: _isGit(), draft: draft })
       : FM().folderItems({ kind: ctx.folder.kind });
     menu.textContent = '';
     menu.setAttribute('data-menu-kind', ctx.type);
