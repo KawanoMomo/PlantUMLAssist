@@ -149,6 +149,18 @@ window.MA.sourceLock = (function() {
     return { action: 'ask', origin: e.origin };
   }
 
+  // unchangedSinceOpen(docId, dsl) — 開いたときから本文が変わっていないか (decide が skip を
+  // 返す条件) を、錠に触らずに答える。decide は名前が変わっていれば錠を外すので、書き先が
+  // 控え (`{名前}-編集中`) に替わった後の doc で問い合わせると、それだけで錠が外れて以後の
+  // 書き戻しが本体へ入ってしまう (BLK-builder-20260924-0637-b2-1-red)。問い合わせはこちらを使う。
+  function unchangedSinceOpen(docId, dsl) {
+    var e = docId ? _read()[docId] : null;
+    if (!e || typeof dsl !== 'string' || !e.opened) return false;
+    if (e.mode === 'copy' && e.alias) return false;
+    if (e.mode === 'overwrite') return false;
+    return fingerprint(dsl) === e.opened;
+  }
+
   // answer(docId, choice, used) — 確認への返事。
   //   'overwrite' … 元ファイルへ書いてよい
   //   'keep'      … 元ファイルは変更前のまま保ち、控えへ書く
@@ -241,6 +253,7 @@ window.MA.sourceLock = (function() {
     clearAll: clearAll,
     copyName: copyName,
     decide: decide,
+    unchangedSinceOpen: unchangedSinceOpen,
     answer: answer,
     answeredText: answeredText,
     askText: askText,

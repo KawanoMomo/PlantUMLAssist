@@ -26593,12 +26593,14 @@ function applyOmitAndSave() {
 // BLK-migrator-20260923-1809: 開いたときから本文が 1 文字も変わっていないか。
 // 判定の正本は source-lock の指紋 (開いた瞬間に憶えている)。錠を持たない図
 // (自分で作ったタブ) は「開いたまま」ではないので false。
+// BLK-builder-20260924-0637-b2-1-red: 問い合わせで錠を動かさない。decide は名前が変わると
+// 錠を外すので、控えへ逸らした後の doc (名前が `{名前}-編集中`) で聞くと、それだけで
+// 錠が外れ、保存直後の突合が本体へ書き戻していた (「本体は変更前のまま」と帯が言うのに本体が変わる)。
 function _isUnchangedSinceOpen(doc) {
   var SL = window.MA.sourceLock;
   if (!SL || !doc || !doc.id || typeof doc.dsl !== 'string') return false;
   try {
-    var d = SL.decide(doc.id, doc.name, _openDocNames(), doc.dsl);
-    return !!(d && d.action === 'skip');
+    return !!SL.unchangedSinceOpen(doc.id, doc.dsl);
   } catch (e) { return false; }
 }
 
