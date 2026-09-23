@@ -51,10 +51,10 @@ async function clearDir(page) {
 
 // 提出物庫は「図を全部消す」では消えない (それが庫の役目)。
 // 前の周の積み残しがテストに混ざらないよう、下ごしらえでだけ明示的に空にする。
-async function clearVault(page) {
+async function clearVault(page, dir) {
   await page.evaluate(async (d) => {
     await fetch('/autosave?vault=1&dir=' + encodeURIComponent(d), { method: 'DELETE' });
-  }, DIR);
+  }, dir || DIR);
 }
 
 async function openFolder(page) {
@@ -305,15 +305,21 @@ test.describe('junior 手順 1: シーケンス図からユースケース図を
 // 新規に開いて別々にやり直していた。下書きを作る機能が図種ごとに別々なので、
 // 図種を移るたびにどの機能を使うかを思い出し、部品名を打ち直すことになる。
 // 部品名を 1 回打てば 6 図種が同じ名前で揃って開くことを到達条件にする。
+// 保存先は専用の親フォルダの下に置く。部品の下書きは保存先の「隣のフォルダ」を先輩の保存先として
+// 読み、同じ部品名の実図があればそれを写す。DIR の隣は他の spec の保存先なので、全体実行で
+// junior-02-readable が保存した timer_init_sequence (Timer_Driver) が手本として写り込んでいた
+// (BLK-builder-20260924-0732-4-red)。隣に誰もいない所で「手本が無い部品」を起こす。
+const PART_MINE = DIR + '-part/junior';
+
 test.describe('junior 手順 1〜2: 手本の無い部品を 1 回の入力で起こす', () => {
   test.beforeEach(async ({ page }) => {
-    await bootWithDir(page);
-    await clearDir(page);
-    await clearVault(page);
+    await S1.bootWithSaveDir(page, PART_MINE);
+    await S1.clearDir(page, PART_MINE);
+    await clearVault(page, PART_MINE);
   });
 
   test.afterEach(async ({ page }) => {
-    await clearDir(page).catch(() => {});
+    await S1.clearDir(page, PART_MINE).catch(() => {});
   });
 
   test('部品名を 1 回打つと、6 図種の下書きが同じ名前で別タブに開く', async ({ page }) => {
@@ -915,6 +921,12 @@ test.describe('junior 手順 1: 先輩の図が前回保存からどこを変え
     await S1.putDoc(page, CHG_SENIOR, 'driver_common_class', COMP_V2);
     await S1.putDoc(page, CHG_SENIOR, 'gpio_init_sequence', SEQ_V2);
     await S1.putDoc(page, CHG_SENIOR, 'can_state', STATE_ONLY);
+    // 全体実行では保存先の取り込み (/prefs) が遅れ、init がボタンに手を付ける前に 👀 を押して
+    // 何も開かずに落ちていた (BLK-builder-20260924-0732-4-red)。遅い回をここで再現しておく。
+    await page.route('**/prefs', async (route) => {
+      await new Promise((r) => setTimeout(r, 1500));
+      await route.continue();
+    });
     await page.reload();
     await page.waitForSelector('#btn-tab-peek');
   });
