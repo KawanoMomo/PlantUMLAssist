@@ -189,10 +189,12 @@ describe('validate — 確定できる条件', function() {
     expect(v.errors.join('')).toContain('親クラス');
   });
 
-  test('図にある名前は二重に作らせない', function() {
+  // BLK-human-20260923-1330: 同名でも DSL は書ける (既存クラスに足される)。
+  // 意図と違うことが多いので警告として出すが、止めはしない。
+  test('図にある名前は、警告を出したうえで追加できる', function() {
     var v = CD.validate(SAMPLE, parse(), Object.assign({}, base, { name: 'Spi_Driver' }));
-    expect(v.ok).toBe(false);
-    expect(v.errors.join('')).toContain('図にあります');
+    expect(v.ok).toBe(true);
+    expect(v.warnings.join('')).toContain('図にあります');
   });
 
   test('確定できない spec の apply は DSL を 1 文字も変えない', function() {

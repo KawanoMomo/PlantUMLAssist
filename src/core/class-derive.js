@@ -171,11 +171,15 @@ window.MA.classDerive = (function() {
     var errors = [];
     if (!_s(spec && spec.parentId)) errors.push('親クラスが選ばれていません');
     if (!_s(spec && spec.name)) errors.push('派生クラス名を入れてください');
-    if (errors.length) return { ok: false, errors: errors };
+    if (errors.length) return { ok: false, errors: errors, warnings: [] };
+    var base = CS().validate(toScaffoldSpec(spec), text);
+    // BLK-human-20260923-1330: 同名のクラスが既にあっても DSL は書ける
+    // (そのクラスにメンバが足される)。意図と違うことは多いので警告として出す。
+    var warnings = (base.warnings || []).slice();
     if (CS().existingIds(text)[_s(spec.name)]) {
-      return { ok: false, errors: ['その名前のクラスは図にあります: ' + _s(spec.name)] };
+      warnings.unshift('その名前のクラスは図にあります: ' + _s(spec.name) + ' (既存のクラスに足されます)');
     }
-    return CS().validate(toScaffoldSpec(spec), text);
+    return { ok: base.ok, errors: base.errors, warnings: warnings };
   }
 
   function apply(text, parsed, spec) {

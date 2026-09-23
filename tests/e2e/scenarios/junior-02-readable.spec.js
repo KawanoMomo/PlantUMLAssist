@@ -124,6 +124,74 @@ test('手順2 先輩の構成(参加者5・メッセージ6)を名前と本文�
   expect(t).toContain('P1 --> Dev : E_OK');
 });
 
+// BLK-human-20260923-1330: 自己メッセージ (`A -> A`) は PlantUML の正当な記法なのに、
+// 「まとめて追加」が「From と To が同じです」で確定ボタンごと止めていた。
+// 検証は「止める」ではなく「知らせる」: 警告は出るが追加はできる。
+test('手順2 同じ参加者へのメッセージを含む構成も、警告は出たうえでまとめて追加できる', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForSelector('#preview-svg', { timeout: 5000 });
+  await page.locator('#diagram-type').selectOption('plantuml-sequence');
+  await page.waitForTimeout(500);
+
+  await page.locator('#seq-scaffold-open').click();
+  await expect(page.locator('#seq-sc-modal')).toBeVisible();
+
+  await page.locator('#seq-sc-title').fill('TIMER内部処理');
+  await page.locator('#seq-sc-ptype-0').selectOption('actor');
+  await page.locator('#seq-sc-pname-0').fill('Dev');
+  await page.locator('#seq-sc-ptype-1').selectOption('participant');
+  await page.locator('#seq-sc-pname-1').fill('Timer');
+  await page.waitForTimeout(200);
+
+  // 1 本目は普通のメッセージ、2 本目を自己メッセージにする。
+  await page.locator('#seq-sc-mfrom-0').selectOption('Dev');
+  await page.locator('#seq-sc-mto-0').selectOption('Timer');
+  await page.locator('#seq-sc-mtext-0').fill('Timer_Init()');
+  await page.locator('#seq-sc-add-msg').click();
+  await page.locator('#seq-sc-mfrom-1').selectOption('Timer');
+  await page.locator('#seq-sc-mto-1').selectOption('Timer');
+  await page.locator('#seq-sc-mtext-1').fill('内部処理');
+  await page.waitForTimeout(300);
+
+  // 到達条件その1: 警告は出る (何を確かめてほしいかが読める)。
+  const notice = page.locator('#seq-sc-errors');
+  await expect(notice).toContainText('From と To');
+  await expect(notice.locator('.scaffold-warn')).toHaveCount(1);
+  await expect(notice.locator('.scaffold-error')).toHaveCount(0);
+
+  // 到達条件その2: 警告が出ていても「追加」は押せる (止められない)。
+  const confirm = page.locator('#seq-sc-confirm');
+  await expect(confirm).toBeEnabled();
+  await expect(page.locator('#seq-sc-preview')).toContainText('Timer -> Timer : 内部処理');
+
+  await confirm.click();
+  await page.waitForTimeout(400);
+
+  // 到達条件その3: 自己メッセージが矢印の形のまま DSL に入る。
+  const t = await getEditorText(page);
+  expect(t).toContain('Dev -> Timer : Timer_Init()');
+  expect(t).toContain('Timer -> Timer : 内部処理');
+
+  // 到達条件その4: プレビューに自己メッセージの矢印が描かれる。
+  await page.waitForTimeout(2500);
+  await expect(page.locator('#preview-svg svg')).toBeVisible();
+  const selfMsg = await page.evaluate(() => {
+    const svg = document.querySelector('#preview-svg svg');
+    if (!svg) return null;
+    const hit = Array.prototype.some.call(svg.querySelectorAll('text'),
+      (n) => (n.textContent || '').indexOf('内部処理') >= 0);
+    // 自己メッセージは往路と復路に分かれて描かれるので、本数ではなく
+    // 「両方のラベルが図に出ている」ことで確かめる。
+    const init = Array.prototype.some.call(svg.querySelectorAll('text'),
+      (n) => (n.textContent || '').indexOf('Timer_Init()') >= 0);
+    return { drawn: hit, initDrawn: init, messages: svg.querySelectorAll('g.message').length };
+  });
+  expect(selfMsg, 'プレビューが描かれている').not.toBeNull();
+  expect(selfMsg.drawn, '自己メッセージのラベルが図に出る').toBe(true);
+  expect(selfMsg.initDrawn, '通常のメッセージも並んで出る').toBe(true);
+  expect(selfMsg.messages >= 2, '矢印が描かれている').toBe(true);
+});
+
 // BLK-junior-20260909-0603-wish: 手本を「見て → 閉じて → 記憶で打つ」の往復をなくす。
 // 覗いたその 1 枚を閉じずに書きかけの右へ据え、足りない状態・遷移を色で出す。
 test('手順2 先輩の図を手本として右に据えたまま、自分に無い状態・遷移が色で分かる', async ({ page }) => {

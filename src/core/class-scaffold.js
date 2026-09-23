@@ -159,11 +159,14 @@ window.MA.classScaffold = (function() {
       var needsParent = s.classes.some(function(c) { return c.relation !== 'none'; });
       if (needsParent) errors.push('親クラスを入れるか、関連を「なし」にしてください');
     }
+    // BLK-human-20260923-1330: 未定義の相手は PlantUML 側がその行からクラスを起こすので
+    // 生成はできる。止めずに「確かめたいこと」として警告に落とす。
+    var warnings = [];
     s.relations.forEach(function(r) {
-      if (!known(r.from)) errors.push('関連の元が未定義です: ' + r.from);
-      if (!known(r.to)) errors.push('関連の先が未定義です: ' + r.to);
+      if (!known(r.from)) warnings.push('関連の元が未定義です: ' + r.from + ' (この行でクラスが起きます)');
+      if (!known(r.to)) warnings.push('関連の先が未定義です: ' + r.to + ' (この行でクラスが起きます)');
     });
-    return { ok: errors.length === 0, errors: errors };
+    return { ok: errors.length === 0, errors: errors, warnings: warnings };
   }
 
   // 追加される行だけを返す。UI のプレビューと apply が同じ結果を見る。

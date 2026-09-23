@@ -101,22 +101,31 @@ describe('validate', function() {
     expect(v.errors.join()).toContain('choice');
   });
 
-  test('枝が 1 本なら ng', function() {
+  // BLK-human-20260923-1330: 枝 1 本・重複した枝・ガード無しが複数、のいずれも
+  // PlantUML としては書ける行なので止めない。警告として知らせる
+  // (旧テストはこの 3 つを「ng / 弾く」と期待していた)。
+  test('枝が 1 本でも、警告を出したうえで追加できる', function() {
     var v = sb.validate(spec({ branches: [{ to: 'Error', guard: '重大' }] }), BASE);
-    expect(v.ok).toBe(false);
-    expect(v.errors.join()).toContain('2 本以上');
+    expect(v.ok).toBe(true);
+    expect(v.warnings.join()).toContain('1 本');
   });
 
-  test('同じ遷移先とガードの重複を弾く', function() {
+  test('同じ遷移先とガードの重複は、警告を出したうえで追加できる', function() {
     var v = sb.validate(spec({ branches: [{ to: 'Error', guard: '重大' }, { to: 'Error', guard: '重大' }] }), BASE);
-    expect(v.ok).toBe(false);
-    expect(v.errors.join()).toContain('重複');
+    expect(v.ok).toBe(true);
+    expect(v.warnings.join()).toContain('重複');
   });
 
-  test('ガード無しの枝は 1 本まで', function() {
+  test('ガード無しの枝が複数でも、警告を出したうえで追加できる', function() {
     var v = sb.validate(spec({ branches: [{ to: 'Error', guard: '' }, { to: 'Idle', guard: '' }] }), BASE);
+    expect(v.ok).toBe(true);
+    expect(v.warnings.join()).toContain('else');
+  });
+
+  test('分岐の名前が無いのは本当のエラーとして止める', function() {
+    var v = sb.validate(spec({ choiceId: '', branches: [{ to: 'Idle', guard: 'a' }, { to: 'Error', guard: 'b' }] }), BASE);
     expect(v.ok).toBe(false);
-    expect(v.errors.join()).toContain('else');
+    expect(v.errors.join()).toContain('名前');
   });
 
   test('遷移先が同じでもガードが違えば ok', function() {

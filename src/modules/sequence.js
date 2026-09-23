@@ -2076,7 +2076,9 @@ window.MA.modules.plantumlSequence = (function() {
       if (pre) pre.textContent = SS.preview(text, spec).join('\n');
       var res = SS.validate(spec, text);
       var errEl = document.getElementById('seq-sc-errors');
-      if (errEl) errEl.textContent = res.ok ? '' : res.errors.join(' / ');
+      // BLK-human-20260923-1330: errors は赤で出して追加を止める。warnings は黄色で
+      // 出したまま追加は通す (自己メッセージなどは PlantUML として正当なため)。
+      if (errEl) errEl.innerHTML = window.MA.scaffoldNotice.html(res);
       var confirmBtn = document.getElementById('seq-sc-confirm');
       if (confirmBtn) {
         confirmBtn.disabled = !res.ok;

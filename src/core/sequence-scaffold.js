@@ -135,10 +135,13 @@ window.MA.sequenceScaffold = (function() {
     return { title: _s(src.title), participants: participants, messages: messages };
   }
 
-  // 「何が足りないか」を返す。UI は確定ボタンの可否とメッセージに使う。
+  // BLK-human-20260923-1330:「PlantUML として正当な入力を GUI が拒まない」。
+  // errors は本当に生成できないものだけ。意図を確かめたいだけのものは warnings に落とし、
+  // ok は errors だけで決める (警告が出ていても「追加」は押せて、押せば追加される)。
   function validate(spec, text) {
     var s = normalizeSpec(spec, text);
     var errors = [];
+    var warnings = [];
     if (s.participants.length === 0 && s.messages.length === 0) {
       errors.push('参加者かメッセージを 1 つ以上入れてください');
     }
@@ -147,10 +150,18 @@ window.MA.sequenceScaffold = (function() {
       if (seen[p.id]) errors.push('参加者名が重複しています: ' + (p.label || p.id));
       seen[p.id] = true;
     });
+    // 宣言のない参加者名は preview が participant 行を補うので生成はできる。
+    var declared = existingIds(text);
     s.messages.forEach(function(m, i) {
-      if (m.from === m.to) errors.push('メッセージ ' + (i + 1) + ': From と To が同じです');
+      var no = 'メッセージ ' + (i + 1) + ': ';
+      // 自己メッセージ (`A -> A`) は PlantUML の正当な記法。状態更新・タイマ処理で頻出する。
+      if (m.from === m.to) warnings.push(no + 'From と To が同じです (自己メッセージとして追加されます)');
+      [m.from, m.to].forEach(function(id) {
+        if (!declared[id] && !seen[id]) warnings.push(no + '宣言のない参加者です: ' + id + ' (participant 行を補って追加されます)');
+      });
+      if (!m.text) warnings.push(no + 'ラベルが空です (矢印だけが追加されます)');
     });
-    return { ok: errors.length === 0, errors: errors };
+    return { ok: errors.length === 0, errors: errors, warnings: warnings };
   }
 
   function _titleIndex(text) {
