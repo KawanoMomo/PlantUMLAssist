@@ -2109,7 +2109,7 @@ window.MA.modules.plantumlState = (function() {
       P.primaryButtonHtml('st-update', '更新');
     if (related.length > 0) {
       html += '<div style="border-top:1px solid var(--border);padding-top:6px;margin-top:6px;">' +
-              '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">Transitions</div>';
+              '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">この状態に出入りする遷移</div>';
       related.forEach(function(tr) {
         html += '<div style="font-size:11px;margin-bottom:2px;">' + tr.from + ' → ' + tr.to + (tr.label ? ' : ' + tr.label : '') + ' (L' + tr.line + ')</div>';
       });
@@ -2117,7 +2117,7 @@ window.MA.modules.plantumlState = (function() {
     }
     if (notes.length > 0) {
       html += '<div style="border-top:1px solid var(--border);padding-top:6px;margin-top:6px;">' +
-              '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">Notes</div>';
+              '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">注釈</div>';
       notes.forEach(function(n, idx) {
         var preview = (n.text || '').replace(/\n/g, ' ⏎ ').slice(0, 30);
         html += '<div style="font-size:11px;margin-bottom:2px;">' + n.position + ' "' + preview + '" (L' + n.line + ') <button id="st-note-del-' + idx + '" data-start="' + n.line + '" data-end="' + n.endLine + '">✕</button></div>';

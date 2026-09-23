@@ -708,6 +708,7 @@ window.MA.modules.plantumlUsecase = (function() {
             'A --&gt; B : label / A ..&gt; B(include) / A ..&gt; B : extend / A &lt;|-- B。空行は無視されます</div>';
       }
       detailEl.innerHTML = html;
+      if (kind === 'relation') window.MA.relationKindCards.mountForSelect('uc-tail-rkind', 'usecase');
       if (kind === 'actor') bindAliasHint('A');
       else if (kind === 'usecase') bindAliasHint('U');
       // 一括欄は「既に他の図にある行」を打ち直させないためのボタンを持つ。

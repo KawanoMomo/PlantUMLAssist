@@ -3779,7 +3779,7 @@ function initCommandPalette() {
       { id: 'export-png', title: 'PNG として保存 / Export PNG', hint: 'Export', keywords: ['export', 'png'], run: function() { clickById('exp-png'); } },
       { id: 'export-png-t', title: 'PNG（透過背景）/ Export PNG transparent', hint: 'Export', keywords: ['export', 'png', 'transparent'], run: function() { clickById('exp-png-transparent'); } },
       { id: 'export-clip', title: 'クリップボードにコピー / Copy image', hint: 'Export', keywords: ['export', 'clipboard', 'copy'], run: function() { clickById('exp-clipboard'); } },
-      { id: 'export-all', title: '全図を SVG で保存（zip）', hint: 'Export', keywords: ['export', 'svg', 'zip', 'all'], run: function() { clickById('exp-svg-all'); } },
+      { id: 'export-all', title: '全図を SVG で保存（zip）', hint: 'Export', keywords: ['export', 'svg', 'zip', 'all', '開いている図すべて'], run: function() { openDocSetModal('open'); } },
       { id: 'call-graph', title: '呼び出しグラフ（このメソッドを呼んでいる図を辿る）', hint: 'Review', keywords: ['call', 'graph', 'callers', '呼び出し', 'よびだし', 'グラフ', '突合', 'method', 'メソッド'], run: function() { openCallGraph(); } },
       // BLK-owner-20260918-0429-prune: ツール ▾ →「確かめる」にも載せたので button を持つ。
       // パレット側の分類・言い換えはメニューに合わせて自動で揃う。
@@ -28667,7 +28667,7 @@ function setDocSetScope(scope) {
   });
   if (_dsScope === 'set') return;
   closeDocSetModal();
-  var hit = { one: 'exp-material', parts: 'exp-png-pack', board: 'exp-material-board' }[_dsScope];
+  var hit = { one: 'exp-material', parts: 'exp-png-pack', board: 'exp-material-board', open: 'exp-svg-all' }[_dsScope];
   if (hit) { var el = document.getElementById(hit); if (el) el.click(); }
   else if (_dsScope === 'fix') toggleExportPick(true, 'fix');
   else if (_dsScope === 'pick') toggleExportPick(true, 'all');

@@ -878,6 +878,7 @@ window.MA.modules.plantumlComponent = (function() {
             'A ..&gt; B(dependency) / A -() B(provides) / A )- B(requires)。空行は無視されます</div>';
       }
       detailEl.innerHTML = html;
+      if (kind === 'relation') window.MA.relationKindCards.mountForSelect('co-tail-rkind', 'component');
       // 一括欄は「既に他の図にある行」を打ち直させないためのボタンを持つ。
       window.MA.reuseModal.bindButton('co-tail-reuse', 'plantuml-component', 'co-tail-bulk');
 

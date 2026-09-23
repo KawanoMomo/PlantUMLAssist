@@ -5,6 +5,18 @@ const S = require('./_scenario');
 
 const DIR = S.dirFor(__filename);
 
+// BLK-owner-20260923-2332-prune: 開いている図を全部 zip にする範囲は、Export ▾ の独立した項目から
+// 📦 資料セットの「対象の選び方」→「開いている図すべて」に移った。
+async function exportOpenDocs(page, timeout) {
+  await page.locator('#btn-export').click();
+  await page.waitForSelector('#export-menu', { state: 'visible' });
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#dsc-open', { state: 'visible' });
+  const dl = page.waitForEvent('download', { timeout: timeout || 20000 }).catch(() => null);
+  await page.locator('#dsc-open').click();
+  return dl;
+}
+
 test('手順9 開いている全図を SVG の zip で 1 度に書き出せる', async ({ page }) => {
   test.setTimeout(90 * 1000);
   await S.bootWithSaveDir(page, DIR);
@@ -14,7 +26,7 @@ test('手順9 開いている全図を SVG の zip で 1 度に書き出せる',
     await S.openFolderItem(page, n);
   }
 
-  const download = await (await S.exportVia(page, 'exp-svg-all', 60000));
+  const download = await (await exportOpenDocs(page, 60000));
   // 到達条件: zip が 1 本書き出される。
   expect(download).not.toBeNull();
   expect(download.suggestedFilename()).toMatch(/\.zip$/);
@@ -33,7 +45,7 @@ test('手順9 2 度目は前回書き出しからの差分が出て、変わっ�
   }
 
   // 1 度目。ここが次回の基準になる。
-  expect(await S.exportVia(page, 'exp-svg-all', 60000)).not.toBeNull();
+  expect(await exportOpenDocs(page, 60000)).not.toBeNull();
   await page.waitForFunction(async (d) => {
     const r = await fetch('/autosave?dir=' + encodeURIComponent(d));
     const j = r.ok ? await r.json() : null;

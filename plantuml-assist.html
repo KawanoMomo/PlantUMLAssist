@@ -7478,8 +7478,10 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button id="exp-png">PNGとして保存</button>
         <button id="exp-png-transparent">PNG（透過背景）</button>
         <button id="exp-clipboard">クリップボードにコピー</button>
-        <button id="exp-svg-all">全図をSVGで保存（zip）</button>
-        <!-- BLK-primary-20260914-2006-wish: 上の「全図」は今開いているタブだけが対象で、
+        <!-- BLK-owner-20260923-2332-prune: 「全図をSVGで保存（zip）」は開いているタブだけを詰める範囲違いの
+             zip で、似た zip の入口がメニューに 2 つ並んでいた。📦 資料セットの「対象の選び方」→
+             「開いている図すべて」に落とした (実体のボタンは #toolbar-actions に残す)。
+             BLK-primary-20260914-2006-wish: 旧「全図」は今開いているタブだけが対象で、
              保存フォルダに 25 枚あってもタブが 1 枚なら 1 枚しか入らない。資料に入れる
              図の組に名前を付けて登録し、名前を選ぶだけで常にその枚数を出す -->
         <!-- BLK-owner-20260918-0329-prune: 「zip にして渡す」入口は Export ▾ の中の
@@ -7538,6 +7540,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <button id="exp-svg-fix" title="▤ 変更サマリで [要修正] の印が付いた図だけを zip に詰める">要修正のみをSVGで保存（zip）</button>
     <button id="exp-png-pack" title="保存フォルダから同じ部品の図を全図種まとめ、図番号を振った PNG セット（zip）にして書き出す">部品の図をまとめて資料化（PNG）…</button>
     <button id="exp-material" title="部品と図種を選ぶと、その図種に決まっている形式で書き出し、題名に（資料用）を付けて保存フォルダと提出物庫にも入れる">1 枚を資料化（形式は図種で自動）…</button>
+    <button id="exp-svg-all" title="開いているタブの図を全部 SVG にして 1 つの zip にする">開いている図すべてをSVGで保存（zip）</button>
     <button id="exp-material-board" title="部品の図種を全部並べ、資料用が無い図種・元が新しい図種を色分けで見せて、選んだ図種をまとめて資料化する">部品の資料一式を見る／まとめて資料化…</button>
     <select id="render-mode" title="レンダリングモード">
       <option value="local">local (Java)</option>
@@ -9049,6 +9052,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
               title="全図・変更図のみ・要修正のみで絞り込んで、選んだ図だけを zip にする">図を選ぶ</button>
       <button type="button" id="dsc-fix" data-scope="fix" aria-pressed="false"
               title="▤ 変更サマリで [要修正] の印が付いた図だけを zip にする">要修正のみ</button>
+      <button type="button" id="dsc-open" data-scope="open" aria-pressed="false"
+              title="いま開いているタブの図を全部 SVG の zip にする（保存フォルダの枚数ではなくタブの枚数）">開いている図すべて</button>
     </div>
     <div id="docset-new">
       <label>新しい資料セット</label>

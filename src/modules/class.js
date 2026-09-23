@@ -1557,7 +1557,10 @@ window.MA.modules.plantumlClass = (function() {
           P.primaryButtonHtml('cl-tail-add', '+ Note 追加');
       }
       detailEl.innerHTML = html2;
-      if (kind === 'relation') _bindRelationRoles();
+      if (kind === 'relation') {
+        window.MA.relationKindCards.mountForSelect('cl-tail-rkind', 'class');
+        _bindRelationRoles();
+      }
 
       P.bindEvent('cl-tail-add', 'click', function() {
         var t = ctx.getMmdText();

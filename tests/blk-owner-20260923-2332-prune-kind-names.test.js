@@ -72,3 +72,48 @@ describe('種別チップの名前 (BLK-owner-20260923-2332-prune)', () => {
     expect(cl.abstract).toBe('抽象クラス');
   });
 });
+
+// 末尾に追加の「関係」フォームの種類は、選択パネルと同じ名称と意味のカードで選ぶ。
+try { delete require.cache[require.resolve('../src/core/relation-kind-cards.js')]; } catch (e) {}
+require('../src/core/relation-kind-cards.js');
+var RC = global.window.MA.relationKindCards;
+
+describe('関係の種類はカードで選ぶ (BLK-owner-20260923-2332-prune)', () => {
+  function setup() {
+    var d = global.document;
+    d.body.innerHTML = '<div id="pane"><div id="wrap"><label>Kind</label><select id="uc-tail-rkind">' +
+      '<option value="association" selected>Association (-->)</option>' +
+      '<option value="generalization">Generalization (&lt;|--)</option>' +
+      '<option value="include">Include</option><option value="extend">Extend</option>' +
+      '</select></div></div>';
+    var changes = [];
+    var sel = d.getElementById('uc-tail-rkind');
+    sel.addEventListener('change', function() { changes.push(sel.value); });
+    var host = RC.mountForSelect('uc-tail-rkind', 'usecase');
+    return { d: d, sel: sel, host: host, changes: changes };
+  }
+
+  test('プルダウンの代わりに名称と意味のカードが並び、プルダウンは隠れる', () => {
+    var s = setup();
+    var cards = s.host.querySelectorAll('.uc-tail-rkind-card');
+    expect(cards.length).toBe(4);
+    expect(cards[0].textContent).toContain('関連 / association');
+    expect(cards[0].getAttribute('aria-pressed')).toBe('true');
+    expect(s.d.getElementById('wrap').getAttribute('data-tail-kind-select')).toBe('1');
+  });
+
+  test('カードを押すと select の値が変わり change が 1 回飛ぶ', () => {
+    var s = setup();
+    s.host.querySelector('[data-value="include"]').click();
+    expect(s.sel.value).toBe('include');
+    expect(s.changes.join(',')).toBe('include');
+    expect(s.host.querySelector('[data-value="include"]').getAttribute('aria-pressed')).toBe('true');
+    expect(s.host.querySelector('[data-value="association"]').getAttribute('aria-pressed')).toBe('false');
+  });
+
+  test('作り直しても列は 1 つ', () => {
+    var s = setup();
+    RC.mountForSelect('uc-tail-rkind', 'usecase');
+    expect(s.d.querySelectorAll('#uc-tail-rkind-cards').length).toBe(1);
+  });
+});
