@@ -3698,9 +3698,14 @@ table.vault-table button.vault-open:hover { border-color: var(--accent); }
 }
 .folder-vault-bar .folder-vault-open:hover { border-color: var(--accent); }
 .folder-vault-bar .folder-vault-state { color: var(--text-secondary); }
+/* 部品名の依存グラフ (BLK-primary-20260908-2003-wish)。
+   上が矢印の絵、下が影響の届く図の一覧。絵だけでは「開いて直す図」を数えられない。 */
 /* 名前で図を探す (BLK-primary-20260917-0523-wish)。
-   1 行 = 1 図。押せばその図のその行へ運ぶので、一覧から開き直す手順が要らない。 */
-#ns-body { flex: 1; overflow-y: auto; padding: 6px 14px 14px 14px; }
+   1 行 = 1 図。押せばその図のその行へ運ぶので、一覧から開き直す手順が要らない。
+   BLK-owner-20260923-1949-prune: ▤ 影響を見る の下段 (置換後が空のときの出現箇所の一覧)。 */
+#ri-occ { padding: 6px 14px 14px 14px; }
+#ri-occ .ri-occ-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; font-size: 12px; margin-bottom: 6px; }
+#ns-summary { color: var(--accent); }
 #ns-q { min-width: 220px; font-family: var(--font-mono); }
 #ns-rows .ns-row {
   border: 1px solid var(--border); border-radius: 4px; background: var(--bg-primary);
@@ -3721,9 +3726,16 @@ table.vault-table button.vault-open:hover { border-color: var(--accent); }
 #ns-rows .ns-at .ns-line { color: var(--text-secondary); margin-right: 6px; }
 #ns-rows .ns-empty, #ns-hint { color: var(--text-secondary); font-size: 11px; padding: 6px 2px; }
 #ns-hint .ns-top-name { cursor: pointer; text-decoration: underline; margin-right: 8px; }
-/* 部品名の依存グラフ (BLK-primary-20260908-2003-wish)。
-   上が矢印の絵、下が影響の届く図の一覧。絵だけでは「開いて直す図」を数えられない。 */
-#dg-body { flex: 1; overflow-y: auto; padding: 6px 14px 14px 14px; }
+/* BLK-owner-20260923-1949-prune: 依存グラフは ▤ 影響を見る の上段。上段と出現行を 1 本の縦スクロールにまとめる。 */
+#ri-scroll { flex: 1; overflow-y: auto; min-height: 0; }
+#ri-scroll #ri-body, #ri-scroll #dg-body { flex: none; overflow: visible; }
+#ri-refs { border-bottom: 1px solid var(--border); }
+.ri-refs-head, .ri-occ-head {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
+  padding: 8px 14px 0 14px; font-size: 12px; color: var(--text-primary);
+}
+.ri-refs-head > * { flex: none; }
+#dg-body { padding: 6px 14px 14px 14px; }
 #dg-canvas { border: 1px solid var(--border); border-radius: 4px; background: var(--bg-primary); overflow-x: auto; }
 #dg-canvas .dg-empty { color: var(--text-secondary); font-size: 12px; padding: 20px 10px; }
 #dg-canvas svg { display: block; }
@@ -7582,10 +7594,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <div class="rename-actions">
           <!-- BLK-primary-20260908-1303-wish: 適用する前に、当たった図の該当行が
                どう変わるかを変更サマリボードと同じ見た目で並べて確かめる -->
-          <button id="btn-rename-preview" disabled title="この置換をヒットした図全部に当てたら、各図の該当行がどう変わるかを並べて見る (まだ置換はしません)">▤ 影響を見る</button>
-          <!-- BLK-primary-20260908-2003-wish: 影響を見るはヒット行を図ごとに並べるだけで、
-               図と図の参照の連鎖は見えない。部品名 1 つから参照元・参照先を矢印で出す -->
-          <button id="btn-rename-depgraph" title="この部品名を参照している図・参照している先を矢印で一望する (連鎖で影響が届く図も出す)">◈ 依存グラフ</button>
+          <button id="btn-rename-preview" disabled title="この部品名が出てくる図と行・参照元と参照先・連鎖で影響が届く図を 1 画面で見る。置換後を入れていれば、各図の該当行がどう変わるかも並ぶ (まだ置換はしません)">▤ 影響を見る</button>
           <button id="btn-rename-apply" disabled>置換</button>
           <button id="btn-rename-cancel">閉じる</button>
         </div>
@@ -8744,11 +8753,15 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   </div>
 </div>
 <!-- BLK-primary-20260908-1303-wish: ⇄ 一括置換の「▤ 影響を見る」。適用する前に、
-     ヒットした図の該当行が置換でどう変わるかを変更サマリボードと同じ見た目で並べる。 -->
+     ヒットした図の該当行が置換でどう変わるかを変更サマリボードと同じ見た目で並べる。
+     BLK-owner-20260923-1949-prune: 「この部品名がどの図のどこに効くか」を出す画面は
+     ここ 1 つ。部品名の依存グラフ (参照元・参照先・連鎖で影響が届く図、note の一括付与、
+     変更チケット、版履歴) は上段、出現行 (置換後があれば今 / 置換後) は下段に並ぶ。
+     Ctrl+K の「依存グラフ」「名前で図を探す」もこの画面を開く。 -->
 <div id="ri-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div class="board-modal">
     <div class="board-head">
-      <strong>置換の影響</strong>
+      <strong>影響を見る</strong>
       <span id="ri-summary"></span>
       <!-- BLK-primary-20260917-0023: 何枚中何枚に変更ありか (残りは触らなくてよい) -->
       <span id="ri-roster"></span>
@@ -8758,105 +8771,93 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
              「置換前の図」と「置換後 (仮適用) の図」を並べて見せたい -->
         <label title="図ごとに 変更前 / 変更後 (仮適用) の図を並べて出す (押すと原寸)"><input type="checkbox" id="ri-svg" checked> 図で見る</label>
         <span id="ri-svg-state" role="status"></span>
+        <button type="button" id="dg-use" title="この画面で見ている名前を一括置換の「置換前」に入れて戻る">この名前を置換前に入れる</button>
         <button type="button" id="ri-apply">この内容で置換する</button>
         <button type="button" id="ri-close">閉じる</button>
       </span>
     </div>
-    <div id="ri-body" class="diff-board"></div>
+    <div id="ri-scroll">
+      <!-- BLK-primary-20260908-2003-wish: 名前を 1 つ選ぶと参照元 (左) → 名前 (中央) →
+           参照先 (右) が矢印で並び、隣の名前を経由して影響が届く図まで一覧に出る。 -->
+      <section id="ri-refs" aria-label="参照の連鎖">
+        <div class="ri-refs-head">
+          <strong>参照の連鎖</strong>
+          <span id="dg-summary" role="status"></span>
+          <label for="dg-name">部品名</label>
+          <select id="dg-name" title="参照の本数が多い順に並ぶ"></select>
+          <label for="dg-hops" title="隣の名前を何段まで辿って影響が及ぶ図を数えるか">連鎖</label>
+          <select id="dg-hops">
+            <option value="0">直接だけ</option>
+            <option value="1">1 段</option>
+            <option value="2" selected>2 段</option>
+            <option value="3">3 段</option>
+          </select>
+          <button type="button" id="dg-ticket" title="今出ている影響一覧を「変更チケット」として保存フォルダに残す。次の run はこの札の未チェックだけを直せばよい">この変更をチケットにする</button>
+        </div>
+        <div id="dg-body">
+          <div id="dg-canvas"></div>
+          <div id="dg-impact"></div>
+          <!-- BLK-primary-20260917-0123-wish: 不具合対応の入口。影響が届く図まで出ても
+               「いつこの記述に変わったか」は各図を開いて目で追うしかなかった。
+               影響一覧の版履歴を 1 本の時系列に混ぜ、症状の語で絞って
+               「ここで書き換わった」版を名指しする。 -->
+          <div id="dg-ver">
+            <div class="dg-ver-head">
+              <strong>版履歴を症状の語で探す</strong>
+              <label for="dg-ver-kw">語</label>
+              <input type="text" id="dg-ver-kw"
+                placeholder="症状や部品名（既定は選んだ部品名）"
+                title="影響が届く図の版履歴から、この語を含む版だけを新しい順に並べる">
+              <label title="当たり行が書き換わった版だけに畳む（読むだけの版を外す）">
+                <input type="checkbox" id="dg-ver-changed" checked> 書き換わった版だけ
+              </label>
+              <button type="button" id="dg-ver-open" disabled
+                title="いちばん最近この語が書き換わった図を、その版の中身で開く">最初の 1 枚を開く</button>
+            </div>
+            <div id="dg-ver-summary" role="status"></div>
+            <div id="dg-ver-list"></div>
+          </div>
+          <!-- BLK-primary-20260915-0007: 影響先すべてに同じ note を 1 回で打つ。
+               「意図的な省略を note で明記する」対応は、影響が届く図の枚数だけ
+               同じ文言を打ち直す作業になっていた (1 図ずつ📂一覧から開き直す)。 -->
+          <div id="dg-note-box" hidden>
+            <div class="dg-note-head">
+              <strong>同じ note を影響先へまとめて打つ</strong>
+              <span id="dg-note-summary" role="status"></span>
+              <button type="button" id="dg-note-run" disabled>この note を打つ</button>
+              <button type="button" id="dg-note-cancel">やめる</button>
+            </div>
+            <textarea id="dg-note-text" rows="2"
+              placeholder="例: ClockCtrl の呼び先は意図的に省略 (reviewer依頼2への回答)"></textarea>
+            <div class="dg-note-pick">
+              <label><input type="checkbox" id="dg-note-all" checked> 影響先すべて</label>
+            </div>
+            <div id="dg-note-targets"></div>
+          </div>
+        </div>
+      </section>
+      <div class="ri-occ-head"><strong>出てくる行</strong></div>
+      <!-- BLK-primary-20260917-0523-wish: 部品名 / メソッド名から「その名前を使っている図の一覧」を引く。
+           置換後が空のとき (置換前だけ・Ctrl+K「名前で図を探す」) はこの出現箇所の一覧、
+           置換後を入れていれば下の 今 / 置換後 の並びになる。 -->
+      <div id="ri-occ" hidden>
+        <div class="ri-occ-tools">
+          <label for="ns-q">名前</label>
+          <input id="ns-q" type="text" list="ns-index" autocomplete="off" placeholder="部品名 / メソッド名"
+                 title="部品名でもメソッド名でも引ける。ClockCtrl.EnableClock のように修飾を付ければその書き方の行だけに当たる" />
+          <datalist id="ns-index"></datalist>
+          <span id="ns-summary" role="status"></span>
+        </div>
+        <div id="ns-rows"></div>
+        <div id="ns-hint">よく出る名前: <span id="ns-top"></span></div>
+      </div>
+      <div id="ri-body" class="diff-board"></div>
+    </div>
   </div>
   <!-- 質問の出た図だけを原寸で見せる (押した図をボードの上に重ねる) -->
   <div id="ri-zoom"><div id="ri-zoom-inner"><div id="ri-zoom-head"></div><div id="ri-zoom-body"></div></div></div>
 </div>
-<!-- BLK-primary-20260908-2003-wish: 部品名の依存グラフ。⇄ 一括置換の「▤ 影響を見る」は
-     ヒット行を図ごとにテキストで並べるだけなので、どの図がどの図を参照して連鎖しているかは
-     各図を開いて目視で推測するしかなかった。名前を 1 つ選ぶと参照元 (左) → 名前 (中央) →
-     参照先 (右) が矢印で並び、隣の名前を経由して影響が届く図まで一覧に出る。 -->
-<!-- BLK-primary-20260917-0523-wish: 部品名 / メソッド名から「その名前を使っている図の一覧」を引く。
-     仕様変更の影響範囲を洗うのに、指摘.md で対象名を絞ってから図を 1 枚ずつ開く手順を無くす。 -->
-<div id="ns-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
-  <div class="board-modal">
-    <div class="board-head">
-      <strong>名前で図を探す</strong>
-      <span id="ns-summary" role="status"></span>
-      <span class="board-tools">
-        <label for="ns-q">名前</label>
-        <input id="ns-q" type="text" list="ns-index" autocomplete="off" placeholder="部品名 / メソッド名"
-               title="部品名でもメソッド名でも引ける。ClockCtrl.EnableClock のように修飾を付ければその書き方の行だけに当たる" />
-        <datalist id="ns-index"></datalist>
-        <button type="button" id="ns-use" title="この名前を一括置換の「置換前」に入れる">この名前を置換前に入れる</button>
-        <button type="button" id="ns-close">閉じる</button>
-      </span>
-    </div>
-    <div id="ns-body">
-      <div id="ns-rows"></div>
-      <div id="ns-hint">よく出る名前: <span id="ns-top"></span></div>
-    </div>
-  </div>
-</div>
 
-<div id="dg-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
-  <div class="board-modal">
-    <div class="board-head">
-      <strong>部品名の依存グラフ</strong>
-      <span id="dg-summary" role="status"></span>
-      <span class="board-tools">
-        <label for="dg-name">部品名</label>
-        <select id="dg-name" title="参照の本数が多い順に並ぶ"></select>
-        <label for="dg-hops" title="隣の名前を何段まで辿って影響が及ぶ図を数えるか">連鎖</label>
-        <select id="dg-hops">
-          <option value="0">直接だけ</option>
-          <option value="1">1 段</option>
-          <option value="2" selected>2 段</option>
-          <option value="3">3 段</option>
-        </select>
-        <button type="button" id="dg-use" title="この名前を一括置換の「置換前」に入れる">この名前を置換前に入れる</button>
-        <button type="button" id="dg-ticket" title="今出ている影響一覧を「変更チケット」として保存フォルダに残す。次の run はこの札の未チェックだけを直せばよい">この変更をチケットにする</button>
-        <button type="button" id="dg-close">閉じる</button>
-      </span>
-    </div>
-    <div id="dg-body">
-      <div id="dg-canvas"></div>
-      <div id="dg-impact"></div>
-      <!-- BLK-primary-20260917-0123-wish: 不具合対応の入口。影響が届く図まで出ても
-           「いつこの記述に変わったか」は各図を開いて目で追うしかなかった。
-           影響一覧の版履歴を 1 本の時系列に混ぜ、症状の語で絞って
-           「ここで書き換わった」版を名指しする。 -->
-      <div id="dg-ver">
-        <div class="dg-ver-head">
-          <strong>版履歴を症状の語で探す</strong>
-          <label for="dg-ver-kw">語</label>
-          <input type="text" id="dg-ver-kw"
-            placeholder="症状や部品名（既定は選んだ部品名）"
-            title="影響が届く図の版履歴から、この語を含む版だけを新しい順に並べる">
-          <label title="当たり行が書き換わった版だけに畳む（読むだけの版を外す）">
-            <input type="checkbox" id="dg-ver-changed" checked> 書き換わった版だけ
-          </label>
-          <button type="button" id="dg-ver-open" disabled
-            title="いちばん最近この語が書き換わった図を、その版の中身で開く">最初の 1 枚を開く</button>
-        </div>
-        <div id="dg-ver-summary" role="status"></div>
-        <div id="dg-ver-list"></div>
-      </div>
-      <!-- BLK-primary-20260915-0007: 影響先すべてに同じ note を 1 回で打つ。
-           「意図的な省略を note で明記する」対応は、影響が届く図の枚数だけ
-           同じ文言を打ち直す作業になっていた (1 図ずつ📂一覧から開き直す)。 -->
-      <div id="dg-note-box" hidden>
-        <div class="dg-note-head">
-          <strong>同じ note を影響先へまとめて打つ</strong>
-          <span id="dg-note-summary" role="status"></span>
-          <button type="button" id="dg-note-run" disabled>この note を打つ</button>
-          <button type="button" id="dg-note-cancel">やめる</button>
-        </div>
-        <textarea id="dg-note-text" rows="2"
-          placeholder="例: ClockCtrl の呼び先は意図的に省略 (reviewer依頼2への回答)"></textarea>
-        <div class="dg-note-pick">
-          <label><input type="checkbox" id="dg-note-all" checked> 影響先すべて</label>
-        </div>
-        <div id="dg-note-targets"></div>
-      </div>
-    </div>
-  </div>
-</div>
 <!-- BLK-primary-20260909-0603-wish: 変更チケット。1 回の仕様変更で直す図の一覧と
      「直した」印を保存フォルダに残す。次の run は依存グラフを開き直さず、
      この札の未チェックだけを見れば続きから直せる。 -->
