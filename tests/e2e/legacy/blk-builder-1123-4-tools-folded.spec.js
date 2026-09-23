@@ -5,7 +5,7 @@
 // BLK-primary-20260908-0923-design (7b) で「ツール ▾」も既定では置かなくなったので、
 // 既定を見る test はメニューを Ctrl+K から開く。
 const { test, expect } = require('@playwright/test');
-const { gotoApp } = require('../helpers');
+const { gotoApp, pickTool } = require('../helpers');
 
 // 既定 (7b) のタブ列にはツールの入口が無いので、Ctrl+K でメニューを開く。
 async function openToolMenu(page) {
@@ -50,7 +50,7 @@ test('畳んでも件数は下端の状態表示に出ている', async ({ page 
 test('畳んだ状態でもツールから機能を開ける', async ({ page }) => {
   await gotoApp(page, { foldedTools: true });
   await openToolMenu(page);
-  await page.locator('.tool-menu-item[data-target="btn-tab-compare"]').click();
+  await pickTool(page, 'btn-tab-compare');
   await expect(page.locator('#compare-pane')).toBeVisible();
 });
 

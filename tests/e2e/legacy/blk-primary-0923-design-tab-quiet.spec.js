@@ -3,7 +3,7 @@
 // 7a はタブ列の 25 個を「ツール ▾」1 個に畳んだが、7b はその 1 個も置かない。
 // タブ列は図のタブと ＋ / 一覧 だけ、件数は下端の状態表示、機能の入口は Ctrl+K。
 const { test, expect } = require('@playwright/test');
-const { gotoApp } = require('../helpers');
+const { gotoApp, pickTool } = require('../helpers');
 
 // 既定を見るので helper の互換設定 (畳まない) は使わない。
 async function open7b(page) {
@@ -43,11 +43,11 @@ test('件数を持つものは下端の状態表示に出て、押せばその�
 test('機能は Ctrl+K から引ける (ツールの分類メニューも Ctrl+K から開く)', async ({ page }) => {
   await open7b(page);
   await openToolMenu(page);
-  await expect(page.locator('#tool-menu .tool-menu-title')).toHaveText([
-    // BLK-owner-20260918-0329-prune で「渡す」は Export ▾ へ移り、この見出しは出なくなった。
-    '図をつくる', '書き換える', '探す', '確かめる', 'レビュー',
+  // BLK-human-20260923-1601 (design 9b): 分類は左列に 6 つ並ぶ。
+  await expect(page.locator('#tool-menu .tool-menu-cat .tool-cat-name')).toHaveText([
+    '図をつくる', '書き換える', '探す', '確かめる', 'レビュー', '渡す',
   ]);
-  await page.locator('.tool-menu-item[data-target="btn-tab-board"]').click();
+  await pickTool(page, 'btn-tab-board');
   await expect(page.locator('#cb-modal')).toBeVisible();
 });
 

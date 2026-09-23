@@ -14,36 +14,36 @@ window.MA.toolMenu = (function() {
   // タブ列のボタン文字 (絵文字 + 短い語) ではなく「何をするか」で読める形にする。
   var GROUPS = [
     { key: 'make', title: '図をつくる', items: [
-      { id: 'btn-tab-part',     label: '部品を起こす (6 図種まとめて)' },
-      { id: 'btn-tab-template', label: 'テンプレートから作る' },
-      { id: 'btn-tab-skeleton', label: '骨格から作る' },
-      { id: 'btn-tab-set',      label: '系統ごと複製する' },
-      { id: 'btn-tab-draft',    label: '一時控えにする' },
+      { id: 'btn-tab-part',     label: '部品を起こす (6 図種まとめて)', group: '起こす' },
+      { id: 'btn-tab-template', label: 'テンプレートから作る', group: '起こす' },
+      { id: 'btn-tab-skeleton', label: '骨格から作る', group: '起こす' },
+      { id: 'btn-tab-set',      label: '系統ごと複製する', group: '複製と控え' },
+      { id: 'btn-tab-draft',    label: '一時控えにする', group: '複製と控え' },
     ] },
     { key: 'edit', title: '書き換える', items: [
-      { id: 'btn-tab-lines',  label: '行を書き換える' },
-      { id: 'btn-tab-rename', label: '部品名を一括置換する' },
-      { id: 'btn-tab-unify',  label: '表記を登録簿に揃える' },
-      { id: 'btn-tab-apply',  label: '複数クラスに一括適用する' },
+      { id: 'btn-tab-lines',  label: '行を書き換える', group: 'まとめて直す' },
+      { id: 'btn-tab-rename', label: '部品名を一括置換する', group: 'まとめて直す' },
+      { id: 'btn-tab-unify',  label: '表記を登録簿に揃える', group: '表記を揃える' },
+      { id: 'btn-tab-apply',  label: '複数クラスに一括適用する', group: 'まとめて直す' },
     ] },
     { key: 'find', title: '探す', items: [
-      { id: 'btn-tab-symptom', label: '症状から関連図を探す' },
-      { id: 'btn-tab-blame',   label: '部品名の混入点を探す' },
-      { id: 'btn-tab-xref',    label: '部品名で図をまたいで辿る' },
+      { id: 'btn-tab-symptom', label: '症状から関連図を探す', group: '図をたどる' },
+      { id: 'btn-tab-blame',   label: '部品名の混入点を探す', group: '図をたどる' },
+      { id: 'btn-tab-xref',    label: '部品名で図をまたいで辿る', group: '図をたどる' },
     ] },
     { key: 'check', title: '確かめる', items: [
-      { id: 'btn-tab-audit',          label: '名前の表記揺れ' },
-      { id: 'btn-tab-family',         label: '系統内の動作名のずれ' },
-      { id: 'btn-tab-drivermap',      label: '系統マップの崩れ' },
-      { id: 'btn-tab-trace',          label: '状態遷移のトレース漏れ' },
-      { id: 'btn-tab-pattern',        label: '1 つの観点で全図を棚卸し' },
-      { id: 'btn-tab-submit',         label: '提出前チェック' },
+      { id: 'btn-tab-audit',          label: '名前の表記揺れ', group: '名前と系統' },
+      { id: 'btn-tab-family',         label: '系統内の動作名のずれ', group: '名前と系統' },
+      { id: 'btn-tab-drivermap',      label: '系統マップの崩れ', group: '名前と系統' },
+      { id: 'btn-tab-trace',          label: '状態遷移のトレース漏れ', group: '名前と系統' },
+      { id: 'btn-tab-pattern',        label: '1 つの観点で全図を棚卸し', group: 'まとめて点検' },
+      { id: 'btn-tab-submit',         label: '提出前チェック', group: '渡す前に' },
       // BLK-owner-20260918-0429-prune: 「渡してよいか」を数える突合。ここに載るまでは
       // Ctrl+K でしか辿り着けず、同じ目的の 6 つで 1 つだけ入口が違っていた。
-      { id: 'btn-tab-handover',       label: '引き継ぎチェックリスト' },
-      { id: 'btn-tab-cross',          label: '突合ボード (1 画面で全部)' },
-      { id: 'btn-tab-design',         label: '仕様 (design) と現在値の突合' },
-      { id: 'btn-tab-audit-timeline', label: '監査履歴' },
+      { id: 'btn-tab-handover',       label: '引き継ぎチェックリスト', group: '渡す前に' },
+      { id: 'btn-tab-cross',          label: '突合ボード (1 画面で全部)', group: 'まとめて点検' },
+      { id: 'btn-tab-design',         label: '仕様 (design) と現在値の突合', group: 'まとめて点検' },
+      { id: 'btn-tab-audit-timeline', label: '監査履歴', group: '渡す前に' },
     ] },
     // BLK-owner-20260923-1307-prune: 「2 つの版・2 枚の図を並べて違いを見る」入口を 2 つに絞る。
     // 前の回 (BLK-owner-20260918-0529-prune) は 5 つの入口をここに並べて名前だけ揃えたが、
@@ -55,18 +55,18 @@ window.MA.toolMenu = (function() {
     // そのまま残し、押すと ⇔ 並べて見る をその相手で開く。
     // opener は、その入口がモーダルの中にしか無いもの (先に開く画面) の id。
     { key: 'review', title: 'レビュー', items: [
-      { id: 'btn-tab-compare',  label: '⇔ 並べて見る' },
-      { id: 'dp-review',        label: '🔍 変更前後を見比べる', opener: 'btn-tab-delivery' },
+      { id: 'btn-tab-compare',  label: '⇔ 並べて見る', group: '見比べる' },
+      { id: 'dp-review',        label: '🔍 変更前後を見比べる', opener: 'btn-tab-delivery', group: '見比べる' },
       // 並べる画面ではない道具。覗く・指摘を出すのが目的で、並べるのは ⇔ 並べて見る に任せる。
-      { id: 'btn-tab-peek',     label: '他の保存フォルダを覗く' },
-      { id: 'btn-tab-review',   label: '基準の図との指摘' },
-      { id: 'btn-tab-pins',     label: 'この図の指摘' },
-      { id: 'btn-tab-inbox',    label: '図をまたぐ指摘箱' },
-      { id: 'btn-tab-findings', label: '手動指摘の台帳' },
-      { id: 'btn-tab-diff',     label: '前回保存からの差分' },
-      { id: 'btn-tab-versions', label: 'この図の変遷' },
-      { id: 'btn-tab-lineage',  label: 'この図の継承元' },
-      { id: 'btn-tab-board',    label: '変更サマリ' },
+      { id: 'btn-tab-peek',     label: '他の保存フォルダを覗く', group: '見比べる' },
+      { id: 'btn-tab-review',   label: '基準の図との指摘', group: '指摘' },
+      { id: 'btn-tab-pins',     label: 'この図の指摘', group: '指摘' },
+      { id: 'btn-tab-inbox',    label: '図をまたぐ指摘箱', group: '指摘' },
+      { id: 'btn-tab-findings', label: '手動指摘の台帳', group: '指摘' },
+      { id: 'btn-tab-diff',     label: '前回保存からの差分', group: '変更の履歴' },
+      { id: 'btn-tab-versions', label: 'この図の変遷', group: '変更の履歴' },
+      { id: 'btn-tab-lineage',  label: 'この図の継承元', group: '変更の履歴' },
+      { id: 'btn-tab-board',    label: '変更サマリ', group: '変更の履歴' },
     ] },
     // BLK-owner-20260918-0329-prune: 「渡す」(引き継ぎ zip / 納品パッケージ zip) はこのメニューに
     // 出さない。zip にして渡す入口は Export ▾ の「渡す」1 か所に集めた。分類と言い換えは
@@ -76,8 +76,8 @@ window.MA.toolMenu = (function() {
   // メニューからは外したが、分類と言い換えは生きているもの (入口は Export ▾)。
   var MOVED_TO_EXPORT = [
     { key: 'give', title: '渡す', items: [
-      { id: 'btn-tab-handoff',  label: '引き継ぎ zip' },
-      { id: 'btn-tab-delivery', label: '納品パッケージ zip' },
+      { id: 'btn-tab-handoff',  label: '引き継ぎ zip', group: 'zip にして渡す' },
+      { id: 'btn-tab-delivery', label: '納品パッケージ zip', group: 'zip にして渡す' },
     ] },
   ];
 
@@ -95,7 +95,75 @@ window.MA.toolMenu = (function() {
   // ボタン)。畳む対象に数えると「他 N 件」の N が実際に消えた数とずれるので外す。
   var NOT_IN_TAB_BAR = ['status-livediff', 'dp-review'];
 
-  var NOTE = 'Ctrl+K でも同じ操作が引ける';
+  // design 9b: 絞り込み欄の右端に出す注記。パネルが 2 段になって幅が要るので短くする。
+  var NOTE = 'Ctrl+K でも引けます';
+  var FILTER_LABEL = 'ツールを絞り込む';
+
+  // design 9b: パネルの左列に出す 6 分類。Export ▾ に入口を移した「渡す」も、
+  // 「どこを見ればよいか」の地図としてはここに居る (押すと Export 側のボタンを鳴らす)。
+  function panelGroups() {
+    return allGroups().map(function(g) {
+      return {
+        key: g.key,
+        title: g.title,
+        items: g.items.map(function(it) {
+          var o = { id: it.id, label: it.label, group: it.group || '' };
+          if (it.opener) o.opener = it.opener;
+          return o;
+        }),
+      };
+    });
+  }
+
+  // 分類ごとの合計件数。開く前に「どこに何件あるか」を左列で見せる (design 9b)。
+  // 0 の分類は数字を出さない (常に場所を取る 0 を画面から消す)。
+  function groupCounts(badges) {
+    var b = badges || {};
+    var out = {};
+    panelGroups().forEach(function(g) {
+      var n = 0;
+      g.items.forEach(function(it) {
+        var v = parseInt(b[it.id], 10);
+        if (v > 0) n += v;
+      });
+      if (n > 0) out[g.key] = n;
+    });
+    return out;
+  }
+
+  // 絞り込み。分類名・小見出し・項目名のどれかに当たれば残す (全分類を横断する)。
+  function filterItems(query) {
+    var q = String(query == null ? '' : query).trim().toLowerCase();
+    var out = [];
+    panelGroups().forEach(function(g) {
+      g.items.forEach(function(it) {
+        if (!q
+          || it.label.toLowerCase().indexOf(q) >= 0
+          || String(it.group).toLowerCase().indexOf(q) >= 0
+          || g.title.toLowerCase().indexOf(q) >= 0) {
+          out.push({ id: it.id, label: it.label, group: it.group,
+            opener: it.opener || '', groupKey: g.key, groupTitle: g.title });
+        }
+      });
+    });
+    return out;
+  }
+
+  // パネル 1 面あたりの行数 (小見出しを 1 行と数える)。design 9b は 14 行以内。
+  function rowCount(key) {
+    var gs = panelGroups();
+    for (var i = 0; i < gs.length; i++) {
+      if (gs[i].key !== key) continue;
+      var heads = {};
+      var n = 0;
+      gs[i].items.forEach(function(it) {
+        if (!heads[it.group]) { heads[it.group] = 1; n++; }
+        n++;
+      });
+      return n;
+    }
+    return 0;
+  }
 
   // 単独キーを持つツール。ボタン id → ショートカット表 (settings-tabs) の行 id。
   // メニューの右端にそのキーを出し、「次からはメニューを開かずに押せる」ことを
@@ -224,24 +292,71 @@ window.MA.toolMenu = (function() {
 
   // メニューの中身。badges は { 'btn-tab-diff': '2' } のように件数を持つものだけ渡す
   // (タブ列のボタン文字から拾った数字。0 件・未計算のものは付けない)。
+  function itemHtml(it, badges) {
+    var badge = (badges || {})[it.id];
+    var key = keyHintOf(it.id);
+    return '<button type="button" class="tool-menu-item" data-target="' + esc(it.id) + '"'
+      + (it.opener ? ' data-opener="' + esc(it.opener) + '"' : '') + '>'
+      + '<span class="tool-menu-label">' + esc(it.label) + '</span>'
+      + (key ? '<span class="tool-menu-key">' + esc(key) + '</span>' : '')
+      + (badge ? '<span class="tool-menu-badge">' + esc(badge) + '</span>' : '')
+      + '</button>';
+  }
+
+  // design 9b: 左に 6 分類、右にその中身を小見出しで区切って出す 2 段のパネル。
+  // 縦 1 列に 40 件近く並べていたときは「確かめる」「レビュー」が画面の下にはみ出し、
+  // 何があるかを見るのにパネル内スクロールが要った。1 面 14 行以内に収める。
   function buildMenuHtml(badges) {
     var b = badges || {};
-    var body = GROUPS.map(function(g) {
+    var counts = groupCounts(b);
+    var gs = panelGroups();
+    var cats = gs.map(function(g, i) {
+      return '<button type="button" class="tool-menu-cat" role="tab" data-group="' + esc(g.key) + '"'
+        + (i === 0 ? ' aria-selected="true"' : ' aria-selected="false"') + '>'
+        + '<span class="tool-cat-name">' + esc(g.title) + '</span>'
+        + (counts[g.key] ? '<span class="tool-cat-count">' + esc(counts[g.key]) + '</span>' : '')
+        + '</button>';
+    }).join('');
+    var panes = gs.map(function(g, i) {
+      var head = '';
       var items = g.items.map(function(it) {
-        var badge = b[it.id];
-        var key = keyHintOf(it.id);
-        return '<button type="button" class="tool-menu-item" data-target="' + esc(it.id) + '"'
-          + (it.opener ? ' data-opener="' + esc(it.opener) + '"' : '') + '>'
-          + '<span class="tool-menu-label">' + esc(it.label) + '</span>'
-          + (key ? '<span class="tool-menu-key">' + esc(key) + '</span>' : '')
-          + (badge ? '<span class="tool-menu-badge">' + esc(badge) + '</span>' : '')
-          + '</button>';
+        var sub = '';
+        if (it.group && it.group !== head) {
+          head = it.group;
+          sub = '<div class="tool-menu-sub">' + esc(head) + '</div>';
+        }
+        return sub + itemHtml(it, b);
       }).join('');
-      return '<div class="tool-menu-group" data-group="' + esc(g.key) + '">'
+      return '<div class="tool-menu-group" data-group="' + esc(g.key) + '"'
+        + (i === 0 ? '' : ' hidden') + '>'
         + '<div class="tool-menu-title">' + esc(g.title) + '</div>'
         + items + '</div>';
     }).join('');
-    return '<div class="tool-menu-note">' + esc(NOTE) + '</div>' + body;
+    return '<div class="tool-menu-head">'
+      + '<input type="search" id="tool-menu-filter" class="tool-menu-filter" autocomplete="off"'
+      + ' placeholder="' + esc(FILTER_LABEL) + '" aria-label="' + esc(FILTER_LABEL) + '">'
+      + '<span class="tool-menu-note">' + esc(NOTE) + '</span></div>'
+      + '<div class="tool-menu-panes">'
+      + '<div class="tool-menu-cats" role="tablist">' + cats + '</div>'
+      + '<div class="tool-menu-items">' + panes
+      + '<div class="tool-menu-hits" hidden></div></div></div>';
+  }
+
+  // 絞り込み中に右列へ出す一覧。どの分類のものかが分かるように分類名を添える。
+  function buildHitsHtml(query, badges) {
+    var hits = filterItems(query);
+    if (!hits.length) {
+      return '<div class="tool-menu-sub">該当なし</div>';
+    }
+    var head = '';
+    return hits.map(function(it) {
+      var sub = '';
+      if (it.groupTitle !== head) {
+        head = it.groupTitle;
+        sub = '<div class="tool-menu-sub">' + esc(head) + '</div>';
+      }
+      return sub + itemHtml(it, badges);
+    }).join('');
   }
 
   return {
@@ -259,6 +374,12 @@ window.MA.toolMenu = (function() {
     miniLabel: miniLabel,
     keyHintOf: keyHintOf,
     buildMenuHtml: buildMenuHtml,
+    buildHitsHtml: buildHitsHtml,
+    panelGroups: panelGroups,
+    groupCounts: groupCounts,
+    filterItems: filterItems,
+    rowCount: rowCount,
     NOTE: NOTE,
+    FILTER_LABEL: FILTER_LABEL,
   };
 })();

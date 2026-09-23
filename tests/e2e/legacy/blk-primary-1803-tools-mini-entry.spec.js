@@ -26,8 +26,8 @@ test('札を 1 クリックで畳んだ一覧が開き、そこから引き継�
   await openDefault(page);
   await page.locator('#btn-tab-tools-mini').click();
   await expect(page.locator('#tool-menu')).toBeVisible();
-  await expect(page.locator('#tool-menu .tool-menu-title')).toHaveText([
-    '図をつくる', '書き換える', '探す', '確かめる', 'レビュー',
+  await expect(page.locator('#tool-menu .tool-menu-cat .tool-cat-name')).toHaveText([
+    '図をつくる', '書き換える', '探す', '確かめる', 'レビュー', '渡す',
   ]);
   // BLK-owner-20260918-0329-prune: 「引き継ぎ zip」の入口は Export ▾ の「渡す」へ移した。
   // コマンド名を知らなくても目で見つかることは変わらない。

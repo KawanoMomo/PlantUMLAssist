@@ -76,7 +76,7 @@ describe('タブ列の機能ボタンとの対応', function() {
 describe('メニューの HTML', function() {
   test('分類見出しと項目、Ctrl+K の注記が出る', function() {
     var out = tm.buildMenuHtml();
-    expect(out).toContain('Ctrl+K でも同じ操作が引ける');
+    expect(out).toContain('Ctrl+K でも引けます');
     expect(out).toContain('>レビュー<');
     expect(out).toContain('data-target="btn-tab-board"');
     expect(out).toContain('変更サマリ');

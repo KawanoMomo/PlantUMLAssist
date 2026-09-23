@@ -1568,30 +1568,103 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
   top: 26px;
   left: 4px;
   z-index: 40;
-  /* 6 分類が一度に見えるように、画面の高さいっぱいまで伸ばしてから溢れを送る */
-  max-height: calc(100vh - 64px);
-  overflow-y: auto;
-  min-width: 240px;
-  padding: 6px;
+  /* design 9b: 左 6 分類・右小見出しの 2 段。1 面 14 行以内なので中はスクロールさせない */
+  width: 520px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: 5px;
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
 }
 #tool-menu[hidden] { display: none; }
+/* design 9b: 上の絞り込み欄 */
+.tool-menu-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.tool-menu-filter {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 11px;
+  padding: 3px 8px;
+}
+.tool-menu-filter:focus { outline: none; border-color: var(--accent); }
 .tool-menu-note {
   color: var(--text-secondary);
   font-size: 10px;
-  padding: 2px 6px 6px;
+  white-space: nowrap;
 }
-.tool-menu-title {
+.tool-menu-panes { display: flex; min-height: 0; }
+.tool-menu-cats {
+  width: 150px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.tool-menu-cat {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  text-align: left;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.tool-menu-cat .tool-cat-name { flex: 1; }
+.tool-menu-cat .tool-cat-count {
+  color: var(--accent-orange);
+  font-size: 10px;
+  font-family: var(--font-mono, monospace);
+}
+.tool-menu-cat:hover { color: var(--text-primary); background: var(--bg-primary); }
+.tool-menu-cat[aria-selected="true"] {
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.tool-menu-items { flex: 1; min-width: 0; padding: 6px; }
+/* 小見出し (design 9b)。分類の中をさらに目的で区切る */
+.tool-menu-sub {
   color: var(--text-secondary);
   font-size: 10px;
-  font-weight: 600;
-  padding: 6px 6px 2px;
-  border-top: 1px solid var(--border);
+  font-family: var(--font-mono, monospace);
+  padding: 6px 8px 2px;
 }
-.tool-menu-group:first-of-type .tool-menu-title { border-top: none; }
+.tool-menu-group > .tool-menu-sub:first-child { padding-top: 2px; }
+/* 分類名は左列が見せるので、右列の見出しは読み上げ用に隠す */
+.tool-menu-title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.tool-menu-group[hidden] { display: none; }
+.tool-menu-hits[hidden] { display: none; }
+/* 絞り込み中は分類の選択が効いていないことを見せる */
+.tool-menu-cats-dim .tool-menu-cat[aria-selected="true"] { box-shadow: none; background: transparent; }
+.tool-menu-foot {
+  border-top: 1px solid var(--border);
+  padding: 4px 6px;
+}
 .tool-menu-item {
   display: flex;
   align-items: center;
@@ -1607,6 +1680,8 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
   cursor: pointer;
 }
 .tool-menu-item:hover { background: var(--bg-primary); color: var(--accent); }
+/* ↑↓ で選んでいる項目 (design 9b のキーボード操作) */
+.tool-menu-item[aria-current="true"] { background: var(--bg-primary); color: var(--accent); }
 .tool-menu-badge {
   margin-left: auto;
   color: var(--accent-orange);
