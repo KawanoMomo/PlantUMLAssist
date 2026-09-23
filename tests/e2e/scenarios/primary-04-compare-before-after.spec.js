@@ -13,6 +13,19 @@ const { test, expect } = require('@playwright/test');
 const { shotOut, gotoApp } = require('../helpers');
 const S = require('./_scenario');
 
+
+// BLK-owner-20260923-1509-prune: 「並べる」面はタブ列の「並べて比較」1 つになった。
+// 旧 ⇔ 並べて見る (#btn-tab-compare) はその枠の相手「別タブの図」になったので、
+// 台本の手順も 「並べて比較を開く → 相手を選ぶ」を通る。見る中身は変わらない。
+async function openCompareTabs(p) {
+  await p.waitForSelector('#btn-tab-senior');
+  if (await p.locator('#senior-pane').isHidden()) {
+    await p.locator('#btn-tab-senior').click();
+  }
+  await p.locator('#senior-target-tabs').click();
+  await p.waitForSelector('#compare-pane:not([hidden])');
+}
+
 const DIR = S.dirFor(__filename);
 // 顧客に見せる場面は別の保存フォルダで回す (会議の一覧の中身と混ざらない)。
 const DIR2 = S.dirFor(__filename) + '-show';
@@ -56,7 +69,7 @@ test('手順4 置換の前後を並べて見せられ、その画面を控えら
 
   await bulkRename(page, 'SpiDrv', 'Spi_Driver');
 
-  await page.locator('#btn-tab-compare').click();
+  await openCompareTabs(page);
   // 到達条件その1: 変更前後を並べる参照ペインが開き、見せる図を選べる。
   await expect(page.locator('#compare-pane')).toBeVisible();
   const sel = page.locator('#compare-select');
@@ -247,7 +260,7 @@ test('手順4 保存フォルダへ直接書いた回を、後から履歴で選
 
   // 到達条件その1: 1 回の置換が 1 件として残り、当たった図が並ぶ
   // (開いていた図も、開かずに書き戻した図も同じ 1 回)。
-  await page.locator('#btn-tab-compare').click();
+  await openCompareTabs(page);
   await page.locator('#btn-compare-hist').click();
   const entry = page.locator('#compare-hist-list .wh-entry').first();
   await expect(entry).toBeVisible();
@@ -281,7 +294,7 @@ test('手順4 保存フォルダへ直接書いた回を、後から履歴で選
   const page2 = await context.newPage();
   await gotoApp(page2);
   await page2.waitForTimeout(1200);
-  await page2.locator('#btn-tab-compare').click();
+  await openCompareTabs(page2);
   await page2.locator('#btn-compare-hist').click();
   const entry2 = page2.locator('#compare-hist-list .wh-entry').first();
   await expect(entry2.locator('.wh-head')).toContainText('SpiDrv → Spi_Driver');

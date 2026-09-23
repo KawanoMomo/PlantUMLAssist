@@ -1,11 +1,13 @@
 'use strict';
-// BLK-owner-20260923-1307-prune: 「2 つの版・2 枚の図を並べて違いを見る」入口を 2 つに絞る。
+// BLK-owner-20260923-1307-prune: 「2 つの版・2 枚の図を並べて違いを見る」入口を絞る。
 //
-// 前の回 (BLK-owner-20260918-0529-prune) は 5 つの入口を ツール ▾ →「レビュー」に集めて
-// 名前を揃えたが、目的が同じ項目が 5 つ並ぶこと自体が「どれを開けばよいか」を選ばせていた。
-// 残す入口は ⇔ 並べて見る (版どうし・図どうしを並べる正面) と
-// 🔍 変更前後を見比べる (資料・会議で見せる) の 2 つ。前回保存版との比較は
-// ⇔ 並べて見る の ± 差分タブが引き受け、下端の札はそこを開くだけになる。
+// この回は 5 つの入口を 2 つ (⇔ 並べて見る / 🔍 変更前後を見比べる) に絞った。
+// BLK-owner-20260923-1509-prune で、その 2 つも「並べて比較」の枠 1 つに畳まれ、
+// 選ぶのは「誰と並べるか」だけになった (面が 2 つ残っている限り、どちらを開けば
+// よいかを選ばせる問題は消えていなかった)。ここに残すのは、畳んだあとも生きている
+// 決め事だけ — 覗く・指摘は「並べる」入口として名乗らない、という呼び名の規律。
+// 「入口が 2 つ」を確かめていた 3 件は、1 つに畳んだ今は成り立たないので
+// blk-owner-1509-compare-one-entry.test.js が引き継いでいる。
 if (!global.window) {
   var jsdom = require('jsdom');
   var dom = new jsdom.JSDOM('<!DOCTYPE html><html><body></body></html>');
@@ -20,33 +22,24 @@ require('../src/core/command-palette.js');
 var TM = global.window.MA.toolMenu;
 var CP = global.window.MA.commandPalette;
 
-// 残す 2 つ (id → 呼び名)。
-var TWO = [
-  ['btn-tab-compare', '⇔ 並べて見る'],
-  ['dp-review',       '🔍 変更前後を見比べる'],
-];
-
 function reviewItems() {
   var g = TM.groups().filter(function(x) { return x.key === 'review'; })[0];
   return g ? g.items : [];
 }
 
-describe('並べて違いを見る入口は 2 つだけ', function() {
-  test('「レビュー」の先頭は ⇔ 並べて見る と 🔍 変更前後を見比べる', function() {
-    var head = reviewItems().slice(0, 2).map(function(it) { return it.id; });
-    expect(head).toEqual(TWO.map(function(p) { return p[0]; }));
-    TWO.forEach(function(pair) {
-      expect(TM.labelOf(pair[0])).toBe(pair[1]);
-      expect(TM.groupOf(pair[0])).toBe('review');
-    });
-  });
-
-  // 寄せた 3 つ: 前回保存版 (下端の札) / 他フォルダの版 / 基準の図。
-  // 札はメニューから消え、覗く・指摘の 2 つは「並べる」入口としては名乗らない。
+describe('並べる入口は「レビュー」に別項目として並ばない', function() {
+  // 寄せたもの: 前回保存版 (下端の札) / 他フォルダの版 / 基準の図 /
+  // ⇔ 並べて見る / 🔍 変更前後を見比べる。
   test('前回保存版との比較は、独立した入口としてメニューに並ばない', function() {
     var ids = reviewItems().map(function(it) { return it.id; });
     expect(ids).not.toContain('status-livediff');
     expect(TM.menuIds().indexOf('status-livediff')).toBe(-1);
+  });
+
+  test('並べる面の入口は「レビュー」から外れている', function() {
+    var ids = reviewItems().map(function(it) { return it.id; });
+    expect(ids).not.toContain('btn-tab-compare');
+    expect(ids).not.toContain('dp-review');
   });
 
   test('覗く・基準の図の指摘は残るが、呼び名から「見比べる」が外れる', function() {
@@ -59,65 +52,48 @@ describe('並べて違いを見る入口は 2 つだけ', function() {
     });
   });
 
-  test('「レビュー」に残る見比べる呼び名は 2 つだけ', function() {
+  test('「レビュー」に「見比べる / 並べて見る」を名乗る項目は残らない', function() {
     var named = reviewItems().filter(function(it) {
       return /見比べる|並べて見る/.test(it.label);
-    }).map(function(it) { return it.id; });
-    expect(named).toEqual(TWO.map(function(p) { return p[0]; }));
+    });
+    expect(named).toEqual([]);
   });
 });
 
-describe('タブ列に居ない入口', function() {
+describe('メニューに載らない id は、畳む数にも入らない', function() {
+  test('メニューから外れた入口は menuIds に出ない', function() {
+    expect(TM.menuIds().indexOf('dp-review')).toBe(-1);
+    expect(TM.menuIds().indexOf('btn-tab-compare')).toBe(-1);
+  });
+
   test('モーダルの中のものは畳む対象に数えない', function() {
     expect(TM.isFoldable('dp-review')).toBe(false);
-    expect(TM.menuIds().indexOf('dp-review')).toBe(-1);
-    expect(TM.isFoldable('btn-tab-compare')).toBe(true);
   });
 
-  test('モーダルの中にしか無い入口は、先に開く画面を連れている', function() {
-    expect(TM.openerOf('dp-review')).toBe('btn-tab-delivery');
-    expect(TM.openerOf('btn-tab-compare')).toBe('');
+  test('知らない id は opener を連れていない', function() {
     expect(TM.openerOf('btn-tab-nope')).toBe('');
-  });
-
-  test('メニューの HTML に opener が出る', function() {
-    var out = TM.buildMenuHtml();
-    expect(out).toContain('data-target="dp-review" data-opener="btn-tab-delivery"');
-    expect(out).toContain('data-target="btn-tab-compare"><span');
+    expect(TM.openerOf('dp-review')).toBe('');
   });
 });
 
 describe('Ctrl+K は今まで通りの呼び名でも引ける', function() {
   function items() {
     return CP.buildItems([
-      { id: 'tab-compare', title: '並べて見る / Compare', hint: 'Tabs',
-        keywords: ['compare', 'side', 'ならべて', 'みくらべ'],
-        button: 'btn-tab-compare', run: function() {} },
+      { id: 'tab-compare', title: '並べて比較 (別タブの図) / Compare', hint: 'Compare',
+        keywords: ['compare', 'side', 'ならべて', 'みくらべ'], run: function() {} },
+      { id: 'compare-before', title: '並べて比較 (この図の前回保存版) / Compare with last save',
+        hint: 'Compare', keywords: ['compare', 'before', 'ぜんかいほぞん', 'へんこうぜんご'], run: function() {} },
       { id: 'livediff', title: '前回保存版との比較 / Compare with last save', hint: 'Status',
         keywords: ['diff', 'compare', 'ぜんかい', 'ほぞん', 'ひかく'],
         button: 'status-livediff', run: function() {} },
-      { id: 'delivery-review', title: '変更前後を見比べる (提出前レビュー) / Before-after review',
-        hint: 'Deliver', keywords: ['review', 'before', 'after', 'へんこうぜんご'],
-        button: 'dp-review', run: function() {} },
     ], '');
   }
 
-  // 下端の札は ⇔ 並べて見る を開くだけになったが、Ctrl+K から引けること自体は変えない
-  // (今まで「前回保存版との比較」で引いていた人の手を止めない)。
+  // 入口を畳んでも、使う人の頭の中の名前は変わらない。
   test('前回保存版との比較は Ctrl+K から今まで通り引ける', function() {
     var all = items();
-    expect(CP.filter(all, '前回保存版').length).toBe(1);
+    expect(CP.filter(all, '前回保存版').length).toBeGreaterThan(0);
     expect(CP.filter(all, '比較').length).toBeGreaterThan(0);
     expect(CP.filter(all, 'compare').length).toBeGreaterThan(0);
-  });
-
-  test('残した 2 つは揃えた呼び名で行の見出しになる', function() {
-    var byId = {};
-    items().forEach(function(it) { byId[it.id] = it; });
-    [['review:tab-compare', '⇔ 並べて見る'], ['review:delivery-review', '🔍 変更前後を見比べる']]
-      .forEach(function(pair) {
-        expect(byId[pair[0]].title).toBe(pair[1]);
-        expect(byId[pair[0]].group).toBe('review');
-      });
   });
 });

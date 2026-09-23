@@ -5,6 +5,19 @@ const { test, expect } = require('@playwright/test');
 const { setDiagramTitle, getEditorText } = require('../helpers');
 const S = require('./_scenario');
 
+
+// BLK-owner-20260923-1509-prune: 「並べる」面はタブ列の「並べて比較」1 つになった。
+// 旧 ⇔ 並べて見る (#btn-tab-compare) はその枠の相手「別タブの図」になったので、
+// 台本の手順も 「並べて比較を開く → 相手を選ぶ」を通る。見る中身は変わらない。
+async function openCompareTabs(p) {
+  await p.waitForSelector('#btn-tab-senior');
+  if (await p.locator('#senior-pane').isHidden()) {
+    await p.locator('#btn-tab-senior').click();
+  }
+  await p.locator('#senior-target-tabs').click();
+  await p.waitForSelector('#compare-pane:not([hidden])');
+}
+
 const DIR = S.dirFor(__filename);
 
 // BLK-junior-20260909-0603-wish: 手本は `persona-data\primary` にあり、自分のタブに
@@ -1166,12 +1179,12 @@ test('手順1-2 先輩側の増分が入る位置つきで並び、チェック�
   await S.clearDir(page, SENIOR_DIR);
   await S.putDoc(page, SENIOR_DIR, 'timer_init_sequence', TAKE_SENIOR);
   await page.reload();
-  await page.waitForSelector('#btn-tab-compare');
+  await page.waitForSelector('#btn-tab-senior');
   await S.typeDsl(page, TAKE_SELF);
   await S.renameActive(page, 'timer_init_sequence');
 
   // 手順1: 先輩のフォルダを相手にする (自分の保存先は変えない)。
-  await page.locator('#btn-tab-compare').click();
+  await openCompareTabs(page);
   await page.locator('#xf-dir').fill(SENIOR_DIR);
   await page.locator('#btn-xf-load').click();
   await expect(page.locator('#xf-summary')).toBeVisible();
@@ -1244,11 +1257,11 @@ test('手順1-2 親状態の中に増えた子状態が入れ子のまま並び�
   await S.clearDir(page, SENIOR_DIR);
   await S.putDoc(page, SENIOR_DIR, 'timer_state', NEST_SENIOR);
   await page.reload();
-  await page.waitForSelector('#btn-tab-compare');
+  await page.waitForSelector('#btn-tab-senior');
   await S.typeDsl(page, NEST_SELF);
   await S.renameActive(page, 'timer_state');
 
-  await page.locator('#btn-tab-compare').click();
+  await openCompareTabs(page);
   await page.locator('#xf-dir').fill(SENIOR_DIR);
   await page.locator('#btn-xf-load').click();
   await expect(page.locator('#xf-summary')).toBeVisible();
@@ -1314,11 +1327,11 @@ test('手順1 先輩に同じ図種が無いことが、突き合わせの答え
   await S.putDoc(page, SENIOR_DIR, 'timer_init_sequence', CLS_SENIOR_SEQ);
   await S.putDoc(page, SENIOR_DIR, 'timer_state', CLS_SENIOR_STATE);
   await page.reload();
-  await page.waitForSelector('#btn-tab-compare');
+  await page.waitForSelector('#btn-tab-senior');
   await S.typeDsl(page, CLS_SELF);
   await S.renameActive(page, 'TimerDrv派生クラス図');
 
-  await page.locator('#btn-tab-compare').click();
+  await openCompareTabs(page);
   await page.locator('#xf-dir').fill(SENIOR_DIR);
   await page.locator('#btn-xf-load').click();
   const summary = page.locator('#xf-summary');
@@ -1361,11 +1374,11 @@ test('手順1 同じ図種でも部品名が違う図しか無ければ、開か
   await S.putDoc(page, SENIOR_DIR, 'timer_state', CLS_SENIOR_STATE);
   await S.putDoc(page, SENIOR_DIR, 'driver_common_class', CLS_SENIOR_COMMON);
   await page.reload();
-  await page.waitForSelector('#btn-tab-compare');
+  await page.waitForSelector('#btn-tab-senior');
   await S.typeDsl(page, CLS_SELF);
   await S.renameActive(page, 'TimerDrv派生クラス図');
 
-  await page.locator('#btn-tab-compare').click();
+  await openCompareTabs(page);
   await page.locator('#xf-dir').fill(SENIOR_DIR);
   await page.locator('#btn-xf-load').click();
   const summary = page.locator('#xf-summary');

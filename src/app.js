@@ -3579,7 +3579,10 @@ function initCommandPalette() {
       { id: 'tab-handoff', title: '引き継ぎパッケージを作る / Handoff package', hint: 'Tabs', keywords: ['handoff', 'package', 'zip', 'ひきつぎ', 'ぱっけーじ'], button: 'btn-tab-handoff', run: function() { clickById('btn-tab-handoff'); } },
       { id: 'tab-delivery', title: '納品パッケージを作る / Delivery package', hint: 'Tabs', keywords: ['delivery', 'package', 'zip', 'のうひん', 'ぱっけーじ', '提出'], button: 'btn-tab-delivery', run: function() { clickById('btn-tab-delivery'); } },
       { id: 'tab-lines', title: '行編集を開く / Line edit', hint: 'Tabs', keywords: ['line', 'edit', 'ぎょう', 'へんしゅう'], button: 'btn-tab-lines', run: function() { clickById('btn-tab-lines'); } },
-      { id: 'tab-compare', title: '並べて見る / Compare', hint: 'Tabs', keywords: ['compare', 'side', 'ならべて', 'みくらべ'], button: 'btn-tab-compare', run: function() { clickById('btn-tab-compare'); } },
+      // BLK-owner-20260923-1509-prune: 並べる面は 1 つに統合した。パレットの項目は
+      // 「誰と並べるか」で 3 つに分かれ、どれも旧称 (並べて見る / 先輩 / 変更前後) で引ける。
+      { id: 'tab-compare', title: '並べて比較 (別タブの図) / Compare', hint: 'Compare', keywords: ['compare', 'side', 'ならべて', 'みくらべ', 'べつたぶ'], run: function() { openCompareTarget('tabs'); } },
+      { id: 'compare-before', title: '並べて比較 (この図の前回保存版) / Compare with last save', hint: 'Compare', keywords: ['compare', 'before', 'after', 'ならべて', 'ひかく', 'ぜんかいほぞん', 'へんこうぜんご', 'さぶん'], run: function() { openCompareTarget('before'); } },
       { id: 'tab-template', title: 'テンプレートから新しい図を作る / Template', hint: 'Tabs', keywords: ['template', 'copy', 'てんぷれ', 'ふくせい'], button: 'btn-tab-template', run: function() { clickById('btn-tab-template'); } },
       { id: 'tab-diff', title: '前回保存からの差分 / Diff', hint: 'Tabs', keywords: ['diff', 'change', 'さぶん', 'へんこう'], button: 'btn-tab-diff', run: function() { clickById('btn-tab-diff'); } },
       { id: 'tab-pins', title: 'レビュー指摘 / Review pins', hint: 'Tabs', keywords: ['pin', 'review', 'してき', 'ぴん'], button: 'btn-tab-pins', run: function() { clickById('btn-tab-pins'); } },
@@ -3593,7 +3596,7 @@ function initCommandPalette() {
       { id: 'tab-apply', title: '複数クラスに一括適用 / Bulk apply', hint: 'Tabs', keywords: ['apply', 'bulk', 'いっかつ', 'てきよう'], button: 'btn-tab-apply', run: function() { clickById('btn-tab-apply'); } },
       // BLK-human-20260923-1600 (design 9a): 「⇔ 先輩」を「並べて比較」に改名したので、
       // Ctrl+K も新しい名前で引ける。旧称 (先輩) でも当たるように語を残す。
-      { id: 'tab-senior', title: '並べて比較 (相手の図を横に並べる) / Side-by-side', hint: 'Tabs', keywords: ['compare', 'senior', 'side', 'ならべて', 'ひかく', 'あいて', 'せんぱい'], button: 'btn-tab-senior', run: function() { clickById('btn-tab-senior'); } },
+      { id: 'tab-senior', title: '並べて比較 (別のフォルダの図) / Side-by-side', hint: 'Compare', keywords: ['compare', 'senior', 'side', 'ならべて', 'ひかく', 'あいて', 'せんぱい', 'ふぉるだ'], button: 'btn-tab-senior', run: function() { openCompareTarget('folder'); } },
       // design 9a: 手元の .puml を開く入口は上部バーの Import ▾ へ移した。
       { id: 'import-clipboard', title: 'クリップボードの DSL から開く / Open from clipboard', hint: 'File', keywords: ['clipboard', 'paste', 'import', 'くりっぷ', 'はりつけ', 'ひらく'], run: function() { clickById('imp-clipboard'); } },
       { id: 'tab-peek', title: '他の保存フォルダを覗く / Peek folder', hint: 'Tabs', keywords: ['peek', 'folder', 'ほかの', 'ふぉるだ'], button: 'btn-tab-peek', run: function() { clickById('btn-tab-peek'); } },
@@ -4786,7 +4789,12 @@ function openLiveDiff() {
 function setupLiveDiff() {
   var el = document.getElementById('status-livediff');
   if (!el) return;
-  el.addEventListener('click', function() { toggleCompareView(true, 'diff'); });
+  el.addEventListener('click', function() {
+    var CE = window.MA.compareEntry;
+    var want = CE ? CE.targetForBadge('status-livediff') : '';
+    if (want) { openCompareTarget(want); return; }
+    toggleCompareView(true, 'diff');
+  });
   renderLiveDiffChip();
 }
 
@@ -10961,6 +10969,64 @@ function renderSeniorModeRow() {
   if (el.modeOnce) el.modeOnce.setAttribute('aria-pressed', mode === 'once' ? 'true' : 'false');
 }
 
+// BLK-owner-20260923-1509-prune: 「2 つを左右に置いて見比べる」入口は 5 つあった。
+// 面をこの枠 1 つにし、選ぶのは「誰と並べるか」だけにする。相手の一覧と、
+// その相手に切り替えるとき鳴らす既存の入口は compare-entry が持つ。
+var _compareTarget = '';
+
+function compareTarget() {
+  var CE = window.MA.compareEntry;
+  if (!CE) return '';
+  if (!CE.isTarget(_compareTarget)) _compareTarget = CE.defaultTarget();
+  return _compareTarget;
+}
+
+// 相手の列は、どちらの枠が出ていても同じものが見える (面は 1 つとして読める)。
+function renderCompareTargetRow() {
+  var CE = window.MA.compareEntry;
+  if (!CE) return;
+  var cur = compareTarget();
+  [['senior-target', 'senior'], ['compare-target', 'compare']].forEach(function(pair) {
+    var host = document.getElementById(pair[0]);
+    if (!host) return;
+    host.innerHTML = '';
+    CE.targets().forEach(function(t) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.id = pair[1] + '-target-' + t.id;
+      b.className = 'compare-target-btn';
+      b.textContent = t.label;
+      b.title = t.title;
+      b.setAttribute('data-target', t.id);
+      b.setAttribute('aria-pressed', t.id === cur ? 'true' : 'false');
+      b.addEventListener('click', function() { openCompareTarget(t.id); });
+      host.appendChild(b);
+    });
+  });
+}
+
+// 相手を選んで枠を開く。旧い 5 つの入口 (タブ列・下端の札・Ctrl+K) は
+// すべてここを通るので、どこから押しても同じ 1 つの面が開く。
+function openCompareTarget(id) {
+  var CE = window.MA.compareEntry;
+  if (!CE) return Promise.resolve(false);
+  var route = CE.routeOf(id);
+  if (!route) return Promise.resolve(false);
+  _compareTarget = route.target;
+  renderCompareTargetRow();
+  // 面は 1 つなので、相手を切り替えたらもう一方の枠は閉じる
+  // (左右に 2 枚重なると「どちらが効いているか」が読めなくなる)。
+  if (route.target === 'folder') {
+    toggleCompareView(false);
+    return Promise.resolve(toggleSeniorPane(true));
+  }
+  // 別タブの図・この図の前回保存版は、既存の並べる面が持っている。
+  toggleSeniorPane(false);
+  toggleCompareView(true, route.mode);
+  renderCompareTargetRow();
+  return Promise.resolve(true);
+}
+
 function setSeniorMode(mode) {
   _seniorSave({ mode: mode === 'once' ? 'once' : 'keep' });
   renderSeniorModeRow();
@@ -11269,6 +11335,7 @@ function toggleSeniorPane(open) {
     window.MA.seniorPane && window.MA.seniorPane.STORE_KEY);
   if (open) showSeniorFirstNote();
   renderSeniorModeRow();
+  renderCompareTargetRow();
   if (el.btn) {
     el.btn.setAttribute('aria-pressed', open ? 'true' : 'false');
     el.btn.className = 'tab-tool' + (open ? ' on' : '');
@@ -11346,9 +11413,17 @@ function setupSeniorPane() {
   if (el.modeKeep) el.modeKeep.addEventListener('click', function() { setSeniorMode('keep'); });
   if (el.modeOnce) el.modeOnce.addEventListener('click', function() { setSeniorMode('once'); });
   renderSeniorModeRow();
-  // 下端の入口。折りたたみを通らずに 1 クリックで先輩の図の枠へ着く。
+  renderCompareTargetRow();
+  // 下端の札。札の名前はそのままで、押すと同じ 1 つの面がその相手で開く
+  // (BLK-owner-20260923-1509-prune)。どの札がどの相手かは compare-entry が持つ。
+  var CE = window.MA.compareEntry;
   var status = document.getElementById('status-senior');
-  if (status) status.addEventListener('click', function() { toggleSeniorPane(el.pane.hidden); });
+  if (status) status.addEventListener('click', function() {
+    var want = CE ? CE.targetForBadge('status-senior') : '';
+    if (want && !el.pane.hidden && compareTarget() === want) { toggleSeniorPane(false); return; }
+    if (want) { openCompareTarget(want); return; }
+    toggleSeniorPane(el.pane.hidden);
+  });
   // 前回開いたままなら、次に開いたときも開いたままにする (据え置きが値打ちなので)。
   if (_seniorState().open) toggleSeniorPane(true);
   else _seniorPrime();

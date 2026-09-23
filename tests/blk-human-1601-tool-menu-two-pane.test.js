@@ -67,7 +67,9 @@ describe('右列の小見出し', function() {
   });
 
   test('項目名は tool-menu.js のラベルそのまま (言い換えない)', function() {
-    expect(tm.labelOf('btn-tab-compare')).toBe('⇔ 並べて見る');
+    // BLK-owner-20260923-1509-prune: ⇔ 並べて見る は「並べて比較」の相手に畳まり、
+    // メニューの項目ではなくなった。他の項目で同じ規則を見る。
+    expect(tm.labelOf('btn-tab-peek')).toBe('他の保存フォルダを覗く');
     expect(tm.labelOf('btn-tab-board')).toBe('変更サマリ');
   });
 });
