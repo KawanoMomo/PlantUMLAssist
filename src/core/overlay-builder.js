@@ -295,6 +295,52 @@ window.MA.overlayBuilder = (function() {
     return lines;
   }
 
+  // BLK-migrator-20260923-1409: この PlantUML は data-source-line を出さないので、
+  // 行での対応は必ず失敗し matchByOrder に落ちる。順番で当てると、パーサが読めない
+  // 記法が 1 行あるだけで以後の枠が全部ずれる (同じ症状がこれで 4 件目)。
+  // PlantUML は参加者の <g> に data-qualified-name (= DSL の別名) を自分で残すので、
+  // 描いた側の名前で当てる。行を読み直さないので記法が増えても穴が開かない。
+  function matchByEntityName(svgEl, items, selector) {
+    if (!svgEl || !svgEl.querySelectorAll) return [];
+    var groups = svgEl.querySelectorAll(selector);
+    var byName = {};
+    Array.prototype.forEach.call(groups, function(g) {
+      var nm = g.getAttribute && g.getAttribute('data-qualified-name');
+      if (nm && !byName[nm]) byName[nm] = g;
+    });
+    var matches = [];
+    items.forEach(function(item) {
+      var g = (item && item.id != null) ? byName[item.id] : null;
+      if (g) matches.push({ item: item, groupEl: g });
+    });
+    return matches;
+  }
+
+  // BLK-migrator-20260923-1409: 参加者の頭は PlantUML が <rect> で実寸を描く。
+  // extractBBox は最初の <text> しか見ないため、表示名が ¥n で複数行になると
+  // 1 行目の上だけが当たり判定になり、2 行目以降を指しても枠が出なかった。
+  // 塗りのある図形 (= 実際に描かれた箱) の和集合を取れば、行数にも装飾 (<b> 等) にも
+  // 左右されない。塗りが無ければ子要素全部の和集合に落ちる。
+  function extractDrawnBBox(g) {
+    if (!g || !g.querySelectorAll) return null;
+    var shapes = g.querySelectorAll('rect, polygon, ellipse, path');
+    var minX = null, minY = null, maxX = null, maxY = null;
+    Array.prototype.forEach.call(shapes, function(sh) {
+      var fill = (sh.getAttribute('fill') || '').toLowerCase();
+      if (!fill || fill === 'none' || fill === 'transparent') return;
+      var op = parseFloat(sh.getAttribute('fill-opacity'));
+      if (!isNaN(op) && op === 0) return;
+      var bb = _nodeBBox(sh);
+      if (!bb || (!bb.width && !bb.height)) return;
+      if (minX === null || bb.x < minX) minX = bb.x;
+      if (minY === null || bb.y < minY) minY = bb.y;
+      if (maxX === null || bb.x + bb.width > maxX) maxX = bb.x + bb.width;
+      if (maxY === null || bb.y + bb.height > maxY) maxY = bb.y + bb.height;
+    });
+    if (minX === null) return extractUnionBBox(g);
+    return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+  }
+
   function matchByDataSourceLine(svgEl, items, selector, offset) {
     var groups = svgEl.querySelectorAll(selector);
     var byLine = {};
@@ -428,6 +474,8 @@ window.MA.overlayBuilder = (function() {
     extractUnionBBox: extractUnionBBox,
     extractMultiLineTextBBoxes: extractMultiLineTextBBoxes,
     hitTestTopmost: hitTestTopmost,
+    extractDrawnBBox: extractDrawnBBox,
+    matchByEntityName: matchByEntityName,
     matchByDataSourceLine: matchByDataSourceLine,
     matchByOrder: matchByOrder,
     pickBestOffset: pickBestOffset,

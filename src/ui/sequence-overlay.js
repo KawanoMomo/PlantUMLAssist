@@ -137,10 +137,22 @@ window.MA.sequenceOverlay = (function() {
     // 参加者より先に足すので、参加者・メッセージの枠が手前に重なる。
     _addBoxRects(svgEl, parsedData, overlayEl);
 
-    var partBest = OB.pickBestOffset(svgEl, participants, 'g.participant-head', candidates);
-    var partMatches = partBest.matches;
+    // BLK-migrator-20260923-1409: 参加者は PlantUML が <g> に残した名前
+    // (data-qualified-name) で当てる。全員が名前で当たるときだけ採り、
+    // 当たらない参加者が 1 人でもいれば今までの行/順番の当て方に落ちる。
+    function _matchParts(selector) {
+      var byName = OB.matchByEntityName(svgEl, participants, selector);
+      if (byName.length === participants.length && participants.length > 0) return byName;
+      return OB.pickBestOffset(svgEl, participants, selector, candidates).matches;
+    }
+    // 枠は描かれた箱 (塗りのある図形) に合わせる。複数行の表示名でも高さが合う。
+    function _partBox(groupEl) {
+      return OB.extractDrawnBBox(groupEl) || OB.extractBBox(groupEl);
+    }
+
+    var partMatches = _matchParts('g.participant-head');
     partMatches.forEach(function(m) {
-      var bb = OB.extractBBox(m.groupEl);
+      var bb = _partBox(m.groupEl);
       if (!bb) return;
       OB.addRect(overlayEl, bb.x - 8, bb.y - 4, (bb.width || 60) + 16, (bb.height || 14) + 8, {
         'data-type': 'participant',
@@ -151,9 +163,8 @@ window.MA.sequenceOverlay = (function() {
     // Bug C6 fix: PlantUML は participant を上下 (head/tail) 両方に描く。
     // tail もクリックで選択できるよう overlay rect を追加配置。
     // (data-id は head と同一なので selection は head/tail 共通で動作。)
-    var partTailBest = OB.pickBestOffset(svgEl, participants, 'g.participant-tail', candidates);
-    partTailBest.matches.forEach(function(m) {
-      var bb = OB.extractBBox(m.groupEl);
+    _matchParts('g.participant-tail').forEach(function(m) {
+      var bb = _partBox(m.groupEl);
       if (!bb) return;
       OB.addRect(overlayEl, bb.x - 8, bb.y - 4, (bb.width || 60) + 16, (bb.height || 14) + 8, {
         'data-type': 'participant',
@@ -176,18 +187,34 @@ window.MA.sequenceOverlay = (function() {
       var y1 = parseFloat(line.getAttribute('y1'));
       var y2 = parseFloat(line.getAttribute('y2'));
       if (isNaN(x1) || isNaN(x2) || isNaN(y1) || isNaN(y2)) return;
-      var cx = (x1 + x2) / 2;
-      var matched = null;
-      var headRects = overlayEl.querySelectorAll('rect[data-type="participant"]');
-      Array.prototype.forEach.call(headRects, function(r) {
-        if (matched) return;
-        var rx = parseFloat(r.getAttribute('x'));
-        var rw = parseFloat(r.getAttribute('width'));
-        if (cx >= rx && cx <= rx + rw) matched = r;
-      });
-      if (!matched) return;
-      var id = matched.getAttribute('data-id');
-      var lineNum = matched.getAttribute('data-line');
+      // BLK-migrator-20260923-1409: ライフラインも PlantUML の名前で当てる。
+      // 頭の枠の x 範囲で当てていたため、表示名が複数行で枠がずれると
+      // 隣の参加者のライフラインを掴み、別人の枠が出ていた。
+      var id = null, lineNum = null;
+      var lgName = lg.getAttribute && lg.getAttribute('data-qualified-name');
+      if (lgName) {
+        for (var pi = 0; pi < participants.length; pi++) {
+          if (participants[pi].id === lgName) {
+            id = participants[pi].id;
+            lineNum = participants[pi].line;
+            break;
+          }
+        }
+      }
+      if (id === null) {
+        var cx = (x1 + x2) / 2;
+        var matched = null;
+        var headRects = overlayEl.querySelectorAll('rect[data-type="participant"]');
+        Array.prototype.forEach.call(headRects, function(r) {
+          if (matched) return;
+          var rx = parseFloat(r.getAttribute('x'));
+          var rw = parseFloat(r.getAttribute('width'));
+          if (cx >= rx && cx <= rx + rw) matched = r;
+        });
+        if (!matched) return;
+        id = matched.getAttribute('data-id');
+        lineNum = matched.getAttribute('data-line');
+      }
       OB.addRect(overlayEl,
         Math.min(x1, x2) - 6, Math.min(y1, y2),
         12, Math.abs(y2 - y1),

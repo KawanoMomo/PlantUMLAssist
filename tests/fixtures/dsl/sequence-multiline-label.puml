@@ -1,0 +1,5 @@
+@startuml
+participant "Line1\n<b>Line2</b>\nLine3" as A
+participant "B" as B
+A -> B : msg
+@enduml
