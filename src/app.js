@@ -32402,9 +32402,14 @@ function bootWithSavedPrefs() {
   try { if (window.MA.gitUi) window.MA.gitUi.init(); } catch (e) {}
   try { if (window.MA.fileMenuUi) window.MA.fileMenuUi.init(); } catch (e) {}
   var as = window.MA.autoSave;
-  if (!as || !as.hydrateFromServer) { init(); return; }
   var started = false;
-  function go() { if (!started) { started = true; init(); } }
+  // init が途中で投げても、押せない (html[data-app-ready] の無い) 画面のまま残さない。
+  function go() {
+    if (started) return;
+    started = true;
+    try { init(); } finally { try { document.documentElement.setAttribute('data-app-ready', '1'); } catch (e) {} }
+  }
+  if (!as || !as.hydrateFromServer) { go(); return; }
   // server が黙っていても画面は開く。3 秒でこの回は諦める (次の起動で入る)。
   var timer = window.setTimeout(go, 3000);
   function done() { window.clearTimeout(timer); go(); }

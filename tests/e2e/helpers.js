@@ -44,6 +44,9 @@ async function gotoApp(page, opts) {
   // so the app opening a little late failed the test before it had begun.
   // The suite-wide `timeout` in playwright.config.js is the budget that matters.
   await page.waitForSelector('#preview-svg');
+  // #preview-svg は HTML の骨格にあり、init (保存先の取り込み /prefs を待って走る) より先に出る。
+  // init が終わるまで画面は押せない (html[data-app-ready] が立つまで pointer-events を切ってある)。
+  await page.waitForSelector('html[data-app-ready="1"]', { state: 'attached' });
   // local (Java) で描画する。online は DSL を plantuml.com へ送るため使わない。
   await page.evaluate(() => {
     var sel = document.getElementById('render-mode');

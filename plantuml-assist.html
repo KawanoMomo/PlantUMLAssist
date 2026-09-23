@@ -6,6 +6,11 @@
 <title>PlantUMLAssist</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
 <style>
+/* 起動中 (保存先の取り込みを待って init が走り終えるまで、最大 3 秒) は画面の骨格だけが出ていて、
+   ボタンの多くはまだ手が付いていない。押しても何も起きないクリックを黙って飲み込まないよう、
+   init が html[data-app-ready] を立てるまでは押せない (カーソルも待ちの形) にしておく。 */
+html:not([data-app-ready]) { cursor: progress; }
+html:not([data-app-ready]) body * { pointer-events: none !important; }
 /* ── CSS Variables ─────────────────────────────────────────────────────────── */
 :root {
   --bg-primary:   #0d1117;
