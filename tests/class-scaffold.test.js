@@ -226,12 +226,15 @@ describe('class-scaffold validate', function() {
     expect(v.ok).toBe(true);
   });
 
-  test('未定義の相手への関連を弾く', function() {
+  // BLK-human-20260923-1330: PlantUML は関連行に出てきただけの名前からクラスを起こすので
+  // 生成はできる。止めずに警告に落とす (旧テストは「弾く」を期待していた)。
+  test('未定義の相手への関連は、警告を出したうえで追加できる', function() {
     var v = cs.validate(spec({
       relations: [{ kind: 'association', from: 'CanDrvHs', to: 'Nowhere' }],
     }), BASE);
-    expect(v.ok).toBe(false);
-    expect(v.errors.join(' ').indexOf('Nowhere') >= 0).toBe(true);
+    expect(v.ok).toBe(true);
+    expect(v.errors).toEqual([]);
+    expect(v.warnings.join(' ').indexOf('Nowhere') >= 0).toBe(true);
   });
 
   test('DSL に既にあるクラスは関連の相手にできる', function() {

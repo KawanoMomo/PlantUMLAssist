@@ -1448,7 +1448,8 @@ window.MA.modules.plantumlState = (function() {
       }
       var v = SB.validate(spec, text);
       var errEl = document.getElementById('st-br-errors');
-      if (errEl) errEl.textContent = v.errors.join(' / ');
+      // BLK-human-20260923-1330: errors は赤で止め、warnings は橙で出したまま追加は通す。
+      if (errEl) errEl.innerHTML = window.MA.scaffoldNotice.html(v);
       var confirmBtn = document.getElementById('st-br-confirm');
       if (confirmBtn) {
         confirmBtn.disabled = !v.ok;

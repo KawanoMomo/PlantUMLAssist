@@ -131,12 +131,26 @@ describe('sequence-scaffold validate', function() {
     expect(r.errors.join('')).toContain('重複');
   });
 
-  test('From と To が同じメッセージは弾く', function() {
+  // BLK-human-20260923-1330: 自己メッセージ (`Dev -> Dev`) は PlantUML の正当な記法なので
+  // 止めない。確かめたい人のために警告だけを出す (旧テストは「弾く」を期待していた)。
+  test('From と To が同じメッセージは、警告を出したうえで追加できる', function() {
     var r = ss.validate(spec({
       messages: [{ from: 'Dev', to: 'Dev', text: 'x' }],
     }), EMPTY);
-    expect(r.ok).toBe(false);
-    expect(r.errors.join('')).toContain('From と To');
+    expect(r.ok).toBe(true);
+    expect(r.errors).toEqual([]);
+    expect(r.warnings.join('')).toContain('From と To');
+  });
+
+  test('自己メッセージは矢印の形がそのまま出る', function() {
+    var lines = ss.preview(EMPTY, spec({ messages: [{ from: 'Dev', to: 'Dev', text: '内部処理' }] }));
+    expect(lines.join(String.fromCharCode(10))).toContain('Dev -> Dev : 内部処理');
+  });
+
+  test('空ラベル・宣言のない参加者も警告どまりで ok', function() {
+    var r = ss.validate(spec({ messages: [{ from: 'A', to: 'B', text: '' }] }), EMPTY);
+    expect(r.ok).toBe(true);
+    expect(r.warnings.join('')).toContain('ラベルが空');
   });
 
   test('参加者だけでも ok', function() {

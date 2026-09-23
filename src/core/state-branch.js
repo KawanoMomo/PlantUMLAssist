@@ -155,16 +155,20 @@ window.MA.stateBranch = (function() {
     var s = normalizeSpec(spec, text);
     var errors = [];
     if (!s.choiceId) errors.push('分岐 (choice) 状態の名前を入れてください');
-    if (s.branches.length < 2) errors.push('枝を 2 本以上入れてください');
+
+    // BLK-human-20260923-1330: 重複した枝もガード無しが複数あるのも PlantUML としては
+    // 書ける行なので、止めずに「確かめたいこと」として警告に落とす。
+    var warnings = [];
+    if (s.branches.length < 2) warnings.push('枝が 1 本だけです (分岐になりませんが行は追加されます)');
     var seen = {};
     s.branches.forEach(function(b) {
       var key = JSON.stringify([b.to, b.guard]);
-      if (seen[key]) errors.push('同じ遷移先とガードの枝が重複しています: ' + b.to);
+      if (seen[key]) warnings.push('同じ遷移先とガードの枝が重複しています: ' + b.to);
       seen[key] = true;
     });
     var noGuard = s.branches.filter(function(b) { return !b.guard; });
-    if (noGuard.length > 1) errors.push('ガード無しの枝 (else) は 1 本までです');
-    return { ok: errors.length === 0, errors: errors };
+    if (noGuard.length > 1) warnings.push('ガード無しの枝 (else) が ' + noGuard.length + ' 本あります');
+    return { ok: errors.length === 0, errors: errors, warnings: warnings };
   }
 
   function fmtTransition(from, to, trigger, guard, action) {

@@ -1094,7 +1094,8 @@ window.MA.modules.plantumlClass = (function() {
       if (pre) pre.textContent = CD.preview(text, parsedData, spec).join('\n');
       var v = CD.validate(text, parsedData, spec);
       var errEl = document.getElementById('cl-dv-errors');
-      if (errEl) errEl.textContent = spec.name ? v.errors.join(' / ') : '';
+      // BLK-human-20260923-1330: errors は赤で止め、warnings は橙で出したまま追加は通す。
+      if (errEl) errEl.innerHTML = spec.name ? window.MA.scaffoldNotice.html(v) : '';
       var btn = document.getElementById('cl-dv-confirm');
       if (btn) {
         btn.disabled = !v.ok;
@@ -1377,7 +1378,8 @@ window.MA.modules.plantumlClass = (function() {
       if (pre) pre.textContent = CS.preview(text, spec).join('\n');
       var v = CS.validate(spec, text);
       var errEl = document.getElementById('cl-sc-errors');
-      if (errEl) errEl.textContent = v.errors.join(' / ');
+      // BLK-human-20260923-1330: errors は赤で止め、warnings は橙で出したまま追加は通す。
+      if (errEl) errEl.innerHTML = window.MA.scaffoldNotice.html(v);
       var confirmBtn = document.getElementById('cl-sc-confirm');
       if (confirmBtn) {
         confirmBtn.disabled = !v.ok;

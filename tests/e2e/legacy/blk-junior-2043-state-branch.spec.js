@@ -59,13 +59,27 @@ test.describe('BLK-junior-20260906-2043 分岐 (choice) 追加', () => {
     expect(preview).toContain('AnomalyCheck --> Error : [重大]');
   });
 
-  test('UC-4: 枝が 1 本だけなら確定できない', async ({ page }) => {
+  // BLK-human-20260923-1330: 枝 1 本の choice も PlantUML としては書ける行なので、
+  // 止めずに警告として知らせる (この UC は「確定できない」を期待していた)。
+  test('UC-4: 枝が 1 本だけなら警告は出るが、確定はできる', async ({ page }) => {
     await openStateDiagram(page);
     await page.locator('#st-branch-open').click();
     await page.locator('#st-br-id').fill('AnomalyCheck');
     await fillBranch(page, 0, '重大', 'Error');
+    await expect(page.locator('#st-br-confirm')).toBeEnabled();
+    await expect(page.locator('#st-br-errors')).toContainText('1 本');
+    await expect(page.locator('#st-br-errors .scaffold-warn')).toHaveCount(1);
+  });
+
+  // 本当に生成できないもの (分岐の名前が無い) は今までどおり止める。
+  test('UC-4b: 分岐の名前が無ければ確定できない', async ({ page }) => {
+    await openStateDiagram(page);
+    await page.locator('#st-branch-open').click();
+    await page.locator('#st-br-id').fill('');
+    await fillBranch(page, 0, '重大', 'Error');
+    await fillBranch(page, 1, '軽微', 'Idle');
     await expect(page.locator('#st-br-confirm')).toBeDisabled();
-    await expect(page.locator('#st-br-errors')).toContainText('2 本以上');
+    await expect(page.locator('#st-br-errors')).toContainText('名前');
   });
 
   test('UC-5: キャンセルすると DSL は変わらない', async ({ page }) => {
