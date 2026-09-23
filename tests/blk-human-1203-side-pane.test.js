@@ -68,7 +68,7 @@ describe('BLK-human-1203 先輩の枠の記憶', function() {
     const st = store();
     SP.save({ open: false, dir: './primary', name: 'gpio_state.puml', width: 500, seen: true }, st);
     assert.deepStrictEqual(SP.load(st),
-      { open: false, dir: './primary', name: 'gpio_state.puml', width: 500, seen: true });
+      { open: false, dir: './primary', name: 'gpio_state.puml', width: 500, seen: true, mode: 'keep' });
   });
 
   test('幅は先輩の枠でも同じ下限で丸める', function() {

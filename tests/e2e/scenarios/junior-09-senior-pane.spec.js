@@ -9,7 +9,7 @@ const S = require('./_scenario');
 
 const DIR = S.dirFor(__filename);
 
-test('手順9 先輩の枠は既定で出ず、👀 先輩で開き、× で閉じ、開き直しても閉じたまま', async ({ page }) => {
+test('手順9 比較相手の枠は既定で出ず、並べて比較で開き、× で閉じ、開き直しても閉じたまま', async ({ page }) => {
   await S.bootWithSaveDir(page, DIR);
 
   const pane = page.locator('#senior-pane');
@@ -18,7 +18,7 @@ test('手順9 先輩の枠は既定で出ず、👀 先輩で開き、× で閉�
   // 到達条件その1: 起動直後は枠が無い (自分の図とプレビューだけが見えている)。
   await expect(pane).toBeHidden();
 
-  // 到達条件その2: 下端の「👀 先輩」1 クリックで開く。
+  // 到達条件その2: 下端の「並べて比較」1 クリックで開く。
   await status.click();
   await expect(pane).toBeVisible();
 
@@ -99,4 +99,35 @@ test('手順9 参照ペインも同じく ✕ で閉じ、境目で幅を変え�
   await page.locator('#btn-compare-close').click();
   await expect(pane).toBeHidden();
   await expect(handle).toBeHidden();
+});
+
+// BLK-human-20260923-1600 (design 9a): 「⇔ 先輩」と「他の保存フォルダの版と見比べる」で
+// 2 つあった入口を「並べて比較」1 つにし、据え置く / 1 回だけを枠の中で切り替える。
+test('手順9 枠は「比較相手」と名乗り、据え置く / 1 回だけを枠の中で選べる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await page.locator('#status-senior').click();
+  await expect(page.locator('#senior-pane')).toBeVisible();
+
+  // 到達条件その1: 枠の見出しは立場 (先輩) ではなく役割 (比較相手) で名乗る。
+  await expect(page.locator('#senior-head strong')).toHaveText('比較相手');
+
+  // 到達条件その2: 2 択は枠の中にあり、既定は据え置き。
+  const keep = page.locator('#senior-mode-keep');
+  const once = page.locator('#senior-mode-once');
+  await expect(keep).toBeVisible();
+  await expect(once).toBeVisible();
+  await expect(keep).toHaveAttribute('aria-pressed', 'true');
+  await expect(once).toHaveAttribute('aria-pressed', 'false');
+
+  // 到達条件その3: 1 回だけを押すとそちらが効き、読み込み直しても覚えている。
+  await once.click();
+  await expect(once).toHaveAttribute('aria-pressed', 'true');
+  await expect(keep).toHaveAttribute('aria-pressed', 'false');
+  await S.reopenApp(page);
+  await expect(page.locator('#senior-pane')).toBeVisible();
+  await expect(page.locator('#senior-mode-once')).toHaveAttribute('aria-pressed', 'true');
+
+  // 到達条件その4: 据え置きに戻せる (切り替えは片道ではない)。
+  await page.locator('#senior-mode-keep').click();
+  await expect(page.locator('#senior-mode-keep')).toHaveAttribute('aria-pressed', 'true');
 });

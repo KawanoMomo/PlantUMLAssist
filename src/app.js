@@ -46,16 +46,20 @@ function updateTopFileName() {
 // いるのに、画面のどこにも出ないので「設定済みであること」に気づけず、図種を
 // 変えるたびに ⚙設定 → ファイル → パス再入力 → OK を習慣で打ち直していた。
 // 上部バーのファイル名の隣に保存先を常時出し、押せば設定へ入れるようにする。
+// BLK-human-20260923-1600 (design 9a): チップではなくパンくずの左半分。
+// フォルダ名を押すと保存先を変えられる。絵文字は使わず文字だけで出す。
 function updateTopSaveTarget() {
   var el = document.getElementById('top-save-target');
   var ST = window.MA.saveTarget;
   if (!el || !ST) return;
   var cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null;
-  var info = ST.label(cfg);
-  el.textContent = info.text;
-  el.title = info.title;
-  el.setAttribute('data-mode', info.mode);
-  if (info.configured) el.classList.add('configured');
+  var doc = null;
+  try { doc = window.MA.workspace ? window.MA.workspace.getActive() : null; } catch (e) { doc = null; }
+  var bc = ST.breadcrumb(cfg, doc, '(無題)');
+  el.textContent = bc.folder;
+  el.title = bc.folderTitle;
+  el.setAttribute('data-mode', bc.mode);
+  if (bc.configured) el.classList.add('configured');
   else el.classList.remove('configured');
   updateTopSaveButton();
 }
@@ -69,10 +73,27 @@ function updateTopSaveButton() {
   var cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null;
   var doc = null;
   try { doc = window.MA.workspace ? window.MA.workspace.getActive() : null; } catch (e) { doc = null; }
-  var info = ST.saveButton(cfg, doc, (currentParsed && currentParsed.meta && currentParsed.meta.title) || '');
+  // design 9a: 未保存のときだけ ● とキーを出し、保存済みは淡色の「保存済み」に落とす。
+  // 保存の有無は下端の札と同じ判定 (前回保存版といまの中身) を使い、2 つの言い分を作らない。
+  var dirty = false;
+  try {
+    var LD = window.MA.liveDiff;
+    var pair = _liveDiffPair();
+    if (LD && pair && pair.has) dirty = LD.verdict(pair.before, pair.now, pair.has) !== 'same';
+    else if (pair && !pair.has) dirty = !!(pair.now && pair.now.trim());
+  } catch (e) { dirty = false; }
+  var fallback = (currentParsed && currentParsed.meta && currentParsed.meta.title) || '';
+  var info = ST.saveState ? ST.saveState(cfg, doc, dirty, fallback)
+                          : ST.saveButton(cfg, doc, fallback);
   btn.textContent = info.text;
   btn.title = info.title;
-  btn.setAttribute('data-mode', info.mode);
+  btn.setAttribute('data-mode', ST.decide(cfg, doc, fallback).mode);
+  if (info.state) btn.setAttribute('data-save-state', info.state);
+  // キーは文字を消してから足し直す (textContent の代入で子ごと消えるため)。
+  var keyEl = document.createElement('span');
+  keyEl.id = 'top-save-key';
+  keyEl.textContent = info.key || '';
+  btn.appendChild(keyEl);
 }
 
 // ── 開いたファイルの錠 (BLK-junior-20260908-1803-wish) ──────────────────
@@ -540,7 +561,46 @@ function init() {
     }
   })();
 
-  // 上部バーの保存先チップ。押したら設定を開く (今の値を確かめて直せる)。
+  // BLK-human-20260923-1600 (design 9a): 上部バーの Import ▾。入れる・出すを対で並べる。
+  // 中身は既にある入口 (.puml を開く / クリップボード / 保存フォルダの一覧) を叩くだけで、
+  // 新しい読み込み経路は作らない。
+  (function setupImportMenu() {
+    var btn = document.getElementById('btn-import');
+    var menu = document.getElementById('import-menu');
+    if (!btn || !menu) return;
+    function close() {
+      menu.classList.remove('open');
+      btn.setAttribute('aria-expanded', 'false');
+    }
+    btn.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      var open = !menu.classList.contains('open');
+      menu.classList.toggle('open', open);
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+    document.addEventListener('click', function(ev) {
+      if (!menu.contains(ev.target) && ev.target !== btn) close();
+    });
+    menu.addEventListener('keydown', function(ev) {
+      if (ev.key === 'Escape') { ev.preventDefault(); close(); btn.focus(); }
+    });
+    [['imp-file', 'btn-open-file'], ['imp-folder', 'btn-tab-folder']].forEach(function(p) {
+      var item = document.getElementById(p[0]);
+      if (!item) return;
+      item.addEventListener('click', function() {
+        close();
+        var target = document.getElementById(p[1]);
+        if (target) target.click();
+      });
+    });
+    var clip = document.getElementById('imp-clipboard');
+    if (clip) clip.addEventListener('click', function() {
+      close();
+      openFromClipboard();
+    });
+  })();
+
+  // 上部バーのパンくずのフォルダ名。押したら設定を開く (保存先を変えられる)。
   (function setupTopSaveTarget() {
     var el = document.getElementById('top-save-target');
     if (!el) return;
@@ -3532,6 +3592,11 @@ function initCommandPalette() {
       { id: 'tab-skeleton', title: '骨格から作る / Skeleton', hint: 'Tabs', keywords: ['skeleton', 'こっかく', 'ひな形'], button: 'btn-tab-skeleton', run: function() { clickById('btn-tab-skeleton'); } },
       { id: 'tab-draft', title: '一時控えにする / Draft', hint: 'Tabs', keywords: ['draft', 'ひかえ', 'いちじ'], button: 'btn-tab-draft', run: function() { clickById('btn-tab-draft'); } },
       { id: 'tab-apply', title: '複数クラスに一括適用 / Bulk apply', hint: 'Tabs', keywords: ['apply', 'bulk', 'いっかつ', 'てきよう'], button: 'btn-tab-apply', run: function() { clickById('btn-tab-apply'); } },
+      // BLK-human-20260923-1600 (design 9a): 「⇔ 先輩」を「並べて比較」に改名したので、
+      // Ctrl+K も新しい名前で引ける。旧称 (先輩) でも当たるように語を残す。
+      { id: 'tab-senior', title: '並べて比較 (相手の図を横に並べる) / Side-by-side', hint: 'Tabs', keywords: ['compare', 'senior', 'side', 'ならべて', 'ひかく', 'あいて', 'せんぱい'], button: 'btn-tab-senior', run: function() { clickById('btn-tab-senior'); } },
+      // design 9a: 手元の .puml を開く入口は上部バーの Import ▾ へ移した。
+      { id: 'import-clipboard', title: 'クリップボードの DSL から開く / Open from clipboard', hint: 'File', keywords: ['clipboard', 'paste', 'import', 'くりっぷ', 'はりつけ', 'ひらく'], run: function() { clickById('imp-clipboard'); } },
       { id: 'tab-peek', title: '他の保存フォルダを覗く / Peek folder', hint: 'Tabs', keywords: ['peek', 'folder', 'ほかの', 'ふぉるだ'], button: 'btn-tab-peek', run: function() { clickById('btn-tab-peek'); } },
       { id: 'tab-drivermap', title: '系統マップを開く / Driver map', hint: 'Tabs', keywords: ['driver', 'map', 'けいとう', 'まっぷ'], button: 'btn-tab-drivermap', run: function() { clickById('btn-tab-drivermap'); } },
       { id: 'tab-design', title: '仕様突合 (design) / Design spec check', hint: 'Tabs', keywords: ['design', 'spec', 'gap', 'しよう', 'とつごう', 'せっけい'], button: 'btn-tab-design', run: function() { clickById('btn-tab-design'); } },
@@ -10798,6 +10863,8 @@ function _seniorEls() {
     draftRow: document.getElementById('senior-draft-row'),
     draft: document.getElementById('senior-draft'),
     draftNote: document.getElementById('senior-draft-note'),
+    modeKeep: document.getElementById('senior-mode-keep'),
+    modeOnce: document.getElementById('senior-mode-once'),
     btn: document.getElementById('btn-tab-senior'),
   };
 }
@@ -10817,10 +10884,10 @@ function renderSeniorDraftRow(pick) {
   el.draftRow.hidden = !show;
   if (!show) return;
   var kind = SD.kindLabel(String(active.diagramType || '').replace(/^plantuml-/, ''));
-  if (el.draft) el.draft.textContent = '🧪 ' + kind + 'の仮の手本を作る';
+  if (el.draft) el.draft.textContent = '相手に無い' + kind + 'を仮に組む';
   if (el.draftNote) {
-    el.draftNote.textContent = '先輩に ' + key + ' の' + kind
-      + ' がありません。先輩の他の図種に書かれている名前から下書きを組めます。';
+    el.draftNote.textContent = '比較相手に ' + key + ' の' + kind
+      + ' がありません。相手の他の図種に書かれている名前から下書きを組めます。';
   }
 }
 
@@ -10875,7 +10942,25 @@ function _seniorSave(over) {
     name: over && over.name !== undefined ? over.name : cur.name,
     width: over && over.width !== undefined ? over.width : cur.width,
     seen: over && over.seen !== undefined ? over.seen : cur.seen,
+    mode: over && over.mode !== undefined ? over.mode : cur.mode,
   });
+}
+
+// design 9a: 「並べて比較」は 1 つの入口で、据え置き (図の切り替えに追従) と
+// 1 回だけ (いま出している 1 枚に留める) を枠の中で切り替える。
+function renderSeniorModeRow() {
+  var el = _seniorEls();
+  var mode = _seniorState().mode;
+  if (el.modeKeep) el.modeKeep.setAttribute('aria-pressed', mode === 'keep' ? 'true' : 'false');
+  if (el.modeOnce) el.modeOnce.setAttribute('aria-pressed', mode === 'once' ? 'true' : 'false');
+}
+
+function setSeniorMode(mode) {
+  _seniorSave({ mode: mode === 'once' ? 'once' : 'keep' });
+  renderSeniorModeRow();
+  // 据え置きに戻したら、いま開いている図の相手へその場で追い付かせる
+  // (次に図を切り替えるまで前の相手が残ると、どちらが効いているか読めない)。
+  if (mode !== 'once') syncSeniorCounterpart();
 }
 
 // 選べるフォルダ = 覗ける行き先のうち、自分の保存先でないもの。
@@ -11177,6 +11262,7 @@ function toggleSeniorPane(open) {
   applySidePaneWidth('senior-pane', 'resizer-senior',
     window.MA.seniorPane && window.MA.seniorPane.STORE_KEY);
   if (open) showSeniorFirstNote();
+  renderSeniorModeRow();
   if (el.btn) {
     el.btn.setAttribute('aria-pressed', open ? 'true' : 'false');
     el.btn.className = 'tab-tool' + (open ? ' on' : '');
@@ -11221,9 +11307,11 @@ function showSeniorFirstNote() {
 }
 
 // 図を切り替えたとき、開いていれば相手も入れ替える (renderTabs から)。
+// 「1 回だけ」に切り替えてある間は入れ替えない (いま出している 1 枚を見続ける)。
 function syncSeniorPane() {
   var el = _seniorEls();
   if (!el.pane || el.pane.hidden) { _seniorRefreshPick(); return; }
+  if (_seniorState().mode === 'once' && _seniorName) { renderSeniorStatus(); return; }
   syncSeniorCounterpart();
 }
 
@@ -11249,6 +11337,9 @@ function setupSeniorPane() {
     });
   }
   if (el.draft) el.draft.addEventListener('click', function() { makeSeniorDraft(); });
+  if (el.modeKeep) el.modeKeep.addEventListener('click', function() { setSeniorMode('keep'); });
+  if (el.modeOnce) el.modeOnce.addEventListener('click', function() { setSeniorMode('once'); });
+  renderSeniorModeRow();
   // 下端の入口。折りたたみを通らずに 1 クリックで先輩の図の枠へ着く。
   var status = document.getElementById('status-senior');
   if (status) status.addEventListener('click', function() { toggleSeniorPane(el.pane.hidden); });
@@ -12019,7 +12110,7 @@ function setupTabs() {
       openHead.type = 'button';
       openHead.className = 'folder-open-file';
       openHead.id = 'folder-open-file';
-      openHead.textContent = '📄 ファイルを開く(.puml)';
+      openHead.textContent = 'ファイルを開く(.puml)';
       openHead.title = '保存フォルダの外にある .puml を開きます (複数可・ドラッグ&ドロップでも開けます)';
       openHead.addEventListener('click', function() { closePanel(); openFile(); });
       panel.appendChild(openHead);
@@ -25155,6 +25246,31 @@ function onFilePicked(e) {
 }
 
 // 読んだファイルをタブで開く。最後に開いた 1 枚を前に出す。
+// BLK-human-20260923-1600 (design 9a): Import ▾ の「クリップボードの DSL から開く」。
+// 他ツールや課題票から貼られた DSL は、今まで新しいタブを作って貼り付ける 2 手だった。
+// 読み込む経路は openSourceFiles 1 本のままにして、入口だけを足す。
+function openFromClipboard() {
+  var nav = window.navigator;
+  if (!nav || !nav.clipboard || !nav.clipboard.readText) {
+    if (window.MA.toast) window.MA.toast.show('この画面ではクリップボードを読めません (貼り付けで開いてください)');
+    return Promise.resolve([]);
+  }
+  return nav.clipboard.readText().then(function(text) {
+    var body = String(text == null ? '' : text);
+    if (!body.trim()) {
+      if (window.MA.toast) window.MA.toast.show('クリップボードが空です');
+      return [];
+    }
+    // 名前は貼られた DSL の title から採る。無ければ日付の付いた仮の名前にする。
+    var m = /^\s*title\s+(.+)$/m.exec(body);
+    var name = m ? m[1].trim() : ('clipboard-' + new Date().toISOString().slice(0, 10));
+    return openSourceFiles([{ name: name, text: body }], []);
+  }, function() {
+    if (window.MA.toast) window.MA.toast.show('クリップボードを読めませんでした');
+    return [];
+  });
+}
+
 function openSourceFiles(items, skipped) {
   var WS = window.MA.workspace;
   var FO = window.MA.fileOpen;
@@ -25282,7 +25398,7 @@ function renderOpenEmptyHint() {
     var b = document.createElement('button');
     b.type = 'button';
     b.id = 'btn-open-file-empty';
-    b.textContent = '📄 ファイルを開く(.puml)';
+    b.textContent = 'ファイルを開く(.puml)';
     b.addEventListener('click', function() { openFile(); });
     var p = document.createElement('div');
     p.textContent = 'またはここへ .puml をドラッグ&ドロップ (複数枚はタブで開きます)';

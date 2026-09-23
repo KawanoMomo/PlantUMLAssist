@@ -73,8 +73,8 @@ describe('先輩が持たない図種の見本選び', function() {
 
   test('枠の 1 行は、先輩がいないことと横に出ている物の両方を言う', function() {
     const p = pick('TIMERドライバ初期化アクティビティ図.puml');
-    const t = PS.noticeText(p, 'この図 (TIMERドライバ初期化アクティビティ図) に当たる先輩の図はありません');
-    assert.ok(t.indexOf('当たる先輩の図はありません') >= 0, t);
+    const t = PS.noticeText(p, 'この図 (TIMERドライバ初期化アクティビティ図) に当たる相手の図はありません');
+    assert.ok(t.indexOf('当たる相手の図はありません') >= 0, t);
     assert.ok(t.indexOf('見本') >= 0, t);
     assert.ok(t.indexOf('読むだけ') >= 0, t);
     assert.ok(t.indexOf(PS.baseOf(p.name)) >= 0, t);

@@ -127,7 +127,7 @@
   // 枠の上の 1 行。先輩がいないことと、代わりに何が出ているかを 1 行で言う
   // (「ありません」だけだと、横に出ている図を先輩の図と読み違える)。
   function noticeText(pick, seniorReason) {
-    var head = _s(seniorReason) || '当たる先輩の図はありません';
+    var head = _s(seniorReason) || '当たる相手の図はありません';
     if (!pick || pick.how !== 'peer-sample' || !pick.name) return head;
     return head + '。代わりに自分の ' + baseOf(pick.name)
       + '（' + pick.reason + '）を見本に出しています・読むだけ';
@@ -137,8 +137,8 @@
   function statusText(pick) {
     if (!pick || pick.how !== 'peer-sample' || !pick.name) return null;
     return {
-      label: '👀 見本 ' + baseOf(pick.name),
-      title: '先輩にこの図種の図がないので、' + pick.reason + ' ' + baseOf(pick.name)
+      label: '並べて比較 見本 ' + baseOf(pick.name),
+      title: '比較相手にこの図種の図がないので、' + pick.reason + ' ' + baseOf(pick.name)
         + ' を見本として横に出します (読むだけ)',
       count: (pick.candidates || []).length,
     };

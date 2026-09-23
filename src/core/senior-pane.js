@@ -106,7 +106,7 @@
     var list = (names || []).map(_s).filter(function(n) { return !!n; });
     var out = { name: '', how: 'none', candidates: [], reason: '', key: '', keys: [] };
     if (!mine.name || !list.length) {
-      out.reason = list.length ? 'まだ図を開いていません' : '先輩のフォルダに図がありません';
+      out.reason = list.length ? 'まだ図を開いていません' : '比較相手のフォルダに図がありません';
       return out;
     }
 
@@ -165,13 +165,13 @@
       }
     }
 
-    out.reason = 'この図 (' + baseOf(mine.name) + ') に当たる先輩の図はありません';
+    out.reason = 'この図 (' + baseOf(mine.name) + ') に当たる相手の図はありません';
     return out;
   }
 
   // 枠の上に出す 1 行。押す前に「いま何が横にあるか」が読める。
   function noticeText(pick, seniorLabel) {
-    var who = _s(seniorLabel) || '先輩';
+    var who = _s(seniorLabel) || '比較相手';
     if (!pick) return who + ' のフォルダを選んでください';
     if (pick.how === 'none') return pick.reason;
     if (pick.name) {
@@ -189,29 +189,29 @@
   function statusText(pick, opts) {
     var o = opts || {};
     if (!o.ready) {
-      return { label: '👀 先輩 −', title: '先輩の図を読むだけで横に出します (押すと開きます)', count: 0 };
+      return { label: '並べて比較 −', title: '別のフォルダの図を読むだけで横に並べます (押すと開きます)', count: 0 };
     }
     if (!pick || pick.how === 'none') {
-      return { label: '👀 先輩 −', title: (pick && pick.reason) || '先輩のフォルダを選んでください', count: 0 };
+      return { label: '並べて比較 −', title: (pick && pick.reason) || '比較相手のフォルダを選んでください', count: 0 };
     }
     if (pick.how === 'common-slice' && pick.name) {
       return {
-        label: '👀 先輩 ' + baseOf(pick.name) + '（' + pick.key + '）',
-        title: '先輩の共通図 ' + baseOf(pick.name) + ' から「' + pick.key
+        label: '並べて比較 ' + baseOf(pick.name) + '（' + pick.key + '）',
+        title: '比較相手の共通図 ' + baseOf(pick.name) + ' から「' + pick.key
           + '」に当たる所だけを抜き出して横に出します (読むだけ)',
         count: 1,
       };
     }
     if (pick.name) {
       return {
-        label: '👀 先輩 ' + baseOf(pick.name),
-        title: '横に出る先輩の図: ' + baseOf(pick.name) + ' (' + pick.reason + '・読むだけ)',
+        label: '並べて比較 ' + baseOf(pick.name),
+        title: '横に並ぶ相手の図: ' + baseOf(pick.name) + ' (' + pick.reason + '・読むだけ)',
         count: 1,
       };
     }
     var n = (pick.candidates || []).length;
     return {
-      label: '👀 先輩 ' + n + ' 候補',
+      label: '並べて比較 ' + n + ' 候補',
       title: pick.reason + ' が ' + n + ' 枚あります (押すと枠が開き、選べます)',
       count: n,
     };
@@ -248,8 +248,15 @@
       name: _s(s.name),
       width: _width(s.width),
       seen: !!s.seen,
+      // design 9a: この枠は「並べて比較」1 つの入口の実体になる。相手を据え置いて
+      // 図の切り替えに追従させる 'keep' と、いま出している 1 枚だけを見る 'once' を
+      // 枠の中で切り替える (別画面を増やさない)。
+      mode: s.mode === 'once' ? 'once' : 'keep',
     };
   }
+
+  // 枠内の切り替えの呼び名。画面と unit の両方がここを見る。
+  var MODE_LABELS = { keep: '据え置く', once: '1 回だけ' };
 
   // 初めて開いたときだけ出す 1 行。この枠が何かを言い切る (読むだけだと分かること)。
   var FIRST_NOTE = 'この枠は、別のフォルダの図を手本として横に出すものです（読むだけ・書き換えません）。'
@@ -283,6 +290,7 @@
     pickCounterpart: pickCounterpart, noticeText: noticeText, statusText: statusText,
     normalize: normalize, load: load, save: save,
     FIRST_NOTE: FIRST_NOTE, firstOpenNote: firstOpenNote,
+    MODE_LABELS: MODE_LABELS,
     DEFAULT_WIDTH: DEFAULT_WIDTH, MIN_WIDTH: MIN_WIDTH,
   };
 

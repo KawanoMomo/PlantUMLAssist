@@ -201,6 +201,34 @@ html, body {
 }
 #top-save:hover { border-color: var(--accent); color: var(--accent); }
 #top-save-target.configured { color: var(--accent); border-color: var(--accent); }
+/* BLK-human-20260923-1600 (design 9a): 上部バー左はパンくず 1 本。フォルダ名は
+   枠なしの文字にして、「/」で繋いだファイル名と 1 つの並びに見せる。 */
+#top-save-target {
+  border: none;
+  border-radius: 0;
+  padding: 1px 2px;
+  margin-right: 0;
+}
+#top-save-target:hover { text-decoration: underline; }
+#top-save-target.configured { border: none; }
+#top-crumb-sep {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin: 0 5px;
+}
+/* design 9a: 未保存のときだけアクセント色 + ●。保存済みは淡色の文字に落とす。 */
+#top-save[data-save-state="saved"] {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-secondary);
+}
+#top-save[data-save-state="dirty"] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+#top-save-key { margin-left: 6px; opacity: 0.7; font-size: 10px; }
+#top-save[data-save-state="saved"] #top-save-key { display: none; }
 #top-render-status {
   font-family: var(--font-mono);
   font-size: 11px;
@@ -448,6 +476,45 @@ html, body {
 }
 #export-menu.open { display: block; }
 
+/* BLK-human-20260923-1600 (design 9a): Import ▾ は Export ▾ と同じ形にする。 */
+#import-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  z-index: 200;
+  min-width: 300px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+}
+#import-menu.open { display: block; }
+#import-menu button {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  padding: 8px 14px;
+  text-align: left;
+  cursor: pointer;
+}
+#import-menu button:hover { background: var(--bg-tertiary); color: var(--accent); }
+#import-menu .menu-key { color: var(--text-secondary); font-family: var(--font-mono); font-size: 11px; }
+#import-menu .menu-note {
+  border-top: 1px solid var(--border);
+  padding: 7px 14px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
 #export-menu button {
   display: block;
   width: 100%;
@@ -598,6 +665,13 @@ html, body {
   white-space: nowrap;
   flex-shrink: 0;
 }
+/* design 9a: フォルダ操作 (一覧 / 並べて比較) は枠なしの文字にして、
+   枠付きで残すのは右端の「ツール ▾」だけにする。 */
+#tab-bar .tab-tool.tab-tool-plain {
+  border-color: transparent;
+  background: transparent;
+}
+#tab-bar .tab-tool.tab-tool-plain:hover { color: var(--accent); }
 #tab-bar .tab { flex-shrink: 0; }
 /* BLK-primary-20260907-2303-wish: 図を開いた人にその図の申し送りを出す帯 */
 #hn-banner {
@@ -6190,6 +6264,17 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   font-size: 12px; color: var(--text-primary);
 }
 #senior-head select { flex: 1; min-width: 0; font-size: 11px; }
+/* design 9a: 据え置く / 1 回だけ。押している方だけを地色で示す 2 択 */
+#senior-mode { display: inline-flex; flex-shrink: 0; }
+#senior-mode button {
+  font-size: 11px; padding: 1px 6px; border-radius: 0;
+  border: 1px solid var(--border); background: transparent;
+  color: var(--text-secondary); cursor: pointer;
+}
+#senior-mode button + button { border-left: none; }
+#senior-mode button[aria-pressed="true"] {
+  background: var(--bg-primary); color: var(--text-primary);
+}
 #senior-head button { border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer; }
 #senior-notice { padding: 4px 8px; font-size: 11px; color: var(--text-secondary); }
 #senior-slice { padding: 0 8px 4px 8px; display: flex; align-items: center; gap: 4px; font-size: 11px; }
@@ -6880,12 +6965,15 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <!-- design 1a: 上部に残すのは「編集中のファイル名」「検索」「状態表示」「Export」だけ。
          Open/Save/設定/Undo/Redo/ズーム/再描画は下の #toolbar-actions に退避し、
          入口は Ctrl+K のコマンドパレット・左レール・キャンバス上のズーム HUD が持つ。 -->
+    <!-- BLK-human-20260923-1600 (design 9a): 上部バー左は「{フォルダ} / {ファイル名}」の
+         パンくず 1 本。ファイル名がアクティブタブと 2 か所に出るのをやめ、保存先チップは
+         パンくずのフォルダ名に統合した (押すと保存先を変えられる)。 -->
+    <button id="top-save-target" type="button" title="保存先">ダウンロード</button>
+    <span id="top-crumb-sep" aria-hidden="true">/</span>
     <span id="top-file-name" title="編集中の図">(無題).puml</span>
-    <!-- BLK-junior-20260907-2009: 保存先が既に覚えられていることを常時見せる -->
-    <button id="top-save-target" type="button" title="保存先">⬇ ダウンロード</button>
-    <!-- BLK-junior-20260913-0306: 一覧・覗く・書き出すはボタンを押せるのに、毎周必ず通る
-         保存だけが Ctrl+K でコマンド名を打つ経路しか無かった。保存先の隣に常時出す。 -->
-    <button id="top-save" type="button" title="保存">💾 保存</button>
+    <!-- design 9a: 保存の状態をそのまま出す。未保存のときだけ ● とアクセント色、
+         保存済みは淡色の「保存済み」に落とす (BLK-junior-20260913-0306 の入口は残す)。 -->
+    <button id="top-save" type="button" title="保存" data-save-state="saved">保存済み<span id="top-save-key"></span></button>
     <button id="top-source-lock" type="button" hidden></button>
 
     <!-- BLK-builder-20260907-0803-1 (design 1a): コマンド中心。名前を打って実行する入口 -->
@@ -6900,6 +6988,19 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <button id="top-render-status" type="button" role="status"
       title="レンダリングのモードと直前の所要時間 (押すと設定のレンダリングを開く)">local · —</button>
 
+    <!-- BLK-human-20260923-1600 (design 9a): 入れる・出すは対の操作なので、上部バーの
+         右端に Import ▾ / Export ▾ を 1 組で並べる。タブ列の「開く」はここへ移した
+         (空の画面の入口とドラッグ&ドロップはそのまま)。 -->
+    <div class="export-wrap">
+      <button class="tb-btn" id="btn-import" aria-expanded="false" aria-controls="import-menu"
+              title="図を読み込む">Import ▾</button>
+      <div id="import-menu">
+        <button id="imp-file">.puml を開く…<span class="menu-key">Ctrl+O</span></button>
+        <button id="imp-clipboard">クリップボードの DSL から開く</button>
+        <button id="imp-folder">保存フォルダの図を開く（一覧）</button>
+        <div class="menu-note">エディタやプレビューへドラッグ&amp;ドロップでも開けます（複数可）</div>
+      </div>
+    </div>
     <div class="export-wrap">
       <button class="tb-btn" id="btn-export" title="エクスポート">Export ▾</button>
       <div id="export-menu">
@@ -6993,20 +7094,25 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <!-- 開いている図のタブ。切り替えても各図の DSL は保持される -->
       <div id="tab-bar">
         <button class="tab-tool" id="btn-tab-new" title="新しい図を開く">＋</button>
-        <button class="tab-tool" id="btn-tab-folder" title="保存フォルダの図を一覧">📂 一覧</button>
-        <!-- BLK-human-20260917-0901: 手元の .puml を開く入口。畳まない (tool-menu の KEEP_IN_TAB_BAR) -->
-        <button class="tab-tool" id="btn-open-file" title="手元の .puml / .plantuml / .uml / .txt を開きます (複数可)。エディタやプレビューへドラッグ&ドロップでも開けます" aria-label="ファイルを開く(.puml)">📄 開く</button>
+        <!-- design 9a: フォルダ操作は枠なしの文字で ＋ の右に置く -->
+        <button class="tab-tool tab-tool-plain" id="btn-tab-folder" title="保存フォルダの図を一覧">一覧</button>
+        <!-- BLK-human-20260917-0901 / design 9a: 手元の .puml を開く入口は上部バーの
+             Import ▾ へ移した。DOM には残す (ドラッグ&ドロップ・空の画面・Ctrl+K が叩く) -->
+        <button class="tab-tool" id="btn-open-file" hidden title="手元の .puml / .plantuml / .uml / .txt を開きます (複数可)。エディタやプレビューへドラッグ&ドロップでも開けます" aria-label="ファイルを開く(.puml)">開く</button>
         <!-- BLK-primary-20260908-0823-design (7a): 機能ボタンを 6 分類のメニューに畳む -->
         <button class="tab-tool" id="btn-tab-tools" aria-expanded="false" aria-controls="tool-menu"
-                title="ツールを分類から選ぶ (Ctrl+K でも同じ操作が引ける)">🧰 ツール ▾</button>
+                title="ツールを分類から選ぶ (Ctrl+K でも同じ操作が引ける)">ツール ▾</button>
         <!-- BLK-primary-20260908-1803: 静かなタブ列でも、畳んだ機能の入口を 1 クリック分残す -->
         <button class="tab-tool tab-tool-mini" id="btn-tab-tools-mini" aria-expanded="false" aria-controls="tool-menu"
                 title="畳んでいるツールの一覧を開く (Ctrl+K でも同じ操作が引ける)">他 0 件</button>
         <button class="tab-tool" id="btn-tab-peek" title="他の保存フォルダの図を読むだけで見る (保存先は変わりません)">👀 他フォルダ</button>
         <!-- BLK-junior-20260914-1406-wish: 先輩のフォルダを 1 回選べば、いま開いている図に
              当たる先輩の図が右の枠に読み専用で出たままになる (保存先は切り替えない) -->
-        <button class="tab-tool" id="btn-tab-senior" aria-pressed="false"
-                title="先輩の保存フォルダを右の枠に据え置く。図を切り替えると、その図に当たる先輩の図が自動で入れ替わる (読むだけ)">⇔ 先輩</button>
+        <!-- design 9a: 「先輩」は使う人の立場の名前で、機能の中身を表していない。
+             相手が先輩でも他チームでも過去の自分の版でも動きは同じなので、
+             何をするかで名付ける。枠なしの文字で「一覧」の隣に置く。 -->
+        <button class="tab-tool tab-tool-plain" id="btn-tab-senior" aria-pressed="false"
+                title="別の保存フォルダの図を右の枠に並べる。図を切り替えると相手も自動で入れ替わる (読むだけ)">並べて比較</button>
         <!-- BLK-junior-20260907-2009-wish: やり直し途中の控えに印を付け、📂 一覧で畳む -->
         <button class="tab-tool" id="btn-tab-draft" aria-pressed="false" title="この図に一時控え(下書き / やり直し途中)の印を付けて、📂 一覧から畳む">🗂 一時控え</button>
         <button class="tab-tool" id="btn-tab-rename" title="開いている図をまたいで部品名を一括置換">⇄ 一括置換</button>
@@ -7556,11 +7662,21 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <!-- BLK-junior-20260914-1406-wish: 先輩の図を読み専用の 2 枠目として据え置く。
          フォルダを 1 回選べば、図を切り替えても相手が自動で入れ替わる。 -->
     <div class="pane-resizer" id="resizer-senior" hidden
-         role="separator" aria-orientation="vertical" aria-label="先輩の図の枠の幅"></div>
+         role="separator" aria-orientation="vertical" aria-label="比較相手の枠の幅"></div>
     <div id="senior-pane" hidden>
       <div id="senior-head">
-        <strong>先輩の図</strong>
-        <select id="senior-dir" aria-label="先輩の保存フォルダ"></select>
+        <!-- design 9a: 「先輩」は使う人の立場で、中身を表していない。相手が先輩でも
+             他チームでも過去の版でも動きは同じなので「比較相手」と呼ぶ。 -->
+        <strong>比較相手</strong>
+        <select id="senior-dir" aria-label="比較相手の保存フォルダ"></select>
+        <!-- design 9a: 「並べて比較」を 1 つの入口にするため、据え置き (図を切り替えると
+             相手も入れ替わる) と 1 回だけ (いま出している 1 枚に留める) を枠の中で切り替える -->
+        <span id="senior-mode" role="group" aria-label="比較相手の追従">
+          <button type="button" id="senior-mode-keep" aria-pressed="true"
+                  title="図を切り替えるたびに、その図に当たる相手へ自動で入れ替えます">据え置く</button>
+          <button type="button" id="senior-mode-once" aria-pressed="false"
+                  title="いま出している 1 枚に留めます (図を切り替えても相手は変わりません)">1 回だけ</button>
+        </span>
         <button type="button" id="senior-close" title="この枠を閉じる">×</button>
       </div>
       <!-- 初めて開いたときだけ「この枠は何か」を 1 行出す (BLK-human-20260915-1203) -->
@@ -7571,7 +7687,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
            名前だけから仮の手本を組んで出す (決め打ちの当てずっぽうを減らす)。 -->
       <div id="senior-draft-row" hidden>
         <button type="button" id="senior-draft"
-                title="先輩の他の図種 (クラス図・シーケンス図など) に書かれている名前から、この図種の下書きを組む">🧪 仮の手本を作る</button>
+                title="比較相手の他の図種 (クラス図・シーケンス図など) に書かれている名前から、この図種の下書きを組む">相手に無い図種を仮に組む</button>
         <span id="senior-draft-note"></span>
       </div>
       <!-- BLK-junior-20260914-2206-wish: 先輩のクラス図は全ドライバ共通の 1 枚なので
@@ -7641,7 +7757,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <!-- BLK-junior-20260908-1103 (design 7b): 先輩の図を見る入口は 🧰 ツールの折りたたみの
          奥にあり、図種ごとの初回は毎回そこを通っていた。常に見えている下端に置き、
          押せば 1 クリックで先輩の枠が開く -->
-    <button type="button" id="status-senior" title="先輩の図を読むだけで横に出します (押すと開きます)">👀 先輩 −</button>
+    <button type="button" id="status-senior" title="別のフォルダの図を読むだけで横に並べます (押すと開きます)">並べて比較 −</button>
     <!-- BLK-reviewer-20260907-0843: 整合性チェックの警告件数を常時出す -->
     <button type="button" id="status-consistency" title="命名規約・未使用 participant・メソッド不一致・粒度不一致の一覧">整合 —</button>
     <!-- BLK-primary-20260907-1803-wish: state の遷移イベントと class のメソッドの突合表 -->

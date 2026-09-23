@@ -113,9 +113,17 @@ describe('GUI と server の配線', function() {
   var server = fs.readFileSync(path.join(ROOT, 'server.py'), 'utf-8');
   test('日本語の入口が上部 (畳まれない所) にあり、複数選択できる', function() {
     expect(html).toContain('id="btn-open-file"');
-    // タブ列は横スクロールさせない幅に収める (札は短く、正式名は aria-label と title)。
-    expect(html).toContain('aria-label="ファイルを開く(.puml)">📄 開く</button>');
-    expect(app).toContain("'📄 ファイルを開く(.puml)'");
+    // BLK-human-20260923-1600 (design 9a): 札そのものはタブ列から外し、入口は上部バーの
+    // Import ▾ に移した。入れる・出すが対で並ぶ方が探す場所が 1 つで済む。
+    // #btn-open-file は DOM に残る (ドラッグ&ドロップ・空の画面・Ctrl+K が叩く先)。
+    expect(html).toContain('aria-label="ファイルを開く(.puml)">開く</button>');
+    expect(html).toContain('id="btn-import"');
+    expect(html).toContain('id="imp-file"');
+    expect(html).toContain('id="imp-clipboard"');
+    expect(html).toContain('id="imp-folder"');
+    // Import ▾ は Export ▾ の左に置く (入れる → 出すの順)。
+    expect(html.indexOf('id="btn-import"')).toBeLessThan(html.indexOf('id="btn-export"'));
+    expect(app).toContain("'ファイルを開く(.puml)'");
     expect(/id="file-input"[^>]*multiple/.test(html)).toBe(true);
     expect(html).toContain('src/core/file-open.js');
   });
