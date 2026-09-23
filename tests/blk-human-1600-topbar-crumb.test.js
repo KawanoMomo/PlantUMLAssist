@@ -84,3 +84,41 @@ describe('保存の状態 (design 9a)', function() {
     });
   });
 });
+
+// design 9a: 「⇔ 先輩」は「並べて比較」1 つの入口になる。実体は据え置きの枠で、
+// 「据え置く / 1 回だけ」を枠の中で切り替える (別画面を増やさない)。
+try { delete require.cache[require.resolve('../src/core/senior-pane.js')]; } catch (e) {}
+var SP = require('../src/core/senior-pane.js');
+
+describe('並べて比較の枠 (design 9a)', function() {
+
+  test('既定は据え置き (図を切り替えると相手も入れ替わる)', function() {
+    expect(SP.normalize(null).mode).toBe('keep');
+    expect(SP.normalize({ mode: 'nonsense' }).mode).toBe('keep');
+  });
+
+  test('1 回だけに切り替えた状態は覚える', function() {
+    expect(SP.normalize({ mode: 'once' }).mode).toBe('once');
+  });
+
+  test('枠の中の 2 択は「据え置く」「1 回だけ」と名乗る', function() {
+    expect(SP.MODE_LABELS.keep).toBe('据え置く');
+    expect(SP.MODE_LABELS.once).toBe('1 回だけ');
+  });
+
+  test('下端の札は「先輩」ではなく「並べて比較」と名乗り、絵文字を出さない', function() {
+    var t = SP.statusText(null, { ready: false });
+    expect(t.label).toBe('並べて比較 −');
+    expect(t.label.indexOf('\u{1F440}')).toBe(-1);
+    expect(t.label.indexOf('先輩')).toBe(-1);
+  });
+
+  test('画面側も「比較相手」と名乗り、仮の手本の口は図種で言う', function() {
+    var html = require('fs').readFileSync(require('path').join(__dirname, '..', 'plantuml-assist.html'), 'utf8');
+    expect(html).toContain('<strong>比較相手</strong>');
+    expect(html).toContain('id="senior-mode-keep"');
+    expect(html).toContain('id="senior-mode-once"');
+    expect(html).toContain('相手に無い図種を仮に組む');
+    expect(html).toContain('>並べて比較 −</button>');
+  });
+});

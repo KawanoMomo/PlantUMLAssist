@@ -123,7 +123,7 @@ describe('GUI と server の配線', function() {
     expect(html).toContain('id="imp-folder"');
     // Import ▾ は Export ▾ の左に置く (入れる → 出すの順)。
     expect(html.indexOf('id="btn-import"')).toBeLessThan(html.indexOf('id="btn-export"'));
-    expect(app).toContain("'📄 ファイルを開く(.puml)'");
+    expect(app).toContain("'ファイルを開く(.puml)'");
     expect(/id="file-input"[^>]*multiple/.test(html)).toBe(true);
     expect(html).toContain('src/core/file-open.js');
   });

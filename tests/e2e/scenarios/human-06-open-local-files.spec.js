@@ -49,7 +49,7 @@ test('人間 手順 6 — 手元の .puml を 2 枚ドロップして 2 タブ�
   await expect(page.locator('#import-menu .menu-note')).toContainText('ドラッグ');
   await page.keyboard.press('Escape');
   await page.locator('#btn-import').click();
-  await expect(page.locator('#btn-open-file-empty')).toHaveText('📄 ファイルを開く(.puml)');
+  await expect(page.locator('#btn-open-file-empty')).toHaveText('ファイルを開く(.puml)');
   await expect(page.locator('#open-empty-hint')).toBeVisible();
   // 📂 一覧 の頭にも出る
   await page.click('#btn-tab-folder');

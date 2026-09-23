@@ -6264,6 +6264,17 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   font-size: 12px; color: var(--text-primary);
 }
 #senior-head select { flex: 1; min-width: 0; font-size: 11px; }
+/* design 9a: 据え置く / 1 回だけ。押している方だけを地色で示す 2 択 */
+#senior-mode { display: inline-flex; flex-shrink: 0; }
+#senior-mode button {
+  font-size: 11px; padding: 1px 6px; border-radius: 0;
+  border: 1px solid var(--border); background: transparent;
+  color: var(--text-secondary); cursor: pointer;
+}
+#senior-mode button + button { border-left: none; }
+#senior-mode button[aria-pressed="true"] {
+  background: var(--bg-primary); color: var(--text-primary);
+}
 #senior-head button { border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer; }
 #senior-notice { padding: 4px 8px; font-size: 11px; color: var(--text-secondary); }
 #senior-slice { padding: 0 8px 4px 8px; display: flex; align-items: center; gap: 4px; font-size: 11px; }
@@ -7651,11 +7662,21 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <!-- BLK-junior-20260914-1406-wish: 先輩の図を読み専用の 2 枠目として据え置く。
          フォルダを 1 回選べば、図を切り替えても相手が自動で入れ替わる。 -->
     <div class="pane-resizer" id="resizer-senior" hidden
-         role="separator" aria-orientation="vertical" aria-label="先輩の図の枠の幅"></div>
+         role="separator" aria-orientation="vertical" aria-label="比較相手の枠の幅"></div>
     <div id="senior-pane" hidden>
       <div id="senior-head">
-        <strong>先輩の図</strong>
-        <select id="senior-dir" aria-label="先輩の保存フォルダ"></select>
+        <!-- design 9a: 「先輩」は使う人の立場で、中身を表していない。相手が先輩でも
+             他チームでも過去の版でも動きは同じなので「比較相手」と呼ぶ。 -->
+        <strong>比較相手</strong>
+        <select id="senior-dir" aria-label="比較相手の保存フォルダ"></select>
+        <!-- design 9a: 「並べて比較」を 1 つの入口にするため、据え置き (図を切り替えると
+             相手も入れ替わる) と 1 回だけ (いま出している 1 枚に留める) を枠の中で切り替える -->
+        <span id="senior-mode" role="group" aria-label="比較相手の追従">
+          <button type="button" id="senior-mode-keep" aria-pressed="true"
+                  title="図を切り替えるたびに、その図に当たる相手へ自動で入れ替えます">据え置く</button>
+          <button type="button" id="senior-mode-once" aria-pressed="false"
+                  title="いま出している 1 枚に留めます (図を切り替えても相手は変わりません)">1 回だけ</button>
+        </span>
         <button type="button" id="senior-close" title="この枠を閉じる">×</button>
       </div>
       <!-- 初めて開いたときだけ「この枠は何か」を 1 行出す (BLK-human-20260915-1203) -->
@@ -7666,7 +7687,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
            名前だけから仮の手本を組んで出す (決め打ちの当てずっぽうを減らす)。 -->
       <div id="senior-draft-row" hidden>
         <button type="button" id="senior-draft"
-                title="先輩の他の図種 (クラス図・シーケンス図など) に書かれている名前から、この図種の下書きを組む">🧪 仮の手本を作る</button>
+                title="比較相手の他の図種 (クラス図・シーケンス図など) に書かれている名前から、この図種の下書きを組む">相手に無い図種を仮に組む</button>
         <span id="senior-draft-note"></span>
       </div>
       <!-- BLK-junior-20260914-2206-wish: 先輩のクラス図は全ドライバ共通の 1 枚なので
@@ -7736,7 +7757,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <!-- BLK-junior-20260908-1103 (design 7b): 先輩の図を見る入口は 🧰 ツールの折りたたみの
          奥にあり、図種ごとの初回は毎回そこを通っていた。常に見えている下端に置き、
          押せば 1 クリックで先輩の枠が開く -->
-    <button type="button" id="status-senior" title="先輩の図を読むだけで横に出します (押すと開きます)">👀 先輩 −</button>
+    <button type="button" id="status-senior" title="別のフォルダの図を読むだけで横に並べます (押すと開きます)">並べて比較 −</button>
     <!-- BLK-reviewer-20260907-0843: 整合性チェックの警告件数を常時出す -->
     <button type="button" id="status-consistency" title="命名規約・未使用 participant・メソッド不一致・粒度不一致の一覧">整合 —</button>
     <!-- BLK-primary-20260907-1803-wish: state の遷移イベントと class のメソッドの突合表 -->

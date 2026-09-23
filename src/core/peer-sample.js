@@ -137,8 +137,8 @@
   function statusText(pick) {
     if (!pick || pick.how !== 'peer-sample' || !pick.name) return null;
     return {
-      label: '👀 見本 ' + baseOf(pick.name),
-      title: '先輩にこの図種の図がないので、' + pick.reason + ' ' + baseOf(pick.name)
+      label: '並べて比較 見本 ' + baseOf(pick.name),
+      title: '比較相手にこの図種の図がないので、' + pick.reason + ' ' + baseOf(pick.name)
         + ' を見本として横に出します (読むだけ)',
       count: (pick.candidates || []).length,
     };
