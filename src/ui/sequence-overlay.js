@@ -171,8 +171,10 @@ window.MA.sequenceOverlay = (function() {
       return OB.pickBestOffset(svgEl, participants, selector, candidates).matches;
     }
     // 枠は描かれた箱 (塗りのある図形) に合わせる。複数行の表示名でも高さが合う。
+    // BLK-migrator-20260923-2012: actor / boundary / control / entity / database / queue …
+    // は名前が図形の外 (下や上) に出るので、図形と名前の和集合で囲む。
     function _partBox(groupEl) {
-      return OB.extractDrawnBBox(groupEl) || OB.extractBBox(groupEl);
+      return OB.extractFigureBBox(groupEl) || OB.extractBBox(groupEl);
     }
 
     var partMatches = _matchParts('g.participant-head');
@@ -205,12 +207,21 @@ window.MA.sequenceOverlay = (function() {
     // そのまま使える。
     var lifelines = svgEl.querySelectorAll('g.participant-lifeline');
     Array.prototype.forEach.call(lifelines, function(lg) {
-      var line = lg.querySelector('line');
-      if (!line) return;
-      var x1 = parseFloat(line.getAttribute('x1'));
-      var x2 = parseFloat(line.getAttribute('x2'));
-      var y1 = parseFloat(line.getAttribute('y1'));
-      var y2 = parseFloat(line.getAttribute('y2'));
+      // BLK-migrator-20260923-2012: 遅延 (`...`) や間隔 (`|||`) があると、PlantUML は
+      // ライフラインを区間ごとの <line> に分けて描く。最初の 1 本だけを見ると、
+      // 最初の区間より下のライフラインに枠が出ない。全区間の上端〜下端で囲む。
+      var segs = lg.querySelectorAll('line');
+      if (!segs.length) return;
+      var x1 = NaN, x2 = NaN, y1 = NaN, y2 = NaN;
+      Array.prototype.forEach.call(segs, function(sg) {
+        var a1 = parseFloat(sg.getAttribute('x1')), a2 = parseFloat(sg.getAttribute('x2'));
+        var b1 = parseFloat(sg.getAttribute('y1')), b2 = parseFloat(sg.getAttribute('y2'));
+        if (isNaN(a1) || isNaN(a2) || isNaN(b1) || isNaN(b2)) return;
+        if (isNaN(x1)) { x1 = a1; x2 = a2; }
+        var top = Math.min(b1, b2), bottom = Math.max(b1, b2);
+        if (isNaN(y1) || top < y1) y1 = top;
+        if (isNaN(y2) || bottom > y2) y2 = bottom;
+      });
       if (isNaN(x1) || isNaN(x2) || isNaN(y1) || isNaN(y2)) return;
       // BLK-migrator-20260923-1409: ライフラインも PlantUML の名前で当てる。
       // 頭の枠の x 範囲で当てていたため、表示名が複数行で枠がずれると
@@ -283,17 +294,28 @@ window.MA.sequenceOverlay = (function() {
       });
       // document 順 (= 上から下 = DSL 順) にすでに並んでいるので y で再 sort して安定化。
       bboxes.sort(function(a, b) { return a.y - b.y; });
-      var n = Math.min(bboxes.length, groups.length);
+      // BLK-migrator-20260923-2012: `ref over A, B` も PlantUML は同じ「塗りなし・枠線あり」の
+      // rect で描く。群だけを数えて順に当てると、ref より後の群が 1 つずつずれ、alt を選ぶと
+      // ref の枠が出ていた。ref も並びに入れて上から順に当て、枠は群にだけ出す。
+      var frames = groups.map(function(g) { return { group: g, line: g.line || 0 }; });
+      String(dslText || '').split('\n').forEach(function(raw, i) {
+        if (/^\s*ref\s+over\b/i.test(raw)) frames.push({ group: null, line: i + 1 });
+      });
+      frames.sort(function(a, b) { return a.line - b.line; });
+      var n = Math.min(bboxes.length, frames.length);
+      var emitted = 0;
       for (var gi = 0; gi < n; gi++) {
         var bb = bboxes[gi];
-        var gp = groups[gi];
+        var gp = frames[gi].group;
+        if (!gp) continue;
+        emitted++;
         OB.addRect(overlayEl, bb.x - 2, bb.y - 2, bb.w + 4, bb.h + 4, {
           'data-type': 'group',
           'data-id': gp.id,
           'data-line': gp.line,
         });
       }
-      OB.warnIfMismatch('group', groups.length, n);
+      OB.warnIfMismatch('group', groups.length, emitted);
     }
     // BLK-migrator-20260923-1409: 群の枠は内側全体を覆うので、先に置いたライフラインが
     // その下に隠れ、alt の中のライフラインを指すと alt が選ばれていた。細いライフラインを

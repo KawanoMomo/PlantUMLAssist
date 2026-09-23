@@ -565,3 +565,69 @@ test('migrator 手順 4 — package / cloud / database / folder で入れ子に�
     expect(hit, label + ' にホバーして枠が出る').toEqual({ type, line, hover: true });
   }
 });
+
+// BLK-migrator-20260923-2012: participant 以外の宣言キーワード (actor / boundary / control / entity /
+// database / collections / queue) で書かれた実物 (corpus seq-08・web sequence-ex / ex2) で、
+// 参加者の見出しにホバーしても枠が出なかった。名前が図形の外に出る形でも、見出しの名前・下端の名前・
+// 遅延で区切られたライフラインの下の区間に、その本人の枠だけが出ること。
+test('migrator 手順 4 — actor〜queue で宣言した sequence 図でも、見出し・下端の名前・ライフラインに本人の枠が出る', async ({ page }) => {
+  await bootPlain(page);
+  await typeDsl(page, [
+    '@startuml',                                  // 1
+    'actor "整備士" as User',                      // 2
+    'boundary "診断ツールUI" as UI',               // 3
+    'control "UDSサービス" as UDS',                // 4
+    'entity "DTC情報" as DTC',                     // 5
+    'database "EEPROM" as EE',                     // 6
+    'collections "センサ群" as Sensors',           // 7
+    'queue "CANメッセージキュー" as MQ',            // 8
+    'User -> UI : 故障診断開始',                    // 9
+    'UI -> UDS : ReadDTC',                         // 10
+    '...',                                         // 11
+    'UDS -> EE : read',                            // 12
+    'Sensors -> MQ : push',                        // 13
+    '@enduml',                                     // 14
+  ].join(String.fromCharCode(10)));
+  await expect(page.locator('#overlay-layer rect[data-type="participant"]')).toHaveCount(14, { timeout: 20000 });
+
+  const hovered = () => page.evaluate(() => Array.from(document.querySelectorAll('#overlay-layer rect.hit-hover'))
+    .map((r) => r.getAttribute('data-type') + '@' + r.getAttribute('data-line')).join(','));
+  const names = [['整備士', '2'], ['診断ツールUI', '3'], ['UDSサービス', '4'], ['DTC情報', '5'],
+    ['EEPROM', '6'], ['センサ群', '7'], ['CANメッセージキュー', '8']];
+  for (const [name, line] of names) {
+    const texts = page.locator('#preview-svg svg g.participant text', { hasText: name });
+    await expect(texts, name + ' は上下 2 か所に描かれる').toHaveCount(2);
+    for (let k = 0; k < 2; k++) {
+      const b = await texts.nth(k).boundingBox();
+      // 右上のズーム帯 (#zoom-hud) が見出しに重なる位置は避け、名前の上で図の上に出ている点を指す。
+      const pt = await page.evaluate((bb) => {
+        for (const fx of [0.5, 0.25, 0.75, 0.1, 0.9]) {
+          const p = { x: bb.x + bb.width * fx, y: bb.y + bb.height / 2 };
+          const e = document.elementFromPoint(p.x, p.y);
+          if (e && e.closest('#overlay-layer')) return p;
+        }
+        return null;
+      }, b);
+      if (!pt) continue;
+      await page.mouse.move(3, 3);
+      await page.mouse.move(pt.x, pt.y);
+      // 指した側 (頭か足) の枠だけが光る。離れたもう片方は光らない。
+      await expect.poll(hovered, name + (k ? ' (下端)' : ' (見出し)') + ' にホバーして本人の枠が出る')
+        .toBe('participant@' + line);
+    }
+  }
+
+  // 遅延 (...) より下の区間のライフラインにも、そのライフラインの枠が出る。
+  const ll = page.locator('#overlay-layer rect[data-type="lifeline"][data-id="User"]');
+  const lb = await ll.boundingBox();
+  const svgLine = await page.evaluate(() => {
+    const ls = Array.from(document.querySelectorAll('#preview-svg svg g.participant-lifeline[data-qualified-name="User"] line'))
+      .map((l) => l.getBoundingClientRect());
+    return { top: Math.min(...ls.map((r) => r.top)), bottom: Math.max(...ls.map((r) => r.bottom)) };
+  });
+  expect(lb.y).toBeLessThanOrEqual(svgLine.top + 1);
+  expect(lb.y + lb.height).toBeGreaterThanOrEqual(svgLine.bottom - 1);
+  await page.mouse.move(3, 3);
+  await page.mouse.move(lb.x + lb.width / 2, svgLine.bottom - 10);
+  await expect.poll(hovered).toBe('lifeline@2');
+});
