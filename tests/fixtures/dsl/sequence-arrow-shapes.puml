@@ -1,0 +1,12 @@
+@startuml
+participant A
+participant B
+A -\ B : half arrow down
+B -/ A : half arrow up
+A ->o B : lost message
+A <-> B : bidir
+[-> A : ext in
+A ->] : ext out
+?-> A : from nowhere
+A ->? : to nowhere
+@enduml

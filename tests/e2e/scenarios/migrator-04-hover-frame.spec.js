@@ -222,3 +222,38 @@ test('migrator 手順 4 — 方向指定の矢印だけで書かれた component
     await expect(r, id + ' にホバーして枠が出る').toHaveClass(/hit-hover/);
   }
 });
+
+// BLK-migrator-20260918-0449: sequence 図で、通常の矢印 (-> / -->) 以外の記法
+// (片羽根 -\ -/ ・丸留め ->o ・双方向 <-> ・図の外との発着 [-> ->] ?-> ->?) で
+// 書かれたメッセージ行に選択枠が 1 つも出ず、実物の図の大半の行が選べなかった。
+test('migrator 手順 4 — 特殊な矢印で書かれた sequence のメッセージにも、ホバーで枠が出る', async ({ page }) => {
+  await bootPlain(page);
+  await typeDsl(page, [
+    '@startuml',                    // 1
+    'participant A',                // 2
+    'participant B',                // 3
+    'A -\\ B : half arrow down',    // 4
+    'B -/ A : half arrow up',       // 5
+    'A ->o B : lost message',       // 6
+    'A <-> B : bidir',              // 7
+    '[-> A : ext in',               // 8
+    'A ->] : ext out',              // 9
+    '?-> A : from nowhere',         // 10
+    'A ->? : to nowhere',           // 11
+    '@enduml',                      // 12
+  ].join(String.fromCharCode(10)));
+  // 8 行すべてがメッセージとして枠を持つ (1 つでも欠けると手順 4 が完了しない)。
+  const msgRects = page.locator('#overlay-layer rect[data-type="message"]');
+  await expect(msgRects).toHaveCount(8, { timeout: 20000 });
+
+  // 疑似端点 (図の外・描かない) は参加者として数えない。
+  await expect(page.locator('#overlay-layer rect[data-type="participant"]')).toHaveCount(4, { timeout: 20000 });
+
+  for (const line of ['4', '5', '6', '7', '8', '9', '10', '11']) {
+    const r = page.locator('#overlay-layer rect[data-type="message"][data-line="' + line + '"]');
+    await expect(r, line + ' 行目の枠がある').toHaveCount(1);
+    const b = await r.boundingBox();
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+    await expect(r, line + ' 行目にホバーして枠が出る').toHaveClass(/hit-hover/);
+  }
+});

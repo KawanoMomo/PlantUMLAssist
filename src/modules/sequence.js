@@ -22,7 +22,13 @@ window.MA.modules.plantumlSequence = (function() {
 
   var PARTICIPANT_TYPES =['participant', 'actor', 'boundary', 'control', 'entity', 'database', 'queue', 'collections'];
   var ARROWS = ['->', '-->', '->>', '-->>', '->x', '-->x', '<-', '<--', '<<-', '<<--', '<->', '<-->',
-                '->o', '->\\', '-[#red]>'];
+                '->o', '->\\', '-[#red]>',
+                // 片羽根 (half arrow)。PlantUML は `-\` `-/` と、その破線・二重羽根・逆向きを
+                // すべて矢印として描く。読めないと SVG 上のメッセージを 1 つも拾えない。
+                '-\\', '--\\', '-\\\\', '--\\\\', '-/', '--/', '-//', '--//',
+                '\\-', '\\--', '\\\\-', '\\\\--', '/-', '/--', '//-', '//--',
+                // 丸留め (lost message) の破線・逆向き・双方向。
+                '-->o', 'o->', 'o-->', '<->o', 'o<->'];
   // design 1a の右ペインで分節ボタンに出す 4 種。
   // 残りは design 2d の「その他の矢印…」パレットから選ぶ。
   var QUICK_ARROWS = ['->', '-->', '->>', '->x'];
@@ -52,7 +58,7 @@ window.MA.modules.plantumlSequence = (function() {
   // 無ければ arrow そのもの。DOM の data-value と spec を紐付ける。
   function arrowSpecKey(spec) { return spec.notation || spec.arrow; }
   // 図の外を表す疑似端点。参加者ではないので participants には入れない。
-  function isOuterEnd(name) { return name === '[' || name === ']'; }
+  function isOuterEnd(name) { return name === '[' || name === ']' || name === '?'; }
   // P.arrowPickerHtml に渡す 2 つのリスト。
   function quickArrowOptions() {
     return QUICK_ARROWS.map(function(a) {
@@ -93,6 +99,14 @@ window.MA.modules.plantumlSequence = (function() {
     '<-->':  '<-->  双方向 返信',
     '->o':   '->o   相手の手前で止まる',
     '->\\':  '->\\   片羽根 (返り値の表現)',
+    '-\\':   '-\\    片羽根 (下向き)',
+    '--\\':  '--\\   片羽根 (下向き・破線)',
+    '-/':    '-/    片羽根 (上向き)',
+    '--/':   '--/   片羽根 (上向き・破線)',
+    '\\-':   '\\-    片羽根 (逆向き)',
+    '/-':    '/-    片羽根 (逆向き・上)',
+    '-->o':  '-->o  相手の手前で止まる (破線)',
+    '<->o':  '<->o  双方向・相手の手前で止まる',
     '-[#red]>': '-[#red]>  線の色を変える',
   };
   function arrowLabel(a) { return ARROW_META[a] || a; }
@@ -101,7 +115,8 @@ window.MA.modules.plantumlSequence = (function() {
   // design 2d: 図の外とのやり取り (`[-> System` / `System ->]`) を読めるように、
   // 端点に疑似参加者 `[` `]` を許す。これらは矢印と空白無しで
   // 接するので、区切りは `\s*` である必要がある。
-  var MSG_RE_FROM = '(\\[|\\]|[A-Za-z_][A-Za-z0-9_]*|"[^"]+")';
+  // `?` は「送り元 / 送り先を描かない」疑似端点 (`?-> B` / `A ->?`)。`[` `]` と同じ扱いで読む。
+  var MSG_RE_FROM = '(\\[|\\]|\\?|[A-Za-z_][A-Za-z0-9_]*|"[^"]+")';
   // design 5d「Sequence のその他パレット: 線色」: 色は矢印の最初の `-` の直後に
   // `[#色]` として入る (`-[#red]->` / `<-[#red]--`)。矢印の形はそのまま残るので、
   // 読む側は「色を挟んだ形」も同じ矢印として認識できる必要がある。
@@ -157,8 +172,8 @@ window.MA.modules.plantumlSequence = (function() {
     var a = arrow || '->';
     // design 2d: 図の外とのやり取りは PlantUML の書き方に合わせ、
     // `[-> System` / `System ->]` と空白無しで接す。
-    var head = from === '[' ? '[' + a : from + ' ' + a;
-    var body = to === ']' ? head + ']' : head + ' ' + to;
+    var head = (from === '[' || from === '?') ? from + a : from + ' ' + a;
+    var body = (to === ']' || to === '?') ? head + to : head + ' ' + to;
     return body + (label ? ' : ' + label : '');
   }
   function fmtNote(position, targets, text) {
@@ -2579,6 +2594,9 @@ window.MA.modules.plantumlSequence = (function() {
           // (選択肢に無いと select が先頭の参加者を指してしまう)。
           if (mm.from === '[') fromOpts.unshift({ value: '[', label: '（図の外）', selected: true });
           if (mm.to === ']') toOpts.unshift({ value: ']', label: '（図の外）', selected: true });
+          // `?` は「送り元 / 送り先を描かない」。選択肢に無いと select が先頭の参加者を指す。
+          if (mm.from === '?') fromOpts.unshift({ value: '?', label: '（描かない）', selected: true });
+          if (mm.to === '?') toOpts.unshift({ value: '?', label: '（描かない）', selected: true });
           // userissue v1.2.7: 既存ラベルから <<stereotype>> 部を分離して個別フィールドへ。
           var msgParts = extractStereotype(mm.label);
           propsEl.innerHTML =

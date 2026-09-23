@@ -105,6 +105,28 @@ describe('buildSequenceOverlay', function() {
     expect(lines.sort(numCmp)).toEqual(modelLines.sort(numCmp));
   });
 
+  // BLK-migrator-20260918-0449: 片羽根 (`-\` `-/`)・丸留め (`->o`)・双方向 (`<->`)・
+  // 図の外との発着 (`[->` `->]` `?->` `->?`) で書かれた行も、通常の矢印と同じく
+  // SVG 上のメッセージとして拾えないとホバーで選択枠が 1 つも出ない。
+  test('特殊な矢印記法のメッセージにも選択枠が出る (BLK-migrator-20260918-0449)', function() {
+    var f = loadFixture('sequence-arrow-shapes');
+    // 8 行すべてがメッセージとして読めている (読めない行があると枠も出ない)。
+    expect(f.parsed.relations.length).toBe(8);
+    var arrows = f.parsed.relations.map(function(r) { return r.arrow; });
+    expect(arrows).toEqual(['-\\', '-/', '->o', '<->', '->', '->', '->', '->']);
+    // 図の外・描かない端点は疑似端点として読み、参加者には混ぜない。
+    expect(f.parsed.elements.filter(function(e) { return e.kind === 'participant'; })
+      .map(function(e) { return e.id; })).toEqual(['A', 'B']);
+    var overlayEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    overlay.buildSequenceOverlay(f.svgEl, f.parsed, overlayEl);
+    var msgRects = overlayEl.querySelectorAll('rect[data-type="message"]');
+    expect(msgRects.length).toBe(f.parsed.relations.length);
+    var lines = Array.prototype.map.call(msgRects, function(r) { return parseInt(r.getAttribute('data-line'), 10); });
+    var modelLines = f.parsed.relations.map(function(r) { return r.line; });
+    function numCmp2(a, b) { return a - b; }
+    expect(lines.sort(numCmp2)).toEqual(modelLines.sort(numCmp2));
+  });
+
   test('matches correctly when @startuml is not on line 1 (preamble)', function() {
     var f = loadFixture('sequence-with-preamble');
     // parsed.meta.startUmlLine should be 3 (after 2 comment lines)
