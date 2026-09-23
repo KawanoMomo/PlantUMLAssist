@@ -96,6 +96,65 @@ window.MA.saveTarget = (function() {
     };
   }
 
+  // BLK-human-20260923-1600 (design 9a): ファイル名が上部バーとアクティブタブの
+  // 2 か所に出ていて、保存先は別のチップに分かれていた。上部バーは
+  // 「{フォルダ} / {ファイル名}」のパンくず 1 本にし、フォルダ名を押すと保存先を
+  // 変えられるようにする (保存先チップは無くす)。絵文字は使わず文字だけで出す。
+  //
+  // 返り値: { folder, folderTitle, name, mode, configured }
+  function breadcrumb(cfg, doc, fallbackName) {
+    var backend = cfg && cfg.backend;
+    var name = (doc && doc.name) || fallbackName || '(無題)';
+    var file = name + '.puml';
+    if (backend === 'file') {
+      var dir = (cfg && cfg.fileDir) || './autosave';
+      return {
+        mode: 'file',
+        folder: tailOf(dir) || dir,
+        folderTitle: '保存先: ' + dir + ' (押すと保存先を変えられます)',
+        name: file,
+        configured: true,
+      };
+    }
+    return {
+      mode: 'download',
+      folder: 'ダウンロード',
+      folderTitle: '保存先フォルダは未設定です。保存するとブラウザのダウンロードになります'
+        + ' (押すと保存先を決められます)',
+      name: file,
+      configured: false,
+    };
+  }
+
+  // design 9a: 保存ボタンは常に同じ見た目ではなく、保存の状態そのものを出す。
+  // 未保存のときだけ「● 保存」とキーを添えてアクセント色にし、保存済みのときは
+  // 淡色の「保存済み」に落とす (押せることは変えない)。
+  //
+  // dirty: 前回保存版といまの中身が違うか (呼ぶ側が判定して渡す)
+  // 返り値: { text, title, state, dirty }
+  function saveState(cfg, doc, dirty, fallbackName) {
+    var t = decide(cfg, doc, fallbackName);
+    var where = t.mode === 'file'
+      ? t.dir + '/' + t.name + '.puml に上書き保存します'
+      : t.name + '.puml をダウンロードします';
+    if (dirty) {
+      return {
+        text: '● 保存',
+        key: 'Ctrl+S',
+        title: '保存していない変更があります。' + where + ' (Ctrl+S)',
+        state: 'dirty',
+        dirty: true,
+      };
+    }
+    return {
+      text: '保存済み',
+      key: '',
+      title: '前回保存版と同じ中身です。' + where + ' (Ctrl+S)',
+      state: 'saved',
+      dirty: false,
+    };
+  }
+
   return { decide: decide, messageFor: messageFor, tailOf: tailOf, label: label,
-    saveButton: saveButton };
+    saveButton: saveButton, breadcrumb: breadcrumb, saveState: saveState };
 })();

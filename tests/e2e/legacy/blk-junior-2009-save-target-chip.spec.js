@@ -30,11 +30,12 @@ test.describe('BLK-junior-2009 保存先が設定済みだと画面で分かる'
     const chip = page.locator('#top-save-target');
     await expect(chip).toBeVisible();
     await expect(chip).toHaveAttribute('data-mode', 'file');
-    await expect(chip).toHaveText('📁 e2e-blk-j2009');
+    // BLK-human-20260923-1600 (design 9a): チップはパンくずの左半分になり、絵文字を出さない。
+    await expect(chip).toHaveText('e2e-blk-j2009');
     await expect(chip).toHaveClass(/configured/);
     // 設定を開き直さなくても「もう設定されている」と分かる。
     const title = await chip.getAttribute('title');
-    expect(title).toContain('保存先は設定済みです');
+    expect(title).toContain('保存先:');
     expect(title).toContain('./test-results/autosave/blk-junior-2009-save-target-chip/e2e-blk-j2009');
   });
 
@@ -42,7 +43,7 @@ test.describe('BLK-junior-2009 保存先が設定済みだと画面で分かる'
     await bootWith(page, LS_CFG);
     const chip = page.locator('#top-save-target');
     await expect(chip).toHaveAttribute('data-mode', 'download');
-    await expect(chip).toHaveText('⬇ ダウンロード');
+    await expect(chip).toHaveText('ダウンロード');
     await expect(chip).not.toHaveClass(/configured/);
   });
 
@@ -54,7 +55,7 @@ test.describe('BLK-junior-2009 保存先が設定済みだと画面で分かる'
     await page.locator('#cfg-file-dir').fill('./test-results/autosave/blk-junior-2009-save-target-chip/e2e-blk-j2009');
     await page.locator('#cfg-ok').click();
     await page.waitForTimeout(300);
-    await expect(page.locator('#top-save-target')).toHaveText('📁 e2e-blk-j2009');
+    await expect(page.locator('#top-save-target')).toHaveText('e2e-blk-j2009');
   });
 
   // 起票された手順 8 の実測。設定済みなら「保存」だけで済むことを数える。

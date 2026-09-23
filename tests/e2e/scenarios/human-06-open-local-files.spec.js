@@ -40,8 +40,15 @@ test('人間 手順 6 — 手元の .puml を 2 枚ドロップして 2 タブ�
   await bootPlain(page);
 
   // 入口: タブ列と、起動直後の空の画面に日本語で出る
-  await expect(page.locator('#btn-open-file')).toBeVisible();
-  await expect(page.locator('#btn-open-file')).toHaveText('📄 開く');
+  // BLK-human-20260923-1600 (design 9a): タブ列の札は外し、入口は上部バーの Import ▾ に移した。
+  await expect(page.locator('#btn-import')).toBeVisible();
+  await page.locator('#btn-import').click();
+  await expect(page.locator('#imp-file')).toBeVisible();
+  await expect(page.locator('#imp-clipboard')).toBeVisible();
+  await expect(page.locator('#imp-folder')).toBeVisible();
+  await expect(page.locator('#import-menu .menu-note')).toContainText('ドラッグ');
+  await page.keyboard.press('Escape');
+  await page.locator('#btn-import').click();
   await expect(page.locator('#btn-open-file-empty')).toHaveText('📄 ファイルを開く(.puml)');
   await expect(page.locator('#open-empty-hint')).toBeVisible();
   // 📂 一覧 の頭にも出る

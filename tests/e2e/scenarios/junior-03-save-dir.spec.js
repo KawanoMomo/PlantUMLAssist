@@ -31,7 +31,9 @@ test('手順3 設定で保存先を変えると、上部バーの表示がその
   const save = page.locator('#top-save');
   await expect(save).toBeVisible();
   await expect(save).toHaveAttribute('data-mode', 'file');
-  await expect(save).toHaveText('💾 上書き保存');
+  // design 9a: 保存ボタンは状態を出す。未保存なら ● 保存 + Ctrl+S。
+  await expect(save).toHaveAttribute('data-save-state', 'dirty');
+  await expect(save).toContainText('保存');
   expect(await save.getAttribute('title')).toContain(DIR);
 
   // 到達条件その3: 押すと保存フォルダへ書かれ、どこへ書いたかが下端に出る。
