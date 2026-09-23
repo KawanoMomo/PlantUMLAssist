@@ -131,3 +131,101 @@ test('手順9 枠は「比較相手」と名乗り、据え置く / 1 回だけ�
   await page.locator('#senior-mode-keep').click();
   await expect(page.locator('#senior-mode-keep')).toHaveAttribute('aria-pressed', 'true');
 });
+
+// BLK-human-20260923-1702 (design 10c): 保存先が Git のとき、FILES ツリーの下端に GIT 欄が出て、
+// コミット → 変更 → 「この図の履歴」の「比較」で、右の枠 (同じ比較相手の枠) に前の版が並ぶ。
+test('手順9 保存先が Git なら、この図の履歴の「比較」で前のコミットの図が右の枠に並ぶ', async ({ page }) => {
+  const fs = require('fs');
+  const path = require('path');
+  const { execFileSync } = require('child_process');
+  const rel = DIR + '-git';
+  const abs = path.join(__dirname, '..', '..', '..', rel.replace(/^\.\//, ''));
+  fs.rmSync(abs, { recursive: true, force: true });
+  fs.mkdirSync(abs, { recursive: true });
+  const git = (...a) => execFileSync('git', ['-C', abs, ...a], { stdio: 'pipe' }).toString();
+  git('init', '-q', '-b', 'main');
+  git('config', 'user.name', 'junior');
+  git('config', 'user.email', 'junior@example.invalid');
+  git('config', 'core.autocrlf', 'false');
+  const V1 = '@startuml\ntitle SPI 初期化\nparticipant App\nparticipant SpiDrv\nApp -> SpiDrv : Spi_Init()\n@enduml\n';
+  fs.writeFileSync(path.join(abs, 'spi_init_sequence.puml'), V1);
+  git('add', '-A');
+  git('commit', '-q', '-m', '初版');
+
+  await S.bootWithSaveDir(page, rel);
+
+  // 到達条件その1: Git の保存先では GIT 欄が出て、畳んだままブランチが読める。
+  const head = page.locator('#files-sec-git');
+  await expect(head).toBeVisible();
+  await expect(page.locator('#files-count-git')).toContainText('main');
+
+  // 図を開いて直す (錠は「書き換える」で外す)。
+  await S.openFolderItem(page, 'spi_init_sequence');
+  await S.overwriteOpenedFile(page);
+  const now = await page.locator('#editor').inputValue();
+  await S.typeDsl(page, now.replace('@enduml', 'SpiDrv --> App : Fault\n@enduml'));
+  await page.waitForTimeout(900);
+
+  // 到達条件その2: 欄を開くと変更 M が出て、ツリーのファイル名にも M が付く。
+  await head.click();
+  await page.locator('#git-refresh').click();
+  await expect(page.locator('#git-changes .git-change[data-git-code="M"]')).toContainText('spi_init_sequence.puml');
+  await expect(page.locator('#files-body-open .files-row[data-git="M"]')).toHaveCount(1);
+
+  // 到達条件その3: メッセージを書いてコミットすると、この図の履歴が 2 件になる。
+  await page.locator('#git-message').click();
+  await page.keyboard.type('Fault 通知の応答を追記');
+  await page.locator('#git-commit').click();
+  await expect(page.locator('#git-result')).toContainText('コミットしました');
+  await expect(page.locator('#git-history .git-commit-row')).toHaveCount(2);
+  await expect(page.locator('#git-changes .git-change')).toHaveCount(0);
+  expect(git('log', '--format=%s')).toContain('Fault 通知の応答を追記');
+
+  // 到達条件その4: 古いコミット (初版) の「比較」で、右の枠にその時点の図が並ぶ。
+  const oldRow = page.locator('#git-history .git-commit-row').filter({ hasText: '初版' });
+  await oldRow.locator('.git-history-compare').click();
+  const pane = page.locator('#senior-pane');
+  await expect(pane).toBeVisible();
+  await expect(page.locator('#senior-git-pick')).toContainText('初版');
+  await expect(page.locator('#senior-git-sides')).toContainText('左: 作業中 右:');
+  await expect(page.locator('#senior-dsl')).toContainText('Spi_Init()');
+  await expect(page.locator('#senior-dsl')).not.toContainText('Fault');
+  await expect(page.locator('#senior-svg svg')).toHaveCount(1);
+
+  // 到達条件その5: 「差分だけ」で作業中との違いの行だけになる (追記した行が + で出る)。
+  await page.locator('#senior-git-diffonly').click();
+  await expect(page.locator('#senior-dsl .sg-add')).toContainText('Fault');
+  await expect(page.locator('#senior-dsl .sg-same')).toHaveCount(0);
+
+  // 到達条件その6: ▶ で 1 つ新しいコミットへ送れる (最新では ▶ が止まる)。
+  await page.locator('#senior-git-next').click();
+  await expect(page.locator('#senior-git-pick')).toContainText('Fault 通知の応答を追記');
+  await expect(page.locator('#senior-git-next')).toBeDisabled();
+  await page.locator('#senior-git-prev').click();
+  await expect(page.locator('#senior-git-pick')).toContainText('初版');
+
+  // 到達条件その7: 相手の名前を押すと相手選びがその場で開き、先頭は作業中。絞り込んで選べる。
+  await page.locator('#senior-git-pick').click();
+  const modal = page.locator('#git-pick-modal');
+  await expect(modal).toBeVisible();
+  await expect(modal.locator('.git-pick-row').first()).toContainText('作業中（未コミット）');
+  await page.locator('#git-pick-filter').click();
+  await page.keyboard.type('Fault');
+  await expect(modal.locator('.git-pick-row')).toHaveCount(2);
+  await modal.locator('.git-pick-row').nth(1).click();
+  await expect(modal).toBeHidden();
+  await expect(page.locator('#senior-git-pick')).toContainText('Fault 通知の応答を追記');
+
+  // 到達条件その8: 読むだけのフォルダを選び直すと、今までどおりの比較に戻る。
+  await page.locator('#senior-git-pick').click();
+  await page.locator('#git-pick-tab-folder').click();
+  await modal.locator('.git-pick-row').first().click();
+  await expect(page.locator('#senior-git')).toBeHidden();
+  await expect(page.locator('#senior-dir')).toBeVisible();
+});
+
+test('手順9 Git でない保存先では GIT 欄を出さない', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await page.waitForTimeout(800);
+  await expect(page.locator('#files-panel [data-files-section="git"]')).toBeHidden();
+});

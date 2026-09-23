@@ -547,6 +547,16 @@ API_INDEX = {
         {'endpoint': 'GET /version-diff', 'summary': '1 枚の図の「その版」と「直前の版」の本文を組で返す (全文差分の材料)',
          'request': '?dir=&type=[&stamp=]'},
         {'endpoint': 'GET /peek-dirs', 'summary': '保存フォルダの候補を覗く'},
+        {'endpoint': 'GET /git-status', 'summary': '保存先が Git 作業木ならブランチ・ahead/behind・変更 (M/A/D)。読むだけで通信しない',
+         'request': '?dir='},
+        {'endpoint': 'GET /git-log', 'summary': 'その図 (file 省略で保存先全体) に関係するコミット。新しい順',
+         'request': '?dir=&file='},
+        {'endpoint': 'GET /git-refs', 'summary': 'ブランチとタグの一覧', 'request': '?dir='},
+        {'endpoint': 'GET /git-show', 'summary': 'rev 時点の {file}.puml の本文 {text}', 'request': '?dir=&file=&rev='},
+        {'endpoint': 'POST /git-commit', 'summary': '保存先の変更を全部載せてコミットする', 'request': '{dir, message}'},
+        {'endpoint': 'POST /git-pull', 'summary': '取得 (pull --ff-only)。押したときだけ', 'request': '{dir}'},
+        {'endpoint': 'POST /git-push', 'summary': '送信 (push)。押したときだけ。認証は OS の git', 'request': '{dir}'},
+        {'endpoint': 'POST /git-checkout', 'summary': 'ブランチ切り替え', 'request': '{dir, branch}'},
         {'endpoint': 'GET /peek-notes', 'summary': '隣のフォルダに置かれた指摘 (.md) を読む',
          'request': '?dir='},
         {'endpoint': 'GET /name-registry', 'summary': '保存フォルダの親にある正式表記の登録簿 (3 人で共有)',
@@ -809,6 +819,279 @@ def _atomic_write_bytes(path, data):
         pass
 
 
+# ── Git (BLK-human-20260923-1702, design 10c) ─────────────────────────────
+# 保存先が Git 作業木のときだけ、FILES ツリーの下端に GIT 欄を出す。
+# ここは OS の `git` を呼ぶだけで、資格情報は持たない (認証は git 側の設定に任せる)。
+# 取得 (pull)・送信 (push)・ブランチ切替は、画面で人が押したときの POST だけが動かす
+# (GET は読むだけで、通信するコマンドを 1 つも呼ばない)。マージと衝突の解消は扱わない。
+GIT_TIMEOUT_SEC = 20
+GIT_NET_TIMEOUT_SEC = 120
+GIT_LOG_MAX = 200
+_GIT_EXE = None
+
+
+def git_exe():
+    """PATH 上の git。無ければ '' (GIT 欄を出さない)。"""
+    global _GIT_EXE
+    if _GIT_EXE is None:
+        import shutil
+        _GIT_EXE = shutil.which('git') or ''
+    return _GIT_EXE
+
+
+def run_git(cwd, args, timeout=GIT_TIMEOUT_SEC):
+    """`git -C cwd args...` を実行し (returncode, stdout, stderr) を返す。git が無ければ None。"""
+    exe = git_exe()
+    if not exe:
+        return None
+    env = dict(os.environ)
+    env['GIT_TERMINAL_PROMPT'] = '0'   # 資格情報を端末で訊かない (画面が固まる)
+    env['LC_ALL'] = 'C'
+    try:
+        r = subprocess.run([exe, '-C', str(cwd), '-c', 'core.quotepath=false'] + list(args),
+                           capture_output=True, timeout=timeout, env=env, **_SUBPROCESS_KWARGS)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return (1, '', str(e))
+
+    def dec(b):
+        return (b or b'').decode('utf-8', 'replace')
+    return (r.returncode, dec(r.stdout), dec(r.stderr))
+
+
+def git_toplevel(save_dir):
+    """save_dir を含む作業木の根。作業木でなければ None。"""
+    try:
+        if not Path(save_dir).is_dir():
+            return None
+    except OSError:
+        return None
+    r = run_git(save_dir, ['rev-parse', '--show-toplevel'])
+    if not r or r[0] != 0:
+        return None
+    top = r[1].strip()
+    if not top:
+        return None
+    # 作業木の中でも .gitignore で外したフォルダ (例: 成果物リポジトリの test-results/) は
+    # Git で管理していないので、GIT 欄を出さない。
+    rel = _git_rel(top, save_dir)
+    if rel:
+        ci = run_git(top, ['check-ignore', '-q', '--', rel + '/'])
+        if ci and ci[0] == 0:
+            return None
+    return Path(top)
+
+
+def parse_git_branch_line(line):
+    """`## main...origin/main [ahead 1, behind 2]` を {branch, upstream, ahead, behind} に。"""
+    out = {'branch': '', 'upstream': '', 'ahead': 0, 'behind': 0}
+    s = line[3:] if line.startswith('## ') else line
+    m = re.search(r'\[(.*)\]\s*$', s)
+    if m:
+        for part in m.group(1).split(','):
+            mm = re.match(r'(ahead|behind)\s+(\d+)', part.strip())
+            if mm:
+                out[mm.group(1)] = int(mm.group(2))
+        s = s[:m.start()].strip()
+    for head in ('No commits yet on ', 'Initial commit on '):
+        if s.startswith(head):
+            s = s[len(head):]
+    if '...' in s:
+        b, up = s.split('...', 1)
+        out['branch'], out['upstream'] = b.strip(), up.strip()
+    else:
+        out['branch'] = s.strip()
+    return out
+
+
+def parse_git_porcelain(text):
+    """`git status --porcelain=v1 -b` を読む。M / A / D の 1 文字に畳む (未追跡は A)。"""
+    info = {'branch': '', 'upstream': '', 'ahead': 0, 'behind': 0, 'changes': []}
+    for line in text.splitlines():
+        if not line:
+            continue
+        if line.startswith('## '):
+            info.update(parse_git_branch_line(line))
+            continue
+        xy, path = line[:2], line[3:]
+        if ' -> ' in path:
+            path = path.split(' -> ', 1)[1]
+        path = path.strip().strip('"')
+        if xy == '??':
+            code = 'A'
+        elif 'D' in xy:
+            code = 'D'
+        elif 'A' in xy:
+            code = 'A'
+        else:
+            code = 'M'
+        info['changes'].append({'code': code, 'path': path})
+    return info
+
+
+def _git_rel(top, save_dir, name=''):
+    """作業木の根から見た save_dir (と name.puml) の相対パス。区切りは /。"""
+    rel = os.path.relpath(os.path.realpath(str(save_dir)), os.path.realpath(str(top)))
+    rel = '' if rel == '.' else rel.replace('\\', '/')
+    if name:
+        fn = name + '.puml'
+        return (rel + '/' + fn) if rel else fn
+    return rel
+
+
+def git_status(save_dir):
+    """保存先の Git の様子。作業木でなければ {'repo': False}。"""
+    if not git_exe():
+        return {'available': False, 'repo': False}
+    top = git_toplevel(save_dir)
+    if not top:
+        return {'available': True, 'repo': False}
+    r = run_git(save_dir, ['status', '--porcelain=v1', '-b', '--untracked-files=all', '--', '.'])
+    if not r or r[0] != 0:
+        return {'available': True, 'repo': False, 'error': (r[2] if r else '').strip()}
+    info = parse_git_porcelain(r[1])
+    rel = _git_rel(top, save_dir)
+    for c in info['changes']:
+        p = c['path']
+        local = p[len(rel) + 1:] if rel and p.startswith(rel + '/') else p
+        c['file'] = local
+        c['name'] = local[:-5] if local.lower().endswith('.puml') and '/' not in local else ''
+    info['available'] = True
+    info['repo'] = True
+    info['root'] = str(top)
+    info['modified'] = len(info['changes'])
+    return info
+
+
+_GIT_LOG_FMT = '%x1e%H%x1f%h%x1f%an%x1f%aI%x1f%s%x1f%D'
+
+
+def parse_git_log(text):
+    """_GIT_LOG_FMT + --numstat の出力を commit の列にする。"""
+    out = []
+    for rec in text.split('\x1e'):
+        rec = rec.strip('\n')
+        if not rec.strip():
+            continue
+        lines = rec.split('\n')
+        f = lines[0].split('\x1f')
+        if len(f) < 6:
+            continue
+        refs = [x.strip() for x in f[5].split(',') if x.strip()]
+        tags = [x[len('tag: '):] for x in refs if x.startswith('tag: ')]
+        added = removed = 0
+        for ln in lines[1:]:
+            parts = ln.split('\t')
+            if len(parts) >= 3:
+                try:
+                    added += int(parts[0])
+                    removed += int(parts[1])
+                except ValueError:
+                    pass
+        out.append({'hash': f[0], 'short': f[1], 'author': f[2], 'date': f[3],
+                    'message': f[4], 'tags': tags,
+                    'head': any(x == 'HEAD' or x.startswith('HEAD -> ') for x in refs),
+                    'added': added, 'removed': removed})
+    return out
+
+
+def git_log(save_dir, name=''):
+    """この図に関係するコミット (name が空なら保存先全体)。新しい順。"""
+    top = git_toplevel(save_dir)
+    if not top:
+        return {'repo': False, 'commits': []}
+    path = _git_rel(top, save_dir, name) if name else (_git_rel(top, save_dir) or '.')
+    args = ['log', '-n', str(GIT_LOG_MAX), '--format=' + _GIT_LOG_FMT, '--numstat']
+    if name:
+        args.append('--follow')
+    r = run_git(top, args + ['--', path])
+    if not r or r[0] != 0:
+        # コミットが 1 つも無い作業木は log が失敗する。空の履歴として返す。
+        return {'repo': True, 'commits': []}
+    return {'repo': True, 'commits': parse_git_log(r[1])}
+
+
+def git_refs(save_dir):
+    top = git_toplevel(save_dir)
+    if not top:
+        return {'repo': False, 'current': '', 'branches': [], 'tags': []}
+    b = run_git(top, ['for-each-ref', '--format=%(refname:short)%09%(objectname:short)%09%(HEAD)',
+                      'refs/heads'])
+    t = run_git(top, ['for-each-ref', '--sort=-creatordate',
+                      '--format=%(refname:short)%09%(objectname:short)', 'refs/tags'])
+    branches, tags, current = [], [], ''
+    for ln in (b[1] if b and b[0] == 0 else '').splitlines():
+        f = ln.split('\t')
+        if len(f) >= 3:
+            on = f[2].strip() == '*'
+            branches.append({'name': f[0], 'short': f[1], 'current': on})
+            if on:
+                current = f[0]
+    for ln in (t[1] if t and t[0] == 0 else '').splitlines():
+        f = ln.split('\t')
+        if len(f) >= 2:
+            tags.append({'name': f[0], 'short': f[1]})
+    return {'repo': True, 'current': current, 'branches': branches, 'tags': tags}
+
+
+_GIT_REV_RE = re.compile(r'^[0-9A-Za-z._/\-~^]{1,200}$')
+
+
+def git_rev_ok(rev):
+    return bool(rev) and bool(_GIT_REV_RE.match(rev)) and not rev.startswith('-')
+
+
+def git_show(save_dir, rev, name):
+    """rev 時点の {name}.puml の本文。無ければ None。"""
+    if not git_rev_ok(rev):
+        return None
+    top = git_toplevel(save_dir)
+    if not top:
+        return None
+    r = run_git(top, ['show', rev + ':' + _git_rel(top, save_dir, name)])
+    if not r or r[0] != 0:
+        return None
+    return r[1]
+
+
+def git_commit(save_dir, message):
+    """保存先の変更を全部載せてコミットする。戻り値 (ok, dict)。"""
+    msg = (message or '').strip()
+    if not msg:
+        return False, {'error': 'コミットメッセージを書いてください'}
+    top = git_toplevel(save_dir)
+    if not top:
+        return False, {'error': '保存先は Git の作業木ではありません'}
+    a = run_git(save_dir, ['add', '-A', '--', '.'])
+    if not a or a[0] != 0:
+        return False, {'error': (a[2] if a else 'git がありません').strip()}
+    c = run_git(save_dir, ['commit', '-m', msg, '--', '.'])
+    if not c or c[0] != 0:
+        return False, {'error': ((c[2] or c[1]) if c else 'git がありません').strip()}
+    h = run_git(top, ['rev-parse', '--short', 'HEAD'])
+    return True, {'ok': True, 'short': (h[1].strip() if h and h[0] == 0 else '')}
+
+
+def git_net(save_dir, op, branch=''):
+    """pull / push / checkout。人が押したときだけ呼ばれる。"""
+    top = git_toplevel(save_dir)
+    if not top:
+        return False, {'error': '保存先は Git の作業木ではありません'}
+    if op == 'pull':
+        r = run_git(top, ['pull', '--ff-only'], timeout=GIT_NET_TIMEOUT_SEC)
+    elif op == 'push':
+        r = run_git(top, ['push'], timeout=GIT_NET_TIMEOUT_SEC)
+    elif op == 'checkout':
+        if not git_rev_ok(branch):
+            return False, {'error': 'ブランチ名が読めません'}
+        r = run_git(top, ['checkout', branch])
+    else:
+        return False, {'error': 'unknown op'}
+    if not r or r[0] != 0:
+        return False, {'error': ((r[2] or r[1]) if r else 'git がありません').strip()}
+    return True, {'ok': True, 'output': (r[1] + r[2]).strip()}
+
+
+
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path.split('?')[0] == '/autosave-versions':
@@ -850,6 +1133,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.split('?')[0] == '/peek-notes':
             with _fs_lock:
                 return self._handle_peek_notes()
+        # BLK-human-20260923-1702 (design 10c): 保存先の Git を読む口。読むだけで通信しない。
+        if self.path.split('?')[0] in ('/git-status', '/git-log', '/git-refs', '/git-show'):
+            return self._handle_git_get()
         if self.path.split('?')[0] == '/version':
             return self._send_json(200, build_info())
         if self.path.split('?')[0] == '/update-check':
@@ -959,6 +1245,10 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == '/native-write':
             with _fs_lock:
                 return self._handle_native_write_post()
+        # BLK-human-20260923-1702 (design 10c): コミット・取得・送信・ブランチ切替。
+        # どれも画面で人が押したときだけ届く (自動では呼ばない)。
+        if self.path in ('/git-commit', '/git-pull', '/git-push', '/git-checkout'):
+            return self._handle_git_post()
         if self.path == '/heartbeat':
             with _state_lock:
                 _last_heartbeat = time.time()
@@ -1204,6 +1494,39 @@ class Handler(BaseHTTPRequestHandler):
         self._send_json(200, write_prefs(data))
 
     # --- autosave helpers ----------------------------------------------------
+
+    def _handle_git_get(self):
+        parsed = urllib.parse.urlparse(self.path)
+        params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
+        save_dir = self._autosave_resolve_dir(params.get('dir'))
+        name = params.get('file', '')
+        if name and not self._autosave_validate_type(name):
+            return self._send_json(400, {'error': 'invalid file'})
+        route = parsed.path
+        if route == '/git-status':
+            return self._send_json(200, git_status(save_dir))
+        if route == '/git-log':
+            return self._send_json(200, git_log(save_dir, name))
+        if route == '/git-refs':
+            return self._send_json(200, git_refs(save_dir))
+        if not name:
+            return self._send_json(400, {'error': 'file が要ります'})
+        text = git_show(save_dir, params.get('rev', ''), name)
+        if text is None:
+            return self._send_json(404, {'error': 'そのコミットにこの図はありません'})
+        return self._send_json(200, {'text': text})
+
+    def _handle_git_post(self):
+        data = self._read_json_object()
+        if data is None:
+            return
+        save_dir = self._autosave_resolve_dir(data.get('dir'))
+        if self.path == '/git-commit':
+            with _fs_lock:
+                ok, res = git_commit(save_dir, data.get('message', ''))
+        else:
+            ok, res = git_net(save_dir, self.path[len('/git-'):], data.get('branch', ''))
+        return self._send_json(200 if ok else 409, res)
 
     def _autosave_resolve_dir(self, raw):
         """Resolve an autosave dir argument to an absolute Path. Empty/None → default."""
