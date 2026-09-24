@@ -348,3 +348,28 @@ test('手順11 クラスの種別を切り替えても選んだまま、enum か
   expect(t).toContain(['class Circle {', '- radius : double', '+ area() : double', '}'].join(NL));
   await expect(page.locator('#cl-sel-head')).toHaveText('Class · 6 行目');
 });
+
+// BLK-builder-20260924-1337-4 (design 7b): タブ列を畳むと、道具に気付く手掛かりは Ctrl+K だけになる。
+// 行の左に「確かめる」と出ているのにその語では 0 件だったので、道具の名前を知らない人は引けなかった。
+test('手順11 Ctrl+K に分類の語「確かめ」を打つと、確かめるの道具が並ぶ', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR, { foldedTools: true });
+  await page.waitForSelector('#preview-svg');
+  await page.waitForTimeout(800);
+  await page.locator('#editor').click();
+  await page.keyboard.press('Control+k');
+  await page.waitForSelector('#cp-modal');
+  await page.locator('#cp-input').pressSequentially('確かめ');
+
+  const rows = page.locator('#cp-list .cp-item');
+  await expect(rows.first()).toBeVisible();
+  // 並ぶのは「確かめる」の見出しの道具で、表記揺れの突き合わせも入っている。
+  await expect(page.locator('#cp-list .cp-group[data-cp-group="check"]')).toBeVisible();
+  await expect(page.locator('#cp-list .cp-item[data-cp-id="check:tab-audit"]')).toBeVisible();
+  const kinds = await page.locator('#cp-list .cp-item[data-cp-id^="check:"] .cp-kind').allTextContents();
+  expect(kinds.length).toBeGreaterThan(2);
+  expect(kinds.every((k) => k === '確かめる')).toBe(true);
+
+  // 行を押すとその道具が開く (分類の語で引いた行も、名前で引いた行と同じに動く)。
+  await page.locator('#cp-list .cp-item[data-cp-id="check:tab-audit"]').click();
+  await expect(page.locator('#cp-modal')).toBeHidden();
+});
