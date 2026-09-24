@@ -82,9 +82,12 @@ describe('BLK-migrator-20260923-1909 SVG の要素情報で当てる', function(
       ent('ArrayList', 7, 400) + link(5, 20) + link(6, 120) + link(7, 220));
     var rel = ids.filter(function(s) { return s.indexOf('relation:') === 0; });
     // 関係 2 本 (5 行目 / 7 行目) は自分の行の線に。読めない 6 行目の線は行を指す枠になる
-    expect(rel.every(function(s) { return /@6$|@8$/.test(s); })).toBe(true);
+    // BLK-builder-20260925-0305-1: `<|-` (短い線) も関係として読むようになったので、6 行目の線も
+    // 行を指す枠ではなく関係の枠になる (3 本とも自分の行の線)。
+    expect(rel.every(function(s) { return /@6$|@7$|@8$/.test(s); })).toBe(true);
+    expect(rel.some(function(s) { return /@7$/.test(s); })).toBe(true);
     expect(ids).toContain('source-line:src:AbstractCollection@3:0@3');
-    expect(ids.some(function(s) { return /^source-line:src:link@7:/.test(s); })).toBe(true);
+    expect(ids.some(function(s) { return /^source-line:src:link@7:/.test(s); })).toBe(false);
   });
 
   test('component: 入れ物の中の部品・読めない要素 (artifact / cloud { }) にも枠が出る', function() {

@@ -1,0 +1,10 @@
+@startuml
+hide empty members
+
+class annotation
+class dog
+class chases
+
+chases -down-> dog
+(chases, dog) . annotation
+@enduml

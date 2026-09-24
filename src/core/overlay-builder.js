@@ -178,9 +178,21 @@ window.MA.overlayBuilder = (function() {
   //     斜めの関係どうしは 1. の箱が重なりうる。ラベルの上だけは必ず自分の関係が
   //     選ばれるよう、小さい箱を手前 (raiseSmallestLast) に重ねて取りこぼしを防ぐ。
   // どちらを押しても選ばれる関係は同じなので、利用者から見た当たり判定は 1 つ。
+  // BLK-builder-20260925-0305-1: linkGroupEl は <g> の配列でもよい (中継点で 2 本に割れた 1 つの関係)。
+  // 選択範囲は全部の和集合 1 つにし、ラベル・矢じりの小さい rect は各 <g> から置く。
   function addLinkRects(overlayEl, linkGroupEl, attrs, padding) {
     if (!overlayEl || !linkGroupEl) return null;
-    var bb = extractLinkBBox(linkGroupEl, padding);
+    var gs = Array.isArray(linkGroupEl) ? linkGroupEl.filter(function(g) { return g; }) : [linkGroupEl];
+    if (!gs.length) return null;
+    var bb = null;
+    gs.forEach(function(g) {
+      var b1 = extractLinkBBox(g, padding);
+      if (!b1) return;
+      if (!bb) { bb = b1; return; }
+      var x2 = Math.max(bb.x + bb.width, b1.x + b1.width), y2 = Math.max(bb.y + bb.height, b1.y + b1.height);
+      bb = { x: Math.min(bb.x, b1.x), y: Math.min(bb.y, b1.y) };
+      bb.width = x2 - bb.x; bb.height = y2 - bb.y;
+    });
     if (!bb) return null;
     // data-hit-kind="link" は raiseSmallestLast が「関係は要素より後ろ」に置くための印。
     var linkAttrs = {};
@@ -188,7 +200,12 @@ window.MA.overlayBuilder = (function() {
     linkAttrs['data-hit-kind'] = 'link';
     var main = addRect(overlayEl, bb.x, bb.y, bb.width, bb.height, linkAttrs);
     var labelPad = 3;
-    Array.prototype.forEach.call(linkGroupEl.querySelectorAll('text'), function(t) {
+    var texts = [], polys = [];
+    gs.forEach(function(g) {
+      Array.prototype.push.apply(texts, g.querySelectorAll('text'));
+      Array.prototype.push.apply(polys, g.querySelectorAll('polygon'));
+    });
+    texts.forEach(function(t) {
       var tb = _nodeBBox(t);
       if (!tb || !tb.width) return;
       addRect(overlayEl,
@@ -201,7 +218,7 @@ window.MA.overlayBuilder = (function() {
     var headAttrs = {};
     Object.keys(attrs || {}).forEach(function(k) { headAttrs[k] = attrs[k]; });
     headAttrs['data-hit-kind'] = 'linkhead';
-    Array.prototype.forEach.call(linkGroupEl.querySelectorAll('polygon'), function(pg) {
+    polys.forEach(function(pg) {
       var hb = _nodeBBox(pg);
       if (!hb || hb.width < 2 || hb.height < 2 || hb.width > 40 || hb.height > 40) return;
       addRect(overlayEl, hb.x, hb.y, hb.width, hb.height, headAttrs);
@@ -383,9 +400,38 @@ window.MA.overlayBuilder = (function() {
 
   // 関係 (線) は書かれた行で当てる。行で当たらない関係は、行が 1 本も当たらなかった
   // (= SVG に行の情報が無い) ときだけ並び順で残りに当てる。戻り値は relations と同じ長さ。
+  // BLK-builder-20260925-0305-1: 行で当たらない関係は、SVG の線が持つ両端 (data-entity-1 / -2 → その要素の
+  // data-qualified-name) で当てる。`!pragma layout smetana` の SVG は線に行の情報を付けず、関連クラス
+  // `(A, B) . C` があると A→B の線は名前の無い中継点 (junction) で 2 本に割れる。並び順で当てると
+  // 前半だけ・別の線に枠が付き、矢じりを指すと行き先の要素が選ばれていた。
+  // 戻り値の配列には parts (添字ごとの、同じ関係を成す残りの線の <g> の配列) を持たせる。
+  function _endName(svgEl, id) {
+    if (!id || !svgEl || !svgEl.querySelector) return null;
+    var el = null;
+    try { el = svgEl.querySelector('[id="' + String(id).replace(/"/g, '') + '"]'); } catch (e) { el = null; }
+    var qn = el ? el.getAttribute('data-qualified-name') : null;
+    return qn ? String(qn) : null;
+  }
+  function linkEnds(svgEl, g) {
+    if (!g || !g.getAttribute) return null;
+    var a = g.getAttribute('data-entity-1'), b = g.getAttribute('data-entity-2');
+    if (!a || !b) return null;
+    return { a: a, b: b, an: _endName(svgEl, a), bn: _endName(svgEl, b) };
+  }
+  function _sameName(qn, name) {
+    if (!qn || name == null) return false;
+    var n = String(name).replace(/^"|"$/g, '').replace(/^\[|\]$/g, '');
+    return qn === n || (qn.length > n.length && qn.slice(-(n.length + 1)) === '.' + n);
+  }
+  function _endsMatch(e, from, to) {
+    return (_sameName(e.an, from) && _sameName(e.bn, to)) || (_sameName(e.an, to) && _sameName(e.bn, from));
+  }
+
   function matchLinksByLine(svgEl, relations) {
     var groups = Array.prototype.slice.call(linkGroups(svgEl));
     var out = (relations || []).map(function() { return null; });
+    var parts = out.map(function() { return []; });
+    out.parts = parts;
     var used = [];
     var hits = 0;
     (relations || []).forEach(function(r, i) {
@@ -395,11 +441,79 @@ window.MA.overlayBuilder = (function() {
         }
       }
     });
+    // 行で当たらなかった関係を両端で当てる (直接結ぶ線 → 名前の無い中継点 1 つを挟む 2 本)。
+    var ends = groups.map(function(g) { return linkEnds(svgEl, g); });
+    var anyEnds = ends.some(function(e) { return e && (e.an || e.bn); });
+    if (anyEnds) {
+      (relations || []).forEach(function(r, i) {
+        if (out[i] || r.from == null || r.to == null) return;
+        var k;
+        for (k = 0; k < groups.length; k++) {
+          if (used.indexOf(groups[k]) < 0 && ends[k] && _endsMatch(ends[k], r.from, r.to)) {
+            out[i] = groups[k]; used.push(groups[k]); return;
+          }
+        }
+        // 中継点: 片端が名前を持たない (要素の <g> ではない) 線どうしを、同じ id でつなぐ。
+        for (k = 0; k < groups.length; k++) {
+          var e1 = ends[k];
+          if (used.indexOf(groups[k]) >= 0 || !e1) continue;
+          var here = null, j1 = null;
+          if (e1.an && !e1.bn) { here = e1.an; j1 = e1.b; }
+          else if (e1.bn && !e1.an) { here = e1.bn; j1 = e1.a; }
+          if (!here) continue;
+          var other = _sameName(here, r.from) ? r.to : (_sameName(here, r.to) ? r.from : null);
+          if (other == null) continue;
+          for (var m = 0; m < groups.length; m++) {
+            var e2 = ends[m];
+            if (m === k || used.indexOf(groups[m]) >= 0 || !e2) continue;
+            if ((e2.a === j1 && !e2.an && _sameName(e2.bn, other)) ||
+                (e2.b === j1 && !e2.bn && _sameName(e2.an, other))) {
+              out[i] = groups[k]; parts[i] = [groups[m]];
+              used.push(groups[k]); used.push(groups[m]);
+              return;
+            }
+          }
+        }
+      });
+    }
+    // 行の情報が 1 本も無い SVG は、行でも両端でも当たらなかった残りを並び順で当てる。
     if (hits === 0) {
       var rest = groups.filter(function(g) { return used.indexOf(g) < 0; });
       out.forEach(function(g, i) { if (!g && rest.length) out[i] = rest.shift(); });
     }
     return out;
+  }
+
+  // 名前の無い中継点 (関連クラスの点) を挟んで a と b を結ぶ線があるとき、その中継点の id。
+  function junctionBetween(svgEl, a, b) {
+    var groups = Array.prototype.slice.call(linkGroups(svgEl));
+    var touch = {};
+    groups.forEach(function(g) {
+      var e = linkEnds(svgEl, g);
+      if (!e) return;
+      if (!e.an && e.bn) (touch[e.a] = touch[e.a] || []).push(e.bn);
+      if (!e.bn && e.an) (touch[e.b] = touch[e.b] || []).push(e.an);
+    });
+    var ids = Object.keys(touch);
+    for (var i = 0; i < ids.length; i++) {
+      var ns = touch[ids[i]];
+      var hasA = ns.some(function(n) { return _sameName(n, a); });
+      var hasB = ns.some(function(n) { return _sameName(n, b); });
+      if (hasA && hasB) return ids[i];
+    }
+    return null;
+  }
+
+  // 中継点 junctionId と名前 name を結ぶ線の <g>。
+  function linkFromJunction(svgEl, junctionId, name) {
+    var groups = Array.prototype.slice.call(linkGroups(svgEl));
+    for (var i = 0; i < groups.length; i++) {
+      var e = linkEnds(svgEl, groups[i]);
+      if (!e) continue;
+      if ((e.a === junctionId && !e.an && _sameName(e.bn, name)) ||
+          (e.b === junctionId && !e.bn && _sameName(e.an, name))) return groups[i];
+    }
+    return null;
   }
 
   // 入れ物 (package / node / folder …) は開始行、次に表示名で当てる。どちらも当たらず、
@@ -691,6 +805,9 @@ window.MA.overlayBuilder = (function() {
     findEntityByName: findEntityByName,
     matchClusters: matchClusters,
     matchLinksByLine: matchLinksByLine,
+    linkEnds: linkEnds,
+    junctionBetween: junctionBetween,
+    linkFromJunction: linkFromJunction,
     addRect: addRect,
     closestLinkGroup: closestLinkGroup,
     dedupById: dedupById,
