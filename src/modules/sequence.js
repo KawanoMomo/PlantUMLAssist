@@ -2569,7 +2569,7 @@ window.MA.modules.plantumlSequence = (function() {
         var participants = elements.filter(function(e) { return e.kind === 'participant'; });
         var autonumChecked = parsedData.meta.autonumber ? 'checked' : '';
         propsEl.innerHTML =
-          '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Sequence Diagram</div>' +
+          // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
           '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
             '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-primary);cursor:pointer;">' +
               '<input id="seq-autonumber" type="checkbox" ' + autonumChecked + '>' +

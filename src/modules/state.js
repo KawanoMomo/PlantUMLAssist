@@ -1197,7 +1197,7 @@ window.MA.modules.plantumlState = (function() {
       .map(function(s) { return { value: s.id, label: s.label || s.id }; });
 
     var html =
-      '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">State Diagram</div>' +
+      // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
         // design 4c: 置く場所を選べるようになったので、見出しは「末尾」を名乗らない。
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">追加 / Add</label>' +

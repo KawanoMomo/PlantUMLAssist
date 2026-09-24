@@ -1472,7 +1472,7 @@ window.MA.modules.plantumlClass = (function() {
     if (allOpts.length === 0) allOpts = [{ value: '', label: '（要素なし）' }];
 
     var html =
-      '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Class Diagram</div>' +
+      // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">末尾に追加</label>' +
         P.selectFieldHtml('種類', 'cl-tail-kind', [
@@ -1875,7 +1875,7 @@ window.MA.modules.plantumlClass = (function() {
                   : element.kind === 'abstract' ? 'Abstract Class'
                   : 'Class';
     var html =
-      '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Class Diagram</div>' +
+      // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
         // BLK-builder-20260924-1305-2 (design 4a): 見出しは「Class · 6 行目」と、その下に選んだクラスの名前。
         _selHeadHtml(kindLabel, element) +
@@ -2308,7 +2308,7 @@ window.MA.modules.plantumlClass = (function() {
     var P = window.MA.properties;
     var GP = window.MA.groupPlace;
     var html =
-      '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Class Diagram</div>' +
+      // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
         _selHeadHtml('Enum', element) +
         // BLK-builder-20260924-1320-2 (design 4a): enum にしたあとも種別の欄から戻せる。
@@ -2414,7 +2414,7 @@ window.MA.modules.plantumlClass = (function() {
     var P = window.MA.properties;
     var RC = window.MA.relationKindCards;
     var html =
-      '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Class Diagram</div>' +
+      // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">RELATION (L' + relation.line + ')</label>' +
         // design 3c: 関係の種類は記法ではなく「UML 名称 + 意味の説明」のカードで選ぶ
@@ -2540,7 +2540,7 @@ window.MA.modules.plantumlClass = (function() {
   function _renderGroupReadOnly(group, parsedData, propsEl, ctx) {
     var P = window.MA.properties;
     var html =
-      '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Class Diagram</div>' +
+      // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' +
         (group.kind === 'namespace' ? 'NAMESPACE' : 'PACKAGE') +

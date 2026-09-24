@@ -775,7 +775,7 @@ window.MA.modules.plantumlComponent = (function() {
     var components = elements.filter(function(e) { return e.kind === 'component'; });
     var interfaces = elements.filter(function(e) { return e.kind === 'interface'; });
     var html =
-      '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Component Diagram</div>' +
+      // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">末尾に追加</label>' +
         P.selectFieldHtml('種類', 'co-tail-kind', [
@@ -951,7 +951,7 @@ window.MA.modules.plantumlComponent = (function() {
     if (element.kind !== 'component' && element.kind !== 'interface') {
       // port / unknown: read-only display
       propsEl.innerHTML =
-        '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Component Diagram</div>' +
+        // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
         '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
           '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + element.kind.toUpperCase() + ' (L' + element.line + ')</label>' +
           '<div style="font-size:11px;color:var(--text-secondary);">id: ' + element.id + '</div>' +
@@ -959,7 +959,7 @@ window.MA.modules.plantumlComponent = (function() {
       return;
     }
     var html =
-      '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Component Diagram</div>' +
+      // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + element.kind.toUpperCase() + ' (L' + element.line + ')</label>' +
         P.fieldHtml('Alias (id)', 'co-edit-id', element.id) +
@@ -1034,7 +1034,7 @@ window.MA.modules.plantumlComponent = (function() {
     var P = window.MA.properties;
     var RC = window.MA.relationKindCards;
     var html =
-      '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Component Diagram</div>' +
+      // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
         RC.headerHtml(relation.line, relation.from, relation.to) +
         RC.cardsHtml('co-rel-card', RC.kindsOf('component'), relation.kind) +
@@ -1181,7 +1181,7 @@ window.MA.modules.plantumlComponent = (function() {
 
   function _renderGroupReadOnly(group, parsedData, propsEl, ctx) {
     var html =
-      '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Component Diagram</div>' +
+      // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">PACKAGE (L' + group.startLine + '-' + group.endLine + ')</label>' +
         '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">Label: ' + window.MA.htmlUtils.escHtml(group.label || '') + '</div>' +
