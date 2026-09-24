@@ -3192,6 +3192,9 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
   font-size: 12px; color: var(--text-primary);
 }
 #hb-sum { color: var(--text-secondary); }
+#hb-peer-wrap { color: var(--text-secondary); font-size: 12px; display: inline-flex; align-items: center; gap: 4px; }
+#hb-peer { font-size: 12px; max-width: 220px; }
+#hb-table button.hb-peer-go { border: none; background: none; color: inherit; cursor: pointer; font: inherit; padding: 0; text-align: left; text-decoration: underline dotted; }
 #hb-sum[data-tone="ng"] { color: var(--danger, #d05050); font-weight: 600; }
 #hb-sum[data-tone="ok"] { color: var(--accent); font-weight: 600; }
 #hb-tools { margin-left: auto; display: flex; gap: 6px; }
@@ -9000,6 +9003,10 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   <div id="hb-modal-content">
     <div id="hb-head">
       <strong>引き継ぎチェックリスト</strong>
+      <!-- BLK-primary-20260924-1432-wish: 渡す相手のフォルダを選ぶと、相手の同名図との食い違いが 5 列目に出る。
+           保存先は動かさない。候補は FILES の「読むだけ」と同じ隣のフォルダ。 -->
+      <label id="hb-peer-wrap" title="渡す相手のフォルダを選ぶと、相手の同名図との食い違いを数えます (保存先は動きません)">渡す相手 =
+        <select id="hb-peer" aria-label="渡す相手のフォルダ"><option value="">選ばない</option></select></label>
       <span id="hb-sum" role="status"></span>
       <span id="hb-tools">
         <button type="button" id="hb-reload" title="保存フォルダ・指摘.md を読み直して数え直す">数え直す</button>
@@ -9010,7 +9017,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <div id="hb-body">
       <table id="hb-table">
         <thead>
-          <tr><th>図</th><th>置換済み</th><th>note最新</th><th>SVG最新</th><th>指摘と符合する欠落</th><th></th></tr>
+          <tr><th>図</th><th>置換済み</th><th>note最新</th><th>SVG最新</th><th>指摘と符合する欠落</th><th id="hb-peer-th" hidden>相手の同名図</th><th></th></tr>
         </thead>
         <tbody id="hb-rows"></tbody>
       </table>

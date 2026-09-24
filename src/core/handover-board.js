@@ -146,6 +146,44 @@ window.MA.handoverBoard = (function() {
       : { state: 'clear', count: 0, titles: [], label: '符合なし' };
   }
 
+  // 相手の同名図 (BLK-primary-20260924-1432-wish)。渡す相手 (読むだけのフォルダ) を選んだときだけ出る 5 列目。
+  // 判定は並べて比較の対応表 (state-map / class-map の build) の戻りをそのまま数える。ここで新しい
+  // 突き合わせ規則は書かない。数えるのは「片方にしか無い」行 (参照図だけ / 自分だけ) だけ。
+  //   exists=false → 相手に無い (赤にしない。新人にまだ渡していない図は普通にある)
+  //   same=true    → 本文が同じ
+  //   map が null  → 読めなかった (未確認)
+  //   行が 0      → 状態遷移・クラスとして突き合わせる図ではない (対象外)
+  var PEER_SHOW = 3;
+
+  function peerDiffRows(map) {
+    var m = map || {};
+    var rows = [].concat(m.states || [], m.members || [], m.transitions || []);
+    return rows.filter(function(r) { return r && (r.match === 'ref-only' || r.match === 'mine-only'); });
+  }
+
+  function peerCell(map, exists, same) {
+    if (!exists) return { state: 'missing', count: 0, names: [], label: '相手に無い' };
+    if (same) return { state: 'same', count: 0, names: [], label: '同じ' };
+    if (!map) return { state: 'unknown', count: 0, names: [], label: '未確認' };
+    var all = [].concat(map.states || [], map.members || [], map.transitions || []);
+    if (!all.length) return { state: 'na', count: 0, names: [], label: '突き合わせ対象外' };
+    var diff = peerDiffRows(map);
+    if (!diff.length) return { state: 'match', count: 0, names: [], label: '食い違いなし' };
+    var names = [];
+    diff.forEach(function(r) {
+      var n = _s(r.ref || r.mine).trim();
+      if (n && names.indexOf(n) < 0) names.push(n);
+    });
+    var head = names.slice(0, PEER_SHOW).join(', ');
+    return {
+      state: 'differ', count: diff.length, names: names,
+      titles: diff.map(function(r) {
+        return (r.match === 'ref-only' ? '相手だけ: ' : '自分だけ: ') + _s(r.ref || r.mine);
+      }),
+      label: '食い違い ' + diff.length + '（' + head + (names.length > PEER_SHOW ? ' ほか' : '') + '）',
+    };
+  }
+
   // ── 表 ────────────────────────────────────────────────────────────────────
 
   var BLOCKING = {
@@ -153,14 +191,16 @@ window.MA.handoverBoard = (function() {
     note: { stale: 1 },
     svg: { ng: 1, unknown: 1 },
     gap: { hit: 1 },
+    peer: { differ: 1 },
   };
 
   var REASON = {
     rename: '旧称が残っている', note: 'note が統一前のまま',
     svg: 'SVG が今の図から作られていない', gap: '指摘と符合する欠落',
+    peer: '相手の同名図と食い違い',
   };
 
-  function row(name, text, froms, svgStatus, findings) {
+  function row(name, text, froms, svgStatus, findings, peer) {
     var r = {
       name: name,
       rename: renameCell(text, froms),
@@ -168,8 +208,10 @@ window.MA.handoverBoard = (function() {
       svg: svgCell(svgStatus),
       gap: gapCell(name, findings),
     };
+    // 相手を選んでいるときだけ 5 列目を持つ (選ばない間は今の 4 列のまま)。
+    if (peer) r.peer = peer;
     var why = [];
-    COLS.forEach(function(c) {
+    COLS.concat(peer ? ['peer'] : []).forEach(function(c) {
       if (BLOCKING[c] && BLOCKING[c][r[c].state]) why.push(REASON[c]);
     });
     r.blockers = why;
@@ -193,11 +235,16 @@ window.MA.handoverBoard = (function() {
       .map(_s).filter(function(f) { return f; });
     var svg = o.svg || {};
     var findings = Array.isArray(o.findings) ? o.findings : [];
+    // peer: { label: 相手の呼び名, cells: { 図名: peerCell } } — 渡す相手を選んだときだけ。
+    var peer = o.peer && o.peer.cells ? o.peer : null;
     var rows = names.map(function(n) {
+      var pc = peer ? (peer.cells[n] || peerCell(null, false)) : null;
       return row(n, Object.prototype.hasOwnProperty.call(texts, n) ? texts[n] : null,
-        froms, svg[n], findings);
+        froms, svg[n], findings, pc);
     });
-    return { rows: rows, froms: froms, summary: summary(rows) };
+    var out = { rows: rows, froms: froms, summary: summary(rows) };
+    if (peer) out.peer = { label: _s(peer.label) };
+    return out;
   }
 
   function summary(rows) {
@@ -241,12 +288,14 @@ window.MA.handoverBoard = (function() {
   function rowText(r) {
     if (!r) return '';
     return r.name + '\t' + r.rename.label + '\t' + r.note.label + '\t'
-      + r.svg.label + '\t' + r.gap.label;
+      + r.svg.label + '\t' + r.gap.label + (r.peer ? '\t' + r.peer.label : '');
   }
 
   function copyText(board) {
     var b = board || { rows: [] };
-    var head = ['図', '置換済み', 'note最新', 'SVG最新', '指摘'].join('\t');
+    var cols = ['図', '置換済み', 'note最新', 'SVG最新', '指摘'];
+    if (b.peer) cols.push('相手の同名図');
+    var head = cols.join('\t');
     return [head].concat((b.rows || []).map(rowText)).join('\n');
   }
 
@@ -259,6 +308,8 @@ window.MA.handoverBoard = (function() {
     noteCell: noteCell,
     svgCell: svgCell,
     gapCell: gapCell,
+    peerCell: peerCell,
+    peerDiffRows: peerDiffRows,
     row: row,
     build: build,
     summary: summary,

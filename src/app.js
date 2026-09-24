@@ -27397,9 +27397,11 @@ function loadHandoverBoard() {
         if (typeof t === 'string') texts[n] = t;
       }, function() {});
     })).then(function() {
+      return _hbPeerCells(names, texts);
+    }).then(function(peer) {
       _hbBoard = HB.build({
         names: names, texts: texts, froms: _hbFroms(), svg: svg,
-        findings: _hbFindings(),
+        findings: _hbFindings(), peer: peer,
       });
       _hbBusy = null;
       return _hbBoard;
@@ -27442,6 +27444,9 @@ function renderHandoverBoard() {
   if (!HB || !box) return;
   var board = _hbBoard || { rows: [], summary: HB.summary([]) };
   box.textContent = '';
+  var peerTh = document.getElementById('hb-peer-th');
+  if (peerTh) peerTh.hidden = !board.peer;
+  _hbRenderPeerSelect();
 
   var sum = document.getElementById('hb-sum');
   if (sum) {
@@ -27476,6 +27481,7 @@ function renderHandoverBoard() {
     _hbCell(tr, r.note);
     _hbCell(tr, r.svg);
     _hbCell(tr, r.gap);
+    if (r.peer) _hbPeerTd(tr, r);
 
     var act = document.createElement('td');
     var go = document.createElement('button');
@@ -27514,9 +27520,156 @@ function openHandoverBoard() {
   if (!modal) return Promise.resolve(null);
   modal.style.display = 'flex';
   renderHandoverBoard();
-  return loadHandoverBoard().then(function(b) {
+  // 相手の候補 (隣のフォルダ) を先に揃えてから数える。選んだ相手は閉じても覚えている。
+  return _ensurePeekDirs(false).then(function() {
+    _hbRenderPeerSelect();
+    return loadHandoverBoard();
+  }).then(function(b) {
     renderHandoverBoard();
     return b;
+  });
+}
+
+// ── 渡す相手 (BLK-primary-20260924-1432-wish) ──────────────────────────────
+// 新人に渡す前に、相手のフォルダの同名図と食い違っていないかをこの表の 5 列目で読む。
+// 以前は保存先を相手のフォルダに切り替え、1 枚ずつ開いて本文を目で読み比べていた。
+// 相手は FILES「読むだけ」・並べて比較と同じ隣のフォルダから選び、保存先は動かさない。
+// 食い違いの判定は並べて比較の対応表 (state-map / class-map) をそのまま使う。
+var HB_PEER_KEY = 'pua.handover.peer';
+
+function _hbPeerDir() {
+  try { return (window.localStorage && window.localStorage.getItem(HB_PEER_KEY)) || ''; } catch (e) { return ''; }
+}
+
+function _hbSetPeerDir(dir) {
+  try {
+    if (dir) window.localStorage.setItem(HB_PEER_KEY, dir);
+    else window.localStorage.removeItem(HB_PEER_KEY);
+  } catch (e) {}
+}
+
+// 候補 = 覗ける隣のフォルダのうち自分の保存先でないもの (並べて比較の相手選びと同じ)。
+function _hbPeerChoices() {
+  var PF = window.MA.peekFolder;
+  if (!PF || !_peekDirs) return [];
+  return PF.others(_peekDirs) || [];
+}
+
+function _hbPeerLabel(dir) {
+  var PF = window.MA.peekFolder;
+  var hit = _hbPeerChoices().filter(function(d) { return PF.samePath(d.path, dir); })[0];
+  if (hit) return hit.name;
+  return PF && PF.baseName ? PF.baseName(dir) : String(dir || '');
+}
+
+function _hbRenderPeerSelect() {
+  var sel = document.getElementById('hb-peer');
+  var PF = window.MA.peekFolder;
+  if (!sel || !PF) return;
+  var cur = _hbPeerDir();
+  var list = _hbPeerChoices();
+  sel.textContent = '';
+  var none = document.createElement('option');
+  none.value = '';
+  none.textContent = list.length ? '選ばない' : '選ばない（隣に読めるフォルダがありません）';
+  sel.appendChild(none);
+  var found = false;
+  list.forEach(function(d) {
+    var o = document.createElement('option');
+    o.value = d.path;
+    o.textContent = PF.label ? PF.label(d) : d.name;
+    if (cur && PF.samePath(d.path, cur)) { o.selected = true; found = true; }
+    sel.appendChild(o);
+  });
+  // 覚えている相手が今の候補に無いとき (保存先を変えた等) も、選んだ事実は見せる。
+  if (cur && !found) {
+    var keep = document.createElement('option');
+    keep.value = cur;
+    keep.textContent = _hbPeerLabel(cur);
+    keep.selected = true;
+    sel.appendChild(keep);
+  }
+}
+
+// 自分の図 1 枚と相手の同名図 1 枚を、対応表と同じ規則で突き合わせる。
+function _hbPeerMap(mineText, peerText) {
+  var stateMod = window.MA.modules && window.MA.modules.plantumlState;
+  if (!stateMod) return null;
+  var sm = _pickMapModule(peerText || '', mineText || '');
+  var mod = (sm === window.MA.classMap)
+    ? (window.MA.modules && window.MA.modules.plantumlClass) : stateMod;
+  if (!sm || !mod) return null;
+  try {
+    return sm.build(mod.parse(peerText || ''), mod.parse(mineText || ''), sm.overrides ? sm.overrides(null) : undefined);
+  } catch (e) { return null; }
+}
+
+// 5 列目の材料。相手を選んでいなければ null (表は今の 4 列のまま)。
+function _hbPeerCells(names, texts) {
+  var HB = window.MA.handoverBoard;
+  var WS = window.MA.workspace;
+  var dir = _hbPeerDir();
+  if (!dir || !HB || !HB.peerCell || !WS) return Promise.resolve(null);
+  return WS.listFolder(dir).then(function(info) {
+    var entries = (info && Array.isArray(info.entries)) ? info.entries : [];
+    var have = {};
+    entries.forEach(function(e) {
+      var n = e && typeof e === 'object' ? e.name : e;
+      if (n) have[n] = true;
+    });
+    var cells = {};
+    return Promise.all(names.map(function(n) {
+      if (!have[n]) { cells[n] = HB.peerCell(null, false); return null; }
+      return WS.loadFile(n, dir).then(function(t) {
+        if (typeof t !== 'string') { cells[n] = HB.peerCell(null, true); return; }
+        var mine = texts[n];
+        if (typeof mine !== 'string') { cells[n] = HB.peerCell(null, true); return; }
+        if (mine === t) { cells[n] = HB.peerCell(null, true, true); return; }
+        cells[n] = HB.peerCell(_hbPeerMap(mine, t), true);
+      }, function() { cells[n] = HB.peerCell(null, true); });
+    })).then(function() {
+      return { label: _hbPeerLabel(dir), dir: dir, cells: cells };
+    });
+  }).catch(function() { return null; });
+}
+
+function _hbPeerTd(tr, r) {
+  var td = _hbCell(tr, r.peer);
+  td.classList.add('hb-peer');
+  td.textContent = '';
+  if (r.peer.state === 'missing') { td.textContent = r.peer.label; return td; }
+  // 押すと自分の図を開き、相手の同名図を並べて比較の右の枠に出す。
+  var b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'hb-peer-go';
+  b.textContent = r.peer.label;
+  b.title = (r.peer.titles && r.peer.titles.length ? r.peer.titles.join(' / ') + '\n' : '')
+    + '押すと ' + r.name + ' を開き、相手の同名図を右の枠に並べます';
+  b.addEventListener('click', function() { _hbComparePeer(r.name); });
+  td.appendChild(b);
+  return td;
+}
+
+function _hbComparePeer(name) {
+  var dir = _hbPeerDir();
+  _hbOpenDoc(name);
+  if (!dir) return Promise.resolve(false);
+  // 開いた図に追従させてから相手のフォルダを決める (据え置き。同名図が相手になる)。
+  _seniorSave({ dir: dir, mode: 'keep', name: '' });
+  _seniorNames = [];
+  var WS = window.MA.workspace;
+  var tries = 0;
+  return new Promise(function(resolve) {
+    (function wait() {
+      var a = WS && WS.getActive ? WS.getActive() : null;
+      if ((a && a.name === name) || tries++ > 60) {
+        openCompareTarget('folder').then(function() {
+          return selectSeniorDir(dir);
+        }).then(function() { resolve(true); }, function() { resolve(false); });
+        return;
+      }
+      window.setTimeout(wait, 50);
+    })();
   });
 }
 
@@ -27531,6 +27684,13 @@ function setupHandoverBoard() {
   if (open) open.addEventListener('click', function() { openHandoverBoard(); });
   var close = document.getElementById('hb-close');
   if (close) close.addEventListener('click', function() { closeHandoverBoard(); });
+  var peerSel = document.getElementById('hb-peer');
+  if (peerSel) peerSel.addEventListener('change', function() {
+    _hbSetPeerDir(this.value);
+    _hbBoard = null;
+    renderHandoverBoard();
+    loadHandoverBoard().then(function() { renderHandoverBoard(); });
+  });
   var reload = document.getElementById('hb-reload');
   if (reload) reload.addEventListener('click', function() {
     _hbBoard = null;
