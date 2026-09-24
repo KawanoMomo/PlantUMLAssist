@@ -112,11 +112,18 @@ window.MA.modules.plantumlSequence = (function() {
   function arrowLabel(a) { return ARROW_META[a] || a; }
 
   var PART_RE = new RegExp('^(' + PARTICIPANT_TYPES.join('|') + ')\\s+(?:"([^"]+)"\\s+as\\s+(\\S+)|(\\S+)(?:\\s+as\\s+"([^"]+)")?)\\s*$');
+  // BLK-builder-20260925-0314-1: `create participant "Instance" as Inst` は途中で作られる参加者の宣言。
+  // `create X` (帯の行) と取り違えず、宣言として読む。書き換えでも `create ` は残す。
+  var CREATE_DECL_LEAD_RE = new RegExp('^(\\s*(?:create\\s+(?=(?:' + PARTICIPANT_TYPES.join('|') + ')\\s))?)');
+  function _declLead(raw) { return String(raw == null ? '' : raw).match(CREATE_DECL_LEAD_RE)[1]; }
   // design 2d: 図の外とのやり取り (`[-> System` / `System ->]`) を読めるように、
   // 端点に疑似参加者 `[` `]` を許す。これらは矢印と空白無しで
   // 接するので、区切りは `\s*` である必要がある。
   // `?` は「送り元 / 送り先を描かない」疑似端点 (`?-> B` / `A ->?`)。`[` `]` と同じ扱いで読む。
-  var MSG_RE_FROM = '(\\[|\\]|\\?|[A-Za-z_][A-Za-z0-9_]*|"[^"]+")';
+  // BLK-builder-20260925-0314-1: 実物は日本語の名前 (`App -> センサ制御 : Init()`) をそのまま使う。
+  // PlantUML は ASCII 以外の文字も名前に使えるので、名前の文字に U+0080 以上を許す
+  // (読めないとメッセージが一覧から消え、順番で当てている枠が以後ずれる)。
+  var MSG_RE_FROM = '(\\[|\\]|\\?|[A-Za-z_\\u0080-\\uFFFF][A-Za-z0-9_\\u0080-\\uFFFF]*|"[^"]+")';
   // design 5d「Sequence のその他パレット: 線色」: 色は矢印の最初の `-` の直後に
   // `[#色]` として入る (`-[#red]->` / `<-[#red]--`)。矢印の形はそのまま残るので、
   // 読む側は「色を挟んだ形」も同じ矢印として認識できる必要がある。
@@ -141,6 +148,10 @@ window.MA.modules.plantumlSequence = (function() {
   // そのメッセージが一覧から消え、順番で当てている枠が以後 1 つずつずれる。
   // 群の番号は MSG_RE と同じ (1=送り元 2=矢印 3=送り先 4=本文)。本文は空でもよい。
   var MSG_ACT_RE = new RegExp('^' + MSG_RE_FROM + '\\s*(' + MSG_ARROW_ALT + ')\\s*' + MSG_RE_FROM + '\\s*(?:\\+\\+|--|\\*\\*|!!)+(?:[ \\t]+[^:]*?)?(?:\\s*:\\s*(.*))?$');
+  // BLK-builder-20260925-0314-1: teoz (`!pragma teoz true`) の `& B -> C : hi` は直前のメッセージと
+  // 同じ高さに並べる印。印の後ろは普通のメッセージとして読み、書き換えでも印 (と字下げ) は残す。
+  var MSG_LEAD_RE = /^(\s*(?:&\s*)?)/;
+  function _msgLead(raw) { return String(raw == null ? '' : raw).match(MSG_LEAD_RE)[1]; }
   // `return` は直前に呼ばれた側から呼んだ側へ戻る矢印を 1 本描く。
   var RETURN_RE = /^return(?:\s+(.*))?$/;
   // 手続き・関数の本体は展開前の型紙なので、図の要素として読まない
@@ -287,7 +298,13 @@ window.MA.modules.plantumlSequence = (function() {
         if (result.meta.startUmlLine === null) result.meta.startUmlLine = lineNum;
         continue;
       }
-      if (/^@enduml/.test(trimmed)) continue;
+      // BLK-builder-20260925-0314-1: 1 つのファイルに @startuml … @enduml が 2 つ以上あっても、
+      // プレビューに描かれるのは最初の図だけ。2 つ目以降の参加者・メッセージを読むと、描かれていない
+      // 要素の数だけ「⚠ Overlay マッチング失敗」が出る。最初の @enduml で読むのをやめる。
+      if (/^@enduml/.test(trimmed)) {
+        if (result.meta.startUmlLine !== null) break;
+        continue;
+      }
 
       var tm = trimmed.match(/^title\s+(.+)$/);
       if (tm) {
@@ -353,6 +370,10 @@ window.MA.modules.plantumlSequence = (function() {
         continue;
       }
 
+      var createdDecl = false;
+      var declLead = _declLead(trimmed);
+      if (declLead) { trimmed = trimmed.slice(declLead.length); createdDecl = true; }
+
       // activation / deactivation / create / destroy
       var am = trimmed.match(ACTIVATION_RE);
       if (am) {
@@ -397,6 +418,7 @@ window.MA.modules.plantumlSequence = (function() {
           participantMap[alias].label = label;
           participantMap[alias].line = lineNum;
         }
+        if (createdDecl) participantMap[alias].created = true;
         // box の中で宣言された参加者は、その囲みの一員として憶えておく。
         if (curBox) {
           participantMap[alias].boxId = curBox.id;
@@ -454,7 +476,8 @@ window.MA.modules.plantumlSequence = (function() {
         continue;
       }
 
-      var mm = trimmed.match(MSG_RE) || trimmed.match(MSG_ACT_RE);
+      var msgSrc = trimmed.slice(_msgLead(trimmed).length);
+      var mm = msgSrc.match(MSG_RE) || msgSrc.match(MSG_ACT_RE);
       if (mm) {
         // design 2d: `[` / `]` は「図の外」を表す疑似端点であり、参加者ではない。
         // 参加者一覧に混ぜると左レールや Outline に `[` が並んでしまう。
@@ -622,8 +645,8 @@ window.MA.modules.plantumlSequence = (function() {
     var lines = text.split('\n');
     var idx = lineNum - 1;
     if (idx < 0 || idx >= lines.length) return text;
-    var indent = lines[idx].match(/^(\s*)/)[1];
-    var m = lines[idx].trim().match(PART_RE);
+    var indent = _declLead(lines[idx]);
+    var m = lines[idx].slice(indent.length).trim().match(PART_RE);
     if (!m) return text;
     var ptype = m[1];
     var alias, label, labelImplicit = false;
@@ -650,8 +673,8 @@ window.MA.modules.plantumlSequence = (function() {
     var lines = text.split('\n');
     var idx = lineNum - 1;
     if (idx < 0 || idx >= lines.length) return text;
-    var indent = lines[idx].match(/^(\s*)/)[1];
-    var m = lines[idx].trim().match(MSG_RE);
+    var indent = _msgLead(lines[idx]);
+    var m = lines[idx].slice(indent.length).trim().match(MSG_RE);
     if (!m) return text;
     var label = m[4] || '';
     // design 2d: 図の外 (`[` / `]`) を入れ替えるときは向きに合う側の記号にする。
@@ -721,14 +744,14 @@ window.MA.modules.plantumlSequence = (function() {
     var lines = String(text == null ? '' : text).split('\n');
     var idx = lineNum - 1;
     if (idx < 0 || idx >= lines.length) return '';
-    var m = lines[idx].trim().match(MSG_RE);
+    var m = lines[idx].slice(_msgLead(lines[idx]).length).trim().match(MSG_RE);
     return m ? arrowColor(m[2]) : '';
   }
   function setMessageColor(text, lineNum, color) {
     var lines = String(text == null ? '' : text).split('\n');
     var idx = lineNum - 1;
     if (idx < 0 || idx >= lines.length) return text;
-    var m = lines[idx].trim().match(MSG_RE);
+    var m = lines[idx].slice(_msgLead(lines[idx]).length).trim().match(MSG_RE);
     if (!m) return text;
     return updateMessage(text, lineNum, 'arrow', setArrowColor(m[2], color));
   }
@@ -743,8 +766,8 @@ window.MA.modules.plantumlSequence = (function() {
     var lines = text.split('\n');
     var idx = lineNum - 1;
     if (idx < 0 || idx >= lines.length) return text;
-    var indent = lines[idx].match(/^(\s*)/)[1];
-    var m = lines[idx].trim().match(MSG_RE);
+    var indent = _msgLead(lines[idx]);
+    var m = lines[idx].slice(indent.length).trim().match(MSG_RE);
     if (!m) return text;
     var from = unquote(m[1]), to = unquote(m[3]), label = m[4] || '';
     from = spec.from || (isOuterEnd(from) ? outerFallback(text, lineNum, 'from') : from);
@@ -769,8 +792,8 @@ window.MA.modules.plantumlSequence = (function() {
     var lines = text.split('\n');
     var idx = lineNum - 1;
     if (idx < 0 || idx >= lines.length) return text;
-    var indent = lines[idx].match(/^(\s*)/)[1];
-    var m = lines[idx].trim().match(MSG_RE);
+    var indent = _msgLead(lines[idx]);
+    var m = lines[idx].slice(indent.length).trim().match(MSG_RE);
     if (!m) return text;
     var from = unquote(m[1]), arrow = m[2], to = unquote(m[3]), label = m[4] || '';
     if (field === 'from') from = value;

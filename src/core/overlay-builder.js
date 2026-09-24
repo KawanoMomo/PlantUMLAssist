@@ -334,18 +334,47 @@ window.MA.overlayBuilder = (function() {
   // 記法が 1 行あるだけで以後の枠が全部ずれる (同じ症状がこれで 4 件目)。
   // PlantUML は参加者の <g> に data-qualified-name (= DSL の別名) を自分で残すので、
   // 描いた側の名前で当てる。行を読み直さないので記法が増えても穴が開かない。
+  //
+  // BLK-builder-20260925-0314-1: PlantUML は data-qualified-name の ASCII 以外の文字を 1 文字ずつ
+  // `.` に置き換えて出す (`センサ制御` → `.....`、`A太郎b` → `A..b`、サロゲート対も 1 文字)。
+  // 名前をそのまま比べると日本語の名前を持つ要素に枠が 1 つも出ない。同じ伏せ方をした名前で比べ、
+  // 伏せた結果が重なる (`太郎` と `別名` はどちらも `..`) ときは、PlantUML が要素を作った順
+  // (= 文書の順) と items の順で 1 つずつ組にする。
+  function qualifiedNameKey(name) {
+    var out = '';
+    Array.from(String(name == null ? '' : name)).forEach(function(ch) {
+      out += ch.codePointAt(0) > 0x7F ? '.' : ch;
+    });
+    return out;
+  }
   function matchByEntityName(svgEl, items, selector) {
     if (!svgEl || !svgEl.querySelectorAll) return [];
-    var groups = svgEl.querySelectorAll(selector);
+    var groups = Array.prototype.slice.call(svgEl.querySelectorAll(selector));
     var byName = {};
-    Array.prototype.forEach.call(groups, function(g) {
+    groups.forEach(function(g) {
       var nm = g.getAttribute && g.getAttribute('data-qualified-name');
       if (nm && !byName[nm]) byName[nm] = g;
     });
-    var matches = [];
-    items.forEach(function(item) {
+    var used = [];
+    var found = items.map(function(item) {
       var g = (item && item.id != null) ? byName[item.id] : null;
-      if (g) matches.push({ item: item, groupEl: g });
+      if (g) used.push(g);
+      return g || null;
+    });
+    items.forEach(function(item, i) {
+      if (found[i] || !item || item.id == null) return;
+      var key = qualifiedNameKey(item.id);
+      if (key === String(item.id)) return;   // ASCII だけの名前は伏せられないので、上で当たらなければ無い
+      for (var k = 0; k < groups.length; k++) {
+        var g = groups[k];
+        if (used.indexOf(g) >= 0) continue;
+        if ((g.getAttribute('data-qualified-name') || '') !== key) continue;
+        found[i] = g; used.push(g); break;
+      }
+    });
+    var matches = [];
+    items.forEach(function(item, i) {
+      if (found[i]) matches.push({ item: item, groupEl: found[i] });
     });
     return matches;
   }
@@ -822,6 +851,7 @@ window.MA.overlayBuilder = (function() {
     extractDrawnBBox: extractDrawnBBox,
     extractFigureBBox: extractFigureBBox,
     matchByEntityName: matchByEntityName,
+    qualifiedNameKey: qualifiedNameKey,
     matchByDataSourceLine: matchByDataSourceLine,
     matchByOrder: matchByOrder,
     pickBestOffset: pickBestOffset,

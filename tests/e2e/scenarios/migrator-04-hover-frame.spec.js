@@ -1181,3 +1181,67 @@ for (const name of ['down', 'left']) {
     await expect(page.locator('#overlay-layer rect.hit-hover').first()).toHaveAttribute('data-line', '10');
   });
 }
+
+// BLK-builder-20260925-0314-1: 日本語の名前 (PlantUML は SVG の名前を `.....` に伏せる)・`create` した参加者
+// (頭が途中に裸の箱で描かれる)・別名と表示名の違う参加者の帯・teoz の `&` で並べたメッセージで、
+// 参加者やメッセージに枠が出ず「⚠ Overlay マッチング失敗」が出ていた (corpus の dirty-01 / seq-11 / seq-12、web の teoz)。
+test('migrator 手順 4 — 日本語の名前・create した参加者・teoz の並んだメッセージでも、本人の枠が出る', async ({ page }) => {
+  await bootPlain(page);
+  const hovered = () => page.evaluate(() => Array.from(document.querySelectorAll('#overlay-layer rect.hit-hover'))
+    .map((r) => r.getAttribute('data-type') + '@' + r.getAttribute('data-line')).join(','));
+  async function hoverText(name, nth) {
+    const t = page.locator('#preview-svg svg text', { hasText: name }).nth(nth || 0);
+    const b = await t.boundingBox();
+    expect(b, name + ' が描かれている').not.toBeNull();
+    await page.mouse.move(3, 3);
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+  }
+
+  // 1. 日本語の名前の参加者と、その名前を使うメッセージ
+  await typeDsl(page, [
+    '@startuml',                         // 1
+    'participant App',                   // 2
+    'participant センサ制御',            // 3
+    'App -> センサ制御 : Init()',        // 4
+    'センサ制御 --> App : E_OK',         // 5
+    '@enduml',                           // 6
+  ].join(String.fromCharCode(10)));
+  await expect(page.locator('#overlay-layer rect[data-type="message"]')).toHaveCount(2, { timeout: 20000 });
+  await expect(page.locator('#overlay-warning')).toBeHidden();
+  await hoverText('センサ制御', 0);
+  await expect.poll(hovered, 'センサ制御 の見出しにホバー').toBe('participant@3');
+  await hoverText('Init()');
+  await expect.poll(hovered, 'Init() にホバー').toBe('message@4');
+
+  // 2. create した参加者の途中の頭と、別名と表示名の違う参加者の帯
+  await typeDsl(page, [
+    '@startuml',                                   // 1
+    'participant Factory',                         // 2
+    'participant "Session Manager" as SM',         // 3
+    'Factory -> SM ++ : open()',                   // 4
+    'SM --> Factory -- : handle',                  // 5
+    'create participant "Instance" as Inst',       // 6
+    'Factory -> Inst : new(config)',               // 7
+    'Inst --> Factory : ok',                       // 8
+    '@enduml',                                     // 9
+  ].join(String.fromCharCode(10)));
+  await expect(page.locator('#overlay-layer rect[data-type="participant"][data-id="Inst"]')).toHaveCount(2, { timeout: 20000 });
+  await expect(page.locator('#overlay-warning')).toBeHidden();
+  await hoverText('Instance', 0);
+  await expect.poll(hovered, '途中に描かれた Instance の頭にホバー').toBe('participant@6');
+
+  // 3. teoz の `&` で並べたメッセージ (class の無い SVG)
+  await typeDsl(page, [
+    '@startuml',                          // 1
+    '!pragma teoz true',                  // 2
+    'Alice -> Bob : hello',               // 3
+    '& Bob -> Charlie : hi',              // 4
+    '@enduml',                            // 5
+  ].join(String.fromCharCode(10)));
+  await expect(page.locator('#overlay-layer rect[data-type="message"]')).toHaveCount(2, { timeout: 20000 });
+  await expect(page.locator('#overlay-warning')).toBeHidden();
+  await hoverText('hi');
+  await expect.poll(hovered, '並んだメッセージ hi にホバー').toBe('message@4');
+  await hoverText('Charlie', 0);
+  await expect.poll(hovered, 'Charlie の見出しにホバー').toBe('participant@4');
+});
