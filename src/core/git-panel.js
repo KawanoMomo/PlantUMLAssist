@@ -179,6 +179,24 @@ window.MA.gitPanel = (function() {
   var SCOPE_NOTE = 'コミット・取得・送信・ブランチ切替まで。マージと衝突の解消は外部の Git ツールで行ってください。'
     + '取得・送信は押したときだけ通信します (認証は OS の git の設定)。';
 
+  // BLK-builder-20260924-1818-1 (design 10c): 「比較する相手を選ぶ」の窓の置き場所。
+  // FILES 下端の「相手を選ぶ…」から下へ開くと窓の下半分が画面の外に出ていた。
+  // 下に余裕 (320px か 60vh の小さい方) があれば今までどおりボタンの下、無ければ上と下の広い側へ開き、
+  // 入る高さ (上限 60vh) まで縮める。上へ開くときは窓の下端をボタンの 4px 上に置く (bottom で指す)。
+  //   r … ボタンの getBoundingClientRect()、vw / vh … 窓の幅と高さ
+  // 返り値 { top, bottom, left, maxHeight } (top / bottom は使わない側が null)
+  function pickerPlace(r, vw, vh) {
+    var GAP = 4, MARGIN = 8;
+    var cap = Math.round(vh * 0.6);
+    var below = Math.floor(vh - r.bottom - GAP - MARGIN);
+    var above = Math.floor(r.top - GAP - MARGIN);
+    var left = Math.max(MARGIN, Math.round(Math.min(r.left, vw - 380)));
+    if (below >= Math.min(cap, 320) || below >= above) {
+      return { top: Math.round(r.bottom + GAP), bottom: null, left: left, maxHeight: Math.max(0, Math.min(cap, below)) };
+    }
+    return { top: null, bottom: Math.round(vh - r.top + GAP), left: left, maxHeight: Math.max(0, Math.min(cap, above)) };
+  }
+
   function emptyHistoryText(hasActive) {
     return hasActive ? 'この図に関係するコミットはまだありません' : '図を開くと、その図のコミットが並びます';
   }
@@ -206,5 +224,6 @@ window.MA.gitPanel = (function() {
     refRows: refRows,
     SCOPE_NOTE: SCOPE_NOTE,
     emptyHistoryText: emptyHistoryText,
+    pickerPlace: pickerPlace,
   };
 })();

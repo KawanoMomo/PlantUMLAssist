@@ -218,6 +218,18 @@ test('手順9 保存先が Git なら、この図の履歴の「比較」で前�
   await expect(page.locator('#git-changes .git-change')).toHaveCount(0);
   expect(git('log', '--format=%s')).toContain('Fault 通知の応答を追記');
 
+  // design 10c (BLK-builder-20260924-1818-1): ツリー下端の「相手を選ぶ…」から開いても、比較する相手を選ぶ窓は
+  // 画面の中に収まり、いちばん古いコミットまで押せる (以前はボタンの下へ開いて画面の下端で切れていた)。
+  await page.locator('#git-pick-open').click();
+  const picker = page.locator('#git-pick-modal');
+  await expect(picker).toBeVisible();
+  const vp = page.viewportSize();
+  const pb = await picker.boundingBox();
+  expect(pb && pb.y >= 0 && pb.y + pb.height <= vp.height).toBe(true);
+  await expect(picker.locator('.git-pick-row').filter({ hasText: '初版' })).toBeInViewport();
+  await page.locator('#git-pick-close').click();
+  await expect(picker).toBeHidden();
+
   // 到達条件その4: 古いコミット (初版) の「比較」で、右の枠にその時点の図が並ぶ。
   const oldRow = page.locator('#git-history .git-commit-row').filter({ hasText: '初版' });
   await oldRow.locator('.git-history-compare').click();

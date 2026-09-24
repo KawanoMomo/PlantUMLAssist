@@ -466,5 +466,9 @@ test('手順8 保存先が Git なら、右クリックの「過去のコミッ�
   await item.click();
   await expect(page.locator('#git-pick-modal')).toBeVisible();
   await expect(page.locator('#git-pick-modal .git-pick-row').filter({ hasText: '初版' })).toHaveCount(1);
+  // BLK-builder-20260924-1818-1: ツリー下端の GIT の見出しの下へ開いて画面の外に切れない (窓の中に収まり、行が見える)。
+  const pb = await page.locator('#git-pick-modal').boundingBox();
+  expect(pb && pb.y >= 0 && pb.y + pb.height <= page.viewportSize().height).toBe(true);
+  await expect(page.locator('#git-pick-modal .git-pick-row').filter({ hasText: '初版' })).toBeInViewport();
   await expect.poll(() => page.locator('#editor').inputValue()).toContain('SPI 状態遷移');
 });
