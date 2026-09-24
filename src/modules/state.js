@@ -2355,6 +2355,9 @@ window.MA.modules.plantumlState = (function() {
         colors: colors(),
         current: tr.color || '',
       }) +
+      // BLK-builder-20260924-1252-2 (design 4c):「状態を追加 / Add state」と「追加する位置」。
+      // 中身は _bindTrAddState が描く (種類で位置の候補が変わる)。
+      '<div id="st-tr-addstate" style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;"></div>' +
       // BLK-builder-20260907-1737-2 (design 4c):「この遷移にノートを添える」。
       // UseCase / Component / Class の関係には 3c で入っているのに、遷移だけ
       // `note on link` を DSL に手で書くしかなかった。
@@ -2366,6 +2369,7 @@ window.MA.modules.plantumlState = (function() {
       P.primaryButtonHtml('st-tr-update', '更新') +
       P.primaryButtonHtml('st-tr-delete', '✕ 削除');
     propsEl.innerHTML = html;
+    _bindTrAddState(tr, parsedData, ctx);
 
     P.bindLinkNote('st-tr-note', function(noteText) {
       window.MA.history.pushHistory();
@@ -2417,6 +2421,103 @@ window.MA.modules.plantumlState = (function() {
       window.MA.selection.clearSelection();
       ctx.onUpdate();
     });
+  }
+
+  // ── 遷移を選んだまま状態を足す (BLK-builder-20260924-1252-2, design 4c) ──────
+  // 以前は「Idle と Running の間に状態を挟む」のに、選択を外して追加タブで State →
+  // 追加する位置「この遷移の途中」→ 挟む遷移を一覧から選び直す必要があった。
+  // いま選んでいる遷移を相手にして、種類・名前・位置だけで足す。足したらその状態を選ぶ。
+  var _trAddKind = 'state';
+  var TR_ADD_KINDS = [
+    { value: 'state', label: '単純状態', base: 'NewState' },
+    { value: 'composite', label: '複合状態', base: 'Composite' },
+    { value: 'choice', label: '選択 choice', base: 'Choice' },
+  ];
+
+  function _bindTrAddState(tr, parsedData, ctx) {
+    var box = document.getElementById('st-tr-addstate');
+    if (!box) return;
+    var P = window.MA.properties;
+    var H = window.MA.htmlUtils;
+    var SI = window.MA.stateInsert;
+    // state-insert を読まない組 (一部の unit) では出さない。
+    if (!SI || !SI.transitionPositions) { box.style.display = 'none'; return; }
+    var where = null;
+
+    function hintText(w) {
+      if (w === 'transition') {
+        return tr.from + ' → (新しい状態) → ' + tr.to + ' の 2 本に割ります。きっかけは前半に残ります';
+      }
+      if (w === 'inside') {
+        var host = SI.fromHost(parsedData, tr);
+        return (host ? host.label : tr.from) + ' の中に入れます (子状態)';
+      }
+      return '図の末尾に足します';
+    }
+
+    function render() {
+      var positions = SI.transitionPositions(parsedData, tr, _trAddKind);
+      if (!positions.some(function(p) { return p.value === where; })) where = positions[0].value;
+      box.innerHTML =
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">状態を追加 / Add state</label>' +
+        P.segmentedFieldHtml('種類', 'st-tr-add-kind', TR_ADD_KINDS.map(function(k) {
+          return { value: k.value, label: k.label, selected: k.value === _trAddKind };
+        })) +
+        P.fieldHtml('名前', 'st-tr-add-id', '', '例: Checking (空なら ' + _baseName() + ')') +
+        P.selectFieldHtml('追加する位置', 'st-tr-add-where', positions.map(function(p) {
+          return { value: p.value, label: p.label, selected: p.value === where };
+        })) +
+        '<div id="st-tr-add-hint" style="font-size:10px;color:var(--text-secondary);margin:-4px 0 6px;line-height:1.5;">' +
+          H.escHtml(hintText(where)) + '</div>' +
+        '<button id="st-tr-add" style="width:100%;font-size:11px;padding:4px 8px;background:var(--bg-tertiary);border:1px solid var(--accent);color:var(--text-primary);border-radius:3px;cursor:pointer;">＋ 状態を追加</button>';
+      Array.prototype.forEach.call(box.querySelectorAll('#st-tr-add-kind .prop-seg'), function(btn) {
+        btn.addEventListener('click', function() {
+          _trAddKind = btn.getAttribute('data-value');
+          render();
+        });
+      });
+      P.bindEvent('st-tr-add-where', 'change', function() {
+        where = document.getElementById('st-tr-add-where').value;
+        var h = document.getElementById('st-tr-add-hint');
+        if (h) h.textContent = hintText(where);
+      });
+      var idEl = document.getElementById('st-tr-add-id');
+      if (idEl) idEl.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); add(); }
+      });
+      P.bindEvent('st-tr-add', 'click', add);
+    }
+
+    function _baseName() {
+      for (var i = 0; i < TR_ADD_KINDS.length; i++) if (TR_ADD_KINDS[i].value === _trAddKind) return TR_ADD_KINDS[i].base;
+      return 'NewState';
+    }
+
+    function add() {
+      var raw = (document.getElementById('st-tr-add-id') || {}).value || '';
+      var norm = String(raw).trim()
+        ? normalizeIdInput(raw, parsedData)
+        : { valid: true, id: window.MA.stateChild.uniqueChildId(parsedData, _baseName()), label: '' };
+      if (!norm.valid) { alert('名前を入れてください'); return; }
+      var t = ctx.getMmdText();
+      var out = SI.addFromTransition(t, parsedData, tr, {
+        kind: _trAddKind, id: norm.id, label: norm.label, where: where,
+      });
+      if (out === t) { alert('足せませんでした'); return; }
+      window.MA.history.pushHistory();
+      ctx.setMmdText(out);
+      // 足した状態を選ぶ (入れ子に入れたときは `親.子` の id になる)。
+      var before = {};
+      (parsedData.states || []).forEach(function(s) { before[s.id] = 1; });
+      var added = (parse(out).states || []).filter(function(s) {
+        return !before[s.id] && (s.id === norm.id || s.id.split('.').pop() === norm.id);
+      })[0];
+      if (added) window.MA.selection.setSelected([{ type: 'state', id: added.id, line: added.line }]);
+      else window.MA.selection.clearSelection();
+      ctx.onUpdate();
+    }
+
+    render();
   }
 
   function _renderNoteEdit(sel, parsedData, propsEl, ctx) {
