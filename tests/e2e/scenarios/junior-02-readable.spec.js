@@ -1458,3 +1458,37 @@ test('手順1 同じ図種でも部品名が違う図しか無ければ、開か
   await expect.poll(() => getEditorText(page)).toContain("' @peek ");
   await expect.poll(() => getEditorText(page)).toContain('TIMER の手本なし');
 });
+
+// BLK-builder-20260924-1252-4 (design 4a): 先輩の構成を真似てクラス図を起こすとき、属性の名前・可視性は
+// 右パネルの 1 行 1 レコードで直す。閉じた行は「記号・シグネチャ・編集」だけで、図の属性を押すと同じ行が
+// その場で開き、入力に合わせて「組み立てられる行」が変わる。並べ替えと削除は開いた行の中にある。
+test('手順2 クラスの属性は図で押した行がその場で開き、組み立てられる行を見てから直せる', async ({ page }) => {
+  await S.bootPlain(page);
+  await S.typeDsl(page, ['@startuml', 'class SpiDrv {', '  - rxbuf : int', '  + Spi_Init() : void', '}', '@enduml'].join('\n'));
+  await page.waitForSelector('#overlay-layer rect[data-type="member"]');
+  // 到達条件その1: クラスを選ぶと、属性・メソッドは閉じた 1 行で、右端に「編集」。消すボタンは閉じた行に無い。
+  const cls = page.locator('#preview-svg text', { hasText: 'SpiDrv' }).first();
+  const cb = await cls.boundingBox();
+  await page.mouse.click(cb.x + cb.width / 2, cb.y + cb.height / 2);
+  const row = page.locator('.cl-member-row[data-member-kind="attribute"]').first();
+  await expect(row.locator('.cl-mem-sig')).toHaveText('rxbuf : int');
+  await expect(row.locator('.cl-mem-vis')).toHaveText('−');
+  await expect(row.locator('.cl-mem-edit')).toHaveText('編集');
+  await expect(page.locator('[id^="cl-mem-del-"]')).toHaveCount(0);
+  // 到達条件その2: 図の属性を押すと同じ行が開く (「編集」を押したのと同じ)。
+  const mem = page.locator('#preview-svg text', { hasText: 'rxbuf' }).first();
+  const mb = await mem.boundingBox();
+  await page.mouse.click(mb.x + mb.width / 2, mb.y + mb.height / 2);
+  await expect(page.locator('#cl-mem-preview-0')).toHaveText('- rxbuf : int');
+  // 到達条件その3: 名前と可視性を変えると、押す前に入る行が読める。更新で本文に入る。
+  await page.locator('#cl-mem-name-0').fill('rxBuffer');
+  await page.locator('.cl-vis-btn[data-vis-for="cl-mem-vis-0"][data-vis="#"]').click();
+  await expect(page.locator('#cl-mem-preview-0')).toHaveText('# rxBuffer : int');
+  await page.locator('#cl-mem-update-0').click();
+  await expect.poll(() => getEditorText(page)).toContain('# rxBuffer : int');
+  // 到達条件その4: 更新の後も同じ行が開いたまま。開いた行の「削除」でその行だけ消える。
+  await expect(page.locator('#cl-mem-preview-0')).toHaveText('# rxBuffer : int');
+  await page.locator('#cl-mem-del-0').click();
+  await expect.poll(() => getEditorText(page)).not.toContain('rxBuffer');
+  expect(await getEditorText(page)).toContain('Spi_Init() : void');
+});
