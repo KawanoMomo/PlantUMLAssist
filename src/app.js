@@ -1674,6 +1674,11 @@ function init() {
     if (cfg && rail.buildConfigHtml) cfg.outerHTML = rail.buildConfigHtml();
     cfg = document.getElementById('rail-config');
     if (cfg && cfgBtn) cfg.addEventListener('click', function() { cfgBtn.click(); });
+    // design 10a / 7a: FILES の印も同じ線画にする。ボタンごと差し替えると files-panel の
+    // 押下の結線が外れるので、印の span だけを入れ替える。
+    var filesGlyph = document.querySelector('#rail-files .rail-glyph');
+    var filesSvg = rail.glyphSvg ? rail.glyphSvg('files') : '';
+    if (filesGlyph && filesSvg) filesGlyph.outerHTML = filesSvg;
   })();
 
   // ── ツールメニュー (design 7a): 機能ボタンを 6 分類に畳む ────────────────

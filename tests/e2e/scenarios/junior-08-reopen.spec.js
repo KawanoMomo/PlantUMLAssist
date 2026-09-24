@@ -210,6 +210,18 @@ test('手順8 FILES ツリーのファイル行の頭に、左レールと同じ
   await expect(peek).toHaveAttribute('aria-label', '他フォルダを覗く');
   await expect(peek.locator('svg')).toBeVisible();
   expect(await peek.textContent()).not.toMatch(/[\u{1F300}-\u{1FAFF}]/u);
+
+  // BLK-builder-20260924-1358-3 (design 10a / 7a): レールの FILES はロゴ P の直下・図種の列の上にあり、
+  // 印は図種と同じ線画。押せばツリーが畳まれ、もう一度押せば開く。
+  const railFiles = page.locator('#rail-files');
+  await expect(railFiles.locator('svg.rail-glyph')).toBeVisible();
+  const fb = await railFiles.boundingBox();
+  const sb = await page.locator('#rail-types .rail-btn').first().boundingBox();
+  expect(fb.y + fb.height).toBeLessThanOrEqual(sb.y);
+  await railFiles.click();
+  await expect(page.locator('#files-panel')).toHaveClass(/collapsed/);
+  await railFiles.click();
+  await expect(page.locator('#files-panel')).not.toHaveClass(/collapsed/);
 });
 
 // BLK-builder-20260924-1317-3 (design 10a「12 図 未反映 1 控え 1」): ツリー下端の 1 行は、開いている
