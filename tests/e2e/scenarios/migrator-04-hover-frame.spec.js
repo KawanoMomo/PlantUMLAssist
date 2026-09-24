@@ -982,6 +982,50 @@ test('migrator 手順 4 — レーンをまたぐ新記法のアクティビテ�
   await expect(page.locator('#overlay-warning')).toBeHidden();
 });
 
+// BLK-migrator-20260924-2232: 題 (title) と sprite を使う新記法のアクティビティ図 (web/plantuml の svg-sprites 系 5 枚と同型)。
+// 題の文字と矢印 (矢じり) に枠が出なかった。題は SVG に残る行で、矢印は矢じりの先の要素から「その前の行の後」の流れで当てる。
+// 流れを押すと、右欄の「＋ ここに挿入」がその矢印の上 (= 前の行の後) を既定にする。
+test('migrator 手順 4 — 題と sprite のある新記法のアクティビティ図でも、題・動作・矢じりに本人の枠が出る', async ({ page }) => {
+  await bootPlain(page);
+  const dsl = fs.readFileSync(path.join(__dirname, '..', '..', 'fixtures', 'dsl', 'activity-2232-title-sprite.puml'), 'utf8')
+    .replace(/\r\n/g, '\n').replace(/\n+$/, '');
+  await typeDsl(page, dsl);
+  await expect(page.locator('#overlay-layer rect[data-type="action"]')).toHaveCount(3, { timeout: 20000 });
+  await expect(page.locator('#overlay-layer rect[data-type="flow"]')).toHaveCount(2);
+  for (const [label, type, line] of [
+    ['Transform Translate Test', 'source-line', '10'],
+    ['The blue circle (with translate) should appear at 40,50', 'action', '11'],
+    ['The red circle (without translate) should appear at 10,10', 'action', '12'],
+  ]) {
+    const { hit } = await hoverHit(page, label);
+    expect(hit, label + ' にホバーして本人の枠が出る').toEqual({ type, line, hover: true });
+  }
+  // 矢じり (4 点の polygon) の中心を実マウスで指す。上から順に 11 の後・12 の後の流れ。
+  const heads = await page.evaluate(() => Array.prototype.filter.call(
+    document.querySelectorAll('#preview-svg svg polygon'),
+    (p) => (p.getAttribute('points') || '').trim().split(/[\s,]+/).length === 8)
+    .map((p) => { const r = p.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })
+    .sort((a, b) => a.y - b.y));
+  expect(heads.length).toBe(2);
+  const got = [];
+  for (const h of heads) {
+    await page.mouse.move(3, 3);
+    await page.mouse.move(h.x, h.y);
+    await page.waitForTimeout(150);
+    got.push(await page.evaluate((p) => {
+      const r = document.elementsFromPoint(p.x, p.y).find((e) => e.tagName.toLowerCase() === 'rect' &&
+        e.closest('#overlay-layer') && !/overlay-background/.test(e.getAttribute('class') || ''));
+      return r ? [r.getAttribute('data-type'), r.getAttribute('data-line'), /hit-hover/.test(r.getAttribute('class') || '')] : null;
+    }, h));
+  }
+  expect(got).toEqual([['flow', '11', true], ['flow', '12', true]]);
+  // 2 本目の矢印を押すと、その矢印の上に足す位置 (12 行目の動作の後) が既定になる
+  await page.mouse.click(heads[1].x, heads[1].y);
+  await expect(page.locator('#ac-ins-point')).toBeVisible();
+  await expect(page.locator('#ac-ins-point option:checked')).toContainText('(L12)');
+  await expect(page.locator('#overlay-warning')).toBeHidden();
+});
+
 // BLK-migrator-20260924-0637: AWS アイコンの手続き (`WorkDocs(...)` など) で部品を宣言した図は、DSL に見えるのが
 // `actor` と `-->` だけなのでシーケンス図と読まれ、枠が 1 つも出なかった (「⚠ Overlay マッチング失敗」)。
 // 手続きの中身は読まず、PlantUML が SVG に残した図種で読み直す。行き先の部品に食い込む矢じりの上では関係が出る。
