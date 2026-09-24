@@ -114,8 +114,13 @@ describe('ツールメニューの道具はすべてパレットから引ける 
   // その道具へ行く経路が 1 本も無くなる。
   var appJs = require('fs').readFileSync(require('path').join(__dirname, '../src/app.js'), 'utf-8');
 
+  // BLK-owner-20260924-1212-prune: ツール ▾ の案内行 (→ ▤ 影響を見る) は Ctrl+K に写さない。
+  // その行き先は別名のコマンド 1 行が持つので、そのコマンドが在ることで経路があると数える。
+  var GUIDE_ROWS = { 'btn-tab-xref': "{ id: 'name-search'" };
+
   test('menuIds の全部が app.js のコマンドに button として現れる', () => {
     var missing = TM.menuIds().filter(function(id) {
+      if (GUIDE_ROWS[id]) return appJs.indexOf(GUIDE_ROWS[id]) < 0;
       return appJs.indexOf("button: '" + id + "'") < 0;
     });
     expect(missing).toEqual([]);

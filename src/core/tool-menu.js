@@ -87,7 +87,7 @@ window.MA.toolMenu = (function() {
   var MOVED_TO_FILES = [
     { key: 'file', title: 'ファイル', items: [
       { id: 'btn-tab-draft',    label: '一時控えにする', group: 'ファイルの右クリック' },
-      { id: 'btn-tab-versions', label: 'この図の変遷', group: 'ファイルの右クリック' },
+      { id: 'btn-tab-versions', label: 'この図の履歴を見る', group: 'ファイルの右クリック' },
     ] },
   ];
   var FILES_NOTE = 'ファイル単位の操作（開く・並べて比較・前回保存版と比較・履歴・名前変更・一時控え・削除…）は FILES のファイルを右クリック';

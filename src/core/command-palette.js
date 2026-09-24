@@ -80,9 +80,11 @@ window.MA.commandPalette = (function() {
   // 道具の題 (「名前突合を開く / Name audit」) から、右端に置く短い呼び名を作る。
   // 英語併記と「を開く」等の動詞は落とす — 分類チップと本文で何をするかは
   // もう言えているので、右端は「どの道具か」の 1 語でよい。
+  // BLK-owner-20260924-1212-prune: 言い換えがその呼び名を含むとき (「この図の履歴を見る」と
+  // 「この図の履歴」) も出さない。同じ画面の名前が 1 行に 2 度並ぶと別の行に見える。
   function _toolHint(title, label) {
     var short = toolShortName(title);
-    return short === label ? '' : short;
+    return (!short || String(label).indexOf(short) >= 0) ? '' : short;
   }
 
   function toolShortName(title) {
@@ -255,8 +257,9 @@ window.MA.commandPalette = (function() {
         id: (g === 'command' ? 'command:' : g + ':') + c.id,
         kind: g === 'command' ? 'command' : g,
         group: g,
+        // 分類をコマンド側で直に持つ行 (group: 'find' 等) も、メニュー由来の行と同じチップにする。
         badge: c.badge || (g === 'add' ? '追加' : g === 'selected' ? '選択中'
-          : toolGroup ? groupChip(toolGroup) : 'コマンド'),
+          : groupChip(g) || 'コマンド'),
         title: toolLabel || c.title,
         // 右端は「どの道具か」。言い換えと同じ文字になるなら出さない (同じ語が 2 度並ぶ)。
         hint: toolLabel ? _toolHint(c.title, toolLabel) : (c.hint || ''),

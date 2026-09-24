@@ -557,6 +557,16 @@ test('手順2 パレットの一括置換に Ctrl+H が出て、エディタで�
   // (Ctrl+K で「使っている図」と打つと「名前で図を探す」が出て、選んだ名前が入った状態で開く)。
   await page.keyboard.press('Control+k');
   await page.waitForSelector('#cp-modal');
+  // BLK-owner-20260924-1212-prune: ▤ 影響を見る を開く行は画面の名前の 1 行だけ。旧名 (依存グラフ /
+  // 参照関係 / 名前で図を探す) で打っても同じ 1 行が出て、旧名の行・ツール ▾ の案内行 (→) は並ばない。
+  for (const q of ['影響', '依存グラフ', '参照関係', '名前で図']) {
+    await page.locator('#cp-input').fill(q);
+    await page.waitForTimeout(150);
+    const rows = page.locator('.cp-item').filter({ hasText: /影響を見る|依存グラフ|参照関係|名前で図を探す|図をまたいで/ });
+    await expect(rows).toHaveCount(1);
+    await expect(rows.first()).toHaveAttribute('data-cp-id', /:name-search$/);
+    await expect(rows.first()).toContainText('影響を見る');
+  }
   await page.locator('#cp-input').fill('使っている図');
   await page.waitForTimeout(250);
   await expect(page.locator('.cp-item').first()).toHaveAttribute('data-cp-id', /:name-search$/);
