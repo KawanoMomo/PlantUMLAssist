@@ -58,13 +58,20 @@ window.MA.autoSave = (function() {
     try { return window.localStorage.getItem(key); } catch (e) { return null; }
   }
 
+  // BLK-owner-20260924-2232-1: 元に戻す / やり直しで入れた本文の保存は、図種の判定が替わっても
+  // server に別名 (`{名前}_{図種}`) へ回させない。1 回の書き込みで消える印。
+  var _keepNames = {};
+  function keepNameOnce(name) { if (name) _keepNames[String(name)] = true; }
+
   function _fileBackendWrite(diagramType, dsl, fileDir) {
     // Fire-and-forget POST to /autosave. We don't await: localStorage
     // already has the canonical sync copy. Errors are logged but don't
     // block the localStorage write.
     // Use window.fetch so test sandboxes can stub it via global.window.fetch.
     try {
-      var body = JSON.stringify({ type: diagramType, dsl: dsl, dir: fileDir || './autosave' });
+      var payload = { type: diagramType, dsl: dsl, dir: fileDir || './autosave' };
+      if (_keepNames[diagramType]) { payload.keepName = true; delete _keepNames[diagramType]; }
+      var body = JSON.stringify(payload);
       window.fetch('/autosave', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -469,6 +476,7 @@ window.MA.autoSave = (function() {
     getLastWrite: getLastWrite,
     noteFileWritten: noteFileWritten,
     onFileRenamed: onFileRenamed,
+    keepNameOnce: keepNameOnce,
     noteFileRenamed: noteFileRenamed,
     noteFileBlocked: noteFileBlocked,
     resetFileBlocked: resetFileBlocked,

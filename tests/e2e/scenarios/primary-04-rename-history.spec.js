@@ -417,10 +417,36 @@ test.describe('primary 手順 4: 社内略語の対応表を確定して顧客�
     await expect(page.locator('#gl-verdict')).toHaveAttribute('data-remaining', '0');
 
     await page.locator('#btn-unify-cancel').click();
+    // BLK-owner-20260924-2232-1: 元に戻す履歴はタブごと。途中で新しいタブを 1 枚開いて状態遷移図を書き、
+    // 元のタブへ戻ってから Ctrl+Z を押しても、別のタブの本文は入らず、タブ名も変わらない。
+    const namesBefore = await page.evaluate(() => window.MA.workspace.list().map((d) => d.name));
+    await page.locator('#btn-tab-new').click();
+    await page.waitForTimeout(400);
+    await page.locator('#editor').fill('@startuml\n[*] --> Idle\nIdle --> Run : start\n@enduml');
+    await page.waitForTimeout(600);
+    await page.locator('#tab-bar .tab[data-doc-name="spi_init_sequence"]').click();
+    await page.waitForTimeout(600);
     await page.locator('#editor').press('Control+z');
     await page.waitForTimeout(800);
     // 表を当てたのは 1 手なので、Ctrl+Z 1 回で開いている図が元の綴りに戻る。
     expect(await page.locator('#editor').inputValue()).toContain('SpiDrv');
+    // 押し続けても、このタブの最初の状態で止まる (別のタブの本文・名前は入らない)。
+    for (let i = 0; i < 3; i++) {
+      await page.locator('#editor').press('Control+z');
+      await page.waitForTimeout(300);
+    }
+    const ed = await page.locator('#editor').inputValue();
+    expect(ed).toContain('SpiDrv');
+    expect(ed).not.toContain('Idle --> Run');
+    await expect(page.locator('#btn-undo')).toBeDisabled();
+    const namesAfter = await page.evaluate(() => window.MA.workspace.list().map((d) => d.name));
+    expect(namesAfter.slice(0, namesBefore.length)).toEqual(namesBefore);
+    await expect(page.locator('#tab-bar .tab.active')).toHaveAttribute('data-doc-name', 'spi_init_sequence');
+    // やり直しは表を当てた後へ 1 段だけ進む。
+    await page.locator('#editor').press('Control+y');
+    await page.waitForTimeout(500);
+    expect(await page.locator('#editor').inputValue()).toContain('Spi_Driver');
+    expect(await page.locator('#editor').inputValue()).not.toContain('Idle --> Run');
   });
 });
 
