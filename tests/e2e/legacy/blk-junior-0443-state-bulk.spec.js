@@ -43,7 +43,7 @@ test.describe('BLK-junior-0443 状態遷移図の一括末尾追加', () => {
   test('種類に「一括 (複数行)」があり、書き方の案内が出る', async ({ page }) => {
     await newState(page);
     await expect(page.locator('#st-tail-bulk-hint')).toBeVisible();
-    await expect(page.locator('#st-tail-add')).toHaveText('+ まとめて末尾に追加');
+    await expect(page.locator('#st-tail-add')).toHaveText('+ まとめて追加');
   });
 
   test('state 4 つ + 遷移 6 本が 1 回の確定でまとめて入る', async ({ page }) => {

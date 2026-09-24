@@ -1503,28 +1503,28 @@ window.MA.modules.plantumlClass = (function() {
       var html2 = '';
       if (kind === 'class' || kind === 'interface' || kind === 'abstract') {
         html2 =
-          P.fieldHtml('Alias', 'cl-tail-alias', '', '例: User') +
-          P.fieldHtml('Label', 'cl-tail-label', '', '省略可') +
-          P.fieldHtml('Stereotype', 'cl-tail-stereo', '', '<<X>> の X 部分のみ') +
-          P.fieldHtml('Generics (カンマ区切り)', 'cl-tail-generics', '', '例: T,K,V') +
+          P.fieldHtml('名前', 'cl-tail-alias', '', '例: User') +
+          P.fieldHtml('表示名', 'cl-tail-label', '', '省略可') +
+          P.fieldHtml('ステレオタイプ', 'cl-tail-stereo', '', '<<X>> の X 部分のみ') +
+          P.fieldHtml('型引数 (カンマ区切り)', 'cl-tail-generics', '', '例: T,K,V') +
           GP.fieldHtml('class', 'cl-tail', parsedData.groups) +
-          P.primaryButtonHtml('cl-tail-add', '+ ' + kind + ' 追加');
+          P.primaryButtonHtml('cl-tail-add', '+ 追加');
       } else if (kind === 'enum') {
         html2 =
-          P.fieldHtml('Alias', 'cl-tail-alias', '', '例: Color') +
+          P.fieldHtml('名前', 'cl-tail-alias', '', '例: Color') +
           P.fieldHtml('値 (改行区切り)', 'cl-tail-values', '', 'RED\\nGREEN\\nBLUE') +
           GP.fieldHtml('class', 'cl-tail', parsedData.groups) +
-          P.primaryButtonHtml('cl-tail-add', '+ enum 追加');
+          P.primaryButtonHtml('cl-tail-add', '+ 追加');
       } else if (kind === 'package' || kind === 'namespace') {
         html2 =
-          P.fieldHtml('Label', 'cl-tail-label', '', '例: domain') +
-          P.primaryButtonHtml('cl-tail-add', '+ ' + kind + ' 追加');
+          P.fieldHtml('表示名', 'cl-tail-label', '', '例: domain') +
+          P.primaryButtonHtml('cl-tail-add', '+ 追加');
       } else if (kind === 'relation') {
         // BLK-junior-20260908-1203: From/To のどちらが親かがフォームから読めず、
         // 継承を逆向きに張ってしまう。種類ごとの呼び名を見出しに出し、
         // 「押すとこう入る」の 1 行と ⇄ 入替を添えて、追加する前に確かめられるようにする。
         html2 =
-          P.selectFieldHtml('Kind', 'cl-tail-rkind', [
+          P.selectFieldHtml('種類', 'cl-tail-rkind', [
             { value: 'association',    label: 'Association (--)', selected: true },
             { value: 'inheritance',    label: 'Inheritance (<|--)' },
             { value: 'implementation', label: 'Implementation (<|..)' },
@@ -1537,24 +1537,24 @@ window.MA.modules.plantumlClass = (function() {
           '<button id="cl-tail-rswap" type="button" style="font-size:11px;padding:3px 10px;margin:0 0 8px;cursor:pointer;">⇄ 入替</button>' +
           _roleSelectHtml('cl-tail-to', 'to', 'association', allOpts) +
           '<div id="cl-tail-rpreview" style="margin-bottom:8px;padding:4px 6px;font-family:var(--font-mono);font-size:11px;color:var(--text-secondary);background:var(--bg-tertiary);border-radius:3px;word-break:break-all;"></div>' +
-          P.fieldHtml('Label', 'cl-tail-rlabel', '', '任意') +
-          P.primaryButtonHtml('cl-tail-add', '+ Relation 追加');
+          P.fieldHtml('ラベル', 'cl-tail-rlabel', '', '任意') +
+          P.primaryButtonHtml('cl-tail-add', '+ 追加');
       } else if (kind === 'note') {
         var noteTargets = elements.map(function(e) { return { value: e.id, label: e.label || e.id }; });
         if (noteTargets.length === 0) noteTargets = [{ value: '', label: '（要素なし）' }];
         html2 =
-          P.selectFieldHtml('Target', 'cl-tail-ntarget', noteTargets) +
-          P.selectFieldHtml('Position', 'cl-tail-npos', [
+          P.selectFieldHtml('付ける相手', 'cl-tail-ntarget', noteTargets) +
+          P.selectFieldHtml('位置', 'cl-tail-npos', [
             { value: 'left', label: 'Left', selected: true },
             { value: 'right', label: 'Right' },
             { value: 'top', label: 'Top' },
             { value: 'bottom', label: 'Bottom' },
           ]) +
           '<div style="margin-bottom:6px;">' +
-            '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Text (改行可)</label>' +
+            '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">本文 (改行可)</label>' +
             '<textarea id="cl-tail-ntext" style="width:100%;min-height:60px;font-family:inherit;font-size:12px;"></textarea>' +
           '</div>' +
-          P.primaryButtonHtml('cl-tail-add', '+ Note 追加');
+          P.primaryButtonHtml('cl-tail-add', '+ 追加');
       }
       detailEl.innerHTML = html2;
       if (kind === 'relation') {

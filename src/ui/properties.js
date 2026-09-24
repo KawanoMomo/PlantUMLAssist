@@ -134,8 +134,31 @@ window.MA.properties = (function() {
   // 「その他の矢印…」の開閉を配線する。
   function bindArrowPicker(id, onPick) {
     var hidden = document.getElementById(id);
+    // 押した矢印に当たりを移す。描き直さない窓 (挿入の窓・末尾に追加) でも、今どれを選んでいるかが見える。
+    var paint = function(v) {
+      var root = document.getElementById(id + '-seg');
+      var segs = root ? root.querySelectorAll('.prop-seg') : [];
+      for (var i = 0; i < segs.length; i++) {
+        var on = segs[i].getAttribute('data-value') === v;
+        segs[i].classList.toggle('active', on);
+        segs[i].setAttribute('aria-pressed', on ? 'true' : 'false');
+        segs[i].style.background = on ? 'var(--accent)' : 'var(--bg-tertiary)';
+        segs[i].style.borderColor = on ? 'var(--accent)' : 'var(--border)';
+        segs[i].style.color = on ? '#fff' : 'var(--text-primary)';
+      }
+      var box = document.getElementById(id + '-more');
+      var rows = box ? box.querySelectorAll('.prop-arrow-item') : [];
+      for (var j = 0; j < rows.length; j++) {
+        var hit = rows[j].getAttribute('data-value') === v;
+        rows[j].classList.toggle('active', hit);
+        rows[j].setAttribute('aria-pressed', hit ? 'true' : 'false');
+        rows[j].style.background = hit ? 'rgba(124,140,248,0.18)' : 'transparent';
+        rows[j].style.borderLeftColor = hit ? 'var(--accent)' : 'transparent';
+      }
+    };
     var apply = function(v) {
       if (hidden) hidden.value = v;
+      paint(v);
       onPick(v);
     };
     var seg = document.getElementById(id + '-seg');

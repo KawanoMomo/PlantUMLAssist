@@ -1805,12 +1805,114 @@ window.MA.modules.plantumlActivity = (function() {
     });
   }
 
+  // BLK-owner-20260924-2259-prune: 追加ペインのフォームは 1 つ。「末尾に追加」と
+  // 「＋ この位置に挿入」が縦に 2 つ並び、同じ要素 (repeat / fork) を別の名前・別の言語で
+  // 書いていたので、位置は他の図種と同じ「追加する位置」で選ぶ形に畳んだ。
+  // 既定は「図の末尾」(= stop の前。従来の末尾に追加と同じ)。途中の位置は design 4b の
+  // 挿入位置 (activityInsert.insertPoints) をそのまま並べ、置けない要素はそこで止める。
+  var OTHER_BARE = [
+    { value: 'break', label: '中断 (break)' },
+    { value: 'detach', label: '切り離し (detach)' },
+    { value: 'kill', label: '打ち切り (kill)' },
+  ];
+
+  // 追加する位置の候補。先頭は「図の末尾」、続けて挿入位置を構造の言葉で。
+  function tailPlaceOptions(dsl) {
+    var AI = window.MA.activityInsert;
+    var out = [{ value: 'tail', label: '図の末尾', line: 0, position: 'tail', inFlow: true }];
+    var pts = AI ? AI.insertPoints(dsl) : [];
+    for (var i = 0; i < pts.length; i++) {
+      out.push({
+        value: 'p' + i,
+        label: new Array((pts[i].depth || 0) + 1).join('　') + pts[i].label,
+        line: pts[i].line,
+        position: pts[i].position,
+        inFlow: !!pts[i].inFlow,
+      });
+    }
+    return out;
+  }
+
+  // その位置にその種類を置けるか。「図の末尾」は従来どおり何でも置ける。
+  // 終了 (end) は停止 (stop) と同じ場所に置けるものとして扱う。
+  function tailKindAllowed(dsl, place, kind, sub) {
+    if (!place || place.value === 'tail') return true;
+    var AI = window.MA.activityInsert;
+    if (!AI) return false;
+    var k = kind === 'other' ? (sub || 'break') : (kind === 'end' ? 'stop' : kind);
+    return AI.isAllowed(dsl, place.line, k);
+  }
+
+  // フォームの値から 1 回ぶんの書き換えを作る。place が「図の末尾」なら流れの終端の手前、
+  // それ以外は選んだ位置 (その行の後 / start の前)。
+  function addFromTailForm(text, place, kind, v) {
+    v = v || {};
+    var atTail = !place || place.value === 'tail';
+    var line = atTail ? 0 : place.line;
+    var pos = atTail ? 'after' : place.position;
+    if (kind === 'action') {
+      return atTail ? addAction(text, v.text) : addActionAtLine(text, line, pos, v.text || '');
+    }
+    if (kind === 'start' || kind === 'stop' || kind === 'end') {
+      return atTail ? insertBeforeEnd(text, kind) : _insertBareAtLine(text, line, pos, kind);
+    }
+    if (kind === 'other') {
+      var word = v.sub || 'break';
+      return atTail ? insertBeforeFlowEnd(text, word) : _insertBareAtLine(text, line, pos, word);
+    }
+    if (kind === 'if') {
+      if (atTail) return addIf(text, v.cond || '', v.thenLabel || 'yes', v.elseLabel || null);
+      return addControlAtLine(text, line, pos, 'if', {
+        cond: v.cond || '', thenLabel: v.thenLabel || 'yes', elseLabel: v.elseLabel || null,
+      });
+    }
+    if (kind === 'while') {
+      if (atTail) return addWhile(text, v.cond || '', v.label);
+      return addControlAtLine(text, line, pos, 'while', { cond: v.cond || '', label: v.label || 'yes' });
+    }
+    if (kind === 'repeat') {
+      if (atTail) return addRepeat(text, v.cond || '', v.label);
+      return addControlAtLine(text, line, pos, 'repeat', { cond: v.cond || '', label: v.label || 'yes' });
+    }
+    if (kind === 'fork') {
+      var n = parseInt(v.branchCount, 10) || 2;
+      return atTail ? addFork(text, n) : addControlAtLine(text, line, pos, 'fork', { branchCount: n });
+    }
+    if (kind === 'swimlane') {
+      return atTail ? addSwimlane(text, v.name || '') : addSwimlaneAtLine(text, line, pos, v.name || '');
+    }
+    if (kind === 'note') {
+      if (!atTail) return addNoteAtLine(text, line, pos, { position: 'right', text: v.text || '' });
+      var f = fmtNote('right', v.text || '');
+      var rows = Array.isArray(f) ? f : [f];
+      var out = text;
+      for (var i = 0; i < rows.length; i++) out = insertBeforeFlowEnd(out, rows[i]);
+      return out;
+    }
+    return text;
+  }
+
+  // 「各行をアクションとして一括追加」。途中の位置でも書いた順に並ぶように、
+  // 1 行ずつ前の行の直後へ入れていく。
+  function addActionsFromTailForm(text, place, block) {
+    if (!place || place.value === 'tail') return addActions(text, block);
+    var items = splitActionLines(block);
+    var out = text;
+    for (var i = 0; i < items.length; i++) {
+      out = addActionAtLine(out, place.line + i, place.position, items[i]);
+    }
+    return out;
+  }
+
   function _renderNoSelection(parsedData, propsEl, ctx) {
     var P = window.MA.properties;
+    var esc = window.MA.htmlUtils.escHtml;
+    var places = tailPlaceOptions(ctx.getMmdText());
     var html =
       // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">末尾に追加</label>' +
+        // 置く場所を選べるので、見出しは「末尾」を名乗らない (状態遷移図と同じ)。
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">追加</label>' +
         P.selectFieldHtml('種類', 'ac-tail-kind', [
           { value: 'action', label: 'アクション (:…;)', selected: true },
           { value: 'start', label: '開始 (start)' },
@@ -1820,117 +1922,133 @@ window.MA.modules.plantumlActivity = (function() {
           { value: 'while', label: '繰り返し (while)' },
           { value: 'repeat', label: '後判定の繰り返し (repeat)' },
           { value: 'fork', label: '並行 (fork)' },
-          { value: 'swimlane', label: 'レーン (swimlane)' }
+          { value: 'swimlane', label: 'レーン (swimlane)' },
+          { value: 'note', label: '注釈 (note)' },
+          // 置く機会の少ない 1 行 (中断・切り離し・打ち切り) はここに畳む。
+          { value: 'other', label: 'その他 (中断・切り離し・打ち切り)' }
         ]) +
+        '<div id="ac-tail-place">' +
+          P.selectFieldHtml('追加する位置', 'ac-tail-where', places.map(function(p, i) {
+            return { value: p.value, label: p.label, selected: i === 0 };
+          })) +
+        '</div>' +
         '<div id="ac-tail-detail" style="margin-top:6px;"></div>' +
-      '</div>' +
-      // design 4b: 位置を選ぶと、その位置に置ける要素だけがメニューに出る。
-      '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">＋ この位置に挿入</label>' +
-        '<div id="ac-ins-point-wrap"></div>' +
-        '<div id="ac-ins-kind-wrap"></div>' +
-        '<div id="ac-ins-detail" style="margin-top:6px;"></div>' +
       '</div>';
     propsEl.innerHTML = html;
-    _renderInsertHere(ctx, propsEl);
 
+    function currentPlace() {
+      var w = document.getElementById('ac-tail-where');
+      var v = w ? w.value : 'tail';
+      for (var i = 0; i < places.length; i++) if (places[i].value === v) return places[i];
+      return places[0];
+    }
+    function val(id) {
+      var el = document.getElementById(id);
+      return el ? el.value : '';
+    }
+    function lbl(text) {
+      return '<label style="display:block;font-size:10px;color:var(--text-secondary);">' + text + '</label>';
+    }
+
+    // 置けない位置では確定ボタンを押せなくし、理由を言う (押しても何も起きない、にしない)。
+    function paintAllowed() {
+      var kind = val('ac-tail-kind');
+      var ok = tailKindAllowed(ctx.getMmdText(), currentPlace(), kind, val('ac-tail-other'));
+      var note = document.getElementById('ac-tail-where-note');
+      if (note) note.style.display = ok ? 'none' : 'block';
+      ['ac-tail-add', 'ac-tail-add-lines'].forEach(function(id) {
+        var b = document.getElementById(id);
+        if (b) b.disabled = !ok;
+      });
+    }
 
     var renderTailDetail = function() {
-      var kind = document.getElementById('ac-tail-kind').value;
+      var kind = val('ac-tail-kind');
       var detailEl = document.getElementById('ac-tail-detail');
       var html2 = '';
       if (kind === 'action') {
         html2 =
-          '<label style="display:block;font-size:10px;color:var(--text-secondary);">Text (改行可)</label>' +
+          lbl('処理 (改行可)') +
           window.MA.reuseModal.buttonHtml('ac-tail-reuse') +
           '<textarea id="ac-tail-text" style="width:100%;min-height:50px;font-family:inherit;font-size:12px;"></textarea>' +
           // BLK-junior-20260915-0606: アクション本文に打つのは先輩のクラス図にある
           // 実在メソッド名。名前帳を欄の下に出さないと、クラス図タブを別に開いて
           // 絞り込み、名前を控えてから戻るという往復が図種ごとに要る。
-          P.vocabPickerHtml('ac-tail-text-vocab', { roles: ['method'], callSuffix: true }) +
-          P.primaryButtonHtml('ac-tail-add', '+ Action 追加') +
-          P.primaryButtonHtml('ac-tail-add-lines', '+ 各行を Action として一括追加') +
-          '<div id="ac-tail-lines-hint" style="font-size:10px;color:var(--text-secondary);margin-top:4px;">' +
-            '1 行 = 1 アクション。空行は無視されます</div>';
-      } else if (kind === 'start' || kind === 'stop' || kind === 'end') {
-        html2 = P.primaryButtonHtml('ac-tail-add', '+ ' + kind + ' 追加');
+          P.vocabPickerHtml('ac-tail-text-vocab', { roles: ['method'], callSuffix: true });
       } else if (kind === 'if') {
         html2 =
-          P.fieldHtml('Condition', 'ac-tail-cond', '', '例: 認証成功?') +
-          P.fieldHtml('Then label', 'ac-tail-thenlbl', 'yes') +
-          P.fieldHtml('Else label (空で else 省略)', 'ac-tail-elselbl', 'no') +
-          P.primaryButtonHtml('ac-tail-add', '+ if 追加');
+          P.fieldHtml('条件', 'ac-tail-cond', '', '例: 認証成功?') +
+          P.fieldHtml('yes のラベル', 'ac-tail-thenlbl', 'yes') +
+          P.fieldHtml('no のラベル (空で no 側なし)', 'ac-tail-elselbl', 'no');
       } else if (kind === 'while') {
         html2 =
-          P.fieldHtml('Condition', 'ac-tail-cond', '') +
-          P.fieldHtml('Label', 'ac-tail-lbl', 'yes') +
-          P.primaryButtonHtml('ac-tail-add', '+ while 追加');
+          P.fieldHtml('条件', 'ac-tail-cond', '', '例: 残りあり?') +
+          P.fieldHtml('yes のラベル', 'ac-tail-lbl', 'yes');
       } else if (kind === 'repeat') {
         html2 =
-          P.fieldHtml('While condition', 'ac-tail-cond', '') +
-          P.fieldHtml('Label', 'ac-tail-lbl', 'yes') +
-          P.primaryButtonHtml('ac-tail-add', '+ repeat 追加');
+          P.fieldHtml('続ける条件', 'ac-tail-cond', '', '例: 残りあり?') +
+          P.fieldHtml('yes のラベル', 'ac-tail-lbl', 'yes');
       } else if (kind === 'fork') {
-        html2 =
-          P.fieldHtml('Branches', 'ac-tail-bcount', '2') +
-          P.primaryButtonHtml('ac-tail-add', '+ fork 追加');
+        html2 = P.fieldHtml('枝の数', 'ac-tail-bcount', '2');
       } else if (kind === 'swimlane') {
-        html2 =
-          P.fieldHtml('Label', 'ac-tail-lbl', '') +
-          P.primaryButtonHtml('ac-tail-add', '+ swimlane 追加');
+        html2 = P.fieldHtml('レーン名', 'ac-tail-lbl', '');
+      } else if (kind === 'note') {
+        html2 = lbl('注釈の本文 (改行可)') +
+          '<textarea id="ac-tail-ntext" style="width:100%;min-height:50px;font-family:inherit;font-size:12px;"></textarea>';
+      } else if (kind === 'other') {
+        html2 = P.selectFieldHtml('足すもの', 'ac-tail-other', OTHER_BARE.map(function(o, i) {
+          return { value: o.value, label: o.label, selected: i === 0 };
+        }));
+      }
+      html2 +=
+        '<div id="ac-tail-where-note" style="display:none;font-size:10px;color:var(--text-secondary);margin:4px 0 6px 0;line-height:1.5;">' +
+          esc('この位置には置けません。フローの外 (start の前・stop の後) に置けるのはレーンと開始・停止だけです') + '</div>' +
+        P.primaryButtonHtml('ac-tail-add', '+ 追加');
+      if (kind === 'action') {
+        html2 +=
+          P.primaryButtonHtml('ac-tail-add-lines', '+ 各行をアクションとして一括追加') +
+          '<div id="ac-tail-lines-hint" style="font-size:10px;color:var(--text-secondary);margin-top:4px;">' +
+            '1 行 = 1 アクション。空行は無視されます</div>';
       }
       detailEl.innerHTML = html2;
       // 一括欄は「既に他の図にある行」を打ち直させないためのボタンを持つ。
       window.MA.reuseModal.bindButton('ac-tail-reuse', 'plantuml-activity', 'ac-tail-text');
       // 一括追加の欄でもあるので、チップは欄を置き換えずカーソル位置に差し込む。
       P.bindVocabPicker('ac-tail-text-vocab', 'ac-tail-text', null, { insert: 'caret' });
+      P.bindEvent('ac-tail-other', 'change', paintAllowed);
 
-      P.bindEvent('ac-tail-add-lines', 'click', function() {
-        var t0 = ctx.getMmdText();
-        var out0 = addActions(t0, document.getElementById('ac-tail-text').value);
-        if (out0 !== t0) {
-          window.MA.history.pushHistory();
-          ctx.setMmdText(out0);
-          ctx.onUpdate();
-        }
-      });
-
-      P.bindEvent('ac-tail-add', 'click', function() {
-        var t = ctx.getMmdText();
-        var k = document.getElementById('ac-tail-kind').value;
-        var out = t;
-        if (k === 'action') {
-          var txt = document.getElementById('ac-tail-text').value;
-          out = addAction(t, txt);
-        } else if (k === 'start') {
-          out = insertBeforeEnd(t, 'start');
-        } else if (k === 'stop') {
-          out = insertBeforeEnd(t, 'stop');
-        } else if (k === 'end') {
-          out = insertBeforeEnd(t, 'end');
-        } else if (k === 'if') {
-          var c = document.getElementById('ac-tail-cond').value;
-          var tl = document.getElementById('ac-tail-thenlbl').value || 'yes';
-          var el = document.getElementById('ac-tail-elselbl').value;
-          out = addIf(t, c, tl, el || null);
-        } else if (k === 'while') {
-          out = addWhile(t, document.getElementById('ac-tail-cond').value, document.getElementById('ac-tail-lbl').value);
-        } else if (k === 'repeat') {
-          out = addRepeat(t, document.getElementById('ac-tail-cond').value, document.getElementById('ac-tail-lbl').value);
-        } else if (k === 'fork') {
-          var n = parseInt(document.getElementById('ac-tail-bcount').value, 10) || 2;
-          out = addFork(t, n);
-        } else if (k === 'swimlane') {
-          out = addSwimlane(t, document.getElementById('ac-tail-lbl').value);
-        }
+      function commit(out, t) {
         if (out !== t) {
           window.MA.history.pushHistory();
           ctx.setMmdText(out);
           ctx.onUpdate();
         }
+      }
+      P.bindEvent('ac-tail-add-lines', 'click', function() {
+        var t0 = ctx.getMmdText();
+        if (!tailKindAllowed(t0, currentPlace(), 'action')) return;
+        commit(addActionsFromTailForm(t0, currentPlace(), val('ac-tail-text')), t0);
       });
+      P.bindEvent('ac-tail-add', 'click', function() {
+        var t = ctx.getMmdText();
+        var k = val('ac-tail-kind');
+        var place = currentPlace();
+        if (!tailKindAllowed(t, place, k, val('ac-tail-other'))) return;
+        commit(addFromTailForm(t, place, k, {
+          text: k === 'note' ? val('ac-tail-ntext') : val('ac-tail-text'),
+          cond: val('ac-tail-cond'),
+          thenLabel: val('ac-tail-thenlbl'),
+          elseLabel: val('ac-tail-elselbl'),
+          label: val('ac-tail-lbl'),
+          name: val('ac-tail-lbl'),
+          branchCount: val('ac-tail-bcount'),
+          sub: val('ac-tail-other'),
+        }), t);
+      });
+      paintAllowed();
     };
     P.bindEvent('ac-tail-kind', 'change', renderTailDetail);
+    P.bindEvent('ac-tail-where', 'change', paintAllowed);
     // design 2b: 種別はチップ 1 クリックで決める。値の持ち主は上の select のまま。
     window.MA.tailKindChips.mount('ac-tail-kind');
     renderTailDetail();
@@ -2686,6 +2804,11 @@ window.MA.modules.plantumlActivity = (function() {
     insertBareAtLine: _insertBareAtLine,
     addSwimlaneAtLine: addSwimlaneAtLine,
     addNoteAtLine: addNoteAtLine,
+    // BLK-owner-20260924-2259-prune: 追加ペインの 1 つのフォーム (追加する位置 + 種類)
+    tailPlaceOptions: tailPlaceOptions,
+    tailKindAllowed: tailKindAllowed,
+    addFromTailForm: addFromTailForm,
+    addActionsFromTailForm: addActionsFromTailForm,
     addElseifBranch: addElseifBranch,
     addElseBranch: addElseBranch,
     addForkBranch: addForkBranch,

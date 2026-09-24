@@ -69,12 +69,18 @@ test.describe('junior シーケンス 4.5: 帯の下にメッセージを足す'
     await page.locator('#seq-band-choice-outside').click();
     await page.locator('#seq-mod-from').selectOption('B');
     await page.locator('#seq-mod-to').selectOption('C');
+    // BLK-owner-20260924-2259-prune: 窓の矢印も末尾に追加・選択パネルと同じ 4 つのボタン +「その他の矢印…」で選ぶ。
+    const seg = page.locator('#seq-mod-arrow-seg .prop-seg');
+    await expect(seg).toHaveCount(4);
+    await expect(page.locator('#seq-mod-arrow-more-btn')).toContainText('その他の矢印');
+    await seg.filter({ hasText: '非同期' }).click();
+    await expect(seg.filter({ hasText: '非同期' })).toHaveAttribute('aria-pressed', 'true');
     await page.locator('#seq-mod-confirm').click();
     await page.waitForTimeout(1500);
 
     const lines = (await getEditorText(page)).split('\n').map((l) => l.trim());
     const deactivateIdx = lines.indexOf('deactivate B');
-    const newIdx = lines.findIndex((l) => /^B -> C/.test(l) && !/work/.test(l));
+    const newIdx = lines.findIndex((l) => /^B ->> C/.test(l) && !/work/.test(l));
     expect(deactivateIdx).toBeGreaterThan(-1);
     expect(newIdx).toBe(deactivateIdx + 1);
     const box = await band.bandBox(page);
