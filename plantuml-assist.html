@@ -1876,13 +1876,17 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
    「ツール ▾」も消し、機能の入口は Ctrl+K だけにする。 */
 #tab-bar.tools-hide-tool-btn #btn-tab-tools { display: none; }
 #btn-tab-tools[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); }
-/* BLK-primary-20260908-1803: 「ツール ▾」を出さないときの小さな入口 (他 N 件)。
+/* BLK-primary-20260908-1803: 「ツール ▾」を出さないときの入口 (右端の「ツール ▾」)。
    タブ列を静かに保ったまま、畳んだ機能の一覧を 1 クリックで開けるようにする。 */
 #tab-bar.tools-hide-mini-btn #btn-tab-tools-mini { display: none; }
-#btn-tab-tools-mini {
-  color: var(--text-secondary);
-  font-size: 10px;
-  padding: 1px 5px;
+/* design 7a / 9a / 10a: 入口は枠付きの「ツール ▾」をタブ列の右端に置く。図のタブが増えて
+   タブ列が横に流れても見えるよう、右端に貼り付ける。 */
+#tab-bar #btn-tab-tools-mini {
+  margin-left: auto;
+  position: sticky;
+  right: 0;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 #btn-tab-tools-mini:hover { color: var(--accent); }
 #btn-tab-tools-mini[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); }
@@ -7508,9 +7512,10 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <!-- BLK-primary-20260908-0823-design (7a): 機能ボタンを 6 分類のメニューに畳む -->
         <button class="tab-tool" id="btn-tab-tools" aria-expanded="false" aria-controls="tool-menu"
                 title="ツールを分類から選ぶ (Ctrl+K でも同じ操作が引ける)">ツール ▾</button>
-        <!-- BLK-primary-20260908-1803: 静かなタブ列でも、畳んだ機能の入口を 1 クリック分残す -->
+        <!-- BLK-primary-20260908-1803: 静かなタブ列でも、畳んだ機能の入口を 1 クリック分残す。
+             BLK-builder-20260924-1416-3 (design 7a / 9a / 10a): 文字は「ツール ▾」、置き場所はタブ列の右端 -->
         <button class="tab-tool tab-tool-mini" id="btn-tab-tools-mini" aria-expanded="false" aria-controls="tool-menu"
-                title="畳んでいるツールの一覧を開く (Ctrl+K でも同じ操作が引ける)">他 0 件</button>
+                title="畳んでいるツールを分類から選ぶ (Ctrl+K でも同じ操作が引ける)">ツール ▾</button>
         <!-- BLK-human-20260923-1700 (design 10a): 👀 他フォルダ と 並べて比較 は
              FILES ツリーの「読むだけ」節へ引っ越した (id はそのまま) -->
         <!-- BLK-junior-20260907-2009-wish: やり直し途中の控えに印を付け、📂 一覧で畳む -->

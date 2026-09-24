@@ -402,3 +402,41 @@ test('手順11 ツール ▾ の「確かめる」は 名前と系統 / まと�
   await pane.locator('.tool-menu-item[data-target="btn-tab-design"]').click();
   await page.waitForSelector('#dc-modal .dc-table');
 });
+
+// BLK-builder-20260924-1416-3 (design 7a / 9a / 10a): ツールの入口は枠付きの「ツール ▾」をタブ列の右端に置く。
+// 以前は「他 28 件」という札が ＋ の直後に出て、何の件数か押すまで読めず、図のタブが増えると位置もずれた。
+test('手順11 既定のタブ列ではツールの入口が右端の「ツール ▾」で、図のタブが増えても右端に見えている', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR, { foldedTools: true });
+  const bar = page.locator('#tab-bar');
+  const tools = page.locator('#btn-tab-tools-mini');
+  await expect(tools).toBeVisible();
+  await expect(tools).toHaveText('ツール ▾');
+  // 畳んでいる件数は title で読める。
+  await expect(tools).toHaveAttribute('title', /畳んでいるツール \d+ 件/);
+  // 枠付き (7a / 9a: ツール ▾ だけを枠付きで)。
+  const border = await tools.evaluate((el) => getComputedStyle(el).borderTopStyle);
+  expect(border).toBe('solid');
+
+  // 右端: 札の右端がタブ列の右端 (内側の余白ぶん) に揃い、＋ とは離れている。
+  const right = async () => {
+    const b = await bar.boundingBox();
+    const t = await tools.boundingBox();
+    return { bar: b, tools: t };
+  };
+  let r = await right();
+  expect(r.bar && r.tools).toBeTruthy();
+  expect((r.bar.x + r.bar.width) - (r.tools.x + r.tools.width)).toBeLessThanOrEqual(8);
+  const plus = await page.locator('#btn-tab-new').boundingBox();
+  expect(r.tools.x - (plus.x + plus.width)).toBeGreaterThan(20);
+
+  // 図のタブを増やしてタブ列が横に流れても、入口は右端に見えたまま押せる。
+  for (let i = 0; i < 6; i++) await page.locator('#btn-tab-new').click();
+  await expect(page.locator('#tab-bar .tab')).toHaveCount(7);
+  r = await right();
+  expect((r.bar.x + r.bar.width) - (r.tools.x + r.tools.width)).toBeLessThanOrEqual(8);
+  await tools.click();
+  await expect(page.locator('#tool-menu')).toBeVisible();
+  await expect(page.locator('#tool-menu .tool-menu-cat .tool-cat-name')).toHaveText([
+    '図をつくる', '書き換える', '探す', '確かめる', 'レビュー', '渡す',
+  ]);
+});

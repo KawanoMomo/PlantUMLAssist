@@ -1724,11 +1724,14 @@ function init() {
     function syncToolButton() {
       bar.classList.toggle('tools-hide-tool-btn',
         !tm.showsToolButton(isFolded(), isQuiet()));
-      // 「ツール ▾」を出さないときは、代わりに「他 N 件」の札を出す。
-      // N は今タブ列から消えているボタンの数 (メニューに載っている数と同じ)。
+      // 「ツール ▾」を出さないときは、代わりに右端の札 (これも「ツール ▾」) を出す。
+      // 畳んで消えているボタンの数 (メニューに載っている数と同じ) は title で読める。
       bar.classList.toggle('tools-hide-mini-btn',
         !tm.showsMiniButton(isFolded(), isQuiet()));
-      if (mini) mini.textContent = tm.miniLabel(foldable().length);
+      if (mini) {
+        mini.textContent = tm.miniLabel(foldable().length);
+        if (tm.miniTitle) mini.title = tm.miniTitle(foldable().length);
+      }
     }
 
     function applyQuiet(quiet) {

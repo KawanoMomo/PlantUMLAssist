@@ -1,6 +1,6 @@
 // @ts-check
 // BLK-primary-20260908-1803 の画面写真。
-// 変更後: 静かなタブ列に「他 N 件」の札が出て、押すと畳んだツールの一覧が開く。
+// 変更後: 静かなタブ列に「ツール ▾」の札 (旧「他 N 件」) が出て、押すと畳んだツールの一覧が開く。
 // 変更前 (SHOT_BEFORE=1): タブ列に入口が無く、Ctrl+K でコマンド名を打つしかなかった。
 const { test } = require('@playwright/test');
 const { gotoApp, shotOut, saveDirFor } = require('../helpers');
