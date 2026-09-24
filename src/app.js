@@ -3796,7 +3796,8 @@ function initCommandPalette() {
       // BLK-owner-20260924-1332-prune: 旧 🔍 名前突合の行はここに置かない。▦ 突合ボードの 1 行
       // (id 'tab-cross') の語に「名前突合」「表記揺れ」「name audit」を入れ、その語で引いたときは
       // ボードを「名前/表記揺れ」で絞って開く。
-      { id: 'tab-handoff', title: '引き継ぎパッケージを作る / Handoff package', hint: 'Tabs', keywords: ['handoff', 'package', 'zip', 'ひきつぎ', 'ぱっけーじ'], button: 'btn-tab-handoff', run: function() { clickById('btn-tab-handoff'); } },
+      // BLK-owner-20260925-0235-prune: チェックリストと zip の書き出しは同じ窓。行も 1 つにし、旧名は引く語に残す。
+      { id: 'handover-board', title: '引き継ぎ（チェックリストと zip）', hint: 'Handover', keywords: ['handover', '引き継ぎ', 'ひきつぎ', 'checklist', 'チェックリスト', '新人', '置換済み', 'note', 'svg', '渡してよい図を数える', '引き継ぎチェックリスト', 'handoff', 'package', 'zip', 'ぱっけーじ', '引き継ぎパッケージを作る', 'Handoff package', '引き継ぎパッケージ', '対象確認', '渡す', '引き継ぎ zip'], button: 'btn-tab-handover', run: function() { openHandoverBoard(); } },
       { id: 'tab-delivery', title: '納品パッケージを作る / Delivery package', hint: 'Tabs', keywords: ['delivery', 'package', 'zip', 'のうひん', 'ぱっけーじ', '提出'], button: 'btn-tab-delivery', run: function() { clickById('btn-tab-delivery'); } },
       { id: 'tab-lines', title: '行編集を開く / Line edit', hint: 'Tabs', keywords: ['line', 'edit', 'ぎょう', 'へんしゅう'], button: 'btn-tab-lines', run: function() { clickById('btn-tab-lines'); } },
       // BLK-owner-20260923-1509-prune: 並べる面は 1 つに統合した。パレットの項目は
@@ -3889,7 +3890,6 @@ function initCommandPalette() {
       { id: 'call-graph', title: '呼び出しグラフ（このメソッドを呼んでいる図を辿る）', hint: 'Review', keywords: ['call', 'graph', 'callers', '呼び出し', 'よびだし', 'グラフ', '突合', 'method', 'メソッド'], run: function() { openCallGraph(); } },
       // BLK-owner-20260918-0429-prune: ツール ▾ →「確かめる」にも載せたので button を持つ。
       // パレット側の分類・言い換えはメニューに合わせて自動で揃う。
-      { id: 'handover-board', title: '引き継ぎチェックリスト（渡してよい図を数える）', hint: 'Handover', keywords: ['handover', '引き継ぎ', 'ひきつぎ', 'checklist', 'チェックリスト', '新人', '置換済み', 'note', 'svg'], button: 'btn-tab-handover', run: function() { openHandoverBoard(); } },
       // BLK-primary-20260917-0523-wish: 仕様変更の影響範囲は「名前 → 使っている図」で引く。
       // BLK-owner-20260923-1949-prune: 名前は残し、開くのは ⇄ 一括置換の ▤ 影響を見る 1 つ
       // (その名前が入った状態で開く)。
@@ -25494,57 +25494,31 @@ function buildHandoffPackage(targetDocs) {
   });
 }
 
-// ── 書き出す前の対象確認 ───────────────────────────────────────────────────
+// ── 書き出す前の対象確認 (引き継ぎチェックリストの窓の中) ─────────────────────
 // BLK-primary-20260908-2303-wish: 📦引き継ぎ は開いているタブだけを対象にする
 // ため、保存フォルダに 14 枚あってもタブ 2 枚分しか zip に入らず、受け取った
 // 新人が開いて初めて欠落に気づく。書き出す前に「対象 2 枚 / 保存フォルダ 14 枚」
 // の差分と「保存フォルダ全体を対象にする」への切替を出し、渡す前に直せるようにする。
+// BLK-owner-20260925-0235-prune: 対象確認は別の窓にせず、📋 引き継ぎチェックリストの窓 (#hb-modal) に畳む。
+// 揃っているかを見る一覧と、入れるかを決める一覧を同じ行にする (行の頭の ✔ / − を押して切り替える)。
+// 保存フォルダの図はチェックリストが読んだものをそのまま使う (同じフォルダを 2 回読まない)。
 // 判定は src/core/export-target.js の職掌。ここは材料集めと結線だけ。
 
 var _etMode = null;      // 'open' | 'folder' | null (既定に任せる)
 // BLK-primary-20260909-0403-wish: 「-編集中」等のスクラッチは既定で対象外。
 // 渡す側が意図してチェックを入れたときだけ同梱する (開き直すと既定に戻る)。
 var _etIncludeScratch = false;
+var _etOverrides = {};   // 行ごとの入る / 入らない ({name: true|false})。開き直すと既定に戻る
 var _etFileDocs = [];    // 保存フォルダから読んだ図 ({name, dsl})
 var _etRoles = {};
 var _etDir = '';
 var _etLoading = false;
-var _etSeq = 0;
-var _etOnBuild = null;   // 「書き出す」で呼ぶもの (docs, model) => Promise
-var _etTitle = '';
 var _etResultLine = '';  // 直前の書き出しの対象内訳。結果の 1 行に混ぜる
 
-function _etLoadFolder() {
-  var WS = window.MA.workspace;
-  if (!WS || !WS.listFolder || !_fiFolderMode()) {
-    _etFileDocs = []; _etRoles = {}; _etDir = ''; _etLoading = false;
-    return Promise.resolve(false);
-  }
-  var dir = _wsFileDir();
-  var seq = ++_etSeq;
-  _etLoading = true;
-  return WS.listFolder(dir).then(function(info) {
-    var names = ((info && info.entries) || []).map(function(e) {
-      return e && typeof e === 'object' ? e.name : e;
-    }).filter(function(n) { return n; });
-    var roles = (info && info.roles) || {};
-    return Promise.all(names.map(function(n) {
-      return WS.loadFile(n, dir).then(function(text) {
-        return typeof text === 'string' ? { name: n, dsl: text } : null;
-      }, function() { return null; });
-    })).then(function(docs) {
-      if (seq !== _etSeq) return false;
-      _etFileDocs = docs.filter(function(d) { return d; });
-      _etRoles = roles;
-      _etDir = dir;
-      _etLoading = false;
-      if (document.getElementById('et-modal-content')) renderExportTargetPanel();
-      return true;
-    });
-  }).catch(function() {
-    if (seq === _etSeq) { _etLoading = false; renderExportTargetPanel(); }
-    return false;
-  });
+function _etReset() {
+  _etMode = null;
+  _etIncludeScratch = false;
+  _etOverrides = {};
 }
 
 function _etModel() {
@@ -25560,114 +25534,81 @@ function _etModel() {
     loading: _etLoading,
     mode: _etMode,
     includeScratch: _etIncludeScratch,
+    overrides: _etOverrides,
     detectType: (WS && WS.detectType) ? WS.detectType : null,
   });
 }
 
-function renderExportTargetPanel() {
-  var content = document.getElementById('et-modal-content');
+// 行の頭の印。チェックリストの行 (保存フォルダの図) ごとに入る / 入らないを出す。
+function _etRowIn(m, name) {
+  if (!m) return false;
+  for (var i = 0; i < m.targets.length; i++) if (m.targets[i].name === name) return true;
+  return false;
+}
+
+// 対象に入っている図のうち、チェックリストで揃っていない (赤い) 行の数。
+function _etNotReady(m) {
+  if (!m || !_hbBoard) return 0;
+  var ready = {};
+  _hbBoard.rows.forEach(function(r) { ready[r.name] = r.ready; });
+  return m.targets.filter(function(d) { return ready[d.name] === false; }).length;
+}
+
+// 見出しの下 (対象の的・未確定) と下端 (書き出す) を描く。行の頭は renderHandoverBoard が描く。
+function renderHandoffTargets() {
+  var top = document.getElementById('hb-et');
+  var foot = document.getElementById('hb-foot');
   var m = _etModel();
-  if (!content || !m) return null;
+  if (!top || !foot || !m) return null;
   var esc = window.MA.htmlUtils.escHtml;
-  var BTN = 'background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;padding:4px 12px;font-size:11px;';
 
-  var html = '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">' + esc(_etTitle) + ' — 対象確認</h3>'
-    + '<div style="font-size:11px;color:var(--text-secondary);">書き出す前に、何が入るかをここで確定します。</div>';
-
-  html += '<div id="et-line" data-warn="' + (m.warn ? '1' : '0')
+  var html = '<div id="et-line" data-warn="' + (m.warn ? '1' : '0')
     + '" data-count="' + m.count + '" data-folder="' + m.folderCount + '"'
     + ' data-missing="' + m.missing + '" data-mode="' + esc(m.mode) + '"'
     + ' data-scratch="' + m.scratch + '" data-include-scratch="' + (m.includeScratch ? '1' : '0') + '"'
-    + ' style="margin-top:10px;font-size:12px;'
-    + (m.warn ? 'color:var(--warning,#d98b00);' : 'color:var(--text-primary);') + '">'
+    + (m.warn ? ' class="is-warn"' : '') + '>'
     + esc((m.warn ? '⚠ ' : '') + m.line) + '</div>';
-  if (m.hint) {
-    html += '<div id="et-hint" style="margin-top:2px;font-size:11px;color:var(--text-secondary);">'
-      + esc(m.hint) + '</div>';
-  }
-
-  html += '<div style="margin-top:10px;font-size:10px;color:var(--accent);font-weight:bold;">対象の的</div>'
-    + '<label style="display:block;font-size:11px;color:var(--text-primary);padding:2px 0;">'
-    + '<input type="radio" name="et-mode" id="et-mode-folder" value="folder"'
+  if (m.hint) html += '<div id="et-hint">' + esc(m.hint) + '</div>';
+  html += '<div id="et-modes"><span class="et-cap">対象の的</span>'
+    + '<label><input type="radio" name="et-mode" id="et-mode-folder" value="folder"'
     + (m.mode === 'folder' ? ' checked' : '') + (m.folderAvailable ? '' : ' disabled') + '> '
     + '保存フォルダ全体（' + m.folderCount + ' 枚'
     + (m.folderDir ? ' ・ ' + esc(m.folderDir) : '') + '）'
     + (m.folderAvailable ? '' : ' — 保存先フォルダが未設定です') + '</label>'
-    + '<label style="display:block;font-size:11px;color:var(--text-primary);padding:2px 0;">'
-    + '<input type="radio" name="et-mode" id="et-mode-open" value="open"'
+    + '<label><input type="radio" name="et-mode" id="et-mode-open" value="open"'
     + (m.mode === 'open' ? ' checked' : '') + '> '
     + '開いているタブだけ（' + m.openCount + ' 枚）</label>';
   if (m.scratch > 0) {
-    html += '<label id="et-scratch-row" style="display:block;font-size:11px;padding:4px 0 0;'
-      + 'color:var(--warning,#d98b00);">'
-      + '<input type="checkbox" id="et-include-scratch"' + (m.includeScratch ? ' checked' : '') + '> '
-      + esc(m.scratchLine) + '</label>';
+    html += '<label id="et-scratch-row"><input type="checkbox" id="et-include-scratch"'
+      + (m.includeScratch ? ' checked' : '') + '> ' + esc(m.scratchLine) + '</label>';
   }
-  if (m.loading) {
-    html += '<div id="et-loading" style="font-size:11px;color:var(--text-secondary);">保存フォルダを読んでいます…</div>';
-  }
-
-  html += '<div id="et-list" style="max-height:200px;overflow-y:auto;border:1px solid var(--border);'
-    + 'border-radius:3px;margin-top:8px;padding:4px;">';
-  m.all.forEach(function(d) {
-    var on = m.targets.indexOf(d) !== -1;
-    html += '<div class="et-item" data-name="' + esc(d.name) + '" data-in="' + (on ? '1' : '0')
-      + '" data-open="' + (d.open ? '1' : '0') + '" data-scratch="' + (d.scratch ? '1' : '0')
-      + '" data-role="' + esc(d.role || 'unset')
-      + '" style="font-size:11px;padding:1px 2px;color:'
-      + (on ? 'var(--text-primary)' : 'var(--text-secondary)') + ';">'
-      + (on ? '✔ ' : '− ') + esc(d.name)
-      + '<span style="color:var(--text-secondary);"> '
-      + esc(String(d.diagramType || '').replace('plantuml-', ''))
-      + (d.open ? '' : ' ・ 未オープン')
-      + (d.scratch ? ' ・ ⚠ 未確定' : '')
-      + (d.role === 'template' ? ' ・ テンプレ' : '') + '</span></div>';
-  });
   html += '</div>';
+  top.innerHTML = html;
 
-  html += '<div id="et-status" style="margin-top:8px;font-size:11px;color:var(--text-secondary);min-height:14px;"></div>';
-  html += '<div style="margin-top:10px;display:flex;gap:8px;justify-content:flex-end;">'
-    + '<button type="button" id="et-cancel" style="' + BTN + '">キャンセル</button>'
-    + '<button type="button" id="et-build" style="' + BTN + 'background:var(--accent);color:#fff;"'
-    + (m.canBuild ? '' : ' disabled') + '>この ' + m.count + ' 枚で書き出す</button></div>';
-
-  content.innerHTML = html;
+  var notReady = _etNotReady(m);
+  foot.innerHTML = '<span id="et-status"></span>'
+    + (notReady > 0 ? '<span id="et-notready" data-count="' + notReady + '">うち揃っていない ' + notReady + ' 枚</span>' : '')
+    + '<button type="button" id="et-build"' + (m.canBuild ? '' : ' disabled') + '>この '
+    + m.count + ' 枚で引き継ぎ zip を書き出す</button>';
 
   var folder = document.getElementById('et-mode-folder');
-  if (folder) folder.addEventListener('change', function() { _etMode = 'folder'; renderExportTargetPanel(); });
+  if (folder) folder.addEventListener('change', function() { _etMode = 'folder'; _etOverrides = {}; renderHandoverBoard(); });
   var open = document.getElementById('et-mode-open');
-  if (open) open.addEventListener('change', function() { _etMode = 'open'; renderExportTargetPanel(); });
+  if (open) open.addEventListener('change', function() { _etMode = 'open'; _etOverrides = {}; renderHandoverBoard(); });
   var inc = document.getElementById('et-include-scratch');
   if (inc) inc.addEventListener('change', function() {
-    _etIncludeScratch = !!inc.checked; renderExportTargetPanel();
+    _etIncludeScratch = !!inc.checked; _etOverrides = {}; renderHandoverBoard();
   });
-  var cancel = document.getElementById('et-cancel');
-  if (cancel) cancel.addEventListener('click', function() { closeExportTargetPanel(); });
   var build = document.getElementById('et-build');
   if (build) build.addEventListener('click', function() { confirmExportTarget(); });
   return m;
 }
 
-function openExportTargetPanel(title, onBuild) {
-  var modal = document.getElementById('et-modal');
-  if (!modal || !window.MA.exportTarget) return null;
-  _etTitle = title || '書き出し';
-  _etOnBuild = onBuild;
-  // 開くたびに的を取り直す (タブが増減した後で古い選択を引きずらない)。
-  _etMode = null;
-  _etIncludeScratch = false;
-  _etFileDocs = [];
-  _etRoles = {};
-  _etDir = '';
-  _etLoadFolder();
-  var m = renderExportTargetPanel();
-  modal.style.display = 'flex';
-  return m;
-}
-
-function closeExportTargetPanel() {
-  var modal = document.getElementById('et-modal');
-  if (modal) modal.style.display = 'none';
+// 行の頭を押して、その図を入れる / 外す。
+function _etToggle(name) {
+  var m = _etModel();
+  _etOverrides[name] = !_etRowIn(m, name);
+  renderHandoverBoard();
 }
 
 function confirmExportTarget() {
@@ -25675,22 +25616,17 @@ function confirmExportTarget() {
   var m = _etModel();
   if (!m || !m.canBuild) return Promise.resolve(null);
   _etResultLine = ET.resultLine(m);
-  var fn = _etOnBuild;
-  closeExportTargetPanel();
-  if (typeof fn !== 'function') return Promise.resolve(null);
-  return Promise.resolve(fn(m.targets, m));
+  closeHandoverBoard();
+  return Promise.resolve(buildHandoffPackage(m.targets));
 }
 
 function setupHandoffPackage() {
   var btn = document.getElementById('btn-tab-handoff');
-  var modal = document.getElementById('et-modal');
   if (!btn || !window.MA.handoffPackage) return;
+  // Export ▾「引き継ぎ」もチェックリストと同じ窓を開く。書き出しに来たので確定ボタンにフォーカスする。
   btn.addEventListener('click', function() {
-    if (!window.MA.exportTarget || !modal) { buildHandoffPackage(); return; }
-    openExportTargetPanel('\u{1F4E6} 引き継ぎ', function(docs) { return buildHandoffPackage(docs); });
-  });
-  if (modal) modal.addEventListener('click', function(ev) {
-    if (ev.target === modal) closeExportTargetPanel();
+    if (!window.MA.exportTarget || !_hbModal()) { buildHandoffPackage(); return; }
+    openHandoverBoard({ focusBuild: true });
   });
 }
 
@@ -28093,11 +28029,18 @@ function loadHandoverBoard() {
       svg = SF.contentMap(SF.scan(entries, (info && info.verified) || {}));
     }
     var texts = {};
+    _etLoading = true;
     return Promise.all(names.map(function(n) {
       return WS.loadFile(n, dir).then(function(t) {
         if (typeof t === 'string') texts[n] = t;
       }, function() {});
     })).then(function() {
+      // BLK-owner-20260925-0235-prune: 引き継ぎ zip の対象も、この表と同じ読み込みから決める。
+      _etFileDocs = names.filter(function(n) { return typeof texts[n] === 'string'; })
+        .map(function(n) { return { name: n, dsl: texts[n] }; });
+      _etRoles = (info && info.roles) || {};
+      _etDir = dir;
+      _etLoading = false;
       return _hbPeerCells(names, texts);
     }).then(function(peer) {
       _hbBoard = HB.build({
@@ -28109,6 +28052,7 @@ function loadHandoverBoard() {
     });
   }).catch(function() {
     _hbBusy = null;
+    _etLoading = false;
     return _hbBoard;
   });
   return _hbBusy;
@@ -28184,11 +28128,27 @@ function renderHandoverBoard() {
       ? '保存フォルダに図がありません。先に図を保存してから開いてください。' : '';
   }
 
+  var em = _etModel();
   shown.forEach(function(r) {
     var tr = document.createElement('tr');
     tr.setAttribute('data-doc-name', r.name);
     tr.setAttribute('data-ready', r.ready ? '1' : '0');
     if (r.blockers.length) tr.setAttribute('data-blockers', r.blockers.join('、'));
+
+    // BLK-owner-20260925-0235-prune: 行の頭 = 引き継ぎ zip に入る (✔) / 入らない (−)。押して切り替える。
+    var isIn = _etRowIn(em, r.name);
+    tr.setAttribute('data-in', isIn ? '1' : '0');
+    var inTd = document.createElement('td');
+    inTd.className = 'hb-in';
+    var inBtn = document.createElement('button');
+    inBtn.type = 'button';
+    inBtn.className = 'hb-in-toggle';
+    inBtn.setAttribute('aria-pressed', isIn ? 'true' : 'false');
+    inBtn.textContent = isIn ? '✔' : '−';
+    inBtn.title = isIn ? r.name + ' を引き継ぎ zip から外す' : r.name + ' を引き継ぎ zip に入れる';
+    inBtn.addEventListener('click', function() { _etToggle(r.name); });
+    inTd.appendChild(inBtn);
+    tr.appendChild(inTd);
 
     var name = document.createElement('td');
     name.className = 'hb-name';
@@ -28214,6 +28174,44 @@ function renderHandoverBoard() {
 
     box.appendChild(tr);
   });
+  // 保存フォルダに無い図 (保存していないタブ) も zip の候補なので、行の頭だけを持つ行で出す。
+  // 数えた答えは無いので列は 1 つにまとめる (表に無い図が枚数にだけ入る形にしない)。
+  if (em && !_hbPeerFilter) {
+    var listed = {};
+    board.rows.forEach(function(r) { listed[r.name] = true; });
+    em.all.forEach(function(d) {
+      if (listed[d.name] || !d.deliverable) return;
+      var isIn = _etRowIn(em, d.name);
+      var tr = document.createElement('tr');
+      tr.className = 'hb-tab-only';
+      // 数えた行 (tr[data-doc-name]) とは分ける。表を写す・絞り込みの対象にもしない。
+      tr.setAttribute('data-tab-name', d.name);
+      tr.setAttribute('data-in', isIn ? '1' : '0');
+      var inTd = document.createElement('td');
+      inTd.className = 'hb-in';
+      var inBtn = document.createElement('button');
+      inBtn.type = 'button';
+      inBtn.className = 'hb-in-toggle';
+      inBtn.setAttribute('aria-pressed', isIn ? 'true' : 'false');
+      inBtn.textContent = isIn ? '✔' : '−';
+      inBtn.title = isIn ? d.name + ' を引き継ぎ zip から外す' : d.name + ' を引き継ぎ zip に入れる';
+      inBtn.addEventListener('click', function() { _etToggle(d.name); });
+      inTd.appendChild(inBtn);
+      tr.appendChild(inTd);
+      var name = document.createElement('td');
+      name.className = 'hb-name';
+      name.textContent = d.name;
+      tr.appendChild(name);
+      var note = document.createElement('td');
+      note.className = 'hb-tab-note';
+      note.colSpan = board.peer ? 6 : 5;
+      note.textContent = '保存していないタブ (保存フォルダに無いので数えていません)'
+        + (d.scratch ? ' ・ ⚠ 未確定' : '');
+      tr.appendChild(note);
+      box.appendChild(tr);
+    });
+  }
+  renderHandoffTargets();
 }
 
 // 赤い行からその図へ。📂 一覧と同じ経路で開く (開き方を 2 つに増やさない)。
@@ -28234,9 +28232,12 @@ function _hbOpenDoc(name) {
   })();
 }
 
-function openHandoverBoard() {
+function openHandoverBoard(opts) {
   var modal = _hbModal();
   if (!modal) return Promise.resolve(null);
+  var focusBuild = !!(opts && opts.focusBuild);
+  // 開くたびに的を取り直す (タブが増減した後で古い選択を引きずらない)。
+  _etReset();
   modal.style.display = 'flex';
   renderHandoverBoard();
   // 相手の候補 (隣のフォルダ) を先に揃えてから数える。選んだ相手は閉じても覚えている。
@@ -28245,6 +28246,10 @@ function openHandoverBoard() {
     return loadHandoverBoard();
   }).then(function(b) {
     renderHandoverBoard();
+    if (focusBuild) {
+      var build = document.getElementById('et-build');
+      if (build && build.focus) build.focus();
+    }
     return b;
   });
 }

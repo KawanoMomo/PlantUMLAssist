@@ -886,15 +886,37 @@ test.describe('primary 手順 4: 14 枚を新人に渡してよいかを 1 画�
 
     // 到達条件その2: 置換が届いていない図は、置換列で名指しされる。
     const left = page.locator('#hb-rows tr[data-doc-name="spi_state"]');
-    await expect(left.locator('td').nth(1)).toHaveAttribute('data-state', 'left');
-    await expect(left.locator('td').nth(1)).toContainText('旧称');
+    // 行の頭 (0 列目) は引き継ぎ zip に入る / 入らない。答えの列は 2 列目から (BLK-owner-20260925-0235-prune)。
+    await expect(left.locator('td').nth(2)).toHaveAttribute('data-state', 'left');
+    await expect(left.locator('td').nth(2)).toContainText('旧称');
 
     // 到達条件その3: 置換は済んだが note だけ統一前のまま、が別の列で分かれて出る
     // (前回はこれを見るために図を個別に開いて本文を読んでいた)。
     const stale = page.locator('#hb-rows tr[data-doc-name="driver_common_class"]');
-    await expect(stale.locator('td').nth(1)).toHaveAttribute('data-state', 'done');
-    await expect(stale.locator('td').nth(2)).toHaveAttribute('data-state', 'stale');
-    await expect(stale.locator('td').nth(2)).toContainText('note');
+    await expect(stale.locator('td').nth(2)).toHaveAttribute('data-state', 'done');
+    await expect(stale.locator('td').nth(3)).toHaveAttribute('data-state', 'stale');
+    await expect(stale.locator('td').nth(3)).toContainText('note');
+
+    // BLK-owner-20260925-0235-prune: 同じ窓から引き継ぎ zip を書き出せる (Export ▾ に入り直さない)。
+    // 3 枚とも入り (行の頭が ✔)、揃っていない枚数を橙で添えるが止めない。
+    // 保存していないタブ (起動時の図) も候補として行の頭だけの行で並び、枚数と表が食い違わない。
+    await expect(page.locator('#hb-rows tr[data-doc-name][data-in="1"]')).toHaveCount(3);
+    const tabOnly = await page.locator('#hb-rows tr[data-tab-name][data-in="1"]').count();
+    await expect(page.locator('#et-line')).toHaveAttribute('data-count', String(3 + tabOnly));
+    await expect(page.locator('#et-notready')).toContainText('うち揃っていない 3 枚');
+    // 行の頭で外すと、書き出す枚数が変わる (保存していないタブも外して、保存フォルダの 2 枚だけにする)。
+    await left.locator('button.hb-in-toggle').click();
+    await expect(left).toHaveAttribute('data-in', '0');
+    for (let i = 0; i < tabOnly; i++) {
+      await page.locator('#hb-rows tr[data-tab-name][data-in="1"] button.hb-in-toggle').first().click();
+    }
+    await expect(page.locator('#et-build')).toHaveText('この 2 枚で引き継ぎ zip を書き出す');
+    const dl = page.waitForEvent('download', { timeout: 90000 });
+    await page.locator('#et-build').click();
+    const file = await dl;
+    expect(file.suggestedFilename()).toMatch(/^handoff-\d{8}-\d{4}\.zip$/);
+    await expect(page.locator('#hb-modal')).toBeHidden();
+    await expect(page.locator('#bulk-export-status')).toContainText(/2 枚 \/ 保存フォルダ \d+ 枚/);
   });
 
   test('渡す前に見る図だけが赤く残り、その行から図を開いて直せる', async ({ page }) => {

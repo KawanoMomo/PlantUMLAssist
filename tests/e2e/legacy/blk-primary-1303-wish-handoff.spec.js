@@ -21,13 +21,19 @@ const ST = [
 ].join('\n');
 
 // BLK-primary-20260908-2303-wish: 📦引き継ぎ は押すとまず「対象確認」を出す。
-// 書き出しはそのパネルの「この N 枚で書き出す」から始まる。
+// BLK-owner-20260925-0235-prune: 対象確認は 📋 引き継ぎチェックリストの窓 (#hb-modal) に畳んだ。
+// 書き出しはその窓の下端「この N 枚で引き継ぎ zip を書き出す」から始まる。
 async function clickHandoff(page) {
   // BLK-owner-20260918-0329-prune: 入口は Export ▾ の「渡す」
   await page.locator('#btn-export').click();
   await page.locator('#exp-handoff').click();
-  await expect(page.locator('#et-modal')).toBeVisible();
+  await expect(page.locator('#hb-modal')).toBeVisible();
   await page.locator('#et-build').click();
+}
+
+// チェックリストが保存フォルダを読み終わるまで待つ (的の既定は読み終えてから決まる)。
+async function waitBoard(page) {
+  await page.waitForSelector('#hb-modal #hb-sum[data-total]');
 }
 
 async function setDsl(page, text) {
@@ -135,7 +141,14 @@ test.describe('BLK-primary-1303-wish 引き継ぎパッケージ', () => {
     await page.keyboard.press('Control+k');
     await page.locator('#cp-input').fill('ひきつぎ');
     await page.waitForTimeout(300);
-    await expect(page.locator('#cp-list .cp-item').first()).toContainText('引き継ぎパッケージ');
+    // BLK-owner-20260925-0235-prune: チェックリストと zip は同じ窓なので Ctrl+K の行も 1 つ。旧名でも引ける。
+    await expect(page.locator('#cp-list .cp-item').first()).toContainText('引き継ぎ（チェックリストと zip）');
+    await page.locator('#cp-input').fill('引き継ぎパッケージ');
+    await page.waitForTimeout(300);
+    await expect(page.locator('#cp-list .cp-item').first()).toContainText('引き継ぎ（チェックリストと zip）');
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#hb-modal')).toBeVisible();
+    await expect(page.locator('#et-build')).toBeVisible();
   });
 });
 
@@ -190,11 +203,12 @@ test.describe('BLK-primary-2303-wish 書き出す前の対象確認', () => {
     // BLK-owner-20260918-0329-prune: 入口は Export ▾ の「渡す」
     await page.locator('#btn-export').click();
     await page.locator('#exp-handoff').click();
-    await expect(page.locator('#et-modal')).toBeVisible();
-    await expect(page.locator('#et-modal-content')).toContainText('対象確認');
+    // BLK-owner-20260925-0235-prune: チェックリストの窓が開き、書き出しはその下端から。
+    await expect(page.locator('#hb-modal')).toBeVisible();
+    await expect(page.locator('#hb-foot #et-build')).toBeFocused();
     // 保存先フォルダが無い運用では、タブが対象のすべてだと言い切る (偽の警告を出さない)。
     await expect(page.locator('#et-line')).toHaveAttribute('data-warn', '0');
-    await expect(page.locator('#et-build')).toContainText('2 枚で書き出す');
+    await expect(page.locator('#et-build')).toContainText('2 枚で引き継ぎ zip を書き出す');
   });
 
   test('タブ 1 枚でも既定はフォルダ全体の 6 枚で、対象一覧に未オープンの図が並ぶ', async ({ page }) => {
@@ -205,8 +219,9 @@ test.describe('BLK-primary-2303-wish 書き出す前の対象確認', () => {
     await expect(page.locator('#et-line')).toHaveAttribute('data-folder', '6');
     await expect(page.locator('#et-line')).toHaveAttribute('data-count', '6');
     await expect(page.locator('#et-line')).toHaveAttribute('data-warn', '0');
-    await expect(page.locator('#et-list')).toContainText('uart_state');
-    await expect(page.locator('.et-item[data-open="0"]')).toHaveCount(5);
+    // 行の頭で入る / 入らないを出す (チェックリストの行 = 対象一覧)。
+    await expect(page.locator('#hb-rows')).toContainText('uart_state');
+    await expect(page.locator('#hb-rows tr[data-in="1"]')).toHaveCount(6);
   });
 
   test('「開いているタブだけ」に切り替えると、何枚が落ちるかを書き出す前に警告する', async ({ page }) => {
@@ -215,6 +230,7 @@ test.describe('BLK-primary-2303-wish 書き出す前の対象確認', () => {
     await page.locator('#btn-export').click();
     await page.locator('#exp-handoff').click();
     await expect(page.locator('#et-line')).toHaveAttribute('data-folder', '6');
+    await waitBoard(page);
     await page.locator('#et-mode-open').check();
     await expect(page.locator('#et-line')).toHaveAttribute('data-count', '1');
     await expect(page.locator('#et-line')).toHaveAttribute('data-missing', '5');
@@ -224,6 +240,11 @@ test.describe('BLK-primary-2303-wish 書き出す前の対象確認', () => {
     // 切り替え直せば元の 6 枚に戻る (的の選択がその場で効く)。
     await page.locator('#et-mode-folder').check();
     await expect(page.locator('#et-line')).toHaveAttribute('data-count', '6');
+    // 行の頭を押せば 1 枚だけ外せる (的を切り替えなくてよい)。
+    await page.locator('#hb-rows tr[data-doc-name="uart_state"] .hb-in-toggle').click();
+    await expect(page.locator('#et-line')).toHaveAttribute('data-count', '5');
+    await expect(page.locator('#hb-rows tr[data-doc-name="uart_state"]')).toHaveAttribute('data-in', '0');
+    await expect(page.locator('#et-build')).toContainText('5 枚で引き継ぎ zip を書き出す');
   });
 
   test('フォルダ全体で書き出すと、開いていない図も zip に入り、結果に枚数が残る', async ({ page }) => {
@@ -246,9 +267,9 @@ test.describe('BLK-primary-2303-wish 書き出す前の対象確認', () => {
     // BLK-owner-20260918-0329-prune: 入口は Export ▾ の「渡す」
     await page.locator('#btn-export').click();
     await page.locator('#exp-handoff').click();
-    await expect(page.locator('#et-modal')).toBeVisible();
-    await page.locator('#et-cancel').click();
-    await expect(page.locator('#et-modal')).toBeHidden();
+    await expect(page.locator('#hb-modal')).toBeVisible();
+    await page.locator('#hb-close').click();
+    await expect(page.locator('#hb-modal')).toBeHidden();
   });
 });
 
@@ -285,12 +306,11 @@ test.describe('BLK-primary-0403-wish 未確定は既定で渡さない', () => {
     // 正式な 6 枚だけが的に載る (スクラッチ 2 枚は数に入らない)。
     await expect(page.locator('#et-line')).toHaveAttribute('data-count', '6');
     await expect(page.locator('#et-line')).toContainText('未確定 2 枚は対象から外しました');
-    await expect(page.locator('.et-item[data-scratch="1"]')).toHaveCount(2);
-    await expect(page.locator('.et-item[data-name="spi_init_sequence-編集中"]'))
-      .toContainText('⚠ 未確定');
-    await expect(page.locator('.et-item[data-name="spi_init_sequence-編集中"]'))
+    await expect(page.locator('#hb-rows tr[data-in="0"]')).toHaveCount(2);
+    await expect(page.locator('#et-scratch-row')).toContainText('spi_init_sequence-編集中');
+    await expect(page.locator('#hb-rows tr[data-doc-name="spi_init_sequence-編集中"]'))
       .toHaveAttribute('data-in', '0');
-    await expect(page.locator('#et-build')).toContainText('6 枚で書き出す');
+    await expect(page.locator('#et-build')).toContainText('6 枚で引き継ぎ zip を書き出す');
   });
 
   test('チェックを入れれば同梱でき、外せばまた外れる', async ({ page }) => {
@@ -322,8 +342,9 @@ test.describe('BLK-primary-0403-wish 未確定は既定で渡さない', () => {
     // BLK-owner-20260918-0329-prune: 入口は Export ▾ の「渡す」
     await page.locator('#btn-export').click();
     await page.locator('#exp-handoff').click();
+    await waitBoard(page);
     await page.locator('#et-mode-open').check();
-    await expect(page.locator('.et-item[data-name="spi_init_sequence-編集中"]'))
+    await expect(page.locator('#hb-rows tr[data-doc-name="spi_init_sequence-編集中"]'))
       .toHaveAttribute('data-in', '0');
     await page.locator('#et-build').click();
     const text = fs.readFileSync(await (await dl).path()).toString('latin1');
