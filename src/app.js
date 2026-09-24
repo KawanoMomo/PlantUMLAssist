@@ -3773,15 +3773,14 @@ function initCommandPalette() {
       // BLK-owner-20260924-1712-prune: 「この図を前回保存版と比べる」行は 1 つ。旧 command:livediff (前回保存版との比較) と
       // この行は同じ枠を同じ「± 差分」で開いていた。消した方の名前は語に残し、分類は ± 差分の一覧と同じ「レビュー」にする。
       { id: 'compare-before', title: '前回保存版と比較 / Compare with last save', hint: 'Compare', group: 'review', keywords: ['並べて比較 (この図の前回保存版)', '前回保存版との比較', 'Compare with last save', '差分', '前回保存', 'レビュー', 'diff', 'compare', 'before', 'after', 'last', 'save', 'ならべて', 'ひかく', 'ぜんかいほぞん', 'ぜんかい', 'ほぞん', 'へんこうぜんご', 'さぶん', 'みくらべ'], run: function() { openCompareTarget('before'); } },
-      { id: 'tab-template', title: 'テンプレートから新しい図を作る / Template', hint: 'Tabs', keywords: ['template', 'copy', 'てんぷれ', 'ふくせい'], button: 'btn-tab-template', run: function() { clickById('btn-tab-template'); } },
+      // BLK-owner-20260924-2337-prune: 部品を起こす・テンプレート・骨格・セット複製の 4 行を 1 行にした。何から起こすかは窓の上端で選ぶ。
+      // 旧名はこの行を引く語に残す (別の行として並べない)。
+      { id: 'tab-template', title: '既存の図や雛形から新しい図を起こす… / New from…', hint: 'Tabs', keywords: ['template', 'copy', 'てんぷれ', 'ふくせい', 'テンプレートから作る', 'テンプレート', '部品を起こす', '6 図種まとめて', 'part', 'starter', 'new', 'ぶひん', 'おこす', 'したがき', '6', 'ろく', 'ずしゅ', '骨格から作る', '骨格', 'skeleton', 'こっかく', 'ひな形', 'セット複製', '系統ごと複製する', '系統ごと複製', 'set', 'clone', 'family', 'せっと'], button: 'btn-tab-template', run: function() { clickById('btn-tab-template'); } },
       { id: 'tab-diff', title: '前回保存からの差分 / Diff', hint: 'Tabs', keywords: ['diff', 'change', 'さぶん', 'へんこう'], button: 'btn-tab-diff', run: function() { clickById('btn-tab-diff'); } },
       { id: 'tab-pins', title: 'レビュー指摘 / Review pins', hint: 'Tabs', keywords: ['pin', 'review', 'してき', 'ぴん'], button: 'btn-tab-pins', run: function() { clickById('btn-tab-pins'); } },
-      { id: 'tab-set', title: 'セット複製 / Clone a set', hint: 'Tabs', keywords: ['set', 'clone', 'family', 'せっと', 'ふくせい'], button: 'btn-tab-set', run: function() { clickById('btn-tab-set'); } },
       // design 7b: タブ列を畳むと Ctrl+K だけが手掛かりになるので、ツールメニューに
       // 載っている道具はすべてパレットからも引けなければならない。ここは
       // 「メニューにはあるがパレットに無かった」道具。題はメニューの言い換えに揃える。
-      { id: 'part-starter', title: '部品を起こす (6 図種まとめて) / New part', hint: 'Tabs', keywords: ['part', 'starter', 'new', 'ぶひん', 'おこす', 'したがき', '6', 'ろく', 'ずしゅ'], button: 'btn-tab-part', run: function() { clickById('btn-tab-part'); } },
-      { id: 'tab-skeleton', title: '骨格から作る / Skeleton', hint: 'Tabs', keywords: ['skeleton', 'こっかく', 'ひな形'], button: 'btn-tab-skeleton', run: function() { clickById('btn-tab-skeleton'); } },
       { id: 'tab-draft', title: '一時控えにする / Draft', hint: 'Tabs', keywords: ['draft', 'ひかえ', 'いちじ'], button: 'btn-tab-draft', run: function() { clickById('btn-tab-draft'); } },
       { id: 'tab-apply', title: '複数クラスに一括適用 / Bulk apply', hint: 'Tabs', keywords: ['apply', 'bulk', 'いっかつ', 'てきよう'], button: 'btn-tab-apply', run: function() { clickById('btn-tab-apply'); } },
       // BLK-human-20260923-1600 (design 9a): 「⇔ 先輩」を「並べて比較」に改名したので、
@@ -20185,10 +20184,71 @@ function setupTemplateNew() {
     updatePart();
   }
 
+  // BLK-owner-20260924-2337-prune: 「既存の図や雛形から新しい図を起こす」窓は 1 つ。上端で「何から起こす」を選び、
+  // 選んだものに要る欄だけを出す (確定ボタンも見えるのは 1 つ)。前は 3 つのフォームを縦に積み、系統ぜんぶは別の窓 (#fc-modal) だった。
+  var KINDS = [
+    { kind: 'part', label: '部品名だけ（6 図種の下書き）' },
+    { kind: 'file', label: '既存の図 1 枚' },
+    { kind: 'family', label: '同じ系統の図ぜんぶ' },
+    { kind: 'skeleton', label: '組み込みの骨格' },
+  ];
+  var curKind = 'file';
+  var lastSubject = '';
+  var familyLoaded = false;
+  // 4 つで共用する部品名の欄 (1 回打った部品名は選び直しても残る)。
+  var SUBJECT_IDS = { part: 'part-subject', file: 'tpl-to', family: 'fc-to', skeleton: 'skel-subject' };
+
+  function kindChooserHtml() {
+    return '<div id="tpl-kinds" role="tablist" aria-label="何から起こす" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 10px 0;">'
+      + '<span style="font-size:11px;color:var(--text-secondary);margin-right:4px;">何から起こす</span>'
+      + KINDS.map(function(k) {
+        return '<button type="button" role="tab" class="tpl-kind" data-kind="' + k.kind + '" aria-pressed="false" style="' + BTN + '">'
+          + esc(k.label) + '</button>';
+      }).join('')
+      + '</div>';
+  }
+
+  function subjectEl(kind) { return document.getElementById(SUBJECT_IDS[kind] || ''); }
+
+  function showKind(kind) {
+    if (!KINDS.some(function(k) { return k.kind === kind; })) kind = 'file';
+    var prev = subjectEl(curKind);
+    if (prev && prev.value) lastSubject = prev.value;
+    curKind = kind;
+    Array.prototype.forEach.call(content.querySelectorAll('[data-tpl-kind]'), function(sec) {
+      sec.style.display = sec.getAttribute('data-tpl-kind') === kind ? '' : 'none';
+    });
+    Array.prototype.forEach.call(content.querySelectorAll('.tpl-kind'), function(b) {
+      var on = b.getAttribute('data-kind') === kind;
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      b.style.borderColor = on ? 'var(--accent)' : 'var(--border)';
+      b.style.color = on ? 'var(--accent)' : 'var(--text-primary)';
+    });
+    if (kind === 'family' && !familyLoaded) {
+      familyLoaded = true;
+      if (typeof window._fcStart === 'function') window._fcStart();
+    }
+    carrySubject();
+  }
+
+  // 前に打った部品名を、選び直した先の欄が空なら入れる。系統ぜんぶの欄は描き直すたびに作り直すので、描いた後にも呼ぶ。
+  function carrySubject() {
+    var el = subjectEl(curKind);
+    if (!el) return;
+    if (!el.value && lastSubject) {
+      el.value = lastSubject;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    try { el.focus(); } catch (e) {}
+  }
+
   function render() {
     content.innerHTML =
-      (PS ? partSectionHtml() : '')
-      + (SK ? skelSectionHtml() : '')
+      kindChooserHtml()
+      + '<div data-tpl-kind="part">' + (PS ? partSectionHtml() : '') + '</div>'
+      + '<div data-tpl-kind="skeleton">' + (SK ? skelSectionHtml() : '') + '</div>'
+      + '<div data-tpl-kind="family"><div id="fc-modal-content"></div></div>'
+      + '<div data-tpl-kind="file">'
       + '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">テンプレートから新規作成</h3>'
       + '<div style="font-size:11px;color:var(--text-secondary);">'
       + '既にある図か組み込みの雛形と同じ構成のまま、部品名だけを替えた図を新しいタブに作ります。</div>'
@@ -20221,8 +20281,12 @@ function setupTemplateNew() {
       + '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">'
       + '<button id="btn-tpl-create" style="' + BTN + '" disabled>この内容で作る</button>'
       + '<button id="btn-tpl-cancel" style="' + BTN + '">キャンセル</button>'
+      + '</div>'
       + '</div>';
 
+    Array.prototype.forEach.call(content.querySelectorAll('.tpl-kind'), function(b) {
+      b.addEventListener('click', function() { showKind(b.getAttribute('data-kind')); });
+    });
     document.getElementById('tpl-source').addEventListener('change', onSourceChange);
     document.getElementById('tpl-from').addEventListener('input', function() { syncName(); rebuildRemaining(); updatePreview(); });
     document.getElementById('tpl-to').addEventListener('input', function() { syncName(); rebuildRemaining(); updatePreview(); });
@@ -20233,23 +20297,21 @@ function setupTemplateNew() {
     if (PS) bindPart();
   }
 
-  function open(focusSkeleton, seed) {
+  // mode: 'part' | 'file' | 'family' | 'skeleton' (旧い呼び方の true = 骨格、false = 既存の図 1 枚も受ける)。
+  function open(mode, seed) {
     saveActiveDoc();
     docs = window.MA.workspace ? window.MA.workspace.list() : [];
     files = [];
     fileCache = {};
     seedTpl = seed || null;
     nameTouched = false;
+    familyLoaded = false;
+    var kind = mode === true ? 'skeleton' : (typeof mode === 'string' && mode ? mode : 'file');
     render();
     if (PS) loadPartFolders();
     modal.style.display = 'flex';
-    if (focusSkeleton === 'part') {
-      var psub = document.getElementById('part-subject');
-      if (psub) psub.focus();
-    } else if (focusSkeleton) {
-      var sub = document.getElementById('skel-subject');
-      if (sub) sub.focus();
-    }
+    curKind = kind;
+    showKind(kind);
     // 覗いてきた図で開いたときは、置換先だけ打てば作れる状態にしておく。
     if (seedTpl) {
       var sel0 = document.getElementById('tpl-source');
@@ -20274,11 +20336,9 @@ function setupTemplateNew() {
   }
 
   _openTemplateNew = open;
-  btn.addEventListener('click', function() { open(false); });
-  var btnSkel = document.getElementById('btn-tab-skeleton');
-  if (btnSkel) btnSkel.addEventListener('click', function() { open(true); });
-  var btnPart = document.getElementById('btn-tab-part');
-  if (btnPart) btnPart.addEventListener('click', function() { open('part'); });
+  // 文脈の入口 (FILES のフォルダの右クリック「6 図種をまとめて作る」など) は、同じ窓を該当の選択で開く。
+  window.openNewFrom = function(kind, seed) { open(kind || 'file', seed); };
+  btn.addEventListener('click', function() { open('file'); });
 
   modal.addEventListener('click', function(ev) { if (ev.target === modal) close(); });
   document.addEventListener('keydown', function(ev) {
@@ -32630,16 +32690,17 @@ function openFamilySet() {
   closeFamilyClone();
 }
 
+// BLK-owner-20260924-2337-prune: 系統ぜんぶの複製は「既存の図や雛形から新しい図を起こす」窓 (#tpl-modal) の
+// 「同じ系統の図ぜんぶ」で出す (別の窓 #fc-modal と入口 ⧉⧉ セット複製 は畳んだ)。中身の描き方はそのまま。
 function closeFamilyClone() {
-  var modal = document.getElementById('fc-modal');
+  var modal = document.getElementById('tpl-modal');
   if (modal) modal.style.display = 'none';
 }
 
 function setupFamilyClone() {
-  var btn = document.getElementById('btn-tab-set');
-  var modal = document.getElementById('fc-modal');
-  if (!btn || !modal) return;
-  btn.addEventListener('click', function() {
+  var modal = document.getElementById('tpl-modal');
+  if (!modal) return;
+  window._fcStart = function() {
     saveActiveDoc();
     _fcExtraPairs = [];
     _fcFileDocs = [];
@@ -32669,10 +32730,7 @@ function setupFamilyClone() {
         renderFamilyClone();
       }
     }).catch(function() { /* 保存フォルダが無くてもタブの図だけでセットは作れる */ });
-  });
-  modal.addEventListener('click', function(ev) {
-    if (ev.target === modal) closeFamilyClone();
-  });
+  };
 }
 
 // ── Render pipeline ────────────────────────────────────────────────────────

@@ -311,6 +311,14 @@ test.describe('junior 手順 1: シーケンス図からユースケース図を
 // (BLK-builder-20260924-0732-4-red)。隣に誰もいない所で「手本が無い部品」を起こす。
 const PART_MINE = DIR + '-part/junior';
 
+// BLK-owner-20260924-2337-prune: 部品を起こす は「既存の図や雛形から新しい図を起こす…」窓の「部品名だけ」。
+// 入口は 1 つ (#btn-tab-template)。窓の上端で何から起こすかを選ぶ。
+async function openPartStarter(page) {
+  await page.locator('#btn-tab-template').click();
+  await page.locator('#tpl-kinds .tpl-kind[data-kind="part"]').click();
+  await expect(page.locator('#tpl-kinds .tpl-kind[data-kind="part"]')).toHaveAttribute('aria-pressed', 'true');
+}
+
 test.describe('junior 手順 1〜2: 手本の無い部品を 1 回の入力で起こす', () => {
   test.beforeEach(async ({ page }) => {
     await S1.bootWithSaveDir(page, PART_MINE);
@@ -323,7 +331,7 @@ test.describe('junior 手順 1〜2: 手本の無い部品を 1 回の入力で�
   });
 
   test('部品名を 1 回打つと、6 図種の下書きが同じ名前で別タブに開く', async ({ page }) => {
-    await page.locator('#btn-tab-part').click();
+    await openPartStarter(page);
     await page.waitForSelector('#part-subject');
     await page.fill('#part-subject', 'TIMER');
 
@@ -372,14 +380,14 @@ test.describe('junior 手順 1〜2: 手本の無い部品を 1 回の入力で�
   // 同じ部品の図を既に開いているタブがあれば、その図種は既定で外す
   // (押し間違えて書きかけを別タブで二重に持つと、どちらを直したか分からなくなる)。
   test('既に開いた図種は 2 度目には開かない側に寄り、選べば作り直せる', async ({ page }) => {
-    await page.locator('#btn-tab-part').click();
+    await openPartStarter(page);
     await page.waitForSelector('#part-subject');
     await page.fill('#part-subject', 'TIMER');
     await page.locator('#btn-part-create').click();
     await page.waitForTimeout(900);
 
     // 2 度目。6 図種とも「既にあります」になり、何も開かない状態から始まる。
-    await page.locator('#btn-tab-part').click();
+    await openPartStarter(page);
     await page.waitForSelector('#part-subject');
     await page.fill('#part-subject', 'TIMER');
     const had = page.locator('#part-sheets [data-part-had]');
@@ -1852,7 +1860,7 @@ test.describe('junior 手順 2: 先輩の実図を手本に新部品を起こす
     await S1.clearDir(page, REF_SENIOR);
     await S1.putDoc(page, REF_SENIOR, 'spiref_init_sequence', SENIOR_SPI_SEQ);
     await page.reload();
-    await page.waitForSelector('#btn-tab-part');
+    await page.waitForSelector('#btn-tab-template');
   });
 
   test.afterEach(async ({ page }) => {
@@ -1861,7 +1869,7 @@ test.describe('junior 手順 2: 先輩の実図を手本に新部品を起こす
   });
 
   test('先輩に同じ部品名の実図がある図種は、下書きがその実図で開く', async ({ page }) => {
-    await page.locator('#btn-tab-part').click();
+    await openPartStarter(page);
     await page.waitForSelector('#part-subject');
     await page.fill('#part-subject', 'SPIREF');
 

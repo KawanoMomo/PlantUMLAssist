@@ -398,7 +398,9 @@ window.MA.fileMenuUi = (function() {
         break;
       case 'new-doc': clickId('btn-tab-new'); break;
       case 'new-part':
-        clickId('btn-tab-part');
+        // BLK-owner-20260924-2337-prune: 「既存の図や雛形から新しい図を起こす」窓を「部品名だけ」で開く。
+        if (typeof window.openNewFrom === 'function') window.openNewFrom('part');
+        else clickId('btn-tab-template');
         // 部品のフォルダから起こすときは、部品名を打ち直させない。
         if (folder && folder.part) {
           window.setTimeout(function() {
