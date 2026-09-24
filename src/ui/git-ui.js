@@ -263,12 +263,19 @@ window.MA.gitUi = (function() {
     var m = $('git-pick-modal');
     if (!m) return Promise.resolve(false);
     m.hidden = false;
-    if (anchor && anchor.getBoundingClientRect) {
-      var r = anchor.getBoundingClientRect();
-      m.style.top = Math.round(r.bottom + 4) + 'px';
-      m.style.left = Math.max(8, Math.round(Math.min(r.left, window.innerWidth - 380))) + 'px';
+    var gp = GP();
+    if (anchor && anchor.getBoundingClientRect && gp && gp.pickerPlace) {
+      // design 10c (BLK-builder-20260924-1818-1): 窓は必ず画面の中。下に入りきらなければボタンの上へ開き、
+      // 入る高さまで縮めて一覧をスクロールさせる (FILES 下端の「相手を選ぶ…」から下へ開くと切れていた)。
+      var p = gp.pickerPlace(anchor.getBoundingClientRect(), window.innerWidth, window.innerHeight);
+      m.style.top = p.top != null ? p.top + 'px' : 'auto';
+      m.style.bottom = p.bottom != null ? p.bottom + 'px' : 'auto';
+      m.style.left = p.left + 'px';
+      m.style.maxHeight = p.maxHeight + 'px';
     } else {
       m.style.top = '80px';
+      m.style.bottom = 'auto';
+      m.style.maxHeight = '';
       m.style.left = Math.max(8, Math.round(window.innerWidth / 2 - 180)) + 'px';
     }
     var f = $('git-pick-filter');
