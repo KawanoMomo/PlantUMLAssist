@@ -1887,6 +1887,21 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
   right: 0;
   flex-shrink: 0;
   white-space: nowrap;
+  z-index: 1;
+  width: 62px;
+  box-sizing: border-box;
+  text-align: center;
+  /* 流れてきた図のタブが札の下に潜るとき、境目を背景色でぼかして重なりを見せない */
+  box-shadow: -8px 0 6px -2px var(--bg-secondary);
+}
+/* 9a: ＋ は図のタブの隣。タブ列が流れても ＋ は札の左に貼り付けて隠さない
+   (札の幅 62px + タブ列の gap 2px)。 */
+#tab-bar:not(.tools-hide-mini-btn) #btn-tab-new {
+  position: sticky;
+  right: 64px;
+  z-index: 1;
+  flex-shrink: 0;
+  box-shadow: -8px 0 6px -2px var(--bg-secondary);
 }
 #btn-tab-tools-mini:hover { color: var(--accent); }
 #btn-tab-tools-mini[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); }

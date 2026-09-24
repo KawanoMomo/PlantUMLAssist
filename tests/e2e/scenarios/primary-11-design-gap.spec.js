@@ -434,6 +434,13 @@ test('手順11 既定のタブ列ではツールの入口が右端の「ツー�
   await expect(page.locator('#tab-bar .tab')).toHaveCount(7);
   r = await right();
   expect((r.bar.x + r.bar.width) - (r.tools.x + r.tools.width)).toBeLessThanOrEqual(8);
+  // ＋ も札の左に見えたまま (流れてきたタブにも札にも隠れない。9a: ＋ は図タブの隣)。
+  const plusHit = await page.locator('#btn-tab-new').evaluate((el) => {
+    const b = el.getBoundingClientRect();
+    const hit = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2);
+    return !!hit && (hit === el || el.contains(hit));
+  });
+  expect(plusHit).toBe(true);
   await tools.click();
   await expect(page.locator('#tool-menu')).toBeVisible();
   await expect(page.locator('#tool-menu .tool-menu-cat .tool-cat-name')).toHaveText([
