@@ -4969,6 +4969,35 @@ function renderTabs() {
   try { if (window.MA.filesPanel) window.MA.filesPanel.refresh(); } catch (e) {}
   // 「この図の履歴」は開いている図で変わる (design 10c)。
   try { if (window.MA.gitUi) window.MA.gitUi.onActiveChanged(); } catch (e) {}
+  // design 10a (BLK-builder-20260924-2325-2): 選ばれているタブを「＋」「ツール ▾」の下に潜らせない。
+  try { revealActiveTab(bar); } catch (e) {}
+}
+
+// タブ列を横に送り、選ばれているタブを全部見える所に出す (もう見えていれば動かさない)。
+// 右端の「＋」「ツール ▾」は position: sticky で中身の上に貼り付くので、その幅を隠れる幅として差し引く。
+function revealActiveTab(bar) {
+  var TR = window.MA.tabReveal;
+  if (!bar || !TR) return;
+  var tab = bar.querySelector('.tab.active');
+  if (!tab || !bar.clientWidth) return;
+  var br = bar.getBoundingClientRect();
+  var viewRight = br.left + bar.clientLeft + bar.clientWidth;
+  var stickLeft = viewRight;
+  Array.prototype.forEach.call(bar.querySelectorAll('#btn-tab-new, #btn-tab-tools-mini'), function(el) {
+    if (!el.offsetParent || window.getComputedStyle(el).position !== 'sticky') return;
+    var r = el.getBoundingClientRect();
+    if (r.width > 0 && r.left < stickLeft) stickLeft = r.left;
+  });
+  var tr = tab.getBoundingClientRect();
+  var next = TR.scrollFor({
+    scrollLeft: bar.scrollLeft,
+    viewWidth: bar.clientWidth,
+    contentWidth: bar.scrollWidth,
+    itemLeft: tr.left - (br.left + bar.clientLeft) + bar.scrollLeft,
+    itemWidth: tr.width,
+    reserveRight: viewRight - stickLeft,
+  });
+  if (Math.abs(next - bar.scrollLeft) >= 1) bar.scrollLeft = next;
 }
 
 // ── 前回保存時点との差分 ──────────────────────────────

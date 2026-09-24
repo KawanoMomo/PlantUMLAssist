@@ -123,4 +123,28 @@ test('手順1 14 枚を 1 回押しで見て回ってもタブは 1 枚だけ増
   await treeRow('gpio_state').dblclick();
   await expect(page.locator('#tab-bar .tab[data-doc-name="gpio_state"]')).not.toHaveAttribute('data-preview', '1');
   await expect(page.locator('#tab-bar .tab[data-doc-name="gpio_state"] .tab-label')).toHaveCSS('font-style', 'normal');
+
+  // BLK-builder-20260924-2325-2 (design 10a): タブが増えてタブ列が横に流れても、開いた図のタブは右端に貼り付いた
+  // 「＋」「ツール ▾」の下に潜らず全部見える。前のタブへ戻ったときも同じ (タブ列がそのタブまで送られる)。
+  // 見えている右端は、タブ列の右端と、右端に貼り付いた (sticky の) ボタンの左端のうち手前の方。
+  const activeTabSeen = () => page.evaluate(() => {
+    const bar = document.getElementById('tab-bar');
+    const br = bar.getBoundingClientRect();
+    const t = bar.querySelector('.tab.active').getBoundingClientRect();
+    let visRight = br.left + bar.clientLeft + bar.clientWidth;
+    bar.querySelectorAll('#btn-tab-new, #btn-tab-tools-mini').forEach((el) => {
+      if (!el.offsetParent || getComputedStyle(el).position !== 'sticky') return;
+      visRight = Math.min(visRight, el.getBoundingClientRect().left);
+    });
+    return { overflow: bar.scrollWidth > bar.clientWidth, left: t.left, right: t.right, visLeft: br.left, visRight };
+  });
+  let seen = await activeTabSeen();
+  expect(seen.overflow, 'タブ列が横に流れている').toBe(true);
+  expect(seen.right, '開いた図のタブがタブ列の外や「＋」「ツール ▾」の下に潜らない').toBeLessThanOrEqual(seen.visRight + 0.5);
+  expect(seen.left).toBeGreaterThanOrEqual(seen.visLeft - 0.5);
+  await page.locator('#files-body-open .files-row').first().click();
+  await expect(page.locator('#tab-bar .tab.active')).not.toHaveAttribute('data-doc-name', 'gpio_state');
+  seen = await activeTabSeen();
+  expect(seen.left, '先頭のタブへ戻ると左端まで送り返す').toBeGreaterThanOrEqual(seen.visLeft - 0.5);
+  expect(seen.right).toBeLessThanOrEqual(seen.visRight + 0.5);
 });
