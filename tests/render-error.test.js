@@ -80,3 +80,40 @@ describe('renderError.describe', function() {
     expect(RE.describe(null)).toBe('');
   });
 });
+
+// BLK-migrator-20260924-1432: PlantUML が描画の途中で落ちたときの絵 (1.2026.2 が実際に返す骨格)。
+// 文法エラーの配色 (緑・赤) を使わず、白地に黒文字でエラーの文言を並べる。
+var CRASH_SVG = [
+  '<?plantuml 1.2026.2?><svg xmlns="http://www.w3.org/2000/svg">',
+  '<text fill="#000000" font-size="12" x="5" y="17">An error has occured : java.lang.NullPointerException: Cannot invoke &quot;String.startsWith(String)&quot; because &quot;s&quot; is null</text>',
+  '<text fill="#000000" font-size="12" font-style="italic" x="5" y="32">Six by nine. Forty two.</text>',
+  '<text fill="#000000" font-size="12" x="5" y="47">&#160;</text>',
+  '<text fill="#000000" font-size="12" x="5" y="62">PlantUML (1.2026.2) has crashed.</text>',
+  '<text fill="#000000" font-size="12" x="5" y="77">This version of PlantUML is 248 days old, so you should</text>',
+  '</svg>',
+].join('');
+
+describe('renderError.detect — PlantUML が落ちた絵 (BLK-migrator-20260924-1432)', function() {
+  test('落ちた絵を描画エラーと見分け、例外の文を添える', function() {
+    var r = RE.detect(CRASH_SVG);
+    expect(r.isError).toBe(true);
+    expect(r.line).toBe(null);
+    expect(r.message).toContain('PlantUML 1.2026.2 が描画の途中で落ちました');
+    expect(r.message).toContain('java.lang.NullPointerException: Cannot invoke "String.startsWith(String)"');
+    expect(RE.describe(r)).toBe(r.message);
+  });
+  test('「has crashed」の行が無ければ、図の中の同じ文言をエラーにしない', function() {
+    var svg = '<svg><text fill="#000000">An error has occured : sample text in a note</text><text>Alice</text></svg>';
+    expect(RE.detect(svg).isError).toBe(false);
+  });
+  test('「An error has occured」の行が無ければ、図の中の「has crashed」だけではエラーにしない', function() {
+    var svg = '<svg><text fill="#000000">PlantUML (1.2026.2) has crashed.</text><text>Alice</text></svg>';
+    expect(RE.detect(svg).isError).toBe(false);
+  });
+  test('文法エラーの絵は今まで通り (行番号つき)', function() {
+    var r = RE.detect(ERROR_SVG);
+    expect(r.isError).toBe(true);
+    expect(r.line).toBe(3);
+    expect(!!r.crashed).toBe(false);
+  });
+});
