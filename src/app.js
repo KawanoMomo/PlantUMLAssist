@@ -12404,6 +12404,34 @@ function clearSeniorGit() {
   if (el.dsl) el.dsl.textContent = '';
   if (el.svg) el.svg.textContent = '';
   _seniorName = '';
+  syncGitDiagramDiff();
+}
+
+// BLK-builder-20260924-1823-2 (design 10c): 「コミットを送ると、図の上の差分の色付けも
+// そのコミットとの差に変わります」。コミットと比較している間だけ、左のプレビューの図には
+// そのコミットに無い文字 (増えた・変わった) に緑、右の枠のコミット時点の図には作業中に無い
+// 文字 (消えた・変わった) に赤の印を付ける。比べるのは描かれている文字 (svg-text-diff)。
+// 右の図を描いたとき・左の図を描き直したとき・比較をやめたときに呼ぶ。
+function syncGitDiagramDiff() {
+  var TD = window.MA.svgTextDiff;
+  if (!TD) return null;
+  var el = _seniorEls();
+  var left = previewSvgEl ? previewSvgEl.querySelector('svg') : null;
+  var right = el.svg ? el.svg.querySelector('svg') : null;
+  var legend = document.getElementById('senior-git-legend');
+  if (left) TD.unmark(left, TD.CLS_ADD);
+  if (right) TD.unmark(right, TD.CLS_DEL);
+  var on = !!(_seniorGit && _seniorGit.hash && _seniorGit.text && el.pane && !el.pane.hidden && left && right);
+  if (!on) {
+    if (legend) legend.textContent = '';
+    return null;
+  }
+  var leftTexts = TD.texts(left);
+  var rightTexts = TD.texts(right);
+  var added = TD.mark(left, rightTexts, TD.CLS_ADD);
+  var removed = TD.mark(right, leftTexts, TD.CLS_DEL);
+  if (legend) legend.textContent = TD.legend(added, removed);
+  return { added: added, removed: removed };
 }
 
 // commit: 比べるコミット (hash が空なら作業中)。commits: ◀ ▶ で送る並び (この図の履歴)。
@@ -12466,6 +12494,7 @@ function renderSeniorGit() {
       _seniorGit.text = '';
       if (el.dsl) el.dsl.textContent = 'このコミットには ' + (name || 'この図') + ' がありません';
       if (el.svg) el.svg.textContent = '';
+      try { syncGitDiagramDiff(); } catch (e) {}
       return false;
     }
     _seniorGit.text = text;
@@ -12474,6 +12503,7 @@ function renderSeniorGit() {
     return renderDslToSvg(text).then(function(svg) {
       if (!_seniorGit || _seniorGit.hash !== want || !el.svg) return false;
       el.svg.innerHTML = svg;
+      try { syncGitDiagramDiff(); } catch (e) {}
       return true;
     }).catch(function() {
       if (el.svg) el.svg.textContent = '図の描画に失敗しました (本文は下に出ています)';
@@ -12540,6 +12570,7 @@ function setupSeniorGit() {
     workingText: function() { return mmdText; },
     openFolderCompare: function() { return openCompareTarget('folder'); },
     refreshDiff: function() { if (_seniorGit && _seniorGit.text) renderSeniorGitDsl(); },
+    diagramDiff: syncGitDiagramDiff,
   };
   // 保存先が決まった後で GIT 欄を読む (FILES の骨格は init より先に出ている)。
   try { if (window.MA.gitUi) window.MA.gitUi.refresh(); } catch (e) {}
@@ -33354,6 +33385,9 @@ function renderSvg() {
       // 今のキャレット行の対応表示を引き直す (再描画で peek が消えたままにしない)。
       try { refreshLinePeek(); } catch (e) {}
     }
+    // BLK-builder-20260924-1823-2 (design 10c): コミットと比較している間は、描き直した図にも
+    // そのコミットとの差の色を付け直す (打つたびに追う)。
+    try { syncGitDiagramDiff(); } catch (e) {}
     var took = elapsed();
     // BLK-builder-20260924-1427-3 (design 7a / 10a): 見出しは「Rendered · 32ms」。
     // 描画方法は上部バーの「local · 32ms」にあるので、ここでは title に回す。

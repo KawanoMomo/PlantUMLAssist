@@ -240,6 +240,11 @@ test('手順9 保存先が Git なら、この図の履歴の「比較」で前�
   await expect(page.locator('#senior-dsl')).toContainText('Spi_Init()');
   await expect(page.locator('#senior-dsl')).not.toContainText('Fault');
   await expect(page.locator('#senior-svg svg')).toHaveCount(1);
+  // design 10c (BLK-builder-20260924-1823-2): 図そのものに差の色が付く。左のプレビューでは初版に無い
+  // 「Fault」が緑。右の初版の図には作業中に無い文字が無いので赤は付かない。色の意味は枠の中に 1 行。
+  await expect(page.locator('#preview-svg svg text.gd-add')).toHaveText(['Fault']);
+  await expect(page.locator('#senior-svg svg text.gd-del')).toHaveCount(0);
+  await expect(page.locator('#senior-git-legend')).toContainText('緑');
 
   // 到達条件その5: 「差分だけ」で作業中との違いの行だけになる (追記した行が + で出る)。
   await page.locator('#senior-git-diffonly').click();
@@ -250,8 +255,18 @@ test('手順9 保存先が Git なら、この図の履歴の「比較」で前�
   await page.locator('#senior-git-next').click();
   await expect(page.locator('#senior-git-pick')).toContainText('Fault 通知の応答を追記');
   await expect(page.locator('#senior-git-next')).toBeDisabled();
+  // 送ると色もそのコミットとの差に変わる (最新のコミットは作業中と同じ図なので色は消える)。
+  await expect(page.locator('#senior-git-legend')).toContainText('同じ');
+  await expect(page.locator('#preview-svg svg text.gd-add')).toHaveCount(0);
   await page.locator('#senior-git-prev').click();
   await expect(page.locator('#senior-git-pick')).toContainText('初版');
+  await expect(page.locator('#preview-svg svg text.gd-add')).toHaveText(['Fault']);
+  // 本文を直すと色が追う: 初版の Spi_Init() を直すと、左の直した文字が緑、右の初版の文字が赤。
+  const cur = await page.locator('#editor').inputValue();
+  await S.typeDsl(page, cur.replace('Spi_Init()', 'Spi_Init(cfg)'));
+  await expect(page.locator('#preview-svg svg text.gd-add')).toHaveText(['Spi_Init(cfg)', 'Fault']);
+  await expect(page.locator('#senior-svg svg text.gd-del')).toHaveText(['Spi_Init()']);
+  await expect(page.locator('#senior-git-legend')).toContainText('赤');
 
   // 到達条件その7: 相手の名前を押すと相手選びがその場で開き、先頭は作業中。絞り込んで選べる。
   await page.locator('#senior-git-pick').click();
@@ -271,6 +286,8 @@ test('手順9 保存先が Git なら、この図の履歴の「比較」で前�
   await modal.locator('.git-pick-row').first().click();
   await expect(page.locator('#senior-git')).toBeHidden();
   await expect(page.locator('#senior-dir')).toBeVisible();
+  // コミットとの比較をやめると、左の図の色も消える。
+  await expect(page.locator('#preview-svg svg text.gd-add')).toHaveCount(0);
 });
 
 test('手順9 Git でない保存先では GIT 欄を出さない', async ({ page }) => {
