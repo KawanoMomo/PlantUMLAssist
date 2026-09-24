@@ -51,6 +51,10 @@ window.MA.autosaveStatus = (function() {
       // 開いたときのまま。ディスクは既にその内容なので、書いていないのは正しい。
       return { text: saved + ' · 変更なし', title: when + ' / ' + target + ' は開いたときのままです (本文を変えていないので書き直していません)', pending: false };
     }
+    if (last.reason === 'untouched') {
+      // BLK-owner-20260925-0312-2: 見本・白紙のまま。行を足すか Ctrl+S を押すまでファイルは作らない。
+      return { text: '見本のまま · ' + target + ' には書いていません', title: target + ' は見本・白紙のままなので、保存フォルダに書いていません。行を足すか Ctrl+S を押すとファイルになります', pending: false };
+    }
     if (last.reason === 'ask') {
       return {
         text: '⚠ 未保存 · ' + target + ' に書いてよいか確認中',

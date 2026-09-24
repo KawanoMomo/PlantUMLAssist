@@ -201,6 +201,22 @@ def dsl_kind(text):
     return ''
 
 
+def is_skeleton_dsl(text):
+    """図として何も言っていない本文か (空・@start/@end・コメントだけ、または活動図の start / stop だけ)。
+
+    クライアントの blankDoc.isBlank と同じ線引き (BLK-owner-20260925-0312-2)。
+    """
+    if not isinstance(text, str):
+        return False
+    body = []
+    for line in text.splitlines():
+        s = line.strip()
+        if not s or s.startswith("'") or re.match(r'^@(start|end)', s, re.I):
+            continue
+        body.append(s)
+    return not body or body == ['start', 'stop']
+
+
 def kind_base_name(name):
     """`diagram1_state` → `diagram1`。図種で分けた名前をもう一度分けない。"""
     for slug in DIAGRAM_KIND_SLUGS:
@@ -2983,8 +2999,14 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if not path.exists():
                 return dt, '', new_kind
-            prev_kind = dsl_kind(path.read_text(encoding='utf-8'))
+            prev_text = path.read_text(encoding='utf-8')
+            prev_kind = dsl_kind(prev_text)
         except OSError:
+            return dt, '', new_kind
+        # BLK-owner-20260925-0312-2: 既にあるファイルが白紙・骨だけ (`@startuml / @enduml`、
+        # 活動図の `start / stop`) なら、図種が替わっても別名へ回さない。潰して失う中身が無く、
+        # 回すと中身の無い `{名前}.puml` と本物の `{名前}_{図種}.puml` が並ぶ。
+        if is_skeleton_dsl(prev_text):
             return dt, '', new_kind
         if not new_kind or not prev_kind or new_kind == prev_kind:
             return dt, prev_kind, new_kind

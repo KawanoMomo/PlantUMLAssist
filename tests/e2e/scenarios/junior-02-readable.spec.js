@@ -1633,3 +1633,71 @@ test('手順2 フォームだけで足した直後にリロードしても本文
   expect(back).toContain('Idle --> Running : Start');
   expect(await getEditorText(page)).toContain('Idle --> Running : Start');
 });
+
+// BLK-human-20260925-0352 / BLK-owner-20260925-0312-2: 左レールの図種を押すと、書きかけの図の本文が
+// 別の図種の見本に差し替わり (ファイル名はそのまま)、Ctrl+S で保存済みの図を潰していた。
+// ＋ で開いただけのタブも空の .puml として書かれ、図種を替えると `{名前}_{図種}.puml` が増えていた。
+test('手順2 図種を替えても前の図のファイルの中身と名前が変わらず、保存フォルダに別名ファイルが増えない', async ({ page }) => {
+  const D = DIR + '-rail';
+  await S.bootWithSaveDir(page, D);
+  await S.clearDir(page, D);
+  const rail = (t) => page.locator('#rail-types .rail-btn[data-type="plantuml-' + t + '"]');
+  const active = () => page.evaluate(() => window.MA.workspace.getActive());
+  const tabs = () => page.evaluate(() => window.MA.workspace.list().map((d) => ({ name: d.name, type: d.diagramType, dsl: d.dsl })));
+
+  await S.typeDsl(page, S.GPIO_SEQ);
+  const seqName = (await active()).name;
+  await expect.poll(() => S.readDoc(page, D, seqName)).toContain('participant Gpio_Driver');
+  const seqOnDisk = await S.readDoc(page, D, seqName);
+
+  // 到達条件その1: 利用者の行があるタブでレールの ST を押すと、そのタブは替わらず、状態遷移の新しいタブが開く。
+  await rail('state').click();
+  await expect(page.locator('#diagram-type')).toHaveValue('plantuml-state');
+  let all = await tabs();
+  expect(all.length).toBe(2);
+  expect(all[0]).toEqual({ name: seqName, type: 'plantuml-sequence', dsl: S.GPIO_SEQ });
+  const stName = (await active()).name;
+  expect(stName).not.toBe(seqName);
+  expect(await getEditorText(page)).not.toContain('Gpio_Driver');
+  // 到達条件その2: 見本のままのタブはディスクへ書かない。前の図のファイルは中身も名前もそのまま。
+  await page.waitForTimeout(800);
+  expect(await S.listDir(page, D)).toEqual([seqName]);
+  expect(await S.readDoc(page, D, seqName)).toBe(seqOnDisk);
+
+  // 到達条件その3: 見本のままのタブでレールを押すと、そのタブの図種だけが替わる (名前もタブの数も同じ)。
+  await rail('component').click();
+  await expect(page.locator('#diagram-type')).toHaveValue('plantuml-component');
+  all = await tabs();
+  expect(all.length).toBe(2);
+  expect((await active()).name).toBe(stName);
+  expect((await active()).diagramType).toBe('plantuml-component');
+
+  // 到達条件その4: ＋ で開いてレールを押しただけのタブは、保存フォルダに何も書かない。
+  await page.locator('#btn-tab-new').click();
+  await rail('activity').click();
+  await rail('class').click();
+  await page.waitForTimeout(800);
+  expect(await S.listDir(page, D)).toEqual([seqName]);
+  const clsName = (await active()).name;
+
+  // 到達条件その5: 行を足した時点で、そのタブの名前のまま 1 枚だけ書かれる (`_{図種}` の別名は作らない)。
+  await S.typeDsl(page, ['@startuml', 'class GpioDriver', '@enduml'].join('\n'));
+  await expect.poll(() => S.listDir(page, D)).toEqual(expect.arrayContaining([seqName, clsName]));
+  await page.waitForTimeout(600);
+  const files = await S.listDir(page, D);
+  expect(files.sort()).toEqual([seqName, clsName].sort());
+  expect(files.some((n) => /_(class|component|activity|state|sequence|usecase)$/.test(n))).toBe(false);
+
+  // 到達条件その6: 中身のある図からレールで CMP を押すと、見本のままの CMP タブがあればそこへ移る (タブを増やさない)。
+  await rail('component').click();
+  expect((await active()).name).toBe(stName);
+  expect((await tabs()).length).toBe(3);
+
+  // 到達条件その7: 元の図に戻って Ctrl+S を押しても、シーケンス図のまま保存される。
+  await page.locator('#tab-bar .tab[data-doc-name="' + seqName + '"]').click();
+  await expect(page.locator('#diagram-type')).toHaveValue('plantuml-sequence');
+  await page.keyboard.press('Control+s');
+  await page.waitForTimeout(600);
+  expect(await S.readDoc(page, D, seqName)).toContain('participant Gpio_Driver');
+  expect((await S.listDir(page, D)).sort()).toEqual([seqName, clsName].sort());
+});
