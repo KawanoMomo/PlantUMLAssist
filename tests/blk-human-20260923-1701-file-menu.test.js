@@ -56,7 +56,9 @@ describe('フォルダの右クリック (design 10b)', function() {
     var it = FM.folderItems({ kind: 'target' });
     expect(ids(it)).toEqual(['new-doc', 'new-part', '-', 'set-target', 'set-readonly', '-', 'open-list']);
     expect(it[3].disabled).toBe(true);
-    expect(!!it[4].disabled).toBe(false);
+    // BLK-owner-20260924-1836-prune: 「読むだけにする」は覗く窓を開かない。保存先は書く場所なので押せない。
+    expect(it[4].disabled).toBe(true);
+    expect(it[4].title).toContain('読むだけ');
   });
 
   test('部品のフォルダは名前で束ねた見出しなので、保存先 / 読むだけ は出さない', function() {
@@ -67,8 +69,10 @@ describe('フォルダの右クリック (design 10b)', function() {
   // 編集できないので「新しい図 / 6 図種をまとめて作る」は出さない (前は it[4] が「読むだけにする」だった)。
   test('読むだけのフォルダ: 並べて比較 / 保存先にする / 読むだけにする (押せない)', function() {
     var it = FM.folderItems({ kind: 'readonly' });
-    expect(ids(it)).toEqual(['compare', '-', 'set-target', 'set-readonly']);
-    expect(it[3].disabled).toBe(true);
+    // BLK-owner-20260924-1836-prune: 覗く窓 (そのフォルダの道具) の入口「このフォルダの図を調べる…」が 2 行目。
+    expect(ids(it)).toEqual(['compare', 'peek', '-', 'set-target', 'set-readonly']);
+    expect(it[1].label).toBe('このフォルダの図を調べる…');
+    expect(it[4].disabled).toBe(true);
   });
 });
 

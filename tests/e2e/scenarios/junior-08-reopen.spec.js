@@ -216,11 +216,12 @@ test('手順8 FILES ツリーのファイル行の頭に、左レールと同じ
   expect(await page.locator('#files-body-open').textContent()).not.toContain('📌');
 
   // BLK-builder-20260924-1350-3 (design 10a / 9a): 節見出しは「名前 + 右端の件数」を 1 回だけ。
-  // 「読むだけ」の入口は絵文字ではなくレールと同じ 1px 線画で、名前は「他フォルダを覗く」。
+  // 「読むだけ」の入口は絵文字ではなくレールと同じ 1px 線画。名前は何をするかで「読むだけのフォルダの図を調べる」
+  // (BLK-owner-20260924-1836-prune。以前は「他フォルダを覗く」)。
   await expect(page.locator('#files-sec-open .files-sec-label')).toHaveText('開いている図');
   await expect(page.locator('#files-count-open')).toHaveText(/^[1-9]\d*$/);
   const peek = page.locator('#btn-tab-peek');
-  await expect(peek).toHaveAttribute('aria-label', '他フォルダを覗く');
+  await expect(peek).toHaveAttribute('aria-label', '読むだけのフォルダの図を調べる');
   await expect(peek.locator('svg')).toBeVisible();
   expect(await peek.textContent()).not.toMatch(/[\u{1F300}-\u{1FAFF}]/u);
 

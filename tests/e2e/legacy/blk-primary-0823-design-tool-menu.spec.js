@@ -127,9 +127,11 @@ test('分類はホバーで切り替わり、どの分類もパネル内をス�
   await expect(page.locator('.tool-menu-group[data-group="review"]')).toBeVisible();
   await expect(page.locator('.tool-menu-group[data-group="make"]')).toBeHidden();
 
-  // 小見出しで区切って出る
+  // 小見出しで区切って出る (BLK-owner-20260924-1836-prune: 「見比べる」の「他の保存フォルダを覗く」は
+  // FILES「読むだけ」の右クリックへ移し、パネル下端の案内 1 行に落とした)
   await expect(page.locator('.tool-menu-group[data-group="review"] .tool-menu-sub'))
-    .toHaveText(['見比べる', '指摘', '変更の履歴']);
+    .toHaveText(['指摘', '変更の履歴']);
+  await expect(page.locator('#tool-menu-files-note')).toContainText('FILES の読むだけ');
 
   // パネルの中は溢れない (1 画面に収まる)
   for (const key of ['make', 'edit', 'find', 'check', 'review', 'give']) {
@@ -166,8 +168,9 @@ test('←→ で分類、↑↓ で項目を選び、Enter で開く', async ({ 
     .toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('.tool-menu-group[data-group="review"]')).toBeVisible();
 
+  // レビューの先頭の項目 (⇔ 並べて見る は 1509-prune で、他の保存フォルダを覗く は 1836-prune でレビューから外れた)
   await page.keyboard.press('ArrowDown');
-  await expect(page.locator('.tool-menu-item[data-target="btn-tab-compare"]'))
+  await expect(page.locator('.tool-menu-item[data-target="btn-tab-review"]'))
     .toHaveAttribute('aria-current', 'true');
   await page.keyboard.press('ArrowUp');
   await expect(page.locator('.tool-menu-item[data-target="btn-tab-board"]'))

@@ -321,7 +321,13 @@ window.MA.fileMenuUi = (function() {
         }
         break;
       case 'set-target': clickId('top-save-target'); break;
-      case 'set-readonly': clickId('btn-tab-peek'); break;
+      // BLK-owner-20260924-1836-prune: 読むだけのフォルダの道具 (部品ビュー・指摘から選ぶ…) は、
+      // ツリーで選んだそのフォルダを開いた状態で覗く窓に出す。窓の中でフォルダを選び直させない。
+      case 'peek':
+        if (typeof window.openPeekFolder === 'function') window.openPeekFolder({ dir: folder && folder.dir });
+        break;
+      // 「読むだけにする」は覗く窓を開かない (名前と違うことをしない)。保存先では押せない (folderItems)。
+      case 'set-readonly': break;
       case 'open-list':
         if (typeof window._openFolderListView === 'function') window._openFolderListView();
         break;

@@ -48,6 +48,22 @@ window.MA.peekFolder = (function() {
     return (list || []).filter(function(d) { return !d.current; });
   }
 
+  // BLK-owner-20260924-1836-prune: 覗く窓を開いたときに見るフォルダ。フォルダの一覧は窓から外し
+  // (ツリーの「読むだけ」で選ぶ)、開いた時点で 1 つに決めておく。
+  //   want (右クリックしたフォルダ) → comparing (右の枠に並べている相手) → last (前に覗いていたフォルダ) → 先頭
+  // どれも隣に無ければ ''。自分の保存先は選ばない。
+  function defaultDir(list, want, comparing, last) {
+    var cand = others(list);
+    var pick = [want, comparing, last];
+    for (var i = 0; i < pick.length; i++) {
+      if (!_s(pick[i])) continue;
+      for (var j = 0; j < cand.length; j++) {
+        if (samePath(cand[j].path, pick[i])) return cand[j].path;
+      }
+    }
+    return cand.length ? cand[0].path : '';
+  }
+
   function label(item) {
     if (!item) return '';
     return item.name + ' (' + (item.files | 0) + ' 枚)' + (item.current ? ' — 自分の保存先' : '');
@@ -145,6 +161,7 @@ window.MA.peekFolder = (function() {
     baseName: baseName,
     choices: choices,
     others: others,
+    defaultDir: defaultDir,
     label: label,
     samePath: samePath,
     noticeText: noticeText,

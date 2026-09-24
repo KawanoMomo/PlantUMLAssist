@@ -1044,9 +1044,15 @@ test.describe('junior 手順 1〜2: 先輩に実体が無い図種の結論を�
       await page.locator('#source-lock-overwrite').click();
       await page.waitForTimeout(600);
     }
-    await page.locator('#btn-tab-peek').click();
-    await page.waitForSelector('#peek-modal');
-    await page.locator('#peek-dirs .peek-dir[data-dir-name="primary"]').click();
+    // BLK-owner-20260924-1836-prune: 覗く窓は FILES「読むだけ」の primary の右クリックから、primary を開いた状態で出る。
+    // 窓の中にフォルダの一覧は無く、見出しの名前を押すとツリーのその行へ戻る。
+    await S1.peekFolder(page, 'primary');
+    await expect(page.locator('#peek-dirs')).toBeHidden();
+    await expect(page.locator('#peek-dirs .peek-dir')).toHaveCount(0);
+    await page.locator('#peek-dir-name').click();
+    await expect(page.locator('#peek-modal')).toBeHidden();
+    await expect(page.locator('#files-panel .files-ro-folder[data-ro-name="primary"]')).toBeFocused();
+    await S1.peekFolder(page, 'primary');
     await page.waitForTimeout(1200);
 
     // 到達条件 1: 先輩に 0 枚の図種が名指しされ、控えるかどうかを聞かれる。
@@ -1094,9 +1100,7 @@ async function openPeekPrimary(page, name) {
     await page.locator('#source-lock-overwrite').click();
     await page.waitForTimeout(600);
   }
-  await page.locator('#btn-tab-peek').click();
-  await page.waitForSelector('#peek-modal');
-  await page.locator('#peek-dirs .peek-dir[data-dir-name="primary"]').click();
+  await S1.peekFolder(page, 'primary');
   await page.waitForTimeout(1200);
 }
 

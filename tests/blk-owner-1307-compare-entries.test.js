@@ -43,7 +43,8 @@ describe('並べる入口は「レビュー」に別項目として並ばない'
   });
 
   test('覗く・基準の図の指摘は残るが、呼び名から「見比べる」が外れる', function() {
-    expect(TM.labelOf('btn-tab-peek')).toBe('他の保存フォルダを覗く');
+    // BLK-owner-20260924-1836-prune: 覗く窓の入口は FILES「読むだけ」の右クリックへ移し、ツール ▾ からは案内 1 行に落とした。
+    expect(TM.labelOf('btn-tab-peek')).toBe('このフォルダの図を調べる…');
     expect(TM.labelOf('btn-tab-review')).toBe('基準の図との指摘');
     ['btn-tab-peek', 'btn-tab-review'].forEach(function(id) {
       expect(/見比べる/.test(TM.labelOf(id))).toBe(false);

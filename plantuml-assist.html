@@ -2539,6 +2539,9 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
   color: var(--text-primary);
 }
 #peek-notice { color: var(--accent); font-family: var(--font-mono); }
+#peek-dir-name { font-size: 12px; padding: 1px 8px; background: transparent; color: var(--text-primary); border: 1px solid var(--border); border-radius: 3px; cursor: pointer; }
+#peek-dir-name:hover { border-color: var(--accent); }
+#peek-dir-name:disabled { color: var(--text-secondary); cursor: default; border-style: dashed; }
 #peek-tools { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 #peek-body { display: flex; flex: 1 1 0; min-height: 0; }
 #peek-dirs, #peek-files {
@@ -7469,8 +7472,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
                   aria-controls="files-body-readonly"><span class="files-caret" aria-hidden="true">▸</span><span
                   class="files-sec-label">読むだけ</span><span class="files-sec-count" id="files-count-readonly"></span></button>
           <!-- design 9a / 10a (BLK-builder-20260924-1350-3): 絵文字をやめ、レールと同じ 1px 線画 (目) にする -->
-          <button class="tab-tool files-sec-act" id="btn-tab-peek" aria-label="他フォルダを覗く"
-                  title="他フォルダを覗く: 他の保存フォルダの図を読むだけで見る (保存先は変わりません)"><svg class="files-act-glyph"
+          <button class="tab-tool files-sec-act" id="btn-tab-peek" aria-label="読むだけのフォルダの図を調べる"
+                  title="読むだけのフォルダの図を調べる… (並べている相手、無ければ先頭のフォルダ。別のフォルダは行の右クリックから。保存先は変わりません)"><svg class="files-act-glyph"
                   viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1"
                   aria-hidden="true"><path d="M1.5 8 C4 4, 12 4, 14.5 8 C12 12, 4 12, 1.5 8 Z"/><circle cx="8" cy="8" r="2"/></svg></button>
           <!-- design 9a: 「先輩」は使う人の立場の名前で、機能の中身を表していない。
@@ -9541,7 +9544,10 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <div id="peek-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="peek-content">
     <div id="peek-head">
-      <strong>他のフォルダを見る</strong>
+      <strong>読むだけのフォルダ</strong>
+      <!-- BLK-owner-20260924-1836-prune: フォルダの一覧 (#peek-dirs) は窓から外した。見ているフォルダの名前だけを出し、
+           押すと FILES「読むだけ」のその行へ移る (フォルダはツリーで選ぶ) -->
+      <button type="button" id="peek-dir-name" class="peek-dir-name"></button>
       <span id="peek-notice"></span>
       <span id="peek-tools">
         <button type="button" id="peek-template" disabled title="この図をテンプレートにして新しい図を作る">⧉ テンプレートとして開く</button>

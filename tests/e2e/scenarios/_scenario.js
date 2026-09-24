@@ -131,6 +131,22 @@ async function openFolderItem(page, name) {
   await page.waitForTimeout(900);
 }
 
+// BLK-owner-20260924-1836-prune: 隣の保存フォルダを覗く窓は、FILES「読むだけ」のそのフォルダの行の
+// 右クリック「このフォルダの図を調べる…」で、そのフォルダを開いた状態で出る (窓の中でフォルダを選ばない)。
+async function peekFolder(page, dirName) {
+  const head = page.locator('#files-sec-readonly');
+  if ((await head.getAttribute('aria-expanded')) !== 'true') await head.click();
+  const row = page.locator('#files-panel .files-ro-folder[data-ro-name="' + dirName + '"]');
+  await row.waitFor();
+  await row.click({ button: 'right' });
+  await page.locator('#files-ctx-menu [data-action="peek"]').click();
+  await page.waitForSelector('#peek-modal');
+  await page.waitForFunction((n) => {
+    const b = document.getElementById('peek-dir-name');
+    return b && b.textContent === n;
+  }, dirName);
+}
+
 // 一覧から開いた図は錠がかかっている。直す目的で開いたときは「このファイルを書き換える」を選ぶ。
 // 錠は最初の書き戻しの直前に一度だけ聞くので、1 文字足して問いを出してから答える。
 async function overwriteOpenedFile(page) {
@@ -319,7 +335,7 @@ module.exports = {
   PRIMARY_DOCS, docFor,
   dirFor, absDirFor, bootWithSaveDir, bootPlain, bootDownloadMode, reopenApp,
   putDoc, readDoc, listDir, clearDir, clearTickets,
-  openFolder, closeFolderList, openFolderItem, overwriteOpenedFile, typeDsl, renameActive, runCommand, exportVia,
+  openFolder, closeFolderList, openFolderItem, overwriteOpenedFile, peekFolder, typeDsl, renameActive, runCommand, exportVia,
   GPIO_STATE, GPIO_SEQ, IRQ_SEQ_FOLDED_DASH,
   messageClickPoints, selectedMessageLine, expectMessageHitUniform,
 };

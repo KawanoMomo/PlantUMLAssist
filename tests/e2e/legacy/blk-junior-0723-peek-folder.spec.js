@@ -36,6 +36,13 @@ async function boot(page) {
   await gotoApp(page);
 }
 
+// BLK-owner-20260924-1836-prune: 覗く窓の中のフォルダの一覧は外した。隣が primary だけなので、
+// 「読むだけ」の目の印で primary を開いた状態の窓が出る (別のフォルダは FILES「読むだけ」の右クリックで選ぶ)。
+async function openPeek(page) {
+  await page.locator('#btn-tab-peek').click();
+  await expect(page.locator('#peek-dir-name')).toHaveText('primary');
+}
+
 async function savedDir(page) {
   return page.evaluate(() => {
     const cfg = JSON.parse(window.localStorage.getItem('plantuml-autosave-config') || '{}');
@@ -62,18 +69,21 @@ test.describe('BLK-junior-0723 他フォルダの図を読むだけで見る', (
     await clearDir(page, SENPAI).catch(() => {});
   });
 
-  test('隣のフォルダが枚数付きで並び、自分の保存先が分かる', async ({ page }) => {
-    await page.locator('#btn-tab-peek').click();
+  test('隣のフォルダは FILES「読むだけ」に枚数付きで並び、窓はそのフォルダを開いて出る', async ({ page }) => {
+    await page.locator('#files-sec-readonly').click();
+    const row = page.locator('#files-panel .files-ro-folder[data-ro-name="primary"]');
+    await expect(row).toBeVisible();
+    await expect(row.locator('.files-sec-count')).toHaveText('2');
+    // 自分の保存先は「読むだけ」に並ばない。
+    await expect(page.locator('#files-panel .files-ro-folder[data-ro-name="junior"]')).toHaveCount(0);
+    await openPeek(page);
     await expect(page.locator('#peek-modal')).toBeVisible();
-    const dirs = page.locator('#peek-dirs .peek-dir');
-    await expect(dirs.first()).toHaveAttribute('data-current', '1');
-    await expect(page.locator('#peek-dirs .peek-dir[data-dir-name="primary"]')).toBeVisible();
-    await expect(page.locator('#peek-dirs .peek-dir[data-dir-name="primary"]')).toContainText('2 枚');
+    await expect(page.locator('#peek-dirs')).toBeHidden();
+    await expect(page.locator('#peek-files .peek-file')).toHaveCount(2);
   });
 
   test('先輩の図を選ぶと本文と図がその場で出る', async ({ page }) => {
-    await page.locator('#btn-tab-peek').click();
-    await page.locator('#peek-dirs .peek-dir[data-dir-name="primary"]').click();
+    await openPeek(page);
     await expect(page.locator('#peek-files .peek-file')).toHaveCount(2);
     await page.locator('#peek-files .peek-file[data-file-name="P0723_gpio_init"]').click();
     await expect(page.locator('#peek-dsl')).toContainText('Gpio_Init()');
@@ -82,8 +92,7 @@ test.describe('BLK-junior-0723 他フォルダの図を読むだけで見る', (
   });
 
   test('見ている間も保存先は自分のまま (紛れ込みが起きない)', async ({ page }) => {
-    await page.locator('#btn-tab-peek').click();
-    await page.locator('#peek-dirs .peek-dir[data-dir-name="primary"]').click();
+    await openPeek(page);
     await expect(page.locator('#peek-notice')).toContainText('保存先は junior のままです');
     expect(await savedDir(page)).toBe(MINE);
     // 閲覧はタブを増やさない (増えれば自動保存で自分のフォルダへ書かれてしまう)
@@ -95,12 +104,14 @@ test.describe('BLK-junior-0723 他フォルダの図を読むだけで見る', (
       const r = await fetch('/autosave?dir=' + encodeURIComponent(d));
       return (await r.json()).files;
     }, MINE);
-    expect(mine.sort()).toEqual(['J0723_mine', 'diagram1'].sort());
+    // 見た先輩の図が自分のフォルダへ書かれていないこと (紛れ込み) を見る。起動時の diagram1 が自動保存されたかは
+    // 時間次第なので問わない (BLK-owner-20260924-1836-prune でフォルダを選ぶ 1 手が減り、閉じるのが早くなった)。
+    expect(mine).toContain('J0723_mine');
+    expect(mine.filter((n) => /^P0723_/.test(n))).toEqual([]);
   });
 
   test('↓ で次の図へ移れる (1 枚ごとに選び直さない)', async ({ page }) => {
-    await page.locator('#btn-tab-peek').click();
-    await page.locator('#peek-dirs .peek-dir[data-dir-name="primary"]').click();
+    await openPeek(page);
     await expect(page.locator('#peek-files .peek-file.selected')).toHaveAttribute('data-file-name', 'P0723_gpio_init');
     await page.locator('#peek-next').click();
     await expect(page.locator('#peek-files .peek-file.selected')).toHaveAttribute('data-file-name', 'P0723_spi_init');
@@ -114,7 +125,7 @@ test.describe('BLK-junior-0723 他フォルダの図を読むだけで見る', (
 
     // 起票の手順: 先輩の GPIO 初期化シーケンス図を開いて読み、自分の作業へ戻る
     await click('#btn-tab-peek');
-    await click('#peek-dirs .peek-dir[data-dir-name="primary"]');
+    await expect(page.locator('#peek-dir-name')).toHaveText('primary');
     await click('#peek-files .peek-file[data-file-name="P0723_gpio_init"]');
     await expect(page.locator('#peek-dsl')).toContainText('Gpio_Init()');
     await click('#peek-close');
@@ -129,9 +140,8 @@ test.describe('BLK-junior-0723 他フォルダの図を読むだけで見る', (
   // 見た構成を覚えて新規タブに打ち直していた (実測 360 字)。覗いた 1 枚を
   // そのままテンプレートに据えて、部品名だけ替えて作れるようにする。
   test('図を選ぶまで「テンプレートとして開く」は押せない', async ({ page }) => {
-    await page.locator('#btn-tab-peek').click();
-    await page.locator('#peek-dirs .peek-dir[data-current="1"]').click();
-    await page.locator('#peek-files .peek-file[data-file-name="J0723_mine"]').click();
+    await openPeek(page);
+    await page.locator('#peek-files .peek-file[data-file-name="P0723_gpio_init"]').click();
     await expect(page.locator('#peek-template')).toBeEnabled();
     await page.locator('#peek-close').click();
     await page.locator('#btn-tab-peek').click();
@@ -139,8 +149,7 @@ test.describe('BLK-junior-0723 他フォルダの図を読むだけで見る', (
   });
 
   test('覗いた先輩の図をテンプレートにして、部品名だけ替えた図が作れる', async ({ page }) => {
-    await page.locator('#btn-tab-peek').click();
-    await page.locator('#peek-dirs .peek-dir[data-dir-name="primary"]').click();
+    await openPeek(page);
     await page.locator('#peek-files .peek-file[data-file-name="P0723_gpio_init"]').click();
     await expect(page.locator('#peek-dsl')).toContainText('Gpio_Init()');
 
@@ -177,7 +186,7 @@ test.describe('BLK-junior-0723 他フォルダの図を読むだけで見る', (
     async function type(sel, text) { keys += text.length; await page.locator(sel).fill(text); }
 
     await click('#btn-tab-peek');
-    await click('#peek-dirs .peek-dir[data-dir-name="primary"]');
+    await expect(page.locator('#peek-dir-name')).toHaveText('primary');
     await click('#peek-files .peek-file[data-file-name="P0723_gpio_init"]');
     await click('#peek-template');
     await type('#tpl-to', 'Can');

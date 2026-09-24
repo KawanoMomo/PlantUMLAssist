@@ -44,7 +44,8 @@ describe('FILES の節見出し (design 10a / 9a)', function() {
     try {
       boot([]);
       var peek = W.document.getElementById('btn-tab-peek');
-      expect(peek.getAttribute('aria-label')).toBe('他フォルダを覗く');
+      // BLK-owner-20260924-1836-prune: 入口は何をするかで呼ぶ (「覗く」ではなく「図を調べる」)。
+      expect(peek.getAttribute('aria-label')).toBe('読むだけのフォルダの図を調べる');
       expect(peek.querySelector('svg')).not.toBeNull();
       expect(EMOJI.test(peek.textContent + peek.getAttribute('aria-label'))).toBe(false);
       var ro = W.document.getElementById('files-body-readonly');
