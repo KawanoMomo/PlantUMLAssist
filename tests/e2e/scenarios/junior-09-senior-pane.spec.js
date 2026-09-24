@@ -29,6 +29,19 @@ test('手順9 比較相手の枠は既定で出ず、並べて比較で開き、
   const note = page.locator('#senior-first-note');
   await expect(note).toBeVisible();
   await expect(note).toContainText('読むだけ');
+  // BLK-builder-20260924-1801-2 (design 9a / 10c): 相手は手本とは限らない。見出し「比較相手」は 1 行で読め、× は右上。
+  await expect(note).not.toContainText('手本');
+  {
+    const head = page.locator('#senior-head > strong');
+    await expect(head).toHaveText('比較相手');
+    const hb = await head.boundingBox();
+    const lh = await head.evaluate((el) => parseFloat(getComputedStyle(el).lineHeight) || parseFloat(getComputedStyle(el).fontSize) * 1.5);
+    expect(hb.height).toBeLessThan(lh * 1.5);
+    const pb = await pane.boundingBox();
+    const cb = await page.locator('#senior-close').boundingBox();
+    expect(cb.y).toBeLessThan(hb.y + hb.height);
+    expect(cb.x + cb.width).toBeGreaterThan(pb.x + pb.width - 30);
+  }
 
   // 到達条件その4: × で確実に閉じる。
   await page.locator('#senior-close').click();
