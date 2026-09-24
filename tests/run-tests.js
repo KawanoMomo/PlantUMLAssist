@@ -84,6 +84,7 @@ const sourceFiles = [
   'src/core/dsl-updater.js',
   'src/core/props-renderer.js',
   'src/core/props-tab-label.js',
+  'src/core/tab-reveal.js',
   'src/core/text-updater.js',
   'src/core/parser-utils.js',
   'src/core/history.js',
