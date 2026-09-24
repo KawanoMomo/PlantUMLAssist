@@ -61,6 +61,82 @@ window.MA.overlayBuilder = (function() {
     return null;
   }
 
+  // BLK-builder-20260925-0656-2: <path d> の外接矩形をコマンドを読んで求める (jsdom には getBBox が無く、
+  // 属性から枠を作る箇所が使う)。数字を 2 つずつ座標として読むと、smetana が複合状態の見出しに使う円弧
+  // `A rx,ry rot large sweep x,y` の半径・フラグが座標に混ざり、枠が図の左上 (x=0) まで広がった。
+  // 曲線は制御点まで含める (実際の線より少し広いが当たり判定としては安全側)。円弧は中心を求めて周上を拾う。
+  var PATH_ARITY = { M: 2, L: 2, T: 2, H: 1, V: 1, C: 6, S: 4, Q: 4, A: 7, Z: 0 };
+  function _arcPoints(x1, y1, rx, ry, phi, fa, fs, x2, y2) {
+    rx = Math.abs(rx); ry = Math.abs(ry);
+    if (!rx || !ry || (x1 === x2 && y1 === y2)) return [[x2, y2]];
+    var cp = Math.cos(phi * Math.PI / 180), sp = Math.sin(phi * Math.PI / 180);
+    var dx = (x1 - x2) / 2, dy = (y1 - y2) / 2;
+    var x1p = cp * dx + sp * dy, y1p = -sp * dx + cp * dy;
+    var lam = (x1p * x1p) / (rx * rx) + (y1p * y1p) / (ry * ry);
+    if (lam > 1) { rx *= Math.sqrt(lam); ry *= Math.sqrt(lam); }
+    var num = rx * rx * ry * ry - rx * rx * y1p * y1p - ry * ry * x1p * x1p;
+    var den = rx * rx * y1p * y1p + ry * ry * x1p * x1p;
+    var co = Math.sqrt(Math.max(0, num / den)) * (fa === fs ? -1 : 1);
+    var cxp = co * rx * y1p / ry, cyp = -co * ry * x1p / rx;
+    var cx = cp * cxp - sp * cyp + (x1 + x2) / 2, cy = sp * cxp + cp * cyp + (y1 + y2) / 2;
+    function ang(ux, uy, vx, vy) {
+      var a = Math.atan2(ux * vy - uy * vx, ux * vx + uy * vy);
+      return a;
+    }
+    var t1 = ang(1, 0, (x1p - cxp) / rx, (y1p - cyp) / ry);
+    var dt = ang((x1p - cxp) / rx, (y1p - cyp) / ry, (-x1p - cxp) / rx, (-y1p - cyp) / ry);
+    if (!fs && dt > 0) dt -= 2 * Math.PI;
+    else if (fs && dt < 0) dt += 2 * Math.PI;
+    var pts = [], steps = 16;
+    for (var i = 1; i <= steps; i++) {
+      var t = t1 + dt * i / steps;
+      var ex = rx * Math.cos(t), ey = ry * Math.sin(t);
+      pts.push([cp * ex - sp * ey + cx, sp * ex + cp * ey + cy]);
+    }
+    pts[pts.length - 1] = [x2, y2];
+    return pts;
+  }
+  function pathBox(d) {
+    var toks = String(d == null ? '' : d).match(/[a-df-zA-DF-Z]|-?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?/g);
+    if (!toks) return null;
+    var xs = [], ys = [];
+    var cx = 0, cy = 0, sx = 0, sy = 0, cmd = null, i = 0;
+    function add(x, y) { xs.push(x); ys.push(y); }
+    while (i < toks.length) {
+      if (/^[a-zA-Z]$/.test(toks[i])) {
+        cmd = toks[i++];
+        if (cmd === 'Z' || cmd === 'z') { cx = sx; cy = sy; add(cx, cy); continue; }
+      }
+      if (!cmd) return null;
+      var up = cmd.toUpperCase(), n = PATH_ARITY[up];
+      if (n === undefined || n === 0) return null;
+      if (i + n > toks.length) break;
+      var a = [];
+      for (var k = 0; k < n; k++) {
+        var v = parseFloat(toks[i + k]);
+        if (isNaN(v)) return null;
+        a.push(v);
+      }
+      i += n;
+      var rel = cmd !== up;
+      var ox = rel ? cx : 0, oy = rel ? cy : 0;
+      if (up === 'H') { cx = a[0] + (rel ? cx : 0); add(cx, cy); continue; }
+      if (up === 'V') { cy = a[0] + (rel ? cy : 0); add(cx, cy); continue; }
+      if (up === 'A') {
+        var ex = a[5] + ox, ey = a[6] + oy;
+        _arcPoints(cx, cy, a[0], a[1], a[2], a[3] ? 1 : 0, a[4] ? 1 : 0, ex, ey).forEach(function(p) { add(p[0], p[1]); });
+        cx = ex; cy = ey;
+        continue;
+      }
+      for (var j = 0; j < n; j += 2) add(a[j] + ox, a[j + 1] + oy);
+      cx = a[n - 2] + ox; cy = a[n - 1] + oy;
+      if (up === 'M') { sx = cx; sy = cy; cmd = rel ? 'l' : 'L'; }   // M の後に続く組は L
+    }
+    if (!xs.length) return null;
+    var x0 = Math.min.apply(null, xs), y0 = Math.min.apply(null, ys);
+    return { x: x0, y: y0, width: Math.max.apply(null, xs) - x0, height: Math.max.apply(null, ys) - y0 };
+  }
+
   // BLK-human-20260912-0900: g.message は「矢印 (line/polygon) + ラベル + 番号
   // (autonumber) + ステレオタイプ」を子に持ち、何を付けたかで <text> の並びが変わる。
   // extractBBox は最初の <text> しか見ないため、autonumber を付けると番号の上、
@@ -123,19 +199,8 @@ window.MA.overlayBuilder = (function() {
       return { x: cx - rx, y: cy - ry, width: rx * 2, height: ry * 2 };
     }
     if (tag === 'path') {
-      // jsdom には getBBox が無い。d から座標を拾って外接矩形を作る
-      // (曲線の制御点も含むので実際の線より少し広いが、当たり判定としては安全側)。
-      var dnums = (n.getAttribute('d') || '').match(/-?\d+(?:\.\d+)?/g);
-      if (!dnums || dnums.length < 2) return null;
-      var pxs = [], pys = [];
-      for (var di = 0; di + 1 < dnums.length; di += 2) {
-        pxs.push(parseFloat(dnums[di])); pys.push(parseFloat(dnums[di + 1]));
-      }
-      return {
-        x: Math.min.apply(null, pxs), y: Math.min.apply(null, pys),
-        width: Math.max.apply(null, pxs) - Math.min.apply(null, pxs),
-        height: Math.max.apply(null, pys) - Math.min.apply(null, pys),
-      };
+      // jsdom には getBBox が無い。d をコマンドごとに読んで外接矩形を作る (pathBox)。
+      return pathBox(n.getAttribute('d'));
     }
     return null;
   }
@@ -846,6 +911,7 @@ window.MA.overlayBuilder = (function() {
     linkGroups: linkGroups,
     extractUnionBBox: extractUnionBBox,
     nodeBBox: _nodeBBox,
+    pathBox: pathBox,
     extractMultiLineTextBBoxes: extractMultiLineTextBBoxes,
     hitTestTopmost: hitTestTopmost,
     extractDrawnBBox: extractDrawnBBox,

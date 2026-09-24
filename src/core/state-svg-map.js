@@ -50,6 +50,11 @@ window.MA.stateSvgMap = (function() {
       var ry = tag === 'circle' ? _num(el, 'r') : _num(el, 'ry');
       return { x: _num(el, 'cx') - rx, y: _num(el, 'cy') - ry, width: rx * 2, height: ry * 2 };
     }
+    if (tag === 'path') {
+      // 円弧 (smetana の複合状態の見出し) の半径・フラグを座標に混ぜないよう、コマンドを読む。
+      var OB = window.MA.overlayBuilder;
+      if (OB && OB.pathBox) return OB.pathBox(el.getAttribute('d'));
+    }
     if (tag === 'polygon' || tag === 'polyline' || tag === 'path') {
       var src = tag === 'path' ? el.getAttribute('d') : el.getAttribute('points');
       var nums = (_s(src).match(/-?\d+(?:\.\d+)?/g) || []).map(parseFloat);
@@ -255,6 +260,34 @@ window.MA.stateSvgMap = (function() {
         if (_inside(ends.a, b, 6) && !/^\*/.test(names[i].a)) hit = names[i].a;
         else if (_inside(ends.b, b, 6) && !/^\*/.test(names[i].b)) hit = names[i].b;
       });
+      // 行き先の側は線が矢じりの手前で切れる (出口・履歴・pin の小さな丸や四角では 6px より離れる)。
+      // 線の終わりに付いた矢じりがその図形に触れていれば、行き先の名前にする。
+      if (!hit) {
+        links.forEach(function(g, i) {
+          if (hit || !names[i] || /^\*/.test(names[i].b)) return;
+          var ends = _pathEnds(g);
+          if (!ends) return;
+          Array.prototype.forEach.call(g.querySelectorAll('polygon'), function(pg) {
+            var hb = shapeBox(pg);
+            if (hit || !hb || !_inside({ x: hb.x + hb.width / 2, y: hb.y + hb.height / 2 }, pad(b, 0), 14)) return;
+            if (_inside(ends.b, hb, 14)) hit = names[i].b;
+          });
+        });
+      }
+      // どの遷移にもつながらない pin (`state x <<inputPin>>`) は、すぐ脇に書かれた名前の文字で名前にする。
+      // 名前は DSL に宣言のある状態だけ (履歴の「H」のような記号は拾わない)。
+      if (!hit) {
+        var near = pad(b, 14), bestD = Infinity;
+        Array.prototype.forEach.call(svgEl.querySelectorAll('text'), function(t) {
+          if (!_isOrphan(t)) return;
+          var name = _s(t.textContent).trim();
+          if (!name || !_findState(parsed, name)) return;
+          var tb = shapeBox(t);
+          if (!tb || tb.x > near.x + near.width || tb.x + tb.width < near.x || tb.y > near.y + near.height || tb.y + tb.height < near.y) return;
+          var d = Math.abs(tb.x + tb.width / 2 - (b.x + b.width / 2)) + Math.abs(tb.y + tb.height / 2 - (b.y + b.height / 2));
+          if (d < bestD) { bestD = d; hit = name; }
+        });
+      }
       if (!hit) return;
       if (!byName[hit]) { byName[hit] = []; order.push(hit); }
       byName[hit].push(b);
