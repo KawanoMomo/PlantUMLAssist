@@ -574,27 +574,15 @@ test.describe('primary 手順 4: 部品名の混入点を過去版から特定�
 const DV_SPI_1 = '@startuml\nparticipant Spi_Driver\nparticipant Hal\nSpi_Driver -> Hal : init\n@enduml';
 const DV_SPI_2 = DV_SPI_1.replace('@enduml', 'note over Hal : 見出し\n@enduml');
 const DV_SPI_3 = DV_SPI_2.replace('Spi_Driver -> Hal : init', 'Spi_Driver -> PowerCtrl : init');
+// いまの中身。Spi_Driver の行は版 3 と同じ (関係ない note が増えただけ) なので、
+// 「今の形になった版」は保存フォルダの控え (版 3) の方になる。
+const DV_SPI_4 = DV_SPI_3.replace('@enduml', 'note over PowerCtrl : 電源\n@enduml');
 const DV_DMA_1 = '@startuml\nclass DmaCtrl\nDmaCtrl --> Spi_Driver : notify\n@enduml';
 // 影響一覧に載るが Spi_Driver を一度も持たない図 (絞り込みで落ちるべき)。
 const DV_ADC = '@startuml\nparticipant AdcDrv\nparticipant Hal\nAdcDrv -> Hal : init\n@enduml';
 
-// version-timeline の控え (localStorage)。保存のたびに積まれる形をそのまま置く。
-const DV_TIMELINE = {
-  files: {
-    spi_init_sequence: [
-      { dsl: DV_SPI_1, at: '2026-09-14T10:00:00.000Z', label: '' },
-      { dsl: DV_SPI_2, at: '2026-09-15T10:00:00.000Z', label: '' },
-      { dsl: DV_SPI_3, at: '2026-09-16T10:00:00.000Z', label: '' },
-    ],
-    dma_class: [
-      { dsl: DV_DMA_1, at: '2026-09-13T08:00:00.000Z', label: '' },
-    ],
-    adc_init_sequence: [
-      { dsl: DV_ADC, at: '2026-09-15T12:00:00.000Z', label: '' },
-    ],
-  },
-};
-
+// BLK-primary-20260924-1232: 版の材料は保存フォルダ (_versions/*.puml と今の中身)。
+// localStorage は毎回空にして起こす (台本どおり素のブラウザ) — それでも前に積んだ版が並ぶこと。
 async function dvBoot(page) {
   await page.addInitScript((a) => {
     try {
@@ -602,9 +590,8 @@ async function dvBoot(page) {
       window.localStorage.setItem('plantuml-tools-folded', '0');
       window.localStorage.setItem('plantuml-autosave-config',
         JSON.stringify({ enabled: true, debounceMs: 200, restoreMode: 'auto', backend: 'file', fileDir: a.dir }));
-      window.localStorage.setItem('plantuml-version-timeline', JSON.stringify(a.timeline));
     } catch (e) {}
-  }, { dir: DIR, timeline: DV_TIMELINE });
+  }, { dir: DIR });
   await gotoApp(page);
 }
 
@@ -619,7 +606,8 @@ async function pickPart(page, name) {
   await page.selectOption('#dg-name', name);
   await page.waitForFunction((n) => {
     const el = document.getElementById('dg-ver-kw');
-    return !!el && el.value === n;
+    const sum = document.getElementById('dg-ver-summary');
+    return !!el && el.value === n && !!sum && sum.hasAttribute('data-rows');
   }, name);
 }
 
@@ -627,8 +615,14 @@ test.describe('primary 手順 4: 症状に関わる部品がいつの版から�
   test.beforeEach(async ({ page }) => {
     await dvBoot(page);
     await clearDir(page);
-    await putFile(page, 'spi_init_sequence', DV_SPI_3);
+    // dma_class は先に書いておく (Spi_Driver を持ったのは spi の書き換えより前)。
     await putFile(page, 'dma_class', DV_DMA_1);
+    await page.waitForTimeout(1100);
+    // 版を 4 世代積む。server は上書きの手前で前の中身を _versions へ控える。
+    await putFile(page, 'spi_init_sequence', DV_SPI_1);
+    await putFile(page, 'spi_init_sequence', DV_SPI_2);
+    await putFile(page, 'spi_init_sequence', DV_SPI_3);
+    await putFile(page, 'spi_init_sequence', DV_SPI_4);
     await putFile(page, 'adc_init_sequence', DV_ADC);
     await page.waitForTimeout(500);
     await page.reload();
@@ -651,6 +645,11 @@ test.describe('primary 手順 4: 症状に関わる部品がいつの版から�
     await expect(page.locator('#dg-ver-list .dgv-row[data-doc="adc_init_sequence"]')).toHaveCount(0);
     await expect(page.locator('#dg-ver-list .dgv-row[data-doc="spi_init_sequence"]').first())
       .toBeVisible();
+    // localStorage は空のまま起こしたのに、保存フォルダの控え (刻印つきの版) が並ぶ。
+    expect(await page.evaluate(() => window.localStorage.getItem('plantuml-version-timeline') || ''))
+      .not.toContain('PowerCtrl');
+    await expect(page.locator('#dg-ver-list .dgv-row[data-doc="spi_init_sequence"]:not([data-stamp=""])'))
+      .not.toHaveCount(0);
   });
 
   test('「今の形になった版」が図ごとに 1 つ名指しされる', async ({ page }) => {
@@ -703,10 +702,12 @@ test.describe('primary 手順 4: 症状に関わる部品がいつの版から�
     await page.locator('#dg-ver-open').click();
     // 版番号つきのタブ名で開く = 今の図を上書きしない。
     await page.waitForSelector('#ri-modal', { state: 'hidden' });
-    await expect(page.locator('.tab .tab-label', { hasText: 'spi_init_sequence@版3' }))
+    // 開き方は ◉ 混入点の「開く」と同じ: 控えは刻印つきの別タブ。
+    await expect(page.locator('.tab .tab-label', { hasText: /^spi_init_sequence@\d{8}-\d{6}/ }))
       .toHaveCount(1);
-    // 開いた中身はその版のもの。
+    // 開いた中身はその版 (版 3) のもの。いまの中身 (版 4) ではない。
     await expect(page.locator('#editor')).toHaveValue(/Spi_Driver -> PowerCtrl/);
+    await expect(page.locator('#editor')).not.toHaveValue(/電源/);
   });
 });
 

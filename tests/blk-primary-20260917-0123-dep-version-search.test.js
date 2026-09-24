@@ -201,3 +201,124 @@ describe('BLK-primary-20260917-0123 影響先の版履歴を症状の語で絞�
     assert.strictEqual(DVS.atLabel(''), '');
   });
 });
+
+// BLK-primary-20260924-1232: 版の材料を保存フォルダ (GET /version-search) にする。
+// ブラウザを起こし直すと localStorage の変遷は空になり、前の run までに保存フォルダへ
+// 積んだ版が一切見えなかった。server の返り (古い順 + 最後がいまの中身、当たり行だけ)
+// から同じ一覧が組めることを固定する。
+describe('dep-version-search: 保存フォルダの版 (/version-search) から読む', function() {
+  function hitsOf(dsl, kw) {
+    return dsl.split('\n').map(function(t, i) { return { no: i + 1, text: t }; })
+      .filter(function(h) { return h.text.toLowerCase().indexOf(kw.toLowerCase()) >= 0; });
+  }
+  // server の返りの形。版は古い順、最後の 1 件が current (刻印なし)。
+  var PAYLOAD = {
+    terms: ['Spi_Driver'],
+    files: [
+      { name: 'spi_init_sequence', versions: [
+        { stamp: '20260914-100000', current: false, counts: [2], lines: hitsOf(SPI_V1, 'Spi_Driver') },
+        { stamp: '20260915-100000', current: false, counts: [2], lines: hitsOf(SPI_V2, 'Spi_Driver') },
+        { stamp: '20260916-100000', current: false, counts: [2], lines: hitsOf(SPI_V3, 'Spi_Driver') },
+        { stamp: '', current: true, counts: [2],
+          lines: hitsOf(SPI_V3 + '\nnote over Spi_Driver : いま', 'Spi_Driver').slice(0, 2) },
+      ] },
+      { name: 'adc_state', versions: [
+        { stamp: '', current: true, counts: [0], lines: [] },
+      ] },
+      { name: 'unrelated', versions: [
+        { stamp: '', current: true, counts: [1], lines: [{ no: 2, text: 'participant Spi_Driver' }] },
+      ] },
+    ],
+  };
+  var IMP = [
+    { doc: 'spi_init_sequence', hop: 0, via: [] },
+    { doc: 'adc_state', hop: 1, via: ['DmaCtrl'] },
+  ];
+
+  test('刻印は時刻に直り、いまの中身は最後の版番号になる', function() {
+    var h = DVS.fromSearch(PAYLOAD);
+    var spi = h.spi_init_sequence;
+    assert.strictEqual(spi.length, 4);
+    assert.strictEqual(spi[0].rev, 4);
+    assert.strictEqual(spi[0].current, true);
+    assert.strictEqual(spi[0].stamp, '');
+    assert.strictEqual(spi[3].rev, 1);
+    assert.strictEqual(spi[3].stamp, '20260914-100000');
+    // 版の時刻は「その中身になった時刻」= 1 つ古い版が置き換えられた刻印 (UTC)。
+    // 一番古い控えがいつ書かれたかは残っていない。
+    assert.strictEqual(spi[3].at, '');
+    assert.strictEqual(DVS.whenLabel(spi[3]), '日時不明');
+    assert.strictEqual(spi[2].at, '2026-09-14T10:00:00Z');
+    assert.strictEqual(spi[0].at, '2026-09-16T10:00:00Z');
+    assert.strictEqual(DVS.stampAt('20260914-001159.2'), '2026-09-14T00:11:59Z');
+    assert.strictEqual(DVS.stampAt('bad'), '');
+  });
+
+  test('いまの中身は更新時刻 (mtime) で並び、控えと時刻で並ぶ', function() {
+    var h = DVS.fromSearch({ files: [
+      { name: 'old_doc', versions: [
+        { stamp: '', current: true, mtime: '2026-09-10T00:00:00Z',
+          lines: [{ no: 1, text: 'participant Spi_Driver' }] },
+      ] },
+      { name: 'new_doc', versions: [
+        { stamp: '20260912-000000', current: false, lines: [{ no: 1, text: 'Spi_Driver -> A' }] },
+        { stamp: '20260913-000000', current: false, lines: [{ no: 1, text: 'Spi_Driver -> B' }] },
+        { stamp: '', current: true, mtime: '2026-09-13T00:00:00Z',
+          lines: [{ no: 1, text: 'Spi_Driver -> B' }] },
+      ] },
+    ] });
+    var imp = [{ doc: 'old_doc', hop: 0, via: [] }, { doc: 'new_doc', hop: 0, via: [] }];
+    var rows = DVS.search(imp, function(n) { return h[n] || []; }, 'Spi_Driver', { changedOnly: true });
+    // new_doc の版 2 (09-12 に置き換わった版 1 の次 = 09-12 から) が一番新しい変化。
+    var first = DVS.firstToOpen(rows);
+    assert.strictEqual(first.doc, 'new_doc');
+    assert.strictEqual(first.rev, 2);
+    assert.strictEqual(first.stamp, '20260913-000000');
+    assert.deepStrictEqual(rows.map(function(r) { return r.doc + ' ' + r.rev; }),
+      ['new_doc 2', 'old_doc 1', 'new_doc 1']);
+    assert.ok(/^\d{2}\/\d{2} \d{2}:\d{2}$/.test(DVS.whenLabel(rows[1])));
+  });
+
+  test('影響一覧に載る図だけに絞り、書き換わった版を名指しする', function() {
+    var h = DVS.fromSearch(PAYLOAD);
+    var rows = DVS.search(IMP, function(n) { return h[n] || []; }, 'spi_driver', { changedOnly: true });
+    // unrelated は影響一覧に無いので出ない。adc は語を持たないので落ちる。
+    assert.deepStrictEqual(DVS.byDoc(rows).map(function(d) { return d.doc; }), ['spi_init_sequence']);
+    var cur = rows.filter(function(r) { return r.becameCurrent; });
+    assert.strictEqual(cur.length, 1);
+    // 当たり行が「今の形」になったのは版 3 (Hal → PowerCtrl)。版 4 は当たり行が同じ (先頭 2 行)。
+    assert.strictEqual(cur[0].rev, 3);
+    assert.strictEqual(cur[0].stamp, '20260916-100000');
+    assert.strictEqual(DVS.firstToOpen(rows).rev, 3);
+  });
+
+  test('いまの中身はどの控えよりも新しく並ぶ (時刻が無ければ「いま」と書く)', function() {
+    var h = DVS.fromSearch(PAYLOAD);
+    var rows = DVS.search(IMP, function(n) { return h[n] || []; }, 'Spi_Driver');
+    assert.strictEqual(rows[0].current, true);
+    // mtime が無いときは、最後の控えが置き換えられた刻印がいまの中身の時刻。
+    assert.strictEqual(rows[0].at, '2026-09-16T10:00:00Z');
+    var lone = DVS.fromSearch({ files: [{ name: 'd', versions: [
+      { stamp: '', current: true, lines: [{ no: 1, text: 'Spi_Driver' }] },
+    ] }] }).d[0];
+    assert.strictEqual(DVS.whenLabel(lone), 'いま');
+    assert.ok(DVS.rowText(DVS.docRows('d', [lone], 'Spi_Driver')[0]).indexOf('いま') >= 0);
+  });
+
+  test('server が語を分けて返した行も、句として当たる行だけに揃える', function() {
+    var h = DVS.fromSearch({ files: [{ name: 'd', versions: [
+      { stamp: '', current: true, lines: [
+        { no: 1, text: 'Spi_Driver -> Hal : init' }, { no: 2, text: 'Hal -> Other' },
+      ] },
+    ] }] });
+    var rows = DVS.search([{ doc: 'd', hop: 0, via: [] }], function(n) { return h[n] || []; }, 'Spi_Driver -> Hal');
+    assert.strictEqual(rows.length, 1);
+    assert.strictEqual(rows[0].hitCount, 1);
+    assert.strictEqual(rows[0].hits[0].line, 1);
+  });
+
+  test('返りが壊れていても落ちない', function() {
+    assert.deepStrictEqual(DVS.fromSearch(null), {});
+    assert.deepStrictEqual(DVS.fromSearch({ files: [null, { name: 'x' }] }), { x: [] });
+  });
+});

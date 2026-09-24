@@ -18251,6 +18251,11 @@ var _dgVerImpact = [];
 var _dgVerKw = null;      // null = まだ触っていない (部品名を既定にする)
 var _dgVerRows = [];
 var _dgVerLastName = null;
+// 保存フォルダの版 (GET /version-search の返り)。鍵は「フォルダ + 語」。
+// BLK-primary-20260924-1232: 材料を ◉ 混入点と同じ保存フォルダにする。ブラウザの
+// localStorage に積む変遷は起こし直すと空になり、前の run までの版が一切見えなかった。
+var _dgVerCache = {};
+var _dgVerLoading = null;
 
 // 語の既定。名前を選んだ直後は、その部品名がそのまま症状の語になる
 // (打ち直させない = 依存グラフで名前を選ぶ + 一覧を読む の 2 手で終わらせる)。
@@ -18260,10 +18265,28 @@ function _dgVerKeyword() {
   return el ? el.value : _dgVerKw;
 }
 
-function _dgVerHistoryOf(name) {
-  var VT = window.MA.versionTimeline;
-  if (!VT) return [];
-  try { return VT.rows(name); } catch (e) { return []; }
+function _dgVerKey(kw) {
+  return _wsFileDir() + '\n' + String(kw || '').trim().toLowerCase();
+}
+
+// 語に当たる版を保存フォルダから読む。読み終えたら描き直す (読んでいる間に語が
+// 変わっていれば、その語の分はまた別に読む)。
+function _dgVerFetch(kw) {
+  var key = _dgVerKey(kw);
+  if (_dgVerLoading === key) return;
+  _dgVerLoading = key;
+  var url = '/version-search?dir=' + encodeURIComponent(_wsFileDir())
+    + '&q=' + encodeURIComponent(String(kw).trim()) + '&ci=1';
+  window.fetch(url).then(function(r) { return r.json(); }).then(function(data) {
+    _dgVerCache[key] = (data && !data.error)
+      ? window.MA.depVersionSearch.fromSearch(data)
+      : { __error: (data && data.error) || '過去版を読めませんでした' };
+  }, function() {
+    _dgVerCache[key] = { __error: '過去版を読めませんでした' };
+  }).then(function() {
+    if (_dgVerLoading === key) _dgVerLoading = null;
+    if (_dgVerKey(_dgVerKeyword()) === key) renderDgVer();
+  });
 }
 
 // 当たり行の語を光らせる。どこが当たったかが行の中で読めないと、
@@ -18301,10 +18324,11 @@ function _dgVerListHtml(rows, kw) {
     }
     if (!hits) hits = '<div class="dgv-hit">（この版にこの語は無い）</div>';
     html += '<tr class="dgv-row" data-doc="' + esc(r.doc) + '" data-rev="' + r.rev + '" '
+      + 'data-stamp="' + esc(r.stamp || '') + '" '
       + 'data-changed="' + (r.changed ? 1 : 0) + '" '
       + 'data-current="' + (r.becameCurrent ? 1 : 0) + '">'
-      + '<td class="dgv-at">' + esc(DVS.atLabel(r.at)) + '</td>'
-      + '<td class="dgv-doc">' + esc(r.doc) + ' 版' + r.rev + '</td>'
+      + '<td class="dgv-at">' + esc(DVS.whenLabel(r)) + '</td>'
+      + '<td class="dgv-doc">' + esc(r.doc) + ' 版' + r.rev + (r.current ? '（いまの中身）' : '') + '</td>'
       + '<td class="dgv-hop">' + (r.hop === 0 ? '直接' : '連鎖 ' + r.hop + ' 段') + '</td>'
       + '<td class="dgv-what">' + what + (r.becameCurrent ? '（今の形）' : '') + '</td>'
       + '<td class="dgv-hits">' + hits + '</td>'
@@ -18313,28 +18337,16 @@ function _dgVerListHtml(rows, kw) {
   return html + '</tbody></table>';
 }
 
-// 版を別タブで開く。中身は版履歴が持っているので読み直さない。
-// タブ名に版番号を付けて、開いたまま自動保存が走っても今の図を塗り潰さない。
+// 版を開く。開き方は ◉ 混入点の行の「開く」と同じ (_blameOpenVersion): 控えは
+// 刻印つきの別タブで開き (今の図を塗り潰さない)、「いまの中身」はその図そのものを開く。
 function openDgVersion(doc, rev) {
   var rows = _dgVerRows.filter(function(r) {
     return r.doc === doc && String(r.rev) === String(rev);
   });
   var row = rows[0];
   if (!row) return null;
-  var detected = window.MA.workspace.detectType(row.dsl);
-  saveActiveDoc();
-  openExistingFile({
-    name: doc + '@版' + row.rev,
-    dsl: row.dsl,
-    diagramType: (detected && modules[detected]) ? detected : currentDiagramType,
-  });
-  applyActiveDoc();
   toggleDepGraph(false);
-  if (window.MA.toast) {
-    var DVS = window.MA.depVersionSearch;
-    window.MA.toast.show(doc + ' の ' + DVS.atLabel(row.at)
-      + ' の版を別タブで開きました（今の図はそのままです）');
-  }
+  _blameOpenVersion(doc, row.current ? '' : row.stamp);
   return row;
 }
 
@@ -18349,7 +18361,35 @@ function renderDgVer() {
   var kw = _dgVerKeyword();
   if (kwEl && kwEl.value !== kw) kwEl.value = kw;
   var changedOnly = !!(document.getElementById('dg-ver-changed') || {}).checked;
-  var rows = DVS.search(_dgVerImpact, _dgVerHistoryOf, kw, { changedOnly: changedOnly });
+
+  // 版は保存フォルダから読む (◉ 混入点と同じ道)。読めないとき・読んでいる間は
+  // 一覧を空にして、その理由を見出しに出す (黙って「当たり無し」にしない)。
+  var hold = null;
+  var hist = null;
+  var loading = false;
+  if (!String(kw).trim()) {
+    hold = '語を入れると、影響が届く図の保存フォルダの版からその語を含む版を新しい順に並べます';
+  } else if (!_fiFolderMode()) {
+    hold = '保存先がフォルダのときだけ使えます (設定 → 自動保存)';
+  } else {
+    hist = _dgVerCache[_dgVerKey(kw)];
+    if (!hist) { _dgVerFetch(kw); hold = '保存フォルダの過去版を走査しています…'; loading = true; }
+    else if (hist.__error) { hold = hist.__error; hist = null; }
+  }
+  if (hold) {
+    _dgVerRows = [];
+    sumEl.textContent = hold;
+    // 読んでいる間は件数を持たない (件数 0 の「当たり無し」と取り違えさせない)。
+    if (loading) sumEl.removeAttribute('data-rows');
+    else sumEl.setAttribute('data-rows', '0');
+    sumEl.setAttribute('data-docs', '0');
+    listEl.innerHTML = '';
+    if (openBtn) { openBtn.disabled = true; openBtn.title = hold; }
+    return { rows: [], first: null };
+  }
+  var rows = DVS.search(_dgVerImpact, function(name) {
+    return Object.prototype.hasOwnProperty.call(hist, name) ? hist[name] : [];
+  }, kw, { changedOnly: changedOnly });
   _dgVerRows = rows;
 
   sumEl.textContent = DVS.summaryText(rows, kw, _dgVerImpact.length);
@@ -18383,6 +18423,9 @@ function setupDgVer() {
   var openBtn = document.getElementById('dg-ver-open');
   if (kwEl) {
     kwEl.addEventListener('input', function() { _dgVerKw = kwEl.value; renderDgVer(); });
+    kwEl.addEventListener('keydown', function(ev) {
+      if (ev.key === 'Enter' && openBtn && !openBtn.disabled) { ev.preventDefault(); openBtn.click(); }
+    });
   }
   if (changedEl) changedEl.addEventListener('change', function() { renderDgVer(); });
   if (openBtn) {
@@ -18405,6 +18448,9 @@ function renderDepGraph() {
 
   var graph = DG.build(_dgDocs());
   var names = DG.names(graph);
+  // 開き直すたびに保存フォルダを読み直す (前に開いたあとで保存した版を取りこぼさない)。
+  _dgVerCache = {};
+  _dgVerLoading = null;
   // 名前が 1 つも無い = 関係行がまだ書かれていない。空の select を出すより、
   // 「この図の束には辿れる参照が無い」と言い切る方が次の手が決まる。
   if (names.length === 0) {
