@@ -67,5 +67,28 @@ window.MA.autosaveStatus = (function() {
     };
   }
 
-  return { describe: describe };
+  // shortResult(msg) — 保存直後の 1 行 (#status-save-result) の、下端に見せる短い形。
+  // BLK-builder-20260924-1413-2 (design 7a / 9c): 「./test-results/…/diagram1.puml に保存しました ／
+  // 他 persona との部品名の衝突なし（1 枚と照合）」がそのまま下端を埋め、パース OK や件数が 2 行に
+  // 折れていた。下端は 1 行に保ち、フォルダのパスと（…）の内訳は落として title (全文) に回す。
+  //   - 区切り「 ／ 」は「 · 」に (9c の 1 行の区切りと同じ)
+  //   - / や \ を含む語 (パス) はファイル名だけ
+  //   - 全角の（…）は内訳なので落とす
+  //   - 「他 persona との部品名の」のような前置きは落とし、「衝突なし」「衝突 2」だけ残す
+  function shortResult(msg) {
+    var raw = msg == null ? '' : String(msg);
+    if (!raw) return '';
+    return raw.split(/\s*／\s*/).map(function(seg) {
+      var t = seg.replace(/（[^）]*）/g, '')
+        .replace(/[^\s]*[\/\\]([^\s\/\\]+)/g, '$1')
+        .replace(/他\s*persona\s*との部品名の/g, '')
+        // 保存時チェックの「名前・整合・… を見て、この図に不一致はありません」は結論だけ
+        .replace(/^.*を見て、この図に不一致はありません。?$/, '不一致なし')
+        .replace(/\s+/g, ' ')
+        .trim();
+      return t;
+    }).filter(function(t) { return t !== ''; }).join(' · ');
+  }
+
+  return { describe: describe, shortResult: shortResult };
 })();
