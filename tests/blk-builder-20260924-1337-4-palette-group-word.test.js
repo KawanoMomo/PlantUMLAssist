@@ -17,7 +17,8 @@ var CP = global.window.MA.commandPalette;
 function noop() {}
 
 var COMMANDS = [
-  { id: 'tab-audit', title: '名前突合を開く / Name audit', hint: 'Tabs', button: 'btn-tab-audit', run: noop },
+  // BLK-owner-20260924-1332-prune: 🔍 名前突合は ▦ 突合ボードの行に畳んだ (旧名は語に残る)。
+  { id: 'tab-cross', title: '突合ボード / Cross-check board', hint: 'Tabs', keywords: ['名前突合', 'name audit'], button: 'btn-tab-cross', run: noop },
   { id: 'tab-board', title: '変更サマリを開く / Change board', hint: 'Tabs', button: 'btn-tab-board', run: noop },
   { id: 'tab-handoff', title: '引き継ぎパッケージを作る / Handoff package', hint: 'Tabs', button: 'btn-tab-handoff', run: noop },
   { id: 'tab-template', title: 'テンプレートから新しい図を作る / Template', hint: 'Tabs', button: 'btn-tab-template', run: noop },
@@ -30,7 +31,7 @@ function ids(q) { return CP.filter(CP.buildItems(COMMANDS, DSL), q).map(function
 
 describe('分類の語で道具を引ける (design 7b)', () => {
   test('「確かめ」で確かめるの道具が出る', () => {
-    expect(ids('確かめ')).toContain('check:tab-audit');
+    expect(ids('確かめ')).toContain('check:tab-cross');
   });
 
   test('「渡す」「レビュー」でもその分類の道具が出る', () => {
@@ -40,7 +41,7 @@ describe('分類の語で道具を引ける (design 7b)', () => {
   });
 
   test('英語の分類名でも引ける', () => {
-    expect(ids('check')).toContain('check:tab-audit');
+    expect(ids('check')).toContain('check:tab-cross');
     expect(ids('Deliver')).toContain('give:tab-handoff');
   });
 
@@ -53,7 +54,7 @@ describe('分類の語で道具を引ける (design 7b)', () => {
 
   test('題で名指しした行は、分類の語で拾った行より近い (点が小さい)', () => {
     var items = CP.buildItems(COMMANDS, DSL);
-    var audit = items.filter(function(i) { return i.id === 'check:tab-audit'; })[0];
+    var audit = items.filter(function(i) { return i.id === 'check:tab-cross'; })[0];
     var add = items.filter(function(i) { return i.id === 'add:add-check'; })[0];
     expect(CP.score(audit, '確かめ')).toBeGreaterThan(CP.score(add, '確かめ'));
   });
@@ -72,8 +73,8 @@ describe('分類の語で道具を引ける (design 7b)', () => {
 
   test('名指しで当たる行の点は変わらない', () => {
     var items = CP.buildItems(COMMANDS, DSL);
-    var audit = items.filter(function(i) { return i.id === 'check:tab-audit'; })[0];
+    var audit = items.filter(function(i) { return i.id === 'check:tab-cross'; })[0];
     expect(CP.score(audit, '表記揺れ')).toBeLessThan(1000);
-    expect(ids('名前突合')[0]).toBe('check:tab-audit');
+    expect(ids('名前突合')[0]).toBe('check:tab-cross');
   });
 });

@@ -362,16 +362,18 @@ test('手順11 Ctrl+K に分類の語「確かめ」を打つと、確かめる�
 
   const rows = page.locator('#cp-list .cp-item');
   await expect(rows.first()).toBeVisible();
-  // 並ぶのは「確かめる」の見出しの道具で、表記揺れの突き合わせも入っている。
+  // 並ぶのは「確かめる」の見出しの道具で、表記揺れの突き合わせ (▦ 突合ボード) も入っている
+  // (BLK-owner-20260924-1332-prune: 🔍 名前突合は突合ボードの行に畳んだ)。
   await expect(page.locator('#cp-list .cp-group[data-cp-group="check"]')).toBeVisible();
-  await expect(page.locator('#cp-list .cp-item[data-cp-id="check:tab-audit"]')).toBeVisible();
+  await expect(page.locator('#cp-list .cp-item[data-cp-id="check:tab-cross"]')).toBeVisible();
   const kinds = await page.locator('#cp-list .cp-item[data-cp-id^="check:"] .cp-kind').allTextContents();
   expect(kinds.length).toBeGreaterThan(2);
   expect(kinds.every((k) => k === '確かめる')).toBe(true);
 
   // 行を押すとその道具が開く (分類の語で引いた行も、名前で引いた行と同じに動く)。
-  await page.locator('#cp-list .cp-item[data-cp-id="check:tab-audit"]').click();
+  await page.locator('#cp-list .cp-item[data-cp-id="check:tab-cross"]').click();
   await expect(page.locator('#cp-modal')).toBeHidden();
+  await expect(page.locator('#ab-modal')).toBeVisible();
 });
 
 // BLK-builder-20260924-1341-4 (design 9b): ツール ▾ の右列は小見出しごとにまとまり、同じ小見出しが 2 度出ない。
@@ -385,8 +387,8 @@ test('手順11 ツール ▾ の「確かめる」は 名前と系統 / まと�
   await expect(pane).toBeVisible();
   await expect(pane.locator('.tool-menu-sub')).toHaveText(['名前と系統', 'まとめて点検', '渡す前に']);
   await expect(pane.locator('.tool-menu-item .tool-menu-label')).toHaveText([
-    '名前の表記揺れ', '系統内の動作名のずれ', '系統マップの崩れ', '状態遷移のトレース漏れ',
-    '突合ボード (1 画面で全部)', '1 つの観点で全図を棚卸し', '仕様 (design) と現在値の突合',
+    '系統内の動作名のずれ', '系統マップの崩れ', '状態遷移のトレース漏れ',
+    '突合ボード (表記揺れ・宣言なし・メソッドも 1 画面で)', '1 つの観点で全図を棚卸し', '仕様 (design) と現在値の突合',
     '提出前チェック', '引き継ぎチェックリスト', '監査履歴',
   ]);
 
