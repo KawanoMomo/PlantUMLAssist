@@ -1736,8 +1736,8 @@ function init() {
   // タブ列に横並びだった機能ボタンを 1 つの「ツール」に畳む。メニュー項目は
   // 既存ボタンの click を鳴らすだけで、処理そのものは元のボタン側に残す
   // (Ctrl+K のコマンドパレットと同じ経路を通す)。
-  // 畳んだ状態は localStorage に憶える。既定は畳まない (今のタブ列のまま) で、
-  // 「ツール ▾」の中の「タブ列から畳む / タブ列に戻す」で切り替える。
+  // 畳んだ状態は localStorage に憶える。既定は畳む (ツール ▾ はタブ列の右端)。
+  // 以前に自分で既定から外した人にだけ、パネルの下端に既定へ戻す 1 行が出る。
   (function setupToolMenu() {
     var btn = document.getElementById('btn-tab-tools');
     // 静かなタブ列で「ツール ▾」の代わりに出る小さな入口 (BLK-primary-20260908-1803)
@@ -1815,16 +1815,14 @@ function init() {
     }
 
     function open() {
+      // BLK-builder-20260924-1815-3 (design 9b / 9a): 既定 (畳む・ツール ▾ は右端) の人には
+      // 切り替えを出さない。既定から外れている人にだけ、既定へ戻す 1 行を出す。
+      var foot = tm.footToggles(isFolded(), isQuiet()).map(function(t) {
+        return '<button type="button" class="tool-menu-item" id="' + t.id + '">'
+          + '<span class="tool-menu-label">' + t.label + '</span></button>';
+      }).join('');
       menu.innerHTML = tm.buildMenuHtml(badges())
-        + '<div class="tool-menu-foot"><button type="button" class="tool-menu-item" id="tool-menu-fold">'
-        + '<span class="tool-menu-label">'
-        + (isFolded() ? 'タブ列に戻す' : 'タブ列から畳む')
-        + '</span></button>'
-        // design 7b: タブ列を図のタブだけにする / ツール ▾ を出す の切り替え。
-        + '<button type="button" class="tool-menu-item" id="tool-menu-quiet">'
-        + '<span class="tool-menu-label">'
-        + (isQuiet() ? 'ツール ▾ をタブ列に出す' : 'タブ列を図のタブだけにする')
-        + '</span></button></div>';
+        + (foot ? '<div class="tool-menu-foot">' + foot + '</div>' : '');
       menu.hidden = false;
       setExpanded(true);
       // design 9b: 開いたらそのまま打てる。分類は 1 つ目を選んだ状態で出す。
@@ -1944,21 +1942,19 @@ function init() {
       if (cat) { selectCat(cat); return; }
       var item = e.target && e.target.closest ? e.target.closest('.tool-menu-item') : null;
       if (!item) return;
+      // BLK-builder-20260924-1815-3: 下端の 1 行は既定へ戻すだけ (既定から外す道はパネルに置かない)。
+      // 既定と同じ値 ('1') を書いて戻す (次に開いても既定 = 畳む・ツール ▾ は右端)。
       if (item.id === 'tool-menu-fold') {
-        var next = !isFolded();
-        // 畳み方をここで自分で選んだ人は「ツール ▾」を入口として使っている。
-        // 7b の静かな既定は解いて、入口をタブ列に残す (Ctrl+K だけにしない)。
-        applyQuiet(false);
-        applyFold(next);
-        try { localStorage.setItem(FOLD_KEY, next ? '1' : '0'); } catch (err) {}
-        try { localStorage.setItem(QUIET_KEY, '0'); } catch (err) {}
+        applyQuiet(true);
+        applyFold(true);
+        try { localStorage.setItem(FOLD_KEY, '1'); } catch (err) {}
+        try { localStorage.setItem(QUIET_KEY, '1'); } catch (err) {}
         close();
         return;
       }
       if (item.id === 'tool-menu-quiet') {
-        var q = !isQuiet();
-        applyQuiet(q);
-        try { localStorage.setItem(QUIET_KEY, q ? '1' : '0'); } catch (err) {}
+        applyQuiet(true);
+        try { localStorage.setItem(QUIET_KEY, '1'); } catch (err) {}
         close();
         return;
       }
@@ -2000,7 +1996,7 @@ function init() {
     // design 7a/7b: 既定は畳んだ状態。タブ列に 25 個の機能ボタンが並ぶと横スクロールが
     // 要り、「今どれを見ているか」の図タブが「何をするか」に埋もれる。畳んだ側を既定に
     // すると、タブ列は図のタブと ＋ / 一覧 / ツール ▾ だけになり、件数は下端に出る。
-    // 一度でも「タブ列に戻す」を押した人はその選択が残る。
+    // 以前に自分で畳みを解いた人 (localStorage に '0') はその選択が残る。
     // design 7b: さらに「ツール ▾」も置かない。タブ列は図のタブと ＋ / 一覧 だけになり、
     // 機能は Ctrl+K から引く (件数は下端の状態表示に出ている)。
     var saved = null;

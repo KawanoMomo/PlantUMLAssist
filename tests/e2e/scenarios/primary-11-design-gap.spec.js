@@ -403,6 +403,43 @@ test('手順11 ツール ▾ の「確かめる」は 名前と系統 / まと�
   await page.waitForSelector('#dc-modal .dc-table');
 });
 
+// BLK-builder-20260924-1815-3 (design 9b / 9a): ツール ▾ のパネルは絞り込み欄と 2 段だけ。下端に
+// 「タブ列に戻す」「ツール ▾ をタブ列に出す」が常に出て、押すと 9a が外した絵文字の機能ボタンが戻ったり、
+// 右端のツール ▾ が ＋ の隣へ動いたりした。既定の人には出さず、既定から外した人には戻す 1 行だけを出す。
+test('手順11 既定のツール ▾ のパネルに切り替えの行は出ず、畳みを解いた人には既定へ戻す 1 行だけが出る', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR, { foldedTools: true });
+  await page.locator('#btn-tab-tools-mini').click();
+  await expect(page.locator('#tool-menu')).toBeVisible();
+  await expect(page.locator('#tool-menu .tool-menu-foot')).toHaveCount(0);
+  await expect(page.locator('#tool-menu-fold')).toHaveCount(0);
+  await expect(page.locator('#tool-menu-quiet')).toHaveCount(0);
+  await expect(page.locator('#tool-menu')).not.toContainText('タブ列に戻す');
+  await expect(page.locator('#tool-menu')).not.toContainText('ツール ▾ をタブ列に出す');
+  await page.keyboard.press('Escape');
+
+  // 以前に自分で畳みを解いた人 (機能ボタンがタブ列に並んでいる)。
+  await page.evaluate(() => {
+    try { localStorage.setItem('pua.e2e.keep', '1'); localStorage.setItem('plantuml-tools-folded', '0'); } catch (e) {}
+  });
+  await page.reload();
+  await page.waitForSelector('#editor');
+  await expect(page.locator('#btn-tab-rename')).toBeVisible();
+  await page.locator('#btn-tab-tools').click();
+  await expect(page.locator('#tool-menu .tool-menu-foot .tool-menu-item')).toHaveText(['タブ列から畳む']);
+  await page.locator('#tool-menu-fold').click();
+  // 既定に戻る: 機能ボタンは畳まれ、入口は右端の「ツール ▾」。値は既定と同じ '1' になり、次に開いても既定のまま。
+  await expect(page.locator('#btn-tab-rename')).toBeHidden();
+  await expect(page.locator('#btn-tab-tools-mini')).toBeVisible();
+  await expect(page.locator('#btn-tab-tools')).toBeHidden();
+  expect(await page.evaluate(() => [localStorage.getItem('plantuml-tools-folded'), localStorage.getItem('plantuml-tools-quiet')]))
+    .toEqual(['1', '1']);
+  await page.reload();
+  await page.waitForSelector('#editor');
+  await expect(page.locator('#btn-tab-rename')).toBeHidden();
+  await page.locator('#btn-tab-tools-mini').click();
+  await expect(page.locator('#tool-menu .tool-menu-foot')).toHaveCount(0);
+});
+
 // BLK-builder-20260924-1416-3 (design 7a / 9a / 10a): ツールの入口は枠付きの「ツール ▾」をタブ列の右端に置く。
 // 以前は「他 28 件」という札が ＋ の直後に出て、何の件数か押すまで読めず、図のタブが増えると位置もずれた。
 test('手順11 既定のタブ列ではツールの入口が右端の「ツール ▾」で、図のタブが増えても右端に見えている', async ({ page }) => {

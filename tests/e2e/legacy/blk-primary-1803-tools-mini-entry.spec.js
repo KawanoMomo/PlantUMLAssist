@@ -83,15 +83,19 @@ test('もう一度押せば閉じ、Esc でも閉じる', async ({ page }) => {
   await expect(page.locator('#tool-menu')).toBeHidden();
 });
 
-test('「ツール ▾」を出す選択をすると札は引っ込む (入口は 1 つだけ)', async ({ page }) => {
+// BLK-builder-20260924-1815-3: 切り替えはパネルから外した (既定の人には出さない)。
+// 以前に選んだ人の設定 (localStorage) で「ツール ▾」を出している間も、入口は 1 つだけ。
+test('「ツール ▾」を出す設定の人には札は出ない (入口は 1 つだけ)', async ({ page }) => {
   await openDefault(page);
-  await page.locator('#btn-tab-tools-mini').click();
-  await page.locator('#tool-menu-quiet').click();
+  await page.evaluate(() => localStorage.setItem('plantuml-tools-quiet', '0'));
+  await page.reload();
+  await page.waitForSelector('#preview-svg');
   await expect(page.locator('#btn-tab-tools')).toBeVisible();
   await expect(page.locator('#btn-tab-tools-mini')).toBeHidden();
-  // 畳みを解いて機能ボタンを並べても、札は出ない。
-  await page.locator('#btn-tab-tools').click();
-  await page.locator('#tool-menu-fold').click();
+  // 畳みを解いて機能ボタンを並べている人にも、札は出ない。
+  await page.evaluate(() => localStorage.setItem('plantuml-tools-folded', '0'));
+  await page.reload();
+  await page.waitForSelector('#preview-svg');
   // BLK-owner-20260918-0329-prune: 引き継ぎはタブ列に戻らない (入口は Export ▾)。
   // タブ列に戻るのは畳んでいた他の道具。
   await expect(page.locator('#btn-tab-board')).toBeVisible();
