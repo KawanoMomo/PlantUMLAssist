@@ -1050,3 +1050,39 @@ test('migrator 手順 4 — C4 の手続きだけで書いた sequence 図でも
   await expectHit('isAuthenticated()', 'message', 13);
   await expectHit('[JDBC]', 'message', 14);
 });
+
+// BLK-migrator-20260924-1332: C4 の手続きの sequence 図に alt / loop / ref / == 区切り == / ... 遅延 ... が混ざると
+// 枠がほぼ全滅し (4/25)、「Overlay マッチング失敗」の帯が出た。斜めの線 ($rel="->(39)") と枠の線で本数が合わず、
+// 全部のメッセージを諦めていた。枠・区切り・遅延を先に見分け、メッセージは線の上の文字の文言で当てる。
+test('migrator 手順 4 — C4 手続きの sequence に alt / loop / ref / 区切り / 遅延が混ざっても、参加者・メッセージ・枠に本人の枠が出る', async ({ page }) => {
+  await bootPlain(page);
+  const dsl = fs.readFileSync(path.join(__dirname, '..', '..', 'fixtures', 'dsl', 'c4-sequence-frames.puml'), 'utf8')
+    .replace(/\r\n/g, '\n').replace(/\n+$/, '');
+  await typeDsl(page, dsl);
+
+  await expect(page.locator('#overlay-layer rect[data-type="message"]')).toHaveCount(9, { timeout: 20000 });
+  await expect(page.locator('#overlay-warning')).toBeHidden();
+
+  // 縦に長い図なので、指す文字をプレビューの中へ送ってから指す。
+  const expectHit = async (label, type, line) => {
+    await page.evaluate((l) => {
+      const t = Array.prototype.find.call(document.querySelectorAll('#preview-svg svg text'), (n) => (n.textContent || '').trim() === l);
+      if (t) t.scrollIntoView({ block: 'center', inline: 'nearest' });
+    }, label);
+    const { hit } = await hoverHit(page, label);
+    expect(hit, label + ' に枠').not.toBeNull();
+    expect(hit.type, label).toBe(type);
+    expect(hit.line, label).toBe(String(line));
+  };
+  await expectHit('Alice', 'participant', 81);
+  await expectHit('Bob', 'participant', 83);
+  await expectHit('Request', 'message', 88);
+  await expectHit('Accepted', 'message', 91);
+  await expectHit('DNS', 'message', 94);
+  await expectHit('hello', 'message', 100);
+  await expectHit('[successful case]', 'group', 90);
+  await expectHit('init', 'source-line', 98);
+  await expectHit('Initialization', 'source-line', 107);
+  await expectHit('5 minutes later', 'source-line', 117);
+  await expectHit('phone', 'message', 119);
+});
