@@ -26672,6 +26672,7 @@ function renderSaveGuard(res) {
     SG.lines(res).forEach(function(l) {
       html += '<li>' + esc(l.text)
         + (l.decl ? '<span class="sgd-decl">クラス図に足すなら: ' + esc(l.decl) + '</span>' : '')
+        + (l.note ? '<span class="sgd-note">📝 ' + esc(l.note) + '</span>' : '')
         + '</li>';
     });
     list.innerHTML = html;
@@ -26682,9 +26683,15 @@ function renderSaveGuard(res) {
   if (row) row.hidden = true;
   var rin = document.getElementById('sgd-omit-reason');
   if (rin) rin.value = '';
+  _sgdNotePrefill = '';
   renderOmitPreview();
   el.hidden = false;
 }
+
+// BLK-reviewer-20260923-2012-wish: 帯の指摘が note の自由文で既に答えてあるとき、
+// 「🚫 意図的に省略」で理由欄に入れた note の本文。理由欄がこのままなら、
+// 指摘ごとに自分の note の本文を理由に使う (note が 2 つ以上あっても打ち直させない)。
+var _sgdNotePrefill = '';
 
 // ── 意図的な省略 (BLK-reviewer-20260915-0106-wish) ─────────────────────────
 // 帯に出ている指摘を「宣言しないと決めた」として片づけるとき、note の自由文では
@@ -26709,9 +26716,11 @@ function omitTagLines(reason) {
   if (!OM || !_sgdRes) return [];
   var cur = mmdText;
   var out = [];
+  var asNote = !!_sgdNotePrefill && String(reason || '').trim() === _sgdNotePrefill.trim();
   (_sgdRes.issues || []).forEach(function(i) {
     if (OM.has(cur, i)) return;
-    out.push(OM.tagLine(i, reason));
+    var r = (asNote && i.noteReply && i.noteReply.reason) ? i.noteReply.reason : reason;
+    out.push(OM.tagLine(i, r));
   });
   return out;
 }
@@ -26815,8 +26824,15 @@ function setupSaveGuard() {
     var row = document.getElementById('sgd-omit-row');
     if (!row) return;
     row.hidden = false;
-    renderOmitPreview();
     var rin = document.getElementById('sgd-omit-reason');
+    // note で既に答えてある組なら、その本文を理由欄に入れて開く (note は消さない)。
+    var SG = window.MA.saveGuard;
+    var pre = (SG && SG.notePrefill) ? SG.notePrefill(_sgdRes) : '';
+    if (rin && pre && !String(rin.value || '').trim()) {
+      rin.value = pre;
+      _sgdNotePrefill = pre;
+    }
+    renderOmitPreview();
     if (rin) rin.focus();
   });
   var omitReason = document.getElementById('sgd-omit-reason');

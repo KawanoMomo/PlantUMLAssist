@@ -118,6 +118,16 @@
     });
   }
 
+  // BLK-reviewer-20260923-2012-wish: タグは無いが note の自由文で答えている組
+  // (omit-method.markNotes が noteReply を付けたもの) は、どの note で答えたかを
+  // 理由の後ろに書く。reviewer が puml を開いて note を読み直さずに済むように。
+  function _noteSuffix(it) {
+    var n = it && it.noteReply;
+    if (!n) return '';
+    return '（自由文で応答あり(タグ化待ち): ' + _s(n.doc) + (n.line ? ' ' + n.line + ' 行' : '')
+      + ' の note「' + _s(n.reason) + '」）';
+  }
+
   function _fromConsistency(res, out) {
     _list(res.naming).forEach(function(n) {
       var docs = _docsOf(n.docs);
@@ -130,7 +140,8 @@
     });
     _list(res.methods).forEach(function(m) {
       out.push(_row('consistency.methods', _s(m.doc), _s(m.target) + '.' + _s(m.method),
-        'シーケンスで呼んでいますが、クラス図の ' + _s(m.target) + ' にこのメソッドがありません',
+        'シーケンスで呼んでいますが、クラス図の ' + _s(m.target) + ' にこのメソッドがありません'
+        + _noteSuffix(m),
         null, { item: m }));
     });
     _list(res.events).forEach(function(e) {
@@ -169,9 +180,9 @@
   function _fromMethod(res, out) {
     _list(res.issues).forEach(function(i) {
       out.push(_row('method.issues', _oneDoc(i.docs), _s(i.owner || i.cls) + '.' + _s(i.method),
-        _s(i.kind) === 'no-method'
+        (_s(i.kind) === 'no-method'
           ? 'クラス図に定義がありません'
-          : 'メソッド突合で ' + _s(i.kind) + ' として挙がっています', i.docs, { item: i }));
+          : 'メソッド突合で ' + _s(i.kind) + ' として挙がっています') + _noteSuffix(i), i.docs, { item: i }));
     });
   }
 

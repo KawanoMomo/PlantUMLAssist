@@ -173,6 +173,50 @@ test('手順4.9 意図的に省略すると決めた呼び出しは、理由つ�
   await expect(guard).toBeHidden();
 });
 
+// BLK-reviewer-20260923-2012-wish: primary がタグを使わず note の自由文で
+// 「意図的に割愛」と答えた図。帯はその note を名指しし、「🚫 意図的に省略」を
+// 押すと note の本文が理由欄に入って開く。そのまま押せばタグが 1 行足され、
+// 以後は突合 (reviewer の手順 8 の監査も) で解消扱いになる。note は消さない。
+const CLASS_NOTED = CLASS_DOC.replace('@enduml',
+  'note top of ClockCtrl : ClockCtrl.EnableClock()\\nは呼び先の詳細を意図的に割愛(reviewer依頼2への回答)\n@enduml');
+
+test('手順4.9 note の自由文で答えた呼び出しは、帯が note を名指しし、その本文のまま省略のタグにできる', async ({ page }) => {
+  await bootManualSave(page, DIR);
+  await S.clearDir(page, DIR);
+  await S.putDoc(page, DIR, 'driver_common_class', CLASS_NOTED);
+  await S.putDoc(page, DIR, 'spi_init_sequence', SEQ_OK);
+
+  await S.openFolderItem(page, 'spi_init_sequence');
+  await S.typeDsl(page, SEQ_GAP);
+  await pressSave(page);
+
+  const guard = page.locator('#save-guard-overlay');
+  await expect(guard).toBeVisible();
+  await expect(page.locator('#sgd-summary')).toContainText('note の自由文で応答済み（タグ化待ち）');
+  await expect(page.locator('#sgd-list .sgd-note')).toContainText('driver_common_class');
+  await expect(page.locator('#sgd-list .sgd-note')).toContainText('意図的に割愛');
+
+  // 理由を打たなくても、note の本文が入った状態で開く。
+  await page.locator('#btn-sgd-omit').click();
+  await expect(page.locator('#sgd-omit-row')).toBeVisible();
+  await expect(page.locator('#sgd-omit-reason')).toHaveValue(/意図的に割愛/);
+  await expect(page.locator('#sgd-omit-preview')).toContainText("'@omit-method ClockCtrl.EnableClock");
+
+  await page.locator('#btn-sgd-omit-go').click();
+  await page.waitForTimeout(1500);
+  await expect(guard).toBeHidden();
+
+  const saved = await S.readDoc(page, DIR, 'spi_init_sequence');
+  expect(saved).toMatch(/'@omit-method ClockCtrl\.EnableClock .*意図的に割愛/);
+  // note を書いたクラス図には触らない。
+  expect(await S.readDoc(page, DIR, 'driver_common_class')).toContain('note top of ClockCtrl');
+
+  await S.typeDsl(page, saved + "\n' 続き");
+  await pressSave(page);
+  await page.waitForTimeout(900);
+  await expect(guard).toBeHidden();
+});
+
 // 宣言が揃っている保存は、これまでどおり黙って通る。
 test('手順4.9 宣言が揃っていれば保存は止まらない', async ({ page }) => {
   await bootManualSave(page, DIR);
