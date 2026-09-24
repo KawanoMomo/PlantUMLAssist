@@ -101,6 +101,7 @@ const sourceFiles = [
   'src/core/pin-verify.js',
   'src/core/relation-options.js',
   'src/core/group-notation.js',
+  'src/core/group-place.js',
   'src/core/sequence-marks.js',
   'src/core/sequence-autonumber.js',
   'src/core/sequence-participant-zone.js',
