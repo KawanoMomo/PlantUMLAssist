@@ -223,3 +223,36 @@ describe('design 2b color panel', function() {
     expect(ta.value).toBe('hello');
   });
 });
+
+// BLK-owner-20260923-2332-prune: 見え方の欄が白い 1 行欄に見え、メッセージの本文の欄が
+// 2 つあると読まれていた。打てない欄と分かる見出しを付け、空の間は出さない。
+describe('見え方の欄は本文の欄と見分けられる', function() {
+  test('空の本文では見え方の欄を出さない', function() {
+    var c = document.createElement('div');
+    document.body.appendChild(c);
+    RLE.mount(c, '');
+    expect(c.querySelector('.rle-preview-wrap').hidden).toBe(true);
+    expect(c.querySelectorAll('textarea').length).toBe(1);
+    expect(c.querySelectorAll('input[type="text"], input:not([type])').length).toBe(0);
+  });
+  test('打つと「図での見え方」の見出し付きで出て、消すとまた隠れる', function() {
+    var c = document.createElement('div');
+    document.body.appendChild(c);
+    RLE.mount(c, '');
+    var ta = c.querySelector('.rle-textarea');
+    ta.value = 'Spi_Init';
+    ta.dispatchEvent(new window.Event('input'));
+    expect(c.querySelector('.rle-preview-wrap').hidden).toBe(false);
+    expect(c.querySelector('.rle-preview-caption').textContent).toBe('図での見え方');
+    expect(c.querySelector('.rle-preview').textContent).toBe('Spi_Init');
+    ta.value = '';
+    ta.dispatchEvent(new window.Event('input'));
+    expect(c.querySelector('.rle-preview-wrap').hidden).toBe(true);
+  });
+  test('既に本文がある要素を開いたときは最初から見え方が出ている', function() {
+    var c = document.createElement('div');
+    document.body.appendChild(c);
+    RLE.mount(c, 'Ack');
+    expect(c.querySelector('.rle-preview-wrap').hidden).toBe(false);
+  });
+});

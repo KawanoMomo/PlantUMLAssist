@@ -133,7 +133,54 @@ window.MA.relationKindCards = (function() {
     }
   }
 
+  // mountForSelect: 末尾に追加の「関係」フォームの種類プルダウン ({selectId}) を、選択パネルと同じ
+  // 名称と意味のカードに置き換える (BLK-owner-20260923-2332-prune: 同じ選択を図種・場所で別の部品にしない)。
+  // select は値の持ち主のまま残して隠す (各図種の分岐と change の聞き手をそのまま使う)。
+  function mountForSelect(selectId, diagram) {
+    var sel = document.getElementById(selectId);
+    if (!sel || !sel.parentNode || !sel.parentNode.parentNode) return null;
+    var old = document.getElementById(selectId + '-cards');
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+    var have = {};
+    for (var i = 0; i < sel.options.length; i++) have[sel.options[i].value] = true;
+    var kinds = kindsOf(diagram).filter(function(k) { return have[k.value]; });
+    if (!kinds.length) return null;
+    var cls = selectId + '-card';
+    var host = sel.ownerDocument.createElement('div');
+    host.id = selectId + '-cards';
+    host.innerHTML = cardsHtml(cls, kinds, sel.value);
+    var wrap = sel.parentNode;
+    wrap.parentNode.insertBefore(host, wrap);
+    var TK = window.MA.tailKindChips;
+    if (TK && TK.hideSelect) TK.hideSelect(sel);
+    else wrap.style.display = 'none';
+    function paint() {
+      var btns = host.querySelectorAll('.' + cls);
+      for (var j = 0; j < btns.length; j++) {
+        var on = btns[j].getAttribute('data-value') === sel.value;
+        btns[j].classList.toggle('active', on);
+        btns[j].setAttribute('aria-pressed', on ? 'true' : 'false');
+        btns[j].style.background = on ? 'var(--accent)' : 'var(--bg-tertiary)';
+        btns[j].style.borderColor = on ? 'var(--accent)' : 'var(--border)';
+        btns[j].style.color = on ? '#fff' : 'var(--text-primary)';
+      }
+    }
+    bindCards(host, cls, function(v) {
+      if (sel.value === v) { paint(); return; }
+      sel.value = v;
+      var view = sel.ownerDocument.defaultView;
+      var ev;
+      if (view && view.Event) ev = new view.Event('change', { bubbles: true });
+      else { ev = sel.ownerDocument.createEvent('Event'); ev.initEvent('change', true, false); }
+      sel.dispatchEvent(ev);
+      paint();
+    });
+    sel.addEventListener('change', paint);
+    return host;
+  }
+
   return {
+    mountForSelect: mountForSelect,
     KINDS: KINDS,
     FIXED_NOTE: FIXED_NOTE,
     kindsOf: kindsOf,

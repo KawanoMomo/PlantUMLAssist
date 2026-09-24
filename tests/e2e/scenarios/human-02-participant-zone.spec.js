@@ -56,7 +56,7 @@ test.describe('人間 手順 2 — 途中から足した参加者の宣言が上
     await setDsl(page, THREE_MESSAGES);
 
     // 末尾に追加の「参加者」から database DB を足す。
-    await page.locator('#seq-tail-kind').selectOption('participant');
+    await page.locator('#seq-tail-kind-chip-participant').click();
     await page.locator('#seq-tail-ptype').selectOption('database');
     await page.locator('#seq-tail-alias').fill('DB');
     await page.locator('#seq-tail-add').click();
@@ -86,7 +86,7 @@ test.describe('人間 手順 2 — 途中から足した参加者の宣言が上
     await gotoApp(page);
     await setDsl(page, ['@startuml', 'A -> B : req', 'B --> A : res', '@enduml'].join('\n'));
 
-    await page.locator('#seq-tail-kind').selectOption('participant');
+    await page.locator('#seq-tail-kind-chip-participant').click();
     await page.locator('#seq-tail-ptype').selectOption('actor');
     await page.locator('#seq-tail-alias').fill('Ope');
     await page.locator('#seq-tail-add').click();
@@ -103,7 +103,7 @@ test.describe('人間 手順 2 — 途中から足した参加者の宣言が上
     await setDsl(page, THREE_MESSAGES);
 
     for (const [ptype, alias] of [['database', 'DB'], ['queue', 'MQ']]) {
-      await page.locator('#seq-tail-kind').selectOption('participant');
+      await page.locator('#seq-tail-kind-chip-participant').click();
       await page.locator('#seq-tail-ptype').selectOption(ptype);
       await page.locator('#seq-tail-alias').fill(alias);
       await page.locator('#seq-tail-add').click();

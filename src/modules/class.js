@@ -1476,14 +1476,14 @@ window.MA.modules.plantumlClass = (function() {
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">末尾に追加</label>' +
         P.selectFieldHtml('種類', 'cl-tail-kind', [
-          { value: 'class',     label: 'Class', selected: true },
-          { value: 'interface', label: 'Interface' },
-          { value: 'abstract',  label: 'Abstract Class' },
-          { value: 'enum',      label: 'Enum' },
-          { value: 'package',   label: 'Package境界' },
-          { value: 'namespace', label: 'Namespace' },
-          { value: 'relation',  label: 'Relation (関係)' },
-          { value: 'note',      label: 'Note (注釈)' },
+          { value: 'class',     label: 'クラス (class)', selected: true },
+          { value: 'interface', label: 'インターフェース (interface)' },
+          { value: 'abstract',  label: '抽象クラス (abstract class)' },
+          { value: 'enum',      label: '列挙 (enum)' },
+          { value: 'package',   label: '境界 (package)' },
+          { value: 'namespace', label: '名前空間 (namespace)' },
+          { value: 'relation',  label: '関係' },
+          { value: 'note',      label: '注釈 (note)' },
         ]) +
         '<div id="cl-tail-detail" style="margin-top:6px;"></div>' +
       '</div>' +
@@ -1557,7 +1557,10 @@ window.MA.modules.plantumlClass = (function() {
           P.primaryButtonHtml('cl-tail-add', '+ Note 追加');
       }
       detailEl.innerHTML = html2;
-      if (kind === 'relation') _bindRelationRoles();
+      if (kind === 'relation') {
+        window.MA.relationKindCards.mountForSelect('cl-tail-rkind', 'class');
+        _bindRelationRoles();
+      }
 
       P.bindEvent('cl-tail-add', 'click', function() {
         var t = ctx.getMmdText();

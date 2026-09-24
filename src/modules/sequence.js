@@ -2584,21 +2584,14 @@ window.MA.modules.plantumlSequence = (function() {
               { value: 'note', label: '注釈 (note)' },
               { value: 'block', label: 'ブロック (alt/loop/...)' },
               { value: 'activation', label: 'ライフライン (activate/deactivate)' },
-              { value: 'bulk', label: '一括 (複数行)' },
+              { value: 'bulk', label: 'まとめて (複数行)' },
             ]) +
             '<div id="seq-tail-detail" style="margin-top:6px;"></div>' +
-          '</div>' +
-          // BLK-junior-20260906-2143: 参加者とメッセージをまとめて組む入口。
-          '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-            '<button id="seq-scaffold-open" style="width:100%;font-size:11px;padding:5px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">⌗ シーケンス構成をまとめて追加</button>' +
           '</div>' +
           '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;color:var(--text-secondary);font-size:11px;">' +
             'プレビュー上で要素をクリックすると編集パネルが開きます' +
           '</div>';
 
-        P.bindEvent('seq-scaffold-open', 'click', function() {
-          _showSeqScaffoldModal(parsedData, ctx);
-        });
 
         // autonumber checkbox
         P.bindEvent('seq-autonumber', 'change', function() {
@@ -2685,7 +2678,10 @@ window.MA.modules.plantumlSequence = (function() {
               P.primaryButtonHtml('seq-tail-add', '+ 末尾に追加');
           } else if (kind === 'bulk') {
             html =
-              '<div style="margin-bottom:4px;font-size:10px;color:var(--text-secondary);">1 行 1 件。参加者とメッセージを混ぜて書けます</div>' +
+              // BLK-junior-20260906-2143 の「名前と本文だけで組む」表も、まとめて足す入口の 1 つとしてここに置く
+              // (BLK-owner-20260923-2332-prune: まとめて足す入口を種別チップの「まとめて」1 つに畳んだ)。
+              '<button id="seq-scaffold-open" style="width:100%;font-size:11px;padding:5px 10px;margin-bottom:6px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">⌗ 名前と本文だけの表で組む…</button>' +
+              '<div style="margin-bottom:4px;font-size:10px;color:var(--text-secondary);">または 1 行 1 件で書く。参加者とメッセージを混ぜて書けます</div>' +
               window.MA.reuseModal.buttonHtml('seq-tail-reuse') +
               '<textarea id="seq-tail-bulk" style="width:100%;min-height:90px;font-family:inherit;font-size:12px;"></textarea>' +
               P.primaryButtonHtml('seq-tail-add', '+ まとめて末尾に追加') +
@@ -2696,6 +2692,9 @@ window.MA.modules.plantumlSequence = (function() {
               '</div>';
           }
           detailEl.innerHTML = html;
+          P.bindEvent('seq-scaffold-open', 'click', function() {
+            _showSeqScaffoldModal(parsedData, ctx);
+          });
           // 一括欄は「既に他の図にある行」を打ち直させないためのボタンを持つ。
           window.MA.reuseModal.bindButton('seq-tail-reuse', 'plantuml-sequence', 'seq-tail-bulk');
           var rleObj = null;

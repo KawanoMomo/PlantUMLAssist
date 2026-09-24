@@ -116,13 +116,20 @@ window.MA.richLabelEditor = (function() {
         colorPanelHtml(recent) +
       '</div>' +
       '<textarea class="rle-textarea" style="width:100%;min-height:60px;background:var(--bg-tertiary);border:1px solid var(--border);border-top:none;color:var(--text-primary);padding:6px;border-radius:0 0 3px 3px;font-family:var(--font-mono);font-size:12px;resize:vertical;box-sizing:border-box;">' + escHtml(initialValue || '') + '</textarea>' +
-      '<div class="rle-preview" style="margin-top:6px;padding:6px 8px;background:#fff;color:#000;border-radius:3px;font-size:12px;font-family:-apple-system,Segoe UI,sans-serif;min-height:24px;">' + plantumlToHtml(initialValue || '') + '</div>';
+      // BLK-owner-20260923-2332-prune: 見え方の欄は白い 1 行欄に見え、本文の欄が 2 つあると
+      // 読まれていた。打てない欄だと分かる形 (見出し付き・破線の枠) にし、空の間は出さない。
+      '<div class="rle-preview-wrap"' + (String(initialValue || '').trim() ? '' : ' hidden') + ' style="margin-top:6px;">' +
+        '<div class="rle-preview-caption" style="font-size:10px;color:var(--text-secondary);margin-bottom:2px;">図での見え方</div>' +
+        '<div class="rle-preview" aria-readonly="true" style="padding:4px 8px;background:transparent;color:var(--text-primary);border:1px dashed var(--border);border-radius:3px;font-size:12px;font-family:-apple-system,Segoe UI,sans-serif;">' + plantumlToHtml(initialValue || '') + '</div>' +
+      '</div>';
 
     var ta = container.querySelector('.rle-textarea');
     var preview = container.querySelector('.rle-preview');
 
+    var previewWrap = container.querySelector('.rle-preview-wrap');
     function refreshPreview() {
       preview.innerHTML = plantumlToHtml(ta.value);
+      if (previewWrap) previewWrap.hidden = !ta.value.trim();
     }
 
     // onChange への出力も getValue() と同じ正規化を通す (実改行 → literal \n)

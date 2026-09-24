@@ -115,7 +115,7 @@ test('手順9 追加フォームからも、どの状態の中に入れるかを
     if (window.MA.selection) window.MA.selection.clearSelection();
   });
   await page.waitForTimeout(300);
-  await page.locator('#st-tail-kind').selectOption('child');
+  await page.locator('#st-tail-kind-chip-child').click();
   await page.waitForTimeout(300);
   // 中身をまだ持たない状態も親の候補に並ぶ (最初の 1 つが作れる)。
   const opts = await page.locator('#st-tail-where-target option').allTextContents();
@@ -406,7 +406,7 @@ test('手順9 開始・終了を「どこの」ものか選んで GUI だけで�
   await page.waitForTimeout(300);
 
   async function addPseudo(kind, scope, state) {
-    await page.locator('#st-tail-kind').selectOption('pseudo');
+    await page.locator('#st-tail-kind-chip-pseudo').click();
     await page.locator('#st-ps-kind').selectOption(kind);
     await page.locator('#st-ps-scope').selectOption(scope);
     await page.locator('#st-ps-state').selectOption(state);
@@ -424,7 +424,7 @@ test('手順9 開始・終了を「どこの」ものか選んで GUI だけで�
   expect(lines).toContain('Busy --> [*]');
 
   // 既に開始がある Idle の中に 2 つ目を足そうとすると、差し替えるかを聞かれる
-  await page.locator('#st-tail-kind').selectOption('pseudo');
+  await page.locator('#st-tail-kind-chip-pseudo').click();
   await page.locator('#st-ps-scope').selectOption('Idle');
   await expect(page.locator('#st-ps-hint')).toContainText('既に開始');
   page.once('dialog', (d) => d.accept());

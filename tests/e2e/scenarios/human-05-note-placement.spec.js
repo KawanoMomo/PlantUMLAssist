@@ -64,7 +64,7 @@ test.describe('人間 手順 5 — 置いた注釈の位置と対象を GUI で�
     await setDsl(page, DSL);
 
     // 末尾に注釈を over A で足す。
-    await page.locator('#seq-tail-kind').selectOption('note');
+    await page.locator('#seq-tail-kind-chip-note').click();
     await page.locator('#seq-tail-npos').selectOption('over');
     await page.locator('#seq-tail-ntarget').selectOption('A');
     await page.locator('#seq-tail-ntext-rle .rle-textarea').fill('memo');
@@ -117,7 +117,7 @@ test.describe('人間 手順 5 — 置いた注釈の位置と対象を GUI で�
     await gotoApp(page);
     await setDsl(page, DSL);
 
-    await page.locator('#seq-tail-kind').selectOption('note');
+    await page.locator('#seq-tail-kind-chip-note').click();
     await page.locator('#seq-tail-npos').selectOption('over');
     await page.locator('#seq-tail-ntarget').selectOption('B');
     await page.locator('input.seq-tail-nextra[data-pid="C"]').check();

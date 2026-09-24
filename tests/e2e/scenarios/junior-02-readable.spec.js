@@ -86,6 +86,8 @@ test('手順2 先輩の構成(参加者5・メッセージ6)を名前と本文�
   await page.locator('#diagram-type').selectOption('plantuml-sequence');
   await page.waitForTimeout(500);
 
+  // 名前と本文だけの表は、まとめて足す入口 (種別チップの「まとめて」) の中にある。
+  await page.locator('#seq-tail-kind-chip-bulk').click();
   await page.locator('#seq-scaffold-open').click();
   await expect(page.locator('#seq-sc-modal')).toBeVisible();
 
@@ -158,6 +160,8 @@ test('手順2 同じ参加者へのメッセージを含む構成も、警告は
   await page.locator('#diagram-type').selectOption('plantuml-sequence');
   await page.waitForTimeout(500);
 
+  // 名前と本文だけの表は、まとめて足す入口 (種別チップの「まとめて」) の中にある。
+  await page.locator('#seq-tail-kind-chip-bulk').click();
   await page.locator('#seq-scaffold-open').click();
   await expect(page.locator('#seq-sc-modal')).toBeVisible();
 

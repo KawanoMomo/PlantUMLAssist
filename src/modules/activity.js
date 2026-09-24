@@ -1812,15 +1812,15 @@ window.MA.modules.plantumlActivity = (function() {
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">末尾に追加</label>' +
         P.selectFieldHtml('種類', 'ac-tail-kind', [
-          { value: 'action', label: 'Action', selected: true },
-          { value: 'start', label: 'Start' },
-          { value: 'stop', label: 'Stop' },
-          { value: 'end', label: 'End' },
-          { value: 'if', label: 'If decision' },
-          { value: 'while', label: 'While loop' },
-          { value: 'repeat', label: 'Repeat loop' },
-          { value: 'fork', label: 'Fork' },
-          { value: 'swimlane', label: 'Swimlane' }
+          { value: 'action', label: 'アクション (:…;)', selected: true },
+          { value: 'start', label: '開始 (start)' },
+          { value: 'stop', label: '停止 (stop)' },
+          { value: 'end', label: '終了 (end)' },
+          { value: 'if', label: '条件分岐 (if)' },
+          { value: 'while', label: '繰り返し (while)' },
+          { value: 'repeat', label: '後判定の繰り返し (repeat)' },
+          { value: 'fork', label: '並行 (fork)' },
+          { value: 'swimlane', label: 'レーン (swimlane)' }
         ]) +
         '<div id="ac-tail-detail" style="margin-top:6px;"></div>' +
       '</div>' +
