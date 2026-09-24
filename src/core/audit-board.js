@@ -93,6 +93,9 @@
       // 「読み直さなくてよい」と分かっている手動指摘。件数からは外して数える
       // (0 件になったのか、見ないことにしただけなのかを潰さない)。
       keep: !!(ref && ref.keep),
+      // BLK-reviewer-20260923-2012-wish (差し戻し 1 回目): note の自由文で答えてある組の印。
+      // --board が「継続」ではなく「タグ化待ち」に別掲するのに使う。
+      noteReply: ref && ref.item && ref.item.noteReply ? ref.item.noteReply : null,
     };
   }
 
