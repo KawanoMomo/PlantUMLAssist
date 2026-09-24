@@ -119,6 +119,11 @@ window.MA.parserUtils = (function() {
   // 組み立てている最中(空のシーケンス図に参加者を 1 人足した直後など)に
   // モジュールを勝手に載せ替えてはならない。この関数が true を返す間は
   // 呼び出し側が現在の図種を保つ。
+  // BLK-owner-20260924-2232-2: 境界 (package / rectangle / node / folder / frame / cloud) の
+  // 開き行と閉じ括弧だけの段階も、コンポーネント・ユースケース・クラスのどれにもなり得る。
+  // PlantUML は中身の無い `package "Mcal" { }` をクラス図として描くので、ここで決めさせると
+  // 境界を先に置いた人の右パネルがクラスの追加フォームに替わっていた。
+  var BOUNDARY_OPEN_RE = /^(package|rectangle|node|folder|frame|cloud)\s+(?:"[^"]*"|[^\s{"]+)(?:\s+as\s+[^\s{]+)?(?:\s+<<[^>]*>>)?(?:\s+#\S+)?\s*\{\s*$/;
   function isAmbiguousType(text) {
     if (!text || !text.trim()) return true;
     var lines = text.split('\n');
@@ -131,10 +136,11 @@ window.MA.parserUtils = (function() {
       if (window.MA.regexParts.isEndUml(t)) break;
       if (!inBlock) continue;
       if (/^actor\b/.test(t)) { hasActor = true; continue; }
+      if (t === '}' || BOUNDARY_OPEN_RE.test(t)) continue;
       // actor 以外の実質的な行が 1 つでもあれば、その行が図種を決める
       if (!/^(@|skinparam\b|title\b|hide\b|show\b|scale\b|autonumber\b)/.test(t)) return false;
     }
-    // 中身が無い、または actor 宣言しか無い
+    // 中身が無い、または actor 宣言・空の境界しか無い
     return true;
   }
 

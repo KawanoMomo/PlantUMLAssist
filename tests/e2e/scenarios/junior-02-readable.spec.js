@@ -512,6 +512,51 @@ test('手順2 手本の無い部品のコンポーネント図を、部品名 1 
   await expect(page.locator('#overlay-layer rect.selectable[data-type="component"][data-id="TIMER_Driver"]').first())
     .toBeAttached({ timeout: 10000 });
 });
+
+// BLK-owner-20260924-2232-2: 台本の成長規則 (コンポーネント図 → ユースケース図) で、白紙から
+// 境界を先に置いて中身を足す順でも起こせる。境界だけの本文 (`package "Mcal" {` / `}`) は
+// PlantUML がクラス図として描くので、以前は右パネルがクラスの追加フォームに替わり、
+// レールを押し直しても戻らず、部品もユースケースも 1 つも足せなかった。
+for (const c of [
+  { rail: 'plantuml-component', pre: 'co', name: 'コンポーネント', boundary: 'Mcal', kind: 'component', elem: 'Dio' },
+  { rail: 'plantuml-usecase', pre: 'uc', name: 'ユースケース', boundary: 'ECU', kind: 'usecase', elem: 'Init' },
+]) {
+  test('手順2 白紙の' + c.name + '図に境界を先に置き、同じ図種のまま中へ要素を足せる', async ({ page }) => {
+    await S.bootWithSaveDir(page, DIR + '-boundary-first');
+    await page.locator('#btn-tab-new').click();
+    await page.waitForTimeout(400);
+    await page.locator('#rail-types .rail-btn[data-type="' + c.rail + '"]').click();
+    await page.waitForTimeout(800);
+
+    await page.locator('#' + c.pre + '-tail-kind-chip-package').click();
+    await page.locator('#' + c.pre + '-tail-label').fill(c.boundary);
+    await page.locator('#' + c.pre + '-tail-add').click();
+    await page.waitForTimeout(1500);   // 描画 (SVG の図種の照合) まで待つ
+    expect(await getEditorText(page)).toMatch(new RegExp('\\{\\n\\}'));
+
+    // 境界しか無くても、図種も右パネルも選んだ図種のまま (クラスの追加フォームに替わらない)。
+    await expect(page.locator('#diagram-type')).toHaveValue(c.rail);
+    await expect(page.locator('[id^="cl-tail-kind-chip-"]')).toHaveCount(0);
+    await expect(page.locator('#' + c.pre + '-tail-add')).toBeVisible();
+    // レールの同じ図種を押し直しても本文は入れ替わらない。
+    await page.locator('#rail-types .rail-btn[data-type="' + c.rail + '"]').click();
+    await page.waitForTimeout(400);
+    expect(await getEditorText(page)).toContain('"' + c.boundary + '" {');
+    await expect(page.locator('#' + c.pre + '-tail-add')).toBeVisible();
+
+    // 次の要素の「追加する位置」は今置いた境界の中で、足すとその `{ }` に入る。
+    await page.locator('#' + c.pre + '-tail-kind-chip-' + c.kind).click();
+    await expect(page.locator('#' + c.pre + '-tail-place option:checked')).toHaveText('境界『' + c.boundary + '』の中');
+    await page.locator('#' + c.pre + '-tail-alias').fill(c.elem);
+    await page.locator('#' + c.pre + '-tail-add').click();
+    await page.waitForTimeout(1200);
+    expect(await getEditorText(page)).toMatch(new RegExp('"' + c.boundary + '" \\{\\n\\s+' + c.kind + ' ' + c.elem + '\\n\\}'));
+    await expect(page.locator('#diagram-type')).toHaveValue(c.rail);
+    // 描き直した図でも、境界の中の要素を押して選べる。
+    await expect(page.locator('#overlay-layer .selectable[data-id="' + c.elem + '"]').first())
+      .toBeAttached({ timeout: 10000 });
+  });
+}
 // BLK-human-20260912-2130: 手順 2 で junior が起こす 5 図種 (状態遷移・クラス・
 // コンポーネント・ユースケース・アクティビティ) でも、シーケンスと同じく
 // 「ホバーすると選択範囲が枠で見え、その枠内のどこを押しても同じ要素が選べる」こと。

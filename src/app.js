@@ -1711,7 +1711,10 @@ function init() {
       var btn = e.target && e.target.closest ? e.target.closest('.rail-btn') : null;
       if (!btn) return;
       var t = btn.getAttribute('data-type');
-      if (!t || t === sel.value) return;  // 同じ図種の押し直しは何もしない
+      // 同じ図種の押し直しは何もしない。ただし右パネルが別の図種の追加フォームに
+      // なっているときは、押した図種の追加フォームへ戻す (BLK-owner-20260924-2232-2)。
+      if (!t) return;
+      if (t === sel.value && (!currentModule || currentModule.type === t || !modules[t])) return;
       sel.value = t;
       sel.dispatchEvent(new Event('change', { bubbles: true }));
       syncRail();
@@ -3460,6 +3463,20 @@ function init() {
     if (t === currentDiagramType && currentModule === mod) {
       syncRail();
       syncZoomHud();
+      return;
+    }
+    // BLK-owner-20260924-2232-2: 図種はそのままで右パネルだけが別の図種 (本文や描画の
+    // 当て推量) になっているときに同じ図種を選び直したら、本文は入れ替えずに、利用者が
+    // 選んだ図種の追加フォームに戻す。本文に決め手の語が出れば従来どおり本文に従う。
+    if (t === currentDiagramType) {
+      _svgKindFix = null;
+      currentModule = mod;
+      try { currentParsed = currentModule.parse(mmdText); } catch (e) { /* leave stale */ }
+      window.MA.selection.clearSelection();
+      try { renderProps(currentParsed); } catch (e) {}
+      syncRail();
+      syncZoomHud();
+      scheduleRefresh();
       return;
     }
     // Force-save the OUTGOING type's current editor content. We schedule
