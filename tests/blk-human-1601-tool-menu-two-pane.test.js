@@ -48,13 +48,14 @@ describe('右列の小見出し', function() {
     });
   });
 
-  test('レビューは 見比べる / 指摘 / 変更の履歴 に分かれる', function() {
+  // BLK-owner-20260924-1836-prune: 覗く窓の入口は FILES「読むだけ」の右クリックへ移し、ツール ▾ からは案内 1 行に落とした。
+  test('レビューは 指摘 / 変更の履歴 に分かれる', function() {
     var g = tm.panelGroups().filter(function(x) { return x.key === 'review'; })[0];
     var subs = [];
     g.items.forEach(function(it) {
       if (subs.indexOf(it.group) < 0) subs.push(it.group);
     });
-    expect(subs).toEqual(['見比べる', '指摘', '変更の履歴']);
+    expect(subs).toEqual(['指摘', '変更の履歴']);
   });
 
   test('確かめるは 名前と系統 / まとめて点検 / 渡す前に に分かれる', function() {
@@ -69,7 +70,7 @@ describe('右列の小見出し', function() {
   test('項目名は tool-menu.js のラベルそのまま (言い換えない)', function() {
     // BLK-owner-20260923-1509-prune: ⇔ 並べて見る は「並べて比較」の相手に畳まり、
     // メニューの項目ではなくなった。他の項目で同じ規則を見る。
-    expect(tm.labelOf('btn-tab-peek')).toBe('他の保存フォルダを覗く');
+    expect(tm.labelOf('btn-tab-peek')).toBe('このフォルダの図を調べる…');
     expect(tm.labelOf('btn-tab-board')).toBe('変更サマリ');
   });
 });
@@ -98,7 +99,7 @@ describe('パネルの HTML', function() {
 
   test('小見出しは分類ごとに出て、同じ見出しを繰り返さない', function() {
     var out = tm.buildMenuHtml();
-    expect((out.match(/class="tool-menu-sub">見比べる</g) || []).length).toBe(1);
+    expect((out.match(/class="tool-menu-sub">変更の履歴</g) || []).length).toBe(1);
     expect((out.match(/class="tool-menu-sub">指摘</g) || []).length).toBe(1);
   });
 });

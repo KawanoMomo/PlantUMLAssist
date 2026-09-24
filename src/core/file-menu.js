@@ -41,6 +41,10 @@ window.MA.fileMenu = (function() {
   // 並べて比較が先頭で、そこに作る 2 つは出さない (BLK-builder-20260924-1749-3)。
   var FOLDER_ITEMS = [
     { id: 'compare', label: '並べて比較', readonlyOnly: true },
+    // BLK-owner-20260924-1836-prune: 覗く窓 (#peek-modal) はツリーで選んだフォルダの「道具の置き場」
+    // (部品ビュー・指摘から選ぶ・ドメインで揃える・同名で並べる・自分の部品を探す・テンプレート)。
+    // 入口はここ (と「読むだけ」見出しの目の印) で、窓の中でフォルダを選び直させない。
+    { id: 'peek', label: 'このフォルダの図を調べる…', readonlyOnly: true },
     { id: 'new-doc', label: '新しい図', writable: true },
     { id: 'new-part', label: '6 図種をまとめて作る', writable: true },
     { sep: true, realOnly: true },
@@ -87,6 +91,12 @@ window.MA.fileMenu = (function() {
       if (o.id === 'set-target' && kind === 'target') {
         o.disabled = true;
         o.title = '今の保存先です';
+      }
+      // BLK-owner-20260924-1836-prune: 「読むだけにする」は名前どおりの操作だけをする (覗く窓は開かない)。
+      // 保存先は書く場所なので読むだけにはできない。別のフォルダを保存先にすると、ここは「読むだけ」に並ぶ。
+      if (o.id === 'set-readonly' && kind === 'target') {
+        o.disabled = true;
+        o.title = '保存先は読むだけにできません (別のフォルダを保存先にすると、ここは「読むだけ」に並びます)';
       }
       if (o.id === 'set-readonly' && kind === 'readonly') {
         o.disabled = true;

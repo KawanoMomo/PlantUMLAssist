@@ -3794,7 +3794,8 @@ function initCommandPalette() {
         var active = WS ? WS.getActive() : null;
         openPartBoard({ part: (PB && active) ? PB.partOf(active.name) : '' });
       } },
-      { id: 'tab-peek', title: 'FILES: 読むだけのフォルダを足す / Files: read-only folder', hint: 'Files', keywords: ['peek', 'files', 'readonly', 'folder', 'よむだけ', 'ほかの', 'ふぉるだ'], button: 'btn-tab-peek', run: function() { clickById('btn-tab-peek'); } },
+      // BLK-owner-20260924-1836-prune: 名前は FILES「読むだけ」のフォルダの右クリックの行と同じ。旧名は検索の語に残す。
+      { id: 'tab-peek', title: 'このフォルダの図を調べる… / Files: inspect a read-only folder', hint: 'Files', keywords: ['peek', 'files', 'readonly', 'folder', 'よむだけ', 'ほかの', 'ふぉるだ', '他フォルダを覗く', '他の保存フォルダを覗く', '読むだけのフォルダを足す', '覗く', 'のぞく', 'しらべる'], button: 'btn-tab-peek', run: function() { clickById('btn-tab-peek'); } },
       { id: 'tab-drivermap', title: '系統マップを開く / Driver map', hint: 'Tabs', keywords: ['driver', 'map', 'けいとう', 'まっぷ'], button: 'btn-tab-drivermap', run: function() { clickById('btn-tab-drivermap'); } },
       { id: 'tab-design', title: '仕様突合 (design) / Design spec check', hint: 'Tabs', keywords: ['design', 'spec', 'gap', 'しよう', 'とつごう', 'せっけい'], button: 'btn-tab-design', run: function() { clickById('btn-tab-design'); } },
       { id: 'tab-cross', title: '突合ボード / Cross-check board', hint: 'Tabs', keywords: ['cross', 'board', 'audit', 'とつごう', 'ぼーど', '名前突合', '表記揺れ', '表記ゆれ', 'name audit', 'name', 'なまえ', 'ゆれ', 'つきあわせ', '宣言なし', 'メソッド突合'], button: 'btn-tab-cross', run: function() {
@@ -8592,6 +8593,7 @@ function applyCohortVerdict(kind, domain, sides, note, btn, key) {
 function renderCohortDomains() {
   var el = _peekEls();
   if (!el.dirs) return;
+  _peekDirsShow();
   el.dirs.textContent = '';
   var head = document.createElement('div');
   head.className = 'peek-head';
@@ -8849,6 +8851,7 @@ function selectSbsPair(key) {
 function renderSbsPairs() {
   var el = _peekEls();
   if (!el.dirs) return;
+  _peekDirsShow();
   el.dirs.textContent = '';
   var head = document.createElement('div');
   head.className = 'peek-head';
@@ -10487,28 +10490,54 @@ function closePeekFolder() {
   setNoteMode(false);
 }
 
+// BLK-owner-20260924-1836-prune: 覗く窓の左にあったフォルダの一覧は外した。フォルダは FILES「読むだけ」の
+// ツリーで選び (右クリック「このフォルダの図を調べる…」)、窓の見出しには今見ているフォルダの名前だけを出す。
+// 名前を押すと窓を閉じてツリーのその行へ移る (別のフォルダはそこで選ぶ)。左の列は「ドメインで揃える」
+// 「同名で並べる」の間だけ、その一覧 (ドメイン・同名の組) の置き場として使う。
 function renderPeekDirs() {
   var el = _peekEls();
   var PF = window.MA.peekFolder;
   if (!el.dirs || !PF) return;
   el.dirs.textContent = '';
-  var head = document.createElement('div');
-  head.className = 'peek-head';
-  head.id = 'peek-dirs-head';
-  head.textContent = _peekDirs.length ? 'フォルダ' : '隣に読めるフォルダがありません';
-  el.dirs.appendChild(head);
-  _peekDirs.forEach(function(d) {
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'peek-dir' + (d.current ? ' current' : '')
-      + (PF.samePath(d.path, _peekDir) ? ' selected' : '');
-    b.setAttribute('data-dir-name', d.name);
-    b.setAttribute('data-current', d.current ? '1' : '0');
-    b.textContent = PF.label(d);
-    b.addEventListener('click', function() { selectPeekDir(d.path); });
-    el.dirs.appendChild(b);
-  });
+  el.dirs.style.display = 'none';
+  renderPeekDirName();
   if (el.notice) el.notice.textContent = PF.noticeText(_peekDir, _wsFileDir());
+}
+
+function _peekDirsShow() {
+  var el = _peekEls();
+  if (el.dirs) el.dirs.style.display = '';
+}
+
+function renderPeekDirName() {
+  var btn = document.getElementById('peek-dir-name');
+  var PF = window.MA.peekFolder;
+  if (!btn || !PF) return;
+  var has = !!_peekDir;
+  btn.disabled = !has;
+  btn.setAttribute('data-dir', has ? String(_peekDir) : '');
+  btn.textContent = has ? PF.baseName(_peekDir) : '隣に読めるフォルダがありません';
+  btn.title = has ? String(_peekDir) + ' — 押すと FILES の「読むだけ」のこの行へ移ります (別のフォルダはそこで選びます)' : '';
+}
+
+// 窓を閉じ、FILES「読むだけ」のそのフォルダの行を見せる (別のフォルダはツリーで選ぶ)。
+function revealPeekDirInTree() {
+  var dir = _peekDir;
+  closePeekFolder();
+  var FP = window.MA.filesPanel;
+  var PF = window.MA.peekFolder;
+  if (FP) { try { FP.setOpen(true); FP.setSec('readonly', true); } catch (e) {} }
+  return Promise.resolve(refreshReadonlyTree(false)).then(function() {
+    var rows = document.querySelectorAll('#files-panel .files-ro-folder[data-ro-dir]');
+    for (var i = 0; i < rows.length; i++) {
+      if (PF && PF.samePath(rows[i].getAttribute('data-ro-dir'), dir)) {
+        try { rows[i].scrollIntoView({ block: 'nearest' }); } catch (e) {}
+        rows[i].focus();
+        return true;
+      }
+    }
+    return false;
+  });
 }
 
 function renderPeekFiles() {
@@ -11399,7 +11428,7 @@ function _pcTodo() {
 // (部品ビューを開いてからフォルダと部品を選び直させない)。
 function openPartBoard(opts) {
   var o = opts || {};
-  return openPeekFolder().then(function() {
+  return openPeekFolder({ dir: o.dir }).then(function() {
     var PF = window.MA.peekFolder;
     if (o.dir && PF && !PF.samePath(o.dir, _peekDir)) return selectPeekDir(o.dir);
     return true;
@@ -11664,15 +11693,19 @@ function openPeekFolder(opts) {
   _peekQuery = (opts && opts.query != null) ? String(opts.query) : '';
   el.modal.style.display = 'flex';
   var dir = _wsFileDir();
+  var want = opts && opts.dir ? String(opts.dir) : '';
   return fetch('/peek-dirs?dir=' + encodeURIComponent(dir))
     .then(function(r) { return r.ok ? r.json() : null; })
     .then(function(data) {
       _peekDirs = PF.choices(data);
+      // BLK-owner-20260924-1836-prune: フォルダは窓の中では選ばない。右クリックしたフォルダ →
+      // 右の枠に並べている相手 → 前に覗いていたフォルダ → 先頭 の順で 1 つに決めて開く。
+      var st = _seniorState();
+      var paneOpen = !(_seniorEls().pane || {}).hidden;
+      var pick = PF.defaultDir(_peekDirs, want, paneOpen && !_seniorGit ? st.dir : '', _peekDir);
+      if (!pick) _peekDir = null;
       renderPeekDirs();
-      // 用があるのは他人のフォルダなので、隣が 1 つだけならそれを開いておく
-      // (「読むだけ」の入口で自分のフォルダを選び直させない)。
-      var others = PF.others(_peekDirs);
-      if (others.length === 1) return selectPeekDir(others[0].path);
+      if (pick) return selectPeekDir(pick);
       renderPeekFiles();
       return true;
     }).catch(function() {
@@ -12242,6 +12275,7 @@ function compareReadonlyFolder(dir, name) {
   });
 }
 window.compareReadonlyFolder = compareReadonlyFolder;
+window.openPeekFolder = openPeekFolder;
 window.refreshReadonlyTree = refreshReadonlyTree;
 
 function selectSeniorDir(dir) {
@@ -12608,6 +12642,8 @@ function setupPeekFolder() {
   var el = _peekEls();
   if (!btn || !el.modal) return;
   btn.addEventListener('click', function() { openPeekFolder(); });
+  var dirName = document.getElementById('peek-dir-name');
+  if (dirName) dirName.addEventListener('click', revealPeekDirInTree);
   var close = closePeekFolder;
   renderPeekTemplateBtn();
   if (el.template) el.template.addEventListener('click', usePeekAsTemplate);
@@ -16062,7 +16098,8 @@ function setupTabs() {
     peek.type = 'button';
     peek.className = 'folder-peek-open';
     peek.id = 'folder-peek-open';
-    peek.textContent = '👀 他フォルダを読むだけ見る';
+    // BLK-owner-20260924-1836-prune: 入口の名前は FILES「読むだけ」の目の印と同じ (何をするかで呼ぶ)。
+    peek.textContent = '読むだけのフォルダの図を調べる…';
     peek.title = '保存先を変えずに、他の人のフォルダの図を読むだけ見る。'
       + '絞り込んでいる名前はあちらへそのまま渡る';
     peek.addEventListener('click', function(ev) {

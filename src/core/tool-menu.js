@@ -64,7 +64,6 @@ window.MA.toolMenu = (function() {
       // その枠の「相手」になったので、ここに別の入口としては並べない
       // (🔍 は ▤ 変更サマリボードの中には残る。提出前に全件を見る文脈)。
       // 並べる画面ではない道具。覗く・指摘を出すのが目的で、並べるのは ⇔ 並べて見る に任せる。
-      { id: 'btn-tab-peek',     label: '他の保存フォルダを覗く', group: '見比べる' },
       { id: 'btn-tab-review',   label: '基準の図との指摘', group: '指摘' },
       { id: 'btn-tab-pins',     label: 'この図の指摘', group: '指摘' },
       { id: 'btn-tab-inbox',    label: '図をまたぐ指摘箱 (手で書いた指摘も出典で絞れる)', group: '指摘' },
@@ -92,9 +91,14 @@ window.MA.toolMenu = (function() {
     { key: 'file', title: 'ファイル', items: [
       { id: 'btn-tab-draft',    label: '一時控えにする', group: 'ファイルの右クリック' },
       { id: 'btn-tab-versions', label: 'この図の履歴を見る', group: 'ファイルの右クリック' },
+      // BLK-owner-20260924-1836-prune: 隣の保存フォルダを覗く窓の入口は FILES「読むだけ」の
+      // フォルダの右クリック (と見出しの目の印) 1 か所。旧名は Ctrl+K の検索の語に残す。
+      { id: 'btn-tab-peek',     label: 'このフォルダの図を調べる…', group: 'FILES の読むだけ',
+        keywords: ['他の保存フォルダを覗く', '他フォルダを覗く', '読むだけのフォルダを足す', 'peek'] },
     ] },
   ];
-  var FILES_NOTE = 'ファイル単位の操作（開く・並べて比較・前回保存版と比較・履歴・名前変更・一時控え・削除…）は FILES のファイルを右クリック';
+  var FILES_NOTE = 'ファイル単位の操作（開く・並べて比較・前回保存版と比較・履歴・名前変更・一時控え・削除…）は FILES のファイルを右クリック。'
+    + '隣の保存フォルダは FILES の読むだけ（右クリックで並べて比較・このフォルダの図を調べる…）';
 
   function allGroups() {
     return GROUPS.concat(MOVED_TO_EXPORT).concat(MOVED_TO_FILES);
