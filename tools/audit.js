@@ -794,6 +794,8 @@ function main(argv) {
     if (viewJson) console.log('\n' + viewJson);
     if (opts.state && !partial) {
       saveState(statePath, opts.targets, result, mark);
+    } else if (opts.state) {
+      saveMark(statePath, opts.targets, mark);
     }
     if (rt.errors.length) {
       for (const e of rt.errors) console.error('読み込み失敗: ' + e.file + ' — ' + e.message);
@@ -819,6 +821,11 @@ function main(argv) {
   // 次回の比較のために控えを置く。書けない場所でも監査自体は成功させる。
   if (opts.state && !partial) {
     saveState(statePath, opts.targets, result, mark);
+  } else if (opts.state) {
+    // BLK-human-20260924-1640: 無変化 tick の印は図のファイル構成の指紋で、指摘の中身とは独立している。
+    // 絞った回でも印だけは書き戻す (控えの report は上の理由で書き替えない)。書かないと
+    // --cohort でしか回さない対象の組は印が一度も残らず、毎回「今回が最初の控え」になる。
+    saveMark(statePath, opts.targets, mark);
   }
   if (rt.errors.length) {
     for (const e of rt.errors) console.error('読み込み失敗: ' + e.file + ' — ' + e.message);
