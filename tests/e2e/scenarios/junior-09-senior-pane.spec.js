@@ -173,6 +173,7 @@ test('手順9 保存先が Git なら、この図の履歴の「比較」で前�
   fs.writeFileSync(path.join(abs, 'spi_init_sequence.puml'), V1);
   git('add', '-A');
   git('commit', '-q', '-m', '初版');
+  git('tag', 'v1.2');
 
   await S.bootWithSaveDir(page, rel);
 
@@ -217,6 +218,30 @@ test('手順9 保存先が Git なら、この図の履歴の「比較」で前�
   await expect(page.locator('#git-history .git-commit-row')).toHaveCount(2);
   await expect(page.locator('#git-changes .git-change')).toHaveCount(0);
   expect(git('log', '--format=%s')).toContain('Fault 通知の応答を追記');
+
+  // design 10c (BLK-builder-20260924-1835-1): 履歴は 1 行 1 コミット (メッセージ・タグの札・右端に日付 MM-DD)。
+  // ハッシュ・作成者・時刻は行の title。「比較」は手を置いた行だけに日付の位置へ出る (全部の行に枠を並べない)。
+  {
+    const rows = page.locator('#git-history .git-commit-row');
+    const first = rows.filter({ hasText: '初版' });
+    await expect(first.locator('.git-commit-msg')).toHaveText('初版');
+    await expect(first.locator('.git-commit-tag')).toHaveText('v1.2');
+    await expect(first.locator('.git-commit-date')).toHaveText(/^\d{2}-\d{2}$/);
+    await expect(page.locator('#git-history .git-commit-meta')).toHaveCount(0);
+    expect(await first.getAttribute('title')).toMatch(/[0-9a-f]{7} · junior · \d{2}-\d{2} \d{2}:\d{2}/);
+    const msgBox = await first.locator('.git-commit-msg').boundingBox();
+    const rowBox = await first.boundingBox();
+    expect(rowBox.height).toBeLessThan(msgBox.height * 1.8);
+    const opa = (loc) => loc.evaluate((el) => getComputedStyle(el).opacity);
+    await page.locator('#git-history-head').hover();
+    expect(await opa(first.locator('.git-history-compare'))).toBe('0');
+    await expect(first.locator('.git-commit-date')).toBeVisible();
+    await first.locator('.git-commit-msg').hover();
+    expect(await opa(first.locator('.git-history-compare'))).toBe('1');
+    await expect(first.locator('.git-commit-date')).toBeHidden();
+    const other = rows.filter({ hasText: 'Fault 通知の応答を追記' });
+    expect(await opa(other.locator('.git-history-compare'))).toBe('0');
+  }
 
   // design 10c (BLK-builder-20260924-1818-1): ツリー下端の「相手を選ぶ…」から開いても、比較する相手を選ぶ窓は
   // 画面の中に収まり、いちばん古いコミットまで押せる (以前はボタンの下へ開いて画面の下端で切れていた)。
