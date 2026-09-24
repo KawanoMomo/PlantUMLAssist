@@ -3357,6 +3357,31 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
   border-radius: 4px; padding: 2px 8px; font-size: 11px; cursor: pointer;
 }
 #hb-empty { color: var(--text-secondary); font-size: 12px; padding: 10px 2px; }
+/* BLK-owner-20260925-0235-prune: 引き継ぎ zip の対象と書き出しをチェックリストの窓に畳む */
+#hb-et { padding: 8px 14px 0; font-size: 12px; color: var(--text-primary); }
+#hb-et #et-line.is-warn { color: var(--warning, #d98b00); }
+#hb-et #et-hint { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+#hb-et #et-modes { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-top: 6px; font-size: 11px; }
+#hb-et .et-cap { color: var(--accent); font-weight: 600; font-size: 10px; }
+#hb-et #et-scratch-row { color: var(--warning, #d98b00); }
+#hb-table td.hb-in { width: 1%; text-align: center; }
+#hb-table tr.hb-tab-only td.hb-tab-note { color: var(--text-secondary); font-size: 11px; white-space: normal; }
+#hb-table button.hb-in-toggle {
+  border: 1px solid var(--border); background: var(--bg-tertiary); color: var(--text-secondary);
+  border-radius: 4px; width: 26px; padding: 1px 0; font-size: 12px; cursor: pointer;
+}
+#hb-table button.hb-in-toggle[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
+#hb-foot {
+  display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+  padding: 8px 14px; border-top: 1px solid var(--border); font-size: 12px;
+}
+#hb-foot #et-status { margin-right: auto; color: var(--text-secondary); font-size: 11px; }
+#hb-foot #et-notready { color: var(--warning, #d98b00); font-weight: 600; }
+#hb-foot #et-build {
+  border: none; background: var(--accent); color: #fff; border-radius: 4px;
+  padding: 5px 14px; font-size: 12px; cursor: pointer;
+}
+#hb-foot #et-build:disabled { opacity: .5; cursor: not-allowed; }
 #docset-handover {
   font-size: 12px; padding: 6px 14px; color: var(--danger, #d05050);
 }
@@ -8420,9 +8445,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <div id="ck-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="ck-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:680px;max-width:960px;max-height:82vh;overflow-y:auto;"></div>
 </div>
-<div id="et-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
-  <div id="et-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:560px;max-width:820px;max-height:84vh;overflow-y:auto;"></div>
-</div>
 <div id="dp-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="dp-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:620px;max-width:860px;max-height:84vh;overflow-y:auto;"></div>
 </div>
@@ -9168,15 +9190,19 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button type="button" id="hb-close">閉じる</button>
       </span>
     </div>
+    <!-- BLK-owner-20260925-0235-prune: 引き継ぎ zip の対象 (的・未確定) はこの窓の見出しの下、書き出しは下端。
+         行の頭の ✔ / − が入る / 入らない。Export ▾「引き継ぎ」も同じ窓を開く。 -->
+    <div id="hb-et"></div>
     <div id="hb-body">
       <table id="hb-table">
         <thead>
-          <tr><th>図</th><th>置換済み</th><th>note最新</th><th>SVG最新</th><th>指摘と符合する欠落</th><th id="hb-peer-th" hidden>相手の同名図</th><th></th></tr>
+          <tr><th title="引き継ぎ zip に入る (✔) / 入らない (−)。押して切り替える">入る</th><th>図</th><th>置換済み</th><th>note最新</th><th>SVG最新</th><th>指摘と符合する欠落</th><th id="hb-peer-th" hidden>相手の同名図</th><th></th></tr>
         </thead>
         <tbody id="hb-rows"></tbody>
       </table>
       <div id="hb-empty" style="display:none;"></div>
     </div>
+    <div id="hb-foot"></div>
   </div>
 </div>
 <div id="docset-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">

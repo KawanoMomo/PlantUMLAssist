@@ -39,8 +39,8 @@ test('札を 1 クリックで畳んだ一覧が開き、そこから引き継�
   await expect(item).toBeVisible();
   await expect(item).toHaveText(/引き継ぎ/);
   await item.click();
-  // 引き継ぎは押すとまず「対象確認」を出し、書き出しはそこから始まる。
-  await expect(page.locator('#et-modal')).toBeVisible();
+  // 引き継ぎは押すとまずチェックリストの窓 (対象確認を畳んだもの) を出し、書き出しはその下端から始まる。
+  await expect(page.locator('#hb-modal')).toBeVisible();
   const dl = page.waitForEvent('download', { timeout: 60000 });
   await page.locator('#et-build').click();
   const file = await dl;
@@ -58,7 +58,7 @@ test('引き継ぎに辿り着く手数を実測する (クリック 10 以下 /
   await click('#btn-export');
   await expect(page.locator('#export-menu')).toBeVisible();
   await click('#exp-handoff');
-  await expect(page.locator('#et-modal')).toBeVisible();
+  await expect(page.locator('#hb-modal')).toBeVisible();
   const dl = page.waitForEvent('download', { timeout: 60000 });
   await click('#et-build');
   const file = await dl;
