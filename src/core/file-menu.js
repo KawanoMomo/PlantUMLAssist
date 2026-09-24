@@ -37,9 +37,12 @@ window.MA.fileMenu = (function() {
 
   // フォルダの右クリック。部品のフォルダ (`SPI 4 / 6`) はファイル名の頭で束ねた見出しで
   // 実在のディレクトリではないので、「保存先にする / 読むだけにする」は出さない。
+  // 読むだけのフォルダ (design 10a「右クリックから「並べて比較」できます」「編集はできません」) は
+  // 並べて比較が先頭で、そこに作る 2 つは出さない (BLK-builder-20260924-1749-3)。
   var FOLDER_ITEMS = [
-    { id: 'new-doc', label: '新しい図' },
-    { id: 'new-part', label: '6 図種をまとめて作る' },
+    { id: 'compare', label: '並べて比較', readonlyOnly: true },
+    { id: 'new-doc', label: '新しい図', writable: true },
+    { id: 'new-part', label: '6 図種をまとめて作る', writable: true },
     { sep: true, realOnly: true },
     { id: 'set-target', label: '保存先にする', realOnly: true },
     { id: 'set-readonly', label: '読むだけにする', realOnly: true },
@@ -76,6 +79,8 @@ window.MA.fileMenu = (function() {
     var real = kind !== 'part';
     return FOLDER_ITEMS.filter(function(it) {
       if (it.targetOnly) return kind === 'target';
+      if (it.readonlyOnly) return kind === 'readonly';
+      if (it.writable && kind === 'readonly') return false;
       return real || !it.realOnly;
     }).map(function(it) {
       var o = _copy(it);

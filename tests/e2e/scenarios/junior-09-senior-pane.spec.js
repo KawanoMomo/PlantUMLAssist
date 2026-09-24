@@ -269,3 +269,53 @@ test('手順9 保存先の図が多くても、読むだけの見出しはツリ
   await expect(page.locator('#btn-tab-peek')).toBeInViewport();
   await S.clearDir(page, dir);
 });
+
+// BLK-builder-20260924-1749-3 (design 10a「読むだけのフォルダ（先輩・過去の版）は下に分けて置き、右クリックから
+// 「並べて比較」できます」「右の枠に並べている間は「比較中」と出ます」): 前は「読むだけ」を開いても説明の 1 行だけで、
+// 隣の保存フォルダが 1 行も並ばず、見出しにも件数・比較中が出なかった。
+test('手順9 読むだけの節に隣の保存フォルダが並び、並べている相手に「比較中」、右クリックで相手を替えられる', async ({ page }) => {
+  const root = DIR + '-ro/';
+  const mine = root + 'junior';
+  await S.bootWithSaveDir(page, mine);
+  for (const d of [mine, root + 'senior', root + 'release_v1.2']) await S.clearDir(page, d);
+  await S.putDoc(page, mine, 'spi_state', S.docFor('spi_state'));
+  await S.putDoc(page, root + 'senior', 'spi_init_sequence', S.docFor('spi_init_sequence'));
+  await S.putDoc(page, root + 'senior', 'spi_state', S.docFor('spi_state'));
+  await S.putDoc(page, root + 'release_v1.2', 'spi_state', S.docFor('spi_state'));
+  await S.reopenApp(page);
+
+  // 到達条件その1: 畳んだままでも件数が読め、開くと隣のフォルダが 1 行ずつ並ぶ (自分の保存先は出ない)。
+  await expect(page.locator('#files-count-readonly')).toHaveText('2');
+  await page.locator('#files-sec-readonly').click();
+  const folder = (n) => page.locator('#files-ro-list .files-ro-folder[data-ro-name="' + n + '"]');
+  await expect(folder('senior')).toBeVisible();
+  await expect(folder('release_v1.2')).toBeVisible();
+  await expect(folder('junior')).toHaveCount(0);
+  await expect(page.locator('#files-ro-hint')).toBeHidden();
+
+  // 到達条件その2: フォルダの行を押すと開き、その図が並ぶ。図を押すとその 1 枚が右の枠に並び、相手に「比較中」。
+  await folder('senior').click();
+  const roFile = page.locator('#files-ro-list .files-ro-file[data-file-name="spi_init_sequence"]');
+  await expect(roFile).toBeVisible();
+  await roFile.click();
+  await expect(page.locator('#senior-pane')).toBeVisible();
+  await expect(page.locator('#senior-dsl')).toContainText('SPI 初期化シーケンス');
+  await expect(folder('senior')).toContainText('比較中');
+  await expect(page.locator('#files-count-readonly')).toHaveText('2 · 比較中 1');
+
+  // 到達条件その3: 別のフォルダの行を右クリック →「並べて比較」で相手が替わる (新規作成の行は出ない)。
+  await folder('release_v1.2').click({ button: 'right' });
+  const menu = page.locator('#files-ctx-menu');
+  await expect(menu.locator('[data-action="new-doc"]')).toHaveCount(0);
+  await menu.locator('[data-action="compare"]').click();
+  await expect(folder('release_v1.2')).toContainText('比較中');
+  await expect(folder('senior')).not.toContainText('比較中');
+  // 保存先は動かない (読むだけ)。
+  expect(await S.readDoc(page, mine, 'spi_state')).toContain('SPI 状態遷移');
+  await expect(page.locator('#top-crumbs')).toContainText('junior');
+
+  // 到達条件その4: 枠を閉じると「比較中」は消える。
+  await page.locator('#senior-close').click();
+  await expect(page.locator('#files-count-readonly')).toHaveText('2');
+  for (const d of [mine, root + 'senior', root + 'release_v1.2']) await S.clearDir(page, d);
+});
