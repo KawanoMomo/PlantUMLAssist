@@ -71,6 +71,7 @@ describe('BLK-junior-2240 上書き確認の選択肢', function() {
     assert.strictEqual(back.name, 'spi_component');
     const label = SL.label(id, 'spi_component');
     assert.ok(!label.undoable);
-    assert.ok(label.text.indexOf('✎') >= 0, label.text);
+    // BLK-builder-20260924-1702-2 (design 9a): 絵文字 ✎ をやめ、文字で書き先を言う。
+    assert.strictEqual(label.text, '元ファイルに書く');
   });
 });
