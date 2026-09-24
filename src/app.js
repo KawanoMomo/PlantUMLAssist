@@ -4771,7 +4771,10 @@ function renderTabs() {
     }
     var label = document.createElement('span');
     label.className = 'tab-label';
-    label.textContent = doc.name;
+    // design 7a / 7b / 10a (BLK-builder-20260924-1636-1): タブは保存されるファイル名 ({name}.puml) で出す。
+    // 上部バーと同じ規則。data-doc-name・名前変更は拡張子なしの図名のまま。
+    label.textContent = window.MA.topStatus && window.MA.topStatus.fileName
+      ? window.MA.topStatus.fileName(doc.name) : doc.name;
     el.appendChild(label);
     if (docs.length > 1) {
       var close = document.createElement('button');

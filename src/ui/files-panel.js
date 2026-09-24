@@ -137,7 +137,9 @@ window.MA.filesPanel = (function() {
       b.appendChild(_glyphEl(doc.diagramType));
       var name = document.createElement('span');
       name.className = 'files-row-name';
-      name.textContent = String(doc.name || '(無題)');
+      // design 10a (BLK-builder-20260924-1636-1): 開いている図はタブ・上部バーと同じファイル名 ({name}.puml) で出す。
+      var TS = window.MA.topStatus;
+      name.textContent = doc.name && TS && TS.fileName ? TS.fileName(String(doc.name)) : String(doc.name || '(無題)');
       b.appendChild(name);
       var mark = _marks(doc);
       if (mark || pinned[String(doc.id)]) {
