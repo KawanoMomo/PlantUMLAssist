@@ -12031,6 +12031,7 @@ function renderSeniorSliceRow() {
 // 下端の「👀 先輩」。枠を開いていなくても、いま横に出る図が読める。
 // design 7b: 件数を持つものはタブ列に置かず下端に寄せ、押せばそのパネルが開く。
 function renderSeniorStatus() {
+  try { renderReadonlyTree(); } catch (e) {}
   var SP = window.MA.seniorPane;
   var btn = document.getElementById('status-senior');
   if (!btn || !SP) return;
@@ -12160,6 +12161,51 @@ function syncSeniorCounterpart() {
   if (pick.name !== _seniorName) showSeniorFile(pick.name);
   else renderSeniorBody();
 }
+
+// ── FILES「読むだけ」節 (design 10a、BLK-builder-20260924-1749-3) ─────────────
+// 隣の保存フォルダを 1 行ずつ出し、右の枠に並べている相手には「比較中」を付ける。
+// 並べる・相手を替えるの実体は並べて比較の枠 (senior-pane) の道をそのまま通る。
+function renderReadonlyTree() {
+  var FP = window.MA.filesPanel;
+  if (!FP || !FP.renderReadonly) return;
+  var st = _seniorState();
+  var open = !(_seniorEls().pane || {}).hidden;
+  FP.renderReadonly(_peekDirs, open && !_seniorGit ? st.dir : '');
+}
+
+function refreshReadonlyTree(force) {
+  return _ensurePeekDirs(!!force).then(function() { renderReadonlyTree(); return true; });
+}
+
+// 読むだけのフォルダを右の枠の相手にする。name を渡すとその 1 枚を出し、図を切り替えても
+// 入れ替えない (1 回だけ)。name が無ければ今開いている図に当たる相手を追う。
+function compareReadonlyFolder(dir, name) {
+  if (!dir) return Promise.resolve(false);
+  var PF = window.MA.peekFolder;
+  var st = _seniorState();
+  if (_seniorGit || !(PF && PF.samePath(st.dir, dir))) {
+    clearSeniorGit();
+    _seniorSave({ dir: dir });
+    _seniorNames = [];
+    _seniorName = '';
+  }
+  if (!name && _seniorState().mode === 'once') setSeniorMode('keep');
+  return Promise.resolve(openCompareTarget('folder')).then(function() {
+    if (!name) return true;
+    setSeniorMode('once');
+    var el = _seniorEls();
+    if (el.notice) {
+      var folder = String(dir).split(/[\\/]/).filter(Boolean).pop() || dir;
+      el.notice.textContent = folder + ' の ' + name + ' を並べています (読むだけ。図を切り替えてもこの 1 枚のまま)';
+    }
+    return showSeniorFile(name);
+  }).then(function(r) {
+    renderSeniorStatus();
+    return r;
+  });
+}
+window.compareReadonlyFolder = compareReadonlyFolder;
+window.refreshReadonlyTree = refreshReadonlyTree;
 
 function selectSeniorDir(dir) {
   var el = _seniorEls();
@@ -33324,6 +33370,8 @@ function bootWithSavedPrefs() {
     if (started) return;
     started = true;
     try { init(); } finally { try { document.documentElement.setAttribute('data-app-ready', '1'); } catch (e) {} }
+    // FILES「読むだけ」節の行と件数 (design 10a)。保存先が決まってから隣を読む。
+    try { refreshReadonlyTree(true); } catch (e) {}
   }
   if (!as || !as.hydrateFromServer) { go(); return; }
   // server が黙っていても画面は開く。3 秒でこの回は諦める (次の起動で入る)。

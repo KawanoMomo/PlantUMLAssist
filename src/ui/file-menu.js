@@ -12,7 +12,7 @@ window.MA = window.MA || {};
 // toggleCompareView / exportSVG / _draftToggleName / タブのダブルクリック改名) を
 // そのまま呼ぶ。同じ操作を 2 通りに実装しない。
 window.MA.fileMenuUi = (function() {
-  var ROW_SEL = '.files-sec-head, .files-row, .files-part-head, .files-part-file, #folder-panel .folder-item[data-file-name]';
+  var ROW_SEL = '.files-sec-head, .files-row, .files-part-head, .files-part-file, .files-ro-folder, .files-ro-file, #folder-panel .folder-item[data-file-name]';
   var FILE_SEL = '.files-row, .files-part-file, #folder-panel .folder-item[data-file-name]';
   var DRAG_TYPE = 'application/x-pua-file';
 
@@ -61,6 +61,12 @@ window.MA.fileMenuUi = (function() {
     if (part) return { kind: 'part', part: part.getAttribute('data-part') || '', el: part };
     var target = el.closest('#btn-tab-folder, #top-save-target');
     if (target) return { kind: 'target', el: target };
+    // design 10a (BLK-builder-20260924-1749-3): 読むだけの節の中のフォルダの行 (と、その中の図の行)。
+    var roRow = el.closest('.files-ro-folder, .files-ro-file');
+    if (roRow) {
+      return { kind: 'readonly', dir: roRow.getAttribute('data-ro-dir') || '',
+        name: roRow.getAttribute('data-ro-name') || '', el: roRow };
+    }
     var ro = el.closest('#files-sec-readonly');
     if (ro) return { kind: 'readonly', el: ro };
     return null;
@@ -262,6 +268,10 @@ window.MA.fileMenuUi = (function() {
 
   function runFolder(action, folder) {
     switch (action) {
+      case 'compare':
+        if (folder && folder.dir && typeof window.compareReadonlyFolder === 'function') window.compareReadonlyFolder(folder.dir);
+        else clickId('btn-tab-senior');
+        break;
       case 'new-doc': clickId('btn-tab-new'); break;
       case 'new-part':
         clickId('btn-tab-part');
@@ -321,7 +331,7 @@ window.MA.fileMenuUi = (function() {
     title.className = 'files-ctx-title';
     title.textContent = ctx.type === 'file' ? ctx.name
       : (ctx.folder.kind === 'part' ? String(ctx.folder.part).toUpperCase()
-        : ctx.folder.kind === 'target' ? '保存先' : '読むだけ');
+        : ctx.folder.kind === 'target' ? '保存先' : (ctx.folder.name || '読むだけ'));
     menu.appendChild(title);
     menuItems.forEach(function(it, i) {
       if (it.sep) {
@@ -417,15 +427,16 @@ window.MA.fileMenuUi = (function() {
   // ── ツリーのキーボード ────────────────────────────────────────────────
   function rowKind(row) {
     if (isFileRow(row)) return 'file';
-    if (row.classList.contains('files-part-head')) return 'folder';
+    if (row.classList.contains('files-part-head') || row.classList.contains('files-ro-folder')) return 'folder';
+    if (row.classList.contains('files-ro-file')) return 'rofile';
     return 'section';
   }
 
   function parentRow(row) {
-    var body = row.closest('.files-part-body');
+    var body = row.closest('.files-part-body, .files-ro-body');
     if (body) {
       var head = body.previousElementSibling;
-      if (head && head.classList.contains('files-part-head')) return head;
+      if (head && (head.classList.contains('files-part-head') || head.classList.contains('files-ro-folder'))) return head;
     }
     var sec = row.closest('.files-sec');
     return sec ? sec.querySelector('.files-sec-head') : null;
@@ -441,8 +452,10 @@ window.MA.fileMenuUi = (function() {
     else if (ev.shiftKey) return;
     var kind = rowKind(row);
     var expanded = row.getAttribute('aria-expanded') === 'true';
-    var act = FM().keyAction(key, kind, expanded);
+    var act = FM().keyAction(key, kind === 'rofile' ? 'file' : kind, expanded);
     if (!act) return;
+    // 読むだけのフォルダの図は名前を変えたり消したりしない (編集はできない)。
+    if (kind === 'rofile' && (act === 'rename' || act === 'delete')) return;
     var rows, i;
     switch (act) {
       case 'down':

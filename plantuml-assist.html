@@ -118,6 +118,25 @@ html, body {
 }
 #files-panel .files-sec-headrow button.files-sec-act .files-act-glyph { display: block; }
 #files-panel .files-sec-body[hidden] { display: none; }
+/* design 10a (BLK-builder-20260924-1749-3): 読むだけのフォルダの行 (senior 比較中 / release_v1.2)。
+   押すと開閉してそのフォルダの図が並ぶ。右の枠に並べている相手には「比較中」。 */
+#files-panel .files-ro-folder {
+  display: flex; align-items: center; gap: 4px; width: 100%;
+  background: none; border: 0; padding: 2px 8px 2px 10px;
+  font: inherit; font-size: 11px; color: var(--text-secondary);
+  text-align: left; cursor: pointer;
+}
+#files-panel .files-ro-folder:hover { background: var(--bg-tertiary); }
+#files-panel .files-ro-folder .files-part-label { flex: 1 1 auto; min-width: 0; }
+#files-panel .files-ro-tag { flex: 0 0 auto; font-size: 9px; color: var(--accent); }
+#files-panel .files-ro-body[hidden] { display: none; }
+#files-panel .files-ro-file {
+  display: flex; align-items: center; gap: 4px; width: 100%; background: none; border: 0;
+  padding: 2px 8px 2px 24px; font: inherit; font-size: 11px;
+  color: var(--text-secondary); text-align: left; cursor: pointer;
+  overflow: hidden; white-space: nowrap;
+}
+#files-panel .files-ro-file:hover { background: var(--bg-tertiary); color: var(--text-primary); }
 /* design 10a: 保存先の下の部品ごとのフォルダ。`SPI 4 / 6` は揃い具合で、ファイル数ではない。 */
 #files-panel .files-part-head {
   display: flex; align-items: center; gap: 4px; width: 100%;
@@ -7424,7 +7443,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
                   title="並べて比較: 別の保存フォルダの図を右の枠に並べる。図を切り替えると相手も自動で入れ替わる (読むだけ)">⇔</button>
         </div>
         <div class="files-sec-body" id="files-body-readonly">
-          <div class="files-empty">見出しの右の目の印で他のフォルダを覗く / ⇔ で右の枠に並べる。どちらも保存先には書き込みません</div>
+          <div class="files-empty" id="files-ro-hint">見出しの右の目の印で他のフォルダを覗く / ⇔ で右の枠に並べる。どちらも保存先には書き込みません</div>
         </div>
       </section>
       <section class="files-sec" data-files-section="git">

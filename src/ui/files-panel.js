@@ -474,10 +474,134 @@ window.MA.filesPanel = (function() {
   }
 
   // ── 件数 (畳んだままでも読める) ───────────────────────────────────────
-  function setReadonlyCount(comparing) {
+  function setReadonlyCount(comparing, total) {
     var FT = window.MA.fileTree;
     var c = $('files-count-readonly');
-    if (c && FT) c.textContent = FT.readonlyCountLabel(comparing);
+    if (c && FT) c.textContent = FT.readonlyCountLabel(comparing, total);
+  }
+
+  // ── 読むだけのフォルダ (design 10a、BLK-builder-20260924-1749-3) ─────────
+  // 「読むだけのフォルダ（先輩・過去の版）は下に分けて置き、右クリックから「並べて比較」できます」
+  // 「右の枠に並べている間は「比較中」と出ます。編集はできません」。
+  // 前は節を開いても説明の 1 行だけで、隣の保存フォルダが 1 行も並ばず、見出しに件数も出なかった。
+  // dirs は /peek-dirs の選択肢 (peek-folder.choices)、comparingDir は右の枠に並べている相手。
+  // 行を押すと開閉し、そのフォルダの図が並ぶ。図を押すとその 1 枚を右の枠に並べる (読むだけ)。
+  var KEY_RO_DIR = 'pua.files.ro.';
+
+  function _roFill(box, path) {
+    var WS = window.MA.workspace;
+    var FT = window.MA.fileTree;
+    if (!WS || !WS.listFolder) return;
+    box.textContent = '';
+    var wait = document.createElement('div');
+    wait.className = 'files-empty';
+    wait.textContent = '読み込み中…';
+    box.appendChild(wait);
+    var got = WS.listFolder(path);
+    if (!got || typeof got.then !== 'function') got = Promise.resolve(got);
+    got.then(function(info) {
+      var entries = ((info && info.entries) || []).filter(function(e) { return e && (e.name || e.type); });
+      box.textContent = '';
+      if (!entries.length) {
+        var none = document.createElement('div');
+        none.className = 'files-empty';
+        none.textContent = '図がありません';
+        box.appendChild(none);
+        return;
+      }
+      entries.map(function(e) { return { name: String(e.name || e.type), kind: e.kind || '' }; })
+        .sort(function(a, b) { return a.name < b.name ? -1 : a.name > b.name ? 1 : 0; })
+        .forEach(function(f) {
+          var b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'files-ro-file';
+          b.setAttribute('data-ro-dir', path);
+          b.setAttribute('data-file-name', f.name);
+          b.title = f.name + ' を右の枠に並べる (読むだけ)';
+          b.appendChild(_glyphEl(FT && FT.fileKind ? FT.fileKind(f.name, f.kind) : f.kind));
+          var nm = document.createElement('span');
+          nm.className = 'files-row-name';
+          nm.textContent = f.name;
+          b.appendChild(nm);
+          b.addEventListener('click', function() {
+            if (typeof window.compareReadonlyFolder === 'function') window.compareReadonlyFolder(path, f.name);
+          });
+          box.appendChild(b);
+        });
+    }).catch(function() {
+      box.textContent = '';
+      var bad = document.createElement('div');
+      bad.className = 'files-empty';
+      bad.textContent = '読めませんでした';
+      box.appendChild(bad);
+    });
+  }
+
+  function renderReadonly(dirs, comparingDir) {
+    var body = $('files-body-readonly');
+    var FT = window.MA.fileTree;
+    if (!body || !FT || !FT.readonlyRows) return;
+    var rows = FT.readonlyRows(dirs, comparingDir);
+    setReadonlyCount(rows.filter(function(r) { return r.comparing; }).length, rows.length);
+    var host = $('files-ro-list');
+    if (!host) {
+      host = document.createElement('div');
+      host.id = 'files-ro-list';
+      body.insertBefore(host, body.firstChild);
+    }
+    var hint = $('files-ro-hint');
+    if (hint) hint.hidden = rows.length > 0;
+    // 並べて比較の枠は図を切り替えるたびに状態を描き直す。行が同じなら作り直さない
+    // (開いているフォルダの中身を毎回読み直さない)。
+    var sig = JSON.stringify(rows);
+    if (host.getAttribute('data-sig') === sig && host.childNodes.length === rows.length * 2) return;
+    host.setAttribute('data-sig', sig);
+    host.textContent = '';
+    rows.forEach(function(r) {
+      var open = _get(KEY_RO_DIR + r.name, '0') === '1';
+      var head = document.createElement('button');
+      head.type = 'button';
+      head.className = 'files-ro-folder';
+      head.setAttribute('data-ro-dir', r.path);
+      head.setAttribute('data-ro-name', r.name);
+      head.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (r.comparing) head.setAttribute('data-comparing', '1');
+      head.title = r.path + ' (読むだけ。右クリックで並べて比較)';
+      var caret = document.createElement('span');
+      caret.className = 'files-caret';
+      caret.setAttribute('aria-hidden', 'true');
+      caret.textContent = open ? '▾' : '▸';
+      head.appendChild(caret);
+      var lab = document.createElement('span');
+      lab.className = 'files-part-label';
+      lab.textContent = r.name;
+      head.appendChild(lab);
+      if (r.comparing) {
+        var tag = document.createElement('span');
+        tag.className = 'files-ro-tag';
+        tag.textContent = '比較中';
+        head.appendChild(tag);
+      }
+      var cnt = document.createElement('span');
+      cnt.className = 'files-sec-count';
+      cnt.textContent = String(r.files);
+      head.appendChild(cnt);
+      host.appendChild(head);
+      var box = document.createElement('div');
+      box.className = 'files-ro-body';
+      box.setAttribute('data-ro-body', r.path);
+      box.hidden = !open;
+      if (open) _roFill(box, r.path);
+      host.appendChild(box);
+      head.addEventListener('click', function() {
+        var on = head.getAttribute('aria-expanded') !== 'true';
+        head.setAttribute('aria-expanded', on ? 'true' : 'false');
+        caret.textContent = on ? '▾' : '▸';
+        box.hidden = !on;
+        _set(KEY_RO_DIR + r.name, on ? '1' : '0');
+        if (on) _roFill(box, r.path);
+      });
+    });
   }
 
   function setGitCount(git) {
@@ -583,7 +707,13 @@ window.MA.filesPanel = (function() {
       var def = FT ? FT.defaultOpen(id) : (id === 'open');
       setSec(id, _get(KEY_SEC + id, def ? '1' : '0') === '1');
       var head = $('files-sec-' + id);
-      if (head) head.addEventListener('click', function() { setSec(id, !secOpen(id)); });
+      if (head) head.addEventListener('click', function() {
+        setSec(id, !secOpen(id));
+        // 読むだけを開いたら隣のフォルダを取り直す (起動後に増えたフォルダも並ぶ)。
+        if (id === 'readonly' && secOpen(id) && typeof window.refreshReadonlyTree === 'function') {
+          window.refreshReadonlyTree(true);
+        }
+      });
     });
 
     // 「読むだけを表示 / 隠す」。隠している間は節ごと出さない。
@@ -662,6 +792,7 @@ window.MA.filesPanel = (function() {
     setSec: setSec,
     secOpen: secOpen,
     setReadonlyCount: setReadonlyCount,
+    renderReadonly: renderReadonly,
     setGitCount: setGitCount,
     setSummary: setSummary,
     renderParts: renderParts,
