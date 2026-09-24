@@ -207,7 +207,7 @@ window.MA.noteBoard = (function() {
       // 語の切れ目で見る。`Gpio` を `Gpio_Driver` に統一した図には `Gpio_Driver` が
       // 並ぶので、素の indexOf では直した図が永遠に「まだ残っています」になる。
       if (_hasWord(body, pair.from)) {
-        return { done: false, why: '「' + pair.from + '」がまだ残っています' };
+        return { done: false, why: '「' + pair.from + '」がまだ残っています', term: pair.from };
       }
       // 消えただけでは足りない。直した綴りが入っていて初めて「揃えた」と言える
       // (部品ごと消しても古い綴りは消える)。
@@ -220,7 +220,23 @@ window.MA.noteBoard = (function() {
     var notes = RN ? RN.verdictNotes(body) : [];
     if (notes.length) return { done: true, why: notes.join('、') };
 
-    return { done: false, why: '本文からは判定できません（開いて確かめてください）' };
+    return { done: false, why: '本文からは判定できません（開いて確かめてください）', term: termIn(text, body) };
+  }
+
+  // BLK-junior-20260924-1632-wish: 指摘文が `…` で括った語のうち、本文に語として出てくる最初の 1 つ。
+  // FILES ツリーの札を押して図を開いたとき、どこを見ればよいかをエディタで選んで見せるのに使う。
+  // 見つからなければ '' (図を開くだけにする。当てずっぽうの語は選ばない)。
+  var CODE_RE = /`([^`\n]+)`/g;
+  function termIn(text, dsl) {
+    var body = _s(dsl);
+    if (!body) return '';
+    CODE_RE.lastIndex = 0;
+    var m;
+    while ((m = CODE_RE.exec(_s(text)))) {
+      var w = m[1].trim();
+      if (w && _hasWord(body, w)) return w;
+    }
+    return '';
   }
 
   // 図 1 枚の状態。dsl が無いうちは ⚠未確認 のまま (「読めていない」を ✅ にしない)。
@@ -232,9 +248,16 @@ window.MA.noteBoard = (function() {
     }
     var reasons = [];
     var allDone = true;
+    // head / term: まだ反映を確かめられない最初の 1 件の見出しと、その件が指す本文の語
+    // (FILES ツリーの札の title と、押したときに選ぶ語。BLK-junior-20260924-1632-wish)。
+    var head = '', term = '', open = 0;
     hits.forEach(function(h) {
       var v = verdictOf(h.row, o.dsl, { mineFolder: o.mineFolder });
-      if (!v.done) allDone = false;
+      if (!v.done) {
+        allDone = false;
+        open++;
+        if (!head) { head = h.head; term = _s(v.term); }
+      }
       reasons.push(h.head + ': ' + v.why);
     });
     var b = allDone ? BADGE.done : BADGE.todo;
@@ -242,6 +265,7 @@ window.MA.noteBoard = (function() {
       key: b.key, mark: b.mark,
       title: b.title + ' — ' + reasons.join(' / '),
       hits: hits, reasons: reasons,
+      head: head, term: term, open: open,
     };
   }
 
@@ -370,6 +394,7 @@ window.MA.noteBoard = (function() {
     sidePairs: sidePairs,
     sideRename: sideRename,
     verdictOf: verdictOf,
+    termIn: termIn,
     statusOf: statusOf,
     statusMap: statusMap,
     pendingNames: pendingNames,
