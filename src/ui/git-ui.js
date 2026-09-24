@@ -143,8 +143,10 @@ window.MA.gitUi = (function() {
       var row = _el('div', 'git-change');
       row.setAttribute('data-git-code', c.code);
       row.setAttribute('data-file', c.file);
+      row.title = c.file;
+      // design 10c (BLK-builder-20260924-1808-1): ツリーの行と同じ形。名前は拡張子なし、状態字は右。
+      row.appendChild(_el('span', 'git-change-name', gp.changeName(c)));
       row.appendChild(_el('span', 'git-code git-code-' + c.code, c.code));
-      row.appendChild(_el('span', 'git-change-name', c.file));
       host.appendChild(row);
     });
   }
@@ -163,7 +165,11 @@ window.MA.gitUi = (function() {
     if (!host || !gp) return;
     host.textContent = '';
     var lab = $('git-history-head');
-    if (lab) lab.textContent = 'この図の履歴' + (history.length ? '（' + history.length + '）' : '');
+    // design 10c (BLK-builder-20260924-1808-1): 見出しはどの図の履歴かを言う。件数は title に回す。
+    if (lab) {
+      lab.textContent = gp.historyLabel(_name());
+      lab.title = lab.textContent + (history.length ? ' (コミット ' + history.length + ' 件)' : '');
+    }
     if (!history.length) {
       host.appendChild(_el('div', 'git-empty', gp.emptyHistoryText(!!_name())));
       return;
