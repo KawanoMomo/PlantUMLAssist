@@ -13,6 +13,8 @@ test('手順3 設定で保存先を変えると、上部バーの表示がその
   await S.bootDownloadMode(page);
   // 未設定ならダウンロードになることが先に出る。
   await expect(page.locator('#top-save-target')).toHaveAttribute('data-mode', 'download');
+  // 保存先の無い新規の図は、上部バーにフォルダの段を出さない (ファイル名だけ)。
+  await expect(page.locator('#top-crumbs .top-crumb')).toHaveCount(0);
 
   await page.locator('#top-save-target').click();
   await expect(page.locator('#cfg-modal')).toBeVisible();
@@ -26,6 +28,8 @@ test('手順3 設定で保存先を変えると、上部バーの表示がその
   await expect(chip).toHaveAttribute('data-mode', 'file');
   await expect(chip).toHaveClass(/configured/);
   expect(await chip.getAttribute('title')).toContain(DIR);
+  // design 10a (BLK-builder-20260924-1715-1): 上部バー左のパンくずにも保存先のフォルダ名が出る。
+  await expect(page.locator('#top-crumbs .top-crumb')).toHaveText([DIR.replace(/[\\/]+$/, '').split(/[\\/]/).pop()]);
 
   // 到達条件その2: 保存は上部バーのボタン 1 押しで済む (コマンド名を打たない)。
   const save = page.locator('#top-save');
