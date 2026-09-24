@@ -4466,7 +4466,7 @@ function syncDraftButton() {
   btn.classList.toggle('tab-tool-on', isDraft);
   btn.title = name
     ? DM.rowTitle(isDraft) + '（' + name + '）'
-    : 'この図に一時控え(下書き / やり直し途中)の印を付けて、📂 一覧から畳む';
+    : 'この図に一時控え(下書き / やり直し途中)の印を付けて、保存先の一覧から畳む';
 }
 
 // BLK-junior-20260908-1803: 「この名前のファイルに書いてよいか」を答える門。
@@ -5832,7 +5832,7 @@ function renderChangeBoard() {
     // 開いていない保存フォルダの図は、その旨と更新時刻を名前の横に出す
     // (会議で「14 枚の外の図」と分かる)。
     var org = (e.origin === 'folder')
-      ? '<span class="cb-origin" title="開いていない保存フォルダのファイル。今日更新された分">📂 フォルダ'
+      ? '<span class="cb-origin" title="開いていない保存フォルダのファイル。今日更新された分">フォルダ'
         + (e.mtime ? ' ' + esc(e.mtime.replace('T', ' ').slice(0, 16)) : '') + '</span>'
       : '';
     html += '<div class="cb-entry" data-doc-id="' + esc(e.id) + '" data-doc-name="' + esc(e.name) + '"'
@@ -6514,7 +6514,7 @@ function _abJump(name, line) {
   var hit = null;
   window.MA.workspace.list().forEach(function(d) { if (d.name === name) hit = d; });
   if (!hit) {
-    if (st) st.textContent = name + ' は開いていません（📂 一覧から開くと飛べます）';
+    if (st) st.textContent = name + ' は開いていません（FILES の保存先から開くと飛べます）';
     return;
   }
   jumpToDocLine(hit.id, line);
@@ -9277,7 +9277,7 @@ function selectNoteFinding(id) {
     // 黙って別の版を並べると、その版を今回の対象だと読んでしまう。
     if (ok && pick && pick.name && pick.name !== p.base) {
       _noteMsg += '（指摘が指す ' + pick.name + ' は片方のフォルダにしかないので、'
-        + '📂一覧で光らせています）';
+        + '保存先の一覧で光らせています）';
     }
     renderNotePanel();
     return ok;
@@ -27549,14 +27549,14 @@ function renderDocSets() {
   var cnt = document.getElementById('docset-pick-count');
   if (cnt) {
     cnt.textContent = target.length + ' 枚'
-      + (t.picked.length ? '（📂 一覧で印を付けた図）' : '（保存フォルダの全図）');
+      + (t.picked.length ? '（保存先の一覧で印を付けた図）' : '（保存フォルダの全図）');
   }
 
   if (!_dsSets.length) {
     var empty = document.createElement('div');
     empty.id = 'docset-empty';
     empty.textContent = '資料セットはまだありません。上の欄に名前を入れて「今の対象を登録する」を押すと、'
-      + 'いま保存フォルダにある図（📂 一覧で印を付けていればその図だけ）がこの名前で登録されます。';
+      + 'いま保存フォルダにある図（保存先の一覧で印を付けていればその図だけ）がこの名前で登録されます。';
     box.appendChild(empty);
     return;
   }

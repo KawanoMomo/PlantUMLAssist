@@ -115,7 +115,7 @@ describe('svgCross.summaryLine / saveLine', () => {
   });
 
   test('保存した図が無事でも、フォルダに残るクロスの件数は言う', () => {
-    expect(sx.saveLine(sx.scan(SWAPPED), 'spi_state')).toBe('⚠ SVG の出力先クロス 2 枚（📂一覧で確認）');
+    expect(sx.saveLine(sx.scan(SWAPPED), 'spi_state')).toBe('⚠ SVG の出力先クロス 2 枚（保存先の一覧で確認）');
   });
 
   test('控えが無い (一覧をまだ読んでいない) ときは黙る', () => {

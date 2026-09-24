@@ -69,7 +69,7 @@ window.MA.materialVerify = (function() {
     if (!info || !info.entries) {
       return {
         status: 'unknown', found: false, docName: docName, dir: dir,
-        text: '保存先の一覧を読めませんでした。📂 一覧で ' + docName + ' を確かめてください',
+        text: '保存先の一覧を読めませんでした。保存先の一覧で ' + docName + ' を確かめてください',
       };
     }
     var hit = find(info.entries, docName);
