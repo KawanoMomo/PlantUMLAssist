@@ -151,8 +151,34 @@ window.MA.groupPlace = (function() {
     return { start: s, end: e, block: lines.slice(s, e + 1) };
   }
 
-  // 宣言を境界の中へ移す。ほかの行は動かさない。
-  function moveInto(text, line, groups, groupId) {
+  function _escRe(v) { return _s(v).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+  // 行 idx が id を名前として含むか (関係の端・注釈の相手など)。コメント行は数えない。
+  function _refers(line, id) {
+    var t = _s(line).trim();
+    if (!t || t.charAt(0) === "'") return false;
+    return new RegExp('(^|[^A-Za-z0-9_])' + _escRe(id) + '([^A-Za-z0-9_]|$)').test(t);
+  }
+
+  // g の祖先 (自分を含む) のうち、親が parentId のもの。無ければ null。
+  function _ancestorUnder(groups, g, parentId) {
+    var cur = g;
+    var guard = 0;
+    while (cur && guard++ < 50) {
+      if ((cur.parentId || null) === (parentId || null)) return cur;
+      cur = cur.parentId ? _byId(groups, cur.parentId) : null;
+    }
+    return null;
+  }
+
+  // 宣言を境界の中へ移す。宣言の行 (ブロックなら閉じまで) だけを動かす。
+  //
+  // PlantUML は名前が先に関係の行に出ると、その場で境界の外に要素を作る。後から
+  // 境界の中で同じ名前を宣言すると「already defined」で図が描けなくなる。
+  // フォームで作った境界は末尾 (関係の行より後ろ) にあるので、そのまま入れると
+  // ほぼ必ずこれを踏む。宣言より後ろの関係が名前を使っていれば、境界 (要素と同じ
+  // 階層にある祖先) ごと元の宣言の位置へ上げる。関係の行は動かさない。
+  function moveInto(text, line, groups, groupId, id) {
     var g = _byId(groups, groupId);
     if (!g) return text;
     var lines = _s(text).split('\n');
@@ -160,18 +186,42 @@ window.MA.groupPlace = (function() {
     if (!c) return text;
     // 自分自身の中 (境界を持つ宣言が自分の境界へ) には移せない
     if (g.startLine - 1 >= c.start && g.endLine - 1 <= c.end) return text;
-    var openIdx = g.startLine - 1;
-    var closeIdx = g.endLine - 1;
-    var indent = _indentOf(lines[openIdx]) + '  ';
-    var body = reindent(c.block, indent);
-    var n = c.end - c.start + 1;
-    lines.splice(c.start, n);
-    if (c.start < closeIdx) closeIdx -= n;
-    lines.splice.apply(lines, [closeIdx, 0].concat(body));
+    var body = reindent(c.block, _indentOf(lines[g.startLine - 1]) + '  ');
+
+    var own = containerOf(groups, line);
+    var lift = null;
+    if (id) {
+      var anc = _ancestorUnder(groups, g, own ? own.id : null);
+      if (anc && anc.startLine - 1 > c.end) {
+        for (var r = c.end + 1; r < anc.startLine - 1; r++) {
+          if (_refers(lines[r], id)) { lift = anc; break; }
+        }
+      }
+    }
+
+    if (!lift) {
+      var closeIdx = g.endLine - 1;
+      var n = c.end - c.start + 1;
+      lines.splice(c.start, n);
+      if (c.start < closeIdx) closeIdx -= n;
+      lines.splice.apply(lines, [closeIdx, 0].concat(body));
+      return lines.join('\n');
+    }
+
+    // 祖先の塊 (中に宣言を入れた形) を作り、元の宣言の位置に置く。
+    var aStart = lift.startLine - 1;
+    var aEnd = lift.endLine - 1;
+    var chunk = lines.slice(aStart, aEnd + 1);
+    chunk.splice.apply(chunk, [g.endLine - 1 - aStart, 0].concat(body));
+    chunk = reindent(chunk, _indentOf(lines[c.start]));
+    // 後ろ (祖先の塊) から消し、前 (宣言) を塊で置き換える。
+    lines.splice(aStart, aEnd - aStart + 1);
+    lines.splice.apply(lines, [c.start, c.end - c.start + 1].concat(chunk));
     return lines.join('\n');
   }
 
-  // 宣言を今の境界の外 (その境界の閉じ `}` の直後) へ出す。
+  // 宣言を今の境界の外へ出す。置き場所は境界の開き行の直前 — 閉じの後ろに置くと、
+  // 境界の中の関係が先に名前を使い、PlantUML が境界の中に同じ名前を作ってしまう。
   function moveOut(text, line, groups) {
     var g = containerOf(groups, line);
     if (!g) return text;
@@ -179,11 +229,8 @@ window.MA.groupPlace = (function() {
     var c = _cut(lines, line);
     if (!c) return text;
     var body = reindent(c.block, _indentOf(lines[g.startLine - 1]));
-    var n = c.end - c.start + 1;
-    var afterIdx = g.endLine; // 閉じの直後 (0 始まり)
-    lines.splice(c.start, n);
-    if (c.start < afterIdx) afterIdx -= n;
-    lines.splice.apply(lines, [afterIdx, 0].concat(body));
+    lines.splice(c.start, c.end - c.start + 1);
+    lines.splice.apply(lines, [g.startLine - 1, 0].concat(body));
     return lines.join('\n');
   }
 
@@ -232,21 +279,21 @@ window.MA.groupPlace = (function() {
     if (!P || _usable(groups).length === 0) return '';
     var cur = containerOf(groups, line);
     return '<div id="' + idPrefix + '-group-box" style="margin-top:8px;">' +
-      '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:2px;">境界: ' +
+      '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:2px;">今の場所: ' +
         (cur ? window.MA.htmlUtils.escHtml(insideLabel(groups, cur)) : '図の直下 (どの境界にも入っていない)') +
       '</div>' +
       P.selectFieldHtml('境界へ入れる / 出す', idPrefix + '-group-move', moveOptions(groups, line)) +
       '</div>';
   }
 
-  function bindEdit(idPrefix, groups, line, ctx) {
+  function bindEdit(idPrefix, groups, line, ctx, id) {
     var el = document.getElementById(idPrefix + '-group-move');
     if (!el) return;
     el.addEventListener('change', function() {
       var v = el.value;
       if (!v) return;
       var t = ctx.getMmdText();
-      var out = v === 'out' ? moveOut(t, line, groups) : moveInto(t, line, groups, v);
+      var out = v === 'out' ? moveOut(t, line, groups) : moveInto(t, line, groups, v, id);
       if (out === t) return;
       window.MA.history.pushHistory();
       // 行が動くので、選択は外して追加フォームへ戻す (古い行番号を指したままにしない)。

@@ -978,7 +978,7 @@ window.MA.modules.plantumlComponent = (function() {
         GP.editFieldHtml('co-edit', parsedData.groups, element.line) +
       '</div>';
     propsEl.innerHTML = html;
-    GP.bindEdit('co-edit', parsedData.groups, element.line, ctx);
+    GP.bindEdit('co-edit', parsedData.groups, element.line, ctx, element.id);
 
     P.bindEvent('co-edit-apply', 'click', function() {
       var rawNewId = document.getElementById('co-edit-id').value.trim();

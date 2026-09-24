@@ -1824,7 +1824,7 @@ window.MA.modules.plantumlClass = (function() {
           '</div>';
 
     propsEl.innerHTML = html;
-    GP.bindEdit('cl-edit', parsedData.groups, element.line, ctx);
+    GP.bindEdit('cl-edit', parsedData.groups, element.line, ctx, element.id);
 
     // BLK-junior-20260909-0703-wish: 選んでいるクラスを親にして派生を 1 つ起こす。
     P.bindEvent('cl-derive-open', 'click', function() {
@@ -2099,7 +2099,7 @@ window.MA.modules.plantumlClass = (function() {
             P.primaryButtonHtml('cl-add-val', '+ Value 追加') +
             '</div>';
     propsEl.innerHTML = html;
-    GP.bindEdit('cl-edit', parsedData.groups, element.line, ctx);
+    GP.bindEdit('cl-edit', parsedData.groups, element.line, ctx, element.id);
 
     P.bindEvent('cl-edit-apply', 'click', function() {
       window.MA.history.pushHistory();

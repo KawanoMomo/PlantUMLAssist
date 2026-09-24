@@ -93,11 +93,34 @@ describe('groupPlace.moveInto / moveOut — 右パネルから移す', function(
     expect(out).toBe('@startuml\npackage "Mcal" {\n  component A {\n    port p1\n  }\n}\n@enduml');
   });
 
-  test('境界の中の要素を外へ出すと、閉じ括弧の直後に並ぶ', function() {
-    var src = '@startuml\nrectangle "SPI" {\n  usecase Init\n  usecase Send\n}\nDev --> Init\n@enduml';
+  test('境界の中の要素を外へ出すと、境界の開きの直前に並ぶ (境界の中の関係より前に宣言が来る)', function() {
+    var src = '@startuml\nrectangle "SPI" {\n  usecase Init\n  usecase Send\n  Send --> Init\n}\nDev --> Init\n@enduml';
     var p = uc.parse(src);
     var out = GP.moveOut(src, 3, p.groups);
-    expect(out).toBe('@startuml\nrectangle "SPI" {\n  usecase Send\n}\nusecase Init\nDev --> Init\n@enduml');
+    expect(out).toBe('@startuml\nusecase Init\nrectangle "SPI" {\n  usecase Send\n  Send --> Init\n}\nDev --> Init\n@enduml');
+  });
+
+  test('宣言より後ろの関係が名前を使っていれば、境界ごと元の宣言の位置へ上がる (already defined を踏まない)', function() {
+    // フォームで作った境界は末尾 (関係より後ろ) にある。宣言だけを境界へ移すと、
+    // PlantUML は Dev --> Init で先に Init を作り、境界の中の宣言が二重になる。
+    var src = '@startuml\nactor Dev\nusecase "初期化" as Init\nDev --> Init\nrectangle "SPI" {\n  usecase Send\n}\n@enduml';
+    var p = uc.parse(src);
+    var out = GP.moveInto(src, 3, p.groups, p.groups[0].id, 'Init');
+    expect(out).toBe('@startuml\nactor Dev\nrectangle "SPI" {\n  usecase Send\n  usecase "初期化" as Init\n}\nDev --> Init\n@enduml');
+  });
+
+  test('入れ子の内側へ移すときは、要素と同じ階層にある外側の境界ごと上がる', function() {
+    var src = '@startuml\ncomponent A\nB --> A\npackage "Mcal" {\n  node "Spi" {\n  }\n}\n@enduml';
+    var p = co.parse(src);
+    var out = GP.moveInto(src, 2, p.groups, p.groups[1].id, 'A');
+    expect(out).toBe('@startuml\npackage "Mcal" {\n  node "Spi" {\n    component A\n  }\n}\nB --> A\n@enduml');
+  });
+
+  test('名前を使う行が無ければ、境界は動かさず宣言だけが入る', function() {
+    var src = '@startuml\ncomponent A\ncomponent B\npackage "Mcal" {\n}\n@enduml';
+    var p = co.parse(src);
+    var out = GP.moveInto(src, 2, p.groups, p.groups[0].id, 'A');
+    expect(out).toBe('@startuml\ncomponent B\npackage "Mcal" {\n  component A\n}\n@enduml');
   });
 
   test('後ろにある要素を前の境界へ移しても、境界の閉じの位置を取り違えない', function() {

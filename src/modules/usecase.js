@@ -852,7 +852,7 @@ window.MA.modules.plantumlUsecase = (function() {
       html += '</div>';
     }
     propsEl.innerHTML = html;
-    GP.bindEdit('uc-edit', parsedData.groups, element.line, ctx);
+    GP.bindEdit('uc-edit', parsedData.groups, element.line, ctx, element.id);
 
     myNotes.forEach(function(n, idx) {
       P.bindEvent('uc-note-edit-' + idx, 'click', function(e) {

@@ -502,6 +502,11 @@ test('手順2 手本の無い部品のコンポーネント図を、部品名 1 
   expect(moved).toMatch(/package "Mcal" \{\n\s+component Timer_Hw\n\s+component[^\n]*TIMER_Driver[^\n]*\n\}/);
   // 移したのは宣言の行だけ。依存の行は元の場所のまま。
   expect(moved).toContain('TIMER_Driver ..> Clock_Ctrl : クロック制御');
+  // 依存の行より前に境界が来ている (後ろだと PlantUML が「already defined」で描けない)。
+  expect(moved.indexOf('package "Mcal" {')).toBeLessThan(moved.indexOf('TIMER_Driver ..> Clock_Ctrl'));
+  // 描き直した図でも、境界の中の部品を押して選べる。
+  await expect(page.locator('#overlay-layer rect.selectable[data-type="component"][data-id="TIMER_Driver"]').first())
+    .toBeAttached({ timeout: 10000 });
 });
 // BLK-human-20260912-2130: 手順 2 で junior が起こす 5 図種 (状態遷移・クラス・
 // コンポーネント・ユースケース・アクティビティ) でも、シーケンスと同じく
