@@ -1,3 +1,4 @@
+- BLK-migrator-20260924-1332: C4_Sequence の手続き (Person / Component / Rel) で書いた sequence 図に alt / loop / ref over / == 区切り == / ... 遅延 ... が混ざっても、参加者・メッセージ・alt/loop の枠に本人の選択枠が出て、ref・区切り・遅延は書かれた行を指す枠になる。「Overlay マッチング失敗」の帯も出ない
 - BLK-builder-20260924-1427-3: プレビューの見出しが「OK (local)」ではなく「Rendered · 32ms」になり、直前の描画にかかった時間が上部バーと同じ数で読める。描画方法は見出しの title で読める (design 7a / 10a)
 - BLK-builder-20260924-1415-4: 起動直後の空の画面の入口「ファイルを開く(.puml) / ここへドラッグ&ドロップ」が見本の図の上に重ならず、図のすぐ下に出る(拡大しても図の下へずれる。design 7a / 9a)
 - BLK-builder-20260924-1413-2: 画面下端がどの幅でも 1 行に収まる (design 7a / 9c)。保存直後の 1 行はパスや内訳を落とした短い形 (「diagram1.puml に保存しました · 衝突なし」) で出し、全文は title で読める。並びは パース OK → N elements · M relations → 保存状態 → 件数

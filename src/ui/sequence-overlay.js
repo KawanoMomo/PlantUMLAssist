@@ -233,7 +233,10 @@ window.MA.sequenceOverlay = (function() {
 
   // BLK-migrator-20260924-1132: `!include` した手続き (C4_Sequence など) で描いた図は、参加者の頭も
   // メッセージも class の無い <rect>/<text>/<line>/<polygon> で出る。手続きの名前は覚えず、描かれた物から当てる:
-  // 参加者 = 表示名と同じ文字の <text> を囲む小さい <rect>、メッセージ = 矢じり (<polygon>) の付いた横線を上から順に。
+  // 参加者 = 表示名と同じ文字の <text> を囲むいちばん小さい <rect>、メッセージ = 矢じり (<polygon>) の付いた線。
+  // BLK-migrator-20260924-1332: alt / loop / ref / 区切り / 遅延 が混ざると線の本数が合わず全部を諦めていた。
+  // 枠 (見出しの五角形が角に付いた rect)・区切り・遅延を先に見分けてその文字を除き、残りの矢印は
+  // 線の上に書かれた文字とメッセージの文言の一致で当てる (本数の一致に頼らない)。
   function _num(el, a) { return parseFloat(el.getAttribute(a)); }
   function _bareShapes(svgEl, sel) {
     return Array.prototype.filter.call(svgEl.querySelectorAll(sel), function(n) {
@@ -245,75 +248,239 @@ window.MA.sequenceOverlay = (function() {
       return true;
     });
   }
-  function _procParticipants(svgEl, participants) {
-    var texts = _bareShapes(svgEl, 'text');
-    var rects = _bareShapes(svgEl, 'rect').filter(function(r) {
-      var h = _num(r, 'height'), w = _num(r, 'width');
-      return !isNaN(h) && !isNaN(w) && h > 10 && h < 120 && w > 10 && r.getAttribute('fill') !== 'none';
-    });
+  // 比べるための文言: 空白・&nbsp; を落とし、SHOW_INDEX の頭の番号 (`1:`) を外す。
+  function _procNorm(s) {
+    return String(s || '').replace(/\\n/g, '').replace(/&nbsp;/g, '').replace(/[\s ]+/g, '').replace(/^\d+:/, '');
+  }
+  function _procRects(svgEl) {
     var out = [];
+    _bareShapes(svgEl, 'rect').forEach(function(r) {
+      var x = _num(r, 'x'), y = _num(r, 'y'), w = _num(r, 'width'), h = _num(r, 'height');
+      if (isNaN(x) || isNaN(y) || isNaN(w) || isNaN(h) || w <= 10 || h <= 10) return;
+      out.push({ el: r, x: x, y: y, w: w, h: h });
+    });
+    return out;
+  }
+  function _procTexts(svgEl) {
+    var out = [];
+    _bareShapes(svgEl, 'text').forEach(function(t) {
+      var x = _num(t, 'x'), y = _num(t, 'y');
+      if (isNaN(x) || isNaN(y)) return;
+      var s = String(t.textContent || '').replace(/ /g, ' ');
+      out.push({ el: t, x: x, y: y, s: s, w: parseFloat(t.getAttribute('textLength')) || s.length * 7 });
+    });
+    return out;
+  }
+  function _inRect(r, x, y) { return x >= r.x - 1 && x <= r.x + r.w && y >= r.y && y <= r.y + r.h; }
+  // 矢じりの付いた線 (斜めの線も含む。点線・縦線・矢じりの無い線は除く)。上から順。
+  function _procArrows(svgEl) {
+    var polys = _bareShapes(svgEl, 'polygon').map(function(pg) {
+      return String(pg.getAttribute('points') || '').split(/[\s,]+/).map(parseFloat);
+    });
+    function tipNear(px, py) {
+      return polys.some(function(pts) {
+        for (var i = 0; i + 1 < pts.length; i += 2) {
+          if (Math.abs(pts[i + 1] - py) <= 6 && Math.abs(pts[i] - px) <= 12) return true;
+        }
+        return false;
+      });
+    }
+    return _bareShapes(svgEl, 'line').map(function(l) {
+      return { x1: _num(l, 'x1'), y1: _num(l, 'y1'), x2: _num(l, 'x2'), y2: _num(l, 'y2'),
+        dashed: /dasharray/.test(l.getAttribute('style') || '') };
+    }).filter(function(a) {
+      if (isNaN(a.x1) || isNaN(a.y1) || isNaN(a.x2) || isNaN(a.y2) || a.dashed) return false;
+      if (Math.abs(a.x2 - a.x1) < 10 || Math.abs(a.y2 - a.y1) > Math.abs(a.x2 - a.x1)) return false;
+      return tipNear(a.x1, a.y1) || tipNear(a.x2, a.y2);
+    }).map(function(a) {
+      return { x1: Math.min(a.x1, a.x2), x2: Math.max(a.x1, a.x2), top: Math.min(a.y1, a.y2), bottom: Math.max(a.y1, a.y2) };
+    }).sort(function(a, b) { return a.top - b.top; });
+  }
+  function _procParticipants(svgEl, participants, arrows) {
+    var texts = _procTexts(svgEl);
+    var rects = _procRects(svgEl);
+    var span = arrows && arrows.length ? { top: arrows[0].top, bottom: arrows[arrows.length - 1].bottom } : null;
+    var hits = [];
     participants.forEach(function(p) {
       var label = String(p.label || '').trim();
       if (!label) return;
       texts.forEach(function(t) {
-        if (String(t.textContent || '').trim() !== label) return;
-        var tx = _num(t, 'x'), ty = _num(t, 'y');
-        if (isNaN(tx) || isNaN(ty)) return;
+        if (t.s.trim() !== label) return;
+        // 頭 (最初の矢印より上) と尻 (最後の矢印より下) の表示名だけ。メッセージの文字の同じ語は拾わない。
+        if (span && t.y > span.top - 2 && t.y < span.bottom + 2) return;
         var best = null;
         rects.forEach(function(r) {
-          var x = _num(r, 'x'), y = _num(r, 'y'), w = _num(r, 'width'), h = _num(r, 'height');
-          if (tx < x - 1 || tx > x + w || ty < y || ty > y + h) return;
-          if (!best || w * h < best.w * best.h) best = { x: x, y: y, w: w, h: h };
+          if (!_inRect(r, t.x, t.y)) return;
+          if (!best || r.w * r.h < best.w * best.h) best = r;
         });
-        if (!best) {
-          // 囲み (`*_Boundary(…)`) は塗りの無い大きな枠で描かれ、表示名は枠の上端に出る。
-          // 枠全体は覆わず (中の参加者を押せなくなる)、表示名の帯だけを当てる。
-          _bareShapes(svgEl, 'rect[fill="none"]').forEach(function(r) {
-            var x = _num(r, 'x'), y = _num(r, 'y'), w = _num(r, 'width'), h = _num(r, 'height');
-            if (isNaN(h) || tx < x || tx > x + w || ty < y || ty > y + 40) return;
-            if (!best || w * h < best.w * best.h) best = { x: x, y: y, w: w, h: Math.min(h, ty - y + 6) };
-          });
-        }
-        if (best) out.push({ item: p, box: best });
+        if (best) hits.push({ item: p, t: t, rect: best });
       });
     });
-    return out;
+    return hits.map(function(h) {
+      var r = h.rect;
+      // 囲み (`*_Boundary(…)`) は中に別の参加者を持つ大きな枠。枠全体は覆わず (中の参加者を押せなくなる)、
+      // 上端から中の参加者の頭の手前までの名札の帯だけを当てる。
+      var inner = hits.filter(function(o) { return o.item !== h.item && _inRect(r, o.t.x, o.t.y); });
+      if (!inner.length) return { item: h.item, box: { x: r.x, y: r.y, w: r.w, h: r.h } };
+      var innerTop = Infinity;
+      inner.forEach(function(o) { innerTop = Math.min(innerTop, o.rect !== r ? o.rect.y : o.t.y - 14); });
+      var bottom = Math.min(r.y + r.h, Math.max(h.t.y + 6, innerTop - 8));
+      return { item: h.item, box: { x: r.x, y: r.y, w: r.w, h: bottom - r.y } };
+    });
   }
-  function _procMessages(svgEl, relations, floorY) {
-    var polys = _bareShapes(svgEl, 'polygon');
-    var lines = _bareShapes(svgEl, 'line').filter(function(l) {
-      var y1 = _num(l, 'y1'), y2 = _num(l, 'y2'), x1 = _num(l, 'x1'), x2 = _num(l, 'x2');
-      if (isNaN(y1) || y1 !== y2 || Math.abs(x2 - x1) < 10) return false;
-      if (/dasharray/.test(l.getAttribute('style') || '')) return false;
-      // 矢じりが線の端に付いているものだけ (枠・凡例の線を拾わない)
-      return polys.some(function(pg) {
-        var pts = String(pg.getAttribute('points') || '').split(/[\s,]+/).map(parseFloat);
-        for (var i = 0; i + 1 < pts.length; i += 2) {
-          if (Math.abs(pts[i + 1] - y1) <= 6 && (Math.abs(pts[i] - x1) <= 12 || Math.abs(pts[i] - x2) <= 12)) return true;
-        }
-        return false;
-      });
-    }).sort(function(a, b) { return _num(a, 'y1') - _num(b, 'y1'); });
-    var rels = relations.slice().sort(function(a, b) { return (a.line || 0) - (b.line || 0); });
-    if (!lines.length || lines.length !== rels.length) return [];
-    var texts = _bareShapes(svgEl, 'text');
-    // 最初のメッセージの文字は参加者の頭より下にしか無い (頭の表示名をメッセージに含めない)。
-    var prevY = typeof floorY === 'number' && isFinite(floorY) ? floorY - 4 : -Infinity;
-    return lines.map(function(l, i) {
-      var y = _num(l, 'y1');
-      var x1 = Math.min(_num(l, 'x1'), _num(l, 'x2')), x2 = Math.max(_num(l, 'x1'), _num(l, 'x2'));
-      var top = y - 6, left = x1, right = x2;
+  // 枠 (alt / loop / ref …)・区切り (`== x ==`)・遅延 (`... x ...`) を描かれた物から見分ける。
+  // claimed: それらに属する <text> (メッセージの文字に混ぜない)。
+  function _procStructures(svgEl, dslText) {
+    var texts = _procTexts(svgEl);
+    var rects = _procRects(svgEl);
+    var claimed = [];
+    function claim(t) { if (claimed.indexOf(t.el) < 0) claimed.push(t.el); }
+    // 見出しの五角形 (<path>) が左上の角から始まる rect が枠。同じ枠は塗りと線で 2 回描かれる。
+    var starts = _bareShapes(svgEl, 'path').map(function(p) {
+      var m = /^\s*M\s*(-?[\d.]+)[\s,]+(-?[\d.]+)/.exec(p.getAttribute('d') || '');
+      return m ? { x: parseFloat(m[1]), y: parseFloat(m[2]) } : null;
+    }).filter(Boolean);
+    var frames = [], seen = {};
+    rects.forEach(function(r) {
+      if (r.w < 30 || r.h < 15) return;
+      if (!starts.some(function(s) { return Math.abs(s.x - r.x) < 0.6 && Math.abs(s.y - r.y) < 0.6; })) return;
+      var key = Math.round(r.x) + ',' + Math.round(r.y) + ',' + Math.round(r.w) + ',' + Math.round(r.h);
+      if (seen[key]) return;
+      seen[key] = 1;
+      frames.push({ x: r.x, y: r.y, w: r.w, h: r.h });
+    });
+    frames.sort(function(a, b) { return a.y - b.y; });
+    // 枠の見出しの行 (種類と条件) と、else の点線のすぐ下の条件は枠の文字。
+    // 矢印を 1 本も含まない枠 (ref) は、中の文字も全部枠の文字。
+    var arrows = _procArrows(svgEl);
+    frames.forEach(function(f) {
+      var empty = !arrows.some(function(a) { return _inRect(f, (a.x1 + a.x2) / 2, a.top); });
       texts.forEach(function(t) {
-        var tx = _num(t, 'x'), ty = _num(t, 'y');
-        if (isNaN(tx) || isNaN(ty) || ty > y || ty <= prevY + 4) return;
-        if (tx < x1 - 20 || tx > x2 + 20) return;
-        var tl = parseFloat(t.getAttribute('textLength')) || 0;
-        top = Math.min(top, ty - 13);
-        left = Math.min(left, tx);
-        right = Math.max(right, tx + tl);
+        if (t.x < f.x - 1 || t.x > f.x + f.w) return;
+        if (t.y >= f.y && t.y <= (empty ? f.y + f.h : f.y + 22)) claim(t);
       });
-      prevY = y;
-      return { item: rels[i], box: { x: left, y: top, w: right - left, h: y + 6 - top } };
+    });
+    _bareShapes(svgEl, 'line').forEach(function(l) {
+      if (!/dasharray/.test(l.getAttribute('style') || '')) return;
+      var y1 = _num(l, 'y1'), y2 = _num(l, 'y2'), x1 = _num(l, 'x1'), x2 = _num(l, 'x2');
+      if (isNaN(y1) || Math.abs(y2 - y1) > 0.5 || Math.abs(x2 - x1) < 30) return;
+      texts.forEach(function(t) {
+        if (t.y > y1 && t.y <= y1 + 20 && t.x >= Math.min(x1, x2) - 1 && t.x <= Math.max(x1, x2)) claim(t);
+      });
+    });
+    var dividers = [], delays = [];
+    var usedRects = [];
+    String(dslText || '').split('\n').forEach(function(raw, i) {
+      var dm = /^\s*==\s*(.*?)\s*==\s*$/.exec(raw);
+      var lm = !dm && /^\s*\.\.\.\s*(.*?)\s*\.\.\.\s*$/.exec(raw);
+      var label = _procNorm(dm ? dm[1] : (lm ? lm[1] : ''));
+      if (!label) return;
+      if (dm) {
+        // 区切り: 表示名を囲む小さい rect。横いっぱいの 2 本線まで広げる。
+        var best = null;
+        rects.forEach(function(r) {
+          if (usedRects.indexOf(r) >= 0) return;
+          var inside = texts.filter(function(t) { return _inRect(r, t.x, t.y); });
+          if (!inside.length || _procNorm(inside.map(function(t) { return t.s; }).join('')) !== label) return;
+          if (!best || r.w * r.h < best.w * best.h) best = r;
+        });
+        if (!best) return;
+        usedRects.push(best);
+        var x1 = best.x, x2 = best.x + best.w;
+        _bareShapes(svgEl, 'line').forEach(function(l) {
+          var ly = _num(l, 'y1');
+          if (Math.abs(_num(l, 'y2') - ly) > 0.5 || ly < best.y || ly > best.y + best.h) return;
+          x1 = Math.min(x1, _num(l, 'x1'), _num(l, 'x2'));
+          x2 = Math.max(x2, _num(l, 'x1'), _num(l, 'x2'));
+        });
+        texts.forEach(function(t) { if (_inRect(best, t.x, t.y)) claim(t); });
+        dividers.push({ line: i + 1, box: { x: x1, y: best.y, w: x2 - x1, h: best.h } });
+        return;
+      }
+      // 遅延: 枠の無い 1 行の文字 (同じ高さに並ぶ語をつなげて表示名と一致するもの)。
+      var rows = {};
+      texts.forEach(function(t) {
+        if (claimed.indexOf(t.el) >= 0) return;
+        var k = Math.round(t.y);
+        (rows[k] = rows[k] || []).push(t);
+      });
+      Object.keys(rows).some(function(k) {
+        var row = rows[k];
+        if (_procNorm(row.map(function(t) { return t.s; }).join('')) !== label) return false;
+        var left = Infinity, right = -Infinity;
+        row.forEach(function(t) { left = Math.min(left, t.x); right = Math.max(right, t.x + t.w); claim(t); });
+        delays.push({ line: i + 1, box: { x: left, y: row[0].y - 13, w: right - left, h: 17 } });
+        return true;
+      });
+    });
+    return { frames: frames, dividers: dividers, delays: delays, claimed: claimed, texts: texts };
+  }
+  // 矢印をメッセージ行へ当てる。線の上 (前の矢印より下) に書かれた文字にメッセージの文言が含まれるものを
+  // 順序を保って最大数対応させ (LCS)、文言で当たらなかった残りは前後の対応の間で本数が合うときだけ順に当てる。
+  function _procMessages(svgEl, relations, floorY, scene) {
+    var arrows = _procArrows(svgEl);
+    var rels = relations.slice().sort(function(a, b) { return (a.line || 0) - (b.line || 0); });
+    if (!arrows.length || !rels.length) return [];
+    var texts = (scene && scene.texts) || _procTexts(svgEl);
+    var claimed = (scene && scene.claimed) || [];
+    var prevY = typeof floorY === 'number' && isFinite(floorY) ? floorY - 4 : -Infinity;
+    var own = arrows.map(function(a) {
+      var mine = texts.filter(function(t) {
+        if (claimed.indexOf(t.el) >= 0) return false;
+        if (t.y > a.bottom || t.y <= prevY + 4) return false;
+        return t.x >= a.x1 - 20 && t.x <= a.x2 + 20;
+      }).sort(function(p, q) { return (p.y - q.y) || (p.x - q.x); });
+      prevY = a.bottom;
+      return { arrow: a, texts: mine, key: _procNorm(mine.map(function(t) { return t.s; }).join('')) };
+    });
+    var R = rels.length, L = own.length;
+    function hit(i, j) {
+      var k = _procNorm(rels[i].label);
+      return !!k && own[j].key.indexOf(k) >= 0;
+    }
+    var dp = [], i, j;
+    for (i = 0; i <= R; i++) { dp.push([]); for (j = 0; j <= L; j++) dp[i].push(0); }
+    for (i = R - 1; i >= 0; i--) {
+      for (j = L - 1; j >= 0; j--) {
+        dp[i][j] = hit(i, j) ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+      }
+    }
+    var pairs = [];
+    i = 0; j = 0;
+    while (i < R && j < L) {
+      if (hit(i, j) && dp[i][j] === dp[i + 1][j + 1] + 1) { pairs.push([i, j]); i++; j++; }
+      else if (dp[i + 1][j] >= dp[i][j + 1]) i++;
+      else j++;
+    }
+    // 文言で当たった組の間の区間は、残りのメッセージと矢印の数が同じときだけ順に当てる。
+    var all = [];
+    var pi = 0, pj = 0;
+    pairs.concat([[R, L]]).forEach(function(p) {
+      if (p[0] - pi === p[1] - pj) {
+        for (var k = 0; k < p[0] - pi; k++) all.push([pi + k, pj + k]);
+      }
+      if (p[0] < R) all.push(p);
+      pi = p[0] + 1; pj = p[1] + 1;
+    });
+    return all.map(function(p) {
+      var o = own[p[1]], a = o.arrow;
+      var top = a.top - 6, left = a.x1, right = a.x2;
+      o.texts.forEach(function(t) {
+        top = Math.min(top, t.y - 13);
+        left = Math.min(left, t.x);
+        right = Math.max(right, t.x + t.w);
+      });
+      return { item: rels[p[0]], box: { x: left, y: top, w: right - left, h: a.bottom + 6 - top } };
+    });
+  }
+
+  // 手続きの図の ref / 区切り / 遅延: フォームで直せない記法として、書かれた行を指す枠 (app.js が右欄に行を出す)。
+  function _addProcSourceLine(overlayEl, bb, line, kind) {
+    OB.addRect(overlayEl, bb.x - 2, bb.y - 2, bb.w + 4, bb.h + 4, {
+      'data-type': 'source-line',
+      'data-id': 'src:' + kind + '@' + line,
+      'data-src-kind': kind,
+      'data-line': String(line),
     });
   }
 
@@ -363,9 +530,15 @@ window.MA.sequenceOverlay = (function() {
       return OB.extractFigureBBox(groupEl) || OB.extractBBox(groupEl);
     }
 
+    // BLK-migrator-20260924-1332: 手続きで描いた図 (class の無い SVG) は、枠・区切り・遅延を先に見分けておく。
+    var procScene = null, procArrows = null;
+    if (participants.length && !svgEl.querySelector('g.participant-head') && !svgEl.querySelector('g.message')) {
+      procArrows = _procArrows(svgEl);
+      procScene = _procStructures(svgEl, dslText);
+    }
     var partMatches = _matchParts('g.participant-head');
     if (!partMatches.length && participants.length && !svgEl.querySelector('g.participant-head')) {
-      partMatches = _procParticipants(svgEl, participants);
+      partMatches = _procParticipants(svgEl, participants, procArrows || _procArrows(svgEl));
       partMatches.forEach(function(m) {
         OB.addRect(overlayEl, m.box.x - 4, m.box.y - 4, m.box.w + 8, m.box.h + 8, {
           'data-type': 'participant', 'data-id': m.item.id, 'data-line': m.item.line,
@@ -499,12 +672,19 @@ window.MA.sequenceOverlay = (function() {
         if (/^\s*ref\s+over\b/i.test(raw)) frames.push({ group: null, line: i + 1 });
       });
       frames.sort(function(a, b) { return a.line - b.line; });
+      // BLK-migrator-20260924-1332: 手続きの図では ref の枠が塗り付き (skinparam) で出て、塗りなしの rect だけを
+      // 数えると枠の並びがずれる。見出しの五角形が角に付いた rect を枠として数え、数が合えばそちらで当てる。
+      if (procScene && procScene.frames.length === frames.length) bboxes = procScene.frames;
       var n = Math.min(bboxes.length, frames.length);
       var emitted = 0;
       for (var gi = 0; gi < n; gi++) {
         var bb = bboxes[gi];
         var gp = frames[gi].group;
-        if (!gp) continue;
+        if (!gp) {
+          // ref の枠は、フォームで直せない記法としてその行を指す (黙って何も出さない、をやめる)。
+          if (procScene && bboxes === procScene.frames) _addProcSourceLine(overlayEl, bb, frames[gi].line, 'ref');
+          continue;
+        }
         emitted++;
         OB.addRect(overlayEl, bb.x - 2, bb.y - 2, bb.w + 4, bb.h + 4, {
           'data-type': 'group',
@@ -513,6 +693,19 @@ window.MA.sequenceOverlay = (function() {
         });
       }
       OB.warnIfMismatch('group', groups.length, emitted);
+    } else if (procScene) {
+      var refLines = [];
+      String(dslText || '').split('\n').forEach(function(raw, i) {
+        if (/^\s*ref\s+over\b/i.test(raw)) refLines.push(i + 1);
+      });
+      if (refLines.length === procScene.frames.length) {
+        procScene.frames.forEach(function(bb, i) { _addProcSourceLine(overlayEl, bb, refLines[i], 'ref'); });
+      }
+    }
+    // BLK-migrator-20260924-1332: 区切り (`== x ==`) と遅延 (`... x ...`) にもその行を指す枠を置く。
+    if (procScene) {
+      procScene.dividers.forEach(function(d) { _addProcSourceLine(overlayEl, d.box, d.line, 'divider'); });
+      procScene.delays.forEach(function(d) { _addProcSourceLine(overlayEl, d.box, d.line, 'delay'); });
     }
     // BLK-migrator-20260923-1409: 群の枠は内側全体を覆うので、先に置いたライフラインが
     // その下に隠れ、alt の中のライフラインを指すと alt が選ばれていた。細いライフラインを
@@ -533,7 +726,7 @@ window.MA.sequenceOverlay = (function() {
     if (!msgMatches.length && parsedData.relations.length && !svgEl.querySelector('g.message')) {
       var headFloor = -Infinity;
       partMatches.forEach(function(m) { if (m.box) headFloor = Math.max(headFloor, m.box.y + m.box.h); });
-      procMsgs = _procMessages(svgEl, parsedData.relations, headFloor);
+      procMsgs = _procMessages(svgEl, parsedData.relations, headFloor, procScene);
       procMsgs.forEach(function(m) {
         OB.addRect(overlayEl, m.box.x - 4, m.box.y - 4, m.box.w + 8, m.box.h + 8, {
           'data-type': 'message', 'data-id': m.item.id, 'data-line': m.item.line,
