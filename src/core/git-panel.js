@@ -108,6 +108,26 @@ window.MA.gitPanel = (function() {
     return '+' + a + (r ? ' −' + r : ' −0');
   }
 
+  // BLK-builder-20260924-1835-1 (design 10c): 「この図の履歴」の行は 1 行 1 コミット
+  // (「CR1 書き込みを追加  09-21」「初版 [v1.2]  09-10」)。右端は日付 `MM-DD` だけで、
+  // ハッシュ・作成者・時刻・HEAD は行の title で読む (以前は 2 行目に詰めて幅 190px で切れていた)。
+  function dayLabel(iso) {
+    var m = /^\d{4}-(\d{2})-(\d{2})/.exec(_s(iso));
+    return m ? (m[1] + '-' + m[2]) : '';
+  }
+
+  function historyRow(c) {
+    if (!c) return { message: '', tags: [], date: '', title: '' };
+    var msg = _s(c.message);
+    var tags = (Array.isArray(c.tags) ? c.tags : []).map(_s).filter(function(t) { return !!t; });
+    return {
+      message: msg,
+      tags: tags,
+      date: dayLabel(c.date),
+      title: (msg ? msg + ' — ' : '') + commitMeta(c),
+    };
+  }
+
   // 絞り込み: メッセージ・作成者・ハッシュ・タグ。大小を問わない。
   function filterCommits(commits, query) {
     var q = _s(query).trim().toLowerCase();
@@ -215,6 +235,8 @@ window.MA.gitPanel = (function() {
     shortDate: shortDate,
     commitMeta: commitMeta,
     commitStat: commitStat,
+    dayLabel: dayLabel,
+    historyRow: historyRow,
     filterCommits: filterCommits,
     indexOf: indexOf,
     step: step,

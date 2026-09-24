@@ -233,12 +233,16 @@ html, body {
 #files-body-git #git-commit:disabled { opacity: 0.45; cursor: default; }
 #files-body-git #git-result { color: var(--text-secondary); }
 #files-body-git #git-result.bad { color: #f85149; }
-#files-body-git .git-commit-row { display: flex; align-items: center; gap: 4px; padding: 2px 0; border-top: 1px solid var(--border); }
+/* design 10c (BLK-builder-20260924-1835-1): この図の履歴は 1 行 1 コミット。右端の日付の位置に、手を置いた行だけ「比較」が出る */
+#files-body-git .git-commit-row { display: flex; align-items: center; gap: 4px; padding: 2px 0; min-height: 20px; }
 #files-body-git .git-commit-row.is-compared .git-commit-msg { color: var(--accent); }
-#files-body-git .git-commit-body { flex: 1 1 auto; min-width: 0; }
-#files-body-git .git-commit-msg, #files-body-git .git-commit-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#files-body-git .git-commit-meta { color: var(--text-secondary); font-size: 9px; }
-#files-body-git .git-history-compare { flex: 0 0 auto; font-size: 10px; padding: 1px 6px; background: transparent; color: var(--accent); border: 1px solid var(--accent); border-radius: 3px; cursor: pointer; }
+#files-body-git .git-commit-msg { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#files-body-git .git-commit-tag { flex: 0 0 auto; font-size: 9px; line-height: 13px; padding: 0 4px; border: 1px solid var(--border); border-radius: 3px; color: var(--text-secondary); }
+#files-body-git .git-commit-end { position: relative; flex: 0 0 auto; min-width: 36px; text-align: right; }
+#files-body-git .git-commit-date { color: var(--text-secondary); font-size: 10px; }
+#files-body-git .git-history-compare { position: absolute; right: 0; top: 50%; transform: translateY(-50%); opacity: 0; font-size: 10px; padding: 1px 6px; background: var(--bg-secondary, transparent); color: var(--accent); border: 1px solid var(--accent); border-radius: 3px; cursor: pointer; }
+#files-body-git .git-commit-row:hover .git-history-compare, #files-body-git .git-commit-row:focus-within .git-history-compare, #files-body-git .git-commit-row.is-compared .git-history-compare { opacity: 1; }
+#files-body-git .git-commit-row:hover .git-commit-date, #files-body-git .git-commit-row:focus-within .git-commit-date, #files-body-git .git-commit-row.is-compared .git-commit-date { visibility: hidden; }
 #files-body-git .git-empty { color: var(--text-secondary); padding: 2px 0; }
 #files-body-git #git-scope { color: var(--text-secondary); font-size: 9px; margin-top: 6px; line-height: 1.4; }
 #git-pick-modal { position: fixed; z-index: 3000; width: 360px; max-height: 60vh; display: flex; flex-direction: column; gap: 4px; padding: 8px; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 6px 24px rgba(0,0,0,.35); font-size: 12px; }

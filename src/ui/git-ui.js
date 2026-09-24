@@ -179,10 +179,14 @@ window.MA.gitUi = (function() {
       var row = _el('div', 'git-commit-row');
       row.setAttribute('data-hash', c.hash);
       if (cur && cur.hash === c.hash) row.classList.add('is-compared');
-      var body = _el('div', 'git-commit-body');
-      body.appendChild(_el('div', 'git-commit-msg', c.message));
-      body.appendChild(_el('div', 'git-commit-meta', gp.commitMeta(c)));
-      row.appendChild(body);
+      // design 10c (BLK-builder-20260924-1835-1): 1 行 1 コミット。メッセージ・タグの札・右端に日付。
+      // 「比較」は行に手を置いた・キーで来たときに日付の位置へ出る (全部の行に枠を並べない)。
+      var hr = gp.historyRow(c);
+      row.title = hr.title;
+      row.appendChild(_el('span', 'git-commit-msg', hr.message));
+      hr.tags.forEach(function(t) { row.appendChild(_el('span', 'git-commit-tag', t)); });
+      var end = _el('span', 'git-commit-end');
+      end.appendChild(_el('span', 'git-commit-date', hr.date));
       var b = _el('button', 'git-history-compare', '比較');
       b.type = 'button';
       b.setAttribute('data-hash', c.hash);
@@ -191,7 +195,8 @@ window.MA.gitUi = (function() {
         ev.stopPropagation();
         compareWith(c);
       });
-      row.appendChild(b);
+      end.appendChild(b);
+      row.appendChild(end);
       host.appendChild(row);
     });
   }
