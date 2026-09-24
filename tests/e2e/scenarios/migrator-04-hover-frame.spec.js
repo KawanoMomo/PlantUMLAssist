@@ -563,8 +563,7 @@ test('migrator 手順 4 — package / cloud / database / folder で入れ子に�
     ['My Package', 'package', '2'], ['My Cloud', 'source-line', '5'], ['My Database', 'source-line', '8'],
     ['My folder', 'package', '9'], ['My Artifact', 'source-line', '13'], ['My Queue', 'source-line', '14'],
   ]) {
-    const { box, hit } = await hoverHit(page, label);
-    console.log('DBG', label, JSON.stringify(box), JSON.stringify(hit));
+    const { hit } = await hoverHit(page, label);
     expect(hit, label + ' にホバーして枠が出る').toEqual({ type, line, hover: true });
   }
 });
@@ -640,8 +639,7 @@ test('migrator 手順 4 — 前の図の保存の帯は次の図を開くと引�
     ['My Package', 'package', '2'], ['My Cloud', 'source-line', '5'], ['My Database', 'source-line', '8'],
     ['My folder', 'package', '9'], ['My Artifact', 'source-line', '13'], ['My Queue', 'source-line', '14'],
   ]) {
-    const { box, hit } = await hoverHit(page, label);
-    console.log('DBG', label, JSON.stringify(box), JSON.stringify(hit));
+    const { hit } = await hoverHit(page, label);
     expect(hit, label + ' にホバーして本人の枠が出る').toEqual({ type, line, hover: true });
   }
 });
@@ -808,8 +806,7 @@ test('migrator 手順 4 — 略記・パッケージ・凡例の混ざったユ�
     ['Restaurant', 'package', '9'],
     ['my legend', 'source-line', '13'],
   ]) {
-    const { box, hit } = await hoverHit(page, label);
-    console.log('DBG', label, JSON.stringify(box), JSON.stringify(hit));
+    const { hit } = await hoverHit(page, label);
     expect(hit, label + ' にホバーして枠が出る').toEqual({ type, line, hover: true });
   }
 });
@@ -946,8 +943,7 @@ test('migrator 手順 4 — 旧記法のアクティビティ図でも、開始�
   ].join(String.fromCharCode(10)));
   await expect(page.locator('#overlay-layer rect[data-src-kind="shape"]')).toHaveCount(3, { timeout: 20000 });
   for (const [label, line] of [['Action1', '2'], ['Action2', '4'], ['cond?', '3'], ['yes', '4'], ['no', '7']]) {
-    const { box, hit } = await hoverHit(page, label);
-    console.log('DBG', label, JSON.stringify(box), JSON.stringify(hit));
+    const { hit } = await hoverHit(page, label);
     expect(hit, label + ' にホバーして枠が出る').not.toBeNull();
     expect(hit.line, label + ' の枠が指す行').toBe(line);
     expect(hit.hover, label + ' の枠が光る').toBe(true);
@@ -978,8 +974,7 @@ test('migrator 手順 4 — レーンをまたぐ新記法のアクティビテ�
   await expect(page.locator('#overlay-layer rect[data-type="action"]')).toHaveCount(4, { timeout: 20000 });
   for (const [label, type, line] of [['foo1', 'action', '5'], ['foo2', 'action', '7'], ['foo3', 'action', '8'],
     ['foo4', 'action', '10'], ['Swimlane2', 'swimlane', '6']]) {
-    const { box, hit } = await hoverHit(page, label);
-    console.log('DBG', label, JSON.stringify(box), JSON.stringify(hit));
+    const { hit } = await hoverHit(page, label);
     expect(hit, label + ' にホバーして本人の枠が出る').toEqual({ type, line, hover: true });
   }
   await expect(page.locator('#overlay-warning')).toBeHidden();
@@ -997,8 +992,7 @@ test('migrator 手順 4 — 手続きで部品を宣言した図 (DSL は actor 
   await expect(page.locator('#overlay-warning')).toBeHidden();
 
   for (const [label, line] of [['Person', '16'], ['Desktop', '17'], ['Storage', '18'], ['[S3]', '18']]) {
-    const { box, hit } = await hoverHit(page, label);
-    console.log('DBG', label, JSON.stringify(box), JSON.stringify(hit));
+    const { hit } = await hoverHit(page, label);
     expect(hit, label + ' にホバーして本人の行の枠が出る').toEqual(expect.objectContaining({ line, hover: true }));
   }
 
@@ -1044,8 +1038,7 @@ test('migrator 手順 4 — C4 の手続きだけで書いた sequence 図でも
   await page.locator('#hud-zoom-fit').click();
   await page.waitForTimeout(400);
   const expectHit = async (label, type, line) => {
-    const { box, hit } = await hoverHit(page, label);
-    console.log('DBG', label, JSON.stringify(box), JSON.stringify(hit));
+    const { hit } = await hoverHit(page, label);
     expect(hit, label + ' に枠').not.toBeNull();
     expect(hit.type, label).toBe(type);
     expect(hit.line, label).toBe(String(line));
