@@ -203,6 +203,19 @@ test('手順8 FILES ツリーのファイル行の頭に、左レールと同じ
   await expect(openRow.locator('.files-row-glyph')).toHaveAttribute('data-kind', 'plantuml-state');
 });
 
+// BLK-builder-20260924-1317-3 (design 10a「12 図 未反映 1 控え 1」): ツリー下端の 1 行は、開いている
+// タブではなく保存先の図の数。一覧を開く前に、保存先に何枚あるかがそこで読める。
+test('手順8 FILES ツリー下端の 1 行は、開いているタブではなく保存先の図の数を出す', async ({ page }) => {
+  await seedParts(page);
+  await S.openFolder(page);
+  // 保存先には 4 図 (spi_init_sequence / spi_state / adc_state / spi_class)。
+  await expect(page.locator('#files-count-target')).toHaveText('4');
+  // 到達条件: 開いているタブの数 (1) ではなく、保存先の 4 図を数える。
+  const tabs = await page.locator('#files-body-open .files-row').count();
+  expect(tabs).not.toBe(4);
+  await expect(page.locator('#files-summary')).toHaveText(/^4 図/);
+});
+
 test('手順8 FILES ツリーのファイルを右クリックすると 10b の操作が揃い、「開く」で開き直せる', async ({ page }) => {
   await seedParts(page);
   await expandPart(page, 'spi');

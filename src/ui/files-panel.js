@@ -249,7 +249,7 @@ window.MA.filesPanel = (function() {
     if (!host) return;
     var FT = window.MA.fileTree;
     var entries = _folderNames();
-    if (!FT || !entries.length) { host.textContent = ''; return; }
+    if (!FT || !entries.length) { host.textContent = ''; refreshSummary(); return; }
     var shown = FT.filter(entries, _query());
     var lay = FT.layout ? FT.layout(shown) : { groups: FT.groups(shown), loose: [] };
     var groups = lay.groups;
@@ -305,6 +305,7 @@ window.MA.filesPanel = (function() {
     lay.loose.forEach(function(f) { host.appendChild(_fileButton(f, true)); });
     var c = $('files-count-target');
     if (c) c.textContent = entries.length ? String(entries.length) : '';
+    refreshSummary();
     _gitMarks();
   }
 
@@ -327,15 +328,19 @@ window.MA.filesPanel = (function() {
     if (s && FT) s.textContent = FT.summaryLine(sum);
   }
 
-  // 下端の「12 図 未反映 1 控え 1」は、開いている図から数えてこの 1 行に出す。
+  // 下端の「12 図 未反映 1 控え 1」(design 10a)。保存先があればその図を、ツリーのファイル行の札と
+  // 同じ事実 (_fileState) で数える。保存先を決めていない (ダウンロードの) ときは開いている図を数える。
   function refreshSummary() {
-    var docs = _docs();
-    var un = 0, dr = 0;
-    docs.forEach(function(d) {
-      if (d.reviewPending) un++;
-      if (d.draft) dr++;
-    });
-    setSummary({ total: docs.length, unapplied: un, draft: dr });
+    var FT = window.MA.fileTree;
+    if (!FT || !FT.summaryOf) return;
+    var entries = _folderNames();
+    if (entries.length) {
+      setSummary(FT.summaryOf(entries.map(function(e) { return _fileState(e.name); })));
+      return;
+    }
+    setSummary(FT.summaryOf(_docs().map(function(d) {
+      return { unapplied: !!d.reviewPending, draft: !!d.draft };
+    })));
   }
 
   function refresh() {
