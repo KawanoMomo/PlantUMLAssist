@@ -156,7 +156,8 @@ describe('audit.js --summary-json', function() {
     // これが混ざると JSON がまた数千行になり、grep -n に逆戻りする。
     expect(v.files === undefined).toBe(true);
     expect(v.audits.name.result === undefined).toBe(true);
-    expect(r.out.split('\n').length).toBeLessThan(120);
+    // 150: 意図省略・タグ化待ちの件数と行を要約に足した分 (BLK-reviewer-20260923-2012-wish)。
+    expect(r.out.split('\n').length).toBeLessThan(150);
   });
 
   test('--only で絞っても出るキーの集合は変わらない', function() {

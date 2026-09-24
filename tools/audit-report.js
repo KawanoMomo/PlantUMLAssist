@@ -252,6 +252,16 @@ function runAudits(MA, docs, only) {
 }
 
 // 件数だけの要約。CI や「直ったか」の確認はここだけ読めば済む。
+// タグ化待ち 1 件の 1 行。どの図の何行目の note で答えているかまで書く
+// (reviewer が puml を開いて note を探し直さずに済むように)。
+function noteLine(it) {
+  const n = it.noteReply || {};
+  const cls = it.cls || it.owner || it.target || '?';
+  // 整合の行は呼び出した図ごとに 1 件なので、どの図の呼び出しかも添える。
+  const at = it.doc ? ` (${it.doc} の呼び出し)` : '';
+  return `${cls}.${it.method}${at} — ${n.doc || '?'}${n.line ? ' ' + n.line + ' 行' : ''} の note: ${n.reason || '(本文なし)'}`;
+}
+
 function summarize(audits) {
   const s = {};
   const n = audits.name;
@@ -278,20 +288,30 @@ function summarize(audits) {
     // 指摘は issues から外れている。0 件が「見ていない」でないと分かるよう、
     // 外した件数と対象を別に出す (reviewer はここを読めば puml を開かずに済む)。
     const om = m.result.omitted || [];
+    // BLK-reviewer-20260923-2012-wish: タグは無いが note の自由文で答えている組は
+    // 「未解消」に数えず、タグ化待ちとして別に数える (issues には残っている)。
+    const nr = mi.filter((it) => it && it.noteReply);
     s.method = {
-      issues: mi.length,
+      issues: mi.length - nr.length,
       suspect: mi.filter((it) => it.kind === 'method-as-class' || it.kind === 'draft-only').length,
       omitted: om.length,
       omittedLines: om.map((it) => `${it.cls || it.owner || '?'}.${it.method} — ${it.reason || '理由の記載なし'}`
         + (it.omitDoc ? ` (${it.omitDoc})` : '')),
+      noteReplied: nr.length,
+      noteRepliedLines: nr.map(noteLine),
     };
   }
   const c = audits.consistency;
   if (c && c.status === 'ok') {
     s.consistency = {
-      naming: c.result.naming.length, unused: c.result.unused.length, methods: c.result.methods.length,
+      naming: c.result.naming.length, unused: c.result.unused.length,
+      // note の自由文で応答済み (タグ化待ち) の組は未解消に数えない (別に数える)。
+      methods: c.result.methods.filter((it) => !(it && it.noteReply)).length,
       // 呼び出しへの応答として突合から外した件数。0 件が「見ていない」ではないと分かるように出す。
       methodReplies: (c.result.methodReplies || []).length,
+      methodOmitted: (c.result.methodOmitted || []).length,
+      methodNoteReplied: c.result.methods.filter((it) => it && it.noteReply).length,
+      methodNoteRepliedLines: c.result.methods.filter((it) => it && it.noteReply).map(noteLine),
       granularity: c.result.granularity.length, events: c.result.events.length, count: c.result.count,
     };
   }
@@ -435,8 +455,9 @@ function summarize(audits) {
 // 取り違えない)。フィールドの既定はここ 1 か所に書く。
 const SUMMARY_FIELDS = {
   name: ['variants', 'undeclared', 'clean', 'variantLines', 'undeclaredLines'],
-  method: ['issues', 'suspect', 'omitted', 'omittedLines'],
-  consistency: ['naming', 'unused', 'methods', 'methodReplies', 'granularity', 'events', 'count'],
+  method: ['issues', 'suspect', 'omitted', 'omittedLines', 'noteReplied', 'noteRepliedLines'],
+  consistency: ['naming', 'unused', 'methods', 'methodReplies', 'methodOmitted', 'methodNoteReplied',
+    'methodNoteRepliedLines', 'granularity', 'events', 'count'],
   family: ['families', 'mismatched', 'skippedPairs'],
   trace: ['families', 'transitions', 'missing', 'partial', 'unmatchable', 'noSequence', 'grainSkipped', 'outOfScope'],
   svg: ['files', 'missing', 'stale', 'unknown', 'missingNames', 'staleNames',
@@ -571,12 +592,21 @@ function formatSummary(report, prev, options) {
   if (s.method) {
     lines.push(`メソッド突合: 指摘 ${s.method.issues} 件`
       + (s.method.suspect ? ` (うち宣言の付け方の疑い ${s.method.suspect} 件)` : '')
-      + (s.method.omitted ? ` / 意図省略で除外 ${s.method.omitted} 件` : ''));
+      + (s.method.omitted ? ` / 意図省略で除外 ${s.method.omitted} 件` : '')
+      + (s.method.noteReplied ? ` / 自由文で応答あり(タグ化待ち) ${s.method.noteReplied} 件` : ''));
     for (const l of (s.method.omittedLines || [])) lines.push('  意図省略: ' + l);
+    for (const l of (s.method.noteRepliedLines || [])) lines.push('  タグ化待ち: ' + l);
   }
-  if (s.consistency) lines.push(`整合: 命名 ${s.consistency.naming} / 未使用 ${s.consistency.unused} / メソッド ${s.consistency.methods}`
-    + (s.consistency.methodReplies ? ` (応答として除外 ${s.consistency.methodReplies} 件)` : '')
-    + ` / 粒度 ${s.consistency.granularity} / イベント ${s.consistency.events}`);
+  if (s.consistency) {
+    const ex = [];
+    if (s.consistency.methodReplies) ex.push(`応答として除外 ${s.consistency.methodReplies} 件`);
+    if (s.consistency.methodOmitted) ex.push(`意図省略で除外 ${s.consistency.methodOmitted} 件`);
+    if (s.consistency.methodNoteReplied) ex.push(`自由文で応答あり(タグ化待ち) ${s.consistency.methodNoteReplied} 件`);
+    lines.push(`整合: 命名 ${s.consistency.naming} / 未使用 ${s.consistency.unused} / メソッド ${s.consistency.methods}`
+      + (ex.length ? ` (${ex.join(' / ')})` : '')
+      + ` / 粒度 ${s.consistency.granularity} / イベント ${s.consistency.events}`);
+    for (const l of (s.consistency.methodNoteRepliedLines || [])) lines.push('  タグ化待ち: ' + l);
+  }
   if (s.family) {
     const skipped = s.family.skippedPairs ? ` (粒度違いで突き合わせ対象外 ${s.family.skippedPairs} 組)` : '';
     lines.push(`系統: ${s.family.families} 系統中 ${s.family.mismatched} 系統に食い違い${skipped}`);

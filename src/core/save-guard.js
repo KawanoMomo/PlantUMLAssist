@@ -114,10 +114,34 @@
       return _s(r.doc) + ' の呼び出しは、クラス図の宣言と食い違いません';
     }
     var ck = _list(r.checked);
+    var nr = noteReplied(r).length;
     return '保存前の突合: ' + _s(r.doc) + ' に宣言の無いメソッド呼び出しが '
       + r.issues.length + ' 件あります（'
       + (ck.length === 1 ? ck[0] : 'クラス図 ' + ck.length + ' 枚')
-      + 'と突合）';
+      + 'と突合）'
+      + (nr ? '。うち ' + nr + ' 件は note の自由文で応答済み（タグ化待ち）' : '');
+  }
+
+  // BLK-reviewer-20260923-2012-wish: 帯の指摘のうち、タグは無いが note の自由文で
+  // 答えている組 (method-audit が noteReply の印を付けたもの)。
+  function noteReplied(res) {
+    return _list(res && res.issues).filter(function(i) { return i && i.noteReply; });
+  }
+
+  // 「🚫 意図的に省略」を押したときに理由欄へ入れる文。note の本文をそのまま使う
+  // (primary が既に書いた答えを打ち直させない)。note が複数あって本文が違うときは
+  // 最初の 1 つ。当たる note が無ければ空 (理由欄は空のまま開く)。
+  function notePrefill(res) {
+    var n = noteReplied(res)[0];
+    return n ? _s(n.noteReply.reason) : '';
+  }
+
+  // 帯の 1 行に添える「どの note で答えているか」。印が無ければ空。
+  function noteText(issue) {
+    var n = issue && issue.noteReply;
+    if (!n) return '';
+    return '自由文で応答あり（タグ化待ち）: ' + _s(n.doc) + (n.line ? ' ' + n.line + ' 行' : '')
+      + ' の note「' + _s(n.reason) + '」';
   }
 
   // 帯に並べる行。文面は method-audit の言い方をそのまま使う
@@ -132,6 +156,7 @@
         cls: _s(i.cls),
         text: MAa ? MAa.describe(i) : _s(i.method),
         decl: declSuggestion(i),
+        note: noteText(i),
       };
     });
   }
@@ -155,6 +180,9 @@
     summaryLine: summaryLine,
     lines: lines,
     declSuggestion: declSuggestion,
+    noteReplied: noteReplied,
+    notePrefill: notePrefill,
+    noteText: noteText,
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

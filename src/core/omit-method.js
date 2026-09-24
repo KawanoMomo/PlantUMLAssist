@@ -253,6 +253,46 @@
     return a;
   }
 
+  // ---- 自由文で応答あり(タグ化待ち) ----------------------------------------
+  //
+  // BLK-reviewer-20260923-2012-wish: primary は依頼に note の自由文で答えたまま
+  // タグを 1 件も書かず、監査は同じ組を 14 tick 以上「未解消」と数え続けた。
+  // 答えがある組は、未解消とは別の箱 (タグ化待ち) で数える。指摘の一覧からは
+  // 外さない (外すと追跡が切れ、タグに変える入口 —— 保存前突合の帯 —— も消える)。
+  var NOTE_PENDING = '自由文で応答あり(タグ化待ち)';
+
+  // 指摘の配列に、当たる note (タグの無いもの) の印 noteReply を付けた写しと、
+  // 印の付いたものだけの配列を返す。omissions は collect(docs, { notes: true })。
+  // タグで外した指摘は呼ぶ前に partition で抜いてある前提 (タグが note より強い)。
+  function markNotes(items, omissions) {
+    var notes = _list(omissions).filter(function(om) { return _s(om && om.source) === 'note'; });
+    var out = [];
+    var replied = [];
+    _list(items).forEach(function(it) {
+      var hit = null;
+      for (var i = 0; i < notes.length; i++) {
+        if (matches(notes[i], it)) { hit = notes[i]; break; }
+      }
+      if (!hit) { out.push(it); return; }
+      var copy = {};
+      Object.keys(it).forEach(function(k) { copy[k] = it[k]; });
+      copy.noteReply = { doc: _s(hit.doc), line: hit.line || 0, reason: _s(hit.reason) };
+      out.push(copy);
+      replied.push(copy);
+    });
+    return { items: out, noteReplied: replied };
+  }
+
+  // 印の付いた 1 件の説明。「どの図の何行目の note で答えているか」を言い切る。
+  function noteReplyLine(item) {
+    var n = item && item.noteReply;
+    if (!n) return '';
+    var cls = _s(item.cls) || _s(item.owner) || _s(item.target);
+    return (cls ? cls + '.' : '') + _s(item.method) + ' — '
+      + (n.doc ? n.doc + (n.line ? ' ' + n.line + ' 行' : '') + ' の note: ' : 'note: ')
+      + (_s(n.reason) || '(本文なし)');
+  }
+
   // 指摘 1 件を、そのまま puml に貼れる 1 行にする。
   // クラスが決まらない (no-class) ものはメソッド名だけで書く。
   function tagLine(issue, reason) {
@@ -316,6 +356,9 @@
     findIntent: findIntent,
     annotate: annotate,
     annotateAudits: annotateAudits,
+    NOTE_PENDING: NOTE_PENDING,
+    markNotes: markNotes,
+    noteReplyLine: noteReplyLine,
     tagLine: tagLine,
     has: has,
     apply: apply,
