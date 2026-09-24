@@ -2852,10 +2852,35 @@ function init() {
     var hud = window.MA.zoomHud;
     if (!host || !hud) return;
 
+    // BLK-owner-20260923-2332-1: 帯はキャンバス (#preview-container) の右上に置く。状態遷移図では
+    // キャンバスの上に状態遷移表・入れ子ツリーの見出しが出るので、固定の top: 40px のままだと
+    // 帯がその見出し (「CSV で書き出し」) に重なって押せない。見出しの下 = キャンバスの上端に下ろす。
+    function placeHud() {
+      var pane = document.getElementById('preview-pane');
+      var cont = document.getElementById('preview-container');
+      if (!pane || !cont) return;
+      var top = cont.getBoundingClientRect().top - pane.getBoundingClientRect().top;
+      if (!(top > 0)) return;   // 画面に出ていない (幅 0 など) ときは触らない
+      host.style.top = Math.max(40, Math.round(top) + 8) + 'px';
+    }
     syncZoomHud = function() {
       host.innerHTML = hud.buildHudHtml(currentDiagramType, zoom);
+      placeHud();
     };
     syncZoomHud();
+    // 見出しの開け閉め・図種の切り替えでキャンバスの上端が動くと、キャンバスの高さも変わる。
+    if (typeof window.ResizeObserver === 'function') {
+      try {
+        var ro = new window.ResizeObserver(function() { placeHud(); });
+        var contEl = document.getElementById('preview-container');
+        if (contEl) ro.observe(contEl);
+        ['state-table-panel', 'state-tree-panel', 'overlay-warning'].forEach(function(id) {
+          var el = document.getElementById(id);
+          if (el) ro.observe(el);
+        });
+      } catch (e) { /* 無くても既定の位置で動く */ }
+    }
+    window.addEventListener('resize', placeHud);
 
     host.addEventListener('click', function(e) {
       var btn = e.target && e.target.closest ? e.target.closest('.hud-btn') : null;

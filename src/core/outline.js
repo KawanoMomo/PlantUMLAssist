@@ -256,6 +256,9 @@ window.MA.outline = (function() {
         relations++;
         [nodes[n].from, nodes[n].to].forEach(function(end) {
           var name = String(end || '').trim();
+          // BLK-owner-20260923-2332-1: `Idle.Standby` と修飾した端は、`state Idle { state Standby }` の
+          // Standby と同じ状態 (PlantUML は入れ子の子として描く)。別の状態として数えない。
+          if (name.indexOf('.') >= 0) name = name.split('.').pop();
           if (name && name !== '[*]') stateNames[name] = 1;
         });
         continue;

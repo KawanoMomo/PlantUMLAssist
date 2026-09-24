@@ -35,9 +35,12 @@ window.MA.modules.plantumlState = (function() {
   // 行き先に `<<exitPoint>>` を添えた書き方も使う。どれも同じ 1 本の遷移として読む。
   // 矢印 = 線 1 本以上 + 向き (up/down/left/right とその略) + 色・線種の [] + 矢じり。色だけを 2 番に取る。
   var TR_ARROW = '-+(?:(?:up|down|left|right|u|d|l|r)(?=[-\\[]))?(?:\\[(?:#([A-Za-z0-9]+))?[^\\]]*\\])?-*>';
+  // BLK-owner-20260923-2332-1: 端は `親.子` と修飾した名前でも書ける (他ツールや手書きの図にある記法。
+  // PlantUML は入れ子の子として描く)。書き換えはせず、読む側 (状態遷移表・遷移一覧・件数) が同じ状態として引く。
+  var QID = ID + '(?:\\.' + ID + ')*';
   var TRANSITION_RE = new RegExp(
     // BLK-human-20260923-2001: 履歴 `[H]` / `[H*]` と親を名指す `親[H]` も端に書ける。
-    '^(\\[\\*\\]|\\[H\\*?\\]|' + ID + '(?:\\[H\\*?\\])?)\\s*' + TR_ARROW + '\\s*(\\[\\*\\]|\\[H\\*?\\]|' + ID + '(?:\\[H\\*?\\])?)(?:\\s*<<[^>]+>>)?(?:\\s*:\\s*(.*))?\\s*$'
+    '^(\\[\\*\\]|\\[H\\*?\\]|' + QID + '(?:\\[H\\*?\\])?)\\s*' + TR_ARROW + '\\s*(\\[\\*\\]|\\[H\\*?\\]|' + QID + '(?:\\[H\\*?\\])?)(?:\\s*<<[^>]+>>)?(?:\\s*:\\s*(.*))?\\s*$'
   );
 
   // その他パレットに出す色。src/core/relation-options.js の COLORS と同じ並びにして、
@@ -2259,6 +2262,35 @@ window.MA.modules.plantumlState = (function() {
     });
   }
 
+  // BLK-owner-20260923-2332-1: 遷移の端 (書かれたままの名前) を、候補の値 (状態の id) に引き直す。
+  // `{ }` の中の素の名前も、最上位の `親.子` も、同じ状態の id になる。
+  function _endValue(name, scope, states) {
+    var n = String(name == null ? '' : name);
+    if (n === '[*]' || !n) return n;
+    var STb = window.MA.stateTable;
+    return STb ? STb.resolveEnd(n, scope, states) : n;
+  }
+
+  // 選んだ状態 id を、その遷移の行 (scope) に書く名前にする。元の端と同じ状態なら書かれたまま残す
+  // (読むだけで書き換えない)。同じ親の中なら素の名前、最上位の行から入れ子の子を指すときは素の名前が
+  // 1 つに決まるならそれを (addTransitionScoped と同じ)、同じ素の名前が他にもあれば `親.子` で書く。
+  function _endNameFor(id, scope, states, written) {
+    var v = String(id == null ? '' : id);
+    if (!v || v === '[*]') return v;
+    if (written != null && _endValue(written, scope, states) === v) return written;
+    var list = states || [];
+    function bareOf(x) { var t = String(x || ''); return t.indexOf('.') >= 0 ? t.split('.').pop() : t; }
+    var st = null;
+    for (var i = 0; i < list.length; i++) if (list[i].id === v) { st = list[i]; break; }
+    if (!st) return v;
+    var bare = bareOf(v);
+    if ((st.parentId || null) === (scope || null)) return bare;
+    // 別の親の `{ }` の中から素の名前で指すと、PlantUML はその中に同名の状態を作る。修飾したまま書く。
+    if (scope) return v;
+    var same = list.filter(function(s) { return bareOf(s.id) === bare; }).length;
+    return same > 1 ? v : bare;
+  }
+
   function _renderTransitionEdit(sel, parsedData, propsEl, ctx) {
     var P = window.MA.properties;
     var tr = null;
@@ -2266,10 +2298,16 @@ window.MA.modules.plantumlState = (function() {
       if (parsedData.transitions[i].id === sel.id) { tr = parsedData.transitions[i]; break; }
     }
     if (!tr) { propsEl.innerHTML = ''; return; }
-    var stateOpts = (parsedData.states || []).map(function(s) { return { value: s.id, label: s.label || s.id }; });
+    // BLK-owner-20260923-2332-1: 候補は追加フォーム・状態遷移表と同じく `親 / 子` で並べ、
+    // 書かれた端 (`Standby` / `Idle.Standby`) はどちらも同じ状態の候補を選んだ形で開く。
+    var allStates = parsedData.states || [];
+    var STe = window.MA.stateTable;
+    var stateOpts = allStates.map(function(s) {
+      return { value: s.id, label: STe ? STe.rowLabel(s.id, allStates) : (s.label || s.id) };
+    });
     var stateOptsWithPseudo = [{ value: '[*]', label: '[*]' }].concat(stateOpts);
-    var fromOpts = stateOptsWithPseudo.map(function(o) { return _selectedOpt(o, tr.from); });
-    var toOpts = stateOptsWithPseudo.map(function(o) { return _selectedOpt(o, tr.to); });
+    var fromOpts = stateOptsWithPseudo.map(function(o) { return _selectedOpt(o, _endValue(tr.from, tr.scope, allStates)); });
+    var toOpts = stateOptsWithPseudo.map(function(o) { return _selectedOpt(o, _endValue(tr.to, tr.scope, allStates)); });
     var html =
       '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">Transition (L' + tr.line + ')</div>' +
       P.selectFieldHtml('From', 'st-tr-from', fromOpts) +
@@ -2336,8 +2374,8 @@ window.MA.modules.plantumlState = (function() {
     P.bindEvent('st-tr-update', 'click', function() {
       window.MA.history.pushHistory();
       ctx.setMmdText(updateTransition(ctx.getMmdText(), tr.line, {
-        from: document.getElementById('st-tr-from').value,
-        to: document.getElementById('st-tr-to').value,
+        from: _endNameFor(document.getElementById('st-tr-from').value, tr.scope, allStates, tr.from),
+        to: _endNameFor(document.getElementById('st-tr-to').value, tr.scope, allStates, tr.to),
         trigger: document.getElementById('st-tr-trig').value || null,
         guard: document.getElementById('st-tr-guard').value || null,
         action: document.getElementById('st-tr-act').value || null
@@ -2534,6 +2572,8 @@ window.MA.modules.plantumlState = (function() {
   return {
     type: 'plantuml-state',
     parse: parse,
+    endValue: _endValue,
+    endNameFor: _endNameFor,
     buildOverlay: buildOverlay,
     renderProps: renderProps,
     template: template,

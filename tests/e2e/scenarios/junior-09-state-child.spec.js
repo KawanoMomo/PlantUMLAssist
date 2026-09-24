@@ -333,6 +333,36 @@ test('手順9 状態遷移表に親 2 つ・子 3 つずつと各親の開始が
   // 表にも子の遷移として出る
   await expect(page.locator('#state-table-body td[data-state-id="Busy.Recv"][data-trigger="sent"]'))
     .toHaveText('Busy / Done');
+
+  // BLK-owner-20260923-2332-1: 表を開いても、見出しの「CSV で書き出し」にズームの帯が重ならず押せる。
+  const csvBox = await page.locator('#btn-state-table-csv').boundingBox();
+  const hudBox = await page.locator('#zoom-hud').boundingBox();
+  expect(csvBox && hudBox).toBeTruthy();
+  const overlap = !(csvBox.x + csvBox.width <= hudBox.x || hudBox.x + hudBox.width <= csvBox.x
+    || csvBox.y + csvBox.height <= hudBox.y || hudBox.y + hudBox.height <= csvBox.y);
+  expect(overlap).toBe(false);
+
+  // BLK-owner-20260923-2332-1: 先輩や他ツールの図にある、最上位に `親.子` と修飾して書いた子どうしの遷移も
+  // 同じ子の遷移として読む (表のマス・遷移一覧・下端の件数)。書き換えはしない。
+  const withQualified = (await dsl(page)).replace('@enduml', 'Idle.Poll --> Idle.Sleep : nap\n@enduml');
+  await S.typeDsl(page, withQualified);
+  await page.waitForTimeout(600);
+  await expect(page.locator('#state-table-body td[data-state-id="Idle.Poll"][data-trigger="nap"]'))
+    .toHaveText('Idle / Sleep');
+  await expect(page.locator('#status-info')).toContainText('8 states');
+  expect(await dsl(page)).toContain('Idle.Poll --> Idle.Sleep : nap');
+  // 遷移一覧から選ぶと、右パネルの From / To は `親 / 子` で並び、書かれた子が選ばれている。
+  const qLine = (await dsl(page)).split('\n').findIndex((l) => l.trim().indexOf('Idle.Poll -->') === 0) + 1;
+  const pick = page.locator('.st-tr-pick[data-line="' + qLine + '"]');
+  await expect(pick).toHaveCount(1);
+  await pick.click();
+  await expect(page.locator('#st-tr-from')).toHaveValue('Idle.Poll');
+  await expect(page.locator('#st-tr-to')).toHaveValue('Idle.Sleep');
+  await expect(page.locator('#st-tr-from option:checked')).toHaveText('Idle / Poll');
+  // 何も変えずに更新しても、書かれた修飾名のまま残る。
+  await page.locator('#st-tr-update').click();
+  await page.waitForTimeout(400);
+  expect(await dsl(page)).toContain('Idle.Poll --> Idle.Sleep : nap');
 });
 
 // BLK-human-20260923-2001: 開始 [*] を足すとき「最上位の開始か、どの親の中の開始か」を選べなかった。

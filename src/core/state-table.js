@@ -73,6 +73,14 @@ window.MA.stateTable = (function() {
     if (map[n]) return n;
     var list = states || [];
     for (var i = 0; i < list.length; i++) if (_bare(list[i].id) === n) return list[i].id;
+    // BLK-owner-20260923-2332-1: `親.子` と修飾して書かれた端 (他ツールや手書きの図の記法)。
+    // 入れ子の途中を省いた書き方 (`子.孫`) も、id の後ろが一致すれば同じ状態として引く。
+    if (n.indexOf('.') >= 0) {
+      for (var j = 0; j < list.length; j++) {
+        var id = _s(list[j].id);
+        if (id.length > n.length && id.slice(-(n.length + 1)) === '.' + n) return id;
+      }
+    }
     return n;
   }
 
