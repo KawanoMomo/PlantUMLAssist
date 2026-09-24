@@ -133,6 +133,49 @@ window.MA.fileMenu = (function() {
     return j;
   }
 
+  // BLK-builder-20260924-2316-3 (design 10b「↑↓ で移動、Enter で開く」): 図を開くとツリーが描き直され、
+  // 押した行の button が DOM から外れてフォーカスが body に落ちていた (続けて ↓ で次の図へ移れない)。
+  // 描き直す前の行を「種類 (class) + 目印の属性」で覚え、描き直した後の同じ行を探してフォーカスを戻す。
+  var ROW_CLASSES = ['files-row', 'files-part-file', 'files-part-head', 'files-part-missing-all',
+    'files-part-missing-kind', 'files-ro-folder', 'files-ro-file'];
+  var ROW_ATTRS = ['data-doc-id', 'data-file-name', 'data-part', 'data-kind', 'data-ro-dir', 'data-ro-name'];
+
+  // el: ツリーの行 (button)。行でなければ null。
+  function rowKey(el) {
+    if (!el || !el.classList || typeof el.getAttribute !== 'function') return null;
+    var cls = '';
+    for (var i = 0; i < ROW_CLASSES.length; i++) {
+      if (el.classList.contains(ROW_CLASSES[i])) { cls = ROW_CLASSES[i]; break; }
+    }
+    if (!cls) return null;
+    var attrs = {};
+    ROW_ATTRS.forEach(function(a) {
+      var v = el.getAttribute(a);
+      if (v != null) attrs[a] = String(v);
+    });
+    return { cls: cls, attrs: attrs };
+  }
+
+  function sameRow(key, el) {
+    if (!key || !el || !el.classList || !el.classList.contains(key.cls)) return false;
+    for (var i = 0; i < ROW_ATTRS.length; i++) {
+      var a = ROW_ATTRS[i];
+      var v = el.getAttribute(a);
+      var want = Object.prototype.hasOwnProperty.call(key.attrs, a) ? key.attrs[a] : null;
+      if ((v == null ? null : String(v)) !== want) return false;
+    }
+    return true;
+  }
+
+  // rows: 描き直した後の行の並び (NodeList / 配列)。当たらなければ null。
+  function findRow(key, rows) {
+    if (!key || !rows) return null;
+    for (var i = 0; i < rows.length; i++) {
+      if (sameRow(key, rows[i])) return rows[i];
+    }
+    return null;
+  }
+
   // ツリーの行で押されたキーを操作の名前に読み替える。当たらなければ ''。
   // row: 'file' | 'folder' | 'section'。folder / section は → ← で開閉する。
   function keyAction(key, row, expanded) {
@@ -277,6 +320,9 @@ window.MA.fileMenu = (function() {
     folderItems: folderItems,
     nextIndex: nextIndex,
     moveInTree: moveInTree,
+    rowKey: rowKey,
+    sameRow: sameRow,
+    findRow: findRow,
     keyAction: keyAction,
     cleanName: cleanName,
     renameProblem: renameProblem,

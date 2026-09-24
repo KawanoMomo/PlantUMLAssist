@@ -147,9 +147,35 @@ window.MA.filesPanel = (function() {
     else renderOpen();
   }
 
+  // BLK-builder-20260924-2316-3 (design 10b): 描き直しで、フォーカスのあった行が作り直されても
+  // 同じ行へフォーカスを戻す (図を Enter / クリックで開いた後も、続けて ↑↓ → ← Enter F2 が効く)。
+  // 描き直す前にフォーカスが host の中の行に無ければ何もしない (利用者が他所を押した後に奪わない)。
+  function _focusKeep(host) {
+    var FM = window.MA.fileMenu;
+    var a = document.activeElement;
+    if (!host || !a || !FM || !FM.rowKey || !host.contains(a)) return null;
+    return FM.rowKey(a);
+  }
+  function _focusBack(host, key) {
+    var FM = window.MA.fileMenu;
+    if (!key || !host || !FM || !FM.findRow) return;
+    var a = document.activeElement;
+    // 描き直しで行が外れると body に落ちる。それ以外 (本文欄・窓など) にあるなら動かさない。
+    if (a && a !== document.body && a !== document.documentElement && a.isConnected !== false) return;
+    var el = FM.findRow(key, host.querySelectorAll('button'));
+    if (!el || (el.closest && el.closest('[hidden]'))) return;
+    try { el.focus({ preventScroll: true }); } catch (e) { el.focus(); }
+  }
+
   function renderOpen() {
     var body = secBody('open');
     if (!body) return;
+    var keep = _focusKeep(body);
+    _renderOpen(body);
+    _focusBack(body, keep);
+  }
+
+  function _renderOpen(body) {
     var FT = window.MA.fileTree;
     var docs = _docs();
     var shown = FT ? FT.filter(docs, _query()) : docs;
@@ -404,6 +430,12 @@ window.MA.filesPanel = (function() {
   function renderParts() {
     var host = $('files-parts');
     if (!host) return;
+    var keep = _focusKeep(host);
+    _renderParts(host);
+    _focusBack(host, keep);
+  }
+
+  function _renderParts(host) {
     var FT = window.MA.fileTree;
     var entries = _folderNames();
     if (!FT || !entries.length) {
@@ -523,6 +555,7 @@ window.MA.filesPanel = (function() {
     var WS = window.MA.workspace;
     var FT = window.MA.fileTree;
     if (!WS || !WS.listFolder) return;
+    var keep = _focusKeep(box);
     box.textContent = '';
     var wait = document.createElement('div');
     wait.className = 'files-empty';
@@ -559,6 +592,13 @@ window.MA.filesPanel = (function() {
           });
           box.appendChild(b);
         });
+      _focusBack(box, keep);
+      var host = box.parentNode;
+      if (host && host._pendingFocus) {
+        var pk = host._pendingFocus;
+        host._pendingFocus = null;
+        _focusBack(host, pk);
+      }
     }).catch(function() {
       box.textContent = '';
       var bad = document.createElement('div');
@@ -587,6 +627,7 @@ window.MA.filesPanel = (function() {
     var sig = JSON.stringify(rows);
     if (host.getAttribute('data-sig') === sig && host.childNodes.length === rows.length * 2) return;
     host.setAttribute('data-sig', sig);
+    var keep = _focusKeep(host);
     host.textContent = '';
     rows.forEach(function(r) {
       var open = _get(KEY_RO_DIR + r.name, '0') === '1';
@@ -633,6 +674,9 @@ window.MA.filesPanel = (function() {
         if (on) _roFill(box, r.path);
       });
     });
+    // 図の行 (読むだけのフォルダの中) は _roFill が後から埋めるので、そこでも戻す。
+    _focusBack(host, keep);
+    host._pendingFocus = (keep && !host.contains(document.activeElement)) ? keep : null;
   }
 
   function setGitCount(git) {
