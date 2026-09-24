@@ -11916,13 +11916,34 @@ function renderSeniorStatus() {
   if (!btn || !SP) return;
   var open = !(_seniorEls().pane || {}).hidden;
   var PS = window.MA.peerSample;
-  var txt = (PS && PS.statusText(_seniorPick))
+  var sample = PS && PS.statusText(_seniorPick);
+  var txt = sample
     || SP.statusText(_seniorPick, { ready: !!(_seniorPick && _seniorNames.length) });
-  btn.textContent = txt.label;
+  // 見本を名指ししている回は候補の数に関わらず 1 件 (横に出る図が決まっている)。
+  var n = sample ? Math.max(1, Number(txt.count) || 0) : (Number(txt.count) || 0);
   btn.title = txt.title;
-  btn.setAttribute('data-count', String(txt.count));
+  btn.setAttribute('data-count', String(n));
   btn.setAttribute('aria-pressed', open ? 'true' : 'false');
   btn.className = open ? 'on' : '';
+  // BLK-builder-20260924-1716-4 (design 9c / 10a): 相手が決まっていない (0 件) ときは出さない。
+  // 出すときは他の件数表示と同じ「● 名前」の 1 種類の形 (枠なし、色は点だけ)。
+  // 入口は FILES ツリーの「読むだけ」の ⇔ が持つ。
+  var SB = window.MA.statusBadges;
+  var shown = SB ? SB.namedText(txt.label, n) : (n > 0 ? txt.label : '');
+  if (!shown) {
+    btn.hidden = true;
+    btn.textContent = '';
+    btn.removeAttribute('data-dot');
+    return;
+  }
+  btn.hidden = false;
+  btn.setAttribute('data-dot', 'ok');
+  var dot = document.createElement('span');
+  dot.className = 'sb-dot';
+  dot.textContent = SB ? SB.DOT : '●';
+  btn.textContent = '';
+  btn.appendChild(dot);
+  btn.appendChild(document.createTextNode(shown.replace(/^●/, '')));
 }
 
 // 枠を閉じていても相手は決めておく (下端に出すのがこの BLK の的なので、

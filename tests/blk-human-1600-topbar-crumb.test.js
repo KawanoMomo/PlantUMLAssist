@@ -119,6 +119,7 @@ describe('並べて比較の枠 (design 9a)', function() {
     expect(html).toContain('id="senior-mode-keep"');
     expect(html).toContain('id="senior-mode-once"');
     expect(html).toContain('相手に無い図種を仮に組む');
-    expect(html).toContain('>並べて比較 −</button>');
+    // BLK-builder-20260924-1716-4 (design 9c / 10a): 下端の札は相手が決まるまで出ないので、名乗りは FILES の入口で見る。
+    expect(html).toContain('aria-label="並べて比較"');
   });
 });

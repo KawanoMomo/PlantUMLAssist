@@ -48,6 +48,13 @@ window.MA.statusBadges = (function() {
     return DOT + ' ' + label(name) + ' ' + String(count);
   }
 
+  // 件数ではなく「相手の名前」を言う項目 (並べて比較 spi_state) も同じ 1 種類の形にする
+  // (BLK-builder-20260924-1716-4)。count が 0 (相手がまだ決まっていない) なら出さないので '' を返す。
+  function namedText(name, count) {
+    if (!isVisible(count)) return '';
+    return DOT + ' ' + label(name);
+  }
+
   return {
     DOT: DOT,
     countOf: countOf,
@@ -55,5 +62,6 @@ window.MA.statusBadges = (function() {
     toneOf: toneOf,
     label: label,
     text: text,
+    namedText: namedText,
   };
 })();

@@ -13,13 +13,16 @@ test('手順9 比較相手の枠は既定で出ず、並べて比較で開き、
   await S.bootWithSaveDir(page, DIR);
 
   const pane = page.locator('#senior-pane');
-  const status = page.locator('#status-senior');
+  // BLK-builder-20260924-1716-4 (design 9c / 10a): 相手が決まるまで下端の札は出ない (0 件は出さない)。
+  // 入口は FILES ツリーの「読むだけ」の ⇔。
+  const entry = page.locator('#btn-tab-senior');
+  await expect(page.locator('#status-senior')).toBeHidden();
 
   // 到達条件その1: 起動直後は枠が無い (自分の図とプレビューだけが見えている)。
   await expect(pane).toBeHidden();
 
-  // 到達条件その2: 下端の「並べて比較」1 クリックで開く。
-  await status.click();
+  // 到達条件その2: FILES「読むだけ」の ⇔ 1 クリックで開く。
+  await entry.click();
   await expect(pane).toBeVisible();
 
   // 到達条件その3: 初めて開いたときだけ「この枠は何か」が 1 行出る。
@@ -42,14 +45,14 @@ test('手順9 比較相手の枠は既定で出ず、並べて比較で開き、
   await expect(page.locator('#senior-pane')).toBeHidden();
 
   // 2 回目に開いたときは説明を繰り返さない。
-  await page.locator('#status-senior').click();
+  await page.locator('#btn-tab-senior').click();
   await expect(page.locator('#senior-pane')).toBeVisible();
   await expect(page.locator('#senior-first-note')).toBeHidden();
 });
 
 test('手順9 枠とプレビューの境目をドラッグして幅を変えられ、幅は覚えている', async ({ page }) => {
   await S.bootWithSaveDir(page, DIR);
-  await page.locator('#status-senior').click();
+  await page.locator('#btn-tab-senior').click();
   await expect(page.locator('#senior-pane')).toBeVisible();
 
   const handle = page.locator('#resizer-senior');
@@ -111,7 +114,7 @@ test('手順9 参照ペインも同じく ✕ で閉じ、境目で幅を変え�
 // 2 つあった入口を「並べて比較」1 つにし、据え置く / 1 回だけを枠の中で切り替える。
 test('手順9 枠は「比較相手」と名乗り、据え置く / 1 回だけを枠の中で選べる', async ({ page }) => {
   await S.bootWithSaveDir(page, DIR);
-  await page.locator('#status-senior').click();
+  await page.locator('#btn-tab-senior').click();
   await expect(page.locator('#senior-pane')).toBeVisible();
 
   // 到達条件その1: 枠の見出しは立場 (先輩) ではなく役割 (比較相手) で名乗る。
