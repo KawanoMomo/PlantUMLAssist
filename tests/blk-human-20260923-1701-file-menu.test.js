@@ -156,7 +156,7 @@ describe('元の入口 (ツール ▾) は右クリックへの案内に落と�
 
   test('ボタンの実体は畳んだまま残り、Ctrl+K / Ctrl+P からは「ファイル」の見出しで引ける', function() {
     expect(TM.isFoldable('btn-tab-draft')).toBe(true);
-    expect(TM.labelOf('btn-tab-versions')).toBe('この図の変遷');
+    expect(TM.labelOf('btn-tab-versions')).toBe('この図の履歴を見る'); // BLK-owner-20260924-1212-prune: 行名は画面の名前にそろえた
     var items = CP.buildItems([
       { id: 'tab-draft', title: '一時控えにする / Draft', button: 'btn-tab-draft', run: function() {} },
       { id: 'spi_state', group: 'file', badge: 'ファイル', title: 'spi_state', run: function() {} },

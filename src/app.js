@@ -3675,8 +3675,8 @@ function initCommandPalette() {
       { id: 'tab-blame', title: '部品名の混入点を探す / Blame point', hint: 'Tabs', keywords: ['blame', 'origin', 'version', 'こんにゅう', 'いつから', 'かこばん', 'ふぐあい'], button: 'btn-tab-blame', run: function() { clickById('btn-tab-blame'); } },
       { id: 'tab-pattern', title: '同じ観点で全図を棚卸し / Pattern check', hint: 'Tabs', keywords: ['pattern', 'check', 'かんてん', 'いっかつ', 'してき', 'たなおろし'], button: 'btn-tab-pattern', run: function() { clickById('btn-tab-pattern'); } },
       { id: 'tab-submit', title: '提出前チェックを開く / Submit check', hint: 'Tabs', keywords: ['submit', 'check', 'ていしゅつ', 'かくにん', '略語'], button: 'btn-tab-submit', run: function() { clickById('btn-tab-submit'); } },
-      // BLK-owner-20260924-0852-prune: 🕸 参照関係の画面は畳んだ。旧名で引いても ▤ 影響を見る が開く。
-      { id: 'tab-xref', title: '参照関係を開く → ▤ 影響を見る / Cross-reference', hint: 'Tabs', keywords: ['xref', 'reference', 'project', 'cross', 'さんしょう', 'かんけい', '参照関係', 'またいで', '図をまたぐ'], button: 'btn-tab-xref', run: function() { openImpactScreen(_nameSearchSeed()); } },
+      // BLK-owner-20260924-1212-prune: 旧 🕸 参照関係の行はここに置かない。▤ 影響を見る の 1 行
+      // (id 'name-search') の語に「参照関係」「図をまたいで辿る」を入れてある。
       { id: 'tab-audit', title: '名前突合を開く / Name audit', hint: 'Tabs', keywords: ['name', 'audit', 'なまえ', 'つきあわせ'], button: 'btn-tab-audit', run: function() { clickById('btn-tab-audit'); } },
       { id: 'tab-handoff', title: '引き継ぎパッケージを作る / Handoff package', hint: 'Tabs', keywords: ['handoff', 'package', 'zip', 'ひきつぎ', 'ぱっけーじ'], button: 'btn-tab-handoff', run: function() { clickById('btn-tab-handoff'); } },
       { id: 'tab-delivery', title: '納品パッケージを作る / Delivery package', hint: 'Tabs', keywords: ['delivery', 'package', 'zip', 'のうひん', 'ぱっけーじ', '提出'], button: 'btn-tab-delivery', run: function() { clickById('btn-tab-delivery'); } },
@@ -3706,7 +3706,8 @@ function initCommandPalette() {
       // BLK-junior-20260924-0704-wish: 部品 1 つの 6 図種を先輩・自分の 2 列で並べる 🧩 部品ビュー。
       // 入口が「読むだけ」節の奥にしか無く、junior は「部品パック」「部品ごと」「6 図種まとめて」の
       // 語で探して辿り着けなかった。開くと、いま開いている図の部品が選ばれた状態で出る。
-      { id: 'part-board', title: '🧩 部品ビュー (部品ごとの 6 図種を先輩と並べる) / Part view', hint: 'Files', keywords: ['part', 'board', 'pack', 'view', '部品パック', '部品ごと', '部品ビュー', '6 図種まとめて', '6図種まとめて', '6 図種', 'ぶひん', 'ぱっく', 'ごと', 'まとめて', 'ずしゅ'], run: function() {
+      // BLK-owner-20260924-1212-prune: 行名に立場の語 (先輩) を出さない。旧名で打っても当たるよう語には残す。
+      { id: 'part-board', title: '🧩 部品ビュー (部品ごとの 6 図種を比較相手と並べる) / Part view', hint: 'Files', keywords: ['先輩', 'せんぱい', 'part', 'board', 'pack', 'view', '部品パック', '部品ごと', '部品ビュー', '6 図種まとめて', '6図種まとめて', '6 図種', 'ぶひん', 'ぱっく', 'ごと', 'まとめて', 'ずしゅ'], run: function() {
         var PB = window.MA.partBoard;
         var WS = window.MA.workspace;
         var active = WS ? WS.getActive() : null;
@@ -3727,7 +3728,8 @@ function initCommandPalette() {
         if (panel && panel.classList.contains('open')) { renderInboxPanel(); renderInboxBadge(); return; }
         clickById('btn-tab-inbox');
       } },
-      { id: 'tab-versions', title: 'この図の履歴を見る (保存した版・往復・戻す) / Version history', hint: 'Tabs', keywords: ['version', 'timeline', 'へんせん', 'りれき'], button: 'btn-tab-versions', run: function() { clickById('btn-tab-versions'); } },
+      // BLK-owner-20260924-1212-prune: この図の履歴 を開く行は「この図の履歴を見る」1 行。旧名「変遷」は語に落とす。
+      { id: 'tab-versions', title: 'この図の履歴を見る / Version history', hint: 'Tabs', keywords: ['version', 'timeline', 'history', 'へんせん', 'りれき', '変遷', 'この図の変遷', '履歴', '保存した版'], button: 'btn-tab-versions', run: function() { clickById('btn-tab-versions'); } },
       { id: 'tab-lineage', title: 'この図の継承元を見る / Lineage', hint: 'Tabs', keywords: ['lineage', 'parent', 'けいしょう', 'もと', 'とりこみ'], button: 'btn-tab-lineage', run: function() { clickById('btn-tab-lineage'); } },
       { id: 'tab-board', title: '変更サマリを開く / Change board', hint: 'Tabs', keywords: ['board', 'summary', 'へんこう', 'さまり'], button: 'btn-tab-board', run: function() { clickById('btn-tab-board'); } },
       // BLK-owner-20260918-0529-prune: 「見比べる」5 つのうち、下端ステータスと
@@ -3766,15 +3768,19 @@ function initCommandPalette() {
       // BLK-primary-20260917-0523-wish: 仕様変更の影響範囲は「名前 → 使っている図」で引く。
       // BLK-owner-20260923-1949-prune: 名前は残し、開くのは ⇄ 一括置換の ▤ 影響を見る 1 つ
       // (その名前が入った状態で開く)。
-      { id: 'name-search', title: '名前で図を探す（部品名 / メソッド名）', hint: 'Search',
+      // BLK-owner-20260924-1212-prune: ▤ 影響を見る を開く行はこの 1 行だけ (画面の名前で出す)。
+      // 旧名 (名前で図を探す / 依存グラフ / 参照関係 / 部品名で図をまたいで辿る) は語に落とし、
+      // どれを打ってもこの行が出る。ツール ▾ の案内行 (→ ▤ 影響を見る) はパレットに写さない
+      // (button を持たせないので、メニューの言い換えで題が差し替わらない)。
+      { id: 'name-search', title: '影響を見る（部品名の参照元・参照先・出てくる行）', hint: '', group: 'find',
         // BLK-primary-20260924-0021-wish: 「使っている図」「使われている」「参照」「どこで使う」でも引ける
         // (IntelliJ の Find Usages に当たる語)。図やエディタで部品名を選んでいれば、その名前を入れて開く。
         keywords: ['search', 'name', 'method', 'xref', 'impact', 'usages', 'find usages', 'references', 'where used',
+          'dependency', 'graph', 'refs', 'reference', 'cross', 'project',
           '名前', '部品', 'メソッド', '検索', '影響', 'どの図', '使っている図', '使われている図', '参照', 'どこで使う',
-          'どこで使われている', 'つかっている', 'つかわれている', 'さんしょう', 'えいきょう'],
-        run: function() { openImpactScreen(_nameSearchSeed()); } },
-      { id: 'dep-graph', title: '依存グラフ（部品名の参照元・参照先）', hint: 'Search',
-        keywords: ['dependency', 'graph', 'refs', 'impact', 'いぞん', '依存', '参照', '連鎖', '影響'],
+          'どこで使われている', 'つかっている', 'つかわれている', 'さんしょう', 'えいきょう',
+          '名前で図を探す', '依存グラフ', '依存', 'いぞん', '連鎖', '参照関係', 'かんけい', '部品名で図をまたいで辿る',
+          'またいで', '図をまたぐ', '影響を見る'],
         run: function() { openImpactScreen(_nameSearchSeed()); } },
       // BLK-primary-20260918-0549-friction: 資料セットの行の中にしか無かった 2 つを
       // Ctrl+K からも引けるようにする (入口は増やさず、同じ操作を同じ名前で呼ぶ)。
