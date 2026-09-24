@@ -18003,7 +18003,9 @@ function toggleRenameImpact(open, seedName) {
   // seedName: Ctrl+K「名前で図を探す」を開く前に選んでいた部品名 (BLK-primary-20260924-0021-wish)。
   var from = (typeof seedName === 'string' && seedName) || (document.getElementById('rename-from') || {}).value || '';
   if (from) _dgName = from;
-  _dgVerKw = null;
+  // BLK-primary-20260924-2132-wish: 語は開いたときの名前 (無ければ空) 1 つ。上段の版履歴と下段の
+  // 出てくる行が同じ語で並ぶ。名前を持たずに開いたとき、依存グラフが先頭に出す部品名を語に入れない。
+  _dgVerKw = from;
   _dgVerLastName = null;
   modal.style.display = 'flex';
   renderDepGraph();
@@ -18334,10 +18336,10 @@ var _dgVerLoading = null;
 
 // 語の既定。名前を選んだ直後は、その部品名がそのまま症状の語になる
 // (打ち直させない = 依存グラフで名前を選ぶ + 一覧を読む の 2 手で終わらせる)。
+// 打った語は _riSetWord が _dgVerKw に入れる (名前欄・版履歴の語のどちらに打っても同じ 1 つ)。
 function _dgVerKeyword() {
-  var el = document.getElementById('dg-ver-kw');
   if (_dgVerKw == null) return _dgName || '';
-  return el ? el.value : _dgVerKw;
+  return _dgVerKw;
 }
 
 function _dgVerKey(kw) {
@@ -18404,7 +18406,7 @@ function _dgVerListHtml(rows, kw) {
       + 'data-current="' + (r.becameCurrent ? 1 : 0) + '">'
       + '<td class="dgv-at">' + esc(DVS.whenLabel(r)) + '</td>'
       + '<td class="dgv-doc">' + esc(r.doc) + ' 版' + r.rev + (r.current ? '（いまの中身）' : '') + '</td>'
-      + '<td class="dgv-hop">' + (r.hop === 0 ? '直接' : '連鎖 ' + r.hop + ' 段') + '</td>'
+      + '<td class="dgv-hop">' + esc(DVS.hopLabel(r)) + '</td>'
       + '<td class="dgv-what">' + what + (r.becameCurrent ? '（今の形）' : '') + '</td>'
       + '<td class="dgv-hits">' + hits + '</td>'
       + '<td><button type="button" class="dgv-open">この版を開く</button></td></tr>';
@@ -18443,7 +18445,7 @@ function renderDgVer() {
   var hist = null;
   var loading = false;
   if (!String(kw).trim()) {
-    hold = '語を入れると、影響が届く図の保存フォルダの版からその語を含む版を新しい順に並べます';
+    hold = '語を入れると、保存フォルダの版からその語を含む版を新しい順に並べます (部品名なら影響が届く図に絞ります)';
   } else if (!_fiFolderMode()) {
     hold = '保存先がフォルダのときだけ使えます (設定 → 自動保存)';
   } else {
@@ -18462,12 +18464,17 @@ function renderDgVer() {
     if (openBtn) { openBtn.disabled = true; openBtn.title = hold; }
     return { rows: [], first: null };
   }
-  var rows = DVS.search(_dgVerImpact, function(name) {
+  // BLK-primary-20260924-2132-wish: 語が上で選んでいる部品名そのものなら今までどおり影響が届く図に絞り、
+  // それ以外の語 (症状の語・部品名でない語) は保存フォルダの版全体から引く (部品名を先に選ばせない)。
+  var scoped = _dgVerScoped(kw);
+  var targets = scoped ? _dgVerImpact : _dgVerFolderTargets(hist);
+  var rows = DVS.search(targets, function(name) {
     return Object.prototype.hasOwnProperty.call(hist, name) ? hist[name] : [];
   }, kw, { changedOnly: changedOnly });
   _dgVerRows = rows;
 
-  sumEl.textContent = DVS.summaryText(rows, kw, _dgVerImpact.length);
+  sumEl.textContent = DVS.summaryText(rows, kw, targets.length, { scope: scoped ? 'impact' : 'folder' });
+  sumEl.setAttribute('data-scope', scoped ? 'impact' : 'folder');
   sumEl.setAttribute('data-rows', String(rows.length));
   sumEl.setAttribute('data-docs', String(DVS.byDoc(rows).length));
   listEl.innerHTML = _dgVerListHtml(rows, kw);
@@ -18492,12 +18499,27 @@ function renderDgVer() {
   return { rows: rows, first: first };
 }
 
+// 語が上段で選んでいる部品名そのものか (大文字小文字は見ない。版の検索と同じ)。
+function _dgVerScoped(kw) {
+  var name = String(_dgName || '').trim();
+  return !!name && String(kw || '').trim().toLowerCase() === name.toLowerCase();
+}
+
+// 保存フォルダ全体から引くときの的。テンプレは除く (置換の的・依存グラフと同じ)。
+function _dgVerFolderTargets(hist) {
+  var DVS = window.MA.depVersionSearch;
+  var skip = {};
+  _fiRows().forEach(function(r) { if (r && r.role === 'template') skip[r.name] = true; });
+  return DVS.folderTargets(hist, _dgVerImpact).filter(function(t) { return !skip[t.doc]; });
+}
+
 function setupDgVer() {
   var kwEl = document.getElementById('dg-ver-kw');
   var changedEl = document.getElementById('dg-ver-changed');
   var openBtn = document.getElementById('dg-ver-open');
   if (kwEl) {
-    kwEl.addEventListener('input', function() { _dgVerKw = kwEl.value; renderDgVer(); });
+    // BLK-primary-20260924-2132-wish: ここに打った語は下段の名前欄にも入る (語は 1 つ)。
+    kwEl.addEventListener('input', function() { _riSetWord(kwEl.value, 'ver'); });
     kwEl.addEventListener('keydown', function(ev) {
       if (ev.key === 'Enter' && openBtn && !openBtn.disabled) { ev.preventDefault(); openBtn.click(); }
     });
@@ -18542,7 +18564,11 @@ function renderDepGraph() {
   if (!_dgName || !graph.nodes[_dgName]) _dgName = names[0].name;
   // 名前を選び直したら、症状の語もその名前に戻す (前の名前で打った語が残ると、
   // 一覧が新しい名前と関係ない版を出したまま「当たり無し」になる)。
-  if (_dgVerLastName !== _dgName) { _dgVerLastName = _dgName; _dgVerKw = null; }
+  // 開いた直後 (_dgVerLastName が null) は、開いたときの語 (toggleRenameImpact が入れる) を残す。
+  if (_dgVerLastName !== _dgName) {
+    if (_dgVerLastName !== null) _dgVerKw = null;
+    _dgVerLastName = _dgName;
+  }
   var opts = '';
   names.forEach(function(n) {
     opts += '<option value="' + esc(n.name) + '"' + (n.name === _dgName ? ' selected' : '') + '>'
@@ -18749,13 +18775,32 @@ function renderNameSearch() {
 
 // 下段の名前を打ち替えたら、上段の依存グラフもその名前が図の束にあれば追う。
 function _riSyncName() {
-  var q = ((document.getElementById('ns-q') || {}).value || '').trim();
+  _riSetWord((document.getElementById('ns-q') || {}).value || '', 'ns');
+}
+
+// BLK-primary-20260924-2132-wish: ▤ 影響を見る の語は 1 つ。下段の名前欄 (#ns-q) と上段の
+// 「版履歴を症状の語で探す」(#dg-ver-kw) のどちらに打っても、もう片方が同じ語になる
+// (以前は部品名のプルダウンを先に選ばないと版履歴が出ず、2 か所を往復した)。
+// 打った語が部品名なら上段の依存グラフ (#dg-name) もその名前に合わせる。
+// origin: 'ns' = 名前欄に打った / 'ver' = 版履歴の語に打った (打っている欄は書き換えない)。
+function _riSetWord(word, origin) {
+  var w = String(word == null ? '' : word);
+  var q = document.getElementById('ns-q');
+  if (q && origin !== 'ns' && q.value !== w) q.value = w;
+  _dgVerKw = w;
+  var kwEl = document.getElementById('dg-ver-kw');
+  if (kwEl && origin !== 'ver' && kwEl.value !== w) kwEl.value = w;
+  var t = w.trim();
   var DG = window.MA.depGraph;
-  if (q && DG && q !== _dgName && DG.build(_dgDocs()).nodes[q]) {
-    _dgName = q;
+  if (t && DG && t !== _dgName && DG.build(_dgDocs()).nodes[t]) {
+    _dgName = t;
+    _dgVerLastName = t;      // 名前を合わせても、語を名前の既定へ戻さない (打った語がその名前)
     renderDepGraph();
+  } else {
+    renderDgVer();
   }
-  renderRenameImpactBoard();
+  // 置換後を入れているとき下段は 今 / 置換後 の並びで、版履歴の語では変わらない (描き直さない)。
+  if (origin !== 'ver' || !((document.getElementById('rename-to') || {}).value)) renderRenameImpactBoard();
 }
 
 function setupDepGraph() {
@@ -20808,6 +20853,15 @@ function renderSymptomSystems(docs, text) {
     var head = document.createElement('div');
     head.className = 'sym-sys-head';
     head.textContent = sys.systemLabel(row);
+    // BLK-primary-20260924-2132-wish: 当たった語の行から、同じ語で ▤ 影響を見る を開く
+    // (今その語を含む図と行・その語が書き換わった過去の版が 1 画面に並ぶ)。
+    head.setAttribute('role', 'button');
+    head.tabIndex = 0;
+    head.title = '「' + row.term + '」で ▤ 影響を見る を開く (今その語を含む図と行・書き換わった過去の版)';
+    head.addEventListener('click', function() { openImpactScreen(row.term); });
+    head.addEventListener('keydown', function(ev) {
+      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); openImpactScreen(row.term); }
+    });
     item.appendChild(head);
     row.docs.forEach(function(d) {
       var b = document.createElement('div');

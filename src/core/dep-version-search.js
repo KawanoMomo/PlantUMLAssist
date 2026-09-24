@@ -102,6 +102,9 @@ window.MA.depVersionSearch = (function() {
     return out;
   }
 
+  // 届き方の順。依存グラフの外 (hop: null) は連鎖のどの段よりも後ろ。
+  function _hopRank(r) { return r && typeof r.hop === 'number' ? r.hop : 1e6; }
+
   // 並べ替えの時刻。「いまの中身」は刻印を持たないが、どの控えよりも新しい。
   function _sortAt(r) { return r && r.current && !r.at ? '\uffff' : _s(r && r.at); }
 
@@ -146,7 +149,8 @@ window.MA.depVersionSearch = (function() {
         doc: _s(doc),
         stamp: _s(v.stamp),
         current: !!v.current,
-        hop: typeof o.hop === 'number' ? o.hop : 0,
+        // hop が null = 依存グラフの外 (保存フォルダ全体から語で引いた図)。
+        hop: typeof o.hop === 'number' ? o.hop : (o.hop === null ? null : 0),
         via: (o.via || []).slice(),
         rev: typeof v.rev === 'number' ? v.rev : i + 1,
         at: _s(v.at),
@@ -200,11 +204,33 @@ window.MA.depVersionSearch = (function() {
     rows.sort(function(a, b) {
       var ta = _sortAt(a), tb = _sortAt(b);
       if (ta !== tb) return ta < tb ? 1 : -1;           // 新しい順
-      if (a.hop !== b.hop) return a.hop - b.hop;        // 直接の図を先に
+      if (a.hop !== b.hop) return _hopRank(a) - _hopRank(b);   // 直接の図を先に (外の図は後)
       return a.doc.localeCompare(b.doc) || b.rev - a.rev;
     });
     if (typeof o.limit === 'number' && o.limit > 0) rows = rows.slice(0, o.limit);
     return rows;
+  }
+
+  // BLK-primary-20260924-2132-wish: 版履歴を依存グラフの影響一覧に絞らず、保存フォルダの
+  // 全図から語で引くときの的。history (fromSearch の返り) に載る図を全部並べ、影響一覧に
+  // 載っている図はその届き方 (hop / via) を持たせる (外の図は hop: null)。
+  function folderTargets(history, impact) {
+    var byName = {};
+    (Array.isArray(impact) ? impact : []).forEach(function(r) {
+      if (r && r.doc && !byName[r.doc]) byName[r.doc] = r;
+    });
+    var h = (history && typeof history === 'object') ? history : {};
+    return Object.keys(h).filter(function(k) { return k.indexOf('__') !== 0; }).map(function(name) {
+      var r = byName[name];
+      return r ? { doc: name, hop: r.hop, via: (r.via || []).slice() }
+               : { doc: name, hop: null, via: [] };
+    });
+  }
+
+  // 行に出す「届き方」。
+  function hopLabel(r) {
+    if (!r || r.hop == null) return '保存フォルダ';
+    return r.hop === 0 ? '直接' : '連鎖 ' + r.hop + ' 段';
   }
 
   // 図ごとのまとめ。一覧の前に「どの図から読むか」を決めるためのもの。
@@ -234,7 +260,7 @@ window.MA.depVersionSearch = (function() {
       if (a.latestChangedAt !== b.latestChangedAt) {
         return a.latestChangedAt < b.latestChangedAt ? 1 : -1;
       }
-      return a.hop - b.hop || a.doc.localeCompare(b.doc);
+      return _hopRank(a) - _hopRank(b) || a.doc.localeCompare(b.doc);
     });
   }
 
@@ -249,20 +275,24 @@ window.MA.depVersionSearch = (function() {
   }
 
   // 一覧の見出し 1 行。
-  function summaryText(rows, keyword, impactCount) {
+  // opts.scope === 'folder' は保存フォルダ全体から引いた回 (impactCount はそのフォルダの図の数)。
+  function summaryText(rows, keyword, impactCount, opts) {
     var kw = _s(keyword).trim();
     var list = rows || [];
     var docs = byDoc(list).length;
     var n = typeof impactCount === 'number' ? impactCount : docs;
+    var folder = !!(opts && opts.scope === 'folder');
     if (!list.length) {
       if (kw) {
-        return '影響 ' + n + ' 図の版履歴に「' + kw + '」を含む版はありません'
+        return (folder ? '保存フォルダ ' + n + ' 図' : '影響 ' + n + ' 図')
+          + 'の版履歴に「' + kw + '」を含む版はありません'
           + '（語を短くするか、保存を重ねると履歴が貯まります）';
       }
       return '影響が届く図を選ぶと、その版履歴を新しい順に並べます';
     }
     var changed = list.filter(function(r) { return r.changed; }).length;
-    var t = (kw ? '「' + kw + '」' : '全部') + ': ' + docs + ' 図 / ' + list.length + ' 版';
+    var t = (kw ? '「' + kw + '」' : '全部') + ': ' + (folder ? '保存フォルダの ' : '')
+      + docs + ' 図 / ' + list.length + ' 版';
     if (changed > 0) t += ' — 書き換わった版 ' + changed;
     var first = firstToOpen(list);
     if (first) t += ' / 最新の変化は ' + first.doc + ' ' + whenLabel(first);
@@ -305,6 +335,8 @@ window.MA.depVersionSearch = (function() {
     whenLabel: whenLabel,
     stampAt: stampAt,
     fromSearch: fromSearch,
+    folderTargets: folderTargets,
+    hopLabel: hopLabel,
     rowText: rowText,
   };
 })();
