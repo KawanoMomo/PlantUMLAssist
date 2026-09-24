@@ -2453,12 +2453,33 @@ window.MA.modules.plantumlState = (function() {
   // 以前は「Idle と Running の間に状態を挟む」のに、選択を外して追加タブで State →
   // 追加する位置「この遷移の途中」→ 挟む遷移を一覧から選び直す必要があった。
   // いま選んでいる遷移を相手にして、種類・名前・位置だけで足す。足したらその状態を選ぶ。
+  // BLK-builder-20260924-2341-1: design 4c の残りの 履歴 / 開始 / 終了 と「その他… ▾」
+  // (並行状態 fork・join / 入口・出口ポイント) も同じ場所から足す。開始・終了・履歴は相手が遷移で決まるので
+  // 名前と位置を聞かず、書かれる 1 行を先に見せる。
   var _trAddKind = 'state';
   var TR_ADD_KINDS = [
     { value: 'state', label: '単純状態', base: 'NewState' },
     { value: 'composite', label: '複合状態', base: 'Composite' },
     { value: 'choice', label: '選択 choice', base: 'Choice' },
+    { value: 'history', label: 'H 履歴', pseudo: true, btn: '＋ 履歴を追加' },
+    { value: 'start', label: '開始 [*]', pseudo: true, btn: '＋ 開始を追加' },
+    { value: 'end', label: '終了 [*]', pseudo: true, btn: '＋ 終了を追加' },
   ];
+  var TR_ADD_OTHER = [
+    { value: 'fork', label: '並行状態 fork', base: 'Fork' },
+    { value: 'join', label: '並行状態 join', base: 'Join' },
+    { value: 'entryPoint', label: '入口ポイント', base: 'In' },
+    { value: 'exitPoint', label: '出口ポイント', base: 'Out' },
+  ];
+  function _trAddSpec(v) {
+    var all = TR_ADD_KINDS.concat(TR_ADD_OTHER);
+    for (var i = 0; i < all.length; i++) if (all[i].value === v) return all[i];
+    return TR_ADD_KINDS[0];
+  }
+  function _trAddIsOther(v) {
+    for (var i = 0; i < TR_ADD_OTHER.length; i++) if (TR_ADD_OTHER[i].value === v) return true;
+    return false;
+  }
 
   function _bindTrAddState(tr, parsedData, ctx) {
     var box = document.getElementById('st-tr-addstate');
@@ -2469,6 +2490,7 @@ window.MA.modules.plantumlState = (function() {
     // state-insert を読まない組 (一部の unit) では出さない。
     if (!SI || !SI.transitionPositions) { box.style.display = 'none'; return; }
     var where = null;
+    var otherOpen = _trAddIsOther(_trAddKind);
 
     function hintText(w) {
       if (w === 'transition') {
@@ -2476,31 +2498,71 @@ window.MA.modules.plantumlState = (function() {
       }
       if (w === 'inside') {
         var host = SI.fromHost(parsedData, tr);
-        return (host ? host.label : tr.from) + ' の中に入れます (子状態)';
+        return (host ? host.label + ' の中に入れます' : tr.from + ' の中に入れます') +
+          (_trAddIsOther(_trAddKind) ? '' : ' (子状態)');
       }
       return '図の末尾に足します';
     }
 
+    // 種類のボタン。7 つを 1 行に詰めると読めないので折り返す (見た目は選択パネルの分節ボタンと同じ)。
+    function chipHtml(k, on) {
+      return '<button type="button" class="prop-seg' + (on ? ' active' : '') + '" data-value="' + H.escHtml(k.value) + '"' +
+        ' aria-pressed="' + (on ? 'true' : 'false') + '"' +
+        ' style="flex:0 0 auto;background:' + (on ? 'var(--accent)' : 'var(--bg-tertiary)') + ';' +
+        'border:1px solid ' + (on ? 'var(--accent)' : 'var(--border)') + ';color:' + (on ? '#fff' : 'var(--text-primary)') + ';' +
+        'font-size:11px;padding:3px 7px;border-radius:3px;cursor:pointer;">' + H.escHtml(k.label) + '</button>';
+    }
+
     function render() {
-      var positions = SI.transitionPositions(parsedData, tr, _trAddKind);
-      if (!positions.some(function(p) { return p.value === where; })) where = positions[0].value;
-      box.innerHTML =
+      var spec = _trAddSpec(_trAddKind);
+      var isOther = _trAddIsOther(_trAddKind);
+      var chips = TR_ADD_KINDS.map(function(k) { return chipHtml(k, k.value === _trAddKind); }).join('') +
+        '<button type="button" id="st-tr-add-more" aria-expanded="' + (otherOpen ? 'true' : 'false') + '"' +
+        ' style="flex:0 0 auto;background:' + (isOther ? 'var(--accent)' : 'var(--bg-tertiary)') + ';' +
+        'border:1px solid ' + (isOther ? 'var(--accent)' : 'var(--border)') + ';color:' + (isOther ? '#fff' : 'var(--text-primary)') + ';' +
+        'font-size:11px;padding:3px 7px;border-radius:3px;cursor:pointer;">その他… ' + (otherOpen ? '▴' : '▾') + '</button>';
+      var otherRow = '<div id="st-tr-add-other"' + (otherOpen ? '' : ' hidden') +
+        ' style="display:' + (otherOpen ? 'flex' : 'none') + ';flex-wrap:wrap;gap:4px;margin:-2px 0 8px;padding:6px;border:1px solid var(--border);border-radius:3px;">' +
+        TR_ADD_OTHER.map(function(k) { return chipHtml(k, k.value === _trAddKind); }).join('') + '</div>';
+      var head =
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">状態を追加 / Add state</label>' +
-        P.segmentedFieldHtml('種類', 'st-tr-add-kind', TR_ADD_KINDS.map(function(k) {
-          return { value: k.value, label: k.label, selected: k.value === _trAddKind };
-        })) +
-        P.fieldHtml('名前', 'st-tr-add-id', '', '例: Checking (空なら ' + _baseName() + ')') +
-        P.selectFieldHtml('追加する位置', 'st-tr-add-where', positions.map(function(p) {
-          return { value: p.value, label: p.label, selected: p.value === where };
-        })) +
-        '<div id="st-tr-add-hint" style="font-size:10px;color:var(--text-secondary);margin:-4px 0 6px;line-height:1.5;">' +
-          H.escHtml(hintText(where)) + '</div>' +
-        '<button id="st-tr-add" style="width:100%;font-size:11px;padding:4px 8px;background:var(--bg-tertiary);border:1px solid var(--accent);color:var(--text-primary);border-radius:3px;cursor:pointer;">＋ 状態を追加</button>';
-      Array.prototype.forEach.call(box.querySelectorAll('#st-tr-add-kind .prop-seg'), function(btn) {
+        '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">種類</label>' +
+        '<div id="st-tr-add-kind" style="display:flex;flex-wrap:wrap;gap:4px;">' + chips + '</div></div>' + otherRow;
+
+      if (spec.pseudo) {
+        // 開始・終了・履歴: 相手は遷移で決まる。書かれる行を見せ、足せないときは理由を出して押せなくする。
+        var ps = SI.pseudoFromTransition(parsedData, tr, _trAddKind);
+        box.innerHTML = head +
+          '<div id="st-tr-add-hint" style="font-size:10px;color:var(--text-secondary);margin:0 0 6px;line-height:1.5;">' +
+            (ps.ok
+              ? '書かれる行: <code id="st-tr-add-line" style="font-family:var(--font-mono);">' + H.escHtml(ps.line) + '</code>' +
+                (_trAddKind === 'start' ? '。同じ所に開始が既にあれば、差し替えるか聞きます' : '')
+              : H.escHtml(ps.reason)) + '</div>' +
+          '<button id="st-tr-add"' + (ps.ok ? '' : ' disabled') + ' style="width:100%;font-size:11px;padding:4px 8px;background:var(--bg-tertiary);border:1px solid var(--accent);color:var(--text-primary);border-radius:3px;cursor:pointer;' + (ps.ok ? '' : 'opacity:0.5;') + '">' + H.escHtml(spec.btn) + '</button>';
+      } else {
+        var positions = SI.transitionPositions(parsedData, tr, _trAddKind);
+        if (positions.length && !positions.some(function(p) { return p.value === where; })) where = positions[0].value;
+        box.innerHTML = head +
+          (positions.length
+            ? P.fieldHtml('名前', 'st-tr-add-id', '', '例: Checking (空なら ' + _baseName() + ')') +
+              P.selectFieldHtml('追加する位置', 'st-tr-add-where', positions.map(function(p) {
+                return { value: p.value, label: p.label, selected: p.value === where };
+              })) +
+              '<div id="st-tr-add-hint" style="font-size:10px;color:var(--text-secondary);margin:-4px 0 6px;line-height:1.5;">' +
+                H.escHtml(hintText(where)) + '</div>' +
+              '<button id="st-tr-add" style="width:100%;font-size:11px;padding:4px 8px;background:var(--bg-tertiary);border:1px solid var(--accent);color:var(--text-primary);border-radius:3px;cursor:pointer;">＋ 状態を追加</button>'
+            : '<div id="st-tr-add-hint" style="font-size:10px;color:var(--text-secondary);margin:0 0 6px;line-height:1.5;">' +
+                '入口・出口ポイントは複合状態の縁に付きます。From が状態の遷移を選んでください</div>');
+      }
+      Array.prototype.forEach.call(box.querySelectorAll('#st-tr-add-kind .prop-seg, #st-tr-add-other .prop-seg'), function(btn) {
         btn.addEventListener('click', function() {
           _trAddKind = btn.getAttribute('data-value');
           render();
         });
+      });
+      P.bindEvent('st-tr-add-more', 'click', function() {
+        otherOpen = !otherOpen;
+        render();
       });
       P.bindEvent('st-tr-add-where', 'change', function() {
         where = document.getElementById('st-tr-add-where').value;
@@ -2515,11 +2577,29 @@ window.MA.modules.plantumlState = (function() {
     }
 
     function _baseName() {
-      for (var i = 0; i < TR_ADD_KINDS.length; i++) if (TR_ADD_KINDS[i].value === _trAddKind) return TR_ADD_KINDS[i].base;
-      return 'NewState';
+      return _trAddSpec(_trAddKind).base || 'NewState';
+    }
+
+    function addPseudo() {
+      var ps = SI.pseudoFromTransition(parsedData, tr, _trAddKind);
+      if (!ps.ok) return;
+      var t = ctx.getMmdText();
+      var res = addPseudoIn(t, parsedData, ps.kind, ps.scope, ps.state);
+      if (res.conflict) {
+        if (!window.confirm('この中には既に開始 ([*] --> ' + res.conflict.to + ') があります。差し替えますか?')) return;
+        res = addPseudoIn(t, parsedData, ps.kind, ps.scope, ps.state, { replace: true });
+      }
+      if (!res.text || res.text === t) { alert('足せませんでした'); return; }
+      window.MA.history.pushHistory();
+      ctx.setMmdText(res.text);
+      // 行が増えて選んでいた遷移の行番号がずれるので、選択は外す (足した行は図と本文で見える)。
+      window.MA.selection.clearSelection();
+      ctx.onUpdate();
     }
 
     function add() {
+      if (_trAddSpec(_trAddKind).pseudo) { addPseudo(); return; }
+      if (!where) return;
       var raw = (document.getElementById('st-tr-add-id') || {}).value || '';
       var norm = String(raw).trim()
         ? normalizeIdInput(raw, parsedData)

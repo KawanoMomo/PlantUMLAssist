@@ -206,24 +206,87 @@ window.MA.stateInsert = (function() {
   }
 
   // 選べる位置。複合状態は中身の無い箱を遷移に挟まない (追加タブと同じ)。
+  // BLK-builder-20260924-2341-1 (design 4c): 入口・出口ポイントは複合状態の縁に付くので「From の中」だけ。
+  // 開始・終了・履歴は置く所が相手で決まる (pseudoFromTransition) ので位置を選ばせない。
+  var STEREO_KINDS = { choice: 1, fork: 1, join: 1, entryPoint: 1, exitPoint: 1 };
+  var EDGE_KINDS = { entryPoint: 1, exitPoint: 1 };
+  var PSEUDO_KINDS = { start: 1, end: 1, history: 1 };
   function transitionPositions(parsed, tr, kind) {
     var out = [];
+    if (PSEUDO_KINDS[kind]) return out;
+    var host = fromHost(parsed, tr);
+    if (EDGE_KINDS[kind]) {
+      if (host) out.push({ value: 'inside', label: host.label + ' の中' });
+      return out;
+    }
     if (kind !== 'composite') out.push({ value: 'transition', label: 'この遷移の途中' });
     out.push({ value: 'end', label: '図の末尾' });
-    var host = fromHost(parsed, tr);
     if (host) out.push({ value: 'inside', label: host.label + ' の中' });
     return out;
   }
 
-  // opts = { kind: 'state' | 'choice' | 'composite', id, label, where: 'transition' | 'end' | 'inside' }
+  // 遷移の端 (From / To) を状態として引く。`[*]` / `[H]` は状態ではないので null。
+  // 宣言の無い状態 (`Idle --> Running` だけで出る Idle) は遷移と同じ所に居るものとして返す。
+  function _endState(parsed, tr, raw) {
+    var r = _s(raw);
+    if (!r || r.indexOf('[') >= 0) return null;
+    var states = (parsed && parsed.states) || [];
+    var STb = window.MA.stateTable;
+    var id = STb && STb.resolveEnd ? STb.resolveEnd(r, tr.scope, states) : r;
+    for (var i = 0; i < states.length; i++) if (states[i].id === id) return states[i];
+    return { id: id, parentId: tr.scope || null, line: 0, endLine: 0 };
+  }
+  function _byId(parsed, id) {
+    var states = (parsed && parsed.states) || [];
+    for (var i = 0; i < states.length; i++) if (states[i].id === id) return states[i];
+    return null;
+  }
+  function _bare(id) { return String(id || '').split('.').pop(); }
+
+  // 選んだ遷移から 開始 / 終了 / 履歴 を足すときの相手と、書かれる 1 行。
+  //   start   — From (From が [*] なら To) を、その状態と同じ所の開始にする
+  //   end     — To (To が [*] なら From) から終わる
+  //   history — To の親 (To が中を持つ複合状態なら To) の [H] へ、From から戻る
+  // 返り値 { ok, kind, scope, state, line } / { ok: false, reason }。scope は複合状態の id (最上位は '')。
+  function pseudoFromTransition(parsed, tr, kind) {
+    if (!tr) return { ok: false, reason: '遷移を選んでください' };
+    var from = _endState(parsed, tr, tr.from);
+    var to = _endState(parsed, tr, tr.to);
+    if (kind === 'start' || kind === 'end') {
+      var st = kind === 'start' ? (from || to) : (to || from);
+      if (!st) return { ok: false, reason: '開始・終了を付ける状態がありません' };
+      return {
+        ok: true, kind: kind, scope: st.parentId || '', state: st.id,
+        line: kind === 'start' ? '[*] --> ' + _bare(st.id) : _bare(st.id) + ' --> [*]',
+      };
+    }
+    if (kind === 'history') {
+      var host = null;
+      if (to && to.line > 0 && to.endLine > to.line) host = to;
+      else if (to && to.parentId) host = _byId(parsed, to.parentId);
+      if (!host || !from) {
+        return { ok: false, reason: '履歴は、複合状態 (中を持つ状態) かその中の状態へ向かう遷移を選んだときに足せます' };
+      }
+      return {
+        ok: true, kind: 'history', scope: host.id, state: from.id,
+        line: _bare(from.id) + ' --> ' + _bare(host.id) + '[H]',
+      };
+    }
+    return { ok: false, reason: '' };
+  }
+
+  // opts = { kind: 'state' | 'composite' | 'choice' | 'fork' | 'join' | 'entryPoint' | 'exitPoint', id, label,
+  //         where: 'transition' | 'end' | 'inside' }
   function addFromTransition(text, parsed, tr, opts) {
     var o = opts || {};
     var id = _s(o.id);
     if (!id || !tr) return text;
     var kind = o.kind || 'state';
-    var stereo = kind === 'choice' ? 'choice' : null;
+    if (PSEUDO_KINDS[kind]) return text;
+    var stereo = STEREO_KINDS[kind] ? kind : null;
     var decl = _stateLine(id, o.label, stereo);
     var block = kind === 'composite' ? [decl + ' {', '}'] : [decl];
+    if (EDGE_KINDS[kind] && o.where !== 'inside') return text;
     if (o.where === 'transition') {
       if (kind === 'composite') return text;
       return splitTransition(text, parsed, tr.id, id, stereo, o.label);
@@ -242,6 +305,7 @@ window.MA.stateInsert = (function() {
     fromHost: fromHost,
     transitionPositions: transitionPositions,
     addFromTransition: addFromTransition,
+    pseudoFromTransition: pseudoFromTransition,
     positions: positions,
     transitionLabel: transitionLabel,
     transitionOptions: transitionOptions,

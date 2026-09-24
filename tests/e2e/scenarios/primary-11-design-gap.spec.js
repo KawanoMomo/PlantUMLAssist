@@ -234,6 +234,35 @@ test('手順11 図で選んだ遷移の右パネルから、その遷移の途�
   await page.waitForTimeout(800);
   expect(await page.locator('#editor').inputValue()).toContain(['state Running {', '  state NewState', '}'].join(NL));
   expect(await page.locator('#editor').inputValue()).toContain('Running --> Idle : stop');
+
+  // 到達条件その3 (BLK-builder-20260924-2341-1, design 4c の残り): 種類に H 履歴 / 開始 [*] / 終了 [*] と「その他… ▾」がある。
+  // その他… ▾ の 並行状態 fork を選ぶと、選択 choice と同じく遷移の途中に <<fork>> が挟まる。
+  await pickLabel('stop');
+  const kinds = await page.locator('#st-tr-add-kind .prop-seg').allTextContents();
+  expect(kinds).toEqual(['単純状態', '複合状態', '選択 choice', 'H 履歴', '開始 [*]', '終了 [*]']);
+  await page.locator('#st-tr-add-more').click();
+  await page.locator('#st-tr-add-other .prop-seg[data-value="fork"]').click();
+  await expect(page.locator('#st-tr-add-where')).toHaveValue('transition');
+  await page.locator('#st-tr-add-id').fill('F1');
+  await page.locator('#st-tr-add').click();
+  await page.waitForTimeout(800);
+  const afterFork = await page.locator('#editor').inputValue();
+  expect(afterFork).toContain(['state F1 <<fork>>', 'Running --> F1 : stop', 'F1 --> Idle'].join(NL));
+
+  // 到達条件その4: 開始・終了・履歴は相手が遷移で決まり、書かれる行を先に見せる。
+  // 「done」(Running --> [*]) では履歴は押せず理由が出る。開始は Running を最上位の開始にし、既にある開始は聞いてから差し替える。
+  await pickLabel('done');
+  await page.locator('#st-tr-add-kind .prop-seg[data-value="history"]').click();
+  await expect(page.locator('#st-tr-add')).toBeDisabled();
+  await expect(page.locator('#st-tr-add-hint')).toContainText('複合状態');
+  await page.locator('#st-tr-add-kind .prop-seg[data-value="start"]').click();
+  await expect(page.locator('#st-tr-add-line')).toHaveText('[*] --> Running');
+  page.once('dialog', (d) => d.accept());
+  await page.locator('#st-tr-add').click();
+  await page.waitForTimeout(800);
+  const afterStart = (await page.locator('#editor').inputValue()).split(NL);
+  expect(afterStart).toContain('[*] --> Running');
+  expect(afterStart).not.toContain('[*] --> Idle');
 });
 
 // BLK-builder-20260924-1252-3 (design 4b「Activity — 途中に挿入」の右パネル): 図で選んだアクションの
