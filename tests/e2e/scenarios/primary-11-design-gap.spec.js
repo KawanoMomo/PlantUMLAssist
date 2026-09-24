@@ -235,3 +235,44 @@ test('手順11 図で選んだ遷移の右パネルから、その遷移の途�
   expect(await page.locator('#editor').inputValue()).toContain(['state Running {', '  state NewState', '}'].join(NL));
   expect(await page.locator('#editor').inputValue()).toContain('Running --> Idle : stop');
 });
+
+// BLK-builder-20260924-1252-3 (design 4b「Activity — 途中に挿入」の右パネル): 図で選んだアクションの
+// 右パネルは「Action · N 行目」と名前を見出しにし、ラベル → スイムレーン → 位置 → この位置に挿入 →
+// ノートを添える → ↑ ↓ → 削除 / Delete の順に日本語で並ぶ。ノートはその場で添えられる。
+test('手順11 図で選んだアクションの右パネルが design 4b の見出し・並びで、ノートをその場で添えられる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  const NL = String.fromCharCode(10);
+  const ACT = ['@startuml', 'title Sample Activity', 'start', ':入力を受け取る;', 'if (有効?) then (yes)', ':保存する;',
+    'else (no)', ':エラーを返す;', 'endif', 'stop', '@enduml'].join(NL);
+  await S.typeDsl(page, ACT);
+  await page.waitForTimeout(1500);
+
+  const hit = page.locator('#overlay-layer rect.selectable[data-type="action"][data-line="6"]').first();
+  await expect(hit).toBeAttached({ timeout: 10000 });
+  const hb = await hit.boundingBox();
+  await page.mouse.click(hb.x + hb.width / 2, hb.y + hb.height / 2);
+  await page.waitForTimeout(400);
+
+  // 到達条件その1: 見出しが「Action · 6 行目 / 保存する」、欄は「ラベル / Label」。
+  await expect(page.locator('#ac-action-head')).toContainText('Action · 6 行目');
+  await expect(page.locator('#ac-action-name')).toHaveText('保存する');
+  await expect(page.locator('#ac-action-label')).toContainText('ラベル / Label');
+  await expect(page.locator('#ac-action-delete')).toHaveText('削除 / Delete');
+
+  // 到達条件その2: 並びが design 4b の順 (上から下へ)。
+  const ys = [];
+  for (const sel of ['#ac-action-text', '#ac-swimlane', '#ac-action-place', '#ac-insert-before', '#ac-add-note-btn', '#ac-move-up', '#ac-action-delete']) {
+    const b = await page.locator(sel).boundingBox();
+    ys.push(b.y);
+  }
+  for (let i = 1; i < ys.length; i++) expect(ys[i]).toBeGreaterThan(ys[i - 1]);
+
+  // 到達条件その3: 「ノートを添える」から本文を書いて添えると、そのアクションの後ろに note が入る。
+  await page.locator('#ac-add-note-btn').click();
+  await page.locator('#ac-new-ntext').fill('上書きする');
+  await page.locator('#ac-new-nadd').click();
+  await page.waitForTimeout(800);
+  const lines = (await page.locator('#editor').inputValue()).split(NL);
+  expect(lines[6]).toContain('note right');
+  expect(lines[6]).toContain('上書きする');
+});

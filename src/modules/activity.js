@@ -2225,6 +2225,15 @@ window.MA.modules.plantumlActivity = (function() {
     '</div>';
   }
 
+  // design 4b: 選んだアクションの右パネルの見出し。「Action · 6 行目」と、その下に
+  // 選んだものの名前 (保存する)。行番号だけでは何を選んだのか図と見比べないと分からない。
+  // 複数行のラベル (PlantUML の \n 区切り・実改行) は 1 行に畳む。
+  function actionPanelHeading(node) {
+    var line = node && node.line;
+    var text = String((node && node.text) || '').replace(/\\n/g, ' ').replace(/\s+/g, ' ').trim();
+    return { kind: 'Action · ' + line + ' 行目', name: text };
+  }
+
   function _renderActionEdit(sel, parsedData, propsEl, ctx) {
     var P = window.MA.properties;
     var node = _findNodeById(parsedData.nodes, sel.id);
@@ -2237,53 +2246,60 @@ window.MA.modules.plantumlActivity = (function() {
     // design 4b: 居場所は行番号ではなく構造で示す (条件分岐「有効?」の yes 側、1 番目)。
     var AI = window.MA.activityInsert;
     var place = (AI && AI.describeStructure) ? AI.describeStructure(ctx.getMmdText(), node.line) : '';
+    // design 4b: 右パネルは上から 見出し (Action · N 行目 / 名前) → ラベル → スイムレーン → 位置 →
+    // この位置に挿入 → ノートを添える → ↑ ↓ → 削除 の順 (BLK-builder-20260924-1252-3)。
+    var esc = window.MA.htmlUtils.escHtml;
+    var head = actionPanelHeading(node);
     var html =
-      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">Action (L' + node.line + ')</div>' +
-      '<div id="ac-action-place" style="margin-bottom:8px;font-size:11px;">' +
-        '<span style="color:var(--text-secondary);">位置</span> ' +
-        window.MA.htmlUtils.escHtml(place || 'フローの外') +
+      '<div id="ac-action-head" style="margin-bottom:10px;">' +
+        '<div style="font-size:11px;color:var(--text-secondary);">' + esc(head.kind) + '</div>' +
+        '<div id="ac-action-name" style="font-size:14px;font-weight:bold;color:var(--text-primary);' +
+          'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + esc(head.name) + '">' +
+          esc(head.name || '(ラベルなし)') + '</div>' +
       '</div>' +
-      // design 4b: スイムレーンは読むだけでなく、チップで選び直せる。
-      _swimlaneChipsHtml(ctx.getMmdText(), node.line) +
-      '<div style="margin-bottom:6px;">' +
-        '<label style="display:block;font-size:10px;color:var(--text-secondary);">Text</label>' +
-        '<textarea id="ac-action-text" style="width:100%;min-height:60px;">' + window.MA.htmlUtils.escHtml(node.text || '') + '</textarea>' +
+      '<div id="ac-action-label" style="margin-bottom:6px;">' +
+        '<label for="ac-action-text" style="display:block;font-size:10px;color:var(--text-secondary);">ラベル / Label</label>' +
+        '<textarea id="ac-action-text" style="width:100%;min-height:60px;">' + esc(node.text || '') + '</textarea>' +
       '</div>' +
       // BLK-junior-20260915-0606: 打ち直すときも同じ名前帳から引ける (綴りを揃える先が
       // 欄の下にあるので、クラス図タブへ確かめに戻らない)。
       P.vocabPickerHtml('ac-action-text-vocab', { roles: ['method'], callSuffix: true }) +
       P.primaryButtonHtml('ac-action-update', '更新') +
       _actionColorHtml(node.color || '') +
-      '<div style="border-top:1px solid var(--border);padding-top:8px;margin-top:8px;">' +
-        '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">Notes</div>';
-    if (attachedNotes.length === 0) {
-      html += '<div style="font-size:11px;color:var(--text-secondary);font-style:italic;">（このアクションに note なし）</div>';
-    } else {
-      for (var ni = 0; ni < attachedNotes.length; ni++) {
-        var n = attachedNotes[ni];
-        var preview = (n.text || '').replace(/\n/g, ' ⏎ ').slice(0, 40);
-        html += '<div style="font-size:11px;margin-bottom:2px;">' +
-                  n.position + ' "' + window.MA.htmlUtils.escHtml(preview) + '" (L' + n.line + ')' +
-                  ' <button id="ac-note-edit-' + ni + '" data-id="' + n.id + '" data-line="' + n.line + '">edit</button>' +
-                  ' <button id="ac-note-del-' + ni + '" data-start="' + n.line + '" data-end="' + n.endLine + '">✕</button>' +
-                '</div>';
-      }
+      // design 4b: スイムレーンは読むだけでなく、チップで選び直せる。
+      '<div style="margin-top:10px;">' + _swimlaneChipsHtml(ctx.getMmdText(), node.line) + '</div>' +
+      // design 4b: 居場所は行番号ではなく構造で示す (条件分岐「有効?」の yes 側、1 番目)。
+      '<div id="ac-action-place" style="margin-bottom:8px;font-size:11px;">' +
+        '<span style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">位置</span>' +
+        esc(place || 'フローの外') +
+      '</div>' +
+      // design 4b:「この位置に挿入 / Insert here」— 選んでいるアクションの前後に足す。
+      // 押すと図の隙間クリックと同じ挿入メニュー (showInsertPicker) がその位置で開く。
+      '<div style="border-top:1px solid var(--border);padding-top:10px;margin-top:8px;">' +
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">この位置に挿入 / Insert here</label>' +
+        '<div style="display:flex;gap:4px;">' +
+          '<button id="ac-insert-before" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↑ 前に</button>' +
+          '<button id="ac-insert-after" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↓ 後に</button>' +
+        '</div>' +
+      '</div>' +
+      // design 4b:「ノートを添える」。既に添えたノートはその上に並べ、直す・外すは日本語で。
+      '<div id="ac-action-notes" style="border-top:1px solid var(--border);padding-top:8px;margin-top:8px;">';
+    for (var ni = 0; ni < attachedNotes.length; ni++) {
+      var n = attachedNotes[ni];
+      var preview = (n.text || '').replace(/\n/g, ' ⏎ ').slice(0, 40);
+      html += '<div class="ac-note-row" style="display:flex;align-items:center;gap:4px;font-size:11px;margin-bottom:4px;">' +
+                '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' +
+                  'ノート (' + (n.position === 'left' ? '左' : '右') + ') 「' + esc(preview) + '」 L' + n.line + '</span>' +
+                '<button id="ac-note-edit-' + ni + '" data-id="' + n.id + '" data-line="' + n.line + '">編集</button>' +
+                '<button id="ac-note-del-' + ni + '" data-start="' + n.line + '" data-end="' + n.endLine + '">削除</button>' +
+              '</div>';
     }
-    html += '<div id="ac-add-note-form" style="margin-top:6px;"></div>' +
-            '<button id="ac-add-note-btn" style="margin-top:4px;">+ Note 追加</button>' +
-          '</div>' +
-          // design 4b:「この位置に挿入 / Insert here」— 選んでいるアクションの前後に足す。
-          // 押すと図の隙間クリックと同じ挿入メニュー (showInsertPicker) がその位置で開く。
-          '<div style="border-top:1px solid var(--border);padding-top:10px;margin-top:8px;">' +
-            '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">この位置に挿入 / Insert here</label>' +
-            '<div style="display:flex;gap:4px;">' +
-              '<button id="ac-insert-before" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↑ 前に</button>' +
-              '<button id="ac-insert-after" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↓ 後に</button>' +
-            '</div>' +
+    html += '<button id="ac-add-note-btn" style="width:100%;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">ノートを添える</button>' +
+            '<div id="ac-add-note-form" style="margin-top:6px;"></div>' +
           '</div>' +
           _reorderHtml(ctx.getMmdText(), node.line) +
           '<div style="margin-top:10px;">' +
-            P.primaryButtonHtml('ac-action-delete', '✕ 削除') +
+            P.primaryButtonHtml('ac-action-delete', '削除 / Delete') +
           '</div>';
     propsEl.innerHTML = html;
     P.bindVocabPicker('ac-action-text-vocab', 'ac-action-text', null, { insert: 'caret' });
@@ -2386,15 +2402,15 @@ window.MA.modules.plantumlActivity = (function() {
     P.bindEvent('ac-add-note-btn', 'click', function() {
       var f = document.getElementById('ac-add-note-form');
       f.innerHTML =
-        P.selectFieldHtml('Position', 'ac-new-npos', [
-          { value: 'right', label: 'Right', selected: true },
-          { value: 'left', label: 'Left' }
+        P.selectFieldHtml('置く側', 'ac-new-npos', [
+          { value: 'right', label: '右', selected: true },
+          { value: 'left', label: '左' }
         ]) +
         '<div style="margin-bottom:6px;">' +
-          '<label style="display:block;font-size:10px;color:var(--text-secondary);">Text</label>' +
+          '<label style="display:block;font-size:10px;color:var(--text-secondary);">ノートの本文</label>' +
           '<textarea id="ac-new-ntext" style="width:100%;min-height:50px;"></textarea>' +
         '</div>' +
-        P.primaryButtonHtml('ac-new-nadd', '+ 追加');
+        P.primaryButtonHtml('ac-new-nadd', '+ 添える');
       P.bindEvent('ac-new-nadd', 'click', function() {
         var pos = document.getElementById('ac-new-npos').value;
         var txt = document.getElementById('ac-new-ntext').value;
@@ -2635,6 +2651,7 @@ window.MA.modules.plantumlActivity = (function() {
     parse: parse,
     buildOverlay: buildOverlay,
     renderProps: renderProps,
+    actionPanelHeading: actionPanelHeading,
     template: template,
     fmtAction: fmtAction,
     fmtIf: fmtIf,
