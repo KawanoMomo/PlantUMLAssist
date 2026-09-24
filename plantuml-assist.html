@@ -158,9 +158,11 @@ html, body {
    行頭の ＋ で未作成をまとめて、その場で作る (BLK-builder-20260924-1735-3)。 */
 #files-panel .files-part-missing {
   display: block; width: 100%; box-sizing: border-box;
-  padding: 2px 8px 2px 22px; font-size: 11px;
+  padding: 2px 8px 2px 36px; text-indent: -14px; font-size: 11px;
   color: var(--text-muted, var(--text-secondary)); opacity: .7;
-  text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  /* 切り詰めない: 未作成が 4 図種以上でも後ろの略号が隠れず押せる (BLK-builder-20260924-1803-3)。
+     折り返した 2 行目は ＋ の右にそろえる。 */
+  text-align: left; white-space: normal; line-height: 1.5;
 }
 #files-panel .files-part-missing:hover { opacity: 1; }
 #files-panel .files-part-missing button {
