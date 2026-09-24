@@ -107,6 +107,15 @@ assert.ok(withDir.indexOf('DmaCtrl') >= 0, '既存の参照関係もそのまま
 var round = SDH.check(SDH.fromText(withDir));
 assert.strictEqual(round.ok, true);
 assert.strictEqual(round.value, 'E:/01_Loop/persona-data/primary');
+// BLK-owner-20260924-0852-prune: 貼る先は ⚙設定の「保存先ディレクトリ」(1 行の入力欄)。
+// 1 行の欄に貼ると改行が落ちて後ろの節まで同じ行に続くが、それでも値だけを拾う。
+var flat = SDH.check(SDH.fromText(withDir.replace(/\r?\n/g, '')));
+assert.strictEqual(flat.ok, true);
+assert.strictEqual(flat.value, 'E:/01_Loop/persona-data/primary');
+// 案内は貼る先 (パンくずのフォルダ名 → ⚙設定の保存先ディレクトリ) を指す。畳んだ 🕸 参照関係は指さない。
+var guide = SDH.toBlock({ backend: 'file', fileDir: 'E:/x' }).join('\n');
+assert.ok(guide.indexOf('パンくず') >= 0 && guide.indexOf('保存先ディレクトリ」') >= 0, guide);
+assert.ok(guide.indexOf('参照関係') < 0, guide);
 // cfg 無しの呼び出し (既存の呼び出し側) は保存先の節を出さない。
 assert.ok(XG.toText(graph).indexOf('## 保存先ディレクトリ') < 0);
 

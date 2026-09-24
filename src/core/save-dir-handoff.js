@@ -118,8 +118,8 @@ window.MA.saveDirHandoff = (function() {
       return out;
     }
     out.push('- ' + LABEL + ': `' + dir + '`');
-    out.push('- 受け取った側は 🕸 参照関係 →「保存先を貼る」にこの値'
-      + ' (この xref.md ごとでも可) を貼って「設定に反映」を押してください。');
+    out.push('- 受け取った側は、上部のパンくずのフォルダ名 (FILES の「保存先」の一番上でも同じ) を押して'
+      + ' ⚙設定の「保存先ディレクトリ」にこの値 (この xref.md ごとでも可) を貼り、「設定を保存」を押してください。');
     out.push('');
     return out;
   }
@@ -133,6 +133,10 @@ window.MA.saveDirHandoff = (function() {
     for (var i = 0; i < lines.length; i++) {
       var m = lines[i].match(/保存先ディレクトリ\s*[:：]\s*(.+)$/);
       if (m) {
+        // 1 行の入力欄に xref.md を貼ると改行が落ちて後ろの節まで同じ行に続く。
+        // 値がバッククォートで括られていれば、その中だけを取る。
+        var bq = m[1].trim().match(/^`([^`]+)`/);
+        if (bq && bq[1].trim()) return bq[1].trim();
         var v = m[1].trim().replace(/^`+/, '').replace(/`+$/, '').trim();
         if (v) return v;
       }

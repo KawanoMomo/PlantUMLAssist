@@ -2598,6 +2598,27 @@ function init() {
     function close() { modal.style.display = 'none'; }
 
     btn.addEventListener('click', open);
+
+    // BLK-owner-20260924-0852-prune: 旧 🕸 参照関係の「保存先を貼る」はここに移した。保存先を変える所
+    // (パンくずのフォルダ名 / FILES の保存先の一番上 → この欄) が、渡された xref.md 全文でも
+    // パス 1 行でも受け、値だけを拾って入れる (受け取った側が打ち直さない)。
+    var dirPasteEl = document.getElementById('cfg-file-dir');
+    if (dirPasteEl) dirPasteEl.addEventListener('paste', function(ev) {
+      var SDH0 = window.MA.saveDirHandoff;
+      var cd = ev.clipboardData || window.clipboardData;
+      var text = cd ? cd.getData('text') : '';
+      // パス 1 行はそのまま貼らせる (入力欄の既定の貼り付けで足りる)。
+      if (!SDH0 || !text || !/[\r\n]|保存先ディレクトリ/.test(text)) return;
+      var picked = SDH0.fromText(text);
+      if (!picked) return;
+      ev.preventDefault();
+      dirPasteEl.value = picked;
+      var msg0 = document.getElementById('cfg-file-dir-msg');
+      if (msg0) {
+        msg0.style.color = 'var(--text-secondary)';
+        msg0.textContent = '貼った文面から' + SDH0.LABEL + 'の値だけを入れました: ' + picked;
+      }
+    });
     // BLK-builder-20260907-2237-2 (design 1a): 上部バーからモードの select を外した
     // 代わりに、状態表示から設定の「レンダリング」タブへ直接開ける口を出す。
     // タブ指定で開けるようにしておくと、他の入口も同じ経路を使える。
@@ -2707,11 +2728,15 @@ function init() {
       for (var j = 0; j < backendRadios.length; j++) if (backendRadios[j].checked) { backend = backendRadios[j].value; break; }
       var fileDirEl = document.getElementById('cfg-file-dir');
       var fileDir = fileDirEl ? (fileDirEl.value.trim() || './autosave') : './autosave';
+      // 渡された xref.md を貼ったまま (1 行の欄では改行が落ちて続いた形) でも、値だけを拾う。
+      if (window.MA.saveDirHandoff && fileDirEl && /保存先ディレクトリ|`/.test(fileDir)) {
+        fileDir = window.MA.saveDirHandoff.fromText(fileDir) || fileDir;
+      }
       // BLK-primary-20260908-0103: バックスラッシュ区切りの絶対パスは往復で
       // 壊れることがあり、壊れた値のまま保存されると 📂一覧が黙って空になる。
       // 保存する前にここで直せる崩れは直し (\ → /)、直せない崩れは保存しない。
       var dirMsgEl = document.getElementById('cfg-file-dir-msg');
-      if (dirMsgEl) dirMsgEl.textContent = '';
+      if (dirMsgEl) { dirMsgEl.textContent = ''; dirMsgEl.style.color = ''; }
       var SDH = window.MA.saveDirHandoff;
       if (SDH && backend === 'file') {
         var chk = SDH.check(fileDir);
@@ -3618,7 +3643,8 @@ function initCommandPalette() {
       { id: 'tab-blame', title: '部品名の混入点を探す / Blame point', hint: 'Tabs', keywords: ['blame', 'origin', 'version', 'こんにゅう', 'いつから', 'かこばん', 'ふぐあい'], button: 'btn-tab-blame', run: function() { clickById('btn-tab-blame'); } },
       { id: 'tab-pattern', title: '同じ観点で全図を棚卸し / Pattern check', hint: 'Tabs', keywords: ['pattern', 'check', 'かんてん', 'いっかつ', 'してき', 'たなおろし'], button: 'btn-tab-pattern', run: function() { clickById('btn-tab-pattern'); } },
       { id: 'tab-submit', title: '提出前チェックを開く / Submit check', hint: 'Tabs', keywords: ['submit', 'check', 'ていしゅつ', 'かくにん', '略語'], button: 'btn-tab-submit', run: function() { clickById('btn-tab-submit'); } },
-      { id: 'tab-xref', title: '参照関係を開く / Cross-reference', hint: 'Tabs', keywords: ['xref', 'reference', 'project', 'さんしょう', 'かんけい'], button: 'btn-tab-xref', run: function() { clickById('btn-tab-xref'); } },
+      // BLK-owner-20260924-0852-prune: 🕸 参照関係の画面は畳んだ。旧名で引いても ▤ 影響を見る が開く。
+      { id: 'tab-xref', title: '参照関係を開く → ▤ 影響を見る / Cross-reference', hint: 'Tabs', keywords: ['xref', 'reference', 'project', 'cross', 'さんしょう', 'かんけい', '参照関係', 'またいで', '図をまたぐ'], button: 'btn-tab-xref', run: function() { openImpactScreen(_nameSearchSeed()); } },
       { id: 'tab-audit', title: '名前突合を開く / Name audit', hint: 'Tabs', keywords: ['name', 'audit', 'なまえ', 'つきあわせ'], button: 'btn-tab-audit', run: function() { clickById('btn-tab-audit'); } },
       { id: 'tab-handoff', title: '引き継ぎパッケージを作る / Handoff package', hint: 'Tabs', keywords: ['handoff', 'package', 'zip', 'ひきつぎ', 'ぱっけーじ'], button: 'btn-tab-handoff', run: function() { clickById('btn-tab-handoff'); } },
       { id: 'tab-delivery', title: '納品パッケージを作る / Delivery package', hint: 'Tabs', keywords: ['delivery', 'package', 'zip', 'のうひん', 'ぱっけーじ', '提出'], button: 'btn-tab-delivery', run: function() { clickById('btn-tab-delivery'); } },
@@ -4733,8 +4759,8 @@ function renderTabs() {
   try { renderConsistencyBadge(); } catch (e) {}
   try { renderEventSyncBadge(); } catch (e) {}
   try { renderPinBadge(); } catch (e) {}
-  // 参照関係でハイライトしている部品名の印は、タブを組み立て直すたびに付け直す。
-  try { if (typeof _xrefSelected === 'string' && _xrefSelected) renderXrefGraph(); } catch (e) {}
+  // ▤ 影響を見る で見ている部品名の印は、タブを組み立て直すたびに付け直す。
+  try { if (_riTabMarks.length) applyXrefHighlight(_riTabMarks); } catch (e) {}
   // 申し送りは開いた時点で見えていないと口頭説明の代わりにならない。
   // 復元で開いた場合も出したいので、タブを組み立て直すたびに引き直す。
   try { renderHandoverBanner(); } catch (e) {}
@@ -12725,7 +12751,7 @@ function setupTabs() {
         how.className = 'folder-empty';
         how.id = 'folder-missing-hint';
         how.textContent = '⚙設定 → 自動保存 → 保存先ディレクトリを確かめてください'
-          + '(区切りは / が安全です)。渡された値があれば 🕸 参照関係 →「保存先を貼る」で入れられます。';
+          + '(区切りは / が安全です)。渡された xref.md があれば、そのまま保存先ディレクトリの欄に貼れば値だけが入ります。';
         panel.appendChild(how);
         return;
       }
@@ -16914,13 +16940,16 @@ function renderRenameImpactBoard() {
   if (occEl) occEl.hidden = !occ;
   body.hidden = occ;
   if (occ) {
-    var q = ((document.getElementById('ns-q') || {}).value || '').trim();
-    if (q) from = q;
-    else if (!from) from = _dgName || '';
+    // BLK-owner-20260924-0852-prune: 名前欄が空なら何も引かない (下段は図をまたぐ部品名の一覧)。
+    from = ((document.getElementById('ns-q') || {}).value || '').trim();
   }
   var res = br.impact(_renameImpactDocs(from), from, to);
 
-  if (sumEl) sumEl.textContent = br.impactText(res, from, to);
+  if (sumEl) {
+    sumEl.textContent = (occ && !from)
+      ? '部品名を選ぶと、その名前が出てくる図と行が並びます'
+      : br.impactText(res, from, to);
+  }
   // BLK-primary-20260917-0023: 仕分けの 1 行 (何枚中何枚に変更あり)。
   var rosterEl = document.getElementById('ri-roster');
   if (rosterEl) {
@@ -16934,7 +16963,13 @@ function renderRenameImpactBoard() {
   var applyBtn = document.getElementById('ri-apply');
   var srcApply = document.getElementById('btn-rename-apply');
   if (applyBtn) applyBtn.disabled = !res.valid || res.docs === 0 || !srcApply || srcApply.disabled;
-  if (occ) { renderNameSearch(); return res; }
+  if (occ) {
+    var hits = renderNameSearch();
+    // 見ている名前が出てくる図のタブに印を付ける (旧 🕸 参照関係の挙動)。
+    _riSetTabMarks(hits ? hits.map(function(h) { return h.name; }) : []);
+    return res;
+  }
+  _riSetTabMarks((res.entries || []).map(function(e) { return e.name; }));
 
   // BLK-primary-20260917-0023: 当たらなかった図も「変更なし」として並べる。
   // 影響範囲の確認は、触らなくてよい図を言い切れてはじめて終わる。
@@ -17086,7 +17121,8 @@ function toggleRenameImpact(open, seedName) {
   // note 欄は開け閉めのたびに畳む (前に打った文面が次の名前に混ざらない)。
   var noteBox = document.getElementById('dg-note-box');
   if (noteBox) noteBox.hidden = true;
-  if (!want) { modal.style.display = 'none'; _riSvgSeq++; _riZoomClose(); return; }
+  // タブの印は ▤ で名前を見ている間だけ (BLK-owner-20260924-0852-prune: 旧 🕸 参照関係の挙動)。
+  if (!want) { modal.style.display = 'none'; _riSvgSeq++; _riZoomClose(); _riSetTabMarks([]); return; }
   // BLK-owner-20260923-1949-prune: 上段は部品名の依存グラフ。置換前に打った名前を
   // そのまま起点にする (打ち直させない)。症状の語も開くたびに選んだ部品名へ戻す。
   // seedName: Ctrl+K「名前で図を探す」を開く前に選んでいた部品名 (BLK-primary-20260924-0021-wish)。
@@ -17097,8 +17133,11 @@ function toggleRenameImpact(open, seedName) {
   modal.style.display = 'flex';
   renderDepGraph();
   var q = document.getElementById('ns-q');
-  if (q) q.value = from || _dgName || '';
+  // BLK-owner-20260924-0852-prune: 名前を持たずに開いた (Ctrl+K「名前で図を探す」・旧 🕸 参照関係) ときは
+  // 名前欄を空のままにし、下段に「図をまたぐ部品名」を並べる (前回の名前を勝手に入れない)。
+  if (q) q.value = from || '';
   _nsBuildIndex();
+  renderRiLinks();
   renderRenameImpactBoard();
   var scroll = document.getElementById('ri-scroll');
   if (scroll) scroll.scrollTop = 0;
@@ -17639,8 +17678,8 @@ function renderDepGraph() {
 
 // BLK-owner-20260923-1949-prune: 依存グラフは ▤ 影響を見る の上段になった。
 // 開け閉めは同じ画面の開け閉め (手当て列の「一覧」・版を開く・札にする から呼ばれる)。
-function toggleDepGraph(open) {
-  toggleRenameImpact(open);
+function toggleDepGraph(open, seedName) {
+  toggleRenameImpact(open, seedName);
 }
 
 // ── 名前で図を探す (BLK-primary-20260917-0523-wish) ──────────────────────────
@@ -17729,14 +17768,17 @@ function renderNameSearch() {
   }
   box.textContent = '';
   box.setAttribute('data-hit-docs', String(res.hitDocs));
-  if (!res.query || !res.hitDocs) {
+  // BLK-owner-20260924-0852-prune: 名前が空のまま開いたときは、図をまたぐ部品名 (名前と枚数) を並べる。
+  if (!res.query) {
+    renderRiXrefNames(box);
+    return [];
+  }
+  if (!res.hitDocs) {
     var empty = document.createElement('div');
     empty.className = 'ns-empty';
-    empty.textContent = res.query
-      ? 'この名前を使っている図はありません（綴りが違うか、まだどこにも出ていません）'
-      : '部品名かメソッド名を入れてください';
+    empty.textContent = 'この名前を使っている図はありません（綴りが違うか、まだどこにも出ていません）';
     box.appendChild(empty);
-    return;
+    return [];
   }
   res.hits.forEach(function(h) {
     var row = document.createElement('div');
@@ -17781,6 +17823,7 @@ function renderNameSearch() {
     });
     box.appendChild(row);
   });
+  return res.hits;
 }
 
 // 下段の名前を打ち替えたら、上段の依存グラフもその名前が図の束にあれば追う。
@@ -17973,7 +18016,7 @@ function setupFixWalk() {
   var list = document.getElementById('fw-list');
   if (list) list.addEventListener('click', function() {
     if (_fwWalk && _fwWalk.subject) _dgName = _fwWalk.subject;
-    toggleDepGraph(true);
+    toggleDepGraph(true, (_fwWalk && _fwWalk.subject) || _dgName);
   });
   var close = document.getElementById('fw-close');
   if (close) close.addEventListener('click', function() {
@@ -20399,59 +20442,6 @@ function setupSymptomSearch() {
       renderSymptomSearch();
     });
   }
-
-  // 受け取った側。渡された保存先を打ち直さず、検証してから設定に反映する
-  // (BLK-primary-20260908-0103-wish)。書式の崩れは反映前にここで止める。
-  var SDH = window.MA.saveDirHandoff;
-  var dirBtn = document.getElementById('btn-xref-dir');
-  var dirBox = document.getElementById('xref-dir-box');
-  var dirInput = document.getElementById('xref-dir-input');
-  var dirMsg = document.getElementById('xref-dir-msg');
-  var dirNow = document.getElementById('xref-dir-now');
-  var dirApply = document.getElementById('btn-xref-dir-apply');
-  var dirCancel = document.getElementById('btn-xref-dir-cancel');
-
-  function showDirMsg(text, ng) {
-    if (!dirMsg) return;
-    dirMsg.textContent = text || '';
-    dirMsg.className = ng ? 'ng' : '';
-  }
-  function showDirNow() {
-    if (!dirNow) return;
-    var cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null;
-    dirNow.textContent = (cfg && cfg.backend === 'file')
-      ? '今の保存先: ' + cfg.fileDir
-      : '今は保存先フォルダ未設定 (localStorage)。反映するとファイル保存に切り替わります。';
-  }
-
-  if (dirBtn && dirBox && SDH) dirBtn.addEventListener('click', function() {
-    dirBox.hidden = !dirBox.hidden;
-    if (!dirBox.hidden) { showDirMsg(''); showDirNow(); if (dirInput) dirInput.focus(); }
-  });
-  if (dirCancel && dirBox) dirCancel.addEventListener('click', function() {
-    dirBox.hidden = true;
-    showDirMsg('');
-  });
-  if (dirApply && SDH) dirApply.addEventListener('click', function() {
-    var raw = SDH.fromText(dirInput ? dirInput.value : '');
-    if (!raw) {
-      showDirMsg('⚠ 貼られた文面から' + SDH.LABEL + 'を見つけられませんでした。'
-        + 'パスを 1 行だけ貼ってみてください。', true);
-      return;
-    }
-    var res = SDH.check(raw);
-    if (!res.ok) { showDirMsg(SDH.messageFor(res), true); return; }
-    if (window.MA.autoSave) {
-      window.MA.autoSave.setConfig({ backend: 'file', fileDir: res.value });
-      updateTopSaveTarget();
-    }
-    // 設定モーダルを開いたときに古い値が出ないよう、入力欄も合わせておく。
-    var cfgDirEl = document.getElementById('cfg-file-dir');
-    if (cfgDirEl) cfgDirEl.value = res.value;
-    showDirNow();
-    showDirMsg(SDH.messageFor(res), false);
-    setSaveStatus(SDH.messageFor(res));
-  });
 }
 
 // ── 観点一括 ───────────────────────────────────────────────────────────────
@@ -20561,14 +20551,13 @@ function setupPatternCheck() {
   if (closeBtn) closeBtn.addEventListener('click', closePanel);
 }
 
-// ── 参照関係 ───────────────────────────────────────────────────────────────
-// BLK-primary-20260908-0003-wish: 14 枚一式を新人に渡すとき、「この図とこの図は
-// 同じ部品名で繋がっている」という関係そのものを渡す手段が無く、渡された側は
-// 1 枚ずつ開いて名前を照合するしかなかった。開いている図を 1 プロジェクトとして
-// 扱い、図をまたぐ部品名を並べ、選べばその名前が出る図をタブ上でハイライトして
-// 一覧に出す。行を押せばその図のその行へ運ぶ。関係は書き出して渡せる。
-
-var _xrefSelected = '';   // 今ハイライトしている部品名
+// ── 図をまたぐ部品名 (▤ 影響を見る の中) ─────────────────────────────────────
+// BLK-primary-20260908-0003-wish で 🕸 参照関係 として作った「図をまたぐ部品名の一覧」
+// 「その名前が出る図のタブの印」「図どうしの繋がり」「xref.md の書き出し」は、
+// BLK-owner-20260924-0852-prune で ▤ 影響を見る 1 つに寄せた。「この部品名はどの図に
+// 出てくるか」に答える画面が 2 つあると、どちらを開けばよいかを選ばせるため。
+// 集計は core/xref-graph、ここは ▤ の中での描画と結線だけ。
+var _riTabMarks = [];   // 今タブに印を付けている図の名前 (▤ で見ている名前が出てくる図)
 
 // タブは編集のたびに組み立て直されるので、印は毎回付け直す。
 function applyXrefHighlight(names) {
@@ -20584,140 +20573,132 @@ function applyXrefHighlight(names) {
   }
 }
 
-function _xrefHighlightSelected(graph) {
-  if (!_xrefSelected) { applyXrefHighlight([]); return; }
-  var e = window.MA.xrefGraph.forName(graph, _xrefSelected);
-  applyXrefHighlight(e ? e.docs.map(function(d) { return d.name; }) : []);
+function _riSetTabMarks(names) {
+  _riTabMarks = (names || []).slice();
+  applyXrefHighlight(_riTabMarks);
 }
 
-function renderXrefGraph() {
+// ▤ に載せる図の束。依存グラフ・出現行と同じ集合 (開いているタブ + 保存フォルダ、テンプレは除く)。
+// 図種は開いているタブならそのタブの図種、保存フォルダだけの図は本文から見分ける。
+function _riXrefDocs() {
+  var FI = window.MA.folderImpact;
+  var WS = window.MA.workspace;
+  var types = {};
+  (WS ? WS.list() : []).forEach(function(d) { types[d.name] = d.diagramType; });
+  return _fiRows().filter(function(r) {
+    return !FI || FI.isTarget(r);
+  }).map(function(r) {
+    var t = types[r.name];
+    if (!t && WS && WS.detectType) { try { t = WS.detectType(r.dsl); } catch (e) { t = ''; } }
+    return { id: r.id, name: r.name, dsl: r.dsl, diagramType: t || '' };
+  });
+}
+
+function _riXrefGraph() {
   var XG = window.MA.xrefGraph;
-  var headEl = document.getElementById('xref-head');
-  var namesEl = document.getElementById('xref-names');
-  var refsEl = document.getElementById('xref-refs');
-  var linksEl = document.getElementById('xref-links');
-  if (!XG || !headEl || !namesEl || !refsEl || !linksEl) return;
+  return XG ? XG.build(_riXrefDocs()) : null;
+}
 
-  var graph = XG.build(_renameDocs());
-  var activeName = '';
-  if (window.MA.workspace) {
-    var act = window.MA.workspace.getActive();
-    activeName = (act && act.name) || '';
+// 名前が空のときの下段。図をまたぐ部品名を枚数付きで並べ、押せばその名前で引き直す
+// (出てくる図と行・参照の連鎖・タブの印が、その名前で揃って出る)。
+function renderRiXrefNames(box) {
+  var XG = window.MA.xrefGraph;
+  var graph = _riXrefGraph();
+  if (!XG || !graph || !box) return null;
+  var head = document.createElement('div');
+  head.id = 'ri-xref-head';
+  head.textContent = XG.summaryLine(graph) + (graph.shared.length
+    ? '。名前を押すと、その名前が出てくる図と行が並びます' : '');
+  head.setAttribute('data-docs', String(graph.counts.docs));
+  head.setAttribute('data-shared', String(graph.counts.shared));
+  head.setAttribute('data-links', String(graph.counts.links));
+  box.appendChild(head);
+  if (!graph.shared.length) {
+    var none = document.createElement('div');
+    none.id = 'ri-xref-none';
+    none.className = 'ns-empty';
+    none.textContent = '図をまたぐ部品名はありません（部品名かメソッド名を入れると、その名前を使っている図が出ます）';
+    box.appendChild(none);
+    return graph;
   }
-
-  headEl.textContent = XG.summaryLine(graph);
-  headEl.setAttribute('data-docs', String(graph.counts.docs));
-  headEl.setAttribute('data-shared', String(graph.counts.shared));
-  headEl.setAttribute('data-links', String(graph.counts.links));
-
-  // 選んでいた名前がもう跨いでいなければ選択を落とす。
-  if (_xrefSelected && !XG.forName(graph, _xrefSelected)) _xrefSelected = '';
-
-  namesEl.textContent = '';
+  var list = document.createElement('div');
+  list.id = 'ri-xref-names';
   graph.shared.forEach(function(n) {
-    var row = document.createElement('div');
-    row.className = 'xref-name' + (n.name === _xrefSelected ? ' on' : '');
-    row.setAttribute('data-name', n.name);
-    row.setAttribute('data-docs', String(n.docCount));
-    row.title = n.name + ' が出てくる図: ' + n.docs.map(function(d) { return d.name; }).join(', ');
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'ri-xref-name';
+    b.setAttribute('data-name', n.name);
+    b.setAttribute('data-docs', String(n.docCount));
+    b.title = n.name + ' が出てくる図: ' + n.docs.map(function(d) { return d.name; }).join(', ');
     var nm = document.createElement('span');
     nm.textContent = n.name;
     var ct = document.createElement('span');
-    ct.className = 'xref-count';
+    ct.className = 'ri-xref-count';
     ct.textContent = n.docCount + ' 枚';
-    row.appendChild(nm);
-    row.appendChild(ct);
-    row.addEventListener('click', function() {
-      _xrefSelected = (_xrefSelected === n.name) ? '' : n.name;
-      renderXrefGraph();
+    b.appendChild(nm);
+    b.appendChild(ct);
+    b.addEventListener('click', function() {
+      var q = document.getElementById('ns-q');
+      if (!q) return;
+      q.value = n.name;
+      _riSyncName();
     });
-    namesEl.appendChild(row);
+    list.appendChild(b);
   });
-  if (graph.shared.length === 0) {
+  box.appendChild(list);
+  return graph;
+}
+
+// 図どうしの繋がり (A ⇄ B: 共有している名前)。参照の連鎖は名前の矢印なので、
+// 図の組はその下に畳んで置く。
+function renderRiLinks() {
+  var box = document.getElementById('ri-links');
+  var countEl = document.getElementById('ri-links-count');
+  var graph = _riXrefGraph();
+  if (!box || !graph) return null;
+  box.textContent = '';
+  box.setAttribute('data-links', String(graph.links.length));
+  if (countEl) countEl.textContent = graph.links.length + ' 組';
+  if (!graph.links.length) {
     var none = document.createElement('div');
-    none.id = 'xref-no-shared';
-    none.className = 'xref-hint';
-    none.textContent = '図をまたぐ部品名はありません';
-    namesEl.appendChild(none);
+    none.textContent = '同じ部品名が出てくる図の組はありません';
+    box.appendChild(none);
+    return graph;
   }
-
-  refsEl.textContent = '';
-  var sel = _xrefSelected ? XG.forName(graph, _xrefSelected) : null;
-  if (!sel) {
-    var hint = document.createElement('div');
-    hint.id = 'xref-hint';
-    hint.className = 'xref-hint';
-    hint.textContent = '部品名を押すと、その名前が出てくる図が並びます';
-    refsEl.appendChild(hint);
-  } else {
-    refsEl.setAttribute('data-name', sel.name);
-    refsEl.setAttribute('data-count', String(sel.docCount));
-    sel.docs.forEach(function(d) {
-      var row = document.createElement('div');
-      row.className = 'xref-ref' + (d.declared ? '' : ' xref-ref-undeclared');
-      row.setAttribute('data-doc-name', d.name);
-      row.setAttribute('data-line', String(d.line));
-      row.setAttribute('data-declared', d.declared ? '1' : '0');
-      if (d.name === activeName) row.setAttribute('data-active', '1');
-      row.title = d.name + ' の ' + d.line + ' 行目へ移動'
-        + (d.declared ? '' : ' (宣言が無く、矢印にだけ出てくる)');
-      var no = document.createElement('span');
-      no.className = 'xref-ref-line';
-      no.textContent = String(d.line);
-      var tx = document.createElement('span');
-      tx.textContent = d.name + ' (' + d.kind + ')';
-      row.appendChild(no);
-      row.appendChild(tx);
-      row.addEventListener('click', function() { jumpToDocLine(d.id, d.line); });
-      refsEl.appendChild(row);
-    });
-  }
-
-  linksEl.textContent = '';
-  linksEl.setAttribute('data-links', String(graph.links.length));
-  graph.links.slice(0, 12).forEach(function(l) {
+  graph.links.forEach(function(l) {
     var row = document.createElement('div');
-    row.className = 'xref-link';
+    row.className = 'ri-link';
     row.setAttribute('data-a', l.a);
     row.setAttribute('data-b', l.b);
     row.textContent = l.a + ' ⇄ ' + l.b + ': ' + l.names.join(', ');
-    linksEl.appendChild(row);
+    box.appendChild(row);
   });
-
-  _xrefHighlightSelected(graph);
+  return graph;
 }
 
+// 渡す側の成果物。図をまたぐ部品名・図どうしの繋がり・保存先の値を 1 枚にする。
+function exportXrefMd() {
+  var XG = window.MA.xrefGraph;
+  if (!XG) return;
+  var cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null;
+  var txt = XG.toText(_riXrefGraph(), cfg);
+  downloadBlob('xref.md', new Blob([txt], { type: 'text/markdown' }));
+  setSaveStatus('図をまたぐ部品名と繋がりを xref.md に書き出しました');
+}
+
+// 旧 🕸 参照関係の入口 (ツール ▾「探す」→「部品名で図をまたいで辿る」・Ctrl+K「参照関係を開く」)。
+// 別の画面は持たず、▤ 影響を見る を開く (選んでいた部品名があればそれを入れて)。
 function setupXrefGraph() {
-  var panel = document.getElementById('xref-panel');
   var btn = document.getElementById('btn-tab-xref');
-  if (!panel || !btn || !window.MA.xrefGraph) return;
-  var closeBtn = document.getElementById('btn-xref-close');
-  var exportBtn = document.getElementById('btn-xref-export');
-
-  function closePanel() {
-    panel.classList.remove('open');
-    _xrefSelected = '';
-    applyXrefHighlight([]);
-    var box = document.getElementById('xref-dir-box');
-    if (box) box.hidden = true;
-  }
-
-  btn.addEventListener('click', function() {
-    if (panel.classList.contains('open')) { closePanel(); return; }
-    var rect = btn.getBoundingClientRect();
-    panel.style.left = Math.max(4, rect.left - 200) + 'px';
-    panel.style.top = (rect.bottom + 2) + 'px';
-    panel.classList.add('open');
-    renderXrefGraph();
+  if (btn) btn.addEventListener('click', function(ev) {
+    ev.stopPropagation();
+    openImpactScreen(_nameSearchSeed());
   });
-
-  if (exportBtn) exportBtn.addEventListener('click', function() {
-    var cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null;
-    var txt = window.MA.xrefGraph.toText(window.MA.xrefGraph.build(_renameDocs()), cfg);
-    downloadBlob('xref.md', new Blob([txt], { type: 'text/markdown' }));
-    setSaveStatus('参照関係を xref.md に書き出しました');
+  var exportBtn = document.getElementById('ri-export');
+  if (exportBtn) exportBtn.addEventListener('click', function(ev) {
+    ev.stopPropagation();
+    exportXrefMd();
   });
-  if (closeBtn) closeBtn.addEventListener('click', closePanel);
 }
 
 // ── 一括適用 ───────────────────────────────────────────────────────────────

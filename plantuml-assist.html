@@ -3742,6 +3742,22 @@ table.vault-table button.vault-open:hover { border-color: var(--accent); }
 #ns-rows .ns-at .ns-line { color: var(--text-secondary); margin-right: 6px; }
 #ns-rows .ns-empty, #ns-hint { color: var(--text-secondary); font-size: 11px; padding: 6px 2px; }
 #ns-hint .ns-top-name { cursor: pointer; text-decoration: underline; margin-right: 8px; }
+/* BLK-owner-20260924-0852-prune: 旧 🕸 参照関係の左列。名前が空のまま開いたときの下段は
+   「図をまたぐ部品名」(名前と枚数)。押すとその名前で引き直す。 */
+#ri-xref-head { color: var(--text-secondary); font-size: 11px; padding: 2px 2px 4px 2px; }
+#ri-xref-names { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px; }
+#ri-xref-names .ri-xref-name {
+  display: flex; justify-content: space-between; gap: 8px; cursor: pointer; text-align: left;
+  border: 1px solid var(--border); border-radius: 3px; background: var(--bg-primary); color: var(--text-primary);
+  font-family: var(--font-mono); font-size: 11px; padding: 3px 6px;
+}
+#ri-xref-names .ri-xref-name:hover { border-color: var(--accent); background: var(--bg-tertiary); }
+#ri-xref-names .ri-xref-count { color: var(--text-secondary); white-space: nowrap; }
+/* 図どうしの繋がり (A ⇄ B: 名前)。参照の連鎖は名前の矢印なので、図の組はその下に畳んで置く。 */
+#ri-links-box { margin-top: 8px; font-size: 11px; }
+#ri-links-box > summary { cursor: pointer; color: var(--text-secondary); }
+#ri-links { max-height: 160px; overflow-y: auto; padding: 4px 0 0 12px; color: var(--text-secondary); }
+#ri-links .ri-link { font-family: var(--font-mono); padding: 1px 0; }
 /* BLK-owner-20260923-1949-prune: 依存グラフは ▤ 影響を見る の上段。上段と出現行を 1 本の縦スクロールにまとめる。 */
 #ri-scroll { flex: 1; overflow-y: auto; min-height: 0; }
 #ri-scroll #ri-body, #ri-scroll #dg-body { flex: none; overflow: visible; }
@@ -4367,84 +4383,6 @@ table.vault-table button.vault-open:hover { border-color: var(--accent); }
 }
 #symptom-panel .symptom-actions { display: flex; gap: 4px; margin-top: 6px; }
 #symptom-panel .symptom-actions button {
-  flex: 1;
-  font-size: 11px;
-  padding: 3px 6px;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  cursor: pointer;
-}
-/* 参照関係パネル (図の束を 1 プロジェクトとして部品名で辿る) */
-#xref-panel {
-  display: none;
-  position: absolute;
-  z-index: 41;
-  width: 420px;
-  background: var(--bg-primary);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 8px;
-  font-size: 11px;
-  color: var(--text-primary);
-}
-#xref-panel.open { display: block; }
-#xref-head {
-  font-size: 10px;
-  color: var(--text-secondary);
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 3px;
-}
-#xref-body { display: flex; gap: 6px; margin-top: 4px; }
-#xref-names, #xref-refs { flex: 1; max-height: 200px; overflow-y: auto; font-size: 10px; }
-#xref-refs { border-left: 1px solid var(--border); padding-left: 6px; }
-#xref-names .xref-name {
-  display: flex;
-  justify-content: space-between;
-  gap: 6px;
-  cursor: pointer;
-  font-family: var(--font-mono);
-  padding: 1px 2px;
-  border-radius: 2px;
-}
-#xref-names .xref-name:hover { background: var(--bg-secondary); }
-#xref-names .xref-name.on { background: var(--accent); color: var(--bg-primary); }
-#xref-names .xref-count { color: var(--text-secondary); white-space: nowrap; }
-#xref-names .xref-name.on .xref-count { color: var(--bg-primary); }
-#xref-refs .xref-hint { color: var(--text-secondary); }
-#xref-refs .xref-ref {
-  display: flex;
-  gap: 5px;
-  cursor: pointer;
-  font-family: var(--font-mono);
-  padding: 1px 0;
-}
-#xref-refs .xref-ref:hover { background: var(--bg-secondary); }
-#xref-refs .xref-ref-line { color: var(--text-secondary); min-width: 2em; text-align: right; }
-#xref-refs .xref-ref-undeclared { color: var(--accent-red); }
-#xref-links {
-  margin-top: 5px;
-  padding-top: 3px;
-  border-top: 1px solid var(--border);
-  font-size: 10px;
-  color: var(--text-secondary);
-  max-height: 70px;
-  overflow-y: auto;
-}
-#xref-dir-box { margin-top: 6px; border-top: 1px solid var(--border); padding-top: 6px; }
-#xref-dir-now { font-size: 10px; color: var(--text-secondary); margin-bottom: 4px; }
-#xref-dir-input {
-  width: 100%; box-sizing: border-box; font-size: 10px; font-family: monospace;
-  background: var(--bg-primary); color: var(--text-primary);
-  border: 1px solid var(--border); border-radius: 3px; padding: 3px; resize: vertical;
-}
-#xref-panel .xref-dir-actions { display: flex; gap: 4px; margin-top: 4px; }
-#xref-dir-msg { font-size: 10px; margin-top: 4px; white-space: pre-wrap; }
-#xref-dir-msg.ng { color: var(--accent-red); }
-#xref-panel .xref-actions { display: flex; gap: 4px; margin-top: 6px; }
-#xref-panel .xref-actions button,
-#xref-panel .xref-dir-actions button {
   flex: 1;
   font-size: 11px;
   padding: 3px 6px;
@@ -7556,7 +7494,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button class="tab-tool" id="btn-tab-review" title="型の基準にした図と突き合わせて、この図のずれと図種特有の間違いを出す">👁 レビュー −</button>
         <!-- BLK-primary-20260907-1303-wish: 引き継ぎに要る確認結果と図を 1 つの zip に固める -->
         <!-- BLK-primary-20260908-0003-wish: 図の束を 1 プロジェクトとして、部品名で辿れるように渡す -->
-        <button class="tab-tool" id="btn-tab-xref" title="開いている図を 1 プロジェクトとして、部品名でどの図とどの図が繋がっているかを出す。名前を押すとその名前が出る図がタブ上でハイライトされる">🕸 参照関係</button>
+        <!-- BLK-owner-20260924-0852-prune: 🕸 参照関係の画面は ▤ 影響を見る 1 つに寄せた。ここは旧名で引いた人の案内 (押すと ▤ 影響を見る が開く) -->
+        <button class="tab-tool" id="btn-tab-xref" title="部品名が図をまたいでどこに出てくるかは ▤ 影響を見る で見る (名前を空のまま開くと、図をまたぐ部品名が枚数付きで並ぶ)">▤ 影響を見る</button>
         <!-- BLK-owner-20260918-0329-prune: 📦 引き継ぎ / 📦 納品パッケージ はタブ列から外し、
              Export ▾ の「渡す」に集めた。実体のボタンは #toolbar-actions にある -->
       </div>
@@ -7703,31 +7642,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <div id="pattern-results"></div>
         <div class="pattern-actions">
           <button id="btn-pattern-close">閉じる</button>
-        </div>
-      </div>
-      <!-- 図の束を 1 プロジェクトとして、部品名で辿る -->
-      <div id="xref-panel">
-        <div id="xref-head"></div>
-        <div id="xref-body">
-          <div id="xref-names"></div>
-          <div id="xref-refs"></div>
-        </div>
-        <div id="xref-links"></div>
-        <div class="xref-actions">
-          <button id="btn-xref-export" title="この参照関係を 1 枚のテキストにして書き出す (渡す側の成果物)。保存先ディレクトリの値も一緒に載る">書き出す</button>
-          <button id="btn-xref-dir" title="渡された保存先ディレクトリの値 (xref.md ごとでも可) を貼って、そのまま設定に反映する">保存先を貼る</button>
-          <button id="btn-xref-close">閉じる</button>
-        </div>
-        <!-- 受け取った側: 保存先を打ち直さずに反映する -->
-        <div id="xref-dir-box" hidden>
-          <div id="xref-dir-now"></div>
-          <textarea id="xref-dir-input" rows="3" spellcheck="false"
-            placeholder="渡された xref.md をそのまま貼るか、保存先のパスを 1 行貼る"></textarea>
-          <div class="xref-dir-actions">
-            <button id="btn-xref-dir-apply">設定に反映</button>
-            <button id="btn-xref-dir-cancel">やめる</button>
-          </div>
-          <div id="xref-dir-msg"></div>
         </div>
       </div>
       <!-- 指摘に並んだ複数のクラスへ同じメンバーを 1 回で足す -->
@@ -8277,8 +8191,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <div id="cfg-backend-cards"></div>
       <div id="cfg-file-dir-row" style="display:none;margin-top:6px;font-size:12px;">
         <label style="display:block;margin-bottom:4px;color:var(--text-secondary);">保存先ディレクトリ</label>
-        <input type="text" id="cfg-file-dir" placeholder="./autosave" style="width:100%;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-family:monospace;">
-        <div style="font-size:10px;color:var(--text-secondary);margin-top:2px;">server.py からの相対パス、 または絶対パス。 存在しなければ保存時に自動作成。 区切りは / が安全です (\ は往復で壊れることがあるため / に直して保存します)。</div>
+        <input type="text" id="cfg-file-dir" placeholder="./autosave (渡された xref.md ごと貼ってもよい)" style="width:100%;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-family:monospace;">
+        <div style="font-size:10px;color:var(--text-secondary);margin-top:2px;">server.py からの相対パス、 または絶対パス。 存在しなければ保存時に自動作成。 区切りは / が安全です (\ は往復で壊れることがあるため / に直して保存します)。 渡された xref.md をそのまま貼っても、保存先の値だけを拾って入れます。</div>
         <div id="cfg-file-dir-msg" style="font-size:10px;color:var(--accent-red);margin-top:2px;white-space:pre-wrap;"></div>
       </div>
     </div>
@@ -8790,6 +8704,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
              「置換前の図」と「置換後 (仮適用) の図」を並べて見せたい -->
         <label title="図ごとに 変更前 / 変更後 (仮適用) の図を並べて出す (押すと原寸)"><input type="checkbox" id="ri-svg" checked> 図で見る</label>
         <span id="ri-svg-state" role="status"></span>
+        <!-- BLK-owner-20260924-0852-prune: 旧 🕸 参照関係の「書き出す」。書き出しはこの 1 か所 -->
+        <button type="button" id="ri-export" title="この画面に載っている図 (開いているタブ + 保存フォルダ) の、図をまたぐ部品名と図どうしの繋がりを xref.md に書き出す。保存先ディレクトリの値も一緒に載る (受け取った側は ⚙設定の保存先ディレクトリにこの xref.md ごと貼れる)">書き出す (xref.md)</button>
         <button type="button" id="dg-use" title="この画面で見ている名前を一括置換の「置換前」に入れて戻る">この名前を置換前に入れる</button>
         <button type="button" id="ri-apply">この内容で置換する</button>
         <button type="button" id="ri-close">閉じる</button>
@@ -8839,6 +8755,12 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
           <!-- BLK-primary-20260915-0007: 影響先すべてに同じ note を 1 回で打つ。
                「意図的な省略を note で明記する」対応は、影響が届く図の枚数だけ
                同じ文言を打ち直す作業になっていた (1 図ずつ📂一覧から開き直す)。 -->
+          <!-- BLK-owner-20260924-0852-prune: 旧 🕸 参照関係の「図どうしの繋がり」。参照の連鎖 (名前の矢印) には
+               図の組が無いので、連鎖の下に畳んで置く。 -->
+          <details id="ri-links-box">
+            <summary>図どうしの繋がり (同じ部品名が出てくる図の組) <span id="ri-links-count"></span></summary>
+            <div id="ri-links"></div>
+          </details>
           <div id="dg-note-box" hidden>
             <div class="dg-note-head">
               <strong>同じ note を影響先へまとめて打つ</strong>
