@@ -135,14 +135,22 @@ html, body {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 #files-panel .files-part-file:hover { background: var(--bg-tertiary); }
-/* 未作成は薄い文字。押すと 🧩 部品ビュー (6 図種の済/未の持ち主) へ渡す。 */
+/* 未作成は薄い文字 (design 10a「＋ 未作成 2 図種（UC・ACT）」)。略号を押すとその図種を、
+   行頭の ＋ で未作成をまとめて、その場で作る (BLK-builder-20260924-1735-3)。 */
 #files-panel .files-part-missing {
-  display: block; width: 100%; background: none; border: 0;
-  padding: 2px 8px 2px 24px; font: inherit; font-size: 11px;
+  display: block; width: 100%; box-sizing: border-box;
+  padding: 2px 8px 2px 22px; font-size: 11px;
   color: var(--text-muted, var(--text-secondary)); opacity: .7;
-  text-align: left; cursor: pointer;
+  text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-#files-panel .files-part-missing:hover { opacity: 1; background: var(--bg-tertiary); }
+#files-panel .files-part-missing:hover { opacity: 1; }
+#files-panel .files-part-missing button {
+  background: none; border: 0; padding: 0 1px; font: inherit; color: inherit; cursor: pointer; border-radius: 2px;
+}
+#files-panel .files-part-missing button.files-part-missing-all { width: 14px; margin-right: 0; text-align: center; }
+#files-panel .files-part-missing button:hover,
+#files-panel .files-part-missing button:focus-visible { color: var(--accent); background: var(--bg-tertiary); outline: none; }
+#files-panel .files-part-missing button.files-part-missing-kind { text-decoration: underline dotted; text-underline-offset: 2px; }
 #files-panel button.files-row {
   display: flex; align-items: center; gap: 4px;
   width: 100%; text-align: left; border: none; background: none; cursor: pointer;

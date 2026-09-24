@@ -336,6 +336,35 @@ test('手順8 ファイルを別の部品のフォルダへドラッグすると
   await expect(page.locator('#files-parts .files-part-head[data-part="adc"]')).toContainText('ADC 2 / 6');
 });
 
+// BLK-builder-20260924-1735-3 (design 10a「展開すると、まだ作っていない図種が薄い文字で出て、押すとその場で作れます」):
+// 前は「未作成 3 図種」を押すと 🧩 部品ビューが開くだけで、作るには ➕ 部品を起こす で部品名を打ち直していた。
+test('手順8 部品フォルダの「＋ 未作成 N 図種」の略号を押すと、その図種の図をその場で作って開く', async ({ page }) => {
+  await seedParts(page);
+  await expandPart(page, 'spi');
+  const row = page.locator('#files-parts .files-part-missing[data-part="spi"]');
+  await expect(row).toHaveText('＋未作成 3 図種（UC・CMP・ACT）');
+
+  // 略号 1 つ = その図種だけ。部品名は打たない。
+  await row.locator('.files-part-missing-kind[data-kind="usecase"]').click();
+  await expect(page.locator('#tab-bar .tab[data-doc-name="spi_usecase"]')).toHaveCount(1);
+  await expect(page.locator('#top-file-name')).toContainText('spi_usecase');
+  await expect.poll(() => page.locator('#editor').inputValue()).toContain('usecase');
+  await expect.poll(async () => (await S.readDoc(page, DIR, 'spi_usecase')) || '').toContain('@startuml');
+  await expect(page.locator('#files-parts .files-part-head[data-part="spi"]')).toContainText('SPI 4 / 6');
+  await expect(treeFile(page, 'spi_usecase')).toBeVisible();
+  await expect(row).toHaveText('＋未作成 2 図種（CMP・ACT）');
+  await expect(page.locator('#peek-modal')).toBeHidden();
+
+  // 行頭の ＋ = 残りをまとめて。
+  await row.locator('.files-part-missing-all').click();
+  await expect.poll(async () => (await S.readDoc(page, DIR, 'spi_activity')) || '').toContain('@startuml');
+  expect(await S.readDoc(page, DIR, 'spi_component')).toContain('@startuml');
+  await expect(page.locator('#files-parts .files-part-head[data-part="spi"]')).toContainText('SPI 6 / 6');
+  await expect(row).toHaveCount(0);
+  // 既にあった図は書き換えない。
+  expect(await S.readDoc(page, DIR, 'spi_state')).toContain('SPI 状態遷移');
+});
+
 test('手順8 Ctrl+P で同じ検索欄がファイル名に絞られて開き、名前を打って Enter で開ける', async ({ page }) => {
   await seedParts(page);
   await page.locator('#editor').click();
