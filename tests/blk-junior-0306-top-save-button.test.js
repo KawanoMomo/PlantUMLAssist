@@ -22,7 +22,7 @@ describe('save-target saveButton (上部バーの保存ボタン)', function() {
   test('保存フォルダ運用なら「上書き保存」と言い、書き先を説明に出す', function() {
     var b = ST.saveButton({ backend: 'file', fileDir: 'E:\\01_Loop\\persona-data\\junior' }, DOC);
     expect(b.mode).toBe('file');
-    expect(b.text).toBe('💾 上書き保存');
+    expect(b.text).toBe('上書き保存');
     expect(b.title).toContain('gpio_init_sequence.puml');
     expect(b.title).toContain('persona-data');
     expect(b.title).toContain('Ctrl+S');
@@ -31,7 +31,7 @@ describe('save-target saveButton (上部バーの保存ボタン)', function() {
   test('保存先が未設定ならダウンロードだと分かる文言になる', function() {
     var b = ST.saveButton({ backend: 'local' }, DOC);
     expect(b.mode).toBe('download');
-    expect(b.text).toBe('💾 保存');
+    expect(b.text).toBe('保存');
     expect(b.title).toContain('ダウンロード');
     expect(b.title).toContain('gpio_init_sequence.puml');
   });
@@ -43,13 +43,13 @@ describe('save-target saveButton (上部バーの保存ボタン)', function() {
 
   test('名前の無い図でも押せる文言になる (題名を代わりに使う)', function() {
     var b = ST.saveButton({ backend: 'local' }, null, 'untitled');
-    expect(b.text).toBe('💾 保存');
+    expect(b.text).toBe('保存');
     expect(b.title).toContain('untitled.puml');
   });
 
   test('保存先チップの説明は Ctrl+K ではなく隣のボタンを案内する', function() {
     var l = ST.label({ backend: 'file', fileDir: './autosave' });
-    expect(l.title).toContain('💾 保存');
+    expect(l.title).toContain('[保存]');
     expect(l.title).not.toContain('Ctrl+K');
   });
 });

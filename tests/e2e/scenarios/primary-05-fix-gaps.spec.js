@@ -124,6 +124,8 @@ test('手順5.5 ディスクに書けていない保存は 💾 がそう言い�
   expect(await S.readDoc(page, DIR3, 'driver_common_class')).toContain('note top of ClockCtrl');
   await expect(badge).not.toContainText('未保存');
   await expect(badge).toContainText('driver_common_class.puml');
+  // design 9c (BLK-builder-20260924-1336-3): 保存状態は「13:31 に自動保存 · 名前」の文字だけ。💾 を付けない。
+  await expect(badge).toHaveText(/^\d{2}:\d{2} に自動保存 · driver_common_class\.puml$/);
 
   // 到達条件その4: 以後の追記は黙って本体へ入る (毎回止まらない)。
   await S.typeDsl(page, BASE + '\nnote top of ClockCtrl : 呼び先は意図的に省略\nnote top of NVIC : 割り込み設定');

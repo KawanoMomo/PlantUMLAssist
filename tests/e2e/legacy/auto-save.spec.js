@@ -103,7 +103,8 @@ test.describe('Auto-save (v1.2.0)', () => {
     expect(hasDsl).toBe(false);
   });
 
-  test('UC-as-5: status bar 💾 indicator updates after edit', async ({ page }) => {
+  // BLK-builder-20260924-1336-3 (design 9c): 保存状態は文字だけの 1 行 (💾 を付けない) に変わった。
+  test('UC-as-5: status bar autosave indicator updates after edit', async ({ page }) => {
     await gotoApp(page);
     await clearAutoSave(page);
     await page.reload();
@@ -111,6 +112,7 @@ test.describe('Auto-save (v1.2.0)', () => {
     await page.locator('#editor').fill('@startuml\nactor IND\n@enduml');
     await page.waitForTimeout(1500);
     var ind = await page.locator('#status-autosave').textContent();
-    expect(ind || '').toContain('💾');
+    expect(ind || '').toMatch(/に自動保存/);
+    expect(ind || '').not.toContain('💾');
   });
 });

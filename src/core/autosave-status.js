@@ -1,7 +1,11 @@
 'use strict';
 window.MA = window.MA || {};
 
-// autosave-status — 状態バーの 💾 が「どこまで届いたか」を言う。
+// autosave-status — 状態バーの保存状態が「どこまで届いたか」を言う。
+//
+// design 9c / 9a (BLK-builder-20260924-1336-3): 保存状態は文字だけの 1 行
+// (「13:31 に自動保存 · 変更なし」)。💾 などの絵文字は付けない。
+// 書けなかった回の ⚠ は警告なので残す。
 //
 // BLK-primary-20260914-2206: 一覧から開いた図に note を打っても保存フォルダの
 // .puml が変わらない、という詰まりが続いた。自動保存は打鍵のたびに走っており、
@@ -27,16 +31,16 @@ window.MA.autosaveStatus = (function() {
       + ' (' + String(meta.lastSavedType || '').replace('plantuml-', '') + ')';
 
     if (!last || last.where === 'local') {
-      return { text: '💾 ' + saved, title: when, pending: false };
+      return { text: saved, title: when, pending: false };
     }
     if (last.where === 'file') {
       var f = last.fileName ? last.fileName + '.puml' : 'ファイル';
-      return { text: '💾 ' + saved + ' · ' + f, title: when + ' → ' + f + ' に書きました', pending: false };
+      return { text: saved + ' · ' + f, title: when + ' → ' + f + ' に書きました', pending: false };
     }
     if (last.where === 'blocked') {
       var b = last.fileName ? last.fileName + '.puml' : 'ファイル';
       return {
-        text: '💾 ブラウザにのみ · ' + b + ' は書き込み停止中',
+        text: 'ブラウザにのみ · ' + b + ' は書き込み停止中',
         title: String(last.reason || '') + '（編集内容はブラウザに残っています。図名を変えれば書けます）',
         pending: false,
       };
@@ -45,7 +49,7 @@ window.MA.autosaveStatus = (function() {
     var target = name ? name + '.puml' : 'ファイル';
     if (last.reason === 'unchanged') {
       // 開いたときのまま。ディスクは既にその内容なので、書いていないのは正しい。
-      return { text: '💾 ' + saved + ' · 変更なし', title: when + ' / ' + target + ' は開いたときのままです (本文を変えていないので書き直していません)', pending: false };
+      return { text: saved + ' · 変更なし', title: when + ' / ' + target + ' は開いたときのままです (本文を変えていないので書き直していません)', pending: false };
     }
     if (last.reason === 'ask') {
       return {
