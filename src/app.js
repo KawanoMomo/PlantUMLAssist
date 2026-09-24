@@ -12439,7 +12439,10 @@ function _seniorGitCommit() {
   if (!_seniorGit || !GP) return null;
   if (!_seniorGit.hash) return { hash: '', short: '作業中', message: '今の編集内容' };
   var i = GP.indexOf(_seniorGit.commits, _seniorGit.hash);
-  return i >= 0 ? _seniorGit.commits[i] : { hash: _seniorGit.hash, short: _seniorGit.hash.slice(0, 7), message: '' };
+  if (i >= 0) return _seniorGit.commits[i];
+  // 控えの行 (BLK-owner-20260924-2157-prune) は ◀ ▶ で送るコミットの並びに無い。押した行そのものを使う。
+  if (_seniorGit.row && _seniorGit.row.hash === _seniorGit.hash) return _seniorGit.row;
+  return { hash: _seniorGit.hash, short: _seniorGit.hash.slice(0, 7), message: '' };
 }
 
 // 枠の見出しを Git の相手用に切り替える (フォルダ選びと追従の切替は Git では使わない)。
@@ -12498,6 +12501,7 @@ function showSeniorGitRev(commit, commits) {
   _seniorGit = {
     commits: Array.isArray(commits) ? commits : (_seniorGit ? _seniorGit.commits : []),
     hash: (commit && commit.hash) || '',
+    row: commit || null,
     name: '',
     diffOnly: _seniorGit ? _seniorGit.diffOnly : false,
     text: '',
@@ -12533,13 +12537,20 @@ function renderSeniorGit() {
   _paintSeniorGitView();
   var want = _seniorGit.hash;
   if (el.notice) {
-    el.notice.textContent = c.hash
+    el.notice.textContent = c.version
+      ? ('保存した版の控え ' + (c.label || c.version) + ' の ' + (name || '図') + '（読むだけ）')
+      : c.hash
       ? ('コミット ' + GP.paneTitle(c) + ' 時点の ' + (name || '図') + '（読むだけ）')
       : ('作業中の ' + (name || '図') + '（未コミット）');
   }
   if (el.dsl) el.dsl.textContent = '読み込み中…';
+  // BLK-owner-20260924-2157-prune: GIT 節の履歴に混ぜた控えの行は、server の _versions から読む。
   var load = !c.hash
     ? Promise.resolve(mmdText)
+    : c.version
+    ? window.fetch('/autosave-versions?dir=' + encodeURIComponent(_wsFileDir()) + '&type=' + encodeURIComponent(stem) + '&stamp=' + encodeURIComponent(c.version))
+      .then(function(r) { return r.ok ? r.text() : null; })
+      .catch(function() { return null; })
     : window.fetch('/git-show?dir=' + encodeURIComponent(_wsFileDir()) + '&file=' + encodeURIComponent(stem)
         + '&rev=' + encodeURIComponent(c.hash))
       .then(function(r) { return r.ok ? r.json() : null; })
@@ -12549,7 +12560,10 @@ function renderSeniorGit() {
     if (!_seniorGit || _seniorGit.hash !== want) return false;
     if (typeof text !== 'string') {
       _seniorGit.text = '';
-      if (el.dsl) el.dsl.textContent = 'このコミットには ' + (name || 'この図') + ' がありません';
+      if (el.dsl) {
+        el.dsl.textContent = c.version ? 'この控えを読めませんでした'
+          : 'このコミットには ' + (name || 'この図') + ' がありません';
+      }
       if (el.svg) el.svg.textContent = '';
       try { syncGitDiagramDiff(); } catch (e) {}
       return false;
@@ -12639,6 +12653,10 @@ function setupSeniorGit() {
     openFolderCompare: function() { return openCompareTarget('folder'); },
     refreshDiff: function() { if (_seniorGit && _seniorGit.text) renderSeniorGitDsl(); },
     diagramDiff: syncGitDiagramDiff,
+    // BLK-owner-20260924-2157-prune: GIT 節の「この図の履歴」に控え (server の _versions) も混ぜる。
+    versions: function(name) { return _versionsApi ? _versionsApi.load(name) : Promise.resolve([]); },
+    lineCount: function(name) { return _versionsApi ? _versionsApi.lineCount(name) : Promise.resolve(null); },
+    restoreVersion: function(name, stamp) { return _versionsApi ? _versionsApi.restore(name, stamp) : null; },
   };
   // 保存先が決まった後で GIT 欄を読む (FILES の骨格は init より先に出ている)。
   try { if (window.MA.gitUi) window.MA.gitUi.refresh(); } catch (e) {}
@@ -15401,6 +15419,14 @@ function setupTabs() {
     b.title = 'この図の履歴を開く (この名前で上書きされる前の中身。図種を変えて保存し直した前の図もここに残っています)';
     b.addEventListener('click', function(ev) {
       ev.stopPropagation();
+      // BLK-owner-20260924-2157-prune: 保存先が Git なら「この図の履歴」は FILES の GIT 節の 1 つ
+      // (コミットと控えが同じ一覧に並ぶ)。その図を開いてから GIT 節の履歴へ移り、窓は開かない。
+      var gu = window.MA.gitUi;
+      var fm = window.MA.fileMenuUi;
+      if (gu && gu.isRepo && gu.isRepo() && fm && fm.runFile) {
+        fm.runFile('history', name);
+        return;
+      }
       // BLK-owner-20260923-2312-prune: 版の一覧は一覧の中に開かず、「この図の履歴」1 つに寄せる。
       toggleVersionTimeline(true, name);
     });

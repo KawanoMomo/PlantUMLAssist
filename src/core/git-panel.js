@@ -120,12 +120,75 @@ window.MA.gitPanel = (function() {
     if (!c) return { message: '', tags: [], date: '', title: '' };
     var msg = _s(c.message);
     var tags = (Array.isArray(c.tags) ? c.tags : []).map(_s).filter(function(t) { return !!t; });
+    if (c.version) {
+      return {
+        message: msg,
+        tags: tags,
+        date: dayLabel(c.date),
+        title: (msg ? msg + ' — ' : '') + '自動保存の控え (上書きされる前の中身。コミットではない)',
+      };
+    }
     return {
       message: msg,
       tags: tags,
       date: dayLabel(c.date),
       title: (msg ? msg + ' — ' : '') + commitMeta(c),
     };
+  }
+
+  // ── コミットと控えを 1 本の「この図の履歴」に (BLK-owner-20260924-2157-prune) ─────
+  // 保存先が Git のとき、server が上書きの手前に取る控え (`_versions/`) も GIT 節の同じ一覧に
+  // 時刻順で混ぜ、行に「控え」の札を付ける (VS Code の Timeline と同じ形)。同じ名前の一覧を 2 つ持たない。
+  //   commits  … /git-log のコミット (新しい順)
+  //   versions … version-history の rows() (+ markRevisits の revisit / revisitOf)
+  // 控えの行: { hash: 'v:{stamp}', version, short: '控え', label, message, date (読み手の時計), tags, lines }
+  function _stampDate(stamp) {
+    var m = /^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})/.exec(_s(stamp));
+    if (!m) return null;
+    var d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]));
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  function _localIso(d) {
+    function p(n) { return (n < 10 ? '0' : '') + n; }
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate())
+      + 'T' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+  }
+
+  function versionRow(v) {
+    var d = _stampDate(v && v.stamp);
+    var label = _s(v && v.label) || _s(v && v.stamp);
+    var lines = v && typeof v.lines === 'number' ? v.lines : null;
+    var tags = ['控え'];
+    if (v && v.revisit) tags.push('往復');
+    return {
+      hash: 'v:' + _s(v && v.stamp),
+      version: _s(v && v.stamp),
+      short: '控え',
+      label: label,
+      message: '保存 ' + label + (lines != null ? ' · ' + lines + ' 行' : ''),
+      date: d ? _localIso(d) : '',
+      tags: tags,
+      lines: lines,
+    };
+  }
+
+  function timeline(commits, versions) {
+    var list = [];
+    (Array.isArray(commits) ? commits : []).forEach(function(c, i) {
+      var t = Date.parse(_s(c && c.date));
+      list.push({ row: c, t: isFinite(t) ? t : -Infinity, i: i });
+    });
+    var n = list.length;
+    (Array.isArray(versions) ? versions : []).forEach(function(v, i) {
+      var d = _stampDate(v && v.stamp);
+      list.push({ row: versionRow(v), t: d ? d.getTime() : -Infinity, i: n + i });
+    });
+    list.sort(function(a, b) {
+      if (a.t !== b.t) return a.t > b.t ? -1 : 1;
+      return a.i - b.i;
+    });
+    return list.map(function(e) { return e.row; });
   }
 
   // 絞り込み: メッセージ・作成者・ハッシュ・タグ。大小を問わない。
@@ -168,6 +231,7 @@ window.MA.gitPanel = (function() {
 
   // 「左: 作業中 右: a3f91c2」。
   function sidesLabel(c) {
+    if (c && c.version) return '左: 作業中 右: 控え ' + _s(c.label);
     return '左: 作業中 右: ' + (c ? _s(c.short || _s(c.hash).slice(0, 7)) : '—');
   }
 
@@ -237,6 +301,7 @@ window.MA.gitPanel = (function() {
     commitStat: commitStat,
     dayLabel: dayLabel,
     historyRow: historyRow,
+    timeline: timeline,
     filterCommits: filterCommits,
     indexOf: indexOf,
     step: step,

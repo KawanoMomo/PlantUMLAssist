@@ -215,7 +215,8 @@ test('手順9 保存先が Git なら、この図の履歴の「比較」で前�
   await page.keyboard.type('Fault 通知の応答を追記');
   await page.locator('#git-commit').click();
   await expect(page.locator('#git-result')).toContainText('コミットしました');
-  await expect(page.locator('#git-history .git-commit-row')).toHaveCount(2);
+  // BLK-owner-20260924-2157-prune: 同じ一覧に保存した版の控え (.is-version) も混ざるので、コミットの行を数える。
+  await expect(page.locator('#git-history .git-commit-row:not(.is-version)')).toHaveCount(2);
   await expect(page.locator('#git-changes .git-change')).toHaveCount(0);
   expect(git('log', '--format=%s')).toContain('Fault 通知の応答を追記');
 
@@ -325,6 +326,30 @@ test('手順9 保存先が Git なら、この図の履歴の「比較」で前�
   await expect(page.locator('#senior-dir')).toBeVisible();
   // コミットとの比較をやめると、左の図の色も消える。
   await expect(page.locator('#preview-svg svg text.gd-add')).toHaveCount(0);
+
+  // BLK-owner-20260924-2157-prune: Git の保存先では「この図の履歴」は GIT 節の 1 つ。
+  // 保存した版の控えも同じ一覧に「控え」の札で混ざり、右クリック「この図の履歴を表示」・保存先一覧の [履歴 N] は
+  // 窓 #vt-modal を開かずに GIT 節のこの図の履歴へ移る。
+  const saved = page.locator('#git-history .git-commit-row.is-version');
+  await expect(saved.first()).toBeVisible();
+  await expect(saved.first().locator('.git-commit-tag').first()).toHaveText('控え');
+  await S.openFolder(page);
+  const hist = page.locator('[data-versions-name="spi_init_sequence"]');
+  await hist.click();
+  await expect(page.locator('#vt-modal')).toBeHidden();
+  await expect(page.locator('#git-history-head')).toHaveText('この図の履歴 spi_init_sequence');
+  await expect(page.locator('#git-history-head')).toBeInViewport();
+  await S.closeFolderList(page);
+  await page.locator('#files-body-open .files-row[data-file-name="spi_init_sequence"]').click({ button: 'right' });
+  await page.locator('#files-ctx-menu [data-action="history"]').click();
+  await expect(page.locator('#vt-modal')).toBeHidden();
+  await expect(page.locator('#git-history-head')).toHaveText('この図の履歴 spi_init_sequence');
+  // 控えの行の「比較」で、控えの中身が同じ右の枠に並ぶ (コミットではないと見出しが言う)。
+  await saved.first().locator('.git-commit-msg').hover();
+  await saved.first().locator('.git-history-compare').click();
+  await expect(page.locator('#senior-git-sides')).toContainText('右: 控え');
+  await expect(page.locator('#senior-dsl')).toContainText('SpiDrv');
+  await expect(saved.first().locator('.git-history-restore')).toBeVisible();
 });
 
 test('手順9 Git でない保存先では GIT 欄を出さない', async ({ page }) => {
