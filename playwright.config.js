@@ -12,6 +12,9 @@ const PORT = servers.portForParallelIndex(PARALLEL_INDEX);
 module.exports = defineConfig({
   testDir: './tests/e2e',
   timeout: 30 * 1000,
+  // BLK-builder-20260924-2152-3b: Playwright は起動のたびに outputDir を丸ごと消す。既定の test-results/ だと
+  // unit が書いた test-results/corpus-roundtrip.json (metrics.py の往復テストの結果) まで消えるので、専用の下位に寄せる。
+  outputDir: './test-results/e2e',
   // worker 1 つにつきサーバ 1 台を立てるので、既定値(CPU 数の半分)ではなく明示する。
   // PUA_WORKERS で変えられる。--workers はこれより優先される
   workers: Number(process.env.PUA_WORKERS || 4),
