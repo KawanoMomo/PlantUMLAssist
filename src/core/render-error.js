@@ -28,12 +28,33 @@ window.MA.renderError = (function() {
       .trim();
   }
 
+  // BLK-migrator-20260924-1432: PlantUML が描いている途中で自分が落ちた (例外) ときの絵は、
+  // 文法エラーの配色 (緑・赤) を使わず、白地に黒文字で「An error has occured : <例外>」
+  // 「PlantUML (版) has crashed.」と書く。これを図として流し込むと、見出しが Rendered のまま
+  // エラーの文言が図の代わりに並ぶ (成功のふり)。両方の文が揃ったときだけ落ちた絵と見分ける。
+  var CRASH_HEAD_RE = /<text[^>]*>\s*An error has occured\s*:?\s*([\s\S]*?)<\/text>/i;
+  var CRASH_MARK_RE = /<text[^>]*>\s*PlantUML \(([^)<]*)\) has crashed\.?\s*<\/text>/i;
+
+  function detectCrash(svgText) {
+    var h = svgText.match(CRASH_HEAD_RE);
+    if (!h) return null;
+    var c = svgText.match(CRASH_MARK_RE);
+    if (!c) return null;
+    var cause = decodeEntities(h[1]);
+    return {
+      isError: true,
+      crashed: true,
+      message: 'PlantUML ' + c[1] + ' が描画の途中で落ちました' + (cause ? ' (' + cause + ')' : ''),
+      line: null,
+    };
+  }
+
   // detect(svgText) → { isError, message, line }
   // isError が false のときは message / line は使わない。
   function detect(svgText) {
     var none = { isError: false, message: '', line: null };
     if (!svgText || typeof svgText !== 'string') return none;
-    if (svgText.indexOf(GREEN_MARK) < 0) return none;
+    if (svgText.indexOf(GREEN_MARK) < 0) return detectCrash(svgText) || none;
     var m = svgText.match(RED_TEXT_RE);
     if (!m) return none;
     var message = decodeEntities(m[1]);

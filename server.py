@@ -638,10 +638,33 @@ def _decode_entities(raw):
     return text.strip()
 
 
+# BLK-migrator-20260924-1432: PlantUML が描いている途中で落ちた (例外) ときの絵。
+# 文法エラーの配色を使わず白地に黒文字で「An error has occured : <例外>」と
+# 「PlantUML (版) has crashed.」を書く。src/core/render-error.js の detectCrash と同じ 2 条件。
+_CRASH_HEAD_RE = re.compile(rb'<text[^>]*>\s*An error has occured\s*:?\s*(.*?)</text>', re.S | re.I)
+_CRASH_MARK_RE = re.compile(rb'<text[^>]*>\s*PlantUML \(([^)<]*)\) has crashed\.?\s*</text>', re.I)
+
+
+def detect_render_crash(svg):
+    """PlantUML が描画の途中で落ちた絵なら {'message', 'line': None, 'crashed': True}。"""
+    if not svg:
+        return None
+    h = _CRASH_HEAD_RE.search(svg)
+    if not h:
+        return None
+    c = _CRASH_MARK_RE.search(svg)
+    if not c:
+        return None
+    cause = _decode_entities(h.group(1))
+    version = c.group(1).decode('utf-8', 'replace')
+    message = 'PlantUML %s が描画の途中で落ちました' % version + (' (%s)' % cause if cause else '')
+    return {'message': message, 'line': None, 'crashed': True}
+
+
 def detect_render_error(svg):
     """PlantUML の「エラー画」なら {'message', 'line'}。図なら None。"""
     if not svg or _ERR_GREEN_MARK not in svg:
-        return None
+        return detect_render_crash(svg)
     m = _ERR_RED_TEXT_RE.search(svg)
     if not m:
         return None
@@ -1329,7 +1352,8 @@ class Handler(BaseHTTPRequestHandler):
             err = detect_render_error(svg)
             if err:
                 msg = ('%d 行目: %s' % (err['line'], err['message'])) if err['line'] else err['message']
-                payload = {'error': msg, 'line': err['line'], 'kind': 'plantuml-syntax'}
+                payload = {'error': msg, 'line': err['line'],
+                           'kind': 'plantuml-crash' if err.get('crashed') else 'plantuml-syntax'}
                 if warning:
                     payload['warning'] = warning
                 self._send_json(422, payload)
