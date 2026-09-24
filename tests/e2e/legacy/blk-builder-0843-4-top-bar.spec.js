@@ -32,6 +32,19 @@ test.describe('上部バーの整理 (design 1a)', () => {
     await expect(page.locator('#btn-export')).toBeVisible();
   });
 
+  // BLK-builder-20260924-1706-3 (design 7a / 9a): 図種は左レールが選ぶ。上部バーの
+  // 「Sequence ▾」は画面から外し、Import ▾ / Export ▾ が右端に来る。要素は値の持ち主として残る。
+  test('図種のプルダウンは上部バーに出ず、Export ▾ が右端に来る', async ({ page }) => {
+    const box = await page.locator('#diagram-type').boundingBox();
+    expect(box === null || (box.width <= 1 && box.height <= 1)).toBe(true);
+    const bar = await page.locator('#toolbar').boundingBox();
+    const exp = await page.locator('#btn-export').boundingBox();
+    expect(bar.x + bar.width - (exp.x + exp.width)).toBeLessThan(24);
+    // レールで替えると、残した select の値も追随する
+    await page.locator('#rail-st').click();
+    await expect(page.locator('#diagram-type')).toHaveValue('plantuml-state');
+  });
+
   test('編集中のファイル名が出て、名前を変えると追随する', async ({ page }) => {
     const name = await page.locator('#top-file-name').textContent();
     expect(name).toMatch(/\.puml$/);

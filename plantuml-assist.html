@@ -828,7 +828,14 @@ html, body {
   cursor: pointer;
 }
 #diagram-type:focus, #render-mode:focus { outline: none; border-color: var(--accent); }
-#diagram-type { margin-left: auto; }
+/* BLK-builder-20260924-1706-3 (design 7a / 9a): 図種は左レール (SEQ … ST)・Ctrl+K・ショートカットが選ぶ。
+ * 上部バーの「Sequence ▾」は同じ選択の 2 つ目の入口なので画面から外す。値の持ち主 (change を
+ * 各所が聞いている) なので要素は残し、見えない・押せない・Tab で止まらない形にする。 */
+#diagram-type {
+  position: absolute; width: 1px; height: 1px; margin: 0; padding: 0; border: 0;
+  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+  opacity: 0; pointer-events: none;
+}
 
 /* ── Main Area ─────────────────────────────────────────────────────────────── */
 #main {
@@ -7504,7 +7511,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <div id="bulk-export-status" role="status"></div>
     </div>
 
-    <select id="diagram-type" title="図の種類">
+    <select id="diagram-type" title="図の種類" tabindex="-1" aria-hidden="true">
       <option value="plantuml-sequence">Sequence</option>
       <option value="plantuml-usecase">UseCase</option>
       <option value="plantuml-component">Component</option>
