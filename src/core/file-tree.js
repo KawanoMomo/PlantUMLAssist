@@ -195,6 +195,18 @@ window.MA.fileTree = (function() {
     return out;
   }
 
+  // 下端の 1 行の数。states は図 1 枚ごとの札の事実 ({ unapplied, draft })。
+  // 保存先の図を数える (design 10a の「12 図」はツリーに並ぶ保存先の図の数)。
+  function summaryOf(states) {
+    var list = states || [];
+    var un = 0, dr = 0;
+    list.forEach(function(st) {
+      if (st && st.unapplied) un++;
+      if (st && st.draft) dr++;
+    });
+    return { total: list.length, unapplied: un, draft: dr };
+  }
+
   // 下端に出していた「12 図 未反映 1 控え 1」をパネル内の 1 行に。
   function summaryLine(sum) {
     var s = sum || {};
@@ -223,5 +235,6 @@ window.MA.fileTree = (function() {
     readonlyCountLabel: readonlyCountLabel,
     gitCountLabel: gitCountLabel,
     summaryLine: summaryLine,
+    summaryOf: summaryOf,
   };
 })();
