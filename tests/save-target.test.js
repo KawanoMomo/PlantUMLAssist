@@ -40,7 +40,7 @@ describe('save-target — 「保存」の行き先 (BLK-primary-20260907-0823)',
 
   test('messageFor: どこに書いたかを必ず言い、失敗も黙らない', () => {
     var f = { mode: 'file', name: 'timer_state', dir: 'E:/persona/primary' };
-    expect(STG.messageFor(f, true)).toBe('💾 E:/persona/primary/timer_state.puml に保存しました');
+    expect(STG.messageFor(f, true)).toBe('E:/persona/primary/timer_state.puml に保存しました');
     expect(STG.messageFor(f, false)).toBe('⚠ E:/persona/primary/timer_state.puml に保存できませんでした');
     expect(STG.messageFor({ mode: 'download', name: 'timer_state' }, true))
       .toBe('⬇ timer_state.puml をダウンロードしました');

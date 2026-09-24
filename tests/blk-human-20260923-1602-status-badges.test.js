@@ -84,19 +84,19 @@ describe('保存状態は 1 行に短く (design 9c)', function() {
 
   test('開いたときのままの回は「· 変更なし」で 1 行に収める', function() {
     var d = AST.describe(meta, { where: 'deferred', reason: 'unchanged' }, 'たった今', 'spi_init_sequence', '13:31');
-    expect(d.text).toBe('💾 13:31 に自動保存 · 変更なし');
+    expect(d.text).toBe('13:31 に自動保存 · 変更なし');
     expect(d.pending).toBe(false);
   });
 
   test('書けた先がある回も 1 行 (時刻 · ファイル名)', function() {
     var d = AST.describe(meta, { where: 'file', fileName: 'spi_init_sequence' }, 'たった今', 'spi_init_sequence', '13:31');
-    expect(d.text).toBe('💾 13:31 に自動保存 · spi_init_sequence.puml');
+    expect(d.text).toBe('13:31 に自動保存 · spi_init_sequence.puml');
     expect(d.text.split('\n').length).toBe(1);
   });
 
   test('時刻を渡さない呼び方は従来どおり相対時刻で出る', function() {
     var d = AST.describe(meta, { where: 'local' }, 'たった今', 'spi_init_sequence');
-    expect(d.text).toBe('💾 たった今');
+    expect(d.text).toBe('たった今');
   });
 
   test('書けなかった回は短くせず、理由を名指ししたまま', function() {

@@ -35,7 +35,7 @@ window.MA.saveTarget = (function() {
     if (!target) return '';
     if (target.mode === 'download') return '⬇ ' + target.name + '.puml をダウンロードしました';
     return ok
-      ? '💾 ' + target.dir + '/' + target.name + '.puml に保存しました'
+      ? target.dir + '/' + target.name + '.puml に保存しました'
       : '⚠ ' + target.dir + '/' + target.name + '.puml に保存できませんでした';
   }
 
@@ -63,7 +63,7 @@ window.MA.saveTarget = (function() {
       return {
         mode: 'file',
         text: '📁 ' + tail,
-        title: '保存先は設定済みです: ' + dir + '\n保存は隣の [💾 保存] を押すだけです (このチップを押すと設定を開きます)',
+        title: '保存先は設定済みです: ' + dir + '\n保存は隣の [保存] を押すだけです (このチップを押すと設定を開きます)',
         configured: true,
       };
     }
@@ -85,13 +85,13 @@ window.MA.saveTarget = (function() {
     if (t.mode === 'file') {
       return {
         mode: 'file',
-        text: '💾 上書き保存',
+        text: '上書き保存',
         title: t.dir + '/' + t.name + '.puml に上書き保存します (Ctrl+S)',
       };
     }
     return {
       mode: 'download',
-      text: '💾 保存',
+      text: '保存',
       title: t.name + '.puml をダウンロードします。保存先フォルダを決めると上書き保存になります (Ctrl+S)',
     };
   }

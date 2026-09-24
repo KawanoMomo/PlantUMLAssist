@@ -3529,7 +3529,7 @@ function init() {
   }
 
   // ── Auto-save: status indicator ─────────────────────────────────────
-  // Render `💾 N秒前` (relative time) in #status-autosave, refreshed on
+  // Render「13:31 に自動保存」(design 9c、絵文字なし) in #status-autosave, refreshed on
   // every successful flush AND every 5 seconds (so the relative-time
   // text stays current without requiring another flush).
   (function setupAutoSaveStatus() {
