@@ -461,3 +461,28 @@ test('手順11 プレビューの見出しは「Rendered · N ms」で、数は�
   await expect(head).not.toContainText('local');
   await expect(head).toHaveAttribute('title', '描画: local');
 });
+
+// BLK-builder-20260924-1636-1 (design 7a / 7b / 10a): タブと FILES「開いている図」の行は「spi_init_sequence.puml」と
+// 保存されるファイル名で出す。以前は「diagram1」と拡張子なしで、上部バーの「diagram1.puml」と 2 通りの名前が並んでいた。
+test('手順11 タブと開いている図の行は上部バーと同じ「名前.puml」で出る', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR, { foldedTools: true });
+  const top = page.locator('#top-file-name');
+  await expect(top).toHaveText(/\.puml$/);
+  const topName = ((await top.textContent()) || '').trim();
+  const tab = page.locator('#tab-bar .tab.active');
+  await expect(tab.locator('.tab-label')).toHaveText(topName);
+  // 名前の受け渡し (data-doc-name) は拡張子なしの図名のまま。
+  const docName = await tab.getAttribute('data-doc-name');
+  expect(docName + '.puml').toBe(topName);
+  const row = page.locator('#files-body-open .files-row[data-file-name="' + docName + '"] .files-row-name');
+  await expect(row).toHaveText(topName);
+
+  // 図を足しても、足した図のタブ・行も .puml 付き。
+  await page.locator('#btn-tab-new').click();
+  await expect(page.locator('#tab-bar .tab')).toHaveCount(2);
+  const labels = await page.locator('#tab-bar .tab .tab-label').allTextContents();
+  expect(labels.every((t) => /\.puml$/.test(t))).toBe(true);
+  const rows = await page.locator('#files-body-open .files-row .files-row-name').allTextContents();
+  expect(rows.length).toBe(2);
+  expect(rows.every((t) => /\.puml$/.test(t))).toBe(true);
+});
