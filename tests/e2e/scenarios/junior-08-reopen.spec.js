@@ -437,7 +437,7 @@ test('手順8 右クリックから「右に並べて開く」「前回保存版
   await expect(page.locator('#vt-modal')).toBeVisible();
 });
 
-test('手順8 外から .puml をツリーに落とすと保存先へ取り込む (複数可、同名は上書きしない)', async ({ page }) => {
+test('手順8 外から .puml をツリーに落とすと保存先へ取り込む (複数可、同名は上書きしない。部品フォルダに落とせばその部品へ)', async ({ page }) => {
   await seedParts(page);
   await S.openFolder(page);
   // ブラウザの外からのドロップは Playwright の実マウスでは作れないので、落ちた後の取り込みの道を直に通す。
@@ -453,6 +453,28 @@ test('手順8 外から .puml をツリーに落とすと保存先へ取り込�
   expect(await S.readDoc(page, DIR, 'spi_state')).toContain('SPI 状態遷移');
   expect(msg).toContain('1 枚を保存先へ取り込みました');
   await expect(page.locator('#files-parts .files-part-head[data-part="timer"]')).toBeVisible();
+
+  // BLK-builder-20260924-1915-4 (design 10b「外から .puml をツリーに落とすと、そのフォルダへ取り込みます」):
+  // 部品フォルダ (ADC) の見出しに落とすと、その部品の下に入る名前で取り込む。
+  // 外からのファイルのドロップは実マウスでは作れないので、drop イベントを見出しに届ける (落ちた先の判定を通す)。
+  const adcHead = page.locator('#files-parts .files-part-head[data-part="adc"]');
+  await expect(adcHead).toBeVisible();
+  const dt = await page.evaluateHandle(() => {
+    const d = new DataTransfer();
+    d.items.add(new File(['@startuml\ntitle GPT クラス\nclass Gpt\n@enduml\n'], 'gpt_class.puml'));
+    d.items.add(new File(['@startuml\nnote "ADC の申し送り" as N\n@enduml\n'], 'memo.puml'));
+    return d;
+  });
+  await adcHead.dispatchEvent('dragover', { dataTransfer: dt });
+  await expect(adcHead).toHaveClass(/is-drop/);
+  await adcHead.dispatchEvent('drop', { dataTransfer: dt });
+  await expect.poll(async () => (await S.readDoc(page, DIR, 'adc_class')) || '').toContain('GPT クラス');
+  await expect.poll(async () => (await S.readDoc(page, DIR, 'adc_memo')) || '').toContain('ADC の申し送り');
+  // 元の名前 (部品 GPT) では入らない。
+  expect(await S.readDoc(page, DIR, 'gpt_class')).toBeFalsy();
+  await expect(page.locator('#status-save-result')).toContainText('2 枚をADCへ取り込みました');
+  await expect(page.locator('#status-save-result')).toContainText('adc_memo');
+  await expect(adcHead).not.toHaveClass(/is-drop/);
 });
 
 // design 10c と組: 保存先が Git なら、右クリックの「過去のコミットと比較…」が押せて、比較する相手を選ぶ画面が開く。

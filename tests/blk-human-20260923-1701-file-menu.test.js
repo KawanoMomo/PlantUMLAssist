@@ -175,3 +175,23 @@ describe('元の入口 (ツール ▾) は右クリックへの案内に落と�
     expect(CP.groupLabel('file')).toBe('ファイル / Files');
   });
 });
+
+// BLK-builder-20260924-1915-4 (design 10b): 外から部品のフォルダに落とした図は、その部品の下に入る名前で取り込む。
+describe('外から部品フォルダへ取り込む名前 (design 10b)', function() {
+  test('もうその部品の名前ならそのまま', function() {
+    expect(FM.importNameForPart('timer_state', 'timer')).toBe('timer_state');
+    expect(FM.importNameForPart('TIMER_state', 'timer')).toBe('TIMER_state');
+  });
+  test('図種の語を持つ名前は、ツリー内の移動と同じく頭の語を差し替える', function() {
+    expect(FM.importNameForPart('gpt_state', 'timer')).toBe('timer_state');
+    expect(FM.importNameForPart('sequence', 'spi')).toBe('spi_sequence');
+  });
+  test('図種の語が無い名前は、元の名前を残して頭に部品を足す', function() {
+    expect(FM.importNameForPart('memo', 'timer')).toBe('timer_memo');
+    expect(FM.importNameForPart('gpt_notes', 'TIMER')).toBe('timer_gpt_notes');
+  });
+  test('部品が無ければ元の名前', function() {
+    expect(FM.importNameForPart('gpt_state', '')).toBe('gpt_state');
+    expect(FM.importNameForPart('gpt_state', null)).toBe('gpt_state');
+  });
+});

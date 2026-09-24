@@ -564,30 +564,51 @@ window.MA.fileMenuUi = (function() {
     });
   }
 
-  function importFiles(list) {
+  // part: 落とした先の部品フォルダ (無ければ保存先の直下へ元の名前で)。
+  function importFiles(list, part) {
     var items = FM().importables(list);
     if (!items.length) { toast('取り込めるのは .puml / .plantuml / .uml / .txt です'); return Promise.resolve(); }
     var ws = WS();
     if (!ws || !ws.saveToFile) return Promise.resolve();
     var dir = _dir();
+    var where = part ? String(part).toUpperCase() : '保存先';
     return folderFileNames().then(function(names) {
       var have = {};
       names.forEach(function(n) { have[n] = true; });
       var done = [], skipped = [];
       return items.reduce(function(p, it) {
+        var name = part ? FM().importNameForPart(it.name, part) : it.name;
         return p.then(function() {
-          if (have[it.name] || !ws.isValidName(it.name)) { skipped.push(it.name); return null; }
+          if (have[name] || !ws.isValidName(name)) { skipped.push(name); return null; }
           return it.file.text().then(function(text) {
-            return ws.saveToFile({ name: it.name, dsl: String(text).replace(/^﻿/, '') }, dir);
-          }).then(function(ok) { if (ok) { done.push(it.name); have[it.name] = true; } else skipped.push(it.name); });
+            return ws.saveToFile({ name: name, dsl: String(text).replace(/^﻿/, '') }, dir);
+          }).then(function(ok) { if (ok) { done.push(name); have[name] = true; } else skipped.push(name); });
         });
       }, Promise.resolve()).then(function() {
-        var msg = done.length + ' 枚を保存先へ取り込みました';
+        var msg = done.length + ' 枚を' + where + 'へ取り込みました';
+        if (part && done.length) msg += ' (' + done.join(', ') + ')';
         if (skipped.length) msg += ' (同じ名前があるなどで取り込まなかった図: ' + skipped.join(', ') + ')';
         toast(msg);
         refreshLists();
       });
     });
+  }
+
+  // 落とした先の部品フォルダ。見出しでも、開いた中の行でも、その部品に落としたことにする。
+  function dropPartHead(target) {
+    if (!target || !target.closest || !panel) return null;
+    var head = target.closest('.files-part-head');
+    if (head) return head;
+    var body = target.closest('.files-part-body');
+    if (!body) return null;
+    var part = body.getAttribute('data-part-body');
+    if (!part) return null;
+    var prev = body.previousElementSibling;
+    return (prev && prev.classList.contains('files-part-head')) ? prev : null;
+  }
+
+  function clearDropMarks() {
+    Array.prototype.forEach.call(panel.querySelectorAll('.files-part-head.is-drop'), function(h) { h.classList.remove('is-drop'); });
   }
 
   function bindDrag() {
@@ -613,6 +634,10 @@ window.MA.fileMenuUi = (function() {
         ev.stopPropagation();
         dt.dropEffect = 'copy';
         panel.classList.add('is-drop');
+        // 外からのドラッグでも、どの部品に入るかを見出しで示す。
+        var ph = dropPartHead(ev.target);
+        clearDropMarks();
+        if (ph) ph.classList.add('is-drop');
       }
     });
     panel.addEventListener('dragleave', function(ev) {
@@ -623,7 +648,7 @@ window.MA.fileMenuUi = (function() {
     panel.addEventListener('drop', function(ev) {
       var dt = ev.dataTransfer;
       panel.classList.remove('is-drop');
-      Array.prototype.forEach.call(panel.querySelectorAll('.files-part-head.is-drop'), function(h) { h.classList.remove('is-drop'); });
+      clearDropMarks();
       if (hasOurs(dt)) {
         var head = ev.target.closest ? ev.target.closest('.files-part-head') : null;
         if (!head) return;
@@ -634,7 +659,8 @@ window.MA.fileMenuUi = (function() {
       if (dt && dt.files && dt.files.length) {
         ev.preventDefault();
         ev.stopPropagation();
-        importFiles(dt.files);
+        var ph = dropPartHead(ev.target);
+        importFiles(dt.files, ph ? ph.getAttribute('data-part') : '');
       }
     });
   }
