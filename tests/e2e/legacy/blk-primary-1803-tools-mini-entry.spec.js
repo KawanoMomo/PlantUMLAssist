@@ -1,7 +1,7 @@
 // @ts-check
 // BLK-primary-20260908-1803: 畳んだ機能の入口が Ctrl+K のコマンド名しか無い状態を作らない。
 // 「📦 引き継ぎ」のような、自分だけでなく新人も使う機能まで Ctrl+K の検索語を知らないと
-// 辿り着けなかった。静かなタブ列でも「他 N 件」の札を 1 クリックすれば一覧が開く。
+// 辿り着けなかった。静かなタブ列でも右端の「ツール ▾」の札を 1 クリックすれば一覧が開く。
 const { test, expect } = require('@playwright/test');
 const { gotoApp } = require('../helpers');
 
@@ -10,14 +10,16 @@ async function openDefault(page) {
   await gotoApp(page, { foldedTools: true });
 }
 
-test('既定のタブ列に「他 N 件」の札が出る (ツール ▾ は出ない)', async ({ page }) => {
+// BLK-builder-20260924-1416-3 (design 7a / 9a / 10a): 札の文字は「ツール ▾」、件数は title。
+test('既定のタブ列に「ツール ▾」の札が出る (展開用の ツール ▾ は出ない)', async ({ page }) => {
   await openDefault(page);
   await expect(page.locator('#btn-tab-tools')).toBeHidden();
   const mini = page.locator('#btn-tab-tools-mini');
   await expect(mini).toBeVisible();
+  await expect(mini).toHaveText('ツール ▾');
   // 件数は畳んでいるボタンの数。0 のままではない。
-  const label = (await mini.textContent()) || '';
-  const m = /他 (\d+) 件/.exec(label);
+  const title = (await mini.getAttribute('title')) || '';
+  const m = /畳んでいるツール (\d+) 件/.exec(title);
   expect(m).not.toBeNull();
   expect(Number(m && m[1])).toBeGreaterThan(20);
 });

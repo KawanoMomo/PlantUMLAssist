@@ -318,10 +318,16 @@ window.MA.toolMenu = (function() {
     return !showsToolButton(folded, quiet);
   }
 
-  // 札の文字。畳んで見えなくなっているボタンの数を出す (「他 25 件」)。
+  // 札の文字。design 7a / 9a / 10a はどれも「ツール ▾」と書く。以前の「他 25 件」は
+  // 押すまで何の 25 件か読めなかったので、件数は title (miniTitle) に回す。
   function miniLabel(count) {
+    return 'ツール ▾';
+  }
+
+  // 札の title。畳んで見えなくなっているボタンの数と、Ctrl+K でも引けることを出す。
+  function miniTitle(count) {
     var n = (typeof count === 'number' && count > 0) ? count : 0;
-    return '他 ' + n + ' 件';
+    return '畳んでいるツール ' + n + ' 件を分類から選ぶ (Ctrl+K でも同じ操作が引ける)';
   }
 
   function esc(s) {
@@ -412,6 +418,7 @@ window.MA.toolMenu = (function() {
     showsToolButton: showsToolButton,
     showsMiniButton: showsMiniButton,
     miniLabel: miniLabel,
+    miniTitle: miniTitle,
     keyHintOf: keyHintOf,
     buildMenuHtml: buildMenuHtml,
     buildHitsHtml: buildHitsHtml,
