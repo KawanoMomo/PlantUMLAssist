@@ -2449,6 +2449,82 @@ window.MA.modules.plantumlState = (function() {
     });
   }
 
+  // ── 遷移の端の状態に 動作・並行領域・色を付ける (BLK-builder-20260924-2350-1, design 4c「その他… ▾」) ──
+  // 遷移にだけ出る状態 (`state` 宣言の無い Idle / Running) は状態を選んでも動作や色を書き込めず、
+  // DSL に `Running : entry / …` を手で書くしかなかった。選んだ遷移の From / To を相手にして足す。
+  function transitionEndOptions(parsed, tr) {
+    var SI = window.MA.stateInsert;
+    var out = [];
+    if (!SI || !SI.endState || !tr) return out;
+    [['to', tr.to, ' (To)'], ['from', tr.from, ' (From)']].forEach(function(p) {
+      var st = SI.endState(parsed, tr, p[1]);
+      if (!st) return;
+      for (var i = 0; i < out.length; i++) if (out[i].id === st.id) return;
+      out.push({ value: p[0], id: st.id, state: st, label: st.id.split('.').pop() + p[2] });
+    });
+    return out;
+  }
+
+  function _isCompositeState(st) { return !!(st && st.line > 0 && st.endLine > st.line); }
+
+  // 状態 st の居場所に 1 行足す。複合状態はその閉じの後、宣言の無い入れ子の子は親の { } の中、それ以外は図の末尾。
+  function _addLineFor(text, parsed, st, line) {
+    if (_isCompositeState(st)) {
+      var lines = text.split('\n');
+      var ind = (lines[st.endLine - 1].match(/^\s*/) || [''])[0];
+      lines.splice(st.endLine, 0, ind + line);
+      return lines.join('\n');
+    }
+    if (!(st.line > 0) && st.parentId && window.MA.stateInsert && window.MA.stateInsert.insertInside) {
+      var out = window.MA.stateInsert.insertInside(text, parsed, st.parentId, [line]);
+      if (out !== text) return out;
+    }
+    return insertBeforeEnd(text, line);
+  }
+
+  // o = { kind: 'behavior' | 'region' | 'look', target: 'to' | 'from', bkind, value, color, stereotype }
+  // 返り値 { text, line, reason }。line は書かれる行の見本。足せないときは text が元のままで reason が理由。
+  function applyToTransitionEnd(text, parsed, tr, o) {
+    o = o || {};
+    var ends = transitionEndOptions(parsed, tr);
+    var end = null;
+    for (var i = 0; i < ends.length; i++) if (ends[i].value === (o.target || 'to')) end = ends[i];
+    if (!end) end = ends[0];
+    if (!end) return { text: text, line: '', reason: '相手にできる状態がありません ([*] には付けられません)' };
+    var st = end.state;
+    var bare = st.id.split('.').pop();
+    if (o.kind === 'behavior') {
+      var k = (o.bkind === 'do' || o.bkind === 'exit') ? o.bkind : 'entry';
+      var v = String(o.value == null ? '' : o.value).trim();
+      var sample = bare + ' : ' + k + ' / ' + (v ? v.replace(/\n/g, '\\n') : '…');
+      if (!v) return { text: text, line: sample, reason: '本文を入れてください' };
+      var out = (st.line > 0 && !_isCompositeState(st)) ? setStateBehavior(text, st.id, k, v) : text;
+      if (out === text) out = _addLineFor(text, parsed, st, sample);
+      return { text: out, line: sample, reason: '' };
+    }
+    if (o.kind === 'region') {
+      if (!_isCompositeState(st)) {
+        return { text: text, line: '', reason: bare + ' は中を持たない状態です。並行領域は複合状態 (中を持つ状態) の中を -- で分けます' };
+      }
+      return { text: addRegionSeparator(text, st.id, parsed), line: bare + ' の { } の閉じの前に --', reason: '' };
+    }
+    if (o.kind === 'look') {
+      var color = String(o.color || '').trim().replace(/^#/, '');
+      var stereo = String(o.stereotype || '').trim().replace(/^<<\s*/, '').replace(/\s*>>$/, '');
+      if (!color && !stereo) return { text: text, line: 'state ' + bare + ' <<ステレオタイプ>> #色', reason: '色かステレオタイプを入れてください' };
+      if (st.line > 0) {
+        var f = {};
+        if (color) f.color = color;
+        if (stereo) f.stereotype = stereo;
+        var out2 = updateState(text, st.line, f);
+        return { text: out2, line: (out2.split('\n')[st.line - 1] || '').trim(), reason: out2 === text ? '書き換えられませんでした' : '' };
+      }
+      var decl = fmtState(bare, bare, stereo || null, color);
+      return { text: _addLineFor(text, parsed, st, decl), line: decl, reason: '' };
+    }
+    return { text: text, line: '', reason: '' };
+  }
+
   // ── 遷移を選んだまま状態を足す (BLK-builder-20260924-1252-2, design 4c) ──────
   // 以前は「Idle と Running の間に状態を挟む」のに、選択を外して追加タブで State →
   // 追加する位置「この遷移の途中」→ 挟む遷移を一覧から選び直す必要があった。
@@ -2470,6 +2546,10 @@ window.MA.modules.plantumlState = (function() {
     { value: 'join', label: '並行状態 join', base: 'Join' },
     { value: 'entryPoint', label: '入口ポイント', base: 'In' },
     { value: 'exitPoint', label: '出口ポイント', base: 'Out' },
+    // BLK-builder-20260924-2350-1: 状態を足すのではなく、遷移の端の状態に付けるもの。
+    { value: 'behavior', label: '状態内の動作', act: true, btn: '＋ 動作を追加' },
+    { value: 'region', label: '並行領域に分ける', act: true, btn: '＋ 区切りを足す' },
+    { value: 'look', label: '状態の色・ステレオタイプ', act: true, btn: '＋ 色・ステレオタイプを付ける' },
   ];
   function _trAddSpec(v) {
     var all = TR_ADD_KINDS.concat(TR_ADD_OTHER);
@@ -2491,6 +2571,7 @@ window.MA.modules.plantumlState = (function() {
     if (!SI || !SI.transitionPositions) { box.style.display = 'none'; return; }
     var where = null;
     var otherOpen = _trAddIsOther(_trAddKind);
+    var actTarget = 'to';
 
     function hintText(w) {
       if (w === 'transition') {
@@ -2529,7 +2610,42 @@ window.MA.modules.plantumlState = (function() {
         '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">種類</label>' +
         '<div id="st-tr-add-kind" style="display:flex;flex-wrap:wrap;gap:4px;">' + chips + '</div></div>' + otherRow;
 
-      if (spec.pseudo) {
+      if (spec.act) {
+        // 状態内の動作 / 並行領域 / 色・ステレオタイプ: 相手は遷移の From か To。
+        var ends = transitionEndOptions(parsedData, tr);
+        if (!ends.some(function(e) { return e.value === actTarget; }) && ends.length) actTarget = ends[0].value;
+        var fields = '';
+        if (_trAddKind === 'behavior') {
+          fields =
+            P.selectFieldHtml('いつ', 'st-tr-add-bkind', [
+              { value: 'entry', label: '入るとき (entry)', selected: true },
+              { value: 'do', label: '居る間 (do)' },
+              { value: 'exit', label: '出るとき (exit)' },
+            ]) +
+            P.fieldHtml('本文', 'st-tr-add-bval', '', '例: motorOn()');
+        } else if (_trAddKind === 'look') {
+          fields =
+            P.fieldHtml('色', 'st-tr-add-color', '', '例: #LightBlue') +
+            P.fieldHtml('ステレオタイプ', 'st-tr-add-stereo', '', '例: safety');
+        }
+        box.innerHTML = head +
+          (ends.length
+            ? P.selectFieldHtml('相手の状態', 'st-tr-add-target', ends.map(function(e) {
+                return { value: e.value, label: e.label, selected: e.value === actTarget };
+              })) + fields
+            : '') +
+          '<div id="st-tr-add-hint" style="font-size:10px;color:var(--text-secondary);margin:0 0 6px;line-height:1.5;"></div>' +
+          '<button id="st-tr-add" style="width:100%;font-size:11px;padding:4px 8px;background:var(--bg-tertiary);border:1px solid var(--accent);color:var(--text-primary);border-radius:3px;cursor:pointer;">' + H.escHtml(spec.btn) + '</button>';
+        paintAct();
+        ['st-tr-add-bkind', 'st-tr-add-bval', 'st-tr-add-color', 'st-tr-add-stereo'].forEach(function(id) {
+          var el = document.getElementById(id);
+          if (el) el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', paintAct);
+        });
+        P.bindEvent('st-tr-add-target', 'change', function() {
+          actTarget = document.getElementById('st-tr-add-target').value;
+          paintAct();
+        });
+      } else if (spec.pseudo) {
         // 開始・終了・履歴: 相手は遷移で決まる。書かれる行を見せ、足せないときは理由を出して押せなくする。
         var ps = SI.pseudoFromTransition(parsedData, tr, _trAddKind);
         box.innerHTML = head +
@@ -2580,6 +2696,39 @@ window.MA.modules.plantumlState = (function() {
       return _trAddSpec(_trAddKind).base || 'NewState';
     }
 
+    function actOpts() {
+      function v(id) { var el = document.getElementById(id); return el ? el.value : ''; }
+      return {
+        kind: _trAddKind, target: actTarget, bkind: v('st-tr-add-bkind'), value: v('st-tr-add-bval'),
+        color: v('st-tr-add-color'), stereotype: v('st-tr-add-stereo'),
+      };
+    }
+
+    // 書かれる行 (または足せない理由) を先に見せる。並行領域は相手が複合状態でなければ押せない。
+    function paintAct() {
+      var hint = document.getElementById('st-tr-add-hint');
+      var btn = document.getElementById('st-tr-add');
+      var r = applyToTransitionEnd(ctx.getMmdText(), parsedData, tr, actOpts());
+      var blocked = !r.line && !!r.reason;
+      if (hint) {
+        hint.innerHTML = r.line
+          ? '書かれる行: <code id="st-tr-add-line" style="font-family:var(--font-mono);">' + H.escHtml(r.line) + '</code>' +
+            (r.reason ? ' — ' + H.escHtml(r.reason) : '')
+          : H.escHtml(r.reason || '');
+      }
+      if (btn) { btn.disabled = blocked; btn.style.opacity = blocked ? '0.5' : ''; }
+    }
+
+    function addAct() {
+      var t = ctx.getMmdText();
+      var r = applyToTransitionEnd(t, parsedData, tr, actOpts());
+      if (r.reason || r.text === t) { paintAct(); return; }
+      window.MA.history.pushHistory();
+      ctx.setMmdText(r.text);
+      window.MA.selection.clearSelection();
+      ctx.onUpdate();
+    }
+
     function addPseudo() {
       var ps = SI.pseudoFromTransition(parsedData, tr, _trAddKind);
       if (!ps.ok) return;
@@ -2598,6 +2747,7 @@ window.MA.modules.plantumlState = (function() {
     }
 
     function add() {
+      if (_trAddSpec(_trAddKind).act) { addAct(); return; }
       if (_trAddSpec(_trAddKind).pseudo) { addPseudo(); return; }
       if (!where) return;
       var raw = (document.getElementById('st-tr-add-id') || {}).value || '';
@@ -2825,6 +2975,8 @@ window.MA.modules.plantumlState = (function() {
     addState: addState,
     addCompositeState: addCompositeState,
     addRegionSeparator: addRegionSeparator,
+    transitionEndOptions: transitionEndOptions,
+    applyToTransitionEnd: applyToTransitionEnd,
     addTransition: addTransition,
     addTransitionScoped: addTransitionScoped,
     pseudoScopeOptions: pseudoScopeOptions,

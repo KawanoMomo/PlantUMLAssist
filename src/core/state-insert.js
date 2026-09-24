@@ -306,6 +306,7 @@ window.MA.stateInsert = (function() {
     transitionPositions: transitionPositions,
     addFromTransition: addFromTransition,
     pseudoFromTransition: pseudoFromTransition,
+    endState: _endState,
     positions: positions,
     transitionLabel: transitionLabel,
     transitionOptions: transitionOptions,
