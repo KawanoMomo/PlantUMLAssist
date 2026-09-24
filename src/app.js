@@ -407,6 +407,8 @@ function updateTopRenderStatus(phase, ms) {
   else topRenderStatusEl.classList.remove('error');
 }
 var mmdText = '';
+// BLK-owner-20260924-2232-1: エディタに今入っている図 (タブ) の id。元に戻す履歴の引き分けに使う。
+var _historyDocId = null;
 var currentDiagramType = 'plantuml-sequence';
 var currentModule = null;
 var currentParsed = { meta: {}, elements: [], relations: [], groups: [] };
@@ -3520,6 +3522,19 @@ function init() {
     getMmdText: function() { return mmdText; },
     setMmdText: function(s) { mmdText = s; suppressSync = true; editorEl.value = s; suppressSync = false; scheduleRefresh(); },
     onUpdate: function() { updateUndoRedoButtons(); },
+    // BLK-owner-20260924-2232-1: 履歴は図 (タブ) ごと。エディタに入っている図の id で引き分ける。
+    getKey: function() {
+      if (_historyDocId) return _historyDocId;
+      try { return window.MA.workspace ? window.MA.workspace.getActiveId() : ''; } catch (e) { return ''; }
+    },
+    // 元に戻した本文で図種の判定が替わっても、次の自動保存でタブ名・ファイル名を付け替えない
+    // (名前を変えるのは F2 と図の設定の図名だけ)。
+    onRestore: function() {
+      try {
+        var d = window.MA.workspace ? window.MA.workspace.getActive() : null;
+        if (d && d.name && window.MA.autoSave && window.MA.autoSave.keepNameOnce) window.MA.autoSave.keepNameOnce(d.name);
+      } catch (e) {}
+    },
   });
 
   window.MA.selection.init(function() {
@@ -4811,12 +4826,14 @@ function applyActiveDoc() {
     try { window.localStorage.setItem('plantuml-diagram-type', currentDiagramType); } catch (e) {}
   }
   mmdText = doc.dsl;
+  _historyDocId = doc.id;  // 以後の元に戻す / やり直しはこの図の履歴
   suppressSync = true;
   editorEl.value = mmdText;
   suppressSync = false;
   try { currentParsed = currentModule.parse(mmdText); } catch (e) { /* leave stale */ }
   if (window.MA.selection) window.MA.selection.clearSelection();
   updateLineNumbers();
+  updateUndoRedoButtons();
   isFirstRender = true;
   scheduleRefresh();
   renderTabs();
@@ -4837,7 +4854,8 @@ function switchToDoc(id) {
   saveActiveDoc();
   if (window.MA.autoSave) { try { window.MA.autoSave.flush(); } catch (e) {} }
   if (!window.MA.workspace.setActive(id)) return;
-  if (window.MA.history) window.MA.history.pushHistory();
+  // BLK-owner-20260924-2232-1: ここで履歴を積むと、前のタブの本文が次のタブの履歴に入り、
+  // Ctrl+Z で別のタブの本文が出ていた。履歴はタブごとに持つので、切り替えでは積まない。
   applyActiveDoc();
 }
 
@@ -4909,6 +4927,8 @@ function renderTabs() {
         if (wasActive) saveActiveDoc();
         if (window.MA.sourceLock) { try { window.MA.sourceLock.release(doc.id); } catch (e) {} }
         if (window.MA.workspace.close(doc.id)) {
+          // 閉じた図の履歴は持ち越さない (VS Code と同じ)。
+          if (window.MA.history && window.MA.history.forget) window.MA.history.forget(doc.id);
           if (wasActive) applyActiveDoc(); else renderTabs();
         }
       });

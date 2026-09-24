@@ -2932,7 +2932,12 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(500, {'error': f'cannot create directory: {e}'})
             return
         # BLK-junior-20260908-2003: 図種が変わる保存は上書きではなく別ファイルへ回す。
-        target, prev_kind, new_kind = self._resolve_save_target(save_dir, dt, dsl)
+        # BLK-owner-20260924-2232-1: 元に戻す / やり直しで入れた本文は、図種が替わっても
+        # 名前を回さない (名前を変えるのは利用者が図名を直したときだけ)。
+        if data.get('keepName') is True:
+            target, prev_kind, new_kind = dt, '', dsl_kind(dsl)
+        else:
+            target, prev_kind, new_kind = self._resolve_save_target(save_dir, dt, dsl)
         file_path = self._autosave_file_path(save_dir, target)
         # 同じ図種の中での上書きは今までどおり。消える中身は先に控える。
         self._stash_version(save_dir, target, dsl)
