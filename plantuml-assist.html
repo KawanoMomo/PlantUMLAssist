@@ -208,6 +208,20 @@ html, body {
   display: flex; width: 100%; box-sizing: border-box; text-align: left;
   border: none; background: none; padding: 3px 6px 3px 16px; cursor: pointer;
 }
+/* design 10a (BLK-builder-20260924-1923-4): 「▾ junior 保存先」の行。その下の部品のフォルダ・図は 1 段下げて中身にする。 */
+#files-panel .files-target-row { display: flex; align-items: center; }
+#files-panel .files-target-row #top-save-target { flex: 1 1 auto; min-width: 0; padding-left: 2px; }
+#files-panel .files-target-caret {
+  flex: 0 0 auto; width: 20px; padding: 3px 0 3px 8px; border: 0; background: none;
+  color: var(--text-secondary); font-size: 10px; cursor: pointer; text-align: left;
+}
+#files-panel .files-target-caret:hover { color: var(--text-primary); }
+#files-panel .files-target-row[data-empty="1"] .files-target-caret { visibility: hidden; }
+#files-panel #files-parts[hidden] { display: none; }
+#files-panel #files-parts .files-part-head { padding-left: 24px; }
+#files-panel #files-parts .files-part-file { padding-left: 38px; }
+#files-panel #files-parts .files-part-file.files-loose-file { padding-left: 30px; }
+#files-panel #files-parts .files-part-missing { padding-left: 50px; }
 /* ツリーに入れた #folder-panel は浮かせず、節の中身としてそのまま流す。 */
 /* BLK-human-20260923-1702 (design 10c): GIT 欄・この図の履歴・比較する相手を選ぶ */
 #files-panel [data-files-section="git"][hidden] { display: none; }
@@ -7455,8 +7469,14 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
                 aria-hidden="true">▸</span><span class="files-sec-label">保存先</span><span
                 class="files-sec-count" id="files-count-target"></span></button>
         <div class="files-sec-body" id="files-body-target">
-          <!-- 保存先の一番上はフォルダそのもの。押すと保存先を変えられる (旧・保存先チップ) -->
-          <button id="top-save-target" type="button" title="保存先">ダウンロード</button>
+          <!-- 保存先の一番上はフォルダそのもの。押すと保存先を変えられる (旧・保存先チップ)。
+               design 10a (BLK-builder-20260924-1923-4): 頭の ▾ / ▸ で、その下の部品のフォルダをまとめて畳む -->
+          <div class="files-target-row">
+            <button type="button" class="files-target-caret" id="files-target-caret" aria-expanded="true"
+                    aria-controls="files-parts" title="部品のフォルダをまとめて畳む / 開く"><span class="files-caret"
+                    aria-hidden="true">▾</span></button>
+            <button id="top-save-target" type="button" title="保存先">ダウンロード</button>
+          </div>
           <!-- design 10a: 保存先の下は部品ごとのフォルダ (`SPI 4 / 6`)。
                中身は #folder-panel の一覧をそのまま読んで組むので、数える所は 1 つのまま。
                6 図種の済/未の表そのものは 🧩 部品ビューの職掌 (BLK-owner-20260918-0049-prune)

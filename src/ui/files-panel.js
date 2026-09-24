@@ -15,6 +15,7 @@ window.MA.filesPanel = (function() {
   var KEY_OPEN = 'pua.files.open';        // パネルそのものの開閉
   var KEY_SEC = 'pua.files.sec.';         // 節ごとの開閉
   var KEY_RO = 'pua.files.readonly';      // 「読むだけを表示 / 隠す」
+  var KEY_TARGET_PARTS = 'pua.files.targetParts';   // 保存先のフォルダの下 (部品のフォルダ) の開閉
 
   function _ls() { try { return window.localStorage; } catch (e) { return null; } }
   function _get(k, d) {
@@ -59,6 +60,25 @@ window.MA.filesPanel = (function() {
     var caret = head.querySelector('.files-caret');
     if (caret) caret.textContent = on ? '▾' : '▸';
     _set(KEY_SEC + id, on ? '1' : '0');
+  }
+
+  // design 10a (BLK-builder-20260924-1923-4): 保存先のフォルダの行の ▾ / ▸。
+  // その下の部品のフォルダ・直下の図をまとめて畳む / 開く。開閉は次回も覚える。
+  function setTargetParts(on) {
+    var host = $('files-parts');
+    var btn = $('files-target-caret');
+    if (host) host.hidden = !on;
+    if (btn) {
+      btn.setAttribute('aria-expanded', on ? 'true' : 'false');
+      var c = btn.querySelector('.files-caret');
+      if (c) c.textContent = on ? '▾' : '▸';
+    }
+    _set(KEY_TARGET_PARTS, on ? '1' : '0');
+  }
+
+  function targetPartsOpen() {
+    var host = $('files-parts');
+    return !!host && !host.hidden;
   }
 
   function secOpen(id) {
@@ -373,6 +393,14 @@ window.MA.filesPanel = (function() {
     it.dispatchEvent(ev);
   }
 
+  // 部品のフォルダも直下の図も無い (ダウンロード保存・空のフォルダ) ときは、畳む印を出さない。
+  function _syncTargetRow() {
+    var host = $('files-parts');
+    var btn = $('files-target-caret');
+    var row = btn ? btn.parentNode : null;
+    if (row) row.setAttribute('data-empty', host && host.firstChild ? '0' : '1');
+  }
+
   function renderParts() {
     var host = $('files-parts');
     if (!host) return;
@@ -380,6 +408,7 @@ window.MA.filesPanel = (function() {
     var entries = _folderNames();
     if (!FT || !entries.length) {
       host.textContent = '';
+      _syncTargetRow();
       refreshSummary();
       if (typeof window.MA.refreshTopCrumbs === 'function') window.MA.refreshTopCrumbs();
       return;
@@ -434,6 +463,7 @@ window.MA.filesPanel = (function() {
     });
     // 図種を読めない図は部品のフォルダに分けず、保存先の直下にファイル行で並べる。
     lay.loose.forEach(function(f) { host.appendChild(_fileButton(f, true)); });
+    _syncTargetRow();
     var c = $('files-count-target');
     if (c) c.textContent = entries.length ? String(entries.length) : '';
     refreshSummary();
@@ -455,6 +485,7 @@ window.MA.filesPanel = (function() {
     }
     var el = null;
     if (kind === 'part' && part) {
+      if (!targetPartsOpen()) setTargetParts(true);
       var q = (window.CSS && window.CSS.escape) ? window.CSS.escape(String(part)) : String(part);
       el = document.querySelector('#files-parts .files-part-head[data-part="' + q + '"]');
       if (el && el.getAttribute('aria-expanded') !== 'true') el.click();
@@ -716,6 +747,11 @@ window.MA.filesPanel = (function() {
       });
     });
 
+    setTargetParts(_get(KEY_TARGET_PARTS, '1') !== '0');
+    _syncTargetRow();
+    var tc = $('files-target-caret');
+    if (tc) tc.addEventListener('click', function() { setTargetParts(!targetPartsOpen()); });
+
     // 「読むだけを表示 / 隠す」。隠している間は節ごと出さない。
     var ro = $('files-show-readonly');
     var roSec = panel.querySelector('[data-files-section="readonly"]');
@@ -751,6 +787,8 @@ window.MA.filesPanel = (function() {
     var filter = $('files-filter');
     if (filter) {
       filter.addEventListener('input', function() {
+        // 絞り込んだ図が畳んだ部品のフォルダの奥に隠れないよう、保存先の下を開く。
+        if (filter.value && !targetPartsOpen()) setTargetParts(true);
         renderOpen();
         renderParts();
         // 保存先の絞り込みは #folder-panel 側の入力に渡す (数える所を 2 つにしない)。
@@ -798,5 +836,7 @@ window.MA.filesPanel = (function() {
     renderParts: renderParts,
     folderEntries: _folderNames,
     reveal: reveal,
+    setTargetParts: setTargetParts,
+    targetPartsOpen: targetPartsOpen,
   };
 })();

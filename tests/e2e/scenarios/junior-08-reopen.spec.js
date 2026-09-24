@@ -196,6 +196,38 @@ test('手順8 FILES ツリーのファイル行の頭に、左レールと同じ
   const nb = await treeFile(page, 'spi_state').locator('.files-row-name').boundingBox();
   expect(gb.x + gb.width).toBeLessThanOrEqual(nb.x + 1);
 
+  // BLK-builder-20260924-1923-4 (design 10a「一番上のフォルダが保存先で、その下は部品ごとのフォルダ」):
+  // 部品のフォルダは保存先のフォルダ (「▾ {フォルダ} 保存先」) の 1 段下に入り、その中の図はさらに 1 段下。
+  // 保存先の行の ▾ を押すと部品のフォルダをまとめて畳み、次に開いたときも畳んだまま。以前は部品のフォルダが保存先の行より左に並んでいた。
+  const caret = page.locator('#files-target-caret');
+  const target = page.locator('#top-save-target');
+  const spiHead = page.locator('#files-parts .files-part-head[data-part="spi"]');
+  await expect(caret).toBeVisible();
+  await expect(caret).toHaveAttribute('aria-expanded', 'true');
+  const textX = async (loc) => loc.evaluate((el) => {
+    const cs = getComputedStyle(el);
+    return el.getBoundingClientRect().left + parseFloat(cs.paddingLeft);
+  });
+  const tx = await textX(target);
+  const px = await textX(spiHead);
+  const fx = await textX(treeFile(page, 'spi_state'));
+  expect(px).toBeGreaterThan(tx);
+  expect(fx).toBeGreaterThan(px);
+  await caret.click();
+  await expect(caret).toHaveAttribute('aria-expanded', 'false');
+  await expect(spiHead).toBeHidden();
+  await expect(target).toBeVisible();
+  // 読み込み直しても畳んだまま (起動のたびに localStorage を空にする init を、この 1 回だけ止める)。
+  await page.evaluate(() => window.localStorage.setItem('pua.e2e.keep', '1'));
+  await page.reload();
+  await page.evaluate(() => window.localStorage.removeItem('pua.e2e.keep'));
+  await S.openFolder(page);
+  await expect(page.locator('#files-target-caret')).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('#files-parts .files-part-head[data-part="spi"]')).toBeHidden();
+  await page.locator('#files-target-caret').click();
+  await expect(page.locator('#files-parts .files-part-head[data-part="spi"]')).toBeVisible();
+  await expandPart(page, 'spi');
+
   // 到達条件その2: 開いて「開いている図」に並んだ行にも、そのタブの図種の線画が付く。
   await treeFile(page, 'spi_state').click();
   await expect.poll(() => page.locator('#editor').inputValue()).toContain('SPI 状態遷移');
