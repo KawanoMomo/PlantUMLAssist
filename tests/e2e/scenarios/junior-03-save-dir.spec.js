@@ -10,7 +10,18 @@ const S = require('./_scenario');
 const DIR = S.dirFor(__filename);
 
 test('手順3 設定で保存先を変えると、上部バーの表示がその場で追いつく', async ({ page }) => {
-  await S.bootDownloadMode(page);
+  // BLK-builder-20260924-2152-2-red: 前に控えていたフォルダに新規タブと同名の diagram1 が残っていても、
+  // 保存先を変えたら FILES の部品フォルダとパンくずは新しいフォルダの中身で出る (前のフォルダの
+  // DIAGRAM1 の段が残らない)。前のフォルダは test-results 配下に作る。
+  const PREV = DIR + '-prev';
+  await S.bootDownloadMode(page, PREV);
+  await S.clearDir(page, DIR);
+  await S.clearDir(page, PREV);
+  await S.putDoc(page, PREV, 'diagram1', ['@startuml', 'participant A', 'A -> B : x', '@enduml'].join('\n'));
+  await page.reload();
+  await page.waitForSelector('html[data-app-ready="1"]', { state: 'attached' });
+  await expect(page.locator('#folder-panel .folder-item[data-file-name="diagram1"]')).toHaveCount(1);
+  await expect(page.locator('#files-parts .files-part-head', { hasText: 'DIAGRAM1' })).toHaveCount(1);
   // 未設定ならダウンロードになることが先に出る。
   await expect(page.locator('#top-save-target')).toHaveAttribute('data-mode', 'download');
   // 保存先の無い新規の図は、上部バーにフォルダの段を出さない (ファイル名だけ)。
@@ -30,6 +41,8 @@ test('手順3 設定で保存先を変えると、上部バーの表示がその
   expect(await chip.getAttribute('title')).toContain(DIR);
   // design 10a (BLK-builder-20260924-1715-1): 上部バー左のパンくずにも保存先のフォルダ名が出る。
   await expect(page.locator('#top-crumbs .top-crumb')).toHaveText([DIR.replace(/[\\/]+$/, '').split(/[\\/]/).pop()]);
+  await expect(page.locator('#folder-panel .folder-item[data-file-name="diagram1"]')).toHaveCount(0);
+  await expect(page.locator('#files-parts .files-part-head', { hasText: 'DIAGRAM1' })).toHaveCount(0);
 
   // 到達条件その2: 保存は上部バーのボタン 1 押しで済む (コマンド名を打たない)。
   const save = page.locator('#top-save');
