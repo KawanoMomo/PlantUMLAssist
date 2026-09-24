@@ -14987,7 +14987,12 @@ function setupTabs() {
     if (kb) row.appendChild(kb);
     // BLK-owner-20260924-0637-1: 本文から読んだ図種を行に持たせる。FILES ツリーは名前に図種が無い図も
     // これで部品の側に数える (1 枚ずつ「0 / 6・未作成 6 図種」と出さない)。
-    if (kindByName[name]) b.setAttribute('data-content-kind', kindByName[name]);
+    // BLK-builder-20260924-1719-3: 保存したときの図種の控え (_kinds.json) があればそれを先に使う
+    // (行のバッジと同じ順)。actor で始まるユースケース図は本文判定だとシーケンスに倒れ、
+    // ツリーの部品フォルダで UC が「未作成」と読めていた。
+    var ckSaved = window.MA.savedKind ? window.MA.savedKind.pick(savedKindByName, name) : '';
+    var ck = ckSaved || kindByName[name];
+    if (ck) b.setAttribute('data-content-kind', ck);
     var vb = folderVersionButton(name);
     if (vb) row.appendChild(vb);
     // BLK-primary-20260914-1306-wish: 中身が同じ図の印と、1 枚だけ消すボタン。
