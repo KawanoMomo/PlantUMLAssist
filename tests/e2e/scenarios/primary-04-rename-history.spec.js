@@ -929,3 +929,65 @@ test.describe('primary 手順 4: 名前から影響する図を 1 回で引く',
     await expect(page.locator('#rename-from')).toHaveValue('ClockCtrl');
   });
 });
+
+// BLK-primary-20260924-1432-wish: 新人に渡す前に、相手 (junior) のフォルダの同名図と食い違っていないかを
+// 引き継ぎチェックリストの中で読む。以前は保存先を junior に切り替え、1 枚ずつ開いて本文を読み比べていた。
+const HB_PEER_DIR = HB_PEER_DIR_OF(DIR);
+function HB_PEER_DIR_OF(d) { return d.replace(/\/+$/, '') + '-junior'; }
+const HB_TIMER_MINE = '@startuml\n[*] --> Idle\nstate Idle\nstate Configured\nstate Running\n'
+  + 'Idle --> Configured : config\nConfigured --> Running : start\nRunning --> Idle : stop\n@enduml';
+const HB_TIMER_PEER = '@startuml\n[*] --> Idle\nstate Idle\nstate Configured {\n  state Sub\n  state Sub2\n  state Sub3\n  state Sub4\n}\n'
+  + 'state Running\nIdle --> Configured : config\nConfigured --> Running : start\nRunning --> Idle : stop\n@enduml';
+
+test.describe('primary 手順 4: 渡す相手のフォルダの同名図と食い違っていないかを同じ表で読む', () => {
+  test.beforeEach(async ({ page }) => {
+    await hbBoot(page);
+    await clearDir(page);
+    await page.evaluate(async (a) => {
+      await fetch('/autosave?dir=' + encodeURIComponent(a.peer), { method: 'DELETE' });
+      const put = (dir, type, dsl) => fetch('/autosave', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, dir, dsl }),
+      });
+      await put(a.dir, 'spi_init_sequence', a.clean);
+      await put(a.dir, 'TIMERドライバ状態遷移', a.mine);
+      await put(a.peer, 'TIMERドライバ状態遷移', a.peerText);
+    }, { dir: DIR, peer: HB_PEER_DIR, clean: HB_CLEAN, mine: HB_TIMER_MINE, peerText: HB_TIMER_PEER });
+    await page.reload();
+    await page.waitForSelector('#preview-svg');
+  });
+
+  test('渡す相手 = junior を選ぶと、相手の同名図との食い違いが 5 列目に赤く名指しされ、押すと並べて比較が開く', async ({ page }) => {
+    await openHandoverBoard(page);
+    // 選ばない間は今の 4 列のまま。
+    await expect(page.locator('#hb-peer-th')).toBeHidden();
+
+    // 相手の候補は隣のフォルダ (保存先は動かさない)。-junior のフォルダを選ぶ。
+    const value = await page.locator('#hb-peer option').evaluateAll((os) =>
+      (os.find((o) => /primary-04-rename-history-junior$/.test(o.value.replace(/[\/]+$/, ''))) || {}).value || '');
+    expect(value).not.toBe('');
+    await page.locator('#hb-peer').selectOption(value);
+
+    await expect(page.locator('#hb-peer-th')).toBeVisible();
+    const timer = page.locator('#hb-rows tr[data-doc-name="TIMERドライバ状態遷移"]');
+    await expect(timer.locator('td.hb-peer')).toContainText('Sub, Sub2, Sub3', { timeout: 15000 });
+    await expect(timer).toHaveAttribute('data-ready', '0');
+    await expect(timer).toHaveAttribute('data-blockers', /相手の同名図と食い違い/);
+    // 相手に同名図が無い図は「相手に無い」。保存先は primary のまま (行は自分のフォルダの 2 枚)。
+    await expect(page.locator('#hb-rows tr[data-doc-name="spi_init_sequence"] td.hb-peer')).toHaveText('相手に無い');
+    await expect(page.locator('#hb-rows tr[data-doc-name]')).toHaveCount(2);
+
+    // 選んだ相手は閉じても覚えている。
+    await page.locator('#hb-close').click();
+    await openHandoverBoard(page);
+    await expect(page.locator('#hb-peer')).toHaveValue(value);
+    await expect(timer.locator('td.hb-peer')).toContainText('Sub, Sub2, Sub3', { timeout: 15000 });
+
+    // 5 列目を押すと、自分の図を開き相手の同名図を右の枠に並べる。
+    await timer.locator('td.hb-peer button.hb-peer-go').click();
+    await expect(page.locator('#hb-modal')).toBeHidden();
+    await expect(page.locator('#editor')).toHaveValue(/state Configured\n/, { timeout: 10000 });
+    await expect(page.locator('#senior-pane')).toBeVisible();
+    await expect(page.locator('#senior-dsl')).toContainText('state Sub4', { timeout: 10000 });
+  });
+});
