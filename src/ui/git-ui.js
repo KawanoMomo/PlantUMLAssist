@@ -173,10 +173,18 @@ window.MA.gitUi = (function() {
       return;
     }
     list.forEach(function(c) {
-      var row = _el('div', 'git-change');
+      // BLK-builder-20260924-2344-3 (design 10c): 押すとその図を開く (M は最後のコミットと並べる)。
+      // 開けない行 (D・保存先の外) は押せる見た目にしない。
+      var op = gp.changeOpen ? gp.changeOpen(c) : null;
+      var row = _el(op ? 'button' : 'div', 'git-change');
+      if (op) {
+        row.type = 'button';
+        row.setAttribute('data-open', op.name);
+        row.addEventListener('click', function() { openChange(c); });
+      }
       row.setAttribute('data-git-code', c.code);
       row.setAttribute('data-file', c.file);
-      row.title = c.file;
+      row.title = op ? op.title : c.file;
       // design 10c (BLK-builder-20260924-1808-1): ツリーの行と同じ形。名前は拡張子なし、状態字は右。
       row.appendChild(_el('span', 'git-change-name', gp.changeName(c)));
       row.appendChild(_el('span', 'git-code git-code-' + c.code, c.code));
@@ -270,6 +278,39 @@ window.MA.gitUi = (function() {
       }
       row.appendChild(end);
       host.appendChild(row);
+    });
+  }
+
+  // 変更の行を押した: ツリーの行を押したのと同じ道 (保存先の一覧の行) で開き、開き終えたら
+  // M の図は「この図の履歴」の先頭 (最後のコミット) を右の枠に並べる。
+  function _waitActive(name, ms) {
+    return new Promise(function(done) {
+      var until = Date.now() + (ms || 5000);
+      (function tick() {
+        if (_stem(_name()) === name) { done(true); return; }
+        if (Date.now() > until) { done(false); return; }
+        window.setTimeout(tick, 80);
+      })();
+    });
+  }
+
+  function openChange(c) {
+    var gp = GP();
+    var op = gp && gp.changeOpen ? gp.changeOpen(c) : null;
+    if (!op) return Promise.resolve(false);
+    if (_stem(_name()) !== op.name) {
+      var q = (window.CSS && window.CSS.escape) ? window.CSS.escape(op.name) : op.name.replace(/(["\\])/g, '\\$1');
+      var it = document.querySelector('#folder-panel .folder-item[data-file-name="' + q + '"]');
+      if (!it) { say(op.name + ' が保存先の一覧に見つかりません', true); return Promise.resolve(false); }
+      it.click();
+    }
+    return _waitActive(op.name).then(function(ok) {
+      if (!ok || !op.compare) return ok;
+      return loadHistory(true).then(function() {
+        var head = history[0];
+        if (!head || _stem(_name()) !== op.name) return false;
+        return compareWith(head);
+      });
     });
   }
 
@@ -515,5 +556,6 @@ window.MA.gitUi = (function() {
     showHistory: showHistory,
     isRepo: isRepo,
     commit: commit,
+    openChange: openChange,
   };
 })();

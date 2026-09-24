@@ -75,6 +75,23 @@ window.MA.gitPanel = (function() {
     return out;
   }
 
+  // BLK-builder-20260924-2344-3 (design 10c「変更ファイル (M / A / D)…はここで済みます」): 変更の行を押して開く図の名前。
+  // 保存先の図 (ツリーに出る名前) だけを開く。消した図 (D) と保存先の外のファイルは開けないので ''。
+  // compare: M の図は開いた上で最後のコミットを右の枠に並べる (何を変えたかをコミットの前に確かめる)。
+  function changeOpen(c) {
+    if (!c) return null;
+    var code = _s(c.code);
+    if (code === 'D') return null;
+    var file = _s(c.file || c.path);
+    var name = _s(c.name) || (file && file.indexOf('/') < 0 ? _stem(file) : '');
+    if (!name) return null;
+    return {
+      name: name,
+      compare: code === 'M',
+      title: code === 'M' ? name + ' を開いて、最後のコミットと並べる' : name + ' を開く',
+    };
+  }
+
   function markOf(marks, name) {
     return (marks && marks[_stem(name)]) || '';
   }
@@ -304,6 +321,7 @@ window.MA.gitPanel = (function() {
     historyLabel: historyLabel,
     marksByName: marksByName,
     markOf: markOf,
+    changeOpen: changeOpen,
     canCommit: canCommit,
     shortDate: shortDate,
     commitMeta: commitMeta,
