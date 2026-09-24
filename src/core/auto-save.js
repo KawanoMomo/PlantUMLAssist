@@ -254,11 +254,12 @@ window.MA.autoSave = (function() {
   // 解決器は名前の文字列だけを返してもよい (従来どおり)。書かない訳まで知らせたいときは
   // { name: '', reason: 'ask' } の形で返す —— 訳が分かると、画面は「まだディスクに
   // 書いていない」と「書く必要が無い」を言い分けられる (BLK-primary-20260914-2206)。
-  function _fileNameFor(diagramType) {
+  // dsl — 書こうとしている本文 (BLK-owner-20260925-0312-2: 見本・白紙のままなら書かないと決めるのに使う)。
+  function _fileNameFor(diagramType, dsl) {
     if (!_fileNameResolver) return { name: diagramType, reason: null };
     var r;
     try {
-      r = _fileNameResolver(diagramType);
+      r = _fileNameResolver(diagramType, dsl);
     } catch (e) {
       return { name: null, reason: 'error' };   // 名前が分からないなら書かない (取り違えより無書き込み)
     }
@@ -318,7 +319,7 @@ window.MA.autoSave = (function() {
     _writeJson(KEY_META, meta);
     // If file backend selected, mirror the write to disk via the server.
     var cfg = getConfig();
-    if (fileInfo === undefined) fileInfo = _fileNameFor(diagramType);
+    if (fileInfo === undefined) fileInfo = _fileNameFor(diagramType, dsl);
     var fileName = fileInfo ? fileInfo.name : null;
     var where = 'local', reason = null;
     // fileName が null なら、名前が決まらないタブ (未命名・記号入り) なので
@@ -375,7 +376,7 @@ window.MA.autoSave = (function() {
     _pending = {
       diagramType: diagramType,
       dsl: String(dsl == null ? '' : dsl),
-      fileInfo: _fileNameFor(diagramType),
+      fileInfo: _fileNameFor(diagramType, dsl),
     };
     if (_timerId != null) {
       try { clearTimeout(_timerId); } catch (e) {}

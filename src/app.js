@@ -3453,16 +3453,24 @@ function init() {
       scheduleRefresh();
       return;
     }
-    // Force-save the OUTGOING type's current editor content. We schedule
-    // a save keyed to currentDiagramType (NOT the new t) and flush so even
-    // if no debounce was pending, the latest mmdText is persisted before
-    // we leave this type. Wrapped in try/catch — never block a type switch
-    // on autosave failures.
+    // BLK-owner-20260925-0312-2: 図種を選ぶ操作 (レール・図種欄・Ctrl+1〜6・コマンド) は、
+    // 本文が空か見本のままのタブにだけ効く。利用者の行があるタブの本文は替えず、押した図種の
+    // 新しいタブを開く (draw.io・VS Code と同じく、図種やテンプレートの選択は新しいファイルを作る)。
+    // 替えると、タブ名とファイル名はそのままで本文だけが見本になり、Ctrl+S で保存済みの図を潰していた。
+    var BDu = window.MA.blankDoc;
+    var curTpl = '';
+    try { curTpl = currentModule && currentModule.template ? currentModule.template() : ''; } catch (e) { curTpl = ''; }
+    var untouchedNow = !!(BDu && (BDu.isUntouched(mmdText, curTpl, currentDiagramType)
+      || _isUntouchedDoc({ dsl: mmdText, diagramType: currentDiagramType })));
+    if (!untouchedNow && window.MA.workspace) {
+      openTypeInNewTab(t);
+      return;
+    }
+    // 見本・白紙のままのタブは、出ていく図種の本文をディスクへ書かない (書くと `{名前}.puml` が
+    // 見本で作られ、次の保存で図種が替わったとして `{名前}_{図種}.puml` が別に増えていた)。
+    // 保存を待っている打鍵があればそれだけ先に流す。
     if (window.MA.autoSave) {
-      try {
-        window.MA.autoSave.scheduleSave(currentDiagramType, mmdText);
-        window.MA.autoSave.flush();
-      } catch (e) { /* never block type switch */ }
+      try { window.MA.autoSave.flush(); } catch (e) { /* never block type switch */ }
     }
     // Persist the active type so the next page load can restore it.
     try { window.localStorage.setItem('plantuml-diagram-type', t); } catch (e) { /* private mode etc */ }
@@ -3479,10 +3487,10 @@ function init() {
     currentDiagramType = t;
     window.MA.history.pushHistory();
     currentModule = mod;  // explicit user choice overrides auto-detection
-    // Per-type restore: if a saved DSL exists for the new type, prefer it
-    // over the default template. Type switch is an explicit user action so
-    // we silently restore (no confirm() prompt regardless of restoreMode).
-    var savedForType = window.MA.autoSave ? window.MA.autoSave.restoreFor(t) : null;
+    // BLK-owner-20260925-0312-2: 図種別の控え (autoSave の図種ごとの最後の本文) は入れない。
+    // タブごとに図を持つので、控えは別のタブの図の写しであり、白紙のタブに入れると同じ図が
+    // 別の名前でもう 1 枚できる。ここに来るのは白紙・見本のタブだけなので、切り替え先の白紙にする。
+    var savedForType = null;
     var BDs = window.MA.blankDoc;
     mmdText = BDs
       ? BDs.dslForTypeSwitch(mmdText, savedForType, mod.template(), prevTemplate,
@@ -4852,6 +4860,35 @@ function switchToDoc(id) {
   // BLK-owner-20260924-2232-1: ここで履歴を積むと、前のタブの本文が次のタブの履歴に入り、
   // Ctrl+Z で別のタブの本文が出ていた。履歴はタブごとに持つので、切り替えでは積まない。
   applyActiveDoc();
+}
+
+// BLK-owner-20260925-0312-2: 利用者の行があるタブで図種を選んだら、そのタブは替えずに
+// 押した図種の新しいタブへ移る。同じ図種の白紙・見本のままのタブが既にあればそこへ移る
+// (押すたびにタブを増やさない)。新しいタブは見本入り (中身のある図から図種を替えた人への
+// 手がかり)。見本のままのタブはディスクへ書かないので、行を足すか Ctrl+S を押すまでファイルは増えない。
+function openTypeInNewTab(t) {
+  var WS = window.MA.workspace;
+  var mod = modules[t];
+  if (!WS || !mod) return null;
+  var activeId = WS.getActiveId();
+  var BD = window.MA.blankDoc;
+  var tpl = '';
+  try { tpl = mod.template ? mod.template() : ''; } catch (e) { tpl = ''; }
+  var reuse = null;
+  WS.list().forEach(function(d) {
+    if (reuse || !d || d.id === activeId || d.diagramType !== t) return;
+    if (_sourcePathOf(d.id)) return;  // 手元から開いたファイルは白紙でも使い回さない
+    if (BD && BD.isUntouched(d.dsl, tpl, t)) reuse = d;
+  });
+  if (reuse) {
+    switchToDoc(reuse.id);
+    return WS.getActive();
+  }
+  saveActiveDoc();
+  if (window.MA.autoSave) { try { window.MA.autoSave.flush(); } catch (e) {} }
+  WS.open({ name: 'diagram' + (WS.count() + 1), diagramType: t, dsl: tpl || (BD ? BD.blankDsl(t) : '@startuml\n@enduml') });
+  applyActiveDoc();
+  return WS.getActive();
 }
 
 // 仮のタブ (保存先ツリーの 1 回押しで開いたタブ) を固定にする。まだ読み込み中なら読み終えてから固定にする。
@@ -15193,13 +15230,19 @@ function setupTabs() {
     // BLK-primary-20260914-2206: 書かなかったときは **訳も返す**。訳が無いと
     // 状態バーは「書けなかった」と「書く必要が無かった」を区別できず、💾 が
     // 「たった今」と出たまま保存フォルダの .puml は何時間でも変わらない。
-    AS.setFileNameResolver(function() {
+    AS.setFileNameResolver(function(diagramType, dsl) {
       var WS = window.MA.workspace;
       if (!WS || !WS.getActive) return { name: '', reason: 'no-name' };
       var doc = WS.getActive();
       var name = (doc && doc.name) || '';
       if (!name) return { name: '', reason: 'no-name' };
       if (WS.isValidName && !WS.isValidName(name)) return { name: '', reason: 'no-name' };
+      // BLK-owner-20260925-0312-2: ＋ で開いただけのタブ・図種を選んだだけのタブ (見本・白紙のまま) は
+      // ディスクへ書かない (手で押す保存と同じ門。saveActiveDoc の BLK-primary-20260914-2106)。
+      // 書くと空の .puml が保存フォルダに並び、次に図種が替わると `{名前}_{図種}.puml` が別に増える。
+      if (typeof dsl === 'string' && _isUntouchedDoc({ dsl: dsl, diagramType: diagramType || currentDiagramType })) {
+        return { name: '', reason: 'untouched' };
+      }
       // 見比べのために開いた元ファイルの錠も、Ctrl+S と同じように効かせる。
       // ここを素通しすると「元のまま保つ」と答えた図へ自動保存だけが書き続ける。
       var SL = window.MA.sourceLock;
