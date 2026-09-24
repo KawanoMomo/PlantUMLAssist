@@ -35,6 +35,20 @@ test('手順5(他の図種) PNG(透過背景)も同じメニューから選べ�
   expect(download.suggestedFilename()).toBe('gpio_seq_doc.png');
 });
 
+// BLK-builder-20260924-1736-2 (design 9a): Export ▾ は上部バーの右端にあり、開いたメニューは窓の中に収まる
+test('手順5 Export ▾ のメニューは窓からはみ出さず、項目が全部読める', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await page.locator('#btn-export').click();
+  await page.waitForSelector('#export-menu', { state: 'visible' });
+  const vw = page.viewportSize().width;
+  const menuBox = await page.locator('#export-menu').boundingBox();
+  expect(menuBox.x).toBeGreaterThanOrEqual(0);
+  expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(vw);
+  const btnBox = await page.locator('#btn-export').boundingBox();
+  // ボタンの右端にそろえて左へ開く
+  expect(Math.abs((menuBox.x + menuBox.width) - (btnBox.x + btnBox.width))).toBeLessThanOrEqual(2);
+});
+
 // 「資料化」— 部品と図種を選ぶだけで、正しい形式が自動で決まる。
 test('手順5 資料化: 状態遷移図を選ぶと SVG で出て、(資料用) が付いて保存フォルダにも入る', async ({ page }) => {
   await S.bootWithSaveDir(page, DIR);

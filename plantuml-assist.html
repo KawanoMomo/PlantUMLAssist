@@ -731,11 +731,13 @@ html, body {
   position: relative;
 }
 
+/* BLK-builder-20260924-1736-2 (design 9a): Import ▾ / Export ▾ は上部バーの右端にあるので、ボタンの右端にそろえて左へ開く
+   (左端から右へ開くと窓の外へはみ出し、Ctrl+O の札や項目の右半分が切れていた)。 */
 #export-menu {
   display: none;
   position: absolute;
   top: calc(100% + 4px);
-  left: 0;
+  right: 0;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -751,7 +753,7 @@ html, body {
   display: none;
   position: absolute;
   top: calc(100% + 4px);
-  left: 0;
+  right: 0;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: 6px;
