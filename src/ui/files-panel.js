@@ -156,11 +156,8 @@ window.MA.filesPanel = (function() {
     });
     var c = $('files-count-open');
     if (c) c.textContent = docs.length ? String(docs.length) : '';
-    var head = $('files-sec-open');
-    if (head) {
-      var lb = head.querySelector('.files-sec-label');
-      if (lb) lb.textContent = '開いている図' + (docs.length ? '（' + docs.length + '）' : '');
-    }
+    // design 10a (BLK-builder-20260924-1350-3): 見出しは「開いている図」+ 右端の件数の 1 回だけ。
+    // 名前に括弧で同じ数を足さない (「開いている図（1）  1」と 2 回出ていた)。
   }
 
   // タブ列の実体を押す (図の切り替えは今までどおりタブ側の 1 本道を通る)。

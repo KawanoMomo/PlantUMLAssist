@@ -112,6 +112,7 @@ html, body {
 #files-panel .files-sec-headrow button.files-sec-act {
   flex: 0 0 auto; font-size: 11px; line-height: 1; padding: 2px 5px; margin-right: 3px;
 }
+#files-panel .files-sec-headrow button.files-sec-act .files-act-glyph { display: block; }
 #files-panel .files-sec-body[hidden] { display: none; }
 /* design 10a: 保存先の下の部品ごとのフォルダ。`SPI 4 / 6` は揃い具合で、ファイル数ではない。 */
 #files-panel .files-part-head {
@@ -7285,15 +7286,18 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
           <button type="button" class="files-sec-head" id="files-sec-readonly" aria-expanded="false"
                   aria-controls="files-body-readonly"><span class="files-caret" aria-hidden="true">▸</span><span
                   class="files-sec-label">読むだけ</span><span class="files-sec-count" id="files-count-readonly"></span></button>
-          <button class="tab-tool files-sec-act" id="btn-tab-peek" aria-label="👀 他フォルダ"
-                  title="他の保存フォルダの図を読むだけで見る (保存先は変わりません)">👀</button>
+          <!-- design 9a / 10a (BLK-builder-20260924-1350-3): 絵文字をやめ、レールと同じ 1px 線画 (目) にする -->
+          <button class="tab-tool files-sec-act" id="btn-tab-peek" aria-label="他フォルダを覗く"
+                  title="他フォルダを覗く: 他の保存フォルダの図を読むだけで見る (保存先は変わりません)"><svg class="files-act-glyph"
+                  viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1"
+                  aria-hidden="true"><path d="M1.5 8 C4 4, 12 4, 14.5 8 C12 12, 4 12, 1.5 8 Z"/><circle cx="8" cy="8" r="2"/></svg></button>
           <!-- design 9a: 「先輩」は使う人の立場の名前で、機能の中身を表していない。
                相手が先輩でも他チームでも過去の自分の版でも動きは同じなので、何をするかで名付ける。 -->
           <button class="tab-tool tab-tool-plain files-sec-act" id="btn-tab-senior" aria-pressed="false" aria-label="並べて比較"
                   title="並べて比較: 別の保存フォルダの図を右の枠に並べる。図を切り替えると相手も自動で入れ替わる (読むだけ)">⇔</button>
         </div>
         <div class="files-sec-body" id="files-body-readonly">
-          <div class="files-empty">👀 で他のフォルダを覗く / ⇔ で右の枠に並べる。どちらも保存先には書き込みません</div>
+          <div class="files-empty">見出しの右の目の印で他のフォルダを覗く / ⇔ で右の枠に並べる。どちらも保存先には書き込みません</div>
         </div>
       </section>
       <section class="files-sec" data-files-section="git">
