@@ -363,6 +363,27 @@ test('手順9 状態遷移表に親 2 つ・子 3 つずつと各親の開始が
   await page.locator('#st-tr-update').click();
   await page.waitForTimeout(400);
   expect(await dsl(page)).toContain('Idle.Poll --> Idle.Sleep : nap');
+
+  // BLK-builder-20260924-1202-b2-2 (design 4c): `state` 宣言の無い図 (遷移にだけ状態が出る) でも、
+  // 図の遷移を押すと From / To にその状態が選ばれて開き、「更新」だけでは端が変わらない。
+  await S.typeDsl(page, [
+    '@startuml', 'title Sample State', '[*] --> Idle', 'Idle --> Running : start',
+    'Running --> Idle : stop', 'Running --> [*] : done', '@enduml',
+  ].join('\n'));
+  await page.waitForTimeout(1500);
+  const startLabel = page.locator('#preview-svg svg text', { hasText: 'start' }).first();
+  await expect(startLabel).toBeVisible();
+  // 図の上は当たり判定の層が受ける。ラベルの位置を実マウスで押す。
+  const lb = await startLabel.boundingBox();
+  expect(lb).toBeTruthy();
+  await page.mouse.click(lb.x + lb.width / 2, lb.y + lb.height / 2);
+  await expect(page.locator('#st-tr-from')).toHaveValue('Idle');
+  await expect(page.locator('#st-tr-to')).toHaveValue('Running');
+  await expect(page.locator('#st-tr-preview')).toContainText('Idle --> Running : start');
+  await page.locator('#st-tr-update').click();
+  await page.waitForTimeout(400);
+  expect(await dsl(page)).toContain('Idle --> Running : start');
+  expect(await dsl(page)).not.toContain('[*] --> [*]');
 });
 
 // BLK-human-20260923-2001: 開始 [*] を足すとき「最上位の開始か、どの親の中の開始か」を選べなかった。

@@ -1331,9 +1331,8 @@ window.MA.modules.plantumlState = (function() {
         if (!_tx.open) { _tx.open = true; _tx.pick = 'to'; _tx.to = ''; _bindTxCapture(); }
         // 入れ子の子は `親 / 子` で出す。表の「親 / （開始）」の行から開いたときは、その開始を From に足す。
         var STl = window.MA.stateTable;
-        var txOpts = [{ value: '[*]', label: '[*] (initial/final)' }].concat(allStates.map(function(s) {
-          return { value: s.id, label: STl ? STl.rowLabel(s.id, allStates) : (s.label || s.id) };
-        }));
+        // BLK-builder-20260924-1202-b2-2: 遷移にだけ出る (宣言の無い) 状態も候補に入れる。
+        var txOpts = [{ value: '[*]', label: '[*] (initial/final)' }].concat(_endOptions(parsedData));
         var fromBase = txOpts.slice();
         if (_tx.from && String(_tx.from).indexOf('[*]@') === 0) {
           fromBase.unshift({ value: _tx.from, label: STl ? STl.rowLabel(_tx.from, allStates) : _tx.from });
@@ -1776,10 +1775,8 @@ window.MA.modules.plantumlState = (function() {
     var P = window.MA.properties;
     var STb = window.MA.stateTable;
     // 入れ子の子は `親 / 子` で出す (同じ名前の子が別の親にいても取り違えない)。
-    var stateOpts = (parsedData.states || []).map(function(s) {
-      return { value: s.id, label: STb ? STb.rowLabel(s.id, parsedData.states) : (s.label || s.id) };
-    });
-    var stateOptsWithPseudo = [{ value: '[*]', label: '[*] (終了)' }].concat(stateOpts);
+    // BLK-builder-20260924-1202-b2-2: 遷移にだけ出る (宣言の無い) 状態も行き先に選べる。
+    var stateOptsWithPseudo = [{ value: '[*]', label: '[*] (終了)' }].concat(_endOptions(parsedData));
     var fromText = STb ? STb.rowLabel(fromId, parsedData.states || []) : fromId;
     content.innerHTML =
       '<h3 style="margin:0 0 12px 0;color:var(--text-primary);">Outgoing transition from ' + window.MA.htmlUtils.escHtml(fromText) + '</h3>' +
@@ -2291,6 +2288,30 @@ window.MA.modules.plantumlState = (function() {
     return same > 1 ? v : bare;
   }
 
+  // BLK-builder-20260924-1202-b2-2: 遷移の端の候補 ({ value: 状態の id, label: `親 / 子` })。
+  // `state` 宣言のある状態に、遷移にだけ出てくる状態 (`Idle --> Running` だけで導入された Idle /
+  // Running) を足す。集め方は状態遷移表の行と同じ (rowStates) で、行き先にしか出ない状態も拾う。
+  // 開始・終了 (`[*]`) と履歴 (`[H]` / `親[H]`) は状態ではないので入れない (呼ぶ側が足す)。
+  function _endOptions(parsed) {
+    var states = (parsed && parsed.states) || [];
+    var trs = (parsed && parsed.transitions) || [];
+    var STb = window.MA.stateTable;
+    var ids = STb ? STb.rowStates(parsed).slice() : states.map(function(s) { return s.id; });
+    trs.forEach(function(tr) {
+      var t = String(tr.to == null ? '' : tr.to);
+      if (t && t !== '[*]') ids.push(STb ? STb.resolveEnd(t, tr.scope, states) : t);
+    });
+    var seen = {};
+    var out = [];
+    ids.forEach(function(id) {
+      var v = String(id == null ? '' : id);
+      if (!v || seen[v] || v === '[*]' || v.indexOf('[*]@') === 0 || /\[H\*?\]$/.test(v)) return;
+      seen[v] = true;
+      out.push({ value: v, label: STb ? STb.rowLabel(v, states) : v });
+    });
+    return out;
+  }
+
   function _renderTransitionEdit(sel, parsedData, propsEl, ctx) {
     var P = window.MA.properties;
     var tr = null;
@@ -2301,13 +2322,18 @@ window.MA.modules.plantumlState = (function() {
     // BLK-owner-20260923-2332-1: 候補は追加フォーム・状態遷移表と同じく `親 / 子` で並べ、
     // 書かれた端 (`Standby` / `Idle.Standby`) はどちらも同じ状態の候補を選んだ形で開く。
     var allStates = parsedData.states || [];
-    var STe = window.MA.stateTable;
-    var stateOpts = allStates.map(function(s) {
-      return { value: s.id, label: STe ? STe.rowLabel(s.id, allStates) : (s.label || s.id) };
-    });
-    var stateOptsWithPseudo = [{ value: '[*]', label: '[*]' }].concat(stateOpts);
-    var fromOpts = stateOptsWithPseudo.map(function(o) { return _selectedOpt(o, _endValue(tr.from, tr.scope, allStates)); });
-    var toOpts = stateOptsWithPseudo.map(function(o) { return _selectedOpt(o, _endValue(tr.to, tr.scope, allStates)); });
+    // BLK-builder-20260924-1202-b2-2: 候補には遷移にだけ出る状態 (宣言の無い Idle / Running) も入れる。
+    var stateOptsWithPseudo = [{ value: '[*]', label: '[*]' }].concat(_endOptions(parsedData));
+    // 今の端が候補に無い書き方 (`親[H]` など) でも、その値のまま開く (開いて「更新」だけで端を変えない)。
+    function withCurrent(opts, written) {
+      var v = _endValue(written, tr.scope, allStates);
+      if (!v || opts.some(function(o) { return o.value === v; })) return opts;
+      return opts.concat([{ value: v, label: String(written) }]);
+    }
+    var fromOpts = withCurrent(stateOptsWithPseudo, tr.from)
+      .map(function(o) { return _selectedOpt(o, _endValue(tr.from, tr.scope, allStates)); });
+    var toOpts = withCurrent(stateOptsWithPseudo, tr.to)
+      .map(function(o) { return _selectedOpt(o, _endValue(tr.to, tr.scope, allStates)); });
     var html =
       '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">Transition (L' + tr.line + ')</div>' +
       P.selectFieldHtml('From', 'st-tr-from', fromOpts) +
@@ -2574,6 +2600,7 @@ window.MA.modules.plantumlState = (function() {
     parse: parse,
     endValue: _endValue,
     endNameFor: _endNameFor,
+    endOptions: _endOptions,
     buildOverlay: buildOverlay,
     renderProps: renderProps,
     template: template,
