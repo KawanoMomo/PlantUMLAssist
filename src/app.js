@@ -61,8 +61,59 @@ function updateTopSaveTarget() {
   el.setAttribute('data-mode', bc.mode);
   if (bc.configured) el.classList.add('configured');
   else el.classList.remove('configured');
+  updateTopCrumbs(bc, doc);
   updateTopSaveButton();
 }
+
+// design 10a / 9a (BLK-builder-20260924-1715-1): 上部バー左のパンくずのフォルダの段。
+// 「{保存先} / {部品} / 」を #top-file-name の左に出す。部品はツリーが保存先の図を束ねた
+// 部品のフォルダ (FILES の一覧に無い図・図種の読めない図は保存先だけ)。
+// 段を押すと FILES ツリーでそのフォルダを見せる (保存先を変える入口はツリーの保存先の行)。
+function updateTopCrumbs(bc, doc) {
+  var host = document.getElementById('top-crumbs');
+  var TS = window.MA.topStatus;
+  if (!host || !TS || !TS.crumbs) return;
+  var folder = (bc && bc.mode === 'file') ? bc.folder : '';
+  var part = null;
+  var FT = window.MA.fileTree;
+  var FP = window.MA.filesPanel;
+  if (folder && doc && doc.name && FT && FT.partFor && FP && FP.folderEntries) {
+    part = FT.partFor(String(doc.name), FP.folderEntries());
+  }
+  var list = TS.crumbs(folder, part);
+  var key = JSON.stringify(list);
+  if (host.getAttribute('data-key') === key) return;
+  host.setAttribute('data-key', key);
+  host.textContent = '';
+  list.forEach(function(c) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'top-crumb';
+    b.setAttribute('data-crumb', c.kind);
+    if (c.part) b.setAttribute('data-part', c.part);
+    b.textContent = c.label;
+    b.title = c.title;
+    b.addEventListener('click', function() {
+      if (window.MA.filesPanel && window.MA.filesPanel.reveal) window.MA.filesPanel.reveal(c.kind, c.part || '');
+    });
+    host.appendChild(b);
+    var sep = document.createElement('span');
+    sep.className = 'top-crumb-sep';
+    sep.setAttribute('aria-hidden', 'true');
+    sep.textContent = '/';
+    host.appendChild(sep);
+  });
+  host.hidden = !list.length;
+}
+// FILES の保存先の一覧は非同期に読み直るので、読み直るたびに部品の段を追う (files-panel が呼ぶ)。
+window.MA.refreshTopCrumbs = function() {
+  var ST = window.MA.saveTarget;
+  if (!ST) return;
+  var cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null;
+  var doc = null;
+  try { doc = window.MA.workspace ? window.MA.workspace.getActive() : null; } catch (e) { doc = null; }
+  updateTopCrumbs(ST.breadcrumb(cfg, doc, '(無題)'), doc);
+};
 
 // BLK-junior-20260913-0306: 保存だけがボタンを持たず、Ctrl+K で「ファイルを保存」と
 // 打つ経路しか無かった。文言は保存先によって変わる (フォルダ運用なら上書き保存)。

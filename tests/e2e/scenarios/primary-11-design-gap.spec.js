@@ -486,3 +486,35 @@ test('手順11 タブと開いている図の行は上部バーと同じ「名�
   expect(rows.length).toBe(2);
   expect(rows.every((t) => /\.puml$/.test(t))).toBe(true);
 });
+
+// BLK-builder-20260924-1715-1 (design 10a / 9a): 上部バー左は「{保存先} / {部品} / {ファイル名}」のパンくず。
+// 以前は保存先の図を開いても上部バーはファイル名だけで、どのフォルダの図か読めなかった。
+// フォルダの段を押すと FILES ツリーでそのフォルダを見せる。
+test('手順11 保存先の図を開くと上部バーが「保存先 / 部品 / ファイル名」のパンくずになる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR, { foldedTools: true });
+  await S.clearDir(page, DIR);
+  await S.putDoc(page, DIR, 'spi_init_sequence', '@startuml\nApp -> SpiDrv : Spi_Init()\n@enduml');
+  await S.putDoc(page, DIR, 'spi_state', '@startuml\n[*] --> Idle\n@enduml');
+  await page.reload();
+  await page.waitForSelector('html[data-app-ready="1"]', { state: 'attached' });
+  const folder = DIR.replace(/[\/]+$/, '').split(/[\/]/).pop();
+  const crumbs = page.locator('#top-crumbs .top-crumb');
+  // 新規の図 (まだ保存先に無い) は保存先の段だけ。
+  await expect(crumbs).toHaveText([folder]);
+
+  const head = page.locator('#files-parts .files-part-head[data-part="spi"]');
+  if ((await head.getAttribute('aria-expanded')) !== 'true') await head.click();
+  await page.locator('#files-parts .files-part-file[data-file-name="spi_state"]').click();
+  await expect(page.locator('#top-file-name')).toHaveText('spi_state.puml');
+  await expect(crumbs).toHaveText([folder, 'SPI']);
+  expect(await page.locator('#top-crumbs').innerText()).not.toMatch(/[📁📂🔒]/u);
+
+  // 部品の段を押すと、畳んだ FILES が開き、部品のフォルダが開いてそこへ移る。
+  await head.click();
+  await page.keyboard.press('Control+b');
+  await expect(page.locator('#files-panel')).toHaveClass(/collapsed/);
+  await page.locator('#top-crumbs [data-crumb="part"]').click();
+  await expect(page.locator('#files-panel')).not.toHaveClass(/collapsed/);
+  await expect(head).toHaveAttribute('aria-expanded', 'true');
+  await expect(head).toBeFocused();
+});

@@ -45,6 +45,24 @@ window.MA.topStatus = (function() {
     return 'Rendered · ' + (t || '—');
   }
 
+  // crumbs: 上部バーのパンくずのうち、ファイル名より左のフォルダの段 (design 9a / 10a
+  // 「junior / SPI / spi_init_sequence.puml」)。BLK-builder-20260924-1715-1。
+  // folder: 保存先フォルダの名前 (保存先が無い = ダウンロードのときは '')
+  // part: 部品フォルダ { part, label } (ツリーで部品のフォルダに入っていなければ null)
+  // 返り値: [{ kind: 'target' | 'part', label, part?, title }]。保存先が無ければ []
+  // (新規の図はファイル名だけ。フォルダの無い図に「ダウンロード /」とは出さない)。
+  function crumbs(folder, part) {
+    var f = (typeof folder === 'string' ? folder : '').trim();
+    if (!f) return [];
+    var out = [{ kind: 'target', label: f, title: '保存先 ' + f + ' (押すと FILES ツリーでこのフォルダを見せます)' }];
+    var p = part && typeof part.label === 'string' ? part.label.trim() : '';
+    if (p) {
+      out.push({ kind: 'part', label: p, part: String(part.part || ''),
+        title: '部品フォルダ ' + p + ' (押すと FILES ツリーでこのフォルダを開きます)' });
+    }
+    return out;
+  }
+
   // isError: 状態表示を赤くするかどうか。
   function isError(phase) {
     return phase === 'error';
@@ -56,5 +74,6 @@ window.MA.topStatus = (function() {
     render: render,
     previewHead: previewHead,
     isError: isError,
+    crumbs: crumbs,
   };
 })();

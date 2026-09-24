@@ -125,6 +125,24 @@ window.MA.fileTree = (function() {
     return { groups: groups(kinded), loose: loose };
   }
 
+  // design 10a (BLK-builder-20260924-1715-1): 上部バーのパンくずの「部品フォルダ」。
+  // 保存先の一覧 (entries) に name の図があり、ツリーがそれを部品のフォルダに入れているときだけ
+  // その部品を返す (ツリーと同じ layout で決めるので、ツリーに無いフォルダ名は出ない)。
+  // 保存先に無い図・図種が読めず直下に並ぶ図は null。
+  function partFor(name, entries) {
+    var n = _s(name).replace(/\.puml$/i, '');
+    if (!n) return null;
+    var hit = null;
+    (entries || []).forEach(function(e) {
+      var en = _s(e && e.name ? e.name : e).replace(/\.puml$/i, '');
+      if (!hit && en === n) hit = e;
+    });
+    if (!hit) return null;
+    var lay = layout([hit]);
+    if (!lay.groups.length) return null;
+    return { part: lay.groups[0].part, label: lay.groups[0].label };
+  }
+
   // ファイル行の頭に付ける図種の線画 (design 10a「ファイルの頭にはその図種の線画が付きます」)。
   // 線画そのものは左レールと同じもの (diagram-rail の GLYPHS) を使い、ツリーだけの絵を作らない。
   // kind は保存先の一覧の短い名前 (`sequence`) でも、タブの図種 (`plantuml-sequence`) でもよい。
@@ -227,6 +245,7 @@ window.MA.fileTree = (function() {
     partLabel: partLabel,
     groups: groups,
     layout: layout,
+    partFor: partFor,
     fileMarks: fileMarks,
     glyphType: glyphType,
     glyphSvg: glyphSvg,

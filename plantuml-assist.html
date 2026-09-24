@@ -459,12 +459,30 @@ html, body {
 }
 #top-save-target:hover { text-decoration: underline; }
 #top-save-target.configured { border: none; }
-#top-crumb-sep {
+#top-crumbs { display: inline-flex; align-items: center; min-width: 0; }
+#top-crumbs[hidden] { display: none; }
+#top-crumbs .top-crumb {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  padding: 1px 2px;
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#top-crumbs .top-crumb:hover { color: var(--text-primary); text-decoration: underline; }
+#top-crumbs .top-crumb-sep {
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-secondary);
   margin: 0 5px;
 }
+/* パンくずで押して見せたツリーの行を一瞬だけ縁取る */
+#files-panel .files-revealed { outline: 1px solid var(--accent); outline-offset: -1px; }
 /* design 9a: 未保存のときだけアクセント色 + ●。保存済みは淡色の文字に落とす。 */
 #top-save[data-save-state="saved"] {
   background: transparent;
@@ -7447,7 +7465,10 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <!-- BLK-human-20260923-1700 (design 10a): 保存先チップは FILES ツリーの
          「保存先」節の一番上 (保存先フォルダの行) へ引っ越した。上部バーに残すのは
          編集中のファイル名だけ。 -->
-    <span id="top-crumb-sep" aria-hidden="true" hidden>/</span>
+    <!-- design 10a (BLK-builder-20260924-1715-1): 上部バー左は「{保存先} / {部品} / {ファイル名}」の
+         パンくず。フォルダの段は押すと FILES ツリーでそのフォルダを見せる (保存先を変えるのは
+         ツリーの保存先の行)。保存先が無い新規の図はファイル名だけ。 -->
+    <span id="top-crumbs"></span>
     <span id="top-file-name" title="編集中の図">(無題).puml</span>
     <!-- design 9a: 保存の状態をそのまま出す。未保存のときだけ ● とアクセント色、
          保存済みは淡色の「保存済み」に落とす (BLK-junior-20260913-0306 の入口は残す)。 -->

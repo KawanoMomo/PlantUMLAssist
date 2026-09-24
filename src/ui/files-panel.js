@@ -253,7 +253,12 @@ window.MA.filesPanel = (function() {
     if (!host) return;
     var FT = window.MA.fileTree;
     var entries = _folderNames();
-    if (!FT || !entries.length) { host.textContent = ''; refreshSummary(); return; }
+    if (!FT || !entries.length) {
+      host.textContent = '';
+      refreshSummary();
+      if (typeof window.MA.refreshTopCrumbs === 'function') window.MA.refreshTopCrumbs();
+      return;
+    }
     var shown = FT.filter(entries, _query());
     var lay = FT.layout ? FT.layout(shown) : { groups: FT.groups(shown), loose: [] };
     var groups = lay.groups;
@@ -311,6 +316,39 @@ window.MA.filesPanel = (function() {
     if (c) c.textContent = entries.length ? String(entries.length) : '';
     refreshSummary();
     _gitMarks();
+    // 上部バーのパンくずの部品の段は、このツリーの束ね方を読む (BLK-builder-20260924-1715-1)。
+    if (typeof window.MA.refreshTopCrumbs === 'function') window.MA.refreshTopCrumbs();
+  }
+
+  // ── パンくずから見せる (design 10a、BLK-builder-20260924-1715-1) ──────────
+  // kind: 'target' = 保存先のフォルダの行 / 'part' = 部品のフォルダの見出し。
+  // パネルと保存先の節が畳まれていれば開き、部品のフォルダは中身まで開いて、行へ移して縁取る。
+  function reveal(kind, part, _retried) {
+    if (!panel) return false;
+    if (!isOpen()) setOpen(true);
+    var fp = $('folder-panel');
+    if (fp && !/\bopen\b/.test(fp.className || '')) {
+      var head = $('btn-tab-folder');
+      if (head) head.click();
+    }
+    var el = null;
+    if (kind === 'part' && part) {
+      var q = (window.CSS && window.CSS.escape) ? window.CSS.escape(String(part)) : String(part);
+      el = document.querySelector('#files-parts .files-part-head[data-part="' + q + '"]');
+      if (el && el.getAttribute('aria-expanded') !== 'true') el.click();
+      // 節を開いた直後は一覧を読み直している最中で、部品の見出しがまだ無いことがある。1 度だけ待つ。
+      if (!el && !_retried) {
+        window.setTimeout(function() { reveal(kind, part, true); }, 400);
+        return true;
+      }
+    }
+    if (!el) el = $('top-save-target');
+    if (!el) return false;
+    if (el.scrollIntoView) el.scrollIntoView({ block: 'nearest' });
+    try { el.focus({ preventScroll: true }); } catch (e) { el.focus(); }
+    el.classList.add('files-revealed');
+    window.setTimeout(function() { el.classList.remove('files-revealed'); }, 1500);
+    return true;
   }
 
   // ── 件数 (畳んだままでも読める) ───────────────────────────────────────
@@ -469,5 +507,7 @@ window.MA.filesPanel = (function() {
     setGitCount: setGitCount,
     setSummary: setSummary,
     renderParts: renderParts,
+    folderEntries: _folderNames,
+    reveal: reveal,
   };
 })();
