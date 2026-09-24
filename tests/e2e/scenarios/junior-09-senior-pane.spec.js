@@ -247,9 +247,21 @@ test('手順9 保存先が Git なら、この図の履歴の「比較」で前�
   await expect(page.locator('#senior-git-legend')).toContainText('緑');
 
   // 到達条件その5: 「差分だけ」で作業中との違いの行だけになる (追記した行が + で出る)。
+  // design 10c (BLK-builder-20260924-1836-2): 見出しは「差分だけ / 並べて比較」の 2 択で、既定は並べて比較。
+  await expect(page.locator('#senior-git-view button')).toHaveText(['差分だけ', '並べて比較']);
+  await expect(page.locator('#senior-git-sbs')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#senior-git-diffonly')).toHaveAttribute('aria-pressed', 'false');
   await page.locator('#senior-git-diffonly').click();
+  await expect(page.locator('#senior-git-diffonly')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#senior-git-sbs')).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('#senior-dsl .sg-add')).toContainText('Fault');
   await expect(page.locator('#senior-dsl .sg-same')).toHaveCount(0);
+  // 「並べて比較」を押すと本文の全部に戻り、もう一度押しても裏返らない (押した方になる)。
+  await page.locator('#senior-git-sbs').click();
+  await page.locator('#senior-git-sbs').click();
+  await expect(page.locator('#senior-git-sbs')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#senior-dsl .sg-same').first()).toBeVisible();
+  await page.locator('#senior-git-diffonly').click();
 
   // 到達条件その6: ▶ で 1 つ新しいコミットへ送れる (最新では ▶ が止まる)。
   await page.locator('#senior-git-next').click();

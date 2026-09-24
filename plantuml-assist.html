@@ -260,7 +260,15 @@ html, body {
 #senior-git[hidden], #senior-mode[hidden], #senior-dir[hidden] { display: none; }
 #senior-git #senior-git-pick { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #senior-git #senior-git-sides { font-size: 10px; color: var(--text-secondary); white-space: nowrap; }
-#senior-git #senior-git-diffonly[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+/* BLK-builder-20260924-1836-2 (design 10c): 差分だけ / 並べて比較 の 2 択。#senior-mode (据え置く / 1 回だけ) と同じ形 */
+#senior-git #senior-git-view { display: inline-flex; flex-shrink: 0; }
+#senior-git #senior-git-view button {
+  font-size: 11px; padding: 1px 6px; border-radius: 0;
+  border: 1px solid var(--border); background: transparent;
+  color: var(--text-secondary); cursor: pointer;
+}
+#senior-git #senior-git-view button + button { border-left: none; }
+#senior-git #senior-git-view button[aria-pressed="true"] { background: var(--bg-primary); color: var(--text-primary); }
 /* BLK-builder-20260924-1823-2 (design 10c): コミットと比較している間、図の上に差の色を付ける。
    左のプレビュー = このコミットの後に増えた・変わった文字 (緑)、右の枠 = このコミットにだけある文字 (赤) */
 #senior-git #senior-git-legend { flex-basis: 100%; font-size: 10px; color: var(--text-secondary); white-space: normal; }
@@ -8217,7 +8225,12 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button type="button" id="senior-git-prev" title="1 つ古いコミット">◀</button>
         <button type="button" id="senior-git-next" title="1 つ新しいコミット">▶</button>
         <span id="senior-git-sides"></span>
-        <button type="button" id="senior-git-diffonly" aria-pressed="false" title="作業中と違う行だけを出す">差分だけ</button>
+        <!-- BLK-builder-20260924-1836-2 (design 10c): 「差分だけ / 並べて比較」の 2 択 (据え置く / 1 回だけ と同じ形)。
+             押している方だけ地色。既定は並べて比較 (本文の全部と図) -->
+        <span id="senior-git-view" role="group" aria-label="コミットとの見比べ方">
+          <button type="button" id="senior-git-diffonly" aria-pressed="false" title="作業中と違う行だけを出す">差分だけ</button>
+          <button type="button" id="senior-git-sbs" aria-pressed="true" title="コミット時点の本文の全部と図を並べる">並べて比較</button>
+        </span>
         <!-- BLK-builder-20260924-1823-2 (design 10c): 図の上の差分の色の意味を 1 行で言う -->
         <span id="senior-git-legend"></span>
       </div>
