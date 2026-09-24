@@ -5,12 +5,18 @@
 const { test, expect } = require('@playwright/test');
 const { gotoApp, saveDirFor } = require('../helpers');
 
-// 保存先の節は既定で開いている (design 10a)。開いていれば畳んでから開き直し、
-// 一覧を今の中身で描き直す (直に押すと、開いていたときに畳んでしまう)。
+// 保存先の一覧は FILES ツリーの「保存先」の右クリック「保存先の一覧を開く」で中央の枠に開く
+// (BLK-owner-20260924-0637-1。scenarios/_scenario.js の openFolder と同じ経路)。
+// BLK-builder-20260924-1702-2: 旧経路 (見出しを押して #folder-panel.open を待つ) は一覧が
+// 中央の枠へ移ってから見えないまま待ち続けて全件落ちていたので、今の入口に合わせた。
 async function openFolder(page) {
-  if (await page.locator('#folder-panel.open').count()) await page.locator('#btn-tab-folder').click();
-  await page.locator('#btn-tab-folder').click();
-  await page.waitForSelector('#folder-panel.open');
+  if (await page.locator('#folder-panel.is-list').count()) {
+    await page.locator('#folder-list-close').click();
+    await page.waitForSelector('#folder-panel:not(.is-list)', { state: 'attached' });
+  }
+  await page.locator('#btn-tab-folder').click({ button: 'right' });
+  await page.locator('#files-ctx-menu [data-action="open-list"]').click();
+  await page.waitForSelector('#folder-panel.open.is-list');
 }
 
 const DIR = saveDirFor(__filename);
