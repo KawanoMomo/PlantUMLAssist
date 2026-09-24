@@ -3748,16 +3748,18 @@ function initCommandPalette() {
       // BLK-owner-20260924-1212-prune: この図の履歴 を開く行は「この図の履歴を見る」1 行。旧名「変遷」は語に落とす。
       { id: 'tab-versions', title: 'この図の履歴を見る / Version history', hint: 'Tabs', keywords: ['version', 'timeline', 'history', 'へんせん', 'りれき', '変遷', 'この図の変遷', '履歴', '保存した版'], button: 'btn-tab-versions', run: function() { clickById('btn-tab-versions'); } },
       { id: 'tab-lineage', title: 'この図の継承元を見る / Lineage', hint: 'Tabs', keywords: ['lineage', 'parent', 'けいしょう', 'もと', 'とりこみ'], button: 'btn-tab-lineage', run: function() { clickById('btn-tab-lineage'); } },
-      { id: 'tab-board', title: '変更サマリを開く / Change board', hint: 'Tabs', keywords: ['board', 'summary', 'へんこう', 'さまり'], button: 'btn-tab-board', run: function() { clickById('btn-tab-board'); } },
+      { id: 'tab-board', title: '変更サマリを開く / Change board', hint: 'Tabs', keywords: ['board', 'summary', 'へんこう', 'さまり', '提出前レビュー', '変更前後', 'へんこうぜんご', 'ていしゅつ', 'before-after', 'review'], button: 'btn-tab-board', run: function() {
+        var cpIn = document.getElementById('cp-input');
+        var q = cpIn ? String(cpIn.value || '') : '';
+        if (/提出|ていしゅつ|変更前後|へんこうぜんご|before.?after/i.test(q)) openChangeBoardAt('delivery', true);
+        else clickById('btn-tab-board');
+      } },
       // BLK-owner-20260918-0529-prune: 「見比べる」5 つのうち、下端ステータスと
       // 納品パネルの中にしか入口が無かった 2 つ。今まで通りの呼び名 (比較 / 前回保存版 /
       // 変更前後) でも、メニューの言い換え (…と見比べる) でも引けるようにする。
       { id: 'livediff', title: '前回保存版との比較 / Compare with last save', hint: 'Status', keywords: ['diff', 'compare', 'last', 'save', 'ぜんかい', 'ほぞん', 'ひかく', 'みくらべ', 'ならべ'], button: 'status-livediff', run: function() { clickById('status-livediff'); } },
-      { id: 'delivery-review', title: '変更前後を見比べる (提出前レビュー) / Before-after review', hint: 'Deliver', keywords: ['review', 'before', 'after', 'へんこうぜんご', 'みくらべ', 'ひかく', 'ならべ', 'ていしゅつ'], button: 'dp-review', run: function() {
-        var modal = document.getElementById('dp-modal');
-        if (!modal || modal.style.display !== 'flex') clickById('btn-tab-delivery');
-        setTimeout(function() { clickById('dp-review'); }, 60);
-      } },
+      // BLK-primary-20260924-1332-wish: 🔍 提出前レビューの行は置かない。▤ 変更サマリの 1 行 (id 'tab-board') の語に
+      // 「提出前レビュー」「変更前後」を入れ、その語で引いたときは 変更前 = 前回提出・🖼 SVGで見る で開く。
       // BLK-primary-20260918-0249-wish: 会議で見せる 3〜5 枚を選んで並べる
       { id: 'meeting-set', title: '会議セットで並べる / Meeting set', hint: 'Board', keywords: ['meeting', 'kaigi', 'かいぎ', 'せっと', 'set'], button: 'cb-meeting', run: function() { toggleChangeBoard(true); clickById('cb-meeting'); } },
       // 顧客の前で開く画面 (BLK-primary-20260913-0306-wish)。ボードを開いていなければ開いてから切り替える。
@@ -5639,12 +5641,36 @@ function _cbShowPanesHtml(entry) {
     // 差し替え先は名前と側で引く。鍵そのものは DSL を含むので属性には置かない
     // (改行を含む値はセレクタに書けない)。
     html += '<div class="cb-pane" data-side="' + esc(p.side) + '">'
-      + '<div class="cb-pane-label">' + esc(p.label) + '</div>'
+      + '<div class="cb-pane-label">' + esc(p.side === 'before' ? _cbBeforeLabel(entry) : p.label) + '</div>'
       + '<div class="cb-pane-body' + cls + '" data-doc="' + esc(entry.name) + '"'
       + ' data-side="' + esc(p.side) + '">' + inner + '</div>'
       + '</div>';
   });
+  // BLK-primary-20260924-1332-wish: 旧 🔍 提出前レビューの「増えた文字 / 消えた文字 / 図形の数」を
+  // 図の下に 1 行ずつ出す (両側を描き終えたら _cbDrawShowPanes が埋める)。
+  html += '<div class="cb-svg-diff" data-doc="' + esc(entry.name) + '"></div>';
   return html + '</div>';
+}
+
+// 両側を描き終えた図の、見た目の差 (delivery-review.diff) を図の下に書く。
+function _cbPutSvgDiff(name, pair) {
+  var DR = window.MA.deliveryReview;
+  var body = document.getElementById('cb-body');
+  if (!DR || !body) return;
+  var slot = null;
+  Array.prototype.forEach.call(body.querySelectorAll('.cb-svg-diff'), function(el) {
+    if (el.getAttribute('data-doc') === name) slot = el;
+  });
+  if (!slot) return;
+  var esc = window.MA.htmlUtils.escHtml;
+  var d = DR.diff(pair.before || '', pair.after || '');
+  var html = '<div class="cb-svg-diff-line" data-kind="' + esc(d.kind) + '">' + esc(DR.summaryLine(d)) + '</div>';
+  if (d.added.length) html += '<div class="cb-svg-added">増えた文字: ' + esc(d.added.join(' / ')) + '</div>';
+  if (d.removed.length) html += '<div class="cb-svg-removed">消えた文字: ' + esc(d.removed.join(' / ')) + '</div>';
+  d.shape.forEach(function(sh) {
+    html += '<div class="cb-svg-shape">' + esc(sh.label + ' の数 ' + sh.was + ' → ' + sh.now) + '</div>';
+  });
+  slot.innerHTML = html;
 }
 
 // 「切替」を押すと 並べる → 変更前だけ → 変更後だけ と回る。顧客の前で押す
@@ -5680,6 +5706,10 @@ function _cbDrawShowPanes(board) {
   var plan = SBA.renderPlan(board);
   var seq = ++_cbSvgSeq;
   var done = 0;
+  // 図ごとの両側の絵。両方そろったら (新規なら後だけで) 見た目の差を書く。
+  var pairs = {};
+  var need = {};
+  plan.forEach(function(it) { need[it.name] = (need[it.name] || 0) + 1; });
   if (stateEl) stateEl.textContent = SBA.statusText(SBA.SVG, board, 0);
 
   function put(item, html) {
@@ -5692,6 +5722,10 @@ function _cbDrawShowPanes(board) {
       slots[i].innerHTML = html;
       slots[i].classList.remove('cb-pane-wait');
     }
+    var pr = pairs[item.name] || (pairs[item.name] = { n: 0 });
+    pr[item.side] = html;
+    pr.n++;
+    if (pr.n >= need[item.name]) _cbPutSvgDiff(item.name, pr);
   }
 
   function step(i) {
@@ -6291,6 +6325,16 @@ function setChangeBoardSvg(on) {
   var st = document.getElementById('cb-svg-state');
   if (st && !_cbSvg) st.textContent = '';
   renderChangeBoard();
+}
+
+// 基準と見せ方を決めてボードを開く (BLK-primary-20260924-1332-wish)。
+// base が選べない (控えが無い) ときは 今日 0 時 のまま開き、選択肢にその理由が出る。
+function openChangeBoardAt(base, svg) {
+  var BL = window.MA.changeBaseline;
+  if (BL && BL.isKind(base)) { _cbBase = base; _cbBaseCacheKey = ''; }
+  toggleChangeBoard(true);
+  if (svg != null && !!svg !== _cbSvg) setChangeBoardSvg(!!svg);
+  return Promise.resolve(true);
 }
 
 function toggleChangeBoard(open) {
@@ -25522,138 +25566,16 @@ function buildDeliveryPackage() {
 // ── 提出前レビュー (変更前後を並べて出す) ─────────────────────────────────
 // BLK-primary-20260908-1903-wish: 納品パッケージは「差分の行数」までしか言わず、
 // 客の目に何が違って見えるかはタブを 1 枚ずつ切り替えて見比べるしかなかった。
-// ここは前回提出時点の puml を描き直した SVG と今の SVG を、並べる / 重ねるで出す。
-// 判断は src/core/delivery-review.js の職掌。ここは描画と DOM だけ。
+var _drName = null;
+var _drCache = {};
 
-var _drMode = 'side';   // 'side' | 'overlay'
-var _drName = null;     // 今見比べている図の name
-var _drCache = {};      // name -> { before: svg|null, after: svg|null }
-
-function _drEntries() {
-  var board = _dpBoard(_dpSelectedDocs());
-  return board ? board.entries : [];
-}
-
-function _drDocByName(name) {
-  var found = null;
-  _dpSelectedDocs().forEach(function(d) { if (d.name === name) found = d; });
-  return found;
-}
-
-// 前回提出時点の SVG と今の SVG を用意する。前回が無い図 (新規) は before が null。
-function _drLoad(name) {
-  var DP = window.MA.deliveryPackage;
-  if (_drCache[name]) return Promise.resolve(_drCache[name]);
-  var doc = _drDocByName(name);
-  if (!doc || !DP) return Promise.resolve({ before: null, after: null });
-  var base = _dpBaselineOf(name);
-  var jobs = [
-    Promise.resolve(renderDslToSvg(doc.dsl)).then(function(s) { return s; }, function() { return null; }),
-    base ? Promise.resolve(renderDslToSvg(base.dsl)).then(function(s) { return s; }, function() { return null; })
-         : Promise.resolve(null),
-  ];
-  return Promise.all(jobs).then(function(r) {
-    _drCache[name] = { after: r[0], before: r[1] };
-    return _drCache[name];
-  });
-}
-
-function renderDeliveryReview(pair) {
-  var DR = window.MA.deliveryReview;
-  var content = document.getElementById('dr-modal-content');
-  if (!DR || !content) return null;
-  var esc = window.MA.htmlUtils.escHtml;
-  var entries = _drEntries();
-  var rows = DR.plan(entries);
-  var p = pair || { before: null, after: null };
-  var d = DR.diff(p.before, p.after);
-
-  var BTN = 'background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;padding:3px 10px;font-size:11px;';
-  var html = '<style>' + DR.overlayCss() + '</style>'
-    + '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">\u{1F50D} 提出前レビュー（変更前後を並べる）</h3>'
-    + '<div id="dr-headline" style="font-size:11px;color:var(--text-secondary);">' + esc(DR.headline(entries)) + '</div>';
-
-  html += '<div id="dr-tabs" style="display:flex;flex-wrap:wrap;gap:4px;margin:10px 0;">';
-  rows.forEach(function(r) {
-    var on = r.name === _drName;
-    var mark = r.status === 'changed' ? '変更' : (r.status === 'new' ? '新規' : '同じ');
-    html += '<button type="button" class="dr-pick" data-name="' + esc(r.name) + '" style="' + BTN
-      + (on ? 'outline:2px solid var(--accent);' : '') + '">' + esc(r.name)
-      + ' <span style="color:var(--text-secondary);">' + esc(mark) + '</span></button>';
-  });
-  html += '</div>';
-
-  html += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">'
-    + '<button type="button" id="dr-mode" style="' + BTN + '">' + esc(DR.modeLabel(_drMode))
-    + '（切り替え）</button>'
-    + '<span id="dr-summary" style="font-size:11px;color:var(--text-primary);">' + esc(DR.summaryLine(d)) + '</span>'
-    + '</div>';
-
-  var before = p.before ? p.before : '';
-  var after = p.after ? p.after : '<div style="font-size:11px;color:var(--text-secondary);">描けませんでした</div>';
-  html += '<div id="dr-view" style="border:1px solid var(--border);border-radius:3px;padding:8px;background:var(--bg-primary);overflow:auto;max-height:52vh;">';
-  if (_drMode === 'overlay') {
-    html += '<div class="dr-stack">'
-      + '<div class="dr-before">' + before + '</div>'
-      + '<div class="dr-after">' + after + '</div></div>';
-  } else {
-    html += '<div class="dr-side">'
-      + '<div><div style="font-size:10px;color:var(--accent);font-weight:bold;">前回提出</div>'
-      + (before || '<div style="font-size:11px;color:var(--text-secondary);">前回提出には入っていません</div>') + '</div>'
-      + '<div><div style="font-size:10px;color:var(--accent);font-weight:bold;">今回</div>' + after + '</div>'
-      + '</div>';
-  }
-  html += '</div>';
-
-  html += '<div id="dr-detail" style="margin-top:8px;font-size:11px;color:var(--text-primary);">';
-  if (d.added.length) {
-    html += '<div id="dr-added">増えた文字: ' + esc(d.added.join(' / ')) + '</div>';
-  }
-  if (d.removed.length) {
-    html += '<div id="dr-removed">消えた文字: ' + esc(d.removed.join(' / ')) + '</div>';
-  }
-  d.shape.forEach(function(s) {
-    html += '<div class="dr-shape">' + esc(s.label + ' の数 ' + s.was + ' → ' + s.now) + '</div>';
-  });
-  html += '</div>';
-
-  html += '<div style="display:flex;gap:8px;margin-top:12px;">'
-    + '<button type="button" id="dr-close" style="flex:1;' + BTN + 'padding:8px;">納品パッケージに戻る</button></div>';
-
-  content.innerHTML = html;
-
-  Array.prototype.forEach.call(content.querySelectorAll('.dr-pick'), function(b) {
-    b.addEventListener('click', function() { openDeliveryReview(b.getAttribute('data-name')); });
-  });
-  var modeBtn = document.getElementById('dr-mode');
-  if (modeBtn) modeBtn.addEventListener('click', function() {
-    _drMode = window.MA.deliveryReview.toggleMode(_drMode);
-    renderDeliveryReview(_drCache[_drName] || p);
-  });
-  var close = document.getElementById('dr-close');
-  if (close) close.addEventListener('click', function() {
-    var m = document.getElementById('dr-modal');
-    if (m) m.style.display = 'none';
-  });
-  return d;
-}
-
-function openDeliveryReview(name) {
-  var DR = window.MA.deliveryReview;
-  var modal = document.getElementById('dr-modal');
-  if (!DR || !modal) return Promise.resolve(null);
-  var target = name || DR.firstOf(_drEntries());
-  if (!target) return Promise.resolve(null);
-  _drName = target;
-  modal.style.display = 'flex';
-  renderDeliveryReview(_drCache[target] || { before: null, after: null });
-  var head = document.getElementById('dr-summary');
-  if (head && !_drCache[target]) head.textContent = '描いています…';
-  return _drLoad(target).then(function(pair) {
-    // 描いている間に別の図に移っていたら、その図の表示を上書きしない。
-    if (_drName !== target) return null;
-    return renderDeliveryReview(pair);
-  });
+// BLK-primary-20260924-1332-wish: 🔍 提出前レビュー (#dr-modal) は ▤ 変更サマリボードに畳んだ。
+// 「前回提出と今を図で並べる」は、ボードを 変更前 = 前回提出・🖼 SVGで見る で開くことと同じ。
+// 入口 (📦 納品パッケージの「🔍 変更前後を見比べる」・Ctrl+K「提出前レビュー」) はここを通る。
+function openDeliveryReview() {
+  var dp = document.getElementById('dp-modal');
+  if (dp) dp.style.display = 'none';
+  return openChangeBoardAt('delivery', true);
 }
 
 function setupDeliveryPackage() {
@@ -25663,10 +25585,6 @@ function setupDeliveryPackage() {
   btn.addEventListener('click', function() { openDeliveryPanel(); });
   modal.addEventListener('click', function(ev) {
     if (ev.target === modal) modal.style.display = 'none';
-  });
-  var review = document.getElementById('dr-modal');
-  if (review) review.addEventListener('click', function(ev) {
-    if (ev.target === review) review.style.display = 'none';
   });
 }
 

@@ -7066,6 +7066,11 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   border-color: #b00020;
   font-weight: 600;
 }
+/* BLK-primary-20260924-1332-wish: ボードの 🖼 表示で図の下に出す見た目の差 (旧 🔍 提出前レビュー) */
+.cb-svg-diff { font-size: 11px; color: var(--text-primary); margin: 4px 0 0 0; }
+.cb-svg-diff:empty { display: none; }
+.cb-svg-diff-line { color: var(--text-secondary); }
+
 #statusbar {
   display: flex;
   align-items: center;
@@ -8237,9 +8242,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 </div>
 <div id="dp-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="dp-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:620px;max-width:860px;max-height:84vh;overflow-y:auto;"></div>
-</div>
-<div id="dr-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1001;align-items:center;justify-content:center;">
-  <div id="dr-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:720px;max-width:96vw;max-height:92vh;overflow-y:auto;"></div>
 </div>
 <div id="dm-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="dm-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:660px;max-width:940px;max-height:80vh;overflow-y:auto;"></div>
