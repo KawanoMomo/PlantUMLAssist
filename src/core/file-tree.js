@@ -264,6 +264,39 @@ window.MA.fileTree = (function() {
     return { total: list.length, unapplied: un, draft: dr };
   }
 
+  // design 10a (BLK-builder-20260924-1735-3): 部品フォルダの「＋ 未作成 2 図種（UC・ACT）」。
+  // 括弧の中の略号はそれぞれ押せる (その図種をその場で作る)。行頭の ＋ はまとめて作る。
+  // 返すのは略号の並び (部品の見出しと同じ 6 図種の順) と、＋ の説明。
+  function missingParts(g) {
+    var miss = (g && Array.isArray(g.missing)) ? g.missing : [];
+    if (!miss.length) return null;
+    var label = partLabel(g.part);
+    var JA = { sequence: 'シーケンス図', state: '状態遷移図', 'class': 'クラス図',
+      usecase: 'ユースケース図', component: 'コンポーネント図', activity: 'アクティビティ図' };
+    return {
+      head: '未作成 ' + miss.length + ' 図種（',
+      tail: '）',
+      kinds: miss.map(function(k) {
+        return { kind: k, abbr: KIND_ABBR[k] || k, title: label + ' の' + (JA[k] || k) + 'をここに作る' };
+      }),
+      allTitle: '未作成の ' + miss.length + ' 図種 (' + miss.map(function(k) { return KIND_ABBR[k] || k; }).join('・')
+        + ') をまとめて作る',
+    };
+  }
+
+  // 作る図の名前がもう保存先にあれば `_2`, `_3`… を付ける (上書きしない)。
+  function freeName(base, existing) {
+    var b = _s(base);
+    if (!b) return '';
+    var taken = {};
+    (existing || []).forEach(function(n) { taken[_s(n).replace(/\.puml$/i, '').toLowerCase()] = true; });
+    if (!taken[b.toLowerCase()]) return b;
+    for (var i = 2; i < 1000; i++) {
+      if (!taken[(b + '_' + i).toLowerCase()]) return b + '_' + i;
+    }
+    return '';
+  }
+
   // 下端に出していた「12 図 未反映 1 控え 1」をパネル内の 1 行に。
   function summaryLine(sum) {
     var s = sum || {};
@@ -295,5 +328,7 @@ window.MA.fileTree = (function() {
     gitCountLabel: gitCountLabel,
     summaryLine: summaryLine,
     summaryOf: summaryOf,
+    missingParts: missingParts,
+    freeName: freeName,
   };
 })();

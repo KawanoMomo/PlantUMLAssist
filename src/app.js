@@ -4578,6 +4578,45 @@ function _isUntouchedDoc(doc) {
   try { return BD.isUntouched(doc.dsl, tpl, doc.diagramType); } catch (e) { return false; }
 }
 
+// design 10a (BLK-builder-20260924-1735-3): FILES ツリーの部品フォルダの「＋ 未作成 2 図種（UC・ACT）」から、
+// その部品のまだ無い図種をその場で作る。名前とひな形は ➕ 部品を起こす と同じ (part-starter の plan)。
+// 部品名は打ち直させない。保存先に同じ名前があれば `_2` を付ける (上書きしない)。
+// part: ツリーの部品名 ('spi')、kinds: file-tree の図種 ('usecase' …)、existing: 保存先の図の名前。
+function createPartKinds(part, kinds, existing) {
+  var PS = window.MA.partStarter;
+  var FT = window.MA.fileTree;
+  var WS = window.MA.workspace;
+  if (!PS || !WS || !Array.isArray(kinds) || !kinds.length) return [];
+  saveActiveDoc();
+  var p = PS.plan(String(part || '').toUpperCase(), WS.list(), null);
+  if (!p) {
+    if (window.MA.toast) window.MA.toast.show('「' + part + '」からは図の名前を組めませんでした (➕ 部品を起こす で部品名を英数字で入れてください)');
+    return [];
+  }
+  var taken = (existing || []).slice();
+  WS.list().forEach(function(d) { if (d && d.name) taken.push(d.name); });
+  var opened = [];
+  PS.selected(p, kinds).forEach(function(s) {
+    var name = FT && FT.freeName ? FT.freeName(s.name, taken) : s.name;
+    if (!name) return;
+    taken.push(name);
+    WS.open({ name: name, dsl: s.dsl, diagramType: s.type });
+    applyActiveDoc();
+    saveActiveDoc();
+    opened.push(name);
+  });
+  if (window.MA.toast && opened.length) {
+    window.MA.toast.show(opened.join('・') + ' を作って開きました (保存先に置きました)');
+  }
+  // 保存 (POST) が届いてからツリーを数え直す。
+  window.setTimeout(function() {
+    try { refreshFolderPanelNow(); } catch (e) {}
+    try { if (window.MA.filesPanel && window.MA.filesPanel.refresh) window.MA.filesPanel.refresh(); } catch (e) {}
+  }, 400);
+  return opened;
+}
+window.createPartKinds = createPartKinds;
+
 // BLK-primary-20260913-0206: 一括置換・改名の後始末が、開いているタブを丸ごと
 // 保存フォルダへ書き戻していた。そこには (a) 今回の置換が 1 文字も当たっていない図、
 // (b) テンプレ宣言で書き込みを止めてある図、(c) 錠に「元のまま保つ」と答えた図が

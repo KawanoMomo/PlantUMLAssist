@@ -301,6 +301,55 @@ window.MA.filesPanel = (function() {
     if (it) it.click();
   }
 
+  // design 10a (BLK-builder-20260924-1735-3): 「＋ 未作成 2 図種（UC・ACT）」。
+  // 「展開すると、まだ作っていない図種が薄い文字で出て、押すとその場で作れます」。
+  // 前は行を押すと 🧩 部品ビュー (読むだけの他フォルダの比較枠) が開くだけで、作るには
+  // ➕ 部品を起こす で部品名を打ち直していた。略号を押せばその図種を、＋ で未作成をまとめて作る。
+  function _missingRow(g) {
+    var FT = window.MA.fileTree;
+    var mp = FT && FT.missingParts ? FT.missingParts(g) : null;
+    var row = document.createElement('div');
+    row.className = 'files-part-missing';
+    row.setAttribute('data-part', g.part);
+    if (!mp) { row.textContent = g.missingLabel; return row; }
+    var all = document.createElement('button');
+    all.type = 'button';
+    all.className = 'files-part-missing-all';
+    all.setAttribute('data-part', g.part);
+    all.textContent = '＋';
+    all.title = mp.allTitle;
+    all.setAttribute('aria-label', mp.allTitle);
+    all.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      _createKinds(g.part, g.missing);
+    });
+    row.appendChild(all);
+    row.appendChild(document.createTextNode(mp.head));
+    mp.kinds.forEach(function(k, i) {
+      if (i) row.appendChild(document.createTextNode('・'));
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'files-part-missing-kind';
+      b.setAttribute('data-part', g.part);
+      b.setAttribute('data-kind', k.kind);
+      b.textContent = k.abbr;
+      b.title = k.title;
+      b.addEventListener('click', function(ev) {
+        ev.stopPropagation();
+        _createKinds(g.part, [k.kind]);
+      });
+      row.appendChild(b);
+    });
+    row.appendChild(document.createTextNode(mp.tail));
+    return row;
+  }
+
+  function _createKinds(part, kinds) {
+    if (typeof window.createPartKinds !== 'function') return;
+    var names = _folderNames().map(function(e) { return e.name; });
+    window.createPartKinds(part, kinds, names);
+  }
+
   function renderParts() {
     var host = $('files-parts');
     if (!host) return;
@@ -349,20 +398,7 @@ window.MA.filesPanel = (function() {
       body.setAttribute('data-part-body', g.part);
       body.hidden = !open;
       g.files.forEach(function(f) { body.appendChild(_fileButton(f, false)); });
-      if (g.missingLabel) {
-        var m = document.createElement('button');
-        m.type = 'button';
-        m.className = 'files-part-missing';
-        m.setAttribute('data-part', g.part);
-        m.textContent = g.missingLabel;
-        m.title = '🧩 部品ビューで、まだ無い図種をその場で起こせます';
-        m.addEventListener('click', function(ev) {
-          ev.stopPropagation();
-          var link = $('folder-board-link');
-          if (link) link.click();
-        });
-        body.appendChild(m);
-      }
+      if (g.missingLabel) body.appendChild(_missingRow(g));
       host.appendChild(body);
 
       head.addEventListener('click', function() {
