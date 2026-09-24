@@ -51,6 +51,13 @@ test('人間 手順 6 — 手元の .puml を 2 枚ドロップして 2 タブ�
   await page.locator('#btn-import').click();
   await expect(page.locator('#btn-open-file-empty')).toHaveText('ファイルを開く(.puml)');
   await expect(page.locator('#open-empty-hint')).toBeVisible();
+  // BLK-builder-20260924-1415-4 (design 7a / 9a): 入口は図の上に重ねず、図のすぐ下に出る
+  await expect(page.locator('#preview-svg svg').first()).toBeVisible();
+  {
+    const svgBox = await page.locator('#preview-svg svg').first().boundingBox();
+    const hintBox = await page.locator('#open-empty-hint').boundingBox();
+    expect(hintBox.y).toBeGreaterThanOrEqual(svgBox.y + svgBox.height);
+  }
   // 📂 一覧 の頭にも出る
   await openFolder(page);
   await expect(page.locator('#folder-open-file')).toBeVisible();

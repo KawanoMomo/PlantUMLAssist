@@ -4319,6 +4319,16 @@ function setZoom(z) {
     overlayEl.style.transformOrigin = '0 0';
   }
   syncOverlayOrigin();
+  syncOpenEmptyHint();
+}
+
+// BLK-builder-20260924-1415-4 (design 7a / 9a): 空の画面の入口は図のすぐ下に置く。
+// 図の拡大は transform なので流れの高さが変わらない。見た目の高さの分だけ下げて重ねない。
+function syncOpenEmptyHint() {
+  var h = document.getElementById('open-empty-hint');
+  var FO = window.MA.fileOpen;
+  if (!h || !previewSvgEl || !FO || !FO.emptyHintGap) return;
+  h.style.marginTop = FO.emptyHintGap(previewSvgEl.offsetHeight, zoom) + 'px';
 }
 
 // BLK-migrator-20260923-1909: 当たり判定の層 (#overlay-layer / #hover-layer) は
@@ -26197,6 +26207,7 @@ function renderOpenEmptyHint() {
   var active = WS.getActive();
   var empty = docs.length <= 1 && !!active && !_openedSourceOf(active.id) && _isUntouchedDoc(active);
   hint.hidden = !empty;
+  if (empty) syncOpenEmptyHint();
 }
 
 function setupFileDrop() {
