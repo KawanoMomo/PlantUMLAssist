@@ -529,6 +529,23 @@ test.describe('junior 手順 1: 指摘.md の 1 件から先輩の図と並べ�
 
     // 到達条件その3: 見出しが、今日開かなくてよい枚数を先に言う。
     await expect(page.locator('#folder-note-summary')).toContainText('対象外');
+
+    // BLK-junior-20260924-1632-wish: 場面 2 の往復の途中でも見えるよう、同じ札を FILES ツリーの
+    // 図の行と部品のフォルダにも出す。対象外の図には札を出さない。札を押すと図を開いて指摘の語を選ぶ。
+    await S1.closeFolderList(page);
+    const part = page.locator('#files-parts .files-part-head[data-part="gpio"]');
+    await expect(part.locator('.files-part-note')).toContainText('⚠確かめられず');
+    if ((await part.getAttribute('aria-expanded')) !== 'true') await part.click();
+    const treeNote = page.locator('#files-parts .files-row-note[data-note-of="gpio_init_sequence"]');
+    await expect(treeNote).toHaveText('⚠確かめられず');
+    expect(await treeNote.getAttribute('title')).toContain('部品名不一致');
+    await expect(page.locator('#files-parts .files-part-file[data-file-name="gpio_component"] .files-row-note')).toHaveCount(0);
+    await treeNote.click();
+    await expect(page.locator('#top-file-name')).toHaveText('gpio_init_sequence.puml');
+    await expect.poll(() => page.evaluate(() => {
+      const e = document.getElementById('editor');
+      return e.value.slice(e.selectionStart, e.selectionEnd);
+    })).toBe('Gpio');
   });
 
   test('指摘どおり直すと、一覧のバッジが ✅反映済み に変わる', async ({ page }) => {

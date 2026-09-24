@@ -154,6 +154,13 @@ html, body {
 #files-panel button.files-row[data-preview="1"] .files-row-name { font-style: italic; opacity: 0.85; }
 #files-panel .files-row-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #files-panel .files-row-mark { flex: 0 0 auto; font-size: 9px; color: var(--accent); white-space: nowrap; }
+/* BLK-junior-20260924-1632-wish: 指摘.md の反映状況の札 (確かめられない指摘がある図だけ)。押すと図を開いて指摘の語を選ぶ */
+#files-panel .files-row-note {
+  flex: 0 0 auto; margin-left: 4px; font-size: 9px; color: var(--accent-orange, #f59e0b);
+  white-space: nowrap; cursor: pointer; border-bottom: 1px dotted currentColor;
+}
+#files-panel .files-row-note:hover { color: var(--text-primary); }
+#files-panel .files-part-note { flex: 0 0 auto; margin-left: 6px; font-size: 9px; color: var(--accent-orange, #f59e0b); white-space: nowrap; }
 #files-panel .files-empty { padding: 3px 16px; color: var(--text-secondary); }
 #files-panel .files-summary {
   flex: 0 0 auto; padding: 4px 6px; border-top: 1px solid var(--border);

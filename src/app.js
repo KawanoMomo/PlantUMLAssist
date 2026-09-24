@@ -15601,7 +15601,50 @@ function setupTabs() {
     el.setAttribute('data-note-status', st.key);
     el.textContent = st.mark;
     el.title = st.title;
+    // BLK-junior-20260924-1632-wish: FILES ツリーの札はこの行を読んで出す (判定する所を 2 つにしない)。
+    // まだ確かめられない最初の 1 件の見出しと、その件が指す本文の語、その件数を持たせる。
+    if (st.head) el.setAttribute('data-note-head', st.head);
+    if (st.term) el.setAttribute('data-note-term', st.term);
+    if (st.open) el.setAttribute('data-note-open', String(st.open));
     return el;
+  }
+
+  // BLK-junior-20260924-1632-wish: FILES ツリーの札を押したとき。指摘が指す図を開き (保存先の一覧の行を
+  // 押したときと同じ開き方)、開けたら指摘の語をエディタで選んで見せる。語が無ければ開くだけ。
+  window.MA.openNoteFinding = function(name, term) {
+    var q = (window.CSS && window.CSS.escape) ? window.CSS.escape(String(name)) : String(name);
+    var it = document.querySelector('#folder-panel .folder-item[data-file-name="' + q + '"]');
+    if (!it) return false;
+    it.click();
+    var w = String(term || '');
+    if (!w) return true;
+    var tries = 0;
+    (function pick() {
+      var doc = null;
+      try { doc = window.MA.workspace ? window.MA.workspace.getActive() : null; } catch (e) { doc = null; }
+      var text = editorEl ? editorEl.value : '';
+      var at = (doc && doc.name === name) ? _noteTermAt(text, w) : -1;
+      if (at < 0) {
+        if (++tries < 30) window.setTimeout(pick, 100);
+        return;
+      }
+      editorEl.focus();
+      editorEl.setSelectionRange(at, at + w.length);
+      var line = text.slice(0, at).split('\n').length;
+      editorEl.scrollTop = Math.max(0, (line - 3) * 18);
+    })();
+    return true;
+  };
+  // 語の切れ目で最初に出てくる位置 (`Gpio` を探して `Gpio_Driver` の頭に当てない)。
+  function _noteTermAt(text, w) {
+    var at = text.indexOf(w);
+    while (at >= 0) {
+      var before = at > 0 ? text.charAt(at - 1) : '';
+      var after = text.charAt(at + w.length);
+      if (!/[A-Za-z0-9_]/.test(before) && !/[A-Za-z0-9_]/.test(after)) return at;
+      at = text.indexOf(w, at + 1);
+    }
+    return -1;
   }
 
   // 指摘.md と、対象になった図の本文を取り寄せて判定する。
