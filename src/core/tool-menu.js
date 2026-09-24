@@ -22,8 +22,8 @@ window.MA.toolMenu = (function() {
     { key: 'edit', title: '書き換える', items: [
       { id: 'btn-tab-lines',  label: '行を書き換える', group: 'まとめて直す' },
       { id: 'btn-tab-rename', label: '部品名を一括置換する', group: 'まとめて直す' },
-      { id: 'btn-tab-unify',  label: '表記を登録簿に揃える', group: '表記を揃える' },
       { id: 'btn-tab-apply',  label: '複数クラスに一括適用する', group: 'まとめて直す' },
+      { id: 'btn-tab-unify',  label: '表記を登録簿に揃える', group: '表記を揃える' },
     ] },
     { key: 'find', title: '探す', items: [
       { id: 'btn-tab-symptom', label: '症状から関連図を探す', group: '図をたどる' },
@@ -36,13 +36,14 @@ window.MA.toolMenu = (function() {
       { id: 'btn-tab-family',         label: '系統内の動作名のずれ', group: '名前と系統' },
       { id: 'btn-tab-drivermap',      label: '系統マップの崩れ', group: '名前と系統' },
       { id: 'btn-tab-trace',          label: '状態遷移のトレース漏れ', group: '名前と系統' },
+      // BLK-builder-20260924-1341-4 (design 9b): 並びは小見出しごとにまとめ、9b の右列と同じ順にする。
+      { id: 'btn-tab-cross',          label: '突合ボード (1 画面で全部)', group: 'まとめて点検' },
       { id: 'btn-tab-pattern',        label: '1 つの観点で全図を棚卸し', group: 'まとめて点検' },
+      { id: 'btn-tab-design',         label: '仕様 (design) と現在値の突合', group: 'まとめて点検' },
       { id: 'btn-tab-submit',         label: '提出前チェック', group: '渡す前に' },
       // BLK-owner-20260918-0429-prune: 「渡してよいか」を数える突合。ここに載るまでは
       // Ctrl+K でしか辿り着けず、同じ目的の 6 つで 1 つだけ入口が違っていた。
       { id: 'btn-tab-handover',       label: '引き継ぎチェックリスト', group: '渡す前に' },
-      { id: 'btn-tab-cross',          label: '突合ボード (1 画面で全部)', group: 'まとめて点検' },
-      { id: 'btn-tab-design',         label: '仕様 (design) と現在値の突合', group: 'まとめて点検' },
       { id: 'btn-tab-audit-timeline', label: '監査履歴', group: '渡す前に' },
     ] },
     // BLK-owner-20260923-1307-prune: 「2 つの版・2 枚の図を並べて違いを見る」入口を 2 つに絞る。
@@ -122,13 +123,29 @@ window.MA.toolMenu = (function() {
       return {
         key: g.key,
         title: g.title,
-        items: g.items.map(function(it) {
+        items: bySubHead(g.items.map(function(it) {
           var o = { id: it.id, label: it.label, group: it.group || '' };
           if (it.opener) o.opener = it.opener;
           return o;
-        }),
+        })),
       };
     });
+  }
+
+  // BLK-builder-20260924-1341-4 (design 9b): 右列は並び順に小見出しを差し込むので、
+  // 同じ小見出しの項目が離れていると小見出しが 2 度出る (「まとめて点検」「渡す前に」が
+  // 2 回ずつ出ていた)。小見出しの初出順に項目を寄せる。小見出しの中では元の並びを保つ。
+  function bySubHead(items) {
+    var order = [];
+    var bucket = {};
+    items.forEach(function(it) {
+      var k = it.group || '';
+      if (!bucket[k]) { bucket[k] = []; order.push(k); }
+      bucket[k].push(it);
+    });
+    var out = [];
+    order.forEach(function(k) { out = out.concat(bucket[k]); });
+    return out;
   }
 
   // 分類ごとの合計件数。開く前に「どこに何件あるか」を左列で見せる (design 9b)。
