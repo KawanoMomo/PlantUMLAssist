@@ -51,22 +51,26 @@ test('機能は Ctrl+K から引ける (ツールの分類メニューも Ctrl+K
   await expect(page.locator('#cb-modal')).toBeVisible();
 });
 
-test('「ツール ▾ をタブ列に出す」を選べば入口が戻り、次に開いても残る', async ({ page }) => {
+// BLK-builder-20260924-1815-3 (design 9b / 9a): 既定のパネルに「ツール ▾ をタブ列に出す」は出さない
+// (押すと右端のツール ▾ が ＋ の隣へ動くだけだった)。以前に選んだ人には右端へ戻す 1 行だけが出る。
+test('以前に「ツール ▾ をタブ列に出す」を選んだ人は、パネルの 1 行で右端の入口に戻せる', async ({ page }) => {
   await open7b(page);
   await openToolMenu(page);
-  await page.locator('#tool-menu-quiet').click();
-  await expect(page.locator('#btn-tab-tools')).toBeVisible();
-  // 機能ボタンは畳んだまま。戻したのは入口 1 個だけ。
-  await expect(page.locator('#btn-tab-board')).toBeHidden();
+  await expect(page.locator('#tool-menu-quiet')).toHaveCount(0);
+  await page.keyboard.press('Escape');
 
+  await page.evaluate(() => localStorage.setItem('plantuml-tools-quiet', '0'));
   await page.reload();
   await page.waitForSelector('#preview-svg');
   await expect(page.locator('#btn-tab-tools')).toBeVisible();
+  await expect(page.locator('#btn-tab-board')).toBeHidden();
 
-  // もう一度静かにできる。
   await page.locator('#btn-tab-tools').click();
+  await expect(page.locator('#tool-menu-quiet')).toHaveText('ツール ▾ を右端へ戻す');
   await page.locator('#tool-menu-quiet').click();
   await expect(page.locator('#btn-tab-tools')).toBeHidden();
+  await expect(page.locator('#btn-tab-tools-mini')).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('plantuml-tools-quiet'))).toBe('1');
 });
 
 test('既定のタブ列は横スクロールしない', async ({ page }) => {

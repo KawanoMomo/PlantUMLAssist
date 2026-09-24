@@ -330,6 +330,17 @@ window.MA.toolMenu = (function() {
     return '畳んでいるツール ' + n + ' 件を分類から選ぶ (Ctrl+K でも同じ操作が引ける)';
   }
 
+  // BLK-builder-20260924-1815-3 (design 9b / 9a): パネルの下端に出す切り替え。
+  // 9b のパネルは絞り込み欄と 2 段だけで、既定 (畳む・ツール ▾ は右端) の人に切り替えは要らない。
+  // 以前に自分で切り替えて既定から外れている人にだけ、既定へ戻す 1 行を出す (選んだ状態は消さない)。
+  //   畳んでいない (機能ボタンがタブ列に並ぶ) → 「タブ列から畳む」
+  //   畳んでいるが ツール ▾ が ＋ の隣       → 「ツール ▾ を右端へ戻す」
+  function footToggles(folded, quiet) {
+    if (!folded) return [{ id: 'tool-menu-fold', label: 'タブ列から畳む' }];
+    if (!quiet) return [{ id: 'tool-menu-quiet', label: 'ツール ▾ を右端へ戻す' }];
+    return [];
+  }
+
   function esc(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -419,6 +430,7 @@ window.MA.toolMenu = (function() {
     showsMiniButton: showsMiniButton,
     miniLabel: miniLabel,
     miniTitle: miniTitle,
+    footToggles: footToggles,
     keyHintOf: keyHintOf,
     buildMenuHtml: buildMenuHtml,
     buildHitsHtml: buildHitsHtml,

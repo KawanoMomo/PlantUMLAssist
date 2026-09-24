@@ -82,15 +82,14 @@ test('タブ列から畳むと機能ボタンが消え、次に開いても畳�
   await page.locator('#btn-tab-tools').click();
   await page.locator('#tool-menu-fold').click();
 
-  // 畳んだ後もツール・＋・一覧はタブ列に残る
+  // 畳んだ後は既定 (＋ と右端のツール ▾) に戻る (BLK-builder-20260924-1815-3)
   await expect(page.locator('#btn-tab-board')).toBeHidden();
   await expect(page.locator('#btn-tab-handoff')).toBeHidden();
   await expect(page.locator('#btn-tab-new')).toBeVisible();
-  await expect(page.locator('#btn-tab-folder')).toBeVisible();
-  await expect(page.locator('#btn-tab-tools')).toBeVisible();
+  await expect(page.locator('#btn-tab-tools-mini')).toBeVisible();
 
   // 畳んでもメニュー経由では引ける
-  await page.locator('#btn-tab-tools').click();
+  await page.locator('#btn-tab-tools-mini').click();
   await pickTool(page, 'btn-tab-board');
   await expect(page.locator('#cb-modal')).toBeVisible();
 
@@ -99,10 +98,9 @@ test('タブ列から畳むと機能ボタンが消え、次に開いても畳�
   await page.waitForSelector('#preview-svg');
   await expect(page.locator('#btn-tab-board')).toBeHidden();
 
-  // 戻せる
-  await page.locator('#btn-tab-tools').click();
-  await page.locator('#tool-menu-fold').click();
-  await expect(page.locator('#btn-tab-board')).toBeVisible();
+  // 既定に戻ったので、パネルに切り替えの行は出ない (design 9b)
+  await page.locator('#btn-tab-tools-mini').click();
+  await expect(page.locator('#tool-menu-fold')).toHaveCount(0);
 });
 
 // BLK-builder-20260908-0858-2: パネル類 (外側 click で閉じる作りのもの) をメニューから開くと、
