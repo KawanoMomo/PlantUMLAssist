@@ -8,7 +8,11 @@
 // 選べるかどうか・その時点より前の最後の版の選び方・会議の日時の控え方を持つ。
 // DOM・localStorage・fetch には触らない (呼び手が値を渡す)。node からも require できる。
 (function() {
+  // BLK-owner-20260924-1712-prune: 既定は「前回保存」(± 差分の [今の内容を基準にする] や保存で決まる時点)。
+  // これまで「今日 0 時」と名乗りながら中身はこの時点と比べていて、見出しに別の「基準 日時」が並んでいた。
+  // 名前と中身をそろえ、今日 0 時は保存フォルダの版の控えからその時点の中身を読む別の選択肢にする。
   var KINDS = [
+    { key: 'saved', label: '前回保存' },
     { key: 'today', label: '今日 0 時' },
     { key: 'meeting', label: '前回の会議' },
     { key: 'delivery', label: '前回提出' },
@@ -26,7 +30,7 @@
   function _sec(iso) { return _s(iso).replace(/\.\d+/, '').replace(/Z$/, ''); }
 
   function isKind(key) { return !!LABEL[_s(key)]; }
-  function labelOf(key) { return LABEL[_s(key)] || LABEL.today; }
+  function labelOf(key) { return LABEL[_s(key)] || LABEL.saved; }
 
   // 手元の時計の今日 0 時 (ISO)。now は Date (テストで差し替える)。
   function todayStart(now) {
@@ -60,8 +64,13 @@
   }
 
   // 「変更前 =」の選択肢。選べない基準は disabled と、その理由を label に出す。
+  //   state.savedAt    … 前回保存 (± 差分の基準) の時点 ('' ならまだ基準が無い。選べるが日時は出ない)
+  //   state.todayAt    … 今日 0 時
+  //   state.folder     … 保存フォルダに書いているか (今日 0 時の中身は版の控えから読むので要る)
   //   state.meetingAt  … lastMeetingBefore の結果 ('' なら会議の控えが無い)
   //   state.deliveryAt … 前回提出の日時 ('' なら一度も納品していない)
+  // 選べる選択肢は日時を名前の後ろに添える (「前回保存 (09/23 21:51)」)。見出しはこの 1 か所で
+  // 時点を言い、ほかに「基準 …」を並べない (BLK-owner-20260924-1712-prune)。
   function options(state) {
     var st = state || {};
     return KINDS.map(function(k) {
@@ -72,8 +81,15 @@
       } else if (k.key === 'delivery') {
         o.at = _s(st.deliveryAt);
         if (!o.at) { o.disabled = true; o.label = k.label + '（まだ納品していません）'; }
-      } else {
+      } else if (k.key === 'today') {
         o.at = _s(st.todayAt);
+        if (!st.folder) { o.disabled = true; o.label = k.label + '（保存フォルダに書いているときに選べます）'; }
+      } else {
+        o.at = _s(st.savedAt);
+      }
+      if (!o.disabled && k.key !== 'today') {
+        var sp = stamp(o.at);
+        if (sp) o.label = k.label + ' (' + sp + ')';
       }
       return o;
     });
@@ -136,16 +152,28 @@
     return p(d.getMonth() + 1) + '/' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
   }
 
-  // 見出しの 1 句。「変更前 = 前回の会議 (09/23 15:00)」。
+  // 見出しの 1 句。「変更前 = 前回の会議 (09/23 15:00)」。今日 0 時は名前が時点なので日時を添えない。
   function headLabel(key, at) {
-    var s = stamp(at);
+    var s = _s(key) === 'today' ? '' : stamp(at);
     return '変更前 = ' + labelOf(key) + (s ? ' (' + s + ')' : '');
+  }
+
+  // 各図の列見出し「変更前 (前回保存 09/23 21:51)」。見出しの選択と同じ語で言う。
+  //   status … その図の状態 ('new' = その時点ではまだ無かった図)
+  function columnLabel(key, at, status) {
+    var k = isKind(key) ? _s(key) : 'saved';
+    var s = k === 'today' ? '' : stamp(at);
+    if (status === 'new') {
+      return '変更前 (' + labelOf(k) + (k === 'saved' ? 'なし' : (s ? ' ' + s : '') + ' には無い図') + ')';
+    }
+    return '変更前 (' + labelOf(k) + (s ? ' ' + s : '') + ')';
   }
 
   var api = {
     KINDS: KINDS, isKind: isKind, labelOf: labelOf, todayStart: todayStart,
     recordMeeting: recordMeeting, lastMeetingBefore: lastMeetingBefore,
     options: options, contentAt: contentAt, stampToIso: stampToIso, stampAt: stampAt, stamp: stamp, headLabel: headLabel,
+    columnLabel: columnLabel,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof window !== 'undefined') {

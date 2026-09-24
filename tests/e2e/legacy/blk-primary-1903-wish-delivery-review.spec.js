@@ -68,7 +68,9 @@ test.describe('BLK-primary-1903-wish 提出前レビュー (▤ 変更サマリ�
     await expect(page.locator('#dp-modal')).toBeHidden();
     await expect(page.locator('#cb-base')).toHaveValue('delivery');
     await expect(page.locator('#cb-svg')).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.locator('#cb-summary')).toContainText('変更前 = 前回提出');
+    // BLK-owner-20260924-1712-prune: 何と比べたかは見出しの「変更前 =」の選択が日時つきで 1 回だけ言う。
+    await expect(page.locator('#cb-base option:checked')).toContainText('前回提出 (');
+    await expect(page.locator('#cb-summary')).not.toContainText('基準');
     const entry = page.locator('.cb-entry[data-doc-name="Adc_Seq"]');
     // 前回提出の SVG と今の SVG が両方描かれている
     await expect(entry.locator('.cb-pane-body svg')).toHaveCount(2, { timeout: 20000 });

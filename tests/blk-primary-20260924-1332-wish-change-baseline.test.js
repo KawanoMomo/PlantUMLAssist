@@ -20,26 +20,27 @@ describe('会議の日時の控え', function() {
 });
 
 describe('「変更前 =」の選択肢', function() {
-  test('今日 0 時 / 前回の会議 / 前回提出 の順', function() {
-    expect(CB.options({}).map(function(o) { return o.key; })).toEqual(['today', 'meeting', 'delivery']);
+  // BLK-owner-20260924-1712-prune: 先頭に既定の「前回保存」(± 差分の基準) を足した。
+  test('前回保存 / 今日 0 時 / 前回の会議 / 前回提出 の順', function() {
+    expect(CB.options({}).map(function(o) { return o.key; })).toEqual(['saved', 'today', 'meeting', 'delivery']);
   });
 
   test('会議の控えが無ければ「まだ会議セットで並べていません」と出して選べない', function() {
-    var m = CB.options({ meetingAt: '' })[1];
+    var m = CB.options({ meetingAt: '' })[2];
     expect(m.disabled).toBe(true);
     expect(m.label).toContain('まだ会議セットで並べていません');
   });
 
   test('一度も納品していなければ前回提出は選べない', function() {
-    var d = CB.options({ deliveryAt: '' })[2];
+    var d = CB.options({ deliveryAt: '' })[3];
     expect(d.disabled).toBe(true);
   });
 
   test('控えがあれば選べて、その時刻を持つ', function() {
     var o = CB.options({ meetingAt: '2026-09-23T15:00:00', deliveryAt: '2026-09-10T12:00:00' });
-    expect(o[1].disabled).toBe(false);
-    expect(o[1].at).toBe('2026-09-23T15:00:00');
     expect(o[2].disabled).toBe(false);
+    expect(o[2].at).toBe('2026-09-23T15:00:00');
+    expect(o[3].disabled).toBe(false);
   });
 });
 
@@ -77,6 +78,6 @@ describe('見出し', function() {
   test('「変更前 = 前回の会議 (MM/DD HH:MM)」', function() {
     var at = new Date(2026, 8, 23, 15, 0, 0).toISOString();
     expect(CB.headLabel('meeting', at)).toBe('変更前 = 前回の会議 (09/23 15:00)');
-    expect(CB.headLabel('bogus', '')).toBe('変更前 = 今日 0 時');
+    expect(CB.headLabel('bogus', '')).toBe('変更前 = 前回保存');
   });
 });

@@ -1794,9 +1794,12 @@ function init() {
     // 「−」や 0 は数が無い印なので付けない。
     function badges() {
       var out = {};
+      // 件数の読み方は下端と同じ (「± 変更 2/10」は 2)。BLK-owner-20260924-1712-prune
+      var SC = window.MA.statusCounters;
       foldable().forEach(function(b) {
-        var m = /(\d+)\s*$/.exec(b.textContent || '');
-        if (m && m[1] !== '0') out[b.id] = m[1];
+        var t = b.textContent || '';
+        var n = SC ? SC.countToken(t) : ((/(\d+)\s*$/.exec(t) || [])[1] || '');
+        if (/^[0-9]+$/.test(n) && n !== '0') out[b.id] = n;
       });
       return out;
     }
@@ -3749,7 +3752,9 @@ function initCommandPalette() {
       // BLK-owner-20260923-1509-prune: 並べる面は 1 つに統合した。パレットの項目は
       // 「誰と並べるか」で 3 つに分かれ、どれも旧称 (並べて見る / 先輩 / 変更前後) で引ける。
       { id: 'tab-compare', title: '並べて比較 (別タブの図) / Compare', hint: 'Compare', keywords: ['compare', 'side', 'ならべて', 'みくらべ', 'べつたぶ'], run: function() { openCompareTarget('tabs'); } },
-      { id: 'compare-before', title: '並べて比較 (この図の前回保存版) / Compare with last save', hint: 'Compare', keywords: ['compare', 'before', 'after', 'ならべて', 'ひかく', 'ぜんかいほぞん', 'へんこうぜんご', 'さぶん'], run: function() { openCompareTarget('before'); } },
+      // BLK-owner-20260924-1712-prune: 「この図を前回保存版と比べる」行は 1 つ。旧 command:livediff (前回保存版との比較) と
+      // この行は同じ枠を同じ「± 差分」で開いていた。消した方の名前は語に残し、分類は ± 差分の一覧と同じ「レビュー」にする。
+      { id: 'compare-before', title: '前回保存版と比較 / Compare with last save', hint: 'Compare', group: 'review', keywords: ['並べて比較 (この図の前回保存版)', '前回保存版との比較', 'Compare with last save', '差分', '前回保存', 'レビュー', 'diff', 'compare', 'before', 'after', 'last', 'save', 'ならべて', 'ひかく', 'ぜんかいほぞん', 'ぜんかい', 'ほぞん', 'へんこうぜんご', 'さぶん', 'みくらべ'], run: function() { openCompareTarget('before'); } },
       { id: 'tab-template', title: 'テンプレートから新しい図を作る / Template', hint: 'Tabs', keywords: ['template', 'copy', 'てんぷれ', 'ふくせい'], button: 'btn-tab-template', run: function() { clickById('btn-tab-template'); } },
       { id: 'tab-diff', title: '前回保存からの差分 / Diff', hint: 'Tabs', keywords: ['diff', 'change', 'さぶん', 'へんこう'], button: 'btn-tab-diff', run: function() { clickById('btn-tab-diff'); } },
       { id: 'tab-pins', title: 'レビュー指摘 / Review pins', hint: 'Tabs', keywords: ['pin', 'review', 'してき', 'ぴん'], button: 'btn-tab-pins', run: function() { clickById('btn-tab-pins'); } },
@@ -3808,7 +3813,7 @@ function initCommandPalette() {
       // BLK-owner-20260918-0529-prune: 「見比べる」5 つのうち、下端ステータスと
       // 納品パネルの中にしか入口が無かった 2 つ。今まで通りの呼び名 (比較 / 前回保存版 /
       // 変更前後) でも、メニューの言い換え (…と見比べる) でも引けるようにする。
-      { id: 'livediff', title: '前回保存版との比較 / Compare with last save', hint: 'Status', keywords: ['diff', 'compare', 'last', 'save', 'ぜんかい', 'ほぞん', 'ひかく', 'みくらべ', 'ならべ'], button: 'status-livediff', run: function() { clickById('status-livediff'); } },
+      // BLK-owner-20260924-1712-prune: 旧 livediff の行は 'compare-before' (前回保存版と比較) に畳んだ。
       // BLK-primary-20260924-1332-wish: 🔍 提出前レビューの行は置かない。▤ 変更サマリの 1 行 (id 'tab-board') の語に
       // 「提出前レビュー」「変更前後」を入れ、その語で引いたときは 変更前 = 前回提出・🖼 SVGで見る で開く。
       // BLK-primary-20260918-0249-wish: 会議で見せる 3〜5 枚を選んで並べる
@@ -5153,6 +5158,14 @@ function setupLiveDiff() {
   renderLiveDiffChip();
 }
 
+// 「変更前 = 前回保存 (09/23 21:51)」。± 差分の窓・比較の枠の見出しも、変更サマリボードの
+// 「変更前 =」と同じ語で基準を言う (BLK-owner-20260924-1712-prune)。
+function _savedHeadLabel(at) {
+  var BL = window.MA.changeBaseline;
+  if (BL) return BL.headLabel('saved', at);
+  return '変更前 = 前回保存 (' + String(at || '').replace('T', ' ').slice(0, 16) + ')';
+}
+
 function setupDiffPanel() {
   var btn = document.getElementById('btn-tab-diff');
   var panel = document.getElementById('diff-panel');
@@ -5166,7 +5179,8 @@ function setupDiffPanel() {
     var docs = _diffDocs();
     var sum = SD.summary(docs);
     var html = '<div class="diff-head">' + esc(SD.badgeText(sum));
-    if (sum.markedAt) html += ' ・ 基準 ' + esc(sum.markedAt.replace('T', ' ').slice(0, 16));
+    // BLK-owner-20260924-1712-prune: 「基準」ではなく変更サマリボードの「変更前 =」と同じ語で言う。
+    if (sum.markedAt) html += ' ・ ' + esc(_savedHeadLabel(sum.markedAt));
     html += '</div>';
     docs.forEach(function(d) {
       var st = SD.statusOf(d.name, d.dsl);
@@ -5446,7 +5460,7 @@ function _cbFolderSince() {
 // ボードの「変更前」を 今日 0 時 / 前回の会議 / 前回提出 から選ぶ。判定は change-baseline。
 // 前回の会議は、会議セットで並べた日時を保存フォルダ (_meetings.json) に控えて使う
 // (ブラウザを起こし直しても残る)。その時点の中身は保存フォルダの版の控えから選ぶ。
-var _cbBase = 'today';
+var _cbBase = 'saved';
 var _cbMeetings = [];
 var _cbBaseCache = {};      // name → { at, dsl } | null (その時点ではまだ無かった図)
 var _cbBaseCacheKey = '';   // どの基準・時点で読んだ控えか
@@ -5454,31 +5468,43 @@ var _cbBaseLoading = false;
 
 function _cbBaseState() {
   var BL = window.MA.changeBaseline;
-  if (!BL) return { todayAt: '', meetingAt: '', deliveryAt: '' };
+  if (!BL) return { savedAt: '', todayAt: '', folder: false, meetingAt: '', deliveryAt: '' };
   var today = BL.todayStart(new Date());
   var last = null;
   try { last = _dpLastDelivery(); } catch (e) { last = null; }
+  // 前回保存 = ± 差分の基準 (開いている図のうち最後に基準を取った時点)。
+  var savedAt = '';
+  try {
+    var SD = window.MA.saveDiff;
+    if (SD) savedAt = SD.summary(_diffDocs()).markedAt || '';
+  } catch (e) { savedAt = ''; }
+  var folder = false;
+  try { folder = !!(_fiFolderMode() && window.fetch); } catch (e) { folder = false; }
   return {
+    savedAt: savedAt,
     todayAt: today,
+    folder: folder,
     meetingAt: BL.lastMeetingBefore(_cbMeetings, today),
     deliveryAt: (last && last.at) || '',
   };
 }
 
-// いま選んでいる基準が選べないもの (控えが無い) なら 今日 0 時 に戻す。
+// いま選んでいる基準が選べないもの (控えが無い) なら 前回保存 に戻す。
 function _cbBaseKind() {
   var BL = window.MA.changeBaseline;
-  if (!BL || _cbBase === 'today') return 'today';
+  if (!BL || !BL.isKind(_cbBase) || _cbBase === 'saved') return 'saved';
   var st = _cbBaseState();
-  if (_cbBase === 'meeting' && !st.meetingAt) return 'today';
-  if (_cbBase === 'delivery' && !st.deliveryAt) return 'today';
+  if (_cbBase === 'today' && !st.folder) return 'saved';
+  if (_cbBase === 'meeting' && !st.meetingAt) return 'saved';
+  if (_cbBase === 'delivery' && !st.deliveryAt) return 'saved';
   return _cbBase;
 }
 
 function _cbBaseAt() {
   var st = _cbBaseState();
   var k = _cbBaseKind();
-  return k === 'meeting' ? st.meetingAt : (k === 'delivery' ? st.deliveryAt : st.todayAt);
+  return k === 'meeting' ? st.meetingAt : (k === 'delivery' ? st.deliveryAt
+    : (k === 'today' ? st.todayAt : st.savedAt));
 }
 
 function renderChangeBaseSelect() {
@@ -5552,7 +5578,7 @@ function _cbBaselineFn() {
   var SD = window.MA.saveDiff;
   var k = _cbBaseKind();
   if (k === 'delivery') return function(name) { return _dpBaselineOf(name); };
-  if (k === 'meeting') return function(name) { return _cbBaseCache[name] || null; };
+  if (k === 'meeting' || k === 'today') return function(name) { return _cbBaseCache[name] || null; };
   return SD ? SD.baselineOf : function() { return null; };
 }
 
@@ -5564,10 +5590,10 @@ function _changeBoardModel() {
   var kind = _cbBaseKind();
   if (_cbFolderOn()) {
     // 基準が今日 0 時より前なら、その時点より後に更新されたフォルダの図を拾う。
-    var since = kind === 'today' ? _cbFolderSince() : _cbBaseAt();
+    var since = kind === 'saved' ? _cbFolderSince() : _cbBaseAt();
     docs = docs.concat(CB.folderExtras(_fiFileDocs, docs, { since: since }));
   }
-  if (kind === 'meeting') {
+  if (kind === 'meeting' || kind === 'today') {
     var names = docs.map(function(d) { return d.name; });
     _cbLoadBaseAt(names).then(function(changed) { if (changed) renderChangeBoard(); });
   }
@@ -5602,11 +5628,9 @@ function _cbSummaryText(board) {
   var CB = window.MA.changeBoard;
   if (!CB) return '';
   var head = CB.summaryText(board);
-  var BL = window.MA.changeBaseline;
-  var bk = _cbBaseKind();
-  if (BL && bk !== 'today') {
-    head += ' ・ ' + BL.headLabel(bk, _cbBaseAt()) + (_cbBaseLoading ? ' (読んでいます…)' : '');
-  } else if (board && board.markedAt) head += ' ・ 基準 ' + board.markedAt.replace('T', ' ').slice(0, 16);
+  // BLK-owner-20260924-1712-prune: 何と比べたか (と、その日時) は見出しの「変更前 =」の選択が 1 回だけ言う。
+  // ここに「基準 …」「変更前 = …」を重ねない。読み込み中だけ一言添える。
+  if (_cbBaseLoading) head += ' ・ 変更前を読んでいます…';
   // 申し送り・レビュー結果は基準の取り直しでは消えないので、差分が 0 枚でも件数を出す。
   var hnSum = window.MA.handoverNotes ? window.MA.handoverNotes.summaryText() : '';
   if (hnSum) head += ' ・ ' + hnSum;
@@ -5787,7 +5811,7 @@ function _cbPutSvgDiff(name, pair) {
   // 何と比べたかは「変更前 =」の選択で言う (前回の会議 / 前回提出。今日 0 時は「変更前」)。
   var BL = window.MA.changeBaseline;
   var k = _cbBaseKind();
-  var base = (BL && k !== 'today') ? BL.labelOf(k) : '変更前';
+  var base = (BL && k !== 'saved') ? BL.labelOf(k) : '変更前';
   var html = '<div class="cb-svg-diff-line" data-kind="' + esc(d.kind) + '">' + esc(DR.summaryLine(d, base)) + '</div>';
   if (d.added.length) html += '<div class="cb-svg-added">増えた文字: ' + esc(d.added.join(' / ')) + '</div>';
   if (d.removed.length) html += '<div class="cb-svg-removed">消えた文字: ' + esc(d.removed.join(' / ')) + '</div>';
@@ -5883,14 +5907,14 @@ function _cbDrawShowPanes(board) {
 // 会議セットの「差分」タブの中身でもあるので 1 か所に置く。
 // 各図の「変更前 (…)」。基準を選んでいるときは、その基準と時点を言う
 // (BLK-primary-20260924-1332-wish)。今日 0 時は今までどおり保存差分の基準の時刻。
+// BLK-owner-20260924-1712-prune: 列見出しも見出しの選択と同じ語 (「変更前 (前回保存 09/23 21:51)」)。
 function _cbBeforeLabel(e) {
   var BL = window.MA.changeBaseline;
   var k = _cbBaseKind();
-  if (BL && k !== 'today') {
-    var s = BL.stamp(_cbBaseAt());
-    return '変更前 (' + BL.labelOf(k) + (s ? ' ' + s : '') + (e && e.status === 'new' ? ' には無い図' : '') + ')';
-  }
-  return '変更前' + (e && e.markedAt ? ' (' + e.markedAt.replace('T', ' ').slice(0, 16) + ')' : ' (基準なし)');
+  if (!BL) return '変更前';
+  // 前回保存は図ごとに基準を取った時刻が違うので、その図の時刻で言う。
+  var at = (k === 'saved') ? ((e && e.markedAt) || '') : _cbBaseAt();
+  return BL.columnLabel(k, at, e && e.status);
 }
 
 function _cbDiffBodyHtml(e, mapTable) {
@@ -6101,6 +6125,8 @@ function renderChangeBoard() {
   var _cbMeeting = _msActive();
   _renderMeetingState(board);
 
+  // 前回保存の時点は ± 差分の [今の内容を基準にする] で動くので、描くたびに選択肢の日時を合わせる。
+  try { renderChangeBaseSelect(); } catch (e) {}
   if (sumEl) sumEl.textContent = _cbSummaryText(board);
 
   // 顧客に見せる画面では申し送りの入力欄も畳む (社内の書き込み欄を客先で出さない)。
@@ -22147,7 +22173,7 @@ function renderCompareDiffView() {
     if (st === 'new') head += 'まだ保存していない (基準なし)';
     else if (st === 'same') head += '前回保存時点から変更なし';
     else head += '前回保存時点から +' + c.added + ' −' + c.removed;
-    if (at) head += ' ・ 基準 ' + esc(at.replace('T', ' ').slice(0, 16));
+    if (at) head += ' ・ ' + esc(_savedHeadLabel(at));
     // 前回保存時点では前後が出せないとき、書き込み履歴の回を **足して** 出す。
     // 「前回保存時点と比べてどうか」は言い切ったままにする (意味をすり替えない)。
     var fc = fb ? SD.countBetween(fb.dsl, active.dsl) : null;

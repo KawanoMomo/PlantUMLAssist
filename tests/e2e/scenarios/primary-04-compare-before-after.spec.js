@@ -852,7 +852,9 @@ test('手順4 前回の会議を変更前にして、会議の後に直した図
 
   // 到達条件その2: 前回の会議を選ぶと、直した 2 枚が「変更」で並び、触っていない 1 枚は並ばない。
   await base.selectOption('meeting');
-  await expect(page.locator('#cb-summary')).toContainText('変更前 = 前回の会議');
+  // BLK-owner-20260924-1712-prune: 何と比べたかとその日時は「変更前 =」の選択が 1 回だけ言う (見出しに「基準」を並べない)。
+  await expect(base.locator('option:checked')).toContainText('前回の会議 (');
+  await expect(page.locator('#cb-summary')).not.toContainText('基準');
   const changed = ['spi_state', 'spi_init_sequence'];
   for (const name of changed) {
     const e = page.locator('#cb-body .cb-entry[data-doc-name="' + name + '"]');
@@ -870,4 +872,61 @@ test('手順4 前回の会議を変更前にして、会議の後に直した図
   await expect(e0.locator('.cb-svg-added')).toContainText('SpiDriver');
   await page.locator('#cb-close').click();
   fs.rmSync(abs, { recursive: true, force: true });
+});
+
+// BLK-owner-20260924-1712-prune: 「前回保存版と比べる」入口が Ctrl+K に 3 行並び (うち 2 行は同じ枠を開く)、
+// 下端の「± 差分」は変わった図ではなく開いている図の総数を出し、変更サマリボードの見出しは基準を 3 通りに言っていた。
+test('手順4 前回保存からの差分は変わった図の数で出て、Ctrl+K は 2 行、ボードは基準を 1 回だけ言う', async ({ page }) => {
+  const A = '@startuml\nparticipant SpiDrv\nSpiDrv -> Reg : write(CR1)\n@enduml';
+  const B = '@startuml\nparticipant AdcDrv\nAdcDrv -> Reg : read(DR)\n@enduml';
+  const C = '@startuml\nclass SpiDrv\nclass AdcDrv\n@enduml';
+  await S.bootPlain(page);
+  await S.typeDsl(page, A);
+  await page.locator('#btn-tab-new').click();
+  await S.typeDsl(page, B);
+  await page.locator('#btn-tab-new').click();
+  await S.typeDsl(page, C);
+  // 3 枚の今を前回保存の基準にしてから、2 枚だけ直す。
+  await page.locator('#btn-tab-diff').click();
+  await page.locator('#diff-mark-all').click();
+  await expect(page.locator('#diff-panel .diff-head')).toContainText('変更前 = 前回保存 (');
+  await expect(page.locator('#diff-panel .diff-head')).not.toContainText('基準');
+  await page.locator('body').click({ position: { x: 5, y: 5 } });
+  await S.typeDsl(page, C.split('SpiDrv').join('Spi_Driver'));
+  await page.locator('#tab-bar .tab').first().click();
+  await page.waitForTimeout(200);
+  await S.typeDsl(page, A.split('SpiDrv').join('Spi_Driver'));
+
+  // 到達条件その1: 下端の差分は変わった図の数 (2)。開いている図の総数 (3) を拾わない。
+  await expect(page.locator('#status-diff')).toHaveText(/差分 2$/);
+
+  // 到達条件その2: Ctrl+K で「前回保存」と打つと、変わった図の一覧と、この図を前回保存版と比べる行の 2 つ。
+  // どちらも分類は「レビュー」で、旧名 (並べて比較 (この図の前回保存版)) でも引ける。
+  await page.keyboard.press('Control+k');
+  await page.waitForSelector('#cp-modal');
+  const input = page.locator('#cp-input');
+  await input.fill('前回保存');
+  const rows = page.locator('#cp-list .cp-item');
+  await expect(page.locator('#cp-list .cp-item[data-cp-id="review:compare-before"]')).toHaveCount(1);
+  await expect(page.locator('#cp-list .cp-item[data-cp-id="review:compare-before"] .cp-kind')).toHaveText('レビュー');
+  await expect(page.locator('#cp-list .cp-item[data-cp-id="review:compare-before"] .cp-title')).toHaveText('前回保存版と比較 / Compare with last save');
+  await expect(page.locator('#cp-list .cp-item[data-cp-id="review:tab-diff"]')).toHaveCount(1);
+  await expect(page.locator('#cp-list .cp-item[data-cp-id="command:livediff"]')).toHaveCount(0);
+  await expect(page.locator('#cp-list .cp-item[data-cp-id="command:compare-before"]')).toHaveCount(0);
+  await input.fill('並べて比較 (この図の前回保存版)');
+  await expect(rows.first()).toHaveAttribute('data-cp-id', 'review:compare-before');
+  await input.fill('レビュー');
+  await expect(page.locator('#cp-list .cp-item[data-cp-id="review:compare-before"]')).toHaveCount(1);
+  await page.keyboard.press('Escape');
+
+  // 到達条件その3: ボードの見出しは「変更前 = 前回保存 (日時)」の選択 1 か所だけで時点を言い、列見出しも同じ語。
+  await page.locator('#btn-tab-board').click();
+  await expect(page.locator('#cb-modal')).toBeVisible();
+  const base = page.locator('#cb-base');
+  await expect(base).toHaveValue('saved');
+  await expect(base.locator('option:checked')).toContainText('前回保存 (');
+  await expect(page.locator('#cb-summary')).not.toContainText('基準');
+  await expect(page.locator('#cb-body .cb-entry')).toHaveCount(2);
+  await expect(page.locator('#cb-body .cb-entry .cb-cols').first()).toContainText('変更前 (前回保存 ');
+  await page.locator('#cb-close').click();
 });

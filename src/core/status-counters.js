@@ -30,7 +30,11 @@ window.MA.statusCounters = (function() {
 
   // ボタン文字の末尾に出る件数 (「📌 指摘 3」の 3、「± 差分 −」の −)。
   // 数も − も無ければ「−」(まだ数えていない) を返す。
+  // BLK-owner-20260924-1712-prune: 「± 変更 2/10」は変わった図 2 枚 / 開いている図 10 枚。
+  // 件数は分子 (変わった数) で、末尾の総数を拾わない。
   function countToken(text) {
+    var frac = /([0-9]+)\s*\/\s*[0-9]+\s*$/.exec(String(text == null ? '' : text));
+    if (frac) return frac[1];
     var m = /([0-9]+|[−-])\s*$/.exec(String(text == null ? '' : text));
     if (!m) return '−';
     return m[1] === '-' ? '−' : m[1];
