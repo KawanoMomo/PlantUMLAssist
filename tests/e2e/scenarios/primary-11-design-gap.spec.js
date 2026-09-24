@@ -373,3 +373,30 @@ test('手順11 Ctrl+K に分類の語「確かめ」を打つと、確かめる�
   await page.locator('#cp-list .cp-item[data-cp-id="check:tab-audit"]').click();
   await expect(page.locator('#cp-modal')).toBeHidden();
 });
+
+// BLK-builder-20260924-1341-4 (design 9b): ツール ▾ の右列は小見出しごとにまとまり、同じ小見出しが 2 度出ない。
+// 「確かめる」で「まとめて点検」「渡す前に」が 2 回ずつ出て、同じ仲間の道具が離れて並んでいた。
+test('手順11 ツール ▾ の「確かめる」は 名前と系統 / まとめて点検 / 渡す前に が 1 回ずつ並ぶ', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR, { foldedTools: true });
+  await page.locator('#btn-tab-tools-mini').click();
+  await expect(page.locator('#tool-menu')).toBeVisible();
+  await page.locator('#tool-menu .tool-menu-cat[data-group="check"]').hover();
+  const pane = page.locator('#tool-menu .tool-menu-group[data-group="check"]');
+  await expect(pane).toBeVisible();
+  await expect(pane.locator('.tool-menu-sub')).toHaveText(['名前と系統', 'まとめて点検', '渡す前に']);
+  await expect(pane.locator('.tool-menu-item .tool-menu-label')).toHaveText([
+    '名前の表記揺れ', '系統内の動作名のずれ', '系統マップの崩れ', '状態遷移のトレース漏れ',
+    '突合ボード (1 画面で全部)', '1 つの観点で全図を棚卸し', '仕様 (design) と現在値の突合',
+    '提出前チェック', '引き継ぎチェックリスト', '監査履歴',
+  ]);
+
+  // 「書き換える」も まとめて直す が 1 回だけ。
+  await page.locator('#tool-menu .tool-menu-cat[data-group="edit"]').hover();
+  await expect(page.locator('#tool-menu .tool-menu-group[data-group="edit"] .tool-menu-sub'))
+    .toHaveText(['まとめて直す', '表記を揃える']);
+
+  // 並びを変えても押した項目がその道具を開く (仕様突合)。
+  await page.locator('#tool-menu .tool-menu-cat[data-group="check"]').hover();
+  await pane.locator('.tool-menu-item[data-target="btn-tab-design"]').click();
+  await page.waitForSelector('#dc-modal .dc-table');
+});
