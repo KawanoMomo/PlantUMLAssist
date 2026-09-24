@@ -1649,6 +1649,44 @@ window.MA.modules.plantumlClass = (function() {
     { value: '~', label: '~ pkg' },
   ];
 
+  // BLK-builder-20260924-1252-4 (design 4a): メンバー 1 行の見出し。可視性は記号を色で分け
+  // (PlantUML の図の印と同じ: + 緑・− 赤・# 橙・~ 青)、シグネチャは可視性と修飾を除いた形で出す。
+  var _VIS_MARK = {
+    '+': { mark: '+', color: 'var(--accent-green, #3fb950)', title: 'public' },
+    '-': { mark: '−', color: 'var(--accent-red, #f74a4a)', title: 'private' },
+    '#': { mark: '#', color: 'var(--accent-orange, #ffa657)', title: 'protected' },
+    '~': { mark: '~', color: 'var(--accent, #58a6ff)', title: 'package' },
+  };
+  function memberRowParts(m) {
+    var mm = m || {};
+    var v = _VIS_MARK[mm.visibility || ''] || { mark: '', color: 'var(--text-secondary)', title: '可視性なし' };
+    var sig = String(mm.name || '') + (mm.kind === 'method' ? '(' + (mm.params || '') + ')' : '') +
+              (mm.type ? ' : ' + mm.type : '');
+    return { vis: mm.visibility || '', visMark: v.mark, visColor: v.color, visTitle: v.title, sig: sig,
+             mod: mm.static ? 'static' : (mm.abstract ? 'abstract' : '') };
+  }
+
+  // 開いた行の「組み立てられる行」。「更新」と同じ書き換えを元の 1 行だけに当てて返すので、
+  // 型が先の書き方 (double radius) なら型が先のまま出る (押すと本文に入る行そのもの)。
+  function memberLinePreview(kind, srcLine, f) {
+    var t = String(srcLine == null ? '' : srcLine).trim();
+    var fv = f || {};
+    if (kind === 'method') {
+      t = updateMethod(t, 1, 'visibility', fv.visibility || null);
+      t = updateMethod(t, 1, 'name', fv.name);
+      t = updateMethod(t, 1, 'params', fv.params || '');
+      t = updateMethod(t, 1, 'type', fv.type || '');
+      t = updateMethod(t, 1, 'static', !!fv.isStatic);
+      t = updateMethod(t, 1, 'abstract', !!fv.isAbstract);
+    } else {
+      t = updateAttribute(t, 1, 'visibility', fv.visibility || null);
+      t = updateAttribute(t, 1, 'name', fv.name);
+      t = updateAttribute(t, 1, 'type', fv.type || '');
+      t = updateAttribute(t, 1, 'static', !!fv.isStatic);
+    }
+    return t;
+  }
+
   function _visToggleHtml(idPrefix, current) {
     var html = '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:2px;">可視性 / Visibility</div>' +
                '<div class="cl-vis-toggle" data-vis-for="' + idPrefix + '" style="display:flex;gap:3px;margin-bottom:6px;">';
@@ -1843,16 +1881,24 @@ window.MA.modules.plantumlClass = (function() {
         var isSel = mi === focusIdx;
         var rowCls = isSel ? 'cl-member-row cl-member-selected' : 'cl-member-row';
         var rowStyle = isSel ? 'background:var(--accent-bg, rgba(0,128,255,0.15));padding:4px;border-radius:3px;' : 'padding:2px;';
-        var preview = (m.visibility || '') + ' ' + m.name +
-                      (m.kind === 'method' ? '(' + (m.params || '') + ')' : '') +
-                      (m.type ? ' : ' + m.type : '');
+        // BLK-builder-20260924-1252-4 (design 4a): 閉じた行は「可視性の記号・シグネチャ・編集」。
+        // 並べ替えと削除は開いた行の中に置く (閉じた行から確かめ無しに消えない)。
+        var parts = memberRowParts(m);
         rows += '<div class="' + rowCls + '" data-member-idx="' + mi + '" data-member-kind="' + m.kind + '" style="' + rowStyle + 'font-size:11px;margin-bottom:2px;">' +
-                  window.MA.htmlUtils.escHtml(preview) +
-                  ' <button id="cl-mem-up-' + mi + '" data-line="' + m.line + '">↑</button>' +
-                  ' <button id="cl-mem-down-' + mi + '" data-line="' + m.line + '">↓</button>' +
-                  ' <button id="cl-mem-del-' + mi + '" data-line="' + m.line + '">✕</button>';
+                  '<div class="cl-mem-head" style="display:flex;align-items:center;gap:6px;">' +
+                    '<span class="cl-mem-vis" data-vis="' + parts.vis + '" title="' + parts.visTitle + '"' +
+                      ' style="flex:0 0 12px;text-align:center;font-weight:bold;color:' + parts.visColor + ';">' +
+                      window.MA.htmlUtils.escHtml(parts.visMark) + '</span>' +
+                    '<span class="cl-mem-sig" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--font-mono),Consolas,monospace;">' +
+                      window.MA.htmlUtils.escHtml(parts.sig) +
+                      (parts.mod ? ' <span class="cl-mem-mod" style="font-size:9px;color:var(--text-secondary);">' + parts.mod + '</span>' : '') +
+                    '</span>' +
+                    (isSel ? '' : '<button type="button" class="cl-mem-edit" id="cl-mem-edit-' + mi + '"' +
+                      ' style="flex:0 0 auto;font-size:10px;padding:1px 8px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">編集</button>') +
+                  '</div>';
         if (isSel) {
           // 選んだ行だけをその場で展開して編集する
+          var srcLine = (ctx && ctx.getMmdText ? ctx.getMmdText() : '').split('\n')[m.line - 1] || '';
           rows += '<div style="margin-top:4px;padding:4px;background:var(--bg);border:1px solid var(--border);">' +
                     _visToggleHtml('cl-mem-vis-' + mi, m.visibility || '') +
                     P.fieldHtml('名前', 'cl-mem-name-' + mi, m.name) +
@@ -1862,7 +1908,18 @@ window.MA.modules.plantumlClass = (function() {
                       '<label><input type="checkbox" id="cl-mem-static-' + mi + '"' + (m.static ? ' checked' : '') + '> static にする</label>' +
                       (m.kind === 'method' ? ' <label><input type="checkbox" id="cl-mem-abstract-' + mi + '"' + (m.abstract ? ' checked' : '') + '> abstract にする</label>' : '') +
                     '</div>' +
-                    P.primaryButtonHtml('cl-mem-update-' + mi, '更新') +
+                    // design 4a: 入力から組み立てられる 1 行をその場に出す (3c / 4c と同じ流儀)。
+                    '<div style="margin-top:6px;">' +
+                      '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:2px;font-weight:bold;">組み立てられる行</label>' +
+                      '<pre id="cl-mem-preview-' + mi + '" style="margin:0;background:var(--bg-primary);border:1px solid var(--border);border-radius:3px;padding:5px 6px;font-family:var(--font-mono),Consolas,monospace;font-size:11px;color:var(--text-primary);white-space:pre-wrap;word-break:break-all;min-height:15px;">' +
+                        window.MA.htmlUtils.escHtml(String(srcLine).trim()) + '</pre>' +
+                    '</div>' +
+                    '<div style="margin-top:6px;">' + P.primaryButtonHtml('cl-mem-update-' + mi, '更新') + '</div>' +
+                    '<div style="margin-top:6px;display:flex;gap:6px;">' +
+                      '<button type="button" id="cl-mem-up-' + mi + '" data-line="' + m.line + '" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:4px;border-radius:4px;font-size:11px;cursor:pointer;">↑ 上へ</button>' +
+                      '<button type="button" id="cl-mem-down-' + mi + '" data-line="' + m.line + '" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:4px;border-radius:4px;font-size:11px;cursor:pointer;">↓ 下へ</button>' +
+                      '<button type="button" id="cl-mem-del-' + mi + '" data-line="' + m.line + '" style="flex:1;background:var(--accent-red);color:#fff;border:none;padding:4px;border-radius:4px;font-size:11px;cursor:pointer;">削除</button>' +
+                    '</div>' +
                   '</div>';
         }
         rows += '</div>';
@@ -2032,6 +2089,19 @@ window.MA.modules.plantumlClass = (function() {
           }]);
         });
       }
+      // 「編集」は行を押したのと同じ (その行を開く)。
+      P.bindEvent('cl-mem-edit-' + mi, 'click', function(e) {
+        if (e && e.stopPropagation) e.stopPropagation();
+        window.MA.selection.setSelected([{
+          type: 'member',
+          id: element.id + '::__m_' + mi,
+          parentId: element.id,
+          parentKind: element.kind,
+          memberIndex: mi,
+          memberKind: m.kind,
+          line: m.line
+        }]);
+      });
       P.bindEvent('cl-mem-up-' + mi, 'click', function(e) {
         if (e && e.stopPropagation) e.stopPropagation();
         window.MA.history.pushHistory();
@@ -2052,7 +2122,28 @@ window.MA.modules.plantumlClass = (function() {
         ctx.onUpdate();
       });
       if (mi === focusIdx) {
-        _bindVisToggle(propsEl, 'cl-mem-vis-' + mi);
+        var _val = function(id) { var el = document.getElementById(id); return el ? el.value : ''; };
+        var _chk = function(id) { var el = document.getElementById(id); return !!(el && el.checked); };
+        var refreshPreview = function() {
+          var pv = document.getElementById('cl-mem-preview-' + mi);
+          if (!pv) return;
+          var src = ctx.getMmdText().split('\n')[m.line - 1] || '';
+          pv.textContent = memberLinePreview(m.kind, src, {
+            visibility: _val('cl-mem-vis-' + mi) || null,
+            name: _val('cl-mem-name-' + mi),
+            params: _val('cl-mem-params-' + mi),
+            type: _val('cl-mem-type-' + mi),
+            isStatic: _chk('cl-mem-static-' + mi),
+            isAbstract: _chk('cl-mem-abstract-' + mi),
+          });
+        };
+        _bindVisToggle(propsEl, 'cl-mem-vis-' + mi, refreshPreview);
+        ['cl-mem-name-', 'cl-mem-type-', 'cl-mem-params-'].forEach(function(pre) {
+          P.bindEvent(pre + mi, 'input', refreshPreview);
+        });
+        ['cl-mem-static-', 'cl-mem-abstract-'].forEach(function(pre) {
+          P.bindEvent(pre + mi, 'change', refreshPreview);
+        });
         P.bindEvent('cl-mem-update-' + mi, 'click', function() {
           var vis = document.getElementById('cl-mem-vis-' + mi).value || null;
           var name = document.getElementById('cl-mem-name-' + mi).value;
@@ -2796,6 +2887,8 @@ window.MA.modules.plantumlClass = (function() {
     fmtRelation: fmtRelation,
     relationEnds: relationEnds,
     fmtAttribute: fmtAttribute,
+    memberRowParts: memberRowParts,
+    memberLinePreview: memberLinePreview,
     fmtMethod: fmtMethod,
     fmtEnumValue: fmtEnumValue,
     fmtPackage: fmtPackage,
