@@ -253,6 +253,16 @@ test('手順9 保存先が Git なら、この図の履歴の「比較」で前�
   const pb = await picker.boundingBox();
   expect(pb && pb.y >= 0 && pb.y + pb.height <= vp.height).toBe(true);
   await expect(picker.locator('.git-pick-row').filter({ hasText: '初版' })).toBeInViewport();
+  // design 10c「初版 v1.2 / 01de5a9 · senior · 09-10 09:15 / +12」(BLK-builder-20260924-2246-1): タグはメッセージの横の札で、
+  // 副題には入れない。図を作ったコミットの右端は「+N」だけ (−0 を付けない)。後のコミットは「+2 −0」の形のまま。
+  const firstPick = picker.locator('.git-pick-row').filter({ hasText: '初版' });
+  await expect(firstPick.locator('.git-pick-title .git-pick-tag')).toHaveText('v1.2');
+  await expect(firstPick.locator('.git-pick-meta')).not.toContainText('v1.2');
+  await expect(firstPick.locator('.git-pick-stat')).toHaveText(/^\+\d+$/);
+  const laterPick = picker.locator('.git-pick-row').filter({ hasText: 'Fault 通知の応答を追記' });
+  await expect(laterPick.locator('.git-pick-meta')).toContainText('HEAD');
+  await expect(laterPick.locator('.git-pick-stat')).toHaveText(/^\+\d+ −\d+$/);
+  await expect(laterPick.locator('.git-pick-tag')).toHaveCount(0);
   await page.locator('#git-pick-close').click();
   await expect(picker).toBeHidden();
 

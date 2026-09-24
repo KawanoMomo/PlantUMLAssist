@@ -1022,18 +1022,25 @@ def parse_git_log(text):
         refs = [x.strip() for x in f[5].split(',') if x.strip()]
         tags = [x[len('tag: '):] for x in refs if x.startswith('tag: ')]
         added = removed = 0
+        files = creates = 0
         for ln in lines[1:]:
             parts = ln.split('\t')
             if len(parts) >= 3:
+                files += 1
                 try:
                     added += int(parts[0])
                     removed += int(parts[1])
                 except ValueError:
                     pass
+            elif ln.startswith(' create mode '):
+                # --summary の行。このコミットで生まれたファイル (BLK-builder-20260924-2246-1)。
+                creates += 1
         out.append({'hash': f[0], 'short': f[1], 'author': f[2], 'date': f[3],
                     'message': f[4], 'tags': tags,
                     'head': any(x == 'HEAD' or x.startswith('HEAD -> ') for x in refs),
-                    'added': added, 'removed': removed})
+                    'added': added, 'removed': removed,
+                    # 触ったファイルが全部このコミットで生まれた (図を作ったコミット。design 10c の「初版 +12」)。
+                    'created': files > 0 and creates >= files})
     return out
 
 
@@ -1043,7 +1050,7 @@ def git_log(save_dir, name=''):
     if not top:
         return {'repo': False, 'commits': []}
     path = _git_rel(top, save_dir, name) if name else (_git_rel(top, save_dir) or '.')
-    args = ['log', '-n', str(GIT_LOG_MAX), '--format=' + _GIT_LOG_FMT, '--numstat']
+    args = ['log', '-n', str(GIT_LOG_MAX), '--format=' + _GIT_LOG_FMT, '--numstat', '--summary']
     if name:
         args.append('--follow')
     r = run_git(top, args + ['--', path])
