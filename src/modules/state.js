@@ -1380,7 +1380,7 @@ window.MA.modules.plantumlState = (function() {
             { value: 'to', label: '直前の遷移先から', selected: _tx.mode !== 'same' },
             { value: 'same', label: '直前と同じ From', selected: _tx.mode === 'same' }
           ]) +
-          P.primaryButtonHtml('st-tail-add', '+ 追加 (Enter)') +
+          P.primaryButtonHtml('st-tail-add', '+ 追加') +
           '<button id="st-tx-close" type="button" style="width:100%;font-size:11px;padding:4px 8px;margin-top:4px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">続けて入れるのを終える (Esc)</button>';
       } else if (kind === 'pseudo') {
         html2 =
