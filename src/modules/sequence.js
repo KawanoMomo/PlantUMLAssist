@@ -1314,8 +1314,31 @@ window.MA.modules.plantumlSequence = (function() {
     _pickHighlight(true);
   }
 
+  // BLK-primary-20260923-2312-friction: 「末尾に追加」のメッセージで To が空欄のあいだは、
+  // 図の参加者 (頭・ライフライン) を押すとその参加者を To に入れる (選択は動かさない)。
+  function _tailToPick(target) {
+    if (!target || !target.getAttribute) return false;
+    var toSel = document.getElementById('seq-tail-to');
+    if (!toSel || toSel.value !== '' || toSel.disabled) return false;
+    var type = target.getAttribute('data-type');
+    if (type !== 'participant' && type !== 'lifeline') return false;
+    var id = target.getAttribute('data-id');
+    if (!id) return false;
+    var has = false;
+    for (var i = 0; i < toSel.options.length; i++) if (toSel.options[i].value === id) has = true;
+    if (!has) return false;
+    toSel.value = id;
+    var ev = document.createEvent('Event');
+    ev.initEvent('change', true, false);
+    toSel.dispatchEvent(ev);
+    var note = document.getElementById('seq-tail-endpoint-note');
+    if (note) note.textContent = 'To: ' + id + ' (「+ 末尾に追加」で確定)';
+    return true;
+  }
+
   // app.js が overlay のクリックを選択に回す前に呼ぶ。消費したら true。
   function handleOverlayPick(target) {
+    if (_tailToPick(target)) return true;
     if (!wrapPick || !target || !target.getAttribute) return false;
     if (target.getAttribute('data-type') !== 'message') return true;  // 終点を待つ間は他を選ばない
     var ln = parseInt(target.getAttribute('data-line'), 10);
@@ -2616,10 +2639,23 @@ window.MA.modules.plantumlSequence = (function() {
             var tailDef = SE ? SE.defaultsFor(participants.map(function(p) { return p.id; })) : { source: 'none' };
             var fromOptsT = tailDef.from ? withSelected(partOptsWithNew, tailDef.from) : partOptsWithNew;
             var toOptsT = tailDef.to ? withSelected(partOptsWithNew, tailDef.to) : partOptsWithNew;
-            var tailNote = SE ? SE.noteText(tailDef, function(id) {
+            var labelOfPart = function(id) {
               for (var i = 0; i < participants.length; i++) if (participants[i].id === id) return participants[i].label;
               return id;
-            }) : '';
+            };
+            var tailNote = SE ? SE.noteText(tailDef, labelOfPart) : '';
+            // BLK-primary-20260923-2312-friction: 1 本確定した後は From = 直前の To、To = 空欄
+            // (図の参加者を押すか選ぶ)。自己メッセージ (先頭 / 先頭) に戻さない。
+            var TMm = window.MA.tailMemory;
+            if (TMm && TMm.hasField('seq-tail-from')) {
+              var memFrom = TMm.field('seq-tail-from');
+              var partIds = participants.map(function(p) { return p.id; });
+              if (partIds.indexOf(memFrom) >= 0) {
+                fromOptsT = withSelected(partOptsWithNew, memFrom);
+                toOptsT = [{ value: '', label: '（図の参加者を押すか選ぶ）', selected: true }].concat(partOptsWithNew);
+                tailNote = '直前の送り先 ' + labelOfPart(memFrom) + ' から続けます。To は図の参加者を押すか選んでください';
+              }
+            }
             html =
               (tailNote ? '<div id="seq-tail-endpoint-note" style="font-size:10px;color:var(--text-secondary);margin-bottom:6px;">'
                 + window.MA.htmlUtils.escHtml(tailNote) + '</div>' : '') +
@@ -2758,6 +2794,13 @@ window.MA.modules.plantumlSequence = (function() {
               }
               if (arrowSpec && arrowSpec.from) fr = arrowSpec.from;
               if (arrowSpec && arrowSpec.to) to = arrowSpec.to;
+              if (!to) {
+                var toNote = document.getElementById('seq-tail-endpoint-note');
+                if (toNote) toNote.textContent = 'To を選んでください (図の参加者を押すか、To で選ぶ)';
+                var toSelE = document.getElementById('seq-tail-to');
+                if (toSelE && toSelE.focus) toSelE.focus();
+                return;
+              }
               var labelVal = (rleObj ? rleObj.getValue() : '').trim();
               if (fr === '__new__' || to === '__new__') {
                 var rawNewAl = document.getElementById('seq-tail-new-alias').value;
@@ -2776,6 +2819,11 @@ window.MA.modules.plantumlSequence = (function() {
               var tailStereo = tailStereoEl ? tailStereoEl.value : '';
               var combinedLabel = formatLabelWithStereotype(tailStereo, labelVal);
               out = addMessage(t, fr, to, arrow, combinedLabel);
+              if (window.MA.tailMemory && fr !== '[' && to !== ']' && fr !== '?' && to !== '?') {
+                var nextEnds = window.MA.tailMemory.nextMessageEnds(fr, to);
+                window.MA.tailMemory.setField('seq-tail-from', nextEnds.from);
+                window.MA.tailMemory.setField('seq-tail-to', nextEnds.to);
+              }
             } else if (kind === 'participant') {
               var rawAl = document.getElementById('seq-tail-alias').value;
               var partNorm = normalizeIdInput(rawAl, parsedData);
@@ -2807,10 +2855,11 @@ window.MA.modules.plantumlSequence = (function() {
             ctx.onUpdate();
           });
         };
-        renderTailDetail();
         P.bindEvent('seq-tail-kind', 'change', renderTailDetail);
         // design 2b: 種別はチップ 1 クリックで決める。値の持ち主は上の select のまま。
+        // BLK-primary-20260923-2312-friction: mount が前回の種別を select に戻すので、詳細はその後に描く。
         window.MA.tailKindChips.mount('seq-tail-kind');
+        renderTailDetail();
         return;
       }
 
@@ -2859,6 +2908,11 @@ window.MA.modules.plantumlSequence = (function() {
           // BLK-junior-20260907-2203: 選んだ行の当事者を憶えておき、選択を外して
           // 「末尾に追加」を開いたときの From / To の初期値にする。
           if (window.MA.selectedEndpoints) window.MA.selectedEndpoints.remember(mm);
+          // 選んだ行の当事者の方が新しいので、確定後の「From = 直前の To」の覚えは捨てる。
+          if (window.MA.tailMemory) {
+            window.MA.tailMemory.forget('seq-tail-from');
+            window.MA.tailMemory.forget('seq-tail-to');
+          }
           var partOpts2 = participants.map(function(p) { return { value: p.id, label: p.label }; });
           var fromOpts = partOpts2.map(function(o) { return { value: o.value, label: o.label, selected: o.value === mm.from }; });
           var toOpts = partOpts2.map(function(o) { return { value: o.value, label: o.label, selected: o.value === mm.to }; });

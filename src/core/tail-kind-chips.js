@@ -127,6 +127,15 @@ window.MA.tailKindChips = (function() {
     }
     if (options.length === 0) return null;
 
+    // BLK-primary-20260923-2312-friction: 確定で描き直しても、前回選んだ種別のまま出す。
+    // change は投げずに値だけ戻す (各図種は mount の後に詳細フォームを描くので、それで揃う)。
+    // 覚えは図種を切り替えたとき・タブを替えたときに tailMemory が捨てる。
+    var TM = window.MA.tailMemory;
+    var remembered = TM ? TM.kind(selectId) : null;
+    if (remembered && remembered !== sel.value && TM.hasOption(sel, remembered)) {
+      sel.value = remembered;
+    }
+
     var host = document.createElement('div');
     host.innerHTML = chipsHtml(idPrefix, chipModels(options, sel.value));
     var chipsEl = host.firstChild;
@@ -175,6 +184,7 @@ window.MA.tailKindChips = (function() {
     // select 側 (従来の経路・E2E) から値が変わってもチップの当たりが古びないようにする。
     sel.addEventListener('change', function() {
       paint(chipsEl, sel.value);
+      if (TM) TM.setKind(selectId, sel.value);
     });
 
     return chipsEl;

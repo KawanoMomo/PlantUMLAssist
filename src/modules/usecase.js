@@ -708,6 +708,12 @@ window.MA.modules.plantumlUsecase = (function() {
             'A --&gt; B : label / A ..&gt; B(include) / A ..&gt; B : extend / A &lt;|-- B。空行は無視されます</div>';
       }
       detailEl.innerHTML = html;
+      // BLK-primary-20260923-2312-friction: 関係を続けて足すとき、種類と From は前回選んだまま
+      // (次の 1 本は To を選ぶだけ)。カードは select の値で描くので、戻してから載せる。
+      if (kind === 'relation' && window.MA.tailMemory) {
+        window.MA.tailMemory.bindSelect('uc-tail-rkind');
+        window.MA.tailMemory.bindSelect('uc-tail-from');
+      }
       if (kind === 'relation') window.MA.relationKindCards.mountForSelect('uc-tail-rkind', 'usecase');
       if (kind === 'actor') bindAliasHint('A');
       else if (kind === 'usecase') bindAliasHint('U');
@@ -746,6 +752,10 @@ window.MA.modules.plantumlUsecase = (function() {
           var to = document.getElementById('uc-tail-to').value;
           if (!fr || !to) { alert('From/To 必須 (先に actor/usecase を追加)'); return; }
           var rkind = document.getElementById('uc-tail-rkind').value;
+          if (window.MA.tailMemory) {
+            window.MA.tailMemory.setField('uc-tail-rkind', rkind);
+            window.MA.tailMemory.setField('uc-tail-from', fr);
+          }
           window.MA.history.pushHistory();
           out = addRelation(t, rkind, fr, to, document.getElementById('uc-tail-rlabel').value.trim());
         } else if (kind === 'note') {

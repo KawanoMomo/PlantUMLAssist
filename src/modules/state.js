@@ -1008,6 +1008,9 @@ window.MA.modules.plantumlState = (function() {
   function renderProps(selData, parsedData, propsEl, ctx) {
     if (!propsEl) return;
     _txLast = { parsedData: parsedData, propsEl: propsEl, ctx: ctx };
+    // BLK-primary-20260923-2312-friction: 図種・タブが替わっていたら「末尾に追加」の覚えを捨てる
+    // (捨てると onReset で続けて入れる回も閉じる)。
+    if (window.MA.tailMemory) window.MA.tailMemory.sync();
     // 遷移や注記を選んだら、続けて入れる回は閉じる (図の状態を押すのは回の中で受ける)。
     if (selData && selData.length > 0) _tx.open = false;
     if (!selData || selData.length === 0) {
@@ -1033,6 +1036,21 @@ window.MA.modules.plantumlState = (function() {
               vals: { trig: '', guard: '', act: '' } };
   var _txLast = null;
   var _txCaptureBound = false;
+  // BLK-primary-20260923-2312-friction: 続けて入れる回は「図種 + タブ」ごと。タブを替えたら
+  // 前のタブの From を持ち込まない (種別チップの覚えと同じ切れ目で閉じる)。
+  if (window.MA.tailMemory) {
+    window.MA.tailMemory.onReset(function() {
+      _tx.open = false;
+      _tx.from = '';
+      _tx.to = '';
+      _tx.pick = '';
+      _tx.count = 0;
+      _tx.note = '';
+      _tx.trig = '';
+      _tx.focus = false;
+      _tx.vals = { trig: '', guard: '', act: '' };
+    });
+  }
 
   function _txRerender() {
     if (!_txLast) return;
@@ -1418,6 +1436,8 @@ window.MA.modules.plantumlState = (function() {
           '</div>';
       }
       detailEl.innerHTML = html2;
+      // BLK-primary-20260923-2312-friction: 子状態を続けて足すとき、親は前回選んだまま。
+      if (kind === 'child' && window.MA.tailMemory) window.MA.tailMemory.bindSelect('st-tail-where-target');
       // 一括欄は「既に他の図にある行」を打ち直させないためのボタンを持つ。
       window.MA.reuseModal.bindButton('st-tail-reuse', 'plantuml-state', 'st-tail-bulk');
       renderWhereDetail();
@@ -1544,6 +1564,9 @@ window.MA.modules.plantumlState = (function() {
             normSt = { valid: true, id: window.MA.stateChild.uniqueChildId(parsedData, 'Sub'), label: '' };
           }
           if (!normSt.valid) { alert('ID 必須'); return; }
+          if (k === 'child' && whereTarget && window.MA.tailMemory) {
+            window.MA.tailMemory.setField('st-tail-where-target', whereTarget);
+          }
           var stereoEl = document.getElementById('st-tail-stereo');
           var st = (stereoEl && stereoEl.value) || null;
           if (where === 'transition') {
