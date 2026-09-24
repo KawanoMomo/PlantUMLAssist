@@ -15,7 +15,6 @@ window.MA.filesPanel = (function() {
   var KEY_OPEN = 'pua.files.open';        // パネルそのものの開閉
   var KEY_SEC = 'pua.files.sec.';         // 節ごとの開閉
   var KEY_RO = 'pua.files.readonly';      // 「読むだけを表示 / 隠す」
-  var KEY_PIN = 'pua.files.pinned';       // ダブルクリックで固定した図
 
   function _ls() { try { return window.localStorage; } catch (e) { return null; } }
   function _get(k, d) {
@@ -31,7 +30,6 @@ window.MA.filesPanel = (function() {
   function $(id) { return document.getElementById(id); }
 
   var panel = null;
-  var pinned = {};
 
   // ── パネルの開閉 ──────────────────────────────────────────────────────
   function isOpen() { return !!panel && !panel.classList.contains('collapsed'); }
@@ -112,6 +110,14 @@ window.MA.filesPanel = (function() {
     return g;
   }
 
+  function _pinDoc(id) {
+    var ws = window.MA.workspace;
+    if (ws && ws.pin) ws.pin(id);
+    // タブ列を描き直すと、この一覧もそこから描き直される (renderTabs → refresh)。
+    if (typeof window.renderTabs === 'function') window.renderTabs();
+    else renderOpen();
+  }
+
   function renderOpen() {
     var body = secBody('open');
     if (!body) return;
@@ -133,7 +139,8 @@ window.MA.filesPanel = (function() {
       b.className = 'files-row' + (doc.id === activeId ? ' is-active' : '');
       b.setAttribute('data-doc-id', String(doc.id));
       b.setAttribute('data-file-name', String(doc.name || ''));
-      if (pinned[String(doc.id)]) b.setAttribute('data-pinned', '1');
+      // design 10a (BLK-builder-20260924-1701-1): 仮のタブの図は、行の名前もタブと同じく斜体で出す。
+      if (doc.preview) b.setAttribute('data-preview', '1');
       b.appendChild(_glyphEl(doc.diagramType));
       var name = document.createElement('span');
       name.className = 'files-row-name';
@@ -142,18 +149,16 @@ window.MA.filesPanel = (function() {
       name.textContent = doc.name && TS && TS.fileName ? TS.fileName(String(doc.name)) : String(doc.name || '(無題)');
       b.appendChild(name);
       var mark = _marks(doc);
-      if (mark || pinned[String(doc.id)]) {
+      if (mark) {
         var m = document.createElement('span');
         m.className = 'files-row-mark';
-        m.textContent = (pinned[String(doc.id)] ? '📌 ' : '') + mark;
+        m.textContent = mark;
         b.appendChild(m);
       }
       b.addEventListener('click', function() { _openDoc(doc.id); });
-      b.addEventListener('dblclick', function() {
-        pinned[String(doc.id)] = true;
-        _set(KEY_PIN, JSON.stringify(Object.keys(pinned)));
-        renderOpen();
-      });
+      // design 10a: ダブルクリックでタブとして固定する (保存先の行のダブルクリックと同じ workspace.pin)。
+      // 以前は FILES だけの覚え書きに 📌 を付けるだけで、タブは仮 (斜体) のまま残っていた。
+      b.addEventListener('dblclick', function() { _pinDoc(doc.id); });
       body.appendChild(b);
     });
     var c = $('files-count-open');
@@ -360,8 +365,6 @@ window.MA.filesPanel = (function() {
   function init() {
     panel = $('files-panel');
     if (!panel) return;
-
-    try { (JSON.parse(_get(KEY_PIN, '[]')) || []).forEach(function(k) { pinned[k] = true; }); } catch (e) { pinned = {}; }
 
     setOpen(_get(KEY_OPEN, '1') !== '0');
 

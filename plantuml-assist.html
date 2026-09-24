@@ -150,6 +150,8 @@ html, body {
 }
 #files-panel button.files-row:hover { background: var(--bg-tertiary); }
 #files-panel button.files-row.is-active { color: var(--accent); }
+/* design 10a (BLK-builder-20260924-1701-1): 仮のタブの図はタブと同じく斜体。ダブルクリックで固定すると戻る */
+#files-panel button.files-row[data-preview="1"] .files-row-name { font-style: italic; opacity: 0.85; }
 #files-panel .files-row-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #files-panel .files-row-mark { flex: 0 0 auto; font-size: 9px; color: var(--accent); white-space: nowrap; }
 #files-panel .files-empty { padding: 3px 16px; color: var(--text-secondary); }
