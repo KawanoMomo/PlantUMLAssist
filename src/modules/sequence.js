@@ -1040,9 +1040,11 @@ window.MA.modules.plantumlSequence = (function() {
         ctx.onUpdate();
         return;
       }
-      var newLine = _findMessageSwapTargetLine(oldText, ln, direction);
-      if (newLine < 0) return;
-      var newText = moveMessage(oldText, ln, direction);
+      // BLK-owner-20260924-2232-3: 動けないときは理由を 1 行出す (何も起きない、にしない)。
+      var mv = moveMessageEx(oldText, ln, direction);
+      var newLine = mv.line;
+      if (newLine < 0) { if (mv.reason) _toastInfo(mv.reason); return; }
+      var newText = mv.text;
       if (newText === oldText) return;
       window.MA.history.pushHistory();
       ctx.setMmdText(newText);
@@ -1945,40 +1947,65 @@ window.MA.modules.plantumlSequence = (function() {
     return /[-=<]-?[>x]|->>?|<<?-/.test(trimmed) && /\S+\s*[-=<]/.test(trimmed);
   }
 
-  function moveMessage(text, lineNum, direction) {
-    // direction: -1 = up, +1 = down. Stops at any non-message structural
-    // line so up/down never visibly rearranges unrelated elements.
+  // BLK-owner-20260924-2232-3: 枠の区切り (alt/loop… の頭・else・end) は 1 段だけ越える。
+  // 越えた先は隣の分岐・枠の中・枠の外。以前は区切りで止まって何も起きず、else 側へ
+  // メッセージを移す手段が無かった。越えない行 (注釈・参加者・activate…) では理由を返す。
+  function _moveBarrier(trimmed) {
+    if (GROUP_END_RE.test(trimmed)) return 'end';
+    if (GROUP_ELSE_RE.test(trimmed)) return 'else';
+    var gm = trimmed.match(GROUP_OPEN_RE);
+    if (gm && !/^end\b/.test(trimmed)) return 'open';
+    return null;
+  }
+
+  function _moveReason(trimmed, direction) {
+    if (/^@startuml|^@enduml/.test(trimmed)) return direction < 0 ? 'これより上には動かせません (図の先頭です)' : 'これより下には動かせません (図の末尾です)';
+    if (/^(note|hnote|rnote)\b|^end note\b/i.test(trimmed)) return '注釈の行は越えられません。注釈を選んで ↑↓ で動かすか、ここに挿入で入れ直してください';
+    if (/^(activate|deactivate|destroy|create|return)\b/i.test(trimmed)) return 'ライフラインの行 (' + trimmed.split(/\s+/)[0] + ') は越えられません。帯の範囲が変わるためです';
+    if (/^(participant|actor|database|queue|collections|control|entity|boundary|box\b|end box)/i.test(trimmed)) return '参加者の宣言より上には動かせません';
+    return 'この行 (' + trimmed.slice(0, 24) + ') は越えられません';
+  }
+
+  // 結果 { text, line (動いた後の 1 始まりの行。動かなければ -1), reason }。
+  function moveMessageEx(text, lineNum, direction) {
+    // direction: -1 = up, +1 = down.
     var lines = text.split('\n');
     var idx = lineNum - 1;
-    if (idx < 0 || idx >= lines.length) return text;
+    if (idx < 0 || idx >= lines.length) return { text: text, line: -1, reason: '' };
     var target = idx + direction;
     while (target >= 0 && target < lines.length) {
       var t = lines[target].trim();
       if (!t || window.MA.dslUtils.isPlantumlComment(t)) { target += direction; continue; }
       if (_isMessageLineForMove(t)) break;
-      return text;  // structural line — no-op
+      var barrier = _moveBarrier(t);
+      if (!barrier) return { text: text, line: -1, reason: _moveReason(t, direction) };
+      // 区切りの行と入れ替える。字下げは越えた先の段に合わせる。
+      var bIndent = (lines[target].match(/^\s*/) || [''])[0];
+      var body = lines[idx].trim();
+      var ind;
+      if (barrier === 'else') ind = (lines[idx].match(/^\s*/) || [''])[0];
+      else if ((barrier === 'end' && direction > 0) || (barrier === 'open' && direction < 0)) ind = bIndent;  // 枠の外へ
+      else ind = bIndent + '  ';  // 枠の中へ
+      var moved = lines.slice();
+      moved.splice(idx, 1);
+      moved.splice(target, 0, ind + body);
+      return { text: moved.join('\n'), line: target + 1, reason: '' };
     }
-    if (target < 0 || target >= lines.length) return text;
+    if (target < 0 || target >= lines.length) return { text: text, line: -1, reason: '' };
     var tmp = lines[idx];
     lines[idx] = lines[target];
     lines[target] = tmp;
-    return lines.join('\n');
+    return { text: lines.join('\n'), line: target + 1, reason: '' };
+  }
+
+  function moveMessage(text, lineNum, direction) {
+    return moveMessageEx(text, lineNum, direction).text;
   }
 
   // _findMessageSwapTargetLine: mirror of moveMessage's target search so
   // callers can re-select the moved message by its new 1-based line.
   function _findMessageSwapTargetLine(text, lineNum, direction) {
-    var lines = text.split('\n');
-    var idx = lineNum - 1;
-    if (idx < 0 || idx >= lines.length) return -1;
-    var target = idx + direction;
-    while (target >= 0 && target < lines.length) {
-      var t = lines[target].trim();
-      if (!t || window.MA.dslUtils.isPlantumlComment(t)) { target += direction; continue; }
-      if (_isMessageLineForMove(t)) return target + 1;
-      return -1;
-    }
-    return -1;
+    return moveMessageEx(text, lineNum, direction).line;
   }
 
   function toggleAutonumber(text) {
@@ -2513,6 +2540,7 @@ window.MA.modules.plantumlSequence = (function() {
     moveNote: moveNote,
     deleteLineOrNote: deleteLineOrNote,
     moveMessage: moveMessage,
+    moveMessageEx: moveMessageEx,
     addActivation: addActivation,
     deleteActivationsFor: deleteActivationsFor,
     extractStereotype: extractStereotype,
@@ -2621,6 +2649,8 @@ window.MA.modules.plantumlSequence = (function() {
               { value: 'activation', label: 'ライフライン (activate/deactivate)' },
               { value: 'bulk', label: 'まとめて (複数行)' },
             ]) +
+            // BLK-owner-20260924-2232-3: 他の図種と同じ「追加する位置」(枠ごと・分岐ごとの末尾)。
+            (window.MA.seqPlace ? window.MA.seqPlace.fieldHtml('seq-tail', ctx.getMmdText(), groups) : '') +
             '<div id="seq-tail-detail" style="margin-top:6px;"></div>' +
           '</div>' +
           '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;color:var(--text-secondary);font-size:11px;">' +
@@ -2638,6 +2668,9 @@ window.MA.modules.plantumlSequence = (function() {
         var renderTailDetail = function() {
           var kind = document.getElementById('seq-tail-kind').value;
           var detailEl = document.getElementById('seq-tail-detail');
+          // 参加者の宣言は枠の中へ入れない (図の頭に並ぶ)。
+          var placeBox = document.getElementById('seq-tail-place-box');
+          if (placeBox) placeBox.style.display = kind === 'participant' ? 'none' : '';
           var partOpts = participants.map(function(p) { return { value: p.id, label: p.label }; });
           if (partOpts.length === 0) partOpts = [{ value: '', label: '（参加者なし）' }];
           var html = '';
@@ -2862,6 +2895,9 @@ window.MA.modules.plantumlSequence = (function() {
               if (bulkOut === t) { alert('追加できる行がありません'); return; }
               window.MA.history.pushHistory();
               out = bulkOut;
+            }
+            if (kind !== 'participant' && window.MA.seqPlace) {
+              out = window.MA.seqPlace.applyAdd('seq-tail', parseSequence, t, out);
             }
             ctx.setMmdText(out);
             ctx.onUpdate();
@@ -3285,7 +3321,14 @@ window.MA.modules.plantumlSequence = (function() {
             if (!gEnd) { alert('対応する end 行を検出できません'); return; }
             var cond = document.getElementById('seq-edit-else-cond').value;
             window.MA.history.pushHistory();
-            ctx.setMmdText(insertElseIntoGroup(ctx.getMmdText(), gLine, gEnd, cond));
+            var withElse = insertElseIntoGroup(ctx.getMmdText(), gLine, gEnd, cond);
+            ctx.setMmdText(withElse);
+            // BLK-owner-20260924-2232-3: 足した else 側を「追加する位置」にして追加フォームへ戻す
+            // (空の else は図に描かれず押せないので、次の 1 本をそのまま入れられるようにする)。
+            if (window.MA.seqPlace && window.MA.seqPlace.rememberElse(withElse, parseSequence(withElse).groups, gLine, gEnd)) {
+              window.MA.selection.clearSelection();
+              _toastInfo('else を足しました。「追加する位置」が else 側になっています');
+            }
             ctx.onUpdate();
           });
           document.getElementById('seq-edit-group-delete').addEventListener('click', function() {

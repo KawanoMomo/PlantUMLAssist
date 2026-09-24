@@ -74,6 +74,26 @@ test('手順5 シーケンスの alt 枠は左上の札を押して選べ、右�
   await page.waitForTimeout(600);
   expect(await page.locator('#editor').inputValue()).toMatch(/^\s*else 失敗$/m);
 
+  // BLK-owner-20260924-2232-3: 空の else は図に描かれず押せない。else を足したら追加フォームへ戻り、
+  // 「追加する位置」が今足した else 側になっていて、次の 1 本をそのまま else 側へ入れられる。
+  const place = page.locator('#seq-tail-place');
+  await expect(place).toBeVisible();
+  await expect(place.locator('option:checked')).toHaveText('alt『成功』の else『失敗』側');
+  await page.locator('#seq-tail-kind-chip-message').click();
+  await page.locator('#seq-tail-from').selectOption('Reg');
+  await page.locator('#seq-tail-to').selectOption('App');
+  await page.locator('#seq-tail-add').click();
+  await expect.poll(async () => page.locator('#editor').inputValue()).toMatch(/^else 失敗\n\s+Reg -> App\s*\nend$/m);
+  // 続けて足す 1 本も同じ else 側が既定のまま。
+  await expect(page.locator('#seq-tail-place option:checked')).toHaveText('alt『成功』の else『失敗』側');
+  await page.waitForTimeout(1200);
+
+  // 成功側のメッセージは「↓ 下へ」で else を 1 段越えて else 側の先頭へ移る (止まって何も起きない、にしない)。
+  await page.mouse.click((await center('Ack')).x, (await center('Ack')).y);
+  await page.locator('#props-pane .seq-move-down').first().click();
+  await expect.poll(async () => page.locator('#editor').inputValue()).toMatch(/^else 失敗\n\s*Reg --> App : Ack\n\s+Reg -> App\s*\nend$/m);
+  await page.waitForTimeout(1200);
+
   // 条件の文字・左の枠線を押しても同じ枠が選ばれる。
   for (const pt of [await center('[成功]'), null]) {
     await page.keyboard.press('Escape');
