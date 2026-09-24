@@ -313,3 +313,38 @@ test('手順11 クラス・遷移を選んだ右パネルの見出しは「種�
   await expect(page.locator('#st-tr-head')).toHaveText('Transition · 4 行目');
   await expect(page.locator('#st-tr-name')).toHaveText('Idle → Running');
 });
+
+// BLK-builder-20260924-1320-2 (design 4a「種別 / Kind」): 種別を押したあとも同じクラスを選んだまま続けて直せ、
+// enum にしたあとも種別の欄から class に戻せる。
+test('手順11 クラスの種別を切り替えても選んだまま、enum からも種別の欄で戻せる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  const NL = String.fromCharCode(10);
+  const CLS = ['@startuml', 'title Sample Class', 'abstract class Shape {', '+ {abstract} area() : double', '}',
+    'class Circle {', '- radius : double', '+ area() : double', '}', 'Shape <|-- Circle', '@enduml'].join(NL);
+  await S.typeDsl(page, CLS);
+  await page.waitForTimeout(1500);
+  const hit = page.locator('#overlay-layer rect.selectable[data-id="Circle"]').first();
+  await expect(hit).toBeAttached({ timeout: 10000 });
+  const hb = await hit.boundingBox();
+  await page.mouse.click(hb.x + hb.width / 2, hb.y + 8);
+  await page.waitForTimeout(400);
+  await expect(page.locator('#cl-sel-head')).toHaveText('Class · 6 行目');
+
+  await page.locator('.cl-kind-btn[data-kind="interface"]').click();
+  await page.waitForTimeout(800);
+  expect(await page.locator('#editor').inputValue()).toContain('interface Circle {');
+  await expect(page.locator('#cl-sel-head')).toHaveText('Interface · 6 行目');
+  await expect(page.locator('#cl-sel-name')).toHaveText('Circle');
+
+  await page.locator('.cl-kind-btn[data-kind="enum"]').click();
+  await page.waitForTimeout(800);
+  expect(await page.locator('#editor').inputValue()).toContain('enum Circle {');
+  await expect(page.locator('#cl-sel-head')).toHaveText('Enum · 6 行目');
+  await expect(page.locator('.cl-kind-btn[data-kind="enum"]')).toHaveAttribute('aria-pressed', 'true');
+
+  await page.locator('.cl-kind-btn[data-kind="class"]').click();
+  await page.waitForTimeout(800);
+  const t = await page.locator('#editor').inputValue();
+  expect(t).toContain(['class Circle {', '- radius : double', '+ area() : double', '}'].join(NL));
+  await expect(page.locator('#cl-sel-head')).toHaveText('Class · 6 行目');
+});
