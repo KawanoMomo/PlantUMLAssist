@@ -52,11 +52,49 @@ window.MA.fileTree = (function() {
     return false;
   }
 
+  // BLK-builder-20260924-1719-3: 区切りの無い日本語名 (`TIMERドライバ状態遷移`) の図種の語。
+  // 名前の中で最も後ろに出た語を採る (`…シーケンス` `…状態遷移(資料用)`)。
+  var KIND_WORDS_JA = [
+    ['ユースケース', 'usecase'], ['コンポーネント', 'component'], ['アクティビティ', 'activity'],
+    ['状態遷移', 'state'], ['シーケンス', 'sequence'], ['クラス', 'class'],
+  ];
+
+  // 名前の末尾の添え字 (`(資料用)` `（資料用）` `-編集中`) は図種・部品を読む邪魔になるので外す。
+  function _stem(name) {
+    return _s(name).replace(/\.puml$/i, '')
+      .replace(/\s*[（(][^（()）]*[）)]\s*$/, '')
+      .replace(/-編集中$/, '');
+  }
+
   // ファイル名からその図の図種を読む。分からなければ ''。
   function kindOf(name) {
-    var n = _s(name).toLowerCase().replace(/\.puml$/, '');
+    var n = _stem(name).toLowerCase();
     var tail = n.split(/[_\-\s]+/).pop();
-    return KIND_WORDS[tail] || '';
+    if (KIND_WORDS[tail]) return KIND_WORDS[tail];
+    var best = '', at = -1;
+    KIND_WORDS_JA.forEach(function(w) {
+      var i = n.lastIndexOf(w[0]);
+      if (i > at) { at = i; best = w[1]; }
+    });
+    return best;
+  }
+
+  // 先頭の語 (区切り `_` `-` 空白の手前) のうち部品名に当たる所。
+  // 区切りの無い日本語名は、先頭の英数字の語が部品 (`TIMERドライバ…` の `TIMER`)。
+  // 「部品名 + Drv / Driver」(`TimerDrv派生クラス図`) の Drv / Driver は部品名に入れない。
+  // 返り値 { part: 名前の中の部品名の文字, rest: その後ろ全部 }。先頭の語が無ければ null。
+  function splitPart(name) {
+    var n = _s(name).replace(/\.puml$/i, '');
+    var m = /^[_\-\s]*([^_\-\s]+)([\s\S]*)$/.exec(n);
+    if (!m) return null;
+    var head = m[1], rest = m[2] || '';
+    var j = /^([A-Za-z0-9]+)([^\x00-\x7F][\s\S]*)$/.exec(head);
+    if (j) {
+      var d = /^([A-Za-z0-9]+?)(drv|driver)$/i.exec(j[1]);
+      if (d) return { part: d[1], rest: d[2] + j[2] + rest };
+      return { part: j[1], rest: j[2] + rest };
+    }
+    return { part: head, rest: rest };
   }
 
   // ファイル名から部品名を読む。図種の語を落とした先頭の語が部品
@@ -66,7 +104,8 @@ window.MA.fileTree = (function() {
     var parts = n.split(/[_\-\s]+/).filter(function(x) { return x !== ''; });
     if (!parts.length) return '';
     if (parts.length > 1 && KIND_WORDS[parts[parts.length - 1].toLowerCase()]) parts.pop();
-    return parts[0].toLowerCase();
+    var sp = splitPart(parts[0]);
+    return (sp ? sp.part : parts[0]).toLowerCase();
   }
 
   function partLabel(part) {
@@ -242,6 +281,7 @@ window.MA.fileTree = (function() {
     defaultOpen: defaultOpen,
     kindOf: kindOf,
     partOf: partOf,
+    splitPart: splitPart,
     partLabel: partLabel,
     groups: groups,
     layout: layout,

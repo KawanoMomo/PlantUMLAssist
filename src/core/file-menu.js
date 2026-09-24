@@ -167,9 +167,18 @@ window.MA.fileMenu = (function() {
     if (!n || !to) return null;
     var m = /^([^_\-\s]+)([_\-\s].*)?$/.exec(n);
     if (!m) return null;
+    var FT = window.MA.fileTree;
+    // BLK-builder-20260924-1719-3: 区切りの無い日本語名 (`TIMERドライバ状態遷移`) は、ツリーと同じく
+    // 先頭の英数字の語が部品。そこだけを差し替え、全部大文字の部品名なら大文字で書く。
+    var sp = FT && FT.splitPart ? FT.splitPart(n) : null;
+    if (sp && sp.part !== m[1]) {
+      if (sp.part.toLowerCase() === to) return null;
+      var up = sp.part === sp.part.toUpperCase() && /[A-Z]/.test(sp.part);
+      var cap = !up && /^[A-Z][^A-Z]*$/.test(sp.part);
+      return (up ? to.toUpperCase() : cap ? to.charAt(0).toUpperCase() + to.slice(1) : to) + sp.rest;
+    }
     if (m[1].toLowerCase() === to) return null;
     // 図種の語だけの名前 (`sequence`) は部品を持たないので、頭に部品を足す。
-    var FT = window.MA.fileTree;
     if (!m[2] && FT && FT.kindOf(n)) return to + '_' + n;
     return to + (m[2] || '');
   }
