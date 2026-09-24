@@ -263,6 +263,27 @@ test('手順11 図で選んだ遷移の右パネルから、その遷移の途�
   const afterStart = (await page.locator('#editor').inputValue()).split(NL);
   expect(afterStart).toContain('[*] --> Running');
   expect(afterStart).not.toContain('[*] --> Idle');
+
+  // 到達条件その5 (BLK-builder-20260924-2350-1): その他… ▾ の 状態内の動作 / 並行領域に分ける で、遷移の端の状態に付ける。
+  // 「start」(Idle --> Checking) の To の Checking に entry 動作を、「stop」(Running --> F1) の From の Running (複合状態) に -- を足す。
+  await pickLabel('start');
+  await page.locator('#st-tr-add-more').click();
+  await page.locator('#st-tr-add-other .prop-seg[data-value="behavior"]').click();
+  await expect(page.locator('#st-tr-add-target option:checked')).toHaveText('Checking (To)');
+  await page.locator('#st-tr-add-bval').fill('motorOn()');
+  await expect(page.locator('#st-tr-add-line')).toHaveText('Checking : entry / motorOn()');
+  await page.locator('#st-tr-add').click();
+  await page.waitForTimeout(800);
+  expect((await page.locator('#editor').inputValue()).split(NL)).toContain('Checking : entry / motorOn()');
+
+  await pickLabel('stop');
+  await page.locator('#st-tr-add-other .prop-seg[data-value="region"]').click();
+  await expect(page.locator('#st-tr-add')).toBeDisabled();   // To の F1 は中を持たない
+  await page.locator('#st-tr-add-target').selectOption('from');
+  await expect(page.locator('#st-tr-add')).toBeEnabled();
+  await page.locator('#st-tr-add').click();
+  await page.waitForTimeout(800);
+  expect(await page.locator('#editor').inputValue()).toContain(['state Running {', '  state NewState', '  --', '}'].join(NL));
 });
 
 // BLK-builder-20260924-1252-3 (design 4b「Activity — 途中に挿入」の右パネル): 図で選んだアクションの
