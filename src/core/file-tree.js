@@ -125,6 +125,28 @@ window.MA.fileTree = (function() {
     return { groups: groups(kinded), loose: loose };
   }
 
+  // ファイル行の頭に付ける図種の線画 (design 10a「ファイルの頭にはその図種の線画が付きます」)。
+  // 線画そのものは左レールと同じもの (diagram-rail の GLYPHS) を使い、ツリーだけの絵を作らない。
+  // kind は保存先の一覧の短い名前 (`sequence`) でも、タブの図種 (`plantuml-sequence`) でもよい。
+  // 図種が読めなければ '' (呼び出し側は線画の幅だけ空けて名前の位置を揃える)。
+  function glyphType(kind) {
+    var k = _s(kind).toLowerCase().replace(/^plantuml-/, '');
+    k = KIND_WORDS[k] || '';
+    return k ? 'plantuml-' + k : '';
+  }
+
+  function glyphSvg(kind) {
+    var t = glyphType(kind);
+    var R = window.MA.diagramRail;
+    if (!t || !R || !R.glyphSvg) return '';
+    return R.glyphSvg(t);
+  }
+
+  // 行に出す図種: 本文から判定済みの図種を先に、無ければ名前の末尾の語。
+  function fileKind(name, contentKind) {
+    return glyphType(contentKind) ? _s(contentKind) : kindOf(name);
+  }
+
   // ツリーのファイル行の右に付ける札 (design 10a「ファイルの状態」)。中身は保存先の一覧の
   // 行のバッジと同じ事実を読む: 未保存 ● / 指摘が未反映 / 一時控え / SVG が本文より古い。
   // Git の M・A は行の data-git が別に出す。
@@ -194,6 +216,9 @@ window.MA.fileTree = (function() {
     groups: groups,
     layout: layout,
     fileMarks: fileMarks,
+    glyphType: glyphType,
+    glyphSvg: glyphSvg,
+    fileKind: fileKind,
     filter: filter,
     readonlyCountLabel: readonlyCountLabel,
     gitCountLabel: gitCountLabel,

@@ -286,6 +286,10 @@ html, body {
 #files-panel .files-part-file { display: flex; align-items: center; gap: 4px; }
 #files-panel .files-part-file .files-row-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #files-panel .files-part-file.files-loose-file { padding-left: 16px; }
+/* design 10a: ファイル行の頭の図種の線画 (左レールと同じ絵)。読めない図種は同じ幅だけ空ける。 */
+#files-panel .files-row-glyph { flex: 0 0 14px; width: 14px; height: 14px; display: inline-flex; align-items: center; justify-content: center; color: var(--text-secondary); }
+#files-panel .files-row-glyph svg { width: 14px; height: 14px; display: block; }
+#files-panel .is-active .files-row-glyph { color: var(--accent); }
 
 /* ── Diagram rail (design 1a「Quiet Rail」) ───────────────────────────────── */
 #rail {

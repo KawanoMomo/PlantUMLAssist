@@ -98,6 +98,20 @@ window.MA.filesPanel = (function() {
     return out.join(' ');
   }
 
+  // design 10a: ファイル行の頭の図種の線画。読めない図種でも同じ幅の空きを置いて名前の頭を揃える。
+  function _glyphEl(kind) {
+    var FT = window.MA.fileTree;
+    var g = document.createElement('span');
+    g.className = 'files-row-glyph';
+    g.setAttribute('aria-hidden', 'true');
+    var t = FT && FT.glyphType ? FT.glyphType(kind) : '';
+    if (t) {
+      g.setAttribute('data-kind', t);
+      g.innerHTML = FT.glyphSvg(kind);
+    }
+    return g;
+  }
+
   function renderOpen() {
     var body = secBody('open');
     if (!body) return;
@@ -120,6 +134,7 @@ window.MA.filesPanel = (function() {
       b.setAttribute('data-doc-id', String(doc.id));
       b.setAttribute('data-file-name', String(doc.name || ''));
       if (pinned[String(doc.id)]) b.setAttribute('data-pinned', '1');
+      b.appendChild(_glyphEl(doc.diagramType));
       var name = document.createElement('span');
       name.className = 'files-row-name';
       name.textContent = String(doc.name || '(無題)');
@@ -207,6 +222,7 @@ window.MA.filesPanel = (function() {
     b.type = 'button';
     b.className = 'files-part-file' + (loose ? ' files-loose-file' : '');
     b.setAttribute('data-file-name', f.name);
+    b.appendChild(_glyphEl(FT && FT.fileKind ? FT.fileKind(f.name, f.kind) : f.kind));
     var nm = document.createElement('span');
     nm.className = 'files-row-name';
     nm.textContent = f.name;
