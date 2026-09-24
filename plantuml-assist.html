@@ -252,6 +252,40 @@ html, body {
   width: 100%; box-sizing: border-box;
   border: none; border-radius: 0; background: none; padding: 0;
 }
+/* BLK-builder-20260923-1849-3: 幅 208px の節ではファイル名を読めるようにする。行は折り返し、名前の箱が
+   1 行目の残り (印と役割のボタンの横) を取る。箱の中も折り返し、名前は 1 行目に下限付きで置き、
+   印 (SVG 無・書込中?・時刻…) は次の行へ送る。操作のボタン (差分・対象にする・控えにする・🗑) は行の下段へ。 */
+#files-panel #folder-panel .folder-row { flex-wrap: wrap; row-gap: 1px; }
+#files-panel #folder-panel .folder-row > .folder-item { flex: 1 1 140px; min-width: 0; flex-wrap: wrap; row-gap: 1px; }
+#files-panel #folder-panel .folder-item .folder-name {
+  flex: 1 1 auto; min-width: 7em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+#files-panel #folder-panel .folder-filterbar,
+#files-panel #folder-panel .folder-pickbar,
+#files-panel #folder-panel .folder-vault-bar { flex-wrap: wrap; }
+#files-panel #folder-panel .folder-row > button:not(.folder-item):not(.folder-role),
+#files-panel #folder-panel .folder-row > .folder-kind { width: auto; flex: 0 0 auto; }
+/* BLK-owner-20260924-0637-1 (design 10a): 「保存先」節の中はツリー (部品のフォルダ → ファイルの行と札) だけ。
+   旧 📂 一覧 (#folder-panel) は節の中では出さず、ツリーの束ね元として DOM にだけ置く。
+   保存先の右クリック「保存先の一覧を開く」(is-list) で中央の枠に浮かせて開く。幅 208px には押し込まない。 */
+#files-panel #folder-panel.open:not(.is-list) { display: none; }
+#files-panel #folder-panel.open.is-list {
+  display: block; position: fixed; z-index: 60;
+  /* 本文欄 (DSL) は覆わない: 1 回押しで図を見て回る間も、開いた図の本文が読めて押せる。 */
+  top: 72px; right: 16px; left: auto;
+  width: min(760px, calc(100vw - 640px)); min-width: 420px; max-height: calc(100vh - 140px); overflow-y: auto;
+  background: var(--bg-primary); border: 1px solid var(--border); border-radius: 6px;
+  padding: 6px 8px; box-shadow: 0 8px 28px rgba(0, 0, 0, .35);
+}
+#folder-panel .folder-list-head {
+  display: flex; align-items: center; gap: 6px; padding: 2px 2px 6px; margin-bottom: 4px;
+  border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-secondary);
+}
+#folder-panel .folder-list-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#folder-panel button.folder-list-close { flex: 0 0 auto; width: auto; padding: 1px 8px; }
+#files-panel .files-part-file { display: flex; align-items: center; gap: 4px; }
+#files-panel .files-part-file .files-row-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#files-panel .files-part-file.files-loose-file { padding-left: 16px; }
 
 /* ── Diagram rail (design 1a「Quiet Rail」) ───────────────────────────────── */
 #rail {

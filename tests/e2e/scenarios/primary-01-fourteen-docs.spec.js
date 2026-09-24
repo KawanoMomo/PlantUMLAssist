@@ -95,6 +95,11 @@ test('手順1 14 枚を 1 回押しで見て回ってもタブは 1 枚だけ増
   await page.keyboard.press('Control+End');
   await page.keyboard.type("\n' 見直し");
   await expect(page.locator('#tab-bar .tab[data-doc-name="' + d + '"]')).not.toHaveAttribute('data-preview', '1');
+  // 一覧から開いた図を書き換えるので、上書きの問いに答える (BLK-owner-20260924-0637-1: 一覧は中央の枠に
+  // 開くようになり、答えずに残した問いの枠が一覧の行に重なる)。
+  const lock = page.locator('#source-lock-modal');
+  await page.waitForTimeout(900);
+  if (await lock.isVisible().catch(() => false)) await page.locator('#source-lock-overwrite').click();
   // 本文を押すと一覧は畳まれる (今までどおり)。開き直して次の図へ。
   await S.openFolder(page);
   await row(a).click();

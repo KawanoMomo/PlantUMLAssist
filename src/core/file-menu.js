@@ -43,6 +43,10 @@ window.MA.fileMenu = (function() {
     { sep: true, realOnly: true },
     { id: 'set-target', label: '保存先にする', realOnly: true },
     { id: 'set-readonly', label: '読むだけにする', realOnly: true },
+    // BLK-owner-20260924-0637-1: 旧 📂 一覧 (要約・選ぶバー・対象 set・SVG の鮮度…) はツリーから外し、
+    // 今の保存先の右クリックからだけ中央の枠に開く。
+    { sep: true, targetOnly: true },
+    { id: 'open-list', label: '保存先の一覧を開く', targetOnly: true },
   ];
 
   function _copy(it) {
@@ -70,7 +74,10 @@ window.MA.fileMenu = (function() {
   function folderItems(ctx) {
     var kind = _s((ctx || {}).kind) || 'part';
     var real = kind !== 'part';
-    return FOLDER_ITEMS.filter(function(it) { return real || !it.realOnly; }).map(function(it) {
+    return FOLDER_ITEMS.filter(function(it) {
+      if (it.targetOnly) return kind === 'target';
+      return real || !it.realOnly;
+    }).map(function(it) {
       var o = _copy(it);
       if (o.id === 'set-target' && kind === 'target') {
         o.disabled = true;

@@ -107,6 +107,37 @@ window.MA.fileTree = (function() {
     });
   }
 
+  // BLK-owner-20260924-0637-1: 保存先節のツリーの形。図種の読めない図 (名前にも本文にも図種が無い
+  // `diagram2` など) は部品のフォルダに分けず、保存先の直下にファイル行で並べる
+  // (1 枚ずつ「DIAGRAM2 0 / 6・未作成 6 図種」と出すと、中に図があるのに無いと読める)。
+  // 本文から図種が読める図 (e.kind) は、名前に図種が無くても部品の側で数える。
+  function layout(entries) {
+    var kinded = [];
+    var loose = [];
+    (entries || []).forEach(function(e) {
+      var name = _s(e && e.name ? e.name : e);
+      if (!name) return;
+      var kind = _s(e && e.kind) || kindOf(name);
+      if (kind) kinded.push({ name: name, kind: kind });
+      else loose.push({ name: name, kind: '' });
+    });
+    loose.sort(function(a, b) { return a.name < b.name ? -1 : a.name > b.name ? 1 : 0; });
+    return { groups: groups(kinded), loose: loose };
+  }
+
+  // ツリーのファイル行の右に付ける札 (design 10a「ファイルの状態」)。中身は保存先の一覧の
+  // 行のバッジと同じ事実を読む: 未保存 ● / 指摘が未反映 / 一時控え / SVG が本文より古い。
+  // Git の M・A は行の data-git が別に出す。
+  function fileMarks(st) {
+    var s = st || {};
+    var out = [];
+    if (s.dirty) out.push('●');
+    if (s.unapplied) out.push('未反映');
+    if (s.draft) out.push('控え');
+    if (s.svgStale) out.push('SVG 古い');
+    return out.join(' ');
+  }
+
   // 絞り込み。ファイル名と部品名のどちらでも引ける (入力は大小を問わない)。
   function filter(entries, query) {
     var q = _s(query).trim().toLowerCase();
@@ -161,6 +192,8 @@ window.MA.fileTree = (function() {
     partOf: partOf,
     partLabel: partLabel,
     groups: groups,
+    layout: layout,
+    fileMarks: fileMarks,
     filter: filter,
     readonlyCountLabel: readonlyCountLabel,
     gitCountLabel: gitCountLabel,
