@@ -1,4 +1,5 @@
 - BLK-migrator-20260924-1432: PlantUML 自身が描画の途中で落ちた絵 (「An error has occured」「PlantUML (版) has crashed.」だけの SVG) を図として出さず、見出し ERROR・描画エラーの帯 (例外の文つき)・直前の図を残す形で出す。POST /render も 422 (kind: plantuml-crash) で返す。<style> の CSS を持つ SVG スプライトでも PlantUML が描ける図はそのまま描く
+- BLK-builder-20260924-1655-2: FILES ツリーの「読むだけ」「GIT」の見出しを下端 (要約の直上) に置き、保存先の図が多くても常に見えるようにした (design 10a / 10c)
 - BLK-human-20260924-1640: tools/audit.js を --cohort / --only / --names で絞って回した回でも「無変化 tick 数」の印を保存するようにした。junior×primary の突合 (-p junior,primary --cohort) が毎回「今回が最初の控えです」に戻らず、2 回目から「変化なし: N 回連続」と出る (控えの report は今まで通り素の回だけが書き替える)
 - BLK-migrator-20260924-1332: C4_Sequence の手続き (Person / Component / Rel) で書いた sequence 図に alt / loop / ref over / == 区切り == / ... 遅延 ... が混ざっても、参加者・メッセージ・alt/loop の枠に本人の選択枠が出て、ref・区切り・遅延は書かれた行を指す枠になる。「Overlay マッチング失敗」の帯も出ない
 - BLK-builder-20260924-1636-1: タブと FILES「開いている図」の行が図の名前を上部バーと同じ「diagram1.puml」のファイル名で出す (design 7a / 7b / 10a。以前は拡張子なしの「diagram1」で、同じ図が 2 通りの名前で並んでいた)

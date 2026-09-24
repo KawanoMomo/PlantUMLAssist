@@ -93,7 +93,11 @@ html, body {
   padding: 3px 6px; font-size: 11px;
 }
 #files-panel input#files-filter:focus { outline: none; border-color: var(--accent); }
-#files-panel .files-sections { flex: 1 1 auto; overflow-y: auto; }
+#files-panel .files-sections { flex: 1 1 auto; overflow-y: auto; min-height: 0; }
+/* 読むだけ・GIT は下端に置く (design 10a / 10c)。畳んだ見出しは常に見え、開いた中身は
+   パネルの半分までで流れる。 */
+#files-panel .files-foot { flex: 0 1 auto; max-height: 50%; overflow-y: auto; min-height: 0; }
+#files-panel .files-foot .files-sec { border-bottom: none; border-top: 1px solid var(--border); }
 #files-panel .files-sec { border-bottom: 1px solid var(--border); }
 #files-panel button.files-sec-head {
   display: flex; align-items: center; gap: 4px;
@@ -7351,6 +7355,11 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
           <div id="folder-panel"></div>
         </div>
       </section>
+    </div>
+    <!-- design 10a / 10c (BLK-builder-20260924-1655-2): 「読むだけ」「GIT」はツリーの下端に 1 行ずつ置く
+         (10c「10a の左下」)。保存先の一覧が長くても見出しと件数が常に見えるよう、流れる一覧の外に出す。
+         開くと下端から上へ伸び、伸びすぎたらこの中で流れる。 -->
+    <div class="files-foot">
       <section class="files-sec" data-files-section="readonly">
         <!-- design 10a: 「読むだけ」は既定で畳む。入口の 2 つ (👀 / ⇔) は見出しの行に置き、
              畳んだままでも押せるようにする (節を開く手数を入口ごとに足さない)。 -->
