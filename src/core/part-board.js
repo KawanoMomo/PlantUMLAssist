@@ -93,10 +93,44 @@ window.MA.partBoard = (function() {
     return { name: nameOf(entry), text: textOf(entry), shared: !!shared, missing: false };
   }
 
-  function _side(list, part, kind) {
+  // BLK-junior-20260924-0704-wish: 相乗り図 (全ドライバ共通のクラス図) を手本に出すときは、
+  // 既存の「部品で絞る」(part-focus の「他を非表示」) と同じ絞りで、その部品の所だけにする。
+  // 8 部品ぶんの全文を出すと、手本にすべきクラスを欄の中で読み分けることになる。
+  // 絞れない図 (部品がクラスとして読めない図種) は全文のまま出す。
+  function _narrow(cell, part) {
+    if (cell.missing || !cell.shared) return cell;
+    var PF = window.MA.partFocus;
+    var res = (PF && PF.focus) ? PF.focus(cell.text, part, 'hide') : null;
+    if (!res || !res.dsl) return cell;
+    cell.fullText = cell.text;
+    cell.text = res.dsl;
+    cell.sliced = {
+      part: _s(res.part && res.part.name),
+      kept: (res.kept || []).length,
+      others: (res.others || []).length,
+    };
+    return cell;
+  }
+
+  // narrow は手本 (先輩) の欄だけ。自分の欄はその場で直して保存するので、
+  // 絞った本文を出すと保存で相乗り図の他部品が消える。
+  function _side(list, part, kind, narrow) {
     var e = _pick(list, part, kind);
     if (e) return _cell(e, false);
-    return _cell(_pickShared(list, part, kind), true);
+    var c = _cell(_pickShared(list, part, kind), true);
+    return narrow ? _narrow(c, part) : c;
+  }
+
+  // 相乗り図の欄の出典 1 行。「どの共通の図から、どの部品の所を絞ったか」を言う
+  // (全文だと思って読むと、伏せた他部品のクラスを「先輩の図に無い」と読み違える)。
+  function sharedNote(cell, part) {
+    if (!cell || cell.missing || !cell.shared) return '';
+    var P = _s(part).toUpperCase();
+    if (cell.sliced) {
+      return '共通の図 ' + cell.name + ' から ' + P + ' の部分を絞った ('
+        + cell.sliced.kept + ' クラス・他 ' + cell.sliced.others + ' クラスは伏せています)';
+    }
+    return '共通の図 ' + cell.name + ' (' + P + ' を含む・全文)';
   }
 
   // 部品 1 つぶんの表。行は 6 図種で固定 (無い図種も行として残す。
@@ -104,8 +138,8 @@ window.MA.partBoard = (function() {
   function board(part, mine, theirs) {
     var p = _s(part).toLowerCase();
     var rows = order().map(function(kind) {
-      var ref = _side(theirs, p, kind);
-      var own = _side(mine, p, kind);
+      var ref = _side(theirs, p, kind, true);
+      var own = _side(mine, p, kind, false);
       return {
         kind: kind,
         label: kindLabel(kind),
@@ -194,5 +228,6 @@ window.MA.partBoard = (function() {
     names: names,
     insertName: insertName,
     rowLabel: rowLabel,
+    sharedNote: sharedNote,
   };
 })();

@@ -3671,6 +3671,15 @@ function initCommandPalette() {
       { id: 'tab-senior', title: 'FILES: 読むだけの図と並べて比較 / Files: compare', hint: 'Files', keywords: ['compare', 'files', 'readonly', 'senior', 'side', 'ならべて', 'ひかく', 'よむだけ', 'あいて', 'せんぱい', 'ふぉるだ'], button: 'btn-tab-senior', run: function() { openCompareTarget('folder'); } },
       // design 9a: 手元の .puml を開く入口は上部バーの Import ▾ へ移した。
       { id: 'import-clipboard', title: 'クリップボードの DSL から開く / Open from clipboard', hint: 'File', keywords: ['clipboard', 'paste', 'import', 'くりっぷ', 'はりつけ', 'ひらく'], run: function() { clickById('imp-clipboard'); } },
+      // BLK-junior-20260924-0704-wish: 部品 1 つの 6 図種を先輩・自分の 2 列で並べる 🧩 部品ビュー。
+      // 入口が「読むだけ」節の奥にしか無く、junior は「部品パック」「部品ごと」「6 図種まとめて」の
+      // 語で探して辿り着けなかった。開くと、いま開いている図の部品が選ばれた状態で出る。
+      { id: 'part-board', title: '🧩 部品ビュー (部品ごとの 6 図種を先輩と並べる) / Part view', hint: 'Files', keywords: ['part', 'board', 'pack', 'view', '部品パック', '部品ごと', '部品ビュー', '6 図種まとめて', '6図種まとめて', '6 図種', 'ぶひん', 'ぱっく', 'ごと', 'まとめて', 'ずしゅ'], run: function() {
+        var PB = window.MA.partBoard;
+        var WS = window.MA.workspace;
+        var active = WS ? WS.getActive() : null;
+        openPartBoard({ part: (PB && active) ? PB.partOf(active.name) : '' });
+      } },
       { id: 'tab-peek', title: 'FILES: 読むだけのフォルダを足す / Files: read-only folder', hint: 'Files', keywords: ['peek', 'files', 'readonly', 'folder', 'よむだけ', 'ほかの', 'ふぉるだ'], button: 'btn-tab-peek', run: function() { clickById('btn-tab-peek'); } },
       { id: 'tab-drivermap', title: '系統マップを開く / Driver map', hint: 'Tabs', keywords: ['driver', 'map', 'けいとう', 'まっぷ'], button: 'btn-tab-drivermap', run: function() { clickById('btn-tab-drivermap'); } },
       { id: 'tab-design', title: '仕様突合 (design) / Design spec check', hint: 'Tabs', keywords: ['design', 'spec', 'gap', 'しよう', 'とつごう', 'せっけい'], button: 'btn-tab-design', run: function() { clickById('btn-tab-design'); } },
@@ -10875,8 +10884,19 @@ function _pcTodo() {
 }
 
 // 📂 一覧の導線から来たとき: 👀 他フォルダを開き、部品ビューに切り替える。
-function openPartBoard() {
-  return openPeekFolder().then(function() { return setPartBoardMode(true); });
+// BLK-junior-20260924-0704-wish: 「並べて比較」の言い切りの行から来たときは、
+// 比較相手のフォルダと、いま開いている図の部品をそのまま引き継ぐ
+// (部品ビューを開いてからフォルダと部品を選び直させない)。
+function openPartBoard(opts) {
+  var o = opts || {};
+  return openPeekFolder().then(function() {
+    var PF = window.MA.peekFolder;
+    if (o.dir && PF && !PF.samePath(o.dir, _peekDir)) return selectPeekDir(o.dir);
+    return true;
+  }).then(function() {
+    if (o.part) _pbPart = String(o.part).toLowerCase();
+    return setPartBoardMode(true);
+  });
 }
 
 // 要直しの図種を押したら、その行の自分の欄に入る (探し直さずに直し始める)。
@@ -10909,6 +10929,15 @@ function _pbRow(r, who) {
   refHead.textContent = r.ref.missing ? who + ': 手本なし'
     : who + ' / ' + r.ref.name + (r.ref.shared ? '（相乗り図）' : '');
   refCol.appendChild(refHead);
+  // BLK-junior-20260924-0704-wish: 部品名の図が無く共通の図を手本にした欄は、
+  // どの図のどの部分を絞ったかを 1 行で書く (全文だと思って読み違えない)。
+  if (r.ref.shared && PB.sharedNote) {
+    var src = document.createElement('div');
+    src.className = 'pb-shared-note';
+    src.setAttribute('data-board-shared', r.kind);
+    src.textContent = PB.sharedNote(r.ref, _pbPart);
+    refCol.appendChild(src);
+  }
   var refText = document.createElement('pre');
   refText.className = 'pb-ref-text';
   refText.setAttribute('data-board-ref', r.kind);
@@ -11411,6 +11440,10 @@ function _withPeerSample(pick) {
   var WS = window.MA.workspace;
   _peerEnsureNames();
   if (!PS || !WS || (pick && pick.name)) return pick;
+  // BLK-junior-20260923-2012: 相手にその図種はあるが、この部品の図が無い (共通図も無い)
+  // ときは見本を出さない。自分の見本図が相手の枠に出ると、相手の図と読み違える。
+  // 見本は相手がその図種を 1 枚も持たないときの代役 (BLK-junior-20260915-0007-wish)。
+  if (pick && pick.sameKind) return pick;
   var active = WS.getActive();
   var s = PS.pickSample({ name: active ? active.name : '', dir: _peerDir },
     _peerNames, _peerDir);
@@ -11571,6 +11604,33 @@ function _seniorRefreshPick() {
   renderSeniorStatus();
 }
 
+// BLK-junior-20260924-0704-wish: 相手の図が無いと言い切った行 (見本に差し替えた行も)
+// から、同じ部品の 🧩 部品ビューへ 1 押しで行ける案内を 1 つだけ添える。
+// 図種ごとに「並べて比較 → 無ければ他フォルダを探す」を繰り返す代わりに、
+// 部品の 6 図種のどれが相手にあって、どれが欠けているかをまとめて見られる。
+function _seniorBoardLink(notice, pick) {
+  if (!notice || !pick || pick.name) return;
+  if (pick.how !== 'none' && pick.how !== 'peer-sample') return;
+  var PB = window.MA.partBoard;
+  var WS = window.MA.workspace;
+  var active = WS ? WS.getActive() : null;
+  var part = (PB && active) ? PB.partOf(active.name) : '';
+  if (!part) return;
+  var b = document.createElement('button');
+  b.type = 'button';
+  b.id = 'senior-to-board';
+  b.className = 'senior-to-board';
+  b.setAttribute('data-part', part);
+  b.textContent = '🧩 部品ビューで ' + part.toUpperCase() + ' の 6 図種をまとめて見る';
+  b.title = '比較相手のフォルダと自分のフォルダで、' + part.toUpperCase()
+    + ' の 6 図種を 2 列に並べます (相手に無い図種は空欄、共通の図は部品で絞って出します)';
+  b.addEventListener('click', function() {
+    openPartBoard({ part: part, dir: _seniorState().dir });
+  });
+  notice.appendChild(document.createTextNode(' '));
+  notice.appendChild(b);
+}
+
 function syncSeniorCounterpart() {
   var el = _seniorEls();
   var SP = window.MA.seniorPane;
@@ -11590,6 +11650,7 @@ function syncSeniorCounterpart() {
     el.notice.textContent = (pick.how === 'peer-sample' && PS)
       ? PS.noticeText(pick, pick.seniorReason)
       : SP.noticeText(pick, _seniorLabel());
+    _seniorBoardLink(el.notice, pick);
   }
   renderSeniorStatus();
   renderSeniorCandidates();

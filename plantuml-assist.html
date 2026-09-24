@@ -2716,6 +2716,8 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 #peek-board .pb-row[data-editing="1"] .pb-mine-text { border-color: var(--accent); }
 #peek-board .pb-row[data-state="mine-missing"] .pb-kind { color: var(--accent-red); }
 #peek-board .pb-col-head { font-size: 10px; color: var(--text-secondary); padding-bottom: 2px; }
+/* BLK-junior-20260924-0704-wish: 共通の図から絞った手本の出典 1 行。 */
+#peek-board .pb-shared-note { font-size: 10px; color: var(--accent); padding-bottom: 2px; }
 #peek-board .pb-ref-text, #peek-board .pb-mine-text {
   width: 100%; max-height: 150px; min-height: 90px; overflow: auto; box-sizing: border-box;
   font-family: var(--mono, monospace); font-size: 10px; line-height: 1.45;
@@ -6503,6 +6505,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 }
 #senior-head button { border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer; }
 #senior-notice { padding: 4px 8px; font-size: 11px; color: var(--text-secondary); }
+/* BLK-junior-20260924-0704-wish: 相手が無いと言い切った行から部品ビューへ。 */
+#senior-notice .senior-to-board { font-size: 11px; padding: 1px 6px; margin-left: 4px; cursor: pointer; }
 #senior-slice { padding: 0 8px 4px 8px; display: flex; align-items: center; gap: 4px; font-size: 11px; }
 /* display 指定は hidden 属性より強い。共通図の抜き出し以外 (見本・1:1 の相手) では
    効かない欄なので、隠すと言った時は隠す (押せない欄が残ると何の欄か読めない)。 */

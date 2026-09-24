@@ -1693,6 +1693,121 @@ test.describe('junior 手順 1: 先輩が持たない図種では自分の他部
   });
 });
 
+// ── BLK-junior-20260924-0704-wish / BLK-junior-20260923-2012 ─────────────────
+// ADC 一巡では、クラス図・コンポーネント図・アクティビティ図・ユースケース図の 4 図種で
+// 「並べて比較」が先輩の図を出さず、そのたび 👀 他フォルダから共通図を開いて部品で絞る
+// 迂回をしていた。同じ部品の別図種 (timer_init_sequence / timer_state) があると
+// 共通図まで降りず、自分の見本図が相手の枠に出ていた。ここでは
+//   - 同じ図種が部品名で引けなければ、共通図を部品で絞って出す (見本に差し替えない)
+//   - 共通図も無ければ枚数つきで言い切り、その行から 🧩 部品ビューを同じ部品で開ける
+//   - 部品ビューの先輩欄は、共通の図を部品で絞って出典を 1 行で言う
+//   - Ctrl+K の「部品パック」でも部品ビューが開く
+// を手順 1 の到達条件にする。
+test.describe('junior 手順 1: 相手の図が無い図種は、共通図を部品で絞るか部品ビューへ案内する', () => {
+  const NL = String.fromCharCode(10);
+  const SEQ = ['@startuml', 'participant Timer_Driver', 'Timer_Driver -> IRQCtrl : Timer_Init()', '@enduml'].join(NL);
+  const ST = ['@startuml', '[*] --> Idle', 'Idle --> Running : Timer_Start', '@enduml'].join(NL);
+  const UC = ['@startuml', 'actor App', 'App --> (Spi を使う)', '@enduml'].join(NL);
+
+  async function putDsl(page, dir, name, dsl) {
+    await page.evaluate(async (a) => {
+      await fetch('/autosave', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: a.name, dir: a.dir, dsl: a.dsl }),
+      });
+    }, { name, dsl, dir });
+  }
+
+  test.beforeEach(async ({ page }) => {
+    await bootWithDir(page);
+    await clearDir(page);
+    await clearSenior(page);
+    // 先輩は TIMER のシーケンス・状態遷移を部品名で持ち、クラス図は全ドライバ共通の 1 枚。
+    // ユースケース図は SPI の 1 枚だけ (TIMER のものも共通のものも無い)。
+    await putDsl(page, SENIOR_DIR, 'timer_init_sequence', SEQ);
+    await putDsl(page, SENIOR_DIR, 'timer_state', ST);
+    await putDsl(page, SENIOR_DIR, 'driver_common_class', COMMON_CLASS);
+    await putDsl(page, SENIOR_DIR, 'spi_usecase', UC);
+    // 自分には別部品のユースケース図がある (見本に差し替えられる材料を置いておく)。
+    await putDsl(page, DIR, 'gpio_usecase', UC);
+    await page.reload();
+    await page.waitForTimeout(600);
+  });
+
+  test.afterEach(async ({ page }) => {
+    await clearDir(page).catch(() => {});
+    await clearSenior(page).catch(() => {});
+  });
+
+  async function openSenior(page) {
+    await page.locator('#btn-tab-senior').click();
+    await page.waitForSelector('#senior-pane:not([hidden])');
+    await page.waitForFunction((base) => {
+      const sel = document.getElementById('senior-dir');
+      return !!sel && Array.prototype.slice.call(sel.options).some(function(o) {
+        return o.value.toLowerCase().split(String.fromCharCode(92)).join('/').indexOf(base) >= 0;
+      });
+    }, SENIOR_BASE);
+    const v = await page.evaluate((base) => {
+      const sel = document.getElementById('senior-dir');
+      const hit = Array.prototype.slice.call(sel.options).filter(function(o) {
+        return o.value.toLowerCase().split(String.fromCharCode(92)).join('/').indexOf(base) >= 0;
+      })[0];
+      return hit ? hit.value : '';
+    }, SENIOR_BASE);
+    await page.selectOption('#senior-dir', v);
+    await page.waitForTimeout(800);
+  }
+
+  test('同じ部品の別図種しか無くても、クラス図は共通図を部品で絞って出し、自分の見本に差し替えない', async ({ page }) => {
+    await openMine(page, 'timer_class');
+    await openSenior(page);
+    const notice = page.locator('#senior-notice');
+    await expect(notice).toContainText('driver_common_class');
+    await expect(notice).not.toContainText('見本');
+    await expect(page.locator('#senior-dsl')).toContainText('Timer_Driver');
+    await expect(page.locator('#senior-dsl')).not.toContainText('Uart_Driver');
+  });
+
+  test('共通図も無い図種は枚数つきで言い切り、その行から同じ部品の部品ビューを開ける', async ({ page }) => {
+    await openMine(page, 'timer_usecase');
+    await openSenior(page);
+    const notice = page.locator('#senior-notice');
+    await expect(notice).toContainText('TIMER のユースケース図は');
+    await expect(notice).toContainText('どれも TIMER の図ではありません');
+    // 相手にその図種がある以上、自分の見本図を相手の枠に出さない。
+    await expect(notice).not.toContainText('見本');
+
+    const link = page.locator('#senior-to-board');
+    await expect(link).toContainText('TIMER');
+    await link.click();
+    await page.waitForSelector('#peek-board .pb-row');
+    await expect(page.locator('#peek-board-part')).toHaveValue('timer');
+    await expect(page.locator('#peek-board-summary')).toContainText('TIMER: 6 図種のうち');
+    // 先輩欄のクラス図は、共通の図を TIMER の部分だけに絞って出典を書く。
+    const classRow = page.locator('#peek-board .pb-row[data-board-kind="class"]');
+    await expect(classRow.locator('[data-board-shared="class"]'))
+      .toContainText('共通の図 driver_common_class から TIMER の部分を絞った');
+    await expect(classRow.locator('[data-board-ref="class"]')).toContainText('Timer_Driver');
+    await expect(classRow.locator('[data-board-ref="class"]')).not.toContainText('Uart_Driver');
+    // ユースケース図は先輩に TIMER のものも共通のものも無いので空欄。
+    await expect(page.locator('#peek-board .pb-row[data-board-kind="usecase"] [data-board-ref="usecase"]')).toHaveText('');
+  });
+
+  test('Ctrl+K で「部品パック」と打っても部品ビューが開く', async ({ page }) => {
+    await openMine(page, 'timer_class');
+    await page.keyboard.press('Control+k');
+    await page.waitForSelector('#cp-modal');
+    await page.locator('#cp-input').fill('部品パック');
+    await page.waitForTimeout(250);
+    await expect(page.locator('#cp-modal')).toContainText('部品ビュー');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('#peek-board .pb-row');
+    expect(await page.locator('#peek-board .pb-row').count()).toBe(6);
+  });
+});
+
 // ── BLK-junior-20260915-0307-wish ───────────────────────────────────────
 // 16 周目の手順 2 は「下書きは汎用ひな形なので、中身を消して先輩の対応図を手本に
 // 打ち直す」。SPI を起こすと 6 図種とも決まった汎用 DSL で埋まるが、先輩 (primary) は
