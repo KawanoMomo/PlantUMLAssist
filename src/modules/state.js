@@ -2335,7 +2335,10 @@ window.MA.modules.plantumlState = (function() {
     var toOpts = withCurrent(stateOptsWithPseudo, tr.to)
       .map(function(o) { return _selectedOpt(o, _endValue(tr.to, tr.scope, allStates)); });
     var html =
-      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">Transition (L' + tr.line + ')</div>' +
+      // BLK-builder-20260924-1305-2 (design 4c): 見出しは「Transition · 4 行目」と、その下に「Idle → Running」。
+      '<div id="st-tr-head" style="font-size:10px;color:var(--accent);margin-bottom:2px;font-weight:bold;">Transition · ' + tr.line + ' 行目</div>' +
+      '<div id="st-tr-name" style="font-size:14px;font-weight:bold;color:var(--text-primary);margin-bottom:8px;word-break:break-all;">' +
+        window.MA.htmlUtils.escHtml(String(tr.from) + ' → ' + String(tr.to)) + '</div>' +
       P.selectFieldHtml('From', 'st-tr-from', fromOpts) +
       '<button id="st-tr-swap" title="From と To を入れ替える" style="width:100%;font-size:11px;padding:3px 8px;margin-bottom:8px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">⇄ 向きを入れ替え</button>' +
       P.selectFieldHtml('To', 'st-tr-to', toOpts) +

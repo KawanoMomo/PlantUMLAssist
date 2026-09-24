@@ -276,3 +276,40 @@ test('手順11 図で選んだアクションの右パネルが design 4b の見
   expect(lines[6]).toContain('note right');
   expect(lines[6]).toContain('上書きする');
 });
+
+// BLK-builder-20260924-1305-2 (design 4a / 4c の見出し): 選んだクラス・遷移の右パネルは「Class · 6 行目」「Transition · 4 行目」と
+// その下に名前 (Circle / Idle → Running) を出す。欄の名前は日本語で、クラスの削除はパネルの末尾に「クラスを削除」。
+test('手順11 クラス・遷移を選んだ右パネルの見出しは「種類 · N 行目」と名前で、クラスを削除は末尾にある', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  const NL = String.fromCharCode(10);
+  const CLS = ['@startuml', 'title Sample Class', 'abstract class Shape {', '+ {abstract} area() : double', '}',
+    'class Circle {', '- radius : double', '+ area() : double', '}', 'Shape <|-- Circle', '@enduml'].join(NL);
+  await S.typeDsl(page, CLS);
+  await page.waitForTimeout(1500);
+  const hit = page.locator('#overlay-layer rect.selectable[data-type="class"][data-id="Circle"]').first();
+  await expect(hit).toBeAttached({ timeout: 10000 });
+  const hb = await hit.boundingBox();
+  await page.mouse.click(hb.x + hb.width / 2, hb.y + 8);
+  await page.waitForTimeout(400);
+
+  await expect(page.locator('#cl-sel-head')).toHaveText('Class · 6 行目');
+  await expect(page.locator('#cl-sel-name')).toHaveText('Circle');
+  const panel = page.locator('#props-content');
+  await expect(panel).toContainText('ステレオタイプ');
+  await expect(panel).not.toContainText('Stereotype');
+  await expect(panel).not.toContainText('Notes');
+  // クラスを削除はパネルの最後のボタン (属性・メソッド・関係を追加・ノートの後ろ)。
+  await expect(panel.locator('button:visible').last()).toHaveText('クラスを削除');
+  await expect(page.locator('#cl-delete')).toHaveText('クラスを削除');
+
+  const ST = ['@startuml', 'title Sample State', '[*] --> Idle', 'Idle --> Running : start', 'Running --> Idle : stop', '@enduml'].join(NL);
+  await S.typeDsl(page, ST);
+  await page.waitForTimeout(1500);
+  const label = page.locator('#preview-svg svg text', { hasText: 'start' }).first();
+  await expect(label).toBeVisible({ timeout: 10000 });
+  const bb = await label.boundingBox();
+  await page.mouse.click(bb.x + bb.width / 2, bb.y + bb.height / 2);
+  await page.waitForTimeout(400);
+  await expect(page.locator('#st-tr-head')).toHaveText('Transition · 4 行目');
+  await expect(page.locator('#st-tr-name')).toHaveText('Idle → Running');
+});
