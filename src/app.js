@@ -12374,6 +12374,7 @@ function _seniorGitEls() {
     next: document.getElementById('senior-git-next'),
     sides: document.getElementById('senior-git-sides'),
     diffOnly: document.getElementById('senior-git-diffonly'),
+    sbs: document.getElementById('senior-git-sbs'),
   };
 }
 
@@ -12473,7 +12474,7 @@ function renderSeniorGit() {
   if (g.sides) g.sides.textContent = GP.sidesLabel(c);
   if (g.prev) g.prev.disabled = !c.hash || !GP.step(_seniorGit.commits, c.hash, -1);
   if (g.next) g.next.disabled = !c.hash || !GP.step(_seniorGit.commits, c.hash, 1);
-  if (g.diffOnly) g.diffOnly.setAttribute('aria-pressed', _seniorGit.diffOnly ? 'true' : 'false');
+  _paintSeniorGitView();
   var want = _seniorGit.hash;
   if (el.notice) {
     el.notice.textContent = c.hash
@@ -12541,18 +12542,29 @@ function stepSeniorGit(dir) {
   return renderSeniorGit();
 }
 
+// BLK-builder-20260924-1836-2 (design 10c): 見出しの「差分だけ / 並べて比較」。押している方だけ地色
+// (据え置く / 1 回だけ と同じ形)。差分だけ = 作業中と違う行だけ、並べて比較 = 本文の全部と図。
+function _paintSeniorGitView() {
+  var g = _seniorGitEls();
+  var on = !!(_seniorGit && _seniorGit.diffOnly);
+  if (g.diffOnly) g.diffOnly.setAttribute('aria-pressed', on ? 'true' : 'false');
+  if (g.sbs) g.sbs.setAttribute('aria-pressed', on ? 'false' : 'true');
+}
+
+function setSeniorGitView(diffOnly) {
+  if (!_seniorGit) return;
+  _seniorGit.diffOnly = !!diffOnly;
+  _paintSeniorGitView();
+  renderSeniorGitDsl();
+}
+
 function setupSeniorGit() {
   var g = _seniorGitEls();
   if (g.prev) g.prev.addEventListener('click', function() { stepSeniorGit(-1); });
   if (g.next) g.next.addEventListener('click', function() { stepSeniorGit(1); });
-  if (g.diffOnly) {
-    g.diffOnly.addEventListener('click', function() {
-      if (!_seniorGit) return;
-      _seniorGit.diffOnly = !_seniorGit.diffOnly;
-      g.diffOnly.setAttribute('aria-pressed', _seniorGit.diffOnly ? 'true' : 'false');
-      renderSeniorGitDsl();
-    });
-  }
+  // design 10c (BLK-builder-20260924-1836-2): 「差分だけ / 並べて比較」の 2 択。押した方にする (裏返さない)。
+  if (g.diffOnly) g.diffOnly.addEventListener('click', function() { setSeniorGitView(true); });
+  if (g.sbs) g.sbs.addEventListener('click', function() { setSeniorGitView(false); });
   // 相手の名前を押すと、相手選びがその場で開く (git-ui が持つ)。
   if (g.pick) {
     g.pick.addEventListener('click', function() {
