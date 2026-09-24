@@ -116,10 +116,13 @@ test.describe('BLK-reviewer-20260908-1703: ラベル位置のズレを開く前�
     await page.locator('#status-consistency').click(); clicks++;
     await expect(page.locator('#ck-labelpos .ck-row')).toContainText('dma');
 
-    // 3. その行から系統チェックへ降り、遷移ごとの位置の列を見る
+    // 3. その行から系統チェックへ降り、案内から遷移ごとの位置の列を見る
+    //    (BLK-owner-20260924-1855-prune: 遷移ごとの表は 状態遷移のトレース漏れ の 1 枚に寄せた)
     await page.locator('#ck-labelpos .ck-row').first().click(); clicks++;
     await expect(page.locator('#fa-family')).toHaveValue('dma');
-    await expect(page.locator('#fl-table .fl-row').first().locator('.fl-pos'))
+    await page.locator('#fa-open-trace').click(); clicks++;
+    await expect(page.locator('#tc-family')).toHaveValue('dma');
+    await expect(page.locator('#tc-table .tc-row').first().locator('.tc-pos'))
       .toHaveAttribute('data-odd', '1');
 
     console.log('MEASURE clicks=' + clicks + ' keys=' + keys);
