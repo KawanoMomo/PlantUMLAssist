@@ -150,6 +150,27 @@ window.MA.modules.plantumlSequence = (function() {
   // 手続きで宣言する参加者 (`$AWSIcon(User, "x") as user <<stereo>>`)。別名で当てる。
   var MACRO_PART_RE = /^\$?[A-Za-z_][A-Za-z0-9_]*\s*\(.*\)\s+as\s+("?)([A-Za-z_][A-Za-z0-9_.]*)\1(?:\s+<<.*>>)?(?:\s+#\S+)?\s*$/;
 
+  // BLK-migrator-20260924-1132: 手続きを呼ぶだけの行 `Name(args...)` (末尾に as は付かない)。
+  var PROC_CALL_RE = /^\$?([A-Za-z_][A-Za-z0-9_]*)\s*\((.*)\)\s*$/;
+  // 手続きの引数を , で分ける ("…" の中の , では分けない)。{ text, quoted, ident, bare }。
+  function _procArgs(src) {
+    var out = [], cur = '', q = false;
+    var s = String(src || '');
+    for (var i = 0; i < s.length; i++) {
+      var ch = s.charAt(i);
+      if (ch === '"') { q = !q; cur += ch; continue; }
+      if (ch === ',' && !q) { out.push(cur); cur = ''; continue; }
+      cur += ch;
+    }
+    if (cur.trim() !== '' || out.length) out.push(cur);
+    return out.map(function(a) {
+      var t = a.trim();
+      var quoted = /^".*"$/.test(t);
+      var bare = quoted ? t.slice(1, -1) : t;
+      return { text: bare, quoted: quoted, ident: /^[A-Za-z_][A-Za-z0-9_.]*$/.test(t), bare: bare };
+    });
+  }
+
   var GROUP_KINDS = ['alt', 'opt', 'loop', 'par', 'break', 'critical', 'group'];
   // design 2d/5c:「各項目は『何が起きるか』を先に書き、記法は右に小さく置く」。
   // ブロックの枠も同じ流儀で読めるよう、記法ごとに何が起きるかを 1 箇所に持つ。
@@ -401,6 +422,30 @@ window.MA.modules.plantumlSequence = (function() {
           if (curBox.members.indexOf(malias) === -1) curBox.members.push(malias);
         }
         continue;
+      }
+
+      // BLK-migrator-20260924-1132: `!include` した手続きを呼ぶだけの行 (C4_Sequence の
+      // `Container(c1, "SPA", "JS")` / `Rel(c1, c2, "calls")` など)。手続きの名前は 1 つずつ覚えない。
+      // 形だけで読む: 第 1 引数が別名で第 2 引数が "表示名" なら参加者、第 1・第 2 引数がどちらも
+      // 既に読んだ参加者で第 3 引数が "文字" ならメッセージ。枠は SVG の側で表示名から当てる。
+      var pcm = trimmed.match(PROC_CALL_RE);
+      if (pcm && !pcm[1].match(/^(?:skinparam|title|hide|show|autonumber|activate|deactivate)$/i)) {
+        var pargs = _procArgs(pcm[2]);
+        if (pargs.length >= 3 && participantMap[pargs[0].bare] && participantMap[pargs[1].bare] && pargs[2].quoted) {
+          result.relations.push({
+            kind: 'message', id: '__m_' + (msgCounter++), from: pargs[0].bare, to: pargs[1].bare,
+            arrow: '->', label: pargs[2].text, line: lineNum, proc: pcm[1],
+          });
+          continue;
+        }
+        if (pargs.length >= 2 && pargs[0].ident && pargs[1].quoted && !participantMap[pargs[0].bare]) {
+          participantMap[pargs[0].bare] = {
+            kind: 'participant', id: pargs[0].bare, label: pargs[1].text, ptype: 'participant',
+            line: lineNum, macro: true, proc: pcm[1],
+          };
+          result.elements.push(participantMap[pargs[0].bare]);
+          continue;
+        }
       }
 
       var rtm = trimmed.match(RETURN_RE);

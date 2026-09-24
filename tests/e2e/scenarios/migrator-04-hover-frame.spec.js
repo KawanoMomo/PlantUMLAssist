@@ -1019,3 +1019,34 @@ test('migrator 手順 4 — 手続きで部品を宣言した図 (DSL は actor 
     return ed.value.slice(0, ed.selectionStart).split('\n').length;
   })).toBe(18);
 });
+
+// BLK-migrator-20260924-1132: C4_Sequence の手続き (Container / Component / ContainerDb / *_Boundary / Rel) だけで
+// 書いた sequence 図は、参加者の頭もメッセージも class の無い図形で描かれ、枠が 1 つも出なかった (0/25)。
+// 手続きの名前は覚えず、呼び出しの形と描かれた表示名・矢じりの付いた横線で当てる。
+test('migrator 手順 4 — C4 の手続きだけで書いた sequence 図でも、参加者・囲み・メッセージに本人の枠が出る', async ({ page }) => {
+  await bootPlain(page);
+  const dsl = fs.readFileSync(path.join(__dirname, '..', '..', 'fixtures', 'dsl', 'c4-sequence-procedure.puml'), 'utf8')
+    .replace(/\r\n/g, '\n').replace(/\n+$/, '');
+  await typeDsl(page, dsl);
+
+  // 参加者 4 + 囲み 1 (名札の帯)、メッセージ 3。
+  await expect(page.locator('#overlay-layer rect[data-type="participant"]')).toHaveCount(5, { timeout: 20000 });
+  await expect(page.locator('#overlay-layer rect[data-type="message"]')).toHaveCount(3);
+  await expect(page.locator('#overlay-warning')).toBeHidden();
+
+  // 図が横に長いので幅に合わせ、右端の参加者もプレビューの中に入れてから指す。
+  await page.locator('#hud-zoom-fit').click();
+  await page.waitForTimeout(400);
+  const expectHit = async (label, type, line) => {
+    const { hit } = await hoverHit(page, label);
+    expect(hit, label + ' に枠').not.toBeNull();
+    expect(hit.type, label).toBe(type);
+    expect(hit.line, label).toBe(String(line));
+  };
+  await expectHit('Single-Page Application', 'participant', 4);
+  await expectHit('Sign In Controller', 'participant', 6);
+  await expectHit('Security Component', 'participant', 7);
+  await expectHit('[JSON/HTTPS]', 'message', 12);
+  await expectHit('isAuthenticated()', 'message', 13);
+  await expectHit('[JDBC]', 'message', 14);
+});
