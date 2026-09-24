@@ -451,6 +451,29 @@ test('手順8 ツリーの図を Enter で開いた後も、続けて ↓ で次
   expect(await focused()).toBe('spi_class');
 });
 
+// BLK-builder-20260924-2336-3 (design 10a「⌕ ファイル名・部品名で絞り込む」): 絞り込み欄に図の名前を打つと、
+// 当たった図が畳んだ部品のフォルダの奥に隠れ、見出しだけが残っていた。打っている間は当たったフォルダを開いて描く。
+test('手順8 FILES の絞り込み欄に図の名前を打つと、畳んだ部品のフォルダの中の当たった図がそのまま見えて開ける', async ({ page }) => {
+  await seedParts(page);
+  await S.openFolder(page);
+  const adcHead = page.locator('#files-parts .files-part-head[data-part="adc"]');
+  await expect(adcHead).toHaveAttribute('aria-expanded', 'false');
+  await expect(treeFile(page, 'adc_state')).toBeHidden();
+
+  await page.locator('#files-filter').click();
+  await page.keyboard.type('adc');
+  await expect(adcHead).toHaveAttribute('aria-expanded', 'true');
+  await expect(treeFile(page, 'adc_state')).toBeVisible();
+  await expect(page.locator('#files-parts .files-part-head[data-part="spi"]')).toHaveCount(0);
+  await treeFile(page, 'adc_state').click();
+  await expect.poll(() => page.locator('#editor').inputValue()).toContain('ADC 状態遷移');
+
+  // 絞り込みを消すと、部品のフォルダは元の開閉 (畳んだまま) に戻る。
+  await page.locator('#files-filter').fill('');
+  await expect(adcHead).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('#files-parts .files-part-head[data-part="spi"]')).toHaveAttribute('aria-expanded', 'false');
+});
+
 test('手順8 ファイルを別の部品のフォルダへドラッグすると、その部品の名前に付け替わる', async ({ page }) => {
   await seedParts(page);
   await expandPart(page, 'spi');

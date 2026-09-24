@@ -255,6 +255,14 @@ window.MA.fileTree = (function() {
     });
   }
 
+  // BLK-builder-20260924-2336-3 (design 10a「⌕ ファイル名・部品名で絞り込む」): 絞り込み中は、当たった図のある
+  // 部品のフォルダを開いて描く (畳んだフォルダの奥に当たった図が隠れて、見出しだけが残っていた)。
+  // 覚えている開閉 (stored) は書き換えない。絞り込みを消せば元の開閉で描く。
+  function partOpen(stored, query) {
+    if (_s(query).trim()) return true;
+    return !!stored;
+  }
+
   // 畳んだままでも読める件数。読むだけは「比較中 N」、GIT は「main · M 2 ↑1」。
   // total (読むだけのフォルダの数) を渡すと「2 · 比較中 1」(design 10a の `読むだけ 2 比較中 1`)。
   function readonlyCountLabel(comparing, total) {
@@ -376,6 +384,7 @@ window.MA.fileTree = (function() {
     glyphSvg: glyphSvg,
     fileKind: fileKind,
     filter: filter,
+    partOpen: partOpen,
     readonlyCountLabel: readonlyCountLabel,
     readonlyRows: readonlyRows,
     gitCountLabel: gitCountLabel,

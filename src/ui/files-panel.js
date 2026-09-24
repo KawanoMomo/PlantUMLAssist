@@ -450,7 +450,8 @@ window.MA.filesPanel = (function() {
     var groups = lay.groups;
     host.textContent = '';
     groups.forEach(function(g) {
-      var open = _get(KEY_PART + g.part, '0') === '1';
+      var stored = _get(KEY_PART + g.part, '0') === '1';
+      var open = FT.partOpen ? FT.partOpen(stored, _query()) : stored;
       var head = document.createElement('button');
       head.type = 'button';
       head.className = 'files-part-head';
@@ -490,7 +491,8 @@ window.MA.filesPanel = (function() {
         head.setAttribute('aria-expanded', on ? 'true' : 'false');
         caret.textContent = on ? '▾' : '▸';
         body.hidden = !on;
-        _set(KEY_PART + g.part, on ? '1' : '0');
+        // 絞り込み中に開閉しても、覚えている開閉は書き換えない (絞り込みを消すと元に戻る)。
+        if (!String(_query() || '').trim()) _set(KEY_PART + g.part, on ? '1' : '0');
       });
     });
     // 図種を読めない図は部品のフォルダに分けず、保存先の直下にファイル行で並べる。
