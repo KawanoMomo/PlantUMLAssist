@@ -202,6 +202,19 @@ test('手順8 FILES ツリーのファイル行の頭に、左レールと同じ
   const openRow = page.locator('#files-body-open .files-row[data-file-name="spi_state"]');
   await expect(openRow.locator('.files-row-glyph')).toHaveAttribute('data-kind', 'plantuml-state');
 
+  // BLK-builder-20260924-1701-1 (design 10a「クリックで開き、ダブルクリックでタブとして固定」): 1 回押しで開いた図は
+  // 仮のタブで、行の名前もタブと同じ斜体。開いている図の行をダブルクリックするとタブが固定になり、行も斜体が外れる。
+  // 以前は行に 📌 が付くだけで、タブは仮のまま残っていた。
+  const tab = page.locator('#tab-bar .tab[data-doc-name="spi_state"]');
+  await expect(tab).toHaveAttribute('data-preview', '1');
+  await expect(openRow).toHaveAttribute('data-preview', '1');
+  await expect(openRow.locator('.files-row-name')).toHaveCSS('font-style', 'italic');
+  await openRow.dblclick();
+  await expect(tab).not.toHaveAttribute('data-preview', '1');
+  await expect(page.locator('#files-body-open .files-row[data-file-name="spi_state"]')).not.toHaveAttribute('data-preview', '1');
+  await expect(page.locator('#files-body-open .files-row[data-file-name="spi_state"] .files-row-name')).toHaveCSS('font-style', 'normal');
+  expect(await page.locator('#files-body-open').textContent()).not.toContain('📌');
+
   // BLK-builder-20260924-1350-3 (design 10a / 9a): 節見出しは「名前 + 右端の件数」を 1 回だけ。
   // 「読むだけ」の入口は絵文字ではなくレールと同じ 1px 線画で、名前は「他フォルダを覗く」。
   await expect(page.locator('#files-sec-open .files-sec-label')).toHaveText('開いている図');
