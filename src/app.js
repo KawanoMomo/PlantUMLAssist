@@ -27105,12 +27105,32 @@ function setupSaveCheck() {
 // 保存の結果をステータスバーに数秒だけ出す。押しても何も起きないように
 // 見える状態を作らないための表示で、通常の自動保存表示は上書きしない。
 var _saveStatusTimer = null;
+// BLK-builder-20260924-1413-2 (design 7a / 9c): 下端は 1 行。見せるのは短い形 (ファイル名に保存 · 衝突なし)
+// で、パス・内訳を含む全文は title と、読み上げ・テキストとして取れる隠れた span に残す
+// (全文を下端に出すと、パース OK や件数が語の途中で 2 行に折れていた)。
 function setSaveStatus(msg) {
   var el = document.getElementById('status-save-result');
   if (!el || !msg) return;
-  el.textContent = msg;
+  var AS = window.MA.autosaveStatus;
+  var short = (AS && AS.shortResult) ? AS.shortResult(msg) : msg;
+  el.textContent = '';
+  var vis = document.createElement('span');
+  vis.className = 'ssr-short';
+  vis.setAttribute('aria-hidden', 'true');
+  vis.textContent = short || msg;
+  var full = document.createElement('span');
+  full.className = 'ssr-full';
+  full.textContent = msg;
+  el.appendChild(vis);
+  el.appendChild(full);
+  el.setAttribute('data-full', msg);
+  el.title = msg;
   if (_saveStatusTimer) clearTimeout(_saveStatusTimer);
-  _saveStatusTimer = setTimeout(function() { el.textContent = ''; }, 6000);
+  _saveStatusTimer = setTimeout(function() {
+    el.textContent = '';
+    el.removeAttribute('data-full');
+    el.title = '';
+  }, 6000);
 }
 
 // 保存の直後に出した「どこに書いたか」の後ろへ、突合の結果を足す。
@@ -27118,7 +27138,7 @@ function setSaveStatus(msg) {
 function appendSaveStatus(msg) {
   var el = document.getElementById('status-save-result');
   if (!el || !msg) return;
-  var cur = el.textContent || '';
+  var cur = el.getAttribute('data-full') || '';
   setSaveStatus(cur ? cur + ' ／ ' + msg : msg);
 }
 

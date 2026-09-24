@@ -7062,7 +7062,19 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 
 #status-parse { color: var(--accent-green); }
 #status-parse.error { color: var(--accent-red); }
-#status-info  { color: var(--text-secondary); margin-left: auto; }
+#status-info  { color: var(--text-secondary); }
+/* BLK-builder-20260924-1413-2 (design 7a / 9c): 下端はどの幅でも 1 行。項目の中で折り返さず、
+   入りきらない分は保存直後の 1 行 (#status-save-result) が省略記号で縮む (全文は title)。 */
+#statusbar { overflow: hidden; min-width: 0; }
+#statusbar > * { white-space: nowrap; flex-shrink: 0; }
+#statusbar > #status-parse { max-width: 40%; overflow: hidden; text-overflow: ellipsis; }
+#statusbar > .sb-spacer { flex: 1 1 0; min-width: 0; }
+#statusbar > #status-autosave { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+#statusbar > #status-save-result { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+#status-save-result .ssr-full {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+}
 
 /* 下端の件数表示は 1 種類の形 (design 9c / BLK-human-20260923-1602)。
    文字色は全部同じで、色を持つのは点だけ。枠は付けない。
@@ -8115,9 +8127,11 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   <!-- ── Status bar ──────────────────────────────────────────────────────── -->
   <div id="statusbar">
     <span id="status-parse">Ready</span>
+    <!-- BLK-builder-20260924-1413-2 (design 7a / 9c): パース OK → N elements · M relations → 保存状態 → 件数 の順 -->
+    <span id="status-info"></span>
     <span id="status-autosave" style="color:var(--text-secondary);"></span>
     <span id="status-save-result" role="status" style="color:var(--text-secondary);"></span>
-    <span id="status-info"></span>
+    <span class="sb-spacer" aria-hidden="true"></span>
     <!-- BLK-builder-20260908-0858-2 (design 7a/7b): 件数を持つものを下端に寄せ、押せばそのパネルが開く -->
     <button type="button" id="status-diff" title="前回保存した時点から変わった図の一覧">± 差分 −</button>
     <!-- BLK-reviewer-20260915-2346-wish: 開いている図が前回保存版から何行増えて何行消えるかを、保存を押す前に常時出す -->
