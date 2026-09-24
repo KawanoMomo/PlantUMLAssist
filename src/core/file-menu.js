@@ -235,6 +235,23 @@ window.MA.fileMenu = (function() {
 
   // 外からツリーへ落としたファイルのうち取り込むもの。.puml / .plantuml / .uml / .txt。
   // 返り値は { name, file } の並び (name は拡張子を落とした図の名前)。
+  // 外から部品のフォルダに落とした図の名前 (design 10b「外から .puml をツリーに落とすと、
+  // そのフォルダへ取り込みます」。BLK-builder-20260924-1915-4)。部品はファイル名の頭の語なので、
+  // その部品の下に出るように名前を組む:
+  //   - もうその部品の名前 (`timer_state` を TIMER へ) … そのまま
+  //   - 図種の語を持つ名前 (`gpt_state` を TIMER へ) … ツリー内の移動と同じく頭の語を差し替える
+  //   - 図種の語が無い名前 (`memo` を TIMER へ) … 頭に部品を足す (元の名前を消さない)
+  // 部品が無い (保存先の見出し・空きに落とした) ときは元の名前。
+  function importNameForPart(name, part) {
+    var n = _s(name);
+    var to = _s(part).trim().toLowerCase();
+    if (!n || !to) return n;
+    var FT = window.MA.fileTree;
+    if (FT && FT.partOf && FT.partOf(n) === to) return n;
+    if (FT && FT.kindOf && FT.kindOf(n)) return renameForPart(n, to) || n;
+    return to + '_' + n;
+  }
+
   function importables(files) {
     var out = [];
     Array.prototype.forEach.call(files || [], function(f) {
@@ -257,5 +274,6 @@ window.MA.fileMenu = (function() {
     renameForPart: renameForPart,
     moveTargets: moveTargets,
     importables: importables,
+    importNameForPart: importNameForPart,
   };
 })();
