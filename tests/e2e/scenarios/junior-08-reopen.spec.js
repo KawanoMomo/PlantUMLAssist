@@ -363,6 +363,21 @@ test('手順8 部品フォルダの「＋ 未作成 N 図種」の略号を押�
   await expect(row).toHaveCount(0);
   // 既にあった図は書き換えない。
   expect(await S.readDoc(page, DIR, 'spi_state')).toContain('SPI 状態遷移');
+
+  // BLK-builder-20260924-1803-3: 未作成が多くても行を … で切り詰めず、どの略号も見えて押せる (折り返す)。
+  await expandPart(page, 'adc');
+  const adc = page.locator('#files-parts .files-part-missing[data-part="adc"]');
+  await expect(adc).toHaveText('＋未作成 5 図種（SEQ・CLS・UC・CMP・ACT）');
+  const edge = await page.evaluate(() => document.getElementById('files-panel').getBoundingClientRect().right);
+  const kinds = adc.locator('.files-part-missing-kind');
+  await expect(kinds).toHaveCount(5);
+  for (let i = 0; i < 5; i++) {
+    await expect(kinds.nth(i)).toBeVisible();
+    const box = await kinds.nth(i).boundingBox();
+    expect(box && box.x + box.width <= edge).toBe(true);
+  }
+  await kinds.last().click();
+  await expect.poll(async () => (await S.readDoc(page, DIR, 'adc_activity')) || '').toContain('@startuml');
 });
 
 test('手順8 Ctrl+P で同じ検索欄がファイル名に絞られて開き、名前を打って Enter で開ける', async ({ page }) => {
