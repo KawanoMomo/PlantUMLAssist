@@ -139,7 +139,9 @@ test.describe('BLK-primary-1203-wish 提出用 zip の図選び', () => {
     await seedThree(page);
     const waitDownload = page.waitForEvent('download', { timeout: 120 * 1000 });
     await page.locator('#btn-export').click();
-    await page.locator('#exp-svg-all').click();
+    // BLK-owner-20260923-2332-prune: 全図の zip は 📦 資料セット →「開いている図すべて」に移った
+    await page.locator('#exp-docset').click();
+    await page.locator('#dsc-open').click();
     const download = await waitDownload;
     expect(readZipNames(fs.readFileSync(await download.path())))
       .toEqual(['Changed.svg', 'Fixed.svg', 'Kept.svg']);
