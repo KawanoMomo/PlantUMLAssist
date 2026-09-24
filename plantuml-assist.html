@@ -154,6 +154,10 @@ html, body {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 #files-panel .files-part-file:hover { background: var(--bg-tertiary); }
+/* design 10b (BLK-builder-20260924-1917-1): F2 / 右クリック「名前を変更」で、行の名前がその場で入力欄になる */
+#files-panel .files-rename-box { padding: 1px 8px 2px 24px; }
+#files-panel .files-rename-input { width: 100%; box-sizing: border-box; font: inherit; font-size: 11px; padding: 1px 4px; color: var(--text-primary); background: var(--bg-primary); border: 1px solid var(--accent); border-radius: 2px; outline: none; }
+#files-panel .files-rename-note { font-size: 10px; line-height: 1.4; color: var(--accent-red); padding-top: 2px; white-space: normal; }
 /* 未作成は薄い文字 (design 10a「＋ 未作成 2 図種（UC・ACT）」)。略号を押すとその図種を、
    行頭の ＋ で未作成をまとめて、その場で作る (BLK-builder-20260924-1735-3)。 */
 #files-panel .files-part-missing {

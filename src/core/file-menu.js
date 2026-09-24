@@ -161,6 +161,15 @@ window.MA.fileMenu = (function() {
     return v;
   }
 
+  // BLK-builder-20260924-1917-1 (design 10b): ツリーの上で名前を直すとき、決まりに合わない名前の理由 (1 行)。
+  // 合っていれば ''。isValid は workspace.isValidName (判定の正本はそちら)、rule は nameRuleText。
+  function renameProblem(next, isValid, rule) {
+    var n = _s(next);
+    if (!n) return '';
+    if (typeof isValid === 'function' && !isValid(n)) return _s(rule) || 'この名前は使えません';
+    return '';
+  }
+
   // 複製の名前。`{名前}_copy`、あれば `_copy2`, `_copy3`…。
   function copyName(name, existing) {
     var base = _s(name) + '_copy';
@@ -270,6 +279,7 @@ window.MA.fileMenu = (function() {
     moveInTree: moveInTree,
     keyAction: keyAction,
     cleanName: cleanName,
+    renameProblem: renameProblem,
     copyName: copyName,
     renameForPart: renameForPart,
     moveTargets: moveTargets,
