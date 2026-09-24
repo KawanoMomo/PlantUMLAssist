@@ -182,7 +182,7 @@ test('手順3 「保つ」を選んでも、元ファイルが変わらないこ
   // 到達条件その2: 元ファイルはまだ古い表記のまま (これが junior の詰まった状態)。
   expect(await S.readDoc(page, DIR, NAME)).toContain('SPI_Driver');
 
-  // 到達条件その3: 上部の 🔒 札を 1 クリックすると、元ファイルを書き換える方に戻る。
+  // 到達条件その3: 上部の「元ファイル保護」の札を 1 クリックすると、元ファイルを書き換える方に戻る。
   const lock = page.locator('#top-source-lock');
   await expect(lock).toBeVisible();
   await lock.click();

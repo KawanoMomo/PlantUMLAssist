@@ -225,22 +225,24 @@ window.MA.sourceLock = (function() {
 
   // 上部バーに常時出す 1 語。錠がかかっていることを見えるようにする
   // (確認に答えたあとも、書き先がどこかは見えていないと分からない)。
+  // BLK-builder-20260924-1702-2 (design 9a): 札は絵文字を使わず、ファイル名も繰り返さない
+  // (名前は左隣のパンくずが言う)。札が言うのは「この図をどう書くか」だけ。
   function label(docId, docName) {
     var e = docId ? _read()[docId] : null;
     if (!e || String(docName) !== e.origin) return null;
     if (e.mode === 'copy' && e.alias) {
       // BLK-junior-20260915-2240: 押し間違えても、押した本人がここから 1 クリックで戻せる。
       return {
-        text: '🔒 元ファイル保護',
+        text: '元ファイル保護',
         title: e.origin + '.puml は変更前のまま保ちます。書き先は ' + e.alias
           + '.puml です（押すと ' + e.origin + '.puml を書き換える方に戻せます）',
         undoable: true,
       };
     }
     if (e.mode === 'overwrite') {
-      return { text: '✎ ' + e.origin, title: '開いた ' + e.origin + '.puml をそのまま書き換えます' };
+      return { text: '元ファイルに書く', title: '開いた ' + e.origin + '.puml をそのまま書き換えます' };
     }
-    return { text: '🔒 ' + e.origin,
+    return { text: '書く前に確認',
              title: '一覧から開いたファイルです。読むだけなら何も書きません。本文を変えたときだけ、'
                + '元ファイルを書き換えてよいか一度だけ確認します' };
   }

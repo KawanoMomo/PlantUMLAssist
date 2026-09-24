@@ -86,11 +86,12 @@ describe('source-lock — 開いた元ファイルを自動保存から守る (B
   test('上部バーの表示は、書き先がどこかを錠の状態ごとに言う', () => {
     expect(SL.label('doc1', 'a')).toBe(null);
     SL.mark('doc1', 'a');
-    expect(SL.label('doc1', 'a').text).toBe('🔒 a');
+    // BLK-builder-20260924-1702-2 (design 9a): 札は絵文字なし・名前を繰り返さない。
+    expect(SL.label('doc1', 'a').text).toBe('書く前に確認');
     SL.answer('doc1', 'keep', []);
     expect(SL.label('doc1', 'a').title).toContain('a-編集中.puml');
     SL.answer('doc1', 'overwrite', []);
-    expect(SL.label('doc1', 'a').text).toBe('✎ a');
+    expect(SL.label('doc1', 'a').text).toBe('元ファイルに書く');
     // 改名済みのタブには何も出さない
     expect(SL.label('doc1', 'b')).toBe(null);
   });
