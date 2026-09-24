@@ -175,6 +175,34 @@ async function seedParts(page) {
   await page.waitForSelector('#editor');
 }
 
+// BLK-builder-20260924-1310-3 (design 10a「ファイルの頭にはその図種の線画が付きます」): 一覧から
+// 開き直す図を探すとき、名前の末尾の語を読まなくても左レールと同じ線画で図種が分かる。
+test('手順8 FILES ツリーのファイル行の頭に、左レールと同じ図種の線画が付く', async ({ page }) => {
+  await seedParts(page);
+  await expandPart(page, 'spi');
+
+  // 到達条件その1: 部品フォルダの中のファイル行の頭に、その図種の線画がある。
+  const want = { spi_init_sequence: 'plantuml-sequence', spi_state: 'plantuml-state', spi_class: 'plantuml-class' };
+  for (const [name, type] of Object.entries(want)) {
+    const g = treeFile(page, name).locator('.files-row-glyph');
+    await expect(g).toHaveAttribute('data-kind', type);
+    await expect(g.locator('svg')).toBeVisible();
+    // 線画は左レールの同じ図種のボタンと同じ絵。
+    const railSvg = await page.locator('#rail .rail-btn[data-type="' + type + '"] svg').innerHTML();
+    expect(await g.locator('svg').innerHTML()).toBe(railSvg);
+  }
+  // 名前より前 (行の頭) にある。
+  const gb = await treeFile(page, 'spi_state').locator('.files-row-glyph').boundingBox();
+  const nb = await treeFile(page, 'spi_state').locator('.files-row-name').boundingBox();
+  expect(gb.x + gb.width).toBeLessThanOrEqual(nb.x + 1);
+
+  // 到達条件その2: 開いて「開いている図」に並んだ行にも、そのタブの図種の線画が付く。
+  await treeFile(page, 'spi_state').click();
+  await expect.poll(() => page.locator('#editor').inputValue()).toContain('SPI 状態遷移');
+  const openRow = page.locator('#files-body-open .files-row[data-file-name="spi_state"]');
+  await expect(openRow.locator('.files-row-glyph')).toHaveAttribute('data-kind', 'plantuml-state');
+});
+
 test('手順8 FILES ツリーのファイルを右クリックすると 10b の操作が揃い、「開く」で開き直せる', async ({ page }) => {
   await seedParts(page);
   await expandPart(page, 'spi');
