@@ -293,7 +293,21 @@ window.MA.sequenceOverlay = (function() {
       if (Math.abs(a.x2 - a.x1) < 10 || Math.abs(a.y2 - a.y1) > Math.abs(a.x2 - a.x1)) return false;
       return tipNear(a.x1, a.y1) || tipNear(a.x2, a.y2);
     }).map(function(a) {
-      return { x1: Math.min(a.x1, a.x2), x2: Math.max(a.x1, a.x2), top: Math.min(a.y1, a.y2), bottom: Math.max(a.y1, a.y2) };
+      var l = a.x1 <= a.x2 ? { x: a.x1, y: a.y1 } : { x: a.x2, y: a.y2 };
+      var r = a.x1 <= a.x2 ? { x: a.x2, y: a.y2 } : { x: a.x1, y: a.y1 };
+      // 矢じりの向き: 重心がこの線の範囲に掛かり、端に近い矢じりだけをその線のものと見る
+      // (teoz の並んだ矢印では、隣の矢印の矢じりがこの線の始点のすぐ外にある)。
+      function ownTip(px, py) {
+        return polys.some(function(pts) {
+          var sx = 0, sy = 0, n = 0;
+          for (var i = 0; i + 1 < pts.length; i += 2) { sx += pts[i]; sy += pts[i + 1]; n++; }
+          if (!n) return false;
+          var cx = sx / n, cy = sy / n;
+          return Math.abs(cy - py) <= 6 && Math.abs(cx - px) <= 8 && cx >= l.x - 3 && cx <= r.x + 3;
+        });
+      }
+      return { x1: l.x, x2: r.x, top: Math.min(a.y1, a.y2), bottom: Math.max(a.y1, a.y2),
+        tipL: ownTip(l.x, l.y), tipR: ownTip(r.x, r.y) };
     }).sort(function(a, b) { return a.top - b.top; });
   }
   function _procParticipants(svgEl, participants, arrows) {
@@ -424,13 +438,18 @@ window.MA.sequenceOverlay = (function() {
     var texts = (scene && scene.texts) || _procTexts(svgEl);
     var claimed = (scene && scene.claimed) || [];
     var prevY = typeof floorY === 'number' && isFinite(floorY) ? floorY - 4 : -Infinity;
+    // BLK-builder-20260925-0314-1: teoz の `&` は前の矢印と同じ高さに矢印を並べる。同じ高さの矢印どうしは
+    // 同じ床 (その段より前の矢印の下端) から文字を探す (前の矢印の下端を床にすると、並んだ矢印の文字が消える)。
+    var rowTop = null, rowFloor = prevY;
     var own = arrows.map(function(a) {
+      if (rowTop === null || Math.abs(a.top - rowTop) > 1) { rowFloor = prevY; rowTop = a.top; }
+      var floor = rowFloor;
       var mine = texts.filter(function(t) {
         if (claimed.indexOf(t.el) >= 0) return false;
-        if (t.y > a.bottom || t.y <= prevY + 4) return false;
+        if (t.y > a.bottom || t.y <= floor + 4) return false;
         return t.x >= a.x1 - 20 && t.x <= a.x2 + 20;
       }).sort(function(p, q) { return (p.y - q.y) || (p.x - q.x); });
-      prevY = a.bottom;
+      prevY = Math.max(prevY, a.bottom);
       return { arrow: a, texts: mine, key: _procNorm(mine.map(function(t) { return t.s; }).join('')) };
     });
     var R = rels.length, L = own.length;
@@ -464,7 +483,9 @@ window.MA.sequenceOverlay = (function() {
     });
     return all.map(function(p) {
       var o = own[p[1]], a = o.arrow;
-      var top = a.top - 6, left = a.x1, right = a.x2;
+      // 矢じり (<polygon>) は線の端から数 px はみ出す。矢じりのある側だけ枠を広げる
+      // (両側に広げると、隣の矢印の矢じりまで覆って別のメッセージの枠が出る)。
+      var top = a.top - 6, left = a.x1 - (a.tipL ? 6 : 0), right = a.x2 + (a.tipR ? 6 : 0);
       o.texts.forEach(function(t) {
         top = Math.min(top, t.y - 13);
         left = Math.min(left, t.x);
@@ -563,6 +584,48 @@ window.MA.sequenceOverlay = (function() {
     });
   }
 
+  // BLK-builder-20260925-0314-1: 作られた参加者 (`create`) の頭。尻 (g.participant-tail) の箱と
+  // 同じ x・同じ幅で、尻より上にある裸の <rect> (参加者の <g> の外) がそれ。
+  function _drawnRect(g) {
+    var rs = g && g.querySelectorAll ? g.querySelectorAll('rect') : [];
+    for (var i = 0; i < rs.length; i++) {
+      var f = (rs[i].getAttribute('fill') || '').toLowerCase();
+      if (f && f !== 'none' && parseFloat(rs[i].getAttribute('fill-opacity')) !== 0) return rs[i];
+    }
+    return null;
+  }
+  function _inParticipantGroup(el, svgEl) {
+    for (var n = el.parentNode; n && n !== svgEl && n.getAttribute; n = n.parentNode) {
+      if (/participant/.test(n.getAttribute('class') || '')) return true;
+    }
+    return false;
+  }
+  function _createdHeads(svgEl, tailMatches, headIds) {
+    var out = [];
+    if (!svgEl || !svgEl.querySelectorAll) return out;
+    var bare = null;
+    tailMatches.forEach(function(m) {
+      if (headIds[m.item.id]) return;
+      var tr = _drawnRect(m.groupEl);
+      if (!tr) return;
+      var tx = _num(tr, 'x'), tw = _num(tr, 'width'), ty = _num(tr, 'y');
+      if (isNaN(tx) || isNaN(tw) || isNaN(ty)) return;
+      if (!bare) {
+        bare = Array.prototype.filter.call(svgEl.querySelectorAll('rect'), function(r) {
+          return !_inParticipantGroup(r, svgEl);
+        });
+      }
+      for (var i = 0; i < bare.length; i++) {
+        var r = bare[i];
+        var x = _num(r, 'x'), w = _num(r, 'width'), y = _num(r, 'y'), h = _num(r, 'height');
+        if (Math.abs(x - tx) > 0.6 || Math.abs(w - tw) > 0.6 || !(y < ty - 1)) continue;
+        out.push({ item: m.item, box: { x: x, y: y, width: w, height: h } });
+        break;
+      }
+    });
+    return out;
+  }
+
   function buildSequenceOverlay(svgEl, parsedData, overlayEl, dslText) {
     _clearChildren(overlayEl);
     if (!svgEl || !parsedData) return;
@@ -639,7 +702,8 @@ window.MA.sequenceOverlay = (function() {
     // Bug C6 fix: PlantUML は participant を上下 (head/tail) 両方に描く。
     // tail もクリックで選択できるよう overlay rect を追加配置。
     // (data-id は head と同一なので selection は head/tail 共通で動作。)
-    _matchParts('g.participant-tail').forEach(function(m) {
+    var tailMatches = _matchParts('g.participant-tail');
+    tailMatches.forEach(function(m) {
       var bb = _partBox(m.groupEl);
       if (!bb) return;
       OB.addRect(overlayEl, bb.x - 8, bb.y - 4, (bb.width || 60) + 16, (bb.height || 14) + 8, {
@@ -647,6 +711,32 @@ window.MA.sequenceOverlay = (function() {
         'data-id': m.item.id,
         'data-line': m.item.line,
       });
+    });
+    // BLK-builder-20260925-0314-1: `create X` / `create participant "…" as X` の参加者は、PlantUML が
+    // 頭を g.participant-head に入れず、作られたメッセージの高さに裸の <rect>+<text> で描く
+    // (尻は g.participant-tail に入る)。尻と同じ幅・同じ x の箱を上に探して頭の枠にする。
+    var headIds = {};
+    partMatches.forEach(function(m) { headIds[m.item.id] = true; });
+    var createdHeads = _createdHeads(svgEl, tailMatches, headIds);
+    createdHeads.forEach(function(c) {
+      OB.addRect(overlayEl, c.box.x - 8, c.box.y - 4, c.box.width + 16, c.box.height + 8, {
+        'data-type': 'participant',
+        'data-id': c.item.id,
+        'data-line': c.item.line,
+      });
+    });
+    // 参加者の数は「頭・尻・作られた頭のどれかで当たった人数」で数える (作られた参加者は頭の <g> を持たない)。
+    var partSeen = {};
+    var partHitCount = 0;
+    partMatches.concat(tailMatches, createdHeads).forEach(function(m) {
+      if (partSeen[m.item.id]) return;
+      partSeen[m.item.id] = true; partHitCount++;
+    });
+    // ライフラインは頭・尻と同じ data-entity-uid を持つ。名前 (伏せ字になる日本語名) より先に uid で当てる。
+    var uidToPart = {};
+    partMatches.concat(tailMatches).forEach(function(m) {
+      var uid = m.groupEl && m.groupEl.getAttribute && m.groupEl.getAttribute('data-entity-uid');
+      if (uid && !uidToPart[uid]) uidToPart[uid] = m.item;
     });
 
     // userissue v1.2.3: lifeline は participant とは別の selectable type に分離。
@@ -677,7 +767,12 @@ window.MA.sequenceOverlay = (function() {
       // 隣の参加者のライフラインを掴み、別人の枠が出ていた。
       var id = null, lineNum = null;
       var lgName = lg.getAttribute && lg.getAttribute('data-qualified-name');
-      if (lgName) {
+      var lgUid = lg.getAttribute && lg.getAttribute('data-entity-uid');
+      if (lgUid && uidToPart[lgUid]) {
+        id = uidToPart[lgUid].id;
+        lineNum = uidToPart[lgUid].line;
+      }
+      if (id === null && lgName) {
         for (var pi = 0; pi < participants.length; pi++) {
           if (participants[pi].id === lgName) {
             id = participants[pi].id;
@@ -705,6 +800,32 @@ window.MA.sequenceOverlay = (function() {
         12, Math.abs(y2 - y1),
         { 'data-type': 'lifeline', 'data-id': id, 'data-line': lineNum });
     });
+
+    // BLK-builder-20260925-0314-1: class の無い SVG (teoz・手続きの図) もライフラインを
+    // `<g><title>表示名</title><rect 透明/><line 点線/></g>` で描く。表示名か別名で参加者に当てて枠を置く。
+    if (!lifelines.length) {
+      Array.prototype.forEach.call(svgEl.querySelectorAll('g'), function(g) {
+        if (g.getAttribute('class')) return;
+        var t = null, ln = null;
+        Array.prototype.forEach.call(g.children || [], function(c) {
+          var tag = (c.tagName || '').toLowerCase();
+          if (tag === 'title' && !t) t = c;
+          if (tag === 'line' && !ln && /dasharray/.test(c.getAttribute('style') || '')) ln = c;
+        });
+        if (!t || !ln) return;
+        var nm = String(t.textContent || '').trim();
+        var owner = null;
+        participants.forEach(function(p) {
+          if (!owner && (p.id === nm || String(p.label || '').trim() === nm)) owner = p;
+        });
+        if (!owner) return;
+        var lx = _num(ln, 'x1'), y1 = _num(ln, 'y1'), y2 = _num(ln, 'y2');
+        if (isNaN(lx) || isNaN(y1) || isNaN(y2) || Math.abs(_num(ln, 'x2') - lx) > 0.5) return;
+        OB.addRect(overlayEl, lx - 6, Math.min(y1, y2), 12, Math.abs(y2 - y1), {
+          'data-type': 'lifeline', 'data-id': owner.id, 'data-line': owner.line,
+        });
+      });
+    }
 
     // Feature #8: group block (alt/opt/loop/par/break/critical/group) の overlay rect。
     // PlantUML v1.2026.x の SVG は group 用の class を付けないが、block bbox を
@@ -837,7 +958,7 @@ window.MA.sequenceOverlay = (function() {
 
     // Warn on silent divergence — early signal when SVG structure changes
     // (PlantUML 新版 / カスタム skin) and our selector/offset assumptions break.
-    OB.warnIfMismatch('participant', participants.length, partMatches.length);
+    OB.warnIfMismatch('participant', participants.length, Math.max(partMatches.length, partHitCount));
     OB.warnIfMismatch('message', parsedData.relations.length, msgMatches.length + procMsgs.length);
 
     // Notes: PlantUML 1.2026.x では <g class="note"> を出さず、bare <path>+<text> で描画される。
@@ -929,7 +1050,28 @@ window.MA.sequenceOverlay = (function() {
     // BLK-human-20260915-1204: 帯の矩形を「押した場所が帯の内か外か」を決める材料として置く。
     // 選択の当たり判定には混ぜない (pointer-events を切る) ので、帯の中を押しても
     // これまでどおり挿入メニューが開く。resolveInsertLine だけがこれを読む。
-    bandZones(svgEl, dslText).forEach(function(z) {
+    var zones = bandZones(svgEl, dslText);
+    // BLK-builder-20260925-0314-1: 帯はふつうライフラインの枠の中に収まり、指すとその参加者のライフラインが出る。
+    // `destroy` した参加者を `create` し直すと PlantUML は作り直した後のライフラインしか描かず、それより上の帯は
+    // どの枠にも入らない。帯の矩形そのものをその参加者のライフラインの枠にする。
+    var lifelineRects = Array.prototype.slice.call(overlayEl.querySelectorAll('rect[data-type="lifeline"]'));
+    zones.forEach(function(z) {
+      var cx = z.bar.x + z.bar.w / 2, cy = z.bar.y + z.bar.h / 2;
+      var covered = lifelineRects.some(function(r) {
+        if (r.getAttribute('data-id') !== z.band.target) return false;
+        var rx = parseFloat(r.getAttribute('x')), ry = parseFloat(r.getAttribute('y'));
+        var rw = parseFloat(r.getAttribute('width')), rh = parseFloat(r.getAttribute('height'));
+        return cx >= rx && cx <= rx + rw && cy >= ry && cy <= ry + rh;
+      });
+      if (covered) return;
+      var owner = null;
+      participants.forEach(function(p) { if (!owner && p.id === z.band.target) owner = p; });
+      if (!owner) return;
+      OB.addRect(overlayEl, z.bar.x - 1, z.bar.y, z.bar.w + 2, z.bar.h, {
+        'data-type': 'lifeline', 'data-id': owner.id, 'data-line': owner.line,
+      });
+    });
+    zones.forEach(function(z) {
       var r = OB.addRect(overlayEl, z.bar.x, z.bar.y, z.bar.w, z.bar.h, {
         'data-type': 'band-zone',
         'data-part': z.band.target,
@@ -952,14 +1094,14 @@ window.MA.sequenceOverlay = (function() {
     return {
       matched: {
         // head 基準。tail rect は重複なので「何人マッチしたか」には加算しない。
-        participant: partMatches.length,
+        participant: Math.max(partMatches.length, partHitCount),
         message: msgMatches.length + procMsgs.length,
         note: noteRectCount,
         activation: actRectCount,
         group: groupRectCount,
       },
       unmatched: {
-        participant: participants.length - partMatches.length,
+        participant: participants.length - Math.max(partMatches.length, partHitCount),
         message: parsedData.relations.length - msgMatches.length - procMsgs.length,
         note: notes.length - noteRectCount,
         activation: activations.length - actRectCount,
@@ -992,6 +1134,8 @@ window.MA.sequenceOverlay = (function() {
       var w = parseFloat(r.getAttribute('width'));
       var h = parseFloat(r.getAttribute('height'));
       if (isNaN(x) || isNaN(y) || isNaN(w) || isNaN(h)) return;
+      // BLK-builder-20260925-0314-1: `create` で作られた参加者の頭も <title> 付きの裸の <g> に入る。帯は幅 10px ほどなので、幅のある箱は帯ではない。
+      if (w > 30) return;
       var key = titleEl.textContent + '|' + x + ',' + y + ',' + w + ',' + h;
       if (seen[key]) return;                                      // 同じ帯が 2 回描かれる
       seen[key] = true;
@@ -1015,9 +1159,22 @@ window.MA.sequenceOverlay = (function() {
     Object.keys(byPart).forEach(function(k) {
       byPart[k].sort(function(a, b) { return a.activateLine - b.activateLine; });
     });
+    // BLK-builder-20260925-0314-1: 帯の <title> は表示名 (`participant "Session Manager" as SM` なら
+    // `Session Manager`)。DSL の帯は別名で持つので、表示名から別名へ引き直す。
+    var aliasOf = {};
+    var SEQ = window.MA.modules && window.MA.modules.plantumlSequence;
+    if (SEQ && SEQ.parseSequence) {
+      (SEQ.parseSequence(dslText).elements || []).forEach(function(e) {
+        if (e.kind !== 'participant' || !e.label || e.label === e.id) return;
+        var lb = String(e.label).replace(/\\n/g, ' ');
+        if (!byPart[e.label] && aliasOf[e.label] === undefined) aliasOf[e.label] = e.id;
+        if (!byPart[lb] && aliasOf[lb] === undefined) aliasOf[lb] = e.id;
+      });
+    }
     var used = {};
     var out = [];
     bars.forEach(function(bar) {
+      if (!byPart[bar.part] && aliasOf[bar.part] !== undefined) bar = Object.assign({}, bar, { part: aliasOf[bar.part] });
       var list = byPart[bar.part];
       if (!list) return;
       var i = used[bar.part] || 0;
