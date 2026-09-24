@@ -24,11 +24,12 @@ test.describe('レール最下段の設定 (design 7a)', () => {
     expect(await g.getAttribute('viewBox')).toBe('0 0 16 16');
     expect(await g.getAttribute('aria-hidden')).toBe('true');
 
-    // 図種のどの線画とも違う形
+    // 図種のどの線画とも違う形。BLK-builder-20260924-1358-3 で FILES の印も線画になったので
+    // レールの線画は 6 図種 + FILES + CFG の 8 つ (どれも別の形)。
     const shapes = await page.locator('#rail .rail-btn svg.rail-glyph').evaluateAll(
       (els) => els.map((el) => el.innerHTML));
-    expect(shapes.length).toBe(7);
-    expect(new Set(shapes).size).toBe(7);
+    expect(shapes.length).toBe(8);
+    expect(new Set(shapes).size).toBe(8);
   });
 
   test('図種の列と設定の間に 1px の区切り線がある', async ({ page }) => {

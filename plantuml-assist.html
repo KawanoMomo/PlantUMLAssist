@@ -7222,14 +7222,16 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   <!-- ── 図種レール (design 1a): 6 図種を 1 クリックで切り替える ────────── -->
   <div id="rail" role="toolbar" aria-label="図の種類">
     <span class="rail-logo" title="PlantUMLAssist">P</span>
-    <div id="rail-types"></div>
-    <div class="rail-spacer"></div>
-    <div class="rail-divider"></div>
-    <!-- BLK-human-20260923-1700 (design 10a): レール右の FILES ツリーを畳む / 開く -->
+    <!-- BLK-human-20260923-1700 (design 10a): レール右の FILES ツリーを畳む / 開く。
+         BLK-builder-20260924-1358-3: 10a のとおりロゴ P の直下・図種の列の上に置く (開くツリーのすぐ隣)。
+         印は app.js が diagram-rail の線画 (files) に差し替える (▤ は fallback)。 -->
     <button type="button" class="rail-btn" id="rail-files" aria-pressed="true"
             aria-controls="files-panel" title="ファイル (Ctrl+B)">
       <span class="rail-glyph" aria-hidden="true">▤</span><span class="rail-code">FILES</span>
     </button>
+    <div id="rail-types"></div>
+    <div class="rail-spacer"></div>
+    <div class="rail-divider"></div>
     <!-- 設定 (design 7a): 中身は diagram-rail.buildConfigHtml で差し替える -->
     <button type="button" class="rail-btn" id="rail-config" title="設定">⚙</button>
   </div>
