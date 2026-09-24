@@ -15,6 +15,9 @@ window.MA.gitUi = (function() {
 
   var status = null;      // /git-status の返り値
   var history = [];       // この図のコミット (新しい順)
+  var saved = [];         // この図の控え (server の _versions。新しい順、往復の印つき)
+  var savedName = '';     // saved がどの図のものか
+  var nowLines = null;    // 保存先の今の中身の行数 (空洞化の名指しに使う)
   var refs = null;        // /git-refs
   var lastDir = null;
   var lastName = null;
@@ -71,21 +74,51 @@ window.MA.gitUi = (function() {
     soonTimer = window.setTimeout(function() { soonTimer = null; refresh(); }, 400);
   }
 
+  // BLK-owner-20260924-2157-prune: 保存先が Git のとき「この図の履歴」は GIT 節の 1 つ。
+  // server が上書きの手前に取った控え (以前は窓 #vt-modal だけが出していた) も読んで同じ一覧に混ぜる。
+  function loadSaved(name) {
+    var a = APP();
+    var VH = window.MA.versionHistory;
+    if (!a || !a.versions || !name) return Promise.resolve({ rows: [], lines: null });
+    return Promise.all([
+      Promise.resolve(a.versions(name)).catch(function() { return []; }),
+      Promise.resolve(a.lineCount ? a.lineCount(name) : null).catch(function() { return null; }),
+    ]).then(function(got) {
+      var rows = Array.isArray(got[0]) ? got[0] : [];
+      if (VH && VH.markRevisits) rows = VH.markRevisits(rows);
+      return { rows: rows, lines: typeof got[1] === 'number' ? got[1] : null };
+    });
+  }
+
   function loadHistory(force) {
     var gp = GP();
     var name = _stem(_name());
-    if (!gp || !gp.visible(status)) { history = []; renderHistory(); return Promise.resolve(false); }
+    if (!gp || !gp.visible(status)) { history = []; saved = []; renderHistory(); return Promise.resolve(false); }
     if (!force && name === lastName) return Promise.resolve(true);
     lastName = name;
-    if (!name) { history = []; renderHistory(); return Promise.resolve(true); }
+    if (!name) { history = []; saved = []; renderHistory(); return Promise.resolve(true); }
     var dir = _dir();
-    return _getJson('/git-log?dir=' + encodeURIComponent(dir) + '&file=' + encodeURIComponent(name))
-      .then(function(d) {
-        if (name !== _stem(_name())) return false;
-        history = (d && Array.isArray(d.commits)) ? d.commits : [];
-        renderHistory();
-        return true;
-      });
+    return Promise.all([
+      _getJson('/git-log?dir=' + encodeURIComponent(dir) + '&file=' + encodeURIComponent(name)),
+      loadSaved(name),
+    ]).then(function(got) {
+      if (name !== _stem(_name())) return false;
+      var d = got[0];
+      history = (d && Array.isArray(d.commits)) ? d.commits : [];
+      saved = got[1].rows;
+      savedName = name;
+      nowLines = got[1].lines;
+      renderHistory();
+      return true;
+    });
+  }
+
+  // コミットと控えを時刻順に 1 本にした並び (画面の行。右の枠の ◀ ▶ はコミットだけを送る = design 10c)。
+  function timelineRows() {
+    var gp = GP();
+    var name = _stem(_name());
+    var sv = savedName === name ? saved : [];
+    return gp ? gp.timeline(history, sv) : history.slice();
   }
 
   function onActiveChanged() {
@@ -166,21 +199,44 @@ window.MA.gitUi = (function() {
     host.textContent = '';
     var lab = $('git-history-head');
     // design 10c (BLK-builder-20260924-1808-1): 見出しはどの図の履歴かを言う。件数は title に回す。
+    var name = _stem(_name());
+    var sv = savedName === name ? saved : [];
+    var rows = timelineRows();
     if (lab) {
       lab.textContent = gp.historyLabel(_name());
-      lab.title = lab.textContent + (history.length ? ' (コミット ' + history.length + ' 件)' : '');
+      lab.title = lab.textContent + (history.length ? ' (コミット ' + history.length + ' 件)' : '')
+        + (sv.length ? ' (控え ' + sv.length + ' 件)' : '');
     }
-    if (!history.length) {
+    // 空洞化した図は、戻す先の控えを名指しして先頭に出す (窓 #vt-modal と同じ名指し)。
+    var VH = window.MA.versionHistory;
+    var notice = (VH && VH.shrinkNotice && sv.length) ? VH.shrinkNotice(name, sv, nowLines) : null;
+    if (notice) {
+      var nb = _el('div', 'git-history-shrink');
+      nb.setAttribute('data-version-shrink', name);
+      var nt = _el('span', 'git-history-shrink-text', notice.text);
+      nt.title = notice.detail;
+      nb.appendChild(nt);
+      var nbtn = _el('button', 'git-history-shrink-restore', notice.restoreLabel);
+      nbtn.type = 'button';
+      nbtn.setAttribute('data-version-shrink-restore', notice.stamp);
+      nbtn.title = notice.detail;
+      nbtn.addEventListener('click', function(ev) { ev.stopPropagation(); restoreSaved(name, notice.stamp); });
+      nb.appendChild(nbtn);
+      host.appendChild(nb);
+    }
+    if (!rows.length) {
       host.appendChild(_el('div', 'git-empty', gp.emptyHistoryText(!!_name())));
       return;
     }
     var cur = APP() && APP().current();
-    history.forEach(function(c) {
-      var row = _el('div', 'git-commit-row');
+    rows.forEach(function(c) {
+      var row = _el('div', 'git-commit-row' + (c.version ? ' is-version' : ''));
       row.setAttribute('data-hash', c.hash);
+      if (c.version) row.setAttribute('data-version-stamp', c.version);
       if (cur && cur.hash === c.hash) row.classList.add('is-compared');
       // design 10c (BLK-builder-20260924-1835-1): 1 行 1 コミット。メッセージ・タグの札・右端に日付。
       // 「比較」は行に手を置いた・キーで来たときに日付の位置へ出る (全部の行に枠を並べない)。
+      // 控えの行は「控え」の札を持ち、手を置くと「比較」と「戻す」が出る。
       var hr = gp.historyRow(c);
       row.title = hr.title;
       row.appendChild(_el('span', 'git-commit-msg', hr.message));
@@ -190,12 +246,28 @@ window.MA.gitUi = (function() {
       var b = _el('button', 'git-history-compare', '比較');
       b.type = 'button';
       b.setAttribute('data-hash', c.hash);
-      b.title = 'このコミット時点の図を右の枠に並べる';
+      b.title = c.version ? 'この控えの図を右の枠に並べる (今の図は上書きしません)' : 'このコミット時点の図を右の枠に並べる';
       b.addEventListener('click', function(ev) {
         ev.stopPropagation();
         compareWith(c);
       });
-      end.appendChild(b);
+      if (c.version) {
+        var acts = _el('span', 'git-history-acts');
+        acts.appendChild(b);
+        var r = _el('button', 'git-history-restore', (VH && VH.restoreLabel) ? VH.restoreLabel() : '戻す');
+        r.type = 'button';
+        r.setAttribute('data-version-restore', c.version);
+        r.setAttribute('data-version-of', name);
+        r.title = (VH && VH.restoreTitle) ? VH.restoreTitle(name, c.version) : 'この控えの中身を今の図に戻す';
+        r.addEventListener('click', function(ev) {
+          ev.stopPropagation();
+          restoreSaved(name, c.version);
+        });
+        acts.appendChild(r);
+        end.appendChild(acts);
+      } else {
+        end.appendChild(b);
+      }
       row.appendChild(end);
       host.appendChild(row);
     });
@@ -205,6 +277,15 @@ window.MA.gitUi = (function() {
     var a = APP();
     if (!a) return Promise.resolve(false);
     return Promise.resolve(a.compare(c, history)).then(function(r) { renderHistory(); return r; });
+  }
+
+  // 控えの中身を今の図に戻す (窓 #vt-modal の「戻す」と同じ道具)。戻した保存も控えになるので読み直す。
+  function restoreSaved(name, stamp) {
+    var a = APP();
+    if (!a || !a.restoreVersion) return Promise.resolve(false);
+    return Promise.resolve(a.restoreVersion(name, stamp)).then(function(r) {
+      return loadHistory(true).then(function() { return r; });
+    });
   }
 
   // ツリーのファイル名の右に M / A / D (未保存 ● とは別)。本文 (textContent) は変えず、
