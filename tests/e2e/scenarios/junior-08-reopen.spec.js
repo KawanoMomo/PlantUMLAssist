@@ -11,11 +11,45 @@ test('手順8 保存した .puml を一覧から見つけて開き直せる', as
   await S.clearDir(page, DIR);
   await S.putDoc(page, DIR, NAME, S.GPIO_STATE);
 
+  // BLK-owner-20260924-0637-1 / BLK-builder-20260923-1849-3: FILES ツリーの「保存先」節はファイルの行と札だけ。
+  // 旧 📂 一覧の棚は節に積まれず、3 つの見出しがスクロールなしで見える。
+  await expect(page.locator('#folder-panel')).toBeHidden();
+  const tree = await page.evaluate(() => {
+    const vh = window.innerHeight;
+    const bottom = (id) => { const el = document.getElementById(id); return el ? el.getBoundingClientRect().bottom : 1e9; };
+    return { vh, open: bottom('files-sec-open'), target: bottom('btn-tab-folder'), ro: bottom('files-sec-readonly') };
+  });
+  expect(tree.ro, '読むだけの見出しが画面の中').toBeLessThanOrEqual(tree.vh);
+
   await S.openFolder(page);
   const filter = page.locator('#folder-filter');
   if (await filter.count()) { await filter.fill('資料用'); await page.waitForTimeout(400); }
   // 到達条件その1: 名前で見つかる。
   await expect(page.locator('#folder-panel .folder-item[data-file-name="' + NAME + '"]')).toBeVisible();
+  // 保存先の一覧は中央の枠に開く。ファイルの行が棚 (選ぶバー以下) より上にあり、名前が潰れずに読め、横にはみ出さない。
+  const layout = await page.evaluate((name) => {
+    const fp = document.getElementById('folder-panel');
+    const item = fp.querySelector('.folder-item[data-file-name="' + name + '"]');
+    const row = item.closest('.folder-row') || item;
+    const kids = Array.prototype.slice.call(fp.children);
+    const pick = fp.querySelector(':scope > .folder-pickbar');
+    const nameEl = item.querySelector('.folder-name');
+    return {
+      width: fp.getBoundingClientRect().width,
+      rowBeforeShelves: !pick || kids.indexOf(row) < kids.indexOf(pick),
+      nameWidth: nameEl ? nameEl.getBoundingClientRect().width : 0,
+      overflow: fp.scrollWidth - fp.clientWidth,
+    };
+  }, NAME);
+  expect(layout.width, '一覧は節の幅に押し込まれない').toBeGreaterThan(400);
+  expect(layout.rowBeforeShelves, 'ファイルの行が棚より上').toBe(true);
+  expect(layout.nameWidth, '名前が潰れずに読める').toBeGreaterThan(60);
+  expect(layout.overflow, '横はみ出しが無い').toBeLessThanOrEqual(1);
+  // 閉じても保存先節は開いたまま (Esc。1 回目は絞り込みを消し、空の欄での 2 回目で閉じる)。
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#folder-panel')).toBeHidden();
+  await expect(page.locator('#folder-panel')).toHaveClass(/\bopen\b/);
 
   await S.openFolderItem(page, NAME);
   // 到達条件その2: 開き直した本文が保存した内容と一致し、編集中の本文で上書きされていない。
@@ -177,7 +211,7 @@ test('手順8 FILES ツリーのファイルを右クリックすると 10b の�
   await page.keyboard.press('Escape');
   await page.locator('#btn-tab-folder').click({ button: 'right' });
   await expect(menu.locator('.files-ctx-item .files-ctx-label'))
-    .toHaveText(['新しい図', '6 図種をまとめて作る', '保存先にする', '読むだけにする']);
+    .toHaveText(['新しい図', '6 図種をまとめて作る', '保存先にする', '読むだけにする', '保存先の一覧を開く']);
   await page.keyboard.press('Escape');
 });
 

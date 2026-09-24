@@ -168,13 +168,63 @@ window.MA.filesPanel = (function() {
     var items = document.querySelectorAll('#folder-panel .folder-item[data-file-name]');
     Array.prototype.forEach.call(items, function(el) {
       var n = el.getAttribute('data-file-name');
-      if (n) out.push({ name: n });
+      // 本文から読んだ図種 (保存先の一覧が判定済みなら)。名前に図種が無い図を部品の側で数えるのに使う。
+      if (n) out.push({ name: n, kind: el.getAttribute('data-content-kind') || '' });
     });
     return out;
   }
 
+  function _itemSel(name) {
+    var n = String(name);
+    var q = (window.CSS && window.CSS.escape) ? window.CSS.escape(n) : n.replace(/(["\\])/g, '\\$1');
+    return '#folder-panel .folder-item[data-file-name="' + q + '"]';
+  }
+
+  // BLK-owner-20260924-0637-1: ツリーのファイル行の札。保存先の一覧の行のバッジと同じ事実を読む
+  // (数える所を 2 つにしない)。開いている図の未保存 ● は作業中のタブから読む。
+  function _fileState(name) {
+    var st = { dirty: false, unapplied: false, draft: false, svgStale: false };
+    _docs().forEach(function(d) {
+      if (String(d.name || '') !== name) return;
+      if (d.dirty) st.dirty = true;
+      if (d.reviewPending) st.unapplied = true;
+      if (d.draft) st.draft = true;
+    });
+    var it = document.querySelector(_itemSel(name));
+    if (it) {
+      var row = (it.closest && it.closest('.folder-row')) || it;
+      var rb = it.querySelector('.folder-review-badge');
+      if (rb && rb.getAttribute('data-review-state') !== 'applied') st.unapplied = true;
+      if (row.classList && row.classList.contains('folder-row-draft')) st.draft = true;
+      if (it.querySelector('[data-svg-status="stale"], .folder-svg-content-badge[data-svg-content="differ"]')) st.svgStale = true;
+    }
+    return st;
+  }
+
+  function _fileButton(f, loose) {
+    var FT = window.MA.fileTree;
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'files-part-file' + (loose ? ' files-loose-file' : '');
+    b.setAttribute('data-file-name', f.name);
+    var nm = document.createElement('span');
+    nm.className = 'files-row-name';
+    nm.textContent = f.name;
+    b.appendChild(nm);
+    var mk = FT && FT.fileMarks ? FT.fileMarks(_fileState(f.name)) : '';
+    if (mk) {
+      var m = document.createElement('span');
+      m.className = 'files-row-mark';
+      m.textContent = mk;
+      b.appendChild(m);
+      b.setAttribute('data-marks', mk);
+    }
+    b.addEventListener('click', function() { _clickFolderItem(f.name); });
+    return b;
+  }
+
   function _clickFolderItem(name) {
-    var it = document.querySelector('#folder-panel .folder-item[data-file-name="' + name + '"]');
+    var it = document.querySelector(_itemSel(name));
     if (it) it.click();
   }
 
@@ -184,7 +234,9 @@ window.MA.filesPanel = (function() {
     var FT = window.MA.fileTree;
     var entries = _folderNames();
     if (!FT || !entries.length) { host.textContent = ''; return; }
-    var groups = FT.groups(FT.filter(entries, _query()));
+    var shown = FT.filter(entries, _query());
+    var lay = FT.layout ? FT.layout(shown) : { groups: FT.groups(shown), loose: [] };
+    var groups = lay.groups;
     host.textContent = '';
     groups.forEach(function(g) {
       var open = _get(KEY_PART + g.part, '0') === '1';
@@ -208,15 +260,7 @@ window.MA.filesPanel = (function() {
       body.className = 'files-part-body';
       body.setAttribute('data-part-body', g.part);
       body.hidden = !open;
-      g.files.forEach(function(f) {
-        var b = document.createElement('button');
-        b.type = 'button';
-        b.className = 'files-part-file';
-        b.setAttribute('data-file-name', f.name);
-        b.textContent = f.name;
-        b.addEventListener('click', function() { _clickFolderItem(f.name); });
-        body.appendChild(b);
-      });
+      g.files.forEach(function(f) { body.appendChild(_fileButton(f, false)); });
       if (g.missingLabel) {
         var m = document.createElement('button');
         m.type = 'button';
@@ -241,8 +285,10 @@ window.MA.filesPanel = (function() {
         _set(KEY_PART + g.part, on ? '1' : '0');
       });
     });
+    // 図種を読めない図は部品のフォルダに分けず、保存先の直下にファイル行で並べる。
+    lay.loose.forEach(function(f) { host.appendChild(_fileButton(f, true)); });
     var c = $('files-count-target');
-    if (c) c.textContent = groups.length ? String(entries.length) : '';
+    if (c) c.textContent = entries.length ? String(entries.length) : '';
     _gitMarks();
   }
 

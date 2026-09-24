@@ -278,6 +278,9 @@ window.MA.fileMenuUi = (function() {
         break;
       case 'set-target': clickId('top-save-target'); break;
       case 'set-readonly': clickId('btn-tab-peek'); break;
+      case 'open-list':
+        if (typeof window._openFolderListView === 'function') window._openFolderListView();
+        break;
     }
   }
 

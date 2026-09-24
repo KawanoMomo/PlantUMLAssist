@@ -54,7 +54,7 @@ describe('ファイルの右クリック (design 10b)', function() {
 describe('フォルダの右クリック (design 10b)', function() {
   test('保存先: 新しい図 / 6 図種 / 保存先にする (今の保存先なので押せない) / 読むだけにする', function() {
     var it = FM.folderItems({ kind: 'target' });
-    expect(ids(it)).toEqual(['new-doc', 'new-part', '-', 'set-target', 'set-readonly']);
+    expect(ids(it)).toEqual(['new-doc', 'new-part', '-', 'set-target', 'set-readonly', '-', 'open-list']);
     expect(it[3].disabled).toBe(true);
     expect(!!it[4].disabled).toBe(false);
   });

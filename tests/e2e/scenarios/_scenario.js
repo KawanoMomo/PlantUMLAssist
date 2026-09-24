@@ -105,15 +105,22 @@ async function clearTickets(page, dir) {
 }
 
 // 📂 一覧 から名前で開く (junior 手順 1・8、primary の openFolderItem と同じ経路)。
-// 開いていれば畳んでから開き直す (起動時に描いた一覧を、台本が置いたファイルで描き直す)。
+// BLK-owner-20260924-0637-1: 旧 📂 一覧 (点検の部品ごと) は FILES ツリーの「保存先」節には出さず、
+// 保存先の右クリック「保存先の一覧を開く」で中央の枠に開く。開くたびに読み直すので、
+// 台本が後から置いたファイルも出る (以前の「畳んでから開き直す」はこの 1 回で済む)。
 async function openFolder(page) {
-  const panel = page.locator('#folder-panel');
-  const cls = (await panel.getAttribute('class')) || '';
-  // 保存先の節は既定で開いている (design 10a)。起動時に描いた一覧は台本が
-  // 後から置いたファイルを知らないので、開いていれば畳んでから開き直して描き直す。
-  if (/\bopen\b/.test(cls)) await page.locator('#btn-tab-folder').click();
-  await page.locator('#btn-tab-folder').click();
-  await page.waitForSelector('#folder-panel.open');
+  await closeFolderList(page);
+  await page.locator('#btn-tab-folder').click({ button: 'right' });
+  await page.locator('#files-ctx-menu [data-action="open-list"]').click();
+  await page.waitForSelector('#folder-panel.open.is-list');
+}
+
+// 中央の枠に開いた保存先の一覧を閉じる (ツリーの保存先節は開いたまま)。
+async function closeFolderList(page) {
+  if (await page.locator('#folder-panel.is-list').count()) {
+    await page.locator('#folder-list-close').click();
+    await page.waitForSelector('#folder-panel:not(.is-list)', { state: 'attached' });
+  }
 }
 
 async function openFolderItem(page, name) {
@@ -312,7 +319,7 @@ module.exports = {
   PRIMARY_DOCS, docFor,
   dirFor, absDirFor, bootWithSaveDir, bootPlain, bootDownloadMode, reopenApp,
   putDoc, readDoc, listDir, clearDir, clearTickets,
-  openFolder, openFolderItem, overwriteOpenedFile, typeDsl, renameActive, runCommand, exportVia,
+  openFolder, closeFolderList, openFolderItem, overwriteOpenedFile, typeDsl, renameActive, runCommand, exportVia,
   GPIO_STATE, GPIO_SEQ, IRQ_SEQ_FOLDED_DASH,
   messageClickPoints, selectedMessageLine, expectMessageHitUniform,
 };

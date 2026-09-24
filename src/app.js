@@ -12063,6 +12063,9 @@ function setupPeekFolder() {
 // setupTabs の中の一覧を外から開く口 (design 10a)。
 var _ensureFolderListOpen = function() {};
 var _openFolderListAtBoot = function() {};
+// BLK-owner-20260924-0637-1: 保存先の一覧 (旧 📂 一覧の点検の部品ごと) を中央の枠に開く。
+// FILES ツリーの「保存先」節はファイルの行と札だけにし、一覧はここからだけ開く。
+var _openFolderListView = function() {};
 
 function setupTabs() {
   if (!window.MA.workspace) return;
@@ -12092,7 +12095,12 @@ function setupTabs() {
   var btnFolder = document.getElementById('btn-tab-folder');
   if (!panel || !btnFolder) return;
 
-  function closePanel() { panel.classList.remove('open'); }
+  // BLK-owner-20260924-0637-1: 一覧を中央の枠に開いている間 (is-list) は、閉じると枠だけを下げて
+  // ツリーの「保存先」節は開いたままにする (図を 1 枚開くたびに節まで畳まない)。
+  function closePanel() {
+    if (panel.classList.contains('is-list')) { panel.classList.remove('is-list'); return; }
+    panel.classList.remove('open');
+  }
 
   // -- 参照専用フォルダ (BLK-junior-20260916-0546-wish) ------------------------
   // 26 一覧は保存先の中身しか出せず、先輩の図を見るには保存先を切り替えるしか
@@ -12677,6 +12685,7 @@ function setupTabs() {
 
   btnFolder.addEventListener('click', function() {
     if (panel.classList.contains('open')) {
+      panel.classList.remove('is-list');
       closePanel();
       _rememberTargetSec(false);
       return;
@@ -12728,9 +12737,18 @@ function setupTabs() {
   // 他の入口 (取り込み ▾ の「フォルダ」、名前の衝突の札、Ctrl+K) は「開く」だけ。
   // 既定で開いている節を、開くつもりで押して畳んでしまわない。
   _ensureFolderListOpen = function() {
-    if (panel.classList.contains('open')) return;
-    btnFolder.click();
+    _openFolderListView();
   };
+  // 保存先の一覧を中央の枠に開く。開くたびに読み直す (台本・人が後から置いたファイルも出す)。
+  _openFolderListView = function() {
+    if (!panel.classList.contains('open')) _rememberTargetSec(true);
+    panel.classList.add('is-list');
+    openFolderList(true);
+  };
+  document.addEventListener('keydown', function(ev) {
+    if (ev.key !== 'Escape' || !panel.classList.contains('is-list')) return;
+    panel.classList.remove('is-list');
+  });
   _openFolderListAtBoot = function() {
     if (panel.classList.contains('open')) return;
     var FT = window.MA.fileTree;
@@ -12793,6 +12811,26 @@ function setupTabs() {
   // 一覧の描画は listFolder を待つので、先に頼んだ描画が後から届くことがある
   // (起動時に既定で開いた描画の返事が、人が押して開き直した描画の後に着く)。
   // 最後に頼んだ描画だけを画面に出す。
+  // 中央の枠に開いたときの見出しと閉じる ✕ (Esc・枠の外を押しても閉じる)。ツリーの節は畳まない。
+  function appendListHead(host) {
+    var head = document.createElement('div');
+    head.className = 'folder-list-head';
+    var t = document.createElement('span');
+    t.className = 'folder-list-title';
+    t.textContent = '保存先の一覧 — ' + _wsFileDir();
+    head.appendChild(t);
+    var x = document.createElement('button');
+    x.type = 'button';
+    x.id = 'folder-list-close';
+    x.className = 'folder-list-close';
+    x.textContent = '✕';
+    x.title = '一覧を閉じる (Esc)。ツリーの保存先は開いたまま';
+    x.setAttribute('aria-label', '保存先の一覧を閉じる');
+    x.addEventListener('click', function(ev) { ev.stopPropagation(); panel.classList.remove('is-list'); });
+    head.appendChild(x);
+    host.appendChild(head);
+  }
+
   var _folderRenderGen = 0;
   function renderFolderPanel() {
     var myGen = ++_folderRenderGen;
@@ -12802,6 +12840,7 @@ function setupTabs() {
     var RFm = window.MA.refFolders;
     if (RFm && RFm.isRef(dir, refActiveDir)) {
       panel.textContent = '';
+      appendListHead(panel);
       appendRefTabs(panel);
       renderRefFolder(refActiveDir);
       return;
@@ -12821,6 +12860,7 @@ function setupTabs() {
       if (myGen !== _folderRenderGen) return;
       var entries = (res && res.entries) || [];
       panel.textContent = '';
+      appendListHead(panel);
       // BLK-human-20260917-0901: 保存フォルダの外にある手元の .puml を開く入口を一覧の頭に置く。
       var openHead = document.createElement('button');
       openHead.type = 'button';
@@ -13011,6 +13051,7 @@ function setupTabs() {
         plain.items.forEach(function(e) { panel.appendChild(folderRow(e.name || e, null, null)); });
         appendDraftSection(plain.drafts, function(e) { return folderRow(e.name || e, null, null); });
         appendGoneVersionsSection(panel);
+        raiseRowsInTree();
         syncFolderPickUi();
         applyFolderFilter();
         focusFolderFilter();
@@ -13086,6 +13127,7 @@ function setupTabs() {
         gone.textContent = '— ' + name + '（前回はあった図が今はありません）';
         panel.appendChild(gone);
       });
+      raiseRowsInTree();
 
       var mark = document.createElement('button');
       mark.className = 'folder-mark-seen';
@@ -13143,6 +13185,28 @@ function setupTabs() {
 
   // 一時控えは成果物の下にまとめ、既定では畳む。畳んだ枚数は必ず言葉で出す
   // (一覧に出ていないことを「保存できていない」と読み違えないため)。
+  // BLK-builder-20260923-1849-3: FILES ツリーの「保存先」節 (幅 208px) では、ファイルの行を入口
+  // (ファイルを開く・保存先タブ・絞り込み) のすぐ下へ上げる。棚 (選ぶバー・対象 set・提出物庫・SVG の鮮度…) はその下。
+  // 行は約 35 個の棚の後ろに積まれ、節を開いた位置から約 2,300px 下にあった。要素・id は動かすだけで作り直さない。
+  function raiseRowsInTree() {
+    if (!panel || !panel.closest || !panel.closest('#files-panel')) return;
+    var kids = Array.prototype.slice.call(panel.children);
+    var anchor = null;
+    for (var i = 0; i < kids.length; i++) {
+      if (kids[i].classList && kids[i].classList.contains('folder-filterbar')) { anchor = kids[i]; break; }
+    }
+    if (!anchor) return;
+    var ref = anchor.nextSibling;
+    kids.forEach(function(c) {
+      var cl = c.classList;
+      if (!cl) return;
+      if (cl.contains('folder-row') || cl.contains('folder-draft-head') || cl.contains('folder-gone') ||
+          (cl.contains('folder-item') && c.hasAttribute('data-file-name'))) {
+        panel.insertBefore(c, ref);
+      }
+    });
+  }
+
   function appendDraftSection(drafts, factory) {
     var DM = window.MA.draftMark;
     if (!DM || !drafts || drafts.length === 0) return;
@@ -14528,6 +14592,9 @@ function setupTabs() {
     }
     var kb = folderKindBadge(name);
     if (kb) row.appendChild(kb);
+    // BLK-owner-20260924-0637-1: 本文から読んだ図種を行に持たせる。FILES ツリーは名前に図種が無い図も
+    // これで部品の側に数える (1 枚ずつ「0 / 6・未作成 6 図種」と出さない)。
+    if (kindByName[name]) b.setAttribute('data-content-kind', kindByName[name]);
     var vb = folderVersionButton(name);
     if (vb) row.appendChild(vb);
     // BLK-primary-20260914-1306-wish: 中身が同じ図の印と、1 枚だけ消すボタン。
@@ -15316,7 +15383,11 @@ function setupTabs() {
       applyFolderFilter();
     });
     input.addEventListener('keydown', function(ev) {
-      if (ev.key === 'Escape') { ev.stopPropagation(); input.value = ''; folderQuery = ''; applyFolderFilter(); return; }
+      // 空の欄での Esc は一覧を閉じる側へ通す (中央の枠に開いた一覧、BLK-owner-20260924-0637-1)。
+      if (ev.key === 'Escape') {
+        if (!input.value) return;
+        ev.stopPropagation(); input.value = ''; folderQuery = ''; applyFolderFilter(); return;
+      }
       if (ev.key !== 'Enter') return;
       ev.preventDefault();
       var FF = window.MA.folderFilter;

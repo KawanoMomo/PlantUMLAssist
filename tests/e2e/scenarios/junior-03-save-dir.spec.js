@@ -202,7 +202,10 @@ test('手順3 起動すると保存先の一覧が開いていて、読むだけ
   // 保存先: 押さずに開いている (見出しの ▾ と一覧の行)。
   await expect(page.locator('#folder-panel')).toHaveClass(/\bopen\b/);
   await expect(page.locator('#btn-tab-folder')).toHaveAttribute('aria-expanded', 'true');
-  await expect(page.locator('#folder-panel .folder-item[data-file-name="J03_tree_state"]')).toBeVisible();
+  // BLK-owner-20260924-0637-1: 保存先節の中はツリー (部品のフォルダ → ファイルの行) だけ。旧 📂 一覧は節に出さない。
+  await expect(page.locator('#files-parts .files-part-head[data-part="j03"]')).toBeVisible();
+  await expect(page.locator('#folder-panel .folder-item[data-file-name="J03_tree_state"]')).toHaveCount(1);
+  await expect(page.locator('#folder-panel')).toBeHidden();
   // 起動時に開いても、カーソルは絞り込み欄へ飛ばない (エディタに打った文字が吸われない)。
   expect(await page.evaluate(() => document.activeElement && document.activeElement.id)).not.toBe('folder-filter');
 
