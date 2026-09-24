@@ -197,3 +197,13 @@ describe('BLK-builder-20260925-0314-1: @startuml … @enduml が 2 つあるフ�
       .toEqual(['App', 'User']);
   });
 });
+
+describe('BLK-builder-20260925-0314-1: 構造タブ・下端の数も日本語の名前の関係を数える', function() {
+  test('App -> センサ制御 を関係として数える', function() {
+    try { delete require.cache[require.resolve('../src/core/outline.js')]; } catch (e) {}
+    require('../src/core/outline.js');
+    var t = ['@startuml', 'participant App', 'participant センサ制御', 'App -> センサ制御 : Init()',
+      'センサ制御 --> App : E_OK', '@enduml'].join(String.fromCharCode(10));
+    expect(window.MA.outline.build(t).counts.relations).toBe(2);
+  });
+});

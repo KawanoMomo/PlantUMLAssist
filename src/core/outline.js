@@ -30,10 +30,11 @@ window.MA.outline = (function() {
   var IF_OPEN = /^\s*if\s*\((.*?)\)\s*then\b(.*)$/i;
 
   // 矢印(関係)。図種で形は違うが「左辺 矢印 右辺」の並びは共通。
+  // BLK-builder-20260925-0314-1: 名前は日本語 (U+0080 以上) でもよい (`App -> センサ制御 : Init()`)。
   var REL_RE = new RegExp(
-    '^\\s*(\\[\\*\\]|"[^"]*"|\\(.*?\\)|:[^:]*:|[A-Za-z0-9_][A-Za-z0-9_.-]*)' +
+    '^\\s*(\\[\\*\\]|"[^"]*"|\\(.*?\\)|:[^:]*:|[A-Za-z0-9_\u0080-\uFFFF][A-Za-z0-9_.\u0080-\uFFFF-]*)' +
     '\\s*([-.=]{1,2}(?:\\(\\)|o|\\*|\\|>)?[->x]*|<[-.|]{1,2}[a-z]*|<\\|[-.]+|[-.]+\\|>|\\*[-.]+|o[-.]+|\\)[-.]+|[-.]+\\(|[-.]{2,})\\s*' +
-    '(\\[\\*\\]|"[^"]*"|\\(.*?\\)|:[^:]*:|[A-Za-z0-9_][A-Za-z0-9_.-]*)\\s*(?::\\s*(.*))?$'
+    '(\\[\\*\\]|"[^"]*"|\\(.*?\\)|:[^:]*:|[A-Za-z0-9_\u0080-\uFFFF][A-Za-z0-9_.\u0080-\uFFFF-]*)\\s*(?::\\s*(.*))?$'
   );
 
   // 枝分かれとして数えるブロック (block ノードの label と一致させる)。
@@ -63,7 +64,7 @@ window.MA.outline = (function() {
     if (colon && !/^".*"$/.test(body)) { body = colon[1].trim(); note = colon[2].trim(); }
     var stereo = body.match(/^(.*?)\s*(<<[^>]*>>)\s*$/);
     if (stereo) body = stereo[1].trim();
-    var as = body.match(/^(.*?)\s+as\s+([A-Za-z0-9_][A-Za-z0-9_.-]*)\s*$/i);
+    var as = body.match(/^(.*?)\s+as\s+([A-Za-z0-9_\u0080-\uFFFF][A-Za-z0-9_.\u0080-\uFFFF-]*)\s*$/i);
     var label, name;
     if (as) {
       label = _unquote(as[1]);
