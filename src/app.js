@@ -3345,16 +3345,31 @@ function init() {
     // メニューを辿らず / Ctrl+K でコマンド名を打たずに開ける道を 1 本用意する。
     else if (KB.matches('bulk-rename', e)) hit = 'bulk-rename';
     if (!hit) return;
+    if (e.isComposing || e.keyCode === 229) return;
     var ae0 = document.activeElement;
-    if (ae0 && ae0 !== editorEl
-      && (ae0.tagName === 'INPUT' || ae0.tagName === 'TEXTAREA' || ae0.tagName === 'SELECT' || ae0.isContentEditable)) return;
+    var inField0 = ae0 && ae0 !== editorEl
+      && (ae0.tagName === 'INPUT' || ae0.tagName === 'TEXTAREA' || ae0.tagName === 'SELECT' || ae0.isContentEditable);
+    // BLK-primary-20260924-0637-friction: Ctrl+S (保存) と Ctrl+H (一括置換) は、どの入力欄に
+    // カーソルがあっても効かせる (Ctrl+K / Ctrl+P と同じ。VS Code の Ctrl+H も入力欄を選ばない)。
+    // FILES の絞り込み欄に焦点があると開かず、Ctrl+K で名前を打つ迂回 (2 → 11 打鍵) になっていた。
+    // 再描画 (Ctrl+R) だけは従来どおり、フォーム入力中は奪わない。
+    if (inField0 && hit === 'render') return;
     e.preventDefault();
     if (hit === 'render') { scheduleRefresh(); return; }
     if (hit === 'bulk-rename') {
+      var renamePanel = document.getElementById('rename-panel');
+      // 一括置換の枠の中の入力欄で押したときは閉じない (開いたまま置換前の欄へ戻る)。
+      if (inField0 && renamePanel && renamePanel.classList.contains('open') && renamePanel.contains(ae0)) {
+        var rf = document.getElementById('rename-from');
+        if (rf) rf.focus();
+        return;
+      }
       var renameBtn = document.getElementById('btn-tab-rename');
       if (renameBtn) renameBtn.click();
       return;
     }
+    // フォームの欄で打ちかけの値は change (欄を離れたとき) で図に入る。先に欄を離れてから保存する。
+    if (inField0 && typeof ae0.blur === 'function') ae0.blur();
     var saveBtn = document.getElementById('btn-save');
     if (saveBtn) saveBtn.click();
   });

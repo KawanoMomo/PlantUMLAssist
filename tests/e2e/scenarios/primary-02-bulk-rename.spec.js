@@ -15,8 +15,17 @@ test('手順2 一括置換の全図適用で、旧名 SpiDrv が全図から消�
 
   // BLK-primary-20260909-0303: ⇄ 一括置換は既定でタブ列から畳まれている (design 7b)。
   // 台本の主戦場なので、メニューを辿らず Ctrl+K でコマンド名も打たずに開ける。
+  // BLK-primary-20260924-0637-friction: FILES の絞り込み欄にカーソルがあっても Ctrl+H で開く
+  // (入力欄にいると開かず、Ctrl+K で名前を打つ迂回で 2 → 11 打鍵になっていた)。
+  await page.locator('#files-filter').click();
+  await expect(page.locator('#files-filter')).toBeFocused();
   await page.keyboard.press('Control+h');
   await page.waitForSelector('#rename-panel.open', { timeout: 5000 });
+  // 枠の中の欄で押し直しても閉じない (置換前の欄へ戻る)。
+  await page.locator('#rename-to').click();
+  await page.keyboard.press('Control+h');
+  await expect(page.locator('#rename-panel')).toHaveClass(/open/);
+  await expect(page.locator('#rename-from')).toBeFocused();
 
   const allDocs = page.locator('#rename-all-docs');
   await expect(allDocs).toHaveCount(1);
