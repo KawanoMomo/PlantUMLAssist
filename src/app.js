@@ -678,35 +678,9 @@ function init() {
     window.MA.history.pushHistory();
     mmdText = editorEl.value;
     updateLineNumbers();
+    // タブの本文 (workspace)・自動保存・差分の印・指摘の引き直しは scheduleRefresh の
+    // syncEditedText が、フォームや窓からの書き換えと同じ 1 本の経路で行う (BLK-owner-20260925-0312-1)。
     scheduleRefresh();
-    // アクティブなタブの中身を先に更新する (タブ切替とリロードで残る)。
-    // BLK-primary-20260914-2206: 自動保存より **前** に書き戻すこと。自動保存は
-    // 書き先を決めるのに「タブの本文が開いたときから変わったか」を見るので、
-    // 古い本文のまま聞くと、1 回の編集 (貼り付け・一括流し込み) はいつも
-    // 「開いたときのまま」と判定され、ディスクへ 1 文字も届かない。
-    if (window.MA.workspace) {
-      try { window.MA.workspace.updateActive({ dsl: mmdText, diagramType: currentDiagramType }); } catch (e) {}
-    }
-    // Auto-save: schedule a debounced write of the current DSL keyed by
-    // the active diagram-type (closure-tracked, kept in sync by the
-    // diagram-type change handler).
-    if (window.MA.autoSave) {
-      window.MA.autoSave.scheduleSave(currentDiagramType, mmdText);
-    }
-    // 前回保存時点との差分バッジを追従させる。
-    try { renderDiffBadge(); } catch (e) {}
-    // 前回保存版との ＋a −b は、保存を押す前に気付けることが値打ちなので
-    // 打つたびに引き直す (BLK-reviewer-20260915-2346-wish)。
-    try { renderLiveDiffChip(); } catch (e) {}
-    try { renderVersionBadge(); } catch (e) {}
-    // Git のコミットを並べている間は、作業中との色付けも打つたびに追う (design 10c)。
-    try { if (window.MA.appGit) window.MA.appGit.refreshDiff(); } catch (e) {}
-    // BLK-junior-20260907-1403-wish: 「見てもらいながらその場で直す」ので、
-    // 指摘は打つたびに引き直す。
-    try { renderReviewBadge(); } catch (e) {}
-    try { renderConsistencyBadge(); } catch (e) {}
-    try { renderEventSyncBadge(); } catch (e) {}
-    try { renderPinBadge(); } catch (e) {}
   });
 
   editorEl.addEventListener('scroll', function() {
@@ -3520,6 +3494,9 @@ function init() {
     if (window.MA.workspace && wsDoc) {
       try { window.MA.workspace.updateActive({ dsl: mmdText, diagramType: t }); } catch (e) {}
     }
+    // 見本・図種別の下書きを入れたのは利用者の編集ではない。次の描画で自動保存に載せない
+    // (前の図のファイル名へ見本を書かない。BLK-owner-20260925-0312-1)。
+    markTextSynced();
     if (typeof renderTabs === 'function') renderTabs();
     // Reparse with the new module BEFORE clearSelection() so that the
     // selection callback's renderProps() sees a parsedData shape matching
@@ -4847,6 +4824,7 @@ function applyActiveDoc() {
   suppressSync = true;
   editorEl.value = mmdText;
   suppressSync = false;
+  markTextSynced();  // タブの中身を出しただけ。書き直さない (BLK-owner-20260925-0312-1)
   try { currentParsed = currentModule.parse(mmdText); } catch (e) { /* leave stale */ }
   if (window.MA.selection) window.MA.selection.clearSelection();
   updateLineNumbers();
@@ -32913,6 +32891,54 @@ function scheduleRefresh() {
   if (renderTimer) clearTimeout(renderTimer);
   renderTimer = setTimeout(refresh, RENDER_DEBOUNCE_MS);
   pinPreviewIfEdited();
+  syncEditedText();
+}
+
+// BLK-owner-20260925-0312-1: 本文を書き換えた後始末の 1 本道。本文欄で打っても、フォーム・選択パネル・
+// 窓・一括操作・元に戻すで書き換えても、本文を書き換えた側は mmdText を入れて scheduleRefresh() を
+// 呼ぶ (ctx.onUpdate もそれ)。ここでタブの本文 (workspace)・自動保存・タブの印・上部バーの保存状態を
+// 同じ時にそろえて追わせる。経路を図種ごとに足さない。判定は MA.textSync (タブを替えた・開いただけは書かない)。
+var _textSyncLast = null;
+function syncEditedText() {
+  var WS = window.MA.workspace;
+  var TS = window.MA.textSync;
+  if (!WS || !TS) return;
+  var doc = null;
+  try { doc = WS.getActive(); } catch (e) { doc = null; }
+  var d = TS.decide(_textSyncLast, doc, mmdText);
+  _textSyncLast = d.next;
+  if (d.writeDoc) {
+    try { WS.updateActive({ dsl: mmdText, diagramType: currentDiagramType }); } catch (e) {}
+  }
+  if (!d.save) return;
+  // 自動保存より **前** に workspace を書き戻すこと (BLK-primary-20260914-2206: 自動保存は書き先を
+  // 決めるのに「タブの本文が開いたときから変わったか」を見る)。
+  if (window.MA.autoSave) {
+    try { window.MA.autoSave.scheduleSave(currentDiagramType, mmdText); } catch (e) {}
+  }
+  // 前回保存時点との差分 (タブの ● ・上部バーの保存・下端の差分) を追従させる。
+  try { renderDiffBadge(); } catch (e) {}
+  // 前回保存版との ＋a −b は、保存を押す前に気付けることが値打ち (BLK-reviewer-20260915-2346-wish)。
+  try { renderLiveDiffChip(); } catch (e) {}
+  try { renderVersionBadge(); } catch (e) {}
+  // Git のコミットを並べている間は、作業中との色付けも追う (design 10c)。
+  try { if (window.MA.appGit) window.MA.appGit.refreshDiff(); } catch (e) {}
+  // BLK-junior-20260907-1403-wish: 「見てもらいながらその場で直す」ので、指摘は書き換えるたびに引き直す。
+  try { renderReviewBadge(); } catch (e) {}
+  try { renderConsistencyBadge(); } catch (e) {}
+  try { renderEventSyncBadge(); } catch (e) {}
+  try { renderPinBadge(); } catch (e) {}
+}
+
+// 本文を入れ替えたが利用者の編集ではない経路 (図種の切り替えで見本・下書きを入れた) が、
+// 次の scheduleRefresh で自動保存に載らないよう、今の本文を基準として控える。
+function markTextSynced() {
+  var WS = window.MA.workspace;
+  var TS = window.MA.textSync;
+  if (!WS || !TS) return;
+  var doc = null;
+  try { doc = WS.getActive(); } catch (e) { doc = null; }
+  _textSyncLast = TS.baseline(doc, mmdText);
 }
 
 // BLK-primary-20260924-0805-design: 仮のタブで本文や図を 1 か所でも直したら、その場で固定のタブにする

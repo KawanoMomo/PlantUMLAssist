@@ -45,6 +45,7 @@ const sourceFiles = [
   'src/core/sequence-group-range.js',
   'src/core/app-bridge.js',
   'src/core/blank-doc.js',
+  'src/core/text-sync.js',
   'src/core/save-diff.js',
   'src/core/version-timeline.js',
   'src/core/svg-freshness.js',
