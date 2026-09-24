@@ -325,8 +325,12 @@ test('手順5.5 塗り潰された図を、打ち直さずに直前の版へ 1 �
   // 一覧は庫・札・保存の確かめが届くたびに描き直される (全体実行で遅い回は、押した後に届く)。
   // 描き直しても開いた版の一覧は閉じない (閉じると、押したのに何も出ないように見える)。
   // 保存したばかりの図なので「一覧を取り直す」が出ている。それで描き直させる。
+  // 版の一覧は「この図の履歴」(#vt-modal) に開くので、一覧はその裏にあって人の手では押せない。
+  // ここで要るのは利用者の操作ではなく「裏で届いた確かめによる描き直し」なので、
+  // 描き直しの入口をマウスを介さずに呼ぶ (押すのは [戻す] で、それは実マウスで押す)。
   const again = page.locator('#folder-panel .folder-write-refresh').first();
-  await again.click();
+  await again.waitFor({ state: 'attached' });
+  await again.evaluate((b) => /** @type {HTMLButtonElement} */ (b).click());
   await page.waitForTimeout(800);
   await restore.waitFor({ timeout: 10000 });
 
