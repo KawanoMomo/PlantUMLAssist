@@ -1626,6 +1626,25 @@ window.MA.modules.plantumlClass = (function() {
     { kind: 'enum', label: 'enum' },
   ];
 
+  // 種別トグル: 押した種別へ宣言のキーワードを差し替える (id・表示名・本体は残る)。
+  // BLK-builder-20260924-1320-2 (design 4a): 押したあとも同じクラスを選んだまま、新しい種別のパネルで続けて直せる
+  // (選択は種別を型に持つので、新しい種別で選び直す)。enum のパネルからも同じ手で戻せる。
+  function _bindKindToggle(element, propsEl, ctx) {
+    Array.prototype.forEach.call(propsEl.querySelectorAll('.cl-kind-btn'), function(b) {
+      b.addEventListener('click', function() {
+        var next = b.getAttribute('data-kind');
+        if (next === element.kind) return;
+        var t = ctx.getMmdText();
+        var out = changeKind(t, element.line, next);
+        if (out === t) return;
+        window.MA.history.pushHistory();
+        ctx.setMmdText(out);
+        window.MA.selection.setSelected([{ type: next, id: element.id, line: element.line }]);
+        ctx.onUpdate();
+      });
+    });
+  }
+
   function _kindToggleHtml(current) {
     var html = '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:2px;">種別 / Kind</div>' +
                '<div id="cl-kind-toggle" style="display:flex;gap:3px;margin-bottom:8px;flex-wrap:wrap;">';
@@ -2052,17 +2071,7 @@ window.MA.modules.plantumlClass = (function() {
       ctx.setMmdText(renameWithRefs(ctx.getMmdText(), element.id, newId));
       ctx.onUpdate();
     });
-    // 種別トグル: 押した種別へ宣言のキーワードを差し替える (id・表示名・本体は残る)
-    Array.prototype.forEach.call(propsEl.querySelectorAll('.cl-kind-btn'), function(b) {
-      b.addEventListener('click', function() {
-        var next = b.getAttribute('data-kind');
-        if (next === element.kind) return;
-        window.MA.history.pushHistory();
-        ctx.setMmdText(changeKind(ctx.getMmdText(), element.line, next));
-        window.MA.selection.clearSelection();
-        ctx.onUpdate();
-      });
-    });
+    _bindKindToggle(element, propsEl, ctx);
     P.bindEvent('cl-move-up', 'click', function() {
       window.MA.history.pushHistory();
       ctx.setMmdText(moveLineUp(ctx.getMmdText(), element.line));
@@ -2299,6 +2308,8 @@ window.MA.modules.plantumlClass = (function() {
       '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Class Diagram</div>' +
       '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
         _selHeadHtml('Enum', element) +
+        // BLK-builder-20260924-1320-2 (design 4a): enum にしたあとも種別の欄から戻せる。
+        _kindToggleHtml(element.kind) +
         P.fieldHtml('名前 (id)', 'cl-edit-id', element.id) +
         P.fieldHtml('ステレオタイプ', 'cl-edit-stereo', element.stereotype || '') +
         P.primaryButtonHtml('cl-edit-apply', '変更を反映') +
@@ -2315,6 +2326,7 @@ window.MA.modules.plantumlClass = (function() {
             '</div>' + '<button id="cl-delete" style="width:100%;margin-top:10px;background:var(--accent-red);color:#fff;border:none;padding:6px;border-radius:4px;font-size:12px;cursor:pointer;">クラスを削除</button>';
     propsEl.innerHTML = html;
     GP.bindEdit('cl-edit', parsedData.groups, element.line, ctx, element.id);
+    _bindKindToggle(element, propsEl, ctx);
 
     P.bindEvent('cl-edit-apply', 'click', function() {
       window.MA.history.pushHistory();
