@@ -423,6 +423,34 @@ test('手順8 右クリックの「複製」、F2 で名前変更、Delete で�
   expect(await S.readDoc(page, DIR, 'spi_state_v2')).toBeNull();
 });
 
+// BLK-builder-20260924-2316-3 (design 10b「↑↓ で移動、Enter で開く」): 図を開くとツリーが描き直され、
+// 押した行が外れてフォーカスが body に落ちていた。↓ Enter ↓ Enter と図を順に開いて見ていけるよう、
+// 開いた後も同じ行にフォーカスを戻す (マウスで押して開いた後も、↑↓ で隣の図へ移れる)。
+test('手順8 ツリーの図を Enter で開いた後も、続けて ↓ で次の図へ移って Enter で開ける', async ({ page }) => {
+  await seedParts(page);
+  await expandPart(page, 'spi');
+  const focused = () => page.evaluate(() => document.activeElement && document.activeElement.getAttribute('data-file-name'));
+
+  await treeFile(page, 'spi_init_sequence').focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => page.locator('#editor').inputValue()).toContain('SPI 初期化');
+  await expect(treeFile(page, 'spi_init_sequence')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  expect(await focused()).toBe('spi_class');
+  await page.keyboard.press('Enter');
+  await expect.poll(() => page.locator('#editor').inputValue()).toContain('class Spi_Driver');
+  await expect(treeFile(page, 'spi_class')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  expect(await focused()).toBe('spi_state');
+
+  // マウスで押して開いた後も、その行から ↑ で上の図へ移れる。
+  await treeFile(page, 'spi_state').click();
+  await expect.poll(() => page.locator('#editor').inputValue()).toContain('SPI 状態遷移');
+  await expect(treeFile(page, 'spi_state')).toBeFocused();
+  await page.keyboard.press('ArrowUp');
+  expect(await focused()).toBe('spi_class');
+});
+
 test('手順8 ファイルを別の部品のフォルダへドラッグすると、その部品の名前に付け替わる', async ({ page }) => {
   await seedParts(page);
   await expandPart(page, 'spi');
