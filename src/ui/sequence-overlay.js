@@ -231,6 +231,92 @@ window.MA.sequenceOverlay = (function() {
     });
   }
 
+  // BLK-migrator-20260924-1132: `!include` した手続き (C4_Sequence など) で描いた図は、参加者の頭も
+  // メッセージも class の無い <rect>/<text>/<line>/<polygon> で出る。手続きの名前は覚えず、描かれた物から当てる:
+  // 参加者 = 表示名と同じ文字の <text> を囲む小さい <rect>、メッセージ = 矢じり (<polygon>) の付いた横線を上から順に。
+  function _num(el, a) { return parseFloat(el.getAttribute(a)); }
+  function _bareShapes(svgEl, sel) {
+    return Array.prototype.filter.call(svgEl.querySelectorAll(sel), function(n) {
+      var anc = n.parentNode;
+      while (anc && anc !== svgEl && anc.getAttribute) {
+        if (anc.getAttribute('class')) return false;
+        anc = anc.parentNode;
+      }
+      return true;
+    });
+  }
+  function _procParticipants(svgEl, participants) {
+    var texts = _bareShapes(svgEl, 'text');
+    var rects = _bareShapes(svgEl, 'rect').filter(function(r) {
+      var h = _num(r, 'height'), w = _num(r, 'width');
+      return !isNaN(h) && !isNaN(w) && h > 10 && h < 120 && w > 10 && r.getAttribute('fill') !== 'none';
+    });
+    var out = [];
+    participants.forEach(function(p) {
+      var label = String(p.label || '').trim();
+      if (!label) return;
+      texts.forEach(function(t) {
+        if (String(t.textContent || '').trim() !== label) return;
+        var tx = _num(t, 'x'), ty = _num(t, 'y');
+        if (isNaN(tx) || isNaN(ty)) return;
+        var best = null;
+        rects.forEach(function(r) {
+          var x = _num(r, 'x'), y = _num(r, 'y'), w = _num(r, 'width'), h = _num(r, 'height');
+          if (tx < x - 1 || tx > x + w || ty < y || ty > y + h) return;
+          if (!best || w * h < best.w * best.h) best = { x: x, y: y, w: w, h: h };
+        });
+        if (!best) {
+          // 囲み (`*_Boundary(…)`) は塗りの無い大きな枠で描かれ、表示名は枠の上端に出る。
+          // 枠全体は覆わず (中の参加者を押せなくなる)、表示名の帯だけを当てる。
+          _bareShapes(svgEl, 'rect[fill="none"]').forEach(function(r) {
+            var x = _num(r, 'x'), y = _num(r, 'y'), w = _num(r, 'width'), h = _num(r, 'height');
+            if (isNaN(h) || tx < x || tx > x + w || ty < y || ty > y + 40) return;
+            if (!best || w * h < best.w * best.h) best = { x: x, y: y, w: w, h: Math.min(h, ty - y + 6) };
+          });
+        }
+        if (best) out.push({ item: p, box: best });
+      });
+    });
+    return out;
+  }
+  function _procMessages(svgEl, relations, floorY) {
+    var polys = _bareShapes(svgEl, 'polygon');
+    var lines = _bareShapes(svgEl, 'line').filter(function(l) {
+      var y1 = _num(l, 'y1'), y2 = _num(l, 'y2'), x1 = _num(l, 'x1'), x2 = _num(l, 'x2');
+      if (isNaN(y1) || y1 !== y2 || Math.abs(x2 - x1) < 10) return false;
+      if (/dasharray/.test(l.getAttribute('style') || '')) return false;
+      // 矢じりが線の端に付いているものだけ (枠・凡例の線を拾わない)
+      return polys.some(function(pg) {
+        var pts = String(pg.getAttribute('points') || '').split(/[\s,]+/).map(parseFloat);
+        for (var i = 0; i + 1 < pts.length; i += 2) {
+          if (Math.abs(pts[i + 1] - y1) <= 6 && (Math.abs(pts[i] - x1) <= 12 || Math.abs(pts[i] - x2) <= 12)) return true;
+        }
+        return false;
+      });
+    }).sort(function(a, b) { return _num(a, 'y1') - _num(b, 'y1'); });
+    var rels = relations.slice().sort(function(a, b) { return (a.line || 0) - (b.line || 0); });
+    if (!lines.length || lines.length !== rels.length) return [];
+    var texts = _bareShapes(svgEl, 'text');
+    // 最初のメッセージの文字は参加者の頭より下にしか無い (頭の表示名をメッセージに含めない)。
+    var prevY = typeof floorY === 'number' && isFinite(floorY) ? floorY - 4 : -Infinity;
+    return lines.map(function(l, i) {
+      var y = _num(l, 'y1');
+      var x1 = Math.min(_num(l, 'x1'), _num(l, 'x2')), x2 = Math.max(_num(l, 'x1'), _num(l, 'x2'));
+      var top = y - 6, left = x1, right = x2;
+      texts.forEach(function(t) {
+        var tx = _num(t, 'x'), ty = _num(t, 'y');
+        if (isNaN(tx) || isNaN(ty) || ty > y || ty <= prevY + 4) return;
+        if (tx < x1 - 20 || tx > x2 + 20) return;
+        var tl = parseFloat(t.getAttribute('textLength')) || 0;
+        top = Math.min(top, ty - 13);
+        left = Math.min(left, tx);
+        right = Math.max(right, tx + tl);
+      });
+      prevY = y;
+      return { item: rels[i], box: { x: left, y: top, w: right - left, h: y + 6 - top } };
+    });
+  }
+
   function buildSequenceOverlay(svgEl, parsedData, overlayEl, dslText) {
     _clearChildren(overlayEl);
     if (!svgEl || !parsedData) return;
@@ -278,6 +364,17 @@ window.MA.sequenceOverlay = (function() {
     }
 
     var partMatches = _matchParts('g.participant-head');
+    if (!partMatches.length && participants.length && !svgEl.querySelector('g.participant-head')) {
+      partMatches = _procParticipants(svgEl, participants);
+      partMatches.forEach(function(m) {
+        OB.addRect(overlayEl, m.box.x - 4, m.box.y - 4, m.box.w + 8, m.box.h + 8, {
+          'data-type': 'participant', 'data-id': m.item.id, 'data-line': m.item.line,
+        });
+      });
+      // 数は「当たった参加者の人数」で数える (頭と尻の 2 か所に出る図でも 1 人)
+      var seenP = {};
+      partMatches = partMatches.filter(function(m) { if (seenP[m.item.id]) return false; seenP[m.item.id] = 1; return true; });
+    }
     partMatches.forEach(function(m) {
       var bb = _partBox(m.groupEl);
       if (!bb) return;
@@ -432,6 +529,17 @@ window.MA.sequenceOverlay = (function() {
     });
     var msgBest = OB.pickBestOffset(svgEl, msgItems, 'g.message', candidates);
     var msgMatches = msgBest.matches.filter(function(m) { return m.item.kind !== 'return'; });
+    var procMsgs = [];
+    if (!msgMatches.length && parsedData.relations.length && !svgEl.querySelector('g.message')) {
+      var headFloor = -Infinity;
+      partMatches.forEach(function(m) { if (m.box) headFloor = Math.max(headFloor, m.box.y + m.box.h); });
+      procMsgs = _procMessages(svgEl, parsedData.relations, headFloor);
+      procMsgs.forEach(function(m) {
+        OB.addRect(overlayEl, m.box.x - 4, m.box.y - 4, m.box.w + 8, m.box.h + 8, {
+          'data-type': 'message', 'data-id': m.item.id, 'data-line': m.item.line,
+        });
+      });
+    }
     msgMatches.forEach(function(m) {
       // BLK-human-20260912-0900: 矢印・ラベル・番号 (autonumber)・ステレオタイプの
       // どこを押しても同じメッセージが選ばれるよう、g.message の子要素全部を覆う。
@@ -455,7 +563,7 @@ window.MA.sequenceOverlay = (function() {
     // Warn on silent divergence — early signal when SVG structure changes
     // (PlantUML 新版 / カスタム skin) and our selector/offset assumptions break.
     OB.warnIfMismatch('participant', participants.length, partMatches.length);
-    OB.warnIfMismatch('message', parsedData.relations.length, msgMatches.length);
+    OB.warnIfMismatch('message', parsedData.relations.length, msgMatches.length + procMsgs.length);
 
     // Notes: PlantUML 1.2026.x では <g class="note"> を出さず、bare <path>+<text> で描画される。
     // data-source-line も付かないため、selector マッチは成立せず placeholder rect を挿入する。
@@ -565,14 +673,14 @@ window.MA.sequenceOverlay = (function() {
       matched: {
         // head 基準。tail rect は重複なので「何人マッチしたか」には加算しない。
         participant: partMatches.length,
-        message: msgMatches.length,
+        message: msgMatches.length + procMsgs.length,
         note: noteRectCount,
         activation: actRectCount,
         group: groupRectCount,
       },
       unmatched: {
         participant: participants.length - partMatches.length,
-        message: parsedData.relations.length - msgMatches.length,
+        message: parsedData.relations.length - msgMatches.length - procMsgs.length,
         note: notes.length - noteRectCount,
         activation: activations.length - actRectCount,
         group: groupsInModel - groupRectCount,
