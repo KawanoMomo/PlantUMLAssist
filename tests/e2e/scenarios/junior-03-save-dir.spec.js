@@ -234,3 +234,51 @@ test('手順3 起動すると保存先の一覧が開いていて、読むだけ
   await expect(page.locator('#folder-panel')).not.toHaveClass(/\bopen\b/);
   await expect(page.locator('#btn-tab-folder')).toHaveAttribute('aria-expanded', 'false');
 });
+
+// BLK-builder-20260924-1741-2 (design 9a / 10a): 未保存の印はタブ・上部バーの保存ボタン・FILES ツリーの行で
+// 同じ判定・同じ時に出る。以前はタブにだけ ● が出て、ツリーには出ず、上部バーは「保存済み」のままだった。
+// 保存先から開いた図は、最初に書き戻す前に「上書きしますか」と聞く。答えるまでは未保存のまま。
+test('手順3 保存先の図を直すとタブ・上部バー・FILES ツリーに同時に未保存の印が出て、書き換えると揃って消える', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  await S.putDoc(page, DIR, 'spi_state', ['@startuml', '[*] --> Idle', '@enduml'].join('\n'));
+  // 保存先を読み直して、置いた図がツリーに並んだ状態にする。
+  await S.openFolder(page);
+  await S.closeFolderList(page);
+  const partHead = page.locator('#files-parts .files-part-head[data-part="spi"], #files-parts .files-part-head[data-part="SPI"]').first();
+  await expect(partHead).toBeVisible({ timeout: 10000 });
+  if ((await partHead.getAttribute('aria-expanded')) !== 'true') await partHead.click();
+  const fileRow = page.locator('#files-parts .files-part-file[data-file-name="spi_state"]');
+  await fileRow.click();
+  await expect(page.locator('#editor')).toHaveValue(/Idle/);
+
+  const save = page.locator('#top-save');
+  const tabDot = page.locator('#tab-bar .tab.active .tab-dot');
+  const openMark = page.locator('#files-panel .files-row.is-active .files-row-mark');
+  const fileMark = fileRow.locator('.files-row-mark');
+  await expect(save).toHaveAttribute('data-save-state', 'saved');
+  await expect(tabDot).toHaveCount(0);
+  await expect(openMark).toHaveCount(0);
+  await expect(fileMark).toHaveCount(0);
+
+  // 直す (実キー入力)。@enduml の行の頭に 1 行足す (@enduml より後ろの行は図の中身に入らない)。
+  await page.locator('#editor').click();
+  await page.keyboard.press('Control+End');
+  await page.keyboard.press('Home');
+  await page.keyboard.type('Idle --> Run\n');
+  await expect(page.locator('#source-lock-modal')).toBeVisible({ timeout: 10000 });
+  await expect(tabDot).toHaveText('●');
+  await expect(save).toHaveAttribute('data-save-state', 'dirty');
+  await expect(save).toContainText('● 保存');
+  await expect(openMark).toHaveText('●');
+  await expect(fileMark).toHaveText('●');
+
+  // 「このファイルを書き換える」で書くと、3 か所の印が揃って消える。
+  await page.locator('#source-lock-overwrite').click();
+  await expect(save).toHaveAttribute('data-save-state', 'saved', { timeout: 10000 });
+  await expect(save).toHaveText('保存済み');
+  await expect(tabDot).toHaveCount(0);
+  await expect(openMark).toHaveCount(0);
+  await expect(fileMark).toHaveCount(0);
+  expect(await S.readDoc(page, DIR, 'spi_state')).toContain('Idle --> Run');
+});
