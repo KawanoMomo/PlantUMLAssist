@@ -73,7 +73,9 @@ test('手順7 activate のある図でも、途中挿入した矢印が帯を壊
   await page.locator('#seq-mod-from').selectOption('Hw_Ctrl');
   await page.locator('#seq-mod-to').selectOption('Hw_Ctrl');
   await page.locator('#seq-mod-label-rle textarea, #seq-mod-label-rle input').first().fill('ClockCheck');
-  await page.locator('#seq-mod-confirm').click();
+  // BLK-owner-20260924-2232-4: 窓はマウスを使わずに確定できる (本文欄で Enter = 確定)。
+  await page.locator('#seq-mod-label-rle textarea').press('Enter');
+  await expect(page.locator('#seq-modal')).toBeHidden();
   await page.waitForTimeout(800);
 
   const lines = (await editorText(page)).split('\n').map((s) => s.trim());
@@ -90,6 +92,21 @@ test('手順7 activate のある図でも、途中挿入した矢印が帯を壊
   // 帯は 1 組のまま (二重に重なっていない)。
   expect(lines.filter((l) => l === 'activate Hw_Ctrl').length).toBe(1);
   expect(lines.filter((l) => l === 'deactivate Hw_Ctrl').length).toBe(1);
+
+  // BLK-owner-20260924-2232-4: 入れたメッセージの本文を、キーボードから手を離さずに直す。
+  // 選択パネルの本文欄で Ctrl+A → 打つ → Enter で確定 (末尾の空白は書かない。改行 \n も入らない)。
+  await page.waitForTimeout(1500);
+  await selectMessageLine(page, iNew + 1);
+  const rle = page.locator('#seq-edit-msg-label-rle .rle-textarea');
+  await rle.click();
+  await page.keyboard.press('Control+a');
+  await page.keyboard.type('ClockCheck2  ');
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(800);
+  const after = (await editorText(page)).split('\n');
+  const edited = after.find((l) => l.indexOf('ClockCheck2') >= 0) || '';
+  expect(edited.trim()).toBe('Hw_Ctrl -> Hw_Ctrl : ClockCheck2');
+  expect(edited).not.toMatch(/ClockCheck2\s+$/);
 });
 
 test('手順7 deactivate の後を指したときは帯の外に入る', async ({ page }) => {

@@ -132,35 +132,36 @@ window.MA.richLabelEditor = (function() {
       if (previewWrap) previewWrap.hidden = !ta.value.trim();
     }
 
-    // onChange への出力も getValue() と同じ正規化を通す (実改行 → literal \n)
-    function normalized() { return ta.value.replace(/\n/g, '\\n'); }
+    // onChange への出力も getValue() と同じ正規化を通す (実改行 → literal \n)。
+    // BLK-owner-20260924-2232-4: 確定する値の末尾の空白・改行は書かない。
+    function normalized() { return ta.value.replace(/\s+$/, '').replace(/\n/g, '\\n'); }
+    var lastCommitted = null;
     // Bug 2+5: input (毎 keystroke) は preview のみ更新 (パネル再描画なし)。
-    // onChange は change (blur) 時のみ発火 → panel re-render で textarea が
+    // onChange は確定 (Enter) か change (blur) のときだけ発火 → panel re-render で textarea が
     // destroy されず focus を保持できる。
     ta.addEventListener('input', function() {
       refreshPreview();
     });
     ta.addEventListener('change', function() {
-      if (onChange) onChange(normalized());
+      var v = normalized();
+      if (v === lastCommitted) return;  // Enter で確定した値を blur でもう一度書かない
+      lastCommitted = v;
+      if (onChange) onChange(v);
     });
     ta.addEventListener('keydown', function(e) {
-      if (e.key === 'Tab' && !e.isComposing) {
+      if (e.isComposing) return;
+      // BLK-owner-20260924-2232-4: 1 行で足りる本文欄は Enter で確定、Shift+Enter で改行 (\n)。
+      // 改行は上の ↵ ボタンでも入れられる。Tab は次の欄へ移る (空白を入れない = ブラウザの既定)。
+      if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
-        var s = ta.selectionStart, ed = ta.selectionEnd;
-        if (e.shiftKey) {
-          // outdent: 行頭の 2 空白を除去
-          var before = ta.value.substring(0, s);
-          var lineStart = before.lastIndexOf('\n') + 1;
-          if (ta.value.substring(lineStart, lineStart + 2) === '  ') {
-            ta.value = ta.value.substring(0, lineStart) + ta.value.substring(lineStart + 2);
-            ta.selectionStart = ta.selectionEnd = Math.max(lineStart, s - 2);
-          }
-        } else {
-          // indent: 2 空白挿入
-          ta.value = ta.value.substring(0, s) + '  ' + ta.value.substring(ed);
-          ta.selectionStart = ta.selectionEnd = s + 2;
-        }
-        ta.dispatchEvent(new window.Event('input', { bubbles: true }));
+        // 確定で右パネルが描き直されると欄が消え、document の Enter (選択の直後に挿入) が続けて動くので止める。
+        e.stopPropagation();
+        var v = normalized();
+        ta.value = ta.value.replace(/\s+$/, '');
+        refreshPreview();
+        if (onChange && v !== lastCommitted) { lastCommitted = v; onChange(v); }
+        // 窓・末尾に追加のフォームは、この合図で「確定」「追加」を押す。
+        container.dispatchEvent(new window.CustomEvent('rle-enter', { bubbles: true }));
         return;
       }
       if (e.key === 'Escape') {
@@ -228,7 +229,7 @@ window.MA.richLabelEditor = (function() {
     return {
       getValue: function() {
         // 実改行 (U+000A) を PlantUML literal '\n' (2 文字) に変換
-        return ta.value.replace(/\n/g, '\\n');
+        return ta.value.replace(/\s+$/, '').replace(/\n/g, '\\n');
       },
       setValue: function(v) { ta.value = (v || '').replace(/\\n/g, '\n'); refreshPreview(); },
       element: ta,

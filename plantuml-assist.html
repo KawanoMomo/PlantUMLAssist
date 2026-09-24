@@ -7423,6 +7423,10 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   stroke-dasharray: 6,3;
   pointer-events: none;
 }
+/* BLK-owner-20260924-2232-4: 図の編集の窓と「末尾に追加」の確定・取り消しに、効くキーを添える (src/ui/modal-keys.js と同じ当て方)。 */
+:is(#seq-modal, #act-modal, #st-modal, #st-tx-modal, #st-br-modal, #cl-sc-modal, #seq-sc-modal) button[id$="-confirm"]::after,
+[id$="-tail-detail"] button[id$="-tail-add"]:not(.no-key-hint)::after { content: " (Enter)"; opacity: .75; font-size: .9em; }
+:is(#seq-modal, #act-modal, #st-modal, #st-tx-modal, #st-br-modal, #cl-sc-modal, #seq-sc-modal) button[id$="-cancel"]::after { content: " (Esc)"; opacity: .75; font-size: .9em; }
 </style>
 </head>
 <body>
@@ -8897,6 +8901,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/ui/properties.js"></script>
 <script src="src/ui/reuse-modal.js"></script>
 <script src="src/ui/sequence-overlay.js"></script>
+<script src="src/ui/modal-keys.js"></script>
 <script src="src/ui/rich-label-editor.js"></script>
 <script src="src/modules/sequence.js"></script>
 <script src="src/modules/usecase.js"></script>

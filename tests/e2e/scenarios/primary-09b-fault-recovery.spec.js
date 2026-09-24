@@ -75,7 +75,9 @@ test('手順9.5 子状態 1 つと遷移 4 本を、確定のたびに種別・�
   await page.locator('#st-tail-kind-chip-child').click(); clicks++;
   await page.locator('#st-tail-where-target').selectOption('Error'); clicks++;
   await page.locator('#st-tail-id').fill('Retrying');
-  await page.locator('#st-tail-add').click(); clicks++;
+  // BLK-owner-20260924-2232-4: 名前の欄で Enter を押せば「+ 追加 (Enter)」を押したのと同じ (マウスに持ち替えない)。
+  await expect(page.locator('#st-tail-add')).toBeVisible();
+  await page.locator('#st-tail-id').press('Enter');
   await waitRendered(page, 'state Retrying');
   expect(clicks).toBeLessThanOrEqual(3);
   // 確定後も「子状態」のまま、親は Error のまま (次の子は名前を打つだけ)。
@@ -149,9 +151,9 @@ test('手順9.5 ユースケース図の関係は、確定しても種類と Fro
   expect(await kindOf(page, 'uc')).toBe('relation');
   await expect(page.locator('#uc-tail-rkind')).toHaveValue('include');
   await expect(page.locator('#uc-tail-from')).toHaveValue('UC1');
-  // 次の 1 本は To を選ぶだけ。
+  // 次の 1 本は To を選ぶだけ。確定は選択欄で Enter (BLK-owner-20260924-2232-4)。
   await page.locator('#uc-tail-to').selectOption('UC3');
-  await page.locator('#uc-tail-add').click();
+  await page.locator('#uc-tail-to').press('Enter');
   await waitRendered(page, 'UC1 ..> UC3');
   expect(await dsl(page)).toMatch(/UC1 \.\.> UC3 : <<include>>|UC1 \.\.> UC3/);
 });
@@ -164,7 +166,8 @@ test('手順9.5 シーケンス図: 参加者は続けて足せ、メッセー�
   // 参加者を足した直後も「参加者」のまま。
   await page.locator('#seq-tail-kind-chip-participant').click();
   await page.locator('#seq-tail-alias').fill('Isr');
-  await page.locator('#seq-tail-add').click();
+  // BLK-owner-20260924-2232-4: 入力欄で Enter = 「+ 追加」。
+  await page.locator('#seq-tail-alias').press('Enter');
   await waitRendered(page, 'participant Isr');
   expect(await kindOf(page, 'seq')).toBe('participant');
 
@@ -180,8 +183,13 @@ test('手順9.5 シーケンス図: 参加者は続けて足せ、メッセー�
   // To は図の参加者を押して入れる (選択は動かない)。
   await clickOverlay(page, 'participant', 'Spi_Driver');
   await expect(page.locator('#seq-tail-to')).toHaveValue('Spi_Driver');
-  await page.locator('#seq-tail-add').click();
-  await waitRendered(page, 'SpiRegs -> Spi_Driver');
+  // BLK-owner-20260924-2232-4: 本文欄で打って Enter で足す (Shift+Enter は改行のまま、末尾の空白は書かない)。
+  const tailLabel = page.locator('#seq-tail-label-rle .rle-textarea');
+  await tailLabel.click();
+  await page.keyboard.type('xfer  ');
+  await page.keyboard.press('Enter');
+  await waitRendered(page, 'SpiRegs -> Spi_Driver : xfer');
+  expect(await dsl(page)).not.toMatch(/SpiRegs -> Spi_Driver : xfer[ 	]+$/m);
 
   // 図種を切り替えたら既定に戻る。
   await S.typeDsl(page, SPI_STATE);
