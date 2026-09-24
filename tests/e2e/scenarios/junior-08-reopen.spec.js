@@ -201,6 +201,15 @@ test('手順8 FILES ツリーのファイル行の頭に、左レールと同じ
   await expect.poll(() => page.locator('#editor').inputValue()).toContain('SPI 状態遷移');
   const openRow = page.locator('#files-body-open .files-row[data-file-name="spi_state"]');
   await expect(openRow.locator('.files-row-glyph')).toHaveAttribute('data-kind', 'plantuml-state');
+
+  // BLK-builder-20260924-1350-3 (design 10a / 9a): 節見出しは「名前 + 右端の件数」を 1 回だけ。
+  // 「読むだけ」の入口は絵文字ではなくレールと同じ 1px 線画で、名前は「他フォルダを覗く」。
+  await expect(page.locator('#files-sec-open .files-sec-label')).toHaveText('開いている図');
+  await expect(page.locator('#files-count-open')).toHaveText(/^[1-9]\d*$/);
+  const peek = page.locator('#btn-tab-peek');
+  await expect(peek).toHaveAttribute('aria-label', '他フォルダを覗く');
+  await expect(peek.locator('svg')).toBeVisible();
+  expect(await peek.textContent()).not.toMatch(/[\u{1F300}-\u{1FAFF}]/u);
 });
 
 // BLK-builder-20260924-1317-3 (design 10a「12 図 未反映 1 控え 1」): ツリー下端の 1 行は、開いている
