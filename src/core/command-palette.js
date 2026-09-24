@@ -350,7 +350,28 @@ window.MA.commandPalette = (function() {
         if (best === null || s2 < best) best = s2;
       }
     }
+    if (best === null) best = _groupWordScore(item, q);
     return best;
+  }
+
+  // BLK-builder-20260924-1337-4 (design 7b): 行の左に「確かめる」と出ているのに、
+  // その語を打つと 0 件だった。7b は「確かめ」と打ってその分類の道具を並べる画面で、
+  // 道具の名前を知らない人の入口は分類の語しか無い。分類の語 (チップと見出し) の
+  // 部分一致でも拾う。名指し (題・呼び名・キーワード) で当たらなかった行だけに使い、
+  // 点は部分一致・順序一致の後ろに置く — 題で名指しした行を分類で拾った行が抜かない。
+  // 順序一致は使わず、1 文字では引かない (「す」「e」が複数の分類に当たり、ほぼ全部が出る)。
+  // 分類を持つのは道具の 6 分類とファイルだけ。図に足す / 移動 は図の中身なので対象外。
+  var GROUP_WORD_SCORE = 1500;
+  function _groupWordScore(item, q) {
+    var g = (item && item.group) || 'command';
+    if (q.length < 2) return null;
+    if (TOOL_GROUPS.indexOf(g) < 0 && g !== 'file') return null;
+    var words = [GROUP_CHIPS[g]].concat(_s(GROUP_LABELS[g]).split('/'));
+    for (var i = 0; i < words.length; i++) {
+      var w = _s(words[i]).trim().toLowerCase();
+      if (w && w.indexOf(q) >= 0) return GROUP_WORD_SCORE;
+    }
+    return null;
   }
 
   // q の文字が f にこの順で現れるか (間に何が挟まってもよい)。
