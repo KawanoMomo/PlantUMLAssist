@@ -126,12 +126,12 @@ function updateTopSaveButton() {
   try { doc = window.MA.workspace ? window.MA.workspace.getActive() : null; } catch (e) { doc = null; }
   // design 9a: 未保存のときだけ ● とキーを出し、保存済みは淡色の「保存済み」に落とす。
   // 保存の有無は下端の札と同じ判定 (前回保存版といまの中身) を使い、2 つの言い分を作らない。
+  // BLK-builder-20260924-1741-2 (design 9a / 10a): 判定はタブの ●/○ と同じ 1 つ (docSaveStatus)。
+  // live-diff の行比べで別に判定すると、タブは ● なのに「保存済み」、自動保存の後も「● 保存」が残った。
   var dirty = false;
   try {
-    var LD = window.MA.liveDiff;
-    var pair = _liveDiffPair();
-    if (LD && pair && pair.has) dirty = LD.verdict(pair.before, pair.now, pair.has) !== 'same';
-    else if (pair && !pair.has) dirty = !!(pair.now && pair.now.trim());
+    var st = doc ? docSaveStatus(doc.id) : 'same';
+    dirty = st === 'changed' || (st === 'new' && !!(mmdText && mmdText.trim()));
   } catch (e) { dirty = false; }
   var fallback = (currentParsed && currentParsed.meta && currentParsed.meta.title) || '';
   var info = ST.saveState ? ST.saveState(cfg, doc, dirty, fallback)
@@ -4962,6 +4962,32 @@ function _diffDocs() {
   });
 }
 
+// BLK-builder-20260924-1741-2 (design 9a / 10a): 未保存の印の判定を 1 つにする。
+// タブの ●/○・上部バーの保存ボタン・FILES ツリーの行は、どれも前回保存時点の基準 (save-diff) と
+// いまの本文 (開いている図はエディタの未確定分を含む) を照らしたこの値だけを読む。
+// 'same' = 前回保存と同じ / 'changed' = 変わった (●) / 'new' = まだ保存していない (○)
+function docSaveStatus(id) {
+  var SD = window.MA.saveDiff;
+  if (!SD) return 'same';
+  var docs = _diffDocs();
+  for (var i = 0; i < docs.length; i++) {
+    if (docs[i].id === id) return SD.statusOf(docs[i].name, docs[i].dsl);
+  }
+  return 'same';
+}
+// 名前で引く版 (保存先の行は図の名前しか持たない)。その名前の図が開いていなければ 'same'。
+function docSaveStatusByName(name) {
+  var SD = window.MA.saveDiff;
+  if (!SD || !name) return 'same';
+  var docs = _diffDocs();
+  for (var i = 0; i < docs.length; i++) {
+    if (String(docs[i].name || '') === String(name)) return SD.statusOf(docs[i].name, docs[i].dsl);
+  }
+  return 'same';
+}
+window.MA.docSaveStatus = docSaveStatus;
+window.MA.docSaveStatusByName = docSaveStatusByName;
+
 // タブの印を今の中身に合わせ直す。編集のたびにタブを組み立て直すと
 // クリック中のタブが差し替わるので、印だけを付け外しする。
 function syncTabDirtyMarks(docs) {
@@ -4996,6 +5022,10 @@ function renderDiffBadge() {
   if (!btn || !SD) return null;
   var docs = _diffDocs();
   syncTabDirtyMarks(docs);
+  // BLK-builder-20260924-1741-2 (design 9a / 10a): 上部バーの保存ボタンと FILES ツリーの印も
+  // タブの印と同じ機会 (打つたび・保存のたび) に合わせ直す。
+  try { updateTopSaveButton(); } catch (e) {}
+  try { if (window.MA.filesPanel && window.MA.filesPanel.syncMarks) window.MA.filesPanel.syncMarks(); } catch (e) {}
   var sum = SD.summary(docs);
   btn.textContent = SD.badgeText(sum);
   // BLK-builder-20260908-1123-4: 件数の描き直しで className を丸ごと入れ替えると、

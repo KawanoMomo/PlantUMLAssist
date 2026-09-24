@@ -88,9 +88,18 @@ window.MA.filesPanel = (function() {
   }
 
   // 未保存 ● / 指摘が未反映 / 一時控え。印の内容は 📂 一覧のバッジと同じものを読む。
+  // BLK-builder-20260924-1741-2 (design 9a / 10a): 未保存の印はタブと同じ判定 (app.js の docSaveStatus) を読む。
+  // 以前は doc.dirty を読んでいたが、この値はどこでも立たず、ツリーに ● が出たことが無かった。
+  function _saveMark(doc) {
+    var f = window.MA.docSaveStatus;
+    var st = (typeof f === 'function' && doc) ? f(doc.id) : 'same';
+    return st === 'changed' ? '●' : (st === 'new' ? '○' : '');
+  }
+
   function _marks(doc) {
     var out = [];
-    if (doc.dirty) out.push('●');
+    var sm = _saveMark(doc);
+    if (sm) out.push(sm);
     if (doc.reviewPending) out.push('未反映');
     if (doc.draft) out.push('控え');
     return out.join(' ');
@@ -203,9 +212,11 @@ window.MA.filesPanel = (function() {
   // (数える所を 2 つにしない)。開いている図の未保存 ● は作業中のタブから読む。
   function _fileState(name) {
     var st = { dirty: false, unapplied: false, draft: false, svgStale: false };
+    // 保存先の行: その名前の図が開いていて、前回保存から変わっていれば ● (タブと同じ判定)。
+    var byName = window.MA.docSaveStatusByName;
+    if (typeof byName === 'function' && byName(name) === 'changed') st.dirty = true;
     _docs().forEach(function(d) {
       if (String(d.name || '') !== name) return;
-      if (d.dirty) st.dirty = true;
       if (d.reviewPending) st.unapplied = true;
       if (d.draft) st.draft = true;
     });
@@ -496,6 +507,41 @@ window.MA.filesPanel = (function() {
     })));
   }
 
+  // 打つたび・保存のたびに、行を組み直さずに未保存の印だけを付け直す (タブの印と同じ機会。
+  // 行を描き直すとツリーの開閉やフォーカスが揺れる)。
+  function _setMark(row, text) {
+    var m = row.querySelector('.files-row-mark');
+    if (!text) {
+      if (m) row.removeChild(m);
+      row.removeAttribute('data-marks');
+      return;
+    }
+    if (!m) {
+      m = document.createElement('span');
+      m.className = 'files-row-mark';
+      var nm = row.querySelector('.files-row-name');
+      if (nm && nm.nextSibling) row.insertBefore(m, nm.nextSibling);
+      else row.appendChild(m);
+    }
+    if (m.textContent !== text) m.textContent = text;
+    if (row.classList.contains('files-part-file')) row.setAttribute('data-marks', text);
+  }
+
+  function syncMarks() {
+    if (!panel) return;
+    var FT = window.MA.fileTree;
+    var byId = {};
+    _docs().forEach(function(d) { byId[String(d.id)] = d; });
+    Array.prototype.forEach.call(panel.querySelectorAll('.files-row[data-doc-id]'), function(row) {
+      var d = byId[row.getAttribute('data-doc-id')];
+      if (d) _setMark(row, _marks(d));
+    });
+    Array.prototype.forEach.call(panel.querySelectorAll('.files-part-file[data-file-name]'), function(row) {
+      var st = _fileState(row.getAttribute('data-file-name'));
+      _setMark(row, FT && FT.fileMarks ? FT.fileMarks(st) : '');
+    });
+  }
+
   function refresh() {
     if (!panel) return;
     renderOpen();
@@ -609,6 +655,7 @@ window.MA.filesPanel = (function() {
   return {
     init: init,
     refresh: refresh,
+    syncMarks: syncMarks,
     isOpen: isOpen,
     setOpen: setOpen,
     toggle: toggle,
