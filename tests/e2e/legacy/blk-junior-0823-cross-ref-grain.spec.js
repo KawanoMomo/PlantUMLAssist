@@ -6,7 +6,7 @@
 // どれが「先輩が後から足した差分」なのか名前だけでは選べなかった。
 // 対応が無いことを言い切り、形 (種別ごとの件数) の見比べに切り替わることを見る。
 const { test, expect } = require('@playwright/test');
-const { gotoApp, saveDirFor } = require('../helpers');
+const { gotoApp, saveDirFor, openCrossRef } = require('../helpers');
 
 const SELF_DIR = saveDirFor(__filename) + '/junior';
 const REF_DIR = saveDirFor(__filename) + '/primary';
@@ -73,10 +73,7 @@ async function setup(page, selfDsl) {
   await page.locator('#editor').fill(selfDsl);
   await page.waitForTimeout(900);
   await seedRefFolder(page);
-  await page.locator('#btn-tab-compare').click();
-  await page.waitForTimeout(400);
-  await page.locator('#xf-dir').fill(REF_DIR);
-  await page.locator('#btn-xf-load').click();
+  await openCrossRef(page, REF_DIR);
   // 相手の図を読むのは非同期なので、相手が選ばれるまで待つ
   // (#xf-summary は読み込み中の短い知らせでも見える)。
   await expect(page.locator('#xf-pick')).toBeVisible();
