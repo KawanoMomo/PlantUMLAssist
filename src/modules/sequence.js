@@ -1189,7 +1189,7 @@ window.MA.modules.plantumlSequence = (function() {
       rangeHtml +
       P.selectFieldHtml('ブロック種類', 'seq-wrap-kind', opts) +
       '<div style="margin-bottom:8px;">' +
-        '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Label/Condition</label>' +
+        '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">条件 / Condition</label>' +
         '<input id="seq-wrap-label" type="text" style="width:100%;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-size:12px;box-sizing:border-box;">' +
       '</div>' +
       '<div style="display:flex;gap:8px;margin-top:12px;">' +
@@ -1692,11 +1692,11 @@ window.MA.modules.plantumlSequence = (function() {
         P.fieldHtml('本文', 'seq-mod-mtext', '', '例: 認証シーケンス参照');
     } else if (kind === 'activation') {
       html +=
-        P.selectFieldHtml('Action', 'seq-mod-aact', [
+        P.selectFieldHtml('する事 / Action', 'seq-mod-aact', [
           { value: 'activate', label: 'activate', selected: true },
           { value: 'deactivate', label: 'deactivate' },
         ]) +
-        P.selectFieldHtml('Target', 'seq-mod-atgt', withSelected(partOpts, (resolveAnchor(parsed, line) || {}).to));
+        P.selectFieldHtml('相手 / Target', 'seq-mod-atgt', withSelected(partOpts, (resolveAnchor(parsed, line) || {}).to));
     }
     if (kind === 'message') {
       html +=
@@ -2670,11 +2670,11 @@ window.MA.modules.plantumlSequence = (function() {
               P.primaryButtonHtml('seq-tail-add', '+ 末尾に追加');
           } else if (kind === 'activation') {
             html =
-              P.selectFieldHtml('Action', 'seq-tail-aact', [
+              P.selectFieldHtml('する事 / Action', 'seq-tail-aact', [
                 { value: 'activate', label: 'activate', selected: true },
                 { value: 'deactivate', label: 'deactivate' },
               ]) +
-              P.selectFieldHtml('Target', 'seq-tail-atgt', partOpts) +
+              P.selectFieldHtml('相手 / Target', 'seq-tail-atgt', partOpts) +
               P.primaryButtonHtml('seq-tail-add', '+ 末尾に追加');
           } else if (kind === 'bulk') {
             html =
@@ -3191,8 +3191,8 @@ window.MA.modules.plantumlSequence = (function() {
           var gtypeOpts = GROUP_KINDS.map(function(k) { return { value: k, label: groupLabel(k), selected: k === gg.gtype }; });
           propsEl.innerHTML =
             '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>' + escHtml(gg.gtype + (gg.label ? ' ' + gg.label : '')) + '</strong><br><span style="color:var(--text-secondary);">Block · L' + gg.line + (gg.endLine ? '–L' + gg.endLine : '') + '</span></div>' +
-            P.selectFieldHtml('Type', 'seq-edit-gtype', gtypeOpts) +
-            P.fieldHtml('Label/Condition', 'seq-edit-glabel', gg.label || '') +
+            P.selectFieldHtml('種類 / Type', 'seq-edit-gtype', gtypeOpts) +
+            P.fieldHtml('条件 / Condition', 'seq-edit-glabel', gg.label || '') +
             _groupRangeHtml(ctx.getMmdText(), gg, escHtml) +
             '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
               '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">else 追加 (alt/critical)</label>' +

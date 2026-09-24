@@ -475,6 +475,85 @@ window.MA.sequenceOverlay = (function() {
   }
 
   // 手続きの図の ref / 区切り / 遅延: フォームで直せない記法として、書かれた行を指す枠 (app.js が右欄に行を出す)。
+  // BLK-owner-20260924-0637-2: 枠 (alt / loop / opt / par / break / critical / group) の当たり判定。
+  // 枠全体を覆う rect はライフラインの当たり矩形の下にあり、左上の札「alt」はライフラインや帯の上に
+  // 描かれるので、札を押すとライフライン選択か帯の「ここに挿入」に吸われていた。PlantUML が SVG に残した
+  // 札の五角形 (枠の左上角から始まる path) と枠線・条件の文字を、ライフラインより手前の当たりにする。
+  // 置くのは <path> (rect の数で枠を数えるテストと選択の塗りはそのまま、選ぶと枠の rect が光る)。
+  var SVG_NS_HIT = 'http://www.w3.org/2000/svg';
+
+  function _nums(str) {
+    return (String(str || '').match(/-?\d+(?:\.\d+)?/g) || []).map(Number);
+  }
+
+  // 札の下端 (y)。札は枠の左上角から始まる五角形。見つからなければ文字 1 行ぶん (18) とみなす。
+  function _frameTabBottom(svgEl, bb) {
+    var best = null;
+    Array.prototype.forEach.call(svgEl.querySelectorAll('path, polygon'), function(el) {
+      var n = _nums(el.getAttribute('d') || el.getAttribute('points'));
+      if (n.length < 6) return;
+      if (Math.abs(n[0] - bb.x) > 1.5 || Math.abs(n[1] - bb.y) > 1.5) return;
+      var maxY = -Infinity;
+      for (var i = 1; i < n.length; i += 2) if (n[i] > maxY) maxY = n[i];
+      if (!(maxY > bb.y) || maxY - bb.y > 40) return;
+      if (best === null || maxY > best) best = maxY;
+    });
+    return best === null ? bb.y + 18 : best;
+  }
+
+  function _addGroupHit(overlayEl, x, y, w, h, gp, part) {
+    if (!(w > 0) || !(h > 0)) return null;
+    var el = document.createElementNS(SVG_NS_HIT, 'path');
+    el.setAttribute('d', 'M' + x + ',' + y + ' h' + w + ' v' + h + ' h' + (-w) + ' Z');
+    el.setAttribute('fill', 'transparent');
+    el.setAttribute('stroke', 'none');
+    el.setAttribute('class', 'group-hit');
+    el.setAttribute('data-type', 'group');
+    el.setAttribute('data-id', gp.id);
+    el.setAttribute('data-line', gp.line);
+    el.setAttribute('data-hit-part', part);
+    el.style.pointerEvents = 'all';
+    el.style.cursor = 'pointer';
+    overlayEl.appendChild(el);
+    return el;
+  }
+
+  // 条件の文字 ([成功] / else の [失敗])。枠の内側にある「[...]」の文字の箱。
+  function _conditionBoxes(svgEl, bb, tabBottom) {
+    var out = [];
+    Array.prototype.forEach.call(svgEl.querySelectorAll('text'), function(t) {
+      var s = String(t.textContent || '').trim();
+      if (!/^\[.*\]$/.test(s)) return;
+      var b = _bbox(t);
+      if (!b) {
+        var tx = parseFloat(t.getAttribute('x')), ty = parseFloat(t.getAttribute('y'));
+        if (isNaN(tx) || isNaN(ty)) return;
+        b = { x: tx, y: ty - 13, width: s.length * 7, height: 16 };
+      }
+      if (b.x < bb.x || b.x > bb.x + bb.w || b.y < tabBottom - 1 || b.y + b.height > bb.y + bb.h + 1) return;
+      out.push(b);
+    });
+    return out;
+  }
+
+  function _addGroupHits(svgEl, overlayEl, frames) {
+    var EDGE = 3;
+    frames.forEach(function(f) {
+      var bb = f.bb, gp = f.group;
+      var tabBottom = _frameTabBottom(svgEl, bb);
+      // 札と見出しの行 (札・条件の文字を含む)。
+      _addGroupHit(overlayEl, bb.x - EDGE, bb.y - EDGE, bb.w + EDGE * 2, (tabBottom - bb.y) + EDGE, gp, 'head');
+      // 枠線 (左・右・下)。
+      _addGroupHit(overlayEl, bb.x - EDGE, bb.y, EDGE * 2, bb.h + EDGE, gp, 'edge');
+      _addGroupHit(overlayEl, bb.x + bb.w - EDGE, bb.y, EDGE * 2, bb.h + EDGE, gp, 'edge');
+      _addGroupHit(overlayEl, bb.x - EDGE, bb.y + bb.h - EDGE, bb.w + EDGE * 2, EDGE * 2, gp, 'edge');
+      // else の条件の文字。
+      _conditionBoxes(svgEl, bb, tabBottom).forEach(function(c) {
+        _addGroupHit(overlayEl, c.x - 2, c.y - 1, c.width + 4, c.height + 2, gp, 'cond');
+      });
+    });
+  }
+
   function _addProcSourceLine(overlayEl, bb, line, kind) {
     OB.addRect(overlayEl, bb.x - 2, bb.y - 2, bb.w + 4, bb.h + 4, {
       'data-type': 'source-line',
@@ -634,6 +713,7 @@ window.MA.sequenceOverlay = (function() {
     var groups = (parsedData.groups || []).slice().sort(function(a, b) {
       return (a.line || 0) - (b.line || 0);
     });
+    var groupHitFrames = [];
     if (groups.length > 0) {
       var allRects = svgEl.querySelectorAll('rect[fill="none"]');
       var seen = {};
@@ -677,6 +757,7 @@ window.MA.sequenceOverlay = (function() {
       if (procScene && procScene.frames.length === frames.length) bboxes = procScene.frames;
       var n = Math.min(bboxes.length, frames.length);
       var emitted = 0;
+      groupHitFrames = [];
       for (var gi = 0; gi < n; gi++) {
         var bb = bboxes[gi];
         var gp = frames[gi].group;
@@ -686,6 +767,7 @@ window.MA.sequenceOverlay = (function() {
           continue;
         }
         emitted++;
+        groupHitFrames.push({ bb: bb, group: gp });
         OB.addRect(overlayEl, bb.x - 2, bb.y - 2, bb.w + 4, bb.h + 4, {
           'data-type': 'group',
           'data-id': gp.id,
@@ -857,6 +939,11 @@ window.MA.sequenceOverlay = (function() {
       r.style.pointerEvents = 'none';
       r.classList.remove('selectable');
     });
+
+    // BLK-owner-20260924-0637-2: 枠の札・見出し・枠線・条件の文字は一番手前に置く。ライフラインの当たり
+    // (メッセージの間の細い区間はメッセージより後に足される) より奥だと、札を押してもライフラインに吸われる。
+    // 帯は細く中身が隠れないので、ここで塞ぐのは枠の縁 (幅 6px) と見出しの行だけ。
+    _addGroupHits(svgEl, overlayEl, groupHitFrames);
 
     var noteRectCount = overlayEl.querySelectorAll('rect[data-type="note"]').length;
     var actRectCount = overlayEl.querySelectorAll('rect[data-type="activation"]').length;

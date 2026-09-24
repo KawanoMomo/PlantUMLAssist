@@ -38,6 +38,58 @@ test('手順5 直し漏れ(旧名の残存)が横断で見つかり、その場�
   await expect(page.locator('#btn-rename-apply')).toBeEnabled();
 });
 
+// BLK-owner-20260924-0637-2: 手順5 (図を直す) のうち、シーケンス図の alt 枠に else を足す直し。
+// 札「alt」は帯・ライフラインの上に描かれ、押すとライフライン選択や帯の「ここに挿入」に吸われて
+// 枠が選べず、else を足す入口 (枠を選んだ右パネル) にたどり着けなかった。札・条件の文字・枠線の
+// どれを押しても枠が選ばれ、右パネルの見出しは日本語 (種類 / 条件) で読める。
+test('手順5 シーケンスの alt 枠は左上の札を押して選べ、右パネルから else を足せる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  const NL = String.fromCharCode(10);
+  await S.typeDsl(page, ['@startuml', 'participant App', 'participant Drv', 'participant Reg',
+    'App -> Drv : Spi_Init()', 'activate App', 'alt 成功', 'App -> Reg : write(CR1)', 'Reg --> App : Ack',
+    'end', 'deactivate App', '@enduml'].join(NL));
+  await page.waitForTimeout(1500);
+  const center = async (label) => {
+    const b = await page.locator('#preview-svg svg text', { hasText: label }).first().boundingBox();
+    expect(b).toBeTruthy();
+    return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+  };
+  const frame = page.locator('#overlay-layer rect[data-type="group"]').first();
+  await expect(frame).toHaveCount(1);
+
+  // 札の上に乗るとその枠が光る (ホバーでも同じ範囲)。
+  const tab = await center('alt');
+  await page.mouse.move(tab.x, tab.y);
+  await expect(frame).toHaveClass(/hit-hover/);
+
+  // 札を押すと枠が選ばれ、挿入メニューは開かない。
+  await page.mouse.click(tab.x, tab.y);
+  await expect(page.locator('#seq-edit-add-else')).toBeVisible();
+  await expect(page.locator('#props-pane')).toContainText('条件 / Condition');
+  await expect(page.locator('#props-pane')).toContainText('種類 / Type');
+
+  // 右パネルから else を足す。
+  await page.locator('#seq-edit-else-cond').fill('失敗');
+  await page.locator('#seq-edit-add-else').click();
+  await page.waitForTimeout(600);
+  expect(await page.locator('#editor').inputValue()).toMatch(/^\s*else 失敗$/m);
+
+  // 条件の文字・左の枠線を押しても同じ枠が選ばれる。
+  for (const pt of [await center('[成功]'), null]) {
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => window.MA.selection.clearSelection());
+    let x, y;
+    if (pt) { x = pt.x; y = pt.y; } else {
+      const b = await page.locator('#overlay-layer rect[data-type="group"]').first().boundingBox();
+      x = b.x + 2; y = b.y + b.height / 2;
+    }
+    await page.mouse.click(x, y);
+    await expect(page.locator('#seq-edit-add-else')).toBeVisible();
+    const sel = await page.evaluate(() => window.MA.selection.getSelected().map((s) => s.type));
+    expect(sel).toEqual(['group']);
+  }
+});
+
 // BLK-primary-20260914-1406: 手順5.5 (指摘反映の保存)。file backend にして 💾 保存を
 // 押しても本体の中身が変わらない、という詰まりが 3 周続いた。書かれてはいたが、
 // 書かれた先が `{名前}-編集中.puml` だった (source-lock の「元ファイルは変更前のまま保つ」に

@@ -460,8 +460,10 @@ test('migrator 手順 4 — 手続きで参加者を宣言した sequence 図で
   const grp = await page.locator('#overlay-layer rect[data-type="group"]').boundingBox();
   const msgs = await page.locator('#overlay-layer rect[data-type="message"], #overlay-layer rect[data-type="note"]').evaluateAll(
     (rs) => rs.map((r) => { const b = r.getBoundingClientRect(); return [b.top, b.bottom]; }));
+  // BLK-owner-20260924-0637-2: 枠の見出しの行 (札・条件の文字) と枠線は枠の当たり。その下から探す。
+  const head = await page.locator('#overlay-layer path.group-hit[data-hit-part="head"]').first().boundingBox();
   let y = null;
-  for (let yy = Math.max(lb.y, grp.y) + 4; yy < Math.min(lb.y + lb.height, grp.y + grp.height) - 4; yy += 3) {
+  for (let yy = Math.max(lb.y, head.y + head.height) + 4; yy < Math.min(lb.y + lb.height, grp.y + grp.height) - 6; yy += 3) {
     if (!msgs.some(([t, b]) => yy >= t - 2 && yy <= b + 2)) { y = yy; break; }
   }
   expect(y, 'alt の中にメッセージの無い高さがある').not.toBeNull();
