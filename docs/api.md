@@ -106,7 +106,8 @@ curl -sS -X POST http://127.0.0.1:8766/verify-svg -H "Content-Type: application/
 
 `GET /version-search` の `q` は空白区切りの語 (最大 6 語)。返りは
 `{terms, dir, scanned, files:[{name, versions:[{stamp, current, counts, lines}]}]}` で、
-版は古い順・最後の 1 件が `current: true` (まだ控えになっていない今の中身)。
+版は古い順・最後の 1 件が `current: true` (まだ控えになっていない今の中身。更新時刻 `mtime` (UTC) 付き)。
+`ci=1` を付けると大文字小文字を無視する (▤ 影響を見る の「版履歴を症状の語で探す」が使う)。
 `counts` は語ごとの出現数、`lines` は当たった行だけ (1 版 40 行まで)。本文は返さない。
 どの版で増えたか・混在がどこから始まったかの判定は GUI 側 (`src/core/blame-point.js`)。
 

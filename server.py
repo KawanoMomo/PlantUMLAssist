@@ -2050,14 +2050,21 @@ class Handler(BaseHTTPRequestHandler):
     SEARCH_TERMS_MAX = 6        # 1 回に突き合わせる語の数 (混在は 2〜3 語で足りる)
     SEARCH_LINES_PER_VERSION = 40   # 1 版から返す当たり行の上限
 
-    def _search_hits(self, text, terms):
-        """本文 → 語ごとの出現数と、当たった行 (行番号つき)。"""
+    def _search_hits(self, text, terms, fold=False):
+        """本文 → 語ごとの出現数と、当たった行 (行番号つき)。
+
+        `fold` は大文字小文字を無視する (▤ 影響を見る の症状の語。Spi_Driver と
+        spi_driver を同じ語として拾う)。混入点は表記の揺れそのものを見るので既定は区別する。
+        """
         counts = [0] * len(terms)
         lines = []
+        if fold:
+            terms = [t.lower() for t in terms]
         for no, line in enumerate(str(text or '').splitlines(), 1):
             hit = False
+            probe = line.lower() if fold else line
             for i, t in enumerate(terms):
-                c = line.count(t)
+                c = probe.count(t)
                 if c:
                     counts[i] += c
                     hit = True
@@ -2070,6 +2077,7 @@ class Handler(BaseHTTPRequestHandler):
 
         `q` は空白区切りの語 (混在を見るので複数可)。返すのは図ごとの
         「古い順の版 + いまの中身」で、各版に語ごとの出現数と当たり行が付く。
+        `ci=1` で大文字小文字を無視する。いまの中身には更新時刻 `mtime` (UTC) が付く。
         """
         parsed = urllib.parse.urlparse(self.path)
         params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
@@ -2079,6 +2087,7 @@ class Handler(BaseHTTPRequestHandler):
         if not terms:
             self._send_json(400, {'error': 'q is required — 探す部品名を 1 つ以上'})
             return
+        fold = params.get('ci', '') in ('1', 'true')
         names = []
         try:
             for p in sorted(save_dir.iterdir(), key=lambda x: x.name.lower()):
@@ -2096,16 +2105,23 @@ class Handler(BaseHTTPRequestHandler):
                     text = self._version_path(save_dir, name, stamp).read_text(encoding='utf-8')
                 except OSError:
                     continue
-                counts, lines = self._search_hits(text, terms)
+                counts, lines = self._search_hits(text, terms, fold)
                 versions.append({'stamp': stamp, 'current': False,
                                  'counts': counts, 'lines': lines})
                 scanned += 1
+            cur_path = save_dir / (name + '.puml')
             try:
-                text = (save_dir / (name + '.puml')).read_text(encoding='utf-8')
+                text = cur_path.read_text(encoding='utf-8')
             except OSError:
                 text = ''
-            counts, lines = self._search_hits(text, terms)
-            versions.append({'stamp': '', 'current': True,
+            # いまの中身がいつ書かれたか (UTC)。控えの刻印は「その版が置き換えられた時刻」
+            # なので、いまの中身の時刻はファイルの更新時刻でしか言えない。
+            try:
+                mtime = time.strftime('%Y-%m-%dT%H:%M:%S', time.gmtime(cur_path.stat().st_mtime)) + 'Z'
+            except OSError:
+                mtime = ''
+            counts, lines = self._search_hits(text, terms, fold)
+            versions.append({'stamp': '', 'current': True, 'mtime': mtime,
                              'counts': counts, 'lines': lines})
             scanned += 1
             files.append({'name': name, 'versions': versions})
