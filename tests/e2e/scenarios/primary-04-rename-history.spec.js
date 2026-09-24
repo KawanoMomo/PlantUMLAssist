@@ -1039,7 +1039,9 @@ const HB_PEER_DIR = HB_PEER_DIR_OF(DIR);
 function HB_PEER_DIR_OF(d) { return d.replace(/\/+$/, '') + '-junior'; }
 const HB_TIMER_MINE = '@startuml\n[*] --> Idle\nstate Idle\nstate Configured\nstate Running\n'
   + 'Idle --> Configured : config\nConfigured --> Running : start\nRunning --> Idle : stop\n@enduml';
-const HB_TIMER_PEER = '@startuml\n[*] --> Idle\nstate Idle\nstate Configured {\n  state Sub\n  state Sub2\n  state Sub3\n  state Sub4\n}\n'
+// BLK-primary-20260924-2332-wish: 子状態を 8 つにして、チップが 6 つを超えたら「ほか N」で開くところまで見る。
+const HB_TIMER_PEER = '@startuml\n[*] --> Idle\nstate Idle\nstate Configured {\n  state Sub\n  state Sub2\n  state Sub3\n  state Sub4\n'
+  + '  state Sub5\n  state Sub6\n  state Sub7\n  state Sub8\n}\n'
   + 'state Running\nIdle --> Configured : config\nConfigured --> Running : start\nRunning --> Idle : stop\n@enduml';
 
 test.describe('primary 手順 4: 渡す相手のフォルダの同名図と食い違っていないかを同じ表で読む', () => {
@@ -1055,6 +1057,9 @@ test.describe('primary 手順 4: 渡す相手のフォルダの同名図と食�
       await put(a.dir, 'spi_init_sequence', a.clean);
       await put(a.dir, 'TIMERドライバ状態遷移', a.mine);
       await put(a.peer, 'TIMERドライバ状態遷移', a.peerText);
+      // 同じ食い違い方をしている 2 枚目 (チップの ×2 と、チップで絞るところを見る)。
+      await put(a.dir, 'WDGドライバ状態遷移', a.mine);
+      await put(a.peer, 'WDGドライバ状態遷移', a.peerText);
     }, { dir: DIR, peer: HB_PEER_DIR, clean: HB_CLEAN, mine: HB_TIMER_MINE, peerText: HB_TIMER_PEER });
     await page.reload();
     await page.waitForSelector('#preview-svg');
@@ -1073,18 +1078,47 @@ test.describe('primary 手順 4: 渡す相手のフォルダの同名図と食�
 
     await expect(page.locator('#hb-peer-th')).toBeVisible();
     const timer = page.locator('#hb-rows tr[data-doc-name="TIMERドライバ状態遷移"]');
-    await expect(timer.locator('td.hb-peer')).toContainText('Sub, Sub2, Sub3', { timeout: 15000 });
+    await expect(timer.locator('td.hb-peer button.hb-chip[data-name="Sub"]')).toHaveText('Sub ×2', { timeout: 15000 });
     await expect(timer).toHaveAttribute('data-ready', '0');
     await expect(timer).toHaveAttribute('data-blockers', /相手の同名図と食い違い/);
-    // 相手に同名図が無い図は「相手に無い」。保存先は primary のまま (行は自分のフォルダの 2 枚)。
+    // 相手に同名図が無い図は「相手に無い」。保存先は primary のまま (行は自分のフォルダの 3 枚)。
     await expect(page.locator('#hb-rows tr[data-doc-name="spi_init_sequence"] td.hb-peer')).toHaveText('相手に無い');
+    await expect(page.locator('#hb-rows tr[data-doc-name]')).toHaveCount(3);
+
+    // BLK-primary-20260924-2332-wish: 食い違いを図の数ではなく要素の数で読む。
+    // 見出しは「食い違い 2/3 枚 · 要素 8 種」(2 枚が同じ 8 つの子状態で食い違っている)。
+    const sum = page.locator('#hb-sum');
+    await expect(sum).toContainText('食い違い 2/3 枚 · 要素 8 種');
+    await expect(sum).toHaveAttribute('data-peer-kinds', '8');
+    // 食い違う要素は 3 つで切らずチップで出す。6 つを超えた分は「ほか 2」を押すと出る。
+    await expect(timer.locator('button.hb-chip')).toHaveCount(6);
+    await timer.locator('button.hb-chip-more').click();
+    await expect(timer.locator('button.hb-chip')).toHaveCount(8);
+    await expect(timer.locator('button.hb-chip[data-name="Sub8"]')).toHaveText('Sub8 ×2');
+    await expect(timer.locator('button.hb-chip-more')).toHaveCount(0);
+
+    // チップを押すと、同じ要素が同じ形で食い違っている行だけに絞る。
+    await timer.locator('button.hb-chip[data-name="Sub8"]').click();
     await expect(page.locator('#hb-rows tr[data-doc-name]')).toHaveCount(2);
+    await expect(page.locator('#hb-rows tr[data-doc-name="spi_init_sequence"]')).toHaveCount(0);
+    await expect(sum).toHaveAttribute('data-filter', 'Sub8');
+    await expect(sum).toContainText('2 枚に絞り込み中');
+    // もう一度押すと戻る。
+    await timer.locator('button.hb-chip[data-name="Sub8"]').click();
+    await expect(page.locator('#hb-rows tr[data-doc-name]')).toHaveCount(3);
+    await expect(sum).toHaveAttribute('data-filter', '');
+    // Esc でも戻る (表は閉じない)。
+    await page.locator('#hb-rows tr[data-doc-name="WDGドライバ状態遷移"] button.hb-chip[data-name="Sub"]').click();
+    await expect(page.locator('#hb-rows tr[data-doc-name]')).toHaveCount(2);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#hb-rows tr[data-doc-name]')).toHaveCount(3);
+    await expect(page.locator('#hb-modal')).toBeVisible();
 
     // 選んだ相手は閉じても覚えている。
     await page.locator('#hb-close').click();
     await openHandoverBoard(page);
     await expect(page.locator('#hb-peer')).toHaveValue(value);
-    await expect(timer.locator('td.hb-peer')).toContainText('Sub, Sub2, Sub3', { timeout: 15000 });
+    await expect(timer.locator('td.hb-peer button.hb-chip[data-name="Sub"]')).toHaveText('Sub ×2', { timeout: 15000 });
 
     // 5 列目を押すと、自分の図を開き相手の同名図を右の枠に並べる。
     await timer.locator('td.hb-peer button.hb-peer-go').click();
