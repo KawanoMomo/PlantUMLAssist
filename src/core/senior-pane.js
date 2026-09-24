@@ -138,10 +138,10 @@
       out.reason = '同じドメイン (' + dom + ') の同じ図種';
       return out;
     }
-    if (domHit.length) {
-      out.name = kindHit.length ? kindHit[0] : '';
+    if (kindHit.length) {
+      out.name = kindHit[0];
       out.how = 'domain';
-      out.candidates = kindHit.length ? kindHit : domHit;
+      out.candidates = kindHit;
       out.reason = '同じドメイン (' + dom + ') の図';
       return out;
     }
@@ -149,6 +149,10 @@
     // 4. 同じ図種の共通図 → その中から自分の部品の所だけを抜き出す。
     //    BLK-junior-20260914-2206-wish: 先輩のクラス図は全ドライバ共通の 1 枚で、
     //    部品名で 1:1 に引けないため 1〜3 段のどれにも掛からず常に「−」だった。
+    //    BLK-junior-20260923-2012: 同じ部品 (adc) の別の図種 (adc_init_sequence /
+    //    adc_state) があると 3 段目が先に効き、図種の違う候補だけを並べて相手を
+    //    決めず、共通図まで降りてこなかった。同じ図種が部品名で引けなければ、
+    //    図種の違う同部品の図より先に共通図を見る。
     var keys = (partKeys || []).filter(function(k) { return !!_s(k); });
     if (kind && keys.length) {
       var common = list.filter(function(n) {
@@ -165,8 +169,43 @@
       }
     }
 
+    // 3'. 同じドメインで図種の読めない図だけは候補として並べる (中身を見ないと
+    //     図種が分からないので、人に選ばせる)。図種が読めて違う図は相手ではない
+    //     (クラス図の相手にシーケンス図を並べると、比べる物が無いのに候補が出る)。
+    var domCands = domHit.filter(function(n) { return !kind || !kindOf(n); });
+    if (domCands.length) {
+      out.how = 'domain';
+      out.candidates = domCands;
+      out.reason = '同じドメイン (' + dom + ') の図';
+      return out;
+    }
+
+    // 相手のフォルダにその図種はあるが、どれもこの部品の図ではない (共通図も無い)。
+    // 「無い」と言い切る。枚数も言うのは、フォルダを目で走査し直させないため
+    // (cross-ref-diff の「TIMER のクラス図がありません (3 枚中 0 枚)」と同じ言い方)。
+    var sameKind = kind ? list.filter(function(n) { return kindOf(n) === kind; }).length : 0;
+    if (sameKind) {
+      var P = (keys[0] || dom || baseOf(mine.name)).toUpperCase();
+      var word = kindWord(kind);
+      out.part = P;
+      out.sameKind = sameKind;
+      out.reason = 'この図 (' + baseOf(mine.name) + ') に当たる相手の図はありません。'
+        + P + ' の' + word + 'は ' + list.length + ' 枚中 0 枚 (' + word + 'は ' + sameKind
+        + ' 枚ありますが、どれも ' + P + ' の図ではありません)';
+      return out;
+    }
+
     out.reason = 'この図 (' + baseOf(mine.name) + ') に当たる相手の図はありません';
     return out;
+  }
+
+  // 図種の呼び名 (「クラス図」)。diagram-kind が読めなければ図種の語のまま。
+  var KIND_WORD = { sequence: 'シーケンス図', state: '状態遷移図', class: 'クラス図',
+    usecase: 'ユースケース図', component: 'コンポーネント図', activity: 'アクティビティ図' };
+  function kindWord(kind) {
+    var DK = (typeof window !== 'undefined' && window.MA) ? window.MA.diagramKind : null;
+    var lab = (DK && DK.label) ? DK.label(kind) : '';
+    return lab ? lab + '図' : (KIND_WORD[kind] || 'この図種');
   }
 
   // 枠の上に出す 1 行。押す前に「いま何が横にあるか」が読める。
