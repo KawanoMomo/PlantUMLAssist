@@ -7731,10 +7731,9 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
              名前では違いが読めなかった。タブ列から外し、並べて比較の枠の
              相手「別タブの図」にした (並べる面 compare-pane 自体はそのまま使う)。 -->
         <!-- BLK-junior-20260907-0803-wish: 既存の図をテンプレートに新しい図を作る -->
-        <button class="tab-tool" id="btn-tab-template" title="既存の図をテンプレートにして、部品名を替えた新しい図を作る">⧉ テンプレート</button>
-        <!-- BLK-junior-20260907-1903-wish: 同じ図種の図の骨格を土台に、題材名 1 語で新規作成 -->
-        <button class="tab-tool" id="btn-tab-part" title="部品名を 1 回打つと、シーケンス・状態遷移・クラス・アクティビティ・コンポーネント・ユースケースの下書きが同じ名前で揃って開く">➕ 部品を起こす</button>
-        <button class="tab-tool" id="btn-tab-skeleton" title="同じ図種の図の骨格をそのまま土台にして、題材名を 1 か所打つだけで新しい図を作る">⧉→ 骨格から</button>
+        <!-- BLK-owner-20260924-2337-prune: 部品を起こす・テンプレート・骨格から・セット複製の 4 つの入口を 1 つにした。
+             何から起こす (部品名だけ / 既存の図 1 枚 / 同じ系統の図ぜんぶ / 組み込みの骨格) は窓の上端で選ぶ。 -->
+        <button class="tab-tool" id="btn-tab-template" title="既存の図や雛形から新しい図を起こす。何から起こすか (部品名だけで 6 図種の下書き・既存の図 1 枚・同じ系統の図ぜんぶ・組み込みの骨格) は窓の上端で選ぶ">⧉ 新しい図を起こす…</button>
         <!-- BLK-reviewer-20260907-0803: 前回保存時点から変わった図があるかを常時見せる -->
         <button class="tab-tool" id="btn-tab-diff" title="前回保存した時点から変わった図の一覧">± 差分 −</button>
         <!-- BLK-reviewer-20260908-0723-wish: 単発 diff では見えない「行って戻った」を履歴の上で見る -->
@@ -7742,8 +7741,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <!-- BLK-junior-20260908-1603-wish: この図がどの図の後継かを 1 回登録し、継承元の更新を自動で言う -->
         <button class="tab-tool" id="btn-tab-lineage" title="この図の継承元 (どの図から派生したか) を 1 回登録すると、継承元が更新されたときに差分の行数で知らせる">⇡ 継承元 −</button>
         <!-- BLK-primary-20260907-0923-wish: 変わった図の変更前後をまとめて 1 画面に並べる -->
-        <!-- BLK-junior-20260907-1203-wish: 同じ系統の図を 1 セットとしてまとめて題材替えする -->
-        <button class="tab-tool" id="btn-tab-set" title="同じ系統の図をまとめて 1 セットとして、対応表 1 回で全部複製する">⧉⧉ セット複製</button>
         <!-- BLK-reviewer-20260907-1203-wish: レビューの指摘を図の該当行に貼り、未読/既読で追う -->
         <button class="tab-tool" id="btn-tab-pins" title="この図に付いたレビュー指摘の一覧。図の上の印をクリックしても開く">📌 指摘 −</button>
         <!-- BLK-junior-20260907-2203-wish: 図をまたいで未対応の指摘を集める受信箱 -->
@@ -8368,10 +8365,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 </div>
 
 <!-- テンプレートから新規作成 (BLK-junior-20260907-0803-wish) -->
-<div id="fc-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
-  <div id="fc-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:600px;max-width:820px;max-height:80vh;overflow-y:auto;"></div>
-</div>
-
 <div id="tpl-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="tpl-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:600px;max-width:820px;max-height:80vh;overflow-y:auto;"></div>
 </div>

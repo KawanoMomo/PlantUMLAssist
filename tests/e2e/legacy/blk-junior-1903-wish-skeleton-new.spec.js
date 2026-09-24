@@ -40,8 +40,10 @@ async function setDsl(page, text) {
 }
 
 async function openSkeleton(page) {
-  await page.locator('#btn-tab-skeleton').click();
+  // BLK-owner-20260924-2337-prune: 入口は「既存の図や雛形から新しい図を起こす…」1 つ。窓の上端で「組み込みの骨格」を選ぶ。
+  await page.locator('#btn-tab-template').click();
   await expect(page.locator('#tpl-modal')).toBeVisible();
+  await page.locator('#tpl-kinds .tpl-kind[data-kind="skeleton"]').click();
 }
 
 test.describe('BLK-junior-1903-wish 骨格から新規作成', () => {

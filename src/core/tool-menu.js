@@ -14,10 +14,11 @@ window.MA.toolMenu = (function() {
   // タブ列のボタン文字 (絵文字 + 短い語) ではなく「何をするか」で読める形にする。
   var GROUPS = [
     { key: 'make', title: '図をつくる', items: [
-      { id: 'btn-tab-part',     label: '部品を起こす (6 図種まとめて)', group: '起こす' },
-      { id: 'btn-tab-template', label: 'テンプレートから作る', group: '起こす' },
-      { id: 'btn-tab-skeleton', label: '骨格から作る', group: '起こす' },
-      { id: 'btn-tab-set',      label: '系統ごと複製する', group: '複製と控え' },
+      // BLK-owner-20260924-2337-prune: 部品を起こす・テンプレート・骨格・系統ごと複製の 4 行は、同じ手順 (元を選ぶ →
+      // 部品名の対応表 → 作る) の「何から」違いだった。1 行にし、何から起こすかは窓の上端で選ぶ。旧名は絞り込みの語に残す。
+      { id: 'btn-tab-template', label: '既存の図や雛形から新しい図を起こす…', group: '起こす',
+        keywords: ['部品を起こす', '6 図種まとめて', 'テンプレートから作る', 'テンプレート', '骨格から作る', '骨格',
+          '系統ごと複製する', 'セット複製', '複製'] },
     ] },
     { key: 'edit', title: '書き換える', items: [
       { id: 'btn-tab-lines',  label: '行を書き換える', group: 'まとめて直す' },
