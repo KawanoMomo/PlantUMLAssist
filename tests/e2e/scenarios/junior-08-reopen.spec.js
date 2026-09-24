@@ -334,6 +334,21 @@ test('手順8 ファイルを別の部品のフォルダへドラッグすると
   await expect.poll(async () => (await S.readDoc(page, DIR, 'adc_class')) || '').toContain('Spi_Driver');
   expect(await S.readDoc(page, DIR, 'spi_class')).toBeNull();
   await expect(page.locator('#files-parts .files-part-head[data-part="adc"]')).toContainText('ADC 2 / 6');
+
+  // design 10b (BLK-builder-20260924-1831-2): 右クリック「別のフォルダへ移動…」は絶対パスを打たせず、
+  // 同じメニューの中に行き先 (今いる部品以外の部品のフォルダ → 隣の保存フォルダ → パスを入力…) を並べる。
+  await treeFile(page, 'spi_init_sequence').click({ button: 'right' });
+  const menu = page.locator('#files-ctx-menu');
+  await menu.locator('[data-action="move"]').click();
+  await expect(menu).toBeVisible();
+  await expect(menu.locator('.files-ctx-title')).toHaveText('spi_init_sequence の移動先');
+  await expect(menu.locator('[data-action="move-part"] .files-ctx-label')).toHaveText(['ADC']);
+  await expect(menu.locator('.files-ctx-item').last()).toHaveAttribute('data-action', 'move-path');
+  // 先頭の行き先 (ADC) に手が乗っていて、Enter でドラッグと同じ移し方になる。
+  await page.keyboard.press('Enter');
+  await expect(menu).toBeHidden();
+  await expect.poll(async () => (await S.readDoc(page, DIR, 'adc_init_sequence')) || '').toContain('@startuml');
+  expect(await S.readDoc(page, DIR, 'spi_init_sequence')).toBeNull();
 });
 
 // BLK-builder-20260924-1735-3 (design 10a「展開すると、まだ作っていない図種が薄い文字で出て、押すとその場で作れます」):

@@ -188,6 +188,41 @@ window.MA.fileMenu = (function() {
     return to + (m[2] || '');
   }
 
+  // BLK-builder-20260924-1831-2 (design 10b): 「別のフォルダへ移動…」の行き先。
+  // 絶対パスを打たせる前に、ツリーに見えている行き先をメニューの中に並べる:
+  // 保存先の部品フォルダ (今いる部品以外。ドラッグと同じく名前の頭を替える) → 隣の保存フォルダ
+  // → 最後に「パスを入力…」(一覧に無い所へ)。
+  // parts: [{ part: 'timer', label: 'TIMER' }]、dirs: [{ path, name }]
+  function moveTargets(name, parts, dirs) {
+    var n = _s(name);
+    var out = [];
+    var seen = {};
+    (parts || []).forEach(function(p) {
+      var key = _s(p && p.part).toLowerCase();
+      if (!key || seen['p:' + key]) return;
+      seen['p:' + key] = true;
+      var to = renameForPart(n, key);
+      if (!to) return;
+      var label = _s(p.label) || key.toUpperCase();
+      out.push({ id: 'move-part', part: key, label: label, tag: '部品', to: to,
+        title: '部品のフォルダ ' + label + ' へ移す (名前は ' + to + ' になります)' });
+    });
+    var dirRows = [];
+    (dirs || []).forEach(function(d) {
+      var path = _s(d && d.path);
+      if (!path || seen['d:' + path]) return;
+      seen['d:' + path] = true;
+      var label = _s(d.name) || path.split(/[\\/]/).filter(Boolean).pop() || path;
+      dirRows.push({ id: 'move-dir', dir: path, label: label, tag: 'フォルダ',
+        title: path + ' へ移す (名前はそのまま)' });
+    });
+    if (out.length && dirRows.length) out.push({ sep: true });
+    out = out.concat(dirRows);
+    if (out.length) out.push({ sep: true });
+    out.push({ id: 'move-path', label: 'パスを入力…', title: '一覧に無いフォルダへ移すときは、フォルダのパスを打って指定します' });
+    return out;
+  }
+
   // 外からツリーへ落としたファイルのうち取り込むもの。.puml / .plantuml / .uml / .txt。
   // 返り値は { name, file } の並び (name は拡張子を落とした図の名前)。
   function importables(files) {
@@ -210,6 +245,7 @@ window.MA.fileMenu = (function() {
     cleanName: cleanName,
     copyName: copyName,
     renameForPart: renameForPart,
+    moveTargets: moveTargets,
     importables: importables,
   };
 })();
