@@ -1909,6 +1909,10 @@ function init() {
       // BLK-owner-20260918-0529-prune: 入口がモーダルの中にしか無いものは、先にその
       // 画面を開いてからボタンを鳴らす (メニューを開いた時点ではまだ DOM に無い)。
       var openerId = item.getAttribute('data-opener');
+      // BLK-owner-20260924-1332-prune: 絞り込み欄の語 (「表記揺れ」等) は開く画面に渡す。
+      // ▦ 突合ボードはその語でカテゴリを絞って開く (閉じると欄が空になるので先に読む)。
+      var filterEl = menu.querySelector('#tool-menu-filter');
+      var toolQuery = filterEl ? filterEl.value : '';
       close();
       // パネル類は「外側の click で閉じる」を document に付けているので、
       // 今の click を配り終えてから鳴らす (同期だと開いた直後に閉じる)。
@@ -1920,7 +1924,8 @@ function init() {
         // 開いた画面が中身を描くのを待ってから目当てのボタンを押す。
         setTimeout(function() {
           var target = document.getElementById(targetId);
-          if (target) target.click();
+          _toolMenuQuery = toolQuery;
+          try { if (target) target.click(); } finally { _toolMenuQuery = ''; }
         }, openerId ? 60 : 0);
       }, 0);
     });
@@ -3501,7 +3506,6 @@ function init() {
   setupSeniorGit();
   setupPinPanel();
   setupPinInbox();
-  setupNameAudit();
   setupSubmitCheck();
   setupFamilyAudit();
   setupDriverMap();
@@ -3682,7 +3686,9 @@ function initCommandPalette() {
       { id: 'tab-submit', title: '提出前チェックを開く / Submit check', hint: 'Tabs', keywords: ['submit', 'check', 'ていしゅつ', 'かくにん', '略語'], button: 'btn-tab-submit', run: function() { clickById('btn-tab-submit'); } },
       // BLK-owner-20260924-1212-prune: 旧 🕸 参照関係の行はここに置かない。▤ 影響を見る の 1 行
       // (id 'name-search') の語に「参照関係」「図をまたいで辿る」を入れてある。
-      { id: 'tab-audit', title: '名前突合を開く / Name audit', hint: 'Tabs', keywords: ['name', 'audit', 'なまえ', 'つきあわせ'], button: 'btn-tab-audit', run: function() { clickById('btn-tab-audit'); } },
+      // BLK-owner-20260924-1332-prune: 旧 🔍 名前突合の行はここに置かない。▦ 突合ボードの 1 行
+      // (id 'tab-cross') の語に「名前突合」「表記揺れ」「name audit」を入れ、その語で引いたときは
+      // ボードを「名前/表記揺れ」で絞って開く。
       { id: 'tab-handoff', title: '引き継ぎパッケージを作る / Handoff package', hint: 'Tabs', keywords: ['handoff', 'package', 'zip', 'ひきつぎ', 'ぱっけーじ'], button: 'btn-tab-handoff', run: function() { clickById('btn-tab-handoff'); } },
       { id: 'tab-delivery', title: '納品パッケージを作る / Delivery package', hint: 'Tabs', keywords: ['delivery', 'package', 'zip', 'のうひん', 'ぱっけーじ', '提出'], button: 'btn-tab-delivery', run: function() { clickById('btn-tab-delivery'); } },
       { id: 'tab-lines', title: '行編集を開く / Line edit', hint: 'Tabs', keywords: ['line', 'edit', 'ぎょう', 'へんしゅう'], button: 'btn-tab-lines', run: function() { clickById('btn-tab-lines'); } },
@@ -3721,7 +3727,10 @@ function initCommandPalette() {
       { id: 'tab-peek', title: 'FILES: 読むだけのフォルダを足す / Files: read-only folder', hint: 'Files', keywords: ['peek', 'files', 'readonly', 'folder', 'よむだけ', 'ほかの', 'ふぉるだ'], button: 'btn-tab-peek', run: function() { clickById('btn-tab-peek'); } },
       { id: 'tab-drivermap', title: '系統マップを開く / Driver map', hint: 'Tabs', keywords: ['driver', 'map', 'けいとう', 'まっぷ'], button: 'btn-tab-drivermap', run: function() { clickById('btn-tab-drivermap'); } },
       { id: 'tab-design', title: '仕様突合 (design) / Design spec check', hint: 'Tabs', keywords: ['design', 'spec', 'gap', 'しよう', 'とつごう', 'せっけい'], button: 'btn-tab-design', run: function() { clickById('btn-tab-design'); } },
-      { id: 'tab-cross', title: '突合ボード / Cross-check board', hint: 'Tabs', keywords: ['cross', 'board', 'audit', 'とつごう', 'ぼーど'], button: 'btn-tab-cross', run: function() { clickById('btn-tab-cross'); } },
+      { id: 'tab-cross', title: '突合ボード / Cross-check board', hint: 'Tabs', keywords: ['cross', 'board', 'audit', 'とつごう', 'ぼーど', '名前突合', '表記揺れ', '表記ゆれ', 'name audit', 'name', 'なまえ', 'ゆれ', 'つきあわせ', '宣言なし', 'メソッド突合'], button: 'btn-tab-cross', run: function() {
+        var cpIn = document.getElementById('cp-input');
+        openAuditBoardFor(cpIn ? cpIn.value : '');
+      } },
       { id: 'tab-audit-timeline', title: '監査履歴を開く / Audit timeline', hint: 'Tabs', keywords: ['audit', 'timeline', 'かんさ', 'りれき'], button: 'btn-tab-audit-timeline', run: function() { clickById('btn-tab-audit-timeline'); } },
       { id: 'tab-review', title: '基準の図と突き合わせる / Review desk', hint: 'Tabs', keywords: ['review', 'desk', 'きじゅん', 'つきあわせ'], button: 'btn-tab-review', run: function() { clickById('btn-tab-review'); } },
       { id: 'tab-inbox', title: '図をまたぐ指摘箱 / Pin inbox', hint: 'Tabs', keywords: ['inbox', 'pin', 'してきばこ'], button: 'btn-tab-inbox', run: function() { clickById('btn-tab-inbox'); } },
@@ -6445,6 +6454,19 @@ var _abKind = '';        // 絞り込み中のカテゴリ (空 = 全部)
 var _abDoc = '';         // 絞り込み中の図名 (空 = 全部)
 var _abBoard = null;     // 直近に組んだ一覧 (コピーで作り直さない)
 var _abSvgScan = null;   // 📂 一覧が読んだ SVG の追いつき。開いていなければ null
+var _abMethodRes = null; // 直近のメソッド突合の結果 (対象外にしたものを 1 行で出すため)
+
+// BLK-primary-20260907-1303 / BLK-owner-20260924-1332-prune: メソッド突合で何を対象外にしたか
+// (応答ラベルの Tick / Reset …) を黙って捨てない。旧 🔍 名前突合の画面にあった 1 行をボードへ移す。
+function _abExcludedHtml(esc) {
+  var MAUD = window.MA.methodAudit;
+  if (!_abMethodRes || !MAUD || !MAUD.excludedLine) return '';
+  if (_abKind && _abKind !== 'method.issues') return '';
+  var line = MAUD.excludedLine(_abMethodRes);
+  if (!line) return '';
+  return '<div id="ab-method-excluded" class="ab-note" data-count="'
+    + ((_abMethodRes.excludedEvents || []).length) + '">' + esc(line) + '</div>';
+}
 
 function _abBuild() {
   var AB = window.MA.auditBoard;
@@ -6452,7 +6474,10 @@ function _abBuild() {
   var run = _atRunAudits();
   var findings = null;
   try { findings = _mfRows(); } catch (e) { findings = null; }
-  _abBoard = AB.build({ audits: run.audits, svg: _abSvgScan, findings: findings });
+  // methodDetail: 🔍 名前突合を畳んだので、メソッド突合の全件もこの画面で見る (BLK-owner-20260924-1332-prune)。
+  _abBoard = AB.build({ audits: run.audits, svg: _abSvgScan, findings: findings, methodDetail: true });
+  var m = run.audits && run.audits.method;
+  _abMethodRes = (m && m.status === 'ok') ? m.result : null;
   return _abBoard;
 }
 
@@ -6476,12 +6501,18 @@ function renderAuditBoard() {
     });
     sel.innerHTML = html;
   }
-  fill('ab-kind', _abKind, b.byCategory, 'すべてのカテゴリ');
+  // 語から絞って開いたカテゴリが 0 件でも、何で絞っているかは箱に出す (「すべて」に見せない)。
+  var cats = b.byCategory.slice();
+  if (_abKind && !cats.some(function(c) { return c.key === _abKind; })) {
+    cats.push({ key: _abKind, label: (AB.LABEL && AB.LABEL[_abKind]) || _abKind, count: 0 });
+  }
+  fill('ab-kind', _abKind, cats, 'すべてのカテゴリ');
   fill('ab-doc', _abDoc, b.byDoc, 'すべての図');
 
   var rows = AB.filter(b, { kind: _abKind, doc: _abDoc });
+  var note = _abExcludedHtml(esc);
   if (rows.length === 0) {
-    body.innerHTML = '<div class="ab-empty">'
+    body.innerHTML = note + '<div class="ab-empty">'
       + (b.total === 0
         ? '突合の指摘はありません。'
           + (b.seen.length ? '（見た突合: ' + esc(b.seen.join('・')) + '）' : '')
@@ -6490,24 +6521,47 @@ function renderAuditBoard() {
     return;
   }
 
-  var html = '<table class="ab-table"><thead><tr>'
+  var html = note + '<table class="ab-table"><thead><tr>'
     + '<th>カテゴリ</th><th>図</th><th>対象</th><th>内容</th></tr></thead><tbody>';
   rows.forEach(function(r) {
     html += '<tr class="ab-row" data-ab-kind="' + esc(r.kind) + '" data-ab-doc="' + esc(r.doc) + '"'
+      + (r.method ? ' data-ab-method="' + esc(r.method) + '" data-ab-issue="' + esc(r.issueKind || '') + '"' : '')
       + ' data-ab-line="' + r.line + '"' + (r.keep ? ' data-ab-keep="1"' : '') + '>'
       + '<td class="ab-cat">' + esc(r.category) + '</td>'
       + '<td class="ab-doc">' + esc(r.doc) + '</td>'
       + '<td class="ab-title">' + esc(r.title) + '</td>'
-      + '<td class="ab-detail">' + esc(r.detail) + '</td></tr>';
+      + '<td class="ab-detail">' + esc(r.detail) + _abUnifyHtml(r, esc) + '</td></tr>';
   });
   html += '</tbody></table>';
   body.innerHTML = html;
+
+  Array.prototype.forEach.call(body.querySelectorAll('.ab-unify-to'), function(bt) {
+    bt.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      var tr = bt.closest('.ab-row');
+      var names = [];
+      Array.prototype.forEach.call(tr ? tr.querySelectorAll('.ab-unify-to') : [], function(x) {
+        names.push(x.getAttribute('data-to'));
+      });
+      _abUnifyTo(bt.getAttribute('data-to'), names);
+    });
+  });
 
   Array.prototype.forEach.call(body.querySelectorAll('.ab-row'), function(tr) {
     tr.addEventListener('click', function() {
       _abJump(tr.getAttribute('data-ab-doc'), Number(tr.getAttribute('data-ab-line')) || 1);
     });
   });
+}
+
+// 「名前/表記揺れ」の行に置く、揃える先の選択 (押すと登録簿に入り 🔤 表記統一が開く)。
+function _abUnifyHtml(r, esc) {
+  if (!r || r.kind !== 'name.variants' || !r.names || r.names.length < 2) return '';
+  return '<div class="ab-unify" title="揃える先を選ぶと登録簿に入り、🔤 表記統一のまとめて適用で書きます">'
+    + '<span class="ab-unify-lead">🔤 表記統一で揃える:</span>'
+    + r.names.map(function(n) {
+      return '<button type="button" class="ab-unify-to" data-to="' + esc(n) + '">' + esc(n) + ' に揃える</button>';
+    }).join('') + '</div>';
 }
 
 // 行からその図へ。開いていない図はここでは開けないので、そう言う
@@ -6567,6 +6621,48 @@ function copyAuditBoard() {
   return text;
 }
 
+// BLK-owner-20260924-1332-prune: 旧 🔍 名前突合の入口 (ツール ▾ の絞り込み・Ctrl+K で「表記揺れ」
+// 「名前突合」と引いた回) は、別の画面を持たずにこのボードをそのカテゴリで絞って開く。
+// 語が当たらなければ絞らずに開く (前回の絞り込みを持ち越さない)。
+var _toolMenuQuery = '';
+
+function openAuditBoardFor(query) {
+  var AB = window.MA.auditBoard;
+  _abKind = AB && AB.kindForQuery ? AB.kindForQuery(query) : '';
+  _abDoc = '';
+  if (_abKind) _abView = 'issues';
+  toggleAuditBoard(true);
+}
+
+// ▦ 突合ボードの「名前/表記揺れ」の行から、揃える先を選んで 🔤 表記統一へ渡す。
+// 書く道は 🔤 表記統一の 1 本: ここは登録簿に組を入れて表記統一を開くだけで、図は書き換えない。
+// 登録簿に入るので、📤 提出前チェック・監査 CLI の --registry にも「決めた」記録が残る。
+function _abUnifyTo(canonical, names) {
+  var NR = window.MA.nameRegistry;
+  var st = document.getElementById('ab-summary');
+  if (!NR || !canonical || !window.fetch) return Promise.resolve(false);
+  var variants = (names || []).filter(function(n) { return n && n !== canonical; });
+  var dir = _wsFileDir();
+  return _loadNameRegistryFresh().then(function(reg) {
+    var next = NR.register(reg || { entries: [] }, canonical, variants, {
+      by: 'gui', at: new Date().toISOString(),
+    }).registry;
+    return window.fetch('/name-registry', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dir: dir, entries: next.entries }),
+    }).then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      if (NR.setCurrent) NR.setCurrent(next);
+      toggleAuditBoard(false);
+      if (typeof _openNameUnifyFor === 'function') _openNameUnifyFor(canonical);
+      return true;
+    });
+  }).catch(function() {
+    if (st) st.textContent = '登録簿に書けませんでした（保存先を確かめてください）';
+    return false;
+  });
+}
+
 function toggleAuditBoard(open) {
   var modal = document.getElementById('ab-modal');
   if (!modal) return;
@@ -6578,7 +6674,7 @@ function setupAuditBoard() {
   var btn = document.getElementById('btn-tab-cross');
   var modal = document.getElementById('ab-modal');
   if (!btn || !modal || !window.MA.auditBoard) return;
-  btn.addEventListener('click', function() { toggleAuditBoard(true); });
+  btn.addEventListener('click', function() { openAuditBoardFor(_toolMenuQuery); });
   var close = document.getElementById('ab-close');
   if (close) close.addEventListener('click', function() { toggleAuditBoard(false); });
   var copy = document.getElementById('ab-copy');
@@ -19509,6 +19605,8 @@ function _abbrevTermsOf(docs, reg) {
   return _abbrevRowsOf(docs, reg).map(function(r) { return r.term; });
 }
 
+var _openNameUnifyFor = null;   // setupNameUnify が差し込む (▦ 突合ボードから開く口)
+
 function setupNameUnify() {
   var panel = document.getElementById('unify-panel');
   var btn = document.getElementById('btn-tab-unify');
@@ -19771,16 +19869,36 @@ function setupNameUnify() {
     });
   }
 
-  btn.addEventListener('click', function() {
-    if (panel.classList.contains('open')) { panel.classList.remove('open'); return; }
+  function openPanel() {
     var rect = btn.getBoundingClientRect();
-    panel.style.left = Math.max(4, rect.left - 60) + 'px';
-    panel.style.top = (rect.bottom + 2) + 'px';
+    // ツール列が畳まれているとこのボタンは幅 0・座標 0。そのときはタブ列の下へ出す。
+    var tabs = document.getElementById('tab-bar');
+    var anchor = (rect.width > 0 || rect.height > 0) ? rect
+      : (tabs ? tabs.getBoundingClientRect() : rect);
+    panel.style.left = Math.max(4, anchor.left + (rect.width > 0 ? -60 : 8)) + 'px';
+    panel.style.top = (anchor.bottom + 2) + 'px';
     panel.classList.add('open');
     resultEl.textContent = '';
     sumEl.textContent = '数えています…';
-    reload();
+    return reload();
+  }
+
+  btn.addEventListener('click', function() {
+    if (panel.classList.contains('open')) { panel.classList.remove('open'); return; }
+    openPanel();
   });
+
+  // BLK-owner-20260924-1332-prune: ▦ 突合ボードの「名前/表記揺れ」の行で揃える先を選んだ回。
+  // 登録簿に入った組を選んだ状態で開く (あとは当てる図を見て「まとめて適用」を押すだけ)。
+  _openNameUnifyFor = function(canonical) {
+    var key = window.MA.nameRegistry ? window.MA.nameRegistry.normalize(canonical) : '';
+    return openPanel().then(function() {
+      if (!sel || !_groups) return;
+      for (var i = 0; i < _groups.length; i++) {
+        if (_groups[i].key === key) { sel.value = key; renderFiles(); break; }
+      }
+    });
+  };
 
   if (sel) sel.addEventListener('change', renderFiles);
   if (allBtn) allBtn.addEventListener('click', function() {
@@ -21085,162 +21203,12 @@ function setupBulkApply() {
 }
 
 // ── 名前突合 ───────────────────────────────────────────────────────────────
-// 図が増えるほど「participant 名・class 名・状態名が図をまたいで揃っているか」の
-// 目視確認が追いつかなくなる。宣言行から名前を機械抽出して、表記揺れ (IRQCtrl と
-// IrqCtrl)、宣言の無い名前 (どの図にもクラスが無い DmaCtrl)、図 × 名前の対照表を
-// 一度に出す。揺れはその場で 1 クリック統一できる。
-
-function openNameAudit() {
-  var modal = document.getElementById('na-modal');
-  var content = document.getElementById('na-modal-content');
-  var na = window.MA.nameAudit;
-  if (!modal || !content || !na) return null;
-  var esc = window.MA.htmlUtils.escHtml;
-
-  var docs = _renameDocs();
-  var result = na.audit(docs);
-
-  var SECTION = 'font-size:10px;color:var(--accent);font-weight:bold;margin:12px 0 4px 0;';
-  var CELL = 'padding:3px 6px;border-bottom:1px solid var(--border);font-size:11px;color:var(--text-primary);';
-  var BTN = 'background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;padding:2px 8px;font-size:11px;';
-
-  var html = '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">名前突合</h3>' +
-    '<div id="na-summary" style="font-size:11px;color:var(--text-secondary);" ' +
-      'data-docs="' + docs.length + '" data-names="' + result.names.length + '" ' +
-      'data-variants="' + result.variants.length + '" data-undeclared="' + result.undeclared.length + '">' +
-      docs.length + ' 枚 / 部品名 ' + result.names.length + ' 件 — ' +
-      '表記揺れ ' + result.variants.length + ' 組、宣言なし ' + result.undeclared.length + ' 件' +
-    '</div>';
-
-  html += '<div style="' + SECTION + '">表記揺れ (同じ部品が別の綴りで書かれている)</div>';
-  if (result.variants.length === 0) {
-    html += '<div id="na-no-variants" style="font-size:11px;color:var(--text-secondary);">揺れはありません</div>';
-  } else {
-    html += '<table id="na-variants" style="border-collapse:collapse;width:100%;">';
-    result.variants.forEach(function(g, gi) {
-      g.members.forEach(function(m, mi) {
-        html += '<tr class="na-variant-row" data-key="' + esc(g.key) + '" data-name="' + esc(m.name) + '">' +
-          (mi === 0 ? '<td rowspan="' + g.members.length + '" style="' + CELL + 'color:var(--text-secondary);white-space:nowrap;">' + esc(g.key) + '</td>' : '') +
-          '<td style="' + CELL + 'font-family:var(--font-mono);">' + esc(m.name) + '</td>' +
-          '<td style="' + CELL + 'color:var(--text-secondary);">' + esc(m.docs.join(', ')) + '</td>' +
-          '<td style="' + CELL + 'text-align:right;color:var(--text-secondary);">' + m.refs + ' 件</td>' +
-          '<td style="' + CELL + 'text-align:right;"><button class="na-unify" data-gi="' + gi + '" ' +
-            'data-to="' + esc(m.name) + '" style="' + BTN + '">これに統一</button></td>' +
-        '</tr>';
-      });
-    });
-    html += '</table>';
-  }
-
-  html += '<div style="' + SECTION + '">宣言なし (矢印にだけ出てきて、どの図にも宣言が無い)</div>';
-  if (result.undeclared.length === 0) {
-    html += '<div id="na-no-undeclared" style="font-size:11px;color:var(--text-secondary);">ありません</div>';
-  } else {
-    html += '<div id="na-undeclared" style="font-size:11px;font-family:var(--font-mono);color:var(--accent-red);">' +
-      result.undeclared.map(function(r) { return esc(r.name) + ' (' + esc(r.docs.join(', ')) + ')'; }).join('<br>') +
-      '</div>';
-  }
-
-  // BLK-reviewer-20260907-0143: 名前だけでなくメソッドの宣言と引数まで突き合わせる。
-  // 図が増えるたびに繰り返していた「Xxx_Init() を呼んでいるのにクラスが無い」
-  // 「クラスはあるがメソッドが無い」「引数の個数が違う」を、grep 目視の前にここで出す。
-  var MAUD = window.MA.methodAudit;
-  var mres = MAUD ? MAUD.audit(docs) : { issues: [], calls: [] };
-  var KIND_LABEL = { 'no-class': 'クラス無し', 'no-method': 'メソッド無し', arity: '引数違い',
-    // BLK-reviewer-20260914-1406: 「クラスを足せば消える」だけを見ていると、
-    // メソッド名をクラスとして宣言した誤りや、写しにだけ入れた修正でも件数が減る。
-    'method-as-class': 'クラス宣言の誤り', 'draft-only': '写しにだけ宣言' };
-  html += '<div style="' + SECTION + '">メソッド突合 (呼び出しとクラス宣言)</div>';
-  html += '<div id="na-method-summary" style="font-size:11px;color:var(--text-secondary);" ' +
-    'data-calls="' + mres.calls.length + '" data-issues="' + mres.issues.length + '">' +
-    '呼び出し ' + mres.calls.length + ' 件 — 指摘 ' + mres.issues.length + ' 件</div>';
-  // BLK-primary-20260907-1303: 何を対象外にしたかを表の上に書く。書かないと
-  // 「0 件」が「見ていないだけ」なのか「揃っている」のか、渡された側に分からない。
-  if (MAUD && MAUD.excludedLine) {
-    var exLine = MAUD.excludedLine(mres);
-    if (exLine) {
-      html += '<div id="na-method-excluded" style="font-size:11px;color:var(--text-secondary);" ' +
-        'data-count="' + ((mres.excludedEvents || []).length) + '">' + esc(exLine) + '</div>';
-    }
-  }
-  if (mres.issues.length === 0) {
-    html += '<div id="na-no-methods" style="font-size:11px;color:var(--text-secondary);">' +
-      '呼び出しと宣言は一致しています</div>';
-  } else {
-    html += '<table id="na-methods" style="border-collapse:collapse;width:100%;">';
-    mres.issues.forEach(function(it) {
-      html += '<tr class="na-method-row" data-kind="' + esc(it.kind) + '" data-method="' + esc(it.method) + '">' +
-        '<td style="' + CELL + 'color:var(--accent-red);white-space:nowrap;">' + esc(KIND_LABEL[it.kind] || it.kind) + '</td>' +
-        '<td style="' + CELL + 'font-family:var(--font-mono);">' + esc(it.method) + '()</td>' +
-        '<td style="' + CELL + '">' + esc(MAUD.describe(it)) + '</td>' +
-        '<td style="' + CELL + 'color:var(--text-secondary);">' + esc(it.docs.join(', ')) + '</td>' +
-      '</tr>';
-    });
-    html += '</table>';
-  }
-
-  html += '<div style="' + SECTION + '">図 × 部品名</div>' +
-    '<table id="na-matrix" style="border-collapse:collapse;width:100%;">' +
-    '<tr><th style="' + CELL + 'text-align:left;">部品名</th>' +
-    '<th style="' + CELL + 'text-align:left;color:var(--text-secondary);">種類</th>' +
-    result.matrix.docs.map(function(n) {
-      return '<th style="' + CELL + 'text-align:center;color:var(--text-secondary);font-weight:normal;">' + esc(n) + '</th>';
-    }).join('') + '</tr>';
-  result.matrix.rows.forEach(function(r) {
-    html += '<tr class="na-matrix-row" data-name="' + esc(r.name) + '">' +
-      '<td style="' + CELL + 'font-family:var(--font-mono);">' + esc(r.name) + '</td>' +
-      '<td style="' + CELL + 'color:var(--text-secondary);">' + esc(r.kind || '—') + '</td>' +
-      r.present.map(function(p, i) {
-        return '<td class="na-cell" data-doc-index="' + i + '" data-present="' + (p ? '1' : '0') + '" ' +
-          'style="' + CELL + 'text-align:center;' + (p ? 'cursor:pointer;' : 'color:var(--text-secondary);') + '">' +
-          (p ? '●' : '·') + '</td>';
-      }).join('') + '</tr>';
-  });
-  html += '</table>' +
-    '<div style="display:flex;gap:8px;margin-top:14px;">' +
-      '<button id="na-close" style="flex:1;' + BTN + 'padding:8px;">閉じる</button>' +
-    '</div>';
-
-  content.innerHTML = html;
-  modal.style.display = 'flex';
-
-  function close() { modal.style.display = 'none'; }
-
-  var closeBtn = document.getElementById('na-close');
-  if (closeBtn) closeBtn.addEventListener('click', close);
-
-  // 揺れの 1 組を選んだ綴りへ寄せる。組の他の綴りを順に置換していく。
-  var unifyBtns = content.querySelectorAll('.na-unify');
-  for (var i = 0; i < unifyBtns.length; i++) {
-    unifyBtns[i].addEventListener('click', function(ev) {
-      var to = ev.currentTarget.getAttribute('data-to');
-      var g = result.variants[Number(ev.currentTarget.getAttribute('data-gi'))];
-      if (!g || !to) return;
-      g.members.forEach(function(m) {
-        if (m.name === to) return;
-        renameAcrossDocs(m.name, to, _renameDocs());
-      });
-      openNameAudit();      // 置換後の状態で開き直す
-    });
-  }
-
-  // ● のセルはその図へのショートカット。名前を追いかけて図を渡り歩ける。
-  var cells = content.querySelectorAll('.na-cell');
-  for (var j = 0; j < cells.length; j++) {
-    cells[j].addEventListener('click', function(ev) {
-      if (ev.currentTarget.getAttribute('data-present') !== '1') return;
-      var idx = Number(ev.currentTarget.getAttribute('data-doc-index'));
-      var target = docs[idx];
-      if (!target || !window.MA.workspace) return;
-      close();
-      saveActiveDoc();
-      window.MA.workspace.setActive(target.id);
-      applyActiveDoc();
-    });
-  }
-
-  return result;
-}
+// BLK-owner-20260924-1332-prune: 🔍 名前突合の画面は畳んだ。表記揺れ・宣言なし・メソッド突合は
+// ▦ 突合ボードが同じ nameAudit / methodAudit で 1 行ずつ出し (openAuditBoardFor)、
+// 揺れを直す道は 🔤 表記統一の 1 本 (ボードの行で揃える先を選ぶと登録簿に入って表記統一が開く)。
+// 図 × 部品名の対照表は ▤ 影響を見る (名前を空で開くと図をまたぐ部品名が枚数付きで並び、
+// 名前を押すとその図と行が出る) で読む。window.MA.nameAudit / methodAudit・📦 引き継ぎの
+// 「名前突合結果」・監査 CLI はそのまま。
 
 // ── 行編集 ─────────────────────────────────────────────────────────────────
 // 一括置換は「図をまたいで識別子を一斉に」直すもので、レビュー指摘のような
@@ -25981,16 +25949,6 @@ function setupSubmitCheck() {
   var modal = document.getElementById('sc-modal');
   if (!btn || !modal || !window.MA.submitCheck) return;
   btn.addEventListener('click', function() { openSubmitCheck(); });
-  modal.addEventListener('click', function(ev) {
-    if (ev.target === modal) modal.style.display = 'none';
-  });
-}
-
-function setupNameAudit() {
-  var btn = document.getElementById('btn-tab-audit');
-  var modal = document.getElementById('na-modal');
-  if (!btn || !modal || !window.MA.nameAudit) return;
-  btn.addEventListener('click', function() { openNameAudit(); });
   modal.addEventListener('click', function(ev) {
     if (ev.target === modal) modal.style.display = 'none';
   });

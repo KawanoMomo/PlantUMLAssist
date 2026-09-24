@@ -3,6 +3,8 @@
 // driver_common_class の宣言を 1 組ずつ grep して目視突合していた。
 // 「クラスが無い」「メソッドが無い」「引数の個数が違う」を名前突合の画面で
 // 機械的に出せることを実機で確かめる。
+// BLK-owner-20260924-1332-prune: 🔍 名前突合の画面を畳んだので、同じ事実を
+// ▦ 突合ボードの「メソッド」の行で見る (Ctrl+K「メソッド突合」でそのカテゴリに絞って開く)。
 const { test, expect } = require('@playwright/test');
 const { gotoApp } = require('../helpers');
 
@@ -28,6 +30,17 @@ const SEQ_BAD = [
   '@enduml',
 ].join('\n');
 
+async function openMethodAudit(page) {
+  await page.keyboard.press('Control+k');
+  await page.locator('#cp-input').fill('メソッド突合');
+  await page.waitForTimeout(250);
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#ab-modal')).toBeVisible();
+  await expect(page.locator('#ab-kind')).toHaveValue('method.issues');
+}
+
+const ROWS = '#ab-body .ab-row[data-ab-kind="method.issues"]';
+
 async function typeDsl(page, text) {
   await page.evaluate((t) => {
     const ed = /** @type {HTMLTextAreaElement} */ (document.getElementById('editor'));
@@ -47,25 +60,23 @@ test.describe('メソッド突合 (BLK-reviewer-0143)', () => {
     await typeDsl(page, CLS);
     await page.locator('#btn-tab-new').click();
     await typeDsl(page, SEQ_OK);
-    await page.locator('#btn-tab-audit').click();
-    await expect(page.locator('#na-modal')).toBeVisible();
-    await expect(page.locator('#na-no-methods')).toBeVisible();
-    await expect(page.locator('#na-method-summary')).toHaveAttribute('data-issues', '0');
+    await openMethodAudit(page);
+    await expect(page.locator('#ab-body .ab-empty')).toBeVisible();
+    await expect(page.locator(ROWS)).toHaveCount(0);
   });
 
   test('クラス無し / メソッド無し / 引数違いが 1 画面に並ぶ', async ({ page }) => {
     await typeDsl(page, CLS);
     await page.locator('#btn-tab-new').click();
     await typeDsl(page, SEQ_BAD);
-    await page.locator('#btn-tab-audit').click();
-    await expect(page.locator('#na-modal')).toBeVisible();
+    await openMethodAudit(page);
 
-    await expect(page.locator('#na-method-summary')).toHaveAttribute('data-issues', '3');
-    const kinds = await page.locator('#na-methods .na-method-row')
-      .evaluateAll((rows) => rows.map((r) => r.getAttribute('data-kind')));
-    expect(kinds).toEqual(['no-class', 'no-method', 'arity']);
+    await expect(page.locator(ROWS)).toHaveCount(3);
+    const kinds = await page.locator(ROWS)
+      .evaluateAll((rows) => rows.map((r) => r.getAttribute('data-ab-issue')));
+    expect(kinds.sort()).toEqual(['arity', 'no-class', 'no-method']);
 
-    const text = await page.locator('#na-methods').innerText();
+    const text = await page.locator('#ab-body').innerText();
     expect(text).toContain('Timer_Init() を呼んでいるが、Timer のクラスがどの図にも無い');
     expect(text).toContain('Uart_Recv() を呼んでいるが、Uart_Driver に宣言が無い');
     expect(text).toContain('Spi_Transmit() の引数が 1 個だが、Spi_Driver の宣言は 2 個');
@@ -76,8 +87,8 @@ test.describe('メソッド突合 (BLK-reviewer-0143)', () => {
     await page.locator('#btn-tab-new').click();
     await typeDsl(page, SEQ_BAD);
     const names = await page.evaluate(() => window.MA.workspace.list().map((d) => d.name));
-    await page.locator('#btn-tab-audit').click();
-    const row = page.locator('#na-methods .na-method-row[data-method="Timer_Init"]');
+    await openMethodAudit(page);
+    const row = page.locator(ROWS + '[data-ab-method="Timer_Init"]');
     await expect(row).toContainText(names[1]);
   });
 
@@ -85,15 +96,15 @@ test.describe('メソッド突合 (BLK-reviewer-0143)', () => {
     await typeDsl(page, CLS);
     await page.locator('#btn-tab-new').click();
     await typeDsl(page, '@startuml\nApp -> Uart_Driver : Uart_Recv(buf, len)\n@enduml');
-    await page.locator('#btn-tab-audit').click();
-    await expect(page.locator('#na-method-summary')).toHaveAttribute('data-issues', '1');
-    await page.locator('#na-close').click();
+    await openMethodAudit(page);
+    await expect(page.locator(ROWS)).toHaveCount(1);
+    await page.locator('#ab-close').click();
 
     // クラス図のタブへ戻って Uart_Recv を足す
     await page.locator('#tab-bar .tab').first().click();
     await typeDsl(page, CLS.replace('  +Uart_Send(buf, len): void',
       '  +Uart_Send(buf, len): void\n  +Uart_Recv(buf, len): void'));
-    await page.locator('#btn-tab-audit').click();
-    await expect(page.locator('#na-method-summary')).toHaveAttribute('data-issues', '0');
+    await openMethodAudit(page);
+    await expect(page.locator(ROWS)).toHaveCount(0);
   });
 });

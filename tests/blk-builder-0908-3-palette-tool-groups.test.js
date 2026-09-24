@@ -20,7 +20,8 @@ function noop() {}
 
 // 道具のコマンド (button 付き) と、道具でないコマンド (button 無し) を混ぜる。
 var COMMANDS = [
-  { id: 'tab-audit', title: '名前突合を開く / Name audit', hint: 'Tabs', button: 'btn-tab-audit', run: noop },
+  // BLK-owner-20260924-1332-prune: 🔍 名前突合の行は ▦ 突合ボードの行に畳んだので、確かめるの代表はボード。
+  { id: 'tab-cross', title: '突合ボード / Cross-check board', hint: 'Tabs', keywords: ['名前突合', 'name audit'], button: 'btn-tab-cross', run: noop },
   { id: 'tab-board', title: '変更サマリを開く / Change board', hint: 'Tabs', button: 'btn-tab-board', run: noop },
   { id: 'tab-handoff', title: '引き継ぎパッケージを作る / Handoff package', hint: 'Tabs', button: 'btn-tab-handoff', run: noop },
   { id: 'tab-template', title: 'テンプレートから新しい図を作る / Template', hint: 'Tabs', button: 'btn-tab-template', run: noop },
@@ -37,7 +38,7 @@ function byId(items, id) {
 describe('道具のコマンドは 6 分類に入る', () => {
   test('分類はツールメニューと同じ key になる', () => {
     var items = itemsOf();
-    expect(byId(items, 'tab-audit').group).toBe('check');
+    expect(byId(items, 'tab-cross').group).toBe('check');
     expect(byId(items, 'tab-board').group).toBe('review');
     expect(byId(items, 'tab-handoff').group).toBe('give');
     expect(byId(items, 'tab-template').group).toBe('make');
@@ -50,27 +51,30 @@ describe('道具のコマンドは 6 分類に入る', () => {
   });
 
   test('行のチップは分類名になる', () => {
-    expect(byId(itemsOf(), 'tab-audit').badge).toBe('確かめる');
+    expect(byId(itemsOf(), 'tab-cross').badge).toBe('確かめる');
     expect(byId(itemsOf(), 'tab-handoff').badge).toBe('渡す');
     expect(byId(itemsOf(), 'command:save').badge).toBe('コマンド');
   });
 
   test('題はツールメニューと同じ言い換えになる (メニューで覚えた語で引ける)', () => {
-    expect(byId(itemsOf(), 'tab-audit').title).toBe('名前の表記揺れ');
-    expect(byId(itemsOf(), 'tab-audit').title).toBe(TM.labelOf('btn-tab-audit'));
+    expect(byId(itemsOf(), 'tab-cross').title).toBe('突合ボード (表記揺れ・宣言なし・メソッドも 1 画面で)');
+    expect(byId(itemsOf(), 'tab-cross').title).toBe(TM.labelOf('btn-tab-cross'));
   });
 
   test('右端には道具の短い呼び名が残る (どの道具かが消えない)', () => {
-    expect(byId(itemsOf(), 'tab-audit').hint).toBe('名前突合');
+    expect(byId(itemsOf(), 'tab-template').hint).toBe('テンプレートから新しい図');
     expect(byId(itemsOf(), 'tab-handoff').hint).toBe('引き継ぎパッケージ');
   });
 
   test('元の題でもメニューの言い換えでも引ける', () => {
     var items = itemsOf();
+    expect(CP.filter(items, 'Cross-check').map(function(i) { return i.id; }))
+      .toContain('check:tab-cross');
+    // 旧 🔍 名前突合の語でもボードの行に当たる (Ctrl+K は 1 画面 1 行)。
     expect(CP.filter(items, 'Name audit').map(function(i) { return i.id; }))
-      .toContain('check:tab-audit');
+      .toContain('check:tab-cross');
     expect(CP.filter(items, '表記揺れ').map(function(i) { return i.id; }))
-      .toContain('check:tab-audit');
+      .toContain('check:tab-cross');
   });
 });
 

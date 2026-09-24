@@ -24,8 +24,9 @@ function checkItems() {
 describe('確かめる(突合)の入口は ツール ▾ の「確かめる」に揃う', () => {
   test('台帳の 6 機能はすべて「確かめる」に並ぶ', () => {
     var ids = checkItems();
-    // 突合ボード / 系統チェック / 名前突合 / トレース / 提出前チェック / 引き継ぎチェックリスト
-    ['btn-tab-cross', 'btn-tab-family', 'btn-tab-audit', 'btn-tab-trace',
+    // 突合ボード / 系統チェック / トレース / 提出前チェック / 引き継ぎチェックリスト
+    // (名前突合は BLK-owner-20260924-1332-prune で突合ボードの「名前/表記揺れ」に畳んだ)
+    ['btn-tab-cross', 'btn-tab-family', 'btn-tab-trace',
       'btn-tab-submit', 'btn-tab-handover'].forEach(function(id) {
       expect(ids).toContain(id);
     });

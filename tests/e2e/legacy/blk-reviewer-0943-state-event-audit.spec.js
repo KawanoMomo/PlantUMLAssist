@@ -63,11 +63,16 @@ test.describe('BLK-reviewer-0943 state の遷移イベントを突合する', ()
     await expect(page.locator('#ck-events')).not.toContainText('Timer_Ack');
   });
 
-  test('名前突合のメソッド突合にも同じ 1 件が並ぶ', async ({ page }) => {
+  // BLK-owner-20260924-1332-prune: 🔍 名前突合の画面は畳んだ。メソッド突合は ▦ 突合ボードの行で見る。
+  test('突合ボードのメソッドの行にも同じ 1 件が並ぶ', async ({ page }) => {
     await twoDocs(page);
-    await page.locator('#btn-tab-audit').click();
-    await expect(page.locator('#na-methods')).toContainText('Timer_StartConv');
-    await expect(page.locator('#na-methods')).toContainText('state の遷移');
+    await page.keyboard.press('Control+k');
+    await page.locator('#cp-input').fill('メソッド突合');
+    await page.waitForTimeout(250);
+    await page.keyboard.press('Enter');
+    const rows = page.locator('#ab-body .ab-row[data-ab-kind="method.issues"]');
+    await expect(rows).toContainText('Timer_StartConv');
+    await expect(rows).toContainText('state の遷移');
   });
 
   test('クラス側に宣言を足すと警告が消える', async ({ page }) => {

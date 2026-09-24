@@ -3,6 +3,8 @@
 // 表記揺れ 0 組・宣言なし 0 件は達成できるのに「メソッド突合」に指摘が大量に出て、
 // その大半が state の応答ラベル (Tick / Fault / Reset / ConvComplete) の過検出だった。
 // どれが本物か新人には判別できず、「0 件にしてから渡す」が達成できなかった。
+// BLK-owner-20260924-1332-prune: 🔍 名前突合の画面は畳んだ。同じ判定を ▦ 突合ボードの
+// 「メソッド」の行と、ボードの上の「対象外」1 行で見る (Ctrl+K「メソッド突合」で絞って開く)。
 const { test, expect } = require('@playwright/test');
 const { gotoApp } = require('../helpers');
 
@@ -46,8 +48,18 @@ async function openAudit(page, stateDsl) {
   await page.locator('#diagram-type').selectOption('plantuml-state');
   await page.waitForTimeout(400);
   await typeDsl(page, stateDsl);
-  await page.locator('#btn-tab-audit').click();
-  await expect(page.locator('#na-method-summary')).toBeVisible();
+  await openBoard(page);
+}
+
+const ROWS = '#ab-body .ab-row[data-ab-kind="method.issues"]';
+
+async function openBoard(page) {
+  await page.keyboard.press('Control+k');
+  await page.locator('#cp-input').fill('メソッド突合');
+  await page.waitForTimeout(250);
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#ab-modal')).toBeVisible();
+  await expect(page.locator('#ab-kind')).toHaveValue('method.issues');
 }
 
 test.describe('BLK-primary-1303 遷移イベントの過検出', () => {
@@ -57,20 +69,20 @@ test.describe('BLK-primary-1303 遷移イベントの過検出', () => {
 
   test('応答ラベルだけの図なら「一致しています」で 0 件になる', async ({ page }) => {
     await openAudit(page, STATE_CLEAN);
-    await expect(page.locator('#na-method-summary')).toHaveAttribute('data-issues', '0');
-    await expect(page.locator('#na-no-methods')).toBeVisible();
+    await expect(page.locator(ROWS)).toHaveCount(0);
+    await expect(page.locator('#ab-body .ab-empty')).toBeVisible();
   });
 
   test('Tick / Reset / ConvComplete は指摘の表に出ない', async ({ page }) => {
     await openAudit(page, STATE_CLEAN);
-    expect(await page.locator('.na-method-row[data-method="Tick"]').count()).toBe(0);
-    expect(await page.locator('.na-method-row[data-method="Reset"]').count()).toBe(0);
-    expect(await page.locator('.na-method-row[data-method="ConvComplete"]').count()).toBe(0);
+    expect(await page.locator(ROWS + '[data-ab-method="Tick"]').count()).toBe(0);
+    expect(await page.locator(ROWS + '[data-ab-method="Reset"]').count()).toBe(0);
+    expect(await page.locator(ROWS + '[data-ab-method="ConvComplete"]').count()).toBe(0);
   });
 
   test('何を対象外にしたかが画面に出る (黙って捨てない)', async ({ page }) => {
     await openAudit(page, STATE_CLEAN);
-    const ex = page.locator('#na-method-excluded');
+    const ex = page.locator('#ab-method-excluded');
     await expect(ex).toBeVisible();
     // ConvComplete / ConvError / Reset / Tick の 4 種。
     await expect(ex).toHaveAttribute('data-count', '4');
@@ -79,8 +91,8 @@ test.describe('BLK-primary-1303 遷移イベントの過検出', () => {
 
   test('接頭辞つきの遷移名は今までどおり指摘に出る', async ({ page }) => {
     await openAudit(page, STATE_BAD);
-    await expect(page.locator('#na-method-summary')).toHaveAttribute('data-issues', '1');
-    const row = page.locator('.na-method-row[data-method="Adc_Recalibrate"]');
+    await expect(page.locator(ROWS)).toHaveCount(1);
+    const row = page.locator(ROWS + '[data-ab-method="Adc_Recalibrate"]');
     await expect(row).toHaveCount(1);
     await expect(row).toContainText('Adc_Driver');
   });
@@ -88,8 +100,8 @@ test.describe('BLK-primary-1303 遷移イベントの過検出', () => {
   test('接頭辞の無い呼び出しは、受け手の名前で何が足りないかを言う', async ({ page }) => {
     await gotoApp(page);
     await typeDsl(page, '@startuml\nAdc_Driver -> ClockCtrl : EnableClock()\n@enduml');
-    await page.locator('#btn-tab-audit').click();
-    const row = page.locator('.na-method-row[data-method="EnableClock"]');
+    await openBoard(page);
+    const row = page.locator(ROWS + '[data-ab-method="EnableClock"]');
     await expect(row).toHaveCount(1);
     await expect(row).toContainText('ClockCtrl');
   });
