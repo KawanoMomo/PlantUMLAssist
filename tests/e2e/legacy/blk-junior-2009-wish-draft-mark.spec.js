@@ -37,21 +37,27 @@ async function clearDir(page) {
   }, DIR);
 }
 
+// BLK-builder-20260924-2255-2: 保存先の一覧は FILES の保存先の右クリック「保存先の一覧を開く」で中央の枠に開く
+// (BLK-owner-20260924-0637-1。scenarios/_scenario.js の openFolder と同じ経路)。旧経路 (見出しを押して
+// #folder-panel.open を待つ) は一覧を開かず、この spec は master でも全件赤だった。
 async function openFolder(page) {
-  // 保存先は既定で開いている (design 10a)。開いていれば畳んでから開き直し、一覧を今の中身で描き直す。
-  if (await page.locator('#folder-panel.open').count()) await page.locator('#btn-tab-folder').click();
-  await page.locator('#btn-tab-folder').click();
-  await page.waitForSelector('#folder-panel.open .folder-item');
+  await closeFolder(page);
+  await page.locator('#btn-tab-folder').click({ button: 'right' });
+  await page.locator('#files-ctx-menu [data-action="open-list"]').click();
+  await page.waitForSelector('#folder-panel.open.is-list .folder-item');
 }
 
 async function closeFolder(page) {
-  if (await page.locator('#folder-panel.open').count()) await page.locator('#btn-tab-folder').click();
-  await page.waitForSelector('#folder-panel.open', { state: 'detached' }).catch(() => {});
+  if (await page.locator('#folder-panel.is-list').count()) {
+    await page.locator('#folder-list-close').click();
+    await page.waitForSelector('#folder-panel:not(.is-list)', { state: 'attached' });
+  }
 }
 
 // 一覧に「今この場に出ている」図の名前。畳まれた控えはここに現れない。
+// BLK-builder-20260924-2255-2: 畳んだ控えの行は FILES ツリーが読むために見えない入れ物に置くので、見えている行だけを数える。
 async function visibleNames(page) {
-  return page.locator('#folder-panel .folder-item').evaluateAll(
+  return page.locator('#folder-panel .folder-item:visible').evaluateAll(
     (els) => els.map((e) => e.getAttribute('data-file-name')));
 }
 

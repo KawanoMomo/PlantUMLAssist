@@ -291,6 +291,36 @@ test('手順8 FILES ツリー下端の 1 行は、開いているタブではな
   await expect(page.locator('#files-summary')).toHaveText(/^4 図/);
 });
 
+// BLK-builder-20260924-2255-2 (design 10a「一時控えは「控え」」・下端「12 図 未反映 1 控え 1」): 右クリックで
+// 一時控えにした図がツリーから消え、部品の枚数から外れて未作成の略号に出ていた。控えは「控え」の札で残る。
+test('手順8 一時控えにした図は FILES ツリーに「控え」の札で残り、枚数にも入る', async ({ page }) => {
+  await seedParts(page);
+  await expandPart(page, 'spi');
+  const head = page.locator('#files-parts .files-part-head[data-part="spi"]');
+  await expect(head).toContainText('3 / 6');
+
+  await treeFile(page, 'spi_class').click({ button: 'right' });
+  await page.locator('#files-ctx-menu [data-action="draft"]').click();
+
+  // 到達条件その1: 行は消えず、札が「控え」。部品の枚数・未作成の略号・保存先の件数・下端の 1 行は控えも数える。
+  await expect(treeFile(page, 'spi_class')).toBeVisible();
+  await expect(treeFile(page, 'spi_class')).toHaveAttribute('data-marks', '控え');
+  await expect(head).toContainText('3 / 6');
+  await expect(page.locator('#files-parts .files-part-missing-kind[data-part="spi"][data-kind="class"]')).toHaveCount(0);
+  await expect(page.locator('#files-count-target')).toHaveText('4');
+  await expect(page.locator('#files-summary')).toHaveText('4 図 · 控え 1');
+
+  // 到達条件その2: 控えの行を押せば開ける。
+  await treeFile(page, 'spi_class').click();
+  await expect.poll(() => page.locator('#editor').inputValue()).toContain('class Spi_Driver');
+
+  // 保存先の一覧 (中央の枠) では今までどおり控えを畳む。
+  await S.openFolder(page);
+  await expect(page.locator('#folder-panel .folder-draft-toggle')).toContainText('一時控え 1 件を出す');
+  await expect(page.locator('#folder-panel .folder-item[data-file-name="spi_class"]')).toBeHidden();
+  await expect(page.locator('#folder-panel .folder-item[data-file-name="spi_state"]')).toBeVisible();
+});
+
 test('手順8 FILES ツリーのファイルを右クリックすると 10b の操作が揃い、「開く」で開き直せる', async ({ page }) => {
   await seedParts(page);
   await expandPart(page, 'spi');

@@ -13861,7 +13861,7 @@ function setupTabs() {
     kids.forEach(function(c) {
       var cl = c.classList;
       if (!cl) return;
-      if (cl.contains('folder-row') || cl.contains('folder-draft-head') || cl.contains('folder-gone') ||
+      if (cl.contains('folder-row') || cl.contains('folder-draft-head') || cl.contains('folder-draft-body') || cl.contains('folder-gone') ||
           (cl.contains('folder-item') && c.hasAttribute('data-file-name'))) {
         panel.insertBefore(c, ref);
       }
@@ -13886,11 +13886,22 @@ function setupTabs() {
     });
     bar.appendChild(b);
     panel.appendChild(bar);
-    if (_draftCollapsed) return;
+    // BLK-builder-20260924-2255-2 (design 10a「一時控えは「控え」」): FILES ツリーはこの一覧の行を読んで組む。
+    // 畳んだ控えの行を作らないと、控えにした図がツリーから消え、部品の枚数・未作成の略号・下端の「N 図」から
+    // 外れていた。畳んでいる間も行は作り、見えない入れ物 (.folder-draft-body) に入れる。一覧では見えず、
+    // 絞り込みの数 (applyFolderFilter) と「全部選ぶ」(setFolderNames) にも入らない。
+    var host = panel;
+    if (_draftCollapsed) {
+      host = document.createElement('div');
+      host.className = 'folder-draft-body';
+      host.hidden = true;
+      host.style.display = 'none';
+      panel.appendChild(host);
+    }
     drafts.forEach(function(e) {
       var row = factory(e);
       if (row && row.classList) row.classList.add('folder-row-draft');
-      panel.appendChild(row);
+      host.appendChild(row);
     });
   }
 
@@ -16201,7 +16212,10 @@ function setupTabs() {
     var FF = window.MA.folderFilter;
     if (!FF) return;
     var shown = 0;
-    var rows = panel.querySelectorAll('[data-file-name]');
+    // 畳んだ一時控え (.folder-draft-body。FILES ツリーが読むためだけに置く行) は一覧に出ていないので数えない。
+    var rows = Array.prototype.filter.call(panel.querySelectorAll('[data-file-name]'), function(el) {
+      return !(el.closest && el.closest('.folder-draft-body'));
+    });
     for (var i = 0; i < rows.length; i++) {
       var el = rows[i];
       var name = el.getAttribute('data-file-name');
