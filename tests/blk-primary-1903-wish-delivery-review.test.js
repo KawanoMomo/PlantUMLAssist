@@ -89,32 +89,16 @@ describe('delivery-review — 提出前レビュー', function() {
     expect(DR.summaryLine(null)).toBe('見比べていません');
   });
 
-  test('見比べる順は 変更 → 新規 → 変更なし', function() {
-    var rows = DR.plan([
-      { name: 'c', status: 'same' },
-      { name: 'a', status: 'new' },
-      { name: 'b', status: 'changed' },
-      { name: 'd', status: 'changed' },
-    ]);
-    expect(rows.map(function(r) { return r.name; })).toEqual(['b', 'd', 'a', 'c']);
-    expect(DR.firstOf([{ name: 'x', status: 'same' }, { name: 'y', status: 'changed' }])).toBe('y');
-    expect(DR.firstOf([])).toBe(null);
-  });
-
-  test('見出しは、何枚のうち何枚を見比べるのかを開いた瞬間に言う', function() {
-    expect(DR.headline([
-      { name: 'a', status: 'changed' }, { name: 'b', status: 'new' }, { name: 'c', status: 'same' },
-    ])).toBe('3 枚のうち 変更 1 枚 ・ 新規 1 枚 を見比べます');
-    expect(DR.headline([{ name: 'a', status: 'same' }])).toContain('変わっていません');
-    expect(DR.headline([])).toBe('対象の図がありません');
-  });
-
-  test('並べる / 重ねるはボタン 1 つで往復する', function() {
-    expect(DR.toggleMode('side')).toBe('overlay');
-    expect(DR.toggleMode('overlay')).toBe('side');
-    expect(DR.modeLabel('overlay')).toContain('重ねて');
-    expect(DR.modeLabel('side')).toContain('並べて');
-    expect(DR.overlayCss()).toContain('.dr-stack');
+  // BLK-primary-20260924-1332-wish: 専用画面 (#dr-modal) を ▤ 変更サマリボードに畳んだので、
+  // 画面の並べ順・見出し・並べる/重ねるの往復 (plan / firstOf / headline / toggleMode / modeLabel /
+  // overlayCss) はボードと show-before-after の職掌になり、ここからは消した。
+  // ボードは「変更前 =」で比べる相手を選ぶので、1 行の言い方はその名前で言う。
+  test('1 行の言い方は、比べた相手 (変更前 =) の名前で言う', function() {
+    expect(DR.summaryLine(DR.diff(svg(['App']), svg(['App'])), '前回の会議')).toContain('前回の会議と同じ');
+    expect(DR.summaryLine(DR.diff('', svg(['App'])), '前回の会議')).toContain('前回の会議には入っていません');
+    expect(DR.summaryLine(DR.diff('', svg(['App'])))).toContain('前回提出には入っていません');
+    expect(typeof DR.plan).toBe('undefined');
+    expect(typeof DR.overlayCss).toBe('undefined');
   });
 });
 

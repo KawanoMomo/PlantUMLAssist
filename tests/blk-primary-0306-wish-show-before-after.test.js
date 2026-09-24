@@ -25,10 +25,12 @@ function entry(over) {
 }
 
 describe('show-before-after 切替', function() {
-  test('1 ボタンで 並べる → 変更前だけ → 変更後だけ → 並べる と回る', function() {
+  // BLK-primary-20260924-1332-wish: 旧 🔍 提出前レビューの「重ねる」を同じ切替の 1 段に足した。
+  test('1 ボタンで 並べる → 変更前だけ → 変更後だけ → 重ねる → 並べる と回る', function() {
     expect(SBA.nextSide(SBA.BOTH)).toBe(SBA.BEFORE);
     expect(SBA.nextSide(SBA.BEFORE)).toBe(SBA.AFTER);
-    expect(SBA.nextSide(SBA.AFTER)).toBe(SBA.BOTH);
+    expect(SBA.nextSide(SBA.AFTER)).toBe(SBA.OVERLAY);
+    expect(SBA.nextSide(SBA.OVERLAY)).toBe(SBA.BOTH);
   });
 
   test('知らない値からでも回り始められる', function() {
@@ -40,6 +42,7 @@ describe('show-before-after 切替', function() {
     expect(SBA.sideLabel(SBA.BOTH)).toBe('並べる');
     expect(SBA.sideLabel(SBA.BEFORE)).toBe('変更前だけ');
     expect(SBA.sideLabel(SBA.AFTER)).toBe('変更後だけ');
+    expect(SBA.sideLabel(SBA.OVERLAY)).toBe('重ねる');
   });
 
   test('並べるときは 2 枚とも、片側のときはその側だけ見せる', function() {
@@ -47,6 +50,9 @@ describe('show-before-after 切替', function() {
     expect(SBA.shows(SBA.BOTH, SBA.AFTER)).toBe(true);
     expect(SBA.shows(SBA.BEFORE, SBA.AFTER)).toBe(false);
     expect(SBA.shows(SBA.AFTER, SBA.AFTER)).toBe(true);
+    // 重ねるときは 2 枚とも出す (同じ位置に重ねるのは画面の職掌)
+    expect(SBA.shows(SBA.OVERLAY, SBA.BEFORE)).toBe(true);
+    expect(SBA.shows(SBA.OVERLAY, SBA.AFTER)).toBe(true);
     // 側が決まっていないうちは並べる (顧客の前で空の画面を出さない)
     expect(SBA.shows('', SBA.BEFORE)).toBe(true);
   });

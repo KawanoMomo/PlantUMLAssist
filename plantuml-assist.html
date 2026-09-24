@@ -3901,6 +3901,10 @@ table.vault-table button.vault-open:hover { border-color: var(--accent); }
 #dg-note-targets label.skip { color: var(--text-secondary); text-decoration: line-through; }
 .board-tools { margin-left: auto; display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
 .board-tools > * { flex: none; }   /* 文字が 1 文字ずつ縦に潰れないようにする */
+/* 道具の列そのものは見出しの残り幅に収め、入り切らない道具を次の行に送る。列ごと縮めずに
+   置くと 1280px 幅で「閉じる」が画面の外に出ていた (BLK-primary-20260924-1332-wish)。 */
+.board-head > .board-tools { flex: 1 1 0; min-width: 240px; justify-content: flex-end; }
+#cb-base { max-width: 16em; }
 .board-tools label { display: flex; align-items: center; gap: 4px; color: var(--text-secondary); cursor: pointer; }
 .board-tools button {
   border: 1px solid var(--border);
@@ -3980,6 +3984,24 @@ table.vault-table button.vault-open:hover { border-color: var(--accent); }
 .diff-board .cb-show { display: flex; gap: 10px; padding: 8px 10px 12px 10px; align-items: flex-start; }
 .diff-board .cb-show .cb-pane { flex: 1; min-width: 0; }
 .diff-board .cb-show .cb-pane[hidden] { display: none; }
+/* 切替の「重ねる」(BLK-primary-20260924-1332-wish、旧 🔍 提出前レビューの重ね表示)。
+   変更前を薄い赤で下に敷き、変更後を同じ位置に重ねる。SVG は触らず包む側で染める。 */
+.diff-board .cb-show[data-side="overlay"] { display: block; position: relative; }
+.diff-board .cb-show[data-side="overlay"] .cb-pane[data-side="before"] {
+  position: absolute; left: 10px; right: 10px; top: 8px; pointer-events: none; z-index: 0;
+}
+.diff-board .cb-show[data-side="overlay"] .cb-pane[data-side="before"] .cb-pane-label { visibility: hidden; }
+.diff-board .cb-show[data-side="overlay"] .cb-pane[data-side="before"] .cb-pane-body svg {
+  filter: grayscale(1) sepia(1) saturate(6) hue-rotate(310deg) opacity(0.45);
+  background: transparent !important;
+}
+.diff-board .cb-show[data-side="overlay"] .cb-pane[data-side="before"]:has(.cb-pane-empty) { display: none; }
+.diff-board .cb-show[data-side="overlay"] .cb-pane[data-side="after"] { position: relative; z-index: 1; }
+.diff-board .cb-show[data-side="overlay"] .cb-pane[data-side="after"] .cb-pane-body { background: transparent; }
+.diff-board .cb-show[data-side="overlay"] .cb-pane[data-side="after"] .cb-pane-body svg { background: transparent !important; }
+.diff-board .cb-show[data-side="overlay"] .cb-pane[data-side="after"] .cb-pane-label::after {
+  content: " に変更前 (薄い赤) を重ねています";
+}
 .diff-board .cb-show .cb-pane-label {
   font-size: 11px; color: var(--text-secondary); padding: 0 0 4px 2px;
 }

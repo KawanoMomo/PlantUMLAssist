@@ -5664,7 +5664,11 @@ function _cbPutSvgDiff(name, pair) {
   if (!slot) return;
   var esc = window.MA.htmlUtils.escHtml;
   var d = DR.diff(pair.before || '', pair.after || '');
-  var html = '<div class="cb-svg-diff-line" data-kind="' + esc(d.kind) + '">' + esc(DR.summaryLine(d)) + '</div>';
+  // 何と比べたかは「変更前 =」の選択で言う (前回の会議 / 前回提出。今日 0 時は「変更前」)。
+  var BL = window.MA.changeBaseline;
+  var k = _cbBaseKind();
+  var base = (BL && k !== 'today') ? BL.labelOf(k) : '変更前';
+  var html = '<div class="cb-svg-diff-line" data-kind="' + esc(d.kind) + '">' + esc(DR.summaryLine(d, base)) + '</div>';
   if (d.added.length) html += '<div class="cb-svg-added">増えた文字: ' + esc(d.added.join(' / ')) + '</div>';
   if (d.removed.length) html += '<div class="cb-svg-removed">消えた文字: ' + esc(d.removed.join(' / ')) + '</div>';
   d.shape.forEach(function(sh) {
@@ -25493,9 +25497,6 @@ function openDeliveryPanel() {
       }
     });
   }
-  // 見比べ用に描いた SVG も捨てる (前に開いたときの絵を今の puml として見せない)。
-  _drCache = {};
-  _drName = null;
   var content = document.getElementById('dp-modal-content');
   if (content) content.innerHTML = '';
   // 保存フォルダ全体が対象の的。読み終わったら _dpLoadFolder が描き直す。
@@ -25566,8 +25567,6 @@ function buildDeliveryPackage() {
 // ── 提出前レビュー (変更前後を並べて出す) ─────────────────────────────────
 // BLK-primary-20260908-1903-wish: 納品パッケージは「差分の行数」までしか言わず、
 // 客の目に何が違って見えるかはタブを 1 枚ずつ切り替えて見比べるしかなかった。
-var _drName = null;
-var _drCache = {};
 
 // BLK-primary-20260924-1332-wish: 🔍 提出前レビュー (#dr-modal) は ▤ 変更サマリボードに畳んだ。
 // 「前回提出と今を図で並べる」は、ボードを 変更前 = 前回提出・🖼 SVGで見る で開くことと同じ。

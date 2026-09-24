@@ -4,7 +4,7 @@
 // 切り替えて見比べるしかなかった。前回提出時点の図と今の図を並べて / 重ねて出す。
 // BLK-primary-20260924-1332-wish: 🔍 提出前レビューの画面 (#dr-modal) は ▤ 変更サマリボードに畳んだ。
 // 同じ事実を、ボードを 変更前 = 前回提出・🖼 SVGで見る で開いた画面で見る形に書き換えた
-// (「重ねて表示」はボードの 🖼 表示の切替へ移す作業が残っているので、その 1 件はここでは見ない)。
+// (「重ねて表示」はボードの 🖼 表示の「切替」の 1 段になった)。
 const { test, expect } = require('@playwright/test');
 const { gotoApp } = require('../helpers');
 
@@ -75,6 +75,15 @@ test.describe('BLK-primary-1903-wish 提出前レビュー (▤ 変更サマリ�
     await expect(entry.locator('.cb-svg-diff')).toContainText('見た目が変わっています', { timeout: 20000 });
     await expect(entry.locator('.cb-svg-added')).toContainText('AdcDriver');
     await expect(entry.locator('.cb-svg-removed')).toContainText('Adc');
+    // 重ねる: 切替を 3 回押すと 変更前だけ → 変更後だけ → 重ねる
+    const flip = entry.locator('.cb-flip');
+    await flip.click();
+    await flip.click();
+    await flip.click();
+    await expect(flip).toHaveText('切替: 重ねる');
+    await expect(entry.locator('.cb-show')).toHaveAttribute('data-side', 'overlay');
+    await expect(entry.locator('.cb-pane-body svg')).toHaveCount(2);
+    await expect(entry.locator('.cb-pane[data-side="after"] .cb-pane-label')).toBeVisible();
   });
 
   test('前回提出に無い図は「新規の図です」と言う', async ({ page }) => {
