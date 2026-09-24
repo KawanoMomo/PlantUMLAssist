@@ -28,7 +28,8 @@ window.MA.toolMenu = (function() {
     { key: 'find', title: '探す', items: [
       { id: 'btn-tab-symptom', label: '症状から関連図を探す', group: '図をたどる' },
       { id: 'btn-tab-blame',   label: '部品名の混入点を探す', group: '図をたどる' },
-      { id: 'btn-tab-xref',    label: '部品名で図をまたいで辿る', group: '図をたどる' },
+      // BLK-owner-20260924-0852-prune: 🕸 参照関係の画面は畳み、旧名のまま ▤ 影響を見る を開く案内にした。
+      { id: 'btn-tab-xref',    label: '部品名で図をまたいで辿る → ▤ 影響を見る', group: '図をたどる' },
     ] },
     { key: 'check', title: '確かめる', items: [
       { id: 'btn-tab-audit',          label: '名前の表記揺れ', group: '名前と系統' },
