@@ -123,11 +123,15 @@ async function closeFolderList(page) {
   }
 }
 
-async function openFolderItem(page, name) {
+// 1 回押しは仮のタブ (次の 1 回押しで中身が入れ替わる)。何枚もタブに並べておく手順は
+// opts.pin でダブルクリックし、固定のタブにする (BLK-primary-20260924-0805-design)。
+async function openFolderItem(page, name, opts) {
   await openFolder(page);
   const filter = page.locator('#folder-filter');
   if (await filter.count()) await filter.fill('');
-  await page.locator('#folder-panel .folder-item[data-file-name="' + name + '"]').first().click();
+  const item = page.locator('#folder-panel .folder-item[data-file-name="' + name + '"]').first();
+  if (opts && opts.pin) await item.dblclick();
+  else await item.click();
   await page.waitForTimeout(900);
 }
 

@@ -688,9 +688,11 @@ test('手順4 会議で見せる 3 枚を選んで並べ、各図の変更前後
   await S.bootWithSaveDir(page, DIR7);
   await S.clearDir(page, DIR7);
   // 会議で見せる 3 枚と、今日変わったが会議では見せない 1 枚 (混ざる側)。
+  // 4 枚ともタブに並べて置換をかける。1 回押しは仮のタブで次の図に入れ替わるので、
+  // ダブルクリックで固定のタブにする (BLK-primary-20260924-0805-design)。
   for (const name of ['spi_init_sequence', 'spi_state', 'driver_common_class', 'can_init_sequence']) {
     await S.putDoc(page, DIR7, name, S.docFor(name, 'SpiDrv'));
-    await S.openFolderItem(page, name);
+    await S.openFolderItem(page, name, { pin: true });
   }
 
   await bulkRename(page, 'SpiDrv', 'Spi_Driver');
@@ -880,7 +882,10 @@ test('手順4 前回保存からの差分は変わった図の数で出て、Ctr
   const A = '@startuml\nparticipant SpiDrv\nSpiDrv -> Reg : write(CR1)\n@enduml';
   const B = '@startuml\nparticipant AdcDrv\nAdcDrv -> Reg : read(DR)\n@enduml';
   const C = '@startuml\nclass SpiDrv\nclass AdcDrv\n@enduml';
-  await S.bootPlain(page);
+  // 保存先を決めていない状態で開く。bootPlain は localStorage を空にするだけで、server の
+  // .assist-prefs.json (全体実行で先に走った junior-03 が保存先フォルダを書く) を引き継ぐ。
+  // 引き継ぐと直した図が 1 秒後に自動でフォルダへ書かれて「前回保存」が今になり、差分 0 で落ちていた。
+  await S.bootDownloadMode(page);
   await S.typeDsl(page, A);
   await page.locator('#btn-tab-new').click();
   await S.typeDsl(page, B);
