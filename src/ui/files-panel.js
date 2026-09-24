@@ -293,6 +293,9 @@ window.MA.filesPanel = (function() {
     }
     if (st.note) b.appendChild(_noteEl(f.name, st.note));
     b.addEventListener('click', function() { _clickFolderItem(f.name); });
+    // design 10a (BLK-builder-20260924-1743-1): ダブルクリックでタブとして固定する。1 回押しは仮のタブのまま。
+    // 固定の道は保存先の一覧の行のダブルクリックと同じ 1 本 (その行へ渡す)。
+    b.addEventListener('dblclick', function() { _dblclickFolderItem(f.name); });
     return b;
   }
 
@@ -348,6 +351,15 @@ window.MA.filesPanel = (function() {
     if (typeof window.createPartKinds !== 'function') return;
     var names = _folderNames().map(function(e) { return e.name; });
     window.createPartKinds(part, kinds, names);
+  }
+
+  function _dblclickFolderItem(name) {
+    var it = document.querySelector(_itemSel(name));
+    if (!it) return;
+    var ev;
+    try { ev = new window.MouseEvent('dblclick', { bubbles: true, cancelable: true }); }
+    catch (e) { ev = document.createEvent('MouseEvents'); ev.initEvent('dblclick', true, true); }
+    it.dispatchEvent(ev);
   }
 
   function renderParts() {

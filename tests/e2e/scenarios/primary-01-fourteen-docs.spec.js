@@ -110,4 +110,17 @@ test('手順1 14 枚を 1 回押しで見て回ってもタブは 1 枚だけ増
   await expect(page.locator('#tab-bar .tab.active')).toHaveAttribute('data-doc-name', c);
   await expect(tabs).toHaveCount(before + 3);
   await expect(page.locator('#tab-bar .tab.active')).not.toHaveAttribute('data-preview', '1');
+
+  // BLK-builder-20260924-1743-1 (design 10a): 普段見て回る FILES ツリーの保存先の行でも同じ。
+  // 1 回押しは仮のタブ、ダブルクリックで固定のタブ。
+  await S.closeFolderList(page);
+  const gpio = page.locator('#files-parts .files-part-head[data-part="gpio"]');
+  if ((await gpio.getAttribute('aria-expanded')) !== 'true') await gpio.click();
+  const treeRow = (n) => page.locator('#files-parts .files-part-file[data-file-name="' + n + '"]');
+  await treeRow('gpio_state').click();
+  await expect(page.locator('#tab-bar .tab.active')).toHaveAttribute('data-doc-name', 'gpio_state');
+  await expect(page.locator('#tab-bar .tab.active')).toHaveAttribute('data-preview', '1');
+  await treeRow('gpio_state').dblclick();
+  await expect(page.locator('#tab-bar .tab[data-doc-name="gpio_state"]')).not.toHaveAttribute('data-preview', '1');
+  await expect(page.locator('#tab-bar .tab[data-doc-name="gpio_state"] .tab-label')).toHaveCSS('font-style', 'normal');
 });
