@@ -17,13 +17,26 @@ async function exportOpenDocs(page, timeout) {
   return dl;
 }
 
+// BLK-builder-20260924-2152-4-red: 保存先の一覧の 1 回押しは仮のタブで開き、次の 1 回押しで入れ替わる
+// (BLK-primary-20260924-0805-design)。「開いている全図」を揃えるには、ダブルクリックで固定のタブにして開く。
+async function openPinned(page, name) {
+  await S.openFolder(page);
+  const filter = page.locator('#folder-filter');
+  if (await filter.count()) await filter.fill('');
+  await page.locator('#folder-panel .folder-item[data-file-name="' + name + '"]').first().dblclick();
+  await expect.poll(() => page.evaluate((n) => {
+    const d = window.MA.workspace.list().find((x) => x.name === n);
+    return !!d && !d.preview;
+  }, name)).toBe(true);
+}
+
 test('手順9 開いている全図を SVG の zip で 1 度に書き出せる', async ({ page }) => {
   test.setTimeout(90 * 1000);
   await S.bootWithSaveDir(page, DIR);
   await S.clearDir(page, DIR);
   for (const n of ['spi_init_sequence', 'spi_state', 'can_state']) {
     await S.putDoc(page, DIR, n, S.docFor(n));
-    await S.openFolderItem(page, n);
+    await openPinned(page, n);
   }
 
   const download = await (await exportOpenDocs(page, 60000));
@@ -41,7 +54,7 @@ test('手順9 2 度目は前回書き出しからの差分が出て、変わっ�
   await S.clearDir(page, DIR);
   for (const n of NAMES) {
     await S.putDoc(page, DIR, n, S.docFor(n));
-    await S.openFolderItem(page, n);
+    await openPinned(page, n);
   }
 
   // 1 度目。ここが次回の基準になる。
@@ -56,7 +69,7 @@ test('手順9 2 度目は前回書き出しからの差分が出て、変わっ�
   // 控えは localStorage ではなく保存フォルダにあるので開き直しても残る。
   await S.putDoc(page, DIR, 'spi_state', S.docFor('spi_state') + "\n' 追記\n");
   await S.bootWithSaveDir(page, DIR);
-  for (const n of NAMES) await S.openFolderItem(page, n);
+  for (const n of NAMES) await openPinned(page, n);
 
   await page.locator('#btn-export').click();
   await page.waitForSelector('#export-menu', { state: 'visible' });
