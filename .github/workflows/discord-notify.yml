@@ -1,0 +1,41 @@
+name: discord-notify
+
+# リリース PR が開いたとき / Release が公開されたときに Discord へ 1 行通知する。
+# 送るのはタイトル・URL・タグ名だけ(図や DSL は送らない)。
+# 事前に Settings > Secrets > Actions に DISCORD_WEBHOOK(Discord の Webhook URL)を登録する。
+on:
+  pull_request:
+    types: [opened, reopened]
+    branches: [master]
+  release:
+    types: [published]
+
+jobs:
+  notify:
+    if: github.event_name == 'release' || startsWith(github.head_ref, 'release/')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post to Discord
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          EVENT: ${{ github.event_name }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_HEAD: ${{ github.head_ref }}
+          REL_TAG: ${{ github.event.release.tag_name }}
+          REL_URL: ${{ github.event.release.html_url }}
+        run: |
+          if [ -z "$WEBHOOK" ]; then echo "DISCORD_WEBHOOK が未設定なので通知しない"; exit 0; fi
+          if [ "$EVENT" = "release" ]; then
+            MSG="📦 PlantUMLAssist Release ${REL_TAG} を公開しました(インストーラ付き)\n${REL_URL}"
+          else
+            MSG="🚂 PlantUMLAssist リリース PR: ${PR_TITLE}(${PR_HEAD} → master)\n${PR_URL}"
+          fi
+          python3 - "$WEBHOOK" "$MSG" <<'PY'
+          import json, sys, urllib.request
+          url, msg = sys.argv[1], sys.argv[2].replace('\n', '\n')
+          req = urllib.request.Request(url, data=json.dumps({'content': msg}).encode('utf-8'),
+                                       headers={'Content-Type': 'application/json', 'User-Agent': 'discord-notify'})
+          with urllib.request.urlopen(req, timeout=20) as r:
+              print('discord', r.status)
+          PY
