@@ -1833,6 +1833,16 @@ window.MA.modules.plantumlClass = (function() {
     refresh();
   }
 
+  // BLK-builder-20260924-1305-2 (design 4a):「Class · 6 行目」の見出しと、選んだクラスの名前。
+  function _selHeadHtml(kindWord, element) {
+    var H = window.MA.htmlUtils;
+    var name = element.label || element.id;
+    return '<div id="cl-sel-head" style="font-size:10px;color:var(--accent);margin-bottom:2px;font-weight:bold;">' +
+        H.escHtml(kindWord) + ' · ' + element.line + ' 行目</div>' +
+      '<div id="cl-sel-name" style="font-size:14px;font-weight:bold;color:var(--text-primary);margin-bottom:8px;word-break:break-all;">' +
+        H.escHtml(name) + '</div>';
+  }
+
   function _renderElementEdit(element, parsedData, propsEl, ctx, opts) {
     var P = window.MA.properties;
     var GP = window.MA.groupPlace;
@@ -1845,22 +1855,21 @@ window.MA.modules.plantumlClass = (function() {
     var html =
       '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Class Diagram</div>' +
       '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' +
-        kindLabel + ' (L' + element.line + ')</label>' +
+        // BLK-builder-20260924-1305-2 (design 4a): 見出しは「Class · 6 行目」と、その下に選んだクラスの名前。
+        _selHeadHtml(kindLabel, element) +
         // design 4a「種別 / Kind」: 宣言のキーワードをその場で切り替える
         _kindToggleHtml(element.kind) +
-        P.fieldHtml('Alias (id)', 'cl-edit-id', element.id) +
+        P.fieldHtml('名前 (id)', 'cl-edit-id', element.id) +
         // BLK-reviewer-20260915-0506-wish: クラス名を打つのはここ。登録簿の
         // 正式表記を欄の下に出し、揺れた綴りならその場で揃える先を言う。
         P.vocabPickerHtml('cl-edit-id-vocab', { roles: ['type'] }) +
-        P.fieldHtml('Label', 'cl-edit-label', element.label || '') +
-        P.fieldHtml('Stereotype', 'cl-edit-stereo', element.stereotype || '') +
+        P.fieldHtml('表示名', 'cl-edit-label', element.label || '') +
+        P.fieldHtml('ステレオタイプ', 'cl-edit-stereo', element.stereotype || '', '例: entity') +
         P.primaryButtonHtml('cl-edit-apply', '変更を反映') +
-        ' ' + P.primaryButtonHtml('cl-rename-refs', 'Alias 変更を関連 Relation にも追従') +
+        ' ' + P.primaryButtonHtml('cl-rename-refs', '名前の変更を関係の行にも反映') +
         '<div style="margin-top:8px;display:flex;gap:6px;">' +
           '<button id="cl-move-up" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↑ 上へ</button>' +
           '<button id="cl-move-down" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↓ 下へ</button>' +
-          '<button id="cl-delete" style="flex:0 0 60px;background:var(--accent-red);color:#fff;border:none;padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 削除</button>' +
         '</div>' +
         // BLK-junior-20260909-0703-wish: 手本の親を選んだまま派生を 1 つ起こす。
         '<button id="cl-derive-open" style="width:100%;margin-top:8px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">⬇ この親から派生を 1 つ作る</button>' +
@@ -1974,23 +1983,25 @@ window.MA.modules.plantumlClass = (function() {
     // Notes section
     var classNotes = (parsedData.notes || []).filter(function(n) { return n.targetId === element.id; });
     html += '<div style="border-top:1px solid var(--border);padding-top:8px;margin-top:8px;">' +
-            '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">Notes</div>';
+            '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">ノート</div>';
     if (classNotes.length === 0) {
-      html += '<div style="font-size:11px;color:var(--text-secondary);font-style:italic;">（このクラスへの note なし）</div>';
+      html += '<div style="font-size:11px;color:var(--text-secondary);font-style:italic;">（このクラスへのノートはありません）</div>';
     } else {
       classNotes.forEach(function(n, idx) {
         var preview = (n.text || '').replace(/\n/g, ' ⏎ ').slice(0, 40);
         if ((n.text || '').length > 40) preview += '...';
         html += '<div style="display:flex;align-items:center;gap:4px;font-size:11px;margin-bottom:2px;">' +
                   '<span style="flex:1;">' + n.position + ' "' + preview.replace(/[<>&]/g, '') + '" (L' + n.line + ')</span>' +
-                  '<button id="cl-note-edit-' + idx + '" data-line="' + n.line + '" data-end="' + n.endLine + '" data-id="' + n.id + '">edit</button>' +
-                  '<button id="cl-note-del-' + idx + '" data-line="' + n.line + '" data-end="' + n.endLine + '">✕</button>' +
+                  '<button id="cl-note-edit-' + idx + '" data-line="' + n.line + '" data-end="' + n.endLine + '" data-id="' + n.id + '">編集</button>' +
+                  '<button id="cl-note-del-' + idx + '" data-line="' + n.line + '" data-end="' + n.endLine + '">削除</button>' +
                 '</div>';
       });
     }
     html += '<div id="cl-add-note-form" style="margin-top:6px;"></div>' +
-            '<button id="cl-add-note-btn" style="margin-top:4px;">+ Note 追加</button>' +
-          '</div>';
+            '<button id="cl-add-note-btn" style="margin-top:4px;">＋ ノートを添える</button>' +
+          '</div>' +
+          // design 4a: 削除はパネルの末尾に「クラスを削除」。
+          '<button id="cl-delete" style="width:100%;margin-top:10px;background:var(--accent-red);color:#fff;border:none;padding:6px;border-radius:4px;font-size:12px;cursor:pointer;">クラスを削除</button>';
 
     propsEl.innerHTML = html;
     GP.bindEdit('cl-edit', parsedData.groups, element.line, ctx, element.id);
@@ -2287,11 +2298,10 @@ window.MA.modules.plantumlClass = (function() {
     var html =
       '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Class Diagram</div>' +
       '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">Enum (L' + element.line + ')</label>' +
-        P.fieldHtml('Alias (id)', 'cl-edit-id', element.id) +
-        P.fieldHtml('Stereotype', 'cl-edit-stereo', element.stereotype || '') +
+        _selHeadHtml('Enum', element) +
+        P.fieldHtml('名前 (id)', 'cl-edit-id', element.id) +
+        P.fieldHtml('ステレオタイプ', 'cl-edit-stereo', element.stereotype || '') +
         P.primaryButtonHtml('cl-edit-apply', '変更を反映') +
-        '<button id="cl-delete" style="margin-left:8px;background:var(--accent-red);color:#fff;border:none;padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 削除</button>' +
         GP.editFieldHtml('cl-edit', parsedData.groups, element.line) +
       '</div>' +
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-top:10px;">' +
@@ -2302,7 +2312,7 @@ window.MA.modules.plantumlClass = (function() {
     });
     html += P.fieldHtml('新しい値', 'cl-add-val-name', '', '例: PURPLE') +
             P.primaryButtonHtml('cl-add-val', '+ Value 追加') +
-            '</div>';
+            '</div>' + '<button id="cl-delete" style="width:100%;margin-top:10px;background:var(--accent-red);color:#fff;border:none;padding:6px;border-radius:4px;font-size:12px;cursor:pointer;">クラスを削除</button>';
     propsEl.innerHTML = html;
     GP.bindEdit('cl-edit', parsedData.groups, element.line, ctx, element.id);
 
