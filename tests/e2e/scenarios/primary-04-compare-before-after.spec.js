@@ -212,6 +212,16 @@ test('手順4 顧客の前で変更前後を図のまま切り替えて見せら
   await flip.click();                                    // 変更後だけ
   await expect(panes.nth(0)).toBeHidden();
   await expect(panes.nth(1)).toBeVisible();
+  // BLK-primary-20260924-1332-wish: 旧 🔍 提出前レビューの「重ねる」も同じボタンの 1 段。
+  await flip.click();                                    // 重ねる
+  await expect(flip).toHaveText('切替: 重ねる');
+  await expect(entry.locator('.cb-show')).toHaveAttribute('data-side', 'overlay');
+  await expect(panes.nth(0)).toBeVisible();
+  await expect(panes.nth(1)).toBeVisible();
+  // 変更前は変更後と同じ位置に敷かれる (横に並ばない)。
+  const b0 = await panes.nth(0).locator('.cb-pane-body').boundingBox();
+  const b1 = await panes.nth(1).locator('.cb-pane-body').boundingBox();
+  expect(b0 && b1 && Math.abs(b0.x - b1.x) < 4 && Math.abs(b0.y - b1.y) < 4).toBe(true);
   await flip.click();                                    // 並べる に戻る
   await expect(panes.nth(0)).toBeVisible();
   await expect(panes.nth(1)).toBeVisible();
@@ -802,4 +812,62 @@ test('手順4 資料セットの 3 枚を、開き直さず 1 回の操作で変
 
   await page.screenshot({ path: shotOut('primary-04-docset-before-after.png'), fullPage: true });
   await S.clearDir(page, DIR8);
+});
+
+// BLK-primary-20260924-1332-wish: ボードの「変更前」は今日 0 時、🔍 提出前レビューは前回提出しか無く、
+// 納品していない日にレビュー会議を開くと全部が「新規」になって、前の会議の後に直した差分を見せられなかった。
+// ボードの見出しの「変更前 =」で 今日 0 時 / 前回の会議 / 前回提出 を選べるようにした
+// (前回の会議 = 今日より前に最後に会議セットで並べた時点。保存フォルダに控える)。
+const DIR9 = S.dirFor(__filename) + '-lastmeeting';
+test('手順4 前回の会議を変更前にして、会議の後に直した図だけを変更として見せられる', async ({ page }) => {
+  const fs = require('fs');
+  const path = require('path');
+  const abs = S.absDirFor(__filename) + '-lastmeeting';
+  fs.rmSync(abs, { recursive: true, force: true });
+  await S.bootWithSaveDir(page, DIR9);
+  const NAMES = ['spi_state', 'spi_init_sequence', 'driver_common_class'];
+  for (const name of NAMES) await S.putDoc(page, DIR9, name, S.docFor(name, 'SpiDrv'));
+  // 下ごしらえ: 3 枚は一昨日からある図、前回の会議は昨日 (会議セットで並べた時点の控え)。
+  const twoDaysAgo = new Date(Date.now() - 2 * 86400000);
+  for (const name of NAMES) fs.utimesSync(path.join(abs, name + '.puml'), twoDaysAgo, twoDaysAgo);
+  const y = new Date(Date.now() - 86400000);
+  y.setHours(15, 0, 0, 0);
+  const meetingAt = y.toISOString();
+  await page.evaluate(async (a) => {
+    await fetch('/meeting-log', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dir: a.dir, at: a.at }) });
+  }, { dir: DIR9, at: meetingAt });
+  // 会議の後で 2 枚を直す (残り 1 枚は触らない)。
+  await S.putDoc(page, DIR9, 'spi_state', S.docFor('spi_state', 'SpiDriver'));
+  await S.putDoc(page, DIR9, 'spi_init_sequence', S.docFor('spi_init_sequence', 'SpiDriver'));
+  await S.reopenApp(page);
+
+  await page.locator('#btn-tab-board').click();
+  await expect(page.locator('#cb-modal')).toBeVisible();
+  const base = page.locator('#cb-base');
+  // 到達条件その1: 選択肢は 今日 0 時 / 前回の会議 / 前回提出。納品していないので前回提出は選べない。
+  await expect(base.locator('option[value="meeting"]')).not.toHaveAttribute('disabled', /.*/, { timeout: 10000 });
+  await expect(base.locator('option[value="delivery"]')).toHaveAttribute('disabled', /.*/);
+  await expect(base.locator('option[value="delivery"]')).toContainText('まだ納品していません');
+
+  // 到達条件その2: 前回の会議を選ぶと、直した 2 枚が「変更」で並び、触っていない 1 枚は並ばない。
+  await base.selectOption('meeting');
+  await expect(page.locator('#cb-summary')).toContainText('変更前 = 前回の会議');
+  const changed = ['spi_state', 'spi_init_sequence'];
+  for (const name of changed) {
+    const e = page.locator('#cb-body .cb-entry[data-doc-name="' + name + '"]');
+    await expect(e).toHaveCount(1, { timeout: 15000 });
+    await expect(e.locator('.cb-count')).toContainText('−', { timeout: 15000 });
+    await expect(e.locator('.cb-cols')).toContainText('変更前 (前回の会議');
+  }
+  await expect(page.locator('#cb-body .cb-entry[data-doc-name="driver_common_class"]')).toHaveCount(0);
+
+  // 到達条件その3: 同じ画面の 🖼 SVGで見る で、図の下に比べた相手の名前で差が出る。
+  await page.locator('#cb-svg').click();
+  const e0 = page.locator('#cb-body .cb-entry[data-doc-name="spi_state"]');
+  await expect(e0.locator('.cb-pane-body svg')).toHaveCount(2, { timeout: 25000 });
+  await expect(e0.locator('.cb-svg-diff')).toContainText('見た目が変わっています', { timeout: 25000 });
+  await expect(e0.locator('.cb-svg-added')).toContainText('SpiDriver');
+  await page.locator('#cb-close').click();
+  fs.rmSync(abs, { recursive: true, force: true });
 });

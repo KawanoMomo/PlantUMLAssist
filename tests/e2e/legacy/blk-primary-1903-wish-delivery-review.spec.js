@@ -2,6 +2,9 @@
 // BLK-primary-20260908-1903-wish 「提出前レビュー画面 (変更前後を並べて出す)」。
 // 納品パッケージが出すのは件数と行数だけで、何が変わったかはタブを 1 枚ずつ
 // 切り替えて見比べるしかなかった。前回提出時点の図と今の図を並べて / 重ねて出す。
+// BLK-primary-20260924-1332-wish: 🔍 提出前レビューの画面 (#dr-modal) は ▤ 変更サマリボードに畳んだ。
+// 同じ事実を、ボードを 変更前 = 前回提出・🖼 SVGで見る で開いた画面で見る形に書き換えた
+// (「重ねて表示」はボードの 🖼 表示の「切替」の 1 段になった)。
 const { test, expect } = require('@playwright/test');
 const { gotoApp } = require('../helpers');
 
@@ -39,72 +42,72 @@ async function submitThenEdit(page) {
   await setDsl(page, SEQ_B);
 }
 
-test.describe('BLK-primary-1903-wish 提出前レビュー', () => {
+test.describe('BLK-primary-1903-wish 提出前レビュー (▤ 変更サマリボードの 前回提出)', () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => { try { window.localStorage.clear(); } catch (e) {} });
   });
 
+  async function openReview(page) {
+    // BLK-owner-20260918-0329-prune: 入口は Export ▾ の「渡す」
+    await page.locator('#btn-export').click();
+    await page.locator('#exp-delivery').click();
+    await page.locator('#dp-review').click();
+    await expect(page.locator('#cb-modal')).toBeVisible();
+  }
+
   test('納品パッケージに「変更前後を見比べる」が出る', async ({ page }) => {
     await gotoApp(page);
-    // BLK-owner-20260918-0329-prune: 入口は Export ▾ の「渡す」
     await page.locator('#btn-export').click();
     await page.locator('#exp-delivery').click();
     await expect(page.locator('#dp-review')).toBeVisible();
   });
 
-  test('押すと前回提出と今回が並び、変わった文字を名指しする', async ({ page }) => {
+  test('押すとボードが 前回提出・SVG で開き、変わった文字を名指しする', async ({ page }) => {
     await submitThenEdit(page);
-    // BLK-owner-20260918-0329-prune: 入口は Export ▾ の「渡す」
-    await page.locator('#btn-export').click();
-    await page.locator('#exp-delivery').click();
-    await page.locator('#dp-review').click();
-    await expect(page.locator('#dr-modal')).toBeVisible();
-    // 変更のある図が最初に開く
-    await expect(page.locator('#dr-headline')).toContainText('変更 1 枚');
-    await expect(page.locator('#dr-summary')).toContainText('見た目が変わっています', { timeout: 20000 });
+    await openReview(page);
+    await expect(page.locator('#dp-modal')).toBeHidden();
+    await expect(page.locator('#cb-base')).toHaveValue('delivery');
+    await expect(page.locator('#cb-svg')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#cb-summary')).toContainText('変更前 = 前回提出');
+    const entry = page.locator('.cb-entry[data-doc-name="Adc_Seq"]');
     // 前回提出の SVG と今の SVG が両方描かれている
-    await expect(page.locator('#dr-view svg')).toHaveCount(2);
-    await expect(page.locator('#dr-added')).toContainText('AdcDriver');
-    await expect(page.locator('#dr-removed')).toContainText('Adc');
-  });
-
-  test('「重ねて表示」に切り替えると 2 枚が重なる', async ({ page }) => {
-    await submitThenEdit(page);
-    // BLK-owner-20260918-0329-prune: 入口は Export ▾ の「渡す」
-    await page.locator('#btn-export').click();
-    await page.locator('#exp-delivery').click();
-    await page.locator('#dp-review').click();
-    await expect(page.locator('#dr-summary')).toContainText('見た目が変わっています', { timeout: 20000 });
-    await expect(page.locator('#dr-mode')).toContainText('並べて表示中');
-    await page.locator('#dr-mode').click();
-    await expect(page.locator('#dr-mode')).toContainText('重ねて表示中');
-    await expect(page.locator('.dr-stack .dr-before svg')).toBeVisible();
-    await expect(page.locator('.dr-stack .dr-after svg')).toBeVisible();
+    await expect(entry.locator('.cb-pane-body svg')).toHaveCount(2, { timeout: 20000 });
+    await expect(entry.locator('.cb-svg-diff')).toContainText('見た目が変わっています', { timeout: 20000 });
+    await expect(entry.locator('.cb-svg-added')).toContainText('AdcDriver');
+    await expect(entry.locator('.cb-svg-removed')).toContainText('Adc');
+    // 重ねる: 切替を 3 回押すと 変更前だけ → 変更後だけ → 重ねる
+    const flip = entry.locator('.cb-flip');
+    await flip.click();
+    await flip.click();
+    await flip.click();
+    await expect(flip).toHaveText('切替: 重ねる');
+    await expect(entry.locator('.cb-show')).toHaveAttribute('data-side', 'overlay');
+    await expect(entry.locator('.cb-pane-body svg')).toHaveCount(2);
+    await expect(entry.locator('.cb-pane[data-side="after"] .cb-pane-label')).toBeVisible();
   });
 
   test('前回提出に無い図は「新規の図です」と言う', async ({ page }) => {
-    await gotoApp(page);
+    await submitThenEdit(page);
+    await page.locator('#btn-tab-new').click();
     await page.evaluate(() => {
       var ws = window.MA.workspace;
       ws.rename(ws.getActiveId(), 'New_Seq');
     });
     await setDsl(page, SEQ_A);
-    // BLK-owner-20260918-0329-prune: 入口は Export ▾ の「渡す」
-    await page.locator('#btn-export').click();
-    await page.locator('#exp-delivery').click();
-    await page.locator('#dp-review').click();
-    await expect(page.locator('#dr-summary')).toContainText('新規の図です', { timeout: 20000 });
+    await openReview(page);
+    const entry = page.locator('.cb-entry[data-doc-name="New_Seq"]');
+    await expect(entry.locator('.cb-svg-diff')).toContainText('新規の図です', { timeout: 20000 });
   });
 
-  test('戻ると納品パッケージがそのまま残っている', async ({ page }) => {
+  test('Ctrl+K「提出前レビュー」でも同じボードが開く (行は 1 つ)', async ({ page }) => {
     await submitThenEdit(page);
-    // BLK-owner-20260918-0329-prune: 入口は Export ▾ の「渡す」
-    await page.locator('#btn-export').click();
-    await page.locator('#exp-delivery').click();
-    await page.locator('#dp-review').click();
-    await expect(page.locator('#dr-modal')).toBeVisible();
-    await page.locator('#dr-close').click();
-    await expect(page.locator('#dr-modal')).toBeHidden();
-    await expect(page.locator('#dp-modal')).toBeVisible();
+    await page.keyboard.press('Control+k');
+    await page.locator('#cp-input').fill('提出前レビュー');
+    await page.waitForTimeout(250);
+    await expect(page.locator('#cp-list .cp-item', { hasText: '提出前レビュー' })).toHaveCount(0);
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#cb-modal')).toBeVisible();
+    await expect(page.locator('#cb-base')).toHaveValue('delivery');
+    await expect(page.locator('#cb-svg')).toHaveAttribute('aria-pressed', 'true');
   });
 });

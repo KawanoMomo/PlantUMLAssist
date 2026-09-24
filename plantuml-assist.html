@@ -3901,6 +3901,10 @@ table.vault-table button.vault-open:hover { border-color: var(--accent); }
 #dg-note-targets label.skip { color: var(--text-secondary); text-decoration: line-through; }
 .board-tools { margin-left: auto; display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
 .board-tools > * { flex: none; }   /* 文字が 1 文字ずつ縦に潰れないようにする */
+/* 道具の列そのものは見出しの残り幅に収め、入り切らない道具を次の行に送る。列ごと縮めずに
+   置くと 1280px 幅で「閉じる」が画面の外に出ていた (BLK-primary-20260924-1332-wish)。 */
+.board-head > .board-tools { flex: 1 1 0; min-width: 240px; justify-content: flex-end; }
+#cb-base { max-width: 16em; }
 .board-tools label { display: flex; align-items: center; gap: 4px; color: var(--text-secondary); cursor: pointer; }
 .board-tools button {
   border: 1px solid var(--border);
@@ -3980,6 +3984,24 @@ table.vault-table button.vault-open:hover { border-color: var(--accent); }
 .diff-board .cb-show { display: flex; gap: 10px; padding: 8px 10px 12px 10px; align-items: flex-start; }
 .diff-board .cb-show .cb-pane { flex: 1; min-width: 0; }
 .diff-board .cb-show .cb-pane[hidden] { display: none; }
+/* 切替の「重ねる」(BLK-primary-20260924-1332-wish、旧 🔍 提出前レビューの重ね表示)。
+   変更前を薄い赤で下に敷き、変更後を同じ位置に重ねる。SVG は触らず包む側で染める。 */
+.diff-board .cb-show[data-side="overlay"] { display: block; position: relative; }
+.diff-board .cb-show[data-side="overlay"] .cb-pane[data-side="before"] {
+  position: absolute; left: 10px; right: 10px; top: 8px; pointer-events: none; z-index: 0;
+}
+.diff-board .cb-show[data-side="overlay"] .cb-pane[data-side="before"] .cb-pane-label { visibility: hidden; }
+.diff-board .cb-show[data-side="overlay"] .cb-pane[data-side="before"] .cb-pane-body svg {
+  filter: grayscale(1) sepia(1) saturate(6) hue-rotate(310deg) opacity(0.45);
+  background: transparent !important;
+}
+.diff-board .cb-show[data-side="overlay"] .cb-pane[data-side="before"]:has(.cb-pane-empty) { display: none; }
+.diff-board .cb-show[data-side="overlay"] .cb-pane[data-side="after"] { position: relative; z-index: 1; }
+.diff-board .cb-show[data-side="overlay"] .cb-pane[data-side="after"] .cb-pane-body { background: transparent; }
+.diff-board .cb-show[data-side="overlay"] .cb-pane[data-side="after"] .cb-pane-body svg { background: transparent !important; }
+.diff-board .cb-show[data-side="overlay"] .cb-pane[data-side="after"] .cb-pane-label::after {
+  content: " に変更前 (薄い赤) を重ねています";
+}
 .diff-board .cb-show .cb-pane-label {
   font-size: 11px; color: var(--text-secondary); padding: 0 0 4px 2px;
 }
@@ -7066,6 +7088,11 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   border-color: #b00020;
   font-weight: 600;
 }
+/* BLK-primary-20260924-1332-wish: ボードの 🖼 表示で図の下に出す見た目の差 (旧 🔍 提出前レビュー) */
+.cb-svg-diff { font-size: 11px; color: var(--text-primary); margin: 4px 0 0 0; }
+.cb-svg-diff:empty { display: none; }
+.cb-svg-diff-line { color: var(--text-secondary); }
+
 #statusbar {
   display: flex;
   align-items: center;
@@ -8238,9 +8265,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <div id="dp-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="dp-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:620px;max-width:860px;max-height:84vh;overflow-y:auto;"></div>
 </div>
-<div id="dr-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1001;align-items:center;justify-content:center;">
-  <div id="dr-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:720px;max-width:96vw;max-height:92vh;overflow-y:auto;"></div>
-</div>
 <div id="dm-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="dm-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:660px;max-width:940px;max-height:80vh;overflow-y:auto;"></div>
 </div>
@@ -8613,6 +8637,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/cross-ref-diff.js"></script>
 <script src="src/core/count-compare.js"></script>
 <script src="src/core/change-board.js"></script>
+<script src="src/core/change-baseline.js"></script>
 <script src="src/core/show-before-after.js"></script>
 <script src="src/core/export-select.js"></script>
 <script src="src/core/handover-notes.js"></script>
@@ -8737,6 +8762,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <strong>変更サマリボード</strong>
       <span id="cb-summary"></span>
       <span class="board-tools">
+        <!-- BLK-primary-20260924-1332-wish: 何と比べるかをこの画面の中で選ぶ (今日 0 時 / 前回の会議 / 前回提出) -->
+        <label title="変更前をいつの時点にするか。前回の会議 = 今日より前に最後に会議セットで並べた時点、前回提出 = 最後に納品パッケージを作った時点">変更前 = <select id="cb-base"></select></label>
         <!-- BLK-primary-20260913-0306-wish: 顧客の前では DSL を見せられない。
              ここを押すと、並んでいる図が描いた絵の変更前後に切り替わる。 -->
         <button type="button" id="cb-svg" aria-pressed="false" title="顧客に見せる画面に切り替える (DSL を出さず、描いた図の変更前後を並べる)">🖼 SVGで見る</button>
