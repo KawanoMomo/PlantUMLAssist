@@ -191,6 +191,14 @@ test('手順8 FILES ツリーのファイル行の頭に、左レールと同じ
     const railSvg = await page.locator('#rail .rail-btn[data-type="' + type + '"] svg').innerHTML();
     expect(await g.locator('svg').innerHTML()).toBe(railSvg);
   }
+  // BLK-builder-20260924-2231-1 (design 10a の SPI は spi_init_sequence・…・spi_class・spi_state): 部品フォルダの中は
+  // 名前の順ではなく左レールと同じ図種の順 (SEQ → CLS → ST) に並び、線画が上からレールの順に揃う。
+  const spiRows = page.locator('#files-parts .files-part-file[data-file-name^="spi_"]');
+  await expect(spiRows).toHaveCount(3);
+  expect(await spiRows.evaluateAll((els) => els.map((e) => e.getAttribute('data-file-name'))))
+    .toEqual(['spi_init_sequence', 'spi_class', 'spi_state']);
+  expect(await spiRows.evaluateAll((els) => els.map((e) => e.querySelector('.files-row-glyph').getAttribute('data-kind'))))
+    .toEqual(['plantuml-sequence', 'plantuml-class', 'plantuml-state']);
   // 名前より前 (行の頭) にある。
   const gb = await treeFile(page, 'spi_state').locator('.files-row-glyph').boundingBox();
   const nb = await treeFile(page, 'spi_state').locator('.files-row-name').boundingBox();
@@ -440,7 +448,8 @@ test('手順8 部品フォルダの「＋ 未作成 N 図種」の略号を押�
   // BLK-builder-20260924-1803-3: 未作成が多くても行を … で切り詰めず、どの略号も見えて押せる (折り返す)。
   await expandPart(page, 'adc');
   const adc = page.locator('#files-parts .files-part-missing[data-part="adc"]');
-  await expect(adc).toHaveText('＋未作成 5 図種（SEQ・CLS・UC・CMP・ACT）');
+  // BLK-builder-20260924-2231-1: 略号は左レールと同じ図種の順 (SEQ・UC・CMP・CLS・ACT・ST)。
+  await expect(adc).toHaveText('＋未作成 5 図種（SEQ・UC・CMP・CLS・ACT）');
   const edge = await page.evaluate(() => document.getElementById('files-panel').getBoundingClientRect().right);
   const kinds = adc.locator('.files-part-missing-kind');
   await expect(kinds).toHaveCount(5);

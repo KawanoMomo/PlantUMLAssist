@@ -27,6 +27,27 @@ window.MA.fileTree = (function() {
     sequence: 'SEQ', state: 'ST', 'class': 'CLS',
     usecase: 'UC', component: 'CMP', activity: 'ACT',
   };
+  // BLK-builder-20260924-2231-1 (design 10a): 部品フォルダの中の図と未作成の略号は左レールと同じ
+  // 図種の順 (SEQ・UC・CMP・CLS・ACT・ST) に並べる。10a の SPI は spi_init_sequence・spi_transfer_sequence・
+  // spi_class・spi_state。名前の順だと行頭の線画がばらばらの順で並び、同じ図種の図が離れる。
+  var RAIL_ORDER = ['sequence', 'usecase', 'component', 'class', 'activity', 'state'];
+
+  function kindRank(kind) {
+    var i = RAIL_ORDER.indexOf(_s(kind));
+    return i < 0 ? RAIL_ORDER.length : i;
+  }
+
+  // 図種の順、同じ図種の中は名前の順 (大文字小文字は見ない)。
+  function sortByKind(files) {
+    return (files || []).slice().sort(function(a, b) {
+      var d = kindRank(a && a.kind) - kindRank(b && b.kind);
+      if (d) return d;
+      var an = _s(a && a.name).toLowerCase(), bn = _s(b && b.name).toLowerCase();
+      if (an !== bn) return an < bn ? -1 : 1;
+      return _s(a && a.name) < _s(b && b.name) ? -1 : _s(a && a.name) > _s(b && b.name) ? 1 : 0;
+    });
+  }
+
   // ファイル名の末尾に出る図種の語 (`spi_init_sequence` の `sequence`)。
   var KIND_WORDS = {
     sequence: 'sequence', seq: 'sequence',
@@ -130,11 +151,11 @@ window.MA.fileTree = (function() {
     return Object.keys(byPart).sort().map(function(k) {
       var g = byPart[k];
       var have = KINDS.filter(function(kind) { return !!g.kinds[kind]; });
-      var missing = KINDS.filter(function(kind) { return !g.kinds[kind]; });
+      var missing = RAIL_ORDER.filter(function(kind) { return !g.kinds[kind]; });
       return {
         part: g.part,
         label: g.label,
-        files: g.files,
+        files: sortByKind(g.files),
         count: have.length,
         total: KINDS.length,
         countLabel: g.label + ' ' + have.length + ' / ' + KINDS.length,
@@ -294,7 +315,7 @@ window.MA.fileTree = (function() {
 
   // design 10a (BLK-builder-20260924-1735-3): 部品フォルダの「＋ 未作成 2 図種（UC・ACT）」。
   // 括弧の中の略号はそれぞれ押せる (その図種をその場で作る)。行頭の ＋ はまとめて作る。
-  // 返すのは略号の並び (部品の見出しと同じ 6 図種の順) と、＋ の説明。
+  // 返すのは略号の並び (左レールと同じ図種の順) と、＋ の説明。
   function missingParts(g) {
     var miss = (g && Array.isArray(g.missing)) ? g.missing : [];
     if (!miss.length) return null;
@@ -338,6 +359,9 @@ window.MA.fileTree = (function() {
     SECTIONS: SECTIONS,
     KINDS: KINDS,
     KIND_ABBR: KIND_ABBR,
+    RAIL_ORDER: RAIL_ORDER,
+    kindRank: kindRank,
+    sortByKind: sortByKind,
     sections: sections,
     defaultOpen: defaultOpen,
     kindOf: kindOf,
