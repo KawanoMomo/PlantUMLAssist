@@ -130,3 +130,32 @@ test('手順11 設定を既定から変えた環境の不一致は「設定差�
   await expect(page.locator('#dc-modal .dc-row[data-verdict="setting"]')).toHaveCount(0);
   await expect(page.locator('#dc-summary')).toContainText('すべて仕様どおり');
 });
+
+// BLK-builder-20260924-1202-2 (design 4a/4b/4c): ズームの帯は図種名を名乗る (「Class · 100%」)。
+// 図種の違う本文を打ち込む・貼ると、右パネルと下端の件数はその図種に替わるのに、帯・左レール・
+// 上端の図種欄は元の Sequence のままで、どの図種を見ているかを 3 か所が違うことを言っていた。
+test('手順11 本文の図種が変わると、ズームの帯・左レール・図種欄もその図種を名乗り、本文は変わらない', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  const NL = String.fromCharCode(10);
+  const CLS = ['@startuml', 'title Sample Class', 'class Circle {', '- radius : double', '}', 'Shape <|-- Circle', '@enduml'].join(NL);
+  const ST = ['@startuml', 'title Sample State', '[*] --> Idle', 'Idle --> Running : start', '@enduml'].join(NL);
+
+  await S.typeDsl(page, CLS);
+  await page.waitForTimeout(800);
+  await expect(page.locator('#zoom-hud')).toContainText('Class');
+  await expect(page.locator('#rail-types .rail-btn.active')).toHaveAttribute('data-type', 'plantuml-class');
+  await expect(page.locator('#diagram-type')).toHaveValue('plantuml-class');
+  expect(await page.locator('#editor').inputValue()).toBe(CLS);
+
+  // 今と同じ図種を選び直しても、本文は見本や下書きに入れ替わらない。
+  await page.locator('#rail-types .rail-btn[data-type="plantuml-class"]').click();
+  await page.waitForTimeout(500);
+  expect(await page.locator('#editor').inputValue()).toBe(CLS);
+
+  await S.typeDsl(page, ST);
+  await page.waitForTimeout(800);
+  await expect(page.locator('#zoom-hud')).toContainText('State');
+  await expect(page.locator('#rail-types .rail-btn.active')).toHaveAttribute('data-type', 'plantuml-state');
+  await expect(page.locator('#diagram-type')).toHaveValue('plantuml-state');
+  expect(await page.locator('#editor').inputValue()).toBe(ST);
+});
