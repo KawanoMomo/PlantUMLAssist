@@ -3368,6 +3368,13 @@ function init() {
     var t = this.value;
     var mod = modules[t];
     if (!mod) return;
+    // BLK-builder-20260924-1202-2: 今の図種を選び直しただけなら、本文を入れ替えない
+    // (本文から図種をそろえた後に同じ図種を選ぶと、見本や下書きで本文が潰れる)。
+    if (t === currentDiagramType && currentModule === mod) {
+      syncRail();
+      syncZoomHud();
+      return;
+    }
     // Force-save the OUTGOING type's current editor content. We schedule
     // a save keyed to currentDiagramType (NOT the new t) and flush so even
     // if no debounce was pending, the latest mmdText is persisted before
@@ -31697,6 +31704,23 @@ function pinPreviewIfEdited() {
   try { renderTabs(); } catch (e) {}
 }
 
+// BLK-builder-20260924-1202-2: 本文から決まった図種を、図種を名乗る所 (currentDiagramType・上端の図種欄・
+// 左レール・ズームの帯・タブ) にそろえる。本文は書き換えない (図種欄の change は鳴らさない。
+// 鳴らすと図種の切り替えとして本文が見本や下書きに入れ替わる)。
+// 起動時の復元 (bootRestore) が本文から図種を当てるときと同じそろえ方。
+function _adoptDetectedType(t) {
+  if (!t || t === currentDiagramType || !modules[t]) return;
+  currentDiagramType = t;
+  var sel = document.getElementById('diagram-type');
+  if (sel) sel.value = t;
+  if (window.MA.workspace) {
+    try { window.MA.workspace.updateActive({ diagramType: t }); } catch (e) {}
+  }
+  try { syncRail(); } catch (e) {}
+  try { syncZoomHud(); } catch (e) {}
+  try { if (typeof renderTabs === 'function') renderTabs(); } catch (e) {}
+}
+
 function refresh() {
   updateLineNumbers();
   updateUndoRedoButtons();
@@ -31720,6 +31744,9 @@ function refresh() {
   }
   var mod = detectedType ? modules[detectedType] : null;
   if (mod) currentModule = mod;
+  // BLK-builder-20260924-1202-2 (design 4a/4b/4c): 右パネルと下端の件数が本文の図種に替わるなら、
+  // ズームの帯・左レール・上端の図種欄・タブの図種も同じ図種にそろえる。
+  if (mod) _adoptDetectedType(detectedType);
 
   try {
     currentParsed = currentModule.parse(mmdText);
