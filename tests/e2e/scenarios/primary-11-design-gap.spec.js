@@ -195,3 +195,43 @@ test('手順11 図で選んだクラスの右パネルから、そのクラス�
   await page.waitForTimeout(800);
   expect(await page.locator('#editor').inputValue()).toContain('Drawable <|.. Circle');
 });
+
+// BLK-builder-20260924-1252-2 (design 4c「状態を追加 / Add state」と「追加する位置」): 図で選んだ遷移の右パネルから、
+// その遷移の途中に状態を挟める。選択を外して追加タブの State →「この遷移の途中」→ 挟む遷移を選び直す遠回りをしない。
+test('手順11 図で選んだ遷移の右パネルから、その遷移の途中・From の中に状態を足せる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  const NL = String.fromCharCode(10);
+  const ST = ['@startuml', 'title Sample State', '[*] --> Idle', 'Idle --> Running : start', 'Running --> Idle : stop',
+    'Running --> [*] : done', '@enduml'].join(NL);
+  await S.typeDsl(page, ST);
+  await page.waitForTimeout(1500);
+
+  async function pickLabel(text) {
+    const label = page.locator('#preview-svg svg text', { hasText: text }).first();
+    await expect(label).toBeVisible({ timeout: 10000 });
+    const bb = await label.boundingBox();
+    await page.mouse.click(bb.x + bb.width / 2, bb.y + bb.height / 2);
+    await page.waitForTimeout(400);
+  }
+
+  // 到達条件その1: 遷移「start」を選んだパネルに「状態を追加」があり、位置の既定は「この遷移の途中」。名前を入れて押すと
+  // 選んでいた遷移が新しい状態を経由する 2 本に割れ (きっかけは前半)、足した状態が選ばれる。
+  await pickLabel('start');
+  await expect(page.locator('#st-tr-addstate')).toContainText('状態を追加');
+  await expect(page.locator('#st-tr-add-where')).toHaveValue('transition');
+  await page.locator('#st-tr-add-id').fill('Checking');
+  await page.locator('#st-tr-add').click();
+  await page.waitForTimeout(800);
+  expect(await page.locator('#editor').inputValue())
+    .toContain(['state Checking', 'Idle --> Checking : start', 'Checking --> Running'].join(NL));
+  await expect(page.locator('#st-id')).toHaveValue('Checking');
+
+  // 到達条件その2: 遷移「stop」を選び、位置を「Running の中」にして名前を空のまま押すと、Running の子状態が入る。
+  await pickLabel('stop');
+  await page.locator('#st-tr-add-where').selectOption('inside');
+  await expect(page.locator('#st-tr-add-where option:checked')).toHaveText('Running の中');
+  await page.locator('#st-tr-add').click();
+  await page.waitForTimeout(800);
+  expect(await page.locator('#editor').inputValue()).toContain(['state Running {', '  state NewState', '}'].join(NL));
+  expect(await page.locator('#editor').inputValue()).toContain('Running --> Idle : stop');
+});

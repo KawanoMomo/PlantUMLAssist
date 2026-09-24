@@ -168,7 +168,80 @@ window.MA.stateInsert = (function() {
     return lines.join('\n');
   }
 
+  // ── 遷移を選んだ右パネルの「状態を追加」(BLK-builder-20260924-1252-2, design 4c) ──
+  // design 4c は遷移を選んだパネルに「状態を追加 / Add state」と「追加する位置」
+  // (この遷移の途中 / 図の末尾 / From の中) を置く。追加タブへ回って挟む遷移を
+  // 選び直さなくても、いま選んでいる遷移を相手にして 1 手で足せるようにする。
+
+  function _endingBefore(lines) {
+    for (var i = lines.length - 1; i >= 0; i--) if (/^\s*@enduml\b/.test(lines[i])) return i;
+    return lines.length;
+  }
+
+  function _appendBeforeEnd(text, newLines) {
+    var lines = String(text).split('\n');
+    lines.splice.apply(lines, [_endingBefore(lines), 0].concat(newLines));
+    return lines.join('\n');
+  }
+
+  // 遷移の元 (From) を「の中」の相手にできるか。開始・終了・履歴 (`[*]` / `[H]`) は状態ではない。
+  // 宣言のある状態はその宣言を開き、宣言の無い最上位の状態 (`Idle --> Running` だけで出る Idle) は
+  // 図の末尾に `state Idle { … }` を足す (PlantUML は同じ状態として描く)。
+  function fromHost(parsed, tr) {
+    if (!tr) return null;
+    var raw = _s(tr.from);
+    if (!raw || raw.indexOf('[') >= 0) return null;
+    var states = (parsed && parsed.states) || [];
+    var STb = window.MA.stateTable;
+    var id = STb && STb.resolveEnd ? STb.resolveEnd(raw, tr.scope, states) : raw;
+    for (var i = 0; i < states.length; i++) {
+      if (states[i].id !== id) continue;
+      var SC = window.MA.stateChild;
+      if (SC && !SC.canHaveChild(states[i])) return null;
+      if (!(states[i].line > 0)) break;
+      return { id: id, label: states[i].label || id.split('.').pop(), declared: true };
+    }
+    if (tr.scope || raw.indexOf('.') >= 0) return null;
+    return { id: raw, label: raw, declared: false };
+  }
+
+  // 選べる位置。複合状態は中身の無い箱を遷移に挟まない (追加タブと同じ)。
+  function transitionPositions(parsed, tr, kind) {
+    var out = [];
+    if (kind !== 'composite') out.push({ value: 'transition', label: 'この遷移の途中' });
+    out.push({ value: 'end', label: '図の末尾' });
+    var host = fromHost(parsed, tr);
+    if (host) out.push({ value: 'inside', label: host.label + ' の中' });
+    return out;
+  }
+
+  // opts = { kind: 'state' | 'choice' | 'composite', id, label, where: 'transition' | 'end' | 'inside' }
+  function addFromTransition(text, parsed, tr, opts) {
+    var o = opts || {};
+    var id = _s(o.id);
+    if (!id || !tr) return text;
+    var kind = o.kind || 'state';
+    var stereo = kind === 'choice' ? 'choice' : null;
+    var decl = _stateLine(id, o.label, stereo);
+    var block = kind === 'composite' ? [decl + ' {', '}'] : [decl];
+    if (o.where === 'transition') {
+      if (kind === 'composite') return text;
+      return splitTransition(text, parsed, tr.id, id, stereo, o.label);
+    }
+    if (o.where === 'inside') {
+      var host = fromHost(parsed, tr);
+      if (!host) return text;
+      if (host.declared) return insertInside(text, parsed, host.id, block);
+      return _appendBeforeEnd(text, ['state ' + host.id + ' {'].concat(
+        block.map(function(l) { return '  ' + l; }), ['}']));
+    }
+    return _appendBeforeEnd(text, block);
+  }
+
   return {
+    fromHost: fromHost,
+    transitionPositions: transitionPositions,
+    addFromTransition: addFromTransition,
     positions: positions,
     transitionLabel: transitionLabel,
     transitionOptions: transitionOptions,
