@@ -3319,6 +3319,18 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 #hb-peer-wrap { color: var(--text-secondary); font-size: 12px; display: inline-flex; align-items: center; gap: 4px; }
 #hb-peer { font-size: 12px; max-width: 220px; }
 #hb-table button.hb-peer-go { border: none; background: none; color: inherit; cursor: pointer; font: inherit; padding: 0; text-align: left; text-decoration: underline dotted; }
+/* BLK-primary-20260924-2332-wish: 食い違う要素を全部チップで出し、同じ食い違い方の図の枚数を添える */
+#hb-table td.hb-peer { white-space: normal; min-width: 180px; }
+#hb-table .hb-chips { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 3px; }
+#hb-table button.hb-chip, #hb-table button.hb-chip-more {
+  border: 1px solid var(--border); background: var(--bg-tertiary); color: var(--text-primary);
+  border-radius: 9px; padding: 0 7px; font-size: 11px; line-height: 16px; cursor: pointer; white-space: nowrap;
+}
+#hb-table button.hb-chip[data-kind="peer-lacks"] { border-left: 3px solid var(--danger, #d05050); }
+#hb-table button.hb-chip[data-kind="mine-lacks"] { border-left: 3px solid #d08a30; }
+#hb-table button.hb-chip[data-kind="renamed"] { border-left: 3px solid var(--accent); }
+#hb-table button.hb-chip[aria-pressed="true"] { background: var(--accent); color: #fff; border-color: var(--accent); }
+#hb-table button.hb-chip-more { border-style: dashed; color: var(--text-secondary); }
 #hb-sum[data-tone="ng"] { color: var(--danger, #d05050); font-weight: 600; }
 #hb-sum[data-tone="ok"] { color: var(--accent); font-weight: 600; }
 #hb-tools { margin-left: auto; display: flex; gap: 6px; }

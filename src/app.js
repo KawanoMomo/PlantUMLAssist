@@ -28111,13 +28111,31 @@ function renderHandoverBoard() {
   if (peerTh) peerTh.hidden = !board.peer;
   _hbRenderPeerSelect();
 
+  // 食い違いの組ごとの枚数 (チップの ×N) と、見出しの「食い違い 18/24 枚 · 要素 N 種」。
+  var groups = (board.peer && HB.peerGroups) ? HB.peerGroups(board) : [];
+  _hbPeerCounts = {};
+  groups.forEach(function(g) { _hbPeerCounts[g.key] = g; });
+  if (_hbPeerFilter && !_hbPeerCounts[_hbPeerFilter]) _hbPeerFilter = '';
+  var ps = (board.peer && HB.peerSummary) ? HB.peerSummary(board) : null;
+  var shown = (HB.filterRows && _hbPeerFilter) ? HB.filterRows(board, _hbPeerFilter) : board.rows;
+
   var sum = document.getElementById('hb-sum');
   if (sum) {
-    sum.textContent = board.summary.line;
+    var line = board.summary.line;
+    if (ps && ps.line) line += ' ｜ ' + ps.line;
+    var fg = _hbPeerFilter ? _hbPeerCounts[_hbPeerFilter] : null;
+    if (fg) {
+      line += ' ｜ 「' + fg.name + '」' + fg.kindLabel + ' の ' + shown.length + ' 枚に絞り込み中'
+        + '（チップをもう一度押すか Esc で戻す）';
+    }
+    sum.textContent = line;
     sum.setAttribute('data-tone', board.summary.tone);
     sum.setAttribute('data-total', String(board.summary.total));
     sum.setAttribute('data-ready', String(board.summary.ready));
     sum.setAttribute('data-blocked', String(board.summary.blocked));
+    sum.setAttribute('data-peer-docs', ps ? String(ps.docs) : '');
+    sum.setAttribute('data-peer-kinds', ps ? String(ps.kinds) : '');
+    sum.setAttribute('data-filter', fg ? fg.name : '');
   }
 
   var empty = document.getElementById('hb-empty');
@@ -28128,7 +28146,7 @@ function renderHandoverBoard() {
       ? '保存フォルダに図がありません。先に図を保存してから開いてください。' : '';
   }
 
-  board.rows.forEach(function(r) {
+  shown.forEach(function(r) {
     var tr = document.createElement('tr');
     tr.setAttribute('data-doc-name', r.name);
     tr.setAttribute('data-ready', r.ready ? '1' : '0');
@@ -28296,6 +28314,42 @@ function _hbPeerCells(names, texts) {
   }).catch(function() { return null; });
 }
 
+// ── 食い違いを要素で読む (BLK-primary-20260924-2332-wish) ────────────────────
+// 5 列目の食い違う要素名を 3 つで切らずに全部チップで出し、同じ食い違い方をしている図の枚数を
+// 添える (`EnableClock ×4`)。チップを押すと同じ組を持つ行だけに絞り、もう一度押すか Esc で戻す。
+// 図の数だけ「開く→読む→戻る」を繰り返さず、食い違いの種類の数だけ判断すれば済むようにする。
+var HB_PEER_CHIPS = 6;          // 1 行に最初から出すチップの数。残りは「ほか N」で開く
+var _hbPeerFilter = '';         // 絞り込み中の組 (peerItems の key)
+var _hbPeerCounts = {};         // key → peerGroups の組 (枚数)
+var _hbPeerOpen = {};           // 「ほか N」を開いた行 (図名)
+
+function _hbSetPeerFilter(key) {
+  _hbPeerFilter = (key && key !== _hbPeerFilter) ? key : '';
+  renderHandoverBoard();
+}
+
+function _hbPeerChip(it) {
+  var g = _hbPeerCounts[it.key];
+  var n = g ? g.count : 1;
+  var c = document.createElement('button');
+  c.type = 'button';
+  c.className = 'hb-chip';
+  c.setAttribute('data-key', it.key);
+  c.setAttribute('data-kind', it.kind);
+  c.setAttribute('data-name', it.name);
+  c.setAttribute('data-count', String(n));
+  c.setAttribute('aria-pressed', _hbPeerFilter === it.key ? 'true' : 'false');
+  c.textContent = it.name + ' ×' + n;
+  c.title = it.kindLabel + ': ' + it.name + ' — 同じ食い違い方の図 ' + n + ' 枚'
+    + (g && g.docs.length ? '（' + g.docs.join('、') + '）' : '')
+    + (_hbPeerFilter === it.key ? '\n押すと絞り込みを戻します（Esc でも戻る）' : '\n押すとその図だけに絞ります');
+  c.addEventListener('click', function(ev) {
+    ev.stopPropagation();
+    _hbSetPeerFilter(it.key);
+  });
+  return c;
+}
+
 function _hbPeerTd(tr, r) {
   var td = _hbCell(tr, r.peer);
   td.classList.add('hb-peer');
@@ -28305,11 +28359,40 @@ function _hbPeerTd(tr, r) {
   var b = document.createElement('button');
   b.type = 'button';
   b.className = 'hb-peer-go';
-  b.textContent = r.peer.label;
+  var items = r.peer.items || [];
+  b.textContent = items.length ? ('食い違い ' + r.peer.count) : r.peer.label;
   b.title = (r.peer.titles && r.peer.titles.length ? r.peer.titles.join(' / ') + '\n' : '')
     + '押すと ' + r.name + ' を開き、相手の同名図を右の枠に並べます';
   b.addEventListener('click', function() { _hbComparePeer(r.name); });
   td.appendChild(b);
+  if (!items.length) return td;
+  // チップは表全体で多い組から並べる (同じ食い違いが先に目に入る)。
+  var cnt = function(it) { return _hbPeerCounts[it.key] ? _hbPeerCounts[it.key].count : 1; };
+  var sorted = items.map(function(it, i) { return { it: it, i: i }; }).sort(function(x, y) {
+    return (cnt(y.it) - cnt(x.it)) || (x.i - y.i);
+  }).map(function(o) { return o.it; });
+  var wrap = document.createElement('span');
+  wrap.className = 'hb-chips';
+  var limit = _hbPeerOpen[r.name] ? sorted.length : HB_PEER_CHIPS;
+  var rest = 0;
+  sorted.forEach(function(it, i) {
+    if (i >= limit && it.key !== _hbPeerFilter) { rest++; return; }
+    wrap.appendChild(_hbPeerChip(it));
+  });
+  if (rest > 0) {
+    var more = document.createElement('button');
+    more.type = 'button';
+    more.className = 'hb-chip-more';
+    more.textContent = 'ほか ' + rest;
+    more.title = '残りの ' + rest + ' 件を出す';
+    more.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      _hbPeerOpen[r.name] = true;
+      renderHandoverBoard();
+    });
+    wrap.appendChild(more);
+  }
+  td.appendChild(wrap);
   return td;
 }
 
@@ -28341,6 +28424,16 @@ function closeHandoverBoard() {
   if (modal) modal.style.display = 'none';
 }
 
+// 絞り込み中の Esc は絞り込みだけを戻す (表は閉じない)。
+document.addEventListener('keydown', function(ev) {
+  if (ev.key !== 'Escape' || ev.isComposing || !_hbPeerFilter) return;
+  var m = _hbModal();
+  if (!m || m.style.display !== 'flex') return;
+  ev.preventDefault();
+  ev.stopPropagation();
+  _hbSetPeerFilter('');
+}, true);
+
 function setupHandoverBoard() {
   // BLK-owner-20260918-0429-prune: ツール ▾ →「確かめる」の項目はこのボタンを押す。
   var open = document.getElementById('btn-tab-handover');
@@ -28351,6 +28444,8 @@ function setupHandoverBoard() {
   if (peerSel) peerSel.addEventListener('change', function() {
     _hbSetPeerDir(this.value);
     _hbBoard = null;
+    _hbPeerFilter = '';
+    _hbPeerOpen = {};
     renderHandoverBoard();
     loadHandoverBoard().then(function() { renderHandoverBoard(); });
   });

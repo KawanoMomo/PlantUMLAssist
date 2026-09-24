@@ -155,33 +155,117 @@ window.MA.handoverBoard = (function() {
   //   行が 0      → 状態遷移・クラスとして突き合わせる図ではない (対象外)
   var PEER_SHOW = 3;
 
+  // 食い違いの種類 (BLK-primary-20260924-2332-wish)。要素の食い違いを「図の数」ではなく
+  // 「要素名 × 種類」の組で数えるための軸。相手 = 渡す相手のフォルダの同名図 (対応表の ref 側)。
+  //   peer-lacks  自分にあって相手に無い (対応表の mine-only)
+  //   mine-lacks  相手にあって自分に無い (対応表の ref-only)
+  //   renamed     対応は付いたが名前の形が違う (状態・クラス・メンバーの partial)
+  // 遷移・関係の partial は端の状態名が違うだけで出るので数えない (状態の行で 1 度だけ数える)。
+  var PEER_KIND = { 'mine-only': 'peer-lacks', 'ref-only': 'mine-lacks', partial: 'renamed' };
+  var PEER_KIND_LABEL = { 'peer-lacks': '相手に無い', 'mine-lacks': '自分に無い', renamed: '名前の形が違う' };
+  var PEER_RENAME_TYPES = { state: 1, 'class': 1, member: 1 };
+
+  function peerKindLabel(kind) { return PEER_KIND_LABEL[kind] || ''; }
+
+  function _peerItem(r) {
+    if (!r) return null;
+    var kind = PEER_KIND[r.match];
+    if (!kind) return null;
+    var ref = _s(r.ref).trim();
+    var mine = _s(r.mine).trim();
+    var name;
+    if (kind === 'renamed') {
+      if (!PEER_RENAME_TYPES[r.type] || !ref || !mine || ref === mine) return null;
+      name = mine + ' → ' + ref;
+    } else {
+      name = kind === 'mine-lacks' ? ref : mine;
+    }
+    if (!name) return null;
+    return { key: kind + '' + name, name: name, kind: kind, kindLabel: PEER_KIND_LABEL[kind] };
+  }
+
   function peerDiffRows(map) {
     var m = map || {};
     var rows = [].concat(m.states || [], m.members || [], m.transitions || []);
     return rows.filter(function(r) { return r && (r.match === 'ref-only' || r.match === 'mine-only'); });
   }
 
-  function peerCell(map, exists, same) {
-    if (!exists) return { state: 'missing', count: 0, names: [], label: '相手に無い' };
-    if (same) return { state: 'same', count: 0, names: [], label: '同じ' };
-    if (!map) return { state: 'unknown', count: 0, names: [], label: '未確認' };
-    var all = [].concat(map.states || [], map.members || [], map.transitions || []);
-    if (!all.length) return { state: 'na', count: 0, names: [], label: '突き合わせ対象外' };
-    var diff = peerDiffRows(map);
-    if (!diff.length) return { state: 'match', count: 0, names: [], label: '食い違いなし' };
-    var names = [];
-    diff.forEach(function(r) {
-      var n = _s(r.ref || r.mine).trim();
-      if (n && names.indexOf(n) < 0) names.push(n);
+  // 1 枚の図の食い違い要素 (要素名 × 種類の組。同じ組は 1 つにまとめる)。
+  function peerItems(map) {
+    var m = map || {};
+    var rows = [].concat(m.states || [], m.classes || [], m.members || [], m.transitions || [],
+      m.relations || []);
+    var seen = {};
+    var out = [];
+    rows.forEach(function(r) {
+      var it = _peerItem(r);
+      if (!it || seen[it.key]) return;
+      seen[it.key] = true;
+      out.push(it);
     });
+    return out;
+  }
+
+  function peerCell(map, exists, same) {
+    if (!exists) return { state: 'missing', count: 0, names: [], items: [], label: '相手に無い' };
+    if (same) return { state: 'same', count: 0, names: [], items: [], label: '同じ' };
+    if (!map) return { state: 'unknown', count: 0, names: [], items: [], label: '未確認' };
+    var all = [].concat(map.states || [], map.members || [], map.transitions || []);
+    if (!all.length) return { state: 'na', count: 0, names: [], items: [], label: '突き合わせ対象外' };
+    var items = peerItems(map);
+    if (!items.length) return { state: 'match', count: 0, names: [], items: [], label: '食い違いなし' };
+    var names = [];
+    items.forEach(function(it) { if (names.indexOf(it.name) < 0) names.push(it.name); });
     var head = names.slice(0, PEER_SHOW).join(', ');
     return {
-      state: 'differ', count: diff.length, names: names,
-      titles: diff.map(function(r) {
-        return (r.match === 'ref-only' ? '相手だけ: ' : '自分だけ: ') + _s(r.ref || r.mine);
-      }),
-      label: '食い違い ' + diff.length + '（' + head + (names.length > PEER_SHOW ? ' ほか' : '') + '）',
+      state: 'differ', count: items.length, names: names, items: items,
+      titles: items.map(function(it) { return it.kindLabel + ': ' + it.name; }),
+      label: '食い違い ' + items.length + '（' + head + (names.length > PEER_SHOW ? ' ほか' : '') + '）',
     };
+  }
+
+  // 表全体の食い違いを「要素名 × 種類」でまとめる。1 つの組が何枚の図にまたがるかを数え、
+  // 多い順 (同数なら名前順) に並べる。チップの「EnableClock ×4」と見出しの「要素 N 種」はここから出す。
+  function peerGroups(board) {
+    var rows = (board && board.rows) || [];
+    var map = {};
+    var list = [];
+    rows.forEach(function(r) {
+      var items = (r && r.peer && r.peer.items) || [];
+      items.forEach(function(it) {
+        var g = map[it.key];
+        if (!g) {
+          g = map[it.key] = { key: it.key, name: it.name, kind: it.kind, kindLabel: it.kindLabel, docs: [] };
+          list.push(g);
+        }
+        if (g.docs.indexOf(r.name) < 0) g.docs.push(r.name);
+      });
+    });
+    list.forEach(function(g) { g.count = g.docs.length; });
+    list.sort(function(a, b) {
+      if (b.count !== a.count) return b.count - a.count;
+      return a.name < b.name ? -1 : (a.name > b.name ? 1 : 0);
+    });
+    return list;
+  }
+
+  // 見出しの件数「食い違い 18/24 枚 · 要素 N 種」。相手を選んでいない表では空。
+  function peerSummary(board) {
+    if (!board || !board.peer) return { docs: 0, total: 0, kinds: 0, line: '' };
+    var rows = board.rows || [];
+    var docs = rows.filter(function(r) { return r && r.peer && r.peer.state === 'differ'; }).length;
+    var kinds = peerGroups(board).length;
+    return { docs: docs, total: rows.length, kinds: kinds,
+      line: '食い違い ' + docs + '/' + rows.length + ' 枚 · 要素 ' + kinds + ' 種' };
+  }
+
+  // チップで絞る。key の組を持つ行だけを返す (key が空なら全行)。
+  function filterRows(board, key) {
+    var rows = (board && board.rows) || [];
+    if (!key) return rows.slice();
+    return rows.filter(function(r) {
+      return ((r && r.peer && r.peer.items) || []).some(function(it) { return it.key === key; });
+    });
   }
 
   // ── 表 ────────────────────────────────────────────────────────────────────
@@ -310,6 +394,11 @@ window.MA.handoverBoard = (function() {
     gapCell: gapCell,
     peerCell: peerCell,
     peerDiffRows: peerDiffRows,
+    peerItems: peerItems,
+    peerKindLabel: peerKindLabel,
+    peerGroups: peerGroups,
+    peerSummary: peerSummary,
+    filterRows: filterRows,
     row: row,
     build: build,
     summary: summary,
