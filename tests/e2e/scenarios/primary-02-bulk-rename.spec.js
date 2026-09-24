@@ -128,6 +128,41 @@ test('手順2 洗った影響一覧を変更チケットにすると、run を�
   await expect(page.locator('#ct-progress-text')).toContainText('1 / ' + impactCount);
   await expect(page.locator('#ct-body tr.ct-item[data-done="1"]')).toHaveCount(1);
   await expect(page.locator('#ct-body tr.ct-item[data-done="1"]')).toContainText('spi_init_sequence');
+
+  // BLK-primary-20260924-1132-wish: 札の行から「洗い出し」と「直す」が繋がる。
+  // 到達条件その4: 未チェックの行のボタンは押すと列に入ることが名前で分かり、押すと
+  // その図が開いて下端の帯に札の名前と何枚目かが残る (閉じて一覧から探し直さない)。
+  const undone = page.locator('#ct-body tr.ct-item[data-done="0"]').first();
+  const undoneDoc = await undone.getAttribute('data-doc');
+  await expect(undone.locator('button.ct-open')).toHaveText('ここから順に直す');
+  await undone.locator('button.ct-open').click();
+  await expect(page.locator('#ct-modal')).toBeHidden();
+  await expect(page.locator('#fw-bar')).toBeVisible();
+  await expect(page.locator('#fw-label')).toContainText('🎫 SpiDrv の仕様変更');
+  await expect(page.locator('#fw-label')).toContainText(undoneDoc);
+  await expect(page.locator('#fw-done')).not.toHaveClass(/is-ready/);
+  // 図は保存フォルダから読み込んで開く (非同期)。開き終わる前に打つと前のタブに入る。
+  await expect.poll(() => page.evaluate(() => window.MA.workspace.getActive().name)).toBe(undoneDoc);
+  await page.waitForTimeout(400);
+
+  // 到達条件その5: 直して保存すると「✓ 直した · 次へ」が目立つ。保存だけでは札に印は付かない。
+  // 一覧から開いた図は錠がかかっているので、書き換えると答えてから Ctrl+S で保存する。
+  await S.overwriteOpenedFile(page);
+  await page.keyboard.press('Control+s');
+  await page.waitForTimeout(800);
+  await expect(page.locator('#fw-done')).toHaveClass(/is-ready/);
+  await expect(page.locator('#fw-label')).toContainText('保存しました');
+
+  // 到達条件その6: 「✓ 直した · 次へ」で札の行に印が付き、次の未対応の図へ進む。
+  await page.locator('#fw-done').click();
+  await page.waitForTimeout(800);
+  await expect(page.locator('#fw-label')).not.toContainText(undoneDoc);
+  await expect(page.locator('#fw-done')).not.toHaveClass(/is-ready/);
+  await S.runCommand(page, '変更チケット');
+  await page.waitForSelector('#ct-modal', { state: 'visible' });
+  await page.waitForTimeout(600);
+  await expect(page.locator('#ct-progress-text')).toContainText('2 / ' + impactCount);
+  await expect(page.locator('#ct-body tr.ct-item[data-doc="' + undoneDoc + '"]')).toHaveAttribute('data-done', '1');
 });
 
 // BLK-primary-20260914-2206-wish: 依存グラフの行から図は開けるが、開いた瞬間に

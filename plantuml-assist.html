@@ -7019,6 +7019,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 #fw-bar button:hover:not(:disabled) { border-color: var(--accent); }
 #fw-bar button:disabled { opacity: 0.4; cursor: default; }
 #fw-done { border-color: var(--accent); }
+/* 今の図を保存したら「✓ 直した · 次へ」を塗って目立たせる (印は付けない) */
+#fw-done.is-ready { background: var(--accent); color: #fff; font-weight: bold; box-shadow: 0 0 0 2px var(--accent); }
 /* 手当て済みの行は一覧でも済みと分かる (同じ図を二度開かない) */
 #dg-impact tr.dg-doc[data-fixed="1"] td.dg-doc-name { text-decoration: line-through; }
 #dg-impact tr.dg-doc[data-current="1"] td { background: var(--bg-tertiary); }
