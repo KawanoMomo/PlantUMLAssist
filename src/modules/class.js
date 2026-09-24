@@ -1466,6 +1466,7 @@ window.MA.modules.plantumlClass = (function() {
 
   function _renderNoSelection(parsedData, propsEl, ctx) {
     var P = window.MA.properties;
+    var GP = window.MA.groupPlace;
     var elements = parsedData.elements || [];
     var allOpts = elements.map(function(e) { return { value: e.id, label: e.label || e.id }; });
     if (allOpts.length === 0) allOpts = [{ value: '', label: '（要素なし）' }];
@@ -1506,11 +1507,13 @@ window.MA.modules.plantumlClass = (function() {
           P.fieldHtml('Label', 'cl-tail-label', '', '省略可') +
           P.fieldHtml('Stereotype', 'cl-tail-stereo', '', '<<X>> の X 部分のみ') +
           P.fieldHtml('Generics (カンマ区切り)', 'cl-tail-generics', '', '例: T,K,V') +
+          GP.fieldHtml('class', 'cl-tail', parsedData.groups) +
           P.primaryButtonHtml('cl-tail-add', '+ ' + kind + ' 追加');
       } else if (kind === 'enum') {
         html2 =
           P.fieldHtml('Alias', 'cl-tail-alias', '', '例: Color') +
           P.fieldHtml('値 (改行区切り)', 'cl-tail-values', '', 'RED\\nGREEN\\nBLUE') +
+          GP.fieldHtml('class', 'cl-tail', parsedData.groups) +
           P.primaryButtonHtml('cl-tail-add', '+ enum 追加');
       } else if (kind === 'package' || kind === 'namespace') {
         html2 =
@@ -1573,6 +1576,7 @@ window.MA.modules.plantumlClass = (function() {
           if (k === 'class') out = addClass(t, normCl.id, lbl, st, gen);
           else if (k === 'interface') out = addInterface(t, normCl.id, lbl, st, gen);
           else out = addAbstract(t, normCl.id, lbl, st, gen);
+          out = GP.applyAdd('class', 'cl-tail', parsedData.groups, t, out);
         } else if (k === 'enum') {
           var rawAl2 = document.getElementById('cl-tail-alias').value;
           var normEn = normalizeIdInput(rawAl2, parsedData);
@@ -1581,11 +1585,14 @@ window.MA.modules.plantumlClass = (function() {
           var vals = valsStr.split(/\r?\n/).map(function(s) { return s.trim(); }).filter(function(s) { return s; });
           window.MA.history.pushHistory();
           out = addEnum(t, normEn.id, normEn.label, vals);
+          out = GP.applyAdd('class', 'cl-tail', parsedData.groups, t, out);
         } else if (k === 'package' || k === 'namespace') {
           var lbl3 = document.getElementById('cl-tail-label').value.trim();
           if (!lbl3) { alert('Label 必須'); return; }
           window.MA.history.pushHistory();
           out = k === 'package' ? addPackage(t, lbl3) : addNamespace(t, lbl3);
+          // 作った直後の境界を次の「追加する位置」にする (続けて中身を足せる)。
+          GP.remember('class', lbl3);
         } else if (k === 'relation') {
           var fr = document.getElementById('cl-tail-from').value;
           var to = document.getElementById('cl-tail-to').value;
@@ -1679,6 +1686,7 @@ window.MA.modules.plantumlClass = (function() {
 
   function _renderElementEdit(element, parsedData, propsEl, ctx, opts) {
     var P = window.MA.properties;
+    var GP = window.MA.groupPlace;
     if (element.kind === 'enum') return _renderEnumEdit(element, parsedData, propsEl, ctx, opts);
     var focusIdx = opts && typeof opts.focusMemberIndex === 'number' ? opts.focusMemberIndex : -1;
 
@@ -1707,6 +1715,8 @@ window.MA.modules.plantumlClass = (function() {
         '</div>' +
         // BLK-junior-20260909-0703-wish: 手本の親を選んだまま派生を 1 つ起こす。
         '<button id="cl-derive-open" style="width:100%;margin-top:8px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">⬇ この親から派生を 1 つ作る</button>' +
+        // BLK-owner-20260923-2332-2: 選んだクラスを境界の中へ移す / 外へ出す。
+        GP.editFieldHtml('cl-edit', parsedData.groups, element.line) +
       '</div>';
 
     // design 4a: 属性 / Attributes と メソッド / Methods を別の節に分け、
@@ -1814,6 +1824,7 @@ window.MA.modules.plantumlClass = (function() {
           '</div>';
 
     propsEl.innerHTML = html;
+    GP.bindEdit('cl-edit', parsedData.groups, element.line, ctx);
 
     // BLK-junior-20260909-0703-wish: 選んでいるクラスを親にして派生を 1 つ起こす。
     P.bindEvent('cl-derive-open', 'click', function() {
@@ -2067,6 +2078,7 @@ window.MA.modules.plantumlClass = (function() {
 
   function _renderEnumEdit(element, parsedData, propsEl, ctx, opts) {
     var P = window.MA.properties;
+    var GP = window.MA.groupPlace;
     var html =
       '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">Class Diagram</div>' +
       '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
@@ -2075,6 +2087,7 @@ window.MA.modules.plantumlClass = (function() {
         P.fieldHtml('Stereotype', 'cl-edit-stereo', element.stereotype || '') +
         P.primaryButtonHtml('cl-edit-apply', '変更を反映') +
         '<button id="cl-delete" style="margin-left:8px;background:var(--accent-red);color:#fff;border:none;padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 削除</button>' +
+        GP.editFieldHtml('cl-edit', parsedData.groups, element.line) +
       '</div>' +
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-top:10px;">' +
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">Values</label>';
@@ -2086,6 +2099,7 @@ window.MA.modules.plantumlClass = (function() {
             P.primaryButtonHtml('cl-add-val', '+ Value 追加') +
             '</div>';
     propsEl.innerHTML = html;
+    GP.bindEdit('cl-edit', parsedData.groups, element.line, ctx);
 
     P.bindEvent('cl-edit-apply', 'click', function() {
       window.MA.history.pushHistory();

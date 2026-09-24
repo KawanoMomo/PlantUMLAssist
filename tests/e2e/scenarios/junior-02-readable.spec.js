@@ -473,6 +473,35 @@ test('手順2 手本の無い部品のコンポーネント図を、部品名 1 
   // (足し忘れたまま先へ進まない)。
   await page.waitForTimeout(400);
   await expect(page.locator('#co-deps-summary')).toHaveAttribute('data-catalog-missing', '0');
+
+  // BLK-owner-20260923-2332-2: 部品を境界 (package) で囲むところまでフォームだけで行う。
+  // 到達条件その5: 境界を作った直後は、その境界が「追加する位置」に選ばれている。
+  await page.locator('#co-tail-kind-chip-package').click();
+  await page.locator('#co-tail-label').fill('Mcal');
+  await page.locator('#co-tail-add').click();
+  await page.waitForTimeout(800);
+  expect(await getEditorText(page)).toContain('package "Mcal" {');
+  await page.locator('#co-tail-kind-chip-component').click();
+  await expect(page.locator('#co-tail-place option:checked')).toHaveText('境界『Mcal』の中');
+
+  // 到達条件その6: そのまま部品を足すと境界の `{ }` の中に入る。
+  await page.locator('#co-tail-alias').fill('Timer_Hw');
+  await page.locator('#co-tail-add').click();
+  await page.waitForTimeout(1200);
+  expect(await getEditorText(page)).toMatch(/package "Mcal" \{\n\s+component Timer_Hw\n\}/);
+
+  // 到達条件その7: 図で既にある部品を選び、右パネルから同じ境界の中へ移せる。
+  const hit = page.locator('#overlay-layer rect.selectable[data-type="component"][data-id="TIMER_Driver"]').first();
+  await expect(hit).toBeAttached({ timeout: 10000 });
+  const hb = await hit.boundingBox();
+  await page.mouse.click(hb.x + hb.width / 2, hb.y + hb.height / 2);
+  await page.waitForTimeout(300);
+  await page.locator('#co-edit-group-move').selectOption({ label: '境界『Mcal』の中へ移す' });
+  await page.waitForTimeout(800);
+  const moved = await getEditorText(page);
+  expect(moved).toMatch(/package "Mcal" \{\n\s+component Timer_Hw\n\s+component[^\n]*TIMER_Driver[^\n]*\n\}/);
+  // 移したのは宣言の行だけ。依存の行は元の場所のまま。
+  expect(moved).toContain('TIMER_Driver ..> Clock_Ctrl : クロック制御');
 });
 // BLK-human-20260912-2130: 手順 2 で junior が起こす 5 図種 (状態遷移・クラス・
 // コンポーネント・ユースケース・アクティビティ) でも、シーケンスと同じく

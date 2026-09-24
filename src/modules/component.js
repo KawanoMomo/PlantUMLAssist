@@ -770,6 +770,7 @@ window.MA.modules.plantumlComponent = (function() {
 
   function _renderNoSelection(parsedData, propsEl, ctx) {
     var P = window.MA.properties;
+    var GP = window.MA.groupPlace;
     var elements = parsedData.elements || [];
     var components = elements.filter(function(e) { return e.kind === 'component'; });
     var interfaces = elements.filter(function(e) { return e.kind === 'interface'; });
@@ -830,12 +831,14 @@ window.MA.modules.plantumlComponent = (function() {
           P.fieldHtml('Alias', 'co-tail-alias', '', '例: WebApp') +
           P.fieldHtml('Label', 'co-tail-label', '', '省略可') +
           P.fieldHtml('Stereotype', 'co-tail-stereo', '', '省略可 (例: service)') +
+          GP.fieldHtml('component', 'co-tail', parsedData.groups) +
           P.primaryButtonHtml('co-tail-add', '+ Component 追加');
       } else if (kind === 'interface') {
         html =
           P.fieldHtml('Alias', 'co-tail-alias', '', '例: IAuth') +
           P.fieldHtml('Label', 'co-tail-label', '', '省略可') +
           P.fieldHtml('Stereotype', 'co-tail-stereo', '', '省略可 (例: api)') +
+          GP.fieldHtml('component', 'co-tail', parsedData.groups) +
           P.primaryButtonHtml('co-tail-add', '+ Interface 追加');
       } else if (kind === 'port') {
         var portParentOpts = compOpts.length > 0 ? compOpts : [{ value: '', label: '（component なし）' }];
@@ -889,6 +892,7 @@ window.MA.modules.plantumlComponent = (function() {
           window.MA.history.pushHistory();
           var stEl = document.getElementById('co-tail-stereo');
           out = addComponent(t, normCo.id, rawLbl || normCo.label, stEl ? stEl.value.trim() : '');
+          out = GP.applyAdd('component', 'co-tail', parsedData.groups, t, out);
         } else if (kind === 'interface') {
           var rawAl2 = document.getElementById('co-tail-alias').value;
           var normIf = normalizeIdInput(rawAl2, parsedData);
@@ -897,6 +901,7 @@ window.MA.modules.plantumlComponent = (function() {
           window.MA.history.pushHistory();
           var stEl2 = document.getElementById('co-tail-stereo');
           out = addInterface(t, normIf.id, rawLbl2 || normIf.label, stEl2 ? stEl2.value.trim() : '');
+          out = GP.applyAdd('component', 'co-tail', parsedData.groups, t, out);
         } else if (kind === 'port') {
           var rawAl3 = document.getElementById('co-tail-alias').value;
           var normPt = normalizeIdInput(rawAl3, parsedData);
@@ -913,6 +918,8 @@ window.MA.modules.plantumlComponent = (function() {
           window.MA.history.pushHistory();
           var notaEl = document.getElementById('co-tail-notation');
           out = addPackage(t, lbl, notaEl ? notaEl.value : 'package');
+          // 作った直後の境界を次の「追加する位置」にする (続けて中身を足せる)。
+          GP.remember('component', lbl);
         } else if (kind === 'relation') {
           var fr = document.getElementById('co-tail-from').value;
           var to = document.getElementById('co-tail-to').value;
@@ -939,6 +946,7 @@ window.MA.modules.plantumlComponent = (function() {
 
   function _renderElementEdit(element, parsedData, propsEl, ctx) {
     var P = window.MA.properties;
+    var GP = window.MA.groupPlace;
     if (element.kind !== 'component' && element.kind !== 'interface') {
       // port / unknown: read-only display
       propsEl.innerHTML =
@@ -966,8 +974,11 @@ window.MA.modules.plantumlComponent = (function() {
           '<button id="co-move-down" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↓ 下へ</button>' +
           '<button id="co-delete" style="flex:0 0 60px;background:var(--accent-red);color:#fff;border:none;padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 削除</button>' +
         '</div>' +
+        // BLK-owner-20260923-2332-2: 選んだ部品を境界の中へ移す / 外へ出す。
+        GP.editFieldHtml('co-edit', parsedData.groups, element.line) +
       '</div>';
     propsEl.innerHTML = html;
+    GP.bindEdit('co-edit', parsedData.groups, element.line, ctx);
 
     P.bindEvent('co-edit-apply', 'click', function() {
       var rawNewId = document.getElementById('co-edit-id').value.trim();

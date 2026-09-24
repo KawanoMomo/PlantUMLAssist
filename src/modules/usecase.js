@@ -569,6 +569,7 @@ window.MA.modules.plantumlUsecase = (function() {
 
   function _renderNoSelection(parsedData, propsEl, ctx) {
     var P = window.MA.properties;
+    var GP = window.MA.groupPlace;
     var elements = parsedData.elements || [];
     var actors = elements.filter(function(e) { return e.kind === 'actor'; });
     var usecases = elements.filter(function(e) { return e.kind === 'usecase'; });
@@ -653,12 +654,14 @@ window.MA.modules.plantumlUsecase = (function() {
           P.fieldHtml('Alias (識別子)', 'uc-tail-alias', '', '例: User（日本語は表示名になります）') +
           aliasHintHtml() +
           P.fieldHtml('Label (表示名)', 'uc-tail-label', '', '省略可、Alias と異なる場合に表示用') +
+          GP.fieldHtml('usecase', 'uc-tail', parsedData.groups) +
           P.primaryButtonHtml('uc-tail-add', '+ Actor 追加');
       } else if (kind === 'usecase') {
         html =
           P.fieldHtml('Alias (識別子)', 'uc-tail-alias', '', '例: L1（日本語は表示名になります）') +
           aliasHintHtml() +
           P.fieldHtml('Label (表示名)', 'uc-tail-label', '', '省略可、Alias と異なる場合に表示用') +
+          GP.fieldHtml('usecase', 'uc-tail', parsedData.groups) +
           P.primaryButtonHtml('uc-tail-add', '+ Usecase 追加');
       } else if (kind === 'package') {
         html =
@@ -720,6 +723,7 @@ window.MA.modules.plantumlUsecase = (function() {
           var rawLbl = document.getElementById('uc-tail-label').value.trim();
           window.MA.history.pushHistory();
           out = addActor(t, normAc.id, rawLbl || normAc.label);
+          out = GP.applyAdd('usecase', 'uc-tail', parsedData.groups, t, out);
         } else if (kind === 'usecase') {
           var rawAl2 = document.getElementById('uc-tail-alias').value;
           var normUc = normalizeIdInput(rawAl2, parsedData, 'U');
@@ -727,12 +731,15 @@ window.MA.modules.plantumlUsecase = (function() {
           var rawLbl2 = document.getElementById('uc-tail-label').value.trim();
           window.MA.history.pushHistory();
           out = addUsecase(t, normUc.id, rawLbl2 || normUc.label);
+          out = GP.applyAdd('usecase', 'uc-tail', parsedData.groups, t, out);
         } else if (kind === 'package') {
           var lbl = document.getElementById('uc-tail-label').value.trim();
           if (!lbl) { alert('Label 必須'); return; }
           window.MA.history.pushHistory();
           var notaEl = document.getElementById('uc-tail-notation');
           out = addPackage(t, lbl, notaEl ? notaEl.value : 'package');
+          // 作った直後の境界を次の「追加する位置」にする (続けて中身を足せる)。
+          GP.remember('usecase', lbl);
         } else if (kind === 'relation') {
           var fr = document.getElementById('uc-tail-from').value;
           var to = document.getElementById('uc-tail-to').value;
@@ -806,6 +813,7 @@ window.MA.modules.plantumlUsecase = (function() {
     // unexpected kinds from rendering an empty edit form.
     if (!(element.kind === 'actor' || element.kind === 'usecase')) return;
     var P = window.MA.properties;
+    var GP = window.MA.groupPlace;
     var html =
       '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">UseCase Diagram</div>' +
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
@@ -821,6 +829,8 @@ window.MA.modules.plantumlUsecase = (function() {
           '<button id="uc-move-down" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↓ 下へ</button>' +
           '<button id="uc-delete" style="flex:0 0 60px;background:var(--accent-red);color:#fff;border:none;padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 削除</button>' +
         '</div>' +
+        // BLK-owner-20260923-2332-2: 選んだ要素を境界の中へ移す / 外へ出す。
+        GP.editFieldHtml('uc-edit', parsedData.groups, element.line) +
       '</div>';
 
     // この要素に付いている注釈。ここに出さないと、付けたあと編集・削除に
@@ -842,6 +852,7 @@ window.MA.modules.plantumlUsecase = (function() {
       html += '</div>';
     }
     propsEl.innerHTML = html;
+    GP.bindEdit('uc-edit', parsedData.groups, element.line, ctx);
 
     myNotes.forEach(function(n, idx) {
       P.bindEvent('uc-note-edit-' + idx, 'click', function(e) {
