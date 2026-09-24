@@ -5623,6 +5623,8 @@ mark.ri-hit { background: var(--accent); color: var(--bg-primary); padding: 0 1p
 .tc-row .tc-text { flex: 1; min-width: 0; font-family: var(--font-mono); word-break: break-all; }
 .tc-row .tc-where { flex-shrink: 0; font-size: 10px; color: var(--text-secondary); max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #tc-empty { padding: 6px 8px; font-size: 11px; color: var(--text-secondary); }
+/* 状態遷移のトレース漏れの表 (#tc-table) の行は表の行のまま (上の .tc-row は比べる欄の一覧用) */
+#tc-table tr.tc-row { display: table-row; padding: 0; }
 /* 橙の行から自分の図へ足す (BLK-junior-20260908-1103-wish) */
 .map-row .map-take {
   flex-shrink: 0;

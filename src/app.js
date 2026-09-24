@@ -3734,7 +3734,7 @@ function initCommandPalette() {
       { id: 'consistency', title: '整合性チェックを開く / Consistency', hint: 'Review', keywords: ['consistency', 'check', 'せいごう', 'かくにん'], run: function() { clickById('status-consistency'); } },
       { id: 'eventsync', title: 'イベント整合を開く / Event sync', hint: 'Review', keywords: ['event', 'sync', 'method', 'いべんと', 'せいごう', 'めそっど'], run: function() { clickById('status-eventsync'); } },
       { id: 'family-audit', title: '系統チェックを開く / Family audit', hint: 'Tabs', keywords: ['family', 'audit', 'けいとう', 'とつごう'], button: 'btn-tab-family', run: function() { clickById('btn-tab-family'); } },
-      { id: 'trace-coverage', title: 'トレースカバレッジを開く / Trace coverage', hint: 'Tabs', keywords: ['trace', 'coverage', 'とれーす', 'もれ', 'せんい'], button: 'btn-tab-trace', run: function() { clickById('btn-tab-trace'); } },
+      { id: 'trace-coverage', title: 'トレースカバレッジを開く / Trace coverage', hint: 'Tabs', keywords: ['trace', 'coverage', 'とれーす', 'もれ', 'せんい', 'label', 'らべる', 'めっせーじ'], button: 'btn-tab-trace', run: function() { clickById('btn-tab-trace'); } },
       // BLK-primary-20260907-0923: タブバーの道具はどれもパレットに無く、design 1a で
       // ペインが狭くなった後は潰れたラベルを目で数えて押すしか経路が無かった。
       // BLK-primary-20260908-0923-design (7b): タブ列から「ツール ▾」も消えるので、
@@ -24059,7 +24059,6 @@ function setupOutline() {
 var _familyAuditDocs = [];   // 表の行から図へ飛ぶための、表示中の系統の図一覧
 var _familyDensity = null;   // BLK-primary-20260908-1403-wish: 系統ごとの遷移密度
 var _familyTrace = [];       // BLK-primary-20260908-1603-wish: 系統ごとのトレース突合
-var _familyLabelRows = [];   // 上の表の行 → 図の行へ飛ぶための控え
 var _familyLabelPos = null;  // BLK-reviewer-20260908-1703-wish: ラベル位置の慣習
 
 // 遷移密度の表。系統ごとに「1 メッセージ何遷移か」を並べ、他系統の中央値から
@@ -24104,9 +24103,10 @@ function _densityTableHtml(result, SECTION, CELL) {
 
 // ラベル位置の慣習。系統ごとに「遷移ラベルが対応するメッセージの何番目を
 // 指しているか」を並べ、他系統の多数派からズレた系統を上に置く。
-// ラベル突合 (下の表) は実在するかどうかまでしか見ないので、実在名を使って
-// いても系統だけが末尾の内部呼び出し名を指している、という慣習のズレは
+// 遷移ごとの対応 (状態遷移のトレース漏れの表) は実在するかどうかまでしか見ないので、
+// 実在名を使っていても系統だけが末尾の内部呼び出し名を指している、という慣習のズレは
 // ここでしか出ない (今までは 9 系統 × 2 図を開いて何番目かを数えていた)。
+// 行を押すと、その系統の遷移ごとの位置をトレース漏れの表で開く。
 function _labelPositionHtml(result, SECTION, CELL) {
   var lp = window.MA.labelPosition;
   var esc = window.MA.htmlUtils.escHtml;
@@ -24145,74 +24145,16 @@ function _labelPositionHtml(result, SECTION, CELL) {
   return html + '</table>';
 }
 
-// 系統 1 つぶんの「行 → 位置」。ラベル突合表に位置の列を足すために引く。
-function _labelPosEntries(key) {
+// 系統 1 つぶんの「行 → 位置」。トレース漏れの表に位置の列を足すために引く。
+// rank は labelPosition.rank(traceCoverage.audit(...)) の結果。
+function _labelPosEntries(rank, key) {
   var out = {};
-  if (!_familyLabelPos) return out;
-  _familyLabelPos.rows.forEach(function(r) {
+  if (!rank) return out;
+  rank.rows.forEach(function(r) {
     if (r.key !== key) return;
     r.entries.forEach(function(e) { out[e.docId + '#' + e.line] = e; });
   });
   return out;
-}
-
-// ラベル突合表。系統の状態遷移のラベルを「対応するシーケンスのメッセージ名」と
-// 並べ、対応が無い行を先頭に置く。遷移密度が件数しか見ないので、件数は揃って
-// いるのにラベルだけが架空 (Dma_Configure) という食い違いはここでしか出ない。
-// 対応が無い行には、その系統に実在するメッセージ名の候補を添える。
-function _labelTableHtml(key, SECTION, CELL) {
-  var TT = window.MA.traceLabelTable;
-  var esc = window.MA.htmlUtils.escHtml;
-  _familyLabelRows = [];
-  if (!TT) return '';
-  var fam = null;
-  for (var i = 0; i < _familyTrace.length; i++) {
-    if (_familyTrace[i].key === key) fam = _familyTrace[i];
-  }
-  var html = '<div style="' + SECTION + '">'
-    + '遷移ラベル × シーケンスのメッセージ (対応が無い行が上)</div>';
-  if (!fam) {
-    return html + '<div id="fl-empty" style="font-size:11px;color:var(--text-secondary);">'
-      + 'この系統に状態遷移図がありません。</div>';
-  }
-  var t = TT.build(fam);
-  _familyLabelRows = t.rows;
-  html += '<div id="fl-summary" data-missing="' + t.counts.missing + '" '
-    + 'data-rows="' + t.rows.length + '" '
-    + 'style="font-size:11px;color:' + (t.counts.missing ? 'var(--accent-orange)' : 'var(--accent-green)') + ';">'
-    + esc(TT.summaryLine(t)) + '</div>';
-  if (!t.rows.length) return html;
-  html += '<table id="fl-table" style="border-collapse:collapse;width:100%;margin-top:4px;">'
-    + '<tr>'
-    + ['遷移', 'ラベル', '対応するメッセージ', '位置', ''].map(function(h) {
-        return '<th style="' + CELL + 'text-align:left;color:var(--text-secondary);font-weight:normal;">'
-          + esc(h) + '</th>';
-      }).join('') + '</tr>';
-  var posOf = _labelPosEntries(key);
-  var LP = window.MA.labelPosition;
-  t.rows.forEach(function(r, ri) {
-    var bad = r.status === 'missing';
-    // その遷移が指しているメッセージの位置。慣習からズレた行は色を変える
-    // (系統の中でどの行がズレの元かを、上の表から降りて 1 目で見せる)。
-    var pe = posOf[r.docId + '#' + r.line];
-    html += '<tr class="fl-row' + (bad ? ' fl-missing' : '') + '" data-row-index="' + ri + '"'
-      + ' data-status="' + esc(r.status) + '" data-label="' + esc(r.label) + '"'
-      + ' style="cursor:pointer;' + (bad ? 'background:rgba(255,140,0,0.10);' : '') + '">'
-      + '<td style="' + CELL + 'font-family:var(--font-mono);color:var(--text-secondary);">'
-        + esc(r.from) + ' → ' + esc(r.to) + '</td>'
-      + '<td class="fl-label" style="' + CELL + 'font-family:var(--font-mono);'
-        + (bad ? 'color:var(--accent-orange);font-weight:bold;' : '') + '">' + esc(r.label) + '</td>'
-      + '<td class="fl-match" style="' + CELL
-        + (bad ? 'color:var(--accent-orange);' : 'color:var(--text-secondary);') + '">'
-        + esc(TT.matchText(r)) + '</td>'
-      + '<td class="fl-pos" data-position="' + esc(pe ? pe.position : '') + '"'
-        + ' data-odd="' + (pe && pe.odd ? '1' : '0') + '" style="' + CELL
-        + (pe && pe.odd ? 'color:var(--accent-orange);' : 'color:var(--text-secondary);') + '">'
-        + esc(pe && LP ? pe.positionLabel + ' ' + pe.ordinal + '/' + pe.total : '') + '</td>'
-      + '<td style="' + CELL + 'color:var(--text-secondary);">' + esc(r.statusLabel) + '</td>'
-      + '</tr>';
-  });
-  return html + '</table>';
 }
 
 function _familyAuditRender(families, selectedKey) {
@@ -24260,7 +24202,13 @@ function _familyAuditRender(families, selectedKey) {
     + 'style="font-size:11px;color:' + (sel.mismatches.length ? 'var(--accent-orange)' : 'var(--accent-green)') + ';">'
     + esc(fa.summaryLine(sel)) + '</div>';
 
-  html += _labelTableHtml(sel.key, SECTION, CELL);
+  // BLK-owner-20260924-1855-prune: 遷移ごとの「対応するメッセージ」の表は
+  // 状態遷移のトレース漏れ (#tc-modal) の 1 枚に寄せた。ここには案内だけを置き、
+  // 押すとこの系統を選んだ状態でその画面を開く (同じ行を 2 画面で数えない)。
+  html += '<div id="fa-trace-link" style="font-size:11px;color:var(--text-secondary);margin-top:8px;">'
+    + '遷移ごとの対応は '
+    + '<button id="fa-open-trace" data-key="' + esc(sel.key) + '" style="' + BTN + '">状態遷移のトレース漏れ</button>'
+    + ' で見る</div>';
 
   html += '<div style="' + SECTION + '">動作名 × 図 (● がある方にだけ名前がある行が食い違い)</div>'
     + '<table id="fa-matrix" style="border-collapse:collapse;width:100%;">'
@@ -24330,33 +24278,22 @@ function _familyAuditBind(families) {
     });
   }
 
-  // ラベル位置の行 → その系統のラベル突合表へ (ズレの中身をその場で開く)。
+  // ラベル位置の行 → その系統の遷移ごとの表 (状態遷移のトレース漏れ) へ。
+  // どの遷移が慣習からズレているかは、あちらの「位置」の列で読む。
   var pRows = content.querySelectorAll('.lp-row');
   for (var p = 0; p < pRows.length; p++) {
     pRows[p].addEventListener('click', function(ev) {
-      var key = ev.currentTarget.getAttribute('data-key');
-      for (var i = 0; i < families.length; i++) {
-        if (families[i].key !== key) continue;
-        _familyAuditRender(families, key);
-        _familyAuditBind(families);
-        return;
-      }
+      close();
+      openTraceCoverage(ev.currentTarget.getAttribute('data-key'));
     });
   }
 
-  // ラベル突合表の行 → その遷移が書かれている状態遷移図の、その行へ。
-  var lRows = content.querySelectorAll('.fl-row');
-  for (var m = 0; m < lRows.length; m++) {
-    lRows[m].addEventListener('click', function(ev) {
-      var r = _familyLabelRows[Number(ev.currentTarget.getAttribute('data-row-index'))];
-      if (!r || !r.docId || !window.MA.workspace) return;
-      close();
-      saveActiveDoc();
-      window.MA.workspace.setActive(r.docId);
-      applyActiveDoc();
-      _traceScrollToLine(r.line);
-    });
-  }
+  // 案内 → 状態遷移のトレース漏れを、この系統を選んだ状態で開く。
+  var traceBtn = document.getElementById('fa-open-trace');
+  if (traceBtn) traceBtn.addEventListener('click', function(ev) {
+    close();
+    openTraceCoverage(ev.currentTarget.getAttribute('data-key'));
+  });
 
   var famSel = document.getElementById('fa-family');
   if (famSel) famSel.addEventListener('change', function() {
@@ -24391,7 +24328,7 @@ function openFamilyAudit() {
   });
   var families = fa.audit(docs);
   _familyDensity = window.MA.transitionDensity ? window.MA.transitionDensity.rank(docs) : null;
-  // ラベル突合はトレースカバレッジと同じ突合を使う (同じ食い違いを 2 通りに数えない)。
+  // ラベル位置はトレースカバレッジと同じ突合から数える (同じ食い違いを 2 通りに数えない)。
   _familyTrace = window.MA.traceCoverage ? window.MA.traceCoverage.audit(docs) : [];
   // ラベル位置の慣習は、同じトレース突合の結果から数える (同じ食い違いを
   // 2 通りに突き合わせない)。
@@ -24573,7 +24510,23 @@ function _traceRender(families, selectedKey) {
   var sel = null;
   for (var i = 0; i < families.length; i++) if (families[i].key === selectedKey) sel = families[i];
   if (!sel) sel = families[0];
-  _traceRows = sel.rows;
+
+  // BLK-owner-20260924-1855-prune: 系統チェックにあった「遷移ラベル × シーケンスの
+  // メッセージ」の表をここに寄せた。行は traceLabelTable の並び (対応が無い行が上) で、
+  // 対応するメッセージ (無ければ実在名の候補) とラベル位置の慣習の列を足す。
+  // 対象外の遷移は上の担当範囲の欄に並ぶので、表には入れない (二重に並べない)。
+  var TT = window.MA.traceLabelTable;
+  var LP = window.MA.labelPosition;
+  var tRows = TT
+    ? TT.build(sel).rows.filter(function(r) { return r.status !== 'out-of-scope'; })
+    : sel.rows;
+  _traceRows = tRows;
+  var posOf = _labelPosEntries(LP ? LP.rank(families) : null, sel.key);
+  var posOdd = 0;
+  tRows.forEach(function(r) {
+    var pe = posOf[r.docId + '#' + r.line];
+    if (pe && pe.odd) posOdd++;
+  });
 
   html += '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">'
     + '<label for="tc-family">系統</label> '
@@ -24589,10 +24542,12 @@ function _traceRender(families, selectedKey) {
       }).join('')
     + '</select></div>';
 
+  // 見出しは 1 行。漏れの件数は traceCoverage の 1 回だけ数え、ラベル位置のズレを添える。
   html += '<div id="tc-summary" data-missing="' + sel.missing.length + '" '
     + 'data-rows="' + sel.rows.length + '" data-comparable="' + (sel.comparable ? '1' : '0') + '" '
-    + 'style="font-size:11px;color:' + (sel.missing.length ? 'var(--accent-orange)' : 'var(--accent-green)') + ';">'
-    + esc(tc.summaryLine(sel)) + '</div>';
+    + 'data-pos-odd="' + posOdd + '" '
+    + 'style="font-size:11px;color:' + ((sel.missing.length || posOdd) ? 'var(--accent-orange)' : 'var(--accent-green)') + ';">'
+    + esc(tc.summaryLine(sel) + (posOdd ? ' / ラベル位置が慣習とズレ ' + posOdd + ' 件' : '')) + '</div>';
 
   html += '<div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">'
     + '突合先のシーケンス図: '
@@ -24603,17 +24558,18 @@ function _traceRender(families, selectedKey) {
 
   html += _traceScopeSection(sel, SECTION, CELL, BTN);
 
-  html += '<div style="' + SECTION + '">遷移 × 現れたシーケンス (赤い行はどこにも現れない = トレース漏れの候補)</div>'
+  var HEAD = 'text-align:left;color:var(--text-secondary);font-weight:normal;';
+  html += '<div style="' + SECTION + '">遷移 × シーケンスのメッセージ (対応が無い行が上 = トレース漏れの候補)</div>'
     + '<table id="tc-table" style="border-collapse:collapse;width:100%;">'
-    + '<tr><th style="' + CELL + 'text-align:left;">遷移</th>'
-    + '<th style="' + CELL + 'text-align:left;">ラベル</th>'
-    + '<th style="' + CELL + 'text-align:left;">現れたシーケンス</th></tr>';
+    + '<tr>' + ['遷移', 'ラベル', '対応するメッセージ', '現れたシーケンス', '位置'].map(function(h) {
+        return '<th style="' + CELL + HEAD + '">' + esc(h) + '</th>';
+      }).join('') + '</tr>';
 
-  if (sel.rows.length === 0) {
+  if (tRows.length === 0) {
     // 対象外に回した遷移があるのに「遷移がありません」と出すと、
     // 図を書いていないのか見ていないのかが読めない (BLK-reviewer-20260907-2003)。
     var oosN = (sel.outOfScope || []).length;
-    html += '<tr><td id="tc-no-rows" colspan="3" style="' + CELL
+    html += '<tr><td id="tc-no-rows" colspan="5" style="' + CELL
       + 'color:var(--text-secondary);">'
       + (oosN
           ? (sel.declared ? '宣言された遷移がありません (上の欄で宣言してください)'
@@ -24621,19 +24577,29 @@ function _traceRender(families, selectedKey) {
           : 'ラベルの付いた遷移がありません')
       + '</td></tr>';
   }
-  sel.rows.forEach(function(r, ri) {
+  tRows.forEach(function(r, ri) {
     var missing = r.status === 'missing';
+    var seenIn = r.seenIn || [];
     var seen = r.status === 'unknown' ? '(突き合わせていません)'
-      : (r.seenIn.length ? r.seenIn.join(' / ') : 'どこにも現れない');
+      : (seenIn.length ? seenIn.join(' / ') : 'どこにも現れない');
+    var match = TT ? TT.matchText(r) : '';
+    // その遷移が指しているメッセージの位置。慣習からズレた行は色を変える。
+    var pe = posOf[r.docId + '#' + r.line];
     html += '<tr class="tc-row' + (missing ? ' tc-missing' : '') + '" data-row-index="' + ri + '"'
       + ' data-status="' + esc(r.status) + '" data-label="' + esc(r.label) + '"'
       + ' style="cursor:pointer;' + (missing ? 'background:rgba(255,140,0,0.10);' : '') + '">'
       + '<td style="' + CELL + 'font-family:var(--font-mono);color:var(--text-secondary);">'
         + esc(r.from) + ' → ' + esc(r.to) + '</td>'
-      + '<td style="' + CELL + 'font-family:var(--font-mono);'
+      + '<td class="tc-label" style="' + CELL + 'font-family:var(--font-mono);'
         + (missing ? 'color:var(--accent-orange);font-weight:bold;' : '') + '">' + esc(r.label) + '</td>'
-      + '<td style="' + CELL + (missing ? 'color:var(--accent-orange);' : 'color:var(--text-secondary);') + '">'
-        + esc(seen) + (r.status === 'partial' ? ' (部分一致)' : '') + '</td>'
+      + '<td class="tc-match" style="' + CELL + (missing ? 'color:var(--accent-orange);' : 'color:var(--text-secondary);') + '">'
+        + esc(match) + '</td>'
+      + '<td class="tc-seen" style="' + CELL + (missing ? 'color:var(--accent-orange);' : 'color:var(--text-secondary);') + '">'
+        + esc(seen) + '</td>'
+      + '<td class="tc-pos" data-position="' + esc(pe ? pe.position : '') + '"'
+        + ' data-odd="' + (pe && pe.odd ? '1' : '0') + '" style="' + CELL
+        + (pe && pe.odd ? 'color:var(--accent-orange);' : 'color:var(--text-secondary);') + '">'
+        + esc(pe && LP ? pe.positionLabel + ' ' + pe.ordinal + '/' + pe.total : '') + '</td>'
       + '</tr>';
   });
   html += '</table>'
@@ -24737,7 +24703,8 @@ function _traceRefresh(key) {
   return families;
 }
 
-function openTraceCoverage() {
+// key を渡すとその系統を選んだ状態で開く (系統チェックの案内・ラベル位置の行から)。
+function openTraceCoverage(key) {
   var modal = document.getElementById('tc-modal');
   var tc = window.MA.traceCoverage;
   if (!modal || !tc) return null;
@@ -24748,7 +24715,8 @@ function openTraceCoverage() {
   });
   var families = tc.audit(docs);
   _traceScopeDocId = null;
-  _traceRender(families, families.length ? families[0].key : null);
+  var has = key && families.some(function(f) { return f.key === key; });
+  _traceRender(families, has ? key : (families.length ? families[0].key : null));
   _traceBind(families);
   modal.style.display = 'flex';
   return families;

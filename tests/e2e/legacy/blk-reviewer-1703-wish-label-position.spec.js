@@ -77,14 +77,18 @@ test.describe('BLK-reviewer-1703-wish: ラベル位置の慣習を系統横断�
     await expect(s).toContainText('1 件 / 3 件');
   });
 
-  test('ズレた行から、その系統のラベル突合表へ降りられる', async ({ page }) => {
+  // BLK-owner-20260924-1855-prune: 遷移ごとの表は 状態遷移のトレース漏れ (#tc-table) の 1 枚に
+  // 寄せたので、ズレた系統の行はその系統を選んだトレース漏れを開く。
+  test('ズレた行から、その系統の遷移ごとの表へ降りられる', async ({ page }) => {
     await setup(page);
-    await page.locator('#lp-table .lp-row[data-key="spi"]').click();
-    await expect(page.locator('#fa-family')).toHaveValue('spi');
     await page.locator('#lp-table .lp-row[data-key="dma"]').click();
-    await expect(page.locator('#fa-family')).toHaveValue('dma');
-    // 突合表の行に位置の列が出て、ズレた行が色分けされる
-    const cell = page.locator('#fl-table .fl-row').first().locator('.fl-pos');
+    await expect(page.locator('#fa-modal')).toBeHidden();
+    await expect(page.locator('#tc-modal')).toBeVisible();
+    await expect(page.locator('#tc-family')).toHaveValue('dma');
+    await expect(page.locator('#tc-summary')).toHaveAttribute('data-pos-odd', '1');
+    await expect(page.locator('#tc-summary')).toContainText('ラベル位置が慣習とズレ 1 件');
+    // 表の行に位置の列が出て、ズレた行が色分けされる
+    const cell = page.locator('#tc-table .tc-row').first().locator('.tc-pos');
     await expect(cell).toHaveAttribute('data-position', 'tail');
     await expect(cell).toHaveAttribute('data-odd', '1');
     await expect(cell).toContainText('末尾 3/3');
