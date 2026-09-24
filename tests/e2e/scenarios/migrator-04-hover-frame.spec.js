@@ -1132,3 +1132,52 @@ test('migrator 手順 4 — C4 手続きの sequence に alt / loop / ref / 区�
   await expectHit('5 minutes later', 'source-line', 117);
   await expectHit('phone', 'message', 119);
 });
+
+// BLK-builder-20260925-0305-1: `!pragma layout smetana` の SVG は線に行の情報を付けず、関連クラス `(A, B) . C` が
+// あると A→B の線は名前の無い中継点で 2 本に割れる。線を並び順で当てていたので矢じりの側の線に枠が無く、
+// 矢じりを指すと行き先のクラスの枠が出ていた (web/plantuml の group2712 の 4 枚、枠が 21〜43px ずれる)。
+// 線の両端 (data-entity-1 / -2) で当て、`-down->` のような置き方の指示付きの矢印も関係として読む。
+for (const name of ['down', 'left']) {
+  test('migrator 手順 4 — smetana と関連クラスの class 図 (' + name + ') でも、矢じり・クラス・関連クラスの点線に本人の枠が出る', async ({ page }) => {
+    await bootPlain(page);
+    const dsl = fs.readFileSync(path.join(__dirname, '..', '..', 'fixtures', 'dsl', 'class-0305-assoc-' + name + '.puml'), 'utf8')
+      .replace(/\r\n/g, '\n').replace(/\n+$/, '');
+    await typeDsl(page, dsl);
+    await expect(page.locator('#overlay-layer rect[data-type="relation"][data-hit-kind="linkhead"]')).toHaveCount(1, { timeout: 20000 });
+    await expect(page.locator('#overlay-warning')).toBeHidden();
+
+    for (const [label, line] of [['annotation', '5'], ['dog', '6'], ['chases', '7']]) {
+      const { hit } = await hoverHit(page, label);
+      expect(hit, label + ' にホバーして本人の行の枠が出る').toEqual({ type: 'class', line, hover: true });
+    }
+
+    // 矢じりの中心 → 行き先の dog ではなく chases -name-> dog の行 (9 行目)。光る枠 (中継点の両側を 1 つに
+    // 囲む関係の枠) は矢じりを含む (migrator の計測で「ずれ」にならない)。
+    const head = await page.evaluate(() => {
+      const r = document.querySelector('#preview-svg svg g.link polygon').getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height };
+    });
+    await page.mouse.move(3, 3);
+    await page.mouse.move(head.x, head.y);
+    const hot = page.locator('#overlay-layer rect.hit-hover').first();
+    await expect(hot).toHaveAttribute('data-type', 'relation');
+    await expect(hot).toHaveAttribute('data-line', '9');
+    const fb = await hot.boundingBox();
+    const hw = head.w / 2, hh = head.h / 2;
+    expect(fb.x - 1 <= head.x - hw && fb.y - 1 <= head.y - hh &&
+      fb.x + fb.width + 1 >= head.x + hw && fb.y + fb.height + 1 >= head.y + hh, '光る枠が矢じりを含む').toBe(true);
+
+    // 関連クラスの点線 (中継点 → annotation) の中ほど → (chases, dog) . annotation の行 (10 行目)
+    const dash = await page.evaluate(() => {
+      const p = Array.prototype.find.call(document.querySelectorAll('#preview-svg svg g.link path'),
+        (e) => /dasharray/.test(e.getAttribute('style') || ''));
+      const len = p.getTotalLength();
+      const pt = p.getPointAtLength(len / 2);
+      const m = p.getScreenCTM();
+      return { x: pt.x * m.a + pt.y * m.c + m.e, y: pt.x * m.b + pt.y * m.d + m.f };
+    });
+    await page.mouse.move(3, 3);
+    await page.mouse.move(dash.x, dash.y);
+    await expect(page.locator('#overlay-layer rect.hit-hover').first()).toHaveAttribute('data-line', '10');
+  });
+}

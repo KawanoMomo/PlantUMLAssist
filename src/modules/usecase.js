@@ -249,7 +249,7 @@ window.MA.modules.plantumlUsecase = (function() {
     var indent = lines[idx].match(/^(\s*)/)[1];
     var trimmed = lines[idx].trim();
     var deco = window.MA.relationOptions.decorationsOf(lines[idx]);
-    var m = window.MA.relationOptions.plainLine(trimmed).match(RELATION_RE);
+    var m = window.MA.relationOptions.readableLine(trimmed).match(RELATION_RE);
     if (!m) return text;
     var fromRaw = m[1], arrow = m[2], toRaw = m[3], lbl = (m[4] || '').trim();
     var from = DU.unquote(fromRaw), to = DU.unquote(toRaw);
@@ -395,7 +395,7 @@ window.MA.modules.plantumlUsecase = (function() {
         continue;
       }
       // relation
-      m = window.MA.relationOptions.plainLine(trimmed).match(RELATION_RE);
+      m = window.MA.relationOptions.readableLine(trimmed).match(RELATION_RE);
       if (m) {
         var fromRaw = m[1], arrow = m[2], toRaw = m[3], lbl = (m[4] || '').trim();
         var from = DU.unquote(fromRaw);
@@ -1293,7 +1293,10 @@ window.MA.modules.plantumlUsecase = (function() {
           'data-line': relations[ri].line,
           'data-relation-kind': relations[ri].kind,
         };
-        if (!OB.addLinkRects(overlayEl, lg, ucRelAttrs, 8)) {
+        // BLK-builder-20260925-0305-1: 中継点で割れた残りの線も同じ関係の 1 つの枠にする。
+        var lgParts = (linkGroups.parts && linkGroups.parts[ri]) || [];
+        lgParts.forEach(function(pg) { claimed.push(pg); });
+        if (!OB.addLinkRects(overlayEl, lgParts.length ? [lg].concat(lgParts) : lg, ucRelAttrs, 8)) {
           var bb = OB.extractEdgeBBox(lineEl, 8);
           if (!bb) continue;
           OB.addRect(overlayEl, bb.x, bb.y, bb.width, bb.height, ucRelAttrs);

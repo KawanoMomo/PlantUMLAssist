@@ -112,6 +112,12 @@ window.MA.modules.plantumlClass = (function() {
     '(' + ID_WITH_GENERICS + '|"[^"]+")(?:\\s*:\\s*(.+))?\\s*$'
   );
 
+  // BLK-builder-20260925-0305-1: 関連クラス `(A, B) . C` (C が A と B の関連を表すクラス)。
+  // PlantUML は A→B の線を名前の無い中継点で割り、中継点から C へ点線を引く。
+  var ASSOC_CLASS_RE = new RegExp(
+    '^\\(\\s*(' + ID + '|"[^"]+")\\s*,\\s*(' + ID + '|"[^"]+")\\s*\\)\\s*(?:\\.{1,2}|-{1,2})\\s*(' + ID + '|"[^"]+")\\s*$'
+  );
+
   function parse(text) {
     var result = { meta: { title: '', startUmlLine: null }, elements: [], relations: [], groups: [], notes: [], hideShow: [] };
     if (!text || !text.trim()) return result;
@@ -257,7 +263,16 @@ window.MA.modules.plantumlClass = (function() {
           };
           continue;
         }
-        var rm = window.MA.relationOptions.plainLine(trimmed).match(RELATION_RE);
+        var acm = trimmed.match(ASSOC_CLASS_RE);
+        if (acm) {
+          // 関係の一覧には入れない (フォームの種別に無い)。枠だけを線に当てる (buildOverlay)。
+          (result.assocClasses = result.assocClasses || []).push({
+            a: acm[1].replace(/^"|"$/g, ''), b: acm[2].replace(/^"|"$/g, ''),
+            cls: acm[3].replace(/^"|"$/g, ''), line: lineNum,
+          });
+          continue;
+        }
+        var rm = window.MA.relationOptions.readableLine(trimmed).match(RELATION_RE);
         if (rm) {
           var arrow = rm[2];
           var fromTok = rm[1].replace(/^"|"$/g, '');
@@ -890,7 +905,7 @@ window.MA.modules.plantumlClass = (function() {
     var indent = lines[idx].match(/^(\s*)/)[1];
     var trimmed = lines[idx].trim();
     var deco = window.MA.relationOptions.decorationsOf(lines[idx]);
-    var rm = window.MA.relationOptions.plainLine(trimmed).match(RELATION_RE);
+    var rm = window.MA.relationOptions.readableLine(trimmed).match(RELATION_RE);
     if (!rm) return text;
     var arrow = rm[2];
     var from = rm[1].replace(/^"|"$/g, '');
@@ -2842,13 +2857,33 @@ window.MA.modules.plantumlClass = (function() {
           'data-line': relations[ri].line,
           'data-relation-kind': relations[ri].kind,
         };
-        if (!OB.addLinkRects(overlayEl, lg, relAttrs2, 8)) {
+        // BLK-builder-20260925-0305-1: 中継点で割れた残りの線 (矢じりの側) も同じ関係の 1 つの枠にする。
+        var lgParts = (linkGroups.parts && linkGroups.parts[ri]) || [];
+        lgParts.forEach(function(pg) { usedG.push(pg); });
+        if (!OB.addLinkRects(overlayEl, lgParts.length ? [lg].concat(lgParts) : lg, relAttrs2, 8)) {
           var bb2 = OB.extractEdgeBBox(lineEl, 8);
           if (!bb2) continue;
           OB.addRect(overlayEl, bb2.x, bb2.y, bb2.width, bb2.height, relAttrs2);
         }
         matched.relation++;
       }
+
+      // BLK-builder-20260925-0305-1: 関連クラス `(A, B) . C` の点線 (中継点 → C) に、その行を指す枠を置く。
+      // 置かないと点線は行の無い <g> のまま残り、指しても枠が出ない (smetana の SVG は線に行を付けない)。
+      (parsedData.assocClasses || []).forEach(function(ac) {
+        if (!OB.junctionBetween) return;
+        var jid = OB.junctionBetween(svgEl, ac.a, ac.b);
+        var ag = jid ? OB.linkFromJunction(svgEl, jid, ac.cls) : null;
+        if (!ag || usedG.indexOf(ag) >= 0) return;
+        usedG.push(ag);
+        OB.addLinkRects(overlayEl, ag, {
+          'data-type': 'source-line',
+          'data-id': 'src:assoc@' + ac.line,
+          'data-line': String(ac.line),
+          'data-src-kind': 'link',
+          'data-src-name': '(' + ac.a + ', ' + ac.b + ') . ' + ac.cls,
+        }, 8);
+      });
 
       // Notes: BLK-migrator-20260918-0049 — note は今の PlantUML では折り返し角を持つ
       // `<path>` を含む `g.entity` として描かれる (5 点 `<polygon>` ではない)。

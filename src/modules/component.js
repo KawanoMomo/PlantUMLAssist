@@ -1417,7 +1417,10 @@ window.MA.modules.plantumlComponent = (function() {
           Object.keys(hintAttrs).forEach(function(k) { relAttrs[k] = hintAttrs[k]; });
         }
         // BLK-human-20260912-2130: 線・矢じり・ラベルをまとめて 1 つの当たり判定にする
-        if (!OB.addLinkRects(overlayEl, lg, relAttrs, 8)) {
+        // BLK-builder-20260925-0305-1: 中継点で割れた残りの線も同じ関係の 1 つの枠にする。
+        var lgParts = (linkGroups.parts && linkGroups.parts[ri]) || [];
+        lgParts.forEach(function(pg) { claimed.push(pg); });
+        if (!OB.addLinkRects(overlayEl, lgParts.length ? [lg].concat(lgParts) : lg, relAttrs, 8)) {
           bb = OB.extractEdgeBBox(lineEl, 8);
           if (!bb) continue;
           OB.addRect(overlayEl, bb.x, bb.y, bb.width, bb.height, relAttrs);
