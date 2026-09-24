@@ -191,6 +191,32 @@ window.MA.fileMenuUi = (function() {
     });
   }
 
+  // BLK-builder-20260924-1831-2 (design 10b): 移動の行き先の一覧から選んだ隣の保存フォルダへ移す。
+  function moveToDir(name, dir) {
+    if (!dir) return Promise.resolve();
+    return fileOp({ op: 'move', dir: _dir(), name: name, toDir: dir }).then(function(r) {
+      if (!r.ok) { toast('移動できませんでした: ' + (r.data.error || r.status)); return; }
+      toast('「' + name + '」を ' + (r.data.dir || dir) + ' へ移しました');
+      refreshLists();
+    });
+  }
+
+  // 行き先の候補: ツリーに並んでいる部品のフォルダと、読むだけの節に並ぶ隣の保存フォルダ。
+  function moveCandidates() {
+    var parts = [];
+    var dirs = [];
+    if (panel) {
+      Array.prototype.forEach.call(panel.querySelectorAll('.files-part-head[data-part]'), function(h) {
+        var p = h.getAttribute('data-part') || '';
+        if (p) parts.push({ part: p, label: p.toUpperCase() });
+      });
+      Array.prototype.forEach.call(panel.querySelectorAll('.files-ro-folder[data-ro-dir]'), function(h) {
+        dirs.push({ path: h.getAttribute('data-ro-dir') || '', name: h.getAttribute('data-ro-name') || '' });
+      });
+    }
+    return { parts: parts, dirs: dirs };
+  }
+
   function renameToPart(name, part) {
     var to = FM().renameForPart(name, part);
     if (!to) return Promise.resolve();
@@ -266,6 +292,14 @@ window.MA.fileMenuUi = (function() {
     }
   }
 
+  function runMove(it, name) {
+    if (!it) return Promise.resolve();
+    if (it.id === 'move-part') return renameToPart(name, it.part);
+    if (it.id === 'move-dir') return moveToDir(name, it.dir);
+    if (it.id === 'move-path') return moveFile(name);
+    return Promise.resolve();
+  }
+
   function runFolder(action, folder) {
     switch (action) {
       case 'compare':
@@ -322,14 +356,20 @@ window.MA.fileMenuUi = (function() {
     if (ctx.type === 'file' && typeof window._draftHas === 'function') {
       try { draft = !!window._draftHas(ctx.name); } catch (e) {}
     }
-    menuItems = ctx.type === 'file'
-      ? FM().fileItems({ git: _isGit(), draft: draft })
-      : FM().folderItems({ kind: ctx.folder.kind });
+    if (ctx.type === 'move') {
+      var cand = moveCandidates();
+      menuItems = FM().moveTargets(ctx.name, cand.parts, cand.dirs);
+    } else {
+      menuItems = ctx.type === 'file'
+        ? FM().fileItems({ git: _isGit(), draft: draft })
+        : FM().folderItems({ kind: ctx.folder.kind });
+    }
     menu.textContent = '';
     menu.setAttribute('data-menu-kind', ctx.type);
     var title = document.createElement('div');
     title.className = 'files-ctx-title';
-    title.textContent = ctx.type === 'file' ? ctx.name
+    title.textContent = ctx.type === 'move' ? ctx.name + ' の移動先'
+      : ctx.type === 'file' ? ctx.name
       : (ctx.folder.kind === 'part' ? String(ctx.folder.part).toUpperCase()
         : ctx.folder.kind === 'target' ? '保存先' : (ctx.folder.name || '読むだけ'));
     menu.appendChild(title);
@@ -363,9 +403,17 @@ window.MA.fileMenuUi = (function() {
       b.addEventListener('click', function(ev) {
         ev.stopPropagation();
         var c = menuCtx;
+        // design 10b (BLK-builder-20260924-1831-2): 「別のフォルダへ移動…」は閉じずに、
+        // 同じメニューの中を行き先の一覧に替える (パスを打たせる前に、見えている行き先を選ばせる)。
+        if (c && c.type === 'file' && it.id === 'move') {
+          openMenu({ type: 'move', name: c.name, row: c.row },
+            parseFloat(menu.style.left) || 4, parseFloat(menu.style.top) || 4);
+          return;
+        }
         closeMenu(false);
         if (!c) return;
-        if (c.type === 'file') runFile(it.id, c.name);
+        if (c.type === 'move') runMove(it, c.name);
+        else if (c.type === 'file') runFile(it.id, c.name);
         else runFolder(it.id, c.folder);
       });
       b.addEventListener('mouseenter', function() { menuActive = i; paintActive(); });
