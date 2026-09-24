@@ -5683,11 +5683,27 @@ function _changeBoardModel() {
     var since = kind === 'saved' ? _cbFolderSince() : _cbBaseAt();
     docs = docs.concat(CB.folderExtras(_fiFileDocs, docs, { since: since }));
   }
+  // BLK-primary-20260924-2232-friction: 会議セットに保存先から選んだ図 (開いておらず今日も更新していない図) も並べる。
+  var MSp = window.MA.meetingSet;
+  var picked = {};
+  if (_msActive() && MSp.folderPicks && _fiFolderMode()) {
+    var extra = MSp.folderPicks(_fiFileDocs, docs);
+    extra.forEach(function(d) { picked[d.name] = d; });
+    docs = docs.concat(extra);
+  }
   if (kind === 'meeting' || kind === 'today') {
     var names = docs.map(function(d) { return d.name; });
     _cbLoadBaseAt(names).then(function(changed) { if (changed) renderChangeBoard(); });
   }
   var baselineOf = _cbBaselineFn();
+  // 保存先から選んだ図で変更前が引けないものは、今の中身を変更前にする (変更前 / 変更後が同じ図になる。
+  // 「新しく作った図です」と言わない)。
+  var baseRaw = baselineOf;
+  baselineOf = function(name) {
+    var b = baseRaw(name);
+    if (b || !picked[name]) return b;
+    return { at: picked[name].mtime || '', dsl: picked[name].dsl };
+  };
   // 会議セット中は、選んだ図だけを選んだ順に、変わっていなくても並べる
   // (会議で「この図は今回触っていません」と見せる場面がそのまま手順になる)。
   if (_msActive()) {
@@ -6125,9 +6141,24 @@ function renderMeetingDocOptions() {
   var docs = _renameDocs();
   var keep = sel.value;
   var html = '';
-  docs.forEach(function(d) {
-    html += '<option value="' + esc(d.name) + '">' + esc(d.name) + '</option>';
+  // BLK-primary-20260924-2232-friction: 開いているタブの図に加えて保存先の図も並べる
+  // (図を開き直さずに、名前を選んで ＋追加 の 2 操作で 1 枚ずつ会議セットに入れられる)。
+  var MS = window.MA.meetingSet;
+  var opts = (MS && MS.docOptions)
+    ? MS.docOptions(docs, _fiFolderMode() ? _fiFileDocs : [])
+    : docs.map(function(d) { return { name: d.name, group: 'open', picked: false }; });
+  var LABEL = { open: '開いている図', folder: '保存先の図' };
+  var cur = '';
+  opts.forEach(function(o) {
+    if (o.group !== cur) {
+      if (cur) html += '</optgroup>';
+      html += '<optgroup label="' + esc(LABEL[o.group] || o.group) + '">';
+      cur = o.group;
+    }
+    html += '<option value="' + esc(o.name) + '" data-group="' + esc(o.group) + '">'
+      + esc((o.picked ? '✓ ' : '') + o.name) + '</option>';
   });
+  if (cur) html += '</optgroup>';
   sel.innerHTML = html;
   if (keep) sel.value = keep;
   if (!sel.value) {
@@ -6150,6 +6181,7 @@ function toggleMeetingDoc(name) {
     return false;
   }
   renderChangeBoard();
+  renderMeetingDocOptions();
   return now;
 }
 
@@ -6594,7 +6626,13 @@ function toggleChangeBoard(open) {
       ? '今日この保存フォルダで更新されたファイルも並べる (いつもの 14 枚に限らない)'
       : '保存先がフォルダのときだけ使えます (設定 → 自動保存)';
   }
-  if (_cbFolderOn()) loadFolderImpact(true).then(function() { renderChangeBoard(); }, function() {});
+  // BLK-primary-20260924-2232-friction: 会議セットの候補に保存先の図も出すので、ボードに
+  // フォルダの図を並べない設定でも一覧は読む。
+  if (_cbFolderOn()) {
+    loadFolderImpact(true).then(function() { renderChangeBoard(); renderMeetingDocOptions(); }, function() {});
+  } else if (_fiFolderMode()) {
+    loadFolderImpact(false).then(function() { renderMeetingDocOptions(); }, function() {});
+  }
   renderChangeBaseSelect();
   _cbLoadMeetings().then(function() { renderChangeBaseSelect(); renderChangeBoard(); });
   renderChangeBoard();
