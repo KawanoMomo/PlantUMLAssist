@@ -301,11 +301,36 @@ test('手順8 右クリックの「複製」、F2 で名前変更、Delete で�
   await expect(treeFile(page, 'spi_state_copy')).toBeVisible();
   expect(await S.readDoc(page, DIR, 'spi_state_copy')).toContain('SPI 状態遷移');
 
-  // F2 → 名前を打つ → 付け替わる (前の名前のファイルは残らない)。
+  // F2 → 行の名前がその場で入力欄になる → 打って Enter → 付け替わる (前の名前のファイルは残らない)。
+  // design 10b (BLK-builder-20260924-1917-1): 以前はブラウザの入力窓が画面の上端に出ていた。
+  let dialogs = 0;
+  const onDialog = (d) => { dialogs++; d.dismiss(); };
+  page.on('dialog', onDialog);
   await treeFile(page, 'spi_state_copy').focus();
-  page.once('dialog', (d) => d.accept('spi_state_v2'));
   await page.keyboard.press('F2');
+  const input = page.locator('#files-panel #files-rename-input');
+  await expect(input).toBeFocused();
+  await expect(input).toHaveValue('spi_state_copy');
+  // 入力欄は行のあった場所 (SPI の中) に出て、行は隠れる。
+  await expect(page.locator('#files-parts .files-part-body #files-rename-input')).toHaveCount(1);
+  await expect(treeFile(page, 'spi_state_copy')).toBeHidden();
+  // Esc で取り消すと行が戻り、名前は変わらない。
+  await page.keyboard.press('Escape');
+  await expect(input).toHaveCount(0);
+  await expect(treeFile(page, 'spi_state_copy')).toBeFocused();
+  // 決まりに合わない名前は欄の下に理由が出て、欄は開いたまま。
+  await page.keyboard.press('F2');
+  await page.keyboard.type('spi/state');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#files-rename-note')).toBeVisible();
+  await expect(input).toBeVisible();
+  expect(await S.readDoc(page, DIR, 'spi_state_copy')).toContain('SPI 状態遷移');
+  await input.fill('');
+  await page.keyboard.type('spi_state_v2');
+  await page.keyboard.press('Enter');
   await expect(treeFile(page, 'spi_state_v2')).toBeVisible();
+  page.off('dialog', onDialog);
+  expect(dialogs).toBe(0);
   await expect(treeFile(page, 'spi_state_copy')).toHaveCount(0);
   expect(await S.readDoc(page, DIR, 'spi_state_copy')).toBeNull();
 

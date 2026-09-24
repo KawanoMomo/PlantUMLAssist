@@ -158,16 +158,106 @@ window.MA.fileMenuUi = (function() {
         return Promise.resolve();
       }
     }
+    // design 10b (BLK-builder-20260924-1917-1): 開いていない図は、ツリーのその行の名前がその場で入力欄になる
+    // (エクスプローラの F2 と同じ)。以前はブラウザの入力窓が画面の上端に出て、どの行を直しているか読めなかった。
+    var row = treeFileRow(name);
+    if (row) return renameInline(row, name);
     var rule = ws && ws.nameRuleText ? ws.nameRuleText() : '新しい名前';
-    var next = FM().cleanName(window.prompt(rule, name), name);
-    if (!next) return Promise.resolve();
+    return commitRename(name, FM().cleanName(window.prompt(rule, name), name));
+  }
+
+  function commitRename(name, next) {
+    if (!next) return Promise.resolve(false);
     return fileOp({ op: 'rename', dir: _dir(), name: name, to: next }).then(function(r) {
-      if (!r.ok) { toast('名前を変えられませんでした: ' + (r.data.error || r.status)); return; }
+      if (!r.ok) { toast('名前を変えられませんでした: ' + (r.data.error || r.status)); return false; }
       if (window.MA.reviewDesk) { try { window.MA.reviewDesk.renameBaseline(name, next); } catch (e) {} }
       if (window.MA.lineage) { try { window.MA.lineage.rename(name, next); } catch (e) {} }
       toast('「' + name + '」を「' + next + '」に変えました');
       refreshLists();
+      return true;
     });
+  }
+
+  function treeFileRow(name) {
+    if (!panel) return null;
+    var rows = panel.querySelectorAll('.files-part-file[data-file-name]');
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].getAttribute('data-file-name') === name && rows[i].offsetParent !== null) return rows[i];
+    }
+    return null;
+  }
+
+  // 行を隠し、同じ位置に名前の入力欄を置く (ボタンの中に入力欄は置けない)。
+  // Enter で確定・Esc で取り消し・欄の外を押すと確定。決まりに合わない名前は欄の下に理由を 1 行出し、欄は開いたまま。
+  function renameInline(row, name) {
+    var old = document.getElementById('files-rename-box');
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+    var box = document.createElement('div');
+    box.id = 'files-rename-box';
+    box.className = 'files-rename-box';
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.id = 'files-rename-input';
+    input.className = 'files-rename-input';
+    input.value = name;
+    input.setAttribute('aria-label', name + ' の新しい名前 (Enter で確定・Esc で取り消し)');
+    input.setAttribute('data-rename-of', name);
+    var note = document.createElement('div');
+    note.id = 'files-rename-note';
+    note.className = 'files-rename-note';
+    note.hidden = true;
+    box.appendChild(input);
+    box.appendChild(note);
+    row.parentNode.insertBefore(box, row.nextSibling);
+    // 行は display: flex を持つので hidden 属性では消えない。
+    row.style.display = 'none';
+    var done = false;
+    var busy = false;
+    function close(focusRow) {
+      if (done) return;
+      done = true;
+      if (box.parentNode) box.parentNode.removeChild(box);
+      row.style.display = '';
+      if (focusRow && document.body.contains(row)) row.focus();
+    }
+    function commit() {
+      if (done || busy) return Promise.resolve(false);
+      var ws = WS();
+      var raw = input.value;
+      var next = FM().cleanName(raw, name);
+      if (!next) { close(true); return Promise.resolve(false); }
+      var why = FM().renameProblem(next, ws && ws.isValidName ? ws.isValidName : null,
+        ws && ws.nameRuleText ? ws.nameRuleText() : '');
+      if (why) {
+        note.textContent = why;
+        note.hidden = false;
+        input.focus();
+        return Promise.resolve(false);
+      }
+      busy = true;
+      return commitRename(name, next).then(function(ok) {
+        busy = false;
+        if (ok) { close(false); return true; }
+        note.textContent = '名前を変えられませんでした (同じ名前の図が無いか確かめてください)';
+        note.hidden = false;
+        input.focus();
+        return false;
+      });
+    }
+    input.addEventListener('keydown', function(ev) {
+      if (ev.isComposing) return;
+      if (ev.key === 'Enter') { ev.preventDefault(); ev.stopPropagation(); commit(); return; }
+      if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); close(true); }
+    });
+    input.addEventListener('input', function() { note.hidden = true; });
+    input.addEventListener('blur', function() {
+      // 理由を出している間は開いたまま (外を押して消えると、何が悪かったか読めない)。
+      window.setTimeout(function() { if (!done && note.hidden) commit(); }, 0);
+    });
+    input.focus();
+    // 拡張子は出していないので、名前の全体を選ぶ (打てばそのまま置き換わる)。
+    try { input.setSelectionRange(0, input.value.length); } catch (e) {}
+    return Promise.resolve(true);
   }
 
   function copyFile(name) {
