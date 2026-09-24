@@ -6631,8 +6631,15 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   display: flex; align-items: center; gap: 6px;
   padding: 6px 8px; border-bottom: 1px solid var(--border);
   font-size: 12px; color: var(--text-primary);
+  /* BLK-builder-20260924-1801-2 (design 9a / 10c): 枠が狭いときは相手選びを次の行へ回し、
+     見出し「比較相手」を押し縮めない (「比較相 / 手」と 2 行に折れていた)。 */
+  flex-wrap: wrap;
+  position: relative; padding-right: 30px;
 }
-#senior-head select { flex: 1; min-width: 0; font-size: 11px; }
+#senior-head > strong { flex-shrink: 0; white-space: nowrap; }
+/* 閉じる × は折り返しても枠の右上に留める (折り返した行の頭に 1 つだけ落ちない)。 */
+#senior-head > #senior-close { position: absolute; top: 6px; right: 8px; }
+#senior-head select { flex: 1 1 120px; min-width: 120px; font-size: 11px; }  /* 折り返すときは潰れず次の行へ (BLK-builder-20260924-1801-2) */
 /* design 9a: 据え置く / 1 回だけ。押している方だけを地色で示す 2 択 */
 #senior-mode { display: inline-flex; flex-shrink: 0; }
 /* BLK-owner-20260923-1509-prune: 相手を選ぶ列。据え置きの切替と同じ見た目で、
