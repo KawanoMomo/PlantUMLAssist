@@ -96,6 +96,7 @@ window.MA.modules.plantumlActivity = (function() {
   }
 
   function parse(text) {
+    var srcLines = String(text || '').split('\n');
     text = _normalizeLegacy(text || '');
     var result = {
       meta: { title: '', startUmlLine: null },
@@ -104,6 +105,8 @@ window.MA.modules.plantumlActivity = (function() {
       notes: [],
     };
     if (!text || !text.trim()) return result;
+    // 図の上の矢印が「どの行の後か」を引くために本文の行を持たせる (比べる対象に入らないよう列挙しない)。
+    Object.defineProperty(result, 'sourceLines', { value: srcLines, enumerable: false });
     var lines = text.split('\n');
     var state = {
       counter: 0,
@@ -1560,14 +1563,13 @@ window.MA.modules.plantumlActivity = (function() {
   function _matchActionsByText(svgEl, flat) {
     var boxes = [];
     Array.prototype.forEach.call(svgEl.querySelectorAll('rect'), function(r) {
+      if (_inDecor(r)) return;
       var h = parseFloat(r.getAttribute('height')) || 0;
       var w = parseFloat(r.getAttribute('width')) || 0;
       if (h < 16 || w < 10) return;
       boxes.push({ el: r, x: parseFloat(r.getAttribute('x')) || 0, y: parseFloat(r.getAttribute('y')) || 0, w: w, h: h, label: null });
     });
-    var texts = Array.prototype.map.call(svgEl.querySelectorAll('text'), function(t) {
-      return { x: parseFloat(t.getAttribute('x')) || 0, y: parseFloat(t.getAttribute('y')) || 0, s: t.textContent || '' };
-    });
+    var texts = _textsIn(svgEl);
     boxes.forEach(function(b) {
       for (var i = 0; i < texts.length; i++) {
         var t = texts[i];
@@ -1612,6 +1614,278 @@ window.MA.modules.plantumlActivity = (function() {
         return;
       }
     });
+  }
+
+  // BLK-migrator-20260924-2232: 図の題・凡例・見出し・脚注・図の下の説明は、PlantUML が
+  // <g class="title" data-source-line> に行を残す。本文の並びを数えず、その行で当てる
+  // (題が付いても動作・分岐の対応はずれない)。data-source-line は @startuml を 0 とする。
+  var DECOR_SELECTOR = 'g.title, g.legend, g.caption, g.header, g.footer';
+  function _addDecorRects(svgEl, parsedData, overlayEl) {
+    var base = (parsedData && parsedData.meta && parsedData.meta.startUmlLine) || 1;
+    Array.prototype.forEach.call(svgEl.querySelectorAll(DECOR_SELECTOR), function(g, i) {
+      var sl = parseInt(g.getAttribute('data-source-line'), 10);
+      if (isNaN(sl)) return;
+      var bb = OB.extractUnionBBox(g, 'text, rect, polygon, path, line');
+      if (!bb || !(bb.width > 0 || bb.height > 0)) return;
+      var cls = (g.getAttribute('class') || '').split(/\s+/)[0];
+      OB.addRect(overlayEl, bb.x - 4, bb.y - 4, bb.width + 8, bb.height + 8, {
+        'data-type': 'source-line',
+        'data-id': 'src:' + cls + '@' + (base + sl) + ':' + i,
+        'data-src-kind': cls,
+        'data-line': String(base + sl),
+      });
+    });
+  }
+
+  // 題・凡例などの <g> の中の図形は、動作や分岐の箱として数えない。
+  function _inDecor(el) {
+    var n = el.parentNode;
+    while (n && n.tagName && n.tagName.toLowerCase() !== 'svg') {
+      if (n.tagName.toLowerCase() === 'g' && /^(title|legend|caption|header|footer)$/.test(
+        (n.getAttribute('class') || '').split(/\s+/)[0])) return true;
+      n = n.parentNode;
+    }
+    return false;
+  }
+
+  function _textsIn(svgEl) {
+    return Array.prototype.filter.call(svgEl.querySelectorAll('text'), function(t) { return !_inDecor(t); })
+      .map(function(t) {
+        return { el: t, x: parseFloat(t.getAttribute('x')) || 0, y: parseFloat(t.getAttribute('y')) || 0, s: t.textContent || '' };
+      });
+  }
+
+  // 分岐 (if / elseif / while) の菱形は、中に描かれた条件の文字で先に当てる。
+  // elseif の菱形は本文の並びでは数えられず (if 1 つに菱形が 2 つ描かれる)、並び順だけでは枠が出なかった。
+  function _matchDecisionsByText(svgEl, flat) {
+    var texts = _textsIn(svgEl);
+    var polys = [];
+    Array.prototype.forEach.call(svgEl.querySelectorAll('polygon'), function(p) {
+      if (_inDecor(p) || _parsePoints(p).length !== 7) return;
+      var bb = _polygonBBox(p);
+      if (!bb) return;
+      var label = '';
+      texts.forEach(function(t) {
+        // 文字の中央が菱形の中にあるものだけ (菱形の脇に描く枝のラベル yes / no は含めない)。
+        var mid = t.x + (parseFloat(t.el.getAttribute('textLength')) || 0) / 2;
+        if (mid >= bb.x && mid <= bb.x + bb.width && t.y >= bb.y && t.y <= bb.y + bb.height + 2) label += _normLabel(t.s);
+      });
+      polys.push({ el: p, label: label });
+    });
+    var wants = [];
+    flat.forEach(function(n) {
+      if (n.kind === 'if') {
+        wants.push({ node: n, line: n.line, want: _normLabel(n.condition) });
+        (n.branches || []).forEach(function(b) {
+          if (b.kind === 'elseif') wants.push({ node: n, line: b.line, want: _normLabel(b.condition), extra: true });
+        });
+      } else if (n.kind === 'while') {
+        wants.push({ node: n, line: n.line, want: _normLabel(n.condition) });
+      }
+    });
+    var used = [];
+    var out = [];
+    wants.forEach(function(w) {
+      if (!w.want) return;
+      for (var i = 0; i < polys.length; i++) {
+        var p = polys[i];
+        if (!p.label || used.indexOf(p) >= 0) continue;
+        if (p.label === w.want || (p.label.length >= 4 && w.want.indexOf(p.label) === 0)) {
+          used.push(p); out.push({ node: w.node, line: w.line, el: p.el, extra: !!w.extra }); return;
+        }
+      }
+    });
+    return out;
+  }
+
+  // 矢印の前にある本文の行 (この矢印の上に足す = その行の後に足す)。空行・コメントは飛ばす。
+  function _flowLineBefore(lines, targetLine) {
+    if (!lines.length) return targetLine > 1 ? targetLine - 1 : 0;
+    var t = String(lines[targetLine - 1] || '').trim();
+    // elseif / else の菱形へ入る矢印は「条件が違ったとき」の道。行はその分岐の行にする。
+    if (/^(elseif|else)\b/i.test(t)) return targetLine;
+    for (var i = targetLine - 2; i >= 0; i--) {
+      var s = String(lines[i] || '').trim();
+      if (!s || s.charAt(0) === "'") continue;
+      if (/^@startuml/i.test(s)) return 0;
+      return i + 1;
+    }
+    return 0;
+  }
+
+  // BLK-migrator-20260924-2232: 新記法の矢印は PlantUML が <g> にも行にも入れず、線と矢じりだけを描く。
+  // 矢じりの先が触れている要素 (無ければ線の元の要素) を描いた位置から探し、
+  // 「その要素の前 (= 本文でその 1 つ前の行の後)」を指す枠を置く。押せばその位置に足せる。
+  function _addFlowRects(svgEl, overlayEl, lines) {
+    var frames = Array.prototype.filter.call(overlayEl.querySelectorAll('rect.selectable'), function(r) {
+      return /^(action|decision|start|stop|end|fork|note)$/.test(r.getAttribute('data-type') || '');
+    }).map(function(r) {
+      return {
+        x: parseFloat(r.getAttribute('x')) || 0, y: parseFloat(r.getAttribute('y')) || 0,
+        w: parseFloat(r.getAttribute('width')) || 0, h: parseFloat(r.getAttribute('height')) || 0,
+        line: parseInt(r.getAttribute('data-line'), 10),
+      };
+    });
+    var segs = Array.prototype.filter.call(svgEl.querySelectorAll('line'), function(l) { return !_inDecor(l); })
+      .map(function(l) {
+        return { x1: parseFloat(l.getAttribute('x1')) || 0, y1: parseFloat(l.getAttribute('y1')) || 0,
+          x2: parseFloat(l.getAttribute('x2')) || 0, y2: parseFloat(l.getAttribute('y2')) || 0 };
+      });
+    function frameAt(x, y) {
+      var best = null;
+      frames.forEach(function(f) {
+        if (x < f.x - 2 || x > f.x + f.w + 2 || y < f.y - 2 || y > f.y + f.h + 2) return;
+        if (!best || f.w * f.h < best.w * best.h) best = f;
+      });
+      return best;
+    }
+    // 既に枠のある文字 (枝のラベル・レーンの見出しなど) は矢印の文字にしない。
+    var placed = Array.prototype.map.call(overlayEl.querySelectorAll('rect.selectable'), function(r) {
+      return { x: parseFloat(r.getAttribute('x')) || 0, y: parseFloat(r.getAttribute('y')) || 0,
+        w: parseFloat(r.getAttribute('width')) || 0, h: parseFloat(r.getAttribute('height')) || 0 };
+    });
+    var texts = _textsIn(svgEl).filter(function(t) {
+      return !placed.some(function(f) {
+        return t.x + 1 >= f.x && t.x + 1 <= f.x + f.w && t.y - 3 >= f.y && t.y - 3 <= f.y + f.h;
+      });
+    });
+    var n = 0;
+    Array.prototype.forEach.call(svgEl.querySelectorAll('polygon'), function(p) {
+      if (_inDecor(p)) return;
+      var pts = _parsePoints(p);
+      if (pts.length !== 4) return;
+      var bb = _polygonBBox(p);
+      if (!bb || bb.width > 20 || bb.height > 20) return;
+      var cx = (pts[0].x + pts[1].x + pts[2].x + pts[3].x) / 4;
+      var cy = (pts[0].y + pts[1].y + pts[2].y + pts[3].y) / 4;
+      var tip = pts[0], far = -1;
+      pts.forEach(function(q) {
+        var d = (q.x - cx) * (q.x - cx) + (q.y - cy) * (q.y - cy);
+        if (d > far) { far = d; tip = q; }
+      });
+      var dx = tip.x - cx, dy = tip.y - cy;
+      // 矢じりと同じ向きで、矢じりの先に端がある線 = この矢印の最後の区間。
+      var own = segs.filter(function(s) {
+        var ends = [[s.x1, s.y1], [s.x2, s.y2]];
+        var touch = ends.some(function(e) { return Math.abs(e[0] - tip.x) < 1.5 && Math.abs(e[1] - tip.y) < 1.5; });
+        if (!touch) return false;
+        var sx = s.x2 - s.x1, sy = s.y2 - s.y1;
+        return Math.abs(sx * dy - sy * dx) <= 0.2 * Math.sqrt(sx * sx + sy * sy) * Math.sqrt(dx * dx + dy * dy) + 0.01;
+      });
+      var line = 0;
+      var target = frameAt(tip.x, tip.y);
+      if (target && target.line) line = _flowLineBefore(lines, target.line);
+      if (!line) {
+        own.forEach(function(s) {
+          if (line) return;
+          var far1 = Math.abs(s.x1 - tip.x) + Math.abs(s.y1 - tip.y) > Math.abs(s.x2 - tip.x) + Math.abs(s.y2 - tip.y);
+          var src = far1 ? frameAt(s.x1, s.y1) : frameAt(s.x2, s.y2);
+          if (src && src.line) line = src.line;
+        });
+      }
+      if (!line) return;
+      var x0 = bb.x, y0 = bb.y, x1 = bb.x + bb.width, y1 = bb.y + bb.height;
+      own.forEach(function(s) {
+        x0 = Math.min(x0, s.x1, s.x2); x1 = Math.max(x1, s.x1, s.x2);
+        y0 = Math.min(y0, s.y1, s.y2); y1 = Math.max(y1, s.y1, s.y2);
+      });
+      // 線の両端は要素の縁に接するだけなので、線の向きには 1 px だけ、横 (縦) には余白を取る。
+      var attrs = { 'data-type': 'flow', 'data-id': 'flow:' + line + ':' + n, 'data-line': String(line) };
+      var pad = 3;
+      var vertical = Math.abs(dy) >= Math.abs(dx);
+      if (vertical) {
+        OB.addRect(overlayEl, x0 - pad, y0 - 1, (x1 - x0) + pad * 2, Math.max(2, y1 - y0) + 2, attrs);
+      } else {
+        OB.addRect(overlayEl, x0 - 1, y0 - pad, Math.max(2, x1 - x0) + 2, (y1 - y0) + pad * 2, attrs);
+      }
+      // 矢印に書いた文字 (`-> 成功;`) は縦の線のすぐ右に描かれる。押せば同じ矢印が選ばれる
+      // (枠は文字の上だけに出す。data-id を分け、矢印の枠と一緒には光らせない)。
+      if (vertical) {
+        texts.forEach(function(t) {
+          if (t.claimed) return;
+          if (t.y < y0 || t.y > y1 + 12 || t.x < tip.x + 1 || t.x > tip.x + 10) return;
+          var tb = OB.nodeBBox(t.el);
+          if (!tb) return;
+          t.claimed = true;
+          OB.addRect(overlayEl, tb.x - 3, tb.y - 3, tb.width + 6, tb.height + 6, {
+            'data-type': 'flow', 'data-id': 'flow:' + line + ':' + n + ':label', 'data-line': String(line),
+          });
+        });
+      }
+      n++;
+    });
+    return n;
+  }
+
+  // BLK-migrator-20260924-2232: ここまでで枠の無い文字 (switch の条件・case、while の出口の no、
+  // repeat while の yes、ノートの本文など) は、同じ文字を書いた本文の行で当てる。
+  // 同じ文字が何度も出るときは、図の上の順と本文の順を 1 つずつ対にする。
+  // 押すとその行が選ばれる (フォームで直せる要素ならそのフォーム、無ければ行の表示)。
+  function _addTextFallback(svgEl, parsedData, overlayEl, lines) {
+    if (!lines.length) return 0;
+    var placed = Array.prototype.map.call(overlayEl.querySelectorAll('rect.selectable'), function(r) {
+      return { x: parseFloat(r.getAttribute('x')) || 0, y: parseFloat(r.getAttribute('y')) || 0,
+        w: parseFloat(r.getAttribute('width')) || 0, h: parseFloat(r.getAttribute('height')) || 0 };
+    });
+    function covered(x, y) {
+      return placed.some(function(f) { return x >= f.x && x <= f.x + f.w && y >= f.y && y <= f.y + f.h; });
+    }
+    var from = 0, to = lines.length;
+    for (var a = 0; a < lines.length; a++) { if (/^\s*@startuml/i.test(lines[a])) { from = a + 1; break; } }
+    for (var b = lines.length - 1; b >= from; b--) { if (/^\s*@enduml/i.test(lines[b])) { to = b; break; } }
+    var body = [];
+    for (var k = from; k < to; k++) {
+      var raw = String(lines[k] || '').trim();
+      if (!raw || raw.charAt(0) === "'") continue;
+      body.push({ line: k + 1, norm: _normLabel(raw.replace(/\\n/g, ' ')), raw: raw });
+    }
+    var nextFor = {};
+    var shapes = Array.prototype.filter.call(svgEl.querySelectorAll('polygon, rect'), function(el) {
+      return !_inDecor(el);
+    }).map(function(el) { return { el: el, bb: _shapeBBox(el) }; }).filter(function(s) { return s.bb && s.bb.width > 0; });
+    var flat = _flattenNodes(parsedData.nodes || [], []);
+    var notes = parsedData.notes || [];
+    var n = 0;
+    _textsIn(svgEl).forEach(function(t) {
+      var want = _normLabel(t.s);
+      if (!want) return;
+      var mid = t.x + (parseFloat(t.el.getAttribute('textLength')) || 0) / 2;
+      if (covered(mid, t.y - 3)) return;
+      var esc = want.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      // 2 文字以下 (yes / no など) は括弧の中に書いたものだけを同じ文字と見なす。
+      var re = want.length <= 3 ? new RegExp('\\(' + esc + '\\)') : null;
+      var start = nextFor[want] || 0;
+      var hit = null;
+      for (var i = start; i < body.length; i++) {
+        if (re ? re.test(body[i].norm) : body[i].norm.indexOf(want) >= 0) { hit = body[i]; nextFor[want] = i + 1; break; }
+      }
+      if (!hit) return;
+      var bb = OB.nodeBBox(t.el);
+      if (!bb) return;
+      // 文字を囲む図形 (switch の菱形・ノートの紙) があれば、その図形ごと囲む。
+      var box = null;
+      shapes.forEach(function(s) {
+        var sb = s.bb;
+        if (mid < sb.x || mid > sb.x + sb.width || t.y < sb.y || t.y > sb.y + sb.height + 2) return;
+        if (covered(sb.x + sb.width / 2, sb.y + sb.height / 2) && covered(sb.x + 1, sb.y + 1)) return;
+        if (sb.width * sb.height > 40000) return;
+        if (!box || sb.width * sb.height < box.width * box.height) box = sb;
+      });
+      var r = box ? { x: box.x, y: box.y, w: box.width, h: box.height }
+        : { x: bb.x - 3, y: bb.y - 3, w: bb.width + 6, h: bb.height + 6 };
+      var node = null;
+      flat.forEach(function(fn) { if (!node && fn.line <= hit.line && (fn.endLine || fn.line) >= hit.line && fn.kind === 'action') node = fn; });
+      var note = null;
+      notes.forEach(function(nt) { if (!note && nt.line <= hit.line && (nt.endLine || nt.line) >= hit.line) note = nt; });
+      var attrs;
+      if (note) attrs = { 'data-type': 'note', 'data-id': note.id, 'data-line': String(note.line) };
+      else if (node) attrs = { 'data-type': 'action', 'data-id': node.id, 'data-line': String(node.line) };
+      else attrs = { 'data-type': 'source-line', 'data-id': 'src:text@' + hit.line + ':' + n, 'data-src-kind': 'text', 'data-line': String(hit.line) };
+      OB.addRect(overlayEl, r.x, r.y, r.w, r.h, attrs);
+      placed.push(r);
+      n++;
+    });
+    return n;
   }
 
   function _hasLinkLines(svgEl) {
@@ -1674,9 +1948,19 @@ window.MA.modules.plantumlActivity = (function() {
         'data-type': 'action', 'data-id': m.node.id, 'data-line': String(m.node.line),
       });
     });
-    var textNodes = byText.map(function(m) { return m.node; });
-    var textEls = byText.map(function(m) { return m.el; });
-    matched = matched.filter(function(sh) { return textEls.indexOf(sh.el) < 0; });
+    var decByText = _matchDecisionsByText(svgEl, flat);
+    decByText.forEach(function(m) {
+      var bb = _shapeBBox(m.el);
+      if (!bb) return;
+      OB.addRect(overlayEl, bb.x, bb.y, bb.width, bb.height, {
+        'data-type': 'decision', 'data-id': m.node.id, 'data-line': String(m.line),
+      });
+    });
+    var textNodes = byText.map(function(m) { return m.node; })
+      .concat(decByText.filter(function(m) { return !m.extra; }).map(function(m) { return m.node; }));
+    var textEls = byText.map(function(m) { return m.el; }).concat(decByText.map(function(m) { return m.el; }));
+    var decExtra = decByText.filter(function(m) { return m.extra; }).length;
+    matched = matched.filter(function(sh) { return textEls.indexOf(sh.el) < 0 && !_inDecor(sh.el); });
 
     // Greedy match: for each flat node, find next matching shape in document order
     var shapeIdx = 0;
@@ -1697,9 +1981,10 @@ window.MA.modules.plantumlActivity = (function() {
       });
     });
 
-    // 文字で当てた動作の箱は matched から外してあるので、数に戻して比べる。
-    if (matched.length + byText.length !== flat.filter(function(n) { return expectedKind(n); }).length) {
-      OB.warnIfMismatch('activity', flat.length, matched.length + byText.length);
+    // 文字で当てた動作・菱形は matched から外してあるので、数に戻して比べる。
+    var byTextCount = byText.length + decByText.length - decExtra;
+    if (matched.length + byTextCount !== flat.filter(function(n) { return expectedKind(n); }).length) {
+      OB.warnIfMismatch('activity', flat.length, matched.length + byTextCount);
     }
 
     // Notes: match 5-point polygons in document order, excluding closed-diamond merge markers (endif/endwhile).
@@ -1732,6 +2017,9 @@ window.MA.modules.plantumlActivity = (function() {
 
     _addBranchLabelRects(svgEl, parsedData, overlayEl);
     _addSwimlaneHeaderRects(svgEl, parsedData, overlayEl);
+    _addDecorRects(svgEl, parsedData, overlayEl);
+    _addFlowRects(svgEl, overlayEl, parsedData.sourceLines || []);
+    _addTextFallback(svgEl, parsedData, overlayEl, parsedData.sourceLines || []);
 
     // BLK-human-20260912-2130: 小さい当たり判定を手前に。共通実装 (src/core)
     OB.raiseSmallestLast(overlayEl);
@@ -1751,6 +2039,7 @@ window.MA.modules.plantumlActivity = (function() {
       if (sel.type === 'note') { _renderNoteEdit(sel, parsedData, propsEl, ctx); return _appendInsertHere(sel, propsEl, ctx); }
       if (sel.type === 'swimlane') { _renderSwimlaneEdit(sel, parsedData, propsEl, ctx); return _appendInsertHere(sel, propsEl, ctx); }
       if (sel.type === 'branch') { _renderBranchPick(sel, parsedData, propsEl, ctx); return _appendInsertHere(sel, propsEl, ctx); }
+      if (sel.type === 'flow') { _renderFlowPick(sel, parsedData, propsEl, ctx); return _appendInsertHere(sel, propsEl, ctx); }
     }
     propsEl.innerHTML = '<div style="font-size:11px;color:var(--text-secondary);">複数選択は未対応 (Activity)</div>';
   }
@@ -1766,6 +2055,18 @@ window.MA.modules.plantumlActivity = (function() {
       '<div style="font-size:11px;margin-bottom:8px;">' + esc(where) + '</div>' +
       '<div style="font-size:10px;color:var(--text-secondary);">この側に足すものを下で選びます。' +
       '枝の名前を変えるときは分岐の菱形を選んでください。</div>';
+  }
+
+  // BLK-migrator-20260924-2232: 図の上で矢印 (流れ) を選んだとき。どの行の後の流れかを言い、
+  // 下の「＋ ここに挿入」がその矢印の上 (= その行の後) を既定にする。
+  function _renderFlowPick(sel, parsedData, propsEl, ctx) {
+    var AI = window.MA.activityInsert;
+    var esc = window.MA.htmlUtils.escHtml;
+    var where = AI ? AI.pointLabel(ctx.getMmdText(), sel.line, 'after') : ('L' + sel.line);
+    propsEl.innerHTML =
+      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">流れの矢印 (L' + sel.line + ' の後)</div>' +
+      '<div style="font-size:11px;margin-bottom:8px;">' + esc(where) + '</div>' +
+      '<div style="font-size:10px;color:var(--text-secondary);">この矢印の上に足すものを下で選びます。</div>';
   }
 
   // 選んだ要素のフォームの下に「＋ ここに挿入」を足す (BLK-junior-20260908-0103)。
