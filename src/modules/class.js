@@ -83,13 +83,18 @@ window.MA.modules.plantumlClass = (function() {
     '^namespace\\s+(?:"([^"]+)"|(' + ID + '))\\s*\\{\\s*$'
   );
 
+  // BLK-builder-20260925-0654-3: note の相手はクラスのメンバー (`E::field1`) でもよく、
+  // 後ろに色 (`#yellow`) や ステレオタイプ (`<<yellowNote>>`) が付く。
+  // 組: 1 位置 / 2 クラス / 3 メンバー / 4 色・ステレオタイプ(先頭の空白込み) / 5 本文 (inline のみ)。
+  // `E::field1 #yellow` を inline の `E` + 本文 `:field1 #yellow` と読まないよう、本文の `:` の次の `:` を拒む。
+  var NOTE_TARGET = '(' + ID + ')(?:::([^\\s:#<]+))?((?:\\s+(?:#[^\\s:]+|<<[^>]+>>))*)';
   var NOTE_INLINE_RE = new RegExp(
-    '^note\\s+(left|right|top|bottom)\\s+of\\s+(' + ID + ')\\s*:\\s*(.*)$',
+    '^note\\s+(left|right|top|bottom)\\s+of\\s+' + NOTE_TARGET + '\\s*:(?!:)\\s*(.*)$',
     'i'
   );
 
   var NOTE_BLOCK_OPEN_RE = new RegExp(
-    '^note\\s+(left|right|top|bottom)\\s+of\\s+(' + ID + ')\\s*$',
+    '^note\\s+(left|right|top|bottom)\\s+of\\s+' + NOTE_TARGET + '\\s*$',
     'i'
   );
   var END_NOTE_RE = /^end\s+note\s*$/i;
@@ -140,6 +145,8 @@ window.MA.modules.plantumlClass = (function() {
             id: '__n_' + result.notes.length,
             position: openNote.position,
             targetId: openNote.targetId,
+            member: openNote.member,
+            suffix: openNote.suffix,
             text: openNote.bodyLines.join('\n'),
             line: openNote.startLine,
             endLine: lineNum,
@@ -247,7 +254,9 @@ window.MA.modules.plantumlClass = (function() {
             id: '__n_' + result.notes.length,
             position: noteMatch[1].toLowerCase(),
             targetId: noteMatch[2],
-            text: noteMatch[3],
+            member: noteMatch[3] || '',
+            suffix: noteMatch[4] || '',
+            text: noteMatch[5],
             line: lineNum,
             endLine: lineNum,
           });
@@ -259,6 +268,8 @@ window.MA.modules.plantumlClass = (function() {
             startLine: lineNum,
             position: blockMatch[1].toLowerCase(),
             targetId: blockMatch[2],
+            member: blockMatch[3] || '',
+            suffix: blockMatch[4] || '',
             bodyLines: [],
           };
           continue;
@@ -521,14 +532,16 @@ window.MA.modules.plantumlClass = (function() {
   function fmtPackage(label) { return 'package "' + label + '" {'; }
   function fmtNamespace(label) { return 'namespace ' + label + ' {'; }
 
-  function fmtNote(position, targetId, text) {
+  // opts.member / opts.suffix: メンバーを指す `::field1` と 色・ステレオタイプ (` #yellow`) を書き戻す。
+  function fmtNote(position, targetId, text, opts) {
     var pos = (position || 'left').toLowerCase();
     if (typeof text !== 'string') text = '';
+    var target = targetId + (opts && opts.member ? '::' + opts.member : '') + (opts && opts.suffix ? opts.suffix : '');
     if (text.indexOf('\n') < 0) {
-      return 'note ' + pos + ' of ' + targetId + ' : ' + text;
+      return 'note ' + pos + ' of ' + target + ' : ' + text;
     }
     var bodyLines = text.split('\n');
-    var out = ['note ' + pos + ' of ' + targetId];
+    var out = ['note ' + pos + ' of ' + target];
     bodyLines.forEach(function(l) { out.push(l); });
     out.push('end note');
     return out;
@@ -948,13 +961,15 @@ window.MA.modules.plantumlClass = (function() {
     var blockMatch = startTrimmed.match(NOTE_BLOCK_OPEN_RE);
     var current = null;
     if (inlineMatch) {
-      current = { position: inlineMatch[1].toLowerCase(), targetId: inlineMatch[2], text: inlineMatch[3] };
+      current = { position: inlineMatch[1].toLowerCase(), targetId: inlineMatch[2],
+        member: inlineMatch[3] || '', suffix: inlineMatch[4] || '', text: inlineMatch[5] };
     } else if (blockMatch) {
       var bodyLines = [];
       for (var k = startIdx + 1; k <= endIdx - 1; k++) {
         bodyLines.push(lines[k].replace(/^  /, ''));
       }
-      current = { position: blockMatch[1].toLowerCase(), targetId: blockMatch[2], text: bodyLines.join('\n') };
+      current = { position: blockMatch[1].toLowerCase(), targetId: blockMatch[2],
+        member: blockMatch[3] || '', suffix: blockMatch[4] || '', text: bodyLines.join('\n') };
     }
     if (!current) return text;
 
@@ -962,7 +977,11 @@ window.MA.modules.plantumlClass = (function() {
     var newText = fields.text != null ? fields.text : current.text;
 
     var newTarget = fields.targetId ? fields.targetId : current.targetId;
-    var formatted = fmtNote(newPos, newTarget, newText);
+    // 相手のクラスを替えたらメンバー (`::field1`) は元のクラスのものなので外す。色・ステレオタイプは残す。
+    var formatted = fmtNote(newPos, newTarget, newText, {
+      member: newTarget === current.targetId ? current.member : '',
+      suffix: current.suffix,
+    });
     var newLines;
     if (Array.isArray(formatted)) {
       newLines = formatted;
@@ -2712,6 +2731,40 @@ window.MA.modules.plantumlClass = (function() {
         return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
       }
 
+      // BLK-builder-20260925-0654-3: メンバーを指す note の「tips」。g.entity / g.link の外にある
+      // 吹き出しの <path> の直後に折り返し角の <path> (4 点) が続き、その後ろに本文の <text> が並ぶ。
+      // 枠は吹き出しの箱だけに取る (メンバーへ伸びる尖りの 1 点は x・y とも 1 回しか出ないので外す)。
+      function _memberNoteTips(root) {
+        var out = [];
+        Array.prototype.forEach.call(root.querySelectorAll('path'), function(p) {
+          var par = p.parentNode;
+          while (par && par !== root) {
+            var cls = par.getAttribute ? (par.getAttribute('class') || '') : '';
+            if (/\b(entity|link|cluster)\b/.test(cls)) return;
+            par = par.parentNode;
+          }
+          var corner = p.nextElementSibling;
+          if (!corner || corner.tagName.toLowerCase() !== 'path') return;
+          var cpts = (corner.getAttribute('d') || '').match(/-?\d+(?:\.\d+)?,-?\d+(?:\.\d+)?/g) || [];
+          if (cpts.length !== 4) return;
+          // 円弧 `A rx,ry ...` の半径の組は点ではないので外す
+          var pts = (p.getAttribute('d') || '').replace(/A\s*-?\d+(?:\.\d+)?,-?\d+(?:\.\d+)?/g, 'A').match(/-?\d+(?:\.\d+)?,-?\d+(?:\.\d+)?/g) || [];
+          if (pts.length < 6) return;
+          var xc = {}, yc = {};
+          pts.forEach(function(s) { var xy = s.split(','); xc[xy[0]] = (xc[xy[0]] || 0) + 1; yc[xy[1]] = (yc[xy[1]] || 0) + 1; });
+          var xs = Object.keys(xc).filter(function(k) { return xc[k] >= 2; }).map(parseFloat);
+          var ys = Object.keys(yc).filter(function(k) { return yc[k] >= 2; }).map(parseFloat);
+          if (xs.length < 2 || ys.length < 2) return;
+          var texts = [];
+          var sib = corner.nextElementSibling;
+          while (sib && sib.tagName.toLowerCase() === 'text') { texts.push(sib.textContent || ''); sib = sib.nextElementSibling; }
+          var x0 = Math.min.apply(null, xs), x1 = Math.max.apply(null, xs);
+          var y0 = Math.min.apply(null, ys), y1 = Math.max.apply(null, ys);
+          out.push({ el: p, texts: texts, bbox: { x: x0, y: y0, width: x1 - x0, height: y1 - y0 } });
+        });
+        return out;
+      }
+
       function _polygonBBox(p) {
         if (!p) return null;
         if (typeof p.getBBox === 'function') {
@@ -2891,6 +2944,42 @@ window.MA.modules.plantumlClass = (function() {
       // どの要素にも取られなかった `g.entity` を文書順に note へ当て、
       // それで数が合わないときだけ旧来の 5 点 polygon を見る。
       var notes = parsedData.notes || [];
+      // BLK-builder-20260925-0654-3: メンバーを指す note (`note right of E::field1`) は、PlantUML が
+      // クラスの横に「tips」として描き、`g.entity` に入らない裸の <path> 2 本 (吹き出し + 折り返し角) と
+      // その後ろの <text> になる。これを先に当て、残りを従来どおり g.entity / 5 点 polygon に当てる。
+      var memberNotes = notes.filter(function(n) { return !!n.member; });
+      if (memberNotes.length > 0) {
+        var tips = _memberNoteTips(svgEl);
+        var tipUsed = [];
+        var assign = {};
+        var norm = function(s) { return String(s || '').replace(/\s+/g, ' ').trim(); };
+        // 本文の 1 行目と tips の 1 行目の文字で当てる (描かれる順はメンバーの順で、DSL の順と違いうる)
+        memberNotes.forEach(function(n) {
+          var first = norm(String(n.text || '').split('\n').filter(function(l) { return norm(l); })[0]);
+          for (var ti = 0; ti < tips.length; ti++) {
+            if (tipUsed[ti]) continue;
+            if (first && norm(tips[ti].texts[0]) === first) { tipUsed[ti] = true; assign[n.id] = tips[ti]; return; }
+          }
+        });
+        // 文字で当たらないもの (Creole の装飾で描かれた文字が違う等) は残りを文書順に
+        memberNotes.forEach(function(n) {
+          if (assign[n.id]) return;
+          for (var ti = 0; ti < tips.length; ti++) {
+            if (!tipUsed[ti]) { tipUsed[ti] = true; assign[n.id] = tips[ti]; return; }
+          }
+        });
+        memberNotes.forEach(function(n) {
+          var tip = assign[n.id];
+          if (!tip || !tip.bbox) return;
+          OB.addRect(overlayEl, tip.bbox.x, tip.bbox.y, tip.bbox.width, tip.bbox.height, {
+            'data-type': 'note',
+            'data-id': n.id,
+            'data-line': n.line,
+            'data-target-id': n.targetId,
+          });
+        });
+        notes = notes.filter(function(n) { return !assign[n.id]; });
+      }
       if (notes.length > 0) {
         // どの要素にも取られず、かつ note の形 (箱でも丸でもなく折り返し角の path) のものだけ。
         // 引き当てられなかったクラス (ロリポップ表記の interface など) を note と取り違えない。
