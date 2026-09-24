@@ -47,6 +47,15 @@ test('人間 手順 6 — 手元の .puml を 2 枚ドロップして 2 タブ�
   await expect(page.locator('#imp-clipboard')).toBeVisible();
   await expect(page.locator('#imp-folder')).toBeVisible();
   await expect(page.locator('#import-menu .menu-note')).toContainText('ドラッグ');
+  // BLK-builder-20260924-1736-2 (design 9a): 上部バーの右端のメニューは窓の中に収まり、Ctrl+O の札まで読める
+  {
+    const vw = page.viewportSize().width;
+    const menuBox = await page.locator('#import-menu').boundingBox();
+    expect(menuBox.x).toBeGreaterThanOrEqual(0);
+    expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(vw);
+    const keyBox = await page.locator('#imp-file .menu-key').boundingBox();
+    expect(keyBox.x + keyBox.width).toBeLessThanOrEqual(vw);
+  }
   await page.keyboard.press('Escape');
   await page.locator('#btn-import').click();
   await expect(page.locator('#btn-open-file-empty')).toHaveText('ファイルを開く(.puml)');
