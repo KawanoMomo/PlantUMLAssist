@@ -4552,7 +4552,9 @@ table.vault-table button.vault-open:hover { border-color: var(--accent); }
   font-family: var(--font-mono);
   color: var(--text-primary);
   padding: 1px 0;
+  cursor: pointer;
 }
+#symptom-systems .sym-sys-head:hover { background: var(--bg-secondary); text-decoration: underline; }
 #symptom-systems .sym-sys-doc {
   display: flex;
   gap: 5px;
@@ -9025,8 +9027,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
               <strong>版履歴を症状の語で探す</strong>
               <label for="dg-ver-kw">語</label>
               <input type="text" id="dg-ver-kw"
-                placeholder="症状や部品名（既定は選んだ部品名）"
-                title="影響が届く図の版履歴から、この語を含む版だけを新しい順に並べる">
+                placeholder="症状や部品名（下の「名前」と同じ語）"
+                title="この語を含む版だけを新しい順に並べる。上で選んでいる部品名なら影響が届く図に、それ以外の語なら保存フォルダの版全体から引く。下の「名前」にも同じ語が入る">
               <label title="当たり行が書き換わった版だけに畳む（読むだけの版を外す）">
                 <input type="checkbox" id="dg-ver-changed" checked> 書き換わった版だけ
               </label>

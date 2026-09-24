@@ -709,6 +709,82 @@ test.describe('primary 手順 4: 症状に関わる部品がいつの版から�
     await expect(page.locator('#editor')).toHaveValue(/Spi_Driver -> PowerCtrl/);
     await expect(page.locator('#editor')).not.toHaveValue(/電源/);
   });
+
+  // BLK-primary-20260924-2132-wish: 不具合の語から「今その語を含む図」と「その語が書き換わった過去の版」を
+  // 追うのに、📂 一覧と ▤ 影響を見る を往復し、版履歴は部品名のプルダウンを先に選ばないと出なかった。
+  // ▤ を開いて語を 1 か所に 1 回打つだけで、上段の版履歴と下段の出てくる行が同じ語で並ぶことを見る。
+  async function dvRows(page) {
+    await page.waitForFunction(() => {
+      const el = document.getElementById('dg-ver-summary');
+      return !!el && Number(el.getAttribute('data-rows')) > 0;
+    });
+  }
+
+  test('▤ を開いて語を 1 回打つだけで、今の図と過去の版が同じ語で並ぶ（部品名を先に選ばない）', async ({ page }) => {
+    await openDepGraph(page);
+    // 開いた直後は語が空 (依存グラフが先頭に出す部品名を版履歴の語に勝手に入れない)。
+    await expect(page.locator('#dg-ver-kw')).toHaveValue('');
+    await page.locator('#ns-q').click();
+    await page.keyboard.type('Spi_Driver');
+    // 下段に打った語が上段の語にも入り、部品名のプルダウンも合う (選び直さない)。
+    await expect(page.locator('#dg-ver-kw')).toHaveValue('Spi_Driver');
+    await expect(page.locator('#dg-name')).toHaveValue('Spi_Driver');
+    await dvRows(page);
+    const sum = page.locator('#dg-ver-summary');
+    await expect(sum).toHaveAttribute('data-docs', '2');
+    await expect(page.locator('#dg-ver-list .dgv-row[data-doc="spi_init_sequence"][data-current="1"]'))
+      .toHaveCount(1);
+    // 下段: 今その語を含む図と行。
+    await expect(page.locator('#ns-rows .ns-row[data-name="spi_init_sequence"]')).toHaveCount(1);
+    await expect(page.locator('#ns-rows .ns-row[data-name="dma_class"]')).toHaveCount(1);
+    await expect(page.locator('#ns-rows .ns-row[data-name="adc_init_sequence"]')).toHaveCount(0);
+  });
+
+  test('部品名でない語は、保存フォルダの版全体から引く（影響が届かない図の版も並ぶ）', async ({ page }) => {
+    await openDepGraph(page);
+    await pickPart(page, 'Spi_Driver');
+    // 上段の語に打っても、下段の名前欄が同じ語になる。
+    await page.locator('#dg-ver-kw').click();
+    await page.keyboard.press('Control+a');
+    await page.keyboard.type('init');
+    await expect(page.locator('#ns-q')).toHaveValue('init');
+    await dvRows(page);
+    const sum = page.locator('#dg-ver-summary');
+    await expect(sum).toHaveAttribute('data-scope', 'folder');
+    await expect(sum).toContainText('保存フォルダ');
+    // adc_init_sequence は Spi_Driver の影響一覧に載らないが、init を含むので並ぶ。
+    const adc = page.locator('#dg-ver-list .dgv-row[data-doc="adc_init_sequence"]');
+    await expect(adc.first()).toBeVisible();
+    await expect(adc.first().locator('td.dgv-hop')).toHaveText('保存フォルダ');
+    await expect(page.locator('#dg-ver-list .dgv-row[data-doc="spi_init_sequence"] td.dgv-hop').first())
+      .toHaveText('直接');
+    // 下段も同じ語で、今その語を含む図が並ぶ。
+    await expect(page.locator('#ns-rows .ns-row[data-name="adc_init_sequence"]')).toHaveCount(1);
+    await expect(page.locator('#ns-rows .ns-row[data-name="spi_init_sequence"]')).toHaveCount(1);
+    // 部品名に戻すと、今までどおり影響が届く図に絞る。
+    await page.locator('#dg-ver-kw').click();
+    await page.keyboard.press('Control+a');
+    await page.keyboard.type('Spi_Driver');
+    await expect(sum).toHaveAttribute('data-scope', 'impact');
+    await expect(sum).toHaveAttribute('data-docs', '2');
+  });
+
+  test('⇄ 症状検索で当たった語の行から、同じ語で ▤ 影響を見る が開く', async ({ page }) => {
+    await page.locator('#btn-tab-symptom').click();
+    await expect(page.locator('#symptom-panel')).toHaveClass(/open/);
+    await page.locator('#symptom-scan-folder').check();
+    await page.locator('#symptom-text').click();
+    await page.keyboard.type('Spi_Driver の初期化が返らない');
+    const head = page.locator('#symptom-systems .sym-sys[data-term="Spi_Driver"] .sym-sys-head');
+    await expect(head).toBeVisible();
+    await head.click();
+    await expect(page.locator('#ri-modal')).toBeVisible();
+    await expect(page.locator('#ns-q')).toHaveValue('Spi_Driver');
+    await expect(page.locator('#dg-ver-kw')).toHaveValue('Spi_Driver');
+    await dvRows(page);
+    await expect(page.locator('#dg-ver-list .dgv-row[data-doc="spi_init_sequence"]').first()).toBeVisible();
+    await expect(page.locator('#ns-rows .ns-row[data-name="spi_init_sequence"]')).toHaveCount(1);
+  });
 });
 
 // BLK-primary-20260917-0323-wish: 新人に引き継ぐ場面の手順 4。統一を終えた図を
