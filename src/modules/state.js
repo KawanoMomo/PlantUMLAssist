@@ -1313,7 +1313,7 @@ window.MA.modules.plantumlState = (function() {
       var html2 = '';
       if (kind === 'state') {
         html2 =
-          P.fieldHtml('ID', 'st-tail-id', '', '例: Idle') +
+          P.fieldHtml('名前', 'st-tail-id', '', '例: Idle') +
           P.selectFieldHtml('ステレオタイプ', 'st-tail-stereo', [
             { value: '', label: '(none)', selected: true },
             { value: 'choice', label: 'choice' },
@@ -1321,7 +1321,7 @@ window.MA.modules.plantumlState = (function() {
             { value: 'historyDeep', label: 'historyDeep' }
           ]) +
           placeHtml('state') +
-          P.primaryButtonHtml('st-tail-add', '+ State 追加');
+          P.primaryButtonHtml('st-tail-add', '+ 追加');
       } else if (kind === 'child') {
         // BLK-human-20260915-1206: 「どの状態の中に入れるか」を先に選ばせる。
         // 親が中身を持たなければその場で `{ }` に開くので、変換の手は要らない。
@@ -1332,7 +1332,7 @@ window.MA.modules.plantumlState = (function() {
           : P.selectFieldHtml('親にする状態', 'st-tail-where-target', parentOpts) +
             P.fieldHtml('子状態の名前', 'st-tail-id', '', '例: Warmup (空なら Sub)') +
             '<input type="hidden" id="st-tail-where" value="inside">' +
-            P.primaryButtonHtml('st-tail-add', '＋ 子状態を追加') +
+            P.primaryButtonHtml('st-tail-add', '+ 追加') +
             '<div id="st-tail-child-hint" style="font-size:10px;color:var(--text-secondary);margin-top:4px;line-height:1.5;">' +
               '選んだ状態の中に入れます (DSL は <code>state 親 { state 子 }</code>)。' +
               '中身をまだ持たない状態でも、その場で中を開くので変換は要りません。' +
@@ -1341,9 +1341,9 @@ window.MA.modules.plantumlState = (function() {
             '</div>';
       } else if (kind === 'composite') {
         html2 =
-          P.fieldHtml('ID', 'st-tail-id', '', '例: Outer') +
+          P.fieldHtml('名前', 'st-tail-id', '', '例: Outer') +
           placeHtml('composite') +
-          P.primaryButtonHtml('st-tail-add', '+ Composite 追加');
+          P.primaryButtonHtml('st-tail-add', '+ 追加');
       } else if (kind === 'transition') {
         // BLK-human-20260923-2000: 開いたままの回。from は直前の to、to は図の状態を押して選ぶ。
         if (!_tx.open) { _tx.open = true; _tx.pick = 'to'; _tx.to = ''; _bindTxCapture(); }
@@ -1367,9 +1367,9 @@ window.MA.modules.plantumlState = (function() {
             (_tx.note ? window.MA.htmlUtils.escHtml(_tx.note)
               : (_tx.pick === 'to' ? '図で遷移先の状態を押してください (同じ状態を押すと自己遷移)'
                 : (_tx.pick === 'from' ? '図で遷移元の状態を押してください' : ''))) + '</div>' +
-          P.selectFieldHtml('From', 'st-tail-from', fromOpts) +
+          P.selectFieldHtml('始点 (From)', 'st-tail-from', fromOpts) +
           '<button id="st-tx-pick-from" type="button" style="font-size:10px;padding:2px 8px;margin:-2px 0 6px 0;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">図で From を選び直す</button>' +
-          P.selectFieldHtml('To', 'st-tail-to', toOpts) +
+          P.selectFieldHtml('終点 (To)', 'st-tail-to', toOpts) +
           P.fieldHtml('きっかけ / trigger', 'st-tail-trig', '', '例: start') +
           P.vocabPickerHtml('st-tail-trig-vocab', { roles: ['method', 'event'] }) +
           P.fieldHtml('条件 / guard', 'st-tail-guard', '', '例: retry > 3') +
@@ -1380,7 +1380,7 @@ window.MA.modules.plantumlState = (function() {
             { value: 'to', label: '直前の遷移先から', selected: _tx.mode !== 'same' },
             { value: 'same', label: '直前と同じ From', selected: _tx.mode === 'same' }
           ]) +
-          P.primaryButtonHtml('st-tail-add', '+ Transition 追加 (Enter)') +
+          P.primaryButtonHtml('st-tail-add', '+ 追加 (Enter)') +
           '<button id="st-tx-close" type="button" style="width:100%;font-size:11px;padding:4px 8px;margin-top:4px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">続けて入れるのを終える (Esc)</button>';
       } else if (kind === 'pseudo') {
         html2 =
@@ -1395,22 +1395,22 @@ window.MA.modules.plantumlState = (function() {
           })) +
           '<div id="st-ps-state-box"></div>' +
           '<div id="st-ps-hint" style="font-size:10px;color:var(--text-secondary);margin:4px 0;line-height:1.5;"></div>' +
-          P.primaryButtonHtml('st-tail-add', '＋ 追加');
+          P.primaryButtonHtml('st-tail-add', '+ 追加');
       } else if (kind === 'note') {
         html2 =
-          P.selectFieldHtml('Target', 'st-tail-target', stateOpts) +
-          P.selectFieldHtml('Position', 'st-tail-pos', [
+          P.selectFieldHtml('付ける相手', 'st-tail-target', stateOpts) +
+          P.selectFieldHtml('位置', 'st-tail-pos', [
             { value: 'right', label: 'Right', selected: true },
             { value: 'left', label: 'Left' }
           ]) +
-          '<div style="margin-bottom:6px;"><label style="display:block;font-size:10px;color:var(--text-secondary);">Text</label><textarea id="st-tail-ntext" style="width:100%;min-height:50px;"></textarea></div>' +
-          P.primaryButtonHtml('st-tail-add', '+ Note 追加');
+          '<div style="margin-bottom:6px;"><label style="display:block;font-size:10px;color:var(--text-secondary);">本文</label><textarea id="st-tail-ntext" style="width:100%;min-height:50px;"></textarea></div>' +
+          P.primaryButtonHtml('st-tail-add', '+ 追加');
       } else if (kind === 'bulk') {
         html2 =
           '<label style="display:block;font-size:10px;color:var(--text-secondary);">state と遷移を 1 行 1 件で</label>' +
           window.MA.reuseModal.buttonHtml('st-tail-reuse') +
           '<textarea id="st-tail-bulk" style="width:100%;min-height:90px;font-family:inherit;font-size:12px;"></textarea>' +
-          P.primaryButtonHtml('st-tail-add', '+ まとめて末尾に追加') +
+          P.primaryButtonHtml('st-tail-add', '+ まとめて追加') +
           '<div id="st-tail-bulk-hint" style="font-size:10px;color:var(--text-secondary);margin-top:4px;line-height:1.5;">' +
             'Idle / state Active / Error : 異常検知 / Sel &lt;&lt;choice&gt;&gt; (state) /<br>' +
             '[*] --&gt; Idle / Idle --&gt; Active : start / Active --&gt; Error : fail [retry &gt; 3] / log()。' +

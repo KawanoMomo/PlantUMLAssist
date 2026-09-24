@@ -15,10 +15,10 @@ window.MA.activityInsert = (function() {
     { kind: 'action',   label: 'アクション',        hint: ':処理;' },
     { kind: 'if',       label: '条件分岐 (if)',     hint: 'if / else / endif' },
     { kind: 'while',    label: '繰り返し (while)',  hint: 'while / endwhile' },
-    { kind: 'repeat',   label: '繰り返し (repeat)', hint: 'repeat / repeat while' },
-    { kind: 'fork',     label: '並行処理 (fork)',   hint: 'fork / fork again / end fork' },
-    { kind: 'note',     label: 'ノート',            hint: 'note right' },
-    { kind: 'swimlane', label: 'スイムレーンを分ける', hint: '|レーン名|' },
+    { kind: 'repeat',   label: '後判定の繰り返し (repeat)', hint: 'repeat / repeat while' },
+    { kind: 'fork',     label: '並行 (fork)',   hint: 'fork / fork again / end fork' },
+    { kind: 'note',     label: '注釈 (note)',       hint: 'note right' },
+    { kind: 'swimlane', label: 'レーン (swimlane)', hint: '|レーン名|' },
     { kind: 'break',    label: '中断 (break)',      hint: 'break' },
     { kind: 'detach',   label: '切り離し (detach)', hint: 'detach' },
     { kind: 'kill',     label: '打ち切り (kill)',   hint: 'kill' },
@@ -314,8 +314,8 @@ window.MA.activityInsert = (function() {
     if (kind === 'if') {
       return [
         { id: 'cond', label: '条件', value: '', placeholder: '例: 受信成功?' },
-        { id: 'thenLabel', label: 'then のラベル', value: 'yes' },
-        { id: 'elseLabel', label: 'else のラベル (空で else なし)', value: 'no' },
+        { id: 'thenLabel', label: 'yes のラベル', value: 'yes' },
+        { id: 'elseLabel', label: 'no のラベル (空で no 側なし)', value: 'no' },
       ];
     }
     if (kind === 'while' || kind === 'repeat') {
@@ -325,7 +325,7 @@ window.MA.activityInsert = (function() {
       ];
     }
     if (kind === 'fork') return [{ id: 'branchCount', label: '枝の数', value: '2' }];
-    if (kind === 'note') return [{ id: 'text', label: 'ノート本文', value: '' }];
+    if (kind === 'note') return [{ id: 'text', label: '注釈の本文', value: '' }];
     if (kind === 'swimlane') return [{ id: 'name', label: 'レーン名', value: '' }];
     return [];   // break / detach / kill / start / stop は入力なし
   }

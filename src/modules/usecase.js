@@ -651,58 +651,58 @@ window.MA.modules.plantumlUsecase = (function() {
       var html = '';
       if (kind === 'actor') {
         html =
-          P.fieldHtml('Alias (識別子)', 'uc-tail-alias', '', '例: User（日本語は表示名になります）') +
+          P.fieldHtml('名前 (識別子)', 'uc-tail-alias', '', '例: User（日本語は表示名になります）') +
           aliasHintHtml() +
-          P.fieldHtml('Label (表示名)', 'uc-tail-label', '', '省略可、Alias と異なる場合に表示用') +
+          P.fieldHtml('表示名', 'uc-tail-label', '', '省略可、名前と異なる場合に表示用') +
           GP.fieldHtml('usecase', 'uc-tail', parsedData.groups) +
-          P.primaryButtonHtml('uc-tail-add', '+ Actor 追加');
+          P.primaryButtonHtml('uc-tail-add', '+ 追加');
       } else if (kind === 'usecase') {
         html =
-          P.fieldHtml('Alias (識別子)', 'uc-tail-alias', '', '例: L1（日本語は表示名になります）') +
+          P.fieldHtml('名前 (識別子)', 'uc-tail-alias', '', '例: L1（日本語は表示名になります）') +
           aliasHintHtml() +
-          P.fieldHtml('Label (表示名)', 'uc-tail-label', '', '省略可、Alias と異なる場合に表示用') +
+          P.fieldHtml('表示名', 'uc-tail-label', '', '省略可、名前と異なる場合に表示用') +
           GP.fieldHtml('usecase', 'uc-tail', parsedData.groups) +
-          P.primaryButtonHtml('uc-tail-add', '+ Usecase 追加');
+          P.primaryButtonHtml('uc-tail-add', '+ 追加');
       } else if (kind === 'package') {
         html =
-          P.fieldHtml('Label', 'uc-tail-label', '', '例: Auth Module') +
+          P.fieldHtml('表示名', 'uc-tail-label', '', '例: Auth Module') +
           P.selectFieldHtml('表記', 'uc-tail-notation', window.MA.groupNotation
             .notationsFor('plantuml-usecase').map(function(n, i) {
               return { value: n.id, label: n.label + ' — ' + n.hint, selected: i === 0 };
             })) +
-          P.primaryButtonHtml('uc-tail-add', '+ 境界 追加');
+          P.primaryButtonHtml('uc-tail-add', '+ 追加');
       } else if (kind === 'relation') {
         html =
-          P.selectFieldHtml('Kind', 'uc-tail-rkind', [
+          P.selectFieldHtml('種類', 'uc-tail-rkind', [
             { value: 'association',    label: 'Association (-->)', selected: true },
             { value: 'generalization', label: 'Generalization (<|--)' },
             { value: 'include',        label: 'Include (..> <<include>>)' },
             { value: 'extend',         label: 'Extend (..> <<extend>>)' },
           ]) +
-          P.selectFieldHtml('From', 'uc-tail-from', allOpts) +
-          P.selectFieldHtml('To', 'uc-tail-to', allOpts) +
-          P.fieldHtml('Label', 'uc-tail-rlabel', '', 'association のみ任意') +
-          P.primaryButtonHtml('uc-tail-add', '+ Relation 追加');
+          P.selectFieldHtml('始点 (From)', 'uc-tail-from', allOpts) +
+          P.selectFieldHtml('終点 (To)', 'uc-tail-to', allOpts) +
+          P.fieldHtml('ラベル', 'uc-tail-rlabel', '', 'association のみ任意') +
+          P.primaryButtonHtml('uc-tail-add', '+ 追加');
       } else if (kind === 'note') {
         // 注釈は必ず既存の要素に付く。付ける相手が無いうちは足させない
         // (`note left of` の後ろが空の DSL は PlantUML が描けない)。
         html =
-          P.selectFieldHtml('Target', 'uc-tail-ntarget', allOpts) +
-          P.selectFieldHtml('Position', 'uc-tail-npos', [
+          P.selectFieldHtml('付ける相手', 'uc-tail-ntarget', allOpts) +
+          P.selectFieldHtml('位置', 'uc-tail-npos', [
             { value: 'left',   label: 'Left', selected: true },
             { value: 'right',  label: 'Right' },
             { value: 'top',    label: 'Top' },
             { value: 'bottom', label: 'Bottom' },
           ]) +
-          '<label style="display:block;font-size:10px;color:var(--text-secondary);">Text</label>' +
+          '<label style="display:block;font-size:10px;color:var(--text-secondary);">本文</label>' +
           '<textarea id="uc-tail-ntext" style="width:100%;min-height:60px;font-family:inherit;font-size:12px;"></textarea>' +
-          P.primaryButtonHtml('uc-tail-add', '+ Note 追加');
+          P.primaryButtonHtml('uc-tail-add', '+ 追加');
       } else if (kind === 'bulk') {
         html =
           '<label style="display:block;font-size:10px;color:var(--text-secondary);">要素と関係を 1 行 1 件で</label>' +
           window.MA.reuseModal.buttonHtml('uc-tail-reuse') +
           '<textarea id="uc-tail-bulk" style="width:100%;min-height:90px;font-family:inherit;font-size:12px;"></textarea>' +
-          P.primaryButtonHtml('uc-tail-add', '+ まとめて末尾に追加') +
+          P.primaryButtonHtml('uc-tail-add', '+ まとめて追加') +
           '<div id="uc-tail-bulk-hint" style="font-size:10px;color:var(--text-secondary);margin-top:4px;line-height:1.5;">' +
             'actor 開発者 / :Tester: (アクター) / 起動 / (診断実行) : ラベル (ユースケース) /<br>' +
             'A --&gt; B : label / A ..&gt; B(include) / A ..&gt; B : extend / A &lt;|-- B。空行は無視されます</div>';

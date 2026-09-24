@@ -1674,16 +1674,18 @@ window.MA.modules.plantumlSequence = (function() {
       '<div id="seq-mod-target" style="font-size:11px;color:var(--text-secondary);margin-bottom:12px;">' +
         window.MA.htmlUtils.escHtml(describeInsertTarget(line, position, ctx && ctx.getMmdText ? ctx.getMmdText() : null)) + '</div>';
     if (kind === 'message') {
-      var arrowOpts = ARROWS.map(function(a) { return { value: a, label: arrowLabel(a), selected: a === '->' }; });
       // FEAT-001: From はアンカー行の from を初期選択する (アンカー不在時は従来どおり先頭)。
       var anchorRel = resolveAnchor(parsed, line);
       var fromOpts = withSelected(partOptsWithNew, anchorRel ? anchorRel.from : null);
       // FEAT-002: To もアンカー行の to を初期選択する (アンカー不在時は従来どおり先頭)。
       var toOpts = withSelected(partOptsWithNew, anchorRel ? anchorRel.to : null);
       html +=
-        P.selectFieldHtml('From', 'seq-mod-from', fromOpts) +
-        P.selectFieldHtml('Arrow', 'seq-mod-arrow', arrowOpts) +
-        P.selectFieldHtml('To', 'seq-mod-to', toOpts) +
+        P.selectFieldHtml('始点 (From)', 'seq-mod-from', fromOpts) +
+        // BLK-owner-20260924-2259-prune: 矢印は末尾に追加・選択パネルと同じ 4 つのボタン +
+        // 「その他の矢印…」で選ぶ (プルダウン 1 つで選ぶ窓はここだけだった)。現在値は hidden #seq-mod-arrow。
+        P.arrowPickerHtml('矢印の種類 / Arrow', 'seq-mod-arrow',
+          quickArrowOptions(), otherArrowOptions(), '->') +
+        P.selectFieldHtml('終点 (To)', 'seq-mod-to', toOpts) +
         // userissue v1.2.7+: 「ここに挿入」 modal にも Stereotype 入力欄を追加。
         '<div style="margin-bottom:8px;">' +
           '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Stereotype <span style="color:#32CD32;">&lt;&lt; &gt;&gt;</span> <span style="color:var(--text-secondary);font-weight:normal;">(任意・上段にライムグリーンで表示)</span></label>' +
@@ -1767,6 +1769,12 @@ window.MA.modules.plantumlSequence = (function() {
       var toSel = document.getElementById('seq-mod-to');
       if (frSel) frSel.addEventListener('change', maybeShowInline);
       if (toSel) toSel.addEventListener('change', maybeShowInline);
+      // 図の外を相手にする矢印 (`[->` / `->]`) を選んだら、その側の From / To を伏せる (末尾に追加と同じ)。
+      P.bindArrowPicker('seq-mod-arrow', function(v) {
+        var sp = findArrowSpec(v);
+        if (frSel) frSel.disabled = !!(sp && sp.from);
+        if (toSel) toSel.disabled = !!(sp && sp.to);
+      });
     }
 
     if (opts.fromPicker) {
@@ -1807,10 +1815,14 @@ window.MA.modules.plantumlSequence = (function() {
         var modStereoEl = document.getElementById('seq-mod-stereotype');
         var modStereo = modStereoEl ? modStereoEl.value : '';
         var modPlain = rleObj ? rleObj.getValue() : '';
+        var modArrowKey = document.getElementById('seq-mod-arrow').value;
+        var modArrowSpec = findArrowSpec(modArrowKey);
+        if (modArrowSpec && modArrowSpec.from) fr = modArrowSpec.from;
+        if (modArrowSpec && modArrowSpec.to) to = modArrowSpec.to;
         t = insertFn(t, line, 'message', {
           from: fr,
           to: to,
-          arrow: document.getElementById('seq-mod-arrow').value,
+          arrow: modArrowSpec ? modArrowSpec.arrow : modArrowKey,
           label: formatLabelWithStereotype(modStereo, modPlain),
         });
       } else if (kind === 'note') {
@@ -2659,7 +2671,7 @@ window.MA.modules.plantumlSequence = (function() {
             html =
               (tailNote ? '<div id="seq-tail-endpoint-note" style="font-size:10px;color:var(--text-secondary);margin-bottom:6px;">'
                 + window.MA.htmlUtils.escHtml(tailNote) + '</div>' : '') +
-              P.selectFieldHtml('From', 'seq-tail-from', fromOptsT) +
+              P.selectFieldHtml('始点 (From)', 'seq-tail-from', fromOptsT) +
               // design 2d: 末尾追加でも同じ矢印パレットから選ぶ。
               // 現在値は hidden #seq-tail-arrow が持つ。
               P.arrowPickerHtml('矢印の種類 / Arrow', 'seq-tail-arrow',
@@ -2667,7 +2679,7 @@ window.MA.modules.plantumlSequence = (function() {
               // design 5d: 末尾追加でも線の色を先に決められる。
               lineColorRowHtml('seq-tail-color', '', true) +
               '<input type="hidden" id="seq-tail-color" value="">' +
-              P.selectFieldHtml('To', 'seq-tail-to', toOptsT) +
+              P.selectFieldHtml('終点 (To)', 'seq-tail-to', toOptsT) +
               // userissue v1.2.7+: 末尾追加でも Stereotype を入力できるように。
               '<div style="margin-bottom:8px;">' +
                 '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Stereotype <span style="color:#32CD32;">&lt;&lt; &gt;&gt;</span> <span style="color:var(--text-secondary);font-weight:normal;">(任意・上段にライムグリーンで表示)</span></label>' +
@@ -2682,28 +2694,28 @@ window.MA.modules.plantumlSequence = (function() {
                   PARTICIPANT_TYPES.map(function(pt) { return '<option value="' + pt + '">' + pt + '</option>'; }).join('') +
                 '</select>' +
               '</div>';
-            html += P.primaryButtonHtml('seq-tail-add', '+ 末尾に追加');
+            html += P.primaryButtonHtml('seq-tail-add', '+ 追加');
           } else if (kind === 'participant') {
             var pTypeOpts = PARTICIPANT_TYPES.map(function(pt) { return { value: pt, label: pt, selected: pt === 'participant' }; });
             html =
-              P.selectFieldHtml('Type', 'seq-tail-ptype', pTypeOpts) +
-              P.fieldHtml('Alias', 'seq-tail-alias', '', '例: user1') +
-              P.fieldHtml('Label', 'seq-tail-plabel', '', '省略可') +
-              P.primaryButtonHtml('seq-tail-add', '+ 末尾に追加');
+              P.selectFieldHtml('種類', 'seq-tail-ptype', pTypeOpts) +
+              P.fieldHtml('名前', 'seq-tail-alias', '', '例: user1') +
+              P.fieldHtml('表示名', 'seq-tail-plabel', '', '省略可') +
+              P.primaryButtonHtml('seq-tail-add', '+ 追加');
           } else if (kind === 'note') {
             var posOpts = NOTE_POSITIONS.map(function(p) { return { value: p, label: p, selected: p === 'over' }; });
             html =
-              P.selectFieldHtml('Position', 'seq-tail-npos', posOpts) +
-              P.selectFieldHtml('Target', 'seq-tail-ntarget', partOpts) +
+              P.selectFieldHtml('位置', 'seq-tail-npos', posOpts) +
+              P.selectFieldHtml('付ける相手', 'seq-tail-ntarget', partOpts) +
               _noteExtraHtml('seq-tail-nextra', participants) +
-              '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Text</label><div id="seq-tail-ntext-rle"></div></div>' +
-              P.primaryButtonHtml('seq-tail-add', '+ 末尾に追加');
+              '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">本文</label><div id="seq-tail-ntext-rle"></div></div>' +
+              P.primaryButtonHtml('seq-tail-add', '+ 追加');
           } else if (kind === 'block') {
             var bkOpts = GROUP_KINDS.map(function(k) { return { value: k, label: groupLabel(k), selected: k === 'alt' }; });
             html =
-              P.selectFieldHtml('Kind', 'seq-tail-bkind', bkOpts) +
-              P.fieldHtml('Label', 'seq-tail-blabel', '', '例: x > 0') +
-              P.primaryButtonHtml('seq-tail-add', '+ 末尾に追加');
+              P.selectFieldHtml('種類', 'seq-tail-bkind', bkOpts) +
+              P.fieldHtml('条件・見出し', 'seq-tail-blabel', '', '例: x > 0') +
+              P.primaryButtonHtml('seq-tail-add', '+ 追加');
           } else if (kind === 'activation') {
             html =
               P.selectFieldHtml('する事 / Action', 'seq-tail-aact', [
@@ -2711,7 +2723,7 @@ window.MA.modules.plantumlSequence = (function() {
                 { value: 'deactivate', label: 'deactivate' },
               ]) +
               P.selectFieldHtml('相手 / Target', 'seq-tail-atgt', partOpts) +
-              P.primaryButtonHtml('seq-tail-add', '+ 末尾に追加');
+              P.primaryButtonHtml('seq-tail-add', '+ 追加');
           } else if (kind === 'bulk') {
             html =
               // BLK-junior-20260906-2143 の「名前と本文だけで組む」表も、まとめて足す入口の 1 つとしてここに置く
@@ -2720,7 +2732,7 @@ window.MA.modules.plantumlSequence = (function() {
               '<div style="margin-bottom:4px;font-size:10px;color:var(--text-secondary);">または 1 行 1 件で書く。参加者とメッセージを混ぜて書けます</div>' +
               window.MA.reuseModal.buttonHtml('seq-tail-reuse') +
               '<textarea id="seq-tail-bulk" style="width:100%;min-height:90px;font-family:inherit;font-size:12px;"></textarea>' +
-              P.primaryButtonHtml('seq-tail-add', '+ まとめて末尾に追加') +
+              P.primaryButtonHtml('seq-tail-add', '+ まとめて追加') +
               '<div id="seq-tail-bulk-hint" style="font-size:10px;color:var(--text-secondary);margin-top:4px;line-height:1.5;">' +
                 'actor Dev / participant "SPI ドライバ" as SpiDrv / DB : データベース → 参加者<br>' +
                 'Dev -&gt; SpiDrv : Spi_Init() → メッセージ (矢印は -&gt; --&gt; -&gt;&gt; など)<br>' +

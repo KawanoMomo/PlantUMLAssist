@@ -44,7 +44,8 @@ test.describe('BLK-junior-20260908-0103: 異常側の位置を図から選ぶ', 
     await openActivity(page, DSL);
     await page.locator('#preview-container').click({ position: { x: 4, y: 4 } });
     await page.waitForTimeout(500);
-    const points = await page.locator('#ac-ins-point option').allTextContents();
+    // BLK-owner-20260924-2259-prune: 無選択の追加ペインでは「追加する位置」で選ぶ。
+    const points = await page.locator('#ac-tail-where option').allTextContents();
     const joined = points.join('|');
     expect(joined).toContain('分岐「初期化失敗時?」の 異常 側のはじめ');
     expect(joined).toContain('分岐「初期化失敗時?」の 正常 側のはじめ');

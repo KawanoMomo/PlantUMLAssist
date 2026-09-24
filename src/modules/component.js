@@ -828,51 +828,51 @@ window.MA.modules.plantumlComponent = (function() {
       var html = '';
       if (kind === 'component') {
         html =
-          P.fieldHtml('Alias', 'co-tail-alias', '', '例: WebApp') +
-          P.fieldHtml('Label', 'co-tail-label', '', '省略可') +
-          P.fieldHtml('Stereotype', 'co-tail-stereo', '', '省略可 (例: service)') +
+          P.fieldHtml('名前', 'co-tail-alias', '', '例: WebApp') +
+          P.fieldHtml('表示名', 'co-tail-label', '', '省略可') +
+          P.fieldHtml('ステレオタイプ', 'co-tail-stereo', '', '省略可 (例: service)') +
           GP.fieldHtml('component', 'co-tail', parsedData.groups) +
-          P.primaryButtonHtml('co-tail-add', '+ Component 追加');
+          P.primaryButtonHtml('co-tail-add', '+ 追加');
       } else if (kind === 'interface') {
         html =
-          P.fieldHtml('Alias', 'co-tail-alias', '', '例: IAuth') +
-          P.fieldHtml('Label', 'co-tail-label', '', '省略可') +
-          P.fieldHtml('Stereotype', 'co-tail-stereo', '', '省略可 (例: api)') +
+          P.fieldHtml('名前', 'co-tail-alias', '', '例: IAuth') +
+          P.fieldHtml('表示名', 'co-tail-label', '', '省略可') +
+          P.fieldHtml('ステレオタイプ', 'co-tail-stereo', '', '省略可 (例: api)') +
           GP.fieldHtml('component', 'co-tail', parsedData.groups) +
-          P.primaryButtonHtml('co-tail-add', '+ Interface 追加');
+          P.primaryButtonHtml('co-tail-add', '+ 追加');
       } else if (kind === 'port') {
         var portParentOpts = compOpts.length > 0 ? compOpts : [{ value: '', label: '（component なし）' }];
         html =
-          P.selectFieldHtml('Parent component', 'co-tail-parent', portParentOpts) +
-          P.fieldHtml('Alias', 'co-tail-alias', '', '例: p1') +
-          P.fieldHtml('Label', 'co-tail-label', '', '省略可') +
-          P.primaryButtonHtml('co-tail-add', '+ Port 追加');
+          P.selectFieldHtml('親のコンポーネント', 'co-tail-parent', portParentOpts) +
+          P.fieldHtml('名前', 'co-tail-alias', '', '例: p1') +
+          P.fieldHtml('表示名', 'co-tail-label', '', '省略可') +
+          P.primaryButtonHtml('co-tail-add', '+ 追加');
       } else if (kind === 'package') {
         html =
-          P.fieldHtml('Label', 'co-tail-label', '', '例: Backend') +
+          P.fieldHtml('表示名', 'co-tail-label', '', '例: Backend') +
           P.selectFieldHtml('表記', 'co-tail-notation', window.MA.groupNotation
             .notationsFor('plantuml-component').map(function(n, i) {
               return { value: n.id, label: n.label + ' — ' + n.hint, selected: i === 0 };
             })) +
-          P.primaryButtonHtml('co-tail-add', '+ 境界 追加');
+          P.primaryButtonHtml('co-tail-add', '+ 追加');
       } else if (kind === 'relation') {
         html =
-          P.selectFieldHtml('Kind', 'co-tail-rkind', [
+          P.selectFieldHtml('種類', 'co-tail-rkind', [
             { value: 'association', label: 'Association (--)', selected: true },
             { value: 'dependency',  label: 'Dependency (..>)' },
             { value: 'provides',    label: 'Provides (lollipop -())' },
             { value: 'requires',    label: 'Requires (lollipop )-)' },
           ]) +
-          P.selectFieldHtml('From', 'co-tail-from', allOpts) +
-          P.selectFieldHtml('To', 'co-tail-to', allOpts) +
-          P.fieldHtml('Label', 'co-tail-rlabel', '', 'association/dependency のみ任意') +
-          P.primaryButtonHtml('co-tail-add', '+ Relation 追加');
+          P.selectFieldHtml('始点 (From)', 'co-tail-from', allOpts) +
+          P.selectFieldHtml('終点 (To)', 'co-tail-to', allOpts) +
+          P.fieldHtml('ラベル', 'co-tail-rlabel', '', 'association/dependency のみ任意') +
+          P.primaryButtonHtml('co-tail-add', '+ 追加');
       } else if (kind === 'bulk') {
         html =
           '<label style="display:block;font-size:10px;color:var(--text-secondary);">要素と関係を 1 行 1 件で</label>' +
           window.MA.reuseModal.buttonHtml('co-tail-reuse') +
           '<textarea id="co-tail-bulk" style="width:100%;min-height:90px;font-family:inherit;font-size:12px;"></textarea>' +
-          P.primaryButtonHtml('co-tail-add', '+ まとめて末尾に追加') +
+          P.primaryButtonHtml('co-tail-add', '+ まとめて追加') +
           '<div id="co-tail-bulk-hint" style="font-size:10px;color:var(--text-secondary);margin-top:4px;line-height:1.5;">' +
             'CanDrv / interface ICan : CAN 送受信 / A -- B : label /<br>' +
             'A ..&gt; B(dependency) / A -() B(provides) / A )- B(requires)。空行は無視されます</div>';

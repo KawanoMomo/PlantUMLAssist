@@ -1108,6 +1108,24 @@ test('手順2 活動図の本文を、先輩のクラス図タブに行かずに
   await page.waitForTimeout(200);
   await expect(page.locator('#ac-tail-text-vocab .vocab-warn')).toContainText('Spi_Transmit');
 
+  // 到達条件その5 (BLK-owner-20260924-2259-prune): 追加のフォームは 1 つ。途中に入れるときも同じフォームの
+  // 「追加する位置」で選ぶ (「＋ この位置に挿入」の 2 つ目のフォームは無い)。確定は 6 図種で同じ「+ 追加」。
+  await expect(page.locator('#ac-ins-point')).toHaveCount(0);
+  await expect(page.locator('#ac-tail-add')).toHaveText('+ 追加');
+  const places = await page.locator('#ac-tail-where option').allTextContents();
+  expect(places[0]).toBe('図の末尾');
+  const afterInit = places.findIndex((t) => t.includes('Spi_Init()') && t.includes('の後'));
+  expect(afterInit).toBeGreaterThan(0);
+  await page.locator('#ac-tail-where').selectOption({ index: afterInit });
+  await page.locator('#ac-tail-kind-chip-if').click();
+  await page.locator('#ac-tail-cond').fill('送信バッファ空?');
+  await page.locator('#ac-tail-add').click();
+  await page.waitForTimeout(400);
+  const acLines = (await getEditorText(page)).split('\n').map((l) => l.trim());
+  const initAt = acLines.indexOf(':Spi_Init();');
+  expect(acLines[initAt + 1]).toBe('if (送信バッファ空?) then (yes)');
+  expect(acLines.indexOf('endif')).toBeLessThan(acLines.indexOf('stop'));
+
   // 先輩のファイルは読むだけ (書き換えない)。
   expect(await S.readDoc(page, SENIOR_DIR, 'driver_common_class')).toBe(SENIOR_COMMON_CLASS);
 });

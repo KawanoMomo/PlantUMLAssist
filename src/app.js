@@ -3960,9 +3960,12 @@ function initCommandPalette() {
       { value: 'stop', label: '停止' },
       { value: 'if', label: '条件分岐 (if)' },
       { value: 'while', label: '繰り返し (while)' },
-      { value: 'repeat', label: '繰り返し (repeat)' },
+      { value: 'end', label: '終了' },
+      { value: 'repeat', label: '後判定の繰り返し (repeat)' },
       { value: 'fork', label: '並行 (fork)' },
-      { value: 'swimlane', label: 'スイムレーン' },
+      { value: 'swimlane', label: 'レーン (swimlane)' },
+      { value: 'note', label: '注釈' },
+      { value: 'other', label: '中断・切り離し・打ち切り (break / detach / kill)' },
     ] },
     'plantuml-state': { prefix: 'st', kinds: [
       { value: 'state', label: '状態' },
@@ -4000,8 +4003,11 @@ function initCommandPalette() {
         id: 'add-' + spec.prefix + '-' + k.value,
         group: 'add',
         title: k.label,
-        hint: '末尾に追加',
-        keywords: ['add', 'ついか', k.value, k.label].concat(plain),
+        hint: '追加',
+        // BLK-owner-20260924-2259-prune: 追加フォームを 1 つにし確定ボタンを「+ 追加」にそろえたので、
+        // 旧名 (末尾に追加 / この位置に挿入 / Action 追加 …) で覚えた人もここから同じ入口に来られるようにする。
+        keywords: ['add', 'ついか', k.value, k.label, '末尾に追加', 'この位置に挿入', 'ここに挿入', 'insert',
+          k.value + ' 追加', k.value.charAt(0).toUpperCase() + k.value.slice(1) + ' 追加'].concat(plain),
         run: function() { openTailForm(spec.prefix, k.value); },
       };
     });
