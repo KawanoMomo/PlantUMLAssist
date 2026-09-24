@@ -4620,6 +4620,7 @@ function saveActiveDoc() {
       // 書きに行った。効いたかどうかはディスクと突き合わせるまで分からないので、
       // 「何を書くつもりだったか」だけを控える (BLK-primary-20260914-1406-wish)。
       _noteSaveVerify(doc, 'written');
+      try { _fwNoteSaved(doc.name); } catch (e) {}
       // 保存した時点を差分の基準にする (BLK-reviewer-20260907-0803)。
       if (window.MA.saveDiff) window.MA.saveDiff.mark(doc.name, doc.dsl);
       // 保存のたびに版を積む (BLK-reviewer-20260908-0723-wish)。基準 1 点だけでは
@@ -17470,7 +17471,7 @@ function _dgImpactHtml(impact) {
       + '<td class="dg-doc-name">' + esc(r.doc) + '</td>'
       + '<td class="dg-hop">' + (r.hop === 0 ? '直接' : '連鎖 ' + r.hop + ' 段') + '</td>'
       + '<td class="dg-via">' + esc((r.via || []).join(', ')) + '</td>'
-      + '<td><button type="button" class="dg-open">この図を開く</button></td></tr>';
+      + '<td><button type="button" class="dg-open" title="この図を開き、下端の帯で影響の図を 1 枚ずつ送る">ここから順に直す</button></td></tr>';
   });
   return html + '</tbody></table>';
 }
@@ -18126,6 +18127,21 @@ function renderFixWalk() {
   if (next) next.disabled = _fwWalk.index >= _fwWalk.items.length - 1;
   // 全部済んだら送り先が無い。押せるままだと「直した」が空振りしたように見える。
   if (done) done.disabled = p.complete;
+  // BLK-primary-20260924-1132-wish: 今の図を保存したら「✓ 直した · 次へ」を目立たせる。
+  // 印は付けない (保存は直し終えた印ではない)。押すのは利用者。
+  var saved = !p.complete && FW.isSaved && FW.isSaved(_fwWalk);
+  bar.setAttribute('data-saved', saved ? '1' : '0');
+  if (done) done.classList.toggle('is-ready', !!saved);
+}
+
+// 保存が今の図に届いたことを帯に伝える (saveActiveDoc の書き込み・手で押す保存)。
+function _fwNoteSaved(name) {
+  var FW = window.MA.fixWalk;
+  if (!FW || !FW.noteSaved || !_fwWalk || !name) return;
+  var next = FW.noteSaved(_fwWalk, name);
+  if (next === _fwWalk) return;
+  _fwWalk = next;
+  renderFixWalk();
 }
 
 function _fwOpenCurrent() {
@@ -18304,7 +18320,9 @@ function _ctItemsHtml(ticket) {
       + '<td class="ct-doc-name">' + esc(it.doc) + '</td>'
       + '<td class="ct-hop">' + (it.hop === 0 ? '直接' : '連鎖 ' + it.hop + ' 段') + '</td>'
       + '<td class="ct-via">' + esc((it.via || []).join(', ')) + '</td>'
-      + '<td><button type="button" class="ct-open">この図を開く</button></td></tr>';
+      // BLK-primary-20260924-1132-wish: 押すと図が開くだけでなく、下端の帯で札の図を
+      // 順に送れる。「この図を開く」では列が続くことが読めず、閉じて一覧から探し直していた。
+      + '<td><button type="button" class="ct-open" title="この図を開き、下端の帯で札の図を 1 枚ずつ送る">ここから順に直す</button></td></tr>';
   });
   return html + '</tbody></table>';
 }
@@ -18356,6 +18374,7 @@ function renderTicketBoard() {
         var row = btn.parentNode.parentNode;
         startFixWalk(cur.subject, cur.items, {
           startDoc: row.getAttribute('data-doc'), ticketId: cur.id, hops: cur.hops,
+          title: cur.title,
         });
       });
     })(opens[j]);
@@ -26238,6 +26257,8 @@ function saveFile() {
   if (doc && openName && doc.name !== openName) {
     doc = { id: doc.id, name: openName, diagramType: doc.diagramType, dsl: doc.dsl };
   }
+  // BLK-primary-20260924-1132-wish: 手で押した保存も、手当ての帯の今の図なら帯に伝える。
+  try { if (doc) _fwNoteSaved(doc.name); } catch (e) {}
   // BLK-human-20260917-0901: 手元から開いたファイルの上書き保存は、元のファイルへ戻す。
   if (doc && _sourcePathOf(doc.id)) {
     writeBackToSource(doc).then(function(res) {

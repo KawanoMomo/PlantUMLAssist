@@ -40,7 +40,11 @@ window.MA.fixWalk = (function() {
       items: list,
       index: list.length ? idx : -1,
       ticketId: _s(o.ticketId),
+      // BLK-primary-20260924-1132-wish: 札から始めた列は札の名前 (何の変更か) を持つ。
+      // 帯に出さないと、11 枚を直している途中で「何を直しているのか」が帯から読めない。
+      title: _s(o.title),
       hops: (typeof o.hops === 'number') ? o.hops : 2,
+      saved: '',
     };
   }
 
@@ -62,7 +66,9 @@ window.MA.fixWalk = (function() {
   function _with(walk, index, items) {
     return {
       subject: walk.subject, items: items || _items(walk).slice(),
-      index: index, ticketId: walk.ticketId, hops: walk.hops,
+      index: index, ticketId: walk.ticketId, title: walk.title, hops: walk.hops,
+      // 保存の印は「今の図」に付く。別の図へ移ったら消える。
+      saved: (walk.index === index && walk.saved) ? walk.saved : '',
     };
   }
 
@@ -114,6 +120,22 @@ window.MA.fixWalk = (function() {
     return at < 0 ? next : _with(next, at);
   }
 
+  // BLK-primary-20260924-1132-wish: 今の図を保存した。印は付けない (保存は直し終えた
+  // 印ではない) — 帯の「✓ 直した · 次へ」を目立たせる合図にだけ使う。
+  // 図名は .puml の有無を問わない (列は拡張子なし、タブ名は拡張子付きのことがある)。
+  function _base(n) { return _s(n).replace(/\.puml$/i, ''); }
+  function noteSaved(walk, doc) {
+    var cur = current(walk);
+    if (!cur || _base(cur.doc) !== _base(doc)) return walk;
+    var next = _with(walk, walk.index);
+    next.saved = cur.doc;
+    return next;
+  }
+  function isSaved(walk) {
+    var cur = current(walk);
+    return !!(cur && walk.saved && walk.saved === cur.doc);
+  }
+
   function progress(walk) {
     var list = _items(walk);
     var done = list.filter(function(it) { return it.done; }).length;
@@ -134,11 +156,14 @@ window.MA.fixWalk = (function() {
     var p = progress(walk);
     if (!p.total) return '手当てする図がありません';
     var cur = current(walk);
-    if (p.complete) return walk.subject + ': ' + p.total + ' 図すべて手当て済み';
-    var t = walk.subject ? walk.subject + ' の影響 ' : '影響 ';
+    var head = walk.title ? '🎫 ' + walk.title : walk.subject;
+    if (p.complete) return head + ': ' + p.total + ' 図すべて手当て済み';
+    var t = walk.title ? '🎫 ' + walk.title + ' — '
+      : (walk.subject ? walk.subject + ' の影響 ' : '影響 ');
     t += p.position + ' / ' + p.total + ' 図';
     if (cur) t += ' · ' + cur.doc + ' (' + hopText(cur) + ')';
     t += ' · 残り ' + p.remaining;
+    if (isSaved(walk)) t += ' · 保存しました。直し終えたら「✓ 直した · 次へ」';
     return t;
   }
 
@@ -152,6 +177,8 @@ window.MA.fixWalk = (function() {
     nextUndone: nextUndone,
     doneNext: doneNext,
     progress: progress,
+    noteSaved: noteSaved,
+    isSaved: isSaved,
     hopText: hopText,
     labelText: labelText,
   };
