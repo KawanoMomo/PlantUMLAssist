@@ -19443,6 +19443,67 @@ function setupTemplateNew() {
 // 何を打つべきかを知っている必要がある。ここは組を登録簿から選ぶだけで、残って
 // いる在処と件数が機械から出る。当てる先は保存フォルダの図そのもの (開いていない
 // 図も含む) なので、手順 2〜3 の「開く → 直す → 保存する」が 1 回で済む。
+// ── 社内略語の見分け方 (🔤 表記統一 と 📤 提出前チェック で 1 本) ─────────────
+// BLK-owner-20260924-1252-prune: 略語は glossary.scan で拾い、登録簿で揃える先が決まった語は
+// 数えない。図の束は「開いているタブ + 保存フォルダの図 (同じ名前はタブ側)」。2 つの画面は
+// どちらもここを通るので、同じ保存フォルダなら略語の件数が一致する。
+
+// 開いているタブと保存フォルダの図を混ぜ、同じ名前はタブ側を勝たせる (編集中の本文の方が新しい)。
+function _tabAndFolderDocs() {
+  var WS = window.MA.workspace;
+  var docs = [];
+  var seen = {};
+  if (!WS) return Promise.resolve(docs);
+  var activeId = WS.getActiveId ? WS.getActiveId() : null;
+  (WS.list ? WS.list() : []).forEach(function(d) {
+    if (!d || !d.name) return;
+    var text = (d.id === activeId) ? mmdText : d.dsl;
+    docs.push({ id: d.id, name: d.name, dsl: String(text == null ? '' : text), open: true });
+    seen[d.name] = true;
+  });
+  if (!_fiFolderMode || !_fiFolderMode() || !WS.listFolder) return Promise.resolve(docs);
+  return WS.listFolder(_wsFileDir()).then(function(info) {
+    ((info && info.entries) || []).forEach(function(e) {
+      if (!e || !e.name || seen[e.name]) return;
+      var text = String(e.text == null ? '' : e.text);
+      if (!text.trim()) return;
+      docs.push({ name: e.name, dsl: text, open: false });
+      seen[e.name] = true;
+    });
+    return docs;
+  // フォルダが読めなくても、開いているタブの分は数える (何もしないより良い)。
+  }).catch(function() { return docs; });
+}
+
+// 登録簿は開くたびに読み直す (reviewer がこの run で足した組が画面の控えに無いことがある)。
+// 読めた登録簿は画面全体の控えにも渡す (2 冊を持たない)。読めなければ null
+// (「揃っている」と別の意味なので空の登録簿にはしない)。
+function _loadNameRegistryFresh() {
+  var NR = window.MA.nameRegistry;
+  if (!NR || !window.fetch) return Promise.resolve(null);
+  return window.fetch('/name-registry?dir=' + encodeURIComponent(_wsFileDir()))
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(data) {
+      if (!data) return null;
+      var reg = NR.parse({ entries: (data && data.entries) || [] });
+      if (NR.setCurrent) NR.setCurrent(reg);
+      return reg;
+    })
+    .catch(function() { return null; });
+}
+
+// 図の束に残っている社内略語の行 (glossary.scan の行のうち、登録簿がまだ揃える先を知らないもの)。
+function _abbrevRowsOf(docs, reg) {
+  var G = window.MA.glossary;
+  var NR = window.MA.nameRegistry;
+  if (!G) return [];
+  return G.unregistered(G.scan(docs || []), function(t) { return reg && NR ? NR.find(reg, t) : null; });
+}
+
+function _abbrevTermsOf(docs, reg) {
+  return _abbrevRowsOf(docs, reg).map(function(r) { return r.term; });
+}
+
 function setupNameUnify() {
   var panel = document.getElementById('unify-panel');
   var btn = document.getElementById('btn-tab-unify');
@@ -19463,28 +19524,14 @@ function setupNameUnify() {
 
   // 当てる材料を集める。開いているタブと保存フォルダの図を混ぜ、同じ名前は
   // タブ側を勝たせる (編集中の本文の方が新しい)。
+  // BLK-owner-20260924-1252-prune: 集め方は 📤 提出前チェックと共有する (_tabAndFolderDocs)。
+  // 同じ保存フォルダなら 2 つの画面が同じ図の束で社内略語を数える。
   function collect() {
-    var docs = [];
-    _texts = {};
-    var activeId = WS.getActiveId ? WS.getActiveId() : null;
-    (WS.list ? WS.list() : []).forEach(function(d) {
-      if (!d || !d.name) return;
-      var text = (d.id === activeId) ? mmdText : d.dsl;
-      docs.push({ name: d.name, dsl: text });
-      _texts[d.name] = String(text == null ? '' : text);
-    });
-    if (!_fiFolderMode || !_fiFolderMode()) return Promise.resolve(docs);
-    return WS.listFolder(_wsFileDir()).then(function(info) {
-      ((info && info.entries) || []).forEach(function(e) {
-        if (!e || !e.name || _texts[e.name] != null) return;
-        var text = String(e.text == null ? '' : e.text);
-        if (!text.trim()) return;
-        docs.push({ name: e.name, dsl: text });
-        _texts[e.name] = text;
-      });
+    return _tabAndFolderDocs().then(function(docs) {
+      _texts = {};
+      docs.forEach(function(d) { _texts[d.name] = String(d.dsl == null ? '' : d.dsl); });
       return docs;
-    // フォルダが読めなくても、開いているタブには当てられる (何もしないより良い)。
-    }).catch(function() { return docs; });
+    });
   }
 
   function currentGroup() {
@@ -19545,21 +19592,7 @@ function setupNameUnify() {
   // 登録簿はここで読み直す。画面の他の場所 (名前欄の注記) が持っている控えは
   // 起動時の 1 回ぶんで、reviewer がこの run で足した組が入っていないことがある。
   // 「揃える先が決まっているのに一覧に出ない」は、探し直す手順がそのまま戻る。
-  function loadRegistry() {
-    var NR = window.MA.nameRegistry;
-    if (!NR || !window.fetch) return Promise.resolve(null);
-    return window.fetch('/name-registry?dir=' + encodeURIComponent(_wsFileDir()))
-      .then(function(r) { return r.ok ? r.json() : null; })
-      .then(function(data) {
-        if (!data) return null;
-        var reg = NR.parse({ entries: (data && data.entries) || [] });
-        // 読めた登録簿は画面全体の控えにも渡す (2 冊を持たない)。
-        if (NR.setCurrent) NR.setCurrent(reg);
-        return reg;
-      })
-      // 登録簿が読めないことは「揃っている」と別の意味なので null のまま返す。
-      .catch(function() { return null; });
-  }
+  function loadRegistry() { return _loadNameRegistryFresh(); }
 
   var _reg = null;
   var abbrevEl = document.getElementById('unify-abbrev');
@@ -19570,8 +19603,7 @@ function setupNameUnify() {
     var G = window.MA.glossary;
     var NR = window.MA.nameRegistry;
     if (!abbrevEl || !G) return;
-    var reg = _reg;
-    var rows = G.unregistered(G.scan(docs), function(t) { return reg && NR ? NR.find(reg, t) : null; });
+    var rows = _abbrevRowsOf(docs, _reg);
     if (!rows.length) { abbrevEl.innerHTML = ''; return; }
     var CELL = 'padding:2px 4px;border-bottom:1px solid var(--border);font-size:10px;color:var(--text-primary);';
     var BTN = 'background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;padding:3px 10px;font-size:11px;';
@@ -24943,7 +24975,9 @@ function _dpBoard(docs) {
 function _dpSubmitResult(docs) {
   var SC = window.MA.submitCheck;
   if (!SC) return null;
-  return SC.check(docs, SC.parseDict(_scLoadDict()));
+  // 略語の見分け方は提出前チェックと同じ (登録簿は画面の控え)。
+  var NR = window.MA.nameRegistry;
+  return _scResult(docs, NR && NR.current ? NR.current() : null);
 }
 
 // 納品履歴の節。保存フォルダの控えにある提出を新しい順に出す。
@@ -25707,20 +25741,58 @@ function _scLoadDict() {
   } catch (e) { return window.MA.submitCheck.DEFAULT_TERMS.join('\n'); }
 }
 
+// BLK-owner-20260924-1252-prune: 辞書は「略語以外で出したくない語」。glossary が略語として
+// 見分ける短縮語 (前の既定の Drv / Ctrl / Mgr / Cfg を含む) は辞書に残っていても使わない。
+function _scWordTerms(dictText) {
+  var SC = window.MA.submitCheck;
+  var G = window.MA.glossary;
+  var terms = SC.parseDict(dictText);
+  var abbrevWords = G && G.SUFFIXES ? G.SUFFIXES.map(function(x) { return x[0]; }) : [];
+  return SC.dropAbbrevWords(terms, abbrevWords);
+}
+
+// 提出前チェックの結果。略語は 🔤 表記統一と同じ見分け方 (_abbrevTermsOf) で数える。
+function _scResult(docs, reg) {
+  var SC = window.MA.submitCheck;
+  var words = _scWordTerms(_scLoadDict());
+  return SC.check(docs, words, { abbrevs: _abbrevTermsOf(docs, reg) });
+}
+
 function _scSaveDict(text) {
   try { window.localStorage.setItem(SC_DICT_KEY, text); } catch (e) { /* 残らないだけ */ }
 }
 
+// 開くとまず開いているタブと画面の控えの登録簿で描き、保存フォルダの図と読み直した登録簿が
+// 揃ったら描き直す (🔤 表記統一と同じ束・同じ登録簿で数える)。描き直し終えると
+// #sc-summary に data-ready="1" が付く。
+var _scSeq = 0;
 function openSubmitCheck() {
+  var SC = window.MA.submitCheck;
+  if (!SC) return null;
+  var seq = ++_scSeq;
+  var NR = window.MA.nameRegistry;
+  var tabs = _renameDocs();
+  var first = _renderSubmitCheck(tabs, NR && NR.current ? NR.current() : null, false);
+  Promise.all([_tabAndFolderDocs(), _loadNameRegistryFresh()]).then(function(v) {
+    if (seq !== _scSeq) return;
+    var modal = document.getElementById('sc-modal');
+    if (!modal || modal.style.display === 'none') return;
+    _renderSubmitCheck(v[0], v[1] || (NR && NR.current ? NR.current() : null), true);
+  });
+  return first;
+}
+
+function _renderSubmitCheck(docs, reg, ready) {
   var modal = document.getElementById('sc-modal');
   var content = document.getElementById('sc-modal-content');
   var SC = window.MA.submitCheck;
   if (!modal || !content || !SC) return null;
   var esc = window.MA.htmlUtils.escHtml;
 
-  var docs = _renameDocs();
   var dictText = _scLoadDict();
-  var result = SC.check(docs, SC.parseDict(dictText));
+  var result = _scResult(docs, reg);
+  var openNames = {};
+  (docs || []).forEach(function(d) { if (d && d.open !== false) openNames[d.name] = true; });
 
   var CELL = 'padding:3px 6px;border-bottom:1px solid var(--border);font-size:11px;color:var(--text-primary);';
   var BTN = 'background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;padding:3px 10px;font-size:11px;';
@@ -25728,7 +25800,19 @@ function openSubmitCheck() {
   var html = '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">\u{1F4E4} 提出前チェック</h3>' +
     '<div id="sc-summary" style="font-size:11px;color:var(--text-secondary);" ' +
       'data-docs="' + result.docs.length + '" data-rows="' + result.rows.length + '" ' +
-      'data-flagged="' + result.flagged.length + '">' + esc(SC.summaryLine(result)) + '</div>';
+      'data-flagged="' + result.flagged.length + '" data-abbrevs="' + result.abbrevs.length + '"' +
+      (ready ? ' data-ready="1"' : '') + '>' + esc(SC.summaryLine(result)) + '</div>';
+  // 社内略語の節。数え方は 🔤 表記統一と同じで、直すのも 🔤 表記統一 (ここに直す表は置かない)。
+  html += '<div id="sc-abbrev" data-count="' + result.abbrevs.length + '" ' +
+      'data-terms="' + esc(result.abbrevs.join(' ')) + '" ' +
+      'style="display:flex;gap:8px;align-items:center;margin-top:6px;font-size:11px;' +
+      'color:' + (result.abbrevs.length ? 'var(--accent-red)' : 'var(--text-secondary)') + ';">' +
+      '<span id="sc-abbrev-line" style="flex:1;min-width:0;">' + esc(SC.abbrevLine(result)) + '</span>' +
+      (result.abbrevs.length
+        ? '<button id="sc-open-unify" style="' + BTN + 'white-space:nowrap;" title="社内略語を正式名称の組にして全図に当てる">' +
+          '\u{1F524} 表記統一で直す</button>'
+        : '') +
+    '</div>';
 
   html += '<div style="display:flex;gap:12px;margin-top:10px;align-items:flex-start;">' +
     '<div style="flex:1;min-width:0;">' +
@@ -25761,12 +25845,13 @@ function openSubmitCheck() {
 
   html += '<div style="width:200px;flex-shrink:0;">' +
       '<label style="display:block;font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">' +
-        '社内略語辞書 (1 行 1 語)</label>' +
+        '出したくない語 (1 行 1 語)</label>' +
       '<textarea id="sc-dict" style="width:100%;min-height:180px;font-family:var(--font-mono);font-size:11px;' +
         'background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);' +
         'border-radius:3px;padding:4px;box-sizing:border-box;">' + esc(dictText) + '</textarea>' +
       '<div style="font-size:10px;color:var(--text-secondary);margin-top:4px;line-height:1.5;">' +
-        '日付入りの識別子 (20260907 / 2026-09-07) は辞書に書かなくても当たります</div>' +
+        '日付入りの識別子 (20260907 / 2026-09-07) は書かなくても当たります。' +
+        '社内略語 (SpiDrv など) は 🔤 表記統一と同じ見分け方で数えるので、ここには書きません</div>' +
       '<button id="sc-recheck" style="' + BTN + 'width:100%;margin-top:6px;">辞書を保存して再チェック</button>' +
     '</div></div>';
 
@@ -25787,17 +25872,31 @@ function openSubmitCheck() {
   applyFilter();
 
   // 行を押すとその図のタブへ移り、該当行を選ぶ。赤い行から直しに行ける。
+  // 開いていない保存フォルダの図は開いてから飛ぶ。
   Array.prototype.forEach.call(content.querySelectorAll('.sc-row'), function(tr) {
     tr.addEventListener('click', function() {
       var name = tr.getAttribute('data-doc');
       var line = parseInt(tr.getAttribute('data-line'), 10);
       modal.style.display = 'none';
-      if (window.MA.workspace) {
-        var d = window.MA.workspace.findByName(name);
-        if (d) switchToDoc(d.id);
+      var d = window.MA.workspace ? window.MA.workspace.findByName(name) : null;
+      if (d) {
+        switchToDoc(d.id);
+        if (!isNaN(line)) jumpToLine(line);
+        return;
       }
-      if (!isNaN(line)) jumpToLine(line);
+      if (!openNames[name] && typeof openFromFolderByName === 'function') {
+        Promise.resolve(openFromFolderByName(name)).then(function() {
+          if (!isNaN(line)) jumpToLine(line);
+        });
+      }
     });
+  });
+
+  var toUnify = document.getElementById('sc-open-unify');
+  if (toUnify) toUnify.addEventListener('click', function() {
+    modal.style.display = 'none';
+    var ub = document.getElementById('btn-tab-unify');
+    if (ub) ub.click();
   });
 
   document.getElementById('sc-recheck').addEventListener('click', function() {

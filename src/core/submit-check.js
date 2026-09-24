@@ -8,12 +8,14 @@ window.MA = window.MA || {};
 // 決まっている (title / note / 宣言名) のに、置き場所が図ごとに散っているだけなので、
 // 抜き出して 1 枚の表にし、辞書に当たった行だけを赤くする。
 //
-// 辞書は利用者が足せる。既定は現場でそのまま出したくない綴り (Drv / Ctrl のような
-// 省略形) と、日付入りの一時的な識別子。判定は「語として現れたか」で見る。
+// BLK-owner-20260924-1252-prune: 社内略語 (SpiDrv / IRQCtrl …) の見分け方は 🔤 表記統一と同じ
+// glossary 1 本にする。ここは略語を自分で決めず、呼び出し側が glossary で数えた語 (opts.abbrevs)
+// を当てるだけ。辞書は「略語以外で出したくない語」(TBD / FIXME / 仮 / 暫定 …) の欄で、
+// 利用者が足せる。日付入りの一時的な識別子は辞書に書かなくても当たる。判定は「語として現れたか」で見る。
 window.MA.submitCheck = (function() {
-  // 既定の社内略語。1 語 1 行で利用者が書き換えられる。
+  // 既定の「出したくない語」。1 語 1 行で利用者が書き換えられる。略語は入れない (glossary が数える)。
   var DEFAULT_TERMS = [
-    'Drv', 'Ctrl', 'Mgr', 'Cfg', 'Init', 'Tmp', 'WIP', 'TBD', 'FIXME', 'TODO',
+    'Init', 'Tmp', 'WIP', 'TBD', 'FIXME', 'TODO',
     '仮', '暫定', '社内',
   ];
 
@@ -113,15 +115,33 @@ window.MA.submitCheck = (function() {
     return out;
   }
 
+  // 辞書から、glossary が略語として見分ける語 (語尾の短縮語 Drv / Ctrl …) を外す。
+  // 前の既定 (Drv / Ctrl / Mgr / Cfg) を保存したままの辞書でも、略語を 2 本の物差しで数えない。
+  //   abbrevWords: glossary の短縮語の綴り (glossary.SUFFIXES の左列)
+  function dropAbbrevWords(terms, abbrevWords) {
+    var drop = {};
+    (abbrevWords || []).forEach(function(w) { drop[String(w)] = true; });
+    return (terms || []).filter(function(t) { return !drop[String(t)]; });
+  }
+
   // 画面が出す形。rows は全件 (赤くない行も並べて「見た」と言えるようにする)、
   // flagged は当たった行だけ。
-  function check(docs, terms) {
+  //   opts.abbrevs: glossary で数えた社内略語の語 (🔤 表記統一の略語欄と同じ語)。
+  //   行ごとの hits は 略語 → 辞書の語 → 日付 の順に並ぶ (abbrevs / words にも分けて持つ)。
+  function check(docs, terms, opts) {
     var list = (terms && terms.length) ? terms : DEFAULT_TERMS;
+    var abbrevs = [];
+    ((opts && opts.abbrevs) || []).forEach(function(a) {
+      var t = String(a == null ? '' : a);
+      if (t && abbrevs.indexOf(t) === -1) abbrevs.push(t);
+    });
     var rows = collect(docs).map(function(r) {
-      var h = hits(r.text, list);
+      var ab = abbrevs.filter(function(a) { return hasTerm(r.text, a); });
+      var w = hits(r.text, list).filter(function(t) { return ab.indexOf(t) === -1; });
+      var h = ab.concat(w);
       return {
         doc: r.doc, kind: r.kind, line: r.line, text: r.text,
-        hits: h, flagged: h.length > 0,
+        hits: h, abbrevs: ab, words: w, flagged: h.length > 0,
       };
     });
     var flagged = rows.filter(function(r) { return r.flagged; });
@@ -131,23 +151,34 @@ window.MA.submitCheck = (function() {
       rows: rows,
       flagged: flagged,
       docs: docNames,
-      clean: flagged.length === 0,
+      clean: flagged.length === 0 && abbrevs.length === 0,
       terms: list,
+      abbrevs: abbrevs,
     };
   }
 
   // 画面の見出しに出す 1 行。0 件が「見ていない」ではなく「揃っている」と読めるように、
-  // 何枚から何行を見たのかを必ず書く。
+  // 何枚から何行を見たのかを必ず書く。社内略語は 🔤 表記統一と同じ語の数 (語の種類) で言う。
   function summaryLine(result) {
     if (!result) return '';
     return result.docs.length + ' 枚 / 見た行 ' + result.rows.length + ' 件 — '
-      + '要確認 ' + result.flagged.length + ' 件';
+      + '要確認 ' + result.flagged.length + ' 件 / 社内略語 ' + (result.abbrevs || []).length + ' 語';
+  }
+
+  // 略語の節の 1 行。直す先は 🔤 表記統一 (ここに直す表は持たない)。
+  function abbrevLine(result) {
+    var ab = (result && result.abbrevs) || [];
+    if (!ab.length) return '社内略語は残っていません';
+    var shown = ab.slice(0, 6).join(', ') + (ab.length > 6 ? ' ほか' : '');
+    return ab.length + ' 件の社内略語が全図に残っています (' + shown + ')';
   }
 
   function kindLabel(kind) { return KIND_LABEL[kind] || kind; }
 
   return {
     DEFAULT_TERMS: DEFAULT_TERMS,
+    dropAbbrevWords: dropAbbrevWords,
+    abbrevLine: abbrevLine,
     parseDict: parseDict,
     hasTerm: hasTerm,
     hits: hits,

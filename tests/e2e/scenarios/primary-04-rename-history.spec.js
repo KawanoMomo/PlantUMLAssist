@@ -308,6 +308,49 @@ test.describe('primary 手順 4: 社内略語の対応表を確定して顧客�
     await page.locator('#btn-tab-submit').click();
     await expect(page.locator('#sc-modal-content')).toContainText('提出前チェック');
     await expect(page.locator('#sc-modal-content #gl-table')).toHaveCount(0);
+    // BLK-owner-20260924-1252-prune: 略語の見分け方は 表記統一 と同じ。登録簿に入った略語は数えない。
+    await expect(page.locator('#sc-summary')).toHaveAttribute('data-ready', '1');
+    await expect(page.locator('#sc-summary')).toHaveAttribute('data-abbrevs', '0');
+    await expect(page.locator('#sc-abbrev-line')).toHaveText('社内略語は残っていません');
+  });
+
+  // BLK-owner-20260924-1252-prune: 社内略語の見分け方は glossary の 1 本。同じ保存フォルダなら
+  // 📤 提出前チェックの略語の件数と 🔤 表記統一の「N 件の社内略語が全図に残っています」の N が一致し、
+  // 前の提出前チェックの辞書に無かった Hdlr も両方に出る。直す先は 表記統一 (提出前チェックに表は無い)。
+  test('提出前チェックと表記統一は同じ社内略語を同じ件数で数え、提出前チェックから表記統一へ直しに行ける', async ({ page }) => {
+    // 開いている spi_init_sequence の本文に、割り込みハンドラ IsrHdlr の宣言を 1 行足す (エディタで打つのと同じ道)。
+    await page.evaluate(() => {
+      const WS = window.MA.workspace;
+      const d = WS.list().filter((x) => x.name === 'spi_init_sequence')[0];
+      window.switchToDoc(d.id);
+      const ed = document.getElementById('editor');
+      ed.value = ed.value.replace('participant IRQCtrl', 'participant IRQCtrl' + String.fromCharCode(10) + 'participant IsrHdlr');
+      ed.dispatchEvent(new Event('input'));
+    });
+    await page.waitForTimeout(400);
+    await page.locator('#btn-tab-unify').click();
+    await page.waitForSelector('#gl-table');
+    await expect(page.locator('.gl-row[data-term="IsrHdlr"]')).toHaveCount(1);
+    const verdict = (await page.locator('#gl-verdict').textContent()) || '';
+    const n = Number((verdict.match(/(\d+) 件の社内略語/) || [])[1]);
+    expect(n).toBe(4);
+    await page.locator('#btn-unify-cancel').click();
+
+    await page.locator('#btn-tab-submit').click();
+    await expect(page.locator('#sc-summary')).toHaveAttribute('data-ready', '1');
+    await expect(page.locator('#sc-summary')).toHaveAttribute('data-abbrevs', String(n));
+    await expect(page.locator('#sc-abbrev-line')).toContainText(n + ' 件の社内略語が全図に残っています');
+    await expect(page.locator('#sc-abbrev')).toHaveAttribute('data-terms', /IsrHdlr/);
+    await expect(page.locator('.sc-row.sc-flagged').filter({ hasText: 'IsrHdlr' })).toHaveCount(1);
+    // 辞書の欄は略語の辞書ではない (前の既定の Drv / Ctrl は入っていない)。
+    const dict = (await page.locator('#sc-dict').inputValue()).split(String.fromCharCode(10)).map((l) => l.trim());
+    expect(dict).not.toContain('Drv');
+    expect(dict).not.toContain('Ctrl');
+    // 直す先は 🔤 表記統一。押すとそのパネルが開き、同じ略語が並ぶ。
+    await page.locator('#sc-open-unify').click();
+    await expect(page.locator('#sc-modal')).toBeHidden();
+    await page.waitForSelector('#gl-table');
+    await expect(page.locator('.gl-row[data-term="IsrHdlr"]')).toHaveCount(1);
   });
 
   test('表は社内略語だけを挙げ、正式名称が既に入っている（打鍵ゼロで確定できる）', async ({ page }) => {
