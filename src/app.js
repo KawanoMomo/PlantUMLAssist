@@ -32866,8 +32866,12 @@ function renderSvg() {
       // 今のキャレット行の対応表示を引き直す (再描画で peek が消えたままにしない)。
       try { refreshLinePeek(); } catch (e) {}
     }
-    renderStatusEl.textContent = 'OK (' + mode + ')';
     var took = elapsed();
+    // BLK-builder-20260924-1427-3 (design 7a / 10a): 見出しは「Rendered · 32ms」。
+    // 描画方法は上部バーの「local · 32ms」にあるので、ここでは title に回す。
+    renderStatusEl.textContent = window.MA.topStatus
+      ? window.MA.topStatus.previewHead(took) : 'Rendered';
+    renderStatusEl.title = '描画: ' + mode;
     _renderTimings[mode] = took;   // design 5a: 設定画面での速度比較に使う
     updateTopRenderStatus('ok', took);
   }).catch(function(err) {

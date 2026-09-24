@@ -38,6 +38,13 @@ window.MA.topStatus = (function() {
     return mode + ' · ' + tail;
   }
 
+  // previewHead: プレビュー見出しの成功表示 (design 7a / 10a「Rendered · 32ms」)。
+  // 描画方法 (local / online) は上部バーにだけ出すので、ここには書かない。
+  function previewHead(ms) {
+    var t = formatDuration(ms);
+    return 'Rendered · ' + (t || '—');
+  }
+
   // isError: 状態表示を赤くするかどうか。
   function isError(phase) {
     return phase === 'error';
@@ -47,6 +54,7 @@ window.MA.topStatus = (function() {
     fileName: fileName,
     formatDuration: formatDuration,
     render: render,
+    previewHead: previewHead,
     isError: isError,
   };
 })();

@@ -24,6 +24,7 @@ async function openRenderTab(page) {
 const GOOD = '@startuml\nAlice -> Bob : hi\n@enduml';
 const BROKEN = '@startuml\nAlice -> Bob : hi\nzzz??? bad line !!!\n@enduml';
 
+// BLK-builder-20260924-1427-3 (design 7a / 10a): 描けたときの見出しは「OK (local)」から「Rendered · Nms」になった。
 function waitStatus(page, expected) {
   return expect(page.locator('#render-status')).toHaveText(expected, { timeout: 25000 });
 }
@@ -36,7 +37,7 @@ test.describe('BLK-primary-1303-design 文法エラーでも直前の図を残�
   test('UC-1: DSL を壊しても直前の図が残り、何行目かの帯が重なる', async ({ page }) => {
     await gotoApp(page);
     await setDsl(page, GOOD);
-    await waitStatus(page, 'OK (local)');
+    await waitStatus(page, /^Rendered · /);
     const goodSvg = await page.locator('#preview-svg').innerHTML();
     expect(goodSvg).toContain('<svg');
 
@@ -59,7 +60,7 @@ test.describe('BLK-primary-1303-design 文法エラーでも直前の図を残�
     await expect(page.locator('#render-error-overlay')).toBeVisible();
 
     await setDsl(page, '@startuml\nAlice -> Bob : hi\nBob -> Carol : ok\n@enduml');
-    await waitStatus(page, 'OK (local)');
+    await waitStatus(page, /^Rendered · /);
     await expect(page.locator('#render-error-overlay')).toBeHidden();
     expect(await page.locator('#preview-svg').innerHTML()).toContain('Carol');
   });
@@ -67,7 +68,7 @@ test.describe('BLK-primary-1303-design 文法エラーでも直前の図を残�
   test('UC-3: チェックを外すと従来どおり図がエラー 1 行に差し替わる', async ({ page }) => {
     await gotoApp(page);
     await setDsl(page, GOOD);
-    await waitStatus(page, 'OK (local)');
+    await waitStatus(page, /^Rendered · /);
     await openRenderTab(page);
     await page.locator('#cfg-render-error-overlay').uncheck();
     await page.locator('#cfg-ok').click();
