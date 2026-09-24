@@ -27,6 +27,9 @@
   // 指摘.md の見出しに付く印。reviewer が手で書く言葉をそのまま読む
   // (書式を新しく決めると、過去の指摘文書が全部「その他」に落ちるため)。
   var MARKS = [
+    // BLK-reviewer-20260923-2012-wish (差し戻し 1 回目): note の自由文で答えてある指摘の節。
+    // 書き戻した指摘文書を次の回に読み直したとき「その他」に落とさない。
+    { status: 'noteReplied', label: 'タグ化待ち', re: /タグ化待ち/ },
     { status: 'partial', label: '部分解消', re: /部分解消|一部解消/ },
     { status: 'resolved', label: '解消', re: /解消/ },
     { status: 'carried', label: '継続', re: /継続|未着手|再掲/ },
@@ -34,7 +37,7 @@
   ];
 
   // 前回の状態を 1 語で言い直すための表 (スコープ外の行が「前回のまま」と言うのに使う)。
-  var VERDICT_OF_STATUS = { partial: '部分解消', resolved: '解消', carried: '継続', fresh: '新規' };
+  var VERDICT_OF_STATUS = { noteReplied: '自由文で応答あり(タグ化待ち)', partial: '部分解消', resolved: '解消', carried: '継続', fresh: '新規' };
 
   // BLK-reviewer-20260914-2206: 「puml 側は解消・svg 再エクスポートのみ継続」のように
   // 1 件の中で解消した所と残っている所を書き分けた指摘は、`解消` の 2 文字だけを見ると
@@ -517,6 +520,23 @@
       return a < b ? -1 : (a > b ? 1 : 0);
     });
 
+    // BLK-reviewer-20260923-2012-wish (差し戻し 1 回目): 当たった突合の行が全部「note の自由文で
+    // 応答あり」(omit-method.markNotes の noteReply) なら、継続ではなく「タグ化待ち」に別掲する。
+    // 回数は進めない (primary は答えている。残っているのはタグへの書き換えだけ)。
+    carried.forEach(function(c) {
+      if (c.verdict !== 'carried' && c.verdict !== 'ledger') return;
+      var rs = _list(c.rows);
+      if (!rs.length || c.regressed) return;
+      var replies = rs.map(function(r) { return r && (r.noteReply || (r.item && r.item.noteReply)); });
+      if (!replies.every(function(n) { return !!n; })) return;
+      c.verdict = 'noteReplied';
+      c.tick = c.finding && c.finding.tick ? c.finding.tick : 0;
+      c.note = '自由文で応答あり(タグ化待ち): ' + replies.map(function(n) {
+        return _s(n.doc) + (n.line ? ' ' + n.line + ' 行' : '') + ' の note「' + _s(n.reason) + '」';
+      }).filter(function(t, i, a) { return a.indexOf(t) === i; }).join(' / ')
+        + '。`\'@omit-method 部品.メソッド 理由` の 1 行に直すと突合から外れます (保存前突合の帯の「🚫 意図的に省略」で足せます)';
+    });
+
     // 指摘のある図のうち、前回控えから実際に中身が変わったもの。
     // 「継続なのに触られている」= 直そうとして直り切っていない、
     // 「継続で触られてもいない」= 未着手、の区別がここで付く。
@@ -547,6 +567,8 @@
         outOfScope: carried.filter(function(c) { return c.verdict === 'outOfScope'; }).length,
         // 突合の対象外 (確認依頼など)。解消にも継続にも数えない。
         notAudited: carried.filter(function(c) { return c.verdict === 'notAudited'; }).length,
+        // note の自由文で答えてあり、タグへの書き換えだけが残っている指摘。継続に数えない。
+        noteReplied: carried.filter(function(c) { return c.verdict === 'noteReplied'; }).length,
         sameDoc: carried.filter(function(c) { return c.verdict === 'sameDoc'; }).length,
         unmatched: carried.filter(function(c) { return c.verdict === 'unmatched'; }).length,
         fresh: fresh.length,
@@ -586,6 +608,7 @@
     if (c.unmatched) re.push('要読み直し ' + c.unmatched + ' 件');
     if (c.outOfScope) re.push('今回は見ていない ' + c.outOfScope + ' 件');
     if (c.notAudited) re.push('突合の対象外で判定できない ' + c.notAudited + ' 件');
+    if (c.noteReplied) re.push('自由文で応答あり(タグ化待ち) ' + c.noteReplied + ' 件');
     if (re.length) s += '（' + re.join('・') + '）';
     s += '、前回控えから変わった図 ' + c.changed + ' 枚';
     if (c.ledger) s += '（うち findings.js の台帳で追跡中 ' + c.ledger + '）';
@@ -597,7 +620,8 @@
   var VERDICT = { carried: '継続', ledger: '継続（findings.js の台帳で追跡中）',
                   resolved: '解消', sameDoc: '同じ図に別の指摘', unmatched: '要読み直し',
                   outOfScope: '今回は見ていない (スコープ外)',
-                  notAudited: '突合の対象外で判定できない (本文を読む)' };
+                  notAudited: '突合の対象外で判定できない (本文を読む)',
+                  noteReplied: '自由文で応答あり(タグ化待ち)' };
 
   // 1 枚の常設ビュー。そのまま次の指摘.md の下敷きになる形で出す。
   function markdown(view, title) {
@@ -609,14 +633,14 @@
         + 'ここに出ていない監査の指摘は「今回は見ていない」として前回の状態のまま据え置きです。', '');
     }
 
-    var order = ['carried', 'ledger', 'sameDoc', 'unmatched', 'outOfScope', 'notAudited', 'resolved'];
+    var order = ['carried', 'ledger', 'noteReplied', 'sameDoc', 'unmatched', 'outOfScope', 'notAudited', 'resolved'];
     order.forEach(function(kind) {
       var items = _list(v.carried).filter(function(c) { return c.verdict === kind; });
       if (!items.length) return;
       out.push('## 前回の指摘 — ' + VERDICT[kind] + '（' + items.length + ' 件）');
       items.forEach(function(c) {
         var head = '- ' + c.finding.title;
-        if ((kind === 'outOfScope' || kind === 'notAudited') && c.tick) head += '（前回のまま ' + c.tick + ' tick 目）';
+        if ((kind === 'outOfScope' || kind === 'notAudited' || kind === 'noteReplied') && c.tick) head += '（前回のまま ' + c.tick + ' tick 目）';
         if (kind === 'ledger' && c.tick) head += '（' + c.tick + ' tick 目' + (c.atLeast ? '以上' : '') + '）';
         if (kind === 'carried') {
           head += '（' + c.tick + ' tick 目' + (c.atLeast ? '以上' : '') + '）';
