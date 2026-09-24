@@ -207,7 +207,9 @@ html, body {
 /* ツリーに入れた #folder-panel は浮かせず、節の中身としてそのまま流す。 */
 /* BLK-human-20260923-1702 (design 10c): GIT 欄・この図の履歴・比較する相手を選ぶ */
 #files-panel [data-files-section="git"][hidden] { display: none; }
-#files-body-git { padding: 2px 8px 6px; font-size: 11px; }
+/* BLK-builder-20260924-1808-1 (design 10a / 10c): #files-panel .files-sec-body の padding 0 に負けないよう #files-panel を付け、
+   中身をツリーの行 (保存先の行と同じ 16px) の字下げに揃える。以前は枠の左端に 0px で貼り付いていた。 */
+#files-panel #files-body-git { padding: 2px 8px 6px 16px; font-size: 11px; }
 #files-body-git .git-head-row, #files-body-git .git-ops, #files-body-git .git-history-bar { display: flex; align-items: center; gap: 4px; margin: 2px 0; }
 #files-body-git #git-branch { flex: 1 1 auto; font-family: ui-monospace, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #files-body-git #git-branch-select { flex: 1 1 auto; min-width: 0; font-size: 11px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border); }
@@ -217,7 +219,7 @@ html, body {
 #files-body-git .git-history-bar span { flex: 1 1 auto; }
 #files-body-git .git-change { display: flex; gap: 6px; padding: 1px 0; min-width: 0; }
 #files-body-git .git-change-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#files-body-git .git-code { flex: 0 0 auto; font-weight: 600; width: 10px; }
+#files-body-git .git-code { flex: 0 0 auto; font-weight: 600; margin-left: auto; padding-left: 6px; }
 #files-body-git .git-code-M, #files-panel [data-git="M"]::after { color: #d29922; }
 #files-body-git .git-code-A, #files-panel [data-git="A"]::after { color: #3fb950; }
 #files-body-git .git-code-D, #files-panel [data-git="D"]::after { color: #f85149; }

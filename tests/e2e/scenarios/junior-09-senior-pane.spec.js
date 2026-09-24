@@ -195,8 +195,19 @@ test('手順9 保存先が Git なら、この図の履歴の「比較」で前�
   // 到達条件その2: 欄を開くと変更 M が出て、ツリーのファイル名にも M が付く。
   await head.click();
   await page.locator('#git-refresh').click();
-  await expect(page.locator('#git-changes .git-change[data-git-code="M"]')).toContainText('spi_init_sequence.puml');
+  // design 10c (BLK-builder-20260924-1808-1): 変更の行はツリーと同じ形 (拡張子なしの名前、状態字は右)。
+  const change = page.locator('#git-changes .git-change[data-git-code="M"]');
+  await expect(change.locator('.git-change-name')).toHaveText('spi_init_sequence');
+  const nameBox = await change.locator('.git-change-name').boundingBox();
+  const codeBox = await change.locator('.git-code').boundingBox();
+  expect(nameBox && codeBox && codeBox.x > nameBox.x + nameBox.width).toBe(true);
   await expect(page.locator('#files-body-open .files-row[data-git="M"]')).toHaveCount(1);
+  // 履歴の見出しはどの図の履歴かを言う。
+  await expect(page.locator('#git-history-head')).toHaveText('この図の履歴 spi_init_sequence');
+  // 中身はツリーの行と同じ字下げ (枠の左端に貼り付かない)。
+  const bodyBox = await page.locator('#files-body-git').boundingBox();
+  const branchBox = await page.locator('#git-branch').boundingBox();
+  expect(bodyBox && branchBox && branchBox.x - bodyBox.x >= 12).toBe(true);
 
   // 到達条件その3: メッセージを書いてコミットすると、この図の履歴が 2 件になる。
   await page.locator('#git-message').click();

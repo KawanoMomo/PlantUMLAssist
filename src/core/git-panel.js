@@ -52,6 +52,20 @@ window.MA.gitPanel = (function() {
   // ツリーのファイル名の右に出す M / A / D (未保存 ● とは別)。キーは拡張子を外した図の名前。
   function _stem(name) { return _s(name).replace(/\.puml$/i, ''); }
 
+  // BLK-builder-20260924-1808-1 (design 10c): 変更の行に出す名前。すぐ上のツリーの行と同じ
+  // 拡張子なしの図の名前にする (「spi_transfer_sequence  M」)。保存先の下のフォルダにある図は
+  // そのフォルダ名を残す (10c の「SPI/spi_init_sequence」)。
+  function changeName(c) {
+    if (!c) return '';
+    return _stem(c.file || c.path);
+  }
+
+  // 「この図の履歴 spi_init_sequence」。どの図の履歴かを見出しで言う (件数では言わない)。
+  function historyLabel(activeName) {
+    var n = _stem(activeName);
+    return n ? 'この図の履歴 ' + n : 'この図の履歴';
+  }
+
   function marksByName(status) {
     var out = {};
     changes(status).forEach(function(c) {
@@ -175,6 +189,8 @@ window.MA.gitPanel = (function() {
     countSource: countSource,
     changes: changes,
     changesLabel: changesLabel,
+    changeName: changeName,
+    historyLabel: historyLabel,
     marksByName: marksByName,
     markOf: markOf,
     canCommit: canCommit,
