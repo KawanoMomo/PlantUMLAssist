@@ -378,12 +378,15 @@ window.MA.gitUi = (function() {
     if (m) m.hidden = true;
   }
 
-  function _pickRow(title, meta, stat, onPick, hash) {
+  // tags: メッセージの横に置く札 (design 10c「初版 [v1.2]」。BLK-builder-20260924-2246-1)。
+  function _pickRow(title, meta, stat, onPick, hash, tags) {
     var b = _el('button', 'git-pick-row');
     b.type = 'button';
     if (hash != null) b.setAttribute('data-hash', hash);
     var body = _el('span', 'git-pick-body');
-    body.appendChild(_el('span', 'git-pick-title', title));
+    var head = _el('span', 'git-pick-title', title);
+    (tags || []).forEach(function(t) { head.appendChild(_el('span', 'git-pick-tag', t)); });
+    body.appendChild(head);
     if (meta) body.appendChild(_el('span', 'git-pick-meta', meta));
     b.appendChild(body);
     if (stat) b.appendChild(_el('span', 'git-pick-stat', stat));
@@ -428,7 +431,7 @@ window.MA.gitUi = (function() {
       function() { compareWith({ hash: '' }); }, ''));
     gp.filterCommits(history, q).forEach(function(c) {
       list.appendChild(_pickRow(c.message, gp.commitMeta(c), gp.commitStat(c),
-        function() { compareWith(c); }, c.hash));
+        function() { compareWith(c); }, c.hash, gp.commitTags ? gp.commitTags(c) : []));
     });
   }
 

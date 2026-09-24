@@ -61,11 +61,26 @@ describe('変更とツリーの M / A', function() {
 });
 
 describe('この図の履歴と比較相手', function() {
-  test('行の副題は ハッシュ · 作成者 · 日付 · HEAD / タグ', function() {
+  // BLK-builder-20260924-2246-1 (design 10c「初版 v1.2 / 01de5a9 · senior · 09-10 09:15 / +12」): タグは副題ではなく
+  // メッセージの横の札 (commitTags)。図を作ったコミット (created) の右端は「+12」だけ。
+  test('行の副題は ハッシュ · 作成者 · 日付 · HEAD (タグは副題に入れず、メッセージの横の札)', function() {
     expect(GP.commitMeta(COMMITS[0])).toBe('a3f91c2 · junior · 09-23 06:30 · HEAD');
-    expect(GP.commitMeta(COMMITS[2])).toBe('01de5a9 · senior · 09-10 09:15 · v1.2');
+    expect(GP.commitMeta(COMMITS[2])).toBe('01de5a9 · senior · 09-10 09:15');
+    expect(GP.commitTags(COMMITS[2])).toEqual(['v1.2']);
+    expect(GP.commitTags(COMMITS[0])).toEqual([]);
+    expect(GP.commitTags({ tags: ['', 'v2'] })).toEqual(['v2']);
+    expect(GP.commitTags(null)).toEqual([]);
     expect(GP.commitStat(COMMITS[1])).toBe('+3 −1');
     expect(GP.commitStat(COMMITS[0])).toBe('+2 −0');
+  });
+
+  test('図を作ったコミットの右端は「+12」だけ (削る行がそもそも無い)', function() {
+    var first = Object.assign({}, COMMITS[2], { created: true });
+    expect(GP.commitStat(first)).toBe('+12');
+    // 作ったと同時に別の図を削った等で削除行があれば、今までどおり両方出す。
+    expect(GP.commitStat(Object.assign({}, first, { removed: 2 }))).toBe('+12 −2');
+    // created を持たない (古い server の返り) なら −0 を出す。
+    expect(GP.commitStat(COMMITS[2])).toBe('+12 −0');
   });
 
   test('メッセージ・作成者・ハッシュ・タグで絞り込める', function() {

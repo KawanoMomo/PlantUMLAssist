@@ -90,7 +90,9 @@ window.MA.gitPanel = (function() {
     return m ? (m[1] + '-' + m[2] + ' ' + m[3] + ':' + m[4]) : '';
   }
 
-  // コミット 1 行の副題 `a3f91c2 · junior · 09-23 06:30 · HEAD`。タグがあれば添える。
+  // コミット 1 行の副題 `a3f91c2 · junior · 09-23 06:30 · HEAD`。
+  // BLK-builder-20260924-2246-1 (design 10c): タグは副題に足さず、メッセージの横の札に置く
+  // (「初版 [v1.2]」。GIT 欄の「この図の履歴」の行と同じ形。札は commitTags)。
   function commitMeta(c) {
     if (!c) return '';
     var parts = [_s(c.short || _s(c.hash).slice(0, 7))];
@@ -98,13 +100,20 @@ window.MA.gitPanel = (function() {
     var d = shortDate(c.date);
     if (d) parts.push(d);
     if (c.head) parts.push('HEAD');
-    (c.tags || []).forEach(function(t) { parts.push(_s(t)); });
     return parts.join(' · ');
   }
 
+  // メッセージの横に出す札 (タグ)。空の名前は落とす。
+  function commitTags(c) {
+    return (c && Array.isArray(c.tags) ? c.tags : []).map(_s).filter(function(t) { return !!t; });
+  }
+
+  // 右端の行数 `+3 −1` / `+2 −0`。図を作ったコミット (server の created: そのコミットで
+  // 生まれたファイルだけ) は削る行がそもそも無いので `+12` だけ (design 10c の「初版 +12」)。
   function commitStat(c) {
     if (!c) return '';
     var a = _n(c.added), r = _n(c.removed);
+    if (c.created && !r) return '+' + a;
     return '+' + a + (r ? ' −' + r : ' −0');
   }
 
@@ -299,6 +308,7 @@ window.MA.gitPanel = (function() {
     shortDate: shortDate,
     commitMeta: commitMeta,
     commitStat: commitStat,
+    commitTags: commitTags,
     dayLabel: dayLabel,
     historyRow: historyRow,
     timeline: timeline,
