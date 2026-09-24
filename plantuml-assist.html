@@ -241,6 +241,9 @@ html, body {
 #files-body-git button.git-mini { flex: 0 0 auto; white-space: nowrap; }
 #files-body-git .git-change { display: flex; gap: 6px; padding: 1px 0; min-width: 0; }
 #files-body-git .git-change-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* BLK-builder-20260924-2344-3 (design 10c): 開ける変更の行は押せる (ツリーの行と同じ見た目で、手を置くと下地が付く) */
+#files-body-git button.git-change { width: 100%; box-sizing: border-box; align-items: center; background: none; border: none; border-radius: 2px; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+#files-body-git button.git-change:hover, #files-body-git button.git-change:focus-visible { background: var(--bg-tertiary); outline: none; }
 #files-body-git .git-code { flex: 0 0 auto; font-weight: 600; margin-left: auto; padding-left: 6px; }
 #files-body-git .git-code-M, #files-panel [data-git="M"]::after { color: #d29922; }
 #files-body-git .git-code-A, #files-panel [data-git="A"]::after { color: #3fb950; }

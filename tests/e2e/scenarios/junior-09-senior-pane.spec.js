@@ -362,6 +362,51 @@ test('手順9 保存先が Git なら、この図の履歴の「比較」で前�
   await expect(saved.first().locator('.git-history-restore')).toBeVisible();
 });
 
+// BLK-builder-20260924-2344-3 (design 10c「変更ファイル（M / A / D）・コミットはここで済みます」): 変更の行は
+// 名前と状態字を出すだけで、押しても何も起きなかった。押すとその図を開き、M の図は最後のコミットを右の枠に並べる。
+test('手順9 GIT 欄の変更の行を押すとその図が開き、M の図は最後のコミットが右の枠に並ぶ', async ({ page }) => {
+  const fs = require('fs');
+  const path = require('path');
+  const { execFileSync } = require('child_process');
+  const rel = DIR + '-gitchg';
+  const abs = path.join(__dirname, '..', '..', '..', rel.replace(/^\.\//, ''));
+  fs.rmSync(abs, { recursive: true, force: true });
+  fs.mkdirSync(abs, { recursive: true });
+  const git = (...a) => execFileSync('git', ['-C', abs, ...a], { stdio: 'pipe' }).toString();
+  git('init', '-q', '-b', 'main');
+  git('config', 'user.name', 'junior');
+  git('config', 'user.email', 'junior@example.invalid');
+  git('config', 'core.autocrlf', 'false');
+  const V1 = '@startuml\ntitle SPI 初期化\nparticipant App\nparticipant SpiDrv\nApp -> SpiDrv : Spi_Init()\n@enduml\n';
+  fs.writeFileSync(path.join(abs, 'spi_init_sequence.puml'), V1);
+  git('add', '-A');
+  git('commit', '-q', '-m', '初版');
+  // コミットの後に書き換えた図 (M) と、まだコミットしていない図 (A)。
+  fs.writeFileSync(path.join(abs, 'spi_init_sequence.puml'), V1.replace('@enduml', 'SpiDrv --> App : Fault\n@enduml'));
+  fs.writeFileSync(path.join(abs, 'spi_transfer_sequence.puml'),
+    '@startuml\ntitle SPI 転送\nparticipant App\nparticipant SpiDrv\nApp -> SpiDrv : Spi_Transfer()\n@enduml\n');
+
+  await S.bootWithSaveDir(page, rel);
+  await page.locator('#files-sec-git').click();
+  const added = page.locator('#git-changes .git-change[data-git-code="A"]');
+  const modified = page.locator('#git-changes .git-change[data-git-code="M"]');
+  await expect(added.locator('.git-change-name')).toHaveText('spi_transfer_sequence');
+  await expect(modified.locator('.git-change-name')).toHaveText('spi_init_sequence');
+
+  // A: 押すと開くだけ。
+  await added.click();
+  await expect.poll(() => page.locator('#editor').inputValue()).toContain('Spi_Transfer()');
+
+  // M: 押すと開いて、右の枠に最後のコミット (初版) の図が並び、図の上で差の色が付く。
+  await modified.click();
+  await expect.poll(() => page.locator('#editor').inputValue()).toContain('Fault');
+  await expect(page.locator('#senior-pane')).toBeVisible();
+  await expect(page.locator('#senior-git-pick')).toContainText('初版');
+  await expect(page.locator('#senior-dsl')).not.toContainText('Fault');
+  await expect(page.locator('#preview-svg svg text.gd-add')).toHaveText(['Fault']);
+  fs.rmSync(abs, { recursive: true, force: true });
+});
+
 test('手順9 Git でない保存先では GIT 欄を出さない', async ({ page }) => {
   await S.bootWithSaveDir(page, DIR);
   await page.waitForTimeout(800);
