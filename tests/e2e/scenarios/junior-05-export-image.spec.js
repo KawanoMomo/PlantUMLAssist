@@ -575,6 +575,9 @@ test('手順5 資料化: 実行後もモーダルが閉じず、保存先に置�
   expect(saved).toContain('(資料用)');
 
   // 到達条件その2: そのまま次の 1 枚を続けられ、根拠は新しい図に入れ替わる。
+  // BLK-builder-20260924-1351-4 (design 10a / 9a): ボタンは今の画面にある名前 (保存先の一覧) で言い、
+  // 10a で無くなった「📂 一覧」を名指ししない。
+  await expect(page.locator('#mexp-result-open')).toHaveText('この図を保存先の一覧で開く');
   await page.locator('#mexp-result-open').click();
   await expect(page.locator('#mexp-modal')).toBeHidden();
   await expect(page.locator('#folder-panel')).toHaveClass(/open/);

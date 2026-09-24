@@ -7488,7 +7488,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <!-- BLK-human-20260923-1700 (design 10a): 👀 他フォルダ と 並べて比較 は
              FILES ツリーの「読むだけ」節へ引っ越した (id はそのまま) -->
         <!-- BLK-junior-20260907-2009-wish: やり直し途中の控えに印を付け、📂 一覧で畳む -->
-        <button class="tab-tool" id="btn-tab-draft" aria-pressed="false" title="この図に一時控え(下書き / やり直し途中)の印を付けて、📂 一覧から畳む">🗂 一時控え</button>
+        <button class="tab-tool" id="btn-tab-draft" aria-pressed="false" title="この図に一時控え(下書き / やり直し途中)の印を付けて、保存先の一覧から畳む">🗂 一時控え</button>
         <button class="tab-tool" id="btn-tab-rename" title="開いている図をまたいで部品名を一括置換">⇄ 一括置換</button>
         <!-- BLK-junior-20260916-0046-wish: 揃える先は登録簿が知っている。組を選ぶだけで
              揺れの残るファイルが出て、チェックした分をまとめて当てる -->
@@ -7827,7 +7827,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
             <button type="button" id="btn-scl-close" title="この警告を閉じる（次の保存でまた出ます）">✕</button>
             <span id="scl-summary"></span>
             <button type="button" id="btn-scl-fix" hidden></button>
-            <button type="button" id="btn-scl-folder" title="📂一覧を開いて、衝突している図を全部見る">📂 一覧で見る</button>
+            <button type="button" id="btn-scl-folder" title="保存先の一覧を開いて、衝突している図を全部見る">ぶつかった図を保存先の一覧で見る</button>
           </div>
           <ul id="scl-list"></ul>
         </div>
@@ -8967,7 +8967,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <label>新しい資料セット</label>
       <input id="docset-name" type="text" placeholder="資料セットの名前" />
       <span id="docset-pick-count" role="status"></span>
-      <button type="button" id="docset-create" title="保存フォルダにある図（📂 一覧で印を付けていればその図だけ）を、この名前の資料セットとして登録する">今の対象を登録する</button>
+      <button type="button" id="docset-create" title="保存フォルダにある図（保存先の一覧で印を付けていればその図だけ）を、この名前の資料セットとして登録する">今の対象を登録する</button>
     </div>
     <!-- BLK-primary-20260917-0323-wish: 未確認のまま渡そうとしている図を、押す前に名指しする -->
     <div id="docset-handover" data-blocked="0" role="status"></div>
@@ -9118,7 +9118,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
          ここに出たままになる。トーストを見落としても📂一覧へ戻らなくてよい。 -->
     <div id="mexp-result" hidden>
       <span id="mexp-result-text" role="status"></span>
-      <button type="button" id="mexp-result-open" title="この図を保存フォルダの一覧で開く">📂 一覧で見る</button>
+      <button type="button" id="mexp-result-open" title="この図を保存先の一覧で開く">この図を保存先の一覧で開く</button>
     </div>
     <!-- BLK-junior-20260915-0106: 手順7 が求めるのは「指摘の内容が反映されているか」で、
          置けたことだけでは足りない。保存先から本文を読み直してここに出し、

@@ -115,8 +115,8 @@ window.MA.draftMark = (function() {
   function activeMessage(name, isDraft) {
     var label = _s(name);
     return isDraft
-      ? '🗂 ' + label + ' を一時控えにしました。📂 一覧では畳まれます'
-      : '🗂 ' + label + ' の一時控えを外しました。📂 一覧に成果物として出ます';
+      ? '🗂 ' + label + ' を一時控えにしました。保存先の一覧では畳まれます'
+      : '🗂 ' + label + ' の一時控えを外しました。保存先の一覧に成果物として出ます';
   }
 
   function load(storage, fileDir) {
