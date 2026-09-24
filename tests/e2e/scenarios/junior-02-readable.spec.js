@@ -1570,3 +1570,66 @@ test('手順2 クラスの属性は図で押した行がその場で開き、組
   await expect.poll(() => getEditorText(page)).not.toContain('rxBuffer');
   expect(await getEditorText(page)).toContain('Spi_Init() : void');
 });
+
+// BLK-owner-20260925-0312-1 / BLK-human-20260925-0351: フォームだけで起こした図は、タブを替えるまで
+// タブの本文にも自動保存にも届かず、そのままリロードすると `@startuml / @enduml` に戻って消えた。
+// フォームで足した行も、本文欄で打ったときと同じ時に同じ経路でタブ・保存フォルダ・タブの印に届く。
+test('手順2 フォームだけで足した直後にリロードしても本文が残り、保存フォルダにも書かれている', async ({ page }) => {
+  const dir = DIR + '-form-autosave';
+  await S.bootWithSaveDir(page, dir);
+  await S.clearDir(page, dir);
+  await page.reload();
+  await page.waitForSelector('html[data-app-ready="1"]');
+
+  // ＋ で白紙のタブを開き、レールで状態遷移図にして、本文欄に触らず右パネルの追加だけで起こす。
+  await page.locator('#btn-tab-new').click();
+  await page.waitForTimeout(400);
+  await page.locator('#rail-types .rail-btn[data-type="plantuml-state"]').click();
+  await page.waitForTimeout(800);
+  const name = await page.evaluate(() => window.MA.workspace.getActive().name);
+  for (const id of ['Idle', 'Running']) {
+    await page.locator('#st-tail-kind').selectOption('state');
+    await page.locator('#st-tail-id').fill(id);
+    await page.locator('#st-tail-add').click();
+    await page.waitForTimeout(400);
+  }
+  await page.locator('#st-tail-kind').selectOption('transition');
+  await page.waitForSelector('#st-tail-trig');
+  await page.locator('#st-tail-from').selectOption('Idle');
+  await page.locator('#st-tail-to').selectOption('Running');
+  await page.locator('#st-tail-trig').fill('Start');
+  await page.locator('#st-tail-add').click();
+  await page.waitForTimeout(400);
+  expect(await getEditorText(page)).toContain('Idle --> Running : Start');
+
+  // 到達条件その1: タブを替えなくても、タブの本文 (リロードで戻る先) に入っている。
+  const ws = await page.evaluate(() => window.localStorage.getItem('plantuml-workspace') || '');
+  expect(ws).toContain('Idle --> Running : Start');
+
+  // 到達条件その2: 1 回の確定は 1 回の Ctrl+Z で戻り、Ctrl+Y で戻せる (保存の経路と取り違えない)。
+  // 追加の後はフォームの欄に入力の続きが残るので、欄から出てから押す (欄の中の Ctrl+Z は欄の文字を戻す)。
+  await page.evaluate(() => { if (document.activeElement) document.activeElement.blur(); });
+  await page.keyboard.press('Control+z');
+  await page.waitForTimeout(300);
+  expect(await getEditorText(page)).not.toContain('Idle --> Running : Start');
+  expect(await getEditorText(page)).toContain('state Running');
+  await page.keyboard.press('Control+y');
+  await page.waitForTimeout(300);
+  expect(await getEditorText(page)).toContain('Idle --> Running : Start');
+
+  // 到達条件その3: 自動保存 (保存先 = ファイル) の debounce のあと、ディスクにも書かれている。
+  await expect.poll(async () => (await S.readDoc(page, dir, name)) || '', { timeout: 5000 })
+    .toContain('Idle --> Running : Start');
+  // 下端の「HH:MM に自動保存」もこの図の名前で進み、タブの印は保存した本文と照らした状態になる
+  // (書けた後に ●/○ が残らない。本文欄で打ったときと同じ)。
+  await expect(page.locator('#status-autosave')).toContainText(name + '.puml');
+  await expect(page.locator('#tab-bar .tab.active .tab-dot')).toHaveCount(0);
+
+  // 到達条件その4: そのままリロードしても、フォームで足した行が消えない。
+  await S.reopenApp(page);
+  await page.waitForTimeout(600);
+  const back = await page.evaluate(() => window.MA.workspace.getActive().dsl);
+  expect(back).toContain('state Idle');
+  expect(back).toContain('Idle --> Running : Start');
+  expect(await getEditorText(page)).toContain('Idle --> Running : Start');
+});
