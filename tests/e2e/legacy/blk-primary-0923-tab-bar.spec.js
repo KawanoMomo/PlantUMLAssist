@@ -48,7 +48,9 @@ test.describe('BLK-primary-0923 タブバーが潰れない', () => {
     await page.keyboard.press('Control+k');
     await expect(page.locator('#cp-input')).toBeVisible();
     await page.locator('#cp-input').fill('テンプレート');
-    await expect(page.locator('#cp-list')).toContainText('テンプレート');
+    // BLK-owner-20260924-2337-prune: テンプレート・部品を起こす・骨格・セット複製は 1 行「既存の図や雛形から新しい図を起こす…」に
+    // まとめた。旧名はその行を引く語として残る (行の題には出ない)。
+    await expect(page.locator('#cp-list .cp-item').first()).toContainText('新しい図を起こす');
     await page.keyboard.press('Enter');
     await expect(page.locator('#tpl-modal')).toBeVisible();
   });
