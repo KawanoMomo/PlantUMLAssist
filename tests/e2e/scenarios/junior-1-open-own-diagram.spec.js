@@ -261,6 +261,21 @@ test('手本が無いユースケース図を、題材名 1 語のひな形か�
 
   // 図として描けている (パースが通り、要素が出そろっている)
   await expect(page.locator('#status-parse')).toContainText('パース OK');
+  // design 9c (BLK-builder-20260924-1759-1): 通ったことは点の色 (緑) で言い、文字は隣の件数と同じ色。
+  await expect(page.locator('#status-parse')).toHaveAttribute('data-dot', 'ok');
+  const look = await page.evaluate(() => {
+    const p = document.getElementById('status-parse');
+    const before = getComputedStyle(p, '::before');
+    return {
+      text: getComputedStyle(p).color,
+      info: getComputedStyle(document.getElementById('status-info')).color,
+      dot: before.color,
+      content: before.content,
+    };
+  });
+  expect(look.text).toBe(look.info);
+  expect(look.content).toBe('"●"');
+  expect(look.dot).not.toBe(look.text);
 });
 
 // BLK-junior-20260916-0546-wish: 手順 1 で先輩 (primary) の図を見るには、📂 一覧が

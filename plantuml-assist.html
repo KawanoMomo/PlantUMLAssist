@@ -7176,8 +7176,11 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   font-size: 11px;
 }
 
-#status-parse { color: var(--accent-green); }
-#status-parse.error { color: var(--accent-red); }
+/* BLK-builder-20260924-1759-1 (design 9c): 色は点だけ。文字は件数の札と同じ色で、正常は緑・書き損じは赤の点 */
+#status-parse { color: var(--text-secondary); }
+#status-parse[data-dot]::before { content: '●'; font-size: 9px; vertical-align: 1px; margin-right: 6px; }
+#status-parse[data-dot="ok"]::before { color: var(--accent-green); }
+#status-parse[data-dot="bad"]::before { color: var(--accent-red); }
 #status-info  { color: var(--text-secondary); }
 /* BLK-builder-20260924-1413-2 (design 7a / 9c): 下端はどの幅でも 1 行。項目の中で折り返さず、
    入りきらない分は保存直後の 1 行 (#status-save-result) が省略記号で縮む (全文は title)。 */

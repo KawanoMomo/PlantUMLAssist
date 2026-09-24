@@ -32410,9 +32410,11 @@ function refresh() {
     currentParsed = currentModule.parse(mmdText);
     statusParseEl.textContent = 'パース OK';
     statusParseEl.classList.remove('error');
+    statusParseEl.setAttribute('data-dot', 'ok');
   } catch (e) {
     statusParseEl.textContent = 'パース NG · ' + e.message;
     statusParseEl.classList.add('error');
+    statusParseEl.setAttribute('data-dot', 'bad');
     currentParsed = { meta: {}, elements: [], relations: [], groups: [] };
   }
   // design 1a/4a/4b/4c: 下端で何を数えるかは図種で変わる (3 classes · 2 relations /
