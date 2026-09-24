@@ -1294,3 +1294,70 @@ test('migrator 手順 4 — 日本語の名前・create した参加者・teoz �
   await hoverText('Charlie', 0);
   await expect.poll(hovered, 'Charlie の見出しにホバー').toBe('participant@4');
 });
+
+// BLK-builder-20260925-0656-2: smetana の複合状態は見出しを円弧付きの path で描き、その数字を座標として読んでいたので、
+// 複合状態の枠が図の左上まで広がり、2 つ目の複合状態の名前を指すと 1 つ目にまたがる枠が出た。
+// 行き先の側にある出口・pin (線が矢じりの手前で切れる) と、どの遷移にもつながらない pin にも枠が無かった。
+test('migrator 手順 4 — smetana の複合状態・出口・pin のある state 図でも、名前・丸・四角に本人の枠が出る', async ({ page }) => {
+  await bootPlain(page);
+  const fx = (n) => fs.readFileSync(path.join(__dirname, '..', '..', 'fixtures', 'dsl', 'state-' + n + '.puml'), 'utf8')
+    .replace(/\r\n/g, '\n').replace(/\n+$/, '');
+  // 名前の文字 (text) か、その脇の図形 (名前の付いた <g> の外の丸・四角) の中心を指し、光った枠を読む
+  const hoverAt = async (label, shape) => {
+    const pt = await page.evaluate((a) => {
+      const svg = document.querySelector('#preview-svg svg');
+      const t = Array.prototype.find.call(svg.querySelectorAll('text'), (n) => (n.textContent || '').trim() === a.label &&
+        !n.closest('g.link'));
+      if (!t) return null;
+      let el = t;
+      if (a.shape) {
+        const tb = t.getBoundingClientRect();
+        let best = null, bd = Infinity;
+        svg.querySelectorAll('ellipse, rect').forEach((e) => {
+          const g = e.parentNode;
+          if (g && g.getAttribute && g.getAttribute('class')) return;
+          const b = e.getBoundingClientRect();
+          const d = Math.abs(b.left + b.width / 2 - (tb.left + tb.width / 2)) + Math.abs(b.top + b.height / 2 - (tb.top + tb.height / 2));
+          if (d < bd) { bd = d; best = e; }
+        });
+        el = best;
+      }
+      el.scrollIntoView({ block: 'center', inline: 'center' });
+      const r = el.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    }, { label, shape });
+    expect(pt, label + ' が描かれている').not.toBeNull();
+    await page.mouse.move(3, 3);
+    await page.mouse.move(pt.x, pt.y);
+    const r = page.locator('#overlay-layer rect.hit-hover').first();
+    await expect(r, label + ' にホバーして枠が出る').toHaveCount(1, { timeout: 5000 });
+    const bb = await r.boundingBox();
+    return { id: await r.getAttribute('data-id'), bb };
+  };
+
+  // smetana の並んだ複合状態: B の名前を指すと B の枠が、B の外枠に重なって出る
+  await typeDsl(page, fx('smetana-siblings'));
+  await expect(page.locator('#overlay-layer rect[data-type="state"][data-id="B"]')).toHaveCount(1, { timeout: 20000 });
+  await expect(page.locator('#ma-toast')).toBeHidden({ timeout: 15000 });
+  const b = await hoverAt('B', false);
+  expect(b.id).toBe('B');
+  const clusterB = await page.evaluate(() => {
+    const r = document.querySelector('#preview-svg svg g.cluster[data-qualified-name="B"] rect').getBoundingClientRect();
+    return { x: r.left, y: r.top, width: r.width, height: r.height };
+  });
+  expect(Math.abs(b.bb.x - clusterB.x), '枠の左端が B の外枠に合う').toBeLessThan(6);
+  expect(Math.abs(b.bb.y - clusterB.y), '枠の上端が B の外枠に合う (A にまたがらない)').toBeLessThan(6);
+
+  // 出口 (矢じりの側): exit1 の丸を指すと exit1
+  await typeDsl(page, fx('pin-exits'));
+  await expect(page.locator('#overlay-layer rect[data-type="state"][data-id="Diagnostics.exit1"]')).toHaveCount(1, { timeout: 20000 });
+  expect((await hoverAt('exit1', true)).id).toBe('Diagnostics.exit1');
+
+  // pin: 遷移の行き先の entry2 と、どこにもつながらない ex / count_start
+  await typeDsl(page, fx('pin-pins'));
+  await expect(page.locator('#overlay-layer rect[data-type="state"][data-id="module.ex"]')).toHaveCount(1, { timeout: 20000 });
+  expect((await hoverAt('entry2', true)).id).toBe('module.Somp.entry2');
+  expect((await hoverAt('ex', true)).id).toBe('module.ex');
+  expect((await hoverAt('count_start', true)).id).toBe('module.counter.count_start');
+  await expect(page.locator('#overlay-warning')).toBeHidden();
+});
