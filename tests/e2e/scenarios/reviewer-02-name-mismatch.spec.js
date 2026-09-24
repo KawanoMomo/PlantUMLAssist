@@ -548,3 +548,60 @@ test('手順2 内部揺れと確認した組は台帳に残り、次の突合は
   expect(CA.statusOf(ledger, grown[0]).status).toBe('changed');
   expect(CA.pending(grown, ledger).length).toBe(1);
 });
+
+// BLK-owner-20260924-1332-prune: 表記揺れを「見つける」画面が 🔍 名前突合と ▦ 突合ボードの 2 つ、
+// 「直す」道が 🔍 の「これに統一」と 🔤 表記統一の 2 本あった。前者で揃えた組は登録簿に入らず、
+// 次の tick の突合 (--registry) で同じ組を決め直していた。見つけるのは ▦ 突合ボード、直すのは
+// 🔤 表記統一の 1 本ずつにし、ボードで揃える先を選ぶと登録簿に入ることを到達条件にする。
+test('手順2 表記揺れは突合ボードで見つけ、揃える先を選ぶと登録簿に入って 🔤 表記統一で直る', async ({ page }) => {
+  test.setTimeout(120 * 1000);
+  // 登録簿 (_names.json) は保存先の親に置かれる。spec の外へ漏らさないよう 1 段下げる。
+  const ROOT = S2.dirFor(__filename) + '/unify';
+  const DIR = ROOT + '/primary';
+  await S2.bootWithSaveDir(page, DIR);
+  await S2.clearDir(page, DIR);
+  await page.evaluate(async (d) => {
+    await fetch('/name-registry', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dir: d, entries: [] }) });
+  }, DIR);
+  await S2.typeDsl(page, ['@startuml', 'participant SpiDrv', 'participant IRQCtrl',
+    'SpiDrv -> IRQCtrl : request', '@enduml'].join('\n'));
+  await page.locator('#btn-tab-new').click();
+  await S2.typeDsl(page, ['@startuml', 'participant CanDrv', 'participant IrqCtrl',
+    'CanDrv -> IrqCtrl : notify', '@enduml'].join('\n'));
+
+  // 到達条件 1: ツール ▾ に「表記揺れ」と打つと当たるのは ▦ 突合ボードの 1 行で、
+  // 押すと「名前/表記揺れ」で絞られて開く (🔍 名前突合という別の画面は無い)。
+  await page.locator('#btn-tab-tools').click();
+  await page.locator('#tool-menu-filter').fill('表記揺れ');
+  const hits = page.locator('#tool-menu .tool-menu-hits .tool-menu-item');
+  await expect(hits).toHaveCount(1);
+  await expect(hits.first()).toHaveAttribute('data-target', 'btn-tab-cross');
+  await hits.first().click();
+  await expect(page.locator('#ab-modal')).toBeVisible();
+  await expect(page.locator('#ab-kind')).toHaveValue('name.variants');
+  const row = page.locator('#ab-body .ab-row[data-ab-kind="name.variants"]');
+  await expect(row).toHaveCount(1);
+
+  // 到達条件 2: 行で揃える先を選ぶと、組が登録簿に入り 🔤 表記統一がその組で開く。
+  await row.locator('.ab-unify-to[data-to="IRQCtrl"]').click();
+  await expect(page.locator('#unify-panel')).toHaveClass(/open/);
+  await expect(page.locator('#unify-entry')).toHaveValue('irqctrl');
+  const reg = await page.evaluate(async (d) =>
+    (await (await fetch('/name-registry?dir=' + encodeURIComponent(d))).json()), DIR);
+  expect(reg.entries.map((e) => e.canonical + ' ← ' + e.variants.join(','))).toEqual(['IRQCtrl ← IrqCtrl']);
+
+  // 到達条件 3: 書くのは 🔤 表記統一の「まとめて適用」の 1 本。保存フォルダの図まで直る。
+  await page.locator('#btn-unify-apply').click();
+  await expect(page.locator('#unify-result')).toHaveAttribute('data-applied', '2');
+  await page.locator('#btn-unify-cancel').click();
+  expect(await S2.readDoc(page, DIR, 'diagram2')).toContain('participant IRQCtrl');
+
+  // 到達条件 4: 直したあとの突合は、ボードの「名前/表記揺れ」も表記統一の未統一の組も 0。
+  await S2.runCommand(page, '表記揺れ');
+  await expect(page.locator('#ab-kind')).toHaveValue('name.variants');
+  await expect(page.locator('#ab-body .ab-row')).toHaveCount(0);
+  await page.locator('#ab-close').click();
+  await page.locator('#btn-tab-unify').click();
+  await expect(page.locator('#unify-summary')).toHaveText('登録簿の表記はすべて揃っています');
+});

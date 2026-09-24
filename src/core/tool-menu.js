@@ -32,12 +32,15 @@ window.MA.toolMenu = (function() {
       { id: 'btn-tab-xref',    label: '部品名で図をまたいで辿る → ▤ 影響を見る', group: '図をたどる' },
     ] },
     { key: 'check', title: '確かめる', items: [
-      { id: 'btn-tab-audit',          label: '名前の表記揺れ', group: '名前と系統' },
+      // BLK-owner-20260924-1332-prune: 🔍 名前突合 (名前の表記揺れ) の画面は畳んだ。同じ指摘は
+      // ▦ 突合ボードの「名前/表記揺れ」に出る。「表記揺れ」「名前突合」と絞り込むとボードの行に当たり、
+      // 押すとそのカテゴリで絞って開く (app.js が絞り込み欄の語を渡す)。
       { id: 'btn-tab-family',         label: '系統内の動作名のずれ', group: '名前と系統' },
       { id: 'btn-tab-drivermap',      label: '系統マップの崩れ', group: '名前と系統' },
       { id: 'btn-tab-trace',          label: '状態遷移のトレース漏れ', group: '名前と系統' },
       // BLK-builder-20260924-1341-4 (design 9b): 並びは小見出しごとにまとめ、9b の右列と同じ順にする。
-      { id: 'btn-tab-cross',          label: '突合ボード (1 画面で全部)', group: 'まとめて点検' },
+      { id: 'btn-tab-cross',          label: '突合ボード (表記揺れ・宣言なし・メソッドも 1 画面で)', group: 'まとめて点検',
+        keywords: ['名前突合', '名前の表記揺れ', '表記ゆれ', 'name audit', 'メソッド突合'] },
       { id: 'btn-tab-pattern',        label: '1 つの観点で全図を棚卸し', group: 'まとめて点検' },
       { id: 'btn-tab-design',         label: '仕様 (design) と現在値の突合', group: 'まとめて点検' },
       { id: 'btn-tab-submit',         label: '提出前チェック', group: '渡す前に' },
@@ -126,6 +129,7 @@ window.MA.toolMenu = (function() {
         items: bySubHead(g.items.map(function(it) {
           var o = { id: it.id, label: it.label, group: it.group || '' };
           if (it.opener) o.opener = it.opener;
+          if (it.keywords) o.keywords = it.keywords.slice();
           return o;
         })),
       };
@@ -170,7 +174,9 @@ window.MA.toolMenu = (function() {
     var out = [];
     panelGroups().forEach(function(g) {
       g.items.forEach(function(it) {
-        if (!q
+        // keywords: 畳んだ旧画面の名前 (「名前突合」等) でも、行き先の行に当たるようにする。
+        var kw = (it.keywords || []).some(function(k) { return String(k).toLowerCase().indexOf(q) >= 0; });
+        if (!q || kw
           || it.label.toLowerCase().indexOf(q) >= 0
           || String(it.group).toLowerCase().indexOf(q) >= 0
           || g.title.toLowerCase().indexOf(q) >= 0) {

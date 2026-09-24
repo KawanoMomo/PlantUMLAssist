@@ -11,7 +11,8 @@ const TOOLS = [
   'btn-tab-new',
   'btn-tab-folder',
   'btn-tab-rename',
-  'btn-tab-audit',
+  // BLK-owner-20260924-1332-prune: 🔍 名前突合は ▦ 突合ボードに畳んだ
+  'btn-tab-cross',
   'btn-tab-family',
   'btn-tab-lines',
   'btn-tab-compare',
