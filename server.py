@@ -582,6 +582,10 @@ API_INDEX = {
          'request': '?dir='},
         {'endpoint': 'POST /cohort-ack', 'summary': '確認済みの組の台帳を置き換える',
          'request': "{dir, entries: [{key, domain, kind, left, right, fingerprint, note, by, at}]}"},
+        {'endpoint': 'GET /meeting-log', 'summary': '会議セットで並べた日時の控え (▤ 変更サマリボードの「変更前 = 前回の会議」)',
+         'request': '?dir='},
+        {'endpoint': 'POST /meeting-log', 'summary': '会議セットで並べた日時を 1 つ足す',
+         'request': '{dir, at}'},
         {'endpoint': 'GET /vault', 'summary': '保管庫の中身', 'request': '?dir='},
         {'endpoint': 'POST /vault', 'summary': '保管庫へ入れる'},
         {'endpoint': 'GET /tickets', 'summary': '変更チケットの一覧', 'request': '?dir='},
@@ -1143,6 +1147,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.split('?')[0] == '/cohort-ack':
             with _fs_lock:
                 return self._handle_cohort_ack_get()
+        if self.path.split('?')[0] == '/meeting-log':
+            with _fs_lock:
+                return self._handle_meeting_log_get()
         if self.path.split('?')[0] == '/peek-dirs':
             with _fs_lock:
                 return self._handle_peek_dirs()
@@ -1220,6 +1227,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == '/cohort-ack':
             with _fs_lock:
                 return self._handle_cohort_ack_post()
+        if self.path == '/meeting-log':
+            with _fs_lock:
+                return self._handle_meeting_log_post()
         if self.path == '/file-roles':
             with _fs_lock:
                 return self._handle_file_roles_post()
@@ -2650,6 +2660,59 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(500, {'error': f'書き込めません: {e}'})
             return
         self._send_json(200, {'dir': str(save_dir), 'path': str(path), 'entries': clean})
+
+    # BLK-primary-20260924-1332-wish: 会議セットで並べた日時の控え。▤ 変更サマリボードの
+    # 「変更前 = 前回の会議」はこれを読む。ブラウザを起こし直しても (localStorage が空でも)
+    # 前の会議の時点で比べられるよう、保存フォルダに置く。1 日 1 件 (その日の最後の時刻)。
+    MEETING_LOG_FILE = '_meetings.json'
+    MEETING_LOG_MAX = 64 * 1024
+    MEETING_LOG_KEEP = 30
+
+    def _meeting_log_path(self, save_dir):
+        return Path(save_dir) / self.MEETING_LOG_FILE
+
+    def _read_meeting_log(self, save_dir):
+        path = self._meeting_log_path(save_dir)
+        try:
+            if not path.exists() or path.stat().st_size > self.MEETING_LOG_MAX:
+                return []
+            data = json.loads(path.read_text(encoding='utf-8-sig'))
+        except (OSError, ValueError):
+            return []
+        items = data.get('meetings') if isinstance(data, dict) else data
+        if not isinstance(items, list):
+            return []
+        return sorted({v.strip() for v in items if isinstance(v, str) and v.strip()})
+
+    def _handle_meeting_log_get(self):
+        """GET /meeting-log?dir= — 会議セットで並べた日時の控え (古い順)."""
+        parsed = urllib.parse.urlparse(self.path)
+        params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
+        save_dir = self._autosave_resolve_dir(params.get('dir'))
+        self._send_json(200, {'dir': str(save_dir), 'meetings': self._read_meeting_log(save_dir)})
+
+    def _handle_meeting_log_post(self):
+        """POST /meeting-log {dir, at} — 日時を 1 つ足す。同じ日の分はその日の最後の時刻に置き換える."""
+        data = self._read_json_object()
+        if data is None:
+            return
+        at = data.get('at')
+        if not isinstance(at, str) or not re.match(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}', at.strip()):
+            self._send_json(400, {'error': 'at must be an ISO datetime'})
+            return
+        at = at.strip()
+        save_dir = self._autosave_resolve_dir(data.get('dir'))
+        items = [v for v in self._read_meeting_log(save_dir) if v[:10] != at[:10]]
+        items.append(at)
+        items = sorted(items)[-self.MEETING_LOG_KEEP:]
+        path = self._meeting_log_path(save_dir)
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            _atomic_write_text(path, json.dumps({'meetings': items}, ensure_ascii=False, indent=2) + '\n')
+        except OSError as e:
+            self._send_json(500, {'error': f'書き込めません: {e}'})
+            return
+        self._send_json(200, {'dir': str(save_dir), 'meetings': items})
 
     def _handle_name_registry_get(self):
         """GET /name-registry?dir= — 保存フォルダの親にある正式表記の登録簿."""

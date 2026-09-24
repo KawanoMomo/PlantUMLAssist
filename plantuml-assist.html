@@ -8613,6 +8613,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/cross-ref-diff.js"></script>
 <script src="src/core/count-compare.js"></script>
 <script src="src/core/change-board.js"></script>
+<script src="src/core/change-baseline.js"></script>
 <script src="src/core/show-before-after.js"></script>
 <script src="src/core/export-select.js"></script>
 <script src="src/core/handover-notes.js"></script>
@@ -8737,6 +8738,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <strong>変更サマリボード</strong>
       <span id="cb-summary"></span>
       <span class="board-tools">
+        <!-- BLK-primary-20260924-1332-wish: 何と比べるかをこの画面の中で選ぶ (今日 0 時 / 前回の会議 / 前回提出) -->
+        <label title="変更前をいつの時点にするか。前回の会議 = 今日より前に最後に会議セットで並べた時点、前回提出 = 最後に納品パッケージを作った時点">変更前 = <select id="cb-base"></select></label>
         <!-- BLK-primary-20260913-0306-wish: 顧客の前では DSL を見せられない。
              ここを押すと、並んでいる図が描いた絵の変更前後に切り替わる。 -->
         <button type="button" id="cb-svg" aria-pressed="false" title="顧客に見せる画面に切り替える (DSL を出さず、描いた図の変更前後を並べる)">🖼 SVGで見る</button>

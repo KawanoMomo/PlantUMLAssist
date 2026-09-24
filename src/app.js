@@ -5320,25 +5320,147 @@ function _cbFolderSince() {
   } catch (e) { return ''; }
 }
 
+// ── 変更前 = (BLK-primary-20260924-1332-wish) ─────────────────────────────
+// ボードの「変更前」を 今日 0 時 / 前回の会議 / 前回提出 から選ぶ。判定は change-baseline。
+// 前回の会議は、会議セットで並べた日時を保存フォルダ (_meetings.json) に控えて使う
+// (ブラウザを起こし直しても残る)。その時点の中身は保存フォルダの版の控えから選ぶ。
+var _cbBase = 'today';
+var _cbMeetings = [];
+var _cbBaseCache = {};      // name → { at, dsl } | null (その時点ではまだ無かった図)
+var _cbBaseCacheKey = '';   // どの基準・時点で読んだ控えか
+var _cbBaseLoading = false;
+
+function _cbBaseState() {
+  var BL = window.MA.changeBaseline;
+  if (!BL) return { todayAt: '', meetingAt: '', deliveryAt: '' };
+  var today = BL.todayStart(new Date());
+  var last = null;
+  try { last = _dpLastDelivery(); } catch (e) { last = null; }
+  return {
+    todayAt: today,
+    meetingAt: BL.lastMeetingBefore(_cbMeetings, today),
+    deliveryAt: (last && last.at) || '',
+  };
+}
+
+// いま選んでいる基準が選べないもの (控えが無い) なら 今日 0 時 に戻す。
+function _cbBaseKind() {
+  var BL = window.MA.changeBaseline;
+  if (!BL || _cbBase === 'today') return 'today';
+  var st = _cbBaseState();
+  if (_cbBase === 'meeting' && !st.meetingAt) return 'today';
+  if (_cbBase === 'delivery' && !st.deliveryAt) return 'today';
+  return _cbBase;
+}
+
+function _cbBaseAt() {
+  var st = _cbBaseState();
+  var k = _cbBaseKind();
+  return k === 'meeting' ? st.meetingAt : (k === 'delivery' ? st.deliveryAt : st.todayAt);
+}
+
+function renderChangeBaseSelect() {
+  var BL = window.MA.changeBaseline;
+  var sel = document.getElementById('cb-base');
+  if (!BL || !sel) return;
+  var esc = window.MA.htmlUtils.escHtml;
+  var cur = _cbBaseKind();
+  sel.innerHTML = BL.options(_cbBaseState()).map(function(o) {
+    return '<option value="' + esc(o.key) + '"' + (o.disabled ? ' disabled' : '')
+      + (o.key === cur ? ' selected' : '') + '>' + esc(o.label) + '</option>';
+  }).join('');
+}
+
+function _cbLoadMeetings() {
+  if (!window.fetch || !_fiFolderMode()) { _cbMeetings = []; return Promise.resolve(_cbMeetings); }
+  return window.fetch('/meeting-log?dir=' + encodeURIComponent(_wsFileDir()))
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(data) { _cbMeetings = (data && data.meetings) || []; return _cbMeetings; })
+    .catch(function() { return _cbMeetings; });
+}
+
+// 会議セットで並べた日時を控える (1 日 1 件。その日の最後の時刻)。
+function _cbRecordMeeting() {
+  var BL = window.MA.changeBaseline;
+  var at = new Date().toISOString();
+  if (BL) _cbMeetings = BL.recordMeeting(_cbMeetings, at);
+  if (!window.fetch || !_fiFolderMode()) return Promise.resolve(false);
+  return window.fetch('/meeting-log', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dir: _wsFileDir(), at: at }),
+  }).then(function(r) { return r.ok; }).catch(function() { return false; });
+}
+
+// 前回の会議の時点の中身を、図ごとに保存フォルダの版の控えから読む。
+// 読み終えたらボードを描き直す (読んでいる間は「読んでいます」を見出しに出す)。
+function _cbLoadBaseAt(names) {
+  var BL = window.MA.changeBaseline;
+  var cut = _cbBaseAt();
+  var key = _cbBaseKind() + '|' + cut + '|' + names.join('/');
+  if (!BL || !window.fetch || key === _cbBaseCacheKey || _cbBaseLoading) return Promise.resolve(false);
+  _cbBaseLoading = true;
+  var dir = _wsFileDir();
+  var files = {};
+  (_fiFileDocs || []).forEach(function(f) { if (f && f.name) files[f.name] = f; });
+  var cache = {};
+  return Promise.all(names.map(function(name) {
+    var cur = files[name] || null;
+    return window.fetch('/autosave-versions?dir=' + encodeURIComponent(dir) + '&type=' + encodeURIComponent(name))
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(data) {
+        var stamps = ((data && data.versions) || []).map(function(v) { return v && v.stamp; });
+        var stamp = BL.stampAt(stamps, cut);
+        if (!stamp) { cache[name] = BL.contentAt([], cut, cur ? { dsl: cur.dsl, mtime: cur.mtime } : null); return; }
+        return window.fetch('/autosave-versions?dir=' + encodeURIComponent(dir) + '&type=' + encodeURIComponent(name)
+          + '&stamp=' + encodeURIComponent(stamp))
+          .then(function(r) { return r.ok ? r.text() : null; })
+          .then(function(text) { cache[name] = text == null ? null : { at: BL.stampToIso(stamp), dsl: text }; });
+      })
+      .catch(function() { cache[name] = null; });
+  })).then(function() {
+    _cbBaseCache = cache;
+    _cbBaseCacheKey = key;
+    _cbBaseLoading = false;
+    return true;
+  }, function() { _cbBaseLoading = false; return false; });
+}
+
+// 基準ごとの「変更前」の引き方。today は今までどおり保存差分の基準。
+function _cbBaselineFn() {
+  var SD = window.MA.saveDiff;
+  var k = _cbBaseKind();
+  if (k === 'delivery') return function(name) { return _dpBaselineOf(name); };
+  if (k === 'meeting') return function(name) { return _cbBaseCache[name] || null; };
+  return SD ? SD.baselineOf : function() { return null; };
+}
+
 function _changeBoardModel() {
   var CB = window.MA.changeBoard;
   var SD = window.MA.saveDiff;
   if (!CB || !SD) return null;
   var docs = _diffDocs();
+  var kind = _cbBaseKind();
   if (_cbFolderOn()) {
-    docs = docs.concat(CB.folderExtras(_fiFileDocs, docs, { since: _cbFolderSince() }));
+    // 基準が今日 0 時より前なら、その時点より後に更新されたフォルダの図を拾う。
+    var since = kind === 'today' ? _cbFolderSince() : _cbBaseAt();
+    docs = docs.concat(CB.folderExtras(_fiFileDocs, docs, { since: since }));
   }
+  if (kind === 'meeting') {
+    var names = docs.map(function(d) { return d.name; });
+    _cbLoadBaseAt(names).then(function(changed) { if (changed) renderChangeBoard(); });
+  }
+  var baselineOf = _cbBaselineFn();
   // 会議セット中は、選んだ図だけを選んだ順に、変わっていなくても並べる
   // (会議で「この図は今回触っていません」と見せる場面がそのまま手順になる)。
   if (_msActive()) {
     var MS = window.MA.meetingSet;
-    return CB.build(MS.pickDocs(docs), SD.baselineOf, {
+    return CB.build(MS.pickDocs(docs), baselineOf, {
       includeSame: true,
       collapse: !_cbFull,
       context: 2,
     });
   }
-  return CB.build(docs, SD.baselineOf, {
+  return CB.build(docs, baselineOf, {
     includeSame: _cbSame,
     collapse: !_cbFull,
     context: 2,
@@ -5358,7 +5480,11 @@ function _cbSummaryText(board) {
   var CB = window.MA.changeBoard;
   if (!CB) return '';
   var head = CB.summaryText(board);
-  if (board && board.markedAt) head += ' ・ 基準 ' + board.markedAt.replace('T', ' ').slice(0, 16);
+  var BL = window.MA.changeBaseline;
+  var bk = _cbBaseKind();
+  if (BL && bk !== 'today') {
+    head += ' ・ ' + BL.headLabel(bk, _cbBaseAt()) + (_cbBaseLoading ? ' (読んでいます…)' : '');
+  } else if (board && board.markedAt) head += ' ・ 基準 ' + board.markedAt.replace('T', ' ').slice(0, 16);
   // 申し送り・レビュー結果は基準の取り直しでは消えないので、差分が 0 枚でも件数を出す。
   var hnSum = window.MA.handoverNotes ? window.MA.handoverNotes.summaryText() : '';
   if (hnSum) head += ' ・ ' + hnSum;
@@ -5597,11 +5723,22 @@ function _cbDrawShowPanes(board) {
 
 // 1 枚ぶんの行差分 (行の印・指摘との対応・申し送りを含む)。ボードの既定の見せ方であり、
 // 会議セットの「差分」タブの中身でもあるので 1 か所に置く。
+// 各図の「変更前 (…)」。基準を選んでいるときは、その基準と時点を言う
+// (BLK-primary-20260924-1332-wish)。今日 0 時は今までどおり保存差分の基準の時刻。
+function _cbBeforeLabel(e) {
+  var BL = window.MA.changeBaseline;
+  var k = _cbBaseKind();
+  if (BL && k !== 'today') {
+    var s = BL.stamp(_cbBaseAt());
+    return '変更前 (' + BL.labelOf(k) + (s ? ' ' + s : '') + (e && e.status === 'new' ? ' には無い図' : '') + ')';
+  }
+  return '変更前' + (e && e.markedAt ? ' (' + e.markedAt.replace('T', ' ').slice(0, 16) + ')' : ' (基準なし)');
+}
+
 function _cbDiffBodyHtml(e, mapTable) {
   var esc = window.MA.htmlUtils.escHtml;
   var RV = window.MA.reviewVerdicts;
-  var html = '<div class="cb-cols"><span>変更前'
-    + (e.markedAt ? ' (' + esc(e.markedAt.replace('T', ' ').slice(0, 16)) + ')' : ' (基準なし)') + '</span>'
+  var html = '<div class="cb-cols"><span>' + esc(_cbBeforeLabel(e)) + '</span>'
     + '<span>変更後 (今)</span></div>'
     + '<table class="cb-diff"><tbody>';
   e.rows.forEach(function(r) {
@@ -5659,7 +5796,7 @@ function _cbSideTabsHtml(e, mapTable) {
   var esc = window.MA.htmlUtils.escHtml;
   var side = _msSideOf(e.name);
   var tabs = [
-    { key: 'before', label: '変更前' + (e.markedAt ? ' (' + e.markedAt.replace('T', ' ').slice(0, 16) + ')' : ' (基準なし)') },
+    { key: 'before', label: _cbBeforeLabel(e) },
     { key: 'after', label: '変更後 (今)' },
     { key: 'diff', label: '差分' },
   ];
@@ -5750,6 +5887,8 @@ function setupMeetingSet() {
   var btn = document.getElementById('cb-meeting');
   if (btn) btn.addEventListener('click', function() {
     _msOn = !_msOn;
+    // BLK-primary-20260924-1332-wish: 会議セットで並べた日時を控える (次の会議の「変更前 = 前回の会議」)。
+    if (_msActive()) _cbRecordMeeting();
     renderChangeBoard();
     var body = document.getElementById('cb-body');
     if (body) body.scrollTop = 0;
@@ -6172,6 +6311,8 @@ function toggleChangeBoard(open) {
       : '保存先がフォルダのときだけ使えます (設定 → 自動保存)';
   }
   if (_cbFolderOn()) loadFolderImpact(true).then(function() { renderChangeBoard(); }, function() {});
+  renderChangeBaseSelect();
+  _cbLoadMeetings().then(function() { renderChangeBaseSelect(); renderChangeBoard(); });
   renderChangeBoard();
   renderChecklistDocOptions();
   renderMeetingDocOptions();
@@ -6199,6 +6340,14 @@ function setupChangeBoard() {
   // ボードを開いたまま 1 回押すだけで、DSL の行差分が描いた図の変更前後に変わる。
   var svgBtn = document.getElementById('cb-svg');
   if (svgBtn) svgBtn.addEventListener('click', function() { setChangeBoardSvg(!_cbSvg); });
+
+  // BLK-primary-20260924-1332-wish: 変更前 = 今日 0 時 / 前回の会議 / 前回提出。
+  var baseSel = document.getElementById('cb-base');
+  if (baseSel) baseSel.addEventListener('change', function() {
+    _cbBase = baseSel.value;
+    _cbBaseCacheKey = '';
+    renderChangeBoard();
+  });
 
   var full = document.getElementById('cb-full');
   if (full) full.addEventListener('change', function() { _cbFull = full.checked; renderChangeBoard(); });
