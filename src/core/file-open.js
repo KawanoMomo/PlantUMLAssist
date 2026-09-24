@@ -223,6 +223,14 @@ window.MA.fileOpen = (function() {
     return [head].concat(rows.map(function(r) { return 'L' + r.line + ': ' + skeleton(r.text); })).join('\n');
   }
 
+  // BLK-builder-20260924-1415-4 (design 7a / 9a): 空の画面の入口は図のすぐ下に流れで置く。
+  // 図は transform: scale で拡大されるので、流れの上の高さ (等倍) と見た目の高さの差だけ
+  // 入口を下へずらし、拡大しても図に重ねない。縮小のときは等倍の位置のまま (base だけ空ける)。
+  function emptyHintGap(height, zoom, base) {
+    var h = Number(height) || 0, z = Number(zoom) || 1, b = (base == null) ? 16 : Number(base) || 0;
+    return Math.round(b + Math.max(0, h * (z - 1)));
+  }
+
   return {
     EXTS: EXTS,
     extOf: extOf,
@@ -238,5 +246,6 @@ window.MA.fileOpen = (function() {
     skeleton: skeleton,
     kindLabel: kindLabel,
     report: report,
+    emptyHintGap: emptyHintGap,
   };
 })();

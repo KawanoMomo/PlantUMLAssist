@@ -1858,7 +1858,10 @@ html, body {
 /* BLK-human-20260917-0901: 手元の .puml を開く入口・ドロップ・未対応記法の一覧 */
 .folder-open-file { display: block; width: 100%; margin: 0 0 6px; padding: 6px 8px; text-align: left; font-size: 12px; cursor: pointer;
   background: var(--bg-tertiary, #2d333b); color: var(--text-primary, #e6edf3); border: 1px solid var(--accent, #58a6ff); border-radius: 4px; }
-#open-empty-hint { position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%); z-index: 5; text-align: center;
+/* BLK-builder-20260924-1415-4 (design 7a / 9a): 入口は残すが図の上に重ねない。
+   プレビューの流れの中で図 (#preview-svg) のすぐ下に置く (見本の図の下段を隠さない) */
+#open-empty-hint { position: relative; display: block; width: fit-content; max-width: calc(100% - 8px); box-sizing: border-box;
+  margin: 16px 0 0; z-index: 5; text-align: center;
   padding: 16px 20px; border: 1px dashed var(--border, #444); border-radius: 8px; background: var(--bg-secondary, #1c2128); font-size: 13px; }
 #open-empty-hint[hidden] { display: none; }
 #open-empty-hint button { font-size: 14px; padding: 6px 14px; margin-bottom: 6px; cursor: pointer; }
