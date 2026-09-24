@@ -164,6 +164,10 @@ test('手順9 保存先が Git なら、この図の履歴の「比較」で前�
   const head = page.locator('#files-sec-git');
   await expect(head).toBeVisible();
   await expect(page.locator('#files-count-git')).toContainText('main');
+  // design 10a / 10c (BLK-builder-20260924-1655-2): GIT の見出しはツリーの左下 (下端の要約の直上)。
+  const gitBox = await head.boundingBox();
+  const sumBox = await page.locator('#files-summary').boundingBox();
+  expect(gitBox && sumBox && Math.abs(gitBox.y + gitBox.height - sumBox.y) < 4).toBe(true);
 
   // 図を開いて直す (錠は「書き換える」で外す)。
   await S.openFolderItem(page, 'spi_init_sequence');
@@ -234,4 +238,31 @@ test('手順9 Git でない保存先では GIT 欄を出さない', async ({ pag
   await S.bootWithSaveDir(page, DIR);
   await page.waitForTimeout(800);
   await expect(page.locator('#files-panel [data-files-section="git"]')).toBeHidden();
+});
+
+// BLK-builder-20260924-1655-2 (design 10a): 「読むだけ」の見出しはツリーの下端に置く。保存先の図が多く、
+// 一覧がツリーの高さを超えても、見出し (と畳んだままの件数・目の印 / ⇔) はスクロールせずに見えている。
+test('手順9 保存先の図が多くても、読むだけの見出しはツリーの下端に見えている', async ({ page }) => {
+  const dir = DIR + '-many';
+  await S.bootWithSaveDir(page, dir);
+  await S.clearDir(page, dir);
+  const parts = ['adc', 'can', 'dma', 'eth', 'flash', 'gpio', 'i2c', 'icu', 'lin', 'mcu', 'nvm', 'ocu',
+    'port', 'pwm', 'spi', 'timer', 'uart', 'wdg', 'fls', 'fee', 'ea', 'com', 'dem', 'dcm', 'pdur', 'canif'];
+  for (const p of parts) await S.putDoc(page, dir, p + '_state', '@startuml\n[*] --> Off\n@enduml');
+  await S.reopenApp(page);
+  await expect(page.locator('#files-count-target')).toContainText(String(parts.length), { timeout: 10000 });
+  const ro = page.locator('#files-sec-readonly');
+  await expect(ro).toBeInViewport();
+  const roBox = await ro.boundingBox();
+  const sumBox = await page.locator('#files-summary').boundingBox();
+  expect(roBox && sumBox && Math.abs(roBox.y + roBox.height - sumBox.y) < 4).toBe(true);
+  // 保存先の一覧はその上で流れる (最後の部品は見出しの下に潜らず、流せば見える)。
+  const last = page.locator('#files-parts .files-part-head').last();
+  await last.scrollIntoViewIfNeeded();
+  const lastBox = await last.boundingBox();
+  const roBox2 = await ro.boundingBox();
+  expect(lastBox && roBox2 && lastBox.y + lastBox.height <= roBox2.y + 1).toBe(true);
+  // 見出しの行の目の印は畳んだまま押せる。
+  await expect(page.locator('#btn-tab-peek')).toBeInViewport();
+  await S.clearDir(page, dir);
 });
