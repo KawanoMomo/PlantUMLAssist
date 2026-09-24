@@ -216,7 +216,11 @@ html, body {
 #files-body-git button.git-mini { font-size: 10px; padding: 1px 5px; background: transparent; color: var(--text-secondary); border: 1px solid var(--border); border-radius: 3px; cursor: pointer; }
 #files-body-git button.git-mini:hover { color: var(--text-primary); background: var(--bg-tertiary); }
 #files-body-git .git-sub { color: var(--text-secondary); margin-top: 6px; }
-#files-body-git .git-history-bar span { flex: 1 1 auto; }
+/* 見出しは図の名前まで 1 行で読ませる。入りきらない幅では「相手を選ぶ…」が次の行の右へ回る。 */
+#files-body-git .git-history-bar { flex-wrap: wrap; }
+#files-body-git .git-history-bar span { flex: 1 0 auto; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#files-body-git .git-history-bar button.git-mini { margin-left: auto; }
+#files-body-git button.git-mini { flex: 0 0 auto; white-space: nowrap; }
 #files-body-git .git-change { display: flex; gap: 6px; padding: 1px 0; min-width: 0; }
 #files-body-git .git-change-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #files-body-git .git-code { flex: 0 0 auto; font-weight: 600; margin-left: auto; padding-left: 6px; }

@@ -168,7 +168,7 @@ window.MA.gitUi = (function() {
     // design 10c (BLK-builder-20260924-1808-1): 見出しはどの図の履歴かを言う。件数は title に回す。
     if (lab) {
       lab.textContent = gp.historyLabel(_name());
-      lab.title = history.length ? 'コミット ' + history.length + ' 件' : '';
+      lab.title = lab.textContent + (history.length ? ' (コミット ' + history.length + ' 件)' : '');
     }
     if (!history.length) {
       host.appendChild(_el('div', 'git-empty', gp.emptyHistoryText(!!_name())));
