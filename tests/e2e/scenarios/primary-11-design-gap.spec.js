@@ -447,3 +447,17 @@ test('手順11 既定のタブ列ではツールの入口が右端の「ツー�
     '図をつくる', '書き換える', '探す', '確かめる', 'レビュー', '渡す',
   ]);
 });
+
+// BLK-builder-20260924-1427-3 (design 7a / 10a): プレビューの見出しは「Rendered · 32ms」。
+// 以前は「OK (local)」で、かかった時間が出ず、描画方法が上部バーの「local · 32ms」と 2 か所に出ていた。
+test('手順11 プレビューの見出しは「Rendered · N ms」で、数は上部バーと同じ', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR, { foldedTools: true });
+  const head = page.locator('#render-status');
+  await expect(head).toHaveText(/^Rendered · \d+(ms|(\.\d)?s)$/, { timeout: 25000 });
+  const top = (await page.locator('#top-render-status').textContent()) || '';
+  const ms = ((await head.textContent()) || '').replace('Rendered · ', '');
+  expect(top).toBe('local · ' + ms);
+  // 描画方法は見出しの文字には出さず、title で読める。
+  await expect(head).not.toContainText('local');
+  await expect(head).toHaveAttribute('title', '描画: local');
+});
