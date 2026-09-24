@@ -765,6 +765,70 @@ test('手順4 会議で見せる 3 枚を選んで並べ、各図の変更前後
   await S.clearDir(page, DIR7);
 });
 
+// BLK-primary-20260924-2232-friction: 会議で見せたい 3 枚が今日は変わっておらず、タブにも開いていない。
+// 会議セットの「名前で選ぶ」欄は開いているタブの図しか出さなかったので、1 枚ごとに
+// 一覧を開く → 図を開く → ▤ を開き直す → 名前を選ぶ → ＋追加 を繰り返していた (3 枚でクリック約 16)。
+// 選ぶ欄に保存先の図も並べ、開き直さずに 1 枚 2 操作 (名前を選ぶ → ＋追加) で入れられることを確かめる。
+const DIR10 = S.dirFor(__filename) + '-meetpick';
+test('手順4 保存先の図を開き直さず、名前を選んで 3 枚を会議セットに入れられる (1 枚 2 操作)', async ({ page }) => {
+  const fs = require('fs');
+  const path = require('path');
+  const abs = S.absDirFor(__filename) + '-meetpick';
+  fs.rmSync(abs, { recursive: true, force: true });
+  await S.bootWithSaveDir(page, DIR10);
+  const SET = ['spi_init_sequence', 'spi_state', 'driver_common_class'];
+  for (const name of SET.concat(['can_init_sequence'])) await S.putDoc(page, DIR10, name, S.docFor(name, 'Spi_Driver'));
+  // 下ごしらえ: 4 枚とも一昨日からある図 (今日は触っていない)。タブには 1 枚も開かない。
+  const twoDaysAgo = new Date(Date.now() - 2 * 86400000);
+  for (const name of SET.concat(['can_init_sequence'])) {
+    fs.utimesSync(path.join(abs, name + '.puml'), twoDaysAgo, twoDaysAgo);
+  }
+  await S.reopenApp(page);
+  const tabsBefore = await page.locator('#tab-bar .tab').count();
+
+  await page.locator('#btn-tab-board').click();
+  await expect(page.locator('#cb-modal')).toBeVisible();
+  // 今日は変わっていないので、ボードの一覧には並ばない ([会議に入れる] では選べない)。
+  await expect(page.locator('#cb-body .cb-entry[data-doc-name="spi_state"]')).toHaveCount(0);
+
+  // 到達条件その1: 選ぶ欄に保存先の図が並ぶ (開いているタブの図と分けて出す)。
+  const sel = page.locator('#cb-meeting-doc');
+  await expect(sel.locator('optgroup[label="保存先の図"] option[value="spi_state"]')).toHaveCount(1, { timeout: 10000 });
+
+  // 到達条件その2: 1 枚 2 操作 (名前を選ぶ → ＋追加) で 3 枚続けて入れられる。図は開き直さない。
+  let ops = 0;
+  for (const name of SET) {
+    await sel.selectOption(name); ops++;
+    await page.locator('#cb-meeting-add').click(); ops++;
+  }
+  expect(ops).toBeLessThanOrEqual(2 * SET.length);
+  await expect(page.locator('#cb-meeting-state')).toContainText('会議セット 3 枚');
+  // 入れた図は選ぶ欄で分かる (同じ図を 2 回入れて外してしまわない)。
+  await expect(sel.locator('option[value="spi_state"]')).toHaveText('✓ spi_state');
+  await expect(page.locator('#tab-bar .tab')).toHaveCount(tabsBefore);
+
+  // 到達条件その3: 🎦 会議セットで、開いていない 3 枚が選んだ順に並ぶ。
+  // 変わっていない図なので、変更前 / 変更後は同じ図になる (「新規」扱いにしない)。
+  await page.locator('#cb-meeting').click();
+  const entries = page.locator('#cb-body .cb-entry');
+  await expect(entries).toHaveCount(3);
+  for (let i = 0; i < SET.length; i++) {
+    await expect(entries.nth(i)).toHaveAttribute('data-doc-name', SET[i]);
+  }
+  const st = page.locator('#cb-body .cb-entry[data-doc-name="spi_state"]');
+  await expect(st.locator('pre.cb-side-dsl')).toContainText('Spi_Driver');
+  await st.locator('button.cb-side[data-side="after"]').click();
+  await expect(page.locator('#cb-body .cb-entry[data-doc-name="spi_state"] pre.cb-side-dsl')).toContainText('Spi_Driver');
+
+  await page.screenshot({ path: shotOut('primary-04-meeting-folder-pick.png'), fullPage: true });
+
+  await page.locator('#cb-meeting').click();
+  await page.locator('#cb-meeting-clear').click();
+  await expect(page.locator('#cb-meeting-state')).toContainText('会議セットは空です');
+  await page.locator('#cb-close').click();
+  await S.clearDir(page, DIR10);
+});
+
 // BLK-primary-20260918-0549-friction: 顧客向け資料に載せる前の確認で、
 // 図ごとに「保存フォルダの一覧を開く → クリックで開く → 変更前後を出す」を
 // 枚数分繰り返していた (クリック 12 / キー 87)。資料セットには「どの図を渡すか」が

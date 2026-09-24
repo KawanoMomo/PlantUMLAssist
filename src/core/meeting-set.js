@@ -116,6 +116,57 @@ window.MA.meetingSet = (function() {
     return out;
   }
 
+  // BLK-primary-20260924-2232-friction: 会議で見せる図を選ぶ欄の候補。開いているタブの図に加えて、
+  // 保存先 (保存フォルダ) の図も並べる。ワークスペースは同時に開ける図が限られるので、開いている図だけだと
+  // 1 枚ごとに「一覧を開く → 図を開く → ボードを開き直す」を繰り返すことになっていた。
+  // 返すのは [{ name, group: 'open' | 'folder', picked }]。同名は開いている方だけ (未保存の編集を含む方)。
+  function docOptions(openDocs, fileDocs) {
+    var seen = {};
+    var out = [];
+    function push(d, group) {
+      if (!d || !d.name) return;
+      var n = String(d.name);
+      if (seen[n]) return;
+      seen[n] = true;
+      out.push({ name: n, group: group, picked: has(n) });
+    }
+    (Array.isArray(openDocs) ? openDocs : []).forEach(function(d) { push(d, 'open'); });
+    var files = (Array.isArray(fileDocs) ? fileDocs : []).slice().sort(function(a, b) {
+      var x = String((a && a.name) || ''), y = String((b && b.name) || '');
+      return x < y ? -1 : (x > y ? 1 : 0);
+    });
+    files.forEach(function(d) { push(d, 'folder'); });
+    return out;
+  }
+
+  // 会議セットに選んだのにボードの図 (開いている図 + 今日更新された保存フォルダの図) に無い図を、
+  // 保存フォルダのファイルから補う。開き直さずに選んだ図も、変わっていなくても会議セットに並ぶ。
+  // 返す形は change-board.folderExtras と同じ (origin: 'folder')。meetingPick を立てて、
+  // 変更前が引けないときは今の中身を変更前として扱えるようにする (変更前 / 変更後が同じ図になる)。
+  function folderPicks(fileDocs, boardDocs) {
+    var inBoard = {};
+    (Array.isArray(boardDocs) ? boardDocs : []).forEach(function(d) {
+      if (d && d.name) inBoard[String(d.name)] = true;
+    });
+    var byName = {};
+    (Array.isArray(fileDocs) ? fileDocs : []).forEach(function(f) {
+      if (f && f.name && !byName[String(f.name)]) byName[String(f.name)] = f;
+    });
+    var out = [];
+    _load().forEach(function(n) {
+      var f = byName[n];
+      if (!f || inBoard[n]) return;
+      out.push({
+        id: 'file:' + n, name: n,
+        dsl: String(f.dsl == null ? '' : f.dsl),
+        diagramType: f.diagramType || '',
+        origin: 'folder', mtime: String(f.mtime == null ? '' : f.mtime),
+        meetingPick: true,
+      });
+    });
+    return out;
+  }
+
   // 会議セットに入っているのに開いても保存フォルダにも無い名前。
   // 「3 枚選んだのに 2 枚しか並ばない」を黙って起こさないために外へ出す。
   function missing(docs) {
@@ -161,6 +212,8 @@ window.MA.meetingSet = (function() {
     remove: remove,
     clear: clear,
     pickDocs: pickDocs,
+    docOptions: docOptions,
+    folderPicks: folderPicks,
     missing: missing,
     summaryText: summaryText,
     fullText: fullText,
