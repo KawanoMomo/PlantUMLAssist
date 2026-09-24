@@ -5,7 +5,7 @@
 // 戻して打ち直していた。相手フォルダを打つだけで、名前の近い図が相手に選ばれ、
 // 「相手にしかない要素」が並び、1 クリックで自分の図に入ることを見る。
 const { test, expect } = require('@playwright/test');
-const { gotoApp } = require('../helpers');
+const { gotoApp, openCrossRef } = require('../helpers');
 
 const SELF_DIR = './test-results/autosave/blk-junior-0723-wish-cross-ref-diff/e2e-xf-junior';
 const REF_DIR = './test-results/autosave/blk-junior-0723-wish-cross-ref-diff/e2e-xf-primary';
@@ -59,23 +59,21 @@ async function setup(page) {
   await page.locator('#editor').fill(SELF_DSL);
   await page.waitForTimeout(900);
   await seedRefFolder(page);
-  // 並べて見るペインを開く
-  await page.locator('#btn-tab-compare').click();
-  await page.waitForTimeout(400);
 }
 
+// BLK-owner-20260924-2135-prune: 相手のフォルダは FILES「読むだけ」で比較中にしたフォルダ (パスは打たない)。
 async function loadRef(page) {
-  await page.locator('#xf-dir').fill(REF_DIR);
-  await page.locator('#btn-xf-load').click();
+  await openCrossRef(page, REF_DIR);
   await expect(page.locator('#xf-summary')).toBeVisible();
 }
 
 test.describe('他の人のフォルダの図と突き合わせる (BLK-junior-0723-wish)', () => {
 
-  test('並べて見るペインに、相手のフォルダを入れる欄がある', async ({ page }) => {
+  test('参照ペインにパスの欄は無く、比較中のフォルダ名が相手として出る', async ({ page }) => {
     await setup(page);
-    await expect(page.locator('#xf-dir')).toBeVisible();
-    await expect(page.locator('#btn-xf-load')).toBeVisible();
+    await loadRef(page);
+    await expect(page.locator('#xf-bar input')).toHaveCount(0);
+    await expect(page.locator('#xf-dir-name')).toHaveText('e2e-xf-primary');
   });
 
   test('相手のフォルダを打つと、名前の近い図が勝手に相手に選ばれる', async ({ page }) => {
@@ -113,22 +111,38 @@ test.describe('他の人のフォルダの図と突き合わせる (BLK-junior-0
     expect(dir).toBe(SELF_DIR);
   });
 
-  test('無いフォルダを打つと、その旨が出る (黙って空にならない)', async ({ page }) => {
+  test('比較中のフォルダが無くなっていると、その旨が出る (黙って空にならない)', async ({ page }) => {
     await setup(page);
-    await page.locator('#xf-dir').fill('./test-results/autosave/blk-junior-0723-wish-cross-ref-diff/e2e-xf-nowhere');
-    await page.locator('#btn-xf-load').click();
+    await openCrossRef(page, './test-results/autosave/blk-junior-0723-wish-cross-ref-diff/e2e-xf-nowhere');
     await expect(page.locator('#xf-summary')).toContainText('見つかりません');
     await expect(page.locator('#xf-list')).toBeHidden();
   });
 
-  test('打った相手フォルダは開き直しても残る', async ({ page }) => {
+  test('比較中の相手フォルダは開き直しても残り、参照ペインを開けば読み直される', async ({ page }) => {
     await setup(page);
     await loadRef(page);
     await page.reload();
-    await page.waitForSelector('#preview-svg');
-    await page.locator('#btn-tab-compare').click();
-    await page.waitForTimeout(400);
-    await expect(page.locator('#xf-dir')).toHaveValue(REF_DIR);
+    await page.waitForSelector('html[data-app-ready="1"]', { state: 'attached' });
+    await page.locator('#btn-tab-senior').click();
+    await page.locator('#senior-target-tabs').click();
+    await page.waitForSelector('#compare-pane:not([hidden])');
+    await expect(page.locator('#xf-dir-name')).toHaveText('e2e-xf-primary');
+    await expect(page.locator('#xf-summary')).toBeVisible();
+  });
+
+  test('以前この枠に打った相手フォルダ (pua.crossRef.dir) は、比較中のフォルダとして 1 度だけ引き継がれる', async ({ page }) => {
+    await page.addInitScript((d) => {
+      if (window.sessionStorage.getItem('xf-legacy-set')) return;
+      window.sessionStorage.setItem('xf-legacy-set', '1');
+      window.localStorage.setItem('pua.crossRef.dir', d);
+    }, REF_DIR);
+    await setup(page);
+    // 控えは 1 つにする (古い控えは消える)。
+    expect(await page.evaluate(() => window.localStorage.getItem('pua.crossRef.dir'))).toBeNull();
+    await page.locator('#btn-tab-senior').click();
+    await page.locator('#senior-target-tabs').click();
+    await page.waitForSelector('#compare-pane:not([hidden])');
+    await expect(page.locator('#xf-dir-name')).toHaveText('e2e-xf-primary');
   });
 
   test('先輩の図を読むのに、保存先設定の往復は要らない (クリック 10 以下・キー入力 50 以下)', async ({ page }) => {
@@ -137,9 +151,13 @@ test.describe('他の人のフォルダの図と突き合わせる (BLK-junior-0
     await page.exposeFunction('__countClick', () => { clicks++; });
     await page.evaluate(() => document.addEventListener('click', () => window.__countClick(), true));
 
-    // ① フォルダ欄に打つ ② 探す ③ 取り込む
-    await page.locator('#xf-dir').fill(REF_DIR);           // キー入力 = REF_DIR の長さ
-    await page.locator('#btn-xf-load').click();
+    // ① 読むだけのフォルダを右クリック ② 並べて比較 ③ 相手「別タブの図」④ 取り込む (キー入力 0)
+    const roHead = page.locator('#files-sec-readonly');
+    if ((await roHead.getAttribute('aria-expanded')) !== 'true') await roHead.click();
+    const row = page.locator('#files-panel .files-ro-folder[data-ro-name="e2e-xf-primary"]');
+    await row.click({ button: 'right' });
+    await page.locator('#files-ctx-menu [data-action="compare"]').click();
+    await page.locator('#senior-target-tabs').click();
     await expect(page.locator('#xf-summary')).toBeVisible();
     await page.locator('#xf-list .xf-row.only-ref .xf-take').first().click();
     await page.waitForTimeout(600);

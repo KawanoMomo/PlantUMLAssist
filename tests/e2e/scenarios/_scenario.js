@@ -153,6 +153,18 @@ async function peekFolder(page, dirName) {
   }, dirName);
 }
 
+// FILES「読むだけ」のフォルダを右クリック →「並べて比較」で比較中にする (相手のフォルダを選ぶ道はこの 1 本。
+// BLK-owner-20260924-2135-prune)。参照ペインの増分の取り込みも、このフォルダを相手にする。
+async function compareFolder(page, dirName) {
+  const head = page.locator('#files-sec-readonly');
+  if ((await head.getAttribute('aria-expanded')) !== 'true') await head.click();
+  const row = page.locator('#files-panel .files-ro-folder[data-ro-name="' + dirName + '"]');
+  await row.waitFor();
+  await row.click({ button: 'right' });
+  await page.locator('#files-ctx-menu [data-action="compare"]').click();
+  await page.waitForSelector('#files-panel .files-ro-folder[data-ro-name="' + dirName + '"][data-comparing="1"]');
+}
+
 // 一覧から開いた図は錠がかかっている。直す目的で開いたときは「このファイルを書き換える」を選ぶ。
 // 錠は最初の書き戻しの直前に一度だけ聞くので、1 文字足して問いを出してから答える。
 async function overwriteOpenedFile(page) {
@@ -341,7 +353,7 @@ module.exports = {
   PRIMARY_DOCS, docFor,
   dirFor, absDirFor, bootWithSaveDir, bootPlain, bootDownloadMode, reopenApp,
   putDoc, readDoc, listDir, clearDir, clearTickets,
-  openFolder, closeFolderList, openFolderItem, overwriteOpenedFile, peekFolder, typeDsl, renameActive, runCommand, exportVia,
+  openFolder, closeFolderList, openFolderItem, overwriteOpenedFile, peekFolder, compareFolder, typeDsl, renameActive, runCommand, exportVia,
   GPIO_STATE, GPIO_SEQ, IRQ_SEQ_FOLDED_DASH,
   messageClickPoints, selectedMessageLine, expectMessageHitUniform,
 };

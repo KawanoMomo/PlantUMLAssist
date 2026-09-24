@@ -5778,28 +5778,11 @@ mark.ri-hit { background: var(--accent); color: var(--bg-primary); padding: 0 1p
   font-size: 11px;
   flex-shrink: 0;
 }
-#xf-dir {
-  flex: 1;
-  min-width: 0;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border);
-  color: var(--text-primary);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  padding: 2px 4px;
-  border-radius: 3px;
-}
-#btn-xf-load {
-  border: 1px solid var(--border);
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  border-radius: 3px;
-  cursor: pointer;
-  font-size: 11px;
-  padding: 2px 8px;
-  white-space: nowrap;
-}
-#btn-xf-load:hover { background: var(--bg-tertiary); }
+#xf-dir-name { font-size: 12px; padding: 1px 8px; background: transparent; color: var(--text-primary); border: 1px solid var(--border); border-radius: 3px; cursor: pointer; font-family: var(--font-mono); }
+#xf-dir-name:hover { border-color: var(--accent); }
+#xf-dir-name[hidden] { display: none; }
+#xf-dir-hint { color: var(--text-secondary); }
+#xf-dir-hint[hidden] { display: none; }
 #xf-pick {
   display: flex;
   align-items: center;
@@ -8207,10 +8190,10 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <div id="tc-note" hidden></div>
       <div id="tc-list" hidden></div>
       <!-- BLK-junior-20260908-0723-wish: 他の人のフォルダの同じ図を相手にする -->
+      <!-- BLK-owner-20260924-2135-prune: 相手のフォルダは FILES「読むだけ」で比較中にしたフォルダ 1 つから取る (パスを打つ欄は持たない) -->
       <div id="xf-bar">
-        <input type="text" id="xf-dir" placeholder="相手のフォルダ (例 ..\primary)"
-               title="他の人の保存フォルダ。自分の保存先設定は変えない">
-        <button type="button" id="btn-xf-load" title="そのフォルダの図を読み、名前の近いものを相手にする">🔍 探す</button>
+        <button type="button" id="xf-dir-name" hidden></button>
+        <span id="xf-dir-hint">FILES の読むだけでフォルダを選ぶと、ここにその図の増分が出ます</span>
       </div>
       <div id="xf-pick" hidden>
         <select id="xf-file" title="相手にする図"></select>

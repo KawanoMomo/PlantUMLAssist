@@ -102,7 +102,17 @@ async function pickTool(page, targetId) {
   await page.locator('.tool-menu-item[data-target="' + targetId + '"]').click();
 }
 
+// BLK-owner-20260924-2135-prune: 参照ペインの相手のフォルダは、FILES「読むだけ」で比較中にしたフォルダ 1 つ。
+// パスを打つ欄 (#xf-dir + 🔍 探す) は外した。ツリーの「並べて比較」と同じ関数で比較中にし、
+// 並べて比較の枠の相手「別タブの図」から参照ペインを開く (開くと相手のフォルダを読む)。
+async function openCrossRef(page, dir) {
+  await page.evaluate((d) => window.compareReadonlyFolder(d), dir);
+  await page.locator('#senior-target-tabs').click();
+  await page.waitForSelector('#compare-pane:not([hidden])');
+}
+
 module.exports = {
+  openCrossRef,
   gotoApp, loadFixture, getEditorText, getEditorLine, clickOverlayByLine, setDiagramTitle,
   saveDirFor, shotOut, E2E_SAVE_ROOT, pickTool,
 };

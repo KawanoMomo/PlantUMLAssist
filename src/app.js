@@ -10531,6 +10531,11 @@ function renderPeekDirName() {
 function revealPeekDirInTree() {
   var dir = _peekDir;
   closePeekFolder();
+  return revealReadonlyDirInTree(dir);
+}
+
+// FILES「読むだけ」のそのフォルダの行を見せる (覗く窓・参照ペインの相手フォルダ名から)。
+function revealReadonlyDirInTree(dir) {
   var FP = window.MA.filesPanel;
   var PF = window.MA.peekFolder;
   if (FP) { try { FP.setOpen(true); FP.setSec('readonly', true); } catch (e) {} }
@@ -11830,6 +11835,10 @@ function _seniorSave(over) {
   var SP = window.MA.seniorPane;
   if (!SP) return null;
   var cur = SP.load();
+  // BLK-owner-20260924-2135-prune: 比較中のフォルダが替わったら、参照ペインの相手フォルダも追う。
+  if (over && over.dir !== undefined && over.dir !== cur.dir) {
+    window.setTimeout(function() { try { syncCrossRefDir(false); } catch (e) {} }, 0);
+  }
   return SP.save({
     open: over && over.open !== undefined ? over.open : cur.open,
     dir: over && over.dir !== undefined ? over.dir : cur.dir,
@@ -22334,6 +22343,8 @@ function toggleCompareView(open, mode) {
     // 登録した雛形は 2 枚目のタブが無くても選べる (参照図が要らないのが登録の値打ち)。
     renderTemplateRegistry();
     setCompareMode(mode || _compareMode);
+    // BLK-owner-20260924-2135-prune: 相手のフォルダ (FILES で比較中のフォルダ) を開くたびに読み直す。
+    try { syncCrossRefDir(true); } catch (e) {}
   }
 }
 
@@ -23587,29 +23598,77 @@ var _xfResult = null;   // 直近の突き合わせ結果
 // 取り込む分に入れた行 (本文をそのまま鍵にする。一覧を出し直しても選びが残る)
 var _xfChecked = Object.create(null);
 
+// BLK-owner-20260924-2135-prune: 相手のフォルダは FILES「読むだけ」で比較中にしたフォルダ
+// (_seniorState().dir) 1 つから取る。以前はこの枠にパスを打つ欄 (#xf-dir + 🔍 探す) があり、
+// 控えも別 (pua.crossRef.dir) で、ツリーで比較中にしたフォルダとは連動しなかった。
+// 古い控えは、比較中のフォルダがまだ無い人に 1 度だけ引き継いで消す (控えは 1 つにする)。
 var XF_DIR_KEY = 'pua.crossRef.dir';
 
-function _xfStore(dir) {
-  try { if (window.localStorage) window.localStorage.setItem(XF_DIR_KEY, dir); } catch (e) { /* 使えない環境でも動く */ }
+function _xfTakeOverLegacyDir() {
+  var old = '';
+  try { old = (window.localStorage && window.localStorage.getItem(XF_DIR_KEY)) || ''; } catch (e) { old = ''; }
+  if (!old) return;
+  try { window.localStorage.removeItem(XF_DIR_KEY); } catch (e) { /* 使えない環境でも動く */ }
+  if (!_seniorState().dir) _seniorSave({ dir: old });
 }
 
-function _xfRestore() {
-  try { return (window.localStorage && window.localStorage.getItem(XF_DIR_KEY)) || ''; } catch (e) { return ''; }
+// 比較中のフォルダ (無ければ '')。Git の版を相手にしている間はフォルダではないので出さない。
+function _xfCompareDir() {
+  if (_seniorGit) return '';
+  return String(_seniorState().dir || '');
 }
+
+// 枠の頭の 1 行: 相手のフォルダ名 (押すと FILES「読むだけ」のその行へ) か、選び方の案内。
+function renderXfDirName() {
+  var btn = _xfEl('xf-dir-name'), hint = _xfEl('xf-dir-hint');
+  var dir = _xfCompareDir();
+  var PF = window.MA.peekFolder;
+  if (btn) {
+    btn.hidden = !dir;
+    btn.setAttribute('data-dir', dir);
+    btn.textContent = dir ? (PF && PF.baseName ? PF.baseName(dir) : dir) : '';
+    btn.title = dir ? dir + ' — 押すと FILES の「読むだけ」のこの行へ移ります (別のフォルダはそこで選びます。自分の保存先は変わりません)' : '';
+  }
+  if (hint) hint.hidden = !!dir;
+}
+
+function _xfPaneOpen() {
+  var pane = document.getElementById('compare-pane');
+  return !!(pane && !pane.hidden);
+}
+
+// 参照ペインを開いたとき・比較中のフォルダが替わったときに、相手のフォルダを読み直す。
+function syncCrossRefDir(force) {
+  renderXfDirName();
+  var dir = _xfCompareDir();
+  if (!dir) {
+    if (_xfDir) {
+      _xfDir = '';
+      _xfClearPick();
+      var summary = _xfEl('xf-summary');
+      if (summary) { summary.hidden = true; summary.textContent = ''; }
+    }
+    return Promise.resolve(false);
+  }
+  if (!_xfPaneOpen()) return Promise.resolve(false);
+  if (!force && dir === _xfDir) return Promise.resolve(false);
+  return loadCrossRefFolder();
+}
+window.syncCrossRefDir = syncCrossRefDir;
 
 function _xfEl(id) { return document.getElementById(id); }
 
 // 相手フォルダを読み、名前の近い図を選んで突き合わせる。
 function loadCrossRefFolder() {
-  var input = _xfEl('xf-dir');
   var summary = _xfEl('xf-summary');
-  var dir = input ? input.value.trim() : '';
+  var dir = _xfCompareDir();
+  renderXfDirName();
   if (!dir) {
-    _xfShowMessage('相手のフォルダを入れてください (自分の保存先は変わりません)', 'dirty');
+    _xfClearPick();
+    if (summary) { summary.hidden = true; summary.textContent = ''; }
     return Promise.resolve();
   }
   _xfDir = dir;
-  _xfStore(dir);
   if (summary) { summary.hidden = false; summary.className = ''; summary.textContent = '読み込み中…'; }
   if (!window.MA.workspace) return Promise.resolve();
   return window.MA.workspace.listFolder(dir).then(function(res) {
@@ -24037,14 +24096,14 @@ function takeCrossRefEntry(entry) {
 }
 
 function setupCrossRefDiff() {
-  var btn = _xfEl('btn-xf-load');
-  var dir = _xfEl('xf-dir');
   var file = _xfEl('xf-file');
-  if (dir) dir.value = _xfRestore();
-  if (btn) btn.addEventListener('click', function() { loadCrossRefFolder(); });
-  if (dir) {
-    dir.addEventListener('keydown', function(e) {
-      if (e.key === 'Enter') { e.preventDefault(); loadCrossRefFolder(); }
+  _xfTakeOverLegacyDir();
+  renderXfDirName();
+  var name = _xfEl('xf-dir-name');
+  if (name) {
+    name.addEventListener('click', function() {
+      var d = name.getAttribute('data-dir') || '';
+      if (d) revealReadonlyDirInTree(d);
     });
   }
   if (file) {

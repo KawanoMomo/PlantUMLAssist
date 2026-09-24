@@ -1241,9 +1241,14 @@ test('手順1-2 先輩側の増分が入る位置つきで並び、チェック�
   await S.renameActive(page, 'timer_init_sequence');
 
   // 手順1: 先輩のフォルダを相手にする (自分の保存先は変えない)。
+  // BLK-owner-20260924-2135-prune: 相手のフォルダはパスを打たず、FILES「読むだけ」で比較中にしたフォルダから取る。
+  // 参照ペインにパスを打つ欄は無い。
   await openCompareTabs(page);
-  await page.locator('#xf-dir').fill(SENIOR_DIR);
-  await page.locator('#btn-xf-load').click();
+  await expect(page.locator('#xf-bar input')).toHaveCount(0);
+  await S.compareFolder(page, 'primary');
+  await openCompareTabs(page);
+  await expect(page.locator('#xf-dir-name')).toHaveText('primary');
+  await expect(page.locator('#xf-dir-hint')).toBeHidden();
   await expect(page.locator('#xf-summary')).toBeVisible();
 
   // 到達条件その1: 増えた 3 要素が、それぞれ「どこへ入るか」つきで並ぶ。
@@ -1275,6 +1280,9 @@ test('手順1-2 先輩側の増分が入る位置つきで並び、チェック�
   await expect(page.locator('#xf-list .xf-row.only-ref')).toHaveCount(0);
   // 先輩のファイルは読むだけ (書き換えない)。
   expect(await S.readDoc(page, SENIOR_DIR, 'timer_init_sequence')).toBe(TAKE_SENIOR);
+  // 相手のフォルダ名を押すと、FILES「読むだけ」のその行へ移る (別のフォルダはそこで選ぶ)。
+  await page.locator('#xf-dir-name').click();
+  await expect(page.locator('#files-panel .files-ro-folder[data-ro-name="primary"]')).toBeFocused();
 });
 
 // BLK-junior-20260917-0323-wish: 同じ手順1〜2 の、状態遷移図 (TIMER) で
@@ -1319,9 +1327,10 @@ test('手順1-2 親状態の中に増えた子状態が入れ子のまま並び�
   await S.typeDsl(page, NEST_SELF);
   await S.renameActive(page, 'timer_state');
 
+  // BLK-owner-20260924-2135-prune: 相手のフォルダはパスを打たず、FILES「読むだけ」で比較中にしたフォルダから取る。
+  await S.compareFolder(page, 'primary');
   await openCompareTabs(page);
-  await page.locator('#xf-dir').fill(SENIOR_DIR);
-  await page.locator('#btn-xf-load').click();
+  await expect(page.locator('#xf-dir-name')).toHaveText('primary');
   await expect(page.locator('#xf-summary')).toBeVisible();
 
   // 到達条件その1: 子状態 2 つと子の遷移 2 本が、親の中の増分として並ぶ。
@@ -1390,9 +1399,10 @@ test('手順1 先輩に同じ図種が無いことが、突き合わせの答え
   await S.typeDsl(page, CLS_SELF);
   await S.renameActive(page, 'TimerDrv派生クラス図');
 
+  // BLK-owner-20260924-2135-prune: 相手のフォルダはパスを打たず、FILES「読むだけ」で比較中にしたフォルダから取る。
+  await S.compareFolder(page, 'primary');
   await openCompareTabs(page);
-  await page.locator('#xf-dir').fill(SENIOR_DIR);
-  await page.locator('#btn-xf-load').click();
+  await expect(page.locator('#xf-dir-name')).toHaveText('primary');
   const summary = page.locator('#xf-summary');
   await expect(summary).toBeVisible();
 
@@ -1438,9 +1448,10 @@ test('手順1 同じ図種でも部品名が違う図しか無ければ、開か
   await S.typeDsl(page, CLS_SELF);
   await S.renameActive(page, 'TimerDrv派生クラス図');
 
+  // BLK-owner-20260924-2135-prune: 相手のフォルダはパスを打たず、FILES「読むだけ」で比較中にしたフォルダから取る。
+  await S.compareFolder(page, 'primary');
   await openCompareTabs(page);
-  await page.locator('#xf-dir').fill(SENIOR_DIR);
-  await page.locator('#btn-xf-load').click();
+  await expect(page.locator('#xf-dir-name')).toHaveText('primary');
   const summary = page.locator('#xf-summary');
   await expect(summary).toBeVisible();
 
