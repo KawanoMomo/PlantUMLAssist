@@ -159,3 +159,39 @@ test('手順11 本文の図種が変わると、ズームの帯・左レール�
   await expect(page.locator('#diagram-type')).toHaveValue('plantuml-state');
   expect(await page.locator('#editor').inputValue()).toBe(ST);
 });
+
+// BLK-builder-20260924-1245-2 (design 4a「関係を追加」): 図で選んだクラスの右パネルから、
+// そのクラスを一端にして関係を 1 本引ける。選択を外して追加ペインの Relation へ行き
+// From を選び直す遠回りをしない。継承は「選んだクラスが子」を既定にする。
+test('手順11 図で選んだクラスの右パネルから、そのクラスの関係をその場で足せる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  const NL = String.fromCharCode(10);
+  const CLS = ['@startuml', 'title Sample Class', 'abstract class Shape', 'class Circle {', '- radius : double', '}',
+    'interface Drawable', '@enduml'].join(NL);
+  await S.typeDsl(page, CLS);
+  await page.waitForTimeout(1500);
+
+  const hit = page.locator('#overlay-layer rect.selectable[data-type="class"][data-id="Circle"]').first();
+  await expect(hit).toBeAttached({ timeout: 10000 });
+  const hb = await hit.boundingBox();
+  await page.mouse.click(hb.x + hb.width / 2, hb.y + 8);
+  await page.waitForTimeout(400);
+
+  // 到達条件その1: 選んだクラスの右パネルに「関係を追加」があり、開くと種類のカード・相手・組み立てられる行が出る。
+  await page.locator('#cl-reladd > summary').click();
+  await page.locator('#cl-reladd .cl-reladd-card[data-value="inheritance"]').click();
+  await page.locator('#cl-reladd-other').selectOption('Shape');
+  await expect(page.locator('#cl-reladd-preview')).toHaveText('Shape <|-- Circle');
+  await page.locator('#cl-reladd-go').click();
+  await page.waitForTimeout(800);
+  expect(await page.locator('#editor').inputValue()).toContain('Shape <|-- Circle');
+
+  // 到達条件その2: 足したあとも選んだクラスのまま「関係を追加」が開いていて、続けて 2 本目を引ける。
+  await expect(page.locator('#cl-reladd')).toHaveAttribute('open', '');
+  await page.locator('#cl-reladd .cl-reladd-card[data-value="implementation"]').click();
+  await page.locator('#cl-reladd-other').selectOption('Drawable');
+  await expect(page.locator('#cl-reladd-preview')).toHaveText('Drawable <|.. Circle');
+  await page.locator('#cl-reladd-go').click();
+  await page.waitForTimeout(800);
+  expect(await page.locator('#editor').inputValue()).toContain('Drawable <|.. Circle');
+});

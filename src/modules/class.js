@@ -1684,6 +1684,117 @@ window.MA.modules.plantumlClass = (function() {
     });
   }
 
+  // ── design 4a「関係を追加」(BLK-builder-20260924-1245-2) ─────────────────
+  // 選んだクラスを一端にして、その場で関係を 1 本引く。選択を外して追加ペインの
+  // Relation へ行き From を選び直す・Shift で 2 つ選ぶ、の遠回りをさせない。
+  //
+  // 選んだクラスがどちらの端になるかは種類で既定を変える。継承・実現は「選んだ
+  // クラスが子 (実装側)」、それ以外は「選んだクラスが根元 (使う側・全体側)」。
+  // ⇄ で入れ替えた向きは、種類を選び直しても保つ。
+  var _relAdd = { openFor: null, kind: 'association', swapped: false, other: '' };
+
+  function _selfIsFromByDefault(kind) {
+    return !(kind === 'inheritance' || kind === 'implementation');
+  }
+
+  // 選んだクラス・相手・種類・入れ替えから、書き込む行の両端を決める (DOM に触らない)。
+  function relationEnds(kind, selfId, otherId, swapped) {
+    var selfFrom = _selfIsFromByDefault(kind);
+    if (swapped) selfFrom = !selfFrom;
+    return selfFrom ? { from: selfId, to: otherId } : { from: otherId, to: selfId };
+  }
+
+  function _relAddHtml(element, parsedData) {
+    var RC = window.MA.relationKindCards;
+    var esc = window.MA.htmlUtils.escHtml;
+    var others = (parsedData.elements || []).filter(function(e) { return e.id && e.id !== element.id; });
+    var open = _relAdd.openFor === element.id;
+    if (!open) { _relAdd.kind = 'association'; _relAdd.swapped = false; _relAdd.other = ''; }
+    var body;
+    if (!others.length) {
+      body = '<div style="font-size:11px;color:var(--text-secondary);">相手にできるクラスがまだありません。先にクラスを 1 つ追加してください。</div>';
+    } else {
+      var opts = others.map(function(e) {
+        var sel = (_relAdd.other ? e.id === _relAdd.other : false) ? ' selected' : '';
+        return '<option value="' + esc(e.id) + '"' + sel + '>' + esc(e.label && e.label !== e.id ? e.label + ' (' + e.id + ')' : e.id) + '</option>';
+      }).join('');
+      body =
+        (RC ? RC.cardsHtml('cl-reladd-card', RC.kindsOf('class'), _relAdd.kind) : '') +
+        '<div style="margin-bottom:6px;">' +
+          '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">相手のクラス</label>' +
+          '<select id="cl-reladd-other" style="width:100%;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:3px 6px;border-radius:3px;font-size:12px;">' + opts + '</select>' +
+        '</div>' +
+        '<div id="cl-reladd-roles" style="font-size:11px;margin-bottom:4px;"></div>' +
+        '<button id="cl-reladd-swap" type="button" style="width:100%;font-size:11px;padding:3px 8px;margin-bottom:6px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">⇄ 向きを入れ替え</button>' +
+        '<div style="font-size:10px;color:var(--text-secondary);">組み立てられる行</div>' +
+        '<div id="cl-reladd-preview" style="margin-bottom:8px;padding:4px 6px;font-family:var(--font-mono);font-size:11px;color:var(--text-primary);background:var(--bg-tertiary);border-radius:3px;word-break:break-all;"></div>' +
+        window.MA.properties.fieldHtml('ラベル', 'cl-reladd-label', '', '任意') +
+        window.MA.properties.primaryButtonHtml('cl-reladd-go', '+ この関係を追加');
+    }
+    return '<details id="cl-reladd"' + (open ? ' open' : '') + ' style="border-top:1px solid var(--border);padding-top:8px;margin-top:8px;">' +
+      '<summary style="font-size:11px;color:var(--accent);font-weight:bold;cursor:pointer;">関係を追加</summary>' +
+      '<div style="margin-top:6px;">' + body + '</div>' +
+      '</details>';
+  }
+
+  function _bindRelAdd(element, parsedData, propsEl, ctx) {
+    var box = document.getElementById('cl-reladd');
+    if (!box) return;
+    box.addEventListener('toggle', function() {
+      _relAdd.openFor = box.open ? element.id : null;
+    });
+    var otherEl = document.getElementById('cl-reladd-other');
+    if (!otherEl) return;
+    var nameOf = {};
+    (parsedData.elements || []).forEach(function(e) { nameOf[e.id] = e.label || e.id; });
+    function refresh() {
+      _relAdd.other = otherEl.value;
+      var ends = relationEnds(_relAdd.kind, element.id, otherEl.value, _relAdd.swapped);
+      var R = window.MA.relationRoles;
+      var roles = document.getElementById('cl-reladd-roles');
+      if (roles && R) {
+        var r = R.of(_relAdd.kind);
+        roles.textContent = r.from + ': ' + (nameOf[ends.from] || ends.from) + ' / ' + r.to + ': ' + (nameOf[ends.to] || ends.to);
+      }
+      var prev = document.getElementById('cl-reladd-preview');
+      var lbl = document.getElementById('cl-reladd-label');
+      if (prev) prev.textContent = fmtRelation(_relAdd.kind, ends.from, ends.to, lbl ? lbl.value.trim() : '');
+    }
+    var RC = window.MA.relationKindCards;
+    if (RC) RC.bindCards(box, 'cl-reladd-card', function(k) {
+      _relAdd.kind = k;
+      var cards = box.querySelectorAll('.cl-reladd-card');
+      for (var i = 0; i < cards.length; i++) {
+        var on = cards[i].getAttribute('data-value') === k;
+        cards[i].classList.toggle('active', on);
+        cards[i].setAttribute('aria-pressed', on ? 'true' : 'false');
+        cards[i].style.background = on ? 'var(--accent)' : 'var(--bg-tertiary)';
+        cards[i].style.borderColor = on ? 'var(--accent)' : 'var(--border)';
+        cards[i].style.color = on ? '#fff' : 'var(--text-primary)';
+      }
+      refresh();
+    });
+    otherEl.addEventListener('change', refresh);
+    var lblEl = document.getElementById('cl-reladd-label');
+    if (lblEl) lblEl.addEventListener('input', refresh);
+    window.MA.properties.bindEvent('cl-reladd-swap', 'click', function() {
+      _relAdd.swapped = !_relAdd.swapped;
+      refresh();
+    });
+    window.MA.properties.bindEvent('cl-reladd-go', 'click', function() {
+      var other = otherEl.value;
+      if (!other) return;
+      var ends = relationEnds(_relAdd.kind, element.id, other, _relAdd.swapped);
+      window.MA.history.pushHistory();
+      // 開いたまま・選んだクラスのまま描き直す (続けて 2 本目を引ける)。
+      _relAdd.openFor = element.id;
+      ctx.setMmdText(addRelation(ctx.getMmdText(), _relAdd.kind, ends.from, ends.to,
+        lblEl && lblEl.value.trim() ? lblEl.value.trim() : null));
+      ctx.onUpdate();
+    });
+    refresh();
+  }
+
   function _renderElementEdit(element, parsedData, propsEl, ctx, opts) {
     var P = window.MA.properties;
     var GP = window.MA.groupPlace;
@@ -1800,7 +1911,8 @@ window.MA.modules.plantumlClass = (function() {
                   P.primaryButtonHtml('cl-nested-go', '+ 内部クラスを追加') +
                 '</div>' +
               '</div>' +
-            '</details>';
+            '</details>' +
+            _relAddHtml(element, parsedData);
 
     // Notes section
     var classNotes = (parsedData.notes || []).filter(function(n) { return n.targetId === element.id; });
@@ -1825,6 +1937,8 @@ window.MA.modules.plantumlClass = (function() {
 
     propsEl.innerHTML = html;
     GP.bindEdit('cl-edit', parsedData.groups, element.line, ctx, element.id);
+
+    _bindRelAdd(element, parsedData, propsEl, ctx);
 
     // BLK-junior-20260909-0703-wish: 選んでいるクラスを親にして派生を 1 つ起こす。
     P.bindEvent('cl-derive-open', 'click', function() {
@@ -2680,6 +2794,7 @@ window.MA.modules.plantumlClass = (function() {
     fmtAbstract: fmtAbstract,
     fmtEnum: fmtEnum,
     fmtRelation: fmtRelation,
+    relationEnds: relationEnds,
     fmtAttribute: fmtAttribute,
     fmtMethod: fmtMethod,
     fmtEnumValue: fmtEnumValue,
