@@ -198,6 +198,55 @@ test('migrator 手順 4 — hide・together・note のある図でも、ホバ�
   }
 });
 
+// BLK-builder-20260925-0654-3: メンバーを指す note (`note right of E::field1 #yellow`) の本文に枠が出なかった。
+// PlantUML はこれを g.entity の外の裸の吹き出し (tips) で描き、parser は `E` + 本文 `:field1 #yellow` と読み違えていた。
+test('migrator 手順 4 — メンバーに付けた色つきの note でも、本文のどの行を指しても本人の枠が出る', async ({ page }) => {
+  await bootPlain(page);
+  await typeDsl(page, [
+    '@startuml',                                    // 1
+    'class AttributeNoteTest {',                    // 2
+    '  int yellow',                                 // 3
+    '  int lightblue',                              // 4
+    '}',                                            // 5
+    'note right of AttributeNoteTest::lightblue #lightblue', // 6
+    '  Hello lightblue',                            // 7
+    'end note',                                     // 8
+    'note right of AttributeNoteTest::yellow #yellow', // 9
+    '  Hello yellow',                               // 10
+    '  (but it is actually lightblue)',             // 11
+    'end note',                                     // 12
+    '@enduml',                                      // 13
+  ].join(String.fromCharCode(10)));
+  await expect(page.locator('#overlay-layer rect[data-type="note"]')).toHaveCount(2, { timeout: 20000 });
+
+  const targets = [
+    ['int yellow', 'member', '3'],
+    ['int lightblue', 'member', '4'],
+    // DSL の順 (lightblue が先) と描かれる順 (メンバー順) が違っても、本文の文字で本人に当たる
+    ['Hello lightblue', 'note', '6'],
+    ['Hello yellow', 'note', '9'],
+    ['(but it is actually lightblue)', 'note', '9'],
+  ];
+  for (const [label, type, line] of targets) {
+    const box = await page.evaluate((l) => {
+      const t = Array.prototype.find.call(document.querySelectorAll('#preview-svg svg text, #preview svg text'),
+        (n) => (n.textContent || '').trim() === l);
+      if (!t) return null;
+      const r = t.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    }, label);
+    expect(box, label + ' が描かれている').not.toBeNull();
+    await page.mouse.move(box.x, box.y);
+    const hit = await page.evaluate((p) => {
+      const els = document.elementsFromPoint(p.x, p.y);
+      const r = els.find((e) => e.tagName.toLowerCase() === 'rect' && e.closest('#overlay-layer') &&
+        !/overlay-background/.test(e.getAttribute('class') || ''));
+      return r ? { type: r.getAttribute('data-type'), line: r.getAttribute('data-line') } : null;
+    }, box);
+    expect(hit, label + ' にホバーしてその行の枠が出る').toEqual({ type, line });
+  }
+});
+
 // BLK-migrator-20260918-0249: component 図で方向指定の矢印 (-right->/-left->/-up->/-down->) を
 // 含むと、枠が 1 つも出なかった。角括弧だけで書かれた部品 (宣言行が 1 つも無い) と
 // 方向語入りの矢印の両方が関係行として読めていなかった。
