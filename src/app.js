@@ -2812,6 +2812,7 @@ function init() {
         if (fileDirEl) fileDirEl.value = fileDir;
       }
       if (window.MA.autoSave) {
+        var prevCfg = window.MA.autoSave.getConfig() || {};
         window.MA.autoSave.setConfig({
           enabled: enabled,
           debounceMs: debounceMs,
@@ -2821,6 +2822,12 @@ function init() {
         });
         // 保存先を変えたらすぐ上部バーに映す (次に開くまで古い表示を残さない)。
         updateTopSaveTarget();
+        // BLK-builder-20260924-2152-2-red: 保存先の一覧 (FILES の部品フォルダ・上部バーの部品の段が読む)
+        // も新しいフォルダで読み直す。読み直さないと前のフォルダの図 (diagram1 など) が残り、
+        // 新しい保存先の下に前のフォルダの部品 (DIAGRAM1) が並び、パンくずにもその段が出た。
+        if (prevCfg.fileDir !== fileDir || prevCfg.backend !== backend) {
+          try { reloadFolderListNow(); } catch (e) {}
+        }
       }
       // レンダリングモードとエディタの見た目も同じ「保存」で確定する。
       // モード切替は既存の #render-mode を唯一の窓口に保ち、change を投げて
@@ -13241,6 +13248,9 @@ function setupTabs() {
 
   openFromFolderByName = function(name) { openFromFolder(name); };
   refreshFolderPanelNow = function() { if (panel.classList.contains('open')) renderFolderPanel(); };
+  // BLK-builder-20260924-2152-2-red: 保存先を変えたときは畳んでいても読み直す (FILES の部品フォルダと
+  // 上部バーの部品の段はこの一覧を読むので、閉じたままだと前のフォルダの図が残る)。
+  reloadFolderListNow = function() { renderFolderPanel(); };
   // BLK-junior-20260915-0007: 資料化の根拠から一覧へ渡るとき、名前を打ち直させない。
   // 一覧は開くたびに絞り込みを白紙に戻すので、外から入れる口をここに置く。
   filterFolderPanelNow = function(q) {
@@ -16656,6 +16666,8 @@ var openFromFolderByName = function() {};
 // 資料化のように、パネルの外で保存フォルダを書き換える操作から一覧を描き直すための口
 // (BLK-junior-20260908-2303-wish)。パネルを開いていなければ何もしない。
 var refreshFolderPanelNow = function() {};
+// 保存先を変えた直後に、開閉に関わらず一覧を新しいフォルダで読み直す口 (BLK-builder-20260924-2152-2-red)。
+var reloadFolderListNow = function() {};
 // 保存先の版 (server の _versions) を読む・開く・並べる・戻す道具。「この図の履歴」が使う
 // (BLK-owner-20260923-2312-prune)。保存先の一覧の結線 (setupTabs) で入る。
 var _versionsApi = null;

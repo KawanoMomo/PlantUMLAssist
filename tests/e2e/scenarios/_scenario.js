@@ -49,15 +49,17 @@ async function bootPlain(page) {
 }
 
 // 保存先をまだ決めていない状態 (= 保存するとダウンロードになる)。
-async function bootDownloadMode(page) {
-  await page.addInitScript(() => {
+// prevDir: ダウンロードのまま控えている保存フォルダ (既定は ./autosave)。前に使っていたフォルダに
+// 図が残っている状態から保存先を変える手順は、test-results 配下のフォルダを渡して作る。
+async function bootDownloadMode(page, prevDir) {
+  await page.addInitScript((d) => {
     try {
       window.localStorage.clear();
       window.localStorage.setItem('plantuml-autosave-config', JSON.stringify({
-        enabled: true, debounceMs: 200, restoreMode: 'auto', backend: 'localStorage', fileDir: './autosave',
+        enabled: true, debounceMs: 200, restoreMode: 'auto', backend: 'localStorage', fileDir: d,
       }));
     } catch (e) {}
-  });
+  }, prevDir || './autosave');
   await gotoApp(page);
 }
 
