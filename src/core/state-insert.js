@@ -31,7 +31,7 @@ window.MA.stateInsert = (function() {
 
   // 選べる位置。図に無いものは出さない — 選んでから「置けません」と
   // 言われるより、最初から並ばない方が迷わない。
-  function positions(parsed) {
+  function positions(parsed, text) {
     var out = [{ value: 'end', label: '図の末尾' }];
     if (((parsed && parsed.transitions) || []).length > 0) {
       out.push({ value: 'transition', label: 'この遷移の途中' });
@@ -42,7 +42,46 @@ window.MA.stateInsert = (function() {
     if (_childHosts(parsed).length > 0) {
       out.push({ value: 'inside', label: '選んだ状態の中 (子状態にする)' });
     }
+    // BLK-migrator-20260925-1332: 最初の並行領域が空の複合状態 (`state X {` の直後に `--`) は
+    // PlantUML が描画の途中で落ちる。「の中」は閉じ `}` の直前 (最後の領域) に入るので、その空の領域へ
+    // 置く道を位置に並べる。値は `region:{区切りの行}`。
+    emptyRegions(parsed, text).forEach(function(r) {
+      out.push({ value: 'region:' + r.line, label: r.label + ' の空の並行領域 (' + r.line + ' 行目 `' + r.sep + '` の前)' });
+    });
     return out;
+  }
+
+  // 最初の並行領域が空の複合状態。見出しは parser の読んだ名前 (入れ子は「Outer › Inner」)。
+  function emptyRegions(parsed, text) {
+    var RE = window.MA.renderError;
+    if (text == null || !RE || !RE.emptyFirstRegions) return [];
+    var SC = window.MA.stateChild;
+    var states = (parsed && parsed.states) || [];
+    return RE.emptyFirstRegions(text).map(function(r) {
+      var label = r.name;
+      for (var i = 0; i < states.length; i++) {
+        if (states[i].line === r.openLine) {
+          label = (SC && SC.breadcrumbText && SC.breadcrumbText(parsed, states[i].id)) || states[i].label || states[i].id;
+          break;
+        }
+      }
+      return { line: r.line, sep: r.sep, indent: r.indent, label: label };
+    });
+  }
+
+  // 空の並行領域 (区切りの行 sepLine の前) へ行を入れる。字下げは区切りにそろえる。
+  function insertIntoRegion(text, sepLine, newLines) {
+    var RE = window.MA.renderError;
+    var hit = null;
+    var rs = (RE && RE.emptyFirstRegions) ? RE.emptyFirstRegions(text) : [];
+    for (var i = 0; i < rs.length; i++) if (rs[i].line === Number(sepLine)) { hit = rs[i]; break; }
+    if (!hit) return text;
+    var lines = String(text).split('\n');
+    var body = (Array.isArray(newLines) ? newLines : [newLines]).map(function(l) {
+      return hit.indent + String(l);
+    });
+    lines.splice.apply(lines, [hit.line - 1, 0].concat(body));
+    return lines.join('\n');
   }
 
   // 遷移に載っている `: ...` の中身。parser は label を持たせるが、
@@ -313,5 +352,7 @@ window.MA.stateInsert = (function() {
     compositeOptions: compositeOptions,
     splitTransition: splitTransition,
     insertInside: insertInside,
+    emptyRegions: emptyRegions,
+    insertIntoRegion: insertIntoRegion,
   };
 })();

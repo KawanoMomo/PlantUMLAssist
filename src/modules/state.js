@@ -1283,7 +1283,7 @@ window.MA.modules.plantumlState = (function() {
     // 挟んでも、そのあと必ず中を作る手が要る。
     var SI = window.MA.stateInsert;
     function placeHtml(kind) {
-      var opts = SI.positions(parsedData).filter(function(p) {
+      var opts = SI.positions(parsedData, ctx.getMmdText()).filter(function(p) {
         return !(kind === 'composite' && p.value === 'transition');
       });
       if (opts.length <= 1) return '';
@@ -1573,7 +1573,11 @@ window.MA.modules.plantumlState = (function() {
           }
           var stereoEl = document.getElementById('st-tail-stereo');
           var st = (stereoEl && stereoEl.value) || null;
-          if (where === 'transition') {
+          if (where.indexOf('region:') === 0) {
+            // BLK-migrator-20260925-1332: 空の並行領域へ置く (PlantUML が落ちる図が描けるようになる)。
+            out = SI.insertIntoRegion(t, where.slice(7), fmtState(normSt.id, normSt.label || normSt.id, st));
+            if (out === t) { alert('その並行領域はもう空ではありません'); return; }
+          } else if (where === 'transition') {
             out = SI.splitTransition(t, parsedData, whereTarget, normSt.id, st, normSt.label);
             if (out === t) { alert('挟む遷移を選んでください'); return; }
           } else if (where === 'inside') {
@@ -1587,7 +1591,13 @@ window.MA.modules.plantumlState = (function() {
           var rawCid = document.getElementById('st-tail-id').value;
           var normC = normalizeIdInput(rawCid, parsedData);
           if (!normC.valid) { alert('ID 必須'); return; }
-          if (where === 'inside') {
+          if (where.indexOf('region:') === 0) {
+            var headR = (normC.label && normC.label !== normC.id)
+              ? 'state "' + normC.label + '" as ' + normC.id + ' {'
+              : 'state ' + normC.id + ' {';
+            out = SI.insertIntoRegion(t, where.slice(7), [headR, '}']);
+            if (out === t) { alert('その並行領域はもう空ではありません'); return; }
+          } else if (where === 'inside') {
             var head = (normC.label && normC.label !== normC.id)
               ? 'state "' + normC.label + '" as ' + normC.id + ' {'
               : 'state ' + normC.id + ' {';

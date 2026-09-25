@@ -105,5 +105,54 @@ window.MA.renderError = (function() {
       ' として開いています。本文はそのまま直せ、何もせず保存しても書き換わりません (⚙ 設定 → レンダリングで別の版の plantuml.jar を入れると読めることがあります)';
   }
 
-  return { detect: detect, describe: describe, kindNote: kindNote };
+  // BLK-migrator-20260925-1332: smetana で描く state 図は、複合状態の最初の並行領域が空
+  // (`state X {` の直後に `--` / `||`) だと PlantUML 1.2026.3 自身が IllegalArgumentException で落ちる
+  // (1.2026.7 からは描けるが、同梱版を上げると sequence / state の SVG の形が変わる)。
+  // 落ちた絵には行が書かれないので、本文からその区切りの行を探す。server.py の empty_first_regions と同じ規則。
+  // 返り値 [{ line: 区切りの行 (1 始まり), sep: '--' | '||', openLine: `state X {` の行, name, indent }]
+  var STATE_OPEN_RE = /^state\s+(?:"([^"]*)"\s+as\s+([^\s{<#]+)|([^\s{<#]+))[^{]*\{\s*$/;
+  function emptyFirstRegions(text) {
+    var out = [];
+    var lines = String(text || '').split('\n');
+    var stack = [];
+    var inComment = false;
+    for (var i = 0; i < lines.length; i++) {
+      var raw = lines[i].replace(/\r$/, '');
+      var t = raw.trim();
+      if (inComment) { if (t.indexOf("'/") >= 0) inComment = false; continue; }
+      if (t.indexOf("/'") === 0) { if (t.indexOf("'/", 2) < 0) inComment = true; continue; }
+      if (!t || t.charAt(0) === "'") continue;
+      var top = stack.length ? stack[stack.length - 1] : null;
+      if (t === '--' || t === '||') {
+        if (top && top.state && !top.sepSeen) {
+          top.sepSeen = true;
+          if (top.empty) {
+            out.push({ line: i + 1, sep: t, openLine: top.openLine, name: top.name,
+              indent: (raw.match(/^\s*/) || [''])[0] });
+          }
+        }
+        continue;
+      }
+      if (t.charAt(0) === '}') { stack.pop(); continue; }
+      if (top) top.empty = false;
+      var m = t.match(STATE_OPEN_RE);
+      if (m) {
+        stack.push({ state: true, openLine: i + 1, name: m[1] || m[2] || m[3], empty: true, sepSeen: false });
+      } else if (/\{\s*$/.test(t)) {
+        stack.push({ state: false, empty: false, sepSeen: true });
+      }
+    }
+    return out;
+  }
+
+  // 落ちた絵の帯に添える原因の 1 文 (「N 行目 `--` の前の並行領域が空です」)。無ければ ''。
+  function crashCause(info, text) {
+    if (!info || !info.crashed) return '';
+    var r = emptyFirstRegions(text);
+    if (!r.length) return '';
+    return r[0].line + ' 行目 `' + r[0].sep + '` の前の並行領域が空です';
+  }
+
+  return { detect: detect, describe: describe, kindNote: kindNote,
+    emptyFirstRegions: emptyFirstRegions, crashCause: crashCause };
 })();

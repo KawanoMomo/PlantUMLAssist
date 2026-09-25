@@ -34111,7 +34111,14 @@ function renderSvg() {
     // \u3053\u3053\u3067\u62fe\u3063\u3066\u63cf\u753b\u30a8\u30e9\u30fc\u6271\u3044\u306b\u3057\u3001\u76f4\u524d\u306e\u56f3\u3092\u6b8b\u3057\u305f\u307e\u307e\u5e2f\u3060\u3051\u3092\u91cd\u306d\u308b\u3002
     var errInfo = window.MA.renderError.detect(svg);
     if (errInfo.isError) {
-      var detected = new Error(window.MA.renderError.describe(errInfo));
+      var detectedText = window.MA.renderError.describe(errInfo);
+      // BLK-migrator-20260925-1332: 落ちた絵には行が無い。本文から落ちる原因の行を探して添える (server の 422 と同じ文)。
+      var causeText = window.MA.renderError.crashCause ? window.MA.renderError.crashCause(errInfo, renderText) : '';
+      if (causeText) {
+        detectedText += '。' + causeText;
+        errInfo.causeLine = window.MA.renderError.emptyFirstRegions(renderText)[0].line;
+      }
+      var detected = new Error(detectedText);
       detected.renderInfo = errInfo;
       throw detected;
     }
@@ -34186,6 +34193,10 @@ function renderSvg() {
         ? window.MA.renderError.kindNote(err.renderInfo, currentModule && currentModule.type) : '';
       if (note) bandText += '。' + note;
     } catch (e) {}
+    // BLK-migrator-20260925-1332: 最初の並行領域が空で落ちた図は、直し方 (その領域に状態を置く) と、描けない間も本文は壊れないことを言う。
+    if (err && err.renderInfo && err.renderInfo.causeLine) {
+      bandText += '。その領域に状態を 1 つ置くと描けます (右パネルの「追加する位置」)。本文はそのまま直せ、何もせず保存しても書き換わりません';
+    }
     showRenderError(bandText);
     renderStatusEl.textContent = 'ERROR';
     renderStatusEl.classList.add('error');
