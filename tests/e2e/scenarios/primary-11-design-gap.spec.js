@@ -643,9 +643,11 @@ test('手順11 保存先の行の右クリック「別のフォルダを保存�
   await page.locator('#files-sec-readonly').click();
   await expect(page.locator('#files-panel .files-ro-folder', { hasText: 'mine' })).toBeVisible({ timeout: 10000 });
 
-  // Ctrl+K「保存先を変える」は同じ窓を開き、パスを入れても替えられる
+  // Ctrl+K も右クリックと同じ名前「別のフォルダを保存先にする…」で同じ窓を開き、パスを入れても替えられる
+  // (BLK-owner-20260925-1132-1: 入口の名前を揃えた。前の名前「保存先を変える」は検索語に残す)
   await page.keyboard.press('Control+k');
   await page.keyboard.type('保存先を変える');
+  await expect(page.locator('#cp-list .cp-item').first()).toContainText('別のフォルダを保存先にする…');
   await page.keyboard.press('Enter');
   await expect(dlg).toBeVisible();
   await expect(page.locator('#target-pick-path')).toBeFocused();
@@ -654,4 +656,72 @@ test('手順11 保存先の行の右クリック「別のフォルダを保存�
   await expect(dlg).toHaveCount(0);
   await expect(page.locator('#top-save-target')).toHaveText('mine');
   await expect(page.locator('#files-count-target')).toHaveText(/1/, { timeout: 10000 });
+});
+
+// BLK-human-20260925-1150 / BLK-owner-20260925-1132-1: 保存先を替えても、開いているタブは開いたときのファイルを指し続ける。
+// 前は替えた途端にタブの書き先が新しいフォルダへ付け替わり、元のファイルは直らず、新しいフォルダの同じ名前の別の図を上書きした。
+test('手順11 保存先を替えたあと前のフォルダのタブを直して保存すると、そのファイルだけが変わり新しい保存先には何も増えない', async ({ page }) => {
+  const base = DIR + '/keep-tab-file';
+  const absBase = path.join(S.absDirFor(__filename), 'keep-tab-file');
+  const mk = (sub, files) => {
+    const d = path.join(absBase, sub);
+    fs.rmSync(d, { recursive: true, force: true });
+    fs.mkdirSync(d, { recursive: true });
+    Object.keys(files).forEach((n) => fs.writeFileSync(path.join(d, n + '.puml'), files[n]));
+  };
+  const IN_B = '@startuml\nclass Other_In_B\n@enduml\n';
+  mk('first', { Same_Class: '@startuml\nclass In_First\n@enduml\n', Only_First: '@startuml\nclass Only_First\n@enduml\n' });
+  mk('second', { Same_Class: IN_B });
+  await S.bootWithSaveDir(page, base + '/first');
+  await expect(page.locator('#top-save-target')).toHaveText('first', { timeout: 15000 });
+
+  // first の Same_Class を開く (タブに固定する)
+  await S.openFolderItem(page, 'Same_Class', { pin: true });
+  await S.closeFolderList(page);
+  await expect(page.locator('#editor')).toHaveValue(/In_First/);
+
+  // 保存先を second に替える (保存先の右クリック →「別のフォルダを保存先にする…」)
+  await page.locator('#top-save-target').click({ button: 'right' });
+  await page.locator('#files-ctx-menu .files-ctx-item', { hasText: '別のフォルダを保存先にする…' }).click();
+  const dlg = page.locator('#target-pick');
+  await expect(dlg).toContainText('開いているタブは開いたファイルに保存します');
+  await dlg.locator('.target-pick-dir', { hasText: 'second' }).click({ timeout: 10000 });
+  await expect(dlg).toHaveCount(0);
+  const cfg = await page.evaluate(() => window.MA.autoSave.getConfig());
+  expect(cfg.fileDir.split(String.fromCharCode(92)).join('/')).toMatch(/keep-tab-file.second$/);
+
+  // パンくずは開いたファイルのフォルダのまま
+  await expect(page.locator('#top-save-target')).toHaveText('first');
+  await expect(page.locator('#top-file-name')).toContainText('Same_Class');
+
+  // 1 行足して Ctrl+S。開いたファイルを書き換えるかの問いは、first のファイルだと名指しする
+  await page.locator('#editor').click();
+  await page.keyboard.press('Control+Home');
+  await page.keyboard.press('End');
+  await page.keyboard.type('\nclass Added_Line');
+  await page.keyboard.press('Control+s');
+  const ask = page.locator('#source-lock-modal');
+  await expect(ask).toBeVisible({ timeout: 5000 });
+  await expect(page.locator('#source-lock-body')).toContainText(/keep-tab-file.first の中/);
+  await page.locator('#source-lock-overwrite').click();
+  await expect(ask).toHaveCount(0);
+  await page.locator('#editor').click();
+  await page.keyboard.press('Control+s');
+  await page.waitForTimeout(1500);
+  // 答えた後に同じ問いがもう一度出ない (打った時点の返事待ちが答えた後に届いても聞き直さない)
+  await expect(ask).toHaveCount(0);
+
+  // 開いたファイル (first) だけが変わり、second の同じ名前の図は元のまま、second に何も増えない
+  await expect.poll(async () => S.readDoc(page, base + '/first', 'Same_Class')).toContain('Added_Line');
+  expect(await S.readDoc(page, base + '/second', 'Same_Class')).toBe(IN_B);
+  expect((await S.listDir(page, base + '/second')).sort()).toEqual(['Same_Class']);
+  expect(fs.readdirSync(path.join(absBase, 'second')).filter((n) => /\.puml$/.test(n))).toEqual(['Same_Class.puml']);
+  // 上書き保存の行き先も first
+  await expect(page.locator('#top-save')).toHaveAttribute('title', /keep-tab-file.first.Same_Class\.puml/);
+
+  // 替えた後に second から開いた図は second に書く (留めるのは替える前に開いていたタブだけ)
+  await S.putDoc(page, base + '/second', 'New_In_Second', '@startuml\nclass New_In_Second\n@enduml\n');
+  await S.openFolderItem(page, 'New_In_Second', { pin: true });
+  await S.closeFolderList(page);
+  await expect(page.locator('#top-save-target')).toHaveText('second');
 });
