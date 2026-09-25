@@ -1,0 +1,13 @@
+@startuml
+state Comp {
+  state A
+  state B
+  state Keep <<history>>
+  A --> B
+}
+state F2 <<fork>>
+X --> Comp[H]
+X --> F2
+state Lone <<fork>>
+state Deep <<history*>>
+@enduml

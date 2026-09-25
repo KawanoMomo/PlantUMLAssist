@@ -1,0 +1,20 @@
+@startuml
+state A
+state C1 <<choice>>
+state F1 <<fork>>
+state J1 <<join>>
+state E1 <<end>>
+state S1 <<start>>
+state H1 <<history>>
+state H2 <<history*>>
+state Comp {
+  state HH <<history>>
+  state EP <<entryPoint>>
+  state XP <<exitPoint>>
+  state I1 <<inputPin>>
+  state O1 <<outputPin>>
+  state X1 <<expansionInput>>
+  state X2 <<expansionOutput>>
+  state B
+}
+@enduml

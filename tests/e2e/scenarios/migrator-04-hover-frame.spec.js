@@ -1743,3 +1743,72 @@ test('migrator 手順 4 — teoz の 1 行に & を書いた sequence 図でも�
     }
   }
 });
+
+// BLK-migrator-20260925-1932: どの遷移にもつながらない `state History <<history>>` の丸と「H」に枠が出なかった (corpus の state-06)。
+// PlantUML は履歴の丸・fork / join の棒を名前も <g> も無しに描くので、遷移の端から名前を引けない図形は
+// 形 (H / H* / 棒) と入れ物の組で宣言順に当てる。遷移の有無で枠の有無が変わらない。
+test('migrator 手順 4 — 遷移の無い履歴・fork の棒のある state 図でも、丸・「H」・棒に本人の宣言行の枠が出て、押すとその行が選ばれる', async ({ page }) => {
+  await bootPlain(page);
+  const fx = (n) => fs.readFileSync(path.join(__dirname, '..', '..', 'fixtures', 'dsl', 'state-unnamed-glyph-' + n + '.puml'), 'utf8')
+    .replace(/\r\n/g, '\n').replace(/\n+$/, '');
+  // 名前の付いた <g> の外の図形 (丸・棒) と丸の中の文字に印を付け、1 つずつ画面に入れてから中心を指す
+  const glyphs = () => page.evaluate(() => {
+    const svg = document.querySelector('#preview-svg svg');
+    const els = [];
+    const bare = (e) => !(e.parentNode.getAttribute && e.parentNode.getAttribute('class'));
+    svg.querySelectorAll('text').forEach((t) => {
+      const s = (t.textContent || '').trim();
+      if ((s === 'H' || s === 'H*') && bare(t)) els.push(['text', t]);
+    });
+    svg.querySelectorAll('ellipse').forEach((e) => { if (bare(e) && parseFloat(e.getAttribute('rx')) === 11) els.push(['circle', e]); });
+    svg.querySelectorAll('rect').forEach((e) => { if ((e.getAttribute('fill') || '').toLowerCase() === '#555') els.push(['bar', e]); });
+    return els.map(([kind, e], i) => {
+      e.setAttribute('data-glyph', String(i));
+      const r = e.getBoundingClientRect();
+      return { kind, i, y: r.top };
+    });
+  });
+  const hotAt = async (g) => {
+    const p = await page.evaluate((i) => {
+      const e = document.querySelector('#preview-svg svg [data-glyph="' + i + '"]');
+      e.scrollIntoView({ block: 'center', inline: 'center' });
+      const r = e.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    }, g.i);
+    await page.mouse.move(3, 3);
+    await page.mouse.move(p.x, p.y);
+    const r = page.locator('#overlay-layer rect.hit-hover').first();
+    await expect(r, g.kind + ' にホバーして枠が出る').toHaveCount(1, { timeout: 5000 });
+    return { p, id: (await r.getAttribute('data-id')) + '@' + (await r.getAttribute('data-line')) };
+  };
+
+  // corpus の state-06: 丸 2 つ・「H」2 つとも、遷移の無い History (9 行目) と遷移のある DeepHist (12 行目) に当たる
+  await typeDsl(page, fx('s6'));
+  await expect(page.locator('#overlay-layer rect[data-type="state"][data-id="History"]')).toHaveCount(1, { timeout: 20000 });
+  await expect(page.locator('#overlay-warning')).toBeHidden();
+  const s6 = await glyphs();
+  expect(s6.filter((g) => g.kind !== 'bar').length).toBe(4);
+  const got = [];
+  for (const g of s6) got.push(g.kind + ':' + (await hotAt(g)).id);
+  expect(got.sort()).toEqual(['circle:DeepHist@12', 'circle:History@9', 'text:DeepHist@12', 'text:History@9']);
+
+  // 押すと本文の宣言行 (9 行目) が選ばれる
+  const hist = s6.filter((g) => g.kind === 'circle').sort((a, b) => a.y - b.y)[0];
+  const hh = await hotAt(hist);
+  expect(hh.id).toBe('History@9');
+  await page.mouse.click(hh.p.x, hh.p.y);
+  await expect.poll(() => page.evaluate(() => {
+    const ed = document.getElementById('editor');
+    return ed.value.slice(0, ed.selectionStart).split('\n').length;
+  })).toBe(9);
+
+  // 宣言だけの図: fork / join の棒・H・H*・複合状態の中の H のどれにも枠が出る
+  await typeDsl(page, fx('iso'));
+  await expect(page.locator('#overlay-layer rect[data-type="state"][data-id="Comp.HH"]')).toHaveCount(1, { timeout: 20000 });
+  const iso = await glyphs();
+  const isoGot = [];
+  for (const g of iso) isoGot.push(g.kind + ':' + (await hotAt(g)).id);
+  expect(isoGot).toEqual(expect.arrayContaining(['bar:F1@4', 'bar:J1@5', 'circle:H1@8', 'text:H1@8', 'circle:H2@9', 'text:H2@9',
+    'circle:Comp.HH@11', 'text:Comp.HH@11']));
+  expect(isoGot.length).toBe(8);
+});

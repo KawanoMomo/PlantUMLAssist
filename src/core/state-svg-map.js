@@ -204,6 +204,94 @@ window.MA.stateSvgMap = (function() {
     return best;
   }
 
+  // 名前の無い図形の種類。履歴の丸 (中に「H」/「H*」の文字)、fork / join の棒 (塗りのある細長い矩形)。
+  // それ以外 (入口・出口・pin は脇に名前の文字がある) は null。
+  function _glyphKind(el, b, texts) {
+    var tag = (el.tagName || '').toLowerCase();
+    if (tag === 'ellipse' || tag === 'circle') {
+      for (var i = 0; i < texts.length; i++) {
+        var s = _s(texts[i].t.textContent).trim();
+        if (s !== 'H' && s !== 'H*') continue;
+        var tb = texts[i].b;
+        if (tb && _inside({ x: tb.x + tb.width / 2, y: tb.y + tb.height / 2 }, b, 2)) {
+          return { kind: s === 'H' ? 'history' : 'history*', text: tb };
+        }
+      }
+      return null;
+    }
+    if (tag === 'rect' && b.width > 0 && b.height > 0 && (b.width >= 6 * b.height || b.height >= 6 * b.width)) {
+      return { kind: 'bar', text: null };
+    }
+    return null;
+  }
+
+  // 宣言の側の種類 (_glyphKind と同じ語)。
+  function _declKind(st) {
+    var k = _s(st.stereotype).toLowerCase();
+    if (k === 'history') return 'history';
+    if (k === 'history*') return 'history*';
+    if (k === 'fork' || k === 'join') return 'bar';
+    return null;
+  }
+
+  // 遷移の線の端か矢じりが触れている図形か (`X --> Comp[H]` の履歴の丸は宣言でなく遷移の行き先)。
+  function _touchedByLink(b, links) {
+    return links.some(function(g) {
+      var ends = _pathEnds(g);
+      if (ends && (_inside(ends.a, b, 6) || _inside(ends.b, b, 6))) return true;
+      return Array.prototype.some.call(g.querySelectorAll('polygon'), function(pg) {
+        var hb = shapeBox(pg);
+        return hb && _inside({ x: hb.x + hb.width / 2, y: hb.y + hb.height / 2 }, b, 14) && ends && _inside(ends.b, hb, 14);
+      });
+    });
+  }
+
+  function _frameUnnamedGlyphs(svgEl, parsed, orphanShapes, byName, frames, seenState, links) {
+    var named = [];
+    Object.keys(byName).forEach(function(k) { named = named.concat(byName[k]); });
+    var sameBox = function(a, c) {
+      return a && c && Math.abs(a.x - c.x) < 0.01 && Math.abs(a.y - c.y) < 0.01 && Math.abs(a.width - c.width) < 0.01 && Math.abs(a.height - c.height) < 0.01;
+    };
+    // 図形の入れ物: その中心を含む複合状態の枠のうち最も小さいもの。
+    var comps = frames.filter(function(f) { return f.type === 'state' && f.composite && f.box; });
+    var scopeOf = function(b) {
+      var c = { x: b.x + b.width / 2, y: b.y + b.height / 2 }, best = null;
+      comps.forEach(function(f) {
+        if (!_inside(c, f.box, 0)) return;
+        if (!best || f.box.width * f.box.height < best.box.width * best.box.height) best = f;
+      });
+      return best ? best.id : '';
+    };
+    var texts = Array.prototype.filter.call(svgEl.querySelectorAll('text'), _isOrphan).map(function(t) {
+      return { t: t, b: shapeBox(t) };
+    });
+    var glyphs = {};
+    orphanShapes.forEach(function(el) {
+      var b = shapeBox(el);
+      if (!b || named.some(function(n) { return sameBox(n, b); })) return;
+      if (_touchedByLink(b, links)) return;
+      var g = _glyphKind(el, b, texts);
+      if (!g) return;
+      var key = g.kind + '|' + scopeOf(b);
+      (glyphs[key] = glyphs[key] || []).push({ box: g.text ? union([b, g.text]) : b });
+    });
+    var decls = {};
+    ((parsed && parsed.states) || []).forEach(function(st) {
+      var k = _declKind(st);
+      if (!k || seenState[st.id]) return;
+      var key = k + '|' + _s(st.parentId);
+      (decls[key] = decls[key] || []).push(st);
+    });
+    Object.keys(glyphs).forEach(function(key) {
+      var gs = glyphs[key], ds = (decls[key] || []).slice().sort(function(a, c) { return a.line - c.line; });
+      if (gs.length !== ds.length) return;
+      gs.forEach(function(g, i) {
+        seenState[ds[i].id] = true;
+        frames.push({ type: 'state', id: ds[i].id, line: ds[i].line, box: pad(g.box, 2), composite: false, declared: true });
+      });
+    });
+  }
+
   // 枠の一覧を返す。各要素 { type, id, line, box | link, composite }。
   //   type: 'state' | 'pseudo' | 'transition'
   // linksReady: 遷移の <g class="link"> が全部 data-source-line を持っていたか (持たない SVG は呼び手が旧来の当て方に落とす)。
@@ -319,6 +407,12 @@ window.MA.stateSvgMap = (function() {
       seenState[r.id] = true;
       frames.push({ type: 'state', id: r.id, line: r.line, box: pad(union(boxes), 2), composite: false, declared: r.declared });
     });
+
+    // 4. BLK-migrator-20260925-1932: 名前の付かなかった図形 (どの遷移にもつながらない履歴の丸・fork / join の棒)。
+    // PlantUML は履歴を「H」/「H*」の丸、fork / join を名前の無い棒で描き、名前の文字を添えない。
+    // 遷移の端からも脇の文字からも名前が引けないので、描かれた図形の形 (種類) と入れ物 (どの複合状態の中か) で
+    // 組を作り、同じ組の「まだ枠の無い宣言」に描いた順 = 宣言順で当てる。数が合わない組は当てない (取り違えない)。
+    _frameUnnamedGlyphs(svgEl, parsed, orphanShapes, byName, frames, seenState, links);
 
     // 並びは 状態 → 遷移 → 開始・終了、それぞれ DSL の行の順 (SVG の描画順は配置で入れ替わるので使わない)。
     var rank = { state: 0, transition: 1, pseudo: 2 };

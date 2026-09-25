@@ -1,0 +1,15 @@
+' 狙い: <<entryPoint>> <<exitPoint>> <<history>> [H] [H*]
+@startuml
+state Diagnostics {
+  state entry1 <<entryPoint>>
+  state exit1 <<exitPoint>>
+  entry1 --> RunningDiag
+  RunningDiag --> exit1
+}
+state History <<history>>
+[*] --> Diagnostics : entry1
+Diagnostics --> [*] : exit1
+state DeepHist <<history>>
+[*] --> DeepHist
+' (padding line for corpus line-count requirement)
+@enduml
