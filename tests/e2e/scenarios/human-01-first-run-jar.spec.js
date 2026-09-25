@@ -171,6 +171,59 @@ test.describe('人間 手順 1 — 初回起動で jar を入れたら、その�
     await expect(page.locator('#preview-svg svg')).toHaveCount(1);
   });
 
+  // BLK-human-20260925-1500: 1.2026.3〜.6 は並行領域 (`--`) を持つ複合状態で最初の領域しか描かない。
+  // レンダリング欄に「使用中: 版 / 推奨: 版」(推奨は lib/PLANTUML_VERSION の 1 か所) を並べ、違えば隣の「取得し直す」で
+  // 推奨版を取り直せる。並行領域を描けない古い版なら、その旨も 1 行出す (版は jar のマニフェストから。通信しない)。
+  test('使用中と推奨の PlantUML の版が並び、違えば「取得し直す」で推奨版に替えられる', async ({ page }) => {
+    // 本物の server: 同梱の jar は推奨版そのもの。取得し直す必要は無い。
+    await gotoApp(page);
+    await openRenderTab(page);
+    const ver = page.locator('#cfg-jar-version');
+    const refetch = page.locator('#cfg-jar-refetch');
+    const warn = page.locator('#cfg-jar-version-warn');
+    await expect(ver).toBeVisible();
+    await expect(ver).toHaveText('使用中: 1.2026.8 / 推奨: 1.2026.8');
+    await expect(ver).toHaveAttribute('data-differs', '0');
+    await expect(refetch).toBeHidden();
+    await expect(warn).toBeHidden();
+    const env = await (await page.request.get('/env')).json();
+    expect(env.jarRecommended, '推奨版は lib/PLANTUML_VERSION の 1 か所').toBe('1.2026.8');
+
+    // 古い jar (1.2026.3) を指している機械: 版が並び、並行領域が描かれない旨と「取得し直す」が出る。
+    const state = { refetched: false };
+    const OLD_ENV = Object.assign({}, READY_ENV, {
+      jarVersion: '1.2026.3', jarRecommended: '1.2026.8', jarMinSafe: '1.2026.7', jarOutdated: true,
+    });
+    const NEW_ENV = Object.assign({}, READY_ENV, {
+      jarVersion: '1.2026.8', jarRecommended: '1.2026.8', jarMinSafe: '1.2026.7', jarOutdated: false,
+    });
+    await page.route('**/env', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json',
+        body: JSON.stringify(state.refetched ? NEW_ENV : OLD_ENV) });
+    });
+    // 取得はネットに出ず、この機械にある jar を答えるだけにする。
+    await page.route('**/fetch-jar', async (route) => {
+      state.refetched = true;
+      await route.fulfill({ status: 200, contentType: 'application/json',
+        body: JSON.stringify({ jarPath: LOCAL_JAR, env: NEW_ENV }) });
+    });
+    await page.reload();
+    await page.waitForSelector('html[data-app-ready="1"]', { state: 'attached' });
+    await openRenderTab(page);
+    await expect(ver).toHaveText('使用中: 1.2026.3 / 推奨: 1.2026.8');
+    await expect(ver).toHaveAttribute('data-differs', '1');
+    await expect(warn).toBeVisible();
+    await expect(warn).toHaveText('並行領域が描かれない不具合があります。取得し直してください');
+    await expect(refetch).toBeVisible();
+
+    // 隣の「取得し直す」を押すと推奨版に替わり、注意とボタンが引っ込む。
+    await refetch.click();
+    await expect(page.locator('#cfg-engine-note')).toHaveAttribute('data-engine-phase', 'done');
+    await expect(ver).toHaveText('使用中: 1.2026.8 / 推奨: 1.2026.8');
+    await expect(warn).toBeHidden();
+    await expect(refetch).toBeHidden();
+  });
+
   test('Java が無い機械では、同じ画面で入手先まで案内する', async ({ page }) => {
     const state = { hasJar: false };
     await page.route('**/env', async (route) => {

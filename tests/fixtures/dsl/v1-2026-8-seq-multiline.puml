@@ -1,0 +1,6 @@
+@startuml
+participant "Amazon EC2\n<b>App Server</b>\nAZ-a" as EC2
+participant "Amazon RDS" as RDS
+EC2 -> RDS : query
+RDS --> EC2 : rows
+@enduml

@@ -48,6 +48,11 @@ DATA_ROOT = _data_root()
 DEFAULT_JAR_PATH = ROOT / 'lib' / 'plantuml.jar'
 DAEMON_SRC = ROOT / 'lib' / 'PlantUMLDaemon.java'
 FETCH_SCRIPT = ROOT / 'lib' / 'fetch-plantuml.ps1'
+# BLK-human-20260925-1500: 取得する PlantUML の版は lib/PLANTUML_VERSION の 1 行だけが正本
+# (fetch-plantuml.ps1 / .sh もここを読む)。1.2026.3〜.6 は並行領域 (`--` / `||`) を持つ複合状態で
+# 最初の領域しか描かず、残りの領域が黙って消えるので、それより古い jar には取得し直しを促す。
+PLANTUML_VERSION_FILE = ROOT / 'lib' / 'PLANTUML_VERSION'
+JAR_MIN_SAFE_VERSION = '1.2026.7'
 # Java も同梱しない。無いときに案内する公式配布元。
 JAVA_DOWNLOAD_URL = 'https://adoptium.net/temurin/releases/'
 PORT = int(os.environ.get('PUA_PORT', '8766'))
@@ -641,7 +646,8 @@ API_INDEX = {
 # PlantUML のエラー画の目印。src/core/render-error.js の detect と同じ 3 条件。
 # 片方だけ変えないこと。
 _ERR_GREEN_MARK = b'fill="#33FF02"'
-_ERR_RED_TEXT_RE = re.compile(rb'<text[^>]*fill="#FF0000"[^>]*>(.*?)</text>', re.S | re.I)
+# BLK-human-20260925-1500: 1.2026.7 からは色を短く書く (赤は #F00)。どちらの書き方でも拾う。
+_ERR_RED_TEXT_RE = re.compile(rb'<text[^>]*fill="#(?:FF0000|F00)"[^>]*>(.*?)</text>', re.S | re.I)
 _ERR_LINE_RE = re.compile(rb'\[From string \(line (\d+)\)')
 _ERR_VERSION_RE = re.compile(rb'<text[^>]*>\s*PlantUML (?:version )?([0-9][0-9A-Za-z.\-]*)')
 _ERR_SOURCE_RE = re.compile(rb'<text[^>]*text-decoration="wavy underline"[^>]*>(.*?)</text>', re.S)
@@ -3988,14 +3994,65 @@ def detect_env():
     return _env_report(java)
 
 
+def recommended_jar_version():
+    """「公式から取得」で取る版 (lib/PLANTUML_VERSION の 1 行目)。読めなければ None。"""
+    try:
+        v = PLANTUML_VERSION_FILE.read_text(encoding='utf-8').splitlines()[0].strip()
+    except (OSError, IndexError):
+        return None
+    return v or None
+
+
+_jar_version_cache = {}
+
+
+def jar_version(path):
+    """jar のマニフェスト (Implementation-Version) から版を読む。通信も Java の起動もしない。"""
+    try:
+        st = Path(path).stat()
+    except OSError:
+        return None
+    key = (str(path), st.st_mtime, st.st_size)
+    if key in _jar_version_cache:
+        return _jar_version_cache[key]
+    ver = None
+    try:
+        import zipfile
+        with zipfile.ZipFile(str(path)) as zf:
+            mf = zf.read('META-INF/MANIFEST.MF').decode('utf-8', 'replace')
+        m = re.search(r'^Implementation-Version:\s*(\S+)', mf, re.M)
+        ver = m.group(1) if m else None
+    except Exception:   # 壊れた・jar でないファイル (BadZipFile など) は「版が分からない」
+        ver = None
+    _jar_version_cache.clear()
+    _jar_version_cache[key] = ver
+    return ver
+
+
+def version_less(a, b):
+    """'1.2026.3' < '1.2026.7' のような版の比較。数字でない部分は 0 とみなす。"""
+    def parts(v):
+        return [int(x) if x.isdigit() else 0 for x in re.split(r'[.\-]', str(v or ''))]
+    pa, pb = parts(a), parts(b)
+    n = max(len(pa), len(pb))
+    pa += [0] * (n - len(pa))
+    pb += [0] * (n - len(pb))
+    return pa < pb
+
+
 def _env_report(java):
     """/env の答え。jar の有無と app モードは毎回見る (走行中に変わる)。"""
     jar = jar_path()
+    ver = jar_version(jar) if jar.exists() else None
     return {
         'java': java,
         'javaUrl': JAVA_DOWNLOAD_URL,
         'jar': jar.exists(),
         'jarPath': str(jar) if jar.exists() else '',
+        'jarVersion': ver or '',
+        'jarRecommended': recommended_jar_version() or '',
+        'jarMinSafe': JAR_MIN_SAFE_VERSION,
+        'jarOutdated': bool(ver) and version_less(ver, JAR_MIN_SAFE_VERSION),
         'app': NATIVE_DIALOG is not None,
         'canFetchJar': FETCH_SCRIPT.exists() and os.name == 'nt',
     }

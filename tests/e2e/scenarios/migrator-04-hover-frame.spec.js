@@ -724,7 +724,8 @@ test('migrator 手順 4 — actor〜queue で宣言した sequence 図でも、�
   const names = [['整備士', '2'], ['診断ツールUI', '3'], ['UDSサービス', '4'], ['DTC情報', '5'],
     ['EEPROM', '6'], ['センサ群', '7'], ['CANメッセージキュー', '8']];
   for (const [name, line] of names) {
-    const texts = page.locator('#preview-svg svg g.participant text', { hasText: name });
+    // BLK-human-20260925-1500: PlantUML 1.2026.7 からシーケンス図の SVG に参加者の <g class> が無い。描かれた文字で探す。
+    const texts = page.locator('#preview-svg svg text').filter({ hasText: new RegExp('^' + name + '$') });
     await expect(texts, name + ' は上下 2 か所に描かれる').toHaveCount(2);
     for (let k = 0; k < 2; k++) {
       const b = await texts.nth(k).boundingBox();
@@ -750,7 +751,12 @@ test('migrator 手順 4 — actor〜queue で宣言した sequence 図でも、�
   const ll = page.locator('#overlay-layer rect.selectable[data-type="lifeline"][data-id="User"]');
   const lb = await ll.boundingBox();
   const svgLine = await page.evaluate(() => {
-    const ls = Array.from(document.querySelectorAll('#preview-svg svg g.participant-lifeline[data-qualified-name="User"] line'))
+    // ライフラインは `<g><title>表示名 (日本語は伏せ字)</title>…<line 点線/></g>`。User は左端の列。
+    const cols = Array.from(document.querySelectorAll('#preview-svg svg g'))
+      .filter((g) => Array.from(g.children).some((c) => c.tagName.toLowerCase() === 'title'))
+      .flatMap((g) => Array.from(g.querySelectorAll('line')));
+    const left = Math.min(...cols.map((l) => parseFloat(l.getAttribute('x1'))));
+    const ls = cols.filter((l) => Math.abs(parseFloat(l.getAttribute('x1')) - left) < 0.5)
       .map((l) => l.getBoundingClientRect());
     return { top: Math.min(...ls.map((r) => r.top)), bottom: Math.max(...ls.map((r) => r.bottom)) };
   });
@@ -788,9 +794,14 @@ test('migrator 手順 4 — 長いメッセージが横切るライフライン�
 
   // B のライフラインの線の上で、A → D の箱の中だが文字も矢印も無い高さ / 矢印の線の高さ
   const pts = await page.evaluate(() => {
-    const ln = document.querySelector('#preview-svg svg g.participant-lifeline[data-qualified-name="B"] line').getBoundingClientRect();
+    // BLK-human-20260925-1500: PlantUML 1.2026.7 からライフラインは `<g><title>B</title>…<line/></g>`、メッセージは class の無い線。
+    const lg = Array.from(document.querySelectorAll('#preview-svg svg g')).find((g) =>
+      Array.from(g.children).some((c) => c.tagName.toLowerCase() === 'title' && c.textContent.trim() === 'B'));
+    const ln = lg.querySelector('line').getBoundingClientRect();
     const msg = document.querySelector('#overlay-layer rect[data-type="message"][data-line="11"]').getBoundingClientRect();
-    const arrow = document.querySelectorAll('#preview-svg svg g.message')[0].querySelector('line').getBoundingClientRect();
+    const arrow = Array.from(document.querySelectorAll('#preview-svg svg line')).find((l) =>
+      !/dasharray/.test(l.getAttribute('style') || '')
+      && Math.abs(parseFloat(l.getAttribute('x2')) - parseFloat(l.getAttribute('x1'))) > 30).getBoundingClientRect();
     const x = ln.left + ln.width / 2;
     let free = null;
     for (let y = msg.top + 1; y < arrow.top - 3; y += 1) {
@@ -891,7 +902,7 @@ test('migrator 手順 4 — 宣言の無い状態・choice / fork / join・`->` 
   };
   // SVG の要素 (状態の <g>・遷移のラベル・fork/join の棒)。図が縦に長いと下端はプレビューの外なので、
   // 1 つずつ見える所まで送ってから、その中心にマウスを置く。
-  const SEL = 'g.entity[data-qualified-name] > rect, g.entity[data-qualified-name] > polygon, g.start_entity > ellipse, g.end_entity > ellipse, g.link text, rect[fill="#555555"]';
+  const SEL = 'g.entity[data-qualified-name] > rect, g.entity[data-qualified-name] > polygon, g.start_entity > ellipse, g.end_entity > ellipse, g.link text, rect[fill="#555555"], rect[fill="#555"]';
   const targets = () => page.evaluate((sel) => {
     const svg = document.querySelector('#preview-svg svg');
     const seen = new Set();
@@ -1385,7 +1396,8 @@ test('migrator 手順 4 — smetana の複合状態・出口・pin のある sta
   const b = await hoverAt('B', false);
   expect(b.id).toBe('B');
   const clusterB = await page.evaluate(() => {
-    const r = document.querySelector('#preview-svg svg g.cluster[data-qualified-name="B"] rect').getBoundingClientRect();
+    // PlantUML 1.2026.7 から smetana の複合状態は g.cluster ではなく中の状態を包む g.entity。どちらも直の子の rect が外枠。
+    const r = document.querySelector('#preview-svg svg g[data-qualified-name="B"] > rect').getBoundingClientRect();
     return { x: r.left, y: r.top, width: r.width, height: r.height };
   });
   expect(Math.abs(b.bb.x - clusterB.x), '枠の左端が B の外枠に合う').toBeLessThan(6);

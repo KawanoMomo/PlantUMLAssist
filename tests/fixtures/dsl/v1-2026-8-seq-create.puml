@@ -1,0 +1,9 @@
+@startuml
+participant Factory
+participant "Session Manager" as SM
+Factory -> SM ++ : open()
+SM --> Factory -- : handle
+create participant "Instance" as Inst
+Factory -> Inst : new(config)
+Inst --> Factory : ok
+@enduml

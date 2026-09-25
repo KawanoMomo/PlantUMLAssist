@@ -14,14 +14,18 @@ function atLeast(a, b) {
   return true;
 }
 
+// BLK-human-20260925-1500: 既定版 (推奨版) は lib/PLANTUML_VERSION の 1 か所に置き、ps1 と sh はそこを読む。
+// 1.2026.3〜.6 は並行領域を描かないので 1.2026.7 以上 (今は 1.2026.8)。
 describe('PlantUML の既定版 (lib/fetch-plantuml)', function() {
-  var ps1 = fs.readFileSync(path.join(LIB, 'fetch-plantuml.ps1'), 'utf8').match(/else \{ '(\d+\.\d+\.\d+)' \}/);
-  var sh = fs.readFileSync(path.join(LIB, 'fetch-plantuml.sh'), 'utf8').match(/PLANTUML_VERSION:-(\d+\.\d+\.\d+)/);
-  test('ps1 と sh の既定版がそろっている', function() {
-    expect(!!ps1 && !!sh).toBe(true);
-    expect(ps1[1]).toBe(sh[1]);
+  var pinned = fs.readFileSync(path.join(LIB, 'PLANTUML_VERSION'), 'utf8').trim();
+  var ps1 = fs.readFileSync(path.join(LIB, 'fetch-plantuml.ps1'), 'utf8');
+  var sh = fs.readFileSync(path.join(LIB, 'fetch-plantuml.sh'), 'utf8');
+  test('ps1 と sh の既定版がそろっている (どちらも PLANTUML_VERSION を読む)', function() {
+    expect(ps1.indexOf("'PLANTUML_VERSION'") >= 0).toBe(true);
+    expect(sh.indexOf('/PLANTUML_VERSION"') >= 0).toBe(true);
   });
-  test('既定版は +package を読める 1.2026.3 以上', function() {
-    expect(atLeast(ps1[1], '1.2026.3')).toBe(true);
+  test('既定版は +package を読め、並行領域も描ける 1.2026.7 以上', function() {
+    expect(atLeast(pinned, '1.2026.3')).toBe(true);
+    expect(atLeast(pinned, '1.2026.7')).toBe(true);
   });
 });

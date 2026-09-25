@@ -1,0 +1,9 @@
+@startuml
+A ->> B : async
+B -\ A : half
+A ->x B : lost
+A -> A : self
+A <-> B : both
+A -->> B : dasync
+A ->o B : circ
+@enduml

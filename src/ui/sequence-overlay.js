@@ -196,11 +196,16 @@ window.MA.sequenceOverlay = (function() {
   // ライフラインの線の上にメッセージの文字・矢じり・線が無い高さを、ライフラインの手前の
   // 当たり判定にする。手前の分は .selectable を持たない (枠は元のライフラインの rect が
   // hover の仲間として出す) ので、ライフラインの rect の数・選択の見た目は変わらない。
-  function _addLifelineFronts(overlayEl, msgMatches) {
-    if (!overlayEl || !msgMatches || !msgMatches.length) return;
+  // procMsgs: class の無い SVG で当てたメッセージ ({ box, parts })。BLK-human-20260925-1500: 1.2026.7 からは全部がこちら。
+  function _addLifelineFronts(overlayEl, msgMatches, procMsgs) {
+    if (!overlayEl) return;
     var PAD = 2;
     var msgs = [];
-    msgMatches.forEach(function(m) {
+    (procMsgs || []).forEach(function(m) {
+      if (!m.parts || !m.parts.length) return;
+      msgs.push({ x: m.box.x - 4, y: m.box.y - 4, w: m.box.w + 8, h: m.box.h + 8, parts: m.parts });
+    });
+    (msgMatches || []).forEach(function(m) {
       var bb = OB.extractUnionBBox(m.groupEl) || null;
       if (!bb) return;
       var parts = [];
@@ -298,20 +303,34 @@ window.MA.sequenceOverlay = (function() {
     var polys = _bareShapes(svgEl, 'polygon').map(function(pg) {
       return String(pg.getAttribute('points') || '').split(/[\s,]+/).map(parseFloat);
     });
+    // BLK-human-20260925-1500: 開いた矢じり (`->>`) と ×印 (`->x`) は <polygon> ではなく斜めの短い <line> 2 本で描かれる。
+    var tipLines = [];
+    _bareShapes(svgEl, 'line').forEach(function(l) {
+      var x1 = _num(l, 'x1'), y1 = _num(l, 'y1'), x2 = _num(l, 'x2'), y2 = _num(l, 'y2');
+      if (isNaN(x1) || isNaN(y1) || isNaN(x2) || isNaN(y2)) return;
+      var dx = Math.abs(x2 - x1), dy = Math.abs(y2 - y1);
+      if (dx < 3 || dy < 3 || dx > 16 || dy > 16) return;
+      tipLines.push([x1, y1, x2, y2]);
+    });
     function tipNear(px, py) {
-      return polys.some(function(pts) {
+      var byPoly = polys.some(function(pts) {
         for (var i = 0; i + 1 < pts.length; i += 2) {
           if (Math.abs(pts[i + 1] - py) <= 6 && Math.abs(pts[i] - px) <= 12) return true;
         }
         return false;
+      });
+      if (byPoly) return true;
+      return tipLines.some(function(t) {
+        return (Math.abs(t[1] - py) <= 6 && Math.abs(t[0] - px) <= 12) || (Math.abs(t[3] - py) <= 6 && Math.abs(t[2] - px) <= 12);
       });
     }
     return _bareShapes(svgEl, 'line').map(function(l) {
       return { x1: _num(l, 'x1'), y1: _num(l, 'y1'), x2: _num(l, 'x2'), y2: _num(l, 'y2'),
         dashed: /dasharray/.test(l.getAttribute('style') || '') };
     }).filter(function(a) {
-      if (isNaN(a.x1) || isNaN(a.y1) || isNaN(a.x2) || isNaN(a.y2) || a.dashed) return false;
+      if (isNaN(a.x1) || isNaN(a.y1) || isNaN(a.x2) || isNaN(a.y2)) return false;
       if (Math.abs(a.x2 - a.x1) < 10 || Math.abs(a.y2 - a.y1) > Math.abs(a.x2 - a.x1)) return false;
+      if (Math.abs(a.x2 - a.x1) <= 16 && Math.abs(a.y2 - a.y1) >= 3) return false;   // 矢じり・×印の短い斜線そのもの
       return tipNear(a.x1, a.y1) || tipNear(a.x2, a.y2);
     }).map(function(a) {
       var l = a.x1 <= a.x2 ? { x: a.x1, y: a.y1 } : { x: a.x2, y: a.y2 };
@@ -331,7 +350,151 @@ window.MA.sequenceOverlay = (function() {
         tipL: ownTip(l.x, l.y), tipR: ownTip(r.x, r.y) };
     }).sort(function(a, b) { return a.top - b.top; });
   }
+  // BLK-human-20260925-1500: PlantUML 1.2026.7 からシーケンス図は teoz の描き方だけになり、参加者・メッセージの
+  // <g class> と data-* が SVG から消えた。残るのはライフラインの `<g><title>表示名</title><rect 透明/><line 点線/></g>`
+  // (表示名の ASCII 以外は '.' に伏せられる。遅延 `...` で区間ごとの <g> に分かれる)。
+  // ライフラインを列の錨にして、参加者 = その列の線の上端のすぐ上 (頭) / 下端のすぐ下 (尻) に接して描かれた
+  // 図形と文字のかたまり、と描いた側の配置から当てる (表示名の文字や形のキーワードに頼らない)。
+  function _maskName(s) {
+    return String(s || '').replace(/<[^>]*>/g, '').replace(/\*\*|__|\/\/|""/g, '').trim()
+      .replace(/[^\x00-\x7f]/g, '.');
+  }
+  function _procLifelines(svgEl) {
+    var cols = [];
+    Array.prototype.forEach.call(svgEl.querySelectorAll('g'), function(g) {
+      if (g.getAttribute('class')) return;
+      var t = null, segs = [];
+      Array.prototype.forEach.call(g.children || [], function(c) {
+        var tag = (c.tagName || '').toLowerCase();
+        if (tag === 'title' && !t) t = c;
+        if (tag === 'line' && /dasharray/.test(c.getAttribute('style') || '')) segs.push(c);
+      });
+      if (!t || !segs.length) return;
+      var x = _num(segs[0], 'x1');
+      if (isNaN(x)) return;
+      var top = Infinity, bottom = -Infinity;
+      segs.forEach(function(l) {
+        var y1 = _num(l, 'y1'), y2 = _num(l, 'y2');
+        if (isNaN(y1) || isNaN(y2) || Math.abs(_num(l, 'x2') - _num(l, 'x1')) > 0.5) return;
+        top = Math.min(top, y1, y2); bottom = Math.max(bottom, y1, y2);
+      });
+      if (!isFinite(top)) return;
+      var name = String(t.textContent || '').trim();
+      var col = null;
+      cols.forEach(function(c) { if (!col && Math.abs(c.x - x) < 0.6 && c.title === name) col = c; });
+      if (!col) { col = { title: name, x: x, top: top, bottom: bottom, groups: [] }; cols.push(col); }
+      col.top = Math.min(col.top, top); col.bottom = Math.max(col.bottom, bottom);
+      col.groups.push(g);
+    });
+    return cols.sort(function(a, b) { return a.x - b.x; });
+  }
+  // 列 → 参加者。伏せ字にした表示名 (1 行目) か別名で当て、当たらない残りは数が同じときだけ左から順に当てる。
+  function _lifelineOwners(cols, participants) {
+    var owner = [], used = [];
+    cols.forEach(function(c, i) {
+      var hits = participants.filter(function(p) {
+        if (used.indexOf(p) >= 0) return false;
+        var first = String(p.label || '').split(/\\n|\n/)[0];
+        return c.title === p.id || c.title === _maskName(first) || c.title === _maskName(p.label);
+      });
+      if (hits.length === 1) { owner[i] = hits[0]; used.push(hits[0]); }
+    });
+    var restC = [], restP = participants.filter(function(p) { return used.indexOf(p) < 0; });
+    cols.forEach(function(c, i) { if (!owner[i]) restC.push(i); });
+    if (restC.length && restC.length === restP.length) restC.forEach(function(ci, k) { owner[ci] = restP[k]; });
+    return owner;
+  }
+  // 線の端より上 (dir<0) / 下 (dir>0) にある。文字の外接矩形は字の下がりのぶん線の端を数 px 越える。
+  function _onSide(s, edgeY, dir) {
+    var cy = s.y + s.h / 2;
+    return dir < 0 ? (cy < edgeY && s.y + s.h <= edgeY + 4) : (cy > edgeY && s.y >= edgeY - 4);
+  }
+  // 列の線の端 (edgeY) に接する図形・文字から始め、上下に隙間なく続き、中心がそのかたまりの幅に入るものを足す。
+  function _columnCluster(shapes, col, edgeY, dir) {
+    var near = shapes.filter(function(s) {
+      if (col.x < s.x - 1 || col.x > s.x + s.w + 1) return false;
+      if (_onSide(s, edgeY, dir) && (dir < 0 ? s.y + s.h >= edgeY - 12 : s.y <= edgeY + 12)) return true;
+      // create した参加者: teoz は線を頭の上端から引き、頭の箱をその上に重ねる。
+      return dir < 0 && Math.abs(s.y - edgeY) <= 1.5 && s.h < 80 && (s.el.tagName || '').toLowerCase() === 'rect';
+    });
+    if (!near.length) return null;
+    near.sort(function(a, b) { return dir < 0 ? (b.y + b.h) - (a.y + a.h) : a.y - b.y; });
+    var box = { x: near[0].x, y: near[0].y, w: near[0].w, h: near[0].h };
+    var taken = [near[0]];
+    for (var grew = true; grew;) {
+      grew = false;
+      shapes.forEach(function(s) {
+        if (taken.indexOf(s) >= 0) return;
+        var inside = s.x >= box.x - 0.5 && s.x + s.w <= box.x + box.w + 0.5 && s.y >= box.y - 0.5 && s.y + s.h <= box.y + box.h + 4;
+        if (!inside && !_onSide(s, edgeY, dir)) return;
+        var cx = s.x + s.w / 2;
+        if (cx < box.x - 2 || cx > box.x + box.w + 2) return;
+        if (s.y > box.y + box.h + 5 || s.y + s.h < box.y - 5) return;
+        taken.push(s);
+        var x2 = Math.max(box.x + box.w, s.x + s.w), y2 = Math.max(box.y + box.h, s.y + s.h);
+        box.x = Math.min(box.x, s.x); box.y = Math.min(box.y, s.y);
+        box.w = x2 - box.x; box.h = y2 - box.y;
+        grew = true;
+      });
+    }
+    return box;
+  }
+  function _procShapes(svgEl) {
+    var out = [];
+    _bareShapes(svgEl, 'rect, ellipse, circle, path, polygon, text').forEach(function(n) {
+      var tag = (n.tagName || '').toLowerCase();
+      if (tag === 'rect' && parseFloat(n.getAttribute('fill-opacity')) === 0) return;
+      var anc = n.parentNode;
+      if (anc && anc !== svgEl && Array.prototype.some.call(anc.children || [], function(c) {
+        return (c.tagName || '').toLowerCase() === 'title';
+      })) return;
+      var bb = OB.nodeBBox(n);
+      if (!bb || isNaN(bb.x) || isNaN(bb.y)) return;
+      out.push({ el: n, x: bb.x, y: bb.y, w: bb.width || 0, h: bb.height || 0 });
+    });
+    return out;
+  }
+  function _procParticipantsByLifeline(svgEl, participants) {
+    var cols = _procLifelines(svgEl);
+    if (!cols.length) return null;
+    var owner = _lifelineOwners(cols, participants);
+    // box の囲み (列の線の上端から下端までを包む rect) の見出しの文字は、参加者のかたまりに入れない。
+    var all = _procShapes(svgEl);
+    var boxes = all.filter(function(r) {
+      return (r.el.tagName || '').toLowerCase() === 'rect' && cols.some(function(c) {
+        return c.x > r.x && c.x < r.x + r.w && r.y < c.top && r.y + r.h > c.bottom;
+      });
+    });
+    var shapes = all.filter(function(s) {
+      if (boxes.indexOf(s) >= 0) return false;
+      return !boxes.some(function(r) {
+        return (s.el.tagName || '').toLowerCase() === 'text' && s.x >= r.x - 1 && s.x <= r.x + r.w && s.y < r.y + 18 && s.y >= r.y - 1;
+      });
+    });
+    var out = [];
+    cols.forEach(function(c, i) {
+      if (!owner[i]) return;
+      var head = _columnCluster(shapes, c, c.top, -1);
+      var tail = _columnCluster(shapes, c, c.bottom, 1);
+      c.headBox = head;
+      if (head) out.push({ item: owner[i], box: head, col: c });
+      if (tail) out.push({ item: owner[i], box: tail, col: c });
+    });
+    return { cols: cols, owner: owner, hits: out };
+  }
+
   function _procParticipants(svgEl, participants, arrows) {
+    // ライフラインで当たった参加者はそれを採り、ライフラインを持たない参加者 (C4 の囲みなど) だけを文字で当てる。
+    var byCol = _procParticipantsByLifeline(svgEl, participants);
+    var colHits = byCol ? byCol.hits : [];
+    if (colHits.length) {
+      var done = colHits.map(function(h) { return h.item; });
+      var rest = participants.filter(function(p) { return done.indexOf(p) < 0; });
+      return colHits.concat(rest.length ? _procParticipantsByText(svgEl, rest, arrows) : []);
+    }
+    return _procParticipantsByText(svgEl, participants, arrows);
+  }
+  function _procParticipantsByText(svgEl, participants, arrows) {
     var texts = _procTexts(svgEl);
     var rects = _procRects(svgEl);
     var span = arrows && arrows.length ? { top: arrows[0].top, bottom: arrows[arrows.length - 1].bottom } : null;
@@ -515,12 +678,16 @@ window.MA.sequenceOverlay = (function() {
       // 矢じり (<polygon>) は線の端から数 px はみ出す。矢じりのある側だけ枠を広げる
       // (両側に広げると、隣の矢印の矢じりまで覆って別のメッセージの枠が出る)。
       var top = a.top - 6, left = a.x1 - (a.tipL ? 6 : 0), right = a.x2 + (a.tipR ? 6 : 0);
+      // parts: メッセージが自分で描いた所 (文字・矢印の線と矢じり)。ライフラインを手前に出す高さを決めるのに使う。
+      var parts = [{ x: left, y: a.top - 5, width: right - left, height: a.bottom - a.top + 10 }];
       o.texts.forEach(function(t) {
         top = Math.min(top, t.y - 13);
         left = Math.min(left, t.x);
         right = Math.max(right, t.x + t.w);
+        var tb = OB.nodeBBox(t.el);
+        if (tb) parts.push(tb);
       });
-      return { item: rels[p[0]], box: { x: left, y: top, w: right - left, h: a.bottom + 6 - top } };
+      return { item: rels[p[0]], box: { x: left, y: top, w: right - left, h: a.bottom + 6 - top }, parts: parts };
     });
   }
 
@@ -839,24 +1006,15 @@ window.MA.sequenceOverlay = (function() {
     // BLK-builder-20260925-0314-1: class の無い SVG (teoz・手続きの図) もライフラインを
     // `<g><title>表示名</title><rect 透明/><line 点線/></g>` で描く。表示名か別名で参加者に当てて枠を置く。
     if (!lifelines.length) {
-      Array.prototype.forEach.call(svgEl.querySelectorAll('g'), function(g) {
-        if (g.getAttribute('class')) return;
-        var t = null, ln = null;
-        Array.prototype.forEach.call(g.children || [], function(c) {
-          var tag = (c.tagName || '').toLowerCase();
-          if (tag === 'title' && !t) t = c;
-          if (tag === 'line' && !ln && /dasharray/.test(c.getAttribute('style') || '')) ln = c;
-        });
-        if (!t || !ln) return;
-        var nm = String(t.textContent || '').trim();
-        var owner = null;
-        participants.forEach(function(p) {
-          if (!owner && (p.id === nm || String(p.label || '').trim() === nm)) owner = p;
-        });
+      // BLK-human-20260925-1500: 表示名は ASCII 以外が伏せ字になるので、列の並びも使って当てる (_lifelineOwners)。
+      // create した参加者は線が頭の上端から始まるので、線の枠は頭の下から (頭を指すと参加者が選ばれる)。
+      var byCol = _procParticipantsByLifeline(svgEl, participants) || { cols: [], owner: [] };
+      byCol.cols.forEach(function(c, i) {
+        var owner = byCol.owner[i];
         if (!owner) return;
-        var lx = _num(ln, 'x1'), y1 = _num(ln, 'y1'), y2 = _num(ln, 'y2');
-        if (isNaN(lx) || isNaN(y1) || isNaN(y2) || Math.abs(_num(ln, 'x2') - lx) > 0.5) return;
-        OB.addRect(overlayEl, lx - 6, Math.min(y1, y2), 12, Math.abs(y2 - y1), {
+        var top = c.headBox && c.headBox.y >= c.top - 1.5 ? c.headBox.y + c.headBox.h : c.top;
+        if (c.bottom - top < 2) return;
+        OB.addRect(overlayEl, c.x - 6, top, 12, c.bottom - top, {
           'data-type': 'lifeline', 'data-id': owner.id, 'data-line': owner.line,
         });
       });
@@ -990,7 +1148,7 @@ window.MA.sequenceOverlay = (function() {
     // 長いメッセージが横切るライフラインは、ラベルも矢印も無い高さでもメッセージに吸われていた
     // (ライフラインを指すと別のメッセージの枠)。描いた側で決める: ライフラインの線の上で
     // メッセージの文字・矢じり・線が無い所は、ライフラインを手前に出す。
-    _addLifelineFronts(overlayEl, msgMatches);
+    _addLifelineFronts(overlayEl, msgMatches, procMsgs);
 
     // Warn on silent divergence — early signal when SVG structure changes
     // (PlantUML 新版 / カスタム skin) and our selector/offset assumptions break.
@@ -1206,6 +1364,19 @@ window.MA.sequenceOverlay = (function() {
         var lb = String(e.label).replace(/\\n/g, ' ');
         if (!byPart[e.label] && aliasOf[e.label] === undefined) aliasOf[e.label] = e.id;
         if (!byPart[lb] && aliasOf[lb] === undefined) aliasOf[lb] = e.id;
+      });
+    }
+    // BLK-human-20260925-1500: PlantUML 1.2026.7 からは帯の <g> の <title> が空。帯の真ん中に最も近いライフラインの列
+    // (列 → 参加者は _lifelineOwners) で、どの参加者の帯かを決める。
+    if (bars.some(function(b) { return !b.part; }) && SEQ && SEQ.parseSequence) {
+      var parts = (SEQ.parseSequence(dslText).elements || []).filter(function(e) { return e.kind === 'participant'; });
+      var cols = _procLifelines(svgEl);
+      var owners = _lifelineOwners(cols, parts);
+      bars.forEach(function(bar) {
+        if (bar.part) return;
+        var cx = bar.x + bar.w / 2, best = -1, bd = Infinity;
+        cols.forEach(function(c, i) { var d = Math.abs(c.x - cx); if (d < bd) { bd = d; best = i; } });
+        if (best >= 0 && bd <= 24 && owners[best]) bar.part = owners[best].id;
       });
     }
     var used = {};

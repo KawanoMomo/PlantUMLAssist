@@ -36,6 +36,7 @@ datas = [
     (BUILD_INFO, 'src'),
     (at('lib/PlantUMLDaemon.java'), 'lib'),
     (at('lib/fetch-plantuml.ps1'), 'lib'),
+    (at('lib/PLANTUML_VERSION'), 'lib'),
     (at('docs'), 'docs'),
     (at('packaging/icon.ico'), 'packaging'),
     (at('README.md'), '.'),

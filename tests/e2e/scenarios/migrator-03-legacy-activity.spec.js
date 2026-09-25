@@ -69,14 +69,26 @@ test('手順3 PlantUML が落ちる図は成功のふりをせず描画エラー
   // BLK-builder-20260925-1052-4: 1.2026.3 は落ちた絵の 1 行目を「An error has occurred」と綴る (1.2026.2 は occured)。
   // 同梱の PlantUML が実際に落ちる図 (smetana で最初の並行領域が空の state、migrator の concurrent-empty-first-region) で、
   // server が 422 (plantuml-crash) を返し、画面は落ちた絵を図として出さず描画エラーとして言い、直前の図を残す。
+  // BLK-human-20260925-1500: 同梱・取得の既定を 1.2026.8 に上げ、その図は PlantUML 自身が描けるようになった
+  // (今の既定の版が落ちる図は見つかっていない)。画面の見え方は、描画の応答に 1.2026.3 の落ちた絵が返ってきた
+  // 場合 (古い jar を選んでいる利用者) を差し替えで作って確かめる。server の見分けは同じ絵を直接通して確かめる。
   const crashDsl = read('smetana-empty-first-region-crash.puml');
-  const crashed = await page.request.post('/render', { data: { text: crashDsl, mode: 'local' } });
-  expect(crashed.status()).toBe(422);
-  const crashedBody = await crashed.json();
-  expect(crashedBody.kind).toBe('plantuml-crash');
-  expect(crashedBody.error).toContain('が描画の途中で落ちました');
+  const crash3 = path.join(FIX, 'svg', 'plantuml-crash-1.2026.3.svg');
+  const judged3 = JSON.parse(execFileSync('python', ['-c',
+    'import sys, json; sys.path.insert(0, sys.argv[1]); import server; '
+    + 'print(json.dumps(server.detect_render_error(open(sys.argv[2], "rb").read())))', root, crash3],
+  { encoding: 'utf8' }));
+  expect(judged3.crashed).toBe(true);
+  expect(judged3.message).toContain('PlantUML 1.2026.3 が描画の途中で落ちました');
+  const drawnNow = await page.request.post('/render', { data: { text: crashDsl, mode: 'local' } });
+  expect(drawnNow.status(), '今の既定の PlantUML はこの図を描ける').toBe(200);
   await setDsl(read('svg-sprite-style-min.puml'));
   await expect.poll(previewTexts, { timeout: 20000 }).toEqual(expect.arrayContaining(['Alice', 'Bob']));
+  await page.route('**/render', async (route) => {
+    const body = route.request().postDataJSON() || {};
+    if (String(body.text || '').indexOf('!pragma layout smetana') < 0) return route.fallback();
+    await route.fulfill({ status: 200, contentType: 'image/svg+xml', body: fs.readFileSync(crash3, 'utf8') });
+  });
   await setDsl(crashDsl);
   await expect(page.locator('#render-status')).toHaveText('ERROR', { timeout: 20000 });
   await expect(page.locator('#render-error-overlay')).toBeVisible();
@@ -175,10 +187,11 @@ test('手順3 PlantUML の公開版が読めない +package の語順は、版�
 });
 
 // BLK-migrator-20260925-1332: smetana の state 図で最初の並行領域が空 (web/plantuml の vega/state/concurrent-empty-first-region) だと、
-// 同梱の PlantUML 1.2026.3 自身が描画の途中で落ちる (1.2026.7 からは描けるが、版を上げると sequence / state の SVG の形が変わり
-// migrator-04 のホバー枠が 12 件落ちるので上げない)。落ちた帯に「N 行目 `--` の前の並行領域が空です」と原因の行を添え、
-// 描けない間もファイルは開けて無変更保存はバイト一致、右パネルの「追加する位置」から空の領域に状態を足せば次の描画で図が出る。
-test('手順3 最初の並行領域が空の state 図は、落ちた帯に原因の行を添え、無変更保存はバイト一致、空の領域に状態を足せば描ける', async ({ page }) => {
+// PlantUML 1.2026.3 自身が描画の途中で落ちていた (落ちた帯に「N 行目 `--` の前の並行領域が空です」と原因の行を添える)。
+// BLK-human-20260925-1500: 同梱・取得の既定を 1.2026.8 に上げた。1.2026.3〜.6 は並行領域を持つ複合状態で最初の領域しか
+// 描かず、残りの領域が黙って消えていた。今の既定ではこの実物がそのまま描け、全部の領域 (A と B) が図に出る。
+// ファイルは無変更保存でバイト一致、右パネルの「追加する位置」から空の領域に状態を足せる。
+test('手順3 最初の並行領域が空の state 図も全部の領域が描け、無変更保存はバイト一致、空の領域に状態を足せる', async ({ page }) => {
   // 実物と同じ CRLF・前置きの YAML。
   const REAL = [
     '---', 'output: svg', '---',
@@ -200,21 +213,17 @@ test('手順3 最初の並行領域が空の state 図は、落ちた帯に原�
   await chooser.setFiles(src);
   await expect(page.locator('#editor')).toHaveValue(/state Parent \{/, { timeout: 20000 });
 
-  // 落ちたことと、落ちる原因の行 (7 行目の `--`) を言う。図種は状態図のまま。
-  await expect(page.locator('#render-status')).toHaveText('ERROR', { timeout: 20000 });
-  const preview = page.locator('#preview-container');
-  await expect(preview).toContainText('描画の途中で落ちました');
-  await expect(preview).toContainText('7 行目 `--` の前の並行領域が空です');
-  await expect(preview).toContainText('その領域に状態を 1 つ置くと描けます');
+  // 落ちずに描け、2 つ目の領域 (B) も消えずに図に出る。図種は状態図のまま。
+  const texts = () => page.evaluate(() =>
+    Array.from(document.querySelectorAll('#preview-svg svg text')).map((t) => (t.textContent || '').trim()));
+  await expect(page.locator('#render-status')).toHaveText(/^Rendered/, { timeout: 20000 });
+  await expect(page.locator('#render-error-overlay')).toBeHidden();
+  await expect.poll(texts, { timeout: 20000 }).toEqual(expect.arrayContaining(['Parent', 'A', 'B']));
   expect(await page.locator('#diagram-type').inputValue()).toBe('plantuml-state');
-  const crashed = await page.request.post('/render', { data: { text: REAL.replace(/\r\n/g, '\n'), mode: 'local' } });
-  expect(crashed.status()).toBe(422);
-  const body = await crashed.json();
-  expect(body.kind).toBe('plantuml-crash');
-  expect(body.causeLine).toBe(7);
-  expect(body.error).toMatch(/が描画の途中で落ちました \(java\.lang\.IllegalArgumentException\)。7 行目 `--` の前の並行領域が空です$/);
+  const drawn = await page.request.post('/render', { data: { text: REAL.replace(/\r\n/g, '\n'), mode: 'local' } });
+  expect(drawn.status()).toBe(200);
 
-  // 描けない間も、何もせず保存すれば元とバイト一致 (実キー)。
+  // 何もせず保存すれば元とバイト一致 (実キー)。
   await page.locator('#editor').click();
   await page.keyboard.press('Control+s');
   await expect(page.locator('#status-save-result')).toContainText('保存しました', { timeout: 20000 });
@@ -233,12 +242,8 @@ test('手順3 最初の並行領域が空の state 図は、落ちた帯に原�
   await expect(page.locator('#editor')).toHaveValue(/state Parent \{\n  state Z\n  --\n  state A\n  --\n  state B\n\}/, { timeout: 20000 });
   await expect(page.locator('#render-status')).toHaveText(/^Rendered/, { timeout: 20000 });
   await expect(page.locator('#render-error-overlay')).toBeHidden();
-  // 同梱の 1.2026.3 は smetana の並行状態を最初の領域だけ描く (実物の dash-two-regions / dash-three-regions も同じ)。
-  // 落ちた絵ではなく、足した状態の入った図が出ることを確かめる。
-  await expect.poll(() => page.evaluate(() =>
-    Array.from(document.querySelectorAll('#preview-svg svg text')).map((t) => (t.textContent || '').trim())), { timeout: 20000 })
-    .toEqual(expect.arrayContaining(['Parent', 'Z']));
-  const after = await page.evaluate(() =>
-    Array.from(document.querySelectorAll('#preview-svg svg text')).map((t) => (t.textContent || '').trim()));
+  // 足した状態も、前からある 2 つの領域の状態も全部図に出る。
+  await expect.poll(texts, { timeout: 20000 }).toEqual(expect.arrayContaining(['Parent', 'Z', 'A', 'B']));
+  const after = await texts();
   expect(after.some((t) => /An error has occurr?ed|has crashed/.test(t)), '落ちた絵が図として出ている').toBe(false);
 });
