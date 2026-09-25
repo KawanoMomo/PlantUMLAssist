@@ -245,6 +245,126 @@ window.MA.overlayBuilder = (function() {
   // どちらを押しても選ばれる関係は同じなので、利用者から見た当たり判定は 1 つ。
   // BLK-builder-20260925-0305-1: linkGroupEl は <g> の配列でもよい (中継点で 2 本に割れた 1 つの関係)。
   // 選択範囲は全部の和集合 1 つにし、ラベル・矢じりの小さい rect は各 <g> から置く。
+  // BLK-migrator-20260925-1032: 関係の線 (<path d> / <line> / <polyline>) を折れ線の点列にする。曲線は細かく刻む。
+  // 返すのは部分路ごとの点列の配列 ([[x,y], ...] の配列)。
+  function linePoints(el) {
+    var tag = (el && el.tagName || '').toLowerCase();
+    if (tag === 'line') {
+      return [[[parseFloat(el.getAttribute('x1')) || 0, parseFloat(el.getAttribute('y1')) || 0],
+        [parseFloat(el.getAttribute('x2')) || 0, parseFloat(el.getAttribute('y2')) || 0]]];
+    }
+    if (tag === 'polyline') {
+      var nums = (el.getAttribute('points') || '').split(/[\s,]+/).map(parseFloat).filter(function(v) { return !isNaN(v); });
+      var pl = [];
+      for (var q = 0; q + 1 < nums.length; q += 2) pl.push([nums[q], nums[q + 1]]);
+      return pl.length > 1 ? [pl] : [];
+    }
+    if (tag !== 'path') return [];
+    var toks = String(el.getAttribute('d') || '').match(/[a-df-zA-DF-Z]|-?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?/g);
+    if (!toks) return [];
+    var subs = [], cur = null;
+    var cx = 0, cy = 0, sx = 0, sy = 0, lcx = null, lcy = null, cmd = null, i = 0, STEPS = 12;
+    function add(x, y) { if (!cur) { cur = [[cx, cy]]; subs.push(cur); } cur.push([x, y]); }
+    function cubic(x1, y1, x2, y2, x3, y3) {
+      for (var s = 1; s <= STEPS; s++) {
+        var t = s / STEPS, u = 1 - t;
+        add(u * u * u * cx + 3 * u * u * t * x1 + 3 * u * t * t * x2 + t * t * t * x3,
+          u * u * u * cy + 3 * u * u * t * y1 + 3 * u * t * t * y2 + t * t * t * y3);
+      }
+    }
+    function quad(x1, y1, x2, y2) {
+      for (var s = 1; s <= STEPS; s++) {
+        var t = s / STEPS, u = 1 - t;
+        add(u * u * cx + 2 * u * t * x1 + t * t * x2, u * u * cy + 2 * u * t * y1 + t * t * y2);
+      }
+    }
+    while (i < toks.length) {
+      if (/^[a-zA-Z]$/.test(toks[i])) {
+        cmd = toks[i++];
+        if (cmd === 'Z' || cmd === 'z') { add(sx, sy); cx = sx; cy = sy; lcx = lcy = null; continue; }
+      }
+      if (!cmd) return [];
+      var up = cmd.toUpperCase(), n = PATH_ARITY[up];
+      if (!n || i + n > toks.length) break;
+      var a = [];
+      for (var k = 0; k < n; k++) a.push(parseFloat(toks[i + k]));
+      i += n;
+      var rel = cmd !== up, ox = rel ? cx : 0, oy = rel ? cy : 0;
+      var nlcx = null, nlcy = null;
+      if (up === 'M') {
+        cx = a[0] + ox; cy = a[1] + oy; sx = cx; sy = cy; cur = null;
+        cmd = rel ? 'l' : 'L';
+        lcx = lcy = null;
+        continue;
+      }
+      if (up === 'L' || up === 'T') { add(a[0] + ox, a[1] + oy); cx = a[0] + ox; cy = a[1] + oy; }
+      else if (up === 'H') { add(a[0] + (rel ? cx : 0), cy); cx = a[0] + (rel ? cx : 0); }
+      else if (up === 'V') { add(cx, a[0] + (rel ? cy : 0)); cy = a[0] + (rel ? cy : 0); }
+      else if (up === 'C') {
+        cubic(a[0] + ox, a[1] + oy, a[2] + ox, a[3] + oy, a[4] + ox, a[5] + oy);
+        nlcx = a[2] + ox; nlcy = a[3] + oy; cx = a[4] + ox; cy = a[5] + oy;
+      } else if (up === 'S') {
+        var rx1 = lcx == null ? cx : 2 * cx - lcx, ry1 = lcy == null ? cy : 2 * cy - lcy;
+        cubic(rx1, ry1, a[0] + ox, a[1] + oy, a[2] + ox, a[3] + oy);
+        nlcx = a[0] + ox; nlcy = a[1] + oy; cx = a[2] + ox; cy = a[3] + oy;
+      } else if (up === 'Q') {
+        quad(a[0] + ox, a[1] + oy, a[2] + ox, a[3] + oy);
+        cx = a[2] + ox; cy = a[3] + oy;
+      } else if (up === 'A') {
+        var ex = a[5] + ox, ey = a[6] + oy;
+        _arcPoints(cx, cy, a[0], a[1], a[2], a[3] ? 1 : 0, a[4] ? 1 : 0, ex, ey).forEach(function(p) { add(p[0], p[1]); });
+        cx = ex; cy = ey;
+      }
+      lcx = nlcx; lcy = nlcy;
+    }
+    return subs.filter(function(s) { return s.length > 1; });
+  }
+
+  // BLK-migrator-20260925-1032: 関係の線に沿った当たり判定。関係の選択範囲 (線・矢じり・ラベルを囲う箱) は
+  // 斜めや曲がった線では線の無い空所まで広く覆い、複合状態のような入れ物の真ん中 (空所) を指しても
+  // その中を通る遷移が選ばれていた。線そのものは太い透明な線 (幅 = 余白 × 2) で当て、入れ物より手前に置く。
+  // 選択範囲の箱は入れ物より後ろに下げる (raiseSmallestLast)。入れ物の外では箱が今までどおり当たる。
+  function addLinkLines(overlayEl, gs, attrs, padding) {
+    var n = 0;
+    var pad = padding == null ? 8 : padding;
+    gs.forEach(function(g) {
+      Array.prototype.forEach.call(g.querySelectorAll('path, line, polyline'), function(el) {
+        linePoints(el).forEach(function(pts) {
+          var d = pts.map(function(p, k) { return (k ? 'L' : 'M') + (Math.round(p[0] * 100) / 100) + ' ' + (Math.round(p[1] * 100) / 100); }).join(' ');
+          var path = document.createElementNS(SVG_NS, 'path');
+          path.setAttribute('d', d);
+          path.setAttribute('fill', 'none');
+          path.setAttribute('stroke', 'transparent');
+          path.setAttribute('stroke-width', String(pad * 2));
+          path.setAttribute('stroke-linecap', 'round');
+          path.setAttribute('stroke-linejoin', 'round');
+          path.classList.add('link-hit');
+          path.style.cursor = 'pointer';
+          path.style.pointerEvents = 'stroke';
+          Object.keys(attrs || {}).forEach(function(k) { path.setAttribute(k, attrs[k]); });
+          path.setAttribute('data-hit-kind', 'linkline');
+          overlayEl.appendChild(path);
+          n++;
+        });
+      });
+    });
+    return n;
+  }
+
+  // 点から折れ線までの距離 (hitTestTopmost が太い線の当たりを測る)。
+  function _distToPolyline(x, y, d) {
+    var nums = (String(d || '').match(/-?\d+(?:\.\d+)?/g) || []).map(parseFloat);
+    var best = Infinity;
+    for (var i = 0; i + 3 < nums.length; i += 2) {
+      var ax = nums[i], ay = nums[i + 1], bx = nums[i + 2], by = nums[i + 3];
+      var dx = bx - ax, dy = by - ay, L = dx * dx + dy * dy;
+      var t = L ? Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / L)) : 0;
+      best = Math.min(best, Math.hypot(x - ax - t * dx, y - ay - t * dy));
+    }
+    if (nums.length === 2) best = Math.hypot(x - nums[0], y - nums[1]);
+    return best;
+  }
+
   function addLinkRects(overlayEl, linkGroupEl, attrs, padding) {
     if (!overlayEl || !linkGroupEl) return null;
     var gs = Array.isArray(linkGroupEl) ? linkGroupEl.filter(function(g) { return g; }) : [linkGroupEl];
@@ -264,6 +384,11 @@ window.MA.overlayBuilder = (function() {
     Object.keys(attrs || {}).forEach(function(k) { linkAttrs[k] = attrs[k]; });
     linkAttrs['data-hit-kind'] = 'link';
     var main = addRect(overlayEl, bb.x, bb.y, bb.width, bb.height, linkAttrs);
+    addLinkLines(overlayEl, gs, attrs, padding);
+    // ラベルの箱は線と同じ段 (入れ物より手前)。選択範囲の箱 (link) とは段を分ける。
+    var labelAttrs = {};
+    Object.keys(linkAttrs).forEach(function(k) { labelAttrs[k] = linkAttrs[k]; });
+    labelAttrs['data-hit-kind'] = 'linklabel';
     var labelPad = 3;
     var texts = [], polys = [];
     gs.forEach(function(g) {
@@ -275,7 +400,7 @@ window.MA.overlayBuilder = (function() {
       if (!tb || !tb.width) return;
       addRect(overlayEl,
         tb.x - labelPad, tb.y - labelPad,
-        tb.width + 2 * labelPad, tb.height + 2 * labelPad, linkAttrs);
+        tb.width + 2 * labelPad, tb.height + 2 * labelPad, labelAttrs);
     });
     // BLK-migrator-20260924-0637: 矢じりは行き先の図形の縁に接して描かれ、図形の枠 (余白付き) の内側に
     // 食い込む。関係は要素より後ろなので、矢じりを指すと行き先の図形が選ばれていた。矢じり (<polygon>)
@@ -321,17 +446,27 @@ window.MA.overlayBuilder = (function() {
   // 背景 rect (overlay-background) は選択解除のため必ず最背面に残す。
   function raiseSmallestLast(overlayEl) {
     if (!overlayEl) return;
-    var rects = Array.prototype.slice.call(overlayEl.querySelectorAll('rect.selectable'));
+    var rects = Array.prototype.slice.call(overlayEl.querySelectorAll('rect.selectable, path.link-hit'));
     if (rects.length < 2) return;
     var area = function(r) {
+      if ((r.tagName || '').toLowerCase() === 'path') {
+        var pb = pathBox(r.getAttribute('d'));
+        return pb ? Math.max(pb.width, 1) * Math.max(pb.height, 1) : 0;
+      }
       return (parseFloat(r.getAttribute('width')) || 0) * (parseFloat(r.getAttribute('height')) || 0);
     };
     // BLK-migrator-20260923-2312: 入れ物 (data-hit-kind="container"、複合状態など) は関係よりさらに後ろ。
     // 入れ物の中を通る関係のラベルを押したら、入れ物ではなくその関係が選ばれる。
+    // BLK-migrator-20260925-1032: 関係の選択範囲の箱 (link) は入れ物よりさらに後ろ。箱は線の無い空所も覆うので、
+    // 入れ物の中の空所を指したら入れ物が選ばれる。線そのもの (linkline) とラベル (linklabel) は入れ物より手前、要素より後ろ。
     var isLink = function(r) {
       var k = r.getAttribute('data-hit-kind');
       // 矢じり (linkhead) は要素より手前。矢じりの上だけは関係が選ばれる。
-      return k === 'container' ? -1 : (k === 'link' ? 0 : (k === 'linkhead' ? 2 : 1));
+      if (k === 'link') return -2;
+      if (k === 'container') return -1;
+      if (k === 'linkline') return 0;
+      if (k === 'linklabel') return 0.5;   // ラベルの文字は他の関係の線より手前 (文字を押したらその関係)
+      return k === 'linkhead' ? 2 : 1;
     };
     // 元の並び順を保つ安定ソート (面積が同じものの前後関係を変えない)
     rects.forEach(function(r, i) { r.__ovIdx = i; });
@@ -815,9 +950,15 @@ window.MA.overlayBuilder = (function() {
   }
 
   function hitTestTopmost(overlayEl, x, y) {
-    var rects = overlayEl.querySelectorAll('rect.selectable');
+    var rects = overlayEl.querySelectorAll('rect.selectable, path.link-hit');
     for (var i = rects.length - 1; i >= 0; i--) {
       var r = rects[i];
+      if ((r.tagName || '').toLowerCase() === 'path') {
+        // 太い透明な線: 線からの距離が線幅の半分以内なら当たり。
+        var half = (parseFloat(r.getAttribute('stroke-width')) || 0) / 2;
+        if (_distToPolyline(x, y, r.getAttribute('d')) <= half) return r;
+        continue;
+      }
       var rx = parseFloat(r.getAttribute('x')) || 0;
       var ry = parseFloat(r.getAttribute('y')) || 0;
       var rw = parseFloat(r.getAttribute('width')) || 0;
@@ -1114,6 +1255,8 @@ window.MA.overlayBuilder = (function() {
     pathBox: pathBox,
     extractMultiLineTextBBoxes: extractMultiLineTextBBoxes,
     hitTestTopmost: hitTestTopmost,
+    linePoints: linePoints,
+    addLinkLines: addLinkLines,
     extractDrawnBBox: extractDrawnBBox,
     extractFigureBBox: extractFigureBBox,
     matchByEntityName: matchByEntityName,

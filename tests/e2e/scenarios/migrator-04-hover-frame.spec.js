@@ -1428,3 +1428,51 @@ test('migrator 手順 4 — title / header / footer / caption / legend のある
     expect(hit, label + ' にホバーしてその行の枠が出る').toEqual({ type: 'source-line', line, hover: true });
   }
 });
+
+// BLK-migrator-20260925-1032: 複合状態の中の空所 (線の無い所) を指すと、その中を通る遷移の箱が当たり、遷移の枠が出ていた。
+// 遷移は線そのもの (太い透明な線) とラベルで当て、箱は入れ物より後ろに置く。線・ラベルの上は今までどおり遷移。
+test('migrator 手順 4 — 複合状態の中の空所を指すと複合状態の枠が出て、中の遷移は線とラベルの上でだけ選ばれる', async ({ page }) => {
+  await bootPlain(page);
+  const dsl = fs.readFileSync(path.join(__dirname, '..', '..', 'fixtures', 'dsl', 'state-composite-center.puml'), 'utf8')
+    .replace(/\r\n/g, '\n').replace(/\n+$/, '');
+  await typeDsl(page, dsl);
+  await expect(page.locator('#overlay-layer rect[data-type="state"][data-id="counter"]')).toHaveCount(1, { timeout: 20000 });
+  await expect(page.locator('#overlay-layer path.link-hit[data-type="transition"]')).toHaveCount(4);
+  await expect(page.locator('#ma-toast')).toBeHidden({ timeout: 15000 });
+
+  const hoverAt = async (pt) => {
+    await page.mouse.move(3, 3);
+    await page.mouse.move(pt.x, pt.y);
+    const r = page.locator('#overlay-layer rect.hit-hover').first();
+    await expect(r).toHaveCount(1, { timeout: 5000 });
+    return { id: await r.getAttribute('data-id'), type: await r.getAttribute('data-type'), line: await r.getAttribute('data-line') };
+  };
+  const pts = await page.evaluate(() => {
+    const svg = document.querySelector('#preview-svg svg');
+    const c = svg.querySelector('rect[fill="none"][rx="12.5"]');
+    c.scrollIntoView({ block: 'center', inline: 'center' });
+    const cb = c.getBoundingClientRect();
+    const lk = svg.querySelector('g.link[data-source-line="6"]');   // count_idle --> count_ongoing: count_start (L7)
+    const lb = lk.querySelector('text').getBoundingClientRect();
+    const p = lk.querySelector('path');
+    const q = p.getPointAtLength(p.getTotalLength() / 2);
+    const m = p.getScreenCTM();
+    return {
+      center: { x: cb.left + cb.width / 2, y: cb.top + cb.height / 2 },
+      label: { x: lb.left + lb.width / 2, y: lb.top + lb.height / 2 },
+      line: { x: m.a * q.x + m.c * q.y + m.e, y: m.b * q.x + m.d * q.y + m.f },
+    };
+  });
+
+  const center = await hoverAt(pts.center);
+  expect(center, '複合状態の真ん中の空所 → counter の枠').toEqual(expect.objectContaining({ type: 'state', id: 'counter' }));
+  const label = await hoverAt(pts.label);
+  expect(label, '遷移ラベル count_start → その遷移 (L7)').toEqual(expect.objectContaining({ type: 'transition', line: '7' }));
+  const onLine = await hoverAt(pts.line);
+  expect(onLine, '遷移の線の中ほど → その遷移 (L7)').toEqual(expect.objectContaining({ type: 'transition', line: '7' }));
+
+  // 押しても同じ: 真ん中の空所を押すと counter が選ばれる
+  await page.mouse.click(pts.center.x, pts.center.y);
+  await expect(page.locator('#overlay-layer rect.selected[data-id="counter"]').first()).toBeVisible({ timeout: 5000 });
+  await expect(page.locator('#overlay-warning')).toBeHidden();
+});

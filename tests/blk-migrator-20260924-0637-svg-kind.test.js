@@ -127,7 +127,9 @@ describe('BLK-migrator-20260924-0637 矢じりの上は関係', function() {
     });
   });
 
-  test('raiseSmallestLast: 入れ物 < 関係 < 要素 < 矢じり の順に手前', function() {
+  // BLK-migrator-20260925-1032: 関係の選択範囲の箱 (link) は入れ物より後ろに下げた (入れ物の空所は入れ物)。
+  // 線そのもの (linkline) は入れ物より手前 (tests/blk-migrator-20260925-1032-link-line-hit.test.js)。
+  test('raiseSmallestLast: 関係の箱 < 入れ物 < 要素 < 矢じり の順に手前', function() {
     var ov = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     OB.addRect(ov, 0, 0, 5, 5, { 'data-type': 'relation', 'data-id': 'h', 'data-hit-kind': 'linkhead' });
     OB.addRect(ov, 0, 0, 50, 50, { 'data-type': 'component', 'data-id': 'e' });
@@ -135,7 +137,7 @@ describe('BLK-migrator-20260924-0637 矢じりの上は関係', function() {
     OB.addRect(ov, 0, 0, 300, 300, { 'data-type': 'package', 'data-id': 'c', 'data-hit-kind': 'container' });
     OB.raiseSmallestLast(ov);
     var order = Array.prototype.map.call(ov.querySelectorAll('rect.selectable'), function(r) { return r.getAttribute('data-id'); });
-    expect(order).toEqual(['c', 'l', 'e', 'h']);
+    expect(order).toEqual(['l', 'c', 'e', 'h']);
   });
 });
 
