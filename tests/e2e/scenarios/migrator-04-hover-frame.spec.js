@@ -1816,7 +1816,7 @@ test('migrator 手順 4 — 遷移の無い履歴・fork の棒のある state �
 // BLK-builder-20260925-2015-3: 遷移の端に書いた履歴 (`Operation --> [H]` / `[H] --> Operation` / `--> [H*]`) の丸と「H」は、
 // 名前の付いた <g> も状態の名前も無く描かれるので、「H」を指すと隣の遷移の大きな枠が出て、「H*」では何も出なかった (corpus の state-11)。
 // 丸に触れる遷移の端の書き方で「どこの履歴か」を決め、開始・終了と同じ枠にする。押すと右パネルにその履歴につながる遷移が並ぶ。
-test('migrator 手順 4 — 遷移の端に [H] / [H*] を書いた state 図で、丸と「H」に履歴の枠が出て、押すとつながる遷移が並ぶ', async ({ page }) => {
+test('migrator 手順 4 — 遷移の端に [H] / [H*] を書いた state 図で、丸と「H」に履歴の枠が出て、押すとつながる遷移が並ぶ。宣言した履歴と混ぜても全部の丸に本人の枠', async ({ page }) => {
   await bootPlain(page);
   const src = fs.readFileSync(path.join(__dirname, '..', '..', 'fixtures', 'dsl', 'state-history-end-s11.puml'), 'utf8')
     .replace(/\r\n/g, '\n').replace(/\n+$/, '');
@@ -1825,7 +1825,7 @@ test('migrator 手順 4 — 遷移の端に [H] / [H*] を書いた state 図で
   await expect(page.locator('#overlay-warning')).toBeHidden();
   // 図種の切替などで出る通知 (#ma-toast) は下端の丸を覆うので、消えてから指す。
   await expect(page.locator('#ma-toast')).toBeHidden({ timeout: 15000 });
-  const marks = await page.evaluate(() => {
+  const markGlyphs = () => page.evaluate(() => {
     const svg = document.querySelector('#preview-svg svg');
     const out = [];
     const bare = (e) => !(e.parentNode.getAttribute && e.parentNode.getAttribute('class'));
@@ -1842,6 +1842,7 @@ test('migrator 手順 4 — 遷移の端に [H] / [H*] を書いた state 図で
     });
     return out;
   });
+  const marks = await markGlyphs();
   expect(marks.length).toBe(4);
   const hotAt = async (m) => {
     const p = await page.evaluate((i) => {
@@ -1867,4 +1868,23 @@ test('migrator 手順 4 — 遷移の端に [H] / [H*] を書いた state 図で
   await expect(page.locator('#st-pseudo-info')).toHaveAttribute('data-kind', 'history');
   await expect(page.locator('#st-pseudo-info')).toContainText('履歴 [H]');
   await expect(page.locator('#st-pseudo-links li')).toHaveText(['L10 Operation --> [H]', 'L11 [H] --> Operation']);
+
+  // BLK-migrator-20260926-0550: 宣言して遷移でつないだ履歴・宣言だけの履歴・{ } の中の [H]・親を名指す Comp[H] / Other[H*] を 1 枚に混ぜる。
+  // 履歴は 1 か所で当てるので、どの丸と文字にも本人の枠が出る (宣言したものは宣言の行、端に書いたものは最初に使う遷移の行)。
+  const uni = fs.readFileSync(path.join(__dirname, '..', '..', 'fixtures', 'dsl', 'state-history-unify.puml'), 'utf8')
+    .replace(/\r\n/g, '\n').replace(/\n+$/, '');
+  await typeDsl(page, uni);
+  await expect(page.locator('#overlay-layer rect[data-type="pseudo"][data-id="history@Other"]')).toHaveCount(1, { timeout: 20000 });
+  await expect(page.locator('#overlay-layer rect[data-type="state"][data-id="Comp.Lone"]')).toHaveCount(1);
+  await expect(page.locator('#ma-toast')).toBeHidden({ timeout: 15000 });
+  const um = await markGlyphs();
+  expect(um.length).toBe(10);
+  const ug = [];
+  for (const m of um) ug.push(m.what + '=' + (await hotAt(m)).id);
+  expect(ug.sort()).toEqual([
+    'circle H*=pseudo:historyDeep@Other@15', 'circle H*=state:Comp.DeepHist@5',
+    'circle H=pseudo:history@Comp@16', 'circle H=pseudo:history@Other@12', 'circle H=state:Comp.Lone@6',
+    'text H*=pseudo:historyDeep@Other@15', 'text H*=state:Comp.DeepHist@5',
+    'text H=pseudo:history@Comp@16', 'text H=pseudo:history@Other@12', 'text H=state:Comp.Lone@6',
+  ]);
 });
