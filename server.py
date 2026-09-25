@@ -4071,6 +4071,27 @@ def _env_report(java):
 _daemon_lock = threading.Lock()
 _daemon_proc = None
 _daemon_disabled = False  # set True once we decide to stop retrying the daemon
+# BLK-migrator-20260925-1632: the running JVM keeps the jar it was started with
+# open and loads classes from it lazily. When that file is replaced in place
+# (「公式から取得」, a hand copy, a version bump) the daemon reads the new bytes
+# through the old central directory and answers NoClassDefFoundError for any
+# class it had not loaded yet -- the diagram never draws again until restart.
+# We remember what the jar looked like when the daemon started and restart the
+# daemon as soon as the file on disk differs.
+_daemon_jar_key = None
+# A daemon answer that means "the JVM could not load its own classes" rather
+# than "PlantUML did not like the diagram". Such an answer is never shown: the
+# daemon is dropped and the diagram is drawn once more by a fresh JVM.
+_DAEMON_BROKEN_JAR_RE = re.compile(r'NoClassDefFoundError|ClassNotFoundException|ZipException')
+
+
+def _jar_key(jar):
+    """(path, mtime_ns, size) of the jar, or None when it cannot be read."""
+    try:
+        st = Path(jar).stat()
+    except OSError:
+        return None
+    return (str(jar), st.st_mtime_ns, st.st_size)
 # BLK-builder-20260907-2249-1: the daemon's stderr must never be left unread.
 # PlantUML logs through java.util.logging, whose ConsoleHandler writes to
 # System.err; on a diagram it cannot export (Logme.error) that is a full stack
@@ -4126,16 +4147,38 @@ def _start_daemon():
 
 
 def _get_daemon():
-    """Lazily start the daemon on first use. Returns Popen or None if unusable."""
-    global _daemon_proc, _daemon_disabled
+    """Lazily start the daemon on first use. Returns Popen or None if unusable.
+
+    A daemon started from a jar that has since been replaced on disk is dropped
+    and started again (BLK-migrator-20260925-1632). A changed jar also clears
+    `_daemon_disabled`: the new jar may well work where the old one did not.
+    """
+    global _daemon_proc, _daemon_disabled, _daemon_jar_key
+    key = _jar_key(jar_path())
+    if key != _daemon_jar_key:
+        if _daemon_proc is not None:
+            _kill_daemon()
+        _daemon_disabled = False
     if _daemon_disabled:
         return None
     if _daemon_proc is not None and _daemon_proc.poll() is None:
         return _daemon_proc
+    _daemon_jar_key = key
     _daemon_proc = _start_daemon()
     if _daemon_proc is None:
         _daemon_disabled = True
     return _daemon_proc
+
+
+def _kill_daemon():
+    """Drop the daemon at once (it is not asked to finish: it may be wedged)."""
+    global _daemon_proc
+    if _daemon_proc is not None:
+        try:
+            _daemon_proc.kill()
+        except Exception:
+            pass
+    _daemon_proc = None
 
 
 def _render_via_daemon(text):
@@ -4220,7 +4263,14 @@ def render_local(text):
     with _daemon_lock:
         try:
             svg, err = _render_via_daemon(text)
-            if svg is not None or err is not None and err != 'daemon unavailable':
+            if err is not None and _DAEMON_BROKEN_JAR_RE.search(err):
+                # The JVM cannot load its own classes (the jar changed under it,
+                # BLK-migrator-20260925-1632). Not the diagram's fault: drop the
+                # daemon and draw once more with a fresh JVM below. The next
+                # request starts a new daemon.
+                print(f'daemon cannot load classes ({err[:120]}); restarting')
+                _kill_daemon()
+            elif svg is not None or err is not None and err != 'daemon unavailable':
                 return svg, err
         except (BrokenPipeError, EOFError, OSError) as exc:
             # Daemon died or stopped answering; drop it and fall back for this
@@ -4228,12 +4278,7 @@ def render_local(text):
             print(f'daemon unusable ({exc}); falling back to -pipe')
             for line in daemon_log_tail(10):
                 print(f'  daemon stderr: {line}')
-            if _daemon_proc is not None:
-                try:
-                    _daemon_proc.kill()
-                except Exception:
-                    pass
-            _daemon_proc = None
+            _kill_daemon()
     return _render_via_pipe(text)
 
 
