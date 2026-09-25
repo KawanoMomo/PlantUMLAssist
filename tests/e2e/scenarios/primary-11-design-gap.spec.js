@@ -690,9 +690,12 @@ test('手順11 保存先を替えたあと前のフォルダのタブを直し�
   const cfg = await page.evaluate(() => window.MA.autoSave.getConfig());
   expect(cfg.fileDir.split(String.fromCharCode(92)).join('/')).toMatch(/keep-tab-file.second$/);
 
-  // パンくずは開いたファイルのフォルダのまま
-  await expect(page.locator('#top-save-target')).toHaveText('first');
+  // 上部バーのパンくずは開いたファイルのフォルダのまま (今の保存先ではないことを添える)。FILES の保存先の行は second
+  const crumb = page.locator('#top-crumbs [data-crumb="target"]');
+  await expect(crumb).toHaveText('first');
+  await expect(crumb).toHaveAttribute('data-held', '1');
   await expect(page.locator('#top-file-name')).toContainText('Same_Class');
+  await expect(page.locator('#top-save-target')).toHaveText('second');
 
   // 1 行足して Ctrl+S。開いたファイルを書き換えるかの問いは、first のファイルだと名指しする
   await page.locator('#editor').click();
@@ -723,5 +726,6 @@ test('手順11 保存先を替えたあと前のフォルダのタブを直し�
   await S.putDoc(page, base + '/second', 'New_In_Second', '@startuml\nclass New_In_Second\n@enduml\n');
   await S.openFolderItem(page, 'New_In_Second', { pin: true });
   await S.closeFolderList(page);
-  await expect(page.locator('#top-save-target')).toHaveText('second');
+  await expect(crumb).toHaveText('second');
+  await expect(crumb).not.toHaveAttribute('data-held', '1');
 });

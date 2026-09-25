@@ -54,15 +54,16 @@ function updateTopSaveTarget() {
   if (!el || !ST) return;
   var doc = null;
   try { doc = window.MA.workspace ? window.MA.workspace.getActive() : null; } catch (e) { doc = null; }
-  // BLK-human-20260925-1150: パンくずのフォルダはそのタブのフォルダ (保存先を替えても開いたファイルのまま)。
-  var cfg = _cfgForDoc(doc);
+  // FILES ツリーの保存先の行は今の保存先。
+  var cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null;
   var bc = ST.breadcrumb(cfg, doc, '(無題)');
   el.textContent = bc.folder;
   el.title = bc.folderTitle;
   el.setAttribute('data-mode', bc.mode);
   if (bc.configured) el.classList.add('configured');
   else el.classList.remove('configured');
-  updateTopCrumbs(bc, doc);
+  // BLK-human-20260925-1150: 上部バーのパンくずはそのタブのファイルの場所 (保存先を替える前に開いたタブは開いたフォルダ)。
+  updateTopCrumbs(ST.breadcrumb(_cfgForDoc(doc), doc, '(無題)'), doc);
   updateTopSaveButton();
 }
 
@@ -82,6 +83,13 @@ function updateTopCrumbs(bc, doc) {
     part = FT.partFor(String(doc.name), FP.folderEntries());
   }
   var list = TS.crumbs(folder, part);
+  // BLK-human-20260925-1150: 保存先を替える前に開いたタブは、そのファイルのフォルダを段に出し、今の保存先ではないことを添える。
+  var held = !!(folder && doc && _docHeldElsewhere(doc));
+  if (held && list[0]) {
+    list[0].held = true;
+    list[0].title = _docDir(doc) + ' (このタブのファイルの場所。保存先を替える前に開いたので、このタブはここに保存します。今の保存先は '
+      + _wsFileDir() + ')';
+  }
   var key = JSON.stringify(list);
   if (host.getAttribute('data-key') === key) return;
   host.setAttribute('data-key', key);
@@ -91,6 +99,7 @@ function updateTopCrumbs(bc, doc) {
     b.type = 'button';
     b.className = 'top-crumb';
     b.setAttribute('data-crumb', c.kind);
+    if (c.held) b.setAttribute('data-held', '1');
     if (c.part) b.setAttribute('data-part', c.part);
     b.textContent = c.label;
     b.title = c.title;
