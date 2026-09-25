@@ -1032,6 +1032,46 @@ test('migrator 手順 4 — 題のある state 図で、題にホバーすると
   expect(s1.hit, 'State1 は今までどおり本人の枠').toEqual({ type: 'state', line: '4', hover: true });
 });
 
+// BLK-builder-20260925-1712-2: 新記法のアクティビティ図で、合流の菱形 (endif / endswitch)・repeat の入口の菱形・end fork の棒に
+// 枠が出なかった (本文の節点は開きの行にしか無い)。開きと閉じを対にして閉じの図形を探し、閉じの行を指す枠を置く。
+test('migrator 手順 4 — 新記法のアクティビティ図の合流の菱形・repeat の入口・end fork の棒に、閉じの行の枠が出る', async ({ page }) => {
+  await bootPlain(page);
+  const dsl = fs.readFileSync(path.join(__dirname, '..', '..', 'fixtures', 'dsl', 'v1-2026-8-act-closers.puml'), 'utf8').replace(/\r\n/g, '\n');
+  await typeDsl(page, dsl);
+  const lines = dsl.split('\n');
+  const lineOf = (re) => String(lines.findIndex((l) => re.test(l.trim())) + 1);
+  await expect(page.locator('#overlay-layer rect.selectable[data-type="fork"]')).toHaveCount(1, { timeout: 20000 });
+  const hovered = () => page.evaluate(() => Array.from(document.querySelectorAll('#overlay-layer rect.hit-hover'))
+    .map((r) => r.getAttribute('data-line')).join(','));
+  // 文字の無い小さい菱形 (上から endif の合流・endswitch の合流・repeat の入口) と、棒 (上から fork・end fork)
+  const shapes = await page.evaluate(() => {
+    const svg = document.querySelector('#preview-svg svg');
+    // 図の下端 (end fork の棒) が画面の下の帯に隠れないよう、図の中ほどを画面の中央に寄せる
+    const rs = Array.from(svg.querySelectorAll('rect')).filter((r) => parseFloat(r.getAttribute('height')) < 12);
+    if (rs.length) rs[rs.length - 1].scrollIntoView({ block: 'center' });
+    const ds = Array.from(svg.querySelectorAll('polygon')).map((p) => p.getBoundingClientRect())
+      .filter((b) => b.width >= 20 && b.width <= 30 && b.height >= 20 && b.height <= 30).sort((a, b) => a.top - b.top);
+    const bars = Array.from(svg.querySelectorAll('rect')).filter((r) => parseFloat(r.getAttribute('height')) < 12)
+      .map((r) => r.getBoundingClientRect()).sort((a, b) => a.top - b.top);
+    const c = (b) => ({ x: b.left + b.width / 2, y: b.top + b.height / 2 });
+    // 棒は中央に矢印の線が付くので、左端寄りを指す
+    return { ds: ds.map(c), bars: bars.map((b) => ({ x: b.left + 8, y: b.top + b.height / 2 })) };
+  });
+  expect(shapes.ds.length).toBe(3);
+  expect(shapes.bars.length).toBe(2);
+  const want = [
+    [shapes.ds[0], lineOf(/^endif$/), 'endif の合流'],
+    [shapes.ds[1], lineOf(/^endswitch$/), 'endswitch の合流'],
+    [shapes.ds[2], lineOf(/^repeat$/), 'repeat の入口'],
+    [shapes.bars[1], lineOf(/^end fork$/), 'end fork の棒'],
+  ];
+  for (const [pt, line, what] of want) {
+    await page.mouse.move(3, 3);
+    await page.mouse.move(pt.x, pt.y);
+    await expect.poll(hovered, what + 'にホバーすると、その行の枠').toBe(line);
+  }
+});
+
 // BLK-migrator-20260924-0752: 旧記法 (`(*) -->` / `if "..." then` / `===LABEL===`) のアクティビティ図で枠が全滅していた。
 // PlantUML が関係に残す行と線のつながりで当て、押すと本文のその行が選ばれてフォーム未対応と出る。
 // 新記法でも、レーンをまたぐ動作は箱の中の文字で当て、レーンの見出しにも枠が出る。

@@ -1,0 +1,23 @@
+@startuml
+start
+if (ok?) then (yes)
+  :A;
+else (no)
+  :B;
+endif
+switch (mode)
+case (x)
+  :C;
+case (y)
+  :D;
+endswitch
+repeat
+  :E;
+repeat while (more?) is (yes)
+fork
+  :F;
+fork again
+  :G;
+end fork
+stop
+@enduml

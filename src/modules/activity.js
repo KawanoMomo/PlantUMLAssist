@@ -1706,12 +1706,15 @@ window.MA.modules.plantumlActivity = (function() {
   // 「その要素の前 (= 本文でその 1 つ前の行の後)」を指す枠を置く。押せばその位置に足せる。
   function _addFlowRects(svgEl, overlayEl, lines) {
     var frames = Array.prototype.filter.call(overlayEl.querySelectorAll('rect.selectable'), function(r) {
-      return /^(action|decision|start|stop|end|fork|note)$/.test(r.getAttribute('data-type') || '');
+      // BLK-builder-20260925-1712-2: 閉じの図形 (合流の菱形・下の棒) も矢印の端として見る
+      return /^(action|decision|start|stop|end|fork|note)$/.test(r.getAttribute('data-type') || '') ||
+        /^(close|loop)$/.test(r.getAttribute('data-src-kind') || '');
     }).map(function(r) {
       return {
         x: parseFloat(r.getAttribute('x')) || 0, y: parseFloat(r.getAttribute('y')) || 0,
         w: parseFloat(r.getAttribute('width')) || 0, h: parseFloat(r.getAttribute('height')) || 0,
         line: parseInt(r.getAttribute('data-line'), 10),
+        close: r.getAttribute('data-src-kind') === 'close',
       };
     });
     var segs = Array.prototype.filter.call(svgEl.querySelectorAll('line'), function(l) { return !_inDecor(l); })
@@ -1737,13 +1740,22 @@ window.MA.modules.plantumlActivity = (function() {
         return t.x + 1 >= f.x && t.x + 1 <= f.x + f.w && t.y - 3 >= f.y && t.y - 3 <= f.y + f.h;
       });
     });
-    var n = 0;
+    // 2 回目の呼び出し (閉じの図形を足した後) では、既に枠のある矢じりは飛ばし、番号は続きから振る
+    var flowBoxes = Array.prototype.filter.call(overlayEl.querySelectorAll('rect.selectable[data-type="flow"]'), function(r) {
+      return !/:label$/.test(r.getAttribute('data-id') || '');
+    }).map(function(r) {
+      return { x: parseFloat(r.getAttribute('x')) || 0, y: parseFloat(r.getAttribute('y')) || 0,
+        w: parseFloat(r.getAttribute('width')) || 0, h: parseFloat(r.getAttribute('height')) || 0 };
+    });
+    var n = flowBoxes.length;
     Array.prototype.forEach.call(svgEl.querySelectorAll('polygon'), function(p) {
       if (_inDecor(p)) return;
       var pts = _parsePoints(p);
       if (pts.length !== 4) return;
       var bb = _polygonBBox(p);
       if (!bb || bb.width > 20 || bb.height > 20) return;
+      var hx = bb.x + bb.width / 2, hy = bb.y + bb.height / 2;
+      if (flowBoxes.some(function(f) { return hx >= f.x && hx <= f.x + f.w && hy >= f.y && hy <= f.y + f.h; })) return;
       var cx = (pts[0].x + pts[1].x + pts[2].x + pts[3].x) / 4;
       var cy = (pts[0].y + pts[1].y + pts[2].y + pts[3].y) / 4;
       var tip = pts[0], far = -1;
@@ -1762,12 +1774,27 @@ window.MA.modules.plantumlActivity = (function() {
       });
       var line = 0;
       var target = frameAt(tip.x, tip.y);
-      if (target && target.line) line = _flowLineBefore(lines, target.line);
+      // 合流へ入る矢印は、合流の前 (= 別の枝の最後) ではなく、矢印の元の要素の後を指す
+      if (target && target.line && !target.close) line = _flowLineBefore(lines, target.line);
       if (!line) {
         own.forEach(function(s) {
           if (line) return;
           var far1 = Math.abs(s.x1 - tip.x) + Math.abs(s.y1 - tip.y) > Math.abs(s.x2 - tip.x) + Math.abs(s.y2 - tip.y);
-          var src = far1 ? frameAt(s.x1, s.y1) : frameAt(s.x2, s.y2);
+          var fx = far1 ? s.x1 : s.x2, fy = far1 ? s.y1 : s.y2;
+          var src = frameAt(fx, fy);
+          // BLK-builder-20260925-1712-2: 枝から合流へ入る矢印は「下へ → 横へ」と折れる。元の要素に着くまで線を 4 本までたどる
+          var prev = s;
+          for (var hop = 0; hop < 4 && !(src && src.line); hop++) {
+            var next = null;
+            segs.forEach(function(q) {
+              if (next || q === prev || q === s) return;
+              if (Math.abs(q.x1 - fx) < 1.5 && Math.abs(q.y1 - fy) < 1.5) { next = q; next._fx = q.x2; next._fy = q.y2; }
+              else if (Math.abs(q.x2 - fx) < 1.5 && Math.abs(q.y2 - fy) < 1.5) { next = q; next._fx = q.x1; next._fy = q.y1; }
+            });
+            if (!next) break;
+            fx = next._fx; fy = next._fy; prev = next;
+            src = frameAt(fx, fy);
+          }
           if (src && src.line) line = src.line;
         });
       }
@@ -1876,6 +1903,110 @@ window.MA.modules.plantumlActivity = (function() {
     return n;
   }
 
+  // BLK-builder-20260925-1712-2: 閉じの行 (endif / endswitch / end fork) が描く合流の菱形・下の棒と、repeat の入口の菱形には
+  // 本文の節点が無く (節点は開きの行 1 つに 1 つ)、並び順の当て方から漏れて枠が出なかった。本文の開きと閉じを対にし、
+  // 開きの図形の枠から閉じの図形を探す (内側の対から): 合流の菱形 = 開きの菱形と同じ列で下の最も近い菱形、
+  // repeat の入口 = repeat while の菱形と同じ列で上の最も近い菱形、end fork の棒 = fork の棒と横が重なり下の最も近い棒。
+  // 枠は閉じの行 (repeat は `repeat` の行) を指す。
+  function _addClosingShapes(svgEl, overlayEl, lines) {
+    if (!lines || !lines.length) return 0;
+    function rbox(r) {
+      return { x: parseFloat(r.getAttribute('x')) || 0, y: parseFloat(r.getAttribute('y')) || 0,
+        w: parseFloat(r.getAttribute('width')) || 0, h: parseFloat(r.getAttribute('height')) || 0,
+        line: parseInt(r.getAttribute('data-line'), 10), type: r.getAttribute('data-type') };
+    }
+    var framed = Array.prototype.map.call(overlayEl.querySelectorAll('rect.selectable[data-type]'), rbox);
+    function hasFrame(b) {
+      return framed.some(function(f) {
+        return Math.abs(f.x - b.x) < 1.5 && Math.abs(f.y - b.y) < 1.5 && Math.abs(f.w - b.w) < 1.5 && Math.abs(f.h - b.h) < 1.5;
+      });
+    }
+    // 行を持たない構造の図形: 文字の無い小さい菱形 (5 点 = 始点で閉じる / 7 点) と、細い棒 (fork の棒)
+    var diamonds = [], bars = [];
+    Array.prototype.forEach.call(svgEl.querySelectorAll('polygon'), function(p) {
+      if (_inDecor(p)) return;
+      var n = _parsePoints(p).length;
+      if (n !== 5 && n !== 7) return;
+      var bb = _polygonBBox(p);
+      if (!bb || bb.width < 15 || bb.height < 15 || bb.width > 40 || bb.height > 40) return;
+      var b = { x: bb.x, y: bb.y, w: bb.width, h: bb.height };
+      if (!hasFrame(b)) diamonds.push(b);
+    });
+    Array.prototype.forEach.call(svgEl.querySelectorAll('rect'), function(r) {
+      if (_inDecor(r) || _classifyShape(r) !== 'fork-bar') return;
+      var b = { x: parseFloat(r.getAttribute('x')) || 0, y: parseFloat(r.getAttribute('y')) || 0,
+        w: parseFloat(r.getAttribute('width')) || 0, h: parseFloat(r.getAttribute('height')) || 0 };
+      if (b.w > 0 && !hasFrame(b)) bars.push(b);
+    });
+    if (!diamonds.length && !bars.length) return 0;
+    // 開きと閉じの対 (種類ごとに入れ子を数える)
+    var OPEN = { 'if': /^if\s*\(/i, 'switch': /^switch\s*\(/i, 'repeat': /^repeat\s*$/i, 'fork': /^fork\s*$/i };
+    var CLOSE = { 'if': /^end\s*if\b/i, 'switch': /^end\s*switch\b/i, 'repeat': /^repeat\s+while\b/i, 'fork': /^end\s*(?:fork|merge)\b/i };
+    var stacks = { 'if': [], 'switch': [], 'repeat': [], 'fork': [] };
+    var pairs = [];
+    lines.forEach(function(raw, i) {
+      var t = String(raw || '').trim();
+      if (!t || t.charAt(0) === "'") return;
+      Object.keys(OPEN).forEach(function(k) {
+        if (CLOSE[k].test(t)) {
+          var o = stacks[k].pop();
+          if (o) pairs.push({ kind: k, open: o, close: i + 1 });
+        } else if (OPEN[k].test(t)) {
+          stacks[k].push(i + 1);
+        }
+      });
+    });
+    pairs.sort(function(a, b) { return a.close - b.close; });
+    var n = 0;
+    pairs.forEach(function(pr) {
+      var isBar = pr.kind === 'fork';
+      // 開きの図形の枠 (repeat の菱形は `repeat` か `repeat while` の行を指す)
+      var opener = null;
+      framed.forEach(function(f) {
+        if (f.line !== pr.open && !(pr.kind === 'repeat' && f.line === pr.close)) return;
+        if (isBar ? f.type !== 'fork' : !/^(decision|source-line)$/.test(f.type || '')) return;
+        if (!isBar && (f.w < 15 || f.h < 15)) return;   // 枝のラベルの小さい枠ではなく菱形
+        if (!opener || f.w * f.h > opener.w * opener.h) opener = f;
+      });
+      if (!opener) return;
+      var cx = opener.x + opener.w / 2;
+      // 閉じより後の行の菱形・棒は、同じ列ならこの閉じの図形より下にある (次の if の合流を取らない)
+      var floor = Infinity;
+      framed.forEach(function(f) {
+        if (!(f.line > pr.close) || !/^(decision|source-line|fork)$/.test(f.type || '')) return;
+        if (Math.abs(f.x + f.w / 2 - cx) > 3 || f.y <= opener.y) return;
+        floor = Math.min(floor, f.y);
+      });
+      var pool = isBar ? bars : diamonds;
+      var best = null;
+      pool.forEach(function(b) {
+        if (b.used) return;
+        var bcx = b.x + b.w / 2;
+        if (isBar) {
+          if (b.x > opener.x + opener.w || b.x + b.w < opener.x) return;
+        } else if (Math.abs(bcx - cx) > 3) return;
+        if (pr.kind === 'repeat') {
+          if (b.y + b.h > opener.y) return;
+          if (!best || b.y > best.y) best = b;
+        } else {
+          if (b.y < opener.y + opener.h || b.y > floor) return;
+          if (!best || b.y < best.y) best = b;
+        }
+      });
+      if (!best) return;
+      best.used = true;
+      var line = pr.kind === 'repeat' ? pr.open : pr.close;
+      OB.addRect(overlayEl, best.x, best.y, best.w, best.h, {
+        // repeat の入口は開きの行 (矢印の行はその前)、合流・下の棒は閉じの行 (入る矢印は元の要素の後) なので印を分ける
+        'data-type': 'source-line', 'data-id': 'src:close@' + line, 'data-src-kind': pr.kind === 'repeat' ? 'loop' : 'close',
+        'data-line': String(line),
+      });
+      framed.push({ x: best.x, y: best.y, w: best.w, h: best.h, line: line, type: 'source-line' });
+      n++;
+    });
+    return n;
+  }
+
   function _hasLinkLines(svgEl) {
     if (!OB.linkGroups) return false;
     return Array.prototype.some.call(OB.linkGroups(svgEl), function(g) {
@@ -1949,6 +2080,25 @@ window.MA.modules.plantumlActivity = (function() {
     var textEls = byText.map(function(m) { return m.el; }).concat(decByText.map(function(m) { return m.el; }));
     var decExtra = decByText.filter(function(m) { return m.extra; }).length;
     matched = matched.filter(function(sh) { return textEls.indexOf(sh.el) < 0 && !_inDecor(sh.el); });
+    // BLK-builder-20260925-1712-2: 並び順で当てる菱形から、switch の菱形 (switch には本文の節点が無い) と、
+    // 文字の無い合流の菱形 (endswitch は 7 点で描かれる) を外す。並びに残すと、後ろの repeat / while / if の節点がそこへ当たり、
+    // 以後の菱形が 1 つずつずれる。switch の菱形の枠は文字で当てる _addTextFallback、合流は _addClosingShapes が置く。
+    var switchConds = (parsedData.sourceLines || []).map(function(l) {
+      var m = /^\s*switch\s*\((.*)\)\s*$/i.exec(String(l || ''));
+      return m ? _normLabel(m[1]) : null;
+    }).filter(function(s) { return s !== null; });
+    var allTexts = _textsIn(svgEl);
+    matched = matched.filter(function(sh) {
+      if (sh.kind !== 'decision') return true;
+      var bb = _shapeBBox(sh.el);
+      if (!bb) return true;
+      var inside = _normLabel(allTexts.filter(function(t) {
+        return t.x >= bb.x && t.x <= bb.x + bb.width && t.y >= bb.y && t.y <= bb.y + bb.height + 2;
+      }).map(function(t) { return t.s; }).join(''));
+      if (switchConds.indexOf(inside) >= 0 && inside !== '') return false;
+      // 合流の菱形は文字の無い正方の小さい菱形 (条件の分岐の菱形は文字の幅だけ横に長い)
+      return !(inside === '' && bb.width <= 30 && Math.abs(bb.width - bb.height) < 2);
+    });
 
     // Greedy match: for each flat node, find next matching shape in document order
     var shapeIdx = 0;
@@ -2006,8 +2156,12 @@ window.MA.modules.plantumlActivity = (function() {
     _addBranchLabelRects(svgEl, parsedData, overlayEl);
     _addSwimlaneHeaderRects(svgEl, parsedData, overlayEl);
     _addDecorRects(svgEl, parsedData, overlayEl);
+    // 閉じの図形 (合流の菱形・下の棒) の枠を矢印より先に置く: 矢じりの先が触れる図形の行から矢印の行を決めるので、
+    // 先に無いと合流へ入る矢印に枠が出ない。switch の菱形は文字で当てる (_addTextFallback) ので、その後にもう一度探す。
+    _addClosingShapes(svgEl, overlayEl, parsedData.sourceLines || []);
     _addFlowRects(svgEl, overlayEl, parsedData.sourceLines || []);
     _addTextFallback(svgEl, parsedData, overlayEl, parsedData.sourceLines || []);
+    if (_addClosingShapes(svgEl, overlayEl, parsedData.sourceLines || [])) _addFlowRects(svgEl, overlayEl, parsedData.sourceLines || []);
 
     // BLK-human-20260912-2130: 小さい当たり判定を手前に。共通実装 (src/core)
     OB.raiseSmallestLast(overlayEl);
