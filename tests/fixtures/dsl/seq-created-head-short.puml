@@ -1,0 +1,9 @@
+@startuml
+participant A
+A -> B ** : new()
+B -> B : init()
+A -> B : run()
+create participant "作られる側" as C
+B -> C : make()
+C --> A : ready
+@enduml

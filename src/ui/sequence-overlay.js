@@ -1192,8 +1192,16 @@ window.MA.sequenceOverlay = (function() {
     var msgMatches = msgBest.matches.filter(function(m) { return m.item.kind !== 'return'; });
     var procMsgs = [];
     if (!msgMatches.length && parsedData.relations.length && !svgEl.querySelector('g.message')) {
+      // BLK-migrator-20260925-1800: 床は最初の矢印より上にある頭 (図の上端に並ぶ頭) の下端だけで決める。`create` / `**` で
+      // 途中に作られた参加者の頭は、作られたメッセージの高さに描かれる。それも床に入れると床が下がり、その頭より上の
+      // メッセージの文字が拾われず枠が出なかった (1.2026.8 からは全ての sequence 図が class の無い SVG でここを通る)。
+      var firstArrowTop = Infinity;
+      (procArrows || _procArrows(svgEl)).forEach(function(a) { if (a.top < firstArrowTop) firstArrowTop = a.top; });
       var headFloor = -Infinity;
-      partMatches.forEach(function(m) { if (m.box) headFloor = Math.max(headFloor, m.box.y + m.box.h); });
+      partMatches.forEach(function(m) {
+        if (!m.box || m.box.y + m.box.h > firstArrowTop) return;
+        headFloor = Math.max(headFloor, m.box.y + m.box.h);
+      });
       procMsgs = _procMessages(svgEl, parsedData.relations, headFloor, procScene);
       procMsgs.forEach(function(m) {
         OB.addRect(overlayEl, m.box.x - 4, m.box.y - 4, m.box.w + 8, m.box.h + 8, {

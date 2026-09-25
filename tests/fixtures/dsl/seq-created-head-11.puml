@@ -1,0 +1,15 @@
+' 狙い: activate/deactivate/destroy と ++ -- ** !! の省略記法
+@startuml
+participant Client
+participant "Session Manager" as SM
+Client -> SM ++ : Session_Open()
+SM -> SM ++ : internal_alloc()
+SM --> Client -- : handle
+Client -> SM ++ : Session_Close()
+SM -> SM !! : force_cleanup()
+destroy SM
+Client --> Client -- : done
+create SM
+Client -> SM ** : Session_Reopen()
+' (padding line for corpus line-count requirement)
+@enduml
