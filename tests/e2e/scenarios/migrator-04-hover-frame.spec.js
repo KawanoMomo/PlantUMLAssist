@@ -834,6 +834,52 @@ test('migrator 手順 4 — 長いメッセージが横切るライフライン�
     .toEqual(['title Diag - $THEME theme', '!else', 'title Diag v2']);
 });
 
+// BLK-builder-20260925-1712-1: migrator の実物 7 枚 (seq-06 / seq-08 / dirty-04 …) で、ライフラインの上を矢印の線から
+// 数 px 離れて指すと、その矢印のメッセージの枠が出た。1.2026.8 の SVG ではメッセージが線の上下 7px を丸ごと持っていた。
+// 線の尾は描いた太さだけがメッセージ、それより離れたライフラインの上はライフライン。
+test('migrator 手順 4 — 矢印の尾が付くライフラインを、線から少し離れて指すとライフラインの枠が出る', async ({ page }) => {
+  await bootPlain(page);
+  await typeDsl(page, [
+    '@startuml',          // 1
+    'participant A',      // 2
+    'participant B',      // 3
+    'A -> B : req',       // 4
+    'B --> A : ack',      // 5
+    'A -> B : req2',      // 6
+    '@enduml',            // 7
+  ].join(String.fromCharCode(10)));
+  await expect(page.locator('#overlay-layer rect.selectable[data-type="message"]')).toHaveCount(3, { timeout: 20000 });
+
+  const hovered = () => page.evaluate(() => Array.from(document.querySelectorAll('#overlay-layer rect.hit-hover'))
+    .map((r) => r.getAttribute('data-type') + '@' + r.getAttribute('data-line')).join(','));
+  // A のライフラインの線 (点線) の x と、`req2` の矢印の線 (A の線から出る 3 本目の実線) の y
+  const pts = await page.evaluate(() => {
+    const lg = Array.from(document.querySelectorAll('#preview-svg svg g')).find((g) =>
+      Array.from(g.children).some((c) => c.tagName.toLowerCase() === 'title' && c.textContent.trim() === 'A'));
+    const ln = lg.querySelector('line').getBoundingClientRect();
+    const arrows = Array.from(document.querySelectorAll('#preview-svg svg line')).filter((l) =>
+      !/dasharray/.test(l.getAttribute('style') || '')
+      && Math.abs(parseFloat(l.getAttribute('x2')) - parseFloat(l.getAttribute('x1'))) > 30)
+      .map((l) => l.getBoundingClientRect()).sort((p, q) => p.top - q.top);
+    const a = arrows[arrows.length - 1];
+    return { x: ln.left + ln.width / 2, y: a.top + a.height / 2 };
+  });
+  const z = await page.evaluate(() => {
+    const svg = document.querySelector('#preview-svg svg');
+    const r = svg.getBoundingClientRect();
+    const vb = svg.viewBox && svg.viewBox.baseVal;
+    return vb && vb.height ? r.height / vb.height : 1;
+  });
+  for (const dy of [-5, 5]) {
+    await page.mouse.move(3, 3);
+    await page.mouse.move(pts.x, pts.y + dy * z);
+    await expect.poll(hovered, `req2 の尾から ${dy}px のライフラインの上はライフライン`).toBe('lifeline@2');
+  }
+  await page.mouse.move(3, 3);
+  await page.mouse.move(pts.x, pts.y);
+  await expect.poll(hovered, '矢印の線の上はメッセージのまま').toBe('message@6');
+});
+
 // BLK-migrator-20260924-0012: web の実物 (puml-themes の usecase-ex / ex2 / with-actorstyle-ex) で、ユースケース図の
 // 要素にホバーしても枠がほとんど出なかった。略記だけの図はシーケンス図と判定され、パッケージの中の要素は
 // 修飾名で描かれるので当たらず、フォームが読めない略記・題・凡例には枠が無かった。
