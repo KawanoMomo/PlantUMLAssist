@@ -3,7 +3,8 @@
 // PlantUML は class 図などでは <g class="header"> … に入れて描き (legend は行を持たない)、sequence では class の無い
 // 裸の <text> / <rect> で描く。どちらも本文の行から飾りを読み、描かれたものに書かれた行を指す枠を置く。
 // fixtures/svg/chrome-*.svg は同名の fixtures/dsl/*.puml を同梱の plantuml.jar で描いたもの
-// (chrome-seq = corpus の seq-18、chrome-class = web/plantuml の vega/nonreg/simple/A0005 から前書きを除いたもの)。
+// (chrome-seq = corpus の seq-18 を 1.2026.2 で描いた裸の文字、chrome-seq-g = 同じ図を 1.2026.3 で描いた <g class="header"> …、
+// chrome-class = web/plantuml の vega/nonreg/simple/A0005 から前書きを除いたもの)。
 var fs = require('fs');
 var path = require('path');
 var jsdom = require('jsdom');
@@ -106,6 +107,16 @@ describe('addDocumentChrome: sequence (裸の text / rect)', function() {
   });
 });
 
+describe('addDocumentChrome: sequence (1.2026.3 の <g class="header"> …)', function() {
+  test('同じ図を <g> で描く版でも、飾りごとに同じ行の枠が 1 つずつ出る', function() {
+    var f = fixture('chrome-seq-g');
+    var n = OB.addDocumentChrome(f.svgEl, f.overlayEl, f.dsl);
+    var r = chromeRects(f.overlayEl);
+    expect(n).toBe(5);
+    expect([r.title.line, r.header.line, r.footer.line, r.caption.line, r.legend.line]).toEqual([3, 4, 5, 6, 12]);
+  });
+});
+
 describe('addDocumentChrome: class (<g class="header"> … 、legend は行なし)', function() {
   test('header / footer / caption / legend の <g> に本文の行で枠を置く', function() {
     var f = fixture('chrome-class');
@@ -115,8 +126,8 @@ describe('addDocumentChrome: class (<g class="header"> … 、legend は行な�
     expect(r.footer.line).toBe(4);
     expect(r.caption.line).toBe(6);
     expect(r.legend.line).toBe(3);
-    // 凡例の箱 (x=12, y=250.7969, 52.041x27.6094)
-    expect(contains(r.legend, 12, 250.7969, 52.041, 27.6094)).toBe(true);
+    // 凡例の箱 (x=12.6519, y=253.7969, 52.041x27.6094)
+    expect(contains(r.legend, 12.6519, 253.7969, 52.041, 27.6094)).toBe(true);
   });
   test('addUnclaimed が題名に置いた枠があれば、題名は重ねない', function() {
     var f = fixture('chrome-class');
