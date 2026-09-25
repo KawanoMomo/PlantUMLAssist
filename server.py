@@ -840,6 +840,23 @@ def _eol_newline(eol):
     return None
 
 
+def _file_eol(path):
+    """既にあるファイルの改行 ('lf' / 'crlf')。無い・読めない・改行を含まないなら None。
+
+    保存先の一覧から開いた図は client が開いたときの改行を知らない
+    (BLK-human-20260925-1250)。上書きする相手の改行をそのまま引き継ぐ。
+    """
+    try:
+        blob = Path(str(path)).read_bytes()
+    except OSError:
+        return None
+    crlf = blob.count(b'\r\n')
+    lf = blob.count(b'\n') - crlf
+    if not crlf and not lf:
+        return None
+    return 'crlf' if crlf and crlf >= lf else 'lf'
+
+
 def _atomic_write_text(path, text, encoding='utf-8', newline=None):
     """`path` を、読んでいる側に途中経過を見せずに置き換える。"""
     tmp = path.with_name(path.name + '.tmp-' + str(os.getpid()) + '-' + str(threading.get_ident()))
@@ -2984,6 +3001,12 @@ class Handler(BaseHTTPRequestHandler):
         else:
             target, prev_kind, new_kind = self._resolve_save_target(save_dir, dt, dsl)
         file_path = self._autosave_file_path(save_dir, target)
+        # BLK-human-20260925-1250: 改行の指定が無い (保存先の一覧から開いた図など) ときは、
+        # 上書きする相手 (無ければ名前を回す前の元の図) の改行を引き継ぐ。
+        # 既定の改行で書くと LF のファイルが 1 行直しただけで全行 CRLF に変わる。
+        if newline is None:
+            newline = _eol_newline(_file_eol(file_path)
+                                   or _file_eol(self._autosave_file_path(save_dir, dt)))
         # 同じ図種の中での上書きは今までどおり。消える中身は先に控える。
         self._stash_version(save_dir, target, dsl)
         try:

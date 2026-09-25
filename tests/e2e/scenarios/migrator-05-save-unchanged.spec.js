@@ -10,7 +10,7 @@
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
-const { bootWithSaveDir, dirFor, absDirFor } = require('./_scenario');
+const { bootWithSaveDir, dirFor, absDirFor, openFolderItem } = require('./_scenario');
 
 // 保存フォルダに置くクラス図。これが突合の相手になる (これが無いと save-guard は動かない)。
 const CLASS_DOC = [
@@ -118,4 +118,38 @@ test('migrator 手順 5 — 1 文字でも変えれば保存前の突合は今�
 
   await expect(page.locator('#save-guard-overlay')).toBeVisible({ timeout: 20000 });
   await expect(page.locator('#status-save-result')).toContainText('保存を止めました');
+});
+
+// BLK-human-20260925-1250: 保存先の一覧から開いた LF の .puml を 1 行直して保存すると、
+// 全行が CRLF で書き直されていた (一覧から開いた図は開いたときの改行を持たず、server が
+// Windows の既定の改行で書いていた)。上書きする相手の改行を引き継ぎ、直した行だけが変わる。
+test('migrator 手順 5 — 保存先の一覧から開いた LF の図を 1 行直して保存しても LF のまま、直した行だけが変わる', async ({ page }) => {
+  const dir = absDirFor(__filename) + '-list-lf';
+  fs.rmSync(dir, { recursive: true, force: true });
+  fs.mkdirSync(dir, { recursive: true });
+  const ORIG = ['@startuml', "' memo", 'class Same', 'class Other', '@enduml', ''].join('\n');
+  const file = path.join(dir, 'Same_Class.puml');
+  fs.writeFileSync(file, ORIG);
+
+  await bootWithSaveDir(page, dirFor(__filename) + '-list-lf');
+  await openFolderItem(page, 'Same_Class');
+  await expect(page.locator('#editor')).toHaveValue(/class Other/, { timeout: 20000 });
+
+  // 2 行目 (コメント) の行末に 1 文字足す (実キー)。
+  await page.locator('#editor').click();
+  await page.keyboard.press('Control+Home');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('End');
+  await page.keyboard.type('2');
+  await page.waitForTimeout(600);
+  // 一覧から開いたファイルを直したので、上書きしてよいかを先に聞かれる。上書きすると答える。
+  await page.locator('#source-lock-overwrite').click({ timeout: 20000 });
+  await page.waitForTimeout(800);
+  await page.locator('#editor').click();
+  await page.keyboard.press('Control+s');
+  await expect(page.locator('#status-save-result')).toContainText('保存しました', { timeout: 20000 });
+
+  const want = ORIG.replace("' memo", "' memo2");
+  await expect.poll(() => fs.readFileSync(file, 'utf8'), { timeout: 10000 }).toBe(want);
+  expect(fs.readFileSync(file).includes(Buffer.from('\r')), 'CRLF に書き直さない').toBe(false);
 });
