@@ -139,6 +139,24 @@ window.MA.sequenceOverlay = (function() {
   function _addTitleRect(svgEl, parsedData, overlayEl) {
     var tls = (parsedData.meta && parsedData.meta.titleLines) || [];
     if (!tls.length || !svgEl || !svgEl.querySelector) return;
+    // BLK-migrator-20260925-0752: PlantUML 1.2026.3 以降は <title> を出さず、題名を
+    // <g class="title" data-source-line> (@startuml を 0 とする行) に包む。その行と文字をそのまま使う。
+    var tg = svgEl.querySelector('g.title[data-source-line]');
+    if (tg) {
+      var sl = parseInt(tg.getAttribute('data-source-line'), 10);
+      var bbT = OB.extractUnionBBox(tg);
+      if (!isNaN(sl) && bbT) {
+        var line = sl + 1;
+        var hit = null;
+        for (var j = 0; j < tls.length; j++) if (tls[j].line === line) { hit = tls[j]; break; }
+        OB.addRect(overlayEl, bbT.x - 4, bbT.y - 3, bbT.width + 8, bbT.height + 6, {
+          'data-type': 'title',
+          'data-id': '__title',
+          'data-line': (hit || tls[tls.length - 1]).line,
+        });
+        return;
+      }
+    }
     var tEl = svgEl.querySelector('title');
     var drawn = tEl ? String(tEl.textContent || '').replace(/\s+/g, ' ').trim() : '';
     if (!drawn) return;

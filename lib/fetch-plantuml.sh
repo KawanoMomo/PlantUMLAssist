@@ -12,7 +12,7 @@
 #   -bsd       → plantuml-bsd-X.Y.Z.jar       BSD (feature subset)
 set -euo pipefail
 
-PLANTUML_VERSION="${PLANTUML_VERSION:-1.2026.2}"
+PLANTUML_VERSION="${PLANTUML_VERSION:-1.2026.3}"
 PLANTUML_VARIANT="${PLANTUML_VARIANT:-}"  # e.g. "-mit" for MIT build
 
 dir="$(cd "$(dirname "$0")" && pwd)"
