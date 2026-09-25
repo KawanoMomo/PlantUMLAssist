@@ -1182,6 +1182,49 @@ test('migrator 手順 4 — C4 手続きの sequence に alt / loop / ref / 区�
   await expectHit('phone', 'message', 119);
 });
 
+// BLK-builder-20260925-1552-3: ふつうの sequence 図 (参加者・メッセージに class が付く SVG) では、ref over の箱・
+// == 区切り ==・... 遅延 ... に枠が 1 つも出ず、ref の札「ref」はライフラインの上にあってライフラインの枠が出ていた
+// (corpus の seq-16 / seq-17、web の sequence-ex / S3 Upload Workflow)。描かれた形から見分けて書かれた行を指す。
+test('migrator 手順 4 — ふつうの sequence 図の ref の箱・区切り・遅延にホバーすると、その行を指す枠が出る', async ({ page }) => {
+  await bootPlain(page);
+  const dsl = fs.readFileSync(path.join(__dirname, '..', '..', 'fixtures', 'dsl', 'seq-ref-divider-delay.puml'), 'utf8')
+    .replace(/\r\n/g, '\n').replace(/\n+$/, '');
+  await typeDsl(page, dsl);
+
+  await expect(page.locator('#overlay-layer rect[data-type="message"]')).toHaveCount(4, { timeout: 20000 });
+  await expect(page.locator('#overlay-warning')).toBeHidden();
+
+  const expectHit = async (label, type, line) => {
+    await page.evaluate((l) => {
+      const t = Array.prototype.find.call(document.querySelectorAll('#preview-svg svg text'), (n) => (n.textContent || '').trim() === l);
+      if (t) t.scrollIntoView({ block: 'center', inline: 'nearest' });
+    }, label);
+    const { hit } = await hoverHit(page, label);
+    expect(hit, label + ' に枠').not.toBeNull();
+    expect(hit.type, label).toBe(type);
+    expect(hit.line, label).toBe(String(line));
+  };
+  await expectHit('初期化フェーズ', 'source-line', 4);
+  await expectHit('Start()', 'message', 5);
+  await expectHit('ref', 'source-line', 6);
+  await expectHit('初期化シーケンス(別図参照)', 'source-line', 6);
+  await expectHit('六角形メモ', 'note', 7);
+  await expectHit('Some', 'source-line', 8);
+  await expectHit('[成功]', 'group', 9);
+  await expectHit('複数行の', 'source-line', 14);
+  await expectHit('Ready', 'message', 19);
+
+  // 選ぶと右欄に書かれた行が出る (フォームで直せない記法として黙らない)。
+  const at = await page.evaluate(() => {
+    const t = Array.prototype.find.call(document.querySelectorAll('#preview-svg svg text'), (n) => (n.textContent || '').trim() === '初期化フェーズ');
+    const r = t.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  });
+  await page.mouse.move(at.x, at.y);
+  await page.mouse.click(at.x, at.y);
+  await expect(page.locator('#src-line-text')).toHaveText('== 初期化フェーズ ==');
+});
+
 // BLK-builder-20260925-0305-1: `!pragma layout smetana` の SVG は線に行の情報を付けず、関連クラス `(A, B) . C` が
 // あると A→B の線は名前の無い中継点で 2 本に割れる。線を並び順で当てていたので矢じりの側の線に枠が無く、
 // 矢じりを指すと行き先のクラスの枠が出ていた (web/plantuml の group2712 の 4 枚、枠が 21〜43px ずれる)。
