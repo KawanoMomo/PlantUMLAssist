@@ -16,6 +16,9 @@ window.MA.renderError = (function() {
   var GREEN_MARK = 'fill="#33FF02"';
   // `[From string (line 3) ]` — 何行目で転んだか。
   var LINE_RE = /\[From string \(line (\d+)\)/;
+  var VERSION_RE = /<text[^>]*>\s*PlantUML (?:version )?([0-9][0-9A-Za-z.\-]*)/;
+  var SOURCE_RE = /<text[^>]*text-decoration="wavy underline"[^>]*>([\s\S]*?)<\/text>/;
+  var ASSUMED_RE = /Assumed diagram type:\s*([A-Za-z_]+)/;
 
   var ENTITIES = { '&lt;': '<', '&gt;': '>', '&quot;': '"', '&apos;': "'", '&amp;': '&' };
 
@@ -60,19 +63,47 @@ window.MA.renderError = (function() {
     var message = decodeEntities(m[1]);
     if (!/error/i.test(message)) return none;
     var lm = svgText.match(LINE_RE);
-    return {
+    var info = {
       isError: true,
       message: message,
       line: lm ? parseInt(lm[1], 10) : null,
     };
+    // BLK-migrator-20260925-0752: エラー画に書いてある版・波線の行・PlantUML が推測した図種。
+    var vm = svgText.match(VERSION_RE);
+    if (vm) info.version = vm[1];
+    var sm = svgText.match(SOURCE_RE);
+    if (sm) info.source = decodeEntities(sm[1]);
+    var am = message.match(ASSUMED_RE);
+    if (am) info.assumed = am[1].toLowerCase();
+    return info;
   }
 
-  // 帯に出す 1 行。何行目かが分かるときは行番号を先に置く。
+  // 帯に出す 1 行。server.py の describe_render_error と同じ文面。
+  // 版が分かる文法エラーは「PlantUML {版} がこの行を読めません: N 行目 `行`」と、
+  // 製品ではなく描画エンジンがその行を読めないことを先に言う (元の文言は括弧に残す)。
   function describe(info) {
     if (!info || !info.isError) return '';
-    if (info.line) return info.line + ' 行目: ' + info.message;
-    return info.message;
+    var head = info.line ? info.line + ' 行目: ' : '';
+    if (info.crashed || !info.version) return head + info.message;
+    var where = info.line ? info.line + ' 行目' : 'この行';
+    var src = info.source ? ' `' + info.source + '`' : '';
+    return 'PlantUML ' + info.version + ' がこの行を読めません: ' + where + src + ' (' + info.message + ')';
   }
 
-  return { detect: detect, describe: describe };
+  // PlantUML が推測した図種 (assumed) と、製品が本文から読んだ図種 (bodyType: 'plantuml-class' など) が
+  // 食い違うときに帯へ足す 1 文。PlantUML がその行で図種を見失っただけで、本文の図種は変わらないことを言う。
+  var KIND_LABEL = {
+    sequence: 'シーケンス図', class: 'クラス図', usecase: 'ユースケース図', activity: 'アクティビティ図',
+    state: '状態図', component: 'コンポーネント図', deployment: '配置図', object: 'オブジェクト図',
+  };
+  function kindNote(info, bodyType) {
+    if (!info || !info.assumed || !bodyType) return '';
+    var body = String(bodyType).replace(/^plantuml-/, '');
+    if (!body || body === info.assumed) return '';
+    var label = function(k) { return KIND_LABEL[k] || k; };
+    return 'PlantUML はこの行で図種を見失い ' + label(info.assumed) + ' と推測しましたが、本文は ' + label(body) +
+      ' として開いています。本文はそのまま直せ、何もせず保存しても書き換わりません (⚙ 設定 → レンダリングで別の版の plantuml.jar を入れると読めることがあります)';
+  }
+
+  return { detect: detect, describe: describe, kindNote: kindNote };
 })();

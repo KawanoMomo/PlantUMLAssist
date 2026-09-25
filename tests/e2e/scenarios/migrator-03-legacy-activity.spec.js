@@ -3,6 +3,9 @@
 // BLK-migrator-20260917-2349: 旧記法 activity (`(*) -->` / `if "c" then`) が usecase と判定されていた。
 const { test, expect } = require('@playwright/test');
 const { gotoApp } = require('../helpers');
+const fs = require('fs');
+const path = require('path');
+const { bootWithSaveDir, dirFor, absDirFor } = require('./_scenario');
 
 const LEGACY = '@startuml\n(*) --> "電源投入"\n"電源投入" --> "自己診断"\nif "診断結果" then\n  -->[OK] "通常起動"\nelse\n  -->[NG] "エラー処理"\nendif\n@enduml\n';
 
@@ -105,4 +108,68 @@ test('手順3 package 宣言に可視性の + が付いた実物がクラス図�
   expect(await page.locator('#editor').inputValue()).toBe(SRC);
   const res = await page.request.post('/render', { data: { text: SRC, mode: 'local' } });
   expect(res.status()).toBe(200);
+});
+
+// BLK-migrator-20260925-0752 (差し戻し 1 回目): 同じ issue #2846 の語順違い `+package uid as "Hello" <<Frame>>` は、
+// 公開版の PlantUML (1.2026.3〜1.2026.8) がどれも読めない (`Syntax Error? (Assumed diagram type: sequence)`)。
+// 描けないことは隠さず、帯で「PlantUML {版} がこの行を読めません: N 行目 `その行`」と描画エンジンの限界であることと行を言い、
+// PlantUML の推測 (sequence) が本文の図種 (クラス図) と違うことも言う。ファイルは開けて本文は直せ、何もせず保存すれば 1 バイトも変わらない。
+test('手順3 PlantUML の公開版が読めない +package の語順は、版と行を帯で示し、図種はクラス図のまま、無変更保存はバイト一致', async ({ page }) => {
+  // 実物 (web/plantuml の src__test__resources__vega__nonreg__group2846__bug.puml) と同じ CRLF・前置きの YAML・末尾のコメント。
+  const REAL = [
+    '---', 'output: svg', '---', '',
+    '@startuml',
+    '+package uid as "Hello" <<Frame>> {',
+    '  class World',
+    '}',
+    '@enduml',
+    '',
+    "/' Issue #2846 - this was the code that had",
+    'produced the bug. The output for this',
+    "(now corrected code) is in bug.png",
+    "'/",
+  ].join('\r\n');
+  const dir = absDirFor(__filename) + '-2846';
+  fs.rmSync(dir, { recursive: true, force: true });
+  fs.mkdirSync(dir, { recursive: true });
+  const srcDir = path.join(dir, '..', 'migrator-03-2846-src');
+  fs.mkdirSync(srcDir, { recursive: true });
+  const src = path.join(srcDir, 'group2846-bug.puml');
+  fs.writeFileSync(src, REAL);
+
+  await bootWithSaveDir(page, dirFor(__filename) + '-2846');
+  const [chooser] = await Promise.all([
+    page.waitForEvent('filechooser', { timeout: 20000 }),
+    page.evaluate(() => { document.getElementById('file-input').click(); }),
+  ]);
+  await chooser.setFiles(src);
+  await expect(page.locator('#editor')).toHaveValue(/\+package uid as "Hello"/, { timeout: 20000 });
+
+  await expect(page.locator('#render-status')).toHaveText('ERROR', { timeout: 20000 });
+  const band = page.locator('#render-error-overlay');
+  await expect(band).toBeVisible();
+  await expect(band).toContainText(/PlantUML \d+\.\d+\.\d+ がこの行を読めません: \d+ 行目/);
+  await expect(band).toContainText('`+package uid as "Hello" <<Frame>> {`');
+  await expect(band).toContainText('本文は クラス図 として開いています');
+  // 図種は本文から読んだクラス図のまま (PlantUML の推測した sequence に引きずられない)。
+  expect(await page.locator('#diagram-type').inputValue()).toBe('plantuml-class');
+  // 本文の `+` は外さない。
+  expect(await page.locator('#editor').inputValue()).toBe(REAL.replace(/\r\n/g, '\n'));
+
+  // 何もせず保存すれば元とバイト一致 (実キー)。
+  await page.locator('#editor').click();
+  await page.keyboard.press('Control+s');
+  await expect(page.locator('#status-save-result')).toContainText('保存しました', { timeout: 20000 });
+  const written = path.join(dir, 'group2846-bug.puml');
+  expect(fs.existsSync(written), '保存先に書かれている').toBe(true);
+  expect(Buffer.compare(fs.readFileSync(written), fs.readFileSync(src))).toBe(0);
+
+  // 本文は直せる: `+` を外せば PlantUML も読め、帯が消えてクラス図が描ける (直すのは本人。製品は勝手に外さない)。
+  await page.locator('#editor').click();
+  await page.keyboard.press('Control+Home');
+  for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Home');
+  await page.keyboard.press('Delete');
+  await expect(page.locator('#render-status')).toHaveText(/^Rendered/, { timeout: 20000 });
+  await expect(band).toBeHidden();
 });

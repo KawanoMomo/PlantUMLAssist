@@ -1,4 +1,5 @@
 - BLK-builder-20260925-1052-4: 同梱 PlantUML 1.2026.3 が描画の途中で落ちた図 (綴りが occurred の落ちた絵) も、見出し ERROR・赤い帯・直前の図で描画エラーとして知らせる (Rendered の図として出さない)
+- BLK-migrator-20260925-0752: 公開版の PlantUML が読めない行 (`+package uid as "Hello" <<Frame>>` など) で描画が止まると、帯に「PlantUML {版} がこの行を読めません: N 行目 `その行`」と出し、PlantUML の推測した図種が本文と違えば「本文は クラス図 として開いています」と言う (本文はそのまま・無変更保存はバイト一致)
 - BLK-migrator-20260925-0932: 題・凡例・見出し・脚注・説明の枠を全図種で 1 か所 (overlayBuilder.addDocumentChrome) から当て、state 図の header / footer / caption にも枠が出る (activity・state・class・component・usecase の個別の当て方をやめた)
 - BLK-migrator-20260925-0752: 同梱・取得する PlantUML の既定を 1.2026.3 に上げ、`+package "Hello" as uid <<Frame>>` のような可視性付きの package 宣言の実物がクラス図として描ける(本文は書き換えない)。1.2026.3 の題名の新しい形 (g.title) でもシーケンス図の題名に枠が出る
 - BLK-primary-20260925-0232-design: FILES の保存先の行・「保存先」見出しの右クリックと Ctrl+K「保存先を変える」から、隣のフォルダを選ぶかパスを入れて別のフォルダを保存先にでき、見出しの件数と「読むだけ」も替えた先に揃う
