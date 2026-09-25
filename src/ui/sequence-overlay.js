@@ -281,8 +281,10 @@ window.MA.sequenceOverlay = (function() {
   // 比べるための文言: 空白・&nbsp; を落とし、SHOW_INDEX の頭の番号 (`1:`) を外す。
   // BLK-builder-20260925-1552-3: Creole の飾り (`<b>` `**` `//` `""` `__` `~~`) は描かれた文字に残らないので、
   // 本文側・SVG 側の両方から落として比べる (`... Some ~~long delay~~ ...` は「Some」「long delay」と描かれる)。
+  // BLK-builder-20260925-1835-2: 改行は `\n` のほかに左寄せ `\l`・右寄せ `\r` もあり、どれも描かれた文字に残らない。
+  // スプライト `<$name>` / `<$name{scale=.5}>` と OpenIconic `<&icon>` は絵として描かれ、文字に残らない。
   function _procNorm(s) {
-    return String(s || '').replace(/\\n/g, '').replace(/&nbsp;/g, '').replace(/<\/?[a-zA-Z][^>]*>/g, '')
+    return String(s || '').replace(/\\[nlr]/g, '').replace(/&nbsp;/g, '').replace(/<[$&][^>]*>/g, '').replace(/<\/?[a-zA-Z][^>]*>/g, '')
       .replace(/\*\*|\/\/|""|__|~~/g, '').replace(/[\s ]+/g, '').replace(/^\d+:/, '');
   }
   function _procRects(svgEl) {
@@ -1202,7 +1204,9 @@ window.MA.sequenceOverlay = (function() {
         if (!m.box || m.box.y + m.box.h > firstArrowTop) return;
         headFloor = Math.max(headFloor, m.box.y + m.box.h);
       });
-      procMsgs = _procMessages(svgEl, parsedData.relations, headFloor, procScene);
+      // BLK-builder-20260925-1835-2: `return` の矢印も並びに入れる (文言の無いメッセージと return が並ぶ区間で
+      // 本数が合わず、その区間のメッセージが当たらなかった)。return の枠は出さない。
+      procMsgs = _procMessages(svgEl, msgItems, headFloor, procScene).filter(function(m) { return m.item.kind !== 'return'; });
       procMsgs.forEach(function(m) {
         OB.addRect(overlayEl, m.box.x - 4, m.box.y - 4, m.box.w + 8, m.box.h + 8, {
           'data-type': 'message', 'data-id': m.item.id, 'data-line': m.item.line,

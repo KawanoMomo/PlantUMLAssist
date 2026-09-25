@@ -1,0 +1,12 @@
+@startuml
+participant User
+participant Api
+participant Fn
+User -> Api ++ : <&star> Process\lPOST /prod
+Api -> Fn ++ : Validate and\lcreate token
+Fn -> Fn : check
+Api -> Fn ++ :
+return
+return
+Api --> User : done\rbye
+@enduml
