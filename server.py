@@ -681,6 +681,61 @@ def detect_render_crash(svg):
     return {'message': message, 'line': None, 'crashed': True}
 
 
+# BLK-migrator-20260925-1332: smetana の state 図で、複合状態の最初の並行領域が空 (`state X {` の直後に
+# `--` / `||`) だと PlantUML 1.2026.3 自身が落ちる。落ちた絵には行が無いので本文から区切りの行を探す。
+# src/core/render-error.js の emptyFirstRegions と同じ規則。片方だけ変えないこと。
+_STATE_OPEN_RE = re.compile(r'^state\s+(?:"([^"]*)"\s+as\s+([^\s{<#]+)|([^\s{<#]+))[^{]*\{\s*$')
+
+
+def empty_first_regions(text):
+    """[{'line', 'sep', 'open_line', 'name'}] — 最初の並行領域が空の複合状態の、その区切りの行。"""
+    out = []
+    stack = []
+    in_comment = False
+    for i, raw in enumerate(str(text or '').split('\n')):
+        t = raw.rstrip('\r').strip()
+        if in_comment:
+            if "'/" in t:
+                in_comment = False
+            continue
+        if t.startswith("/'"):
+            if t.find("'/", 2) < 0:
+                in_comment = True
+            continue
+        if not t or t.startswith("'"):
+            continue
+        top = stack[-1] if stack else None
+        if t in ('--', '||'):
+            if top and top['state'] and not top['sep_seen']:
+                top['sep_seen'] = True
+                if top['empty']:
+                    out.append({'line': i + 1, 'sep': t, 'open_line': top['open_line'], 'name': top['name']})
+            continue
+        if t.startswith('}'):
+            if stack:
+                stack.pop()
+            continue
+        if top:
+            top['empty'] = False
+        m = _STATE_OPEN_RE.match(t)
+        if m:
+            stack.append({'state': True, 'open_line': i + 1, 'name': m.group(1) or m.group(2) or m.group(3),
+                          'empty': True, 'sep_seen': False})
+        elif re.search(r'\{\s*$', t):
+            stack.append({'state': False, 'empty': False, 'sep_seen': True})
+    return out
+
+
+def crash_cause(err, text):
+    """落ちた絵の帯に添える 1 文 (「N 行目 `--` の前の並行領域が空です」) と行。無ければ ('', None)。"""
+    if not err or not err.get('crashed'):
+        return '', None
+    r = empty_first_regions(text)
+    if not r:
+        return '', None
+    return '%d 行目 `%s` の前の並行領域が空です' % (r[0]['line'], r[0]['sep']), r[0]['line']
+
+
 def detect_render_error(svg):
     """PlantUML の「エラー画」なら {'message', 'line'}。図なら None。"""
     if not svg or _ERR_GREEN_MARK not in svg:
@@ -1418,8 +1473,13 @@ class Handler(BaseHTTPRequestHandler):
             err = detect_render_error(svg)
             if err:
                 msg = describe_render_error(err)
+                cause, cause_line = crash_cause(err, text)
+                if cause:
+                    msg += '。' + cause
                 payload = {'error': msg, 'line': err['line'],
                            'kind': 'plantuml-crash' if err.get('crashed') else 'plantuml-syntax'}
+                if cause_line:
+                    payload['causeLine'] = cause_line
                 for key in ('version', 'source', 'assumed'):
                     if err.get(key):
                         payload[key] = err[key]
