@@ -1361,3 +1361,38 @@ test('migrator 手順 4 — smetana の複合状態・出口・pin のある sta
   expect((await hoverAt('count_start', true)).id).toBe('module.counter.count_start');
   await expect(page.locator('#overlay-warning')).toBeHidden();
 });
+
+// BLK-builder-20260925-0934-3: header / footer / caption / legend に枠が出なかった (sequence は裸の文字、
+// class は <g class="header"> … で描かれ、legend は行を持たない)。図種を問わず本文の行で当て、押すとその行が選ばれる。
+test('migrator 手順 4 — title / header / footer / caption / legend のある sequence 図と class 図でも、飾りに本人の行の枠が出る', async ({ page }) => {
+  await bootPlain(page);
+  const fx = (n) => fs.readFileSync(path.join(__dirname, '..', '..', 'fixtures', 'dsl', n + '.puml'), 'utf8')
+    .replace(/\r\n/g, '\n').replace(/\n+$/, '');
+
+  // corpus の seq-18: 1 行目がコメントなので title は 3 行目、legend … endlegend は 12 行目から
+  await typeDsl(page, fx('chrome-seq'));
+  await expect(page.locator('#overlay-layer rect[data-src-kind="legend"]')).toHaveCount(1, { timeout: 20000 });
+  await expect(page.locator('#ma-toast')).toBeHidden({ timeout: 15000 });
+  for (const [label, line] of [['ドキュメントNo. SWD-0012', '4'], ['Confidential', '5'], ['図1: 起動処理', '6'],
+    ['BSW = Basic Software', '12'], ['RTE = Runtime Environment', '12']]) {
+    const { hit } = await hoverHit(page, label);
+    expect(hit, label + ' にホバーしてその行の枠が出る').toEqual({ type: 'source-line', line, hover: true });
+  }
+  const msg = await hoverHit(page, 'Jump_to_App()');
+  expect(msg.hit && msg.hit.type, 'メッセージは今までどおり本人の枠').toBe('message');
+  // 凡例を押すと本文の legend 行が選ばれる
+  const leg = await hoverHit(page, 'BSW = Basic Software');
+  await page.mouse.click(leg.box.x, leg.box.y);
+  await expect(page.locator('#src-line-props')).toHaveAttribute('data-line', '12');
+
+  // web の A0005 (前書きを除いたもの): <style> で色を付けた class 図。legend は行を持たない <g class="legend">
+  await typeDsl(page, fx('chrome-class'));
+  await expect(page.locator('#overlay-layer rect[data-src-kind="legend"]')).toHaveCount(1, { timeout: 20000 });
+  await expect(page.locator('#ma-toast')).toBeHidden({ timeout: 15000 });
+  for (const [label, line] of [['legend', '3'], ['footer', '4'], ['header', '5'], ['caption', '6']]) {
+    const { hit } = await hoverHit(page, label);
+    expect(hit, label + ' にホバーしてその行の枠が出る').toEqual({ type: 'source-line', line, hover: true });
+  }
+  const bob = await hoverHit(page, 'Bob');
+  expect(bob.hit && bob.hit.type, 'クラスは今までどおり本人の枠').not.toBe('source-line');
+});
