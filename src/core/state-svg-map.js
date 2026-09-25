@@ -292,6 +292,68 @@ window.MA.stateSvgMap = (function() {
     });
   }
 
+  // BLK-builder-20260925-2015-3: 遷移の端に書いた履歴 (`X --> [H]` / `[H] --> X` / `X --> Comp[H*]`) の丸と「H」。
+  // PlantUML は名前の付いた <g> を作らず、線の名前も `*historical*Comp` / `*deephistory*` の仮の名なので
+  // 状態としては引けない。丸に触れている遷移 (data-source-line で DSL の行が分かっている) の、その側の端の
+  // 書き方 (`[H]` なら書かれた { } の中、`Comp[H]` なら Comp) から「どこの履歴か」を決め、開始・終了と同じ
+  // 'pseudo' の枠にする (id は `history@Comp` / `historyDeep@`、行はその履歴を使う最初の遷移)。
+  var HIST_END_RE = /\[H(\*?)\]$/;
+  function historyEnd(end, tr, parsed) {
+    var m = HIST_END_RE.exec(_s(end));
+    if (!m) return null;
+    var head = _s(end).slice(0, m.index);
+    var scope = _s(tr && tr.scope);
+    if (head) {
+      var st = _findState(parsed, head);
+      scope = st ? st.id : head;
+    }
+    return { kind: m[1] ? 'historyDeep' : 'history', scope: scope };
+  }
+
+  function _frameHistoryEnds(svgEl, parsed, orphanShapes, linkTrs, frames) {
+    var texts = Array.prototype.filter.call(svgEl.querySelectorAll('text'), _isOrphan).map(function(t) {
+      return { t: t, b: shapeBox(t) };
+    });
+    var byId = {}, order = [];
+    orphanShapes.forEach(function(el) {
+      var b = shapeBox(el);
+      if (!b) return;
+      var g = _glyphKind(el, b, texts);
+      if (!g || (g.kind !== 'history' && g.kind !== 'history*')) return;
+      var want = g.kind === 'history' ? 'history' : 'historyDeep';
+      var hit = null, lines = [];
+      linkTrs.forEach(function(lt) {
+        var ends = _pathEnds(lt.g);
+        if (!ends) return;
+        var sides = [];
+        if (_inside(ends.a, b, 6)) sides.push(lt.tr.from);
+        if (_inside(ends.b, b, 6)) sides.push(lt.tr.to);
+        else {
+          var head = Array.prototype.some.call(lt.g.querySelectorAll('polygon'), function(pg) {
+            var hb = shapeBox(pg);
+            return hb && _inside({ x: hb.x + hb.width / 2, y: hb.y + hb.height / 2 }, b, 14) && _inside(ends.b, hb, 14);
+          });
+          if (head) sides.push(lt.tr.to);
+        }
+        sides.forEach(function(end) {
+          var h = historyEnd(end, lt.tr, parsed);
+          if (!h || h.kind !== want) return;
+          if (!hit) hit = h;
+          if (h.scope === hit.scope) lines.push(lt.tr.line);
+        });
+      });
+      if (!hit) return;
+      var id = hit.kind + '@' + hit.scope;
+      if (!byId[id]) { byId[id] = { boxes: [], lines: [] }; order.push(id); }
+      byId[id].boxes.push(b, g.text);
+      byId[id].lines = byId[id].lines.concat(lines);
+    });
+    order.forEach(function(id) {
+      var e = byId[id];
+      frames.push({ type: 'pseudo', id: id, line: Math.min.apply(null, e.lines), box: pad(union(e.boxes), 3) });
+    });
+  }
+
   // 枠の一覧を返す。各要素 { type, id, line, box | link, composite }。
   //   type: 'state' | 'pseudo' | 'transition'
   // linksReady: 遷移の <g class="link"> が全部 data-source-line を持っていたか (持たない SVG は呼び手が旧来の当て方に落とす)。
@@ -299,6 +361,9 @@ window.MA.stateSvgMap = (function() {
     var frames = [];
     if (!svgEl) return { frames: frames, linksReady: false };
     var seenState = {};
+    // 遷移の <g> と、data-source-line を DSL の行にするずれ (@startuml の前に行がある図でも開始・終了の行を合わせる)。
+    var links = Array.prototype.slice.call(svgEl.querySelectorAll('g.link'));
+    var off = _lineOffset(links, parsed);
 
     // 1. 名前の付いた実体
     Array.prototype.forEach.call(svgEl.querySelectorAll('g[data-qualified-name]'), function(g) {
@@ -313,7 +378,7 @@ window.MA.stateSvgMap = (function() {
         var pb = union(ells);
         if (!pb) return;
         var sl = parseInt(g.getAttribute('data-source-line'), 10);
-        frames.push({ type: 'pseudo', id: ps.kind + '@' + ps.scope, line: isNaN(sl) ? null : sl + 1, box: pad(pb, 3) });
+        frames.push({ type: 'pseudo', id: ps.kind + '@' + ps.scope, line: isNaN(sl) ? null : sl + off, box: pad(pb, 3) });
         return;
       }
       var r = resolveState(parsed, qn);
@@ -331,17 +396,17 @@ window.MA.stateSvgMap = (function() {
     });
 
     // 2. 遷移
-    var links = Array.prototype.slice.call(svgEl.querySelectorAll('g.link'));
     var linksReady = links.length > 0 && links.every(function(g) { return g.hasAttribute('data-source-line'); });
     var names = linkNames(svgEl, links);
+    var linkTrs = [];
     if (linksReady) {
-      var off = _lineOffset(links, parsed);
       var trs = (parsed && parsed.transitions) || [];
       links.forEach(function(g) {
         var line = parseInt(g.getAttribute('data-source-line'), 10) + off;
         var tr = null;
         for (var i = 0; i < trs.length; i++) if (trs[i].line === line) { tr = trs[i]; break; }
         if (!tr) return;
+        linkTrs.push({ g: g, tr: tr });
         frames.push({ type: 'transition', id: tr.id, line: line, link: g });
       });
     }
@@ -414,6 +479,9 @@ window.MA.stateSvgMap = (function() {
     // 組を作り、同じ組の「まだ枠の無い宣言」に描いた順 = 宣言順で当てる。数が合わない組は当てない (取り違えない)。
     _frameUnnamedGlyphs(svgEl, parsed, orphanShapes, byName, frames, seenState, links);
 
+    // 5. 遷移の端に書いた履歴 `[H]` / `Comp[H*]` の丸と「H」(4. は遷移に触れる丸を扱わない)。
+    _frameHistoryEnds(svgEl, parsed, orphanShapes, linkTrs, frames);
+
     // 並びは 状態 → 遷移 → 開始・終了、それぞれ DSL の行の順 (SVG の描画順は配置で入れ替わるので使わない)。
     var rank = { state: 0, transition: 1, pseudo: 2 };
     frames.forEach(function(f, i) { f._i = i; });
@@ -433,6 +501,7 @@ window.MA.stateSvgMap = (function() {
     shapeBox: shapeBox,
     linkNames: linkNames,
     resolveState: resolveState,
+    historyEnd: historyEnd,
     collect: collect,
   };
 })();

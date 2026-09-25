@@ -1028,21 +1028,32 @@ window.MA.modules.plantumlState = (function() {
     var scope = at >= 0 ? sel.id.slice(at + 1) : '';
     var states = parsedData.states || [];
     var where = scope ? (STb ? STb.rowLabel(scope, states) : scope) + ' の中' : '最上位 (図全体)';
+    // BLK-builder-20260925-2015-3: 遷移の端に書いた履歴 (`[H]` / `Comp[H*]`) の丸も同じ欄で見せる。
+    var isHist = kind === 'history' || kind === 'historyDeep';
+    var SM = window.MA.stateSvgMap;
+    var histOf = function(end, t) {
+      var h = SM && SM.historyEnd ? SM.historyEnd(end, t, parsedData) : null;
+      return !!(h && h.kind === kind && h.scope === scope);
+    };
     var trs = (parsedData.transitions || []).filter(function(t) {
+      if (isHist) return histOf(t.from, t) || histOf(t.to, t);
       if ((t.scope || '') !== scope) return false;
       return kind === 'start' ? t.from === '[*]' : t.to === '[*]';
     });
+    var title = isHist ? (kind === 'history' ? '履歴 [H]' : '深い履歴 [H*]') : (kind === 'start' ? '開始 [*]' : '終了 [*]');
     var html =
       '<div id="st-pseudo-info" data-kind="' + H.escHtml(kind) + '" data-scope="' + H.escHtml(scope) + '" style="font-size:12px;margin-bottom:8px;">' +
-        '<b>' + (kind === 'start' ? '開始 [*]' : '終了 [*]') + '</b> — <span id="st-pseudo-scope">' + H.escHtml(where) + '</span></div>' +
+        '<b>' + title + '</b> — <span id="st-pseudo-scope">' + H.escHtml(where) + '</span></div>' +
       '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:6px;">' +
-        (kind === 'start' ? 'ここから始まる状態' : 'ここで終わる状態') + '</div>' +
+        (isHist ? 'この履歴につながる遷移' : kind === 'start' ? 'ここから始まる状態' : 'ここで終わる状態') + '</div>' +
       '<ul id="st-pseudo-links" style="margin:0 0 8px 16px;padding:0;font-size:11px;">' +
         trs.map(function(t) {
+          if (isHist) return '<li>L' + t.line + ' ' + H.escHtml(t.from + ' --> ' + t.to) + '</li>';
           var other = kind === 'start' ? t.to : t.from;
           return '<li>L' + t.line + ' ' + H.escHtml(kind === 'start' ? '[*] --> ' + other : other + ' --> [*]') + '</li>';
         }).join('') + '</ul>' +
-      P.primaryButtonHtml('st-pseudo-add', (kind === 'start' ? '開始' : '終了') + 'を足す・差し替える (同じ場所)');
+      P.primaryButtonHtml('st-pseudo-add', isHist ? (kind === 'history' ? '履歴' : '深い履歴') + 'への遷移を足す (同じ場所)'
+        : (kind === 'start' ? '開始' : '終了') + 'を足す・差し替える (同じ場所)');
     propsEl.innerHTML = html;
     P.bindEvent('st-pseudo-add', 'click', function() {
       window.MA.selection.clearSelection();
