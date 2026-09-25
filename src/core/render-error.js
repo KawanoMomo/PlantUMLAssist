@@ -30,9 +30,9 @@ window.MA.renderError = (function() {
 
   // BLK-migrator-20260924-1432: PlantUML が描いている途中で自分が落ちた (例外) ときの絵は、
   // 文法エラーの配色 (緑・赤) を使わず、白地に黒文字で「An error has occured : <例外>」
-  // 「PlantUML (版) has crashed.」と書く。これを図として流し込むと、見出しが Rendered のまま
+  // 「PlantUML (版) has crashed.」と書く (1.2026.3 からは綴りが occurred。どちらも見分ける。BLK-builder-20260925-1052-4)。これを図として流し込むと、見出しが Rendered のまま
   // エラーの文言が図の代わりに並ぶ (成功のふり)。両方の文が揃ったときだけ落ちた絵と見分ける。
-  var CRASH_HEAD_RE = /<text[^>]*>\s*An error has occured\s*:?\s*([\s\S]*?)<\/text>/i;
+  var CRASH_HEAD_RE = /<text[^>]*>\s*An error has occurr?ed\s*:?\s*([\s\S]*?)<\/text>/i;
   var CRASH_MARK_RE = /<text[^>]*>\s*PlantUML \(([^)<]*)\) has crashed\.?\s*<\/text>/i;
 
   function detectCrash(svgText) {
