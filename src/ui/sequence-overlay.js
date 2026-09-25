@@ -53,7 +53,7 @@ window.MA.sequenceOverlay = (function() {
   function _findNoteShape(svgEl, note, usedTexts) {
     var first = String(note.text || '').split('\n')[0].replace(/<[^>]*>|\*\*|\/\/|__|""/g, '').trim();
     if (!first || !svgEl.querySelectorAll) return null;
-    var texts = svgEl.querySelectorAll('text');
+    var texts = _q(svgEl, 'text');
     var shapes = null;
     for (var i = 0; i < texts.length; i++) {
       var t = texts[i];
@@ -61,7 +61,7 @@ window.MA.sequenceOverlay = (function() {
       if ((t.textContent || '').trim() !== first && !_lineStartsAt(texts, i, first)) continue;
       var tb = _bbox(t);
       if (!tb) continue;
-      if (!shapes) shapes = svgEl.querySelectorAll('path, polygon, rect');
+      if (!shapes) shapes = _q(svgEl, 'path, polygon, rect');
       var best = null, bestArea = Infinity;
       for (var k = 0; k < shapes.length; k++) {
         var fill = (shapes[k].getAttribute('fill') || '').toLowerCase();
@@ -82,7 +82,7 @@ window.MA.sequenceOverlay = (function() {
   // (ライフラインの帯は塗りだけで style を持たない)。描画順は DSL の box 順。
   function _boxRectsInSvg(svgEl) {
     if (!svgEl || !svgEl.querySelectorAll) return [];
-    var all = svgEl.querySelectorAll('rect');
+    var all = _q(svgEl, 'rect');
     var out = [];
     for (var i = 0; i < all.length; i++) {
       var r = all[i];
@@ -164,7 +164,7 @@ window.MA.sequenceOverlay = (function() {
     for (var i = 0; i < tls.length; i++) {
       if (tls[i].text.replace(/\s+/g, ' ').trim() === drawn) { pick = tls[i]; break; }
     }
-    var texts = svgEl.querySelectorAll('text');
+    var texts = _q(svgEl, 'text');
     var minX = null, minY = null, maxX = null, maxY = null;
     for (var k = 0; k < texts.length; k++) {
       var t = texts[k];
@@ -261,8 +261,15 @@ window.MA.sequenceOverlay = (function() {
   // 枠 (見出しの五角形が角に付いた rect)・区切り・遅延を先に見分けてその文字を除き、残りの矢印は
   // 線の上に書かれた文字とメッセージの文言の一致で当てる (本数の一致に頼らない)。
   function _num(el, a) { return parseFloat(el.getAttribute(a)); }
+  // BLK-migrator-20260925-1732: mainframe の枠・札・札の文字は図全体の飾り。overlayBuilder.addDocumentChrome が
+  // 先に当てるので、参加者・メッセージ・枠を描いた形から探すときは数えない (buildSequenceOverlay が描画ごとに入れ直す)。
+  var _chromeSkip = [];
+  function _q(root, sel) {
+    return Array.prototype.filter.call(root.querySelectorAll(sel), function(n) { return _chromeSkip.indexOf(n) < 0; });
+  }
   function _bareShapes(svgEl, sel) {
     return Array.prototype.filter.call(svgEl.querySelectorAll(sel), function(n) {
+      if (_chromeSkip.indexOf(n) >= 0) return false;
       var anc = n.parentNode;
       while (anc && anc !== svgEl && anc.getAttribute) {
         if (anc.getAttribute('class')) return false;
@@ -753,7 +760,7 @@ window.MA.sequenceOverlay = (function() {
   // 札の下端 (y)。札は枠の左上角から始まる五角形。見つからなければ文字 1 行ぶん (18) とみなす。
   function _frameTabBottom(svgEl, bb) {
     var best = null;
-    Array.prototype.forEach.call(svgEl.querySelectorAll('path, polygon'), function(el) {
+    Array.prototype.forEach.call(_q(svgEl, 'path, polygon'), function(el) {
       var n = _nums(el.getAttribute('d') || el.getAttribute('points'));
       if (n.length < 6) return;
       if (Math.abs(n[0] - bb.x) > 1.5 || Math.abs(n[1] - bb.y) > 1.5) return;
@@ -785,7 +792,7 @@ window.MA.sequenceOverlay = (function() {
   // 条件の文字 ([成功] / else の [失敗])。枠の内側にある「[...]」の文字の箱。
   function _conditionBoxes(svgEl, bb, tabBottom) {
     var out = [];
-    Array.prototype.forEach.call(svgEl.querySelectorAll('text'), function(t) {
+    Array.prototype.forEach.call(_q(svgEl, 'text'), function(t) {
       var s = String(t.textContent || '').trim();
       if (!/^\[.*\]$/.test(s)) return;
       var b = _bbox(t);
@@ -854,7 +861,7 @@ window.MA.sequenceOverlay = (function() {
       var tx = _num(tr, 'x'), tw = _num(tr, 'width'), ty = _num(tr, 'y');
       if (isNaN(tx) || isNaN(tw) || isNaN(ty)) return;
       if (!bare) {
-        bare = Array.prototype.filter.call(svgEl.querySelectorAll('rect'), function(r) {
+        bare = Array.prototype.filter.call(_q(svgEl, 'rect'), function(r) {
           return !_inParticipantGroup(r, svgEl);
         });
       }
@@ -869,9 +876,26 @@ window.MA.sequenceOverlay = (function() {
     return out;
   }
 
+  // BLK-migrator-20260925-1732: プレビューは `newpage` で分けた 1 枚目だけを描く。2 枚目以降の
+  // メッセージ・注釈・帯・群は並びの照合にも数にも入れない (参加者は全ページの頭に描かれるので残す)。
+  function _firstPage(parsedData) {
+    var end = parsedData && parsedData.meta && parsedData.meta.newpageLine;
+    if (!end) return parsedData;
+    function on(x) { return x.kind === 'participant' || !x.line || x.line < end; }
+    var out = {};
+    Object.keys(parsedData).forEach(function(k) { out[k] = parsedData[k]; });
+    ['elements', 'relations', 'groups', 'returns'].forEach(function(k) {
+      if (Array.isArray(parsedData[k])) out[k] = parsedData[k].filter(on);
+    });
+    return out;
+  }
+
   function buildSequenceOverlay(svgEl, parsedData, overlayEl, dslText) {
     _clearChildren(overlayEl);
     if (!svgEl || !parsedData) return;
+    parsedData = _firstPage(parsedData);
+    _chromeSkip = (OB.chromeElements && dslText) ? OB.chromeElements(svgEl, dslText) : [];
+    var pageEnd = (parsedData.meta && parsedData.meta.newpageLine) || Infinity;
 
     OB.syncDimensions(svgEl, overlayEl);
 
@@ -1076,7 +1100,7 @@ window.MA.sequenceOverlay = (function() {
     });
     var groupHitFrames = [];
     if (groups.length > 0) {
-      var allRects = svgEl.querySelectorAll('rect[fill="none"]');
+      var allRects = _q(svgEl, 'rect[fill="none"]');
       var seen = {};
       var bboxes = [];
       Array.prototype.forEach.call(allRects, function(r) {
@@ -1110,7 +1134,7 @@ window.MA.sequenceOverlay = (function() {
       // ref の枠が出ていた。ref も並びに入れて上から順に当て、枠は群にだけ出す。
       var frames = groups.map(function(g) { return { group: g, line: g.line || 0 }; });
       String(dslText || '').split('\n').forEach(function(raw, i) {
-        if (/^\s*ref\s+over\b/i.test(raw)) frames.push({ group: null, line: i + 1 });
+        if (i + 1 < pageEnd && /^\s*ref\s+over\b/i.test(raw)) frames.push({ group: null, line: i + 1 });
       });
       frames.sort(function(a, b) { return a.line - b.line; });
       // BLK-migrator-20260924-1332: 手続きの図では ref の枠が塗り付き (skinparam) で出て、塗りなしの rect だけを
@@ -1140,7 +1164,7 @@ window.MA.sequenceOverlay = (function() {
     } else if (scene) {
       var refLines = [];
       String(dslText || '').split('\n').forEach(function(raw, i) {
-        if (/^\s*ref\s+over\b/i.test(raw)) refLines.push(i + 1);
+        if (i + 1 < pageEnd && /^\s*ref\s+over\b/i.test(raw)) refLines.push(i + 1);
       });
       if (refLines.length === scene.frames.length) {
         scene.frames.forEach(function(bb, i) { srcHits.push({ box: bb, line: refLines[i], kind: 'ref' }); });
@@ -1360,7 +1384,7 @@ window.MA.sequenceOverlay = (function() {
     if (!svgEl || !svgEl.querySelectorAll) return [];
     var seen = {};
     var bars = [];
-    var rects = svgEl.querySelectorAll('rect');
+    var rects = _q(svgEl, 'rect');
     Array.prototype.forEach.call(rects, function(r) {
       var fill = (r.getAttribute('fill') || '').toUpperCase();
       var style = (r.getAttribute('style') || '') + '';

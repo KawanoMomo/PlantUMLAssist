@@ -1626,7 +1626,10 @@ window.MA.modules.plantumlActivity = (function() {
   }
 
   // 題・凡例などの <g> の中の図形は、動作や分岐の箱として数えない。
+  // BLK-migrator-20260925-1732: mainframe の枠・札・札の文字 (どの <g> にも入らない) も同じ。buildOverlay が描画ごとに入れ直す。
+  var _chromeEls = [];
   function _inDecor(el) {
+    if (_chromeEls.indexOf(el) >= 0) return true;
     var n = el.parentNode;
     while (n && n.tagName && n.tagName.toLowerCase() !== 'svg') {
       if (n.tagName.toLowerCase() === 'g' && /^(title|legend|caption|header|footer)$/.test(
@@ -2016,6 +2019,8 @@ window.MA.modules.plantumlActivity = (function() {
 
   function buildOverlay(svgEl, parsedData, overlayEl) {
     if (!svgEl || !overlayEl) return;
+    _chromeEls = (OB.chromeElements && parsedData && parsedData.sourceLines)
+      ? OB.chromeElements(svgEl, parsedData.sourceLines.join('\n')) : [];
     OB.syncDimensions(svgEl, overlayEl);
     while (overlayEl.firstChild) overlayEl.removeChild(overlayEl.firstChild);
 
@@ -2024,7 +2029,7 @@ window.MA.modules.plantumlActivity = (function() {
     // 描いた側の情報 (関係の行・要素の名前・線のつながり) だけで当てる。
     // 新記法 (`:Action;`) の図は SVG に行も <g> も無いので、今までどおり本文の並びで当てる。
     if (_hasLinkLines(svgEl)) {
-      var claimed = [];
+      var claimed = _chromeEls.slice();
       if (OB.addLooseShapes) OB.addLooseShapes(svgEl, overlayEl, claimed);
       if (OB.addUnclaimed) {
         OB.addUnclaimed(svgEl, overlayEl, claimed,

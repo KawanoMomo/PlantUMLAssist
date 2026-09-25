@@ -114,6 +114,16 @@ window.MA.modules.plantumlSequence = (function() {
   var PART_RE = new RegExp('^(' + PARTICIPANT_TYPES.join('|') + ')\\s+(?:"([^"]+)"\\s+as\\s+(\\S+)|(\\S+)(?:\\s+as\\s+"([^"]+)")?)\\s*$');
   // BLK-builder-20260925-0314-1: `create participant "Instance" as Inst` は途中で作られる参加者の宣言。
   // `create X` (帯の行) と取り違えず、宣言として読む。書き換えでも `create ` は残す。
+  // BLK-migrator-20260925-1732: 宣言の後ろに付く飾り (`<<ステレオタイプ>>`・`order 10`・`#色`) は名前の外。
+  // 飾りを外して宣言として読み、書き換えるときは飾りをそのまま後ろに戻す (外さないと宣言と読めず、
+  // 参加者がメッセージから暗黙に作られて並びが入れ替わり、枠が隣の参加者に出ていた)。
+  var PART_TAIL_RE = /((?:\s+(?:<<.*?>>|order\s+-?\d+|#[^\s"]+))+)\s*$/;
+  function _partSplit(s) {
+    var t = String(s == null ? '' : s).trim();
+    var m = t.match(PART_TAIL_RE);
+    if (!m) return { head: t, tail: '' };
+    return { head: t.slice(0, t.length - m[0].length), tail: m[1] };
+  }
   var CREATE_DECL_LEAD_RE = new RegExp('^(\\s*(?:create\\s+(?=(?:' + PARTICIPANT_TYPES.join('|') + ')\\s))?)');
   function _declLead(raw) { return String(raw == null ? '' : raw).match(CREATE_DECL_LEAD_RE)[1]; }
   // design 2d: 図の外とのやり取り (`[-> System` / `System ->]`) を読めるように、
@@ -306,6 +316,13 @@ window.MA.modules.plantumlSequence = (function() {
         continue;
       }
 
+      // BLK-migrator-20260925-1732: `newpage` より後は 2 枚目以降。プレビューに描かれるのは 1 枚目だけなので、
+      // 最初の newpage の行を憶えておき、プレビューの当て方が 2 枚目以降の要素を数えないようにする
+      // (一覧には残す。数えると描かれていないメッセージの数だけ「⚠ Overlay マッチング失敗」が出ていた)。
+      if (/^newpage\b/i.test(trimmed)) {
+        if (result.meta.newpageLine == null) result.meta.newpageLine = lineNum;
+        continue;
+      }
       var tm = trimmed.match(/^title\s+(.+)$/);
       if (tm) {
         result.meta.title = tm[1].trim();
@@ -396,7 +413,7 @@ window.MA.modules.plantumlSequence = (function() {
         continue;
       }
 
-      var partTrimmed = trimmed.replace(/\s+#[0-9A-Fa-f]{6}\s*$/, '');
+      var partTrimmed = _partSplit(trimmed).head;
       var pm = partTrimmed.match(PART_RE);
       if (pm) {
         var ptype = pm[1];
@@ -646,7 +663,8 @@ window.MA.modules.plantumlSequence = (function() {
     var idx = lineNum - 1;
     if (idx < 0 || idx >= lines.length) return text;
     var indent = _declLead(lines[idx]);
-    var m = lines[idx].slice(indent.length).trim().match(PART_RE);
+    var split = _partSplit(lines[idx].slice(indent.length));
+    var m = split.head.match(PART_RE);
     if (!m) return text;
     var ptype = m[1];
     var alias, label, labelImplicit = false;
@@ -663,7 +681,7 @@ window.MA.modules.plantumlSequence = (function() {
     }
     else if (field === 'label') label = value;
     var out = label && label !== alias ? (ptype + ' "' + label + '" as ' + alias) : (ptype + ' ' + alias);
-    lines[idx] = indent + out;
+    lines[idx] = indent + out + split.tail;
     return lines.join('\n');
   }
 
@@ -2107,8 +2125,7 @@ window.MA.modules.plantumlSequence = (function() {
     for (var i = 0; i < lines.length; i++) {
       var trimmed = lines[i].trim();
       // color suffix を除去してから match
-      var withoutColor = trimmed.replace(/\s+#[0-9A-Fa-f]{6}\s*$/, '');
-      var m = withoutColor.match(PART_RE);
+      var m = _partSplit(trimmed).head.match(PART_RE);
       if (m) {
         var al = (m[2] !== undefined) ? m[3] : m[4];
         partIndexes.push({ lineIdx: i, alias: al });

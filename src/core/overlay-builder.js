@@ -1060,6 +1060,9 @@ window.MA.overlayBuilder = (function() {
         cur.texts.push(t);
         continue;
       }
+      // BLK-migrator-20260925-1732: `mainframe 見出し` は図全体を囲む枠と左上の札。札の文字を本文のその行に当てる。
+      var mf = /^mainframe\s+(.+)$/i.exec(t);
+      if (mf) { out.push({ kind: 'mainframe', line: i + 1, texts: [mf[1]] }); continue; }
       var m = /^(?:(left|right|center)\s+)?(title|header|footer|caption|legend)\b\s*(.*)$/i.exec(t);
       if (!m) continue;
       var kind = m[2].toLowerCase(), rest = m[3];
@@ -1136,6 +1139,66 @@ window.MA.overlayBuilder = (function() {
     return 1;
   }
 
+  // BLK-migrator-20260925-1732: mainframe の描いた物を探す。PlantUML は図全体を囲む裸の <rect>、左上の札の輪郭
+  // (<path> 1 本: 右上から下りて斜めに左下へ)、札の文字 (<text>) を、どの <g> にも入れずに描く (6 図種とも同じ)。
+  // 札の文字は本文の見出しと同じ文字の裸の <text> のうち最も上のもの、札はその文字を囲む最も小さい裸の <path>、
+  // 枠はその札の左上の角に左上の角が重なる裸の <rect>。戻り値: [{ line, text, path, rect, tab: 札の矩形 }]
+  function mainframeParts(svgEl, dslText, entries) {
+    if (!svgEl || !svgEl.querySelectorAll || dslText == null) return [];
+    var list = (entries || chromeEntries(dslText)).filter(function(en) { return en.kind === 'mainframe'; });
+    if (!list.length) return [];
+    function bare(sel) {
+      return Array.prototype.filter.call(svgEl.querySelectorAll(sel), function(el) { return !_chromeOwner(el, svgEl); });
+    }
+    var texts = bare('text'), paths = bare('path'), rects = bare('rect');
+    var out = [];
+    list.forEach(function(en) {
+      var re = _chromeLineRe(en.texts[0] || '');
+      var best = null, bestBox = null;
+      texts.forEach(function(t) {
+        if (out.some(function(o) { return o.text === t; })) return;
+        var norm = _chromePlain(t.textContent);
+        if (!norm || !re.test(norm)) return;
+        var bb = _nodeBBox(t);
+        if (bb && (!bestBox || bb.y < bestBox.y)) { best = t; bestBox = bb; }
+      });
+      if (!best) return;
+      var cx = bestBox.x + Math.min(bestBox.width / 2, 4), cy = bestBox.y + bestBox.height / 2;
+      var tabPath = null, tabBox = null;
+      paths.forEach(function(p) {
+        var pb = _nodeBBox(p);
+        if (!pb || cx < pb.x - 1 || cx > pb.x + pb.width + 1 || cy < pb.y - 1 || cy > pb.y + pb.height + 1) return;
+        if (!tabBox || pb.width * pb.height < tabBox.width * tabBox.height) { tabPath = p; tabBox = pb; }
+      });
+      var frame = null;
+      if (tabBox) {
+        rects.forEach(function(r) {
+          var rb = _nodeBBox(r);
+          if (!rb || Math.abs(rb.x - tabBox.x) > 1 || Math.abs(rb.y - tabBox.y) > 1) return;
+          if (rb.width < tabBox.width || rb.height < tabBox.height) return;
+          if (!frame || rb.width * rb.height > frame.w * frame.h) frame = { el: r, w: rb.width, h: rb.height };
+        });
+      }
+      out.push({
+        line: en.line, text: best, path: tabPath, rect: frame ? frame.el : null,
+        tab: _unionBoxes([bestBox, tabBox]),
+      });
+    });
+    return out;
+  }
+
+  // 図全体に掛かる飾り (mainframe の札の文字・札・枠) の要素。図種のモジュールが並び順・文字で要素を当てるとき、
+  // これらを数えないために使う (見出しの文字をメッセージや部品の文字と取り違えない)。
+  function chromeElements(svgEl, dslText) {
+    var els = [];
+    try {
+      mainframeParts(svgEl, dslText).forEach(function(mp) {
+        [mp.text, mp.path, mp.rect].forEach(function(el) { if (el) els.push(el); });
+      });
+    } catch (e) {}
+    return els;
+  }
+
   // dslText を渡さないとき (図種のモジュールが本文なしで呼ぶ) は、<g class="{種類}" data-source-line> の行だけで当てる。
   // data-source-line は @startuml を 0 とするので、opts.startUmlLine (@startuml の行、既定 1) を足す。
   // 行を持たない legend と裸の文字は、本文を渡す呼び出し (app の描画のたび) が当てる。
@@ -1164,6 +1227,10 @@ window.MA.overlayBuilder = (function() {
       loose.push({ el: t, norm: norm, owner: owner, used: false });
     });
     var n = 0;
+    mainframeParts(svgEl, dslText, entries).forEach(function(mp, i) {
+      loose.forEach(function(lt) { if (lt.el === mp.text) lt.used = true; });
+      n += _placeChrome(overlayEl, 'mainframe', mp.line, mp.tab, 1, i);
+    });
     CHROME_KINDS.forEach(function(kind) {
       var list = entries.filter(function(en) { return en.kind === kind; });
       if (!list.length) return;
@@ -1236,6 +1303,8 @@ window.MA.overlayBuilder = (function() {
     addUnclaimed: addUnclaimed,
     addDocumentChrome: addDocumentChrome,
     chromeEntries: chromeEntries,
+    mainframeParts: mainframeParts,
+    chromeElements: chromeElements,
     addLooseShapes: addLooseShapes,
     findEntityByName: findEntityByName,
     matchClusters: matchClusters,

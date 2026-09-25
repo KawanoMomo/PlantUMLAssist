@@ -1,0 +1,5 @@
+@startuml
+mainframe 旧記法の枠
+(*) --> "Init"
+"Init" --> (*)
+@enduml
