@@ -165,8 +165,10 @@ describe('BLK-builder-20260925-0314-1: teoz の並んだメッセージ (`& B ->
     expect(b.res.unmatched.message).toBe(0);
     expect(b.res.unmatched.participant).toBe(0);
     expect(rects(b.overlayEl, 'message').length).toBe(4);
+    // BLK-human-20260925-1500: class の無い SVG でも、メッセージが横切る所にはライフラインを手前に出す補助の枠
+    // (data-front、選択対象ではない) が付く。選べるライフラインの枠は 1 人 1 つ。
     ['Alice', 'Bob', 'Charlie'].forEach(function(p) {
-      expect(rects(b.overlayEl, 'lifeline', p).length).toBe(1);
+      expect(rects(b.overlayEl, 'lifeline', p).filter(function(r) { return !r.hasAttribute('data-front'); }).length).toBe(1);
     });
   });
   test('並んだ矢印の枠は、隣の矢印の矢じりを覆わない', function() {
