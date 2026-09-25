@@ -652,6 +652,8 @@ window.MA.overlayBuilder = (function() {
     var nodes = svgEl.querySelectorAll(selector || 'g.entity, g.cluster, g.title, g.legend, g.link, g[class*="link_"]');
     Array.prototype.forEach.call(nodes, function(g) {
       if (taken.indexOf(g) >= 0) return;
+      // BLK-migrator-20260925-0932: 題・凡例・見出し・脚注・説明は addDocumentChrome の 1 か所で当てる。
+      if (CHROME_KINDS.indexOf((g.getAttribute('class') || '').split(/\s+/)[0]) >= 0) return;
       var line = _srcLine(g);
       // 行を持たない要素 (PlantUML が `diamond` などに行を付けない) も、名前があれば枠は出す。
       if (line === null && !g.getAttribute('data-qualified-name')) return;
@@ -675,6 +677,7 @@ window.MA.overlayBuilder = (function() {
       addRect(overlayEl, bb.x - pad, bb.y - pad, bb.width + pad * 2, bb.height + pad * 2, attrs);
       n++;
     });
+    if (!selector || /g\.(title|header|footer|caption|legend)/.test(selector)) n += addDocumentChrome(svgEl, overlayEl, null);
     return n;
   }
 
@@ -979,8 +982,36 @@ window.MA.overlayBuilder = (function() {
     return false;
   }
 
-  function addDocumentChrome(svgEl, overlayEl, dslText) {
+  function _placeChrome(overlayEl, kind, line, bb, pad, i) {
+    if (!bb || !(bb.width > 0 || bb.height > 0)) return 0;
+    if (_chromeCovered(overlayEl, bb)) return 0;
+    addRect(overlayEl, bb.x - pad, bb.y - pad, bb.width + pad * 2, bb.height + pad * 2, {
+      'data-type': 'source-line',
+      'data-id': 'src:' + kind + '@' + line + ':chrome' + i,
+      'data-src-kind': kind,
+      'data-src-name': '',
+      'data-line': String(line),
+    });
+    return 1;
+  }
+
+  // dslText を渡さないとき (図種のモジュールが本文なしで呼ぶ) は、<g class="{種類}" data-source-line> の行だけで当てる。
+  // data-source-line は @startuml を 0 とするので、opts.startUmlLine (@startuml の行、既定 1) を足す。
+  // 行を持たない legend と裸の文字は、本文を渡す呼び出し (app の描画のたび) が当てる。
+  function addDocumentChrome(svgEl, overlayEl, dslText, opts) {
     if (!svgEl || !overlayEl || !svgEl.querySelectorAll) return 0;
+    if (dslText == null) {
+      var base = (opts && opts.startUmlLine) || 1;
+      var placed = 0;
+      CHROME_KINDS.forEach(function(kind) {
+        Array.prototype.forEach.call(svgEl.querySelectorAll('g.' + kind), function(g, i) {
+          var sl = parseInt(g.getAttribute('data-source-line'), 10);
+          if (isNaN(sl)) return;
+          placed += _placeChrome(overlayEl, kind, base + sl, extractUnionBBox(g, 'text, rect, polygon, path, line'), 2, i);
+        });
+      });
+      return placed;
+    }
     var entries = chromeEntries(dslText);
     if (!entries.length) return 0;
     var loose = [];
@@ -1042,18 +1073,7 @@ window.MA.overlayBuilder = (function() {
           picks.push({ en: en, bb: bb, pad: 3 });
         });
       }
-      picks.forEach(function(p, i) {
-        if (!(p.bb.width > 0 || p.bb.height > 0)) return;
-        if (_chromeCovered(overlayEl, p.bb)) return;
-        addRect(overlayEl, p.bb.x - p.pad, p.bb.y - p.pad, p.bb.width + p.pad * 2, p.bb.height + p.pad * 2, {
-          'data-type': 'source-line',
-          'data-id': 'src:' + kind + '@' + p.en.line + ':chrome' + i,
-          'data-src-kind': kind,
-          'data-src-name': '',
-          'data-line': String(p.en.line),
-        });
-        n++;
-      });
+      picks.forEach(function(p, i) { n += _placeChrome(overlayEl, kind, p.en.line, p.bb, p.pad, i); });
     });
     return n;
   }

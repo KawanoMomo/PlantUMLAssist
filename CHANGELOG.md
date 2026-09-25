@@ -1,3 +1,4 @@
+- BLK-migrator-20260925-0932: 題・凡例・見出し・脚注・説明の枠を全図種で 1 か所 (overlayBuilder.addDocumentChrome) から当て、state 図の header / footer / caption にも枠が出る (activity・state・class・component・usecase の個別の当て方をやめた)
 - BLK-migrator-20260925-0752: 同梱・取得する PlantUML の既定を 1.2026.3 に上げ、`+package "Hello" as uid <<Frame>>` のような可視性付きの package 宣言の実物がクラス図として描ける(本文は書き換えない)。1.2026.3 の題名の新しい形 (g.title) でもシーケンス図の題名に枠が出る
 - BLK-primary-20260925-0232-design: FILES の保存先の行・「保存先」見出しの右クリックと Ctrl+K「保存先を変える」から、隣のフォルダを選ぶかパスを入れて別のフォルダを保存先にでき、見出しの件数と「読むだけ」も替えた先に揃う
 - BLK-builder-20260925-0934-3: 図種を問わず title / header / footer / caption / legend にホバーすると書かれた行の枠が出て、押すとその行が選ばれる (sequence の裸の文字、class 図などの行を持たない legend も)

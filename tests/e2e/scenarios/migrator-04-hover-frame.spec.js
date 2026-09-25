@@ -1395,4 +1395,36 @@ test('migrator 手順 4 — title / header / footer / caption / legend のある
   }
   const bob = await hoverHit(page, 'Bob');
   expect(bob.hit && bob.hit.type, 'クラスは今までどおり本人の枠').not.toBe('source-line');
+
+  // BLK-migrator-20260925-0932 の最小再現: title / legend / header と矢印 (Sally --> Bob) の全部に本人の枠
+  await typeDsl(page, ['@startuml', 'title title', 'legend legend', 'header header', 'class Bob', 'class Sally',
+    'Sally --> Bob', '@enduml'].join(String.fromCharCode(10)));
+  await expect(page.locator('#overlay-layer rect[data-src-kind="legend"]')).toHaveCount(1, { timeout: 20000 });
+  await expect(page.locator('#ma-toast')).toBeHidden({ timeout: 15000 });
+  for (const [label, line] of [['title', '2'], ['legend', '3'], ['header', '4']]) {
+    const { hit } = await hoverHit(page, label);
+    expect(hit, label + ' にホバーしてその行の枠が出る').toEqual({ type: 'source-line', line, hover: true });
+  }
+  for (const name of ['Bob', 'Sally']) {
+    const { hit } = await hoverHit(page, name);
+    expect(hit && hit.hover, name + ' に本人の枠').toBe(true);
+    expect(hit.type, name + ' はクラスの枠').not.toBe('source-line');
+  }
+  const head = await page.evaluate(() => {
+    const r = document.querySelector('#preview-svg svg g.link polygon').getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  });
+  await page.mouse.move(3, 3);
+  await page.mouse.move(head.x, head.y);
+  await expect.poll(() => page.locator('#overlay-layer .hit-hover[data-type="relation"][data-line="7"]').count(),
+    { message: '矢じりにホバーして 7 行目の関係の枠', timeout: 5000 }).toBeGreaterThan(0);
+
+  // 他の図種 (state) でも header / footer / caption に枠
+  await typeDsl(page, ['@startuml', 'header SH', 'footer SF', 'caption SC', '[*] --> S1', '@enduml'].join(String.fromCharCode(10)));
+  await expect(page.locator('#overlay-layer rect[data-src-kind="caption"]')).toHaveCount(1, { timeout: 20000 });
+  await expect(page.locator('#ma-toast')).toBeHidden({ timeout: 15000 });
+  for (const [label, line] of [['SH', '2'], ['SF', '3'], ['SC', '4']]) {
+    const { hit } = await hoverHit(page, label);
+    expect(hit, label + ' にホバーしてその行の枠が出る').toEqual({ type: 'source-line', line, hover: true });
+  }
 });

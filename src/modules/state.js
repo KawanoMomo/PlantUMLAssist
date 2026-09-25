@@ -951,7 +951,11 @@ window.MA.modules.plantumlState = (function() {
 
     // BLK-migrator-20260923-2312: 図の題 (title) にも本文の行を指す枠を置く (class / component と同じ)。
     // 題にホバーしても何も出ない / 下の複合状態の枠が出る、をやめる。
-    if (OB.addUnclaimed) OB.addUnclaimed(svgEl, overlayEl, [], 'g.title');
+    // BLK-migrator-20260925-0932: 題に加え header / footer / caption も全図種共通の 1 か所 (addDocumentChrome) で当てる。
+    if (OB.addDocumentChrome) {
+      OB.addDocumentChrome(svgEl, overlayEl, null,
+        { startUmlLine: (parsedData && parsedData.meta && parsedData.meta.startUmlLine) || 1 });
+    }
 
     // BLK-human-20260912-2130: 小さい当たり判定を手前に。共通実装 (src/core)
     OB.raiseSmallestLast(overlayEl);

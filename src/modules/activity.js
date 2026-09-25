@@ -1619,22 +1619,10 @@ window.MA.modules.plantumlActivity = (function() {
   // BLK-migrator-20260924-2232: 図の題・凡例・見出し・脚注・図の下の説明は、PlantUML が
   // <g class="title" data-source-line> に行を残す。本文の並びを数えず、その行で当てる
   // (題が付いても動作・分岐の対応はずれない)。data-source-line は @startuml を 0 とする。
-  var DECOR_SELECTOR = 'g.title, g.legend, g.caption, g.header, g.footer';
+  // BLK-migrator-20260925-0932: 当て方は全図種共通の overlayBuilder.addDocumentChrome の 1 か所に置く。
   function _addDecorRects(svgEl, parsedData, overlayEl) {
     var base = (parsedData && parsedData.meta && parsedData.meta.startUmlLine) || 1;
-    Array.prototype.forEach.call(svgEl.querySelectorAll(DECOR_SELECTOR), function(g, i) {
-      var sl = parseInt(g.getAttribute('data-source-line'), 10);
-      if (isNaN(sl)) return;
-      var bb = OB.extractUnionBBox(g, 'text, rect, polygon, path, line');
-      if (!bb || !(bb.width > 0 || bb.height > 0)) return;
-      var cls = (g.getAttribute('class') || '').split(/\s+/)[0];
-      OB.addRect(overlayEl, bb.x - 4, bb.y - 4, bb.width + 8, bb.height + 8, {
-        'data-type': 'source-line',
-        'data-id': 'src:' + cls + '@' + (base + sl) + ':' + i,
-        'data-src-kind': cls,
-        'data-line': String(base + sl),
-      });
-    });
+    OB.addDocumentChrome(svgEl, overlayEl, null, { startUmlLine: base });
   }
 
   // 題・凡例などの <g> の中の図形は、動作や分岐の箱として数えない。

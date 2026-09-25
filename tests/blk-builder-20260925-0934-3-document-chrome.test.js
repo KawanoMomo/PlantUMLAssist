@@ -129,13 +129,20 @@ describe('addDocumentChrome: class (<g class="header"> … 、legend は行な�
     // 凡例の箱 (x=12.6519, y=253.7969, 52.041x27.6094)
     expect(contains(r.legend, 12.6519, 253.7969, 52.041, 27.6094)).toBe(true);
   });
-  test('addUnclaimed が題名に置いた枠があれば、題名は重ねない', function() {
+  test('本文なしの呼び出し (図種のモジュール) は行のある <g> だけに枠を置き、本文ありの呼び出しは残りの legend だけを足す', function() {
+    // BLK-migrator-20260925-0932: addUnclaimed / activity / state は同じ addDocumentChrome を本文なしで呼ぶ (当て方は 1 か所)。
     var f = fixture('chrome-class');
-    OB.addUnclaimed(f.svgEl, f.overlayEl, [], 'g.title');
-    var before = f.overlayEl.querySelectorAll('rect').length;
-    OB.addDocumentChrome(f.svgEl, f.overlayEl, f.dsl);
+    expect(OB.addUnclaimed(f.svgEl, f.overlayEl, [], 'g.title')).toBe(4);   // title / header / footer / caption (legend は行なし)
+    expect(Number(f.overlayEl.querySelector('rect[data-src-kind="header"]').getAttribute('data-line'))).toBe(5);
+    expect(OB.addDocumentChrome(f.svgEl, f.overlayEl, f.dsl)).toBe(1);
     expect(f.overlayEl.querySelectorAll('rect[data-src-kind="title"]').length).toBe(1);
-    expect(f.overlayEl.querySelectorAll('rect').length).toBe(before + 4);
+    expect(f.overlayEl.querySelector('rect[data-src-kind="legend"]').getAttribute('data-line')).toBe('3');
+  });
+  test('本文なしの呼び出しは @startuml の行 (startUmlLine) を足して本文の行にする', function() {
+    var f = fixture('chrome-class');
+    OB.addDocumentChrome(f.svgEl, f.overlayEl, null, { startUmlLine: 5 });
+    expect(f.overlayEl.querySelector('rect[data-src-kind="title"]').getAttribute('data-line')).toBe('6');
+    expect(f.overlayEl.querySelectorAll('rect[data-src-kind="legend"]').length).toBe(0);
   });
   test('飾りの無い図では何も置かない', function() {
     var f = fixture('chrome-class');
