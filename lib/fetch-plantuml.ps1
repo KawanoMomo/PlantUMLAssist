@@ -11,7 +11,7 @@
 
 $ErrorActionPreference = 'Stop'
 
-$version = if ($env:PLANTUML_VERSION) { $env:PLANTUML_VERSION } else { '1.2026.2' }
+$version = if ($env:PLANTUML_VERSION) { $env:PLANTUML_VERSION } else { '1.2026.3' }
 $variant = if ($env:PLANTUML_VARIANT) { $env:PLANTUML_VARIANT } else { '' }
 
 $dir = if ($env:PLANTUML_OUT) { $env:PLANTUML_OUT } else { Split-Path -Parent $MyInvocation.MyCommand.Definition }
