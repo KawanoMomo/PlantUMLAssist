@@ -22,7 +22,7 @@ test('手順3 旧記法だけの activity 図を開くと activity と判定さ�
 // 同じ <style> でも PlantUML が描ける図はそのまま描く。
 // BLK-migrator-20260925-0752: 同梱・取得の既定を 1.2026.3 に上げ、この実物は PlantUML 自身が描けるようになった。
 // 落ちた絵の扱いは、1.2026.2 が返した絵 (fixtures/svg/plantuml-crash-1.2026.2.svg) を server の見分けに通し、
-// その 422 を画面が受けたときの見え方で確かめる。
+// 画面の見え方は、今の同梱版が実際に落ちる図で確かめる (BLK-builder-20260925-1052-4)。
 test('手順3 PlantUML が落ちる図は成功のふりをせず描画エラーに出し、<style> 付きスプライトでも描ける図は描く', async ({ page }) => {
   const fs = require('fs');
   const path = require('path');
@@ -63,20 +63,25 @@ test('手順3 PlantUML が落ちる図は成功のふりをせず描画エラー
   expect(judged.message).toContain('PlantUML 1.2026.2 が描画の途中で落ちました');
   expect(judged.message).toContain('NullPointerException');
 
-  // その 422 (kind: plantuml-crash) を受けた画面は、落ちた絵を図として出さず描画エラーとして言い、直前の図を残す。
+  // BLK-builder-20260925-1052-4: 1.2026.3 は落ちた絵の 1 行目を「An error has occurred」と綴る (1.2026.2 は occured)。
+  // 同梱の PlantUML が実際に落ちる図 (smetana で最初の並行領域が空の state、migrator の concurrent-empty-first-region) で、
+  // server が 422 (plantuml-crash) を返し、画面は落ちた絵を図として出さず描画エラーとして言い、直前の図を残す。
+  const crashDsl = read('smetana-empty-first-region-crash.puml');
+  const crashed = await page.request.post('/render', { data: { text: crashDsl, mode: 'local' } });
+  expect(crashed.status()).toBe(422);
+  const crashedBody = await crashed.json();
+  expect(crashedBody.kind).toBe('plantuml-crash');
+  expect(crashedBody.error).toContain('が描画の途中で落ちました');
   await setDsl(read('svg-sprite-style-min.puml'));
   await expect.poll(previewTexts, { timeout: 20000 }).toEqual(expect.arrayContaining(['Alice', 'Bob']));
-  await page.route('**/render', (route) => route.fulfill({ status: 422, contentType: 'application/json',
-    body: JSON.stringify({ error: judged.message, line: null, kind: 'plantuml-crash' }) }));
-  await setDsl(read('svg-sprite-style-crash.puml'));
+  await setDsl(crashDsl);
   await expect(page.locator('#render-status')).toHaveText('ERROR', { timeout: 20000 });
   await expect(page.locator('#render-error-overlay')).toBeVisible();
   await expect(page.locator('#render-error-overlay')).toContainText('描画の途中で落ちました');
-  await expect(page.locator('#render-error-overlay')).toContainText('NullPointerException');
+  await expect(page.locator('#render-error-overlay')).toContainText('IllegalArgumentException');
   const after = await previewTexts();
-  expect(after.some((t) => /An error has occured|has crashed/.test(t)), '落ちた絵が図として出ている').toBe(false);
+  expect(after.some((t) => /An error has occurr?ed|has crashed/.test(t)), '落ちた絵が図として出ている').toBe(false);
   expect(after).toEqual(expect.arrayContaining(['Alice', 'Bob']));
-  await page.unroute('**/render');
 });
 
 // BLK-migrator-20260925-0752: package 宣言の先頭に可視性の `+` を付けた実物 (PlantUML 公式 issue #2846 の再現、

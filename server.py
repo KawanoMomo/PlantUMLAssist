@@ -656,8 +656,9 @@ def _decode_entities(raw):
 
 # BLK-migrator-20260924-1432: PlantUML が描いている途中で落ちた (例外) ときの絵。
 # 文法エラーの配色を使わず白地に黒文字で「An error has occured : <例外>」と
+# (1.2026.3 からは綴りが occurred。どちらの綴りでも見分ける。BLK-builder-20260925-1052-4)
 # 「PlantUML (版) has crashed.」を書く。src/core/render-error.js の detectCrash と同じ 2 条件。
-_CRASH_HEAD_RE = re.compile(rb'<text[^>]*>\s*An error has occured\s*:?\s*(.*?)</text>', re.S | re.I)
+_CRASH_HEAD_RE = re.compile(rb'<text[^>]*>\s*An error has occurr?ed\s*:?\s*(.*?)</text>', re.S | re.I)
 _CRASH_MARK_RE = re.compile(rb'<text[^>]*>\s*PlantUML \(([^)<]*)\) has crashed\.?\s*</text>', re.I)
 
 
