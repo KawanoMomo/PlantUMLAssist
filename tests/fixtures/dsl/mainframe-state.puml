@@ -1,0 +1,6 @@
+@startuml
+mainframe 状態の枠
+[*] --> Idle
+Idle --> Run : go
+Run --> [*]
+@enduml

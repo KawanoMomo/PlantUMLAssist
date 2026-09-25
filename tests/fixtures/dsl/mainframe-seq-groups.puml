@@ -1,0 +1,16 @@
+@startuml
+title 題
+header 頭
+participant A
+participant B
+mainframe 全体の枠
+alt 成功
+  A -> B : Req()
+else 失敗
+  B --> A : Err
+end
+ref over A, B : 初期化
+loop 3回
+  A -> B : Poll()
+end
+@enduml

@@ -1,0 +1,6 @@
+@startuml
+mainframe クラスの枠
+class Foo
+class Bar
+Foo --> Bar
+@enduml

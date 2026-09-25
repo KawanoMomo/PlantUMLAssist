@@ -1617,3 +1617,31 @@ test('migrator 手順 4 — 複合状態の中の空所を指すと複合状態�
   await expect(page.locator('#overlay-layer rect.selected[data-id="counter"]').first()).toBeVisible({ timeout: 5000 });
   await expect(page.locator('#overlay-warning')).toBeHidden();
 });
+
+// BLK-migrator-20260925-1732: mainframe の見出しの文字に枠が出ず、「⚠ Overlay マッチング失敗: message:6」が出ていた (corpus の seq-19)。
+// mainframe の札は title / header と同じ 1 か所で当て (押すと mainframe の行)、2 枚目以降 (newpage の後) は 1 枚目の照合に数えない。
+// 宣言の後ろの `<<ステレオタイプ>>` も名前の外として読み、参加者は宣言の行に当たる。
+test('migrator 手順 4 — mainframe と newpage とステレオタイプ付きの宣言がある sequence 図でも、見出し・参加者・メッセージに本人の枠が出て警告が出ない', async ({ page }) => {
+  await bootPlain(page);
+  const dsl = fs.readFileSync(path.join(__dirname, '..', '..', 'fixtures', 'dsl', 'mainframe-seq19.puml'), 'utf8')
+    .replace(/\r\n/g, '\n').replace(/\n+$/, '');
+  await typeDsl(page, dsl);
+  await expect(page.locator('#overlay-layer rect[data-src-kind="mainframe"]')).toHaveCount(1, { timeout: 20000 });
+  await expect(page.locator('#ma-toast')).toBeHidden({ timeout: 15000 });
+  await expect(page.locator('#overlay-warning')).toBeHidden();
+  for (const [label, type, line] of [['起動シーケンス概要', 'source-line', '5'], ['MCUドライバ', 'participant', '3'],
+    ['アプリ', 'participant', '4'], ['Init()', 'message', '6'], ['E_OK', 'message', '7']]) {
+    const { hit } = await hoverHit(page, label);
+    expect(hit, label + ' にホバーして本人の行の枠が出る').toEqual({ type, line, hover: true });
+  }
+  // 見出しを押すと本文の mainframe の行が選ばれる
+  const mf = await hoverHit(page, '起動シーケンス概要');
+  await page.mouse.click(mf.box.x, mf.box.y);
+  await expect(page.locator('#src-line-props')).toHaveAttribute('data-line', '5');
+
+  // 他の図種 (新記法のアクティビティ図) でも札に mainframe の行、動作は本人の枠
+  await typeDsl(page, ['@startuml', 'mainframe 動作の枠', 'start', ':A;', 'stop', '@enduml'].join(String.fromCharCode(10)));
+  await expect(page.locator('#overlay-layer rect[data-src-kind="mainframe"]')).toHaveCount(1, { timeout: 20000 });
+  expect((await hoverHit(page, '動作の枠')).hit).toEqual({ type: 'source-line', line: '2', hover: true });
+  expect((await hoverHit(page, 'A')).hit).toEqual({ type: 'action', line: '4', hover: true });
+});
