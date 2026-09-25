@@ -67,8 +67,14 @@ describe('renderError.detect', function() {
 });
 
 describe('renderError.describe', function() {
-  test('行番号が分かるときは行番号を先に置く', function() {
+  // BLK-migrator-20260925-0752: 版の分かるエラー画は「PlantUML {版} がこの行を読めません」を先に言う (元の文言は括弧に残す)。
+  test('行番号が分かるときは行番号を言う (版の分かるエラー画は PlantUML の版と一緒に)', function() {
     expect(RE.describe(RE.detect(ERROR_SVG)))
+      .toBe('PlantUML 1.2026.2 がこの行を読めません: 3 行目 (Syntax Error? (Assumed diagram type: sequence))');
+  });
+  test('版の書かれていないエラー画は従来どおり行番号を先に置く', function() {
+    var svg = ERROR_SVG.replace('PlantUML 1.2026.2', 'Welcome');
+    expect(RE.describe(RE.detect(svg)))
       .toBe('3 行目: Syntax Error? (Assumed diagram type: sequence)');
   });
   test('行番号が無ければ message だけ', function() {

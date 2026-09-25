@@ -34022,7 +34022,11 @@ function renderSvg() {
   }).then(function(resp) {
     var contentType = resp.headers.get('Content-Type') || '';
     if (!resp.ok) {
-      return resp.json().then(function(err) { throw new Error(err.error || ('HTTP ' + resp.status)); });
+      return resp.json().then(function(err) {
+        var e = new Error(err.error || ('HTTP ' + resp.status));
+        e.renderInfo = err;  // BLK-migrator-20260925-0752: 版・行・推測した図種 (422)
+        throw e;
+      });
     }
     if (contentType.indexOf('image/svg') < 0) {
       throw new Error('Unexpected content type: ' + contentType);
@@ -34034,7 +34038,11 @@ function renderSvg() {
     // \u76f4\u524d\u307e\u3067\u898b\u3048\u3066\u3044\u305f\u56f3\u304c\u300cSyntax Error?\u300d\u306e\u7d75\u306b\u4e38\u3054\u3068\u7f6e\u304d\u63db\u308f\u308b\u306e\u3067\u3001
     // \u3053\u3053\u3067\u62fe\u3063\u3066\u63cf\u753b\u30a8\u30e9\u30fc\u6271\u3044\u306b\u3057\u3001\u76f4\u524d\u306e\u56f3\u3092\u6b8b\u3057\u305f\u307e\u307e\u5e2f\u3060\u3051\u3092\u91cd\u306d\u308b\u3002
     var errInfo = window.MA.renderError.detect(svg);
-    if (errInfo.isError) throw new Error(window.MA.renderError.describe(errInfo));
+    if (errInfo.isError) {
+      var detected = new Error(window.MA.renderError.describe(errInfo));
+      detected.renderInfo = errInfo;
+      throw detected;
+    }
     clearRenderError();
     previewSvgEl.innerHTML = svg;
     var svgEl = previewSvgEl.querySelector('svg');
@@ -34099,7 +34107,14 @@ function renderSvg() {
     updateTopRenderStatus('ok', took);
   }).catch(function(err) {
     if (myGen !== renderGen) return;  // stale failure — ignore
-    showRenderError(err.message || err);
+    var bandText = (err && err.message) || err;
+    // BLK-migrator-20260925-0752: PlantUML がその行で図種を見失った (本文の図種と違うものを推測した) ときは、そのことを帯に足す。
+    try {
+      var note = err && err.renderInfo && window.MA.renderError.kindNote
+        ? window.MA.renderError.kindNote(err.renderInfo, currentModule && currentModule.type) : '';
+      if (note) bandText += '。' + note;
+    } catch (e) {}
+    showRenderError(bandText);
     renderStatusEl.textContent = 'ERROR';
     renderStatusEl.classList.add('error');
     updateTopRenderStatus('error');

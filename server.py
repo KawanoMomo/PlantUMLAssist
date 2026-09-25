@@ -643,6 +643,9 @@ API_INDEX = {
 _ERR_GREEN_MARK = b'fill="#33FF02"'
 _ERR_RED_TEXT_RE = re.compile(rb'<text[^>]*fill="#FF0000"[^>]*>(.*?)</text>', re.S | re.I)
 _ERR_LINE_RE = re.compile(rb'\[From string \(line (\d+)\)')
+_ERR_VERSION_RE = re.compile(rb'<text[^>]*>\s*PlantUML (?:version )?([0-9][0-9A-Za-z.\-]*)')
+_ERR_SOURCE_RE = re.compile(rb'<text[^>]*text-decoration="wavy underline"[^>]*>(.*?)</text>', re.S)
+_ERR_ASSUMED_RE = re.compile(r'Assumed diagram type:\s*([A-Za-z_]+)')
 _ENTITIES = {'&lt;': '<', '&gt;': '>', '&quot;': '"', '&apos;': "'", '&amp;': '&', '&#160;': ' '}
 
 
@@ -689,7 +692,29 @@ def detect_render_error(svg):
     if 'error' not in message.lower():
         return None
     lm = _ERR_LINE_RE.search(svg)
-    return {'message': message, 'line': int(lm.group(1)) if lm else None}
+    info = {'message': message, 'line': int(lm.group(1)) if lm else None}
+    # BLK-migrator-20260925-0752: エラー画には版・波線の付いた行・PlantUML が推測した図種が書いてある。
+    # 帯で「PlantUML {版} がこの行を読めません」と PlantUML 側の限界であることを言うのに使う。
+    vm = _ERR_VERSION_RE.search(svg)
+    if vm:
+        info['version'] = vm.group(1).decode('ascii', 'replace')
+    sm = _ERR_SOURCE_RE.search(svg)
+    if sm:
+        info['source'] = _decode_entities(sm.group(1))
+    am = _ERR_ASSUMED_RE.search(message)
+    if am:
+        info['assumed'] = am.group(1).lower()
+    return info
+
+
+def describe_render_error(err):
+    """帯と 422 の error に出す 1 行。src/core/render-error.js の describe と同じ文面。"""
+    head = ('%d 行目: ' % err['line']) if err.get('line') else ''
+    if err.get('crashed') or not err.get('version'):
+        return head + err['message']
+    where = ('%d 行目' % err['line']) if err.get('line') else 'この行'
+    src = (' `%s`' % err['source']) if err.get('source') else ''
+    return 'PlantUML %s がこの行を読めません: %s%s (%s)' % (err['version'], where, src, err['message'])
 
 
 def resolve_render_request(data):
@@ -1375,9 +1400,12 @@ class Handler(BaseHTTPRequestHandler):
             # 元から !resp.ok を描画エラー扱いにしているので見え方は変わらない。
             err = detect_render_error(svg)
             if err:
-                msg = ('%d 行目: %s' % (err['line'], err['message'])) if err['line'] else err['message']
+                msg = describe_render_error(err)
                 payload = {'error': msg, 'line': err['line'],
                            'kind': 'plantuml-crash' if err.get('crashed') else 'plantuml-syntax'}
+                for key in ('version', 'source', 'assumed'):
+                    if err.get(key):
+                        payload[key] = err[key]
                 if warning:
                     payload['warning'] = warning
                 self._send_json(422, payload)
