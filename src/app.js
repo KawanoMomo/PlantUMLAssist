@@ -3767,6 +3767,8 @@ function initCommandPalette() {
       { id: 'seq-to-activity', title: 'シーケンス図からアクティビティ図を起こす / Sequence to activity', hint: 'Tabs', keywords: ['activity', 'sequence', 'draft', 'あくてぃびてぃ', 'しーけんす', 'おこす', 'したがき'], run: function() { makeActivityFromSequence(); } },
       { id: 'component-draft', title: '定石構成からコンポーネント図を起こす / Component draft', hint: 'Tabs', keywords: ['component', 'draft', 'こんぽーねんと', 'じょうせき', 'おこす', 'したがき'], run: function() { promptComponentDraft(); } },
       { id: 'tab-new', title: '新しい図を開く / New diagram', hint: 'Tabs', keywords: ['new', 'tab', 'あたらしい', 'ず'], button: 'btn-tab-new', run: function() { clickById('btn-tab-new'); } },
+      // BLK-primary-20260925-0232-design: 保存先の行の右クリック「別のフォルダを保存先にする…」と同じ窓。
+      { id: 'change-target', title: '保存先を変える / Change save folder', hint: 'Files', keywords: ['保存先', 'ほぞんさき', 'かえる', '変える', '自動保存', 'じどうほぞん', 'save', 'folder', 'autosave', 'target'], run: function() { setTimeout(openChangeTarget, 0); } },
       { id: 'tab-folder', title: 'FILES: 保存先を開く / Files: save folder', hint: 'Files', keywords: ['folder', 'files', 'tree', 'list', 'いちらん', 'ふぉるだ', 'ほぞんさき'], button: 'btn-tab-folder', run: function() { _ensureFolderListOpen(); } },
       { id: 'change-ticket', title: '変更チケットを開く / Change tickets', hint: 'Tabs', keywords: ['ticket', 'change', 'impact', 'ちけっと', 'へんこう', 'つづき', 'しようへんこう'], run: function() { toggleTicketBoard(true); } },
       { id: 'vault', title: '提出物庫を開く / Deliverable vault', hint: 'Tabs', keywords: ['vault', 'export', 'ていしゅつ', 'こ', 'かこ', 'ぜんかい'], run: function() { toggleVault(true); } },
@@ -12386,6 +12388,123 @@ function renderReadonlyTree() {
 function refreshReadonlyTree(force) {
   return _ensurePeekDirs(!!force).then(function() { renderReadonlyTree(); return true; });
 }
+
+// ── 別のフォルダを保存先にする (BLK-primary-20260925-0232-design、design 10a / 10b) ─────────
+// ツリーからは別のフォルダを保存先にできず、⚙ 設定 → 自動保存 → ファイル → パス → 設定を保存 の 5 手だった。
+// 保存先の行・「保存先」見出しの右クリックと Ctrl+K「保存先を変える」から同じ 1 つの窓を開く。
+// 窓は「読むだけ」節と同じ一覧 (隣のフォルダ) とパスの欄。書く値は ⚙ 設定の保存先の欄と同じ (autoSave の fileDir)。
+function changeSaveTarget(dir) {
+  var v = String(dir == null ? '' : dir).trim();
+  if (!v) return Promise.resolve({ ok: false, reason: 'フォルダを選ぶか、パスを入れてください' });
+  var SDH = window.MA.saveDirHandoff;
+  if (SDH) {
+    var chk = SDH.check(v);
+    if (!chk.ok) return Promise.resolve({ ok: false, reason: chk.reason });
+    v = chk.value;
+  }
+  var AS = window.MA.autoSave;
+  if (!AS) return Promise.resolve({ ok: false, reason: '自動保存が使えません' });
+  var prev = AS.getConfig() || {};
+  AS.setConfig({ backend: 'file', fileDir: v });
+  var inp = document.getElementById('cfg-file-dir');
+  if (inp) inp.value = v;
+  updateTopSaveTarget();
+  // 保存先の一覧 (見出しの件数・部品のフォルダ) を替えた先で読み直す。前の保存先は「読むだけ」に並ぶ。
+  if (prev.fileDir !== v || prev.backend !== 'file') { try { reloadFolderListNow(); } catch (e) {} }
+  return refreshReadonlyTree(true).then(function() { return { ok: true, dir: v }; });
+}
+
+function _closeChangeTarget() {
+  var m = document.getElementById('target-pick');
+  if (m) m.parentNode.removeChild(m);
+}
+
+function openChangeTarget() {
+  _closeChangeTarget();
+  var PF = window.MA.peekFolder;
+  var m = document.createElement('div');
+  m.id = 'target-pick';
+  m.setAttribute('role', 'dialog');
+  m.setAttribute('aria-label', '別のフォルダを保存先にする');
+  var box = document.createElement('div');
+  box.className = 'target-pick-box';
+  var h = document.createElement('div');
+  h.className = 'target-pick-title';
+  h.textContent = '別のフォルダを保存先にする';
+  var cur = document.createElement('div');
+  cur.className = 'target-pick-cur';
+  cur.textContent = '今の保存先: ' + _wsFileDir() + '（替えると「読むだけ」に並びます）';
+  var list = document.createElement('div');
+  list.className = 'target-pick-list';
+  list.id = 'target-pick-list';
+  var msg = document.createElement('div');
+  msg.className = 'target-pick-msg';
+  msg.id = 'target-pick-msg';
+  var row = document.createElement('div');
+  row.className = 'target-pick-row';
+  var path = document.createElement('input');
+  path.type = 'text';
+  path.id = 'target-pick-path';
+  path.spellcheck = false;
+  path.placeholder = 'フォルダのパス (例: C:/work/diagrams)';
+  path.setAttribute('aria-label', '保存先にするフォルダのパス');
+  var ok = document.createElement('button');
+  ok.type = 'button';
+  ok.id = 'target-pick-ok';
+  ok.textContent = '保存先にする';
+  var cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.id = 'target-pick-cancel';
+  cancel.textContent = 'やめる';
+  row.appendChild(path); row.appendChild(ok); row.appendChild(cancel);
+  box.appendChild(h); box.appendChild(cur); box.appendChild(list); box.appendChild(row); box.appendChild(msg);
+  m.appendChild(box);
+  document.body.appendChild(m);
+
+  function apply(dir) {
+    msg.textContent = '';
+    return changeSaveTarget(dir).then(function(r) {
+      if (!r.ok) { msg.textContent = '⚠ ' + r.reason; path.focus(); return r; }
+      _closeChangeTarget();
+      setSaveStatus('保存先を ' + (PF ? PF.baseName(r.dir) : r.dir) + ' にしました（前の保存先は「読むだけ」に並びます）');
+      return r;
+    });
+  }
+  function renderList() {
+    list.innerHTML = '';
+    var others = PF ? PF.others(_peekDirs) : [];
+    if (!others.length) {
+      var none = document.createElement('div');
+      none.className = 'target-pick-none';
+      none.textContent = '隣に図のあるフォルダはありません。パスを入れてください';
+      list.appendChild(none);
+      return;
+    }
+    others.forEach(function(d) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'target-pick-dir';
+      b.setAttribute('data-dir', d.path);
+      b.title = d.path;
+      b.textContent = d.name + '  ' + d.files + ' 図';
+      b.addEventListener('click', function() { apply(d.path); });
+      list.appendChild(b);
+    });
+  }
+  ok.addEventListener('click', function() { apply(path.value); });
+  cancel.addEventListener('click', _closeChangeTarget);
+  m.addEventListener('mousedown', function(e) { if (e.target === m) _closeChangeTarget(); });
+  m.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); _closeChangeTarget(); }
+    else if (e.key === 'Enter' && e.target === path) { e.preventDefault(); apply(path.value); }
+  });
+  renderList();
+  _ensurePeekDirs(true).then(function() { if (document.getElementById('target-pick') === m) renderList(); });
+  path.focus();
+  return m;
+}
+window.openChangeTarget = openChangeTarget;
+window.changeSaveTarget = changeSaveTarget;
 
 // 読むだけのフォルダを右の枠の相手にする。name を渡すとその 1 枚を出し、図を切り替えても
 // 入れ替えない (1 回だけ)。name が無ければ今開いている図に当たる相手を追う。

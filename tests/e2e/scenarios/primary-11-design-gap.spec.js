@@ -605,3 +605,53 @@ test('手順11 保存先の図を開くと上部バーが「保存先 / 部品 /
   await expect(head).toHaveAttribute('aria-expanded', 'true');
   await expect(head).toBeFocused();
 });
+
+// BLK-primary-20260925-0232-design (design 10a / 10b): ツリーから別のフォルダを保存先にする。
+// 前は保存先の行の「保存先にする」「読むだけにする」が灰色で、⚙ 設定 → 自動保存 → ファイル → パス → 設定を保存 の 5 手だった。
+test('手順11 保存先の行の右クリック「別のフォルダを保存先にする…」で隣のフォルダを選ぶと、保存先・件数・読むだけが替わる', async ({ page }) => {
+  const base = DIR + '/change-target';
+  const absBase = path.join(S.absDirFor(__filename), 'change-target');
+  const mk = (sub, names) => {
+    const d = path.join(absBase, sub);
+    fs.rmSync(d, { recursive: true, force: true });
+    fs.mkdirSync(d, { recursive: true });
+    names.forEach((n) => fs.writeFileSync(path.join(d, n + '.puml'), '@startuml\nclass ' + n + '\n@enduml\n'));
+  };
+  mk('mine', ['Own_Class']);
+  mk('senior', ['Spi_Class', 'Spi_Sequence']);
+  await S.bootWithSaveDir(page, base + '/mine');
+  await expect(page.locator('#top-save-target')).toHaveText('mine', { timeout: 15000 });
+
+  // 保存先の行を右クリック → 「別のフォルダを保存先にする…」
+  await page.locator('#top-save-target').click({ button: 'right' });
+  const item = page.locator('#files-ctx-menu .files-ctx-item', { hasText: '別のフォルダを保存先にする…' });
+  await expect(item).toBeEnabled();
+  await item.click();
+  const dlg = page.locator('#target-pick');
+  await expect(dlg).toBeVisible();
+  // 読むだけ節と同じ一覧 (隣の図のあるフォルダ) が並ぶ
+  const senior = dlg.locator('.target-pick-dir', { hasText: 'senior' });
+  await expect(senior).toBeVisible({ timeout: 10000 });
+  await senior.click();
+  await expect(dlg).toHaveCount(0);
+
+  // パンくず・見出しの件数が替えた先になり、前の保存先は「読むだけ」に並ぶ
+  await expect(page.locator('#top-save-target')).toHaveText('senior');
+  await expect(page.locator('#files-count-target')).toHaveText(/2/, { timeout: 10000 });
+  const cfg = await page.evaluate(() => window.MA.autoSave.getConfig());
+  expect(cfg.fileDir.split(String.fromCharCode(92)).join('/')).toMatch(/change-target.senior$/);
+  await page.locator('#files-sec-readonly').click();
+  await expect(page.locator('#files-panel .files-ro-folder', { hasText: 'mine' })).toBeVisible({ timeout: 10000 });
+
+  // Ctrl+K「保存先を変える」は同じ窓を開き、パスを入れても替えられる
+  await page.keyboard.press('Control+k');
+  await page.keyboard.type('保存先を変える');
+  await page.keyboard.press('Enter');
+  await expect(dlg).toBeVisible();
+  await expect(page.locator('#target-pick-path')).toBeFocused();
+  await page.keyboard.type(base + '/mine');
+  await page.keyboard.press('Enter');
+  await expect(dlg).toHaveCount(0);
+  await expect(page.locator('#top-save-target')).toHaveText('mine');
+  await expect(page.locator('#files-count-target')).toHaveText(/1/, { timeout: 10000 });
+});
