@@ -314,3 +314,38 @@ test('手順3 正しい PlantUML には「読めない行」の帯が出ず、�
   await expect(page.locator('#render-status')).toHaveText(/^Rendered/, { timeout: 20000 });
   await expect(panel).toBeHidden({ timeout: 20000 });
 });
+
+// BLK-migrator-20260925-1632: par / else / end を持つ sequence 図 (corpus の seq-15) を開くと「NoClassDefFoundError:
+// .../CrashReportHandler」で描けなかった。原因は図ではなく、走っている描画 daemon の jar が同じ場所で置き換えられたこと
+// (置き換えの確かめは tests/blk-migrator-20260925-1632-daemon-jar-swap.test.js が本物の jar で行う)。ここでは実物の形を
+// 「ファイルを開く」で開き、par・critical・group・break の文字も分岐の両方のメッセージも描かれることを見る。
+test('手順3 par/else・critical・group/break の sequence 図を開くと落ちずに全部の枠とメッセージが描ける', async ({ page }) => {
+  const REAL = [
+    '@startuml', 'participant Core', 'participant TaskA', 'participant TaskB',
+    'par 並列実行', '  Core -> TaskA : Start()', 'else', '  Core -> TaskB : Start()', 'end',
+    'critical 排他区間', '  TaskA -> Core : AccessSharedMem()', 'end',
+    'group カスタムグループ [初期化シーケンス]', '  Core -> TaskA : Init()',
+    '  break 初期化失敗', '    TaskA --> Core : E_NOT_OK', '  end', 'end',
+    '@enduml', '',
+  ].join('\n');
+  const srcDir = path.join(absDirFor(__filename), '..', 'migrator-03-par-src');
+  fs.mkdirSync(srcDir, { recursive: true });
+  const src = path.join(srcDir, 'seq-15-par-break-critical-group.puml');
+  fs.writeFileSync(src, REAL);
+
+  await bootWithSaveDir(page, dirFor(__filename) + '-par');
+  const [chooser] = await Promise.all([
+    page.waitForEvent('filechooser', { timeout: 20000 }),
+    page.evaluate(() => { document.getElementById('file-input').click(); }),
+  ]);
+  await chooser.setFiles(src);
+  await expect(page.locator('#editor')).toHaveValue(/par 並列実行/, { timeout: 20000 });
+  await expect(page.locator('#render-status')).toHaveText(/^Rendered/, { timeout: 20000 });
+  await expect(page.locator('#render-error-overlay')).toBeHidden();
+  const texts = () => page.evaluate(() =>
+    Array.from(document.querySelectorAll('#preview-svg svg text')).map((t) => (t.textContent || '').trim()));
+  await expect.poll(texts, { timeout: 20000 }).toEqual(expect.arrayContaining(
+    ['par', 'critical', 'break', 'AccessSharedMem()', 'Init()', 'E_NOT_OK']));
+  expect((await texts()).filter((t) => t === 'Start()')).toHaveLength(2);
+  expect(await page.locator('#diagram-type').inputValue()).toBe('plantuml-sequence');
+});
