@@ -267,8 +267,11 @@ window.MA.sequenceOverlay = (function() {
     });
   }
   // 比べるための文言: 空白・&nbsp; を落とし、SHOW_INDEX の頭の番号 (`1:`) を外す。
+  // BLK-builder-20260925-1552-3: Creole の飾り (`<b>` `**` `//` `""` `__` `~~`) は描かれた文字に残らないので、
+  // 本文側・SVG 側の両方から落として比べる (`... Some ~~long delay~~ ...` は「Some」「long delay」と描かれる)。
   function _procNorm(s) {
-    return String(s || '').replace(/\\n/g, '').replace(/&nbsp;/g, '').replace(/[\s ]+/g, '').replace(/^\d+:/, '');
+    return String(s || '').replace(/\\n/g, '').replace(/&nbsp;/g, '').replace(/<\/?[a-zA-Z][^>]*>/g, '')
+      .replace(/\*\*|\/\/|""|__|~~/g, '').replace(/[\s ]+/g, '').replace(/^\d+:/, '');
   }
   function _procRects(svgEl) {
     var out = [];
@@ -402,6 +405,11 @@ window.MA.sequenceOverlay = (function() {
     });
     var dividers = [], delays = [];
     var usedRects = [];
+    var hLines = _bareShapes(svgEl, 'line').map(function(l) {
+      var y1 = _num(l, 'y1'), x1 = _num(l, 'x1'), x2 = _num(l, 'x2');
+      if (isNaN(y1) || isNaN(x1) || isNaN(x2) || Math.abs(_num(l, 'y2') - y1) > 0.5) return null;
+      return { y: y1, x1: Math.min(x1, x2), x2: Math.max(x1, x2) };
+    }).filter(Boolean);
     String(dslText || '').split('\n').forEach(function(raw, i) {
       var dm = /^\s*==\s*(.*?)\s*==\s*$/.exec(raw);
       var lm = !dm && /^\s*\.\.\.\s*(.*?)\s*\.\.\.\s*$/.exec(raw);
@@ -409,9 +417,12 @@ window.MA.sequenceOverlay = (function() {
       if (!label) return;
       if (dm) {
         // 区切り: 表示名を囲む小さい rect。横いっぱいの 2 本線まで広げる。
+        // BLK-builder-20260925-1552-3: 描かれた区切りの形 (rect を左右に突き抜ける横線がある) を持つ rect に限る
+        // (同じ文字を持つ注釈や手続きの部品の箱を区切りと取り違えない)。
         var best = null;
         rects.forEach(function(r) {
           if (usedRects.indexOf(r) >= 0) return;
+          if (!hLines.some(function(l) { return l.y >= r.y && l.y <= r.y + r.h && l.x1 < r.x - 1 && l.x2 > r.x + r.w + 1; })) return;
           var inside = texts.filter(function(t) { return _inRect(r, t.x, t.y); });
           if (!inside.length || _procNorm(inside.map(function(t) { return t.s; }).join('')) !== label) return;
           if (!best || r.w * r.h < best.w * best.h) best = r;
@@ -696,6 +707,12 @@ window.MA.sequenceOverlay = (function() {
       procArrows = _procArrows(svgEl);
       procScene = _procStructures(svgEl, dslText);
     }
+    // BLK-builder-20260925-1552-3: ref / 区切り / 遅延は、ふつうの図 (参加者・メッセージに class が付く SVG) でも
+    // class の無い <rect>/<path>/<line>/<text> で描かれる。手続きの図と同じく描かれた形から見分け、書かれた行を指す枠を置く
+    // (ふつうの図では ref も区切りも遅延も枠が 1 つも出ていなかった)。枠は最後にまとめて手前に置く
+    // (ref の箱・区切りの帯はライフラインの上に描かれ、先に置くとライフラインに吸われる)。
+    var scene = procScene || (participants.length && dslText ? _procStructures(svgEl, dslText) : null);
+    var srcHits = [];
     var partMatches = _matchParts('g.participant-head');
     if (!partMatches.length && participants.length && !svgEl.querySelector('g.participant-head')) {
       partMatches = _procParticipants(svgEl, participants, procArrows || _procArrows(svgEl));
@@ -894,6 +911,7 @@ window.MA.sequenceOverlay = (function() {
       // BLK-migrator-20260924-1332: 手続きの図では ref の枠が塗り付き (skinparam) で出て、塗りなしの rect だけを
       // 数えると枠の並びがずれる。見出しの五角形が角に付いた rect を枠として数え、数が合えばそちらで当てる。
       if (procScene && procScene.frames.length === frames.length) bboxes = procScene.frames;
+      else if (scene && bboxes.length !== frames.length && scene.frames.length === frames.length) bboxes = scene.frames;
       var n = Math.min(bboxes.length, frames.length);
       var emitted = 0;
       groupHitFrames = [];
@@ -902,7 +920,7 @@ window.MA.sequenceOverlay = (function() {
         var gp = frames[gi].group;
         if (!gp) {
           // ref の枠は、フォームで直せない記法としてその行を指す (黙って何も出さない、をやめる)。
-          if (procScene && bboxes === procScene.frames) _addProcSourceLine(overlayEl, bb, frames[gi].line, 'ref');
+          srcHits.push({ box: bb, line: frames[gi].line, kind: 'ref' });
           continue;
         }
         emitted++;
@@ -914,19 +932,19 @@ window.MA.sequenceOverlay = (function() {
         });
       }
       OB.warnIfMismatch('group', groups.length, emitted);
-    } else if (procScene) {
+    } else if (scene) {
       var refLines = [];
       String(dslText || '').split('\n').forEach(function(raw, i) {
         if (/^\s*ref\s+over\b/i.test(raw)) refLines.push(i + 1);
       });
-      if (refLines.length === procScene.frames.length) {
-        procScene.frames.forEach(function(bb, i) { _addProcSourceLine(overlayEl, bb, refLines[i], 'ref'); });
+      if (refLines.length === scene.frames.length) {
+        scene.frames.forEach(function(bb, i) { srcHits.push({ box: bb, line: refLines[i], kind: 'ref' }); });
       }
     }
     // BLK-migrator-20260924-1332: 区切り (`== x ==`) と遅延 (`... x ...`) にもその行を指す枠を置く。
-    if (procScene) {
-      procScene.dividers.forEach(function(d) { _addProcSourceLine(overlayEl, d.box, d.line, 'divider'); });
-      procScene.delays.forEach(function(d) { _addProcSourceLine(overlayEl, d.box, d.line, 'delay'); });
+    if (scene) {
+      scene.dividers.forEach(function(d) { srcHits.push({ box: d.box, line: d.line, kind: 'divider' }); });
+      scene.delays.forEach(function(d) { srcHits.push({ box: d.box, line: d.line, kind: 'delay' }); });
     }
     // BLK-migrator-20260923-1409: 群の枠は内側全体を覆うので、先に置いたライフラインが
     // その下に隠れ、alt の中のライフラインを指すと alt が選ばれていた。細いライフラインを
@@ -1103,6 +1121,7 @@ window.MA.sequenceOverlay = (function() {
     // BLK-owner-20260924-0637-2: 枠の札・見出し・枠線・条件の文字は一番手前に置く。ライフラインの当たり
     // (メッセージの間の細い区間はメッセージより後に足される) より奥だと、札を押してもライフラインに吸われる。
     // 帯は細く中身が隠れないので、ここで塞ぐのは枠の縁 (幅 6px) と見出しの行だけ。
+    srcHits.forEach(function(h) { _addProcSourceLine(overlayEl, h.box, h.line, h.kind); });
     _addGroupHits(svgEl, overlayEl, groupHitFrames);
 
     var noteRectCount = overlayEl.querySelectorAll('rect[data-type="note"]').length;
