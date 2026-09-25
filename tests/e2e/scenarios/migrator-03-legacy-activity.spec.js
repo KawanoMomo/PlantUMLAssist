@@ -295,7 +295,7 @@ test('手順3 正しい PlantUML には「読めない行」の帯が出ず、�
   await expect(page.locator('#unsupported-list .unsupported-row')).toHaveCount(1);
   const row = page.locator('#unsupported-list .unsupported-row[data-line="5"]');
   await expect(row).toHaveAttribute('data-reason', /5 行目の alt を閉じる end がありません/);
-  await expect(page.locator('#unsupported-summary')).toContainText('alt を閉じる end がありません');
+  await expect(page.locator('#unsupported-summary')).toContainText('閉じていない枠が 1 個あります (5 行目の alt に end がありません)');
 
   // エンジンが読めない行: その行だけを「エンジンのエラー 行 N: …」で出す (推定の行は並べない)。
   await openOne(files[2], /\$wobble/);
@@ -303,7 +303,7 @@ test('手順3 正しい PlantUML には「読めない行」の帯が出ず、�
   await expect(panel).toBeVisible({ timeout: 20000 });
   await expect(page.locator('#unsupported-list .unsupported-row')).toHaveCount(1);
   await expect(page.locator('#unsupported-list .unsupported-row[data-line="4"]')).toHaveAttribute('data-reason', /^エンジンのエラー 行 4: /);
-  await expect(page.locator('#unsupported-summary')).toContainText('エンジンのエラー 行 4');
+  await expect(page.locator('#unsupported-summary')).toContainText('として読めない行が 1 行あります (エンジンのエラー 行 4)');
 
   // 直せば (読めない行を消せば) 次の描画で帯が消える。
   await page.locator('#editor').click();

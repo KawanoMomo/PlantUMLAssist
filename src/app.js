@@ -27088,9 +27088,13 @@ function renderUnsupportedPanel() {
   panel.hidden = false;
   var head = document.createElement('div');
   head.id = 'unsupported-summary';
-  var what = rows[0].cause === 'unclosed' ? '閉じていない枠が ' + rows.length + ' 個'
+  // 見出しは何がどこか (理由の頭) だけを言い、理由の全文は下の行ごとに書く。
+  var unclosed = rows[0].cause === 'unclosed';
+  var what = unclosed ? '閉じていない枠が ' + rows.length + ' 個'
     : 'PlantUML が ' + FO.kindLabel(kind) + 'として読めない行が ' + rows.length + ' 行';
-  head.textContent = '⚠ ' + what + 'あります (' + rows[0].reason + (rows.length > 1 ? ' ほか' : '')
+  var where = unclosed ? rows[0].line + ' 行目の ' + String(rows[0].text).trim().split(/\s+/)[0] + ' に end がありません'
+    : String(rows[0].reason).split(/:\s/)[0];
+  head.textContent = '⚠ ' + what + 'あります (' + where + (rows.length > 1 ? ' ほか' : '')
     + ')。本文の編集とプレビューはそのまま使えます';
   var copy = document.createElement('button');
   copy.type = 'button';
