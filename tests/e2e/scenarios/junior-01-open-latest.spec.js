@@ -784,7 +784,8 @@ test.describe('junior 手順 1: 先輩の複合図から部品を切り出して
     const svg = await page.locator('#peek-svg').innerHTML();
     expect(svg).toContain('Can_Driver');
     expect(svg).toContain('Gpio_Driver');
-    expect(svg.toUpperCase()).toContain('#DDDDDD');
+    // PlantUML 1.2026.7 からは色を短く書く (#DDDDDD → #DDD)。
+    expect(/#DDD(DDD)?(?![0-9A-F])/.test(svg.toUpperCase()), '淡色 (#DDDDDD) が描画に届いている').toBe(true);
 
     // 到達条件その4: 本文も同じ絞りで読める (打ち写す側で行が見分けられる)。
     const kept = await page.locator('#peek-dsl .peek-dsl-keep').allInnerTexts();

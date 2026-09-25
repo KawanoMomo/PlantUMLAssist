@@ -305,7 +305,35 @@ async function messageClickPoints(page, msgIndex) {
   return page.evaluate((i) => {
     const gs = document.querySelectorAll('#preview-container svg g.message');
     const g = gs[i];
-    if (!g) return null;
+    if (!g) {
+      // BLK-human-20260925-1500: PlantUML 1.2026.7 からメッセージは g.message に入らない (teoz の描き方)。
+      // 上から i 本目の横向きの矢印の線と、その線の上 (1 本前の矢印より下) に書かれた文字をそのメッセージとする。
+      const svg = document.querySelector('#preview-container svg');
+      if (!svg) return null;
+      const lines = Array.from(svg.querySelectorAll('line')).filter((l) => {
+        if (/dasharray:\s*5/.test(l.getAttribute('style') || '')) return false;   // ライフライン
+        const dx = Math.abs(parseFloat(l.getAttribute('x2')) - parseFloat(l.getAttribute('x1')));
+        const dy = Math.abs(parseFloat(l.getAttribute('y2')) - parseFloat(l.getAttribute('y1')));
+        return dy < 0.5 && dx > 16;
+      }).sort((a, b) => parseFloat(a.getAttribute('y1')) - parseFloat(b.getAttribute('y1')));
+      const line = lines[i];
+      if (!line) return null;
+      const lr = line.getBoundingClientRect();
+      // 1 本目の上限はライフラインの上端 (参加者の頭の文字を拾わない)。
+      const lifeTops = Array.from(svg.querySelectorAll('line')).filter((l) => /dasharray:\s*5/.test(l.getAttribute('style') || ''))
+        .map((l) => l.getBoundingClientRect().top);
+      const prev = i > 0 ? lines[i - 1].getBoundingClientRect().bottom : (lifeTops.length ? Math.min(...lifeTops) : -Infinity);
+      const out = [];
+      svg.querySelectorAll('text').forEach((t) => {
+        const r = t.getBoundingClientRect();
+        const cx = r.x + r.width / 2, cy = r.y + r.height / 2;
+        if (r.width > 0 && cy > prev && cy < lr.y && cx >= lr.x - 20 && cx <= lr.right + 20) {
+          out.push({ x: cx, y: cy, what: 'text:' + t.textContent });
+        }
+      });
+      out.push({ x: lr.x + lr.width / 2, y: lr.y + lr.height / 2, what: 'arrow' });
+      return out;
+    }
     const pts = [];
     g.querySelectorAll('text').forEach((t) => {
       const r = t.getBoundingClientRect();

@@ -12,7 +12,10 @@
 #   -bsd       → plantuml-bsd-X.Y.Z.jar       BSD (feature subset)
 set -euo pipefail
 
-PLANTUML_VERSION="${PLANTUML_VERSION:-1.2026.3}"
+# The default version lives in one place: PLANTUML_VERSION next to this script
+# (server.py and fetch-plantuml.ps1 read the same file).
+PINNED_VERSION="$(head -n 1 "$(dirname "$0")/PLANTUML_VERSION" | tr -d '[:space:]')"
+PLANTUML_VERSION="${PLANTUML_VERSION:-$PINNED_VERSION}"
 PLANTUML_VARIANT="${PLANTUML_VARIANT:-}"  # e.g. "-mit" for MIT build
 
 dir="$(cd "$(dirname "$0")" && pwd)"

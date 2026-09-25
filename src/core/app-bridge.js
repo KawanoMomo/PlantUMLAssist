@@ -23,11 +23,29 @@ window.MA.appBridge = (function() {
     return !!(e && e.app);
   }
 
+  // BLK-human-20260925-1500: 使っている PlantUML の版と推奨版 (lib/PLANTUML_VERSION。開発・自動検証はこの版) を
+  // 「使用中: 1.2026.3 / 推奨: 1.2026.8」と並べる。違えば「取得し直す」を隣に出す (differs)。1.2026.3〜.6 は並行領域
+  // (`--` / `||`) を持つ複合状態で最初の領域しか描かない (残りが黙って消える) ので、server が古いと言ったらその旨も 1 行出す。
+  // 版は server が jar のマニフェストから読む (通信しない)。
+  function engineVersion(env) {
+    var e = env || {};
+    if (!e.jar || !e.jarVersion) return { text: '', warn: '', differs: false, outdated: false };
+    var rec = e.jarRecommended || '';
+    return {
+      text: '使用中: ' + e.jarVersion + (rec ? ' / 推奨: ' + rec : ''),
+      warn: e.jarOutdated ? '並行領域が描かれない不具合があります。取得し直してください' : '',
+      differs: !!rec && rec !== e.jarVersion,
+      outdated: !!e.jarOutdated,
+    };
+  }
+
   // jar の状態を 1 行で言う。ok なら何も直す必要はない。
   function jarStatus(env) {
     var e = env || {};
     if (e.jar) {
-      return { ok: true, canFetch: !!e.canFetchJar, text: 'plantuml.jar: ' + (e.jarPath || '同梱') };
+      var ev = engineVersion(e);
+      return { ok: true, canFetch: !!e.canFetchJar, text: 'plantuml.jar: ' + (e.jarPath || '同梱'),
+        versionText: ev.text, versionWarn: ev.warn, differs: ev.differs, outdated: ev.outdated };
     }
     return {
       ok: false,
@@ -166,6 +184,7 @@ window.MA.appBridge = (function() {
   return {
     isApp: isApp,
     jarStatus: jarStatus,
+    engineVersion: engineVersion,
     jarReady: jarReady,
     jarTurnedReady: jarTurnedReady,
     engineProgress: engineProgress,

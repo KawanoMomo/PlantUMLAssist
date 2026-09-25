@@ -163,11 +163,27 @@ window.MA.stateSvgMap = (function() {
 
   function _classOf(g) { return _s(g.getAttribute('class')); }
 
+  // BLK-human-20260925-1500: PlantUML 1.2026.7 からは複合状態も <g class="entity" data-qualified-name> になり、
+  // 中の状態・遷移・fork の棒をその <g> の中に入れて描く (1.2026.6 までは名前の無い <g> と外枠の rect)。
+  // 中に名前の付いた <g> を持つ entity を複合状態と見る。
+  function _isComposite(g) {
+    if (!/(^|\s)entity(\s|$)/.test(_classOf(g))) return false;
+    var inner = g.querySelectorAll('g');
+    for (var i = 0; i < inner.length; i++) if (_classOf(inner[i])) return true;
+    return false;
+  }
+  function _ownShapes(g, sel) {
+    return Array.prototype.filter.call(g.children || [], function(c) {
+      return sel.indexOf((c.tagName || '').toLowerCase()) >= 0;
+    });
+  }
+
   // 名前の付いた <g> (entity / cluster / link / title …) の外に直に置かれた図形か。
+  // 複合状態の <g> は入れ物なので、その中に直に置かれた図形 (fork の棒など) も名前の無い図形として扱う。
   function _isOrphan(el) {
     for (var n = el.parentNode; n && n.getAttribute; n = n.parentNode) {
       if ((n.tagName || '').toLowerCase() === 'svg') return true;
-      if ((n.tagName || '').toLowerCase() === 'g' && _classOf(n)) return false;
+      if ((n.tagName || '').toLowerCase() === 'g' && _classOf(n) && !_isComposite(n)) return false;
     }
     return true;
   }
@@ -200,7 +216,7 @@ window.MA.stateSvgMap = (function() {
     Array.prototype.forEach.call(svgEl.querySelectorAll('g[data-qualified-name]'), function(g) {
       var cls = _classOf(g);
       var qn = g.getAttribute('data-qualified-name') || '';
-      var isCluster = /(^|\s)cluster(\s|$)/.test(cls);
+      var isCluster = /(^|\s)cluster(\s|$)/.test(cls) || _isComposite(g);
       if (!isCluster && !/(^|\s)(entity|start_entity|end_entity)(\s|$)/.test(cls)) return;
       if (/^GMN/.test(qn)) return;   // 注記は呼び手が別に当てる
       var ps = isCluster ? null : pseudoOf(qn, cls);
@@ -215,7 +231,9 @@ window.MA.stateSvgMap = (function() {
       var r = resolveState(parsed, qn);
       var box;
       if (isCluster) {
-        box = union(Array.prototype.map.call(g.querySelectorAll('rect, path'), shapeBox));
+        // 入れ物自身の外枠と見出し (直の子) だけ。中の状態・遷移まで和集合に入れない。
+        var own = /(^|\s)cluster(\s|$)/.test(cls) ? g.querySelectorAll('rect, path') : _ownShapes(g, ['rect', 'path']);
+        box = union(Array.prototype.map.call(own, shapeBox));
       } else {
         box = _entityBox(g);
       }

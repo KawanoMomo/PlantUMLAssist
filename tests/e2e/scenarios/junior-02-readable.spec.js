@@ -213,7 +213,8 @@ test('手順2 同じ参加者へのメッセージを含む構成も、警告は
     // 「両方のラベルが図に出ている」ことで確かめる。
     const init = Array.prototype.some.call(svg.querySelectorAll('text'),
       (n) => (n.textContent || '').indexOf('Timer_Init()') >= 0);
-    return { drawn: hit, initDrawn: init, messages: svg.querySelectorAll('g.message').length };
+    // PlantUML 1.2026.7 からメッセージは g.message に入らない。矢じり (<polygon>) の数で数える。
+    return { drawn: hit, initDrawn: init, messages: svg.querySelectorAll('g.message').length || svg.querySelectorAll('polygon').length };
   });
   expect(selfMsg, 'プレビューが描かれている').not.toBeNull();
   expect(selfMsg.drawn, '自己メッセージのラベルが図に出る').toBe(true);

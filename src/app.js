@@ -2416,6 +2416,23 @@ function init() {
         jarEl.textContent = jar.text;
         jarEl.style.color = jar.ok ? 'var(--text-secondary)' : 'var(--accent-red)';
       }
+      // BLK-human-20260925-1500: 「使用中 / 推奨」の版。違えば「取得し直す」、並行領域を描けない古い版ならその 1 行。
+      var verRow = document.getElementById('cfg-jar-version-row');
+      var verEl = document.getElementById('cfg-jar-version');
+      var warnEl = document.getElementById('cfg-jar-version-warn');
+      var refetchBtn = document.getElementById('cfg-jar-refetch');
+      if (verRow) verRow.hidden = !jar.versionText;
+      if (verEl) {
+        verEl.textContent = jar.versionText || '';
+        verEl.setAttribute('data-outdated', jar.outdated ? '1' : '0');
+        verEl.setAttribute('data-differs', jar.differs ? '1' : '0');
+        verEl.style.color = jar.differs ? 'var(--accent-red)' : 'var(--text-secondary)';
+      }
+      if (warnEl) {
+        warnEl.textContent = jar.versionWarn || '';
+        warnEl.hidden = !jar.versionWarn;
+      }
+      if (refetchBtn) refetchBtn.hidden = !(jar.differs && jar.canFetch);
       var pathEl = document.getElementById('cfg-jar-path');
       if (pathEl && document.activeElement !== pathEl) pathEl.value = env.jarPath || '';
       var javaEl = document.getElementById('cfg-java-status');
@@ -2455,6 +2472,8 @@ function init() {
       var pickBtn = document.getElementById('cfg-jar-pick');
       if (fetchBtn) fetchBtn.disabled = !!prog.busy || !(window.MA.appBridge
         && window.MA.appBridge.jarStatus(_renderEnv || {}).canFetch);
+      var refetch = document.getElementById('cfg-jar-refetch');
+      if (refetch) refetch.disabled = !!prog.busy;
       if (pickBtn) pickBtn.disabled = !!prog.busy;
     }
 
@@ -2496,6 +2515,9 @@ function init() {
       if (pickBtn) pickBtn.addEventListener('click', doPick);
       var fetchBtn = document.getElementById('cfg-jar-fetch');
       if (fetchBtn) fetchBtn.addEventListener('click', doFetch);
+      // BLK-human-20260925-1500: 使用中の版が推奨版と違うときの「取得し直す」(推奨版を取って差し替える)。
+      var refetchBtn = document.getElementById('cfg-jar-refetch');
+      if (refetchBtn) refetchBtn.addEventListener('click', doFetch);
       // 失敗したときの再試行の入口。取得が使えない機械ではパス指定に落ちる。
       var retryBtn = document.getElementById('cfg-jar-retry');
       if (retryBtn) retryBtn.addEventListener('click', function() {

@@ -12,7 +12,8 @@ window.MA.renderError = (function() {
   // エラー画の目印。3 つとも揃ったときだけエラーと判定する。
   // 図の中にたまたま「Syntax Error?」という文字列があっても誤検出しないよう、
   // PlantUML がエラー画にしか使わない配色 (#33FF02 の緑) を条件に加えている。
-  var RED_TEXT_RE = /<text[^>]*fill="#FF0000"[^>]*>([\s\S]*?)<\/text>/i;
+  // BLK-human-20260925-1500: 1.2026.7 からは色を短く書く (赤は #F00)。どちらの書き方でも拾う。
+  var RED_TEXT_RE = /<text[^>]*fill="#(?:FF0000|F00)"[^>]*>([\s\S]*?)<\/text>/i;
   var GREEN_MARK = 'fill="#33FF02"';
   // `[From string (line 3) ]` — 何行目で転んだか。
   var LINE_RE = /\[From string \(line (\d+)\)/;

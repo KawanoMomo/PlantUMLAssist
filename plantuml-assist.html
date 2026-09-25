@@ -8533,6 +8533,12 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <div id="cfg-engine" style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:10px;">
         <div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">描画エンジン / PlantUML と Java</div>
         <div id="cfg-jar-status" style="font-size:11px;margin-bottom:4px;"></div>
+        <!-- BLK-human-20260925-1500: 使用中の版と推奨版 (lib/PLANTUML_VERSION)。違えば「取得し直す」。 -->
+        <div id="cfg-jar-version-row" hidden style="display:flex;gap:6px;align-items:center;margin-bottom:4px;">
+          <span id="cfg-jar-version" data-outdated="0" data-differs="0" style="font-size:11px;"></span>
+          <button type="button" id="cfg-jar-refetch" hidden title="推奨版の plantuml.jar を公式リリースから取り直す (この操作で初めて外部へ接続します)">取得し直す</button>
+        </div>
+        <div id="cfg-jar-version-warn" hidden style="font-size:11px;color:var(--accent-red);margin-bottom:4px;"></div>
         <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;">
           <input id="cfg-jar-path" type="text" placeholder="plantuml.jar のパス"
                  style="flex:1;min-width:0;font-size:11px;padding:4px;background:var(--bg-input,#222);color:inherit;border:1px solid var(--border);border-radius:3px;">
