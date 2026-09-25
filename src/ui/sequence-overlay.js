@@ -324,10 +324,11 @@ window.MA.sequenceOverlay = (function() {
         return (Math.abs(t[1] - py) <= 6 && Math.abs(t[0] - px) <= 12) || (Math.abs(t[3] - py) <= 6 && Math.abs(t[2] - px) <= 12);
       });
     }
-    return _bareShapes(svgEl, 'line').map(function(l) {
+    var allLines = _bareShapes(svgEl, 'line').map(function(l) {
       return { x1: _num(l, 'x1'), y1: _num(l, 'y1'), x2: _num(l, 'x2'), y2: _num(l, 'y2'),
         dashed: /dasharray/.test(l.getAttribute('style') || '') };
-    }).filter(function(a) {
+    });
+    return allLines.filter(function(a) {
       if (isNaN(a.x1) || isNaN(a.y1) || isNaN(a.x2) || isNaN(a.y2)) return false;
       if (Math.abs(a.x2 - a.x1) < 10 || Math.abs(a.y2 - a.y1) > Math.abs(a.x2 - a.x1)) return false;
       if (Math.abs(a.x2 - a.x1) <= 16 && Math.abs(a.y2 - a.y1) >= 3) return false;   // 矢じり・×印の短い斜線そのもの
@@ -337,17 +338,59 @@ window.MA.sequenceOverlay = (function() {
       var r = a.x1 <= a.x2 ? { x: a.x2, y: a.y2 } : { x: a.x1, y: a.y1 };
       // 矢じりの向き: 重心がこの線の範囲に掛かり、端に近い矢じりだけをその線のものと見る
       // (teoz の並んだ矢印では、隣の矢印の矢じりがこの線の始点のすぐ外にある)。
-      function ownTip(px, py) {
-        return polys.some(function(pts) {
-          var sx = 0, sy = 0, n = 0;
-          for (var i = 0; i + 1 < pts.length; i += 2) { sx += pts[i]; sy += pts[i + 1]; n++; }
-          if (!n) return false;
-          var cx = sx / n, cy = sy / n;
-          return Math.abs(cy - py) <= 6 && Math.abs(cx - px) <= 8 && cx >= l.x - 3 && cx <= r.x + 3;
-        });
+      // BLK-builder-20260925-1712-1: 自分の矢じりとして見た形の外接矩形を tips に集める (ライフラインを手前に出す高さを
+      // 描いた形で決めるため)。開いた矢じり・×印の短い斜線は、端に接するものを矢じりとして数える。
+      var tips = [];
+      function _box(xs, ys) {
+        var x0 = Math.min.apply(null, xs), y0 = Math.min.apply(null, ys);
+        return { x: x0, y: y0, width: Math.max.apply(null, xs) - x0, height: Math.max.apply(null, ys) - y0 };
       }
+      function ownTip(px, py) {
+        var found = false;
+        polys.forEach(function(pts) {
+          var sx = 0, sy = 0, n = 0, xs = [], ys = [];
+          for (var i = 0; i + 1 < pts.length; i += 2) {
+            if (isNaN(pts[i]) || isNaN(pts[i + 1])) continue;
+            sx += pts[i]; sy += pts[i + 1]; n++; xs.push(pts[i]); ys.push(pts[i + 1]);
+          }
+          if (!n) return;
+          var cx = sx / n, cy = sy / n;
+          if (Math.abs(cy - py) <= 6 && Math.abs(cx - px) <= 8 && cx >= l.x - 3 && cx <= r.x + 3) {
+            found = true;
+            tips.push(_box(xs, ys));
+          }
+        });
+        if (!found) {
+          tipLines.forEach(function(t) {
+            if ((Math.abs(t[1] - py) <= 6 && Math.abs(t[0] - px) <= 12) || (Math.abs(t[3] - py) <= 6 && Math.abs(t[2] - px) <= 12)) {
+              tips.push(_box([t[0], t[2]], [t[1], t[3]]));
+            }
+          });
+        }
+        return found;
+      }
+      var tipL = ownTip(l.x, l.y), tipR = ownTip(r.x, r.y);
+      // 自分宛ての矢印は「出る線・縦の短い線・戻る線 (矢じり付き)」の 3 本。矢じりの付いた戻る線だけが矢印として残るので、
+      // 縦の短い線とその先の出る線も描いた物として tips に入れる (出る線の尾もライフラインの上で線の太さだけはメッセージ)。
+      [l, r].forEach(function(end) {
+        allLines.forEach(function(v) {
+          if (isNaN(v.x1) || isNaN(v.y1) || isNaN(v.x2) || isNaN(v.y2)) return;
+          if (Math.abs(v.x1 - v.x2) > 0.5 || Math.abs(v.x1 - end.x) > 1.5) return;
+          var vTop = Math.min(v.y1, v.y2), vBot = Math.max(v.y1, v.y2);
+          if (vBot - vTop < 3 || vBot - vTop > 40) return;
+          var far = Math.abs(vTop - end.y) <= 1.5 ? vBot : Math.abs(vBot - end.y) <= 1.5 ? vTop : null;
+          if (far === null) return;
+          tips.push({ x: v.x1, y: vTop, width: 0, height: vBot - vTop });
+          allLines.forEach(function(h) {
+            if (isNaN(h.x1) || isNaN(h.y1) || isNaN(h.x2) || isNaN(h.y2)) return;
+            if (Math.abs(h.y1 - h.y2) > 0.5 || Math.abs(h.y1 - far) > 1.5) return;
+            if (Math.abs(h.x1 - end.x) > 1.5 && Math.abs(h.x2 - end.x) > 1.5) return;
+            tips.push({ x: Math.min(h.x1, h.x2), y: h.y1, width: Math.abs(h.x2 - h.x1), height: 0 });
+          });
+        });
+      });
       return { x1: l.x, x2: r.x, top: Math.min(a.y1, a.y2), bottom: Math.max(a.y1, a.y2),
-        tipL: ownTip(l.x, l.y), tipR: ownTip(r.x, r.y) };
+        tipL: tipL, tipR: tipR, tips: tips };
     }).sort(function(a, b) { return a.top - b.top; });
   }
   // BLK-human-20260925-1500: PlantUML 1.2026.7 からシーケンス図は teoz の描き方だけになり、参加者・メッセージの
@@ -679,7 +722,11 @@ window.MA.sequenceOverlay = (function() {
       // (両側に広げると、隣の矢印の矢じりまで覆って別のメッセージの枠が出る)。
       var top = a.top - 6, left = a.x1 - (a.tipL ? 6 : 0), right = a.x2 + (a.tipR ? 6 : 0);
       // parts: メッセージが自分で描いた所 (文字・矢印の線と矢じり)。ライフラインを手前に出す高さを決めるのに使う。
-      var parts = [{ x: left, y: a.top - 5, width: right - left, height: a.bottom - a.top + 10 }];
+      // BLK-builder-20260925-1712-1: 線は描いた太さ (上下 1px)、矢じりはその形の外接矩形。矢印全体を上下 5px の帯 1 枚に
+      // すると、ライフラインの上で線の尾 (太さ 1px) の上下 7px までがメッセージのものになり、ライフラインを指しても
+      // 近くの矢印が選ばれた (class の付いた旧版の SVG は線を実際の太さで数えていた)。
+      var parts = [{ x: a.x1, y: a.top - 1, width: a.x2 - a.x1, height: a.bottom - a.top + 2 }];
+      (a.tips || []).forEach(function(tb) { parts.push(tb); });
       o.texts.forEach(function(t) {
         top = Math.min(top, t.y - 13);
         left = Math.min(left, t.x);
