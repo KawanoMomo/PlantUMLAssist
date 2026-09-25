@@ -213,3 +213,40 @@ describe('コーパス往復テスト (実物の .puml を壊さない)', functi
     expect(hardFails.length).toBe(0);
   });
 });
+
+// BLK-migrator-20260925-1600: 「この図種として読めない行」の帯は、エンジンが読めた図には出ない。
+// 行ごとの正規表現で決めていた頃は正しい図 217 枚中 117 枚に帯が出ていた。帯はエンジンの答え (bannerRows) で決め、
+// 行ごとの推定 (unsupported) は答えの無い本文に単独で出さない。わざと壊した -broken の 2 枚は、理由つきで出る。
+describe('コーパスに誤警告の帯を出さない', function() {
+  function kindOf(text) { return WS.detectType(text); }
+  function textOf(p) { return openBytes(new Uint8Array(fs.readFileSync(p))).text; }
+
+  test('エンジンが読めた (エラー画でない) 図では帯の対象行が 0、答えの無い本文にも 0', function() {
+    var hits = [];
+    FILES.forEach(function(p) {
+      var t = textOf(p);
+      var k = kindOf(t);
+      FO.bannerRows(t, k, { state: 'ok' }).forEach(function(r) { hits.push(relName(p) + ' L' + r.line + ' ' + r.reason); });
+      FO.bannerRows(t, k, null).forEach(function(r) { hits.push(relName(p) + ' (答えなし) L' + r.line); });
+      FO.bannerRows(t, k, { state: 'none' }).forEach(function(r) { hits.push(relName(p) + ' (届かず) L' + r.line); });
+    });
+    expect(hits).toEqual([]);
+  });
+
+  var BROKEN_05 = path.join(CORPUS_DIR, 'corpus', 'dirty-05-missing-enduml-broken.puml');
+  var BROKEN_06 = path.join(CORPUS_DIR, 'corpus', 'dirty-06-unmatched-block-broken.puml');
+  (fs.existsSync(BROKEN_05) ? test : test.skip)('-broken: @enduml の無い図は、エンジンの答え (No valid @start/@end) と閉じていない行を帯に書く', function() {
+    var t = textOf(BROKEN_05);
+    var rows = FO.bannerRows(t, kindOf(t), { state: 'error', noStartEnd: true, message: 'No valid @start/@end found, please check the version' });
+    expect(rows.length).toBe(1);
+    expect(rows[0].line).toBe(2);
+    expect(rows[0].reason).toContain('No valid @start/@end found');
+    expect(rows[0].reason).toContain('2 行目の @startuml を閉じる @enduml がありません');
+  });
+  (fs.existsSync(BROKEN_06) ? test : test.skip)('-broken: end の無い alt は、エンジンが描けても (枠が黙って消える) 理由つきで帯に出る', function() {
+    var t = textOf(BROKEN_06);
+    var rows = FO.bannerRows(t, kindOf(t), { state: 'ok' });
+    expect(rows.map(function(r) { return r.line; })).toEqual([6]);
+    expect(rows[0].reason).toContain('6 行目の alt を閉じる end がありません');
+  });
+});

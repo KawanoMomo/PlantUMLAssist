@@ -97,6 +97,8 @@ test('人間 手順 6 — 手元の .puml を 2 枚ドロップして 2 タブ�
   // 未対応記法: 行で一覧、報告用の複製は図の中身を含まない
   await expect(page.locator('#unsupported-panel')).toBeVisible();
   await expect(page.locator('#unsupported-list .unsupported-row[data-line="5"]')).toHaveCount(1);
+  // BLK-migrator-20260925-1600: 帯は PlantUML が読めなかった行だけを、エンジンの答えを理由に出す
+  await expect(page.locator('#unsupported-list .unsupported-row[data-line="5"]')).toHaveAttribute('data-reason', /^エンジンのエラー 行 5: /);
   await page.click('#btn-unsupported-copy');
   await expect(page.locator('#btn-unsupported-copy')).toHaveAttribute('data-copied', '1');
   const clip = await page.evaluate(() => navigator.clipboard.readText()).catch(() => null);

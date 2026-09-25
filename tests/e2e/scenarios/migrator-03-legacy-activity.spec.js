@@ -247,3 +247,70 @@ test('手順3 最初の並行領域が空の state 図も全部の領域が描�
   const after = await texts();
   expect(after.some((t) => /An error has occurr?ed|has crashed/.test(t)), '落ちた絵が図として出ている').toBe(false);
 });
+
+// BLK-migrator-20260925-1600: 「この図種として読めない行」の帯が、行ごとの正規表現で正しい PlantUML にも出ていた
+// (`|||`、skinparam { } の本文、SVG スプライトの本文、半矢印 `-\` `-/`。migrator の実物 217 枚中 117 枚)。
+// 帯はエンジンが読めたかで決める: PlantUML が図を返した本文には出さず、出すときは理由 (エンジンのエラー行・閉じない枠) を書く。
+test('手順3 正しい PlantUML には「読めない行」の帯が出ず、エンジンが読めない行・閉じない枠には理由つきで出る', async ({ page }) => {
+  const OK = [
+    '@startuml', 'skinparam sequence {', '  ArrowColor DeepSkyBlue', '  LifeLineBorderColor blue', '}',
+    'sprite $ok <svg viewBox="0 0 10 10">', '<circle cx="5" cy="5" r="4" fill="green"/>', '</svg>',
+    'participant A', 'participant B', 'A -\ B : half', '|||', 'B -/ A : back <$ok>', '@enduml', '',
+  ].join('\n');
+  // migrator の corpus/dirty-06-unmatched-block-broken と同じ形: alt に end が無い (PlantUML は枠を黙って描かない)。
+  const UNCLOSED = ['@startuml', 'participant App', 'participant Drv', 'App -> Drv : Read()', 'alt 正常',
+    '  Drv --> App : value', 'else 異常', '  Drv --> App : error', 'App -> Drv : Close()', '@enduml', ''].join('\n');
+  const BAD = ['@startuml', 'participant A', 'A -> B : x', '$wobble B ~~ zz', '@enduml', ''].join('\n');
+  const dir = absDirFor(__filename) + '-banner';
+  fs.rmSync(dir, { recursive: true, force: true });
+  const srcDir = path.join(dir, '..', 'migrator-03-banner-src');
+  fs.mkdirSync(srcDir, { recursive: true });
+  const files = [['ok-seq.puml', OK], ['unclosed-alt.puml', UNCLOSED], ['engine-bad.puml', BAD]].map(([n, t]) => {
+    const p = path.join(srcDir, n);
+    fs.writeFileSync(p, t);
+    return p;
+  });
+
+  await bootWithSaveDir(page, dirFor(__filename) + '-banner');
+  const openOne = async (p, re) => {
+    const [chooser] = await Promise.all([
+      page.waitForEvent('filechooser', { timeout: 20000 }),
+      page.evaluate(() => { document.getElementById('file-input').click(); }),
+    ]);
+    await chooser.setFiles(p);
+    await expect(page.locator('#editor')).toHaveValue(re, { timeout: 20000 });
+  };
+  const panel = page.locator('#unsupported-panel');
+
+  // 正しい図: PlantUML が描けたので帯は出ない (以前は 3・4・6・7・8・11・12・13 行目の 8 行が並んでいた)。
+  await openOne(files[0], /skinparam sequence \{/);
+  await expect(page.locator('#render-status')).toHaveText(/^Rendered/, { timeout: 20000 });
+  await expect(panel).toBeHidden();
+  await expect(panel).toHaveAttribute('data-count', '0');
+
+  // end の無い alt: エンジンは描くが枠と条件の札を落とすので、開いた行と理由を出す。
+  await openOne(files[1], /alt 正常/);
+  await expect(page.locator('#render-status')).toHaveText(/^Rendered/, { timeout: 20000 });
+  await expect(panel).toBeVisible({ timeout: 20000 });
+  await expect(page.locator('#unsupported-list .unsupported-row')).toHaveCount(1);
+  const row = page.locator('#unsupported-list .unsupported-row[data-line="5"]');
+  await expect(row).toHaveAttribute('data-reason', /5 行目の alt を閉じる end がありません/);
+  await expect(page.locator('#unsupported-summary')).toContainText('alt を閉じる end がありません');
+
+  // エンジンが読めない行: その行だけを「エンジンのエラー 行 N: …」で出す (推定の行は並べない)。
+  await openOne(files[2], /\$wobble/);
+  await expect(page.locator('#render-status')).toHaveText('ERROR', { timeout: 20000 });
+  await expect(panel).toBeVisible({ timeout: 20000 });
+  await expect(page.locator('#unsupported-list .unsupported-row')).toHaveCount(1);
+  await expect(page.locator('#unsupported-list .unsupported-row[data-line="4"]')).toHaveAttribute('data-reason', /^エンジンのエラー 行 4: /);
+  await expect(page.locator('#unsupported-summary')).toContainText('エンジンのエラー 行 4');
+
+  // 直せば (読めない行を消せば) 次の描画で帯が消える。
+  await page.locator('#editor').click();
+  await page.keyboard.press('Control+Home');
+  for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Shift+End');
+  await page.keyboard.press('Delete');
+  await expect(page.locator('#render-status')).toHaveText(/^Rendered/, { timeout: 20000 });
+  await expect(panel).toBeHidden({ timeout: 20000 });
+});

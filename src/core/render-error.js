@@ -154,6 +154,16 @@ window.MA.renderError = (function() {
     return r[0].line + ' 行目 `' + r[0].sep + '` の前の並行領域が空です';
   }
 
+  // BLK-migrator-20260925-1600: @enduml の無い本文に PlantUML は「No valid @start/@end found」の絵を返す。
+  // 赤字を使わないので detect はエラーと見なさない (図として出す) が、帯の判定ではエンジンが読めなかった答えとして扱う。
+  var NO_START_END_RE = /<text[^>]*>\s*(No valid @start\/@end found[^<]*)<\/text>/;
+  function noStartEnd(svgText) {
+    if (!svgText || typeof svgText !== 'string' || svgText.indexOf(GREEN_MARK) < 0) return null;
+    var m = svgText.match(NO_START_END_RE);
+    if (!m) return null;
+    return { isError: true, noStartEnd: true, message: decodeEntities(m[1]), line: null };
+  }
+
   return { detect: detect, describe: describe, kindNote: kindNote,
-    emptyFirstRegions: emptyFirstRegions, crashCause: crashCause };
+    emptyFirstRegions: emptyFirstRegions, crashCause: crashCause, noStartEnd: noStartEnd };
 })();

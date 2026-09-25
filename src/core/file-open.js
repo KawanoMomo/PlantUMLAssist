@@ -93,13 +93,14 @@ window.MA.fileOpen = (function() {
     /^(note|rnote|hnote)\b/i, /^end\s*note\b/i, /^[{}]\s*$/, /^(package|namespace|rectangle|frame|folder|node|cloud|database|box)\b/i,
     /^end\s*box\b/i, /^<style>/i, /^<\/style>/i,
   ];
-  var ARROW = /(<\|?|<<?|\*|\bo|#|\+|\^|\bx)?(-+|\.{2,}|=+)(\[[^\]]*\])?(up|down|left|right|u|d|l|r)?(-*|\.*)(\|?>|>>?|\*|o\b|#|\+|\^|x\b|\\\\|\/\/)|(<\|?|<<?|\*|o|#|\+|x)(-+|\.{2,})|--|\.\./i;
+  // 半矢印 (`-\` `-/` `\-` `/-`) も矢印 (BLK-migrator-20260925-1600)。
+  var ARROW = /(<\|?|<<?|\*|\bo|#|\+|\^|\bx)?(-+|\.{2,}|=+)(\[[^\]]*\])?(up|down|left|right|u|d|l|r)?(-*|\.*)(\|?>|>>?|\*|o\b|#|\+|\^|x\b|\\\\?|\/\/?)|(<\|?|<<?|\*|o|#|\+|x|\\\\?|\/\/?)(-+|\.{2,})|--|\.\./i;
 
   var KIND = {
     'plantuml-sequence': [
       /^(participant|actor|boundary|control|entity|database|collections|queue)\b/i,
       /^(alt|else|opt|loop|par|par2|break|critical|group|end|activate|deactivate|destroy|create|return|autonumber|ref|autoactivate|mainframe)\b/i,
-      /^==.*==$/, /^\.\.\.(.*\.\.\.)?$/, /^\|\|\d*\|\|$/, /^delay\b/i,
+      /^==.*==$/, /^\.\.\.(.*\.\.\.)?$/, /^\|\|\|$/, /^\|\|\d+\|\|$/, /^delay\b/i,
     ],
     'plantuml-class': [
       /^(abstract\s+class|abstract|class|interface|enum|annotation|entity|struct|protocol|exception|metaclass|stereotype|dataclass|record)\b/i,
@@ -133,21 +134,47 @@ window.MA.fileOpen = (function() {
     return false;
   }
 
+  // BLK-migrator-20260925-1600: 複数行の構文はブロックとして読み飛ばし、中の行を 1 行ずつ判定しない。
+  //   /' … '/、note … end note、legend、複数行の title / header / footer、ref over … end ref、
+  //   skinparam { }、sprite { } / sprite <svg> … </svg>、<style> … </style>、
+  //   !procedure / !function / !definelongmacro … !end…
+  // 返す関数 skip(s) は、s (trim 済み) がブロックの頭・中・尻なら true。
+  function blockSkipper() {
+    var until = null;   // 閉じの行の正規表現 (これが来たら抜ける)
+    var depth = 0;      // { } で閉じるブロックの深さ
+    return function(s) {
+      if (depth > 0) {
+        if (/\{\s*$/.test(s)) depth++;
+        if (/^\}/.test(s)) depth--;
+        return true;
+      }
+      if (until) { if (until.test(s)) until = null; return true; }
+      if (/^\/'/.test(s)) { if (!/'\/\s*$/.test(s.slice(2))) until = /'\/\s*$/; return true; }
+      if (/^(note|rnote|hnote|legend|floating\s+note)\b/i.test(s) && !/:/.test(s)) {
+        until = /^end\s*(note|legend|rnote|hnote)\b|^endlegend\b|^endnote\b/i; return true;
+      }
+      if (/^(title|header|footer)\s*$/i.test(s)) { until = /^end\s*(title|header|footer)\b/i; return true; }
+      if (/^ref\s+over\b/i.test(s) && !/:/.test(s)) { until = /^end(\s*ref)?\b/i; return true; }
+      if (/^skinparam\b[^{]*\{\s*$/i.test(s) || /^sprite\b[^{]*\{\s*$/i.test(s)) { depth = 1; return true; }
+      if (/^sprite\b.*<svg\b/i.test(s) && !/<\/svg>\s*$/i.test(s)) { until = /<\/svg>\s*$/i; return true; }
+      if (/^<style>/i.test(s) && !/<\/style>/i.test(s)) { until = /^<\/style>/i; return true; }
+      if (/^!(unquoted\s+)?(procedure|function)\b/i.test(s)) { until = /^!end\s*(procedure|function)\b/i; return true; }
+      if (/^!definelongmacro\b/i.test(s)) { until = /^!enddefinelongmacro\b/i; return true; }
+      return false;
+    };
+  }
+
   // 未対応の行の一覧。複数行の note / legend / クラスの中身 / 複数行 Action は読み飛ばす。
+  // BLK-migrator-20260925-1600: これは行ごとの推定。帯はこれ単独では出さない (bannerRows を通す)。
   function unsupported(text, kind) {
     var lines = String(text || '').replace(/\r\n/g, '\n').split('\n');
     var out = [];
-    var inNote = false;
-    var inBlockComment = false;
+    var skip = blockSkipper();
     var braceDepth = 0;   // class / enum の { } の中はメンバ
     var inAction = false; // activity の複数行 :...;
     for (var i = 0; i < lines.length; i++) {
       var s = lines[i].trim();
-      if (inBlockComment) { if (/'\/\s*$/.test(s)) inBlockComment = false; continue; }
-      if (/^\/'/.test(s) && !/'\/\s*$/.test(s)) { inBlockComment = true; continue; }
-      if (inNote) { if (/^end\s*(note|legend)\b|^endlegend\b|^end\s*(title|header|footer)\b/i.test(s)) inNote = false; continue; }
-      if (/^(note|rnote|hnote|legend|floating\s+note)\b/i.test(s) && !/:/.test(s)) { inNote = true; continue; }
-      if (/^(title|header|footer)\s*$/i.test(s)) { inNote = true; continue; }
+      if (!inAction && braceDepth === 0 && skip(s)) continue;
       if (inAction) { if (/[;|<>\]}]$/.test(s)) inAction = false; continue; }
       if (kind === 'plantuml-activity' && /^:/.test(s) && !/[;|<>\]}]$/.test(s)) { inAction = true; continue; }
       if (kind === 'plantuml-class' && braceDepth > 0) {
@@ -159,6 +186,77 @@ window.MA.fileOpen = (function() {
       if (kind === 'plantuml-class' && /\{\s*$/.test(s)) braceDepth++;
     }
     return out;
+  }
+
+  // ── 帯の判定: エンジンが読めたか (BLK-migrator-20260925-1600) ─────────────
+  // 行ごとの正規表現は PlantUML の文法を追い切れず、正しい図の 217 枚中 117 枚に帯を出していた。
+  // 帯は PlantUML の答えで決める。
+  //   engine = { state: 'ok' }                           エンジンが図 (エラー画でない SVG) を返した
+  //          | { state: 'error', line, message, crashed, noStartEnd, causeLine }  エラー画 / 落ちた絵
+  //          | null / { state: 'none' }                   まだ描いていない・エンジンに届かない → 帯を出さない
+  // 返り値 [{ line, text, reason }]。reason の無い行は返さない。
+
+  var SEQ_GROUP_OPEN = /^(alt|opt|loop|par|par2|break|critical|group)\b/i;
+  // 前処理 (手続き・マクロ・取り込み) は本文に見えない枠を作り・閉じるので、本文だけでは数えない。
+  var PREPROC = /^!(include\w*|import|procedure|function|unquoted|define\w*|startsub|dynamic|foreach|while|if\w*)\b/i;
+
+  // シーケンス図で end の来ない alt / opt / loop / par / break / critical / group。
+  // PlantUML はこれを誤りにせず、閉じない枠を黙って描かない (枠と条件の札が図から消える)。
+  function unclosedBlocks(text, kind) {
+    if (kind !== 'plantuml-sequence') return [];
+    var lines = String(text || '').replace(/\r\n/g, '\n').split('\n');
+    var skip = blockSkipper();
+    var stack = [];
+    var i;
+    for (i = 0; i < lines.length; i++) if (PREPROC.test(lines[i].trim())) return [];
+    for (i = 0; i < lines.length; i++) {
+      var s = lines[i].trim();
+      if (!s || s.charAt(0) === "'" || skip(s)) continue;
+      if (SEQ_GROUP_OPEN.test(s)) { stack.push({ line: i + 1, text: lines[i], word: s.split(/\s+/)[0].toLowerCase() }); continue; }
+      if (/^end\s*$/i.test(s) || /^end\s*'/.test(s)) { stack.pop(); continue; }
+      if (/^@enduml\b/i.test(s)) break;
+    }
+    return stack;
+  }
+
+  function lineAt(lines, n) { return n >= 1 && n <= lines.length ? lines[n - 1] : ''; }
+
+  function bannerRows(text, kind, engine) {
+    var e = engine || {};
+    var lines = String(text || '').replace(/\r\n/g, '\n').split('\n');
+    var msg = String(e.message || '').trim();
+    if (e.state === 'error') {
+      if (e.line) {
+        return [{ line: e.line, text: lineAt(lines, e.line), reason: 'エンジンのエラー 行 ' + e.line + ': ' + (msg || '読めません') }];
+      }
+      if (e.causeLine) {
+        return [{ line: e.causeLine, text: lineAt(lines, e.causeLine), reason: 'エンジンが落ちました: ' + msg }];
+      }
+      if (e.noStartEnd) {
+        var start = 0;
+        var end = 0;
+        lines.forEach(function(l, k) {
+          if (!start && /^\s*@start\w+/i.test(l)) start = k + 1;
+          if (/^\s*@end\w+/i.test(l)) end = k + 1;
+        });
+        if (start && !end) {
+          return [{ line: start, text: lineAt(lines, start),
+            reason: 'エンジンのエラー: ' + (msg || 'No valid @start/@end found') + ' — ' + start + ' 行目の ' + lines[start - 1].trim().split(/\s+/)[0] + ' を閉じる @enduml がありません' }];
+        }
+        return [];
+      }
+      // 行の分からないエラー (落ちた絵) のときだけ、行ごとの推定を補助に添える。
+      return unsupported(text, kind).map(function(r) {
+        return { line: r.line, text: r.text, reason: 'エンジンが落ちました (' + (msg || '行不明') + ')。行ごとの推定: ' + kindLabel(kind) + 'の記法に当たりません' };
+      });
+    }
+    if (e.state === 'ok') {
+      return unclosedBlocks(text, kind).map(function(b) {
+        return { line: b.line, text: b.text, reason: 'エンジンは描きましたが、' + b.line + ' 行目の ' + b.word
+          + ' を閉じる end がありません (PlantUML はこの枠と条件の札を描かずに落とします)' };
+      });
+    }
+    return [];
   }
 
   // ── 報告用の骨格 ─────────────────────────────────────────────────────
@@ -216,9 +314,10 @@ window.MA.fileOpen = (function() {
   function kindLabel(kind) { return KIND_LABEL[kind] || '図種不明'; }
 
   // クリップボードに入れる報告文。ファイル名・本文を含めない。
-  function report(text, kind) {
+  // rows を渡せばその行 (帯に出した行) を、無ければ行ごとの推定を並べる。
+  function report(text, kind, rowsIn) {
     var total = String(text || '').replace(/\r\n/g, '\n').split('\n').length;
-    var rows = unsupported(text, kind);
+    var rows = rowsIn || unsupported(text, kind);
     var head = 'PlantUMLAssist 未対応記法の報告 (' + kindLabel(kind) + ' / 全 ' + total + ' 行 / 未対応 ' + rows.length + ' 行)';
     return [head].concat(rows.map(function(r) { return 'L' + r.line + ': ' + skeleton(r.text); })).join('\n');
   }
@@ -243,6 +342,8 @@ window.MA.fileOpen = (function() {
     partition: partition,
     isSupportedLine: isSupportedLine,
     unsupported: unsupported,
+    unclosedBlocks: unclosedBlocks,
+    bannerRows: bannerRows,
     skeleton: skeleton,
     kindLabel: kindLabel,
     report: report,

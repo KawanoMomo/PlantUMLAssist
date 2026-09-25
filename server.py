@@ -1486,7 +1486,7 @@ class Handler(BaseHTTPRequestHandler):
                            'kind': 'plantuml-crash' if err.get('crashed') else 'plantuml-syntax'}
                 if cause_line:
                     payload['causeLine'] = cause_line
-                for key in ('version', 'source', 'assumed'):
+                for key in ('version', 'source', 'assumed', 'message'):
                     if err.get(key):
                         payload[key] = err[key]
                 if warning:
