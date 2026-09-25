@@ -224,6 +224,7 @@ window.MA.stateSvgMap = (function() {
     }
     return null;
   }
+  function _isHistoryKind(g) { return !!(g && (g.kind === 'history' || g.kind === 'history*')); }
 
   // 宣言の側の種類 (_glyphKind と同じ語)。
   function _declKind(st) {
@@ -234,27 +235,27 @@ window.MA.stateSvgMap = (function() {
     return null;
   }
 
-  // 遷移の線の端か矢じりが触れている図形か (`X --> Comp[H]` の履歴の丸は宣言でなく遷移の行き先)。
-  function _touchedByLink(b, links) {
-    return links.some(function(g) {
-      var ends = _pathEnds(g);
-      if (ends && (_inside(ends.a, b, 6) || _inside(ends.b, b, 6))) return true;
-      return Array.prototype.some.call(g.querySelectorAll('polygon'), function(pg) {
+  // 遷移の線の端か矢じりが触れている図形か。触れていれば { from: 始点が触れる, to: 終点 (か矢じり) が触れる }。
+  function _linkTouch(g, b) {
+    var ends = _pathEnds(g);
+    if (!ends) return null;
+    var from = _inside(ends.a, b, 6), to = _inside(ends.b, b, 6);
+    if (!to) {
+      to = Array.prototype.some.call(g.querySelectorAll('polygon'), function(pg) {
         var hb = shapeBox(pg);
-        return hb && _inside({ x: hb.x + hb.width / 2, y: hb.y + hb.height / 2 }, b, 14) && ends && _inside(ends.b, hb, 14);
+        return hb && _inside({ x: hb.x + hb.width / 2, y: hb.y + hb.height / 2 }, b, 14) && _inside(ends.b, hb, 14);
       });
-    });
+    }
+    return from || to ? { from: from, to: to } : null;
+  }
+  function _touchedByLink(b, links) {
+    return links.some(function(g) { return !!_linkTouch(g, b); });
   }
 
-  function _frameUnnamedGlyphs(svgEl, parsed, orphanShapes, byName, frames, seenState, links) {
-    var named = [];
-    Object.keys(byName).forEach(function(k) { named = named.concat(byName[k]); });
-    var sameBox = function(a, c) {
-      return a && c && Math.abs(a.x - c.x) < 0.01 && Math.abs(a.y - c.y) < 0.01 && Math.abs(a.width - c.width) < 0.01 && Math.abs(a.height - c.height) < 0.01;
-    };
-    // 図形の入れ物: その中心を含む複合状態の枠のうち最も小さいもの。
+  // 図形の入れ物: その中心を含む複合状態の枠のうち最も小さいもの (最上位は '')。
+  function _scopeFinder(frames) {
     var comps = frames.filter(function(f) { return f.type === 'state' && f.composite && f.box; });
-    var scopeOf = function(b) {
+    return function(b) {
       var c = { x: b.x + b.width / 2, y: b.y + b.height / 2 }, best = null;
       comps.forEach(function(f) {
         if (!_inside(c, f.box, 0)) return;
@@ -262,18 +263,15 @@ window.MA.stateSvgMap = (function() {
       });
       return best ? best.id : '';
     };
-    var texts = Array.prototype.filter.call(svgEl.querySelectorAll('text'), _isOrphan).map(function(t) {
-      return { t: t, b: shapeBox(t) };
-    });
-    var glyphs = {};
-    orphanShapes.forEach(function(el) {
-      var b = shapeBox(el);
-      if (!b || named.some(function(n) { return sameBox(n, b); })) return;
-      if (_touchedByLink(b, links)) return;
-      var g = _glyphKind(el, b, texts);
-      if (!g) return;
-      var key = g.kind + '|' + scopeOf(b);
-      (glyphs[key] = glyphs[key] || []).push({ box: g.text ? union([b, g.text]) : b });
+  }
+
+  // 遷移の端からも脇の文字からも名前が引けない図形を、形 (種類) と入れ物の組で「まだ枠の無い宣言」に描いた順 = 宣言順で当てる。
+  // glyphs: [{ kind, box, scope }]。数が合わない組は当てない (取り違えない)。
+  function _frameByKindAndScope(glyphs, parsed, frames, seenState) {
+    var byKey = {};
+    glyphs.forEach(function(g) {
+      var key = g.kind + '|' + g.scope;
+      (byKey[key] = byKey[key] || []).push(g);
     });
     var decls = {};
     ((parsed && parsed.states) || []).forEach(function(st) {
@@ -282,8 +280,8 @@ window.MA.stateSvgMap = (function() {
       var key = k + '|' + _s(st.parentId);
       (decls[key] = decls[key] || []).push(st);
     });
-    Object.keys(glyphs).forEach(function(key) {
-      var gs = glyphs[key], ds = (decls[key] || []).slice().sort(function(a, c) { return a.line - c.line; });
+    Object.keys(byKey).forEach(function(key) {
+      var gs = byKey[key], ds = (decls[key] || []).slice().sort(function(a, c) { return a.line - c.line; });
       if (gs.length !== ds.length) return;
       gs.forEach(function(g, i) {
         seenState[ds[i].id] = true;
@@ -292,11 +290,28 @@ window.MA.stateSvgMap = (function() {
     });
   }
 
-  // BLK-builder-20260925-2015-3: 遷移の端に書いた履歴 (`X --> [H]` / `[H] --> X` / `X --> Comp[H*]`) の丸と「H」。
-  // PlantUML は名前の付いた <g> を作らず、線の名前も `*historical*Comp` / `*deephistory*` の仮の名なので
-  // 状態としては引けない。丸に触れている遷移 (data-source-line で DSL の行が分かっている) の、その側の端の
-  // 書き方 (`[H]` なら書かれた { } の中、`Comp[H]` なら Comp) から「どこの履歴か」を決め、開始・終了と同じ
-  // 'pseudo' の枠にする (id は `history@Comp` / `historyDeep@`、行はその履歴を使う最初の遷移)。
+  // fork / join の棒のうち、遷移の端からも名前が引けなかったもの (BLK-migrator-20260925-1932)。
+  function _frameUnnamedBars(orphanShapes, byName, frames, seenState, links, texts, parsed) {
+    var named = [];
+    Object.keys(byName).forEach(function(k) { named = named.concat(byName[k]); });
+    var sameBox = function(a, c) {
+      return a && c && Math.abs(a.x - c.x) < 0.01 && Math.abs(a.y - c.y) < 0.01 && Math.abs(a.width - c.width) < 0.01 && Math.abs(a.height - c.height) < 0.01;
+    };
+    var scopeOf = _scopeFinder(frames);
+    var glyphs = [];
+    orphanShapes.forEach(function(el) {
+      var b = shapeBox(el);
+      if (!b || named.some(function(n) { return sameBox(n, b); })) return;
+      if (_touchedByLink(b, links)) return;
+      var g = _glyphKind(el, b, texts);
+      if (!g || g.kind !== 'bar') return;
+      glyphs.push({ kind: g.kind, box: b, scope: scopeOf(b) });
+    });
+    _frameByKindAndScope(glyphs, parsed, frames, seenState);
+  }
+
+  // 遷移の端に書いた履歴の書き方 `[H]` / `[H*]` / `Comp[H]` / `Comp[H*]` を { kind: 'history' | 'historyDeep', scope } に読む。
+  // `[H]` は書かれた { } の中 (tr.scope)、`Comp[H]` は名指した Comp。履歴でない端は null。
   var HIST_END_RE = /\[H(\*?)\]$/;
   function historyEnd(end, tr, parsed) {
     var m = HIST_END_RE.exec(_s(end));
@@ -310,48 +325,67 @@ window.MA.stateSvgMap = (function() {
     return { kind: m[1] ? 'historyDeep' : 'history', scope: scope };
   }
 
-  function _frameHistoryEnds(svgEl, parsed, orphanShapes, linkTrs, frames) {
-    var texts = Array.prototype.filter.call(svgEl.querySelectorAll('text'), _isOrphan).map(function(t) {
-      return { t: t, b: shapeBox(t) };
-    });
-    var byId = {}, order = [];
+  // BLK-migrator-20260926-0550: 履歴の丸と「H」/「H*」は、宣言の有無・遷移の有無・入れ物に依らずここ 1 か所で当てる。
+  // PlantUML は履歴を名前の付いた <g> も名前の文字も無しに「H」/「H*」の丸で描く。丸ごとに次の順で持ち主を決める:
+  //   (1) 丸に遷移の端 (線の端か矢じり) が触れていれば、その側の端の DSL の書き方で決める。
+  //       `[H]` / `Comp[H*]` と書いた端 → 開始・終了と同じ 'pseudo' の枠 (id `history@Comp` / `historyDeep@`、行は最初に使う遷移)。
+  //       `state DeepHist <<history*>>` の名前を書いた端 → その宣言の 'state' の枠 (行は宣言)。
+  //       遷移の行が分からない古い SVG は `<!--link A to B-->` の名前で宣言だけを引く。
+  //   (2) どの遷移も触れない丸 (宣言だけの履歴) は、形 (H / H*) と入れ物の組で、まだ枠の無い宣言に宣言順で当てる。
+  function _frameHistories(orphanShapes, linkInfo, parsed, frames, seenState, texts) {
+    var scopeOf = _scopeFinder(frames);
+    var pseudo = {}, pseudoOrder = [], declared = {}, declOrder = [], loose = [];
     orphanShapes.forEach(function(el) {
       var b = shapeBox(el);
       if (!b) return;
       var g = _glyphKind(el, b, texts);
-      if (!g || (g.kind !== 'history' && g.kind !== 'history*')) return;
-      var want = g.kind === 'history' ? 'history' : 'historyDeep';
-      var hit = null, lines = [];
-      linkTrs.forEach(function(lt) {
-        var ends = _pathEnds(lt.g);
-        if (!ends) return;
+      if (!_isHistoryKind(g)) return;
+      var box = union([b, g.text]);
+      var wantEnd = g.kind === 'history' ? 'history' : 'historyDeep';
+      var touched = false, hit = null, lines = [];
+      linkInfo.forEach(function(li) {
+        var t = _linkTouch(li.g, b);
+        if (!t) return;
+        touched = true;
         var sides = [];
-        if (_inside(ends.a, b, 6)) sides.push(lt.tr.from);
-        if (_inside(ends.b, b, 6)) sides.push(lt.tr.to);
-        else {
-          var head = Array.prototype.some.call(lt.g.querySelectorAll('polygon'), function(pg) {
-            var hb = shapeBox(pg);
-            return hb && _inside({ x: hb.x + hb.width / 2, y: hb.y + hb.height / 2 }, b, 14) && _inside(ends.b, hb, 14);
-          });
-          if (head) sides.push(lt.tr.to);
-        }
+        if (t.from) sides.push(li.tr ? li.tr.from : li.names && li.names.a);
+        if (t.to) sides.push(li.tr ? li.tr.to : li.names && li.names.b);
         sides.forEach(function(end) {
-          var h = historyEnd(end, lt.tr, parsed);
-          if (!h || h.kind !== want) return;
-          if (!hit) hit = h;
-          if (h.scope === hit.scope) lines.push(lt.tr.line);
+          if (!end || /^\*/.test(end)) return;
+          var h = li.tr ? historyEnd(end, li.tr, parsed) : null;
+          if (h) {
+            if (h.kind !== wantEnd) return;
+            if (!hit) hit = { pseudo: h.kind + '@' + h.scope };
+            if (hit.pseudo === h.kind + '@' + h.scope) lines.push(li.tr.line);
+            return;
+          }
+          if (hit) return;
+          var st = _findState(parsed, end);
+          if (st && _declKind(st) === g.kind) hit = { state: st };
         });
       });
-      if (!hit) return;
-      var id = hit.kind + '@' + hit.scope;
-      if (!byId[id]) { byId[id] = { boxes: [], lines: [] }; order.push(id); }
-      byId[id].boxes.push(b, g.text);
-      byId[id].lines = byId[id].lines.concat(lines);
+      if (hit && hit.pseudo) {
+        if (!pseudo[hit.pseudo]) { pseudo[hit.pseudo] = { boxes: [], lines: [] }; pseudoOrder.push(hit.pseudo); }
+        pseudo[hit.pseudo].boxes.push(box);
+        pseudo[hit.pseudo].lines = pseudo[hit.pseudo].lines.concat(lines);
+      } else if (hit && hit.state) {
+        if (!declared[hit.state.id]) { declared[hit.state.id] = { st: hit.state, boxes: [] }; declOrder.push(hit.state.id); }
+        declared[hit.state.id].boxes.push(box);
+      } else if (!touched) {
+        loose.push({ kind: g.kind, box: box, scope: scopeOf(b) });
+      }
     });
-    order.forEach(function(id) {
-      var e = byId[id];
+    pseudoOrder.forEach(function(id) {
+      var e = pseudo[id];
       frames.push({ type: 'pseudo', id: id, line: Math.min.apply(null, e.lines), box: pad(union(e.boxes), 3) });
     });
+    declOrder.forEach(function(id) {
+      var e = declared[id];
+      if (seenState[id]) return;
+      seenState[id] = true;
+      frames.push({ type: 'state', id: id, line: e.st.line, box: pad(union(e.boxes), 2), composite: false, declared: true });
+    });
+    _frameByKindAndScope(loose, parsed, frames, seenState);
   }
 
   // 枠の一覧を返す。各要素 { type, id, line, box | link, composite }。
@@ -398,7 +432,7 @@ window.MA.stateSvgMap = (function() {
     // 2. 遷移
     var linksReady = links.length > 0 && links.every(function(g) { return g.hasAttribute('data-source-line'); });
     var names = linkNames(svgEl, links);
-    var linkTrs = [];
+    var trOf = [];
     if (linksReady) {
       var trs = (parsed && parsed.transitions) || [];
       links.forEach(function(g) {
@@ -406,7 +440,7 @@ window.MA.stateSvgMap = (function() {
         var tr = null;
         for (var i = 0; i < trs.length; i++) if (trs[i].line === line) { tr = trs[i]; break; }
         if (!tr) return;
-        linkTrs.push({ g: g, tr: tr });
+        trOf[links.indexOf(g)] = tr;
         frames.push({ type: 'transition', id: tr.id, line: line, link: g });
       });
     }
@@ -418,11 +452,16 @@ window.MA.stateSvgMap = (function() {
       if ((el.tagName || '').toLowerCase() === 'rect' && (fill === 'none' || fill === '')) return false;   // 複合状態の外枠
       return true;
     });
+    // 丸の中の「H」/「H*」を見分けるための、名前の付いた <g> の外の文字。
+    var glyphTexts = Array.prototype.filter.call(svgEl.querySelectorAll('text'), _isOrphan).map(function(t) {
+      return { t: t, b: shapeBox(t) };
+    });
     var byName = {};
     var order = [];
     orphanShapes.forEach(function(el) {
       var b = shapeBox(el);
       if (!b) return;
+      if (_isHistoryKind(_glyphKind(el, b, glyphTexts))) return;   // 履歴の丸は 5. で 1 か所で当てる
       var hit = null;
       links.forEach(function(g, i) {
         if (hit || !names[i]) return;
@@ -473,14 +512,14 @@ window.MA.stateSvgMap = (function() {
       frames.push({ type: 'state', id: r.id, line: r.line, box: pad(union(boxes), 2), composite: false, declared: r.declared });
     });
 
-    // 4. BLK-migrator-20260925-1932: 名前の付かなかった図形 (どの遷移にもつながらない履歴の丸・fork / join の棒)。
-    // PlantUML は履歴を「H」/「H*」の丸、fork / join を名前の無い棒で描き、名前の文字を添えない。
-    // 遷移の端からも脇の文字からも名前が引けないので、描かれた図形の形 (種類) と入れ物 (どの複合状態の中か) で
-    // 組を作り、同じ組の「まだ枠の無い宣言」に描いた順 = 宣言順で当てる。数が合わない組は当てない (取り違えない)。
-    _frameUnnamedGlyphs(svgEl, parsed, orphanShapes, byName, frames, seenState, links);
+    // 4. BLK-migrator-20260925-1932: 名前の付かなかった fork / join の棒 (どの遷移にもつながらない)。
+    // PlantUML は fork / join を名前の無い棒で描き、名前の文字を添えない。遷移の端からも脇の文字からも名前が引けないので、
+    // 棒と入れ物 (どの複合状態の中か) の組で、同じ組の「まだ枠の無い宣言」に描いた順 = 宣言順で当てる。数が合わない組は当てない。
+    _frameUnnamedBars(orphanShapes, byName, frames, seenState, links, glyphTexts, parsed);
 
-    // 5. 遷移の端に書いた履歴 `[H]` / `Comp[H*]` の丸と「H」(4. は遷移に触れる丸を扱わない)。
-    _frameHistoryEnds(svgEl, parsed, orphanShapes, linkTrs, frames);
+    // 5. 履歴の丸と「H」/「H*」(宣言した履歴・遷移の端に書いた `[H]` / `Comp[H*]`・宣言だけの履歴のすべて)。
+    var linkInfo = links.map(function(g, i) { return { g: g, tr: trOf[i] || null, names: names[i] || null }; });
+    _frameHistories(orphanShapes, linkInfo, parsed, frames, seenState, glyphTexts);
 
     // 並びは 状態 → 遷移 → 開始・終了、それぞれ DSL の行の順 (SVG の描画順は配置で入れ替わるので使わない)。
     var rank = { state: 0, transition: 1, pseudo: 2 };

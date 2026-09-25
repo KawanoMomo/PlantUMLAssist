@@ -1,0 +1,17 @@
+@startuml
+state Comp {
+  state A
+  state B
+  state DeepHist <<history*>>
+  state Lone <<history>>
+  A --> B
+  B --> DeepHist
+}
+state Other {
+  state C
+  [H] --> C
+}
+[*] --> Comp
+Comp --> Other[H*] : jump
+Other --> Comp[H] : back
+@enduml
