@@ -1,0 +1,17 @@
+@startuml
+state Idle
+state Comp {
+  state A
+  state B
+  A --> B
+  [H] --> A
+}
+state Other {
+  state C
+  C --> [H*]
+}
+Idle --> Comp[H] : resume
+Idle --> Comp[H*]
+Comp --> Other[H]
+Other --> Idle
+@enduml

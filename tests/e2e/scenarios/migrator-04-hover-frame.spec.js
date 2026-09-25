@@ -1812,3 +1812,59 @@ test('migrator 手順 4 — 遷移の無い履歴・fork の棒のある state �
     'circle:Comp.HH@11', 'text:Comp.HH@11']));
   expect(isoGot.length).toBe(8);
 });
+
+// BLK-builder-20260925-2015-3: 遷移の端に書いた履歴 (`Operation --> [H]` / `[H] --> Operation` / `--> [H*]`) の丸と「H」は、
+// 名前の付いた <g> も状態の名前も無く描かれるので、「H」を指すと隣の遷移の大きな枠が出て、「H*」では何も出なかった (corpus の state-11)。
+// 丸に触れる遷移の端の書き方で「どこの履歴か」を決め、開始・終了と同じ枠にする。押すと右パネルにその履歴につながる遷移が並ぶ。
+test('migrator 手順 4 — 遷移の端に [H] / [H*] を書いた state 図で、丸と「H」に履歴の枠が出て、押すとつながる遷移が並ぶ', async ({ page }) => {
+  await bootPlain(page);
+  const src = fs.readFileSync(path.join(__dirname, '..', '..', 'fixtures', 'dsl', 'state-history-end-s11.puml'), 'utf8')
+    .replace(/\r\n/g, '\n').replace(/\n+$/, '');
+  await typeDsl(page, src);
+  await expect(page.locator('#overlay-layer rect[data-type="pseudo"][data-id="history@"]')).toHaveCount(1, { timeout: 20000 });
+  await expect(page.locator('#overlay-warning')).toBeHidden();
+  // 図種の切替などで出る通知 (#ma-toast) は下端の丸を覆うので、消えてから指す。
+  await expect(page.locator('#ma-toast')).toBeHidden({ timeout: 15000 });
+  const marks = await page.evaluate(() => {
+    const svg = document.querySelector('#preview-svg svg');
+    const out = [];
+    const bare = (e) => !(e.parentNode.getAttribute && e.parentNode.getAttribute('class'));
+    svg.querySelectorAll('text').forEach((t) => {
+      const s = (t.textContent || '').trim();
+      if ((s === 'H' || s === 'H*') && bare(t)) {
+        t.setAttribute('data-hmark', String(out.length)); out.push({ i: out.length, what: 'text ' + s });
+        const c = t.getBBox(); const cx = c.x + c.width / 2, cy = c.y + c.height / 2;
+        svg.querySelectorAll('ellipse').forEach((e) => {
+          const r = parseFloat(e.getAttribute('rx')), x = parseFloat(e.getAttribute('cx')), y = parseFloat(e.getAttribute('cy'));
+          if (bare(e) && Math.abs(x - cx) <= r && Math.abs(y - cy) <= r) { e.setAttribute('data-hmark', String(out.length)); out.push({ i: out.length, what: 'circle ' + s }); }
+        });
+      }
+    });
+    return out;
+  });
+  expect(marks.length).toBe(4);
+  const hotAt = async (m) => {
+    const p = await page.evaluate((i) => {
+      const e = document.querySelector('#preview-svg svg [data-hmark="' + i + '"]');
+      e.scrollIntoView({ block: 'center', inline: 'center' });
+      const r = e.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    }, m.i);
+    await page.mouse.move(3, 3);
+    await page.mouse.move(p.x, p.y);
+    const r = page.locator('#overlay-layer rect.hit-hover').first();
+    await expect(r, m.what + ' にホバーして枠が出る').toHaveCount(1, { timeout: 5000 });
+    return { p, id: (await r.getAttribute('data-type')) + ':' + (await r.getAttribute('data-id')) + '@' + (await r.getAttribute('data-line')) };
+  };
+  const got = [];
+  for (const m of marks) got.push(m.what + '=' + (await hotAt(m)).id);
+  expect(got.sort()).toEqual(['circle H*=pseudo:historyDeep@@12', 'circle H=pseudo:history@@10',
+    'text H*=pseudo:historyDeep@@12', 'text H=pseudo:history@@10']);
+
+  // 「H」を押すと、右パネルに履歴とつながる 2 本の遷移 (10 行目・11 行目) が並ぶ
+  const h = await hotAt(marks.find((m) => m.what === 'text H'));
+  await page.mouse.click(h.p.x, h.p.y);
+  await expect(page.locator('#st-pseudo-info')).toHaveAttribute('data-kind', 'history');
+  await expect(page.locator('#st-pseudo-info')).toContainText('履歴 [H]');
+  await expect(page.locator('#st-pseudo-links li')).toHaveText(['L10 Operation --> [H]', 'L11 [H] --> Operation']);
+});

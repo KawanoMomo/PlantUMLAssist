@@ -1,0 +1,15 @@
+' 狙い: [H]/[H*] のショートハンド表記と複合状態からの復帰
+@startuml
+state Operation {
+  [*] --> Phase1
+  Phase1 --> Phase2
+  Phase2 --> Phase1
+  Phase2 --> Phase3
+}
+[*] --> Operation
+Operation --> [H] : 中断
+[H] --> Operation : 再開
+Operation --> [H*] : 深い中断
+Operation --> [*] : Complete
+' (padding line for corpus line-count requirement)
+@enduml
