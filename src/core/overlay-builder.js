@@ -880,6 +880,184 @@ window.MA.overlayBuilder = (function() {
     return rect;
   }
 
+  // BLK-builder-20260925-0934-3: 図の飾り (title / header / footer / caption / legend) の当て方を図種で分けない。
+  // PlantUML は図種によって <g class="header"> などに入れて描く (class / component …、legend は行を持たない) か、
+  // class の無い裸の <text> と <rect> で描く (sequence) ので、図種ごとのモジュールでは header・footer・caption・
+  // legend に枠が出なかった。本文の行から飾りを読み、<g class="{種類}"> があればそれ、無ければ文字の一致する
+  // 裸の <text> (legend は囲む箱も) に、書かれた行を指す枠を置く。既にモジュールが枠を置いたもの (sequence の題名、
+  // class の題名など) は置かない。戻り値は置いた数。
+  var CHROME_KINDS = ['title', 'header', 'footer', 'caption', 'legend'];
+
+  function _chromePlain(s) {
+    return String(s == null ? '' : s)
+      .replace(/<\/?[a-zA-Z][^>]*>/g, '')
+      .replace(/\*\*|\/\/|""|__|~~/g, '')
+      .replace(/\s+/g, '');
+  }
+
+  // 本文から飾りを読む: [{ kind, line (1 始まり), texts: [表示行…] }]。最初の @start〜@end の中だけ。
+  function chromeEntries(text) {
+    var lines = String(text == null ? '' : text).split('\n').map(function(l) { return l.replace(/\r$/, ''); });
+    var s = 0, e = lines.length, i;
+    for (i = 0; i < lines.length; i++) {
+      if (/^\s*@start\w*/i.test(lines[i])) {
+        s = i + 1;
+        for (var j = s; j < lines.length; j++) { if (/^\s*@end\w*/i.test(lines[j])) { e = j; break; } }
+        break;
+      }
+    }
+    var out = [], cur = null, inStyle = false;
+    for (i = s; i < e; i++) {
+      var t = lines[i].trim();
+      if (inStyle) { if (/<\/style>/i.test(t)) inStyle = false; continue; }
+      if (/^<style\b/i.test(t)) { if (!/<\/style>/i.test(t)) inStyle = true; continue; }
+      if (cur) {
+        if (new RegExp('^end\\s*' + cur.kind + '\\b', 'i').test(t)) { out.push(cur); cur = null; continue; }
+        cur.texts.push(t);
+        continue;
+      }
+      var m = /^(?:(left|right|center)\s+)?(title|header|footer|caption|legend)\b\s*(.*)$/i.exec(t);
+      if (!m) continue;
+      var kind = m[2].toLowerCase(), rest = m[3];
+      if (m[1] && kind !== 'header' && kind !== 'footer') continue;
+      if (/^[{:]/.test(rest)) continue;
+      if (kind === 'legend' && /^((top|bottom|left|right|center)\s*)*$/i.test(rest)) {
+        cur = { kind: kind, line: i + 1, texts: [] };
+        continue;
+      }
+      if (rest === '' && kind !== 'caption') { cur = { kind: kind, line: i + 1, texts: [] }; continue; }
+      out.push({ kind: kind, line: i + 1, texts: [rest] });
+    }
+    out.forEach(function(en) {
+      var flat = [];
+      en.texts.forEach(function(tx) { String(tx).split(/\\n/).forEach(function(p) { flat.push(p); }); });
+      en.texts = flat.filter(function(p) { return _chromePlain(p) !== ''; });
+    });
+    return out;
+  }
+
+  // 本文の 1 行を、描かれた文字と比べる正規表現にする。%page% / $THEME / %version() / C4Version() は何にでも当てる。
+  function _chromeLineRe(txt) {
+    var p = _chromePlain(txt);
+    var parts = p.split(/%\w+%|%\w+\([^)]*\)|\$\w+|\w+\(\)/);
+    return new RegExp('^' + parts.map(function(x) { return x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }).join('.*?') + '$');
+  }
+
+  function _chromeOwner(el, svgEl) {
+    var n = el.parentNode;
+    while (n && n !== svgEl && n.getAttribute) {
+      var c = n.getAttribute('class');
+      if (c) return c.split(/\s+/)[0];
+      n = n.parentNode;
+    }
+    return '';
+  }
+
+  function _unionBoxes(boxes) {
+    var minX = null, minY = null, maxX = null, maxY = null;
+    boxes.forEach(function(bb) {
+      if (!bb) return;
+      if (minX === null || bb.x < minX) minX = bb.x;
+      if (minY === null || bb.y < minY) minY = bb.y;
+      if (maxX === null || bb.x + bb.width > maxX) maxX = bb.x + bb.width;
+      if (maxY === null || bb.y + bb.height > maxY) maxY = bb.y + bb.height;
+    });
+    return minX === null ? null : { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+  }
+
+  function _chromeCovered(overlayEl, bb) {
+    var cx = bb.x + bb.width / 2, cy = bb.y + bb.height / 2;
+    var area = Math.max(bb.width * bb.height, 1);
+    var rects = overlayEl.querySelectorAll('rect.selectable');
+    for (var i = 0; i < rects.length; i++) {
+      var r = rects[i];
+      var x = parseFloat(r.getAttribute('x')), y = parseFloat(r.getAttribute('y'));
+      var w = parseFloat(r.getAttribute('width')), h = parseFloat(r.getAttribute('height'));
+      if (isNaN(x) || isNaN(y) || isNaN(w) || isNaN(h) || w < 2 || h < 2) continue;
+      if (cx >= x && cx <= x + w && cy >= y && cy <= y + h && w * h <= area * 4) return true;
+    }
+    return false;
+  }
+
+  function addDocumentChrome(svgEl, overlayEl, dslText) {
+    if (!svgEl || !overlayEl || !svgEl.querySelectorAll) return 0;
+    var entries = chromeEntries(dslText);
+    if (!entries.length) return 0;
+    var loose = [];
+    Array.prototype.forEach.call(svgEl.querySelectorAll('text'), function(t) {
+      var owner = _chromeOwner(t, svgEl);
+      if (owner && CHROME_KINDS.indexOf(owner) < 0) return;
+      var norm = _chromePlain(t.textContent);
+      if (!norm) return;
+      loose.push({ el: t, norm: norm, owner: owner, used: false });
+    });
+    var n = 0;
+    CHROME_KINDS.forEach(function(kind) {
+      var list = entries.filter(function(en) { return en.kind === kind; });
+      if (!list.length) return;
+      var groups = Array.prototype.slice.call(svgEl.querySelectorAll('g.' + kind));
+      var picks = [];
+      function matches(en, norm) {
+        for (var k = 0; k < en.texts.length; k++) {
+          var lp = _chromePlain(en.texts[k]);
+          if (_chromeLineRe(en.texts[k]).test(norm)) return true;
+          if (norm.length >= 2 && lp.indexOf(norm) >= 0) return true;
+        }
+        return false;
+      }
+      if (groups.length) {
+        // 描かれた <g> ごとに、文字の合う行 (無ければ同じ種類の最後の行) に当てる。
+        groups.forEach(function(g) {
+          var txt = _chromePlain(g.textContent);
+          var en = null;
+          for (var k = 0; k < list.length && !en; k++) {
+            if (list[k].texts.some(function(tx) { var lp = _chromePlain(tx); return lp && (txt.indexOf(lp) >= 0 || _chromeLineRe(tx).test(txt)); })) en = list[k];
+          }
+          if (!en) en = list[list.length - 1];
+          var bb = extractUnionBBox(g, 'text, rect, polygon, path, line');
+          loose.forEach(function(lt) { if (lt.owner === kind && g.contains(lt.el)) lt.used = true; });
+          if (bb) picks.push({ en: en, bb: bb, pad: 2 });
+        });
+      } else {
+        list.forEach(function(en) {
+          var boxes = [];
+          loose.forEach(function(lt) {
+            if (lt.used || lt.owner) return;
+            if (!matches(en, lt.norm)) return;
+            lt.used = true;
+            boxes.push(_nodeBBox(lt.el));
+          });
+          var bb = _unionBoxes(boxes);
+          if (!bb) return;
+          if (kind === 'legend') {
+            // 凡例は文字を囲む箱 (裸の <rect>) ごと枠にする。
+            Array.prototype.forEach.call(svgEl.querySelectorAll('rect'), function(r) {
+              if (_chromeOwner(r, svgEl)) return;
+              var rb = _nodeBBox(r);
+              if (!rb || rb.width * rb.height > bb.width * bb.height * 8) return;
+              if (rb.x <= bb.x + 1 && rb.y <= bb.y + 1 && rb.x + rb.width >= bb.x + bb.width - 1 &&
+                  rb.y + rb.height >= bb.y + bb.height - 1) bb = _unionBoxes([bb, rb]);
+            });
+          }
+          picks.push({ en: en, bb: bb, pad: 3 });
+        });
+      }
+      picks.forEach(function(p, i) {
+        if (!(p.bb.width > 0 || p.bb.height > 0)) return;
+        if (_chromeCovered(overlayEl, p.bb)) return;
+        addRect(overlayEl, p.bb.x - p.pad, p.bb.y - p.pad, p.bb.width + p.pad * 2, p.bb.height + p.pad * 2, {
+          'data-type': 'source-line',
+          'data-id': 'src:' + kind + '@' + p.en.line + ':chrome' + i,
+          'data-src-kind': kind,
+          'data-src-name': '',
+          'data-line': String(p.en.line),
+        });
+        n++;
+      });
+    });
+    return n;
+  }
+
   function syncDimensions(svgEl, overlayEl) {
     if (!svgEl || !overlayEl) return;
     var vb = svgEl.getAttribute('viewBox');
@@ -895,6 +1073,8 @@ window.MA.overlayBuilder = (function() {
     addBackground: addBackground,
     addLinkRects: addLinkRects,
     addUnclaimed: addUnclaimed,
+    addDocumentChrome: addDocumentChrome,
+    chromeEntries: chromeEntries,
     addLooseShapes: addLooseShapes,
     findEntityByName: findEntityByName,
     matchClusters: matchClusters,

@@ -1,0 +1,16 @@
+' 狙い: title/header/footer/caption/legend/skinparam/hide footbox
+@startuml
+title 車載MCU 起動シーケンス
+header ドキュメントNo. SWD-0012
+footer Confidential
+caption 図1: 起動処理
+skinparam sequenceMessageAlign center
+hide footbox
+participant Boot
+participant App
+Boot -> App : Jump_to_App()
+legend right
+  BSW = Basic Software
+  RTE = Runtime Environment
+endlegend
+@enduml
