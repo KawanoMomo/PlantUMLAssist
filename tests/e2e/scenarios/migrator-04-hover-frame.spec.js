@@ -1667,3 +1667,30 @@ test('migrator 手順 4 — 途中で create / ** / !! した参加者のある 
     }
   }
 });
+
+// BLK-builder-20260925-1835-2: 同じファイルで定義した手続きを呼ぶ行 (corpus の seq-22)、改行 `\l`・`\r` とアイコン `<&x>` を含む文言、
+// 文言の無いメッセージと `return` が並ぶ区間 (aws-icons の Sequence - Images・Figure 5・S3 Upload Workflow) で
+// 「⚠ Overlay マッチング失敗: message:N」が出て、メッセージの枠が抜けていた。描かれた矢印と DSL のメッセージを同じ数だけ並べて当てる。
+test('migrator 手順 4 — 手続きで描いたメッセージ・\l で折り返した文言・return の並ぶ sequence 図でも、メッセージに本人の枠が出て警告が出ない', async ({ page }) => {
+  await bootPlain(page);
+  const fx = (n) => fs.readFileSync(path.join(__dirname, '..', '..', 'fixtures', 'dsl', 'v1-2026-8-' + n + '.puml'), 'utf8')
+    .replace(/\r\n/g, '\n').replace(/\n+$/, '');
+  await typeDsl(page, fx('local-proc'));
+  await expect(page.locator('#overlay-layer rect[data-type="message"]')).toHaveCount(4, { timeout: 20000 });
+  await expect(page.locator('#ma-toast')).toBeHidden({ timeout: 15000 });
+  await expect(page.locator('#overlay-warning')).toBeHidden();
+  for (const [label, line] of [['Flush()', '8'], ['Rotate()', '10'], ['Close()', '11']]) {
+    expect((await hoverHit(page, label)).hit, label + ' にホバーして呼んだ行の枠が出る').toEqual({ type: 'message', line, hover: true });
+  }
+  // 手続きの矢印を押すと、呼んだ行が選ばれる
+  const fl = await hoverHit(page, 'Flush()');
+  await page.mouse.click(fl.box.x, fl.box.y);
+  await expect(page.locator('#overlay-layer rect.selected[data-type="message"]')).toHaveAttribute('data-line', '8');
+
+  await typeDsl(page, fx('lbreak-sprite'));
+  await expect(page.locator('#overlay-layer rect[data-type="message"]')).toHaveCount(5, { timeout: 20000 });
+  await expect(page.locator('#overlay-warning')).toBeHidden();
+  for (const [label, line] of [['POST /prod', '5'], ['create token', '6'], ['check', '7'], ['bye', '11']]) {
+    expect((await hoverHit(page, label)).hit, label + ' にホバーして本人の行の枠が出る').toEqual({ type: 'message', line, hover: true });
+  }
+});

@@ -192,6 +192,40 @@ window.MA.modules.plantumlSequence = (function() {
     });
   }
 
+  // BLK-builder-20260925-1835-2: 同じファイルで定義した手続き。{ 名前 (`$` を除く): { params: ['who', …], body: [行…] } }。
+  // 名前は `$log` と `log` のどちらで呼んでも当たるよう `$` を外して持つ (PROC_CALL_RE も `$` を外して返す)。
+  var LOCAL_PROC_RE = /^!(?:unquoted\s+)?procedure\s+\$?([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)\s*$/i;
+  function _localProcedures(lines) {
+    var out = {}, cur = null;
+    for (var i = 0; i < lines.length; i++) {
+      var t = String(lines[i]).trim();
+      if (cur) {
+        if (PREPROC_BLOCK_END_RE.test(t)) { cur = null; continue; }
+        cur.body.push(t);
+        continue;
+      }
+      var m = t.match(LOCAL_PROC_RE);
+      if (!m) continue;
+      cur = { params: [], body: [] };
+      m[2].split(',').forEach(function(p) {
+        var n = p.replace(/=.*$/, '').trim().replace(/^\$/, '');
+        if (n) cur.params.push(n);
+      });
+      out[m[1]] = cur;
+    }
+    return out;
+  }
+  // 本体の `$param` を引数に置き換える ("…" の引数は中身だけ)。長い名前から置き換え、`$a` が `$ab` を壊さないようにする。
+  function _expandLocalProc(proc, args) {
+    var order = proc.params.map(function(p, i) { return { p: p, v: args[i] ? args[i].bare : '' }; })
+      .sort(function(a, b) { return b.p.length - a.p.length; });
+    return proc.body.map(function(line) {
+      var s = line;
+      order.forEach(function(o) { s = s.split('$' + o.p).join(o.v); });
+      return s;
+    });
+  }
+
   var GROUP_KINDS = ['alt', 'opt', 'loop', 'par', 'break', 'critical', 'group'];
   // design 2d/5c:「各項目は『何が起きるか』を先に書き、記法は右に小さく置く」。
   // ブロックの枠も同じ流儀で読めるよう、記法ごとに何が起きるかを 1 箇所に持つ。
@@ -297,6 +331,7 @@ window.MA.modules.plantumlSequence = (function() {
     var boxCounter = 0;
     var curBox = null;
     var inPreproc = false;
+    var localProcs = _localProcedures(lines);
 
     for (var i = 0; i < lines.length; i++) {
       var lineNum = i + 1;
@@ -468,6 +503,25 @@ window.MA.modules.plantumlSequence = (function() {
       // 形だけで読む: 第 1 引数が別名で第 2 引数が "表示名" なら参加者、第 1・第 2 引数がどちらも
       // 既に読んだ参加者で第 3 引数が "文字" ならメッセージ。枠は SVG の側で表示名から当てる。
       var pcm = trimmed.match(PROC_CALL_RE);
+      // BLK-builder-20260925-1835-2: 同じファイルで定義した手続き (`!procedure $log($who,$what)` の本体
+      // `$who -> $who : $what`) を呼ぶ行は、引数を入れた本体のメッセージを PlantUML と同じく描かれた数だけ読む。
+      // 行は呼んだ行 (フォームの書換は呼び出し行が矢印の形でないので何もしない)。読まないと描かれた矢印が
+      // 1 本多く、前後のメッセージの枠がずれて「⚠ Overlay マッチング失敗」が出た。
+      if (pcm && localProcs[pcm[1]]) {
+        _expandLocalProc(localProcs[pcm[1]], _procArgs(pcm[2])).forEach(function(src) {
+          var em = src.match(MSG_RE) || src.match(MSG_ACT_RE);
+          if (!em) return;
+          var efrom = isOuterEnd(em[1]) ? em[1] : ensurePart(em[1]);
+          var eto = isOuterEnd(em[3]) ? em[3] : ensurePart(em[3]);
+          if (participantMap[efrom] && !participantMap[efrom].line) participantMap[efrom].line = lineNum;
+          if (participantMap[eto] && !participantMap[eto].line) participantMap[eto].line = lineNum;
+          result.relations.push({
+            kind: 'message', id: '__m_' + (msgCounter++), from: efrom, to: eto,
+            arrow: em[2], label: em[4] || '', line: lineNum, proc: pcm[1],
+          });
+        });
+        continue;
+      }
       if (pcm && !pcm[1].match(/^(?:skinparam|title|hide|show|autonumber|activate|deactivate)$/i)) {
         var pargs = _procArgs(pcm[2]);
         if (pargs.length >= 3 && participantMap[pargs[0].bare] && participantMap[pargs[1].bare] && pargs[2].quoted) {
