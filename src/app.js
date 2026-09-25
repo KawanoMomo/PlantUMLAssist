@@ -27088,8 +27088,9 @@ function renderUnsupportedPanel() {
   panel.hidden = false;
   var head = document.createElement('div');
   head.id = 'unsupported-summary';
-  head.textContent = '⚠ PlantUML が ' + FO.kindLabel(kind) + 'として読めない行が ' + rows.length
-    + ' 行あります (' + rows[0].reason + (rows.length > 1 ? ' ほか' : '')
+  var what = rows[0].cause === 'unclosed' ? '閉じていない枠が ' + rows.length + ' 個'
+    : 'PlantUML が ' + FO.kindLabel(kind) + 'として読めない行が ' + rows.length + ' 行';
+  head.textContent = '⚠ ' + what + 'あります (' + rows[0].reason + (rows.length > 1 ? ' ほか' : '')
     + ')。本文の編集とプレビューはそのまま使えます';
   var copy = document.createElement('button');
   copy.type = 'button';

@@ -257,7 +257,7 @@ test('手順3 正しい PlantUML には「読めない行」の帯が出ず、�
     'sprite $ok <svg viewBox="0 0 10 10">', '<circle cx="5" cy="5" r="4" fill="green"/>', '</svg>',
     'participant A', 'participant B', 'A -\ B : half', '|||', 'B -/ A : back <$ok>', '@enduml', '',
   ].join('\n');
-  // migrator の corpus/dirty-06-unmatched-block-broken と同じ形: alt に end が無い (PlantUML は枠を黙って描かない)。
+  // migrator の corpus/dirty-06-unmatched-block-broken と同じ形: alt に end が無い (PlantUML は図の終わりで閉じたものとして描く)。
   const UNCLOSED = ['@startuml', 'participant App', 'participant Drv', 'App -> Drv : Read()', 'alt 正常',
     '  Drv --> App : value', 'else 異常', '  Drv --> App : error', 'App -> Drv : Close()', '@enduml', ''].join('\n');
   const BAD = ['@startuml', 'participant A', 'A -> B : x', '$wobble B ~~ zz', '@enduml', ''].join('\n');
@@ -288,7 +288,7 @@ test('手順3 正しい PlantUML には「読めない行」の帯が出ず、�
   await expect(panel).toBeHidden();
   await expect(panel).toHaveAttribute('data-count', '0');
 
-  // end の無い alt: エンジンは描くが枠と条件の札を落とすので、開いた行と理由を出す。
+  // end の無い alt: エンジンは描くが図の終わりまで枠に入れてしまうので、開いた行と理由を出す。
   await openOne(files[1], /alt 正常/);
   await expect(page.locator('#render-status')).toHaveText(/^Rendered/, { timeout: 20000 });
   await expect(panel).toBeVisible({ timeout: 20000 });

@@ -30,7 +30,7 @@ describe('帯はエンジンの答えで決める', function() {
 
   test('エンジンのエラー行があれば、その行だけを「エンジンのエラー 行 N: メッセージ」の理由つきで出す', function() {
     var rows = FO.bannerRows(t, SEQ, { state: 'error', line: 4, message: 'Syntax Error? (Assumed diagram type: sequence)' });
-    expect(rows).toEqual([{ line: 4, text: '$wobble B ~~ zz',
+    expect(rows).toEqual([{ line: 4, text: '$wobble B ~~ zz', cause: 'engine',
       reason: 'エンジンのエラー 行 4: Syntax Error? (Assumed diagram type: sequence)' }]);
   });
 
@@ -62,7 +62,7 @@ describe('帯はエンジンの答えで決める', function() {
   });
 });
 
-describe('閉じていない alt / loop などの枠 (エンジンは黙って描かない)', function() {
+describe('閉じていない alt / loop などの枠 (エンジンは誤りにせず、書いた人の意図と違う図になる)', function() {
   test('入れ子で閉じた枠と else・end note・end box・end ref は数えない', function() {
     var ok = lines(['@startuml', 'box B', 'participant A', 'end box', 'alt x', 'loop y', 'A -> A', 'end', 'else z',
       'note over A', 'end は本文', 'end note', 'ref over A', 'r', 'end ref', 'group g', 'end', 'end', '@enduml']);

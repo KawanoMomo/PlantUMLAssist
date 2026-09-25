@@ -194,14 +194,15 @@ window.MA.fileOpen = (function() {
   //   engine = { state: 'ok' }                           エンジンが図 (エラー画でない SVG) を返した
   //          | { state: 'error', line, message, crashed, noStartEnd, causeLine }  エラー画 / 落ちた絵
   //          | null / { state: 'none' }                   まだ描いていない・エンジンに届かない → 帯を出さない
-  // 返り値 [{ line, text, reason }]。reason の無い行は返さない。
+  // 返り値 [{ line, text, reason, cause: 'engine' | 'guess' | 'unclosed' }]。reason の無い行は返さない。
 
   var SEQ_GROUP_OPEN = /^(alt|opt|loop|par|par2|break|critical|group)\b/i;
   // 前処理 (手続き・マクロ・取り込み) は本文に見えない枠を作り・閉じるので、本文だけでは数えない。
   var PREPROC = /^!(include\w*|import|procedure|function|unquoted|define\w*|startsub|dynamic|foreach|while|if\w*)\b/i;
 
   // シーケンス図で end の来ない alt / opt / loop / par / break / critical / group。
-  // PlantUML はこれを誤りにせず、閉じない枠を黙って描かない (枠と条件の札が図から消える)。
+  // PlantUML はこれを誤りにしない (1.2026.8 は図の終わりで閉じたものとして描き、後ろの行が全部その枠に入る。
+  // 1.2026.3 は枠ごと黙って描かなかった)。どちらも書いた人の意図と違う図になるので、理由つきで知らせる。
   function unclosedBlocks(text, kind) {
     if (kind !== 'plantuml-sequence') return [];
     var lines = String(text || '').replace(/\r\n/g, '\n').split('\n');
@@ -227,10 +228,10 @@ window.MA.fileOpen = (function() {
     var msg = String(e.message || '').trim();
     if (e.state === 'error') {
       if (e.line) {
-        return [{ line: e.line, text: lineAt(lines, e.line), reason: 'エンジンのエラー 行 ' + e.line + ': ' + (msg || '読めません') }];
+        return [{ line: e.line, text: lineAt(lines, e.line), cause: 'engine', reason: 'エンジンのエラー 行 ' + e.line + ': ' + (msg || '読めません') }];
       }
       if (e.causeLine) {
-        return [{ line: e.causeLine, text: lineAt(lines, e.causeLine), reason: 'エンジンが落ちました: ' + msg }];
+        return [{ line: e.causeLine, text: lineAt(lines, e.causeLine), cause: 'engine', reason: 'エンジンが落ちました: ' + msg }];
       }
       if (e.noStartEnd) {
         var start = 0;
@@ -240,20 +241,20 @@ window.MA.fileOpen = (function() {
           if (/^\s*@end\w+/i.test(l)) end = k + 1;
         });
         if (start && !end) {
-          return [{ line: start, text: lineAt(lines, start),
+          return [{ line: start, text: lineAt(lines, start), cause: 'engine',
             reason: 'エンジンのエラー: ' + (msg || 'No valid @start/@end found') + ' — ' + start + ' 行目の ' + lines[start - 1].trim().split(/\s+/)[0] + ' を閉じる @enduml がありません' }];
         }
         return [];
       }
       // 行の分からないエラー (落ちた絵) のときだけ、行ごとの推定を補助に添える。
       return unsupported(text, kind).map(function(r) {
-        return { line: r.line, text: r.text, reason: 'エンジンが落ちました (' + (msg || '行不明') + ')。行ごとの推定: ' + kindLabel(kind) + 'の記法に当たりません' };
+        return { line: r.line, text: r.text, cause: 'guess', reason: 'エンジンが落ちました (' + (msg || '行不明') + ')。行ごとの推定: ' + kindLabel(kind) + 'の記法に当たりません' };
       });
     }
     if (e.state === 'ok') {
       return unclosedBlocks(text, kind).map(function(b) {
-        return { line: b.line, text: b.text, reason: 'エンジンは描きましたが、' + b.line + ' 行目の ' + b.word
-          + ' を閉じる end がありません (PlantUML はこの枠と条件の札を描かずに落とします)' };
+        return { line: b.line, text: b.text, cause: 'unclosed', reason: 'エンジンは描きましたが、' + b.line + ' 行目の ' + b.word
+          + ' を閉じる end がありません (PlantUML は図の終わりで閉じたものとして描くので、後ろの行もこの枠に入ります)' };
       });
     }
     return [];

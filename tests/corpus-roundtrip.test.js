@@ -243,7 +243,7 @@ describe('コーパスに誤警告の帯を出さない', function() {
     expect(rows[0].reason).toContain('No valid @start/@end found');
     expect(rows[0].reason).toContain('2 行目の @startuml を閉じる @enduml がありません');
   });
-  (fs.existsSync(BROKEN_06) ? test : test.skip)('-broken: end の無い alt は、エンジンが描けても (枠が黙って消える) 理由つきで帯に出る', function() {
+  (fs.existsSync(BROKEN_06) ? test : test.skip)('-broken: end の無い alt は、エンジンが描けても (図の終わりまで枠に入る) 理由つきで帯に出る', function() {
     var t = textOf(BROKEN_06);
     var rows = FO.bannerRows(t, kindOf(t), { state: 'ok' });
     expect(rows.map(function(r) { return r.line; })).toEqual([6]);
