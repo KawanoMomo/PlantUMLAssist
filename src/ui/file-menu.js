@@ -413,6 +413,9 @@ window.MA.fileMenuUi = (function() {
         }
         break;
       case 'set-target': clickId('top-save-target'); break;
+      case 'change-target':
+        if (typeof window.openChangeTarget === 'function') window.openChangeTarget();
+        break;
       // BLK-owner-20260924-1836-prune: 読むだけのフォルダの道具 (部品ビュー・指摘から選ぶ…) は、
       // ツリーで選んだそのフォルダを開いた状態で覗く窓に出す。窓の中でフォルダを選び直させない。
       case 'peek':

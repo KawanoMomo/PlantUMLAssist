@@ -321,6 +321,19 @@ html, body {
   box-shadow: 0 8px 24px rgba(0,0,0,0.35); font-size: 12px;
 }
 #files-ctx-menu[hidden] { display: none; }
+/* BLK-primary-20260925-0232-design: 別のフォルダを保存先にする窓 (保存先の右クリック / Ctrl+K「保存先を変える」) */
+#target-pick { position: fixed; inset: 0; z-index: 3000; display: flex; align-items: flex-start; justify-content: center; padding-top: 12vh; background: rgba(0,0,0,0.35); }
+#target-pick .target-pick-box { width: min(520px, 92vw); background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; box-shadow: 0 8px 28px rgba(0,0,0,0.45); font-size: 13px; }
+#target-pick .target-pick-title { font-weight: 600; margin-bottom: 4px; }
+#target-pick .target-pick-cur { color: var(--text-secondary); font-size: 12px; margin-bottom: 8px; word-break: break-all; }
+#target-pick .target-pick-list { display: flex; flex-direction: column; gap: 2px; max-height: 40vh; overflow: auto; margin-bottom: 8px; }
+#target-pick .target-pick-dir { text-align: left; background: transparent; color: var(--text-primary); border: 1px solid transparent; border-radius: 4px; padding: 4px 8px; cursor: pointer; font: inherit; }
+#target-pick .target-pick-dir:hover, #target-pick .target-pick-dir:focus { background: var(--bg-tertiary); border-color: var(--accent); }
+#target-pick .target-pick-none { color: var(--text-secondary); font-size: 12px; padding: 4px 0; }
+#target-pick .target-pick-row { display: flex; gap: 6px; }
+#target-pick #target-pick-path { flex: 1 1 auto; min-width: 0; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 4px; padding: 4px 6px; font: inherit; }
+#target-pick .target-pick-row button { flex: 0 0 auto; font: inherit; padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-tertiary); color: var(--text-primary); cursor: pointer; }
+#target-pick .target-pick-msg { color: var(--error, #f87171); font-size: 12px; min-height: 1em; margin-top: 6px; }
 #files-ctx-menu .files-ctx-title {
   padding: 3px 12px 5px; font-size: 10px; color: var(--text-secondary);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;

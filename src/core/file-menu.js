@@ -50,6 +50,9 @@ window.MA.fileMenu = (function() {
     { sep: true, realOnly: true },
     { id: 'set-target', label: '保存先にする', realOnly: true },
     { id: 'set-readonly', label: '読むだけにする', realOnly: true },
+    // BLK-primary-20260925-0232-design: 保存先の行・「保存先」見出しから別のフォルダを保存先に替える
+    // (隣のフォルダから選ぶか、パスを入れる)。今は ⚙ 設定 → 自動保存 → ファイル → パス の 5 手だった。
+    { id: 'change-target', label: '別のフォルダを保存先にする…', targetOnly: true },
     // BLK-owner-20260924-0637-1: 旧 📂 一覧 (要約・選ぶバー・対象 set・SVG の鮮度…) はツリーから外し、
     // 今の保存先の右クリックからだけ中央の枠に開く。
     { sep: true, targetOnly: true },

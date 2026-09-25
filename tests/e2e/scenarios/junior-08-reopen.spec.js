@@ -357,7 +357,8 @@ test('手順8 FILES ツリーのファイルを右クリックすると 10b の�
   await page.keyboard.press('Escape');
   await page.locator('#btn-tab-folder').click({ button: 'right' });
   await expect(menu.locator('.files-ctx-item .files-ctx-label'))
-    .toHaveText(['新しい図', '6 図種をまとめて作る', '保存先にする', '読むだけにする', '保存先の一覧を開く']);
+    // BLK-primary-20260925-0232-design: 別のフォルダを保存先に替える入口を足した。
+    .toHaveText(['新しい図', '6 図種をまとめて作る', '保存先にする', '読むだけにする', '別のフォルダを保存先にする…', '保存先の一覧を開く']);
   await page.keyboard.press('Escape');
 });
 
