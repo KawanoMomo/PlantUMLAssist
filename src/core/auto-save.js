@@ -263,11 +263,15 @@ window.MA.autoSave = (function() {
     } catch (e) {
       return { name: null, reason: 'error' };   // 名前が分からないなら書かない (取り違えより無書き込み)
     }
-    var n, why = null;
-    if (r && typeof r === 'object') { n = r.name; why = r.reason || null; }
+    var n, why = null, dir = null;
+    if (r && typeof r === 'object') { n = r.name; why = r.reason || null; dir = r.dir ? String(r.dir) : null; }
     else n = r;
     n = (n == null) ? '' : String(n);
-    return { name: n ? n : null, reason: n ? null : (why || 'no-name') };
+    // BLK-human-20260925-1150: dir はそのタブの書き先のフォルダ (保存先を替える前に開いたタブは
+    // 開いたフォルダ)。打った時点で名前と一緒に決める (debounce の間に保存先が替わっても流れない)。
+    var out = { name: n ? n : null, reason: n ? null : (why || 'no-name') };
+    if (dir) out.dir = dir;
+    return out;
   }
 
   // 直近の 1 回の保存が「どこまで届いたか」。画面の 💾 表示はここを読む。
@@ -340,7 +344,7 @@ window.MA.autoSave = (function() {
           _notifyBlocked(fileName, block);
         } else {
           where = 'file';
-          _fileBackendWrite(fileName, dsl, cfg.fileDir);
+          _fileBackendWrite(fileName, dsl, (fileInfo && fileInfo.dir) || cfg.fileDir);
         }
       }
     }

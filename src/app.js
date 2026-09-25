@@ -52,9 +52,10 @@ function updateTopSaveTarget() {
   var el = document.getElementById('top-save-target');
   var ST = window.MA.saveTarget;
   if (!el || !ST) return;
-  var cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null;
   var doc = null;
   try { doc = window.MA.workspace ? window.MA.workspace.getActive() : null; } catch (e) { doc = null; }
+  // BLK-human-20260925-1150: パンくずのフォルダはそのタブのフォルダ (保存先を替えても開いたファイルのまま)。
+  var cfg = _cfgForDoc(doc);
   var bc = ST.breadcrumb(cfg, doc, '(無題)');
   el.textContent = bc.folder;
   el.title = bc.folderTitle;
@@ -77,7 +78,7 @@ function updateTopCrumbs(bc, doc) {
   var part = null;
   var FT = window.MA.fileTree;
   var FP = window.MA.filesPanel;
-  if (folder && doc && doc.name && FT && FT.partFor && FP && FP.folderEntries) {
+  if (folder && doc && doc.name && FT && FT.partFor && FP && FP.folderEntries && !_docHeldElsewhere(doc)) {
     part = FT.partFor(String(doc.name), FP.folderEntries());
   }
   var list = TS.crumbs(folder, part);
@@ -109,10 +110,9 @@ function updateTopCrumbs(bc, doc) {
 window.MA.refreshTopCrumbs = function() {
   var ST = window.MA.saveTarget;
   if (!ST) return;
-  var cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null;
   var doc = null;
   try { doc = window.MA.workspace ? window.MA.workspace.getActive() : null; } catch (e) { doc = null; }
-  updateTopCrumbs(ST.breadcrumb(cfg, doc, '(無題)'), doc);
+  updateTopCrumbs(ST.breadcrumb(_cfgForDoc(doc), doc, '(無題)'), doc);
 };
 
 // BLK-junior-20260913-0306: 保存だけがボタンを持たず、Ctrl+K で「ファイルを保存」と
@@ -121,9 +121,9 @@ function updateTopSaveButton() {
   var btn = document.getElementById('top-save');
   var ST = window.MA.saveTarget;
   if (!btn || !ST || !ST.saveButton) return;
-  var cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null;
   var doc = null;
   try { doc = window.MA.workspace ? window.MA.workspace.getActive() : null; } catch (e) { doc = null; }
+  var cfg = _cfgForDoc(doc);   // 書き先はそのタブのフォルダ (BLK-human-20260925-1150)
   // design 9a: 未保存のときだけ ● とキーを出し、保存済みは淡色の「保存済み」に落とす。
   // 保存の有無は下端の札と同じ判定 (前回保存版といまの中身) を使い、2 つの言い分を作らない。
   // BLK-builder-20260924-1741-2 (design 9a / 10a): 判定はタブの ●/○ と同じ 1 つ (docSaveStatus)。
@@ -292,7 +292,8 @@ function askSourceLock(doc) {
   if (!SL || !doc || _sourceAskOpenFor === doc.id) return;
   if (document.getElementById('source-lock-modal')) return;
   _sourceAskOpenFor = doc.id;
-  var t = SL.askText(doc.name);
+  // BLK-human-20260925-1150: どのフォルダのファイルを書き換えるのかも言う。
+  var t = SL.askText(doc.name, _docDir(doc));
   var used = _openDocNames();
   var wrap = document.createElement('div');
   wrap.id = 'source-lock-modal';
@@ -2792,6 +2793,8 @@ function init() {
       }
       if (window.MA.autoSave) {
         var prevCfg = window.MA.autoSave.getConfig() || {};
+        // BLK-human-20260925-1150: 開いているタブは前の保存先のファイルを指し続ける。
+        _holdOpenDocsBeforeTargetChange(prevCfg, backend, fileDir);
         window.MA.autoSave.setConfig({
           enabled: enabled,
           debounceMs: debounceMs,
@@ -3768,7 +3771,8 @@ function initCommandPalette() {
       { id: 'component-draft', title: '定石構成からコンポーネント図を起こす / Component draft', hint: 'Tabs', keywords: ['component', 'draft', 'こんぽーねんと', 'じょうせき', 'おこす', 'したがき'], run: function() { promptComponentDraft(); } },
       { id: 'tab-new', title: '新しい図を開く / New diagram', hint: 'Tabs', keywords: ['new', 'tab', 'あたらしい', 'ず'], button: 'btn-tab-new', run: function() { clickById('btn-tab-new'); } },
       // BLK-primary-20260925-0232-design: 保存先の行の右クリック「別のフォルダを保存先にする…」と同じ窓。
-      { id: 'change-target', title: '保存先を変える / Change save folder', hint: 'Files', keywords: ['保存先', 'ほぞんさき', 'かえる', '変える', '自動保存', 'じどうほぞん', 'save', 'folder', 'autosave', 'target'], run: function() { setTimeout(openChangeTarget, 0); } },
+      // BLK-owner-20260925-1132-1: 右クリックの入口と同じ名前にする (前の名前「保存先を変える」は検索語に残す)。
+      { id: 'change-target', title: '別のフォルダを保存先にする… / Change save folder', hint: 'Files', keywords: ['保存先を変える', 'べつのフォルダ', '別のフォルダ', '保存先', 'ほぞんさき', 'かえる', '変える', '自動保存', 'じどうほぞん', 'save', 'folder', 'autosave', 'target'], run: function() { setTimeout(openChangeTarget, 0); } },
       { id: 'tab-folder', title: 'FILES: 保存先を開く / Files: save folder', hint: 'Files', keywords: ['folder', 'files', 'tree', 'list', 'いちらん', 'ふぉるだ', 'ほぞんさき'], button: 'btn-tab-folder', run: function() { _ensureFolderListOpen(); } },
       { id: 'change-ticket', title: '変更チケットを開く / Change tickets', hint: 'Tabs', keywords: ['ticket', 'change', 'impact', 'ちけっと', 'へんこう', 'つづき', 'しようへんこう'], run: function() { toggleTicketBoard(true); } },
       { id: 'vault', title: '提出物庫を開く / Deliverable vault', hint: 'Tabs', keywords: ['vault', 'export', 'ていしゅつ', 'こ', 'かこ', 'ぜんかい'], run: function() { toggleVault(true); } },
@@ -4533,6 +4537,54 @@ function _wsFileDir() {
   } catch (e) { return './autosave'; }
 }
 
+// ── タブの書き先のフォルダ (BLK-human-20260925-1150) ─────────────────────────
+// 保存先を別のフォルダに替えると、開いているタブの書き先まで新しいフォルダへ付け替わり、
+// 元のファイルは直らず、新しいフォルダに同じ名前の別の図があればそれを上書きしていた。
+// タブは開いたときのファイルを指し続ける (VS Code・IntelliJ と同じ)。保存先を替える直前に
+// 開いているタブを前の保存先に留め (workspace.holdDir)、自動保存・Ctrl+S・パンくず・
+// 未保存の印はそのタブのフォルダで決める。留めていないタブは今の保存先に従う。
+function _docDir(doc) {
+  var cur = _wsFileDir();
+  var WS = window.MA.workspace;
+  if (!doc || !doc.id || !WS || !WS.dirOf) return cur;
+  return WS.dirOf(doc.id, cur) || cur;
+}
+
+// そのタブが今の保存先とは別のフォルダに留めてあるか。
+function _docHeldElsewhere(doc) {
+  var PF = window.MA.peekFolder;
+  var d = _docDir(doc), cur = _wsFileDir();
+  if (d === cur) return false;
+  return !(PF && PF.samePath && PF.samePath(d, cur));
+}
+
+// 保存の判定 (save-target) に渡す設定。保存先がフォルダなら、書き先をそのタブのフォルダにする。
+function _cfgForDoc(doc) {
+  var cfg = null;
+  try { cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null; } catch (e) { cfg = null; }
+  if (!cfg || cfg.backend !== 'file' || !doc) return cfg;
+  var out = {};
+  for (var k in cfg) if (Object.prototype.hasOwnProperty.call(cfg, k)) out[k] = cfg[k];
+  out.fileDir = _docDir(doc);
+  return out;
+}
+
+// 保存先を替える直前に呼ぶ。開いているタブを前の保存先に留める。
+// 見本・白紙のままのタブ (まだ何も書いていない) と手元から開いたファイル (元の場所へ書く) は留めない。
+function _holdOpenDocsBeforeTargetChange(prevCfg, nextBackend, nextDir) {
+  var WS = window.MA.workspace;
+  if (!WS || !WS.holdDir || !prevCfg || prevCfg.backend !== 'file') return 0;
+  var prevDir = prevCfg.fileDir || './autosave';
+  if (nextBackend === 'file' && prevDir === nextDir) return 0;
+  try { saveActiveDoc(); } catch (e) {}
+  return WS.holdDir(prevDir, function(d) {
+    if (_sourcePathOf(d.id)) return true;
+    var live = d;
+    if (d.id === WS.getActiveId()) live = { id: d.id, name: d.name, diagramType: currentDiagramType, dsl: mmdText };
+    return _isUntouchedDoc(live);
+  });
+}
+
 // 「前回見た版」の控えの置き場。使えない環境でもフォルダ一覧は出る。
 function _reviewStore() {
   try { return window.localStorage || null; } catch (e) { return null; }
@@ -4711,7 +4763,7 @@ function writeChangedToFolder(changed) {
     (window.MA.workspace ? window.MA.workspace.list() : []).forEach(function(d) { byId[d.id] = d; });
     (changed || []).forEach(function(c) {
       var d = byId[c && c.id];
-      if (d) writeDocToFolder(d, cfg.fileDir);
+      if (d) writeDocToFolder(d, _docDir(d));
     });
   } catch (e) {}
 }
@@ -4783,7 +4835,8 @@ function saveActiveDoc() {
       // 既定が当たって書き先が変わることがあるので、上部バーの錠表示も合わせ直す。
       try { updateTopSourceLock(); } catch (e) {}
       if (d.name !== doc.name) doc = { id: doc.id, name: d.name, diagramType: doc.diagramType, dsl: doc.dsl };
-      window.MA.workspace.saveToFile(_withSourceEol(doc), cfg.fileDir);
+      // BLK-human-20260925-1150: 書き先はそのタブのフォルダ (保存先を替える前に開いたタブは開いたフォルダ)。
+      window.MA.workspace.saveToFile(_withSourceEol(doc), _docDir(doc));
       // 保存先が Git なら、変更 (M / A) の数え直しを予約する (design 10c)。
       try { if (window.MA.gitUi) window.MA.gitUi.refreshSoon(); } catch (e) {}
       // 届いた先を状態バーにも揃える (BLK-primary-20260914-2206)。
@@ -5093,7 +5146,8 @@ function docSaveStatusByName(name) {
   if (!SD || !name) return 'same';
   var docs = _diffDocs();
   for (var i = 0; i < docs.length; i++) {
-    if (String(docs[i].name || '') === String(name)) return SD.statusOf(docs[i].name, docs[i].dsl);
+    // 保存先の行は今の保存先のファイル。別のフォルダに留めたタブ (同じ名前の別のファイル) の印は付けない。
+    if (String(docs[i].name || '') === String(name) && !_docHeldElsewhere(docs[i])) return SD.statusOf(docs[i].name, docs[i].dsl);
   }
   return 'same';
 }
@@ -12405,6 +12459,8 @@ function changeSaveTarget(dir) {
   var AS = window.MA.autoSave;
   if (!AS) return Promise.resolve({ ok: false, reason: '自動保存が使えません' });
   var prev = AS.getConfig() || {};
+  // BLK-human-20260925-1150: 開いているタブは前の保存先のファイルを指し続ける (書き先を新しいフォルダへ付け替えない)。
+  _holdOpenDocsBeforeTargetChange(prev, 'file', v);
   AS.setConfig({ backend: 'file', fileDir: v });
   var inp = document.getElementById('cfg-file-dir');
   if (inp) inp.value = v;
@@ -12433,7 +12489,7 @@ function openChangeTarget() {
   h.textContent = '別のフォルダを保存先にする';
   var cur = document.createElement('div');
   cur.className = 'target-pick-cur';
-  cur.textContent = '今の保存先: ' + _wsFileDir() + '（替えると「読むだけ」に並びます）';
+  cur.textContent = '今の保存先: ' + _wsFileDir() + '（替えると「読むだけ」に並びます。開いているタブは開いたファイルに保存します）';
   var list = document.createElement('div');
   list.className = 'target-pick-list';
   list.id = 'target-pick-list';
@@ -15371,9 +15427,10 @@ function setupTabs() {
         catch (e) { return { name: '', reason: 'no-name' }; }
         if (!d || d.action === 'ask') return { name: '', reason: 'ask' };   // 返事を待つ間は書かない
         if (d.action === 'skip') return { name: '', reason: 'unchanged' };  // 開いたときのまま。書かない
-        if (d.name) return d.name;                 // 控えの名前へ逃がす
+        if (d.name) return { name: d.name, dir: _docDir(doc) };   // 控えの名前へ逃がす
       }
-      return name;
+      // BLK-human-20260925-1150: 書き先のフォルダもタブごと (保存先を替える前に開いたタブは開いたフォルダ)。
+      return { name: name, dir: _docDir(doc) };
     });
 
     // 返事待ちで書かなかった回は、その場で確認を出す。自動保存の側から聞かないと、
@@ -15384,6 +15441,11 @@ function setupTabs() {
         var WS = window.MA.workspace;
         var doc = WS && WS.getActive ? WS.getActive() : null;
         if (!doc) return;
+        // 打った時点の「返事待ち」が、答えた後に届くことがある (debounce の間に答えた)。
+        // もう答えてあれば聞き直さず、その回の分を書く (答えた直後に同じ窓がもう一度出ていた)。
+        var SLd = window.MA.sourceLock;
+        var st = (SLd && SLd.stateOf) ? SLd.stateOf(doc.id) : { mode: 'ask' };
+        if (!st || st.mode !== 'ask') { try { saveActiveDoc(); } catch (e) {} return; }
         try { askSourceLock(doc); } catch (e) {}
         try { renderAutoSaveStatus(); } catch (e) {}
       });
@@ -27235,7 +27297,8 @@ function saveFile() {
   if (runSaveGuard(doc)) return;
 
   var ST = window.MA.saveTarget;
-  var target = ST ? ST.decide(cfg, doc, title) : { mode: 'download', name: title };
+  // BLK-human-20260925-1150: 書き先はそのタブのフォルダ。保存先を替えても、前に開いたタブは開いたファイルへ書く。
+  var target = ST ? ST.decide(_cfgForDoc(doc) || cfg, doc, title) : { mode: 'download', name: title };
 
   if (target.mode === 'file') {
     // saveActiveDoc() が既に書き出しているが、ここでは結果を待って利用者に伝える。

@@ -97,6 +97,8 @@ window.MA.workspace = (function() {
           dsl: typeof d.dsl === 'string' ? d.dsl : '',
           preview: d.preview === true,
         });
+        // BLK-human-20260925-1150: 保存先を替える前に開いていたタブは、開いたフォルダを持ち続ける。
+        if (typeof d.dir === 'string' && d.dir) docs[docs.length - 1].dir = d.dir;
       }
       if (docs.length === 0) return null;
       var activeId = docs[0].id;
@@ -140,7 +142,10 @@ window.MA.workspace = (function() {
   }
 
   function _copy(d) {
-    return d ? { id: d.id, name: d.name, diagramType: d.diagramType, dsl: d.dsl, preview: !!d.preview } : null;
+    if (!d) return null;
+    var c = { id: d.id, name: d.name, diagramType: d.diagramType, dsl: d.dsl, preview: !!d.preview };
+    if (d.dir) c.dir = d.dir;
+    return c;
   }
 
   function list() {
@@ -230,6 +235,10 @@ window.MA.workspace = (function() {
     var name = sanitizeName(spec.name || '');
     for (var i = 0; i < _state.docs.length; i++) {
       if (_state.docs[i].name === name) {
+        // BLK-human-20260925-1150: 別のフォルダに留めてあるタブと同じ名前のファイルを今の保存先から
+        // 開いた。中身を読み込むなら、そのタブは今の保存先のファイルになる (留めを外す)。
+        // 中身を渡さない (名前で移るだけ) ときは留めたまま (前のフォルダの中身を今の保存先へ流さない)。
+        if (typeof spec.dsl === 'string' && _state.docs[i].dir) delete _state.docs[i].dir;
         if (typeof spec.dsl === 'string') _state.docs[i].dsl = spec.dsl;
         if (spec.diagramType) _state.docs[i].diagramType = spec.diagramType;
         _state.activeId = _state.docs[i].id;
@@ -295,6 +304,44 @@ window.MA.workspace = (function() {
     d.name = _uniqueName(name, id);
     persist();
     return _copy(d);
+  }
+
+  // ── タブの書き先のフォルダ (BLK-human-20260925-1150) ─────────────────────
+  // 保存先を別のフォルダに替えても、開いているタブは開いたときのファイルを指し続ける
+  // (VS Code・IntelliJ と同じ。書き先はタブごと)。dir を持たないタブは今の保存先に従う。
+  // holdDir(dir, skip): dir を持たないタブを dir に留める。skip(doc) が真のタブは留めない
+  // (見本のままのタブ・手元から開いたファイル)。戻り値は留めたタブの数。
+  function holdDir(dir, skip) {
+    if (!_state || !dir) return 0;
+    var n = 0;
+    for (var i = 0; i < _state.docs.length; i++) {
+      var d = _state.docs[i];
+      if (d.dir) continue;
+      if (typeof skip === 'function') {
+        var sk = false;
+        try { sk = !!skip(_copy(d)); } catch (e) { sk = false; }
+        if (sk) continue;
+      }
+      d.dir = String(dir);
+      n++;
+    }
+    if (n) persist();
+    return n;
+  }
+
+  // タブ 1 枚の書き先を決め直す。dir が空ならそのタブは今の保存先に従う。
+  function setDir(id, dir) {
+    var d = _find(id);
+    if (!d) return null;
+    if (dir) d.dir = String(dir); else delete d.dir;
+    persist();
+    return _copy(d);
+  }
+
+  // タブの書き先のフォルダ。留めていなければ fallback (今の保存先)。
+  function dirOf(id, fallback) {
+    var d = _find(id);
+    return (d && d.dir) || fallback || '';
   }
 
   function reset() {
@@ -534,6 +581,9 @@ window.MA.workspace = (function() {
     close: close,
     rename: rename,
     reset: reset,
+    holdDir: holdDir,
+    setDir: setDir,
+    dirOf: dirOf,
     sanitizeName: sanitizeName,
     isValidName: isValidName,
     nameRuleText: nameRuleText,
