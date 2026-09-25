@@ -6433,6 +6433,16 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   white-space: pre-wrap;
 }
 
+/* BLK-migrator-20260925-0752: 右上に浮くズーム帯 (#zoom-hud) が帯の頭の高さに重なる。右上だけを空け
+   (浮かせた空きの箱に文字を回り込ませる)、「PlantUML {版} がこの行を読めません: N 行目」の頭を帯の下に隠さない。
+   2 行目より下は幅いっぱいに使う。 */
+#render-error-overlay::before {
+  content: '';
+  float: right;
+  width: min(250px, 50%);
+  height: 40px;
+}
+
 /* BLK-reviewer-20260908-1503-wish: 保存時チェックの帯。エラー帯と同じ位置に
    重ねるが、色は警告 (図は読める) で分ける。 */
 /* BLK-reviewer-20260915-0007-wish: 保存を止める帯。済んだことを知らせる
