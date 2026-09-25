@@ -27077,15 +27077,25 @@ function renderUnsupportedPanel() {
   if (!doc || !_openedSourceOf(doc.id)) { panel.hidden = true; panel.setAttribute('data-count', '0'); return; }
   // BLK-migrator-20260924-0637: 描いた図種に合わせて読み直した図は、その図種として読めない行を出す。
   var kind = (_svgKindFix && currentModule && currentModule.type) ? currentModule.type : doc.diagramType;
-  var rows = FO.unsupported(doc.dsl, kind);
+  // BLK-migrator-20260925-1600: 行ごとの正規表現では決めない。今の本文に対するエンジンの答えがあるときだけ、
+  // その答え (エラー行・落ちた理由・閉じない枠) を理由つきで出す。答えの無い本文 (描く前・描けなかった) には出さない。
+  var dsl = (doc.id === window.MA.workspace.getActiveId() && typeof mmdText === 'string') ? mmdText : doc.dsl;
+  var verdict = (_engineVerdict && _engineVerdict.text === dsl) ? _engineVerdict : null;
+  var rows = FO.bannerRows ? FO.bannerRows(dsl, kind, verdict) : [];
   panel.setAttribute('data-count', String(rows.length));
   panel.textContent = '';
   if (!rows.length) { panel.hidden = true; return; }
   panel.hidden = false;
   var head = document.createElement('div');
   head.id = 'unsupported-summary';
-  head.textContent = '⚠ ' + FO.kindLabel(kind) + 'として読めない行が ' + rows.length
-    + ' 行あります。本文の編集とプレビューはそのまま使えます';
+  // 見出しは何がどこか (理由の頭) だけを言い、理由の全文は下の行ごとに書く。
+  var unclosed = rows[0].cause === 'unclosed';
+  var what = unclosed ? '閉じていない枠が ' + rows.length + ' 個'
+    : 'PlantUML が ' + FO.kindLabel(kind) + 'として読めない行が ' + rows.length + ' 行';
+  var where = unclosed ? rows[0].line + ' 行目の ' + String(rows[0].text).trim().split(/\s+/)[0] + ' に end がありません'
+    : String(rows[0].reason).split(/:\s/)[0];
+  head.textContent = '⚠ ' + what + 'あります (' + where + (rows.length > 1 ? ' ほか' : '')
+    + ')。本文の編集とプレビューはそのまま使えます';
   var copy = document.createElement('button');
   copy.type = 'button';
   copy.id = 'btn-unsupported-copy';
@@ -27093,7 +27103,8 @@ function renderUnsupportedPanel() {
   copy.title = '識別子・ラベル・本文・ファイル名を伏せた記法の骨格と行数だけをクリップボードに入れます (外部へは送りません)';
   copy.addEventListener('click', function() {
     var live = window.MA.workspace.getActive();
-    var text = FO.report(live ? (live.id === doc.id ? mmdText : live.dsl) : '', live ? live.diagramType : null);
+    var text = FO.report(live ? (live.id === doc.id ? mmdText : live.dsl) : '', live ? live.diagramType : null,
+      live && live.id === doc.id ? rows : null);
     var done = function() { copy.textContent = '複製しました'; copy.setAttribute('data-copied', '1'); };
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(done, function() { _copyByTextarea(text); done(); });
@@ -27108,7 +27119,8 @@ function renderUnsupportedPanel() {
     var li = document.createElement('li');
     li.className = 'unsupported-row';
     li.setAttribute('data-line', String(r.line));
-    li.textContent = r.line + ' 行目: ' + String(r.text).trim().slice(0, 120);
+    li.setAttribute('data-reason', r.reason);
+    li.textContent = r.line + ' 行目: ' + String(r.text).trim().slice(0, 120) + ' — ' + r.reason;
     ul.appendChild(li);
   });
   panel.appendChild(ul);
@@ -34091,6 +34103,15 @@ function _reconcileKindWithSvg(svgEl) {
   try { renderUnsupportedPanel(); } catch (e) {}
 }
 
+// BLK-migrator-20260925-1600: 「読めない行」の帯はエンジンの答えで決める。最後に描いた本文と、その答え。
+// { text, state: 'ok' | 'error' | 'none', line, message, crashed, noStartEnd, causeLine }
+var _engineVerdict = null;
+function _setEngineVerdict(text, v) {
+  v.text = text;
+  _engineVerdict = v;
+  try { renderUnsupportedPanel(); } catch (e) {}
+}
+
 function renderSvg() {
   var mode = document.getElementById('render-mode').value || 'local';
   renderStatusEl.textContent = 'Rendering\u2026';
@@ -34146,6 +34167,10 @@ function renderSvg() {
     }
     clearRenderError();
     previewSvgEl.innerHTML = svg;
+    var nse = window.MA.renderError.noStartEnd ? window.MA.renderError.noStartEnd(svg) : null;
+    _setEngineVerdict(renderText, nse
+      ? { state: 'error', noStartEnd: true, message: nse.message, line: null }
+      : { state: 'ok' });
     var svgEl = previewSvgEl.querySelector('svg');
     if (svgEl) {
       var dim = normalizeSvgSize(svgEl);
@@ -34209,6 +34234,12 @@ function renderSvg() {
   }).catch(function(err) {
     if (myGen !== renderGen) return;  // stale failure — ignore
     var bandText = (err && err.message) || err;
+    // BLK-migrator-20260925-1600: エンジンが答えた (エラー画 / 落ちた絵) ときだけ帯の根拠にする。届かなかったときは何も言わない。
+    var ri = err && err.renderInfo;
+    _setEngineVerdict(renderText, ri ? {
+      state: 'error', line: ri.line || null, message: ri.message || String(bandText),
+      crashed: !!ri.crashed || ri.kind === 'plantuml-crash', causeLine: ri.causeLine || null,
+    } : { state: 'none' });
     // BLK-migrator-20260925-0752: PlantUML がその行で図種を見失った (本文の図種と違うものを推測した) ときは、そのことを帯に足す。
     try {
       var note = err && err.renderInfo && window.MA.renderError.kindNote
