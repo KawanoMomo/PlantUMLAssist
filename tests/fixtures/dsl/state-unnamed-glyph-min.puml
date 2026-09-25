@@ -1,0 +1,8 @@
+@startuml
+state Diagnostics {
+  state entry1 <<entryPoint>>
+}
+state History <<history>>
+state DeepHist <<history>>
+[*] --> DeepHist
+@enduml
