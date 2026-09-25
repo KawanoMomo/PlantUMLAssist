@@ -10,7 +10,7 @@
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
-const { bootWithSaveDir, dirFor, absDirFor, openFolderItem } = require('./_scenario');
+const { bootWithSaveDir, dirFor, absDirFor, openFolderItem, typeDsl } = require('./_scenario');
 
 // 保存フォルダに置くクラス図。これが突合の相手になる (これが無いと save-guard は動かない)。
 const CLASS_DOC = [
@@ -152,4 +152,41 @@ test('migrator 手順 5 — 保存先の一覧から開いた LF の図を 1 行
   const want = ORIG.replace("' memo", "' memo2");
   await expect.poll(() => fs.readFileSync(file, 'utf8'), { timeout: 10000 }).toBe(want);
   expect(fs.readFileSync(file).includes(Buffer.from('\r')), 'CRLF に書き直さない').toBe(false);
+});
+
+// BLK-builder-20260925-2010-1 (data-loss): 右パネルのステレオタイプ欄に無いステレオタイプ (<<history*>> / <<end>> …) の
+// 状態を選んでラベルを直し「更新」を押すと、欄が (none) に見えていたためステレオタイプが消え、深い履歴や名前付き終了が
+// ふつうの状態の箱に変わっていた。直したラベル以外は書かれたままの字で残り、保存しても直した行以外は変わらない。
+test('migrator 手順 5 — 欄に無いステレオタイプの状態を図で選んでラベルを直しても、ステレオタイプは消えない', async ({ page }) => {
+  const ORIG = [
+    '@startuml',
+    'state Comp {',
+    '  state A',
+    '  state H2 <<history*>>',
+    '  state E1 <<end>>',
+    '  A --> H2',
+    '  A --> E1',
+    '}',
+    '@enduml',
+  ].join('\n');
+  await bootWithSaveDir(page, dirFor(__filename) + '-stereo');
+  await typeDsl(page, ORIG);
+
+  const relabel = async (id, label) => {
+    const r = page.locator('#overlay-layer rect.selectable[data-type="state"][data-id="' + id + '"]');
+    await expect(r).toHaveCount(1, { timeout: 20000 });
+    const b = await r.boundingBox();
+    await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
+    await expect(page.locator('#st-id')).toBeVisible({ timeout: 10000 });
+    // 欄は (none) ではなく、書かれた字を選んだ形で出る。
+    await expect(page.locator('#st-stereo')).not.toHaveValue('');
+    await page.locator('#st-label').fill(label);
+    await page.locator('#st-update').click();
+    await page.waitForTimeout(800);
+  };
+  await relabel('Comp.H2', 'Resume');
+  await relabel('Comp.E1', 'Done');
+
+  const want = ORIG.replace('state H2 <<', 'state "Resume" as H2 <<').replace('state E1 <<', 'state "Done" as E1 <<');
+  await expect.poll(() => page.locator('#editor').inputValue(), { timeout: 10000 }).toBe(want);
 });

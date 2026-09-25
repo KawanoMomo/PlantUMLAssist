@@ -23,7 +23,7 @@ window.MA.stateChild = (function() {
   // 疑似状態 (choice / fork / join / history / 入口・出口) は中を持てない。
   // 見た目が状態でも、PlantUML は中身を描かない。
   var PSEUDO = {
-    choice: 1, fork: 1, join: 1, history: 1, historydeep: 1,
+    choice: 1, fork: 1, join: 1, history: 1, historydeep: 1, 'history*': 1,
     entrypoint: 1, exitpoint: 1,
   };
 

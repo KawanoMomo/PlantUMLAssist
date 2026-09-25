@@ -67,6 +67,8 @@ window.MA.modules.plantumlState = (function() {
     'choice': 'choice',
     'history': 'history',
     'historydeep': 'historyDeep',
+    // PlantUML の深い履歴は `<<history*>>` (H* の丸)。`<<historyDeep>>` はふつうの状態として描かれる (上は旧い書き出しの読み)。
+    'history*': 'historyDeep',
     'fork': 'fork',
     'join': 'join',
     'entrypoint': 'entryPoint',
@@ -167,6 +169,8 @@ window.MA.modules.plantumlState = (function() {
           id: qid,
           label: slabel,
           stereotype: stereotype,
+          // BLK-builder-20260925-2010-1: 書かれたままの字 (大文字小文字も)。欄に無いステレオタイプを「更新」で消さないために持つ。
+          stereotypeRaw: sm[5] ? sm[5].trim() : null,
           color: scolor,
           parentId: parentId,
           entry: null,
@@ -252,6 +256,49 @@ window.MA.modules.plantumlState = (function() {
       }
     }
     return result;
+  }
+
+  // BLK-builder-20260925-2010-1: 右パネルのステレオタイプ欄。欄に無いステレオタイプ (<<end>> / <<inputPin>> / 利用者の <<MyType>> …) は
+  // 書かれたままの字を選択肢に足して選んでおく。(none) に見せて「更新」で消すと、名前を直しただけで図が別物になる。
+  // design 5d: fork / join / 入口・出口ポイントも同じ 1 つの欄で選べる。深い履歴は PlantUML の書き方 `<<history*>>`。
+  var STEREO_CHOICES = [
+    { value: 'choice', label: 'choice' },
+    { value: 'history', label: 'history' },
+    { value: 'history*', label: 'history* (深い履歴)' },
+    { value: 'fork', label: 'fork' },
+    { value: 'join', label: 'join' },
+    { value: 'entryPoint', label: 'entryPoint' },
+    { value: 'exitPoint', label: 'exitPoint' }
+  ];
+  function stereoOptions(st) {
+    var cur = String((st && st.stereotype) || '').toLowerCase();
+    var raw = (st && (st.stereotypeRaw || st.stereotype)) || '';
+    var opts = [{ value: '', label: '(none)', selected: !cur }];
+    var hit = false;
+    STEREO_CHOICES.forEach(function(c) {
+      var sel = !!cur && c.value.toLowerCase() === cur;
+      if (sel) hit = true;
+      opts.push({ value: c.value, label: c.label, selected: sel });
+    });
+    if (cur && !hit) opts.push({ value: raw, label: raw + ' (書かれたまま)', selected: true });
+    return opts;
+  }
+  // 欄の値から updateState に渡すステレオタイプ。選び直していなければ undefined (書かれたままの字を残す)。
+  function stereoToWrite(st, value) {
+    var v = String(value || '');
+    var cur = String((st && st.stereotype) || '').toLowerCase();
+    if (v.toLowerCase() === cur) return undefined;
+    return v || null;
+  }
+
+  // BLK-builder-20260925-2010-1: 入れ子の状態の ID 欄は `親.子` の形で出る。直さずに「更新」を押すと `.` を含む字が
+  // ASCII の ID と見なされず、ラベルに `親.子` が入って ID が S1 に付け替わり、遷移がつながらない別の状態になっていた。
+  // 欄の字が自分の親の名前で始まっていれば、その後ろ (宣言行に書かれている名前) を ID として読む。
+  function idFieldToWrite(st, rawId, parsed) {
+    var v = String(rawId == null ? '' : rawId).trim();
+    var pid = st && st.parentId;
+    if (pid && v.indexOf(pid + '.') === 0) v = v.slice(pid.length + 1);
+    return normalizeIdInput(v, parsed);
   }
 
   function fmtState(id, label, stereotype, color) {
@@ -538,7 +585,8 @@ window.MA.modules.plantumlState = (function() {
     var id, label, stereotype, labelExplicit;
     if (m[2] !== undefined) { id = m[2]; label = m[1]; labelExplicit = true; }
     else { id = m[3]; label = m[4] !== undefined ? m[4] : m[3]; labelExplicit = m[4] !== undefined; }
-    stereotype = m[5] ? m[5].toLowerCase() : null;
+    // BLK-builder-20260925-2010-1: 書き換えないステレオタイプは書かれたままの字で残す (小文字に畳むと `<<MyType>>` の表示が変わる)。
+    stereotype = m[5] ? m[5].trim() : null;
     // 色は ID / ラベル / ステレオタイプの書き換えでは失われない (design 3c と同じ扱い)。
     var color = m[6] || '';
     if (fields.color !== undefined) color = fields.color || '';
@@ -1322,7 +1370,7 @@ window.MA.modules.plantumlState = (function() {
             { value: '', label: '(none)', selected: true },
             { value: 'choice', label: 'choice' },
             { value: 'history', label: 'history' },
-            { value: 'historyDeep', label: 'historyDeep' }
+            { value: 'history*', label: 'history* (深い履歴)' }
           ]) +
           placeHtml('state') +
           P.primaryButtonHtml('st-tail-add', '+ 追加');
@@ -2083,17 +2131,7 @@ window.MA.modules.plantumlState = (function() {
       // BLK-junior-20260915-0406-wish: 状態名も同じ部品の他の図と揃える。
       P.vocabPickerHtml('st-id-vocab', { roles: ['state'] }) +
       P.fieldHtml('ラベル', 'st-label', st.label || '') +
-      P.selectFieldHtml('ステレオタイプ', 'st-stereo', [
-        { value: '', label: '(none)', selected: !st.stereotype },
-        { value: 'choice', label: 'choice', selected: st.stereotype === 'choice' },
-        { value: 'history', label: 'history', selected: st.stereotype === 'history' },
-        { value: 'historyDeep', label: 'historyDeep', selected: st.stereotype === 'historydeep' },
-        // design 5d: fork / join / 入口・出口ポイントも同じ 1 つの欄で選べるようにする。
-        { value: 'fork', label: 'fork', selected: st.stereotype === 'fork' },
-        { value: 'join', label: 'join', selected: st.stereotype === 'join' },
-        { value: 'entryPoint', label: 'entryPoint', selected: st.stereotype === 'entrypoint' },
-        { value: 'exitPoint', label: 'exitPoint', selected: st.stereotype === 'exitpoint' }
-      ]) +
+      P.selectFieldHtml('ステレオタイプ', 'st-stereo', stereoOptions(st)) +
       // BLK-human-20260915-1206: 入れ子の中の状態を選んだとき、どの親の中に
       // 居るかが「Parent: Outer」だけでは孫の代で読み取れない。根から並べる。
       '<div style="font-size:11px;margin:4px 0;color:var(--text-secondary);">居場所: ' +
@@ -2176,14 +2214,14 @@ window.MA.modules.plantumlState = (function() {
       // If user typed a non-ASCII id (e.g. Japanese), promote it to the label
       // and synthesize a fresh ASCII alias so parser+PlantUML stay in sync.
       var freshParsed = parse(ctx.getMmdText());
-      var renameNorm = normalizeIdInput(rawId, freshParsed);
+      var renameNorm = idFieldToWrite(st, rawId, freshParsed);
       var newId = renameNorm.id;
       var newLabel = (renameNorm.id !== renameNorm.label) ? renameNorm.label : rawLabel;
       var src = ctx.getMmdText();
       var out = updateState(src, st.line, {
         id: newId,
         label: newLabel,
-        stereotype: document.getElementById('st-stereo').value || null
+        stereotype: stereoToWrite(st, document.getElementById('st-stereo').value)
       });
       // Apply Behaviors. Use the (possibly renamed) id.
       var bareId = newId.indexOf('.') >= 0 ? newId.split('.').pop() : newId;
@@ -2981,6 +3019,9 @@ window.MA.modules.plantumlState = (function() {
     endNameFor: _endNameFor,
     endOptions: _endOptions,
     buildOverlay: buildOverlay,
+    stereoOptions: stereoOptions,
+    stereoToWrite: stereoToWrite,
+    idFieldToWrite: idFieldToWrite,
     renderProps: renderProps,
     template: template,
     fmtState: fmtState,
