@@ -1645,3 +1645,25 @@ test('migrator 手順 4 — mainframe と newpage とステレオタイプ付き
   expect((await hoverHit(page, '動作の枠')).hit).toEqual({ type: 'source-line', line: '2', hover: true });
   expect((await hoverHit(page, 'A')).hit).toEqual({ type: 'action', line: '4', hover: true });
 });
+
+// BLK-migrator-20260925-1800: 途中で `create` / `**` した参加者の頭がそのメッセージの高さに描かれ、メッセージの文字を探す床を押し下げて、
+// それより上のメッセージの文字に枠が出なかった (corpus の seq-11 / seq-12、1.2026.8 への版上げ由来)。床は最初の矢印より上の頭だけで決める。
+test('migrator 手順 4 — 途中で create / ** / !! した参加者のある sequence 図でも、その頭より上のメッセージの文字に本人の枠が出る', async ({ page }) => {
+  await bootPlain(page);
+  const fx = (n) => fs.readFileSync(path.join(__dirname, '..', '..', 'fixtures', 'dsl', n + '.puml'), 'utf8')
+    .replace(/\r\n/g, '\n').replace(/\n+$/, '');
+  for (const [name, labels] of [
+    ['seq-created-head-12', [['validate()', '4'], ['new(config)', '6'], ['ok', '7'], ['stop()', '12']]],
+    ['seq-created-head-11', [['Session_Open()', '5'], ['internal_alloc()', '6'], ['handle', '7'], ['force_cleanup()', '9'],
+      ['done', '11'], ['Session_Reopen()', '13']]],
+  ]) {
+    await typeDsl(page, fx(name));
+    await expect(page.locator('#overlay-layer rect[data-type="message"]')).toHaveCount(7, { timeout: 20000 });
+    await expect(page.locator('#ma-toast')).toBeHidden({ timeout: 15000 });
+    await expect(page.locator('#overlay-warning')).toBeHidden();
+    for (const [label, line] of labels) {
+      const { hit } = await hoverHit(page, label);
+      expect(hit, name + ' の ' + label + ' にホバーして本人の行の枠が出る').toEqual({ type: 'message', line, hover: true });
+    }
+  }
+});

@@ -1,0 +1,15 @@
+' 狙い: return構文と create構文
+@startuml
+participant Factory
+Factory -> Factory : validate()
+create participant "Instance" as Inst
+Factory -> Inst : new(config)
+Inst --> Factory : ok
+Factory -> Inst : start()
+activate Inst
+Inst --> Factory : return status
+deactivate Inst
+Factory -> Inst : stop()
+Inst --> Factory : return E_OK
+' (padding line for corpus line-count requirement)
+@enduml
