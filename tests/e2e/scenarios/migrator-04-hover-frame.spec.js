@@ -1694,3 +1694,52 @@ test('migrator 手順 4 — 手続きで描いたメッセージ・\l で折り�
     expect((await hoverHit(page, label)).hit, label + ' にホバーして本人の行の枠が出る').toEqual({ type: 'message', line, hover: true });
   }
 });
+
+// BLK-migrator-20260925-1832: corpus の seq-21 (`!pragma teoz true` で 1 行に `A -> B : x & A -> C : y` と書いた図) で、
+// 「& で並べたメッセージの文字の枠が 102px ずれる」と報告された。PlantUML 1.2026.8 は行の途中の `&` を並べる印と読まず、
+// `x & A -> C : y` を 1 本の矢印の文字として描く (並べる印は行頭の `&`)。文字の枠は描いた文字の上に出ており、
+// ずれと数えられた 2 点は、ライフラインの中心がちょうど矢印の線の高さにある点 (線の上はメッセージ、が既定の当て方)。
+// 文字には本人の行の枠が出て、線から離れたライフラインはライフラインが選ばれることを守る。
+test('migrator 手順 4 — teoz の 1 行に & を書いた sequence 図でも、描かれた文字に本人の行の枠が出て、線から離れたライフラインはライフライン', async ({ page }) => {
+  await bootPlain(page);
+  await typeDsl(page, [
+    '@startuml',                                          // 1
+    '!pragma teoz true',                                  // 2
+    'participant App',                                    // 3
+    'participant DrvA',                                   // 4
+    'participant DrvB',                                   // 5
+    'App -> DrvA : Start() & App -> DrvB : Start()',      // 6
+    'DrvA --> App : Done() & DrvB --> App : Done()',      // 7
+    'App -> DrvA : Stop() & App -> DrvB : Stop()',        // 8
+    'DrvA --> App : Ack() & DrvB --> App : Ack()',        // 9
+    'App -> App : LogFinish()',                           // 10
+    '@enduml',                                            // 11
+  ].join(String.fromCharCode(10)));
+  await expect(page.locator('#overlay-layer rect.selectable[data-type="message"]')).toHaveCount(5, { timeout: 20000 });
+  await expect(page.locator('#overlay-warning')).toBeHidden();
+  for (const [label, line] of [['Start() & App -> DrvB : Start()', '6'], ['Done() & DrvB --> App : Done()', '7'],
+    ['Stop() & App -> DrvB : Stop()', '8'], ['Ack() & DrvB --> App : Ack()', '9'], ['LogFinish()', '10']]) {
+    expect((await hoverHit(page, label)).hit, label + ' にホバーして本人の行の枠が出る').toEqual({ type: 'message', line, hover: true });
+  }
+  // Stop() の矢印の尾が付く App のライフラインは線から 5px、矢じりが付く DrvA のライフラインは矢じり (高さ ±4px) から離れた 8px の所でライフライン
+  const hovered = () => page.evaluate(() => Array.from(document.querySelectorAll('#overlay-layer rect.hit-hover'))
+    .map((r) => r.getAttribute('data-type') + '@' + r.getAttribute('data-line')).join(','));
+  const pts = await page.evaluate(() => {
+    const ls = Array.from(document.querySelectorAll('#preview-svg svg line')).map((l) => l.getBoundingClientRect());
+    const vert = ls.filter((b) => b.width < 1 && b.height > 100).sort((p, q) => p.left - q.left);
+    const horiz = ls.filter((b) => b.height < 1 && b.width > 100).sort((p, q) => p.top - q.top);
+    return { xs: [vert[0].left, vert[1].left], y: horiz[2].top };
+  });
+  const z = await page.evaluate(() => {
+    const svg = document.querySelector('#preview-svg svg');
+    const vb = svg.viewBox && svg.viewBox.baseVal;
+    return vb && vb.height ? svg.getBoundingClientRect().height / vb.height : 1;
+  });
+  for (const [i, line, d] of [[0, '3', 5], [1, '4', 8]]) {
+    for (const dy of [-d, d]) {
+      await page.mouse.move(3, 3);
+      await page.mouse.move(pts.xs[i], pts.y + dy * z);
+      await expect.poll(hovered, `ライフライン ${line} 行の、矢印の線から ${dy}px の所はライフライン`).toBe('lifeline@' + line);
+    }
+  }
+});
