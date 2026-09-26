@@ -207,6 +207,26 @@ window.MA.sequenceOverlay = (function() {
   // 当たり判定にする。手前の分は .selectable を持たない (枠は元のライフラインの rect が
   // hover の仲間として出す) ので、ライフラインの rect の数・選択の見た目は変わらない。
   // procMsgs: class の無い SVG で当てたメッセージ ({ box, parts })。BLK-human-20260925-1500: 1.2026.7 からは全部がこちら。
+  // BLK-builder-20260926-1243-2: `create` / `**` で作った参加者の頭は、それを作るメッセージの高さに描かれ、メッセージの枠
+  // (矢印と文言の和) の中に入る。頭は塗りのある箱で、メッセージの矢印は頭の縁で止まる (描いた側では頭が手前)。
+  // メッセージの枠と重なる参加者の枠だけを、メッセージ (とその高さで手前に出したライフライン) より手前に置く。
+  function _raiseHeadsOverMessages(overlayEl) {
+    function box(r) {
+      return { x: parseFloat(r.getAttribute('x')), y: parseFloat(r.getAttribute('y')),
+        w: parseFloat(r.getAttribute('width')), h: parseFloat(r.getAttribute('height')) };
+    }
+    var msgs = Array.prototype.map.call(overlayEl.querySelectorAll('rect[data-type="message"]'), box);
+    if (!msgs.length) return;
+    Array.prototype.forEach.call(overlayEl.querySelectorAll('rect[data-type="participant"]'), function(r) {
+      var b = box(r);
+      if ([b.x, b.y, b.w, b.h].some(isNaN)) return;
+      var over = msgs.some(function(m) {
+        return m.x < b.x + b.w && b.x < m.x + m.w && m.y < b.y + b.h && b.y < m.y + m.h;
+      });
+      if (over) overlayEl.appendChild(r);
+    });
+  }
+
   function _addLifelineFronts(overlayEl, msgMatches, procMsgs) {
     if (!overlayEl) return;
     var PAD = 2;
@@ -1281,6 +1301,7 @@ window.MA.sequenceOverlay = (function() {
     // (ライフラインを指すと別のメッセージの枠)。描いた側で決める: ライフラインの線の上で
     // メッセージの文字・矢じり・線が無い所は、ライフラインを手前に出す。
     _addLifelineFronts(overlayEl, msgMatches, procMsgs);
+    _raiseHeadsOverMessages(overlayEl);
 
     // Warn on silent divergence — early signal when SVG structure changes
     // (PlantUML 新版 / カスタム skin) and our selector/offset assumptions break.
