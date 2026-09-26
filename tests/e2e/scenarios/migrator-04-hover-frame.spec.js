@@ -2012,3 +2012,33 @@ test('migrator 手順 4 — note に Creole の表・箇条書き・リンクを
       { message: kind + ': 押すと note の行', timeout: 5000 }).toEqual([noteLine]);
   }
 });
+
+// BLK-builder-20260926-1243-2: corpus seq-11 / seq-12 (ok と記録済み) の退行。`create` で作った参加者の頭は、それを作る
+// メッセージの高さに描かれ、メッセージの枠 (矢印と文言の和) の中に入る。頭を指すとメッセージの枠が出ていた。
+test('migrator 手順 4 — create で途中に作った参加者の頭を指すと、作ったメッセージではなくその参加者の枠が出る', async ({ page }) => {
+  await bootPlain(page);
+  await typeDsl(page, [
+    '@startuml',                                  // 1
+    'participant Factory',                        // 2
+    'Factory -> Factory : validate()',            // 3
+    'create participant "Instance" as Inst',      // 4
+    'Factory -> Inst : new(config)',              // 5
+    'Inst --> Factory : ok',                      // 6
+    'Factory -> Inst : start()',                  // 7
+    '@enduml',
+  ].join('\n'));
+  await expect(page.locator('#overlay-layer rect[data-type="message"]')).toHaveCount(4, { timeout: 20000 });
+  await expect(page.locator('#overlay-warning')).toBeHidden();
+
+  const heads = await page.evaluate(() => Array.from(document.querySelectorAll('#preview-svg svg text'))
+    .filter((t) => (t.textContent || '').trim() === 'Instance').map((t) => { const r = t.getBoundingClientRect(); return r.top; }));
+  expect(heads.length, '頭と尻の 2 か所に描かれる').toBe(2);
+  const { hit } = await hoverHit(page, 'Instance');
+  expect(hit, 'Instance の頭に枠').not.toBeNull();
+  expect(hit.type).toBe('participant');
+  expect(hit.line).toBe('4');
+  // 作ったメッセージの文言は今までどおりメッセージ
+  const msg = await hoverHit(page, 'new(config)');
+  expect(msg.hit.type).toBe('message');
+  expect(msg.hit.line).toBe('5');
+});
