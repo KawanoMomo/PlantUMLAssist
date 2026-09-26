@@ -150,6 +150,17 @@ test('手順3 PlantUML の公開版が読めない +package の語順は、版�
   fs.writeFileSync(src, REAL);
 
   await bootWithSaveDir(page, dirFor(__filename) + '-2846');
+  // BLK-owner-20260925-1132-2: 先に別の図 (シーケンス) を描いておく。描けない図を開いても、その図の場所に前のタブの図を出さない。
+  const previewTexts = () => page.evaluate(() =>
+    Array.from(document.querySelectorAll('#preview-svg svg text')).map((t) => (t.textContent || '').trim()));
+  await page.evaluate((text) => {
+    const ed = document.getElementById('editor');
+    ed.value = text;
+    ed.dispatchEvent(new Event('input'));
+  }, '@startuml\nparticipant User\nparticipant System\nparticipant DB\nUser -> System : Ping\n@enduml\n');
+  await expect.poll(previewTexts, { timeout: 20000 }).toEqual(expect.arrayContaining(['Ping']));
+  const prevName = await page.evaluate(() => window.MA.workspace.getActive().name);
+  await expect(page.locator('#status-autosave')).toContainText(prevName + '.puml', { timeout: 20000 });
   const [chooser] = await Promise.all([
     page.waitForEvent('filechooser', { timeout: 20000 }),
     page.evaluate(() => { document.getElementById('file-input').click(); }),
@@ -163,6 +174,12 @@ test('手順3 PlantUML の公開版が読めない +package の語順は、版�
   await expect(band).toContainText(/PlantUML \d+\.\d+\.\d+ がこの行を読めません: \d+ 行目/);
   await expect(band).toContainText('`+package uid as "Hello" <<Frame>> {`');
   await expect(band).toContainText('本文は クラス図 として開いています');
+  // 帯の下に前のタブの図 (Ping のシーケンス) を「直前の図」として出さない。下端の札も前のタブのファイルを名乗らない。
+  await expect(page.locator('#preview-svg svg')).toHaveCount(0);
+  expect(await previewTexts()).not.toEqual(expect.arrayContaining(['Ping']));
+  await expect(page.locator('#overlay-layer [data-id]')).toHaveCount(0);
+  await expect(page.locator('#status-autosave')).not.toContainText(prevName + '.puml');
+  await expect(page.locator('#status-autosave')).toContainText('group2846-bug.puml');
   // 図種は本文から読んだクラス図のまま (PlantUML の推測した sequence に引きずられない)。
   expect(await page.locator('#diagram-type').inputValue()).toBe('plantuml-class');
   // 本文の `+` は外さない。
@@ -184,6 +201,35 @@ test('手順3 PlantUML の公開版が読めない +package の語順は、版�
   await page.keyboard.press('Delete');
   await expect(page.locator('#render-status')).toHaveText(/^Rendered/, { timeout: 20000 });
   await expect(band).toBeHidden();
+
+  // 同じタブが描けた図は、描けない行を入れても帯の下に残る (直前の図を残すのはそのタブ自身の図)。
+  // (開いたファイルを直したので、書いてよいかの確認が出る。上書きで答える。)
+  const lockBtn = page.locator('#source-lock-overwrite');
+  await lockBtn.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+  if (await lockBtn.isVisible()) await lockBtn.click();
+  await expect.poll(previewTexts, { timeout: 20000 }).toEqual(expect.arrayContaining(['World']));
+  await page.locator('#editor').click();
+  await page.keyboard.press('Control+Home');
+  for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Home');
+  await page.keyboard.type('+');
+  await expect(page.locator('#render-status')).toHaveText('ERROR', { timeout: 20000 });
+  await expect(band).toBeVisible();
+  expect(await previewTexts()).toEqual(expect.arrayContaining(['World']));
+
+  // 白紙のタブに描けない本文を貼っても、PlantUML の案内画面 (Welcome) を「直前の図」として出さない。
+  await page.locator('#btn-tab-new').click();
+  await expect(page.locator('#render-status')).toHaveText(/^Rendered/, { timeout: 20000 });
+  await page.evaluate((text) => {
+    const ed = document.getElementById('editor');
+    ed.value = text;
+    ed.dispatchEvent(new Event('input'));
+  }, REAL.replace(/\r\n/g, '\n'));
+  await expect(page.locator('#render-status')).toHaveText('ERROR', { timeout: 20000 });
+  await expect(band).toBeVisible();
+  const blankTexts = await previewTexts();
+  expect(blankTexts.some((t) => /Welcome to PlantUML/.test(t)), '案内画面が図として出ている').toBe(false);
+  expect(blankTexts).not.toEqual(expect.arrayContaining(['World']));
 });
 
 // BLK-migrator-20260925-1332: smetana の state 図で最初の並行領域が空 (web/plantuml の vega/state/concurrent-empty-first-region) だと、
