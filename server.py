@@ -30,8 +30,18 @@ FROZEN = bool(getattr(sys, 'frozen', False))
 ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).parent))
 
 
+# BLK-owner-20260926-0550-7: E2E が起こすサーバは PUA_DATA_ROOT に test-results/ の下を渡され、設定
+# (`.assist-prefs.json`) と既定の保存先をそこに置く。渡されないと、同じチェックアウトから起こした利用者の
+# アプリと設定を共有し、テストが利用者の保存先へ図を書いていた (data-loss)。
+SANDBOX_DATA_ROOT = os.environ.get('PUA_DATA_ROOT', '').strip()
+
+
 def _data_root():
     """設定と autosave を置く、再起動しても残る場所。"""
+    if SANDBOX_DATA_ROOT:
+        d = Path(SANDBOX_DATA_ROOT).expanduser().resolve()
+        d.mkdir(parents=True, exist_ok=True)
+        return d
     if not FROZEN:
         return Path(__file__).parent
     base = os.environ.get('APPDATA') or str(Path.home())
@@ -630,6 +640,7 @@ API_INDEX = {
         {'endpoint': 'POST /export-log', 'summary': '書き出しの控えを 1 件足す'},
         {'endpoint': 'POST /file-op', 'summary': 'FILES ツリーの右クリック: 図の名前変更 / 複製 / 別フォルダへ移動 / 場所を開く'},
         {'endpoint': 'GET /prefs', 'summary': 'この機械に保存した設定'},
+        {'endpoint': 'GET /data-root', 'summary': '設定と既定の保存先の置き場所 {dataRoot, sandbox} (sandbox は PUA_DATA_ROOT で起こしたテスト用)'},
         {'endpoint': 'POST /prefs', 'summary': '設定を書く'},
         {'endpoint': 'POST /jar-path', 'summary': 'plantuml.jar の場所を設定する {path}'},
         {'endpoint': 'POST /pick-jar', 'summary': 'アプリ版: jar をファイルダイアログで選ぶ'},
@@ -1322,6 +1333,8 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.split('?')[0] == '/prefs':
             with _fs_lock:
                 return self._send_json(200, read_prefs())
+        if self.path.split('?')[0] == '/data-root':
+            return self._send_json(200, {'dataRoot': str(DATA_ROOT), 'sandbox': bool(SANDBOX_DATA_ROOT)})
         if self.path.split('?')[0] == '/env':
             return self._send_json(200, detect_env())
         path = self.path.split('?')[0]
