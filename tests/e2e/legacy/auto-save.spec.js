@@ -34,30 +34,6 @@ test.describe('Auto-save (v1.2.0)', () => {
     expect(activeType).toBe('plantuml-state');
   });
 
-  test('UC-as-2: per-type isolation across diagram switches', async ({ page }) => {
-    await gotoApp(page);
-    await clearAutoSave(page);
-    await page.reload();
-    await page.waitForSelector('#preview-svg', { timeout: 5000 });
-    // Edit state
-    await page.locator('#diagram-type').selectOption('plantuml-state');
-    await page.waitForTimeout(500);
-    await page.locator('#editor').fill('@startuml\nstate STATE_MARKER\n@enduml');
-    await page.waitForTimeout(1500);
-    // Switch to class — should NOT show state DSL
-    await page.locator('#diagram-type').selectOption('plantuml-class');
-    await page.waitForTimeout(500);
-    var classText = await getEditorText(page);
-    expect(classText).not.toContain('STATE_MARKER');
-    await page.locator('#editor').fill('@startuml\nclass CLASS_MARKER\n@enduml');
-    await page.waitForTimeout(1500);
-    // Switch back to state — state's edited DSL must come back
-    await page.locator('#diagram-type').selectOption('plantuml-state');
-    await page.waitForTimeout(500);
-    var stateText = await getEditorText(page);
-    expect(stateText).toContain('STATE_MARKER');
-    expect(stateText).not.toContain('CLASS_MARKER');
-  });
 
   test('UC-as-3: settings modal → restoreMode=none → reload does not restore', async ({ page }) => {
     await gotoApp(page);

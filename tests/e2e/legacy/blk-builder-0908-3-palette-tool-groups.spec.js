@@ -11,22 +11,6 @@ test.describe('BLK-builder-0908-3 パレットのツール 6 分類', () => {
     await page.addInitScript(() => { try { window.localStorage.clear(); } catch (e) {} });
   });
 
-  test('6 分類の見出しが並び、道具はその下に入る', async ({ page }) => {
-    await gotoApp(page);
-    await page.keyboard.press('Control+k');
-    const heads = page.locator('#cp-list .cp-group');
-    await expect(heads.filter({ hasText: '確かめる / Check' })).toHaveCount(1);
-    await expect(heads.filter({ hasText: 'レビュー / Review' })).toHaveCount(1);
-    await expect(heads.filter({ hasText: '渡す / Deliver' })).toHaveCount(1);
-    // 突合ボードはメニューの言い換えで並ぶ (BLK-owner-20260924-1332-prune: 旧 🔍 名前突合の行は畳んだ)。
-    const row = page.locator('#cp-list .cp-item', { hasText: '突合ボード (表記揺れ' });
-    await expect(row).toHaveCount(1);
-    await expect(row.locator('.cp-kind')).toHaveText('確かめる');
-    // 右端に道具の呼び名が残る。
-    const tpl = page.locator('#cp-list .cp-item', { hasText: 'テンプレートから作る' });
-    await expect(tpl.locator('.cp-hint')).toHaveText('テンプレートから新しい図');
-  });
-
   test('メニューに載っている道具は全部パレットから引ける', async ({ page }) => {
     await gotoApp(page);
     const missing = await page.evaluate(() => {

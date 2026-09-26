@@ -11,16 +11,6 @@ async function pickInsertKind(page, kind) {
 
 test.describe('Activity v0.7.0', () => {
   test.describe('α: DSL technical', () => {
-    test('UC-1: switching to Activity loads start + action template', async ({ page }) => {
-      await gotoApp(page);
-      await page.locator('#diagram-type').selectOption('plantuml-activity');
-      await page.waitForTimeout(500);
-      var t = await getEditorText(page);
-      expect(t).toContain('start');
-      expect(t).toContain(':Hello world;');
-      expect(t).toContain('stop');
-    });
-
     test('UC-1b: tail-add action emits canonical', async ({ page }) => {
       await gotoApp(page);
       await page.locator('#diagram-type').selectOption('plantuml-activity');

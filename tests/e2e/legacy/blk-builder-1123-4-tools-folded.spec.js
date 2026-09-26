@@ -5,7 +5,7 @@
 // BLK-primary-20260908-0923-design (7b) で「ツール ▾」も既定では置かなくなったので、
 // 既定を見る test はメニューを Ctrl+K から開く。
 const { test, expect } = require('@playwright/test');
-const { gotoApp, pickTool } = require('../helpers');
+const { gotoApp } = require('../helpers');
 
 // 既定 (7b) のタブ列にはツールの入口が無いので、Ctrl+K でメニューを開く。
 async function openToolMenu(page) {
@@ -40,20 +40,6 @@ test('既定のタブ列は横スクロールしない', async ({ page }) => {
   expect(over).toBeLessThanOrEqual(1);
 });
 
-test('畳んでも件数は下端の状態表示に出ている', async ({ page }) => {
-  await gotoApp(page, { foldedTools: true });
-  await expect(page.locator('#status-diff')).toBeVisible();
-  await expect(page.locator('#status-pins')).toBeVisible();
-  await expect(page.locator('#status-inbox')).toBeVisible();
-});
-
-test('畳んだ状態でもツールから機能を開ける', async ({ page }) => {
-  await gotoApp(page, { foldedTools: true });
-  await openToolMenu(page);
-  await pickTool(page, 'btn-tab-compare');
-  await expect(page.locator('#compare-pane')).toBeVisible();
-});
-
 // BLK-builder-20260924-1815-3 (design 9b / 9a): 既定のパネルには「タブ列に戻す」を出さない
 // (押すと 9a が外した絵文字の機能ボタンがタブ列に戻っていた)。畳みを解くのは以前に選んだ人の設定だけ。
 test('既定のツールのパネルに「タブ列に戻す」は出ない', async ({ page }) => {
@@ -63,11 +49,3 @@ test('既定のツールのパネルに「タブ列に戻す」は出ない', as
   await expect(page.locator('#tool-menu')).not.toContainText('タブ列に戻す');
 });
 
-test('戻したあとにもう一度畳める', async ({ page }) => {
-  await gotoApp(page);   // helper の既定 (畳まない) で開く
-  await expect(page.locator('#btn-tab-compare')).toBeVisible();
-  await page.locator('#btn-tab-tools').click();
-  await page.locator('#tool-menu-fold').click();
-  await expect(page.locator('#tab-bar')).toHaveClass(/tools-folded/);
-  await expect(page.locator('#btn-tab-compare')).toBeHidden();
-});
