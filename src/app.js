@@ -34113,17 +34113,21 @@ function _isPlantUmlWelcome(svg) {
 function showRenderError(message) {
   var banner = document.getElementById('render-error-overlay');
   var text = 'Render error: ' + message;
-  if (!currentErrorOverlay || !banner) {
+  // まだ 1 枚も描けていない画面 (初回起動で jar が無い等) は、帯ではなく図の場所そのものに理由を出す。
+  // 別のタブの図を外した後 (.preview-not-drawn) は帯のまま続ける。
+  if (!currentErrorOverlay || !banner
+      || (!previewSvgEl.querySelector('svg') && !previewSvgEl.querySelector('.preview-not-drawn'))) {
     if (banner) { banner.hidden = true; banner.textContent = ''; }
     previewSvgEl.innerHTML = '<p style="color:var(--accent-red);padding:20px;white-space:pre-wrap;font-family:var(--font-mono);font-size:12px;">' +
       window.MA.htmlUtils.escHtml(text) + '</p>';
     return;
   }
-  // 別のタブの図・案内画面・まだ 1 度も描けていないタブは「直前の図」が無い。図の場所は空にして帯だけを出す
-  // (選択枠も前の図のものなので外す)。
+  // 別のタブの図・案内画面は「直前の図」ではない。図を外して帯だけを出す (選択枠も前の図のものなので外す)。
   var own = !!previewSvgEl.querySelector('svg') && _previewOwnerId !== false && _previewOwnerId === _activeDocKey();
   if (!own) {
-    previewSvgEl.innerHTML = '';
+    // 空の枠だと図の場所が潰れて何も無いように見えるので、描けていないことだけを 1 行で言う (理由は帯)。
+    previewSvgEl.innerHTML = '<p class="preview-not-drawn" style="color:var(--text-secondary);padding:20px;font-size:12px;">' +
+      'この図はまだ描けていません (理由は上の帯)</p>';
     _previewOwnerId = false;
     var ovl = document.getElementById('overlay-layer');
     if (ovl) { while (ovl.firstChild) ovl.removeChild(ovl.firstChild); }
