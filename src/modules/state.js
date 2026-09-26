@@ -1318,9 +1318,12 @@ window.MA.modules.plantumlState = (function() {
       '</div>';
     propsEl.innerHTML = html;
     // 続けて入れる回の途中なら、描き直しても遷移のフォームのまま (初期状態に戻さない)。
+    // BLK-owner-20260926-0550-2: 種別チップは覚えた種別 (回を閉じた直後は「状態」) を戻すので、
+    // 覚えの方も「遷移」にしておく (でないと「→ ここから遷移」の道だけ「状態」のフォームに戻る)。
     if (_tx.open) {
       var kindSel = document.getElementById('st-tail-kind');
       if (kindSel) kindSel.value = 'transition';
+      if (window.MA.tailMemory) window.MA.tailMemory.setKind('st-tail-kind', 'transition');
     }
     _bindCollapse(parsedData, ctx);
 

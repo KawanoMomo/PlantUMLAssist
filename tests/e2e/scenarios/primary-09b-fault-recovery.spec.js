@@ -138,6 +138,66 @@ test('手順9.5 子状態 1 つと遷移 4 本を、確定のたびに種別・�
   expect(await kindOf(page, 'st')).toBe('transition');
 });
 
+// BLK-owner-20260926-0550-2: 状態を選んだ右パネルの「→ ここから遷移」も、種別チップ「遷移」と同じ連続入力フォームを開く。
+// 種別の覚えが「状態」(子状態を足した直後・回を閉じた直後) のとき、このボタンの道だけ右パネルが「状態」の追加フォームに戻り、
+// 次に図で押した状態はただ選ばれていた。子状態から始めても、回を閉じて別の状態から始め直しても、次に図で押した状態が To に入る。
+test('手順9.5 状態を選んだ右パネルの「→ ここから遷移」から、図で押した状態へ遷移を続けて入れられる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.typeDsl(page, SPI_STATE);
+  await page.waitForTimeout(800);
+
+  // 子状態を 1 つ足しておく (種別の覚えが「状態」になる)。
+  await page.locator('#st-tail-kind-chip-state').click();
+  await page.locator('#st-tail-where').selectOption({ label: 'Error の中' });
+  await page.locator('#st-tail-id').fill('Retrying');
+  await page.locator('#st-tail-id').press('Enter');
+  await waitRendered(page, 'state Retrying');
+  expect(await kindOf(page, 'st')).toBe('state');
+
+  // 子状態 Retrying を図で選び「→ ここから遷移」→ 図で Idle → きっかけ + Enter (クリック 3)。
+  let clicks = 0;
+  await clickOverlay(page, 'state', 'Error.Retrying'); clicks++;
+  await page.locator('#st-add-tx').click(); clicks++;
+  expect(await kindOf(page, 'st')).toBe('transition');
+  await expect(page.locator('#st-tail-from')).toHaveValue('Error.Retrying');
+  await expect(page.locator('#st-tail-to')).toHaveValue('');
+  await expect(page.locator('#st-tx-hint')).toContainText('遷移先');
+  await clickOverlay(page, 'state', 'Idle'); clicks++;
+  await expect(page.locator('#st-tail-to')).toHaveValue('Idle');
+  await expect(page.locator('#st-tail-trig')).toBeFocused();
+  await page.keyboard.type('Spi_Recovered');
+  await page.keyboard.press('Enter');
+  await waitRendered(page, ': Spi_Recovered');
+  expect(clicks).toBeLessThanOrEqual(3);
+  // フォームは開いたまま。次の From は直前の To。
+  expect(await kindOf(page, 'st')).toBe('transition');
+  await expect(page.locator('#st-tail-from')).toHaveValue('Idle');
+  await expect(page.locator('#st-tx-count')).toContainText('1');
+
+  // 回を閉じる (種別は「状態」に戻り、覚えも「状態」)。
+  await page.locator('#st-tx-close').click();
+  expect(await kindOf(page, 'st')).toBe('state');
+
+  // 閉じた後 (覚えが「状態」) に別の状態から始め直しても同じ。
+  await clickOverlay(page, 'state', 'Diagnosing');
+  await page.waitForTimeout(300);
+  await page.locator('#st-add-tx').click();
+  expect(await kindOf(page, 'st')).toBe('transition');
+  await expect(page.locator('#st-tail-from')).toHaveValue('Diagnosing');
+  await clickOverlay(page, 'state', 'Busy');
+  await expect(page.locator('#st-tail-to')).toHaveValue('Busy');
+  await page.keyboard.type('Spi_Rediag');
+  await page.keyboard.press('Enter');
+  await waitRendered(page, ': Spi_Rediag');
+
+  const parsed = await page.evaluate((t) => {
+    const p = window.MA.modules.plantumlState.parse(t);
+    return p.transitions.map((x) => x.from + '>' + x.to + ':' + (x.trigger || x.label || ''));
+  }, await dsl(page));
+  expect(parsed.some((x) => /Retrying>Idle/.test(x))).toBe(true);
+  expect(parsed.some((x) => /^Diagnosing>Busy/.test(x))).toBe(true);
+});
+
 test('手順9.5 ユースケース図の関係は、確定しても種類と From が前回のまま', async ({ page }) => {
   await S.bootWithSaveDir(page, DIR);
   await S.typeDsl(page, UC);
