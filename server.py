@@ -659,7 +659,10 @@ API_INDEX = {
 _ERR_GREEN_MARK = b'fill="#33FF02"'
 # BLK-human-20260925-1500: 1.2026.7 からは色を短く書く (赤は #F00)。どちらの書き方でも拾う。
 _ERR_RED_TEXT_RE = re.compile(rb'<text[^>]*fill="#(?:FF0000|F00)"[^>]*>(.*?)</text>', re.S | re.I)
-_ERR_LINE_RE = re.compile(rb'\[From string \(line (\d+)\)')
+_ERR_LINE_RE = re.compile(rb'\[From [^\]]*?\(line (\d+)\)')
+# BLK-migrator-20260926-1608 / BLK-owner-20260925-1932-1: 赤字の文言 (Illegal sequence arrow / No such color など)
+# に error の語が無くてもエラー画。文言ではなく `[From …]` の出所の行か波線の付いた行があることで見分ける。
+_ERR_WHERE_RE = re.compile(rb'\[From [^\]]*\]|text-decoration="wavy underline"')
 _ERR_VERSION_RE = re.compile(rb'<text[^>]*>\s*PlantUML (?:version )?([0-9][0-9A-Za-z.\-]*)')
 _ERR_SOURCE_RE = re.compile(rb'<text[^>]*text-decoration="wavy underline"[^>]*>(.*?)</text>', re.S)
 _ERR_ASSUMED_RE = re.compile(r'Assumed diagram type:\s*([A-Za-z_]+)')
@@ -760,9 +763,9 @@ def detect_render_error(svg):
     m = _ERR_RED_TEXT_RE.search(svg)
     if not m:
         return None
-    message = _decode_entities(m.group(1))
-    if 'error' not in message.lower():
+    if not _ERR_WHERE_RE.search(svg):
         return None
+    message = _decode_entities(m.group(1))
     lm = _ERR_LINE_RE.search(svg)
     info = {'message': message, 'line': int(lm.group(1)) if lm else None}
     # BLK-migrator-20260925-0752: エラー画には版・波線の付いた行・PlantUML が推測した図種が書いてある。

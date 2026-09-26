@@ -34216,7 +34216,7 @@ function renderSvg() {
     if (overlayEl) {
       while (overlayEl.firstChild) overlayEl.removeChild(overlayEl.firstChild);
     }
-    if (warnEl) { warnEl.style.display = 'none'; warnEl.textContent = ''; }
+    if (warnEl) { warnEl.style.display = 'none'; warnEl.textContent = ''; warnEl.title = ''; }
     if (svgEl && !focusDsl) _reconcileKindWithSvg(svgEl);
     if (svgEl && !focusDsl && currentModule && currentModule.buildOverlay) {
       syncOverlayOrigin();
@@ -34228,7 +34228,9 @@ function renderSvg() {
         var totalUnmatched = (u.participant || 0) + (u.message || 0) + (u.note || 0) + (u.activation || 0);
         if (totalUnmatched > 0) {
           warnEl.style.display = 'block';
-          warnEl.textContent = '\u26A0 Overlay \u30DE\u30C3\u30C1\u30F3\u30B0\u5931\u6557: ' + JSON.stringify(u) + ' \u3002\u30EA\u30B9\u30C8\u4E00\u89A7\u304B\u3089\u7DE8\u96C6\u3057\u3066\u304F\u3060\u3055\u3044\u3002';
+          // BLK-owner-20260925-1932-1: 内部の件数 (JSON) ではなく利用者の言葉で言う。内訳は title に残す。
+          warnEl.textContent = '⚠ 図の要素 ' + totalUnmatched + ' 個に選択枠を当てられませんでした。本文か構造から直せます';
+          warnEl.title = JSON.stringify(u);
         }
       }
       if (moduleHas('overlaySelection')) {

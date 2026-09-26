@@ -9,14 +9,18 @@ window.MA = window.MA || {};
 // 呼び出し側はここで拾って描画エラー扱いにし、直前の図を残したまま
 // 帯 (#render-error-overlay) だけを重ねる。
 window.MA.renderError = (function() {
-  // エラー画の目印。3 つとも揃ったときだけエラーと判定する。
+  // エラー画の目印。3 つとも揃ったときだけエラーと判定する (緑の目印・赤字・出所の行か波線の行)。
   // 図の中にたまたま「Syntax Error?」という文字列があっても誤検出しないよう、
   // PlantUML がエラー画にしか使わない配色 (#33FF02 の緑) を条件に加えている。
   // BLK-human-20260925-1500: 1.2026.7 からは色を短く書く (赤は #F00)。どちらの書き方でも拾う。
   var RED_TEXT_RE = /<text[^>]*fill="#(?:FF0000|F00)"[^>]*>([\s\S]*?)<\/text>/i;
   var GREEN_MARK = 'fill="#33FF02"';
-  // `[From string (line 3) ]` — 何行目で転んだか。
-  var LINE_RE = /\[From string \(line (\d+)\)/;
+  // `[From string (line 3) ]` — 何行目で転んだか (jar に直接渡すと `[From x.puml (line 3) ]`)。
+  var LINE_RE = /\[From [^\]]*?\(line (\d+)\)/;
+  // BLK-migrator-20260926-1608 / BLK-owner-20260925-1932-1: 赤字の文言は「Syntax Error?」だけでなく
+  // 「Illegal sequence arrow」「No such color」など error の語を含まないものもある。文言には依らず、
+  // エラー画の形 (緑の目印・赤字に加え、`[From …]` の出所の行か波線の付いた行) で見分ける。
+  var WHERE_RE = /\[From [^\]]*\]|text-decoration="wavy underline"/;
   var VERSION_RE = /<text[^>]*>\s*PlantUML (?:version )?([0-9][0-9A-Za-z.\-]*)/;
   var SOURCE_RE = /<text[^>]*text-decoration="wavy underline"[^>]*>([\s\S]*?)<\/text>/;
   var ASSUMED_RE = /Assumed diagram type:\s*([A-Za-z_]+)/;
@@ -61,8 +65,8 @@ window.MA.renderError = (function() {
     if (svgText.indexOf(GREEN_MARK) < 0) return detectCrash(svgText) || none;
     var m = svgText.match(RED_TEXT_RE);
     if (!m) return none;
+    if (!WHERE_RE.test(svgText)) return none;
     var message = decodeEntities(m[1]);
-    if (!/error/i.test(message)) return none;
     var lm = svgText.match(LINE_RE);
     var info = {
       isError: true,
