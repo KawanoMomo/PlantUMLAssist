@@ -378,11 +378,27 @@ function findingsPath(opts) {
   }
   // 指摘文書を書くのは reviewer なので、見られる側 (primary / junior) の
   // フォルダには無い。書いた側のフォルダを既定の置き場として最後に見る。
+  // BLK-builder-20260926-1512-3-red: 置き場を借りるのは persona-data の中を突き合わせた回だけ。
+  // 関係の無いフォルダ (一時フォルダ・別の案件) を突き合わせた回に reviewer の指摘.md を当てると、
+  // 別の図の指摘の語 (`Fault` など) が今回の行に当たり、本当の新規が「継続」に化けて 0 件になる。
+  if (!targetsInPersonaRoot(opts)) return null;
   try {
     const p = path.join(personaRoot(), 'reviewer', '指摘.md');
     if (fs.existsSync(p)) return p;
   } catch (e) {}
   return null;
+}
+
+// 対象のどれかが persona-data (PUA_PERSONA_DATA) の中にあるか。
+function targetsInPersonaRoot(opts) {
+  let root;
+  try { root = path.resolve(personaRoot()); } catch (e) { return false; }
+  const norm = (p) => (process.platform === 'win32' ? p.toLowerCase() : p);
+  const r = norm(root);
+  return (opts.targets || []).some((t) => {
+    const a = norm(path.resolve(t));
+    return a === r || a.startsWith(r + path.sep);
+  });
 }
 
 // 入口で降りた回に出す 1 行。突合を回していないので、前回の指摘文書に何件
@@ -412,6 +428,8 @@ function boardSavePath(opts) {
   const found = findingsPath(opts);
   if (found) return found;
   // 指摘文書を書くのは reviewer なので、見られる側のフォルダには置かない。
+  // persona-data の外を突き合わせた回は reviewer の指摘.md に書き戻さない (名指しさせる)。
+  if (!targetsInPersonaRoot(opts)) return null;
   try { return path.join(personaRoot(), 'reviewer', '指摘.md'); } catch (e) { return null; }
 }
 
