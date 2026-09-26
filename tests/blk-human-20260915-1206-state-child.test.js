@@ -205,7 +205,10 @@ describe('breadcrumb / placeText — どの親の中に居るかが分かる', f
 describe('stateInsert — 追加フォームの「選んだ状態の中」が最初の 1 つから使える', function() {
   test('複合状態がまだ無くても「の中」が出る (以前は出なかった)', function() {
     var vals = SI.positions(parse(SIMPLE)).map(function(p) { return p.value; });
-    expect(vals).toEqual(['end', 'transition', 'inside']);
+    // BLK-owner-20260925-0312-3: 親は位置のプルダウンに名前で並ぶ (値は in:{id})。
+    expect(vals.slice(0, 2)).toEqual(['end', 'transition']);
+    expect(vals.length).toBeGreaterThan(2);
+    vals.slice(2).forEach(function(v) { expect(v.indexOf('in:')).toBe(0); });
   });
 
   test('状態が 1 つも無ければ「の中」は出ない', function() {

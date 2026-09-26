@@ -1284,8 +1284,9 @@ window.MA.modules.plantumlState = (function() {
         // design 4c: 置く場所を選べるようになったので、見出しは「末尾」を名乗らない。
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">追加 / Add</label>' +
         P.selectFieldHtml('種類', 'st-tail-kind', [
+          // BLK-owner-20260925-0312-3: 「子状態」は「状態」+ 追加する位置「{親} の中」と同じ行を書くので畳んだ
+          // (入れ子を作る入口を「追加する位置」1 つにする。Ctrl+K の「子状態」「入れ子」はここへ連れてくる)。
           { value: 'state', label: '状態 (state)', selected: true },
-          { value: 'child', label: '子状態 (選んだ状態の中に入れる)' },
           { value: 'composite', label: '複合状態 (state … { })' },
           { value: 'transition', label: '遷移 (-->)' },
           // BLK-human-20260923-2001: どこの開始・終了・履歴かを選んで足す
@@ -1341,6 +1342,9 @@ window.MA.modules.plantumlState = (function() {
     // (遷移とノートは相手の行が決まるので位置を選ばせる意味がない)。
     // composite に「この遷移の途中」は出さない — 中身の無い箱を遷移の間に
     // 挟んでも、そのあと必ず中を作る手が要る。
+    // BLK-owner-20260925-0312-3: 親は「Run の中」「Run › Busy の中」と名前で並べ、このプルダウン 1 つで
+    // 選び終える。選んだ位置は確定しても保ち (図種・タブを替えたときだけ既定に戻る)、図で状態を
+    // 選んだあとはその状態の中が既定になる (覚えは tailMemory の 'st-tail-where')。
     var SI = window.MA.stateInsert;
     function placeHtml(kind) {
       var opts = SI.positions(parsedData, ctx.getMmdText()).filter(function(p) {
@@ -1355,7 +1359,7 @@ window.MA.modules.plantumlState = (function() {
       '</div>';
     }
 
-    // 位置を選ぶと相手 (どの遷移 / どの複合状態) の欄が要る。
+    // 位置が「この遷移の途中」のときだけ、挟む遷移の欄が要る。
     function renderWhereDetail() {
       var box = document.getElementById('st-tail-where-detail');
       var whereEl = document.getElementById('st-tail-where');
@@ -1363,9 +1367,6 @@ window.MA.modules.plantumlState = (function() {
       if (whereEl.value === 'transition') {
         box.innerHTML = P.selectFieldHtml('間に挟む遷移', 'st-tail-where-target',
           SI.transitionOptions(parsedData));
-      } else if (whereEl.value === 'inside') {
-        box.innerHTML = P.selectFieldHtml('中に入れる複合状態', 'st-tail-where-target',
-          SI.compositeOptions(parsedData));
       } else {
         box.innerHTML = '';
       }
@@ -1386,23 +1387,6 @@ window.MA.modules.plantumlState = (function() {
           ]) +
           placeHtml('state') +
           P.primaryButtonHtml('st-tail-add', '+ 追加');
-      } else if (kind === 'child') {
-        // BLK-human-20260915-1206: 「どの状態の中に入れるか」を先に選ばせる。
-        // 親が中身を持たなければその場で `{ }` に開くので、変換の手は要らない。
-        var SC = window.MA.stateChild;
-        var parentOpts = SC.parentOptions(parsedData);
-        html2 = parentOpts.length === 0
-          ? '<div style="font-size:11px;color:var(--text-secondary);">親にできる状態がまだありません。先に状態を 1 つ追加してください。</div>'
-          : P.selectFieldHtml('親にする状態', 'st-tail-where-target', parentOpts) +
-            P.fieldHtml('子状態の名前', 'st-tail-id', '', '例: Warmup (空なら Sub)') +
-            '<input type="hidden" id="st-tail-where" value="inside">' +
-            P.primaryButtonHtml('st-tail-add', '+ 追加') +
-            '<div id="st-tail-child-hint" style="font-size:10px;color:var(--text-secondary);margin-top:4px;line-height:1.5;">' +
-              '選んだ状態の中に入れます (DSL は <code>state 親 { state 子 }</code>)。' +
-              '中身をまだ持たない状態でも、その場で中を開くので変換は要りません。' +
-              '子状態を選び直せば孫も同じ手で足せます。' +
-              '図の中の状態を押して選んでからでも、右パネルの「＋ 子状態を追加」で足せます。' +
-            '</div>';
       } else if (kind === 'composite') {
         html2 =
           P.fieldHtml('名前', 'st-tail-id', '', '例: Outer') +
@@ -1500,8 +1484,10 @@ window.MA.modules.plantumlState = (function() {
           '</div>';
       }
       detailEl.innerHTML = html2;
-      // BLK-primary-20260923-2312-friction: 子状態を続けて足すとき、親は前回選んだまま。
-      if (kind === 'child' && window.MA.tailMemory) window.MA.tailMemory.bindSelect('st-tail-where-target');
+      // BLK-owner-20260925-0312-3: 位置は確定しても前回のまま (子を続けて足すのに選び直さない)。
+      if ((kind === 'state' || kind === 'composite') && window.MA.tailMemory) {
+        window.MA.tailMemory.bindSelect('st-tail-where');
+      }
       // 一括欄は「既に他の図にある行」を打ち直させないためのボタンを持つ。
       window.MA.reuseModal.bindButton('st-tail-reuse', 'plantuml-state', 'st-tail-bulk');
       renderWhereDetail();
@@ -1616,21 +1602,16 @@ window.MA.modules.plantumlState = (function() {
         var out = t;
         // design 4c: 位置の欄が出ていなければ従来どおり末尾。
         var whereEl = document.getElementById('st-tail-where');
-        var where = whereEl ? whereEl.value : 'end';
+        var whereRaw = whereEl ? whereEl.value : 'end';
+        var whereP = SI.parseWhere(whereRaw);
+        // 'in:X' は位置の欄 1 つで親まで決まる。「この遷移の途中」だけは挟む遷移の欄を読む。
+        var where = whereP.mode === 'inside' ? 'inside' : whereRaw;
         var tgtEl = document.getElementById('st-tail-where-target');
-        var whereTarget = tgtEl ? tgtEl.value : '';
-        if (k === 'state' || k === 'child') {
+        var whereTarget = whereP.mode === 'inside' ? whereP.target : (tgtEl ? tgtEl.value : '');
+        if (k === 'state') {
           var rawId = document.getElementById('st-tail-id').value;
           var normSt = normalizeIdInput(rawId, parsedData);
-          // BLK-human-20260915-1206: 子状態は名前を思いつかないまま押せる方が
-          // 早い。空なら空いている名前 (Sub / Sub2 …) を当てる。
-          if (!normSt.valid && k === 'child') {
-            normSt = { valid: true, id: window.MA.stateChild.uniqueChildId(parsedData, 'Sub'), label: '' };
-          }
           if (!normSt.valid) { alert('ID 必須'); return; }
-          if (k === 'child' && whereTarget && window.MA.tailMemory) {
-            window.MA.tailMemory.setField('st-tail-where-target', whereTarget);
-          }
           var stereoEl = document.getElementById('st-tail-stereo');
           var st = (stereoEl && stereoEl.value) || null;
           if (where.indexOf('region:') === 0) {
@@ -1665,6 +1646,11 @@ window.MA.modules.plantumlState = (function() {
             if (out === t) { alert('入れる複合状態を選んでください'); return; }
           } else {
             out = addCompositeState(t, normC.id, normC.label);
+          }
+          // 作った直後の複合状態を次の「追加する位置」にする (続けて中身を足せる。
+          // コンポーネント・クラス・ユースケースの境界と同じ動き)。
+          if (out !== t && where.indexOf('region:') !== 0 && window.MA.tailMemory) {
+            window.MA.tailMemory.setField('st-tail-where', SI.insideValue(SI.addedId(whereRaw, normC.id)));
           }
         } else if (k === 'transition') {
           var fr = document.getElementById('st-tail-from').value;
@@ -2106,6 +2092,11 @@ window.MA.modules.plantumlState = (function() {
       if (parsedData.states[i].id === sel.id) { st = parsedData.states[i]; break; }
     }
     if (!st) { _renderUndeclaredState(sel, parsedData, propsEl); return; }
+    // BLK-owner-20260925-0312-3: 図で状態を選んだら、追加フォームの「追加する位置」の既定をその状態の中にする
+    // (選んでから Esc で追加フォームへ戻り、そのまま子を足せる)。
+    if (window.MA.tailMemory && window.MA.stateChild && window.MA.stateChild.canHaveChild(st)) {
+      window.MA.tailMemory.setField('st-tail-where', window.MA.stateInsert.insideValue(st.id));
+    }
     var related = (parsedData.transitions || []).filter(function(tr) { return tr.from === st.id || tr.to === st.id; });
     var notes = (parsedData.notes || []).filter(function(n) { return n.targetId === st.id; });
 

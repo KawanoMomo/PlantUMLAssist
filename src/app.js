@@ -4022,7 +4022,8 @@ function initCommandPalette() {
     ] },
     'plantuml-state': { prefix: 'st', kinds: [
       { value: 'state', label: '状態' },
-      { value: 'child', label: '子状態 (状態の中に入れる)' },
+      // BLK-owner-20260925-0312-3: 子状態は種別「状態」+ 追加する位置「{親} の中」。検索語は残し、同じフォームへ連れていく。
+      { value: 'child', label: '子状態 (状態の中に入れる)', kind: 'state', place: 'inside' },
       { value: 'composite', label: '複合状態' },
       { value: 'transition', label: '遷移' },
       { value: 'note', label: '注釈' },
@@ -4030,7 +4031,7 @@ function initCommandPalette() {
     ] },
   };
 
-  function openTailForm(prefix, kindValue) {
+  function openTailForm(prefix, kindValue, place) {
     if (window.MA.selection) window.MA.selection.clearSelection();
     renderProps();
     var sel = document.getElementById(prefix + '-tail-kind');
@@ -4038,6 +4039,21 @@ function initCommandPalette() {
     sel.value = kindValue;
     sel.dispatchEvent(new Event('change', { bubbles: true }));
     if (sel.scrollIntoView) sel.scrollIntoView({ block: 'nearest' });
+    // 「中に入れる」入口は「追加する位置」を「{親} の中」にして、その欄へ連れていく。
+    var whereEl = place === 'inside' ? document.getElementById(prefix + '-tail-where') : null;
+    if (whereEl) {
+      if (String(whereEl.value).indexOf('in:') !== 0) {
+        for (var i = 0; i < whereEl.options.length; i++) {
+          if (String(whereEl.options[i].value).indexOf('in:') === 0) {
+            whereEl.value = whereEl.options[i].value;
+            whereEl.dispatchEvent(new Event('change', { bubbles: true }));
+            break;
+          }
+        }
+      }
+      whereEl.focus();
+      return;
+    }
     sel.focus();
   }
 
@@ -4061,7 +4077,7 @@ function initCommandPalette() {
         // 旧名 (末尾に追加 / この位置に挿入 / Action 追加 …) で覚えた人もここから同じ入口に来られるようにする。
         keywords: ['add', 'ついか', k.value, k.label, '末尾に追加', 'この位置に挿入', 'ここに挿入', 'insert',
           k.value + ' 追加', k.value.charAt(0).toUpperCase() + k.value.slice(1) + ' 追加'].concat(plain),
-        run: function() { openTailForm(spec.prefix, k.value); },
+        run: function() { openTailForm(spec.prefix, k.kind || k.value, k.place); },
       };
     });
   }

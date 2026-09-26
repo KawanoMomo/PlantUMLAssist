@@ -66,19 +66,21 @@ describe('positions — 選べる位置は図の中身で決まる', function() 
 
   // BLK-human-20260915-1206: 以前は複合状態がある図でしか「の中」を出さず、
   // 最初の 1 つを GUI から作る道がどこにも無かった。状態が 1 つでもあれば出す。
+  // BLK-owner-20260925-0312-3: 「選んだ状態の中」+ 別欄の親、の 2 段をやめ、親ごとに 1 行 (in:{id}) を並べる。
   test('遷移があれば「この遷移の途中」が増える', function() {
     var ps = SI.positions(SAMPLE_PARSED);
-    expect(ps.map(function(p) { return p.value; })).toEqual(['end', 'transition', 'inside']);
+    expect(ps.map(function(p) { return p.value; })).toEqual(['end', 'transition', 'in:Idle', 'in:Running']);
   });
 
   test('複合状態があれば「（状態）の中」が増える', function() {
     var ps = SI.positions(COMPOSITE_PARSED);
-    expect(ps.map(function(p) { return p.value; })).toEqual(['end', 'transition', 'inside']);
+    expect(ps.map(function(p) { return p.value; })).toEqual(['end', 'transition', 'in:Outer', 'in:Done']);
+    expect(ps[2].label).toBe('Outer の中');
   });
 
   test('単純 state でも「の中」は出る (その場で { } に開いて子にする)', function() {
     var ps = SI.positions({ states: [{ id: 'A', line: 3, endLine: 3 }], transitions: [] });
-    expect(ps.map(function(p) { return p.value; })).toEqual(['end', 'inside']);
+    expect(ps.map(function(p) { return p.value; })).toEqual(['end', 'in:A']);
   });
 
   test('状態が 1 つも無ければ「の中」は出ない', function() {
