@@ -1137,9 +1137,17 @@ test('手順2 活動図の本文を、先輩のクラス図タブに行かずに
   // 到達条件その2: 押せば括弧まで入り、そのままアクションとして足せる。
   await picker.locator('.vocab-chip[data-name="Spi_Init"]').click();
   await expect(page.locator('#ac-tail-text')).toHaveValue('Spi_Init()');
-  await page.locator('#ac-tail-add').click();
+  // BLK-owner-20260925-0312-4: 処理欄も他の図種と同じく Enter で確定 (改行は Shift+Enter)。
+  await page.locator('#ac-tail-text').press('Enter');
+  await expect.poll(async () => getEditorText(page)).toContain(':Spi_Init();');
   await page.waitForTimeout(400);
-  expect(await getEditorText(page)).toContain(':Spi_Init();');
+  await page.locator('#ac-tail-text').click();
+  await page.keyboard.type('Clk_A');
+  await page.keyboard.press('Shift+Enter');
+  await page.keyboard.type('Clk_B');
+  await expect(page.locator('#ac-tail-text')).toHaveValue('Clk_A\nClk_B');
+  expect(await getEditorText(page)).not.toContain('Clk_A');
+  await page.locator('#ac-tail-text').fill('');
 
   // 到達条件その3: 打ちかけの本文は消えない (カーソル位置に差し込む)。
   await page.locator('#ac-tail-kind').selectOption('action');
@@ -1171,6 +1179,21 @@ test('手順2 活動図の本文を、先輩のクラス図タブに行かずに
   const initAt = acLines.indexOf(':Spi_Init();');
   expect(acLines[initAt + 1]).toBe('if (送信バッファ空?) then (yes)');
   expect(acLines.indexOf('endif')).toBeLessThan(acLines.indexOf('stop'));
+
+  // BLK-owner-20260925-0312-4: 「start の直後」はフローの先頭として選べ、処理を打って Enter で start の次の行に入る。
+  const places2 = await page.locator('#ac-tail-where option').allTextContents();
+  expect(places2.join('|')).not.toContain('フローのはじめ');
+  const afterStart = places2.findIndex((t) => t.trim().startsWith('start の直後'));
+  expect(afterStart).toBeGreaterThan(0);
+  await page.locator('#ac-tail-kind-chip-action').click();
+  await page.locator('#ac-tail-where').selectOption({ index: afterStart });
+  await expect(page.locator('#ac-tail-add')).toBeEnabled();
+  await expect(page.locator('#ac-tail-where-note')).toBeHidden();
+  await page.locator('#ac-tail-text').fill('クロック有効化');
+  await page.locator('#ac-tail-text').press('Enter');
+  await expect.poll(async () => getEditorText(page)).toContain(':クロック有効化;');
+  const acLines2 = (await getEditorText(page)).split('\n').map((l) => l.trim());
+  expect(acLines2[acLines2.indexOf('start') + 1]).toBe(':クロック有効化;');
 
   // 先輩のファイルは読むだけ (書き換えない)。
   expect(await S.readDoc(page, SENIOR_DIR, 'driver_common_class')).toBe(SENIOR_COMMON_CLASS);

@@ -49,7 +49,9 @@ describe('追加する位置の候補', function() {
   test('先頭は「図の末尾」、続けて挿入位置が構造の言葉で並ぶ', function() {
     var labels = ac.tailPlaceOptions(FLOW).map(function(p) { return p.label.trim(); });
     expect(labels[0]).toBe('図の末尾');
-    expect(labels).toContain('フローのはじめの前 (L2)');
+    // BLK-owner-20260925-0312-4: 同じ L2 を指す 2 つは「start の前」「start の直後」と何が起きるかで呼び分ける。
+    expect(labels).toContain('start の前 (フローの外) (L2)');
+    expect(labels).toContain('start の直後 (L2)');
     expect(labels.join('|')).toContain('アクション「受信」の後');
     expect(labels.join('|')).not.toContain('@startuml');
   });
@@ -57,7 +59,7 @@ describe('追加する位置の候補', function() {
   test('図の末尾には何でも置ける。フローの外にはアクションは置けず、レーンは置ける', function() {
     var tail = ac.tailPlaceOptions(FLOW)[0];
     expect(ac.tailKindAllowed(FLOW, tail, 'action')).toBe(true);
-    var outside = place(FLOW, 'フローのはじめの前 (L2)');
+    var outside = place(FLOW, 'start の前 (フローの外) (L2)');
     expect(ac.tailKindAllowed(FLOW, outside, 'action')).toBe(false);
     expect(ac.tailKindAllowed(FLOW, outside, 'swimlane')).toBe(true);
     var inside = ac.tailPlaceOptions(FLOW).filter(function(p) { return /「受信」の後/.test(p.label); })[0];
