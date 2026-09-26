@@ -2042,3 +2042,94 @@ test('migrator 手順 4 — create で途中に作った参加者の頭を指す
   expect(msg.hit.type).toBe('message');
   expect(msg.hit.line).toBe('5');
 });
+
+// BLK-owner-20260926-1628-1: 当て方を変えるたびに、migrator が枠 ok と記録した実物の図が退行し、マージの後の手の測り直しで
+// 見つかっていた。progress.md で描画 ok・枠 ok の実物の図を、migrator と同じ道 (ファイルを開く → Fit → 要素を指す) で測り、
+// 基準 (tests/e2e/hit-baseline/plantuml-{版}.json) で枠が出ていた点が「枠なし」「別の行の枠」になったら赤にする。
+// 当て方を変えた変更は、この test を同じ変更の中で通す。直しで点の答えが意図して変わったときは
+// `PUA_HIT_WRITE=1` を付けて回すと基準を書き直す (差分の点を BLK に書く)。コーパスが無い環境では skip。
+test('migrator 手順 4 — 枠 ok と記録した実物の図は、基準で枠が出ていた点で今も同じ枠が出る (当て方の回帰)', async ({ page }) => {
+  const HB = require('../hit-baseline');
+  test.skip(!HB.corpusAvailable(HB.CORPUS_DIR), 'コーパス (persona-data の migrator) が無い環境');
+  test.setTimeout(8 * 60 * 1000);
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await bootPlain(page);
+  const env = await page.evaluate(() => fetch('/env').then((r) => r.json()));
+  const version = env.jarVersion;
+  expect(version, 'plantuml.jar の版が分かる').toBeTruthy();
+
+  const writing = !!process.env.PUA_HIT_WRITE;
+  let base = HB.readBaseline(version);
+  let otherVersion = null;
+  if (!base && !writing) {
+    const other = HB.latestOtherBaseline(version);
+    if (other) { base = other.data; otherVersion = other.version; }
+  }
+  let targets;
+  if (writing) {
+    const names = HB.okNamesFromProgress(fs.readFileSync(path.join(HB.CORPUS_DIR, 'progress.md'), 'utf8'));
+    targets = HB.resolveNames(names, HB.CORPUS_DIR).found;
+  } else {
+    expect(base, 'hit-baseline に基準がある (PUA_HIT_WRITE=1 で作る)').toBeTruthy();
+    targets = Object.keys(base.files);
+  }
+
+  const current = {};
+  for (const rel of targets) {
+    const abs = path.join(HB.CORPUS_DIR, rel);
+    if (!fs.existsSync(abs)) { current[rel] = { error: 'ファイルが無い' }; continue; }
+    // 前の図の答え (描けた図・ERROR) を消しておき、この図の描画が終わったことを見分ける。
+    await page.evaluate(() => {
+      const s = document.querySelector('#preview-svg svg'); if (s) s.setAttribute('data-hit-old', '1');
+      const st = document.getElementById('render-status'); if (st) st.textContent = '';
+    });
+    const [chooser] = await Promise.all([
+      page.waitForEvent('filechooser', { timeout: 20000 }),
+      page.evaluate(() => { document.getElementById('file-input').click(); }),
+    ]);
+    await chooser.setFiles(abs);
+    const done = await page.waitForFunction(() => {
+      const s = document.querySelector('#preview-svg svg');
+      const st = (document.getElementById('render-status') || {}).textContent || '';
+      return st === 'ERROR' || (!!s && !s.hasAttribute('data-hit-old') && /^Rendered/.test(st));
+    }, null, { timeout: 30000 }).then(() => true, () => false);
+    if (!done) { current[rel] = { error: '描画が終わらない' }; continue; }
+    if ((await page.locator('#render-status').textContent()) === 'ERROR') { current[rel] = { error: 'ERROR' }; continue; }
+    // 手順 4 の「幅合わせ」。点の名前は SVG 座標なので倍率に依らないが、細い要素の当たりは倍率で変わるため毎回そろえる。
+    await page.evaluate(() => { document.getElementById('btn-zoom-fit').click(); });
+    await page.waitForTimeout(200);
+    current[rel] = { points: await page.evaluate(HB.probeInPage) };
+  }
+
+  if (writing) {
+    const files = {}, excluded = {};
+    Object.keys(current).forEach((rel) => {
+      if (current[rel].error) excluded[rel] = current[rel].error;
+      else files[rel] = current[rel].points;
+    });
+    const p = HB.writeBaseline(version, files, excluded,
+      'progress.md の描画 ok・枠 ok の図。値は指した点に出る枠の data-type:data-line (- は枠なし)');
+    console.log('hit-baseline を書いた: ' + p + ' (' + Object.keys(files).length + ' 枚、除外 ' + Object.keys(excluded).length + ')');
+    return;
+  }
+
+  const r = HB.compare(base.files, current);
+  const lines = HB.formatReport(r, 60);
+  const outDir = path.join(__dirname, '..', '..', '..', 'test-results');
+  try {
+    fs.mkdirSync(outDir, { recursive: true });
+    fs.writeFileSync(path.join(outDir, 'hit-baseline-report.json'), JSON.stringify({
+      plantuml: version, baseline: otherVersion || version, failed: r.failed,
+      lost: r.lost, changed: r.changed, unrendered: r.unrendered, gained: r.gained, perFile: r.perFile,
+    }, null, 1), 'utf8');
+  } catch (e) {}
+  if (r.gained.length) console.log('基準で枠なしだった点に枠が出た: ' + r.gained.length + ' 点 (PUA_HIT_WRITE=1 で基準に取り込める)');
+  if (otherVersion) {
+    // 版の違う基準との差は、PlantUML の描き方の違いと当て方の退行を分けられないので赤にしない。
+    console.log('PlantUML ' + version + ' の基準が無いので ' + otherVersion + ' の基準と比べた (版の違い、赤にしない)。'
+      + ' 違い ' + r.failed + ' 点。PUA_HIT_WRITE=1 で ' + version + ' の基準を作る\n  ' + lines.slice(0, 20).join('\n  '));
+    test.info().annotations.push({ type: 'hit-baseline', description: '版の違い ' + otherVersion + ' → ' + version });
+    return;
+  }
+  expect(lines, '基準より当たりが減った点 (test-results/hit-baseline-report.json)').toEqual([]);
+});
