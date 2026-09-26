@@ -45,7 +45,7 @@ describe('開いている図の行のダブルクリックはタブを固定す�
     } finally { restore(); }
   });
 
-  test('ダブルクリックで workspace.pin を呼び、タブ列を描き直し、📌 は出さない', function() {
+  test('ダブルクリックで workspace.pin を呼び、タブ列を描き直し、は出さない', function() {
     try {
       boot();
       row(2).dispatchEvent(new W.MouseEvent('dblclick', { bubbles: true }));

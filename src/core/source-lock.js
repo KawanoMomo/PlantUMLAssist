@@ -218,7 +218,7 @@ window.MA.sourceLock = (function() {
   function answeredText(choice, origin, alias) {
     if (choice === 'keep') {
       return {
-        text: '🔒 ' + origin + '.puml は変更前のまま（いまの本文は ' + alias + '.puml に入りました）',
+        text: '' + origin + '.puml は変更前のまま（いまの本文は ' + alias + '.puml に入りました）',
         undo: '↩ やっぱり ' + origin + '.puml を書き換える',
       };
     }

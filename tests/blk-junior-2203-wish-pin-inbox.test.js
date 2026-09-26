@@ -86,13 +86,13 @@ describe('pin-inbox — 図をまたいで未対応の指摘を集める', () =>
     expect(sum.openDocs).toBe(2);
     // BLK-junior-20260908-0103-wish: 未対応 = 対応済み以外。既読 (読んだだけ) も未対応に数える。
     expect(PI().headText(sum)).toBe('未対応 4 件 / 全 4 件 ・ 2 図');
-    expect(PI().badgeText(sum)).toBe('📥 指摘箱 4/4');
+    expect(PI().badgeText(sum)).toBe('指摘箱 4/4');
   });
 
   test('指摘が 1 件も無ければ、見出しもバッジもそう言う', () => {
     var sum = PI().summary([]);
     expect(PI().headText(sum)).toBe('未対応の指摘はありません');
-    expect(PI().badgeText(sum)).toBe('📥 指摘箱 −');
+    expect(PI().badgeText(sum)).toBe('指摘箱 −');
   });
 
   test('行には図名・行番号・作者・本文が入る', () => {

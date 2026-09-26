@@ -96,9 +96,9 @@ window.MA.kindMatrix = (function() {
   }
 
   var MARKS = {
-    recheck: '👀要確認',
-    check: '👀未確認',
-    noted: '👀手本なし',
+    recheck: '要確認',
+    check: '未確認',
+    noted: '手本なし',
     'no-model': '手本なし（未控え）',
     'mine-missing': '自分に無し',
   };
@@ -193,8 +193,8 @@ window.MA.kindMatrix = (function() {
 
   // 表のセルは 1〜2 文字にする。言葉は行の title と凡例が持つ。
   var CELL_MARKS = {
-    recheck: '👀!',
-    check: '👀',
+    recheck: '!',
+    check: '?',
     noted: '✓',
     'no-model': '·',
     'mine-missing': '△',
@@ -261,7 +261,7 @@ window.MA.kindMatrix = (function() {
 
   // 凡例。表のセルだけでは印の意味が読めない。
   function legend() {
-    return ['👀! 要確認', '👀 未確認', '△ 自分に無し', '✓ 控え済み', '· 手本なし'].join(' / ');
+    return ['! 要確認', '? 未確認', '△ 自分に無し', '✓ 控え済み', '· 手本なし'].join(' / ');
   }
 
   // ── 相手の作成進捗 (BLK-junior-20260917-0423-wish) ────────────────────

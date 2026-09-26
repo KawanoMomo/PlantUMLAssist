@@ -366,7 +366,7 @@ html, body {
 }
 /* BLK-builder-20260923-1849-3: 幅 208px の節ではファイル名を読めるようにする。行は折り返し、名前の箱が
    1 行目の残り (印と役割のボタンの横) を取る。箱の中も折り返し、名前は 1 行目に下限付きで置き、
-   印 (SVG 無・書込中?・時刻…) は次の行へ送る。操作のボタン (差分・対象にする・控えにする・🗑) は行の下段へ。 */
+   印 (SVG 無・書込中?・時刻…) は次の行へ送る。操作のボタン (差分・対象にする・控えにする・) は行の下段へ。 */
 #files-panel #folder-panel .folder-row { flex-wrap: wrap; row-gap: 1px; }
 #files-panel #folder-panel .folder-row > .folder-item { flex: 1 1 140px; min-width: 0; flex-wrap: wrap; row-gap: 1px; }
 #files-panel #folder-panel .folder-item .folder-name {
@@ -378,7 +378,7 @@ html, body {
 #files-panel #folder-panel .folder-row > button:not(.folder-item):not(.folder-role),
 #files-panel #folder-panel .folder-row > .folder-kind { width: auto; flex: 0 0 auto; }
 /* BLK-owner-20260924-0637-1 (design 10a): 「保存先」節の中はツリー (部品のフォルダ → ファイルの行と札) だけ。
-   旧 📂 一覧 (#folder-panel) は節の中では出さず、ツリーの束ね元として DOM にだけ置く。
+   旧 一覧 (#folder-panel) は節の中では出さず、ツリーの束ね元として DOM にだけ置く。
    保存先の右クリック「保存先の一覧を開く」(is-list) で中央の枠に浮かせて開く。幅 208px には押し込まない。 */
 #files-panel #folder-panel.open:not(.is-list) { display: none; }
 #files-panel #folder-panel.open.is-list {
@@ -6549,7 +6549,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 #folder-ref-matrix .pkm-foot.has-todo { color: var(--accent-red); }
 
 /* BLK-primary-20260914-2206: 保存フォルダへまだ書けていない回 (錠の返事待ち) は、
-   💾 を灰色の「たった今」のままにせず、押せる警告として出す。 */
+   を灰色の「たった今」のままにせず、押せる警告として出す。 */
 #status-autosave.autosave-pending {
   color: #ffd79a; background: rgba(60, 40, 14, 0.96);
   border: 1px solid #8a6a23; border-radius: 3px; padding: 0 6px;
@@ -7498,7 +7498,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   </div>
 
   <!-- ── FILES ツリー (design 10a) ──────────────────────────────────────────
-       BLK-human-20260923-1700: 「保存先チップ」「📂 一覧」「📄 開く」「⇔ 先輩」の
+       BLK-human-20260923-1700: 「保存先チップ」「一覧」「開く」「⇔ 先輩」の
        4 つが別々の入口で、どこに何があるかを入口ごとに覚え直していた。
        レールの右に常設する 1 本のツリーに畳む。節は上から
        開いている図 / 保存先 / 読むだけ / GIT。古い入口の実体はこの中に引っ越す
@@ -7508,7 +7508,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <span class="files-title">FILES</span>
       <span class="files-head-acts">
         <button type="button" class="files-act" id="files-new-doc" title="新しい図" aria-label="新しい図">＋</button>
-        <button type="button" class="files-act" id="files-new-folder" title="新しいフォルダ" aria-label="新しいフォルダ">🗀</button>
+        <button type="button" class="files-act" id="files-new-folder" title="新しいフォルダ" aria-label="新しいフォルダ"><svg class="files-act-glyph" style="display:block;" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"><path d="M1.8 4h4.2l1.3 1.5h6.9v7.5H1.8z"/><path d="M8 8v3.6M6.2 9.8h3.6"/></svg></button>
         <button type="button" class="files-act" id="files-show-readonly" aria-pressed="true"
                 title="読むだけを表示 / 隠す" aria-label="読むだけを表示 / 隠す">◍</button>
         <button type="button" class="files-act" id="files-collapse" title="畳む (Ctrl+B)" aria-label="畳む">‹</button>
@@ -7542,7 +7542,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
           </div>
           <!-- design 10a: 保存先の下は部品ごとのフォルダ (`SPI 4 / 6`)。
                中身は #folder-panel の一覧をそのまま読んで組むので、数える所は 1 つのまま。
-               6 図種の済/未の表そのものは 🧩 部品ビューの職掌 (BLK-owner-20260918-0049-prune)
+               6 図種の済/未の表そのものは 部品ビューの職掌 (BLK-owner-20260918-0049-prune)
                なので、ここは束ねて数えるところまでにして、未作成はそこへ渡す。 -->
           <div id="files-parts"></div>
           <div id="folder-panel"></div>
@@ -7672,7 +7672,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button id="exp-png-transparent">PNG（透過背景）</button>
         <button id="exp-clipboard">クリップボードにコピー</button>
         <!-- BLK-owner-20260923-2332-prune: 「全図をSVGで保存（zip）」は開いているタブだけを詰める範囲違いの
-             zip で、似た zip の入口がメニューに 2 つ並んでいた。📦 資料セットの「対象の選び方」→
+             zip で、似た zip の入口がメニューに 2 つ並んでいた。資料セットの「対象の選び方」→
              「開いている図すべて」に落とした (実体のボタンは #toolbar-actions に残す)。
              BLK-primary-20260914-2006-wish: 旧「全図」は今開いているタブだけが対象で、
              保存フォルダに 25 枚あってもタブが 1 枚なら 1 枚しか入らない。資料に入れる
@@ -7681,7 +7681,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
              この「渡す」1 か所に集める。タブ列には置かない (実体のボタンは
              #toolbar-actions に残すので Ctrl+K からは今まで通りの名前で引ける) -->
         <div class="exp-group-title">渡す</div>
-        <button id="exp-docset" title="登録した資料セット（名前を付けた図の組）を選ぶと、タブを開き直さずに保存フォルダからその枚数ぶんを zip にする">📦 資料セット（SVG / PNG・1 枚 / 部品 / 組）…</button>
+        <button id="exp-docset" title="登録した資料セット（名前を付けた図の組）を選ぶと、タブを開き直さずに保存フォルダからその枚数ぶんを zip にする">資料セット（SVG / PNG・1 枚 / 部品 / 組）…</button>
         <button id="exp-delivery" title="表紙 (図一覧・版数・提出前チェック結果)・前回提出からの差分・全図 SVG を 1 つの納品 zip にまとめる">納品パッケージ（zip）…</button>
         <button id="exp-handoff" title="系統チェック・名前突合・変更サマリ・SVG 一式を 1 つのパッケージ (zip) に書き出す">引き継ぎ（zip）…</button>
         <div class="exp-group-title">その他</div>
@@ -7724,8 +7724,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
          これまでどおり効く。 -->
     <!-- BLK-owner-20260918-0329-prune: 「zip にして渡す」の実体。入口は Export ▾ の「渡す」
          (と Ctrl+K)。画面には出さないが DOM には残すので、処理も件数表示もそのまま働く -->
-    <button class="tab-tool" id="btn-tab-handoff" title="系統チェック・名前突合・変更サマリ・SVG 一式を 1 つのパッケージ (zip) に書き出す">📦 引き継ぎ</button>
-    <button class="tab-tool" id="btn-tab-delivery" title="表紙 (図一覧・版数・提出前チェック結果)・前回提出からの差分・全図 SVG を 1 つの納品 zip にまとめる">📦 納品パッケージ</button>
+    <button class="tab-tool" id="btn-tab-handoff" title="系統チェック・名前突合・変更サマリ・SVG 一式を 1 つのパッケージ (zip) に書き出す">引き継ぎ</button>
+    <button class="tab-tool" id="btn-tab-delivery" title="表紙 (図一覧・版数・提出前チェック結果)・前回提出からの差分・全図 SVG を 1 つの納品 zip にまとめる">納品パッケージ</button>
     <!-- BLK-owner-20260923-1829-prune: 「資料にする」出口は 📦 資料セット 1 つに畳んだ。
          範囲 (1 枚 / 部品 / 名前を付けた組 / 資料一式) と形式は資料セット画面で選ぶ。
          実体のボタンは画面から外してここに残すので、処理も件数表示も Ctrl+K も今までどおり働く -->
@@ -7769,11 +7769,11 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <!-- BLK-human-20260923-1700 (design 10a): 👀 他フォルダ と 並べて比較 は
              FILES ツリーの「読むだけ」節へ引っ越した (id はそのまま) -->
         <!-- BLK-junior-20260907-2009-wish: やり直し途中の控えに印を付け、📂 一覧で畳む -->
-        <button class="tab-tool" id="btn-tab-draft" aria-pressed="false" title="この図に一時控え(下書き / やり直し途中)の印を付けて、保存先の一覧から畳む">🗂 一時控え</button>
+        <button class="tab-tool" id="btn-tab-draft" aria-pressed="false" title="この図に一時控え(下書き / やり直し途中)の印を付けて、保存先の一覧から畳む">一時控え</button>
         <button class="tab-tool" id="btn-tab-rename" title="開いている図をまたいで部品名を一括置換">⇄ 一括置換</button>
         <!-- BLK-junior-20260916-0046-wish: 揃える先は登録簿が知っている。組を選ぶだけで
              揺れの残るファイルが出て、チェックした分をまとめて当てる -->
-        <button class="tab-tool" id="btn-tab-unify" title="登録簿で決めた正式表記に揃っていない図を挙げ、選んだ分にまとめて当てる (どの図に残っているかを探さなくてよい)">🔤 表記統一</button>
+        <button class="tab-tool" id="btn-tab-unify" title="登録簿で決めた正式表記に揃っていない図を挙げ、選んだ分にまとめて当てる (どの図に残っているかを探さなくてよい)">表記統一</button>
         <!-- BLK-primary-20260907-2203-wish: 症状文を貼るだけで関連しそうな図を出す -->
         <button class="tab-tool" id="btn-tab-symptom" title="不具合の症状文を貼ると、部品名を思い付かなくても関連しそうな図を関連度順に出す">⇄ 症状検索</button>
         <!-- BLK-primary-20260915-0506-wish: 部品名がどの版から入ったか (混入点) を全図の版から 1 回で出す -->
@@ -7783,11 +7783,11 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button class="tab-tool" id="btn-tab-apply" title="指摘に並んだ複数のクラスへ同じメソッド・属性を 1 回で追加する">⊞ 一括適用</button>
         <!-- BLK-primary-20260907-0823-wish: 同じ系統の複数枚で動作名が揃っているかを見る -->
         <!-- BLK-primary-20260907-1403-wish: 顧客に出す前に、全図の title / note / 部品名を横断で見る -->
-        <button class="tab-tool" id="btn-tab-submit" title="顧客提出前に、全図のタイトル・注釈・部品名を横断で見て社内略語を洗い出し、正式名称の対応表を確定して全図に当てる">📤 提出前チェック</button>
+        <button class="tab-tool" id="btn-tab-submit" title="顧客提出前に、全図のタイトル・注釈・部品名を横断で見て社内略語を洗い出し、正式名称の対応表を確定して全図に当てる">提出前チェック</button>
         <!-- BLK-owner-20260918-0429-prune: 引き継ぎチェックリストの入口。ツール ▾ →「確かめる」から開く -->
-        <button class="tab-tool" id="btn-tab-handover" title="渡す図の「置換済み / note 最新 / SVG 最新 / 指摘と符合する欠落」を 1 画面の表で読み、渡す前に見る図だけを残す">📋 引き継ぎチェック</button>
+        <button class="tab-tool" id="btn-tab-handover" title="渡す図の「置換済み / note 最新 / SVG 最新 / 指摘と符合する欠落」を 1 画面の表で読み、渡す前に見る図だけを残す">引き継ぎチェック</button>
         <button class="tab-tool" id="btn-tab-family" title="同じ系統の図を並べて、片方にしか無いメッセージ名・遷移名を探す">⇉ 系統チェック</button>
-        <button class="tab-tool" id="btn-tab-drivermap" title="どの図がどの図の相手かを系統として宣言し、1 プロジェクトとして持つ。宣言した対応が崩れたら赤くなる">🧩 系統マップ −</button>
+        <button class="tab-tool" id="btn-tab-drivermap" title="どの図がどの図の相手かを系統として宣言し、1 プロジェクトとして持つ。宣言した対応が崩れたら赤くなる">系統マップ −</button>
         <!-- BLK-reviewer-20260907-1903-wish: 状態遷移がどのシーケンスにも現れない「トレース漏れ」を出す -->
         <button class="tab-tool" id="btn-tab-trace" title="状態遷移図の遷移が、同じ系統のシーケンス図のどれかに現れているかを見る">◎ トレース</button>
         <button class="tab-tool" id="btn-tab-lines" title="この図の 1 行だけを選んで書き換え・挿入・削除する">✎ 行編集</button>
@@ -7806,17 +7806,17 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button class="tab-tool" id="btn-tab-lineage" title="この図の継承元 (どの図から派生したか) を 1 回登録すると、継承元が更新されたときに差分の行数で知らせる">⇡ 継承元 −</button>
         <!-- BLK-primary-20260907-0923-wish: 変わった図の変更前後をまとめて 1 画面に並べる -->
         <!-- BLK-reviewer-20260907-1203-wish: レビューの指摘を図の該当行に貼り、未読/既読で追う -->
-        <button class="tab-tool" id="btn-tab-pins" title="この図に付いたレビュー指摘の一覧。図の上の印をクリックしても開く">📌 指摘 −</button>
+        <button class="tab-tool" id="btn-tab-pins" title="この図に付いたレビュー指摘の一覧。図の上の印をクリックしても開く">指摘 −</button>
         <!-- BLK-junior-20260907-2203-wish: 図をまたいで未対応の指摘を集める受信箱 -->
-        <button class="tab-tool" id="btn-tab-inbox" title="保存フォルダの図をまたいで、未対応の指摘を「どの図に何件」で出す。監査が出した指摘も手で書いた指摘も同じ札で並び、出典で絞り込める。行を押すとその図の該当行へ飛ぶ">📥 指摘箱 −</button>
+        <button class="tab-tool" id="btn-tab-inbox" title="保存フォルダの図をまたいで、未対応の指摘を「どの図に何件」で出す。監査が出した指摘も手で書いた指摘も同じ札で並び、出典で絞り込める。行を押すとその図の該当行へ飛ぶ">指摘箱 −</button>
         <button class="tab-tool" id="btn-tab-board" title="変わった図の変更前 DSL と変更後 DSL を全部まとめて 1 画面に並べる (レビュー会議用)">▤ 変更サマリ</button>
         <!-- BLK-reviewer-20260907-2303-wish: 監査ツールが育つと、同じ欠陥が別カテゴリへ移る -->
         <!-- BLK-primary-20260915-2240-wish: design の仕様と GUI の現在値を突き合わせる -->
-        <button class="tab-tool" id="btn-tab-design" title="design/ の仕様項目と、いま開いている GUI の現在値を並べて、一致/設定差/仕様後退に振り分ける">📐 仕様突合</button>
+        <button class="tab-tool" id="btn-tab-design" title="design/ の仕様項目と、いま開いている GUI の現在値を並べて、一致/設定差/仕様後退に振り分ける">仕様突合</button>
         <button class="tab-tool" id="btn-tab-cross" title="名前の不一致・未使用 participant・粒度のばらつき・SVG 実体不一致・手動指摘を、保存フォルダ 1 つ分の 1 画面にまとめて出す。行を押すとその図へ飛ぶ">▦ 突合ボード</button>
         <button class="tab-tool" id="btn-tab-audit-timeline" title="監査を回すたびに記録し、同じ欠陥が run ごとにどのカテゴリへ分類されたかを 1 本の帯で並べる。解消と再分類を分けて出す">◷ 監査履歴</button>
         <!-- BLK-junior-20260907-1403-wish: 型の基準にした図と突き合わせて、書いている間ずっと見てもらう -->
-        <button class="tab-tool" id="btn-tab-review" title="型の基準にした図と突き合わせて、この図のずれと図種特有の間違いを出す">👁 レビュー −</button>
+        <button class="tab-tool" id="btn-tab-review" title="型の基準にした図と突き合わせて、この図のずれと図種特有の間違いを出す">レビュー −</button>
         <!-- BLK-primary-20260907-1303-wish: 引き継ぎに要る確認結果と図を 1 つの zip に固める -->
         <!-- BLK-primary-20260908-0003-wish: 図の束を 1 プロジェクトとして、部品名で辿れるように渡す -->
         <!-- BLK-owner-20260924-0852-prune: 🕸 参照関係の画面は ▤ 影響を見る 1 つに寄せた。ここは旧名で引いた人の案内 (押すと ▤ 影響を見る が開く) -->
@@ -8084,7 +8084,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
             <!-- BLK-reviewer-20260915-0106-wish: 「宣言しないと決めた」を自由文の
                  note ではなく、監査ツールが読める 1 行 (`'@omit-method`) で図に残す。
                  突合は次の tick から この行を見て指摘から外す。 -->
-            <button type="button" id="btn-sgd-omit" title="宣言しないと決めた理由を図に記し、以後の突合から外す">🚫 意図的に省略（理由を記す）</button>
+            <button type="button" id="btn-sgd-omit" title="宣言しないと決めた理由を図に記し、以後の突合から外す">意図的に省略（理由を記す）</button>
           </div>
           <div class="sgd-omit" id="sgd-omit-row" hidden>
             <label for="sgd-omit-reason">省略する理由（図に残り、監査はこの行を読んで指摘から外します）</label>
@@ -8097,7 +8097,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         </div>
         <!-- BLK-primary-20260916-0526-wish: 保存したその場で隣の persona の保存
              フォルダまで読み、部品名が表記違いでぶつかっていれば相手と相手の図を
-             名指しする帯。押さないと動かない 📂一覧の突合を待たない。
+             名指しする帯。押さないと動かない 一覧の突合を待たない。
              中身は save-clash.js -->
         <div id="save-clash-overlay" role="alert" hidden>
           <div class="scl-head">
@@ -8126,7 +8126,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <div id="save-swap-overlay" role="alert" hidden>
           <div class="ssw-head">
             <button type="button" id="btn-ssw-close" title="この警告を閉じる（次の保存でまた出ます）">✕</button>
-            <button type="button" id="btn-ssw-log" title="この保存フォルダへの直近の保存操作を、ファイル名込みで見る">🧾 保存の記録</button>
+            <button type="button" id="btn-ssw-log" title="この保存フォルダへの直近の保存操作を、ファイル名込みで見る">保存の記録</button>
             <span id="ssw-summary"></span>
           </div>
           <ul id="ssw-list"></ul>
@@ -8197,7 +8197,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
            見せたい回を選べるようにする。 -->
       <div id="compare-hist-bar">
         <button type="button" id="btn-compare-hist" aria-expanded="false"
-                title="保存フォルダへ書いた操作の前後を、後から呼び出して並べる">🕘 書き込み履歴</button>
+                title="保存フォルダへ書いた操作の前後を、後から呼び出して並べる">書き込み履歴</button>
         <span id="compare-hist-summary"></span>
       </div>
       <div id="compare-hist-list" hidden></div>
@@ -8211,7 +8211,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
            対応を機械的に取り、片方にしか無い要素だけを目立たせる。
            BLK-junior-20260908-1203-wish: 状態遷移図に加えクラス図 (クラスと関係) も同じ表で扱う。 -->
       <div id="map-bar">
-        <button type="button" id="btn-map-run" title="参照図と自分の図の対応表を作る (状態遷移図は状態・遷移、クラス図はクラス・関係)">🔀 対応表</button>
+        <button type="button" id="btn-map-run" title="参照図と自分の図の対応表を作る (状態遷移図は状態・遷移、クラス図はクラス・関係)">対応表</button>
         <span id="map-summary"></span>
       </div>
       <div id="map-warn" hidden></div>
@@ -8235,12 +8235,12 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         </select>
         <input type="text" id="tr-label" placeholder="呼び名 (例 GPIO系初期化)"
                title="この図を雛形として登録するときの呼び名">
-        <button type="button" id="btn-tr-add" title="いま開いている図を雛形として登録する (以降は呼び名で選べる)">📌 雛形に登録</button>
+        <button type="button" id="btn-tr-add" title="いま開いている図を雛形として登録する (以降は呼び名で選べる)">雛形に登録</button>
         <button type="button" id="btn-tr-del" title="選んでいる登録を消す">✕</button>
       </div>
       <div id="tr-note" hidden></div>
       <div id="td-bar">
-        <button type="button" id="btn-td-run" title="選んだ雛形 (未選択なら参照図) と、この図との差分 (題材語の違いは除く) を出す">🧩 雛形との差分</button>
+        <button type="button" id="btn-td-run" title="選んだ雛形 (未選択なら参照図) と、この図との差分 (題材語の違いは除く) を出す">雛形との差分</button>
         <span id="td-summary"></span>
       </div>
       <div id="td-note" hidden></div>
@@ -8249,7 +8249,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
            開いている図を全部まとめて突き合わせ、行ごとにどの図にあるかを出す。 -->
       <div id="tc-bar">
         <button type="button" id="btn-tc-run"
-                title="開いている図を全部まとめて突き合わせ、1 枚にだけある行 (取り込み候補) を出す">🧩 系統ぜんぶと比べる</button>
+                title="開いている図を全部まとめて突き合わせ、1 枚にだけある行 (取り込み候補) を出す">系統ぜんぶと比べる</button>
         <span id="tcoh-summary"></span>
       </div>
       <div id="tc-verdict" hidden></div>
@@ -8631,17 +8631,17 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:6px;">バージョン / Version</div>
       <div style="display:flex;align-items:center;gap:8px;">
         <code id="cfg-version" style="font-size:13px;user-select:all;">読み込み中…</code>
-        <button type="button" id="cfg-version-copy" title="版の文字列をクリップボードに複製する (不具合報告に貼る)">📋 複製</button>
+        <button type="button" id="cfg-version-copy" title="版の文字列をクリップボードに複製する (不具合報告に貼る)">複製</button>
         <span id="cfg-version-status" style="font-size:11px;color:var(--text-secondary);"></span>
       </div>
       <div style="font-size:10px;color:var(--text-secondary);margin-top:6px;">不具合を報告するときは、この 1 行を一緒に貼ってください。</div>
       <!-- BLK-human-20260917-0900: 新しい版に気付けるようにする。押したときだけ確かめ、落とさない・実行しない -->
       <div style="display:flex;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap;">
-        <button type="button" id="cfg-update-check" title="GitHub Releases の最新版と比べる (押したときだけ通信。自動では落とさない)">🔄 更新を確認</button>
+        <button type="button" id="cfg-update-check" title="GitHub Releases の最新版と比べる (押したときだけ通信。自動では落とさない)">更新を確認</button>
         <span id="cfg-update-status" style="font-size:11px;color:var(--text-secondary);"></span>
       </div>
       <div id="cfg-update-result" style="display:none;gap:8px;margin-top:6px;flex-wrap:wrap;">
-        <button type="button" id="cfg-update-notes" title="変更点 (リリースノート) をブラウザで開く">📝 変更点を見る</button>
+        <button type="button" id="cfg-update-notes" title="変更点 (リリースノート) をブラウザで開く">変更点を見る</button>
         <button type="button" id="cfg-update-get" title="インストーラをブラウザで取得する (実行はしない)">⬇ インストーラを取得</button>
       </div>
       <label style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:11px;">
@@ -8984,7 +8984,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <label title="変更前をいつの時点にするか。前回の会議 = 今日より前に最後に会議セットで並べた時点、前回提出 = 最後に納品パッケージを作った時点">変更前 = <select id="cb-base"></select></label>
         <!-- BLK-primary-20260913-0306-wish: 顧客の前では DSL を見せられない。
              ここを押すと、並んでいる図が描いた絵の変更前後に切り替わる。 -->
-        <button type="button" id="cb-svg" aria-pressed="false" title="顧客に見せる画面に切り替える (DSL を出さず、描いた図の変更前後を並べる)">🖼 SVGで見る</button>
+        <button type="button" id="cb-svg" aria-pressed="false" title="顧客に見せる画面に切り替える (DSL を出さず、描いた図の変更前後を並べる)">SVGで見る</button>
         <span id="cb-svg-state"></span>
         <label><input type="checkbox" id="cb-full"> 全文</label>
         <label><input type="checkbox" id="cb-same"> 変更なしも出す</label>
@@ -8993,8 +8993,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <label title="会議で [要修正] を付けた行だけを残す (新人に渡す分)"><input type="checkbox" id="cb-fixonly"> 要修正のみ</label>
         <span id="cb-filter-state"></span>
         <label title="指摘と変更の対応表で、まだ図を結んでいない指摘 (会議で「対応なし」と言う分) だけを出す"><input type="checkbox" id="cb-map-pending"> 未対応の指摘のみ</label>
-        <button type="button" id="cb-map-export" title="指摘 1 件ごとに「どの図の変更で対応したか / 対応なし」を並べた対応表を Markdown で書き出す (会議資料)">🔗 対応表を書き出す</button>
-        <button type="button" id="cb-minutes" title="開いた図ごとの要修正件数・印の付いた行・申し送りを 1 枚の Markdown にまとめて書き出す (会議の議事録)">📝 会議メモを書き出す</button>
+        <button type="button" id="cb-map-export" title="指摘 1 件ごとに「どの図の変更で対応したか / 対応なし」を並べた対応表を Markdown で書き出す (会議資料)">対応表を書き出す</button>
+        <button type="button" id="cb-minutes" title="開いた図ごとの要修正件数・印の付いた行・申し送りを 1 枚の Markdown にまとめて書き出す (会議の議事録)">会議メモを書き出す</button>
         <button type="button" id="cb-minutes-copy" title="同じ内容をクリップボードにコピーする">コピー</button>
         <span id="cb-minutes-state"></span>
         <button type="button" id="cb-close">閉じる</button>
@@ -9006,7 +9006,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <div class="board-head" id="cb-handover-bar">
       <!-- BLK-primary-20260918-0249-wish: 会議で見せる図はその場で 3〜5 枚選ぶ。
            選んだ図だけを選んだ順に並べ、各図は 変更前 / 変更後 のタブで切り替える。 -->
-      <button type="button" id="cb-meeting" aria-pressed="false" title="選んだ図だけを選んだ順に並べる (各図の見出しの [会議に入れる] で 3〜5 枚選ぶ)">🎦 会議セット</button>
+      <button type="button" id="cb-meeting" aria-pressed="false" title="選んだ図だけを選んだ順に並べる (各図の見出しの [会議に入れる] で 3〜5 枚選ぶ)">会議セット</button>
       <select id="cb-meeting-doc" title="会議で見せる図を名前で選ぶ (変わっていない図も選べる)"></select>
       <button type="button" id="cb-meeting-add" title="選んだ図を会議セットに足す">＋追加</button>
       <button type="button" id="cb-meeting-clear" title="会議セットを空にする">空に</button>
@@ -9016,7 +9016,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <input type="text" id="cb-note-text" placeholder="なぜ直したか" maxlength="200">
       <button type="button" id="cb-note-add" title="選んだ図に申し送りを足す (差分の有無によらない)">追加</button>
       <span id="cb-note-add-state"></span>
-      <label for="cb-reply-file" title="新人が引き継ぎパッケージで返した handover-reply.json を読み込む">📥 返信を読み込む</label>
+      <label for="cb-reply-file" title="新人が引き継ぎパッケージで返した handover-reply.json を読み込む">返信を読み込む</label>
       <input type="file" id="cb-reply-file" accept=".json,application/json">
       <span id="cb-checklist-state"></span>
     </div>
@@ -9092,7 +9092,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
           </div>
           <!-- BLK-primary-20260915-0007: 影響先すべてに同じ note を 1 回で打つ。
                「意図的な省略を note で明記する」対応は、影響が届く図の枚数だけ
-               同じ文言を打ち直す作業になっていた (1 図ずつ📂一覧から開き直す)。 -->
+               同じ文言を打ち直す作業になっていた (1 図ずつ一覧から開き直す)。 -->
           <!-- BLK-owner-20260924-0852-prune: 旧 🕸 参照関係の「図どうしの繋がり」。参照の連鎖 (名前の矢印) には
                図の組が無いので、連鎖の下に畳んで置く。 -->
           <details id="ri-links-box">
@@ -9375,7 +9375,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <!-- BLK-junior-20260915-0206-wish: 書き出し終えたあと「6 図種とも揃っているか」を
            見返すための 1 枚。部品の図種を絵と保存日時ごと並べる (一覧を部品名で
            フィルタして 1 枚ずつ開き直す確認が要らなくなる)。 -->
-      <button type="button" id="mexp-summary-toggle">📋 部品サマリカード…</button>
+      <button type="button" id="mexp-summary-toggle">部品サマリカード…</button>
     </div>
     <div id="mexp-summary" hidden>
       <div id="mexp-summary-head">
@@ -9414,7 +9414,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <div id="mexp-state" role="status"></div>
     <!-- BLK-junior-20260915-0007: 資料化の根拠を、資料化したその場に残す。
          実行してもモーダルは閉じず、保存先の一覧を読み直した結果 (置けたか) が
-         ここに出たままになる。トーストを見落としても📂一覧へ戻らなくてよい。 -->
+         ここに出たままになる。トーストを見落としても一覧へ戻らなくてよい。 -->
     <div id="mexp-result" hidden>
       <span id="mexp-result-text" role="status"></span>
       <button type="button" id="mexp-result-open" title="この図を保存先の一覧で開く">この図を保存先の一覧で開く</button>
@@ -9650,16 +9650,16 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button type="button" id="peek-compare" disabled title="この図を手本として自分の書きかけの右に並べ、対応表で足りない状態・遷移を出す">⇔ 自分の図と並べる</button>
         <!-- BLK-junior-20260914-1006: ファイル名が対をなさない相手 (複合図) でも、
              今開いている自分の図の部品名から「先輩のどの図に載っているか」を名指しする。 -->
-        <button type="button" id="peek-find-part" title="今開いている自分の図の部品名で、このフォルダの図の中身を引き、載っている図を名指しする">🔎 自分の部品を探す</button>
-        <button type="button" id="peek-cohort-toggle" title="同じドメイン名の図をフォルダ横断で並べる">🔀 ドメインで揃える</button>
+        <button type="button" id="peek-find-part" title="今開いている自分の図の部品名で、このフォルダの図の中身を引き、載っている図を名指しする">自分の部品を探す</button>
+        <button type="button" id="peek-cohort-toggle" title="同じドメイン名の図をフォルダ横断で並べる">ドメインで揃える</button>
         <button type="button" id="peek-sbs-toggle" title="同じファイル名を持つ 2 人の図を左右に並べ、部品名・メッセージ名の食い違いだけを光らせる">⇔ 同名で並べる</button>
         <!-- BLK-junior-20260915-0606-wish: 部品を 1 つ選ぶと、その部品の 6 図種が
              先輩・自分の 2 列で並ぶ。自分の欄はその場で直して保存できる。 -->
-        <button type="button" id="peek-board-toggle" title="部品を 1 つ選び、その部品の 6 図種を先輩・自分の 2 列で並べる（自分の欄はその場で直して保存できる）">🧩 部品ビュー</button>
+        <button type="button" id="peek-board-toggle" title="部品を 1 つ選び、その部品の 6 図種を先輩・自分の 2 列で並べる（自分の欄はその場で直して保存できる）">部品ビュー</button>
         <!-- BLK-junior-20260913-0306-wish: 指摘.md の 1 件を選ぶと、そこに書かれた
              図名を自分と先輩のフォルダから見つけ、並べて見る画面をその組で開く。 -->
-        <button type="button" id="peek-note-toggle" title="隣のフォルダの指摘.md を 1 件ずつ並べ、押した指摘の図を自分と先輩のフォルダから見つけて並べて見る">🔖 指摘から選ぶ</button>
-        <button type="button" id="peek-cohort-templates" style="display:none;" title="アプリ同梱テンプレ・既定サンプル由来のドメインも突合に含める">📄 テンプレも表示</button>
+        <button type="button" id="peek-note-toggle" title="隣のフォルダの指摘.md を 1 件ずつ並べ、押した指摘の図を自分と先輩のフォルダから見つけて並べて見る">指摘から選ぶ</button>
+        <button type="button" id="peek-cohort-templates" style="display:none;" title="アプリ同梱テンプレ・既定サンプル由来のドメインも突合に含める">テンプレも表示</button>
         <button type="button" id="peek-prev" title="前の図">↑</button>
         <button type="button" id="peek-next" title="次の図">↓</button>
         <button type="button" id="peek-close">閉じる</button>

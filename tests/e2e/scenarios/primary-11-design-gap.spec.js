@@ -45,7 +45,7 @@ async function openDesignCheck(page) {
 // BLK-primary-20260915-2240-wish: 仕様と GUI の食い違いが「仕様後退」なのか
 // 「この環境の設定が既定と違うだけ」なのかを GUI から判定できず、手順 11 が
 // 原因の切り分けをできないまま終わっていた。📐 仕様突合 でその 1 手を守る。
-test('手順11 📐 仕様突合 が、仕様と現在値を並べて不一致を設定差と仕様後退に分ける', async ({ page }) => {
+test('手順11 仕様突合 が、仕様と現在値を並べて不一致を設定差と仕様後退に分ける', async ({ page }) => {
   // 既定そのものを見る手順なので、helper に畳み方を書かせない (foldedTools)。
   await S.bootWithSaveDir(page, DIR, { foldedTools: true });
 

@@ -28,7 +28,7 @@ describe('shortResult — 保存直後の 1 行の短い形', function() {
   });
 
   test('パスも内訳も無い文はそのまま', function() {
-    expect(AST.shortResult('⛔ 保存を止めました: 旧称が 2 件残っています')).toBe('⛔ 保存を止めました: 旧称が 2 件残っています');
+    expect(AST.shortResult('保存を止めました: 旧称が 2 件残っています')).toBe('保存を止めました: 旧称が 2 件残っています');
     expect(AST.shortResult('')).toBe('');
     expect(AST.shortResult(null)).toBe('');
   });

@@ -198,7 +198,7 @@ async function openWithFolder(page) {
 
 test.describe('BLK-primary-2303-wish 書き出す前の対象確認', () => {
 
-  test('📦引き継ぎ を押すと、書き出す前に対象確認が出る', async ({ page }) => {
+  test('引き継ぎ を押すと、書き出す前に対象確認が出る', async ({ page }) => {
     await openTwoDiagrams(page);
     // BLK-owner-20260918-0329-prune: 入口は Export ▾ の「渡す」
     await page.locator('#btn-export').click();

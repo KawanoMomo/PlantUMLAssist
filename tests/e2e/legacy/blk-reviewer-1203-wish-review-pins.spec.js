@@ -59,9 +59,9 @@ test.describe('BLK-reviewer-20260907-1203-wish: 指摘を図にピン留めす�
 
   test('未読の指摘があるとタブの道具に件数が出る', async ({ page }) => {
     await openState(page);
-    await expect(page.locator('#btn-tab-pins')).toHaveText('📌 指摘 −');
+    await expect(page.locator('#btn-tab-pins')).toHaveText('指摘 −');
     await pinLine(page, 4, 'method が無い');
-    await expect(page.locator('#btn-tab-pins')).toHaveText('📌 指摘 1/1');
+    await expect(page.locator('#btn-tab-pins')).toHaveText('指摘 1/1');
     await expect(page.locator('#btn-tab-pins')).toHaveClass(/has-open/);
   });
 
@@ -86,7 +86,7 @@ test.describe('BLK-reviewer-20260907-1203-wish: 指摘を図にピン留めす�
     await page.waitForTimeout(1200);
     // BLK-junior-20260908-0103-wish: バッジの件数は「未対応」= 対応済み以外になった。
     // 既読 (読んだだけ) はまだ直っていないので 1/1 のまま。0 になるのは対応済みにしたとき。
-    await expect(page.locator('#btn-tab-pins')).toHaveText('📌 指摘 1/1');
+    await expect(page.locator('#btn-tab-pins')).toHaveText('指摘 1/1');
     await expect(page.locator('#pin-panel .pin-row').first()).toHaveAttribute('data-pin-state', 'read');
     var t = await getEditorText(page);
     expect(t).toContain('|read|');
@@ -121,7 +121,7 @@ test.describe('BLK-reviewer-20260907-1203-wish: 指摘を図にピン留めす�
     await pinLine(page, 4, 'method が無い');
     await page.locator('.pin-del').first().click();
     await page.waitForTimeout(1200);
-    await expect(page.locator('#btn-tab-pins')).toHaveText('📌 指摘 −');
+    await expect(page.locator('#btn-tab-pins')).toHaveText('指摘 −');
     expect(await getEditorText(page)).not.toContain("' @pin ");
   });
 });

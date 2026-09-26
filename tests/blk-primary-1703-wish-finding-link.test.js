@@ -128,7 +128,7 @@ var oddLine = FL.toMarkdown(odd).split('\n').filter(function(l) { return l.index
 eq(oddLine.split(/(?<!\\)\|/).length, 6, '本文の | を逃がして 4 列のまま');
 ok(oddLine.indexOf('\n') < 0, '本文の改行を 1 行に畳む');
 
-eq(FL.toMarkdown(FL.buildTable({ findings: [] })).indexOf('- 図に 📌 指摘ピンがありません') > 0, true,
+eq(FL.toMarkdown(FL.buildTable({ findings: [] })).indexOf('- 図に指摘ピンがありません') > 0, true,
   '指摘が無いときは空の表ではなくその旨を書く');
 eq(FL.fileName('2026-09-08T17:40:00.000Z'), '指摘対応表-20260908-1740.md', '書き出し名に日時が入る');
 eq(FL.fileName(''), '指摘対応表.md', '日時が無ければ素の名前');

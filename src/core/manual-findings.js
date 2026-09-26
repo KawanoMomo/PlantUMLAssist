@@ -186,8 +186,8 @@
 
   function badgeText(sum) {
     var s = sum || { total: 0, recheck: 0 };
-    if (!s.total) return '🔖 手動指摘 −';
-    return '🔖 手動指摘 ' + s.recheck + '/' + s.total;
+    if (!s.total) return '手動指摘 −';
+    return '手動指摘 ' + s.recheck + '/' + s.total;
   }
 
   // 要再確認の行だけを図名で返す (今日開く図)。

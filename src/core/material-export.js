@@ -185,7 +185,7 @@ window.MA.materialExport = (function() {
   // 「保存フォルダにも入ったのか」が分からず、結局一覧を開いて確かめていた。
   function doneMessage(p) {
     if (!p) return '資料化できませんでした';
-    return '📑 ' + p.title + ' を ' + p.formatLabel + ' で書き出し、保存フォルダと提出物庫に入れました';
+    return '' + p.title + ' を ' + p.formatLabel + ' で書き出し、保存フォルダと提出物庫に入れました';
   }
 
   function failMessage(p, err) {

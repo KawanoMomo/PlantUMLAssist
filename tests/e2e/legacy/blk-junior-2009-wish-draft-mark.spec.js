@@ -83,7 +83,7 @@ test.describe('BLK-junior-2009-wish: 一時控えに印を付けて一覧から�
 
   test('一覧の行から控えの印を付けると、畳まれて成果物だけが並ぶ', async ({ page }) => {
     await openFolder(page);
-    let clicks = 1;   // 📂 一覧
+    let clicks = 1;   // 一覧
     for (const n of DRAFTS) {
       await page.locator('#folder-panel .folder-draft[data-draft-name="' + n + '"]').click();
       clicks++;
@@ -145,13 +145,13 @@ test.describe('BLK-junior-2009-wish: 一時控えに印を付けて一覧から�
     await expect(page.locator('#folder-panel .folder-draft-toggle')).toContainText('一時控え 1 件を出す');
   });
 
-  test('上部バーの「🗂 一時控え」で、開いている図そのものに印を付けられる', async ({ page }) => {
+  test('上部バーの「一時控え」で、開いている図そのものに印を付けられる', async ({ page }) => {
     await openFolder(page);
     await page.locator('#folder-panel .folder-item[data-file-name="' + DRAFTS[0] + '"]').click();
     await page.waitForTimeout(1000);
 
     const btn = page.locator('#btn-tab-draft');
-    await expect(btn).toContainText('🗂 一時控え');
+    await expect(btn).toContainText('一時控え');
     await expect(btn).toHaveAttribute('aria-pressed', 'false');
     await btn.click();
     await expect(btn).toContainText('一時控え中');

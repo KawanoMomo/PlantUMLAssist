@@ -82,8 +82,8 @@ describe('review-pins — 対応済みと、対応した修正の記録', () => 
   });
 
   test('バッジは未対応件数を出す (既読でも直っていなければ数える)', () => {
-    expect(RP().badgeText({ total: 3, open: 1, read: 2, done: 0, pending: 3 })).toBe('📌 指摘 3/3');
-    expect(RP().badgeText({ total: 3, open: 1, read: 0, done: 2, pending: 1 })).toBe('📌 指摘 1/3');
+    expect(RP().badgeText({ total: 3, open: 1, read: 2, done: 0, pending: 3 })).toBe('指摘 3/3');
+    expect(RP().badgeText({ total: 3, open: 1, read: 0, done: 2, pending: 1 })).toBe('指摘 1/3');
   });
 
   test('図の上の印は対応済みなら「済」で色も別になる', () => {
@@ -128,7 +128,7 @@ describe('pin-inbox — 対応済みは受信箱から落ちる', () => {
     expect(sum.done).toBe(1);
     expect(sum.pending).toBe(1);
     expect(PI().headText(sum)).toBe('未対応 1 件 / 全 2 件 ・ 1 図');
-    expect(PI().badgeText(sum)).toBe('📥 指摘箱 1/2');
+    expect(PI().badgeText(sum)).toBe('指摘箱 1/2');
   });
 
   test('全部対応済みの図は未対応の図に数えない', () => {

@@ -185,7 +185,7 @@ window.MA.mapQuestion = (function() {
 
   function buttonLabel(dsl, row) {
     if (!askable(row)) return '';
-    return hasAsked(dsl, row) ? '✔ 聞き済み' : '❓ 先輩に聞く';
+    return hasAsked(dsl, row) ? '✔ 聞き済み' : '先輩に聞く';
   }
 
   return {

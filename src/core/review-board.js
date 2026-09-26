@@ -534,7 +534,7 @@
       c.note = '自由文で応答あり(タグ化待ち): ' + replies.map(function(n) {
         return _s(n.doc) + (n.line ? ' ' + n.line + ' 行' : '') + ' の note「' + _s(n.reason) + '」';
       }).filter(function(t, i, a) { return a.indexOf(t) === i; }).join(' / ')
-        + '。`\'@omit-method 部品.メソッド 理由` の 1 行に直すと突合から外れます (保存前突合の帯の「🚫 意図的に省略」で足せます)';
+        + '。`\'@omit-method 部品.メソッド 理由` の 1 行に直すと突合から外れます (保存前突合の帯の「意図的に省略」で足せます)';
     });
 
     // 指摘のある図のうち、前回控えから実際に中身が変わったもの。

@@ -21,7 +21,7 @@ describe('下端の差分の件数は変わった図の数', function() {
   });
 
   test('ほかの札の読み方は今のまま', function() {
-    expect(SC.countToken('📌 指摘 3')).toBe('3');
+    expect(SC.countToken('指摘 3')).toBe('3');
     expect(SC.countToken('± 差分 −')).toBe('−');
     expect(SC.countToken('± 変更なし')).toBe('−');
     expect(SC.isActive('± 変更 2/10')).toBe(true);

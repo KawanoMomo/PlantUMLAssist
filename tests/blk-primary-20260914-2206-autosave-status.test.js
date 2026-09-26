@@ -118,7 +118,7 @@ describe('自動保存が「どこまで届いたか」を残す', function() {
   });
 });
 
-describe('状態バーの 💾 が届いた先を言い分ける', function() {
+describe('状態バーの が届いた先を言い分ける', function() {
   var meta = { lastSavedAt: '2026-09-14T22:00:00.000Z', lastSavedType: 'plantuml-class' };
 
   test('ファイルに書けた回は書き先の .puml を名乗る', function() {

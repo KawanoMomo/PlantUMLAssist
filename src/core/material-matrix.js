@@ -171,10 +171,10 @@ window.MA.materialMatrix = (function() {
     var ok = rs.length - ng.length;
     if (!rs.length) return _s(component) + ' に資料化の要る図種はありません';
     if (!ng.length) {
-      return '📚 ' + _s(component) + ' の ' + ok
+      return '' + _s(component) + ' の ' + ok
         + ' 図種をまとめて資料化しました（保存フォルダと提出物庫にも入れました）';
     }
-    return '📚 ' + _s(component) + ' の ' + ok + ' 図種を資料化しましたが、'
+    return '' + _s(component) + ' の ' + ok + ' 図種を資料化しましたが、'
       + ng.length + ' 図種が失敗しました：'
       + ng.map(function(r) { return (r && r.kind) ? r.kind : '不明'; }).join('・');
   }

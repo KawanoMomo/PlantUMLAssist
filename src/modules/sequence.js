@@ -3022,7 +3022,7 @@ window.MA.modules.plantumlSequence = (function() {
           var msgOnlyButtons = '';
           if (kind === 'message') {
             msgOnlyButtons =
-              '<button class="seq-infer-activation" data-line="' + line + '" style="width:100%;text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">⚡ ライフライン推論 (activate/deactivate)</button>';
+              '<button class="seq-infer-activation" data-line="' + line + '" style="width:100%;text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">ライフライン推論 (activate/deactivate)</button>';
           }
           return '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
             '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">この位置に挿入</label>' +
@@ -3459,7 +3459,7 @@ window.MA.modules.plantumlSequence = (function() {
               return '<button class="seq-bulk-wrap" data-kind="' + k + '" data-start="' + range.start + '" data-end="' + range.end + '" style="width:100%;text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">⌗ ' + groupLabel(k) + ' で囲む</button>';
             }).join('') +
             '<button class="seq-scaffold-after" data-line="' + range.end + '" style="width:100%;text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">⌗ この後にまとめて追加…</button>' +
-            '<button class="seq-bulk-duplicate" data-start="' + range.start + '" data-end="' + range.end + '" style="width:100%;text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">📋 範囲を複製</button>' +
+            '<button class="seq-bulk-duplicate" data-start="' + range.start + '" data-end="' + range.end + '" style="width:100%;text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">範囲を複製</button>' +
             '<button class="seq-bulk-delete" data-start="' + range.start + '" data-end="' + range.end + '" style="width:100%;text-align:left;background:var(--accent-red);border:none;color:#fff;padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 範囲を一括削除</button>' +
           '</div>';
 

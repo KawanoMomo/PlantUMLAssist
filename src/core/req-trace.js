@@ -320,7 +320,7 @@ window.MA = window.MA || {};
 
   function doneMessage(p) {
     if (!p) return '対応表を書き出せませんでした';
-    return '📋 ' + p.filename + ' に ' + p.assigned + ' 要素の要求 ID 対応表を書き出しました';
+    return '' + p.filename + ' に ' + p.assigned + ' 要素の要求 ID 対応表を書き出しました';
   }
 
   var api = {

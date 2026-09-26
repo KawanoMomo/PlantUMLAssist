@@ -82,7 +82,7 @@ t('audit の分類がそのまま「何を比較して出たか」になる', ()
   assert.strictEqual(o.basis, 'メソッド / 整合/イベント');
 });
 
-t('📌 は本文に書かれた指摘 ID で結ばれる (reviewer 自身の紐づけを読む)', () => {
+t('は本文に書かれた指摘 ID で結ばれる (reviewer 自身の紐づけを読む)', () => {
   const f1 = row(build(), 'F-01');
   const o = f1.origins.filter((x) => x.tool === 'pins')[0];
   assert.ok(o, '出典に pins が無い');
@@ -123,7 +123,7 @@ t('指摘は「SVG ずれ」でも中身が一致なら、その食い違いを�
   assert.ok(f3.conflicts[0].indexOf('体裁差のみ') >= 0, f3.conflicts[0]);
 });
 
-t('解消済みの指摘に開いた 📌 が残っていれば、その食い違いを残す', () => {
+t('解消済みの指摘に開いた が残っていれば、その食い違いを残す', () => {
   const f4 = row(build(), 'F-04');
   assert.ok(f4.conflicts.some((c) => c.indexOf('📌') >= 0), f4.conflicts.join('|'));
   assert.strictEqual(build().totals.conflicts, 2);
@@ -188,7 +188,7 @@ t('出口が 1 つも無い回でも落ちない (見ていないことと 0 件
   assert.ok(FO.text(b, 'x').indexOf('指摘 0 件') >= 0);
 });
 
-t('📌 だけ取れなかった回でも、audit の出典は出る', () => {
+t('だけ取れなかった回でも、audit の出典は出る', () => {
   const b = FO.build({ findings: FINDINGS, pins: null, svg: null, registry: null });
   assert.strictEqual(row(b, 'F-01').pins.length, 0);
   assert.ok(row(b, 'F-01').origins.some((o) => o.tool === 'audit'));

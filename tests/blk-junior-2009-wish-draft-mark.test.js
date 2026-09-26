@@ -90,8 +90,8 @@ describe('draft-mark — 一時控えの印 (BLK-junior-2009-wish)', () => {
     expect(DM.rowLabel(false)).toBe('控えにする');
     expect(DM.rowTitle(false)).toContain('印を付けて');
     expect(DM.rowTitle(true)).toContain('印を外して');
-    expect(DM.activeLabel(true)).toBe('🗂 一時控え中');
-    expect(DM.activeLabel(false)).toBe('🗂 一時控え');
+    expect(DM.activeLabel(true)).toBe('一時控え中');
+    expect(DM.activeLabel(false)).toBe('一時控え');
     expect(DM.activeMessage('GPIO_TYPO_interim', true)).toContain('畳まれます');
     expect(DM.activeMessage('GPIO_TYPO_interim', false)).toContain('成果物として出ます');
   });

@@ -62,7 +62,7 @@ window.MA.saveTarget = (function() {
       var tail = tailOf(dir) || dir;
       return {
         mode: 'file',
-        text: '📁 ' + tail,
+        text: '' + tail,
         title: '保存先は設定済みです: ' + dir + '\n保存は隣の [保存] を押すだけです (このチップを押すと設定を開きます)',
         configured: true,
       };

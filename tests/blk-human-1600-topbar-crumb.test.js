@@ -78,7 +78,7 @@ describe('保存の状態 (design 9a)', function() {
     expect(ST.saveState(DL_CFG, DOC, true, '').title).toContain('ダウンロードします');
   });
 
-  test('保存ボタンに 💾 を出さない', function() {
+  test('保存ボタンに を出さない', function() {
     [true, false].forEach(function(d) {
       expect(ST.saveState(FILE_CFG, DOC, d, '').text.indexOf('\u{1F4BE}')).toBe(-1);
     });

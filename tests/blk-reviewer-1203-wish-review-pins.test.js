@@ -121,8 +121,8 @@ describe('review-pins — 指摘を DSL の行に結び付ける', () => {
 
   test('badgeText は未対応件数を先に出す', () => {
     // 未対応 = 対応済み以外 (BLK-junior-20260908-0103-wish)。この 3 件は全部未対応。
-    expect(RP().badgeText({ total: 3, open: 2, read: 1, done: 0, pending: 3, stale: 0 })).toBe('📌 指摘 3/3');
-    expect(RP().badgeText({ total: 0, open: 0, read: 0, stale: 0 })).toBe('📌 指摘 −');
+    expect(RP().badgeText({ total: 3, open: 2, read: 1, done: 0, pending: 3, stale: 0 })).toBe('指摘 3/3');
+    expect(RP().badgeText({ total: 0, open: 0, read: 0, stale: 0 })).toBe('指摘 −');
   });
 
   test('図の上の印は未読なら番号、既読ならチェックになる', () => {

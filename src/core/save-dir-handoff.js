@@ -163,7 +163,7 @@ window.MA.saveDirHandoff = (function() {
   function messageFor(res) {
     if (!res) return '';
     if (!res.ok) return '⚠ ' + res.reason;
-    return '📁 保存先を ' + res.value + ' にしました'
+    return '保存先を ' + res.value + ' にしました'
       + (res.notes.length ? ' (' + res.notes.join(' ') + ')' : '');
   }
 

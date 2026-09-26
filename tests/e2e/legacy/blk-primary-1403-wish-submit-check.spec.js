@@ -48,7 +48,7 @@ test.describe('BLK-primary-20260907-1403-wish: 提出前チェック', () => {
     await twoDocs(page);
   });
 
-  test('📤 提出前チェックを押すと全図の title / note / 部品名が 1 枚に並ぶ', async ({ page }) => {
+  test('提出前チェックを押すと全図の title / note / 部品名が 1 枚に並ぶ', async ({ page }) => {
     await page.locator('#btn-tab-submit').click();
     await expect(page.locator('#sc-modal')).toBeVisible();
 

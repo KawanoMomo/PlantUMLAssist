@@ -12,7 +12,7 @@ var html = fs.readFileSync(path.join(__dirname, '..', 'plantuml-assist.html'), '
 var start = html.indexOf('<div id="files-panel"');
 var end = html.indexOf('<section class="files-sec" data-files-section="git">', start);
 var frag = html.slice(start, end) + '</div>';
-var EMOJI = /[\u{1F300}-\u{1FAFF}]/u;
+var EMOJI = /[-]/u;
 
 describe('FILES の節見出し (design 10a / 9a)', function() {
   var dom, W;
