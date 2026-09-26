@@ -106,6 +106,11 @@ test('手順9 GUI のヘルプ (Ctrl+K) から「子状態」を引ける', asyn
   await page.waitForTimeout(400);
   // 到達条件: 記法 (`state A { }`) を知らなくても、言葉で入口に届く。
   await expect(page.locator('#cp-list')).toContainText('子状態');
+  // BLK-owner-20260925-0312-3: 選ぶと、種別「状態」+ 追加する位置「{親} の中」のフォームが開く (入口は 1 つ)。
+  await page.locator('#cp-list').getByText('子状態 (状態の中に入れる)').first().click();
+  await expect(page.locator('#st-tail-kind')).toHaveValue('state');
+  await expect(page.locator('#st-tail-where')).toHaveValue(/^in:/);
+  await expect(page.locator('#st-tail-where')).toBeFocused();
 });
 
 test('手順9 追加フォームからも、どの状態の中に入れるかを選んで足せる', async ({ page }) => {
@@ -115,17 +120,55 @@ test('手順9 追加フォームからも、どの状態の中に入れるかを
     if (window.MA.selection) window.MA.selection.clearSelection();
   });
   await page.waitForTimeout(300);
-  await page.locator('#st-tail-kind-chip-child').click();
+  // BLK-owner-20260925-0312-3: 入れ子を作る入口は種別「状態」+「追加する位置」1 つ (「子状態」チップは畳んだ)。
+  await expect(page.locator('#st-tail-kind-chip-child')).toHaveCount(0);
+  await page.locator('#st-tail-kind-chip-state').click();
   await page.waitForTimeout(300);
-  // 中身をまだ持たない状態も親の候補に並ぶ (最初の 1 つが作れる)。
-  const opts = await page.locator('#st-tail-where-target option').allTextContents();
-  expect(opts).toContain('Uninit');
-  await page.locator('#st-tail-where-target').selectOption('Uninit');
+  // 中身をまだ持たない状態も、位置のプルダウンに「{親} の中」と名前で並ぶ (最初の 1 つが作れる)。
+  const where = page.locator('#st-tail-where');
+  const opts = await where.locator('option').allTextContents();
+  expect(opts).toContain('Uninit の中');
+  expect(opts.some((o) => o.includes('選んだ状態の中'))).toBe(false);
+  await where.selectOption({ label: 'Uninit の中' });
   await page.locator('#st-tail-id').fill('Boot');
   await page.locator('#st-tail-add').click();
-  await page.waitForTimeout(400);
-  expect(await dsl(page)).toContain('state Uninit {');
+  await expect.poll(async () => dsl(page)).toContain('state Uninit {');
   expect(await dsl(page)).toContain('state Boot');
+  await page.waitForTimeout(400);
+
+  // 2 つ目の子は名前を打つだけ: 確定後も位置は「Uninit の中」のまま (位置も親も選び直さない)。
+  await expect(page.locator('#st-tail-where')).toHaveValue('in:Uninit');
+  await expect(page.locator('#st-tail-where-target')).toHaveCount(0);
+  await page.locator('#st-tail-id').fill('Calib');
+  await page.locator('#st-tail-id').press('Enter');
+  await expect.poll(async () => dsl(page)).toContain('state Calib');
+  const lines = (await dsl(page)).split('\n');
+  const open = lines.findIndex((l) => /^state Uninit \{/.test(l));
+  const close = lines.findIndex((l, i) => i > open && /^\}/.test(l));
+  const inner = lines.slice(open + 1, close).map((l) => l.trim());
+  expect(inner).toEqual(expect.arrayContaining(['state Boot', 'state Calib']));
+});
+
+test('手順9 図で状態を選んでから追加フォームへ戻ると、その状態の中が位置の既定になる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.typeDsl(page, TIMER_STATE);
+  await page.waitForTimeout(800);
+  // 図の Ready を押して選ぶ → Esc で追加フォームへ戻る。
+  const hit = page.locator('#overlay-layer [data-type="state"][data-id="Ready"]').first();
+  await expect(hit).toBeAttached({ timeout: 15000 });
+  const box = await hit.boundingBox();
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await expect(page.locator('#st-id')).toHaveValue('Ready');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#st-tail-kind-chip-state')).toBeVisible();
+  await page.locator('#st-tail-kind-chip-state').click();
+  await expect(page.locator('#st-tail-where')).toHaveValue('in:Ready');
+  await page.locator('#st-tail-id').fill('Armed');
+  await page.locator('#st-tail-add').click();
+  await expect.poll(async () => dsl(page)).toContain('state Ready {');
+  const lines = (await dsl(page)).split('\n');
+  const open = lines.findIndex((l) => /^state Ready \{/.test(l));
+  expect(lines[open + 1].trim()).toBe('state Armed');
 });
 
 // BLK-junior-20260916-0526-wish: 子状態を足した後の「中を見る」手立て。

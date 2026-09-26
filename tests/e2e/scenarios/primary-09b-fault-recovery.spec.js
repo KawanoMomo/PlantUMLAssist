@@ -70,10 +70,10 @@ test('手順9.5 子状態 1 つと遷移 4 本を、確定のたびに種別・�
   await S.typeDsl(page, SPI_STATE);
   await page.waitForTimeout(800);
 
-  // 子状態: チップ → 親 → 名前 → 追加。
+  // 子状態: チップ「状態」→ 追加する位置「Error の中」→ 名前 → 追加 (BLK-owner-20260925-0312-3: 親は位置の 1 欄で選ぶ)。
   let clicks = 0;
-  await page.locator('#st-tail-kind-chip-child').click(); clicks++;
-  await page.locator('#st-tail-where-target').selectOption('Error'); clicks++;
+  await page.locator('#st-tail-kind-chip-state').click(); clicks++;
+  await page.locator('#st-tail-where').selectOption({ label: 'Error の中' }); clicks++;
   await page.locator('#st-tail-id').fill('Retrying');
   // BLK-owner-20260924-2232-4: 名前の欄で Enter を押せば「+ 追加 (Enter)」を押したのと同じ (マウスに持ち替えない)。
   await expect(page.locator('#st-tail-add')).toBeVisible();
@@ -81,8 +81,8 @@ test('手順9.5 子状態 1 つと遷移 4 本を、確定のたびに種別・�
   await waitRendered(page, 'state Retrying');
   expect(clicks).toBeLessThanOrEqual(3);
   // 確定後も「子状態」のまま、親は Error のまま (次の子は名前を打つだけ)。
-  expect(await kindOf(page, 'st')).toBe('child');
-  await expect(page.locator('#st-tail-where-target')).toHaveValue('Error');
+  expect(await kindOf(page, 'st')).toBe('state');
+  await expect(page.locator('#st-tail-where')).toHaveValue('in:Error');
 
   // 遷移 4 本。From は直前の To を引き継ぎ、To は図の状態を押す。種別チップは最初の 1 回だけ。
   const perTx = [];

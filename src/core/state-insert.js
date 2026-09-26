@@ -39,9 +39,11 @@ window.MA.stateInsert = (function() {
     // BLK-human-20260915-1206: 以前は「既に中身を持つ状態」がある図でしか
     // 出さなかったので、最初の 1 つを GUI から作る道がどこにも無かった。
     // 中身を持たない状態もその場で `{ }` に開くので、状態が 1 つでもあれば出す。
-    if (_childHosts(parsed).length > 0) {
-      out.push({ value: 'inside', label: '選んだ状態の中 (子状態にする)' });
-    }
+    // BLK-owner-20260925-0312-3: 親は名前で並べ、この 1 つのプルダウンで選び終える
+    // (「選んだ状態の中」+ 下の「中に入れる複合状態」の 2 段は、図で選んだ状態と
+    // 下の欄の親が食い違っても気づけなかった)。値は `in:{状態の id}`。
+    // 入れ子は「Run › Busy の中」— クラス・コンポーネントの「境界『X』の中」と同じ言い方。
+    insideOptions(parsed).forEach(function(o) { out.push(o); });
     // BLK-migrator-20260925-1332: 最初の並行領域が空の複合状態 (`state X {` の直後に `--`) は
     // PlantUML が描画の途中で落ちる。「の中」は閉じ `}` の直前 (最後の領域) に入るので、その空の領域へ
     // 置く道を位置に並べる。値は `region:{区切りの行}`。
@@ -49,6 +51,32 @@ window.MA.stateInsert = (function() {
       out.push({ value: 'region:' + r.line, label: r.label + ' の空の並行領域 (' + r.line + ' 行目 `' + r.sep + '` の前)' });
     });
     return out;
+  }
+
+  // 「{親} の中」の候補。値は `in:{id}`。
+  var IN = 'in:';
+  function insideValue(id) { return IN + _s(id); }
+  function insideOptions(parsed) {
+    var SC = window.MA.stateChild;
+    return _childHosts(parsed).map(function(s) {
+      return { value: insideValue(s.id), label: ((SC && SC.breadcrumbText(parsed, s.id)) || s.label || s.id) + ' の中' };
+    });
+  }
+
+  // 位置の値を読む。'in:X' → { mode: 'inside', target: 'X' }。
+  // 'region:N' / 'transition' / 'end' はそのまま mode に返す (target は別の欄)。
+  function parseWhere(value) {
+    var v = _s(value);
+    if (v.indexOf(IN) === 0) return { mode: 'inside', target: v.slice(IN.length) };
+    if (v.indexOf('region:') === 0) return { mode: 'region', target: v.slice(7) };
+    if (v === 'transition') return { mode: 'transition', target: '' };
+    return { mode: 'end', target: '' };
+  }
+
+  // 足した状態の id。入れ子の子は `親.子` (parser の読み方) になる。
+  function addedId(where, id) {
+    var w = parseWhere(where);
+    return w.mode === 'inside' && w.target ? w.target + '.' + _s(id) : _s(id);
   }
 
   // 最初の並行領域が空の複合状態。見出しは parser の読んだ名前 (入れ子は「Outer › Inner」)。
@@ -347,6 +375,10 @@ window.MA.stateInsert = (function() {
     pseudoFromTransition: pseudoFromTransition,
     endState: _endState,
     positions: positions,
+    insideOptions: insideOptions,
+    insideValue: insideValue,
+    parseWhere: parseWhere,
+    addedId: addedId,
     transitionLabel: transitionLabel,
     transitionOptions: transitionOptions,
     compositeOptions: compositeOptions,
