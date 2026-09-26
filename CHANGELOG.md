@@ -1,3 +1,4 @@
+- BLK-owner-20260926-1628-1: migrator が枠 ok と記録した実物の図 181 枚について「どの点を指すとどの行の枠が出るか」を PlantUML の版ごとの基準 (tests/e2e/hit-baseline/) に持ち、migrator-04 の E2E で当て方の変更がその点の枠を消す・別の行に変えると赤になる (約 1.5 分、コーパスが無ければ skip。意図した変更は PUA_HIT_WRITE=1 で基準を書き直す)
 - BLK-migrator-20260926-1608: PlantUML が「Illegal sequence arrow」「No such color」など error の語を含まない文言で返したエラー画も、図として並べず見出し ERROR と帯で版・行・理由を言う (server の 422 も同じ規則)。選択枠を当てられなかった知らせは内部の件数でなく「図の要素 N 個に選択枠を当てられませんでした」と言う
 - BLK-builder-20260926-1512-3-red: `npm run audit -- <フォルダ> --board` で persona-data の外のフォルダを突き合わせても reviewer の指摘.md を前回の指摘として当てず、本当の新規が「継続」に化けない (--save-board の既定の書き先にもしない)
 - BLK-builder-20260926-1243-2: sequence 図で create / ** で途中に作った参加者の頭を指すと、作ったメッセージではなくその参加者の枠が出て、押すと参加者が選ばれる (頭がメッセージの枠と重なるときは頭を手前に置く)
