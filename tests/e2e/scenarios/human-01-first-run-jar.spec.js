@@ -95,6 +95,8 @@ test.describe('人間 手順 1 — 初回起動で jar を入れたら、その�
     await expect(note).toContainText('再起動せず');
     await expect(page.locator('#cfg-jar-status')).toContainText(LOCAL_JAR);
 
+    // BLK-owner-20260925-1932-2: jar が入ったら「公式から取得」は引っ込む (取り直すのは版の行の「取得し直す」だけ)。
+    await expect(page.locator('#cfg-jar-fetch')).toBeHidden();
     // 4. 到達条件: 設定を閉じる前に、もう警告は消えて図が描かれている。
     await expect(page.locator('#preview-svg svg')).toHaveCount(1);
     await expect(preview).not.toContainText('plantuml.jar');
@@ -186,6 +188,10 @@ test.describe('人間 手順 1 — 初回起動で jar を入れたら、その�
     await expect(ver).toHaveAttribute('data-differs', '0');
     await expect(refetch).toBeHidden();
     await expect(warn).toBeHidden();
+    // BLK-owner-20260925-1932-2: 同じ取得をする「公式から取得」を下の行に並べない (下の行はパス欄と「jar を選ぶ」だけ)。
+    const fetchBtn = page.locator('#cfg-jar-fetch');
+    await expect(fetchBtn).toBeHidden();
+    await expect(page.locator('#cfg-jar-pick')).toBeVisible();
     const env = await (await page.request.get('/env')).json();
     expect(env.jarRecommended, '推奨版は lib/PLANTUML_VERSION の 1 か所').toBe('1.2026.8');
 
@@ -215,6 +221,9 @@ test.describe('人間 手順 1 — 初回起動で jar を入れたら、その�
     await expect(warn).toBeVisible();
     await expect(warn).toHaveText('並行領域が描かれない不具合があります。取得し直してください');
     await expect(refetch).toBeVisible();
+    // 取得の入口は版の行の「取得し直す」1 つ。
+    await expect(fetchBtn).toBeHidden();
+    await expect(page.locator('#cfg-engine button:visible', { hasText: /取得/ })).toHaveCount(1);
 
     // 隣の「取得し直す」を押すと推奨版に替わり、注意とボタンが引っ込む。
     await refetch.click();

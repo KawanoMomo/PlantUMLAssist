@@ -54,6 +54,14 @@ window.MA.appBridge = (function() {
     };
   }
 
+  // BLK-owner-20260925-1932-2: 取得の入口は状態ごとに 1 つ。jar が無いときは下の行の「公式から取得」、
+  // jar があるときは版の行の「取得し直す」(推奨版と違うときだけ)。同じ取得をする 2 つのボタンを並べない。
+  //   返り値 { fetch: 「公式から取得」を出すか, refetch: 「取得し直す」を出すか, canFetch }
+  function fetchEntries(env) {
+    var j = jarStatus(env);
+    return { fetch: !j.ok, refetch: !!(j.ok && j.differs && j.canFetch), canFetch: !!j.canFetch };
+  }
+
   // Java の状態を 1 行で言う。無ければ導入先の URL を添える。
   function javaStatus(env) {
     var e = env || {};
@@ -184,6 +192,7 @@ window.MA.appBridge = (function() {
   return {
     isApp: isApp,
     jarStatus: jarStatus,
+    fetchEntries: fetchEntries,
     engineVersion: engineVersion,
     jarReady: jarReady,
     jarTurnedReady: jarTurnedReady,

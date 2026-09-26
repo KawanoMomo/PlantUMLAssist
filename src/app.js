@@ -2432,7 +2432,9 @@ function init() {
         warnEl.textContent = jar.versionWarn || '';
         warnEl.hidden = !jar.versionWarn;
       }
-      if (refetchBtn) refetchBtn.hidden = !(jar.differs && jar.canFetch);
+      // BLK-owner-20260925-1932-2: 取得の入口は 1 つ (jar が無ければ「公式から取得」、あれば版の行の「取得し直す」)。
+      var entries = AB.fetchEntries ? AB.fetchEntries(env) : { fetch: true, refetch: !!(jar.differs && jar.canFetch) };
+      if (refetchBtn) refetchBtn.hidden = !entries.refetch;
       var pathEl = document.getElementById('cfg-jar-path');
       if (pathEl && document.activeElement !== pathEl) pathEl.value = env.jarPath || '';
       var javaEl = document.getElementById('cfg-java-status');
@@ -2451,7 +2453,10 @@ function init() {
         }
       }
       var fetchBtn = document.getElementById('cfg-jar-fetch');
-      if (fetchBtn) fetchBtn.disabled = !jar.canFetch;
+      if (fetchBtn) {
+        fetchBtn.disabled = !jar.canFetch;
+        fetchBtn.hidden = !entries.fetch;
+      }
       var pickBtn = document.getElementById('cfg-jar-pick');
       // Web 版にはネイティブのダイアログが無いので、パス欄に打って反映させる。
       if (pickBtn) pickBtn.textContent = AB.isApp(env) ? 'jar を選ぶ' : 'このパスを使う';
