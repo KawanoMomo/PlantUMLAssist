@@ -50,8 +50,11 @@ window.MA.sequenceOverlay = (function() {
 
   // 注釈本文の 1 行目を持つ <text> (未使用のもの) を探し、それを囲む塗りのある最小の図形を返す。
   // 群の枠 (alt 等) は fill="none" なので候補にならない。見つからなければ null。
-  function _findNoteShape(svgEl, note, usedTexts) {
-    var first = String(note.text || '').split('\n')[0].replace(/<[^>]*>|\*\*|\/\/|__|""/g, '').trim();
+  // BLK-migrator-20260926-1116: 1 行目は Creole の印 (表の `|=` `|`・箇条書きの `*` `#`・リンクの URL) を落として比べ
+  // (OB.noteLineKey)、文字が注釈の紙 (折り返し角の path) の上なら紙の外形を返す (中の表・点の図形を範囲にしない)。
+  function _findNoteShape(svgEl, note, usedTexts, usedPapers) {
+    var key = OB.noteLineKey || function(l) { return String(l).replace(/<[^>]*>|\*\*|\/\/|__|""/g, '').trim(); };
+    var first = String(note.text || '').split('\n').map(key).filter(function(l) { return l; })[0];
     if (!first || !svgEl.querySelectorAll) return null;
     var texts = _q(svgEl, 'text');
     var shapes = null;
@@ -61,6 +64,13 @@ window.MA.sequenceOverlay = (function() {
       if ((t.textContent || '').trim() !== first && !_lineStartsAt(texts, i, first)) continue;
       var tb = _bbox(t);
       if (!tb) continue;
+      var paper = OB.notePaperAt ? OB.notePaperAt(svgEl, tb.x + tb.width / 2, tb.y + tb.height / 2) : null;
+      if (paper && usedPapers && usedPapers.indexOf(paper.el) >= 0) continue;
+      if (paper) {
+        usedTexts.push(t);
+        if (usedPapers) usedPapers.push(paper.el);
+        return paper.box;
+      }
       if (!shapes) shapes = _q(svgEl, 'path, polygon, rect');
       var best = null, bestArea = Infinity;
       for (var k = 0; k < shapes.length; k++) {
@@ -1258,10 +1268,18 @@ window.MA.sequenceOverlay = (function() {
       // note の target participant の既存 overlay rect の位置を参照し、その近傍に
       // クリック可能な approximate box を置く (正確座標抽出は別 sprint)。
       var usedTexts = [];
+      var usedPapers = [];
+      var boxOf = {};
+      notes.forEach(function(n) { boxOf[n.id] = _findNoteShape(svgEl, n, usedTexts, usedPapers); });
+      // 文字で当たらない注釈 (1 行目が画像・区切り線だけ等) は、残った紙を文書順に
+      var restPapers = (OB.notePapers ? OB.notePapers(svgEl) : []).filter(function(p) { return usedPapers.indexOf(p.el) < 0; });
+      notes.forEach(function(n) {
+        if (!boxOf[n.id] && restPapers.length) boxOf[n.id] = restPapers.shift().box;
+      });
       notes.forEach(function(n) {
         // BLK-human-20260916-0900: 描かれた注釈の形 (note=path / hnote=polygon / rnote=rect) を
         // 本文の 1 行目から探し、その矩形全体を当たり判定にする (どこを押しても選べる)。
-        var shapeBox = _findNoteShape(svgEl, n, usedTexts);
+        var shapeBox = boxOf[n.id];
         if (shapeBox) {
           OB.addRect(overlayEl, shapeBox.x - 2, shapeBox.y - 2, shapeBox.width + 4, shapeBox.height + 4, {
             'data-type': 'note',

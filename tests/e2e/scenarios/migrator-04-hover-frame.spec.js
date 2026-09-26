@@ -1888,3 +1888,58 @@ test('migrator 手順 4 — 遷移の端に [H] / [H*] を書いた state 図で
     'text H=pseudo:history@Comp@16', 'text H=pseudo:history@Other@12', 'text H=state:Comp.Lone@6',
   ]);
 });
+
+// BLK-migrator-20260926-1116: note の中に Creole の表 (|= |)・箇条書き・リンク・区切り線を書くと、state / sequence /
+// activity では表の見出し・セルに枠が出なかった (範囲を中の図形から取り、箇条書きの点の 4px 角や表の 1 セルになった)。
+// 範囲は note の紙の外形から全図種共通の 1 か所で取る: 6 図種とも、見出し・各セル・箇条書き・リンクに note の行の枠が出る。
+test('migrator 手順 4 — note に Creole の表・箇条書き・リンクを書いても、6 図種とも見出し・各セル・リンクに note の行の枠が出て、押すと note の行が選ばれる', async ({ page }) => {
+  await bootPlain(page);
+  const NOTE = ['  |= Item |= Status |', '  | WDT reset | ok |', '  | Brownout detect | NG |', '',
+    '  * Checklist', '  ** Sub item A', '  # Step 1', '  ----', '  See [[https://example.com/spec spec doc]]', 'end note'];
+  const cases = [
+    ['state', ['state Review', 'note right of Review'], 3],
+    ['class', ['class Review', 'note right of Review'], 3],
+    ['sequence', ['participant Review', 'participant B', 'Review -> B : go', 'note right of Review'], 5],
+    ['activity', ['start', ':Review;', 'note right'], 4],
+    ['usecase', ['actor User', 'usecase (Review)', 'User --> (Review)', 'note right of (Review)'], 5],
+    ['component', ['component Review', 'note right of Review'], 3],
+  ];
+  const words = ['Item', 'Status', 'WDT reset', 'ok', 'Brownout detect', 'NG', 'Checklist', 'Sub item A', 'Step 1', 'spec doc'];
+  for (const [kind, head, noteLine] of cases) {
+    const tail = kind === 'activity' ? ['stop'] : [];
+    await typeDsl(page, ['@startuml'].concat(head, NOTE, tail, ['@enduml']).join(String.fromCharCode(10)));
+    await expect(page.locator('#preview-svg svg text').filter({ hasText: 'Brownout detect' })).toHaveCount(1, { timeout: 20000 });
+    await expect(page.locator('#overlay-layer rect[data-line="' + noteLine + '"]')).not.toHaveCount(0, { timeout: 20000 });
+    const got = [];
+    for (const w of words) {
+      const box = await page.evaluate((l) => {
+        const t = Array.prototype.find.call(document.querySelectorAll('#preview-svg svg text'),
+          (n) => (n.textContent || '').trim() === l);
+        if (!t) return null;
+        const r = t.getBoundingClientRect();
+        return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+      }, w);
+      expect(box, kind + ': ' + w + ' が描かれている').not.toBeNull();
+      await page.mouse.move(3, 3);
+      await page.mouse.move(box.x, box.y);
+      const line = await page.evaluate(() => {
+        const r = document.querySelector('#overlay-layer .hit-hover');
+        return r ? r.getAttribute('data-line') : null;
+      });
+      got.push(w + '=' + line);
+    }
+    expect(got, kind).toEqual(words.map((w) => w + '=' + noteLine));
+    // 表のセルを押すと note の行が選ばれる
+    const cell = await page.evaluate(() => {
+      const t = Array.prototype.find.call(document.querySelectorAll('#preview-svg svg text'),
+        (n) => (n.textContent || '').trim() === 'WDT reset');
+      const r = t.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    });
+    // 前の図種で選んだ note (同じ行・同じ id) が選ばれたまま残ると、押して外す操作になるので空にしてから押す
+    await page.evaluate(() => window.MA.selection.setSelected([]));
+    await page.mouse.click(cell.x, cell.y);
+    await expect.poll(() => page.evaluate(() => (window.MA.selection.getSelected() || []).map((s) => Number(s.line))),
+      { message: kind + ': 押すと note の行', timeout: 5000 }).toEqual([noteLine]);
+  }
+});

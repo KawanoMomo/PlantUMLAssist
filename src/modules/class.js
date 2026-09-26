@@ -2690,7 +2690,7 @@ window.MA.modules.plantumlClass = (function() {
       multiSelectConnect: true,
     },
 
-    buildOverlay: function(svgEl, parsedData, overlayEl) {
+    buildOverlay: function(svgEl, parsedData, overlayEl, dslText) {
       if (!svgEl || !overlayEl) return { matched: {}, unmatched: {} };
       var OB = window.MA.overlayBuilder;
       OB.syncDimensions(svgEl, overlayEl);
@@ -2986,11 +2986,14 @@ window.MA.modules.plantumlClass = (function() {
         var noteGroups = Array.prototype.filter.call(
           svgEl.querySelectorAll('g.entity'), function(ge) {
             if (usedG.indexOf(ge) >= 0) return false;
+            // BLK-migrator-20260926-1116: 本文の Creole (箇条書きの点 = rect / ellipse、表の罫線) が
+            // 入っても紙の外形 (折り返し角の path) で note と見分ける。
+            if (OB.notePaperBox && OB.notePaperBox(ge)) return true;
             return !!ge.querySelector('path') &&
               !ge.querySelector('rect') && !ge.querySelector('ellipse');
           });
         var notePolys = noteGroups;
-        var bboxOf = _entityBBox;
+        var bboxOf = function(ge) { return (OB.notePaperBox && OB.notePaperBox(ge)) || _entityBBox(ge); };
         if (notePolys.length !== notes.length) {
           notePolys = [];
           Array.prototype.forEach.call(svgEl.querySelectorAll('polygon'), function(p) {
@@ -3021,7 +3024,7 @@ window.MA.modules.plantumlClass = (function() {
 
       // BLK-migrator-20260923-1909: フォームが読めない記法 (`abstract X` / circle / diamond / 題 …) にも
       // 書かれた行を指す枠を置く。
-      OB.addUnclaimed(svgEl, overlayEl, usedG);
+      OB.addUnclaimed(svgEl, overlayEl, usedG, null, dslText);
 
       // BLK-human-20260912-2130: 小さい当たり判定を手前に。共通実装 (src/core)
       OB.raiseSmallestLast(overlayEl);

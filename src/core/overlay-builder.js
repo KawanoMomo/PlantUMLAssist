@@ -97,6 +97,15 @@ window.MA.overlayBuilder = (function() {
     return pts;
   }
   function pathBox(d) {
+    var pts = pathPoints(d);
+    if (!pts || !pts.xs.length) return null;
+    var xs = pts.xs, ys = pts.ys;
+    var x0 = Math.min.apply(null, xs), y0 = Math.min.apply(null, ys);
+    return { x: x0, y: y0, width: Math.max.apply(null, xs) - x0, height: Math.max.apply(null, ys) - y0 };
+  }
+
+  // <path d> の頂点 (円弧は周上の点) を { xs, ys } で返す。読めない d は null。
+  function pathPoints(d) {
     var toks = String(d == null ? '' : d).match(/[a-df-zA-DF-Z]|-?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?/g);
     if (!toks) return null;
     var xs = [], ys = [];
@@ -132,9 +141,101 @@ window.MA.overlayBuilder = (function() {
       cx = a[n - 2] + ox; cy = a[n - 1] + oy;
       if (up === 'M') { sx = cx; sy = cy; cmd = rel ? 'l' : 'L'; }   // M の後に続く組は L
     }
-    if (!xs.length) return null;
+    return { xs: xs, ys: ys };
+  }
+
+  // BLK-migrator-20260926-1116: 注釈 (note) の紙の外形を全図種で 1 か所で求める。
+  // PlantUML は note を図種によらず「塗りのある外形の path + 右上の折り返しの小さい三角の path」で描き、
+  // 本文の Creole (表の罫線・箇条書きの点・リンク・区切り線) はその後ろに並べる。中身の図形から範囲を
+  // 取ると (最初の rect = 箇条書きの点、最初の text = 表の 1 セル) 紙のほとんどが当たり判定から外れた。
+  // 範囲は紙の外形 (対象へ伸びる吹き出しの尖りを含む、描かれた形そのもの) から取る。
+  function _isFold(el) {
+    if (!el || (el.tagName || '').toLowerCase() !== 'path') return null;
+    var pts = pathPoints(el.getAttribute('d'));
+    if (!pts || pts.xs.length !== 4) return null;
+    var xs = pts.xs, ys = pts.ys, c = ys[1] - ys[0];
+    if (!(c >= 2 && c <= 30)) return null;
+    var near = function(a, b) { return Math.abs(a - b) < 0.6; };
+    if (!near(xs[0], xs[3]) || !near(ys[0], ys[3]) || !near(xs[1], xs[0]) ||
+        !near(xs[2], xs[0] + c) || !near(ys[2], ys[1])) return null;
+    return { x: xs[0], y: ys[0], size: c };
+  }
+
+  function _filled(el) {
+    var fill = (el.getAttribute('fill') || '').toLowerCase();
+    return !!fill && fill !== 'none' && fill !== 'transparent';
+  }
+
+  // 紙の外形の頂点から、1 点だけ飛び出した頂点 (吹き出しの尖り) を除いた外接矩形 (紙そのもの)。
+  function noteBodyBox(pathEl) {
+    var pts = pathPoints(pathEl && pathEl.getAttribute('d'));
+    if (!pts || pts.xs.length < 4) return null;
+    var P = pts.xs.map(function(x, i) { return { x: x, y: pts.ys[i] }; });
+    for (var guard = 0; guard < 4 && P.length > 4; guard++) {
+      var dropped = false;
+      [['x', Math.min], ['x', Math.max], ['y', Math.min], ['y', Math.max]].forEach(function(side) {
+        if (dropped || P.length <= 4) return;
+        var k = side[0];
+        var ext = side[1].apply(null, P.map(function(p) { return p[k]; }));
+        var at = P.filter(function(p) { return Math.abs(p[k] - ext) < 0.6; });
+        if (at.length === 1) { P.splice(P.indexOf(at[0]), 1); dropped = true; }
+      });
+      if (!dropped) break;
+    }
+    var xs = P.map(function(p) { return p.x; }), ys = P.map(function(p) { return p.y; });
     var x0 = Math.min.apply(null, xs), y0 = Math.min.apply(null, ys);
     return { x: x0, y: y0, width: Math.max.apply(null, xs) - x0, height: Math.max.apply(null, ys) - y0 };
+  }
+
+  // root (svg または g) の中の注釈の紙を文書順に返す:
+  // [{ el: 外形の path, fold: 折り返し, box: 外形の矩形 (尖りを含む), body: 紙の矩形 (尖りを除く) }]。
+  // 折り返しの三角の直前にある塗りのある path で、その右上の角に折り返しが載っているものを紙とみなす。
+  function notePapers(root) {
+    if (!root || !root.querySelectorAll) return [];
+    var out = [];
+    Array.prototype.forEach.call(root.querySelectorAll('path'), function(fold) {
+      var f = _isFold(fold);
+      if (!f) return;
+      var main = fold.previousElementSibling;
+      while (main && (main.tagName || '').toLowerCase() === 'title') main = main.previousElementSibling;
+      if (!main || (main.tagName || '').toLowerCase() !== 'path' || !_filled(main)) return;
+      var body = noteBodyBox(main);
+      var box = pathBox(main.getAttribute('d'));
+      if (!body || !box) return;
+      if (Math.abs(f.y - body.y) > 1 || Math.abs(f.x + f.size - (body.x + body.width)) > 1) return;
+      out.push({ el: main, fold: fold, box: box, body: body });
+    });
+    return out;
+  }
+
+  // 要素 g の中の最初の紙の矩形 (無ければ null)。
+  function notePaperBox(g) {
+    var ps = notePapers(g);
+    return ps.length ? ps[0].box : null;
+  }
+
+  // 点 (SVG 座標) を含む最小の紙 (無ければ null)。
+  function notePaperAt(root, x, y) {
+    var best = null;
+    notePapers(root).forEach(function(p) {
+      var b = p.box;
+      if (x < b.x - 1 || x > b.x + b.width + 1 || y < b.y - 1 || y > b.y + b.height + 1) return;
+      if (!best || b.width * b.height < best.box.width * best.box.height) best = p;
+    });
+    return best;
+  }
+
+  // 注釈本文の 1 行を、描かれた文字と比べられる形にする (Creole の表の区切り・見出し印、箇条書きの印、
+  // リンクの URL、太字などの印を落とす)。描かれる文字は PlantUML がこれらを図形・書式に変えた後のもの。
+  function noteLineKey(line) {
+    var s = String(line == null ? '' : line);
+    s = s.replace(/\[\[\s*[^\]\s|]+(?:\{[^}]*\})?\s+([^\]]+)\]\]/g, '$1')   // [[url label]] -> label
+      .replace(/\[\[\s*([^\]]+)\]\]/g, '$1')
+      .replace(/<[^>]*>/g, '')
+      .replace(/^\s*[*#]+\s+/, '')
+      .replace(/\|=?/g, ' ')
+      .replace(/\*\*|\/\/|__|""|~~|--/g, '');
+    return s.replace(/\s+/g, ' ').trim();
   }
 
   // BLK-human-20260912-0900: g.message は「矢印 (line/polygon) + ラベル + 番号
@@ -780,7 +881,19 @@ window.MA.overlayBuilder = (function() {
   // 右欄で「フォーム未対応の記法」と分かる (黙って何も出さない、をやめる)。
   // claimed: モジュールが既に当てた <g> の配列。戻り値は置いた数。
   // selector: 見る <g> を絞るとき (state 図は要素を自前で当てるので題 `g.title` だけ)。
-  function addUnclaimed(svgEl, overlayEl, claimed, selector) {
+  // BLK-migrator-20260926-1116: 複数行の note (`note right of X` … `end note`) の data-source-line は、PlantUML が
+  // note の見出しの行でなく本文の 1 行目を指す。1 行上が note の見出しならその行を note の行にする
+  // (押すと本文の 1 行目でなく note の行が選ばれる)。1 行の note・浮いた note は書いた行のまま。
+  function _noteHeadLine(dslText, line) {
+    if (dslText == null || line == null) return line;
+    var ls = String(dslText).split(/\r?\n/);
+    var re = /^\s*[rh]?note\b/i;
+    if (re.test(ls[line - 1] || '')) return line;
+    var up = ls[line - 2] || '';
+    return (re.test(up) && !/:/.test(up.replace(/"[^"]*"/g, ''))) ? line - 1 : line;
+  }
+
+  function addUnclaimed(svgEl, overlayEl, claimed, selector, dslText) {
     if (!svgEl || !overlayEl || !svgEl.querySelectorAll) return 0;
     var taken = claimed || [];
     var n = 0;
@@ -790,6 +903,8 @@ window.MA.overlayBuilder = (function() {
       // BLK-migrator-20260925-0932: 題・凡例・見出し・脚注・説明は addDocumentChrome の 1 か所で当てる。
       if (CHROME_KINDS.indexOf((g.getAttribute('class') || '').split(/\s+/)[0]) >= 0) return;
       var line = _srcLine(g);
+      var paperBox = notePaperBox(g);
+      if (paperBox) line = _noteHeadLine(dslText, line);
       // 行を持たない要素 (PlantUML が `diamond` などに行を付けない) も、名前があれば枠は出す。
       if (line === null && !g.getAttribute('data-qualified-name')) return;
       var cls = (g.getAttribute('class') || '').split(/\s+/)[0];
@@ -806,7 +921,8 @@ window.MA.overlayBuilder = (function() {
         if (addLinkRects(overlayEl, g, attrs, 8)) n++;
         return;
       }
-      var bb = extractUnionBBox(g, 'text, line, polygon, polyline, path, rect, ellipse');
+      // 注釈は紙の外形 (notePapers) を範囲にする (中の Creole の図形・文字から取らない)。
+      var bb = paperBox || extractUnionBBox(g, 'text, line, polygon, polyline, path, rect, ellipse');
       if (!bb || !(bb.width > 0 || bb.height > 0)) return;
       var pad = cls === 'cluster' ? 2 : 4;
       addRect(overlayEl, bb.x - pad, bb.y - pad, bb.width + pad * 2, bb.height + pad * 2, attrs);
@@ -1322,6 +1438,12 @@ window.MA.overlayBuilder = (function() {
     extractUnionBBox: extractUnionBBox,
     nodeBBox: _nodeBBox,
     pathBox: pathBox,
+    pathPoints: pathPoints,
+    noteBodyBox: noteBodyBox,
+    notePapers: notePapers,
+    notePaperBox: notePaperBox,
+    notePaperAt: notePaperAt,
+    noteLineKey: noteLineKey,
     extractMultiLineTextBBoxes: extractMultiLineTextBBoxes,
     hitTestTopmost: hitTestTopmost,
     linePoints: linePoints,
