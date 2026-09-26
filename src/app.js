@@ -4479,6 +4479,7 @@ function syncOpenEmptyHint() {
 function syncOverlayOrigin() {
   var host = previewSvgEl || document.getElementById('preview-svg');
   if (!host) return;
+  syncFigureBelowHud(host);
   var top = host.offsetTop + 'px';
   var left = host.offsetLeft + 'px';
   ['overlay-layer', 'hover-layer'].forEach(function(id) {
@@ -4487,6 +4488,26 @@ function syncOverlayOrigin() {
     if (el.style.top !== top) el.style.top = top;
     if (el.style.left !== left) el.style.left = left;
   });
+}
+
+// BLK-builder-20260926-1010-1: 右上に浮くズーム帯 (#zoom-hud) のボタンが図の上端に重なり、header の文字や
+// 右端の参加者・部品の頭にホバーしても枠が出ず押せなかった。図の上端 (スクロール 0 の位置) が帯の下端より
+// 上に来るときだけ、その差ぶん図を下げる。保存の帯・エラーの帯が図を帯より下へ押しているときは下げない。
+function syncFigureBelowHud(host) {
+  var hudEl = document.getElementById('zoom-hud');
+  var container = document.getElementById('preview-container');
+  var ZH = window.MA && window.MA.zoomHud;
+  if (!hudEl || !container || !ZH || !ZH.figureGap) return;
+  var cur = parseFloat(host.style.marginTop) || 0;
+  var hr = hudEl.getBoundingClientRect();
+  var gap = 0;
+  if (hr && hr.height > 0 && container.contains(host)) {
+    var cr = container.getBoundingClientRect();
+    var naturalTop = cr.top + container.clientTop + host.offsetTop - cur;
+    gap = ZH.figureGap(hr.bottom, naturalTop);
+  }
+  var want = gap ? gap + 'px' : '';
+  if (host.style.marginTop !== want) host.style.marginTop = want;
 }
 
 // 図より前にある帯が出る・消える・高さが変わるたびに合わせ直す。

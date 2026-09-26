@@ -92,15 +92,23 @@ describe('BLK-builder-20260925-1552-3: ふつうの sequence 図の ref / 区切
     expect(covers(dl[0], textAt(f.svgEl, 'Some'))).toBe(true);
   });
 
-  test('ref・区切り・遅延の枠はライフラインより手前 (後) に置かれる', function() {
+  // BLK-builder-20260926-1010-1: この図の ref の箱は塗りが無く (fill="none")、中を通るライフラインが透けて見える。
+  // 箱全体の枠は群と同じくライフラインより奥に置き、札・枠線は手前 (後) の当たり (path) にした。区切り・遅延は今までどおり手前。
+  test('区切り・遅延の枠と、ref の札・枠線の当たりはライフラインより手前 (後) に置かれる', function() {
     var f = load();
     var b = build(f);
     var all = Array.prototype.slice.call(b.overlayEl.children);
     var lastLifeline = -1;
     all.forEach(function(el, i) { if (el.getAttribute('data-type') === 'lifeline') lastLifeline = i; });
-    var firstSrc = all.findIndex(function(el) { return el.getAttribute('data-type') === 'source-line'; });
     expect(lastLifeline).toBeGreaterThan(-1);
-    expect(firstSrc).toBeGreaterThan(lastLifeline);
+    var firstFront = all.findIndex(function(el) {
+      var k = el.getAttribute('data-src-kind');
+      return el.getAttribute('data-type') === 'source-line' && (k !== 'ref' || el.tagName.toLowerCase() === 'path');
+    });
+    expect(firstFront).toBeGreaterThan(lastLifeline);
+    var refHeads = all.filter(function(el) { return el.getAttribute('data-src-kind') === 'ref' && el.getAttribute('data-hit-part') === 'head'; });
+    expect(refHeads.length).toBe(2);
+    refHeads.forEach(function(el) { expect(all.indexOf(el)).toBeGreaterThan(lastLifeline); });
   });
 
   test('alt の枠は今までどおり alt の行を指し、ref の枠と取り違えない', function() {
