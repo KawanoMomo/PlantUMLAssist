@@ -406,13 +406,14 @@ test('手順8 前回も出ていた指摘は、指摘.md に書き落として�
   write('driver_class.puml', 'class Timer {\n  +Timer_Init()\n}');
   write('timer_state.puml', '[*] --> Idle\nIdle --> Running : Timer_Start()\nRunning --> Idle : Timer_Stop()');
   // BLK-builder-20260926-1512-3-red: 本物の persona-data の reviewer/指摘.md には、別の図の指摘に
-  // `Fault` / `Idle` の語が書いてある。関係の無いフォルダを突き合わせた回にそれを当てると、
-  // 3 回目の本当の新規 (Fault) が「継続」に化けて 0 件になっていた (master でだけ赤)。同じ形の指摘.md を置いて確かめる。
+  // 同じ名前の図 (primary の timer_state.puml) と `Fault` / `Idle` の語が書いてある。関係の無いフォルダを
+  // 突き合わせた回にそれを当てると、3 回目の本当の新規 (Fault) が「継続」に化けて 0 件になっていた
+  // (本物の persona-data が隣にある master でだけ赤)。同じ形の指摘.md を置いて確かめる。
   const pd = path.join(root, 'persona-data');
   fs.mkdirSync(path.join(pd, 'reviewer'), { recursive: true });
   fs.writeFileSync(path.join(pd, 'reviewer', '指摘.md'), [
     '# reviewer 手書き指摘', '', '## junior 部品DMA — 新規指摘 1件',
-    '- **[DMAドライバ状態遷移.puml] 遷移ラベルが架空**: `Transmit`/`Fault`/`Reset` が Idle→Busy→Error の流用',
+    '- **[timer_state.puml] 遷移ラベルが架空**: `Idle`→`Error` の `Fault` が spi_state.puml の流用',
     '',
   ].join('\n'), 'utf-8');
   const board = () => {
