@@ -137,6 +137,24 @@ describe('設定欄の版の表示 (appBridge.engineVersion / jarStatus)', funct
   });
 });
 
+// BLK-owner-20260925-1932-2: 同じ取得をする「取得し直す」と「公式から取得」を並べない。
+describe('取得の入口は状態ごとに 1 つ (appBridge.fetchEntries)', function() {
+  test('jar が無ければ「公式から取得」だけ', function() {
+    expect(AB.fetchEntries({ jar: false, canFetchJar: true })).toEqual({ fetch: true, refetch: false, canFetch: true });
+  });
+  test('jar があり推奨版と違えば、版の行の「取得し直す」だけ', function() {
+    expect(AB.fetchEntries({ jar: true, canFetchJar: true, jarVersion: '1.2026.3', jarRecommended: '1.2026.8' }))
+      .toEqual({ fetch: false, refetch: true, canFetch: true });
+  });
+  test('jar があり推奨版と同じなら、取得のボタンは出さない', function() {
+    expect(AB.fetchEntries({ jar: true, canFetchJar: true, jarVersion: '1.2026.8', jarRecommended: '1.2026.8' }))
+      .toEqual({ fetch: false, refetch: false, canFetch: true });
+  });
+  test('取得できない機械で版が違っても「取得し直す」は出さない (jar を選ぶ道だけ)', function() {
+    expect(AB.fetchEntries({ jar: true, canFetchJar: false, jarVersion: '1.2026.3', jarRecommended: '1.2026.8' }).refetch).toBe(false);
+  });
+});
+
 describe('1.2026.8 のエラー画 (赤は #F00) も描画エラーと見分ける', function() {
   var svg = fs.readFileSync(path.join(FIX, 'svg', 'plantuml-syntax-package-1.2026.8.svg'), 'utf8');
   test('画面側', function() {
