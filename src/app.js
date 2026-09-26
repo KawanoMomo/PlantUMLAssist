@@ -3682,6 +3682,9 @@ function init() {
       return Math.floor(sec / 3600) + '時間前';
     }
     var _autoSavePending = null;
+    // BLK-owner-20260925-1132-2: 直近の記録をどのタブの図の回かで分けて持つ (札は今のタブの図の回を言う)。
+    var _asSeen = null;
+    var _asByDoc = {};
     function update() {
       if (!window.MA.autoSave.isAvailable()) {
         span.textContent = '';
@@ -3692,8 +3695,17 @@ function init() {
       if (!meta || !AST) { span.textContent = ''; return; }
       var doc = window.MA.workspace ? window.MA.workspace.getActive() : null;
       var last = window.MA.autoSave.getLastWrite ? window.MA.autoSave.getLastWrite() : null;
+      // BLK-owner-20260925-1132-2: 札は今のタブのファイルを指す (前のタブで書いた記録を名乗らない)。
+      // 新しい記録はその時のタブの図の回 (書くのは今のタブ。切り替えの前に flush する)。
+      if (last && (!_asSeen || _asSeen.at !== last.at || _asSeen.fileName !== last.fileName || _asSeen.where !== last.where || _asSeen.reason !== last.reason)) {
+        _asSeen = last;
+        if (doc) _asByDoc[doc.id] = last;
+      }
+      var _fa = (AST.forActive && doc) ? AST.forActive(_asByDoc[doc.id] || null, last) : { last: last, at: null };
+      last = _fa.last;
       // design 9c: 時刻は HH:MM の 1 形で渡す (秒まで出す機械的な形にしない)。
-      var _sd = meta.lastSavedAt ? new Date(meta.lastSavedAt) : null;
+      var _savedAt = _fa.at || meta.lastSavedAt;
+      var _sd = _savedAt ? new Date(_savedAt) : null;
       var _clock = (_sd && !isNaN(_sd.getTime()))
         ? (('0' + _sd.getHours()).slice(-2) + ':' + ('0' + _sd.getMinutes()).slice(-2)) : '';
       var d = AST.describe(meta, last, relTime(meta.lastSavedAt), doc && doc.name, _clock);
@@ -34084,14 +34096,41 @@ function renderProps(parsed) {
 
 // design 5a: 描画エラーの出し方。「図の上に重ねて表示」が入っていれば
 // 直前の図を残して帯だけ重ね、外れていれば従来どおり図をエラー 1 行に差し替える。
+// BLK-owner-20260925-1132-2: 「直前の図」はそのタブ自身が前に描けた図に限る。プレビューの図がどのタブのものか
+// (タブの id と名前。ファイルを開いて白紙のタブに入れ替わったときも別の図と分かる。
+// PlantUML の案内画面「Welcome to PlantUML!」は図に数えないので false)。
+var _previewOwnerId = false;
+function _activeDocKey() {
+  try {
+    var d = window.MA.workspace ? window.MA.workspace.getActive() : null;
+    return d ? String(d.id) + '|' + String(d.name || '') : null;
+  } catch (e) { return null; }
+}
+function _isPlantUmlWelcome(svg) {
+  return /Welcome to PlantUML!/.test(String(svg || ''));
+}
+
 function showRenderError(message) {
   var banner = document.getElementById('render-error-overlay');
   var text = 'Render error: ' + message;
-  if (!currentErrorOverlay || !banner || !previewSvgEl.querySelector('svg')) {
+  // まだ 1 枚も描けていない画面 (初回起動で jar が無い等) は、帯ではなく図の場所そのものに理由を出す。
+  // 別のタブの図を外した後 (.preview-not-drawn) は帯のまま続ける。
+  if (!currentErrorOverlay || !banner
+      || (!previewSvgEl.querySelector('svg') && !previewSvgEl.querySelector('.preview-not-drawn'))) {
     if (banner) { banner.hidden = true; banner.textContent = ''; }
     previewSvgEl.innerHTML = '<p style="color:var(--accent-red);padding:20px;white-space:pre-wrap;font-family:var(--font-mono);font-size:12px;">' +
       window.MA.htmlUtils.escHtml(text) + '</p>';
     return;
+  }
+  // 別のタブの図・案内画面は「直前の図」ではない。図を外して帯だけを出す (選択枠も前の図のものなので外す)。
+  var own = !!previewSvgEl.querySelector('svg') && _previewOwnerId !== false && _previewOwnerId === _activeDocKey();
+  if (!own) {
+    // 空の枠だと図の場所が潰れて何も無いように見えるので、描けていないことだけを 1 行で言う (理由は帯)。
+    previewSvgEl.innerHTML = '<p class="preview-not-drawn" style="color:var(--text-secondary);padding:20px;font-size:12px;">' +
+      'この図はまだ描けていません (理由は上の帯)</p>';
+    _previewOwnerId = false;
+    var ovl = document.getElementById('overlay-layer');
+    if (ovl) { while (ovl.firstChild) ovl.removeChild(ovl.firstChild); }
   }
   banner.textContent = text;
   banner.hidden = false;
@@ -34167,6 +34206,7 @@ function renderSvg() {
   // 図と DSL の行番号がずれるので、焦点中は overlay を作らない。
   var focusDsl = stateTreeFocusText();
   var renderText = focusDsl || mmdText;
+  var renderDocKey = _activeDocKey();  // BLK-owner-20260925-1132-2: この回の図がどのタブのものか
   fetch('/render', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -34204,6 +34244,7 @@ function renderSvg() {
     }
     clearRenderError();
     previewSvgEl.innerHTML = svg;
+    _previewOwnerId = (renderDocKey === _activeDocKey() && !_isPlantUmlWelcome(svg)) ? renderDocKey : false;
     var nse = window.MA.renderError.noStartEnd ? window.MA.renderError.noStartEnd(svg) : null;
     _setEngineVerdict(renderText, nse
       ? { state: 'error', noStartEnd: true, message: nse.message, line: null }

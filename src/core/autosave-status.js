@@ -51,6 +51,10 @@ window.MA.autosaveStatus = (function() {
       // 開いたときのまま。ディスクは既にその内容なので、書いていないのは正しい。
       return { text: saved + ' · 変更なし', title: when + ' / ' + target + ' は開いたときのままです (本文を変えていないので書き直していません)', pending: false };
     }
+    if (last.reason === 'opened') {
+      // BLK-owner-20260925-1132-2: この図はこの起動でまだ書いていない (別のタブで書いた記録を名乗らない)。
+      return { text: '変更なし · ' + target, title: target + ' は開いてから書いていません (本文を変えていないので書き直していません)', pending: false };
+    }
     if (last.reason === 'untouched') {
       // BLK-owner-20260925-0312-2: 見本・白紙のまま。行を足すか Ctrl+S を押すまでファイルは作らない。
       return { text: '見本のまま · ' + target + ' には書いていません', title: target + ' は見本・白紙のままなので、保存フォルダに書いていません。行を足すか Ctrl+S を押すとファイルになります', pending: false };
@@ -94,5 +98,17 @@ window.MA.autosaveStatus = (function() {
     }).filter(function(t) { return t !== ''; }).join(' · ');
   }
 
-  return { describe: describe, shortResult: shortResult };
+  // forActive(own, last) — 札に使う記録を今のタブの図に合わせる。
+  //   own  … 今のタブの図を書いた (書こうとした) 直近の記録 (この起動で無ければ null)
+  //   last … autoSave.getLastWrite() (どのタブの回かを問わない直近の記録)
+  // BLK-owner-20260925-1132-2: 直近の記録が別のタブの回なら、それを今の図の札にしない。今の図の記録があればそれを、
+  // 無ければ「開いてから書いていない」(reason 'opened') にする。ダウンロード保存 (where 'local') はファイルを名乗らないので従来どおり。
+  // 返り値 { last, at } … at はその記録の時刻 (札の時刻に使う。null なら従来どおり meta の時刻)。
+  function forActive(own, last) {
+    if (own) return { last: own, at: own.at || null };
+    if (!last || last.where === 'local') return { last: last, at: null };
+    return { last: { where: 'deferred', reason: 'opened', fileName: null }, at: null };
+  }
+
+  return { describe: describe, shortResult: shortResult, forActive: forActive };
 })();
