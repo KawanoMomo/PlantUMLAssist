@@ -64,7 +64,7 @@ async function twoDrivers(page, stateDsl) {
 }
 
 test.describe('BLK-reviewer-20260908-0103-wish: 系統マップ', () => {
-  test('タブ列に 🧩 系統マップ があり、押すと画面が開く', async ({ page }) => {
+  test('タブ列に 系統マップ があり、押すと画面が開く', async ({ page }) => {
     await twoDrivers(page, SPI_STATE_OK);
     await expect(page.locator('#btn-tab-drivermap')).toBeVisible();
     await page.locator('#btn-tab-drivermap').click();

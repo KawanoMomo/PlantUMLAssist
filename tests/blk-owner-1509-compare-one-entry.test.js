@@ -86,7 +86,7 @@ describe('入口が減っても、今までの名前で引ける', function() {
 });
 
 describe('たたんだ入口と、下端の札', function() {
-  test('⇔ 並べて見る と 🔍 変更前後を見比べる は別の入口として並べない', function() {
+  test('⇔ 並べて見る と 変更前後を見比べる は別の入口として並べない', function() {
     expect(CE.foldedInto('btn-tab-compare')).toBe('tabs');
     expect(CE.foldedInto('dp-review')).toBe('before');
     expect(CE.foldedIds().sort()).toEqual(['btn-tab-compare', 'dp-review']);

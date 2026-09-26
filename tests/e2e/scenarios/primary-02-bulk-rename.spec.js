@@ -147,7 +147,7 @@ test('手順2 洗った影響一覧を変更チケットにすると、run を�
   await undone.locator('button.ct-open').click();
   await expect(page.locator('#ct-modal')).toBeHidden();
   await expect(page.locator('#fw-bar')).toBeVisible();
-  await expect(page.locator('#fw-label')).toContainText('🎫 SpiDrv の仕様変更');
+  await expect(page.locator('#fw-label')).toContainText('SpiDrv の仕様変更');
   await expect(page.locator('#fw-label')).toContainText(undoneDoc);
   await expect(page.locator('#fw-done')).not.toHaveClass(/is-ready/);
   // 図は保存フォルダから読み込んで開く (非同期)。開き終わる前に打つと前のタブに入る。

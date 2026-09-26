@@ -88,7 +88,7 @@ async function seed(page) {
   }, { dma: FILES.R0003_dma_seq, gpio: FILES.R0003_gpio_state, dir: DIR });
 }
 
-test.describe('BLK-reviewer-0003-wish: 手で書いた指摘 (📥 指摘箱の出典「手で書いた」)', () => {
+test.describe('BLK-reviewer-0003-wish: 手で書いた指摘 (指摘箱の出典「手で書いた」)', () => {
   test.beforeEach(async ({ page }) => {
     await boot(page);
     await clearDir(page);

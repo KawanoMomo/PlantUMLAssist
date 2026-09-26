@@ -34,7 +34,7 @@ test.describe('BLK-primary-20260908-0103 保存先が違うことが分かる', 
     await page.addInitScript(() => { try { window.localStorage.clear(); } catch (e) {} });
   });
 
-  test('実在しない保存先なら、📂一覧は「見つかりません」とパスを名指しで言う', async ({ page }) => {
+  test('実在しない保存先なら、一覧は「見つかりません」とパスを名指しで言う', async ({ page }) => {
     await gotoApp(page);
     await setSaveDir(page, './test-results/autosave/blk-primary-0103-save-dir-missing/e2e-blk-p0103-nope');
     await openFolder(page);

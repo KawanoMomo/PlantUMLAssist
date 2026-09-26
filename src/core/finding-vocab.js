@@ -104,7 +104,7 @@ window.MA.findingVocab = (function() {
   function noteMark(key) {
     var v = fromNote(key);
     if (!v) return '対象外';
-    return (v === 'reflected' ? '✅' : '⚠') + label(v);
+    return (v === 'reflected' ? '✓' : '⚠') + label(v);
   }
 
   // ---- 数える --------------------------------------------------------------

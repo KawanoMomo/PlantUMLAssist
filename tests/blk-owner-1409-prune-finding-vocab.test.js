@@ -12,7 +12,7 @@ var NB = W.MA.noteBoard;
 var PV = W.MA.pinVerify;
 
 describe('札の語彙は 1 つ', function() {
-  test('正本は 📥 指摘箱の 4 つ', function() {
+  test('正本は 指摘箱の 4 つ', function() {
     expect(FV.order()).toEqual(['open', 'puml-only', 'unknown', 'reflected']);
     expect(FV.order().map(FV.label)).toEqual(['未対応', 'SVG 未反映', '確かめられず', '反映済み']);
   });
@@ -32,7 +32,7 @@ describe('札の語彙は 1 つ', function() {
   });
 });
 
-describe('🔖 手動指摘の札 → 正本', function() {
+describe('手動指摘の札 → 正本', function() {
   function row(o) {
     return Object.assign({ keep: true, verdict: '', status: 'unchanged', title: '' }, o);
   }
@@ -60,8 +60,8 @@ describe('🔖 手動指摘の札 → 正本', function() {
   });
 });
 
-describe('📂 一覧の反映状況 → 正本', function() {
-  test('⚠未確認 は 確かめられず、✅対応済み は 反映済み', function() {
+describe('一覧の反映状況 → 正本', function() {
+  test('⚠未確認 は 確かめられず、✓対応済み は 反映済み', function() {
     expect(FV.fromNote('todo')).toBe('unknown');
     expect(FV.fromNote('done')).toBe('reflected');
   });
@@ -71,9 +71,9 @@ describe('📂 一覧の反映状況 → 正本', function() {
     expect(FV.noteMark('off')).toBe('対象外');
   });
 
-  test('📂 一覧のバッジも同じ語彙で出る', function() {
+  test('一覧のバッジも同じ語彙で出る', function() {
     expect(NB.badge('todo').mark).toBe('⚠確かめられず');
-    expect(NB.badge('done').mark).toBe('✅反映済み');
+    expect(NB.badge('done').mark).toBe('✓反映済み');
     expect(NB.badge('off').mark).toBe('対象外');
   });
 });
@@ -96,7 +96,7 @@ describe('出典は札ではなく列', function() {
     expect(PI.sourceLabel(items[0])).toBe('手で書いた');
   });
 
-  test('出典で絞り込める (🔖 のタブが無くても同じものが出せる)', function() {
+  test('出典で絞り込める (のタブが無くても同じものが出せる)', function() {
     var items = [
       { doc: 'a', id: '1', text: 'x', source: 'audit' },
       { doc: 'a', id: '2', text: 'y', source: 'manual' },

@@ -87,7 +87,7 @@ describe('BLK-owner-20260924-1212-prune この図の履歴 は Ctrl+K に 1 行'
 
 });
 
-describe('BLK-owner-20260924-1212-prune 🧩 部品ビュー の行名に立場の語を出さない', function() {
+describe('BLK-owner-20260924-1212-prune 部品ビュー の行名に立場の語を出さない', function() {
   test('行名に「先輩」が無く、先輩で打っても引ける', function() {
     var it = items().filter(function(i) { return /part-board$/.test(i.id); })[0];
     expect(it.title.indexOf('先輩')).toBe(-1);

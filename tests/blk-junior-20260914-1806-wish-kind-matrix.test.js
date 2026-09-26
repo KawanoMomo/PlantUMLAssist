@@ -137,7 +137,7 @@ describe('部品 × 図種の表 (BLK-junior-20260914-1906-wish)', function() {
     var gpio = all.rows[0];
     var byKind = {};
     gpio.rows.forEach(function(r) { byKind[r.kind] = r; });
-    expect(KM.cellMark(byKind.state)).toBe('👀');          // 未確認
+    expect(KM.cellMark(byKind.state)).toBe('?');          // 未確認
     expect(KM.cellMark(byKind.component)).toBe('△');       // 自分に無し
     expect(KM.cellMark(byKind.sequence)).toBe('✓');        // 控え済み
     expect(KM.cellMark(byKind.usecase)).toBe('·');         // 手本なし (未控え)
@@ -166,7 +166,7 @@ describe('部品 × 図種の表 (BLK-junior-20260914-1906-wish)', function() {
     var gpio = a2.rows.filter(function(r) { return r.subject === 'gpio'; })[0];
     var seq = gpio.rows.filter(function(r) { return r.kind === 'sequence'; })[0];
     expect(seq.state).toBe('recheck');
-    expect(KM.cellMark(seq)).toBe('👀!');
+    expect(KM.cellMark(seq)).toBe('!');
     expect(KM.nextCell(a2).kind).toBe('sequence');
   });
 

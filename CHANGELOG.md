@@ -1,3 +1,5 @@
+- BLK-owner-20260925-0312-5: 画面の絵文字をやめ、ボタン・見出し・件数の札を文字だけにそろえた（読むだけの窓の 7 つ、FILES の新しいフォルダは線画、シーケンスの「ライフライン推論」「範囲を複製」、納品パッケージの窓など）
+- BLK-owner-20260925-0312-4: アクティビティ図の追加フォームで、処理欄・注釈欄を Enter で確定（改行は Shift+Enter）できる。追加する位置の「start の前」「start の直後」を呼び分け、start の直後にもアクションや分岐を置ける。開始・停止・終了は流れの外でも止めず橙で知らせる
 - releaser (a)置換 legacy/: 単一 #diagram-type セレクトで図種を切り替える旧経路 (activity.spec.js UC-1 / auto-save.spec.js UC-as-2 / blk-builder-0803-4-diagram-rail.spec.js 往復テスト) は、図ごとに DSL・図種を保持するタブ方式の workspace に置き換わっており、workspace.test.js の unit と junior-01/02/04/08 の scenarios が同じ事実を守っている。旧 spec の該当テストを削除
 - releaser (a)置換 legacy/: 下端の件数ボタン (#status-diff / #status-pins / #status-inbox の可視性・押下、blk-builder-0858-2) と旧ツールメニューの畳み/戻し (#tool-menu-fold・#btn-tab-compare、blk-builder-1123-4) は design 9a/9b/9c で #status-save-result の 1 行表示と再設計されたツール入口・比較枠 (#compare-pane) に置き換わっており、reviewer-05-diff-vs-last / junior-09-senior-pane 等の scenarios が同じ事実を守っている。旧 spec の該当テストを削除
 - releaser (a)置換 legacy/: パレット (Ctrl+K) の「テンプレートから作る」行は BLK-owner-20260924-2337-prune で「既存の図や雛形から新しい図を起こす…」1 本に統合済みで、blk-builder-0908-3 の旧文言テストは junior-01/04/08・primary-04-rename-history の scenarios が同じ事実を守っている。旧 spec の該当テストを削除

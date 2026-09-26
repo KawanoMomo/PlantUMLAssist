@@ -56,7 +56,7 @@ window.MA.peekSettled = (function() {
   }
 
   function staleText(peer, kind, count) {
-    return '👀要確認 ' + kind + ': 手本なしで確定していましたが、' + (_s(peer) || '相手')
+    return '要確認 ' + kind + ': 手本なしで確定していましたが、' + (_s(peer) || '相手')
       + ' に ' + Number(count || 0) + ' 枚増えました';
   }
 

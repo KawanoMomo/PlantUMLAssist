@@ -11,7 +11,7 @@ var W = (typeof window !== 'undefined' && window) || global.window;
 var AST = W.MA.autosaveStatus;
 var ST = W.MA.saveTarget;
 var SR = W.MA.saveRedirect;
-var EMOJI = /[\u{1F300}-\u{1FAFF}]/u;
+var EMOJI = /[-]/u;
 var meta = { lastSavedAt: '2026-09-24T13:31:04', lastSavedType: 'plantuml-sequence' };
 
 describe('保存状態の 1 行に絵文字を付けない (design 9c)', function() {

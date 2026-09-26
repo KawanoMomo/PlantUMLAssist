@@ -112,10 +112,10 @@ describe('fix-walk: 変更チケットから入った列', function() {
   test('帯の 1 行に札の名前が出る', function() {
     var w = FW.start('IRQCtrl', IMPACT, { ticketId: 't1', title: 'IRQCtrl の仕様変更' });
     expect(FW.labelText(w)).toBe(
-      '🎫 IRQCtrl の仕様変更 — 1 / 5 図 · spi_init_sequence (直接) · 残り 5');
+      'IRQCtrl の仕様変更 — 1 / 5 図 · spi_init_sequence (直接) · 残り 5');
     var done = IMPACT.map(function(r) { return Object.assign({}, r, { done: true }); });
     expect(FW.labelText(FW.start('IRQCtrl', done, { title: 'IRQCtrl の仕様変更' })))
-      .toBe('🎫 IRQCtrl の仕様変更: 5 図すべて手当て済み');
+      .toBe('IRQCtrl の仕様変更: 5 図すべて手当て済み');
   });
 
   test('札の名前は列を送っても保たれる', function() {

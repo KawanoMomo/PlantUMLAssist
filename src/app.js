@@ -357,7 +357,7 @@ function askSourceLock(doc) {
     var said = SL.answeredText
       ? SL.answeredText(choice, doc.name, res.name)
       : { text: '✎ ' + res.name + '.puml を書き換えます', undo: '' };
-    setSaveStatus(said.text + also + (said.undo ? '　' + said.undo + '（🔒 の札を押す）' : ''));
+    setSaveStatus(said.text + also + (said.undo ? '　' + said.undo + '（「提出物庫」の札を押す）' : ''));
     updateTopSourceLock();
     saveActiveDoc();
   }
@@ -3849,7 +3849,7 @@ function initCommandPalette() {
       // 入口が「読むだけ」節の奥にしか無く、junior は「部品パック」「部品ごと」「6 図種まとめて」の
       // 語で探して辿り着けなかった。開くと、いま開いている図の部品が選ばれた状態で出る。
       // BLK-owner-20260924-1212-prune: 行名に立場の語 (先輩) を出さない。旧名で打っても当たるよう語には残す。
-      { id: 'part-board', title: '🧩 部品ビュー (部品ごとの 6 図種を比較相手と並べる) / Part view', hint: 'Files', keywords: ['先輩', 'せんぱい', 'part', 'board', 'pack', 'view', '部品パック', '部品ごと', '部品ビュー', '6 図種まとめて', '6図種まとめて', '6 図種', 'ぶひん', 'ぱっく', 'ごと', 'まとめて', 'ずしゅ'], run: function() {
+      { id: 'part-board', title: '部品ビュー (部品ごとの 6 図種を比較相手と並べる) / Part view', hint: 'Files', keywords: ['先輩', 'せんぱい', 'part', 'board', 'pack', 'view', '部品パック', '部品ごと', '部品ビュー', '6 図種まとめて', '6図種まとめて', '6 図種', 'ぶひん', 'ぱっく', 'ごと', 'まとめて', 'ずしゅ'], run: function() {
         var PB = window.MA.partBoard;
         var WS = window.MA.workspace;
         var active = WS ? WS.getActive() : null;
@@ -4758,7 +4758,7 @@ function createPartKinds(part, kinds, existing) {
   saveActiveDoc();
   var p = PS.plan(String(part || '').toUpperCase(), WS.list(), null);
   if (!p) {
-    if (window.MA.toast) window.MA.toast.show('「' + part + '」からは図の名前を組めませんでした (➕ 部品を起こす で部品名を英数字で入れてください)');
+    if (window.MA.toast) window.MA.toast.show('「' + part + '」からは図の名前を組めませんでした (部品を起こす で部品名を英数字で入れてください)');
     return [];
   }
   var taken = (existing || []).slice();
@@ -5932,7 +5932,7 @@ function _cbMapHtml(table) {
     + '<span>指摘と変更の対応表</span>'
     + '<span class="cb-map-count">' + esc(FL.summaryText(table) || '指摘なし') + '</span></div>';
   if (!table.total) {
-    return head + '<div class="cb-map-empty">開いている図に 📌 指摘ピンがありません。'
+    return head + '<div class="cb-map-empty">開いている図に指摘ピンがありません。'
       + 'プレビューの行に指摘を付けると、その指摘がここに並びます。</div></div>';
   }
   var rows = _cbMapPending ? FL.pendingRows(table) : table.rows;
@@ -6731,7 +6731,7 @@ function setChangeBoardSvg(on) {
   var btn = document.getElementById('cb-svg');
   if (btn) {
     btn.setAttribute('aria-pressed', _cbSvg ? 'true' : 'false');
-    btn.textContent = _cbSvg ? '▤ DSLに戻す' : '🖼 SVGで見る';
+    btn.textContent = _cbSvg ? '▤ DSLに戻す' : 'SVGで見る';
   }
   var st = document.getElementById('cb-svg-state');
   if (st && !_cbSvg) st.textContent = '';
@@ -7079,7 +7079,7 @@ function toggleAuditTimeline(open) {
 var _abKind = '';        // 絞り込み中のカテゴリ (空 = 全部)
 var _abDoc = '';         // 絞り込み中の図名 (空 = 全部)
 var _abBoard = null;     // 直近に組んだ一覧 (コピーで作り直さない)
-var _abSvgScan = null;   // 📂 一覧が読んだ SVG の追いつき。開いていなければ null
+var _abSvgScan = null;   // 一覧が読んだ SVG の追いつき。開いていなければ null
 var _abMethodRes = null; // 直近のメソッド突合の結果 (対象外にしたものを 1 行で出すため)
 
 // BLK-primary-20260907-1303 / BLK-owner-20260924-1332-prune: メソッド突合で何を対象外にしたか
@@ -7183,8 +7183,8 @@ function renderAuditBoard() {
 // 「名前/表記揺れ」の行に置く、揃える先の選択 (押すと登録簿に入り 🔤 表記統一が開く)。
 function _abUnifyHtml(r, esc) {
   if (!r || r.kind !== 'name.variants' || !r.names || r.names.length < 2) return '';
-  return '<div class="ab-unify" title="揃える先を選ぶと登録簿に入り、🔤 表記統一のまとめて適用で書きます">'
-    + '<span class="ab-unify-lead">🔤 表記統一で揃える:</span>'
+  return '<div class="ab-unify" title="揃える先を選ぶと登録簿に入り、表記統一のまとめて適用で書きます">'
+    + '<span class="ab-unify-lead">表記統一で揃える:</span>'
     + r.names.map(function(n) {
       return '<button type="button" class="ab-unify-to" data-to="' + esc(n) + '">' + esc(n) + ' に揃える</button>';
     }).join('') + '</div>';
@@ -9006,7 +9006,7 @@ function _syncCohortTemplateBtn() {
   el.cohortTemplates.style.display = _cohortOn ? '' : 'none';
   el.cohortTemplates.setAttribute('aria-pressed', _cohortShowTemplates ? 'true' : 'false');
   el.cohortTemplates.classList.toggle('on', _cohortShowTemplates);
-  el.cohortTemplates.textContent = _cohortShowTemplates ? '📄 テンプレも表示中' : '📄 テンプレも表示';
+  el.cohortTemplates.textContent = _cohortShowTemplates ? 'テンプレも表示中' : 'テンプレも表示';
 }
 
 // ── 同名ファイルを左右に並べる (BLK-reviewer-20260912-2206-wish) ──
@@ -9509,7 +9509,7 @@ function renderSbs() {
     ns.className = 'sbs-summary';
     ns.id = 'sbs-note-status';
     ns.setAttribute('data-note-clear', /指摘はありません/.test(noteText) ? '1' : '0');
-    ns.textContent = '🔖 ' + noteText;
+    ns.textContent = '' + noteText;
     el.sbs.appendChild(ns);
   }
 
@@ -9640,7 +9640,7 @@ var _noteShowPreamble = false;
 var _noteNames = [];       // 覗ける全フォルダにある図名 (版ぞろいを引くため)
 var _noteIndex = null;     // reviewNote.index の戻り (図名 → それを持つフォルダ)
 var _noteTargets = {};     // { 指摘 id: findingVariant.choose の戻り }
-var _noteHit = null;       // 選んだ指摘の対象 ({id, name, family, kind}) — 📂一覧を光らせる
+var _noteHit = null;       // 選んだ指摘の対象 ({id, name, family, kind}) — 一覧を光らせる
 
 function _noteEls() {
   return { note: document.getElementById('peek-note'),
@@ -11771,7 +11771,7 @@ function _pbRow(r, who) {
   if (r.mine.missing) {
     var none = document.createElement('div');
     none.className = 'pb-empty';
-    none.textContent = 'この図種はまだ起こしていません（➕部品を起こす で作れます）。';
+    none.textContent = 'この図種はまだ起こしていません（部品を起こす で作れます）。';
     mineCol.appendChild(none);
   } else {
     var ta = document.createElement('textarea');
@@ -12450,7 +12450,7 @@ function _seniorBoardLink(notice, pick) {
   b.id = 'senior-to-board';
   b.className = 'senior-to-board';
   b.setAttribute('data-part', part);
-  b.textContent = '🧩 部品ビューで ' + part.toUpperCase() + ' の 6 図種をまとめて見る';
+  b.textContent = '部品ビューで ' + part.toUpperCase() + ' の 6 図種をまとめて見る';
   b.title = '比較相手のフォルダと自分のフォルダで、' + part.toUpperCase()
     + ' の 6 図種を 2 列に並べます (相手に無い図種は空欄、共通の図は部品で絞って出します)';
   b.addEventListener('click', function() {
@@ -13799,7 +13799,7 @@ function setupTabs() {
     b.type = 'button';
     b.id = 'btn-vault';
     b.className = 'folder-vault-open';
-    b.textContent = '🔒 提出物庫';
+    b.textContent = '提出物庫';
     b.title = '画像を書き出した時点の図が積んである庫。あとの周が同じ名前で上書きしても消えません';
     b.addEventListener('click', function(ev) {
       ev.stopPropagation();
@@ -13819,7 +13819,7 @@ function setupTabs() {
       ct.type = 'button';
       ct.id = 'btn-change-ticket';
       ct.className = 'folder-vault-open';
-      ct.textContent = '🎫 変更チケット';
+      ct.textContent = '変更チケット';
       ct.title = '仕様変更で直す図の一覧と「直した」印。前回の続きから直せます';
       ct.addEventListener('click', function(ev) {
         ev.stopPropagation();
@@ -14800,7 +14800,7 @@ function setupTabs() {
     b.type = 'button';
     b.className = 'folder-delete' + (armed ? ' folder-delete-armed' : '');
     b.setAttribute('data-delete-name', name);
-    b.textContent = armed ? '本当に消す' : '🗑';
+    b.textContent = armed ? '本当に消す' : '消す';
     b.title = armed
       ? name + ' を保存フォルダから消します（過去版は残るので戻せます）'
       : name + ' を保存フォルダから消す（もう一度押すと消えます）';
@@ -16139,7 +16139,7 @@ function setupTabs() {
     b.type = 'button';
     b.className = 'folder-board-link';
     b.id = 'folder-board-link';
-    b.textContent = '🧩 部品ビューで開く（部品ごとの 6 図種の済/未）';
+    b.textContent = '部品ビューで開く（部品ごとの 6 図種の済/未）';
     b.title = '部品を選ぶと、6 図種のうちまだ無い図種と対応不要の図種が進捗の帯に出ます';
     b.addEventListener('click', function(ev) {
       ev.stopPropagation();
@@ -16455,7 +16455,7 @@ function setupTabs() {
     bar.id = 'folder-recent';
     var label = document.createElement('span');
     label.className = 'folder-recent-label';
-    label.textContent = '🕘 最近開いた図';
+    label.textContent = '最近開いた図';
     label.title = 'この画面で開いた図を新しい順に ' + RF.LIMIT + ' 件まで。同じ図に戻るのに名前を探し直さなくて済みます';
     bar.appendChild(label);
     names.forEach(function(name) {
@@ -22978,7 +22978,7 @@ function renderWriteHistory() {
     var empty = document.createElement('div');
     empty.id = 'compare-hist-empty';
     empty.style.cssText = 'font-size:10px;color:var(--text-secondary);padding:4px 8px;';
-    empty.textContent = '⇄ 一括置換・🔖 [適用] で保存フォルダへ書くと、'
+    empty.textContent = '⇄ 一括置換・[適用] で保存フォルダへ書くと、'
       + 'その回の前後がここに残ります (ブラウザを開き直しても残ります)。';
     listEl.appendChild(empty);
     return;
@@ -23903,7 +23903,7 @@ function runTemplateDiff() {
   var src = _templateSource();
   if (!src) {
     _clearTemplateDiff();
-    sumEl.textContent = '雛形にする参照図を選んでください (この図を「📌 雛形に登録」しても比べられます)';
+    sumEl.textContent = '雛形にする参照図を選んでください (この図を「雛形に登録」しても比べられます)';
     sumEl.classList.add('dirty');
     return;
   }
@@ -24013,7 +24013,7 @@ function runTemplateCohort() {
     var empty = document.createElement('div');
     empty.id = 'tc-empty';
     empty.textContent = (total < 2)
-      ? '並べる図が足りません。＋ でもう 1 枚開くか、🔍 探す で相手の図を引き当ててください。'
+      ? '並べる図が足りません。＋ でもう 1 枚開くか、探す で相手の図を引き当ててください。'
       : '比べる行がありません。図の中身を入れてください。';
     listEl.appendChild(empty);
     return;
@@ -24178,7 +24178,7 @@ function _xfAppendKeepVerdict(dir, verdict) {
   b.id = 'xf-keep-verdict';
   b.className = 'peek-verdict-act';
   if (had && !PV.isStale(had, 0)) {
-    b.textContent = '👀手本なし（控え済み）';
+    b.textContent = '手本なし（控え済み）';
     b.disabled = true;
   } else {
     b.textContent = '対応不要（手本なし）として控える';
@@ -24190,7 +24190,7 @@ function _xfAppendKeepVerdict(dir, verdict) {
         note: verdict.state === 'no-part'
           ? '対応不要（' + verdict.part + ' の手本なし）' : '対応不要（手本なし）',
       }));
-      b.textContent = '👀手本なし（控え済み）';
+      b.textContent = '手本なし（控え済み）';
       b.disabled = true;
     });
   }
@@ -26180,7 +26180,7 @@ function renderDeliveryPanel() {
   var title = (_dpMetaTouched && titleVal) ? titleVal.value : (last.title || '設計書 図面集');
   var rev = (_dpMetaTouched && revVal) ? revVal.value : DP.nextRevision(last.revision);
 
-  var html = '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">\u{1F4E6} 納品パッケージ</h3>'
+  var html = '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">納品パッケージ</h3>'
     + '<div id="dp-last" style="font-size:11px;color:var(--text-secondary);">'
     + esc(last.at ? '前回提出 ' + (last.revision || '版数なし') + ' ・ ' + last.at.replace('T', ' ').slice(0, 16)
                   + ' ・ ' + last.count + ' 枚' + (last.file ? ' ・ ' + last.file : '')
@@ -26266,8 +26266,8 @@ function renderDeliveryPanel() {
 
   html += '<div id="dp-status" style="margin-top:8px;font-size:11px;color:var(--text-secondary);"></div>';
   html += '<div style="display:flex;gap:8px;margin-top:12px;">'
-    + '<button id="dp-review" style="flex:2;' + BTN + 'padding:8px;">\u{1F50D} 変更前後を見比べる</button>'
-    + '<button id="dp-build" style="flex:2;' + BTN + 'padding:8px;">\u{1F4E6} この内容で zip を作る</button>'
+    + '<button id="dp-review" style="flex:2;' + BTN + 'padding:8px;">変更前後を見比べる</button>'
+    + '<button id="dp-build" style="flex:2;' + BTN + 'padding:8px;">この内容で zip を作る</button>'
     + '<button id="dp-close" style="flex:1;' + BTN + 'padding:8px;">閉じる</button></div>';
 
   content.innerHTML = html;
@@ -26526,7 +26526,7 @@ function syncDriverMapBadge() {
   if (!btn || !window.MA.driverMap || !window.MA.workspace) return;
   var decl = _dmLoad();
   if (!decl.families.length) {
-    btn.textContent = '\uD83E\uDDE9 系統マップ −';
+    btn.textContent = '系統マップ −';
     btn.classList.remove('has-red');
     return;
   }
@@ -26534,7 +26534,7 @@ function syncDriverMapBadge() {
     return { id: d.id, name: d.name, diagramType: d.diagramType, dsl: d.dsl };
   });
   var r = window.MA.driverMap.check(decl, docs);
-  btn.textContent = '\uD83E\uDDE9 系統マップ ' + (r.red ? r.red : '−');
+  btn.textContent = '系統マップ ' + (r.red ? r.red : '−');
   if (r.red > 0) btn.classList.add('has-red');
   else btn.classList.remove('has-red');
 }
@@ -26544,7 +26544,7 @@ function _dmRender(result) {
   var DM = window.MA.driverMap;
   if (!content || !DM) return;
   var esc = window.MA.htmlUtils.escHtml;
-  var html = '<h3 style="margin:0 0 6px;">\uD83E\uDDE9 系統マップ</h3>'
+  var html = '<h3 style="margin:0 0 6px;">系統マップ</h3>'
     + '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">'
     + 'どの図がどの図の相手かを宣言しておくと、その組だけを確かめれば済む。'
     + '宣言は次に開いたときも残る。</div>'
@@ -26759,7 +26759,7 @@ function _renderSubmitCheck(docs, reg, ready) {
   var CELL = 'padding:3px 6px;border-bottom:1px solid var(--border);font-size:11px;color:var(--text-primary);';
   var BTN = 'background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;padding:3px 10px;font-size:11px;';
 
-  var html = '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">\u{1F4E4} 提出前チェック</h3>' +
+  var html = '<h3 style="margin:0 0 4px 0;color:var(--text-primary);">提出前チェック</h3>' +
     '<div id="sc-summary" style="font-size:11px;color:var(--text-secondary);" ' +
       'data-docs="' + result.docs.length + '" data-rows="' + result.rows.length + '" ' +
       'data-flagged="' + result.flagged.length + '" data-abbrevs="' + result.abbrevs.length + '"' +
@@ -26772,7 +26772,7 @@ function _renderSubmitCheck(docs, reg, ready) {
       '<span id="sc-abbrev-line" style="flex:1;min-width:0;">' + esc(SC.abbrevLine(result)) + '</span>' +
       (result.abbrevs.length
         ? '<button id="sc-open-unify" style="' + BTN + 'white-space:nowrap;" title="社内略語を正式名称の組にして全図に当てる">' +
-          '\u{1F524} 表記統一で直す</button>'
+          '表記統一で直す</button>'
         : '') +
     '</div>';
 
@@ -26813,7 +26813,7 @@ function _renderSubmitCheck(docs, reg, ready) {
         'border-radius:3px;padding:4px;box-sizing:border-box;">' + esc(dictText) + '</textarea>' +
       '<div style="font-size:10px;color:var(--text-secondary);margin-top:4px;line-height:1.5;">' +
         '日付入りの識別子 (20260907 / 2026-09-07) は書かなくても当たります。' +
-        '社内略語 (SpiDrv など) は 🔤 表記統一と同じ見分け方で数えるので、ここには書きません</div>' +
+        '社内略語 (SpiDrv など) は表記統一と同じ見分け方で数えるので、ここには書きません</div>' +
       '<button id="sc-recheck" style="' + BTN + 'width:100%;margin-top:6px;">辞書を保存して再チェック</button>' +
     '</div></div>';
 
@@ -27909,7 +27909,7 @@ function renderSaveGuard(res) {
     SG.lines(res).forEach(function(l) {
       html += '<li>' + esc(l.text)
         + (l.decl ? '<span class="sgd-decl">クラス図に足すなら: ' + esc(l.decl) + '</span>' : '')
-        + (l.note ? '<span class="sgd-note">📝 ' + esc(l.note) + '</span>' : '')
+        + (l.note ? '<span class="sgd-note">' + esc(l.note) + '</span>' : '')
         + '</li>';
     });
     list.innerHTML = html;
@@ -28040,7 +28040,7 @@ function runSaveGuard(doc) {
   try { renderSaveGuard(res); } catch (e) { return false; }
   // BLK-migrator-20260923-1809: 止めたことを状態バーにも言う。帯はプレビュー枠の
   // 中に出るので、大きい図で下へ送られていると「押したのに何も起きない」に見える。
-  try { setSaveStatus('⛔ 保存を止めました: ' + SG.summaryLine(res)); } catch (e) {}
+  try { setSaveStatus('保存を止めました: ' + SG.summaryLine(res)); } catch (e) {}
   return true;
 }
 
@@ -30567,7 +30567,7 @@ function _mexpRenderSummary() {
 function _mexpToggleSummary() {
   _mexpSummaryOpen = !_mexpSummaryOpen;
   var btn = _mexpSel('mexp-summary-toggle');
-  if (btn) btn.textContent = _mexpSummaryOpen ? '📋 部品サマリカードを閉じる' : '📋 部品サマリカード…';
+  if (btn) btn.textContent = _mexpSummaryOpen ? '部品サマリカードを閉じる' : '部品サマリカード…';
   return _mexpRenderSummary();
 }
 
@@ -32353,7 +32353,7 @@ function renderInboxBadge() {
   var PI = window.MA.pinInbox;
   if (!btn || !PI) return null;
   if (!_inboxItems) {
-    btn.textContent = '📥 指摘箱 −';
+    btn.textContent = '指摘箱 −';
     btn.classList.remove('has-open');
     btn.title = '保存フォルダの図をまたいで、未対応のレビュー指摘を集める';
     return null;

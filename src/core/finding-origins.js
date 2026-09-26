@@ -21,7 +21,7 @@
   // 出口の呼び名。表・markdown・JSON で同じ語を使う。
   var TOOLS = [
     { key: 'audit',  label: 'audit --board', note: '図同士の突合' },
-    { key: 'pins',   label: 'pins',          note: '📌 の控え' },
+    { key: 'pins',   label: 'pins',          note: 'ピンの控え' },
     { key: 'svg',    label: 'verify-svg',    note: '出力物の中身' },
     { key: 'names',  label: '登録簿',         note: '表記の要決定' },
   ];
@@ -159,7 +159,7 @@
         else row.origins.push({ tool: 'pins', label: TOOL_LABEL.pins, basis: piece });
         // 食い違い: 指摘は片付いたのに 📌 は開いたまま (またはその逆)。
         if (!row.open && openPin[status]) {
-          row.conflicts.push('指摘は解消済みだが 📌 ' + docKey(doc) + ' は ' + (_s(e.label) || status));
+          row.conflicts.push('指摘は解消済みだが ' + docKey(doc) + ' は ' + (_s(e.label) || status));
         }
       });
     });

@@ -115,7 +115,7 @@ test.describe('BLK-reviewer-2043 名前突合 (▦ 突合ボードで見る)', (
     await expect(names.locator('.ri-xref-name[data-name="SpiDrv"]')).toHaveAttribute('data-docs', '2');
   });
 
-  test('揃える先を選ぶと登録簿に入り、🔤 表記統一のまとめて適用で別の図まで直る', async ({ page }) => {
+  test('揃える先を選ぶと登録簿に入り、表記統一のまとめて適用で別の図まで直る', async ({ page }) => {
     await setupThreeDocs(page);
     await openByWord(page, '表記揺れ');
     await page.locator('#ab-body .ab-row[data-ab-kind="name.variants"] .ab-unify-to[data-to="IRQCtrl"]').click();

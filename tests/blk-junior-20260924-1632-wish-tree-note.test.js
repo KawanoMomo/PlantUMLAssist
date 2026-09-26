@@ -51,7 +51,7 @@ describe('反映状況の札が、指摘の見出しと指す語を持つ', func
     } finally { restore(); }
   });
 
-  test('直した図は ✅ で、見出し・語を持たない', function() {
+  test('直した図は ✓ で、見出し・語を持たない', function() {
     var W = fresh();
     try {
       var fixed = MINE.split('Gpio ').join('Gpio_Driver ').replace('participant Gpio\n', 'participant Gpio_Driver\n');
@@ -93,7 +93,7 @@ describe('FILES ツリーの図の行と部品のフォルダに札を出す', f
       + row('gpio_component', 'component',
         '<span class="folder-note-badge folder-note-off" data-note-status="off">対象外</span>')
       + row('gpio_class', 'class',
-        '<span class="folder-note-badge folder-note-done" data-note-status="done">✅反映済み</span>')
+        '<span class="folder-note-badge folder-note-done" data-note-status="done">✓反映済み</span>')
       + row('gpio_state', 'state', '')
       + row('can_state', 'state', '');
     // 指摘.md とは別の「未反映」(reviewer の依頼の反映状態) だけが付いた図

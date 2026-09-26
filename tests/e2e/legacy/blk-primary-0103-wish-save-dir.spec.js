@@ -147,7 +147,7 @@ test.describe('BLK-primary-20260908-0103-wish 保存先つきの引き継ぎ', (
     await expect(page.locator('#cfg-file-dir-msg')).toContainText('⚠');
   });
 
-  test('畳んだ 🕸 参照関係の「保存先を貼る」の欄は残っていない', async ({ page }) => {
+  test('畳んだ 参照関係の「保存先を貼る」の欄は残っていない', async ({ page }) => {
     await gotoApp(page);
     await expect(page.locator('#xref-dir-box')).toHaveCount(0);
     await expect(page.locator('#btn-xref-dir')).toHaveCount(0);

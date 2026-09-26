@@ -160,7 +160,7 @@ describe('預ける', function() {
     expect(MQ.hasAsked(once.text, row)).toBe(true);
     expect(MQ.ask(once.text, row, {})).toBe(null);
     expect(MQ.buttonLabel(once.text, row)).toBe('✔ 聞き済み');
-    expect(MQ.buttonLabel(MINE_DSL, row)).toBe('❓ 先輩に聞く');
+    expect(MQ.buttonLabel(MINE_DSL, row)).toBe('先輩に聞く');
   });
 
   test('別の行は別の質問として預けられる', function() {

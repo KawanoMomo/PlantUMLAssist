@@ -113,7 +113,7 @@ test('別の行は別の質問として預けられる', async ({ page }) => {
   await expect(page.locator('#map-asked')).toContainText('先輩に預けた質問 2 件');
 });
 
-test('預けた質問は 📌 指摘の一覧に並ぶ', async ({ page }) => {
+test('預けた質問は 指摘の一覧に並ぶ', async ({ page }) => {
   await openMap(page);
   await row(page, 'ref-only', 'state', 'Disabled').locator('.map-ask').click();
   await page.waitForTimeout(600);

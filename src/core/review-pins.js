@@ -245,9 +245,9 @@ window.MA.reviewPins = (function() {
 
   // badgeText: タブの道具ボタンに出す 1 行。未対応 (= 対応済み以外) が一目で分かる形。
   function badgeText(sum) {
-    if (!sum || !sum.total) return '📌 指摘 −';
+    if (!sum || !sum.total) return '指摘 −';
     var pending = (typeof sum.pending === 'number') ? sum.pending : sum.open;
-    return '📌 指摘 ' + pending + '/' + sum.total;
+    return '指摘 ' + pending + '/' + sum.total;
   }
 
   // markerLabel: 図の上に置く印。未読は番号、既読はチェック、対応済みは「済」。

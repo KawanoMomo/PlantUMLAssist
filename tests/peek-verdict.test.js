@@ -62,14 +62,14 @@ describe('peekVerdict — 確認の結論を図の中に残す', function() {
 describe('peekVerdict — 相手に図が増えたら控えは古い', function() {
   test('0 枚のままなら控えはそのまま使える', function() {
     expect(PV.isStale(REC, 0)).toBe(false);
-    expect(PV.badge(REC, 0).mark).toBe('👀手本なし');
+    expect(PV.badge(REC, 0).mark).toBe('手本なし');
     expect(PV.badge(REC, 0).title).toContain('0 枚でした');
   });
 
   test('1 枚でも増えたら確かめ直すと言う', function() {
     expect(PV.isStale(REC, 1)).toBe(true);
     var b = PV.badge(REC, 1);
-    expect(b.mark).toBe('👀要確認');
+    expect(b.mark).toBe('要確認');
     expect(b.stale).toBe(true);
     expect(b.title).toContain('増えました');
   });

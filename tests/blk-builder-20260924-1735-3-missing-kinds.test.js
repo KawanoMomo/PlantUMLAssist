@@ -82,7 +82,7 @@ describe('ツリーの行から、その場で作る (design 10a)', function() {
     return W;
   }
 
-  test('行は「＋ 未作成 2 図種（UC・ACT）」で、略号と ＋ が押せる (🧩 部品ビューへは渡さない)', function() {
+  test('行は「＋ 未作成 2 図種（UC・ACT）」で、略号と ＋ が押せる (部品ビューへは渡さない)', function() {
     var calls = [];
     var W = boot(calls);
     try {

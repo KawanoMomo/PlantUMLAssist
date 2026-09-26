@@ -85,7 +85,7 @@ async function exportAllAndRead(page, timeoutMs) {
 test.describe('BLK-primary-0443 全図の一括 SVG 書き出し', () => {
   test.beforeEach(async ({ page }) => { await freshWorkspace(page); });
 
-  test('📦 資料セットの対象に「開いている図すべて」がある', async ({ page }) => {
+  test('資料セットの対象に「開いている図すべて」がある', async ({ page }) => {
     await gotoApp(page);
     await page.locator('#btn-export').click();
     await page.locator('#exp-docset').click();

@@ -145,7 +145,7 @@
       spec: 'PlantUMLAssist - 実装現況.dc.html',
       plan: '7a',
       scope: 'always',
-      title: '機能は 1 か所 (🧰 ツール ▾ のメニュー) に畳む',
+      title: '機能は 1 か所 (ツール ▾ のメニュー) に畳む',
       expect: 'タブ列が畳んだ状態',
       settings: [
         {

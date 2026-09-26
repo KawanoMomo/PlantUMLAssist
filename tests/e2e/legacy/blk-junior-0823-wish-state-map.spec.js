@@ -57,7 +57,7 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => { try { window.localStorage.clear(); } catch (e) {} });
 });
 
-test('「🔀 対応表」で状態と遷移の対応が並ぶ', async ({ page }) => {
+test('「対応表」で状態と遷移の対応が並ぶ', async ({ page }) => {
   await openCompare(page);
   await expect(page.locator('#map-list')).toBeHidden();
 

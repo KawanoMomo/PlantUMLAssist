@@ -216,7 +216,7 @@ window.MA.findingLink = (function() {
     if (at) out.push('', '作成: ' + at);
     out.push('', summaryText(t) || '指摘はありません', '');
     if (!t.total) {
-      out.push('- 図に 📌 指摘ピンがありません');
+      out.push('- 図に指摘ピンがありません');
       return out.join('\n');
     }
     out.push('| 指摘 | 内容 | 対応 | 変更した図 |');

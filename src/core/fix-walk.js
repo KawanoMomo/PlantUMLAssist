@@ -156,9 +156,9 @@ window.MA.fixWalk = (function() {
     var p = progress(walk);
     if (!p.total) return '手当てする図がありません';
     var cur = current(walk);
-    var head = walk.title ? '🎫 ' + walk.title : walk.subject;
+    var head = walk.title ? '' + walk.title : walk.subject;
     if (p.complete) return head + ': ' + p.total + ' 図すべて手当て済み';
-    var t = walk.title ? '🎫 ' + walk.title + ' — '
+    var t = walk.title ? '' + walk.title + ' — '
       : (walk.subject ? walk.subject + ' の影響 ' : '影響 ');
     t += p.position + ' / ' + p.total + ' 図';
     if (cur) t += ' · ' + cur.doc + ' (' + hopText(cur) + ')';

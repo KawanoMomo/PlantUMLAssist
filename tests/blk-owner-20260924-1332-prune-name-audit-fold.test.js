@@ -76,7 +76,7 @@ describe('名前/表記揺れの行は揃える先に選べる綴りを持つ', 
 });
 
 describe('ツール ▾ の入口は 1 つ', function() {
-  test('🔍 名前突合 (btn-tab-audit) はメニューに無い', function() {
+  test('名前突合 (btn-tab-audit) はメニューに無い', function() {
     expect(TM.groupOf('btn-tab-audit')).toBe(null);
     expect(TM.menuIds()).not.toContain('btn-tab-audit');
   });

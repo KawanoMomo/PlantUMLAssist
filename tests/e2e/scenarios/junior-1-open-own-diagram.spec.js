@@ -87,7 +87,7 @@ test('図種を変えて保存し続けても、前の周の図が消えない',
   expect(state).toContain('IDLE --> RUNNING');
 });
 
-test('📂 一覧が図種を言う。行のバッジと「状態遷移 1」の要約', async ({ page }) => {
+test('一覧が図種を言う。行のバッジと「状態遷移 1」の要約', async ({ page }) => {
   await saveThreeRounds(page);
   await openFolder(page);
 

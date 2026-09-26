@@ -50,7 +50,7 @@ window.MA.noteBoard = (function() {
       title: 'この図あての指摘があります（反映されているかはまだ確かめていません）',
     },
     done: {
-      key: 'done', mark: _mark('done', '✅反映済み'),
+      key: 'done', mark: _mark('done', '✓反映済み'),
       title: 'この図あての指摘は、本文を見るかぎり反映済みです',
     },
   };

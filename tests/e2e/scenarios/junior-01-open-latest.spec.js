@@ -79,7 +79,7 @@ test.describe('junior 手順 1: 前周までの最新版を開く', () => {
 
   // BLK-owner-20260918-0049-prune: 部品 × 6 図種の済/未は 🧩 部品ビューに寄せた。
   // 📂 一覧には表を出さず、部品ビューへの導線だけを置く (同じ表を 3 か所で読ませない)。
-  test('📂 一覧は棚卸しの表を持たず、🧩 部品ビューへの導線だけを出す', async ({ page }) => {
+  test('一覧は棚卸しの表を持たず、部品ビューへの導線だけを出す', async ({ page }) => {
     await openFolder(page);
     await expect(page.locator('#folder-inv-pick')).toHaveCount(0);
     await expect(page.locator('.folder-inv-row')).toHaveCount(0);
@@ -514,7 +514,7 @@ test.describe('junior 手順 1: 指摘.md の 1 件から先輩の図と並べ�
   // 突き合わせ、「対応不要」を自分で判定していた (8 周目は 5 図種のうち 4 図種が
   // 指摘なしで、その 4 回ぶんが丸ごと無駄だった)。📂一覧が開く前に
   // 対象外 / ⚠確かめられず / ✅反映済み を出すことを到達条件にする。
-  test('📂一覧が、開く前に「対象外 / ⚠確かめられず」を図ごとに出す', async ({ page }) => {
+  test('一覧が、開く前に「対象外 / ⚠確かめられず」を図ごとに出す', async ({ page }) => {
     // 指摘.md に名前の出ない図を 1 枚足す (今回の GPIO コンポーネント図に当たる)。
     await S1.putDoc(page, NOTE_MINE, 'gpio_component',
       ['@startuml', 'component Gpio_Driver', '@enduml'].join('\n'));
@@ -556,7 +556,7 @@ test.describe('junior 手順 1: 指摘.md の 1 件から先輩の図と並べ�
     })).toBe('Gpio');
   });
 
-  test('指摘どおり直すと、一覧のバッジが ✅反映済み に変わる', async ({ page }) => {
+  test('指摘どおり直すと、一覧のバッジが ✓反映済み に変わる', async ({ page }) => {
     // 指摘: junior 側の `Gpio` を先輩に合わせて `Gpio_Driver` に統一する。
     await S1.putDoc(page, NOTE_MINE, 'gpio_init_sequence',
       ['@startuml', 'title GPIO 初期化シーケンス',
@@ -570,7 +570,7 @@ test.describe('junior 手順 1: 指摘.md の 1 件から先輩の図と並べ�
 
     const done = page.locator('.folder-note-badge[data-note-of="gpio_init_sequence"]');
     await expect(done).toHaveAttribute('data-note-status', 'done');
-    await expect(done).toHaveText('✅反映済み');
+    await expect(done).toHaveText('✓反映済み');
   });
 
   test('並べる相手がいない指摘は、押しても理由が出るだけで済む', async ({ page }) => {
@@ -874,7 +874,7 @@ test.describe('junior 手順 1: 指摘が指す版が名指しで開く', () => 
     expect(grid).toContain('資料用');
   });
 
-  test('📂 一覧は版を 1 文字で言い、指摘が指す版の行を光らせる', async ({ page }) => {
+  test('一覧は版を 1 文字で言い、指摘が指す版の行を光らせる', async ({ page }) => {
     await page.locator('#btn-tab-peek').click();
     await page.waitForSelector('#peek-modal');
     await page.locator('#peek-note-toggle').click();
@@ -1078,7 +1078,7 @@ test.describe('junior 手順 1〜2: 先輩に実体が無い図種の結論を�
     expect(text).toContain("' @peek アクティビティ|primary|0");
 
     // 到達条件 3: 控えた後は「👀手本なし」として見え、確認をやり直さずに済む。
-    await expect(page.locator('[data-peek-verdict="アクティビティ"]')).toContainText('👀手本なし');
+    await expect(page.locator('[data-peek-verdict="アクティビティ"]')).toContainText('手本なし');
 
     // 到達条件 4: 控えは図の本文なので、保存すれば保存フォルダのファイルにも残る。
     await page.keyboard.press('Escape');
@@ -1189,7 +1189,7 @@ test.describe('junior 手順 1〜2: 部品ビューの進捗帯で 6 図種の�
 
   // BLK-owner-20260918-0049-prune: 👀 他フォルダの対応要否の表と 📂 一覧の棚卸しを、
   // 🧩 部品ビューの進捗帯に統合した。着手先の特定 (junior 手順 1) はここで済む。
-  test('📂 一覧の導線から部品ビューが開き、帯がまだ無い図種と対応不要の図種を名指しする', async ({ page }) => {
+  test('一覧の導線から部品ビューが開き、帯がまだ無い図種と対応不要の図種を名指しする', async ({ page }) => {
     await openFolder(page);
     await page.waitForSelector('#folder-panel.open #folder-board-link');
     await page.locator('#folder-board-link').click();
@@ -1699,7 +1699,7 @@ test.describe('junior 手順 1: 先輩が持たない図種では自分の他部
     expect(names.join('|')).not.toContain('資料用');
   });
 
-  test('下端の「👀」は、開く前から見本が出ることを言う', async ({ page }) => {
+  test('下端の「」は、開く前から見本が出ることを言う', async ({ page }) => {
     await openMine(page, MINE_ACT);
     await openSenior(page);
     await page.waitForTimeout(600);

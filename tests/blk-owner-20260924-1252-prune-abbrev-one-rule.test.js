@@ -65,7 +65,7 @@ describe('BLK-owner-20260924-1252-prune 略語は glossary の語で当てる', 
     expect(row.flagged).toBe(false);
   });
 
-  test('要約と略語の行は 🔤 表記統一と同じ言い方で件数を言う', function() {
+  test('要約と略語の行は 表記統一と同じ言い方で件数を言う', function() {
     var res = SC.check(DOCS, SC.DEFAULT_TERMS, { abbrevs: abbrevsOf(DOCS) });
     var n = G.scan(DOCS).length;
     expect(SC.summaryLine(res).indexOf('社内略語 ' + n + ' 語') >= 0).toBe(true);

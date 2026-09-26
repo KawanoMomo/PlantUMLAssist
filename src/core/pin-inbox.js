@@ -144,8 +144,8 @@ window.MA.pinInbox = (function() {
 
   // badgeText: 道具ボタンの 1 行。図をまたいだ未対応の数がボタンだけで分かる。
   function badgeText(sum) {
-    if (!sum || !sum.total) return '📥 指摘箱 −';
-    return '📥 指摘箱 ' + _pending(sum) + '/' + sum.total;
+    if (!sum || !sum.total) return '指摘箱 −';
+    return '指摘箱 ' + _pending(sum) + '/' + sum.total;
   }
 
   function groupText(g) {

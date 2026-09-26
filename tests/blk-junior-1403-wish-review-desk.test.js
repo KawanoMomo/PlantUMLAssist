@@ -185,8 +185,8 @@ describe('review-desk — レビュー', () => {
   test('summary / badgeText: 件数と種類を言い切る', () => {
     expect(RD.summary([])).toBe('指摘なし');
     expect(RD.summary([{ kind: 'dup' }, { kind: 'dup' }, { kind: 'order' }])).toBe('3 件 (二重 2 / 並び 1)');
-    expect(RD.badgeText([])).toBe('👁 レビュー −');
-    expect(RD.badgeText([{ kind: 'dup' }])).toBe('👁 レビュー 1');
+    expect(RD.badgeText([])).toBe('レビュー −');
+    expect(RD.badgeText([{ kind: 'dup' }])).toBe('レビュー 1');
     expect(RD.kindLabel('typo')).toBe('打ち間違い');
   });
 });
