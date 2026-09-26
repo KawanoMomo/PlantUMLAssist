@@ -315,6 +315,60 @@ test('手順3 正しい PlantUML には「読めない行」の帯が出ず、�
   await expect(panel).toBeHidden({ timeout: 20000 });
 });
 
+// BLK-migrator-20260926-1608 / BLK-owner-20260925-1932-1: PlantUML が「Illegal sequence arrow」「No such color」のように
+// error の語を含まない文言で返したエラー画を、図として並べ見出し Rendered のままにしていた (corpus の seq-27 は枠 0/7)。
+// 文言に依らずエラー画と見分け、見出し ERROR・帯に版と行と理由を出し、エラー画を図として並べない。
+test('手順3 PlantUML が error の語を含まない文言で返したエラー画も、図として並べず ERROR と帯で行と理由を言う', async ({ page }) => {
+  const ARROW = ['@startuml', 'participant A', 'participant B', 'A - B : half', 'B -/ A : back', '@enduml', ''].join('\n');
+  const COLOR = ['@startuml', 'participant Client #white;line:red;line.bold;text:blue', 'participant Server',
+    'note over Client, Server #white;line:orange;text:black : x', '@enduml', ''].join('\n');
+  const GOOD = ['@startuml', 'participant Client', 'participant Server', 'Client -> Server : hello', '@enduml', ''].join('\n');
+  const dir = absDirFor(__filename) + '-wordless';
+  fs.rmSync(dir, { recursive: true, force: true });
+  const srcDir = path.join(dir, '..', 'migrator-03-wordless-src');
+  fs.mkdirSync(srcDir, { recursive: true });
+  const files = [['illegal-arrow.puml', ARROW], ['no-such-color.puml', COLOR], ['good.puml', GOOD]].map(([n, t]) => {
+    const p = path.join(srcDir, n);
+    fs.writeFileSync(p, t);
+    return p;
+  });
+
+  await bootWithSaveDir(page, dirFor(__filename) + '-wordless');
+  const openOne = async (p, re) => {
+    const [chooser] = await Promise.all([
+      page.waitForEvent('filechooser', { timeout: 20000 }),
+      page.evaluate(() => { document.getElementById('file-input').click(); }),
+    ]);
+    await chooser.setFiles(p);
+    await expect(page.locator('#editor')).toHaveValue(re, { timeout: 20000 });
+  };
+  const band = page.locator('#render-error-overlay');
+  const previewTexts = () => page.locator('#preview-svg text').allTextContents();
+
+  // 先に描ける図を開いておく (エラー画はこの図と入れ替わらない)。
+  await openOne(files[2], /Client -> Server : hello/);
+  await expect(page.locator('#render-status')).toHaveText(/^Rendered/, { timeout: 20000 });
+
+  const cases = [
+    [files[0], /A - B : half/, 4, '`A - B : half`', 'Illegal sequence arrow'],
+    [files[1], /line\.bold/, 2, '`participant Client #white;line:red;line.bold;text:blue`', 'No such color'],
+  ];
+  for (const [file, re, line, src, reason] of cases) {
+    await openOne(file, re);
+    await expect(page.locator('#render-status')).toHaveText('ERROR', { timeout: 20000 });
+    await expect(band).toBeVisible();
+    await expect(band).toContainText(new RegExp('PlantUML [0-9]+[.][0-9]+[.][0-9]+ がこの行を読めません: ' + line + ' 行目'));
+    await expect(band).toContainText(src);
+    await expect(band).toContainText(reason);
+    await expect(page.locator('#unsupported-list .unsupported-row[data-line="' + line + '"]'))
+      .toHaveAttribute('data-reason', new RegExp('^エンジンのエラー 行 ' + line + ': '));
+    // エラー画を図として並べない (理由の文言が図の中に無い)、内部の件数の「Overlay マッチング失敗」も出さない。
+    const texts = await previewTexts();
+    expect(texts.some((t) => t.includes(reason)), 'エラー画が図として出ている').toBe(false);
+    await expect(page.locator('#overlay-warning')).toBeHidden();
+  }
+});
+
 // BLK-migrator-20260925-1632: par / else / end を持つ sequence 図 (corpus の seq-15) を開くと「NoClassDefFoundError:
 // .../CrashReportHandler」で描けなかった。原因は図ではなく、走っている描画 daemon の jar が同じ場所で置き換えられたこと
 // (置き換えの確かめは tests/blk-migrator-20260925-1632-daemon-jar-swap.test.js が本物の jar で行う)。ここでは実物の形を
