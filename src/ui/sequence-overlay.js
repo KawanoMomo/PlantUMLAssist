@@ -785,15 +785,16 @@ window.MA.sequenceOverlay = (function() {
   }
 
   function _addGroupHit(overlayEl, x, y, w, h, gp, part) {
+    return _addFrontHit(overlayEl, x, y, w, h, { 'data-type': 'group', 'data-id': gp.id, 'data-line': gp.line }, part);
+  }
+  function _addFrontHit(overlayEl, x, y, w, h, attrs, part) {
     if (!(w > 0) || !(h > 0)) return null;
     var el = document.createElementNS(SVG_NS_HIT, 'path');
     el.setAttribute('d', 'M' + x + ',' + y + ' h' + w + ' v' + h + ' h' + (-w) + ' Z');
     el.setAttribute('fill', 'transparent');
     el.setAttribute('stroke', 'none');
     el.setAttribute('class', 'group-hit');
-    el.setAttribute('data-type', 'group');
-    el.setAttribute('data-id', gp.id);
-    el.setAttribute('data-line', gp.line);
+    Object.keys(attrs).forEach(function(k) { el.setAttribute(k, attrs[k]); });
     el.setAttribute('data-hit-part', part);
     el.style.pointerEvents = 'all';
     el.style.cursor = 'pointer';
@@ -834,6 +835,38 @@ window.MA.sequenceOverlay = (function() {
       _conditionBoxes(svgEl, bb, tabBottom).forEach(function(c) {
         _addGroupHit(overlayEl, c.x - 2, c.y - 1, c.width + 4, c.height + 2, gp, 'cond');
       });
+    });
+  }
+
+  // BLK-builder-20260926-1010-1: 枠 (ref) の箱の中が塗られているか。描いた側の塗りで決める: 箱と同じ位置・大きさの
+  // rect に塗り (fill が none でも透明でもない) があれば塗りあり。見つからなければ塗りありとみなす (これまでどおり)。
+  function _framePainted(svgEl, bb) {
+    var found = false, painted = false;
+    _q(svgEl, 'rect').forEach(function(r) {
+      if (Math.abs(_num(r, 'x') - bb.x) > 0.6 || Math.abs(_num(r, 'y') - bb.y) > 0.6) return;
+      if (Math.abs(_num(r, 'width') - bb.w) > 0.6 || Math.abs(_num(r, 'height') - bb.h) > 0.6) return;
+      found = true;
+      var f = String(r.getAttribute('fill') || '').trim().toLowerCase();
+      var op = parseFloat(r.getAttribute('fill-opacity'));
+      if (f && f !== 'none' && f !== 'transparent' && op !== 0) painted = true;
+    });
+    return !found || painted;
+  }
+
+  // BLK-builder-20260926-1010-1: 塗りの無い ref の箱は、中を通るライフラインが透けて見える (描いた側では線が手前)。
+  // 群の枠と同じく、箱全体の枠はライフラインより奥に置き、札と見出しの行・枠線・中の文字だけを一番手前にする。
+  function _addFrameFronts(svgEl, overlayEl, bb, attrs) {
+    var EDGE = 3;
+    var tabBottom = _frameTabBottom(svgEl, bb);
+    _addFrontHit(overlayEl, bb.x - EDGE, bb.y - EDGE, bb.w + EDGE * 2, (tabBottom - bb.y) + EDGE, attrs, 'head');
+    _addFrontHit(overlayEl, bb.x - EDGE, bb.y, EDGE * 2, bb.h + EDGE, attrs, 'edge');
+    _addFrontHit(overlayEl, bb.x + bb.w - EDGE, bb.y, EDGE * 2, bb.h + EDGE, attrs, 'edge');
+    _addFrontHit(overlayEl, bb.x - EDGE, bb.y + bb.h - EDGE, bb.w + EDGE * 2, EDGE * 2, attrs, 'edge');
+    _q(svgEl, 'text').forEach(function(t) {
+      var b = _bbox(t);
+      if (!b) return;
+      if (b.x < bb.x - 1 || b.y < tabBottom - 1 || b.x + b.width > bb.x + bb.w + 1 || b.y + b.height > bb.y + bb.h + 1) return;
+      _addFrontHit(overlayEl, b.x - 2, b.y - 1, b.width + 4, b.height + 2, attrs, 'text');
     });
   }
 
@@ -1190,6 +1223,12 @@ window.MA.sequenceOverlay = (function() {
     // BLK-migrator-20260923-1409: 群の枠は内側全体を覆うので、先に置いたライフラインが
     // その下に隠れ、alt の中のライフラインを指すと alt が選ばれていた。細いライフラインを
     // 群の枠より手前に出す (メッセージ・注釈はこの後に足すので、さらに手前に来る)。
+    // BLK-builder-20260926-1010-1: 塗りの無い ref の箱は群と同じくライフラインより奥 (札・枠線・文字は最後に手前へ)。
+    srcHits.forEach(function(h) {
+      if (h.kind !== 'ref' || _framePainted(svgEl, h.box)) return;
+      _addProcSourceLine(overlayEl, h.box, h.line, h.kind);
+      h.behind = true;
+    });
     Array.prototype.forEach.call(overlayEl.querySelectorAll('rect[data-type="lifeline"]'), function(r) {
       overlayEl.appendChild(r);
     });
@@ -1380,7 +1419,13 @@ window.MA.sequenceOverlay = (function() {
     // BLK-owner-20260924-0637-2: 枠の札・見出し・枠線・条件の文字は一番手前に置く。ライフラインの当たり
     // (メッセージの間の細い区間はメッセージより後に足される) より奥だと、札を押してもライフラインに吸われる。
     // 帯は細く中身が隠れないので、ここで塞ぐのは枠の縁 (幅 6px) と見出しの行だけ。
-    srcHits.forEach(function(h) { _addProcSourceLine(overlayEl, h.box, h.line, h.kind); });
+    srcHits.forEach(function(h) {
+      if (!h.behind) { _addProcSourceLine(overlayEl, h.box, h.line, h.kind); return; }
+      _addFrameFronts(svgEl, overlayEl, h.box, {
+        'data-type': 'source-line', 'data-id': 'src:' + h.kind + '@' + h.line,
+        'data-src-kind': h.kind, 'data-line': String(h.line),
+      });
+    });
     _addGroupHits(svgEl, overlayEl, groupHitFrames);
 
     var noteRectCount = overlayEl.querySelectorAll('rect[data-type="note"]').length;

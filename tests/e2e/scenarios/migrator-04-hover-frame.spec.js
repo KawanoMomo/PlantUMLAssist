@@ -549,10 +549,17 @@ async function hoverHit(page, label) {
     await page.waitForTimeout(100 + i * 100);
     hit = await page.evaluate((p) => {
       const els = document.elementsFromPoint(p.x, p.y);
-      const r = els.find((e) => e.tagName.toLowerCase() === 'rect' && e.closest('#overlay-layer') &&
+      // BLK-builder-20260926-1010-1: 枠 (群・塗りの無い ref) の札・枠線・文字は、ライフラインより手前の <path class="group-hit">。
+      // 指すと同じ要素の枠の rect が光る (path 自身は光らない) ので、光ったかは同じ種類・id の rect で見る。
+      const r = els.find((e) => e.closest('#overlay-layer') && e.getAttribute('data-type') &&
+        (e.tagName.toLowerCase() === 'rect' || /group-hit/.test(e.getAttribute('class') || '')) &&
         !/overlay-background/.test(e.getAttribute('class') || ''));
-      return r ? { type: r.getAttribute('data-type'), line: r.getAttribute('data-line'),
-        hover: /hit-hover/.test(r.getAttribute('class') || '') } : null;
+      if (!r) return null;
+      const type = r.getAttribute('data-type'), id = r.getAttribute('data-id');
+      const lit = r.tagName.toLowerCase() === 'rect' ? /hit-hover/.test(r.getAttribute('class') || '')
+        : Array.from(document.querySelectorAll('#overlay-layer rect.hit-hover'))
+          .some((x) => x.getAttribute('data-type') === type && x.getAttribute('data-id') === id);
+      return { type, line: r.getAttribute('data-line'), hover: lit };
     }, { x: box.x + (i % 2), y: box.y });
     if (hit && hit.hover) break;
   }
@@ -873,6 +880,26 @@ test('migrator 手順 4 — 図の右上の header と右端の参加者の頭�
     await page.mouse.move(3, 3);
     await page.mouse.move(p.x, p.y);
     await expect.poll(hovered, label + ' にホバーして本人の枠が出る').toContain(want);
+  }
+
+  // `ref over Foo4, Foo5` (35 行目) の箱は塗りが無く、中を Foo4・Foo5 のライフラインが通って見える。
+  // 箱の中のライフラインの線を指すとライフライン、箱の中の文字・札を指すと ref の行の枠が出る。
+  const refBox = await page.locator('#overlay-layer rect[data-src-kind="ref"][data-line="35"]').boundingBox();
+  const foo4 = await page.evaluate(() => {
+    const r = Array.from(document.querySelectorAll('#overlay-layer rect[data-type="lifeline"][data-id="Foo4"]'))
+      .map((e) => e.getBoundingClientRect()).sort((a, b) => b.height - a.height)[0];
+    return { x: r.x + r.width / 2 };
+  });
+  expect(foo4.x).toBeGreaterThan(refBox.x);
+  expect(foo4.x).toBeLessThan(refBox.x + refBox.width);
+  await page.mouse.move(3, 3);
+  await page.mouse.move(foo4.x, refBox.y + refBox.height * 0.6);
+  await expect.poll(hovered, '塗りの無い ref の箱の中でもライフラインの線はライフライン').toContain('lifeline@');
+  for (const label of ['ref', 'several lines']) {
+    const b = await page.locator('#preview-svg svg text').filter({ hasText: new RegExp('^' + label + '$') }).first().boundingBox();
+    await page.mouse.move(3, 3);
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+    await expect.poll(hovered, 'ref の「' + label + '」を指すと ref の行の枠').toContain('source-line@35');
   }
 });
 
