@@ -33,7 +33,8 @@ function setup(top, left) {
   Object.defineProperty(host, 'offsetTop', { configurable: true, get: function() { return top.v; } });
   Object.defineProperty(host, 'offsetLeft', { configurable: true, get: function() { return left.v; } });
   // eslint-disable-next-line no-new-func
-  var fn = new Function('previewSvgEl', 'document', extract('syncOverlayOrigin') + '\nreturn syncOverlayOrigin;');
+  // BLK-builder-20260926-1010-1: syncOverlayOrigin は先に図をズーム帯の下へ下げる (syncFigureBelowHud)。帯の無い DOM では何もしない。
+  var fn = new Function('previewSvgEl', 'document', extract('syncFigureBelowHud') + '\n' + extract('syncOverlayOrigin') + '\nreturn syncOverlayOrigin;');
   return fn(host, doc);
 }
 

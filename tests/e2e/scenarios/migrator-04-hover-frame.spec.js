@@ -672,7 +672,9 @@ test('migrator 手順 4 — 前の図の保存の帯は次の図を開くと引�
   await expect(page.locator('#overlay-layer rect[data-type="component"]')).toHaveCount(3, { timeout: 20000 });
   // 前の図の帯は引っ込み、図は余白どおりの位置に戻る。
   await expect(page.locator('#save-swap-overlay')).toBeHidden();
-  expect(await page.evaluate(() => document.getElementById('preview-svg').offsetTop)).toBeLessThan(40);
+  // BLK-builder-20260926-1010-1: 帯の無い図は余白 16px ではなく、右上のズーム帯のすぐ下 (帯の下端 + 4px) に置く。
+  expect(await page.evaluate(() => document.getElementById('preview-svg').getBoundingClientRect().top
+    - document.getElementById('zoom-hud').getBoundingClientRect().bottom)).toBeLessThan(20);
   // この図を保存すると帯がまた出て、図はその分だけ下へ押される (この状態で当たり判定が図に重なっていること)。
   await page.locator('#editor').click();
   await page.keyboard.press('Control+s');
@@ -832,6 +834,46 @@ test('migrator 手順 4 — 長いメッセージが横切るライフライン�
   await field.blur();
   await expect.poll(() => page.locator('#editor').inputValue().then((v) => v.split('\n').slice(2, 5)))
     .toEqual(['title Diag - $THEME theme', '!else', 'title Diag v2']);
+});
+
+// BLK-builder-20260926-1010-1: web の実物 (puml-themes sequence-ex) で、右上に浮くズーム帯 (#zoom-hud) の
+// ボタンが図の上端に重なり、右上の header「Page Header」にホバーしても帯のボタンに当たって枠が出なかった。
+// 図の上端は帯の下端より下に置き、header・右端の参加者の頭に実マウスで本人の枠が出る。
+test('migrator 手順 4 — 図の右上の header と右端の参加者の頭は、ズーム帯の下に隠れずホバーで本人の枠が出る', async ({ page }) => {
+  // migrator の計測と同じ画面の大きさ (図が幅に合わせて縮み、右上が帯の高さに来る)
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await bootPlain(page);
+  const dsl = fs.readFileSync(path.join(__dirname, '..', '..', 'fixtures', 'dsl', 'themes-sequence-ex.puml'), 'utf8')
+    .replace(/\r\n/g, '\n').replace(/\n+$/, '');
+  await typeDsl(page, dsl);
+  await expect(page.locator('#overlay-layer rect[data-src-kind="header"]')).toHaveCount(1, { timeout: 20000 });
+  await expect(page.locator('#ma-toast')).toBeHidden({ timeout: 15000 });
+  // 幅に合わせる (ファイルを開いたときと同じ倍率)。図の右端が帯の真下に来る
+  await page.locator('#hud-zoom-fit').click();
+  await page.waitForTimeout(300);
+
+  const geo = await page.evaluate(() => {
+    const hud = document.getElementById('zoom-hud').getBoundingClientRect();
+    const svg = document.getElementById('preview-svg').getBoundingClientRect();
+    return { hudBottom: hud.bottom, hudH: hud.height, svgTop: svg.top };
+  });
+  expect(geo.hudH, 'ズーム帯が出ている').toBeGreaterThan(0);
+  expect(geo.svgTop, '図の上端はズーム帯の下端より下').toBeGreaterThanOrEqual(geo.hudBottom);
+
+  const hovered = () => page.evaluate(() => Array.from(document.querySelectorAll('#overlay-layer rect.hit-hover'))
+    .map((r) => r.getAttribute('data-type') + '@' + r.getAttribute('data-line')).join(','));
+  for (const [label, want] of [['Page Header', 'source-line@14'], ['Alice', 'participant@']]) {
+    const b = await page.locator('#preview-svg svg text').filter({ hasText: new RegExp('^' + label + '$') }).first().boundingBox();
+    const p = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+    const top = await page.evaluate((q) => {
+      const e = document.elementFromPoint(q.x, q.y);
+      return e ? (e.closest('#zoom-hud') ? 'zoom-hud' : e.closest('#overlay-layer') ? 'overlay' : e.tagName + '#' + e.id + '.' + e.className + ' in ' + (e.parentElement && e.parentElement.id) + ' ' + (e.textContent || '').slice(0, 30)) : null;
+    }, p);
+    expect(top, label + ' の真上に帯のボタンが重ならない').toBe('overlay');
+    await page.mouse.move(3, 3);
+    await page.mouse.move(p.x, p.y);
+    await expect.poll(hovered, label + ' にホバーして本人の枠が出る').toContain(want);
+  }
 });
 
 // BLK-builder-20260925-1712-1: migrator の実物 7 枚 (seq-06 / seq-08 / dirty-04 …) で、ライフラインの上を矢印の線から
