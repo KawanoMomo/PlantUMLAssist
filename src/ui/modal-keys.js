@@ -64,10 +64,15 @@ window.MA.modalKeys = (function() {
     var form = target && target.closest ? target.closest('[id$="-tail-detail"]') : null;
     return form ? visibleButton(form, '-tail-add') : null;
   }
+  // BLK-owner-20260925-0312-4: 末尾に追加の本文欄 (textarea) のうち data-enter="submit" のものは、
+  // Enter で確定・Shift+Enter で改行 (アクティビティの処理欄・注釈欄)。
+  function isTailEnterArea(el) {
+    return !!el && el.tagName === 'TEXTAREA' && el.getAttribute && el.getAttribute('data-enter') === 'submit';
+  }
   function onTailKey(e) {
     if (e.key !== 'Enter' || e.defaultPrevented || e.isComposing || e.keyCode === 229) return;
     if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
-    if (!isEnterField(e.target)) return;
+    if (!isEnterField(e.target) && !isTailEnterArea(e.target)) return;
     press(tailButton(e.target), e);
   }
   function onTailRle(e) {

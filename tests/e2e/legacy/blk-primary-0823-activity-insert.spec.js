@@ -41,14 +41,14 @@ test.describe('BLK-primary-0823-design Activity 途中に挿入', () => {
     const points = await page.locator('#ac-tail-where option').allTextContents();
     expect(points[0]).toBe('図の末尾');
     // BLK-junior-20260908-0103: 候補は行番号と生コードではなく構造の言葉になった。
-    expect(points.join('|')).toContain('フローのはじめの前');
+    expect(points.join('|')).toContain('start の前 (フローの外)');
     expect(points.join('|')).toContain('アクション「Hello world」の後');
     expect(points.join('|')).not.toContain('@startuml');
   });
 
   test('フローの外ではアクションは置けず、レーンは置ける', async ({ page }) => {
     await openActivity(page, MIN);
-    await page.locator('#ac-tail-where').selectOption({ label: 'フローのはじめの前 (L2)' });
+    await page.locator('#ac-tail-where').selectOption({ label: 'start の前 (フローの外) (L2)' });
     await page.waitForTimeout(300);
     await expect(page.locator('#ac-tail-where-note')).toBeVisible();
     await expect(page.locator('#ac-tail-add')).toBeDisabled();

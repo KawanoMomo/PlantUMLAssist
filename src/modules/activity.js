@@ -2294,12 +2294,30 @@ window.MA.modules.plantumlActivity = (function() {
 
   // その位置にその種類を置けるか。「図の末尾」は従来どおり何でも置ける。
   // 終了 (end) は停止 (stop) と同じ場所に置けるものとして扱う。
+  // BLK-owner-20260925-0312-4: 開始・停止・終了はどこに置いても PlantUML が描くので止めない
+  // (流れの外や 2 つ目になるときは tailKindWarning が橙で知らせる)。
+  // 位置は行だけでなく「前 / 後」も見る (start の前はフローの外、start の直後はフローの先頭)。
   function tailKindAllowed(dsl, place, kind, sub) {
     if (!place || place.value === 'tail') return true;
+    if (kind === 'start' || kind === 'stop' || kind === 'end') return true;
     var AI = window.MA.activityInsert;
     if (!AI) return false;
-    var k = kind === 'other' ? (sub || 'break') : (kind === 'end' ? 'stop' : kind);
-    return AI.isAllowed(dsl, place.line, k);
+    var k = kind === 'other' ? (sub || 'break') : kind;
+    return AI.isAllowed(dsl, place.line, k, place.position);
+  }
+
+  // 置けない位置で言う理由。その位置の名前で言う (「start の直後」なのに「フローの外」と言わない)。
+  function tailPlaceReason(place) {
+    var name = String((place && place.label) || '').trim().replace(/\s*\(L\d+\)$/, '').replace(/\s*\(フローの外\)$/, '');
+    return '「' + name + '」はフローの外です。ここに置けるのはレーンと開始・停止・終了だけです (アクションや分岐は start の直後から stop の前までに置けます)';
+  }
+
+  // 開始・停止・終了が流れの外や 2 つ目になるときの橙の知らせ。無ければ ''。
+  function tailKindWarning(dsl, place, kind) {
+    if (kind !== 'start' && kind !== 'stop' && kind !== 'end') return '';
+    var AI = window.MA.activityInsert;
+    if (!AI || !AI.placementWarning) return '';
+    return AI.placementWarning(dsl, addFromTailForm(dsl, place, kind, {}), kind);
   }
 
   // フォームの値から 1 回ぶんの書き換えを作る。place が「図の末尾」なら流れの終端の手前、
@@ -2410,26 +2428,57 @@ window.MA.modules.plantumlActivity = (function() {
     }
 
     // 置けない位置では確定ボタンを押せなくし、理由を言う (押しても何も起きない、にしない)。
+    // 置けるが流れの外になる開始・停止・終了は、押せるまま橙で知らせる。
     function paintAllowed() {
       var kind = val('ac-tail-kind');
-      var ok = tailKindAllowed(ctx.getMmdText(), currentPlace(), kind, val('ac-tail-other'));
+      var place = currentPlace();
+      var ok = tailKindAllowed(ctx.getMmdText(), place, kind, val('ac-tail-other'));
       var note = document.getElementById('ac-tail-where-note');
-      if (note) note.style.display = ok ? 'none' : 'block';
+      if (note) {
+        note.textContent = ok ? '' : tailPlaceReason(place);
+        note.style.display = ok ? 'none' : 'block';
+      }
+      var warn = document.getElementById('ac-tail-where-warn');
+      if (warn) {
+        var w = ok ? tailKindWarning(ctx.getMmdText(), place, kind) : '';
+        warn.textContent = w ? '注意: ' + w : '';
+        warn.style.display = w ? 'block' : 'none';
+      }
       ['ac-tail-add', 'ac-tail-add-lines'].forEach(function(id) {
         var b = document.getElementById(id);
         if (b) b.disabled = !ok;
       });
     }
 
+    // BLK-owner-20260925-0312-4: 種別を替えても、打ちかけの欄は黙って消さない (同じ欄に戻れば戻る)。
+    var drafts = {};
+    function keepDrafts() {
+      var box = document.getElementById('ac-tail-detail');
+      if (!box) return;
+      Array.prototype.forEach.call(box.querySelectorAll('input[id], textarea[id]'), function(el) {
+        if (el.type === 'hidden' || el.type === 'checkbox' || el.type === 'radio') return;
+        drafts[el.id] = el.value;
+      });
+    }
+    function restoreDrafts() {
+      Object.keys(drafts).forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el && drafts[id] !== '' && drafts[id] != null) el.value = drafts[id];
+      });
+    }
+
     var renderTailDetail = function() {
       var kind = val('ac-tail-kind');
       var detailEl = document.getElementById('ac-tail-detail');
+      keepDrafts();
       var html2 = '';
       if (kind === 'action') {
+        // BLK-owner-20260925-0312-4: 処理欄も他の図種と同じく Enter で確定、改行は Shift+Enter
+        // (data-enter="submit" を modal-keys が見る)。複数行は Shift+Enter か「各行を一括追加」。
         html2 =
-          lbl('処理 (改行可)') +
+          lbl('処理 (Enter で追加 / Shift+Enter で改行)') +
           window.MA.reuseModal.buttonHtml('ac-tail-reuse') +
-          '<textarea id="ac-tail-text" style="width:100%;min-height:50px;font-family:inherit;font-size:12px;"></textarea>' +
+          '<textarea id="ac-tail-text" data-enter="submit" rows="2" style="width:100%;min-height:50px;font-family:inherit;font-size:12px;"></textarea>' +
           // BLK-junior-20260915-0606: アクション本文に打つのは先輩のクラス図にある
           // 実在メソッド名。名前帳を欄の下に出さないと、クラス図タブを別に開いて
           // 絞り込み、名前を控えてから戻るという往復が図種ごとに要る。
@@ -2452,16 +2501,16 @@ window.MA.modules.plantumlActivity = (function() {
       } else if (kind === 'swimlane') {
         html2 = P.fieldHtml('レーン名', 'ac-tail-lbl', '');
       } else if (kind === 'note') {
-        html2 = lbl('注釈の本文 (改行可)') +
-          '<textarea id="ac-tail-ntext" style="width:100%;min-height:50px;font-family:inherit;font-size:12px;"></textarea>';
+        html2 = lbl('注釈の本文 (Enter で追加 / Shift+Enter で改行)') +
+          '<textarea id="ac-tail-ntext" data-enter="submit" style="width:100%;min-height:50px;font-family:inherit;font-size:12px;"></textarea>';
       } else if (kind === 'other') {
         html2 = P.selectFieldHtml('足すもの', 'ac-tail-other', OTHER_BARE.map(function(o, i) {
           return { value: o.value, label: o.label, selected: i === 0 };
         }));
       }
       html2 +=
-        '<div id="ac-tail-where-note" style="display:none;font-size:10px;color:var(--text-secondary);margin:4px 0 6px 0;line-height:1.5;">' +
-          esc('この位置には置けません。フローの外 (start の前・stop の後) に置けるのはレーンと開始・停止だけです') + '</div>' +
+        '<div id="ac-tail-where-note" style="display:none;font-size:10px;color:var(--text-secondary);margin:4px 0 6px 0;line-height:1.5;"></div>' +
+        '<div id="ac-tail-where-warn" role="status" style="display:none;font-size:10px;color:var(--accent-orange, #ffa657);margin:4px 0 6px 0;line-height:1.5;"></div>' +
         P.primaryButtonHtml('ac-tail-add', '+ 追加');
       if (kind === 'action') {
         html2 +=
@@ -2470,6 +2519,7 @@ window.MA.modules.plantumlActivity = (function() {
             '1 行 = 1 アクション。空行は無視されます</div>';
       }
       detailEl.innerHTML = html2;
+      restoreDrafts();
       // 一括欄は「既に他の図にある行」を打ち直させないためのボタンを持つ。
       window.MA.reuseModal.bindButton('ac-tail-reuse', 'plantuml-activity', 'ac-tail-text');
       // 一括追加の欄でもあるので、チップは欄を置き換えずカーソル位置に差し込む。
@@ -2478,6 +2528,7 @@ window.MA.modules.plantumlActivity = (function() {
 
       function commit(out, t) {
         if (out !== t) {
+          drafts = {};
           window.MA.history.pushHistory();
           ctx.setMmdText(out);
           ctx.onUpdate();
@@ -2643,7 +2694,7 @@ window.MA.modules.plantumlActivity = (function() {
 
     function renderKinds() {
       var pt = currentPoint();
-      var allowed = AI.allowedKinds(ctx.getMmdText(), pt.line);
+      var allowed = AI.allowedKinds(ctx.getMmdText(), pt.line, pt.position);
       kindWrap.innerHTML = P.selectFieldHtml('要素', 'ac-ins-kind', allowed.map(function(k, i) {
         return { value: k.kind, label: k.label + '  (' + k.hint + ')', selected: i === 0 };
       })) +
@@ -2675,7 +2726,7 @@ window.MA.modules.plantumlActivity = (function() {
       var pt = currentPoint();
       var kindSel = document.getElementById('ac-ins-kind');
       var kind = kindSel ? kindSel.value : 'action';
-      if (!AI.isAllowed(ctx.getMmdText(), pt.line, kind)) return;
+      if (!AI.isAllowed(ctx.getMmdText(), pt.line, kind, pt.position)) return;
       var t = ctx.getMmdText();
       var out = t;
       if (kind === 'action') {
@@ -3266,6 +3317,8 @@ window.MA.modules.plantumlActivity = (function() {
     // BLK-owner-20260924-2259-prune: 追加ペインの 1 つのフォーム (追加する位置 + 種類)
     tailPlaceOptions: tailPlaceOptions,
     tailKindAllowed: tailKindAllowed,
+    tailKindWarning: tailKindWarning,
+    tailPlaceReason: tailPlaceReason,
     addFromTailForm: addFromTailForm,
     addActionsFromTailForm: addActionsFromTailForm,
     addElseifBranch: addElseifBranch,
