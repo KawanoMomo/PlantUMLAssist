@@ -1251,7 +1251,7 @@ window.MA.modules.plantumlComponent = (function() {
       showInsertForm: false,
       multiSelectConnect: true,
     },
-    buildOverlay: function(svgEl, parsedData, overlayEl) {
+    buildOverlay: function(svgEl, parsedData, overlayEl, dslText) {
       if (!svgEl || !overlayEl) return { matched: {}, unmatched: {} };
       var OB = window.MA.overlayBuilder;
       OB.syncDimensions(svgEl, overlayEl);
@@ -1428,7 +1428,7 @@ window.MA.modules.plantumlComponent = (function() {
       }
 
       // BLK-migrator-20260923-1909: フォームが読めない記法 (artifact / cloud { } / 題 …) にも行を指す枠を置く
-      OB.addUnclaimed(svgEl, overlayEl, claimed);
+      OB.addUnclaimed(svgEl, overlayEl, claimed, null, dslText);
 
       // BLK-human-20260912-2130: 小さい当たり判定を手前に。共通実装 (src/core)
       OB.raiseSmallestLast(overlayEl);

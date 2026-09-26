@@ -1143,7 +1143,7 @@ window.MA.modules.plantumlUsecase = (function() {
       showInsertForm: false,
       multiSelectConnect: true,  // Task 13: 2-element connect form
     },
-    buildOverlay: function(svgEl, parsedData, overlayEl) {
+    buildOverlay: function(svgEl, parsedData, overlayEl, dslText) {
       if (!svgEl || !overlayEl) return { matched: {}, unmatched: {} };
       var OB = window.MA.overlayBuilder;
       OB.syncDimensions(svgEl, overlayEl);
@@ -1304,7 +1304,7 @@ window.MA.modules.plantumlUsecase = (function() {
       }
 
       // フォームが読めない記法の要素・線・題・凡例にも、書かれた行を指す枠を置く
-      OB.addUnclaimed(svgEl, overlayEl, claimed);
+      OB.addUnclaimed(svgEl, overlayEl, claimed, null, dslText);
 
       // BLK-human-20260912-2130: 小さい当たり判定を手前に。共通実装 (src/core)
       OB.raiseSmallestLast(overlayEl);

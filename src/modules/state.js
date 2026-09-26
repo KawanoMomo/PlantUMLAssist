@@ -983,7 +983,8 @@ window.MA.modules.plantumlState = (function() {
       if (noteEnts.length === notes.length) {
         notes.forEach(function(n, idx) {
           var g = noteEnts[idx];
-          var bb = _entityBBox(g);
+          // BLK-migrator-20260926-1116: 紙の外形から取る (中の Creole の表・箇条書きの点を範囲にしない)。
+          var bb = (OB.notePaperBox && OB.notePaperBox(g)) || _entityBBox(g);
           if (!bb) {
             // Note path-based shapes may not have a rect; use getBBox or skip
             return;

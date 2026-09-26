@@ -2143,9 +2143,20 @@ window.MA.modules.plantumlActivity = (function() {
           if (first.x !== last.x || first.y !== last.y) notePolys.push(p);
         }
       });
+      var noteBoxOf = _polygonBBox;
+      // BLK-migrator-20260926-1116: PlantUML 1.2026 は note を 5 点の polygon でなく、紙の外形の path と
+      // 折り返しの path で描く。紙の外形 (OB.notePapers) を全図種共通の 1 か所で取り、中の Creole の表・
+      // 箇条書きの文字ごとに枠を作らない。
+      if (notePolys.length !== notes.length && OB.notePapers) {
+        var papers = OB.notePapers(svgEl);
+        if (papers.length === notes.length) {
+          notePolys = papers;
+          noteBoxOf = function(p) { return p.box; };
+        }
+      }
       if (notePolys.length === notes.length) {
         notes.forEach(function(n, idx) {
-          var bb = _polygonBBox(notePolys[idx]);
+          var bb = noteBoxOf(notePolys[idx]);
           if (!bb) return;
           OB.addRect(overlayEl, bb.x, bb.y, bb.width, bb.height, {
             'data-type': 'note',
