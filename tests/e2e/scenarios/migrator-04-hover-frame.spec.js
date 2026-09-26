@@ -2053,6 +2053,7 @@ test('migrator 手順 4 — 枠 ok と記録した実物の図は、基準で枠
   test.skip(!HB.corpusAvailable(HB.CORPUS_DIR), 'コーパス (persona-data の migrator) が無い環境');
   test.setTimeout(8 * 60 * 1000);
   await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.addInitScript(HB.watchRenders);
   await bootPlain(page);
   const env = await page.evaluate(() => fetch('/env').then((r) => r.json()));
   const version = env.jarVersion;
@@ -2078,21 +2079,17 @@ test('migrator 手順 4 — 枠 ok と記録した実物の図は、基準で枠
   for (const rel of targets) {
     const abs = path.join(HB.CORPUS_DIR, rel);
     if (!fs.existsSync(abs)) { current[rel] = { error: 'ファイルが無い' }; continue; }
-    // 前の図の答え (描けた図・ERROR) を消しておき、この図の描画が終わったことを見分ける。
-    await page.evaluate(() => {
-      const s = document.querySelector('#preview-svg svg'); if (s) s.setAttribute('data-hit-old', '1');
-      const st = document.getElementById('render-status'); if (st) st.textContent = '';
-    });
+    const prev = await page.evaluate(() => window.__hitDoc());
     const [chooser] = await Promise.all([
       page.waitForEvent('filechooser', { timeout: 20000 }),
       page.evaluate(() => { document.getElementById('file-input').click(); }),
     ]);
     await chooser.setFiles(abs);
-    const done = await page.waitForFunction(() => {
-      const s = document.querySelector('#preview-svg svg');
-      const st = (document.getElementById('render-status') || {}).textContent || '';
-      return st === 'ERROR' || (!!s && !s.hasAttribute('data-hit-old') && /^Rendered/.test(st));
-    }, null, { timeout: 30000 }).then(() => true, () => false);
+    // 本文が変わったことと、その本文の描画が出たことを待つ (前の図の遅れた描画を取り違えない)。
+    const done = await page.waitForFunction((p) => {
+      const d = window.__hitDoc();
+      return (d.name !== p.name || d.text !== p.text) && window.__hitSettled();
+    }, prev, { timeout: 30000 }).then(() => true, () => false);
     if (!done) { current[rel] = { error: '描画が終わらない' }; continue; }
     if ((await page.locator('#render-status').textContent()) === 'ERROR') { current[rel] = { error: 'ERROR' }; continue; }
     // 手順 4 の「幅合わせ」。点の名前は SVG 座標なので倍率に依らないが、細い要素の当たりは倍率で変わるため毎回そろえる。

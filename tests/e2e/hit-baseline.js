@@ -204,14 +204,48 @@ function probeInPage() {
       sx = q.x; sy = q.y; cr = pc.getBoundingClientRect();
       if (outside()) continue;
     }
-    const hit = document.elementFromPoint(sx, sy);
+    // 開いた直後の知らせ (#ma-toast、6 秒で消える) は画面の下の中ほどに重なる。利用者は消えてから指すので、
+    // その下の要素で答える (覆われた点を「枠なし」と数えていた。BLK-builder-20260926-1721-1)。
+    const hit = document.elementsFromPoint(sx, sy).filter((e) => !e.closest('#ma-toast'))[0];
     const rect = hit && hit.closest ? hit.closest('#overlay-layer [data-type]') : null;
     out[key] = rect ? rect.getAttribute('data-type') + ':' + rect.getAttribute('data-line') : '-';
   }
   return out;
 }
 
+// ── 描画が「この本文の」答えで落ち着いたかを見分ける ─────────────────────
+// 開いた直後に前の図の遅れた描画が届くと、新しい SVG が出て「Rendered」になっても前の図のことがある
+// (基準に前の図の点が入り、次の回で「点が消えた」と出ていた。BLK-builder-20260926-1721-1)。
+// /render に送った本文を覚え、最後に送った本文が今の本文 (#editor) と同じで、その答えが画面に出た
+// (状態が Rendered / ERROR。途中は Rendering…) ときだけ落ち着いたと見る。古い答えはアプリが捨てる (renderGen)。
+function watchRenders() {
+  if (window.__hitRender) return;
+  window.__hitRender = { text: null };
+  // 開いた図 (タブの名前と本文) と、その本文の描画が画面に出たか。page.waitForFunction から呼ぶ。
+  window.__hitDoc = function() {
+    const ed = document.getElementById('editor');
+    let name = '';
+    try { name = (window.MA.workspace.getActive() || {}).name || ''; } catch (e) { name = ''; }
+    return { name: name, text: ed ? ed.value : '' };
+  };
+  window.__hitSettled = function() {
+    const ed = document.getElementById('editor');
+    const st = (document.getElementById('render-status') || {}).textContent || '';
+    return !!ed && window.__hitRender.text === ed.value && (st === 'ERROR' || /^Rendered/.test(st));
+  };
+  const orig = window.fetch;
+  window.fetch = function(url, opts) {
+    try {
+      if (/(^|\/)render(\?|$)/.test(String(url)) && opts && opts.body) {
+        window.__hitRender.text = JSON.parse(opts.body).text;
+      }
+    } catch (e) {}
+    return orig.apply(this, arguments);
+  };
+}
+
 module.exports = {
+  watchRenders,
   CORPUS_DIR, BASELINE_DIR, baselinePath, readBaseline, latestOtherBaseline,
   okNamesFromProgress, resolveNames, corpusAvailable, compare, formatReport, writeBaseline, probeInPage,
 };
