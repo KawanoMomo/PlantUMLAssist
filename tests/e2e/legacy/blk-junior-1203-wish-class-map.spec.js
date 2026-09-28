@@ -3,7 +3,7 @@
 // 1 クリックで取り込めること。継承は向きを保ったまま入り、Relation フォームで
 // From/To を選び直す (逆向きに張ってしまう) 場面が無くなる。
 const { test, expect } = require('@playwright/test');
-const { gotoApp, getEditorText } = require('../helpers');
+const { gotoApp, getEditorText, openCompareTabs } = require('../helpers');
 
 // 先輩のクラス図。共通基底クラス DriverBase とそこからの継承が 2 本ある。
 const SENIOR = [
@@ -39,7 +39,7 @@ async function openMap(page, mine) {
   await page.locator('#btn-tab-new').click();
   await page.waitForTimeout(600);
   await typeDsl(page, mine == null ? MINE : mine);
-  await page.locator('#btn-tab-compare').click();
+  await openCompareTabs(page);
   await expect(page.locator('#compare-pane')).toBeVisible();
   await page.locator('#btn-map-run').click();
   await expect(page.locator('#map-list')).toBeVisible();
@@ -136,7 +136,7 @@ test('状態遷移図では今までどおり状態・遷移の対応表が出�
   await page.locator('#btn-tab-new').click();
   await page.waitForTimeout(600);
   await typeDsl(page, '@startuml\n[*] --> Idle\nstate Idle\n@enduml');
-  await page.locator('#btn-tab-compare').click();
+  await openCompareTabs(page);
   await page.locator('#btn-map-run').click();
   await expect(page.locator('#map-list')).toContainText('状態 (参照図 / 自分の図)');
   await expect(page.locator('#map-list')).toContainText('遷移 (参照図 / 自分の図)');

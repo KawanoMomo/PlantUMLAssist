@@ -6,7 +6,7 @@
 // 1 組ずつ「同じもの」「対応なし」と決めていけば推測が減り、0 件になった時点で
 // 「参照図にあって自分の図に無い要素は N 件」と言い切れることを見る。
 const { test, expect } = require('@playwright/test');
-const { gotoApp, saveDirFor } = require('../helpers');
+const { gotoApp, saveDirFor, openCompareTabs } = require('../helpers');
 
 // 起票そのままの 2 枚。先輩は電気的な出力状態、自分は生死 + 選択擬似状態。
 const SENIOR = [
@@ -50,7 +50,7 @@ async function openMap(page) {
   await page.locator('#btn-tab-new').click();
   await page.waitForTimeout(600);
   await typeDsl(page, MINE);
-  await page.locator('#btn-tab-compare').click();
+  await openCompareTabs(page);
   await expect(page.locator('#compare-pane')).toBeVisible();
   await page.locator('#btn-map-run').click();
   await expect(page.locator('#map-list')).toBeVisible();

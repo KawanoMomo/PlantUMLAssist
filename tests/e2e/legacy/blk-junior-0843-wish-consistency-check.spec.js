@@ -3,7 +3,7 @@
 // 打ち間違い・並べ間違い・語尾の不統一を保存前に挙げる。
 // これまでは目視で見比べるしかなく、気づくのは保存した後だった。
 const { test, expect } = require('@playwright/test');
-const { gotoApp } = require('../helpers');
+const { gotoApp, openCompareTabs } = require('../helpers');
 
 const SENIOR = [
   '@startuml',
@@ -38,7 +38,7 @@ async function twoTabsThenCompare(page, mine) {
   await page.locator('#btn-tab-new').click();
   await page.waitForTimeout(600);
   await typeDsl(page, mine);
-  await page.locator('#btn-tab-compare').click();
+  await openCompareTabs(page);
   await expect(page.locator('#compare-pane')).toBeVisible();
   await expect(page.locator('#compare-svg svg')).toBeVisible({ timeout: 15000 });
 }

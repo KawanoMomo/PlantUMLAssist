@@ -41,22 +41,17 @@ async function clearDir(page) {
   }, DIR);
 }
 
+// 保存先の一覧は FILES の保存先の右クリック「保存先の一覧を開く」で中央の枠に開く
+// (BLK-owner-20260924-0637-1。scenarios/_scenario.js の openFolder と同じ経路)。旧経路 (見出しを
+// 畳んで開き直す) は FILES の節を開くだけで、一覧の枠は見えないまま待ち続けた。
 async function openFolder(page) {
-  // 保存先は既定で開いている (design 10a)。開いていれば畳んでから開き直し、一覧を今の中身で描き直す。
-  if (await page.locator('#folder-panel.open').count()) await page.locator('#btn-tab-folder').click();
-  await page.locator('#btn-tab-folder').click();
-  await page.waitForSelector('#folder-panel.open .folder-item');
+  await require('../scenarios/_scenario').openFolder(page);
+  await page.waitForSelector('#folder-panel.open.is-list .folder-item');
 }
 
-// パネルは外側クリックで閉じる。閉じきる前に開き直すと、開く操作が
-// 「閉じる」に化けて一覧が出てこない。
+// 中央の枠の一覧は ✕ で閉じる (ツリーの保存先節は開いたまま)。旧経路の外側クリックでは閉じない。
 async function closeFolder(page) {
-  await page.locator('body').click({ position: { x: 5, y: 5 } });
-  await page.waitForSelector('#folder-panel.open', { state: 'detached' }).catch(() => {});
-  await page.waitForFunction(() => {
-    const el = document.getElementById('folder-panel');
-    return el && !el.classList.contains('open');
-  });
+  await require('../scenarios/_scenario').closeFolderList(page);
 }
 
 function itemOf(page, name) {

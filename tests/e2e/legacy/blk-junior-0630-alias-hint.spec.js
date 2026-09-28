@@ -21,12 +21,14 @@ async function seedUsecase(page) {
 
 test.describe('BLK-junior-20260908-0630: Alias 欄のヒントと id 併記', () => {
 
-  test('欄の名前が Alias (識別子) / Label (表示名) になっている', async ({ page }) => {
+  // BLK-owner-20260924-2259-prune で 6 図種の追加フォームの欄名を日本語にそろえ、
+  // Alias / Label は「名前 (識別子)」「表示名」になった。識別子と表示名を言い分けるのは同じ。
+  test('欄の名前が 名前 (識別子) / 表示名 になっている', async ({ page }) => {
     await seedUsecase(page);
     await page.locator('#uc-tail-kind').selectOption('usecase');
     await page.waitForTimeout(300);
-    await expect(page.locator('#props-content')).toContainText('Alias (識別子)');
-    await expect(page.locator('#props-content')).toContainText('Label (表示名)');
+    await expect(page.locator('#props-content')).toContainText('名前 (識別子)');
+    await expect(page.locator('#props-content')).toContainText('表示名');
   });
 
   test('打つ前はヒントを出さない', async ({ page }) => {
