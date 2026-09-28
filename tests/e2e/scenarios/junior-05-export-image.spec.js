@@ -93,6 +93,8 @@ test('手順5 資料化: 状態遷移図を選ぶと SVG で出て、(資料用)
 test('手順5 資料化: シーケンス図を選ぶと PNG(透過背景)に切り替わる', async ({ page }) => {
   await S.bootWithSaveDir(page, DIR);
   await S.clearDir(page, DIR);
+  // 前の回に書いた PNG が残っていると、書けなかったことを見逃す。
+  require('fs').rmSync(path.join(S.absDirFor(__filename), 'GPIOドライバ初期化シーケンス(資料用).png'), { force: true });
   await S.putDoc(page, DIR, 'GPIOドライバ状態遷移', S.GPIO_STATE);
   await S.putDoc(page, DIR, 'GPIOドライバ初期化シーケンス', S.GPIO_SEQ);
   await page.reload();
@@ -117,6 +119,24 @@ test('手順5 資料化: シーケンス図を選ぶと PNG(透過背景)に切�
 
   expect(download).not.toBeNull();
   expect(download.suggestedFilename()).toBe('GPIOドライバ初期化シーケンス(資料用).png');
+
+  // BLK-junior-20260928-2255: 画面は「保存フォルダと提出物庫に入れました」と言うのに、PNG の実体はどちらにも
+  // 無かった。保存フォルダに PNG があり、庫にも同じ大きさの PNG が控えられ、画面はその大きさを言う。
+  const fs = require('fs');
+  const abs = S.absDirFor(__filename);
+  const png = path.join(abs, 'GPIOドライバ初期化シーケンス(資料用).png');
+  await expect(page.locator('#mexp-state')).toContainText('バイト', { timeout: 15000 });
+  expect(fs.existsSync(png)).toBe(true);
+  const bytes = fs.readFileSync(png);
+  expect(bytes.subarray(1, 4).toString('latin1')).toBe('PNG');
+  expect(bytes.length).toBeGreaterThan(100);
+  await expect(page.locator('#mexp-state')).toContainText(bytes.length + ' バイト');
+  await expect(page.locator('#mexp-state')).toContainText('保存フォルダと提出物庫');
+  await expect(page.locator('#mexp-result-text')).toContainText('も置けました');
+  const vault = path.join(abs, '_vault');
+  const vaultPngs = fs.readdirSync(vault).filter((f) => f.endsWith('.png'))
+    .map((f) => fs.statSync(path.join(vault, f)).size);
+  expect(vaultPngs).toContain(bytes.length);
 });
 
 // 資料化の残りが部品をまたいで見える (BLK-junior-20260914-2006-wish)。

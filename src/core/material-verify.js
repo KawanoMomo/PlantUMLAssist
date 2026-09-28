@@ -62,7 +62,8 @@ window.MA.materialVerify = (function() {
   //   plan:  { docName, filename, formatLabel, source }
   //   info:  workspace.listFolder() の返り値 ({ entries, dir, exists })
   // status は 'ok' (置けた) / 'missing' (一覧に無い) / 'unknown' (一覧を読めなかった)。
-  function verdict(info, plan) {
+  // done (任意): runMaterialPlan の結果 { imageSize }。画像の実体を保存先に書けた大きさ (BLK-junior-20260928-2255)。
+  function verdict(info, plan, done) {
     var p = plan || {};
     var docName = _s(p.docName);
     var dir = _s(info && info.dir);
@@ -87,7 +88,9 @@ window.MA.materialVerify = (function() {
     if (size) detail.push(size);
     var text = '保存先' + (dir ? ' ' + dir : '') + ' に ' + docName + '.puml を置けました'
       + (detail.length ? '（' + detail.join(' · ') + '）' : '');
-    if (_s(p.filename)) text += '。画像は ' + _s(p.filename) + ' で書き出しました';
+    var imgSize = done ? sizeText(done.imageSize) : '';
+    if (_s(p.filename) && imgSize) text += '。画像 ' + _s(p.filename) + ' も置けました（' + imgSize + '）';
+    else if (_s(p.filename)) text += '。画像は ' + _s(p.filename) + ' で書き出しました';
     return {
       status: 'ok', found: true, docName: docName, dir: dir,
       mtime: _s(hit.mtime), size: hit.size, when: when, text: text,

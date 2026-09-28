@@ -81,6 +81,7 @@ curl -sS -X POST http://127.0.0.1:8766/verify-svg -H "Content-Type: application/
 | `POST /autosave` | `{type, dir, dsl}` | 図の DSL を保存する |
 | `DELETE /autosave` | `?dir=&type=` | 保存を消す |
 | `POST /autosave-svg` | `{type, dir, svg}` | 書き出した svg を保存する (印を刻む) |
+| `POST /autosave-image` | `{name, dir, image: {ext, base64}}` | 資料化した画像 (png / svg) を保存フォルダに置き、書けた大きさを返す |
 | `GET /autosave-versions` | `?dir=&type=` | 1 枚の図の版の一覧 |
 | `GET /version-search` | `?dir=&q=` | 保存フォルダの全図の版から部品名を探す (混入点の材料) |
 | `GET /version-diff` | `?dir=&type=[&stamp=]` | 1 枚の図の「その版」と「直前の版」の本文を組で返す (全文差分の材料) |

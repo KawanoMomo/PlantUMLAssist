@@ -30643,6 +30643,38 @@ function closeMaterialExport() {
 // (2 通りの手順を持つと、まとめて出したときだけ庫に入らない、が起きる)。
 // opts.open=false のときはタブを開き直さない (まとめて流すときに図種の数だけ
 // タブが開くと、終わったあとの画面が資料の最後の 1 枚で埋まる)。
+// BLK-junior-20260928-2255: 画像はブラウザのダウンロードに渡すだけで、保存フォルダにも提出物庫にも
+// 実体が無かった (画面は「保存フォルダと提出物庫に入れました」と言っていた)。保存フォルダと庫に
+// 画像を書き、書けたバイト数が作った画像と合うのを確かめてから済んだことにする。合わなければ理由を投げる。
+function _mexpBlobBase64(blob) {
+  return new Promise(function(resolve, reject) {
+    if (typeof FileReader !== 'function') { reject(new Error('画像を読めません')); return; }
+    var fr = new FileReader();
+    fr.onload = function() { resolve(String(fr.result || '').split(',')[1] || ''); };
+    fr.onerror = function() { reject(new Error('画像を読めません')); };
+    fr.readAsDataURL(blob);
+  });
+}
+
+function _mexpPutImage(p, image, size, dir) {
+  var ME = window.MA.materialExport;
+  return window.fetch('/autosave-image', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: p.docName, dir: dir, image: image }),
+  }).then(function(r) {
+    return r.json().catch(function() { return {}; }).then(function(j) {
+      if (!r.ok) throw new Error(ME.imageFailText(p, '保存フォルダ', j && j.error ? j.error : 'HTTP ' + r.status));
+      if (Number(j.size) !== size) {
+        throw new Error(ME.imageFailText(p, '保存フォルダ', '書けたのは ' + j.size + ' / ' + size + ' バイト'));
+      }
+      return j;
+    });
+  }, function(e) {
+    throw new Error(ME.imageFailText(p, '保存フォルダ', (e && e.message) || 'server に届きません'));
+  });
+}
+
 function runMaterialPlan(p, opts) {
   var ME = window.MA.materialExport;
   var WS = window.MA.workspace;
@@ -30651,10 +30683,14 @@ function runMaterialPlan(p, opts) {
   var openTab = o.open !== false;
   var dir = _wsFileDir();
   var dsl = '';
+  var image = null;
+  var size = 0;
+  var out = { plan: p, dsl: '', imageSize: 0, imagePath: '', vault: false };
   return Promise.resolve(WS.loadFile(p.source, dir))
     .then(function(text) {
       if (!text || String(text).trim() === '') throw new Error('元の図が空です');
       dsl = ME.applyTitle(text, p.title);
+      out.dsl = dsl;
       return renderDslToSvg(dsl);
     })
     .then(function(svg) {
@@ -30662,10 +30698,19 @@ function runMaterialPlan(p, opts) {
       return svgTextToPngBlob(svg, true);
     })
     .then(function(blob) {
+      if (!blob || !blob.size) throw new Error(ME.imageFailText(p, '保存フォルダ', '画像を作れませんでした'));
+      size = blob.size;
       downloadBlob(p.filename, blob);
+      return _mexpBlobBase64(blob);
+    })
+    .then(function(b64) {
+      image = { ext: ME.formatExt(p.format).replace(/^\./, ''), base64: b64 };
       return WS.saveToFile({ name: p.docName, dsl: dsl }, dir);
     })
-    .then(function() {
+    .then(function() { return _mexpPutImage(p, image, size, dir); })
+    .then(function(put) {
+      out.imageSize = put.size;
+      out.imagePath = put.path || '';
       if (openTab) {
         saveActiveDoc();
         var detected = WS.detectType(dsl);
@@ -30676,9 +30721,20 @@ function runMaterialPlan(p, opts) {
         });
         applyActiveDoc();
       }
-      return stashToVault(p.formatLabel);
+      // 開き直さないとき (まとめて流すとき) も、控えるのは資料用の本文 (今のタブの本文ではない)。
+      return stashToVault(p.formatLabel, { dsl: dsl, name: p.docName, image: image });
     })
-    .then(function() { return p; });
+    .then(function(res) {
+      if (_fiFolderMode()) {
+        var got = res && res.entry ? Number(res.entry.imageSize) : NaN;
+        if (got !== size) {
+          throw new Error(ME.imageFailText(p, '提出物庫',
+            res ? '書けたのは ' + got + ' / ' + size + ' バイト' : '庫に控えられませんでした'));
+        }
+        out.vault = true;
+      }
+      return out;
+    });
 }
 
 // ── 資料化の根拠を残す (BLK-junior-20260915-0007) ───────────────────────────
@@ -30767,16 +30823,16 @@ function _mexpReadback(p, dsl) {
   });
 }
 
-function _mexpVerify(p, dsl) {
+function _mexpVerify(p, dsl, done) {
   var MV = window.MA.materialVerify;
   var WS = window.MA.workspace;
   if (!MV || !WS || !WS.listFolder || !p) return Promise.resolve(null);
   return Promise.resolve(WS.listFolder(_wsFileDir())).then(function(info) {
-    var v = MV.verdict(info, p);
+    var v = MV.verdict(info, p, done);
     _mexpShowVerify(v);
     return _mexpReadback(p, dsl).then(function() { return v; });
   }, function() {
-    var v = MV.verdict(null, p);
+    var v = MV.verdict(null, p, done);
     _mexpShowVerify(v);
     return _mexpReadback(p, dsl).then(function() { return v; });
   });
@@ -30789,43 +30845,16 @@ function runMaterialExport() {
   var state = _mexpSel('mexp-state');
   var run = _mexpSel('mexp-run');
   if (!ME || !WS || !p) return Promise.resolve(null);
-  var dir = _wsFileDir();
   if (run) run.disabled = true;
   if (state) state.textContent = p.source + ' を ' + p.formatLabel + ' で資料化しています…';
 
   var dsl = '';
-  return Promise.resolve(WS.loadFile(p.source, dir))
-    .then(function(text) {
-      if (!text || String(text).trim() === '') throw new Error('元の図が空です');
-      dsl = ME.applyTitle(text, p.title);
-      return renderDslToSvg(dsl);
-    })
-    .then(function(svg) {
-      if (p.format === 'svg') {
-        return new Blob([svg], { type: 'image/svg+xml' });
-      }
-      return svgTextToPngBlob(svg, true);
-    })
-    .then(function(blob) {
-      downloadBlob(p.filename, blob);
-      // 資料用の版を保存フォルダにも残す (次の周に開き直せないと資料を作り直しになる)。
-      return WS.saveToFile({ name: p.docName, dsl: dsl }, dir);
-    })
-    .then(function() {
-      // 開いているタブを資料用の版に切り替える。一覧から開き直す手順がここで済む。
-      saveActiveDoc();
-      var detected = WS.detectType(dsl);
-      openExistingFile({
-        name: p.docName,
-        dsl: dsl,
-        diagramType: (detected && modules[detected]) ? detected : currentDiagramType,
-      });
-      applyActiveDoc();
-      // 書き出した瞬間が周の区切り。Export と同じく庫へ控える。
-      return stashToVault(p.formatLabel);
-    })
-    .then(function() {
-      var msg = ME.doneMessage(p);
+  // 書き出し・資料用の版の保存・画像を保存フォルダと庫へ・タブの切り替えは runMaterialPlan と同じ道
+  // (BLK-junior-20260928-2255: 2 通りに持っていたので、画像の実体を書く直しが片方に漏れる)。
+  return runMaterialPlan(p, { open: true })
+    .then(function(done) {
+      dsl = done.dsl;
+      var msg = ME.doneMessage(p, done);
       // 貼付先が登録済みなら、出来た画像をどの見出しに貼るかまでを 1 行で言う
       // (BLK-junior-20260914-2106-wish: 資料化の直後に確かめに戻らないため)。
       var MAn2 = window.MA.materialAnchor;
@@ -30837,7 +30866,7 @@ function runMaterialExport() {
       try { refreshFolderPanelNow(); } catch (e) {}
       // BLK-junior-20260915-0007: 保存先の一覧を読み直して「本当に置けたか」を
       // このモーダルに残す。閉じないので、トーストを見落としても📂一覧へ戻らずに済む。
-      return _mexpVerify(p, dsl).then(function() { return p; });
+      return _mexpVerify(p, dsl, done).then(function() { return p; });
     })
     .catch(function(e) {
       var msg = ME.failMessage(p, e);
@@ -31519,20 +31548,29 @@ function loadVault(force) {
 }
 
 // 画像を書き出した瞬間に呼ぶ。積めなくても書き出しは止めない (庫は副作用)。
-function stashToVault(format) {
+// opts (任意): { dsl, name, image: {ext, base64} } — 今のタブではない図を控えるとき (資料化をまとめて流すとき) と、
+// 画像の実体も庫に入れるとき (BLK-junior-20260928-2255)。
+function stashToVault(format, opts) {
   var V = window.MA.vault;
   if (!V || !_fiFolderMode()) return Promise.resolve(null);
-  var dsl = mmdText;
+  var o = opts || {};
+  var dsl = (typeof o.dsl === 'string') ? o.dsl : mmdText;
   if (!dsl || !dsl.trim()) return Promise.resolve(null);
   var doc = window.MA.workspace ? window.MA.workspace.getActive() : null;
+  var title = (currentParsed && currentParsed.meta && currentParsed.meta.title) || '';
+  if (typeof o.dsl === 'string') {
+    var tm = /^\s*title\s+(.+)$/im.exec(o.dsl);
+    title = tm ? tm[1].trim() : '';
+  }
   var entry = V.entryFor({
     dsl: dsl,
-    title: (currentParsed && currentParsed.meta && currentParsed.meta.title) || '',
-    name: doc ? doc.name : '',
+    title: title,
+    name: o.name || (doc ? doc.name : ''),
     format: format,
   });
   entry.dsl = dsl;
   entry.dir = _wsFileDir();
+  if (o.image) entry.image = o.image;
   return window.fetch('/vault', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
