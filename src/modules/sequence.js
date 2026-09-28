@@ -1565,6 +1565,38 @@ window.MA.modules.plantumlSequence = (function() {
     return ai.resolve(text, line, position, hint);
   }
 
+  // BLK-human-20260928-2255-1: 図の末尾に入れるときの基準行 = @enduml の行の前。@startuml が無い本文には決めない
+  // (@enduml が無ければ最後の中身の行の後ろ)。
+  function resolveTailInsert(text) {
+    if (typeof text !== 'string') return null;
+    var lines = text.split(/\r?\n/);
+    var start = -1, end = lines.length;
+    for (var i = 0; i < lines.length; i++) {
+      if (start < 0 && /^\s*@startuml\b/i.test(lines[i])) start = i;
+      else if (start >= 0 && /^\s*@enduml\b/i.test(lines[i])) { end = i; break; }
+    }
+    if (start < 0) return null;
+    if (end < lines.length) return { line: end + 1, position: 'before', tail: true };
+    var last = start;
+    for (var j = start + 1; j < end; j++) {
+      var t = lines[j].trim();
+      if (t && t.charAt(0) !== "'") last = j;
+    }
+    return { line: last + 1, position: 'after', tail: true };
+  }
+
+  // BLK-human-20260928-2255-1: 挿入フォームで「+ 新規追加…」の参加者を宣言の場所へ足すと、
+  // それより下の行は 1 行ずつずれる。挿入先の行 (押した位置の基準行) も同じだけずらす
+  // (ずらさないとメッセージが 1 行上 = 宣言の直後や別のメッセージの前に入る)。
+  function _shiftAfterAdd(before, after, line) {
+    var a = String(before).split('\n'), b = String(after).split('\n');
+    var added = b.length - a.length;
+    if (added <= 0) return line;
+    var k = 0;
+    while (k < a.length && a[k] === b[k]) k++;
+    return (k <= line - 1) ? line + added : line;
+  }
+
   // 挿入結果が DSL の何行目になるか。text があれば帯を避けた行、無ければ
   // before は line そのもの、after は line の次。
   function insertTargetLine(line, position, text, hint) {
@@ -1902,7 +1934,11 @@ window.MA.modules.plantumlSequence = (function() {
           if (!al) { alert('新しい参加者の Alias は必須です'); return; }
           var ptype = document.getElementById('seq-mod-new-ptype').value;
           window.MA.history.pushHistory();
+          var tBefore = t;
           t = addParticipant(t, ptype, al, al);
+          line = _shiftAfterAdd(tBefore, t, line);
+          // 帯を見て決める挿入先も、参加者を足した後の本文で決め直す
+          insertFn = _activationAwareInsertFn(t, line, position, kind, opts.zoneHint);
           if (fr === '__new__') fr = al;
           if (to === '__new__') to = al;
         } else {
@@ -2669,6 +2705,10 @@ window.MA.modules.plantumlSequence = (function() {
       if (!window.MA.sequenceOverlay || !window.MA.sequenceOverlay.resolveInsertLine) return null;
       return window.MA.sequenceOverlay.resolveInsertLine(overlayEl, x, y);
     },
+    // BLK-human-20260928-2255-1: メッセージがまだ 1 本も無い図 (＋ で開いた白紙・参加者だけ) では
+    // resolveInsertLine が挿入先を決められず、図を押しても「ここに挿入」が開かなかった。
+    // そのときは図の末尾 (@enduml の前) に入れる。
+    resolveTailInsert: resolveTailInsert,
     template: function() {
       return [
         '@startuml',

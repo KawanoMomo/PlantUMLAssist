@@ -127,4 +127,61 @@ test.describe('人間 手順 2 — 途中から足した参加者の宣言が上
     const order = await participantOrder(page, ['User', 'Front', 'DB', 'MQ']);
     expect(order).toEqual(['User', 'Front', 'DB', 'MQ']);
   });
+
+  // BLK-human-20260928-2255-1: ＋ で開いた白紙 (`@startuml` / `@enduml` だけ) では、図を押すと挿入のガイド線は出るのに
+  // 何も開かず、図からメッセージを書けなかった。白紙は図の末尾 (@enduml の前) に入れる。
+  test('白紙のシーケンスで図を押すと「ここに挿入」が開き、新しい参加者とメッセージが宣言 → メッセージの順に入る', async ({ page }) => {
+    await gotoApp(page);
+    await setDsl(page, ['@startuml', '@enduml'].join('\n'));
+    await expect(page.locator('#preview-svg svg')).toHaveCount(1);
+    const box = await page.locator('#preview-svg svg').boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await expect(page.locator('#hover-layer text')).toContainText('2 行目に挿入');
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    await expect(page.locator('#seq-modal')).toBeVisible();
+    await expect(page.locator('#seq-pick-target')).toContainText('2 行目に挿入');
+    // まとめて足す入口も同じメニューにある
+    await expect(page.locator('#seq-pick-scaffold')).toBeVisible();
+
+    await page.locator('#seq-pick-message').click();
+    await page.locator('#seq-mod-from').selectOption('__new__');
+    await page.locator('#seq-mod-to').selectOption('__new__');
+    await page.locator('#seq-mod-new-alias').fill('Bob');
+    await page.locator('#seq-mod-confirm').click();
+    await page.waitForTimeout(800);
+    const lines = (await getEditorText(page)).split('\n').filter((l) => l.trim());
+    expect(lines[0]).toContain('@startuml');
+    expect(lines[1]).toMatch(/^\s*participant\s+Bob\b/);
+    expect(lines[2]).toMatch(/^\s*Bob\s*->\s*Bob\b/);
+    expect(lines[3]).toContain('@enduml');
+  });
+
+  // 同じ窓で「+ 新規追加…」の参加者を足すと、宣言の分だけ下の行がずれるのに挿入先はずらしていなかった
+  // (押したメッセージの後ではなく、その 1 行上に入った)。
+  test('メッセージの間を押して新しい参加者へのメッセージを足すと、押した位置 (そのメッセージの後) に入る', async ({ page }) => {
+    await gotoApp(page);
+    await setDsl(page, THREE_MESSAGES);
+    await expect(page.locator('#overlay-layer rect[data-type="message"][data-line="7"]')).toHaveCount(1);
+    const pt = await page.evaluate(() => {
+      const a = document.querySelector('#overlay-layer rect[data-type="message"][data-line="6"]').getBoundingClientRect();
+      // 6 行目の矢印のすぐ下、7 行目 (Front の自己メッセージ) の枠より左の空き (2 本のライフラインの間)。
+      const b = document.querySelector('#overlay-layer rect[data-type="message"][data-line="7"]').getBoundingClientRect();
+      return { x: Math.min(a.x + a.width * 0.35, b.x - 8), y: a.y + a.height + 4 };
+    });
+    await page.mouse.click(pt.x, pt.y);
+    await expect(page.locator('#seq-pick-target')).toContainText('6 行目の後');
+    await page.locator('#seq-pick-message').click();
+    await page.locator('#seq-mod-from').selectOption('Front');
+    await page.locator('#seq-mod-to').selectOption('__new__');
+    await page.locator('#seq-mod-new-alias').fill('DB');
+    await page.locator('#seq-mod-confirm').click();
+    await page.waitForTimeout(800);
+    const lines = (await getEditorText(page)).split('\n');
+    const decl = lines.findIndex((l) => /^\s*participant\s+DB\b/.test(l));
+    const first = lines.findIndex((l) => l.includes('User -> Front : 申し込む'));
+    expect(decl).toBeGreaterThan(-1);
+    expect(decl).toBeLessThan(first);
+    expect(lines[first + 1]).toMatch(/^\s*Front\s*->\s*DB\b/);
+    expect(lines[first + 2]).toContain('Front -> Front : 内容を確かめる');
+  });
 });

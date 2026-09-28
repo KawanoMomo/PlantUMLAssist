@@ -988,6 +988,13 @@ function init() {
     overlayElForHover.addEventListener('mouseleave', _clearHoverPeers);
   }
 
+  // BLK-human-20260928-2255-1: 図の中に挿入先の目印 (メッセージ) がまだ無いとき (＋ で開いた白紙など) は、
+  // 図の末尾に入れる。ガイド線だけ出て押しても何も開かない、を無くす。
+  function _tailInsertRes() {
+    if (!currentModule || typeof currentModule.resolveTailInsert !== 'function') return null;
+    try { return currentModule.resolveTailInsert(mmdText); } catch (e) { return null; }
+  }
+
   // 選択中は hover-insert ガイドと挿入 popup を両方抑制する。
   // 理由: 選択 = 編集モードでユーザーは選択項目を扱っており、別の箇所への
   // 挿入を示唆する点線ガイドは視覚ノイズになる。また空白クリックは選択解除に
@@ -1037,7 +1044,7 @@ function init() {
         ? currentModule.resolveInsertLine
         : null;
       if (resolver) {
-        var res = resolver(overlayElForHover, x, y);
+        var res = resolver(overlayElForHover, x, y) || _tailInsertRes();
         if (res) {
           drawHoverGuide(y, res.rectX, res.rectWidth, _insertGuideLabel(res));
           return;
@@ -1079,7 +1086,7 @@ function init() {
       var z = zoom || 1;
       var x = (e.clientX - rect.left) / z;
       var y = (e.clientY - rect.top) / z;
-      var res = resolver(overlayElForHover, x, y);
+      var res = resolver(overlayElForHover, x, y) || _tailInsertRes();
       if (!res) return;
       var insertCtx = {
         getMmdText: function() { return mmdText; },
