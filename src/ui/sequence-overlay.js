@@ -1448,6 +1448,7 @@ window.MA.sequenceOverlay = (function() {
       });
     });
     _addGroupHits(svgEl, overlayEl, groupHitFrames);
+    _markStatementEnds(overlayEl, parsedData, dslText);
 
     var noteRectCount = overlayEl.querySelectorAll('rect[data-type="note"]').length;
     var actRectCount = overlayEl.querySelectorAll('rect[data-type="activation"]').length;
@@ -1599,33 +1600,97 @@ window.MA.sequenceOverlay = (function() {
     return null;
   }
 
+  // BLK-human-20260928-2255-2: 注釈・枠 (alt など)・ref は複数行にまたがる。挿入の当たりが「その後ろ」を
+  // 指すとき、始まりの行の後ろ (= 注釈や枠の中) ではなく終わりの行の後ろに入れられるよう、終わりの行を持たせる。
+  function _markStatementEnds(overlayEl, parsedData, dslText) {
+    var endOf = { note: {}, group: {}, 'source-line': {} };
+    ((parsedData && parsedData.elements) || []).forEach(function(e) {
+      if (e.kind === 'note' && e.endLine > e.line) endOf.note[e.line] = e.endLine;
+    });
+    ((parsedData && parsedData.groups) || []).forEach(function(g) {
+      if (g.endLine > g.line) endOf.group[g.line] = g.endLine;
+    });
+    var lines = String(dslText || '').split('\n');
+    lines.forEach(function(raw, i) {
+      // 1 行の `ref over A : 本文` は終わりの行を持たない。`ref over A` … `end ref` だけ。
+      if (!/^\s*ref\s+over\b/i.test(raw) || raw.indexOf(':') >= 0) return;
+      for (var j = i + 1; j < lines.length; j++) {
+        if (/^\s*end\s*ref\b/i.test(lines[j])) { endOf['source-line'][i + 1] = j + 1; return; }
+      }
+    });
+    Object.keys(endOf).forEach(function(type) {
+      Array.prototype.forEach.call(overlayEl.querySelectorAll('rect[data-type="' + type + '"]'), function(r) {
+        var end = endOf[type][parseInt(r.getAttribute('data-line'), 10)];
+        if (end) r.setAttribute('data-line-end', String(end));
+      });
+    });
+  }
+
+  // 挿入の当たりの目印。メッセージは矢印の高さ (枠の真ん中) を境にし、注釈・区切り線・遅延・ref・枠は
+  // 描かれた箱の下端を境にする (箱の下を押したら、その後ろ = 終わりの行の後ろ)。
+  var INSERT_MARK_TYPES = ['message', 'note', 'group', 'source-line'];
+
+  function _insertMarks(overlayEl) {
+    var byKey = {};
+    var marks = [];
+    Array.prototype.forEach.call(overlayEl.querySelectorAll('rect[data-type]'), function(r) {
+      var type = r.getAttribute('data-type');
+      if (INSERT_MARK_TYPES.indexOf(type) < 0) return;
+      var line = parseInt(r.getAttribute('data-line'), 10);
+      // data-line が付いていない rect (描き直しの途中など) は挿入先にできない。
+      if (isNaN(line)) return;
+      var rx = parseFloat(r.getAttribute('x')), ry = parseFloat(r.getAttribute('y'));
+      var rw = parseFloat(r.getAttribute('width')), rh = parseFloat(r.getAttribute('height'));
+      if (isNaN(ry) || isNaN(rh)) return;
+      if (type !== 'message' && !(rw > 1 && rh > 1)) return;   // 位置の分からない注釈の 1×1 の代わり
+      var end = parseInt(r.getAttribute('data-line-end'), 10);
+      if (type === 'message') {
+        marks.push({ line: line, endLine: line, top: ry + rh / 2, y: ry + rh / 2,
+          // 隣のメッセージの矢印が占める横幅。ガイド線をこの列に収めるために返す
+          // (図の端から端まで伸びる線は、どのメッセージの隙間を指しているのか読めない)。
+          rectX: rx, rectWidth: rw });
+        return;
+      }
+      // 注釈・枠は当たりが複数の rect (見出し・縁・文字) に分かれるので、1 つの箱にまとめる。
+      var key = type + '@' + line;
+      var m = byKey[key];
+      if (!m) {
+        m = byKey[key] = { line: line, endLine: isNaN(end) ? line : end, top: ry, y: ry + rh,
+          x0: rx, x1: rx + rw };
+        marks.push(m);
+      }
+      m.top = Math.min(m.top, ry);
+      m.y = Math.max(m.y, ry + rh);
+      if (!isNaN(rx) && !isNaN(rw)) { m.x0 = Math.min(m.x0, rx); m.x1 = Math.max(m.x1, rx + rw); }
+    });
+    marks.forEach(function(m) {
+      if (m.rectX === undefined && !isNaN(m.x0) && !isNaN(m.x1)) { m.rectX = m.x0; m.rectWidth = m.x1 - m.x0; }
+    });
+    return marks;
+  }
+
   function resolveInsertLine(overlayEl, x, y) {
     // x は activity モジュールとの signature 合わせだけでなく、帯の内外の判定
     // (resolveBandZone) にも使う。行の決定そのものは 1 列のライフラインなので y だけで足りる。
     if (!overlayEl) return null;
-    var msgRects = overlayEl.querySelectorAll('rect[data-type="message"]');
-    if (msgRects.length === 0) return null;
-    var items = Array.prototype.map.call(msgRects, function(r) {
-      return {
-        line: parseInt(r.getAttribute('data-line'), 10),
-        y: parseFloat(r.getAttribute('y')) + parseFloat(r.getAttribute('height')) / 2,
-        // 隣のメッセージの矢印が占める横幅。ガイド線をこの列に収めるために返す
-        // (図の端から端まで伸びる線は、どのメッセージの隙間を指しているのか読めない)。
-        rectX: parseFloat(r.getAttribute('x')),
-        rectWidth: parseFloat(r.getAttribute('width')),
-      };
-    }).filter(function(it) {
-      // data-line が付いていない rect (描き直しの途中など) は挿入先にできない。
-      return !isNaN(it.line);
-    }).sort(function(a, b) { return a.y - b.y; });
+    var items = _insertMarks(overlayEl);
     if (items.length === 0) return null;
     var zoneHint = resolveBandZone(overlayEl, x, y);
-    // y がどの rect の y より下か判定: 下端から遡って最初に「rect.y < y」なら after その rect
-    for (var i = items.length - 1; i >= 0; i--) {
-      if (y > items[i].y) return _hit(items[i], 'after', zoneHint);
-    }
-    // 全 rect より上 → 最上位 rect の before
-    return _hit(items[0], 'before', zoneHint);
+    // BLK-human-20260928-2255-2: 押した点より上にある目印のうち、境が一番下のものの後ろ。メッセージだけを
+    // 見ていたので、末尾の区切り線・注釈・遅延・ref・枠の下を押しても最後のメッセージの後ろ (それらより前) に入った。
+    // 境が同じ高さなら DSL で後に書いた方 (外側の枠の end など) の後ろ。
+    var below = null;
+    items.forEach(function(it) {
+      if (!(y > it.y)) return;
+      if (!below || it.y > below.y || (it.y === below.y && it.endLine > below.endLine)) below = it;
+    });
+    if (below) return _hit({ line: below.endLine, rectX: below.rectX, rectWidth: below.rectWidth }, 'after', zoneHint);
+    // 全部の目印より上 → 一番上の目印の前
+    var top = null;
+    items.forEach(function(it) {
+      if (!top || it.top < top.top || (it.top === top.top && it.line < top.line)) top = it;
+    });
+    return _hit(top, 'before', zoneHint);
   }
 
   function _hit(item, position, zoneHint) {
@@ -1645,5 +1710,6 @@ window.MA.sequenceOverlay = (function() {
     bandZones: bandZones,
     resolveBandZone: resolveBandZone,
     resolveInsertLine: resolveInsertLine,
+    markStatementEnds: _markStatementEnds,
   };
 })();
