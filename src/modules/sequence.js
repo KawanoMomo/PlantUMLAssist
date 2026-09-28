@@ -719,6 +719,37 @@ window.MA.modules.plantumlSequence = (function() {
     return deleteLine(text, lineNum);
   }
 
+  // BLK-owner-20260929-0431-1: 参加者を選んだパネルの ↑↓・✕ 削除が効くのは、その参加者を図に出す行
+  // (宣言 `participant X`・`create participant X`・`create X`・手続きの宣言) だけ。宣言の行が無い参加者
+  // (最初に出るメッセージで現れる参加者) を選んだとき、選んだ行はメッセージの行になる。その行を消すと
+  // 参加者ではなく別の部品の線が 1 本だけ消え、create の直後のメッセージなら描けない図になっていた。
+  // 宣言のある参加者の「✕ 削除」は宣言の行だけを消す (メッセージは残る) ので、宣言の行が無い参加者は
+  // 消す行が無い: 理由を言って本文を変えない。
+  function participantOwnsLine(text, id, lineNum) {
+    if (!id) return false;
+    var raw = String(text == null ? '' : text).split('\n')[lineNum - 1];
+    if (raw == null) return false;
+    var t = raw.trim();
+    var lead = _declLead(t);
+    if (lead) t = t.slice(lead.length);
+    var am = t.match(ACTIVATION_RE);
+    if (am) return am[1] === 'create' && unquote(am[2]) === id;
+    var pm = _partSplit(t).head.match(PART_RE);
+    if (pm) return (pm[2] !== undefined ? pm[3] : pm[4]) === id;
+    var mpm = t.match(MACRO_PART_RE);
+    if (mpm) return mpm[2] === id;
+    return false;
+  }
+
+  // verb: 'delete' | 'move'。効く行なら ''、効かないなら画面に出す理由。
+  function participantLineGuard(text, id, lineNum, verb) {
+    if (participantOwnsLine(text, id, lineNum)) return '';
+    var what = verb === 'move' ? '↑↓ で動かすとそのメッセージが動くので、動かしません'
+      : '消すと参加者ではなくそのメッセージの行が消えるので、何も消しません';
+    return '「' + id + '」には宣言の行がありません (L' + lineNum + ' は最初に出るメッセージの行)。' + what +
+      '。参加者を消すには、その参加者が出るメッセージの行を消してください';
+  }
+
   function deleteSelectedLine(ctx, lineNum) {
     window.MA.history.pushHistory();
     ctx.setMmdText(deleteLineOrNote(ctx.getMmdText(), lineNum));
@@ -1169,13 +1200,25 @@ window.MA.modules.plantumlSequence = (function() {
       } catch (e) { /* keep prior selection */ }
       ctx.onUpdate();
     }
+    // BLK-owner-20260929-0431-1: 参加者を選んだときは、その参加者を図に出す行でなければ断る (本文は変えない)。
+    function _partGuard(btn, verb) {
+      var pid = btn.getAttribute('data-part-id');
+      if (!pid) return false;
+      var reason = participantLineGuard(ctx.getMmdText(), pid, parseInt(btn.getAttribute('data-line'), 10), verb);
+      if (!reason) return false;
+      _toastInfo(reason);
+      return true;
+    }
     P.bindAllByClass(propsEl, 'seq-move-up', function(btn) {
+      if (_partGuard(btn, 'move')) return;
       _moveAndReselect(parseInt(btn.getAttribute('data-line'), 10), -1);
     });
     P.bindAllByClass(propsEl, 'seq-move-down', function(btn) {
+      if (_partGuard(btn, 'move')) return;
       _moveAndReselect(parseInt(btn.getAttribute('data-line'), 10), 1);
     });
     P.bindAllByClass(propsEl, 'seq-delete-line', function(btn) {
+      if (_partGuard(btn, 'delete')) return;
       var ln = parseInt(btn.getAttribute('data-line'), 10);
       // FEAT-015: 削除の確認ダイアログを廃し、削除後の「元に戻す」トーストで代替する。
       // FEAT-104: 削除直前のテキストを捕捉し、トーストの復元先として渡す。
@@ -2683,6 +2726,8 @@ window.MA.modules.plantumlSequence = (function() {
     updateNote: updateNote,
     moveNote: moveNote,
     deleteLineOrNote: deleteLineOrNote,
+    participantOwnsLine: participantOwnsLine,
+    participantLineGuard: participantLineGuard,
     moveMessage: moveMessage,
     moveMessageEx: moveMessageEx,
     addActivation: addActivation,
@@ -3066,7 +3111,10 @@ window.MA.modules.plantumlSequence = (function() {
         // kind: 'message' | 'participant' | 'note' | 'activation'
         //   - 'participant': 参加者左右挿入ボタンを前置
         //   - 'message': ライフライン推論ボタンを末尾に追加
-        function actionBarHtml(line, kind) {
+        // partId: 参加者を選んだときだけ。↑↓・✕ 削除にその名を持たせ、宣言の行でなければ断る
+        // (BLK-owner-20260929-0431-1)。
+        function actionBarHtml(line, kind, partId) {
+          var partAttr = partId ? ' data-part-id="' + escHtml(partId) + '"' : '';
           var partInsert = '';
           if (kind === 'participant') {
             partInsert =
@@ -3091,9 +3139,9 @@ window.MA.modules.plantumlSequence = (function() {
             msgOnlyButtons +
           '</div>' +
           '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;display:flex;gap:4px;">' +
-            '<button class="seq-move-up" data-line="' + line + '" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↑ 上へ</button>' +
-            '<button class="seq-move-down" data-line="' + line + '" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↓ 下へ</button>' +
-            '<button class="seq-delete-line" data-line="' + line + '" style="flex:0 0 60px;background:var(--accent-red);color:#fff;border:none;padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 削除</button>' +
+            '<button class="seq-move-up" data-line="' + line + '"' + partAttr + ' style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↑ 上へ</button>' +
+            '<button class="seq-move-down" data-line="' + line + '"' + partAttr + ' style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↓ 下へ</button>' +
+            '<button class="seq-delete-line" data-line="' + line + '"' + partAttr + ' style="flex:0 0 60px;background:var(--accent-red);color:#fff;border:none;padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 削除</button>' +
           '</div>';
         }
 
@@ -3206,6 +3254,10 @@ window.MA.modules.plantumlSequence = (function() {
           var pp = null;
           for (var ii = 0; ii < participants.length; ii++) if (participants[ii].id === sel.id) { pp = participants[ii]; break; }
           if (!pp) { propsEl.innerHTML = '<p style="color:var(--text-secondary);font-size:11px;">参加者が見つかりません</p>'; return; }
+          // BLK-owner-20260929-0431-1: 見出しの行番号・↑↓・✕ 削除は、図で選んでエディタで光らせた行 (sel.line) を指す。
+          // create し直した 2 回目の頭は 2 回目の create の行、宣言の無い参加者は最初に出るメッセージの行。
+          // 別に行を探し直すと (pp.line は 1 回目の行)、光った行と違う行を消していた。
+          var selLine = (typeof sel.line === 'number' && sel.line > 0) ? sel.line : pp.line;
           var pOpts2 = PARTICIPANT_TYPES.map(function(pt) { return { value: pt, label: pt, selected: pt === pp.ptype }; });
           // userissue v1.2.5: 設計ドキュメント向けに Material Design 100 シェード
           // ベースの 10 色パレットへ拡張。 ロール想起 (User=Blue / Service=Green
@@ -3242,7 +3294,7 @@ window.MA.modules.plantumlSequence = (function() {
             '</div>' +
           '</div>';
           propsEl.innerHTML =
-            '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>' + escHtml(pp.label) + '</strong><br><span style="color:var(--text-secondary);">' + pp.ptype + ' · L' + pp.line + '</span></div>' +
+            '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>' + escHtml(pp.label) + '</strong><br><span style="color:var(--text-secondary);">' + pp.ptype + ' · L' + selLine + '</span></div>' +
             P.selectFieldHtml('Type', 'seq-edit-ptype', pOpts2) +
             P.fieldHtml('Alias', 'seq-edit-alias', pp.id) +
             // BLK-reviewer-20260915-0506-wish: 部品名を打つのはここ。登録簿の
@@ -3251,7 +3303,7 @@ window.MA.modules.plantumlSequence = (function() {
             '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Label</label><div id="seq-edit-label-rle"></div></div>' +
             '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-primary);margin:8px 0;"><input id="seq-edit-rename-refs" type="checkbox" checked> Alias 変更時に他要素の参照も追従</label>' +
             paletteHtml +
-            actionBarHtml(pp.line, 'participant');
+            actionBarHtml(selLine, 'participant', pp.id);
           var ln = pp.line;
           document.getElementById('seq-edit-ptype').addEventListener('change', function() {
             window.MA.history.pushHistory();

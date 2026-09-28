@@ -2131,6 +2131,34 @@ test('migrator 手順 4 — destroy した参加者を同じ名前で create し
   await expect.poll(() => page.evaluate(() => (window.MA.selection.getSelected() || []).map((s) => s.type + ':' + s.id + '@' + s.line)),
     { timeout: 5000 }).toEqual(['participant:Worker@6']);
   await expect(page.locator('#props-content')).toContainText('Worker');
+  // BLK-owner-20260929-0431-1: 右欄の見出し・✕ 削除は光らせた行 (6) を指す。1 回目のメッセージ (4) を消さない。
+  await expect(page.locator('#props-content')).toContainText('participant · L6');
+  const before = await page.locator('#editor').inputValue();
+  // 1 回目の頭は宣言の行が無く、選んだ行は最初のメッセージ。✕ 削除は理由を言って本文を変えない。
+  // (同じ参加者をもう一度押すと選択が外れるので、Esc で外してから押す)
+  await page.keyboard.press('Escape');
+  await expect.poll(() => page.evaluate(() => (window.MA.selection.getSelected() || []).length)).toBe(0);
+  await page.mouse.move(pts[0].x, pts[0].y);
+  await page.mouse.down();
+  await page.mouse.up();
+  await expect.poll(() => page.evaluate(() => (window.MA.selection.getSelected() || []).map((s) => s.type + ':' + s.id)),
+    { timeout: 5000 }).toEqual(['participant:Worker']);
+  await page.locator('#props-content .seq-delete-line').click();
+  await expect(page.locator('#seq-range-toast')).toContainText('宣言の行がありません');
+  expect(await page.locator('#editor').inputValue()).toBe(before);
+  // 2 回目の頭の ✕ 削除は 2 回目の create の行だけを消し、描ける図のまま。
+  await page.keyboard.press('Escape');
+  await expect.poll(() => page.evaluate(() => (window.MA.selection.getSelected() || []).length)).toBe(0);
+  await page.mouse.move(pts[1].x, pts[1].y);
+  await page.mouse.down();
+  await page.mouse.up();
+  await expect(page.locator('#props-content')).toContainText('participant · L6');
+  await page.locator('#props-content .seq-delete-line').click();
+  const after = before.split('\n');
+  after.splice(5, 1);
+  await expect.poll(() => page.locator('#editor').inputValue()).toBe(after.join('\n'));
+  await expect(page.locator('#overlay-layer rect[data-type="message"]')).toHaveCount(2, { timeout: 20000 });
+  await expect(page.locator('#overlay-warning')).toBeHidden();
 });
 
 // BLK-owner-20260926-1628-1: 当て方を変えるたびに、migrator が枠 ok と記録した実物の図が退行し、マージの後の手の測り直しで
