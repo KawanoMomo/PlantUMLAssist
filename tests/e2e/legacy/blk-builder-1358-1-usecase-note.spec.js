@@ -30,9 +30,10 @@ async function selectUser(page) {
 
 test.describe('BLK-builder-20260907-1358-1: UseCase のノート', () => {
 
-  test('追加パレットに Note (注釈) が並ぶ', async ({ page }) => {
+  test('追加パレットに 注釈 (note) が並ぶ', async ({ page }) => {
     await seedUsecase(page);
-    await expect(page.locator('#uc-tail-kind')).toContainText('Note (注釈)');
+    // 選択肢の表記は全図種で「注釈 (note)」に揃えた (BLK-owner-20260925-0312-5 系の表記統一)。
+    await expect(page.locator('#uc-tail-kind')).toContainText('注釈 (note)');
   });
 
   test('Target と Position を選んで本文を打つと DSL に 1 行で入る', async ({ page }) => {

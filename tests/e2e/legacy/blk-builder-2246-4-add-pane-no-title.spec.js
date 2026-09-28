@@ -5,12 +5,12 @@ const { test, expect } = require('@playwright/test');
 const { gotoApp, getEditorText, setDiagramTitle } = require('../helpers');
 
 const TYPES = [
-  { value: 'plantuml-sequence', label: 'Sequence' },
-  { value: 'plantuml-usecase', label: 'UseCase' },
-  { value: 'plantuml-component', label: 'Component' },
-  { value: 'plantuml-class', label: 'Class' },
-  { value: 'plantuml-activity', label: 'Activity' },
-  { value: 'plantuml-state', label: 'State' },
+  { value: 'plantuml-sequence', label: 'Sequence', tail: 'seq' },
+  { value: 'plantuml-usecase', label: 'UseCase', tail: 'uc' },
+  { value: 'plantuml-component', label: 'Component', tail: 'co' },
+  { value: 'plantuml-class', label: 'Class', tail: 'cl' },
+  { value: 'plantuml-activity', label: 'Activity', tail: 'ac' },
+  { value: 'plantuml-state', label: 'State', tail: 'st' },
 ];
 
 async function switchType(page, value) {
@@ -25,7 +25,8 @@ test.describe('BLK-builder-2246-4 (design 2b): 追加ペインから Title 設�
     for (const t of TYPES) {
       await switchType(page, t.value);
       const props = page.locator('#props-content');
-      await expect(props).toContainText(t.label + ' Diagram');
+      // 英語の図種名の見出し「{X} Diagram」は BLK-builder-20260924-1829-4 で外した。図種の切替は追加ペインの種別欄で確かめる
+      await expect(props.locator('#' + t.tail + '-tail-kind')).toHaveCount(1);
       await expect(props).not.toContainText('Title 設定');
       await expect(props.locator('input[id$="-title"]')).toHaveCount(0);
       await expect(props.locator('button[id$="-set-title"]')).toHaveCount(0);
