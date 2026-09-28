@@ -72,7 +72,7 @@ window.MA.autoSave = (function() {
       var payload = { type: diagramType, dsl: dsl, dir: fileDir || './autosave' };
       if (_keepNames[diagramType]) { payload.keepName = true; delete _keepNames[diagramType]; }
       var body = JSON.stringify(payload);
-      window.fetch('/autosave', {
+      var req = window.fetch('/autosave', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: body,
@@ -92,7 +92,21 @@ window.MA.autoSave = (function() {
           console.warn('[autoSave] file write failed:', e);
         }
       });
+      _trackWrite(req);
     } catch (e) { /* fetch may not exist in test sandbox; localStorage still works */ }
+  }
+
+  // BLK-junior-20260925-1732-friction: 書きに出た途中の保存。改名の後始末 (rename-sweep) は
+  // 前の名前のファイルを読んで今の図と比べるので、書き終わる前に読むと古い中身と比べてしまう。
+  var _inflight = [];
+  function _trackWrite(req) {
+    if (!req || typeof req.then !== 'function') return;
+    var done = req.then(function() {}, function() {});
+    _inflight.push(done);
+    done.then(function() {
+      var i = _inflight.indexOf(done);
+      if (i >= 0) _inflight.splice(i, 1);
+    });
   }
   function _fileBackendDelete(fileDir) {
     try {
@@ -370,6 +384,16 @@ window.MA.autoSave = (function() {
     _doWrite(p.diagramType, p.dsl, p.fileInfo);
   }
 
+  // settle() — 待っている保存 (debounce 中) を今すぐ書き、書きに出た保存が届くまで待つ Promise。
+  // BLK-junior-20260925-1732-friction: タイトル欄を変えた直後 (1 秒の debounce の間) にタブ名を変えると、
+  // 待っていた保存は打った時点の名前 (= 前の名前) で後から書かれ、改名の後始末が済んだ後に
+  // 前の名前のファイルが今の図と同じ中身で作り直されていた。改名の前にここで書き切らせる。
+  function settle() {
+    flush();
+    if (!_inflight.length) return Promise.resolve();
+    return Promise.all(_inflight.slice()).then(function() {});
+  }
+
   function scheduleSave(diagramType, dsl) {
     if (!diagramType) return;
     var cfg = getConfig();
@@ -465,6 +489,7 @@ window.MA.autoSave = (function() {
     init: init,
     scheduleSave: scheduleSave,
     flush: flush,
+    settle: settle,
     restoreFor: restoreFor,
     hasSavedFor: hasSavedFor,
     getMeta: getMeta,

@@ -33566,7 +33566,14 @@ function _sweepRenamedFile(from, to, dsl) {
   if (!saved) return Promise.resolve('');
   var dir = _wsFileDir();
   var body = String(dsl == null ? '' : dsl);
-  return Promise.resolve(ws.loadFile(from, dir)).then(function(oldDsl) {
+  // BLK-junior-20260925-1732-friction: 直前の編集 (タイトル欄など) の自動保存がまだ待っていると、
+  // それは前の名前で後から書かれ、付け替えた後に前の名前のファイルが同じ中身で戻ってくる。
+  // 先に書き切らせてから前の名前のファイルを読む (書き切った中身は今の図と同じなので付け替えになる)。
+  var AS = window.MA.autoSave;
+  var settled = (AS && AS.settle) ? AS.settle() : null;
+  return Promise.resolve(settled).then(function() {
+    return ws.loadFile(from, dir);
+  }).then(function(oldDsl) {
     var p = RS.plan({ from: from, to: to, saved: true, oldDsl: oldDsl, currentDsl: body });
     if (!p || p.action === 'none') return '';
     if (p.action === 'keep') return p.text;

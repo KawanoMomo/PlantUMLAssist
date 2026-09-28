@@ -93,6 +93,39 @@ test('手順3 図名を変えて保存すると、古い名前のファイルは
   await expect(page.locator('#ds-name-notice')).toContainText('spi_sequence.puml');
 });
 
+// BLK-junior-20260925-1732-friction: 図の設定のタイトル欄を変えた直後にタブ名をダブルクリックで変えて Ctrl+S すると、
+// タイトルを入れた自動保存が前の名前 (dma_usecase) で後から書かれ、新しい名前と同じ中身の dma_usecase.puml が残った。
+test('手順3 タイトル欄を変えてからすぐタブ名を変えて保存しても、古い名前のファイルは残らない', async ({ page }) => {
+  const NEW = 'DMAドライバ利用ユースケース図';
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  const dsl = ['@startuml', 'left to right direction', 'actor App', 'usecase "DMA転送開始" as UC1',
+    'App --> UC1', '@enduml'].join('\n');
+  await S.putDoc(page, DIR, 'dma_usecase', dsl);
+  await S.renameActive(page, 'dma_usecase');
+  await S.typeDsl(page, dsl);
+  await page.waitForTimeout(600);
+  // タイトル欄の自動保存がまだ待っている間にタブ名を変える (1 秒の既定の debounce を長くして必ずその間に入れる)。
+  await page.evaluate(() => window.MA.autoSave.setConfig({ debounceMs: 5000 }));
+
+  await page.locator('#props-tab-settings').click();
+  await page.locator('#ds-title').click();
+  await page.keyboard.type(NEW);
+  await page.keyboard.press('Tab');
+  page.once('dialog', (d) => d.accept(NEW));
+  await page.locator('#tab-bar .tab.active').first().dblclick();
+  await page.locator('#editor').click();
+  await page.keyboard.press('Control+s');
+  await expect(page.locator('#status-save-result')).toContainText('に保存しました', { timeout: 10000 });
+  // 待っていた保存の debounce (5 秒) より長く待ってから見る。
+  await page.waitForTimeout(6000);
+
+  const names = await S.listDir(page, DIR);
+  expect(names).toContain(NEW);
+  expect(names).not.toContain('dma_usecase');
+  expect(await S.readDoc(page, DIR, NEW)).toContain('title ' + NEW);
+});
+
 // BLK-junior-20260915-2240: 部品名を統一したあと上書き保存すると出る確認が二択とも
 // 同格に見え、強調はむしろ「元ファイルを保つ」側に付いていた。選び間違えると直した
 // 表記が元ファイルに入らないまま、エラーも出ずに進んでしまう。
