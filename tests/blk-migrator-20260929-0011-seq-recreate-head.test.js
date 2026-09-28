@@ -127,6 +127,10 @@ describe('BLK-migrator-20260929-0011: 作り直した参加者の頭に枠が出
     var first = topAt(b.overlayEl, heads[0].x + 5, heads[0].y - 5);
     expect(first && first.getAttribute('data-type') + ':' + first.getAttribute('data-id')).toBe('participant:Worker');
     expect(first.getAttribute('data-line')).not.toBe(String(secondCreate));
+    // destroy で線が途中で終わった Worker の尻 (図の下端の段) にも Worker の枠 (行は 1 回目の頭と同じ)
+    var tail = topAt(b.overlayEl, heads[2].x + 5, heads[2].y - 5);
+    expect(tail && tail.getAttribute('data-type') + ':' + tail.getAttribute('data-id') + '@' + tail.getAttribute('data-line'))
+      .toBe('participant:Worker@' + first.getAttribute('data-line'));
     ['Main', 'Logger'].forEach(function(n) {
       headRects(f.svgEl, n).forEach(function(h) {
         var r = topAt(b.overlayEl, h.x + 3, h.y - 5);

@@ -540,21 +540,37 @@ window.MA.sequenceOverlay = (function() {
   // 頭をもう一度描く (1 回目の頭と同じ x・幅・高さの箱)。名前で 1 つに畳まず、描いた回ごとに枠を持つ。
   // 回の順 (上から) に、本文の create の行 (`create X` / `create participant … as X` / `A -> X **`) の後ろから当てる
   // (頭の数より create が少ないのは、1 回目の頭が宣言で描かれた頭のとき)。
-  function _reHeads(shapes, col, head, tail, item, createLines) {
-    var lines = (createLines && createLines[item.id]) || [];
-    if (!head || !lines.length) return [];
+  function _headRect(shapes, head) {
     var hr = null;
+    if (!head) return null;
     shapes.forEach(function(s) {
       if ((s.el.tagName || '').toLowerCase() !== 'rect') return;
       if (s.x < head.x - 0.5 || s.x + s.w > head.x + head.w + 0.5 || s.y < head.y - 0.5 || s.y + s.h > head.y + head.h + 0.5) return;
       if (!hr || s.w * s.h > hr.w * hr.h) hr = s;
     });
+    return hr;
+  }
+  function _sameBox(s, hr) {
+    return (s.el.tagName || '').toLowerCase() === 'rect' && s !== hr &&
+      Math.abs(s.x - hr.x) <= 0.6 && Math.abs(s.w - hr.w) <= 0.6 && Math.abs(s.h - hr.h) <= 0.6;
+  }
+  // destroy で線が途中で終わった参加者の尻は、線の端から離れた図の下端の段に描かれる。線の端の近くに尻が無ければ、
+  // 頭と同じ x・幅・高さの箱を線より下で探す。
+  function _farTail(shapes, col, head) {
+    var hr = _headRect(shapes, head);
+    if (!hr) return null;
+    var below = shapes.filter(function(s) { return _sameBox(s, hr) && s.y >= col.bottom - 1; })
+      .sort(function(a, b) { return a.y - b.y; });
+    return below.length ? { x: below[0].x, y: below[0].y, w: below[0].w, h: below[0].h } : null;
+  }
+  function _reHeads(shapes, col, head, tail, item, createLines) {
+    var lines = (createLines && createLines[item.id]) || [];
+    if (!head || !lines.length) return [];
+    var hr = _headRect(shapes, head);
     if (!hr) return [];
     var lo = head.y + head.h - 1, hi = tail ? tail.y + 1 : col.bottom + 1;
     var found = shapes.filter(function(s) {
-      if (s === hr || (s.el.tagName || '').toLowerCase() !== 'rect') return false;
-      if (Math.abs(s.x - hr.x) > 0.6 || Math.abs(s.w - hr.w) > 0.6 || Math.abs(s.h - hr.h) > 0.6) return false;
-      return s.y > lo && s.y + s.h < hi;
+      return _sameBox(s, hr) && s.y > lo && s.y + s.h < hi;
     }).sort(function(a, b) { return a.y - b.y; });
     return found.map(function(s, k) {
       var li = lines.length - found.length + k;
@@ -582,7 +598,7 @@ window.MA.sequenceOverlay = (function() {
     cols.forEach(function(c, i) {
       if (!owner[i]) return;
       var head = _columnCluster(shapes, c, c.top, -1);
-      var tail = _columnCluster(shapes, c, c.bottom, 1);
+      var tail = _columnCluster(shapes, c, c.bottom, 1) || _farTail(shapes, c, head);
       c.headBox = head;
       if (head) out.push({ item: owner[i], box: head, col: c });
       c.reHeads = _reHeads(shapes, c, head, tail, owner[i], createLines);
