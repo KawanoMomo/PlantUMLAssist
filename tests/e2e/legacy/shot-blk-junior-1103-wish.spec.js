@@ -3,7 +3,7 @@
 // 先輩だけにある状態・遷移が橙で並び、そこに「＋この図にも足す」が付いて、
 // 端点の対応が付かない遷移では行き先の聞き返しが出ているところを撮る。
 const { test } = require('@playwright/test');
-const { gotoApp, shotOut, saveDirFor } = require('../helpers');
+const { gotoApp, shotOut, saveDirFor, openCompareTabs } = require('../helpers');
 
 const OUT = shotOut('shot-blk-junior-1103-wish.png');
 // 自動保存の書き込み先をこの spec 専用にする (既定だと autosave/ に図が残る)。
@@ -51,7 +51,7 @@ test('shot: 対応表の橙の行から自分の図に足す', async ({ page }) 
   await page.locator('#btn-tab-new').click();
   await page.waitForTimeout(600);
   await typeDsl(page, MINE);
-  await page.locator('#btn-tab-compare').click();
+  await openCompareTabs(page);
   await page.locator('#btn-map-run').click();
   await page.waitForSelector('#map-list .map-row');
 

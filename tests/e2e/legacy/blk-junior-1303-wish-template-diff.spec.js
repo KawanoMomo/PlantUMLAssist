@@ -2,7 +2,7 @@
 // BLK-junior-20260908-1303-wish: 参照ペインの「🧩 雛形との差分」で、参照図を雛形として
 // 題材語 (GPIO / UART) を伏せて突き合わせ、「この図だけ / 雛形だけ」の行が出ること。
 const { test, expect } = require('@playwright/test');
-const { gotoApp } = require('../helpers');
+const { gotoApp, openCompareTabs } = require('../helpers');
 
 const TEMPLATE = [
   '@startuml',
@@ -32,7 +32,7 @@ async function openDiff(page, mine) {
   await page.locator('#btn-tab-new').click();
   await page.waitForTimeout(600);
   await typeDsl(page, mine);
-  await page.locator('#btn-tab-compare').click();
+  await openCompareTabs(page);
   await expect(page.locator('#compare-pane')).toBeVisible();
   await page.locator('#btn-td-run').click();
   await expect(page.locator('#td-list')).toBeVisible();
@@ -72,7 +72,7 @@ test('雛形にだけある手順は「雛形だけ」に出る', async ({ page 
 test('参照図を選ばずに押すと、選ぶように言う', async ({ page }) => {
   await gotoApp(page);
   await typeDsl(page, SAME);
-  await page.locator('#btn-tab-compare').click();
+  await openCompareTabs(page);
   await page.locator('#btn-td-run').click();
   await expect(page.locator('#td-summary')).toContainText('参照図を選んでください');
 });

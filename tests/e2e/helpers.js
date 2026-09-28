@@ -118,8 +118,20 @@ async function openCrossRef(page, dir) {
   await page.waitForSelector('#compare-pane:not([hidden])');
 }
 
+// BLK-owner-20260923-1509-prune: 旧 ⇔ 並べて見る (#btn-tab-compare) はタブ列から外れ、
+// 並べて比較の枠の相手「別タブの図」になった (scenarios の junior-02 / primary-04 と同じ経路)。
+// 並べて比較 (FILES「読むだけ」の ⇔) を開き、相手を「別タブの図」にして参照ペインを出す。
+async function openCompareTabs(page) {
+  await page.waitForSelector('#btn-tab-senior');
+  if (await page.locator('#senior-pane').isHidden()) {
+    await page.locator('#btn-tab-senior').click();
+  }
+  await page.locator('#senior-target-tabs').click();
+  await page.waitForSelector('#compare-pane:not([hidden])');
+}
+
 module.exports = {
-  openCrossRef,
+  openCrossRef, openCompareTabs,
   gotoApp, loadFixture, getEditorText, getEditorLine, clickOverlayByLine, setDiagramTitle,
   saveDirFor, shotOut, E2E_SAVE_ROOT, pickTool,
 };

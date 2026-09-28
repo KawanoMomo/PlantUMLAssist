@@ -2,7 +2,7 @@
 // BLK-junior-20260907-0823-wish: 先輩の図と自分の図を並べて見比べる。
 // 従来は「先輩のタブを開いて記憶 → 自分のタブに切り替えて打ち込む」の往復しかなかった。
 const { test, expect } = require('@playwright/test');
-const { gotoApp, getEditorText } = require('../helpers');
+const { gotoApp, getEditorText, openCompareTabs } = require('../helpers');
 
 const SENIOR = [
   '@startuml',
@@ -44,7 +44,7 @@ test('「⇔ 並べて見る」で参照ペインが開き、もう 1 枚の図�
   await twoTabs(page);
   await expect(page.locator('#compare-pane')).toBeHidden();
 
-  await page.locator('#btn-tab-compare').click();
+  await openCompareTabs(page);
   await expect(page.locator('#compare-pane')).toBeVisible();
   await expect(page.locator('#compare-svg svg')).toBeVisible({ timeout: 15000 });
   // 参照側には先輩の図が出る (自分の図ではない)
@@ -53,7 +53,7 @@ test('「⇔ 並べて見る」で参照ペインが開き、もう 1 枚の図�
 
 test('参照ペインを開いたまま自分の図を編集し続けられる', async ({ page }) => {
   await twoTabs(page);
-  await page.locator('#btn-tab-compare').click();
+  await openCompareTabs(page);
   await expect(page.locator('#compare-svg svg')).toBeVisible({ timeout: 15000 });
 
   // タブは 1 回も切り替えずに、参照を見ながら書き足す
@@ -66,7 +66,7 @@ test('参照ペインを開いたまま自分の図を編集し続けられる',
 
 test('編集中のタブは参照の候補に出ない', async ({ page }) => {
   await twoTabs(page);
-  await page.locator('#btn-tab-compare').click();
+  await openCompareTabs(page);
   await expect(page.locator('#compare-svg svg')).toBeVisible({ timeout: 15000 });
 
   const opts = page.locator('#compare-select option');
@@ -81,7 +81,7 @@ test('編集中のタブは参照の候補に出ない', async ({ page }) => {
 
 test('参照ペインは主プレビューと別にスクロールする', async ({ page }) => {
   await twoTabs(page);
-  await page.locator('#btn-tab-compare').click();
+  await openCompareTabs(page);
   await expect(page.locator('#compare-svg svg')).toBeVisible({ timeout: 15000 });
 
   const independent = await page.evaluate(() => {
@@ -94,7 +94,7 @@ test('参照ペインは主プレビューと別にスクロールする', async
 
 test('✕ で参照ペインを閉じられる', async ({ page }) => {
   await twoTabs(page);
-  await page.locator('#btn-tab-compare').click();
+  await openCompareTabs(page);
   await expect(page.locator('#compare-pane')).toBeVisible();
   await page.locator('#btn-compare-close').click();
   await expect(page.locator('#compare-pane')).toBeHidden();
@@ -103,7 +103,7 @@ test('✕ で参照ペインを閉じられる', async ({ page }) => {
 test('タブが 1 枚のときは並べる図が無いと知らせる', async ({ page }) => {
   await gotoApp(page);
   await typeDsl(page, MINE);
-  await page.locator('#btn-tab-compare').click();
+  await openCompareTabs(page);
   await expect(page.locator('#compare-pane')).toBeVisible();
   await expect(page.locator('#compare-empty')).toContainText('並べる図がありません');
 });

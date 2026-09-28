@@ -2,7 +2,7 @@
 // BLK-junior-20260908-1403-wish: 雛形は 1 回だけ登録して呼び名で選ぶ。
 // 以降は「🧩 相手のフォルダ」に絶対パスを打ち直さず、2 枚目のタブも要らない。
 const { test, expect } = require('@playwright/test');
-const { gotoApp } = require('../helpers');
+const { gotoApp, openCompareTabs } = require('../helpers');
 
 const UART = [
   '@startuml',
@@ -27,7 +27,7 @@ async function typeDsl(page, text) {
 }
 
 async function openCompare(page) {
-  await page.locator('#btn-tab-compare').click();
+  await openCompareTabs(page);
   await expect(page.locator('#compare-pane')).toBeVisible();
 }
 

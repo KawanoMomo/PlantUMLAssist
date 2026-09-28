@@ -4,7 +4,7 @@
 // ⇔ 並べて見る の「🧩 系統ぜんぶと比べる」で、開いている図をまとめて突き合わせ、
 // 1 枚にだけある行 (取り込み候補) が出ること / 無いなら無いと言い切ることを実機で見る。
 const { test, expect } = require('@playwright/test');
-const { gotoApp, saveDirFor } = require('../helpers');
+const { gotoApp, saveDirFor, openCompareTabs } = require('../helpers');
 
 const DIR = saveDirFor(__filename);
 
@@ -62,7 +62,7 @@ async function openCohort(page, canDsl) {
     window.MA.workspace.rename(window.MA.workspace.getActiveId(), 'can');
   });
   await typeDsl(page, canDsl);
-  await page.locator('#btn-tab-compare').click();
+  await openCompareTabs(page);
   await expect(page.locator('#compare-pane')).toBeVisible();
 }
 
@@ -123,7 +123,7 @@ test.describe('系統ぜんぶと比べる (BLK-junior-20260908-1403)', () => {
       window.MA.workspace.rename(window.MA.workspace.getActiveId(), 'can');
     });
     await typeDsl(page, CAN.replace(':CAN割込みを有効化;', ':CAN割込みを有効化;\n:統計を記録;'));
-    await page.locator('#btn-tab-compare').click();
+    await openCompareTabs(page);
     await page.locator('#btn-tc-run').click();
     await expect(page.locator('#tc-list')).toBeVisible();
 
@@ -136,7 +136,7 @@ test.describe('系統ぜんぶと比べる (BLK-junior-20260908-1403)', () => {
     await gotoApp(page);
     await setSaveDir(page);
     await typeDsl(page, CAN);
-    await page.locator('#btn-tab-compare').click();
+    await openCompareTabs(page);
     await page.locator('#btn-tc-run').click();
     await expect(page.locator('#tcoh-summary')).toContainText('1 枚しかありません');
     await expect(page.locator('#tc-empty')).toBeVisible();

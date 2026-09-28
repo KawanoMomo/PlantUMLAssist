@@ -40,11 +40,14 @@ async function boot(page) {
   for (const n of NAMES) await putFile(page, n);
 }
 
+// 保存先の一覧は FILES の保存先の右クリック「保存先の一覧を開く」で中央の枠 (is-list) に開く
+// (BLK-owner-20260924-0637-1。scenarios/_scenario.js の openFolder と同じ経路)。旧経路 (見出しを
+// 畳んで開き直す) は FILES の節を開くだけで、絞り込み欄にカーソルが来ない。
+// 図を開いて閉じるのは中央の枠だけ (ツリーの保存先節は開いたまま) なので、閉じたかは is-list で見る。
+const S = require('../scenarios/_scenario');
 async function openFolder(page) {
-  // 保存先は既定で開いている (design 10a)。開いていれば畳んでから開き直し、一覧を今の中身で描き直す。
-  if (await page.locator('#folder-panel.open').count()) await page.locator('#btn-tab-folder').click();
-  await page.locator('#btn-tab-folder').click();
-  await expect(page.locator('#folder-panel')).toHaveClass(/open/);
+  await S.openFolder(page);
+  await expect(page.locator('#folder-panel')).toHaveClass(/is-list/);
   await expect(page.locator('#folder-filter')).toBeVisible();
 }
 
@@ -90,7 +93,7 @@ test.describe('BLK-junior-1103 一覧を名前で絞り込む', () => {
     await page.waitForTimeout(900);
     expect(await page.locator('#editor').inputValue()).toContain('title gpio_state');
     expect(await page.locator('#editor').inputValue()).not.toContain('gpio_init_sequence');
-    await expect(page.locator('#folder-panel')).not.toHaveClass(/open/);
+    await expect(page.locator('#folder-panel')).not.toHaveClass(/is-list/);
   });
 
   test('2 枚以上に当たっているうちは Enter で何も開かない', async ({ page }) => {
@@ -101,7 +104,7 @@ test.describe('BLK-junior-1103 一覧を名前で絞り込む', () => {
     await page.locator('#folder-filter').press('Enter');
     await page.waitForTimeout(600);
     expect(await page.locator('#editor').inputValue()).toBe(before);
-    await expect(page.locator('#folder-panel')).toHaveClass(/open/);
+    await expect(page.locator('#folder-panel')).toHaveClass(/is-list/);
   });
 
   test('当たらなければその旨を出し、絞り込みを消せば全部戻る', async ({ page }) => {
@@ -123,17 +126,18 @@ test.describe('BLK-junior-1103 一覧を名前で絞り込む', () => {
     await page.locator('#folder-filter').fill('adc');
     expect(await visibleNames(page)).toEqual(['adc_state']);
 
-    await page.locator('#btn-tab-folder').click();   // 閉じる
+    await S.closeFolderList(page);   // 閉じる
     await openFolder(page);
     expect(await page.locator('#folder-filter').inputValue()).toBe('');
     expect((await visibleNames(page)).length).toBeGreaterThanOrEqual(6);
   });
 
-  test('手数: 一覧を開いて目的の 1 枚を出すまで クリック 1 / キー 11', async ({ page }) => {
+  // 一覧を開くのは右クリックと「保存先の一覧を開く」の 2 押し。
+  test('手数: 一覧を開いて目的の 1 枚を出すまで クリック 2 / キー 11', async ({ page }) => {
     await boot(page);
     let clicks = 0;
     let keys = 0;
-    await openFolder(page); clicks++;
+    await openFolder(page); clicks += 2;
     await expect(page.locator('#folder-filter')).toBeVisible();
     for (const ch of 'gpio_state') { await page.keyboard.type(ch); keys++; }
     await page.keyboard.press('Enter'); keys++;

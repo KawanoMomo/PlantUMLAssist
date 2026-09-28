@@ -2,7 +2,7 @@
 // BLK-junior-20260908-1103-wish: 対応表の橙の行に「＋この図にも足す」を添える。
 // 見つけた要素を一括入力欄に打ち直さず、押すだけで自分の図に入ること。
 const { test, expect } = require('@playwright/test');
-const { gotoApp, getEditorText, saveDirFor } = require('../helpers');
+const { gotoApp, getEditorText, saveDirFor, openCompareTabs } = require('../helpers');
 
 // 先輩の図。Configured と Idle --> Configured が自分の図に無い。
 const SENIOR = [
@@ -41,7 +41,7 @@ async function openMap(page, mine) {
   await page.locator('#btn-tab-new').click();
   await page.waitForTimeout(600);
   await typeDsl(page, mine == null ? MINE : mine);
-  await page.locator('#btn-tab-compare').click();
+  await openCompareTabs(page);
   await expect(page.locator('#compare-pane')).toBeVisible();
   await page.locator('#btn-map-run').click();
   await expect(page.locator('#map-list')).toBeVisible();
