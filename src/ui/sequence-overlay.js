@@ -536,7 +536,32 @@ window.MA.sequenceOverlay = (function() {
     });
     return out;
   }
-  function _procParticipantsByLifeline(svgEl, participants) {
+  // BLK-migrator-20260929-0011: destroy した名前を create し直すと、PlantUML は同じ列 (同じライフライン) の途中に
+  // 頭をもう一度描く (1 回目の頭と同じ x・幅・高さの箱)。名前で 1 つに畳まず、描いた回ごとに枠を持つ。
+  // 回の順 (上から) に、本文の create の行 (`create X` / `create participant … as X` / `A -> X **`) の後ろから当てる
+  // (頭の数より create が少ないのは、1 回目の頭が宣言で描かれた頭のとき)。
+  function _reHeads(shapes, col, head, tail, item, createLines) {
+    var lines = (createLines && createLines[item.id]) || [];
+    if (!head || !lines.length) return [];
+    var hr = null;
+    shapes.forEach(function(s) {
+      if ((s.el.tagName || '').toLowerCase() !== 'rect') return;
+      if (s.x < head.x - 0.5 || s.x + s.w > head.x + head.w + 0.5 || s.y < head.y - 0.5 || s.y + s.h > head.y + head.h + 0.5) return;
+      if (!hr || s.w * s.h > hr.w * hr.h) hr = s;
+    });
+    if (!hr) return [];
+    var lo = head.y + head.h - 1, hi = tail ? tail.y + 1 : col.bottom + 1;
+    var found = shapes.filter(function(s) {
+      if (s === hr || (s.el.tagName || '').toLowerCase() !== 'rect') return false;
+      if (Math.abs(s.x - hr.x) > 0.6 || Math.abs(s.w - hr.w) > 0.6 || Math.abs(s.h - hr.h) > 0.6) return false;
+      return s.y > lo && s.y + s.h < hi;
+    }).sort(function(a, b) { return a.y - b.y; });
+    return found.map(function(s, k) {
+      var li = lines.length - found.length + k;
+      return { item: item, box: { x: s.x, y: s.y, w: s.w, h: s.h }, col: col, line: li >= 0 ? lines[li] : item.line, reHead: true };
+    });
+  }
+  function _procParticipantsByLifeline(svgEl, participants, createLines) {
     var cols = _procLifelines(svgEl);
     if (!cols.length) return null;
     var owner = _lifelineOwners(cols, participants);
@@ -560,14 +585,16 @@ window.MA.sequenceOverlay = (function() {
       var tail = _columnCluster(shapes, c, c.bottom, 1);
       c.headBox = head;
       if (head) out.push({ item: owner[i], box: head, col: c });
+      c.reHeads = _reHeads(shapes, c, head, tail, owner[i], createLines);
+      c.reHeads.forEach(function(h) { out.push(h); });
       if (tail) out.push({ item: owner[i], box: tail, col: c });
     });
     return { cols: cols, owner: owner, hits: out };
   }
 
-  function _procParticipants(svgEl, participants, arrows) {
+  function _procParticipants(svgEl, participants, arrows, createLines) {
     // ライフラインで当たった参加者はそれを採り、ライフラインを持たない参加者 (C4 の囲みなど) だけを文字で当てる。
-    var byCol = _procParticipantsByLifeline(svgEl, participants);
+    var byCol = _procParticipantsByLifeline(svgEl, participants, createLines);
     var colHits = byCol ? byCol.hits : [];
     if (colHits.length) {
       var done = colHits.map(function(h) { return h.item; });
@@ -975,6 +1002,7 @@ window.MA.sequenceOverlay = (function() {
     _push(1);
 
     var participants = parsedData.elements.filter(function(e) { return e.kind === 'participant'; });
+    var createLines = (parsedData.meta && parsedData.meta.createLines) || null;
 
     // BLK-migrator-20260923-1307: `box "…" #色` … `end box` の囲み。
     // PlantUML は囲みを、参加者より先に描く「塗りと細い枠を持つ rect」で出す
@@ -1018,10 +1046,10 @@ window.MA.sequenceOverlay = (function() {
     var srcHits = [];
     var partMatches = _matchParts('g.participant-head');
     if (!partMatches.length && participants.length && !svgEl.querySelector('g.participant-head')) {
-      partMatches = _procParticipants(svgEl, participants, procArrows || _procArrows(svgEl));
+      partMatches = _procParticipants(svgEl, participants, procArrows || _procArrows(svgEl), createLines);
       partMatches.forEach(function(m) {
         OB.addRect(overlayEl, m.box.x - 4, m.box.y - 4, m.box.w + 8, m.box.h + 8, {
-          'data-type': 'participant', 'data-id': m.item.id, 'data-line': m.item.line,
+          'data-type': 'participant', 'data-id': m.item.id, 'data-line': m.line || m.item.line,
         });
       });
       // 数は「当たった参加者の人数」で数える (頭と尻の 2 か所に出る図でも 1 人)
@@ -1144,14 +1172,20 @@ window.MA.sequenceOverlay = (function() {
     if (!lifelines.length) {
       // BLK-human-20260925-1500: 表示名は ASCII 以外が伏せ字になるので、列の並びも使って当てる (_lifelineOwners)。
       // create した参加者は線が頭の上端から始まるので、線の枠は頭の下から (頭を指すと参加者が選ばれる)。
-      var byCol = _procParticipantsByLifeline(svgEl, participants) || { cols: [], owner: [] };
+      var byCol = _procParticipantsByLifeline(svgEl, participants, createLines) || { cols: [], owner: [] };
       byCol.cols.forEach(function(c, i) {
         var owner = byCol.owner[i];
         if (!owner) return;
         var top = c.headBox && c.headBox.y >= c.top - 1.5 ? c.headBox.y + c.headBox.h : c.top;
-        if (c.bottom - top < 2) return;
-        OB.addRect(overlayEl, c.x - 6, top, 12, c.bottom - top, {
-          'data-type': 'lifeline', 'data-id': owner.id, 'data-line': owner.line,
+        // 作り直した頭 (_reHeads) の上は線の枠を切る (頭を指すとその回の参加者が選ばれる)。
+        (c.reHeads || []).concat([{ box: { y: c.bottom, h: 0 } }]).forEach(function(h) {
+          var bottom = Math.min(c.bottom, h.box.y);
+          if (bottom - top >= 2) {
+            OB.addRect(overlayEl, c.x - 6, top, 12, bottom - top, {
+              'data-type': 'lifeline', 'data-id': owner.id, 'data-line': owner.line,
+            });
+          }
+          top = Math.max(top, h.box.y + h.box.h);
         });
       });
     }

@@ -2091,6 +2091,48 @@ test('migrator 手順 4 — create で途中に作った参加者の頭を指す
   expect(msg.hit.line).toBe('5');
 });
 
+// BLK-migrator-20260929-0011: 同じ名前の参加者を create → destroy → create し直すと (corpus の seq-32)、PlantUML は
+// 同じ列の途中に頭をもう一度描く。名前で 1 つに畳んでいたため 2 回目の頭 (箱・見出し文字) に枠が出なかった。
+test('migrator 手順 4 — destroy した参加者を同じ名前で create し直すと、2 回目の頭にも枠が出て、押すと 2 回目の create の行が選ばれる', async ({ page }) => {
+  await bootPlain(page);
+  await typeDsl(page, [
+    '@startuml',                 // 1
+    'participant Main',          // 2
+    'create Worker',             // 3
+    'Main -> Worker : run1',     // 4
+    'destroy Worker',            // 5
+    'create Worker',             // 6
+    'Main -> Worker : run2',     // 7
+    'destroy Worker',            // 8
+    '@enduml',
+  ].join('\n'));
+  await expect(page.locator('#overlay-layer rect[data-type="message"]')).toHaveCount(2, { timeout: 20000 });
+  await expect(page.locator('#overlay-warning')).toBeHidden();
+  // 見出し文字「Worker」は 1 回目の頭・2 回目の頭・尻の 3 か所。上から順に指す。
+  const pts = await page.evaluate(() => Array.from(document.querySelectorAll('#preview-svg svg text'))
+    .filter((t) => (t.textContent || '').trim() === 'Worker')
+    .map((t) => { const r = t.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })
+    .sort((a, b) => a.y - b.y));
+  expect(pts.length, '頭 2 つと尻の 3 か所に描かれる').toBe(3);
+  const got = [];
+  for (const p of pts) {
+    await page.mouse.move(3, 3);
+    await page.mouse.move(p.x, p.y);
+    await page.waitForTimeout(150);
+    got.push(await page.evaluate(() => Array.from(document.querySelectorAll('#overlay-layer rect.hit-hover'))
+      .filter((r) => r.getAttribute('data-type') === 'participant')
+      .map((r) => r.getAttribute('data-id')).filter((v, i, a) => a.indexOf(v) === i).join(',')));
+  }
+  expect(got, '3 か所とも Worker の枠が出る').toEqual(['Worker', 'Worker', 'Worker']);
+  // 2 回目の頭を押すと 2 回目の create の行 (6) が選ばれ、右欄は同じ参加者 Worker の編集
+  await page.mouse.move(pts[1].x, pts[1].y);
+  await page.mouse.down();
+  await page.mouse.up();
+  await expect.poll(() => page.evaluate(() => (window.MA.selection.getSelected() || []).map((s) => s.type + ':' + s.id + '@' + s.line)),
+    { timeout: 5000 }).toEqual(['participant:Worker@6']);
+  await expect(page.locator('#props-content')).toContainText('Worker');
+});
+
 // BLK-owner-20260926-1628-1: 当て方を変えるたびに、migrator が枠 ok と記録した実物の図が退行し、マージの後の手の測り直しで
 // 見つかっていた。progress.md で描画 ok・枠 ok の実物の図を、migrator と同じ道 (ファイルを開く → Fit → 要素を指す) で測り、
 // 基準 (tests/e2e/hit-baseline/plantuml-{版}.json) で枠が出ていた点が「枠なし」「別の行の枠」になったら赤にする。

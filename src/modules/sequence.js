@@ -328,6 +328,15 @@ window.MA.modules.plantumlSequence = (function() {
     var groupStack = [];
     var groupCounter = 0;
     var noteCounter = 0;
+    // BLK-migrator-20260929-0011: 参加者を作った行 (`create X` / `create participant … as X` / `A -> X **`) を名前ごとに
+    // 書かれた順で持つ。destroy した名前を create し直すと PlantUML は頭を作り直した回ごとに描くので、
+    // n 回目に描かれた頭を n 回目の create の行に当てる (参加者そのものは名前で 1 人のまま)。
+    // `create X` の直後の `A -> X ** : new` は同じ 1 回の生成なので、`**` を別の回に数えない (pendingCreate)。
+    var createLines = {}, pendingCreate = {};
+    function _markCreate(name, ln) {
+      var arr = createLines[name] || (createLines[name] = []);
+      if (arr.indexOf(ln) < 0) arr.push(ln);
+    }
     var boxCounter = 0;
     var curBox = null;
     var inPreproc = false;
@@ -430,6 +439,7 @@ window.MA.modules.plantumlSequence = (function() {
       var am = trimmed.match(ACTIVATION_RE);
       if (am) {
         var act = { kind: 'activation', action: am[1], target: unquote(am[2]), line: lineNum };
+        if (am[1] === 'create') { _markCreate(act.target, lineNum); pendingCreate[act.target] = true; }
         if (am[3]) act.color = am[3].trim();
         result.elements.push(act);
         continue;
@@ -470,7 +480,7 @@ window.MA.modules.plantumlSequence = (function() {
           participantMap[alias].label = label;
           participantMap[alias].line = lineNum;
         }
-        if (createdDecl) participantMap[alias].created = true;
+        if (createdDecl) { participantMap[alias].created = true; _markCreate(alias, lineNum); pendingCreate[alias] = true; }
         // box の中で宣言された参加者は、その囲みの一員として憶えておく。
         if (curBox) {
           participantMap[alias].boxId = curBox.id;
@@ -558,12 +568,16 @@ window.MA.modules.plantumlSequence = (function() {
         var label = mm[4] || '';
         if (participantMap[from] && !participantMap[from].line) participantMap[from].line = lineNum;
         if (participantMap[to] && !participantMap[to].line) participantMap[to].line = lineNum;
+        // `A -> X ** : new` は X を作るメッセージ (送り先の直後の `**`)。
+        if (!isOuterEnd(to) && !pendingCreate[to] && /\*\*/.test(msgSrc.split(':')[0].replace(/"[^"]*"/g, '""'))) _markCreate(to, lineNum);
+        pendingCreate[to] = false;
         result.relations.push({
           kind: 'message', id: '__m_' + (msgCounter++),
           from: from, to: to, arrow: arrow, label: label, line: lineNum,
         });
       }
     }
+    if (Object.keys(createLines).length) result.meta.createLines = createLines;
     return result;
   }
 
