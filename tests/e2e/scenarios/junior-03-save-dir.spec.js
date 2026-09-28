@@ -114,6 +114,8 @@ test('手順3 タイトル欄を変えてからすぐタブ名を変えて保存
   await page.keyboard.press('Tab');
   page.once('dialog', (d) => d.accept(NEW));
   await page.locator('#tab-bar .tab.active').first().dblclick();
+  // 図の設定の図名欄も新しい名前になる (前の名前のまま残らない)
+  await expect(page.locator('#ds-docname')).toHaveValue(NEW);
   await page.locator('#editor').click();
   await page.keyboard.press('Control+s');
   await expect(page.locator('#status-save-result')).toContainText('に保存しました', { timeout: 10000 });

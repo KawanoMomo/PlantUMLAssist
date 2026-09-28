@@ -5146,6 +5146,9 @@ function renderTabs() {
         });
       }
       renderTabs();
+      // BLK-junior-20260925-1732-friction: 図の設定の「図名 / File name」欄も新しい名前に揃える
+      // (前の名前のまま残ると、その欄を触ったときに前の名前へ戻してしまう)。
+      try { renderDiagramSettings(true); } catch (e) {}
       try { updateTopSourceLock(); } catch (e) {}
       try { renderLineageBadge(); } catch (e) {}
     });
