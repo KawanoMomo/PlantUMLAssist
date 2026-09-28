@@ -1141,6 +1141,54 @@ test('migrator 手順 4 — 新記法のアクティビティ図の合流の菱�
   }
 });
 
+// BLK-migrator-20260926-2118: 単純な if / else の、枝から合流へ「下へ → 横へ」折れる矢印の縦の区間 (と、菱形から枝へ
+// 「横へ → 下へ」の横の区間) にホバーしても枠が出なかった。1 本の矢印の全区間に同じ枠を置き、どの区間を指しても矢印全体が光る。
+test('migrator 手順 4 — 単純な if / else の折れた矢印は、どの区間を指しても枠が出て、その矢印の全区間が光る', async ({ page }) => {
+  await bootPlain(page);
+  const dsl = fs.readFileSync(path.join(__dirname, '..', '..', 'fixtures', 'dsl', 'activity-2118-if-else.puml'), 'utf8')
+    .replace(/\r\n/g, '\n').replace(/\n+$/, '');
+  await typeDsl(page, dsl);
+  await expect(page.locator('#overlay-layer rect[data-type="action"]')).toHaveCount(3, { timeout: 20000 });
+  // 線分 (長さ 0 を除く) の中点を画面の座標で。上から順。
+  const segs = await page.evaluate(() => {
+    const svg = document.querySelector('#preview-svg svg');
+    return Array.from(svg.querySelectorAll('line')).map((l) => {
+      const len = l.getTotalLength();
+      if (!(len > 1)) return null;
+      const p = l.getPointAtLength(len / 2);
+      const q = new DOMPoint(p.x, p.y).matrixTransform(l.getScreenCTM());
+      return { x: q.x, y: q.y, key: ['x1', 'y1', 'x2', 'y2'].map((a) => Math.round(+l.getAttribute(a))).join(',') };
+    }).filter(Boolean);
+  });
+  expect(segs.length).toBe(11);
+  const got = {};
+  for (const s of segs) {
+    await page.mouse.move(3, 3);
+    await page.mouse.move(s.x, s.y);
+    await page.waitForTimeout(100);
+    got[s.key] = await page.evaluate((p) => {
+      const r = document.elementsFromPoint(p.x, p.y).find((e) => e.tagName.toLowerCase() === 'rect' &&
+        e.closest('#overlay-layer') && !/overlay-background/.test(e.getAttribute('class') || ''));
+      if (!r) return null;
+      const lit = Array.from(document.querySelectorAll('#overlay-layer rect.hit-hover'));
+      return { type: r.getAttribute('data-type'), line: r.getAttribute('data-line'), lit: lit.length,
+        same: lit.every((e) => e.getAttribute('data-id') === r.getAttribute('data-id')) };
+    }, s);
+  }
+  for (const s of segs) expect(got[s.key] && got[s.key].type, s.key + ' の中点に流れの枠').toBe('flow');
+  // yes 側・no 側の縦の線は各枝 (4 行目 a / 6 行目 b) から合流への矢印で、縦と横の 2 区間が一緒に光る
+  expect(got['29,124,29,142']).toEqual({ type: 'flow', line: '4', lit: 2, same: true });
+  expect(got['103,124,103,142']).toEqual({ type: 'flow', line: '6', lit: 2, same: true });
+  // 菱形から枝への横の区間も、その枝の矢印 (if の行の後 = 3 行目)
+  expect(got['39,67,29,67']).toEqual({ type: 'flow', line: '3', lit: 2, same: true });
+  // yes 側の縦の線を押すと、その枝の末尾 (a の後) が既定の挿入位置になる
+  const yes = segs.find((s) => s.key === '29,124,29,142');
+  await page.mouse.click(yes.x, yes.y);
+  await expect(page.locator('#ac-ins-point')).toBeVisible();
+  await expect(page.locator('#ac-ins-point option:checked')).toContainText('(L4)');
+  await expect(page.locator('#overlay-warning')).toBeHidden();
+});
+
 // BLK-migrator-20260924-0752: 旧記法 (`(*) -->` / `if "..." then` / `===LABEL===`) のアクティビティ図で枠が全滅していた。
 // PlantUML が関係に残す行と線のつながりで当て、押すと本文のその行が選ばれてフォーム未対応と出る。
 // 新記法でも、レーンをまたぐ動作は箱の中の文字で当て、レーンの見出しにも枠が出る。

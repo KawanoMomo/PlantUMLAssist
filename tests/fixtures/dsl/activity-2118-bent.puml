@@ -1,0 +1,34 @@
+@startuml
+start
+if (a?) then (yes)
+  :A1;
+elseif (b?) then (yes)
+  :B1;
+else (no)
+  :C1;
+endif
+switch (mode)
+case (x)
+  :SX;
+case (y)
+  :SY;
+case (z)
+  :SZ;
+endswitch
+fork
+  :F1;
+fork again
+  :F2;
+end fork
+repeat
+  :R1;
+  backward :Back;
+repeat while (again?) is (yes)
+while (w?) is (yes)
+  :W1;
+endwhile (no)
+if (solo?) then (yes)
+  :S1;
+endif
+stop
+@enduml
