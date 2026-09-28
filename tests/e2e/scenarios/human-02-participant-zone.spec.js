@@ -184,4 +184,55 @@ test.describe('人間 手順 2 — 途中から足した参加者の宣言が上
     expect(lines[first + 1]).toMatch(/^\s*Front\s*->\s*DB\b/);
     expect(lines[first + 2]).toContain('Front -> Front : 内容を確かめる');
   });
+
+  // BLK-human-20260928-2255-2: 図の末尾に区切り線・注釈・枠がある図で、その下 (最後の部品の下) を押すと
+  // 最後のメッセージの後ろ = 末尾の部品より前に入っていた。押した位置の下に置く。
+  function tailDsl(tail) {
+    return ['@startuml', 'participant App', 'participant Drv',
+      'App -> Drv : init()', 'Drv -> App : ok', 'App -> Drv : read()', 'Drv -> App : data']
+      .concat(tail).concat(['@enduml']).join('\n');
+  }
+  // 末尾の部品 (data-type / data-line) の箱の下、2 本のライフラインの間の空き。
+  async function pointBelow(page, type, line) {
+    return page.evaluate(([t, l]) => {
+      const rs = Array.from(document.querySelectorAll('#overlay-layer rect[data-type="' + t + '"][data-line="' + l + '"]'));
+      const bottom = Math.max.apply(null, rs.map((r) => r.getBoundingClientRect().bottom));
+      const m = document.querySelector('#overlay-layer rect[data-type="message"][data-line="7"]').getBoundingClientRect();
+      return { x: m.x + m.width / 2, y: bottom + 8 };
+    }, [type, String(line)]);
+  }
+
+  test('末尾の区切り線の下を押して区切り線を足すと、その区切り線の後ろ (図の最後) に入る', async ({ page }) => {
+    await gotoApp(page);
+    await setDsl(page, tailDsl(['== 終了処理 ==']));
+    await expect(page.locator('#overlay-layer rect[data-type="source-line"][data-line="8"]').first()).toBeAttached();
+    const pt = await pointBelow(page, 'source-line', 8);
+    await page.mouse.move(pt.x, pt.y);
+    await expect(page.locator('#hover-layer text')).toContainText('9 行目に挿入');
+    await page.mouse.click(pt.x, pt.y);
+    await expect(page.locator('#seq-pick-target')).toContainText('8 行目の後');
+    await page.locator('#seq-pick-other').click();
+    await page.locator('#seq-pick-separator').click();
+    await page.locator('#seq-mod-mtext').fill('最後');
+    await page.locator('#seq-mod-confirm').click();
+    await page.waitForTimeout(800);
+    const lines = (await getEditorText(page)).split('\n').filter((l) => l.trim());
+    expect(lines.slice(-3)).toEqual(['== 終了処理 ==', '== 最後 ==', '@enduml']);
+  });
+
+  test('末尾の複数行の注釈・枠 (alt) の下を押すと、end note / end の後ろに入る', async ({ page }) => {
+    await gotoApp(page);
+    await setDsl(page, tailDsl(['note over App', 'おわり', 'end note']));
+    await expect(page.locator('#overlay-layer rect[data-type="note"][data-line="8"]').first()).toBeAttached();
+    let pt = await pointBelow(page, 'note', 8);
+    await page.mouse.click(pt.x, pt.y);
+    await expect(page.locator('#seq-pick-target')).toContainText('11 行目に挿入（10 行目の後）');
+    await page.keyboard.press('Escape');
+
+    await setDsl(page, tailDsl(['alt ok', 'App -> Drv : x', 'else ng', 'App -> Drv : y', 'end']));
+    await expect(page.locator('#overlay-layer rect[data-type="group"][data-line="8"]').first()).toBeAttached();
+    pt = await pointBelow(page, 'group', 8);
+    await page.mouse.click(pt.x, pt.y);
+    await expect(page.locator('#seq-pick-target')).toContainText('13 行目に挿入（12 行目の後）');
+  });
 });
