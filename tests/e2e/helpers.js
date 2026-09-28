@@ -77,8 +77,15 @@ async function getEditorLine(page, lineNum) {
   return t.split('\n')[lineNum - 1];
 }
 
+// 実マウスで当たりの真ん中を押す。関係の線は細い当たり (path.link-hit) が枠の rect より手前にあり
+// (BLK-migrator-20260925-1032)、locator.click は「別の要素が受ける」と押す前に断る。利用者が押すのと同じく、
+// その位置で一番手前の当たりが受ける (線の当たりも同じ関係を選ぶ)。
 async function clickOverlayByLine(page, line) {
-  await page.locator('#overlay-layer rect[data-line="' + line + '"]').first().click();
+  const r = page.locator('#overlay-layer rect[data-line="' + line + '"]').first();
+  await r.scrollIntoViewIfNeeded();
+  const b = await r.boundingBox();
+  if (!b) throw new Error('overlay rect for line ' + line + ' has no box');
+  await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
 }
 
 

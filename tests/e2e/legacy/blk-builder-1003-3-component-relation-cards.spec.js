@@ -26,7 +26,10 @@ async function openRelation(page) {
   await page.waitForTimeout(2500);
   var rel = page.locator('#overlay-layer rect[data-type="relation"]').first();
   if (await rel.count() === 0) return false;
-  await rel.click();
+  // 関係の線の当たり (path.link-hit) が rect より手前にあるので、実マウスで rect の真ん中を押す (線の当たりが受ける)。
+  await rel.scrollIntoViewIfNeeded();
+  const b = await rel.boundingBox();
+  await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
   await page.waitForTimeout(400);
   return (await page.locator('.co-rel-card').count()) > 0;
 }
