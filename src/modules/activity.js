@@ -1710,8 +1710,11 @@ window.MA.modules.plantumlActivity = (function() {
   function _addFlowRects(svgEl, overlayEl, lines) {
     var frames = Array.prototype.filter.call(overlayEl.querySelectorAll('rect.selectable'), function(r) {
       // BLK-builder-20260925-1712-2: 閉じの図形 (合流の菱形・下の棒) も矢印の端として見る
-      return /^(action|decision|start|stop|end|fork|note)$/.test(r.getAttribute('data-type') || '') ||
-        /^(close|loop)$/.test(r.getAttribute('data-src-kind') || '');
+      if (/^(action|decision|start|stop|end|fork|note)$/.test(r.getAttribute('data-type') || '') ||
+        /^(close|loop)$/.test(r.getAttribute('data-src-kind') || '')) return true;
+      // BLK-migrator-20260926-2118: switch の菱形 (文字で当てた枠) も矢印の端。入る矢印は switch の前を指す
+      return r.getAttribute('data-src-kind') === 'text' &&
+        /^\s*switch\s*\(/i.test(String(lines[(parseInt(r.getAttribute('data-line'), 10) || 0) - 1] || ''));
     }).map(function(r) {
       return {
         x: parseFloat(r.getAttribute('x')) || 0, y: parseFloat(r.getAttribute('y')) || 0,
@@ -1724,7 +1727,9 @@ window.MA.modules.plantumlActivity = (function() {
       .map(function(l) {
         return { x1: parseFloat(l.getAttribute('x1')) || 0, y1: parseFloat(l.getAttribute('y1')) || 0,
           x2: parseFloat(l.getAttribute('x2')) || 0, y2: parseFloat(l.getAttribute('y2')) || 0 };
-      });
+      })
+      // 長さ 0 の線 (折れ目に PlantUML が描く点) は道の分かれ目に数えない
+      .filter(function(s) { return Math.abs(s.x2 - s.x1) + Math.abs(s.y2 - s.y1) >= 0.5; });
     function frameAt(x, y) {
       var best = null;
       frames.forEach(function(f) {
@@ -1751,14 +1756,15 @@ window.MA.modules.plantumlActivity = (function() {
         w: parseFloat(r.getAttribute('width')) || 0, h: parseFloat(r.getAttribute('height')) || 0 };
     });
     var n = flowBoxes.length;
+    function near(ax, ay, bx, by) { return Math.abs(ax - bx) < 1.5 && Math.abs(ay - by) < 1.5; }
+    // 矢じり (4 点の小さい polygon) と、その矢印の最後の区間 (矢じりと同じ向きで、矢じりの先に端がある線)。
+    var heads = [];
     Array.prototype.forEach.call(svgEl.querySelectorAll('polygon'), function(p) {
       if (_inDecor(p)) return;
       var pts = _parsePoints(p);
       if (pts.length !== 4) return;
       var bb = _polygonBBox(p);
       if (!bb || bb.width > 20 || bb.height > 20) return;
-      var hx = bb.x + bb.width / 2, hy = bb.y + bb.height / 2;
-      if (flowBoxes.some(function(f) { return hx >= f.x && hx <= f.x + f.w && hy >= f.y && hy <= f.y + f.h; })) return;
       var cx = (pts[0].x + pts[1].x + pts[2].x + pts[3].x) / 4;
       var cy = (pts[0].y + pts[1].y + pts[2].y + pts[3].y) / 4;
       var tip = pts[0], far = -1;
@@ -1767,40 +1773,55 @@ window.MA.modules.plantumlActivity = (function() {
         if (d > far) { far = d; tip = q; }
       });
       var dx = tip.x - cx, dy = tip.y - cy;
-      // 矢じりと同じ向きで、矢じりの先に端がある線 = この矢印の最後の区間。
       var own = segs.filter(function(s) {
-        var ends = [[s.x1, s.y1], [s.x2, s.y2]];
-        var touch = ends.some(function(e) { return Math.abs(e[0] - tip.x) < 1.5 && Math.abs(e[1] - tip.y) < 1.5; });
-        if (!touch) return false;
+        if (!near(s.x1, s.y1, tip.x, tip.y) && !near(s.x2, s.y2, tip.x, tip.y)) return false;
         var sx = s.x2 - s.x1, sy = s.y2 - s.y1;
         return Math.abs(sx * dy - sy * dx) <= 0.2 * Math.sqrt(sx * sx + sy * sy) * Math.sqrt(dx * dx + dy * dy) + 0.01;
       });
+      heads.push({ bb: bb, tip: tip, dx: dx, dy: dy, own: own });
+    });
+    // 別の矢印の最後の区間は、その矢印のもの (たどって別の矢印へ乗り移らない)
+    var lastSegs = [];
+    heads.forEach(function(h) { h.own.forEach(function(s) { lastSegs.push(s); }); });
+    // BLK-migrator-20260926-2118: 1 本の矢印 = 矢じりから元の要素まで、端点でつながった区間の全部。
+    // 折れた矢印 (分岐の菱形から枝へ「横へ → 下へ」、枝から合流へ「下へ → 横へ」、while / repeat の戻り) は、
+    // 最後の区間の遠い端から、元の要素 (行を持つ枠) に着くまで区間をたどる。分かれ道 (続きが 2 本以上) と
+    // 別の矢印の最後の区間では止める。行を決める道と枠を出す区間はこの 1 つの道。
+    function tracePath(s, tip) {
+      var far1 = Math.abs(s.x1 - tip.x) + Math.abs(s.y1 - tip.y) > Math.abs(s.x2 - tip.x) + Math.abs(s.y2 - tip.y);
+      var fx = far1 ? s.x1 : s.x2, fy = far1 ? s.y1 : s.y2;
+      var path = [], seen = [s];
+      var src = frameAt(fx, fy);
+      for (var hop = 0; hop < 8 && !(src && src.line); hop++) {
+        var cands = [];
+        segs.forEach(function(q) {
+          if (seen.indexOf(q) >= 0) return;
+          if (near(q.x1, q.y1, fx, fy)) cands.push({ q: q, x: q.x2, y: q.y2 });
+          else if (near(q.x2, q.y2, fx, fy)) cands.push({ q: q, x: q.x1, y: q.y1 });
+        });
+        if (cands.length !== 1 || lastSegs.indexOf(cands[0].q) >= 0) break;
+        seen.push(cands[0].q);
+        path.push(cands[0].q);
+        fx = cands[0].x; fy = cands[0].y;
+        src = frameAt(fx, fy);
+      }
+      return { path: path, src: src };
+    }
+    heads.forEach(function(h) {
+      var bb = h.bb, tip = h.tip, dx = h.dx, dy = h.dy, own = h.own;
+      var hx = bb.x + bb.width / 2, hy = bb.y + bb.height / 2;
+      if (flowBoxes.some(function(f) { return hx >= f.x && hx <= f.x + f.w && hy >= f.y && hy <= f.y + f.h; })) return;
       var line = 0;
       var target = frameAt(tip.x, tip.y);
       // 合流へ入る矢印は、合流の前 (= 別の枝の最後) ではなく、矢印の元の要素の後を指す
       if (target && target.line && !target.close) line = _flowLineBefore(lines, target.line);
-      if (!line) {
-        own.forEach(function(s) {
-          if (line) return;
-          var far1 = Math.abs(s.x1 - tip.x) + Math.abs(s.y1 - tip.y) > Math.abs(s.x2 - tip.x) + Math.abs(s.y2 - tip.y);
-          var fx = far1 ? s.x1 : s.x2, fy = far1 ? s.y1 : s.y2;
-          var src = frameAt(fx, fy);
-          // BLK-builder-20260925-1712-2: 枝から合流へ入る矢印は「下へ → 横へ」と折れる。元の要素に着くまで線を 4 本までたどる
-          var prev = s;
-          for (var hop = 0; hop < 4 && !(src && src.line); hop++) {
-            var next = null;
-            segs.forEach(function(q) {
-              if (next || q === prev || q === s) return;
-              if (Math.abs(q.x1 - fx) < 1.5 && Math.abs(q.y1 - fy) < 1.5) { next = q; next._fx = q.x2; next._fy = q.y2; }
-              else if (Math.abs(q.x2 - fx) < 1.5 && Math.abs(q.y2 - fy) < 1.5) { next = q; next._fx = q.x1; next._fy = q.y1; }
-            });
-            if (!next) break;
-            fx = next._fx; fy = next._fy; prev = next;
-            src = frameAt(fx, fy);
-          }
-          if (src && src.line) line = src.line;
-        });
-      }
+      var path = [];
+      own.forEach(function(s) {
+        if (path.length) return;
+        var tr = tracePath(s, tip);
+        path = tr.path;
+        if (!line && tr.src && tr.src.line) line = tr.src.line;
+      });
       if (!line) return;
       var x0 = bb.x, y0 = bb.y, x1 = bb.x + bb.width, y1 = bb.y + bb.height;
       own.forEach(function(s) {
@@ -1816,6 +1837,12 @@ window.MA.modules.plantumlActivity = (function() {
       } else {
         OB.addRect(overlayEl, x0 - 1, y0 - pad, Math.max(2, x1 - x0) + 2, (y1 - y0) + pad * 2, attrs);
       }
+      // 折れた矢印の残りの区間にも、区間ごとの細い枠を同じ data-id で置く (L 字を外接矩形 1 つで覆わない)。
+      path.forEach(function(s) {
+        var sx0 = Math.min(s.x1, s.x2), sx1 = Math.max(s.x1, s.x2), sy0 = Math.min(s.y1, s.y2), sy1 = Math.max(s.y1, s.y2);
+        if (sy1 - sy0 >= sx1 - sx0) OB.addRect(overlayEl, sx0 - pad, sy0 - 1, (sx1 - sx0) + pad * 2, Math.max(2, sy1 - sy0) + 2, attrs);
+        else OB.addRect(overlayEl, sx0 - 1, sy0 - pad, Math.max(2, sx1 - sx0) + 2, (sy1 - sy0) + pad * 2, attrs);
+      });
       // 矢印に書いた文字 (`-> 成功;`) は縦の線のすぐ右に描かれる。押せば同じ矢印が選ばれる
       // (枠は文字の上だけに出す。data-id を分け、矢印の枠と一緒には光らせない)。
       if (vertical) {
@@ -2177,7 +2204,9 @@ window.MA.modules.plantumlActivity = (function() {
     _addClosingShapes(svgEl, overlayEl, parsedData.sourceLines || []);
     _addFlowRects(svgEl, overlayEl, parsedData.sourceLines || []);
     _addTextFallback(svgEl, parsedData, overlayEl, parsedData.sourceLines || []);
-    if (_addClosingShapes(svgEl, overlayEl, parsedData.sourceLines || [])) _addFlowRects(svgEl, overlayEl, parsedData.sourceLines || []);
+    // 2 回目は、文字で当てた switch の菱形・その後に見つかった閉じの図形を端にして、まだ枠の無い矢印だけに置く
+    _addClosingShapes(svgEl, overlayEl, parsedData.sourceLines || []);
+    _addFlowRects(svgEl, overlayEl, parsedData.sourceLines || []);
 
     // BLK-human-20260912-2130: 小さい当たり判定を手前に。共通実装 (src/core)
     OB.raiseSmallestLast(overlayEl);

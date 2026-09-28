@@ -968,15 +968,22 @@ function init() {
       // BLK-migrator-20260923-2012: まとめて光らせるのは、指した rect と重なる仲間だけ
       // (関係の箱とその中のラベルの箱)。シーケンスの参加者の頭と足のように、同じ要素を
       // 離れた所にもう一度描いた rect は別の当たり判定なので、指していない側は光らせない。
-      var hb = _rectBox(t);
-      Array.prototype.forEach.call(
+      // BLK-migrator-20260926-2118: 折れた矢印は区間ごとの枠が端で重なって続くので、重なりをたどった全部を光らせる。
+      var peers = Array.prototype.filter.call(
         overlayElForHover.querySelectorAll('rect.selectable[data-type]'),
-        function(r) {
-          if (r.getAttribute('data-type') === type && r.getAttribute('data-id') === id &&
-              (r === t || !hb || _boxesTouch(hb, _rectBox(r)))) {
-            r.classList.add('hit-hover');
-          }
-        });
+        function(r) { return r.getAttribute('data-type') === type && r.getAttribute('data-id') === id; });
+      var lit = [t];
+      if (_rectBox(t)) {
+        for (var li = 0; li < lit.length; li++) {
+          var lb = _rectBox(lit[li]);
+          peers.forEach(function(r) {
+            if (lit.indexOf(r) < 0 && _boxesTouch(lb, _rectBox(r))) lit.push(r);
+          });
+        }
+      } else {
+        lit = peers;
+      }
+      lit.forEach(function(r) { if (peers.indexOf(r) >= 0) r.classList.add('hit-hover'); });
     });
     overlayElForHover.addEventListener('mouseleave', _clearHoverPeers);
   }
