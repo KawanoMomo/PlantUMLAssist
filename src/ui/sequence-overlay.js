@@ -87,6 +87,49 @@ window.MA.sequenceOverlay = (function() {
     return null;
   }
 
+  // BLK-migrator-20260929-0459: 注釈の紙は DSL の読み取りが注釈と認めたかどうかに関係なく枠にする。
+  // 本文の `note` / `hnote` / `rnote` で始まる行のうち、パーサが注釈の要素にしなかった行 (読めない書き方) を
+  // 注釈の行として拾う。本文は `:` の後ろか、`end note` までの行。行は 1 始まり、描かれる範囲
+  // (@startuml … 最初の @enduml、newpage より前) だけ。読んだ注釈の行の範囲 (見出し … end) は除く。
+  var _NOTE_OPEN_RE = /^(note|hnote|rnote)\b(.*)$/i;
+  var _NOTE_END_RE = /^end\s*(note|hnote|rnote)\s*$/i;
+  function _unparsedNoteLines(dslText, notes, meta) {
+    if (!dslText) return [];
+    var lines = String(dslText).split('\n');
+    var covered = {};
+    (notes || []).forEach(function(n) {
+      for (var l = n.line; l <= (n.endLine || n.line); l++) covered[l] = true;
+    });
+    var from = (meta && meta.startUmlLine) || 1;
+    var stop = (meta && meta.newpageLine) || Infinity;
+    var out = [];
+    for (var i = from - 1; i < lines.length; i++) {
+      var ln = i + 1;
+      if (ln >= stop) break;
+      var t = lines[i].trim();
+      if (ln > from && /^@enduml/i.test(t)) break;
+      if (covered[ln]) continue;
+      var m = t.match(_NOTE_OPEN_RE);
+      if (!m) continue;
+      var rest = m[2];
+      var colon = rest.indexOf(':');
+      var text, endLine = ln;
+      if (colon >= 0) text = rest.slice(colon + 1).trim();
+      else {
+        var body = [];
+        var j = i + 1;
+        for (; j < lines.length; j++) {
+          if (_NOTE_END_RE.test(lines[j].trim())) break;
+          body.push(lines[j].trim());
+        }
+        if (j >= lines.length) { text = ''; }
+        else { text = body.join('\n'); endLine = j + 1; i = j; }
+      }
+      out.push({ kind: 'note', id: '__nx_' + ln, line: ln, endLine: endLine, text: text, targets: [], unparsed: true });
+    }
+    return out;
+  }
+
   // 囲み (box) の rect を SVG から拾う。PlantUML は class を付けないので、
   // 「最初の participant-head より前に出る、塗りと細い枠を持つ rect」で見分ける
   // (ライフラインの帯は塗りだけで style を持たない)。描画順は DSL の box 順。
@@ -1362,6 +1405,9 @@ window.MA.sequenceOverlay = (function() {
     // data-source-line も付かないため、selector マッチは成立せず placeholder rect を挿入する。
     // (overlay は data-line が正しければ click hit/jump が機能する。座標精度は後続 task で改善。)
     var notes = parsedData.elements.filter(function(e) { return e.kind === 'note'; });
+    // BLK-migrator-20260929-0459: 描いた紙は、読めない書き方の注釈の行にも当てる (紙を黙って捨てない)。
+    // 読んだ注釈と並べて行の順にし、文字で当て、残りの紙を並び順で残りの行に当てる。
+    var extraNotes = _unparsedNoteLines(dslText, notes, parsedData.meta);
     var notePicked = OB.pickBestOffset(svgEl, notes, 'g.note', candidates);
     if (notePicked.matches.length > 0) {
       notePicked.matches.forEach(function(m) {
@@ -1380,11 +1426,20 @@ window.MA.sequenceOverlay = (function() {
       var usedTexts = [];
       var usedPapers = [];
       var boxOf = {};
-      notes.forEach(function(n) { boxOf[n.id] = _findNoteShape(svgEl, n, usedTexts, usedPapers); });
+      var allNotes = notes.concat(extraNotes).sort(function(a, b) { return (a.line || 0) - (b.line || 0); });
+      allNotes.forEach(function(n) { boxOf[n.id] = _findNoteShape(svgEl, n, usedTexts, usedPapers); });
       // 文字で当たらない注釈 (1 行目が画像・区切り線だけ等) は、残った紙を文書順に
       var restPapers = (OB.notePapers ? OB.notePapers(svgEl) : []).filter(function(p) { return usedPapers.indexOf(p.el) < 0; });
-      notes.forEach(function(n) {
+      allNotes.forEach(function(n) {
         if (!boxOf[n.id] && restPapers.length) boxOf[n.id] = restPapers.shift().box;
+      });
+      // 読めない書き方の行は、紙に当たったものだけ枠にする (当たらなければ出さない。仮の枠を置かない)。
+      extraNotes.forEach(function(n) {
+        var eb = boxOf[n.id];
+        if (!eb) return;
+        OB.addRect(overlayEl, eb.x - 2, eb.y - 2, eb.width + 4, eb.height + 4, {
+          'data-type': 'note', 'data-id': n.id, 'data-line': n.line,
+        });
       });
       notes.forEach(function(n) {
         // BLK-human-20260916-0900: 描かれた注釈の形 (note=path / hnote=polygon / rnote=rect) を

@@ -566,6 +566,58 @@ async function hoverHit(page, label) {
   return { box, hit };
 }
 
+// BLK-migrator-20260929-0459: 全参加者にまたがる注釈 (`note across`、corpus の seq-23) の紙には、縁にも本文にも枠が出なかった。
+// 1 行・複数行・hnote (帯は polygon)・色付きで、紙の左右の縁と本文の文字のどこでも note の枠が出て、押すと見出しの行 (5) が選ばれる。
+test('migrator 手順 4 — note across の紙の縁・本文のどこでも注釈の枠が出て、押すと note の行', async ({ page }) => {
+  await bootPlain(page);
+  const cases = [
+    { note: ['note across : 全体にまたがるnote'], text: '全体にまたがるnote' },
+    { note: ['note across', '  1 行目の注釈', '  2 行目の注釈', 'end note'], text: '2 行目の注釈' },
+    { note: ['hnote across #LightBlue : 色付きの帯'], text: '色付きの帯' },
+    { note: ['rnote across : 四角の帯'], text: '四角の帯' },
+  ];
+  for (const c of cases) {
+    await typeDsl(page, ['@startuml', 'participant A', 'participant B', 'A -> B : req'].concat(c.note, ['B --> A : res', '@enduml']).join('\n'));
+    await expect(page.locator('#overlay-layer rect[data-type="message"]')).toHaveCount(2, { timeout: 20000 });
+    await expect(page.locator('#overlay-layer rect[data-type="note"]')).toHaveCount(1);
+    const t = await hoverHit(page, c.text);
+    expect(t.hit, c.text + ' の本文に枠').not.toBeNull();
+    expect(t.hit.type + '@' + t.hit.line + (t.hit.hover ? '' : ' (光らない)')).toBe('note@5');
+    // 紙 (本文の文字を囲む塗りのある最小の図形) の左右の縁の内側
+    const edges = await page.evaluate((s) => {
+      const tx = Array.from(document.querySelectorAll('#preview-svg svg text')).find((n) => (n.textContent || '').trim() === s);
+      const tb = tx.getBoundingClientRect();
+      let best = null;
+      document.querySelectorAll('#preview-svg svg path, #preview-svg svg polygon, #preview-svg svg rect').forEach((el) => {
+        const f = (el.getAttribute('fill') || '').toLowerCase();
+        if (!f || f === 'none' || f === 'transparent') return;
+        const b = el.getBoundingClientRect();
+        if (b.left > tb.left + 2 || b.top > tb.top + 2 || b.right < tb.right - 2 || b.bottom < tb.bottom - 2) return;
+        if (!best || b.width * b.height < best.width * best.height) best = b;
+      });
+      return best && [{ x: best.left + 3, y: best.top + best.height / 2 }, { x: best.right - 3, y: best.top + best.height / 2 }];
+    }, c.text);
+    expect(edges, c.text + ' の紙が描かれている').not.toBeNull();
+    for (const p of edges) {
+      await page.mouse.move(3, 3);
+      await page.mouse.move(p.x, p.y);
+      await page.waitForTimeout(150);
+      const got = await page.evaluate((q) => {
+        const r = document.elementsFromPoint(q.x, q.y).find((e) => e.closest('#overlay-layer') && e.tagName.toLowerCase() === 'rect' &&
+          e.getAttribute('data-type') && !/overlay-background/.test(e.getAttribute('class') || ''));
+        return r ? r.getAttribute('data-type') + '@' + r.getAttribute('data-line') : 'none';
+      }, p);
+      expect(got, c.text + ' の紙の縁').toBe('note@5');
+    }
+    await page.mouse.move(t.box.x, t.box.y);
+    await page.mouse.down();
+    await page.mouse.up();
+    await expect.poll(() => page.evaluate(() => (window.MA.selection.getSelected() || []).map((s) => s.type + '@' + s.line)),
+      { timeout: 5000 }).toEqual(['note@5']);
+    await page.keyboard.press('Escape');
+  }
+});
+
 test('migrator 手順 4 — 継承線の先・abstract・circle のある class 図でも、ホバーした要素の行に枠が出る', async ({ page }) => {
   await bootPlain(page);
   await typeDsl(page, [
