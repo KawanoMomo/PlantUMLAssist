@@ -183,9 +183,21 @@ window.MA.materialExport = (function() {
 
   // doneMessage(p) — 済んだあとに何が残ったかを言う。書き出しただけでは
   // 「保存フォルダにも入ったのか」が分からず、結局一覧を開いて確かめていた。
-  function doneMessage(p) {
+  // BLK-junior-20260928-2255: done (runMaterialPlan の結果 { imageSize, vault }) があれば、書けたことを
+  // 確かめた所だけを言う。画像の大きさは保存フォルダに書けた後の実物の大きさ。庫に入れていなければ庫とは言わない。
+  function doneMessage(p, done) {
     if (!p) return '資料化できませんでした';
-    return '' + p.title + ' を ' + p.formatLabel + ' で書き出し、保存フォルダと提出物庫に入れました';
+    if (!done) return '' + p.title + ' を ' + p.formatLabel + ' で書き出し、保存フォルダと提出物庫に入れました';
+    var where = done.vault ? '保存フォルダと提出物庫' : '保存フォルダ';
+    var size = Number(done.imageSize);
+    return '' + p.filename + '（' + p.formatLabel + (size > 0 ? '・' + size + ' バイト' : '') + '）を'
+      + where + 'に書き出しました';
+  }
+
+  // 画像の実体を書けなかったときの理由。「成功」とは言わず、どこに・なぜ書けなかったかを言う。
+  function imageFailText(p, where, why) {
+    var name = p && p.filename ? p.filename : '画像';
+    return '画像 ' + name + ' を' + _s(where) + 'に書けませんでした' + (why ? '（' + _s(why) + '）' : '');
   }
 
   function failMessage(p, err) {
@@ -211,6 +223,7 @@ window.MA.materialExport = (function() {
     planText: planText,
     emptyText: emptyText,
     doneMessage: doneMessage,
+    imageFailText: imageFailText,
     failMessage: failMessage,
   };
 })();

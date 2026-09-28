@@ -587,6 +587,8 @@ API_INDEX = {
          'request': '?dir=&type='},
         {'endpoint': 'POST /autosave-svg', 'summary': '書き出した svg を保存する (印を刻む)',
          'request': "{type, dir, svg}"},
+        {'endpoint': 'POST /autosave-image', 'summary': '資料化した画像 (png / svg) を保存フォルダに置き、書けた大きさを返す',
+         'request': "{name, dir, image: {ext, base64}}"},
         {'endpoint': 'GET /autosave-versions', 'summary': '1 枚の図の版の一覧', 'request': '?dir=&type='},
         {'endpoint': 'GET /version-search', 'summary': '保存フォルダの全図の版から部品名を探す (混入点の材料)',
          'request': '?dir=&q='},
@@ -1372,6 +1374,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == '/autosave-svg':
             with _fs_lock:
                 return self._handle_autosave_svg_post()
+        if self.path == '/autosave-image':
+            with _fs_lock:
+                return self._handle_autosave_image_post()
         if self.path == '/vault':
             with _fs_lock:
                 return self._handle_vault_post()
@@ -2442,8 +2447,21 @@ class Handler(BaseHTTPRequestHandler):
             'at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
             'lines': len(dsl.splitlines()),
         }
+        # BLK-junior-20260928-2255: 資料化の控えには画像の実体も入れる (puml と meta だけでは
+        # 「提出物庫に入れました」の画像が庫に無い)。{stamp}.{ext} に置き、書けた大きさを返す。
+        image_ext, image_bytes = None, None
+        if data.get('image') is not None:
+            image_ext, image_bytes = self._decode_image(data.get('image'))
+            if image_ext is None:
+                self._send_json(400, {'error': image_bytes})
+                return
+            meta['image'] = puml.stem + '.' + image_ext
         try:
             _atomic_write_text(puml, dsl)
+            if image_ext:
+                image_path = puml.with_suffix('.' + image_ext)
+                _atomic_write_bytes(image_path, image_bytes)
+                meta['imageSize'] = image_path.stat().st_size
             meta_path.write_text(json.dumps(meta, ensure_ascii=False), encoding='utf-8')
         except OSError as e:
             self._send_json(500, {'error': f'write failed: {e}'})
@@ -3254,6 +3272,67 @@ class Handler(BaseHTTPRequestHandler):
         except OSError:
             mtime = None
         self._send_json(200, {'ok': True, 'path': str(svg_path), 'svgMtime': mtime})
+
+    # BLK-junior-20260928-2255: 資料化した画像 (PNG / SVG) を保存フォルダに置く。
+    # これまで画像はブラウザのダウンロードに渡すだけで、保存フォルダには puml しか入らなかった
+    # (画面は「保存フォルダと提出物庫に入れました」と言っていた)。
+    IMAGE_EXTS = ('png', 'svg')
+
+    @classmethod
+    def _decode_image(cls, image):
+        """{ext, base64} を (ext, bytes) にする。形が違えば (None, 理由)。"""
+        if not isinstance(image, dict):
+            return None, 'image must be an object'
+        ext = str(image.get('ext') or '').lower().lstrip('.')
+        if ext not in cls.IMAGE_EXTS:
+            return None, 'ext must be png or svg'
+        b64 = image.get('base64')
+        if not isinstance(b64, str) or b64 == '':
+            return None, 'base64 must be a non-empty string'
+        try:
+            data = base64.b64decode(b64, validate=True)
+        except (binascii.Error, ValueError):
+            return None, 'base64 を読めません'
+        if not data:
+            return None, '画像が空です'
+        return ext, data
+
+    def _handle_autosave_image_post(self):
+        """POST /autosave-image {name, dir, image: {ext, base64}} — 保存フォルダに {name}.{ext} を書く。
+
+        書けたら書いた後のファイルの大きさを返す (呼び手は送ったバイト数と突き合わせてから成功を出す)。
+        """
+        length = int(self.headers.get('Content-Length', 0))
+        try:
+            data = json.loads(self.rfile.read(length).decode('utf-8'))
+        except ValueError:
+            self._send_json(400, {'error': 'invalid JSON'})
+            return
+        if not isinstance(data, dict):
+            self._send_json(400, {'error': 'body must be an object'})
+            return
+        name = data.get('name')
+        if not self._autosave_validate_type(name):
+            self._send_json(400, {'error': 'invalid name — パス区切り・制御文字・Windows の禁止文字は使えません'})
+            return
+        ext, blob = self._decode_image(data.get('image'))
+        if ext is None:
+            self._send_json(400, {'error': blob})
+            return
+        save_dir = self._autosave_resolve_dir(data.get('dir'))
+        try:
+            save_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            self._send_json(500, {'error': f'mkdir failed: {e}'})
+            return
+        path = save_dir / (name + '.' + ext)
+        try:
+            _atomic_write_bytes(path, blob)
+            size = path.stat().st_size
+        except OSError as e:
+            self._send_json(500, {'error': f'write failed: {e}'})
+            return
+        self._send_json(200, {'ok': True, 'path': str(path), 'size': size})
 
     # BLK-reviewer-20260908-1103: mtime 比較だけでは「svg が今の puml から作られたか」は
     # 分からない (保存し直しただけで中身は追いついている図と、前々回の編集から
