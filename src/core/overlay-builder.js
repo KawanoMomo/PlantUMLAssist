@@ -254,6 +254,7 @@ window.MA.overlayBuilder = (function() {
   // 楔の上も、その note の枠と同じ当たりにする。図種・記法 (メンバー・クラス・リンク・参加者を指す note) を問わず、
   // 描かれた紙の外形から楔を取り、紙に当てた枠 (紙の矩形と最もよく重なる data-type 付きの rect) の data-* を写した
   // 楔の形の当たり (path.note-tail) を置く。楔が枠の中に収まっていれば置かない。置いた数を返す。
+  var NOTE_TAIL_EDGE_PX = 6;
   function addNoteTails(svgEl, overlayEl) {
     if (!svgEl || !overlayEl || !overlayEl.querySelectorAll) return 0;
     var rects = Array.prototype.filter.call(overlayEl.querySelectorAll('rect.selectable[data-type]'), function(r) {
@@ -303,6 +304,28 @@ window.MA.overlayBuilder = (function() {
         // 当たりは楔の内側だけ (縁に幅を持たせると、細く伸びた楔の先が対象のクラスの真ん中まで覆う)。
         path.style.pointerEvents = 'fill';
         overlayEl.appendChild(path);
+        // 差し戻し 1 回目: 楔の縁 (図の上では note から対象へ伸びる線に見える所) は内側の判定の境目で、線の上を指すと
+        // 当たらなかった。縁に沿った細い帯 (画面で左右 3px) を、ほかのどの当たりよりも奥 (背景のすぐ手前) に置く。
+        // 奥なので、縁が対象のクラス・メンバーの枠に重なる所はそちらが勝ち、何も無い所だけ note になる。
+        var edge = document.createElementNS(SVG_NS, 'path');
+        edge.setAttribute('d', poly.map(function(q, k) {
+          return (k ? 'L' : 'M') + (Math.round(q[0] * 100) / 100) + ' ' + (Math.round(q[1] * 100) / 100);
+        }).join(' '));
+        edge.setAttribute('fill', 'none');
+        edge.setAttribute('stroke', 'transparent');
+        edge.setAttribute('stroke-width', String(NOTE_TAIL_EDGE_PX));
+        edge.setAttribute('vector-effect', 'non-scaling-stroke');
+        Array.prototype.forEach.call(best.attributes, function(a) {
+          if (/^data-/.test(a.name) && a.name !== 'data-hit-kind') edge.setAttribute(a.name, a.value);
+        });
+        edge.setAttribute('data-hit-kind', 'notetailedge');
+        edge.classList.add('note-tail');
+        edge.style.cursor = 'pointer';
+        edge.style.pointerEvents = 'stroke';
+        var bg = overlayEl.querySelector('rect.overlay-background');
+        var anchor = bg ? bg.nextSibling : overlayEl.firstChild;
+        if (anchor) overlayEl.insertBefore(edge, anchor);
+        else overlayEl.appendChild(edge);
         n++;
       });
     });
@@ -657,6 +680,7 @@ window.MA.overlayBuilder = (function() {
     var isLink = function(r) {
       var k = r.getAttribute('data-hit-kind');
       // 矢じり (linkhead) は要素より手前。矢じりの上だけは関係が選ばれる。
+      if (k === 'notetailedge') return -3;   // note の楔の縁の帯は最も奥 (addNoteTails)
       if (k === 'link') return -2;
       if (k === 'container') return -1;
       if (k === 'linkline') return 0;
@@ -1172,6 +1196,11 @@ window.MA.overlayBuilder = (function() {
       // note の楔 (addNoteTails): 多角形の内側なら当たり。
       if (r.getAttribute('data-hit-kind') === 'notetail') {
         if (_inPolygon(x, y, r.getAttribute('d'))) return r;
+        continue;
+      }
+      // その縁の帯 (最も奥): 縁から 2 単位以内なら当たり。
+      if (r.getAttribute('data-hit-kind') === 'notetailedge') {
+        if (_distToPolyline(x, y, r.getAttribute('d')) <= 2) return r;
         continue;
       }
       if ((r.tagName || '').toLowerCase() === 'path') {
