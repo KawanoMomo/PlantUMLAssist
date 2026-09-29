@@ -2636,6 +2636,26 @@ window.MA.modules.plantumlActivity = (function() {
     return out;
   }
 
+  // BLK-owner-20260926-0550-1: 1 件足した後の「追加する位置」。図の末尾で足したら図の末尾のまま、
+  // 途中の位置で足したら足した行 (if〜endif のような組は最後の行) の後。見つからなければ図の末尾。
+  function placeAfterAdd(before, after, place) {
+    if (!place || place.value === 'tail') return 'tail';
+    var a = String(before == null ? '' : before).split('\n');
+    var b = String(after == null ? '' : after).split('\n');
+    var head = 0;
+    while (head < a.length && head < b.length && a[head] === b[head]) head++;
+    var tail = 0;
+    while (tail < a.length - head && tail < b.length - head
+           && a[a.length - 1 - tail] === b[b.length - 1 - tail]) tail++;
+    var last = b.length - tail;   // 足した最後の行 (1 始まり)
+    if (last <= head) return 'tail';
+    var opts = tailPlaceOptions(after);
+    for (var i = 0; i < opts.length; i++) {
+      if (opts[i].line === last && opts[i].position === 'after') return opts[i].value;
+    }
+    return 'tail';
+  }
+
   // その位置にその種類を置けるか。「図の末尾」は従来どおり何でも置ける。
   // 終了 (end) は停止 (stop) と同じ場所に置けるものとして扱う。
   // BLK-owner-20260925-0312-4: 開始・停止・終了はどこに置いても PlantUML が描くので止めない
@@ -2761,6 +2781,8 @@ window.MA.modules.plantumlActivity = (function() {
         '<div id="ac-tail-detail" style="margin-top:6px;"></div>' +
       '</div>';
     propsEl.innerHTML = html;
+    // BLK-owner-20260926-0550-1: 確定後も「追加する位置」を保つ (足した行の後)。図種・タブを替えたときだけ既定に戻る。
+    if (window.MA.tailMemory) window.MA.tailMemory.bindSelect('ac-tail-where');
 
     function currentPlace() {
       var w = document.getElementById('ac-tail-where');
@@ -2892,7 +2914,7 @@ window.MA.modules.plantumlActivity = (function() {
         var k = val('ac-tail-kind');
         var place = currentPlace();
         if (!tailKindAllowed(t, place, k, val('ac-tail-other'))) return;
-        commit(addFromTailForm(t, place, k, {
+        commitKeepPlace(t, place, addFromTailForm(t, place, k, {
           text: k === 'note' ? val('ac-tail-ntext') : (k === 'bulk' ? val('ac-tail-bulk') : val('ac-tail-text')),
           cond: val('ac-tail-cond'),
           thenLabel: val('ac-tail-thenlbl'),
@@ -2901,8 +2923,15 @@ window.MA.modules.plantumlActivity = (function() {
           name: val('ac-tail-lbl'),
           branchCount: val('ac-tail-bcount'),
           sub: val('ac-tail-other'),
-        }), t);
+        }));
       });
+      // 足した行の後を次の「追加する位置」にしてから確定する (同じ枝に 2 つ目を続けて足せる)。
+      function commitKeepPlace(t, place, out) {
+        if (out !== t && window.MA.tailMemory) {
+          window.MA.tailMemory.setField('ac-tail-where', placeAfterAdd(t, out, place));
+        }
+        commit(out, t);
+      }
       paintAllowed();
     };
     P.bindEvent('ac-tail-kind', 'change', renderTailDetail);
@@ -3666,6 +3695,7 @@ window.MA.modules.plantumlActivity = (function() {
     addNoteAtLine: addNoteAtLine,
     // BLK-owner-20260924-2259-prune: 追加ペインの 1 つのフォーム (追加する位置 + 種類)
     tailPlaceOptions: tailPlaceOptions,
+    placeAfterAdd: placeAfterAdd,
     tailKindAllowed: tailKindAllowed,
     tailKindWarning: tailKindWarning,
     tailPlaceReason: tailPlaceReason,
