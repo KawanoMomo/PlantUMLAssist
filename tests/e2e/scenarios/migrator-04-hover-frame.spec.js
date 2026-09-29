@@ -343,6 +343,54 @@ test('migrator 手順 4 — 書式指定つき autonumber の sequence 図でも
 
 });
 
+// BLK-migrator-20260930-0255: `<style>` で participant と note の色を替え、`participant 店舗 as S` (引用符の無い表示名) で
+// 宣言した図で、参加者の頭とライフラインに枠が出ず「選択枠を当てられませんでした」が出た (style の中の `participant {` を
+// 参加者と読み、描かれたライフラインと人数が合わなかった)。頭・ライフラインが宣言の行を指し、警告が出ないこと。
+test('migrator 手順 4 — <style> で参加者と注釈の色を替えた sequence 図でも、頭とライフラインに本人の枠が出る', async ({ page }) => {
+  await bootPlain(page);
+  await typeDsl(page, [
+    '@startuml',                                   // 1
+    '<style>',                                     // 2
+    'sequenceDiagram {',                           // 3
+    '  participant {',                             // 4
+    '    BackGroundColor lightblue',               // 5
+    '  }',                                         // 6
+    '  note {',                                    // 7
+    '    BackGroundColor #FFFFCC',                 // 8
+    '  }',                                         // 9
+    '}',                                           // 10
+    '</style>',                                    // 11
+    'participant 店舗 as S',                       // 12
+    'participant 決済GW as G',                     // 13
+    'S -> G : a',                                  // 14
+    'G --> S : ok',                                // 15
+    'note over G : n',                             // 16
+    'S -> G : b',                                  // 17
+    '@enduml',                                     // 18
+  ].join(String.fromCharCode(10)));
+
+  await expect(page.locator('#overlay-layer rect[data-type="participant"]')).toHaveCount(4, { timeout: 20000 });
+  await expect(page.locator('#overlay-layer rect[data-type="message"]')).toHaveCount(3);
+  await expect(page.locator('#overlay-warning')).toBeHidden();
+  // 店舗の頭 (宣言は 12 行目) とライフラインを実マウスで指す。
+  const heads = page.locator('#overlay-layer rect[data-type="participant"][data-id="S"]');
+  await expect(heads).toHaveCount(2);
+  await expect(heads.first()).toHaveAttribute('data-line', '12');
+  const hb = await heads.first().boundingBox();
+  await page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2);
+  await expect(heads.first()).toHaveClass(/hit-hover/);
+  for (const id of ['S', 'G']) {
+    const life = page.locator('#overlay-layer rect[data-type="lifeline"][data-id="' + id + '"]:not([data-front])').first();
+    await expect(life, id + ' のライフラインの枠がある').toHaveCount(1);
+    await expect(life).toHaveAttribute('data-line', id === 'S' ? '12' : '13');
+  }
+  const svgLife = page.locator('#preview-svg line[x1="95.052"]').first();
+  const lb = await svgLife.boundingBox();
+  // 注釈の下・最後のメッセージの上 (図の y 150 付近) の決済GW の線を指す。
+  await page.mouse.move(lb.x + lb.width / 2, lb.y + lb.height * 0.74);
+  await expect(page.locator('#overlay-layer rect.hit-hover')).toHaveAttribute('data-id', 'G');
+});
+
 // BLK-migrator-20260923-1307: 実物は `box "…" #色` / `end box` で参加者をグループ化する。
 // その囲みがあると図の全要素 (参加者見出し・メッセージ) で枠が 1 件も出ず、手順 4 が完了しない。
 // 0449 (特殊矢印)・0549 (書式つき autonumber) と同じ「読めない行があるとその図の枠が落ちる」系統。

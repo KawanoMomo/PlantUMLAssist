@@ -118,6 +118,17 @@ window.MA.modules.plantumlSequence = (function() {
   // 飾りを外して宣言として読み、書き換えるときは飾りをそのまま後ろに戻す (外さないと宣言と読めず、
   // 参加者がメッセージから暗黙に作られて並びが入れ替わり、枠が隣の参加者に出ていた)。
   var PART_TAIL_RE = /((?:\s+(?:<<.*?>>|order\s+-?\d+|#[^\s"]+))+)\s*$/;
+  // BLK-migrator-20260930-0255: `participant 店舗 as S` (引用符の無い表示名 + 別名) も PlantUML の宣言。
+  // PART_RE と同じ組 (m[1] 種類 / m[2] 表示名 / m[3] 別名) で返し、読む側・書き換える側を 1 つの形で扱う。
+  // 読めないと参加者がメッセージから暗黙に作られ、表示名が別名になってライフラインの名前と照合できなかった。
+  var PART_BARE_AS_RE = new RegExp('^(' + PARTICIPANT_TYPES.join('|') + ')\\s+([^\\s"]+)\\s+as\\s+([^\\s"]+)\\s*$');
+  function _partMatch(s) {
+    var t = String(s == null ? '' : s);
+    var m = t.match(PART_RE);
+    if (m) return m;
+    var b = t.match(PART_BARE_AS_RE);
+    return b ? [b[0], b[1], b[2], b[3], undefined, undefined] : null;
+  }
   function _partSplit(s) {
     var t = String(s == null ? '' : s).trim();
     var m = t.match(PART_TAIL_RE);
@@ -357,6 +368,7 @@ window.MA.modules.plantumlSequence = (function() {
     var boxCounter = 0;
     var curBox = null;
     var inPreproc = false;
+    var inStyle = false;
     var localProcs = _localProcedures(lines);
 
     for (var i = 0; i < lines.length; i++) {
@@ -365,6 +377,10 @@ window.MA.modules.plantumlSequence = (function() {
       if (!trimmed || window.MA.dslUtils.isPlantumlComment(trimmed)) continue;
       if (inPreproc) { if (PREPROC_BLOCK_END_RE.test(trimmed)) inPreproc = false; continue; }
       if (PREPROC_BLOCK_OPEN_RE.test(trimmed)) { inPreproc = true; continue; }
+      // BLK-migrator-20260930-0255: `<style>` … `</style>` の中は見た目の指定 (`participant {` / `note {` …)。
+      // 図の要素として読むと `{` という参加者が 1 人増え、描かれたライフラインと人数が合わずに全員の枠が外れた。
+      if (inStyle) { if (/<\/style>/i.test(trimmed)) inStyle = false; continue; }
+      if (/^<style\b/i.test(trimmed)) { inStyle = !/<\/style>/i.test(trimmed); continue; }
       if (/^@startuml/.test(trimmed)) {
         if (result.meta.startUmlLine === null) result.meta.startUmlLine = lineNum;
         continue;
@@ -483,7 +499,7 @@ window.MA.modules.plantumlSequence = (function() {
       }
 
       var partTrimmed = _partSplit(trimmed).head;
-      var pm = partTrimmed.match(PART_RE);
+      var pm = _partMatch(partTrimmed);
       if (pm) {
         var ptype = pm[1];
         var alias, label;
@@ -758,7 +774,7 @@ window.MA.modules.plantumlSequence = (function() {
     if (lead) t = t.slice(lead.length);
     var am = t.match(ACTIVATION_RE);
     if (am) return am[1] === 'create' && unquote(am[2]) === id;
-    var pm = _partSplit(t).head.match(PART_RE);
+    var pm = _partMatch(_partSplit(t).head);
     if (pm) return (pm[2] !== undefined ? pm[3] : pm[4]) === id;
     var mpm = t.match(MACRO_PART_RE);
     if (mpm) return mpm[2] === id;
@@ -787,7 +803,7 @@ window.MA.modules.plantumlSequence = (function() {
     if (idx < 0 || idx >= lines.length) return text;
     var indent = _declLead(lines[idx]);
     var split = _partSplit(lines[idx].slice(indent.length));
-    var m = split.head.match(PART_RE);
+    var m = _partMatch(split.head);
     if (!m) return text;
     var ptype = m[1];
     var alias, label, labelImplicit = false;
@@ -2305,7 +2321,7 @@ window.MA.modules.plantumlSequence = (function() {
     for (var i = 0; i < lines.length; i++) {
       var trimmed = lines[i].trim();
       // color suffix を除去してから match
-      var m = _partSplit(trimmed).head.match(PART_RE);
+      var m = _partMatch(_partSplit(trimmed).head);
       if (m) {
         var al = (m[2] !== undefined) ? m[3] : m[4];
         partIndexes.push({ lineIdx: i, alias: al });
@@ -2348,7 +2364,7 @@ window.MA.modules.plantumlSequence = (function() {
       var trimmed = ln.trim();
       // match: line ends with optional #HEX, strip first
       var withoutColor = trimmed.replace(/\s+#[0-9A-Fa-f]{6}\s*$/, '');
-      var m = withoutColor.match(PART_RE);
+      var m = _partMatch(withoutColor);
       if (!m) continue;
       var aliasInLine = (m[2] !== undefined) ? m[3] : m[4];
       if (aliasInLine !== alias) continue;
