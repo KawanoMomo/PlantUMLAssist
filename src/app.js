@@ -20122,11 +20122,21 @@ function updateRenamePreview() {
 // 置換前・置換後を決めたあとの共通処理。一括置換パネルと名前突合の
 // 「統一」ボタンが同じ経路を通るようにここへ出す。
 function renameAcrossDocs(from, to, docs) {
+  return renamePairsAcrossDocs([{ from: from, to: to }], docs);
+}
+
+// 複数の組を 1 回で当てる (BLK-primary-20260925-0932-wish の「揃える」もこの道を通る)。
+// 1 組のときは従来の ⇄ 一括置換と同じ結果になる。
+function renamePairsAcrossDocs(pairs, docs) {
   var br = window.MA.bulkRename;
   if (!br || !window.MA.workspace) return null;
   var activeId = window.MA.workspace.getActiveId();
+  var list = (pairs || []).filter(function(p) { return p && p.from; });
+  if (!list.length) return null;
+  var from = list.map(function(p) { return p.from; }).join(', ');
+  var to = list.map(function(p) { return p.to; }).join(', ');
 
-  var res = br.apply(docs, from, to);
+  var res = list.length === 1 ? br.apply(docs, list[0].from, list[0].to) : br.applyMany(docs, list);
   if (res.changed.length === 0) return res;
 
   // BLK-primary-20260908-2203-wish: 当てる前の本文を図ごとに控える。
@@ -20155,7 +20165,9 @@ function renameAcrossDocs(from, to, docs) {
   });
   // タブ名自体が旧名なら追随させる (SpiDrv.puml → Spi_Driver.puml)。
   window.MA.workspace.list().forEach(function(d) {
-    if (d.name === from && br.isValidTarget(to)) window.MA.workspace.rename(d.id, to);
+    list.forEach(function(p) {
+      if (d.name === p.from && br.isValidTarget(p.to)) window.MA.workspace.rename(d.id, p.to);
+    });
   });
 
   if (window.MA.selection) window.MA.selection.clearSelection();
@@ -23789,6 +23801,9 @@ function _mapper() { return _mapModule || window.MA.stateMap; }
 
 // 図種を選ぶ。自分の図が読めればそれに合わせる。読めないときだけ参照図を見る。
 function _pickMapModule(refText, mineText) {
+  // BLK-primary-20260925-0932-wish: シーケンス図は参加者 (部品名) とメッセージで組む。
+  var seqMod = window.MA.modules && window.MA.modules.plantumlSequence;
+  if (window.MA.seqMap && seqMod && seqMod.detect(mineText || '')) return window.MA.seqMap;
   var classMod = window.MA.modules && window.MA.modules.plantumlClass;
   if (!window.MA.classMap || !classMod) return window.MA.stateMap;
   if (classMod.detect(mineText || '')) return window.MA.classMap;
@@ -23813,6 +23828,9 @@ function _clearStateMap() {
   var askedEl = document.getElementById('map-asked');
   var decEl = document.getElementById('map-decision');
   if (decEl) decEl.hidden = true;
+  var alignEl = document.getElementById('map-align');
+  if (alignEl) { alignEl.textContent = ''; alignEl.hidden = true; }
+  _mapAlignMsg = '';
   if (listEl) { listEl.textContent = ''; listEl.hidden = true; }
   if (warnEl) { warnEl.textContent = ''; warnEl.hidden = true; }
   if (askedEl) { askedEl.textContent = ''; askedEl.hidden = true; }
@@ -23875,7 +23893,8 @@ function _mapRow(listEl, row) {
     el.appendChild(ask);
   }
   // 参照図だけの行は「まだ自分の図に無い要素」なので、その場で足せる。
-  if (row.match === 'ref-only') {
+  // 足す道を持たない規則 (シーケンス図) では出さない (押しても何も起きない、にしない)。
+  if (row.match === 'ref-only' && sm.supportsAdopt !== false) {
     var take = document.createElement('button');
     take.type = 'button';
     take.className = 'map-take';
@@ -24103,6 +24122,113 @@ function renderMapAsked() {
   el.hidden = (text === '');
 }
 
+// ── 対応表の組を相手の綴りに揃える (BLK-primary-20260925-0932-wish) ──────────
+// 「{相手フォルダ} の「X」に揃える」は名前の形で結べた綴り違いにしか出ず、部品名が総入れ替えの
+// 2 枚 (spi_init_sequence / spi_sequence) では揃える行が 1 つも出なかった。対応表で組になった行
+// (機械の組も、「同じもの」「対応を選ぶ」で手で結んだ組も) を同じ 1 つの行に並べ、チェックした
+// 組を 1 回で自分の図に当てる。書く道は ⇄ 一括置換と同じ (未保存の印・自動保存・元に戻すが同じに効く)。
+// 相手の図は書かない。揃えずに残した組は対応表に残る。
+var _mapAlignChecked = {};   // 組の key → false なら揃えずに残す
+var _compareRefChosen = false; // 参照図の欄 (#compare-select) を人が選び直したか
+var _mapAlignMsg = '';
+
+// 比較中のフォルダで選ばれた相手 (増分の突き合わせの相手) を、参照図の候補に据える。
+// 並べる別タブが選ばれていないときは、それを参照図にする。参照図にしたら true。
+function _xfUseAsRef() {
+  var cv = window.MA.compareView;
+  var PF = window.MA.peekFolder;
+  if (!cv || !_xfFile || !_xfRefDsl || !_xfDir) return false;
+  var cur = cv.peek ? cv.peek() : null;
+  var folder = PF && PF.baseName ? PF.baseName(_xfDir) : _xfDir;
+  var same = !!(cur && cur.folder === folder && cur.fileName === _xfFile && cur.dsl === _xfRefDsl);
+  if (!same && !cv.setPeek(folder, _xfFile, _xfRefDsl, '')) return false;
+  // 参照図の欄で別の図を自分で選んだときは、それを動かさない (候補の先頭に並ぶだけ)。
+  if (_compareRefId && _compareRefId !== cv.PEEK_ID && _compareRefChosen) return false;
+  if (_compareRefId === cv.PEEK_ID && same) return true;
+  _compareRefId = cv.PEEK_ID;
+  _compareShownDsl = null;
+  if (_compareOpen) renderCompareView();
+  return true;
+}
+
+// 参照図の置き場所の名前 (ボタンの「{相手} の綴りに揃える」)。
+function _mapRefWho() {
+  var cv = window.MA.compareView;
+  var ref = (cv && _compareRefId) ? cv.doc(_compareDocs(), _compareRefId) : null;
+  if (!ref) return '';
+  if (ref.isPeek) return ref.folder || ref.name || '';
+  return ref.name || '';
+}
+
+function renderMapAlign() {
+  var host = document.getElementById('map-align');
+  var MAL = window.MA.mapAlign;
+  if (!host) return;
+  host.textContent = '';
+  var cands = (MAL && _mapResult) ? MAL.candidates(_mapResult) : [];
+  if (!cands.length && !_mapAlignMsg) { host.hidden = true; return; }
+  host.hidden = false;
+  var who = _mapRefWho();
+  if (cands.length) {
+    var head = document.createElement('div');
+    head.className = 'map-align-head';
+    head.textContent = '綴りの違う組 ' + cands.length + ' — チェックした組を、自分の図だけ '
+      + (who || '相手') + ' の綴りに書き替えます (外した組は揃えずに残ります)';
+    host.appendChild(head);
+  }
+  cands.forEach(function(c) {
+    var row = document.createElement('label');
+    row.className = 'map-align-row';
+    row.setAttribute('data-align-from', c.from);
+    row.setAttribute('data-align-to', c.to);
+    var cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.className = 'map-align-check';
+    cb.checked = _mapAlignChecked[c.key] !== false;
+    cb.addEventListener('change', function() {
+      _mapAlignChecked[c.key] = cb.checked;
+      _mapAlignMsg = '';
+      renderMapAlign();
+    });
+    row.appendChild(cb);
+    var t = document.createElement('span');
+    t.textContent = MAL.rowText(c);
+    row.appendChild(t);
+    host.appendChild(row);
+  });
+  var pairs = MAL ? MAL.pairsOf(cands, _mapAlignChecked) : [];
+  if (cands.length) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.id = 'btn-map-align';
+    btn.textContent = MAL.buttonLabel(who, pairs.length);
+    btn.disabled = pairs.length === 0;
+    btn.addEventListener('click', function() { applyMapAlign(); });
+    host.appendChild(btn);
+  }
+  if (_mapAlignMsg) {
+    var res = document.createElement('span');
+    res.id = 'map-align-result';
+    res.textContent = _mapAlignMsg;
+    host.appendChild(res);
+  }
+}
+
+function applyMapAlign() {
+  var MAL = window.MA.mapAlign;
+  var WS = window.MA.workspace;
+  if (!MAL || !WS || !_mapResult) return null;
+  var pairs = MAL.pairsOf(MAL.candidates(_mapResult), _mapAlignChecked);
+  if (!pairs.length) return null;
+  var active = WS.getActive ? WS.getActive() : null;
+  if (!active) return null;
+  var doc = { id: active.id, name: active.name, dsl: editorEl ? editorEl.value : active.dsl };
+  var res = renamePairsAcrossDocs(pairs, [doc]);
+  _mapAlignMsg = MAL.doneMessage(res, active.name);
+  runStateMap();
+  return res;
+}
+
 // 対応をどこまで決めたか。ここが「取り込む 1 個を選んでよいか」の判断そのものなので、
 // 表の上に常に出す (行を 1 つ決めるたびに件数が減る)。
 function renderMapDecision() {
@@ -24146,6 +24272,7 @@ function renderStateMap() {
 
   renderMapAsked();
   renderMapDecision();
+  renderMapAlign();
   var warn = sm.abstractionWarning(_mapResult);
   if (warnEl) {
     warnEl.textContent = warn;
@@ -24182,6 +24309,9 @@ function runStateMap() {
   if (!cv || !stateMod || !sumEl) return;
 
   var ref = _compareRefId ? cv.doc(_compareDocs(), _compareRefId) : null;
+  // BLK-primary-20260925-0932-wish: 並べる別タブが無くても、比較中のフォルダの同じ部品・同じ図種の図
+  // (増分の突き合わせが選んだ相手) があれば、それを参照図にする。同名ファイルでなくてよい。
+  if (!ref && _xfUseAsRef()) ref = cv.doc(_compareDocs(), _compareRefId);
   if (!ref) {
     _clearStateMap();
     sumEl.textContent = '参照図を選んでください';
@@ -24194,7 +24324,9 @@ function runStateMap() {
   _mapModule = sm;
   var mod = (sm === window.MA.classMap)
     ? (window.MA.modules && window.MA.modules.plantumlClass)
-    : stateMod;
+    : (sm === window.MA.seqMap)
+      ? (window.MA.modules && window.MA.modules.plantumlSequence)
+      : stateMod;
   var refParsed = mod.parse(ref.dsl || '');
   var mineParsed = mod.parse(mmdText || '');
   _mapMineParsed = mineParsed;
@@ -24726,6 +24858,7 @@ function _xfSelectFile(name) {
       _xfShowMessage('その図を読めませんでした: ' + name, 'dirty');
       return;
     }
+    _xfUseAsRef();
     renderCrossRefDiff();
   });
 }
@@ -25081,6 +25214,7 @@ function setupCompareView() {
   if (sel) {
     sel.addEventListener('change', function() {
       _compareRefId = sel.value;
+      _compareRefChosen = true;
       _compareShownDsl = null;
       _clearCheckList();
       _clearStateMap();

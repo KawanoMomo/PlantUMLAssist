@@ -5500,6 +5500,32 @@ mark.ri-hit { background: var(--accent); color: var(--bg-primary); padding: 0 1p
   flex-shrink: 0;
 }
 #map-list[hidden] { display: none; }
+/* BLK-primary-20260925-0932-wish: 対応表で組になった綴り違いを、相手の綴りに揃える行。
+   機械が組んだ組も、手で結んだ組も同じ行に並び、チェックした組を 1 回で当てる。 */
+#map-align {
+  padding: 4px 8px;
+  font-size: 11px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-primary);
+  flex-shrink: 0;
+}
+#map-align[hidden] { display: none; }
+#map-align .map-align-head { color: var(--text-secondary); font-size: 10px; padding-bottom: 2px; }
+#map-align .map-align-row { display: flex; gap: 6px; align-items: baseline; padding: 1px 0; font-family: var(--font-mono); }
+#map-align .map-align-row input { margin: 0; }
+#btn-map-align {
+  margin-top: 4px;
+  font-size: 11px;
+  padding: 2px 10px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+#btn-map-align:hover { border-color: var(--accent); color: var(--accent); }
+#btn-map-align:disabled { opacity: 0.5; cursor: default; }
+#map-align-result { margin-left: 6px; color: var(--accent-green); font-size: 10px; }
 .map-head {
   padding: 3px 8px;
   font-family: var(--font-mono);
@@ -8240,6 +8266,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       </div>
       <!-- BLK-junior-20260908-0923-wish: 先輩・reviewer に預けた質問の件数 -->
       <div id="map-asked" hidden></div>
+      <!-- BLK-primary-20260925-0932-wish: 組になった綴り違いを相手の綴りに揃える (自分の図だけを書く) -->
+      <div id="map-align" hidden></div>
       <div id="map-list" hidden></div>
       <!-- BLK-junior-20260908-1303-wish: 派生図は雛形をペリフェラル名だけ変えて複製したもの。
            題材語を伏せて突き合わせ、「この図だけ / 雛形だけ」の行を出す。 -->
@@ -8918,6 +8946,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/template-registry.js"></script>
 <script src="src/core/template-cohort.js"></script>
 <script src="src/core/class-map.js"></script>
+<script src="src/core/seq-map.js"></script>
+<script src="src/core/map-align.js"></script>
 <script src="src/core/map-question.js"></script>
 <script src="src/core/seq-to-activity.js"></script>
 <script src="src/core/reuse-picker.js"></script>

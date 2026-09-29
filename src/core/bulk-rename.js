@@ -41,6 +41,57 @@ window.MA.bulkRename = (function() {
     return out + text.slice(last);
   }
 
+  // BLK-primary-20260925-0932-wish: 複数の組を 1 回で当てる。組を 1 つずつ順に当てると
+  // A→B と B→C が続けて効いてしまう (A が C になる) ので、全部の組を 1 回の走査で拾う。
+  // 長い綴りを先に試す (Clock_Ctrl と Clock_Ctrl_Hw があれば長い方を取る)。
+  // pairs: [{from, to}] — 置換後が識別子として使えない組・同じ綴りの組は捨てる。
+  function _validPairs(pairs) {
+    var seen = {};
+    return (Array.isArray(pairs) ? pairs : []).filter(function(p) {
+      if (!p || !p.from || p.from === p.to || !isValidTarget(p.to) || seen[p.from]) return false;
+      seen[p.from] = true;
+      return true;
+    }).sort(function(a, b) { return String(b.from).length - String(a.from).length; });
+  }
+
+  function replaceManyIn(dsl, pairs) {
+    var text = String(dsl == null ? '' : dsl);
+    var list = _validPairs(pairs);
+    if (!list.length) return text;
+    var to = {};
+    list.forEach(function(p) { to[p.from] = String(p.to); });
+    var re = new RegExp(list.map(function(p) { return escapeRe(p.from); }).join('|'), 'g');
+    var out = '', last = 0, m;
+    while ((m = re.exec(text)) !== null) {
+      var s = m.index, e = s + m[0].length;
+      var beforeOk = s === 0 || !WORD.test(text.charAt(s - 1));
+      var afterOk = e >= text.length || !WORD.test(text.charAt(e));
+      if (beforeOk && afterOk) {
+        out += text.slice(last, s) + to[m[0]];
+        last = e;
+      }
+      if (re.lastIndex === m.index) re.lastIndex++;
+    }
+    return out + text.slice(last);
+  }
+
+  // apply の複数組版。返す形は apply と同じ (count は当たった組の出現の合計)。
+  function applyMany(docs, pairs) {
+    var result = { changed: [], total: 0, docs: 0 };
+    var list = _validPairs(pairs);
+    if (!Array.isArray(docs) || !list.length) return result;
+    docs.forEach(function(d) {
+      if (!d) return;
+      var n = 0;
+      list.forEach(function(p) { n += countIn(d.dsl, p.from); });
+      if (n === 0) return;
+      result.changed.push({ id: d.id, name: d.name, dsl: replaceManyIn(d.dsl, list), count: n });
+      result.total += n;
+      result.docs++;
+    });
+    return result;
+  }
+
   // 1 本の DSL 中の出現数。
   function countIn(dsl, from) {
     var n = 0;
@@ -239,6 +290,8 @@ window.MA.bulkRename = (function() {
     seedForSearch: seedForSearch,
     countIn: countIn,
     replaceIn: replaceIn,
+    replaceManyIn: replaceManyIn,
+    applyMany: applyMany,
     detectRename: detectRename,
     isValidTarget: isValidTarget,
     preview: preview,
