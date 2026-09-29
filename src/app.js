@@ -6715,7 +6715,12 @@ function setupHandoverBanner() {
     for (var i = 0; i < rows.length; i++) {
       if (rows[i].getAttribute('data-doc-name') === doc.name) {
         var input = rows[i].querySelector('input.cb-note');
-        if (input) { rows[i].scrollIntoView(); input.focus(); }
+        if (input) {
+          rows[i].scrollIntoView();
+          input.focus();
+          // 書き直しは今の一言に書き足すことが多いので、キャレットは末尾に置く
+          try { input.setSelectionRange(input.value.length, input.value.length); } catch (e) {}
+        }
         return;
       }
     }
