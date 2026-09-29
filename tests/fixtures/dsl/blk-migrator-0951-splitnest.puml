@@ -1,0 +1,13 @@
+@startuml
+start
+split
+  split
+    :a;
+  split again
+    :b;
+  end split
+split again
+  :c;
+end split
+stop
+@enduml

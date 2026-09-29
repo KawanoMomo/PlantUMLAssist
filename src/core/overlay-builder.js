@@ -567,6 +567,9 @@ window.MA.overlayBuilder = (function() {
       if (k === 'container') return -1;
       if (k === 'linkline') return 0;
       if (k === 'linklabel') return 0.5;   // ラベルの文字は他の関係の線より手前 (文字を押したらその関係)
+      // BLK-migrator-20260929-0951: 1 本の線で描いた棒 (activity の split / end split) は、棒に入る・棒から出る矢印の
+      // 端の枠と重なる。棒の細い帯の上は棒が選ばれる (矢じりの関係 linkhead よりは後ろ)。
+      if (k === 'bar') return 1.5;
       return k === 'linkhead' ? 2 : 1;
     };
     // 元の並び順を保つ安定ソート (面積が同じものの前後関係を変えない)
