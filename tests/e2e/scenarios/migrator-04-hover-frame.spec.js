@@ -580,12 +580,25 @@ async function hoverHit(page, label) {
     if (!t) return null;
     // 入れ物の名札は右上のズーム帯の下に隠れることがあるので、枠の左下の内側を指す。
     const g = t.closest('g');
-    if (g && /cluster/.test(g.getAttribute('class') || '')) {
-      const f = g.getBoundingClientRect();
-      return { x: f.left + 6, y: f.bottom - 6 };
+    const cluster = g && /cluster/.test(g.getAttribute('class') || '');
+    const at = () => {
+      if (cluster) { const f = g.getBoundingClientRect(); return { x: f.left + 6, y: f.bottom - 6 }; }
+      const r = t.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    };
+    // BLK-releaser-20260930-0451-1: 保存の帯 (保存時チェック・保存の記録) が図を下へ押すと、図の下の方は
+    // プレビューの見える範囲の外 (下端の札の下) に出る。利用者と同じく、指す所までプレビューを巻いてから指す。
+    let p = at();
+    const pc = document.getElementById('preview-container');
+    if (pc) {
+      const v = pc.getBoundingClientRect();
+      const bottom = Math.min(v.top + pc.clientHeight, window.innerHeight);
+      if (p.y > bottom - 8 || p.y < v.top + 8) {
+        pc.scrollTop += Math.round(p.y - (v.top + Math.min(pc.clientHeight, bottom - v.top) / 2));
+        p = at();
+      }
     }
-    const r = t.getBoundingClientRect();
-    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    return p;
   }, label);
   expect(box, label + ' が描かれている').not.toBeNull();
   // 描き直しで当たり判定が作り直されると、乗せたままの枠は光らない (mousemove が来ない)。
