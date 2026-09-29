@@ -1848,6 +1848,36 @@ test('migrator 手順 4 — mainframe と newpage とステレオタイプ付き
   await expect(page.locator('#overlay-layer rect[data-src-kind="mainframe"]')).toHaveCount(1, { timeout: 20000 });
   expect((await hoverHit(page, '動作の枠')).hit).toEqual({ type: 'source-line', line: '2', hover: true });
   expect((await hoverHit(page, 'A')).hit).toEqual({ type: 'action', line: '4', hover: true });
+
+  // BLK-migrator-20260929-2158: newpage が 1 枚目の下端に全幅で描く破線 (ページの境目) にも newpage の行の枠が出て、
+  // 押すとその行が選ばれる (== 区切り == と同じ)。メッセージの枠は今までどおり本人の行 (corpus の seq-42)。
+  const seq42 = fs.readFileSync(path.join(__dirname, '..', '..', 'fixtures', 'dsl', 'seq-42-autonumber-in-groups-newpage.puml'), 'utf8')
+    .replace(/\r\n/g, '\n').replace(/\n+$/, '');
+  await typeDsl(page, seq42);
+  await expect(page.locator('#overlay-layer rect[data-src-kind="newpage"]')).toHaveCount(1, { timeout: 20000 });
+  await expect(page.locator('#overlay-warning')).toBeHidden();
+  const rulePts = await page.evaluate(() => {
+    const ls = Array.from(document.querySelectorAll('#preview-svg svg line')).filter((l) =>
+      /dasharray:\s*2,\s*2/.test(l.getAttribute('style') || '') && Math.abs(+l.getAttribute('y1') - +l.getAttribute('y2')) < 0.5);
+    ls.sort((a, b) => Math.abs(+b.getAttribute('x2') - +b.getAttribute('x1')) - Math.abs(+a.getAttribute('x2') - +a.getAttribute('x1')));
+    const r = ls[0].getBoundingClientRect();
+    return [0.1, 0.5, 0.9].map((f) => ({ x: r.left + r.width * f, y: r.top + r.height / 2 }));
+  });
+  for (const p of rulePts) {
+    await page.mouse.move(3, 3);
+    await page.mouse.move(p.x, p.y);
+    await page.waitForTimeout(200);
+    const hit = await page.evaluate((q) => {
+      const r = document.elementsFromPoint(q.x, q.y).find((e) => e.closest('#overlay-layer') && e.getAttribute('data-type'));
+      return r ? { type: r.getAttribute('data-type'), line: r.getAttribute('data-line') } : null;
+    }, p);
+    expect(hit, 'ページの境目の破線にホバーして newpage の行の枠').toEqual({ type: 'source-line', line: '14' });
+  }
+  await page.mouse.click(rulePts[1].x, rulePts[1].y);
+  await expect(page.locator('#src-line-props')).toHaveAttribute('data-line', '14');
+  for (const [label, line] of [['電源投入', '7'], ['運転開始', '11']]) {
+    expect((await hoverHit(page, label)).hit, label + ' は本人の行').toEqual({ type: 'message', line, hover: true });
+  }
 });
 
 // BLK-migrator-20260929-1300: `!ifdef` / `!else` の両枝に同じ `A -> B` があると、描かれない枝の行まで当て損ねに数え、

@@ -755,7 +755,7 @@ window.MA.sequenceOverlay = (function() {
     var hLines = _bareShapes(svgEl, 'line').map(function(l) {
       var y1 = _num(l, 'y1'), x1 = _num(l, 'x1'), x2 = _num(l, 'x2');
       if (isNaN(y1) || isNaN(x1) || isNaN(x2) || Math.abs(_num(l, 'y2') - y1) > 0.5) return null;
-      return { y: y1, x1: Math.min(x1, x2), x2: Math.max(x1, x2) };
+      return { y: y1, x1: Math.min(x1, x2), x2: Math.max(x1, x2), dashed: /dasharray/.test(l.getAttribute('style') || '') };
     }).filter(Boolean);
     String(dslText || '').split('\n').forEach(function(raw, i) {
       var dm = /^\s*==\s*(.*?)\s*==\s*$/.exec(raw);
@@ -803,7 +803,32 @@ window.MA.sequenceOverlay = (function() {
         return true;
       });
     });
-    return { frames: frames, dividers: dividers, delays: delays, claimed: claimed, texts: texts };
+    // BLK-migrator-20260929-2158: 図全体にかかる区切りの線のうち、枠・区切り (`==`) の中に無いもの。どのライフラインも
+    // 左右に突き抜ける横の破線は、メッセージ (ライフラインの上から出る) でも枠の else の点線 (枠の中) でもなく、
+    // ページの境目の区切り (`newpage` が 1 枚目の下端に描く全幅の破線)。本文で箱を持たない区切りの行 (`newpage`) に
+    // 上から順に当てる。本数が合わなければ当てない (推し量って別の行を指さない)。
+    var lifeXs = _bareShapes(svgEl, 'line').map(function(l) {
+      var x1 = _num(l, 'x1'), y1 = _num(l, 'y1'), y2 = _num(l, 'y2');
+      if (isNaN(x1) || Math.abs(_num(l, 'x2') - x1) > 0.5 || Math.abs(y2 - y1) < 20) return null;
+      return /dasharray/.test(l.getAttribute('style') || '') ? x1 : null;
+    }).filter(function(x) { return x != null; });
+    var rules = [];
+    if (lifeXs.length) {
+      var lxMin = Math.min.apply(null, lifeXs), lxMax = Math.max.apply(null, lifeXs);
+      var wide = hLines.filter(function(l) {
+        return l.x1 < lxMin - 1 && l.x2 > lxMax + 1 && l.dashed &&
+          !frames.some(function(f) { return l.y > f.y + 0.5 && l.y < f.y + f.h - 0.5 && l.x1 >= f.x - 1 && l.x2 <= f.x + f.w + 1; }) &&
+          !dividers.some(function(d) { return l.y >= d.box.y - 1 && l.y <= d.box.y + d.box.h + 1; });
+      }).sort(function(a, b) { return a.y - b.y; });
+      var ruleLines = [];
+      String(dslText || '').split('\n').forEach(function(raw, i) { if (/^\s*newpage\b/i.test(raw)) ruleLines.push(i + 1); });
+      // プレビューに描かれるのは 1 枚目だけなので、描かれる境目は最初の newpage の 1 本
+      ruleLines = ruleLines.slice(0, 1);
+      if (wide.length === ruleLines.length) {
+        wide.forEach(function(l, k) { rules.push({ line: ruleLines[k], box: { x: l.x1, y: l.y - 3, w: l.x2 - l.x1, h: 6 } }); });
+      }
+    }
+    return { frames: frames, dividers: dividers, delays: delays, rules: rules, claimed: claimed, texts: texts };
   }
   // 矢印をメッセージ行へ当てる。線の上 (前の矢印より下) に書かれた文字にメッセージの文言が含まれるものを
   // 順序を保って最大数対応させ (LCS)、文言で当たらなかった残りは前後の対応の間で本数が合うときだけ順に当てる。
@@ -1364,6 +1389,8 @@ window.MA.sequenceOverlay = (function() {
     if (scene) {
       scene.dividers.forEach(function(d) { srcHits.push({ box: d.box, line: d.line, kind: 'divider' }); });
       scene.delays.forEach(function(d) { srcHits.push({ box: d.box, line: d.line, kind: 'delay' }); });
+      // BLK-migrator-20260929-2158: ページの境目の破線 (`newpage`) も区切りと同じくその行を指す
+      (scene.rules || []).forEach(function(d) { srcHits.push({ box: d.box, line: d.line, kind: 'newpage' }); });
     }
     // BLK-migrator-20260923-1409: 群の枠は内側全体を覆うので、先に置いたライフラインが
     // その下に隠れ、alt の中のライフラインを指すと alt が選ばれていた。細いライフラインを

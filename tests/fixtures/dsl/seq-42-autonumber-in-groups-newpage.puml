@@ -1,0 +1,18 @@
+' 狙い: グループ内 autonumber、%autonumber% の参照、newpage の見出し付き、skinparam actorStyle
+@startuml
+skinparam actorStyle awesome
+autonumber "<b>[00]"
+actor 操作者 as O
+entity 装置 as D
+O -> D : 電源投入
+D -> D : 自己診断
+group 通常運転
+  autonumber 10 10 "<b>(000)"
+  O -> D : 運転開始
+  D --> O : 稼働中 (通番 %autonumber%)
+end
+newpage 停止手順
+autonumber resume "<i>[00]"
+O -> D : 停止要求
+D --> O : 停止完了
+@enduml
