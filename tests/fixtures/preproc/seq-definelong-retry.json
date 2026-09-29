@@ -1,0 +1,1 @@
+["@startuml","§pua7f3§2§","§pua7f3§5§","participant A","§pua7f3§6§","participant B","§pua7f3§7§","A -> B : 送信","§pua7f3§8§","B -> B : 再試行","§pua7f3§9§","B --> A : 完了","§pua7f3§10§","@enduml"]

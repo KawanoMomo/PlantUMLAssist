@@ -37,6 +37,7 @@ curl -sS -H "Accept-Charset: shift_jis" http://127.0.0.1:8766/api  # cp932 (日�
 | --- | --- | --- |
 | `GET /render` | — | `POST /render` の仕様 (別名・比較の注意つき) |
 | `POST /render` | `{text, mode}` | 200 `image/svg+xml` / 400 `{error}` / 422 `{error, line}` |
+| `POST /preproc` | `{text}` | 200 `{ok: true, lines}` (同梱 jar のプリプロセッサで展開した最初の図の行) / 200 `{ok: false, error}` / 400 `{error}` |
 
 `text` は `@startuml … @enduml` の DSL 全文。`dsl` `source` `uml` `puml` `diagram` は別名として
 受理されるが、正式な名前は `text` (別名で送ると `X-PlantUMLAssist-Warning` が付く)。

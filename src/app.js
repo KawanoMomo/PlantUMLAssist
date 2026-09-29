@@ -7,6 +7,7 @@ function _registerModules() {
   for (var i = 0; i < keys.length; i++) {
     var mod = mm[keys[i]];
     var key = (mod && mod.type) ? mod.type : keys[i];
+    _wrapParseWithExpansion(mod);
     if (!modules[key]) {
       modules[key] = mod;
     } else {
@@ -17,6 +18,35 @@ function _registerModules() {
       }
     }
   }
+}
+
+// BLK-migrator-20260929-1351: どの図種のパーサも、PlantUML のプリプロセッサが展開した行
+// (src/core/preproc-expand.js。マクロを呼んだ行が生んだ行はその行番号) を読む。展開が手元に無ければ元の読み方。
+function _wrapParseWithExpansion(mod) {
+  if (!mod || typeof mod.parse !== 'function' || mod.parse.__puaExpand) return;
+  var orig = mod.parse;
+  var wrapped = function(text) {
+    var PE = window.MA.preprocExpand;
+    var self = this;
+    var run = function(t) { return orig.call(self, t); };
+    return PE ? PE.parseWith(run, text) : run(text);
+  };
+  wrapped.__puaExpand = true;
+  mod.parse = wrapped;
+}
+
+// 描画が返ったとき、展開が届いていれば今の本文を展開後の行で読み直し、下端の件数もそれで数え直す
+// (当て方と帯はこの読みで数える)。右パネルは組み直さない (打ちかけの欄を消さない)。
+function _adoptExpansion() {
+  var PE = window.MA.preprocExpand;
+  if (!PE || !currentModule || !PE.has(mmdText)) return;
+  if (currentParsed && currentParsed.meta && currentParsed.meta.expanded && currentParsed.meta.expandedFor === mmdText) return;
+  try { currentParsed = currentModule.parse(mmdText); } catch (e) { return; }
+  if (currentParsed && currentParsed.meta && currentParsed.meta.expanded) currentParsed.meta.expandedFor = mmdText;
+  try {
+    statusInfoEl.textContent = window.MA.outline.countLabel(
+      window.MA.outline.build(PE.splicedText(mmdText) || mmdText).counts, currentDiagramType);
+  } catch (e) {}
 }
 
 // Feature #10: online モードの外部送信警告バナー表示/非表示
@@ -33572,8 +33602,10 @@ function refresh() {
   // elements / relations を持たないので、モジュールの戻り値を直接数えると
   // どちらも常に 0 になっていた。構造タブと同じ outline.countLabel で数えて、
   // 同じ図の 2 か所に違う数が出ないようにする。
+  // BLK-migrator-20260929-1351: 展開が手元にある本文は、マクロを呼んだ行を展開後の行に差し替えた本文で数える。
+  var _PE = window.MA.preprocExpand;
   statusInfoEl.textContent = window.MA.outline.countLabel(
-    window.MA.outline.build(mmdText).counts,
+    window.MA.outline.build((_PE && _PE.has(mmdText) && _PE.splicedText(mmdText)) || mmdText).counts,
     detectedType || currentDiagramType);
 
   renderProps(currentParsed);
@@ -34485,6 +34517,10 @@ function renderSvg() {
   var focusDsl = stateTreeFocusText();
   var renderText = focusDsl || mmdText;
   var renderDocKey = _activeDocKey();  // BLK-owner-20260925-1132-2: この回の図がどのタブのものか
+  // BLK-migrator-20260929-1351: マクロのある本文は、描画と並べて PlantUML のプリプロセッサに展開を頼み、
+  // 選択枠はその展開を読んでから当てる (展開できない・遅いときは今までの読み方で当てる)。
+  var _PEx = window.MA.preprocExpand;
+  var expandP = (!focusDsl && _PEx) ? _PEx.ensure(mmdText).catch(function() { return false; }) : Promise.resolve(false);
   fetch('/render', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -34502,6 +34538,8 @@ function renderSvg() {
       throw new Error('Unexpected content type: ' + contentType);
     }
     return resp.text();
+  }).then(function(svg) {
+    return expandP.then(function() { return svg; }, function() { return svg; });
   }).then(function(svg) {
     if (myGen !== renderGen) return;  // stale response \u2014 a newer renderSvg() superseded this one
     // design 5a: PlantUML \u306f\u6587\u6cd5\u30a8\u30e9\u30fc\u3067\u3082 200 + SVG \u3092\u8fd4\u3059\u3002\u305d\u306e\u307e\u307e\u6d41\u3057\u8fbc\u3080\u3068
@@ -34552,6 +34590,7 @@ function renderSvg() {
       while (overlayEl.firstChild) overlayEl.removeChild(overlayEl.firstChild);
     }
     if (warnEl) { warnEl.style.display = 'none'; warnEl.textContent = ''; warnEl.title = ''; }
+    if (svgEl && !focusDsl) _adoptExpansion();
     if (svgEl && !focusDsl) _reconcileKindWithSvg(svgEl);
     if (svgEl && !focusDsl && currentModule && currentModule.buildOverlay) {
       syncOverlayOrigin();

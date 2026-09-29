@@ -121,10 +121,15 @@ window.MA.outline = (function() {
     var PL = window.MA.preprocLive;
     var dead = PL ? PL.deadLines(dsl) : {};
 
+    // BLK-migrator-20260929-1351: 手続き・関数・!definelong の本体は展開前の型紙なので数えない
+    // (描かれるのは呼んだ行の展開。本体の `target -> target` を矢印と数えると 1 本多い)。
+    var inBody = false;
     for (var i = 0; i < lines.length; i++) {
       var raw = _clean(lines[i]);
       var line = raw.trim();
       if (line === '') continue;
+      if (inBody) { if (/^!end(?:procedure|function|definelong)\b/i.test(line)) inBody = false; continue; }
+      if (/^!(?:unquoted\s+)?(?:procedure|function|definelong)\b/i.test(line) && !/!return\b/i.test(line)) { inBody = true; continue; }
       if (dead[i + 1]) continue;
       if (_isComment(raw)) continue;
       if (/^@startuml\b/i.test(line)) { sawStart = true; continue; }

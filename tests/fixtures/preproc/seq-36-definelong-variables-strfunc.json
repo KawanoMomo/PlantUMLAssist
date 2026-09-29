@@ -1,0 +1,1 @@
+["@startuml","§pua7f3§3§","§pua7f3§4§","§pua7f3§5§","§pua7f3§8§","participant \"決済 画面\" as A","§pua7f3§9§","participant \"決済 サーバ\" as B","§pua7f3§10§","A -> B : REQ 送信","§pua7f3§11§","§pua7f3§12§","B -> B : 上限 3 回まで","§pua7f3§13§","§pua7f3§14§","B -> B : 再試行","§pua7f3§15§","B --> A : 文字数 4 / 3","§pua7f3§16§","@enduml"]

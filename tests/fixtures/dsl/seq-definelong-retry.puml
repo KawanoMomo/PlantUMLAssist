@@ -1,0 +1,10 @@
+@startuml
+!definelong RETRY(target)
+target -> target : 再試行
+!enddefinelong
+participant A
+participant B
+A -> B : 送信
+RETRY(B)
+B --> A : 完了
+@enduml
