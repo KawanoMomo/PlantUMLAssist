@@ -190,10 +190,42 @@ window.MA.preprocExpand = (function() {
     return out;
   }
 
+  // 行ごとの「何が描かれるか」: 要素は id、関係は From>To。パーサが振る通し番号の id (`__m_3` など) は数だけ見る
+  // (前の行の展開で番号がずれても同じ要素と見る)。
+  function _identities(result) {
+    var out = {}, seen = _seenSet();
+    function walk(o) {
+      if (!o || typeof o !== 'object' || seen.has(o) || o.nodeType) return;
+      seen.add(o);
+      if (typeof o.line === 'number' && o.kind) {
+        var k = o.from != null || o.to != null ? String(o.from) + '>' + String(o.to)
+          : (o.id != null && !/^__/.test(String(o.id)) ? 'id:' + o.id : '#');
+        (out[o.line] = out[o.line] || []).push(o.kind + '|' + k);
+      }
+      Object.keys(o).forEach(function(k) { if (o[k] && typeof o[k] === 'object') walk(o[k]); });
+    }
+    walk(result);
+    return out;
+  }
+
+  // 展開後の読みが、元の読みと同じ種類の要素を別の顔ぶれで描くか。元に無い種類 (C4 の Container_Boundary が
+  // 展開で `box` になる等) と、パーサが展開後の書き方を読めずに何も出さない行は比べない (元の読みを残す)。
+  function _drawsOther(baseIds, fullIds) {
+    if (!baseIds || !fullIds) return false;
+    var kinds = {};
+    baseIds.forEach(function(k) { kinds[k.split('|')[0]] = true; });
+    var same = fullIds.filter(function(k) { return kinds[k.split('|')[0]]; });
+    if (!same.length) return false;
+    return same.slice().sort().join('\n') !== baseIds.slice().sort().join('\n');
+  }
+
   // parseFn(text) の展開版。展開が手元に無ければ parseFn(text) そのもの。
-  // 元の読み方が既に要素を読んでいる行 (C4 の Container(...) を形で読む、`participant "$sys 画面" as A` 等) は
-  // 元のまま残す。右パネルの名前は本文の書き方のまま出し、描いた側の飾り (`==` や <size>) で当て方を崩さない。
-  // 差し替えるのは、元の読み方では何も読めなかった呼び出しの行 (RETRY(B) など) だけ。
+  // 元の読み方が既に要素を読んでいる行 (C4 の Container(...) を形で読む、`participant "$sys 画面" as A` 等) は、
+  // 展開しても同じ要素 (同じ id・同じ From>To・同じ数) になるなら元のまま残す。右パネルの名前は本文の書き方のまま出し、
+  // 描いた側の飾り (`==` や <size>) で当て方を崩さない。
+  // 展開で別の要素になる行 (`!while` の中の `participant "サービス$i" as S$i` が S1・S2・S3 を描く) は、
+  // 元の読み方が何かを読んでいても展開後の行を読む (元の `S$i` は図のどこにも描かれない)。
+  // 元の読み方では何も読めなかった呼び出しの行 (RETRY(B) など) は展開後の行を読む。
   function parseWith(parseFn, text) {
     var base = parseFn(text);
     var c = _cache[text];
@@ -202,9 +234,22 @@ window.MA.preprocExpand = (function() {
     var keys = Object.keys(calls);
     if (!keys.length) { _spliced[text] = text; return base; }
     var claimed = _claimed(base);
-    keys.forEach(function(L) {
-      if (claimed[L]) delete calls[L];
-    });
+    var claimedKeys = keys.filter(function(L) { return claimed[L]; });
+    var full = null;
+    if (claimedKeys.length) {
+      // 全部の呼び出しを差し替えて読み、元の読み方と同じ要素になる行だけ元に戻す
+      var spAll = splice(text, calls);
+      try { full = remap(parseFn(spAll.text), spAll); } catch (e) { full = null; }
+      var idsBase = _identities(base), idsFull = full ? _identities(full) : {};
+      claimedKeys.forEach(function(L) {
+        if (!full || !_drawsOther(idsBase[L], idsFull[L])) delete calls[L];
+      });
+      if (full && Object.keys(calls).length === keys.length) {
+        _spliced[text] = spAll.text;
+        if (full.meta) full.meta.expanded = true;
+        return full;
+      }
+    }
     if (!Object.keys(calls).length) { _spliced[text] = text; return base; }
     var sp = splice(text, calls);
     var res;

@@ -1,0 +1,17 @@
+[
+"@startuml",
+"§pua7f3§2§",
+"§pua7f3§3§",
+"§pua7f3§4§",
+"  participant \"サービス1\" as S1",
+"§pua7f3§5§",
+"§pua7f3§6§",
+"§pua7f3§4§",
+"  participant \"サービス2\" as S2",
+"§pua7f3§5§",
+"§pua7f3§6§",
+"§pua7f3§7§",
+"S1 -> S2 : 転送",
+"§pua7f3§8§",
+"@enduml"
+]

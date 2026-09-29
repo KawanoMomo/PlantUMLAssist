@@ -185,4 +185,34 @@ describe('BLK-migrator-20260929-1351 マクロは PlantUML の展開で読む', 
     expect(app.line).toBe(8);
     expect(p.relations.map(function(r) { return r.line; })).toEqual([9]);
   });
+  // 差し戻し 1 回目: `!while` の中の `participant "サービス$i" as S$i` を元の読み方が `S$i` 1 つと読み、展開後の
+  // S1・S2 (・S3) に差し替えていなかった。描かれる参加者に枠が出ず「図の要素 4 個に選択枠を当てられません」の帯 (common-22)。
+  test('!while で宣言した参加者: 展開で別の要素になる行は、元の読み方が読んでいても展開後の行を読む', function() {
+    var r = parseExpanded(seq, 'seq-while-participants');
+    var parts = r.parsed.elements.filter(function(e) { return e.kind === 'participant'; });
+    expect(parts.map(function(e) { return e.id + ':' + e.label + '@' + e.line; })).toEqual(['S1:サービス1@4', 'S2:サービス2@4']);
+    var b = build('seq-while-participants', r.parsed, r.dsl);
+    expect(totalUnmatched(b.res)).toBe(0);
+    var heads = Array.prototype.map.call(b.overlayEl.querySelectorAll('rect[data-type="participant"]'), function(x) {
+      return x.getAttribute('data-id') + '@' + x.getAttribute('data-line');
+    }).filter(function(v, i, a) { return a.indexOf(v) === i; }).sort();
+    expect(heads).toEqual(['S1@4', 'S2@4']);
+    expect(msgLines(b.overlayEl)).toEqual(['7']);
+  });
+
+  test('common-22: 変数・!if・!while・%関数の図で参加者 3 つとメッセージ 3 本に枠が出て、枠なしが 0', function() {
+    var r = parseExpanded(seq, 'common-22-preproc-variables-conditions');
+    var parts = r.parsed.elements.filter(function(e) { return e.kind === 'participant'; });
+    expect(parts.map(function(e) { return e.id + '@' + e.line; })).toEqual(['S1@15', 'S2@15', 'S3@15']);
+    var b = build('common-22-preproc-variables-conditions', r.parsed, r.dsl);
+    expect(totalUnmatched(b.res)).toBe(0);
+    expect(msgLines(b.overlayEl)).toEqual(['18', '19', '21']);
+  });
+
+  test('展開しても同じ要素になる行は元の書き方のまま読む (右パネルの名前は本文の書き方)', function() {
+    var r = parseExpanded(seq, 'seq-36-definelong-variables-strfunc');
+    var a = r.parsed.elements.filter(function(e) { return e.id === 'A'; })[0];
+    expect(a.label).not.toBe('決済 画面');
+    expect(!!a.expanded).toBe(false);
+  });
 });
