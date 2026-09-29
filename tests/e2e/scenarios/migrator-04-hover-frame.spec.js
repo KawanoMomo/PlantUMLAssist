@@ -1228,6 +1228,55 @@ test('migrator 手順 4 — アクティビティ図の split の分岐の棒・
   await expect.poll(caretLine, '合流の棒を押すと end split の行').toBe(7);
 });
 
+// BLK-migrator-20260929-0951 追記: `repeat :検証;` (repeat 行に処理) の箱・文字・戻りの矢印と、色付きレーン `|#色|B|` へ
+// 移る矢印の縦 5px の区間に枠が出なかった。矢印の線の中点・矢じりの中心のどこを指しても枠が出て、箱を押すと repeat の行。
+test('migrator 手順 4 — repeat 行に処理を書いた repeat の箱・戻りの矢印と、色付きレーンへ移る矢印の全区間に枠が出る', async ({ page }) => {
+  await bootPlain(page);
+  const gaps = () => page.evaluate(() => {
+    const svg = document.querySelector('#preview-svg svg');
+    const out = [];
+    const pts = [];
+    svg.querySelectorAll('line').forEach((l) => {
+      if (!/stroke-width:1;/.test(l.getAttribute('style') || '')) return;
+      const b = l.getBoundingClientRect();
+      if (b.width + b.height < 1) return;
+      pts.push(['line', b.left + b.width / 2, b.top + b.height / 2]);
+    });
+    svg.querySelectorAll('polygon').forEach((p) => {
+      if ((p.getAttribute('points') || '').split(',').length !== 8) return;
+      const b = p.getBoundingClientRect();
+      pts.push(['head', b.left + b.width / 2, b.top + b.height / 2]);
+    });
+    for (const [k, x, y] of pts) {
+      const hit = document.elementsFromPoint(x, y).find((e) => e.closest && e.closest('#overlay-layer [data-type]'));
+      if (!hit) out.push(k + '@' + Math.round(x) + ',' + Math.round(y));
+    }
+    return out;
+  });
+  const caretLine = () => page.evaluate(() => {
+    const ed = document.getElementById('editor');
+    return ed.value.slice(0, ed.selectionStart).split('\n').length;
+  });
+
+  await typeDsl(page, ['@startuml', 'start', 'repeat :検証;', '  :ログ出力;', 'repeat while (エラー?)', 'stop', '@enduml'].join('\n'));
+  await expect(page.locator('#overlay-layer rect.selectable[data-src-kind="loop"]')).toHaveCount(1, { timeout: 20000 });
+  expect(await gaps(), 'repeat :検証; の図で枠の出ない矢印').toEqual([]);
+  const box = await page.evaluate(() => {
+    const t = Array.from(document.querySelectorAll('#preview-svg svg text')).find((n) => n.textContent.trim() === '検証');
+    const r = t.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  });
+  await page.mouse.move(box.x, box.y);
+  await expect.poll(() => page.evaluate(() => Array.from(document.querySelectorAll('#overlay-layer rect.hit-hover'))
+    .map((r) => r.getAttribute('data-line')).join(',')), '「検証」にホバーすると repeat の行の枠').toBe('3');
+  await page.mouse.click(box.x, box.y);
+  await expect.poll(caretLine, '「検証」を押すと repeat の行').toBe(3);
+
+  await typeDsl(page, ['@startuml', '|A|', 'start', ':a;', '|#LightGray|B|', ':x;', 'stop', '@enduml'].join('\n'));
+  await expect(page.locator('#overlay-layer rect.selectable[data-type="swimlane"]')).toHaveCount(2, { timeout: 20000 });
+  expect(await gaps(), '色付きレーンの図で枠の出ない矢印').toEqual([]);
+});
+
 // BLK-migrator-20260926-2118: 単純な if / else の、枝から合流へ「下へ → 横へ」折れる矢印の縦の区間 (と、菱形から枝へ
 // 「横へ → 下へ」の横の区間) にホバーしても枠が出なかった。1 本の矢印の全区間に同じ枠を置き、どの区間を指しても矢印全体が光る。
 test('migrator 手順 4 — 単純な if / else の折れた矢印は、どの区間を指しても枠が出て、その矢印の全区間が光る', async ({ page }) => {

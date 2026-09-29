@@ -1,0 +1,23 @@
+' 狙い: スイムレーン(色付き)の切替、<style> ブロック、:action; の <<stereotype>>、sdl 風終端
+@startuml
+<style>
+activityDiagram {
+  BackgroundColor #FFFDF0
+  FontColor #333333
+  LineColor #556677
+}
+</style>
+|#DDEEFF|申請者|
+start
+:申請書を作成;
+|#FFEEDD|承認者|
+:内容を確認; <<input>>
+if (承認?) then (可)
+  |#EEFFEE|経理|
+  :支払処理; <<procedure>>
+else (否)
+  |申請者|
+  :差し戻し内容を確認;
+endif
+stop
+@enduml
