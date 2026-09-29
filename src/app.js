@@ -18103,10 +18103,14 @@ function loadRenamePairs(force) {
 
 // 打った組を覚える。当たらなかった組 (hits 0) も残すのは、「もう残っていない」
 // と分かったこと自体が、次の run で打ち直さずに済む知識だから。
-function rememberRenamePair(from, to, hits) {
+// applied は [置換] で当たった回だけ true。開いた時に欄へ入れる「前回の組」は
+// 当てた組に限る (BLK-primary-20260914-1106-friction) ので、打っただけの組と分けて残す。
+function rememberRenamePair(from, to, hits, applied) {
   var RP = window.MA.renamePairs;
   if (!RP || !RP.shouldRemember(from, to)) return Promise.resolve(null);
-  var row = { from: String(from).trim(), to: String(to).trim(), at: new Date().toISOString() };
+  var now = new Date().toISOString();
+  var row = { from: String(from).trim(), to: String(to).trim(), at: now,
+    appliedAt: applied ? now : '' };
   _rpRows = RP.merge([row], _rpRows);
   if (typeof renderRenameRedo === 'function') renderRenameRedo();
   // 組が増えた・当たった直後は下端の統一バッジも数え直す (次に開くまで
@@ -18116,14 +18120,18 @@ function rememberRenamePair(from, to, hits) {
   return window.fetch('/rename-pairs', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ dir: _wsFileDir(), from: row.from, to: row.to, hits: Number(hits || 0) }),
+    body: JSON.stringify({ dir: _wsFileDir(), from: row.from, to: row.to, hits: Number(hits || 0),
+      applied: !!applied }),
   }).then(function(r) { return r.ok ? r.json() : null; }, function() { return null; });
 }
 
 // renameRedo に渡す組。フォルダの組が先 (run をまたいで残る方が正本)。
 function _renameRedoPairs() {
   var RP = window.MA.renamePairs;
-  var hist = _renameHistoryList();
+  // 改名履歴は当たった置換だけが残る記録なので、その日時が「当てた日時」。
+  var hist = (_renameHistoryList() || []).map(function(e) {
+    return e ? { from: e.from, to: e.to, at: e.at, appliedAt: e.at } : e;
+  });
   return RP ? RP.merge(_rpRows, hist) : hist;
 }
 
@@ -21282,6 +21290,15 @@ function setupBulkRename() {
   function closePanel() {
     panel.classList.remove('open');
     rememberRenamePair(fromEl && fromEl.value, toEl && toEl.value, _renameGrandTotal());
+    // 当てずに閉じた組は欄に残さない。残すと次に開いたとき「前回の組」の代わりに
+    // その組が居座り、本来の組を確かめるたびに消して打ち直すことになる
+    // (BLK-primary-20260914-1106-friction)。打った組は上の行で履歴の行に残るので、
+    // 要るときは行を 1 回押せば戻る。
+    if (fromEl) fromEl.value = '';
+    if (toEl) toEl.value = '';
+    _seededPair = null;
+    _seedUntouched = false;
+    renderRenameSeedNote(null);
   }
 
   function fillCandidates() {
@@ -21315,6 +21332,7 @@ function setupBulkRename() {
     // 利用者が選んで入った値 (図の選択・エディタの選択) は「尋ねた名前」なので、
     // 入れ直しの印はここで必ず落としてから seed に判断させる。
     _seedUntouched = false;
+    _seedArmed = true;
     seedRenamePair();
     var rect = btn.getBoundingClientRect();
     // ツール列が畳まれているとこのボタンは幅 0・座標 0 になる。そのときはタブ列の
@@ -21363,8 +21381,12 @@ function setupBulkRename() {
     return pair;
   }
 
+  // 開き直すまでの間に [置換] で当てたら、もう入れ直さない。当てた直後は下端のバッジの
+  // 数え直しが組を読み直してここへ来るので、空にした欄へ今当てた組を戻して
+  // 「N 件 / M 枚を置換しました」を「見つかりません」で上書きしてしまう。
+  var _seedArmed = false;
   _seedRenamePairAgain = function() {
-    if (!panel.classList.contains('open')) return;
+    if (!panel.classList.contains('open') || !_seedArmed) return;
     var p = seedRenamePair();
     if (p && document.activeElement === fromEl) { try { fromEl.select(); } catch (e) {} }
   };
@@ -21411,6 +21433,7 @@ function setupBulkRename() {
   function doApply() {
     var from = fromEl.value;
     var to = toEl.value;
+    _seedArmed = false;
     var res = applyBulkRename();
     var openTotal = (res && res.total) || 0;
     var openDocs = (res && res.docs) || 0;
@@ -21420,7 +21443,7 @@ function setupBulkRename() {
       var total = openTotal + f.total;
       var docs = openDocs + f.docs;
       // 当たっても当たらなくても組は覚える。次の run はこの行を押すだけで済む。
-      rememberRenamePair(from, to, total);
+      rememberRenamePair(from, to, total, total > 0);
       if (total === 0) return;
       // 履歴は「1 回の置換」で 1 件。開いている図とフォルダ直書きを 1 つにまとめる。
       _recordRename(from, to, ((res && res.changed) || []).map(function(c) {
@@ -21433,6 +21456,9 @@ function setupBulkRename() {
         })));
       fromEl.value = '';
       toEl.value = '';
+      // 欄を空けたら「前回の組を入れました」も下ろす (空の欄の上に残すと食い違う)。
+      _seededPair = null;
+      renderRenameSeedNote(null);
       fillCandidates();
       updateRenamePreview();
       var msg = total + ' 件 / ' + docs + ' 枚を置換しました';

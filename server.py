@@ -766,7 +766,7 @@ API_INDEX = {
          'request': "{dir, peer, kind, settled} | {dir, clear: true}"},
         {'endpoint': 'GET /rename-pairs', 'summary': 'そのフォルダで打たれた置換の組', 'request': '?dir='},
         {'endpoint': 'POST /rename-pairs', 'summary': '置換の組を 1 つ覚える',
-         'request': "{dir, from, to, hits}"},
+         'request': "{dir, from, to, hits, applied}"},
         {'endpoint': 'GET /doc-sets', 'summary': 'そのフォルダに登録した資料セット', 'request': '?dir='},
         {'endpoint': 'POST /doc-sets', 'summary': '資料セットを 1 つ登録する (同じ名前は置き換え)',
          'request': "{dir, name, docs, items}"},
@@ -2900,14 +2900,26 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(400, {'error': 'from and to must be non-empty strings'})
             return
         save_dir = self._autosave_resolve_dir(data.get('dir'))
+        now = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
         entry = {
             'from': src,
             'to': dst,
-            'at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+            'at': now,
             'hits': int(data.get('hits') or 0),
         }
+        old = self._read_rename_pairs(save_dir)
+        # applied_at は [置換] で当てた最後の日時 (BLK-primary-20260914-1106-friction)。
+        # 開いた時に欄へ入れる「前回の組」はこれを持つ組に限る。打っただけの回は
+        # 前に当てた日時を引き継ぐ (打ち直しで当てた事実を消さない)。
+        if data.get('applied') is True:
+            entry['applied_at'] = now
+        else:
+            for p in old:
+                if p.get('from') == src and p.get('to') == dst and isinstance(p.get('applied_at'), str):
+                    entry['applied_at'] = p['applied_at']
+                    break
         # 同じ組は 1 行。打ち直すたびに先頭へ上がるので、最近の関心が上に並ぶ。
-        pairs = [p for p in self._read_rename_pairs(save_dir)
+        pairs = [p for p in old
                  if not (p.get('from') == src and p.get('to') == dst)]
         pairs.insert(0, entry)
         pairs = pairs[:self.RENAMES_MAX]
