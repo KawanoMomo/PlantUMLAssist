@@ -6651,7 +6651,9 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 #overlay-layer rect.selectable[data-type]:hover:not(.selected):not(.peek):not(.lg-mark),
 /* 同じ要素・関係の当たり判定が複数の rect に分かれるとき (関係の箱とラベルの箱) は
    app.js が .hit-hover をまとめて付ける。枠 = 当たり判定の範囲、を崩さないため */
-#overlay-layer rect.selectable[data-type].hit-hover:not(.selected):not(.peek):not(.lg-mark) {
+#overlay-layer rect.selectable[data-type].hit-hover:not(.selected):not(.peek):not(.lg-mark),
+/* BLK-migrator-20260929-1611: 楔を持つ note は、紙の枠の代わりに楔込みの見た目だけの枠 (rect.note-frame) を光らせる */
+#overlay-layer rect.note-frame.hit-hover {
   fill: rgba(80, 160, 255, 0.10);
   stroke: rgba(80, 160, 255, 0.55);
   stroke-width: 1;

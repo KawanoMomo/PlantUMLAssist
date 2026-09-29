@@ -217,7 +217,7 @@ test('migrator 手順 4 — メンバーに付けた色つきの note でも、�
     'end note',                                     // 12
     '@enduml',                                      // 13
   ].join(String.fromCharCode(10)));
-  await expect(page.locator('#overlay-layer rect[data-type="note"]')).toHaveCount(2, { timeout: 20000 });
+  await expect(page.locator('#overlay-layer rect.selectable[data-type="note"]')).toHaveCount(2, { timeout: 20000 });
 
   const targets = [
     ['int yellow', 'member', '3'],
@@ -2582,7 +2582,8 @@ test('migrator 手順 4 — メンバー・クラス・状態を指す note の�
   ];
   for (const c of cases) {
     await typeDsl(page, c.dsl.join(String.fromCharCode(10)));
-    await expect(page.locator('#overlay-layer rect[data-type="note"]')).toHaveCount(1, { timeout: 20000 });
+    // 数えるのは当たりの枠 (selectable)。楔込みの見た目だけの枠 (rect.note-frame) は数えない。
+    await expect(page.locator('#overlay-layer rect.selectable[data-type="note"]')).toHaveCount(1, { timeout: 20000 });
     // 紙の外形の path から、紙の矩形の外へ飛び出した頂点 (楔の先) と前後の縁の頂点を取る。
     const pts = await page.evaluate(() => {
       const svg = document.querySelector('#preview-svg svg');
@@ -2603,6 +2604,12 @@ test('migrator 手順 4 — メンバー・クラス・状態を指す note の�
       const lit = await page.evaluate(() => Array.from(document.querySelectorAll('#overlay-layer rect.hit-hover'))
         .map((r) => r.getAttribute('data-type') + ':' + r.getAttribute('data-line')));
       expect(lit, c.dsl[4] + ' の楔を指して note の枠が出る').toEqual(['note:' + c.line]);
+      // 再確認 2: 光った枠は楔を含む紙の外形を包み、指した点が枠の内側 (8px 以内) にある。
+      const out = await page.evaluate((q) => {
+        const b = document.querySelector('#overlay-layer rect.hit-hover').getBoundingClientRect();
+        return Math.max(b.left - q.x, q.x - b.right, b.top - q.y, q.y - b.bottom, 0);
+      }, p);
+      expect(out, c.dsl[4] + ' の楔の点が光った枠の内側').toBeLessThanOrEqual(8);
     }
     // 差し戻し 1 回目: 楔の縁そのもの (図の上では note から伸びる線に見える所) の上。対象の枠の外にある縁の点は note の枠が出る。
     const edgePts = await page.evaluate(() => {
