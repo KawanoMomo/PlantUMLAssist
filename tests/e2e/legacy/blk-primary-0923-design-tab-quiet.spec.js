@@ -30,14 +30,21 @@ test('既定のタブ列にはボタンが 1 つも無い (図のタブと ＋ /
   }
 });
 
+// 下端の札は件数が 1 以上のときだけ出る (0 件の札は消えて静か。BLK-releaser-20260929-0851-2 で今の画面に合わせた)。
+// 件数を持たせると札が出て、押すとそのパネルが開く。
 test('件数を持つものは下端の状態表示に出て、押せばそのパネルが開く', async ({ page }) => {
   await open7b(page);
   for (const id of ['status-diff', 'status-pins', 'status-inbox',
                     'status-consistency', 'status-eventsync']) {
-    await expect(page.locator('#' + id), id).toBeVisible();
+    await expect(page.locator('#' + id), id).toHaveCount(1);
   }
-  await page.locator('#status-pins').click();
-  await expect(page.locator('#pin-panel')).toHaveClass(/open/);
+  // 遷移のイベントに対応するクラスが無い state 図 → イベント整合の札に件数が出る
+  await page.locator('#diagram-type').selectOption('plantuml-state');
+  await page.locator('#editor').fill('@startuml\n[*] --> Idle\nIdle --> Busy : Adc_StartConv\n@enduml');
+  const badge = page.locator('#status-eventsync');
+  await expect(badge).toBeVisible();
+  await badge.click();
+  await expect(page.locator('#ev-modal')).toBeVisible();
 });
 
 test('機能は Ctrl+K から引ける (ツールの分類メニューも Ctrl+K から開く)', async ({ page }) => {

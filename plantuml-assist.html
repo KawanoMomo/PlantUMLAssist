@@ -9297,7 +9297,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
          そのページから編集に戻る (zip を解いて 1 枚ずつ開き直さない) -->
     <div id="docset-proof" style="display:none;">
       <div id="dp-head">
-        <strong id="dp-title"></strong>
+        <!-- 納品パッケージの窓の「タイトル」欄 (#dp-title) と同じ id にしない (getElementById が先のこちらを返し、書き出しの題が空になっていた。BLK-releaser-20260929-0851-2) -->
+        <strong id="dpf-title"></strong>
         <span id="dp-verdict" role="status"></span>
         <span id="dp-tools">
           <button type="button" id="dp-save" title="このページで書いた見出し・注記を資料セットに保存します">見出し・注記を保存</button>

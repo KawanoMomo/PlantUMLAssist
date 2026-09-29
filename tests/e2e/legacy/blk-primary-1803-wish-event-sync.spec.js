@@ -75,7 +75,8 @@ test.describe('BLK-primary-1803-wish ⇄ イベント整合', () => {
     await setupDocs(page);
     const badge = page.locator('#status-eventsync');
     await expect(badge).toBeVisible();
-    await expect(badge).toHaveText('⇄ イベント 5');
+    // 下端の札は「● 名前 件数」の形 (design の状態表示にそろえた。BLK-releaser-20260929-0851-2)
+    await expect(badge).toHaveText('● イベント 5');
     await expect(badge).toHaveClass(/has-warning/);
   });
 
@@ -124,7 +125,8 @@ test.describe('BLK-primary-1803-wish ⇄ イベント整合', () => {
     // 本体を持たないクラスは外置きの形で入る
     expect(dsl).toContain('Gpio_Driver : +Gpio_SetHigh() : void');
     await page.locator('#ev-close').click();
-    await expect(page.locator('#status-eventsync')).toHaveText('⇄ イベント OK');
+    // 欠落が 0 件になった札は下端から消える (件数を持つものだけを出す)
+    await expect(page.locator('#status-eventsync')).toBeHidden();
   });
 
   test('追加は開いていない class 図にも入る', async ({ page }) => {
