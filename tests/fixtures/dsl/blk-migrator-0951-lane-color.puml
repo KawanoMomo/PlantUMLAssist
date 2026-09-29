@@ -1,0 +1,8 @@
+@startuml
+|A|
+start
+:a;
+|#LightGray|B|
+:x;
+stop
+@enduml

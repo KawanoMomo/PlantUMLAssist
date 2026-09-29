@@ -28,6 +28,13 @@ window.MA.modules.plantumlActivity = (function() {
     if (head) { if (!color) color = head[1]; body = body.substring(head[0].length - 1); }
     return { color: color, body: body };
   }
+  // BLK-migrator-20260929-0951: 後ろに SDL の形 (`:内容を確認; <<input>>`) を書いた動作も 1 行で閉じた動作。
+  // 読めないと閉じていない複数行の動作と見なし、後ろの if や分岐までを 1 つの動作に呑んでいた。
+  var ACTION_TAIL_STEREO_RE = /;\s*(<<[A-Za-z_][A-Za-z0-9_]*>>)\s*$/;
+  function _splitActionStereo(trimmedLine) {
+    var m = trimmedLine.match(ACTION_TAIL_STEREO_RE);
+    return m ? { body: trimmedLine.substring(0, m.index + 1), stereo: m[1] } : { body: trimmedLine, stereo: null };
+  }
   var ACTION_OPEN_RE = /^:(.*)$/;
   var ACTION_CLOSED_RE = /^:(.*);$/;
 
@@ -37,10 +44,13 @@ window.MA.modules.plantumlActivity = (function() {
   var ENDIF_RE = /^endif\s*$/i;
 
   var WHILE_OPEN_RE = /^while\s*\(([^)]*)\)\s*(?:is\s*\(([^)]*)\))?\s*$/i;
-  var ENDWHILE_RE = /^endwhile\s*$/i;
+  // BLK-migrator-20260929-0951: 出口に文字を書いた `endwhile (なし)`、入口に処理を書いた `repeat :検証;`、
+  // 抜ける側に文字を書いた `repeat while (c) is (再試行) not (成功)` も同じ入れ物の開き・閉じとして読む
+  // (読めないと入れ物が閉じず、後ろの行が中に入り、入口の箱に枠が出なかった)。
+  var ENDWHILE_RE = /^endwhile\s*(?:\(([^)]*)\))?\s*$/i;
 
-  var REPEAT_OPEN_RE = /^repeat\s*$/i;
-  var REPEAT_WHILE_RE = /^repeat\s+while\s*\(([^)]*)\)\s*(?:is\s*\(([^)]*)\))?\s*$/i;
+  var REPEAT_OPEN_RE = /^repeat\s*(?::(.*);)?\s*$/i;
+  var REPEAT_WHILE_RE = /^repeat\s+while\s*\(([^)]*)\)\s*(?:is\s*\(([^)]*)\))?\s*(?:not\s*\(([^)]*)\))?\s*$/i;
 
   // BLK-migrator-20260929-0951: split / split again / end split は fork と同じ「枝を持つ入れ物」(棒から枝が分かれ、
   // 下の棒で合流する)。fork の閉じは `end merge` でも書ける。どちらも同じ正規表現で読み、開きの語を節点に残す。
@@ -127,14 +137,16 @@ window.MA.modules.plantumlActivity = (function() {
 
       // Multi-line action collection
       if (openAction) {
-        var closeSplit = _splitActionColor(trimmed);
+        var closeStereo = _splitActionStereo(trimmed);
+        if (closeStereo.stereo) openAction.stereotype = closeStereo.stereo;
+        var closeSplit = _splitActionColor(closeStereo.body);
         if (closeSplit.color && !openAction.color) openAction.color = closeSplit.color;
         var closeLine = closeSplit.body;
         var endsWithSemi = /;\s*$/.test(closeLine);
         var bodyTextLine = endsWithSemi ? closeLine.replace(/;\s*$/, '') : closeLine;
         openAction.bodyLines.push(bodyTextLine);
         if (endsWithSemi) {
-          _appendNode(state, {
+          var multiNode = {
             kind: 'action',
             id: _newId(state),
             text: openAction.bodyLines.join('\n'),
@@ -142,7 +154,9 @@ window.MA.modules.plantumlActivity = (function() {
             line: openAction.startLine,
             endLine: lineNum,
             swimlaneId: null,
-          });
+          };
+          if (openAction.stereotype) multiNode.stereotype = openAction.stereotype;
+          _appendNode(state, multiNode);
           openAction = null;
         }
         continue;
@@ -250,11 +264,13 @@ window.MA.modules.plantumlActivity = (function() {
           var rf = state.stack.pop();
           rf.repeatNode.condition = repWhileMatch[1];
           rf.repeatNode.label = repWhileMatch[2] || 'yes';
+          if (repWhileMatch[3] != null) rf.repeatNode.notLabel = repWhileMatch[3];
           rf.repeatNode.endLine = lineNum;
         }
         continue;
       }
-      if (REPEAT_OPEN_RE.test(trimmed)) {
+      var repOpenMatch = trimmed.match(REPEAT_OPEN_RE);
+      if (repOpenMatch) {
         var repeatNode = {
           kind: 'repeat',
           id: _newId(state),
@@ -265,6 +281,8 @@ window.MA.modules.plantumlActivity = (function() {
           endLine: lineNum,
           swimlaneId: null,
         };
+        // `repeat :検証;` の入口は菱形でなく、その文字の箱で描かれる
+        if (repOpenMatch[1] != null) repeatNode.startAction = repOpenMatch[1];
         _appendNode(state, repeatNode);
         state.stack.push({ type: 'repeat-node', repeatNode: repeatNode, target: repeatNode.body });
         continue;
@@ -398,13 +416,14 @@ window.MA.modules.plantumlActivity = (function() {
 
       // Action (after control-structure tokens to avoid confusion)
       // 色つき `#色:本文;` は色を外した `:本文;` として、以降まったく同じ扱いにする。
-      var split = _splitActionColor(trimmed);
+      var stereoSplit = _splitActionStereo(trimmed);
+      var split = _splitActionColor(stereoSplit.body);
       var actionColor = split.color;
       var actionBody = split.body;
       if (actionBody.charAt(0) === ':') {
         var closedMatch = actionBody.match(ACTION_CLOSED_RE);
         if (closedMatch) {
-          _appendNode(state, {
+          var oneNode = {
             kind: 'action',
             id: _newId(state),
             text: closedMatch[1],
@@ -412,7 +431,9 @@ window.MA.modules.plantumlActivity = (function() {
             line: lineNum,
             endLine: lineNum,
             swimlaneId: null,
-          });
+          };
+          if (stereoSplit.stereo) oneNode.stereotype = stereoSplit.stereo;
+          _appendNode(state, oneNode);
           continue;
         }
         openAction = { startLine: lineNum, color: actionColor, bodyLines: [actionBody.substring(1)] };
@@ -437,8 +458,9 @@ window.MA.modules.plantumlActivity = (function() {
   function fmtWhile(condition, label) {
     return 'while (' + condition + ') is (' + (label || 'yes') + ')';
   }
-  function fmtRepeatWhile(condition, label) {
-    return 'repeat while (' + condition + ') is (' + (label || 'yes') + ')';
+  function fmtRepeatWhile(condition, label, notLabel) {
+    return 'repeat while (' + condition + ') is (' + (label || 'yes') + ')' +
+      (notLabel != null && notLabel !== '' ? ' not (' + notLabel + ')' : '');
   }
   function fmtSwimlane(label) {
     return '|' + label + '|';
@@ -610,6 +632,9 @@ window.MA.modules.plantumlActivity = (function() {
     }
     var newLines = [firstLine].concat(rest);
     if (keepColor) newLines[newLines.length - 1] += ' <<' + keepColor + '>>';
+    // 後ろの SDL の形 (<<input>> など) は残す
+    var keepStereo = _splitActionStereo(String(lines[endLine - 1] || '').trim()).stereo;
+    if (keepStereo) newLines[newLines.length - 1] += ' ' + keepStereo;
     var before = lines.slice(0, startLine - 1);
     var after = lines.slice(endLine);
     return before.concat(newLines).concat(after).join('\n');
@@ -1626,18 +1651,37 @@ window.MA.modules.plantumlActivity = (function() {
       var h = parseFloat(r.getAttribute('height')) || 0;
       var w = parseFloat(r.getAttribute('width')) || 0;
       if (h < 16 || w < 10) return;
+      // 塗りも線も無い <rect> (レーンの見出しの帯) は箱として見えないので数えない
+      var fillN = (r.getAttribute('fill') || '').toLowerCase();
+      if ((fillN === 'none' || fillN === 'transparent') && /stroke\s*:\s*none/i.test(r.getAttribute('style') || '')) return;
       boxes.push({ el: r, x: parseFloat(r.getAttribute('x')) || 0, y: parseFloat(r.getAttribute('y')) || 0, w: w, h: h, label: null });
     });
     var texts = _textsIn(svgEl);
-    boxes.forEach(function(b) {
-      for (var i = 0; i < texts.length; i++) {
-        var t = texts[i];
-        if (t.x >= b.x && t.x <= b.x + b.w && t.y >= b.y && t.y <= b.y + b.h) { b.label = _normLabel(t.s); break; }
-      }
+    // BLK-migrator-20260929-0951: 文字はそれを囲む最も小さい箱のもの。色付きレーン (`|#色|B|`) の背景は
+    // レーンの高さいっぱいの <rect> で、中の動作の文字も囲むので、背景が動作の箱と取り違えられていた。
+    function inBox(t, b) { return t.x >= b.x && t.x <= b.x + b.w && t.y >= b.y && t.y <= b.y + b.h; }
+    texts.forEach(function(t) {
+      var own = null;
+      boxes.forEach(function(b) {
+        if (inBox(t, b) && (!own || b.w * b.h < own.w * own.h)) own = b;
+      });
+      if (own && own.label === null) own.label = _normLabel(t.s);
     });
     var used = [];
     var out = [];
     flat.forEach(function(n) {
+      // `repeat :検証;` の入口の箱も、書いた文字で当てる (枠は repeat の行。loop: true)
+      if (n.kind === 'repeat' && n.startAction != null) {
+        var wantR = _normLabel(n.startAction);
+        for (var j = 0; wantR && j < boxes.length; j++) {
+          var bj = boxes[j];
+          if (!bj.label || used.indexOf(bj) >= 0) continue;
+          if (bj.label === wantR || (bj.label.length >= 4 && wantR.indexOf(bj.label) === 0)) {
+            used.push(bj); out.push({ node: n, el: bj.el, loop: true }); return;
+          }
+        }
+        return;
+      }
       if (n.kind !== 'action') return;
       var want = _normLabel(n.text);
       if (!want) return;
@@ -1658,7 +1702,15 @@ window.MA.modules.plantumlActivity = (function() {
     var sws = parsedData.swimlanes || [];
     if (!sws.length) return;
     var seen = {};
-    var texts = Array.prototype.slice.call(svgEl.querySelectorAll('text'));
+    // 動作の箱の中の文字 (レーン A の中の動作 `:a;` など) は見出しにしない
+    var actBoxes = Array.prototype.map.call(overlayEl.querySelectorAll('rect[data-type="action"]'), function(r) {
+      return { x: parseFloat(r.getAttribute('x')) || 0, y: parseFloat(r.getAttribute('y')) || 0,
+        w: parseFloat(r.getAttribute('width')) || 0, h: parseFloat(r.getAttribute('height')) || 0 };
+    });
+    var texts = Array.prototype.filter.call(svgEl.querySelectorAll('text'), function(t) {
+      var x = parseFloat(t.getAttribute('x')) || 0, y = parseFloat(t.getAttribute('y')) || 0;
+      return !actBoxes.some(function(b) { return x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h; });
+    });
     sws.forEach(function(sw) {
       var want = _normLabel(sw.label);
       if (!want || seen[want]) return;
@@ -1830,6 +1882,36 @@ window.MA.modules.plantumlActivity = (function() {
     return false;
   }
 
+  // レーン (`|#色|名前|`) は、境目の縦線 (太さ 1.3 以上、図の縦いっぱい) と、その線の上端から始まる <rect>
+  // (色付きレーンの背景・見出しの帯) で描かれる。背景は中の動作の文字も囲むので、動作の箱と取り違えると
+  // 矢印の端がレーン全体になり、レーンをまたぐ矢印に枠が出なかった。図全体の背景 (<style> の BackgroundColor) も同じ。
+  function _laneChromeRects(svgEl) {
+    if (!svgEl || !svgEl.querySelectorAll) return [];
+    function num(el, k) { return parseFloat(el.getAttribute(k)) || 0; }
+    var tops = [];
+    Array.prototype.forEach.call(svgEl.querySelectorAll('line'), function(l) {
+      if (Math.abs(num(l, 'x1') - num(l, 'x2')) > 0.5) return;
+      var m = /stroke-width\s*:\s*([\d.]+)/.exec(l.getAttribute('style') || '');
+      if (!m || parseFloat(m[1]) < 1.3) return;
+      var y0 = Math.min(num(l, 'y1'), num(l, 'y2')), y1 = Math.max(num(l, 'y1'), num(l, 'y2'));
+      if (y1 - y0 < 60) return;
+      tops.push({ x: num(l, 'x1'), y0: y0, y1: y1 });
+    });
+    var vb = (svgEl.getAttribute('viewBox') || '').split(/[\s,]+/).map(parseFloat);
+    var svgW = vb.length === 4 ? vb[2] : num(svgEl, 'width');
+    var svgH = vb.length === 4 ? vb[3] : num(svgEl, 'height');
+    return Array.prototype.filter.call(svgEl.querySelectorAll('rect'), function(r) {
+      var x = num(r, 'x'), y = num(r, 'y'), w = num(r, 'width'), h = num(r, 'height');
+      if (svgW && svgH && x <= 0.5 && y <= 0.5 && w >= svgW - 1 && h >= svgH - 1) return true;
+      if (num(r, 'rx') > 0) return false;
+      return tops.some(function(t) {
+        if (Math.abs(t.x - x) > 1 || Math.abs(t.y0 - y) > 1) return false;
+        // 背景はレーンの縦いっぱい、見出しの帯は上端だけ
+        return Math.abs(t.y1 - (y + h)) <= 1 || h < (t.y1 - t.y0) / 2;
+      });
+    });
+  }
+
   function _textsIn(svgEl) {
     return Array.prototype.filter.call(svgEl.querySelectorAll('text'), function(t) { return !_inDecor(t); })
       .map(function(t) {
@@ -1849,8 +1931,9 @@ window.MA.modules.plantumlActivity = (function() {
       var label = '';
       texts.forEach(function(t) {
         // 文字の中央が菱形の中にあるものだけ (菱形の脇に描く枝のラベル yes / no は含めない)。
+        // textLength の無い 1 文字のラベル (`else (否)`) は左端が菱形の右の角ちょうどに描かれるので、縁は含めない。
         var mid = t.x + (parseFloat(t.el.getAttribute('textLength')) || 0) / 2;
-        if (mid >= bb.x && mid <= bb.x + bb.width && t.y >= bb.y && t.y <= bb.y + bb.height + 2) label += _normLabel(t.s);
+        if (mid > bb.x + 1 && mid < bb.x + bb.width - 1 && t.y >= bb.y && t.y <= bb.y + bb.height + 2) label += _normLabel(t.s);
       });
       polys.push({ el: p, label: label });
     });
@@ -2175,7 +2258,8 @@ window.MA.modules.plantumlActivity = (function() {
     });
     if (!diamonds.length && !bars.length) return 0;
     // 開きと閉じの対 (種類ごとに入れ子を数える)
-    var OPEN = { 'if': /^if\s*\(/i, 'switch': /^switch\s*\(/i, 'repeat': /^repeat\s*$/i, 'fork': /^(?:fork|split)\s*$/i };
+    // `repeat :検証;` は入口を菱形でなく箱で描く (枠は文字で当てた箱)。対には数え、入口の菱形は探さない
+    var OPEN = { 'if': /^if\s*\(/i, 'switch': /^switch\s*\(/i, 'repeat': /^repeat\s*(?::.*;)?\s*$/i, 'fork': /^(?:fork|split)\s*$/i };
     var CLOSE = { 'if': /^end\s*if\b/i, 'switch': /^end\s*switch\b/i, 'repeat': /^repeat\s+while\b/i, 'fork': /^end\s*(?:fork|merge|split)\b/i };
     var stacks = { 'if': [], 'switch': [], 'repeat': [], 'fork': [] };
     var pairs = [];
@@ -2194,6 +2278,7 @@ window.MA.modules.plantumlActivity = (function() {
     pairs.sort(function(a, b) { return a.close - b.close; });
     var n = 0;
     pairs.forEach(function(pr) {
+      if (pr.kind === 'repeat' && /^repeat\s*:/i.test(String(lines[pr.open - 1] || '').trim())) return;
       var isBar = pr.kind === 'fork';
       // 開きの図形の枠 (repeat の菱形は `repeat` か `repeat while` の行を指す)
       var opener = null;
@@ -2285,6 +2370,8 @@ window.MA.modules.plantumlActivity = (function() {
       if (pr.drawn.sep) _chromeEls.push(pr.drawn.sep);
       pr.drawn.texts.forEach(function(t) { _chromeEls.push(t); });
     });
+    // BLK-migrator-20260929-0951: レーンの背景・見出しの帯と図全体の背景の <rect> は、動作の箱・文字を囲む図形として数えない。
+    _laneChromeRects(svgEl).forEach(function(r) { _chromeEls.push(r); });
 
     // Walk SVG, classify each primitive, then post-process to group ellipse pairs as 'stop-or-end'.
     // split の棒は横の <line> なので、棒と見なした線も文書順に混ぜる (fork の棒の rect と同じ 'fork-bar')。
@@ -2320,10 +2407,16 @@ window.MA.modules.plantumlActivity = (function() {
     byText.forEach(function(m) {
       var bb = _shapeBBox(m.el);
       if (!bb) return;
-      OB.addRect(overlayEl, bb.x, bb.y, bb.width, bb.height, {
+      // repeat の入口の箱は、入口の菱形と同じ枠 (repeat の行。戻りの矢印の端にもなる)
+      OB.addRect(overlayEl, bb.x, bb.y, bb.width, bb.height, m.loop ? {
+        'data-type': 'source-line', 'data-id': 'src:close@' + m.node.line, 'data-src-kind': 'loop',
+        'data-line': String(m.node.line),
+      } : {
         'data-type': 'action', 'data-id': m.node.id, 'data-line': String(m.node.line),
       });
     });
+    var loopEls = byText.filter(function(m) { return m.loop; }).map(function(m) { return m.el; });
+    byText = byText.filter(function(m) { return !m.loop; });
     var decByText = _matchDecisionsByText(svgEl, flat);
     decByText.forEach(function(m) {
       var bb = _shapeBBox(m.el);
@@ -2334,7 +2427,7 @@ window.MA.modules.plantumlActivity = (function() {
     });
     var textNodes = byText.map(function(m) { return m.node; })
       .concat(decByText.filter(function(m) { return !m.extra; }).map(function(m) { return m.node; }));
-    var textEls = byText.map(function(m) { return m.el; }).concat(decByText.map(function(m) { return m.el; }));
+    var textEls = byText.map(function(m) { return m.el; }).concat(decByText.map(function(m) { return m.el; })).concat(loopEls);
     var decExtra = decByText.filter(function(m) { return m.extra; }).length;
     matched = matched.filter(function(sh) { return textEls.indexOf(sh.el) < 0 && !_inDecor(sh.el); });
     // BLK-builder-20260925-1712-2: 並び順で当てる菱形から、switch の菱形 (switch には本文の節点が無い) と、
@@ -2363,8 +2456,12 @@ window.MA.modules.plantumlActivity = (function() {
       var ek = expectedKind(n);
       if (!ek) return;
       if (textNodes.indexOf(n) >= 0) return;
-      while (shapeIdx < matched.length && matched[shapeIdx].kind !== ek) shapeIdx++;
-      if (shapeIdx >= matched.length) return;
+      // 描いた図形が見つからない節点 (箱でなく SDL の形で描かれた動作など) は、並びを先へ進めない
+      // (進めると後ろの分岐・終了の図形まで読み飛ばし、どれにも枠が出なかった)。
+      var j = shapeIdx;
+      while (j < matched.length && matched[j].kind !== ek) j++;
+      if (j >= matched.length) return;
+      shapeIdx = j;
       var sh = matched[shapeIdx];
       shapeIdx++;
       var bb = _shapeBBox(sh.el);
@@ -3395,11 +3492,13 @@ window.MA.modules.plantumlActivity = (function() {
         var indent = lines[idx].match(/^(\s*)/)[1];
         lines[idx] = indent + fmtWhile(document.getElementById('ac-while-cond').value, document.getElementById('ac-while-lbl').value);
         out = lines.join('\n');
-      } else if (node.kind === 'repeat') {
+      } else if (node.kind === 'repeat' && node.endLine > node.line) {
+        // 閉じ (repeat while) の行だけを書き直す。抜ける側の文字 (not (…)) は残す
         var lines2 = t.split('\n');
         var idx2 = node.endLine - 1;
         var indent2 = lines2[idx2].match(/^(\s*)/)[1];
-        lines2[idx2] = indent2 + fmtRepeatWhile(document.getElementById('ac-rep-cond').value, document.getElementById('ac-rep-lbl').value);
+        lines2[idx2] = indent2 + fmtRepeatWhile(document.getElementById('ac-rep-cond').value,
+          document.getElementById('ac-rep-lbl').value, node.notLabel);
         out = lines2.join('\n');
       }
       if (out !== t) {

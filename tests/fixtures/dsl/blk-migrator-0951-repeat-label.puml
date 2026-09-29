@@ -1,0 +1,7 @@
+@startuml
+start
+repeat :検証;
+  :ログ出力;
+repeat while (エラー?)
+stop
+@enduml

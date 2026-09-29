@@ -1,0 +1,13 @@
+@startuml
+start
+:キューを開く;
+while (未処理あり?) is (yes)
+  :1 件取り出す;
+  repeat :検証;
+    :ログ出力;
+  backward:再試行待機;
+  repeat while (エラー?) is (再試行) not (成功)
+endwhile (なし)
+:キューを閉じる;
+stop
+@enduml
