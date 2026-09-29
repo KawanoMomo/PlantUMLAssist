@@ -1915,6 +1915,22 @@ test('migrator 手順 4 — !definelong・変数・%関数で書いた sequence 
   for (const [label, line] of [['REQ 送信', '10'], ['上限 3 回まで', '12'], ['再試行', '14'], ['文字数 4 / 3', '15']]) {
     expect((await hoverHit(page, label)).hit, label + ' にホバーして枠が出る').toEqual({ type: 'message', line, hover: true });
   }
+
+  // 差し戻し 1 回目: `!while` の中で宣言した参加者 (`participant "サービス$i" as S$i`) に枠が出ず、帯が出た (corpus の common-22)。
+  // 展開で別の要素になる行は展開後の行で読み、参加者は宣言した行 (4 行目) の枠になる。
+  await typeDsl(page, fx('seq-while-participants'));
+  await expect(page.locator('#overlay-layer rect[data-type="participant"][data-id="S2"]').first()).toBeAttached({ timeout: 20000 });
+  await page.waitForTimeout(600);
+  await expect(page.locator('#overlay-warning'), '!while の図で帯が出ない').toBeHidden();
+  // 上下の頭の両方に枠が出る
+  await expect(page.locator('#overlay-layer rect[data-type="participant"][data-id="S1"]')).toHaveCount(2);
+  await expect(page.locator('#overlay-layer rect[data-type="participant"][data-id="S2"]')).toHaveCount(2);
+  for (const label of ['サービス1', 'サービス2']) {
+    const h = await hoverHit(page, label);
+    expect(h.hit && h.hit.type, label + ' にホバーして参加者の枠が出る').toBe('participant');
+    expect(h.hit.line, label + ' は宣言した 4 行目').toBe('4');
+  }
+  expect((await hoverHit(page, '転送')).hit, '転送 にホバーして 7 行目の枠').toEqual({ type: 'message', line: '7', hover: true });
 });
 
 // BLK-migrator-20260925-1800: 途中で `create` / `**` した参加者の頭がそのメッセージの高さに描かれ、メッセージの文字を探す床を押し下げて、

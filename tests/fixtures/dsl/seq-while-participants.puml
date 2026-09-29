@@ -1,0 +1,8 @@
+@startuml
+!$i = 1
+!while $i <= 2
+  participant "サービス$i" as S$i
+  !$i = $i + 1
+!endwhile
+S1 -> S2 : 転送
+@enduml
