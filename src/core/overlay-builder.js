@@ -374,6 +374,149 @@ window.MA.overlayBuilder = (function() {
     overlayEl.appendChild(fr);
   }
 
+  // BLK-migrator-20260930-0157: note の枠を、図種ごとの拾い方 (宣言の並び順で SVG の note と組にする) ではなく、
+  // PlantUML が SVG に残した note 自身の情報で全図種共通の 1 か所で当てる。
+  //  - 紙: notePapers (外形の path と折り返し) と、それを包む <g> の data-source-line (0 始まり) = note の行
+  //    (複数行の note は本文の 1 行目を指すので _noteHeadLine で見出しの行に直す)。
+  //  - 接続線: 紙を包む <g> の id を端 (data-entity-1 / -2) に持つ関係の <g> (note top of 複合状態・浮いた note の点線)。
+  // 図種のモジュールが既に枠を置いた紙・線はそのまま (二重に置かない)。置けなかった紙だけに枠を置き、
+  // notes (モジュールが読んだ note。{ id, line, endLine }) のうち行の範囲に入るものの id を付ける (無ければ行だけの枠)。
+  // 1 つの note が読めなくても他の note の枠は落ちない (並び順で組にしない)。置いた数を返す。
+  function _overlap(a, c) {
+    var w = Math.min(a.x + a.width, c.x + c.width) - Math.max(a.x, c.x);
+    var h = Math.min(a.y + a.height, c.y + c.height) - Math.max(a.y, c.y);
+    return w > 0 && h > 0 ? w * h : 0;
+  }
+
+  function _paperFrame(paper, rects) {
+    var body = paper.body, bodyArea = Math.max(body.width * body.height, 1);
+    var boxArea = Math.max(paper.box.width * paper.box.height, 1);
+    var best = null, bestScore = 0;
+    rects.forEach(function(r) {
+      var rb = { x: parseFloat(r.getAttribute('x')) || 0, y: parseFloat(r.getAttribute('y')) || 0,
+        width: parseFloat(r.getAttribute('width')) || 0, height: parseFloat(r.getAttribute('height')) || 0 };
+      var ra = Math.max(rb.width * rb.height, 1);
+      if (ra > boxArea * 1.5) return;   // 紙を中に含む入れ物・図全体の枠は紙の枠ではない
+      // 紙の矩形 (楔を除く) か外形 (楔を含む) のどちらかとよく重なる枠が、その紙の枠。
+      var s = Math.max(_overlap(rb, body) / Math.max(bodyArea, ra), _overlap(rb, paper.box) / Math.max(boxArea, ra));
+      if (s > bestScore) { bestScore = s; best = r; }
+    });
+    return best && bestScore >= 0.6 ? best : null;
+  }
+
+  function _paperGroup(paper, svgEl) {
+    for (var n = paper.el.parentNode; n && n !== svgEl && n.getAttribute; n = n.parentNode) {
+      if ((n.tagName || '').toLowerCase() === 'g' && n.hasAttribute('data-source-line')) return n;
+    }
+    return null;
+  }
+
+  // 挿した当たりを raiseSmallestLast と同じ前後関係の位置に入れる (既に並んだ他の当たりの順は動かさない)。
+  function _insertByRank(overlayEl, el) {
+    var rank = _hitRank(el), area = _hitArea(el);
+    var kids = overlayEl.querySelectorAll('rect.selectable, path.link-hit, path.note-tail');
+    for (var i = 0; i < kids.length; i++) {
+      var k = kids[i];
+      if (k === el || /overlay-background/.test(k.getAttribute('class') || '')) continue;
+      var kr = _hitRank(k);
+      if (kr > rank || (kr === rank && _hitArea(k) < area)) { overlayEl.insertBefore(el, k); return; }
+    }
+    overlayEl.appendChild(el);
+  }
+
+  function _lineHitD(pts) {
+    return pts.map(function(p, k) { return (k ? 'L' : 'M') + (Math.round(p[0] * 100) / 100) + ' ' + (Math.round(p[1] * 100) / 100); }).join(' ');
+  }
+
+  function addNoteFrames(svgEl, overlayEl, dslText, notes) {
+    if (!svgEl || !overlayEl || !svgEl.querySelectorAll || !overlayEl.querySelectorAll) return 0;
+    var papers = notePapers(svgEl);
+    if (!papers.length) return 0;
+    var list = (notes || []).filter(function(n) { return n && n.line != null; });
+    var ls = dslText == null ? null : String(dslText).split(/\r?\n/);
+    // 関係の <g> の中に描かれた紙 (`note on link`) は、その関係の一部 (関係の当て方に任せる)。
+    var items = papers.map(function(p) { return { paper: p, g: _paperGroup(p, svgEl) }; }).filter(function(it) {
+      return !(it.g && /(^|\s|_)link(_|\s|$)/.test(it.g.getAttribute('class') || ''));
+    });
+    var noteOf = function(line) {
+      for (var i = 0; i < list.length; i++) {
+        var a = Number(list[i].line), b = Number(list[i].endLine != null ? list[i].endLine : list[i].line);
+        if (line >= a && line <= b) return list[i];
+      }
+      return null;
+    };
+    var looksNote = function(line) { return !!ls && /^\s*[rh]?note\b/i.test(ls[line - 1] || ''); };
+    // data-source-line を本文の行にするずれ。0 始まりの行 (+1) が基本。@startuml の前に行があって合わない図だけ別のずれを試す。
+    var off = 1;
+    var raw = items.map(function(it) {
+      var n = it.g ? parseInt(it.g.getAttribute('data-source-line'), 10) : NaN;
+      return isNaN(n) ? null : n;
+    });
+    var score = function(o) {
+      var c = 0;
+      raw.forEach(function(n) {
+        if (n === null) return;
+        var l = _noteHeadLine(dslText, n + o);
+        // 読んだ note の行の範囲に入るずれを強く採る (note らしい行に当たるだけのずれより優先)。
+        if (noteOf(l)) c += 2;
+        else if (looksNote(l)) c++;
+      });
+      return c;
+    };
+    var sul = 1;
+    if (ls) for (var q = 0; q < ls.length; q++) if (/^\s*@start/i.test(ls[q])) { sul = q + 1; break; }
+    var bestS = score(1);
+    [sul, sul + 1, 0, 2].forEach(function(o) { var sc = score(o); if (sc > bestS) { bestS = sc; off = o; } });
+
+    var rects = Array.prototype.filter.call(overlayEl.querySelectorAll('rect.selectable[data-type]'), function(r) {
+      return !/overlay-background/.test(r.getAttribute('class') || '');
+    });
+    var linkHitDs = {};
+    Array.prototype.forEach.call(overlayEl.querySelectorAll('path.link-hit'), function(p) { linkHitDs[p.getAttribute('d')] = true; });
+    var links = Array.prototype.slice.call(svgEl.querySelectorAll('g.link, g[class*="link_"]'));
+    var added = 0;
+    items.forEach(function(it, idx) {
+      var paper = it.paper, attrs = null;
+      var have = _paperFrame(paper, rects);
+      if (have) {
+        attrs = {};
+        Array.prototype.forEach.call(have.attributes, function(a) {
+          if (/^data-/.test(a.name) && a.name !== 'data-hit-kind' && a.name !== 'data-note-frame') attrs[a.name] = a.value;
+        });
+      } else {
+        if (raw[idx] === null) return;   // 行の情報が無い紙 (図種のモジュールの当て方に任せる)
+        var line = _noteHeadLine(dslText, raw[idx] + off);
+        var note = noteOf(line);
+        attrs = note
+          ? { 'data-type': 'note', 'data-id': String(note.id), 'data-line': String(note.line) }
+          : { 'data-type': 'source-line', 'data-id': 'src:note@' + line + ':' + (it.g.getAttribute('id') || idx),
+            'data-src-kind': 'note', 'data-src-name': it.g.getAttribute('data-qualified-name') || '', 'data-line': String(line) };
+        var b = paper.box;
+        var r = addRect(overlayEl, b.x, b.y, b.width, b.height, attrs);
+        _insertByRank(overlayEl, r);
+        rects.push(r);
+        added++;
+      }
+      // 接続線 (紙の <g> の id を端に持つ関係)。既に当たりのある線はそのまま。
+      var gid = it.g && it.g.getAttribute('id');
+      if (!gid) return;
+      links.forEach(function(lg) {
+        if (lg.getAttribute('data-entity-1') !== gid && lg.getAttribute('data-entity-2') !== gid) return;
+        var ds = [];
+        Array.prototype.forEach.call(lg.querySelectorAll('path, line, polyline'), function(el) {
+          linePoints(el).forEach(function(pts) { ds.push(_lineHitD(pts)); });
+        });
+        if (!ds.length || ds.some(function(d) { return linkHitDs[d]; })) return;
+        var tmp = document.createElementNS(SVG_NS, 'g');
+        if (!addLinkRects(tmp, lg, attrs, 8)) return;
+        Array.prototype.slice.call(tmp.childNodes).forEach(function(el) { overlayEl.appendChild(el); _insertByRank(overlayEl, el); });
+        ds.forEach(function(d) { linkHitDs[d] = true; });
+        added++;
+      });
+    });
+    return added;
+  }
+
   // ホバーで光らせる矩形の列 (app.js)。紙の枠に楔込みの枠 (rect.note-frame) が結ばれていれば、紙の枠の代わりにそれを光らせる。
   function litRects(overlayEl, rects) {
     var out = [];
@@ -723,37 +866,42 @@ window.MA.overlayBuilder = (function() {
   //  2. 同じ段の中では面積の大きい順 = 小さい (より具体的な) 当たり判定が手前。
   //     入れ物 (パッケージ・合成状態) の中の要素が押せなくならない。
   // 背景 rect (overlay-background) は選択解除のため必ず最背面に残す。
+  // 当たりの段 (raiseSmallestLast の並べ方)。小さいほど奥。
+  function _hitRank(r) {
+    var k = r.getAttribute('data-hit-kind');
+    // 矢じり (linkhead) は要素より手前。矢じりの上だけは関係が選ばれる。
+    if (k === 'notetailedge') return -3;   // note の楔の縁の帯は最も奥 (addNoteTails)
+    if (k === 'link') return -2;
+    if (k === 'container') return -1;
+    if (k === 'linkline') return 0;
+    if (k === 'linklabel') return 0.5;   // ラベルの文字は他の関係の線より手前 (文字を押したらその関係)
+    // BLK-migrator-20260929-0951: 1 本の線で描いた棒 (activity の split / end split) は、棒に入る・棒から出る矢印の
+    // 端の枠と重なる。棒の細い帯の上は棒が選ばれる (矢じりの関係 linkhead よりは後ろ)。
+    if (k === 'bar') return 1.5;
+    // BLK-migrator-20260929-0952: 入れ物 (activity の partition) の枠線の細い帯と見出しの札も同じ。辺・札を横切る矢印より手前で、
+    // 見出し・枠線のどこを押しても入れ物が選ばれる。
+    if (k === 'frameline') return 1.5;
+    return k === 'linkhead' ? 2 : 1;
+  }
+
+  function _hitArea(r) {
+    if ((r.tagName || '').toLowerCase() === 'path') {
+      var pb = pathBox(r.getAttribute('d'));
+      return pb ? Math.max(pb.width, 1) * Math.max(pb.height, 1) : 0;
+    }
+    return (parseFloat(r.getAttribute('width')) || 0) * (parseFloat(r.getAttribute('height')) || 0);
+  }
+
   function raiseSmallestLast(overlayEl) {
     if (!overlayEl) return;
     var rects = Array.prototype.slice.call(overlayEl.querySelectorAll('rect.selectable, path.link-hit, path.note-tail'));
     if (rects.length < 2) return;
-    var area = function(r) {
-      if ((r.tagName || '').toLowerCase() === 'path') {
-        var pb = pathBox(r.getAttribute('d'));
-        return pb ? Math.max(pb.width, 1) * Math.max(pb.height, 1) : 0;
-      }
-      return (parseFloat(r.getAttribute('width')) || 0) * (parseFloat(r.getAttribute('height')) || 0);
-    };
+    var area = _hitArea;
+    var isLink = _hitRank;
     // BLK-migrator-20260923-2312: 入れ物 (data-hit-kind="container"、複合状態など) は関係よりさらに後ろ。
     // 入れ物の中を通る関係のラベルを押したら、入れ物ではなくその関係が選ばれる。
     // BLK-migrator-20260925-1032: 関係の選択範囲の箱 (link) は入れ物よりさらに後ろ。箱は線の無い空所も覆うので、
     // 入れ物の中の空所を指したら入れ物が選ばれる。線そのもの (linkline) とラベル (linklabel) は入れ物より手前、要素より後ろ。
-    var isLink = function(r) {
-      var k = r.getAttribute('data-hit-kind');
-      // 矢じり (linkhead) は要素より手前。矢じりの上だけは関係が選ばれる。
-      if (k === 'notetailedge') return -3;   // note の楔の縁の帯は最も奥 (addNoteTails)
-      if (k === 'link') return -2;
-      if (k === 'container') return -1;
-      if (k === 'linkline') return 0;
-      if (k === 'linklabel') return 0.5;   // ラベルの文字は他の関係の線より手前 (文字を押したらその関係)
-      // BLK-migrator-20260929-0951: 1 本の線で描いた棒 (activity の split / end split) は、棒に入る・棒から出る矢印の
-      // 端の枠と重なる。棒の細い帯の上は棒が選ばれる (矢じりの関係 linkhead よりは後ろ)。
-      if (k === 'bar') return 1.5;
-      // BLK-migrator-20260929-0952: 入れ物 (activity の partition) の枠線の細い帯と見出しの札も同じ。辺・札を横切る矢印より手前で、
-      // 見出し・枠線のどこを押しても入れ物が選ばれる。
-      if (k === 'frameline') return 1.5;
-      return k === 'linkhead' ? 2 : 1;
-    };
     // 元の並び順を保つ安定ソート (面積が同じものの前後関係を変えない)
     rects.forEach(function(r, i) { r.__ovIdx = i; });
     rects.sort(function(a, b) {
@@ -1640,6 +1788,7 @@ window.MA.overlayBuilder = (function() {
     notePaperAt: notePaperAt,
     noteTails: noteTails,
     addNoteTails: addNoteTails,
+    addNoteFrames: addNoteFrames,
     litRects: litRects,
     noteLineKey: noteLineKey,
     extractMultiLineTextBBoxes: extractMultiLineTextBBoxes,
