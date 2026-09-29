@@ -2508,3 +2508,45 @@ test('migrator 手順 4 — 日本語名の状態と [*] の state 図で、遷�
   await expect(page.locator('#overlay-layer rect[data-type="pseudo"][data-id="start@親"]')).toHaveCount(1);
   await expect(page.locator('#overlay-layer rect[data-type="pseudo"][data-id="start@"]')).toHaveCount(1);
 });
+
+// BLK-migrator-20260929-1611: メンバーを指す note (`note right of Filter::apply`) は、紙と対象へ伸びる楔を 1 本の path で描く
+// (接続線を別の線として持たない)。楔の上 (線の 25%・50% の点) に枠が 0 個だった。楔の形の当たりを全図種共通の 1 か所で置き、
+// 楔のどこを指しても note 全体の枠が出て、押すと note の行が選ばれる。クラスを指す note・状態を指す note も同じ道を通る。
+test('migrator 手順 4 — メンバー・クラス・状態を指す note の楔の上でも note の枠が出て、押すと note の行が選ばれる', async ({ page }) => {
+  await bootPlain(page);
+  const cases = [
+    { dsl: ['@startuml', 'class Filter {', '  + apply(v : int) : int', '}', 'note right of Filter::apply', '  移動平均', 'end note', '@enduml'], line: '5' },
+    { dsl: ['@startuml', 'class Filter {', '  + apply(v : int) : int', '}', 'note left of Filter', '  平滑化', 'end note', '@enduml'], line: '5' },
+    { dsl: ['@startuml', '[*] --> Idle', 'Idle --> Run', 'note right of Idle', '  待機', 'end note', '@enduml'], line: '4' },
+  ];
+  for (const c of cases) {
+    await typeDsl(page, c.dsl.join(String.fromCharCode(10)));
+    await expect(page.locator('#overlay-layer rect[data-type="note"]')).toHaveCount(1, { timeout: 20000 });
+    // 紙の外形の path から、紙の矩形の外へ飛び出した頂点 (楔の先) と前後の縁の頂点を取る。
+    const pts = await page.evaluate(() => {
+      const svg = document.querySelector('#preview-svg svg');
+      const OB = window.MA.overlayBuilder;
+      const paper = OB.notePapers(svg)[0];
+      const tail = paper && OB.noteTails(paper)[0];
+      if (!tail) return null;
+      const ctm = paper.el.getScreenCTM();
+      const toScr = (q) => { const p = new DOMPoint(q[0], q[1]).matrixTransform(ctm); return { x: p.x, y: p.y }; };
+      const a = tail[0], tip = tail[1], b = tail[tail.length - 1];
+      const base = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+      const at = (t) => toScr([base[0] + (tip[0] - base[0]) * t, base[1] + (tip[1] - base[1]) * t]);
+      return [at(0.25), at(0.5), at(0.75)];
+    });
+    expect(pts, c.dsl[4] + ' の note に楔がある').not.toBeNull();
+    for (const p of pts) {
+      await page.mouse.move(p.x, p.y);
+      const lit = await page.evaluate(() => Array.from(document.querySelectorAll('#overlay-layer rect.hit-hover'))
+        .map((r) => r.getAttribute('data-type') + ':' + r.getAttribute('data-line')));
+      expect(lit, c.dsl[4] + ' の楔を指して note の枠が出る').toEqual(['note:' + c.line]);
+    }
+    await page.mouse.click(pts[1].x, pts[1].y);
+    await expect.poll(() => page.evaluate(() => (window.MA.selection.getSelected() || []).map((s) => s.type + ':' + s.line)))
+      .toEqual(['note:' + c.line]);
+    // 次の図の下ごしらえ: 選択を外す (同じ id の note を押し直すと選択が外れる作りのため)。
+    await page.evaluate(() => window.MA.selection.clearSelection());
+  }
+});

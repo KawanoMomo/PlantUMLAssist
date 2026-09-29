@@ -225,6 +225,100 @@ window.MA.overlayBuilder = (function() {
     return best;
   }
 
+  // BLK-migrator-20260929-1611: 対象を指す note は、紙の外形の path に対象へ伸びる楔 (尖り) を含めて 1 本で描かれる
+  // (接続線を別の線として持たない)。楔は紙の矩形の外へ飛び出した頂点の並びと、その前後の紙の縁の頂点で囲まれた多角形。
+  // 紙の外形の path から [[x, y], ...] の多角形の列を返す (楔の無い紙は [])。
+  function noteTails(paper) {
+    if (!paper || !paper.el || !paper.body) return [];
+    var pts = pathPoints(paper.el.getAttribute('d'));
+    if (!pts) return [];
+    var P = [];
+    pts.xs.forEach(function(x, i) {
+      var q = [x, pts.ys[i]], last = P[P.length - 1];
+      if (!last || Math.abs(last[0] - q[0]) > 0.01 || Math.abs(last[1] - q[1]) > 0.01) P.push(q);
+    });
+    var b = paper.body;
+    var out = function(q) { return q[0] < b.x - 1 || q[0] > b.x + b.width + 1 || q[1] < b.y - 1 || q[1] > b.y + b.height + 1; };
+    var tails = [];
+    for (var i = 1; i < P.length - 1; i++) {
+      if (!out(P[i]) || out(P[i - 1])) continue;
+      var j = i;
+      while (j + 1 < P.length && out(P[j + 1])) j++;
+      if (j + 1 >= P.length) break;
+      tails.push(P.slice(i - 1, j + 2));
+      i = j;
+    }
+    return tails;
+  }
+
+  // 楔の上も、その note の枠と同じ当たりにする。図種・記法 (メンバー・クラス・リンク・参加者を指す note) を問わず、
+  // 描かれた紙の外形から楔を取り、紙に当てた枠 (紙の矩形と最もよく重なる data-type 付きの rect) の data-* を写した
+  // 楔の形の当たり (path.note-tail) を置く。楔が枠の中に収まっていれば置かない。置いた数を返す。
+  function addNoteTails(svgEl, overlayEl) {
+    if (!svgEl || !overlayEl || !overlayEl.querySelectorAll) return 0;
+    var rects = Array.prototype.filter.call(overlayEl.querySelectorAll('rect.selectable[data-type]'), function(r) {
+      return !/overlay-background/.test(r.getAttribute('class') || '');
+    });
+    var boxOf = function(r) {
+      return { x: parseFloat(r.getAttribute('x')) || 0, y: parseFloat(r.getAttribute('y')) || 0,
+        width: parseFloat(r.getAttribute('width')) || 0, height: parseFloat(r.getAttribute('height')) || 0 };
+    };
+    var inter = function(a, c) {
+      var w = Math.min(a.x + a.width, c.x + c.width) - Math.max(a.x, c.x);
+      var h = Math.min(a.y + a.height, c.y + c.height) - Math.max(a.y, c.y);
+      return w > 0 && h > 0 ? w * h : 0;
+    };
+    var n = 0;
+    notePapers(svgEl).forEach(function(paper) {
+      var tails = noteTails(paper);
+      if (!tails.length) return;
+      var body = paper.body, bodyArea = Math.max(body.width * body.height, 1);
+      var boxArea = Math.max(paper.box.width * paper.box.height, 1);
+      var best = null, bestScore = 0;
+      rects.forEach(function(r) {
+        var rb = boxOf(r), ra = Math.max(rb.width * rb.height, 1);
+        if (ra > boxArea * 1.5) return;   // 紙を中に含む入れ物・図全体の枠は紙の枠ではない
+        var s = inter(rb, body) / Math.max(bodyArea, ra);
+        if (s > bestScore) { bestScore = s; best = r; }
+      });
+      if (!best || bestScore < 0.6) return;
+      var rb = boxOf(best);
+      tails.forEach(function(poly) {
+        var inside = poly.every(function(q) {
+          return q[0] >= rb.x - 0.5 && q[0] <= rb.x + rb.width + 0.5 && q[1] >= rb.y - 0.5 && q[1] <= rb.y + rb.height + 0.5;
+        });
+        if (inside) return;
+        var path = document.createElementNS(SVG_NS, 'path');
+        path.setAttribute('d', poly.map(function(q, k) {
+          return (k ? 'L' : 'M') + (Math.round(q[0] * 100) / 100) + ' ' + (Math.round(q[1] * 100) / 100);
+        }).join(' ') + ' Z');
+        path.setAttribute('fill', 'transparent');
+        path.setAttribute('stroke', 'none');
+        Array.prototype.forEach.call(best.attributes, function(a) {
+          if (/^data-/.test(a.name) && a.name !== 'data-hit-kind') path.setAttribute(a.name, a.value);
+        });
+        path.setAttribute('data-hit-kind', 'notetail');
+        path.classList.add('note-tail');
+        path.style.cursor = 'pointer';
+        // 当たりは楔の内側だけ (縁に幅を持たせると、細く伸びた楔の先が対象のクラスの真ん中まで覆う)。
+        path.style.pointerEvents = 'fill';
+        overlayEl.appendChild(path);
+        n++;
+      });
+    });
+    return n;
+  }
+
+  function _inPolygon(x, y, d) {
+    var nums = (String(d || '').match(/-?\d+(?:\.\d+)?/g) || []).map(parseFloat);
+    var inside = false;
+    for (var i = 0, j = nums.length - 2; i + 1 < nums.length; j = i, i += 2) {
+      var xi = nums[i], yi = nums[i + 1], xj = nums[j], yj = nums[j + 1];
+      if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+  }
+
   // 注釈本文の 1 行を、描かれた文字と比べられる形にする (Creole の表の区切り・見出し印、箇条書きの印、
   // リンクの URL、太字などの印を落とす)。描かれる文字は PlantUML がこれらを図形・書式に変えた後のもの。
   function noteLineKey(line) {
@@ -547,7 +641,7 @@ window.MA.overlayBuilder = (function() {
   // 背景 rect (overlay-background) は選択解除のため必ず最背面に残す。
   function raiseSmallestLast(overlayEl) {
     if (!overlayEl) return;
-    var rects = Array.prototype.slice.call(overlayEl.querySelectorAll('rect.selectable, path.link-hit'));
+    var rects = Array.prototype.slice.call(overlayEl.querySelectorAll('rect.selectable, path.link-hit, path.note-tail'));
     if (rects.length < 2) return;
     var area = function(r) {
       if ((r.tagName || '').toLowerCase() === 'path') {
@@ -1072,9 +1166,14 @@ window.MA.overlayBuilder = (function() {
   }
 
   function hitTestTopmost(overlayEl, x, y) {
-    var rects = overlayEl.querySelectorAll('rect.selectable, path.link-hit');
+    var rects = overlayEl.querySelectorAll('rect.selectable, path.link-hit, path.note-tail');
     for (var i = rects.length - 1; i >= 0; i--) {
       var r = rects[i];
+      // note の楔 (addNoteTails): 多角形の内側なら当たり。
+      if (r.getAttribute('data-hit-kind') === 'notetail') {
+        if (_inPolygon(x, y, r.getAttribute('d'))) return r;
+        continue;
+      }
       if ((r.tagName || '').toLowerCase() === 'path') {
         // 太い透明な線: 線からの距離が線幅の半分以内なら当たり。
         var half = (parseFloat(r.getAttribute('stroke-width')) || 0) / 2;
@@ -1449,6 +1548,8 @@ window.MA.overlayBuilder = (function() {
     notePapers: notePapers,
     notePaperBox: notePaperBox,
     notePaperAt: notePaperAt,
+    noteTails: noteTails,
+    addNoteTails: addNoteTails,
     noteLineKey: noteLineKey,
     extractMultiLineTextBBoxes: extractMultiLineTextBBoxes,
     hitTestTopmost: hitTestTopmost,

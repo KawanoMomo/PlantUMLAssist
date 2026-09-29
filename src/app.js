@@ -34604,6 +34604,8 @@ function renderSvg() {
       var report = currentModule.buildOverlay(svgEl, currentParsed, overlayEl, mmdText);
       // BLK-builder-20260925-0934-3: title / header / footer / caption / legend は図種を問わず同じ当て方で枠を置く。
       try { if (window.MA.overlayBuilder.addDocumentChrome) window.MA.overlayBuilder.addDocumentChrome(svgEl, overlayEl, mmdText); } catch (e) {}
+      // BLK-migrator-20260929-1611: 対象へ伸びる note の楔の上も note の当たりにする (図種を問わず 1 か所)。
+      try { if (window.MA.overlayBuilder.addNoteTails) window.MA.overlayBuilder.addNoteTails(svgEl, overlayEl); } catch (e) {}
       if (report && warnEl) {
         var u = report.unmatched || {};
         var totalUnmatched = (u.participant || 0) + (u.message || 0) + (u.note || 0) + (u.activation || 0);
