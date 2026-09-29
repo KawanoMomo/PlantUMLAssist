@@ -6454,7 +6454,48 @@ function _wireMeetingSet(body) {
   }
 }
 
+// ボードは開いた後も会議の記録や保存先の一覧を読み終えるたびに描き直す。描き直しで
+// 打っている申し送りの欄が消えると、「書き直す」で置いたキャレットも打ちかけの字も
+// 失われるので、同じ図の欄へ字とキャレットを戻す。
 function renderChangeBoard() {
+  var body = document.getElementById('cb-body');
+  var act = document.activeElement;
+  var keep = null;
+  if (body && act && act.classList && act.classList.contains('cb-note') && body.contains(act)) {
+    var row0 = act.parentNode;
+    keep = {
+      name: row0 && row0.getAttribute ? row0.getAttribute('data-doc-name') : null,
+      value: act.value,
+      start: act.selectionStart,
+      end: act.selectionEnd,
+      top: body.scrollTop,
+    };
+  }
+  var board = _renderChangeBoardBody();
+  if (keep && keep.name != null && body) {
+    var rows = body.querySelectorAll('.cb-note-row');
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].getAttribute('data-doc-name') !== keep.name) continue;
+      var input = rows[i].querySelector('input.cb-note');
+      if (!input) break;
+      if (input.value !== keep.value) {
+        // 打ちかけの字を戻す。戻した字は打ち終わり (欄を離れた時) に保存する。
+        input.value = keep.value;
+        input.addEventListener('blur', function onBlur() {
+          input.removeEventListener('blur', onBlur);
+          input.dispatchEvent(new Event('change'));
+        });
+      }
+      body.scrollTop = keep.top;
+      input.focus();
+      try { input.setSelectionRange(keep.start, keep.end); } catch (e) {}
+      break;
+    }
+  }
+  return board;
+}
+
+function _renderChangeBoardBody() {
   var CB = window.MA.changeBoard;
   var body = document.getElementById('cb-body');
   var sumEl = document.getElementById('cb-summary');
