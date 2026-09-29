@@ -59,9 +59,10 @@ test.describe('Class v0.6.1 polish', () => {
       var box = await rect.boundingBox();
       await page.mouse.click(box.x + 10, box.y + 8);
       await page.waitForTimeout(300);
-      // Auto-confirm window.confirm() dialog (cascade delete prompts)
-      page.once('dialog', function(d) { d.accept(); });
+      // BLK-primary-20260930-0257: 確かめる窓はブラウザの confirm ではなくアプリの窓 (#cl-del-modal)。
       await page.locator('#cl-delete').click();
+      await expect(page.locator('#cl-del-message')).toContainText('note 1 つ');
+      await page.locator('#cl-del-confirm').click();
       await page.waitForTimeout(300);
       var t = await getEditorText(page);
       expect(t).not.toContain('class User');
