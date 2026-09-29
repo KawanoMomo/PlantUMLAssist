@@ -2,6 +2,7 @@
 window.MA = window.MA || {};
 
 // ref-folders — 「参照専用フォルダ」を保存先とは別に登録しておく。
+// (BLK-owner-20260925-0416-prune 以後は、FILES「読むだけ」節に並べ続けるフォルダの控え。タブ列は無い)
 //
 // BLK-junior-20260916-0546-wish: 📂 一覧は「今の保存先フォルダの中身」しか出せず、
 // 保存先そのものが唯一の設定なので、先輩 (primary) の図を覗くには保存先を
@@ -76,52 +77,16 @@ window.MA.refFolders = (function() {
     return (list || []).filter(function(x) { return !samePath(x, dir); });
   }
 
-  // タブの並び。先頭は必ず保存先で、動かさない
-  // (書き込む先が先頭にある、が読み方の拠りどころになる)。
-  function tabs(saveDir, list, activeDir) {
-    var out = [{
-      dir: _s(saveDir), kind: 'save', name: baseName(saveDir),
-      label: baseName(saveDir) + '(保存先)',
-      active: !activeDir || samePath(activeDir, saveDir),
-    }];
+  // BLK-owner-20260925-0416-prune: 参照タブ列は外し、隣のフォルダを読むのは FILES「読むだけ」節 1 か所にした。
+  // ここに控えてあるフォルダ (以前「＋参照」で足したもの) は、読むだけ節の並び (/peek-dirs) に
+  // `keep` で渡して並べ続ける (利用者が足したフォルダを失わない)。保存先そのものは渡さない。
+  function keepQuery(list, saveDir) {
+    var out = '';
     (list || []).forEach(function(d) {
-      if (samePath(d, saveDir)) return;
-      out.push({
-        dir: _s(d), kind: 'ref', name: baseName(d),
-        label: baseName(d) + '(参照)',
-        active: !!activeDir && samePath(activeDir, d),
-      });
+      if (!_s(d) || samePath(d, saveDir)) return;
+      out += '&keep=' + encodeURIComponent(_s(d));
     });
-    // 登録が消えたフォルダを見ていた場合は保存先に戻す (どれも active でない状態を作らない)。
-    if (!out.some(function(t) { return t.active; })) out[0].active = true;
     return out;
-  }
-
-  function activeTab(saveDir, list, activeDir) {
-    var t = tabs(saveDir, list, activeDir);
-    for (var i = 0; i < t.length; i++) if (t[i].active) return t[i];
-    return t[0];
-  }
-
-  function isRef(saveDir, activeDir) {
-    return !!activeDir && !samePath(activeDir, saveDir);
-  }
-
-  // 参照タブに出す但し書き。「見るだけのつもりが保存先を戻し忘れていないか」を
-  // 確かめる手間を無くすのが目的なので、保存先の名前をそのまま出す。
-  function notice(saveDir, activeDir) {
-    if (!isRef(saveDir, activeDir)) return '';
-    return '読むだけです。保存先は ' + baseName(saveDir) + ' のまま変わりません';
-  }
-
-  // 追加できる行き先。/peek-dirs の答え (peek-folder.choices と同じ形) から、
-  // 保存先と登録済みを除く。
-  function candidates(choices, saveDir, list) {
-    return (choices || []).filter(function(c) {
-      var p = c && c.path;
-      if (!p || samePath(p, saveDir)) return false;
-      return !(list || []).some(function(d) { return samePath(d, p); });
-    });
   }
 
   return {
@@ -136,10 +101,6 @@ window.MA.refFolders = (function() {
     save: save,
     add: add,
     remove: remove,
-    tabs: tabs,
-    activeTab: activeTab,
-    isRef: isRef,
-    notice: notice,
-    candidates: candidates,
+    keepQuery: keepQuery,
   };
 })();
