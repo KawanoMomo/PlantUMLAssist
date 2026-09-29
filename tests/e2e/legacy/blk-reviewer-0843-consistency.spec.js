@@ -52,16 +52,17 @@ test.describe('BLK-reviewer-0843 整合性チェック', () => {
     await setupTwoDocs(page);
     const badge = page.locator('#status-consistency');
     await expect(badge).toBeVisible();
-    await expect(badge).toHaveText('⚠ 3');
+    await expect(badge).toHaveText('● 整合 3');
     await expect(badge).toHaveClass(/has-warning/);
     await expect(badge).toHaveAttribute('title', /命名 1 .* 未使用 1 .* メソッド 1/);
   });
 
+  // 下端の札は件数が 0 のとき出さない (● 整合 N の形。0 件は札ごと消えて「問題なし」を表す)。
   test('逸脱の無い図では「整合 OK」と言い切る', async ({ page }) => {
     await gotoApp(page);
     await typeDsl(page, CLEAN);
     const badge = page.locator('#status-consistency');
-    await expect(badge).toHaveText('整合 OK');
+    await expect(badge).toBeHidden();
     await expect(badge).not.toHaveClass(/has-warning/);
   });
 
@@ -85,12 +86,15 @@ test.describe('BLK-reviewer-0843 整合性チェック', () => {
 
   test('警告が消えるとバッジも一覧も追随する', async ({ page }) => {
     await setupTwoDocs(page);
-    await expect(page.locator('#status-consistency')).toHaveText('⚠ 3');
+    await expect(page.locator('#status-consistency')).toHaveText('● 整合 3');
     // stop を read に直し、GpioDrv を Gpio_Driver に改めて矢印にも出す
     await typeDsl(page, '@startuml\nparticipant Drv\nparticipant Adc_Driver\nparticipant Gpio_Driver\n'
       + 'Drv -> Adc_Driver : read\nDrv -> Gpio_Driver : read\n@enduml');
-    await expect(page.locator('#status-consistency')).toHaveText('整合 OK');
-    await page.locator('#status-consistency').click();
+    await expect(page.locator('#status-consistency')).toBeHidden();
+    // 札が消えたので、一覧はコマンドパレットの「整合性チェック」から開く。
+    await page.keyboard.press('Control+k');
+    await page.locator('#cp-input').fill('整合性');
+    await page.keyboard.press('Enter');
     await expect(page.locator('#ck-naming-none')).toBeVisible();
     await expect(page.locator('#ck-methods-none')).toBeVisible();
     await expect(page.locator('#ck-unused-none')).toBeVisible();

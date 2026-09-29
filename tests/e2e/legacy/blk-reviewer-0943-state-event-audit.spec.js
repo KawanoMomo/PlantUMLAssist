@@ -87,8 +87,8 @@ test.describe('BLK-reviewer-0943 state の遷移イベントを突合する', ()
       ed.dispatchEvent(new Event('input'));
     }, CLASS_DSL);
     await page.waitForTimeout(800);
-    // 他の警告も無くなるので、バッジは「整合 OK」に戻る。
-    await expect(page.locator('#status-consistency')).toHaveText('整合 OK');
+    // 他の警告も無くなるので、バッジは消える (件数 0 の札は出さない)。
+    await expect(page.locator('#status-consistency')).toBeHidden();
     await expect(page.locator('#status-consistency')).not.toHaveClass(/has-warning/);
   });
 });
