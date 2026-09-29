@@ -42,9 +42,11 @@ window.MA.modules.plantumlActivity = (function() {
   var REPEAT_OPEN_RE = /^repeat\s*$/i;
   var REPEAT_WHILE_RE = /^repeat\s+while\s*\(([^)]*)\)\s*(?:is\s*\(([^)]*)\))?\s*$/i;
 
-  var FORK_OPEN_RE = /^fork\s*$/i;
-  var FORK_AGAIN_RE = /^fork\s+again\s*$/i;
-  var END_FORK_RE = /^end\s+fork\s*$/i;
+  // BLK-migrator-20260929-0951: split / split again / end split は fork と同じ「枝を持つ入れ物」(棒から枝が分かれ、
+  // 下の棒で合流する)。fork の閉じは `end merge` でも書ける。どちらも同じ正規表現で読み、開きの語を節点に残す。
+  var FORK_OPEN_RE = /^(fork|split)\s*$/i;
+  var FORK_AGAIN_RE = /^(fork|split)\s+again\s*$/i;
+  var END_FORK_RE = /^end\s+(?:fork|merge|split)\s*(?:\{[^}]*\})?\s*$/i;
 
   var SWIMLANE_RE = /^\|(?:#[^|]+\|)?\s*([^|]+?)\s*\|$/;
 
@@ -297,6 +299,7 @@ window.MA.modules.plantumlActivity = (function() {
       if (FORK_OPEN_RE.test(trimmed)) {
         var forkNode = {
           kind: 'fork',
+          keyword: trimmed.match(FORK_OPEN_RE)[1].toLowerCase(),   // 'fork' | 'split'
           id: _newId(state),
           branches: [],
           line: lineNum,
@@ -722,7 +725,7 @@ window.MA.modules.plantumlActivity = (function() {
   }
 
   // Closing tokens: indent should be inherited from PREVIOUS line, not these.
-  var CLOSING_TOKEN_RE = /^(endif|endwhile|repeat\s+while|else|elseif|end\s+fork|fork\s+again|end\s+note)/i;
+  var CLOSING_TOKEN_RE = /^(endif|endwhile|repeat\s+while|else|elseif|end\s+(?:fork|merge|split)|(?:fork|split)\s+again|end\s+note)/i;
 
   function _resolveInsertIndent(lines, targetIdx) {
     if (targetIdx < 0) targetIdx = 0;
@@ -932,8 +935,9 @@ window.MA.modules.plantumlActivity = (function() {
     if (endForkIdx < 0) return text;
     var forkIndent = (lines[forkLine - 1].match(/^(\s*)/) || ['', ''])[1];
     var inner = forkIndent + '  ';
+    var kw = (lines[forkLine - 1].trim().match(FORK_OPEN_RE) || ['', 'fork'])[1].toLowerCase();
     var block = [
-      forkIndent + 'fork again',
+      forkIndent + kw + ' again',
       inner + ':;'
     ];
     var args = [endForkIdx, 0].concat(block);
@@ -1391,6 +1395,60 @@ window.MA.modules.plantumlActivity = (function() {
     return pts;
   }
 
+  // BLK-migrator-20260929-0951: 分岐・合流の棒は、fork なら塗った細い <rect> (高さ 6 前後) で、split / end split なら
+  // 横の <line> (stroke-width 1.5) で描かれる。どちらも「上下から矢印がつながる横の区間」なので、描いた側から拾う。
+  // 横線のうち太さ 1.3 以上で、端点がその線に触れる縦の線 (矢印) が 1 本以上あるものを棒とする
+  // (矢印の横の区間は太さ 1 なので入らない)。返り値は棒と見なした <line> の配列。
+  function _barLines(svgEl) {
+    if (!svgEl || !svgEl.querySelectorAll) return [];
+    var all = Array.prototype.slice.call(svgEl.querySelectorAll('line'));
+    function num(el, k) { return parseFloat(el.getAttribute(k)) || 0; }
+    function sw(el) {
+      var m = /stroke-width\s*:\s*([\d.]+)/.exec(el.getAttribute('style') || '');
+      return m ? parseFloat(m[1]) : (parseFloat(el.getAttribute('stroke-width')) || 1);
+    }
+    var verticals = all.filter(function(l) {
+      return Math.abs(num(l, 'x1') - num(l, 'x2')) < 0.5 && Math.abs(num(l, 'y1') - num(l, 'y2')) >= 4;
+    });
+    return all.filter(function(l) {
+      if (_inDecor(l)) return false;
+      var y = num(l, 'y1');
+      if (Math.abs(num(l, 'y2') - y) > 0.5) return false;
+      var x1 = Math.min(num(l, 'x1'), num(l, 'x2'));
+      var x2 = Math.max(num(l, 'x1'), num(l, 'x2'));
+      if (x2 - x1 < 8 || sw(l) < 1.3) return false;
+      return verticals.some(function(v) {
+        var vx = num(v, 'x1');
+        if (vx < x1 - 1 || vx > x2 + 1) return false;
+        return Math.abs(num(v, 'y1') - y) <= 2.5 || Math.abs(num(v, 'y2') - y) <= 2.5;
+      });
+    });
+  }
+
+  // 棒の上端で終わる縦の線 (上から入る矢印) の本数。合流の棒 (end fork / end split) には枝の数だけ入り、
+  // 分岐の棒には 1 本だけ入る。並び順の当て方で、開きの節点が前の合流の棒を取らないように使う。
+  function _barIncoming(svgEl, bb) {
+    if (!bb) return 0;
+    var n = 0;
+    Array.prototype.forEach.call(svgEl.querySelectorAll('line'), function(v) {
+      var x1 = parseFloat(v.getAttribute('x1')) || 0, x2 = parseFloat(v.getAttribute('x2')) || 0;
+      var y1 = parseFloat(v.getAttribute('y1')) || 0, y2 = parseFloat(v.getAttribute('y2')) || 0;
+      if (Math.abs(x1 - x2) >= 0.5 || Math.abs(y1 - y2) < 4) return;
+      if (x1 < bb.x - 1 || x1 > bb.x + bb.width + 1) return;
+      var top = Math.min(y1, y2), bottom = Math.max(y1, y2);
+      if (top < bb.y && Math.abs(bottom - bb.y) <= 2.5 + (bb.height / 2)) n++;
+    });
+    return n;
+  }
+
+  // 棒の <line> の当たり: 線の左右いっぱい、上下 3px (fork の棒の高さ 6 と揃える)。
+  var BAR_LINE_HALF = 3;
+  function _lineBarBBox(el) {
+    var x1 = parseFloat(el.getAttribute('x1')) || 0, x2 = parseFloat(el.getAttribute('x2')) || 0;
+    var y = parseFloat(el.getAttribute('y1')) || 0;
+    return { x: Math.min(x1, x2), y: y - BAR_LINE_HALF, width: Math.abs(x2 - x1), height: BAR_LINE_HALF * 2 };
+  }
+
   // Classify a single SVG primitive into a node-kind string,
   // OR return an ellipse descriptor for post-processing (pair grouping).
   // Returns null for shapes that should be ignored (arrow heads, merge markers, container rects).
@@ -1478,6 +1536,7 @@ window.MA.modules.plantumlActivity = (function() {
 
   function _shapeBBox(el) {
     var tag = el.tagName.toLowerCase();
+    if (tag === 'line') return _lineBarBBox(el);
     if (tag === 'rect') {
       return {
         x: parseFloat(el.getAttribute('x')) || 0,
@@ -1968,10 +2027,16 @@ window.MA.modules.plantumlActivity = (function() {
         w: parseFloat(r.getAttribute('width')) || 0, h: parseFloat(r.getAttribute('height')) || 0 };
       if (b.w > 0 && !hasFrame(b)) bars.push(b);
     });
+    // split / end split の棒 (横の <line>)
+    _barLines(svgEl).forEach(function(l) {
+      var bb = _lineBarBBox(l);
+      var b = { x: bb.x, y: bb.y, w: bb.width, h: bb.height, line: true };
+      if (b.w > 0 && !hasFrame(b)) bars.push(b);
+    });
     if (!diamonds.length && !bars.length) return 0;
     // 開きと閉じの対 (種類ごとに入れ子を数える)
-    var OPEN = { 'if': /^if\s*\(/i, 'switch': /^switch\s*\(/i, 'repeat': /^repeat\s*$/i, 'fork': /^fork\s*$/i };
-    var CLOSE = { 'if': /^end\s*if\b/i, 'switch': /^end\s*switch\b/i, 'repeat': /^repeat\s+while\b/i, 'fork': /^end\s*(?:fork|merge)\b/i };
+    var OPEN = { 'if': /^if\s*\(/i, 'switch': /^switch\s*\(/i, 'repeat': /^repeat\s*$/i, 'fork': /^(?:fork|split)\s*$/i };
+    var CLOSE = { 'if': /^end\s*if\b/i, 'switch': /^end\s*switch\b/i, 'repeat': /^repeat\s+while\b/i, 'fork': /^end\s*(?:fork|merge|split)\b/i };
     var stacks = { 'if': [], 'switch': [], 'repeat': [], 'fork': [] };
     var pairs = [];
     lines.forEach(function(raw, i) {
@@ -2026,11 +2091,13 @@ window.MA.modules.plantumlActivity = (function() {
       if (!best) return;
       best.used = true;
       var line = pr.kind === 'repeat' ? pr.open : pr.close;
-      OB.addRect(overlayEl, best.x, best.y, best.w, best.h, {
+      var closeAttrs = {
         // repeat の入口は開きの行 (矢印の行はその前)、合流・下の棒は閉じの行 (入る矢印は元の要素の後) なので印を分ける
         'data-type': 'source-line', 'data-id': 'src:close@' + line, 'data-src-kind': pr.kind === 'repeat' ? 'loop' : 'close',
         'data-line': String(line),
-      });
+      };
+      if (best.line) closeAttrs['data-hit-kind'] = 'bar';   // 1 本の線の棒は、入る矢印の端より手前
+      OB.addRect(overlayEl, best.x, best.y, best.w, best.h, closeAttrs);
       framed.push({ x: best.x, y: best.y, w: best.w, h: best.h, line: line, type: 'source-line' });
       n++;
     });
@@ -2070,13 +2137,21 @@ window.MA.modules.plantumlActivity = (function() {
     if (flat.length === 0) return;
 
     // Walk SVG, classify each primitive, then post-process to group ellipse pairs as 'stop-or-end'.
-    var shapeNodes = svgEl.querySelectorAll('rect, polygon, ellipse');
+    // split の棒は横の <line> なので、棒と見なした線も文書順に混ぜる (fork の棒の rect と同じ 'fork-bar')。
+    var shapeNodes = svgEl.querySelectorAll('rect, polygon, ellipse, line');
+    var barLines = _barLines(svgEl);
     var raw = [];
     Array.prototype.forEach.call(shapeNodes, function(s) {
-      var c = _classifyShape(s);
+      var c = s.tagName.toLowerCase() === 'line'
+        ? (barLines.indexOf(s) >= 0 ? 'fork-bar' : null)
+        : _classifyShape(s);
       if (c) raw.push({ el: s, classification: c });
     });
     var matched = _groupShapes(raw);
+    // 合流の棒 (上から 2 本以上入る棒) は開きの節点に当てない。枠は _addClosingShapes が閉じの行で置く。
+    matched = matched.filter(function(sh) {
+      return sh.kind !== 'fork-bar' || _barIncoming(svgEl, _shapeBBox(sh.el)) < 2;
+    });
 
     // Map flat nodes to expected shape kind
     var expectedKind = function(n) {
@@ -2144,11 +2219,13 @@ window.MA.modules.plantumlActivity = (function() {
       shapeIdx++;
       var bb = _shapeBBox(sh.el);
       if (!bb) return;
-      OB.addRect(overlayEl, bb.x, bb.y, bb.width, bb.height, {
+      var attrs = {
         'data-type': n.kind === 'if' || n.kind === 'while' || n.kind === 'repeat' ? 'decision' : n.kind,
         'data-id': n.id,
         'data-line': String(n.line),
-      });
+      };
+      if (sh.el.tagName.toLowerCase() === 'line') attrs['data-hit-kind'] = 'bar';   // split の棒 (1 本の線)
+      OB.addRect(overlayEl, bb.x, bb.y, bb.width, bb.height, attrs);
     });
 
     // 文字で当てた動作・菱形は matched から外してあるので、数に戻して比べる。
@@ -3081,7 +3158,7 @@ window.MA.modules.plantumlActivity = (function() {
     var P = window.MA.properties;
     var node = _findNodeById(parsedData.nodes, sel.id);
     if (!node) { propsEl.innerHTML = ''; return; }
-    var html = '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' + node.kind + ' (L' + node.line + ')</div>';
+    var html = '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' + (node.keyword || node.kind) + ' (L' + node.line + ')</div>';
 
     if (node.kind === 'if') {
       html += P.fieldHtml('Condition', 'ac-if-cond', node.condition || '');
@@ -3130,12 +3207,12 @@ window.MA.modules.plantumlActivity = (function() {
           html += '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:2px;">▸ branch 1 (L' + fb.line + ')</div>';
         } else {
           html += '<div style="font-size:11px;margin-bottom:2px;">' +
-                    '▸ branch ' + (fbi + 1) + ' (fork again, L' + fb.line + ')' +
+                    '▸ branch ' + (fbi + 1) + ' (' + (node.keyword === 'split' ? 'split' : 'fork') + ' again, L' + fb.line + ')' +
                     ' <button id="ac-fork-branch-del-' + fbi + '" data-line="' + fb.line + '" title="この branch を削除" style="background:var(--accent-red);border:none;color:#fff;padding:2px 6px;border-radius:3px;cursor:pointer;font-size:10px;">✕</button>' +
                   '</div>';
         }
       }
-      html += '<button id="ac-add-fork-again" style="font-size:11px;padding:3px 8px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">+ fork again 追加</button>';
+      html += '<button id="ac-add-fork-again" style="font-size:11px;padding:3px 8px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">+ ' + (node.keyword === 'split' ? 'split' : 'fork') + ' again 追加</button>';
     }
     html += P.primaryButtonHtml('ac-ctrl-update', '更新') +
             P.primaryButtonHtml('ac-ctrl-delete', '✕ 構造ごと削除');

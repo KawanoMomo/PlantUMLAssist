@@ -1193,6 +1193,41 @@ test('migrator 手順 4 — 新記法のアクティビティ図の合流の菱�
   }
 });
 
+// BLK-migrator-20260929-0951: split / end split の棒は fork の棒 (塗った細い rect) と違い、横の <line> 1 本で描かれ、
+// どこにホバーしても枠が出なかった。棒は描いた横線から拾い、上の棒は split の行、下の棒は end split の行を指す。
+test('migrator 手順 4 — アクティビティ図の split の分岐の棒・end split の合流の棒の左端・中央・右端に枠が出て、押すとその行が選ばれる', async ({ page }) => {
+  await bootPlain(page);
+  const dsl = ['@startuml', 'start', 'split', '  :a;', 'split again', '  :b;', 'end split', 'stop', '@enduml'].join('\n');
+  await typeDsl(page, dsl);
+  await expect(page.locator('#overlay-layer rect.selectable[data-type="fork"]')).toHaveCount(1, { timeout: 20000 });
+  const bars = await page.evaluate(() => {
+    const svg = document.querySelector('#preview-svg svg');
+    return Array.from(svg.querySelectorAll('line'))
+      .filter((l) => l.getAttribute('y1') === l.getAttribute('y2') && /stroke-width:1\.5/.test(l.getAttribute('style') || ''))
+      .map((l) => l.getBoundingClientRect()).sort((a, b) => a.top - b.top)
+      .map((b) => ({ l: b.left + 2, c: b.left + b.width / 2, r: b.right - 2, y: b.top + b.height / 2 }));
+  });
+  expect(bars.length, 'split の棒 2 本 (分岐・合流) が横線で描かれている').toBe(2);
+  const hovered = () => page.evaluate(() => Array.from(document.querySelectorAll('#overlay-layer rect.hit-hover'))
+    .map((r) => r.getAttribute('data-line')).join(','));
+  for (const [bar, line, what] of [[bars[0], '3', 'split の分岐の棒'], [bars[1], '7', 'end split の合流の棒']]) {
+    for (const x of [bar.l, bar.c, bar.r]) {
+      await page.mouse.move(3, 3);
+      await page.mouse.move(x, bar.y);
+      await expect.poll(hovered, what + ' (x=' + Math.round(x) + ') にホバーすると、その行の枠').toBe(line);
+    }
+  }
+  const caretLine = () => page.evaluate(() => {
+    const ed = document.getElementById('editor');
+    return ed.value.slice(0, ed.selectionStart).split('\n').length;
+  });
+  await page.mouse.click(bars[0].l, bars[0].y);
+  await expect.poll(caretLine, '分岐の棒を押すと split の行').toBe(3);
+  await page.mouse.click(3, 3);
+  await page.mouse.click(bars[1].l, bars[1].y);
+  await expect.poll(caretLine, '合流の棒を押すと end split の行').toBe(7);
+});
+
 // BLK-migrator-20260926-2118: 単純な if / else の、枝から合流へ「下へ → 横へ」折れる矢印の縦の区間 (と、菱形から枝へ
 // 「横へ → 下へ」の横の区間) にホバーしても枠が出なかった。1 本の矢印の全区間に同じ枠を置き、どの区間を指しても矢印全体が光る。
 test('migrator 手順 4 — 単純な if / else の折れた矢印は、どの区間を指しても枠が出て、その矢印の全区間が光る', async ({ page }) => {

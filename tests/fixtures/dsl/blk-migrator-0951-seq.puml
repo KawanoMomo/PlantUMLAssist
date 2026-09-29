@@ -1,0 +1,19 @@
+@startuml
+start
+split
+  :a;
+split again
+  :b;
+end split
+fork
+  :c;
+fork again
+  :d;
+end fork
+split
+  :e;
+split again
+  :f;
+end split
+stop
+@enduml
