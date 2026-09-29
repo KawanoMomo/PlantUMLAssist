@@ -19554,7 +19554,21 @@ function _fwOpenCurrent() {
   var FW = window.MA.fixWalk;
   var cur = FW ? FW.current(_fwWalk) : null;
   renderFixWalk();
-  if (cur) openFromFolderByName(cur.doc);
+  if (!cur) return;
+  // 症状検索の列は開いているタブの図も当たる。タブにある図はそのタブへ移る (編集中の中身を読み直さない)。
+  var tab = null;
+  if (_fwWalk.origin === 'symptom' && _fwSymptomIds[cur.doc] != null && window.MA.workspace) {
+    window.MA.workspace.list().forEach(function(d) { if (d && d.id === _fwSymptomIds[cur.doc]) tab = d; });
+  }
+  if (tab) {
+    var lines = window.MA.symptomSearch
+      ? window.MA.symptomSearch.markLines(tab.dsl, _fwWalk.query, _fwSymptomGaps[cur.doc] || [])
+      : [];
+    jumpToDocLine(tab.id, lines.length ? lines[0] : 1);
+    try { applySymptomMarks(); } catch (e) {}
+    return;
+  }
+  openFromFolderByName(cur.doc);
 }
 
 // 直した印は、札から始めた列なら札にも書き戻す (同じ変更の進捗を 2 つ持たない)。
@@ -19601,6 +19615,16 @@ function setupFixWalk() {
   // 一覧に戻るのは「どこを飛ばしたか」を見たいときだけ。列は消さない。
   var list = document.getElementById('fw-list');
   if (list) list.addEventListener('click', function() {
+    // 症状検索から始めた列の一覧は症状検索の結果 (貼った症状文のまま)。
+    if (_fwWalk && _fwWalk.origin === 'symptom') {
+      var sp = document.getElementById('symptom-panel');
+      var sb = document.getElementById('btn-tab-symptom');
+      var st = document.getElementById('symptom-text');
+      if (st && _fwWalk.query) st.value = _fwWalk.query;
+      if (sp && sb && !sp.classList.contains('open')) sb.click();
+      else renderSymptomSearch();
+      return;
+    }
     if (_fwWalk && _fwWalk.subject) _dgName = _fwWalk.subject;
     toggleDepGraph(true, (_fwWalk && _fwWalk.subject) || _dgName);
   });
@@ -19608,6 +19632,7 @@ function setupFixWalk() {
   if (close) close.addEventListener('click', function() {
     _fwWalk = null;
     renderFixWalk();
+    try { applySymptomMarks(); } catch (e) {}
   });
   renderFixWalk();
 }
@@ -21707,6 +21732,18 @@ function renderSymptomSearch() {
     k.textContent = r.kindLabel + ' / 関連度 ' + r.score;
     line.appendChild(n);
     line.appendChild(k);
+    // BLK-primary-20260925-1732-wish: 影響を見るの影響先と同じ「ここから順に直す」。当たった図を関連度順に
+    // 1 枚ずつ開き、下端の手当ての帯の「次へ」で次の当たり図へ送る (帯は 1 本を共用)。
+    var walk = document.createElement('button');
+    walk.type = 'button';
+    walk.className = 'sym-walk';
+    walk.textContent = 'ここから順に直す';
+    walk.title = 'この図を開き、下端の帯で当たった図を関連度順に 1 枚ずつ送る (当たった語と流れの対応なしを図の上で光らせる)';
+    walk.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      startSymptomWalk(r.name);
+    });
+    line.appendChild(walk);
     item.appendChild(line);
     var m = document.createElement('div');
     m.className = 'sym-matched';
@@ -21730,6 +21767,68 @@ function renderSymptomSearch() {
     });
     resEl.appendChild(item);
   });
+}
+
+// ── 症状検索から順に開く (BLK-primary-20260925-1732-wish) ─────────────────────
+// 症状検索は当たった図を 1 枚ずつ開けるだけで、次の当たり図へは一覧に戻って探し直していた。
+// 影響を見るの「ここから順に直す」と同じ手当ての帯 (1 本を共用) に、当たった図を関連度順に載せる。
+// 開いた図では、当たった語と「流れ」で対応の無い名前が書かれた行の図形を、DSL と図の相互ジャンプ
+// (キャレット行の対応表示) と同じ琥珀の破線で光らせる。調査用の別画面は作らない。
+var _fwSymptomGaps = {};   // 図名 → 流れで対応の無い名前 [...]
+var _fwSymptomIds = {};    // 図名 → 開いているタブの id (開いていない図は無し)
+
+function startSymptomWalk(startName) {
+  var ss = window.MA.symptomSearch;
+  var textEl = document.getElementById('symptom-text');
+  if (!ss || !textEl) return;
+  var text = textEl.value;
+  var docs = _symptomDocs();
+  var rows = ss.search(docs, text);
+  if (!rows.length) return;
+  _fwSymptomGaps = {};
+  _fwSymptomIds = {};
+  var sf = window.MA.symptomFlow;
+  if (sf && _symptomCrossOn()) {
+    sf.cross(docs, text).rows.forEach(function(x) {
+      if (x.status === 'gap') _fwSymptomGaps[x.name] = x.gaps.map(function(g) { return g.name; });
+    });
+  }
+  var list = rows.map(function(r) {
+    if (r.id != null && String(r.id).indexOf('file:') !== 0) _fwSymptomIds[r.name] = r.id;
+    var gaps = _fwSymptomGaps[r.name] || [];
+    return {
+      doc: r.name, hop: 0, via: r.matched,
+      note: '関連度 ' + r.score + (gaps.length ? ' · 対応なし ' + gaps.length : ''),
+    };
+  });
+  var terms = ss.terms(text);
+  var title = '症状「' + (terms.length ? terms.slice(0, 3).join('・') + (terms.length > 3 ? '…' : '') : text) + '」の当たり図';
+  var panel = document.getElementById('symptom-panel');
+  if (panel) panel.classList.remove('open');
+  startFixWalk(title, list, { startDoc: startName, title: title, origin: 'symptom', query: text });
+}
+
+// 症状検索の列で開いた図に、当たった語と対応の無い名前の行を光らせる。描画のたびに引き直す。
+function applySymptomMarks() {
+  var ov = document.getElementById('overlay-layer');
+  if (!ov) return 0;
+  Array.prototype.forEach.call(ov.querySelectorAll('rect.sym-mark'), function(r) { r.classList.remove('sym-mark'); });
+  var FW = window.MA.fixWalk;
+  var ss = window.MA.symptomSearch;
+  if (!FW || !ss || !_fwWalk || _fwWalk.origin !== 'symptom') return 0;
+  var cur = FW.current(_fwWalk);
+  var active = window.MA.workspace ? window.MA.workspace.getActive() : null;
+  if (!cur || !active || String(active.name).replace(/\.puml$/i, '') !== cur.doc) return 0;
+  var lines = ss.markLines(mmdText, _fwWalk.query, _fwSymptomGaps[cur.doc] || []);
+  var n = 0;
+  lines.forEach(function(line) {
+    Array.prototype.forEach.call(ov.querySelectorAll('rect.selectable[data-line="' + line + '"]'), function(r) {
+      r.classList.add('sym-mark');
+      n++;
+    });
+  });
+  ov.setAttribute('data-sym-marks', String(n));
+  return n;
 }
 
 // ── 混入点 (BLK-primary-20260915-0506-wish) ─────────────────────────────────
@@ -34832,6 +34931,8 @@ function renderSvg() {
       // BLK-primary-20260908-1603: overlay は描画のたびに作り直されるので、
       // 今のキャレット行の対応表示を引き直す (再描画で peek が消えたままにしない)。
       try { refreshLinePeek(); } catch (e) {}
+      // BLK-primary-20260925-1732-wish: 症状検索の列で開いた図は、当たった語と対応の無い名前の行も光らせ直す。
+      try { applySymptomMarks(); } catch (e) {}
     }
     // BLK-builder-20260924-1823-2 (design 10c): コミットと比較している間は、描き直した図にも
     // そのコミットとの差の色を付け直す (打つたびに追う)。

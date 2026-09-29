@@ -1207,3 +1207,80 @@ test.describe('primary 手順 4 (c)④: 共通定義を !include の共通ファ
     await expect(band).toContainText(path.basename(ABS));
   });
 });
+
+// BLK-primary-20260925-1732-wish: 不具合対応で過去の図を探す場面。⇄ 症状検索は当たった図を 1 枚ずつしか
+// 開けず、次の当たり図へは一覧に戻って探し直し、流れで対応の無い名前は DSL を目で探していた。
+// 結果の各図の「ここから順に直す」(影響を見ると同じ) で下端の手当ての帯に関連度順に載り、「次へ」で
+// 次の当たり図へ進み、開いた図では当たった語と対応の無い名前の行が相互ジャンプと同じ光らせ方で出ることを見る。
+const CAN_SEQ = '@startuml\ntitle CAN 送信\nparticipant App\nparticipant Can_Driver\n'
+  + 'App -> Can_Driver : Can_Transmit()\nCan_Driver -> Can_Driver : Can_Reset()\n'
+  + 'Can_Driver -> App : EnableIrq()\n@enduml';
+const CAN_STATE = '@startuml\n[*] --> Idle\nIdle --> BusOff : Can_Driver_BusOff\n'
+  + 'BusOff --> Idle : Can_Driver_Recover\n@enduml';
+
+test.describe('primary 手順 4: 不具合対応で当たった図を順に開いて確かめる', () => {
+  test.beforeEach(async ({ page }) => {
+    await boot(page);
+    await clearDir(page);
+    await putFile(page, 'can_send_sequence', CAN_SEQ);
+    await putFile(page, 'can_state', CAN_STATE);
+    await putFile(page, 'adc_init_sequence', ADC);
+    await page.waitForTimeout(500);
+    await page.reload();
+    await page.waitForSelector('html[data-app-ready="1"]', { state: 'attached' });
+  });
+
+  test.afterEach(async ({ page }) => {
+    await clearDir(page).catch(() => {});
+  });
+
+  test('症状検索の当たり図を「ここから順に直す」で開き、帯の「次へ」で次の当たり図へ進み、当たった行が図の上で光る', async ({ page }) => {
+    await page.locator('#btn-tab-symptom').click();
+    await expect(page.locator('#symptom-panel')).toHaveClass(/open/);
+    await page.locator('#symptom-scan-folder').check();
+    await page.locator('#symptom-text').click();
+    await page.keyboard.type('Can_Driver のバスオフ復帰後に EnableIrq が再発火しない');
+    const docs = page.locator('#symptom-results .sym-doc');
+    await expect(docs).toHaveCount(2, { timeout: 10000 });
+    await expect(docs.nth(0)).toHaveAttribute('data-doc-name', 'can_send_sequence');
+
+    // 到達条件その1: 結果の図の「ここから順に直す」1 回で、その図が開き、下端の帯に当たり図が関連度順に載る。
+    let clicks = 0;
+    await docs.nth(0).locator('button.sym-walk').click(); clicks++;
+    await expect(page.locator('#symptom-panel')).not.toHaveClass(/open/);
+    const bar = page.locator('#fw-bar');
+    await expect(bar).toBeVisible();
+    await expect(page.locator('#fw-label')).toContainText('1 / 2 図');
+    await expect(page.locator('#fw-label')).toContainText('can_send_sequence (関連度 ');
+    await expect(page.locator('#editor')).toHaveValue(/Can_Transmit\(\)/, { timeout: 10000 });
+
+    // 到達条件その2: 開いた図で、当たった語 (Can_Driver・EnableIrq) と流れで対応の無い名前 (EnableIrq()) の
+    // 行の図形が、キャレット行の対応表示と同じ琥珀の破線で光る。
+    const ov = page.locator('#overlay-layer');
+    await expect(ov.locator('rect.sym-mark[data-line="7"]').first()).toBeAttached({ timeout: 15000 });
+    await expect(ov.locator('rect.sym-mark[data-line="5"]').first()).toBeAttached();
+    const dash = await ov.locator('rect.sym-mark[data-line="7"]').first()
+      .evaluate((el) => getComputedStyle(el).strokeDasharray);
+    expect(dash.replace(/px/g, '').replace(/,\s*/g, ' ')).toBe('4 3');
+
+    // 到達条件その3: 帯の「次へ」1 回で次の当たり図 (状態遷移図) が開き、そこでも当たった行が光る。
+    await page.locator('#fw-next').click(); clicks++;
+    await expect(page.locator('#fw-label')).toContainText('2 / 2 図');
+    await expect(page.locator('#editor')).toHaveValue(/Can_Driver_BusOff/, { timeout: 10000 });
+    await expect(ov.locator('rect.sym-mark[data-line="3"]').first()).toBeAttached({ timeout: 15000 });
+    // 当たっていない図 (adc_init_sequence) は列に入らない。
+    await expect(page.locator('#fw-label')).not.toContainText('adc_init_sequence');
+    expect(clicks).toBeLessThanOrEqual(2);
+
+    // 到達条件その4: 帯の「一覧」で、同じ症状文のまま症状検索の結果に戻れる。
+    await page.locator('#fw-list').click();
+    await expect(page.locator('#symptom-panel')).toHaveClass(/open/);
+    await expect(page.locator('#symptom-text')).toHaveValue('Can_Driver のバスオフ復帰後に EnableIrq が再発火しない');
+    await expect(docs).toHaveCount(2);
+
+    // 帯を閉じると光らせた印も消える。
+    await page.locator('#btn-symptom-close').click();
+    await page.locator('#fw-close').click();
+    await expect(ov.locator('rect.sym-mark')).toHaveCount(0);
+  });
+});
