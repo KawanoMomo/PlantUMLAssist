@@ -116,11 +116,16 @@ window.MA.outline = (function() {
     // 「どの親の中か」を付けるために持つ。alt/loop のような括りは親に数えない。
     var declStack = [];
     var sawStart = false, sawEnd = false;
+    // BLK-migrator-20260929-1300: `!ifdef` / `!if` の描かれない枝の行は、構造にも件数にも入れない
+    // (両枝に `A -> B` があると、描かれる 1 本を 2 本と数えていた)。解けない条件の枝は今までどおり数える。
+    var PL = window.MA.preprocLive;
+    var dead = PL ? PL.deadLines(dsl) : {};
 
     for (var i = 0; i < lines.length; i++) {
       var raw = _clean(lines[i]);
       var line = raw.trim();
       if (line === '') continue;
+      if (dead[i + 1]) continue;
       if (_isComment(raw)) continue;
       if (/^@startuml\b/i.test(line)) { sawStart = true; continue; }
       if (/^@enduml\b/i.test(line)) { sawEnd = true; continue; }

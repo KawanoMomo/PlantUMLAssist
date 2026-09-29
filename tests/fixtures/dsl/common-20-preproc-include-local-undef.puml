@@ -1,0 +1,22 @@
+' 狙い: !define / !undef / !ifdef、!local 変数、!function の戻り値、!procedure、!log、!unquoted
+@startuml
+!define USE_LABEL
+!function $tag($x)
+  !local $p = "【"
+  !return $p + $x + "】"
+!endfunction
+!procedure $svc($name)
+  participant "$name" as $name
+!endprocedure
+$svc("受付")
+$svc("審査")
+!ifdef USE_LABEL
+受付 -> 審査 : $tag("申請")
+!else
+受付 -> 審査 : 申請
+!endif
+!undef USE_LABEL
+!ifndef USE_LABEL
+審査 --> 受付 : $tag("結果")
+!endif
+@enduml

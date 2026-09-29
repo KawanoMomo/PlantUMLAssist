@@ -109,6 +109,7 @@ window.MA.sequenceOverlay = (function() {
       var t = lines[i].trim();
       if (ln > from && /^@enduml/i.test(t)) break;
       if (covered[ln]) continue;
+      if (meta && meta.deadLines && meta.deadLines[ln]) continue;   // 描かれない枝の注釈
       var m = t.match(_NOTE_OPEN_RE);
       if (!m) continue;
       var rest = m[2];
@@ -1029,15 +1030,31 @@ window.MA.sequenceOverlay = (function() {
 
   // BLK-migrator-20260925-1732: プレビューは `newpage` で分けた 1 枚目だけを描く。2 枚目以降の
   // メッセージ・注釈・帯・群は並びの照合にも数にも入れない (参加者は全ページの頭に描かれるので残す)。
+  // BLK-migrator-20260929-1300: 描かれない物も並びの照合と数から外す。
+  //   - `!ifdef` / `!if` の描かれない枝の行 (meta.deadLines)。参加者は、宣言の行が描かれない枝でも、
+  //     描かれる枝のメッセージに出てくれば描かれるので残す
+  //   - `hide unlinked` の図で、描かれるメッセージを 1 本も持たない参加者
   function _firstPage(parsedData) {
-    var end = parsedData && parsedData.meta && parsedData.meta.newpageLine;
-    if (!end) return parsedData;
-    function on(x) { return x.kind === 'participant' || !x.line || x.line < end; }
+    var meta = (parsedData && parsedData.meta) || {};
+    var end = meta.newpageLine;
+    var dead = meta.deadLines || null;
+    if (!end && !dead && !meta.hideUnlinked) return parsedData;
+    function live(x) { return !dead || !x.line || !dead[x.line]; }
+    function on(x) { return live(x) && (x.kind === 'participant' || !end || !x.line || x.line < end); }
     var out = {};
     Object.keys(parsedData).forEach(function(k) { out[k] = parsedData[k]; });
-    ['elements', 'relations', 'groups', 'returns'].forEach(function(k) {
+    ['relations', 'groups', 'returns'].forEach(function(k) {
       if (Array.isArray(parsedData[k])) out[k] = parsedData[k].filter(on);
     });
+    var used = {};
+    (out.relations || []).forEach(function(r) { used[r.from] = 1; used[r.to] = 1; });
+    if (Array.isArray(parsedData.elements)) {
+      out.elements = parsedData.elements.filter(function(x) {
+        if (x.kind !== 'participant') return on(x);
+        if (meta.hideUnlinked && !used[x.id]) return false;
+        return live(x) || !!used[x.id];
+      });
+    }
     return out;
   }
 

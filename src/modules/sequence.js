@@ -313,6 +313,13 @@ window.MA.modules.plantumlSequence = (function() {
     var lines = text.split('\n');
     var msgCounter = 0;
     var participantMap = {};
+    // BLK-migrator-20260929-1300: `!ifdef` / `!if` の描かれない枝の行。要素は一覧に残し (本文から直せるように)、
+    // プレビューの当て方と件数だけがこの行を数えない (newpage より後と同じ扱い)。
+    var PL = window.MA.preprocLive;
+    var deadLines = PL ? PL.deadLines(text) : {};
+    for (var dk in deadLines) {
+      if (Object.prototype.hasOwnProperty.call(deadLines, dk)) { result.meta.deadLines = deadLines; break; }
+    }
 
     function ensurePart(name) {
       var clean = unquote(name);
@@ -373,6 +380,13 @@ window.MA.modules.plantumlSequence = (function() {
         // BLK-migrator-20260923-2012: `!if` の両枝に title があると、どちらが描かれたかは SVG を
         // 見るまで分からない。全部の行を憶えておき、プレビューの当て方が描かれた方を選ぶ。
         (result.meta.titleLines = result.meta.titleLines || []).push({ line: lineNum, text: tm[1].trim() });
+        continue;
+      }
+
+      // BLK-migrator-20260929-1300: `hide unlinked` はメッセージを持たない参加者を描かない。
+      // 描かれない参加者は枠が無いのが正しいので、当て方が数えないように印を残す。
+      if (/^hide\s+unlinked\s*$/i.test(trimmed)) {
+        if (!deadLines[lineNum]) result.meta.hideUnlinked = true;
         continue;
       }
 

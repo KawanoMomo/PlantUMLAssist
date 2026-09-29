@@ -12,6 +12,7 @@ const sourceFiles = [
   'src/core/diagram-kind.js',
   'src/core/kind-mismatch.js',
   'src/core/dsl-utils.js',
+  'src/core/preproc-live.js',
   'src/core/regex-parts.js',
   'src/core/id-normalizer.js',
   'src/core/alias-hint.js',
