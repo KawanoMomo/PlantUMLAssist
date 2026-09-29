@@ -204,3 +204,76 @@ test('手順5.5 ディスクに書けていない保存は がそう言い、そ
   await page.waitForTimeout(1500);
   expect(await S.readDoc(page, DIR3, 'driver_common_class')).toContain('note top of NVIC');
 });
+
+// BLK-primary-20260930-0257: driver_common_class が横に伸びたので系統ごとに 2 枚へ分けたい (reviewer 指摘 3)。
+// 分け方は FILES の「複製」で同じ図を 2 枚にし、それぞれで要らないクラスを「クラスを削除」で消す。
+// 以前の「クラスを削除」は宣言の行だけを消し、そのクラスへの関係の行を残したので、PlantUML が関係の行から
+// 同じ名前のクラスを描き直し、消したクラスが図に残った。確かめる窓もブラウザの confirm で note のことしか言わなかった。
+test('手順5.5 複製してクラスを消すと、消したクラスとその関係が図と本文から無くなる', async ({ page }) => {
+  const DIR4 = DIR + '-split';
+  const NL = String.fromCharCode(10);
+  const CLS = ['@startuml', 'title driver_common_class', 'class Driver_Common', 'interface ISpi', 'class SpiDrv',
+    'interface IAdc', 'class AdcDrv', 'SpiDrv ..|> ISpi', 'AdcDrv ..|> IAdc', 'SpiDrv --|> Driver_Common',
+    'AdcDrv --|> Driver_Common', 'note right of IAdc : ADC の口', '@enduml'].join(NL);
+  await S.bootWithSaveDir(page, DIR4);
+  await S.clearDir(page, DIR4);
+  await S.putDoc(page, DIR4, 'driver_common_class', CLS);
+  await page.reload();
+  await page.waitForSelector('html[data-app-ready="1"]', { state: 'attached' });
+
+  // FILES の右クリック「複製」で 2 枚にし、写しを開く。
+  await S.openFolder(page);
+  await S.closeFolderList(page);
+  const head = page.locator('#files-parts .files-part-head[aria-expanded="false"]');
+  for (let i = await head.count(); i > 0; i--) await head.first().click();
+  await page.locator('#files-parts .files-part-file[data-file-name="driver_common_class"]').click({ button: 'right' });
+  await page.locator('#files-ctx-menu [data-action="copy"]').click();
+  const copy = page.locator('#files-parts .files-part-file[data-file-name="driver_common_class_copy"]');
+  await expect(copy).toBeAttached();
+  await copy.click();
+  await expect.poll(() => page.locator('#editor').inputValue()).toContain('AdcDrv');
+
+  // ADC 系を消す (写しは SPI 系だけにする)。クラスを選んで「クラスを削除」→ 窓が消える関係と note の数を先に言う → Enter。
+  const del = async (id, want) => {
+    await expect(page.locator('#overlay-layer rect.selectable[data-id="' + id + '"]').first()).toBeAttached({ timeout: 10000 });
+    // 図のクラス名の文字の上を押す (見出しの上。属性・メソッドの行ではなくクラスそのものが選ばれる)。
+    const name = page.locator('#preview-svg svg text', { hasText: new RegExp('^' + id + '$') }).first();
+    const nb = await name.boundingBox();
+    await page.mouse.click(nb.x + nb.width / 2, nb.y + nb.height / 2);
+    await expect(page.locator('#cl-sel-name')).toHaveText(id);
+    await page.locator('#cl-delete').click();
+    await expect(page.locator('#cl-del-modal')).toBeVisible();
+    await expect(page.locator('#cl-del-message')).toHaveText(want);
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#cl-del-modal')).toHaveCount(0);
+    await page.waitForTimeout(1200);
+    // 一覧から開いた図の最初の書き戻しでは錠が聞く。直すために開いたので「書き換える」。
+    if (await page.locator('#source-lock-modal').isVisible().catch(() => false)) {
+      await page.locator('#source-lock-overwrite').click();
+      await page.waitForTimeout(800);
+    }
+  };
+  await del('AdcDrv', 'クラス AdcDrv を削除します。関係 2 本も消えます。');
+  await del('IAdc', 'クラス IAdc を削除します。note 1 つも消えます。');
+
+  // 到達条件その1: 本文にも図にも ADC 系が残らない (関係の行から描き直されない)。SPI 系と共通クラスは残る。
+  const text = await page.locator('#editor').inputValue();
+  expect(text).not.toContain('Adc');
+  expect(text).toContain('SpiDrv ..|> ISpi');
+  expect(text).toContain('SpiDrv --|> Driver_Common');
+  await expect(page.locator('#preview-svg svg text', { hasText: 'AdcDrv' })).toHaveCount(0);
+  await expect(page.locator('#preview-svg svg text', { hasText: 'IAdc' })).toHaveCount(0);
+  await expect(page.locator('#preview-svg svg text', { hasText: 'SpiDrv' }).first()).toBeVisible();
+  await expect.poll(async () => (await S.readDoc(page, DIR4, 'driver_common_class_copy')) || '').not.toContain('Adc');
+
+  // 到達条件その2: 元の図はそのまま (両方に要る Driver_Common も残る)。Esc で取り消せば何も消えない。
+  expect(await S.readDoc(page, DIR4, 'driver_common_class')).toContain('AdcDrv --|> Driver_Common');
+  const hit = page.locator('#overlay-layer rect.selectable[data-type="class"][data-id="SpiDrv"]').first();
+  const hb = await hit.boundingBox();
+  await page.mouse.click(hb.x + hb.width / 2, hb.y + 8);
+  await page.locator('#cl-delete').click();
+  await expect(page.locator('#cl-del-modal')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#cl-del-modal')).toHaveCount(0);
+  expect(await page.locator('#editor').inputValue()).toContain('class SpiDrv');
+});

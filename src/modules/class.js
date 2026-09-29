@@ -881,26 +881,112 @@ window.MA.modules.plantumlClass = (function() {
     return lines.join('\n');
   }
 
-  function deleteClassWithNotes(text, classId) {
+  // BLK-primary-20260930-0257: 「クラスを削除」の確かめる窓。ブラウザの confirm は note のことしか言わず、
+  // Enter / Esc の約束も他の窓と違った。アプリの窓で、消える関係と note の数を先に言う (Enter で削除・Esc で取り消し)。
+  function _askDeleteClass(classId, ctx) {
+    var plan = classDeletePlan(ctx.getMmdText(), classId);
+    if (!plan) return;
+    var old = document.getElementById('cl-del-modal');
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+    var back = document.activeElement;
+    var wrap = document.createElement('div');
+    wrap.id = 'cl-del-modal';
+    wrap.setAttribute('style', 'position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;');
+    var box = document.createElement('div');
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-modal', 'true');
+    box.setAttribute('aria-label', 'クラスを削除');
+    box.setAttribute('style', 'background:var(--bg-secondary);color:var(--text-primary);border:1px solid var(--border);border-radius:6px;padding:14px 16px;min-width:300px;max-width:440px;font-size:12px;box-shadow:0 8px 24px rgba(0,0,0,0.4);');
+    var msg = document.createElement('p');
+    msg.id = 'cl-del-message';
+    msg.setAttribute('style', 'margin:0 0 12px;line-height:1.6;');
+    msg.textContent = classDeleteMessage(classId, plan);
+    box.appendChild(msg);
+    var row = document.createElement('div');
+    row.setAttribute('style', 'display:flex;gap:8px;justify-content:flex-end;');
+    var cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.id = 'cl-del-cancel';
+    cancel.textContent = '取り消し';
+    cancel.setAttribute('style', 'background:var(--bg-tertiary);color:var(--text-primary);border:1px solid var(--border);padding:5px 12px;border-radius:4px;font-size:12px;cursor:pointer;');
+    var ok = document.createElement('button');
+    ok.type = 'button';
+    ok.id = 'cl-del-confirm';
+    ok.textContent = '削除する';
+    ok.setAttribute('style', 'background:var(--accent-red);color:#fff;border:none;padding:5px 12px;border-radius:4px;font-size:12px;cursor:pointer;');
+    row.appendChild(cancel);
+    row.appendChild(ok);
+    box.appendChild(row);
+    wrap.appendChild(box);
+    document.body.appendChild(wrap);
+    function close() {
+      if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
+      if (back && back.focus && back.isConnected !== false) { try { back.focus(); } catch (e) {} }
+    }
+    function doDelete() {
+      close();
+      window.MA.history.pushHistory();
+      ctx.setMmdText(deleteClassWithNotes(ctx.getMmdText(), classId));
+      window.MA.selection.clearSelection();
+      ctx.onUpdate();
+    }
+    ok.addEventListener('click', doDelete);
+    cancel.addEventListener('click', close);
+    wrap.addEventListener('click', function(e) { if (e.target === wrap) close(); });
+    wrap.addEventListener('keydown', function(e) {
+      if (e.isComposing) return;
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); return; }
+      if (e.key === 'Enter' && document.activeElement !== cancel) { e.preventDefault(); e.stopPropagation(); doDelete(); }
+    });
+    try { ok.focus(); } catch (e) {}
+  }
+
+  // BLK-primary-20260930-0257: クラスを消すときに一緒に消える行。宣言 (本体の {} まで)・そのクラスへの note・
+  // そのクラスに繋がる関係の行。関係の行を残すと PlantUML がその名前のクラスを描き直し、消したクラスが図に残る
+  // (1 枚のクラス図を「複製」して要らないクラスを消し、2 枚に分ける手順が成り立たなかった)。
+  // 返り値: { ranges: [{start,end}] (降順), relations: 本数, notes: 個数 } / クラスが無ければ null。
+  function classDeletePlan(text, classId) {
     var parsed = parse(text);
-    // Find target element
     var elt = null;
     for (var i = 0; i < parsed.elements.length; i++) {
       if (parsed.elements[i].id === classId) { elt = parsed.elements[i]; break; }
     }
-    if (!elt) return text;
-
-    // Collect line ranges to delete: element + its notes (descending order to avoid index shift)
+    if (!elt) return null;
     var ranges = [];
-    var elStart = elt.line;
     var elEnd = elt.endLine && elt.endLine > elt.line ? elt.endLine : elt.line;
-    ranges.push({ start: elStart, end: elEnd });
+    ranges.push({ start: elt.line, end: elEnd });
+    var notes = 0, rels = 0;
     parsed.notes.forEach(function(n) {
       if (n.targetId === classId) {
-        ranges.push({ start: n.line, end: n.endLine });
+        ranges.push({ start: n.line, end: n.endLine || n.line });
+        notes++;
       }
     });
+    var seen = {};
+    (parsed.relations || []).forEach(function(r) {
+      if (r.from !== classId && r.to !== classId) return;
+      if (seen[r.line]) return;
+      seen[r.line] = true;
+      ranges.push({ start: r.line, end: r.line });
+      rels++;
+    });
     ranges.sort(function(a, b) { return b.start - a.start; });
+    return { ranges: ranges, relations: rels, notes: notes };
+  }
+
+  // 確かめる窓の文。消える行を先に言う (「関係 3 本と note 1 つも消えます」)。
+  function classDeleteMessage(classId, plan) {
+    var extra = [];
+    if (plan && plan.relations) extra.push('関係 ' + plan.relations + ' 本');
+    if (plan && plan.notes) extra.push('note ' + plan.notes + ' つ');
+    return 'クラス ' + classId + ' を削除します。'
+      + (extra.length ? extra.join('と') + 'も消えます。' : '繋がる関係と note はありません。');
+  }
+
+  function deleteClassWithNotes(text, classId) {
+    var plan = classDeletePlan(text, classId);
+    if (!plan) return text;
+    var ranges = plan.ranges;
 
     var lines = text.split('\n');
     ranges.forEach(function(r) {
@@ -2225,11 +2311,7 @@ window.MA.modules.plantumlClass = (function() {
       ctx.onUpdate();
     });
     P.bindEvent('cl-delete', 'click', function() {
-      if (!confirm('このクラスと紐付く note も削除します。続行しますか？')) return;
-      window.MA.history.pushHistory();
-      ctx.setMmdText(deleteClassWithNotes(ctx.getMmdText(), element.id));
-      window.MA.selection.clearSelection();
-      ctx.onUpdate();
+      _askDeleteClass(element.id, ctx);
     });
     // Per-member row handlers (click row to focus, ↑↓✕ buttons, update button when focused)
     (element.members || []).forEach(function(m, mi) {
@@ -2481,11 +2563,7 @@ window.MA.modules.plantumlClass = (function() {
       ctx.onUpdate();
     });
     P.bindEvent('cl-delete', 'click', function() {
-      if (!confirm('このクラスと紐付く note も削除します。続行しますか？')) return;
-      window.MA.history.pushHistory();
-      ctx.setMmdText(deleteClassWithNotes(ctx.getMmdText(), element.id));
-      window.MA.selection.clearSelection();
-      ctx.onUpdate();
+      _askDeleteClass(element.id, ctx);
     });
     P.bindEvent('cl-add-val', 'click', function() {
       var name = document.getElementById('cl-add-val-name').value.trim();
@@ -3195,6 +3273,8 @@ window.MA.modules.plantumlClass = (function() {
     moveMemberDownByIndex: moveMemberDownByIndex,
     deleteLine: deleteLine,
     deleteClassWithNotes: deleteClassWithNotes,
+    classDeletePlan: classDeletePlan,
+    classDeleteMessage: classDeleteMessage,
     moveLineUp: moveLineUp,
     moveLineDown: moveLineDown,
     setTitle: setTitle,
