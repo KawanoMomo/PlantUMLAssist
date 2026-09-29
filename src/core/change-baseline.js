@@ -144,6 +144,22 @@
     return pick ? pick.stamp : '';
   }
 
+  // BLK-primary-20260925-0637-wish: 保存先が Git の作業木なら、版の控えに無い時点の中身を
+  // その時点より前の最後のコミットから引く。commits は /git-log の並び ({ hash, date }、date は
+  // ISO 8601 で時差付き)。時点以前のうち最も新しいコミットを返す。無ければ null。
+  function commitAt(commits, cutoffIso) {
+    var cut = Date.parse(_s(cutoffIso));
+    if (isNaN(cut)) return null;
+    var pick = null, pickT = -Infinity;
+    _list(commits).forEach(function(c) {
+      if (!c || !c.hash) return;
+      var t = Date.parse(_s(c.date));
+      if (isNaN(t) || t > cut) return;
+      if (t > pickT) { pick = c; pickT = t; }
+    });
+    return pick;
+  }
+
   // 「MM/DD HH:MM」。見出しと各図の「変更前 (MM/DD HH:MM)」に使う。
   function stamp(iso) {
     var d = new Date(_s(iso));
@@ -172,7 +188,7 @@
   var api = {
     KINDS: KINDS, isKind: isKind, labelOf: labelOf, todayStart: todayStart,
     recordMeeting: recordMeeting, lastMeetingBefore: lastMeetingBefore,
-    options: options, contentAt: contentAt, stampToIso: stampToIso, stampAt: stampAt, stamp: stamp, headLabel: headLabel,
+    options: options, contentAt: contentAt, stampToIso: stampToIso, stampAt: stampAt, commitAt: commitAt, stamp: stamp, headLabel: headLabel,
     columnLabel: columnLabel,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

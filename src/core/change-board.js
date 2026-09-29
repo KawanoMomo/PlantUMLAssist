@@ -265,7 +265,49 @@ window.MA.changeBoard = (function() {
     return filtered.verdict + 'のみ ' + filtered.matched + ' 行 / ' + filtered.entries.length + ' 枚';
   }
 
+  // BLK-primary-20260925-0637-wish: 会議セットの「変更前」「変更後」の表示で、変わった行と、
+  // その行の中で変わった文字を ± 差分と同じ色で示すための印。
+  //   rows … diffRows().rows (畳む前の全行)
+  //   side … 'before' (消えた・変わる前の行を赤) / 'after' (増えた・変わった後の行を緑)
+  // 返り値 { 行番号: { kind: 'del'|'add', from, to } }。from/to はその行の中で変わった文字の範囲
+  // (前後で対になる行があるときだけ。対が無い行は行ごと変わったので from = 0, to = 行の長さ)。
+  // 対は、同じ行が挟まらない一続きの 'del' と 'add' を上から順に 1 対 1 で組む。
+  function sideMarks(rows, side) {
+    var out = {};
+    var list = Array.isArray(rows) ? rows : [];
+    var i = 0;
+    while (i < list.length) {
+      if (!list[i] || list[i].kind === 'same' || list[i].kind === 'gap') { i++; continue; }
+      var dels = [], adds = [];
+      while (i < list.length && list[i] && (list[i].kind === 'del' || list[i].kind === 'add')) {
+        if (list[i].kind === 'del') dels.push(list[i]); else adds.push(list[i]);
+        i++;
+      }
+      var mine = side === 'before' ? dels : adds;
+      var other = side === 'before' ? adds : dels;
+      mine.forEach(function(r, k) {
+        var text = String((side === 'before' ? r.before : r.after) || '');
+        var no = side === 'before' ? r.beforeNo : r.afterNo;
+        if (!no) return;
+        var from = 0, to = text.length;
+        var pair = other[k];
+        if (pair) {
+          var o = String((side === 'before' ? pair.after : pair.before) || '');
+          var p = 0;
+          while (p < text.length && p < o.length && text.charAt(p) === o.charAt(p)) p++;
+          var s = 0;
+          while (s < text.length - p && s < o.length - p
+                 && text.charAt(text.length - 1 - s) === o.charAt(o.length - 1 - s)) s++;
+          from = p; to = text.length - s;
+        }
+        out[no] = { kind: side === 'before' ? 'del' : 'add', from: from, to: to };
+      });
+    }
+    return out;
+  }
+
   return {
+    sideMarks: sideMarks,
     diffRows: diffRows,
     folderExtras: folderExtras,
     filterVerdict: filterVerdict,

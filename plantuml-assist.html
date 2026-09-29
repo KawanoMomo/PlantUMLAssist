@@ -3874,9 +3874,13 @@ pre.cb-side-dsl {
   max-height: 46vh; overflow: auto; white-space: pre-wrap; word-break: break-all;
   color: var(--text-primary);
 }
-pre.cb-side-dsl .cb-line-add { color: var(--accent); }
-pre.cb-side-dsl .cb-line-del { color: var(--text-secondary); text-decoration: line-through; }
+/* 変わった行と文字は ± 差分 (変更サマリボードの行差分) と同じ色 (BLK-primary-20260925-0637-wish) */
+pre.cb-side-dsl .cb-line-add { background: rgba(80, 180, 110, 0.16); }
+pre.cb-side-dsl .cb-line-del { background: rgba(220, 80, 80, 0.16); }
+pre.cb-side-dsl mark.cb-ch-add { background: rgba(80, 180, 110, 0.45); color: inherit; border-radius: 2px; }
+pre.cb-side-dsl mark.cb-ch-del { background: rgba(220, 80, 80, 0.45); color: inherit; border-radius: 2px; }
 .cb-side-empty { color: var(--text-secondary); font-size: 11px; padding: 6px 8px; }
+.diff-board .cb-entry-head .cb-nobase { color: var(--accent-red); font-size: 11px; font-weight: normal; }
 /* 変更サマリボード (BLK-primary-20260907-0923-wish) */
 .board-modal {
   background: var(--bg-secondary);

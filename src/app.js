@@ -5931,6 +5931,50 @@ function _cbRecordMeeting() {
   }).then(function(r) { return r.ok; }).catch(function() { return false; });
 }
 
+// 1 枚の図の、時点 cut の中身。保存フォルダの版の控え (_versions) から選び、控えにも今のファイルにも
+// その時点の中身が無ければ、保存先が Git の作業木のときはその時点より前の最後のコミットから引く
+// (BLK-primary-20260925-0637-wish)。どこにも無ければ null (その時点ではまだ無かった図)。
+//   cur … 保存フォルダの今のファイル { dsl, mtime } (無ければ null)
+function _cbFetchContentAt(dir, name, cut, cur) {
+  var BL = window.MA.changeBaseline;
+  if (!BL || !window.fetch) return Promise.resolve(null);
+  var q = '/autosave-versions?dir=' + encodeURIComponent(dir) + '&type=' + encodeURIComponent(name);
+  return window.fetch(q)
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(data) {
+      var stamps = ((data && data.versions) || []).map(function(v) { return v && v.stamp; });
+      var stamp = BL.stampAt(stamps, cut);
+      if (stamp) {
+        return window.fetch(q + '&stamp=' + encodeURIComponent(stamp))
+          .then(function(r) { return r.ok ? r.text() : null; })
+          .then(function(text) { return text == null ? null : { at: BL.stampToIso(stamp), dsl: text }; });
+      }
+      var now = BL.contentAt([], cut, cur ? { dsl: cur.dsl, mtime: cur.mtime } : null);
+      if (now) return now;
+      return _cbGitContentAt(dir, name, cut);
+    })
+    .catch(function() { return null; });
+}
+
+// 時点 cut より前の最後のコミットにある、この図の中身。Git の作業木でなければ null。
+function _cbGitContentAt(dir, name, cut) {
+  var BL = window.MA.changeBaseline;
+  var q = 'dir=' + encodeURIComponent(dir) + '&file=' + encodeURIComponent(name);
+  return window.fetch('/git-log?' + q)
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(data) {
+      if (!data || !data.repo) return null;
+      var c = BL.commitAt(data.commits, cut);
+      if (!c) return null;
+      return window.fetch('/git-show?' + q + '&rev=' + encodeURIComponent(c.hash))
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(d) {
+          return (d && d.text != null) ? { at: c.date || '', dsl: String(d.text), commit: c.short || '' } : null;
+        });
+    })
+    .catch(function() { return null; });
+}
+
 // 前回の会議の時点の中身を、図ごとに保存フォルダの版の控えから読む。
 // 読み終えたらボードを描き直す (読んでいる間は「読んでいます」を見出しに出す)。
 function _cbLoadBaseAt(names) {
@@ -5944,25 +5988,46 @@ function _cbLoadBaseAt(names) {
   (_fiFileDocs || []).forEach(function(f) { if (f && f.name) files[f.name] = f; });
   var cache = {};
   return Promise.all(names.map(function(name) {
-    var cur = files[name] || null;
-    return window.fetch('/autosave-versions?dir=' + encodeURIComponent(dir) + '&type=' + encodeURIComponent(name))
-      .then(function(r) { return r.ok ? r.json() : null; })
-      .then(function(data) {
-        var stamps = ((data && data.versions) || []).map(function(v) { return v && v.stamp; });
-        var stamp = BL.stampAt(stamps, cut);
-        if (!stamp) { cache[name] = BL.contentAt([], cut, cur ? { dsl: cur.dsl, mtime: cur.mtime } : null); return; }
-        return window.fetch('/autosave-versions?dir=' + encodeURIComponent(dir) + '&type=' + encodeURIComponent(name)
-          + '&stamp=' + encodeURIComponent(stamp))
-          .then(function(r) { return r.ok ? r.text() : null; })
-          .then(function(text) { cache[name] = text == null ? null : { at: BL.stampToIso(stamp), dsl: text }; });
-      })
-      .catch(function() { cache[name] = null; });
+    return _cbFetchContentAt(dir, name, cut, files[name] || null)
+      .then(function(got) { cache[name] = got; });
   })).then(function() {
     _cbBaseCache = cache;
     _cbBaseCacheKey = key;
     _cbBaseLoading = false;
     return true;
   }, function() { _cbBaseLoading = false; return false; });
+}
+
+// ── 会議セットの開いていない図の変更前 (BLK-primary-20260925-0637-wish) ─────────
+// 変更前 = 前回保存 は、開いた図に ± 差分が控えた中身。保存先から開かずに選んだ図にはその控えが無く、
+// これまでは今の中身を変更前にして「同じ」図を 2 つ並べていた。控えの無い開いていない図は、
+// 今日 0 時より前の最後の版 (版の控え、Git ならコミット) を変更前にする。その図の列見出しは「今日 0 時」と言う。
+var _msPickBase = {};      // name → { at, dsl } | null
+var _msPickKey = '';
+var _msPickLoading = false;
+var _msPickVia = {};       // name → true (前回保存の控えが無く、今日 0 時の版を変更前にした図)
+var _cbPending = {};       // name → true (変更前をまだ読んでいる図)
+
+function _msLoadPickBase(names) {
+  var BL = window.MA.changeBaseline;
+  if (!BL || !window.fetch) return Promise.resolve(false);
+  var cut = BL.todayStart(new Date());
+  var key = cut + '|' + names.join('/');
+  if (key === _msPickKey || _msPickLoading) return Promise.resolve(false);
+  _msPickLoading = true;
+  var dir = _wsFileDir();
+  var files = {};
+  (_fiFileDocs || []).forEach(function(f) { if (f && f.name) files[f.name] = f; });
+  var cache = {};
+  return Promise.all(names.map(function(name) {
+    return _cbFetchContentAt(dir, name, cut, files[name] || null)
+      .then(function(got) { cache[name] = got; });
+  })).then(function() {
+    _msPickBase = cache;
+    _msPickKey = key;
+    _msPickLoading = false;
+    return true;
+  }, function() { _msPickLoading = false; return false; });
 }
 
 // 基準ごとの「変更前」の引き方。today は今までどおり保存差分の基準。
@@ -5993,18 +6058,35 @@ function _changeBoardModel() {
     extra.forEach(function(d) { picked[d.name] = d; });
     docs = docs.concat(extra);
   }
+  _cbPending = {};
   if (kind === 'meeting' || kind === 'today') {
     var names = docs.map(function(d) { return d.name; });
+    var loadKey = kind + '|' + _cbBaseAt() + '|' + names.join('/');
+    if (loadKey !== _cbBaseCacheKey) names.forEach(function(n) { _cbPending[n] = true; });
     _cbLoadBaseAt(names).then(function(changed) { if (changed) renderChangeBoard(); });
   }
   var baselineOf = _cbBaselineFn();
-  // 保存先から選んだ図で変更前が引けないものは、今の中身を変更前にする (変更前 / 変更後が同じ図になる。
-  // 「新しく作った図です」と言わない)。
+  // BLK-primary-20260925-0637-wish: 会議セットの開いていない図 (保存先から選んだ図・今日更新された
+  // 保存フォルダの図) は、前回保存の控えが無ければ今日 0 時より前の最後の版を変更前にする。
+  // 今の中身を変更前にして同じ図を 2 つ並べることはしない (版が無ければ「この基準より前の版がありません」)。
   var baseRaw = baselineOf;
+  _msPickVia = {};
+  if (_msActive() && kind === 'saved' && _fiFolderMode()) {
+    var unopened = window.MA.meetingSet.pickDocs(docs).filter(function(d) {
+      return d.origin === 'folder' && !baseRaw(d.name);
+    }).map(function(d) { return d.name; });
+    unopened.forEach(function(n) { _msPickVia[n] = true; });
+    if (unopened.length) {
+      var pickKey = window.MA.changeBaseline.todayStart(new Date()) + '|' + unopened.join('/');
+      if (pickKey !== _msPickKey) unopened.forEach(function(n) { _cbPending[n] = true; });
+      _msLoadPickBase(unopened).then(function(changed) { if (changed) renderChangeBoard(); });
+    }
+  }
   baselineOf = function(name) {
     var b = baseRaw(name);
-    if (b || !picked[name]) return b;
-    return { at: picked[name].mtime || '', dsl: picked[name].dsl };
+    if (b) return b;
+    if (_msPickVia[name]) return _msPickBase[name] || null;
+    return null;
   };
   // 会議セット中は、選んだ図だけを選んだ順に、変わっていなくても並べる
   // (会議で「この図は今回触っていません」と見せる場面がそのまま手順になる)。
@@ -6320,6 +6402,10 @@ function _cbBeforeLabel(e) {
   var BL = window.MA.changeBaseline;
   var k = _cbBaseKind();
   if (!BL) return '変更前';
+  // 前回保存の控えが無い開いていない図は、今日 0 時の版と比べている (BLK-primary-20260925-0637-wish)。
+  if (k === 'saved' && e && _msPickVia[e.name] && _msActive()) {
+    return BL.columnLabel('today', BL.todayStart(new Date()), e.status);
+  }
   // 前回保存は図ごとに基準を取った時刻が違うので、その図の時刻で言う。
   var at = (k === 'saved') ? ((e && e.markedAt) || '') : _cbBaseAt();
   return BL.columnLabel(k, at, e && e.status);
@@ -6375,6 +6461,15 @@ function _cbPickButtonHtml(name) {
     + (on ? '会議から外す' : '会議に入れる') + '</button>';
 }
 
+// 基準より前の版が無い図の一言。「この基準 (今日 0 時) より前の版がありません」。
+function _cbNoBaseText(e) {
+  var BL = window.MA.changeBaseline;
+  var k = _cbBaseKind();
+  if (k === 'saved' && e && _msPickVia[e.name]) k = 'today';
+  var name = BL ? BL.labelOf(k) : '';
+  return 'この基準' + (name ? ' (' + name + ')' : '') + 'より前の版がありません';
+}
+
 // 会議セット中の 1 枚。変更前 / 変更後 / 差分 をタブで切り替える。
 // 既定は「変更前」— 会議は「前はこうでした」から話し始める。
 function _msSideOf(name) {
@@ -6398,24 +6493,32 @@ function _cbSideTabsHtml(e, mapTable) {
   });
   html += '</div>';
   if (side === 'diff') return html + _cbDiffBodyHtml(e, mapTable);
+  if (side === 'before' && _cbPending[e.name]) {
+    return html + '<div class="cb-side-empty">変更前を読んでいます…</div>';
+  }
   var dsl = (side === 'before') ? e.before : e.after;
   if (!String(dsl == null ? '' : dsl)) {
+    // BLK-primary-20260925-0637-wish: 基準より前の版が本当に無いときだけ、その旨を言う。
     return html + '<div class="cb-side-empty">'
-      + (side === 'before' ? 'この図には変更前 (基準) がありません。新しく作った図です。'
+      + (side === 'before' ? _cbNoBaseText(e) + '。変更後 (今) の全行が今回増えた行です。'
                            : 'この図の中身が空です。')
       + '</div>';
   }
-  // 変わった行だけ色を付ける。会議では「どこが違うか」を指し示しながら読む。
-  var mark = {};
-  (Array.isArray(e.allRows) ? e.allRows : []).forEach(function(r) {
-    if (side === 'before' && r.kind === 'del' && r.beforeNo) mark[r.beforeNo] = 'del';
-    if (side === 'after' && r.kind === 'add' && r.afterNo) mark[r.afterNo] = 'add';
-  });
+  // 変わった行と、行の中で変わった文字に色を付ける (± 差分と同じ色。増えた・変わったは緑、消えたは赤)。
+  // 会議では「どこが違うか」を指し示しながら読む (BLK-primary-20260925-0637-wish)。
+  var CB = window.MA.changeBoard;
+  var mark = (CB && CB.sideMarks) ? CB.sideMarks(e.allRows, side) : {};
   var out = '';
   String(dsl).replace(/\r\n?/g, '\n').split('\n').forEach(function(line, i) {
     var m = mark[i + 1];
-    var text = esc(line) + '\n';
-    out += m ? '<span class="cb-line-' + m + '">' + text + '</span>' : text;
+    if (!m) { out += esc(line) + '\n'; return; }
+    var from = Math.max(0, Math.min(m.from, line.length));
+    var to = Math.max(from, Math.min(m.to, line.length));
+    var whole = from === 0 && to === line.length;
+    var body = whole ? esc(line)
+      : esc(line.slice(0, from)) + '<mark class="cb-ch-' + m.kind + '">' + esc(line.slice(from, to)) + '</mark>'
+        + esc(line.slice(to));
+    out += '<span class="cb-line-' + m.kind + '">' + body + '\n</span>';
   });
   return html + '<pre class="cb-side-dsl" data-doc-name="' + esc(e.name) + '"'
     + ' data-side="' + esc(side) + '">' + out + '</pre>';
@@ -6657,7 +6760,11 @@ function _renderChangeBoardBody() {
       + ' data-origin="' + esc(e.origin || 'open') + '">'
       + '<div class="cb-entry-head"><span>' + esc(e.name) + (t ? ' (' + esc(t) + ')' : '') + '</span>'
       + org
-      + '<span class="cb-count">' + esc(_cbCountText(e)) + '</span>'
+      + '<span class="cb-count">' + esc((_cbMeeting && _cbPending[e.name]) ? '変更前を読んでいます…' : _cbCountText(e)) + '</span>'
+      // BLK-primary-20260925-0637-wish: 会議で変更前が引けない図は、図の見出しでそう言う
+      // (黙って同じ図を 2 つ並べない / 「新規」とだけ言わない)。
+      + ((_cbMeeting && e.status === 'new' && !_cbPending[e.name])
+          ? '<span class="cb-nobase">' + esc(_cbNoBaseText(e)) + '</span>' : '')
       + (_cbSvg ? '<button type="button" class="cb-flip" data-side="both"'
           + ' title="この図の見せ方を 並べる → 変更前だけ → 変更後だけ と回す">切替: 並べる</button>' : '')
       + _cbPickButtonHtml(e.name)
