@@ -1179,6 +1179,21 @@ test('手順2 活動図の本文を、先輩のクラス図タブに行かずに
   const initAt = acLines.indexOf(':Spi_Init();');
   expect(acLines[initAt + 1]).toBe('if (送信バッファ空?) then (yes)');
   expect(acLines.indexOf('endif')).toBeLessThan(acLines.indexOf('stop'));
+  // BLK-owner-20260927-0745-1: 枠は空の枝で入り、頼んでいない空のアクション `:;` を書かない。
+  // 枝のはじめは中身が無くても「追加する位置」で選べ、足した処理はその枝の中に入る。
+  expect(acLines).not.toContain(':;');
+  const placesIf = await page.locator('#ac-tail-where option').allTextContents();
+  const noHead = placesIf.findIndex((t) => t.includes('送信バッファ空?') && t.includes('no 側のはじめ'));
+  expect(noHead).toBeGreaterThan(0);
+  await page.locator('#ac-tail-kind-chip-action').click();
+  await page.locator('#ac-tail-where').selectOption({ index: noHead });
+  await page.locator('#ac-tail-text').fill('エラー通知');
+  await page.locator('#ac-tail-text').press('Enter');
+  await expect.poll(async () => getEditorText(page)).toContain(':エラー通知;');
+  const acLinesNo = (await getEditorText(page)).split('\n').map((l) => l.trim());
+  expect(acLinesNo[acLinesNo.indexOf('else (no)') + 1]).toBe(':エラー通知;');
+  expect(acLinesNo[acLinesNo.indexOf('else (no)') + 2]).toBe('endif');
+  expect(acLinesNo).not.toContain(':;');
 
   // BLK-owner-20260925-0312-4: 「start の直後」はフローの先頭として選べ、処理を打って Enter で start の次の行に入る。
   const places2 = await page.locator('#ac-tail-where option').allTextContents();

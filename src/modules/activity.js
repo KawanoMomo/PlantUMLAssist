@@ -751,6 +751,8 @@ window.MA.modules.plantumlActivity = (function() {
 
   // Closing tokens: indent should be inherited from PREVIOUS line, not these.
   var CLOSING_TOKEN_RE = /^(endif|endwhile|repeat\s+while|else|elseif|end\s+(?:fork|merge|split)|(?:fork|split)\s+again|end\s+note)/i;
+  // 枝・繰り返しの中身が始まる行 (この直後に足す行は 1 段内側)。
+  var OPENING_TOKEN_RE = /^(if\s*\(|elseif\s*\(|else\b|while\s*\(|repeat\s*$|(?:fork|split)(?:\s+again)?\s*$)/i;
 
   function _resolveInsertIndent(lines, targetIdx) {
     if (targetIdx < 0) targetIdx = 0;
@@ -760,6 +762,11 @@ window.MA.modules.plantumlActivity = (function() {
     // If target is a closing token, use previous line's indent
     if (CLOSING_TOKEN_RE.test(trimmed) && targetIdx > 0) {
       src = lines[targetIdx - 1] || src;
+      // 中身の無い枝・繰り返し (開き行の直後が閉じ行) では、開き行より 1 段内側に置く
+      // (BLK-owner-20260927-0745-1: 枠は `:;` を書かずに入るので、枝のはじめへ足す行がここを通る)。
+      if (OPENING_TOKEN_RE.test(src.trim())) {
+        return (src.match(/^(\s*)/) || ['', ''])[1] + '  ';
+      }
     }
     return (src.match(/^(\s*)/) || ['', ''])[1];
   }
@@ -778,7 +785,9 @@ window.MA.modules.plantumlActivity = (function() {
   }
 
   // Insert a control structure (if/while/repeat/fork) before/after lineNum,
-  // with indent inherited from target line and inner placeholder `:;`.
+  // with indent inherited from target line. 枝の中身は空のまま入れる
+  // (BLK-owner-20260927-0745-1: 利用者が入れていない空のアクション `:;` を書かない。
+  // PlantUML は空の枝・空の繰り返し・空の並行を描け、枝のはじめは「追加する位置」に開き行として残る)。
   // fields: { cond, thenLabel, elseLabel } for if; { cond, label } for while/repeat; { branchCount } for fork
   function addControlAtLine(text, lineNum, position, kind, fields) {
     var lines = text.split('\n');
@@ -786,32 +795,25 @@ window.MA.modules.plantumlActivity = (function() {
     if (targetIdx < 0) targetIdx = 0;
     if (targetIdx > lines.length) targetIdx = lines.length;
     var indent = _resolveInsertIndent(lines, Math.min(targetIdx, lines.length - 1));
-    var inner = indent + '  ';
     var block = [];
     fields = fields || {};
     if (kind === 'if') {
       block.push(indent + fmtIf(fields.cond || '', fields.thenLabel || 'yes'));
-      block.push(inner + ':;');
       if (fields.elseLabel) {
         block.push(indent + fmtElse(fields.elseLabel));
-        block.push(inner + ':;');
       }
       block.push(indent + 'endif');
     } else if (kind === 'while') {
       block.push(indent + fmtWhile(fields.cond || '', fields.label || 'yes'));
-      block.push(inner + ':;');
       block.push(indent + 'endwhile');
     } else if (kind === 'repeat') {
       block.push(indent + 'repeat');
-      block.push(inner + ':;');
       block.push(indent + fmtRepeatWhile(fields.cond || '', fields.label || 'yes'));
     } else if (kind === 'fork') {
       var n = Math.max(2, fields.branchCount || 2);
       block.push(indent + 'fork');
-      block.push(inner + ':;');
       for (var i = 1; i < n; i++) {
         block.push(indent + 'fork again');
-        block.push(inner + ':;');
       }
       block.push(indent + 'end fork');
     } else {
@@ -825,7 +827,7 @@ window.MA.modules.plantumlActivity = (function() {
 
   // よく使う分岐パターンを、条件・枝ラベル・枝の中身ごと 1 手で入れる
   // (BLK-junior-20260907-1803-wish)。addControlAtLine の if は枠だけを入れて
-  // 中身が `:;` のままなので、型として繰り返し使うにはここが別に要る。
+  // 中身が空のままなので、型として繰り返し使うにはここが別に要る。
   function addBranchPatternAtLine(text, lineNum, position, pattern) {
     var BP = window.MA.activityBranchPattern;
     if (!BP || !pattern) return text;
@@ -912,11 +914,7 @@ window.MA.modules.plantumlActivity = (function() {
     var elseIdx = _findElseLine(lines, ifLine, endifIdx);
     var insertAt = elseIdx >= 0 ? elseIdx : endifIdx;
     var ifIndent = (lines[ifLine - 1].match(/^(\s*)/) || ['', ''])[1];
-    var inner = ifIndent + '  ';
-    var block = [
-      ifIndent + fmtElseif(condition || '', label || 'yes'),
-      inner + ':;'
-    ];
+    var block = [ifIndent + fmtElseif(condition || '', label || 'yes')];
     var args = [insertAt, 0].concat(block);
     Array.prototype.splice.apply(lines, args);
     return lines.join('\n');
@@ -929,11 +927,7 @@ window.MA.modules.plantumlActivity = (function() {
     var elseIdx = _findElseLine(lines, ifLine, endifIdx);
     if (elseIdx >= 0) return text;  // else already exists, no-op
     var ifIndent = (lines[ifLine - 1].match(/^(\s*)/) || ['', ''])[1];
-    var inner = ifIndent + '  ';
-    var block = [
-      ifIndent + fmtElse(label || 'no'),
-      inner + ':;'
-    ];
+    var block = [ifIndent + fmtElse(label || 'no')];
     var args = [endifIdx, 0].concat(block);
     Array.prototype.splice.apply(lines, args);
     return lines.join('\n');
@@ -959,12 +953,8 @@ window.MA.modules.plantumlActivity = (function() {
     var endForkIdx = _findMatchingEndFork(lines, forkLine);
     if (endForkIdx < 0) return text;
     var forkIndent = (lines[forkLine - 1].match(/^(\s*)/) || ['', ''])[1];
-    var inner = forkIndent + '  ';
     var kw = (lines[forkLine - 1].trim().match(FORK_OPEN_RE) || ['', 'fork'])[1].toLowerCase();
-    var block = [
-      forkIndent + kw + ' again',
-      inner + ':;'
-    ];
+    var block = [forkIndent + kw + ' again'];
     var args = [endForkIdx, 0].concat(block);
     Array.prototype.splice.apply(lines, args);
     return lines.join('\n');

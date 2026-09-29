@@ -70,9 +70,10 @@ test.describe('BLK-primary-0823-design Activity 途中に挿入', () => {
 
     const lines = (await getEditorText(page)).split('\n');
     expect(lines[3]).toBe('if (受信成功?) then (yes)');
-    expect(lines[5]).toBe('else (no)');
-    expect(lines[7]).toBe('endif');
-    expect(lines[8]).toBe('stop');
+    // 枝は空のまま入る (BLK-owner-20260927-0745-1: 利用者が入れていない `:;` を書かない)
+    expect(lines[4]).toBe('else (no)');
+    expect(lines[5]).toBe('endif');
+    expect(lines[6]).toBe('stop');
   });
 
   test('fork は枝の数だけ fork again を作る', async ({ page }) => {
