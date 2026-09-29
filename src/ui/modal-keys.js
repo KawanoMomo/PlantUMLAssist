@@ -100,15 +100,115 @@ window.MA.modalKeys = (function() {
   function onTailBlur(e) {
     if (e.target && e.target._maSelectOnUp) e.target._maSelectOnUp = false;
   }
+  // BLK-owner-20260926-0550-1: 確定すると右パネルが描き直され、キャレットが BODY に落ちて次の 1 件を打つたびに
+  // 欄を押し直していた。確定の後に描き直された「末尾に追加」のフォームへキャレットを戻す。
+  // 戻す先は Enter を押した欄 (同じ id / 同じ本文欄)。ボタンを押して確定したときや、その欄が無くなったときは
+  // その種別の最初に打つ欄 (本文欄があれば本文、無ければ最初の文字欄)。
+  // 描き直されなかった確定 (必須が空で止めた・To を選ばせた) では動かさない (知らせた欄のキャレットを奪わない)。
+  var _pendingKey = null;
+  function _fieldKey(el) {
+    if (!el || !el.closest) return null;
+    var key = null;
+    var rle = el.closest('[id$="-rle"]');
+    if (rle && rle.id) key = { rle: rle.id };
+    else if (el.id) key = { id: el.id };
+    // 描き直しを待つ間に打った字 (確定した字の後ろに続けて打った分) を、描き直した欄へ持ち越すために覚える。
+    if (key && typeof el.value === 'string') { key.el = el; key.val = el.value; }
+    return key;
+  }
+  // 確定から描き直しまでの間に古い欄へ打った字。無ければ ''。
+  function _typedSince(key) {
+    if (!key || !key.el || typeof key.el.value !== 'string' || typeof key.val !== 'string') return '';
+    var now = key.el.value;
+    if (now.length <= key.val.length || now.indexOf(key.val) !== 0) return '';
+    return now.slice(key.val.length);
+  }
+  function _hiddenIn(el, form) {
+    for (var n = el; n && n !== form; n = n.parentNode) {
+      if (n.hidden) return true;
+      if (n.style && n.style.display === 'none') return true;
+    }
+    return false;
+  }
+  function firstTypingField(form) {
+    if (!form || !form.querySelectorAll) return null;
+    var rles = form.querySelectorAll('[id$="-rle"] textarea');
+    for (var r = 0; r < rles.length; r++) if (!_hiddenIn(rles[r], form)) return rles[r];
+    var list = form.querySelectorAll('input, textarea');
+    for (var i = 0; i < list.length; i++) {
+      var el = list[i];
+      if (el.disabled || el.readOnly) continue;
+      if (el.tagName === 'INPUT' && !TEXT_TYPES.test(String(el.type || 'text').toLowerCase())) continue;
+      if (el.tagName === 'INPUT' && /^(checkbox|radio)$/i.test(el.type || '')) continue;
+      if (_hiddenIn(el, form)) continue;
+      return el;
+    }
+    return null;
+  }
+  function _resolve(formId, key) {
+    var doc = typeof document !== 'undefined' ? document : null;
+    if (!doc) return null;
+    var el = null;
+    if (key && key.id) el = doc.getElementById(key.id);
+    else if (key && key.rle) {
+      var c = doc.getElementById(key.rle);
+      el = c ? c.querySelector('textarea') : null;
+    }
+    var form = doc.getElementById(formId);
+    if (el && form && !form.contains(el)) el = null;
+    return el || firstTypingField(form);
+  }
+  function refocusAfterAdd(form, key, opts) {
+    if (!form || !form.id) return;
+    var o = opts || {};
+    var doc = form.ownerDocument || document;
+    var formId = form.id;
+    var tries = 0;
+    var wait = o.wait || 50;
+    var limit = o.limit || 40;
+    function tick() {
+      tries++;
+      var now = doc.getElementById(formId);
+      if (now && now !== form) {
+        var act = doc.activeElement;
+        // 描き直しの後に利用者が自分で別の欄へ移っていれば、そのまま。
+        if (act && act !== doc.body && act.tagName !== 'HTML' && now.contains && !now.contains(act)
+            && act.ownerDocument === doc && doc.body.contains(act)) return;
+        var el = _resolve(formId, key);
+        var carry = _typedSince(key);
+        if (el && carry && !el.value) el.value = carry;
+        if (el && el !== act) {
+          try { el.focus(); } catch (e) { return; }
+          try { var n = el.value ? el.value.length : 0; el.setSelectionRange(n, n); } catch (e2) {}
+        }
+        return;
+      }
+      if (tries < limit) setTimeout(tick, wait);
+    }
+    setTimeout(tick, 0);
+  }
+  function onTailAddClick(e) {
+    var btn = e.target && e.target.closest ? e.target.closest('button[id$="-tail-add"]') : null;
+    if (!btn) return;
+    var form = btn.closest('[id$="-tail-detail"]');
+    var key = _pendingKey;
+    _pendingKey = null;
+    if (form) refocusAfterAdd(form, key);
+  }
+
   function onTailKey(e) {
     if (e.key !== 'Enter' || e.defaultPrevented || e.isComposing || e.keyCode === 229) return;
     if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
     if (!isEnterField(e.target) && !isTailEnterArea(e.target)) return;
-    press(tailButton(e.target), e);
+    var btn = tailButton(e.target);
+    if (btn) _pendingKey = _fieldKey(e.target);
+    press(btn, e);
   }
   function onTailRle(e) {
     var btn = tailButton(e.target);
-    if (btn) btn.click();
+    if (!btn) return;
+    _pendingKey = _fieldKey(e.target);
+    btn.click();
   }
 
   function bindModal(modal) {
@@ -129,6 +229,7 @@ window.MA.modalKeys = (function() {
       doc.addEventListener('focusin', onTailFocus);
       doc.addEventListener('mouseup', onTailMouseUp, true);
       doc.addEventListener('focusout', onTailBlur);
+      doc.addEventListener('click', onTailAddClick, true);
     }
   }
 
@@ -138,5 +239,6 @@ window.MA.modalKeys = (function() {
   }
 
   return { init: init, bindModal: bindModal, EDIT_MODALS: EDIT_MODALS,
-    isTailEnterArea: isTailEnterArea, isDefaultField: isDefaultField };
+    isTailEnterArea: isTailEnterArea, isDefaultField: isDefaultField,
+    firstTypingField: firstTypingField, refocusAfterAdd: refocusAfterAdd };
 })();

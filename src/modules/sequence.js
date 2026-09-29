@@ -2949,8 +2949,10 @@ window.MA.modules.plantumlSequence = (function() {
               P.selectFieldHtml('始点 (From)', 'seq-tail-from', fromOptsT) +
               // design 2d: 末尾追加でも同じ矢印パレットから選ぶ。
               // 現在値は hidden #seq-tail-arrow が持つ。
+              // BLK-owner-20260926-0550-1: 確定後も矢印の種類 (応答・戻り など) を保つ。
               P.arrowPickerHtml('矢印の種類 / Arrow', 'seq-tail-arrow',
-                quickArrowOptions(), otherArrowOptions(), '->') +
+                quickArrowOptions(), otherArrowOptions(),
+                (TMm && TMm.field('seq-tail-arrow')) || '->') +
               // design 5d: 末尾追加でも線の色を先に決められる。
               lineColorRowHtml('seq-tail-color', '', true) +
               '<input type="hidden" id="seq-tail-color" value="">' +
@@ -2971,7 +2973,11 @@ window.MA.modules.plantumlSequence = (function() {
               '</div>';
             html += P.primaryButtonHtml('seq-tail-add', '+ 追加');
           } else if (kind === 'participant') {
-            var pTypeOpts = PARTICIPANT_TYPES.map(function(pt) { return { value: pt, label: pt, selected: pt === 'participant' }; });
+            // BLK-owner-20260926-0550-1: 確定後も参加者の種類 (actor など) を保つ。
+            var TMp = window.MA.tailMemory;
+            var memPType = TMp ? TMp.field('seq-tail-ptype') : null;
+            if (PARTICIPANT_TYPES.indexOf(memPType) < 0) memPType = 'participant';
+            var pTypeOpts = PARTICIPANT_TYPES.map(function(pt) { return { value: pt, label: pt, selected: pt === memPType }; });
             html =
               P.selectFieldHtml('種類', 'seq-tail-ptype', pTypeOpts) +
               P.fieldHtml('名前', 'seq-tail-alias', '', '例: user1') +
@@ -3106,6 +3112,10 @@ window.MA.modules.plantumlSequence = (function() {
               var tailStereo = tailStereoEl ? tailStereoEl.value : '';
               var combinedLabel = formatLabelWithStereotype(tailStereo, labelVal);
               out = addMessage(t, fr, to, arrow, combinedLabel);
+              // 端を決める矢印 ([-> など) は From / To の欄を伏せるので、保たずに既定に戻す。
+              if (window.MA.tailMemory) {
+                window.MA.tailMemory.setField('seq-tail-arrow', (arrowSpec && (arrowSpec.from || arrowSpec.to)) ? '->' : arrowKey);
+              }
               if (window.MA.tailMemory && fr !== '[' && to !== ']' && fr !== '?' && to !== '?') {
                 var nextEnds = window.MA.tailMemory.nextMessageEnds(fr, to);
                 window.MA.tailMemory.setField('seq-tail-from', nextEnds.from);
@@ -3117,6 +3127,7 @@ window.MA.modules.plantumlSequence = (function() {
               if (!partNorm.valid) { alert('Alias 必須'); return; }
               var rawPlbl = document.getElementById('seq-tail-plabel').value.trim();
               window.MA.history.pushHistory();
+              if (window.MA.tailMemory) window.MA.tailMemory.setField('seq-tail-ptype', document.getElementById('seq-tail-ptype').value);
               out = addParticipant(t, document.getElementById('seq-tail-ptype').value, partNorm.id, rawPlbl || partNorm.label);
             } else if (kind === 'note') {
               var ntg = document.getElementById('seq-tail-ntarget').value;

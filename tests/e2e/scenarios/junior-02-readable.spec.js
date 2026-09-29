@@ -1743,6 +1743,61 @@ test('手順2 フォームだけで足した直後にリロードしても本文
   await page.keyboard.press('Enter');
   await expect.poll(async () => getEditorText(page)).toContain('起動済み');
   expect(await getEditorText(page)).toContain('停止で戻る');
+
+  // BLK-owner-20260926-0550-1: 確定した後もキャレットは名前欄に残り、名前を打って Enter を続けるだけで
+  // 次の 1 件が入る (欄を押し直さない)。参加者の種類 (actor) も確定後に保つ。
+  await page.locator('#btn-tab-new').click();
+  await page.waitForTimeout(400);
+  await page.locator('#rail-types .rail-btn[data-type="plantuml-sequence"]').click();
+  await page.waitForTimeout(800);
+  await page.locator('#seq-tail-kind-chip-participant').click();
+  await page.locator('#seq-tail-ptype').selectOption('actor');
+  await page.locator('#seq-tail-alias').click();
+  for (const who of ['Dev', 'Ops']) {
+    await page.keyboard.type(who);
+    await page.keyboard.press('Enter');
+    await expect.poll(async () => getEditorText(page)).toContain('actor ' + who);
+    // 右パネルが描き直されて名前欄が空に戻り、キャレットはその欄にある (押し直さずに次を打てる)。
+    await expect(page.locator('#seq-tail-alias')).toHaveValue('');
+    await expect(page.locator('#seq-tail-alias')).toBeFocused();
+    await expect(page.locator('#seq-tail-ptype')).toHaveValue('actor');
+  }
+
+  // クラス図: 名前欄も Enter で続けて 2 つ。関係の To は From と同じ要素を既定にせず (自分への線を黙って書かない)、
+  // 確定後は関係の種類と From を保って To だけ空に戻る。
+  await page.locator('#btn-tab-new').click();
+  await page.waitForTimeout(400);
+  await page.locator('#rail-types .rail-btn[data-type="plantuml-class"]').click();
+  await page.waitForTimeout(800);
+  await page.locator('#cl-tail-kind-chip-class').click();
+  await page.locator('#cl-tail-alias').click();
+  for (const cls of ['Spi_Driver', 'Driver_Base', 'Can_Driver']) {
+    await page.keyboard.type(cls);
+    await page.keyboard.press('Enter');
+    await expect.poll(async () => getEditorText(page)).toContain('class ' + cls);
+    await expect(page.locator('#cl-tail-alias')).toHaveValue('');
+    await expect(page.locator('#cl-tail-alias')).toBeFocused();
+  }
+  await page.locator('#cl-tail-kind-chip-relation').click();
+  await page.locator('#cl-tail-rkind-cards [data-value="inheritance"]').click();
+  await expect(page.locator('#cl-tail-to')).toHaveValue('');
+  const beforeRel = await getEditorText(page);
+  await page.locator('#cl-tail-add').click();
+  await expect(page.locator('#cl-tail-rpreview')).toContainText('To を選んでください');
+  expect(await getEditorText(page)).toBe(beforeRel);
+  await page.locator('#cl-tail-from').selectOption('Spi_Driver');
+  await page.locator('#cl-tail-to').selectOption('Driver_Base');
+  await page.locator('#cl-tail-add').click();
+  await expect.poll(async () => getEditorText(page)).toMatch(/Driver_Base <\|-- Spi_Driver/);
+  await expect(page.locator('#cl-tail-rkind')).toHaveValue('inheritance');
+  await expect(page.locator('#cl-tail-from')).toHaveValue('Spi_Driver');
+  await expect(page.locator('#cl-tail-to')).toHaveValue('');
+  // 2 本目は To を選ぶだけ (種類・From は選び直さない)。
+  await page.locator('#cl-tail-from').selectOption('Can_Driver');
+  await page.locator('#cl-tail-to').selectOption('Driver_Base');
+  await page.locator('#cl-tail-add').click();
+  await expect.poll(async () => getEditorText(page)).toMatch(/Driver_Base <\|-- Can_Driver/);
+  expect(await getEditorText(page)).not.toMatch(/Spi_Driver -- Spi_Driver/);
 });
 
 // BLK-human-20260925-0352 / BLK-owner-20260925-0312-2: 左レールの図種を押すと、書きかけの図の本文が

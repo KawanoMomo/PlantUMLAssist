@@ -864,7 +864,10 @@ window.MA.modules.plantumlComponent = (function() {
             { value: 'requires',    label: 'Requires (lollipop )-)' },
           ]) +
           P.selectFieldHtml('始点 (From)', 'co-tail-from', allOpts) +
-          P.selectFieldHtml('終点 (To)', 'co-tail-to', allOpts) +
+          // BLK-owner-20260926-0550-1: To は From と同じ要素を既定にしない (一覧で選ぶ。自分への線は選んだときだけ)。
+          P.selectFieldHtml('終点 (To)', 'co-tail-to',
+            [{ value: '', label: '（一覧で相手を選ぶ）', selected: true }].concat(allOpts)) +
+          '<div id="co-tail-rhint" role="status" style="font-size:10px;color:var(--text-secondary);margin:-4px 0 6px 0;"></div>' +
           P.fieldHtml('ラベル', 'co-tail-rlabel', '', 'association/dependency のみ任意') +
           P.primaryButtonHtml('co-tail-add', '+ 追加');
       } else if (kind === 'bulk') {
@@ -878,7 +881,14 @@ window.MA.modules.plantumlComponent = (function() {
             'A ..&gt; B(dependency) / A -() B(provides) / A )- B(requires)。空行は無視されます</div>';
       }
       detailEl.innerHTML = html;
-      if (kind === 'relation') window.MA.relationKindCards.mountForSelect('co-tail-rkind', 'component');
+      if (kind === 'relation') {
+        // BLK-owner-20260926-0550-1: 確定後も関係の種類 (要求 / requires など) と From を保つ。
+        if (window.MA.tailMemory) {
+          window.MA.tailMemory.bindSelect('co-tail-rkind');
+          window.MA.tailMemory.bindSelect('co-tail-from');
+        }
+        window.MA.relationKindCards.mountForSelect('co-tail-rkind', 'component');
+      }
       // 一括欄は「既に他の図にある行」を打ち直させないためのボタンを持つ。
       window.MA.reuseModal.bindButton('co-tail-reuse', 'plantuml-component', 'co-tail-bulk');
 
@@ -924,8 +934,19 @@ window.MA.modules.plantumlComponent = (function() {
         } else if (kind === 'relation') {
           var fr = document.getElementById('co-tail-from').value;
           var to = document.getElementById('co-tail-to').value;
-          if (!fr || !to) { alert('From/To 必須'); return; }
+          if (!fr) { alert('From/To 必須'); return; }
+          if (!to) {
+            var coHint = document.getElementById('co-tail-rhint');
+            if (coHint) coHint.textContent = 'To を選んでください (一覧で相手を選ぶ)';
+            var coTo = document.getElementById('co-tail-to');
+            if (coTo && coTo.focus) coTo.focus();
+            return;
+          }
           var rkind = document.getElementById('co-tail-rkind').value;
+          if (window.MA.tailMemory) {
+            window.MA.tailMemory.setField('co-tail-rkind', rkind);
+            window.MA.tailMemory.setField('co-tail-from', fr);
+          }
           window.MA.history.pushHistory();
           out = addRelation(t, rkind, fr, to, document.getElementById('co-tail-rlabel').value.trim());
         } else if (kind === 'bulk') {

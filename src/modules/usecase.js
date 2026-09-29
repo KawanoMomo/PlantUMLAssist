@@ -703,7 +703,10 @@ window.MA.modules.plantumlUsecase = (function() {
             { value: 'extend',         label: 'Extend (..> <<extend>>)' },
           ]) +
           P.selectFieldHtml(_fieldLabel('association', 'from'), 'uc-tail-from', allOpts) +
-          P.selectFieldHtml(_fieldLabel('association', 'to'), 'uc-tail-to', allOpts) +
+          // BLK-owner-20260926-0550-1: To は From と同じ要素を既定にしない (一覧で選ぶ。自分への線は選んだときだけ)。
+          P.selectFieldHtml(_fieldLabel('association', 'to'), 'uc-tail-to',
+            [{ value: '', label: '（一覧で相手を選ぶ）', selected: true }].concat(allOpts)) +
+          '<div id="uc-tail-rhint" role="status" style="font-size:10px;color:var(--text-secondary);margin:-4px 0 6px 0;"></div>' +
           P.fieldHtml('ラベル', 'uc-tail-rlabel', '', 'association のみ任意') +
           P.primaryButtonHtml('uc-tail-add', '+ 追加');
       } else if (kind === 'note') {
@@ -785,7 +788,14 @@ window.MA.modules.plantumlUsecase = (function() {
         } else if (kind === 'relation') {
           var fr = document.getElementById('uc-tail-from').value;
           var to = document.getElementById('uc-tail-to').value;
-          if (!fr || !to) { alert('From/To 必須 (先に actor/usecase を追加)'); return; }
+          if (!fr) { alert('From/To 必須 (先に actor/usecase を追加)'); return; }
+          if (!to) {
+            var ucHint = document.getElementById('uc-tail-rhint');
+            if (ucHint) ucHint.textContent = 'To を選んでください (一覧で相手を選ぶ)';
+            var ucTo = document.getElementById('uc-tail-to');
+            if (ucTo && ucTo.focus) ucTo.focus();
+            return;
+          }
           var rkind = document.getElementById('uc-tail-rkind').value;
           if (window.MA.tailMemory) {
             window.MA.tailMemory.setField('uc-tail-rkind', rkind);
