@@ -103,8 +103,37 @@ describe('BLK-migrator-20260929-1611 note の楔の当たり', function() {
     OB.raiseSmallestLast(ov);
     var kids = Array.prototype.slice.call(ov.children);
     var iPkg = kids.findIndex(function(e) { return e.getAttribute('data-type') === 'package'; });
-    var iTail = kids.findIndex(function(e) { return e.classList.contains('note-tail'); });
+    var iTail = kids.findIndex(function(e) { return e.getAttribute('data-hit-kind') === 'notetail'; });
     expect(iTail > iPkg).toBe(true);
+    // 縁の帯は並べ直しても最も奥 (背景の次)
+    var iEdge = kids.findIndex(function(e) { return e.getAttribute('data-hit-kind') === 'notetailedge'; });
+    expect(iEdge < iPkg).toBe(true);
+  });
+
+  // 差し戻し 1 回目: 楔の縁 (線に見える所) の上を指すと、内側の判定の境目で当たらなかった (class-19 の 25% の点)。
+  test('縁の帯: 楔の縁に沿った細い帯を最も奥に置き、縁の上の点 (クラスの外) は note に当たる', function() {
+    var svg = makeSvg(MEMBER_NOTE);
+    var ov = overlayWith([
+      [7, 7, 128.703, 65.609, { 'data-type': 'class', 'data-id': 'Filter', 'data-line': '2' }],
+      [171, 22, 73, 26.352, { 'data-type': 'note', 'data-id': '__n_0', 'data-line': '5' }],
+    ]);
+    OB.addBackground(ov);
+    OB.addNoteTails(svg, ov);
+    var edge = ov.querySelector('path[data-hit-kind="notetailedge"]');
+    expect(!!edge).toBe(true);
+    expect(edge.getAttribute('data-line')).toBe('5');
+    expect(edge.getAttribute('fill')).toBe('none');
+    expect(edge.style.pointerEvents).toBe('stroke');
+    expect(edge.previousElementSibling.classList.contains('overlay-background')).toBe(true);
+    // 縁の上ちょうど (171,31.176)→(129.703,59.805) の 25% の点
+    var x = 171 + (129.703 - 171) * 0.25, y = 31.176 + (59.805 - 31.176) * 0.25;
+    var hit = OB.hitTestTopmost(ov, x, y + 0.9);
+    expect(hit && hit.getAttribute('data-type')).toBe('note');
+    // 縁がクラスの枠に重なる所は今までどおりクラス (帯は奥なので勝たない)
+    hit = OB.hitTestTopmost(ov, 131, 58.4);
+    expect(hit && hit.getAttribute('data-type')).toBe('class');
+    // 縁から離れた空所は当たらない
+    expect(OB.hitTestTopmost(ov, 150, 25)).toBeNull();
   });
 });
 

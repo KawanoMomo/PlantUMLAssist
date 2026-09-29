@@ -2543,6 +2543,34 @@ test('migrator 手順 4 — メンバー・クラス・状態を指す note の�
         .map((r) => r.getAttribute('data-type') + ':' + r.getAttribute('data-line')));
       expect(lit, c.dsl[4] + ' の楔を指して note の枠が出る').toEqual(['note:' + c.line]);
     }
+    // 差し戻し 1 回目: 楔の縁そのもの (図の上では note から伸びる線に見える所) の上。対象の枠の外にある縁の点は note の枠が出る。
+    const edgePts = await page.evaluate(() => {
+      const svg = document.querySelector('#preview-svg svg');
+      const OB = window.MA.overlayBuilder;
+      const paper = OB.notePapers(svg)[0];
+      const tail = OB.noteTails(paper)[0];
+      const ctm = paper.el.getScreenCTM();
+      const others = Array.from(document.querySelectorAll('#overlay-layer rect.selectable[data-type]'))
+        .filter((r) => r.getAttribute('data-type') !== 'note' && !/overlay-background/.test(r.getAttribute('class') || ''))
+        .map((r) => r.getBoundingClientRect());
+      const out = [];
+      [tail[0], tail[tail.length - 1]].forEach((end) => {
+        const tip = tail[1];
+        [0.2, 0.3, 0.45].forEach((t) => {
+          const p = new DOMPoint(end[0] + (tip[0] - end[0]) * t, end[1] + (tip[1] - end[1]) * t).matrixTransform(ctm);
+          if (others.some((b) => p.x >= b.left - 4 && p.x <= b.right + 4 && p.y >= b.top - 4 && p.y <= b.bottom + 4)) return;
+          out.push({ x: p.x, y: p.y });
+        });
+      });
+      return out;
+    });
+    expect(edgePts.length, c.dsl[4] + ' の楔の縁に対象の枠の外の点がある').toBeGreaterThan(0);
+    for (const p of edgePts) {
+      await page.mouse.move(p.x, p.y);
+      const lit = await page.evaluate(() => Array.from(document.querySelectorAll('#overlay-layer rect.hit-hover'))
+        .map((r) => r.getAttribute('data-type') + ':' + r.getAttribute('data-line')));
+      expect(lit, c.dsl[4] + ' の楔の縁を指して note の枠が出る').toEqual(['note:' + c.line]);
+    }
     await page.mouse.click(pts[1].x, pts[1].y);
     await expect.poll(() => page.evaluate(() => (window.MA.selection.getSelected() || []).map((s) => s.type + ':' + s.line)))
       .toEqual(['note:' + c.line]);
