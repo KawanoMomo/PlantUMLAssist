@@ -20,6 +20,7 @@ window.MA.sequenceOverlay = (function() {
   }
 
   function _bbox(el) {
+    if (el && el.__drawn) return OB.nodeBBox(el);   // 揺れた図形の代わりの要素 (_canon) は読んだ外形
     if (!el || typeof el.getBBox !== 'function') return null;
     try {
       var b = el.getBBox();
@@ -357,11 +358,161 @@ window.MA.sequenceOverlay = (function() {
   // BLK-migrator-20260925-1732: mainframe の枠・札・札の文字は図全体の飾り。overlayBuilder.addDocumentChrome が
   // 先に当てるので、参加者・メッセージ・枠を描いた形から探すときは数えない (buildSequenceOverlay が描画ごとに入れ直す)。
   var _chromeSkip = [];
+  // BLK-migrator-20260930-0351: 手書き風 (`skinparam handwritten true` / `!option handwritten true`) の図は、PlantUML が
+  // 線を揺らして描く。<line> は頂点の多い <path> に、<rect> は頂点の多い <polygon> (角丸なら閉じた <path>) になり、
+  // 形の種類で探す当て方 (点線の <line> = ライフライン、矢じりの付いた <line> = メッセージ、塗りなしの <rect> = 枠 …) が
+  // 全部外れて、図の要素に 1 つも枠が出なかった。手書き風のキーワードは覚えず、描いた図形の外形で読む:
+  // 揺れた (頂点がまっすぐ・四角からわずかにずれる) 図形が 1 つでもある SVG では、ほぼまっすぐな 1 本の path を
+  // その両端を結ぶ <line> として、ほぼ四角の多角形をその四辺の <rect> として見る (_canon)。当て方の関数は
+  // 形の種類で探したまま、描いた側の揺れに依らず同じ答えを出す。揺れた図形が無い SVG はこれまでと同じ要素をそのまま返す。
+  function _shapePoints(el) {
+    var tag = (el.tagName || '').toLowerCase();
+    if (tag === 'polygon' || tag === 'polyline') {
+      var n = String(el.getAttribute('points') || '').split(/[\s,]+/).filter(function(v) { return v !== ''; }).map(parseFloat);
+      if (n.length < 4 || n.some(isNaN)) return null;
+      var xs = [], ys = [];
+      for (var i = 0; i + 1 < n.length; i += 2) { xs.push(n[i]); ys.push(n[i + 1]); }
+      return { xs: xs, ys: ys, closed: tag === 'polygon', subs: 1 };
+    }
+    if (tag !== 'path') return null;
+    var d = String(el.getAttribute('d') || '');
+    if (/[^MLZmlz\d\s,.eE+-]/.test(d)) return null;   // 曲線・円弧を含む path は揺れた直線・四角ではない
+    var pts = OB.pathPoints ? OB.pathPoints(d) : null;
+    if (!pts || pts.xs.length < 2) return null;
+    return { xs: pts.xs, ys: pts.ys, closed: /[Zz]/.test(d), subs: (d.match(/[Mm]/g) || []).length };
+  }
+  // ほぼまっすぐな 1 本 (始点と終点を結ぶ線から全ての頂点が 2.5 以内)。{ line, wobble } か null。
+  function _straight(p) {
+    if (p.subs !== 1 || p.closed) return null;
+    var n = p.xs.length;
+    var x1 = p.xs[0], y1 = p.ys[0], x2 = p.xs[n - 1], y2 = p.ys[n - 1];
+    var len = Math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
+    if (!(len >= 4)) return null;
+    var dev = 0;
+    for (var i = 1; i < n - 1; i++) {
+      dev = Math.max(dev, Math.abs((x2 - x1) * (y1 - p.ys[i]) - (x1 - p.xs[i]) * (y2 - y1)) / len);
+    }
+    if (dev > 2.5) return null;
+    // 描いた側の横線・縦線は揺らしても両端は元の座標に置かれる。ほぼ水平・垂直なら端をそろえる。
+    if (Math.abs(y2 - y1) <= 2.5 && Math.abs(x2 - x1) >= 8) y2 = y1;
+    else if (Math.abs(x2 - x1) <= 2.5 && Math.abs(y2 - y1) >= 8) x2 = x1;
+    return { line: { x1: x1, y1: y1, x2: x2, y2: y2 }, wobble: n > 2 && dev > 0.05 };
+  }
+  function _median(a) {
+    var s = a.slice().sort(function(p, q) { return p - q; });
+    return s.length ? s[Math.floor(s.length / 2)] : NaN;
+  }
+  // ほぼ四角の閉じた形。頂点が多く、どの頂点も外接矩形の縁から 2.5 以内か角丸の角の中にあり、四辺 (縁の近くの頂点の
+  // 中央値) で囲んだ四角と面積がほぼ同じ。丸 (actor の頭・control の丸) は楕円の式にほぼ乗るので四角と見ない。
+  // { rect, wobble } か null。
+  function _boxy(p) {
+    var n = p.xs.length;
+    if (n < 8 || p.subs !== 1) return null;
+    var closed = p.closed || (Math.abs(p.xs[0] - p.xs[n - 1]) < 1 && Math.abs(p.ys[0] - p.ys[n - 1]) < 1);
+    if (!closed) return null;
+    var X0 = Math.min.apply(null, p.xs), X1 = Math.max.apply(null, p.xs);
+    var Y0 = Math.min.apply(null, p.ys), Y1 = Math.max.apply(null, p.ys);
+    var W = X1 - X0, H = Y1 - Y0;
+    if (!(W >= 4 && H >= 4)) return null;
+    var T = 2.5, C = Math.min(W / 2, H / 2, 12);
+    var area = 0, oval = 0;
+    var cx = (X0 + X1) / 2, cy = (Y0 + Y1) / 2;
+    var L = [], R = [], U = [], D = [];
+    for (var i = 0; i < n; i++) {
+      var x = p.xs[i], y = p.ys[i], j = (i + 1) % n;
+      area += x * p.ys[j] - p.xs[j] * y;
+      var ex = (x - cx) / (W / 2), ey = (y - cy) / (H / 2);
+      oval += Math.abs(ex * ex + ey * ey - 1);
+      var dx = Math.min(x - X0, X1 - x), dy = Math.min(y - Y0, Y1 - y);
+      if (Math.min(dx, dy) > T && !(dx <= C && dy <= C)) return null;
+      if (x - X0 <= T) L.push(x);
+      if (X1 - x <= T) R.push(x);
+      if (y - Y0 <= T) U.push(y);
+      if (Y1 - y <= T) D.push(y);
+    }
+    if (oval / n < 0.12) return null;   // 楕円
+    var rx = _median(L), ry = _median(U), rw = _median(R) - rx, rh = _median(D) - ry;
+    if (!(rw > 0 && rh > 0)) return null;
+    var ratio = Math.abs(area) / 2 / (rw * rh);
+    if (ratio < 0.85 || ratio > 1.15) return null;
+    return { rect: { x: rx, y: ry, width: rw, height: rh }, wobble: true };
+  }
+  // 描いた図形の外形で読んだ代わりの要素。形の種類と座標の属性だけを持ち、ほかの属性 (fill / style …)・親は元の要素のもの。
+  function _proxy(el, tag, geo) {
+    var own = {};
+    Object.keys(geo).forEach(function(k) { own[k] = String(Math.round(geo[k] * 1000) / 1000); });
+    return {
+      tagName: tag, nodeName: tag, nodeType: 1, parentNode: el.parentNode, textContent: '', __drawn: el,
+      getAttribute: function(a) {
+        if (Object.prototype.hasOwnProperty.call(own, a)) return own[a];
+        if (a === 'points' || a === 'd') return null;
+        return el.getAttribute(a);
+      },
+      hasAttribute: function(a) { return this.getAttribute(a) != null; },
+    };
+  }
+  function _canon(svgEl) {
+    if (svgEl.__puaCanon && svgEl.__puaCanon.count === svgEl.querySelectorAll('*').length) return svgEl.__puaCanon;
+    var all = Array.prototype.slice.call(svgEl.querySelectorAll('*'));
+    var found = [], wobbly = false;
+    all.forEach(function(el) {
+      var tag = (el.tagName || '').toLowerCase();
+      if (tag !== 'path' && tag !== 'polygon' && tag !== 'polyline') return;
+      var p = _shapePoints(el);
+      if (!p) return;
+      // 開いた 1 本の線は塗りを持っても線として描かれる (区切り `==` の横線は塗り付きの path になる)。
+      var s = tag === 'path' || tag === 'polyline' ? _straight(p) : null;
+      var b = s ? null : _boxy(p);
+      if (!s && !b) return;
+      if ((s || b).wobble) wobbly = true;
+      found.push({ el: el, proxy: s ? _proxy(el, 'line', s.line) : _proxy(el, 'rect', b.rect) });
+    });
+    var map = { count: all.length, on: wobbly };
+    if (wobbly) found.forEach(function(f) { f.el.__puaProxy = f.proxy; });
+    try { svgEl.__puaCanon = map; } catch (e) {}
+    return map;
+  }
+  function _svgOf(n) {
+    while (n && n.parentNode && (n.tagName || '').toLowerCase() !== 'svg') n = n.parentNode;
+    return n && n.querySelectorAll ? n : null;
+  }
+  function _wobbly(n) {
+    var svgEl = _svgOf(n);
+    return !!(svgEl && _canon(svgEl).on);
+  }
+  // `tag` / `tag[attr="値"]` をカンマで並べた選択子を代わりの要素に当てる (それ以外の選択子には当たらない)。
+  function _proxyMatches(px, sel) {
+    return String(sel).split(',').some(function(part) {
+      var m = /^\s*([a-z]+)((?:\[[a-z-]+="[^"]*"\])*)\s*$/i.exec(part);
+      if (!m || m[1].toLowerCase() !== px.tagName) return false;
+      var re = /\[([a-z-]+)="([^"]*)"\]/gi, a;
+      while ((a = re.exec(m[2]))) { if (px.getAttribute(a[1]) !== a[2]) return false; }
+      return true;
+    });
+  }
+  function _drawnOf(n) { return (n && n.__drawn) || n; }
+  // root の中の sel に当たる要素 (揺れた図形は代わりの要素で)。文書順。
+  function _select(root, sel) {
+    if (!_wobbly(root)) return Array.prototype.slice.call(root.querySelectorAll(sel));
+    var out = [];
+    Array.prototype.forEach.call(root.querySelectorAll('*'), function(el) {
+      var px = el.__puaProxy;
+      if (px ? _proxyMatches(px, sel) : (el.matches && el.matches(sel))) out.push(px || el);
+    });
+    return out;
+  }
+  // 要素 g の子 (揺れた図形は代わりの要素で)。
+  function _kids(g) {
+    var kids = Array.prototype.slice.call(g.children || []);
+    if (!_wobbly(g)) return kids;
+    return kids.map(function(k) { return k.__puaProxy || k; });
+  }
   function _q(root, sel) {
-    return Array.prototype.filter.call(root.querySelectorAll(sel), function(n) { return _chromeSkip.indexOf(n) < 0; });
+    return _select(root, sel).filter(function(n) { return _chromeSkip.indexOf(_drawnOf(n)) < 0; });
   }
   function _bareShapes(svgEl, sel) {
-    return Array.prototype.filter.call(svgEl.querySelectorAll(sel), function(n) {
+    return _select(svgEl, sel).filter(function(n) {
+      n = _drawnOf(n);
       if (_chromeSkip.indexOf(n) >= 0) return false;
       var anc = n.parentNode;
       while (anc && anc !== svgEl && anc.getAttribute) {
@@ -509,7 +660,7 @@ window.MA.sequenceOverlay = (function() {
     Array.prototype.forEach.call(svgEl.querySelectorAll('g'), function(g) {
       if (g.getAttribute('class')) return;
       var t = null, segs = [];
-      Array.prototype.forEach.call(g.children || [], function(c) {
+      _kids(g).forEach(function(c) {
         var tag = (c.tagName || '').toLowerCase();
         if (tag === 'title' && !t) t = c;
         if (tag === 'line' && /dasharray/.test(c.getAttribute('style') || '')) segs.push(c);
@@ -575,7 +726,9 @@ window.MA.sequenceOverlay = (function() {
     return dir < 0 ? (cy < edgeY && s.y + s.h <= edgeY + 4) : (cy > edgeY && s.y >= edgeY - 4);
   }
   // 列の線の端 (edgeY) に接する図形・文字から始め、上下に隙間なく続き、中心がそのかたまりの幅に入るものを足す。
-  function _columnCluster(shapes, col, edgeY, dir) {
+  // slack: 手書き風の図の揺れの幅 (図形の外形が描いた位置から少しずれる)。ふつうの図は 0。
+  function _columnCluster(shapes, col, edgeY, dir, slack) {
+    slack = slack || 0;
     var near = shapes.filter(function(s) {
       if (col.x < s.x - 1 || col.x > s.x + s.w + 1) return false;
       if (_onSide(s, edgeY, dir) && (dir < 0 ? s.y + s.h >= edgeY - 12 : s.y <= edgeY + 12)) return true;
@@ -593,7 +746,7 @@ window.MA.sequenceOverlay = (function() {
         var inside = s.x >= box.x - 0.5 && s.x + s.w <= box.x + box.w + 0.5 && s.y >= box.y - 0.5 && s.y + s.h <= box.y + box.h + 4;
         if (!inside && !_onSide(s, edgeY, dir)) return;
         var cx = s.x + s.w / 2;
-        if (cx < box.x - 2 || cx > box.x + box.w + 2) return;
+        if (cx < box.x - 2 - slack || cx > box.x + box.w + 2 + slack) return;
         if (s.y > box.y + box.h + 5 || s.y + s.h < box.y - 5) return;
         taken.push(s);
         var x2 = Math.max(box.x + box.w, s.x + s.w), y2 = Math.max(box.y + box.h, s.y + s.h);
@@ -606,8 +759,10 @@ window.MA.sequenceOverlay = (function() {
   }
   function _procShapes(svgEl) {
     var out = [];
-    _bareShapes(svgEl, 'rect, ellipse, circle, path, polygon, text').forEach(function(n) {
+    // 手書き風の図では、揺れた path を線として読んだもの (boundary の縦棒など、参加者の形の一部) も図形に数える。
+    _bareShapes(svgEl, 'rect, ellipse, circle, path, polygon, text, line').forEach(function(n) {
       var tag = (n.tagName || '').toLowerCase();
+      if (tag === 'line' && !n.__drawn) return;
       if (tag === 'rect' && parseFloat(n.getAttribute('fill-opacity')) === 0) return;
       var anc = n.parentNode;
       if (anc && anc !== svgEl && Array.prototype.some.call(anc.children || [], function(c) {
@@ -664,6 +819,7 @@ window.MA.sequenceOverlay = (function() {
     var cols = _procLifelines(svgEl);
     if (!cols.length) return null;
     var owner = _lifelineOwners(cols, participants);
+    var slack = _wobbly(svgEl) ? 1.5 : 0;
     // box の囲み (列の線の上端から下端までを包む rect) の見出しの文字は、参加者のかたまりに入れない。
     var all = _procShapes(svgEl);
     var boxes = all.filter(function(r) {
@@ -680,8 +836,8 @@ window.MA.sequenceOverlay = (function() {
     var out = [];
     cols.forEach(function(c, i) {
       if (!owner[i]) return;
-      var head = _columnCluster(shapes, c, c.top, -1);
-      var tail = _columnCluster(shapes, c, c.bottom, 1) || _farTail(shapes, c, head);
+      var head = _columnCluster(shapes, c, c.top, -1, slack);
+      var tail = _columnCluster(shapes, c, c.bottom, 1, slack) || _farTail(shapes, c, head);
       c.headBox = head;
       if (head) out.push({ item: owner[i], box: head, col: c });
       c.reHeads = _reHeads(shapes, c, head, tail, owner[i], createLines);

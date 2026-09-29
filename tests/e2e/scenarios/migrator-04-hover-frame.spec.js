@@ -2974,3 +2974,84 @@ test('migrator 手順 4 — 矢印に書式 [bold] [dashed] [#red,bold] --[#gree
     expect(h.hit && h.hit.type + '@' + h.hit.line, label).toBe(want);
   }
 });
+
+// BLK-migrator-20260930-0351: 手書き風 (`skinparam handwritten true` / `!option handwritten true`) のシーケンス図は、PlantUML が
+// 線を揺らした <path>、四角を揺らした <polygon> で描く。形の種類で探していた当て方が外れ、参加者・ライフライン・メッセージ・
+// alt・注釈のどれにも枠が出なかった (corpus の seq-45 で 35 点中 31 点)。描いた図形の外形で読み、揺らさない図と同じ枠にする。
+test('migrator 手順 4 — 手書き風のシーケンス図でも、参加者・ライフライン・メッセージの線と文字・alt・注釈に本人の枠が出る', async ({ page }) => {
+  await bootPlain(page);
+  // 描いた図形 (線は長さの中ほど、図形は外接矩形の中心) を画面の座標で指し、出た枠の種類と行を返す。案内文の帯は数えない。
+  const probe = () => page.evaluate(() => {
+    const svg = document.querySelector('#preview-svg svg');
+    const note = Array.from(svg.querySelectorAll('text')).find((t) => /Please\s+use/.test(t.textContent || ''));   // 空白は &nbsp; で描かれる
+    const nb = note ? note.getBoundingClientRect() : null;
+    const out = [];
+    svg.querySelectorAll('text, polygon, path').forEach((el) => {
+      let sx, sy;
+      if (el.tagName.toLowerCase() === 'path') {
+        const len = el.getTotalLength();
+        if (!(len > 4)) return;
+        const q = new DOMPoint(el.getPointAtLength(len / 2).x, el.getPointAtLength(len / 2).y).matrixTransform(el.getScreenCTM());
+        sx = q.x; sy = q.y;
+      } else {
+        const r = el.getBoundingClientRect();
+        sx = r.left + r.width / 2; sy = r.top + r.height / 2;
+      }
+      if (nb && sy >= nb.top - 8 && sy <= nb.bottom + 8) return;
+      out.push({ what: el.tagName.toLowerCase() + ' ' + (el.textContent || '').trim(), x: sx, y: sy });
+    });
+    return out;
+  });
+  const hitAt = async (p) => {
+    await page.mouse.move(3, 3);
+    await page.mouse.move(p.x, p.y);
+    return page.evaluate((q) => {
+      const r = document.elementsFromPoint(q.x, q.y).find((e) => e.closest('#overlay-layer') && e.getAttribute('data-type') &&
+        !/overlay-background/.test(e.getAttribute('class') || ''));
+      return r ? r.getAttribute('data-type') + ':' + r.getAttribute('data-line') : '-';
+    }, p);
+  };
+  for (const opt of ['skinparam handwritten true', '!option handwritten true']) {
+    await typeDsl(page, [
+      '@startuml',                        // 1
+      opt,                                // 2
+      'actor 幹事',                        // 3
+      'participant カレンダー',             // 4
+      '幹事 -> カレンダー : 空き確認',        // 5
+      'alt 空きあり',                       // 6
+      '  カレンダー --> 幹事 : 候補日',       // 7
+      'else 空きなし',                      // 8
+      '  カレンダー --> 幹事 : なし',         // 9
+      'end',                              // 10
+      'note over 幹事, カレンダー : 手書き風で描画', // 11
+      '@enduml',                          // 12
+    ].join(String.fromCharCode(10)));
+    await expect(page.locator('#overlay-layer rect[data-type="message"]')).toHaveCount(3, { timeout: 20000 });
+    await expect(page.locator('#overlay-warning')).toBeHidden();
+    const pts = await probe();
+    expect(pts.length, opt + ': 描いた要素がある').toBeGreaterThan(20);
+    const got = {};
+    for (const p of pts) got[p.what + '@' + Math.round(p.x) + ',' + Math.round(p.y)] = await hitAt(p);
+    const miss = Object.keys(got).filter((k) => got[k] === '-');
+    expect(miss, opt + ': 枠の出ない要素').toEqual([]);
+    const byText = (s) => Object.keys(got).filter((k) => k === 'text ' + s || k.startsWith('text ' + s + '@')).map((k) => got[k]);
+    expect(byText('幹事'), opt + ': 幹事の頭と下端の名前').toEqual(['participant:3', 'participant:3']);
+    expect(byText('カレンダー'), opt + ': カレンダーの頭と下端の名前').toEqual(['participant:4', 'participant:4']);
+    expect(byText('空き確認'), opt).toEqual(['message:5']);
+    expect(byText('候補日'), opt).toEqual(['message:7']);
+    expect(byText('なし'), opt).toEqual(['message:9']);
+    expect(byText('alt'), opt).toEqual(['group:6']);
+    expect(byText('手書き風で描画'), opt).toEqual(['note:11']);
+    // 揺れた点線 (ライフライン) の上の方 (alt より上) は、その参加者のライフライン
+    const lifePts = await page.evaluate(() => Array.from(document.querySelectorAll('#preview-svg svg path'))
+      .filter((p) => /dasharray:5/.test(p.getAttribute('style') || ''))
+      .map((p) => {
+        const q = new DOMPoint(p.getPointAtLength(p.getTotalLength() * 0.08).x, p.getPointAtLength(p.getTotalLength() * 0.08).y)
+          .matrixTransform(p.getScreenCTM());
+        return { x: q.x, y: q.y };
+      }));
+    const life = [];
+    for (const p of lifePts) life.push(await hitAt(p));
+    expect(life, opt + ': 2 本のライフライン').toEqual(['lifeline:3', 'lifeline:4']);
+  }
+});
