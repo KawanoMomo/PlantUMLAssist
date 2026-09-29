@@ -1,0 +1,16 @@
+' 狙い: 外部からの入出力矢印 [-> ->] [<- <-]、色付き矢印 -[#red]>、太さ・破線指定、短い矢印 ->
+@startuml
+title 受注 API の外部入出力
+participant "受注 API" as API
+participant "在庫 DB" as DB
+[-> API : POST /orders
+activate API
+API -[#blue]> DB : 在庫確認
+DB --[#green]> API : 残数 12
+API -[#red,bold]> DB : 引当
+API ->] : 監査ログ出力
+API -[dashed]> DB : 統計更新
+[<- API : 202 Accepted
+API ->> API : 非同期通知の予約
+deactivate API
+@enduml

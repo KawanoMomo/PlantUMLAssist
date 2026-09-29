@@ -1,0 +1,3 @@
+@startuml
+A -[bold]> B : 太
+@enduml

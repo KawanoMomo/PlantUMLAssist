@@ -15,9 +15,13 @@ window.MA.relationOptions = (function() {
   // 方向を付けた行がまるごと関係行でなくなり、選択枠も出なくなる。
   var _DIR = (window.MA.regexParts && window.MA.regexParts.ARROW_DIRECTION)
     || '(?:up|down|left|right|u|d|l|r)';
+  // BLK-migrator-20260929-2003: 線の中の書式 `[…]` は `#色` だけでなく bold・dashed・thickness=N をカンマで並べてよい
+  // (`-[#red,bold]->` `-[hidden]-` `.[dotted].>`)。読む断片と読み書きの関数は regex-parts の 1 か所 (sequence・state と同じ)。
+  var _STYLE = '(?:' + ((window.MA.regexParts && window.MA.regexParts.ARROW_STYLE) || '\\[[^\\]\\r\\n]*\\]') + ')?';
   var ARROW_RE = new RegExp(
-    '^([<>|*o+^]{0,2})((?:-|\\.){1,2}(?:\\[#[^\\]\\s]+\\])?' + _DIR + '?(?:\\[#[^\\]\\s]+\\])?(?:-|\\.){0,2})([<>|*o+^]{0,2})$'
+    '^([<>|*o+^]{0,2})((?:-|\\.){1,2}' + _STYLE + _DIR + '?' + _STYLE + '(?:-|\\.){0,2})([<>|*o+^]{0,2})$'
   );
+  function _RP() { return window.MA.regexParts; }
   var MULT_RE = /^"[^"]*"$/;
 
   function isArrow(tok) {
@@ -158,8 +162,7 @@ window.MA.relationOptions = (function() {
   function lineColor(line) {
     var p = parseLine(line);
     if (!p) return null;
-    var m = p.arrow.match(/\[#([^\]\s]+)\]/);
-    return m ? m[1] : '';
+    return _RP().arrowStyleColor(p.arrow);
   }
 
   function setLineColor(line, color) {
@@ -167,10 +170,8 @@ window.MA.relationOptions = (function() {
     if (!p) return line;
     var a = _splitArrow(p.arrow);
     if (!a) return line;
-    var dashes = a.body.replace(/\[#[^\]\s]+\]/, '');
-    var c = (color || '').trim().replace(/^#/, '');
-    var body = c ? dashes.charAt(0) + '[#' + c + ']' + dashes.slice(1) : dashes;
-    p.arrow = a.lead + body + a.tail;
+    // 同じ `[]` の中の bold・dashed などと、書式の置き場所は残す。
+    p.arrow = a.lead + _RP().setArrowStyleColor(a.body, color) + a.tail;
     return formatLine(p);
   }
 
@@ -228,7 +229,7 @@ window.MA.relationOptions = (function() {
     if (!p) return line;
     var a = _splitArrow(p.arrow);
     if (!a) return line;
-    p.arrow = a.lead + a.body.replace(/\[#[^\]\s]+\]/, '') + a.tail;
+    p.arrow = a.lead + _RP().stripArrowStyle(a.body) + a.tail;
     p.leftMult = '';
     p.rightMult = '';
     p.indent = '';
@@ -240,7 +241,7 @@ window.MA.relationOptions = (function() {
   // 読むときは readableLine で揃え、書き直すときは applyDecorations で元の形に戻す。
   var SHAPE_RE = new RegExp('^([-.]{1,2})(' + _DIR + ')?([-.]{0,2})$');
   function _shapeOfBody(body) {
-    var m = String(body || '').replace(/\[#[^\]\s]+\]/g, '').match(SHAPE_RE);
+    var m = _RP().stripArrowStyle(body).match(SHAPE_RE);
     if (!m) return null;
     return { pre: m[1].length, dir: m[2] || '', post: m[3].length };
   }
@@ -260,11 +261,10 @@ window.MA.relationOptions = (function() {
     if (!p) return line;
     var a = _splitArrow(p.arrow);
     if (!a) return line;
-    var color = lineColor(line) || '';
-    var c = a.body.replace(/\[#[^\]\s]+\]/g, '').charAt(0) || '-';
-    p.arrow = a.lead + _repeat(c, shape.pre) + (shape.dir || '') + _repeat(c, shape.post) + a.tail;
-    var out = formatLine(p);
-    return color ? setLineColor(out, color) : out;
+    var style = _RP().arrowStyle(a.body);
+    var c = _RP().stripArrowStyle(a.body).charAt(0) || '-';
+    p.arrow = a.lead + _RP().setArrowStyle(_repeat(c, shape.pre) + (shape.dir || '') + _repeat(c, shape.post), style) + a.tail;
+    return formatLine(p);
   }
 
   // 図種のパーサに渡す形: plainLine に加えて、線の長さを 2 に揃え、置き方の指示 (up/down/…) を外す。
@@ -286,16 +286,28 @@ window.MA.relationOptions = (function() {
   // 多重度と線の色、線の形 (長さ・置き方の指示) を落とさないための持ち運び。
   function decorationsOf(line) {
     var p = parseLine(line);
-    if (!p) return { leftMult: '', rightMult: '', color: '', shape: null };
+    if (!p) return { leftMult: '', rightMult: '', color: '', shape: null, style: [] };
     var sh = arrowShape(line);
+    // style: 色以外の書式の語 (bold・dashed・thickness=2 …)。色は color で運ぶ。
+    var style = _RP().arrowStyle(p.arrow).filter(function(w) { return w.charAt(0) !== '#'; });
     return { leftMult: p.leftMult, rightMult: p.rightMult, color: lineColor(line) || '',
-      shape: _isPlainShape(sh) ? null : sh };
+      shape: _isPlainShape(sh) ? null : sh, style: style };
+  }
+
+  function _setBodyStyle(line, words) {
+    var p = parseLine(line);
+    if (!p) return line;
+    var a = _splitArrow(p.arrow);
+    if (!a) return line;
+    p.arrow = a.lead + _RP().setArrowStyle(a.body, words) + a.tail;
+    return formatLine(p);
   }
 
   function applyDecorations(line, deco) {
     if (!deco) return line;
     var out = setMultiplicity(line, deco.leftMult, deco.rightMult);
     if (deco.shape) out = setArrowShape(out, deco.shape);
+    if (deco.style && deco.style.length) out = _setBodyStyle(out, deco.style);
     return setLineColor(out, deco.color);
   }
 

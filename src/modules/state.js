@@ -33,11 +33,15 @@ window.MA.modules.plantumlState = (function() {
   }
 
   // BLK-builder-20260907-1306-2 (design 5d): 遷移行の線の色 (`A -[#red]-> B`) を読む。
-  // 1 = from、2 = 色 (`#` を除いた中身)、3 = to、4 = ラベル。
+  // 1 = from、2 = 矢印 (色は _trColor で読む)、3 = to、4 = ラベル。
   // BLK-migrator-20260923-2312: 実物の図は `->` / `--->` / `-up->` / `-[#red,dashed]->` や、
   // 行き先に `<<exitPoint>>` を添えた書き方も使う。どれも同じ 1 本の遷移として読む。
-  // 矢印 = 線 1 本以上 + 向き (up/down/left/right とその略) + 色・線種の [] + 矢じり。色だけを 2 番に取る。
-  var TR_ARROW = '-+(?:(?:up|down|left|right|u|d|l|r)(?=[-\\[]))?(?:\\[(?:#([A-Za-z0-9]+))?[^\\]]*\\])?-*>';
+  // 矢印 = 線 1 本以上 + 向き (up/down/left/right とその略) + 色・線種の [] + 矢じり。矢印を丸ごと 2 番に取り、色はそこから読む。
+  // BLK-migrator-20260929-2003: 書式 `[…]` の読みは regex-parts の ARROW_STYLE 1 か所 (sequence・class 系と同じ)。
+  // 置き方の指示の前にも後ろにも置ける (`-[#red]up->` / `-up[dashed]->`)。
+  var _TR_STYLE = '(?:' + ((window.MA.regexParts && window.MA.regexParts.ARROW_STYLE) || '\\[[^\\]\\r\\n]*\\]') + ')?';
+  var TR_ARROW = '(-+' + _TR_STYLE + '(?:(?:up|down|left|right|u|d|l|r)(?=[-\\[]))?' + _TR_STYLE + '-*>)';
+  function _trColor(arrow) { return window.MA.regexParts.arrowStyleColor(arrow); }
   // BLK-owner-20260923-2332-1: 端は `親.子` と修飾した名前でも書ける (他ツールや手書きの図にある記法。
   // PlantUML は入れ子の子として描く)。書き換えはせず、読む側 (状態遷移表・遷移一覧・件数) が同じ状態として引く。
   var QID = ID + '(?:\\.' + ID + ')*';
@@ -196,7 +200,7 @@ window.MA.modules.plantumlState = (function() {
           id: '__t_' + result.transitions.length,
           from: tmt[1],
           to: tmt[3],
-          color: tmt[2] || '',
+          color: _trColor(tmt[2]),
           label: lbl,
           trigger: parts.trigger,
           guard: parts.guard,
@@ -614,7 +618,7 @@ window.MA.modules.plantumlState = (function() {
     var indent = (lines[idx].match(/^(\s*)/) || ['', ''])[1];
     var from = m[1], to = m[3];
     // 線の色は from / to / trigger / guard / action の書き換えでは失われない。
-    var color = m[2] || '';
+    var color = _trColor(m[2]);
     var lbl = m[4] ? m[4].trim() : null;
     var parts = _parseTransitionLabel(lbl);
     if (fields.from != null) from = fields.from;
@@ -626,9 +630,10 @@ window.MA.modules.plantumlState = (function() {
     var outLine = fmtTransition(from, to, parts.trigger, parts.guard, parts.action, color);
     // BLK-migrator-20260923-2312: 色を変えない書き換えでは、元の矢印 (`->` / `-up->` 等) と
     // 行き先の `<<exitPoint>>` を残す (トリガを直しただけで線の向きや種類が変わらない)。
-    var am = /^\S+?\s*(-[^\s>]*>)/.exec(trimmed);
-    if (am && fields.color === undefined && am[1] !== '-->') {
-      outLine = outLine.replace(/ -(?:\[#[A-Za-z0-9]+\])?-> /, ' ' + am[1] + ' ');
+    // BLK-migrator-20260929-2003: 色を替える書き換えも元の矢印に色だけを当て、同じ `[]` の bold・dashed や向きを残す。
+    var keepArrow = fields.color === undefined ? m[2] : window.MA.regexParts.setArrowStyleColor(m[2], color);
+    if (keepArrow !== (color ? '-[#' + color + ']->' : '-->')) {
+      outLine = outLine.replace(/ -(?:\[#[A-Za-z0-9]+\])?-> /, ' ' + keepArrow + ' ');
     }
     var stm = /^[^:]*?-[^\s>]*>\s*\S+(\s*<<[^>]+>>)/.exec(trimmed);
     if (stm && fields.to == null) {

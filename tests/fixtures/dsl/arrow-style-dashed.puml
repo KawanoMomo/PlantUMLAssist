@@ -1,0 +1,3 @@
+@startuml
+A -[dashed]> B : 破
+@enduml
