@@ -520,3 +520,46 @@ test('手順4 書き出す前に、見出し・注記の有無が図ごとに �
   await expect(firstAgain).toBeHidden();
   await expect(page.locator('#dl-rows .dl-row:visible')).toHaveCount(total - 1);
 });
+
+// BLK-primary-20260929-0551: 「新人に引き継ぐ」場面で GPIO の 3 枚だけの資料セットを作る。印を付けるには
+// 保存先の一覧を中央の枠 (is-list) に開くが、Ctrl+K「FILES: 保存先を開く」の行・Import ▾「保存フォルダの図を
+// 開く（一覧）」を押すと、その同じクリックが枠の外を押したと読まれて開いた瞬間に閉じていた。
+// どちらの入口から開いても一覧が残り、印を付けた 3 枚だけが資料セットに入ることを到達条件にする。
+test('手順9 Ctrl+K・Import ▾ から開いた保存先の一覧で 3 枚に印を付け、その 3 枚だけの資料セットを作れる', async ({ page }) => {
+  test.setTimeout(120 * 1000);
+  const PICK = ['gpio_init_sequence', 'gpio_state', 'driver_common_class'];
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  for (const n of PICK.concat(['spi_state', 'can_state'])) await S.putDoc(page, DIR, n, S.docFor(n));
+  await page.reload();
+  await page.waitForSelector('html[data-app-ready="1"]', { state: 'attached' });
+
+  // 入口 1: Ctrl+K の行をマウスで押す。
+  await page.locator('#btn-command-palette').click();
+  await page.locator('#cp-input').fill('保存先を開く');
+  await page.locator('.cp-item[data-cp-id="command:tab-folder"]').click();
+  await page.waitForTimeout(400);
+  await expect(page.locator('#folder-panel')).toHaveClass(/is-list/);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#folder-panel')).not.toHaveClass(/is-list/);
+
+  // 入口 2: Import ▾ の項目。
+  await page.locator('#btn-import').click();
+  await page.locator('#imp-folder').click();
+  await page.waitForTimeout(400);
+  await expect(page.locator('#folder-panel')).toHaveClass(/is-list/);
+
+  for (const n of PICK) await page.locator('#folder-panel .folder-pick[data-pick-name="' + n + '"]').click();
+  await expect(page.locator('#folder-panel')).toHaveClass(/is-list/);
+
+  await page.locator('#btn-export').click();
+  await page.waitForSelector('#export-menu', { state: 'visible' });
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-modal', { state: 'visible' });
+  await expect(page.locator('#docset-pick-count')).toContainText('3 枚（保存先の一覧で印を付けた図）');
+  await page.locator('#docset-name').fill('新人引き継ぎ');
+  await page.locator('#docset-create').click();
+  const sum = page.locator('.ds-row[data-set-name="新人引き継ぎ"] .ds-sum');
+  await expect(sum).toHaveAttribute('data-expected', '3');
+  await expect(sum).toHaveAttribute('data-present', '3');
+});
