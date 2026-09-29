@@ -1,12 +1,23 @@
 const { test, expect } = require('@playwright/test');
 const { gotoApp, saveDirFor } = require('../helpers');
 
-// 保存先の節は既定で開いている (design 10a)。開いていれば畳んでから開き直し、
-// 一覧を今の中身で描き直す (直に押すと、開いていたときに畳んでしまう)。
+// 保存先の一覧は FILES の保存先の右クリック「保存先の一覧を開く」で中央の枠に開く
+// (BLK-owner-20260924-0637-1。scenarios/_scenario.js の openFolder と同じ経路)。旧経路 (保存先の
+// 見出しを畳んで開き直す) は FILES の節を開くだけで、一覧の枠は見えないまま待ち続けた。
+// 開くたびに読み直すので、後から置いたファイルも出る。
 async function openFolder(page) {
-  if (await page.locator('#folder-panel.open').count()) await page.locator('#btn-tab-folder').click();
-  await page.locator('#btn-tab-folder').click();
-  await page.waitForSelector('#folder-panel.open');
+  await require('../scenarios/_scenario').openFolder(page);
+  await page.waitForSelector('#folder-panel.open.is-list');
+  // 開いた直後は FILES ツリーの読み直しが続けて一覧を 1 回描き直す。その間に押すと
+  // 描き直しで消えた古いボタンに当たることがあるので、描き直しが 400ms 止むまで待つ。
+  await page.evaluate(() => new Promise((resolve) => {
+    const el = document.getElementById('folder-panel');
+    let t = null;
+    const mo = new MutationObserver(() => { clearTimeout(t); t = setTimeout(done, 400); });
+    function done() { mo.disconnect(); resolve(); }
+    mo.observe(el, { childList: true });
+    t = setTimeout(done, 400);
+  }));
 }
 
 // BLK-reviewer-20260908-1203: 「一致 / 不一致」までは自動で分かるが、不一致の中身
