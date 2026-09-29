@@ -230,7 +230,8 @@ window.MA.preprocExpand = (function() {
   function splicedText(text) { return _spliced[text] || null; }
 
   // 展開を server に頼み、手元に憶える。展開が要らない・憶え済みならすぐ解決。失敗しても reject しない。
-  function ensure(text, fetchFn) {
+  // dir: 相対の !include を探すフォルダ (その図の .puml のあるフォルダ。BLK-primary-20260929-1108)。
+  function ensure(text, fetchFn, dir) {
     if (!needs(text) || _cache[text]) return Promise.resolve(has(text));
     if (_pending[text]) return _pending[text];
     var f = fetchFn || (typeof fetch === 'function' ? fetch : null);
@@ -240,7 +241,7 @@ window.MA.preprocExpand = (function() {
       return f('/preproc', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: withMarks(text) }),
+        body: JSON.stringify(dir ? { text: withMarks(text), dir: dir } : { text: withMarks(text) }),
       });
     }).then(function(r) { return r && r.ok ? r.json() : null; })
       .then(function(d) {
