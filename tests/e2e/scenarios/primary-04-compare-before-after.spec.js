@@ -829,6 +829,85 @@ test('手順4 保存先の図を開き直さず、名前を選んで 3 枚を会
   await S.clearDir(page, DIR10);
 });
 
+// BLK-primary-20260925-0637-wish: 今日 ⇄ 一括置換で直した図・遷移を足した図を、開かずに保存先から
+// 会議セットに入れると、変更前が引けずに今の中身が変更前に入り「同じ」図が 2 つ並んでいた。
+// 会議では 変更前 / 変更後 の表示のまま、今日変わった行と文字が ± 差分と同じ色で出ること、
+// 本当に前の版が無い図だけ「この基準より前の版がありません」と図の見出しで言うことを確かめる。
+const DIR11 = S.dirFor(__filename) + '-meetbefore';
+test('手順4 開かずに選んだ図も、今日変わった行と文字を色付きで変更前後に見せられる', async ({ page }) => {
+  const fs = require('fs');
+  const path = require('path');
+  const abs = S.absDirFor(__filename) + '-meetbefore';
+  fs.rmSync(abs, { recursive: true, force: true });
+  await S.bootWithSaveDir(page, DIR11);
+  const OLD = ['spi_init_sequence', 'spi_state', 'driver_common_class'];
+  for (const name of OLD) await S.putDoc(page, DIR11, name, S.docFor(name, 'SpiDrv'));
+  // 下ごしらえ: 3 枚は一昨日からある図。今日、1 枚は一括置換 (SpiDrv → Spi_Driver)、1 枚は遷移を足した。
+  const twoDaysAgo = new Date(Date.now() - 2 * 86400000);
+  for (const name of OLD) fs.utimesSync(path.join(abs, name + '.puml'), twoDaysAgo, twoDaysAgo);
+  await S.putDoc(page, DIR11, 'spi_init_sequence', S.docFor('spi_init_sequence', 'Spi_Driver'));
+  const stateToday = S.docFor('spi_state', 'SpiDrv').replace('@enduml', 'Busy --> Fault : SpiDrv_Error\n@enduml');
+  await S.putDoc(page, DIR11, 'spi_state', stateToday);
+  // 今日はじめて作った図 (今日 0 時より前の版がどこにも無い)。
+  await S.putDoc(page, DIR11, 'adc_init_sequence', S.docFor('adc_init_sequence'));
+  await S.reopenApp(page);
+  const tabsBefore = await page.locator('#tab-bar .tab').count();
+
+  await page.locator('#btn-tab-board').click();
+  await expect(page.locator('#cb-modal')).toBeVisible();
+  const sel = page.locator('#cb-meeting-doc');
+  const SET = ['spi_init_sequence', 'spi_state', 'driver_common_class', 'adc_init_sequence'];
+  await expect(sel.locator('option[value="driver_common_class"]')).toHaveCount(1, { timeout: 10000 });
+  for (const name of SET) {
+    await sel.selectOption(name);
+    await page.locator('#cb-meeting-add').click();
+  }
+  await page.locator('#cb-meeting').click();
+  await expect(page.locator('#cb-body .cb-entry')).toHaveCount(SET.length);
+
+  // 到達条件その1: 一括置換した図は、変更前に今日 0 時の中身 (SpiDrv) が出て、変わった文字だけが赤い。
+  const seq = () => page.locator('#cb-body .cb-entry[data-doc-name="spi_init_sequence"]');
+  await expect(seq().locator('button.cb-side[data-side="before"]')).toContainText('変更前 (今日 0 時)', { timeout: 15000 });
+  await expect(seq().locator('pre.cb-side-dsl')).toContainText('SpiDrv', { timeout: 15000 });
+  await expect(seq().locator('pre.cb-side-dsl')).not.toContainText('Spi_Driver');
+  await expect(seq().locator('pre.cb-side-dsl .cb-line-del mark.cb-ch-del').first()).toHaveText('Drv');
+  await expect(seq().locator('.cb-count')).toContainText('−');
+  // 変更後は変わった文字が緑。
+  await seq().locator('button.cb-side[data-side="after"]').click();
+  await expect(seq().locator('pre.cb-side-dsl .cb-line-add mark.cb-ch-add').first()).toHaveText('_Driver');
+  const bg = await seq().locator('pre.cb-side-dsl .cb-line-add').first()
+    .evaluate((el) => getComputedStyle(el).backgroundColor);
+  expect(bg).toContain('80, 180, 110');
+
+  // 到達条件その2: 遷移を足した図は、変更後に足した遷移の行が行ごと緑で出る。
+  const st = () => page.locator('#cb-body .cb-entry[data-doc-name="spi_state"]');
+  await st().locator('button.cb-side[data-side="after"]').click();
+  await expect(st().locator('pre.cb-side-dsl .cb-line-add')).toContainText('Busy --> Fault : SpiDrv_Error');
+
+  // 到達条件その3: 今日触っていない図は、同じ中身で「変更なし」と言う (版が無いとは言わない)。
+  const dc = page.locator('#cb-body .cb-entry[data-doc-name="driver_common_class"]');
+  await expect(dc.locator('.cb-count')).toHaveText('変更なし');
+  await expect(dc.locator('.cb-nobase')).toHaveCount(0);
+
+  // 到達条件その4: 今日はじめて作った図だけ、図の見出しで「この基準より前の版がありません」と言う。
+  const adc = page.locator('#cb-body .cb-entry[data-doc-name="adc_init_sequence"]');
+  await expect(adc.locator('.cb-nobase')).toHaveText('この基準 (今日 0 時)より前の版がありません');
+  await expect(adc.locator('.cb-side-empty')).toContainText('より前の版がありません');
+
+  // 到達条件その5: 見出しの「変更前 =」を 今日 0 時 にしても同じ変更前が出る。タブは 1 枚も開かない。
+  await page.locator('#cb-base').selectOption('today');
+  await seq().locator('button.cb-side[data-side="before"]').click();
+  await expect(seq().locator('pre.cb-side-dsl')).toContainText('SpiDrv', { timeout: 15000 });
+  await expect(seq().locator('pre.cb-side-dsl mark.cb-ch-del').first()).toHaveText('Drv');
+  await expect(page.locator('#tab-bar .tab')).toHaveCount(tabsBefore);
+
+  await page.screenshot({ path: shotOut('primary-04-meeting-before-colors.png'), fullPage: true });
+  await page.locator('#cb-meeting').click();
+  await page.locator('#cb-meeting-clear').click();
+  await page.locator('#cb-close').click();
+  fs.rmSync(abs, { recursive: true, force: true });
+});
+
 // BLK-primary-20260918-0549-friction: 顧客向け資料に載せる前の確認で、
 // 図ごとに「保存フォルダの一覧を開く → クリックで開く → 変更前後を出す」を
 // 枚数分繰り返していた (クリック 12 / キー 87)。資料セットには「どの図を渡すか」が

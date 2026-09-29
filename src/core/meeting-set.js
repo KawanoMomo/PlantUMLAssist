@@ -141,8 +141,9 @@ window.MA.meetingSet = (function() {
 
   // 会議セットに選んだのにボードの図 (開いている図 + 今日更新された保存フォルダの図) に無い図を、
   // 保存フォルダのファイルから補う。開き直さずに選んだ図も、変わっていなくても会議セットに並ぶ。
-  // 返す形は change-board.folderExtras と同じ (origin: 'folder')。meetingPick を立てて、
-  // 変更前が引けないときは今の中身を変更前として扱えるようにする (変更前 / 変更後が同じ図になる)。
+  // 返す形は change-board.folderExtras と同じ (origin: 'folder')。meetingPick を立てる。
+  // 変更前は基準より前の最後の版 (版の控え・Git のコミット) から引き、今の中身では埋めない
+  // (BLK-primary-20260925-0637-wish。黙って同じ図を 2 つ並べない)。
   function folderPicks(fileDocs, boardDocs) {
     var inBoard = {};
     (Array.isArray(boardDocs) ? boardDocs : []).forEach(function(d) {
