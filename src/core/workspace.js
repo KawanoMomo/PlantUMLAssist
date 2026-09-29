@@ -442,6 +442,8 @@ window.MA.workspace = (function() {
           type: doc.name, dsl: doc.dsl, dir: _dir(fileDir),
           // BLK-owner-20260929-1111-1: まだ 1 度も書いていない新しい図は、既にある別のファイルへは書かない。
           freshId: (doc.fresh && doc.id) ? String(doc.id) : undefined,
+          // BLK-owner-20260930-0311-1: 書いたタブの印。自分で書いた続きは、図種の読みが替わっても別名へ回さない。
+          docId: doc.id ? String(doc.id) : undefined,
           kind: (window.MA.savedKind ? window.MA.savedKind.slugOf(doc.diagramType) : '') || undefined,
           // BLK-migrator-20260918-0349: 手元から開いた図は、開いたときの改行で
           // 書き戻す。付けないと server は platform の既定 (Windows は CRLF) で
