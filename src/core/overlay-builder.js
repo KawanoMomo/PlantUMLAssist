@@ -149,16 +149,28 @@ window.MA.overlayBuilder = (function() {
   // 本文の Creole (表の罫線・箇条書きの点・リンク・区切り線) はその後ろに並べる。中身の図形から範囲を
   // 取ると (最初の rect = 箇条書きの点、最初の text = 表の 1 セル) 紙のほとんどが当たり判定から外れた。
   // 範囲は紙の外形 (対象へ伸びる吹き出しの尖りを含む、描かれた形そのもの) から取る。
+  // BLK-migrator-20260929-1858: 折り返しは頂点の数ではなく描いた形で見分ける。`skinparam roundCorner` を付けると
+  // 折り返しの左下の角が円弧 (A) で丸められ、頂点が 4 つでなくなって紙が 1 枚も見つからなかった。
+  // 折り返しは「外接矩形 (小さい正方形) の左上から始まって左上に戻り、左の縁を下へ降り、右下の角を通り、
+  // どの点も左上→右下の対角線より上に出ない」閉じた形 (左下の直角三角形。角が丸いか・曲線かは問わない)。
   function _isFold(el) {
     if (!el || (el.tagName || '').toLowerCase() !== 'path') return null;
     var pts = pathPoints(el.getAttribute('d'));
-    if (!pts || pts.xs.length !== 4) return null;
-    var xs = pts.xs, ys = pts.ys, c = ys[1] - ys[0];
-    if (!(c >= 2 && c <= 30)) return null;
+    if (!pts || pts.xs.length < 3) return null;
+    var xs = pts.xs, ys = pts.ys, n = xs.length;
     var near = function(a, b) { return Math.abs(a - b) < 0.6; };
-    if (!near(xs[0], xs[3]) || !near(ys[0], ys[3]) || !near(xs[1], xs[0]) ||
-        !near(xs[2], xs[0] + c) || !near(ys[2], ys[1])) return null;
-    return { x: xs[0], y: ys[0], size: c };
+    var x0 = Math.min.apply(null, xs), y0 = Math.min.apply(null, ys);
+    var w = Math.max.apply(null, xs) - x0, h = Math.max.apply(null, ys) - y0;
+    if (!(w >= 2 && w <= 30) || !near(w, h)) return null;
+    if (!near(xs[0], x0) || !near(ys[0], y0) || !near(xs[n - 1], x0) || !near(ys[n - 1], y0)) return null;
+    var corner = false, left = false;
+    for (var i = 0; i < n; i++) {
+      if (ys[i] - y0 < xs[i] - x0 - 0.6) return null;   // 対角線より右上に出る点がある (欠けた角ではない)
+      if (near(xs[i], x0 + w) && near(ys[i], y0 + h)) corner = true;
+      if (near(xs[i], x0) && ys[i] - y0 >= h / 2) left = true;
+    }
+    if (!corner || !left) return null;
+    return { x: x0, y: y0, size: w };
   }
 
   function _filled(el) {
@@ -349,6 +361,8 @@ window.MA.overlayBuilder = (function() {
     s = s.replace(/\[\[\s*[^\]\s|]+(?:\{[^}]*\})?\s+([^\]]+)\]\]/g, '$1')   // [[url label]] -> label
       .replace(/\[\[\s*([^\]]+)\]\]/g, '$1')
       .replace(/<[^>]*>/g, '')
+      .replace(/^\s*[=.]{2,}\s*$/, '')   // 区切り線 (==== / ....)
+      .replace(/^\s*=+\s*(?=[^=\s>])/, '').replace(/([^=\s])\s*=+\s*$/, '$1')   // 見出し (= / == / === 見出し ==)
       .replace(/^\s*[*#]+\s+/, '')
       .replace(/\|=?/g, ' ')
       .replace(/\*\*|\/\/|__|""|~~|--/g, '');
