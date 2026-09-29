@@ -25,6 +25,9 @@ window.MA.workspace = (function() {
 
   var _state = null;   // { activeId, docs: [] }
   var _seq = 0;
+  // BLK-owner-20260929-1111-1: 保存先ごとに「そこに在る .puml の名前」を覚える (一覧を読んだ時点のもの)。
+  // 「＋ 新しい図」の名前 diagramN を、開いているタブだけでなく保存先の図とも重ならないものにする。
+  var _known = {};     // dir → { 小文字の名前: true }
 
   function _newId() {
     _seq++;
@@ -67,6 +70,49 @@ window.MA.workspace = (function() {
     return true;
   }
 
+  function _noteKnown(dir, names) {
+    if (!Array.isArray(names)) return;
+    var m = {};
+    for (var i = 0; i < names.length; i++) {
+      var n = names[i];
+      if (n && typeof n === 'object') n = n.name;
+      if (typeof n !== 'string' || !n) continue;
+      m[n.replace(/\.puml$/i, '').toLowerCase()] = true;
+    }
+    _known[_dir(dir)] = m;
+  }
+
+  // 1 つだけ覚え足す (書こうとして「同じ名前の図がある」と断られた名前)。
+  function noteFolderName(dir, name) {
+    if (typeof name !== 'string' || !name) return;
+    var k = _dir(dir);
+    if (!_known[k]) _known[k] = {};
+    _known[k][name.replace(/\.puml$/i, '').toLowerCase()] = true;
+  }
+
+  // 保存先 dir に同じ名前の図が在るか (Windows のファイル名は大文字小文字を区別しない)。
+  function knownInFolder(name, dir) {
+    var m = _known[_dir(dir)];
+    return !!(m && name && m[String(name).toLowerCase()]);
+  }
+
+  // 「＋ 新しい図」の名前。diagram{開いているタブの数 + 1} から数え、開いているタブにも
+  // 保存先の図にも無い最初の番号にする (diagram2.puml が在れば diagram3)。
+  function newDocName(dir) {
+    var n = (_state ? _state.docs.length : 0) + 1;
+    for (var guard = 0; guard < 10000; guard++, n++) {
+      var name = 'diagram' + n;
+      if (knownInFolder(name, dir)) continue;
+      var taken = false;
+      var docs = _state ? _state.docs : [];
+      for (var i = 0; i < docs.length; i++) {
+        if (String(docs[i].name).toLowerCase() === name) { taken = true; break; }
+      }
+      if (!taken) return name;
+    }
+    return 'diagram' + n;
+  }
+
   function _uniqueName(name, exceptId) {
     var base = sanitizeName(name);
     var used = {};
@@ -99,6 +145,7 @@ window.MA.workspace = (function() {
         });
         // BLK-human-20260925-1150: 保存先を替える前に開いていたタブは、開いたフォルダを持ち続ける。
         if (typeof d.dir === 'string' && d.dir) docs[docs.length - 1].dir = d.dir;
+        if (d.fresh === true) docs[docs.length - 1].fresh = true;
       }
       if (docs.length === 0) return null;
       var activeId = docs[0].id;
@@ -145,6 +192,7 @@ window.MA.workspace = (function() {
     if (!d) return null;
     var c = { id: d.id, name: d.name, diagramType: d.diagramType, dsl: d.dsl, preview: !!d.preview };
     if (d.dir) c.dir = d.dir;
+    if (d.fresh) c.fresh = true;
     return c;
   }
 
@@ -221,10 +269,22 @@ window.MA.workspace = (function() {
       diagramType: spec.diagramType || 'plantuml-sequence',
       dsl: typeof spec.dsl === 'string' ? spec.dsl : '',
     };
+    // BLK-owner-20260929-1111-1: ＋ で開いた新しい図は、1 度書けるまで「新しい図」の印を持つ。
+    // 印のある図の保存は、保存先に既にある別のファイルを書き換えない (server が 409 で断る)。
+    if (spec.fresh === true) doc.fresh = true;
     _state.docs.push(doc);
     _state.activeId = doc.id;
     persist();
     return _copy(doc);
+  }
+
+  // 新しい図がファイルとして書けた (以後は自分のファイルへの保存)。
+  function markWritten(id) {
+    var d = _find(id);
+    if (!d || !d.fresh) return d ? _copy(d) : null;
+    delete d.fresh;
+    persist();
+    return _copy(d);
   }
 
   // 既に同じ name のタブがあればそれをアクティブにし、無ければ開く。
@@ -368,6 +428,8 @@ window.MA.workspace = (function() {
         // doc が図種を持たない経路 (一括の書き戻し) では送らない = 前の控えが残る。
         body: JSON.stringify({
           type: doc.name, dsl: doc.dsl, dir: _dir(fileDir),
+          // BLK-owner-20260929-1111-1: まだ 1 度も書いていない新しい図は、既にある別のファイルへは書かない。
+          freshId: (doc.fresh && doc.id) ? String(doc.id) : undefined,
           kind: (window.MA.savedKind ? window.MA.savedKind.slugOf(doc.diagramType) : '') || undefined,
           // BLK-migrator-20260918-0349: 手元から開いた図は、開いたときの改行で
           // 書き戻す。付けないと server は platform の既定 (Windows は CRLF) で
@@ -376,7 +438,17 @@ window.MA.workspace = (function() {
         }),
         keepalive: true,
       }).then(function(r) {
+        if (r && r.status === 409) {
+          var why = function(data) {
+            if (window.MA.autoSave && window.MA.autoSave.noteFileConflict) {
+              window.MA.autoSave.noteFileConflict({ name: doc.name, id: doc.id, message: data && data.message });
+            }
+            return false;
+          };
+          return r.json ? r.json().then(why, function() { return why(null); }) : why(null);
+        }
         if (!(r && r.ok)) return false;
+        if (doc.fresh && doc.id) markWritten(doc.id);
         // BLK-junior-20260908-2003: 図種が変わる保存は server が別ファイルへ回す。
         // 回された先は autoSave の知らせに寄せる (聞き手は 1 か所でよい)。
         if (!r.json) return true;
@@ -396,7 +468,11 @@ window.MA.workspace = (function() {
     try {
       return window.fetch('/autosave?dir=' + encodeURIComponent(_dir(fileDir)))
         .then(function(r) { return r.ok ? r.json() : null; })
-        .then(function(data) { return (data && Array.isArray(data.files)) ? data.files : []; })
+        .then(function(data) {
+          var files = (data && Array.isArray(data.files)) ? data.files : [];
+          if (data) _noteKnown(fileDir, files);
+          return files;
+        })
         .catch(function() { return []; });
     } catch (e) {
       return Promise.resolve([]);
@@ -411,6 +487,7 @@ window.MA.workspace = (function() {
         .then(function(r) { return r.ok ? r.json() : null; })
         .then(function(data) {
           if (!data) return [];
+          if (Array.isArray(data.files)) _noteKnown(fileDir, data.files);
           if (Array.isArray(data.entries)) return data.entries;
           if (Array.isArray(data.files)) {
             return data.files.map(function(n) { return { name: n, mtime: null, hash: null }; });
@@ -451,6 +528,7 @@ window.MA.workspace = (function() {
           else if (Array.isArray(data.files)) {
             entries = data.files.map(function(n) { return { name: n, mtime: null, hash: null }; });
           }
+          _noteKnown(asked, Array.isArray(data.files) ? data.files : entries);
           return {
             entries: entries,
             // 古い server は exists を返さない。その場合は判定しない (null)。
@@ -588,6 +666,11 @@ window.MA.workspace = (function() {
     isValidName: isValidName,
     nameRuleText: nameRuleText,
     saveToFile: saveToFile,
+    markWritten: markWritten,
+    newDocName: newDocName,
+    knownInFolder: knownInFolder,
+    noteFolderNames: _noteKnown,
+    noteFolderName: noteFolderName,
     listFiles: listFiles,
     listFileEntries: listFileEntries,
     listFolder: listFolder,

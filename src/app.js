@@ -5040,9 +5040,83 @@ function openTypeInNewTab(t) {
   }
   saveActiveDoc();
   if (window.MA.autoSave) { try { window.MA.autoSave.flush(); } catch (e) {} }
-  WS.open({ name: 'diagram' + (WS.count() + 1), diagramType: t, dsl: tpl || (BD ? BD.blankDsl(t) : '@startuml\n@enduml') });
+  openNewDocTab(t, tpl || (BD ? BD.blankDsl(t) : '@startuml\n@enduml'));
   applyActiveDoc();
   return WS.getActive();
+}
+
+// タブの図の名前を聞いて変える (タブ名のダブルクリック・新しい図の名前が保存先の図と重なったとき)。
+// message を渡すと、名前の規則の前にその 1 行を添えて聞く。
+function promptRenameDoc(docId, message, suggest) {
+  var WS = window.MA.workspace;
+  var doc = null;
+  (WS.list() || []).forEach(function(d) { if (d && d.id === docId) doc = d; });
+  if (!doc) return null;
+  var ask = (message ? message + '\n' : '') + WS.nameRuleText();
+  var next = window.prompt(ask, suggest || doc.name);
+  if (next == null) return null;
+  // 図の名前が変わってもレビューの基準は持ち越す。
+  if (window.MA.reviewDesk) {
+    try { window.MA.reviewDesk.renameBaseline(doc.name, next); } catch (e) {}
+  }
+  // 図の名前が変わっても継承元の関係は付いていく (BLK-junior-20260908-1603-wish)。
+  if (window.MA.lineage) {
+    try { window.MA.lineage.rename(doc.name, WS.sanitizeName(next)); } catch (e) {}
+  }
+  var before = doc.name;
+  var renamed = WS.rename(doc.id, next);
+  // 図名欄で名前を変え終えたら、開いた元ファイルの錠は用済み (BLK-junior-20260908-1803-wish)。
+  if (window.MA.sourceLock) { try { window.MA.sourceLock.release(doc.id); } catch (e) {} }
+  if (window.MA.autoSave && window.MA.autoSave.resetFileBlocked) {
+    try { window.MA.autoSave.resetFileBlocked('conflict:' + before); } catch (e) {}
+  }
+  // 前の名前のファイルは残さず付け替える (BLK-junior-20260915-0307)。
+  // 開いているタブの本文は、active なら editor の内容が正 (まだ保存前の編集が入る)。
+  // BLK-owner-20260929-1111-1: まだ 1 度も書いていない新しい図には前の名前のファイルが無い
+  // (同じ名前のファイルは別の図)。付け替えの後始末はしない。
+  var isActive = doc.id === WS.getActiveId();
+  if (renamed && renamed.name && renamed.name !== before && !doc.fresh) {
+    var body = isActive ? mmdText : String(renamed.dsl == null ? '' : renamed.dsl);
+    _sweepRenamedFile(before, renamed.name, body).then(function(text) {
+      if (text) setSaveStatus(text);
+    });
+  }
+  renderTabs();
+  // BLK-junior-20260925-1732-friction: 図の設定の「図名 / File name」欄も新しい名前に揃える
+  // (前の名前のまま残ると、その欄を触ったときに前の名前へ戻してしまう)。
+  try { renderDiagramSettings(true); } catch (e) {}
+  try { updateTopSourceLock(); } catch (e) {}
+  try { renderLineageBadge(); } catch (e) {}
+  // 新しい名前で書き直す (名前を選び直した新しい図は、ここで初めてファイルになる)。
+  if (renamed && renamed.fresh && isActive) { try { saveActiveDoc(); } catch (e) {} }
+  return renamed;
+}
+
+// BLK-owner-20260929-1111-1: 「＋ 新しい図」のタブを開く。名前 diagramN は開いているタブに加えて
+// 保存先にある .puml の名前とも重ならないものにし (diagram2.puml が在れば diagram3)、
+// 1 度書けるまで「新しい図」の印を付ける (印のある図は既にある別のファイルを書き換えない)。
+function openNewDocTab(diagramType, dsl) {
+  var WS = window.MA.workspace;
+  var dir = _wsFileDir();
+  var name = WS.newDocName ? WS.newDocName(dir) : 'diagram' + (WS.count() + 1);
+  var doc = WS.open({ name: name, diagramType: diagramType, dsl: dsl, fresh: true });
+  _recheckNewDocName(doc && doc.id, dir);
+  return doc;
+}
+
+// 保存先の一覧をまだ読んでいなかった (覚えている名前が古い) ときのために、開いた後に読み直し、
+// 付けた名前が保存先の図と重なっていれば、まだ書いていないうちに次の空いた番号へ替える。
+function _recheckNewDocName(id, dir) {
+  var WS = window.MA.workspace;
+  if (!id || !WS || !WS.listFiles || !WS.knownInFolder) return;
+  WS.listFiles(dir).then(function() {
+    var d = null;
+    (WS.list() || []).forEach(function(x) { if (x && x.id === id) d = x; });
+    if (!d || !d.fresh || !/^diagram\d+$/.test(d.name) || !WS.knownInFolder(d.name, dir)) return;
+    WS.rename(id, WS.newDocName(dir));
+    renderTabs();
+    try { renderDiagramSettings(true); } catch (e) {}
+  }).catch(function() {});
 }
 
 // 仮のタブ (保存先ツリーの 1 回押しで開いたタブ) を固定にする。まだ読み込み中なら読み終えてから固定にする。
@@ -5129,35 +5203,7 @@ function renderTabs() {
         renderTabs();
         return;
       }
-      var next = window.prompt(window.MA.workspace.nameRuleText(), doc.name);
-      if (next == null) return;
-      // 図の名前が変わってもレビューの基準は持ち越す。
-      if (window.MA.reviewDesk) {
-        try { window.MA.reviewDesk.renameBaseline(doc.name, next); } catch (e) {}
-      }
-      // 図の名前が変わっても継承元の関係は付いていく (BLK-junior-20260908-1603-wish)。
-      if (window.MA.lineage) {
-        try { window.MA.lineage.rename(doc.name, window.MA.workspace.sanitizeName(next)); } catch (e) {}
-      }
-      var before = doc.name;
-      var renamed = window.MA.workspace.rename(doc.id, next);
-      // 図名欄で名前を変え終えたら、開いた元ファイルの錠は用済み (BLK-junior-20260908-1803-wish)。
-      if (window.MA.sourceLock) { try { window.MA.sourceLock.release(doc.id); } catch (e) {} }
-      // 前の名前のファイルは残さず付け替える (BLK-junior-20260915-0307)。
-      // 開いているタブの本文は、active なら editor の内容が正 (まだ保存前の編集が入る)。
-      if (renamed && renamed.name && renamed.name !== before) {
-        var isActive = doc.id === window.MA.workspace.getActiveId();
-        var body = isActive ? mmdText : String(renamed.dsl == null ? '' : renamed.dsl);
-        _sweepRenamedFile(before, renamed.name, body).then(function(text) {
-          if (text) setSaveStatus(text);
-        });
-      }
-      renderTabs();
-      // BLK-junior-20260925-1732-friction: 図の設定の「図名 / File name」欄も新しい名前に揃える
-      // (前の名前のまま残ると、その欄を触ったときに前の名前へ戻してしまう)。
-      try { renderDiagramSettings(true); } catch (e) {}
-      try { updateTopSourceLock(); } catch (e) {}
-      try { renderLineageBadge(); } catch (e) {}
+      promptRenameDoc(doc.id);
     });
     bar.insertBefore(el, firstTool);
   });
@@ -13139,11 +13185,7 @@ function setupTabs() {
       // 一手間にしかならない。見本が要る人には無選択時の右ペインに
       // 「まとめて追加」「白紙から: ひな形」があり、そちらから入れられる。
       var BD = window.MA.blankDoc;
-      window.MA.workspace.open({
-        name: 'diagram' + (window.MA.workspace.count() + 1),
-        diagramType: currentDiagramType,
-        dsl: BD ? BD.blankDsl(currentDiagramType) : '@startuml\n@enduml',
-      });
+      openNewDocTab(currentDiagramType, BD ? BD.blankDsl(currentDiagramType) : '@startuml\n@enduml');
       applyActiveDoc();
       // 新規タブも作った時点でフォルダに現れる (BLK-primary-20260907-0823)。
       saveActiveDoc();
@@ -15529,11 +15571,46 @@ function setupTabs() {
         catch (e) { return { name: '', reason: 'no-name' }; }
         if (!d || d.action === 'ask') return { name: '', reason: 'ask' };   // 返事を待つ間は書かない
         if (d.action === 'skip') return { name: '', reason: 'unchanged' };  // 開いたときのまま。書かない
-        if (d.name) return { name: d.name, dir: _docDir(doc) };   // 控えの名前へ逃がす
+        if (d.name) {   // 控えの名前へ逃がす (逃がさないときは今の名前)
+          return (doc.fresh && d.name === name) ? { name: d.name, dir: _docDir(doc), freshId: doc.id }
+            : { name: d.name, dir: _docDir(doc) };
+        }
       }
       // BLK-human-20260925-1150: 書き先のフォルダもタブごと (保存先を替える前に開いたタブは開いたフォルダ)。
-      return { name: name, dir: _docDir(doc) };
+      // BLK-owner-20260929-1111-1: まだ 1 度も書いていない新しい図は印を添える (既にある別の図へは書かない)。
+      return doc.fresh ? { name: name, dir: _docDir(doc), freshId: doc.id } : { name: name, dir: _docDir(doc) };
     });
+
+    // BLK-owner-20260929-1111-1: 新しい図の名前が保存先の別の図と重なった。書かずに名前を選ばせる。
+    if (AS.onFileConflict) {
+      AS.onFileConflict(function(info) {
+        var WS = window.MA.workspace;
+        var target = null;
+        (WS.list() || []).forEach(function(d) {
+          if (target || !d) return;
+          if (info.id ? d.id === info.id : d.name === info.name) target = d;
+        });
+        try { renderAutoSaveStatus(); } catch (e) {}
+        if (!target) return;
+        var dir = _docDir(target);
+        if (WS.noteFolderName) WS.noteFolderName(dir, target.name);   // 次の名前の候補から外す
+        var msg = info.reason || ('同じ名前の図が保存先にあります (' + target.name + '.puml)');
+        if (window.MA.toast) {
+          try {
+            window.MA.toast.show(msg, '名前を選ぶ', function() {
+              promptRenameDoc(target.id, msg, WS.newDocName ? WS.newDocName(dir) : '');
+            });
+          } catch (e) {}
+        }
+        try { setSaveStatus(msg); } catch (e) {}
+      });
+    }
+    if (AS.onFreshWritten) {
+      AS.onFreshWritten(function(info) {
+        var WS = window.MA.workspace;
+        if (info && info.id && WS.markWritten) WS.markWritten(info.id);
+      });
+    }
 
     // 返事待ちで書かなかった回は、その場で確認を出す。自動保存の側から聞かないと、
     // 「打っているのにディスクに何も起きない」が黙って続く (ペルソナが 5 周詰まった形)。
