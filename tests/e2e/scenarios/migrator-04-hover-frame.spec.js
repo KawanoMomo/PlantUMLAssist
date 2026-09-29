@@ -1850,6 +1850,36 @@ test('migrator 手順 4 — mainframe と newpage とステレオタイプ付き
   expect((await hoverHit(page, 'A')).hit).toEqual({ type: 'action', line: '4', hover: true });
 });
 
+// BLK-migrator-20260929-1300: `!ifdef` / `!else` の両枝に同じ `A -> B` があると、描かれない枝の行まで当て損ねに数え、
+// 正しい図に「図の要素 1 個に選択枠を当てられませんでした」が出ていた (corpus の common-20)。`hide unlinked` で隠れる参加者も
+// 同じ誤警告 (seq-23)。描かれない枝の行と隠れる参加者は数えず、下端の件数も描かれる物で数える。
+test('migrator 手順 4 — !ifdef / !else の両枝にメッセージのある sequence 図と hide unlinked の図で、帯が出ず、描かれた矢印に描かれた側の行の枠が出る', async ({ page }) => {
+  await bootPlain(page);
+  const fx = (n) => fs.readFileSync(path.join(__dirname, '..', '..', 'fixtures', 'dsl', n + '.puml'), 'utf8')
+    .replace(/\r\n/g, '\n').replace(/\n+$/, '');
+  await typeDsl(page, fx('preproc-ifdef-else-seq'));
+  await expect(page.locator('#overlay-layer rect[data-type="message"]')).toHaveCount(1, { timeout: 20000 });
+  await expect(page.locator('#ma-toast')).toBeHidden({ timeout: 15000 });
+  await expect(page.locator('#overlay-warning')).toBeHidden();
+  await expect(page.locator('#status-info')).toHaveText('2 elements · 1 relation');
+  expect((await hoverHit(page, 'a')).hit).toEqual({ type: 'message', line: '6', hover: true });
+
+  // 描かれない枝が先にあっても、描かれた矢印は描かれた側の行 (順番でずれない)
+  await typeDsl(page, fx('preproc-ifndef-first-dead-seq'));
+  await expect(page.locator('#overlay-layer rect[data-type="message"]')).toHaveCount(2, { timeout: 20000 });
+  await expect(page.locator('#overlay-warning')).toBeHidden();
+  expect((await hoverHit(page, 'a')).hit).toEqual({ type: 'message', line: '8', hover: true });
+  expect((await hoverHit(page, 'done')).hit).toEqual({ type: 'message', line: '10', hover: true });
+
+  for (const name of ['common-20-preproc-include-local-undef', 'seq-23-hide-unlinked-note-across']) {
+    await typeDsl(page, fx(name));
+    await expect(page.locator('#overlay-layer rect[data-type="message"]').first()).toBeAttached({ timeout: 20000 });
+    await page.waitForTimeout(600);
+    await expect(page.locator('#overlay-warning'), name + ' で帯が出ない').toBeHidden();
+  }
+  await expect(page.locator('#overlay-layer rect[data-type="participant"][data-id="Cache"]').first()).toBeAttached();
+});
+
 // BLK-migrator-20260925-1800: 途中で `create` / `**` した参加者の頭がそのメッセージの高さに描かれ、メッセージの文字を探す床を押し下げて、
 // それより上のメッセージの文字に枠が出なかった (corpus の seq-11 / seq-12、1.2026.8 への版上げ由来)。床は最初の矢印より上の頭だけで決める。
 test('migrator 手順 4 — 途中で create / ** / !! した参加者のある sequence 図でも、その頭より上のメッセージの文字に本人の枠が出る', async ({ page }) => {

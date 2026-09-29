@@ -1,0 +1,16 @@
+@startuml
+' 狙い: hide unlinked(メッセージを持たない参加者を隠す)、note across(全参加者にまたがるnote)
+participant Client
+participant Server
+participant Cache
+participant Logger
+participant DeadLetter
+
+hide unlinked
+
+Client -> Server : request(id)
+Server -> Cache : lookup(id)
+Cache --> Server : hit
+note across : ここまでキャッシュヒット経路。DeadLetter・Loggerはメッセージが無いため非表示になる
+Server --> Client : response(200)
+@enduml

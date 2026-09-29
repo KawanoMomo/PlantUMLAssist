@@ -1,0 +1,11 @@
+@startuml
+participant A
+participant B
+!define U
+!ifndef U
+A -> B : b
+!else
+A -> B : a
+!endif
+B --> A : done
+@enduml
