@@ -17,6 +17,10 @@ test.describe('Class diagram (v0.6.0)', () => {
     // 入れず切り替え先の白紙にする。クラス図の追加フォームが出て、そこから 1 件目を足せる。
     test('switching a blank tab to Class gives a blank class diagram and the class add form', async ({ page }) => {
       await gotoApp(page);
+      // BLK-releaser-20260930-0417-1: 起動時のタブは前の spec が保存先に残した図を開き直していることがある
+      // (白紙でない)。＋ で白紙のタブを作ってから図種を選ぶ。
+      await page.locator('#btn-tab-new').click();
+      await page.waitForTimeout(300);
       await page.locator('#diagram-type').selectOption('plantuml-class');
       await page.waitForTimeout(500);
       var t = await getEditorText(page);
