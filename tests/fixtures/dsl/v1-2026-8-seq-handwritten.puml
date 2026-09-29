@@ -1,0 +1,16 @@
+@startuml
+skinparam monochrome true
+skinparam shadowing false
+skinparam handwritten true
+skinparam roundcorner 15
+title 手書き風の会議調整
+actor 幹事
+participant カレンダー
+幹事 -> カレンダー : 空き確認
+alt 空きあり
+  カレンダー --> 幹事 : 候補日
+else 空きなし
+  カレンダー --> 幹事 : なし
+end
+note over 幹事, カレンダー : 手書き風で描画
+@enduml

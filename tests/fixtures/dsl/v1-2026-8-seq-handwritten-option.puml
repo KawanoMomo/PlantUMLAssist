@@ -1,0 +1,6 @@
+@startuml
+!option handwritten true
+actor 幹事
+participant カレンダー
+幹事 -> カレンダー : 空き確認
+@enduml

@@ -1,0 +1,36 @@
+@startuml
+skinparam handwritten true
+autonumber
+box "Front" #LightBlue
+actor User
+boundary UI
+end box
+control Ctl
+database DB
+queue Q
+User -> UI : click
+activate UI
+UI -> Ctl ++ : request
+Ctl -> Ctl : self check
+Ctl ->> DB : query
+DB --> Ctl : rows
+Ctl ->x Q : drop
+note right of DB : right note
+hnote over Ctl : hex note
+rnote left of UI : rect note
+== Phase 2 ==
+... later ...
+ref over UI, Ctl : sub flow
+loop 3 times
+  Ctl -> DB : retry
+end
+alt ok
+  Ctl --> UI : done
+else ng
+  Ctl --> UI : fail
+end
+create Worker
+Ctl -> Worker : new
+return ack
+deactivate UI
+@enduml
